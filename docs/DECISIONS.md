@@ -280,6 +280,18 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Zmieniona później:** nie.
 - **Powiązania:** `app/research/diagnostics.py` (nowy), `app/research/base.py` (nowe typy: `SourceCandidate`, `DiscoveryResult`, `SourceCardDraft`, `ExtractionResult`), `app/research/anthropic_client.py` (`discover_sources`/`extract_source`/`synthesize_from_cards`), migracja `0005_staged_source_extraction.sql`, `app/workflows/research/pipeline.py` (`run_source_discovery`/`run_source_extraction`/`run_synthesis_from_cards`/`run_staged_research_pipeline`/`resume_staged_research`), `tests/test_staged_research_extraction.py` (12 testów), `IMPLEMENTATION_PLAN.md` CZĘŚĆ F, `ERRORS_AND_FAILURES.md` (oba incydenty 11.07/12.07).
 
+### ADR-021: Prywatne repozytorium GitHub i strategia branchy main/dev
+- **Data:** 2026-07-12
+- **Status:** ACCEPTED (decyzja właściciela)
+- **Czego dotyczyła:** pierwsze objęcie całego projektu kontrolą wersji i bezpieczna publikacja kodu poza komputerem lokalnym.
+- **Rozważane opcje:** A) repozytorium publiczne; B) repozytorium prywatne z `main` jako stabilnym punktem odniesienia i osobnym branchem rozwojowym; C) wyłącznie lokalny Git bez GitHub.
+- **Decyzja i uzasadnienie:** B. Repozytorium `krapcys1-maker/nothing-is-accidental-agent` jest **PRIVATE**. Pierwszy stabilny snapshot znajduje się na `main`; dalsza praca A2 odbywa się na `dev/a2-stabilization`, bez automatycznego merge do `main`. Publiczność repozytorium jest zakazana bez osobnej przyszłej decyzji właściciela.
+- **Zalety:** historia zmian i backup poza komputerem; stabilny `main`; izolacja pracy rozwojowej; ograniczenie dostępu do kodu i prywatnej dokumentacji projektu.
+- **Ryzyka:** sama prywatność GitHub nie zastępuje higieny sekretów. Dlatego przed pierwszym commitem rozszerzono `.gitignore`, przeskanowano staged content oraz jawnie zweryfikowano brak `.env`, baz, diagnostyki, profili przeglądarki i danych sesji.
+- **Kto podjął:** człowiek (właściciel); wykonanie: Codex.
+- **Zmieniona później:** nie.
+- **Powiązania:** `.gitignore`, `docs/BUILD_LOG.md` Etap 1N, `docs/ERRORS_AND_FAILURES.md` (pierwsza nieudana próba skanu sekretów).
+
 ---
 
 ## Decyzje otwarte (wymagają właściciela)

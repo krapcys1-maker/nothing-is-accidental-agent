@@ -123,3 +123,13 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Etap projektu:** Etap 1
 - **CZEGO NIE MOŻE BYĆ WIDAĆ:** klucza API w terminalu (maskować `ANTHROPIC_API_KEY`).
 - **Status:** SCREENSHOT REQUIRED (powstanie po uruchomieniu walking skeleton)
+
+### [2026-07-12] private-github-repository
+- **Plik:** docs/screenshots/YYYY-MM-DD_HHMM_private-github-repository.png
+- **Co pokazuje:** stronę główną repozytorium `nothing-is-accidental-agent` z widocznym oznaczeniem **Private** oraz listę branchy `main` i `dev/a2-stabilization`.
+- **Dlaczego ważny:** dowód, że pierwszy zewnętrzny backup projektu powstał jako prywatny i że praca rozwojowa została oddzielona od stabilnego `main`.
+- **Etap projektu:** Etap 1N — Git/GitHub.
+- **CO OTWORZYĆ:** prywatne repozytorium GitHub; osobno dropdown/listę branchy, jeśli obie nazwy nie mieszczą się na jednym ekranie.
+- **CO MA BYĆ WIDOCZNE:** nazwa repozytorium, badge `Private`, branche `main` i `dev/a2-stabilization`.
+- **CZEGO NIE MOŻE BYĆ WIDAĆ:** tokenów GitHub, adresu e-mail, ustawień konta, `.env`, terminala z danymi uwierzytelnienia ani prywatnych informacji profilu.
+- **Status:** SCREENSHOT REQUIRED (nie używano przeglądarki/Playwrighta w tym zadaniu)

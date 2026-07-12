@@ -131,3 +131,9 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Dlaczego trafi do artykułu: pokazuje, jak łatwo pomylić koszt jednego calla z kosztem skumulowanym runu oraz jak „bezpieczny sufit" kosztowy może być użyteczny, choć bardzo niedokładny.
   - Dowód / źródło: `docs/ERRORS_AND_FAILURES.md` (wpisy o SDK i diagnostyce A2), `docs/BUILD_LOG.md` Etap 1M, `docs/COSTS.csv` (wiersz source candidate `id=3`).
   - Cytowalne liczby: lokalna porażka = **0,00 USD**; diagnostyczny call = **0,028969 USD**; skumulowany koszt runu = **0,126793 USD**; skumulowany realny koszt projektu = **0,500616 USD**; conservative estimate 0,1256 USD = około **4,34×** kosztu calla, więc bezpieczny, lecz nie „dokładny".
+
+- **[2026-07-12] Pierwszy prywatny snapshot projektu na GitHub** (sekcja: 1, 2, 14)
+  - Co to jest: po audycie sekretów projekt dostał pierwszy commit (`df418dd`) na `main`, prywatne repozytorium GitHub i osobny branch `dev/a2-stabilization`.
+  - Dlaczego trafi do artykułu: wyznacza odtwarzalny punkt początkowy eksperymentu i pokazuje, że bezpieczeństwo danych było częścią procesu, nie porządkiem dodanym po fakcie.
+  - Dowód / źródło: `docs/BUILD_LOG.md` Etap 1N, ADR-021, przyszły screenshot `private-github-repository` w `docs/SCREENSHOT_INDEX.md`.
+  - Cytowalna liczba: 125 plików w initial commit; 124 staged pliki tekstowe przeskanowane; 0 realnych sekretów; 102 testy zielone.
