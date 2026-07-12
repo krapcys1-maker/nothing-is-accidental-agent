@@ -1,0 +1,82 @@
+# === Sekrety i konfiguracja lokalna (NIGDY nie commitować) ===
+.env
+.env.*
+!.env.example
+config/accounts.yaml
+config/growth_policy.yaml
+
+# === Dane runtime ===
+data/*
+!data/.gitkeep
+
+# === Diagnostyka: surowe odpowiedzi modelu (mogą zawierać treść z internetu) ===
+# Już objęte przez "data/*" powyżej — ta reguła jest tu jawnie, żeby wymóg
+# "folder musi być ignorowany przez Git" był widoczny bez doczytywania ogólnej reguły.
+data/debug/
+
+# === Profile przeglądarki / sesje (gdy powstaną) ===
+data/browser-profiles/
+browser-profiles/
+**/browser-profiles/
+playwright/.auth/
+**/playwright/.auth/
+storage-state*.json
+**/storage-state*.json
+cookies*.json
+session*.json
+
+# === Lokalne bazy danych (łącznie z plikami roboczymi SQLite) ===
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+# === Klucze, certyfikaty i pliki poświadczeń ===
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets*.json
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+.coverage
+htmlcov/
+
+# === Logi i pliki tymczasowe ===
+*.log
+logs/
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# === Screenshoty (ciężkie binaria) — indeks trzymamy, pliki opcjonalnie poza gitem ===
+# Odkomentuj, jeśli nie chcesz wersjonować obrazów:
+# docs/screenshots/*.png
+
+# === OS / edytory ===
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.fleet/

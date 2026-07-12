@@ -1,0 +1,80 @@
+# Przykładowe profile kont
+# Skopiuj jako config/accounts.yaml i uzupełnij bez wpisywania haseł.
+
+accounts:
+  - id: nothing_is_accidental
+    display_name: "Nothing Is Accidental"
+    mode: FULL_PUBLICATION
+    autonomy_level: LEVEL_1
+    active: true
+    niche:
+      - hidden systems
+      - everyday economics
+      - logistics
+      - cities and transport
+      - product design
+      - consumer behavior
+    languages: [en]
+    browser_profile_path: "./data/browser-profiles/nothing_is_accidental"
+    writing_profile_path: "./config/prompts/nothing_is_accidental.md"
+    allowed_actions:
+      - research
+      - draft_article
+      - draft_note
+      - draft_comment
+      - publish_article
+      - publish_note
+      - publish_comment
+      - like
+      - restack
+    policies:
+      require_article_approval: true
+      require_note_approval: true
+      require_comment_approval: true
+      require_restack_approval: true
+      daily_comment_limit: 5
+      daily_note_limit: 2
+      weekly_article_limit: 2
+      link_ratio_limit: 0.10
+
+  - id: owner_account
+    display_name: "Owner Substack"
+    mode: COMMENT_ONLY
+    autonomy_level: LEVEL_1
+    active: false
+    niche:
+      - artificial intelligence
+      - automation
+      - technology
+      - future of work
+    languages: [pl, en]
+    browser_profile_path: "./data/browser-profiles/owner_account"
+    writing_profile_path: "./config/prompts/owner_account.md"
+    allowed_actions:
+      - research
+      - draft_comment
+      - publish_comment
+      - like
+    policies:
+      require_comment_approval: true
+      daily_comment_limit: 5
+      link_ratio_limit: 0.10
+
+  - id: wife_account
+    display_name: "Wife Substack"
+    mode: COMMENT_ONLY
+    autonomy_level: LEVEL_1
+    active: false
+    niche: []
+    languages: [pl, en]
+    browser_profile_path: "./data/browser-profiles/wife_account"
+    writing_profile_path: "./config/prompts/wife_account.md"
+    allowed_actions:
+      - research
+      - draft_comment
+      - publish_comment
+      - like
+    policies:
+      require_comment_approval: true
+      daily_comment_limit: 5
+      link_ratio_limit: 0.05

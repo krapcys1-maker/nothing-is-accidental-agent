@@ -1,0 +1,58 @@
+objective:
+  primary_metric: engaged_subscribers
+  weights:
+    engaged_subscribers: 0.45
+    returning_readers: 0.20
+    comments_received: 0.15
+    restacks: 0.10
+    likes_received: 0.05
+    recommendations: 0.05
+
+global_limits:
+  max_daily_cost_usd: 2.00
+  max_monthly_cost_usd: 40.00
+  stop_on_budget_limit: true
+  monthly_limit_has_priority: true   # limit miesięczny nadrzędny: po 40 USD/mies. stop wszystkich płatnych działań (ADR-012)
+  max_consecutive_browser_errors: 3
+  max_consecutive_hidden_comments: 1
+  kill_switch: false
+  dry_run: true
+
+comment_policy:
+  min_target_score: 70
+  max_per_account_per_day: 5
+  max_per_author_per_day: 1
+  max_link_ratio: 0.10
+  semantic_duplicate_threshold: 0.80
+  allow_generic_praise: false
+  allow_direct_profile_invitation: false
+  allow_private_messages: false
+
+topic_policy:
+  article_min_score: 75
+  note_min_score: 65
+  minimum_sources_for_article: 3
+  duplicate_title_similarity_threshold: 0.72   # >= tej wartości = duplikat (dedup lokalny, bez płatnego modelu)
+
+# Wagi scoringu tematu (suma = 100). Źródło prawdy wg ADR-001 (ARCHITECTURE §7).
+topic_scoring_weights:
+  curiosity: 25
+  source_quality: 20
+  non_obvious: 15
+  universality: 15
+  discussion_potential: 10
+  visual_potential: 10
+  originality: 5
+
+# Progi jakości researchu (bramka Policy Engine dla Research Card).
+research_policy:
+  minimum_sources: 3
+  min_confidence_score: 0.60
+  min_source_quality_score: 0.50
+  max_retries: 2              # limit ponawiania kosztownych wywołań (bez nieskończonego retry)
+  timeout_seconds: 60
+
+learning_policy:
+  minimum_days_before_strategy_change: 7
+  one_primary_variable_per_experiment: true
+  never_optimize_only_for_views: true

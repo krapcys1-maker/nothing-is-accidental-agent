@@ -1,0 +1,1 @@
+"""Rdzeń: konfiguracja, zegar, identyfikatory."""

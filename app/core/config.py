@@ -1,0 +1,173 @@
+"""Konfiguracja aplikacji.
+
+Zasady:
+- brak ścieżek absolutnych w kodzie — PROJECT_ROOT liczony z położenia pliku,
+- nazwy modeli pochodzą z .env (nie z kodu),
+- limity i wagi pochodzą z config/growth_policy(.example).yaml,
+- konta z config/accounts(.example).yaml,
+- sekrety (klucz API) z .env, ładowane przez python-dotenv.
+"""
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import yaml
+from dotenv import load_dotenv
+
+from app.models import Account, AccountMode, AccountPolicy, AutonomyLevel
+
+# app/core/config.py -> parents[0]=core, [1]=app, [2]=root projektu
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+class ConfigError(RuntimeError):
+    pass
+
+
+@dataclass
+class Settings:
+    project_root: Path
+    data_dir: Path
+    db_path: Path
+    costs_csv_path: Path
+
+    # tryb
+    dry_run: bool = True
+    kill_switch: bool = False
+
+    # budżet
+    max_daily_cost_usd: float = 2.00
+    max_monthly_cost_usd: float = 40.00
+    monthly_limit_has_priority: bool = True
+
+    # modele (z env)
+    model_fast: str = ""
+    model_quality: str = ""
+
+    # cennik (z env)
+    pricing: dict[str, float] = field(default_factory=dict)
+
+    # progi i wagi (z growth_policy)
+    article_min_score: float = 75.0
+    note_min_score: float = 65.0
+    topic_scoring_weights: dict[str, float] = field(default_factory=dict)
+    topic_duplicate_threshold: float = 0.72
+
+    # research (z growth_policy.research_policy)
+    research_min_sources: int = 3
+    research_min_confidence: float = 0.60
+    research_min_source_quality: float = 0.50
+    research_max_retries: int = 2
+    research_timeout_seconds: int = 60
+
+    # sekrety
+    anthropic_api_key: str | None = None
+
+    # konta
+    accounts: dict[str, Account] = field(default_factory=dict)
+
+    def get_account(self, account_id: str) -> Account:
+        acc = self.accounts.get(account_id)
+        if acc is None:
+            raise ConfigError(f"Nie znaleziono konta o id={account_id!r} w konfiguracji.")
+        return acc
+
+
+def _first_existing(*paths: Path) -> Path | None:
+    for p in paths:
+        if p.exists():
+            return p
+    return None
+
+
+def _as_bool(value, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _load_yaml(path: Path) -> dict:
+    with path.open("r", encoding="utf-8") as fh:
+        return yaml.safe_load(fh) or {}
+
+
+def _load_accounts(config_dir: Path) -> dict[str, Account]:
+    path = _first_existing(config_dir / "accounts.yaml", config_dir / "accounts.example.yaml")
+    if path is None:
+        return {}
+    data = _load_yaml(path)
+    accounts: dict[str, Account] = {}
+    for raw in data.get("accounts", []):
+        policies_raw = raw.get("policies", {}) or {}
+        account = Account(
+            id=raw["id"],
+            display_name=raw.get("display_name", raw["id"]),
+            mode=AccountMode(raw.get("mode", "DRAFT_ONLY")),
+            autonomy_level=AutonomyLevel(raw.get("autonomy_level", "LEVEL_1")),
+            active=bool(raw.get("active", False)),
+            niche=list(raw.get("niche", []) or []),
+            languages=list(raw.get("languages", ["en"]) or ["en"]),
+            browser_profile_path=raw.get("browser_profile_path", ""),
+            writing_profile_path=raw.get("writing_profile_path", ""),
+            allowed_actions=list(raw.get("allowed_actions", []) or []),
+            policies=AccountPolicy(**{k: v for k, v in policies_raw.items()
+                                      if k in AccountPolicy.model_fields}),
+        )
+        accounts[account.id] = account
+    return accounts
+
+
+def load_settings() -> Settings:
+    """Buduje Settings z .env + config/*.yaml. Nie tworzy plików."""
+    load_dotenv(PROJECT_ROOT / ".env")
+
+    config_dir = PROJECT_ROOT / "config"
+    gp_path = _first_existing(
+        config_dir / "growth_policy.yaml", config_dir / "growth_policy.example.yaml"
+    )
+    growth = _load_yaml(gp_path) if gp_path else {}
+    limits = growth.get("global_limits", {}) or {}
+    topic_policy = growth.get("topic_policy", {}) or {}
+    weights = growth.get("topic_scoring_weights", {}) or {}
+    research_policy = growth.get("research_policy", {}) or {}
+
+    data_dir = PROJECT_ROOT / "data"
+
+    pricing = {
+        "input_per_mtok": float(os.getenv("PRICE_INPUT_USD_PER_MTOK", "0") or 0),
+        "output_per_mtok": float(os.getenv("PRICE_OUTPUT_USD_PER_MTOK", "0") or 0),
+        "cache_read_per_mtok": float(os.getenv("PRICE_CACHE_READ_USD_PER_MTOK", "0") or 0),
+        "cache_write_per_mtok": float(os.getenv("PRICE_CACHE_WRITE_USD_PER_MTOK", "0") or 0),
+        "web_search_per_1k": float(os.getenv("PRICE_WEB_SEARCH_USD_PER_1K", "0") or 0),
+    }
+
+    return Settings(
+        project_root=PROJECT_ROOT,
+        data_dir=data_dir,
+        db_path=data_dir / "agent.db",
+        costs_csv_path=PROJECT_ROOT / "docs" / "COSTS.csv",
+        dry_run=_as_bool(os.getenv("DRY_RUN"), bool(limits.get("dry_run", True))),
+        kill_switch=_as_bool(os.getenv("KILL_SWITCH"), bool(limits.get("kill_switch", False))),
+        max_daily_cost_usd=float(limits.get("max_daily_cost_usd", 2.00)),
+        max_monthly_cost_usd=float(limits.get("max_monthly_cost_usd", 40.00)),
+        monthly_limit_has_priority=bool(limits.get("monthly_limit_has_priority", True)),
+        model_fast=os.getenv("ANTHROPIC_MODEL_FAST", "") or "",
+        model_quality=os.getenv("ANTHROPIC_MODEL_QUALITY", "") or "",
+        pricing=pricing,
+        article_min_score=float(topic_policy.get("article_min_score", 75)),
+        note_min_score=float(topic_policy.get("note_min_score", 65)),
+        topic_scoring_weights={k: float(v) for k, v in weights.items()},
+        topic_duplicate_threshold=float(
+            topic_policy.get("duplicate_title_similarity_threshold", 0.72)),
+        research_min_sources=int(research_policy.get("minimum_sources", 3)),
+        research_min_confidence=float(research_policy.get("min_confidence_score", 0.60)),
+        research_min_source_quality=float(research_policy.get("min_source_quality_score", 0.50)),
+        research_max_retries=int(research_policy.get("max_retries", 2)),
+        research_timeout_seconds=int(research_policy.get("timeout_seconds", 60)),
+        anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
+        accounts=_load_accounts(config_dir),
+    )

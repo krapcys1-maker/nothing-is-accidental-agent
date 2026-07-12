@@ -1,0 +1,272 @@
+"""Modele domenowe (Pydantic v2) używane przez walking skeleton.
+
+Podzbiór modeli z IMPLEMENTATION_PLAN.md §B.3 — tylko to, czego potrzebuje
+pierwszy etap (konta, tematy, run, zużycie modelu).
+"""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from enum import Enum
+
+from pydantic import BaseModel, Field
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class AccountMode(str, Enum):
+    FULL_PUBLICATION = "FULL_PUBLICATION"
+    COMMENT_ONLY = "COMMENT_ONLY"
+    DRAFT_ONLY = "DRAFT_ONLY"
+    RESEARCH_ONLY = "RESEARCH_ONLY"
+
+
+class AutonomyLevel(str, Enum):
+    LEVEL_0 = "LEVEL_0"
+    LEVEL_1 = "LEVEL_1"
+    LEVEL_2 = "LEVEL_2"
+    LEVEL_3 = "LEVEL_3"
+
+
+class WorkflowType(str, Enum):
+    TOPIC = "TOPIC"
+    RESEARCH = "RESEARCH"
+    ARTICLE = "ARTICLE"
+    NOTE = "NOTE"
+    COMMENT = "COMMENT"
+    ANALYTICS = "ANALYTICS"
+
+
+class RunStatus(str, Enum):
+    RUNNING = "RUNNING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    STOPPED = "STOPPED"
+    DRY_RUN = "DRY_RUN"
+
+
+class TopicStatus(str, Enum):
+    DISCOVERED = "DISCOVERED"
+    SCORED = "SCORED"        # kwalifikuje się na Note (>= note_min, < article_min)
+    SELECTED = "SELECTED"    # kwalifikuje się na artykuł (>= article_min)
+    REJECTED = "REJECTED"    # poniżej progu Note
+    DUPLICATE = "DUPLICATE"  # duplikat istniejącego tematu (nieaktywny)
+    USED = "USED"
+
+
+class SourceType(str, Enum):
+    PRIMARY = "PRIMARY"
+    SECONDARY = "SECONDARY"
+    DATA = "DATA"
+    OTHER = "OTHER"
+
+
+class SourceVerification(str, Enum):
+    VERIFIED = "VERIFIED"
+    UNVERIFIED = "UNVERIFIED"
+    FAILED = "FAILED"
+
+
+class ResearchRecommendation(str, Enum):
+    PROCEED = "PROCEED"
+    REVISE = "REVISE"
+    REJECT = "REJECT"
+
+
+class AccountPolicy(BaseModel):
+    require_article_approval: bool = True
+    require_note_approval: bool = True
+    require_comment_approval: bool = True
+    require_restack_approval: bool = True
+    daily_comment_limit: int = 5
+    daily_note_limit: int = 2
+    weekly_article_limit: int = 2
+    max_per_author_per_day: int = 1
+    allow_links: bool = True
+    link_ratio_limit: float = 0.10
+
+
+class Account(BaseModel):
+    id: str
+    display_name: str
+    mode: AccountMode
+    autonomy_level: AutonomyLevel = AutonomyLevel.LEVEL_1
+    active: bool = False
+    niche: list[str] = Field(default_factory=list)
+    languages: list[str] = Field(default_factory=lambda: ["en"])
+    browser_profile_path: str = ""
+    writing_profile_path: str = ""
+    allowed_actions: list[str] = Field(default_factory=list)
+    policies: AccountPolicy = Field(default_factory=AccountPolicy)
+
+
+class Topic(BaseModel):
+    id: int | None = None
+    account_id: str
+    title: str
+    question: str | None = None
+    score: float | None = None
+    score_breakdown: dict[str, float] = Field(default_factory=dict)
+    status: TopicStatus = TopicStatus.DISCOVERED
+    source: str | None = None
+    duplicate_of: int | None = None
+    rejection_reason: str | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class Run(BaseModel):
+    id: str
+    account_id: str
+    workflow: WorkflowType
+    status: RunStatus = RunStatus.RUNNING
+    current_state: str | None = None
+    started_at: datetime = Field(default_factory=_utcnow)
+    finished_at: datetime | None = None
+    cost_usd: float = 0.0
+    error: str | None = None
+    human_intervention_count: int = 0
+
+
+class ModelUsage(BaseModel):
+    id: int | None = None
+    run_id: str
+    provider: str = "anthropic"
+    model: str
+    task: str | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    web_search_requests: int = 0
+    estimated_cost_usd: float = 0.0
+    dry_run: bool = False
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class Source(BaseModel):
+    id: int | None = None
+    research_card_id: int | None = None
+    url: str
+    title: str | None = None
+    author_or_org: str | None = None
+    published_at: str | None = None      # ISO string lub None (może być nieznana)
+    source_type: SourceType = SourceType.OTHER
+    supports_claim: str | None = None    # które twierdzenie potwierdza
+    verification_status: SourceVerification = SourceVerification.UNVERIFIED
+
+
+class ResearchCard(BaseModel):
+    id: int | None = None
+    topic_id: int
+    question: str
+    working_thesis: str
+    main_mechanism: str | None = None
+    confirmed_claims: list[str] = Field(default_factory=list)
+    uncertain_claims: list[str] = Field(default_factory=list)
+    contradictions: list[str] = Field(default_factory=list)
+    strongest_counterargument: str | None = None
+    citable_numbers: list[str] = Field(default_factory=list)
+    visual_idea: str | None = None
+    confidence_score: float = 0.0
+    source_quality_score: float = 0.0
+    publication_recommendation: ResearchRecommendation = ResearchRecommendation.REJECT
+    rejection_reason: str | None = None
+    sources: list[Source] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+# --- Wznawialny dwuetapowy research (od 2026-07-11, stabilizacja Research Pipeline) ---
+
+class ResearchRunStatus(str, Enum):
+    # --- stary dwuetapowy przepływ (gather_sources+synthesize_card, ADR-016/019) ---
+    PENDING = "PENDING"                    # utworzony, etap A jeszcze nie próbowany
+    SOURCE_COLLECTED = "SOURCE_COLLECTED"   # etap A udany, źródła trwale zapisane
+    # --- nowy etapowy przepływ A1/A2/B (discover/extract/synthesize, ADR-020) ---
+    DISCOVERY_PENDING = "DISCOVERY_PENDING"         # utworzony, etap A1 jeszcze nie próbowany
+    DISCOVERY_COMPLETE = "DISCOVERY_COMPLETE"       # etap A1 udany, kandydaci trwale zapisani
+    EXTRACTION_IN_PROGRESS = "EXTRACTION_IN_PROGRESS"  # etap A2 w toku/wznawialny (część źródeł już wyekstrahowana)
+    SOURCES_COMPLETE = "SOURCES_COMPLETE"           # etap A2 dał >= min_sources kart — gotowe do etapu B
+    SYNTHESIS_PENDING = "SYNTHESIS_PENDING"         # etap B właśnie w trakcie próby
+    # --- wspólne dla obu przepływów ---
+    PARTIAL = "PARTIAL"                    # za mało źródeł/wyników — zachowane, ale poniżej progu
+    COMPLETE = "COMPLETE"                  # etap B udany, pełna Research Card istnieje
+    FAILED = "FAILED"                      # nic trwałego nie powstało — nie ma czego wznawiać
+
+
+class SourceCandidateStatus(str, Enum):
+    PENDING_EXTRACTION = "PENDING_EXTRACTION"   # z etapu A1, jeszcze nie próbowano A2
+    EXTRACTED = "EXTRACTED"                     # etap A2 udany dla TEGO źródła
+    EXTRACTION_FAILED = "EXTRACTION_FAILED"     # etap A2 nieudany dla TEGO źródła (inne nietknięte)
+
+
+class ResearchStageName(str, Enum):
+    A = "A"     # gather_sources (stary dwuetapowy przepływ)
+    A1 = "A1"   # discover_sources (nowy etapowy przepływ)
+    A2 = "A2"   # extract_source (nowy etapowy przepływ, per źródło)
+    B = "B"     # synthesize_card / synthesize_from_cards (wspólne dla obu przepływów)
+
+
+class ResearchStageStatus(str, Enum):
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+
+
+class ResearchRun(BaseModel):
+    """Stan maszyny stanów dla jednej próby researchu. `id` = to samo id co w `Run`
+    (rozszerzenie 1:1) — model_usage.run_id już na nie wskazuje, więc koszt obu
+    etapów jest naturalnie powiązany bez osobnej tabeli kosztów."""
+    id: str
+    account_id: str
+    topic_id: int
+    status: ResearchRunStatus = ResearchRunStatus.PENDING
+    stage_a_completed_at: datetime | None = None
+    stage_b_completed_at: datetime | None = None
+    research_card_id: int | None = None
+    total_cost_usd: float = 0.0
+    error: str | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
+class ResearchSourceRecord(BaseModel):
+    """Trwały wynik etapu A — jedno źródło, zapisane NIEZALEŻNIE od tego, czy etap B
+    kiedykolwiek się wykona. To jest mechanizm "nie trać wyników wyszukiwania".
+    Należy do STAREGO dwuetapowego przepływu (gather_sources+synthesize_card) —
+    nowy, etapowy przepływ używa `SourceCandidateRecord` poniżej."""
+    id: int | None = None
+    research_run_id: str
+    url: str
+    title: str | None = None
+    author_or_org: str | None = None
+    published_at: str | None = None
+    source_type: SourceType = SourceType.OTHER
+    key_facts: list[str] = Field(default_factory=list)
+    verification_status: SourceVerification = SourceVerification.UNVERIFIED
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+# --- Etapowy research A1/A2/B (od 2026-07-12, ADR-020) ---
+
+class SourceCandidateRecord(BaseModel):
+    """Wynik etapu A1 (url+title), wzbogacany W MIEJSCU przez etap A2 (autor, data,
+    twierdzenia, fakty liczbowe, ocena jakości) — jeden wiersz na źródło, ewoluujący
+    od "kandydata" do pełnej "Source Card" w tej samej tabeli/rekordzie. Zapisywany
+    do bazy NATYCHMIAST po A1 (jako PENDING_EXTRACTION) i aktualizowany NATYCHMIAST
+    po każdej (udanej lub nieudanej) próbie A2 dla TEGO źródła — źródła 1..N-1 nigdy
+    nie czekają na wynik źródła N."""
+    id: int | None = None
+    research_run_id: str
+    url: str
+    title: str | None = None
+    author_or_org: str | None = None
+    published_at: str | None = None
+    source_type: SourceType = SourceType.OTHER
+    supported_claims: list[str] = Field(default_factory=list)
+    numeric_facts: list[str] = Field(default_factory=list)
+    verification_status: SourceVerification = SourceVerification.UNVERIFIED
+    source_quality_score: float = 0.0
+    status: SourceCandidateStatus = SourceCandidateStatus.PENDING_EXTRACTION
+    extraction_error: str | None = None
+    discovered_at: datetime = Field(default_factory=_utcnow)
+    extracted_at: datetime | None = None
