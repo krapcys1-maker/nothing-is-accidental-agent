@@ -1,12 +1,14 @@
 # ARCHITECTURE_EVOLUTION
 
+> **Uwaga (2026-07-12):** to jest kronika historyczna (stan faktyczny w czasie), nie wytyczne. Obowiązująca architektura: `MASTER_ARCHITECTURE.md`; plan: `IMPLEMENTATION_ROADMAP.md`; stan bieżący: `CURRENT_PROJECT_STATE.md`. Odsyłacze do `IMPLEMENTATION_PLAN.md` w starych wpisach wskazują na `docs/archive/superseded_plans/`.
+
 ## Cel
 
 Zapis **jak zmieniała się architektura** w czasie: od wersji na papierze do tego, co realnie zbudowano. Dokumentuje różnicę między planem a rzeczywistością, porzucone pomysły i powody zmian. Każda „wersja" architektury dostaje wpis z datą, opisem i diagramem faktycznie działającego systemu (nie docelowego). To jeden z najcenniejszych materiałów do końcowego artykułu — pokazuje ewolucję, nie tylko efekt.
 
 ## Zasady
 
-- Dokumentuj stan **faktyczny**, nie docelowy (docelowy jest w `IMPLEMENTATION_PLAN.md`).
+- Dokumentuj stan **faktyczny**, nie docelowy. Architektura docelowa znajduje się w `MASTER_ARCHITECTURE.md`, a kolejność wdrożenia w `IMPLEMENTATION_ROADMAP.md`.
 - Każdy większy etap = nowa wersja (V0, V1, …) z diagramem tego, co realnie działa.
 - Zapisuj, co z planu **odpadło** lub zostało zmienione i dlaczego (link do `DECISIONS.md`).
 
@@ -28,7 +30,7 @@ Zapis **jak zmieniała się architektura** w czasie: od wersji na papierze do te
 ## Wersje
 
 ## V0 — [2026-07-11] Architektura na papierze (przed kodem)
-- **Co realnie działa:** nic w kodzie — to stan wyjściowy. Istnieją: pełna architektura docelowa (`IMPLEMENTATION_PLAN.md`), założenia, konfiguracje przykładowe, dokumentacja eksperymentu.
+- **Co realnie działa:** nic w kodzie — to stan wyjściowy. Istnieją: pełna architektura docelowa (ówczesny `IMPLEMENTATION_PLAN.md` — dziś historyczny, w `docs/archive/superseded_plans/`), założenia, konfiguracje przykładowe, dokumentacja eksperymentu.
 - **Czego jeszcze nie ma:** żadnego kodu (`app/` nie istnieje), bazy, klienta Anthropic, Policy Engine.
 - **Zmiany względem planu:** brak — punkt zerowy.
 - **Diagram (stan faktyczny):**
@@ -116,4 +118,4 @@ docs/ + config/*.example.yaml + .env(lokalny)
 ```
 
 ## [2026-07-11] Redefinicja stanu DOCELOWEGO (nie nowa wersja — meta-wpis)
-Ta sekcja celowo nie jest kolejną wersją „Vx" — zgodnie z zasadą tego pliku dokumentujemy tu wyłącznie stan **faktyczny**, a poniższe jest korektą **celu**, nie nowym zbudowanym kodem. Właściciel doprecyzował (ADR-017, `docs/DECISIONS.md`), że architektura docelowa to **LEVEL_3 — pełna autonomia operacyjna** (agent samodzielnie prowadzi konto), a ręczna akceptacja każdej akcji, którą sugerowała dotychczasowa dokumentacja (macierz `IMPLEMENTATION_PLAN.md §B.8`, ADR-004), była opisem **fazy startowej**, nie architektury końcowej. Pełna specyfikacja docelowego stanu (LEVEL_0–3, warunki przejść, Autonomous Interaction Engine, scoring komentarzy/subskrypcji, SAFE MODE) — `docs/IMPLEMENTATION_PLAN.md` CZĘŚĆ D. **Stan faktyczny kodu na dziś się nie zmienił** — to wciąż V3 opisane wyżej; żaden nowy kod, Playwright ani wywołanie API nie powstały w ramach tej redefinicji.
+Ta sekcja celowo nie jest kolejną wersją „Vx" — zgodnie z zasadą tego pliku dokumentujemy tu wyłącznie stan **faktyczny**, a poniższe jest korektą **celu**, nie nowym zbudowanym kodem. Właściciel doprecyzował (ADR-017, `docs/DECISIONS.md`), że architektura docelowa to **LEVEL_3 — pełna autonomia operacyjna** (agent samodzielnie prowadzi konto), a ręczna akceptacja każdej akcji, którą sugerowała dotychczasowa dokumentacja (macierz `IMPLEMENTATION_PLAN.md §B.8`, ADR-004), była opisem **fazy startowej**, nie architektury końcowej. Pełna specyfikacja docelowego stanu znajdowała się wtedy w `IMPLEMENTATION_PLAN.md` CZĘŚĆ D (dziś historyczny, `docs/archive/superseded_plans/`); obowiązująca wersja: `MASTER_ARCHITECTURE.md` §7. **Stan faktyczny kodu na dziś się nie zmienił** — to wciąż V3 opisane wyżej; żaden nowy kod, Playwright ani wywołanie API nie powstały w ramach tej redefinicji.

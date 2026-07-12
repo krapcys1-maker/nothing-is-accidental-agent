@@ -1,6 +1,6 @@
 """Modele domenowe (Pydantic v2) używane przez walking skeleton.
 
-Podzbiór modeli z IMPLEMENTATION_PLAN.md §B.3 — tylko to, czego potrzebuje
+Podzbiór modeli z archiwalnego IMPLEMENTATION_PLAN.md §B.3 (docs/archive/superseded_plans/) — tylko to, czego potrzebuje
 pierwszy etap (konta, tematy, run, zużycie modelu).
 """
 from __future__ import annotations

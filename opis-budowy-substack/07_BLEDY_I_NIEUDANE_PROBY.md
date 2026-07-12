@@ -117,6 +117,24 @@ Każdy wpis: co miało działać · co nie zadziałało · dlaczego · jak napra
 
 ---
 
+### [2026-07-12] PowerShell potraktował alternację regexu jak potok
+
+- **Co miało działać:** lokalne wyszukanie odwołań do staged research i zabezpieczeń.
+- **Co się zepsuło:** wzorzec zawierający znak `|` został przekazany w podwójnych cudzysłowach; PowerShell zinterpretował jego fragment jak kolejne polecenie i zgłosił błąd `discover: The term 'discover' is not recognized`.
+- **Przyczyna:** niewłaściwe cytowanie wyrażenia regularnego w powłoce, nie błąd aplikacji.
+- **Naprawa:** wzorzec uruchomiono ponownie w pojedynczych cudzysłowach.
+- **Liczba prób:** 2; druga zakończona sukcesem.
+- **Skutek:** brak zmian danych, brak API, koszt 0,000000 USD.
+- **Ryzyko powtórki:** niskie, jeśli regexy z alternacją są cytowane pojedynczo.
+
+### [2026-07-12] Kontrola odczytowa wskazała błędną nazwę bazy SQLite
+
+- **Co miało działać:** końcowe potwierdzenie, że statusy istniejących runów nie zmieniły się.
+- **Co się zepsuło:** polecenie wskazało `data/nothing_is_accidental.db` zamiast skonfigurowanego `data/agent.db`; SQLite utworzył pusty plik i zwrócił `no such table: research_runs`.
+- **Naprawa:** usunięto wyłącznie nowo utworzony pusty plik i powtórzono odczyt na poprawnej bazie.
+- **Wynik:** nadal dokładnie 2 runy (`FAILED`, `PARTIAL`), bez zmiany statusów lub danych; zero API i kosztu.
+- **Zapobieganie:** ścieżkę do bazy brać z konfiguracji, nie zakładać jej nazwy.
+
 ## Kategoria „jeszcze nieodkryte" (świadome luki, spodziewane błędy)
 Te pozycje **jeszcze się nie wydarzyły**, bo nie doszliśmy do odpowiednich etapów. Zapisujemy je jako spodziewane pola ryzyka, żeby uczciwie pokazać, czego się obawiamy (ryzyka R2–R12 z planu):
 - **[BROWSER/R2/R3]** zmiany UI Substacka, wygaśnięcie sesji / 2FA — spodziewane przy Etapie 4.
@@ -134,5 +152,5 @@ Te pozycje **jeszcze się nie wydarzyły**, bo nie doszliśmy do odpowiednich et
 - Przebudowy: **3 architektoniczne** (ADR-016/019/020) + drobniejsze refinements (dry_run, zachowanie usage przy błędzie, estymator, diagnostyka, default A2=1500 i agregacja CLI). Nadal brak pełnej realnej Research Card; P1-5 i prawdziwy fetch źródła pozostają otwarte.
 
 ## Powiązania
-- `docs/ERRORS_AND_FAILURES.md` (źródło), `docs/IMPLEMENTATION_PLAN.md` §B.12 (ryzyka R1–R12)
+- `docs/ERRORS_AND_FAILURES.md` (źródło), `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` §B.12 (ryzyka R1–R12)
 - `08_INTERWENCJE_CZLOWIEKA.md`, `14_WNIOSKI_CZASTKOWE.md`

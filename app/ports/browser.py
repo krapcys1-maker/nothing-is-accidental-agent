@@ -1,7 +1,7 @@
 """BrowserPort — automatyzacja przeglądarki (Substack).
 
 STUB w walking skeleton. Playwright włączamy dopiero w Etapie 4 i tylko po ręcznym
-logowaniu użytkownika (patrz docs/architecture/SUBSTACK_INTEGRATION.md).
+logowaniu użytkownika (patrz docs/archive/superseded_plans/SUBSTACK_INTEGRATION.md (archiwum; obowiazuje MASTER_ARCHITECTURE.md §8.2)).
 Model językowy NIGDY nie wywołuje tego portu bezpośrednio — tylko orchestrator po
 walidacji Policy Engine.
 """

@@ -56,7 +56,7 @@ def test_inactive_account_stops_workflow(settings, storage, account):
 
 
 def test_real_mode_reaches_success_not_running(settings, storage, account):
-    """P0-1 (docs/AUDYT_ARCHITEKTURY_2026-07-12.md): przed naprawą KAŻDY realny
+    """P0-1 (docs/archive/superseded_plans/AUDYT_ARCHITEKTURY_2026-07-12.md): przed naprawą KAŻDY realny
     (dry_run=False) sukces kończył się terminalnym RUNNING — RunStatus.SUCCESS nie był
     zapisywany nigdzie w kodzie (potwierdzone też w produkcyjnej bazie: 0 wierszy SUCCESS)."""
     real_settings = replace(settings, dry_run=False)

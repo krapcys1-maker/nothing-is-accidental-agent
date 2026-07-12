@@ -76,14 +76,14 @@ def run_topics(count: int = 6, account_id: str = DEFAULT_ACCOUNT,
 def run_research(topic_id: int | None = None, account_id: str = DEFAULT_ACCOUNT,
                  force_real: bool = False, settings: Settings | None = None) -> ResearchRunSummary:
     if force_real:
-        # P0-3 (docs/AUDYT_ARCHITEKTURY_2026-07-12.md): ta ścieżka woła przestarzały,
+        # P0-3 (docs/archive/superseded_plans/AUDYT_ARCHITEKTURY_2026-07-12.md): ta ścieżka woła przestarzały,
         # jednoetapowy run_research_pipeline przez klienta zbudowanego BEZ max_web_searches
         # (brak max_uses -> nieograniczona liczba web searchy w jednym wywołaniu) i bez
         # capu kosztu per-run. Wszystkie zabezpieczenia z dwóch incydentów żyją wyłącznie
         # w scripts/run_capped_research.py — tam też należy uruchamiać realny research.
         raise RuntimeError(
             "run_research(force_real=True) / 'python -m app.main run-research --real' jest "
-            "zablokowane (docs/AUDYT_ARCHITEKTURY_2026-07-12.md, P0-3): ta ścieżka nie ma "
+            "zablokowane (docs/archive/superseded_plans/AUDYT_ARCHITEKTURY_2026-07-12.md, P0-3): ta ścieżka nie ma "
             "limitu web searchy (max_uses) ani capu kosztu per-run. Użyj zamiast tego "
             "scripts/run_capped_research.py --topic-id <id> (ma pre-flight, cap kosztu, "
             "--estimate-only)."

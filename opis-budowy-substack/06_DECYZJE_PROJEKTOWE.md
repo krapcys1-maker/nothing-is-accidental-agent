@@ -125,7 +125,7 @@ Redakcyjny zapis **każdej ważnej decyzji**: problem, opcje, wybór, dlaczego, 
 - **Wybór:** B.
 - **Dlaczego:** konto ma funkcjonować jak zwyczajna, anonimowa publikacja redakcyjna, nie jak eksponat eksperymentu od pierwszego dnia. Brak ujawnienia ≠ podszywanie się pod kogoś — nie ma fikcyjnego autora, fikcyjnej biografii ani fikcyjnych doświadczeń, jest tylko brak deklaracji, kto/co pisze.
 - **Zalety:** czystszy eksperyment (mierzy się odbiór treści, nie „ciekawostkę o AI"); konto nie traci wiarygodności, zanim jakość zostanie udowodniona; prywatna dokumentacja i tak zachowuje pełną prawdę do przyszłej serii artykułów.
-- **Wady/ryzyka:** pytanie wprost „czy jesteś botem?" wymaga jasnej zasady (rozwiązane: NO_REPLY, nigdy kłamstwo — patrz `IMPLEMENTATION_PLAN.md §D.5a`); zgodność z aktualnymi zasadami Substacka dot. treści AI pozostaje do zweryfikowania przez właściciela przed realną publikacją (Etap 4) — nie zakładam tego samodzielnie.
+- **Wady/ryzyka:** pytanie wprost „czy jesteś botem?" wymaga jasnej zasady (rozwiązane: NO_REPLY, nigdy kłamstwo — patrz `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md §D.5a`); zgodność z aktualnymi zasadami Substacka dot. treści AI pozostaje do zweryfikowania przez właściciela przed realną publikacją (Etap 4) — nie zakładam tego samodzielnie.
 - **Kto podjął:** **człowiek (właściciel).** **Zmieniona później:** nie.
 
 ---
@@ -134,4 +134,4 @@ Redakcyjny zapis **każdej ważnej decyzji**: problem, opcje, wybór, dlaczego, 
 **Otwarte do weryfikacji przez właściciela (nie rozstrzygam sam):** zgodność polityki braku ujawniania AI-autorstwa z aktualnym regulaminem Substacka — przed Etapem 4 (realna publikacja). Poza tym: **brak** innych otwartych pozycji z audytu. Jedyna utrzymywana pozycja ryzyka: **rotacja klucza API** (D-10/R1) przed ewentualnym publicznym udostępnieniem repo.
 
 ## Powiązania
-- `docs/DECISIONS.md` (pełne ADR-001…018), `docs/IMPLEMENTATION_PLAN.md` (załącznik rozbieżności, CZĘŚĆ D, §D.5a)
+- `docs/DECISIONS.md` (pełne ADR-001…018), `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` (załącznik rozbieżności, CZĘŚĆ D, §D.5a)

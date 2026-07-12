@@ -23,8 +23,10 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Ryzyka:** ...
 - **Kto podjął:** Claude | człowiek | wspólnie
 - **Zmieniona później:** nie | tak → ADR-YYY (kiedy i dlaczego)
-- **Powiązania:** ADR-..., IMPLEMENTATION_PLAN.md §...
+- **Powiązania:** ADR-..., MASTER_ARCHITECTURE.md §..., IMPLEMENTATION_ROADMAP.md Etap ...
 ```
+
+> Uwaga (2026-07-12, ADR-023): powiązania w historycznych wpisach ADR-001..022 wskazują na dokumenty zarchiwizowane w `docs/archive/superseded_plans/` (IMPLEMENTATION_PLAN.md, ARCHITECTURE.md, SUBSTACK_INTEGRATION.md) — pozostają jako kontekst historyczny; nowe wpisy odwołują się do dokumentów źródła prawdy.
 
 > Wcześniejsze wpisy ADR-001..010 używają skróconej formy (Kontekst/Opcje/Decyzja/Konsekwencje). Nowe wpisy stosują pola powyżej.
 
@@ -291,6 +293,30 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Kto podjął:** człowiek (właściciel); wykonanie: Codex.
 - **Zmieniona później:** nie.
 - **Powiązania:** `.gitignore`, `docs/BUILD_LOG.md` Etap 1N, `docs/ERRORS_AND_FAILURES.md` (pierwsza nieudana próba skanu sekretów).
+
+### ADR-022: Konfiguracja pierwszego świeżego runu nastawionego na kompletną Research Card
+- **Data:** 2026-07-12
+- **Status:** PROPOSED — wymaga jawnej zgody właściciela przed realnym API
+- **Czego dotyczyła:** wybór najmniejszej konfiguracji A1/A2/B, która daje tolerancję jednego błędu A2 i nadal może osiągnąć próg 3 zweryfikowanych źródeł.
+- **Rozważane opcje:** A) 3 źródła — najtaniej, ale zero tolerancji błędu; B) 4 źródła — jedna możliwa porażka i nadal 3 źródła do B; C) 5+ źródeł — większa tolerancja kosztem dodatkowych płatnych calli bez obecnego uzasadnienia.
+- **Decyzja i uzasadnienie:** proponowane B: świeży `three-stage`, A1 1 search/600 tokens, A2 max 4 źródła × 1 search × 1500 tokens, zero retry, B 2200 tokens/2500 forwarded context, approved cap 0,55 USD. Expected=0,201280 USD; conservative=0,510375 USD. Komenda używa `--topic-id 2`, nie `--resume`, więc nie dotyka istniejącego PARTIAL.
+- **Zalety:** jedna awaria A2 nie blokuje automatycznie syntezy; maksymalnie 5 searchy; brak automatycznych ponowień; wszystkie granice jawne w CLI; conservative mieści się w dziennym/miesięcznym budżecie.
+- **Ryzyka:** cap jest wyłącznie bramką pre-flight; P0-2c/P1-2/P1-3/P1-4/P1-5/P1-6 pozostają; B nie ma jeszcze potwierdzenia na żywym API. Search-o-URL nie jest dowodem bezpośredniego odczytu strony.
+- **Kto podjął:** Codex przygotował propozycję na podstawie parametrów właściciela; decyzja o realnym wydatku należy do właściciela.
+- **Zmieniona później:** nie.
+- **Powiązania:** `docs/BUILD_LOG.md` Etap 1O, `docs/IMPLEMENTATION_PLAN.md` F.10, audyt P0-2/P1-2..6.
+
+### ADR-023: Konsolidacja dokumentacji architektonicznej do trzech dokumentów źródła prawdy
+- **Data:** 2026-07-12
+- **Status:** ACCEPTED (na polecenie właściciela — pełny audyt architektury + porządkowanie dokumentów)
+- **Czego dotyczyła:** w repo narosły równoległe dokumenty architektury/planów (ARCHITECTURE.md V1, IMPLEMENTATION_PLAN.md CZĘŚCI A–F, audyt 12.07, SUBSTACK_INTEGRATION.md, dwa pierwotne dokumenty założeń) — częściowo sprzeczne (14 rozbieżności kod↔dokumentacja z audytu), co groziło wprowadzeniem kolejnego modelu w błąd.
+- **Rozważane opcje:** A) aktualizować wszystkie istniejące dokumenty równolegle; B) jeden zestaw źródła prawdy (`MASTER_ARCHITECTURE.md` + `IMPLEMENTATION_ROADMAP.md` + `CURRENT_PROJECT_STATE.md` w korzeniu) + jedno archiwum `docs/archive/superseded_plans/` z banerem „ARCHIVED — NOT A SOURCE OF TRUTH".
+- **Decyzja i uzasadnienie:** B. Wartościowa treść starych dokumentów (model danych, autonomia CZĘŚĆ D, stabilizacja researchu E–F, projekt integracji Substack, findingi audytu P0/P1/P2) została przeniesiona/zmapowana do nowych dokumentów; sprzeczności rozstrzygnięte na rzecz stanu opisanego w MASTER_ARCHITECTURE (zasada: obowiązuje kod tam, gdzie kod był lepszy od specyfikacji). Dzienniki (BUILD_LOG, DECISIONS, ERRORS_AND_FAILURES, HUMAN_INTERVENTIONS, COSTS, RESEARCH_LOG) i kronika `opis-budowy-substack/` NIE są archiwizowane — to logi, nie plany. README dostał sekcję „Source of Truth"; AGENTS.md dostał baner z trzema korektami (nadrzędność GROWTH_MASTER uchylona; jawność AI wg ADR-018; akceptacje wg ADR-017). Odsyłacze w kodzie do przeniesionych plików zaktualizowane do ścieżek archiwum (zero zmian logiki; 102 testy zielone przed i po).
+- **Zalety:** jeden obowiązujący obraz architektury/planu/stanu; koniec konkurencyjnych roadmap; następny model zaczyna bez zgadywania.
+- **Ryzyka:** historyczne odsyłacze „§B.x" w starych wpisach BUILD_LOG/DECISIONS prowadzą teraz do archiwum — oznaczone w README archiwum jako kontekst historyczny, nie wytyczne.
+- **Kto podjął:** człowiek (właściciel) — polecenie audytu i konsolidacji; wykonanie: Claude.
+- **Zmieniona później:** nie.
+- **Powiązania:** MASTER_ARCHITECTURE.md, IMPLEMENTATION_ROADMAP.md, CURRENT_PROJECT_STATE.md, docs/archive/superseded_plans/README.md, ADR-017/018/020/022.
 
 ---
 

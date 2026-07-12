@@ -117,6 +117,14 @@ Po każdym etapie: co nas zaskoczyło, co działało, co nie, co agent robił le
 - **Lekcja kosztowa:** koszt jednego calla (0,028969 USD), koszt skumulowany runu (0,126793 USD) i koszt całego projektu (0,500616 USD) to trzy różne metryki. Podsumowanie CLI powinno opisywać bieżącą inwokację A2, baza — całą historię runu. Conservative estimate 0,1256 USD był bezpieczny, ale ~4,34× wyższy od calla, więc nie należy nazywać go dokładnym.
 - **Co pozostaje otwarte:** brak P1-5 (retry failed candidates), brak prawdziwego fetch źródła i brak pełnej realnej Research Card. Naprawa limitu nie jest dowodem gotowości epistemicznej całego pipeline'u.
 
+### Wnioski z offline preflight pierwszej kompletnej karty (2026-07-12)
+
+- Cztery źródła są celowym minimum odporności: przy progu trzech źródeł pozwalają przeżyć jeden błąd A2, ale nie dwa.
+- Trzeba rozdzielać koszt oczekiwany (0,201280 USD), konserwatywny (0,510375 USD) i limit zatwierdzany przez człowieka (0,55 USD). Cap nie jest prognozą.
+- Zabezpieczenia strukturalne działają: tryb staged jest domyślny, legacy real path jest blokowany, retry można wyzerować, a limity źródeł i wyszukiwań są przekazywane do narzędzi.
+- Nadal istnieją luki: cap działa przed rozpoczęciem, nie w trakcie; timeout może pozostawić nieznany koszt; A2 nie pobiera strony bezpośrednio; dwa błędy ekstrakcji zatrzymają syntezę; B nie ma jeszcze realnego sukcesu.
+- Wynik preflight pozwala poprosić właściciela o zgodę, ale nie jest obietnicą powstania karty. Werdykt techniczny: READY FOR OWNER APPROVAL.
+
 ## Otwarte pytania (do rozstrzygnięcia danymi, nie opinią)
 - Czy szacunek kosztu dry_run jest bliski rzeczywistości?
 - Jaki procent szkiców agenta przejdzie bez poprawek człowieka?

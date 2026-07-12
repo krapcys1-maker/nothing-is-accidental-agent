@@ -142,6 +142,16 @@ Naturalne domknięcie punktu 18 — bo pokazuje, co się stało zaraz PO tym, ja
 
 **Dlaczego to dobry materiał:** rzadki, uczciwy przykład dwóch KOLEJNYCH podejść do tego samego problemu tego samego dnia — pierwsze płytsze (podnieś limit), drugie głębsze (zmień konstrukcję) — z jasno pokazanym momentem, w którym ktoś (człowiek, nie agent) zatrzymał tę pierwszą, gorszą ścieżkę.
 
+## 20. Najdroższa rzecz, której jeszcze nie uruchomiliśmy — świadomy preflight (2026-07-12)
+
+Po sześciu realnych requestach i koszcie projektu 0,500616 USD nadal nie było kompletnej Research Card. Następnej próby nie uruchomiono odruchowo. Najpierw offline policzono każdy etap świeżego runu: A1 0,033956 USD, cztery A2 łącznie 0,153824 USD, B 0,013500 USD, czyli 0,201280 USD oczekiwanego kosztu. Konserwatywna kalkulacja wyniosła 0,510375 USD, a limit przedstawiony właścicielowi — 0,55 USD.
+
+Cztery źródła są interesującym kompromisem narracyjnym i technicznym: pipeline potrzebuje trzech udanych ekstrakcji, więc czwarte źródło kupuje odporność na dokładnie jedną awarię. Retry pozostaje wyłączony, a dwie awarie zakończą próbę bez syntezy.
+
+**Zdanie do artykułu:** „Pierwszy raz sukces nie oznaczał kliknięcia Enter. Oznaczał, że potrafiliśmy dokładnie powiedzieć, ile możemy stracić, gdzie możemy przegrać i dlaczego jeszcze niczego nie uruchomiliśmy”.
+
+Koszt przygotowania: 0,000000 USD; zero API, zero Playwrighta i zero zmian statusów. Wynik był gotowością do decyzji człowieka, nie zgodą udzieloną przez system.
+
 ## Powiązania
-- Źródła: `00`–`10`, `docs/BUILD_LOG.md`, `docs/DECISIONS.md` (ADR-017, ADR-019, ADR-020), `docs/COSTS.csv`, `docs/IMPLEMENTATION_PLAN.md` CZĘŚĆ D, CZĘŚĆ E, CZĘŚĆ F
+- Źródła: `00`–`10`, `docs/BUILD_LOG.md`, `docs/DECISIONS.md` (ADR-017, ADR-019, ADR-020), `docs/COSTS.csv`, `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` CZĘŚĆ D, CZĘŚĆ E, CZĘŚĆ F
 - Następny krok redakcyjny: szkic w `article-series/artykul-01-dlaczego-wlasny-substack.md`

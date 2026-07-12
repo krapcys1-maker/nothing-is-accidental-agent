@@ -193,3 +193,25 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Czy może się powtórzyć:** tak przy ponownym użyciu niekompatybilnej metody; naprawiona wersja nie zależy od `GetRelativePath`.
 - **Wpływ na harmonogram / koszt:** kilka minut; 0 USD; żadna treść sekretu nie została wypisana ani wysłana.
 - **Status:** FIXED przed stagingiem i przed jakimkolwiek push.
+
+### [2026-07-12] Regex z alternacją został źle zacytowany w PowerShell podczas offline audytu A1/A2/B
+- **Kategoria:** TECH
+- **Ryzyko z planu:** —
+- **Konto / run_id:** —
+- **Co miało działać:** `rg` miał jednorazowo zindeksować funkcje, flagi bezpieczeństwa i testy związane z staged research.
+- **Co się zepsuło:** podwójne cudzysłowy pozwoliły PowerShellowi potraktować znak `|` we fragmencie regexu `research_(discover|extract|...)` jako operator potoku/polecenie.
+- **Pełny komunikat błędu:** `discover : The term 'discover' is not recognized as the name of a cmdlet...`
+- **Prawdopodobna przyczyna:** quoting powłoki, nie błąd kodu projektu.
+- **Sposób naprawy:** cały regex przekazano `rg` w pojedynczych cudzysłowach; powtórzone wyszukiwanie zakończyło się poprawnie.
+- **Liczba prób:** 2.
+- **Czy może się powtórzyć:** tak przy użyciu niebezpiecznego quoting w PowerShell; mitygacja: pojedyncze cudzysłowy dla regexów zawierających `|`.
+- **Wpływ na harmonogram / koszt:** poniżej minuty, 0 USD, zero modyfikacji plików/bazy i zero wywołań API.
+- **Status:** FIXED.
+## 2026-07-12 — final verification pointed at the wrong SQLite filename
+
+- **Expected:** perform a read-only confirmation that topic 2 still had the existing `FAILED` and `PARTIAL` research runs.
+- **Failure:** the helper command opened `data/nothing_is_accidental.db` instead of configured `data/agent.db`; SQLite created an empty 0-byte file and the query failed with `no such table: research_runs`.
+- **Cause:** the database filename was assumed instead of read from `app/core/config.py`.
+- **Recovery:** removed only the newly created empty file, then repeated the read-only query against `data/agent.db`.
+- **Result:** 2 runs remain unchanged (`FAILED`, `PARTIAL`); no status or application data was modified; no API call and no cost.
+- **Prevention:** resolve `settings.db_path` or inspect configuration before diagnostic SQLite commands.

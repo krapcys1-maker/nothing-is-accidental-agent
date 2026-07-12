@@ -109,7 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
                             help="ID tematu; domyślnie najlepszy SELECTED.")
     p_research.add_argument("--account", default=DEFAULT_ACCOUNT, help="ID konta.")
     p_research.add_argument("--real", action="store_true",
-                            help="ZABLOKOWANE (P0-3, docs/AUDYT_ARCHITEKTURY_2026-07-12.md) — "
+                            help="ZABLOKOWANE (P0-3, docs/archive/superseded_plans/AUDYT_ARCHITEKTURY_2026-07-12.md) — "
                                  "ta ścieżka nie ma capu ani limitu web searchy. Do realnego "
                                  "researchu użyj scripts/run_capped_research.py.")
     p_research.set_defaults(func=_cmd_run_research)

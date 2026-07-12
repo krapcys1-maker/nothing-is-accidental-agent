@@ -59,7 +59,7 @@ Te „eksperymenty" nie testują treści, tylko samą zdolność systemu do bezp
 - **Status:** PLANNED (wymaga zbudowania SAFE MODE — nie zbudowane).
 
 ### EXP-08 — Test przejścia LEVEL_1 → LEVEL_2
-- **Hipoteza:** po spełnieniu warunków (`IMPLEMENTATION_PLAN.md §D.3`) system może bezpiecznie działać bez ręcznej akceptacji pojedynczych Notes/komentarzy, utrzymując jakość porównywalną z LEVEL_1.
+- **Hipoteza:** po spełnieniu warunków (`docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md §D.3`) system może bezpiecznie działać bez ręcznej akceptacji pojedynczych Notes/komentarzy, utrzymując jakość porównywalną z LEVEL_1.
 - **Zmienna:** poziom autonomii (LEVEL_1 z ręczną akceptacją vs LEVEL_2 bez niej, przy tych samych progach scoringu).
 - **Metryka sukcesu:** wskaźnik odrzuceń/ukryć po publikacji na LEVEL_2 nie wyższy niż na LEVEL_1; zero naruszeń limitów.
 - **Okres:** minimum kilka dni po przejściu, zanim wyciągniemy wnioski.
@@ -71,4 +71,4 @@ Te „eksperymenty" nie testują treści, tylko samą zdolność systemu do bezp
 - Nie zmieniać wielu zmiennych naraz.
 
 ## Powiązania
-- `docs/experiments/_TEMPLATE.md` (szablon techniczny), `13_WYNIKI_SUBSTACKA.md`, `docs/IMPLEMENTATION_PLAN.md` §A.9 (atrybucja)
+- `docs/experiments/_TEMPLATE.md` (szablon techniczny), `13_WYNIKI_SUBSTACKA.md`, `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` §A.9 (atrybucja)

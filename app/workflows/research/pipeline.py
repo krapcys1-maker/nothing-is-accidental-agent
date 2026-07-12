@@ -963,7 +963,7 @@ def run_source_extraction(
                             stop_reason=extraction.stop_reason)
 
         card = extraction.card
-        # P0-2a (docs/AUDYT_ARCHITEKTURY_2026-07-12.md): gdy etap A2 nie miał dostępu do
+        # P0-2a (docs/archive/superseded_plans/AUDYT_ARCHITEKTURY_2026-07-12.md): gdy etap A2 nie miał dostępu do
         # narzędzia wyszukiwania (max_web_searches_per_source<=0), model nie miał jak
         # NAPRAWDĘ zweryfikować źródła — samoocena "VERIFIED" w tej sytuacji byłaby
         # dokładnie tym, przed czym projekt ma chronić (wiedza modelu zastępująca dowód).
@@ -1156,7 +1156,7 @@ def run_synthesis_from_cards(
             draft.strongest_counterargument = injection_guard.neutralize(
                 draft.strongest_counterargument)
 
-    # P0-2b (docs/AUDYT_ARCHITEKTURY_2026-07-12.md): dla REALNYCH runów wymagamy, żeby
+    # P0-2b (docs/archive/superseded_plans/AUDYT_ARCHITEKTURY_2026-07-12.md): dla REALNYCH runów wymagamy, żeby
     # co najmniej `research_min_sources` źródeł było faktycznie VERIFIED, nie tylko
     # nie-FAILED — inaczej karta zbudowana z samych UNVERIFIED (np. etap A2 bez dostępu
     # do wyszukiwania, patrz run_source_extraction niżej) przechodziłaby bramkę. W

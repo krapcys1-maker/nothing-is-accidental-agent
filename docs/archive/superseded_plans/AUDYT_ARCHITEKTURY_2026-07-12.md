@@ -1,3 +1,6 @@
+> **ARCHIVED — NOT A SOURCE OF TRUTH. DO NOT USE FOR IMPLEMENTATION.**
+> Dokument historyczny (zarchiwizowany 2026-07-12). Obowiazuja wylacznie: MASTER_ARCHITECTURE.md, IMPLEMENTATION_ROADMAP.md, CURRENT_PROJECT_STATE.md (korzen repozytorium) oraz rejestr decyzji docs/DECISIONS.md.
+
 # AUDYT ARCHITEKTURY — „Nothing Is Accidental"
 
 **Data:** 2026-07-12 · **Zakres:** całe repozytorium (kod, migracje, konfiguracja, docs/, opis-budowy-substack/, testy) · **Tryb:** wyłącznie odczyt — zero zmian w kodzie, zero wywołań API, zero Playwrighta, zero publikacji.

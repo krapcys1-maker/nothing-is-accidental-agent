@@ -1,3 +1,6 @@
+> **ARCHIVED — NOT A SOURCE OF TRUTH. DO NOT USE FOR IMPLEMENTATION.**
+> Dokument historyczny (zarchiwizowany 2026-07-12). Obowiazuja wylacznie: MASTER_ARCHITECTURE.md, IMPLEMENTATION_ROADMAP.md, CURRENT_PROJECT_STATE.md (korzen repozytorium) oraz rejestr decyzji docs/DECISIONS.md.
+
 # IMPLEMENTATION PLAN — Nothing Is Accidental Agent (MVP)
 
 Wersja: 1.0 · Data: 2026-07-11 · Status: **DO AKCEPTACJI** (kod nie został napisany)
@@ -1426,3 +1429,20 @@ python scripts/run_capped_research.py --topic-id 2 \
 ```
 
 Świadomie MINIMALNY: 2 web search (oba w A1), 2 Source Cards ekstrahowane BEZ dodatkowego wyszukiwania per źródło (`--max-web-searches-per-source 0` — A2 opiera się na URL/tytule z A1 i wiedzy modelu, nie na świeżym fetchu). Priorytet: potwierdzić MECHANIKĘ nowej architektury (atomowe zapisy, statusy, diagnostyka) na żywym API, nie jakość treści — bogatszy test z wyszukiwaniem per źródło to naturalny kolejny krok, po potwierdzeniu, że sama architektura działa. Cap 0,25 USD > estymacja conservative 0,2085 USD (margines się mieści). Jeśli A2 padnie dla któregoś źródła — pozostałe źródła MUSZĄ przetrwać (to jest właśnie to, co ten test ma udowodnić na żywo, nie tylko na fake'ach).
+
+### F.10 — Proponowany świeży run dla pierwszej kompletnej Research Card (OFFLINE PRE-FLIGHT, czeka na zgodę)
+
+Status: **PROPOSED / READY FOR OWNER APPROVAL**, zero API w ramach przygotowania. Poprzedni PARTIAL nie jest wznawiany.
+
+```
+.venv\Scripts\python.exe scripts/run_capped_research.py --topic-id 2 --account nothing_is_accidental --mode three-stage --discovery-max-searches 1 --discovery-max-tokens 600 --max-sources 4 --max-web-searches-per-source 1 --extraction-max-tokens 1500 --max-retries 0 --synthesize-max-tokens 2200 --forwarded-context-tokens 2500 --max-cost-usd 0.55
+```
+
+| Etap | Expected USD | Conservative USD | Twarda granica |
+|---|---:|---:|---|
+| A1 discovery | 0,033956 | 0,092625 | 1 search, 600 output tokens, do 4 kandydatów |
+| A2 extraction ×4 | 0,153824 | 0,397500 | max 4 źródła, 1 search i 1500 output tokens per źródło |
+| B synthesis | 0,013500 | 0,020250 | 0 search, 2200 output tokens, 2500 forwarded context |
+| **TOTAL** | **0,201280** | **0,510375** | max 5 searchy, retry=0 |
+
+Rekomendowany approved cap = **0,55 USD**. Czwarte źródło kupuje tolerancję jednej awarii A2 przy progu 3 VERIFIED; większa liczba nie ma jeszcze uzasadnienia. Cap jest pre-flightem, nie runtime limiterem. P0-2c i P1-2..6 pozostają jawnie otwarte.

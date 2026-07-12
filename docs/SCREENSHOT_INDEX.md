@@ -96,20 +96,20 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 
 ### [—] 05_first-architecture
 - **Plik:** docs/screenshots/YYYY-MM-DD_HHMM_first-architecture.png
-- **Co pokazuje:** pierwszą architekturę systemu (diagram/sekcja z `IMPLEMENTATION_PLAN.md §B.1` lub `ARCHITECTURE.md §5`).
+- **Co pokazuje:** pierwszą architekturę systemu (diagram/sekcja z `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md §B.1` lub `docs/archive/superseded_plans/ARCHITECTURE.md §5`).
 - **Dlaczego ważny:** „architektura na papierze" na starcie — do porównania z tym, co realnie zbudowano (`ARCHITECTURE_EVOLUTION.md`).
 - **Etap projektu:** V0
-- **CO OTWORZYĆ:** `docs/IMPLEMENTATION_PLAN.md` (sekcja architektury) w edytorze/podglądzie Markdown.
+- **CO OTWORZYĆ:** `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` (sekcja architektury) w edytorze/podglądzie Markdown.
 - **CO MA BYĆ WIDOCZNE:** diagram warstw / mermaid architektury.
 - **CZEGO NIE MOŻE BYĆ WIDAĆ:** żadnego otwartego `.env`, kluczy, terminala z sekretami.
 - **Status:** SCREENSHOT REQUIRED
 
 ### [—] 06_first-implementation-plan
 - **Plik:** docs/screenshots/YYYY-MM-DD_HHMM_first-implementation-plan.png
-- **Co pokazuje:** pierwszy plan implementacji (nagłówek + spis sekcji `docs/IMPLEMENTATION_PLAN.md`).
+- **Co pokazuje:** pierwszy plan implementacji (nagłówek + spis sekcji `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md`).
 - **Dlaczego ważny:** punkt odniesienia „plan vs rzeczywistość".
 - **Etap projektu:** V0
-- **CO OTWORZYĆ:** `docs/IMPLEMENTATION_PLAN.md` — góra dokumentu / spis części A–C.
+- **CO OTWORZYĆ:** `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` — góra dokumentu / spis części A–C.
 - **CO MA BYĆ WIDOCZNE:** tytuł, data, struktura planu.
 - **CZEGO NIE MOŻE BYĆ WIDAĆ:** sekretów, kluczy, prywatnych danych.
 - **Status:** SCREENSHOT REQUIRED
@@ -133,3 +133,13 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **CO MA BYĆ WIDOCZNE:** nazwa repozytorium, badge `Private`, branche `main` i `dev/a2-stabilization`.
 - **CZEGO NIE MOŻE BYĆ WIDAĆ:** tokenów GitHub, adresu e-mail, ustawień konta, `.env`, terminala z danymi uwierzytelnienia ani prywatnych informacji profilu.
 - **Status:** SCREENSHOT REQUIRED (nie używano przeglądarki/Playwrighta w tym zadaniu)
+
+### [2026-07-12] first-research-card-offline-preflight
+- **Plik:** docs/screenshots/YYYY-MM-DD_HHMM_first-research-card-offline-preflight.png
+- **Co pokazuje:** terminal z wynikiem `--estimate-only`, tabelą kosztów A1/A2/B, łącznym kosztem oczekiwanym 0,201280 USD, konserwatywnym 0,510375 USD i limitem 0,55 USD.
+- **Dlaczego ważny:** dokumentuje moment, w którym pełny realny run był gotowy do świadomej akceptacji, ale nie został jeszcze uruchomiony.
+- **Etap projektu:** Etap 1O — offline preflight pierwszej kompletnej Research Card.
+- **CO OTWORZYĆ:** terminal i ponownie wykonać wyłącznie bezpłatną komendę z `--estimate-only`.
+- **CO MA BYĆ WIDOCZNE:** tryb `three-stage`, limity źródeł/wyszukiwań/retry, rozbicie A1/A2/B i komunikat o zerowym koszcie estimate-only.
+- **CZEGO NIE MOŻE BYĆ WIDAĆ:** wartości klucza API, `.env`, danych uwierzytelnienia, surowych odpowiedzi diagnostycznych ani prywatnych danych.
+- **Status:** SCREENSHOT REQUIRED (zgodnie z zakazem nie używano Playwrighta ani przeglądarki)

@@ -75,7 +75,7 @@ Za `BrowserPort`. Osobny persistent context per konto w `data/browser-profiles/<
 - **RESEARCH_ONLY** — tylko tematy/źródła/autorzy.
 
 ## Poziomy autonomii
-> **Cel końcowy = LEVEL_3, nie LEVEL_1/2 (ADR-017).** Człowiek zatwierdza poziom autonomii i granice działania, nie każdą pojedynczą akcję. Pełna specyfikacja: `docs/IMPLEMENTATION_PLAN.md` CZĘŚĆ D.
+> **Cel końcowy = LEVEL_3, nie LEVEL_1/2 (ADR-017).** Człowiek zatwierdza poziom autonomii i granice działania, nie każdą pojedynczą akcję. Pełna specyfikacja: `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` CZĘŚĆ D.
 
 LEVEL_0 (dry_run, tylko szkice, offline) → LEVEL_1 (kontrolowane realne testy, publikacja tylko za jawną, jednorazową zgodą — **etap przejściowy, dziś tu jesteśmy**, nie stan docelowy) → LEVEL_2 (pierwszy realny poziom autonomiczny: Notes/komentarze/odpowiedzi/lajki/subskrypcje/research/**artykuły** publikowane samodzielnie po przejściu scoringu, bez ręcznej akceptacji pojedynczej akcji) → LEVEL_3 (cel końcowy: pełna autonomia operacyjna — własny harmonogram, zarządzanie Topic Inventory, drobne zmiany strategii w twardych granicach; człowiek zachowuje kill switch, budżet, wgląd w logi, możliwość zatrzymania).
 
@@ -108,10 +108,10 @@ Zmiana architektoniczna wywołana incydentem V2.1: pesymistyczny szacunek kosztu
 **Następna planowana wersja (nie zbudowana):** V4 — realne uruchomienie dwuetapowego pipeline'u (wymaga nowej, osobnej zgody właściciela), generator artykułów/Notes + panel FastAPI.
 
 ### [2026-07-11] Redefinicja stanu DOCELOWEGO (nie nowa wersja kodu — korekta celu)
-Właściciel doprecyzował (ADR-017), że architektura docelowa to **LEVEL_3 — pełna autonomia operacyjna**, nie asystent wymagający ręcznej akceptacji każdej akcji na stałe. Poprzednie sformułowania („LEVEL_2 — docelowy sufit, artykuły/komentarze zawsze za akceptacją") opisywały fazę startową, nie cel. **Stan faktyczny kodu się nie zmienił** (wciąż V3 wyżej) — to korekta dokumentacji celu, nie nowa implementacja. Pełna specyfikacja: `docs/IMPLEMENTATION_PLAN.md` CZĘŚĆ D.
+Właściciel doprecyzował (ADR-017), że architektura docelowa to **LEVEL_3 — pełna autonomia operacyjna**, nie asystent wymagający ręcznej akceptacji każdej akcji na stałe. Poprzednie sformułowania („LEVEL_2 — docelowy sufit, artykuły/komentarze zawsze za akceptacją") opisywały fazę startową, nie cel. **Stan faktyczny kodu się nie zmienił** (wciąż V3 wyżej) — to korekta dokumentacji celu, nie nowa implementacja. Pełna specyfikacja: `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` CZĘŚĆ D.
 
 ## Powiązania
 - `ARCHITECTURE.md` (architektura docelowa, §4 zaktualizowane wg ADR-017)
-- `docs/ARCHITECTURE_EVOLUTION.md` (źródło ewolucji), `docs/IMPLEMENTATION_PLAN.md` §B.1–B.6, CZĘŚĆ D
+- `docs/ARCHITECTURE_EVOLUTION.md` (źródło ewolucji), `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` §B.1–B.6, CZĘŚĆ D
 - `docs/DECISIONS.md` — ADR-006/011/012/013/014/015/016/017
 - diagramy: `diagrams/` (do wyeksportowania)

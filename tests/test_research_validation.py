@@ -71,7 +71,7 @@ def test_claims_without_sources():
 
 
 def test_too_few_verified_sources_rejected_even_when_not_failed():
-    """P0-2b (docs/AUDYT_ARCHITEKTURY_2026-07-12.md): UNVERIFIED (nie FAILED) źródła nie
+    """P0-2b (docs/archive/superseded_plans/AUDYT_ARCHITEKTURY_2026-07-12.md): UNVERIFIED (nie FAILED) źródła nie
     mogą same wystarczyć do PROCEED, gdy min_verified_sources > 0 — inaczej samoocena
     modelu (etap A2 bez dostępu do wyszukiwania) mogłaby zastąpić prawdziwy dowód."""
     draft = _draft("good")

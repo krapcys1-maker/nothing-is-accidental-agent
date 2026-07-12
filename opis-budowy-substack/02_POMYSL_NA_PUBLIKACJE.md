@@ -74,6 +74,6 @@ Kierunek: nowoczesny, redakcyjny, lekko filmowy, elegancki, prosty. Bez tandetne
 - **Świeży** względem przesyconego rynku treści o AI.
 
 ## Powiązania
-- `zalozenia projektu/PROJEKT_AGENT_SUBSTACK_NIC_NIE_JEST_PRZYPADKOWE.md` (źródło opisu publikacji)
+- `docs/archive/superseded_plans/PROJEKT_AGENT_SUBSTACK_NIC_NIE_JEST_PRZYPADKOWE.md` (źródło opisu publikacji)
 - `docs/architecture/SUBSTACK_INTEGRATION.md` (dane konta)
 - `00_START_PROJEKTU.md`, `03_ARCHITEKTURA_AGENTA.md`

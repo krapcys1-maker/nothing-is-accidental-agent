@@ -137,6 +137,19 @@ Jednorazowe `max_tokens=5000` było wyłącznie sufitem diagnostycznym; produkcy
 - Dotychczas: sesja planistyczna + przeglądy etapów (2026-07-11). Do systematycznego pomiaru od Etapu 2 (akceptacje treści).
 - Metryka docelowa: **minuty człowieka / artykuł** oraz **minuty człowieka / dzień**.
 
+## Offline preflight pierwszej pełnej Research Card (2026-07-12)
+
+Konfiguracja estimate-only: świeży run trzyetapowy, A1 z 1 wyszukiwaniem, maksymalnie 4 źródła, A2 z 1 wyszukiwaniem i 1500 tokenami na źródło, bez retry, normalny etap B.
+
+| Etap | Oczekiwany | Konserwatywny |
+|---|---:|---:|
+| A1 | 0,033956 USD | 0,092625 USD |
+| A2 × 4 | 0,153824 USD | 0,397500 USD |
+| B | 0,013500 USD | 0,020250 USD |
+| **Razem** | **0,201280 USD** | **0,510375 USD** |
+
+Rekomendowany zatwierdzany cap: **0,55 USD**. Maksymalna liczba wyszukiwań wynikająca z konfiguracji to 5: jedno w A1 oraz po jednym dla najwyżej czterech źródeł A2. Jest to wyłącznie kalkulacja przed decyzją właściciela; nie wykonano żadnego API, więc koszt zadania wynosi 0,000000 USD, `docs/COSTS.csv` pozostaje bez nowego wiersza, a realny koszt projektu pozostaje 0,500616 USD.
+
 ## Koszt całego eksperymentu (na żywo, do domknięcia po 30 dniach)
 | Składnik | Stan |
 |---|---|

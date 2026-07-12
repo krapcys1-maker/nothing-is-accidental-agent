@@ -137,3 +137,9 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Dlaczego trafi do artykułu: wyznacza odtwarzalny punkt początkowy eksperymentu i pokazuje, że bezpieczeństwo danych było częścią procesu, nie porządkiem dodanym po fakcie.
   - Dowód / źródło: `docs/BUILD_LOG.md` Etap 1N, ADR-021, przyszły screenshot `private-github-repository` w `docs/SCREENSHOT_INDEX.md`.
   - Cytowalna liczba: 125 plików w initial commit; 124 staged pliki tekstowe przeskanowane; 0 realnych sekretów; 102 testy zielone.
+
+- **[2026-07-12] Ile kosztuje próba zdobycia pierwszej kompletnej Research Card — zanim wydamy pieniądze** (sekcja: 2, 7, 13, 15)
+  - Co to jest: offline pre-flight świeżego A1/A2/B z czterema źródłami, jednym searchem na źródło, A2=1500 i retry=0.
+  - Dlaczego trafi do artykułu: pokazuje różnicę między expected (typowy punkt odniesienia), conservative (bramka z marginesem) i approved cap; dokumentuje też decyzję, by kupić tolerancję jednej awarii A2 czwartym źródłem.
+  - Dowód / źródło: `scripts/run_capped_research.py --estimate-only`, `docs/BUILD_LOG.md` Etap 1O, ADR-022.
+  - Cytowalne liczby: A1 0,033956/0,092625 USD; A2×4 0,153824/0,397500; B 0,013500/0,020250; TOTAL expected **0,201280**, conservative **0,510375**, proponowany cap **0,55 USD**; pełny test suite 102 passed; koszt przygotowania 0 USD.

@@ -196,8 +196,56 @@ Pełna **chronologia** budowy. Po każdym większym etapie: co chcieliśmy osią
 
 ---
 
+### [2026-07-12] Etap 1O — bezpieczna konfiguracja pierwszej kompletnej Research Card
+
+Cel: przygotować całkowicie offline świeży, trzyetapowy run A1/A2/B, bez jego uruchamiania.
+
+Konfiguracja: A1 ma najwyżej 1 wyszukiwanie i 600 tokenów wyjścia; maksymalnie 4 źródła; każde A2 ma najwyżej 1 wyszukiwanie i 1500 tokenów wyjścia; max_retries=0; B ma 2200 tokenów wyjścia i 2500 tokenów kontekstu; wyłącznie mode=three-stage, bez resume.
+
+Cztery źródła dają minimalny zapas odporności: synteza wymaga co najmniej trzech udanych ekstrakcji, więc pojedynczy błąd A2 nie musi przerwać runu.
+
+| Etap | Oczekiwany | Konserwatywny |
+|---|---:|---:|
+| A1 | 0,033956 USD | 0,092625 USD |
+| A2 (4 źródła) | 0,153824 USD | 0,397500 USD |
+| B | 0,013500 USD | 0,020250 USD |
+| Razem | 0,201280 USD | 0,510375 USD |
+
+Rekomendowany limit akceptacyjny wynosi 0,55 USD. Jest o 0,039625 USD (7,76%) wyższy od konserwatywnej kalkulacji, która sama zawiera 50% marginesu.
+
+Weryfikacja offline: 102 passed; estimate-only nie wykonał API ani nie utworzył runu; test timeoutu potwierdził jedno wywołanie przy max_retries=0; odczyt bazy potwierdził, że istniejący run PARTIAL pozostał bez zmian.
+
+Ryzyka: A2 nadal wyszukuje adres URL zamiast pobierać stronę; limit kosztu jest kontrolą przed startem, a nie bezpiecznikiem w trakcie; timeout może mieć nieznany koszt; bez P1-5 dwa błędy A2 uniemożliwią B; etap B nie ma jeszcze realnego sukcesu.
+
+Koszt etapu: 0,000000 USD. Nie wykonano API, Playwrighta, startu ani wznowienia runu.
+
+Werdykt: READY FOR OWNER APPROVAL.
+
+## Etap 1P — wielki porządek w dokumentacji (2026-07-12)
+
+Po trzech nieudanych realnych próbach researchu i serii napraw projekt miał już cztery
+równoległe dokumenty opisujące „docelową architekturę" — z różnych dat, częściowo sprzeczne.
+Właściciel zlecił pełny audyt architektury i konsolidację: od teraz obowiązują dokładnie trzy
+dokumenty w korzeniu repo (MASTER_ARCHITECTURE.md — architektura, IMPLEMENTATION_ROADMAP.md —
+kolejność prac, CURRENT_PROJECT_STATE.md — rzeczywisty stan), a wszystkie stare plany i audyty
+wylądowały w docs/archive/superseded_plans/ z banerem „ARCHIVED — NOT A SOURCE OF TRUTH".
+
+Audyt zweryfikował stan wyłącznie z kodu, testów i bazy (102 testy zielone, 0,500616 USD
+realnego kosztu, zero publikacji). Ciekawostka procesowa: audyt znalazł też dwa nowe drobiazgi —
+klient tematów nie księguje kosztu przy błędzie parsowania (klient researchu robi to od
+incydentu 11.07), a dwa adaptery portów okazały się martwym kodem. Zero zmian w logice
+aplikacji; następny krok to Etap 0 roadmapy i — po osobnej zgodzie — run z limitem 0,55 USD.
+
+Wniosek do serii: agentowa dokumentacja rozrasta się szybciej niż kod i po tygodniu potrafi
+kłamać. Lekarstwem nie jest „więcej dokumentów", tylko jeden jawny kanon + archiwum z twardym
+ostrzeżeniem.
+
+---
+
 ## Stan bieżący (2026-07-12)
 Zbudowane i przetestowane: Etap 0 + walking skeleton + Etap 1A + Etap 1B + Etap 1C (pierwsza realna próba, nieudana + naprawiony bug kosztowy) + Etap 1D (realny koszt = 0,25 USD wpisany wszędzie, nowy sposób liczenia kosztu, research podzielony na dwa kroki) + Etap 1E (doprecyzowanie celu: pełna autonomia, dokumentacja, zero kodu) + Etap 1F (korekta: brak publicznego ujawniania AI, ADR-018, zasada NO_REPLY, zero kodu) + Etap 1G (pełna wznawialność researchu, ADR-019, zero kodu poza researchem) + Etap 1H (drugi realny test — awaria kroku 1, mechanizmy bezpieczeństwa potwierdzone na żywo) + Etap 1I (przebudowa kroku 1 na szukanie + czytanie pojedynczego źródła, diagnostyka, ADR-020) + Etap 1J (pełny audyt architektury, zero zmian w kodzie, 3 błędy krytyczne znalezione) + Etap 1K (naprawa trzech błędów krytycznych z audytu, zero API) + Etap 1L (trzeci realny test — bezpieczna obsługa błędu i księgowanie kosztu potwierdzone na żywo) + Etap 1M (udana diagnostyka kandydata 3, produkcyjny default A2=1500, naprawione podsumowanie CLI). **102 testy przechodzą.** Dotychczas wykonano cztery zatwierdzone płatne operacje/testy researchu, obejmujące łącznie sześć requestów API; żadna pełna Research Card jeszcze nie powstała. **Łączny realny koszt: 0,500616 USD**, potwierdzony w bazie. Zero publikacji.
+
+**Aktualizacja Etap 1O:** świeży run A1/A2/B dla tematu 2 został przygotowany, lecz nie uruchomiony. Koszt oczekiwany to 0,201280 USD, konserwatywny 0,510375 USD, a proponowany limit akceptacyjny 0,55 USD.
 
 **Następne (niezbudowane):** udana pełna Research Card w nowej architekturze (limit A2 został podniesiony do 1500, ale pełna ścieżka nadal nie ma realnego sukcesu); ponawianie nieudanych prób pojedynczych źródeł (P1-5, świadomie poza tym zadaniem); prawdziwe pobieranie treści źródła (P0-2c, świadomie odłożone); pozostałe pozycje audytu; generator artykułów + 3 audyty; generator Notes; generator komentarzy + Autonomous Interaction Engine; panel FastAPI; Playwright; SAFE MODE; przejścia poziomów autonomii.
 

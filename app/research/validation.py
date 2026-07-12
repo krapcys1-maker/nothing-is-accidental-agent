@@ -38,7 +38,7 @@ def validate_draft(
     min_source_quality: float,
     min_verified_sources: int = 0,
 ) -> ValidationOutcome:
-    """`min_verified_sources` (P0-2b, docs/AUDYT_ARCHITEKTURY_2026-07-12.md): domyślnie 0
+    """`min_verified_sources` (P0-2b, docs/archive/superseded_plans/AUDYT_ARCHITEKTURY_2026-07-12.md): domyślnie 0
     (nieaktywne — zachowuje dotychczasowe zachowanie dla wywołujących, którzy tego nie
     przekazują). Gdy > 0, UNVERIFIED przestaje wystarczać do PROCEED razem z VERIFIED —
     liczą się WYŁĄCZNIE źródła faktycznie zweryfikowane (verification == VERIFIED).

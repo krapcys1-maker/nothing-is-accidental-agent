@@ -1,3 +1,6 @@
+> **ARCHIVED — NOT A SOURCE OF TRUTH. DO NOT USE FOR IMPLEMENTATION.**
+> Dokument historyczny (zarchiwizowany 2026-07-12). Obowiazuja wylacznie: MASTER_ARCHITECTURE.md, IMPLEMENTATION_ROADMAP.md, CURRENT_PROJECT_STATE.md (korzen repozytorium) oraz rejestr decyzji docs/DECISIONS.md.
+
 # Architektura integracji z istniejącym kontem Substack
 
 Status: **PROJEKT** (na obecnym etapie nie łączymy się z kontem — tylko opisujemy jak to zrobimy). Data: 2026-07-11.

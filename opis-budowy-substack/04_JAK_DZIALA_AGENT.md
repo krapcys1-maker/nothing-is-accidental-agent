@@ -66,11 +66,11 @@ Rolę „zatwierdzenia" na docelowych poziomach (LEVEL_2/LEVEL_3) przejmuje **de
 
 **Najważniejsze zdanie:** *„Człowiek zatwierdza poziom autonomii i granice działania, a nie każdą pojedynczą akcję agenta."* Człowiek nadal: ustala budżet i zasady bezpieczeństwa, zatwierdza przejście na wyższy poziom autonomii, ma wyłącznik awaryjny, widzi logi i raporty, może w każdej chwili zatrzymać agenta.
 
-**Co się nigdy nie zmienia, niezależnie od poziomu (ADR-018):** konto publiczne NIE ujawnia proaktywnie, że treść tworzy agent AI — działa jako anonimowa marka redakcyjna, bez fikcyjnej osoby, bez wymyślonej biografii czy doświadczeń. Informacja o AI zostaje wyłącznie w prywatnej dokumentacji projektu (`docs/`, `opis-budowy-substack/`, logi), do osobnej, jednoznacznej decyzji właściciela o ujawnieniu eksperymentu. Jeśli ktoś wprost zapyta „czy jesteś botem?" — agent nie odpowiada na ten wątek i nie generuje żadnego zaprzeczenia (zero „nie, jestem człowiekiem"); pytanie trafia tylko do prywatnego logu. Pełna zasada: `docs/IMPLEMENTATION_PLAN.md §D.5a` (IDENTITY_DISCLOSURE_QUESTION / NO_REPLY).
+**Co się nigdy nie zmienia, niezależnie od poziomu (ADR-018):** konto publiczne NIE ujawnia proaktywnie, że treść tworzy agent AI — działa jako anonimowa marka redakcyjna, bez fikcyjnej osoby, bez wymyślonej biografii czy doświadczeń. Informacja o AI zostaje wyłącznie w prywatnej dokumentacji projektu (`docs/`, `opis-budowy-substack/`, logi), do osobnej, jednoznacznej decyzji właściciela o ujawnieniu eksperymentu. Jeśli ktoś wprost zapyta „czy jesteś botem?" — agent nie odpowiada na ten wątek i nie generuje żadnego zaprzeczenia (zero „nie, jestem człowiekiem"); pytanie trafia tylko do prywatnego logu. Pełna zasada: `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md §D.5a` (IDENTITY_DISCLOSURE_QUESTION / NO_REPLY).
 
-Pełny opis czterech poziomów (LEVEL_0→3), warunków przejścia między nimi i „SAFE MODE" (automatyczne wyhamowanie przy sygnałach problemu): `docs/IMPLEMENTATION_PLAN.md` CZĘŚĆ D.
+Pełny opis czterech poziomów (LEVEL_0→3), warunków przejścia między nimi i „SAFE MODE" (automatyczne wyhamowanie przy sygnałach problemu): `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` CZĘŚĆ D.
 
 ## Powiązania
-- `docs/IMPLEMENTATION_PLAN.md` §B.7 (przepływy), §B.8 (akceptacje — dziś), CZĘŚĆ D (docelowo)
+- `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` §B.7 (przepływy), §B.8 (akceptacje — dziś), CZĘŚĆ D (docelowo)
 - `docs/DECISIONS.md` ADR-017
 - `03_ARCHITEKTURA_AGENTA.md`, `10_FRAGMENTY_KODU.md`

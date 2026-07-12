@@ -433,7 +433,7 @@ def test_no_diagnostics_written_in_dry_run(settings, storage, account):
     assert not diagnostics_dir(settings.data_dir, run_id).exists()
 
 
-# --- Audyt 2026-07-12 (docs/AUDYT_ARCHITEKTURY_2026-07-12.md) — testy sekcji 22, pozycje 1-2 ---
+# --- Audyt 2026-07-12 (docs/archive/superseded_plans/AUDYT_ARCHITEKTURY_2026-07-12.md) — testy sekcji 22, pozycje 1-2 ---
 
 def test_real_mode_staged_pipeline_reaches_success_not_running(settings, storage, account):
     """P0-1: przed naprawą KAŻDY realny (dry_run=False) sukces — w tym cały etapowy

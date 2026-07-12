@@ -1,4 +1,4 @@
-"""Testy bezpieczeństwa app/orchestrator/runner.py (P0-3, docs/AUDYT_ARCHITEKTURY_2026-07-12.md)."""
+"""Testy bezpieczeństwa app/orchestrator/runner.py (P0-3, docs/archive/superseded_plans/AUDYT_ARCHITEKTURY_2026-07-12.md)."""
 from __future__ import annotations
 
 import pytest
