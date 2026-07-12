@@ -85,6 +85,7 @@ from app.workflows.research.docs_writer import make_research_log_writer  # noqa:
 from app.workflows.research.pipeline import (  # noqa: E402
     resume_research_stage_b,
     resume_staged_research,
+    retry_failed_source_candidates,
     run_research_pipeline,
     run_staged_research_pipeline,
     run_two_stage_research_pipeline,
@@ -144,7 +145,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="Wznów DOKŁADNIE JEDEN kolejny etap dla istniejącego "
                              "research_run_id — status w bazie decyduje który (A2/B dla "
                              "three-stage, etap 2 dla starszych runów). Nigdy nie powtarza "
-                             "już wykonanych płatnych etapów.")
+                              "już wykonanych płatnych etapów.")
+    parser.add_argument("--retry-failed-candidates", action="store_true",
+                        help="Wyłącznie z --resume: jawnie resetuje eligible EXTRACTION_FAILED "
+                             "do PENDING_EXTRACTION. Nie wykonuje API ani A2; po nim potrzebne "
+                             "jest osobne --resume.")
     parser.add_argument("--account", default=DEFAULT_ACCOUNT)
     parser.add_argument("--mode", choices=["three-stage", "two-stage", "single"],
                         default="three-stage",
@@ -188,16 +193,31 @@ def main(argv: list[str] | None = None) -> int:
                              "1500 (podniesione ze starego 500 po diagnostyce 2026-07-12 — "
                              "udana diagnostyka kandydata id=3 zwróciła 915 tokenów; "
                              "jednorazowe 5000 nie jest defaultem produkcyjnym, "
-                             "patrz docs/ERRORS_AND_FAILURES.md).")
+                              "patrz docs/ERRORS_AND_FAILURES.md).")
+    parser.add_argument("--max-extraction-attempts", type=int, default=2,
+                        help="[three-stage] Łączny cap rozpoczętych prób A2 na kandydata: "
+                             "domyślnie 2 (pierwsza próba + najwyżej jedno jawne retry). "
+                             "To nie jest --max-retries transportowego klienta.")
     parser.add_argument("--estimate-only", action="store_true",
                         help="Pokaż pełną estymację i zakończ — ZERO wywołań API.")
     args = parser.parse_args(argv)
 
+    if args.max_extraction_attempts < 1:
+        print("STOP: --max-extraction-attempts musi być dodatnie.")
+        return 1
+    if args.retry_failed_candidates and args.resume is None:
+        print("STOP: --retry-failed-candidates wymaga --resume RESEARCH_RUN_ID.")
+        return 1
+    if args.retry_failed_candidates and args.estimate_only:
+        print("STOP: --retry-failed-candidates nie łączy się z --estimate-only.")
+        return 1
     if args.resume is None and args.topic_id is None:
         print("STOP: podaj --topic-id (nowy research) lub --resume RESEARCH_RUN_ID "
               "(wznowienie dokładnie jednego kolejnego etapu).")
         return 1
 
+    if args.retry_failed_candidates:
+        return _run_retry_failed_candidates(args)
     if args.resume is not None:
         return _run_resume(args)
     return _run_fresh(args)
@@ -329,6 +349,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
             max_sources=args.max_sources,
             max_web_searches_per_source=args.max_web_searches_per_source,
             extraction_max_tokens=args.extraction_max_tokens,
+            max_attempts=args.max_extraction_attempts,
             synthesize_max_tokens=args.synthesize_max_tokens,
             forwarded_context_tokens=args.forwarded_context_tokens,
         )
@@ -384,6 +405,17 @@ def _run_resume(args: argparse.Namespace) -> int:
             f"dozwolone statusy dla tego flow: {allowed_description}."
         )
         return 1
+    if flow == ResearchFlow.STAGED:
+        uncertain = storage.list_source_candidates(
+            args.resume, SourceCandidateStatus.EXTRACTION_IN_PROGRESS,
+        )
+        if uncertain:
+            print(
+                f"STOP: research_run #{args.resume} ma {len(uncertain)} kandydatÃ³w "
+                "EXTRACTION_IN_PROGRESS; zwykÅ‚e resume wymaga jawnej decyzji recovery "
+                "i nie tworzy klienta API."
+            )
+            return 1
 
     print("=" * 70)
     print("PRE-FLIGHT CHECKS — WZNOWIENIE (przed jakimkolwiek wywołaniem API)")
@@ -412,6 +444,29 @@ def _run_resume(args: argparse.Namespace) -> int:
     raise ValueError(
         f"research_run #{args.resume}: unsupported stored flow '{flow.value}'."
     )
+
+
+def _run_retry_failed_candidates(args: argparse.Namespace) -> int:
+    """Bezpłatna, jawna mutacja kandydatów; celowo bez preflightu i bez klienta API."""
+    settings = load_settings()
+    storage = SqliteStorage.open(settings.db_path)
+    try:
+        result = retry_failed_source_candidates(
+            args.resume, settings=settings, storage=storage,
+            account_id=args.account,
+            max_attempts=args.max_extraction_attempts,
+        )
+    except ValueError as exc:
+        print(f"STOP: {exc}")
+        return 1
+    research_run = storage.get_research_run(args.resume)
+    print("retry-failed-candidates: API nie zostało wywołane; A2 nie zostało uruchomione.")
+    print(f"reset={result.reset_count} skipped_cap={result.skipped_cap_count} "
+          f"already_pending={result.already_pending_count} "
+          f"in_progress={result.in_progress_count} reopened={int(result.reopened_run)} "
+          f"remaining_failed={result.remaining_failed_count}")
+    print(f"status research_run: {research_run.status.value}")
+    return 0
 
 
 def _run_resume_legacy(args, settings, storage, clock, research_run, prior_cost,
@@ -535,6 +590,7 @@ def _run_resume_staged(args, settings, storage, clock, research_run, prior_cost,
         clock=clock, research_log=research_log, max_sources=args.max_sources,
         max_web_searches_per_source=args.max_web_searches_per_source,
         extraction_max_tokens=args.extraction_max_tokens,
+        max_attempts=getattr(args, "max_extraction_attempts", 2),
         synthesize_max_tokens=args.synthesize_max_tokens,
         forwarded_context_tokens=args.forwarded_context_tokens,
     )

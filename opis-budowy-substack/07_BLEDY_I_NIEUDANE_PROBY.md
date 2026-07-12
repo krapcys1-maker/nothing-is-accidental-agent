@@ -135,6 +135,20 @@ Każdy wpis: co miało działać · co nie zadziałało · dlaczego · jak napra
 - **Wynik:** nadal dokładnie 2 runy (`FAILED`, `PARTIAL`), bez zmiany statusów lub danych; zero API i kosztu.
 - **Zapobieganie:** ścieżkę do bazy brać z konfiguracji, nie zakładać jej nazwy.
 
+### [2026-07-12] Stary test migracji pomylił nową wersję schematu z błędem migracji — [TEST]
+- **Co miało działać:** po dodaniu 0007 istniejące testy flow miały nadal potwierdzać bezpieczne zastosowanie migracji od schematu 0005.
+- **Co nie zadziałało:** pięć testów oczekiwało listy z samym `0006_research_run_flow`; rzeczywisty wynik poprawnie zawierał także `0007_candidate_attempts`.
+- **Dlaczego:** test był zbyt literalnie związany z liczbą kolejnych migracji, choć jego intencją było sprawdzenie zachowania 0006.
+- **Jak naprawiono:** rozszerzono oczekiwane listy i dopisano osobny test 0007 dla `attempts=0` w danych historycznych, `integrity_check` i `foreign_key_check`.
+- **Wynik:** 153 testy zielone; to błąd testu wykryty offline, bez API, bazy produkcyjnej i kosztu.
+
+### [2026-07-12] Review pokazał, że `attempts=0` i osobny COMMIT nie są neutralne — [SAFETY]
+- **Co miało działać:** cap 2 miał oznaczać pierwszą próbę i jedno retry, a migracja miała być ponawialna po awarii.
+- **Co nie działało:** historyczny failed z zerem dostawał dwa kolejne retry; rekord pending po przerwaniu mógł przekroczyć cap; schema mógł zostać zmieniony przed wpisem wersji.
+- **Dlaczego:** zero nie kodowało dolnej granicy znanej ze statusu, a licznik bez stanu in-progress nie opisywał niepewnego wyniku zewnętrznego calla. DDL i ledger miały osobne commity.
+- **Jak naprawiono:** backfill 0/1, warunkowy claim do `EXTRACTION_IN_PROGRESS`, jawny higher-cap reopen i jedna transakcja migration runnera. Trigger SQLite sprawdza rollback schema razem z ledgerem.
+- **Wynik:** 164 testy zielone, 0 USD, zero API i bez dotykania źródłowej bazy.
+
 ## Kategoria „jeszcze nieodkryte" (świadome luki, spodziewane błędy)
 Te pozycje **jeszcze się nie wydarzyły**, bo nie doszliśmy do odpowiednich etapów. Zapisujemy je jako spodziewane pola ryzyka, żeby uczciwie pokazać, czego się obawiamy (ryzyka R2–R12 z planu):
 - **[BROWSER/R2/R3]** zmiany UI Substacka, wygaśnięcie sesji / 2FA — spodziewane przy Etapie 4.
@@ -142,6 +156,7 @@ Te pozycje **jeszcze się nie wydarzyły**, bo nie doszliśmy do odpowiednich et
 - **[INJECTION/R4]** prawdziwa próba prompt injection z treści internetowej — mechanizm obronny zbudowany, ale nietestowany na żywych danych.
 - ~~**[COST/R7]** realny rozjazd „szacunek dry_run vs faktyczny koszt" — pojawi się przy pierwszym `--real`.~~ **WYDARZYŁO SIĘ i jest udokumentowane wyżej** (0,095 USD szacunek vs 0,25 USD realnie, błąd +163%) — ryzyko potwierdzone, naprawa wdrożona.
 - **[ACCOUNT/R10]** pomyłka konta — chronione przez `account_id` w każdej akcji; test izolacji obowiązkowy przed włączeniem drugiego konta.
+- **[DATA/P2]** ujemne `attempts` w ręcznie uszkodzonym rekordzie może ominąć cap; normalny kod takich wartości nie tworzy. Plan: dolna granica w claimie/modelu i ewentualny CHECK constraint.
 
 ## Podsumowanie liczbowe (stan 2026-07-12, po diagnostyce limitu A2)
 - Błędy techniczne/kosztowe wykryte i naprawione: **10** (wcześniejsze 8 + lokalna niezgodność `anthropic/httpx` + błędne, niepełne podsumowanie usage/kosztu A2 w CLI). Osobno skorygowano zbyt niski default A2 z 500 do 1500 po diagnostyce.

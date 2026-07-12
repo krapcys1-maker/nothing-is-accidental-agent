@@ -149,3 +149,15 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Dlaczego trafi do artykułu: to mały, konkretny przykład rozróżnienia między księgą zdarzeń a stanem pochodnym — szczególnie ważny przy awarii po płatnym callu albo wznowieniu procesu.
   - Dowód / źródło: `app/storage/repositories.py`, `app/workflows/research/pipeline.py`, `tests/test_staged_research_extraction.py`, BUILD_LOG Etap 0 / zadanie 2.
   - Cytowalne liczby: **139** testów zielonych; **12** regresji Task 2 i poprawek po review; WAL potwierdzany dla połączeń plikowych, timeout **5000 ms**; koszt implementacji/testów **0 USD**.
+
+- **[2026-07-12] Retry nie może udawać zwykłego wznowienia** (Etap 0 / Task 3)
+  - Fakt: historyczny run `9bbeb020` miał dwa `EXTRACTION_FAILED`; zwykłe resume odczytywało wyłącznie pending, więc nie mogło potajemnie spróbować jeszcze raz ani domknąć brakujących źródeł.
+  - Decyzja: `attempts` liczy rozpoczęte A2; retry jest osobną komendą, domyślny cap to 2 próby łącznie, a sam reset nie tworzy `model_usage` ani kosztu.
+  - Kontrast do wykorzystania w artykule: bezpieczeństwo nie polega na zakazie retry, lecz na tym, aby moment podjęcia ryzyka i jego limit były widoczne oraz świadome.
+  - Dowód: migracja 0007 zastosowana na pamięciowej kopii bazy (`integrity_check=ok`, `foreign_key_check=[]`), 14 nowych regresji, **153 passed**, koszt **0 USD**, zero API i realnego researchu.
+
+- **[2026-07-12] Licznik nie jest dowodem, że request się wydarzył** (korekta Task 3 po review)
+  - Fakt: inkrementacja „tuż przed callem” tworzy crash-window; bez osobnego stanu zwykłe resume nie rozróżnia nieprzetworzonego źródła od requestu o nieznanym skutku.
+  - Decyzja: `attempts` to zarezerwowana próba, a `EXTRACTION_IN_PROGRESS` jest uczciwym zapisem niepewności. Historyczne statusy dają tylko dolną granicę 0/1, nie wymyśloną historię.
+  - Kontrast do artykułu: system nie stał się bezpieczny dlatego, że dodał licznik; stał się bezpieczniejszy, gdy przestał udawać wiedzę o skutku przerwanego działania.
+  - Dowód: reprodukcje `2→3`, historyczne ≥3 calle przy capie 2 oraz rollback DDL+ledgeru; 87 testów celowanych, **164 passed**, 0 USD i zero API.

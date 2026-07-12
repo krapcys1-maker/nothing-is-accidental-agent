@@ -87,3 +87,20 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Jaki był efekt:** Task 2 wykonano offline; kanon kosztu pozostał `model_usage`, a cache `runs.cost_usd` jest odświeżany bez podwójnego doliczania.
 - **Czas człowieka:** niezmierzony (instrukcja tekstowa).
 - **Wpływ na strategię:** brak zmiany ADR; utrzymano kolejność Etapu 0 i warunek osobnej zgody na realny run.
+
+### [2026-07-12] APPROVAL — wykonanie wyłącznie Etapu 0 / Task 3
+- **Typ:** APPROVAL
+- **Konto:** — (cały projekt)
+- **Obiekt:** capowany retry `EXTRACTION_FAILED`, migracja 0007 i `PARTIAL_EXHAUSTED`.
+- **Co agent chciał zrobić:** odblokować bezpieczną, ręcznie inicjowaną drogę dla historycznego PARTIAL bez wznawiania go ani wykonywania API.
+- **Dlaczego człowiek zareagował:** retry może prowadzić do przyszłego kosztu, więc właściciel wymagał jawnej komendy, capu, testów i pozostawienia working tree do review.
+- **Co zostało zmienione:** zatwierdzono wyłącznie Task 3; zakazano Task 4+, API, realnego researchu, Playwrighta, commita, pushu i zmiany produkcyjnej bazy.
+- **Jaki był efekt:** implementacja resetuje tylko eligible failed i sam reset kosztuje 0 USD; żaden realny run nie został zmieniony.
+
+### [2026-07-12] APPROVAL — poprawki P1/P2 po niezależnym review Task 3
+- **Typ:** APPROVAL
+- **Konto:** — (cały projekt)
+- **Obiekt:** wyłącznie findings review dla attempts, claimu A2, `PARTIAL_EXHAUSTED`, migracji/ledgeru, izolacji kont i wpisu screenshot.
+- **Co agent miał zrobić:** poprawić implementację Task 3 oraz regresje bez uruchamiania retry na historycznym runie.
+- **Co zostało zmienione:** właściciel rozszerzył autoryzację Task 3 o naprawę czterech P1 i bezpośrednio związanych P2; utrzymał zakaz API, researchu, Playwrighta, Task 4+, commita i pushu.
+- **Jaki był efekt:** poprawki i testy wykonano offline; źródłowa baza nie została otwarta do migracji ani zmieniona.

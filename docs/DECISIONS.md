@@ -318,6 +318,20 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Zmieniona później:** nie.
 - **Powiązania:** MASTER_ARCHITECTURE.md, IMPLEMENTATION_ROADMAP.md, CURRENT_PROJECT_STATE.md, docs/archive/superseded_plans/README.md, ADR-017/018/020/022.
 
+### ADR-024: Jawne, capowane ponowienie A2 zamiast automatycznego retry
+- **Data:** 2026-07-12
+- **Status:** ACCEPTED (zakres i granice wskazane przez właściciela w Task 3)
+- **Czego dotyczyła:** historyczny run `9bbeb020` zawiera nieudane kandydaty A2, lecz status `EXTRACTION_FAILED` nie miał drogi powrotu. Zwykłe resume czytało tylko `PENDING_EXTRACTION`, więc częściowy run mógł pozostać niezamykalny.
+- **Rozważane opcje:** A) automatycznie resetować każdy failed podczas resume; B) zwiększać retry klienta przez `--max-retries`; C) zapisywać liczbę rozpoczętych A2 i resetować failed wyłącznie przez osobną, jawną operację z limitem.
+- **Decyzja i uzasadnienie:** C, doprecyzowane po niezależnym review. `attempts` oznacza liczbę **atomowo zarezerwowanych/rozpoczętych** prób A2, nie gwarancję dotarcia calla do providera. Jeden warunkowy claim wymaga `PENDING_EXTRACTION` i `attempts < cap`, zwiększa licznik i ustawia `EXTRACTION_IN_PROGRESS`; sukces/błąd przechodzą stamtąd do `EXTRACTED`/`EXTRACTION_FAILED`. Awaria po claimie lub callu zostawia jawny stan niepewny, którego zwykłe resume nie ponawia. Migracja zapisuje historyczne `PENDING=0`, `EXTRACTED=1`, `EXTRACTION_FAILED=1` jako konserwatywną dolną granicę, nie pełną historię. `--retry-failed-candidates` wymaga `--resume`, wybranego zgodnego konta i nie tworzy klienta ani `model_usage`. Domyślny cap `--max-extraction-attempts=2` oznacza pierwszą próbę i najwyżej jedno świadomie uruchomione retry; jest niezależny od technicznego `--max-retries` klienta.
+- **PARTIAL_EXHAUSTED:** gdy EXTRACTED < minimum i nie ma legalnego `PENDING`/failed poniżej aktualnego capu, run otrzymuje status terminalny dla zwykłego resume. Tylko jawne `retry-failed-candidates`, uruchomione z wyższym capem, może atomowo zresetować eligible failed i przejść `PARTIAL_EXHAUSTED → PARTIAL`; bez eligible failed status nie zmienia się.
+- **Migracja:** od 0007 runner obejmuje jednym `BEGIN IMMEDIATE` DDL/backfill oraz wpis `schema_migrations`; crash lub błąd ledgeru wycofuje oba elementy. Plik 0007 nie otwiera własnej transakcji, starsze migracje zachowują historyczny kontrakt.
+- **Zalety:** koszt dodatkowego calla nigdy nie jest ukryty za zwykłym resume; cap jest egzekwowany przy samym claimie; reset i odblokowanie są bezpłatne oraz idempotentne; testy dokumentują backfill, crash-window, konkurencyjny claim, dynamiczny cap, rollback migracji i CLI.
+- **Ryzyka:** `EXTRACTION_IN_PROGRESS` celowo wymaga przyszłej, jawnej decyzji recovery; nie wprowadzono automatycznego timeoutowego recovery ani workera. Re-discovery pozostaje osobnym zakresem Etapu 2.
+- **Kto podjął:** właściciel zatwierdził granice Task 3; wykonanie: Codex.
+- **Zmieniona później:** nie.
+- **Powiązania:** migracja `0007_candidate_attempts.sql`, `pipeline.retry_failed_source_candidates`, `scripts/run_capped_research.py`, `tests/test_candidate_attempts.py`.
+
 ---
 
 ## Decyzje otwarte (wymagają właściciela)

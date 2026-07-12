@@ -131,6 +131,18 @@ Po każdym etapie: co nas zaskoczyło, co działało, co nie, co agent robił le
 - **Granica rozwiązania:** WAL jest potwierdzany dla bazy plikowej, a timeout 5000 ms jest ustawiany przed próbą przełączenia trybu; nie zastępuje to przyszłego workera, lease ani walidacji przejść stanów.
 - **Materiał do artykułu:** dobra, zwięzła lekcja: „pole z całkowitym kosztem nie powinno być drugim księgowym; powinno być odtwarzalnym widokiem księgi".
 
+### Wnioski po jawnym retry A2 (2026-07-12, ADR-024)
+- **Co zaskoczyło:** „wznów run” i „spróbuj ponownie tego samego źródła” brzmią podobnie, ale są różnymi decyzjami kosztowymi. Zlanie ich w jedno zwykłe resume ukryłoby następne wywołanie modelu.
+- **Co działa:** `attempts` zapisuje rozpoczęte A2, retry jest osobnym ruchem z capem, a wyczerpanie daje `PARTIAL_EXHAUSTED` zamiast pętli pozornie wznawialnych komend. Reset jest bezpłatny i idempotentny.
+- **Granica rozwiązania:** licznik chroni przed niekontrolowanym retry, nie tworzy nowych kandydatów ani nie poprawia P0-2c; re-discovery pozostaje przyszłą, odrębną decyzją.
+- **Dowód:** pamięciowa kopia historycznej bazy przeszła oba pragma, 14 regresji Task 3 i 153 testy pełne; koszt pracy 0 USD i zero API.
+
+### Wnioski po korekcie retry przez niezależne review (2026-07-12)
+- **Co zaskoczyło:** „inkrementuj tuż przed callem” jest dobrą ostrożnością kosztową, ale nie jest opisem faktu, że call na pewno dotarł. Awaria zamienia tę różnicę w decyzję produktową.
+- **Co działa:** atomowy claim zapisuje rezerwację i `EXTRACTION_IN_PROGRESS`; zwykłe resume zatrzymuje się przy niepewności. Historyczna baza dostaje minimalną wiedzę 0/1, nie wygodną fikcję zera.
+- **Granica rozwiązania:** nie ma automatycznego timeout recovery. Przyszły worker musi kiedyś dostarczyć jawny lease/recovery, ale dziś bezpieczniej odmówić niż kupić kolejny call.
+- **Materiał do artykułu:** „Najważniejszą informacją po awarii nie jest to, ile razy próbowaliśmy. Jest nią to, czy wolno nam udawać, że wiemy, co stało się ostatnim razem.”
+
 ## Otwarte pytania (do rozstrzygnięcia danymi, nie opinią)
 - Czy szacunek kosztu dry_run jest bliski rzeczywistości?
 - Jaki procent szkiców agenta przejdzie bez poprawek człowieka?

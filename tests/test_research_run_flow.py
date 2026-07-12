@@ -137,7 +137,7 @@ def test_migration_0006_backfills_all_historical_flows(tmp_path: Path):
         )
     }
 
-    assert apply_migrations(conn) == ["0006_research_run_flow"]
+    assert apply_migrations(conn) == ["0006_research_run_flow", "0007_candidate_attempts"]
 
     rows = {
         row["id"]: row
@@ -191,7 +191,7 @@ def test_migration_0006_backfills_all_historical_flows(tmp_path: Path):
 def test_migration_0006_runs_on_clean_empty_database(tmp_path: Path):
     conn = _database_through_0005(tmp_path / "clean.db")
 
-    assert apply_migrations(conn) == ["0006_research_run_flow"]
+    assert apply_migrations(conn) == ["0006_research_run_flow", "0007_candidate_attempts"]
     assert conn.execute("SELECT count(*) FROM research_runs").fetchone()[0] == 0
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
@@ -209,7 +209,7 @@ def test_migration_0006_without_paid_single_uuid(tmp_path: Path):
     _seed_historical_runs(conn)
     _delete_historical_run(conn, "1b649314-27cf-4b29-857e-287175664a3f")
 
-    assert apply_migrations(conn) == ["0006_research_run_flow"]
+    assert apply_migrations(conn) == ["0006_research_run_flow", "0007_candidate_attempts"]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
     assert "1b649314-27cf-4b29-857e-287175664a3f" not in flows
@@ -225,7 +225,7 @@ def test_migration_0006_without_either_local_single_uuid(tmp_path: Path):
     _delete_historical_run(conn, "1b649314-27cf-4b29-857e-287175664a3f")
     _delete_historical_run(conn, "bda661bc-59c9-4f4e-9313-86c659bde74d")
 
-    assert apply_migrations(conn) == ["0006_research_run_flow"]
+    assert apply_migrations(conn) == ["0006_research_run_flow", "0007_candidate_attempts"]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
     assert flows == {
@@ -283,7 +283,7 @@ def test_migration_0006_rolls_back_on_conflicting_flow_signals(tmp_path: Path):
 
 def test_database_rejects_invalid_or_missing_flow(tmp_path: Path):
     conn = _database_through_0005(tmp_path / "flow-constraints.db")
-    assert apply_migrations(conn) == ["0006_research_run_flow"]
+    assert apply_migrations(conn) == ["0006_research_run_flow", "0007_candidate_attempts"]
     conn.execute(
         "INSERT INTO accounts "
         "(id,name,mode,autonomy_level,active,browser_profile_path,writing_profile_path) "
@@ -310,6 +310,76 @@ def test_database_rejects_invalid_or_missing_flow(tmp_path: Path):
             "VALUES ('missing-flow','a',1,'PENDING')"
         )
     conn.rollback()
+    conn.close()
+
+
+def test_migration_0007_backfills_conservative_historical_attempt_lower_bound(tmp_path: Path):
+    conn = _database_through_0005(tmp_path / "candidate-attempts.db")
+    _seed_historical_runs(conn)
+    conn.executemany(
+        "INSERT INTO research_source_candidates (research_run_id,url,title,status) VALUES (?,?,?,?)",
+        [
+            ("9bbeb020-staged", "https://example.org/extracted", "Extracted", "EXTRACTED"),
+            ("9bbeb020-staged", "https://example.org/failed", "Failed", "EXTRACTION_FAILED"),
+        ],
+    )
+    conn.commit()
+
+    assert apply_migrations(conn) == ["0006_research_run_flow", "0007_candidate_attempts"]
+
+    attempts_column = next(
+        row for row in conn.execute("PRAGMA table_info(research_source_candidates)")
+        if row["name"] == "attempts"
+    )
+    assert (attempts_column["type"], attempts_column["notnull"], attempts_column["dflt_value"]) == (
+        "INTEGER", 1, "0",
+    )
+    attempts = {
+        row["status"]: row["attempts"]
+        for row in conn.execute(
+            "SELECT status,attempts FROM research_source_candidates "
+            "WHERE research_run_id='9bbeb020-staged'"
+        )
+    }
+    assert attempts == {
+        "PENDING_EXTRACTION": 0,
+        "EXTRACTED": 1,
+        "EXTRACTION_FAILED": 1,
+    }
+    assert apply_migrations(conn) == []
+    assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    conn.close()
+
+
+def test_migration_0007_rolls_back_schema_when_ledger_insert_fails(tmp_path: Path):
+    conn = _database_through_0005(tmp_path / "attempts-ledger-rollback.db")
+    conn.execute(
+        "CREATE TRIGGER reject_attempts_ledger BEFORE INSERT ON schema_migrations "
+        "WHEN NEW.version='0007_candidate_attempts' "
+        "BEGIN SELECT RAISE(ABORT, 'forced ledger failure'); END"
+    )
+    conn.commit()
+
+    with pytest.raises(sqlite3.IntegrityError, match="forced ledger failure"):
+        apply_migrations(conn)
+
+    assert "attempts" not in {
+        row["name"] for row in conn.execute("PRAGMA table_info(research_source_candidates)")
+    }
+    assert conn.execute(
+        "SELECT count(*) FROM schema_migrations WHERE version='0007_candidate_attempts'"
+    ).fetchone()[0] == 0
+
+    conn.execute("DROP TRIGGER reject_attempts_ledger")
+    conn.commit()
+    assert apply_migrations(conn) == ["0007_candidate_attempts"]
+    assert "attempts" in {
+        row["name"] for row in conn.execute("PRAGMA table_info(research_source_candidates)")
+    }
+    assert conn.execute(
+        "SELECT count(*) FROM schema_migrations WHERE version='0007_candidate_attempts'"
+    ).fetchone()[0] == 1
     conn.close()
 
 
@@ -420,9 +490,11 @@ def test_single_resume_validation_rejects_staged_run(account):
 
 
 class _CliResumeStorage:
-    def __init__(self, research_run: ResearchRun, *, reject_post_lookup: bool = False):
+    def __init__(self, research_run: ResearchRun, *, reject_post_lookup: bool = False,
+                 uncertain_count: int = 0):
         self.research_run = research_run
         self.reject_post_lookup = reject_post_lookup
+        self.uncertain_count = uncertain_count
         self.calls: list[str] = []
 
     def get_research_run(self, run_id: str) -> ResearchRun:
@@ -435,6 +507,11 @@ class _CliResumeStorage:
         if self.reject_post_lookup:
             raise AssertionError("invalid resume reached usage/estimation path")
         return []
+
+    def list_source_candidates(self, run_id: str, status=None):
+        self.calls.append("list_source_candidates")
+        assert run_id == self.research_run.id
+        return [object()] * self.uncertain_count
 
     def sum_real_cost_usd(self, prefix: str) -> float:
         self.calls.append("sum_real_cost_usd")
@@ -536,13 +613,28 @@ def test_cli_resume_dispatches_valid_status_by_persisted_flow(
     assert "get_research_usage" in storage.calls
 
 
+def test_cli_resume_refuses_uncertain_candidate_before_preflight_or_client(
+        monkeypatch, capsys, account):
+    run = ResearchRun(
+        id="cli-uncertain-staged", account_id=account.id, topic_id=1,
+        flow=ResearchFlow.STAGED, status=ResearchRunStatus.DISCOVERY_COMPLETE,
+    )
+    storage = _CliResumeStorage(run, reject_post_lookup=True, uncertain_count=1)
+    capped_script = _patch_cli_resume_environment(monkeypatch, storage)
+
+    assert capped_script._run_resume(Namespace(resume=run.id)) == 1
+    assert storage.calls == ["get_research_run", "list_source_candidates"]
+    assert "EXTRACTION_IN_PROGRESS" in capsys.readouterr().out
+
+
 def test_resume_dispatch_uses_only_persisted_flow():
     import scripts.run_capped_research as capped_script
 
     source = inspect.getsource(capped_script._run_resume)
     assert "research_run.flow" in source
     assert "_detect_flow" not in source
-    assert "list_source_candidates" not in source
+    # Candidate reads are allowed solely for the explicit uncertain-A2 safety guard;
+    # flow dispatch itself remains based only on the persisted research_run.flow.
     assert "list_research_sources" not in source
 
     project_root = Path(__file__).resolve().parents[1]

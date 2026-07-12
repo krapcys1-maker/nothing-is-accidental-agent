@@ -162,6 +162,26 @@ To ma dobry wymiar narracyjny: po pierwszym incydencie nauczyliśmy się, że ko
 
 **Zdanie do artykułu:** „Najpierw nauczyliśmy agenta zapisywać rachunki. Potem musieliśmy nauczyć go, że podsumowanie rachunków nie może mieć własnej pamięci."
 
+## 22. Retry jako decyzja, nie odruch (2026-07-12, ADR-024)
+
+Po serii błędów A2 pojawiła się kusząca „prosta” naprawa: gdy run jest częściowy, po prostu spróbuj failed jeszcze raz przy zwykłym resume. Taki mechanizm wyglądałby jak odzyskiwanie, ale w praktyce ukrywałby następny płatny request za komendą, która miała tylko kontynuować nieprzetworzone dane.
+
+Zamiast tego każdy kandydat dostał licznik rozpoczętych prób. Pierwszy call zmienia 0 na 1; dopiero osobna, jasno nazwana komenda może przywrócić failed do kolejki, i tylko poniżej capu 2. Sam reset nie woła modelu ani nie tworzy kosztu. Jeśli nic legalnego już nie zostało, system mówi `PARTIAL_EXHAUSTED` i odmawia zwykłego resume.
+
+**Zdanie do artykułu:** „Najbezpieczniejszy retry to taki, którego nie da się pomylić ze zwykłym wznowieniem.”
+
+To zrobiono całkowicie offline: test migracji na pamięciowej kopii prawdziwej bazy, 14 nowych regresji i **153 testy zielone**, 0 USD. Nie naprawiono jeszcze pobierania faktycznej treści strony ani nie uruchomiono historycznego runu — bezpieczeństwo mechanizmu nie jest dowodem jakości researchu.
+
+## 23. Licznik, który musiał przyznać się do niepewności (2026-07-12)
+
+Review wykazał, że pierwsza wersja retry opowiadała zbyt prostą historię. `attempts=0` dla starego błędu sugerowało brak wcześniejszej próby, choć sam status mówił coś przeciwnego. A licznik zwiększany przed callem zostawiał po awarii rekord wyglądający jak zwykła praca do zrobienia. Następne resume mogło więc kupić kolejną próbę pod niewinną nazwą „wznów”.
+
+Naprawa nie polegała na lepszym zgadywaniu. Rekord dostał stan `EXTRACTION_IN_PROGRESS`: próba jest zarezerwowana, ale jej wynik nie jest jeszcze zapisany. To nie jest porażka ani sukces — to uczciwe „nie wiemy”. Zwykłe resume ma wtedy się zatrzymać. Tylko jawna polityka recovery może kiedyś zdecydować, co dalej.
+
+**Zdanie do artykułu:** „Dobry system po awarii nie udaje pamięci. Zostawia miejsce na zdanie: nie wiemy, czy to już się wydarzyło.”
+
+Ta korekta dodała też atomiczność migracji i możliwość świadomego podniesienia capu, jeśli exhausted run naprawdę odzyskuje legalny ruch. Wszystko sprawdzone offline: **164 testy**, 0 USD, zero API i bez zmian źródłowej bazy.
+
 ## Powiązania
 - Źródła: `00`–`10`, `docs/BUILD_LOG.md`, `docs/DECISIONS.md` (ADR-017, ADR-019, ADR-020), `docs/COSTS.csv`, `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` CZĘŚĆ D, CZĘŚĆ E, CZĘŚĆ F
 - Następny krok redakcyjny: szkic w `article-series/artykul-01-dlaczego-wlasny-substack.md`

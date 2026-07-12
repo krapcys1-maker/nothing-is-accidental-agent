@@ -22,6 +22,7 @@ from app.models import (
     RunStatus,
     Source,
     SourceCandidateRecord,
+    SourceCandidateRetryResult,
     SourceCandidateStatus,
     SourceType,
     SourceVerification,
@@ -543,6 +544,7 @@ class SqliteStorage:
             source_quality_score=r["source_quality_score"],
             status=SourceCandidateStatus(r["status"]),
             extraction_error=r["extraction_error"],
+            attempts=r["attempts"],
             discovered_at=r["discovered_at"], extracted_at=r["extracted_at"],
         )
 
@@ -564,29 +566,165 @@ class SqliteStorage:
         """Zapisuje pełną Source Card dla JEDNEGO kandydata — commit NATYCHMIAST, nie
         czeka na pozostałych. To jest sedno odporności etapu A2: awaria źródła N+1 nie
         wpływa na już zapisane źródło N."""
-        self.conn.execute(
+        cursor = self.conn.execute(
             "UPDATE research_source_candidates SET title=?, author_or_org=?,"
             " published_at=?, source_type=?, supported_claims_json=?, numeric_facts_json=?,"
             " verification_status=?, source_quality_score=?, status=?, extraction_error=NULL,"
-            " extracted_at=? WHERE id=?",
+            " extracted_at=? WHERE id=? AND status=?",
             (
                 title, author_or_org, published_at, source_type.value,
                 json.dumps(supported_claims), json.dumps(numeric_facts),
                 verification_status.value, source_quality_score,
                 SourceCandidateStatus.EXTRACTED.value, _ts(), candidate_id,
+                SourceCandidateStatus.EXTRACTION_IN_PROGRESS.value,
             ),
         )
+        if cursor.rowcount != 1:
+            self.conn.rollback()
+            raise ValueError(
+                f"Source candidate #{candidate_id} is not EXTRACTION_IN_PROGRESS; "
+                "cannot persist extraction success."
+            )
         self.conn.commit()
 
     def mark_source_candidate_failed(self, candidate_id: int, error: str) -> None:
         """Ekstrakcja nieudana dla JEDNEGO źródła — commit NATYCHMIAST. Inne kandydaci
         (przetworzeni wcześniej lub później) są nietknięci."""
-        self.conn.execute(
+        cursor = self.conn.execute(
             "UPDATE research_source_candidates SET status=?, extraction_error=?,"
-            " extracted_at=? WHERE id=?",
-            (SourceCandidateStatus.EXTRACTION_FAILED.value, error, _ts(), candidate_id),
+            " extracted_at=? WHERE id=? AND status=?",
+            (
+                SourceCandidateStatus.EXTRACTION_FAILED.value, error, _ts(), candidate_id,
+                SourceCandidateStatus.EXTRACTION_IN_PROGRESS.value,
+            ),
         )
+        if cursor.rowcount != 1:
+            self.conn.rollback()
+            raise ValueError(
+                f"Source candidate #{candidate_id} is not EXTRACTION_IN_PROGRESS; "
+                "cannot persist extraction failure."
+            )
         self.conn.commit()
+
+    def claim_source_candidate_attempt(self, candidate_id: int, *, max_attempts: int) -> int:
+        """Atomically reserves one legal A2 attempt before the external call.
+
+        The conditional UPDATE makes the candidate unavailable to another process
+        and enforces the cap at the only point where a model call may begin.
+        """
+        if max_attempts < 1:
+            raise ValueError("max_attempts must be positive.")
+        cursor = self.conn.execute(
+            "UPDATE research_source_candidates "
+            "SET attempts=attempts+1, status=? "
+            "WHERE id=? AND status=? AND attempts < ?",
+            (
+                SourceCandidateStatus.EXTRACTION_IN_PROGRESS.value,
+                candidate_id, SourceCandidateStatus.PENDING_EXTRACTION.value, max_attempts,
+            ),
+        )
+        if cursor.rowcount != 1:
+            self.conn.rollback()
+            raise ValueError(
+                f"Source candidate #{candidate_id} is not claimable "
+                "(requires PENDING_EXTRACTION below attempts cap)."
+            )
+        row = self.conn.execute(
+            "SELECT attempts FROM research_source_candidates WHERE id=?", (candidate_id,)
+        ).fetchone()
+        self.conn.commit()
+        return int(row["attempts"])
+
+    def retry_failed_source_candidates(
+        self, research_run_id: str, *, max_attempts: int,
+    ) -> SourceCandidateRetryResult:
+        """Idempotentnie przygotowuje tylko eligible EXTRACTION_FAILED do jawnego A2.
+
+        Reset nie zmienia attempts, kosztu ani usage. Dla PARTIAL_EXHAUSTED z co
+        najmniej jednym resetem atomowo otwiera run z powrotem jako PARTIAL. Historia
+        zakończonych prób pozostaje w research_stage_results i diagnostyce.
+        """
+        if max_attempts < 1:
+            raise ValueError("max_attempts musi być dodatnie.")
+        self.conn.execute("BEGIN")
+        try:
+            run_row = self.conn.execute(
+                "SELECT status FROM research_runs WHERE id=?", (research_run_id,)
+            ).fetchone()
+            if run_row is None:
+                raise ValueError(f"Research run #{research_run_id} does not exist.")
+            if run_row["status"] not in (
+                ResearchRunStatus.PARTIAL.value,
+                ResearchRunStatus.PARTIAL_EXHAUSTED.value,
+            ):
+                raise ValueError(
+                    f"Research run #{research_run_id} cannot retry failed candidates "
+                    f"from status {run_row['status']}."
+                )
+            rows = self.conn.execute(
+                "SELECT id, status, attempts FROM research_source_candidates "
+                "WHERE research_run_id=? ORDER BY id ASC",
+                (research_run_id,),
+            ).fetchall()
+            reset_count = 0
+            skipped_cap_count = 0
+            already_pending_count = 0
+            in_progress_count = 0
+            for row in rows:
+                status = SourceCandidateStatus(row["status"])
+                if status == SourceCandidateStatus.PENDING_EXTRACTION:
+                    already_pending_count += 1
+                elif status == SourceCandidateStatus.EXTRACTION_IN_PROGRESS:
+                    in_progress_count += 1
+                elif status == SourceCandidateStatus.EXTRACTION_FAILED:
+                    if row["attempts"] < max_attempts:
+                        cursor = self.conn.execute(
+                            "UPDATE research_source_candidates SET status=? "
+                            "WHERE id=? AND status=? AND attempts < ?",
+                            (
+                                SourceCandidateStatus.PENDING_EXTRACTION.value, row["id"],
+                                SourceCandidateStatus.EXTRACTION_FAILED.value, max_attempts,
+                            ),
+                        )
+                        reset_count += cursor.rowcount
+                    else:
+                        skipped_cap_count += 1
+            remaining_failed_count = int(self.conn.execute(
+                "SELECT count(*) FROM research_source_candidates "
+                "WHERE research_run_id=? AND status=?",
+                (research_run_id, SourceCandidateStatus.EXTRACTION_FAILED.value),
+            ).fetchone()[0])
+            reopened_run = False
+            if (
+                run_row["status"] == ResearchRunStatus.PARTIAL_EXHAUSTED.value
+                and reset_count > 0
+            ):
+                cursor = self.conn.execute(
+                    "UPDATE research_runs SET status=?, error=NULL, updated_at=? "
+                    "WHERE id=? AND status=?",
+                    (
+                        ResearchRunStatus.PARTIAL.value, _ts(), research_run_id,
+                        ResearchRunStatus.PARTIAL_EXHAUSTED.value,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise ValueError(
+                        f"Research run #{research_run_id} could not be reopened from "
+                        "PARTIAL_EXHAUSTED."
+                    )
+                reopened_run = True
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+        return SourceCandidateRetryResult(
+            reset_count=reset_count,
+            skipped_cap_count=skipped_cap_count,
+            already_pending_count=already_pending_count,
+            in_progress_count=in_progress_count,
+            remaining_failed_count=remaining_failed_count,
+            reopened_run=reopened_run,
+        )
 
     def mark_sources_complete(self, research_run_id: str) -> None:
         """Etap A2 dał >= research_min_sources wyekstrahowanych kart — gotowe do etapu B."""
@@ -595,6 +733,26 @@ class SqliteStorage:
             " WHERE id=?",
             (ResearchRunStatus.SOURCES_COMPLETE.value, _ts(), _ts(), research_run_id),
         )
+        self.conn.commit()
+
+    def mark_research_run_partial_exhausted(self, research_run_id: str, error: str) -> None:
+        """Terminalny brak legalnej drogi A2: nie ma pending ani failed poniżej capu."""
+        cursor = self.conn.execute(
+            "UPDATE research_runs SET status=?, error=?, updated_at=? "
+            "WHERE id=? AND status IN (?,?,?)",
+            (
+                ResearchRunStatus.PARTIAL_EXHAUSTED.value, error, _ts(), research_run_id,
+                ResearchRunStatus.DISCOVERY_COMPLETE.value,
+                ResearchRunStatus.EXTRACTION_IN_PROGRESS.value,
+                ResearchRunStatus.PARTIAL.value,
+            ),
+        )
+        if cursor.rowcount != 1:
+            self.conn.rollback()
+            raise ValueError(
+                f"Research run #{research_run_id} cannot transition to PARTIAL_EXHAUSTED "
+                "from its current status."
+            )
         self.conn.commit()
 
     def mark_synthesis_pending(self, research_run_id: str) -> None:

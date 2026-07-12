@@ -188,6 +188,7 @@ class ResearchRunStatus(str, Enum):
     EXTRACTION_IN_PROGRESS = "EXTRACTION_IN_PROGRESS"  # etap A2 w toku/wznawialny (część źródeł już wyekstrahowana)
     SOURCES_COMPLETE = "SOURCES_COMPLETE"           # etap A2 dał >= min_sources kart — gotowe do etapu B
     SYNTHESIS_PENDING = "SYNTHESIS_PENDING"         # etap B właśnie w trakcie próby
+    PARTIAL_EXHAUSTED = "PARTIAL_EXHAUSTED"          # za mało źródeł i brak legalnego retry A2
     # --- wspólne dla obu przepływów ---
     PARTIAL = "PARTIAL"                    # za mało źródeł/wyników — zachowane, ale poniżej progu
     COMPLETE = "COMPLETE"                  # etap B udany, pełna Research Card istnieje
@@ -202,6 +203,7 @@ class ResearchFlow(str, Enum):
 
 class SourceCandidateStatus(str, Enum):
     PENDING_EXTRACTION = "PENDING_EXTRACTION"   # z etapu A1, jeszcze nie próbowano A2
+    EXTRACTION_IN_PROGRESS = "EXTRACTION_IN_PROGRESS"  # A2 reserved; durable result not yet saved
     EXTRACTED = "EXTRACTED"                     # etap A2 udany dla TEGO źródła
     EXTRACTION_FAILED = "EXTRACTION_FAILED"     # etap A2 nieudany dla TEGO źródła (inne nietknięte)
 
@@ -275,5 +277,19 @@ class SourceCandidateRecord(BaseModel):
     source_quality_score: float = 0.0
     status: SourceCandidateStatus = SourceCandidateStatus.PENDING_EXTRACTION
     extraction_error: str | None = None
+    # Atomically reserved/started A2 attempts. It does not prove a provider call
+    # completed: a crash leaves the candidate EXTRACTION_IN_PROGRESS for recovery.
+    attempts: int = 0
     discovered_at: datetime = Field(default_factory=_utcnow)
     extracted_at: datetime | None = None
+
+
+class SourceCandidateRetryResult(BaseModel):
+    """Wynik idempotentnego, jawnego resetu nieudanych kandydatów A2."""
+
+    reset_count: int = 0
+    skipped_cap_count: int = 0
+    already_pending_count: int = 0
+    in_progress_count: int = 0
+    remaining_failed_count: int = 0
+    reopened_run: bool = False

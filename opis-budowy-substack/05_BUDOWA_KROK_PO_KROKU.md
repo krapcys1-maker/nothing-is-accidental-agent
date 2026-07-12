@@ -273,7 +273,23 @@ Zbudowane i przetestowane: Etap 0 + walking skeleton + Etap 1A + Etap 1B + Etap 
 
 **Aktualizacja Etap 1O:** świeży run A1/A2/B dla tematu 2 został przygotowany, lecz nie uruchomiony. Koszt oczekiwany to 0,201280 USD, konserwatywny 0,510375 USD, a proponowany limit akceptacyjny 0,55 USD.
 
-**Następne (niezbudowane):** udana pełna Research Card w nowej architekturze (limit A2 został podniesiony do 1500, ale pełna ścieżka nadal nie ma realnego sukcesu); ponawianie nieudanych prób pojedynczych źródeł (P1-5, świadomie poza tym zadaniem); prawdziwe pobieranie treści źródła (P0-2c, świadomie odłożone); pozostałe pozycje audytu; generator artykułów + 3 audyty; generator Notes; generator komentarzy + Autonomous Interaction Engine; panel FastAPI; Playwright; SAFE MODE; przejścia poziomów autonomii.
+## Etap 0 / Task 3 — retry, które nie dzieje się samo (2026-07-12)
+
+Po poprzednim etapie `9bbeb020` był częściowym runem z dwoma błędami A2, ale system umiał wznawiać tylko źródła, których nigdy nie próbował. To bezpieczne w jednym sensie — nie kupował kolejnych prób po cichu — lecz pozostawiało brak jawnej drogi naprawy.
+
+Dodaliśmy więc licznik `attempts` do każdego kandydata. To nie jest licznik „błędów” ani „retry”: oznacza rozpoczęte wywołania A2 i rośnie tuż przed call'em. Nowa komenda resetuje wyłącznie failed poniżej capu do pending; nie uruchamia modelu, a następne A2 wymaga osobnego resume. Domyślny cap 2 oznacza jedną pierwszą próbę i co najwyżej jedno ręczne ponowienie.
+
+Jeżeli nie ma pending ani failed poniżej capu, a źródeł nadal jest za mało, run przechodzi do `PARTIAL_EXHAUSTED`. To uczciwy terminalny wynik, nie fałszywa obietnica, że zwykłe resume „może coś jeszcze zrobi”. Testy obejmują migrację na pamięciowej kopii prawdziwej bazy, sukces/błąd, drugi attempt, cap, idempotencję, CLI i odmowę terminalnego resume: **153 testy zielone**, koszt 0 USD, zero API, Playwrighta i realnego researchu. Produkcyjna baza nie została zmieniona.
+
+### Korekta po review: sam licznik nie mówi, co stało się z requestem
+
+Niezależne review zatrzymało ten wariant przed commitem. Historyczne zero było zbyt optymistyczne: status failed już dowodził co najmniej jednej próby. Jeszcze ważniejsze było okno między inkrementacją a wynikiem calla. Po awarii rekord nadal wyglądał jak `PENDING`, więc zwykłe resume mogło nieświadomie zrobić drugi request.
+
+Poprawka nadała temu stanowi nazwę: `EXTRACTION_IN_PROGRESS`. Jedna atomowa operacja rezerwuje próbę, podnosi `attempts` tylko poniżej capu i odbiera kandydat drugiemu wykonawcy. Jeżeli proces znika, system nie zgaduje wyniku i odmawia zwykłego resume. `attempts` nie oznacza już „na pewno wykonanych calli”, lecz uczciwie: „zarezerwowane próby”. Historyczne dane dostają dolną granicę 0 lub 1.
+
+Review znalazł też, że terminalność zależała od zmiennego parametru. Teraz wyższy cap może być świadomą, bezpłatną komendą, która odblokowuje exhausted run do `PARTIAL`; sam resume nadal tego nie robi. Do tego DDL migracji i wpis w ledgerze są jedną transakcją. Wynik po poprawce: **164 testy zielone**, 0 USD, zero API, Playwrighta i zmian bazy źródłowej.
+
+**Następne (niezbudowane):** `topics.status=USED` i guard re-research (Task 4); prawdziwe pobieranie treści źródła (P0-2c); pierwszy kompletny realny Research Card dopiero po ukończeniu pozostałych zadań Etapu 0 i osobnej zgodzie.
 
 ## Powiązania
 - `docs/BUILD_LOG.md` (źródło), `docs/ARCHITECTURE_EVOLUTION.md`, `docs/RELEASE_TIMELINE.md`

@@ -17,6 +17,7 @@ from app.models import (
     ResearchStageStatus,
     Run,
     SourceCandidateRecord,
+    SourceCandidateRetryResult,
     SourceCandidateStatus,
     SourceType,
     SourceVerification,
@@ -109,6 +110,18 @@ class StoragePort(Protocol):
     ) -> None: ...
 
     def mark_source_candidate_failed(self, candidate_id: int, error: str) -> None: ...
+
+    def claim_source_candidate_attempt(self, candidate_id: int, *, max_attempts: int) -> int:
+        """Atomically claims PENDING below cap: attempts+1 and EXTRACTION_IN_PROGRESS."""
+        ...
+
+    def retry_failed_source_candidates(
+        self, research_run_id: str, *, max_attempts: int,
+    ) -> SourceCandidateRetryResult:
+        """Jawnie resetuje tylko EXTRACTION_FAILED z attempts < max_attempts."""
+        ...
+
+    def mark_research_run_partial_exhausted(self, research_run_id: str, error: str) -> None: ...
 
     def mark_sources_complete(self, research_run_id: str) -> None: ...
 

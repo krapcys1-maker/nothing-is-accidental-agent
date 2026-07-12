@@ -322,3 +322,21 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Dokumentacja:** README i dokumenty bieżącego stanu wskazują 139 testów; szczegóły wykrytej luki i naprawy zapisano także w `ERRORS_AND_FAILURES.md`.
 - **Koszt / zakres:** **0.000000 USD**; zero API, zero Playwrighta, zero prawdziwego researchu, zero zmian `research_runs.total_cost_usd`, retry, statusów workflow ani Task 3.
 - **Następny krok:** STOP po Task 2 i pozostawienie working tree do drugiego review; Task 3 wymaga osobnego polecenia właściciela.
+
+### [2026-07-12] Etap 0 / Task 3 — jawny, capowany retry nieudanych kandydatów A2
+- **Cel:** domknąć lukę P1-5 bez automatycznego kupowania kolejnych prób: umożliwić jawny reset `EXTRACTION_FAILED`, zachować historię prób i rozpoznać run wyczerpany pod aktualnym limitem.
+- **Wykonanie:** migracja `0007_candidate_attempts.sql` dodaje `INTEGER NOT NULL DEFAULT 0`; `attempts` oznacza rozpoczęte A2 i zwiększa się tuż przed pojedynczym call'em. Dane historyczne dostają 0, bo wcześniejszy schemat nie zapisywał liczby prób. Typowany wynik resetu podaje resetowane, pominięte przez cap, już pending i pozostałe failed.
+- **Bezpieczeństwo:** zwykłe resume nadal czyta wyłącznie `PENDING_EXTRACTION` i nigdy nie resetuje failed. `--retry-failed-candidates` wymaga `--resume`, działa tylko dla staged `PARTIAL`, nie tworzy klienta, nie wykonuje A2 i nie zapisuje usage ani kosztu. Domyślny `--max-extraction-attempts=2` to pierwsza próba i najwyżej jedno ręcznie zlecone retry; nie jest tym samym co techniczne `--max-retries`.
+- **Stan terminalny:** gdy EXTRACTED < minimum, nie ma pending i żaden failed nie jest poniżej capu, run przechodzi do `PARTIAL_EXHAUSTED`; zwykłe resume odmawia przed klientem i przed nowym `model_usage`.
+- **Kontrola migracji:** na pamięciowej kopii `data/agent.db` zastosowano 0006+0007, `integrity_check=ok`, `foreign_key_check=[]`; istniejący układ kandydatów otrzymał `attempts=0`. Źródłowa baza i run `9bbeb020` nie zostały zmienione.
+- **Testy:** 14 nowych regresji (migracja, sukces/błąd A2, drugi attempt, cap, idempotencja, zestaw mieszany, PARTIAL/PARTIAL_EXHAUSTED, cross-flow, koszt 0 i black-box CLI). Celowane: **76 passed**; pełne: **153 passed**.
+- **Koszt / zakres:** **0.000000 USD**; zero API, zero realnego researchu, zero Playwrighta, zero commita/pushu, Task 4 nierozpoczęty.
+- **Następny krok:** niezależne review working tree; potem wyłącznie Task 4 po osobnej dyspozycji.
+
+### [2026-07-12] Etap 0 / Task 3 — korekta P1/P2 po niezależnym review
+- **Cel:** usunąć cztery P1 z review bez rozszerzania Task 3: fałszywe historyczne zero, claim bez capu, trwały status zależny od dynamicznego parametru i rozdzieloną transakcję migracji/ledgeru.
+- **Kod:** 0007 backfilluje `PENDING=0`, `EXTRACTED=1`, `EXTRACTION_FAILED=1` jako dolną granicę historii. A2 używa warunkowego claimu `PENDING + attempts < cap → EXTRACTION_IN_PROGRESS`; tylko z tego stanu można trwale zapisać sukces albo obsłużony błąd. Zwykłe resume odmawia przy niepewnym kandydacie i nie tworzy klienta. Retry z wyższym capem może atomowo odblokować `PARTIAL_EXHAUSTED → PARTIAL`; CLI porównuje też konto runu z `--account`.
+- **Migracja:** 0007 nie ma własnego BEGIN/COMMIT. Runner wykonuje DDL, lower-bound backfill i INSERT do `schema_migrations` w jednej transakcji; trigger wymuszający błąd ledgeru wycofuje również kolumnę.
+- **Testy:** dodano regresje dla trzech historycznych statusów, jedynego retry historycznego failed, claimu/race na dwóch połączeniach, capu `==` i `>`, crash-window `EXTRACTION_IN_PROGRESS`, higher-cap reopen, account isolation oraz rollbacku ledgeru. Celowane: **87 passed**; pełne: **164 passed**.
+- **Koszt / zakres:** **0.000000 USD**; zero API, zero realnego researchu, zero Playwrighta, zero commita/pushu, Task 4 nierozpoczęty. Baza źródłowa i `9bbeb020` nie zostały zmienione.
+- **Następny krok:** drugie niezależne review working tree; brak działania na historycznym runie bez osobnej zgody właściciela.

@@ -40,6 +40,7 @@ from app.models import (
     RunStatus,
     Source,
     SourceCandidateRecord,
+    SourceCandidateRetryResult,
     SourceCandidateStatus,
     SourceVerification,
     Topic,
@@ -131,6 +132,68 @@ def _sync_staged_run_cost(
             )
             return None
         raise
+
+
+def _extraction_is_exhausted(
+    candidates: list[SourceCandidateRecord], *, min_sources: int, max_attempts: int,
+) -> bool:
+    """Czy A2 nie ma już legalnego ruchu bez nowego discovery lub podniesienia capu?"""
+    extracted = sum(c.status == SourceCandidateStatus.EXTRACTED for c in candidates)
+    if extracted >= min_sources:
+        return False
+    return not any(
+        (c.status == SourceCandidateStatus.PENDING_EXTRACTION and c.attempts < max_attempts)
+        or c.status == SourceCandidateStatus.EXTRACTION_IN_PROGRESS
+        or (c.status == SourceCandidateStatus.EXTRACTION_FAILED and c.attempts < max_attempts)
+        for c in candidates
+    )
+
+
+def retry_failed_source_candidates(
+    research_run_id: str,
+    *,
+    settings: Settings,
+    storage: StoragePort,
+    account_id: str,
+    max_attempts: int = 2,
+) -> SourceCandidateRetryResult:
+    """Jawna, bezpłatna operacja przygotowania capped retry A2.
+
+    Nie tworzy klienta modelu, nie zapisuje usage i nie uruchamia ekstrakcji. Zwykłe
+    resume nadal czyta wyłącznie kandydatów PENDING_EXTRACTION. PARTIAL_EXHAUSTED
+    może zostać odblokowany wyłącznie tą operacją i wyłącznie po jawnym podniesieniu capu.
+    """
+    if max_attempts < 1:
+        raise ValueError("max_attempts musi być dodatnie.")
+    research_run = storage.get_research_run(research_run_id)
+    if research_run is None:
+        raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
+    if research_run.account_id != account_id:
+        raise ValueError(
+            f"research_run #{research_run_id} należy do konta {research_run.account_id}, "
+            f"nie do wybranego konta {account_id}."
+        )
+    _validate_resume_flow(research_run, ResearchFlow.STAGED)
+    if research_run.status not in (
+        ResearchRunStatus.PARTIAL, ResearchRunStatus.PARTIAL_EXHAUSTED,
+    ):
+        raise ValueError(
+            f"research_run #{research_run_id} ma status {research_run.status.value} — "
+            "retry-failed-candidates wymaga statusu PARTIAL lub PARTIAL_EXHAUSTED."
+        )
+    result = storage.retry_failed_source_candidates(
+        research_run_id, max_attempts=max_attempts,
+    )
+    candidates = storage.list_source_candidates(research_run_id)
+    if research_run.status == ResearchRunStatus.PARTIAL and _extraction_is_exhausted(
+        candidates, min_sources=settings.research_min_sources, max_attempts=max_attempts,
+    ):
+        storage.mark_research_run_partial_exhausted(
+            research_run_id,
+            error=("Za mało wyekstrahowanych źródeł i brak kandydatów kwalifikujących się "
+                   "do retry w aktualnym limicie attempts."),
+        )
+    return result
 
 
 def _record_staged_usage(
@@ -939,6 +1002,7 @@ def run_source_extraction(
     max_sources: int | None = None,
     max_web_searches_per_source: int = 1,
     max_output_tokens: int = 1500,
+    max_attempts: int = 2,
 ) -> ResearchRunSummary:
     """Etap A2: JEDNO źródło na wywołanie API. Zapisywane do bazy NATYCHMIAST po
     KAŻDYM źródle (sukces LUB błąd) — awaria źródła N nie ma wpływu na 1..N-1, i
@@ -949,7 +1013,14 @@ def run_source_extraction(
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
     _validate_resume_flow(research_run, ResearchFlow.STAGED)
+    if max_attempts < 1:
+        raise ValueError("max_attempts musi być dodatnie.")
     clock = clock or SystemClock()
+    if research_run.status == ResearchRunStatus.PARTIAL_EXHAUSTED:
+        raise ValueError(
+            f"research_run #{research_run_id} is PARTIAL_EXHAUSTED; no candidates are eligible "
+            "for retry under the current attempts cap."
+        )
     if research_run.status not in (
         ResearchRunStatus.DISCOVERY_COMPLETE, ResearchRunStatus.EXTRACTION_IN_PROGRESS,
         ResearchRunStatus.PARTIAL,
@@ -957,6 +1028,16 @@ def run_source_extraction(
         raise ValueError(
             f"research_run #{research_run_id} ma status {research_run.status.value} — "
             "ekstrakcja wymaga DISCOVERY_COMPLETE, EXTRACTION_IN_PROGRESS lub PARTIAL.")
+
+    uncertain = storage.list_source_candidates(
+        research_run_id, SourceCandidateStatus.EXTRACTION_IN_PROGRESS,
+    )
+    if uncertain:
+        raise ValueError(
+            f"research_run #{research_run_id} has {len(uncertain)} candidate(s) in "
+            "EXTRACTION_IN_PROGRESS; ordinary resume refuses uncertain A2 attempts and "
+            "requires explicit recovery."
+        )
 
     summary = ResearchRunSummary(run_id=research_run_id, account_id=account.id,
                                  topic_id=research_run.topic_id, dry_run=settings.dry_run)
@@ -1005,6 +1086,14 @@ def run_source_extraction(
             summary.block_code, summary.block_reason = budget.code, budget.reason
             break
 
+        try:
+            storage.claim_source_candidate_attempt(
+                candidate_record.id, max_attempts=max_attempts,
+            )
+        except ValueError:
+            # Another executor may have claimed this snapshot row first, or a stale
+            # PENDING row may already be at cap. In both cases this process must not call.
+            continue
         candidate = SourceCandidate(url=candidate_record.url, title=candidate_record.title)
         try:
             extraction = research_client.extract_source(plan, candidate)
@@ -1094,6 +1183,7 @@ def run_source_extraction(
     summary.web_search_requests = call_web_search_requests
     summary.cost_usd = round(call_cost, 6)
 
+    all_candidates = storage.list_source_candidates(research_run_id)
     if len(all_extracted) >= settings.research_min_sources:
         storage.mark_sources_complete(research_run_id)
         notifier.notify(
@@ -1103,7 +1193,14 @@ def run_source_extraction(
     else:
         error_msg = (f"Za mało wyekstrahowanych źródeł ({len(all_extracted)} < "
                      f"{settings.research_min_sources}) po etapie A2.")
-        storage.mark_research_run_partial(research_run_id, error=error_msg)
+        if _extraction_is_exhausted(
+            all_candidates, min_sources=settings.research_min_sources,
+            max_attempts=max_attempts,
+        ):
+            error_msg += " Brak kandydatów legalnych w aktualnym attempts cap."
+            storage.mark_research_run_partial_exhausted(research_run_id, error=error_msg)
+        else:
+            storage.mark_research_run_partial(research_run_id, error=error_msg)
         summary.recommendation = ResearchRecommendation.REJECT.value
         summary.reasons = [TOO_FEW_SOURCES]
         storage.finish_run(research_run_id, RunStatus.FAILED.value, total_cost, error=error_msg)
@@ -1137,6 +1234,15 @@ def run_synthesis_from_cards(
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
     _validate_resume_flow(research_run, ResearchFlow.STAGED)
+
+    uncertain = storage.list_source_candidates(
+        research_run_id, SourceCandidateStatus.EXTRACTION_IN_PROGRESS,
+    )
+    if uncertain:
+        raise ValueError(
+            f"research_run #{research_run_id} has {len(uncertain)} candidate(s) in "
+            "EXTRACTION_IN_PROGRESS; ordinary resume requires explicit recovery."
+        )
     clock = clock or SystemClock()
     if research_run.status != ResearchRunStatus.SOURCES_COMPLETE:
         raise ValueError(
@@ -1314,6 +1420,7 @@ def run_staged_research_pipeline(
     max_sources: int | None = None,
     max_web_searches_per_source: int = 1,
     extraction_max_tokens: int = 1500,
+    max_attempts: int = 2,
     synthesize_max_tokens: int = 2200,
     forwarded_context_tokens: int = 2500,
 ) -> ResearchRunSummary:
@@ -1333,7 +1440,7 @@ def run_staged_research_pipeline(
         research_client=research_client, usage_tracker=usage_tracker, policy=policy,
         notifier=notifier, clock=clock, max_sources=max_sources,
         max_web_searches_per_source=max_web_searches_per_source,
-        max_output_tokens=extraction_max_tokens)
+        max_output_tokens=extraction_max_tokens, max_attempts=max_attempts)
     extraction_summary.candidates_discovered = discovery_summary.candidates_discovered
 
     research_run = storage.get_research_run(discovery_summary.run_id)
@@ -1368,6 +1475,7 @@ def resume_staged_research(
     max_sources: int | None = None,
     max_web_searches_per_source: int = 1,
     extraction_max_tokens: int = 1500,
+    max_attempts: int = 2,
     synthesize_max_tokens: int = 2200,
     forwarded_context_tokens: int = 2500,
 ) -> ResearchRunSummary:
@@ -1384,6 +1492,21 @@ def resume_staged_research(
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
     _validate_resume_flow(research_run, ResearchFlow.STAGED)
 
+    if research_run.status == ResearchRunStatus.PARTIAL_EXHAUSTED:
+        raise ValueError(
+            f"research_run #{research_run_id} is PARTIAL_EXHAUSTED; no candidates are eligible "
+            "for retry under the current attempts cap."
+        )
+
+    uncertain = storage.list_source_candidates(
+        research_run_id, SourceCandidateStatus.EXTRACTION_IN_PROGRESS,
+    )
+    if uncertain:
+        raise ValueError(
+            f"research_run #{research_run_id} has {len(uncertain)} candidate(s) in "
+            "EXTRACTION_IN_PROGRESS; ordinary resume requires explicit recovery."
+        )
+
     if research_run.status in (
         ResearchRunStatus.DISCOVERY_COMPLETE, ResearchRunStatus.EXTRACTION_IN_PROGRESS,
         ResearchRunStatus.PARTIAL,
@@ -1393,7 +1516,7 @@ def resume_staged_research(
             research_client=research_client, usage_tracker=usage_tracker, policy=policy,
             notifier=notifier, clock=clock, max_sources=max_sources,
             max_web_searches_per_source=max_web_searches_per_source,
-            max_output_tokens=extraction_max_tokens)
+            max_output_tokens=extraction_max_tokens, max_attempts=max_attempts)
 
     if research_run.status == ResearchRunStatus.SOURCES_COMPLETE:
         return run_synthesis_from_cards(

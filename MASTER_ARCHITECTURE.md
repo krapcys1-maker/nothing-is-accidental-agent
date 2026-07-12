@@ -5,7 +5,7 @@
 >
 > Kolejność prac: `IMPLEMENTATION_ROADMAP.md`. Aktualny stan: `CURRENT_PROJECT_STATE.md`. Rejestr decyzji (ADR): `docs/DECISIONS.md` (nadal obowiązujący — ten dokument konsoliduje decyzje, nie zastępuje rejestru).
 >
-> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (139 passed, 2026-07-12) lub bazie `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
+> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (164 passed, 2026-07-12) lub pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
 
 ---
 
@@ -17,7 +17,7 @@
 |---|---|---|
 | Konfiguracja (.env + YAML, zero ścieżek absolutnych) | `app/core/config.py` | testy + 3 realne runy |
 | Modele domenowe (Pydantic v2) | `app/models.py` | testy |
-| SQLite + 6 migracji + repozytoria | `app/storage/` | `tests/test_storage.py`, `tests/test_research_run_flow.py` i in. |
+| SQLite + 7 migracji + repozytoria | `app/storage/` | `tests/test_storage.py`, `tests/test_research_run_flow.py`, `tests/test_candidate_attempts.py` i in. |
 | Policy Engine (kill-switch, aktywność konta, budżet dzienny/miesięczny z priorytetem miesięcznym ADR-012, progi tematów) | `app/policies/policy_engine.py` | `tests/test_policy_engine.py` |
 | Księgowanie kosztów (model_usage + COSTS.csv, flaga dry_run) | `app/llm/usage_tracker.py` | 3 realne incydenty potwierdziły poprawność |
 | Pipeline tematów (generacja+scoring+dedup+progi) | `app/workflows/topics/` | testy; realnie NIGDY nie uruchomiony (`NOT VERIFIED` na żywym API) |
@@ -34,7 +34,7 @@
 
 - **Policy Engine** — pokrywa ~3 z ~14 docelowych obowiązków. Brak: egzekucji `autonomy_level`, `AccountMode` (COMMENT_ONLY niczego nie blokuje), limitów per konto (`AccountPolicy` — martwa konfiguracja), cooldownów, capu per-run w bibliotece (żyje tylko w CLI), SAFE MODE, runtime kill-switch (czytany raz z .env przy starcie).
 - **Klient Anthropic dla tematów** (`app/llm/anthropic_client.py`) — kompletny kod, ale: nigdy nie uruchomiony realnie, brak testów parsera, **nie księguje kosztu przy błędzie parsowania JSON** (w przeciwieństwie do klienta researchu), brak zdejmowania code fence. Do wyrównania z klientem researchu przed pierwszym realnym użyciem.
-- **Maszyna stanów researchu** — Etap 0 / Tasks 1–2 ukończone: jawny `research_runs.flow`, walidacja cross-flow/flow→status i `_detect_flow` usunięte; researchowy INSERT `model_usage` oraz absolutne odświeżenie `runs.cost_usd` są atomowe, a helper synchronizacji pozostaje idempotentny dla wyjść no-call A1/A2/B. Nadal `EXTRACTION_FAILED` nie ma drogi powrotu (run `9bbeb020` trwale niedomykalny).
+- **Maszyna stanów researchu** — Etap 0 / Tasks 1–3 ukończone: jawny `research_runs.flow`, walidacja cross-flow/flow→status i `_detect_flow` usunięte; researchowy INSERT `model_usage` oraz absolutne odświeżenie `runs.cost_usd` są atomowe. A2 atomowo rezerwuje próbę i przechodzi przez `EXTRACTION_IN_PROGRESS`; niepewny wynik po awarii nie jest automatycznie ponawiany. `EXTRACTION_FAILED` wraca do `PENDING_EXTRACTION` wyłącznie przez jawną, capowaną operację, która może odblokować `PARTIAL_EXHAUSTED` po jawnym podniesieniu capu. Produkcyjna baza nie została w tej pracy zmieniona.
 
 ### 1.3. Co jest tylko szkieletem
 
@@ -198,7 +198,7 @@ Wyjątek `ResearchError` niesie `usage`/`model` z udanego wywołania API, które
 
 Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → budżet). `runs.cost_usd`, `research_runs.total_cost_usd` = cache. **Izolacja kont: `account_id` obowiązkowy w każdej encji per-konto.**
 
-### 4.1. Encje istniejące (migracje 0001–0006)
+### 4.1. Encje istniejące (migracje 0001–0007)
 
 | Encja | Przeznaczenie | Kluczowe pola | Statusy | Relacje / idempotencja |
 |---|---|---|---|---|
@@ -206,7 +206,7 @@ Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → bu
 | `topics` | temat (= **topic**) | account_id, title, question, score, score_breakdown, duplicate_of, rejection_reason | DISCOVERED→SCORED/SELECTED/REJECTED/DUPLICATE→USED | dedup lokalny per konto przed insertem |
 | `runs` | przebieg workflow (= **audit event** poziomu runu) | id (uuid), workflow, status, cost_usd (cache), error | RUNNING→SUCCESS/FAILED/STOPPED; DRY_RUN | id generowany raz, przekazywany wszędzie |
 | `research_runs` | maszyna stanów researchu (= **research task**); id = runs.id (rozszerzenie 1:1) | flow, status, stage_*_completed_at, research_card_id, error | patrz sekcja 5 | koszt przez model_usage.run_id — bez własnej tabeli kosztów |
-| `research_source_candidates` | kandydat A1 ewoluujący w Source Card po A2 (= **source** + **claim** w postaci supported_claims_json) | url, title, supported_claims, numeric_facts, verification_status, quality, extraction_error | PENDING_EXTRACTION→EXTRACTED/EXTRACTION_FAILED | zapis NATYCHMIAST per źródło; wznowienie czyta tylko PENDING |
+| `research_source_candidates` | kandydat A1 ewoluujący w Source Card po A2 (= **source** + **claim** w postaci supported_claims_json) | url, title, supported_claims, numeric_facts, verification_status, quality, extraction_error, attempts | PENDING_EXTRACTION→EXTRACTION_IN_PROGRESS→EXTRACTED/EXTRACTION_FAILED | attempts = atomowo zarezerwowane A2; historyczne wartości są dolną granicą; retry tylko jawnie i poniżej capu |
 | `research_sources` | trwałe źródła STAREGO przepływu (legacy) | jak wyżej, bez statusu per źródło | — | do konsolidacji po wygaszeniu legacy |
 | `research_cards` + `sources` | karta badawcza (= **research card**) + źródła finalne | question, working_thesis, confirmed/uncertain_claims, contradictions, confidence, recommendation | PROCEED/REVISE/REJECT (rekomendacja) | karta zapisywana też po odrzuceniu |
 | `research_stage_results` | log KAŻDEJ próby etapu (= **retry**/**failure** log researchu) | stage (A/A1/A2/B), status, error | SUCCESS/FAILED | append-only |
@@ -255,13 +255,16 @@ research_runs.status (flow='staged'):
   DISCOVERY_PENDING → DISCOVERY_COMPLETE → EXTRACTION_IN_PROGRESS
     → SOURCES_COMPLETE ⇄ SYNTHESIS_PENDING → COMPLETE
     → PARTIAL            (są PENDING_EXTRACTION → wznawialne: wyłącznie A2)
-    → PARTIAL_EXHAUSTED  (0 pending, EXTRACTED < min — TERMINAL; do dodania, P1-5)
+    → PARTIAL_EXHAUSTED  (brak legalnego PENDING/FAILED poniżej capu, EXTRACTED < min — terminalny dla zwykłego resume)
+  PARTIAL_EXHAUSTED → PARTIAL (TYLKO jawne retry-failed-candidates po podniesieniu capu)
   DISCOVERY_PENDING → FAILED (terminal)
   (flow='two_stage', legacy: PENDING → SOURCE_COLLECTED → COMPLETE | PARTIAL | FAILED)
 
 research_source_candidates.status:
-  PENDING_EXTRACTION → EXTRACTED | EXTRACTION_FAILED
-  EXTRACTION_FAILED → PENDING_EXTRACTION   (TYLKO jawny retry, attempts < cap; do dodania, P1-5)
+  PENDING_EXTRACTION → EXTRACTION_IN_PROGRESS  (atomowy claim: attempts < cap)
+  EXTRACTION_IN_PROGRESS → EXTRACTED | EXTRACTION_FAILED
+  EXTRACTION_IN_PROGRESS → [wymaga jawnego recovery po awarii; zwykłe resume odmawia]
+  EXTRACTION_FAILED → PENDING_EXTRACTION   (TYLKO jawny retry, attempts < cap)
 
 content_items.status (docelowe, Etap 3–5):
   DRAFT → PENDING_APPROVAL → APPROVED → QUEUED → PUBLISHING
@@ -365,7 +368,7 @@ Playwright, osobny persistent context per konto w `data/browser-profiles/<accoun
 
 ## 9. Decyzje architektoniczne (skonsolidowane; pełny rejestr: docs/DECISIONS.md)
 
-Obowiązujące ADR-y: 001–022 (statusy PROPOSED dla 001/002/003/005/006 traktować jako ACCEPTED — wdrożone od tygodni; higiena statusów w Etapie 0). Kluczowe decyzje i nowe rozstrzygnięcia tego dokumentu:
+Obowiązujące ADR-y: 001–024 (statusy PROPOSED dla 001/002/003/005/006 traktować jako ACCEPTED — wdrożone od tygodni; higiena statusów w Etapie 0). Kluczowe decyzje i nowe rozstrzygnięcia tego dokumentu:
 
 | # | Problem | Decyzja (jedna droga) | Odrzucone | Uzasadnienie / konsekwencje |
 |---|---|---|---|---|

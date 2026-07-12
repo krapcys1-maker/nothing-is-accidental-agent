@@ -5,6 +5,7 @@ import sqlite3
 from pathlib import Path
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
+_RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({"0007_candidate_attempts"})
 
 
 def connect(db_path: Path | str) -> sqlite3.Connection:
@@ -45,8 +46,25 @@ def apply_migrations(conn: sqlite3.Connection, migrations_dir: Path = MIGRATIONS
         version = sql_file.stem
         if version in applied:
             continue
-        conn.executescript(sql_file.read_text(encoding="utf-8"))
-        conn.execute("INSERT INTO schema_migrations(version) VALUES (?)", (version,))
-        conn.commit()
+        sql = sql_file.read_text(encoding="utf-8")
+        if version in _RUNNER_TRANSACTIONAL_MIGRATIONS:
+            quoted_version = conn.execute("SELECT quote(?)", (version,)).fetchone()[0]
+            try:
+                conn.executescript(
+                    "BEGIN IMMEDIATE;\n"
+                    f"{sql}\n"
+                    f"INSERT INTO schema_migrations(version) VALUES ({quoted_version});\n"
+                    "COMMIT;"
+                )
+            except Exception:
+                if conn.in_transaction:
+                    conn.rollback()
+                raise
+        else:
+            # 0001-0006 retain their historical migration contract; 0006 has its
+            # own BEGIN IMMEDIATE/COMMIT and must not be nested here.
+            conn.executescript(sql)
+            conn.execute("INSERT INTO schema_migrations(version) VALUES (?)", (version,))
+            conn.commit()
         newly.append(version)
     return newly

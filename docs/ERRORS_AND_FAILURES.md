@@ -252,3 +252,26 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Czy może się powtórzyć:** nie dla tej granicy INSERT research usage → cache, ponieważ oba zapisy są atomowe i pokryte testem rollbacku. Pozostaje znane, nieusuwalne ryzyko timeoutu zafakturowanego bez lokalnego `usage`.
 - **Wpływ na harmonogram / koszt:** 0 USD; nie zmodyfikowano bazy projektu ani żadnego realnego runu.
 - **Status:** FIXED; oczekuje na drugi review przed commitem.
+
+### [2026-07-12] Test migracji po dodaniu 0007 zakładał nieaktualną listę wersji
+- **Kategoria:** TEST / IMPLEMENTATION; nie dotyczyło kodu produkcyjnego ani danych.
+- **Co się zepsuło:** pierwszy celowany przebieg po dodaniu migracji 0007 miał 5 czerwonych asercji w `tests/test_research_run_flow.py`: testy 0006 oczekiwały dokładnie `['0006_research_run_flow']`, podczas gdy mechanizm migracji poprawnie zastosował także `0007_candidate_attempts`.
+- **Przyczyna:** testy sprawdzały kompletną listę migracji po schemacie 0005, lecz nie zostały jeszcze rozszerzone o kolejną addytywną wersję.
+- **Naprawa:** zaktualizowano oczekiwane listy oraz dodano osobny test 0007 dla kolumny/defaultu danych historycznych i obu pragma integrity.
+- **Liczba prób / wpływ:** 1 wykrycie offline; po poprawce 76 testów celowanych i 153 pełne zielone. Zero API, zmian źródłowej bazy i kosztu.
+- **Status:** FIXED.
+
+### [2026-07-12] Review Task 3 wykrył, że licznik próby nie wystarcza bez claimu i ledgeru atomowego
+- **Kategoria:** IMPLEMENTATION / MIGRATION / SAFETY; odtworzone wyłącznie offline na SQLite.
+- **Co się zepsuło:** historyczny `EXTRACTION_FAILED` z `attempts=0` dostawał dwa nowe retry przy capie 2; `PENDING` już na capie można było inkrementować dalej; crash po inkremencie nie odróżniał niepewnego calla od nieprzetworzonego kandydata. Osobno `COMMIT` migracji następował przed wpisem wersji, więc błąd ledgeru pozostawiał zmieniony schema bez rejestru.
+- **Reprodukcje:** review odtworzył co najmniej trzy faktyczne calle dla historycznego failed przy capie 2, increment `2 → 3`, odmowę higher-cap dla `PARTIAL_EXHAUSTED` oraz `duplicate column` po braku wpisu ledgeru.
+- **Naprawa:** lower-bound backfill 0/1, atomowy claim do `EXTRACTION_IN_PROGRESS`, odmowa zwykłego resume dla niepewnego wyniku, jawne higher-cap reopen, warunki przejść statusu, izolacja konta i jedna transakcja runnera dla 0007+ledgeru.
+- **Dowód:** 87 testów celowanych i **164** pełne; test triggera potwierdza rollback kolumny oraz ledgeru razem. Zero API, bazy źródłowej i kosztu.
+- **Status:** FIXED; oczekuje na drugie review przed commitem.
+
+### [2026-07-12] P2 po drugim review Task 3 — ujemne attempts może ominąć cap
+- **Kategoria:** DATA INTEGRITY / DEFENSE IN DEPTH; normalny kod nie tworzy wartości ujemnych.
+- **Scenariusz:** ręcznie uszkodzony `PENDING_EXTRACTION` z `attempts=-1` przy capie 2 spełnia `attempts < cap`; claim przechodzi i zapisuje `attempts=0`, umożliwiając więcej rezerwacji niż deklarowany cap.
+- **Wpływ:** brak na poprawne dane po migracji 0007 i normalne ścieżki zapisu; ryzyko dotyczy uszkodzonego lub ręcznie zmienionego rekordu.
+- **Docelowa poprawka:** `attempts >= 0` w warunku claimu, `Field(ge=0)`, test regresyjny i ewentualnie CHECK constraint w kolejnej migracji.
+- **Status:** OPEN / P2; świadomie niepoprawiane przed commitem Task 3 zgodnie z decyzją właściciela.

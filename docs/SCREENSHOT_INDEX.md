@@ -143,3 +143,13 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **CO MA BYĆ WIDOCZNE:** tryb `three-stage`, limity źródeł/wyszukiwań/retry, rozbicie A1/A2/B i komunikat o zerowym koszcie estimate-only.
 - **CZEGO NIE MOŻE BYĆ WIDAĆ:** wartości klucza API, `.env`, danych uwierzytelnienia, surowych odpowiedzi diagnostycznych ani prywatnych danych.
 - **Status:** SCREENSHOT REQUIRED (zgodnie z zakazem nie używano Playwrighta ani przeglądarki)
+
+### [2026-07-12] task3-attempts-recovery-audit
+- **Plik:** docs/screenshots/YYYY-MM-DD_HHMM_task3-attempts-recovery-audit.png
+- **Co pokazuje:** bezpieczny, zanonimizowany dowód historycznego runu PARTIAL: failed candidates z lower-bound `attempts`, wynik jawnego `retry-failed-candidates`, ewentualne `PARTIAL_EXHAUSTED → PARTIAL` po wyższym capie oraz niezmienione `model_usage`/koszt.
+- **Dlaczego ważny:** pokazuje granicę między bezpłatną decyzją recovery a osobnym, potencjalnie płatnym resume.
+- **Etap projektu:** Etap 0 / Task 3 po korekcie review.
+- **CO OTWORZYĆ:** wyłącznie bezpieczną, lokalną kopię/dry fixture albo późniejszy widok administracyjny; nie uruchamiać API ani retry na bazie źródłowej tylko dla zrzutu.
+- **CO MA BYĆ WIDOCZNE:** statusy kandydatów, cap, liczba resetów, status runu oraz brak nowego usage/kosztu.
+- **CZEGO NIE MOŻE BYĆ WIDAĆ:** URL-i prywatnych, kluczy, `.env`, danych konta, treści źródeł ani terminala z sekretami.
+- **Status:** SCREENSHOT REQUIRED (nie ma jeszcze bezpiecznego materiału wizualnego; Playwrighta nie używano).
