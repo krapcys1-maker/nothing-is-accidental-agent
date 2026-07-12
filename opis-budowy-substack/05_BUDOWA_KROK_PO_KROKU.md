@@ -309,8 +309,11 @@ Review nie znalazło nowego błędu w finalizacji. Mimo to odrzuciło zmianę, p
 
 Dopisane sześć regresji przeszło bez zmiany kodu produkcyjnego. Runner i capped CLI porównują teraz cztery tabele po account mismatch. Pełny wynik to **212 testów**, koszt 0 USD i zero API. Pozostał jawny P2: koszt no-op jest porównywany dokładnym `float == float`, więc równoważna kwota o innej reprezentacji binarnej może zostać bezpiecznie odrzucona.
 
-**Następne (niezbudowane):** szczelny budżet retry i centralny cap per-run (Task 5); prawdziwe pobieranie treści źródła (P0-2c); pierwszy kompletny realny Research Card dopiero po ukończeniu pozostałych zadań Etapu 0 i osobnej zgodzie.
+**Następne (niezbudowane):** wyrównanie klienta tematów (Task 6); prawdziwe pobieranie treści źródła (P0-2c); pierwszy kompletny realny Research Card dopiero po ukończeniu pozostałych zadań Etapu 0 i osobnej zgodzie.
 
 ## Powiązania
 - `docs/BUILD_LOG.md` (źródło), `docs/ARCHITECTURE_EVOLUTION.md`, `docs/RELEASE_TIMELINE.md`
 - `timeline/` (oś czasu do wyeksportowania)
+
+### 2026-07-12 — Task 5: budżet sprawdzany przed każdą próbą
+Pre-flight przed pierwszym callem okazał się konieczny, ale niewystarczający. Timeout może uruchomić drugi płatny call, dlatego koszt jednej próby jest mnożony przez `1 + max_retries`, a tuż przed każdą próbą system ponownie czyta kanoniczne `model_usage`. Review wykryło jeszcze, że brak capu był akceptowany przez bibliotekę, a resume podnosiło domyślny cap wraz z kosztem. Po korekcie cap jest obowiązkowy dla realnego calla i absolutny dla resume. Wynik: 257 testów offline, 0 USD.

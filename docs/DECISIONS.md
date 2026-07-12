@@ -352,6 +352,28 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Uzasadnienie:** atomowość chroni przed częściowym zapisem jednego wykonania; idempotencja chroni przed zmianą znaczenia już zatwierdzonego zdarzenia podczas powtórzenia. Audytowalny wynik nie może być przepinany po fakcie.
 - **Weryfikacja:** plikowa SQLite z reopen; identyczne powtórzenie oraz konflikty karty, kosztu i statusu dla single/two-stage/staged; **206 testów**, koszt 0 USD.
 
+---
+
+### ADR-026: Jedna polityka budżetowa dla pre-flightu i każdej próby researchu
+
+- **Data:** 2026-07-12
+- **Status:** ACCEPTED (zakres wskazany przez właściciela w Etapie 0 / Task 5)
+- **Problem:** CLI liczyło cap oraz limity D/M niezależnie od biblioteki, a klient mógł ponowić timeout bez nowego odczytu kosztu. Estymata jednej próby nie obejmowała `1 + max_retries`.
+- **Decyzja:** kanonem jest `PolicyEngine.check_run_budget(estimated_total, cap, current_run_cost, account)`. `estimated_total` oznacza projekcję całego runu, `current_run_cost` pochodzi z `model_usage`; do globalnej sumy dodawany jest tylko koszt przyszły, bo zapisany usage już w niej jest. Miesięczny limit ma priorytet ADR-012. Workflow przekazuje klientowi callback przed każdą próbą i callback zapisu usage timeoutu przed retry, jeśli usage istnieje. Budget i parse error nie są retry’owane.
+- **Estymata:** każdy etap/call liczy `base × (1 + max_retries)`; A2 stosuje mnożnik osobno dla każdego źródła. `max_retries` pozostaje niezależny od `max_extraction_attempts` ADR-024.
+- **Odrzucone warianty:** PolicyEngine/SQLite wewnątrz klienta (złe sprzężenie); sama bramka CLI (możliwa do ominięcia); sztuczne usage dla timeoutu bez danych (fałszywa księgowość).
+- **Ryzyko:** `timeout-billed-unrecorded` — provider może naliczyć koszt bez zwrócenia usage; rekonsyliacja z billingiem jest poza Task 5.
+- **Kto podjął:** właściciel zatwierdził zakres; wykonanie: Codex.
+- **Powiązania:** `app/policies/policy_engine.py`, `app/research/cost_estimator.py`, `app/research/anthropic_client.py`, `app/workflows/research/pipeline.py`, `scripts/run_capped_research.py`, `tests/test_research_run_budget.py`.
+
+#### Korekta ADR-026 po pełnym review
+
+- `run_cap_usd=None` jest dozwolone tylko w dry-run/non-research; realny pipeline odmawia przed utworzeniem runu i callerem.
+- Domyślny cap resume jest absolutny (`0.05` legacy, `0.20` staged), nie `prior_cost + allowance`; jawna flaga może świadomie wskazać inny absolutny cap.
+- Ownership `research_run.account_id` jest sprawdzane przed `model_usage`, synchronizacją cache, preflightem i klientem.
+- NaN/Infinity/ujemne wartości limitów lub sum storage powodują `BUDGET_INVALID_STATE`, nie allow.
+- Weryfikacja: timeout+usage+deny attempt 2 osobno dla A1/A2/B, stan B wraca do SOURCES_COMPLETE; 257 testów offline.
+
 ## Decyzje otwarte (wymagają właściciela)
 
 - **brak** — wszystkie pozycje otwarte z audytu zostały rozstrzygnięte (OPEN-1..5 → ADR-004/007/008/009/010, OPEN-4 → ADR-012).

@@ -79,6 +79,7 @@ from app.research.cost_estimator import (  # noqa: E402
     estimate_no_search_call_usd,
     estimate_staged_research_cost_usd,
     estimate_synthesis_cost_usd,
+    estimate_with_retries,
     estimate_worst_case_search_call_usd,
 )
 from app.storage.repositories import SqliteStorage  # noqa: E402
@@ -212,6 +213,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.max_extraction_attempts < 1:
         print("STOP: --max-extraction-attempts musi być dodatnie.")
         return 1
+    if args.max_retries < 0:
+        print("STOP: --max-retries musi być nieujemne.")
+        return 1
     if args.retry_failed_candidates and args.resume is None:
         print("STOP: --retry-failed-candidates wymaga --resume RESEARCH_RUN_ID.")
         return 1
@@ -291,7 +295,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
         print(f"  TOTAL (conservative sufit):  {est['total'].conservative_usd:.4f} USD")
         print(f"  TOTAL (expected, z 2 realnych obserwacji, BEZ marginesu): "
               f"{est['total'].expected_usd:.4f} USD")
-        worst_case = est["total"].conservative_usd
+        base_worst_case = est["total"].conservative_usd
     elif args.mode == "two-stage":
         stage_a = estimate_worst_case_search_call_usd(
             settings, max_web_searches=args.max_web_searches,
@@ -301,13 +305,16 @@ def _run_fresh(args: argparse.Namespace) -> int:
             forwarded_context_tokens=args.forwarded_context_tokens)
         _print_estimate("ETAP 1 (gather_sources, TYLKO search)", stage_a)
         _print_estimate("ETAP 2 (synthesize_card, ZERO search)", stage_b)
-        worst_case = stage_a.total_usd + stage_b.total_usd
-        print(f"  COMBINED (etap1 + etap2):                    {worst_case:.4f} USD")
+        base_worst_case = stage_a.total_usd + stage_b.total_usd
+        print(f"  COMBINED (etap1 + etap2, jedna próba/call): {base_worst_case:.4f} USD")
     else:
         single = estimate_worst_case_search_call_usd(
             settings, max_web_searches=args.max_web_searches, max_output_tokens=3000)
         _print_estimate("SINGLE-CALL (search + analiza naraz, NIEZALECANE)", single)
-        worst_case = single.total_usd
+        base_worst_case = single.total_usd
+
+    worst_case = estimate_with_retries(base_worst_case, args.max_retries)
+    print(f"  WORST-CASE z retry x(1+{args.max_retries}): {worst_case:.4f} USD")
 
     print(f"\ncap tego uruchomienia (--max-cost-usd): {max_cost_usd:.2f} USD")
 
@@ -315,22 +322,11 @@ def _run_fresh(args: argparse.Namespace) -> int:
         print("\n--estimate-only: kończę tutaj. ZERO wywołań API, ZERO kosztu.")
         return 0
 
-    if not settings.anthropic_api_key:
-        print("STOP: brak ANTHROPIC_API_KEY w .env. Nie wołam API.")
-        return 1
-    if settings.kill_switch:
-        print("STOP: KILL_SWITCH aktywny. Nie wołam API.")
-        return 1
-    if worst_case > max_cost_usd:
-        print(f"STOP: pesymistyczny szacunek ({worst_case:.4f} USD) przekracza cap tego "
-              f"uruchomienia ({max_cost_usd:.2f} USD). Nie wołam API.")
-        return 1
-    if month_spent + worst_case > settings.max_monthly_cost_usd or \
-            day_spent + worst_case > settings.max_daily_cost_usd:
-        print("STOP: nawet pesymistyczny szacunek przekroczyłby dzienny/miesięczny budżet.")
-        return 1
-    print(f"OK: pesymistyczny szacunek ({worst_case:.4f} USD) mieści się w capie "
-          f"({max_cost_usd:.2f} USD) i w budżecie dziennym/miesięcznym.")
+    policy = PolicyEngine(settings, storage, clock)
+    stop = _preflight_stop(
+        settings, policy, account, worst_case, max_cost_usd, current_run_cost=0.0)
+    if stop:
+        return stop
 
     storage.ensure_account(account)
 
@@ -346,7 +342,6 @@ def _run_fresh(args: argparse.Namespace) -> int:
         max_web_searches_per_source=args.max_web_searches_per_source,
     )
     usage_tracker = UsageTracker(settings, storage)
-    policy = PolicyEngine(settings, storage, clock)
     notifier = LogNotification()
     research_log = make_research_log_writer(settings.project_root / "docs" / "RESEARCH_LOG.md")
 
@@ -374,6 +369,8 @@ def _run_fresh(args: argparse.Namespace) -> int:
             synthesize_max_tokens=args.synthesize_max_tokens,
             forwarded_context_tokens=args.forwarded_context_tokens,
             force_re_research=args.force_re_research,
+            max_retries=args.max_retries,
+            run_cap_usd=max_cost_usd,
         )
     elif args.mode == "two-stage":
         summary = run_two_stage_research_pipeline(
@@ -386,6 +383,8 @@ def _run_fresh(args: argparse.Namespace) -> int:
             synthesize_max_tokens=args.synthesize_max_tokens,
             forwarded_context_tokens=args.forwarded_context_tokens,
             force_re_research=args.force_re_research,
+            max_retries=args.max_retries,
+            run_cap_usd=max_cost_usd,
         )
     else:
         summary = run_research_pipeline(
@@ -394,6 +393,8 @@ def _run_fresh(args: argparse.Namespace) -> int:
             usage_tracker=usage_tracker, policy=policy, notifier=notifier,
             clock=clock, research_log=research_log,
             force_re_research=args.force_re_research,
+            max_retries=args.max_retries,
+            run_cap_usd=max_cost_usd,
         )
 
     _print_result(summary, max_cost_usd, worst_case, args.max_web_searches)
@@ -414,6 +415,13 @@ def _run_resume(args: argparse.Namespace) -> int:
     research_run = storage.get_research_run(args.resume)
     if research_run is None:
         print(f"STOP: nie znaleziono research_run #{args.resume}.")
+        return 1
+    selected_account_id = getattr(args, "account", DEFAULT_ACCOUNT)
+    if research_run.account_id != selected_account_id:
+        print(
+            f"STOP: research_run #{args.resume} należy do konta "
+            f"{research_run.account_id}, nie do wybranego konta {selected_account_id}."
+        )
         return 1
     status = research_run.status.value
     print(f"status research_run:          {status}")
@@ -505,17 +513,21 @@ def _run_resume_legacy(args, settings, storage, clock, research_run, prior_cost,
         settings, max_output_tokens=args.synthesize_max_tokens,
         forwarded_context_tokens=args.forwarded_context_tokens)
     _print_estimate("ETAP 2 (synthesize_card, ZERO search)", stage_b)
-    worst_case = stage_b.total_usd
+    worst_case = estimate_with_retries(stage_b.total_usd, args.max_retries)
+    print(f"  WORST-CASE z retry x(1+{args.max_retries}): {worst_case:.4f} USD")
     print(f"\ncap tego wznowienia (--max-cost-usd): {max_cost_usd:.2f} USD")
 
     if args.estimate_only:
         print("\n--estimate-only: kończę tutaj. ZERO wywołań API, ZERO kosztu.")
         return 0
-    stop = _preflight_stop(settings, worst_case, max_cost_usd, month_spent, day_spent)
+    account = settings.get_account(args.account)
+    policy = PolicyEngine(settings, storage, clock)
+    stop = _preflight_stop(
+        settings, policy, account, round(prior_cost + worst_case, 6), max_cost_usd,
+        current_run_cost=prior_cost)
     if stop:
         return stop
 
-    account = settings.get_account(args.account)
     storage.ensure_account(account)
     research_client = AnthropicResearchClient(
         settings.anthropic_api_key, settings.model_quality, max_retries=args.max_retries,
@@ -523,7 +535,6 @@ def _run_resume_legacy(args, settings, storage, clock, research_run, prior_cost,
         synthesize_max_tokens=args.synthesize_max_tokens,
     )
     usage_tracker = UsageTracker(settings, storage)
-    policy = PolicyEngine(settings, storage, clock)
     notifier = LogNotification()
     research_log = make_research_log_writer(settings.project_root / "docs" / "RESEARCH_LOG.md")
 
@@ -540,6 +551,8 @@ def _run_resume_legacy(args, settings, storage, clock, research_run, prior_cost,
         clock=clock, research_log=research_log,
         synthesize_max_tokens=args.synthesize_max_tokens,
         forwarded_context_tokens=args.forwarded_context_tokens,
+        max_retries=args.max_retries,
+        run_cap_usd=max_cost_usd,
     )
     _print_result(summary, max_cost_usd, worst_case, max_web_searches=0)
     return 0
@@ -568,24 +581,30 @@ def _run_resume_staged(args, settings, storage, clock, research_run, prior_cost,
             output_cost_usd=per_source.output_cost_usd * n,
             conservative_usd=per_source.conservative_usd * n,
             expected_usd=per_source.expected_usd * n, safety_margin=per_source.safety_margin))
-        worst_case = per_source.conservative_usd * n
+        base_worst_case = per_source.conservative_usd * n
     else:
         print("\n--- KALIBROWANA ESTYMACJA (wznowienie etapu B — zero web search) ---")
         synth = estimate_synthesis_cost_usd(
             settings, args.synthesize_max_tokens, args.forwarded_context_tokens)
         _print_staged_estimate("B synthesis", synth)
-        worst_case = synth.conservative_usd
+        base_worst_case = synth.conservative_usd
+
+    worst_case = estimate_with_retries(base_worst_case, args.max_retries)
+    print(f"  WORST-CASE z retry x(1+{args.max_retries}): {worst_case:.4f} USD")
 
     print(f"\ncap tego wznowienia (--max-cost-usd): {max_cost_usd:.2f} USD")
 
     if args.estimate_only:
         print("\n--estimate-only: kończę tutaj. ZERO wywołań API, ZERO kosztu.")
         return 0
-    stop = _preflight_stop(settings, worst_case, max_cost_usd, month_spent, day_spent)
+    account = settings.get_account(args.account)
+    policy = PolicyEngine(settings, storage, clock)
+    stop = _preflight_stop(
+        settings, policy, account, round(prior_cost + worst_case, 6), max_cost_usd,
+        current_run_cost=prior_cost)
     if stop:
         return stop
 
-    account = settings.get_account(args.account)
     storage.ensure_account(account)
     research_client = AnthropicResearchClient(
         settings.anthropic_api_key, settings.model_quality, max_retries=args.max_retries,
@@ -596,7 +615,6 @@ def _run_resume_staged(args, settings, storage, clock, research_run, prior_cost,
         max_web_searches_per_source=args.max_web_searches_per_source,
     )
     usage_tracker = UsageTracker(settings, storage)
-    policy = PolicyEngine(settings, storage, clock)
     notifier = LogNotification()
     research_log = make_research_log_writer(settings.project_root / "docs" / "RESEARCH_LOG.md")
 
@@ -617,30 +635,30 @@ def _run_resume_staged(args, settings, storage, clock, research_run, prior_cost,
         max_attempts=getattr(args, "max_extraction_attempts", 2),
         synthesize_max_tokens=args.synthesize_max_tokens,
         forwarded_context_tokens=args.forwarded_context_tokens,
+        max_retries=args.max_retries,
+        run_cap_usd=max_cost_usd,
     )
     _print_result(summary, max_cost_usd, worst_case, max_web_searches=0)
     return 0
 
 
-def _preflight_stop(settings, worst_case: float, max_cost_usd: float,
-                    month_spent: float, day_spent: float) -> int | None:
+def _preflight_stop(settings, policy: PolicyEngine, account, estimated_total: float,
+                    max_cost_usd: float, *, current_run_cost: float) -> int | None:
     """Wspólne bramki PRZED wywołaniem API. Zwraca kod wyjścia, jeśli trzeba się
     zatrzymać, albo None, jeśli wolno kontynuować."""
     if not settings.anthropic_api_key:
         print("STOP: brak ANTHROPIC_API_KEY w .env. Nie wołam API.")
         return 1
-    if settings.kill_switch:
-        print("STOP: KILL_SWITCH aktywny. Nie wołam API.")
+    decision = policy.check_run_budget(
+        estimated_total,
+        max_cost_usd,
+        current_run_cost=current_run_cost,
+        account=account,
+    )
+    if not decision.allowed:
+        print(f"STOP [{decision.code}]: {decision.reason} Nie wołam API.")
         return 1
-    if worst_case > max_cost_usd:
-        print(f"STOP: pesymistyczny szacunek ({worst_case:.4f} USD) przekracza cap "
-              f"({max_cost_usd:.2f} USD). Nie wołam API.")
-        return 1
-    if month_spent + worst_case > settings.max_monthly_cost_usd or \
-            day_spent + worst_case > settings.max_daily_cost_usd:
-        print("STOP: nawet pesymistyczny szacunek przekroczyłby dzienny/miesięczny budżet.")
-        return 1
-    print(f"OK: pesymistyczny szacunek ({worst_case:.4f} USD) mieści się w capie "
+    print(f"OK: projekcja kosztu runu ({estimated_total:.4f} USD) mieści się w capie "
           f"({max_cost_usd:.2f} USD) i w budżecie dziennym/miesięcznym.")
     return None
 

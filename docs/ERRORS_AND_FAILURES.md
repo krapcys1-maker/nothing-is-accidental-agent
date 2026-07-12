@@ -310,3 +310,19 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Wpływ:** bezpieczna fałszywa odmowa i rollback; brak ryzyka przepisania karty, kosztu lub timestampów.
 - **Docelowy kierunek:** najmniejsza jednostka pieniężna, `Decimal` albo jawna tolerancja zgodna z kanoniczną sumą `model_usage`.
 - **Status:** OPEN / P2; świadomie niezmieniane w Task 4. P2-17 pozostaje osobno otwarte.
+
+### [2026-07-12] Task 5 — timeout-billed-unrecorded — [COST]
+
+- **Ryzyko rezydualne:** provider może naliczyć koszt, mimo że lokalny timeout nastąpił przed otrzymaniem odpowiedzi zawierającej usage.
+- **Skutek:** brak wiarygodnych danych do `model_usage`; lokalny budżet może chwilowo zaniżać rzeczywiste rozliczenie. System nie zapisuje sztucznego usage i nie udaje, że zna koszt.
+- **Mitygacje:** niskie `max_retries`; worst-case `base × (1 + max_retries)`; świeży re-check z `model_usage` przed każdą próbą; niski cap per-run. Późniejsza rekonsyliacja z billingiem providera pozostaje poza Task 5.
+- **Testowany przypadek sąsiedni:** jeśli timeout niesie usage, jest ono zapisywane przed re-checkiem retry; odmowa daje dokładnie jeden call i zachowuje pierwszy wpis.
+- **Koszt zadania:** 0 USD; wyłącznie fake callery, zero API.
+
+### [2026-07-12] Review Task 5: cap nie był jeszcze kontraktem fail-closed — [SAFETY | COST]
+
+- **Co wykryto:** `run_cap_usd=None` wyłączało cap realnego pipeline; resume dodawało nowy allowance do już wydanego kosztu; ownership konta sprawdzano po odczycie usage; NaN/Infinity limitów przechodziły jako `OK`.
+- **Wpływ:** wspierany CLI przekazywał cap, ale kontrakt biblioteczny i wielokrotne resume nie gwarantowały stałej granicy całego runu.
+- **Naprawa:** brak capu realnego researchu jest błędem przed callem; cap resume jest absolutny; account guard poprzedza koszt/klienta; uszkodzony stan budżetu odmawia.
+- **Regresje:** A1/A2/B utrwalają usage timeoutu i blokują attempt 2; B wraca do `SOURCES_COMPLETE`; obce konto nie synchronizuje kosztu ani nie tworzy klienta.
+- **Status:** FIXED offline; `timeout-billed-unrecorded` pozostaje rezydualnym P2, nie jest uznane za rozwiązane.

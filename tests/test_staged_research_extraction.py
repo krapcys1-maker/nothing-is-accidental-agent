@@ -22,6 +22,7 @@ from app.core.ids import new_run_id
 from app.llm.base import Usage
 from app.llm.usage_tracker import UsageTracker
 from app.models import (
+    ModelUsage,
     ResearchFlow,
     ResearchRun,
     ResearchRunStatus,
@@ -34,11 +35,17 @@ from app.models import (
     TopicStatus,
     WorkflowType,
 )
-from app.policies.policy_engine import PolicyEngine
+from app.policies.policy_engine import PolicyDecision, PolicyEngine
 from app.ports.notification import LogNotification
-from app.research.anthropic_client import _parse_discovery_candidates_jsonl
-from app.research.base import ResearchError, ResearchParseError
+from app.research.anthropic_client import AnthropicResearchClient, _parse_discovery_candidates_jsonl
+from app.research.base import ResearchError, ResearchParseError, ResearchTimeout
 from app.research.diagnostics import diagnostics_dir
+from app.research.cost_estimator import (
+    estimate_discovery_cost_usd,
+    estimate_extraction_cost_per_source_usd,
+    estimate_synthesis_cost_usd,
+    estimate_with_retries,
+)
 from app.research.fake_client import FakeResearchClient
 from app.research.validation import TOO_FEW_VERIFIED_SOURCES
 from app.workflows.research.pipeline import (
@@ -81,6 +88,8 @@ def _seeded_run_with_candidates(storage, account, topic, n: int = 3) -> str:
 
 
 def _run_discovery(settings, storage, account, topic, client, **kwargs):
+    if not settings.dry_run and "run_cap_usd" not in kwargs:
+        kwargs["run_cap_usd"] = 10.0
     return run_source_discovery(
         account, topic, settings=settings, storage=storage, research_client=client,
         usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
@@ -88,6 +97,8 @@ def _run_discovery(settings, storage, account, topic, client, **kwargs):
 
 
 def _run_extraction(settings, storage, account, run_id, client, **kwargs):
+    if not settings.dry_run and "run_cap_usd" not in kwargs:
+        kwargs["run_cap_usd"] = 10.0
     return run_source_extraction(
         run_id, account, settings=settings, storage=storage, research_client=client,
         usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
@@ -95,13 +106,226 @@ def _run_extraction(settings, storage, account, run_id, client, **kwargs):
 
 
 def _run_synthesis(settings, storage, account, run_id, client, **kwargs):
+    if not settings.dry_run and "run_cap_usd" not in kwargs:
+        kwargs["run_cap_usd"] = 10.0
     return run_synthesis_from_cards(
         run_id, account, settings=settings, storage=storage, research_client=client,
         usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
         policy=PolicyEngine(settings, storage), notifier=LogNotification(), **kwargs)
 
 
+class _CaptureBudgetPolicy:
+    def __init__(self):
+        self.calls = []
+
+    def check_can_run(self, account):
+        return PolicyDecision.ok()
+
+    def check_run_budget(self, estimated_total, cap, *, current_run_cost, account):
+        self.calls.append((estimated_total, cap, current_run_cost))
+        return PolicyDecision.block("RUN_CAP_EXCEEDED", "captured")
+
+
+def test_a1_preflight_uses_retry_multiplier(settings, storage, account):
+    topic = _selected_topic(storage, account)
+    policy = _CaptureBudgetPolicy()
+    summary = run_source_discovery(
+        account, topic, settings=settings, storage=storage,
+        research_client=FakeResearchClient("good"),
+        usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
+        policy=policy, notifier=LogNotification(), max_searches=1,
+        max_output_tokens=600, max_retries=2, run_cap_usd=2.0)
+    base = estimate_discovery_cost_usd(settings, 1, 600).conservative_usd
+    assert policy.calls == [(estimate_with_retries(base, 2), 2.0, 0.0)]
+    assert summary.blocked
+    assert summary.run_id is None
+
+
+def test_a2_preflight_uses_retry_multiplier_per_source(settings, storage, account):
+    topic = _selected_topic(storage, account)
+    run_id = _seeded_run_with_candidates(storage, account, topic, n=1)
+    policy = _CaptureBudgetPolicy()
+    summary = run_source_extraction(
+        run_id, account, settings=settings, storage=storage,
+        research_client=FakeResearchClient("good"),
+        usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
+        policy=policy, notifier=LogNotification(), max_sources=1,
+        max_web_searches_per_source=1, max_output_tokens=1500,
+        max_retries=2, run_cap_usd=2.0)
+    base = estimate_extraction_cost_per_source_usd(settings, 1, 1500).conservative_usd
+    assert policy.calls == [(estimate_with_retries(base, 2), 2.0, 0.0)]
+    assert summary.blocked
+    assert storage.get_research_usage(run_id) == []
+
+
+def test_b_resume_includes_persisted_usage_and_retry_multiplier(settings, storage, account):
+    topic = _selected_topic(storage, account)
+    run_id = _seeded_run_with_candidates(storage, account, topic, n=3)
+    extraction = _run_extraction(
+        settings, storage, account, run_id, FakeResearchClient("good"), max_sources=3)
+    assert extraction.sources_count == 3
+    current = sum(row.estimated_cost_usd for row in storage.get_research_usage(run_id))
+    policy = _CaptureBudgetPolicy()
+    summary = run_synthesis_from_cards(
+        run_id, account, settings=settings, storage=storage,
+        research_client=FakeResearchClient("good"),
+        usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
+        policy=policy, notifier=LogNotification(), synthesize_max_tokens=2200,
+        forwarded_context_tokens=2500, max_retries=2, run_cap_usd=2.0)
+    base = estimate_synthesis_cost_usd(settings, 2200, 2500).conservative_usd
+    assert policy.calls == [(
+        round(current + estimate_with_retries(base, 2), 6), 2.0, round(current, 6))]
+    assert summary.blocked
+
+
+def test_a1_timeout_usage_blocks_second_attempt(settings, storage, account):
+    topic = _selected_topic(storage, account)
+    calls = []
+
+    def discover_caller(plan, max_searches):
+        calls.append(1)
+        raise ResearchTimeout(
+            "A1 timeout", usage=Usage(output_tokens=40_000), model="m")
+
+    client = AnthropicResearchClient(
+        "offline", "m", discover_caller=discover_caller, max_retries=1)
+    summary = run_source_discovery(
+        account, topic, settings=settings, storage=storage, research_client=client,
+        usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
+        policy=PolicyEngine(settings, storage), notifier=LogNotification(),
+        max_searches=1, max_output_tokens=600, max_retries=1, run_cap_usd=0.50)
+
+    assert calls == [1]
+    assert summary.blocked and summary.block_code == "RUN_CAP_EXCEEDED"
+    usage = storage.get_research_usage(summary.run_id)
+    assert len(usage) == 1 and usage[0].task == "research_discover"
+
+
+def test_a2_timeout_usage_blocks_second_attempt_for_one_source(
+        settings, storage, account):
+    topic = _selected_topic(storage, account)
+    run_id = _seeded_run_with_candidates(storage, account, topic, n=1)
+    calls = []
+
+    def extract_caller(plan, candidate):
+        calls.append(candidate.url)
+        raise ResearchTimeout(
+            "A2 timeout", usage=Usage(output_tokens=40_000), model="m")
+
+    client = AnthropicResearchClient(
+        "offline", "m", extract_caller=extract_caller, max_retries=1)
+    summary = run_source_extraction(
+        run_id, account, settings=settings, storage=storage, research_client=client,
+        usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
+        policy=PolicyEngine(settings, storage), notifier=LogNotification(),
+        max_sources=1, max_web_searches_per_source=1, max_output_tokens=1500,
+        max_retries=1, run_cap_usd=0.50)
+
+    assert len(calls) == 1
+    assert summary.blocked and summary.block_code == "RUN_CAP_EXCEEDED"
+    usage = storage.get_research_usage(run_id)
+    assert len(usage) == 1 and usage[0].task == "research_extract"
+    candidate = storage.list_source_candidates(run_id)[0]
+    assert candidate.status == SourceCandidateStatus.EXTRACTION_FAILED
+
+
+def test_b_timeout_usage_blocks_retry_and_restores_sources_complete(
+        settings, storage, account):
+    topic = _selected_topic(storage, account)
+    run_id = _seeded_run_with_candidates(storage, account, topic, n=3)
+    _run_extraction(
+        settings, storage, account, run_id, FakeResearchClient("good"), max_sources=3)
+    prior_count = len(storage.get_research_usage(run_id))
+    calls = []
+
+    def synthesize_caller(plan, cards):
+        calls.append(1)
+        raise ResearchTimeout(
+            "B timeout", usage=Usage(output_tokens=40_000), model="m")
+
+    client = AnthropicResearchClient(
+        "offline", "m", synthesize_from_cards_caller=synthesize_caller,
+        max_retries=1)
+    summary = run_synthesis_from_cards(
+        run_id, account, settings=settings, storage=storage, research_client=client,
+        usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
+        policy=PolicyEngine(settings, storage), notifier=LogNotification(),
+        synthesize_max_tokens=2200, forwarded_context_tokens=2500,
+        max_retries=1, run_cap_usd=0.50)
+
+    assert calls == [1]
+    assert summary.blocked and summary.block_code == "RUN_CAP_EXCEEDED"
+    assert storage.get_research_run(run_id).status == ResearchRunStatus.SOURCES_COMPLETE
+    usage = storage.get_research_usage(run_id)
+    assert len(usage) == prior_count + 1
+    assert usage[-1].task == "research_synthesize_cards"
+
+
+def test_resume_rejects_other_account_before_cost_sync_or_client(
+        settings, storage, account):
+    topic = _selected_topic(storage, account)
+    run_id = _seeded_run_with_candidates(storage, account, topic, n=1)
+    other = account.model_copy(update={"id": "other-account", "display_name": "Other"})
+
+    class ForbiddenClient(FakeResearchClient):
+        def extract_source(self, plan, candidate):
+            raise AssertionError("account mismatch must stop before caller")
+
+    before = storage.get_run(run_id).cost_usd
+    with pytest.raises(ValueError, match="należy do konta"):
+        run_source_extraction(
+            run_id, other, settings=settings, storage=storage,
+            research_client=ForbiddenClient("good"),
+            usage_tracker=UsageTracker(
+                settings, storage, costs_csv_path=settings.costs_csv_path),
+            policy=PolicyEngine(settings, storage), notifier=LogNotification(),
+            run_cap_usd=1.0)
+    assert storage.get_run(run_id).cost_usd == before
+    assert storage.get_research_usage(run_id) == []
+
+
+def test_cli_resume_default_cap_is_absolute_not_prior_cost_plus_allowance(
+        monkeypatch, capsys, settings, storage, account):
+    from scripts import run_capped_research
+
+    topic = _selected_topic(storage, account)
+    run_id = _seeded_run_with_candidates(storage, account, topic, n=1)
+    storage.add_model_usage(ModelUsage(
+        run_id=run_id, model="m", task="research_extract",
+        estimated_cost_usd=0.40, dry_run=False))
+    monkeypatch.setattr(run_capped_research, "load_settings", lambda: settings)
+
+    assert run_capped_research.main(["--resume", run_id, "--estimate-only"]) == 0
+    output = capsys.readouterr().out
+    assert "koszt już poniesiony:          0.400000 USD" in output
+    assert "cap tego wznowienia (--max-cost-usd): 0.20 USD" in output
+
+
+def test_cli_resume_rejects_other_account_before_usage_or_client(
+        monkeypatch, capsys, settings, storage, account):
+    from scripts import run_capped_research
+
+    topic = _selected_topic(storage, account)
+    run_id = _seeded_run_with_candidates(storage, account, topic, n=1)
+    other = account.model_copy(update={"id": "other-account", "display_name": "Other"})
+    configured = replace(settings, accounts={account.id: account, other.id: other})
+    monkeypatch.setattr(run_capped_research, "load_settings", lambda: configured)
+
+    def forbidden_client(*args, **kwargs):
+        raise AssertionError("account mismatch must stop before client")
+
+    monkeypatch.setattr(run_capped_research, "AnthropicResearchClient", forbidden_client)
+    before = storage.conn.execute("SELECT count(*) FROM model_usage").fetchone()[0]
+    assert run_capped_research.main([
+        "--resume", run_id, "--account", other.id,
+    ]) == 1
+    assert "należy do konta" in capsys.readouterr().out
+    assert storage.conn.execute("SELECT count(*) FROM model_usage").fetchone()[0] == before
+
+
 def _run_staged(settings, storage, account, topic, client, **kwargs):
+    if not settings.dry_run and "run_cap_usd" not in kwargs:
+        kwargs["run_cap_usd"] = 10.0
     return run_staged_research_pipeline(
         account, topic, settings=settings, storage=storage, research_client=client,
         usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),

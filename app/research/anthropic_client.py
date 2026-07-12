@@ -34,6 +34,8 @@ from typing import Callable
 from app.llm.base import Usage
 from app.models import SourceType, SourceVerification
 from app.research.base import (
+    AttemptBudgetCallback,
+    AttemptBudgetContext,
     DiscoveryResult,
     ExtractionResult,
     GatheredSource,
@@ -46,6 +48,7 @@ from app.research.base import (
     SourceCardDraft,
     SourceDraft,
     SourceGatheringResult,
+    RetryUsageCallback,
 )
 
 Caller = Callable[[ResearchPlan], tuple[str, Usage]]
@@ -290,6 +293,8 @@ class AnthropicResearchClient:
                  discover_max_tokens: int = 600,
                  extract_max_tokens: int = 1500,
                  max_web_searches_per_source: int = 1) -> None:
+        if max_retries < 0:
+            raise ValueError("max_retries musi być >= 0.")
         self.model = model
         self._api_key = api_key
         self._caller = caller or self._default_caller
@@ -300,6 +305,7 @@ class AnthropicResearchClient:
         self._synthesize_from_cards_caller = (
             synthesize_from_cards_caller or self._default_synthesize_from_cards_caller)
         self._max_retries = max_retries
+        self.max_retries = max_retries
         self._timeout_seconds = timeout_seconds
         # Twardy cap na liczbę wyszukiwań w JEDNYM wywołaniu (API: tools[].max_uses).
         # None = brak jawnego capu (zachowanie sprzed tej zmiany). Używany zarówno
@@ -316,17 +322,56 @@ class AnthropicResearchClient:
         self._extract_max_tokens = extract_max_tokens
         self._max_web_searches_per_source = max_web_searches_per_source
         self.call_count = 0
+        self._attempt_budget_callback: AttemptBudgetCallback | None = None
+        self._retry_usage_callback: RetryUsageCallback | None = None
+        self._estimated_attempt_cost = 0.0
+
+    def configure_attempt_control(
+        self,
+        *,
+        budget_callback: AttemptBudgetCallback | None,
+        retry_usage_callback: RetryUsageCallback | None,
+        estimated_attempt_cost: float,
+    ) -> None:
+        """Install workflow-owned hooks used immediately before each attempt.
+
+        The client remains independent of SQLite and PolicyEngine. The workflow
+        owns persistence and policy and supplies simple callbacks instead.
+        """
+        if estimated_attempt_cost < 0:
+            raise ValueError("estimated_attempt_cost musi być >= 0.")
+        self._attempt_budget_callback = budget_callback
+        self._retry_usage_callback = retry_usage_callback
+        self._estimated_attempt_cost = estimated_attempt_cost
+
+    def _before_attempt(self, attempt: int) -> None:
+        if self._attempt_budget_callback is not None:
+            self._attempt_budget_callback(AttemptBudgetContext(
+                attempt_number=attempt + 1,
+                max_attempts=self._max_retries + 1,
+                estimated_attempt_cost=self._estimated_attempt_cost,
+            ))
+
+    def _record_timeout_usage_before_retry(self, exc: ResearchTimeout) -> None:
+        if exc.usage is None or self._retry_usage_callback is None:
+            return
+        self._retry_usage_callback(exc.usage, exc.model or self.model)
+        # Ownership moved to model_usage; prevent the outer workflow from
+        # recording the same usage again if a later attempt also fails.
+        exc.usage = None
 
     # --- wspólny szkielet retry + parsowanie (dzielony przez wszystkie 3 metody) ---
     def _run_with_retry_and_parse(self, call_fn, parse_fn, empty_error_msg: str):
         last_error: Exception | None = None
         for attempt in range(self._max_retries + 1):
+            self._before_attempt(attempt)
             self.call_count += 1
             try:
                 text, usage = call_fn()
             except ResearchTimeout as exc:
                 last_error = exc
                 if attempt < self._max_retries:
+                    self._record_timeout_usage_before_retry(exc)
                     continue
                 raise
             try:
@@ -373,12 +418,14 @@ class AnthropicResearchClient:
     def _run_with_retry_and_parse_v2(self, call_fn, parse_fn, empty_error_msg: str):
         last_error: Exception | None = None
         for attempt in range(self._max_retries + 1):
+            self._before_attempt(attempt)
             self.call_count += 1
             try:
                 text, usage, stop_reason = call_fn()
             except ResearchTimeout as exc:
                 last_error = exc
                 if attempt < self._max_retries:
+                    self._record_timeout_usage_before_retry(exc)
                     continue
                 raise
             try:

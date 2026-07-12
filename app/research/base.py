@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Callable, Protocol
 
 from app.llm.base import Usage
 from app.models import SourceType, SourceVerification
@@ -38,6 +38,27 @@ class ResearchTimeout(ResearchError):
 
 class ResearchParseError(ResearchError):
     """Model zwrócił niepoprawny JSON (NIE ponawiamy — to nie jest błąd transient)."""
+
+
+class ResearchBudgetError(ResearchError):
+    """A budget gate rejected an attempt; this error is never retried."""
+
+    def __init__(self, message: str, *, code: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+@dataclass(frozen=True)
+class AttemptBudgetContext:
+    """Context emitted immediately before each technical client attempt."""
+
+    attempt_number: int
+    max_attempts: int
+    estimated_attempt_cost: float
+
+
+AttemptBudgetCallback = Callable[[AttemptBudgetContext], None]
+RetryUsageCallback = Callable[[Usage, str], None]
 
 
 @dataclass

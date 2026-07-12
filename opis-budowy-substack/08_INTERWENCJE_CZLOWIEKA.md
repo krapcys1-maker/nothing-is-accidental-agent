@@ -79,3 +79,12 @@ Na obecnym etapie (przed generacją treści i publikacją) interwencje człowiek
 ### [2026-07-12] Zgoda na korektę Task 4 po review
 - Właściciel ograniczył poprawkę do czterech P1, fail-closed i dokumentacji; race condition pozostawił jako P2.
 - Efekt: pełna finalizacja i regresje wykonane offline, bez API, commita, pushu ani Task 5.
+
+### [2026-07-12] Zgoda na wyłącznie Task 5
+- Właściciel zatwierdził centralny budżet i retry callback, wymagając pełnych testów offline.
+- Granice: bez API, realnego researchu, Task 6, commita i pushu; P2-17 i P2-18 bez zmian.
+- Efekt: 242 testy, koszt 0 USD, working tree pozostawiony do review.
+
+### [2026-07-12] Właściciel nakazał poprawić findings, nie tylko wydać REJECT
+- Review znalazło pięć P1 w Task 5; właściciel jawnie rozszerzył pracę o ich natychmiastową korektę i regresje.
+- Efekt: 257 testów, bez API, commita, pushu, Task 6 i zmian P2-17/P2-18.

@@ -12,6 +12,7 @@ from app.core.config import Settings
 from app.research.cost_estimator import (
     MIN_SAFETY_MARGIN,
     estimate_no_search_call_usd,
+    estimate_with_retries,
     estimate_worst_case_search_call_usd,
 )
 
@@ -113,3 +114,21 @@ def test_two_stage_projection_cheaper_than_single_call_worst_case(real_pricing_s
         real_pricing_settings, max_output_tokens=2200, forwarded_context_tokens=2500)
     combined = stage_a.total_usd + stage_b.total_usd
     assert combined < single_call.total_usd
+
+
+@pytest.mark.parametrize(
+    ("max_retries", "multiplier"),
+    [(0, 1), (1, 2), (2, 3)],
+)
+def test_retry_estimate_includes_first_attempt(max_retries, multiplier):
+    assert estimate_with_retries(0.08, max_retries) == pytest.approx(0.08 * multiplier)
+
+
+def test_retry_estimate_accepts_zero_base():
+    assert estimate_with_retries(0.0, 2) == 0.0
+
+
+@pytest.mark.parametrize(("base", "retries"), [(-0.01, 0), (0.01, -1)])
+def test_retry_estimate_rejects_negative_inputs(base, retries):
+    with pytest.raises(ValueError):
+        estimate_with_retries(base, retries)

@@ -199,3 +199,8 @@ Te pozycje **jeszcze się nie wydarzyły**, bo nie doszliśmy do odpowiednich et
 - **Ryzyko:** `0.1 + 0.2` i `0.3` mogą mieć inną reprezentację binarną.
 - **Wpływ:** wyłącznie bezpieczna odmowa; brak nadpisania danych.
 - **Plan późniejszy:** najmniejsza jednostka, `Decimal` albo tolerancja zgodna z `model_usage`. Nie naprawiano w Task 4.
+
+### Task 5 — dwa rodzaje niewiedzy o timeoutach
+Jeśli timeout zwraca usage, zapisujemy je przed decyzją o retry. Jeśli nie zwraca, provider nadal może naliczyć koszt — `timeout-billed-unrecorded`. Nie dopisujemy fikcyjnego usage. Pierwsza implementacja miała też niebezpieczny skrót: `dry_run=True` omijało kontrolę limitów; istniejące testy wykryły fail-open i skrót usunięto.
+
+Pełne review znalazło kolejne trzy luki: opcjonalny cap realnego pipeline, rosnący cap resume oraz NaN/Infinity limitów kończące się `OK`. Wszystkie poprawiono fail-closed i pokryto regresjami; rezydualne ryzyko providera pozostało jawne.

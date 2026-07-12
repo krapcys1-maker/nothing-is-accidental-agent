@@ -373,3 +373,18 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Wynik:** najbliższe testy **43 passed**; celowane Task 1–4 **155 passed in 12.30s**; pełne `python -m pytest` **212 passed in 13.87s**. Nowe testy nie ujawniły błędu produkcyjnego.
 - **P2:** zapisano P2-18 — dokładne `float == float` może fałszywie odrzucić semantycznie identyczny koszt (`0.1 + 0.2` vs `0.3`), lecz zachowanie pozostaje bezpieczne fail-closed. P2-17 bez zmian.
 - **Koszt / zakres:** **0,000000 USD**; zero API, realnego researchu i Playwrighta; bez commita, pushu, merge i bez rozpoczęcia Task 5.
+
+### [2026-07-12] Etap 0 / Task 5 — szczelny budżet researchu
+
+- **Cel:** domknąć P1-3/P1-4: policzyć wszystkie techniczne próby, ponawiać kontrolę przed retry i usunąć drugą implementację polityki z CLI.
+- **Kod:** dodano `PolicyEngine.check_run_budget(projected_total, cap, current_run_cost, account)` z walidacją fail-closed, priorytetem miesięcznym ADR-012 i kanonem `model_usage(dry_run=0)`. `estimate_with_retries` liczy `base × (1 + max_retries)`. `AnthropicResearchClient` wywołuje workflow-owned callback przed każdą próbą; dostępne usage timeoutu jest utrwalane przed kolejną bramką. Single, two-stage, A1, A2, B i resume przekazują cap/retry. CLI deleguje decyzję i zachowuje estimate-only przed konstrukcją klienta.
+- **Błędy/obserwacje:** pierwsza wersja błędnie omijała budżet, gdy `settings.dry_run=True`; testy istniejącej semantyki wykryły fail-open i skrót usunięto. Miesięczny limit ustawiono przed capem runu, aby zachować ADR-012. Ryzyko `timeout-billed-unrecorded` zapisano bez sztucznego usage.
+- **Testy:** estimator 0/1/2 i wartości ujemne; cap poniżej/równo/powyżej, D/M, dry-run, NaN i zero; callback przed każdą próbą, zero/one call przy odmowie, usage przed retry; integracja persistence+cap; mnożnik A1/A2/B z resume; delegacja i kody CLI; inferencja oraz fail-closed mismatch retry klient↔workflow. Celowane: **86 passed**; pełne `python -m pytest`: **242 passed in 11.88s**.
+- **Zakres:** 0 USD, zero API, realnego researchu i Playwrighta; Task 6 nierozpoczęty; P2-17/P2-18 bez zmian; bez commita i pushu.
+
+### [2026-07-12] Etap 0 / Task 5 — poprawki P1 po pełnym self-review
+
+- **Findingi:** realny pipeline przyjmował brak capu; domyślny cap resume rósł razem z `prior_cost`; CLI/pipeline odczytywały stan obcego runu przed walidacją konta; NaN/Infinity limitów mogły fail-open; brakowało prób timeout→usage→deny osobno dla A1/A2/B.
+- **Reprodukcje:** fake real-mode wykonał pipeline bez capu i zapisał 0.0276 USD; limity NaN/Infinity zwracały `OK`; staged default cap rósł `0.30→0.45→0.60` wraz z kosztem.
+- **Poprawki:** obowiązkowy cap realnego pipeline, stałe capy resume, wczesny account guard, `BUDGET_INVALID_STATE` oraz pełne regresje SQLite/caller dla wszystkich etapów i legacy multiplier.
+- **Wynik:** celowane **224 passed**; pełne **257 passed in 10.60s**; `git diff --check` czysty. Koszt 0 USD, zero API, Playwrighta, commita i pushu.

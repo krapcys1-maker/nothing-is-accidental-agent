@@ -7,7 +7,13 @@ import pytest
 
 from app.llm.base import Usage
 from app.research.anthropic_client import AnthropicResearchClient
-from app.research.base import ResearchParseError, ResearchPlan, ResearchTimeout, SourceCandidate
+from app.research.base import (
+    ResearchBudgetError,
+    ResearchParseError,
+    ResearchPlan,
+    ResearchTimeout,
+    SourceCandidate,
+)
 
 _PLAN = ResearchPlan(topic_id=1, account_id="acc", question="Why?", niche=["x"])
 
@@ -77,6 +83,90 @@ def test_invalid_json_still_carries_real_usage():
     assert client.call_count == 1
     assert excinfo.value.usage == _USAGE
     assert excinfo.value.model == "sonnet-x"
+
+
+def test_budget_callback_runs_before_every_attempt():
+    attempts = []
+    state = {"n": 0}
+
+    def caller(plan):
+        state["n"] += 1
+        if state["n"] == 1:
+            raise ResearchTimeout("retry")
+        return _GOOD_JSON, _USAGE
+
+    client = AnthropicResearchClient("key", "m", caller=caller, max_retries=1)
+    client.configure_attempt_control(
+        budget_callback=lambda context: attempts.append(context.attempt_number),
+        retry_usage_callback=lambda usage, model: None,
+        estimated_attempt_cost=0.08,
+    )
+    client.run_research(_PLAN)
+    assert attempts == [1, 2]
+
+
+def test_budget_denial_before_first_attempt_makes_zero_calls():
+    calls = []
+
+    def caller(plan):
+        calls.append(1)
+        return _GOOD_JSON, _USAGE
+
+    def deny(context):
+        raise ResearchBudgetError("cap", code="RUN_CAP_EXCEEDED")
+
+    client = AnthropicResearchClient("key", "m", caller=caller, max_retries=2)
+    client.configure_attempt_control(
+        budget_callback=deny, retry_usage_callback=None, estimated_attempt_cost=0.08)
+    with pytest.raises(ResearchBudgetError):
+        client.run_research(_PLAN)
+    assert calls == []
+    assert client.call_count == 0
+
+
+def test_budget_denial_before_retry_is_not_retried():
+    calls = []
+
+    def caller(plan):
+        calls.append(1)
+        raise ResearchTimeout("timeout")
+
+    def guard(context):
+        if context.attempt_number == 2:
+            raise ResearchBudgetError("daily", code="BUDGET_DAILY_EXCEEDED")
+
+    client = AnthropicResearchClient("key", "m", caller=caller, max_retries=3)
+    client.configure_attempt_control(
+        budget_callback=guard, retry_usage_callback=None, estimated_attempt_cost=0.08)
+    with pytest.raises(ResearchBudgetError):
+        client.run_research(_PLAN)
+    assert len(calls) == 1
+    assert client.call_count == 1
+
+
+def test_timeout_usage_is_recorded_before_retry():
+    recorded = []
+    state = {"n": 0}
+
+    def caller(plan):
+        state["n"] += 1
+        if state["n"] == 1:
+            raise ResearchTimeout("timeout", usage=_USAGE, model="m")
+        return _GOOD_JSON, _USAGE
+
+    client = AnthropicResearchClient("key", "m", caller=caller, max_retries=1)
+    client.configure_attempt_control(
+        budget_callback=lambda context: None,
+        retry_usage_callback=lambda usage, model: recorded.append((usage, model)),
+        estimated_attempt_cost=0.08,
+    )
+    client.run_research(_PLAN)
+    assert recorded == [(_USAGE, "m")]
+
+
+def test_negative_max_retries_is_rejected():
+    with pytest.raises(ValueError):
+        AnthropicResearchClient("key", "m", max_retries=-1)
 
 
 def test_web_search_max_uses_passed_to_tool_spec(monkeypatch):

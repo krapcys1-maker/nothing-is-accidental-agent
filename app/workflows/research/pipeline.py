@@ -51,8 +51,10 @@ from app.ports.notification import NotificationPort
 from app.ports.storage import StoragePort
 from app.research import injection_guard
 from app.research.base import (
+    AttemptBudgetContext,
     GatheredSource,
     ResearchClient,
+    ResearchBudgetError,
     ResearchError,
     ResearchPlan,
     SourceCandidate,
@@ -64,6 +66,7 @@ from app.research.cost_estimator import (
     estimate_extraction_cost_per_source_usd,
     estimate_no_search_call_usd,
     estimate_synthesis_cost_usd,
+    estimate_with_retries,
     estimate_worst_case_search_call_usd,
 )
 from app.research.diagnostics import ResponseDiagnostics, write_diagnostics
@@ -101,6 +104,99 @@ ResearchLogWriter = Callable[[ResearchCard, Topic, "ResearchRunSummary"], None]
 _LOGGER = logging.getLogger(__name__)
 
 
+def _current_run_cost(storage: StoragePort, run_id: str | None) -> float:
+    if run_id is None:
+        return 0.0
+    return round(sum(row.estimated_cost_usd for row in storage.get_research_usage(run_id)), 6)
+
+
+def _resolve_max_retries(
+    research_client: ResearchClient,
+    configured_max_retries: int | None,
+) -> int:
+    client_max_retries = getattr(research_client, "max_retries", None)
+    if configured_max_retries is None:
+        return int(client_max_retries) if client_max_retries is not None else 0
+    if client_max_retries is not None and configured_max_retries != client_max_retries:
+        raise ValueError(
+            "max_retries workflowu musi być zgodne z max_retries klienta; "
+            "rozbieżność mogłaby zaniżyć estymatę budżetu."
+        )
+    return configured_max_retries
+
+
+def _check_stage_budget(
+    settings: Settings,
+    policy: PolicyEngine,
+    account: Account,
+    storage: StoragePort,
+    run_id: str | None,
+    *,
+    base_estimate: float,
+    max_retries: int,
+    run_cap_usd: float | None,
+):
+    if not settings.dry_run and run_cap_usd is None:
+        raise ValueError(
+            "Realny research wymaga jawnego run_cap_usd; brak capu jest fail-closed."
+        )
+    current = _current_run_cost(storage, run_id)
+    projected = round(current + estimate_with_retries(base_estimate, max_retries), 6)
+    return policy.check_run_budget(
+        projected,
+        run_cap_usd,
+        current_run_cost=current,
+        account=account,
+    )
+
+
+def _configure_attempt_control(
+    research_client: ResearchClient,
+    *,
+    policy: PolicyEngine,
+    account: Account,
+    storage: StoragePort,
+    usage_tracker: UsageTracker,
+    run_id: str,
+    run_cap_usd: float | None,
+    estimated_attempt_cost: float,
+    task: str,
+    dry_run: bool,
+) -> None:
+    """Connect a client retry loop to workflow-owned policy and persistence."""
+    configure = getattr(research_client, "configure_attempt_control", None)
+    if not callable(configure):
+        return
+
+    def budget_callback(context: AttemptBudgetContext) -> None:
+        current = _current_run_cost(storage, run_id)
+        projected = round(current + context.estimated_attempt_cost, 6)
+        decision = policy.check_run_budget(
+            projected,
+            run_cap_usd,
+            current_run_cost=current,
+            account=account,
+        )
+        if not decision.allowed:
+            raise ResearchBudgetError(decision.reason, code=decision.code)
+
+    def retry_usage_callback(usage: Usage, model: str) -> None:
+        usage_tracker.record(run_id, model, usage, task=task, dry_run=dry_run)
+
+    configure(
+        budget_callback=budget_callback,
+        retry_usage_callback=retry_usage_callback,
+        estimated_attempt_cost=estimated_attempt_cost,
+    )
+
+
+def _mark_budget_block(summary: "ResearchRunSummary", exc: ResearchError) -> None:
+    if isinstance(exc, ResearchBudgetError):
+        summary.blocked = True
+        summary.block_code = exc.code
+        summary.block_reason = str(exc)
+
+
 class CompletedResearchExistsError(RuntimeError):
     """Świeży research wymaga jawnego potwierdzenia, gdy karta już istnieje."""
 
@@ -125,6 +221,14 @@ def _validate_resume_flow(research_run: ResearchRun, expected: ResearchFlow) -> 
         raise ValueError(
             f"research_run #{research_run.id}: expected flow '{expected.value}', "
             f"stored flow '{research_run.flow.value}'."
+        )
+
+
+def _validate_research_run_account(research_run: ResearchRun, account: Account) -> None:
+    if research_run.account_id != account.id:
+        raise ValueError(
+            f"research_run #{research_run.id} należy do konta {research_run.account_id}, "
+            f"nie do wybranego konta {account.id}."
         )
 
 
@@ -284,7 +388,10 @@ def run_research_pipeline(
     clock: Clock | None = None,
     research_log: ResearchLogWriter | None = None,
     force_re_research: bool = False,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
 ) -> ResearchRunSummary:
+    max_retries = _resolve_max_retries(research_client, max_retries)
     clock = clock or SystemClock()
     summary = ResearchRunSummary(run_id=None, account_id=account.id,
                                  topic_id=int(topic.id), dry_run=settings.dry_run)
@@ -310,7 +417,9 @@ def run_research_pipeline(
     # runów — patrz run_two_stage_research_pipeline() niżej.
     worst_case = estimate_worst_case_search_call_usd(
         settings, max_web_searches=6, max_output_tokens=3000)
-    budget = policy.check_budget(worst_case.total_usd)
+    budget = _check_stage_budget(
+        settings, policy, account, storage, None, base_estimate=worst_case.total_usd,
+        max_retries=max_retries, run_cap_usd=run_cap_usd)
     if not budget.allowed:
         notifier.notify("warning", "Budżet — stop (research)", budget.reason, account.id)
         summary.blocked = True
@@ -329,10 +438,17 @@ def run_research_pipeline(
         flow=ResearchFlow.SINGLE, status=ResearchRunStatus.PENDING,
     ))
 
+    _configure_attempt_control(
+        research_client, policy=policy, account=account, storage=storage,
+        usage_tracker=usage_tracker, run_id=run_id, run_cap_usd=run_cap_usd,
+        estimated_attempt_cost=worst_case.total_usd, task="research",
+        dry_run=settings.dry_run)
+
     # 5. Wywołanie klienta (web search). Błędy: timeout/parse -> run FAILED.
     try:
         result = research_client.run_research(plan)
     except ResearchError as exc:
+        _mark_budget_block(summary, exc)
         # Nawet gdy research się nie powiódł (np. ucięty/niepoprawny JSON), wywołanie
         # API mogło być realne i kosztować — jeśli wyjątek niesie `usage`, zaksięguj je,
         # żeby rzeczywisty koszt nigdy nie zniknął z model_usage/COSTS.csv.
@@ -349,6 +465,8 @@ def run_research_pipeline(
             summary.input_tokens = usage_row.input_tokens
             summary.output_tokens = usage_row.output_tokens
             summary.web_search_requests = usage_row.web_search_requests
+        cost = _current_run_cost(storage, run_id)
+        summary.cost_usd = cost
         storage.finish_run(run_id, RunStatus.FAILED.value, cost, error=str(exc))
         storage.mark_research_run_failed(run_id, error=str(exc))
         notifier.notify("error", "Research nieudany", str(exc), account.id)
@@ -373,7 +491,7 @@ def run_research_pipeline(
     # 7. Koszt.
     usage_row = usage_tracker.record(run_id, result.model, result.usage,
                                      task="research", dry_run=settings.dry_run)
-    summary.cost_usd = usage_row.estimated_cost_usd
+    summary.cost_usd = _current_run_cost(storage, run_id)
     summary.model = result.model
     summary.input_tokens = usage_row.input_tokens
     summary.output_tokens = usage_row.output_tokens
@@ -413,7 +531,7 @@ def run_research_pipeline(
 
     # 10. Jedna granica transakcji: COMPLETE + terminalny runs + USED.
     storage.finalize_research_success(
-        run_id, research_card_id=int(card.id), total_cost_usd=usage_row.estimated_cost_usd,
+        run_id, research_card_id=int(card.id), total_cost_usd=summary.cost_usd,
         stage_b_completed=False,
         terminal_run_status=RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS,
     )
@@ -446,6 +564,8 @@ def run_two_stage_research_pipeline(
     synthesize_max_tokens: int = 2200,
     forwarded_context_tokens: int = 2500,
     force_re_research: bool = False,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
 ) -> ResearchRunSummary:
     """Dwuetapowy research (ZALECANY od 2026-07-11, ADR-016, docs/ERRORS_AND_FAILURES.md).
 
@@ -461,6 +581,7 @@ def run_two_stage_research_pipeline(
     zbudowano `research_client` (patrz AnthropicResearchClient) — inaczej szacunek nie
     będzie pasował do realnie stosowanych capów.
     """
+    max_retries = _resolve_max_retries(research_client, max_retries)
     clock = clock or SystemClock()
     summary = ResearchRunSummary(run_id=None, account_id=account.id,
                                  topic_id=int(topic.id), dry_run=settings.dry_run)
@@ -482,7 +603,9 @@ def run_two_stage_research_pipeline(
     # 3. Bramka budżetu PRZED etapem 1 (kalibrowany pesymistyczny szacunek).
     stage_a_estimate = estimate_worst_case_search_call_usd(
         settings, max_web_searches=max_web_searches, max_output_tokens=gather_max_tokens)
-    budget_a = policy.check_budget(stage_a_estimate.total_usd)
+    budget_a = _check_stage_budget(
+        settings, policy, account, storage, None, base_estimate=stage_a_estimate.total_usd,
+        max_retries=max_retries, run_cap_usd=run_cap_usd)
     if not budget_a.allowed:
         notifier.notify("warning", "Budżet — stop (etap 1: gather_sources)",
                         budget_a.reason, account.id)
@@ -503,11 +626,18 @@ def run_two_stage_research_pipeline(
     ))
     total_cost = 0.0
 
+    _configure_attempt_control(
+        research_client, policy=policy, account=account, storage=storage,
+        usage_tracker=usage_tracker, run_id=run_id, run_cap_usd=run_cap_usd,
+        estimated_attempt_cost=stage_a_estimate.total_usd, task="research_gather",
+        dry_run=settings.dry_run)
+
     # 5. Etap 1: gather_sources. Błąd -> run FAILED, ale realny koszt (jeśli był) zaksięgowany.
     #    Brak trwałych źródeł -> nie ma czego wznawiać (research_runs.status=FAILED).
     try:
         gathered = research_client.gather_sources(plan)
     except ResearchError as exc:
+        _mark_budget_block(summary, exc)
         cost = 0.0
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
@@ -520,8 +650,9 @@ def run_two_stage_research_pipeline(
             summary.input_tokens = usage_row.input_tokens
             summary.output_tokens = usage_row.output_tokens
             summary.web_search_requests = usage_row.web_search_requests
-        summary.cost_usd = cost
-        storage.finish_run(run_id, RunStatus.FAILED.value, cost, error=f"[gather_sources] {exc}")
+        total_cost = _current_run_cost(storage, run_id)
+        summary.cost_usd = total_cost
+        storage.finish_run(run_id, RunStatus.FAILED.value, total_cost, error=f"[gather_sources] {exc}")
         storage.mark_research_run_failed(run_id, error=f"[gather_sources] {exc}")
         storage.add_research_stage_result(run_id, ResearchStageName.A,
                                           ResearchStageStatus.FAILED, error=str(exc))
@@ -531,7 +662,7 @@ def run_two_stage_research_pipeline(
 
     gather_usage_row = usage_tracker.record(run_id, gathered.model, gathered.usage,
                                             task="research_gather", dry_run=settings.dry_run)
-    total_cost += gather_usage_row.estimated_cost_usd
+    total_cost = _current_run_cost(storage, run_id)
     summary.model = gathered.model
 
     # 6. Ochrona przed prompt injection — treść źródeł to niezaufany materiał (już tu,
@@ -585,7 +716,9 @@ def run_two_stage_research_pipeline(
     stage_b_estimate = estimate_no_search_call_usd(
         settings, max_output_tokens=synthesize_max_tokens,
         forwarded_context_tokens=forwarded_context_tokens)
-    budget_b = policy.check_budget(stage_b_estimate.total_usd)
+    budget_b = _check_stage_budget(
+        settings, policy, account, storage, run_id, base_estimate=stage_b_estimate.total_usd,
+        max_retries=max_retries, run_cap_usd=run_cap_usd)
     if not budget_b.allowed:
         summary.cost_usd = total_cost
         summary.sources_count = len(gathered.sources)
@@ -600,16 +733,22 @@ def run_two_stage_research_pipeline(
     # 9. Etap 2: synthesize_card. Błąd -> run PARTIAL (nie FAILED!) — źródła z etapu 1
     # zostają nietknięte w research_sources, można wznowić WYŁĄCZNIE etap 2
     # (resume_research_stage_b), bez ponownego web search.
+    _configure_attempt_control(
+        research_client, policy=policy, account=account, storage=storage,
+        usage_tracker=usage_tracker, run_id=run_id, run_cap_usd=run_cap_usd,
+        estimated_attempt_cost=stage_b_estimate.total_usd, task="research_synthesize",
+        dry_run=settings.dry_run)
     try:
         synthesized = research_client.synthesize_card(plan, gathered)
     except ResearchError as exc:
+        _mark_budget_block(summary, exc)
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
             usage_row = usage_tracker.record(
                 run_id, getattr(exc, "model", None) or "unknown", exc_usage,
                 task="research_synthesize", dry_run=settings.dry_run,
             )
-            total_cost += usage_row.estimated_cost_usd
+            total_cost = _current_run_cost(storage, run_id)
         summary.cost_usd = total_cost
         summary.sources_count = len(gathered.sources)
         storage.finish_run(run_id, RunStatus.FAILED.value, total_cost,
@@ -624,7 +763,7 @@ def run_two_stage_research_pipeline(
 
     synth_usage_row = usage_tracker.record(run_id, synthesized.model, synthesized.usage,
                                            task="research_synthesize", dry_run=settings.dry_run)
-    total_cost += synth_usage_row.estimated_cost_usd
+    total_cost = _current_run_cost(storage, run_id)
     summary.cost_usd = total_cost
     summary.input_tokens = gather_usage_row.input_tokens + synth_usage_row.input_tokens
     summary.output_tokens = gather_usage_row.output_tokens + synth_usage_row.output_tokens
@@ -708,6 +847,8 @@ def resume_research_stage_b(
     research_log: ResearchLogWriter | None = None,
     synthesize_max_tokens: int = 2200,
     forwarded_context_tokens: int = 2500,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
 ) -> ResearchRunSummary:
     """Wznawia WYŁĄCZNIE etap 2 dla już istniejącego `research_run_id` w stanie
     SOURCE_COLLECTED lub PARTIAL. NIGDY nie woła `gather_sources` / web search —
@@ -715,9 +856,11 @@ def resume_research_stage_b(
     to działa również po pełnym restarcie procesu (prawdziwa odporność na awarię,
     nie tylko "w ramach jednego wywołania funkcji").
     """
+    max_retries = _resolve_max_retries(research_client, max_retries)
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
+    _validate_research_run_account(research_run, account)
     _validate_resume_flow(research_run, ResearchFlow.TWO_STAGE)
     clock = clock or SystemClock()
     if research_run.status not in (ResearchRunStatus.SOURCE_COLLECTED, ResearchRunStatus.PARTIAL):
@@ -781,7 +924,10 @@ def resume_research_stage_b(
     stage_b_estimate = estimate_no_search_call_usd(
         settings, max_output_tokens=synthesize_max_tokens,
         forwarded_context_tokens=forwarded_context_tokens)
-    budget_b = policy.check_budget(stage_b_estimate.total_usd)
+    budget_b = _check_stage_budget(
+        settings, policy, account, storage, research_run_id,
+        base_estimate=stage_b_estimate.total_usd, max_retries=max_retries,
+        run_cap_usd=run_cap_usd)
     if not budget_b.allowed:
         summary.cost_usd = total_cost
         notifier.notify("warning", "Budżet — stop (wznowienie etapu 2)",
@@ -792,16 +938,22 @@ def resume_research_stage_b(
 
     run_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.RUNNING
 
+    _configure_attempt_control(
+        research_client, policy=policy, account=account, storage=storage,
+        usage_tracker=usage_tracker, run_id=research_run_id, run_cap_usd=run_cap_usd,
+        estimated_attempt_cost=stage_b_estimate.total_usd, task="research_synthesize",
+        dry_run=settings.dry_run)
     try:
         synthesized = research_client.synthesize_card(plan, gathered)
     except ResearchError as exc:
+        _mark_budget_block(summary, exc)
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
             usage_row = usage_tracker.record(
                 research_run_id, getattr(exc, "model", None) or "unknown", exc_usage,
                 task="research_synthesize", dry_run=settings.dry_run,
             )
-            total_cost += usage_row.estimated_cost_usd
+            total_cost = _current_run_cost(storage, research_run_id)
         summary.cost_usd = total_cost
         storage.mark_research_run_partial(research_run_id, error=f"[synthesize_card] {exc}")
         storage.add_research_stage_result(research_run_id, ResearchStageName.B,
@@ -814,7 +966,7 @@ def resume_research_stage_b(
 
     synth_usage_row = usage_tracker.record(research_run_id, synthesized.model, synthesized.usage,
                                            task="research_synthesize", dry_run=settings.dry_run)
-    total_cost += synth_usage_row.estimated_cost_usd
+    total_cost = _current_run_cost(storage, research_run_id)
     summary.cost_usd = total_cost
     summary.model = synthesized.model
     summary.input_tokens = synth_usage_row.input_tokens
@@ -911,12 +1063,15 @@ def run_source_discovery(
     max_searches: int = 3,
     max_output_tokens: int = 600,
     force_re_research: bool = False,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
 ) -> ResearchRunSummary:
     """Etap A1: TYLKO web search + krótka lista kandydatów URL (JSONL, url+title).
     Zero analizy — najlżejszy możliwy ładunek (patrz app/research/base.py). Kandydaci
     zapisywani ATOMOWO natychmiast po sukcesie (jak dawny etap A, ADR-019) — to
     dopiero PIERWSZY z trzech etapów, nie jedyny. Błąd -> FAILED, nic do wznowienia
     (bez trwałych kandydatów nie ma czego ekstrahować)."""
+    max_retries = _resolve_max_retries(research_client, max_retries)
     clock = clock or SystemClock()
     summary = ResearchRunSummary(run_id=None, account_id=account.id,
                                  topic_id=int(topic.id), dry_run=settings.dry_run)
@@ -933,7 +1088,9 @@ def run_source_discovery(
     plan = build_research_plan(topic, account)
 
     estimate = estimate_discovery_cost_usd(settings, max_searches, max_output_tokens)
-    budget = policy.check_budget(estimate.conservative_usd)
+    budget = _check_stage_budget(
+        settings, policy, account, storage, None, base_estimate=estimate.conservative_usd,
+        max_retries=max_retries, run_cap_usd=run_cap_usd)
     if not budget.allowed:
         notifier.notify("warning", "Budżet — stop (etap A1: discover_sources)",
                         budget.reason, account.id)
@@ -952,9 +1109,16 @@ def run_source_discovery(
     ))
     _sync_staged_run_cost(storage, run_id)
 
+    _configure_attempt_control(
+        research_client, policy=policy, account=account, storage=storage,
+        usage_tracker=usage_tracker, run_id=run_id, run_cap_usd=run_cap_usd,
+        estimated_attempt_cost=estimate.conservative_usd, task="research_discover",
+        dry_run=settings.dry_run)
+
     try:
         discovered = research_client.discover_sources(plan, max_searches)
     except ResearchError as exc:
+        _mark_budget_block(summary, exc)
         cost = 0.0
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
@@ -966,12 +1130,13 @@ def run_source_discovery(
             summary.input_tokens = usage_row.input_tokens
             summary.output_tokens = usage_row.output_tokens
             summary.web_search_requests = usage_row.web_search_requests
-        summary.cost_usd = cost
+        summary.cost_usd = _current_run_cost(storage, run_id)
         _record_diagnostics(settings, run_id, "A1", usage=exc_usage or Usage(),
                             raw_text=getattr(exc, "raw_text", "") or "",
                             stop_reason=getattr(exc, "stop_reason", None),
                             parse_error_location=str(exc))
-        storage.finish_run(run_id, RunStatus.FAILED.value, cost, error=f"[discover_sources] {exc}")
+        storage.finish_run(run_id, RunStatus.FAILED.value, summary.cost_usd,
+                           error=f"[discover_sources] {exc}")
         storage.mark_research_run_failed(run_id, error=f"[discover_sources] {exc}")
         storage.add_research_stage_result(run_id, ResearchStageName.A1,
                                           ResearchStageStatus.FAILED, error=str(exc))
@@ -982,7 +1147,7 @@ def run_source_discovery(
     usage_row = _record_staged_usage(
         usage_tracker, storage, run_id, discovered.model, discovered.usage,
         task="research_discover", dry_run=settings.dry_run)
-    summary.cost_usd = usage_row.estimated_cost_usd
+    summary.cost_usd = _current_run_cost(storage, run_id)
     summary.model = discovered.model
     summary.input_tokens = usage_row.input_tokens
     summary.output_tokens = usage_row.output_tokens
@@ -1029,15 +1194,19 @@ def run_source_extraction(
     max_web_searches_per_source: int = 1,
     max_output_tokens: int = 1500,
     max_attempts: int = 2,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
 ) -> ResearchRunSummary:
     """Etap A2: JEDNO źródło na wywołanie API. Zapisywane do bazy NATYCHMIAST po
     KAŻDYM źródle (sukces LUB błąd) — awaria źródła N nie ma wpływu na 1..N-1, i
     wznowienie po restarcie kontynuuje dokładnie tam, gdzie się skończyło (czyta
     kandydatów PENDING_EXTRACTION z BAZY, nie z pamięci procesu). Wołalne zarówno
     świeżo (zaraz po A1) jak i jako wznowienie (osobne wywołanie, później)."""
+    max_retries = _resolve_max_retries(research_client, max_retries)
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
+    _validate_research_run_account(research_run, account)
     _validate_resume_flow(research_run, ResearchFlow.STAGED)
     if max_attempts < 1:
         raise ValueError("max_attempts musi być dodatnie.")
@@ -1102,7 +1271,10 @@ def run_source_extraction(
     call_web_search_requests = 0
     call_cost = 0.0
     for candidate_record in pending:
-        budget = policy.check_budget(per_source_estimate.conservative_usd)
+        budget = _check_stage_budget(
+            settings, policy, account, storage, research_run_id,
+            base_estimate=per_source_estimate.conservative_usd,
+            max_retries=max_retries, run_cap_usd=run_cap_usd)
         if not budget.allowed:
             notifier.notify(
                 "warning", "Budżet — stop w trakcie etapu A2 (extract_source)",
@@ -1121,9 +1293,15 @@ def run_source_extraction(
             # PENDING row may already be at cap. In both cases this process must not call.
             continue
         candidate = SourceCandidate(url=candidate_record.url, title=candidate_record.title)
+        _configure_attempt_control(
+            research_client, policy=policy, account=account, storage=storage,
+            usage_tracker=usage_tracker, run_id=research_run_id, run_cap_usd=run_cap_usd,
+            estimated_attempt_cost=per_source_estimate.conservative_usd,
+            task="research_extract", dry_run=settings.dry_run)
         try:
             extraction = research_client.extract_source(plan, candidate)
         except ResearchError as exc:
+            _mark_budget_block(summary, exc)
             exc_usage = getattr(exc, "usage", None)
             if exc_usage is not None:
                 usage_row = _record_staged_usage(
@@ -1146,6 +1324,8 @@ def run_source_extraction(
             notifier.notify("warning", f"Ekstrakcja źródła nieudana ({candidate_record.url})",
                             str(exc), account.id)
             failed_now += 1
+            if isinstance(exc, ResearchBudgetError):
+                break
             continue
 
         usage_row = _record_staged_usage(
@@ -1252,13 +1432,17 @@ def run_synthesis_from_cards(
     research_log: ResearchLogWriter | None = None,
     synthesize_max_tokens: int = 2200,
     forwarded_context_tokens: int = 2500,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
 ) -> ResearchRunSummary:
     """Etap B: synteza WYŁĄCZNIE z już wyekstrahowanych Source Cards (etap A2). Zero
     web search. Błąd -> status WRACA do SOURCES_COMPLETE (źródła nietknięte) — można
     ponowić WYŁĄCZNIE ten etap, dowolną liczbę razy, bez powtarzania A1/A2."""
+    max_retries = _resolve_max_retries(research_client, max_retries)
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
+    _validate_research_run_account(research_run, account)
     _validate_resume_flow(research_run, ResearchFlow.STAGED)
 
     uncertain = storage.list_source_candidates(
@@ -1319,7 +1503,10 @@ def run_synthesis_from_cards(
     total_cost = sum(u.estimated_cost_usd for u in prior_usage)
 
     estimate = estimate_synthesis_cost_usd(settings, synthesize_max_tokens, forwarded_context_tokens)
-    budget = policy.check_budget(estimate.conservative_usd)
+    budget = _check_stage_budget(
+        settings, policy, account, storage, research_run_id,
+        base_estimate=estimate.conservative_usd, max_retries=max_retries,
+        run_cap_usd=run_cap_usd)
     if not budget.allowed:
         summary.cost_usd = total_cost
         notifier.notify("warning", "Budżet — stop (etap B: synthesize_from_cards)",
@@ -1331,16 +1518,22 @@ def run_synthesis_from_cards(
     storage.mark_synthesis_pending(research_run_id)
     run_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.RUNNING
 
+    _configure_attempt_control(
+        research_client, policy=policy, account=account, storage=storage,
+        usage_tracker=usage_tracker, run_id=research_run_id, run_cap_usd=run_cap_usd,
+        estimated_attempt_cost=estimate.conservative_usd,
+        task="research_synthesize_cards", dry_run=settings.dry_run)
     try:
         synthesized = research_client.synthesize_from_cards(plan, cards)
     except ResearchError as exc:
+        _mark_budget_block(summary, exc)
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
             usage_row = _record_staged_usage(
                 usage_tracker, storage, research_run_id,
                 getattr(exc, "model", None) or "unknown", exc_usage,
                 task="research_synthesize_cards", dry_run=settings.dry_run)
-            total_cost += usage_row.estimated_cost_usd
+            total_cost = _current_run_cost(storage, research_run_id)
         _record_diagnostics(settings, research_run_id, "B", usage=exc_usage or Usage(),
                             raw_text=getattr(exc, "raw_text", "") or "",
                             stop_reason=getattr(exc, "stop_reason", None),
@@ -1357,7 +1550,7 @@ def run_synthesis_from_cards(
     usage_row = _record_staged_usage(
         usage_tracker, storage, research_run_id, synthesized.model, synthesized.usage,
         task="research_synthesize_cards", dry_run=settings.dry_run)
-    total_cost += usage_row.estimated_cost_usd
+    total_cost = _current_run_cost(storage, research_run_id)
     _record_diagnostics(settings, research_run_id, "B", usage=synthesized.usage,
                         raw_text=synthesized.raw_text, stop_reason=synthesized.stop_reason)
 
@@ -1450,16 +1643,20 @@ def run_staged_research_pipeline(
     synthesize_max_tokens: int = 2200,
     forwarded_context_tokens: int = 2500,
     force_re_research: bool = False,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
 ) -> ResearchRunSummary:
     """Świeży, pełny etapowy research: A1 (discovery) -> A2 (extraction, per źródło)
     -> B (synthesis). Zatrzymuje się BEZ przechodzenia dalej, jeśli poprzedni etap
     się nie powiódł/zablokował lub dał za mało źródeł — zero synthesis, jeśli source
     collection się nie powiodła (ta sama zasada co w starym dwuetapowym przepływie)."""
+    max_retries = _resolve_max_retries(research_client, max_retries)
     discovery_summary = run_source_discovery(
         account, topic, settings=settings, storage=storage, research_client=research_client,
         usage_tracker=usage_tracker, policy=policy, notifier=notifier, clock=clock,
         max_searches=discovery_max_searches, max_output_tokens=discovery_max_tokens,
-        force_re_research=force_re_research)
+        force_re_research=force_re_research, max_retries=max_retries,
+        run_cap_usd=run_cap_usd)
     if discovery_summary.blocked or discovery_summary.error or discovery_summary.run_id is None:
         return discovery_summary
 
@@ -1468,7 +1665,8 @@ def run_staged_research_pipeline(
         research_client=research_client, usage_tracker=usage_tracker, policy=policy,
         notifier=notifier, clock=clock, max_sources=max_sources,
         max_web_searches_per_source=max_web_searches_per_source,
-        max_output_tokens=extraction_max_tokens, max_attempts=max_attempts)
+        max_output_tokens=extraction_max_tokens, max_attempts=max_attempts,
+        max_retries=max_retries, run_cap_usd=run_cap_usd)
     extraction_summary.candidates_discovered = discovery_summary.candidates_discovered
 
     research_run = storage.get_research_run(discovery_summary.run_id)
@@ -1481,7 +1679,8 @@ def run_staged_research_pipeline(
         research_client=research_client, usage_tracker=usage_tracker, policy=policy,
         notifier=notifier, clock=clock, research_log=research_log,
         synthesize_max_tokens=synthesize_max_tokens,
-        forwarded_context_tokens=forwarded_context_tokens)
+        forwarded_context_tokens=forwarded_context_tokens,
+        max_retries=max_retries, run_cap_usd=run_cap_usd)
     synthesis_summary.candidates_discovered = discovery_summary.candidates_discovered
     synthesis_summary.sources_extracted = extraction_summary.sources_extracted
     synthesis_summary.sources_failed = extraction_summary.sources_failed
@@ -1506,6 +1705,8 @@ def resume_staged_research(
     max_attempts: int = 2,
     synthesize_max_tokens: int = 2200,
     forwarded_context_tokens: int = 2500,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
 ) -> ResearchRunSummary:
     """Wznawia DOKŁADNIE JEDEN kolejny etap — nigdy nie kaskaduje automatycznie do
     następnego płatnego etapu (jedno wywołanie = zero automatycznych ponowień, ta
@@ -1515,9 +1716,11 @@ def resume_staged_research(
     - SOURCES_COMPLETE -> wznawia WYŁĄCZNIE B (synteza), NIGDY nie woła A1/A2.
     - inne statusy (DISCOVERY_PENDING/COMPLETE/FAILED oraz statusy starego
       przepływu) -> ValueError, nic do wznowienia tą funkcją."""
+    max_retries = _resolve_max_retries(research_client, max_retries)
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
+    _validate_research_run_account(research_run, account)
     _validate_resume_flow(research_run, ResearchFlow.STAGED)
 
     if research_run.status == ResearchRunStatus.PARTIAL_EXHAUSTED:
@@ -1544,7 +1747,8 @@ def resume_staged_research(
             research_client=research_client, usage_tracker=usage_tracker, policy=policy,
             notifier=notifier, clock=clock, max_sources=max_sources,
             max_web_searches_per_source=max_web_searches_per_source,
-            max_output_tokens=extraction_max_tokens, max_attempts=max_attempts)
+            max_output_tokens=extraction_max_tokens, max_attempts=max_attempts,
+            max_retries=max_retries, run_cap_usd=run_cap_usd)
 
     if research_run.status == ResearchRunStatus.SOURCES_COMPLETE:
         return run_synthesis_from_cards(
@@ -1552,7 +1756,8 @@ def resume_staged_research(
             research_client=research_client, usage_tracker=usage_tracker, policy=policy,
             notifier=notifier, clock=clock, research_log=research_log,
             synthesize_max_tokens=synthesize_max_tokens,
-            forwarded_context_tokens=forwarded_context_tokens)
+            forwarded_context_tokens=forwarded_context_tokens,
+            max_retries=max_retries, run_cap_usd=run_cap_usd)
 
     raise ValueError(
         f"research_run #{research_run_id} ma status {research_run.status.value} — "

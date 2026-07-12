@@ -32,9 +32,9 @@
 
 ### 1.2. Co jest częściowe
 
-- **Policy Engine** — pokrywa ~3 z ~14 docelowych obowiązków. Brak: egzekucji `autonomy_level`, `AccountMode` (COMMENT_ONLY niczego nie blokuje), limitów per konto (`AccountPolicy` — martwa konfiguracja), cooldownów, capu per-run w bibliotece (żyje tylko w CLI), SAFE MODE, runtime kill-switch (czytany raz z .env przy starcie).
+- **Policy Engine** — centralnie egzekwuje cap per-run oraz budżet dzienny/miesięczny przez `check_run_budget`; miesięczny zachowuje priorytet ADR-012. Brak nadal: egzekucji `autonomy_level`, `AccountMode`, limitów per konto, cooldownów, SAFE MODE i runtime kill-switcha.
 - **Klient Anthropic dla tematów** (`app/llm/anthropic_client.py`) — kompletny kod, ale: nigdy nie uruchomiony realnie, brak testów parsera, **nie księguje kosztu przy błędzie parsowania JSON** (w przeciwieństwie do klienta researchu), brak zdejmowania code fence. Do wyrównania z klientem researchu przed pierwszym realnym użyciem.
-- **Maszyna stanów researchu** — Etap 0 / Tasks 1–4 ukończone: jawny `research_runs.flow`, walidacja cross-flow/flow→status i `_detect_flow` usunięte; researchowy INSERT `model_usage` oraz absolutne odświeżenie `runs.cost_usd` są atomowe. A2 atomowo rezerwuje próbę i przechodzi przez `EXTRACTION_IN_PROGRESS`; niepewny wynik po awarii nie jest automatycznie ponawiany. Finalizacja researchu waliduje relację run–topic–card, dozwolony stan źródłowy i jawny status terminalny, po czym atomowo ustawia COMPLETE, terminalny `runs.status` oraz `topics.USED`. Identyczne powtórzenie jest idempotentnym no-op; sprzeczne powtórzenie i uszkodzony USED/COMPLETE zatrzymują się fail-closed. Negatywna macierz flow↔Stage B oraz obce topic/account są pokryte trwałymi testami. Rezydualne P2-18: dokładne porównanie kosztów float może fałszywie odmówić no-op, ale nie może nadpisać danych. Produkcyjna baza nie została w tej pracy zmieniona.
+- **Maszyna stanów researchu** — Etap 0 / Tasks 1–5 ukończone: jawny flow, atomowy koszt/cache i claim A2, idempotentna finalizacja COMPLETE+terminalny run+USED oraz centralny budżet retry. Przed etapem estymata obejmuje `1+max_retries`, a przed każdą próbą callback ponownie czyta `model_usage`. Rezydualne P2-17/P2-18 oraz `timeout-billed-unrecorded` pozostają jawne. Produkcyjna baza nie została w tej pracy zmieniona.
 
 ### 1.3. Co jest tylko szkieletem
 
@@ -49,7 +49,7 @@
 
 ### 1.5. Duplikacja logiki
 
-- **Bramka budżetowa**: `PolicyEngine.check_budget` (biblioteka) vs `_preflight_stop` w `scripts/run_capped_research.py` (druga kopia sumowania budżetu + cap per-run istniejący TYLKO tam).
+- **Bramka budżetowa**: `PolicyEngine.check_run_budget(projected_total, cap, current_run_cost, account)` jest kanonem dla capu runu i limitów D/M; niepoprawne limity/sumy kończą się fail-closed. Realny pipeline wymaga jawnego capu, resume używa absolutnego capu i waliduje run–account przed odczytem usage. CLI tylko zbiera argumenty, estymuje i deleguje. `model_usage(dry_run=0)` pozostaje jedyną podstawą decyzji.
 - **Dwie kalibracje estymatora**: legacy liczy z cennika w runtime, staged ma stałe `0.04875`/`0.020956` — rozjadą się przy zmianie cen w `.env`.
 - **Trzy tabele źródeł** dla trzech generacji przepływu (`sources`, `research_sources`, `research_source_candidates`) — świadome (supersede-nie-usuń), konsolidacja dopiero po wygaszeniu legacy.
 
@@ -183,7 +183,7 @@ APPROVED → [DB] job (kind='browser', idempotency_key=hash(account,type,content
 `kolektor metryk (read-only, Playwright) → [DB] metrics_daily (estymacje oznaczone) → tygodniowa analiza → [DB] strategy_decisions (problem→dane→decyzja→oczekiwany efekt) → korekta parametrów treści/harmonogramu w configu → NIGDY zmiana polityk bezpieczeństwa`
 
 ### 3.9. Obsługa błędów (OBOWIĄZUJE WSZĘDZIE)
-- Timeout = transient → retry z twardym limitem; przed KAŻDĄ próbą ponowny `[P]` budżetu (docelowo — dziś dług P1-3).
+- Timeout = transient → retry z twardym limitem; przed KAŻDĄ próbą callback wykonuje ponowny `[P]` z aktualnym `model_usage`. Parse i budget denial nie są retry’owane.
 - Błąd parsowania JSON = NIE-transient → zero retry, diagnostyka (surowa odpowiedź + stop_reason do `data/debug/`), run FAILED/PARTIAL.
 - Każdy etap zostawia stan trwały w SQLite → wznowienie po restarcie zawsze z bazy.
 - Kolejne błędy tej samej klasy ≥ progu → SAFE MODE (wejście automatyczne, wyjście TYLKO ręczne).
@@ -294,7 +294,7 @@ SAFE MODE: flaga w system_flags, ortogonalna do statusów; wejście automatyczne
 | Routing wg zadania | `ModelRouter.model_for(task)`: fast (topics/note/comment/classify) vs quality (research/article/audit/strategy); nazwy modeli TYLKO z `.env` | ZBUDOWANE (scripts mają go używać zamiast `settings.model_quality` — dług P2-8) |
 | Fallback | brak automatycznego fallbacku na inny model — świadomie: fallback = nieprzewidywalny koszt; awaria → FAILED/PARTIAL + stan trwały + jawne wznowienie | DECYZJA |
 | Timeout | per klient (`timeout_seconds` z configu), traktowany jako transient | ZBUDOWANE |
-| Retry | max_retries z configu; tylko transient; parse error NIGDY; docelowo re-check budżetu przed każdą próbą i estymata ×(1+retries) | CZĘŚCIOWE (P1-3) |
+| Retry | tylko timeout; estymata ×(1+max_retries); re-check przed każdą próbą; parse/budget error NIGDY | ZBUDOWANE (Task 5) |
 | Limit tokenów | `max_tokens` per wywołanie, per etap, z CLI/configu (A1=600, A2=1500, B=2200) — to REALNY limit kosztu w locie, nie estymata | ZBUDOWANE |
 | Structured output | JSON/JSONL + parsery defensywne (`_strip_code_fence`, JSONL per linia — ucięta linia pomijana); walidacja pól z defaultami | ZBUDOWANE |
 | Walidacja JSON | parse error → wyjątek z `usage`+`raw_text`+`stop_reason` → koszt zaksięgowany, diagnostyka zapisana | ZBUDOWANE (research); DŁUG (topics) |
@@ -318,7 +318,7 @@ SAFE MODE: flaga w system_flags, ortogonalna do statusów; wejście automatyczne
 ### 7.2. Twarde mechanizmy (deterministyczne, poza modelem)
 
 - **Budżety:** 2,00 USD/dzień, 40,00 USD/miesiąc; miesięczny NADRZĘDNY (ADR-012). Egzekwowane przed każdym płatnym wywołaniem. ZBUDOWANE.
-- **Cap pojedynczej akcji:** `--max-cost-usd` per run (pesymistyczna estymata, margines ≥50%) — dziś tylko w CLI; do przeniesienia do `PolicyEngine.check_run_budget` (Etap 0). Realny limit w locie = `max_tokens` + `max_uses` (Anthropic nie przerywa wywołania po kwocie — udokumentowane wprost).
+- **Cap pojedynczej akcji:** `--max-cost-usd` jest egzekwowany bibliotecznie przez `PolicyEngine.check_run_budget`; przed etapem obejmuje pełny worst-case retry, a przed próbą bieżący koszt runu + koszt następnego calla. Realny limit w locie nadal wyznaczają `max_tokens` + `max_uses`.
 - **Limity publikacji/interakcji:** `AccountPolicy` (daily_comment_limit=5, daily_note_limit=2, weekly_article_limit=2, max_per_author_per_day=1, link_ratio) — skonfigurowane, egzekucja w Etapie 4 (PRZED generatorami treści, nie po).
 - **Kill switch:** `KILL_SWITCH` w .env (sprawdzany przez PolicyEngine) — dziś snapshot przy starcie; docelowo flaga w `system_flags` czytana przy każdym checku (Etap 1).
 - **Tryb offline / dry run:** `DRY_RUN=true` domyślnie; Fake-klienty bez sieci; koszt oznaczony `dry_run=1` nie liczy się do budżetu. ZBUDOWANE.

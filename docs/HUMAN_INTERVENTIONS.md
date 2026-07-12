@@ -116,3 +116,14 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Obiekt:** wyłącznie integralność card-topic-account, pełna atomowość finalizacji, pre-guard runnera, fail-closed i testy Task 4.
 - **Zakres decyzji właściciela:** nie rozpoczynać Task 5, nie naprawiać race condition, nie wykonywać API ani commit/push.
 - **Efekt:** poprawki wykonano offline; race zapisano jako P2 do przyszłego claimu/lease.
+
+### [2026-07-12] APPROVAL — Etap 0 / Task 5, szczelny budżet retry
+- **Typ:** APPROVAL
+- **Obiekt:** centralny cap runu, retry techniczne i delegacja CLI.
+- **Zakres decyzji właściciela:** wyłącznie Task 5; pełne testy offline; bez API, Task 6, zmian P2-17/P2-18, commita i pushu.
+- **Efekt:** wdrożono ADR-026 i pozostawiono working tree do niezależnego review; koszt 0 USD.
+
+### [2026-07-12] APPROVAL — review i natychmiastowa korekta P0/P1 Task 5
+- **Typ:** APPROVAL
+- **Zakres:** właściciel polecił nie kończyć na REJECT, poprawić wszystkie P0/P1, dodać regresje i pozostawić zmiany bez commita/pushu.
+- **Efekt:** pięć P1 poprawiono offline; P2-17/P2-18 i Task 6 pozostały nietknięte.

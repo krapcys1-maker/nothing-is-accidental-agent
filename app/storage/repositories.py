@@ -35,6 +35,7 @@ from app.storage.db import apply_migrations, connect
 
 
 _RESEARCH_USAGE_TASKS = (
+    "research",
     "research_gather",
     "research_synthesize",
     "research_discover",

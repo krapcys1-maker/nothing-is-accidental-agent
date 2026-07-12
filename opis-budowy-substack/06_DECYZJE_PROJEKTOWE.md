@@ -153,3 +153,8 @@ Redakcyjny zapis **każdej ważnej decyzji**: problem, opcje, wybór, dlaczego, 
 - **Wybór:** identyczny COMPLETE kończy się bez mutacji; inna karta, koszt, terminalny status, Stage B lub uszkodzona relacja powodują błąd integralności i rollback.
 - **Dlaczego:** atomowość odpowiada, czy pojedyncza operacja zapisze się w całości. Idempotencja odpowiada, czy jej bezpieczne powtórzenie zachowa pierwotny audyt.
 - **Dowód:** reopen SQLite i 206 testów; koszt 0 USD.
+
+### Task 5 — jedna polityka budżetowa, klient bez wiedzy o bazie
+Odrzucono wbudowanie SQLite i `PolicyEngine` do klienta Anthropic. Workflow przekazuje prosty callback przed próbą oraz callback utrwalenia dostępnego usage timeoutu. Klient zna numer próby i koszt nadchodzącego calla, ale nie zna magazynu danych ani limitów produktu. Decyzję opisuje ADR-026.
+
+Po review doprecyzowano: realny pipeline bez capu odmawia, cap resume jest absolutny, a nie „dotychczas wydane + nowy limit”. To ostatnie rozróżnia limit całego zdarzenia od odnawialnego kredytu.

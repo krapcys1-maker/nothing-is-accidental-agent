@@ -165,3 +165,9 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co pokazuje:** lokalny fixture po reopen: poprawną relację run–topic–card, a następnie rollback wymuszony triggerem, bez częściowego SUCCESS/COMPLETE/USED.
 - **Dlaczego ważny:** dokumentuje różnicę między atomowością dwóch statusów a atomowością całej finalizacji.
 - **Status:** SCREENSHOT REQUIRED — wykonano wyłącznie testy SQLite, bez przeglądarki i API.
+
+### [2026-07-12] task5-retry-budget-matrix
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_task5-retry-budget-matrix.png`
+- **Co pokazuje:** terminal z celowanymi testami callbacku/PolicyEngine i pełnym wynikiem `257 passed`, w tym A1/A2/B deny attempt 2, bez sekretów i danych API.
+- **Dlaczego ważny:** dowodzi, że retry jest blokowane przed drugim callem, a CLI korzysta z centralnej polityki.
+- **Status:** SCREENSHOT REQUIRED — w tej pracy nie uruchamiano Playwrighta ani przeglądarki.

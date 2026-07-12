@@ -22,6 +22,15 @@ from dataclasses import dataclass
 
 from app.core.config import Settings
 
+
+def estimate_with_retries(base_estimate: float, max_retries: int) -> float:
+    """Worst-case cost for the first attempt plus all technical retries."""
+    if base_estimate < 0:
+        raise ValueError("base_estimate musi być >= 0.")
+    if max_retries < 0:
+        raise ValueError("max_retries musi być >= 0.")
+    return round(base_estimate * (1 + max_retries), 6)
+
 # --- Kalibracja z jedynej znanej realnej obserwacji (2026-07-11, run 1b649314) ---
 # Konfiguracja tamtego runu: max_uses=6 (limit), ~4 realnie wykonane wyszukiwania
 # (wywnioskowane z 0.04 USD / 0.01 USD za wyszukiwanie), max_tokens=3000 (padło na

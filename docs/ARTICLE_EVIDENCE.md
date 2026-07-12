@@ -184,3 +184,10 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Fakt: kod już odrzucał sprzeczny Stage B oraz obcy topic/account, ale review słusznie nie uznało zachowania za udowodnione bez jawnych regresji i pełnych liczników tabel.
   - Dowód: negatywna macierz single/two-stage/staged, plikowa SQLite z reopen, karty obcego topicu/konta i cztery liczniki po odmowie; **212 passed**, 0 USD, zero API.
   - P2 do przyszłego tekstu: dokładne `float == float` może fałszywie odrzucić idempotentny koszt (`0.1 + 0.2` vs `0.3`), ale fail-closed nie pozwala nadpisać historii.
+
+- **[2026-07-12] Pre-flight nie chroni przed drugim rachunkiem** (Etap 0 / Task 5)
+  - Materiał: retry timeoutu jest osobnym potencjalnie płatnym callem; przy `base=0.08 USD` i `max_retries=2` worst-case wynosi `0.24 USD`, nie `0.16 USD`.
+  - Decyzja: jedna polityka w bibliotece, callback przed każdą próbą i odczyt aktualnego `model_usage`; CLI nie ma własnej matematyki limitów.
+  - Uczciwe ograniczenie: `timeout-billed-unrecorded` — brak usage nie dowodzi braku opłaty, a system nie wymyśla kosztu.
+  - Zwrot narracyjny po review: „cap per-run” nie jest capem, jeśli resume przelicza go jako dotychczasowy koszt plus nowy kredyt; green suite nie testował tej semantyki.
+  - Dowód: ADR-026, `tests/test_research_run_budget.py`, BUILD_LOG Task 5; **257 passed**, koszt 0 USD, brak API.
