@@ -169,3 +169,33 @@ Te pozycje **jeszcze się nie wydarzyły**, bo nie doszliśmy do odpowiednich et
 ## Powiązania
 - `docs/ERRORS_AND_FAILURES.md` (źródło), `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` §B.12 (ryzyka R1–R12)
 - `08_INTERWENCJE_CZLOWIEKA.md`, `14_WNIOSKI_CZASTKOWE.md`
+
+### [2026-07-12] Potencjalna powtórka kosztu po sukcesie — zatrzymana przed API
+- **Ryzyko:** system umiał stworzyć kartę, ale nie odróżniał później kompletnego wyniku od tematu gotowego do zwykłego świeżego researchu.
+- **Naprawa:** `USED` jest ustawiane razem z COMPLETE; brak force kończy CLI zanim powstanie klient API.
+- **Dowód:** 169 testów, w tym odmowa przed konstrukcją klienta; 0 USD i zero API.
+
+### [2026-07-12] Pierwsza poprawka Task 4 była za wąska — znalezione offline
+- **Co nie działało:** COMPLETE mogło wskazać kartę innego tematu; błąd ostatniego UPDATE zostawiał wcześniej zatwierdzony `runs.SUCCESS`.
+- **Naprawa:** walidacja relacji card-topic-account i jedna granica transakcji dla COMPLETE, terminalnego runu i USED.
+- **Dowód:** trigger SQLite + reopen dla trzech flow, **186 passed**, 0 USD i zero API.
+
+### [2026-07-12] Druga finalizacja przepisywała historię ukończonego runu — [SAFETY]
+
+- **Co nie działało:** po poprawnym COMPLETE drugie wywołanie mogło zmienić kartę 1→2, koszt 0,1→0,9 i timestampy.
+- **Dlaczego:** pierwsza poprawka zapewniała atomowość, ale nie rozpoznawała powtórzenia ani konfliktu z utrwalonym wynikiem.
+- **Jak naprawiono:** identyczny payload jest no-op; sprzeczny lub uszkodzony COMPLETE jest odrzucany bez mutacji. Dodano brakującą macierz guard/force/failure dla wszystkich flow.
+- **Nieudana próba podczas poprawki:** pierwszy guard był zbyt ścisły dla legalnego wznowienia legacy Stage B ze stanu FAILED; zawężono wyjątek wyłącznie do jawnego resume TWO_STAGE z zachowanymi źródłami.
+- **Wynik:** **206 testów**, 0 USD, zero API i realnego researchu.
+
+### [2026-07-12] Trzecie review: brak testu to brak dowodu kontraktu — [TEST]
+
+- **Co nie działało:** kod prawidłowo obsługiwał konflikt Stage B i obce karty, lecz testy nie pokrywały tych ścieżek wprost; account mismatch liczył tylko `runs`.
+- **Jak naprawiono:** sześć testów SQLite z reopen oraz cztery liczniki tabel dla runnera i capped CLI. Kod produkcyjny pozostał nietknięty.
+- **Wynik:** 212 testów, 0 USD, zero API.
+
+### [2026-07-12] P2-18: dokładne `float == float` może fałszywie odrzucić no-op — [DATA]
+
+- **Ryzyko:** `0.1 + 0.2` i `0.3` mogą mieć inną reprezentację binarną.
+- **Wpływ:** wyłącznie bezpieczna odmowa; brak nadpisania danych.
+- **Plan późniejszy:** najmniejsza jednostka, `Decimal` albo tolerancja zgodna z `model_usage`. Nie naprawiano w Task 4.

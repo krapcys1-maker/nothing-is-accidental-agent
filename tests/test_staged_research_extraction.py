@@ -42,6 +42,7 @@ from app.research.diagnostics import diagnostics_dir
 from app.research.fake_client import FakeResearchClient
 from app.research.validation import TOO_FEW_VERIFIED_SOURCES
 from app.workflows.research.pipeline import (
+    CompletedResearchExistsError,
     resume_staged_research,
     run_source_discovery,
     run_source_extraction,
@@ -247,10 +248,55 @@ def test_staged_pipeline_happy_path_reaches_complete(settings, storage, account)
     assert research_run.flow == ResearchFlow.STAGED
     assert research_run.status == ResearchRunStatus.COMPLETE
     assert research_run.research_card_id == summary.card.id
+    assert storage.list_topics(account.id)[0].status == TopicStatus.USED
     _assert_run_cost_matches_research_usage(storage, summary.run_id)
 
     extracted = storage.list_source_candidates(summary.run_id, SourceCandidateStatus.EXTRACTED)
     assert len(extracted) == 3
+
+
+def test_staged_re_research_requires_force_and_force_keeps_history(settings, storage, account):
+    topic = _selected_topic(storage, account)
+    first = _run_staged(settings, storage, account, topic, FakeResearchClient("good"))
+    old_card_id = first.card.id
+    counts_before = {
+        table: storage.conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+        for table in ("runs", "research_runs", "model_usage")
+    }
+
+    class _ForbiddenClient(FakeResearchClient):
+        def discover_sources(self, plan, max_searches):
+            raise AssertionError("blocked re-research must not call discovery")
+
+    with pytest.raises(CompletedResearchExistsError, match="--force-re-research"):
+        _run_staged(settings, storage, account, topic, _ForbiddenClient("good"))
+
+    counts_after_block = {
+        table: storage.conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+        for table in counts_before
+    }
+    assert counts_after_block == counts_before
+
+    forced = _run_staged(
+        settings, storage, account, topic, FakeResearchClient("good"), force_re_research=True,
+    )
+    assert forced.run_id != first.run_id
+    assert forced.card.id != old_card_id
+    assert storage.get_research_card(old_card_id) is not None
+    assert storage.get_research_run(forced.run_id).flow == ResearchFlow.STAGED
+    assert storage.list_topics(account.id)[0].status == TopicStatus.USED
+
+    cards_before_failure = [card.id for card in storage.list_research_cards(account.id)]
+    failed = _run_staged(
+        settings, storage, account, topic, _BrokenDiscoveryClient(),
+        force_re_research=True,
+    )
+    assert failed.error is not None
+    assert storage.get_run(failed.run_id).status == RunStatus.FAILED
+    assert storage.get_research_run(failed.run_id).status == ResearchRunStatus.FAILED
+    assert storage.list_topics(account.id)[0].status == TopicStatus.USED
+    assert [card.id for card in storage.list_research_cards(account.id)] == cards_before_failure
+    assert storage.get_research_run(first.run_id).research_card_id == old_card_id
 
 
 # --- 1 + 2. Raw response i stop_reason zapisywane przy błędzie (etap A2) ---

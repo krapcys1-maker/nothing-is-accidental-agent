@@ -161,3 +161,26 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Decyzja: `attempts` to zarezerwowana próba, a `EXTRACTION_IN_PROGRESS` jest uczciwym zapisem niepewności. Historyczne statusy dają tylko dolną granicę 0/1, nie wymyśloną historię.
   - Kontrast do artykułu: system nie stał się bezpieczny dlatego, że dodał licznik; stał się bezpieczniejszy, gdy przestał udawać wiedzę o skutku przerwanego działania.
   - Dowód: reprodukcje `2→3`, historyczne ≥3 calle przy capie 2 oraz rollback DDL+ledgeru; 87 testów celowanych, **164 passed**, 0 USD i zero API.
+
+- **[2026-07-12] Słowo „complete” zmienia ekonomię następnego kliknięcia** (Etap 0 / Task 4)
+  - Fakt: kompletna karta nie jest „kolejnym kandydatem do retry”. Drugi świeży research może kosztować, więc system ustawia temat jako `USED` i odmawia przed klientem API.
+  - Decyzja: tylko jawne `--force-re-research` otwiera nowy run; force nie omija budżetu, capu, kill switcha ani polityki.
+  - Kontrast do artykułu: dobre zabezpieczenie nie zabrania działania na zawsze — sprawia, że kosztowna decyzja jest nazwana, widoczna i audytowalna.
+  - Dowód: trzy flow aktualizują `USED`; test CLI zabrania nawet konstrukcji klienta bez force; **169 passed**, 0 USD i zero API.
+
+- **[2026-07-12] Atomowość nie kończy się na dwóch kolumnach** (korekta Task 4 po review)
+  - Fakt: `COMPLETE → USED` może nadal zostawić fałszywy sukces, jeśli karta należy do innego tematu albo `runs.SUCCESS` został zatwierdzony poza transakcją końcową.
+  - Decyzja: jedna finalizacja waliduje run–topic–card–account i razem zapisuje COMPLETE, terminalny run oraz USED; uszkodzony USED/COMPLETE zatrzymuje się fail-closed, nawet przy force.
+  - Kontrast do artykułu: transakcja nie jest nazwą dla dwóch UPDATE. Jej granica musi obejmować cały sens biznesowy zdarzenia.
+  - Dowód: trwały rollback triggerów SQLite po reopen dla single/two-stage/staged, pre-guard runnera i **186 passed**, 0 USD, zero API.
+
+- **[2026-07-12] Atomowość i idempotencja odpowiadają na dwa różne pytania** (drugie review Task 4)
+  - Fakt: jedna transakcja chroniła pierwszą finalizację, ale jej ponowienie mogło przepiąć kartę 1→2 oraz koszt 0,1→0,9 USD.
+  - Decyzja: identyczne powtórzenie jest no-op bez dotknięcia timestampów; każda różnica albo uszkodzony COMPLETE jest odmową z rollbackiem.
+  - Kontrast do artykułu: „wszystko albo nic” nie znaczy „drugi raz niczego nie zmieni”. Audytowalny system potrzebuje obu własności osobno.
+  - Dowód: plikowa SQLite z reopen, pełna macierz refinalizacji i force/failure dla trzech flow; **206 passed**, koszt 0 USD.
+
+- **[2026-07-12] Poprawny kod bez testu nadal nie jest zamkniętym kontraktem** (trzecie review Task 4)
+  - Fakt: kod już odrzucał sprzeczny Stage B oraz obcy topic/account, ale review słusznie nie uznało zachowania za udowodnione bez jawnych regresji i pełnych liczników tabel.
+  - Dowód: negatywna macierz single/two-stage/staged, plikowa SQLite z reopen, karty obcego topicu/konta i cztery liczniki po odmowie; **212 passed**, 0 USD, zero API.
+  - P2 do przyszłego tekstu: dokładne `float == float` może fałszywie odrzucić idempotentny koszt (`0.1 + 0.2` vs `0.3`), ale fail-closed nie pozwala nadpisać historii.

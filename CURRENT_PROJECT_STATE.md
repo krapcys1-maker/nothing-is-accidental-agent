@@ -18,8 +18,8 @@
 | Moduł | Status | % | Co działa | Co nie działa / znane błędy | Testy | Ostatnia weryfikacja | Następny krok |
 |---|---|---|---|---|---|---|---|
 | Konfiguracja (`app/core/config.py`) | VERIFIED | 90 | .env+YAML, zero ścieżek absolutnych, fallback na *.example | kill-switch czytany raz przy starcie (runtime — Etap 1) | pośrednie (fixtures) | 2026-07-12 | bez zmian do Etapu 1 |
-| Modele domenowe (`app/models.py`) | VERIFIED | 90 | wszystkie enumy/modele zbudowanej części | `TopicStatus.USED`, `RunStatus.STOPPED` — martwe wartości | tak | 2026-07-12 | USED w Etapie 0 (P1-6) |
-| Storage SQLite + 7 migracji | VERIFIED | 96 | repozytoria, flow, WAL/busy timeout, atomowy koszt, 0007+ledger atomowe oraz claim A2 z capem | starsze migracje bez transakcji; `mark_*` poza nowymi przejściami bez pełnej walidacji stanu poprzedniego | storage + flow + candidate attempts | 2026-07-12 | Etap 0 zad. 8 |
+| Modele domenowe (`app/models.py`) | VERIFIED | 92 | wszystkie enumy/modele zbudowanej części; `TopicStatus.USED` aktywny po COMPLETE | `RunStatus.STOPPED` — martwa wartość | tak | 2026-07-12 | Etap 0 zad. 5 |
+| Storage SQLite + 7 migracji | VERIFIED | 97 | repozytoria, flow, WAL/busy timeout, atomowy koszt, claim A2 oraz atomowa finalizacja run–topic–card | starsze migracje bez transakcji; `mark_*` poza nowymi przejściami bez pełnej walidacji stanu poprzedniego | storage + flow + candidate attempts + finalization | 2026-07-12 | Etap 0 zad. 8 |
 | Policy Engine | PARTIAL | 25 | kill-switch (statyczny), active, budżet D/M (miesięczny nadrzędny), progi tematów | brak: autonomy_level, AccountMode, limity AccountPolicy, cooldowny, cap per-run, SAFE MODE | test_policy_engine | 2026-07-12 | check_run_budget (Etap 0 zad. 5); reszta Etap 4 |
 | UsageTracker (koszty) | VERIFIED | 95 | model_usage+COSTS.csv, dry_run flaga, koszt przy błędach researchu | równoległy append CSV nieodporny (przyszły worker) | tak + 3 realne runy | 2026-07-12 | eksport z DB przy Etapie 8 |
 | ModelRouter | VERIFIED | 90 | zadanie→model z .env | scripts omijają router (P2-8) | tak | 2026-07-12 | P2-8 przy Etapie 0/1 |
@@ -28,7 +28,7 @@
 | AnthropicResearchClient (3 generacje metod) | WORKING | 80 | retry(timeout-only), koszt przy parse-error, capy tokenów/searchy, diagnostyka raw+stop_reason | retry bez re-checku budżetu (P1-3); A2 = search-o-URL, nie fetch treści (P0-2c → Etap 2); live: A1 ✅, A2 1×✅ (diagnostyka), B **NOT VERIFIED live** | tak (wstrzykiwane callery) | 2026-07-12 | Etap 0 zad. 5, potem Etap 2 |
 | Estymator kosztów | VERIFIED | 85 | conservative+expected z 2 realnych obserwacji, margines ≥50% | dwie kalibracje (legacy z cennika vs staged stałe) — P2-1; kalibracja n=2 | tak | 2026-07-12 | ujednolicić przy Etapie 2 |
 | Workflow tematów + dedup | VERIFIED | 90 | pełny przepływ dry_run, dedup lokalny, progi, SUCCESS-fix | realny run tematów nigdy nie wykonany | tak | 2026-07-12 | realny run po Etap 0 zad. 6 |
-| Research staged A1/A2/B + resume | WORKING | 89 | flow, koszt, atomowy claim A2, stan niepewny `EXTRACTION_IN_PROGRESS`, jawny retry i capowane odblokowanie exhausted | brak guardu re-researchu (P1-6); jawny recovery niepewnego A2 pozostaje przyszłą decyzją; `research_runs.total_cost_usd` nadal cache; **cała ścieżka bez sukcesu na żywym API** | staged + candidate attempts + CLI | 2026-07-12 | Etap 0 zad. 4–8, potem (za osobną zgodą) run ADR-022 = zad. 9 |
+| Research staged A1/A2/B + resume | WORKING | 93 | flow, koszt, atomowy claim A2, jawny retry, pełna finalizacja COMPLETE+run+USED i fail-closed guard przed klientem | jawny recovery niepewnego A2 oraz race dwóch świeżych runów pozostają przyszłą decyzją; `research_runs.total_cost_usd` nadal cache; **cała ścieżka bez sukcesu na żywym API** | staged + candidate attempts + finalization + CLI | 2026-07-12 | Etap 0 zad. 5–8, potem (za osobną zgodą) run ADR-022 = zad. 9 |
 | Research legacy (single, two-stage) | WORKING | 100 | działa, 24 testy | NIEZALECANY (ADR-016→020); do DEPRECATED po sukcesie staged live | tak | 2026-07-12 | Etap 2 zad. 6 |
 | Walidacja + injection guard | VERIFIED | 90 | deterministyczna bramka, min_verified_sources, neutralizacja injection | wzorce EN-only (P2-7) | tak | 2026-07-12 | rozszerzenie przy Etapie 2 |
 | Diagnostyka odpowiedzi | VERIFIED | 95 | raw+stop_reason per etap, potwierdzona na żywo | nadpisuje poprzednią próbę tego samego etapu (P2-13, świadome) | tak | 2026-07-12 | — |
@@ -48,7 +48,7 @@
 
 ## Aktualne blokery
 
-1. **Ukończenie zadań 4–8 Etapu 0** (`IMPLEMENTATION_ROADMAP.md`) — Tasks 1–3 są ukończone; pozostałe naprawy wykonawcze muszą zostać wdrożone, przetestowane i udokumentowane przed kolejnym płatnym uruchomieniem. Dopiero po nich potrzebna będzie **osobna zgoda właściciela** na realny run ADR-022.
+1. **Ukończenie zadań 5–8 Etapu 0** (`IMPLEMENTATION_ROADMAP.md`) — Tasks 1–4 są ukończone; pozostałe naprawy wykonawcze muszą zostać wdrożone, przetestowane i udokumentowane przed kolejnym płatnym uruchomieniem. Dopiero po nich potrzebna będzie **osobna zgoda właściciela** na realny run ADR-022.
 2. **Run `9bbeb020` pozostaje niezmieniony w źródłowej bazie** — po migracji jego historyczne `EXTRACTION_FAILED` dostaną konserwatywną dolną granicę `attempts=1`; legalna droga prowadzi wyłącznie przez jawną komendę retry i nie jest uruchamiana przez zwykłe resume.
 3. **Etap B syntezy nigdy nie wykonany na żywym API** — ostatni niezweryfikowany element ścieżki researchu; zostanie zweryfikowany dopiero przy zadaniu 9 Etapu 0.
 
@@ -62,11 +62,11 @@
 ## Etapy
 
 - **Aktywny etap roadmapy:** Etap 0 — Stabilizacja (zadania 1–9).
-- **Ostatni ukończony krok:** Etap 0 / zadanie 3 — po korekcie review: 0007 lower-bound backfill, atomowy claim A2, `EXTRACTION_IN_PROGRESS`, dynamiczne odblokowanie exhausted i atomowy ledger migracji; bez API ani zmiany bazy źródłowej.
+- **Ostatni ukończony krok:** Etap 0 / zadanie 4 — po trzecim review finalizacja jest atomowa i idempotentna: identyczne powtórzenie to no-op bez zmiany karty, kosztu i timestampów, a sprzeczne powtórzenie lub uszkodzony COMPLETE kończy się błędem integralności. Pełna macierz obejmuje negatywne relacje flow↔Stage B, karty innego topicu/konta i cztery liczniki tabel po account mismatch; **212 testów**, bez API i bez zmiany bazy źródłowej.
 - **Następne trzy zadania:**
-  1. `topics.status=USED` po COMPLETE + guard `--force-re-research`.
-  2. Szczelny budżet przy retry i centralizacja capu per-run.
-  3. Wyrównanie klienta tematów dla parse-error i code fence.
+  1. Szczelny budżet przy retry i centralizacja capu per-run.
+  2. Wyrównanie klienta tematów dla parse-error i code fence.
+  3. Higiena rejestru decyzji (ADR-001/002/003/005/006).
 
 ## Znane długi techniczne (poza blokerami; numeracja z audytu 12.07)
 
@@ -87,6 +87,8 @@
 | P2-13/P2-14 | diagnostyka nadpisuje poprzednią próbę; stage log nie mierzy czasu | świadomie odłożone |
 | P2-15 | `--max-sources 0` znaczy „wszyscy" | Etap 0 przy zad. 1 |
 | P2-16 | ujemne `research_source_candidates.attempts` spełnia `attempts < cap` i może przyznać dodatkowe claimy po ręcznym uszkodzeniu rekordu; normalny kod tworzy wyłącznie 0/1+ | dodać `attempts >= 0` do claimu, `Field(ge=0)`, test i ewentualny CHECK constraint |
+| P2-17 | dwa równoległe świeże procesy mogą przejść guard przed utworzeniem któregokolwiek runu i oba rozpocząć research tego samego tematu | Etap 1: trwały claim/lease lub constraint aktywnego researchu per topic |
+| P2-18 | idempotentny no-op porównuje koszt przez dokładne `float == float`; binarnie różne reprezentacje tej samej kwoty mogą dać fałszywą odmowę, ale nie nadpiszą danych | docelowo najmniejsza jednostka, `Decimal` albo tolerancja zgodna z kanonem `model_usage`; bez zmiany w Task 4 |
 | nowy | AnthropicLLMClient bez księgowania kosztu przy parse-error, bez testów | Etap 0 zad. 6 |
 | nowy | EnvSecretStore/LocalFileStore = martwy kod | Etap 8 (podpiąć) albo usunąć decyzją |
 | znany | lokalne `.venv`: open-interpreter wymaga anthropic<0.38 przy zainstalowanym 0.116 (ostrzeżenie pip, poza projektem) | obserwować |

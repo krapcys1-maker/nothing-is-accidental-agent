@@ -34,7 +34,7 @@
 
 - **Policy Engine** — pokrywa ~3 z ~14 docelowych obowiązków. Brak: egzekucji `autonomy_level`, `AccountMode` (COMMENT_ONLY niczego nie blokuje), limitów per konto (`AccountPolicy` — martwa konfiguracja), cooldownów, capu per-run w bibliotece (żyje tylko w CLI), SAFE MODE, runtime kill-switch (czytany raz z .env przy starcie).
 - **Klient Anthropic dla tematów** (`app/llm/anthropic_client.py`) — kompletny kod, ale: nigdy nie uruchomiony realnie, brak testów parsera, **nie księguje kosztu przy błędzie parsowania JSON** (w przeciwieństwie do klienta researchu), brak zdejmowania code fence. Do wyrównania z klientem researchu przed pierwszym realnym użyciem.
-- **Maszyna stanów researchu** — Etap 0 / Tasks 1–3 ukończone: jawny `research_runs.flow`, walidacja cross-flow/flow→status i `_detect_flow` usunięte; researchowy INSERT `model_usage` oraz absolutne odświeżenie `runs.cost_usd` są atomowe. A2 atomowo rezerwuje próbę i przechodzi przez `EXTRACTION_IN_PROGRESS`; niepewny wynik po awarii nie jest automatycznie ponawiany. `EXTRACTION_FAILED` wraca do `PENDING_EXTRACTION` wyłącznie przez jawną, capowaną operację, która może odblokować `PARTIAL_EXHAUSTED` po jawnym podniesieniu capu. Produkcyjna baza nie została w tej pracy zmieniona.
+- **Maszyna stanów researchu** — Etap 0 / Tasks 1–4 ukończone: jawny `research_runs.flow`, walidacja cross-flow/flow→status i `_detect_flow` usunięte; researchowy INSERT `model_usage` oraz absolutne odświeżenie `runs.cost_usd` są atomowe. A2 atomowo rezerwuje próbę i przechodzi przez `EXTRACTION_IN_PROGRESS`; niepewny wynik po awarii nie jest automatycznie ponawiany. Finalizacja researchu waliduje relację run–topic–card, dozwolony stan źródłowy i jawny status terminalny, po czym atomowo ustawia COMPLETE, terminalny `runs.status` oraz `topics.USED`. Identyczne powtórzenie jest idempotentnym no-op; sprzeczne powtórzenie i uszkodzony USED/COMPLETE zatrzymują się fail-closed. Negatywna macierz flow↔Stage B oraz obce topic/account są pokryte trwałymi testami. Rezydualne P2-18: dokładne porównanie kosztów float może fałszywie odmówić no-op, ale nie może nadpisać danych. Produkcyjna baza nie została w tej pracy zmieniona.
 
 ### 1.3. Co jest tylko szkieletem
 
@@ -44,7 +44,6 @@
 ### 1.4. Co jest błędne lub nieużywane (martwy kod)
 
 - `EnvSecretStore` i `LocalFileStore` — zdefiniowane, zero wywołań w całym repo (config czyta `os.getenv` bezpośrednio).
-- `TopicStatus.USED` — nigdy nie ustawiany (P1-6: brak guardu przed wielokrotnym płatnym researchem tego samego tematu).
 - `RunStatus.STOPPED` — nigdy nie zapisywany (zarezerwowany dla przyszłego reapera).
 - Legacy pipeline'y researchu (`run_research_pipeline` jednoetapowy, `run_two_stage_research_pipeline`) — działają i mają testy, ale są NIEZALECANE (ADR-016→020); do wygaszenia po pierwszym sukcesie staged na żywo.
 
@@ -249,7 +248,7 @@ runs.status:
 
 topics.status:
   DISCOVERED → SCORED | SELECTED | REJECTED | DUPLICATE
-  SELECTED → USED   (po COMPLETE researchu — do wdrożenia w Etapie 0, P1-6)
+  SELECTED → USED   (jedna transakcja z `research_runs.status=COMPLETE` i terminalnym `runs.status`; COMPLETE wymaga karty tego samego tematu i konta; identyczna refinalizacja = no-op, sprzeczna = błąd integralności)
 
 research_runs.status (flow='staged'):
   DISCOVERY_PENDING → DISCOVERY_COMPLETE → EXTRACTION_IN_PROGRESS

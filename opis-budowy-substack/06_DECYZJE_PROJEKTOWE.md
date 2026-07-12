@@ -135,3 +135,21 @@ Redakcyjny zapis **każdej ważnej decyzji**: problem, opcje, wybór, dlaczego, 
 
 ## Powiązania
 - `docs/DECISIONS.md` (pełne ADR-001…018), `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` (załącznik rozbieżności, CZĘŚĆ D, §D.5a)
+
+### D-25: Kompletna karta wymaga jawnej decyzji o nowym koszcie (↔ ADR-025)
+- **Problem:** po udanym researchu ten sam temat mógłby przypadkiem wejść w kolejny świeży, płatny run.
+- **Wybór:** `COMPLETE` atomowo ustawia temat jako `USED`; świeży run z istniejącą kartą wymaga `--force-re-research`. Wznowienie nie przyjmuje tej flagi.
+- **Dlaczego:** odzyskanie przerwanego runu i rozpoczęcie nowej próby to różne decyzje kosztowe. Druga musi być widoczna, ale nie może osłabiać pozostałych bramek.
+- **Kto podjął:** człowiek zatwierdził zakres Task 4; wykonanie: Codex.
+
+### Korekta D-25 po review: karta musi być kartą tego tematu
+- **Problem:** sama referencja do istniejącej karty nie dowodziła, że należy ona do finalizowanego runu; osobny commit terminalnego runu zostawiał częściowy sukces po awarii.
+- **Wybór:** kanoniczna finalizacja porównuje run–topic–card–account i obejmuje COMPLETE, terminalny run oraz USED jedną transakcją. Force omija wyłącznie poprawną blokadę duplikatu; nigdy uszkodzoną relację.
+- **Ryzyko odłożone:** równoległe świeże procesy potrzebują później claimu/lease per temat (P2-17).
+
+### Druga korekta D-25: identyczne powtórzenie = no-op, sprzeczne = odmowa
+
+- **Problem:** atomowa finalizacja nadal pozwalała drugim wywołaniem przepiąć ukończony run do innej karty oraz nadpisać koszt i timestampy.
+- **Wybór:** identyczny COMPLETE kończy się bez mutacji; inna karta, koszt, terminalny status, Stage B lub uszkodzona relacja powodują błąd integralności i rollback.
+- **Dlaczego:** atomowość odpowiada, czy pojedyncza operacja zapisze się w całości. Idempotencja odpowiada, czy jej bezpieczne powtórzenie zachowa pierwotny audyt.
+- **Dowód:** reopen SQLite i 206 testów; koszt 0 USD.

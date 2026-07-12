@@ -1,6 +1,10 @@
 """Testy integracyjne pipeline researchu (FakeResearchClient, dry_run)."""
 from __future__ import annotations
 
+from dataclasses import replace
+
+import pytest
+
 from app.llm.usage_tracker import UsageTracker
 from app.models import (
     ModelUsage,
@@ -16,8 +20,12 @@ from app.models import (
 from app.policies.policy_engine import PolicyEngine
 from app.ports.notification import LogNotification
 from app.research.fake_client import FakeResearchClient
+from app.research.base import ResearchError
 from app.research.validation import TOO_FEW_SOURCES
-from app.workflows.research.pipeline import run_research_pipeline
+from app.workflows.research.pipeline import (
+    CompletedResearchExistsError,
+    run_research_pipeline,
+)
 
 
 def _selected_topic(storage, account) -> Topic:
@@ -30,12 +38,12 @@ def _selected_topic(storage, account) -> Topic:
     ))
 
 
-def _run(settings, storage, account, topic, client):
+def _run(settings, storage, account, topic, client, **kwargs):
     return run_research_pipeline(
         account, topic,
         settings=settings, storage=storage, research_client=client,
         usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
-        policy=PolicyEngine(settings, storage), notifier=LogNotification(),
+        policy=PolicyEngine(settings, storage), notifier=LogNotification(), **kwargs,
     )
 
 
@@ -69,6 +77,112 @@ def test_good_research_proceeds_and_persists(settings, storage, account):
     assert research_run.flow == ResearchFlow.SINGLE
     assert research_run.status == ResearchRunStatus.COMPLETE
     assert research_run.stage_b_completed_at is None
+    assert storage.list_topics(account.id)[0].status == TopicStatus.USED
+
+
+def test_completed_card_blocks_fresh_research_without_explicit_override(
+        settings, storage, account):
+    topic = _selected_topic(storage, account)
+    _run(settings, storage, account, topic, FakeResearchClient("good"))
+
+    class _ForbiddenClient(FakeResearchClient):
+        def __init__(self):
+            super().__init__("good")
+            self.calls = 0
+
+        def run_research(self, plan):
+            self.calls += 1
+            return super().run_research(plan)
+
+    forbidden = _ForbiddenClient()
+    counts_before = {
+        table: storage.conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+        for table in ("runs", "research_runs", "model_usage")
+    }
+    with pytest.raises(CompletedResearchExistsError, match="--force-re-research"):
+        _run(settings, storage, account, topic, forbidden)
+
+    assert forbidden.calls == 0
+    counts_after = {
+        table: storage.conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+        for table in counts_before
+    }
+    assert counts_after == counts_before
+    assert len(storage.list_research_cards(account.id)) == 1
+    assert len(storage.list_topics(account.id)) == 1
+
+
+def test_explicit_override_allows_new_research_but_keeps_topic_used(settings, storage, account):
+    topic = _selected_topic(storage, account)
+    first = _run(settings, storage, account, topic, FakeResearchClient("good"))
+
+    summary = _run(
+        settings, storage, account, topic, FakeResearchClient("good"),
+        force_re_research=True,
+    )
+
+    assert summary.passed
+    assert summary.run_id != first.run_id
+    assert storage.get_research_card(first.card.id) is not None
+    assert len(storage.list_research_cards(account.id)) == 2
+    assert storage.list_topics(account.id)[0].status == TopicStatus.USED
+
+    class _FailingSingleClient(FakeResearchClient):
+        def run_research(self, plan):
+            raise ResearchError("forced single failure")
+
+    cards_before_failure = [card.id for card in storage.list_research_cards(account.id)]
+    failed = _run(
+        settings, storage, account, topic, _FailingSingleClient("good"),
+        force_re_research=True,
+    )
+    assert failed.error == "forced single failure"
+    assert storage.get_run(failed.run_id).status == RunStatus.FAILED
+    assert storage.get_research_run(failed.run_id).status == ResearchRunStatus.FAILED
+    assert storage.list_topics(account.id)[0].status == TopicStatus.USED
+    assert [card.id for card in storage.list_research_cards(account.id)] == cards_before_failure
+    assert storage.get_research_run(first.run_id).research_card_id == first.card.id
+
+
+def test_force_re_research_keeps_budget_gate_and_topic_used(settings, storage, account):
+    topic = _selected_topic(storage, account)
+    _run(settings, storage, account, topic, FakeResearchClient("good"))
+    _seed_real_cost(storage, account, cost=40.0)
+
+    class _Counting(FakeResearchClient):
+        def __init__(self):
+            super().__init__("good")
+            self.calls = 0
+
+        def run_research(self, plan):
+            self.calls += 1
+            return super().run_research(plan)
+
+    client = _Counting()
+    summary = _run(
+        settings, storage, account, topic, client, force_re_research=True,
+    )
+    assert summary.blocked
+    assert summary.block_code == "BUDGET_MONTHLY_REACHED"
+    assert client.calls == 0
+    assert storage.list_topics(account.id)[0].status == TopicStatus.USED
+
+
+def test_force_re_research_keeps_kill_switch_gate_and_topic_used(settings, storage, account):
+    topic = _selected_topic(storage, account)
+    _run(settings, storage, account, topic, FakeResearchClient("good"))
+
+    class _ForbiddenClient(FakeResearchClient):
+        def run_research(self, plan):
+            raise AssertionError("kill switch must block before the model call")
+
+    summary = _run(
+        replace(settings, kill_switch=True), storage, account, topic, _ForbiddenClient("good"),
+        force_re_research=True,
+    )
+    assert summary.blocked
+    assert summary.block_code == "KILL_SWITCH"
+    assert storage.list_topics(account.id)[0].status == TopicStatus.USED
 
 
 def test_cost_and_sources_saved(settings, storage, account):

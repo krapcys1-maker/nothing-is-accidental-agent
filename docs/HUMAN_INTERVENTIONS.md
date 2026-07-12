@@ -104,3 +104,15 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Co agent miał zrobić:** poprawić implementację Task 3 oraz regresje bez uruchamiania retry na historycznym runie.
 - **Co zostało zmienione:** właściciel rozszerzył autoryzację Task 3 o naprawę czterech P1 i bezpośrednio związanych P2; utrzymał zakaz API, researchu, Playwrighta, Task 4+, commita i pushu.
 - **Jaki był efekt:** poprawki i testy wykonano offline; źródłowa baza nie została otwarta do migracji ani zmieniona.
+
+### [2026-07-12] APPROVAL — wykonanie Etapu 0 / Task 4
+- **Typ:** APPROVAL
+- **Obiekt:** `topics.status=USED`, blokada świeżego researchu kompletnej karty i jawny `--force-re-research`.
+- **Zakres decyzji właściciela:** wdrożyć dokładnie Task 4 z pełnymi regresjami, bez automatycznego płatnego ponowienia.
+- **Efekt:** implementacja i testy wykonane offline; bez API, realnego researchu, zmian produkcyjnej bazy, commita lub pushu.
+
+### [2026-07-12] APPROVAL — poprawki P1/P2 po review Task 4
+- **Typ:** APPROVAL
+- **Obiekt:** wyłącznie integralność card-topic-account, pełna atomowość finalizacji, pre-guard runnera, fail-closed i testy Task 4.
+- **Zakres decyzji właściciela:** nie rozpoczynać Task 5, nie naprawiać race condition, nie wykonywać API ani commit/push.
+- **Efekt:** poprawki wykonano offline; race zapisano jako P2 do przyszłego claimu/lease.

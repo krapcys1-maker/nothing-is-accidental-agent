@@ -101,6 +101,24 @@ ResearchLogWriter = Callable[[ResearchCard, Topic, "ResearchRunSummary"], None]
 _LOGGER = logging.getLogger(__name__)
 
 
+class CompletedResearchExistsError(RuntimeError):
+    """Świeży research wymaga jawnego potwierdzenia, gdy karta już istnieje."""
+
+
+def ensure_topic_can_start_research(
+    storage: StoragePort, account: Account, topic: Topic, force_re_research: bool,
+) -> None:
+    """Jedyna bramka świeżego researchu: integralność zawsze, force tylko dla re-researchu."""
+    has_completed_card = storage.has_valid_completed_research_card_for_topic(
+        account.id, int(topic.id),
+    )
+    if has_completed_card and not force_re_research:
+        raise CompletedResearchExistsError(
+            f"Temat #{topic.id} ma już kompletną kartę researchu. "
+            "Aby rozpocząć nowy, potencjalnie płatny research, podaj --force-re-research."
+        )
+
+
 def _validate_resume_flow(research_run: ResearchRun, expected: ResearchFlow) -> None:
     """Reject cross-flow resume before status checks or any paid work."""
     if research_run.flow != expected:
@@ -265,12 +283,16 @@ def run_research_pipeline(
     notifier: NotificationPort,
     clock: Clock | None = None,
     research_log: ResearchLogWriter | None = None,
+    force_re_research: bool = False,
 ) -> ResearchRunSummary:
     clock = clock or SystemClock()
     summary = ResearchRunSummary(run_id=None, account_id=account.id,
                                  topic_id=int(topic.id), dry_run=settings.dry_run)
 
-    # 1. Bramka: czy wolno działać?
+    # 1. Bramka idempotencji przed polityką, budżetem, runem i klientem.
+    ensure_topic_can_start_research(storage, account, topic, force_re_research)
+
+    # 2. Bramka: czy wolno działać?
     can_run = policy.check_can_run(account)
     if not can_run.allowed:
         notifier.notify("warning", "Research zablokowany", can_run.reason, account.id)
@@ -278,7 +300,7 @@ def run_research_pipeline(
         summary.block_code, summary.block_reason = can_run.code, can_run.reason
         return summary
 
-    # 2. Plan researchu (lokalny, bez kosztu).
+    # 3. Plan researchu (lokalny, bez kosztu).
     plan = build_research_plan(topic, account)
 
     # 3. Bramka budżetu PRZED web search — pesymistyczny, KALIBROWANY szacunek
@@ -389,14 +411,11 @@ def run_research_pipeline(
     summary.card = card
     summary.sources_count = len(card.sources)
 
-    # 10. Zamknięcie runu. P0-1 (AUDYT 2026-07-12): terminal statusu sukcesu musi być
-    # SUCCESS dla realnych runów — run_status (RUNNING/DRY_RUN) jest poprawny tylko
-    # jako stan POCZĄTKOWY (create_run wyżej), nie końcowy.
-    terminal_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS
-    storage.finish_run(run_id, terminal_status.value, usage_row.estimated_cost_usd)
-    storage.mark_single_research_run_complete(
-        run_id, research_card_id=int(card.id),
-        total_cost_usd=usage_row.estimated_cost_usd,
+    # 10. Jedna granica transakcji: COMPLETE + terminalny runs + USED.
+    storage.finalize_research_success(
+        run_id, research_card_id=int(card.id), total_cost_usd=usage_row.estimated_cost_usd,
+        stage_b_completed=False,
+        terminal_run_status=RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS,
     )
 
     # 11. Aktualizacja dokumentacji (opcjonalna — realny run dopisuje do RESEARCH_LOG.md).
@@ -426,6 +445,7 @@ def run_two_stage_research_pipeline(
     gather_max_tokens: int = 1200,
     synthesize_max_tokens: int = 2200,
     forwarded_context_tokens: int = 2500,
+    force_re_research: bool = False,
 ) -> ResearchRunSummary:
     """Dwuetapowy research (ZALECANY od 2026-07-11, ADR-016, docs/ERRORS_AND_FAILURES.md).
 
@@ -445,7 +465,10 @@ def run_two_stage_research_pipeline(
     summary = ResearchRunSummary(run_id=None, account_id=account.id,
                                  topic_id=int(topic.id), dry_run=settings.dry_run)
 
-    # 1. Bramka: czy wolno działać?
+    # 1. Bramka idempotencji przed polityką, budżetem, runem i klientem.
+    ensure_topic_can_start_research(storage, account, topic, force_re_research)
+
+    # 2. Bramka: czy wolno działać?
     can_run = policy.check_can_run(account)
     if not can_run.allowed:
         notifier.notify("warning", "Research zablokowany", can_run.reason, account.id)
@@ -653,11 +676,11 @@ def run_two_stage_research_pipeline(
     summary.sources_count = len(card.sources)
     storage.add_research_stage_result(run_id, ResearchStageName.B, ResearchStageStatus.SUCCESS)
 
-    # 13. Zamknięcie runu (koszt = suma obu etapów). P0-1: SUCCESS dla realnych runów.
-    terminal_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS
-    storage.finish_run(run_id, terminal_status.value, total_cost)
-    storage.mark_research_run_complete(run_id, research_card_id=card.id,
-                                       total_cost_usd=total_cost)
+    # 13. Jedna granica transakcji: COMPLETE + terminalny runs + USED.
+    storage.finalize_research_success(
+        run_id, research_card_id=card.id, total_cost_usd=total_cost, stage_b_completed=True,
+        terminal_run_status=RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS,
+    )
 
     # 14. Aktualizacja dokumentacji.
     if research_log is not None:
@@ -838,11 +861,11 @@ def resume_research_stage_b(
     storage.add_research_stage_result(research_run_id, ResearchStageName.B,
                                       ResearchStageStatus.SUCCESS)
 
-    # P0-1: SUCCESS dla realnych runów (nie tylko RUNNING).
-    terminal_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS
-    storage.finish_run(research_run_id, terminal_status.value, total_cost)
-    storage.mark_research_run_complete(research_run_id, research_card_id=card.id,
-                                       total_cost_usd=total_cost)
+    storage.finalize_research_success(
+        research_run_id, research_card_id=card.id, total_cost_usd=total_cost,
+        stage_b_completed=True,
+        terminal_run_status=RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS,
+    )
 
     if research_log is not None:
         research_log(card, topic, summary)
@@ -887,6 +910,7 @@ def run_source_discovery(
     clock: Clock | None = None,
     max_searches: int = 3,
     max_output_tokens: int = 600,
+    force_re_research: bool = False,
 ) -> ResearchRunSummary:
     """Etap A1: TYLKO web search + krótka lista kandydatów URL (JSONL, url+title).
     Zero analizy — najlżejszy możliwy ładunek (patrz app/research/base.py). Kandydaci
@@ -896,6 +920,8 @@ def run_source_discovery(
     clock = clock or SystemClock()
     summary = ResearchRunSummary(run_id=None, account_id=account.id,
                                  topic_id=int(topic.id), dry_run=settings.dry_run)
+
+    ensure_topic_can_start_research(storage, account, topic, force_re_research)
 
     can_run = policy.check_can_run(account)
     if not can_run.allowed:
@@ -1387,11 +1413,11 @@ def run_synthesis_from_cards(
     summary.sources_count = len(card.sources)
     storage.add_research_stage_result(research_run_id, ResearchStageName.B, ResearchStageStatus.SUCCESS)
 
-    # P0-1: SUCCESS dla realnych runów (nie tylko RUNNING).
-    terminal_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS
-    storage.finish_run(research_run_id, terminal_status.value, total_cost)
-    storage.mark_research_run_complete(research_run_id, research_card_id=card.id,
-                                       total_cost_usd=total_cost)
+    storage.finalize_research_success(
+        research_run_id, research_card_id=card.id, total_cost_usd=total_cost,
+        stage_b_completed=True,
+        terminal_run_status=RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS,
+    )
 
     if research_log is not None:
         research_log(card, topic, summary)
@@ -1423,6 +1449,7 @@ def run_staged_research_pipeline(
     max_attempts: int = 2,
     synthesize_max_tokens: int = 2200,
     forwarded_context_tokens: int = 2500,
+    force_re_research: bool = False,
 ) -> ResearchRunSummary:
     """Świeży, pełny etapowy research: A1 (discovery) -> A2 (extraction, per źródło)
     -> B (synthesis). Zatrzymuje się BEZ przechodzenia dalej, jeśli poprzedni etap
@@ -1431,7 +1458,8 @@ def run_staged_research_pipeline(
     discovery_summary = run_source_discovery(
         account, topic, settings=settings, storage=storage, research_client=research_client,
         usage_tracker=usage_tracker, policy=policy, notifier=notifier, clock=clock,
-        max_searches=discovery_max_searches, max_output_tokens=discovery_max_tokens)
+        max_searches=discovery_max_searches, max_output_tokens=discovery_max_tokens,
+        force_re_research=force_re_research)
     if discovery_summary.blocked or discovery_summary.error or discovery_summary.run_id is None:
         return discovery_summary
 

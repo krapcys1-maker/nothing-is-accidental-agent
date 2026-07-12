@@ -153,3 +153,15 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **CO MA BYĆ WIDOCZNE:** statusy kandydatów, cap, liczba resetów, status runu oraz brak nowego usage/kosztu.
 - **CZEGO NIE MOŻE BYĆ WIDAĆ:** URL-i prywatnych, kluczy, `.env`, danych konta, treści źródeł ani terminala z sekretami.
 - **Status:** SCREENSHOT REQUIRED (nie ma jeszcze bezpiecznego materiału wizualnego; Playwrighta nie używano).
+
+### [2026-07-12] task4-topic-used-research-guard
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_task4-topic-used-research-guard.png`
+- **Co pokazuje:** lokalny fixture po COMPLETE: `topics.status=USED`, następnie odmowę świeżego researchu bez flagi oraz jawny komunikat `--force-re-research`; bez kluczy i bez surowych źródeł.
+- **Dlaczego ważny:** odróżnia bezpłatne wznowienie istniejącej pracy od nowej, świadomie ryzykownej próby płatnej.
+- **Status:** SCREENSHOT REQUIRED — w zadaniu nie uruchamiano przeglądarki ani API.
+
+### [2026-07-12] task4-finalization-integrity-after-review
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_task4-finalization-integrity-after-review.png`
+- **Co pokazuje:** lokalny fixture po reopen: poprawną relację run–topic–card, a następnie rollback wymuszony triggerem, bez częściowego SUCCESS/COMPLETE/USED.
+- **Dlaczego ważny:** dokumentuje różnicę między atomowością dwóch statusów a atomowością całej finalizacji.
+- **Status:** SCREENSHOT REQUIRED — wykonano wyłącznie testy SQLite, bez przeglądarki i API.

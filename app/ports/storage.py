@@ -16,6 +16,7 @@ from app.models import (
     ResearchStageName,
     ResearchStageStatus,
     Run,
+    RunStatus,
     SourceCandidateRecord,
     SourceCandidateRetryResult,
     SourceCandidateStatus,
@@ -24,6 +25,10 @@ from app.models import (
     Topic,
     TopicStatus,
 )
+
+
+class ResearchTopicIntegrityError(RuntimeError):
+    """Stan researchu tematu przeczy jego trwałej semantyce."""
 
 
 class StoragePort(Protocol):
@@ -60,6 +65,15 @@ class StoragePort(Protocol):
     def create_research_run(self, research_run: ResearchRun) -> ResearchRun: ...
 
     def get_research_run(self, research_run_id: str) -> ResearchRun | None: ...
+
+    def has_valid_completed_research_card_for_topic(
+        self, account_id: str, topic_id: int,
+    ) -> bool: ...
+
+    def finalize_research_success(
+        self, research_run_id: str, research_card_id: int, total_cost_usd: float,
+        *, stage_b_completed: bool, terminal_run_status: RunStatus,
+    ) -> None: ...
 
     def mark_single_research_run_complete(
         self, research_run_id: str, research_card_id: int, total_cost_usd: float,

@@ -30,6 +30,7 @@ from app.models import (
     TopicStatus,
     WorkflowType,
 )
+from app.ports.storage import ResearchTopicIntegrityError
 from app.storage.db import apply_migrations, connect
 
 
@@ -335,17 +336,215 @@ class SqliteStorage:
             created_at=r["created_at"], updated_at=r["updated_at"],
         )
 
+    def has_valid_completed_research_card_for_topic(self, account_id: str, topic_id: int) -> bool:
+        """Sprawdza poprawną relację COMPLETE runu, karty i tematu.
+
+        `USED` bez takiej relacji oraz COMPLETE z błędną kartą są stanem uszkodzonym.
+        Zatrzymujemy świeży research fail-closed, również gdy wywołujący poda force.
+        """
+        topic = self.conn.execute(
+            "SELECT status FROM topics WHERE id=? AND account_id=?", (topic_id, account_id),
+        ).fetchone()
+        if topic is None:
+            raise ResearchTopicIntegrityError(
+                f"Temat #{topic_id} nie należy do konta {account_id} lub nie istnieje."
+            )
+
+        invalid_complete = self.conn.execute(
+            "SELECT rr.id FROM research_runs rr "
+            "LEFT JOIN runs r ON r.id=rr.id "
+            "LEFT JOIN research_cards rc ON rc.id=rr.research_card_id "
+            "LEFT JOIN topics card_topic ON card_topic.id=rc.topic_id "
+            "WHERE rr.account_id=? AND rr.topic_id=? AND rr.status=? AND ("
+            "rr.research_card_id IS NULL OR rc.id IS NULL OR rc.topic_id!=rr.topic_id "
+            "OR card_topic.account_id!=rr.account_id OR r.id IS NULL "
+            "OR r.account_id!=rr.account_id OR r.status NOT IN (?,?)) LIMIT 1",
+            (account_id, topic_id, ResearchRunStatus.COMPLETE.value,
+             RunStatus.SUCCESS.value, RunStatus.DRY_RUN.value),
+        ).fetchone()
+        if invalid_complete is not None:
+            raise ResearchTopicIntegrityError(
+                f"research_run {invalid_complete['id']} ma niepoprawną relację COMPLETE/karta/temat."
+            )
+
+        valid_complete = self.conn.execute(
+            "SELECT 1 FROM research_runs rr "
+            "JOIN runs r ON r.id=rr.id AND r.account_id=rr.account_id "
+            "JOIN research_cards rc ON rc.id=rr.research_card_id AND rc.topic_id=rr.topic_id "
+            "JOIN topics card_topic ON card_topic.id=rc.topic_id AND card_topic.account_id=rr.account_id "
+            "WHERE rr.account_id=? AND rr.topic_id=? AND rr.status=? AND r.status IN (?,?) LIMIT 1",
+            (account_id, topic_id, ResearchRunStatus.COMPLETE.value,
+             RunStatus.SUCCESS.value, RunStatus.DRY_RUN.value),
+        ).fetchone()
+        if TopicStatus(topic["status"]) == TopicStatus.USED and valid_complete is None:
+            raise ResearchTopicIntegrityError(
+                f"Temat #{topic_id} ma status USED bez poprawnej kompletnej karty researchu."
+            )
+        return valid_complete is not None
+
+    def finalize_research_success(
+        self, research_run_id: str, research_card_id: int, total_cost_usd: float,
+        *, stage_b_completed: bool, terminal_run_status: RunStatus,
+    ) -> None:
+        """Atomowo finalizuje kartę już zapisaną przez pipeline.
+
+        Karta może powstać przed finalizacją, ale żaden status sukcesu nie jest wtedy
+        jeszcze zatwierdzany. W tej jednej transakcji są walidacja relacji, COMPLETE,
+        terminalny status `runs` i `topics.USED`. Identyczne powtórzenie jest no-op;
+        każde sprzeczne powtórzenie kończy się błędem integralności bez mutacji.
+        """
+        if terminal_run_status not in (RunStatus.SUCCESS, RunStatus.DRY_RUN):
+            raise ValueError("Finalizacja sukcesu wymaga statusu SUCCESS albo DRY_RUN.")
+        self.conn.execute("BEGIN")
+        try:
+            row = self.conn.execute(
+                "SELECT rr.account_id AS research_account_id, rr.topic_id, rr.flow, "
+                "rr.status AS research_status, rr.research_card_id AS stored_card_id, "
+                "rr.total_cost_usd AS research_cost, rr.error AS research_error, "
+                "rr.stage_b_completed_at, rr.updated_at AS research_updated_at, "
+                "r.account_id AS run_account_id, r.status AS run_status, "
+                "r.cost_usd AS run_cost, r.error AS run_error, r.finished_at, "
+                "t.account_id AS topic_account_id, rc.id AS card_id, "
+                "t.status AS topic_status, rc.topic_id AS card_topic_id, "
+                "card_topic.account_id AS card_account_id "
+                "FROM research_runs rr "
+                "JOIN runs r ON r.id=rr.id "
+                "JOIN topics t ON t.id=rr.topic_id "
+                "LEFT JOIN research_cards rc ON rc.id=? "
+                "LEFT JOIN topics card_topic ON card_topic.id=rc.topic_id "
+                "WHERE rr.id=?",
+                (research_card_id, research_run_id),
+            ).fetchone()
+            if row is None:
+                raise ResearchTopicIntegrityError(
+                    f"Nie znaleziono pełnej relacji run/research_run/temat dla {research_run_id}."
+                )
+            if row["card_id"] is None or row["card_topic_id"] != row["topic_id"] or \
+                    row["research_account_id"] != row["run_account_id"] or \
+                    row["research_account_id"] != row["topic_account_id"] or \
+                    row["research_account_id"] != row["card_account_id"]:
+                raise ResearchTopicIntegrityError(
+                    f"Karta {research_card_id} nie należy do tematu i konta research_run {research_run_id}."
+                )
+            expected_stage_b = row["flow"] != ResearchFlow.SINGLE.value
+            if stage_b_completed != expected_stage_b:
+                raise ResearchTopicIntegrityError(
+                    f"Niezgodna semantyka etapu B dla flow {row['flow']} w {research_run_id}."
+                )
+
+            if row["research_status"] == ResearchRunStatus.COMPLETE.value:
+                identical = (
+                    row["stored_card_id"] == research_card_id
+                    and float(row["research_cost"]) == float(total_cost_usd)
+                    and row["run_status"] == terminal_run_status.value
+                    and float(row["run_cost"]) == float(total_cost_usd)
+                    and row["run_error"] is None
+                    and row["finished_at"] is not None
+                    and row["topic_status"] == TopicStatus.USED.value
+                    and ((row["stage_b_completed_at"] is not None) == stage_b_completed)
+                )
+                if not identical:
+                    raise ResearchTopicIntegrityError(
+                        f"Sprzeczna ponowna finalizacja research_run {research_run_id}."
+                    )
+                self.conn.rollback()
+                return
+
+            allowed_research_statuses = {
+                ResearchFlow.SINGLE.value: {ResearchRunStatus.PENDING.value},
+                ResearchFlow.TWO_STAGE.value: {
+                    ResearchRunStatus.SOURCE_COLLECTED.value,
+                    ResearchRunStatus.PARTIAL.value,
+                },
+                ResearchFlow.STAGED.value: {ResearchRunStatus.SYNTHESIS_PENDING.value},
+            }
+            if row["research_status"] not in allowed_research_statuses.get(row["flow"], set()):
+                raise ResearchTopicIntegrityError(
+                    f"research_run {research_run_id} nie może zostać sfinalizowany ze stanu "
+                    f"{row['research_status']}."
+                )
+            if row["stored_card_id"] is not None:
+                raise ResearchTopicIntegrityError(
+                    f"research_run {research_run_id} ma kartę przed stanem COMPLETE."
+                )
+            allowed_source_statuses = (
+                {RunStatus.DRY_RUN.value, RunStatus.RUNNING.value}
+                if terminal_run_status == RunStatus.DRY_RUN
+                else {RunStatus.RUNNING.value}
+            )
+            if row["flow"] == ResearchFlow.TWO_STAGE.value:
+                # Jawne wznowienie etapu B zaczyna z FAILED po wcześniejszej
+                # nieudanej syntezie lub blokadzie budżetowej, ale nie powtarza A.
+                allowed_source_statuses.add(RunStatus.FAILED.value)
+            if row["run_status"] not in allowed_source_statuses:
+                raise ResearchTopicIntegrityError(
+                    f"run {research_run_id} nie może przejść z {row['run_status']} "
+                    f"do {terminal_run_status.value}."
+                )
+            if row["topic_status"] not in (TopicStatus.SELECTED.value, TopicStatus.USED.value):
+                raise ResearchTopicIntegrityError(
+                    f"Temat #{row['topic_id']} nie może przejść do USED ze stanu "
+                    f"{row['topic_status']}."
+                )
+
+            if stage_b_completed:
+                cursor = self.conn.execute(
+                    "UPDATE research_runs SET status=?, stage_b_completed_at=?, research_card_id=?,"
+                    " total_cost_usd=?, updated_at=? WHERE id=? AND account_id=? AND topic_id=?"
+                    " AND status=? AND research_card_id IS NULL",
+                    (ResearchRunStatus.COMPLETE.value, _ts(), research_card_id, total_cost_usd,
+                     _ts(), research_run_id, row["research_account_id"], row["topic_id"],
+                     row["research_status"]),
+                )
+            else:
+                cursor = self.conn.execute(
+                    "UPDATE research_runs SET status=?, research_card_id=?, total_cost_usd=?,"
+                    " updated_at=? WHERE id=? AND account_id=? AND topic_id=?"
+                    " AND status=? AND research_card_id IS NULL",
+                    (ResearchRunStatus.COMPLETE.value, research_card_id, total_cost_usd,
+                     _ts(), research_run_id, row["research_account_id"], row["topic_id"],
+                     row["research_status"]),
+                )
+            if cursor.rowcount != 1:
+                raise ResearchTopicIntegrityError(f"Nie zaktualizowano research_run {research_run_id}.")
+
+            cursor = self.conn.execute(
+                "UPDATE runs SET status=?, cost_usd=?, error=?, finished_at=? "
+                "WHERE id=? AND account_id=? AND status=?",
+                (terminal_run_status.value, total_cost_usd, None, _ts(), research_run_id,
+                 row["research_account_id"], row["run_status"]),
+            )
+            if cursor.rowcount != 1:
+                raise ResearchTopicIntegrityError(f"Nie zaktualizowano run {research_run_id}.")
+
+            cursor = self.conn.execute(
+                "UPDATE topics SET status=? WHERE id=? AND account_id=? AND status IN (?,?)",
+                (TopicStatus.USED.value, row["topic_id"], row["research_account_id"],
+                 TopicStatus.SELECTED.value, TopicStatus.USED.value),
+            )
+            if cursor.rowcount != 1:
+                raise ResearchTopicIntegrityError(
+                    f"Nie znaleziono tematu #{row['topic_id']} dla research_run {research_run_id}."
+                )
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+
     def mark_single_research_run_complete(
         self, research_run_id: str, research_card_id: int, total_cost_usd: float,
     ) -> None:
-        """Zamyka single flow bez fałszywego ustawiania czasu nieistniejącego etapu B."""
-        self.conn.execute(
-            "UPDATE research_runs SET status=?, research_card_id=?, total_cost_usd=?,"
-            " updated_at=? WHERE id=?",
-            (ResearchRunStatus.COMPLETE.value, research_card_id, total_cost_usd,
-             _ts(), research_run_id),
+        """Kompatybilny alias kanonicznej atomowej finalizacji single flow."""
+        self.finalize_research_success(
+            research_run_id, research_card_id, total_cost_usd, stage_b_completed=False,
+            terminal_run_status=self._terminal_status_for_finalization(research_run_id),
         )
-        self.conn.commit()
+
+    def _terminal_status_for_finalization(self, research_run_id: str) -> RunStatus:
+        run = self.get_run(research_run_id)
+        if run is None:
+            raise ResearchTopicIntegrityError(f"Nie znaleziono run {research_run_id}.")
+        return RunStatus.DRY_RUN if run.status == RunStatus.DRY_RUN else RunStatus.SUCCESS
 
     def add_research_sources(self, research_run_id: str,
                              sources: list[ResearchSourceRecord]) -> list[ResearchSourceRecord]:
@@ -422,13 +621,11 @@ class SqliteStorage:
 
     def mark_research_run_complete(self, research_run_id: str, research_card_id: int,
                                    total_cost_usd: float) -> None:
-        self.conn.execute(
-            "UPDATE research_runs SET status=?, stage_b_completed_at=?, research_card_id=?,"
-            " total_cost_usd=?, updated_at=? WHERE id=?",
-            (ResearchRunStatus.COMPLETE.value, _ts(), research_card_id, total_cost_usd,
-             _ts(), research_run_id),
+        """Kompatybilny alias kanonicznej atomowej finalizacji etapów z syntezą B."""
+        self.finalize_research_success(
+            research_run_id, research_card_id, total_cost_usd, stage_b_completed=True,
+            terminal_run_status=self._terminal_status_for_finalization(research_run_id),
         )
-        self.conn.commit()
 
     def add_research_stage_result(self, research_run_id: str, stage: ResearchStageName,
                                   status: ResearchStageStatus, error: str | None = None) -> None:

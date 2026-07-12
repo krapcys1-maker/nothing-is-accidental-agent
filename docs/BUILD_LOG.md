@@ -340,3 +340,36 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Testy:** dodano regresje dla trzech historycznych statusów, jedynego retry historycznego failed, claimu/race na dwóch połączeniach, capu `==` i `>`, crash-window `EXTRACTION_IN_PROGRESS`, higher-cap reopen, account isolation oraz rollbacku ledgeru. Celowane: **87 passed**; pełne: **164 passed**.
 - **Koszt / zakres:** **0.000000 USD**; zero API, zero realnego researchu, zero Playwrighta, zero commita/pushu, Task 4 nierozpoczęty. Baza źródłowa i `9bbeb020` nie zostały zmienione.
 - **Następny krok:** drugie niezależne review working tree; brak działania na historycznym runie bez osobnej zgody właściciela.
+
+### [2026-07-12] Etap 0 / Task 4 — użycie tematu i jawny re-research
+
+- **Cel:** po COMPLETE ustawić temat jako `USED`, a drugi świeży research kompletnej karty zatrzymać przed potencjalnym kosztem bez jawnego force.
+- **Kod:** `mark_research_run_complete` oraz legacy `mark_single_research_run_complete` aktualizują `research_runs` i `topics.status=USED` w jednej transakcji. Bramka domenowa obejmuje single, two-stage i staged przed polityką, budżetem, runem oraz klientem; `--force-re-research` przechodzi przez oba CLI, a capped CLI odmawia też kombinacji z `--resume`.
+- **Bezpieczeństwo:** brak flagi nie tworzy runu, usage ani klienta API. Force zezwala tylko na nowy świeży run i nie omija kill switcha, limitu per-run, budżetu ani policy gates. Nie ma automatycznego płatnego ponowienia.
+- **Testy:** celowane research/CLI/runner = **54 passed**; pełne `python -m pytest` = **169 passed in 7.73s**. Regresje obejmują `USED` dla single/two-stage/staged, blokadę przed callem i explicite force oraz odmowę force z resume.
+- **Koszt / zakres:** **0,000000 USD**; zero API, Playwrighta, realnego researchu, commita/pushu i zmian produkcyjnej bazy.
+- **Następny krok:** Etap 0 / Task 5 — szczelny budżet retry i centralny cap per-run, wyłącznie po osobnej dyspozycji właściciela.
+
+### [2026-07-12] Etap 0 / Task 4 — korekta P1/P2 po niezależnym review
+
+- **Wykryty problem:** pierwsza wersja atomowo chroniła tylko parę COMPLETE+USED. Mogła przyjąć kartę innego tematu, a `runs.SUCCESS` był commitowany wcześniej; dodatkowo standardowy runner tworzył klienta przed guardem.
+- **Kod:** `finalize_research_success` jest jedyną granicą końcową: waliduje run–topic–card–account, po czym w jednej transakcji zapisuje research COMPLETE, terminalny run i USED. Poprawna karta może istnieć wcześniej, ale błąd finalizacji nie pozostawia SUCCESS/COMPLETE/USED. Guard jest kanoniczny, wykonywany przed klientem także w runnerze; `USED` lub COMPLETE bez poprawnej relacji kończy się fail-closed i force tego nie omija.
+- **Testy:** dodano plikową SQLite z reopen dla single/two-stage/staged, rollback błędu `topics` i `runs`, kartę innego tematu/konta, uszkodzone COMPLETE/USED, pre-guard runnera, force dla trzech flow oraz budget/kill switch. Celowane: **129 passed in 8.19s**; pełne `python -m pytest`: **186 passed in 10.16s**.
+- **P2 pozostawione:** dwa równoległe świeże procesy mogą minąć guard przed utworzeniem runu; wymaga trwałego claimu/lease w Etapie 1.
+- **Koszt / zakres:** **0,000000 USD**; zero API, Playwrighta, realnego researchu, commita/pushu i zmian produkcyjnej bazy.
+
+### [2026-07-12] Etap 0 / Task 4 — ostatnia korekta po drugim review
+
+- **Cel:** zamknąć dwa P1: nieidempotentną ponowną finalizację i niepełną macierz regresji.
+- **Kod:** `finalize_research_success` przyjmuje jawny terminalny status, waliduje flow i dozwolone stany źródłowe, wykonuje UPDATE z warunkiem na poprzedni status oraz kontrolą `rowcount`. COMPLETE z identycznym payloadem kończy się no-op bez zmiany `research_card_id`, `cost_usd`, błędów ani timestampów; inna karta, koszt, status, Stage B lub uszkodzony stan są odrzucane i wycofywane.
+- **Testy:** dodano reopen dla identycznej i sprzecznej refinalizacji, SELECTED+COMPLETE, historię FAILED/PARTIAL/COMPLETE w obu kolejnościach, force dla uszkodzonego USED/COMPLETE i złego konta w runnerze oraz capped CLI, a także nieudany forced run dla single/two-stage/staged z zachowaniem starej karty i USED. Celowane: **149 passed**; pełne: **206 passed in 13.32s**.
+- **P2 bez zmian:** P2-17 (dwa równoległe świeże procesy) pozostaje długiem Etapu 1; nie wprowadzono claimu/lease.
+- **Koszt / zakres:** **0,000000 USD**; zero API, realnego researchu i Playwrighta; bez commita, pushu, merge i bez rozpoczęcia Task 5.
+
+### [2026-07-12] Etap 0 / Task 4 — domknięcie dowodów po trzecim review
+
+- **Zakres:** kod produkcyjny pozostał bez zmian. Review odrzuciło poprawną implementację, ponieważ testy nie dowodziły literalnie całego kontraktu.
+- **Testy dodane:** sprzeczna semantyka Stage B dla single i two-stage; COMPLETE z timestampem Stage B niezgodnym z single/staged; ponowna finalizacja kartą innego topicu i innego konta — wszystkie z plikową SQLite, reopen i pełnym porównaniem stanu. Runner oraz capped CLI sprawdzają po account mismatch niezmienność `runs`, `research_runs`, `model_usage` i `research_cards` oraz zakaz konstrukcji klienta.
+- **Wynik:** najbliższe testy **43 passed**; celowane Task 1–4 **155 passed in 12.30s**; pełne `python -m pytest` **212 passed in 13.87s**. Nowe testy nie ujawniły błędu produkcyjnego.
+- **P2:** zapisano P2-18 — dokładne `float == float` może fałszywie odrzucić semantycznie identyczny koszt (`0.1 + 0.2` vs `0.3`), lecz zachowanie pozostaje bezpieczne fail-closed. P2-17 bez zmian.
+- **Koszt / zakres:** **0,000000 USD**; zero API, realnego researchu i Playwrighta; bez commita, pushu, merge i bez rozpoczęcia Task 5.

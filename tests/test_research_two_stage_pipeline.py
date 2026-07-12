@@ -7,12 +7,15 @@ pozwala TANIO odrzucić słaby research po etapie 1, zanim zapłacimy za etap 2.
 """
 from __future__ import annotations
 
+import pytest
+
 from app.llm.base import Usage
 from app.llm.usage_tracker import UsageTracker
 from app.models import (
     ModelUsage,
     ResearchFlow,
     ResearchRecommendation,
+    ResearchRunStatus,
     Run,
     RunStatus,
     Topic,
@@ -24,7 +27,10 @@ from app.ports.notification import LogNotification
 from app.research.base import ResearchParseError, ResearchPlan, SourceGatheringResult
 from app.research.fake_client import FakeResearchClient
 from app.research.validation import TOO_FEW_SOURCES
-from app.workflows.research.pipeline import run_two_stage_research_pipeline
+from app.workflows.research.pipeline import (
+    CompletedResearchExistsError,
+    run_two_stage_research_pipeline,
+)
 
 
 def _selected_topic(storage, account) -> Topic:
@@ -37,12 +43,12 @@ def _selected_topic(storage, account) -> Topic:
     ))
 
 
-def _run(settings, storage, account, topic, client):
+def _run(settings, storage, account, topic, client, **kwargs):
     return run_two_stage_research_pipeline(
         account, topic,
         settings=settings, storage=storage, research_client=client,
         usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
-        policy=PolicyEngine(settings, storage), notifier=LogNotification(),
+        policy=PolicyEngine(settings, storage), notifier=LogNotification(), **kwargs,
     )
 
 
@@ -94,6 +100,51 @@ def test_good_research_proceeds_through_both_stages(settings, storage, account):
     run = storage.get_run(summary.run_id)
     assert run is not None and run.status == RunStatus.DRY_RUN
     assert storage.get_research_run(summary.run_id).flow == ResearchFlow.TWO_STAGE
+    assert storage.list_topics(account.id)[0].status == TopicStatus.USED
+
+
+def test_two_stage_re_research_requires_force_and_force_keeps_history(settings, storage, account):
+    topic = _selected_topic(storage, account)
+    first = _run(settings, storage, account, topic, FakeResearchClient("good"))
+    old_card_id = first.card.id
+    counts_before = {
+        table: storage.conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+        for table in ("runs", "research_runs", "model_usage")
+    }
+
+    class _ForbiddenClient(FakeResearchClient):
+        def gather_sources(self, plan):
+            raise AssertionError("blocked re-research must not call gather_sources")
+
+    with pytest.raises(CompletedResearchExistsError, match="--force-re-research"):
+        _run(settings, storage, account, topic, _ForbiddenClient("good"))
+
+    counts_after_block = {
+        table: storage.conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+        for table in counts_before
+    }
+    assert counts_after_block == counts_before
+
+    forced = _run(
+        settings, storage, account, topic, FakeResearchClient("good"), force_re_research=True,
+    )
+    assert forced.run_id != first.run_id
+    assert forced.card.id != old_card_id
+    assert storage.get_research_card(old_card_id) is not None
+    assert storage.get_research_run(forced.run_id).flow == ResearchFlow.TWO_STAGE
+    assert storage.list_topics(account.id)[0].status == TopicStatus.USED
+
+    cards_before_failure = [card.id for card in storage.list_research_cards(account.id)]
+    failed = _run(
+        settings, storage, account, topic, FakeResearchClient("few_sources"),
+        force_re_research=True,
+    )
+    assert not failed.passed
+    assert storage.get_run(failed.run_id).status == RunStatus.FAILED
+    assert storage.get_research_run(failed.run_id).status == ResearchRunStatus.PARTIAL
+    assert storage.list_topics(account.id)[0].status == TopicStatus.USED
+    assert [card.id for card in storage.list_research_cards(account.id)] == cards_before_failure
+    assert storage.get_research_run(first.run_id).research_card_id == old_card_id
 
 
 def test_stops_after_stage_a_when_too_few_sources_and_skips_stage_b(settings, storage, account):

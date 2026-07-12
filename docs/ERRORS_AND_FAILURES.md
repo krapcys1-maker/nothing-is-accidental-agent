@@ -275,3 +275,38 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Wpływ:** brak na poprawne dane po migracji 0007 i normalne ścieżki zapisu; ryzyko dotyczy uszkodzonego lub ręcznie zmienionego rekordu.
 - **Docelowa poprawka:** `attempts >= 0` w warunku claimu, `Field(ge=0)`, test regresyjny i ewentualnie CHECK constraint w kolejnej migracji.
 - **Status:** OPEN / P2; świadomie niepoprawiane przed commitem Task 3 zgodnie z decyzją właściciela.
+
+### [2026-07-12] Zapobieżony koszt: COMPLETE nie może wyglądać jak kandydat do zwykłego retry — [SAFETY]
+- **Ryzyko przed Task 4:** `TopicStatus.USED` istniał, ale nie był ustawiany. Temat z kompletną kartą mógł wejść w drugi świeży flow bez świadomego potwierdzenia kosztu.
+- **Zabezpieczenie:** transakcyjne `COMPLETE → USED` oraz bramka po `research_runs.status=COMPLETE` i istniejącej karcie; w CLI odmowa następuje przed konstrukcją klienta API.
+- **Weryfikacja:** test zakazuje konstrukcji klienta dla kompletnej karty, a pełna regresja kończy się `169 passed`.
+- **Wynik:** nie było wywołania API, kosztu ani zmiany bazy źródłowej. Jawny `--force-re-research` pozostaje jedyną drogą nowej, potencjalnie płatnej próby.
+
+### [2026-07-12] Review Task 4: atomowość dwóch statusów nie wystarczyła — [SAFETY]
+- **Co wykryto:** karta innego tematu mogła zostać przypięta do COMPLETE, a błąd ustawienia USED pozostawiał wcześniej zatwierdzony `runs.SUCCESS` i osieroconą kartę.
+- **Naprawa:** jedna transakcja finalizacji waliduje card-topic-account i obejmuje COMPLETE, terminalny run oraz USED; trigger SQLite i reopen potwierdzają rollback każdego końcowego UPDATE.
+- **Dodatkowa ochrona:** uszkodzony COMPLETE lub USED bez poprawnej karty jest błędem integralności fail-closed. Standardowy runner sprawdza guard przed konstrukcją klienta.
+- **Ryzyko odłożone (P2-17):** dwa równoległe świeże procesy nadal wymagają przyszłego claimu/lease per temat.
+- **Wynik:** **186 passed**, 0 USD, zero API i brak zmiany bazy źródłowej.
+
+### [2026-07-12] Drugie review Task 4: atomowość nie zapewnia idempotencji — [SAFETY]
+
+- **Co wykryto:** ponowne wywołanie poprawnie atomowej finalizacji nadal wykonywało bezwarunkowe UPDATE. Reprodukcja przepięła `research_card_id` 1→2 i zmieniła koszt 0,1→0,9 USD, niszcząc audytowalność ukończonego runu.
+- **Dlaczego:** transakcja gwarantowała „wszystko albo nic” dla jednego wykonania, lecz nie porównywała nowego żądania z już utrwalonym COMPLETE.
+- **Naprawa:** identyczny COMPLETE jest no-op bez UPDATE; sprzeczny payload i częściowo uszkodzony COMPLETE są odrzucane. Pierwsza finalizacja ma dozwolone stany wejściowe, jawny status terminalny, warunkowe UPDATE i kontrolę `rowcount`.
+- **Braki testów wykryte przez review:** SELECTED+COMPLETE, mieszana historia runów, force wobec korupcji i złego konta, błędny forced run oraz pełna macierz refinalizacji. Wszystkie dodano dla właściwych wejść runnera/CLI i trzech flow.
+- **Nieudana iteracja lokalna:** pierwszy zbyt wąski guard statusu `runs` odrzucił legalne jawne wznowienie legacy Stage B ze stanu FAILED; doprecyzowano wyłącznie dozwolone przejście TWO_STAGE po zachowaniu źródeł. Był to błąd testowy/implementacyjny offline, bez API i kosztu.
+- **Wynik:** **206 passed**, 0 USD, zero API; P2-17 pozostaje świadomie otwarte.
+
+### [2026-07-12] Trzecie review Task 4: kod obsługiwał przypadki, lecz brakowało dowodów regresyjnych — [TEST]
+
+- **Co wykryto:** implementacja prawidłowo odrzucała konflikt Stage B, błędny timestamp flow i kartę obcego topicu/konta, ale testy nie wywoływały tych przypadków wprost. Testy account mismatch sprawdzały tylko licznik `runs`, nie cały wymagany zestaw tabel.
+- **Naprawa:** dodano sześć trwałych regresji z reopen SQLite oraz pełne liczniki `runs`, `research_runs`, `model_usage`, `research_cards` w runnerze i capped CLI. Kod produkcyjny nie wymagał zmiany.
+- **Wynik:** **212 passed**, 0 USD i zero API. Różnica „kod zachowuje się poprawnie” vs „test dowodzi kontraktu” pozostaje materiałem do artykułu.
+
+### [2026-07-12] P2-18 — dokładne porównanie kosztów float w idempotentnym no-op
+
+- **Finding:** `finalize_research_success()` porównuje utrwalone koszty z payloadem przez dokładne `float == float`; `0.1 + 0.2` może różnić się binarnie od `0.3`.
+- **Wpływ:** bezpieczna fałszywa odmowa i rollback; brak ryzyka przepisania karty, kosztu lub timestampów.
+- **Docelowy kierunek:** najmniejsza jednostka pieniężna, `Decimal` albo jawna tolerancja zgodna z kanoniczną sumą `model_usage`.
+- **Status:** OPEN / P2; świadomie niezmieniane w Task 4. P2-17 pozostaje osobno otwarte.

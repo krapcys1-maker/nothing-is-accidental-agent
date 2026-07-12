@@ -301,7 +301,7 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Rozważane opcje:** A) 3 źródła — najtaniej, ale zero tolerancji błędu; B) 4 źródła — jedna możliwa porażka i nadal 3 źródła do B; C) 5+ źródeł — większa tolerancja kosztem dodatkowych płatnych calli bez obecnego uzasadnienia.
 - **Decyzja i uzasadnienie:** proponowane B: świeży `three-stage`, A1 1 search/600 tokens, A2 max 4 źródła × 1 search × 1500 tokens, zero retry, B 2200 tokens/2500 forwarded context, approved cap 0,55 USD. Expected=0,201280 USD; conservative=0,510375 USD. Komenda używa `--topic-id 2`, nie `--resume`, więc nie dotyka istniejącego PARTIAL.
 - **Zalety:** jedna awaria A2 nie blokuje automatycznie syntezy; maksymalnie 5 searchy; brak automatycznych ponowień; wszystkie granice jawne w CLI; conservative mieści się w dziennym/miesięcznym budżecie.
-- **Ryzyka:** cap jest wyłącznie bramką pre-flight; P0-2c/P1-2/P1-3/P1-4/P1-5/P1-6 pozostają; B nie ma jeszcze potwierdzenia na żywym API. Search-o-URL nie jest dowodem bezpośredniego odczytu strony.
+- **Ryzyka:** cap jest wyłącznie bramką pre-flight; P0-2c/P1-2/P1-3/P1-4/P1-5 pozostają; B nie ma jeszcze potwierdzenia na żywym API. Search-o-URL nie jest dowodem bezpośredniego odczytu strony.
 - **Kto podjął:** Codex przygotował propozycję na podstawie parametrów właściciela; decyzja o realnym wydatku należy do właściciela.
 - **Zmieniona później:** nie.
 - **Powiązania:** `docs/BUILD_LOG.md` Etap 1O, `docs/IMPLEMENTATION_PLAN.md` F.10, audyt P0-2/P1-2..6.
@@ -333,6 +333,24 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Powiązania:** migracja `0007_candidate_attempts.sql`, `pipeline.retry_failed_source_candidates`, `scripts/run_capped_research.py`, `tests/test_candidate_attempts.py`.
 
 ---
+
+### ADR-025: Ponowny research kompletnej karty tylko po jawnym force
+
+- **Data:** 2026-07-12
+- **Status:** ACCEPTED (zakres wskazany przez właściciela w Etapie 0 / Task 4)
+- **Problem:** drugi świeży research tego samego tematu może ponownie wydać budżet i nadpisać znaczenie cyklu życia tematu, choć kompletna karta już istnieje.
+- **Decyzja:** po korekcie niezależnego review kanoniczna finalizacja waliduje, że karta należy do tego samego tematu i konta, a w jednej transakcji zapisuje COMPLETE, terminalny `runs.status` oraz `topics.status=USED`. Każdy świeży flow najpierw sprawdza poprawność trwałej relacji; `USED`/COMPLETE bez poprawnej karty kończy się błędem integralności fail-closed, także z force. Wyłącznie jawne `--force-re-research` zezwala na kolejny poprawny świeży run; nie omija kill switcha, capu, budżetu ani walidacji. Flaga jest niedozwolona z `--resume`.
+- **Dlaczego:** wznowienie istniejącego, niepełnego runu jest odzyskiwaniem już rozpoczętej pracy; nowy research kompletnej karty to osobna, potencjalnie płatna decyzja. Nie wolno ukrywać jej jako automatycznego retry.
+- **Kto podjął:** właściciel zatwierdził zadanie i granice; wykonanie: Codex.
+- **Ryzyko:** force może świadomie utworzyć następną kartę tego samego tematu; audyt pozostaje zachowany przez osobny `research_run` i kartę. Nie uruchamia się automatycznie.
+- **Powiązania:** `app/storage/repositories.py`, `app/workflows/research/pipeline.py`, `scripts/run_capped_research.py`, `tests/test_research_research_guard_cli.py`.
+
+#### Korekta ADR-025 po drugim review
+
+- **Problem:** atomowa pierwsza finalizacja nadal nie była idempotentna. Drugie wywołanie mogło przepiąć ten sam run z karty 1 na kartę 2 i zmienić koszt z 0,1 na 0,9 USD wraz z timestampami.
+- **Doprecyzowana decyzja:** wywołujący przekazuje oczekiwany terminalny `runs.status`. Jeśli utrwalony COMPLETE jest identyczny (ten sam run, karta, koszt, terminalny status, semantyka Stage B, poprawne konto i temat, topic USED), funkcja kończy się bez żadnego UPDATE. Każda różnica lub częściowo uszkodzony COMPLETE powoduje `ResearchTopicIntegrityError` i zero mutacji. Pierwsza finalizacja używa warunkowych UPDATE wyłącznie z dozwolonych stanów i sprawdza `rowcount`.
+- **Uzasadnienie:** atomowość chroni przed częściowym zapisem jednego wykonania; idempotencja chroni przed zmianą znaczenia już zatwierdzonego zdarzenia podczas powtórzenia. Audytowalny wynik nie może być przepinany po fakcie.
+- **Weryfikacja:** plikowa SQLite z reopen; identyczne powtórzenie oraz konflikty karty, kosztu i statusu dla single/two-stage/staged; **206 testów**, koszt 0 USD.
 
 ## Decyzje otwarte (wymagają właściciela)
 

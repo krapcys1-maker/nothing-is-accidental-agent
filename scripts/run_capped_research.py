@@ -71,6 +71,7 @@ from app.models import ResearchFlow, ResearchRunStatus, SourceCandidateStatus  #
 from app.orchestrator.runner import DEFAULT_ACCOUNT  # noqa: E402
 from app.policies.policy_engine import PolicyEngine  # noqa: E402
 from app.ports.notification import LogNotification  # noqa: E402
+from app.ports.storage import ResearchTopicIntegrityError  # noqa: E402
 from app.research.anthropic_client import AnthropicResearchClient  # noqa: E402
 from app.research.cost_estimator import (  # noqa: E402
     CostEstimate,
@@ -83,6 +84,8 @@ from app.research.cost_estimator import (  # noqa: E402
 from app.storage.repositories import SqliteStorage  # noqa: E402
 from app.workflows.research.docs_writer import make_research_log_writer  # noqa: E402
 from app.workflows.research.pipeline import (  # noqa: E402
+    CompletedResearchExistsError,
+    ensure_topic_can_start_research,
     resume_research_stage_b,
     resume_staged_research,
     retry_failed_source_candidates,
@@ -148,8 +151,12 @@ def main(argv: list[str] | None = None) -> int:
                               "już wykonanych płatnych etapów.")
     parser.add_argument("--retry-failed-candidates", action="store_true",
                         help="Wyłącznie z --resume: jawnie resetuje eligible EXTRACTION_FAILED "
-                             "do PENDING_EXTRACTION. Nie wykonuje API ani A2; po nim potrzebne "
-                             "jest osobne --resume.")
+                              "do PENDING_EXTRACTION. Nie wykonuje API ani A2; po nim potrzebne "
+                              "jest osobne --resume.")
+    parser.add_argument("--force-re-research", action="store_true",
+                        help="Tylko dla świeżego researchu: jawnie zezwala na nowy, potencjalnie "
+                             "płatny run tematu z istniejącą kompletną kartą. Nie omija capu, "
+                             "budżetu, kill switcha ani innych bramek.")
     parser.add_argument("--account", default=DEFAULT_ACCOUNT)
     parser.add_argument("--mode", choices=["three-stage", "two-stage", "single"],
                         default="three-stage",
@@ -211,6 +218,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.retry_failed_candidates and args.estimate_only:
         print("STOP: --retry-failed-candidates nie łączy się z --estimate-only.")
         return 1
+    if args.force_re_research and args.resume is not None:
+        print("STOP: --force-re-research dotyczy wyłącznie świeżego researchu, nie --resume.")
+        return 1
     if args.resume is None and args.topic_id is None:
         print("STOP: podaj --topic-id (nowy research) lub --resume RESEARCH_RUN_ID "
               "(wznowienie dokładnie jednego kolejnego etapu).")
@@ -239,6 +249,23 @@ def _run_fresh(args: argparse.Namespace) -> int:
 
     storage = SqliteStorage.open(settings.db_path)
     clock = SystemClock()
+
+    account = settings.get_account(args.account)
+    topic = next((t for t in storage.list_topics(account.id) if t.id == args.topic_id), None)
+    if topic is None:
+        print(f"STOP: nie znaleziono tematu #{args.topic_id} dla konta {account.id}.")
+        return 1
+    try:
+        ensure_topic_can_start_research(storage, account, topic, args.force_re_research)
+    except CompletedResearchExistsError as exc:
+        print(f"STOP: {exc}")
+        return 1
+    except ResearchTopicIntegrityError as exc:
+        print(f"STOP: błąd integralności researchu tematu: {exc}")
+        return 1
+    print(f"\ntemat: #{topic.id} [{topic.status.value}] score={topic.score} — {topic.title!r}")
+    if args.force_re_research:
+        print("UWAGA: --force-re-research jest jawnie włączone; pozostałe bramki bezpieczeństwa działają.")
 
     now = datetime.now(timezone.utc)
     month_spent = storage.sum_real_cost_usd(now.strftime("%Y-%m"))
@@ -305,13 +332,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
     print(f"OK: pesymistyczny szacunek ({worst_case:.4f} USD) mieści się w capie "
           f"({max_cost_usd:.2f} USD) i w budżecie dziennym/miesięcznym.")
 
-    account = settings.get_account(args.account)
     storage.ensure_account(account)
-    topic = next((t for t in storage.list_topics(account.id) if t.id == args.topic_id), None)
-    if topic is None:
-        print(f"STOP: nie znaleziono tematu #{args.topic_id} dla konta {account.id}.")
-        return 1
-    print(f"\ntemat: #{topic.id} [{topic.status.value}] score={topic.score} — {topic.title!r}")
 
     research_client = AnthropicResearchClient(
         settings.anthropic_api_key, settings.model_quality,
@@ -352,6 +373,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
             max_attempts=args.max_extraction_attempts,
             synthesize_max_tokens=args.synthesize_max_tokens,
             forwarded_context_tokens=args.forwarded_context_tokens,
+            force_re_research=args.force_re_research,
         )
     elif args.mode == "two-stage":
         summary = run_two_stage_research_pipeline(
@@ -363,6 +385,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
             gather_max_tokens=args.gather_max_tokens,
             synthesize_max_tokens=args.synthesize_max_tokens,
             forwarded_context_tokens=args.forwarded_context_tokens,
+            force_re_research=args.force_re_research,
         )
     else:
         summary = run_research_pipeline(
@@ -370,6 +393,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
             settings=settings, storage=storage, research_client=research_client,
             usage_tracker=usage_tracker, policy=policy, notifier=notifier,
             clock=clock, research_log=research_log,
+            force_re_research=args.force_re_research,
         )
 
     _print_result(summary, max_cost_usd, worst_case, args.max_web_searches)

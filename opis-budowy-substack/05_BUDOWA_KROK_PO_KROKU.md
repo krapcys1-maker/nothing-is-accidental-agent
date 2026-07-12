@@ -289,7 +289,27 @@ Poprawka nadała temu stanowi nazwę: `EXTRACTION_IN_PROGRESS`. Jedna atomowa op
 
 Review znalazł też, że terminalność zależała od zmiennego parametru. Teraz wyższy cap może być świadomą, bezpłatną komendą, która odblokowuje exhausted run do `PARTIAL`; sam resume nadal tego nie robi. Do tego DDL migracji i wpis w ledgerze są jedną transakcją. Wynik po poprawce: **164 testy zielone**, 0 USD, zero API, Playwrighta i zmian bazy źródłowej.
 
-**Następne (niezbudowane):** `topics.status=USED` i guard re-research (Task 4); prawdziwe pobieranie treści źródła (P0-2c); pierwszy kompletny realny Research Card dopiero po ukończeniu pozostałych zadań Etapu 0 i osobnej zgodzie.
+**Task 4 (2026-07-12):** zakończony research ma teraz drugi, mały skutek: temat przechodzi w `USED`. To nie blokada na zawsze. Jeśli naprawdę chcemy sprawdzić temat od nowa, komenda musi wprost powiedzieć `--force-re-research`. Bez tego program zatrzymuje się, zanim policzy budżet, utworzy run lub zbuduje klienta API. Force nadal przechodzi wszystkie zwykłe bramki; nie jest ukrytym retry. Testy objęły single, two-stage, staged i CLI: **169 passed**, 0 USD, zero API.
+
+### Korekta po niezależnym review: „atomowo” znaczy cały finał
+
+Review zbudowało celowo złą relację: run jednego tematu dostał kartę drugiego. Baza zaakceptowała ją, bo zwykły foreign key sprawdza tylko istnienie karty. Drugi eksperyment zatrzymał UPDATE `USED`; para COMPLETE/USED wróciła poprawnie, ale wcześniej zapisany `runs.SUCCESS` i karta zostały. To był sukces tylko z nazwy.
+
+Poprawka wprowadziła jedną końcową operację. Najpierw sprawdza ona, czy run, temat, karta i konto mówią o tym samym obiekcie. Dopiero potem, w jednej transakcji, zapisuje COMPLETE, terminalny run i USED. Uszkodzony USED albo COMPLETE nie jest już interpretowany jako „nic tu nie ma”: system zatrzymuje się fail-closed, także gdy ktoś poda force. Standardowy runner sprawdza to zanim zbuduje nawet klienta zastępczego. **186 testów**, 0 USD, zero API.
+
+### Druga korekta Task 4: bezpieczna transakcja też może być niebezpieczna po raz drugi
+
+Drugie review powtórzyło finalizację już ukończonego runu. Pierwsza zapisała kartę 1 i koszt 0,1; druga bez oporu przepięła go na kartę 2 i koszt 0,9. Wszystko odbyło się atomowo — tylko że atomowo zmieniliśmy historię. To pokazało różnicę: atomowość chroni granicę jednego zapisu, idempotencja chroni jego znaczenie przy powtórzeniu.
+
+Od tej korekty identyczne powtórzenie nie wykonuje żadnego UPDATE. Inna karta, koszt, status terminalny, semantyka etapu B lub uszkodzony COMPLETE kończą się odmową i rollbackiem. Uzupełniono też pominięte scenariusze: SELECTED z COMPLETE, mieszane historie, force wobec korupcji i złego konta oraz nieudany forced run w każdym flow. **206 testów zielonych**, 0 USD, zero API.
+
+### Trzecie review Task 4: kod potrafił, ale test jeszcze tego nie dowodził
+
+Review nie znalazło nowego błędu w finalizacji. Mimo to odrzuciło zmianę, ponieważ brakowało jawnych dowodów dla negatywnej macierzy Stage B, karty obcego topicu/konta oraz pełnych liczników tabel po odmowie. To ważna różnica: przeczytanie warunku w kodzie nie zastępuje testu, który uruchamia go na prawdziwej SQLite i sprawdza stan po reopen.
+
+Dopisane sześć regresji przeszło bez zmiany kodu produkcyjnego. Runner i capped CLI porównują teraz cztery tabele po account mismatch. Pełny wynik to **212 testów**, koszt 0 USD i zero API. Pozostał jawny P2: koszt no-op jest porównywany dokładnym `float == float`, więc równoważna kwota o innej reprezentacji binarnej może zostać bezpiecznie odrzucona.
+
+**Następne (niezbudowane):** szczelny budżet retry i centralny cap per-run (Task 5); prawdziwe pobieranie treści źródła (P0-2c); pierwszy kompletny realny Research Card dopiero po ukończeniu pozostałych zadań Etapu 0 i osobnej zgodzie.
 
 ## Powiązania
 - `docs/BUILD_LOG.md` (źródło), `docs/ARCHITECTURE_EVOLUTION.md`, `docs/RELEASE_TIMELINE.md`

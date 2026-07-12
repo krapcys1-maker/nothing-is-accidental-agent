@@ -18,7 +18,11 @@ from app.research.base import ResearchClient
 from app.research.fake_client import FakeResearchClient
 from app.storage.repositories import SqliteStorage
 from app.workflows.research.docs_writer import make_research_log_writer
-from app.workflows.research.pipeline import ResearchRunSummary, run_research_pipeline
+from app.workflows.research.pipeline import (
+    ResearchRunSummary,
+    ensure_topic_can_start_research,
+    run_research_pipeline,
+)
 from app.workflows.topics.discover import TopicRunSummary, run_topic_discovery
 
 DEFAULT_ACCOUNT = "nothing_is_accidental"
@@ -74,7 +78,8 @@ def run_topics(count: int = 6, account_id: str = DEFAULT_ACCOUNT,
 
 
 def run_research(topic_id: int | None = None, account_id: str = DEFAULT_ACCOUNT,
-                 force_real: bool = False, settings: Settings | None = None) -> ResearchRunSummary:
+                  force_real: bool = False, force_re_research: bool = False,
+                  settings: Settings | None = None) -> ResearchRunSummary:
     if force_real:
         # P0-3 (docs/archive/superseded_plans/AUDYT_ARCHITEKTURY_2026-07-12.md): ta ścieżka woła przestarzały,
         # jednoetapowy run_research_pipeline przez klienta zbudowanego BEZ max_web_searches
@@ -109,6 +114,10 @@ def run_research(topic_id: int | None = None, account_id: str = DEFAULT_ACCOUNT,
                 "Brak tematu SELECTED. Uruchom najpierw: python -m app.main run-topics")
         topic = selected[0]  # list_topics sortuje malejąco po score
 
+    # Bramka musi poprzedzać nawet konstrukcję klienta dry-run — force nie omija
+    # kontroli integralności, a bez force nie powstaje żaden klient ani run.
+    ensure_topic_can_start_research(storage, account, topic, force_re_research)
+
     research_client = _build_research_client(settings, force_real)
     usage_tracker = UsageTracker(settings, storage)
     policy = PolicyEngine(settings, storage, clock)
@@ -120,4 +129,5 @@ def run_research(topic_id: int | None = None, account_id: str = DEFAULT_ACCOUNT,
         settings=settings, storage=storage, research_client=research_client,
         usage_tracker=usage_tracker, policy=policy, notifier=notifier,
         clock=clock, research_log=research_log,
+        force_re_research=force_re_research,
     )

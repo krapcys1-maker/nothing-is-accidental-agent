@@ -71,3 +71,11 @@ Na obecnym etapie (przed generacją treści i publikacją) interwencje człowiek
 
 ## Powiązania
 - `docs/HUMAN_INTERVENTIONS.md` (źródło), `06_DECYZJE_PROJEKTOWE.md`, `09_KOSZTY.md`
+
+### [2026-07-12] Zgoda na Task 4
+- Właściciel dopuścił wyłącznie ustawienie `USED`, jawny force re-research i regresje; zachował zakaz API oraz automatycznych płatnych ponowień.
+- Efekt: Task 4 wykonano offline, bez realnego researchu i bez zmian bazy źródłowej.
+
+### [2026-07-12] Zgoda na korektę Task 4 po review
+- Właściciel ograniczył poprawkę do czterech P1, fail-closed i dokumentacji; race condition pozostawił jako P2.
+- Efekt: pełna finalizacja i regresje wykonane offline, bez API, commita, pushu ani Task 5.
