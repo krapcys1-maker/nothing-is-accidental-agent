@@ -27,6 +27,7 @@ from app.llm.usage_tracker import UsageTracker
 from app.models import (
     Account,
     ResearchCard,
+    ResearchFlow,
     ResearchRecommendation,
     ResearchRun,
     ResearchRunStatus,
@@ -94,6 +95,15 @@ class ResearchRunSummary:
 
 
 ResearchLogWriter = Callable[[ResearchCard, Topic, "ResearchRunSummary"], None]
+
+
+def _validate_resume_flow(research_run: ResearchRun, expected: ResearchFlow) -> None:
+    """Reject cross-flow resume before status checks or any paid work."""
+    if research_run.flow != expected:
+        raise ValueError(
+            f"research_run #{research_run.id}: expected flow '{expected.value}', "
+            f"stored flow '{research_run.flow.value}'."
+        )
 
 
 def _record_diagnostics(settings: Settings, run_id: str, stage: str, *, usage: Usage,
@@ -171,6 +181,10 @@ def run_research_pipeline(
     storage.create_run(Run(id=run_id, account_id=account.id,
                            workflow=WorkflowType.RESEARCH, status=run_status,
                            current_state="research"))
+    storage.create_research_run(ResearchRun(
+        id=run_id, account_id=account.id, topic_id=int(topic.id),
+        flow=ResearchFlow.SINGLE, status=ResearchRunStatus.PENDING,
+    ))
 
     # 5. Wywołanie klienta (web search). Błędy: timeout/parse -> run FAILED.
     try:
@@ -193,6 +207,7 @@ def run_research_pipeline(
             summary.output_tokens = usage_row.output_tokens
             summary.web_search_requests = usage_row.web_search_requests
         storage.finish_run(run_id, RunStatus.FAILED.value, cost, error=str(exc))
+        storage.mark_research_run_failed(run_id, error=str(exc))
         notifier.notify("error", "Research nieudany", str(exc), account.id)
         summary.error = str(exc)
         return summary
@@ -249,7 +264,7 @@ def run_research_pipeline(
             for s in draft.sources
         ],
     )
-    storage.add_research_card(card)
+    card = storage.add_research_card(card)
     summary.card = card
     summary.sources_count = len(card.sources)
 
@@ -258,6 +273,10 @@ def run_research_pipeline(
     # jako stan POCZĄTKOWY (create_run wyżej), nie końcowy.
     terminal_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS
     storage.finish_run(run_id, terminal_status.value, usage_row.estimated_cost_usd)
+    storage.mark_single_research_run_complete(
+        run_id, research_card_id=int(card.id),
+        total_cost_usd=usage_row.estimated_cost_usd,
+    )
 
     # 11. Aktualizacja dokumentacji (opcjonalna — realny run dopisuje do RESEARCH_LOG.md).
     if research_log is not None:
@@ -336,7 +355,7 @@ def run_two_stage_research_pipeline(
                            current_state="gather_sources"))
     storage.create_research_run(ResearchRun(
         id=run_id, account_id=account.id, topic_id=int(topic.id),
-        status=ResearchRunStatus.PENDING,
+        flow=ResearchFlow.TWO_STAGE, status=ResearchRunStatus.PENDING,
     ))
     total_cost = 0.0
 
@@ -552,10 +571,11 @@ def resume_research_stage_b(
     to działa również po pełnym restarcie procesu (prawdziwa odporność na awarię,
     nie tylko "w ramach jednego wywołania funkcji").
     """
-    clock = clock or SystemClock()
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
+    _validate_resume_flow(research_run, ResearchFlow.TWO_STAGE)
+    clock = clock or SystemClock()
     if research_run.status not in (ResearchRunStatus.SOURCE_COLLECTED, ResearchRunStatus.PARTIAL):
         raise ValueError(
             f"research_run #{research_run_id} ma status {research_run.status.value} — "
@@ -781,7 +801,7 @@ def run_source_discovery(
                            status=run_status, current_state="discover_sources"))
     storage.create_research_run(ResearchRun(
         id=run_id, account_id=account.id, topic_id=int(topic.id),
-        status=ResearchRunStatus.DISCOVERY_PENDING,
+        flow=ResearchFlow.STAGED, status=ResearchRunStatus.DISCOVERY_PENDING,
     ))
 
     try:
@@ -865,10 +885,11 @@ def run_source_extraction(
     wznowienie po restarcie kontynuuje dokładnie tam, gdzie się skończyło (czyta
     kandydatów PENDING_EXTRACTION z BAZY, nie z pamięci procesu). Wołalne zarówno
     świeżo (zaraz po A1) jak i jako wznowienie (osobne wywołanie, później)."""
-    clock = clock or SystemClock()
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
+    _validate_resume_flow(research_run, ResearchFlow.STAGED)
+    clock = clock or SystemClock()
     if research_run.status not in (
         ResearchRunStatus.DISCOVERY_COMPLETE, ResearchRunStatus.EXTRACTION_IN_PROGRESS,
         ResearchRunStatus.PARTIAL,
@@ -1049,10 +1070,11 @@ def run_synthesis_from_cards(
     """Etap B: synteza WYŁĄCZNIE z już wyekstrahowanych Source Cards (etap A2). Zero
     web search. Błąd -> status WRACA do SOURCES_COMPLETE (źródła nietknięte) — można
     ponowić WYŁĄCZNIE ten etap, dowolną liczbę razy, bez powtarzania A1/A2."""
-    clock = clock or SystemClock()
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
+    _validate_resume_flow(research_run, ResearchFlow.STAGED)
+    clock = clock or SystemClock()
     if research_run.status != ResearchRunStatus.SOURCES_COMPLETE:
         raise ValueError(
             f"research_run #{research_run_id} ma status {research_run.status.value} — "
@@ -1294,6 +1316,7 @@ def resume_staged_research(
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
+    _validate_resume_flow(research_run, ResearchFlow.STAGED)
 
     if research_run.status in (
         ResearchRunStatus.DISCOVERY_COMPLETE, ResearchRunStatus.EXTRACTION_IN_PROGRESS,

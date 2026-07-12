@@ -4,7 +4,9 @@ from __future__ import annotations
 from app.llm.usage_tracker import UsageTracker
 from app.models import (
     ModelUsage,
+    ResearchFlow,
     ResearchRecommendation,
+    ResearchRunStatus,
     Run,
     RunStatus,
     Topic,
@@ -62,6 +64,11 @@ def test_good_research_proceeds_and_persists(settings, storage, account):
     assert cards[0].working_thesis
     run = storage.get_run(summary.run_id)
     assert run is not None and run.status == RunStatus.DRY_RUN
+    research_run = storage.get_research_run(summary.run_id)
+    assert research_run is not None
+    assert research_run.flow == ResearchFlow.SINGLE
+    assert research_run.status == ResearchRunStatus.COMPLETE
+    assert research_run.stage_b_completed_at is None
 
 
 def test_cost_and_sources_saved(settings, storage, account):

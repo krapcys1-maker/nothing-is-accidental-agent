@@ -67,7 +67,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.core.clock import SystemClock  # noqa: E402
 from app.core.config import load_settings  # noqa: E402
 from app.llm.usage_tracker import UsageTracker  # noqa: E402
-from app.models import ResearchRunStatus, SourceCandidateStatus  # noqa: E402
+from app.models import ResearchFlow, ResearchRunStatus, SourceCandidateStatus  # noqa: E402
 from app.orchestrator.runner import DEFAULT_ACCOUNT  # noqa: E402
 from app.policies.policy_engine import PolicyEngine  # noqa: E402
 from app.ports.notification import LogNotification  # noqa: E402
@@ -91,27 +91,18 @@ from app.workflows.research.pipeline import (  # noqa: E402
 )
 
 _DEFAULT_MAX_COST = {"three-stage": 0.45, "two-stage": 0.45, "single": 0.60}
-# Statusy jednoznacznie nowego (etapowego A1/A2/B) przepływu -- nie istniały przed
-# ADR-020, więc nie mogą pochodzić ze starego, dwuetapowego runu.
-_STAGED_ONLY_STATUSES = {
-    ResearchRunStatus.DISCOVERY_COMPLETE.value, ResearchRunStatus.EXTRACTION_IN_PROGRESS.value,
-    ResearchRunStatus.SOURCES_COMPLETE.value,
+_RESUMABLE_STATUSES = {
+    ResearchFlow.TWO_STAGE: frozenset({
+        ResearchRunStatus.SOURCE_COLLECTED,
+        ResearchRunStatus.PARTIAL,
+    }),
+    ResearchFlow.STAGED: frozenset({
+        ResearchRunStatus.DISCOVERY_COMPLETE,
+        ResearchRunStatus.EXTRACTION_IN_PROGRESS,
+        ResearchRunStatus.PARTIAL,
+        ResearchRunStatus.SOURCES_COMPLETE,
+    }),
 }
-# SOURCE_COLLECTED istnieje TYLKO w starym przepływie. PARTIAL jest WSPÓLNY dla obu
-# przepływów (ADR-019 i ADR-020) -- dla PARTIAL trzeba sprawdzić, w której tabeli
-# faktycznie są dane (patrz _detect_flow niżej), nie da się rozstrzygnąć po samym statusie.
-
-
-def _detect_flow(storage, research_run_id: str) -> str:
-    """Rozstrzyga: 'staged' (A1/A2/B, research_source_candidates) czy 'legacy'
-    (gather_sources+synthesize_card, research_sources) -- na podstawie tego, w
-    której tabeli faktycznie są zapisane dane dla tego research_run_id. Potrzebne
-    TYLKO dla statusu PARTIAL, który jest współdzielony przez oba przepływy."""
-    if storage.list_source_candidates(research_run_id):
-        return "staged"
-    if storage.list_research_sources(research_run_id):
-        return "legacy"
-    return "unknown"
 
 
 def _configure_output() -> None:
@@ -366,22 +357,11 @@ def _run_fresh(args: argparse.Namespace) -> int:
 
 def _run_resume(args: argparse.Namespace) -> int:
     """Wznawia dokładnie JEDEN kolejny etap dla istniejącego research_run_id — bez
-    ponownego web search tam, gdzie to już zostało wykonane. Rozstrzyga MIĘDZY
-    starym dwuetapowym przepływem (resume_research_stage_b) a nowym, etapowym A1/A2/B
-    (resume_staged_research) na podstawie statusu runu i — dla współdzielonego
-    statusu PARTIAL — na podstawie tego, w której tabeli faktycznie są dane
-    (_detect_flow). Wszystko wczytywane z BAZY, więc działa nawet po pełnym
-    restarcie procesu."""
+    ponownego web search tam, gdzie to już zostało wykonane. Wybór funkcji resume
+    opiera się wyłącznie na zapisanym `research_runs.flow`; status ani obecność
+    rekordów w tabelach źródeł nie służą już do rozpoznawania przepływu."""
     settings = load_settings()
     settings = replace(settings, dry_run=False)
-
-    print("=" * 70)
-    print("PRE-FLIGHT CHECKS — WZNOWIENIE (przed jakimkolwiek wywołaniem API)")
-    print("=" * 70)
-    print(f"research_run_id:              {args.resume}")
-    print(f"ANTHROPIC_API_KEY ustawiony:  {bool(settings.anthropic_api_key)}  (wartość NIE jest wypisywana)")
-    print(f"model (research/quality):     {settings.model_quality!r}")
-    print(f"kill_switch:                  {settings.kill_switch}")
 
     storage = SqliteStorage.open(settings.db_path)
     clock = SystemClock()
@@ -392,27 +372,26 @@ def _run_resume(args: argparse.Namespace) -> int:
         return 1
     status = research_run.status.value
     print(f"status research_run:          {status}")
+    flow = research_run.flow
+    print(f"zapisany flow:                 {flow.value}")
 
-    if status in _STAGED_ONLY_STATUSES:
-        flow = "staged"
-    elif status == ResearchRunStatus.SOURCE_COLLECTED.value:
-        flow = "legacy"
-    elif status == ResearchRunStatus.PARTIAL.value:
-        flow = _detect_flow(storage, args.resume)
-    else:
-        flow = "none"
+    allowed_statuses = _RESUMABLE_STATUSES.get(flow, frozenset())
+    if research_run.status not in allowed_statuses:
+        allowed_values = sorted(item.value for item in allowed_statuses)
+        allowed_description = allowed_values or ["brak — ten flow nie ma trwałego resume"]
+        print(
+            f"STOP: research_run #{args.resume}: flow={flow.value}, status={status}; "
+            f"dozwolone statusy dla tego flow: {allowed_description}."
+        )
+        return 1
 
-    if flow == "none":
-        print(f"STOP: status {status} nie pozwala wznowić niczego (wymagane: "
-              f"{sorted(_STAGED_ONLY_STATUSES)} lub SOURCE_COLLECTED/PARTIAL).")
-        return 1
-    if flow == "unknown":
-        print(f"STOP: status {status} to PARTIAL, ale nie znaleziono danych ani w "
-              "research_source_candidates, ani w research_sources — nie da się rozstrzygnąć, "
-              "który etap wznowić.")
-        return 1
-    print(f"wykryty przepływ:             {flow} "
-          f"({'A1 discovery + A2 extraction + B synthesis' if flow == 'staged' else 'gather_sources + synthesize_card (legacy)'})")
+    print("=" * 70)
+    print("PRE-FLIGHT CHECKS — WZNOWIENIE (przed jakimkolwiek wywołaniem API)")
+    print("=" * 70)
+    print(f"research_run_id:              {args.resume}")
+    print(f"ANTHROPIC_API_KEY ustawiony:  {bool(settings.anthropic_api_key)}  (wartość NIE jest wypisywana)")
+    print(f"model (research/quality):     {settings.model_quality!r}")
+    print(f"kill_switch:                  {settings.kill_switch}")
 
     prior_usage = storage.get_research_usage(args.resume)
     prior_cost = sum(u.estimated_cost_usd for u in prior_usage)
@@ -424,11 +403,15 @@ def _run_resume(args: argparse.Namespace) -> int:
     print(f"budżet miesięczny: wydano dotąd {month_spent:.6f} / limit {settings.max_monthly_cost_usd:.2f} USD")
     print(f"budżet dzienny:    wydano dotąd {day_spent:.6f} / limit {settings.max_daily_cost_usd:.2f} USD")
 
-    if flow == "legacy":
+    if flow == ResearchFlow.TWO_STAGE:
         return _run_resume_legacy(args, settings, storage, clock, research_run, prior_cost,
                                   month_spent, day_spent)
-    return _run_resume_staged(args, settings, storage, clock, research_run, prior_cost,
-                              month_spent, day_spent)
+    if flow == ResearchFlow.STAGED:
+        return _run_resume_staged(args, settings, storage, clock, research_run, prior_cost,
+                                  month_spent, day_spent)
+    raise ValueError(
+        f"research_run #{args.resume}: unsupported stored flow '{flow.value}'."
+    )
 
 
 def _run_resume_legacy(args, settings, storage, clock, research_run, prior_cost,

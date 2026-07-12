@@ -65,3 +65,14 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Jaki był efekt:** jeden spójny kanon bez konstrukcji „plik odwołuje sam siebie"; kolejność Etapu 0 jednoznaczna; commit dokumentacyjny dopiero po tych korektach.
 - **Czas człowieka:** ~15 min (review + decyzja).
 - **Wpływ na strategię:** tak — potwierdzone: koniec debaty architektonicznej; następny krok = zadanie 1 Etapu 0 (bez pytania kolejnych modeli o nową architekturę, chyba że problem wymaga zmiany ADR).
+
+### [2026-07-12] APPROVAL — Etap 0 / Task 1 zatwierdzony po drugim code review
+- **Typ:** APPROVAL
+- **Konto:** — (dotyczy całego projektu)
+- **Obiekt:** Etap 0 / Task 1 — `research_runs.flow` i bezpieczne resume
+- **Co agent chciał zrobić:** zamknąć Task 1 po poprawieniu findingów pierwszego review i opublikować zmiany na branchu developerskim.
+- **Dlaczego człowiek zareagował:** commit i push wymagały jawnego zatwierdzenia końcowego zakresu po drugim, niezależnym review.
+- **Co zostało zmienione:** właściciel zaakceptował wynik `APPROVE` i polecił commit `Add explicit research run flow and safe resume validation` oraz push wyłącznie na `origin/dev/first-successful-research-card`; Task 2 pozostaje nierozpoczęty.
+- **Jaki był efekt:** Task 1 dopuszczony do commita i pushu; bez zgody na API, Playwrighta, realny research ani kolejne zadania roadmapy.
+- **Czas człowieka:** niezmierzony (instrukcja tekstowa).
+- **Wpływ na strategię:** brak zmiany architektury; formalne zamknięcie Task 1 i utrzymanie kolejności roadmapy.

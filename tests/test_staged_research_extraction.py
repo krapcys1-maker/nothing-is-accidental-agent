@@ -22,6 +22,7 @@ from app.core.ids import new_run_id
 from app.llm.base import Usage
 from app.llm.usage_tracker import UsageTracker
 from app.models import (
+    ResearchFlow,
     ResearchRun,
     ResearchRunStatus,
     Run,
@@ -68,7 +69,7 @@ def _seeded_run_with_candidates(storage, account, topic, n: int = 3) -> str:
                            workflow=WorkflowType.RESEARCH, status=RunStatus.RUNNING))
     storage.create_research_run(ResearchRun(
         id=run_id, account_id=account.id, topic_id=int(topic.id),
-        status=ResearchRunStatus.DISCOVERY_PENDING,
+        flow=ResearchFlow.STAGED, status=ResearchRunStatus.DISCOVERY_PENDING,
     ))
     storage.create_source_candidates(run_id, [
         SourceCandidateRecord(research_run_id=run_id, url=f"https://example.org/source-{i}",
@@ -216,6 +217,7 @@ def test_staged_pipeline_happy_path_reaches_complete(settings, storage, account)
     assert summary.sources_failed == 0
 
     research_run = storage.get_research_run(summary.run_id)
+    assert research_run.flow == ResearchFlow.STAGED
     assert research_run.status == ResearchRunStatus.COMPLETE
     assert research_run.research_card_id == summary.card.id
 

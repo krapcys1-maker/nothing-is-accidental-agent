@@ -13,6 +13,7 @@ from app.models import (
     ResearchCard,
     ResearchRecommendation,
     ResearchRun,
+    ResearchFlow,
     ResearchRunStatus,
     ResearchSourceRecord,
     ResearchStageName,
@@ -287,11 +288,11 @@ class SqliteStorage:
         """`research_run.id` musi być TYM SAMYM id co odpowiadający `Run` (rozszerzenie 1:1) —
         wołający tworzy najpierw `create_run(...)`, potem to, z tym samym id."""
         self.conn.execute(
-            "INSERT INTO research_runs (id, account_id, topic_id, status, total_cost_usd,"
-            " created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO research_runs (id, account_id, topic_id, flow, status, total_cost_usd,"
+            " created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
             (
                 research_run.id, research_run.account_id, research_run.topic_id,
-                research_run.status.value, research_run.total_cost_usd,
+                research_run.flow.value, research_run.status.value, research_run.total_cost_usd,
                 _ts(research_run.created_at), _ts(research_run.updated_at),
             ),
         )
@@ -306,6 +307,7 @@ class SqliteStorage:
             return None
         return ResearchRun(
             id=r["id"], account_id=r["account_id"], topic_id=r["topic_id"],
+            flow=ResearchFlow(r["flow"]),
             status=ResearchRunStatus(r["status"]),
             stage_a_completed_at=r["stage_a_completed_at"],
             stage_b_completed_at=r["stage_b_completed_at"],
@@ -313,6 +315,18 @@ class SqliteStorage:
             total_cost_usd=r["total_cost_usd"], error=r["error"],
             created_at=r["created_at"], updated_at=r["updated_at"],
         )
+
+    def mark_single_research_run_complete(
+        self, research_run_id: str, research_card_id: int, total_cost_usd: float,
+    ) -> None:
+        """Zamyka single flow bez fałszywego ustawiania czasu nieistniejącego etapu B."""
+        self.conn.execute(
+            "UPDATE research_runs SET status=?, research_card_id=?, total_cost_usd=?,"
+            " updated_at=? WHERE id=?",
+            (ResearchRunStatus.COMPLETE.value, research_card_id, total_cost_usd,
+             _ts(), research_run_id),
+        )
+        self.conn.commit()
 
     def add_research_sources(self, research_run_id: str,
                              sources: list[ResearchSourceRecord]) -> list[ResearchSourceRecord]:

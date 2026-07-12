@@ -5,7 +5,7 @@
 >
 > Kolejność prac: `IMPLEMENTATION_ROADMAP.md`. Aktualny stan: `CURRENT_PROJECT_STATE.md`. Rejestr decyzji (ADR): `docs/DECISIONS.md` (nadal obowiązujący — ten dokument konsoliduje decyzje, nie zastępuje rejestru).
 >
-> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (102 passed, 2026-07-12) lub bazie `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
+> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (127 passed, 2026-07-12) lub bazie `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
 
 ---
 
@@ -17,7 +17,7 @@
 |---|---|---|
 | Konfiguracja (.env + YAML, zero ścieżek absolutnych) | `app/core/config.py` | testy + 3 realne runy |
 | Modele domenowe (Pydantic v2) | `app/models.py` | testy |
-| SQLite + 5 migracji + repozytoria | `app/storage/` | `tests/test_storage.py` i in. |
+| SQLite + 6 migracji + repozytoria | `app/storage/` | `tests/test_storage.py`, `tests/test_research_run_flow.py` i in. |
 | Policy Engine (kill-switch, aktywność konta, budżet dzienny/miesięczny z priorytetem miesięcznym ADR-012, progi tematów) | `app/policies/policy_engine.py` | `tests/test_policy_engine.py` |
 | Księgowanie kosztów (model_usage + COSTS.csv, flaga dry_run) | `app/llm/usage_tracker.py` | 3 realne incydenty potwierdziły poprawność |
 | Pipeline tematów (generacja+scoring+dedup+progi) | `app/workflows/topics/` | testy; realnie NIGDY nie uruchomiony (`NOT VERIFIED` na żywym API) |
@@ -34,7 +34,7 @@
 
 - **Policy Engine** — pokrywa ~3 z ~14 docelowych obowiązków. Brak: egzekucji `autonomy_level`, `AccountMode` (COMMENT_ONLY niczego nie blokuje), limitów per konto (`AccountPolicy` — martwa konfiguracja), cooldownów, capu per-run w bibliotece (żyje tylko w CLI), SAFE MODE, runtime kill-switch (czytany raz z .env przy starcie).
 - **Klient Anthropic dla tematów** (`app/llm/anthropic_client.py`) — kompletny kod, ale: nigdy nie uruchomiony realnie, brak testów parsera, **nie księguje kosztu przy błędzie parsowania JSON** (w przeciwieństwie do klienta researchu), brak zdejmowania code fence. Do wyrównania z klientem researchu przed pierwszym realnym użyciem.
-- **Maszyna stanów researchu** — działa, ale: status `PARTIAL` współdzielony przez dwa przepływy bez pola `flow` (rozstrzyganie sniffingiem tabel w CLI), `EXTRACTION_FAILED` bez drogi powrotu (run `9bbeb020` trwale niedomykalny), `runs.cost_usd` nieodświeżany w części ścieżek staged.
+- **Maszyna stanów researchu** — Etap 0 / Task 1 ukończony: działa z jawnym, trwałym `research_runs.flow`, walidacją cross-flow i flow→status przed resume; `_detect_flow` nie istnieje. Nadal `EXTRACTION_FAILED` nie ma drogi powrotu (run `9bbeb020` trwale niedomykalny), a `runs.cost_usd` nie jest odświeżany w części ścieżek staged.
 
 ### 1.3. Co jest tylko szkieletem
 
@@ -198,14 +198,14 @@ Wyjątek `ResearchError` niesie `usage`/`model` z udanego wywołania API, które
 
 Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → budżet). `runs.cost_usd`, `research_runs.total_cost_usd` = cache. **Izolacja kont: `account_id` obowiązkowy w każdej encji per-konto.**
 
-### 4.1. Encje istniejące (migracje 0001–0005)
+### 4.1. Encje istniejące (migracje 0001–0006)
 
 | Encja | Przeznaczenie | Kluczowe pola | Statusy | Relacje / idempotencja |
 |---|---|---|---|---|
 | `accounts` + `account_policies` | publikacja/konto + jej limity (= **publication** w nomenklaturze docelowej) | id, mode, autonomy_level, active; limity dzienne/tygodniowe | mode: FULL_PUBLICATION/COMMENT_ONLY/DRAFT_ONLY/RESEARCH_ONLY | upsert po id (idempotentne `ensure_account`) |
 | `topics` | temat (= **topic**) | account_id, title, question, score, score_breakdown, duplicate_of, rejection_reason | DISCOVERED→SCORED/SELECTED/REJECTED/DUPLICATE→USED | dedup lokalny per konto przed insertem |
 | `runs` | przebieg workflow (= **audit event** poziomu runu) | id (uuid), workflow, status, cost_usd (cache), error | RUNNING→SUCCESS/FAILED/STOPPED; DRY_RUN | id generowany raz, przekazywany wszędzie |
-| `research_runs` | maszyna stanów researchu (= **research task**); id = runs.id (rozszerzenie 1:1) | status, stage_*_completed_at, research_card_id, error | patrz sekcja 5 | koszt przez model_usage.run_id — bez własnej tabeli kosztów |
+| `research_runs` | maszyna stanów researchu (= **research task**); id = runs.id (rozszerzenie 1:1) | flow, status, stage_*_completed_at, research_card_id, error | patrz sekcja 5 | koszt przez model_usage.run_id — bez własnej tabeli kosztów |
 | `research_source_candidates` | kandydat A1 ewoluujący w Source Card po A2 (= **source** + **claim** w postaci supported_claims_json) | url, title, supported_claims, numeric_facts, verification_status, quality, extraction_error | PENDING_EXTRACTION→EXTRACTED/EXTRACTION_FAILED | zapis NATYCHMIAST per źródło; wznowienie czyta tylko PENDING |
 | `research_sources` | trwałe źródła STAREGO przepływu (legacy) | jak wyżej, bez statusu per źródło | — | do konsolidacji po wygaszeniu legacy |
 | `research_cards` + `sources` | karta badawcza (= **research card**) + źródła finalne | question, working_thesis, confirmed/uncertain_claims, contradictions, confidence, recommendation | PROCEED/REVISE/REJECT (rekomendacja) | karta zapisywana też po odrzuceniu |
@@ -226,7 +226,6 @@ Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → bu
 |---|---|---|
 | `jobs` (= **publication job** i każde inne zadanie kolejki) | 1 | kind, account_id, payload_json, status (QUEUED/LEASED/DONE/FAILED/CANCELLED), priority, earliest_run_at, deadline_at, **idempotency_key UNIQUE**, lease_owner, lease_expires_at, attempts, last_error, schedule_reason |
 | `system_flags` | 1 | kill-switch/SAFE MODE runtime (key, value, reason, updated_at) — czytane przy KAŻDYM checku Policy |
-| `research_runs.flow` (kolumna) | 0 | 'single'/'two_stage'/'staged' — koniec sniffingu tabel |
 | `research_source_candidates.attempts` (kolumna) | 0 | jawny, capowany retry nieudanych kandydatów |
 | `evaluations` (= **evaluation**) | 3 | wynik audytu treści: content_id, kind (fact/style/growth), score, findings_json |
 | `autonomous_decisions` | 4 | log każdej decyzji podjętej bez człowieka: action, inputs, thresholds, outcome |

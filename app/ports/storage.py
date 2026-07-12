@@ -60,6 +60,10 @@ class StoragePort(Protocol):
 
     def get_research_run(self, research_run_id: str) -> ResearchRun | None: ...
 
+    def mark_single_research_run_complete(
+        self, research_run_id: str, research_card_id: int, total_cost_usd: float,
+    ) -> None: ...
+
     def add_research_sources(self, research_run_id: str,
                              sources: list[ResearchSourceRecord]) -> list[ResearchSourceRecord]: ...
 

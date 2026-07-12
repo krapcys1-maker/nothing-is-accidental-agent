@@ -215,3 +215,25 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Recovery:** removed only the newly created empty file, then repeated the read-only query against `data/agent.db`.
 - **Result:** 2 runs remain unchanged (`FAILED`, `PARTIAL`); no status or application data was modified; no API call and no cost.
 - **Prevention:** resolve `settings.db_path` or inspect configuration before diagnostic SQLite commands.
+
+### [2026-07-12] Pomocniczy odczyt SQLite — quoting PowerShell i kodowanie konsoli
+
+- **Kategoria:** TECH / narzędzie lokalne; kod aplikacji nie był wykonywany.
+- **Co miało działać:** read-only inwentaryzacja historycznych runów i sygnałów potrzebnych do backfillu migracji 0006.
+- **Co się zepsuło:** trzy warianty `python -c` zakończyły się `SyntaxError`, ponieważ PowerShell usunął lub rozbił cudzysłowy zagnieżdżonego SQL. Po przejściu na skrypt podawany przez stdin pierwszy odczyt zatrzymał się na `UnicodeEncodeError` konsoli cp1252 przy polskim tekście błędu.
+- **Przyczyna:** cytowanie wielowarstwowe PowerShell→Python→SQL oraz domyślne kodowanie konsoli, nie dane ani aplikacja.
+- **Naprawa:** kod przekazano przez PowerShell here-string do stdin Pythona i ustawiono `sys.stdout.reconfigure(encoding='utf-8')`.
+- **Wynik:** pełny odczyt zakończony poprawnie; potem migracja przeszła na pamięciowej kopii bazy. Źródłowy `data/agent.db` pozostał niezmieniony.
+- **Liczba prób:** 5 łącznie (3 błędy cytowania, 1 błąd kodowania, 1 sukces).
+- **Koszt / skutki:** 0 USD, zero API, zero nowych rekordów i zero zmian statusów.
+- **Zapobieganie:** przy dłuższym SQL na Windows używać stdin/here-string i jawnego UTF-8 zamiast wielokrotnie zagnieżdżonego `python -c`.
+
+### [2026-07-12] Etap 0 / zadanie 1 — błędy wykryte w review przed commitem
+
+- **Kategoria:** IMPLEMENTATION / MIGRATION / SAFETY; wykryte przed wdrożeniem i przed commitem.
+- **Co było błędne:** pierwszy wariant backfillu single dopuszczał prefiks UUID, `current_state` i czasowe dopasowanie karty; refaktor CLI usunął wcześniejszą walidację dozwolonych statusów resume; roadmapa błędnie nazywała przebudowę tabeli migracją addytywną z rollbackiem przez sam powrót do starego commita.
+- **Scenariusz ryzyka:** obca instalacja lub niejednoznaczna historia mogła dostać błędny flow/kartę; `--estimate-only` albo realne resume mogło wejść w helper dla terminalnego `FAILED`/`COMPLETE`; stary kod po 0006 próbowałby insertu bez obowiązkowego `flow`.
+- **Naprawa:** dokładna mapa pełny UUID+konto+topic(+karta), wyłącznie strukturalne sygnały dla two-stage/staged, walidacja flow→status przed jakąkolwiek pracą CLI oraz poprawiona procedura rollbacku.
+- **Dowód:** 70 testów celowanych i 127 pełnych; testy black-box potwierdzają zero wywołań helperów/klienta po odmowie, a migracyjne obejmują brak znanych UUID, konflikt, czystą/pustą bazę oraz integralność schematu.
+- **Wpływ / koszt:** brak wpływu na dane produkcyjne — migracja nie została zastosowana do źródłowej bazy; 0 USD, zero API, Playwrighta i researchu.
+- **Status:** FIXED; oczekuje na drugi review właściciela.

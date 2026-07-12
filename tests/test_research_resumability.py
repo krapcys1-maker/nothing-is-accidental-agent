@@ -12,6 +12,7 @@ from app.llm.base import Usage
 from app.llm.usage_tracker import UsageTracker
 from app.models import (
     ModelUsage,
+    ResearchFlow,
     ResearchRunStatus,
     Run,
     RunStatus,
@@ -114,6 +115,7 @@ def test_stage_a_success_persists_research_run_and_sources(settings, storage, ac
 
     research_run = storage.get_research_run(summary.run_id)
     assert research_run is not None
+    assert research_run.flow == ResearchFlow.TWO_STAGE
     assert research_run.status == ResearchRunStatus.PARTIAL  # etap 2 padł, ale etap 1 trwały
     assert research_run.stage_a_completed_at is not None
     assert research_run.stage_b_completed_at is None

@@ -9,7 +9,16 @@ from __future__ import annotations
 
 from app.llm.base import Usage
 from app.llm.usage_tracker import UsageTracker
-from app.models import ModelUsage, ResearchRecommendation, Run, RunStatus, Topic, TopicStatus, WorkflowType
+from app.models import (
+    ModelUsage,
+    ResearchFlow,
+    ResearchRecommendation,
+    Run,
+    RunStatus,
+    Topic,
+    TopicStatus,
+    WorkflowType,
+)
 from app.policies.policy_engine import PolicyEngine
 from app.ports.notification import LogNotification
 from app.research.base import ResearchParseError, ResearchPlan, SourceGatheringResult
@@ -84,6 +93,7 @@ def test_good_research_proceeds_through_both_stages(settings, storage, account):
 
     run = storage.get_run(summary.run_id)
     assert run is not None and run.status == RunStatus.DRY_RUN
+    assert storage.get_research_run(summary.run_id).flow == ResearchFlow.TWO_STAGE
 
 
 def test_stops_after_stage_a_when_too_few_sources_and_skips_stage_b(settings, storage, account):

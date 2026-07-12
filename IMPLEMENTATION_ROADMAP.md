@@ -20,7 +20,7 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 
 ### Zadania (w tej kolejności)
 
-1. **[P1-1/P1-9] Migracja `0006_research_run_flow.sql`:** kolumna `research_runs.flow` ('single'|'two_stage'|'staged') + backfill (staged, gdzie istnieją candidates; single dla `1b649314`); wszystkie funkcje resume walidują flow; usunięcie `_detect_flow` z CLI.
+1. ✅ **[P1-1/P1-9] Migracja `0006_research_run_flow.sql` — WYKONANE 2026-07-12:** kolumna `research_runs.flow` ('single'|'two_stage'|'staged') NOT NULL bez defaultu + deterministyczny backfill; wszystkie istniejące funkcje resume walidują flow, a CLI także dozwolony status przed jakąkolwiek pracą; `_detect_flow` usunięte z CLI; 127 testów zielonych.
 2. **[P1-2 + P1-8] Spójność księgi runów:** `runs.cost_usd` odświeżany (suma z `get_research_usage`) przy KAŻDYM wyjściu każdej funkcji etapu staged; `PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;` w `app/storage/db.py:connect()`.
 3. **[P1-5] Migracja `0007_candidate_attempts.sql`:** kolumna `attempts` na kandydacie; jawna operacja `retry-failed-candidates` (EXTRACTION_FAILED → PENDING_EXTRACTION, tylko przy `attempts < cap`, nowa flaga CLI); status `PARTIAL_EXHAUSTED` (terminal: 0 pending, EXTRACTED < min); resume na PARTIAL_EXHAUSTED → czytelna odmowa.
 4. **[P1-6] Cykl życia tematu:** po `mark_research_run_complete` → `topics.status=USED`; research tematu z istniejącą kartą COMPLETE wymaga jawnej flagi `--force-re-research`.
@@ -34,8 +34,8 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 - **Testy:** resume cross-flow → ValueError (obie strony); `runs.cost_usd == sum(model_usage)` po każdej ścieżce staged (w tym B-failure); retry-failed z capem attempts; PARTIAL_EXHAUSTED terminalny; topic USED + `--force-re-research`; drugi attempt zablokowany gdy budżet wyczerpany między próbami; macierz dozwolonych przejść `mark_*`; parser topics z fence/uciętym JSON + księgowanie kosztu.
 - **Kryteria akceptacji:** wszystkie dotychczasowe 102 testy + nowe zielone; run `9bbeb020` da się jawnie ponowić albo zamknąć jako PARTIAL_EXHAUSTED; `_detect_flow` nie istnieje.
 - **Kryterium zakończenia etapu:** istnieje ≥1 realna Research Card z `research_runs.status=COMPLETE`, `runs.status=SUCCESS`, ≥3 źródłami VERIFIED, kosztem ≤ capu — potwierdzona w bazie i opisana w `docs/RESEARCH_LOG.md`.
-- **Ryzyka:** kolejna porażka realnego runu (mitygacja: retry-failed-candidates sprawia, że częściowa porażka przestaje być terminalna); backfill flow błędnie sklasyfikuje stary run (mitygacja: tylko 2 runy istnieją, weryfikacja ręczna).
-- **Rollback:** migracje 0006/0007 są addytywne (nowe kolumny/wartości statusów) — rollback = powrót do poprzedniego commita; baza z nowymi kolumnami pozostaje kompatybilna wstecz.
+- **Ryzyka:** kolejna porażka realnego runu (mitygacja: retry-failed-candidates sprawia, że częściowa porażka przestaje być terminalna); backfill flow błędnie sklasyfikuje historyczny run (w bazie są 4 historyczne runy workflow research, z czego przed migracją tylko 2 miały rekord w `research_runs`; dwa znane runy single są mapowane po pełnym UUID, koncie i temacie, a pozostałe wyłącznie po jednoznacznych śladach strukturalnych).
+- **Rollback:** 0006 przebudowuje `research_runs` i po migracji baza wymaga kodu świadomego obowiązkowego pola `flow`; sam powrót do poprzedniego commita nie jest kompatybilnym rollbackiem i spowoduje błędy `NOT NULL` przy nowych insertach starego kodu. Cofnięcie 0006 wymaga odtworzenia kopii bazy sprzed migracji albo osobnej migracji odwrotnej. Procedurę rollbacku 0007 należy określić osobno przy jego implementacji.
 - **Nie wolno zmieniać:** legacy pipeline'ów (poza dopisaniem walidacji flow), trzech tabel źródeł, semantyki DRY_RUN, promptów researchu (działają — zmiany promptów tylko z osobnym uzasadnieniem), `.env`/cennika.
 
 ---
@@ -175,7 +175,7 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 ## NASTĘPNY ETAP DO WYKONANIA: **Etap 0** (zadania 1–9 w podanej kolejności)
 
 Pierwsze 5 zadań do wykonania (dokładnie):
-1. Migracja 0006 `research_runs.flow` + walidacja przepływu w funkcjach resume + usunięcie `_detect_flow` (P1-1/P1-9).
+1. ✅ Migracja 0006 `research_runs.flow` + walidacja przepływu w funkcjach resume + usunięcie `_detect_flow` (P1-1/P1-9) — wykonane 2026-07-12.
 2. `runs.cost_usd` odświeżany przy każdym wyjściu etapu staged + WAL/busy_timeout w `db.py` (P1-2, P1-8).
 3. Migracja 0007 `attempts` + operacja `retry-failed-candidates` + status `PARTIAL_EXHAUSTED` (P1-5).
 4. `topics.status=USED` po COMPLETE + guard `--force-re-research` (P1-6).

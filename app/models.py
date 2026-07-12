@@ -194,6 +194,12 @@ class ResearchRunStatus(str, Enum):
     FAILED = "FAILED"                      # nic trwałego nie powstało — nie ma czego wznawiać
 
 
+class ResearchFlow(str, Enum):
+    SINGLE = "single"
+    TWO_STAGE = "two_stage"
+    STAGED = "staged"
+
+
 class SourceCandidateStatus(str, Enum):
     PENDING_EXTRACTION = "PENDING_EXTRACTION"   # z etapu A1, jeszcze nie próbowano A2
     EXTRACTED = "EXTRACTED"                     # etap A2 udany dla TEGO źródła
@@ -219,6 +225,7 @@ class ResearchRun(BaseModel):
     id: str
     account_id: str
     topic_id: int
+    flow: ResearchFlow
     status: ResearchRunStatus = ResearchRunStatus.PENDING
     stage_a_completed_at: datetime | None = None
     stage_b_completed_at: datetime | None = None
