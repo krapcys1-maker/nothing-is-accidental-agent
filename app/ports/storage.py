@@ -85,6 +85,10 @@ class StoragePort(Protocol):
 
     def get_research_usage(self, research_run_id: str) -> list[ModelUsage]: ...
 
+    def sync_run_cost_from_research_usage(self, research_run_id: str) -> float:
+        """Idempotentnie ustawia runs.cost_usd na kanoniczną sumę model_usage runu."""
+        ...
+
     # --- etapowy research A1 (discovery) / A2 (per-source extraction) / B (synthesis) ---
 
     def create_source_candidates(

@@ -17,6 +17,8 @@ docs/ERRORS_AND_FAILURES.md.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
+import sys
 from typing import Callable
 
 from app.core.clock import Clock, SystemClock
@@ -95,6 +97,7 @@ class ResearchRunSummary:
 
 
 ResearchLogWriter = Callable[[ResearchCard, Topic, "ResearchRunSummary"], None]
+_LOGGER = logging.getLogger(__name__)
 
 
 def _validate_resume_flow(research_run: ResearchRun, expected: ResearchFlow) -> None:
@@ -104,6 +107,61 @@ def _validate_resume_flow(research_run: ResearchRun, expected: ResearchFlow) -> 
             f"research_run #{research_run.id}: expected flow '{expected.value}', "
             f"stored flow '{research_run.flow.value}'."
         )
+
+
+def _sync_staged_run_cost(
+    storage: StoragePort,
+    research_run_id: str,
+    *,
+    preserve_original_error: bool = False,
+) -> float | None:
+    """Odświeża cache kosztu bez zmiany statusu workflow.
+
+    Gdy pierwotny wyjątek jest już propagowany, błąd synchronizacji trafia do logu,
+    aby nie zastępować przyczyny biznesowej mniej istotnym błędem cache'a.
+    """
+    try:
+        return storage.sync_run_cost_from_research_usage(research_run_id)
+    except Exception:
+        if preserve_original_error:
+            _LOGGER.exception(
+                "Nie udało się zsynchronizować runs.cost_usd dla research_run %s; "
+                "zachowuję pierwotny wyjątek.",
+                research_run_id,
+            )
+            return None
+        raise
+
+
+def _record_staged_usage(
+    usage_tracker: UsageTracker,
+    storage: StoragePort,
+    research_run_id: str,
+    model: str,
+    usage: Usage,
+    *,
+    task: str,
+    dry_run: bool,
+):
+    """Księguje usage i w finally odświeża cache po zapisie model_usage."""
+    try:
+        return usage_tracker.record(research_run_id, model, usage, task=task, dry_run=dry_run)
+    finally:
+        _sync_staged_run_cost(
+            storage,
+            research_run_id,
+            preserve_original_error=sys.exc_info()[0] is not None,
+        )
+
+
+def _finish_staged_summary(
+    storage: StoragePort,
+    research_run_id: str,
+    summary: "ResearchRunSummary",
+) -> "ResearchRunSummary":
+    """Synchronizuje także bezpłatne/idempotentne wyjścia etapu przed zwrotem."""
+    _sync_staged_run_cost(storage, research_run_id)
+    return summary
 
 
 def _record_diagnostics(settings: Settings, run_id: str, stage: str, *, usage: Usage,
@@ -803,6 +861,7 @@ def run_source_discovery(
         id=run_id, account_id=account.id, topic_id=int(topic.id),
         flow=ResearchFlow.STAGED, status=ResearchRunStatus.DISCOVERY_PENDING,
     ))
+    _sync_staged_run_cost(storage, run_id)
 
     try:
         discovered = research_client.discover_sources(plan, max_searches)
@@ -810,9 +869,9 @@ def run_source_discovery(
         cost = 0.0
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
-            usage_row = usage_tracker.record(
-                run_id, getattr(exc, "model", None) or "unknown", exc_usage,
-                task="research_discover", dry_run=settings.dry_run)
+            usage_row = _record_staged_usage(
+                usage_tracker, storage, run_id, getattr(exc, "model", None) or "unknown",
+                exc_usage, task="research_discover", dry_run=settings.dry_run)
             cost = usage_row.estimated_cost_usd
             summary.model = getattr(exc, "model", None) or ""
             summary.input_tokens = usage_row.input_tokens
@@ -829,10 +888,11 @@ def run_source_discovery(
                                           ResearchStageStatus.FAILED, error=str(exc))
         notifier.notify("error", "Odkrywanie źródeł nieudane", str(exc), account.id)
         summary.error = str(exc)
-        return summary
+        return _finish_staged_summary(storage, run_id, summary)
 
-    usage_row = usage_tracker.record(run_id, discovered.model, discovered.usage,
-                                     task="research_discover", dry_run=settings.dry_run)
+    usage_row = _record_staged_usage(
+        usage_tracker, storage, run_id, discovered.model, discovered.usage,
+        task="research_discover", dry_run=settings.dry_run)
     summary.cost_usd = usage_row.estimated_cost_usd
     summary.model = discovered.model
     summary.input_tokens = usage_row.input_tokens
@@ -862,7 +922,7 @@ def run_source_discovery(
         "info", "Odkrywanie źródeł (A1) zakończone",
         f"kandydaci={summary.candidates_discovered}, koszt~{summary.cost_usd:.6f} USD "
         f"(dry_run={settings.dry_run})", account.id)
-    return summary
+    return _finish_staged_summary(storage, run_id, summary)
 
 
 def run_source_extraction(
@@ -900,13 +960,14 @@ def run_source_extraction(
 
     summary = ResearchRunSummary(run_id=research_run_id, account_id=account.id,
                                  topic_id=research_run.topic_id, dry_run=settings.dry_run)
+    _sync_staged_run_cost(storage, research_run_id)
 
     can_run = policy.check_can_run(account)
     if not can_run.allowed:
         notifier.notify("warning", "Ekstrakcja źródeł zablokowana", can_run.reason, account.id)
         summary.blocked = True
         summary.block_code, summary.block_reason = can_run.code, can_run.reason
-        return summary
+        return _finish_staged_summary(storage, research_run_id, summary)
 
     topic = next((t for t in storage.list_topics(account.id)
                   if t.id == research_run.topic_id), None)
@@ -950,8 +1011,9 @@ def run_source_extraction(
         except ResearchError as exc:
             exc_usage = getattr(exc, "usage", None)
             if exc_usage is not None:
-                usage_row = usage_tracker.record(
-                    research_run_id, getattr(exc, "model", None) or "unknown", exc_usage,
+                usage_row = _record_staged_usage(
+                    usage_tracker, storage, research_run_id,
+                    getattr(exc, "model", None) or "unknown", exc_usage,
                     task="research_extract", dry_run=settings.dry_run)
                 total_cost += usage_row.estimated_cost_usd
                 call_cost += usage_row.estimated_cost_usd
@@ -971,8 +1033,9 @@ def run_source_extraction(
             failed_now += 1
             continue
 
-        usage_row = usage_tracker.record(research_run_id, extraction.model, extraction.usage,
-                                         task="research_extract", dry_run=settings.dry_run)
+        usage_row = _record_staged_usage(
+            usage_tracker, storage, research_run_id, extraction.model, extraction.usage,
+            task="research_extract", dry_run=settings.dry_run)
         total_cost += usage_row.estimated_cost_usd
         call_cost += usage_row.estimated_cost_usd
         call_model = extraction.model or call_model
@@ -1049,7 +1112,7 @@ def run_source_extraction(
             f"{len(all_extracted)} < {settings.research_min_sources}, "
             f"koszt dotąd~{total_cost:.6f} USD.", account.id)
 
-    return summary
+    return _finish_staged_summary(storage, research_run_id, summary)
 
 
 def run_synthesis_from_cards(
@@ -1082,13 +1145,14 @@ def run_synthesis_from_cards(
 
     summary = ResearchRunSummary(run_id=research_run_id, account_id=account.id,
                                  topic_id=research_run.topic_id, dry_run=settings.dry_run)
+    _sync_staged_run_cost(storage, research_run_id)
 
     can_run = policy.check_can_run(account)
     if not can_run.allowed:
         notifier.notify("warning", "Synteza zablokowana", can_run.reason, account.id)
         summary.blocked = True
         summary.block_code, summary.block_reason = can_run.code, can_run.reason
-        return summary
+        return _finish_staged_summary(storage, research_run_id, summary)
 
     topic = next((t for t in storage.list_topics(account.id)
                   if t.id == research_run.topic_id), None)
@@ -1106,7 +1170,7 @@ def run_synthesis_from_cards(
         notifier.notify(
             "info", "Synteza odrzucona — nadal za mało wyekstrahowanych źródeł",
             f"{len(extracted)} < {settings.research_min_sources}; nie wołam API.", account.id)
-        return summary
+        return _finish_staged_summary(storage, research_run_id, summary)
 
     cards = [
         SourceCardDraft(
@@ -1130,7 +1194,7 @@ def run_synthesis_from_cards(
                         budget.reason, account.id)
         summary.blocked = True
         summary.block_code, summary.block_reason = budget.code, budget.reason
-        return summary
+        return _finish_staged_summary(storage, research_run_id, summary)
 
     storage.mark_synthesis_pending(research_run_id)
     run_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.RUNNING
@@ -1140,8 +1204,9 @@ def run_synthesis_from_cards(
     except ResearchError as exc:
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
-            usage_row = usage_tracker.record(
-                research_run_id, getattr(exc, "model", None) or "unknown", exc_usage,
+            usage_row = _record_staged_usage(
+                usage_tracker, storage, research_run_id,
+                getattr(exc, "model", None) or "unknown", exc_usage,
                 task="research_synthesize_cards", dry_run=settings.dry_run)
             total_cost += usage_row.estimated_cost_usd
         _record_diagnostics(settings, research_run_id, "B", usage=exc_usage or Usage(),
@@ -1155,10 +1220,11 @@ def run_synthesis_from_cards(
         notifier.notify("error", "Synteza karty nieudana — źródła zachowane, można ponowić "
                         "wyłącznie etap B", str(exc), account.id)
         summary.error = str(exc)
-        return summary
+        return _finish_staged_summary(storage, research_run_id, summary)
 
-    usage_row = usage_tracker.record(research_run_id, synthesized.model, synthesized.usage,
-                                     task="research_synthesize_cards", dry_run=settings.dry_run)
+    usage_row = _record_staged_usage(
+        usage_tracker, storage, research_run_id, synthesized.model, synthesized.usage,
+        task="research_synthesize_cards", dry_run=settings.dry_run)
     total_cost += usage_row.estimated_cost_usd
     _record_diagnostics(settings, research_run_id, "B", usage=synthesized.usage,
                         raw_text=synthesized.raw_text, stop_reason=synthesized.stop_reason)
@@ -1228,7 +1294,7 @@ def run_synthesis_from_cards(
         "info", "Synteza (etap B) zakończona",
         f"rekomendacja={summary.recommendation}, źródła={summary.sources_count}, "
         f"koszt całkowity~{summary.cost_usd:.6f} USD (dry_run={settings.dry_run})", account.id)
-    return summary
+    return _finish_staged_summary(storage, research_run_id, summary)
 
 
 def run_staged_research_pipeline(

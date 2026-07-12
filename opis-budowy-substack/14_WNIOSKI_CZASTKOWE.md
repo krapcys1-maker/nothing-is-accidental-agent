@@ -125,6 +125,12 @@ Po każdym etapie: co nas zaskoczyło, co działało, co nie, co agent robił le
 - Nadal istnieją luki: cap działa przed rozpoczęciem, nie w trakcie; timeout może pozostawić nieznany koszt; A2 nie pobiera strony bezpośrednio; dwa błędy ekstrakcji zatrzymają syntezę; B nie ma jeszcze realnego sukcesu.
 - Wynik preflight pozwala poprosić właściciela o zgodę, ale nie jest obietnicą powstania karty. Werdykt techniczny: READY FOR OWNER APPROVAL.
 
+### Wnioski po uszczelnieniu cache'a kosztu i SQLite (2026-07-12)
+- **Co zaskoczyło:** koszty można księgować poprawnie przy każdym pojedynczym wywołaniu, a mimo to mieć błędne podsumowanie całego runu, jeśli pole cache'a jest aktualizowane lokalną zmienną tylko z bieżącego etapu.
+- **Co działa:** append-only `model_usage` jako kanon; dla researchu zapis usage i absolutne odtworzenie `runs.cost_usd` z tej księgi są jedną transakcją. Idempotentny helper pozostaje dla sukcesu, błędu, resume i wtedy, gdy żadnego nowego calla nie było.
+- **Granica rozwiązania:** WAL jest potwierdzany dla bazy plikowej, a timeout 5000 ms jest ustawiany przed próbą przełączenia trybu; nie zastępuje to przyszłego workera, lease ani walidacji przejść stanów.
+- **Materiał do artykułu:** dobra, zwięzła lekcja: „pole z całkowitym kosztem nie powinno być drugim księgowym; powinno być odtwarzalnym widokiem księgi".
+
 ## Otwarte pytania (do rozstrzygnięcia danymi, nie opinią)
 - Czy szacunek kosztu dry_run jest bliski rzeczywistości?
 - Jaki procent szkiców agenta przejdzie bez poprawek człowieka?

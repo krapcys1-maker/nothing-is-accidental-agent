@@ -16,7 +16,7 @@ Obowiązujące dodatkowo (logi, nie plany): `docs/DECISIONS.md` (rejestr ADR), `
 
 ## Stan projektu (skrót — pełny obraz w CURRENT_PROJECT_STATE.md)
 
-- Zbudowane i przetestowane: konfiguracja, SQLite+migracje, Policy Engine (budżety, kill-switch), księgowanie kosztów, pipeline tematów z deduplikacją, etapowy research A1/A2/B z wznawialnością po restarcie, deterministyczna bramka jakości, injection guard, diagnostyka odpowiedzi. **102 testy, wszystkie offline.**
+- Zbudowane i przetestowane: konfiguracja, SQLite+migracje, Policy Engine (budżety, kill-switch), księgowanie kosztów, pipeline tematów z deduplikacją, etapowy research A1/A2/B z wznawialnością po restarcie, deterministyczna bramka jakości, injection guard, diagnostyka odpowiedzi. **139 testów, wszystkie offline.**
 - Niezbudowane: scheduler/kolejka, artykuły/Notes, approval/autonomia, publikacja (Playwright), interakcje, analityka, panel.
 - Zero publikacji na Substacku; realny koszt dotąd: ~0,50 USD z limitu 40 USD/mies.
 
@@ -24,7 +24,7 @@ Obowiązujące dodatkowo (logi, nie plany): `docs/DECISIONS.md` (rejestr ADR), `
 
 ```bash
 pip install -e .[dev]           # + .[llm] tylko do realnych wywołań API
-python -m pytest                # 102 testy, bez sieci
+python -m pytest                # 139 testów, bez sieci
 python -m app.main run-topics --count 6      # dry_run (zero kosztu)
 python -m app.main run-research              # dry_run (zero kosztu)
 # realny research: WYŁĄCZNIE scripts/run_capped_research.py (pre-flight, capy,

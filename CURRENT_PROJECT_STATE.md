@@ -1,13 +1,13 @@
 # CURRENT_PROJECT_STATE — Nothing Is Accidental Agent
 
 > **STATUS: JEDYNY OBOWIĄZUJĄCY OBRAZ STANU PROJEKTU.**
-> Data weryfikacji: **2026-07-12** (pełny odczyt kodu + `python -m pytest` → **127 passed** + migracja 0006 sprawdzona na pamięciowej kopii `data/agent.db`; źródłowa baza niezmieniona).
+> Data weryfikacji: **2026-07-12** (pełny odczyt kodu + `python -m pytest` → **139 passed** + migracja 0006 sprawdzona na pamięciowej kopii `data/agent.db`; źródłowa baza niezmieniona).
 > Architektura: `MASTER_ARCHITECTURE.md` · Kolejność prac: `IMPLEMENTATION_ROADMAP.md`.
 > Aktualizować przy każdej zmianie stanu modułu; statusy tylko z zestawu: `NOT_STARTED / SKELETON / PARTIAL / WORKING / VERIFIED / BLOCKED / DEPRECATED`. `VERIFIED` wyłącznie dla kodu URUCHOMIONEGO i przetestowanego.
 
 ## Liczby kontrolne (zweryfikowane)
 
-- Testy: **127 passed** (offline, deterministyczne, bez sieci; 102 wcześniejsze + 25 nowych dla flow/migracji/resume i walidacji CLI). Gałąź: `dev/first-successful-research-card`.
+- Testy: **139 passed** (offline, deterministyczne, bez sieci; 102 wcześniejsze + 37 nowych dla flow/migracji/resume, kosztów staged i walidacji CLI). Gałąź: `dev/first-successful-research-card`.
 - Realny koszt projektu: **0,500616 USD** (6 wpisów `model_usage` z `dry_run=0`; limit miesięczny 40 USD → wykorzystane 1,25%).
 - Realne próby researchu: **3** (+1 diagnostyka pojedynczego źródła) — **0 ukończonych Research Card na żywym API** (1 karta istnieje wyłącznie z dry_run).
 - Baza: runs = 4×DRY_RUN + 3×FAILED (zero osieroconych RUNNING); research_runs = 1×FAILED, 1×PARTIAL (`9bbeb020`, niedomykalny bez P1-5); topics = 6×SELECTED, 4×SCORED, 2×REJECTED, 6×DUPLICATE.
@@ -19,7 +19,7 @@
 |---|---|---|---|---|---|---|---|
 | Konfiguracja (`app/core/config.py`) | VERIFIED | 90 | .env+YAML, zero ścieżek absolutnych, fallback na *.example | kill-switch czytany raz przy starcie (runtime — Etap 1) | pośrednie (fixtures) | 2026-07-12 | bez zmian do Etapu 1 |
 | Modele domenowe (`app/models.py`) | VERIFIED | 90 | wszystkie enumy/modele zbudowanej części | `TopicStatus.USED`, `RunStatus.STOPPED` — martwe wartości | tak | 2026-07-12 | USED w Etapie 0 (P1-6) |
-| Storage SQLite + 6 migracji | VERIFIED | 88 | repozytoria, migracja 0006 z transakcją, jawny `research_runs.flow` NOT NULL+CHECK i deterministyczny backfill | starsze migracje bez transakcji; `mark_*` bez walidacji stanu poprzedniego; brak WAL/busy_timeout | test_storage + test_research_run_flow | 2026-07-12 | Etap 0 zad. 2 i 8 |
+| Storage SQLite + 6 migracji | VERIFIED | 92 | repozytoria, migracja 0006 z transakcją, jawny `research_runs.flow`, WAL i busy_timeout=5000; atomowy zapis researchowego `model_usage` i cache'a `runs.cost_usd` | starsze migracje bez transakcji; `mark_*` bez walidacji stanu poprzedniego | test_storage + test_research_run_flow | 2026-07-12 | Etap 0 zad. 8 |
 | Policy Engine | PARTIAL | 25 | kill-switch (statyczny), active, budżet D/M (miesięczny nadrzędny), progi tematów | brak: autonomy_level, AccountMode, limity AccountPolicy, cooldowny, cap per-run, SAFE MODE | test_policy_engine | 2026-07-12 | check_run_budget (Etap 0 zad. 5); reszta Etap 4 |
 | UsageTracker (koszty) | VERIFIED | 95 | model_usage+COSTS.csv, dry_run flaga, koszt przy błędach researchu | równoległy append CSV nieodporny (przyszły worker) | tak + 3 realne runy | 2026-07-12 | eksport z DB przy Etapie 8 |
 | ModelRouter | VERIFIED | 90 | zadanie→model z .env | scripts omijają router (P2-8) | tak | 2026-07-12 | P2-8 przy Etapie 0/1 |
@@ -28,7 +28,7 @@
 | AnthropicResearchClient (3 generacje metod) | WORKING | 80 | retry(timeout-only), koszt przy parse-error, capy tokenów/searchy, diagnostyka raw+stop_reason | retry bez re-checku budżetu (P1-3); A2 = search-o-URL, nie fetch treści (P0-2c → Etap 2); live: A1 ✅, A2 1×✅ (diagnostyka), B **NOT VERIFIED live** | tak (wstrzykiwane callery) | 2026-07-12 | Etap 0 zad. 5, potem Etap 2 |
 | Estymator kosztów | VERIFIED | 85 | conservative+expected z 2 realnych obserwacji, margines ≥50% | dwie kalibracje (legacy z cennika vs staged stałe) — P2-1; kalibracja n=2 | tak | 2026-07-12 | ujednolicić przy Etapie 2 |
 | Workflow tematów + dedup | VERIFIED | 90 | pełny przepływ dry_run, dedup lokalny, progi, SUCCESS-fix | realny run tematów nigdy nie wykonany | tak | 2026-07-12 | realny run po Etap 0 zad. 6 |
-| Research staged A1/A2/B + resume | WORKING | 78 | pełny przepływ + wznowienia z bazy po restarcie; jawny flow i cross-flow guard; P0-1/2a/2b naprawione | brak retry EXTRACTION_FAILED (P1-5); `runs.cost_usd` dziury (P1-2); brak guardu re-researchu (P1-6); **cała ścieżka bez sukcesu na żywym API** | 12+ + flow tests | 2026-07-12 | Etap 0 zad. 2–8, potem (za osobną zgodą) run ADR-022 = zad. 9 |
+| Research staged A1/A2/B + resume | WORKING | 82 | pełny przepływ + wznowienia z bazy po restarcie; jawny flow, cross-flow guard, atomowy zapis usage+cache oraz idempotentny sync no-call | brak retry EXTRACTION_FAILED (P1-5); brak guardu re-researchu (P1-6); `research_runs.total_cost_usd` nadal cache; **cała ścieżka bez sukcesu na żywym API** | staged cost regression + flow tests | 2026-07-12 | Etap 0 zad. 3–8, potem (za osobną zgodą) run ADR-022 = zad. 9 |
 | Research legacy (single, two-stage) | WORKING | 100 | działa, 24 testy | NIEZALECANY (ADR-016→020); do DEPRECATED po sukcesie staged live | tak | 2026-07-12 | Etap 2 zad. 6 |
 | Walidacja + injection guard | VERIFIED | 90 | deterministyczna bramka, min_verified_sources, neutralizacja injection | wzorce EN-only (P2-7) | tak | 2026-07-12 | rozszerzenie przy Etapie 2 |
 | Diagnostyka odpowiedzi | VERIFIED | 95 | raw+stop_reason per etap, potwierdzona na żywo | nadpisuje poprzednią próbę tego samego etapu (P2-13, świadome) | tak | 2026-07-12 | — |
@@ -48,7 +48,7 @@
 
 ## Aktualne blokery
 
-1. **Ukończenie zadań 2–8 Etapu 0** (`IMPLEMENTATION_ROADMAP.md`) — zadanie 1 (jawny flow + bezpieczne resume) jest ukończone; pozostałe naprawy wykonawcze researchu muszą zostać wdrożone, przetestowane i udokumentowane PRZED jakimkolwiek kolejnym płatnym uruchomieniem. Dopiero po nich potrzebna będzie **osobna zgoda właściciela** na realny run ADR-022 (zadanie 9, cap 0,55 USD) — offline pre-flight jest gotowy, ale run NIE jest obecnie do wykonania.
+1. **Ukończenie zadań 3–8 Etapu 0** (`IMPLEMENTATION_ROADMAP.md`) — zadania 1–2 (jawny flow/safe resume oraz koszt cache'a/WAL) są ukończone; pozostałe naprawy wykonawcze researchu muszą zostać wdrożone, przetestowane i udokumentowane PRZED jakimkolwiek kolejnym płatnym uruchomieniem. Dopiero po nich potrzebna będzie **osobna zgoda właściciela** na realny run ADR-022 (zadanie 9, cap 0,55 USD) — offline pre-flight jest gotowy, ale run NIE jest obecnie do wykonania.
 2. **Run `9bbeb020` (PARTIAL) niedomykalny** — 2 kandydatów EXTRACTION_FAILED bez drogi powrotu; nawet pełne wznowienie da max 2<3 źródeł. Usuwane przez zadanie 3 Etapu 0 (P1-5).
 3. **Etap B syntezy nigdy nie wykonany na żywym API** — ostatni niezweryfikowany element ścieżki researchu; zostanie zweryfikowany dopiero przy zadaniu 9 Etapu 0.
 
@@ -62,11 +62,11 @@
 ## Etapy
 
 - **Aktywny etap roadmapy:** Etap 0 — Stabilizacja (zadania 1–9).
-- **Ostatni ukończony krok:** Etap 0 / zadanie 1 — migracja 0006 `research_runs.flow`, jawny flow w trzech pipeline'ach, walidacja cross-flow resume i usunięcie `_detect_flow`.
+- **Ostatni ukończony krok:** Etap 0 / zadanie 2 — `runs.cost_usd` synchronizowany z `model_usage` po ścieżkach staged oraz WAL/busy_timeout w centralnym połączeniu SQLite.
 - **Następne trzy zadania:**
-  1. `runs.cost_usd` świeży przy każdym wyjściu etapu staged + WAL/busy_timeout w `db.py`.
-  2. Migracja 0007 `attempts` + `retry-failed-candidates` + status `PARTIAL_EXHAUSTED`.
-  3. `topics.status=USED` po COMPLETE + guard `--force-re-research`.
+  1. Migracja 0007 `attempts` + `retry-failed-candidates` + status `PARTIAL_EXHAUSTED`.
+  2. `topics.status=USED` po COMPLETE + guard `--force-re-research`.
+  3. Szczelny budżet przy retry i centralizacja capu per-run.
 
 ## Znane długi techniczne (poza blokerami; numeracja z audytu 12.07)
 
@@ -75,7 +75,7 @@
 | P1-3/P1-4 | retry poza estymatą i bez re-checku budżetu; cap per-run tylko w CLI (zduplikowana logika budżetu) | Etap 0 zad. 5 |
 | P1-7 | kill-switch nie działa w runtime (snapshot z .env) | Etap 1 (system_flags) |
 | P2-1 | dwie kalibracje estymatora (rozjazd przy zmianie cen w .env) | Etap 2 |
-| P2-2 | koszt w 3 miejscach (model_usage=kanon; runs.cost_usd i research_runs.total_cost_usd=cache z dziurami) | Etap 0 zad. 2 deklaruje kanon |
+| P2-2 | koszt w 3 miejscach (model_usage=kanon; runs.cost_usd i research_runs.total_cost_usd=cache) | `runs.cost_usd` synchronizowany w Etapie 0 zad. 2; total_cost_usd pozostaje cache |
 | P2-4 | budżet dzienny wg dnia UTC (właściciel w Europe/Warsaw) | decyzja: zostaje UTC — udokumentowane |
 | P2-5 | migracje bez transakcji (częściowa awaria = zakleszczenie) | nowe migracje od 0006 z BEGIN/COMMIT |
 | P2-6 | RESEARCH_LOG.md tylko przy sukcesie (nieudane realne runy nielogowane automatycznie) | Etap 2 |

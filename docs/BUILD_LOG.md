@@ -301,3 +301,24 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Zakres:** nie zmieniono promptów, tokenów, estymatora, retry, Policy Engine, statusów kandydatów, klienta Anthropic ani zadań 2–9 Etapu 0.
 - **Koszt:** **0,000000 USD**; zero API, zero Playwrighta, zero prawdziwych nowych lub wznowionych runów.
 - **Następny krok:** STOP po zadaniu 1; zadanie 2 wymaga osobnego polecenia właściciela.
+
+### [2026-07-12] Etap 0 / zadanie 2 — kanoniczny cache kosztu staged + WAL SQLite
+
+- **Cel:** usunąć rozjazdy `runs.cost_usd` względem kanonicznego `model_usage` na ścieżkach A1/A2/B oraz przygotować SQLite na bezpieczniejszą współbieżność odczytu/zapisu.
+- **Kod:** `SqliteStorage.sync_run_cost_from_research_usage()` wykonuje idempotentny `UPDATE` cache'a z sumy tych samych tasków, które zwraca `get_research_usage`; nie zmienia statusu ani błędu runu, nie używa estymatora i nie filtruje dry-run (zgodnie z dotychczasową semantyką cache'a; budżet nadal filtruje `dry_run=0`). Staged A1/A2/B synchronizują przy wejściu/zwrocie, a zapis usage ma dodatkowy `finally`, więc koszt pozostaje spójny także po wyjątku następującym po trwałym zapisie usage.
+- **SQLite:** centralne `connect()` ustawia `PRAGMA journal_mode=WAL` oraz `PRAGMA busy_timeout=5000`; `foreign_keys=ON` pozostaje bez zmian.
+- **Testy:** celowane storage/staged/flow = **54 passed**; pełny `python -m pytest` = **131 passed in 4.51s** (127 przed zadaniem, +4). Nowe regresje obejmują WAL/timeout, idempotencję i zachowanie statusu, dry-run, pełny sukces, błędy A1/B, częściową i wznowioną A2, odrzuconą po płatnym B walidację, wyjście bez nowego calla oraz wyjątek po zapisie usage.
+- **Zakres:** nie zmieniono `UsageTracker`, estymatora, retry, statusów kandydatów, `research_runs.total_cost_usd`, P1-5 ani żadnego późniejszego zadania.
+- **Koszt:** **0,000000 USD**; zero API, zero Playwrighta, zero prawdziwych nowych lub wznowionych runów.
+- **Następny krok:** STOP po zadaniu 2; zadanie 3 wymaga osobnego polecenia właściciela.
+
+### [2026-07-12] Etap 0 / zadanie 2 — korekta P1 po niezależnym review: atomowy usage+cache
+
+- **Cel:** zamknąć trzy P1 z review Task 2 bez rozpoczynania zadania 3: lukę między commitem `model_usage` a cache'em runu, brakujące ścieżki regresyjne oraz nieaktualny licznik README.
+- **Wykryty problem:** wcześniejszy wariant zatwierdzał INSERT `model_usage` przed osobnym UPDATE `runs.cost_usd`. Diagnostyka na plikowej bazie odtworzyła trwały rozjazd: `persisted_usage=0.123456`, `persisted_run_cache=0.000000`.
+- **Kod:** `SqliteStorage.add_model_usage()` dla pięciu tasków researchowych obejmuje teraz jednym `BEGIN`/commit: INSERT usage, kanoniczną sumę wpisów researchowych tego samego `run_id` i absolutny UPDATE `runs.cost_usd`. Wyjątek powoduje rollback całej transakcji. `sync_run_cost_from_research_usage()` pozostaje idempotentną ścieżką naprawczą dla resume/no-call/ponownego wejścia w etap.
+- **SQLite:** `busy_timeout=5000` jest ustawiany przed przełączeniem journal mode; dla bazy plikowej `connect()` odczytuje wynik `journal_mode=WAL`, zamyka połączenie i zgłasza błąd, jeśli WAL nie został aktywowany. `:memory:` zachowuje obsługiwany tryb bez wymogu WAL.
+- **Testy:** dodano trwały zapis po reopen (`0.123456` w usage i cache), rollback wymuszony triggerem SQLite między INSERT a UPDATE, kilka wpisów bez inkrementowania starego cache'a, dry-run w cache lecz poza budżetem, zero usage, A1/B error bez usage i wielokrotne no-call resume. Pełny wynik: **139 passed**; celowane storage/staged/flow/policy: **69 passed**.
+- **Dokumentacja:** README i dokumenty bieżącego stanu wskazują 139 testów; szczegóły wykrytej luki i naprawy zapisano także w `ERRORS_AND_FAILURES.md`.
+- **Koszt / zakres:** **0.000000 USD**; zero API, zero Playwrighta, zero prawdziwego researchu, zero zmian `research_runs.total_cost_usd`, retry, statusów workflow ani Task 3.
+- **Następny krok:** STOP po Task 2 i pozostawienie working tree do drugiego review; Task 3 wymaga osobnego polecenia właściciela.

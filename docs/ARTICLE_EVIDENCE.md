@@ -143,3 +143,9 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Dlaczego trafi do artykułu: pokazuje różnicę między expected (typowy punkt odniesienia), conservative (bramka z marginesem) i approved cap; dokumentuje też decyzję, by kupić tolerancję jednej awarii A2 czwartym źródłem.
   - Dowód / źródło: `scripts/run_capped_research.py --estimate-only`, `docs/BUILD_LOG.md` Etap 1O, ADR-022.
   - Cytowalne liczby: A1 0,033956/0,092625 USD; A2×4 0,153824/0,397500; B 0,013500/0,020250; TOTAL expected **0,201280**, conservative **0,510375**, proponowany cap **0,55 USD**; pełny test suite 102 passed; koszt przygotowania 0 USD.
+
+- **[2026-07-12] Cache kosztu nie może być drugim księgowym** (sekcja: 5, 7)
+  - Co to jest: po rozbiciu researchu na A1/A2/B pojedynczy run może zakończyć się w wielu miejscach. `runs.cost_usd` jest wygodnym podsumowaniem, ale jedynym kanonem pozostaje append-only `model_usage`; dla researchu INSERT usage i absolutne ustawienie cache'a na aktualną sumę należą do jednej transakcji SQLite.
+  - Dlaczego trafi do artykułu: to mały, konkretny przykład rozróżnienia między księgą zdarzeń a stanem pochodnym — szczególnie ważny przy awarii po płatnym callu albo wznowieniu procesu.
+  - Dowód / źródło: `app/storage/repositories.py`, `app/workflows/research/pipeline.py`, `tests/test_staged_research_extraction.py`, BUILD_LOG Etap 0 / zadanie 2.
+  - Cytowalne liczby: **139** testów zielonych; **12** regresji Task 2 i poprawek po review; WAL potwierdzany dla połączeń plikowych, timeout **5000 ms**; koszt implementacji/testów **0 USD**.

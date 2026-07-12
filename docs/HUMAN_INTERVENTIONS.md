@@ -76,3 +76,14 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Jaki był efekt:** Task 1 dopuszczony do commita i pushu; bez zgody na API, Playwrighta, realny research ani kolejne zadania roadmapy.
 - **Czas człowieka:** niezmierzony (instrukcja tekstowa).
 - **Wpływ na strategię:** brak zmiany architektury; formalne zamknięcie Task 1 i utrzymanie kolejności roadmapy.
+
+### [2026-07-12] APPROVAL — wykonanie Etapu 0 / Task 2
+- **Typ:** APPROVAL
+- **Konto:** — (dotyczy całego projektu)
+- **Obiekt:** spójność `runs.cost_usd` z `model_usage` oraz SQLite WAL/busy timeout
+- **Co agent chciał zrobić:** naprawić cache kosztu staged i ustawić centralne parametry połączenia SQLite, nie rozpoczynając zadania 3.
+- **Dlaczego człowiek zareagował:** po zatwierdzeniu Task 1 właściciel dopuścił dokładnie następne zadanie roadmapy, zachowując zakaz API, Playwrighta i realnego researchu.
+- **Co zostało zmienione:** właściciel polecił synchronizację z istniejącego `get_research_usage`, WAL i `busy_timeout=5000`, z testami wszystkich ścieżek staged; nie udzielił zgody na Task 3–9.
+- **Jaki był efekt:** Task 2 wykonano offline; kanon kosztu pozostał `model_usage`, a cache `runs.cost_usd` jest odświeżany bez podwójnego doliczania.
+- **Czas człowieka:** niezmierzony (instrukcja tekstowa).
+- **Wpływ na strategię:** brak zmiany ADR; utrzymano kolejność Etapu 0 i warunek osobnej zgody na realny run.

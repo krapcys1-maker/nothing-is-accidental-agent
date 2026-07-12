@@ -32,6 +32,16 @@ from app.models import (
 from app.storage.db import apply_migrations, connect
 
 
+_RESEARCH_USAGE_TASKS = (
+    "research_gather",
+    "research_synthesize",
+    "research_discover",
+    "research_extract",
+    "research_synthesize_cards",
+)
+_RESEARCH_USAGE_PLACEHOLDERS = ", ".join("?" for _ in _RESEARCH_USAGE_TASKS)
+
+
 def _ts(dt: datetime | None = None) -> str:
     dt = dt or datetime.now(timezone.utc)
     return dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -168,18 +178,26 @@ class SqliteStorage:
 
     # --- zużycie modelu / koszty ---
     def add_model_usage(self, usage: ModelUsage) -> ModelUsage:
-        cur = self.conn.execute(
-            "INSERT INTO model_usage (run_id, provider, model, task, input_tokens,"
-            " output_tokens, cache_read_tokens, cache_write_tokens, web_search_requests,"
-            " estimated_cost_usd, dry_run, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                usage.run_id, usage.provider, usage.model, usage.task, usage.input_tokens,
-                usage.output_tokens, usage.cache_read_tokens, usage.cache_write_tokens,
-                usage.web_search_requests, usage.estimated_cost_usd, int(usage.dry_run),
-                _ts(usage.created_at),
-            ),
-        )
-        self.conn.commit()
+        """Persist usage; research usage atomically refreshes the run cost cache."""
+        self.conn.execute("BEGIN")
+        try:
+            cur = self.conn.execute(
+                "INSERT INTO model_usage (run_id, provider, model, task, input_tokens,"
+                " output_tokens, cache_read_tokens, cache_write_tokens, web_search_requests,"
+                " estimated_cost_usd, dry_run, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    usage.run_id, usage.provider, usage.model, usage.task, usage.input_tokens,
+                    usage.output_tokens, usage.cache_read_tokens, usage.cache_write_tokens,
+                    usage.web_search_requests, usage.estimated_cost_usd, int(usage.dry_run),
+                    _ts(usage.created_at),
+                ),
+            )
+            if usage.task in _RESEARCH_USAGE_TASKS:
+                self._set_run_cost_from_research_usage(usage.run_id)
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
         usage.id = int(cur.lastrowid)
         return usage
 
@@ -428,10 +446,8 @@ class SqliteStorage:
         model_usage dla tego run_id, dla dowolnego zadania researchowego."""
         rows = self.conn.execute(
             "SELECT * FROM model_usage WHERE run_id=? AND task IN"
-            " ('research_gather','research_synthesize',"
-            " 'research_discover','research_extract','research_synthesize_cards')"
-            " ORDER BY id ASC",
-            (research_run_id,),
+            f" ({_RESEARCH_USAGE_PLACEHOLDERS}) ORDER BY id ASC",
+            (research_run_id, *_RESEARCH_USAGE_TASKS),
         ).fetchall()
         return [
             ModelUsage(
@@ -444,6 +460,36 @@ class SqliteStorage:
             )
             for r in rows
         ]
+
+    def _set_run_cost_from_research_usage(self, research_run_id: str) -> None:
+        """Ustawia cache runs.cost_usd z kanonicznych wpisów model_usage tego runu.
+
+        Celowo nie filtruje dry_run: cache runu zachowuje koszt zapisany w
+        model_usage, a budżet odróżnia realne użycie przez sum_real_cost_usd.
+        """
+        cursor = self.conn.execute(
+            "UPDATE runs SET cost_usd=COALESCE(("
+            " SELECT SUM(estimated_cost_usd) FROM model_usage"
+            f" WHERE run_id=? AND task IN ({_RESEARCH_USAGE_PLACEHOLDERS})"
+            "), 0.0) WHERE id=?",
+            (research_run_id, *_RESEARCH_USAGE_TASKS, research_run_id),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError(f"Nie znaleziono run #{research_run_id} do synchronizacji kosztu.")
+
+    def sync_run_cost_from_research_usage(self, research_run_id: str) -> float:
+        """Idempotently repairs the cache from canonical research usage."""
+        self.conn.execute("BEGIN")
+        try:
+            self._set_run_cost_from_research_usage(research_run_id)
+            row = self.conn.execute(
+                "SELECT cost_usd FROM runs WHERE id=?", (research_run_id,)
+            ).fetchone()
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+        return float(row["cost_usd"])
 
     # --- etapowy research A1 (discovery) / A2 (per-source extraction) / B (synthesis) ---
 

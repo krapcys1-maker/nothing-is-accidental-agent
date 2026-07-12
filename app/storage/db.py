@@ -11,9 +11,20 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
-    return conn
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("PRAGMA busy_timeout=5000;")
+        if str(db_path) != ":memory:":
+            journal_mode = conn.execute("PRAGMA journal_mode=WAL;").fetchone()[0].lower()
+            if journal_mode != "wal":
+                raise RuntimeError(
+                    f"SQLite database {db_path} did not enable WAL (active mode: {journal_mode})."
+                )
+        return conn
+    except Exception:
+        conn.close()
+        raise
 
 
 def _ensure_migrations_table(conn: sqlite3.Connection) -> None:

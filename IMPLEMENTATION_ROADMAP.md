@@ -21,7 +21,7 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 ### Zadania (w tej kolejności)
 
 1. ✅ **[P1-1/P1-9] Migracja `0006_research_run_flow.sql` — WYKONANE 2026-07-12:** kolumna `research_runs.flow` ('single'|'two_stage'|'staged') NOT NULL bez defaultu + deterministyczny backfill; wszystkie istniejące funkcje resume walidują flow, a CLI także dozwolony status przed jakąkolwiek pracą; `_detect_flow` usunięte z CLI; 127 testów zielonych.
-2. **[P1-2 + P1-8] Spójność księgi runów:** `runs.cost_usd` odświeżany (suma z `get_research_usage`) przy KAŻDYM wyjściu każdej funkcji etapu staged; `PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;` w `app/storage/db.py:connect()`.
+2. ✅ **[P1-2 + P1-8] Spójność księgi runów — WYKONANE 2026-07-12:** researchowy INSERT `model_usage`, kanoniczna suma i absolutny UPDATE `runs.cost_usd` są jedną transakcją; idempotentny helper pozostaje dla no-call/resume. A1/A2/B synchronizują cache przy każdym wyjściu bez zmiany statusu. `connect()` ustawia najpierw `busy_timeout=5000`, potem potwierdzone `journal_mode=WAL` dla bazy plikowej; 139 testów zielonych.
 3. **[P1-5] Migracja `0007_candidate_attempts.sql`:** kolumna `attempts` na kandydacie; jawna operacja `retry-failed-candidates` (EXTRACTION_FAILED → PENDING_EXTRACTION, tylko przy `attempts < cap`, nowa flaga CLI); status `PARTIAL_EXHAUSTED` (terminal: 0 pending, EXTRACTED < min); resume na PARTIAL_EXHAUSTED → czytelna odmowa.
 4. **[P1-6] Cykl życia tematu:** po `mark_research_run_complete` → `topics.status=USED`; research tematu z istniejącą kartą COMPLETE wymaga jawnej flagi `--force-re-research`.
 5. **[P1-3 + P1-4] Budżet szczelny:** pesymistyczna estymata ×(1+max_retries) w bramkach; re-check budżetu przed KAŻDĄ próbą retry (callback do klienta); `PolicyEngine.check_run_budget(estimated_total, cap)` — CLI deleguje zamiast liczyć samodzielnie; wpis „timeout-billed-unrecorded" jako ryzyko rezydualne w `docs/ERRORS_AND_FAILURES.md`.
@@ -176,7 +176,7 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 
 Pierwsze 5 zadań do wykonania (dokładnie):
 1. ✅ Migracja 0006 `research_runs.flow` + walidacja przepływu w funkcjach resume + usunięcie `_detect_flow` (P1-1/P1-9) — wykonane 2026-07-12.
-2. `runs.cost_usd` odświeżany przy każdym wyjściu etapu staged + WAL/busy_timeout w `db.py` (P1-2, P1-8).
+2. ✅ `runs.cost_usd` odświeżany przy każdym wyjściu etapu staged + WAL/busy_timeout w `db.py` (P1-2, P1-8) — wykonane 2026-07-12.
 3. Migracja 0007 `attempts` + operacja `retry-failed-candidates` + status `PARTIAL_EXHAUSTED` (P1-5).
 4. `topics.status=USED` po COMPLETE + guard `--force-re-research` (P1-6).
 5. Estymata ×(1+retries), re-check budżetu przed retry, `PolicyEngine.check_run_budget` + delegacja z CLI (P1-3, P1-4).

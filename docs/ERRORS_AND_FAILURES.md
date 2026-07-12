@@ -237,3 +237,18 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Dowód:** 70 testów celowanych i 127 pełnych; testy black-box potwierdzają zero wywołań helperów/klienta po odmowie, a migracyjne obejmują brak znanych UUID, konflikt, czystą/pustą bazę oraz integralność schematu.
 - **Wpływ / koszt:** brak wpływu na dane produkcyjne — migracja nie została zastosowana do źródłowej bazy; 0 USD, zero API, Playwrighta i researchu.
 - **Status:** FIXED; oczekuje na drugi review właściciela.
+
+### [2026-07-12] Etap 0 / zadanie 2 — nieatomowy zapis usage i cache'a kosztu wykryty przez review
+
+- **Kategoria:** COST / TECH
+- **Ryzyko z planu:** P1-2 (spójność księgi runów)
+- **Konto / run_id:** — (odtworzone wyłącznie na tymczasowej, plikowej bazie SQLite)
+- **Co miało działać:** po każdym trwałym zapisie researchowego `model_usage`, `runs.cost_usd` ma wskazywać dokładnie tę samą kanoniczną sumę, także po restarcie procesu.
+- **Co się zepsuło:** `add_model_usage()` zatwierdzał INSERT osobnym commitem, a pipeline wywoływał synchronizację cache'a dopiero później. Diagnostyka odtworzyła stan po przerwaniu między krokami: `persisted_usage=0.123456`, `persisted_run_cache=0.000000`.
+- **Prawdopodobna przyczyna:** granica transakcji była w warstwie `UsageTracker`/repozytorium przed późniejszym helperem pipeline'u, więc `finally` chronił zwykłe wyjątki po zapisie usage, ale nie awarię procesu ani błąd samego późniejszego UPDATE.
+- **Sposób naprawy:** dla tasków researchowych `SqliteStorage.add_model_usage()` wykonuje teraz jednym `BEGIN`/commit: INSERT `model_usage`, kanoniczną sumę wpisów researchu po `run_id` oraz absolutny UPDATE `runs.cost_usd`. Wyjątek podczas UPDATE wycofuje INSERT i cache; `sync_run_cost_from_research_usage()` pozostaje osobną, idempotentną naprawą no-call/resume.
+- **Dowód regresji:** test na plikowej bazie potwierdza zgodność po reopen; trigger SQLite wymusza błąd między INSERT i UPDATE, po reopen nie ma nowego usage ani częściowej zmiany cache'a. Dodatkowe testy obejmują zero usage, dry-run, kilka wpisów, A1/B error bez usage i wielokrotny no-call resume.
+- **Liczba prób:** 1 diagnostyka lokalna + poprawka offline; zero wywołań API.
+- **Czy może się powtórzyć:** nie dla tej granicy INSERT research usage → cache, ponieważ oba zapisy są atomowe i pokryte testem rollbacku. Pozostaje znane, nieusuwalne ryzyko timeoutu zafakturowanego bez lokalnego `usage`.
+- **Wpływ na harmonogram / koszt:** 0 USD; nie zmodyfikowano bazy projektu ani żadnego realnego runu.
+- **Status:** FIXED; oczekuje na drugi review przed commitem.

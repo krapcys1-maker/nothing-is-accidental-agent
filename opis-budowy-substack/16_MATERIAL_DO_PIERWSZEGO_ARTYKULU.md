@@ -152,6 +152,16 @@ Cztery źródła są interesującym kompromisem narracyjnym i technicznym: pipel
 
 Koszt przygotowania: 0,000000 USD; zero API, zero Playwrighta i zero zmian statusów. Wynik był gotowością do decyzji człowieka, nie zgodą udzieloną przez system.
 
+## 21. Drugi licznik nie może prowadzić własnej księgowości (2026-07-12)
+
+Po ustabilizowaniu typów runów przyszła mniej widowiskowa, ale bardzo praktyczna poprawka: jeden research składa się z A1, wielu A2 i B, więc `runs.cost_usd` łatwo mógł pamiętać tylko ostatni fragment albo policzyć coś drugi raz po wznowieniu. Rozwiązanie nie polegało na nowym estymatorze. Jedyną księgą pozostała tabela `model_usage`, a pole w `runs` stało się odtwarzalnym widokiem jej aktualnej sumy.
+
+Niezależne review odsłoniło jeszcze subtelniejszą wersję tego ryzyka: dwa osobne, poprawne commity mogły po awarii zostawić księgę z nowym wpisem i stary widok. Naprawa związała INSERT usage, ponowne zsumowanie księgi i UPDATE cache'a jedną transakcją SQLite. Test rollbacku wymuszony triggerem sprawdza, że nie zostaje nawet częściowy wpis.
+
+To ma dobry wymiar narracyjny: po pierwszym incydencie nauczyliśmy się, że koszt może zniknąć przy błędzie parsowania. Następna lekcja była subtelniejsza — nawet zapisany koszt może być źle pokazany przez wygodny cache. Testy obejmowały błąd po samym zapisie usage, żeby sprawdzić właśnie tę granicę.
+
+**Zdanie do artykułu:** „Najpierw nauczyliśmy agenta zapisywać rachunki. Potem musieliśmy nauczyć go, że podsumowanie rachunków nie może mieć własnej pamięci."
+
 ## Powiązania
 - Źródła: `00`–`10`, `docs/BUILD_LOG.md`, `docs/DECISIONS.md` (ADR-017, ADR-019, ADR-020), `docs/COSTS.csv`, `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` CZĘŚĆ D, CZĘŚĆ E, CZĘŚĆ F
 - Następny krok redakcyjny: szkic w `article-series/artykul-01-dlaczego-wlasny-substack.md`

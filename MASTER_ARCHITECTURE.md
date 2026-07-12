@@ -5,7 +5,7 @@
 >
 > Kolejność prac: `IMPLEMENTATION_ROADMAP.md`. Aktualny stan: `CURRENT_PROJECT_STATE.md`. Rejestr decyzji (ADR): `docs/DECISIONS.md` (nadal obowiązujący — ten dokument konsoliduje decyzje, nie zastępuje rejestru).
 >
-> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (127 passed, 2026-07-12) lub bazie `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
+> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (139 passed, 2026-07-12) lub bazie `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
 
 ---
 
@@ -34,7 +34,7 @@
 
 - **Policy Engine** — pokrywa ~3 z ~14 docelowych obowiązków. Brak: egzekucji `autonomy_level`, `AccountMode` (COMMENT_ONLY niczego nie blokuje), limitów per konto (`AccountPolicy` — martwa konfiguracja), cooldownów, capu per-run w bibliotece (żyje tylko w CLI), SAFE MODE, runtime kill-switch (czytany raz z .env przy starcie).
 - **Klient Anthropic dla tematów** (`app/llm/anthropic_client.py`) — kompletny kod, ale: nigdy nie uruchomiony realnie, brak testów parsera, **nie księguje kosztu przy błędzie parsowania JSON** (w przeciwieństwie do klienta researchu), brak zdejmowania code fence. Do wyrównania z klientem researchu przed pierwszym realnym użyciem.
-- **Maszyna stanów researchu** — Etap 0 / Task 1 ukończony: działa z jawnym, trwałym `research_runs.flow`, walidacją cross-flow i flow→status przed resume; `_detect_flow` nie istnieje. Nadal `EXTRACTION_FAILED` nie ma drogi powrotu (run `9bbeb020` trwale niedomykalny), a `runs.cost_usd` nie jest odświeżany w części ścieżek staged.
+- **Maszyna stanów researchu** — Etap 0 / Tasks 1–2 ukończone: jawny `research_runs.flow`, walidacja cross-flow/flow→status i `_detect_flow` usunięte; researchowy INSERT `model_usage` oraz absolutne odświeżenie `runs.cost_usd` są atomowe, a helper synchronizacji pozostaje idempotentny dla wyjść no-call A1/A2/B. Nadal `EXTRACTION_FAILED` nie ma drogi powrotu (run `9bbeb020` trwale niedomykalny).
 
 ### 1.3. Co jest tylko szkieletem
 
@@ -131,7 +131,7 @@ Pełna lista 14 rozbieżności była w audycie 12.07 (zarchiwizowany). Wszystkie
 | **Configuration system** | `.env` (sekrety, modele, tryby) + `config/*.yaml` (polityki, wagi, limity); wartości NIGDY w kodzie | — | WORKING |
 | **Secrets management** | `.env` + `.gitignore` (ADR-010); docelowo przez `SecretStorePort` (adapter istnieje, nieużywany — podpiąć zamiast `os.getenv`) | zero haseł Substacka gdziekolwiek | WORKING (adapter martwy — dług) |
 | **Backend API / frontend** | panel FastAPI, localhost-only (ADR-009): readonly stan + approvals + kill-switch (flaga DB) | brak wystawiania na sieć publiczną w MVP | NOT_STARTED |
-| **Database** | SQLite + migracje plikowe; WAL + busy_timeout (do włączenia); backup przed oknami publikacji | Postgres poza zakresem do czasu realnej współbieżności | WORKING |
+| **Database** | SQLite + migracje plikowe; WAL potwierdzany dla każdego plikowego połączenia + busy_timeout=5000 (baza `:memory:` nie wymaga WAL); backup przed oknami publikacji | Postgres poza zakresem do czasu realnej współbieżności | WORKING |
 
 ---
 

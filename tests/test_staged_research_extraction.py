@@ -37,7 +37,7 @@ from app.models import (
 from app.policies.policy_engine import PolicyEngine
 from app.ports.notification import LogNotification
 from app.research.anthropic_client import _parse_discovery_candidates_jsonl
-from app.research.base import ResearchParseError
+from app.research.base import ResearchError, ResearchParseError
 from app.research.diagnostics import diagnostics_dir
 from app.research.fake_client import FakeResearchClient
 from app.research.validation import TOO_FEW_VERIFIED_SOURCES
@@ -114,6 +114,14 @@ def _resume_staged(settings, storage, account, run_id, client, **kwargs):
         run_id, account, settings=settings, storage=storage, research_client=client,
         usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
         policy=PolicyEngine(settings, storage), notifier=LogNotification(), **kwargs)
+
+
+def _assert_run_cost_matches_research_usage(storage, run_id: str) -> float:
+    expected = sum(usage.estimated_cost_usd for usage in storage.get_research_usage(run_id))
+    run = storage.get_run(run_id)
+    assert run is not None
+    assert run.cost_usd == pytest.approx(expected)
+    return expected
 
 
 class _AlwaysFailExtractClient(FakeResearchClient):
@@ -204,6 +212,25 @@ class _BrokenDiscoveryClient:
         raise AssertionError("synthesize_from_cards nie powinien być wołany po błędzie A1")
 
 
+class _DiscoveryErrorWithoutUsageClient:
+    """Błąd transportowy przed otrzymaniem usage od dostawcy."""
+
+    def discover_sources(self, plan, max_searches):
+        raise ResearchError("discovery failed before usage was available")
+
+
+class _SynthesisErrorWithoutUsageClient(FakeResearchClient):
+    """Błąd etapu B przed otrzymaniem usage od dostawcy."""
+
+    def synthesize_from_cards(self, plan, cards):
+        raise ResearchError("synthesis failed before usage was available")
+
+
+def _set_stale_run_cache(storage, run_id: str, cost_usd: float = 99.0) -> None:
+    storage.conn.execute("UPDATE runs SET cost_usd=? WHERE id=?", (cost_usd, run_id))
+    storage.conn.commit()
+
+
 # --- 0. Sanity: pełny etapowy pipeline, dobra ścieżka (fundament dla reszty testów) ---
 
 def test_staged_pipeline_happy_path_reaches_complete(settings, storage, account):
@@ -220,6 +247,7 @@ def test_staged_pipeline_happy_path_reaches_complete(settings, storage, account)
     assert research_run.flow == ResearchFlow.STAGED
     assert research_run.status == ResearchRunStatus.COMPLETE
     assert research_run.research_card_id == summary.card.id
+    _assert_run_cost_matches_research_usage(storage, summary.run_id)
 
     extracted = storage.list_source_candidates(summary.run_id, SourceCandidateStatus.EXTRACTED)
     assert len(extracted) == 3
@@ -326,6 +354,7 @@ def test_resume_extraction_after_restart_continues_remaining(settings, storage, 
     assert len(all_extracted) == 4
     research_run2 = storage.get_research_run(run_id)
     assert research_run2.status == ResearchRunStatus.SOURCES_COMPLETE
+    _assert_run_cost_matches_research_usage(storage, run_id)
 
 
 # --- 7. Ponowienie etapu B (synthesis) bez web search, przez pełny dispatcher wznowienia ---
@@ -337,12 +366,13 @@ def test_resume_synthesis_never_calls_discovery_or_extraction(settings, storage,
     assert storage.get_research_run(run_id).status == ResearchRunStatus.SOURCES_COMPLETE
 
     broken = _BrokenSynthesizeFromCardsOnceClient("good")
-    summary1 = _run_synthesis(settings, storage, account, run_id, broken)
+    summary1 = _resume_staged(settings, storage, account, run_id, broken)
     assert summary1.error is not None
     assert summary1.cost_usd > 0                          # 9. usage/koszt zachowane mimo błędu B
     research_run = storage.get_research_run(run_id)
     assert research_run.status == ResearchRunStatus.SOURCES_COMPLETE  # WRACA, nie PARTIAL/FAILED
     assert len(storage.list_source_candidates(run_id, SourceCandidateStatus.EXTRACTED)) == 3
+    _assert_run_cost_matches_research_usage(storage, run_id)
 
     resume_client = _DiscoveryAndExtractionForbiddenClient("good")
     summary2 = _resume_staged(settings, storage, account, run_id, resume_client)
@@ -352,6 +382,28 @@ def test_resume_synthesis_never_calls_discovery_or_extraction(settings, storage,
     research_run2 = storage.get_research_run(run_id)
     assert research_run2.status == ResearchRunStatus.COMPLETE
     assert research_run2.research_card_id is not None
+    _assert_run_cost_matches_research_usage(storage, run_id)
+
+
+def test_synthesis_error_without_usage_preserves_canonical_cost(settings, storage, account):
+    topic = _selected_topic(storage, account)
+    run_id = _seeded_run_with_candidates(storage, account, topic, n=3)
+    _run_extraction(settings, storage, account, run_id, FakeResearchClient("good"))
+    expected_cost = _assert_run_cost_matches_research_usage(storage, run_id)
+    usage_count = len(storage.get_research_usage(run_id))
+    _set_stale_run_cache(storage, run_id)
+
+    summary = _run_synthesis(
+        settings, storage, account, run_id, _SynthesisErrorWithoutUsageClient("good"),
+    )
+
+    assert summary.error == "synthesis failed before usage was available"
+    assert len(storage.get_research_usage(run_id)) == usage_count
+    run = storage.get_run(run_id)
+    assert run is not None
+    assert run.cost_usd == pytest.approx(expected_cost)
+    assert run.status == RunStatus.RUNNING
+    assert storage.get_research_run(run_id).status == ResearchRunStatus.SOURCES_COMPLETE
 
 
 # --- 8. JSONL z uszkodzonym ostatnim rekordem — wcześniejsze rekordy zachowane ---
@@ -400,6 +452,31 @@ def test_real_usage_preserved_when_discovery_fails(settings, storage, account):
 
     run = storage.get_run(summary.run_id)
     assert run is not None and run.status == RunStatus.FAILED and run.cost_usd > 0
+    _assert_run_cost_matches_research_usage(storage, summary.run_id)
+
+
+def test_discovery_error_without_usage_repairs_stale_cache(settings, storage, account, monkeypatch):
+    topic = _selected_topic(storage, account)
+    original_create_research_run = storage.create_research_run
+
+    def create_research_run_with_stale_cache(research_run):
+        original_create_research_run(research_run)
+        _set_stale_run_cache(storage, research_run.id)
+        return research_run
+
+    monkeypatch.setattr(storage, "create_research_run", create_research_run_with_stale_cache)
+
+    summary = _run_discovery(
+        settings, storage, account, topic, _DiscoveryErrorWithoutUsageClient(),
+    )
+
+    assert summary.error == "discovery failed before usage was available"
+    assert storage.get_research_usage(summary.run_id) == []
+    run = storage.get_run(summary.run_id)
+    assert run is not None
+    assert run.cost_usd == 0.0
+    assert run.status == RunStatus.FAILED
+    assert storage.get_research_run(summary.run_id).status == ResearchRunStatus.FAILED
 
 
 # --- 10. Brak sekretów w plikach diagnostycznych ---
@@ -485,6 +562,7 @@ def test_real_mode_extraction_without_search_produces_rejected_card(settings, st
     assert not summary.passed             # …ale NIE przechodzi bramki jakości
     assert summary.recommendation == "REJECT"
     assert TOO_FEW_VERIFIED_SOURCES in summary.reasons
+    _assert_run_cost_matches_research_usage(storage, run_id)
 
 
 # --- Diagnostyka 2026-07-12 (run 9bbeb020) — naprawa błędu wyświetlania CLI etapu A2:
@@ -509,6 +587,7 @@ def test_extraction_summary_aggregates_usage_across_sources(settings, storage, a
                 if u.task == "research_extract"]
     assert summary.cost_usd == pytest.approx(
         sum(u.estimated_cost_usd for u in a2_usage))
+    _assert_run_cost_matches_research_usage(storage, run_id)
 
 
 def test_extraction_summary_aggregation_unaffected_by_real_mode(settings, storage, account):
@@ -578,6 +657,7 @@ def test_extraction_summary_partial_path_excludes_prior_stage_usage(
     assert summary.cost_usd == pytest.approx(a2_cost)
     assert storage.get_run(run_id).cost_usd == pytest.approx(
         prior.estimated_cost_usd + a2_cost)
+    _assert_run_cost_matches_research_usage(storage, run_id)
 
 
 def test_extraction_summary_keeps_existing_dry_run_accounting(
@@ -597,6 +677,47 @@ def test_extraction_summary_keeps_existing_dry_run_accounting(
     assert len(a2_usage) == 3
     assert all(u.dry_run for u in a2_usage)
     assert storage.sum_real_cost_usd("") == 0.0
+    _assert_run_cost_matches_research_usage(storage, run_id)
+
+
+def test_extraction_resyncs_existing_usage_when_no_model_call_is_made(settings, storage, account):
+    topic = _selected_topic(storage, account)
+    run_id = _seeded_run_with_candidates(storage, account, topic, n=1)
+    tracker = UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path)
+    prior = tracker.record(
+        run_id, "discovery-model",
+        Usage(input_tokens=1000, output_tokens=100, web_search_requests=1),
+        task="research_discover", dry_run=settings.dry_run,
+    )
+    storage.finish_run(run_id, RunStatus.FAILED.value, cost_usd=99.0, error="stale cache")
+
+    summary = _run_extraction(
+        settings, storage, account, run_id, FakeResearchClient("good"), max_sources=0)
+    resumed = _resume_staged(
+        settings, storage, account, run_id, FakeResearchClient("good"), max_sources=0)
+
+    assert summary.sources_extracted == 0
+    assert resumed.sources_extracted == 0
+    assert len(storage.get_research_usage(run_id)) == 1
+    assert storage.get_run(run_id).cost_usd == pytest.approx(prior.estimated_cost_usd)
+    _assert_run_cost_matches_research_usage(storage, run_id)
+
+
+def test_cost_is_synced_when_post_usage_stage_write_raises(
+        settings, storage, account, monkeypatch):
+    topic = _selected_topic(storage, account)
+    run_id = _seeded_run_with_candidates(storage, account, topic, n=1)
+
+    def fail_after_usage(*args, **kwargs):
+        raise RuntimeError("stage-log write failed after usage")
+
+    monkeypatch.setattr(storage, "add_research_stage_result", fail_after_usage)
+
+    with pytest.raises(RuntimeError, match="stage-log write failed"):
+        _run_extraction(settings, storage, account, run_id, FakeResearchClient("good"))
+
+    assert len(storage.get_research_usage(run_id)) == 1
+    _assert_run_cost_matches_research_usage(storage, run_id)
 
 
 def test_extraction_and_client_defaults_use_1500_tokens():
