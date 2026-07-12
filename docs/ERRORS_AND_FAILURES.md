@@ -326,3 +326,12 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Naprawa:** brak capu realnego researchu jest błędem przed callem; cap resume jest absolutny; account guard poprzedza koszt/klienta; uszkodzony stan budżetu odmawia.
 - **Regresje:** A1/A2/B utrwalają usage timeoutu i blokują attempt 2; B wraca do `SOURCES_COMPLETE`; obce konto nie synchronizuje kosztu ani nie tworzy klienta.
 - **Status:** FIXED offline; `timeout-billed-unrecorded` pozostaje rezydualnym P2, nie jest uznane za rozwiązane.
+
+### [2026-07-12] Task 6 — koszt odpowiedzi tematów znikał po parse-error — [COST | DATA]
+
+- **Co było nie tak:** klient tematów wykonywał `json.loads(text)` przed zbudowaniem `Usage`. Poprawnie zbilowana odpowiedź z uciętym lub wadliwym JSON-em przerywała funkcję, zanim usage mogło dotrzeć do workflow; run pozostawał bez kontrolowanej ścieżki `FAILED`.
+- **Różnica błędów:** provider error przed odpowiedzią nie ma usage i nie wolno wymyślać kosztu. Parse/schema error po odpowiedzi ma już rzeczywiste usage i model, więc ich utrata byłaby fałszywą księgowością.
+- **Naprawa:** response → `Usage` → text → parse; typowane provider/parse/schema errors; jeden ścisły zewnętrzny code fence; workflow zapisuje usage raz, ustawia `FAILED` i nie zapisuje topics.
+- **Dlaczego bez retry:** wadliwy format odpowiedzi nie jest błędem transient. Automatyczne powtórzenie mogłoby zapłacić drugi raz bez usunięcia przyczyny.
+- **Nieudana wersja podczas pracy:** pierwsza poprawka wciąż składała tekst przed `Usage`. Self-review sklasyfikował to jako P1 względem literalnego kontraktu i odwrócił kolejność przed finalną weryfikacją.
+- **Dowód:** 35 testów topics i 286 całego suite, wyłącznie fake caller/fake SDK oraz SQLite; 0 USD, zero API.

@@ -309,7 +309,19 @@ Review nie znalazło nowego błędu w finalizacji. Mimo to odrzuciło zmianę, p
 
 Dopisane sześć regresji przeszło bez zmiany kodu produkcyjnego. Runner i capped CLI porównują teraz cztery tabele po account mismatch. Pełny wynik to **212 testów**, koszt 0 USD i zero API. Pozostał jawny P2: koszt no-op jest porównywany dokładnym `float == float`, więc równoważna kwota o innej reprezentacji binarnej może zostać bezpiecznie odrzucona.
 
-**Następne (niezbudowane):** wyrównanie klienta tematów (Task 6); prawdziwe pobieranie treści źródła (P0-2c); pierwszy kompletny realny Research Card dopiero po ukończeniu pozostałych zadań Etapu 0 i osobnej zgodzie.
+**Stan planu w chwili trzeciego review Task 4:** następne było wyrównanie klienta tematów (Task 6); prawdziwe pobieranie treści źródła (P0-2c) i pierwszy kompletny realny Research Card pozostawały późniejsze oraz zależne od osobnej zgody.
+
+### Task 6: rachunek zapisany przed próbą zrozumienia odpowiedzi
+
+Klient tematów miał prostą, ale kosztowną w skutkach kolejność: najpierw próbował sparsować JSON, a dopiero później budował obiekt usage. Jeśli odpowiedź była ucięta, `json.loads` przerywał funkcję i lokalna księga zachowywała się tak, jakby płatnego wywołania nie było.
+
+Nowa kolejność brzmi: odpowiedź providera, natychmiast `Usage`, dopiero potem tekst i parser. Błąd formatu przenosi usage oraz model do workflow, które zapisuje koszt raz, kończy run jako `FAILED` i nie tworzy nawet jednego częściowego tematu. Błąd providera przed odpowiedzią pozostaje innym przypadkiem: nie ma wiarygodnego usage, więc system nie wymyśla zera ani fikcyjnego rachunku.
+
+Parser toleruje jedną rzecz, którą modele robią często: opakowanie poprawnego JSON-u w pojedynczy fence ` ```json `. Nie toleruje tekstu przed lub po danych, pustego albo niedomkniętego fence ani uciętego JSON-u. Parse error nie jest retry'owany — drugi call byłby drugim potencjalnym kosztem, nie naprawą pierwszej odpowiedzi.
+
+Self-review znalazł, że pierwsza poprawka nadal składała tekst przed obiektem usage. Testy były zielone, ale kontrakt nie był spełniony literalnie. Kolejność poprawiono i udowodniono przez fałszywy moduł SDK. Wynik: **286 testów**, 0 USD, zero API, researchu i Playwrighta.
+
+**Następne (niezbudowane):** Task 7 — higiena statusów ADR; Task 8 — walidacja przejść `mark_*`; realny run dopiero później i za osobną zgodą.
 
 ## Powiązania
 - `docs/BUILD_LOG.md` (źródło), `docs/ARCHITECTURE_EVOLUTION.md`, `docs/RELEASE_TIMELINE.md`

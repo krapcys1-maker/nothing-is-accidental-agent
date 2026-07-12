@@ -88,3 +88,8 @@ Na obecnym etapie (przed generacją treści i publikacją) interwencje człowiek
 ### [2026-07-12] Właściciel nakazał poprawić findings, nie tylko wydać REJECT
 - Review znalazło pięć P1 w Task 5; właściciel jawnie rozszerzył pracę o ich natychmiastową korektę i regresje.
 - Efekt: 257 testów, bez API, commita, pushu, Task 6 i zmian P2-17/P2-18.
+
+### [2026-07-12] Zgoda na Task 6 z obowiązkowym self-review
+- Właściciel zatwierdził wyłącznie wyrównanie klienta tematów: usage przed parse, ścisły code fence, typowane błędy i trwały `FAILED` bez częściowych topics.
+- Polecenie wymagało poprawienia każdego znalezionego P0/P1 przed raportem i pozostawienia working tree bez commita/pushu.
+- Efekt: self-review poprawił kolejność text/usage; 286 testów offline, koszt 0 USD, brak API, Task 7 nierozpoczęty.

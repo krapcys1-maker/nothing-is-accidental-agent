@@ -204,3 +204,11 @@ Te pozycje **jeszcze się nie wydarzyły**, bo nie doszliśmy do odpowiednich et
 Jeśli timeout zwraca usage, zapisujemy je przed decyzją o retry. Jeśli nie zwraca, provider nadal może naliczyć koszt — `timeout-billed-unrecorded`. Nie dopisujemy fikcyjnego usage. Pierwsza implementacja miała też niebezpieczny skrót: `dry_run=True` omijało kontrolę limitów; istniejące testy wykryły fail-open i skrót usunięto.
 
 Pełne review znalazło kolejne trzy luki: opcjonalny cap realnego pipeline, rosnący cap resume oraz NaN/Infinity limitów kończące się `OK`. Wszystkie poprawiono fail-closed i pokryto regresjami; rezydualne ryzyko providera pozostało jawne.
+
+### [2026-07-12] Task 6: poprawna odpowiedź kosztowa, niepoprawny JSON
+
+Klient tematów budował `Usage` dopiero po `json.loads`. Ucięta odpowiedź oznaczała więc podwójną porażkę: nie było tematów, ale nie było też lokalnego śladu kosztu. To inna sytuacja niż błąd providera przed odpowiedzią — wtedy system naprawdę nie zna usage i nie powinien go wymyślać.
+
+Naprawa wprowadziła trzy typy błędów: provider, parse i schema. Po odpowiedzi usage powstaje przed inspekcją tekstu. Parse/schema error kończy run `FAILED`, zapisuje usage dokładnie raz i nie pozostawia częściowych topics. Parser zdejmuje jeden pełny zewnętrzny code fence, ale odrzuca tekst przed/po JSON-ie, brak zamknięcia i uszkodzone dane. Nie ma retry parse-error.
+
+Pierwsza wersja poprawki nadal budowała tekst przed usage. Self-review uznał to za niespełniony kontrakt P1 mimo zielonych testów. Po korekcie fake SDK dowodzi rzeczywistej kolejności. **286 testów**, 0 USD, brak API.

@@ -191,3 +191,10 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Uczciwe ograniczenie: `timeout-billed-unrecorded` — brak usage nie dowodzi braku opłaty, a system nie wymyśla kosztu.
   - Zwrot narracyjny po review: „cap per-run” nie jest capem, jeśli resume przelicza go jako dotychczasowy koszt plus nowy kredyt; green suite nie testował tej semantyki.
   - Dowód: ADR-026, `tests/test_research_run_budget.py`, BUILD_LOG Task 5; **257 passed**, koszt 0 USD, brak API.
+
+- **[2026-07-12] Rachunek może zniknąć między odpowiedzią a nawiasem klamrowym** (Etap 0 / Task 6)
+  - Materiał: provider zdążył zwrócić odpowiedź i usage, ale `json.loads` padał wcześniej niż kod budujący lokalny rekord kosztu.
+  - Decyzja: kolejność ma znaczenie biznesowe — response → `Usage` → parse. Parser error niesie usage/model do workflow; provider error bez odpowiedzi nie tworzy fikcyjnego kosztu.
+  - Code fence: `````json````` jest częstym, nieszkodliwym opakowaniem odpowiedzi modelu. System zdejmuje dokładnie jeden pełny fence, lecz nie wycina tekstu przed/po JSON-ie i nie „naprawia” uciętych danych.
+  - Dlaczego bez retry: zły format nie jest timeoutem; drugi call oznaczałby drugi możliwy rachunek zamiast deterministycznej odmowy.
+  - Dowód: fake SDK, rzeczywista SQLite, jeden `model_usage`, `runs.FAILED`, zero topics; **286 passed**, koszt 0 USD, brak API.

@@ -171,3 +171,9 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co pokazuje:** terminal z celowanymi testami callbacku/PolicyEngine i pełnym wynikiem `257 passed`, w tym A1/A2/B deny attempt 2, bez sekretów i danych API.
 - **Dlaczego ważny:** dowodzi, że retry jest blokowane przed drugim callem, a CLI korzysta z centralnej polityki.
 - **Status:** SCREENSHOT REQUIRED — w tej pracy nie uruchamiano Playwrighta ani przeglądarki.
+
+### [2026-07-12] task6-topics-parser-ledger
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_task6-topics-parser-ledger.png`
+- **Co pokazuje:** terminal z testami parsera/klienta/workflow topics (`35 passed`) oraz pełnym wynikiem `286 passed`; bez kluczy, `.env` i odpowiedzi realnego providera.
+- **Dlaczego ważny:** dowodzi, że malformed JSON zachowuje dostępne usage, kończy run `FAILED` i nie zapisuje częściowych tematów.
+- **Status:** SCREENSHOT REQUIRED — nie używano Playwrighta ani przeglądarki; bezpieczny screenshot może powstać później z testów offline.

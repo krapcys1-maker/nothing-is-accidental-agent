@@ -388,3 +388,12 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Reprodukcje:** fake real-mode wykonał pipeline bez capu i zapisał 0.0276 USD; limity NaN/Infinity zwracały `OK`; staged default cap rósł `0.30→0.45→0.60` wraz z kosztem.
 - **Poprawki:** obowiązkowy cap realnego pipeline, stałe capy resume, wczesny account guard, `BUDGET_INVALID_STATE` oraz pełne regresje SQLite/caller dla wszystkich etapów i legacy multiplier.
 - **Wynik:** celowane **224 passed**; pełne **257 passed in 10.60s**; `git diff --check` czysty. Koszt 0 USD, zero API, Playwrighta, commita i pushu.
+
+### [2026-07-12] Etap 0 / Task 6 — wyrównanie klienta tematów
+
+- **Cel:** przed pierwszym realnym runem tematów usunąć lukę, w której płatna odpowiedź mogła zakończyć się parse-error bez lokalnego kosztu, oraz zaakceptować pojedynczy poprawny Markdown code fence bez heurystycznego naprawiania JSON-u.
+- **Kod:** `AnthropicLLMClient` stosuje kolejność response → `Usage` → text → parse. Czysty parser zdejmuje dokładnie jeden kompletny zewnętrzny fence i rozróżnia `LLMProviderError`, `LLMParseError` oraz `LLMSchemaValidationError`. Parse/schema error przenosi usage/model do workflow; klient nie zna SQLite ani `UsageTracker`.
+- **Workflow:** `run_topic_discovery` zapisuje dostępne usage dokładnie raz do `model_usage`, ustawia zgodny `runs.cost_usd`, kończy run `FAILED`, nie zapisuje częściowych topics i ponownie rzuca typowany błąd. Brak usage nie tworzy sztucznego kosztu. Parse error nie ma retry.
+- **Self-review:** pierwsza wersja budowała usage dopiero po złożeniu tekstu odpowiedzi. Nie gubiło to kosztu przy `json.loads`, ale nie spełniało literalnego kontraktu „usage natychmiast po response”; kolejność poprawiono i dodano test domyślnego adaptera z fałszywym SDK.
+- **Testy:** parser raw/fence/whitespace/backticks/truncation/prefix/suffix/schema; klient przez caller i fake SDK; workflow na prawdziwej SQLite dla usage/cost/FAILED/zero topics/policy/account. Celowane topics: **35 passed**; pełne `python -m pytest`: **286 passed**.
+- **Zakres:** 0 USD, zero API, realnego generowania tematów, researchu i Playwrighta; bez commita/pushu; Task 7 nierozpoczęty; P2-17/P2-18/P2-19 bez zmian.

@@ -6,9 +6,21 @@ W walking skeleton NIE jest wywoływany. Pakiet `anthropic` importowany leniwie,
 from __future__ import annotations
 
 import json
+from typing import Callable
 
-from app.llm.base import LLMClient, TopicGenerationResult, TopicIdea, Usage
+from app.llm.base import (
+    LLMClient,
+    LLMParseError,
+    LLMProviderError,
+    LLMResponseError,
+    LLMSchemaValidationError,
+    TopicGenerationResult,
+    TopicIdea,
+    Usage,
+)
 from app.models import Account
+
+TopicCaller = Callable[[Account, int], tuple[str, Usage]]
 
 _SYSTEM = (
     "You are a topic scout for the English-language Substack 'Nothing Is Accidental', "
@@ -28,12 +40,106 @@ def _build_prompt(account: Account, count: int) -> str:
     )
 
 
+def _strip_outer_code_fence(text: str) -> str:
+    """Remove exactly one complete outer Markdown fence, if present."""
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return stripped
+
+    newline = stripped.find("\n")
+    if newline == -1:
+        raise LLMParseError("Niekompletny Markdown code fence w odpowiedzi tematów.")
+
+    opening = stripped[:newline].rstrip("\r").strip().lower()
+    if opening not in {"```", "```json"}:
+        raise LLMParseError("Nieobsługiwany Markdown code fence w odpowiedzi tematów.")
+    if not stripped.endswith("```"):
+        raise LLMParseError("Brak zamykającego Markdown code fence w odpowiedzi tematów.")
+
+    inner = stripped[newline + 1:-3].strip()
+    if not inner:
+        raise LLMParseError("Pusty Markdown code fence w odpowiedzi tematów.")
+    return inner
+
+
+def _parse_topic_response(text: str) -> list[TopicIdea]:
+    """Parse and validate one complete topic-generation JSON response."""
+    candidate = _strip_outer_code_fence(text)
+    try:
+        payload = json.loads(candidate)
+    except json.JSONDecodeError as exc:
+        raise LLMParseError(
+            f"Niepoprawny JSON odpowiedzi tematów: {exc.msg} "
+            f"(linia {exc.lineno}, kolumna {exc.colno})."
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise LLMSchemaValidationError("Odpowiedź tematów musi być obiektem JSON.")
+    if "topics" not in payload:
+        raise LLMSchemaValidationError("Odpowiedź tematów nie zawiera pola 'topics'.")
+    items = payload["topics"]
+    if not isinstance(items, list):
+        raise LLMSchemaValidationError("Pole 'topics' musi być listą.")
+
+    ideas: list[TopicIdea] = []
+    for index, item in enumerate(items):
+        label = f"topics[{index}]"
+        if not isinstance(item, dict):
+            raise LLMSchemaValidationError(f"{label} musi być obiektem JSON.")
+        title = item.get("title")
+        if not isinstance(title, str) or not title.strip():
+            raise LLMSchemaValidationError(f"{label}.title musi być niepustym tekstem.")
+        question = item.get("question", "")
+        if not isinstance(question, str):
+            raise LLMSchemaValidationError(f"{label}.question musi być tekstem.")
+        raw_breakdown = item.get("score_breakdown", {})
+        if not isinstance(raw_breakdown, dict):
+            raise LLMSchemaValidationError(f"{label}.score_breakdown musi być obiektem.")
+
+        breakdown: dict[str, float] = {}
+        for key, value in raw_breakdown.items():
+            if not isinstance(key, str) or isinstance(value, bool) or not isinstance(
+                value, (int, float)
+            ):
+                raise LLMSchemaValidationError(
+                    f"{label}.score_breakdown musi zawierać liczbowe oceny."
+                )
+            score = float(value)
+            if not 0.0 <= score <= 1.0:
+                raise LLMSchemaValidationError(
+                    f"{label}.score_breakdown['{key}'] musi mieścić się w zakresie 0..1."
+                )
+            breakdown[key] = score
+
+        ideas.append(TopicIdea(
+            title=title,
+            question=question,
+            score_breakdown=breakdown,
+        ))
+    return ideas
+
+
 class AnthropicLLMClient(LLMClient):
-    def __init__(self, api_key: str, model: str) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        *,
+        caller: TopicCaller | None = None,
+    ) -> None:
         self.model = model
         self._api_key = api_key
+        self._caller = caller or self._default_caller
 
     def generate_and_score_topics(self, account: Account, count: int) -> TopicGenerationResult:
+        text, usage = self._caller(account, count)
+        try:
+            ideas = _parse_topic_response(text)
+        except LLMResponseError as exc:
+            raise type(exc)(str(exc), usage=usage, model=self.model) from exc
+        return TopicGenerationResult(ideas=ideas, usage=usage, model=self.model)
+
+    def _default_caller(self, account: Account, count: int) -> tuple[str, Usage]:
         try:
             import anthropic  # leniwy import — tylko gdy realnie wołamy API
         except ImportError as exc:  # pragma: no cover - zależność opcjonalna
@@ -43,26 +149,27 @@ class AnthropicLLMClient(LLMClient):
             ) from exc
 
         client = anthropic.Anthropic(api_key=self._api_key)
-        message = client.messages.create(
-            model=self.model,
-            max_tokens=1500,
-            system=_SYSTEM,
-            messages=[{"role": "user", "content": _build_prompt(account, count)}],
-        )
-        text = "".join(block.text for block in message.content if block.type == "text")
-        payload = json.loads(text)
-        ideas = [
-            TopicIdea(
-                title=item["title"],
-                question=item.get("question", ""),
-                score_breakdown={k: float(v) for k, v in item.get("score_breakdown", {}).items()},
+        try:
+            message = client.messages.create(
+                model=self.model,
+                max_tokens=1500,
+                system=_SYSTEM,
+                messages=[{"role": "user", "content": _build_prompt(account, count)}],
             )
-            for item in payload.get("topics", [])
-        ]
+        except anthropic.APIError as exc:
+            raise LLMProviderError(
+                f"Błąd providera Anthropic przed otrzymaniem odpowiedzi: {exc}",
+                model=self.model,
+            ) from exc
+
+        # Usage is constructed immediately after the provider response and
+        # before inspecting/parsing its text, so a billed malformed response
+        # cannot disappear from the workflow's ledger.
         usage = Usage(
             input_tokens=getattr(message.usage, "input_tokens", 0),
             output_tokens=getattr(message.usage, "output_tokens", 0),
             cache_read_tokens=getattr(message.usage, "cache_read_input_tokens", 0) or 0,
             cache_write_tokens=getattr(message.usage, "cache_creation_input_tokens", 0) or 0,
         )
-        return TopicGenerationResult(ideas=ideas, usage=usage, model=self.model)
+        text = "".join(block.text for block in message.content if block.type == "text")
+        return text, usage

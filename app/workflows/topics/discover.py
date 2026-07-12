@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from app.core.clock import Clock, SystemClock
 from app.core.config import Settings
 from app.core.ids import new_run_id
-from app.llm.base import LLMClient, Usage
+from app.llm.base import LLMClient, LLMClientError, Usage
 from app.llm.usage_tracker import UsageTracker
 from app.models import Account, Run, RunStatus, Topic, TopicStatus, WorkflowType
 from app.policies.policy_engine import PolicyEngine
@@ -79,7 +79,24 @@ def run_topic_discovery(
                            current_state="discover"))
 
     # 4. Jedno wywołanie LLM (Fake w dry_run, Anthropic poza dry_run).
-    result = llm.generate_and_score_topics(account, count)
+    try:
+        result = llm.generate_and_score_topics(account, count)
+    except LLMClientError as exc:
+        # The provider may have billed a response that later failed parsing.
+        # Persist only real usage supplied by the client; never invent usage.
+        cost_usd = 0.0
+        if exc.usage is not None:
+            usage_row = usage_tracker.record(
+                run_id,
+                exc.model or llm.model,
+                exc.usage,
+                task="topics",
+                dry_run=settings.dry_run,
+            )
+            cost_usd = usage_row.estimated_cost_usd
+        storage.finish_run(run_id, RunStatus.FAILED.value, cost_usd, error=str(exc))
+        notifier.notify("error", "Workflow tematów nieudany", str(exc), account.id)
+        raise
 
     # 5. Koszt.
     usage_row = usage_tracker.record(run_id, result.model, result.usage,

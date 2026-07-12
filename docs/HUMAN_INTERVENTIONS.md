@@ -127,3 +127,9 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Typ:** APPROVAL
 - **Zakres:** właściciel polecił nie kończyć na REJECT, poprawić wszystkie P0/P1, dodać regresje i pozostawić zmiany bez commita/pushu.
 - **Efekt:** pięć P1 poprawiono offline; P2-17/P2-18 i Task 6 pozostały nietknięte.
+
+### [2026-07-12] APPROVAL — Etap 0 / Task 6, wyrównanie klienta tematów
+- **Typ:** APPROVAL
+- **Obiekt:** parser odpowiedzi tematów, typowane błędy i księgowanie usage po parse-error.
+- **Zakres decyzji właściciela:** implementacja, testy, self-review i poprawa wszystkich P0/P1; wyłącznie offline, bez API, realnego generowania tematów, researchu, Task 7, commita i pushu.
+- **Efekt:** response→Usage→parse, ścisły code fence i trwały `FAILED` z kanonicznym kosztem; 286 testów, 0 USD; P2-17/P2-18/P2-19 bez zmian.

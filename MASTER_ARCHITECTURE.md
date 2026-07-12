@@ -5,7 +5,7 @@
 >
 > Kolejność prac: `IMPLEMENTATION_ROADMAP.md`. Aktualny stan: `CURRENT_PROJECT_STATE.md`. Rejestr decyzji (ADR): `docs/DECISIONS.md` (nadal obowiązujący — ten dokument konsoliduje decyzje, nie zastępuje rejestru).
 >
-> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (164 passed, 2026-07-12) lub pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
+> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (286 passed, 2026-07-12) lub pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
 
 ---
 
@@ -33,7 +33,7 @@
 ### 1.2. Co jest częściowe
 
 - **Policy Engine** — centralnie egzekwuje cap per-run oraz budżet dzienny/miesięczny przez `check_run_budget`; miesięczny zachowuje priorytet ADR-012. Brak nadal: egzekucji `autonomy_level`, `AccountMode`, limitów per konto, cooldownów, SAFE MODE i runtime kill-switcha.
-- **Klient Anthropic dla tematów** (`app/llm/anthropic_client.py`) — kompletny kod, ale: nigdy nie uruchomiony realnie, brak testów parsera, **nie księguje kosztu przy błędzie parsowania JSON** (w przeciwieństwie do klienta researchu), brak zdejmowania code fence. Do wyrównania z klientem researchu przed pierwszym realnym użyciem.
+- **Klient Anthropic dla tematów** (`app/llm/anthropic_client.py`) — offline zweryfikowany kontrakt response→Usage→parse, typowane provider/parse/schema errors, jeden zewnętrzny code fence i księgowanie dostępnego usage przez workflow także przy błędzie; nadal nigdy nie uruchomiony realnie (`NOT VERIFIED live`).
 - **Maszyna stanów researchu** — Etap 0 / Tasks 1–5 ukończone: jawny flow, atomowy koszt/cache i claim A2, idempotentna finalizacja COMPLETE+terminalny run+USED oraz centralny budżet retry. Przed etapem estymata obejmuje `1+max_retries`, a przed każdą próbą callback ponownie czyta `model_usage`. Rezydualne P2-17/P2-18 oraz `timeout-billed-unrecorded` pozostają jawne. Produkcyjna baza nie została w tej pracy zmieniona.
 
 ### 1.3. Co jest tylko szkieletem
@@ -119,13 +119,13 @@ Pełna lista 14 rozbieżności była w audycie 12.07 (zarchiwizowany). Wszystkie
 | **Memory** | SQLite jako pamięć trwała (topics/cards/content/metrics); brak osobnego vector-store w MVP | — | WORKING (w zakresie zbudowanym) |
 | **Strategy engine** | analiza metryk → `strategy_decisions` (log) → korekty parametrów w configu, nigdy „po cichu" | nie zmienia polityk bezpieczeństwa | NOT_STARTED |
 | **Analytics** | kolektor metryk → `metrics_daily`; estymacje jawnie oznaczane | — | NOT_STARTED (tabela czeka) |
-| **Budget & cost control** | `model_usage` = JEDYNY kanon kosztu; PolicyEngine gate przed KAŻDYM płatnym wywołaniem; cap per-run w bibliotece | `runs.cost_usd`/`research_runs.total_cost_usd` = cache, nigdy podstawa decyzji | WORKING (cap per-run tylko w CLI — dług) |
+| **Budget & cost control** | `model_usage` = JEDYNY kanon kosztu; PolicyEngine gate przed KAŻDYM płatnym wywołaniem; cap per-run w bibliotece | `runs.cost_usd`/`research_runs.total_cost_usd` = cache, nigdy podstawa decyzji | WORKING (centralny cap i retry budget zbudowane w Task 5) |
 | **Model provider abstraction** (`app/llm/`, `app/research/base.py`) | Protocole `LLMClient`/`ResearchClient`; `ModelRouter` (zadanie→model z .env); Fake dla dry_run | logika biznesowa nie zna nazw modeli ani SDK | WORKING (sekcja 6) |
 | **Publication adapters** | `PublicationChannelPort` — wspólny kontrakt kanałów (sekcja 8) | rdzeń nie zna Substacka | NOT_STARTED |
 | **Substack adapter** | Playwright, dedykowany profil per konto, ręczne logowanie (magic-link), screenshoty, stop-conditions | nigdy auto-login, nigdy zapis hasła, brak prywatnych endpointów | NOT_STARTED (projekt: sekcja 8.2) |
 | **Approval & autonomy** | poziomy LEVEL_0–3 (ADR-017), macierz akcji×poziom, tabela `approvals`, SAFE MODE | autonomia dotyczy WYKONANIA, nie ujawniania natury agenta (ADR-018) | NOT_STARTED (specyfikacja: sekcja 7) |
 | **Audit log** | `runs` + `research_stage_results` + `autonomous_decisions` (przyszła) + `HUMAN_INTERVENTIONS.md`; każda decyzja/koszt/błąd/interwencja zapisywalna | — | PARTIAL |
-| **Retry system** | retry TYLKO błędów transient (timeout), twardy limit prób, re-check budżetu przed każdą próbą, estymata ×(1+retries); błąd parsowania NIGDY nie jest ponawiany | ŻADNEGO auto-retry publikacji (UNCERTAIN → człowiek/odczyt stanu) | PARTIAL (re-check budżetu przed retry — dług P1-3) |
+| **Retry system** | retry TYLKO błędów transient (timeout), twardy limit prób, re-check budżetu przed każdą próbą, estymata ×(1+retries); błąd parsowania NIGDY nie jest ponawiany | ŻADNEGO auto-retry publikacji (UNCERTAIN → człowiek/odczyt stanu) | WORKING dla researchu; topics nie retry'uje parse/schema errors |
 | **Failure recovery** | stany trwałe w SQLite po każdym etapie; wznowienie po restarcie czyta BAZĘ, nie pamięć; reaper osieroconych RUNNING | — | WORKING dla researchu; reaper NOT_STARTED |
 | **Configuration system** | `.env` (sekrety, modele, tryby) + `config/*.yaml` (polityki, wagi, limity); wartości NIGDY w kodzie | — | WORKING |
 | **Secrets management** | `.env` + `.gitignore` (ADR-010); docelowo przez `SecretStorePort` (adapter istnieje, nieużywany — podpiąć zamiast `os.getenv`) | zero haseł Substacka gdziekolwiek | WORKING (adapter martwy — dług) |
@@ -189,7 +189,7 @@ APPROVED → [DB] job (kind='browser', idempotency_key=hash(account,type,content
 - Kolejne błędy tej samej klasy ≥ progu → SAFE MODE (wejście automatyczne, wyjście TYLKO ręczne).
 
 ### 3.10. Rozliczanie kosztów — również nieudanych wywołań (ZBUDOWANE dla researchu)
-Wyjątek `ResearchError` niesie `usage`/`model` z udanego wywołania API, którego wynik nie dał się sparsować → pipeline księguje koszt do `model_usage` ZANIM zwróci błąd. Potwierdzone na żywo 3×. **Ryzyko rezydualne (nieusuwalne):** timeout po stronie klienta może być zbilowany serwerowo bez lokalnego `usage` — mitygacja: `max_retries=0/1` + niskie capy. **Dług:** klient tematów nie ma tego mechanizmu (sekcja 1.2).
+Wyjątek `ResearchError` niesie `usage`/`model` z udanego wywołania API, którego wynik nie dał się sparsować → pipeline księguje koszt do `model_usage` ZANIM zwróci błąd. Potwierdzone na żywo 3×. Klient tematów stosuje ten sam bezpieczny porządek offline: odpowiedź → `Usage` → parse, a typowany błąd przenosi usage/model do workflow. **Ryzyko rezydualne (nieusuwalne):** timeout po stronie klienta może być zbilowany serwerowo bez lokalnego `usage` — mitygacja: `max_retries=0/1` + niskie capy.
 
 ---
 
@@ -297,7 +297,7 @@ SAFE MODE: flaga w system_flags, ortogonalna do statusów; wejście automatyczne
 | Retry | tylko timeout; estymata ×(1+max_retries); re-check przed każdą próbą; parse/budget error NIGDY | ZBUDOWANE (Task 5) |
 | Limit tokenów | `max_tokens` per wywołanie, per etap, z CLI/configu (A1=600, A2=1500, B=2200) — to REALNY limit kosztu w locie, nie estymata | ZBUDOWANE |
 | Structured output | JSON/JSONL + parsery defensywne (`_strip_code_fence`, JSONL per linia — ucięta linia pomijana); walidacja pól z defaultami | ZBUDOWANE |
-| Walidacja JSON | parse error → wyjątek z `usage`+`raw_text`+`stop_reason` → koszt zaksięgowany, diagnostyka zapisana | ZBUDOWANE (research); DŁUG (topics) |
+| Walidacja JSON | research: parse error z `usage`+`raw_text`+`stop_reason`; topics: typowany parse/schema error z `usage`+modelem; koszt zaksięgowany, parse nigdy nie retry'owany | ZBUDOWANE (research + topics Task 6) |
 | Koszt przy błędzie/przerwaniu | jak wyżej + ryzyko rezydualne timeout-billed-unrecorded (udokumentowane) | ZBUDOWANE (research) |
 
 ---
