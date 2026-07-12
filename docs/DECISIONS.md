@@ -32,11 +32,11 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 
 ---
 
-## Decyzje przyjęte (wstępnie, do potwierdzenia akceptacją)
+## Decyzje architektoniczne
 
 ### ADR-001: Źródło prawdy dla wag scoringu tematów
 - **Data:** 2026-07-11
-- **Status:** PROPOSED
+- **Status:** ACCEPTED (zweryfikowane 2026-07-12, Etap 0 / Task 7)
 - **Kontekst:** trzy dokumenty podają różne wagi scoringu tematu (ARCHITECTURE/YAML vs PROJEKT vs MASTER).
 - **Opcje:** A) ARCHITECTURE/growth_policy.yaml (25/20/15/15/10/10/5) B) PROJEKT (25/25/20/10/10/10) C) MASTER.
 - **Decyzja:** A — spójne z plikiem konfiguracyjnym, który będzie kodem.
@@ -45,7 +45,7 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 
 ### ADR-002: Źródło prawdy dla funkcji celu wzrostu
 - **Data:** 2026-07-11
-- **Status:** PROPOSED
+- **Status:** ACCEPTED (zweryfikowane 2026-07-12, Etap 0 / Task 7)
 - **Kontekst:** ARCHITECTURE/YAML (45/20/15/10/5/5) vs MASTER (40/20/15/10/10/5 + konwersja).
 - **Decyzja:** ARCHITECTURE/growth_policy.yaml.
 - **Konsekwencje:** „konwersja profil→subskrypcja" liczona jako metryka pomocnicza oznaczona jako estymacja, nie składnik funkcji celu.
@@ -53,7 +53,7 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 
 ### ADR-003: Grafiki SVG-only w MVP
 - **Data:** 2026-07-11
-- **Status:** PROPOSED
+- **Status:** ACCEPTED (zweryfikowane 2026-07-12, Etap 0 / Task 7)
 - **Kontekst:** MASTER/PROJEKT chcą obrazów „cinematic editorial"; Anthropic-only daje tylko SVG→PNG.
 - **Decyzja:** MVP = SVG-only za interfejsem `ImageProvider`; zewnętrzny generator poza MVP.
 - **Konsekwencje:** okładki/diagramy zamiast fotorealizmu; brak kosztu grafik w MVP.
@@ -70,7 +70,7 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 
 ### ADR-005: Brak publikacji na Substacku w MVP-0
 - **Data:** 2026-07-11
-- **Status:** PROPOSED
+- **Status:** ACCEPTED (zweryfikowane 2026-07-12, Etap 0 / Task 7)
 - **Kontekst:** `IMPLEMENTATION_PROMPT.md` zakazuje wdrażania publikacji; DoD §23 zakłada publikację jako cel końcowy.
 - **Decyzja:** Etapy 0–3 offline (dry_run), publikacja dopiero od Etapu 4 i tylko po wyraźnej zgodzie właściciela.
 - **Konsekwencje:** pierwszy MVP produkuje szkice do akceptacji, nie publikuje.
@@ -78,11 +78,20 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 
 ### ADR-006: Jedna baza SQLite ze scopingiem po account_id
 - **Data:** 2026-07-11
-- **Status:** PROPOSED
+- **Status:** ACCEPTED (zweryfikowane 2026-07-12, Etap 0 / Task 7)
 - **Kontekst:** izolacja kont vs prostota raportów.
 - **Decyzja:** jedna baza; obowiązkowy `account_id` w StoragePort; testy izolacji.
 - **Konsekwencje:** prostsze raporty, ryzyko wycieku między kontami przy błędzie — pokryte testami.
 - **Powiązania:** IMPLEMENTATION_PLAN.md §A.6, §B.9, §B.10.
+
+#### Weryfikacja wdrożenia ADR-001/002/003/005/006 — Etap 0 / Task 7
+
+- **ADR-001:** `config/growth_policy.example.yaml` jest kanonem wag 25/20/15/15/10/10/5; `load_settings()` ładuje je do `Settings.topic_scoring_weights`, a workflow tematów używa ich w `compute_weighted_score`. Brak nowszego ADR zmieniającego te wagi.
+- **ADR-002:** funkcja celu i wagi 45/20/15/10/5/5 są zapisane w jedynym bieżącym `growth_policy`; analytics/strategy loop jest dopiero Etapem 7 roadmapy, ale nie istnieje konkurencyjne źródło ani nowsza decyzja zmieniająca kontrakt.
+- **ADR-003:** bieżący MVP nie ma zewnętrznego generatora rasterowego ani kosztu grafik; decyzja pozostaje ograniczeniem zakresu. `ImageProvider` będzie potrzebny dopiero przy implementacji modułu grafik — jego brak dziś nie oznacza wdrożenia alternatywnej drogi.
+- **ADR-005:** brak publikacji jest faktycznie wymuszony (`DisabledBrowser`, zero kodu publikacyjnego i zero publikacji). Historyczne określenie „od Etapu 4” pochodzi sprzed konsolidacji roadmapy; aktualne mapowanie z `IMPLEMENTATION_ROADMAP.md` lokuje właściwą publikację w **Etapie 5**. Zmieniła się numeracja, nie meritum: publikacja dopiero po wcześniejszych bramkach i osobnej zgodzie właściciela.
+- **ADR-006:** aplikacja używa jednej bazy SQLite; encje i operacje per-konto są scopowane bezpośrednim `account_id` albo zweryfikowaną relacją przez temat/run. Repozytoria i testy izolacji obejmują topics, research cards, runy, usage i finalizację.
+- **Wynik:** wszystkie pięć decyzji pozostaje zgodnych z `MASTER_ARCHITECTURE.md`, `IMPLEMENTATION_ROADMAP.md` i `CURRENT_PROJECT_STATE.md`; żadna nie została zastąpiona nowszym ADR. Nie znaleziono sprzeczności P1.
 
 ### ADR-007: Zakres MVP = jedno konto (nothing_is_accidental)
 - **Data:** 2026-07-11

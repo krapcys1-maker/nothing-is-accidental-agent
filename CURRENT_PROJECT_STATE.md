@@ -48,7 +48,7 @@
 
 ## Aktualne blokery
 
-1. **Ukończenie zadań 7–8 Etapu 0** (`IMPLEMENTATION_ROADMAP.md`) — Tasks 1–6 są ukończone; pozostałe naprawy wykonawcze muszą zostać wdrożone, przetestowane i udokumentowane przed kolejnym płatnym uruchomieniem.
+1. **Ukończenie zadania 8 Etapu 0** (`IMPLEMENTATION_ROADMAP.md`) — Tasks 1–7 są ukończone; walidacja przejść `mark_*` musi zostać wdrożona, przetestowana i udokumentowana przed kolejnym płatnym uruchomieniem.
 2. **Run `9bbeb020` pozostaje niezmieniony w źródłowej bazie** — po migracji jego historyczne `EXTRACTION_FAILED` dostaną konserwatywną dolną granicę `attempts=1`; legalna droga prowadzi wyłącznie przez jawną komendę retry i nie jest uruchamiana przez zwykłe resume.
 3. **Etap B syntezy nigdy nie wykonany na żywym API** — ostatni niezweryfikowany element ścieżki researchu; zostanie zweryfikowany dopiero przy zadaniu 9 Etapu 0.
 
@@ -62,11 +62,11 @@
 ## Etapy
 
 - **Aktywny etap roadmapy:** Etap 0 — Stabilizacja (zadania 1–9).
-- **Ostatni ukończony krok:** Etap 0 / zadanie 6 — klient tematów buduje `Usage` przed parsowaniem, rozróżnia provider/parse/schema error, zdejmuje jeden pełny zewnętrzny code fence, a workflow zapisuje dostępny koszt dokładnie raz i kończy run `FAILED` bez częściowych topics; **286 testów**, zero API i koszt 0 USD.
+- **Ostatni ukończony krok:** Etap 0 / zadanie 7 — ADR-001/002/003/005/006 zweryfikowane jako zgodne, wdrożone i niezastąpione, po czym ich status zmieniono z `PROPOSED` na `ACCEPTED`; historyczną numerację publikacji w ADR-005 zmapowano na aktualny Etap 5; **286 testów**, zero zmian kodu, zero API i koszt 0 USD.
 - **Następne trzy zadania:**
-  1. Higiena rejestru decyzji (ADR-001/002/003/005/006).
-  2. Walidacja przejść stanów `mark_*`.
-  3. Realny run ADR-022 wyłącznie za osobną zgodą właściciela.
+  1. Walidacja przejść stanów `mark_*`.
+  2. Realny run ADR-022 wyłącznie za osobną zgodą właściciela.
+  3. Etap 1 dopiero po spełnieniu kryterium zakończenia Etapu 0.
 
 ## Znane długi techniczne (poza blokerami; numeracja z audytu 12.07)
 
@@ -81,7 +81,7 @@
 | P2-6 | RESEARCH_LOG.md tylko przy sukcesie (nieudane realne runy nielogowane automatycznie) | Etap 2 |
 | P2-7 | injection guard EN-only, URL-e nieskanowane | Etap 2 (przy fetch) |
 | P2-8 | scripts używają settings.model_quality zamiast ModelRouter | Etap 0/1 |
-| P2-9 | ADR-001/002/003/005/006 wiecznie PROPOSED | Etap 0 zad. 7 |
+| P2-9 | ZAMKNIĘTE: ADR-001/002/003/005/006 miały status PROPOSED mimo wdrożenia | Task 7: wszystkie zweryfikowane i oznaczone ACCEPTED |
 | P2-10/P2-11 | migracja przy każdym otwarciu bazy; runtime pisze do docs/ | Etap 8 |
 | P2-12 | brak prompt cachingu (N×A2 dzieli system prompt) | po sukcesie live |
 | P2-13/P2-14 | diagnostyka nadpisuje poprzednią próbę; stage log nie mierzy czasu | świadomie odłożone |

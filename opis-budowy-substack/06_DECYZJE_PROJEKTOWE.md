@@ -52,6 +52,14 @@ Redakcyjny zapis **każdej ważnej decyzji**: problem, opcje, wybór, dlaczego, 
 - **Wybór:** jedna baza; obowiązkowy `account_id` w `StoragePort`; testy izolacji.
 - **Ryzyko:** pojedynczy zapomniany filtr = wyciek między kontami → pokryte testami izolacji. **Zmieniona później:** nie.
 
+### [2026-07-12] Task 7: status rejestru dogonił stan projektu
+
+ADR-001, ADR-002, ADR-003, ADR-005 i ADR-006 przez kolejne zadania działały jak decyzje przyjęte: wagi tematów pochodziły z configu, funkcja celu miała jedno źródło, MVP nie korzystał z zewnętrznego generatora grafik, publikacja była fizycznie wyłączona, a dane kont trafiały do jednej SQLite z izolacją. Rejestr nadal opisywał je jako `PROPOSED`.
+
+Każdą decyzję sprawdzono osobno względem architektury, roadmapy, bieżącego stanu i repozytorium. Nie znaleziono nowszego ADR, który zastępowałby którąkolwiek z pięciu. Jedyna pozorna sprzeczność dotyczyła ADR-005: stare „od Etapu 4” pochodziło sprzed konsolidacji numeracji. W aktualnej roadmapie właściwa publikacja jest Etapem 5, lecz zasada bezpieczeństwa pozostaje ta sama — nic nie publikuje się wcześniej ani bez zgody właściciela.
+
+Statusy zmieniono na `ACCEPTED` bez przepisywania historycznego uzasadnienia. Task 7 nie dotknął kodu, kosztował 0 USD i nie wykonał API.
+
 ### D-07: Zakres MVP = jedno konto (↔ ADR-007)
 - **Problem:** trzy konta w architekturze, ale start ma być prosty.
 - **Wybór:** MVP obsługuje wyłącznie `nothing_is_accidental`; `owner_account`/`wife_account` pozostają `active: false`.

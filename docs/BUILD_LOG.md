@@ -397,3 +397,11 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Self-review:** pierwsza wersja budowała usage dopiero po złożeniu tekstu odpowiedzi. Nie gubiło to kosztu przy `json.loads`, ale nie spełniało literalnego kontraktu „usage natychmiast po response”; kolejność poprawiono i dodano test domyślnego adaptera z fałszywym SDK.
 - **Testy:** parser raw/fence/whitespace/backticks/truncation/prefix/suffix/schema; klient przez caller i fake SDK; workflow na prawdziwej SQLite dla usage/cost/FAILED/zero topics/policy/account. Celowane topics: **35 passed**; pełne `python -m pytest`: **286 passed**.
 - **Zakres:** 0 USD, zero API, realnego generowania tematów, researchu i Playwrighta; bez commita/pushu; Task 7 nierozpoczęty; P2-17/P2-18/P2-19 bez zmian.
+
+### [2026-07-12] Etap 0 / Task 7 — higiena rejestru decyzji
+
+- **Cel:** zamknąć P2-9 przez sprawdzenie, czy ADR-001/002/003/005/006 nadal opisują aktualną architekturę i faktyczny kierunek wdrożenia, zamiast mechanicznie zmieniać pięć etykiet.
+- **Weryfikacja:** ADR-001 — config i scoring tematów; ADR-002 — jedyny `growth_policy` i brak konkurencyjnej funkcji celu; ADR-003 — brak zewnętrznego generatora grafik w MVP; ADR-005 — fizyczny brak publikacji i `DisabledBrowser`; ADR-006 — jedna SQLite, scoping i testy izolacji kont.
+- **Rozstrzygnięcie numeracji:** zapis „publikacja od Etapu 4” w ADR-005 pochodził sprzed konsolidacji ADR-023. Aktualna roadmapa umieszcza publikację w Etapie 5; nie zmienia to decyzji o braku publikacji w MVP-0 ani wymogu jawnej zgody.
+- **Wynik:** wszystkie pięć ADR-ów pozostaje zgodnych, wdrożonych w aktualnym zakresie i niezastąpionych; statusy zmieniono `PROPOSED → ACCEPTED`. Nie znaleziono P0/P1 ani nowego P2.
+- **Zakres:** wyłącznie dokumentacja; 286 testów offline; `git diff --check` czysty; 0 USD, zero API, researchu, generowania tematów i Playwrighta; Task 8/9 nierozpoczęte.

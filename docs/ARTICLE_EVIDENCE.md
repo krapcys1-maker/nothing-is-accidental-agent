@@ -198,3 +198,9 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Code fence: `````json````` jest częstym, nieszkodliwym opakowaniem odpowiedzi modelu. System zdejmuje dokładnie jeden pełny fence, lecz nie wycina tekstu przed/po JSON-ie i nie „naprawia” uciętych danych.
   - Dlaczego bez retry: zły format nie jest timeoutem; drugi call oznaczałby drugi możliwy rachunek zamiast deterministycznej odmowy.
   - Dowód: fake SDK, rzeczywista SQLite, jeden `model_usage`, `runs.FAILED`, zero topics; **286 passed**, koszt 0 USD, brak API.
+
+- **[2026-07-12] Decyzja wdrożona, ale nadal „proponowana”** (Etap 0 / Task 7)
+  - Materiał: pięć ADR-ów od tygodni sterowało configiem, granicami MVP, publikacją i izolacją kont, lecz rejestr nadal nazywał je `PROPOSED`.
+  - Metoda: każdy wpis porównano z trzema źródłami prawdy i kodem/configiem; status zmieniono dopiero po potwierdzeniu wdrożenia oraz braku nowszego ADR supersedującego decyzję.
+  - Ciekawy przypadek: ADR-005 mówił historycznie o publikacji „od Etapu 4”, podczas gdy skonsolidowana roadmapa przeniosła adapter publikacyjny do Etapu 5. To zmiana numeracji, nie decyzji bezpieczeństwa — system nadal fizycznie nie publikuje.
+  - Dowód: pięć statusów `ACCEPTED`, jawna tabela weryfikacji w `docs/DECISIONS.md`, **286 passed**, zero zmian kodu, 0 USD i brak API.
