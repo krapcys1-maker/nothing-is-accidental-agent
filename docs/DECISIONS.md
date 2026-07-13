@@ -383,6 +383,19 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - NaN/Infinity/ujemne wartości limitów lub sum storage powodują `BUDGET_INVALID_STATE`, nie allow.
 - Weryfikacja: timeout+usage+deny attempt 2 osobno dla A1/A2/B, stan B wraca do SOURCES_COMPLETE; 257 testów offline.
 
+### ADR-027: Status zmienia wyłącznie atomowe przejście z jawnego stanu źródłowego
+
+- **Data:** 2026-07-12
+- **Status:** ACCEPTED
+- **Kontekst:** inwentaryzacja Task 8 wykazała, że część helperów `runs`, `research_runs` i kandydatów źródeł wykonywała `UPDATE ... WHERE id=?` bez sprawdzenia poprzedniego statusu. Równoległy albo spóźniony proces mógł więc cofnąć nowszy stan lub dopisać pola do niedozwolonego przejścia.
+- **Decyzja:** każda istniejąca repozytoryjna mutacja statusu zawiera w tym samym UPDATE `status IN (...)`; research dodatkowo warunkuje `flow`. Sukces wymaga `rowcount=1`. Zero wierszy oznacza brak rekordu, konflikt albo niedozwolony stan i daje `LifecycleTransitionError` zawierający encję, ID, cel, dozwolone źródła i aktualny stan. Kanoniczna finalizacja Task 4 zachowuje silniejszy `ResearchTopicIntegrityError`.
+- **Atomowość:** dane towarzyszące statusowi są w tej samej transakcji. Niedozwolony Stage A/A1 nie pozostawia źródeł ani kandydatów; testy sprawdzają stan po ponownym otwarciu plikowej SQLite.
+- **Idempotencja:** identyczna finalizacja COMPLETE, terminalizacja runu, `mark_extraction_in_progress` i identyczny zapis PARTIAL są no-op. Kolejny jawny resume może zaktualizować `FAILED→FAILED` w `runs` albo błąd `PARTIAL→PARTIAL`; pozostałe powtórzenia terminalne są odrzucane. `PARTIAL_EXHAUSTED→PARTIAL` i `EXTRACTION_FAILED→PENDING_EXTRACTION` istnieją wyłącznie w jawnym kontrakcie retry.
+- **Zakres tabel:** `topics.SELECTED→USED` pozostaje wyłącznie częścią `finalize_research_success`; `research_sources` nie mają lifecycle statusu. `content_items`, approvals i interactions nie mają dziś używanych helperów, więc nie dodano logiki przyszłych etapów.
+- **Weryfikacja:** 44 literalne testy Task 8 plus regresje Tasks 1–7; race dwóch terminalizacji runu, konkurencyjnego resume i równoległego claimu kandydata na plikowej SQLite; pełne **330 passed** offline. Zero API, realnego researchu, Playwrighta i kosztu.
+- **Poza zakresem:** P2-17, P2-18 i P2-19 pozostają bez zmian; nie dodano migracji, workera, lease ani Task 9.
+- **Powiązania:** `app/ports/storage.py`, `app/storage/repositories.py`, `tests/test_status_transitions.py`, ADR-024/025/026, MASTER §5.
+
 ## Decyzje otwarte (wymagają właściciela)
 
 - **brak** — wszystkie pozycje otwarte z audytu zostały rozstrzygnięte (OPEN-1..5 → ADR-004/007/008/009/010, OPEN-4 → ADR-012).

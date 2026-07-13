@@ -181,6 +181,26 @@ def test_resume_stage_b_never_calls_gather_sources_and_survives_restart(settings
     assert research_run.research_card_id is not None
 
 
+def test_failed_two_stage_resume_updates_only_explicit_resume_audit(settings, storage, account):
+    topic = _selected_topic(storage, account)
+    first_failure = _BrokenSynthesizeOnceClient("good")
+    summary = _run_fresh(settings, storage, account, topic, first_failure)
+    before = storage.get_run(summary.run_id)
+    assert before.status == RunStatus.FAILED
+
+    second_failure = _BrokenSynthesizeOnceClient("good")
+    resumed = _resume(settings, storage, account, summary.run_id, second_failure)
+
+    after = storage.get_run(summary.run_id)
+    assert resumed.error is not None
+    assert after.status == RunStatus.FAILED
+    assert after.error.startswith("[synthesize_card]")
+    assert after.finished_at != before.finished_at
+    assert after.cost_usd == sum(
+        usage.estimated_cost_usd for usage in storage.get_research_usage(summary.run_id)
+    )
+
+
 # --- 6. Realny usage zachowany przy błędzie (już etap 2, ale w nowej ścieżce) ---
 
 def test_real_usage_recorded_when_stage_b_fails_during_fresh_run(settings, storage, account):

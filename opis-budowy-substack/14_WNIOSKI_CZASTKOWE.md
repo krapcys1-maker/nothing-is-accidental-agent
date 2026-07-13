@@ -143,6 +143,18 @@ Po każdym etapie: co nas zaskoczyło, co działało, co nie, co agent robił le
 - **Granica rozwiązania:** nie ma automatycznego timeout recovery. Przyszły worker musi kiedyś dostarczyć jawny lease/recovery, ale dziś bezpieczniej odmówić niż kupić kolejny call.
 - **Materiał do artykułu:** „Najważniejszą informacją po awarii nie jest to, ile razy próbowaliśmy. Jest nią to, czy wolno nam udawać, że wiemy, co stało się ostatnim razem.”
 
+### Wnioski po walidacji lifecycle (2026-07-12, ADR-027)
+- **Co zaskoczyło:** poprawna lista statusów nie chroni przed race, jeśli SELECT i UPDATE są osobnymi krokami.
+- **Co działa:** status źródłowy i docelowy spotykają się w jednym atomowym UPDATE; `rowcount` jest dowodem wygranej albo konfliktu, a no-op istnieje tylko tam, gdzie kontrakt mówi o nim wprost.
+- **Granica:** nie jest to rozwiązanie P2-17 dla dwóch świeżych researchów tego samego tematu; przyszły claim tematu nadal wymaga osobnej decyzji.
+- **Dowód:** plikowa SQLite, race terminalizacji, resume i claimu, rollback po reopen, 330 testów i 0 USD.
+
+### Wnioski z korekty dwóch P1 Task 8 (2026-07-13)
+- **Jawność:** wyjątek nie jest jawny dlatego, że komentarz nazywa go resume; musi mieć osobny kontrakt i wymagane dane domenowe.
+- **Concurrency:** dwa połączenia sekwencyjne dowodzą warunku statusu, ale nie dowodzą zachowania przy wspólnym starcie. `Barrier` zmienia test jakościowo.
+- **SQLite:** SELECT w rozpoczętej transakcji może stworzyć konflikt upgrade-lock. Bezpieczeństwo powinien nieść warunkowy UPDATE i CAS, a nie utrzymywany read-lock.
+- **Dowód:** dwa race tests powtórzone 10 razy, 337 testów, 0 USD.
+
 ## Otwarte pytania (do rozstrzygnięcia danymi, nie opinią)
 - Czy szacunek kosztu dry_run jest bliski rzeczywistości?
 - Jaki procent szkiców agenta przejdzie bez poprawek człowieka?

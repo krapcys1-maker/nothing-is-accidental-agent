@@ -5,7 +5,7 @@
 >
 > Kolejność prac: `IMPLEMENTATION_ROADMAP.md`. Aktualny stan: `CURRENT_PROJECT_STATE.md`. Rejestr decyzji (ADR): `docs/DECISIONS.md` (nadal obowiązujący — ten dokument konsoliduje decyzje, nie zastępuje rejestru).
 >
-> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (286 passed, 2026-07-12) lub pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
+> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (337 passed, 2026-07-13) lub pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
 
 ---
 
@@ -34,7 +34,7 @@
 
 - **Policy Engine** — centralnie egzekwuje cap per-run oraz budżet dzienny/miesięczny przez `check_run_budget`; miesięczny zachowuje priorytet ADR-012. Brak nadal: egzekucji `autonomy_level`, `AccountMode`, limitów per konto, cooldownów, SAFE MODE i runtime kill-switcha.
 - **Klient Anthropic dla tematów** (`app/llm/anthropic_client.py`) — offline zweryfikowany kontrakt response→Usage→parse, typowane provider/parse/schema errors, jeden zewnętrzny code fence i księgowanie dostępnego usage przez workflow także przy błędzie; nadal nigdy nie uruchomiony realnie (`NOT VERIFIED live`).
-- **Maszyna stanów researchu** — Etap 0 / Tasks 1–5 ukończone: jawny flow, atomowy koszt/cache i claim A2, idempotentna finalizacja COMPLETE+terminalny run+USED oraz centralny budżet retry. Przed etapem estymata obejmuje `1+max_retries`, a przed każdą próbą callback ponownie czyta `model_usage`. Rezydualne P2-17/P2-18 oraz `timeout-billed-unrecorded` pozostają jawne. Produkcyjna baza nie została w tej pracy zmieniona.
+- **Maszyna stanów researchu** — Etap 0 / Tasks 1–8 ukończone: jawny flow, atomowy koszt/cache i claim A2, idempotentna finalizacja COMPLETE+terminalny run+USED, centralny budżet retry oraz warunkowe przejścia lifecycle. Przed etapem estymata obejmuje `1+max_retries`, przed każdą próbą callback ponownie czyta `model_usage`, a każdy statusowy UPDATE wymaga dozwolonego stanu źródłowego i `rowcount=1`. Rezydualne P2-17/P2-18 oraz `timeout-billed-unrecorded` pozostają jawne. Produkcyjna baza nie została w tej pracy zmieniona.
 
 ### 1.3. Co jest tylko szkieletem
 
@@ -235,7 +235,7 @@ Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → bu
 1. Operacje płatne: nigdy nie powtarzaj automatycznie etapu, który zostawił trwały wynik (resume wykonuje wyłącznie NASTĘPNY etap).
 2. Publikacja: `idempotency_key` + verify-before-publish + wynik UNCERTAIN nigdy nie jest retry'owany automatycznie.
 3. Zapisy stanu: przejście statusu + dane w JEDNEJ transakcji (wzór: `mark_research_stage_a_success`).
-4. Każde `mark_*` docelowo waliduje stan poprzedni (`WHERE status IN (...)` + liczba zmienionych wierszy) — dziś ślepy UPDATE (dług).
+4. Każdy istniejący helper zmieniający status waliduje stan poprzedni w tym samym UPDATE (`WHERE status IN (...)`, a dla researchu także `flow`) i wymaga dokładnie jednego zmienionego wiersza. `rowcount=0` daje typowany błąd z aktualnym stanem, z wyjątkiem jawnych no-opów idempotencji; `rowcount>1` jest błędem integralności.
 
 ---
 
@@ -243,7 +243,10 @@ Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → bu
 
 ```
 runs.status:
-  RUNNING → SUCCESS | FAILED | STOPPED          (DRY_RUN = osobny terminal dla dry_run)
+  RUNNING → SUCCESS | FAILED | STOPPED
+  DRY_RUN → DRY_RUN | FAILED
+  FAILED → FAILED  (NIE przez finish_run; wyłącznie `finish_resumed_research_run` z poprawną relacją run–research–topic–account, flow/status i tokenem CAS)
+  identyczne powtórzenie terminalizacji = no-op; inny terminal = błąd
   reaper (Etap 1): RUNNING starszy niż X bez żywego procesu → STOPPED(stale)
 
 topics.status:
@@ -253,11 +256,12 @@ topics.status:
 research_runs.status (flow='staged'):
   DISCOVERY_PENDING → DISCOVERY_COMPLETE → EXTRACTION_IN_PROGRESS
     → SOURCES_COMPLETE ⇄ SYNTHESIS_PENDING → COMPLETE
-    → PARTIAL            (są PENDING_EXTRACTION → wznawialne: wyłącznie A2)
+    → PARTIAL            (z DISCOVERY_COMPLETE/EXTRACTION_IN_PROGRESS/PARTIAL; wznawialne: wyłącznie A2)
     → PARTIAL_EXHAUSTED  (brak legalnego PENDING/FAILED poniżej capu, EXTRACTED < min — terminalny dla zwykłego resume)
   PARTIAL_EXHAUSTED → PARTIAL (TYLKO jawne retry-failed-candidates po podniesieniu capu)
   DISCOVERY_PENDING → FAILED (terminal)
-  (flow='two_stage', legacy: PENDING → SOURCE_COLLECTED → COMPLETE | PARTIAL | FAILED)
+  (flow='single': PENDING → COMPLETE | FAILED)
+  (flow='two_stage', legacy: PENDING → SOURCE_COLLECTED → COMPLETE | PARTIAL; PENDING → FAILED; PARTIAL może zapisać wynik kolejnej jawnej próby resume)
 
 research_source_candidates.status:
   PENDING_EXTRACTION → EXTRACTION_IN_PROGRESS  (atomowy claim: attempts < cap)

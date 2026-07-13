@@ -5,12 +5,14 @@ Lokalny adapter: app/storage/repositories.py (SQLite). Później: Postgres.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol, Sequence
 
 from app.models import (
     Account,
     ModelUsage,
     ResearchCard,
+    ResearchFlow,
     ResearchRun,
     ResearchSourceRecord,
     ResearchStageName,
@@ -31,6 +33,33 @@ class ResearchTopicIntegrityError(RuntimeError):
     """Stan researchu tematu przeczy jego trwałej semantyce."""
 
 
+class LifecycleTransitionError(ValueError):
+    """A persisted entity cannot make the requested lifecycle transition."""
+
+    def __init__(
+        self,
+        entity: str,
+        identifier: str | int,
+        target_status: str,
+        allowed_source_statuses: Sequence[str],
+        current_status: str | None,
+        *,
+        detail: str | None = None,
+    ) -> None:
+        self.entity = entity
+        self.identifier = identifier
+        self.target_status = target_status
+        self.allowed_source_statuses = tuple(allowed_source_statuses)
+        self.current_status = current_status
+        current = current_status if current_status is not None else "<missing>"
+        allowed = ", ".join(self.allowed_source_statuses) or "<none>"
+        prefix = f"{detail} " if detail else ""
+        super().__init__(
+            f"{prefix}{entity} #{identifier} cannot transition to {target_status}; "
+            f"allowed source statuses: [{allowed}]; current status: {current}."
+        )
+
+
 class StoragePort(Protocol):
     def ensure_account(self, account: Account) -> None: ...
 
@@ -46,6 +75,15 @@ class StoragePort(Protocol):
 
     def finish_run(self, run_id: str, status: str, cost_usd: float,
                    error: str | None = None) -> None: ...
+
+    def get_run(self, run_id: str) -> Run | None: ...
+
+    def finish_resumed_research_run(
+        self, run_id: str, account_id: str, expected_flow: ResearchFlow,
+        expected_finished_at: datetime, cost_usd: float, error: str,
+    ) -> None:
+        """CAS-updates FAILED audit fields for one explicitly resumed research attempt."""
+        ...
 
     def add_model_usage(self, usage: ModelUsage) -> ModelUsage: ...
 

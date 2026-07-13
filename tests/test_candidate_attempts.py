@@ -1,6 +1,9 @@
 """Regresje Etapu 0 / Task 3: jawny, capowany retry kandydatów A2."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
 import pytest
 
 from app.core.ids import new_run_id
@@ -19,6 +22,7 @@ from app.models import (
 )
 from app.policies.policy_engine import PolicyEngine
 from app.ports.notification import LogNotification
+from app.ports.storage import LifecycleTransitionError
 from app.research.base import ResearchError
 from app.research.fake_client import FakeResearchClient
 from app.storage.repositories import SqliteStorage
@@ -111,7 +115,10 @@ def test_explicit_retry_resets_only_eligible_failed_and_second_attempt_is_two(
     assert candidate.status == SourceCandidateStatus.PENDING_EXTRACTION
     assert candidate.attempts == 1
 
-    _extract(settings, storage, account, run_id, FakeResearchClient("good"), max_attempts=2)
+    _extract(
+        settings, storage, account, run_id, FakeResearchClient("good"),
+        max_attempts=2, explicit_resume=True,
+    )
     candidate = storage.list_source_candidates(run_id)[0]
     assert candidate.status == SourceCandidateStatus.EXTRACTED
     assert candidate.attempts == 2
@@ -337,18 +344,35 @@ def test_extraction_does_not_call_client_when_pending_candidate_is_at_cap(
     assert storage.get_research_usage(run_id) == []
 
 
-def test_second_sqlite_connection_cannot_claim_already_claimed_candidate(
+def test_two_concurrent_sqlite_connections_only_allow_one_candidate_claim(
         settings, storage, account):
     run_id = _staged_run(storage, account, _topic(storage, account))
     candidate = storage.list_source_candidates(run_id)[0]
-    other = SqliteStorage.open(settings.db_path)
+    barrier = Barrier(2)
+
+    def claim() -> str:
+        local = SqliteStorage.open(settings.db_path)
+        try:
+            barrier.wait()
+            local.claim_source_candidate_attempt(candidate.id, max_attempts=2)
+            return "won"
+        except LifecycleTransitionError:
+            return "lost"
+        finally:
+            local.close()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: claim(), range(2)))
+
+    assert sorted(results) == ["lost", "won"]
+    storage.close()
+    reopened = SqliteStorage.open(settings.db_path)
     try:
-        assert storage.claim_source_candidate_attempt(candidate.id, max_attempts=2) == 1
-        with pytest.raises(ValueError, match="not claimable"):
-            other.claim_source_candidate_attempt(candidate.id, max_attempts=2)
+        persisted = reopened.list_source_candidates(run_id)[0]
+        assert persisted.attempts == 1
+        assert persisted.status == SourceCandidateStatus.EXTRACTION_IN_PROGRESS
     finally:
-        other.close()
-    assert storage.list_source_candidates(run_id)[0].attempts == 1
+        reopened.close()
 
 
 def test_uncertain_claim_blocks_ordinary_resume_before_model_or_usage(settings, storage, account):

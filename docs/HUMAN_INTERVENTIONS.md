@@ -133,3 +133,9 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Obiekt:** parser odpowiedzi tematów, typowane błędy i księgowanie usage po parse-error.
 - **Zakres decyzji właściciela:** implementacja, testy, self-review i poprawa wszystkich P0/P1; wyłącznie offline, bez API, realnego generowania tematów, researchu, Task 7, commita i pushu.
 - **Efekt:** response→Usage→parse, ścisły code fence i trwały `FAILED` z kanonicznym kosztem; 286 testów, 0 USD; P2-17/P2-18/P2-19 bez zmian.
+
+### [2026-07-12] APPROVAL — Etap 0 / Task 8, walidacja przejść stanów
+- **Typ:** APPROVAL
+- **Obiekt:** pełna inwentaryzacja i zabezpieczenie istniejących repozytoryjnych zmian statusu.
+- **Zakres decyzji właściciela:** atomowy warunek statusu, `rowcount`, typowany błąd, testy illegal/race/reopen i self-review; bez Task 9, API, realnego researchu, Playwrighta, commita i pushu. P2-17/P2-18/P2-19 pozostają poza zakresem.
+- **Efekt:** ADR-027, 44 nowe regresje i 330 testów offline; working tree pozostawiony do niezależnego review, koszt 0 USD.

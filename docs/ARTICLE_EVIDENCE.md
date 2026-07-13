@@ -204,3 +204,15 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Metoda: każdy wpis porównano z trzema źródłami prawdy i kodem/configiem; status zmieniono dopiero po potwierdzeniu wdrożenia oraz braku nowszego ADR supersedującego decyzję.
   - Ciekawy przypadek: ADR-005 mówił historycznie o publikacji „od Etapu 4”, podczas gdy skonsolidowana roadmapa przeniosła adapter publikacyjny do Etapu 5. To zmiana numeracji, nie decyzji bezpieczeństwa — system nadal fizycznie nie publikuje.
   - Dowód: pięć statusów `ACCEPTED`, jawna tabela weryfikacji w `docs/DECISIONS.md`, **286 passed**, zero zmian kodu, 0 USD i brak API.
+
+- **[2026-07-12] Status to porównanie i zapis, nie dwa osobne kroki** (Etap 0 / Task 8)
+  - Materiał: ślepy `UPDATE ... WHERE id=?` pozwala spóźnionemu procesowi nadpisać stan, który zdążył już przejść dalej. Poprzedzający SELECT nie rozwiązuje race, bo prawda może zmienić się między zapytaniami.
+  - Decyzja: warunek źródłowego statusu jest częścią tego samego UPDATE, a `rowcount` staje się wynikiem próby przejścia. Po zerze wierszy system odczytuje stan wyłącznie dla diagnostyki i odmawia typowanym błędem.
+  - Kontrast: idempotencja nie oznacza „ignoruj rowcount=0”. Każdy no-op jest jawnym kontraktem; resume może mieć inną regułę niż terminalna finalizacja.
+  - Dowód: dwa połączenia do plikowej SQLite, jeden zwycięzca terminalizacji, resume i claimu, rollback Stage A/A1 sprawdzony po reopen; **330 passed**, 0 USD, brak API.
+
+- **[2026-07-13] Dwa połączenia nie tworzą jeszcze wyścigu** (korekta review Task 8)
+  - Materiał: wcześniejszy test uruchamiał drugi claim dopiero po commicie pierwszego, więc dowodził tylko odmowy dla starego snapshotu. `Barrier` wymusił rzeczywiście wspólny start dwóch osobnych połączeń.
+  - Druga lekcja: wyjątek nazwany „resume” nie jest jawny, jeśli siedzi w ogólnym helperze terminalizacji. Nowy helper wymaga kompletnej relacji researchu i tokenu CAS sprzed próby.
+  - Nieudana iteracja: transakcja rozpoczęta przed SELECT dała lock upgrade zamiast domenowego konfliktu. Warunkowy UPDATE bez wcześniejszego read-locka dał jednego zwycięzcę i typowaną odmowę drugiego.
+  - Dowód: oba race tests ×10, stan po reopen, `attempts=1`, `EXTRACTION_IN_PROGRESS`; **337 passed**, 0 USD, brak API.

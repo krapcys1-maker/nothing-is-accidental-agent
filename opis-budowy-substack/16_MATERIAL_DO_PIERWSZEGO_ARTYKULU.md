@@ -182,6 +182,22 @@ Naprawa nie polegała na lepszym zgadywaniu. Rekord dostał stan `EXTRACTION_IN_
 
 Ta korekta dodała też atomiczność migracji i możliwość świadomego podniesienia capu, jeśli exhausted run naprawdę odzyskuje legalny ruch. Wszystko sprawdzone offline: **164 testy**, 0 USD, zero API i bez zmian źródłowej bazy.
 
+## 24. Jeden UPDATE jako granica prawdy (2026-07-12)
+
+Odczyt statusu i późniejszy zapis wyglądają bezpiecznie tylko w świecie z jednym procesem. Gdy dwa wykonania widzą `RUNNING`, oba mogą uznać, że wolno im zakończyć run. Task 8 przeniósł pytanie „czy nadal jestem w dozwolonym stanie?” do tego samego UPDATE, który zapisuje wynik. Jeden konkurent zmienia jeden wiersz; drugi dostaje zero i typowany konflikt.
+
+**Zdanie do artykułu:** „W systemie współbieżnym prawda nie mieści się w SELECT. Mieści się w warunku zapisu, który może wygrać tylko raz.”
+
+Test na dwóch połączeniach SQLite, konkurencyjne resume, rollback źródeł po reopen i pełne 330 testów powstały bez API i kosztu. To nie naprawia wyścigu dwóch świeżych researchów tematu — ten nadal czeka na trwały claim w późniejszym etapie.
+
+## 25. Dwa połączenia to jeszcze nie wyścig (2026-07-13)
+
+Test może używać dwóch bazodanowych połączeń i nadal nie testować współbieżności. Jeśli drugie zaczyna dopiero po commicie pierwszego, zna już wynik. `Barrier` zmusił oba do startu z tego samego momentu i natychmiast odsłonił nowy problem: read-locki przed UPDATE dawały `database is locked` zamiast domenowego rozstrzygnięcia.
+
+**Zdanie do artykułu:** „Wyścigu nie tworzy liczba uczestników. Tworzy go moment, w którym obaj wierzą, że nadal mogą wygrać.”
+
+Po korekcie jeden warunkowy UPDATE wygrywa, drugi dostaje typowany konflikt. Tak samo oddzielono ogólny koniec runu od jawnego resume researchu. 337 testów, 0 USD, brak API.
+
 ## Powiązania
 - Źródła: `00`–`10`, `docs/BUILD_LOG.md`, `docs/DECISIONS.md` (ADR-017, ADR-019, ADR-020), `docs/COSTS.csv`, `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` CZĘŚĆ D, CZĘŚĆ E, CZĘŚĆ F
 - Następny krok redakcyjny: szkic w `article-series/artykul-01-dlaczego-wlasny-substack.md`

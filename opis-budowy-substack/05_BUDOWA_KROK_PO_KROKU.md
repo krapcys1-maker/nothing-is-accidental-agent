@@ -323,6 +323,18 @@ Self-review znalazł, że pierwsza poprawka nadal składała tekst przed obiekte
 
 **Następne (niezbudowane):** Task 7 — higiena statusów ADR; Task 8 — walidacja przejść `mark_*`; realny run dopiero później i za osobną zgodą.
 
+### Task 8: przejście statusu stało się pojedynczą operacją
+
+Inwentaryzacja znalazła ślepe UPDATE-y w ogólnych runach, etapach researchu i części helperów kandydatów. Od tej zmiany status nie jest najpierw odczytywany, a potem bezwarunkowo zapisywany. Poprzedni stan jest częścią tego samego UPDATE, a liczba zmienionych wierszy mówi, czy proces naprawdę wygrał prawo do przejścia.
+
+Najciekawsza korekta przyszła z istniejących testów: resume używa tego samego `run_id`, więc kolejna jawna próba może zakończyć się `FAILED→FAILED`, a staged A2 może legalnie przejść `DISCOVERY_COMPLETE→PARTIAL`, gdy nie próbuje żadnego źródła. Reguły doprecyzowano bez zezwalania na cofanie COMPLETE ani zmianę jednego terminala na drugi; konkurencyjne resume używa compare-and-swap poprzedniego payloadu. Wynik: **330 testów**, 0 USD, zero API; Task 9 nie został rozpoczęty.
+
+### Korekta Task 8 po końcowym review: wyjątek musi mieć własne wejście
+
+Review zauważyło, że nazwanie gałęzi w ogólnym `finish_run` „resume” niczego nie ograniczało. Każdy FAILED mógł wejść w ten kod. Po korekcie zwykły terminalny run jest niezmienny, a nieudane resume researchu ma osobną operację wymagającą całej relacji, właściwego flow/statusu i snapshotu sprzed próby.
+
+Drugi P1 dotyczył dowodu: dwa połączenia wykonane kolejno nie są wyścigiem. Nowy test uruchamia dwa wątki przez `Barrier`; jedno wygrywa claim, drugie dostaje konflikt, a po reopen baza pokazuje dokładnie jedną próbę. Pełny wynik: **337 testów**, 0 USD, zero API.
+
 ## Powiązania
 - `docs/BUILD_LOG.md` (źródło), `docs/ARCHITECTURE_EVOLUTION.md`, `docs/RELEASE_TIMELINE.md`
 - `timeline/` (oś czasu do wyeksportowania)

@@ -16,3 +16,4 @@ date,run_id,task,provider,model,input_tokens,output_tokens,cache_read_tokens,cac
 2026-07-12,9bbeb020-bf46-472f-b68c-3a9c6c85cabb,research_extract,anthropic,claude-sonnet-5,24719,640,0,0,1,0,0.037919,actual
 2026-07-12,9bbeb020-bf46-472f-b68c-3a9c6c85cabb,research_extract,anthropic,claude-sonnet-5,20004,653,0,0,1,0,0.033269,actual
 2026-07-12,9bbeb020-bf46-472f-b68c-3a9c6c85cabb,research_extract,anthropic,claude-sonnet-5,14394,915,0,0,1,0,0.028969,actual
+# 2026-07-12 - Etap 0 / Task 8 - ZERO platnych wywolan API; inwentaryzacja lifecycle, implementacja guardow statusu, testy SQLite/race i dokumentacja kosztowaly 0.000000 USD. Brak realnego researchu, generowania tematow i Playwrighta.

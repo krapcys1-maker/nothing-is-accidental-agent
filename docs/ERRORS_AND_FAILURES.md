@@ -335,3 +335,20 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Dlaczego bez retry:** wadliwy format odpowiedzi nie jest błędem transient. Automatyczne powtórzenie mogłoby zapłacić drugi raz bez usunięcia przyczyny.
 - **Nieudana wersja podczas pracy:** pierwsza poprawka wciąż składała tekst przed `Usage`. Self-review sklasyfikował to jako P1 względem literalnego kontraktu i odwrócił kolejność przed finalną weryfikacją.
 - **Dowód:** 35 testów topics i 286 całego suite, wyłącznie fake caller/fake SDK oraz SQLite; 0 USD, zero API.
+
+### [2026-07-12] Task 8 — pierwsza macierz lifecycle odrzuciła legalne resume — [IMPLEMENTATION | TEST]
+
+- **Co się zepsuło:** pierwszy celowany suite miał 4 failures. Staged A2 z `max_sources=0` legalnie zapisywał `DISCOVERY_COMPLETE→PARTIAL`, a kolejne jawne próby resume aktualizowały wynik tego samego ogólnego runu `FAILED→FAILED`; początkowa macierz obu kontraktów nie uwzględniła.
+- **Dlaczego:** statusy są rozdzielone na ogólny audit `runs` i szczegółowy `research_runs`. Odczyt samego diagramu bez wszystkich callerów nie ujawnił, że resume zachowuje ten sam `run_id` i może zakończyć się kolejnym błędem bez cofania researchu do początku.
+- **Naprawa:** staged PARTIAL dopuszcza `DISCOVERY_COMPLETE`, `EXTRACTION_IN_PROGRESS` i `PARTIAL`. `finish_run` dopuszcza FAILED→FAILED wyłącznie jako zapis następnej jawnej próby; identyczne powtórzenie jest no-op, a FAILED→SUCCESS i każdy inny konflikt terminali nadal są odrzucane.
+- **Dowód:** 44 testy Task 8, 96 celowanych i 330 pełnych; race różnych terminali oraz konkurencyjnego resume ma dokładnie jeden statusowy UPDATE. Wszystko offline, bez API i kosztu.
+- **Status:** FIXED przed niezależnym review.
+- **Drobna nieudana próba testowa:** pierwszy trigger audytowy użył w body składni `INSERT ... DEFAULT VALUES`, której SQLite nie przyjął w tym kontekście. Zastąpiono ją równoważnym `VALUES (NULL)`; błąd nie dotyczył kodu produkcyjnego ani danych.
+
+### [2026-07-13] Review Task 8: ogólny FAILED był przepisywalny, a test claimu nie był race — [AUDIT | TEST]
+
+- **P1-1:** wyjątek FAILED→FAILED znajdował się w ogólnym `finish_run`, więc również niereseachowy terminalny run mógł zmienić koszt, błąd i timestamp. Oddzielono zwykłą finalizację od jawnego resume z pełną walidacją relacji oraz CAS.
+- **P1-2:** dwa połączenia SQLite były użyte kolejno, nie równolegle. Test nie dowodził zachowania przy jednoczesnym snapshotcie PENDING. Zastąpił go deterministyczny `Barrier` i dwa wątki.
+- **Nieudana pierwsza korekta race resume:** `BEGIN` przed SELECT tworzył upgrade-lock race i faktyczny `database is locked`. Diagnostyczny SELECT jest teraz poza transakcją zapisu, natomiast UPDATE ponownie sprawdza cały kontrakt oraz token CAS. Test nie łapie OperationalError — lock pozostaje porażką.
+- **Wynik:** 337 testów, w tym oba race powtórzone 10 razy; 0 USD i brak API.
+- **Status:** FIXED; oczekuje na krótkie końcowe review.

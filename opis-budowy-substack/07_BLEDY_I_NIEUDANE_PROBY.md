@@ -212,3 +212,11 @@ Klient tematów budował `Usage` dopiero po `json.loads`. Ucięta odpowiedź ozn
 Naprawa wprowadziła trzy typy błędów: provider, parse i schema. Po odpowiedzi usage powstaje przed inspekcją tekstu. Parse/schema error kończy run `FAILED`, zapisuje usage dokładnie raz i nie pozostawia częściowych topics. Parser zdejmuje jeden pełny zewnętrzny code fence, ale odrzuca tekst przed/po JSON-ie, brak zamknięcia i uszkodzone dane. Nie ma retry parse-error.
 
 Pierwsza wersja poprawki nadal budowała tekst przed usage. Self-review uznał to za niespełniony kontrakt P1 mimo zielonych testów. Po korekcie fake SDK dowodzi rzeczywistej kolejności. **286 testów**, 0 USD, brak API.
+
+### [2026-07-12] Task 8: zbyt wąska pierwsza macierz stanów
+
+Pierwszy przebieg nowych guardów miał cztery failures. Nie był to race SQLite, lecz pominięty kontrakt istniejącego resume: kolejna próba na tym samym runie może ponownie zapisać `FAILED`, a staged extraction bez wybranego źródła może przejść prosto z discovery do PARTIAL. Poprawiono wyłącznie te legalne krawędzie i dodano literalne regresje. COMPLETE nadal nie cofa się, cross-flow jest odrzucany, a różne terminale i konkurencyjne resume mają w race jeden statusowy UPDATE. **330 testów**, 0 USD, brak API.
+
+### [2026-07-13] Końcowe review: sekwencja udawała race, a ogólny helper udawał resume
+
+Pierwszy P1 był semantyczny: zwykły FAILED mógł zostać przepisany, bo wyjątek resume nie wymagał research_run. Drugi był testowy: dwa połączenia działały jedno po drugim. Po rozdzieleniu helperów i dodaniu `Barrier` pierwsza wersja CAS ujawniła prawdziwy `database is locked`, ponieważ oba procesy trzymały read-lock przed UPDATE. SELECT diagnostyczny przeniesiono przed transakcję zapisu; sam UPDATE ponownie sprawdza relację i token CAS. **337 testów**, brak API i kosztu.

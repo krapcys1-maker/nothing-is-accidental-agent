@@ -177,3 +177,9 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co pokazuje:** terminal z testami parsera/klienta/workflow topics (`35 passed`) oraz pełnym wynikiem `286 passed`; bez kluczy, `.env` i odpowiedzi realnego providera.
 - **Dlaczego ważny:** dowodzi, że malformed JSON zachowuje dostępne usage, kończy run `FAILED` i nie zapisuje częściowych tematów.
 - **Status:** SCREENSHOT REQUIRED — nie używano Playwrighta ani przeglądarki; bezpieczny screenshot może powstać później z testów offline.
+
+### [2026-07-12] task8-lifecycle-transition-race
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_task8-lifecycle-transition-race.png`
+- **Co pokazuje:** bezpieczny terminal z wynikiem 44 testów Task 8, race terminalnych UPDATE/resume i pełnym `330 passed`; bez danych źródłowej bazy.
+- **Dlaczego ważny:** pokazuje, że stan źródłowy jest warunkiem tego samego UPDATE, tylko jeden konkurent wygrywa, a odrzucona mutacja nie zostawia częściowego zapisu po reopen.
+- **Status:** SCREENSHOT REQUIRED — zgodnie z zakazem nie używano Playwrighta ani przeglądarki; screenshot może powstać później wyłącznie z testów offline.

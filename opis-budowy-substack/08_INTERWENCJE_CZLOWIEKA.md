@@ -93,3 +93,13 @@ Na obecnym etapie (przed generacją treści i publikacją) interwencje człowiek
 - Właściciel zatwierdził wyłącznie wyrównanie klienta tematów: usage przed parse, ścisły code fence, typowane błędy i trwały `FAILED` bez częściowych topics.
 - Polecenie wymagało poprawienia każdego znalezionego P0/P1 przed raportem i pozostawienia working tree bez commita/pushu.
 - Efekt: self-review poprawił kolejność text/usage; 286 testów offline, koszt 0 USD, brak API, Task 7 nierozpoczęty.
+
+### [2026-07-12] Zgoda na Task 8 i zakaz rozpoczęcia Task 9
+- Właściciel zatwierdził pełną inwentaryzację statusów, atomowe guardy, typowane błędy, race/reopen tests i poprawę każdego P0/P1.
+- Granice: bez API, realnego researchu, Playwrighta, migracji bez konieczności, commita i pushu; P2-17/P2-18/P2-19 bez zmian.
+- Efekt: ADR-027, 44 nowe testy i 330 pełnych; working tree pozostawiony do niezależnego review.
+
+### [2026-07-13] Właściciel ograniczył korektę do dwóch P1 Task 8
+- Zakres: osobny kontrakt nieudanego research resume oraz rzeczywiście równoległy candidate claim.
+- Zakazy utrzymane: bez API, realnego researchu, Playwrighta, Task 9, Etapu 1, commita i pushu; P2-17/P2-18/P2-19 bez zmian.
+- Efekt: oba P1 poprawione, 337 testów offline, working tree pozostawiony do krótkiego review.

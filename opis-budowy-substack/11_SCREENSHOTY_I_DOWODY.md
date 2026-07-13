@@ -79,6 +79,7 @@ Na 2026-07-11 **nie wykonano jeszcze żadnego screenshotu** — dotychczasowa pr
 - **SS-14** Pierwsze statystyki publikacji — Etap 5. `SCREENSHOT REQUIRED`
 - **SS-15** Pierwszy subskrybent — po publikacji. `SCREENSHOT REQUIRED`
 - **SS-16** Pierwsza zmiana strategii (raport tygodniowy) — po ≥7 dniach. `SCREENSHOT REQUIRED`
+- **SS-Task8** Lifecycle race — terminal z 44 testami Task 8 oraz pełnym `330 passed`, bez danych produkcyjnej bazy. `SCREENSHOT REQUIRED`; w zadaniu nie użyto Playwrighta.
 
 ## Podsumowanie
 - Dowodów zrobionych: **0**.

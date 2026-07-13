@@ -30,7 +30,7 @@ from app.models import (
     TopicStatus,
     WorkflowType,
 )
-from app.ports.storage import ResearchTopicIntegrityError
+from app.ports.storage import LifecycleTransitionError, ResearchTopicIntegrityError
 from app.storage.db import apply_migrations, connect
 
 
@@ -50,9 +50,79 @@ def _ts(dt: datetime | None = None) -> str:
     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _ts_precise(dt: datetime | None = None) -> str:
+    dt = dt or datetime.now(timezone.utc)
+    return dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+
+
+def _persisted_ts(dt: datetime) -> str:
+    return _ts_precise(dt) if dt.microsecond else _ts(dt)
+
+
 class SqliteStorage:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
+
+    def _current_status(self, table: str, identifier: str | int) -> str | None:
+        row = self.conn.execute(
+            f"SELECT status FROM {table} WHERE id=?", (identifier,),
+        ).fetchone()
+        return None if row is None else str(row["status"])
+
+    def _lifecycle_error(
+        self,
+        *,
+        table: str,
+        entity: str,
+        identifier: str | int,
+        target_status: str,
+        allowed_source_statuses: Sequence[str],
+        include_flow: bool = False,
+        detail: str | None = None,
+    ) -> LifecycleTransitionError:
+        columns = "status, flow" if include_flow else "status"
+        row = self.conn.execute(
+            f"SELECT {columns} FROM {table} WHERE id=?", (identifier,),
+        ).fetchone()
+        current = None if row is None else str(row["status"])
+        if row is not None and include_flow:
+            current = f"{row['flow']}:{current}"
+        return LifecycleTransitionError(
+            entity,
+            identifier,
+            target_status,
+            allowed_source_statuses,
+            current,
+            detail=detail,
+        )
+
+    def _require_one_transition(
+        self,
+        cursor: sqlite3.Cursor,
+        *,
+        table: str,
+        entity: str,
+        identifier: str | int,
+        target_status: str,
+        allowed_source_statuses: Sequence[str],
+        include_flow: bool = False,
+        detail: str | None = None,
+    ) -> None:
+        if cursor.rowcount == 1:
+            return
+        if cursor.rowcount > 1:
+            detail = (
+                f"Integrity failure: lifecycle UPDATE changed {cursor.rowcount} rows."
+            )
+        raise self._lifecycle_error(
+            table=table,
+            entity=entity,
+            identifier=identifier,
+            target_status=target_status,
+            allowed_source_statuses=allowed_source_statuses,
+            include_flow=include_flow,
+            detail=detail,
+        )
 
     # --- fabryka ---
     @classmethod
@@ -163,11 +233,140 @@ class SqliteStorage:
 
     def finish_run(self, run_id: str, status: str, cost_usd: float,
                    error: str | None = None) -> None:
-        self.conn.execute(
-            "UPDATE runs SET status=?, cost_usd=?, error=?, finished_at=? WHERE id=?",
-            (status, cost_usd, error, _ts(), run_id),
+        try:
+            target = RunStatus(status)
+        except ValueError as exc:
+            raise LifecycleTransitionError(
+                "run", run_id, str(status), (),
+                self._current_status("runs", run_id),
+                detail="Unknown terminal run status.",
+            ) from exc
+        allowed_by_target = {
+            RunStatus.SUCCESS: (RunStatus.RUNNING.value,),
+            RunStatus.FAILED: (RunStatus.RUNNING.value, RunStatus.DRY_RUN.value),
+            RunStatus.STOPPED: (RunStatus.RUNNING.value,),
+            RunStatus.DRY_RUN: (RunStatus.DRY_RUN.value,),
+        }
+        allowed = allowed_by_target.get(target, ())
+        if not allowed:
+            raise LifecycleTransitionError(
+                "run", run_id, target.value, allowed,
+                self._current_status("runs", run_id),
+                detail="finish_run accepts terminal targets only.",
+            )
+
+        existing = self.conn.execute(
+            "SELECT status, cost_usd, error, finished_at FROM runs WHERE id=?", (run_id,),
+        ).fetchone()
+        if existing is not None and existing["finished_at"] is not None:
+            if (
+                existing["status"] == target.value
+                and float(existing["cost_usd"]) == float(cost_usd)
+                and existing["error"] == error
+            ):
+                return
+            raise LifecycleTransitionError(
+                "run", run_id, target.value, allowed, str(existing["status"]),
+                detail="Conflicting repeated run finalization.",
+            )
+
+        placeholders = ", ".join("?" for _ in allowed)
+        self.conn.execute("BEGIN")
+        try:
+            cursor = self.conn.execute(
+                "UPDATE runs SET status=?, cost_usd=?, error=?, finished_at=? "
+                f"WHERE id=? AND status IN ({placeholders}) "
+                "AND finished_at IS NULL",
+                (target.value, cost_usd, error, _ts(), run_id, *allowed),
+            )
+            self._require_one_transition(
+                cursor, table="runs", entity="run", identifier=run_id,
+                target_status=target.value, allowed_source_statuses=allowed,
+            )
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+
+    def finish_resumed_research_run(
+        self, run_id: str, account_id: str, expected_flow: ResearchFlow,
+        expected_finished_at: datetime, cost_usd: float, error: str,
+    ) -> None:
+        """Atomically records a later FAILED result for an explicit research resume.
+
+        The caller must retain the terminal timestamp observed before the resumed
+        attempt. It is the compare-and-swap token: two resumptions of the same
+        snapshot cannot both rewrite the audit event.
+        """
+        allowed_research_statuses = {
+            ResearchFlow.TWO_STAGE: (ResearchRunStatus.PARTIAL.value,),
+            ResearchFlow.STAGED: (
+                ResearchRunStatus.PARTIAL.value,
+                ResearchRunStatus.PARTIAL_EXHAUSTED.value,
+                ResearchRunStatus.SOURCES_COMPLETE.value,
+            ),
+        }.get(expected_flow, ())
+        allowed = tuple(
+            f"{RunStatus.FAILED.value}+{expected_flow.value}:{status}"
+            for status in allowed_research_statuses
         )
-        self.conn.commit()
+        expected_finished = _persisted_ts(expected_finished_at)
+        try:
+            row = self.conn.execute(
+                "SELECT r.account_id AS run_account_id, r.workflow, r.status AS run_status, "
+                "r.finished_at, rr.account_id AS research_account_id, rr.flow, "
+                "rr.status AS research_status, rr.topic_id, t.account_id AS topic_account_id "
+                "FROM runs r LEFT JOIN research_runs rr ON rr.id=r.id "
+                "LEFT JOIN topics t ON t.id=rr.topic_id WHERE r.id=?",
+                (run_id,),
+            ).fetchone()
+            current = None if row is None else (
+                f"{row['run_status']}+{row['flow']}:{row['research_status']}"
+            )
+            invalid = (
+                row is None
+                or not allowed_research_statuses
+                or row["research_account_id"] is None
+                or row["topic_account_id"] is None
+                or row["workflow"] != WorkflowType.RESEARCH.value
+                or row["run_account_id"] != account_id
+                or row["research_account_id"] != account_id
+                or row["topic_account_id"] != account_id
+                or row["flow"] != expected_flow.value
+                or row["research_status"] not in allowed_research_statuses
+                or row["run_status"] != RunStatus.FAILED.value
+                or row["finished_at"] != expected_finished
+            )
+            if invalid:
+                raise LifecycleTransitionError(
+                    "resumed_research_run", run_id, RunStatus.FAILED.value,
+                    allowed, current,
+                    detail="Explicit research resume validation failed.",
+                )
+            placeholders = ", ".join("?" for _ in allowed_research_statuses)
+            cursor = self.conn.execute(
+                "UPDATE runs SET status=?, cost_usd=?, error=?, finished_at=? "
+                "WHERE id=? AND account_id=? AND status IN (?) AND finished_at=? "
+                "AND EXISTS (SELECT 1 FROM research_runs rr JOIN topics t ON t.id=rr.topic_id "
+                "WHERE rr.id=runs.id AND rr.account_id=? AND t.account_id=? AND rr.flow=? "
+                f"AND rr.status IN ({placeholders}))",
+                (
+                    RunStatus.FAILED.value, cost_usd, error, _ts_precise(), run_id,
+                    account_id, RunStatus.FAILED.value, expected_finished,
+                    account_id, account_id, expected_flow.value,
+                    *allowed_research_statuses,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise LifecycleTransitionError(
+                    "resumed_research_run", run_id, RunStatus.FAILED.value,
+                    allowed, current,
+                    detail="Conflicting concurrent resume finalization.",
+                )
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def get_run(self, run_id: str) -> Run | None:
         r = self.conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
@@ -176,6 +375,7 @@ class SqliteStorage:
         return Run(
             id=r["id"], account_id=r["account_id"],
             workflow=WorkflowType(r["workflow"]), status=RunStatus(r["status"]),
+            started_at=r["started_at"], finished_at=r["finished_at"],
             cost_usd=r["cost_usd"], error=r["error"],
         )
 
@@ -473,9 +673,11 @@ class SqliteStorage:
                 if terminal_run_status == RunStatus.DRY_RUN
                 else {RunStatus.RUNNING.value}
             )
-            if row["flow"] == ResearchFlow.TWO_STAGE.value:
-                # Jawne wznowienie etapu B zaczyna z FAILED po wcześniejszej
-                # nieudanej syntezie lub blokadzie budżetowej, ale nie powtarza A.
+            if row["flow"] in (
+                ResearchFlow.TWO_STAGE.value, ResearchFlow.STAGED.value,
+            ):
+                # Jawne wznowienie etapu B może zaczynać z FAILED po wcześniejszej
+                # próbie, ale nie powtarza zachowanych etapów A/A1/A2.
                 allowed_source_statuses.add(RunStatus.FAILED.value)
             if row["run_status"] not in allowed_source_statuses:
                 raise ResearchTopicIntegrityError(
@@ -492,7 +694,7 @@ class SqliteStorage:
                 cursor = self.conn.execute(
                     "UPDATE research_runs SET status=?, stage_b_completed_at=?, research_card_id=?,"
                     " total_cost_usd=?, updated_at=? WHERE id=? AND account_id=? AND topic_id=?"
-                    " AND status=? AND research_card_id IS NULL",
+                    " AND status IN (?) AND research_card_id IS NULL",
                     (ResearchRunStatus.COMPLETE.value, _ts(), research_card_id, total_cost_usd,
                      _ts(), research_run_id, row["research_account_id"], row["topic_id"],
                      row["research_status"]),
@@ -501,7 +703,7 @@ class SqliteStorage:
                 cursor = self.conn.execute(
                     "UPDATE research_runs SET status=?, research_card_id=?, total_cost_usd=?,"
                     " updated_at=? WHERE id=? AND account_id=? AND topic_id=?"
-                    " AND status=? AND research_card_id IS NULL",
+                    " AND status IN (?) AND research_card_id IS NULL",
                     (ResearchRunStatus.COMPLETE.value, research_card_id, total_cost_usd,
                      _ts(), research_run_id, row["research_account_id"], row["topic_id"],
                      row["research_status"]),
@@ -511,7 +713,7 @@ class SqliteStorage:
 
             cursor = self.conn.execute(
                 "UPDATE runs SET status=?, cost_usd=?, error=?, finished_at=? "
-                "WHERE id=? AND account_id=? AND status=?",
+                "WHERE id=? AND account_id=? AND status IN (?)",
                 (terminal_run_status.value, total_cost_usd, None, _ts(), research_run_id,
                  row["research_account_id"], row["run_status"]),
             )
@@ -593,32 +795,103 @@ class SqliteStorage:
         transakcji (jeden commit) — unika stanu pośredniego (źródła zapisane, status
         wciąż PENDING), gdyby proces padł w trakcie. To jest sedno odporności:
         po tym wywołaniu wyniki wyszukiwania są trwałe, niezależnie od losu etapu B."""
-        for src in sources:
-            self._insert_research_source(research_run_id, src)
-        self.conn.execute(
-            "UPDATE research_runs SET status=?, stage_a_completed_at=?, updated_at=?"
-            " WHERE id=?",
-            (ResearchRunStatus.SOURCE_COLLECTED.value, _ts(), _ts(), research_run_id),
-        )
-        self.conn.commit()
+        allowed = (f"{ResearchFlow.TWO_STAGE.value}:{ResearchRunStatus.PENDING.value}",)
+        self.conn.execute("BEGIN")
+        try:
+            cursor = self.conn.execute(
+                "UPDATE research_runs SET status=?, stage_a_completed_at=?, updated_at=? "
+                "WHERE id=? AND flow=? AND status IN (?)",
+                (
+                    ResearchRunStatus.SOURCE_COLLECTED.value, _ts(), _ts(), research_run_id,
+                    ResearchFlow.TWO_STAGE.value, ResearchRunStatus.PENDING.value,
+                ),
+            )
+            self._require_one_transition(
+                cursor, table="research_runs", entity="research_run",
+                identifier=research_run_id,
+                target_status=ResearchRunStatus.SOURCE_COLLECTED.value,
+                allowed_source_statuses=allowed, include_flow=True,
+            )
+            for src in sources:
+                self._insert_research_source(research_run_id, src)
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
         return sources
 
     def mark_research_run_failed(self, research_run_id: str, error: str) -> None:
         """Etap A się nie powiódł — nie ma czego wznawiać (brak trwałych źródeł)."""
-        self.conn.execute(
-            "UPDATE research_runs SET status=?, error=?, updated_at=? WHERE id=?",
-            (ResearchRunStatus.FAILED.value, error, _ts(), research_run_id),
+        allowed = (
+            f"{ResearchFlow.SINGLE.value}:{ResearchRunStatus.PENDING.value}",
+            f"{ResearchFlow.TWO_STAGE.value}:{ResearchRunStatus.PENDING.value}",
+            f"{ResearchFlow.STAGED.value}:{ResearchRunStatus.DISCOVERY_PENDING.value}",
         )
-        self.conn.commit()
+        self.conn.execute("BEGIN")
+        try:
+            cursor = self.conn.execute(
+                "UPDATE research_runs SET status=?, error=?, updated_at=? WHERE id=? AND "
+                "((flow IN (?, ?) AND status IN (?)) OR (flow=? AND status IN (?)))",
+                (
+                    ResearchRunStatus.FAILED.value, error, _ts(), research_run_id,
+                    ResearchFlow.SINGLE.value, ResearchFlow.TWO_STAGE.value,
+                    ResearchRunStatus.PENDING.value, ResearchFlow.STAGED.value,
+                    ResearchRunStatus.DISCOVERY_PENDING.value,
+                ),
+            )
+            self._require_one_transition(
+                cursor, table="research_runs", entity="research_run",
+                identifier=research_run_id, target_status=ResearchRunStatus.FAILED.value,
+                allowed_source_statuses=allowed, include_flow=True,
+            )
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def mark_research_run_partial(self, research_run_id: str, error: str) -> None:
         """Etap A udany, etap B nieudany — źródła w research_sources zostają
         nietknięte; można ponowić WYŁĄCZNIE etap B, bez ponownego web search."""
-        self.conn.execute(
-            "UPDATE research_runs SET status=?, error=?, updated_at=? WHERE id=?",
-            (ResearchRunStatus.PARTIAL.value, error, _ts(), research_run_id),
+        allowed = (
+            f"{ResearchFlow.TWO_STAGE.value}:{ResearchRunStatus.SOURCE_COLLECTED.value}",
+            f"{ResearchFlow.TWO_STAGE.value}:{ResearchRunStatus.PARTIAL.value}",
+            f"{ResearchFlow.STAGED.value}:{ResearchRunStatus.EXTRACTION_IN_PROGRESS.value}",
+            f"{ResearchFlow.STAGED.value}:{ResearchRunStatus.DISCOVERY_COMPLETE.value}",
+            f"{ResearchFlow.STAGED.value}:{ResearchRunStatus.PARTIAL.value}",
         )
-        self.conn.commit()
+        existing = self.conn.execute(
+            "SELECT flow, status, error FROM research_runs WHERE id=?", (research_run_id,),
+        ).fetchone()
+        if (
+            existing is not None
+            and existing["status"] == ResearchRunStatus.PARTIAL.value
+            and existing["error"] == error
+            and f"{existing['flow']}:{existing['status']}" in allowed
+        ):
+            return
+        self.conn.execute("BEGIN")
+        try:
+            cursor = self.conn.execute(
+                "UPDATE research_runs SET status=?, error=?, updated_at=? WHERE id=? AND "
+                "((flow=? AND status IN (?, ?)) OR (flow=? AND status IN (?, ?, ?)))",
+                (
+                    ResearchRunStatus.PARTIAL.value, error, _ts(), research_run_id,
+                    ResearchFlow.TWO_STAGE.value, ResearchRunStatus.SOURCE_COLLECTED.value,
+                    ResearchRunStatus.PARTIAL.value, ResearchFlow.STAGED.value,
+                    ResearchRunStatus.DISCOVERY_COMPLETE.value,
+                    ResearchRunStatus.EXTRACTION_IN_PROGRESS.value,
+                    ResearchRunStatus.PARTIAL.value,
+                ),
+            )
+            self._require_one_transition(
+                cursor, table="research_runs", entity="research_run",
+                identifier=research_run_id, target_status=ResearchRunStatus.PARTIAL.value,
+                allowed_source_statuses=allowed, include_flow=True,
+            )
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def mark_research_run_complete(self, research_run_id: str, research_card_id: int,
                                    total_cost_usd: float) -> None:
@@ -699,20 +972,39 @@ class SqliteStorage:
         JEDNEJ transakcji (jeden commit) — analogicznie do `mark_research_stage_a_success`
         dla starego przepływu. Unika stanu pośredniego (kandydaci zapisani, status
         wciąż DISCOVERY_PENDING), gdyby proces padł w trakcie."""
-        cur = self.conn.cursor()
-        for c in candidates:
-            row = cur.execute(
-                "INSERT INTO research_source_candidates (research_run_id, url, title,"
-                " status) VALUES (?,?,?,?)",
-                (research_run_id, c.url, c.title, SourceCandidateStatus.PENDING_EXTRACTION.value),
+        allowed = (f"{ResearchFlow.STAGED.value}:{ResearchRunStatus.DISCOVERY_PENDING.value}",)
+        self.conn.execute("BEGIN")
+        try:
+            cursor = self.conn.execute(
+                "UPDATE research_runs SET status=?, updated_at=? "
+                "WHERE id=? AND flow=? AND status IN (?)",
+                (
+                    ResearchRunStatus.DISCOVERY_COMPLETE.value, _ts(), research_run_id,
+                    ResearchFlow.STAGED.value, ResearchRunStatus.DISCOVERY_PENDING.value,
+                ),
             )
-            c.id = int(row.lastrowid)
-            c.research_run_id = research_run_id
-        self.conn.execute(
-            "UPDATE research_runs SET status=?, updated_at=? WHERE id=?",
-            (ResearchRunStatus.DISCOVERY_COMPLETE.value, _ts(), research_run_id),
-        )
-        self.conn.commit()
+            self._require_one_transition(
+                cursor, table="research_runs", entity="research_run",
+                identifier=research_run_id,
+                target_status=ResearchRunStatus.DISCOVERY_COMPLETE.value,
+                allowed_source_statuses=allowed, include_flow=True,
+            )
+            cur = self.conn.cursor()
+            for c in candidates:
+                row = cur.execute(
+                    "INSERT INTO research_source_candidates (research_run_id, url, title,"
+                    " status) VALUES (?,?,?,?)",
+                    (
+                        research_run_id, c.url, c.title,
+                        SourceCandidateStatus.PENDING_EXTRACTION.value,
+                    ),
+                )
+                c.id = int(row.lastrowid)
+                c.research_run_id = research_run_id
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
         return candidates
 
     def list_source_candidates(
@@ -749,11 +1041,41 @@ class SqliteStorage:
     def mark_extraction_in_progress(self, research_run_id: str) -> None:
         """Idempotentne — wołane na START pętli ekstrakcji (etap A2), niezależnie od
         tego, czy to pierwsze uruchomienie czy wznowienie po restarcie."""
-        self.conn.execute(
-            "UPDATE research_runs SET status=?, updated_at=? WHERE id=?",
-            (ResearchRunStatus.EXTRACTION_IN_PROGRESS.value, _ts(), research_run_id),
+        allowed = (
+            f"{ResearchFlow.STAGED.value}:{ResearchRunStatus.DISCOVERY_COMPLETE.value}",
+            f"{ResearchFlow.STAGED.value}:{ResearchRunStatus.PARTIAL.value}",
+            f"{ResearchFlow.STAGED.value}:{ResearchRunStatus.EXTRACTION_IN_PROGRESS.value}",
         )
-        self.conn.commit()
+        existing = self.conn.execute(
+            "SELECT flow, status FROM research_runs WHERE id=?", (research_run_id,),
+        ).fetchone()
+        if (
+            existing is not None
+            and existing["flow"] == ResearchFlow.STAGED.value
+            and existing["status"] == ResearchRunStatus.EXTRACTION_IN_PROGRESS.value
+        ):
+            return
+        self.conn.execute("BEGIN")
+        try:
+            cursor = self.conn.execute(
+                "UPDATE research_runs SET status=?, updated_at=? "
+                "WHERE id=? AND flow=? AND status IN (?, ?)",
+                (
+                    ResearchRunStatus.EXTRACTION_IN_PROGRESS.value, _ts(), research_run_id,
+                    ResearchFlow.STAGED.value, ResearchRunStatus.DISCOVERY_COMPLETE.value,
+                    ResearchRunStatus.PARTIAL.value,
+                ),
+            )
+            self._require_one_transition(
+                cursor, table="research_runs", entity="research_run",
+                identifier=research_run_id,
+                target_status=ResearchRunStatus.EXTRACTION_IN_PROGRESS.value,
+                allowed_source_statuses=allowed, include_flow=True,
+            )
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def update_source_candidate_extracted(
         self, candidate_id: int, *, title: str | None, author_or_org: str | None,
@@ -768,7 +1090,7 @@ class SqliteStorage:
             "UPDATE research_source_candidates SET title=?, author_or_org=?,"
             " published_at=?, source_type=?, supported_claims_json=?, numeric_facts_json=?,"
             " verification_status=?, source_quality_score=?, status=?, extraction_error=NULL,"
-            " extracted_at=? WHERE id=? AND status=?",
+            " extracted_at=? WHERE id=? AND status IN (?)",
             (
                 title, author_or_org, published_at, source_type.value,
                 json.dumps(supported_claims), json.dumps(numeric_facts),
@@ -777,12 +1099,22 @@ class SqliteStorage:
                 SourceCandidateStatus.EXTRACTION_IN_PROGRESS.value,
             ),
         )
-        if cursor.rowcount != 1:
-            self.conn.rollback()
-            raise ValueError(
-                f"Source candidate #{candidate_id} is not EXTRACTION_IN_PROGRESS; "
-                "cannot persist extraction success."
+        try:
+            self._require_one_transition(
+                cursor, table="research_source_candidates", entity="source_candidate",
+                identifier=candidate_id,
+                target_status=SourceCandidateStatus.EXTRACTED.value,
+                allowed_source_statuses=(
+                    SourceCandidateStatus.EXTRACTION_IN_PROGRESS.value,
+                ),
+                detail=(
+                    f"Source candidate #{candidate_id} is not EXTRACTION_IN_PROGRESS; "
+                    "cannot persist extraction success."
+                ),
             )
+        except Exception:
+            self.conn.rollback()
+            raise
         self.conn.commit()
 
     def mark_source_candidate_failed(self, candidate_id: int, error: str) -> None:
@@ -790,18 +1122,28 @@ class SqliteStorage:
         (przetworzeni wcześniej lub później) są nietknięci."""
         cursor = self.conn.execute(
             "UPDATE research_source_candidates SET status=?, extraction_error=?,"
-            " extracted_at=? WHERE id=? AND status=?",
+            " extracted_at=? WHERE id=? AND status IN (?)",
             (
                 SourceCandidateStatus.EXTRACTION_FAILED.value, error, _ts(), candidate_id,
                 SourceCandidateStatus.EXTRACTION_IN_PROGRESS.value,
             ),
         )
-        if cursor.rowcount != 1:
-            self.conn.rollback()
-            raise ValueError(
-                f"Source candidate #{candidate_id} is not EXTRACTION_IN_PROGRESS; "
-                "cannot persist extraction failure."
+        try:
+            self._require_one_transition(
+                cursor, table="research_source_candidates", entity="source_candidate",
+                identifier=candidate_id,
+                target_status=SourceCandidateStatus.EXTRACTION_FAILED.value,
+                allowed_source_statuses=(
+                    SourceCandidateStatus.EXTRACTION_IN_PROGRESS.value,
+                ),
+                detail=(
+                    f"Source candidate #{candidate_id} is not EXTRACTION_IN_PROGRESS; "
+                    "cannot persist extraction failure."
+                ),
             )
+        except Exception:
+            self.conn.rollback()
+            raise
         self.conn.commit()
 
     def claim_source_candidate_attempt(self, candidate_id: int, *, max_attempts: int) -> int:
@@ -815,18 +1157,28 @@ class SqliteStorage:
         cursor = self.conn.execute(
             "UPDATE research_source_candidates "
             "SET attempts=attempts+1, status=? "
-            "WHERE id=? AND status=? AND attempts < ?",
+            "WHERE id=? AND status IN (?) AND attempts < ?",
             (
                 SourceCandidateStatus.EXTRACTION_IN_PROGRESS.value,
                 candidate_id, SourceCandidateStatus.PENDING_EXTRACTION.value, max_attempts,
             ),
         )
-        if cursor.rowcount != 1:
-            self.conn.rollback()
-            raise ValueError(
-                f"Source candidate #{candidate_id} is not claimable "
-                "(requires PENDING_EXTRACTION below attempts cap)."
+        try:
+            self._require_one_transition(
+                cursor, table="research_source_candidates", entity="source_candidate",
+                identifier=candidate_id,
+                target_status=SourceCandidateStatus.EXTRACTION_IN_PROGRESS.value,
+                allowed_source_statuses=(
+                    f"{SourceCandidateStatus.PENDING_EXTRACTION.value} below attempts cap",
+                ),
+                detail=(
+                    f"Source candidate #{candidate_id} is not claimable "
+                    "(requires PENDING_EXTRACTION below attempts cap)."
+                ),
             )
+        except Exception:
+            self.conn.rollback()
+            raise
         row = self.conn.execute(
             "SELECT attempts FROM research_source_candidates WHERE id=?", (candidate_id,)
         ).fetchone()
@@ -847,17 +1199,37 @@ class SqliteStorage:
         self.conn.execute("BEGIN")
         try:
             run_row = self.conn.execute(
-                "SELECT status FROM research_runs WHERE id=?", (research_run_id,)
+                "SELECT status, flow FROM research_runs WHERE id=?", (research_run_id,)
             ).fetchone()
             if run_row is None:
-                raise ValueError(f"Research run #{research_run_id} does not exist.")
-            if run_row["status"] not in (
-                ResearchRunStatus.PARTIAL.value,
-                ResearchRunStatus.PARTIAL_EXHAUSTED.value,
+                raise LifecycleTransitionError(
+                    "research_run", research_run_id, "retry_failed_candidates",
+                    (
+                        f"{ResearchFlow.STAGED.value}:{ResearchRunStatus.PARTIAL.value}",
+                        f"{ResearchFlow.STAGED.value}:"
+                        f"{ResearchRunStatus.PARTIAL_EXHAUSTED.value}",
+                    ),
+                    None,
+                )
+            if (
+                run_row["flow"] != ResearchFlow.STAGED.value
+                or run_row["status"] not in (
+                    ResearchRunStatus.PARTIAL.value,
+                    ResearchRunStatus.PARTIAL_EXHAUSTED.value,
+                )
             ):
-                raise ValueError(
-                    f"Research run #{research_run_id} cannot retry failed candidates "
-                    f"from status {run_row['status']}."
+                raise LifecycleTransitionError(
+                    "research_run", research_run_id, "retry_failed_candidates",
+                    (
+                        f"{ResearchFlow.STAGED.value}:{ResearchRunStatus.PARTIAL.value}",
+                        f"{ResearchFlow.STAGED.value}:"
+                        f"{ResearchRunStatus.PARTIAL_EXHAUSTED.value}",
+                    ),
+                    f"{run_row['flow']}:{run_row['status']}",
+                    detail=(
+                        f"Research run #{research_run_id} cannot retry failed candidates "
+                        f"from status {run_row['status']}."
+                    ),
                 )
             rows = self.conn.execute(
                 "SELECT id, status, attempts FROM research_source_candidates "
@@ -878,13 +1250,22 @@ class SqliteStorage:
                     if row["attempts"] < max_attempts:
                         cursor = self.conn.execute(
                             "UPDATE research_source_candidates SET status=? "
-                            "WHERE id=? AND status=? AND attempts < ?",
+                            "WHERE id=? AND status IN (?) AND attempts < ?",
                             (
                                 SourceCandidateStatus.PENDING_EXTRACTION.value, row["id"],
                                 SourceCandidateStatus.EXTRACTION_FAILED.value, max_attempts,
                             ),
                         )
-                        reset_count += cursor.rowcount
+                        self._require_one_transition(
+                            cursor, table="research_source_candidates",
+                            entity="source_candidate", identifier=row["id"],
+                            target_status=SourceCandidateStatus.PENDING_EXTRACTION.value,
+                            allowed_source_statuses=(
+                                f"{SourceCandidateStatus.EXTRACTION_FAILED.value} "
+                                "below attempts cap",
+                            ),
+                        )
+                        reset_count += 1
                     else:
                         skipped_cap_count += 1
             remaining_failed_count = int(self.conn.execute(
@@ -899,17 +1280,24 @@ class SqliteStorage:
             ):
                 cursor = self.conn.execute(
                     "UPDATE research_runs SET status=?, error=NULL, updated_at=? "
-                    "WHERE id=? AND status=?",
+                    "WHERE id=? AND status IN (?)",
                     (
                         ResearchRunStatus.PARTIAL.value, _ts(), research_run_id,
                         ResearchRunStatus.PARTIAL_EXHAUSTED.value,
                     ),
                 )
-                if cursor.rowcount != 1:
-                    raise ValueError(
+                self._require_one_transition(
+                    cursor, table="research_runs", entity="research_run",
+                    identifier=research_run_id,
+                    target_status=ResearchRunStatus.PARTIAL.value,
+                    allowed_source_statuses=(
+                        ResearchRunStatus.PARTIAL_EXHAUSTED.value,
+                    ),
+                    detail=(
                         f"Research run #{research_run_id} could not be reopened from "
                         "PARTIAL_EXHAUSTED."
-                    )
+                    ),
+                )
                 reopened_run = True
             self.conn.commit()
         except Exception:
@@ -926,50 +1314,113 @@ class SqliteStorage:
 
     def mark_sources_complete(self, research_run_id: str) -> None:
         """Etap A2 dał >= research_min_sources wyekstrahowanych kart — gotowe do etapu B."""
-        self.conn.execute(
-            "UPDATE research_runs SET status=?, stage_a_completed_at=?, updated_at=?"
-            " WHERE id=?",
-            (ResearchRunStatus.SOURCES_COMPLETE.value, _ts(), _ts(), research_run_id),
+        allowed = (
+            f"{ResearchFlow.STAGED.value}:{ResearchRunStatus.EXTRACTION_IN_PROGRESS.value}",
         )
-        self.conn.commit()
+        self.conn.execute("BEGIN")
+        try:
+            cursor = self.conn.execute(
+                "UPDATE research_runs SET status=?, stage_a_completed_at=?, updated_at=? "
+                "WHERE id=? AND flow=? AND status IN (?)",
+                (
+                    ResearchRunStatus.SOURCES_COMPLETE.value, _ts(), _ts(), research_run_id,
+                    ResearchFlow.STAGED.value,
+                    ResearchRunStatus.EXTRACTION_IN_PROGRESS.value,
+                ),
+            )
+            self._require_one_transition(
+                cursor, table="research_runs", entity="research_run",
+                identifier=research_run_id,
+                target_status=ResearchRunStatus.SOURCES_COMPLETE.value,
+                allowed_source_statuses=allowed, include_flow=True,
+            )
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def mark_research_run_partial_exhausted(self, research_run_id: str, error: str) -> None:
         """Terminalny brak legalnej drogi A2: nie ma pending ani failed poniżej capu."""
-        cursor = self.conn.execute(
-            "UPDATE research_runs SET status=?, error=?, updated_at=? "
-            "WHERE id=? AND status IN (?,?,?)",
-            (
-                ResearchRunStatus.PARTIAL_EXHAUSTED.value, error, _ts(), research_run_id,
+        allowed = tuple(
+            f"{ResearchFlow.STAGED.value}:{status}"
+            for status in (
                 ResearchRunStatus.DISCOVERY_COMPLETE.value,
                 ResearchRunStatus.EXTRACTION_IN_PROGRESS.value,
                 ResearchRunStatus.PARTIAL.value,
-            ),
-        )
-        if cursor.rowcount != 1:
-            self.conn.rollback()
-            raise ValueError(
-                f"Research run #{research_run_id} cannot transition to PARTIAL_EXHAUSTED "
-                "from its current status."
             )
-        self.conn.commit()
+        )
+        self.conn.execute("BEGIN")
+        try:
+            cursor = self.conn.execute(
+                "UPDATE research_runs SET status=?, error=?, updated_at=? "
+                "WHERE id=? AND flow=? AND status IN (?,?,?)",
+                (
+                    ResearchRunStatus.PARTIAL_EXHAUSTED.value, error, _ts(), research_run_id,
+                    ResearchFlow.STAGED.value, ResearchRunStatus.DISCOVERY_COMPLETE.value,
+                    ResearchRunStatus.EXTRACTION_IN_PROGRESS.value,
+                    ResearchRunStatus.PARTIAL.value,
+                ),
+            )
+            self._require_one_transition(
+                cursor, table="research_runs", entity="research_run",
+                identifier=research_run_id,
+                target_status=ResearchRunStatus.PARTIAL_EXHAUSTED.value,
+                allowed_source_statuses=allowed, include_flow=True,
+            )
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def mark_synthesis_pending(self, research_run_id: str) -> None:
         """Wołane TUŻ PRZED próbą etapu B — czysto obserwacyjne (jak `runs.current_state`),
         nie mechanizm odzyskiwania w locie (nie-streamowane wywołanie API i tak nie da
         się 'odzyskać' w połowie — awaria w trakcie po prostu traci TĘ próbę, tak jak
         zawsze; źródła i tak zostają nietknięte, więc kolejna próba jest tania)."""
-        self.conn.execute(
-            "UPDATE research_runs SET status=?, updated_at=? WHERE id=?",
-            (ResearchRunStatus.SYNTHESIS_PENDING.value, _ts(), research_run_id),
-        )
-        self.conn.commit()
+        allowed = (f"{ResearchFlow.STAGED.value}:{ResearchRunStatus.SOURCES_COMPLETE.value}",)
+        self.conn.execute("BEGIN")
+        try:
+            cursor = self.conn.execute(
+                "UPDATE research_runs SET status=?, updated_at=? "
+                "WHERE id=? AND flow=? AND status IN (?)",
+                (
+                    ResearchRunStatus.SYNTHESIS_PENDING.value, _ts(), research_run_id,
+                    ResearchFlow.STAGED.value, ResearchRunStatus.SOURCES_COMPLETE.value,
+                ),
+            )
+            self._require_one_transition(
+                cursor, table="research_runs", entity="research_run",
+                identifier=research_run_id,
+                target_status=ResearchRunStatus.SYNTHESIS_PENDING.value,
+                allowed_source_statuses=allowed, include_flow=True,
+            )
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def revert_to_sources_complete(self, research_run_id: str, error: str) -> None:
         """Etap B nieudany — źródła (research_source_candidates) zostają nietknięte;
         status wraca do SOURCES_COMPLETE, żeby etap B można było ponowić bez powtarzania
         A1/A2. `error` zapisany dla widoczności/audytu, nie kasuje wcześniejszego sukcesu."""
-        self.conn.execute(
-            "UPDATE research_runs SET status=?, error=?, updated_at=? WHERE id=?",
-            (ResearchRunStatus.SOURCES_COMPLETE.value, error, _ts(), research_run_id),
-        )
-        self.conn.commit()
+        allowed = (f"{ResearchFlow.STAGED.value}:{ResearchRunStatus.SYNTHESIS_PENDING.value}",)
+        self.conn.execute("BEGIN")
+        try:
+            cursor = self.conn.execute(
+                "UPDATE research_runs SET status=?, error=?, updated_at=? "
+                "WHERE id=? AND flow=? AND status IN (?)",
+                (
+                    ResearchRunStatus.SOURCES_COMPLETE.value, error, _ts(), research_run_id,
+                    ResearchFlow.STAGED.value, ResearchRunStatus.SYNTHESIS_PENDING.value,
+                ),
+            )
+            self._require_one_transition(
+                cursor, table="research_runs", entity="research_run",
+                identifier=research_run_id,
+                target_status=ResearchRunStatus.SOURCES_COMPLETE.value,
+                allowed_source_statuses=allowed, include_flow=True,
+            )
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise

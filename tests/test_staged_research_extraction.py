@@ -641,6 +641,9 @@ def test_resume_synthesis_never_calls_discovery_or_extraction(settings, storage,
     assert summary1.cost_usd > 0                          # 9. usage/koszt zachowane mimo błędu B
     research_run = storage.get_research_run(run_id)
     assert research_run.status == ResearchRunStatus.SOURCES_COMPLETE  # WRACA, nie PARTIAL/FAILED
+    failed_resume_audit = storage.get_run(run_id)
+    assert failed_resume_audit.status == RunStatus.FAILED
+    assert failed_resume_audit.error.startswith("[synthesize_from_cards]")
     assert len(storage.list_source_candidates(run_id, SourceCandidateStatus.EXTRACTED)) == 3
     _assert_run_cost_matches_research_usage(storage, run_id)
 
@@ -962,7 +965,8 @@ def test_extraction_resyncs_existing_usage_when_no_model_call_is_made(settings, 
     storage.finish_run(run_id, RunStatus.FAILED.value, cost_usd=99.0, error="stale cache")
 
     summary = _run_extraction(
-        settings, storage, account, run_id, FakeResearchClient("good"), max_sources=0)
+        settings, storage, account, run_id, FakeResearchClient("good"),
+        max_sources=0, explicit_resume=True)
     resumed = _resume_staged(
         settings, storage, account, run_id, FakeResearchClient("good"), max_sources=0)
 

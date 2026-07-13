@@ -232,6 +232,41 @@ def _validate_research_run_account(research_run: ResearchRun, account: Account) 
         )
 
 
+def _explicit_resume_run_snapshot(
+    storage: StoragePort, research_run_id: str, account: Account,
+) -> Run:
+    run = storage.get_run(research_run_id)
+    if run is None:
+        raise ValueError(f"Nie znaleziono run #{research_run_id} dla jawnego resume.")
+    if run.account_id != account.id:
+        raise ValueError(
+            f"run #{research_run_id} należy do konta {run.account_id}, "
+            f"nie do wybranego konta {account.id}."
+        )
+    if run.status not in (RunStatus.RUNNING, RunStatus.DRY_RUN, RunStatus.FAILED):
+        raise ValueError(
+            f"run #{research_run_id} ma terminalny status {run.status.value}; "
+            "jawne resume wymaga RUNNING, DRY_RUN albo FAILED."
+        )
+    if run.status == RunStatus.FAILED and run.finished_at is None:
+        raise ValueError(f"run #{research_run_id} ma FAILED bez finished_at.")
+    return run
+
+
+def _finish_explicit_resume_failure(
+    storage: StoragePort, snapshot: Run, expected_flow: ResearchFlow,
+    cost_usd: float, error: str,
+) -> None:
+    if snapshot.status == RunStatus.FAILED:
+        assert snapshot.finished_at is not None
+        storage.finish_resumed_research_run(
+            snapshot.id, snapshot.account_id, expected_flow,
+            snapshot.finished_at, cost_usd, error,
+        )
+        return
+    storage.finish_run(snapshot.id, RunStatus.FAILED.value, cost_usd, error=error)
+
+
 def _sync_staged_run_cost(
     storage: StoragePort,
     research_run_id: str,
@@ -862,6 +897,7 @@ def resume_research_stage_b(
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
     _validate_research_run_account(research_run, account)
     _validate_resume_flow(research_run, ResearchFlow.TWO_STAGE)
+    resume_run_snapshot = _explicit_resume_run_snapshot(storage, research_run_id, account)
     clock = clock or SystemClock()
     if research_run.status not in (ResearchRunStatus.SOURCE_COLLECTED, ResearchRunStatus.PARTIAL):
         raise ValueError(
@@ -955,7 +991,12 @@ def resume_research_stage_b(
             )
             total_cost = _current_run_cost(storage, research_run_id)
         summary.cost_usd = total_cost
-        storage.mark_research_run_partial(research_run_id, error=f"[synthesize_card] {exc}")
+        resume_error = f"[synthesize_card] {exc}"
+        storage.mark_research_run_partial(research_run_id, error=resume_error)
+        _finish_explicit_resume_failure(
+            storage, resume_run_snapshot, ResearchFlow.TWO_STAGE,
+            total_cost, resume_error,
+        )
         storage.add_research_stage_result(research_run_id, ResearchStageName.B,
                                           ResearchStageStatus.FAILED, error=str(exc))
         notifier.notify("error", "Wznowienie: synteza karty nadal nieudana "
@@ -1196,18 +1237,23 @@ def run_source_extraction(
     max_attempts: int = 2,
     max_retries: int | None = None,
     run_cap_usd: float | None = None,
+    explicit_resume: bool = False,
 ) -> ResearchRunSummary:
     """Etap A2: JEDNO źródło na wywołanie API. Zapisywane do bazy NATYCHMIAST po
     KAŻDYM źródle (sukces LUB błąd) — awaria źródła N nie ma wpływu na 1..N-1, i
     wznowienie po restarcie kontynuuje dokładnie tam, gdzie się skończyło (czyta
     kandydatów PENDING_EXTRACTION z BAZY, nie z pamięci procesu). Wołalne zarówno
-    świeżo (zaraz po A1) jak i jako wznowienie (osobne wywołanie, później)."""
+    świeżo (zaraz po A1), jak i jawnie jako wznowienie z `explicit_resume=True`."""
     max_retries = _resolve_max_retries(research_client, max_retries)
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
     _validate_research_run_account(research_run, account)
     _validate_resume_flow(research_run, ResearchFlow.STAGED)
+    resume_run_snapshot = (
+        _explicit_resume_run_snapshot(storage, research_run_id, account)
+        if explicit_resume else None
+    )
     if max_attempts < 1:
         raise ValueError("max_attempts musi być dodatnie.")
     clock = clock or SystemClock()
@@ -1409,7 +1455,15 @@ def run_source_extraction(
             storage.mark_research_run_partial(research_run_id, error=error_msg)
         summary.recommendation = ResearchRecommendation.REJECT.value
         summary.reasons = [TOO_FEW_SOURCES]
-        storage.finish_run(research_run_id, RunStatus.FAILED.value, total_cost, error=error_msg)
+        if resume_run_snapshot is None:
+            storage.finish_run(
+                research_run_id, RunStatus.FAILED.value, total_cost, error=error_msg,
+            )
+        else:
+            _finish_explicit_resume_failure(
+                storage, resume_run_snapshot, ResearchFlow.STAGED,
+                total_cost, error_msg,
+            )
         notifier.notify(
             "info", "Ekstrakcja zatrzymana (za mało źródeł) — etap B pominięty",
             f"{len(all_extracted)} < {settings.research_min_sources}, "
@@ -1434,16 +1488,21 @@ def run_synthesis_from_cards(
     forwarded_context_tokens: int = 2500,
     max_retries: int | None = None,
     run_cap_usd: float | None = None,
+    explicit_resume: bool = False,
 ) -> ResearchRunSummary:
     """Etap B: synteza WYŁĄCZNIE z już wyekstrahowanych Source Cards (etap A2). Zero
     web search. Błąd -> status WRACA do SOURCES_COMPLETE (źródła nietknięte) — można
-    ponowić WYŁĄCZNIE ten etap, dowolną liczbę razy, bez powtarzania A1/A2."""
+    ponowić WYŁĄCZNIE ten etap z `explicit_resume=True`, bez powtarzania A1/A2."""
     max_retries = _resolve_max_retries(research_client, max_retries)
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
     _validate_research_run_account(research_run, account)
     _validate_resume_flow(research_run, ResearchFlow.STAGED)
+    resume_run_snapshot = (
+        _explicit_resume_run_snapshot(storage, research_run_id, account)
+        if explicit_resume else None
+    )
 
     uncertain = storage.list_source_candidates(
         research_run_id, SourceCandidateStatus.EXTRACTION_IN_PROGRESS,
@@ -1539,7 +1598,13 @@ def run_synthesis_from_cards(
                             stop_reason=getattr(exc, "stop_reason", None),
                             parse_error_location=str(exc))
         summary.cost_usd = total_cost
-        storage.revert_to_sources_complete(research_run_id, error=f"[synthesize_from_cards] {exc}")
+        resume_error = f"[synthesize_from_cards] {exc}"
+        storage.revert_to_sources_complete(research_run_id, error=resume_error)
+        if resume_run_snapshot is not None:
+            _finish_explicit_resume_failure(
+                storage, resume_run_snapshot, ResearchFlow.STAGED,
+                total_cost, resume_error,
+            )
         storage.add_research_stage_result(research_run_id, ResearchStageName.B,
                                           ResearchStageStatus.FAILED, error=str(exc))
         notifier.notify("error", "Synteza karty nieudana — źródła zachowane, można ponowić "
@@ -1748,7 +1813,8 @@ def resume_staged_research(
             notifier=notifier, clock=clock, max_sources=max_sources,
             max_web_searches_per_source=max_web_searches_per_source,
             max_output_tokens=extraction_max_tokens, max_attempts=max_attempts,
-            max_retries=max_retries, run_cap_usd=run_cap_usd)
+            max_retries=max_retries, run_cap_usd=run_cap_usd,
+            explicit_resume=True)
 
     if research_run.status == ResearchRunStatus.SOURCES_COMPLETE:
         return run_synthesis_from_cards(
@@ -1757,7 +1823,8 @@ def resume_staged_research(
             notifier=notifier, clock=clock, research_log=research_log,
             synthesize_max_tokens=synthesize_max_tokens,
             forwarded_context_tokens=forwarded_context_tokens,
-            max_retries=max_retries, run_cap_usd=run_cap_usd)
+            max_retries=max_retries, run_cap_usd=run_cap_usd,
+            explicit_resume=True)
 
     raise ValueError(
         f"research_run #{research_run_id} ma status {research_run.status.value} — "

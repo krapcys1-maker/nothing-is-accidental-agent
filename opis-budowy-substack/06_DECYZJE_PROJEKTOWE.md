@@ -141,6 +141,18 @@ Statusy zmieniono na `ACCEPTED` bez przepisywania historycznego uzasadnienia. Ta
 ## Decyzje otwarte
 **Otwarte do weryfikacji przez właściciela (nie rozstrzygam sam):** zgodność polityki braku ujawniania AI-autorstwa z aktualnym regulaminem Substacka — przed Etapem 4 (realna publikacja). Poza tym: **brak** innych otwartych pozycji z audytu. Jedyna utrzymywana pozycja ryzyka: **rotacja klucza API** (D-10/R1) przed ewentualnym publicznym udostępnieniem repo.
 
+### D-27: stan źródłowy należy do UPDATE, nie do wcześniejszego SELECT
+- **Problem:** dwa procesy mogły przeczytać ten sam status, po czym spóźniony zapisywał wynik na nowszym stanie.
+- **Wybór:** każdy istniejący helper statusowy używa `status IN (...)`, właściwego flow i kontroli `rowcount`; po konflikcie odmawia typowanym błędem. Dane dodatkowe i status pozostają jedną transakcją.
+- **Idempotencja:** no-op jest jawny per operacja. Resume zachowuje szczególne, zatwierdzone przejścia; retry kandydatur i reopen exhausted pozostają dostępne tylko przez osobny kontrakt.
+- **Kto podjął:** właściciel zatwierdził Task 8; wykonanie i self-review: Codex. Pełny zapis: ADR-027.
+
+### Korekta D-27 po review: jawny resume ma osobny kontrakt
+- `finish_run` nie przepisuje terminalnego FAILED.
+- `finish_resumed_research_run` wymaga workflow RESEARCH, wspólnego konta runu, research_runu i tematu, właściwego flow/statusu oraz tokenu `finished_at` odczytanego przed próbą.
+- CAS w UPDATE rozstrzyga konkurencyjne zakończenia; drugi wynik jest konfliktem, nie cichym sukcesem ani lockiem uznanym przez test.
+- Równoległość candidate jest dowodzona przez `Barrier`, nie przez sam fakt użycia dwóch połączeń.
+
 ## Powiązania
 - `docs/DECISIONS.md` (pełne ADR-001…018), `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` (załącznik rozbieżności, CZĘŚĆ D, §D.5a)
 

@@ -162,6 +162,8 @@ Rekomendowany zatwierdzany cap: **0,55 USD**. Maksymalna liczba wyszukiwań wyni
 
 **Zrobione:** wszystkie znane realne koszty są zapisane w bazie i `COSTS.csv`; call diagnostyczny (0,028969 USD) jest jawnie oddzielony od skumulowanego kosztu runu (0,126793 USD). **Wciąż otwarte:** brak pełnej realnej karty researchu; P1-5 i prawdziwy fetch źródła pozostają niezbudowane.
 
+**Task 8:** 0,000000 USD. Wykonano wyłącznie lokalne zmiany kodu, SQLite i testy race; nie było API, researchu ani generowania tematów. Całkowity historyczny koszt realnych calli projektu nie zmienił się.
+
 ## Jak koszty trafiają tutaj
 Automatycznie: `UsageTracker` liczy koszt z cennika i dopisuje wiersz do `model_usage` (baza) **oraz** do `docs/COSTS.csv`. Ten plik (`09_KOSZTY.md`) agreguje je narracyjnie po każdym większym etapie i po każdym tygodniu (patrz `weekly-summaries/`).
 
