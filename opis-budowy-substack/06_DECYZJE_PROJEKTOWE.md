@@ -191,3 +191,15 @@ Po review doprecyzowano: realny pipeline bez capu odmawia, cap resume jest absol
 - Domyślny limit B rośnie z 2200 do 3000, pozostaje jawny w CLI i jest liczony w capie: 0,026250 USD conservative; cały fresh plan 0,516375 < 0,55.
 - Porażka kończy `runs=FAILED`, ale zachowuje `research_runs=SOURCES_COMPLETE`; jawny resume robi tylko B i używa CAS.
 - Realny run historyczny nie został naprawiony w bazie. Repair oraz resume są dwiema osobnymi decyzjami człowieka.
+
+### [2026-07-13] D-32–D-36: redakcja ma prawo powiedzieć „nie teraz”
+
+- **Wybór:** decyzje ADR-032–036 ustanawiają modularny system redakcyjny, `SKIP`, izolację NIA/build logu, oddzielne metryki follows i subscribers oraz rozdzielenie lokalnych Notes (Etap 3) od publicznych Notes/komentarzy (Etap 6).
+- **Granica:** blueprint jest propozycją, nie wdrożeniem. Nie zmieniono promptu stylu, kodu, bazy, migracji ani poziomu autonomii.
+- **Dlaczego:** tempo publikacji nie może wymuszać słabej tezy, niezweryfikowanego claimu ani mieszania dwóch odrębnych tożsamości redakcyjnych.
+- **Dokument:** `docs/CONTENT_AND_GROWTH_BLUEPRINT.md`.
+
+### [2026-07-13] Pełny raport Fable pozostaje źródłem zewnętrznym, nie decyzją implementacyjną
+
+- **Wybór:** pełny raport zapisujemy w jednym miejscu (`docs/research/FABLE_GROWTH_EDITORIAL_REPORT.md`), a blueprint zawiera tylko mapę statusów i etapów.
+- **Granica:** [OF]/[TW]/[AN]/[WN] zachowują znaczenie dowodowe; kosztorysy są `COST ESTIMATES — UNVALIDATED`; żadna pozycja nie staje się `IMPLEMENTED` bez kodu lub trwałej konfiguracji.

@@ -17,7 +17,7 @@
 |---|---|---|
 | Konfiguracja (.env + YAML, zero ścieżek absolutnych) | `app/core/config.py` | testy + 4 realne runy |
 | Modele domenowe (Pydantic v2) | `app/models.py` | testy |
-| SQLite + 7 migracji + repozytoria | `app/storage/` | `tests/test_storage.py`, `tests/test_research_run_flow.py`, `tests/test_candidate_attempts.py` i in. |
+| SQLite + 8 migracji + repozytoria | `app/storage/` | `tests/test_storage.py`, `tests/test_research_run_flow.py`, `tests/test_candidate_attempts.py` i in.; `0008` utrwala force staged runu |
 | Policy Engine (kill-switch, aktywność konta, budżet dzienny/miesięczny z priorytetem miesięcznym ADR-012, progi tematów) | `app/policies/policy_engine.py` | `tests/test_policy_engine.py` |
 | Księgowanie kosztów (model_usage + COSTS.csv, flaga dry_run) | `app/llm/usage_tracker.py` | 4 realne runy i kontrolowany resume potwierdziły poprawność |
 | Pipeline tematów (generacja+scoring+dedup+progi) | `app/workflows/topics/` | testy; realnie NIGDY nie uruchomiony (`NOT VERIFIED` na żywym API) |
@@ -112,13 +112,13 @@ Pełna lista 14 rozbieżności była w audycie 12.07 (zarchiwizowany). Wszystkie
 | **Task queue** | ta sama tabela `jobs` (kolejka = scheduler w SQLite, nie osobny system) | brak zewnętrznego brokera | NOT_STARTED |
 | **Workers** | jeden proces workera; lease z wygasaniem; `kind='browser'` serializowany (jeden Chromium — inwariant) | brak puli procesów w MVP | NOT_STARTED |
 | **Research engine** (`app/research/`, `app/workflows/research/`) | A1 discovery → A2 per-source extraction (z fetch treści — docelowo) → B synthesis; wznawialność; evidence | nie pisze artykułów; nie publikuje | WORKING |
-| **Content planner** | wybór: artykuł vs Note, harmonogram treści z research cards PROCEED | nie generuje treści | NOT_STARTED |
+| **Content planner** | wybór: artykuł vs Note, Article Brief, kandydaci harmonogramu i `SKIP` z reason code | nie generuje treści ani nie wymusza publikacji | NOT_STARTED; blueprint PROPOSED |
 | **Writing engine** (`app/workflows/content/`, przyszły) | draft artykułu/Note wg `instrukcja dla pisania artykulow/`; rewrite po audytach | nie publikuje; startuje ZAWSZE od bramki Policy | NOT_STARTED |
 | **Quality scoring** | 3 deterministyczne audyty (fact/style/growth) + progi z configu; scoring gates dla autonomii | samoocena modelu nigdy nie jest jedyną bramką | NOT_STARTED |
 | **Evidence & citation handling** | każde twierdzenie → źródło + `evidence_excerpt` (cytat z treści źródła po fetch); citable_numbers z kontekstem | wiedza modelu nie zastępuje dowodu (P0-2) | PARTIAL (twierdzenie→URL jest; excerpt brak) |
 | **Memory** | SQLite jako pamięć trwała (topics/cards/content/metrics); brak osobnego vector-store w MVP | — | WORKING (w zakresie zbudowanym) |
 | **Strategy engine** | analiza metryk → `strategy_decisions` (log) → korekty parametrów w configu, nigdy „po cichu" | nie zmienia polityk bezpieczeństwa | NOT_STARTED |
-| **Analytics** | kolektor metryk → `metrics_daily`; estymacje jawnie oznaczane | — | NOT_STARTED (tabela czeka) |
+| **Analytics** | kolektor metryk → `metrics_daily`; followers, free/paid/engaged subscribers rozdzielone, estymacje jawnie oznaczane | follows ≠ subscriptions | NOT_STARTED (tabela czeka; blueprint PLANNED) |
 | **Budget & cost control** | `model_usage` = JEDYNY kanon kosztu; PolicyEngine gate przed KAŻDYM płatnym wywołaniem; cap per-run w bibliotece | `runs.cost_usd`/`research_runs.total_cost_usd` = cache, nigdy podstawa decyzji | WORKING (centralny cap i retry budget zbudowane w Task 5) |
 | **Model provider abstraction** (`app/llm/`, `app/research/base.py`) | Protocole `LLMClient`/`ResearchClient`; `ModelRouter` (zadanie→model z .env); Fake dla dry_run | logika biznesowa nie zna nazw modeli ani SDK | WORKING (sekcja 6) |
 | **Publication adapters** | `PublicationChannelPort` — wspólny kontrakt kanałów (sekcja 8) | rdzeń nie zna Substacka | NOT_STARTED |
@@ -160,7 +160,7 @@ Błąd B → status wraca do SOURCES_COMPLETE (źródła nietknięte, ponawialne
 Deterministyczna bramka `validate_draft` — poza modelem. REJECT przy: za mało źródeł, za mało VERIFIED (realne runy), teza bez poparcia, twierdzenia bez źródeł, słabe źródła, niska pewność, wymagane doświadczenie osobiste, nieusuwalne sprzeczności. Karta zapisywana TAKŻE po odrzuceniu (audyt).
 
 ### 3.4. Generowanie artykułu → scoring → poprawki (DOCELOWE, Etap 3)
-`[P] check(action=CREATE_ARTICLE: mode+autonomy+limity) → planner wybiera kartę PROCEED → [$] draft (wg podręcznika stylu) → [$|lokalnie] 3 audyty: fact (każde twierdzenie vs evidence_excerpt karty), style (podręcznik + deterministyczne reguły), growth (tytuł/lead/struktura) → wynik < progu? → [$] rewrite (max N iteracji z configu) → [DB] content_items: DRAFT→PENDING_APPROVAL`
+`[P] check(action=CREATE_ARTICLE/CREATE_NOTE: mode+autonomy+limity) → planner wybiera kartę PROCEED i Article Brief → [$] draft A1–A9 lub lokalny/dry-run Note N1–N16 (wg podręcznika stylu) → [$|lokalnie] fact/style/growth audit + SEO metadata + diversity memory → wynik < progu? → SKIP(reason code) albo [$] rewrite (max N) → [DB] content_items: DRAFT→PENDING_APPROVAL`. Szczegóły: `docs/CONTENT_AND_GROWTH_BLUEPRINT.md` (PROPOSED/PLANNED) oraz pełny zewnętrzny snapshot `docs/research/FABLE_GROWTH_EDITORIAL_REPORT.md` (NOT IMPLEMENTED); Etap 3 nie publikuje Notes.
 
 ### 3.5. Akceptacja lub automatyczne zatwierdzenie (DOCELOWE, Etap 4)
 `content PENDING_APPROVAL → PolicyEngine: wymaga człowieka? (poziom autonomii × typ akcji × scoring gate) → TAK: [DB] approvals PENDING → decyzja w panelu → APPROVED|REJECTED · NIE (LEVEL_2/3 + scoring ≥ progu): auto-APPROVED + [DB] autonomous_decisions (pełny log: co, dlaczego, jakie progi)`
@@ -177,10 +177,10 @@ APPROVED → [DB] job (kind='browser', idempotency_key=hash(account,type,content
 ```
 
 ### 3.7. Komentarze i odpowiedzi (DOCELOWE, Etap 6)
-`discovery targetów (read-only) → scoring komentarza (specyfikacja D.5 ze starego planu — do przeniesienia do configu) → [P] check(COMMENT: daily_comment_limit, max_per_author_per_day, link_ratio) → generacja → approval wg poziomu → publikacja jak 3.6 → odpowiedzi czytelników: te same limity + zasada NO_REPLY dla pytań o tożsamość (ADR-018)`
+`wybór Notes do publikacji + discovery targetów (read-only) → scoring K1–K8 i antyspam → [P] check(NOTE/COMMENT/REPLY/RESTACK: limity, cooldown, link ratio) → generacja → approval wg poziomu → publikacja jak 3.6 → odpowiedzi: te same limity + NO_REPLY dla pytań o tożsamość (ADR-018)`. Publiczne Notes, komentarze i restacki zaczynają się wyłącznie w Etapie 6; blueprint i raport Fable są planem, nie implementacją.
 
 ### 3.8. Analiza wyników → zmiana strategii (DOCELOWE, Etap 7)
-`kolektor metryk (read-only, Playwright) → [DB] metrics_daily (estymacje oznaczone) → tygodniowa analiza → [DB] strategy_decisions (problem→dane→decyzja→oczekiwany efekt) → korekta parametrów treści/harmonogramu w configu → NIGDY zmiana polityk bezpieczeństwa`
+`kolektor metryk (read-only, Playwright) → [DB] metrics_daily (followers oraz free/paid/engaged subscribers rozdzielone; estymacje oznaczone) → atrybucja per content item → tygodniowa analiza i eksperymenty → [DB] strategy_decisions → korekta parametrów treści/harmonogramu w configu → NIGDY zmiana polityk bezpieczeństwa`. Szczegóły i ograniczenia danych: blueprint (PLANNED/PROPOSED) i pełny raport Fable (MIXED / NOT IMPLEMENTED).
 
 ### 3.9. Obsługa błędów (OBOWIĄZUJE WSZĘDZIE)
 - Błędy providera są typowane przed decyzją retry. Retry z twardym limitem wolno wykonać tylko dla timeoutu, SDK-klasyfikowanego błędu połączenia, HTTP 429 oraz 500/502/503/504; przed KAŻDĄ próbą callback wykonuje ponowny `[P]` z aktualnym `model_usage`. HTTP 400/401/403/404/422, nieznany błąd providera, parse, truncation, validation i budget denial nigdy nie są retry’owane.
@@ -199,7 +199,7 @@ Wyjątek `ResearchError` niesie `usage`/`model` z udanego wywołania API, które
 
 Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → budżet). `runs.cost_usd`, `research_runs.total_cost_usd` = cache. **Izolacja kont: `account_id` obowiązkowy w każdej encji per-konto.**
 
-### 4.1. Encje istniejące (migracje 0001–0007)
+### 4.1. Encje istniejące (migracje 0001–0008)
 
 | Encja | Przeznaczenie | Kluczowe pola | Statusy | Relacje / idempotencja |
 |---|---|---|---|---|

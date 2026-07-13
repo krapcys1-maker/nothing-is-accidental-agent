@@ -425,3 +425,48 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 ## Decyzje otwarte (wymagają właściciela)
 
 - **brak** — wszystkie pozycje otwarte z audytu zostały rozstrzygnięte (OPEN-1..5 → ADR-004/007/008/009/010, OPEN-4 → ADR-012).
+
+### ADR-032: Modular Editorial System
+
+- **Data:** 2026-07-13
+- **Status:** ACCEPTED (decyzja dokumentacyjna; implementacja PLANNED od Etapu 3).
+- **Decyzja:** docelowy system redakcyjny składa się z niezależnych modułów: factual constitution, voice profile, format, Article Brief, diversity memory, fact/style/growth audit i SEO/discovery metadata. Obecny podręcznik stylu pozostaje źródłem do modularizacji, nie pojedynczym docelowym promptem.
+- **Granica:** moduły nie uruchamiają modelu, nie zmieniają schematu, nie publikują i nie osłabiają evidence/Policy.
+- **Powiązania:** `docs/CONTENT_AND_GROWTH_BLUEPRINT.md`, Etap 3, ADR-017/018.
+
+### ADR-033: Right to SKIP
+
+- **Data:** 2026-07-13
+- **Status:** ACCEPTED (decyzja dokumentacyjna; egzekwowanie PLANNED).
+- **Decyzja:** harmonogram tworzy kandydatów, nie obowiązek. Negatywna bramka kończy się `SKIP` z reason code; nie jest błędem joba i nie uruchamia automatycznego zastępstwa. Minimalne reason codes: `INSUFFICIENT_EVIDENCE`, `WEAK_THESIS`, `DUPLICATE_ANGLE`, `STYLE_REPETITION`, `REPUTATIONAL_RISK`, `LOW_EDITORIAL_VALUE`, `QUALITY_GATE_REJECTED`.
+- **Dlaczego:** cadence nie może omijać jakości ani lineage.
+- **Powiązania:** blueprint §6, Etap 3 i Etap 6.
+
+### ADR-034: NIA and Build Log Account Isolation
+
+- **Data:** 2026-07-13
+- **Status:** ACCEPTED (decyzja dokumentacyjna; obsługa danych PLANNED).
+- **Decyzja:** NIA i publiczny build log mają odrębne `account_id`, voice profiles, diversity memory, strategie i metryki. Materiały techniczne projektu nie trafiają do promptów NIA; transfer między kontami wymaga jawnej decyzji człowieka.
+- **Dlaczego:** ochrona anonimowej tożsamości NIA z ADR-018 oraz rozdzielenie celów redakcyjnych.
+- **Powiązania:** blueprint §1–2, ADR-017/018.
+
+### ADR-035: Followers and Subscribers Are Separate Metrics
+
+- **Data:** 2026-07-13
+- **Status:** ACCEPTED (definicje dokumentacyjne; kolektor i raportowanie PLANNED w Etapie 7).
+- **Decyzja:** `followers`, `free_subscribers`, `paid_subscribers` i `engaged_subscribers` są osobnymi metrykami. Follows nie są raportowane jako subskrypcje. Nieobserwowalna atrybucja ma flagę `is_estimated` oraz opis metody i ograniczeń danych.
+- **Powiązania:** blueprint §10–11, Etap 7.
+
+### ADR-036: Notes Generation in Stage 3, Public Notes Operations in Stage 6
+
+- **Data:** 2026-07-13
+- **Status:** ACCEPTED (podział zakresu; implementacja PLANNED).
+- **Decyzja:** Etap 3 tworzy artykuły i Notes lokalnie/dry-run wraz z audytami, metadata i diversity memory, bez publicznej publikacji Notes. Etap 6 wybiera Notes do publikacji oraz realizuje harmonogram, komentarze, odpowiedzi i restacki zgodnie z Policy, antyspamem, `NO_REPLY` i autonomią.
+- **Granica:** żadna publiczna akcja nie wynika automatycznie z wygenerowania draftu; metryki i eksperymenty należą do Etapu 7.
+- **Powiązania:** blueprint §5 i §12, roadmapa Etapy 3/6/7, ADR-017/018.
+
+#### Integracja pełnego raportu Fable
+
+- **Status:** dokumentacyjna korekta kompletności, nie nowa decyzja wykonawcza.
+- **Decyzja dokumentacyjna:** pełny materiał źródłowy Fable jest utrwalony wyłącznie w `docs/research/FABLE_GROWTH_EDITORIAL_REPORT.md`, z oznaczeniami [OF]/[TW]/[AN]/[WN], statusem `NOT IMPLEMENTED` oraz ostrzeżeniem `COST ESTIMATES — UNVALIDATED`. `docs/CONTENT_AND_GROWTH_BLUEPRINT.md` mapuje wszystkie 16 sekcji raportu na Etapy 2/3/6/7 i statusy DECIDED/PROPOSED/PLANNED/DEFERRED.
+- **Granica:** nie przyjęto jako faktu danych anegdotycznych ani wniosków Fable; nie zmieniono kodu, polityki, poziomu autonomii ani instrukcji pisania.

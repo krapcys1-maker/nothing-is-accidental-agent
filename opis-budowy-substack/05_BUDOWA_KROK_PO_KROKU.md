@@ -367,3 +367,15 @@ Przed zbudowaniem kolejki zajrzeliśmy do najniższej warstwy płatnego calla. B
 Kolejne review znalazło drobny, lecz ważny P1: typ istniał w pamięci, ale audit przechowywał tylko jego komunikat. Wspólny formatter zapisuje teraz np. `[discover_sources] ResearchInvalidRequestError(status_code=422, retryable=False): ...` w runie, research_runie i logu etapu. Nie kopiuje raw response ani obiektów SDK, redaguje sekrety i ogranicza długość. 406 testów przeszło offline; retry, koszt i lifecycle nie zmieniły się.
 
 Ostatnie review wykazało jeszcze dwie szczeliny: SDK wkładało body do własnego tekstu błędu, a samotny `Bearer token` omijał regex. Mapper nie przenosi już tekstu SDK — zostawia wyłącznie klasę i status — a audit redaguje każdy wariant Bearer. Marker syntetycznego body nie dotarł do SQLite; 411 testów przeszło offline, bez API i kosztu.
+
+## 2026-07-13 — Najpierw język systemu, potem system
+
+Zanim powstanie content pipeline, opisaliśmy jego granice w `docs/CONTENT_AND_GROWTH_BLUEPRINT.md`. To nie jest generator ani plan publikowania. To słownik, który rozdziela artykuły A1–A9, lokalne Notes N1–N16, publiczne działania Etapu 6 i metryki Etapu 7.
+
+Najważniejsza reguła brzmi banalnie, ale chroni przed rytmem udającym strategię: harmonogram tworzy kandydatów, nie obowiązek. Słaby materiał ma dostać `SKIP` z nazwanym powodem, a nie automatycznego następcę. NIA i build log dostają też osobne konta, głosy, pamięć i metryki; techniczna historia projektu nie może przypadkiem wejść do publicznego głosu NIA.
+
+Praca była wyłącznie dokumentacyjna: brak kodu, migracji, bazy, API, publikacji, commita i kosztu. Pełny system pozostaje planem na Etapy 3, 6 i 7.
+
+## 2026-07-13 — Raport nie jest jeszcze systemem
+
+Pełny raport Fable dostał własny snapshot, zamiast kolejnego skrótu. Osobno zapisaliśmy to, co raport twierdzi, i to, co projekt naprawdę ma: jego dane są mieszane, kosztorysy niewalidowane, a formaty, routing, Notes i metryki należą dopiero do przyszłych etapów. To ważne rozdzielenie — dokument może pokazać kierunek, ale nie może udawać działającego generatora ani rosnącego konta.

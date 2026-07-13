@@ -481,3 +481,16 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Naprawa:** komunikat mappera SDK powstaje teraz wyłącznie z kontrolowanej klasy/statusu, więc body/payload/headers/request nie mogą wejść do błędu domenowego ani audit fields. Formatter redaguje każdy, niezależny od wielkości liter wariant `Bearer <token>`.
 - **Regresje:** syntetyczne 422 z `RAW_RESPONSE_MARKER` zachowuje typ/status/cause, lecz marker nie trafia do run/research_run/stage/candidate audit; trzy warianty Bearer, named keys, `sk-ant-*`, raw_text i długi komunikat są bezpieczne. Pełne **411 passed**, zero API i 0 USD.
 - **Zakres:** retry, mapowanie statusów, usage, koszt i lifecycle bez zmian; bez schedulera/jobs/workers, commita i pushu przed ponownym review.
+
+### 2026-07-13 — Growth & Editorial Operating System: integracja wyłącznie dokumentacyjna — [ROADMAP 3/6/7 | PROPOSED]
+
+- **Cel:** opisać docelowy system treści i wzrostu bez rozpoczęcia Etapu 3, 6 lub 7.
+- **Dokumenty:** dodano `docs/research/FABLE_GROWTH_EDITORIAL_REPORT.md` jako oznaczone źródło zewnętrzne oraz `docs/CONTENT_AND_GROWTH_BLUEPRINT.md` ze statusem PROPOSED.
+- **Decyzje:** ADR-032–036 ustalają modularizację, `SKIP`, izolację NIA/build logu, rozdzielenie followers/subscribers oraz granicę Notes: dry-run w Etapie 3, publiczne operacje w Etapie 6.
+- **Zakres:** zaktualizowano krótkie odwołania w architekturze, roadmapie, stanie i kronice. Bez kodu, konfiguracji, migracji, bazy, API, publikacji, commita i pushu; koszt 0 USD. Zmiany pozostają do niezależnego review.
+
+### 2026-07-13 — pełny snapshot Fable i mapa roadmapy — [DOCS | ROADMAP 2/3/6/7]
+
+- **Cel:** dokończyć wyłącznie dokumentacyjną integrację pełnego fragmentu „Growth & Editorial Operating System” z dostarczonego materiału, bez audytu technicznego i bez promptu źródłowego.
+- **Wynik:** `docs/research/FABLE_GROWTH_EDITORIAL_REPORT.md` zawiera 16 kompletnych sekcji, formaty A1–A9/N1–N16/K1–K8, routing, trzy warianty kosztowe, E1–E10, granice autonomii i oznaczenia [OF]/[TW]/[AN]/[WN]. Blueprint zawiera tylko statusy i mapowanie, bez deklaracji wdrożenia.
+- **Granica:** brak kodu, migracji, bazy, testów, API, researchu, publikacji, commita i pushu; koszt 0 USD. Kosztorysy są oznaczone jako niewalidowane, a zmiany pozostają do niezależnego review.

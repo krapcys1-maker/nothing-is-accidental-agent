@@ -39,11 +39,11 @@
 | Porty: Browser/Scheduler | SKELETON | 10 | celowe stuby; DisabledBrowser blokuje każdą akcję | to zabezpieczenie, nie brak | — | 2026-07-12 | Etap 1 (scheduler), Etap 5 (browser) |
 | Tabele bez kodu (content_items, interactions, target_items, approvals, metrics_daily, screenshots) | SKELETON | 5 | schemat od migracji 0001 | żaden kod ich nie dotyka | — | 2026-07-12 | Etapy 3–7 |
 | Task queue / workers / scheduler | NOT_STARTED | 0 | poprzedzający je kontrakt typed-provider-error/retry jest gotowy offline | brak tabel, lease, jobów, workerów i runtime scheduler | kontrakt klienta: tak | 2026-07-13 | dopiero po niezależnym review blockera |
-| Content pipeline (artykuły/Notes) | NOT_STARTED | 0 | — | — | — | — | Etap 3 |
+| Content pipeline (artykuły/Notes) | NOT_STARTED | 0 | pełny snapshot Fable + blueprint: Article Brief, A1–A9, N1–N16 dry-run, audyty, SEO i diversity memory | brak kodu, migracji i generatorów; raport/blueprint nie są wdrożeniem, a kosztorysy są niewalidowane | — | 2026-07-13 | Etap 3 po Etapach 1–2 |
 | Approval/autonomy + panel FastAPI | NOT_STARTED | 0 | — | — | — | — | Etap 4 |
 | Publishing (Playwright/Substack) | NOT_STARTED | 0 | — | — | — | — | Etap 5 |
-| Interakcje (komentarze/odpowiedzi) | NOT_STARTED | 0 | — | — | — | — | Etap 6 |
-| Analytics + strategy engine | NOT_STARTED | 0 | — | — | — | — | Etap 7 |
+| Interakcje (komentarze/odpowiedzi) | NOT_STARTED | 0 | dokumentacyjny podział: publiczne Notes, K1–K8, odpowiedzi/restacki w Etapie 6 | brak kodu i akcji publicznych | — | 2026-07-13 | Etap 6 |
+| Analytics + strategy engine | NOT_STARTED | 0 | dokumentacyjne definicje oddzielnych metryk i `is_estimated` | brak kolektora, atrybucji, eksperymentów i strategy engine | — | 2026-07-13 | Etap 7 |
 | Backend API / frontend | NOT_STARTED | 0 | — | (panel = Etap 4; poza nim brak frontendu w planie MVP) | — | — | Etap 4 |
 
 ## Aktualne blokery

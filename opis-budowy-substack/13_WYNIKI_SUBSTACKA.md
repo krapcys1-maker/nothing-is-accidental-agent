@@ -42,6 +42,12 @@ Na 2026-07-11 **nie opublikowano żadnej treści** (ADR-005: brak publikacji w M
 - **Automatycznie** (gdy powstanie `MetricsCollector`, Etap 5, tolerancyjny na błędy): subskrybenci, obserwujący, odsłony, polubienia, komentarze, restacki, wejścia na profil — o ile Substack je udostępnia w UI.
 - **Estymowane / ręczne:** konwersja „profil → subskrypcja", „subskrypcje z Notes/komentarzy" — Substack nie daje pełnej atrybucji; oznaczane `is_estimated=1`, uzupełniane ręcznie tam, gdzie trzeba.
 
+## Kontrakt metryk (PLANNED)
+
+`followers`, `free subscribers`, `paid subscribers` i `engaged subscribers` są różnymi liczbami. Follow nie jest subskrypcją i nie będzie tak raportowany. Metryka per content item, estymowana atrybucja i weekly strategy należą do Etapu 7; każda nieobserwowalna atrybucja dostanie `is_estimated=true`, metodę i ograniczenia danych. Szczegóły: `docs/CONTENT_AND_GROWTH_BLUEPRINT.md`.
+
+Pełny raport Fable dodaje jako **PLANNED** dashboard i E1–E10; nie daje jeszcze żadnego wyniku ani danych NIA. [OF], [TW], [AN] i [WN] w źródle pozostają rozdzielone, a follows nigdy nie są prezentowane jako subskrypcje.
+
 ## Rankingi (do wypełniania od pierwszego tygodnia publikacji)
 - Najlepsze artykuły — po odsłonach / subskrypcjach / komentarzach.
 - Najlepsze Notes — po reakcjach / restackach.

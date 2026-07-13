@@ -45,7 +45,7 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 - **Cel:** przejście z „człowiek uruchamia komendy" na „system sam wykonuje zakolejkowane zadania" — bez utraty ani zdublowania żadnego płatnego działania.
 - **Uzasadnienie:** wszystko od Etapu 3 wzwyż (treści, publikacja, interakcje, metryki) wymaga zadań cyklicznych i odporności na restart; audyt wskazał brak locków i reapera jako warunek wstępny współbieżności.
 - **Zależności:** Etap 0.
-- **Pliki/moduły:** NOWY `app/scheduler/` (worker, lease, wybór jobów), migracja `0008_jobs_system_flags.sql`, `app/policies/policy_engine.py` (flagi z DB), `app/main.py` (subkomenda `worker`), `app/orchestrator/`.
+- **Pliki/moduły:** NOWY `app/scheduler/` (worker, lease, wybór jobów), migracja `0009_jobs_system_flags.sql`, `app/policies/policy_engine.py` (flagi z DB), `app/main.py` (subkomenda `worker`), `app/orchestrator/`.
 - **Zadania:**
   0. **Blocker przed płatnymi workerami — GOTOWY OFFLINE, oczekuje na niezależne review (2026-07-13):** `AnthropicResearchClient` mapuje wyjątki SDK na typy domenowe. Retry obejmuje wyłącznie timeout, SDK-network, 429 i 500/502/503/504; 400/401/403/404/422, unknown, parse/truncation/validation są fail-closed. Każda kolejna próba nadal przechodzi callback budżetowy, usage jest księgowane raz, P2-19 pozostaje jawne, a trwały audit zachowuje typ/status/retryable/stop_reason bez SDK body, raw response i sekretów, w tym samodzielnego `Bearer <token>`. **411 testów**, 0 USD, brak API. Bez scheduler/jobs/workerów/rezerwacji budżetowych.
   1. Tabela `jobs` (schemat: MASTER_ARCHITECTURE §4.2) + `system_flags`.
@@ -55,7 +55,7 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
   5. Kill-switch/SAFE MODE runtime: PolicyEngine czyta `system_flags` przy KAŻDYM checku (P1-7).
   6. Reaper: `runs.status=RUNNING` starsze niż X bez żywego procesu → STOPPED(stale).
   7. Okna redakcyjne (godziny działań) z `growth_policy` → filtr `earliest_run_at`; `schedule_reason` przy każdym jobie.
-- **Migracje:** 0008.
+- **Migracje:** 0009 (`jobs` + `system_flags`).
 - **Testy:** dwa workery nie biorą tego samego joba (lease); wygasły lease wraca do QUEUED; kill-switch w DB zatrzymuje NASTĘPNY check w trwającej pętli A2; reaper nie ubija żywych runów; dead-letter po capie prób; pełne logowanie kosztów/błędów jobów.
 - **Kryteria akceptacji/zakończenia:** research da się zakolejkować i wykonać przez workera (dry_run) z identycznym wynikiem jak z CLI; restart w połowie nie gubi ani nie dubluje żadnego etapu.
 - **Ryzyka:** współbieżność SQLite (mitygacja: WAL z Etapu 0, jeden worker, lease); nadmierna komplikacja (mitygacja: ZERO zewnętrznych zależności — czysty SQLite).
@@ -69,7 +69,7 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 - **Cel:** A2 czyta TREŚĆ źródła (nie „opinię o URL-u") i utrwala dowód per twierdzenie; kontrola sprzeczności; porządki po legacy.
 - **Uzasadnienie:** P0-2c — bez fetch treści nazwa „extraction" jest na wyrost, a przyszły fact-audit artykułów (Etap 3) nie ma na czym pracować.
 - **Zależności:** Etap 0 (pierwszy sukces staged na żywo); niezależny od Etapu 1 (może iść równolegle, ale nie przed Etapem 0).
-- **Pliki/moduły:** NOWY `app/ports/fetch.py` (`FetchPort: fetch(url) -> FetchedDocument(text, status, retrieved_at)`), `app/research/anthropic_client.py` (A2 z narzędziem web_fetch API albo treścią z FetchPort w prompcie), `app/research/base.py`, migracja 0009 (`evidence_excerpt` per twierdzenie), `app/research/injection_guard.py`.
+- **Pliki/moduły:** NOWY `app/ports/fetch.py` (`FetchPort: fetch(url) -> FetchedDocument(text, status, retrieved_at)`), `app/research/anthropic_client.py` (A2 z narzędziem web_fetch API albo treścią z FetchPort w prompcie), `app/research/base.py`, migracja 0010 (`evidence_excerpt` per twierdzenie), `app/research/injection_guard.py`.
 - **Zadania:**
   1. FetchPort + adapter (narzędzie web_fetch Anthropic API jako pierwszy wybór; lokalny fetcher jako drugi adapter później).
   2. A2: ekstrakcja Z TREŚCI; `evidence_excerpt` (krótki cytat + kontekst) per supported_claim; `VERIFIED` TYLKO gdy treść była faktycznie pobrana.
@@ -78,7 +78,7 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
   5. Rozszerzenie injection guard (wektor rośnie wraz z fetch pełnych treści): wzorce wielojęzyczne, skan URL-i.
   6. Wygaszenie legacy: po ≥2 sukcesach staged na żywo — oznaczenie `run_research_pipeline`/`run_two_stage_research_pipeline` jako DEPRECATED (docstring + warning), plan konsolidacji tabel źródeł (osobna decyzja przed usunięciem czegokolwiek).
   7. Detekcja sprzeczności: pole `contradictions` + `contradictions_block` już istnieją — dodać test na realnym schemacie B i regułę „sprzeczność między evidence_excerpt dwóch źródeł → flaga do REVISE".
-- **Migracje:** 0009 (evidence per claim).
+- **Migracje:** 0010 (evidence per claim).
 - **Testy:** A2 bez fetch → wymuszone UNVERIFIED (już jest — rozszerzyć o ścieżkę fetch-failed); excerpt trafia do bazy i do karty; injection w pobranej treści neutralizowany; re-discovery nie dubluje kandydatów (dedup po URL).
 - **Kryteria zakończenia:** realna karta, w której KAŻDE confirmed_claim ma źródło + evidence_excerpt z pobranej treści; koszt fetch w kanonie kosztów.
 - **Ryzyka:** wzrost kosztu A2 (mitygacja: estymator rozszerzony o fetch, capy bez zmian); web_fetch może nie działać dla części stron (mitygacja: verification_status=FAILED, nie udawanie sukcesu).
@@ -94,7 +94,8 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 - **Zależności:** Etap 0 + Etap 2 (fact-audit wymaga evidence_excerpt). Minimalna bramka Policy dla akcji CREATE_* — wdrażana TU, przed generatorami (zasada: bramka → generator).
 - **Pliki/moduły:** NOWY `app/workflows/content/` (planner, writer, audits, rewriter), `app/policies/policy_engine.py` (check dla CREATE_ARTICLE/CREATE_NOTE: mode, limity tworzenia), repozytoria content_items, `instrukcja dla pisania artykulow/CLAUDE_INSTRUKCJA_NATURALNEGO_PISANIA.md` jako podręcznik stylu (wejście do promptów + reguł deterministycznych).
 - **Zadania:** planner (artykuł vs Note wg score tematu — progi już w configu); writer (draft z karty, każde twierdzenie linkowane do claim+excerpt); audyt faktów (deterministyczny: każde twierdzenie w tekście musi mapować się na claim karty; twierdzenia bez pokrycia → obniżenie score/REVISE); audyt stylu (podręcznik + mierzalne reguły: długości, struktura, zakazane frazy); audyt growth (tytuł/lead/CTA wg polityk); pętla rewrite (max N z configu); duplicate detection vs istniejące content_items (ten sam mechanizm co dedup tematów); scoring końcowy + zapis evaluations.
-- **Migracje:** 0010 (`evaluations`; ewentualne braki kolumn content_items).
+- **Doprecyzowanie dokumentacyjne:** Article Brief, A1–A9, N1–N16 wyłącznie lokalnie/dry-run, Fact/Style/Growth Audit, SEO metadata i diversity memory są opisane jako PLANNED/PROPOSED w `docs/CONTENT_AND_GROWTH_BLUEPRINT.md`; pełny materiał referencyjny jest w `docs/research/FABLE_GROWTH_EDITORIAL_REPORT.md` (EXTERNAL STRATEGIC RESEARCH — NOT IMPLEMENTED). Negatywna bramka kończy się `SKIP` z reason code; nie publikuje ani nie tworzy automatycznej treści zastępczej.
+- **Migracje:** 0011 (`evaluations`; ewentualne braki kolumn content_items).
 - **Testy:** E2E dry-run topics→research→draft→audyty→PENDING_APPROVAL (pierwszy pełny test integracyjny przez wszystkie workflow); twierdzenie bez pokrycia w karcie → REVISE; duplikat treści wykryty; koszt każdego wywołania w kanonie; Policy blokuje CREATE_ARTICLE dla konta COMMENT_ONLY.
 - **Kryteria zakończenia:** pełny łańcuch dry-run zielony; ≥1 realny artykuł-draft z audytami (za zgodą właściciela) oceniony przez człowieka jako publikowalny.
 - **Ryzyka:** jakość stylu (mitygacja: podręcznik + iteracje z właścicielem na dry-runach); koszt generacji (mitygacja: te same bramki budżetowe i capy per-run).
@@ -108,9 +109,9 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 - **Cel:** kompletny, egzekwowany system poziomów autonomii, akceptacji i SAFE MODE — ZANIM powstanie jakakolwiek możliwość publikacji.
 - **Uzasadnienie:** publikacja bez działających bramek = niekontrolowane ryzyko reputacyjne; dziś `autonomy_level`/`AccountMode`/`AccountPolicy` to martwa konfiguracja (P1-10).
 - **Zależności:** Etap 1 (system_flags, jobs), Etap 3 (jest co zatwierdzać).
-- **Pliki/moduły:** `app/policies/policy_engine.py` (centralny `check(action, ctx)`), repozytoria approvals, NOWY `app/ui/` (panel FastAPI localhost: readonly stan + approvals + kill-switch), migracja 0011 (`autonomous_decisions`).
+- **Pliki/moduły:** `app/policies/policy_engine.py` (centralny `check(action, ctx)`), repozytoria approvals, NOWY `app/ui/` (panel FastAPI localhost: readonly stan + approvals + kill-switch), migracja 0012 (`autonomous_decisions`).
 - **Zadania:** macierz akcja×poziom×tryb konta; egzekucja WSZYSTKICH limitów AccountPolicy (daily_comment_limit, daily_note_limit, weekly_article_limit, max_per_author_per_day, link_ratio); cooldowny; scoring gates (auto-approve TYLKO ≥ progu + log autonomous_decisions); SAFE MODE (progi błędów z configu, wejście auto, wyjście ręczne przez panel); approvals workflow w panelu; per-akcja cap kosztu w bibliotece (dokończenie P1-4).
-- **Migracje:** 0011.
+- **Migracje:** 0012 (`autonomous_decisions`).
 - **Testy:** każda kombinacja poziom×akcja z macierzy; limit dzienny blokuje N+1-szą akcję; SAFE MODE zatrzymuje trwającą pętlę przy następnym checku; auto-approve poniżej progu ODMAWIA; wszystkie decyzje autonomiczne logowane.
 - **Kryteria zakończenia:** żadna akcja zewnętrzna nie może wykonać się z pominięciem `PolicyEngine.check` (test architektoniczny: orchestrator jest jedynym wołającym porty); panel pozwala zatwierdzić/odrzucić draft.
 - **Ryzyka:** panel = pierwszy współbieżny czytelnik bazy (mitygacja: WAL już włączony w Etapie 0).
@@ -126,7 +127,7 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 - **Zależności:** Etapy 1+3+4 W CAŁOŚCI. Jawna zgoda właściciela + weryfikacja ToS Substacka (otwarty punkt z ADR-018) PRZED pierwszą publikacją.
 - **Pliki/moduły:** NOWY `app/browser/` (adapter `PublicationChannelPort`/`BrowserPort` na Playwright), `app/workflows/publishing/`, tabela `screenshots` (wreszcie używana), `jobs` kind='browser'.
 - **Zadania:** persistent context per konto + procedura pierwszego RĘCZNEGO logowania (MASTER §8.2); `is_logged_in` + stop-conditions; publish z `idempotency_key` + verify-before-publish + potwierdzenie odczytem stanu + screenshot; status UNCERTAIN bez auto-retry; recovery po częściowym błędzie (NEEDS_VERIFICATION po wygasłym lease); serializacja jobów browser (jeden Chromium); `max_consecutive_browser_errors` → SAFE MODE; drugi adapter `FileExportChannel` jako test szczelności kontraktu portu.
-- **Migracje:** 0012 (kolumny weryfikacji publikacji w content_items/jobs, jeśli brakujące).
+- **Migracje:** 0013 (kolumny weryfikacji publikacji w content_items/jobs, jeśli brakujące).
 - **Testy:** dubel idempotency_key odrzucony; UNCERTAIN nigdy nie retry'owany automatycznie; crash po kliknięciu a przed potwierdzeniem → NEEDS_VERIFICATION; adapter plikowy przechodzi ten sam kontrakt testowy co Substack (contract tests portu).
 - **Kryteria zakończenia:** ≥1 realna publikacja Note za akceptacją, potwierdzona odczytem stanu + screenshot; zero dubli w całej historii jobów.
 - **Ryzyka:** zmiany UI Substacka (stop-conditions + selektory w jednym miejscu); ToS (weryfikacja przed startem, decyzja właściciela); ban/rate-limiting (limity z Etapu 4 + wolny start).
@@ -136,6 +137,8 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 ---
 
 ## Etap 6 — Interakcje (czytanie, komentarze, odpowiedzi)
+
+> Doprecyzowanie: wybór i publiczna obsługa Notes oraz K1–K8 (komentarze), odpowiedzi i restacki należą do tego etapu, nie do Etapu 3. Szczegóły: `docs/CONTENT_AND_GROWTH_BLUEPRINT.md` (PLANNED/PROPOSED); wartości, dane i koszty z raportu Fable pozostają zewnętrzną, mieszaną weryfikacyjnie propozycją.
 
 - **Cel:** kontrolowane uczestnictwo w ekosystemie: czytanie, komentarze, odpowiedzi czytelnikom, subskrypcje — w limitach i z pełnym logiem.
 - **Zależności:** Etap 5 (ta sama warstwa przeglądarki i te same bramki).
@@ -151,11 +154,14 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 
 ## Etap 7 — Analytics i strategy loop
 
+> Doprecyzowanie: metryki per content item, rozdzielone followers/free subscribers/paid subscribers/engaged subscribers, estymowana atrybucja (`is_estimated`), eksperymenty i weekly strategy należą do tego etapu. Szczegóły: `docs/CONTENT_AND_GROWTH_BLUEPRINT.md` (PLANNED/PROPOSED); nie istnieje jeszcze kolektor ani wynik eksperymentu.
+
 - **Cel:** system mierzy skutki własnych działań i koryguje strategię na podstawie danych, z pełnym logiem decyzji.
 - **Zależności:** Etap 5 (są publikacje do mierzenia); Etap 6 wzbogaca dane, nie blokuje.
-- **Pliki/moduły:** NOWY `app/metrics/` (kolektor → metrics_daily), NOWY `app/workflows/strategy/`, migracja `strategy_decisions`.
+- **Pliki/moduły:** NOWY `app/metrics/` (kolektor → metrics_daily), NOWY `app/workflows/strategy/`, migracja `0014_strategy_decisions.sql`.
 - **Zadania:** kolektor metryk (read-only Playwright; estymacje oznaczane `is_estimated`); attribution (metryka↔treść po external_url/dacie); tygodniowy raport (docs/weekly-reports/ — automatyczny szkic); ocena skuteczności vs funkcja celu wzrostu (wagi z growth_policy, ADR-002); strategy engine: propozycje korekt parametrów treści/harmonogramu → `strategy_decisions` (problem→dane→decyzja→oczekiwany efekt→wynik po fakcie); korekty wchodzą przez config, NIGDY w politykę bezpieczeństwa; na LEVEL<3 zmiany strategii wymagają akceptacji.
 - **Testy:** attribution deterministyczna na danych syntetycznych; strategia nie może zmienić limitów bezpieczeństwa (test negatywny); każdy wpis strategii kompletny.
+- **Migracje:** 0014 (`strategy_decisions`).
 - **Kryteria zakończenia:** ≥2 cykle tygodniowe z raportem i ≥1 udokumentowaną, zamkniętą pętlą decyzja→efekt.
 - **Ryzyka:** za mało danych do wniosków (mitygacja: decyzje oznaczane confidence, minimalne progi próby).
 - **Rollback:** strategia w trybie „proponuj, nie stosuj".

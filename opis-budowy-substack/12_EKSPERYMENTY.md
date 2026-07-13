@@ -79,3 +79,13 @@ Te „eksperymenty" nie testują treści, tylko samą zdolność systemu do bezp
 - **Kontrola:** run `c01171bc`, 4 VERIFIED, prior 0,170050, `max_retries=0`, B=3000, absolutny cap 0,20; pełny read-only preflight i PolicyEngine przed klientem.
 - **Wynik:** dokładnie jeden nowy usage `research_synthesize_cards`, zero search, 1904/2402 tokenów, 0,013914 USD; A1/A2 bez nowych wpisów. SUCCESS/COMPLETE/USED, card #2.
 - **Wniosek:** hipoteza potwierdzona technicznie; karta jakościowo REJECT, więc odporność wykonawcza nie zastępuje bramki dowodowej.
+
+## [2026-07-13] Proponowane eksperymenty redakcyjne — bez uruchomienia
+
+Blueprint dodaje propozycje EXP-G1–EXP-G5: typ otwarcia, format Note, pojedynczy CTA, tytuł i rotację formatów. Każdy zmienia jedną zmienną, ma minimalny czas lub n≥30 i nie może obchodzić fact audit, SEO contractu ani granic autonomii.
+
+Wynik przy n<30 będzie oznaczany **SIGNAL, NOT PROOF**. To opis przyszłego Etapu 7, nie wykonany test i nie podstawa do zmiany strategii.
+
+## [2026-07-13] E1–E10 z raportu Fable — backlog, nie wyniki
+
+Pełny raport zapisuje dziesięć proponowanych eksperymentów E1–E10 wraz z hipotezą, zmienną, metryką, minimalnym czasem, kryterium decyzji i ryzykiem małej próby. Są one zmapowane na Etap 7 i nie uruchomiono żadnego z nich. Reguła pozostaje bez zmian: `n < 30 = SIGNAL, NOT PROOF`.
