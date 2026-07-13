@@ -89,3 +89,7 @@ Wynik przy n<30 będzie oznaczany **SIGNAL, NOT PROOF**. To opis przyszłego Eta
 ## [2026-07-13] E1–E10 z raportu Fable — backlog, nie wyniki
 
 Pełny raport zapisuje dziesięć proponowanych eksperymentów E1–E10 wraz z hipotezą, zmienną, metryką, minimalnym czasem, kryterium decyzji i ryzykiem małej próby. Są one zmapowane na Etap 7 i nie uruchomiono żadnego z nich. Reguła pozostaje bez zmian: `n < 30 = SIGNAL, NOT PROOF`.
+
+## [2026-07-13] Kontrola utrzymaniowa Etapu 1 — nie jest eksperymentem redakcyjnym
+
+`MaintenanceRunner` testuje tylko trwałość lokalnego recovery/reapera: kolejność recovery→reaper, brak nakładających się cykli, fail-closed błędów z zachowaniem primary/cleanup diagnostic oraz zachowanie SQLite po close→reopen w dwóch połączeniach. Nie generuje treści, nie publikuje i nie mierzy reakcji odbiorców, dlatego nie jest wynikiem ani uruchomieniem EXP-01–EXP-08, E1–E10 lub eksperymentu wzrostowego. Status techniczny: one-shot/poll VERIFIED OFFLINE; system scheduler/service i okna redakcyjne NOT_STARTED; koszt 0 USD.

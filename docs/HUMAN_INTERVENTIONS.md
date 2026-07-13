@@ -238,3 +238,10 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Zakazy:** bez nowej migracji lub implementacji lease, retry dispatchu, API, sieci, realnego researchu/resume, `data/agent.db`, paid/browser workera, schedulerów cyklicznych, okien redakcyjnych, commita, pushu, PR i merge; instrukcja pisania poza zakresem.
 - **Efekt:** guard działa tylko w LOCAL/RESEARCH `dry_run`, zawsze jest joinowany i blokuje `DONE` po utracie lease/błędzie guarda. Pełny suite 548 testów, koszt 0 USD.
 - **Korekta P1:** guard jest daemonem wyłącznie jako osłona procesu; worker zawsze podejmuje stop event, `wake`, bounded join i kontrolę `is_alive()`. Timeout nie daje prawa do `DONE`, a po odblokowaniu guard widzi stop event przed kolejnym heartbeat. Aktualny wynik: 15 pierwotnych testów periodic heartbeat + 11 testów bounded lifecycle/P1 = 26; `test_worker_runtime.py` 59 passed, pełny suite 566 passed, koszt 0 USD.
+
+### [2026-07-13] APPROVAL — osobna offline maintenance loop Etapu 1
+
+- **Typ:** IMPLEMENTATION BOUNDARY / OFFLINE ONLY.
+- **Zakres decyzji właściciela:** dodać oddzielny runner maintenance i CLI `maintain --once/--poll`, który zawsze robi recovery wygasłych lease przed stale-run reaperem, z osobnym połączeniem SQLite na cykl, walidacją progów, jawnym stopem i testami współbieżności/fail-closed.
+- **Zakazy:** bez claimu jobów, dispatchu, workera, researchu, resume, API, sieci, paid/browser/public action, okien redakcyjnych, cron/service/autostartu, migracji, zmian `data/agent.db`, commita, pushu, PR i merge; instrukcje pisania poza zakresem.
+- **Efekt:** one-shot i poll są zweryfikowane offline. Błąd factory/recovery/reapera/close/waitera zatrzymuje poll; przy podwójnym błędzie recovery/reapera + `close()` pierwszeństwo diagnostyczne ma operation error, a cleanup error pozostaje zachowany. Równoległe runnery używają istniejących transakcji SQLite/CAS. Usługa schedulera systemowego i okna redakcyjne pozostają NOT_STARTED, realne resume NOT IMPLEMENTED, live API NOT VERIFIED, paid/browser/public BLOCKED. 26 testów maintenance, pełny suite 592 passed, koszt 0 USD.

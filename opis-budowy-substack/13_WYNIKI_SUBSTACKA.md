@@ -55,3 +55,7 @@ Pełny raport Fable dodaje jako **PLANNED** dashboard i E1–E10; nie daje jeszc
 
 ## Powiązania
 - `docs/METRICS_LOG.md` (źródło), `12_EKSPERYMENTY.md`, `09_KOSZTY.md` (koszt/subskrybenta), `14_WNIOSKI_CZASTKOWE.md`
+
+## [2026-07-13] Maintenance Etapu 1 nie dodaje wyniku publicznego
+
+Zweryfikowane offline `maintain --once/--poll` porządkuje wyłącznie lokalne lease i stale runy. Nie uruchamia workera, nie wykonuje researchu, nie publikuje ani nie zbiera metryk, więc nie zmienia baseline’u: nadal 0 artykułów, 0 Notes, 0 komentarzy i brak danych NIA. One-shot oraz poll są VERIFIED OFFLINE; usługa schedulera systemowego i okna redakcyjne pozostają NOT_STARTED, a API live i działania paid/browser/public nie zostały uruchomione. Koszt: 0 USD.

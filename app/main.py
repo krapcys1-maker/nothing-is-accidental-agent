@@ -19,6 +19,7 @@ from app.core.config import Settings, load_settings
 from app.orchestrator.runner import DEFAULT_ACCOUNT, run_research, run_topics
 from app.policies.policy_engine import PolicyEngine
 from app.scheduler.dispatcher import JobDispatcher
+from app.scheduler.maintenance import MaintenanceRunner
 from app.scheduler.worker import Worker, WorkerIterationStatus
 from app.storage.repositories import SqliteStorage
 
@@ -172,6 +173,35 @@ def _cmd_reap_runs(args: argparse.Namespace) -> int:
         storage.close()
 
 
+def _cmd_maintain(args: argparse.Namespace) -> int:
+    """Run explicit offline safety maintenance, once or in a controlled poll."""
+    settings = load_settings()
+    runner = MaintenanceRunner(
+        storage_factory=lambda: SqliteStorage.open(settings.db_path),
+        stale_after_seconds=args.stale_after_seconds,
+        clock=SystemClock(),
+    )
+    try:
+        if args.once:
+            result = runner.run_once()
+            print(
+                "MAINTENANCE: "
+                f"checked={result.reaper.checked_count} stopped={result.reaper.stopped_count} "
+                f"recovered(requeued={result.recovery.requeued_count}, "
+                f"needs_verification={result.recovery.needs_verification_count}, "
+                f"failed={result.recovery.failed_count})"
+            )
+            return 0
+        runner.run_forever(interval_seconds=args.interval_seconds)
+        return 0
+    except KeyboardInterrupt:
+        print("MAINTENANCE: interrupted; polling stopped.", file=sys.stderr)
+        return 130
+    except Exception as exc:
+        print(f"MAINTENANCE: failed closed: {exc}", file=sys.stderr)
+        return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="app.main", description="Nothing Is Accidental agent (MVP).")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -211,6 +241,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_reaper.add_argument("--stale-after-seconds", type=_positive_seconds, required=True,
                           help="Jawny dodatni próg wieku RUNNING runu.")
     p_reaper.set_defaults(func=_cmd_reap_runs)
+
+    p_maintain = sub.add_parser(
+        "maintain",
+        help="Offline maintenance: recovery wygasłych lease, potem stale-run reaper.",
+    )
+    maintenance_mode = p_maintain.add_mutually_exclusive_group(required=True)
+    maintenance_mode.add_argument("--once", action="store_true",
+                                  help="Wykonaj dokładnie jeden przebieg maintenance.")
+    maintenance_mode.add_argument("--poll", action="store_true",
+                                  help="Uruchom sekwencyjną pętlę maintenance.")
+    p_maintain.add_argument("--interval-seconds", type=_positive_seconds,
+                            help="Wymagany dodatni interwał tylko dla --poll.")
+    p_maintain.add_argument("--stale-after-seconds", type=_positive_seconds, required=True,
+                            help="Jawny dodatni próg wieku RUNNING runu.")
+    p_maintain.set_defaults(func=_cmd_maintain)
     return parser
 
 
@@ -218,6 +263,10 @@ def main(argv: list[str] | None = None) -> int:
     _configure_output()
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "maintain" and args.poll and args.interval_seconds is None:
+        parser.error("maintain --poll wymaga --interval-seconds.")
+    if args.command == "maintain" and args.once and args.interval_seconds is not None:
+        parser.error("maintain --once nie przyjmuje --interval-seconds.")
     return args.func(args)
 
 
