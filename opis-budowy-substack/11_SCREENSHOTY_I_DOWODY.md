@@ -97,3 +97,7 @@ Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior u
 ### Task 9 — dowód kontrolowanej naprawy statusu
 
 `SCREENSHOT REQUIRED`: bezpieczny kadr może później pokazać jedynie zanonimizowane preconditions, `rowcount=1`, trzy zmienione pola i niezmienne agregaty kosztu/researchu. Playwrighta nie użyto. Obecny dowód stanowią SHA-256 backupu i bazy, logiczne snapshoty przed/po oraz wpis `task9-controlled-status-repair` w `docs/SCREENSHOT_INDEX.md`.
+
+### Task 9 — pierwsza realna karta po resume B
+
+`SCREENSHOT REQUIRED`: zanonimizowany lokalny raport powinien pokazać SUCCESS/COMPLETE/USED, card #2, 4 VERIFIED, `end_turn`, koszt nowego B 0,013914 i runu 0,183964/0,20 USD oraz jakościowe REJECT. Nie użyto Playwrighta ani przeglądarki; obecnym dowodem są SQLite po reopen, usage ledger i wpis `task9-first-real-card-resume-b` w indeksie.

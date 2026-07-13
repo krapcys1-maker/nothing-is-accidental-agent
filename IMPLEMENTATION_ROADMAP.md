@@ -1,19 +1,19 @@
 # IMPLEMENTATION_ROADMAP — Nothing Is Accidental Agent
 
 > **STATUS: JEDYNA OBOWIĄZUJĄCA KOLEJNOŚĆ DALSZYCH PRAC.**
-> Data: 2026-07-12 · Architektura docelowa: `MASTER_ARCHITECTURE.md` · Stan bieżący: `CURRENT_PROJECT_STATE.md`.
+> Data: 2026-07-13 · Architektura docelowa: `MASTER_ARCHITECTURE.md` · Stan bieżący: `CURRENT_PROJECT_STATE.md`.
 > Zastępuje plany etapów z `docs/IMPLEMENTATION_PLAN.md` (§B.11, CZĘŚCI D–F) i plan napraw z audytu 12.07 — oba w `docs/archive/superseded_plans/`.
 >
-> **AKTYWNY ETAP: 0.** Nie zaczynaj etapu N+1 przed spełnieniem kryteriów zakończenia etapu N. Każde realne (płatne lub publikujące) uruchomienie wymaga osobnej, jawnej zgody właściciela — zawsze.
+> **ETAP 0 ZAKOŃCZONY. NASTĘPNY ETAP: 1 (NIEROZPOCZĘTY).** Nie zaczynaj etapu N+1 przed spełnieniem kryteriów zakończenia etapu N. Każde realne (płatne lub publikujące) uruchomienie wymaga osobnej, jawnej zgody właściciela — zawsze.
 
 Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; findingi przeniesione tutaj i do `CURRENT_PROJECT_STATE.md`). ✅ = już wykonane (nie jest zadaniem).
 
 ---
 
-## Etap 0 — Stabilizacja obecnego projektu (AKTYWNY)
+## Etap 0 — Stabilizacja obecnego projektu (ZAKOŃCZONY 2026-07-13)
 
-- **Cel:** domknąć znane wady wykonawcze researchu i uzyskać PIERWSZĄ kompletną, realną Research Card z terminalnym `SUCCESS`.
-- **Uzasadnienie:** 3 realne próby researchu = 3 porażki (wszystkie przyczyny zdiagnozowane i naprawione); run `9bbeb020` jest trwale niedomykalny bez retry nieudanych kandydatów; bez żywego sukcesu researchu nie ma sensu budować niczego wyżej.
+- **Cel — OSIĄGNIĘTY:** domknięto znane wady wykonawcze researchu i uzyskano pierwszą kompletną, realną Research Card z terminalnym `SUCCESS`.
+- **Uzasadnienie:** wcześniejsze realne próby kończyły się bez kompletnej karty. Kontrolowany staged run `c01171bc` zachował A1/A2 po pierwszym błędzie B, a następnie za osobną zgodą wznowił wyłącznie B i spełnił kryterium etapu bez powtarzania opłaconych etapów.
 - **Zależności:** brak.
 - **Już wykonane w tym etapie ✅:** testy 102/102 zielone; naprawy P0-1 (SUCCESS), P0-2a/b (wymuszone UNVERIFIED + `min_verified_sources`), P0-3 (blokada `run-research --real`) — z testami regresyjnymi; diagnostyka raw+stop_reason; default A2=1500; konsolidacja dokumentacji (ten zestaw dokumentów).
 - **Pliki/moduły:** `app/storage/migrations/`, `app/storage/repositories.py`, `app/models.py`, `app/workflows/research/pipeline.py`, `app/orchestrator/runner.py`, `app/policies/policy_engine.py`, `app/research/cost_estimator.py`, `app/storage/db.py`, `scripts/run_capped_research.py`, testy.
@@ -28,12 +28,12 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 6. ✅ **[nowe, z tego audytu] Wyrównanie klienta tematów — WYKONANE 2026-07-12:** `AnthropicLLMClient` buduje `Usage` przed parsowaniem, zachowuje usage/model w typowanych błędach parse/schema, rozróżnia błąd providera bez odpowiedzi, zdejmuje dokładnie jeden kompletny zewnętrzny code fence, a workflow księguje dostępny koszt raz i kończy run `FAILED` bez częściowych topics; **286 testów offline**, zero API i 0 USD.
 7. ✅ **[P2-9] Higiena rejestru decyzji — WYKONANE 2026-07-12:** ADR-001/002/003/005/006 zweryfikowane względem architektury, roadmapy, bieżącego stanu i wdrożenia, następnie oznaczone `ACCEPTED`. Historyczne mapowanie publikacji w ADR-005 doprecyzowano do aktualnego Etapu 5 bez zmiany meritum; brak sprzeczności, zero zmian kodu, 286 testów offline i 0 USD.
 8. ✅ **Walidacja przejść stanów — WYKONANE 2026-07-13, poprawione po review:** pełna inwentaryzacja objęła `runs`, `research_runs`, `topics` i `research_source_candidates`; `research_sources` nie mają lifecycle statusu, a przyszłe `content_items`/`approvals`/`interactions` nie mają używanych helperów. Każdy istniejący statusowy UPDATE ma warunek `status IN (...)` (oraz `flow`, gdy wymagany), kontrolę `rowcount`, atomowy rollback i typowany `LifecycleTransitionError` albo zachowany `ResearchTopicIntegrityError`. `finish_run` nie przepisuje FAILED; wyłącznie jawny research resume używa osobnego helpera z pełną walidacją relacji i CAS. Race terminalizacji, resume i candidate claim są rzeczywiście równoległe na osobnych połączeniach SQLite z `Barrier`; **337 testów offline**, zero API i 0 USD.
-9. **Realny run researchu — PIERWSZA PRÓBA WYKONANA 2026-07-13, KRYTERIUM NIEOSIĄGNIĘTE:** za jawną zgodą wykonano dokładnie komendę ADR-022 (`--topic-id 2 --mode three-stage --discovery-max-searches 1 --max-sources 4 --max-web-searches-per-source 1 --extraction-max-tokens 1500 --max-retries 0 --max-cost-usd 0.55`). A1 odkrył 4 kandydatów, A2 zapisał 4×EXTRACTED/VERIFIED, B zużył 2200 tokenów i zwrócił ucięty JSON (`stop_reason=max_tokens`). Koszt 0,170050 USD mieści się w capie; `research_runs=SOURCES_COMPLETE`, brak karty, temat SELECTED, historyczny ogólny run pozostał RUNNING. Offline naprawiono przyszłe zachowanie: typowany truncation bez retry, limit B=3000 uwzględniony w estymacie i terminalny `FAILED` auditu przy zachowaniu wznawialnego B. Nie naprawiono historycznej bazy i nie wykonano retry/resume/force; Etap 0 pozostaje aktywny, a repair i każdy kolejny płatny krok wymagają osobnej zgody.
+9. ✅ **Realny run researchu — WYKONANE 2026-07-13:** świeży staged run ADR-022 wykonał A1 i 4×A2, a pierwsze B zakończyło się `stop_reason=max_tokens`, zachowując `SOURCES_COMPLETE`. Po osobnym, zatwierdzonym repair auditu właściciel zezwolił na dokładnie jeden resume B z `--synthesize-max-tokens 3000 --max-retries 0 --max-cost-usd 0.20`. Centralny PolicyEngine dopuścił projekcję 0,196300 USD. Jedyny call B zakończył się `end_turn`, 1904/2402 tokenów, zero search, kosztem 0,013914 USD. Run osiągnął `SUCCESS`, research `COMPLETE`, topic `USED`, karta #2 ma 4 VERIFIED, a łączny koszt 0,183964 USD pozostał poniżej capu. Karta jakościowo ma rekomendację `REJECT` (`THESIS_UNSUPPORTED`, `CLAIMS_WITHOUT_SOURCES`), co blokuje użycie jej do treści, ale nie narusza technicznego kryterium zakończenia Etapu 0. Nie wykonano retry, A1/A2, nowego runu ani Etapu 1.
 
 - **Migracje:** 0006 ma własną transakcję; 0007 jest transakcyjna razem z wpisem `schema_migrations`, kontrolowana przez runner.
 - **Testy:** resume cross-flow → ValueError (obie strony); `runs.cost_usd == sum(model_usage)` po każdej ścieżce staged (w tym B-failure); retry-failed z capem attempts; PARTIAL_EXHAUSTED terminalny; topic USED + `--force-re-research`; drugi attempt zablokowany gdy budżet wyczerpany między próbami; macierz dozwolonych przejść `mark_*`; parser topics z fence/uciętym JSON + księgowanie kosztu.
 - **Kryteria akceptacji:** wszystkie dotychczasowe 102 testy + nowe zielone; run `9bbeb020` da się jawnie ponowić albo zamknąć jako PARTIAL_EXHAUSTED; `_detect_flow` nie istnieje.
-- **Kryterium zakończenia etapu:** istnieje ≥1 realna Research Card z `research_runs.status=COMPLETE`, `runs.status=SUCCESS`, ≥3 źródłami VERIFIED, kosztem ≤ capu — potwierdzona w bazie i opisana w `docs/RESEARCH_LOG.md`.
+- **Kryterium zakończenia etapu — SPEŁNIONE 2026-07-13:** istnieje realna Research Card #2 z `research_runs.status=COMPLETE`, `runs.status=SUCCESS`, 4 źródłami VERIFIED i kosztem 0,183964 ≤ 0,20 USD; potwierdzone po reopen bazy i opisane w `docs/RESEARCH_LOG.md`.
 - **Ryzyka:** kolejna porażka realnego runu (mitygacja: retry-failed-candidates sprawia, że częściowa porażka przestaje być terminalna); backfill flow błędnie sklasyfikuje historyczny run (w bazie są 4 historyczne runy workflow research, z czego przed migracją tylko 2 miały rekord w `research_runs`; dwa znane runy single są mapowane po pełnym UUID, koncie i temacie, a pozostałe wyłącznie po jednoznacznych śladach strukturalnych).
 - **Rollback:** 0006 przebudowuje `research_runs` i po migracji baza wymaga kodu świadomego obowiązkowego pola `flow`; sam powrót do poprzedniego commita nie jest kompatybilnym rollbackiem i spowoduje błędy `NOT NULL` przy nowych insertach starego kodu. Cofnięcie 0006 wymaga odtworzenia kopii bazy sprzed migracji albo osobnej migracji odwrotnej. 0007 jest addytywne: wcześniejszy kod ignoruje dodatkową kolumnę, a fizyczne usunięcie `attempts` wymaga osobnej migracji przebudowującej tabelę, nie resetu pliku bazy.
 - **Nie wolno zmieniać:** legacy pipeline'ów (poza dopisaniem walidacji flow), trzech tabel źródeł, semantyki DRY_RUN, promptów researchu (działają — zmiany promptów tylko z osobnym uzasadnieniem), `.env`/cennika.
@@ -172,13 +172,6 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 
 ---
 
-## NASTĘPNY ETAP DO WYKONANIA: **Etap 0** (zadania 1–9 w podanej kolejności)
+## NASTĘPNY ETAP DO WYKONANIA: **Etap 1** (nierozpoczęty)
 
-Pierwsze 5 zadań do wykonania (dokładnie):
-1. ✅ Migracja 0006 `research_runs.flow` + walidacja przepływu w funkcjach resume + usunięcie `_detect_flow` (P1-1/P1-9) — wykonane 2026-07-12.
-2. ✅ `runs.cost_usd` odświeżany przy każdym wyjściu etapu staged + WAL/busy_timeout w `db.py` (P1-2, P1-8) — wykonane 2026-07-12.
-3. Migracja 0007 `attempts` + operacja `retry-failed-candidates` + status `PARTIAL_EXHAUSTED` (P1-5).
-4. ✅ `topics.status=USED` po COMPLETE + guard `--force-re-research` (P1-6) — wykonane 2026-07-12.
-5. ✅ Estymata ×(1+retries), re-check budżetu przed retry, `PolicyEngine.check_run_budget` + delegacja z CLI (P1-3, P1-4) — wykonane 2026-07-12.
-
-Po nich: zadania 7–8, a następnie — **wyłącznie za jawną zgodą właściciela** — zadanie 9 (realny run ADR-022, cap 0,55 USD), które zamyka Etap 0.
+Etap 0 spełnił kryterium zakończenia 2026-07-13. Ta aktualizacja nie rozpoczyna implementacji Etapu 1; pierwsza praca nad schedulerem, kolejką lub workerem wymaga osobnego zadania właściciela.

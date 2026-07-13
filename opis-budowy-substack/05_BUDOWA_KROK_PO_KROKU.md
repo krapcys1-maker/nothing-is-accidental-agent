@@ -355,3 +355,7 @@ Realne A1 i cztery A2 przetrwały, lecz B wyczerpało 2200 tokenów i urwało JS
 ### 2026-07-13 — kontrolowana naprawa historycznego auditu
 
 Po osobnej zgodzie właściciela utworzono backup SQLite i snapshoty wszystkich rekordów powiązanych z runem. W transakcji `BEGIN IMMEDIATE` ponownie sprawdzono konto, topic, staged `SOURCES_COMPLETE`, cztery VERIFIED, sześć wpisów usage, koszt 0,170050 USD oraz ślad `max_tokens`/truncation. Warunkowy UPDATE z CAS zmienił dokładnie jeden rekord i tylko trzy pola: `runs.status`, `finished_at`, `error`. Po zamknięciu i ponownym otwarciu bazy hash każdego pozostałego zbioru był identyczny. Nie wykonano API ani resume; dodatkowy koszt 0 USD.
+
+### 2026-07-13 — jedno B domknęło run bez powtarzania A1/A2
+
+Po trzeciej, osobnej zgodzie — tym razem na płatny resume — preflight potwierdził sześć wcześniejszych usage i 0,170050 USD. PolicyEngine dopuścił projected 0,196300 przy absolutnym capie 0,20. Oficjalna komenda wykonała wyłącznie B z limitem 3000 i zerem retry. Odpowiedź zakończyła się `end_turn`, 1904/2402 tokenów, zero search; nowy koszt 0,013914 USD. Finalizacja ustawiła SUCCESS/COMPLETE/USED i kartę #2 z czterema VERIFIED. Karta jakościowo dostała REJECT, więc Etap 0 zakończył się dowodem działającego systemu, a nie materiałem gotowym do publikacji. Etapu 1 nie rozpoczęto.

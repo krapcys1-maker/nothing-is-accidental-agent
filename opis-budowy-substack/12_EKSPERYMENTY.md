@@ -72,3 +72,10 @@ Te „eksperymenty" nie testują treści, tylko samą zdolność systemu do bezp
 
 ## Powiązania
 - `docs/experiments/_TEMPLATE.md` (szablon techniczny), `13_WYNIKI_SUBSTACKA.md`, `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` §A.9 (atrybucja)
+
+### [2026-07-13] Eksperyment: czy staged resume zachowa płatne A1/A2
+
+- **Hipoteza:** po uciętym B oficjalny resume ze stanu SOURCES_COMPLETE wykona tylko jedno B, nie dublując discovery/extraction ani prior usage.
+- **Kontrola:** run `c01171bc`, 4 VERIFIED, prior 0,170050, `max_retries=0`, B=3000, absolutny cap 0,20; pełny read-only preflight i PolicyEngine przed klientem.
+- **Wynik:** dokładnie jeden nowy usage `research_synthesize_cards`, zero search, 1904/2402 tokenów, 0,013914 USD; A1/A2 bez nowych wpisów. SUCCESS/COMPLETE/USED, card #2.
+- **Wniosek:** hipoteza potwierdzona technicznie; karta jakościowo REJECT, więc odporność wykonawcza nie zastępuje bramki dowodowej.

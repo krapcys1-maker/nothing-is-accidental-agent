@@ -225,3 +225,10 @@ Odczyt bazy przyniósł jeszcze jedną lekcję: szczegółowy research był popr
 - Backup i snapshoty logiczne wykazały, że operacja zmieniła tylko `status`, `finished_at` i `error`; `rowcount=1`.
 - Cztery VERIFIED, sześć wpisów usage, 0,170050 USD i brak Research Card pozostały faktami historycznymi.
 - **Zdanie do artykułu:** „Dobra naprawa nie sprawia, że porażka znika. Sprawia, że baza nazywa ją po imieniu, nie zmieniając rachunku ani tego, co udało się ocalić.”
+
+### Materiał: „Sukces systemu, odmowa redakcji”
+
+- Jedyny resume B kosztował 0,013914 USD zamiast ponownego opłacenia A1 i czterech A2; run zamknął się na 0,183964 USD przy capie 0,20.
+- `end_turn`, karta #2, SUCCESS/COMPLETE/USED i cztery VERIFIED spełniły techniczne kryterium Etapu 0.
+- Ta sama karta dostała REJECT za `THESIS_UNSUPPORTED` i `CLAIMS_WITHOUT_SOURCES`, więc nie stała się artykułem.
+- **Zdanie do artykułu:** „Pierwszym prawdziwym sukcesem agenta nie było napisanie tekstu. Było nim dokończenie przerwanej pracy bez ponownego rachunku — i odwaga, by własny wynik odrzucić.”

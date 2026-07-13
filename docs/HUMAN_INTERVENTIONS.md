@@ -162,3 +162,13 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Jaki był efekt:** `research_runs=SOURCES_COMPLETE`, topic `SELECTED`, 4× EXTRACTED/VERIFIED, sześć wpisów usage i koszt 0,170050 USD pozostały bez zmian; run jest gotowy wyłącznie do osobno zatwierdzonego resume B. Dodatkowy koszt: 0 USD.
 - **Czas człowieka:** niezmierzony (instrukcja tekstowa).
 - **Wpływ na strategię:** brak zmiany architektury; jest to kontrolowana korekta auditu historycznego.
+
+### [2026-07-13] APPROVAL / PAID API — dokładnie jeden resume wyłącznie B
+- **Typ:** APPROVAL / PAID API
+- **Konto:** nothing_is_accidental
+- **Obiekt:** run `c01171bc-7ff5-4b83-bbfa-c0b164137793`, topic #2
+- **Zakres zgody:** dokładnie jeden realny call syntezy B przez oficjalny kontrakt resume, `synthesize_max_tokens=3000`, `max_retries=0`, absolutny cap całego runu 0,20 USD.
+- **Zakazy:** bez nowego runu, A1/A2, discovery/extraction, retry, force, drugiego B, Playwrighta, publikacji i Etapu 1.
+- **Efekt:** PolicyEngine dopuścił projekcję 0,196300 USD; call zakończył `end_turn`, kosztował 0,013914 USD i utworzył kartę #2. Finalny koszt runu 0,183964 USD; COMPLETE/SUCCESS/USED, 4 VERIFIED. Karta ma jakościowe REJECT i nie przechodzi do treści. Etap 0 formalnie zakończony.
+- **Czas człowieka:** niezmierzony (jawna instrukcja tekstowa).
+- **Wpływ na strategię:** spełniono bramkę przejścia roadmapy; nie jest to zgoda na rozpoczęcie Etapu 1.

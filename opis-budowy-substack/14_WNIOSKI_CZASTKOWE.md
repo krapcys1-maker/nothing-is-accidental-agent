@@ -178,3 +178,7 @@ Po każdym etapie: co nas zaskoczyło, co działało, co nie, co agent robił le
 ### 2026-07-13 — wniosek po kontrolowanym repair
 
 Historyczne dane można naprawiać bez utraty audytowalności, jeśli zgoda, preconditions, CAS, `rowcount`, backup i porównanie po reopen są częścią jednej procedury. Terminalny FAILED nie usuwa odzyskiwalności B: `research_runs=SOURCES_COMPLETE` nadal mówi, skąd można wznowić, a `runs=FAILED` mówi prawdę o zakończonej próbie. Resume pozostaje osobną, potencjalnie płatną decyzją.
+
+### 2026-07-13 — wniosek po pierwszej realnej karcie
+
+Resumability przyniosło mierzalny zwrot: zamiast powtarzać pięć calli A1/A2, system zapłacił 0,013914 USD wyłącznie za B i domknął run. Jednocześnie COMPLETE nie znaczy „publikowalne”: REJECT wykazał brak wystarczającego mapowania tezy i twierdzeń do źródeł. Etap 0 dowiódł odporności technicznej; jakość dowodów pozostaje pracą Etapu 2. P2-20 przypomina, że bieżące pole error powinno mieć jednoznaczną semantykę względem historycznego stage logu.

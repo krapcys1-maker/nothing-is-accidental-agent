@@ -1,7 +1,7 @@
 # MASTER_ARCHITECTURE — Nothing Is Accidental Agent
 
 > **STATUS: JEDYNE ŹRÓDŁO PRAWDY O ARCHITEKTURZE.**
-> Data: 2026-07-12 · Wersja: 1.0 · Zastępuje: `ARCHITECTURE.md` (V1), `docs/IMPLEMENTATION_PLAN.md` (CZĘŚCI A–F), `docs/AUDYT_ARCHITEKTURY_2026-07-12.md`, `docs/architecture/SUBSTACK_INTEGRATION.md` — wszystkie przeniesione do `docs/archive/superseded_plans/`.
+> Data: 2026-07-13 · Wersja: 1.1 · Zastępuje: `ARCHITECTURE.md` (V1), `docs/IMPLEMENTATION_PLAN.md` (CZĘŚCI A–F), `docs/AUDYT_ARCHITEKTURY_2026-07-12.md`, `docs/architecture/SUBSTACK_INTEGRATION.md` — wszystkie przeniesione do `docs/archive/superseded_plans/`.
 >
 > Kolejność prac: `IMPLEMENTATION_ROADMAP.md`. Aktualny stan: `CURRENT_PROJECT_STATE.md`. Rejestr decyzji (ADR): `docs/DECISIONS.md` (nadal obowiązujący — ten dokument konsoliduje decyzje, nie zastępuje rejestru).
 >
@@ -15,14 +15,14 @@
 
 | Element | Pliki | Dowód |
 |---|---|---|
-| Konfiguracja (.env + YAML, zero ścieżek absolutnych) | `app/core/config.py` | testy + 3 realne runy |
+| Konfiguracja (.env + YAML, zero ścieżek absolutnych) | `app/core/config.py` | testy + 4 realne runy |
 | Modele domenowe (Pydantic v2) | `app/models.py` | testy |
 | SQLite + 7 migracji + repozytoria | `app/storage/` | `tests/test_storage.py`, `tests/test_research_run_flow.py`, `tests/test_candidate_attempts.py` i in. |
 | Policy Engine (kill-switch, aktywność konta, budżet dzienny/miesięczny z priorytetem miesięcznym ADR-012, progi tematów) | `app/policies/policy_engine.py` | `tests/test_policy_engine.py` |
-| Księgowanie kosztów (model_usage + COSTS.csv, flaga dry_run) | `app/llm/usage_tracker.py` | 3 realne incydenty potwierdziły poprawność |
+| Księgowanie kosztów (model_usage + COSTS.csv, flaga dry_run) | `app/llm/usage_tracker.py` | 4 realne runy i kontrolowany resume potwierdziły poprawność |
 | Pipeline tematów (generacja+scoring+dedup+progi) | `app/workflows/topics/` | testy; realnie NIGDY nie uruchomiony (`NOT VERIFIED` na żywym API) |
 | Deduplikacja tematów (lokalna, bez kosztu, ADR-014) | `app/workflows/topics/dedup.py` | `tests/test_dedup.py` |
-| Research etapowy A1/A2/B (ADR-020) + wznawialność po restarcie | `app/workflows/research/pipeline.py` | 351 testów; na żywo Task 9: A1 ✅, A2 4/4 ✅, B ucięte przy 2200; offline: typowany truncation B bez zmiany salvage A1, limit B=3000 w estymacie i terminalny audit failure; brak kompletnej karty |
+| Research etapowy A1/A2/B (ADR-020) + wznawialność po restarcie | `app/workflows/research/pipeline.py` | 351 testów; na żywo Task 9: A1 ✅, A2 4/4 ✅, pierwsze B `max_tokens`, kontrolowany resume wyłącznie B ✅; karta #2, COMPLETE/SUCCESS/USED, 4 VERIFIED, 0,183964 USD |
 | Bramka jakości researchu (deterministyczna, min_verified_sources) | `app/research/validation.py` | testy |
 | Injection guard (treść źródeł = dane, nie polecenia) | `app/research/injection_guard.py` | testy |
 | Kalibrowany estymator kosztów (2 realne obserwacje, margines ≥50%) | `app/research/cost_estimator.py` | testy + 3 realne runy |
@@ -34,7 +34,7 @@
 
 - **Policy Engine** — centralnie egzekwuje cap per-run oraz budżet dzienny/miesięczny przez `check_run_budget`; miesięczny zachowuje priorytet ADR-012. Brak nadal: egzekucji `autonomy_level`, `AccountMode`, limitów per konto, cooldownów, SAFE MODE i runtime kill-switcha.
 - **Klient Anthropic dla tematów** (`app/llm/anthropic_client.py`) — offline zweryfikowany kontrakt response→Usage→parse, typowane provider/parse/schema errors, jeden zewnętrzny code fence i księgowanie dostępnego usage przez workflow także przy błędzie; nadal nigdy nie uruchomiony realnie (`NOT VERIFIED live`).
-- **Maszyna stanów researchu** — Etap 0 / Tasks 1–8 ukończone; Task 9 wykonał jeden realny staged run. A1 i 4×A2 zakończyły się sukcesem, B zachowało usage i diagnostykę po uciętym JSON-ie. Offline naprawiono kontrakt przyszłych wywołań: `stop_reason=max_tokens` jest typowany i nie powoduje retry, świeży B failure terminalizuje `runs=FAILED` z `finished_at/error`, a `research_runs=SOURCES_COMPLETE` zachowuje jawne wznowienie wyłącznie B. Historyczny run celowo pozostaje RUNNING do osobno zatwierdzonego repair. Rezydualne P2-17/P2-18/P2-19 oraz `timeout-billed-unrecorded` pozostają bez zmian.
+- **Maszyna stanów researchu** — Etap 0 / Tasks 1–9 ukończone. Task 9 zachował A1 i 4×A2 po uciętym pierwszym B, następnie kontrolowany repair ustawił prawdziwy audit FAILED, a osobno zatwierdzony resume wykonał dokładnie jedno B bez search/retry. Finalizacja ustawiła `research_runs=COMPLETE`, `runs=SUCCESS`, topic `USED` i kartę #2 przy 4 VERIFIED oraz koszcie 0,183964 USD. Karta ma jakościowe `REJECT`, więc nie jest wejściem do treści. Historyczny `research_runs.error` po sukcesie pozostał z pierwszego B jako nieblokujący P2-20; historia prób jest poprawnie zachowana również w `research_stage_results`. Rezydualne P2-17/P2-18/P2-19 pozostają bez zmian.
 
 ### 1.3. Co jest tylko szkieletem
 
@@ -45,7 +45,7 @@
 
 - `EnvSecretStore` i `LocalFileStore` — zdefiniowane, zero wywołań w całym repo (config czyta `os.getenv` bezpośrednio).
 - `RunStatus.STOPPED` — nigdy nie zapisywany (zarezerwowany dla przyszłego reapera).
-- Legacy pipeline'y researchu (`run_research_pipeline` jednoetapowy, `run_two_stage_research_pipeline`) — działają i mają testy, ale są NIEZALECANE (ADR-016→020); do wygaszenia po pierwszym sukcesie staged na żywo.
+- Legacy pipeline'y researchu (`run_research_pipeline` jednoetapowy, `run_two_stage_research_pipeline`) — działają i mają testy, ale są NIEZALECANE (ADR-016→020); pierwszy sukces staged osiągnięto, lecz roadmapa wymaga ≥2 przed oznaczeniem legacy jako DEPRECATED.
 
 ### 1.5. Duplikacja logiki
 

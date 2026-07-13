@@ -450,3 +450,12 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Operacja:** `BEGIN IMMEDIATE`; ponowny preflight; warunkowy UPDATE po run_id/account/workflow/status/NULL finished/error/dokładnym koszcie; `rowcount=1`, `total_changes=1`; commit, WAL checkpoint, reopen i `integrity_check=ok`.
 - **Wynik:** zmieniły się wyłącznie `runs.status=FAILED`, `finished_at=2026-07-13 05:39:30 UTC`, `error=[maintenance][synthesize_from_cards] ... stop_reason=max_tokens ...`. SHA bazy po: `B7B84176B73936F1948E27D3417E1FB0CF18D5121ACF8BB9C98F2BB3BBC9F3D3`.
 - **Niezmienione:** koszt, usage, research_run, topic, candidates, stage log, account, karty i źródła. Koszt dodatkowy 0 USD. Etap 0 nadal nieukończony; resume B wymaga nowej zgody.
+
+### 2026-07-13 — kontrolowany realny resume wyłącznie B zamyka Etap 0
+
+- **Zgoda i zakres:** właściciel dopuścił dokładnie jeden płatny call B istniejącego runu `c01171bc-7ff5-4b83-bbfa-c0b164137793`, cap całego runu 0,20 USD, `max_retries=0`; zakazał nowego runu, A1/A2, discovery/extraction, force, drugiego B, Playwrighta i Etapu 1.
+- **Komenda:** `python scripts/run_capped_research.py --resume c01171bc-7ff5-4b83-bbfa-c0b164137793 --account nothing_is_accidental --synthesize-max-tokens 3000 --forwarded-context-tokens 2500 --max-retries 0 --max-cost-usd 0.20`.
+- **Preflight:** 351 testów; repo clean i 0/0; run FAILED/0,170050, research staged/SOURCES_COMPLETE/no card, topic #2 SELECTED, 4 VERIFIED, 6 usage; poprzednie B `max_tokens`, brak wcześniejszego sukcesu B. PolicyEngine: allowed, projected 0,196300, cap 0,20, zapas 0,003700 przed callem.
+- **Wynik calla:** dokładnie jedno B, `stop_reason=end_turn`, 1904 input / 2402 output, zero search, koszt 0,013914 USD. Bez retry, A1/A2 i nowego runu.
+- **Finalizacja:** `runs=SUCCESS`, `research_runs=COMPLETE`, topic USED, card #2, 4 VERIFIED; siedem usage i cache kosztu = 0,183964 USD ≤ 0,20. Karta kompletna, ale jakościowo REJECT (`THESIS_UNSUPPORTED`, `CLAIMS_WITHOUT_SOURCES`), więc nie przechodzi do treści.
+- **Stan projektu:** literalne kryterium roadmapy spełnione; Etap 0 zakończony, Etap 1 nierozpoczęty. P2-20: bieżące `research_runs.error` zachowało historyczny błąd pierwszego B mimo COMPLETE; bez naprawy w tym zadaniu.

@@ -234,3 +234,7 @@ Przyczyna nie była już zagadką: provider jawnie zwrócił `stop_reason=max_to
 ### [2026-07-13] Historyczny RUNNING naprawiony operacją maintenance
 
 Osobna zgoda pozwoliła skorygować wyłącznie audit runu po nieudanym B. Backup, kontrola SHA-256 i snapshoty logiczne poprzedziły warunkowy UPDATE wymagający `RUNNING`, pustego `finished_at`, pustego `error`, właściwego konta/workflow i kosztu 0,170050 USD. `rowcount=1`; po reopen zmieniły się tylko status na FAILED, czas zakończenia i pełny opis `max_tokens`/parse-truncation/maintenance. `SOURCES_COMPLETE`, topic SELECTED, cztery VERIFIED, sześć usage i brak karty pozostały niezmienione. Bez API, bez resume, 0 USD.
+
+### [2026-07-13] Techniczny sukces, redakcyjne REJECT i stary error
+
+Jedyny resume B zakończył się `end_turn` i utworzył kompletną kartę bez retry. Deterministyczna walidacja odrzuciła ją jednak za `THESIS_UNSUPPORTED` i `CLAIMS_WITHOUT_SOURCES`; to pożądane zatrzymanie przed treścią. Odczyt ujawnił też P2-20: po COMPLETE pole `research_runs.error` nadal pokazuje parse-error pierwszego B, choć osobny stage log ma już późniejszy B SUCCESS. Nie poprawiano tego w bazie ani kodzie. Koszt B 0,013914 USD, run 0,183964/0,20 USD.

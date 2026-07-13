@@ -387,3 +387,10 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Zmiana:** wyłącznie `runs.status=FAILED`, `finished_at=2026-07-13 05:39:30 UTC` oraz pełny maintenance error z etapem `synthesize_from_cards`, `stop_reason=max_tokens` i wcześniejszym `ResearchParseError/truncated JSON`.
 - **Niezmienione po reopen:** `runs.cost_usd=0,170050`; sześć `model_usage` o sumie 0,170050; `research_runs=SOURCES_COMPLETE`, `research_card_id=NULL`; topic #2 SELECTED; 4×EXTRACTED/VERIFIED/attempts=1; stage timestamps/log, account, karty i źródła. `integrity_check=ok`.
 - **Granica:** naprawiono prawdziwość auditu, nie wynik researchu. Etap 0 nadal nieukończony, a resume wyłącznie B pozostaje osobnym potencjalnie płatnym działaniem wymagającym jawnej zgody.
+
+### 2026-07-13 — resume B zakończone technicznie, karta odrzucona jakościowo
+
+- **Call:** jedyne zatwierdzone B zakończyło się poprawnie (`stop_reason=end_turn`, 1904/2402 tokenów, 0 search, 0,013914 USD); nie wystąpił błąd providera ani parsera i nie wykonano retry.
+- **Bramka jakości:** karta #2 otrzymała `publication_recommendation=REJECT` z powodami `THESIS_UNSUPPORTED` i `CLAIMS_WITHOUT_SOURCES`. To poprawna odmowa użycia materiału do treści, nie awaria lifecycle; COMPLETE/SUCCESS/USED i kryterium Etapu 0 pozostają spełnione.
+- **P2-20:** `research_runs.error` po COMPLETE nadal zawiera parse-error pierwszego, nieudanego B. Pełna historia prób istnieje w `research_stage_results` (B FAILED, potem B SUCCESS), więc utrzymanie starego tekstu w polu bieżącego stanu może mylić konsumentów. Nie zmieniono kodu ani bazy; finding czeka na niezależne review.
+- **Koszt:** run łącznie 0,183964 USD ≤ 0,20; dodatkowy B 0,013914 USD. Brak drugiego calla.

@@ -93,3 +93,28 @@ Nie wykonano nowego calla ani resume. Przyczyną B był wyczerpany limit 2200, n
 #### Kontrolowany repair auditu (2026-07-13, bez researchu/API)
 
 Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego samego runu. Po backupie i ponownym sprawdzeniu relacji run–research–topic–account, 4×EXTRACTED/VERIFIED `attempts=1`, sześciu wpisów usage, sumy 0,170050 USD, FAILED Stage B oraz prywatnej diagnostyki `stop_reason=max_tokens`, warunkowy UPDATE zmienił wyłącznie `runs.status RUNNING→FAILED`, `finished_at=2026-07-13 05:39:30 UTC` i `runs.error`. `rowcount=1`, `total_changes=1`. Research pozostał `SOURCES_COMPLETE`, topic `SELECTED`, brak karty; koszt i usage bez zmian. Nie wykonano resume ani A1/A2/B. Techniczna gotowość do resume wyłącznie B nie jest zgodą na płatny call.
+
+### [2026-07-13] What really happens to your suitcase after check-in
+- **Konto:** nothing_is_accidental
+- **Powiązanie:** research_card #2 / topic #2
+- **Pytanie badawcze:** What is the hidden logistics chain behind checked luggage?
+- **Źródła:**
+  1. [Checked Baggage: Where Does It Go In The Airport & How Does The System Work?](https://simpleflying.com/checked-baggage-journey-analysis/) — SECONDARY, 2024-03-12 — wspiera: Automated sensor-based routing and scale of Denver's BHS infrastructure (DCVs, track, conveyors).
+  2. [The journey of a suitcase - More than meets the eye](https://www.easa.europa.eu/en/light/topics/journey-suitcase) — PRIMARY, unknown — wspiera: Regulatory weight-and-balance logic, ULD building, dangerous goods separation, and transfer bag re-screening/re-sorting.
+  3. [The hidden complexity behind your luggage ~ The engineering and systems behind modern airport baggage handling](https://www.airport-suppliers.com/supplier-press-release/the-hidden-complexity-behind-your-luggage-the-engineering-and-systems-behind-modern-airport-baggage-handling/) — OTHER, 2024-08-01 — wspiera: Engineering design details of conveyor geometry, diverters, and automated bag-centring before security scanning.
+  4. [The hidden highway beneath your suitcase](https://www.fly2houston.com/airport-business/newsroom/articles/item/the-hidden-highway-beneath-your-suitcase/) — PRIMARY, 2025-12-17 — wspiera: Physical scale and infrastructure investment of a new BHS (steel bridge, conveyor network length, processing capacity) at IAH.
+- **Najważniejsze fakty (potwierdzone):** Baggage handling systems use automated tag-scanning at check-in to determine routing (SimpleFlying, Airport Suppliers, Fly2Houston)., Bags move through networks of conveyors, diverters, and sensors rather than a single simple belt (all four sources)., Bags are consolidated into pallets, carts, or Unit Load Devices (ULDs) before being transported to aircraft (SimpleFlying, EASA)., Arriving bags are automatically re-sorted to separate connecting-flight bags from baggage-claim bags (SimpleFlying, EASA)., Large-scale BHS infrastructure (tracks, conveyors, steel structures) represents major engineering investment (Denver: 19mi track, 5mi conveyors, 4000+ DCVs; IAH: 1.5-mile conveyor network, 157-ft steel bridge).
+- **Elementy niepewne:** Specific engineering design choices, like avoidance of 90-degree diverters and use of optimized angles, are asserted by only one lower-quality source (Airport Suppliers, quality=0.45)., Claims about EASA-regulated weight-and-balance manuals dictating bag placement are plausible but only sourced from a single site without independent verification., The degree to which automated guided vehicles (AGVs) are 'increasingly' used industry-wide is asserted without supporting data.
+- **Sprzeczności między źródłami:** —
+- **Wniosek (teza robocza):** Behind the simple counter drop-off, checked luggage travels through a highly automated, engineered logistics network of scanners, conveyors, diverters, and vehicles that route, screen, and consolidate bags into loadable units before they ever reach the aircraft — a system whose scale and precision most passengers never see.
+- **Confidence:** 0.72  |  **Source quality:** 0.67
+- **Rekomendacja:** REJECT (powód: THESIS_UNSUPPORTED; CLAIMS_WITHOUT_SOURCES)
+- **Wpływ:** REALNE wywołanie Anthropic (płatne) — łączny koszt runu 0.183964 USD.
+
+#### Kontrolowany resume wyłącznie B — audit wykonania
+
+- **Jawna zgoda i komenda:** właściciel zatwierdził dokładnie jeden call B: `python scripts/run_capped_research.py --resume c01171bc-7ff5-4b83-bbfa-c0b164137793 --account nothing_is_accidental --synthesize-max-tokens 3000 --forwarded-context-tokens 2500 --max-retries 0 --max-cost-usd 0.20`.
+- **Preflight:** branch/HEAD/upstream/working tree i 351 testów zgodne; staged/SOURCES_COMPLETE, topic #2 SELECTED, 4×EXTRACTED/VERIFIED/attempts=1, brak karty, 6 usage = 0,170050 USD. PolicyEngine dopuścił conservative B 0,026250 i projected total 0,196300 ≤ 0,20 USD; kill switch false, konto aktywne, budżety D/M pozwalały.
+- **Jedyny nowy call:** `stop_reason=end_turn`, input/output 1904/2402, zero web search, koszt B 0,013914 USD; bez retry i bez A1/A2. Siedem wpisów usage sumuje się do 0,183964 USD i dokładnie odpowiada `runs.cost_usd` oraz `research_runs.total_cost_usd`.
+- **Stan po reopen:** `runs=SUCCESS`, `research_runs=COMPLETE`, `stage_b_completed_at=2026-07-13 05:57:57 UTC`, topic `USED`, research_card #2, 4 źródła VERIFIED. Karta jest kompletna, ale bramka jakości zwróciła `REJECT` (`THESIS_UNSUPPORTED`, `CLAIMS_WITHOUT_SOURCES`), więc nie wolno użyć jej do treści.
+- **Zamknięcie:** techniczne kryterium Etapu 0 zostało spełnione. Etap 1 nie został rozpoczęty. `research_runs.error` zachował historyczny parse-error pierwszego B — jawny P2-20 do review, bez mutacji w tej pracy.

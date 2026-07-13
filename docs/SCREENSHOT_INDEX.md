@@ -201,3 +201,10 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Dlaczego ważny:** dokumentuje, że historyczny audit został naprawiony kontrolowanie, bez zmiany danych researchu, kosztu ani uruchomienia resume.
 - **CZEGO NIE MOŻE BYĆ WIDAĆ:** surowej odpowiedzi providera, treści `.env`, kluczy, URL-i źródeł ani danych uwierzytelnienia.
 - **Status:** SCREENSHOT REQUIRED — zgodnie z zakazem nie używano Playwrighta; dowodem bieżącym są snapshoty logiczne, SHA-256 i log operacji.
+
+### [2026-07-13] task9-first-real-card-resume-b
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_task9-first-real-card-resume-b.png`
+- **Co pokazuje:** bezpieczny raport po reopen: run SUCCESS, research COMPLETE, topic USED, card #2, 4 VERIFIED, `stop_reason=end_turn`, jeden nowy usage B 0,013914 USD i łączny koszt 0,183964/0,20 USD; obok jakościowe REJECT bez treści raw response.
+- **Dlaczego ważny:** dokumentuje pierwsze spełnienie kryterium Etapu 0 oraz rozdzielenie sukcesu technicznego od odmowy redakcyjnej.
+- **CZEGO NIE MOŻE BYĆ WIDAĆ:** klucza API, `.env`, prywatnej diagnostyki raw, danych uwierzytelnienia ani panelu zewnętrznego konta.
+- **Status:** SCREENSHOT REQUIRED — Playwrighta nie używano; screenshot może powstać później wyłącznie z zanonimizowanego lokalnego raportu.

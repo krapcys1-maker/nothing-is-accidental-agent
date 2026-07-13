@@ -235,3 +235,9 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Liczby: `rowcount=1`; 4 candidates nadal EXTRACTED/VERIFIED, 6 wpisów usage nadal sumuje się do 0,170050 USD, brak Research Card; dodatkowy koszt 0 USD.
   - Dlaczego trafi do artykułu: pokazuje różnicę między korektą prawdziwości auditu a przepisywaniem historii. Opłacone dane i wznawialny `SOURCES_COMPLETE` zostały zachowane, lecz zakończony proces nie figuruje już jako `RUNNING`.
   - Dowód: `docs/BUILD_LOG.md`, `docs/ERRORS_AND_FAILURES.md`, `docs/HUMAN_INTERVENTIONS.md`; bez API i bez resume.
+
+- **[2026-07-13] Pierwsza realna karta powstała dzięki resume, ale sama powiedziała „nie publikuj”** (sekcja: 3, 4, 6, 7, 15)
+  - Materiał: po zachowaniu czterech opłaconych źródeł i jawnym repairze auditu wykonano dokładnie jedno B. `end_turn` przy 2402 tokenach utworzył kartę #2 bez powtarzania A1/A2.
+  - Liczby: prior 0,170050; conservative B 0,026250; projected 0,196300; nowy B 0,013914; run 0,183964 przy capie 0,20; 4 VERIFIED, 7 usage.
+  - Zwrot narracyjny: sukces infrastruktury nie oznacza zgody redakcyjnej. Lifecycle osiągnął COMPLETE/SUCCESS/USED i zamknął Etap 0, lecz deterministyczna bramka nadała karcie REJECT (`THESIS_UNSUPPORTED`, `CLAIMS_WITHOUT_SOURCES`).
+  - Dowód: run `c01171bc-7ff5-4b83-bbfa-c0b164137793`, card #2, `docs/RESEARCH_LOG.md`, `docs/COSTS.csv`; dokładnie jeden call, zero retry/search.
