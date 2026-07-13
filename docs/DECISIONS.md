@@ -426,6 +426,39 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 
 - **brak** — wszystkie pozycje otwarte z audytu zostały rozstrzygnięte (OPEN-1..5 → ADR-004/007/008/009/010, OPEN-4 → ADR-012).
 
+### ADR-030: Staged B finalizuje kartę i lifecycle w jednej transakcji
+
+- **Data:** 2026-07-13
+- **Status:** ACCEPTED / wdrożone offline, oczekuje na niezależne review.
+- **Problem:** poprzednia ścieżka B commitowała kolejno kartę, źródła, stage result i lifecycle. Awaria między krokami mogła pozostawić kartę bez COMPLETE/SUCCESS/USED.
+- **Decyzja:** `StoragePort.finalize_staged_research_with_card` jest jedyną ścieżką sukcesu staged B. W `BEGIN IMMEDIATE` waliduje run–research_run–topic–account, flow/stany, kanoniczny koszt `model_usage`, kandydatów A2 i minimum źródeł; następnie zapisuje kartę, wszystkie źródła, B SUCCESS, COMPLETE, terminalny run i USED. Każdy błąd robi rollback.
+- **Idempotencja:** identyczna finalizacja COMPLETE jest no-opem, a różnica payloadu/kosztu/lifecycle jest błędem integralności.
+- **Wyjątki jawne:** tylko workflow z `--force-re-research` może finalizować następny run dla USED z wcześniejszą kartą, a tylko jawne resume B może podnieść własny `runs=FAILED`; kontrakt finalizera nie przyjmuje już niezależnych flag, lecz jeden typowany context walidowany ponownie z SQLite.
+- **Jakość:** karta REJECT pozostaje kompletnym artefaktem audytowym; minimum VERIFIED blokuje wynik pozytywny, nie utrwalenie uczciwego REJECT po A2 bez realnej weryfikacji.
+- **Weryfikacja:** fault injection dla insertu karty, drugiego źródła, B SUCCESS i lifecycle; reopen/integrity_check; no-op i konflikt; dwa połączenia SQLite z `Barrier`; regresje fresh, force i resume B. **446 passed**, 0 USD, brak API.
+
+### ADR-031: Autoryzacja finalizacji staged B jest trwała i typowana
+
+- **Data:** 2026-07-13
+- **Status:** ACCEPTED / wdrożone offline, oczekuje na niezależne review.
+- **Kontekst:** ADR-030 usunęło częściowy zapis, ale jego dwa luźne parametry mogły rozszerzyć legalny lifecycle przez pamięć procesu. Fresh force po późniejszym B failure nie miał też trwałego śladu, z którego dispatcher resume mógł odtworzyć uprawnienie.
+- **Decyzja:** port przyjmuje jeden `StagedFinalizationContext` z trybem `FRESH`, `RESUME_B`, `FORCE_RERESEARCH` albo `FORCE_RERESEARCH_RESUME_B`. `0008_staged_force_reresearch.sql` dodaje `research_runs.is_force_reresearch NOT NULL DEFAULT 0`; historyczne runy nie dostają force retrospektywnie. Resume wymaga snapshotu `runs=FAILED`, `finished_at`, markera błędu, `research_runs=SOURCES_COMPLETE` oraz trwałego B FAILED o tym samym markerze. Repozytorium rewaliduje cały snapshot w SQLite przed B i drugi raz w transakcji po `SYNTHESIS_PENDING`.
+- **Preflight i granice:** niemutujący preflight odmawia przed clientem/providerem i usage, gdy mode, konto, topic, flow, wcześniejsza karta, force albo CAS są sprzeczne. Genericzny audit nie może dopisać `B SUCCESS` do flow staged; tylko atomowy helper może to zrobić. Brak UNIQUE dla B SUCCESS/card sources pozostaje P2 wyłącznie dla obecnego modularnego monolitu: helper ma jedyną staged ścieżkę sukcesu, `BEGIN IMMEDIATE` i CAS, a kolejność źródeł jest niedomenowa (porównywana jako multiset). Nie dodano workera, zewnętrznego writer-a ani constraintu dla przyszłej architektury wieloprocesowej.
+- **Weryfikacja:** force → B failure → resume odtwarza trwały mode po osobnym połączeniu SQLite; błędny marker lub timestamp snapshotu zatrzymuje preflight przed providerem i bez nowego usage. Pełne 13 fault points po zamknięciu i reopen plikowej SQLite odtwarza dokładnie stan sprzed finalizacji; testy obejmują account/topic/flow/status/VERIFIED, source/topic/cost conflicts, idempotencję bez timestampów, pojedynczy i dwa różne runy równolegle oraz rollback migracji 0008. **446 passed**, brak API i koszt 0 USD.
+
+#### Korekta ADR-031 po końcowym review F4: terminalny no-op waliduje mode
+
+- **Problem:** gałąź istniejącego `COMPLETE` porównywała payload przed walidacją `StagedFinalizationContext`. Przez to identyczny FRESH run mógł zaakceptować `FORCE_RERESEARCH` jako bezmutacyjny no-op.
+- **Decyzja:** przed każdym terminalnym no-opem repozytorium waliduje trwały mode: `is_force_reresearch`, dozwoloną semantykę fresh/resume, `research_runs.error` oraz wpis B FAILED z tym samym markerem i snapshotem `finished_at` dla resume. FRESH nie może udawać resume, force nie może udawać fresh, a `COMPLETE` nie jest aliasem omijającym context.
+- **Trwałość snapshotu:** wpis B FAILED przy staged failure dostaje timestamp trwałego `runs.finished_at`; nie dodano tabeli ani migracji.
+- **Weryfikacja:** FRESH→FRESH i FORCE→FORCE są no-op; FRESH→FORCE, FRESH→RESUME, FORCE→FRESH, FORCE→force-resume bez snapshotu oraz resume z błędnym timestampem/markerem są konfliktami po reopen, bez zmiany rekordów lub timestampów. **449 passed**, 0 USD, brak API.
+
+#### Korekta ADR-031 P1 F4: publiczny finalizer legacy nie ma prawa finalizować staged
+
+- **Problem:** `finalize_research_success` oraz kompatybilny `mark_research_run_complete` nadal przyjmowały `staged/SYNTHESIS_PENDING`. Omijały przez to typed context, walidację kandydatów, atomowy zapis karty i źródeł oraz kanoniczny koszt `model_usage`; dla `COMPLETE` mogły zwrócić legacy no-op.
+- **Decyzja:** oba publiczne finalizery są ograniczone do `single` i `two_stage`. Każdy `staged` — `SYNTHESIS_PENDING`, `COMPLETE` lub `FAILED` — dostaje `ResearchTopicIntegrityError` po odczycie relacji, lecz przed no-opem, payloadem, lifecycle i użyciem kosztu. Audyt alternatywnej ścieżki wykazał też, że ogólny `finish_run` mógł wpisać staged `SUCCESS`/`DRY_RUN`; teraz odmawia tych dwóch sukcesów, zachowując legalne ścieżki `FAILED`. Wyłączną publiczną ścieżką staged sukcesu pozostaje `finalize_staged_research_with_card`; tylko ona zapisuje kartę, źródła, B SUCCESS, COMPLETE/SUCCESS/USED i pobiera koszt z kanonicznej sumy `model_usage`.
+- **Weryfikacja:** literalne regresje generic i aliasu obejmują arbitralny koszt, identyczną kartę/koszt w COMPLETE oraz FAILED; dwa targety `finish_run` staged też są odrzucone. Po zamknięciu i reopen SQLite snapshot kart, źródeł, auditu B, research_run/run/topic, usage, cache kosztu, timestampów, błędów, card ID i force markera jest identyczny; legacy `single`/`two_stage` oraz ich idempotentny no-op pozostają działające. **454 passed**, 0 USD, brak API.
+
 ### ADR-032: Modular Editorial System
 
 - **Data:** 2026-07-13

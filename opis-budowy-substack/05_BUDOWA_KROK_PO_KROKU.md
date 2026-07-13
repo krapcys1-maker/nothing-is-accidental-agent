@@ -368,6 +368,22 @@ Kolejne review znalazło drobny, lecz ważny P1: typ istniał w pamięci, ale au
 
 Ostatnie review wykazało jeszcze dwie szczeliny: SDK wkładało body do własnego tekstu błędu, a samotny `Bearer token` omijał regex. Mapper nie przenosi już tekstu SDK — zostawia wyłącznie klasę i status — a audit redaguje każdy wariant Bearer. Marker syntetycznego body nie dotarł do SQLite; 411 testów przeszło offline, bez API i kosztu.
 
+## 2026-07-13 — Karta nie może przeżyć własnego zakończenia
+
+Po syntezie B nie wystarczało już, że baza potrafiła ustawić `COMPLETE` i `USED` atomowo. Karta i jej źródła były zapisywane wcześniej, w osobnych commitach. Awaria po drugim źródle mogła zostawić materiał bez zakończonego runu.
+
+Nowy krok kończy staged B jednym zapisem transakcyjnym: najpierw sprawdza relację run–research_run–temat–konto, koszt i karty A2; potem zapisuje kartę, wszystkie źródła, B SUCCESS oraz razem COMPLETE, terminalny run i USED. Testy psują każdy z tych momentów. Po reopen SQLite nie ma wtedy ani połowy karty, ani fałszywego sukcesu.
+
+To była wyłącznie praca offline: 420 testów, brak API, brak realnego researchu i koszt 0 USD. Scheduler, joby i workery nadal nie powstały.
+
+## 2026-07-13 — Transakcja potrzebuje też pamięci o zgodzie
+
+Pierwsza poprawka umiała już cofnąć połowę zapisu, ale wciąż pytała proces o dwie rzeczy, których proces nie powinien sam rozstrzygać: czy wolno ponownie użyć tematu i czy wolno podnieść nieudany run. Dwa booleany były wygodne, lecz ich wygoda była myląca — po restarcie nie było wiadomo, czy force naprawdę należał do tego runu.
+
+Dlatego force zapisuje się teraz przy konkretnym `research_run`, a finał dostaje jeden typowany kontekst: świeży, wznowiony B, forced albo forced-wznowiony B. Resume niesie snapshot poprzedniej porażki i porównuje go ponownie z bazą. Gdy temat, konto, marker błędu albo wcześniejsza karta nie pasują, preflight zatrzymuje się przed clientem i przed nowym usage.
+
+Testy nie zatrzymały się na „błąd po drugim źródle”. Wstrzyknęły awarię w trzynastu miejscach, zamknęły SQLite i otworzyły ją od nowa. Za każdym razem baza pamiętała dokładnie stan sprzed próby. Równie ważne: zmiana kolejności tych samych źródeł nie jest nowym wynikiem. Forced resume przechodzi też przez osobne połączenie SQLite, a stary timestamp CAS zatrzymuje preflight. **446 testów**, 0 USD, bez API, researchu, schedulerów, jobów i workerów; zmiany czekają na niezależne review.
+
 ## 2026-07-13 — Najpierw język systemu, potem system
 
 Zanim powstanie content pipeline, opisaliśmy jego granice w `docs/CONTENT_AND_GROWTH_BLUEPRINT.md`. To nie jest generator ani plan publikowania. To słownik, który rozdziela artykuły A1–A9, lokalne Notes N1–N16, publiczne działania Etapu 6 i metryki Etapu 7.
@@ -376,6 +392,20 @@ Najważniejsza reguła brzmi banalnie, ale chroni przed rytmem udającym strateg
 
 Praca była wyłącznie dokumentacyjna: brak kodu, migracji, bazy, API, publikacji, commita i kosztu. Pełny system pozostaje planem na Etapy 3, 6 i 7.
 
+## 2026-07-13 — „Nic nie zmieniam” też może być błędem
+
+Końcowe review F4 znalazło paradoks idempotencji. Finalizer niczego nie zapisywał przy powtórzeniu COMPLETE, ale sprawdzał zgodność karty przed pytaniem, czy caller ma prawo nazwać ten run force albo resume. Brak mutacji nie był więc dowodem poprawności kontraktu.
+
+Naprawa przesunęła walidację mode przed no-op. Świeży i forced run muszą nadal pasować do trwałego markera; resume dodatkowo pokazuje wcześniejszą porażkę B z tym samym markerem i timestampem CAS. Testy po reopen potwierdzają, że zły mode nie zmienia nawet timestampu. **449 testów**, zero API i 0 USD.
+
 ## 2026-07-13 — Raport nie jest jeszcze systemem
 
 Pełny raport Fable dostał własny snapshot, zamiast kolejnego skrótu. Osobno zapisaliśmy to, co raport twierdzi, i to, co projekt naprawdę ma: jego dane są mieszane, kosztorysy niewalidowane, a formaty, routing, Notes i metryki należą dopiero do przyszłych etapów. To ważne rozdzielenie — dokument może pokazać kierunek, ale nie może udawać działającego generatora ani rosnącego konta.
+
+## 2026-07-13 — Jeden publiczny skrót nie może być bocznym wejściem
+
+Po poprzednich poprawkach staged B miało prawidłowy atomowy finał, ale starszy skrót do finalizacji nadal umiał przyjąć ten sam flow. To wyglądało niewinnie: dostawał kartę i koszt, ustawiał statusy, a przy COMPLETE nawet grzecznie zwracał no-op. Właśnie to było błędem — omijał kontekst fresh/resume/force, sprawdzenie A2 i wspólną transakcję karty, źródeł oraz B SUCCESS.
+
+Teraz `finalize_research_success` i jego alias są czytelnie legacy: tylko `single` i `two_stage`. Każdy staged run — oczekujący, ukończony lub nieudany — kończy się typowanym błędem zanim kod użyje kosztu albo dotknie lifecycle. Audyt znalazł jeszcze ogólny `finish_run`, który potrafił wpisać samo staged `SUCCESS` lub `DRY_RUN`; dla tych dwóch wyników też odmawia, nie blokując zapisu porażki. Jedyny finał staged pozostaje w helperze, który sam liczy koszt z `model_usage`.
+
+Testy zamykają bazę i otwierają ją od nowa po każdej odmowie. Porównują kartę, źródła, audit B, usage, koszty, timestampy, błędy, ID karty i marker force. Legacy dalej działa. Wynik: **454 testy**, brak API, realnego researchu, migracji i koszt **0 USD**; zmiany nadal czekają na niezależne review.

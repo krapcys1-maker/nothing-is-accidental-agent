@@ -208,3 +208,24 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Dlaczego ważny:** dokumentuje pierwsze spełnienie kryterium Etapu 0 oraz rozdzielenie sukcesu technicznego od odmowy redakcyjnej.
 - **CZEGO NIE MOŻE BYĆ WIDAĆ:** klucza API, `.env`, prywatnej diagnostyki raw, danych uwierzytelnienia ani panelu zewnętrznego konta.
 - **Status:** SCREENSHOT REQUIRED — Playwrighta nie używano; screenshot może powstać później wyłącznie z zanonimizowanego lokalnego raportu.
+
+### 2026-07-13 — F4: dowód atomowej finalizacji staged B
+
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_f4-staged-finalization-rollback.png`
+- **Co ma pokazywać:** zanonimizowany wynik lokalnego testu/reopen: fault injection po drugim źródle lub lifecycle, brak `research_cards`, `sources` i B SUCCESS, a `research_runs` nadal `SYNTHESIS_PENDING`; osobny fragment dla jednego zwycięzcy dwóch SQLite connections.
+- **CZEGO NIE MOŻE BYĆ WIDAĆ:** `.env`, klucza API, raw response, danych realnej bazy albo konta zewnętrznego.
+- **Status:** SCREENSHOT REQUIRED — tego zadania nie wolno było łączyć z Playwrightem ani API; materiał może powstać wyłącznie z lokalnej, syntetycznej bazy testowej.
+
+### 2026-07-13 — F4: trwały force i pełna macierz rollbacku
+
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_f4-typed-context-reopen-matrix.png`
+- **Co ma pokazywać:** zanonimizowany raport z syntetycznej plikowej SQLite: force marker po reopen, odmowę preflight przed klientem oraz tabelę 13 fault points z brakiem karty/źródeł/B SUCCESS/COMPLETE/USED i niezmienionym usage.
+- **CZEGO NIE MOŻE BYĆ WIDAĆ:** `.env`, klucza API, raw response, danych historycznej bazy ani zewnętrznego konta.
+- **Status:** SCREENSHOT REQUIRED — testy wykonały wyłącznie lokalne dane; Playwright i API są poza zakresem.
+
+### 2026-07-13 — F4: terminalny no-op waliduje execution mode
+
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_f4-terminal-mode-noop.png`
+- **Co ma pokazywać:** zanonimizowany wynik lokalnych testów: FRESH→FRESH i FORCE→FORCE jako no-op oraz fresh/force/resume conflicts po reopen bez zmiany timestampów, kosztu, runu, research_runu ani topicu.
+- **CZEGO NIE MOŻE BYĆ WIDAĆ:** `.env`, kluczy API, raw response, historycznej bazy i zewnętrznego konta.
+- **Status:** SCREENSHOT REQUIRED — brak Playwrighta i API; materiał może powstać tylko z syntetycznej SQLite testowej.

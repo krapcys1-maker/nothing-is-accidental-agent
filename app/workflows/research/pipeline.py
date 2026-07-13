@@ -44,6 +44,8 @@ from app.models import (
     SourceCandidateRetryResult,
     SourceCandidateStatus,
     SourceVerification,
+    StagedFinalizationContext,
+    StagedFinalizationMode,
     Topic,
     WorkflowType,
 )
@@ -300,6 +302,47 @@ def _explicit_resume_run_snapshot(
     if run.status == RunStatus.FAILED and run.finished_at is None:
         raise ValueError(f"run #{research_run_id} ma FAILED bez finished_at.")
     return run
+
+
+def _staged_finalization_context(
+    research_run: ResearchRun,
+    run_snapshot: Run,
+    *,
+    explicit_resume: bool,
+) -> StagedFinalizationContext:
+    """Build the only legal staged-B mode from durable state, never loose flags."""
+    if explicit_resume:
+        if run_snapshot.status != RunStatus.FAILED or \
+                run_snapshot.finished_at is None or not run_snapshot.error:
+            raise ValueError(
+                "Resume staged B wymaga trwałego FAILED z finished_at i markerem błędu."
+            )
+        return StagedFinalizationContext(
+            mode=(
+                StagedFinalizationMode.FORCE_RERESEARCH_RESUME_B
+                if research_run.is_force_reresearch else StagedFinalizationMode.RESUME_B
+            ),
+            expected_run_status=RunStatus.FAILED,
+            expected_research_status=ResearchRunStatus.SOURCES_COMPLETE,
+            expected_finished_at=run_snapshot.finished_at,
+            expected_failure_marker=run_snapshot.error,
+        )
+
+    if run_snapshot.status not in (RunStatus.RUNNING, RunStatus.DRY_RUN) or \
+            run_snapshot.finished_at is not None or run_snapshot.error is not None:
+        raise ValueError(
+            "Świeże staged B wymaga trwałego RUNNING/DRY_RUN bez finished_at i błędu."
+        )
+    return StagedFinalizationContext(
+        mode=(
+            StagedFinalizationMode.FORCE_RERESEARCH
+            if research_run.is_force_reresearch else StagedFinalizationMode.FRESH
+        ),
+        # Offline dry runs are created as DRY_RUN; real fresh runs are RUNNING.
+        # The exact durable status becomes part of the CAS context.
+        expected_run_status=run_snapshot.status,
+        expected_research_status=ResearchRunStatus.SOURCES_COMPLETE,
+    )
 
 
 def _finish_explicit_resume_failure(
@@ -1050,8 +1093,15 @@ def resume_research_stage_b(
             storage, resume_run_snapshot, ResearchFlow.TWO_STAGE,
             total_cost, resume_error,
         )
-        storage.add_research_stage_result(research_run_id, ResearchStageName.B,
-                                          ResearchStageStatus.FAILED, error=audit_error)
+        failed_snapshot = storage.get_run(research_run_id)
+        if failed_snapshot is None or failed_snapshot.finished_at is None:
+            raise RuntimeError(
+                f"Staged B failure for {research_run_id} lacks durable finished_at snapshot."
+            )
+        storage.add_research_stage_result(
+            research_run_id, ResearchStageName.B, ResearchStageStatus.FAILED,
+            error=audit_error, finished_at=failed_snapshot.finished_at,
+        )
         notifier.notify("error", "Wznowienie: synteza karty nadal nieudana "
                         "(źródła pozostają zachowane, można spróbować ponownie)",
                         str(exc), account.id)
@@ -1200,6 +1250,7 @@ def run_source_discovery(
     storage.create_research_run(ResearchRun(
         id=run_id, account_id=account.id, topic_id=int(topic.id),
         flow=ResearchFlow.STAGED, status=ResearchRunStatus.DISCOVERY_PENDING,
+        is_force_reresearch=force_re_research,
     ))
     _sync_staged_run_cost(storage, run_id)
 
@@ -1558,6 +1609,9 @@ def run_synthesis_from_cards(
         _explicit_resume_run_snapshot(storage, research_run_id, account)
         if explicit_resume else None
     )
+    current_run_snapshot = resume_run_snapshot or storage.get_run(research_run_id)
+    if current_run_snapshot is None:
+        raise ValueError(f"Nie znaleziono run #{research_run_id} dla staged B.")
 
     uncertain = storage.list_source_candidates(
         research_run_id, SourceCandidateStatus.EXTRACTION_IN_PROGRESS,
@@ -1602,6 +1656,16 @@ def run_synthesis_from_cards(
             f"{len(extracted)} < {settings.research_min_sources}; nie wołam API.", account.id)
         return _finish_staged_summary(storage, research_run_id, summary)
 
+    terminal_run_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS
+    finalization_context = _staged_finalization_context(
+        research_run, current_run_snapshot, explicit_resume=explicit_resume,
+    )
+    # Before the budget/provider path, prove that B can later commit legally.
+    storage.preflight_staged_finalization(
+        research_run_id, terminal_run_status=terminal_run_status,
+        context=finalization_context,
+    )
+
     cards = [
         SourceCardDraft(
             url=r.url, title=r.title, author_or_org=r.author_or_org,
@@ -1630,7 +1694,6 @@ def run_synthesis_from_cards(
         return _finish_staged_summary(storage, research_run_id, summary)
 
     storage.mark_synthesis_pending(research_run_id)
-    run_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.RUNNING
 
     _configure_attempt_control(
         research_client, policy=policy, account=account, storage=storage,
@@ -1666,8 +1729,15 @@ def run_synthesis_from_cards(
                 storage, resume_run_snapshot, ResearchFlow.STAGED,
                 total_cost, resume_error,
             )
-        storage.add_research_stage_result(research_run_id, ResearchStageName.B,
-                                          ResearchStageStatus.FAILED, error=audit_error)
+        failed_snapshot = storage.get_run(research_run_id)
+        if failed_snapshot is None or failed_snapshot.finished_at is None:
+            raise RuntimeError(
+                f"Staged B failure for {research_run_id} lacks durable finished_at snapshot."
+            )
+        storage.add_research_stage_result(
+            research_run_id, ResearchStageName.B, ResearchStageStatus.FAILED,
+            error=audit_error, finished_at=failed_snapshot.finished_at,
+        )
         notifier.notify("error", "Synteza karty nieudana — źródła zachowane, można ponowić "
                         "wyłącznie etap B", str(exc), account.id)
         summary.error = str(exc)
@@ -1727,16 +1797,20 @@ def run_synthesis_from_cards(
             for s in draft.sources
         ],
     )
-    storage.add_research_card(card)
+    card = storage.finalize_staged_research_with_card(
+        research_run_id, card, total_cost,
+        terminal_run_status=RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS,
+        min_sources=settings.research_min_sources,
+        # REJECT nadal jest kompletną kartą audytową. Wymóg VERIFIED jest więc
+        # twardym precondition zapisu tylko dla jakościowo pozytywnego wyniku;
+        # inaczej brak search w A2 nie mógłby zostać trwale udokumentowany.
+        min_verified_sources=(
+            min_verified if outcome.recommendation != ResearchRecommendation.REJECT else 0
+        ),
+        context=finalization_context,
+    )
     summary.card = card
     summary.sources_count = len(card.sources)
-    storage.add_research_stage_result(research_run_id, ResearchStageName.B, ResearchStageStatus.SUCCESS)
-
-    storage.finalize_research_success(
-        research_run_id, research_card_id=card.id, total_cost_usd=total_cost,
-        stage_b_completed=True,
-        terminal_run_status=RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS,
-    )
 
     if research_log is not None:
         research_log(card, topic, summary)

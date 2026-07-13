@@ -14,6 +14,7 @@ from app.models import (
     ResearchCard,
     ResearchFlow,
     ResearchRun,
+    StagedFinalizationContext,
     ResearchSourceRecord,
     ResearchStageName,
     ResearchStageStatus,
@@ -74,7 +75,9 @@ class StoragePort(Protocol):
     def create_run(self, run: Run) -> Run: ...
 
     def finish_run(self, run_id: str, status: str, cost_usd: float,
-                   error: str | None = None) -> None: ...
+                   error: str | None = None) -> None:
+        """Kończy ogólny run; nie może oznaczyć staged research jako sukcesu."""
+        ...
 
     def get_run(self, run_id: str) -> Run | None: ...
 
@@ -111,7 +114,24 @@ class StoragePort(Protocol):
     def finalize_research_success(
         self, research_run_id: str, research_card_id: int, total_cost_usd: float,
         *, stage_b_completed: bool, terminal_run_status: RunStatus,
-    ) -> None: ...
+    ) -> None:
+        """Finalizuje wyłącznie legacy `single`/`two_stage`; `staged` jest odrzucany."""
+        ...
+
+    def finalize_staged_research_with_card(
+        self, research_run_id: str, card: ResearchCard, total_cost_usd: float,
+        *, terminal_run_status: RunStatus, min_sources: int, min_verified_sources: int,
+        context: StagedFinalizationContext,
+    ) -> ResearchCard:
+        """Jedyna publiczna ścieżka sukcesu staged B: karta, B SUCCESS i lifecycle razem."""
+        ...
+
+    def preflight_staged_finalization(
+        self, research_run_id: str, *, terminal_run_status: RunStatus,
+        context: StagedFinalizationContext,
+    ) -> None:
+        """Fail-closed sprawdzenie legalności finalizacji przed płatnym B."""
+        ...
 
     def mark_single_research_run_complete(
         self, research_run_id: str, research_card_id: int, total_cost_usd: float,
@@ -131,10 +151,15 @@ class StoragePort(Protocol):
     def mark_research_run_partial(self, research_run_id: str, error: str) -> None: ...
 
     def mark_research_run_complete(self, research_run_id: str, research_card_id: int,
-                                   total_cost_usd: float) -> None: ...
+                                   total_cost_usd: float) -> None:
+        """Alias legacy `two_stage`; delegacja zachowuje odmowę dla `staged`."""
+        ...
 
-    def add_research_stage_result(self, research_run_id: str, stage: ResearchStageName,
-                                  status: ResearchStageStatus, error: str | None = None) -> None: ...
+    def add_research_stage_result(
+        self, research_run_id: str, stage: ResearchStageName,
+        status: ResearchStageStatus, error: str | None = None,
+        *, finished_at: datetime | None = None,
+    ) -> None: ...
 
     def get_research_usage(self, research_run_id: str) -> list[ModelUsage]: ...
 

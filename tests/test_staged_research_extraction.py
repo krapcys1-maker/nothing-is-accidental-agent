@@ -37,6 +37,7 @@ from app.models import (
 )
 from app.policies.policy_engine import PolicyDecision, PolicyEngine
 from app.ports.notification import LogNotification
+from app.ports.storage import ResearchTopicIntegrityError
 from app.research.anthropic_client import AnthropicResearchClient, _parse_discovery_candidates_jsonl
 from app.research.base import (
     ResearchAuthenticationError,
@@ -721,8 +722,10 @@ def test_resume_synthesis_never_calls_discovery_or_extraction(settings, storage,
     _run_extraction(settings, storage, account, run_id, FakeResearchClient("good"))
     assert storage.get_research_run(run_id).status == ResearchRunStatus.SOURCES_COMPLETE
 
+    # RESUME_B is deliberately legal only after a durable B failure; the first
+    # call is fresh B and records that failure before the dispatcher resumes it.
     broken = _BrokenSynthesizeFromCardsOnceClient("good")
-    summary1 = _resume_staged(settings, storage, account, run_id, broken)
+    summary1 = _run_synthesis(settings, storage, account, run_id, broken)
     assert summary1.error is not None
     assert summary1.cost_usd > 0                          # 9. usage/koszt zachowane mimo błędu B
     research_run = storage.get_research_run(run_id)
@@ -742,6 +745,66 @@ def test_resume_synthesis_never_calls_discovery_or_extraction(settings, storage,
     assert research_run2.status == ResearchRunStatus.COMPLETE
     assert research_run2.research_card_id is not None
     _assert_run_cost_matches_research_usage(storage, run_id)
+
+
+def test_force_reresearch_b_failure_then_resume_restores_durable_force_mode(
+        settings, storage, account):
+    topic = _selected_topic(storage, account)
+    original = _run_staged(settings, storage, account, topic, FakeResearchClient("good"))
+    assert original.card is not None
+
+    broken = _BrokenSynthesizeFromCardsOnceClient("good")
+    failed = _run_staged(
+        settings, storage, account, topic, broken, force_re_research=True,
+    )
+    assert failed.error is not None
+    failed_run = storage.get_run(failed.run_id)
+    failed_research_run = storage.get_research_run(failed.run_id)
+    assert failed_run.status == RunStatus.FAILED
+    assert failed_research_run.status == ResearchRunStatus.SOURCES_COMPLETE
+    assert failed_research_run.is_force_reresearch is True
+
+    # A separate connection simulates a restarted dispatcher: only the durable
+    # marker, not Python process memory, may select the forced resume mode.
+    resumed_storage = SqliteStorage.open(settings.db_path)
+    resumed = _resume_staged(
+        settings, resumed_storage, account, failed.run_id,
+        _DiscoveryAndExtractionForbiddenClient("good"),
+    )
+    assert resumed.card is not None
+    assert resumed_storage.get_run(failed.run_id).status == RunStatus.DRY_RUN
+    assert resumed_storage.get_research_run(failed.run_id).status == ResearchRunStatus.COMPLETE
+    assert resumed_storage.list_topics(account.id)[0].status == TopicStatus.USED
+    resumed_storage.close()
+
+
+def test_force_resume_preflight_rejects_before_provider_call_when_marker_is_invalid(
+        settings, storage, account, monkeypatch):
+    topic = _selected_topic(storage, account)
+    _run_staged(settings, storage, account, topic, FakeResearchClient("good"))
+    failed = _run_staged(
+        settings, storage, account, topic,
+        _BrokenSynthesizeFromCardsOnceClient("good"), force_re_research=True,
+    )
+    storage.conn.execute(
+        "UPDATE research_runs SET is_force_reresearch=0 WHERE id=?", (failed.run_id,),
+    )
+    storage.conn.commit()
+    client = FakeResearchClient("good")
+    calls = 0
+
+    def forbidden_synthesis(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        raise AssertionError("preflight must fail before provider call")
+
+    monkeypatch.setattr(client, "synthesize_from_cards", forbidden_synthesis)
+    usage_before = len(storage.get_research_usage(failed.run_id))
+    with pytest.raises(ResearchTopicIntegrityError):
+        _resume_staged(settings, storage, account, failed.run_id, client)
+    assert calls == 0
+    assert len(storage.get_research_usage(failed.run_id)) == usage_before
+    assert storage.get_research_run(failed.run_id).status == ResearchRunStatus.SOURCES_COMPLETE
 
 
 def test_synthesis_error_without_usage_preserves_canonical_cost(settings, storage, account):

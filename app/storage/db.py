@@ -5,7 +5,10 @@ import sqlite3
 from pathlib import Path
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
-_RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({"0007_candidate_attempts"})
+_RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
+    "0007_candidate_attempts",
+    "0008_staged_force_reresearch",
+})
 
 
 def connect(db_path: Path | str) -> sqlite3.Connection:

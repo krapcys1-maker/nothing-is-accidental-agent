@@ -199,7 +199,19 @@ Po review doprecyzowano: realny pipeline bez capu odmawia, cap resume jest absol
 - **Dlaczego:** tempo publikacji nie może wymuszać słabej tezy, niezweryfikowanego claimu ani mieszania dwóch odrębnych tożsamości redakcyjnych.
 - **Dokument:** `docs/CONTENT_AND_GROWTH_BLUEPRINT.md`.
 
+### [2026-07-13] Korekta D-31: idempotencja nie jest przepustką do innego trybu
+
+- **Problem:** COMPLETE/no-op akceptował identyczny wynik bez uprzedniego sprawdzenia, czy caller podaje ten sam execution mode.
+- **Wybór:** mode, marker force i resume CAS są walidowane przed porównaniem payloadu. Terminalne powtórzenie jest legalne tylko dla tego samego trwałego kontraktu.
+- **Granica:** nie dodano migracji ani nowej automatyki; P2 dotyczące UNIQUE, multizbiorów i pozostałych długów nie zostały zmienione.
+
 ### [2026-07-13] Pełny raport Fable pozostaje źródłem zewnętrznym, nie decyzją implementacyjną
 
 - **Wybór:** pełny raport zapisujemy w jednym miejscu (`docs/research/FABLE_GROWTH_EDITORIAL_REPORT.md`), a blueprint zawiera tylko mapę statusów i etapów.
 - **Granica:** [OF]/[TW]/[AN]/[WN] zachowują znaczenie dowodowe; kosztorysy są `COST ESTIMATES — UNVALIDATED`; żadna pozycja nie staje się `IMPLEMENTED` bez kodu lub trwałej konfiguracji.
+
+### [2026-07-13] Korekta D-31: genericzna finalizacja jest legacy-only
+
+- **Problem:** historyczny `finalize_research_success` i jego alias pozwalały wywołać staged finał poza typowanym contextem i atomowym helperem.
+- **Wybór:** `single` i `two_stage` zachowują publiczny genericzny finalizer; każdy `staged`, także COMPLETE i FAILED, jest odrzucany przed no-opem i użyciem kosztu. Audyt obejmuje też `finish_run`: staged SUCCESS/DRY_RUN są odrzucone, a legalne FAILED pozostaje dostępne dla obsługi błędów. Wyłącznie `finalize_staged_research_with_card` ma prawo utrwalić kartę, źródła, B SUCCESS, COMPLETE/SUCCESS/USED oraz kanoniczny koszt `model_usage`.
+- **Granica:** nie dodano tabeli, migracji, workerów ani automatyki; P2 dotyczące constraintów pozostają bez zmian.

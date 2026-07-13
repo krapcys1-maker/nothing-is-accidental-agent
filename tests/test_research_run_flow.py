@@ -137,7 +137,9 @@ def test_migration_0006_backfills_all_historical_flows(tmp_path: Path):
         )
     }
 
-    assert apply_migrations(conn) == ["0006_research_run_flow", "0007_candidate_attempts"]
+    assert apply_migrations(conn) == [
+        "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
+    ]
 
     rows = {
         row["id"]: row
@@ -161,11 +163,18 @@ def test_migration_0006_backfills_all_historical_flows(tmp_path: Path):
         row["name"]: (row["type"], row["notnull"], row["dflt_value"], row["pk"])
         for row in new_column_rows
     }
-    assert [name for name in new_columns if name != "flow"] == old_column_order
+    assert [name for name in new_columns if name not in {"flow", "is_force_reresearch"}] == old_column_order
     assert {name: new_columns[name] for name in old_columns} == old_columns
     flow_column = next(row for row in new_column_rows if row["name"] == "flow")
     assert flow_column["notnull"] == 1
     assert flow_column["dflt_value"] is None
+    force_column = next(row for row in new_column_rows if row["name"] == "is_force_reresearch")
+    assert (force_column["type"], force_column["notnull"], force_column["dflt_value"]) == (
+        "INTEGER", 1, "0",
+    )
+    assert conn.execute(
+        "SELECT count(*) FROM research_runs WHERE is_force_reresearch != 0"
+    ).fetchone()[0] == 0
     new_indexes = {
         row["name"]: row["sql"]
         for row in conn.execute(
@@ -191,7 +200,9 @@ def test_migration_0006_backfills_all_historical_flows(tmp_path: Path):
 def test_migration_0006_runs_on_clean_empty_database(tmp_path: Path):
     conn = _database_through_0005(tmp_path / "clean.db")
 
-    assert apply_migrations(conn) == ["0006_research_run_flow", "0007_candidate_attempts"]
+    assert apply_migrations(conn) == [
+        "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
+    ]
     assert conn.execute("SELECT count(*) FROM research_runs").fetchone()[0] == 0
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
@@ -209,7 +220,9 @@ def test_migration_0006_without_paid_single_uuid(tmp_path: Path):
     _seed_historical_runs(conn)
     _delete_historical_run(conn, "1b649314-27cf-4b29-857e-287175664a3f")
 
-    assert apply_migrations(conn) == ["0006_research_run_flow", "0007_candidate_attempts"]
+    assert apply_migrations(conn) == [
+        "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
+    ]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
     assert "1b649314-27cf-4b29-857e-287175664a3f" not in flows
@@ -225,7 +238,9 @@ def test_migration_0006_without_either_local_single_uuid(tmp_path: Path):
     _delete_historical_run(conn, "1b649314-27cf-4b29-857e-287175664a3f")
     _delete_historical_run(conn, "bda661bc-59c9-4f4e-9313-86c659bde74d")
 
-    assert apply_migrations(conn) == ["0006_research_run_flow", "0007_candidate_attempts"]
+    assert apply_migrations(conn) == [
+        "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
+    ]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
     assert flows == {
@@ -283,7 +298,9 @@ def test_migration_0006_rolls_back_on_conflicting_flow_signals(tmp_path: Path):
 
 def test_database_rejects_invalid_or_missing_flow(tmp_path: Path):
     conn = _database_through_0005(tmp_path / "flow-constraints.db")
-    assert apply_migrations(conn) == ["0006_research_run_flow", "0007_candidate_attempts"]
+    assert apply_migrations(conn) == [
+        "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
+    ]
     conn.execute(
         "INSERT INTO accounts "
         "(id,name,mode,autonomy_level,active,browser_profile_path,writing_profile_path) "
@@ -325,7 +342,9 @@ def test_migration_0007_backfills_conservative_historical_attempt_lower_bound(tm
     )
     conn.commit()
 
-    assert apply_migrations(conn) == ["0006_research_run_flow", "0007_candidate_attempts"]
+    assert apply_migrations(conn) == [
+        "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
+    ]
 
     attempts_column = next(
         row for row in conn.execute("PRAGMA table_info(research_source_candidates)")
@@ -373,13 +392,56 @@ def test_migration_0007_rolls_back_schema_when_ledger_insert_fails(tmp_path: Pat
 
     conn.execute("DROP TRIGGER reject_attempts_ledger")
     conn.commit()
-    assert apply_migrations(conn) == ["0007_candidate_attempts"]
+    assert apply_migrations(conn) == ["0007_candidate_attempts", "0008_staged_force_reresearch"]
     assert "attempts" in {
         row["name"] for row in conn.execute("PRAGMA table_info(research_source_candidates)")
     }
     assert conn.execute(
         "SELECT count(*) FROM schema_migrations WHERE version='0007_candidate_attempts'"
     ).fetchone()[0] == 1
+    conn.close()
+
+
+def test_migration_0008_rolls_back_force_marker_when_ledger_insert_fails(tmp_path: Path):
+    conn = _database_through_0005(tmp_path / "force-marker-ledger-rollback.db")
+    _seed_historical_runs(conn)
+    conn.execute(
+        "CREATE TRIGGER reject_force_marker_ledger BEFORE INSERT ON schema_migrations "
+        "WHEN NEW.version='0008_staged_force_reresearch' "
+        "BEGIN SELECT RAISE(ABORT, 'forced force-marker ledger failure'); END"
+    )
+    conn.commit()
+
+    with pytest.raises(sqlite3.IntegrityError, match="forced force-marker ledger failure"):
+        apply_migrations(conn)
+
+    assert "is_force_reresearch" not in {
+        row["name"] for row in conn.execute("PRAGMA table_info(research_runs)")
+    }
+    assert conn.execute(
+        "SELECT count(*) FROM schema_migrations WHERE version='0008_staged_force_reresearch'"
+    ).fetchone()[0] == 0
+
+    conn.execute("DROP TRIGGER reject_force_marker_ledger")
+    conn.commit()
+    assert apply_migrations(conn) == ["0008_staged_force_reresearch"]
+    force_column = next(
+        row for row in conn.execute("PRAGMA table_info(research_runs)")
+        if row["name"] == "is_force_reresearch"
+    )
+    assert (force_column["type"], force_column["notnull"], force_column["dflt_value"]) == (
+        "INTEGER", 1, "0",
+    )
+    assert conn.execute(
+        "SELECT count(*) FROM research_runs WHERE is_force_reresearch != 0"
+    ).fetchone()[0] == 0
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint failed"):
+        conn.execute(
+            "UPDATE research_runs SET is_force_reresearch=2 "
+            "WHERE id='9bbeb020-staged'"
+        )
+    conn.rollback()
+    assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     conn.close()
 
 

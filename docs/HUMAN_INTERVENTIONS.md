@@ -180,3 +180,25 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Zakres decyzji właściciela:** wolno zmienić kontrakt błędów, retry, testy i dokumentację; każda próba ma nadal przechodzić budget callback. Nie wolno naprawiać P2-19 przez sztuczny koszt.
 - **Zakazy:** bez API, researchu, resume, retry realnego calla, schedulera, jobs, workerów, budżetowych rezerwacji, commita i pushu przed niezależnym review.
 - **Efekt:** 382 testy offline; typed/fail-closed mapping gotowy do review, scheduler/jobs/workery nadal NOT_STARTED, koszt 0 USD.
+
+### [2026-07-13] APPROVAL — naprawa F4 atomowej finalizacji staged B
+
+- **Typ:** IMPLEMENTATION BOUNDARY / NO EXTERNAL ACTION.
+- **Zakres zgody właściciela:** zmienić wyłącznie storage/workflow/testy/dokumentację, aby karta B i lifecycle były atomowe; dodać rollback, idempotencję, reopen i współbieżność SQLite.
+- **Zakazy:** bez API, realnego researchu, resume, schedulerów, jobs, workerów, rezerwacji budżetowych, migracji, commita, pushu, PR i merge.
+- **Efekt:** helper transakcyjny i 420 testów offline; historyczna baza i świat zewnętrzny bez zmian, dodatkowy koszt 0 USD. Zmiana oczekuje na niezależne review.
+
+### [2026-07-13] APPROVAL — trzy lokalne poprawki P1 do F4
+
+- **Typ:** IMPLEMENTATION BOUNDARY / NO EXTERNAL ACTION.
+- **Obiekt:** typowany context finalizacji staged B, trwałe force i macierz crash/reopen.
+- **Zakres decyzji właściciela:** usunąć luźne booleany force/resume, w razie potrzeby dodać minimalną migrację trwałego markera, wykonać preflight przed B i pełne testy rollback po reopen. Pozostawić zmiany do kolejnego niezależnego review.
+- **Zakazy:** bez Anthropic API, realnego researchu/resume, schedulera, jobs, workerów, rezerwacji budżetowych, zmian historycznej bazy, commita, pushu, PR i merge.
+- **Efekt:** `0008` dodaje marker force per staged run; CAS resume i 13 crash points przeszły offline. 446 testów, dodatkowy koszt 0 USD; brak zewnętrznych działań.
+
+### [2026-07-13] APPROVAL — końcowy P1 F4: mode przed terminalnym no-op
+
+- **Typ:** IMPLEMENTATION BOUNDARY / NO EXTERNAL ACTION.
+- **Zakres decyzji właściciela:** naprawić wyłącznie akceptację sprzecznego `StagedFinalizationContext` przez COMPLETE/no-op i dodać powiązane testy; wolno doprecyzować trwały snapshot B FAILED bez migracji.
+- **Zakazy:** bez API, realnego researchu/resume, zmian historycznej bazy, schedulerów, jobs, workerów, rezerwacji budżetowych, commita, pushu, PR i merge; instrukcja pisania poza zakresem.
+- **Efekt:** mode, marker force i CAS resume są walidowane przed no-op; 449 testów offline, koszt 0 USD. Zmiany oczekują na niezależne review.

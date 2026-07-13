@@ -247,3 +247,15 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Decyzja: domyślną odpowiedzią jest „nie ponawiaj”. Tylko timeout, błąd połączenia sklasyfikowany przez SDK, 429 i cztery wskazane statusy 5xx otwierają możliwość retry — nadal po kontroli budżetu.
   - Granica wiedzy: brak usage w wyjątku nie oznacza kosztu 0. P2-19 pozostaje uczciwie otwarte zamiast zasłoniętego sztucznym rekordem.
   - Dowód: ADR-029, fake SDK, testy A1/A2/B i ledgeru; 382 passed, zero API, koszt 0 USD.
+
+- **[2026-07-13] Karta bez statusu to jeszcze nie wynik** (sekcja: 3, 6, 15)
+  - Materiał: po B system potrafił zapisać kartę i źródła, a dopiero potem próbował powiedzieć bazie, że research się zakończył. Jeden crash rozjeżdżał artefakt i jego znaczenie.
+  - Decyzja: jedna transakcja obejmuje kartę, każde źródło, B SUCCESS, COMPLETE, terminalny run oraz USED. Testy psują drugi insert źródła i lifecycle; po reopen nie ma pół artefaktu.
+  - Zwrot narracyjny: „zapisano odpowiedź” nie znaczy „zapisano wynik”. Status nadaje odpowiedzi znaczenie, więc dane i status muszą upaść razem albo przetrwać razem.
+  - Dowód: ADR-030, `tests/test_staged_finalization_atomic.py`, 420 testów offline, 0 USD, bez API.
+
+- **[2026-07-13] Zgoda, której nie da się zapamiętać tylko na chwilę** (sekcja: 3, 6, 15)
+  - Materiał: transakcja potrafiła ocalić bazę, ale jej uprawnienie mogły rozszerzyć dwa zwykłe booleany. Po awarii B informacja, że run był świadomie forced, znikała z procesu razem z pamięcią.
+  - Decyzja: force jest zapisem per run, resume porównuje trwały ślad nieudanego B, a przed następnym potencjalnym kosztem system wykonuje niemutujący preflight. Pomyłka nie robi „spróbuj mimo wszystko”; nie wywołuje nawet klienta.
+  - Dowód: 13 crash points z zamknięciem i reopen SQLite, force→failure→resume oraz test braku usage po odmowie. Kolejność tych samych źródeł nie zmienia wyniku — dowód jest zbiorem, nie przypadkiem kolejności listy.
+  - Koszt: 0 USD; 446 testów offline, bez API.

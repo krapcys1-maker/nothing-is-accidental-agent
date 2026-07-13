@@ -5,7 +5,7 @@
 >
 > Kolejność prac: `IMPLEMENTATION_ROADMAP.md`. Aktualny stan: `CURRENT_PROJECT_STATE.md`. Rejestr decyzji (ADR): `docs/DECISIONS.md` (nadal obowiązujący — ten dokument konsoliduje decyzje, nie zastępuje rejestru).
 >
-> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (406 passed, 2026-07-13) lub pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
+> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (454 passed, 2026-07-13) lub pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
 
 ---
 
@@ -34,7 +34,7 @@
 
 - **Policy Engine** — centralnie egzekwuje cap per-run oraz budżet dzienny/miesięczny przez `check_run_budget`; miesięczny zachowuje priorytet ADR-012. Brak nadal: egzekucji `autonomy_level`, `AccountMode`, limitów per konto, cooldownów, SAFE MODE i runtime kill-switcha.
 - **Klient Anthropic dla tematów** (`app/llm/anthropic_client.py`) — offline zweryfikowany kontrakt response→Usage→parse, typowane provider/parse/schema errors, jeden zewnętrzny code fence i księgowanie dostępnego usage przez workflow także przy błędzie; nadal nigdy nie uruchomiony realnie (`NOT VERIFIED live`).
-- **Maszyna stanów researchu** — Etap 0 / Tasks 1–9 ukończone. Task 9 zachował A1 i 4×A2 po uciętym pierwszym B, następnie kontrolowany repair ustawił prawdziwy audit FAILED, a osobno zatwierdzony resume wykonał dokładnie jedno B bez search/retry. Finalizacja ustawiła `research_runs=COMPLETE`, `runs=SUCCESS`, topic `USED` i kartę #2 przy 4 VERIFIED oraz koszcie 0,183964 USD. Karta ma jakościowe `REJECT`, więc nie jest wejściem do treści. Historyczny `research_runs.error` po sukcesie pozostał z pierwszego B jako nieblokujący P2-20; historia prób jest poprawnie zachowana również w `research_stage_results`. Rezydualne P2-17/P2-18/P2-19 pozostają bez zmian.
+- **Maszyna stanów researchu** — Etap 0 / Tasks 1–9 ukończone. Task 9 zachował A1 i 4×A2 po uciętym pierwszym B, następnie kontrolowany repair ustawił prawdziwy audit FAILED, a osobno zatwierdzony resume wykonał dokładnie jedno B bez search/retry. Finalizacja ustawiła `research_runs=COMPLETE`, `runs=SUCCESS`, topic `USED` i kartę #2 przy 4 VERIFIED oraz koszcie 0,183964 USD. Karta ma jakościowe `REJECT`, więc nie jest wejściem do treści. Staged B ma typowany context fresh/resume/force; marker force jest trwały per run, a resume wymaga CAS `FAILED/finished_at/error` i wcześniejszego B FAILED. Także identyczny terminalny no-op najpierw rewaliduje mode, marker force i trwały snapshot resume; sprzeczny context kończy się błędem bez mutacji. Historyczny `research_runs.error` po sukcesie pozostaje z pierwszego B jako nieblokujący P2-20; historia prób jest poprawnie zachowana również w `research_stage_results`. Rezydualne P2-17/P2-18/P2-19 pozostają bez zmian.
 
 ### 1.3. Co jest tylko szkieletem
 
@@ -236,7 +236,7 @@ Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → bu
 
 1. Operacje płatne: nigdy nie powtarzaj automatycznie etapu, który zostawił trwały wynik (resume wykonuje wyłącznie NASTĘPNY etap).
 2. Publikacja: `idempotency_key` + verify-before-publish + wynik UNCERTAIN nigdy nie jest retry'owany automatycznie.
-3. Zapisy stanu: przejście statusu + dane w JEDNEJ transakcji (wzór: `mark_research_stage_a_success`).
+3. Zapisy stanu: przejście statusu + dane w JEDNEJ transakcji (wzór: `mark_research_stage_a_success` oraz staged B `finalize_staged_research_with_card`). `finalize_research_success` i `mark_research_run_complete` obsługują wyłącznie legacy `single`/`two_stage`, a ogólny `finish_run` odmawia staged `SUCCESS`/`DRY_RUN`; wszystkie trzy blokady działają przed no-opem lub użyciem kosztu. Staged B zapisuje kartę, wszystkie jej źródła, wynik B SUCCESS i COMPLETE/SUCCESS-or-DRY_RUN/USED w jednym `BEGIN IMMEDIATE`; jego kanoniczny koszt pochodzi wyłącznie z `model_usage`. Zgoda na fresh/resume/force jest jednym typowanym contextem, a nie luźnymi booleanami; preflight sprawdza go przed B.
 4. Każdy istniejący helper zmieniający status waliduje stan poprzedni w tym samym UPDATE (`WHERE status IN (...)`, a dla researchu także `flow`) i wymaga dokładnie jednego zmienionego wiersza. `rowcount=0` daje typowany błąd z aktualnym stanem, z wyjątkiem jawnych no-opów idempotencji; `rowcount>1` jest błędem integralności.
 
 ---

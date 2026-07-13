@@ -248,3 +248,29 @@ Klient researchu mapował wszystkie wyjątki SDK na jeden retryowalny typ. W prz
 Retry działało poprawnie, ale `str(exc)` usuwało z trwałego auditu nazwę klasy i jej metadane. Jeden bezpieczny formatter zastąpił lokalne składanie tekstu we wszystkich catchach research pipeline. Reopen SQLite potwierdził identyczny typed error w run/research_run/stage, zgodny ledger i brak karty; raw response nie trafia do auditu. 406 testów, zero API i 0 USD.
 
 Kolejne sprawdzenie zakwestionowało to ostatnie zdanie: sam formatter nie używał `raw_text`, ale mapper wnosił `str(APIStatusError)`, które SDK składa z body. Naprawa przeniosła granicę bezpieczeństwa do mappera; `RAW_RESPONSE_MARKER` nie dotarł już do żadnego audit field. Osobno rozszerzono redakcję o samodzielny `Bearer <token>`. 411 testów offline, bez API i 0 USD.
+
+## 2026-07-13 — Pół karty to nie karta
+
+Przez chwilę system miał zdradliwe okno: B mógł zapisać kartę i źródła, zanim utrwalił sukces w lifecycle. Nie był to problem jakości modelu ani parsera, lecz znaczenia danych po awarii procesu.
+
+Naprawa nie sprząta osieroconych kart po fakcie. Granicę transakcji przesunięto tak, aby karta, źródła, B SUCCESS, COMPLETE, status runu i USED zawsze powstawały razem. Cztery testowane awarie w środku zapisu kończą się rollbackiem, a dwa równoległe połączenia SQLite zostawiają jedną kartę. Koszt eksperymentu: 0 USD; bez API.
+
+## 2026-07-13 — Połowa transakcji zniknęła, lecz zgoda nadal była w pamięci
+
+Niezależne review znalazło trzy szczeliny. Pierwsza: dwa luźne booleany w publicznym kontrakcie mogły nadać callerowi prawo do force albo `FAILED → SUCCESS`. Druga: świeży forced run po awarii B tracił kontekst potrzebny dispatcherowi resume. Trzecia: dotychczasowe testy awarii nie udowadniały całej granicy transakcji po fizycznym reopen bazy.
+
+Naprawa nie dodała kolejnych wyjątków w `if`. Wprowadziła cztery jawne tryby i trwały marker force na `research_runs`; resume musi pokazać nie tylko status FAILED, ale też ten sam czas zakończenia, marker błędu i wcześniejszy wpis B FAILED. Preflight porównuje je przed providerem. Trzynaście kontrolowanych awarii — od przed kartą do po `USED` — po reopen zostawia stan sprzed finalizacji, bez nowego usage.
+
+Pozostał świadomy P2: nie ma osobnego UNIQUE dla B SUCCESS ani card sources. Nie jest to jednak alternatywna ścieżka staged B: ogólny audit odmawia staged B SUCCESS, sukces zapisuje wyłącznie helper z `BEGIN IMMEDIATE` i CAS, a kolejność źródeł jest multizbiorem. Workerzy i dodatkowi writerzy nie istnieją jeszcze, więc ich przyszły model wymaga ponownej decyzji. **446 testów**, 0 USD, bez API.
+
+## 2026-07-13 — No-op z niewłaściwą zgodą
+
+Końcowy review F4 pokazał, że „nic nie zapisano” nie wystarcza. Identyczny wynik FRESH mógł zostać powtórzony jako FORCE, bo ścieżka COMPLETE kończyła porównanie payloadu przed walidacją mode. To był P1 kontraktu, nie uszkodzenie danych.
+
+Po poprawce terminalny no-op najpierw porównuje context z trwałym markerem force i historią resume. Dla resume zapis B FAILED niesie timestamp pierwotnej porażki, więc stary czas lub marker nie przechodzą po reopen. 449 testów offline, zero API i koszt 0 USD.
+
+## 2026-07-13 — Stary finalizer nadal miał klucz do staged B
+
+Ostatni P1 F4 nie był już problemem samego execution mode. Publiczny legacy helper mógł przyjąć staged `SYNTHESIS_PENDING`, a jego alias prowadził tą samą drogą. W ten sposób karta, koszt i lifecycle mogły ominąć typed context, A2 i atomowy zapis B SUCCESS; w COMPLETE identyczny payload był nawet traktowany jako no-op.
+
+Naprawa nie usuwa legacy. Zawęża je do `single` i `two_stage`, a każdy staged stan odrzuca typowanym błędem przed no-opem, zmianą statusu i użyciem przekazanego kosztu. W trakcie audytu zamknięto też węższą furtkę `finish_run`: staged SUCCESS/DRY_RUN są odrzucone, lecz legalne FAILED pozostaje. Tylko helper staged zapisuje sukces z kanonicznym kosztem `model_usage`. Snapshot po reopen obejmuje wszystkie artefakty i pola lifecycle; **454 testy**, zero API i 0 USD. Brak migracji, workerów i commita/pushu — zmiany pozostają do niezależnego review.

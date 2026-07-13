@@ -5,6 +5,7 @@ pierwszy etap (konta, tematy, run, zużycie modelu).
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -201,6 +202,49 @@ class ResearchFlow(str, Enum):
     STAGED = "staged"
 
 
+class StagedFinalizationMode(str, Enum):
+    """Trwały kontrakt uprawnienia dla atomowego zakończenia staged B."""
+
+    FRESH = "fresh"
+    RESUME_B = "resume_b"
+    FORCE_RERESEARCH = "force_reresearch"
+    FORCE_RERESEARCH_RESUME_B = "force_reresearch_resume_b"
+
+
+class StagedFinalizationFaultPoint(str, Enum):
+    """Test-only controlled interruption points inside staged B transaction."""
+
+    BEFORE_CARD_INSERT = "before_card_insert"
+    AFTER_CARD_INSERT = "after_card_insert"
+    BEFORE_SOURCE_INSERT = "before_source_insert"
+    AFTER_FIRST_SOURCE_INSERT = "after_first_source_insert"
+    AFTER_ALL_SOURCE_INSERTS = "after_all_source_inserts"
+    BEFORE_STAGE_B_SUCCESS_INSERT = "before_stage_b_success_insert"
+    AFTER_STAGE_B_SUCCESS_INSERT = "after_stage_b_success_insert"
+    BEFORE_RESEARCH_RUN_UPDATE = "before_research_run_update"
+    AFTER_RESEARCH_RUN_UPDATE = "after_research_run_update"
+    BEFORE_RUN_UPDATE = "before_run_update"
+    AFTER_RUN_UPDATE = "after_run_update"
+    BEFORE_TOPIC_USED_UPDATE = "before_topic_used_update"
+    AFTER_TOPIC_USED_UPDATE = "after_topic_used_update"
+
+
+@dataclass(frozen=True)
+class StagedFinalizationContext:
+    """Snapshot wymagany przez preflight i atomową finalizację staged B.
+
+    `expected_research_status` opisuje stan przed wywołaniem B
+    (`SOURCES_COMPLETE`). Finalizer ponownie sprawdza, że po preflight stan
+    przeszedł wyłącznie do `SYNTHESIS_PENDING`.
+    """
+
+    mode: StagedFinalizationMode
+    expected_run_status: RunStatus
+    expected_research_status: ResearchRunStatus
+    expected_finished_at: datetime | None = None
+    expected_failure_marker: str | None = None
+
+
 class SourceCandidateStatus(str, Enum):
     PENDING_EXTRACTION = "PENDING_EXTRACTION"   # z etapu A1, jeszcze nie próbowano A2
     EXTRACTION_IN_PROGRESS = "EXTRACTION_IN_PROGRESS"  # A2 reserved; durable result not yet saved
@@ -232,6 +276,9 @@ class ResearchRun(BaseModel):
     stage_a_completed_at: datetime | None = None
     stage_b_completed_at: datetime | None = None
     research_card_id: int | None = None
+    # Trwały ślad jawnego --force-re-research. Nie jest to zgoda przekazywana
+    # przez pamięć procesu: dispatcher resume odczytuje go ponownie z SQLite.
+    is_force_reresearch: bool = False
     total_cost_usd: float = 0.0
     error: str | None = None
     created_at: datetime = Field(default_factory=_utcnow)

@@ -482,12 +482,42 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Regresje:** syntetyczne 422 z `RAW_RESPONSE_MARKER` zachowuje typ/status/cause, lecz marker nie trafia do run/research_run/stage/candidate audit; trzy warianty Bearer, named keys, `sk-ant-*`, raw_text i długi komunikat są bezpieczne. Pełne **411 passed**, zero API i 0 USD.
 - **Zakres:** retry, mapowanie statusów, usage, koszt i lifecycle bez zmian; bez schedulera/jobs/workers, commita i pushu przed ponownym review.
 
+### 2026-07-13 — F4: atomowy zapis Research Card po staged B — [P1 | DURABILITY]
+
+- **Przyczyna:** sukces B był persystowany w czterech commitach: karta, źródła, audit B SUCCESS, a następnie COMPLETE/run/topic. Crash pozostawiał częściowy artefakt bez poprawnego lifecycle.
+- **Zmiana:** `finalize_staged_research_with_card` wykonuje pełną finalizację staged B w jednym `BEGIN IMMEDIATE`; sprawdza relację run–research_run–topic–account, flow/status, A2, kanon `model_usage` i rowcount.
+- **Odtwarzalność:** fault injection dla karty, drugiego źródła, B SUCCESS i lifecycle; po reopen nie ma wtedy karty, źródeł ani B SUCCESS. Dwa połączenia SQLite dają jedną kartę i jeden B SUCCESS.
+- **Granice:** brak migracji, brak zmiany historycznej bazy, brak API/researchu/resume realnego/Playwrighta. `--force-re-research` i jawne resume B są obsłużone wyłącznie jawnie przez workflow. Koszt **0 USD**.
+- **Wynik:** **420 passed** offline; zmiana oczekuje na niezależne review, bez commita i pushu.
+
+### 2026-07-13 — F4: trzy P1 po review — trwała zgoda force, CAS resume i pełny rollback po reopen
+
+- **Root cause:** atomowość nie ograniczała jeszcze tego, kto wolno finalizować. Dwa luźne booleany rozszerzały lifecycle w pamięci procesu; force nie przetrwał awarii B; cztery fault points nie dowodziły rollbacku całego transaction scope po zamknięciu połączenia.
+- **Zmiana:** `StagedFinalizationContext` rozróżnia `FRESH`, `RESUME_B`, `FORCE_RERESEARCH` i `FORCE_RERESEARCH_RESUME_B`. Migracja `0008_staged_force_reresearch.sql` zapisuje force dla konkretnego staged runu. Resume wymaga w bazie zgodnego `FAILED`, `finished_at`, markera błędu oraz B FAILED; preflight jest niemutujący i działa przed budżetem oraz clientem B.
+- **Atomowość:** dodano 13 kontrolowanych crash points od przed insertem karty do po `topics.USED`; każdy test używa plikowej SQLite, zamyka połączenie i otwiera ją ponownie. Stan po reopen jest dokładnie sprzed finalizacji: brak karty/źródeł/B SUCCESS, brak COMPLETE/terminalnego sukcesu/USED, usage i koszt bez zmian. Genericzny audit nie może ominąć helpera przez staged `B SUCCESS`.
+- **Kontrakt danych:** kolejność źródeł nie jest tożsamością karty — identyczny multiset jest no-opem. Konflikty źródła, topicu i kosztu są fail-closed. Dwa różne runy finalizują się równolegle bez `database is locked` i bez fałszywego konfliktu; ten sam run pozostaje dokładnie-once.
+- **Zakres i wynik:** aktualizacja wyłącznie offline; brak API, realnego researchu/resume, historycznej bazy, schedulera/jobs/workerów, commita i pushu. Celowane regresje oraz pełny suite: **446 passed**; koszt 0 USD. Przed niezależnym review pozostawiono working tree.
+
 ### 2026-07-13 — Growth & Editorial Operating System: integracja wyłącznie dokumentacyjna — [ROADMAP 3/6/7 | PROPOSED]
 
 - **Cel:** opisać docelowy system treści i wzrostu bez rozpoczęcia Etapu 3, 6 lub 7.
 - **Dokumenty:** dodano `docs/research/FABLE_GROWTH_EDITORIAL_REPORT.md` jako oznaczone źródło zewnętrzne oraz `docs/CONTENT_AND_GROWTH_BLUEPRINT.md` ze statusem PROPOSED.
 - **Decyzje:** ADR-032–036 ustalają modularizację, `SKIP`, izolację NIA/build logu, rozdzielenie followers/subscribers oraz granicę Notes: dry-run w Etapie 3, publiczne operacje w Etapie 6.
 - **Zakres:** zaktualizowano krótkie odwołania w architekturze, roadmapie, stanie i kronice. Bez kodu, konfiguracji, migracji, bazy, API, publikacji, commita i pushu; koszt 0 USD. Zmiany pozostają do niezależnego review.
+
+### 2026-07-13 — F4: COMPLETE nie omija już execution mode — [P1 | DURABILITY]
+
+- **Przyczyna:** terminalna gałąź idempotentna porównywała kartę, źródła, koszt i lifecycle przed `StagedFinalizationContext`, więc zgodny payload mógł ukryć sprzeczny mode.
+- **Naprawa:** finalizer waliduje context przed no-opem. FRESH/force sprawdzają trwały marker i brak semantyki resume; resume dodatkowo wymaga zachowanego markeru oraz B FAILED z tym samym `finished_at` snapshotu.
+- **Regresje:** literalne FRESH→FRESH, FRESH→FORCE, FRESH→RESUME, FORCE→FORCE, FORCE→FRESH, force-resume bez snapshotu i resume CAS mismatch; konflikty sprawdzone po reopen bez mutacji. Pełne **449 passed**, 0 USD, bez API.
+- **Zakres:** brak migracji, historycznej bazy, schedulerów, jobs, workerów, commita i pushu; do ponownego niezależnego review.
+
+### 2026-07-13 — F4 P1: publiczna finalizacja legacy nie omija staged helpera — [DURABILITY]
+
+- **Przyczyna:** `finalize_research_success` i alias `mark_research_run_complete` nadal przyjmowały staged `SYNTHESIS_PENDING`; były więc alternatywną ścieżką do COMPLETE/SUCCESS/USED bez typed contextu, pełnej transakcji karty i źródeł ani kanonicznej sumy `model_usage`. Gałąź COMPLETE mogła dodatkowo zwrócić legacy no-op.
+- **Naprawa:** oba wejścia są teraz wyłącznie dla `single`/`two_stage` i odrzucają każdy staged run zaraz po odczycie relacji, przed payloadem, terminalnym no-opem, lifecycle i użyciem przekazanego kosztu. Audyt alternatyw wykazał ogólny `finish_run`, który mógł wpisać staged `SUCCESS`/`DRY_RUN`; dostał wąską odmowę tylko dla tych sukcesów, bez zmiany legalnych porażek. Staged sukces pozostaje wyłącznie w `finalize_staged_research_with_card`.
+- **Regresje:** generic sprawdza staged SYNTHESIS_PENDING z arbitralnym kosztem, COMPLETE z identyczną kartą i kosztem oraz FAILED; alias sprawdza SYNTHESIS_PENDING i COMPLETE; `finish_run` sprawdza SUCCESS i DRY_RUN. Każdy przypadek porównuje po reopen pełny stan kart, źródeł, auditu B, usage, cache kosztu, timestampów, błędów, card ID i force markera. Legacy single/two-stage oraz no-op są zachowane.
+- **Wynik i zakres:** celowane 151 testów oraz pełne `python -m pytest` = **454 passed in 17.88s**; `git diff --check` czysty. Zero API, realnego researchu, bazy produkcyjnej, migracji, schedulerów/jobs/workerów, commita i pushu; koszt **0 USD**. Zmiany czekają na powtórne niezależne review.
 
 ### 2026-07-13 — pełny snapshot Fable i mapa roadmapy — [DOCS | ROADMAP 2/3/6/7]
 

@@ -5,6 +5,7 @@ import pytest
 
 from app.core.ids import new_run_id
 from app.models import (
+    ModelUsage,
     ResearchCard,
     ResearchFlow,
     ResearchRun,
@@ -76,15 +77,78 @@ def _table_counts(storage) -> dict[str, int]:
     }
 
 
+def _staged_rejection_snapshot(storage, run_id: str, topic_id: int) -> dict[str, tuple]:
+    """Pełny stan, który publiczny legacy finalizer staged nie może zmienić."""
+    queries = {
+        "cards": "SELECT * FROM research_cards ORDER BY id",
+        "sources": "SELECT * FROM sources ORDER BY id",
+        "stage_results": (
+            "SELECT * FROM research_stage_results WHERE research_run_id=? ORDER BY id"
+        ),
+        "research_run": "SELECT * FROM research_runs WHERE id=?",
+        "run": "SELECT * FROM runs WHERE id=?",
+        "topic": "SELECT * FROM topics WHERE id=?",
+        "usage": "SELECT * FROM model_usage WHERE run_id=? ORDER BY id",
+    }
+    params = {
+        "cards": (),
+        "sources": (),
+        "stage_results": (run_id,),
+        "research_run": (run_id,),
+        "run": (run_id,),
+        "topic": (topic_id,),
+        "usage": (run_id,),
+    }
+    return {
+        name: tuple(tuple(row) for row in storage.conn.execute(query, params[name]).fetchall())
+        for name, query in queries.items()
+    }
+
+
+def _add_existing_usage(storage, run_id: str) -> None:
+    storage.add_model_usage(ModelUsage(
+        run_id=run_id, provider="test", model="test", task="research_synthesize_cards",
+        input_tokens=1, output_tokens=1, estimated_cost_usd=0.123,
+    ))
+
+
+def _seed_staged_complete(storage, run_id: str, topic_id: int, card_id: int) -> None:
+    storage.conn.execute(
+        "UPDATE research_runs SET status=?, research_card_id=?, total_cost_usd=?, "
+        "stage_b_completed_at=?, error=NULL, updated_at=? WHERE id=?",
+        (ResearchRunStatus.COMPLETE.value, card_id, 0.123,
+         "2001-01-01 01:01:01", "2001-01-01 01:01:02", run_id),
+    )
+    storage.conn.execute(
+        "UPDATE runs SET status=?, cost_usd=?, error=NULL, finished_at=? WHERE id=?",
+        (RunStatus.SUCCESS.value, 0.123, "2001-01-01 01:01:03", run_id),
+    )
+    storage.conn.execute(
+        "UPDATE topics SET status=? WHERE id=?", (TopicStatus.USED.value, topic_id),
+    )
+    storage.conn.commit()
+
+
+def _seed_staged_failed(storage, run_id: str) -> None:
+    storage.conn.execute(
+        "UPDATE research_runs SET status=?, error=?, updated_at=? WHERE id=?",
+        (ResearchRunStatus.FAILED.value, "existing staged failure", "2001-01-01 01:01:01", run_id),
+    )
+    storage.conn.execute(
+        "UPDATE runs SET status=?, error=?, finished_at=? WHERE id=?",
+        (RunStatus.FAILED.value, "existing staged failure", "2001-01-01 01:01:02", run_id),
+    )
+    storage.conn.commit()
+
+
 @pytest.mark.parametrize(
     ("flow", "stage_b_completed"),
     [
         (ResearchFlow.SINGLE, False),
         (ResearchFlow.TWO_STAGE, True),
-        (ResearchFlow.STAGED, True),
     ],
 )
-def test_finalization_is_durable_and_atomic_for_each_flow(
+def test_generic_finalization_is_durable_and_atomic_for_legacy_flows(
         settings, account, flow, stage_b_completed):
     storage = SqliteStorage.open(settings.db_path)
     topic = _topic(storage, account, flow.value)
@@ -115,10 +179,9 @@ def test_finalization_is_durable_and_atomic_for_each_flow(
     [
         (ResearchFlow.SINGLE, False),
         (ResearchFlow.TWO_STAGE, True),
-        (ResearchFlow.STAGED, True),
     ],
 )
-def test_identical_repeated_finalization_is_durable_no_op(
+def test_legacy_identical_repeated_finalization_is_durable_no_op(
         settings, account, flow, stage_b_completed):
     storage = SqliteStorage.open(settings.db_path)
     topic = _topic(storage, account, f"repeat-{flow.value}")
@@ -150,6 +213,98 @@ def test_identical_repeated_finalization_is_durable_no_op(
     storage.close()
 
 
+@pytest.mark.parametrize(
+    ("state", "caller_cost"),
+    [
+        pytest.param("SYNTHESIS_PENDING", 999.0, id="synthesis_pending-arbitrary-cost"),
+        pytest.param("COMPLETE", 0.123, id="complete-identical-card-and-cost"),
+        pytest.param("FAILED", 999.0, id="failed"),
+    ],
+)
+def test_generic_finalizer_rejects_every_staged_state_without_mutation_after_reopen(
+        settings, account, state, caller_cost):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account, f"staged-generic-{state}")
+    card = _card(storage, topic)
+    run_id = _pending_run(storage, account, topic, ResearchFlow.STAGED)
+    _add_existing_usage(storage, run_id)
+    if state == "COMPLETE":
+        _seed_staged_complete(storage, run_id, int(topic.id), int(card.id))
+    elif state == "FAILED":
+        _seed_staged_failed(storage, run_id)
+    before = _staged_rejection_snapshot(storage, run_id, int(topic.id))
+
+    with pytest.raises(
+        ResearchTopicIntegrityError,
+        match="STAGED research must be finalized through finalize_staged_research_with_card",
+    ):
+        storage.finalize_research_success(
+            run_id, int(card.id), caller_cost, stage_b_completed=True,
+            terminal_run_status=RunStatus.SUCCESS,
+        )
+
+    storage = _reopen(settings, storage)
+    assert _staged_rejection_snapshot(storage, run_id, int(topic.id)) == before
+    assert storage.conn.execute(
+        "SELECT COUNT(*) FROM research_stage_results "
+        "WHERE research_run_id=? AND stage='B' AND status='SUCCESS'", (run_id,),
+    ).fetchone()[0] == 0
+    storage.close()
+
+
+@pytest.mark.parametrize(
+    ("state", "caller_cost"),
+    [
+        pytest.param("SYNTHESIS_PENDING", 999.0, id="synthesis_pending"),
+        pytest.param("COMPLETE", 0.123, id="complete-is-not-a-noop"),
+    ],
+)
+def test_legacy_two_stage_alias_rejects_staged_without_mutation_after_reopen(
+        settings, account, state, caller_cost):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account, f"staged-alias-{state}")
+    card = _card(storage, topic)
+    run_id = _pending_run(storage, account, topic, ResearchFlow.STAGED)
+    _add_existing_usage(storage, run_id)
+    if state == "COMPLETE":
+        _seed_staged_complete(storage, run_id, int(topic.id), int(card.id))
+    before = _staged_rejection_snapshot(storage, run_id, int(topic.id))
+
+    with pytest.raises(
+        ResearchTopicIntegrityError,
+        match="STAGED research must be finalized through finalize_staged_research_with_card",
+    ):
+        storage.mark_research_run_complete(run_id, int(card.id), caller_cost)
+
+    storage = _reopen(settings, storage)
+    assert _staged_rejection_snapshot(storage, run_id, int(topic.id)) == before
+    assert storage.conn.execute(
+        "SELECT COUNT(*) FROM research_stage_results "
+        "WHERE research_run_id=? AND stage='B' AND status='SUCCESS'", (run_id,),
+    ).fetchone()[0] == 0
+    storage.close()
+
+
+@pytest.mark.parametrize("target", [RunStatus.SUCCESS, RunStatus.DRY_RUN])
+def test_general_finish_run_cannot_mark_staged_success_without_mutation_after_reopen(
+        settings, account, target):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account, f"staged-finish-run-{target.value}")
+    run_id = _pending_run(storage, account, topic, ResearchFlow.STAGED)
+    _add_existing_usage(storage, run_id)
+    before = _staged_rejection_snapshot(storage, run_id, int(topic.id))
+
+    with pytest.raises(
+        ResearchTopicIntegrityError,
+        match="STAGED research must be finalized through finalize_staged_research_with_card",
+    ):
+        storage.finish_run(run_id, target.value, 999.0)
+
+    storage = _reopen(settings, storage)
+    assert _staged_rejection_snapshot(storage, run_id, int(topic.id)) == before
+    storage.close()
+
+
 @pytest.mark.parametrize("conflict", ["card", "cost", "terminal_status"])
 def test_conflicting_repeated_finalization_is_rejected_without_mutation(
         settings, account, conflict):
@@ -157,7 +312,7 @@ def test_conflicting_repeated_finalization_is_rejected_without_mutation(
     topic = _topic(storage, account, f"conflict-{conflict}")
     card = _card(storage, topic)
     other_card = _card(storage, topic)
-    run_id = _pending_run(storage, account, topic, ResearchFlow.STAGED)
+    run_id = _pending_run(storage, account, topic, ResearchFlow.TWO_STAGE)
     storage.finalize_research_success(
         run_id, int(card.id), 0.1, stage_b_completed=True,
         terminal_run_status=RunStatus.SUCCESS,
@@ -216,7 +371,7 @@ def test_repeated_finalization_with_conflicting_stage_b_semantics_is_rejected(
     ("flow", "stage_b_completed", "corrupt_timestamp"),
     [
         (ResearchFlow.SINGLE, False, "2001-01-01 01:01:01"),
-        (ResearchFlow.STAGED, True, None),
+        (ResearchFlow.TWO_STAGE, True, None),
     ],
 )
 def test_complete_with_stage_b_timestamp_inconsistent_with_flow_fails_closed(
@@ -255,7 +410,7 @@ def test_repeated_finalization_with_card_from_other_topic_or_account_is_rejected
     storage = SqliteStorage.open(settings.db_path)
     topic = _topic(storage, account, "completed-target")
     original_card = _card(storage, topic)
-    run_id = _pending_run(storage, account, topic, ResearchFlow.STAGED)
+    run_id = _pending_run(storage, account, topic, ResearchFlow.TWO_STAGE)
     storage.finalize_research_success(
         run_id, int(original_card.id), 0.1, stage_b_completed=True,
         terminal_run_status=RunStatus.SUCCESS,
@@ -353,7 +508,7 @@ def test_finalization_rolls_back_when_any_terminal_update_fails_after_reopen(
     storage = SqliteStorage.open(settings.db_path)
     topic = _topic(storage, account)
     card = _card(storage, topic)
-    run_id = _pending_run(storage, account, topic, ResearchFlow.STAGED)
+    run_id = _pending_run(storage, account, topic, ResearchFlow.TWO_STAGE)
     if target == "topics":
         storage.conn.execute(
             "CREATE TRIGGER fail_used BEFORE UPDATE OF status ON topics "
@@ -376,7 +531,7 @@ def test_finalization_rolls_back_when_any_terminal_update_fails_after_reopen(
     research_run = storage.get_research_run(run_id)
     run = storage.get_run(run_id)
     persisted_topic = next(t for t in storage.list_topics(account.id) if t.id == topic.id)
-    assert research_run.status == ResearchRunStatus.SYNTHESIS_PENDING
+    assert research_run.status == ResearchRunStatus.SOURCE_COLLECTED
     assert research_run.research_card_id is None
     assert run.status == RunStatus.RUNNING
     assert persisted_topic.status == TopicStatus.SELECTED

@@ -415,3 +415,29 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Przyczyna:** `str(APIStatusError)` SDK Anthropic 0.116.0 zawiera body odpowiedzi; dodatkowo regex traktował `Bearer` jako sekret tylko przy poprzedzającej nazwie nagłówka.
 - **Naprawa:** mapper nie używa już tekstu SDK dla komunikatu domenowego, lecz kontrolowanego statusu/klasy. Formatter redaguje każdy case-insensitive `Bearer <token>`.
 - **Dowód:** marker body nie występuje w błędzie domenowym ani w `runs.error`, `research_runs.error`, stage/candidate audit; typ, `status_code`, `retryable` i `__cause__` pozostają. Testy offline: **411 passed**, koszt 0 USD, bez API.
+
+### 2026-07-13 — F4: crash po B mógł zapisać kartę bez sukcesu lifecycle — [P1 | DURABILITY]
+
+- **Scenariusz:** B commitował `research_cards` i `sources` przed wpisem B SUCCESS oraz finalizacją `research_runs`, `runs` i `topics`. Przerwanie tworzyło kartę bez COMPLETE/SUCCESS/USED.
+- **Naprawa:** atomowy helper staged B, `BEGIN IMMEDIATE`, walidacja pełnego kontraktu i rollback całego zestawu. Testowane są crash points: karta, drugie źródło, audit B i lifecycle; po każdym zostaje poprzedni `SYNTHESIS_PENDING`.
+- **Lekcja:** atomowość finalnego statusu nie wystarcza, gdy artefakt wyniku jest wcześniej zapisywany. Dane i ich semantyczne zatwierdzenie muszą upaść razem albo przetrwać razem.
+- **Status:** naprawione offline; 420 passed, 0 USD, brak API. P2-17, P2-18 i P2-19 poza zakresem.
+
+### 2026-07-13 — F4 po review: booleany nie są autoryzacją lifecycle — [P1 | DURABILITY]
+
+- **Co nie działało:** caller mógł przekazać `allow_prior_complete_card` albo `allow_failed_run` i ominąć część preconditions. Force nie był utrwalony, więc po B failure dispatcher resume nie znał legalnego trybu. Macierz awarii obejmowała zbyt mało miejsc i nie zawsze sprawdzała bazę po reopen.
+- **Jak naprawiono:** jeden typowany context i cztery tryby finalizacji; `0008` z trwałym markerem force per run; CAS resume (`FAILED`, `finished_at`, marker błędu, `SOURCES_COMPLETE`, B FAILED); fail-closed preflight przed B. Każdy z 13 punktów awarii po reopen pozostawia pre-finalization state.
+- **Dodatkowa granica:** genericzny wpis stage nie może utworzyć staged `B SUCCESS`; jedynym writerem sukcesu jest helper transakcyjny. Brak UNIQUE dla staged B/card sources pozostaje udokumentowanym P2 dla jednego procesu SQLite z `BEGIN IMMEDIATE`, nie otwartą ścieżką biznesową.
+- **Dowód:** force→failure→resume po osobnym połączeniu SQLite, odmowa przed providerem/usage dla błędnego markera lub timestampu CAS, account/topic/flow/status/VERIFIED, conflicts, no-op i concurrency jednego oraz dwóch runów. **446 passed**, bez API i 0 USD.
+
+### 2026-07-13 — F4 końcowe review: COMPLETE akceptował sprzeczny execution mode — [P1 | DURABILITY]
+
+- **Scenariusz:** zwykły FRESH run mógł powtórzyć identyczny payload jako `FORCE_RERESEARCH`; karta, źródła i koszt były zgodne, więc no-op wracał zanim sprawdzono mode.
+- **Naprawa:** COMPLETE najpierw waliduje marker force i semantykę fresh/resume. Resume porównuje też trwały B FAILED z tym samym markerem i `finished_at` CAS; timestamp porażki B jest zapisywany z `runs.finished_at`.
+- **Dowód:** konflikty fresh↔force, fresh→resume, force→force-resume bez historii oraz dwa CAS mismatch po reopen nie zmieniają żadnego rekordu, kosztu ani timestampu. **449 passed**, 0 USD, bez API.
+
+### 2026-07-13 — F4 P1: publiczny legacy finalizer nadal otwierał staged sukces — [P1 | DURABILITY]
+
+- **Scenariusz:** `finalize_research_success` przyjmował staged `SYNTHESIS_PENDING`, a `mark_research_run_complete` delegował do niego. Caller mógł przekazać kartę i koszt poza atomowym helperem; dla staged COMPLETE identyczny payload wpadał w legacy no-op. To obchodziło typed context, A2, B SUCCESS i kanon `model_usage`.
+- **Naprawa:** blokada flow `staged` następuje po odczycie relacji, lecz przed walidacją karty, no-opem i mutacjami. Generic i alias rzucają ten sam `ResearchTopicIntegrityError`; audyt wykazał też możliwość samego staged `runs.SUCCESS` przez `finish_run`, więc ten ogólny helper odmawia staged SUCCESS/DRY_RUN. Tylko `finalize_staged_research_with_card` może zapisać staged sukces i jego koszt.
+- **Dowód:** SYNTHESIS_PENDING, COMPLETE z identyczną kartą/kosztem, FAILED i arbitralny koszt generic oraz SYNTHESIS_PENDING/COMPLETE aliasu są odrzucone; tak samo SUCCESS/DRY_RUN przez `finish_run`. Po reopen nie zmieniają się karty, źródła, B SUCCESS, statusy, usage, cache kosztu, timestampy, błędy, card ID ani force marker. **454 passed**, 0 USD, bez API.
