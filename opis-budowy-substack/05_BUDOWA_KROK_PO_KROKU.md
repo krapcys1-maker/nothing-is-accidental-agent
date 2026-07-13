@@ -359,3 +359,11 @@ Po osobnej zgodzie właściciela utworzono backup SQLite i snapshoty wszystkich 
 ### 2026-07-13 — jedno B domknęło run bez powtarzania A1/A2
 
 Po trzeciej, osobnej zgodzie — tym razem na płatny resume — preflight potwierdził sześć wcześniejszych usage i 0,170050 USD. PolicyEngine dopuścił projected 0,196300 przy absolutnym capie 0,20. Oficjalna komenda wykonała wyłącznie B z limitem 3000 i zerem retry. Odpowiedź zakończyła się `end_turn`, 1904/2402 tokenów, zero search; nowy koszt 0,013914 USD. Finalizacja ustawiła SUCCESS/COMPLETE/USED i kartę #2 z czterema VERIFIED. Karta jakościowo dostała REJECT, więc Etap 0 zakończył się dowodem działającego systemu, a nie materiałem gotowym do publikacji. Etapu 1 nie rozpoczęto.
+
+### 2026-07-13 — pierwszy bezpłatny blocker przed workerami Etapu 1
+
+Przed zbudowaniem kolejki zajrzeliśmy do najniższej warstwy płatnego calla. Był tam szeroki `except Exception`, który nazywał timeoutem zarówno zerwane połączenie, jak i zły klucz, brak uprawnień czy błędne żądanie. Dodaliśmy typy dla timeout/network/429/5xx/401/403/400–422/404/unknown. Automatyczne ponowienie jest możliwe tylko dla jawnej listy transient i zawsze zaczyna się od kolejnej kontroli budżetu. Brak usage nie jest zapisywany jako koszt zero; P2-19 pozostaje otwarte. 382 testy przeszły offline, koszt 0 USD. Nie powstał scheduler, job, worker ani migracja; kod czeka na niezależne review bez commita.
+
+Kolejne review znalazło drobny, lecz ważny P1: typ istniał w pamięci, ale audit przechowywał tylko jego komunikat. Wspólny formatter zapisuje teraz np. `[discover_sources] ResearchInvalidRequestError(status_code=422, retryable=False): ...` w runie, research_runie i logu etapu. Nie kopiuje raw response ani obiektów SDK, redaguje sekrety i ogranicza długość. 406 testów przeszło offline; retry, koszt i lifecycle nie zmieniły się.
+
+Ostatnie review wykazało jeszcze dwie szczeliny: SDK wkładało body do własnego tekstu błędu, a samotny `Bearer token` omijał regex. Mapper nie przenosi już tekstu SDK — zostawia wyłącznie klasę i status — a audit redaguje każdy wariant Bearer. Marker syntetycznego body nie dotarł do SQLite; 411 testów przeszło offline, bez API i kosztu.

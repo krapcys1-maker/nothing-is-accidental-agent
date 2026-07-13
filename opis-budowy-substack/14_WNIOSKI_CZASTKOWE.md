@@ -182,3 +182,9 @@ Historyczne dane można naprawiać bez utraty audytowalności, jeśli zgoda, pre
 ### 2026-07-13 — wniosek po pierwszej realnej karcie
 
 Resumability przyniosło mierzalny zwrot: zamiast powtarzać pięć calli A1/A2, system zapłacił 0,013914 USD wyłącznie za B i domknął run. Jednocześnie COMPLETE nie znaczy „publikowalne”: REJECT wykazał brak wystarczającego mapowania tezy i twierdzeń do źródeł. Etap 0 dowiódł odporności technicznej; jakość dowodów pozostaje pracą Etapu 2. P2-20 przypomina, że bieżące pole error powinno mieć jednoznaczną semantykę względem historycznego stage logu.
+
+### 2026-07-13 — wniosek przed automatyzacją retry
+
+Scheduler nie może decydować o ponowieniu na podstawie etykiety „provider error”. Potrzebuje zamkniętej taksonomii i domyślnej odmowy: dopiero jawny timeout, network, 429 albo wybrany 5xx jest kandydatem do retry, a i wtedy budżet może zatrzymać kolejną próbę. Błędy formatu i walidacji nie stają się bardziej poprawne przez drugi płatny call. Brak lokalnego usage również nie dowodzi braku rachunku — P2-19 pozostaje granicą obserwowalności.
+
+Typowany wyjątek ma wartość także po zakończeniu procesu. Jeśli przy zapisie zostaje z niego tylko komunikat, przyszły operator lub worker nie odróżni 401 od 422 bez ponownej interpretacji tekstu. Trwały audit musi więc zachować klasę i bezpieczne skalarne metadane, ale nie provider payload ani raw response.

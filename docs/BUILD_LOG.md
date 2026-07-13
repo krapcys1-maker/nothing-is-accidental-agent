@@ -459,3 +459,25 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Wynik calla:** dokładnie jedno B, `stop_reason=end_turn`, 1904 input / 2402 output, zero search, koszt 0,013914 USD. Bez retry, A1/A2 i nowego runu.
 - **Finalizacja:** `runs=SUCCESS`, `research_runs=COMPLETE`, topic USED, card #2, 4 VERIFIED; siedem usage i cache kosztu = 0,183964 USD ≤ 0,20. Karta kompletna, ale jakościowo REJECT (`THESIS_UNSUPPORTED`, `CLAIMS_WITHOUT_SOURCES`), więc nie przechodzi do treści.
 - **Stan projektu:** literalne kryterium roadmapy spełnione; Etap 0 zakończony, Etap 1 nierozpoczęty. P2-20: bieżące `research_runs.error` zachowało historyczny błąd pierwszego B mimo COMPLETE; bez naprawy w tym zadaniu.
+
+### 2026-07-13 — Etap 1 / blocker 1: typowane błędy Anthropic i bezpieczny retry
+
+- **Cel:** usunąć przed płatnymi workerami P1, w którym każdy wyjątek `messages.create` stawał się retryowalnym `ResearchTimeout`.
+- **Kod:** dodano zamkniętą hierarchię `ResearchProviderError` dla timeout, SDK-network, 429, 5xx, 401, 403, 400/422, 404 i unknown. Mapper SDK jest wspólny dla A1/A2/B. Retry dopuszcza wyłącznie timeout, SDK-network, 429 oraz 500/502/503/504; inne 5xx i unknown są fail-closed.
+- **Koszt i polityka:** `_before_attempt` nadal wywołuje callback budżetowy przed każdą próbą. Dostępne usage błędu transient jest zapisywane przez callback dokładnie raz przed retry; brak usage nie tworzy zera. P2-19 pozostaje otwarte.
+- **Testy:** timeout z retry i przy `max_retries=0`; connection/429/500/502/503; 400/401/403/404/422/501/unknown; parse/truncation/validation; odmowa budżetu przed drugą próbą; usage exactly once w SQLite; zachowanie typów A1/A2/B. Celowane **64 passed**, pełne **382 passed**.
+- **Zakres:** bez Anthropic API, researchu, resume, schedulerów, jobs, workerów, migracji i rezerwacji budżetowych. Koszt 0 USD. Zmiany pozostawiono bez commita/pushu do niezależnego review.
+
+### 2026-07-13 — korekta P1: typ błędu zachowany w trwałym audycie
+
+- **Root cause:** pipeline łapał typowany `ResearchError`, lecz przed zapisem redukował go do `str(exc)`, więc etap pozostawał, a klasa domenowa i metadane znikały.
+- **Naprawa:** wspólny `_format_audit_error` zapisuje etap, klasę, `status_code`, `retryable`, `stop_reason` i ograniczony komunikat. Ten sam tekst trafia do run/research_run/stage/candidate audit; raw response, cause i obiekty SDK nie są serializowane, a wzorce sekretów są redagowane.
+- **Regresje:** 422 non-retryable z jednym usage po reopen; 401/unknown/plain; 429 po wyczerpaniu retry z dwoma callami i dwoma wpisami; literalne 504; pełna macierz 15 A1/A2/B×typ. Celowane **156 passed**, pełne **406 passed**.
+- **Zakres:** brak zmian retry, mappera, budżetów, usage, kosztu i lifecycle; zero API, scheduler/jobs/workers i kosztu; bez commita/pushu do review.
+
+### 2026-07-13 — korekta dwóch P1: body SDK i samodzielny Bearer poza audytem
+
+- **Root cause:** mapper kopiował `str(APIStatusError)`, a Anthropic SDK 0.116.0 może w nim umieścić całe body odpowiedzi; formatter redagował `Bearer` tylko po nazwanym nagłówku.
+- **Naprawa:** komunikat mappera SDK powstaje teraz wyłącznie z kontrolowanej klasy/statusu, więc body/payload/headers/request nie mogą wejść do błędu domenowego ani audit fields. Formatter redaguje każdy, niezależny od wielkości liter wariant `Bearer <token>`.
+- **Regresje:** syntetyczne 422 z `RAW_RESPONSE_MARKER` zachowuje typ/status/cause, lecz marker nie trafia do run/research_run/stage/candidate audit; trzy warianty Bearer, named keys, `sk-ant-*`, raw_text i długi komunikat są bezpieczne. Pełne **411 passed**, zero API i 0 USD.
+- **Zakres:** retry, mapowanie statusów, usage, koszt i lifecycle bez zmian; bez schedulera/jobs/workers, commita i pushu przed ponownym review.

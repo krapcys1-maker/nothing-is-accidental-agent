@@ -5,7 +5,7 @@
 >
 > Kolejność prac: `IMPLEMENTATION_ROADMAP.md`. Aktualny stan: `CURRENT_PROJECT_STATE.md`. Rejestr decyzji (ADR): `docs/DECISIONS.md` (nadal obowiązujący — ten dokument konsoliduje decyzje, nie zastępuje rejestru).
 >
-> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (351 passed, 2026-07-13) lub pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
+> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (406 passed, 2026-07-13) lub pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
 
 ---
 
@@ -183,14 +183,15 @@ APPROVED → [DB] job (kind='browser', idempotency_key=hash(account,type,content
 `kolektor metryk (read-only, Playwright) → [DB] metrics_daily (estymacje oznaczone) → tygodniowa analiza → [DB] strategy_decisions (problem→dane→decyzja→oczekiwany efekt) → korekta parametrów treści/harmonogramu w configu → NIGDY zmiana polityk bezpieczeństwa`
 
 ### 3.9. Obsługa błędów (OBOWIĄZUJE WSZĘDZIE)
-- Timeout = transient → retry z twardym limitem; przed KAŻDĄ próbą callback wykonuje ponowny `[P]` z aktualnym `model_usage`. Parse i budget denial nie są retry’owane.
+- Błędy providera są typowane przed decyzją retry. Retry z twardym limitem wolno wykonać tylko dla timeoutu, SDK-klasyfikowanego błędu połączenia, HTTP 429 oraz 500/502/503/504; przed KAŻDĄ próbą callback wykonuje ponowny `[P]` z aktualnym `model_usage`. HTTP 400/401/403/404/422, nieznany błąd providera, parse, truncation, validation i budget denial nigdy nie są retry’owane.
 - `stop_reason=max_tokens` = typowany `ResearchTruncatedError` przed parse → zero retry, usage zapisane raz, diagnostyka zawiera limit; brak częściowej karty. Pozostały błąd parsowania JSON = NIE-transient → zero retry.
 - Kontrolowany błąd B kończy ogólny audit jako FAILED (`finished_at` i error), ale szczegółowy research wraca do SOURCES_COMPLETE. Jawny resume używa `finish_resumed_research_run` z CAS i nie powtarza A1/A2.
+- Trwały audit błędu researchu ma jeden bezpieczny format: `[stage] DomainError(status_code=..., retryable=..., stop_reason=...): message`. `runs`, `research_runs`, stage log i candidate error używają wspólnego formattera; mapper SDK tworzy komunikat wyłącznie z kontrolowanej klasy/statusu (nigdy z `str(APIStatusError)`), `raw_text`, body, cause, request/response i nagłówki nie są serializowane, a `sk-ant-*`, nazwane klucze i każdy `Bearer <token>` są redagowane.
 - Każdy etap zostawia stan trwały w SQLite → wznowienie po restarcie zawsze z bazy.
 - Kolejne błędy tej samej klasy ≥ progu → SAFE MODE (wejście automatyczne, wyjście TYLKO ręczne).
 
 ### 3.10. Rozliczanie kosztów — również nieudanych wywołań (ZBUDOWANE dla researchu)
-Wyjątek `ResearchError` niesie `usage`/`model` z udanego wywołania API, którego wynik nie dał się sparsować → pipeline księguje koszt do `model_usage` ZANIM zwróci błąd. Potwierdzone na żywo 3×. Klient tematów stosuje ten sam bezpieczny porządek offline: odpowiedź → `Usage` → parse, a typowany błąd przenosi usage/model do workflow. **Ryzyko rezydualne (nieusuwalne):** timeout po stronie klienta może być zbilowany serwerowo bez lokalnego `usage` — mitygacja: `max_retries=0/1` + niskie capy.
+Wyjątek `ResearchError` niesie `usage`/`model` z udanego wywołania API, którego wynik nie dał się sparsować → pipeline księguje koszt do `model_usage` ZANIM zwróci błąd. Typowany `ResearchProviderError` zachowuje usage tylko wtedy, gdy adapter rzeczywiście je otrzymał; przed retry usage jest przekazywane do workflow-owned callbacku i czyszczone z wyjątku, więc nie powstaje dubel. Brak usage nie tworzy fikcyjnego wpisu 0 USD. Klient tematów stosuje bezpieczny porządek response → `Usage` → parse. **Ryzyko rezydualne P2-19:** timeout może być zbilowany serwerowo bez lokalnego `usage`; nie wolno przedstawiać tego jako kosztu 0.
 
 ---
 
@@ -298,8 +299,8 @@ SAFE MODE: flaga w system_flags, ortogonalna do statusów; wejście automatyczne
 | OpenAI / przyszli providerzy | kolejna implementacja Protocolu; wybór providera per task w `.env` (`PROVIDER_TOPICS=anthropic`); `ModelUsage.provider` już istnieje w schemacie | POZA ZAKRESEM teraz (sekcja 10) — architektura gotowa |
 | Routing wg zadania | `ModelRouter.model_for(task)`: fast (topics/note/comment/classify) vs quality (research/article/audit/strategy); nazwy modeli TYLKO z `.env` | ZBUDOWANE (scripts mają go używać zamiast `settings.model_quality` — dług P2-8) |
 | Fallback | brak automatycznego fallbacku na inny model — świadomie: fallback = nieprzewidywalny koszt; awaria → FAILED/PARTIAL + stan trwały + jawne wznowienie | DECYZJA |
-| Timeout | per klient (`timeout_seconds` z configu), traktowany jako transient | ZBUDOWANE |
-| Retry | tylko timeout; estymata ×(1+max_retries); re-check przed każdą próbą; parse/budget error NIGDY | ZBUDOWANE (Task 5) |
+| Błędy Anthropic | research: typy timeout, SDK-network, 429, 5xx, auth 401, permission 403, invalid 400/422, not-found 404 i unknown; mapowanie wspólne dla A1/A2/B | ZBUDOWANE offline (ADR-029; przed workerami Etapu 1) |
+| Retry | tylko timeout, SDK-network, 429 i 500/502/503/504; estymata ×(1+max_retries); re-check przed każdą próbą; 4xx/unknown/parse/truncation/validation/budget NIGDY | ZBUDOWANE (Task 5 + ADR-029) |
 | Limit tokenów | `max_tokens` per wywołanie, per etap, z CLI/configu (A1=600, A2=1500, B=3000 od ADR-028) — to REALNY limit kosztu w locie, przekazywany też do estymatora | ZBUDOWANE |
 | Structured output | JSON/JSONL + parsery defensywne (`_strip_code_fence`, JSONL per linia — ucięta linia pomijana); walidacja pól z defaultami | ZBUDOWANE |
 | Walidacja JSON | research: `max_tokens` rozpoznawane przed parse jako typowane truncation, pozostały parse error z `usage`+`raw_text`+`stop_reason`; topics: typowany parse/schema error z `usage`+modelem; koszt zaksięgowany, parse/truncation nigdy nie retry'owane | ZBUDOWANE (research + topics Task 6 + ADR-028) |

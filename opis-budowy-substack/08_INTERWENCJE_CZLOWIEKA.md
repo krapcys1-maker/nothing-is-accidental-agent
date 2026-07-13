@@ -123,3 +123,8 @@ Na obecnym etapie (przed generacją treści i publikacją) interwencje człowiek
 - Dozwolone: oficjalny resume istniejącego runu, wyłącznie synteza B, 3000 tokenów, zero retry, absolutny cap 0,20 USD.
 - Niedozwolone: nowy run, A1/A2, discovery/extraction, force, drugi B, Playwright, publikacja i Etap 1.
 - Efekt: jeden call `end_turn`, 0,013914 USD; finalny run 0,183964 USD, card #2 i zamknięcie Etapu 0. Jakościowe REJECT zachowano bez obchodzenia bramki.
+
+### [2026-07-13] Właściciel zezwolił na pierwszy blocker przygotowawczy Etapu 1
+- Dozwolone: typowane mapowanie błędów Anthropic, zamknięta polityka retry, testy offline i dokumentacja.
+- Niedozwolone: API, research/resume, scheduler, jobs, workery, rezerwacje budżetowe, commit i push przed niezależnym review.
+- Efekt: kontrakt gotowy w working tree, 382 testy, koszt 0 USD; infrastruktura wykonawcza Etapu 1 nadal nie powstała.

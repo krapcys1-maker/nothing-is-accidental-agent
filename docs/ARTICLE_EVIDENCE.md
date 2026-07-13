@@ -241,3 +241,9 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Liczby: prior 0,170050; conservative B 0,026250; projected 0,196300; nowy B 0,013914; run 0,183964 przy capie 0,20; 4 VERIFIED, 7 usage.
   - Zwrot narracyjny: sukces infrastruktury nie oznacza zgody redakcyjnej. Lifecycle osiągnął COMPLETE/SUCCESS/USED i zamknął Etap 0, lecz deterministyczna bramka nadała karcie REJECT (`THESIS_UNSUPPORTED`, `CLAIMS_WITHOUT_SOURCES`).
   - Dowód: run `c01171bc-7ff5-4b83-bbfa-c0b164137793`, card #2, `docs/RESEARCH_LOG.md`, `docs/COSTS.csv`; dokładnie jeden call, zero retry/search.
+
+- **[2026-07-13] „Timeout” nie jest nazwą na każdy błąd** (sekcja: 3, 6, 15)
+  - Materiał: jedna szeroka klauzula `except Exception` zmieniała błędne żądanie i zły klucz w tę samą kategorię co zerwane połączenie. Dla ręcznego CLI było to ryzyko; dla przyszłego workera stałoby się mechanizmem automatycznego powtarzania płatnych błędów.
+  - Decyzja: domyślną odpowiedzią jest „nie ponawiaj”. Tylko timeout, błąd połączenia sklasyfikowany przez SDK, 429 i cztery wskazane statusy 5xx otwierają możliwość retry — nadal po kontroli budżetu.
+  - Granica wiedzy: brak usage w wyjątku nie oznacza kosztu 0. P2-19 pozostaje uczciwie otwarte zamiast zasłoniętego sztucznym rekordem.
+  - Dowód: ADR-029, fake SDK, testy A1/A2/B i ledgeru; 382 passed, zero API, koszt 0 USD.

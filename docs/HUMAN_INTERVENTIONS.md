@@ -172,3 +172,11 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Efekt:** PolicyEngine dopuścił projekcję 0,196300 USD; call zakończył `end_turn`, kosztował 0,013914 USD i utworzył kartę #2. Finalny koszt runu 0,183964 USD; COMPLETE/SUCCESS/USED, 4 VERIFIED. Karta ma jakościowe REJECT i nie przechodzi do treści. Etap 0 formalnie zakończony.
 - **Czas człowieka:** niezmierzony (jawna instrukcja tekstowa).
 - **Wpływ na strategię:** spełniono bramkę przejścia roadmapy; nie jest to zgoda na rozpoczęcie Etapu 1.
+
+### [2026-07-13] APPROVAL — pierwszy blocker przygotowawczy Etapu 1
+
+- **Typ:** APPROVAL / IMPLEMENTATION BOUNDARY / NO EXTERNAL ACTION.
+- **Obiekt:** typowane mapowanie błędów Anthropic i polityka retry research clienta.
+- **Zakres decyzji właściciela:** wolno zmienić kontrakt błędów, retry, testy i dokumentację; każda próba ma nadal przechodzić budget callback. Nie wolno naprawiać P2-19 przez sztuczny koszt.
+- **Zakazy:** bez API, researchu, resume, retry realnego calla, schedulera, jobs, workerów, budżetowych rezerwacji, commita i pushu przed niezależnym review.
+- **Efekt:** 382 testy offline; typed/fail-closed mapping gotowy do review, scheduler/jobs/workery nadal NOT_STARTED, koszt 0 USD.

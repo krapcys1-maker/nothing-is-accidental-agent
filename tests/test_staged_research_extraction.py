@@ -38,7 +38,15 @@ from app.models import (
 from app.policies.policy_engine import PolicyDecision, PolicyEngine
 from app.ports.notification import LogNotification
 from app.research.anthropic_client import AnthropicResearchClient, _parse_discovery_candidates_jsonl
-from app.research.base import ResearchError, ResearchParseError, ResearchTimeout
+from app.research.base import (
+    ResearchAuthenticationError,
+    ResearchError,
+    ResearchInvalidRequestError,
+    ResearchParseError,
+    ResearchRateLimitError,
+    ResearchTimeout,
+    ResearchUnknownProviderError,
+)
 from app.research.diagnostics import diagnostics_dir
 from app.research.cost_estimator import (
     estimate_discovery_cost_usd,
@@ -51,6 +59,7 @@ from app.storage.repositories import SqliteStorage
 from app.research.validation import TOO_FEW_VERIFIED_SOURCES
 from app.workflows.research.pipeline import (
     CompletedResearchExistsError,
+    _format_audit_error,
     resume_staged_research,
     run_source_discovery,
     run_source_extraction,
@@ -484,6 +493,50 @@ class _SynthesisErrorWithoutUsageClient(FakeResearchClient):
         raise ResearchError("synthesis failed before usage was available")
 
 
+class _TypedInvalidDiscoveryWithUsageClient:
+    model = "typed-provider-model"
+
+    def __init__(self) -> None:
+        self.discover_calls = 0
+
+    def discover_sources(self, plan, max_searches):
+        self.discover_calls += 1
+        raise ResearchInvalidRequestError(
+            "provider rejected discovery request",
+            status_code=422,
+            usage=Usage(input_tokens=321, output_tokens=45, web_search_requests=0),
+            model=self.model,
+        )
+
+
+class _MappedSdkBodyErrorClient:
+    """Offline SDK-shaped 422 whose body must never enter persistent audit."""
+
+    model = "typed-provider-model"
+    marker = "RAW_RESPONSE_MARKER"
+
+    def __init__(self) -> None:
+        anthropic = pytest.importorskip("anthropic")
+        httpx = pytest.importorskip("httpx")
+        request = httpx.Request("POST", "https://api.anthropic.invalid/v1/messages")
+        response = httpx.Response(422, request=request)
+        body = {"error": {"message": self.marker}, "private_payload": self.marker}
+        self._anthropic = anthropic
+        self._sdk_error = anthropic.UnprocessableEntityError(
+            f"Error code: 422 - {body}", response=response, body=body)
+        self._mapper = AnthropicResearchClient("offline", self.model, max_retries=0)
+
+    def _raise_mapped(self) -> None:
+        mapped = self._mapper._map_anthropic_error(self._sdk_error, self._anthropic)
+        raise mapped from self._sdk_error
+
+    def discover_sources(self, plan, max_searches):
+        self._raise_mapped()
+
+    def extract_source(self, plan, candidate):
+        self._raise_mapped()
+
+
 def _set_stale_run_cache(storage, run_id: str, cost_usd: float = 99.0) -> None:
     storage.conn.execute("UPDATE runs SET cost_usd=? WHERE id=?", (cost_usd, run_id))
     storage.conn.commit()
@@ -710,7 +763,10 @@ def test_synthesis_error_without_usage_preserves_canonical_cost(settings, storag
     assert run.cost_usd == pytest.approx(expected_cost)
     assert run.status == RunStatus.FAILED
     assert run.finished_at is not None
-    assert run.error == "[synthesize_from_cards] synthesis failed before usage was available"
+    assert run.error == (
+        "[synthesize_from_cards] ResearchError: "
+        "synthesis failed before usage was available"
+    )
     assert storage.get_research_run(run_id).status == ResearchRunStatus.SOURCES_COMPLETE
 
 
@@ -842,6 +898,221 @@ def test_discovery_error_without_usage_repairs_stale_cache(settings, storage, ac
     assert run.cost_usd == 0.0
     assert run.status == RunStatus.FAILED
     assert storage.get_research_run(summary.run_id).status == ResearchRunStatus.FAILED
+
+
+def test_typed_non_retryable_discovery_with_usage_is_recorded_once_after_reopen(
+        settings, storage, account):
+    real_settings = replace(settings, dry_run=False)
+    topic = _selected_topic(storage, account)
+    client = _TypedInvalidDiscoveryWithUsageClient()
+
+    summary = _run_discovery(
+        real_settings, storage, account, topic, client,
+        max_retries=3, run_cap_usd=10.0,
+    )
+
+    assert client.discover_calls == 1
+    assert summary.error == "provider rejected discovery request"
+
+    reopened = SqliteStorage.open(real_settings.db_path)
+    try:
+        usage = reopened.get_research_usage(summary.run_id)
+        assert len(usage) == 1
+        assert usage[0].model == "typed-provider-model"
+        assert usage[0].input_tokens == 321
+        assert usage[0].output_tokens == 45
+        assert usage[0].web_search_requests == 0
+
+        run = reopened.get_run(summary.run_id)
+        assert run.status == RunStatus.FAILED
+        assert run.finished_at is not None
+        assert run.cost_usd == pytest.approx(
+            sum(row.estimated_cost_usd for row in usage))
+        assert "[discover_sources]" in run.error
+        assert "ResearchInvalidRequestError" in run.error
+        assert "status_code=422" in run.error
+        assert "retryable=False" in run.error
+
+        research_run = reopened.get_research_run(summary.run_id)
+        assert research_run.status == ResearchRunStatus.FAILED
+        assert research_run.research_card_id is None
+        assert research_run.error == run.error
+        stage_error = reopened.conn.execute(
+            "SELECT error FROM research_stage_results "
+            "WHERE research_run_id=? AND stage='A1' ORDER BY id DESC LIMIT 1",
+            (summary.run_id,),
+        ).fetchone()[0]
+        assert stage_error == run.error
+        assert reopened.list_topics(account.id)[0].status == TopicStatus.SELECTED
+        assert reopened.conn.execute(
+            "SELECT count(*) FROM research_cards WHERE topic_id=?", (topic.id,),
+        ).fetchone()[0] == 0
+    finally:
+        reopened.close()
+
+
+def test_sdk_response_body_marker_never_reaches_discovery_or_candidate_audit(
+        settings, storage, account):
+    real_settings = replace(settings, dry_run=False)
+    topic = _selected_topic(storage, account)
+    client = _MappedSdkBodyErrorClient()
+
+    discovery = _run_discovery(
+        real_settings, storage, account, topic, client, run_cap_usd=10.0,
+    )
+    discovery_run = storage.get_run(discovery.run_id)
+    discovery_research_run = storage.get_research_run(discovery.run_id)
+    discovery_stage_error = storage.conn.execute(
+        "SELECT error FROM research_stage_results "
+        "WHERE research_run_id=? AND stage='A1' ORDER BY id DESC LIMIT 1",
+        (discovery.run_id,),
+    ).fetchone()[0]
+
+    assert "ResearchInvalidRequestError(status_code=422, retryable=False)" in discovery_run.error
+    assert discovery_research_run.error == discovery_run.error == discovery_stage_error
+    assert client.marker not in discovery_run.error
+    assert client.marker not in discovery_research_run.error
+    assert client.marker not in discovery_stage_error
+
+    extraction_run_id = _seeded_run_with_candidates(storage, account, topic, n=1)
+    _run_extraction(
+        real_settings, storage, account, extraction_run_id, client,
+        max_attempts=1, run_cap_usd=10.0,
+    )
+    candidate = storage.list_source_candidates(extraction_run_id)[0]
+    candidate_stage_error = storage.conn.execute(
+        "SELECT error FROM research_stage_results "
+        "WHERE research_run_id=? AND stage='A2' ORDER BY id DESC LIMIT 1",
+        (extraction_run_id,),
+    ).fetchone()[0]
+
+    assert candidate.extraction_error is not None
+    assert client.marker not in candidate.extraction_error
+    assert client.marker not in candidate_stage_error
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (
+            ResearchAuthenticationError("bad credentials", status_code=401),
+            "[discover_sources] ResearchAuthenticationError"
+            "(status_code=401, retryable=False): bad credentials",
+        ),
+        (
+            ResearchRateLimitError("rate limited", status_code=429),
+            "[discover_sources] ResearchRateLimitError"
+            "(status_code=429, retryable=True): rate limited",
+        ),
+        (
+            ResearchUnknownProviderError("unknown provider failure"),
+            "[discover_sources] ResearchUnknownProviderError"
+            "(retryable=False): unknown provider failure",
+        ),
+        (
+            ResearchError("plain domain failure"),
+            "[discover_sources] ResearchError: plain domain failure",
+        ),
+        (
+            ResearchError("truncated", stop_reason="max_tokens"),
+            "[discover_sources] ResearchError(stop_reason=max_tokens): truncated",
+        ),
+    ],
+)
+def test_audit_error_formatter_preserves_safe_domain_metadata(error, expected):
+    assert _format_audit_error("discover_sources", error) == expected
+
+
+def test_audit_error_formatter_redacts_and_never_serializes_raw_response():
+    raw_response = "PRIVATE_RAW_RESPONSE_SHOULD_NEVER_BE_PERSISTED"
+    error = ResearchError(
+        "authorization: Bearer secret-token; x-api-key=key-secret; "
+        "api key: another-key-secret; sk-ant-example-secret " + "x" * 900,
+        raw_text=raw_response,
+    )
+
+    formatted = _format_audit_error("discover_sources", error)
+
+    assert formatted.startswith("[discover_sources] ResearchError: ")
+    assert "authorization=[REDACTED]" in formatted
+    assert "x-api-key=[REDACTED]" in formatted
+    assert "api key=[REDACTED]" in formatted
+    assert "[REDACTED]" in formatted
+    assert "secret-token" not in formatted
+    assert "key-secret" not in formatted
+    assert "another-key-secret" not in formatted
+    assert "sk-ant-example-secret" not in formatted
+    assert raw_response not in formatted
+    assert formatted.endswith("...")
+    assert len(formatted) < 600
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Bearer synthetic-secret-token",
+        "bearer abc123",
+        "BEARER eyJhbGciOiJIUzI1NiJ9.payload.signature",
+    ],
+)
+def test_audit_error_formatter_redacts_standalone_bearer_tokens(message):
+    formatted = _format_audit_error("discover_sources", ResearchError(message))
+
+    assert message.split(maxsplit=1)[1] not in formatted
+    assert "Bearer [REDACTED]" in formatted
+
+
+def test_exhausted_429_audit_keeps_type_and_records_each_attempt_once_after_reopen(
+        settings, storage, account):
+    real_settings = replace(settings, dry_run=False)
+    topic = _selected_topic(storage, account)
+    calls = []
+
+    def rate_limited(plan, max_searches):
+        calls.append(1)
+        raise ResearchRateLimitError(
+            "provider rate limit",
+            status_code=429,
+            usage=Usage(input_tokens=100, output_tokens=20),
+            model="typed-provider-model",
+        )
+
+    client = AnthropicResearchClient(
+        "offline", "typed-provider-model",
+        discover_caller=rate_limited, max_retries=1,
+    )
+    summary = _run_discovery(
+        real_settings, storage, account, topic, client,
+        max_retries=1, run_cap_usd=10.0,
+    )
+
+    assert calls == [1, 1]
+    reopened = SqliteStorage.open(real_settings.db_path)
+    try:
+        usage = reopened.get_research_usage(summary.run_id)
+        assert len(usage) == 2
+        assert [(row.input_tokens, row.output_tokens) for row in usage] == [
+            (100, 20), (100, 20),
+        ]
+        run = reopened.get_run(summary.run_id)
+        research_run = reopened.get_research_run(summary.run_id)
+        assert run.status == RunStatus.FAILED
+        assert run.finished_at is not None
+        assert run.cost_usd == pytest.approx(
+            sum(row.estimated_cost_usd for row in usage))
+        assert run.error == research_run.error
+        assert "[discover_sources]" in run.error
+        assert "ResearchRateLimitError" in run.error
+        assert "status_code=429" in run.error
+        assert "retryable=True" in run.error
+        assert research_run.status == ResearchRunStatus.FAILED
+        assert research_run.research_card_id is None
+        assert reopened.list_topics(account.id)[0].status == TopicStatus.SELECTED
+        assert reopened.conn.execute(
+            "SELECT count(*) FROM research_cards WHERE topic_id=?", (topic.id,),
+        ).fetchone()[0] == 0
+    finally:
+        reopened.close()
 
 
 # --- 10. Brak sekretów w plikach diagnostycznych ---

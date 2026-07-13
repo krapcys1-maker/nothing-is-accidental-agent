@@ -38,8 +38,68 @@ class ResearchError(RuntimeError):
         self.stop_reason = stop_reason
 
 
-class ResearchTimeout(ResearchError):
-    """Przekroczono czas wywołania (transient — podlega ograniczonemu retry)."""
+class ResearchProviderError(ResearchError):
+    """Typed failure raised by the provider call itself.
+
+    ``retryable`` is explicit and fail-closed.  Callers must not infer retry
+    eligibility merely from this base class or from the presence of an HTTP
+    status.  ``usage`` remains optional because Anthropic error responses do
+    not normally expose message usage; when it is present, the existing retry
+    usage callback owns persisting it exactly once.
+    """
+
+    default_retryable = False
+
+    def __init__(self, message: str, *, status_code: int | None = None,
+                 retryable: bool | None = None, usage: Usage | None = None,
+                 model: str | None = None, raw_text: str | None = None,
+                 stop_reason: str | None = None) -> None:
+        super().__init__(message, usage=usage, model=model, raw_text=raw_text,
+                         stop_reason=stop_reason)
+        self.status_code = status_code
+        self.retryable = self.default_retryable if retryable is None else retryable
+
+
+class ResearchTimeout(ResearchProviderError):
+    """Provider timeout (transient — eligible for bounded retry)."""
+
+    default_retryable = True
+
+
+class ResearchConnectionError(ResearchProviderError):
+    """SDK-classified connection/network failure eligible for bounded retry."""
+
+    default_retryable = True
+
+
+class ResearchRateLimitError(ResearchProviderError):
+    """Provider rate limit (HTTP 429) eligible for bounded retry."""
+
+    default_retryable = True
+
+
+class ResearchServerError(ResearchProviderError):
+    """Provider 5xx response; only explicitly selected statuses are retryable."""
+
+
+class ResearchAuthenticationError(ResearchProviderError):
+    """Provider authentication failure (HTTP 401); never retried."""
+
+
+class ResearchPermissionError(ResearchProviderError):
+    """Provider permission failure (HTTP 403); never retried."""
+
+
+class ResearchInvalidRequestError(ResearchProviderError):
+    """Invalid provider request (HTTP 400/422); never retried."""
+
+
+class ResearchNotFoundError(ResearchProviderError):
+    """Provider resource/model not found (HTTP 404); never retried."""
+
+
+class ResearchUnknownProviderError(ResearchProviderError):
+    """Unclassified provider/SDK failure; fail closed without automatic retry."""
 
 
 class ResearchParseError(ResearchError):

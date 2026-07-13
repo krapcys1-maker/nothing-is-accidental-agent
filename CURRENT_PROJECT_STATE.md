@@ -1,13 +1,13 @@
 # CURRENT_PROJECT_STATE — Nothing Is Accidental Agent
 
 > **STATUS: JEDYNY OBOWIĄZUJĄCY OBRAZ STANU PROJEKTU.**
-> Data weryfikacji: **2026-07-13** (`python -m pytest` → **351 passed**; kontrolowany resume B ukończył Task 9 i formalnie zamknął Etap 0; Etap 1 nierozpoczęty).
+> Data weryfikacji: **2026-07-13** (`python -m pytest` → **411 passed**; Etap 0 zamknięty, a pierwszy blocker przygotowawczy Etapu 1 — typowane błędy Anthropic, zamknięta polityka retry i trwały typed audit — wdrożony offline i oczekuje na niezależne review; scheduler/jobs/workery nierozpoczęte).
 > Architektura: `MASTER_ARCHITECTURE.md` · Kolejność prac: `IMPLEMENTATION_ROADMAP.md`.
 > Aktualizować przy każdej zmianie stanu modułu; statusy tylko z zestawu: `NOT_STARTED / SKELETON / PARTIAL / WORKING / VERIFIED / BLOCKED / DEPRECATED`. `VERIFIED` wyłącznie dla kodu URUCHOMIONEGO i przetestowanego.
 
 ## Liczby kontrolne (zweryfikowane)
 
-- Testy: **351 passed** (offline, deterministyczne, bez sieci; w tym typowane truncation wyłącznie B, zachowany salvage JSONL A1, prior usage liczone raz, brak retry, budżet resume z limitem 3000, terminalizacja fresh B failure, jawny resume audit CAS oraz race tests na plikowej SQLite). Gałąź: `dev/first-successful-research-card`.
+- Testy: **411 passed** (offline, deterministyczne, bez sieci; mapowanie Anthropic, literalne 504, pełne 15 kombinacji A1/A2/B×typ, retry/budget/ledger oraz typed audit z reopen SQLite, bez body SDK i z redakcją sekretów/raw response/Bearer). Gałąź: `dev/first-successful-research-card`.
 - Realny koszt projektu: **0,684580 USD** (13 wpisów `model_usage` z `dry_run=0`; Task 9 łącznie **0,183964 USD**, w tym resume B **0,013914 USD**; limit miesięczny 40 USD → wykorzystane 1,71%).
 - Realne próby researchu: **4** (+1 diagnostyka pojedynczego źródła) — **1 ukończona Research Card na żywym API** (oraz 1 dry_run). Karta realna #2 ma rekomendację jakościową REJECT i nie przechodzi do treści.
 - Baza po kontrolowanym resume Task 9: runs = 4×DRY_RUN + 3×FAILED + 1×SUCCESS (`c01171bc`); research_runs = 2×COMPLETE (1 dry-run, 1 real), 2×FAILED i 1×PARTIAL (`9bbeb020`). Run `c01171bc` ma kartę #2, 4×EXTRACTED/VERIFIED, topic USED, 7 usage i koszt 0,183964 USD; drugie B zakończyło się `end_turn` bez retry.
@@ -25,10 +25,10 @@
 | ModelRouter | VERIFIED | 90 | zadanie→model z .env | scripts omijają router (P2-8) | tak | 2026-07-12 | P2-8 przy Etapie 0/1 |
 | FakeLLMClient / FakeResearchClient | VERIFIED | 100 | deterministyczne dry_run/testy, scenariusze brzegowe | — | tak | 2026-07-12 | — |
 | AnthropicLLMClient (tematy) | WORKING | 85 | odpowiedź→Usage→parse; pojedynczy zewnętrzny code fence; typowane provider/parse/schema errors; usage parse-error księgowane raz przez workflow | **nigdy nie uruchomiony realnie (NOT VERIFIED live)** | parser + klient SDK fake + workflow SQLite | 2026-07-12 | realny run tematów wyłącznie za osobną zgodą |
-| AnthropicResearchClient (3 generacje metod) | VERIFIED | 96 | A1 i 4×A2 oraz kontrolowany resume B zakończone realnie; `max_tokens` typowane bez retry; B=3000 zweryfikowane `end_turn`, usage zachowane | `timeout-billed-unrecorded`; A2 = search-o-URL, nie fetch treści | offline + realny Task 9 + resume B | 2026-07-13 | niezależne review dokumentacji; bez startu Etapu 1 |
+| AnthropicResearchClient (3 generacje metod) | VERIFIED | 98 | A1 i 4×A2 oraz resume B potwierdzone live; SDK mapuje timeout, connection, 429, 4xx, 5xx i unknown; retry tylko jawna lista transient po callbacku budżetowym; audit zachowuje typ/status/retryable/stop_reason bez SDK body i z redakcją Bearer | P2-19 `timeout-billed-unrecorded`; A2 = search-o-URL, nie fetch treści | 411 offline + realny Task 9 + resume B | 2026-07-13 | niezależne review kontraktu błędów przed płatnymi workerami |
 | Estymator kosztów | VERIFIED | 85 | conservative+expected z 2 realnych obserwacji, margines ≥50% | dwie kalibracje (legacy z cennika vs staged stałe) — P2-1; kalibracja n=2 | tak | 2026-07-12 | ujednolicić przy Etapie 2 |
 | Workflow tematów + dedup | VERIFIED | 90 | pełny przepływ dry_run, dedup lokalny, progi, SUCCESS-fix | realny run tematów nigdy nie wykonany | tak | 2026-07-12 | realny run po Etap 0 zad. 6 |
-| Research staged A1/A2/B + resume | VERIFIED | 99 | realny A1 + 4×A2 + B; failure zachował SOURCES_COMPLETE, repair naprawił audit, a pojedynczy resume B dał COMPLETE/SUCCESS/USED i kartę #2 | karta #2 jakościowo REJECT; `research_runs.error` zachował historyczny parse-error (P2-20) | 351 offline + Task 9 live + repair + resume | 2026-07-13 | niezależne review; Etap 1 osobnym zadaniem |
+| Research staged A1/A2/B + resume | VERIFIED | 99 | realny A1 + 4×A2 + B; failure zachował SOURCES_COMPLETE, repair naprawił audit, resume dał COMPLETE/SUCCESS/USED; typed error ma identyczny bezpieczny format w run/research_run/stage/candidate audit bez SDK body i sekretów | karta #2 jakościowo REJECT; `research_runs.error` zachował historyczny parse-error (P2-20) | 411 offline + Task 9 live + repair + resume | 2026-07-13 | niezależne review; scheduler/jobs/workery osobnym zadaniem |
 | Research legacy (single, two-stage) | WORKING | 100 | działa, 24 testy | NIEZALECANY (ADR-016→020); do DEPRECATED po sukcesie staged live | tak | 2026-07-12 | Etap 2 zad. 6 |
 | Walidacja + injection guard | VERIFIED | 90 | deterministyczna bramka, min_verified_sources, neutralizacja injection | wzorce EN-only (P2-7) | tak | 2026-07-12 | rozszerzenie przy Etapie 2 |
 | Diagnostyka odpowiedzi | VERIFIED | 95 | raw+stop_reason per etap, potwierdzona na żywo | nadpisuje poprzednią próbę tego samego etapu (P2-13, świadome) | tak | 2026-07-12 | — |
@@ -38,7 +38,7 @@
 | Porty: SecretStore/FileStore | SKELETON | 20 | kod adapterów istnieje | **martwy kod — zero wywołań** (config używa os.getenv wprost) | brak | 2026-07-12 | podpiąć w Etapie 8 (lub usunąć decyzją) |
 | Porty: Browser/Scheduler | SKELETON | 10 | celowe stuby; DisabledBrowser blokuje każdą akcję | to zabezpieczenie, nie brak | — | 2026-07-12 | Etap 1 (scheduler), Etap 5 (browser) |
 | Tabele bez kodu (content_items, interactions, target_items, approvals, metrics_daily, screenshots) | SKELETON | 5 | schemat od migracji 0001 | żaden kod ich nie dotyka | — | 2026-07-12 | Etapy 3–7 |
-| Task queue / workers / scheduler | NOT_STARTED | 0 | — | — | — | — | Etap 1 |
+| Task queue / workers / scheduler | NOT_STARTED | 0 | poprzedzający je kontrakt typed-provider-error/retry jest gotowy offline | brak tabel, lease, jobów, workerów i runtime scheduler | kontrakt klienta: tak | 2026-07-13 | dopiero po niezależnym review blockera |
 | Content pipeline (artykuły/Notes) | NOT_STARTED | 0 | — | — | — | — | Etap 3 |
 | Approval/autonomy + panel FastAPI | NOT_STARTED | 0 | — | — | — | — | Etap 4 |
 | Publishing (Playwright/Substack) | NOT_STARTED | 0 | — | — | — | — | Etap 5 |
@@ -48,7 +48,7 @@
 
 ## Aktualne blokery
 
-Brak blockerów Etapu 0 — kryterium zakończenia spełnione. Karta #2 ma `publication_recommendation=REJECT`, więc nie może zasilić przyszłego content pipeline bez poprawy dowodów; jest to poprawne działanie bramki jakości, nie cofnięcie sukcesu lifecycle. Historyczny run `9bbeb020` i P2-20 pozostają długiem technicznym, nie blokerem zamkniętego etapu.
+Brak blockerów Etapu 0 — kryterium zakończenia spełnione. P1 polegające na mapowaniu wszystkich wyjątków `messages.create` na retryowalny timeout zostało naprawione offline jako pierwszy warunek przed płatnymi workerami Etapu 1 i oczekuje na niezależne review. Karta #2 ma `publication_recommendation=REJECT`, więc nie może zasilić przyszłego content pipeline bez poprawy dowodów. Historyczny run `9bbeb020` i P2-20 pozostają długiem technicznym.
 
 ## Ostatnie ważne decyzje
 
@@ -56,16 +56,17 @@ Brak blockerów Etapu 0 — kryterium zakończenia spełnione. Karta #2 ma `publ
 - **2026-07-13 (jawna zgoda właściciela):** po osobnym repairze zatwierdzono dokładnie jeden resume wyłącznie B z absolutnym capem 0,20 USD i `max_retries=0`; wynik `end_turn`, karta #2, łączny koszt 0,183964 USD.
 - **ADR-021:** repo GitHub PRIVATE, main stabilny + branche dev.
 - **ADR-020:** research staged A1/A2/B; **ADR-019:** trwałość etapów; **ADR-017/018:** cel = pełna autonomia operacyjna + anonimowa marka redakcyjna bez proaktywnego ujawniania AI (NO_REPLY, zero impersonacji).
+- **ADR-029:** retry błędów Anthropic jest dozwolone wyłącznie dla jawnie typowanych timeout/SDK-network/429/500/502/503/504; 400/401/403/404/422, unknown, parse, truncation i validation są terminalne dla próby.
 - **2026-07-12 (ten audyt):** konsolidacja dokumentacji do 3 dokumentów źródła prawdy; stare plany w `docs/archive/superseded_plans/` (ADR-023).
 
 ## Etapy
 
-- **Aktywny etap roadmapy:** brak; **następny jest Etap 1, ale pozostaje nierozpoczęty**.
+- **Aktywny etap roadmapy:** Etap 1 — wyłącznie pierwszy blocker przygotowawczy klienta Anthropic; kod oczekuje na niezależne review. Scheduler, jobs, workery i rezerwacje budżetowe pozostają nierozpoczęte.
 - **Ostatni ukończony krok:** Etap 0 / zadanie 9 — kontrolowany resume B dał pierwszą realną kompletną Research Card; **Etap 0 formalnie zakończony**.
 - **Następne trzy zadania:**
-  1. Niezależne review realnego resume B, dokumentacji i P2-20; bez kolejnego API.
-  2. Osobna decyzja właściciela o rozpoczęciu Etapu 1.
-  3. Jeśli Etap 1 zostanie zatwierdzony, rozpocząć od tabel `jobs`/`system_flags`, bez zmian pipeline researchu.
+  1. Niezależne review typowanego mapowania Anthropic i polityki retry; bez API.
+  2. Po akceptacji osobne zadanie projektowe dla jobs/lease/system_flags i globalnych rezerwacji budżetowych.
+  3. Nie uruchamiać płatnych workerów przed domknięciem pozostałych blockerów wykonawczych Etapu 1.
 
 ## Znane długi techniczne (poza blokerami; numeracja z audytu 12.07)
 

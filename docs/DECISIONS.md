@@ -409,6 +409,19 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Weryfikacja:** 174 testy celowane (włącznie z cost ledger, prior usage liczone raz i zachowanie JSONL A1) i 351 pełnego suite, offline; plikowa SQLite z reopen, brak API i koszt dodatkowy 0 USD.
 - **Powiązania:** ADR-020/022/026/027, `app/research/base.py`, `app/research/anthropic_client.py`, `app/workflows/research/pipeline.py`, `scripts/run_capped_research.py`.
 
+### ADR-029: Retry Anthropic wyłącznie na podstawie zamkniętej taksonomii błędów
+
+- **Data:** 2026-07-13
+- **Status:** ACCEPTED (właściciel wskazał ten kontrakt jako pierwszy blocker infrastrukturalny Etapu 1)
+- **Kontekst:** wspólna ścieżka `messages.create` mapowała każdy wyjątek SDK na `ResearchTimeout`. W efekcie błędy trwałe, w tym 400/401/403/404/422, mogły wejść w techniczny retry i spowodować drugi płatny call przed przyszłymi workerami.
+- **Decyzja:** domenowy `ResearchProviderError` ma jawne `retryable=False` domyślnie. Typy obejmują timeout, SDK-classified connection/network, rate limit 429, provider 5xx, authentication 401, permission 403, invalid request 400/422, not found 404 oraz unknown. Retry wolno wykonać tylko dla timeoutu, SDK-network, 429 i wybranych 5xx: 500/502/503/504. Inne 5xx oraz każdy błąd nieznany są fail-closed.
+- **Błędy treści:** `ResearchParseError`, `ResearchTruncatedError`, validation error i budget denial nie są błędami providera i nigdy nie uruchamiają automatycznego retry. A1/A2/B zachowują konkretny typ wyjątku.
+- **Koszt:** każda próba, także retry, zaczyna się od workflow-owned budget callback. Jeśli wyjątek niesie prawdziwe `Usage`, callback retry zapisuje je raz i usuwa z wyjątku; bez usage nie powstaje rekord o koszcie 0. P2-19 (`timeout-billed-unrecorded`) pozostaje otwarte i nie jest naprawiane heurystyką.
+- **Trwały audit:** jeden formatter zapisuje etap, nazwę klasy domenowej oraz dostępne `status_code`, `retryable` i `stop_reason` identycznie w `runs.error`, `research_runs.error`, stage logu i candidate error. Mapper SDK tworzy komunikat wyłącznie z kontrolowanej klasy/statusu, nigdy z `str(APIStatusError)` zawierającego body. Formatter nie serializuje `raw_text`, body, cause, obiektu SDK, request/response ani headers i redaguje wzorce sekretów, w tym samodzielne `Bearer <token>`.
+- **Granice:** brak fallbacku modelu, backoffu/schedulera, jobów, workerów, lease, migracji i globalnych rezerwacji budżetu. Nie wykonano API.
+- **Weryfikacja:** fake SDK i injected callers; literalne 504, 15 kombinacji A1/A2/B×typ, retry/no-retry, budget denial, ledger oraz typed audit po reopen SQLite. Syntetyczny `APIStatusError` z `RAW_RESPONSE_MARKER` nie trafia do żadnego audit field, a warianty `Bearer <token>` są redagowane; **411 passed** offline, koszt 0 USD.
+- **Powiązania:** ADR-026/028, MASTER §3.9/3.10/6, `app/research/base.py`, `app/research/anthropic_client.py`.
+
 ## Decyzje otwarte (wymagają właściciela)
 
 - **brak** — wszystkie pozycje otwarte z audytu zostały rozstrzygnięte (OPEN-1..5 → ADR-004/007/008/009/010, OPEN-4 → ADR-012).

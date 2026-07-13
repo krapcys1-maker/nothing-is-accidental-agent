@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import logging
+import re
 import sys
 from typing import Callable
 
@@ -103,6 +104,53 @@ class ResearchRunSummary:
 
 ResearchLogWriter = Callable[[ResearchCard, Topic, "ResearchRunSummary"], None]
 _LOGGER = logging.getLogger(__name__)
+_AUDIT_ERROR_MESSAGE_LIMIT = 500
+_AUDIT_SECRET_PATTERNS = (
+    re.compile(r"\bsk-ant-[A-Za-z0-9_-]+\b"),
+    re.compile(
+        r"(?i)\b(x-api-key|api[_ -]?key|authorization)\b\s*[:=]\s*"
+        r"(?:bearer\s+)?[^\s,;]+"
+    ),
+    re.compile(r"(?i)\bbearer\s+[^\s,;]+"),
+)
+
+
+def _sanitize_audit_error_text(value: object, *, limit: int) -> str:
+    text = " ".join(str(value).split())
+    text = _AUDIT_SECRET_PATTERNS[0].sub("[REDACTED]", text)
+    text = _AUDIT_SECRET_PATTERNS[1].sub(
+        lambda match: f"{match.group(1)}=[REDACTED]", text)
+    text = _AUDIT_SECRET_PATTERNS[2].sub("Bearer [REDACTED]", text)
+    if len(text) > limit:
+        text = f"{text[:limit - 3]}..."
+    return text
+
+
+def _format_audit_error(stage: str, exc: Exception) -> str:
+    """Return a deterministic, bounded audit string without provider payloads.
+
+    Only the exception message and selected scalar metadata are used.  In
+    particular, ``raw_text``, the SDK exception object/cause, request headers
+    and response objects are never serialized into persistent audit fields.
+    """
+    metadata = []
+    status_code = getattr(exc, "status_code", None)
+    if status_code is not None:
+        metadata.append(f"status_code={status_code}")
+    retryable = getattr(exc, "retryable", None)
+    if retryable is not None:
+        metadata.append(f"retryable={retryable}")
+    stop_reason = getattr(exc, "stop_reason", None)
+    if stop_reason is not None:
+        safe_stop_reason = _sanitize_audit_error_text(stop_reason, limit=80)
+        metadata.append(f"stop_reason={safe_stop_reason}")
+
+    type_and_metadata = type(exc).__name__
+    if metadata:
+        type_and_metadata = f"{type_and_metadata}({', '.join(metadata)})"
+    message = _sanitize_audit_error_text(exc, limit=_AUDIT_ERROR_MESSAGE_LIMIT)
+    suffix = f": {message}" if message else ""
+    return f"[{stage}] {type_and_metadata}{suffix}"
 
 
 def _current_run_cost(storage: StoragePort, run_id: str | None) -> float:
@@ -485,6 +533,7 @@ def run_research_pipeline(
         result = research_client.run_research(plan)
     except ResearchError as exc:
         _mark_budget_block(summary, exc)
+        audit_error = _format_audit_error("run_research", exc)
         # Nawet gdy research się nie powiódł (np. ucięty/niepoprawny JSON), wywołanie
         # API mogło być realne i kosztować — jeśli wyjątek niesie `usage`, zaksięguj je,
         # żeby rzeczywisty koszt nigdy nie zniknął z model_usage/COSTS.csv.
@@ -503,8 +552,8 @@ def run_research_pipeline(
             summary.web_search_requests = usage_row.web_search_requests
         cost = _current_run_cost(storage, run_id)
         summary.cost_usd = cost
-        storage.finish_run(run_id, RunStatus.FAILED.value, cost, error=str(exc))
-        storage.mark_research_run_failed(run_id, error=str(exc))
+        storage.finish_run(run_id, RunStatus.FAILED.value, cost, error=audit_error)
+        storage.mark_research_run_failed(run_id, error=audit_error)
         notifier.notify("error", "Research nieudany", str(exc), account.id)
         summary.error = str(exc)
         return summary
@@ -674,6 +723,7 @@ def run_two_stage_research_pipeline(
         gathered = research_client.gather_sources(plan)
     except ResearchError as exc:
         _mark_budget_block(summary, exc)
+        audit_error = _format_audit_error("gather_sources", exc)
         cost = 0.0
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
@@ -688,10 +738,10 @@ def run_two_stage_research_pipeline(
             summary.web_search_requests = usage_row.web_search_requests
         total_cost = _current_run_cost(storage, run_id)
         summary.cost_usd = total_cost
-        storage.finish_run(run_id, RunStatus.FAILED.value, total_cost, error=f"[gather_sources] {exc}")
-        storage.mark_research_run_failed(run_id, error=f"[gather_sources] {exc}")
+        storage.finish_run(run_id, RunStatus.FAILED.value, total_cost, error=audit_error)
+        storage.mark_research_run_failed(run_id, error=audit_error)
         storage.add_research_stage_result(run_id, ResearchStageName.A,
-                                          ResearchStageStatus.FAILED, error=str(exc))
+                                          ResearchStageStatus.FAILED, error=audit_error)
         notifier.notify("error", "Zbieranie źródeł nieudane", str(exc), account.id)
         summary.error = str(exc)
         return summary
@@ -778,6 +828,7 @@ def run_two_stage_research_pipeline(
         synthesized = research_client.synthesize_card(plan, gathered)
     except ResearchError as exc:
         _mark_budget_block(summary, exc)
+        audit_error = _format_audit_error("synthesize_card", exc)
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
             usage_row = usage_tracker.record(
@@ -788,10 +839,10 @@ def run_two_stage_research_pipeline(
         summary.cost_usd = total_cost
         summary.sources_count = len(gathered.sources)
         storage.finish_run(run_id, RunStatus.FAILED.value, total_cost,
-                           error=f"[synthesize_card] {exc}")
-        storage.mark_research_run_partial(run_id, error=f"[synthesize_card] {exc}")
+                           error=audit_error)
+        storage.mark_research_run_partial(run_id, error=audit_error)
         storage.add_research_stage_result(run_id, ResearchStageName.B,
-                                          ResearchStageStatus.FAILED, error=str(exc))
+                                          ResearchStageStatus.FAILED, error=audit_error)
         notifier.notify("error", "Synteza karty nieudana — źródła zachowane, można wznowić "
                         "wyłącznie etap 2", str(exc), account.id)
         summary.error = str(exc)
@@ -984,6 +1035,7 @@ def resume_research_stage_b(
         synthesized = research_client.synthesize_card(plan, gathered)
     except ResearchError as exc:
         _mark_budget_block(summary, exc)
+        audit_error = _format_audit_error("synthesize_card", exc)
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
             usage_row = usage_tracker.record(
@@ -992,14 +1044,14 @@ def resume_research_stage_b(
             )
             total_cost = _current_run_cost(storage, research_run_id)
         summary.cost_usd = total_cost
-        resume_error = f"[synthesize_card] {exc}"
+        resume_error = audit_error
         storage.mark_research_run_partial(research_run_id, error=resume_error)
         _finish_explicit_resume_failure(
             storage, resume_run_snapshot, ResearchFlow.TWO_STAGE,
             total_cost, resume_error,
         )
         storage.add_research_stage_result(research_run_id, ResearchStageName.B,
-                                          ResearchStageStatus.FAILED, error=str(exc))
+                                          ResearchStageStatus.FAILED, error=audit_error)
         notifier.notify("error", "Wznowienie: synteza karty nadal nieudana "
                         "(źródła pozostają zachowane, można spróbować ponownie)",
                         str(exc), account.id)
@@ -1161,6 +1213,7 @@ def run_source_discovery(
         discovered = research_client.discover_sources(plan, max_searches)
     except ResearchError as exc:
         _mark_budget_block(summary, exc)
+        audit_error = _format_audit_error("discover_sources", exc)
         cost = 0.0
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
@@ -1178,10 +1231,10 @@ def run_source_discovery(
                             stop_reason=getattr(exc, "stop_reason", None),
                             parse_error_location=str(exc))
         storage.finish_run(run_id, RunStatus.FAILED.value, summary.cost_usd,
-                           error=f"[discover_sources] {exc}")
-        storage.mark_research_run_failed(run_id, error=f"[discover_sources] {exc}")
+                           error=audit_error)
+        storage.mark_research_run_failed(run_id, error=audit_error)
         storage.add_research_stage_result(run_id, ResearchStageName.A1,
-                                          ResearchStageStatus.FAILED, error=str(exc))
+                                          ResearchStageStatus.FAILED, error=audit_error)
         notifier.notify("error", "Odkrywanie źródeł nieudane", str(exc), account.id)
         summary.error = str(exc)
         return _finish_staged_summary(storage, run_id, summary)
@@ -1349,6 +1402,7 @@ def run_source_extraction(
             extraction = research_client.extract_source(plan, candidate)
         except ResearchError as exc:
             _mark_budget_block(summary, exc)
+            audit_error = _format_audit_error("extract_source", exc)
             exc_usage = getattr(exc, "usage", None)
             if exc_usage is not None:
                 usage_row = _record_staged_usage(
@@ -1365,9 +1419,9 @@ def run_source_extraction(
                 settings, research_run_id, f"A2_source_{candidate_record.id}",
                 usage=exc_usage or Usage(), raw_text=getattr(exc, "raw_text", "") or "",
                 stop_reason=getattr(exc, "stop_reason", None), parse_error_location=str(exc))
-            storage.mark_source_candidate_failed(candidate_record.id, error=str(exc))
+            storage.mark_source_candidate_failed(candidate_record.id, error=audit_error)
             storage.add_research_stage_result(research_run_id, ResearchStageName.A2,
-                                              ResearchStageStatus.FAILED, error=str(exc))
+                                              ResearchStageStatus.FAILED, error=audit_error)
             notifier.notify("warning", f"Ekstrakcja źródła nieudana ({candidate_record.url})",
                             str(exc), account.id)
             failed_now += 1
@@ -1587,6 +1641,7 @@ def run_synthesis_from_cards(
         synthesized = research_client.synthesize_from_cards(plan, cards)
     except ResearchError as exc:
         _mark_budget_block(summary, exc)
+        audit_error = _format_audit_error("synthesize_from_cards", exc)
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
             usage_row = _record_staged_usage(
@@ -1599,7 +1654,7 @@ def run_synthesis_from_cards(
                             stop_reason=getattr(exc, "stop_reason", None),
                             parse_error_location=str(exc))
         summary.cost_usd = total_cost
-        resume_error = f"[synthesize_from_cards] {exc}"
+        resume_error = audit_error
         storage.revert_to_sources_complete(research_run_id, error=resume_error)
         if resume_run_snapshot is None:
             storage.finish_run(
@@ -1612,7 +1667,7 @@ def run_synthesis_from_cards(
                 total_cost, resume_error,
             )
         storage.add_research_stage_result(research_run_id, ResearchStageName.B,
-                                          ResearchStageStatus.FAILED, error=str(exc))
+                                          ResearchStageStatus.FAILED, error=audit_error)
         notifier.notify("error", "Synteza karty nieudana — źródła zachowane, można ponowić "
                         "wyłącznie etap B", str(exc), account.id)
         summary.error = str(exc)

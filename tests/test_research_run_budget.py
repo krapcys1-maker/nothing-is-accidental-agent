@@ -13,7 +13,7 @@ from app.policies.policy_engine import PolicyEngine
 from app.policies.policy_engine import PolicyDecision
 from app.ports.notification import LogNotification
 from app.research.anthropic_client import AnthropicResearchClient
-from app.research.base import ResearchTimeout
+from app.research.base import ResearchRateLimitError, ResearchTimeout
 from app.research.cost_estimator import (
     estimate_with_retries,
     estimate_worst_case_search_call_usd,
@@ -118,6 +118,33 @@ def test_allowed_retry_keeps_first_usage_and_success_usage(settings, storage, ac
     assert summary.cost_usd == pytest.approx(expected)
     assert storage.get_run(summary.run_id).status == RunStatus.DRY_RUN
     assert storage.get_run(summary.run_id).cost_usd == pytest.approx(expected)
+
+
+def test_rate_limit_usage_is_persisted_exactly_once_before_retry(
+        settings, storage, account):
+    state = {"calls": 0}
+    billed_rate_limit = Usage(input_tokens=100, output_tokens=50)
+    success_usage = Usage(input_tokens=200, output_tokens=100)
+
+    def caller(plan):
+        state["calls"] += 1
+        if state["calls"] == 1:
+            raise ResearchRateLimitError(
+                "rate limit", status_code=429, usage=billed_rate_limit, model="m")
+        return _good_json(), success_usage
+
+    client = AnthropicResearchClient("offline", "m", caller=caller, max_retries=1)
+    summary = _run(settings, storage, account, client, cap=2.0)
+
+    assert not summary.blocked
+    assert summary.error is None
+    usage = storage.get_research_usage(summary.run_id)
+    assert len(usage) == 2
+    assert [(row.input_tokens, row.output_tokens) for row in usage] == [
+        (100, 50), (200, 100),
+    ]
+    assert storage.get_run(summary.run_id).cost_usd == pytest.approx(
+        sum(row.estimated_cost_usd for row in usage))
 
 
 def test_cli_preflight_delegates_budget_decision_to_policy(settings, account, capsys):

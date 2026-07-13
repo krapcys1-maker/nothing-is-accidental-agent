@@ -238,3 +238,13 @@ Osobna zgoda pozwoliła skorygować wyłącznie audit runu po nieudanym B. Backu
 ### [2026-07-13] Techniczny sukces, redakcyjne REJECT i stary error
 
 Jedyny resume B zakończył się `end_turn` i utworzył kompletną kartę bez retry. Deterministyczna walidacja odrzuciła ją jednak za `THESIS_UNSUPPORTED` i `CLAIMS_WITHOUT_SOURCES`; to pożądane zatrzymanie przed treścią. Odczyt ujawnił też P2-20: po COMPLETE pole `research_runs.error` nadal pokazuje parse-error pierwszego B, choć osobny stage log ma już późniejszy B SUCCESS. Nie poprawiano tego w bazie ani kodzie. Koszt B 0,013914 USD, run 0,183964/0,20 USD.
+
+### [2026-07-13] P1 przed workerami: 401 wyglądało jak timeout
+
+Klient researchu mapował wszystkie wyjątki SDK na jeden retryowalny typ. W przyszłej pętli workera oznaczałoby to możliwość powtarzania błędu 400, złego klucza 401, odmowy 403, braku modelu 404 albo 422. Naprawa jest fail-closed: osobne typy, a retry tylko dla timeout, SDK-network, 429 i 500/502/503/504. Każda próba nadal przechodzi bramkę budżetu. Timeout bez usage nadal może być zbilowany — P2-19 nie zostało ukryte ani naprawione. Dowód: 382 testy offline, 0 USD, zero API.
+
+### [2026-07-13] P1 po review: typ wyjątku znikał przy zapisie
+
+Retry działało poprawnie, ale `str(exc)` usuwało z trwałego auditu nazwę klasy i jej metadane. Jeden bezpieczny formatter zastąpił lokalne składanie tekstu we wszystkich catchach research pipeline. Reopen SQLite potwierdził identyczny typed error w run/research_run/stage, zgodny ledger i brak karty; raw response nie trafia do auditu. 406 testów, zero API i 0 USD.
+
+Kolejne sprawdzenie zakwestionowało to ostatnie zdanie: sam formatter nie używał `raw_text`, ale mapper wnosił `str(APIStatusError)`, które SDK składa z body. Naprawa przeniosła granicę bezpieczeństwa do mappera; `RAW_RESPONSE_MARKER` nie dotarł już do żadnego audit field. Osobno rozszerzono redakcję o samodzielny `Bearer <token>`. 411 testów offline, bez API i 0 USD.

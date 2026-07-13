@@ -20,7 +20,8 @@ timeoutu, retry, błędnego JSON). Domyślne callery używają pakietu `anthropi
 (leniwy import).
 
 Zasady (obowiązują we wszystkich trzech metodach):
-- retry tylko dla błędów transient (timeout), z twardym limitem (bez nieskończonego retry),
+- retry tylko dla jawnie typowanych błędów transient (timeout, połączenie, 429,
+  wybrane 5xx), z twardym limitem (bez nieskończonego retry),
 - błędny JSON NIE jest ponawiany,
 - realny `usage` z udanego wywołania API jest zachowywany NAWET przy błędzie parsowania
   (dopięty do wyjątku) — inaczej realny koszt znika z księgowości (patrz incydent wyżej),
@@ -41,17 +42,28 @@ from app.research.base import (
     ExtractionResult,
     GatheredSource,
     ResearchDraft,
+    ResearchAuthenticationError,
+    ResearchConnectionError,
+    ResearchInvalidRequestError,
+    ResearchNotFoundError,
     ResearchParseError,
     ResearchPlan,
+    ResearchPermissionError,
+    ResearchProviderError,
+    ResearchRateLimitError,
     ResearchResult,
+    ResearchServerError,
     ResearchTimeout,
     ResearchTruncatedError,
+    ResearchUnknownProviderError,
     SourceCandidate,
     SourceCardDraft,
     SourceDraft,
     SourceGatheringResult,
     RetryUsageCallback,
 )
+
+_RETRYABLE_SERVER_STATUS_CODES = frozenset({500, 502, 503, 504})
 
 Caller = Callable[[ResearchPlan], tuple[str, Usage]]
 GatherCaller = Callable[[ResearchPlan], tuple[str, Usage]]
@@ -354,7 +366,7 @@ class AnthropicResearchClient:
                 estimated_attempt_cost=self._estimated_attempt_cost,
             ))
 
-    def _record_timeout_usage_before_retry(self, exc: ResearchTimeout) -> None:
+    def _record_provider_usage_before_retry(self, exc: ResearchProviderError) -> None:
         if exc.usage is None or self._retry_usage_callback is None:
             return
         self._retry_usage_callback(exc.usage, exc.model or self.model)
@@ -370,10 +382,10 @@ class AnthropicResearchClient:
             self.call_count += 1
             try:
                 text, usage = call_fn()
-            except ResearchTimeout as exc:
+            except ResearchProviderError as exc:
                 last_error = exc
-                if attempt < self._max_retries:
-                    self._record_timeout_usage_before_retry(exc)
+                if exc.retryable and attempt < self._max_retries:
+                    self._record_provider_usage_before_retry(exc)
                     continue
                 raise
             try:
@@ -427,10 +439,10 @@ class AnthropicResearchClient:
             self.call_count += 1
             try:
                 text, usage, stop_reason = call_fn()
-            except ResearchTimeout as exc:
+            except ResearchProviderError as exc:
                 last_error = exc
-                if attempt < self._max_retries:
-                    self._record_timeout_usage_before_retry(exc)
+                if exc.retryable and attempt < self._max_retries:
+                    self._record_provider_usage_before_retry(exc)
                     continue
                 raise
             # Stage A1 intentionally salvages complete JSONL rows before a cut
@@ -503,6 +515,73 @@ class AnthropicResearchClient:
             ) from exc
         return anthropic
 
+    @staticmethod
+    def _is_sdk_error(exc: Exception, anthropic, class_name: str) -> bool:
+        error_type = getattr(anthropic, class_name, None)
+        return isinstance(error_type, type) and isinstance(exc, error_type)
+
+    def _safe_provider_error_message(
+        self, exc: Exception, anthropic, status_code: int | None,
+    ) -> str:
+        """Build an audit-safe message without copying an SDK response body.
+
+        ``anthropic.APIStatusError.__str__`` may contain the complete parsed
+        response body.  Domain errors must therefore use only controlled
+        metadata for SDK exceptions.  Non-SDK exceptions also get a generic
+        class-only message, so neither path copies provider payloads or an
+        arbitrary exception string into durable audit fields.
+        """
+        if self._is_sdk_error(exc, anthropic, "APIError"):
+            if isinstance(status_code, int):
+                return f"Anthropic request failed with status {status_code}."
+            return f"Anthropic request failed ({type(exc).__name__})."
+
+        return f"Provider request failed ({type(exc).__name__})."
+
+    def _map_anthropic_error(self, exc: Exception, anthropic) -> ResearchProviderError:
+        """Map SDK errors to the closed research error taxonomy.
+
+        Only SDK-classified connection failures are treated as network
+        transients.  Arbitrary ``OSError``/``RuntimeError`` instances fail
+        closed as unknown provider errors.  Anthropic error objects normally
+        have no message usage; a real ``Usage`` attached by a compatible
+        adapter is preserved without fabricating zero usage.
+        """
+        usage = getattr(exc, "usage", None)
+        if not isinstance(usage, Usage):
+            usage = None
+        common = {"usage": usage, "model": self.model}
+        status_code = getattr(exc, "status_code", None)
+        message = self._safe_provider_error_message(exc, anthropic, status_code)
+
+        if self._is_sdk_error(exc, anthropic, "APITimeoutError"):
+            return ResearchTimeout(message, **common)
+        if self._is_sdk_error(exc, anthropic, "APIConnectionError"):
+            return ResearchConnectionError(message, **common)
+
+        if status_code == 429 or self._is_sdk_error(exc, anthropic, "RateLimitError"):
+            return ResearchRateLimitError(message, status_code=429, **common)
+        if status_code == 401 or self._is_sdk_error(exc, anthropic, "AuthenticationError"):
+            return ResearchAuthenticationError(message, status_code=401, **common)
+        if status_code == 403 or self._is_sdk_error(exc, anthropic, "PermissionDeniedError"):
+            return ResearchPermissionError(message, status_code=403, **common)
+        if status_code in {400, 422} or any(
+            self._is_sdk_error(exc, anthropic, name)
+            for name in ("BadRequestError", "UnprocessableEntityError")
+        ):
+            return ResearchInvalidRequestError(
+                message, status_code=status_code, **common)
+        if status_code == 404 or self._is_sdk_error(exc, anthropic, "NotFoundError"):
+            return ResearchNotFoundError(message, status_code=404, **common)
+        if isinstance(status_code, int) and 500 <= status_code <= 599:
+            return ResearchServerError(
+                message,
+                status_code=status_code,
+                retryable=status_code in _RETRYABLE_SERVER_STATUS_CODES,
+                **common,
+            )
+        return ResearchUnknownProviderError(message, status_code=status_code, **common)
+
     def _call_anthropic(self, client, prompt: str, *, tools: list[dict] | None,
                         max_tokens: int) -> tuple[str, Usage, str | None]:  # pragma: no cover
         kwargs = dict(model=self.model, max_tokens=max_tokens, system=_SYSTEM,
@@ -512,8 +591,9 @@ class AnthropicResearchClient:
             kwargs["tools"] = tools
         try:
             message = client.messages.create(**kwargs)
-        except Exception as exc:  # timeout SDK -> traktujemy jako transient
-            raise ResearchTimeout(str(exc)) from exc
+        except Exception as exc:
+            anthropic = self._import_anthropic()
+            raise self._map_anthropic_error(exc, anthropic) from exc
         text = "".join(getattr(b, "text", "") for b in message.content
                        if getattr(b, "type", "") == "text")
         web_search_usage = getattr(getattr(message, "usage", None), "server_tool_use", None)

@@ -394,3 +394,24 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Bramka jakości:** karta #2 otrzymała `publication_recommendation=REJECT` z powodami `THESIS_UNSUPPORTED` i `CLAIMS_WITHOUT_SOURCES`. To poprawna odmowa użycia materiału do treści, nie awaria lifecycle; COMPLETE/SUCCESS/USED i kryterium Etapu 0 pozostają spełnione.
 - **P2-20:** `research_runs.error` po COMPLETE nadal zawiera parse-error pierwszego, nieudanego B. Pełna historia prób istnieje w `research_stage_results` (B FAILED, potem B SUCCESS), więc utrzymanie starego tekstu w polu bieżącego stanu może mylić konsumentów. Nie zmieniono kodu ani bazy; finding czeka na niezależne review.
 - **Koszt:** run łącznie 0,183964 USD ≤ 0,20; dodatkowy B 0,013914 USD. Brak drugiego calla.
+
+### 2026-07-13 — wszystkie błędy SDK Anthropic udawały timeout — [P1 | RETRY | COST]
+
+- **Problem:** `_call_anthropic` przechwytywał każde `Exception` z `messages.create` i rzucał `ResearchTimeout`. Stałe odmowy 400/401/403/404/422 mogły więc zostać potraktowane jak transient i uruchomić kolejny potencjalnie płatny call.
+- **Naprawa:** wyjątki SDK są mapowane na typy domenowe; retry jest jawnie dozwolone wyłącznie dla timeout, SDK-network, 429 i 500/502/503/504. Unknown i pozostałe statusy są terminalne dla próby. Parse, truncation, validation i budget error pozostają poza retry.
+- **Regresja kosztowa:** każda kolejna próba przechodzi świeży callback budżetowy. Jeśli błąd niesie prawdziwe usage, zapis następuje raz przed retry; jeśli SDK go nie zwraca, system nie zapisuje fikcyjnego 0 USD.
+- **Ryzyko rezydualne:** P2-19 pozostaje OPEN — timeout może być zbilowany bez lokalnego usage. Ten task nie dodaje rekonsyliacji billingowej ani rezerwacji globalnej.
+- **Weryfikacja:** 382 testy offline, bez API i dodatkowego kosztu.
+
+### 2026-07-13 — typed provider error tracił klasę w polach auditu — [P1 | AUDIT]
+
+- **Objaw:** `ResearchInvalidRequestError(status_code=422, retryable=False)` kończył run poprawnie i księgował usage, lecz `runs.error`/`research_runs.error` zawierały tylko etap i komunikat.
+- **Przyczyna:** każda ścieżka persystencji budowała własne `f"[stage] {exc}"` albo `str(exc)`.
+- **Naprawa:** jeden bounded/redacting formatter dla run, research_run, stage i candidate audit. Nie zapisuje raw response, cause, request/response ani headers; zachowuje bezpieczne skalarne metadane.
+- **Dowód:** plikowa SQLite po reopen: 422 = jeden call/jeden usage/FAILED/SELECTED/zero kart; 429 po wyczerpaniu = dwa calle/dwa usage bez dubla; `runs.cost_usd == sum(model_usage)`. Pełne **406 passed**, 0 USD, brak API.
+
+### 2026-07-13 — dwa P1 po review: body SDK i nagi Bearer mogły wejść do auditu — [P1 | SECURITY]
+
+- **Przyczyna:** `str(APIStatusError)` SDK Anthropic 0.116.0 zawiera body odpowiedzi; dodatkowo regex traktował `Bearer` jako sekret tylko przy poprzedzającej nazwie nagłówka.
+- **Naprawa:** mapper nie używa już tekstu SDK dla komunikatu domenowego, lecz kontrolowanego statusu/klasy. Formatter redaguje każdy case-insensitive `Bearer <token>`.
+- **Dowód:** marker body nie występuje w błędzie domenowym ani w `runs.error`, `research_runs.error`, stage/candidate audit; typ, `status_code`, `retryable` i `__cause__` pozostają. Testy offline: **411 passed**, koszt 0 USD, bez API.

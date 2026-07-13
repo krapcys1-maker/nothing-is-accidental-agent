@@ -47,6 +47,7 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 - **Zależności:** Etap 0.
 - **Pliki/moduły:** NOWY `app/scheduler/` (worker, lease, wybór jobów), migracja `0008_jobs_system_flags.sql`, `app/policies/policy_engine.py` (flagi z DB), `app/main.py` (subkomenda `worker`), `app/orchestrator/`.
 - **Zadania:**
+  0. **Blocker przed płatnymi workerami — GOTOWY OFFLINE, oczekuje na niezależne review (2026-07-13):** `AnthropicResearchClient` mapuje wyjątki SDK na typy domenowe. Retry obejmuje wyłącznie timeout, SDK-network, 429 i 500/502/503/504; 400/401/403/404/422, unknown, parse/truncation/validation są fail-closed. Każda kolejna próba nadal przechodzi callback budżetowy, usage jest księgowane raz, P2-19 pozostaje jawne, a trwały audit zachowuje typ/status/retryable/stop_reason bez SDK body, raw response i sekretów, w tym samodzielnego `Bearer <token>`. **411 testów**, 0 USD, brak API. Bez scheduler/jobs/workerów/rezerwacji budżetowych.
   1. Tabela `jobs` (schemat: MASTER_ARCHITECTURE §4.2) + `system_flags`.
   2. Pętla workera: `SELECT ... WHERE status='QUEUED' AND earliest_run_at<=now ORDER BY priority, deadline` → lease (UPDATE warunkowy) → egzekucja przez orchestrator → DONE/FAILED; wygasłe lease wracają do QUEUED.
   3. Idempotencja: `idempotency_key UNIQUE`; joby „publikacyjne" (przyszłe) po wygaśnięciu lease → NEEDS_VERIFICATION, nigdy ponowne wykonanie.
@@ -172,6 +173,6 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 
 ---
 
-## NASTĘPNY ETAP DO WYKONANIA: **Etap 1** (nierozpoczęty)
+## AKTUALNY ETAP: **Etap 1** (rozpoczęty wyłącznie od blockera kontraktu providera)
 
-Etap 0 spełnił kryterium zakończenia 2026-07-13. Ta aktualizacja nie rozpoczyna implementacji Etapu 1; pierwsza praca nad schedulerem, kolejką lub workerem wymaga osobnego zadania właściciela.
+Etap 0 spełnił kryterium zakończenia 2026-07-13. Wdrożono offline pierwszy blocker przed płatnymi workerami: typed Anthropic errors i bezpieczny retry (ADR-029), pozostawiony do niezależnego review. Scheduler, kolejka, workery, migracja 0008 i rezerwacje budżetowe nie zostały rozpoczęte i wymagają osobnych zadań właściciela.
