@@ -220,3 +220,13 @@ Pierwszy przebieg nowych guardów miał cztery failures. Nie był to race SQLite
 ### [2026-07-13] Końcowe review: sekwencja udawała race, a ogólny helper udawał resume
 
 Pierwszy P1 był semantyczny: zwykły FAILED mógł zostać przepisany, bo wyjątek resume nie wymagał research_run. Drugi był testowy: dwa połączenia działały jedno po drugim. Po rozdzieleniu helperów i dodaniu `Barrier` pierwsza wersja CAS ujawniła prawdziwy `database is locked`, ponieważ oba procesy trzymały read-lock przed UPDATE. SELECT diagnostyczny przeniesiono przed transakcję zapisu; sam UPDATE ponownie sprawdza relację i token CAS. **337 testów**, brak API i kosztu.
+
+### [2026-07-13] Cztery VERIFIED, a jednak brak karty
+
+Jeden zatwierdzony staged run przeszedł A1 i wszystkie cztery A2. B osiągnęło limit 2200 tokenów (`stop_reason=max_tokens`) i urwało JSON wewnątrz stringa. Parser odmówił utworzenia Research Card; to poprawna reakcja na niekompletne dane, nie powód do automatycznego drugiego rachunku.
+
+Koszt 0,170050 USD został zapisany w całości. `research_runs` wrócił do `SOURCES_COMPLETE`, ale ogólny `runs` został `RUNNING` bez `finished_at`, mimo że proces się zakończył. To osobny finding lifecycle do review. Nie poprawiano kodu ani statusu ręcznie; nie wykonano resume.
+
+### Co naprawiono offline
+
+Przyczyna nie była już zagadką: provider jawnie zwrócił `stop_reason=max_tokens`. Klient rozpoznaje teraz ten stan przed parserem, zachowuje usage i nie próbuje ponownie. Limit 3000 oraz krótszy prompt pozostają pod kontrolą estymatora. Drugi błąd był warunkiem w pipeline: tylko porażka jawnego resume terminalizowała główny run. Fresh failure również kończy teraz `FAILED`, zachowując źródła do B. Test reopen SQLite potwierdza brak częściowych mutacji. Historyczny rekord celowo pozostał RUNNING do osobnego repair.

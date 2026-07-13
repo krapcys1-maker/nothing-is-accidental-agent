@@ -422,3 +422,22 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **P1-2:** sekwencyjny test dwóch połączeń candidate zastąpiono dwoma wątkami, osobnymi połączeniami plikowej SQLite i `Barrier`. Dokładnie jeden claim wygrywa, drugi dostaje `LifecycleTransitionError`; `database is locked` nie jest akceptowane, po reopen pozostaje `attempts=1` i `EXTRACTION_IN_PROGRESS`.
 - **Nieudane próby lokalne:** pierwsza wersja resume CAS zaczynała transakcję przed diagnostycznym SELECT, więc dwa czytające połączenia próbowały podnieść lock i jedno dostało `database is locked`. SELECT przeniesiono przed warunkowy UPDATE; bezpieczeństwo zapewnia CAS w samym UPDATE. Dwa istniejące testy ujawniły też miejsca wymagające jawnego `explicit_resume` i sukces staged po wcześniejszym FAILED.
 - **Weryfikacja:** oba race tests przeszły 10 kolejnych uruchomień; pełny `python -m pytest` = **337 passed**. Koszt 0 USD, zero API, realnego researchu, Playwrighta, Task 9, commita i pushu.
+
+### [2026-07-13] Etap 0 / Task 9 — jeden realny staged run, A1/A2 sukces, B nieudane
+
+- **Zgoda i granice:** właściciel jawnie zatwierdził dokładnie jeden realny run, cap 0,55 USD, `max_retries=0`; zakazał drugiego runu, retry, resume, force, Playwrighta, publikacji i Etapu 1.
+- **Baseline:** branch `dev/first-successful-research-card`, HEAD `c3bd76879f50fc4706fc1621addf18ddf25990b2`, upstream 0/0, clean, **337 passed**, `git diff --check` czysty.
+- **Pre-flight offline:** topic #2 SELECTED i zgodny z aktywnym kontem; brak kompletnego wcześniejszego researchu; kill switch false; klucz/model/SDK gotowe bez ujawnienia sekretu; expected 0,201280 USD, conservative 0,510375 USD, cap 0,550000 USD; daily remaining 2,000000 USD, monthly remaining 39,499384 USD; centralny PolicyEngine `OK`.
+- **Komenda:** `python scripts/run_capped_research.py --topic-id 2 --mode three-stage --discovery-max-searches 1 --max-sources 4 --max-web-searches-per-source 1 --extraction-max-tokens 1500 --max-retries 0 --max-cost-usd 0.55`.
+- **Wynik:** run `c01171bc-7ff5-4b83-bbfa-c0b164137793`. A1 SUCCESS (4 candidates); A2 4/4 SUCCESS, EXTRACTED i VERIFIED; B FAILED po 2200 output tokens, `stop_reason=max_tokens`, ucięty JSON/`ResearchParseError`. Brak Research Card.
+- **Koszt:** A1 0,029243; A2 0,127903; B 0,012904; razem **0,170050 USD**, czyli 30,92% capu. Sześć wpisów `model_usage` sumuje się dokładnie do `runs.cost_usd`; `docs/COSTS.csv` uzupełniony automatycznie.
+- **Stan po procesie:** `research_runs=SOURCES_COMPLETE`, topic SELECTED, 4 VERIFIED, `research_card_id=NULL`. Ogólny run pozostał `RUNNING` z `finished_at=NULL`; zapisano jako otwarty blocker do review, bez poprawiania kodu.
+- **Decyzja:** Task 9 i Etap 0 **nieukończone**. Nie wykonano ponowienia, resume ani force; dokumentacja pozostawiona bez commita do niezależnego review.
+
+### 2026-07-13 — Etap 0 / Task 9: offline naprawa blockerów pierwszego realnego B
+
+- **Zakres:** bez API, bez resume i bez mutacji realnej bazy. Rozpoznanie `stop_reason=max_tokens` przed parse, jawny limit B=3000, ograniczenia długości promptu oraz terminalizacja fresh B failure.
+- **Kontrakt:** truncation przenosi usage i jest księgowane dokładnie raz, bez retry i bez częściowej karty. `runs=FAILED` dostaje `finished_at/error`, `research_runs=SOURCES_COMPLETE`, topic pozostaje SELECTED; jawny resume nadal wykonuje wyłącznie B przez CAS Task 8.
+- **Kosztorys:** B expected 0,017500 / conservative 0,026250 USD; fresh worst-case 0,516375 < 0,55; resume z prior 0,170050 daje 0,196300 < 0,20. Limit jest konfigurowalny i przekazywany do estymatora/policy.
+- **Weryfikacja:** 174 testy celowane (włącznie z cost ledger, prior usage liczone raz i zachowanie JSONL A1), pełne **351 passed**, `git diff --check` bez błędów. Testy użyły fake callerów i plikowej SQLite; dodatkowy koszt 0 USD.
+- **Stan historyczny:** run `c01171bc-7ff5-4b83-bbfa-c0b164137793` nie został zmieniony. Repair i późniejszy płatny resume wymagają oddzielnych zgód. Etap 0 pozostaje aktywny.

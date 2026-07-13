@@ -47,6 +47,7 @@ from app.research.cost_estimator import (
     estimate_with_retries,
 )
 from app.research.fake_client import FakeResearchClient
+from app.storage.repositories import SqliteStorage
 from app.research.validation import TOO_FEW_VERIFIED_SOURCES
 from app.workflows.research.pipeline import (
     CompletedResearchExistsError,
@@ -170,12 +171,44 @@ def test_b_resume_includes_persisted_usage_and_retry_multiplier(settings, storag
         run_id, account, settings=settings, storage=storage,
         research_client=FakeResearchClient("good"),
         usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
-        policy=policy, notifier=LogNotification(), synthesize_max_tokens=2200,
+        policy=policy, notifier=LogNotification(), synthesize_max_tokens=3000,
         forwarded_context_tokens=2500, max_retries=2, run_cap_usd=2.0)
-    base = estimate_synthesis_cost_usd(settings, 2200, 2500).conservative_usd
+    base = estimate_synthesis_cost_usd(settings, 3000, 2500).conservative_usd
     assert policy.calls == [(
         round(current + estimate_with_retries(base, 2), 6), 2.0, round(current, 6))]
     assert summary.blocked
+
+
+def test_b_resume_is_blocked_before_client_when_3000_token_projection_exceeds_cap(
+        settings, storage, account):
+    topic = _selected_topic(storage, account)
+    run_id = _seeded_run_with_candidates(storage, account, topic, n=3)
+    _run_extraction(
+        settings, storage, account, run_id, FakeResearchClient("good"), max_sources=3)
+    prior_usage = storage.get_research_usage(run_id)
+    current = sum(row.estimated_cost_usd for row in prior_usage)
+    projected_b = estimate_synthesis_cost_usd(
+        settings, 3000, 2500).conservative_usd
+
+    class ForbiddenSynthesisClient(FakeResearchClient):
+        def synthesize_from_cards(self, plan, cards):
+            raise AssertionError("budget guard must run before stage B client")
+
+    summary = run_synthesis_from_cards(
+        run_id, account, settings=settings, storage=storage,
+        research_client=ForbiddenSynthesisClient("good"),
+        usage_tracker=UsageTracker(
+            settings, storage, costs_csv_path=settings.costs_csv_path),
+        policy=PolicyEngine(settings, storage), notifier=LogNotification(),
+        synthesize_max_tokens=3000, forwarded_context_tokens=2500,
+        max_retries=0, run_cap_usd=current + projected_b - 0.000001,
+    )
+
+    assert summary.blocked and summary.block_code == "RUN_CAP_EXCEEDED"
+    after_usage = storage.get_research_usage(run_id)
+    assert len(after_usage) == len(prior_usage)
+    assert [row.id for row in after_usage] == [row.id for row in prior_usage]
+    assert storage.get_research_run(run_id).status == ResearchRunStatus.SOURCES_COMPLETE
 
 
 def test_a1_timeout_usage_blocks_second_attempt(settings, storage, account):
@@ -250,7 +283,7 @@ def test_b_timeout_usage_blocks_retry_and_restores_sources_complete(
         run_id, account, settings=settings, storage=storage, research_client=client,
         usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
         policy=PolicyEngine(settings, storage), notifier=LogNotification(),
-        synthesize_max_tokens=2200, forwarded_context_tokens=2500,
+        synthesize_max_tokens=3000, forwarded_context_tokens=2500,
         max_retries=1, run_cap_usd=0.50)
 
     assert calls == [1]
@@ -675,8 +708,67 @@ def test_synthesis_error_without_usage_preserves_canonical_cost(settings, storag
     run = storage.get_run(run_id)
     assert run is not None
     assert run.cost_usd == pytest.approx(expected_cost)
-    assert run.status == RunStatus.RUNNING
+    assert run.status == RunStatus.FAILED
+    assert run.finished_at is not None
+    assert run.error == "[synthesize_from_cards] synthesis failed before usage was available"
     assert storage.get_research_run(run_id).status == ResearchRunStatus.SOURCES_COMPLETE
+
+
+def test_fresh_b_max_tokens_records_usage_once_and_finishes_failed_after_reopen(
+        settings, storage, account):
+    real_settings = replace(settings, dry_run=False)
+    topic = _selected_topic(storage, account)
+    run_id = _seeded_run_with_candidates(storage, account, topic, n=3)
+    _run_extraction(real_settings, storage, account, run_id, FakeResearchClient("good"))
+    prior_usage = len(storage.get_research_usage(run_id))
+    prior_cards = storage.conn.execute("SELECT count(*) FROM research_cards").fetchone()[0]
+    calls = []
+    billed = Usage(input_tokens=1904, output_tokens=3000, web_search_requests=0)
+
+    def truncated_b(plan, cards):
+        calls.append(1)
+        return '{"question": "cut', billed, "max_tokens"
+
+    client = AnthropicResearchClient(
+        "offline", "m", synthesize_from_cards_caller=truncated_b,
+        synthesize_max_tokens=3000, max_retries=2,
+    )
+    summary = _run_synthesis(
+        real_settings, storage, account, run_id, client,
+        synthesize_max_tokens=3000, max_retries=2,
+    )
+
+    assert calls == [1]
+    assert summary.error is not None
+    assert "stop_reason=max_tokens" in summary.error
+    usage = storage.get_research_usage(run_id)
+    assert len(usage) == prior_usage + 1
+    assert usage[-1].task == "research_synthesize_cards"
+    assert usage[-1].output_tokens == 3000
+    assert storage.conn.execute("SELECT count(*) FROM research_cards").fetchone()[0] == prior_cards
+    assert storage.get_research_run(run_id).status == ResearchRunStatus.SOURCES_COMPLETE
+    selected = storage.list_topics_by_status(account.id, TopicStatus.SELECTED)
+    assert any(row.id == topic.id for row in selected)
+
+    reopened = SqliteStorage.open(real_settings.db_path)
+    try:
+        persisted_run = reopened.get_run(run_id)
+        persisted_research = reopened.get_research_run(run_id)
+        assert persisted_run.status == RunStatus.FAILED
+        assert persisted_run.finished_at is not None
+        assert "stop_reason=max_tokens" in persisted_run.error
+        assert persisted_research.status == ResearchRunStatus.SOURCES_COMPLETE
+        assert persisted_research.research_card_id is None
+        assert reopened.conn.execute(
+            "SELECT count(*) FROM research_cards WHERE topic_id=?", (topic.id,),
+        ).fetchone()[0] == 0
+    finally:
+        reopened.close()
+
+    diagnostic = diagnostics_dir(real_settings.data_dir, run_id) / "B_raw_response.txt"
+    content = diagnostic.read_text(encoding="utf-8")
+    assert "stop_reason: max_tokens" in content
+    assert "max_output_tokens=3000" in content
 
 
 # --- 8. JSONL z uszkodzonym ostatnim rekordem — wcześniejsze rekordy zachowane ---
@@ -1011,3 +1103,18 @@ def test_extraction_and_client_defaults_use_1500_tokens():
         "extraction_max_tokens"].default == 1500
     assert inspect.signature(resume_staged_research).parameters[
         "extraction_max_tokens"].default == 1500
+
+
+def test_synthesis_defaults_use_measured_3000_token_limit():
+    import inspect
+
+    from app.research.anthropic_client import AnthropicResearchClient
+
+    assert inspect.signature(AnthropicResearchClient.__init__).parameters[
+        "synthesize_max_tokens"].default == 3000
+    assert inspect.signature(run_synthesis_from_cards).parameters[
+        "synthesize_max_tokens"].default == 3000
+    assert inspect.signature(run_staged_research_pipeline).parameters[
+        "synthesize_max_tokens"].default == 3000
+    assert inspect.signature(resume_staged_research).parameters[
+        "synthesize_max_tokens"].default == 3000

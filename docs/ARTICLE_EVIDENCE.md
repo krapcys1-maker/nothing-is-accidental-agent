@@ -216,3 +216,16 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Druga lekcja: wyjątek nazwany „resume” nie jest jawny, jeśli siedzi w ogólnym helperze terminalizacji. Nowy helper wymaga kompletnej relacji researchu i tokenu CAS sprzed próby.
   - Nieudana iteracja: transakcja rozpoczęta przed SELECT dała lock upgrade zamiast domenowego konfliktu. Warunkowy UPDATE bez wcześniejszego read-locka dał jednego zwycięzcę i typowaną odmowę drugiego.
   - Dowód: oba race tests ×10, stan po reopen, `attempts=1`, `EXTRACTION_IN_PROGRESS`; **337 passed**, 0 USD, brak API.
+
+- **[2026-07-13] Cztery poprawne źródła nadal nie są kartą** (Etap 0 / Task 9)
+  - Materiał: pierwszy realny staged run przeszedł A1 i cztery niezależne A2; wszystkie źródła zostały EXTRACTED/VERIFIED. Dopiero B wyczerpało 2200 tokenów i urwało JSON wewnątrz stringa.
+  - Liczby: conservative 0,510375 USD, cap 0,55 USD, koszt rzeczywisty 0,170050 USD; A1 0,029243, A2 0,127903, B 0,012904; 5 web searchy, zero retry.
+  - Zwrot narracyjny: trwałość etapów zadziałała — cztery opłacone karty źródłowe nie zniknęły. Jednocześnie sukces podzadań nie pozwala ogłosić sukcesu produktu: brak Research Card oznacza REJECT.
+  - Dodatkowy finding: proces się skończył, ale ogólny audit pozostał RUNNING. To dobry przykład różnicy między odzyskiwalnością danych a prawdziwością statusu.
+  - Dowód: run `c01171bc-7ff5-4b83-bbfa-c0b164137793`, sześć wpisów `model_usage`, prywatne nagłówki diagnostyki z `stop_reason`; brak retry/resume/publikacji.
+
+- **2026-07-13 — naprawa po prawdziwym rachunku, lecz bez kolejnego rachunku:**
+  - Incydent rozdzielono na dwa P1: semantyczny truncation (`max_tokens`) i nieprawdziwy audit `RUNNING`.
+  - Minimalna korekta: limit 3000 (+36%), zwięzły schema prompt, zero auto-retry; conservative B 0,026250 USD, fresh 0,516375 USD, projected resume 0,196300 USD.
+  - Test na plikowej SQLite dowodzi, że źródła zostają w `SOURCES_COMPLETE`, audit kończy się `FAILED`, a karta nie powstaje częściowo; osobne testy zachowują salvage JSONL A1 i liczą prior usage dokładnie raz. 351 testów offline, koszt dodatkowy 0 USD.
+  - Historycznej bazy nie „upiększono”; plan repair jest osobnym, audytowalnym krokiem wymagającym zgody. To dowód, że dokumentacja odróżnia naprawiony kod od naprawionych danych.

@@ -178,3 +178,16 @@ Statusy zmieniono na `ACCEPTED` bez przepisywania historycznego uzasadnienia. Ta
 Odrzucono wbudowanie SQLite i `PolicyEngine` do klienta Anthropic. Workflow przekazuje prosty callback przed próbą oraz callback utrwalenia dostępnego usage timeoutu. Klient zna numer próby i koszt nadchodzącego calla, ale nie zna magazynu danych ani limitów produktu. Decyzję opisuje ADR-026.
 
 Po review doprecyzowano: realny pipeline bez capu odmawia, cap resume jest absolutny, a nie „dotychczas wydane + nowy limit”. To ostatnie rozróżnia limit całego zdarzenia od odnawialnego kredytu.
+
+### D-28: jeden realny run ADR-022, bez automatycznego ratowania wyniku
+- **Problem:** do zamknięcia Etapu 0 potrzebna była pierwsza realna karta, ale każdy etap staged jest płatny i może pozostawić trwały wynik częściowy.
+- **Wybór:** właściciel zatwierdził dokładnie jeden świeży run: A1=1 search, A2 maks. 4×1 search/1500 tokenów, B=2200 tokenów, `max_retries=0`, cap 0,55 USD. Bez resume, force i drugiego runu.
+- **Wynik decyzji:** A1/A2 sukces, B `max_tokens`/parse-error, koszt 0,170050 USD. Granica zadziałała: proces nie został ponowiony, mimo że cztery VERIFIED czynią B technicznie wznawialnym.
+- **Kto podjął:** człowiek; wykonanie i zatrzymanie po pierwszym runie: Codex.
+
+### [2026-07-13] Ucięte B jest terminalne dla auditu, lecz wznawialne dla researchu
+
+- `max_tokens` ma własny typ błędu i nigdy nie jest automatycznie retry'owane.
+- Domyślny limit B rośnie z 2200 do 3000, pozostaje jawny w CLI i jest liczony w capie: 0,026250 USD conservative; cały fresh plan 0,516375 < 0,55.
+- Porażka kończy `runs=FAILED`, ale zachowuje `research_runs=SOURCES_COMPLETE`; jawny resume robi tylko B i używa CAS.
+- Realny run historyczny nie został naprawiony w bazie. Repair oraz resume są dwiema osobnymi decyzjami człowieka.

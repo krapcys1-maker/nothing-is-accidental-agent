@@ -155,6 +155,12 @@ Po każdym etapie: co nas zaskoczyło, co działało, co nie, co agent robił le
 - **SQLite:** SELECT w rozpoczętej transakcji może stworzyć konflikt upgrade-lock. Bezpieczeństwo powinien nieść warunkowy UPDATE i CAS, a nie utrzymywany read-lock.
 - **Dowód:** dwa race tests powtórzone 10 razy, 337 testów, 0 USD.
 
+### Wnioski z pierwszego realnego Task 9 (2026-07-13)
+- **Trwałość zadziałała:** A1 i cztery A2 zostały opłacone raz, zapisane i nie zniknęły po błędzie B.
+- **Bramka sukcesu zadziałała:** cztery VERIFIED nie wystarczyły do ogłoszenia wyniku; bez poprawnej Research Card cały Task 9 pozostaje nieudany.
+- **Cap był bezpieczny:** 0,170050 USD wobec 0,510375 USD conservative i 0,55 USD limitu; zero retry.
+- **Nowa luka:** odzyskiwalny `research_runs=SOURCES_COMPLETE` współistnieje z ogólnym `runs=RUNNING` po zakończeniu procesu. Odzyskiwalność i prawdziwość audytu to dwa różne wymagania.
+
 ## Otwarte pytania (do rozstrzygnięcia danymi, nie opinią)
 - Czy szacunek kosztu dry_run jest bliski rzeczywistości?
 - Jaki procent szkiców agenta przejdzie bez poprawek człowieka?
@@ -164,3 +170,7 @@ Po każdym etapie: co nas zaskoczyło, co działało, co nie, co agent robił le
 
 ## Powiązania
 - `07_BLEDY_I_NIEUDANE_PROBY.md`, `08_INTERWENCJE_CZLOWIEKA.md`, `09_KOSZTY.md`, `15_PLAN_SERII_ARTYKULOW.md`, `docs/DECISIONS.md` ADR-017, ADR-019, ADR-020
+
+### 2026-07-13 — wniosek po pierwszym realnym B
+
+„Dane są odzyskiwalne” i „audit mówi prawdę” to dwa niezależne wymagania. `SOURCES_COMPLETE` uratowało cztery opłacone źródła, ale pozostawione `RUNNING` fałszowało stan procesu. Poprawny kontrakt musi zachować oba fakty naraz: szczegółowy research jest wznawialny, ogólny run jest terminalnie FAILED. Drugi wniosek: podniesienie limitu ma sens wyłącznie razem z pomiarem, zwięzłym promptem i przeliczeniem capu.

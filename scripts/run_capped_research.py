@@ -73,6 +73,7 @@ from app.policies.policy_engine import PolicyEngine  # noqa: E402
 from app.ports.notification import LogNotification  # noqa: E402
 from app.ports.storage import ResearchTopicIntegrityError  # noqa: E402
 from app.research.anthropic_client import AnthropicResearchClient  # noqa: E402
+from app.research.base import DEFAULT_SYNTHESIS_MAX_TOKENS  # noqa: E402
 from app.research.cost_estimator import (  # noqa: E402
     CostEstimate,
     estimate_extraction_cost_per_source_usd,
@@ -176,8 +177,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="Retry tylko dla błędów technicznych/timeout, max N prób dodatkowych.")
     parser.add_argument("--gather-max-tokens", type=int, default=1200,
                         help="[two-stage] max_tokens dla etapu gather_sources.")
-    parser.add_argument("--synthesize-max-tokens", type=int, default=2200,
-                        help="max_tokens dla etapu syntezy (B, wspólne dla three-stage/two-stage).")
+    parser.add_argument(
+        "--synthesize-max-tokens", type=int, default=DEFAULT_SYNTHESIS_MAX_TOKENS,
+        help=("max_tokens dla etapu syntezy B (domyślnie 3000 po realnym "
+              "stop_reason=max_tokens przy 2200; uwzględniane w estymacie)."),
+    )
     parser.add_argument("--forwarded-context-tokens", type=int, default=2500,
                         help="szacowany rozmiar kontekstu przekazywanego do etapu B (syntezy).")
     # --- three-stage (A1/A2/B, ADR-020) ---

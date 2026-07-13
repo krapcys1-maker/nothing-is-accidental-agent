@@ -12,6 +12,8 @@ from app.core.config import Settings
 from app.research.cost_estimator import (
     MIN_SAFETY_MARGIN,
     estimate_no_search_call_usd,
+    estimate_staged_research_cost_usd,
+    estimate_synthesis_cost_usd,
     estimate_with_retries,
     estimate_worst_case_search_call_usd,
 )
@@ -94,6 +96,50 @@ def test_no_search_call_has_zero_search_fee(real_pricing_settings):
     e = estimate_no_search_call_usd(
         real_pricing_settings, max_output_tokens=2200, forwarded_context_tokens=2500)
     assert e.search_fee_usd == 0.0
+
+
+def test_measured_3000_token_synthesis_limit_is_fully_costed(real_pricing_settings):
+    """Nowy limit B nie może być tylko ustawieniem klienta: pre-flight musi
+    policzyć pełne 3000 tokenów wyjścia oraz kontrolowany kontekst wejściowy."""
+    estimate = estimate_synthesis_cost_usd(
+        real_pricing_settings, max_output_tokens=3000, forwarded_context_tokens=2500)
+
+    assert estimate.expected_usd == pytest.approx(0.0175)
+    assert estimate.conservative_usd == pytest.approx(0.02625)
+    assert estimate_with_retries(estimate.conservative_usd, 0) == pytest.approx(0.02625)
+
+
+def test_task9_fresh_projection_with_3000_token_b_stays_below_055_cap(
+        real_pricing_settings):
+    projection = estimate_staged_research_cost_usd(
+        real_pricing_settings,
+        discovery_max_searches=1,
+        discovery_max_tokens=600,
+        expected_source_count=4,
+        max_web_searches_per_source=1,
+        extraction_max_tokens=1500,
+        synthesize_max_tokens=3000,
+        forwarded_context_tokens=2500,
+    )
+
+    assert projection["synthesis"].conservative_usd == pytest.approx(0.02625)
+    assert projection["total"].conservative_usd == pytest.approx(0.516375)
+    assert projection["total"].conservative_usd < 0.55
+
+
+def test_task9_resume_projection_counts_prior_usage_exactly_once(
+        real_pricing_settings):
+    prior_usage = 0.170050
+    stage_b = estimate_synthesis_cost_usd(
+        real_pricing_settings, max_output_tokens=3000, forwarded_context_tokens=2500)
+
+    projected_total = round(
+        prior_usage + estimate_with_retries(stage_b.conservative_usd, 0), 6)
+
+    assert projected_total == pytest.approx(0.196300)
+    assert projected_total < 0.20
+    assert projected_total != pytest.approx(
+        round(2 * prior_usage + stage_b.conservative_usd, 6))
 
 
 def test_negative_inputs_rejected(real_pricing_settings):

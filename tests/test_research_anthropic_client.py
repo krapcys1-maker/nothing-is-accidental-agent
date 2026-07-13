@@ -9,9 +9,11 @@ from app.llm.base import Usage
 from app.research.anthropic_client import AnthropicResearchClient
 from app.research.base import (
     ResearchBudgetError,
+    ResearchError,
     ResearchParseError,
     ResearchPlan,
     ResearchTimeout,
+    ResearchTruncatedError,
     SourceCandidate,
 )
 
@@ -83,6 +85,92 @@ def test_invalid_json_still_carries_real_usage():
     assert client.call_count == 1
     assert excinfo.value.usage == _USAGE
     assert excinfo.value.model == "sonnet-x"
+
+
+def test_staged_synthesis_success_below_limit_parses_normally():
+    def caller(plan, cards):
+        return _GOOD_JSON, _USAGE, "end_turn"
+
+    client = AnthropicResearchClient(
+        "key", "m", synthesize_from_cards_caller=caller, max_retries=0,
+    )
+    result = client.synthesize_from_cards(_PLAN, [])
+    assert result.draft.working_thesis == "Because dynamic pricing."
+    assert result.stop_reason == "end_turn"
+    assert client.call_count == 1
+
+
+def test_max_tokens_is_typed_truncation_with_usage_and_no_retry():
+    calls = []
+
+    def caller(plan, cards):
+        calls.append(1)
+        return '{"working_thesis": "cut', _USAGE, "max_tokens"
+
+    client = AnthropicResearchClient(
+        "key", "m", synthesize_from_cards_caller=caller,
+        synthesize_max_tokens=3000, max_retries=3,
+    )
+    with pytest.raises(ResearchTruncatedError) as excinfo:
+        client.synthesize_from_cards(_PLAN, [])
+
+    assert calls == [1]
+    assert client.call_count == 1
+    assert excinfo.value.usage == _USAGE
+    assert excinfo.value.model == "m"
+    assert excinfo.value.raw_text == '{"working_thesis": "cut'
+    assert excinfo.value.stop_reason == "max_tokens"
+    assert "max_output_tokens=3000" in str(excinfo.value)
+
+
+def test_a1_max_tokens_still_salvages_complete_jsonl_rows():
+    """Truncation B is all-or-nothing, but A1 intentionally keeps complete
+    JSONL candidates before a cut final row (ADR-020)."""
+    raw = (
+        '{"url":"https://a.example","title":"A"}\n'
+        '{"url":"https://b.example","title":"B"}\n'
+        '{"url":"https://cut.example","title":"'
+    )
+
+    def caller(plan, max_searches):
+        return raw, _USAGE, "max_tokens"
+
+    client = AnthropicResearchClient(
+        "key", "m", discover_caller=caller, max_retries=0,
+    )
+    result = client.discover_sources(_PLAN, max_searches=3)
+
+    assert [candidate.url for candidate in result.candidates] == [
+        "https://a.example", "https://b.example",
+    ]
+    assert result.stop_reason == "max_tokens"
+
+
+def test_invalid_json_without_max_tokens_remains_plain_parse_error():
+    def caller(plan, cards):
+        return "{invalid", _USAGE, "end_turn"
+
+    client = AnthropicResearchClient(
+        "key", "m", synthesize_from_cards_caller=caller, max_retries=2,
+    )
+    with pytest.raises(ResearchParseError) as excinfo:
+        client.synthesize_from_cards(_PLAN, [])
+    assert not isinstance(excinfo.value, ResearchTruncatedError)
+    assert excinfo.value.usage == _USAGE
+    assert client.call_count == 1
+
+
+def test_provider_error_remains_separate_from_truncation():
+    def caller(plan, cards):
+        raise ResearchError("provider rejected request")
+
+    client = AnthropicResearchClient(
+        "key", "m", synthesize_from_cards_caller=caller, max_retries=2,
+    )
+    with pytest.raises(ResearchError) as excinfo:
+        client.synthesize_from_cards(_PLAN, [])
+    assert not isinstance(excinfo.value, (ResearchParseError, ResearchTruncatedError))
+    assert client.call_count == 1
 
 
 def test_budget_callback_runs_before_every_attempt():
@@ -248,6 +336,42 @@ def test_extract_max_tokens_explicit_override_still_works(monkeypatch):
     assert captured.get("max_tokens") == 800
 
 
+def _capture_synthesis_call_kwargs(monkeypatch, client: AnthropicResearchClient) -> dict:
+    import sys
+    import types
+
+    captured = {}
+
+    class _FakeMessages:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+            raise RuntimeError("stop-before-network")
+
+    class _FakeAnthropicClient:
+        def __init__(self, api_key):
+            self.messages = _FakeMessages()
+
+    fake_module = types.ModuleType("anthropic")
+    fake_module.Anthropic = _FakeAnthropicClient
+    monkeypatch.setitem(sys.modules, "anthropic", fake_module)
+    try:
+        client._default_synthesize_from_cards_caller(_PLAN, [])
+    except Exception:
+        pass
+    return captured
+
+
+def test_synthesis_default_max_tokens_is_3000_and_override_works(monkeypatch):
+    default = _capture_synthesis_call_kwargs(
+        monkeypatch, AnthropicResearchClient("key", "m"),
+    )
+    override = _capture_synthesis_call_kwargs(
+        monkeypatch, AnthropicResearchClient("key", "m", synthesize_max_tokens=2600),
+    )
+    assert default.get("max_tokens") == 3000
+    assert override.get("max_tokens") == 2600
+
+
 @pytest.mark.parametrize(
     ("extra_args", "expected"),
     [([], 1500), (["--extraction-max-tokens", "800"], 800)],
@@ -268,3 +392,22 @@ def test_capped_research_cli_preserves_extraction_token_default_and_override(
 
     assert run_capped_research.main(["--topic-id", "1", *extra_args]) == 0
     assert captured["extraction_max_tokens"] == expected
+
+
+@pytest.mark.parametrize(
+    ("extra_args", "expected"),
+    [([], 3000), (["--synthesize-max-tokens", "2600"], 2600)],
+)
+def test_capped_research_cli_preserves_synthesis_token_default_and_override(
+        monkeypatch, extra_args, expected):
+    from scripts import run_capped_research
+
+    captured = {}
+
+    def fake_run_fresh(args):
+        captured["synthesize_max_tokens"] = args.synthesize_max_tokens
+        return 0
+
+    monkeypatch.setattr(run_capped_research, "_run_fresh", fake_run_fresh)
+    assert run_capped_research.main(["--topic-id", "1", *extra_args]) == 0
+    assert captured["synthesize_max_tokens"] == expected

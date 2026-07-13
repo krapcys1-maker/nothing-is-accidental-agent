@@ -103,3 +103,13 @@ Na obecnym etapie (przed generacją treści i publikacją) interwencje człowiek
 - Zakres: osobny kontrakt nieudanego research resume oraz rzeczywiście równoległy candidate claim.
 - Zakazy utrzymane: bez API, realnego researchu, Playwrighta, Task 9, Etapu 1, commita i pushu; P2-17/P2-18/P2-19 bez zmian.
 - Efekt: oba P1 poprawione, 337 testów offline, working tree pozostawiony do krótkiego review.
+
+### [2026-07-13] Właściciel zatwierdził dokładnie jeden płatny Task 9
+- Zakres: topic #2, staged A1/A2/B, cap 0,55 USD, `max_retries=0`, dokładna komenda ADR-022.
+- Zakazy: bez drugiego runu, retry, resume, force, Playwrighta, publikacji, Etapu 1, commita i pushu.
+- Efekt: A1 i 4×A2 sukces; B `max_tokens`/parse-error; koszt 0,170050 USD. Codex zatrzymał się po pierwszym runie i pozostawił dokumentację do review.
+
+### [2026-07-13] Właściciel ograniczył naprawę do pracy offline
+- Dozwolone: kod, fake callery, plikowa SQLite, testy i dokumentacja.
+- Niedozwolone: API, resume, drugi run, ręczna zmiana realnej bazy, Playwright, publikacja, commit i push.
+- Efekt: 351 testów zielonych, koszt 0 USD; osobna zgoda nadal potrzebna zarówno na repair auditu, jak i późniejszy płatny resume B.

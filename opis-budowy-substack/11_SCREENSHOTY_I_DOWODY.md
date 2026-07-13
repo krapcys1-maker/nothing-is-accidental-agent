@@ -80,6 +80,7 @@ Na 2026-07-11 **nie wykonano jeszcze żadnego screenshotu** — dotychczasowa pr
 - **SS-15** Pierwszy subskrybent — po publikacji. `SCREENSHOT REQUIRED`
 - **SS-16** Pierwsza zmiana strategii (raport tygodniowy) — po ≥7 dniach. `SCREENSHOT REQUIRED`
 - **SS-Task8** Lifecycle race — terminal z 44 testami Task 8 oraz pełnym `330 passed`, bez danych produkcyjnej bazy. `SCREENSHOT REQUIRED`; w zadaniu nie użyto Playwrighta.
+- **SS-Task9** Pierwszy realny staged run — bezpieczny widok statusów A1/A2/B, 4 VERIFIED, `max_tokens`, koszt 0,170050 USD i cap 0,55 USD; bez raw response i sekretów. `SCREENSHOT REQUIRED`; do wykonania ręcznie po review, bez Playwrighta.
 
 ## Podsumowanie
 - Dowodów zrobionych: **0**.
@@ -88,3 +89,7 @@ Na 2026-07-11 **nie wykonano jeszcze żadnego screenshotu** — dotychczasowa pr
 
 ## Powiązania
 - `docs/SCREENSHOT_INDEX.md` (indeks techniczny), `screenshots/` (pliki), `16_MATERIAL_DO_PIERWSZEGO_ARTYKULU.md`
+
+### Task 9 — dowód poprawki offline
+
+Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior usage liczone raz i zachowaniem JSONL A1) oraz 351/351 pełnego suite. Screenshot pozostaje oznaczony `SCREENSHOT REQUIRED`: nie użyto Playwrighta ani przeglądarki i nie wolno eksponować prywatnego raw response. Dowodem trwałym przed screenshotem są testy, diff oraz wpis `SS-TASK9-FIX` w indeksie.

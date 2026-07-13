@@ -36,6 +36,7 @@ from app.models import SourceType, SourceVerification
 from app.research.base import (
     AttemptBudgetCallback,
     AttemptBudgetContext,
+    DEFAULT_SYNTHESIS_MAX_TOKENS,
     DiscoveryResult,
     ExtractionResult,
     GatheredSource,
@@ -44,6 +45,7 @@ from app.research.base import (
     ResearchPlan,
     ResearchResult,
     ResearchTimeout,
+    ResearchTruncatedError,
     SourceCandidate,
     SourceCardDraft,
     SourceDraft,
@@ -289,7 +291,7 @@ class AnthropicResearchClient:
                  max_retries: int = 2, timeout_seconds: int = 60,
                  max_web_searches: int | None = None,
                  gather_max_tokens: int = 1200,
-                 synthesize_max_tokens: int = 2200,
+                 synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
                  discover_max_tokens: int = 600,
                  extract_max_tokens: int = 1500,
                  max_web_searches_per_source: int = 1) -> None:
@@ -415,7 +417,10 @@ class AnthropicResearchClient:
     # stop_reason (na sukces I na błąd) — potrzebne do diagnostyki (patrz
     # app/research/diagnostics.py) po dwóch incydentach, w których nie dało się
     # jednoznacznie ustalić przyczyny ucięcia bez surowej odpowiedzi. ---
-    def _run_with_retry_and_parse_v2(self, call_fn, parse_fn, empty_error_msg: str):
+    def _run_with_retry_and_parse_v2(
+        self, call_fn, parse_fn, empty_error_msg: str, *,
+        stage: str, max_output_tokens: int, typed_truncation: bool = False,
+    ):
         last_error: Exception | None = None
         for attempt in range(self._max_retries + 1):
             self._before_attempt(attempt)
@@ -428,6 +433,16 @@ class AnthropicResearchClient:
                     self._record_timeout_usage_before_retry(exc)
                     continue
                 raise
+            # Stage A1 intentionally salvages complete JSONL rows before a cut
+            # final row; A2 retains its established parse-error contract. Only
+            # stage B is all-or-nothing and needs the dedicated truncation type.
+            if typed_truncation and stop_reason == "max_tokens":
+                raise ResearchTruncatedError(
+                    f"{stage}: odpowiedź ucięta; stop_reason=max_tokens; "
+                    f"max_output_tokens={max_output_tokens}.",
+                    usage=usage, model=self.model, raw_text=text,
+                    stop_reason=stop_reason,
+                )
             try:
                 parsed = parse_fn(text)
             except ResearchParseError as exc:
@@ -445,7 +460,8 @@ class AnthropicResearchClient:
         candidates, usage, raw_text, stop_reason = self._run_with_retry_and_parse_v2(
             lambda: self._discover_caller(plan, max_searches),
             _parse_discovery_candidates_jsonl,
-            "Odkrywanie źródeł nieudane bez konkretnego błędu.")
+            "Odkrywanie źródeł nieudane bez konkretnego błędu.",
+            stage="discover_sources", max_output_tokens=self._discover_max_tokens)
         return DiscoveryResult(candidates=candidates, usage=usage, model=self.model,
                                raw_text=raw_text, stop_reason=stop_reason)
 
@@ -457,7 +473,8 @@ class AnthropicResearchClient:
         card, usage, raw_text, stop_reason = self._run_with_retry_and_parse_v2(
             lambda: self._extract_caller(plan, candidate),
             lambda text: _parse_source_card(text, candidate),
-            "Ekstrakcja źródła nieudana bez konkretnego błędu.")
+            "Ekstrakcja źródła nieudana bez konkretnego błędu.",
+            stage="extract_source", max_output_tokens=self._extract_max_tokens)
         return ExtractionResult(card=card, usage=usage, model=self.model,
                                 raw_text=raw_text, stop_reason=stop_reason)
 
@@ -469,7 +486,9 @@ class AnthropicResearchClient:
         draft, usage, raw_text, stop_reason = self._run_with_retry_and_parse_v2(
             lambda: self._synthesize_from_cards_caller(plan, cards),
             lambda text: _parse_synthesis_from_cards(text, cards),
-            "Synteza karty (z kart źródeł) nieudana bez konkretnego błędu.")
+            "Synteza karty (z kart źródeł) nieudana bez konkretnego błędu.",
+            stage="synthesize_from_cards", max_output_tokens=self._synthesize_max_tokens,
+            typed_truncation=True)
         return ResearchResult(draft=draft, usage=usage, model=self.model,
                               raw_text=raw_text, stop_reason=stop_reason)
 
@@ -568,6 +587,11 @@ class AnthropicResearchClient:
             "confidence_score, source_quality_score, source_claims "
             '(list of {"url": "...", "supports_claim": "..."} mapping each source url '
             "to the claim it supports — do NOT repeat title/author/date, just url). "
+            "Keep the JSON concise: working_thesis <= 80 words; main_mechanism <= 150 "
+            "words; 4-8 confirmed_claims of <= 35 words each; at most 4 "
+            "uncertain_claims and 4 contradictions; strongest_counterargument <= 80 "
+            "words; at most 8 citable_numbers; visual_idea <= 60 words; source_claims "
+            "must contain exactly one short mapping per supplied source. "
             "Return ONLY the JSON object, no prose before or after it."
         )
         text, usage, _stop_reason = self._call_anthropic(

@@ -198,6 +198,23 @@ Test może używać dwóch bazodanowych połączeń i nadal nie testować wspó�
 
 Po korekcie jeden warunkowy UPDATE wygrywa, drugi dostaje typowany konflikt. Tak samo oddzielono ogólny koniec runu od jawnego resume researchu. 337 testów, 0 USD, brak API.
 
+## 26. Cztery źródła to jeszcze nie wynik (2026-07-13)
+
+Pierwszy realny staged run po stabilizacji zrobił niemal wszystko dobrze. A1 znalazł cztery kandydaty. Cztery osobne A2 zakończyły się sukcesem i zapisały VERIFIED. Koszt całości pozostawał daleko pod capem: 0,170050 USD wobec 0,55 USD.
+
+Synteza B wykorzystała jednak pełne 2200 tokenów. `stop_reason=max_tokens` potwierdziło, że JSON nie był po prostu „dziwny” — został ucięty. System zachował cztery opłacone karty źródłowe, zaksięgował koszt i odmówił stworzenia finalnej karty. Nie wykonał drugiego calla.
+
+**Zdanie do artykułu:** „Odporność nie polega na tym, że wszystko kończy się sukcesem. Polega na tym, że po porażce dokładnie wiadomo, za co zapłaciliśmy i czego nadal nie mamy.”
+
+Odczyt bazy przyniósł jeszcze jedną lekcję: szczegółowy research był poprawnie wznawialny jako `SOURCES_COMPLETE`, ale ogólny run nadal udawał aktywny proces. To finding do review, nie poprawiony po cichu w trakcie płatnego eksperymentu.
+
 ## Powiązania
 - Źródła: `00`–`10`, `docs/BUILD_LOG.md`, `docs/DECISIONS.md` (ADR-017, ADR-019, ADR-020), `docs/COSTS.csv`, `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` CZĘŚĆ D, CZĘŚĆ E, CZĘŚĆ F
 - Następny krok redakcyjny: szkic w `article-series/artykul-01-dlaczego-wlasny-substack.md`
+
+### Materiał: „Nie naprawiaj historii po cichu” (Task 9)
+
+- Fakt: 4 VERIFIED i 0,170050 USD przetrwały ucięcie B; nie powstała częściowa karta.
+- Finding: provider powiedział `max_tokens`, ale system nazywał to ogólnym parse error i zostawił audit RUNNING.
+- Naprawa: typowany truncation, zero retry, limit 3000 (+36%) z conservative 0,026250 USD, terminalny FAILED + wznawialny SOURCES_COMPLETE.
+- Etyka auditu: kod naprawiono, lecz historycznego rekordu nie zmieniono bez osobnej zgody. 351 testów offline, brak kolejnego rachunku.

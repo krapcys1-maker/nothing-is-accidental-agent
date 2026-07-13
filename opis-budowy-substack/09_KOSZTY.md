@@ -153,7 +153,7 @@ Rekomendowany zatwierdzany cap: **0,55 USD**. Maksymalna liczba wyszukiwań wyni
 ## Koszt całego eksperymentu (na żywo, do domknięcia po 30 dniach)
 | Składnik | Stan |
 |---|---|
-| **Realny koszt API do dziś (zmierzony, potwierdzony w bazie)** | **0,500616 USD** |
+| **Realny koszt API do dziś (zmierzony, potwierdzony w bazie)** | **0,670666 USD** |
 | Szacunek dry_run do dziś (nie liczy się do budżetu) | ~0.062 USD |
 | Prognoza 30 dni | ~20–55 USD |
 | Wykorzystanie budżetu miesięcznego (40 USD) | 1,25% |
@@ -162,7 +162,9 @@ Rekomendowany zatwierdzany cap: **0,55 USD**. Maksymalna liczba wyszukiwań wyni
 
 **Zrobione:** wszystkie znane realne koszty są zapisane w bazie i `COSTS.csv`; call diagnostyczny (0,028969 USD) jest jawnie oddzielony od skumulowanego kosztu runu (0,126793 USD). **Wciąż otwarte:** brak pełnej realnej karty researchu; P1-5 i prawdziwy fetch źródła pozostają niezbudowane.
 
-**Task 8:** 0,000000 USD. Wykonano wyłącznie lokalne zmiany kodu, SQLite i testy race; nie było API, researchu ani generowania tematów. Całkowity historyczny koszt realnych calli projektu nie zmienił się.
+**Task 8:** 0,000000 USD. Wykonano wyłącznie lokalne zmiany kodu, SQLite i testy race; nie było API, researchu ani generowania tematów.
+
+**Task 9:** 0,170050 USD za dokładnie jeden staged run: A1 0,029243; cztery A2 łącznie 0,127903; B 0,012904. Rzeczywisty koszt stanowi 30,92% capu 0,55 USD i 33,30% conservative 0,510375 USD. Pięć searchy, zero retry. Księga `model_usage`, `docs/COSTS.csv` i `runs.cost_usd` są zgodne; kompletna karta nie powstała.
 
 ## Jak koszty trafiają tutaj
 Automatycznie: `UsageTracker` liczy koszt z cennika i dopisuje wiersz do `model_usage` (baza) **oraz** do `docs/COSTS.csv`. Ten plik (`09_KOSZTY.md`) agreguje je narracyjnie po każdym większym etapie i po każdym tygodniu (patrz `weekly-summaries/`).
@@ -170,3 +172,9 @@ Automatycznie: `UsageTracker` liczy koszt z cennika i dopisuje wiersz do `model_
 ## Powiązania
 - `docs/COSTS.csv` (źródło), `app/llm/usage_tracker.py` (mechanizm), `10_FRAGMENTY_KODU.md` (fragment)
 - `docs/DECISIONS.md` ADR-012/013, `weekly-summaries/`
+
+### 2026-07-13 — koszt poprawki offline
+
+- Nowe wywołania API: **0**; dodatkowy koszt: **0 USD**. `docs/COSTS.csv` nie dostał sztucznego wpisu.
+- Historyczny Task 9 pozostaje **0,170050 USD**.
+- Nowy limit B=3000: expected **0,017500 USD**, conservative **0,026250 USD**; fresh worst-case **0,516375 USD**, projected resume z prior usage **0,196300 USD**.

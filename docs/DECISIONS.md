@@ -282,13 +282,13 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
   - **Diagnostyka** (`app/research/diagnostics.py`): każda REALNA odpowiedź modelu (sukces i błąd) zapisywana do prywatnego pliku `data/debug/research/<run_id>/<stage>_raw_response.txt` (run_id, stage, `stop_reason`, tokeny, długość odpowiedzi, surowa treść, miejsce błędu parsowania) — bez tego oba dotychczasowe incydenty ucięcia JSON-a dawały tylko HIPOTEZĘ przyczyny. Cały `data/` jest w `.gitignore`; zero sekretów w plikach (tylko treść odpowiedzi + metadane liczbowe).
   - **`stop_reason` z API** — `_call_anthropic` teraz zwraca też `message.stop_reason` (np. `max_tokens`/`end_turn`), więc przyszłe ucięcia będzie można potwierdzić WPROST, nie domysłem z pozycji znaku błędu.
   - **JSONL zamiast jednego JSON-a dla A1** — kandydaci to jeden obiekt JSON NA LINIĘ; uszkodzona/ucięta linia (najczęściej ostatnia) jest pomijana, zachowując wszystkie poprawne rekordy sprzed niej — zamiast odrzucać całą odpowiedź przy jednym złym rekordzie.
-  - **Limity tokenów per wywołanie** (uzasadnienie liczbowe w `IMPLEMENTATION_PLAN.md` CZĘŚĆ F): A1=600 (lista URL-i, była 1200 na PEŁNE fakty wielu źródeł), A2 pierwotnie=500 (JEDNO źródło), B=2200 (bez zmian). **Aktualizacja 2026-07-12 po diagnostyce:** produkcyjny default A2 został podniesiony z 500 do **1500**. Jednorazowe `max_tokens=5000` służyło wyłącznie jako sufit diagnostyczny dla kandydata `id=3` i nie jest wartością domyślną. Udana odpowiedź zakończyła się `stop_reason=end_turn` przy 915 output tokens; kandydatów 1 i 2 nie ponowiono, więc nie twierdzimy, że wymagały dokładnie tej samej długości.
+  - **Limity tokenów per wywołanie** (uzasadnienie liczbowe w `IMPLEMENTATION_PLAN.md` CZĘŚĆ F): A1=600 (lista URL-i, była 1200 na PEŁNE fakty wielu źródeł), A2 pierwotnie=500 (JEDNO źródło), B pierwotnie=2200. **Aktualizacja 2026-07-12 po diagnostyce:** produkcyjny default A2 został podniesiony z 500 do **1500**. Jednorazowe `max_tokens=5000` służyło wyłącznie jako sufit diagnostyczny dla kandydata `id=3` i nie jest wartością domyślną. Udana odpowiedź zakończyła się `stop_reason=end_turn` przy 915 output tokens; kandydatów 1 i 2 nie ponowiono, więc nie twierdzimy, że wymagały dokładnie tej samej długości. **Aktualizacja 2026-07-13 (ADR-028):** po realnym ucięciu B przy 2200 produkcyjny default B wynosi 3000 i jest objęty estymatorem/capem.
   - **Nowy estymator kosztu z DWÓCH realnych obserwacji** (nie jednej): incydent 1 (11.07, rekonstrukcja) i incydent 2 (12.07, pomiar wprost) różnią się ~2.3x per-search — estymator POKAZUJE OBA („conservative" sufit z marginesem, oparty na wyższej/starszej obserwacji; „expected" środkowy szacunek z pomiaru wprost, bez marginesu) zamiast jednej liczby, żeby nie powtórzyć błędu „estymacja = przewidywany koszt".
 - **Zalety:** awaria źródła N nie ma ŻADNEGO wpływu na źródła 1..N-1 (zapisane niezależnie, natychmiast); wznowienie ekstrakcji kontynuuje dokładnie od pierwszego nieprzetworzonego kandydata (nawet po restarcie procesu); koszt per źródło jest mały, przewidywalny i niezależnie księgowany; diagnostyka pozwala PIERWSZY RAZ potwierdzić przyczynę ucięcia zamiast zgadywać.
 - **Ryzyka:** więcej pojedynczych wywołań API (N źródeł = N wywołań zamiast 1) — koszt per-search-fee ($0.01) mnoży się przez liczbę źródeł, częściowo kompensowane bardzo małym `max_output_tokens` per wywołanie; więcej stanów w maszynie stanów (`DISCOVERY_PENDING/COMPLETE`, `EXTRACTION_IN_PROGRESS`, `SOURCES_COMPLETE`, `SYNTHESIS_PENDING` — dodane OBOK istniejących `PARTIAL/COMPLETE/FAILED`, które są świadomie WSPÓLNE dla starego i nowego przepływu); kalibracja estymatora nadal opiera się na n=2, jawnie oznaczone jako przybliżenie.
 - **Co NIE zostało zmienione:** stary dwuetapowy przepływ (`run_two_stage_research_pipeline`, `resume_research_stage_b`, ADR-016/019) pozostaje w kodzie, NIEZALECANY, ale w pełni działający i pokryty swoimi 17 testami (nie usuwamy działającego, przetestowanego kodu — supersede, nie usuń, ta sama zasada co przy ADR-017→018). Tabela `research_sources` (migracja 0004) też zostaje nietknięta.
 - **Kto podjął:** człowiek (właściciel), wykonanie: Claude.
-- **Zmieniona później:** nie.
+- **Zmieniona później:** limit B i semantykę truncation/lifecycle doprecyzował ADR-028 po realnym Task 9; podział A1/A2/B pozostaje bez zmian.
 - **Powiązania:** `app/research/diagnostics.py` (nowy), `app/research/base.py` (nowe typy: `SourceCandidate`, `DiscoveryResult`, `SourceCardDraft`, `ExtractionResult`), `app/research/anthropic_client.py` (`discover_sources`/`extract_source`/`synthesize_from_cards`), migracja `0005_staged_source_extraction.sql`, `app/workflows/research/pipeline.py` (`run_source_discovery`/`run_source_extraction`/`run_synthesis_from_cards`/`run_staged_research_pipeline`/`resume_staged_research`), `tests/test_staged_research_extraction.py` (12 testów), `IMPLEMENTATION_PLAN.md` CZĘŚĆ F, `ERRORS_AND_FAILURES.md` (oba incydenty 11.07/12.07).
 
 ### ADR-021: Prywatne repozytorium GitHub i strategia branchy main/dev
@@ -305,14 +305,14 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 
 ### ADR-022: Konfiguracja pierwszego świeżego runu nastawionego na kompletną Research Card
 - **Data:** 2026-07-12
-- **Status:** PROPOSED — wymaga jawnej zgody właściciela przed realnym API
+- **Status:** ACCEPTED / EXECUTED 2026-07-13 — właściciel jawnie zatwierdził dokładnie jeden realny run z capem 0,55 USD
 - **Czego dotyczyła:** wybór najmniejszej konfiguracji A1/A2/B, która daje tolerancję jednego błędu A2 i nadal może osiągnąć próg 3 zweryfikowanych źródeł.
 - **Rozważane opcje:** A) 3 źródła — najtaniej, ale zero tolerancji błędu; B) 4 źródła — jedna możliwa porażka i nadal 3 źródła do B; C) 5+ źródeł — większa tolerancja kosztem dodatkowych płatnych calli bez obecnego uzasadnienia.
 - **Decyzja i uzasadnienie:** proponowane B: świeży `three-stage`, A1 1 search/600 tokens, A2 max 4 źródła × 1 search × 1500 tokens, zero retry, B 2200 tokens/2500 forwarded context, approved cap 0,55 USD. Expected=0,201280 USD; conservative=0,510375 USD. Komenda używa `--topic-id 2`, nie `--resume`, więc nie dotyka istniejącego PARTIAL.
 - **Zalety:** jedna awaria A2 nie blokuje automatycznie syntezy; maksymalnie 5 searchy; brak automatycznych ponowień; wszystkie granice jawne w CLI; conservative mieści się w dziennym/miesięcznym budżecie.
 - **Ryzyka:** cap jest wyłącznie bramką pre-flight; P0-2c/P1-2/P1-3/P1-4/P1-5 pozostają; B nie ma jeszcze potwierdzenia na żywym API. Search-o-URL nie jest dowodem bezpośredniego odczytu strony.
 - **Kto podjął:** Codex przygotował propozycję na podstawie parametrów właściciela; decyzja o realnym wydatku należy do właściciela.
-- **Zmieniona później:** nie.
+- **Zmieniona później:** wykonana 2026-07-13 bez zmiany parametrów. A1 i 4×A2 zakończyły się sukcesem; B zwróciło ucięty JSON (`stop_reason=max_tokens`) po 2200 tokenach. Koszt 0,170050 USD; brak retry/resume/force; kryterium końca Etapu 0 nie zostało osiągnięte.
 - **Powiązania:** `docs/BUILD_LOG.md` Etap 1O, `docs/IMPLEMENTATION_PLAN.md` F.10, audyt P0-2/P1-2..6.
 
 ### ADR-023: Konsolidacja dokumentacji architektonicznej do trzech dokumentów źródła prawdy
@@ -395,6 +395,19 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Weryfikacja:** 44 literalne testy Task 8 plus regresje Tasks 1–7; race dwóch terminalizacji runu, konkurencyjnego resume i równoległego claimu kandydata na plikowej SQLite; pełne **330 passed** offline. Zero API, realnego researchu, Playwrighta i kosztu.
 - **Poza zakresem:** P2-17, P2-18 i P2-19 pozostają bez zmian; nie dodano migracji, workera, lease ani Task 9.
 - **Powiązania:** `app/ports/storage.py`, `app/storage/repositories.py`, `tests/test_status_transitions.py`, ADR-024/025/026, MASTER §5.
+
+### ADR-028: Ucięcie syntezy jest terminalną, lecz wznawialną porażką auditu
+
+- **Data:** 2026-07-13
+- **Status:** ACCEPTED (kontrakt naprawczy zlecony przez właściciela po pierwszym realnym Task 9)
+- **Kontekst:** realny etap B runu `c01171bc-7ff5-4b83-bbfa-c0b164137793` zakończył generację dokładnie przy 2200 tokenach (`stop_reason=max_tokens`), urwał JSON i pozostawił główny `runs=RUNNING`, choć proces już się zakończył. Usage 1904/2200 i koszt zostały zachowane, 4 źródła pozostały VERIFIED.
+- **Decyzja:** `stop_reason=max_tokens` jest rozpoznawane przed parserem jako `ResearchTruncatedError`, przenosi usage/model/raw response/stop_reason i nigdy nie uruchamia automatycznego retry. Domyślny, jawny i nadpisywalny limit B wynosi 3000 tokenów; prompt ogranicza długość pól bez usuwania wymaganej treści. Estymator i każda bramka budżetowa używają dokładnie przekazanego limitu.
+- **Lifecycle:** po kontrolowanym fresh B failure `runs` przechodzi do `FAILED` z `finished_at`, przyczyną i kanonicznym kosztem z `model_usage`; `research_runs` wraca do `SOURCES_COMPLETE`, karta nie powstaje, topic pozostaje SELECTED. Późniejszy jawny resume wykonuje wyłącznie B i kończy audit przez istniejący `finish_resumed_research_run` z CAS.
+- **Pomiar i koszt:** 3000 daje 36% zapasu względem zaobserwowanych 2200. Dla cen ADR-022 B ma expected 0,017500 USD i conservative 0,026250 USD; pełny fresh staged worst-case rośnie do 0,516375 USD i pozostaje poniżej capu 0,55 USD. Dla prior usage 0,170050 USD projected resume wynosi 0,196300 USD, poniżej absolutnego capu 0,20 USD. `max_retries=0` nie dodaje mnożnika.
+- **Dane historyczne:** kodu naprawczego nie użyto do mutacji realnej bazy. Run `c01171bc` pozostaje historycznie RUNNING do osobno zatwierdzonej, warunkowej operacji lifecycle; nie wolno naprawiać go surowym SQL ani łączyć repair z płatnym resume.
+- **P2-2:** `model_usage` pozostaje jedynym kanonem kosztu. `research_runs.total_cost_usd=0.0` jest znanym cache i nie było naprawiane w tym zadaniu.
+- **Weryfikacja:** 174 testy celowane (włącznie z cost ledger, prior usage liczone raz i zachowanie JSONL A1) i 351 pełnego suite, offline; plikowa SQLite z reopen, brak API i koszt dodatkowy 0 USD.
+- **Powiązania:** ADR-020/022/026/027, `app/research/base.py`, `app/research/anthropic_client.py`, `app/workflows/research/pipeline.py`, `scripts/run_capped_research.py`.
 
 ## Decyzje otwarte (wymagają właściciela)
 

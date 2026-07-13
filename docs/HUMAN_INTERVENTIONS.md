@@ -139,3 +139,15 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Obiekt:** pełna inwentaryzacja i zabezpieczenie istniejących repozytoryjnych zmian statusu.
 - **Zakres decyzji właściciela:** atomowy warunek statusu, `rowcount`, typowany błąd, testy illegal/race/reopen i self-review; bez Task 9, API, realnego researchu, Playwrighta, commita i pushu. P2-17/P2-18/P2-19 pozostają poza zakresem.
 - **Efekt:** ADR-027, 44 nowe regresje i 330 testów offline; working tree pozostawiony do niezależnego review, koszt 0 USD.
+
+### [2026-07-13] APPROVAL — Etap 0 / Task 9, dokładnie jeden realny run
+- **Typ:** APPROVAL / PAID API
+- **Obiekt:** pierwszy świeży staged run topic #2 według ADR-022.
+- **Zakres decyzji właściciela:** dokładnie jedna komenda, cap maks. 0,55 USD, `max_retries=0`; bez drugiego runu, retry, resume, force, Playwrighta, publikacji i Etapu 1.
+- **Efekt:** A1 i 4×A2 zakończone sukcesem; B zwróciło ucięty JSON przy `max_tokens`. Koszt 0,170050 USD. Polecenie zatrzymania po błędzie zachowano literalnie; nie wykonano żadnej dodatkowej płatnej akcji.
+
+### 2026-07-13 — zgoda na wyłącznie offline naprawę blockerów Task 9
+
+- **Typ:** IMPLEMENTATION BOUNDARY / NO EXTERNAL ACTION.
+- **Zakres decyzji właściciela:** naprawić truncation B i fałszywe RUNNING, dodać testy i dokumentację; nie wykonywać API, resume, drugiego runu, retry failed candidates, force ani ręcznej mutacji realnej bazy.
+- **Efekt:** kod i 351 testów offline gotowe do niezależnego review. Historyczny run, main i świat zewnętrzny pozostały bez zmian; kolejna operacja lifecycle oraz płatny resume wymagają osobnych zgód.

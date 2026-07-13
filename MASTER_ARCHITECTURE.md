@@ -5,7 +5,7 @@
 >
 > Kolejność prac: `IMPLEMENTATION_ROADMAP.md`. Aktualny stan: `CURRENT_PROJECT_STATE.md`. Rejestr decyzji (ADR): `docs/DECISIONS.md` (nadal obowiązujący — ten dokument konsoliduje decyzje, nie zastępuje rejestru).
 >
-> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (337 passed, 2026-07-13) lub pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
+> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (351 passed, 2026-07-13) lub pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
 
 ---
 
@@ -22,7 +22,7 @@
 | Księgowanie kosztów (model_usage + COSTS.csv, flaga dry_run) | `app/llm/usage_tracker.py` | 3 realne incydenty potwierdziły poprawność |
 | Pipeline tematów (generacja+scoring+dedup+progi) | `app/workflows/topics/` | testy; realnie NIGDY nie uruchomiony (`NOT VERIFIED` na żywym API) |
 | Deduplikacja tematów (lokalna, bez kosztu, ADR-014) | `app/workflows/topics/dedup.py` | `tests/test_dedup.py` |
-| Research etapowy A1/A2/B (ADR-020) + wznawialność po restarcie | `app/workflows/research/pipeline.py` | 12+ testów; na żywo: A1 ✅, A2 1× sukces (diagnostyka), B `NOT VERIFIED` na żywo |
+| Research etapowy A1/A2/B (ADR-020) + wznawialność po restarcie | `app/workflows/research/pipeline.py` | 351 testów; na żywo Task 9: A1 ✅, A2 4/4 ✅, B ucięte przy 2200; offline: typowany truncation B bez zmiany salvage A1, limit B=3000 w estymacie i terminalny audit failure; brak kompletnej karty |
 | Bramka jakości researchu (deterministyczna, min_verified_sources) | `app/research/validation.py` | testy |
 | Injection guard (treść źródeł = dane, nie polecenia) | `app/research/injection_guard.py` | testy |
 | Kalibrowany estymator kosztów (2 realne obserwacje, margines ≥50%) | `app/research/cost_estimator.py` | testy + 3 realne runy |
@@ -34,7 +34,7 @@
 
 - **Policy Engine** — centralnie egzekwuje cap per-run oraz budżet dzienny/miesięczny przez `check_run_budget`; miesięczny zachowuje priorytet ADR-012. Brak nadal: egzekucji `autonomy_level`, `AccountMode`, limitów per konto, cooldownów, SAFE MODE i runtime kill-switcha.
 - **Klient Anthropic dla tematów** (`app/llm/anthropic_client.py`) — offline zweryfikowany kontrakt response→Usage→parse, typowane provider/parse/schema errors, jeden zewnętrzny code fence i księgowanie dostępnego usage przez workflow także przy błędzie; nadal nigdy nie uruchomiony realnie (`NOT VERIFIED live`).
-- **Maszyna stanów researchu** — Etap 0 / Tasks 1–8 ukończone: jawny flow, atomowy koszt/cache i claim A2, idempotentna finalizacja COMPLETE+terminalny run+USED, centralny budżet retry oraz warunkowe przejścia lifecycle. Przed etapem estymata obejmuje `1+max_retries`, przed każdą próbą callback ponownie czyta `model_usage`, a każdy statusowy UPDATE wymaga dozwolonego stanu źródłowego i `rowcount=1`. Rezydualne P2-17/P2-18 oraz `timeout-billed-unrecorded` pozostają jawne. Produkcyjna baza nie została w tej pracy zmieniona.
+- **Maszyna stanów researchu** — Etap 0 / Tasks 1–8 ukończone; Task 9 wykonał jeden realny staged run. A1 i 4×A2 zakończyły się sukcesem, B zachowało usage i diagnostykę po uciętym JSON-ie. Offline naprawiono kontrakt przyszłych wywołań: `stop_reason=max_tokens` jest typowany i nie powoduje retry, świeży B failure terminalizuje `runs=FAILED` z `finished_at/error`, a `research_runs=SOURCES_COMPLETE` zachowuje jawne wznowienie wyłącznie B. Historyczny run celowo pozostaje RUNNING do osobno zatwierdzonego repair. Rezydualne P2-17/P2-18/P2-19 oraz `timeout-billed-unrecorded` pozostają bez zmian.
 
 ### 1.3. Co jest tylko szkieletem
 
@@ -184,7 +184,8 @@ APPROVED → [DB] job (kind='browser', idempotency_key=hash(account,type,content
 
 ### 3.9. Obsługa błędów (OBOWIĄZUJE WSZĘDZIE)
 - Timeout = transient → retry z twardym limitem; przed KAŻDĄ próbą callback wykonuje ponowny `[P]` z aktualnym `model_usage`. Parse i budget denial nie są retry’owane.
-- Błąd parsowania JSON = NIE-transient → zero retry, diagnostyka (surowa odpowiedź + stop_reason do `data/debug/`), run FAILED/PARTIAL.
+- `stop_reason=max_tokens` = typowany `ResearchTruncatedError` przed parse → zero retry, usage zapisane raz, diagnostyka zawiera limit; brak częściowej karty. Pozostały błąd parsowania JSON = NIE-transient → zero retry.
+- Kontrolowany błąd B kończy ogólny audit jako FAILED (`finished_at` i error), ale szczegółowy research wraca do SOURCES_COMPLETE. Jawny resume używa `finish_resumed_research_run` z CAS i nie powtarza A1/A2.
 - Każdy etap zostawia stan trwały w SQLite → wznowienie po restarcie zawsze z bazy.
 - Kolejne błędy tej samej klasy ≥ progu → SAFE MODE (wejście automatyczne, wyjście TYLKO ręczne).
 
@@ -299,9 +300,9 @@ SAFE MODE: flaga w system_flags, ortogonalna do statusów; wejście automatyczne
 | Fallback | brak automatycznego fallbacku na inny model — świadomie: fallback = nieprzewidywalny koszt; awaria → FAILED/PARTIAL + stan trwały + jawne wznowienie | DECYZJA |
 | Timeout | per klient (`timeout_seconds` z configu), traktowany jako transient | ZBUDOWANE |
 | Retry | tylko timeout; estymata ×(1+max_retries); re-check przed każdą próbą; parse/budget error NIGDY | ZBUDOWANE (Task 5) |
-| Limit tokenów | `max_tokens` per wywołanie, per etap, z CLI/configu (A1=600, A2=1500, B=2200) — to REALNY limit kosztu w locie, nie estymata | ZBUDOWANE |
+| Limit tokenów | `max_tokens` per wywołanie, per etap, z CLI/configu (A1=600, A2=1500, B=3000 od ADR-028) — to REALNY limit kosztu w locie, przekazywany też do estymatora | ZBUDOWANE |
 | Structured output | JSON/JSONL + parsery defensywne (`_strip_code_fence`, JSONL per linia — ucięta linia pomijana); walidacja pól z defaultami | ZBUDOWANE |
-| Walidacja JSON | research: parse error z `usage`+`raw_text`+`stop_reason`; topics: typowany parse/schema error z `usage`+modelem; koszt zaksięgowany, parse nigdy nie retry'owany | ZBUDOWANE (research + topics Task 6) |
+| Walidacja JSON | research: `max_tokens` rozpoznawane przed parse jako typowane truncation, pozostały parse error z `usage`+`raw_text`+`stop_reason`; topics: typowany parse/schema error z `usage`+modelem; koszt zaksięgowany, parse/truncation nigdy nie retry'owane | ZBUDOWANE (research + topics Task 6 + ADR-028) |
 | Koszt przy błędzie/przerwaniu | jak wyżej + ryzyko rezydualne timeout-billed-unrecorded (udokumentowane) | ZBUDOWANE (research) |
 
 ---

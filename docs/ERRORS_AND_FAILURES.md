@@ -352,3 +352,30 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Nieudana pierwsza korekta race resume:** `BEGIN` przed SELECT tworzył upgrade-lock race i faktyczny `database is locked`. Diagnostyczny SELECT jest teraz poza transakcją zapisu, natomiast UPDATE ponownie sprawdza cały kontrakt oraz token CAS. Test nie łapie OperationalError — lock pozostaje porażką.
 - **Wynik:** 337 testów, w tym oba race powtórzone 10 razy; 0 USD i brak API.
 - **Status:** FIXED; oczekuje na krótkie końcowe review.
+
+### [2026-07-13] Task 9: realne B wyczerpało max_tokens i zwróciło ucięty JSON — [LIVE API | PARSE | COST]
+
+- **Run:** `c01171bc-7ff5-4b83-bbfa-c0b164137793`, flow staged, topic #2.
+- **Co zadziałało:** A1 odkrył 4 kandydatów; wszystkie cztery A2 zakończyły się `end_turn`, EXTRACTED i VERIFIED. Każdy candidate miał `attempts=1`; zero retry.
+- **Co się zepsuło:** B osiągnęło dokładnie 2200 output tokens i `stop_reason=max_tokens`. JSON urwał się wewnątrz stringa (`Unterminated string`, char 4224), więc parser poprawnie odmówił utworzenia karty. Nie jest to timeout ani błąd transient; automatyczny retry był zabroniony i nie nastąpił.
+- **Koszt:** 0,170050 USD = A1 0,029243 + A2 0,127903 + B 0,012904. Całość jest w `model_usage`, `runs.cost_usd` jest zgodne; cap 0,55 USD zachowany.
+- **Stan odzyskiwalny:** `research_runs=SOURCES_COMPLETE`, 4 VERIFIED, brak karty, temat SELECTED. Technicznie możliwe jest wyłącznie jawne resume B, ale wymaga nowej zgody i nie zostało wykonane.
+- **Diagnostyka:** prywatny `B_raw_response.txt` potwierdza `max_tokens`, 1904 input, 2200 output, 0 search i długość 4489 znaków. Surowa treść nie jest kopiowana do repo.
+- **Status:** OPEN; Task 9 i Etap 0 nieukończone.
+
+### [2026-07-13] Task 9: proces zakończył się, ale ogólny run pozostał RUNNING — [LIFECYCLE | AUDIT]
+
+- **Obserwacja:** po obsłużonym błędzie B CLI zakończyło pojedynczy run, lecz `runs.status=RUNNING`, `finished_at=NULL`, `error=NULL`; jedynie cache kosztu wynosi 0,170050 USD. Szczegółowy `research_runs` poprawnie wrócił do wznawialnego `SOURCES_COMPLETE` z opisem błędu.
+- **Przyczyna w odczytanym kodzie:** ścieżka błędu świeżego `run_synthesis_from_cards` wywołuje `revert_to_sources_complete`, ale terminalizuje ogólny audit tylko wtedy, gdy istnieje snapshot jawnego resume.
+- **Wpływ:** kanoniczne `model_usage` i `runs.cost_usd` są spójne, a źródła trwałe, lecz ogólny audit fałszywie sugeruje aktywny proces. `research_runs.total_cost_usd` pozostało 0,0 — to potwierdzenie znanego P2-2 (niekanoniczny cache), nie utrata usage. Stan wymaga niezależnego review przed kolejnym krokiem.
+- **Działanie:** zgodnie z Task 9 nie zmieniono kodu, statusu ani bazy ręcznie; nie wykonano resume. Klasyfikacja ważności i ewentualna poprawka należą do osobnego review.
+
+### 2026-07-13 — P1-1/P1-2 naprawione offline dla przyszłych wykonań; historyczny run bez mutacji
+
+- **P1-1 przyczyna:** limit B=2200 pochodził z domyślnej wartości klienta/pipeline/CLI. Estymator przyjmował przekazany limit poprawnie, ale sam limit okazał się zbyt niski dla realnego schematu; klient próbował parsować odpowiedź mimo jednoznacznego `stop_reason=max_tokens`.
+- **P1-1 poprawka:** jeden kanoniczny default 3000, jawny override CLI, zwięzłe limity pól promptu i `ResearchTruncatedError` przed JSON parse. Usage/raw/stop_reason zostają zachowane, bez auto-retry i częściowej karty. B=0,026250 USD conservative; fresh=0,516375 USD; resume z prior=0,196300 USD.
+- **P1-2 przyczyna:** fresh ścieżka błędu wywoływała `revert_to_sources_complete`, lecz terminalizowała `runs` tylko dla explicit resume snapshot.
+- **P1-2 poprawka:** fresh B failure wywołuje warunkowe `finish_run(...FAILED...)`; explicit resume zachowuje `finish_resumed_research_run` z CAS. Reopen SQLite potwierdza `FAILED`, `finished_at`, przyczynę, brak karty i nienaruszone `SOURCES_COMPLETE`.
+- **Stan historyczny:** poprawka nie działa wstecz. `c01171bc` nadal ma RUNNING/NULL; nie wykonano raw SQL, repair ani resume. P2-2 pozostaje świadomym cache (`model_usage` jest kanonem), a P2-17/P2-18/P2-19 są poza zakresem.
+- **Plan repair (NIEWYKONANY):** osobna, reviewowana komenda maintenance ma otworzyć repozytorium i w jednej kontrolowanej operacji lifecycle wywołać istniejące `finish_run(..., FAILED, 0.170050, error=...)`; nie jest potrzebna nowa migracja ani surowy SQL. Przed mutacją musi atomowo/tuż przed CAS potwierdzić dokładny run ID, konto i workflow RESEARCH, `runs=RUNNING/finished_at=NULL/error=NULL/cost_usd=0.170050`, `research_runs=staged/SOURCES_COMPLETE/card=NULL/topic=2`, topic SELECTED, 4 kandydatów EXTRACTED+VERIFIED, brak karty, 6 rekordów `model_usage` sumujących się do 0.170050 oraz ostatni Stage B FAILED z `stop_reason=max_tokens`; jakakolwiek rozbieżność = fail-closed.
+- **Skutek repair:** zmienia wyłącznie audit `runs` na FAILED, ustawia `finished_at` i zachowuje pełną przyczynę `[synthesize_from_cards] ... stop_reason=max_tokens`; nie zmienia `model_usage`, `runs.cost_usd`, `research_runs.status`, `research_runs.total_cost_usd`, kandydatów, topic ani kart. Po operacji należy zapisać jawny log maintenance z preconditions/wynikiem, ponownie otworzyć SQLite, sprawdzić wszystkie inwarianty i dopiero w osobnym kroku prosić o zgodę na płatny resume B.

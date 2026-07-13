@@ -335,9 +335,19 @@ Review zauważyło, że nazwanie gałęzi w ogólnym `finish_run` „resume” n
 
 Drugi P1 dotyczył dowodu: dwa połączenia wykonane kolejno nie są wyścigiem. Nowy test uruchamia dwa wątki przez `Barrier`; jedno wygrywa claim, drugie dostaje konflikt, a po reopen baza pokazuje dokładnie jedną próbę. Pełny wynik: **337 testów**, 0 USD, zero API.
 
+### Task 9: pierwszy pełny staged run dotarł do B, ale nie utworzył karty
+
+Właściciel zatwierdził jeden run topic #2 z capem 0,55 USD i zerem retry. Pre-flight policzył conservative 0,510375 USD. A1 odkrył cztery kandydaty, a cztery osobne A2 zakończyły się sukcesem i zapisały cztery VERIFIED. Dopiero synteza B wykorzystała pełne 2200 tokenów, zwróciła `stop_reason=max_tokens` i ucięty JSON.
+
+Trwałość zadziałała: wszystkie opłacone źródła i sześć wpisów usage pozostały w bazie, a koszt 0,170050 USD jest zgodny z cache runu. Jednocześnie brak karty oznacza, że Task 9 i Etap 0 nie są ukończone. Nie wykonano drugiej próby ani resume. Odczyt po procesie ujawnił też nieterminalny ogólny `RUNNING`; zapisano go do review bez poprawiania kodu.
+
 ## Powiązania
 - `docs/BUILD_LOG.md` (źródło), `docs/ARCHITECTURE_EVOLUTION.md`, `docs/RELEASE_TIMELINE.md`
 - `timeline/` (oś czasu do wyeksportowania)
 
 ### 2026-07-12 — Task 5: budżet sprawdzany przed każdą próbą
 Pre-flight przed pierwszym callem okazał się konieczny, ale niewystarczający. Timeout może uruchomić drugi płatny call, dlatego koszt jednej próby jest mnożony przez `1 + max_retries`, a tuż przed każdą próbą system ponownie czyta kanoniczne `model_usage`. Review wykryło jeszcze, że brak capu był akceptowany przez bibliotekę, a resume podnosiło domyślny cap wraz z kosztem. Po korekcie cap jest obowiązkowy dla realnego calla i absolutny dla resume. Wynik: 257 testów offline, 0 USD.
+
+### 2026-07-13 — Task 9: naprawa po pierwszym realnym B, bez ponowienia
+
+Realne A1 i cztery A2 przetrwały, lecz B wyczerpało 2200 tokenów i urwało JSON. Offline dodano osobny błąd truncation, limit 3000 poparty estymatą oraz krótsze pola promptu. Błąd nie uruchamia retry: zapisuje usage raz, nie tworzy karty, zostawia research w `SOURCES_COMPLETE`, a ogólny audit kończy `FAILED` z czasem i przyczyną. Salvage poprawnych linii JSONL A1 pozostał bez zmian, a prior usage jest liczony dokładnie raz. Historycznej bazy nie zmieniono. 174 testy celowane (włącznie z cost ledger) i 351 pełnych przeszło bez API; 0 USD.

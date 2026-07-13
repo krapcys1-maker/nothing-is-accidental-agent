@@ -183,3 +183,14 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co pokazuje:** bezpieczny terminal z wynikiem 44 testów Task 8, race terminalnych UPDATE/resume i pełnym `330 passed`; bez danych źródłowej bazy.
 - **Dlaczego ważny:** pokazuje, że stan źródłowy jest warunkiem tego samego UPDATE, tylko jeden konkurent wygrywa, a odrzucona mutacja nie zostawia częściowego zapisu po reopen.
 - **Status:** SCREENSHOT REQUIRED — zgodnie z zakazem nie używano Playwrighta ani przeglądarki; screenshot może powstać później wyłącznie z testów offline.
+
+### [2026-07-13] task9-real-run-a1-a2-success-b-max-tokens
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_task9-real-run-a1-a2-success-b-max-tokens.png`
+- **Co pokazuje:** zanonimizowany terminal lub bezpieczny raport DB: run_id, A1 SUCCESS, 4×A2 SUCCESS/VERIFIED, B FAILED z `stop_reason=max_tokens`, koszt 0,170050 USD i cap 0,55 USD. Bez surowej odpowiedzi, klucza API i zawartości `.env`.
+- **Dlaczego ważny:** dowodzi jednocześnie trwałości opłaconych etapów, poprawnego księgowania kosztu oraz uczciwego nieogłoszenia Etapu 0 jako ukończonego.
+- **Status:** SCREENSHOT REQUIRED — w Task 9 nie używano Playwrighta ani przeglądarki; screenshot ma zostać wykonany ręcznie po review z bezpiecznego widoku, nie z prywatnego raw response.
+
+### SS-TASK9-FIX — offline regresja truncation i lifecycle
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_task9-offline-truncation-lifecycle-tests.png`
+- **Co pokazuje:** zanonimizowany wynik `174 passed` testów celowanych (włącznie z cost ledger, prior usage liczone raz i zachowaniem JSONL A1) oraz `351 passed` pełnego suite, bez danych raw/API.
+- **Status:** SCREENSHOT REQUIRED — w zadaniu nie uruchamiano Playwrighta ani nie tworzono automatycznie obrazu; obecny dowód to log testów i diff kodu.

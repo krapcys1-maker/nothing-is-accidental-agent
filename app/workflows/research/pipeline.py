@@ -52,6 +52,7 @@ from app.ports.storage import StoragePort
 from app.research import injection_guard
 from app.research.base import (
     AttemptBudgetContext,
+    DEFAULT_SYNTHESIS_MAX_TOKENS,
     GatheredSource,
     ResearchClient,
     ResearchBudgetError,
@@ -596,7 +597,7 @@ def run_two_stage_research_pipeline(
     research_log: ResearchLogWriter | None = None,
     max_web_searches: int = 4,
     gather_max_tokens: int = 1200,
-    synthesize_max_tokens: int = 2200,
+    synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
     forwarded_context_tokens: int = 2500,
     force_re_research: bool = False,
     max_retries: int | None = None,
@@ -880,7 +881,7 @@ def resume_research_stage_b(
     notifier: NotificationPort,
     clock: Clock | None = None,
     research_log: ResearchLogWriter | None = None,
-    synthesize_max_tokens: int = 2200,
+    synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
     forwarded_context_tokens: int = 2500,
     max_retries: int | None = None,
     run_cap_usd: float | None = None,
@@ -1484,7 +1485,7 @@ def run_synthesis_from_cards(
     notifier: NotificationPort,
     clock: Clock | None = None,
     research_log: ResearchLogWriter | None = None,
-    synthesize_max_tokens: int = 2200,
+    synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
     forwarded_context_tokens: int = 2500,
     max_retries: int | None = None,
     run_cap_usd: float | None = None,
@@ -1600,7 +1601,12 @@ def run_synthesis_from_cards(
         summary.cost_usd = total_cost
         resume_error = f"[synthesize_from_cards] {exc}"
         storage.revert_to_sources_complete(research_run_id, error=resume_error)
-        if resume_run_snapshot is not None:
+        if resume_run_snapshot is None:
+            storage.finish_run(
+                research_run_id, RunStatus.FAILED.value,
+                total_cost, error=resume_error,
+            )
+        else:
             _finish_explicit_resume_failure(
                 storage, resume_run_snapshot, ResearchFlow.STAGED,
                 total_cost, resume_error,
@@ -1705,7 +1711,7 @@ def run_staged_research_pipeline(
     max_web_searches_per_source: int = 1,
     extraction_max_tokens: int = 1500,
     max_attempts: int = 2,
-    synthesize_max_tokens: int = 2200,
+    synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
     forwarded_context_tokens: int = 2500,
     force_re_research: bool = False,
     max_retries: int | None = None,
@@ -1768,7 +1774,7 @@ def resume_staged_research(
     max_web_searches_per_source: int = 1,
     extraction_max_tokens: int = 1500,
     max_attempts: int = 2,
-    synthesize_max_tokens: int = 2200,
+    synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
     forwarded_context_tokens: int = 2500,
     max_retries: int | None = None,
     run_cap_usd: float | None = None,
