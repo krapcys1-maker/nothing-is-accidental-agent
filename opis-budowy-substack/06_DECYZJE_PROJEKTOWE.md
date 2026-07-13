@@ -236,3 +236,10 @@ Po review doprecyzowano: realny pipeline bez capu odmawia, cap resume jest absol
 - **Wybór:** `attach_job_run` wymaga zgodnej relacji RESEARCH job→run→research_run dla tego samego account/topicu i flow `single`. Po expiry RESEARCH bez `run_id` może wrócić do QUEUED; z przypiętym `run_id` przechodzi do `NEEDS_VERIFICATION`, zachowując run i rezerwację. Terminalny sukces nie jest zgadywany.
 - **Granica:** brak realnego resume, reapera runs, API, paid/browser workera i manualnego UI. Reconciliation pozostaje osobnym krokiem.
 - **Dowód:** literalna macierz relation/CAS i recovery z reopen oraz dwoma workerami recovery; pełny suite 512 passed, 0 USD.
+
+### [2026-07-13] D-40: reaper kończy audit, nie pracę za workera
+
+- **Problem:** `RUNNING` po crashu był stanem otwartym bez żywego procesu. Zatrzymanie go przed recovery joba mogłoby jednak zostawić job gotowy do działania przy runie już STOPPED.
+- **Wybór:** ręczna komenda najpierw robi recovery jobów, następnie atomowo zatrzymuje stale run tylko bez joba `QUEUED`, `LEASED` lub `RUNNING`. RESEARCH z trwałym `run_id` zostaje `NEEDS_VERIFICATION`; reaper może zamknąć audit, ale nie wznawia pipeline’u ani nie zwalnia rezerwacji.
+- **Granica:** nie ma cyklicznego schedulera, realnego resume, API, paid/browser workera ani UI reconciliation. `JobRunRelationError` nie wypisuje surowego ID joba do trwałego komunikatu.
+- **Dowód:** dwa reapery i terminalizacje konkurują przez plikową SQLite/Barrier/CAS, reaper blokuje się przed recovery wygasłego lease, jest reopen/integrity i CLI temp DB; pełny suite 529 passed, 0 USD.

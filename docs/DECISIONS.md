@@ -538,3 +538,14 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Granica:** nie zgadujemy sukcesu nawet dla terminalnego runu; nie implementujemy resume, realnego API, reapera `runs`, migracji ani manualnego UI. Reconciliation jest osobnym przyszłym zakresem.
 - **Weryfikacja:** literalne testy relacji account/topic/workflow/flow, idempotencji, innego run_id, ownera, expiry i terminalnego joba; recovery RESEARCH bez/ z `run_id`, terminalny/failed/partial run, zachowanie rezerwacji, external effect i dwa workery recovery z Barrier/reopen. Pełny suite **512 passed**, 0 USD.
 - **Kto podjął:** właściciel zlecił fail-closed preferowaną semantykę; wykonanie: Codex.
+
+### ADR-040: Stale reaper zatrzymuje run dopiero po recovery joba
+
+- **Data:** 2026-07-13
+- **Status:** ACCEPTED / wdrożone i zweryfikowane offline.
+- **Kontekst:** `RUNNING` bez żywego procesu pozostawał otwartym audytem. Samo zatrzymanie runu mogłoby jednak stworzyć sprzeczność `job=QUEUED` + `run=STOPPED` albo zatrzymać run wykonywany przez świeży lease.
+- **Decyzja:** jawne `reap-runs --once --stale-after-seconds X` najpierw wywołuje recovery lease, następnie `reap_orphaned_stale_runs(stale_before, now)` w `BEGIN IMMEDIATE`. Reaper zapisuje `RUNNING→STOPPED` wyłącznie dla runu starszego niż przekazany próg, z `finished_at`, kontrolowanym `STALE_RUN_REAPER` i CAS `status/finished_at/started_at`. Każdy job `QUEUED`, `LEASED` lub `RUNNING` z tym `run_id` blokuje stop; po recovery RESEARCH z `run_id` jest `NEEDS_VERIFICATION`, zachowuje rezerwację i nie daje auto-resume. `SUCCESS`, `FAILED`, `DRY_RUN`, `STOPPED` i wyścig terminalizacji pozostają bez mutacji.
+- **Sanitacja:** `JobRunRelationError` zachowuje surowy `job_id` wyłącznie jako dane wyjątku; do trwałego tekstu wpisuje kontrolowany, jednowierszowy i ograniczony komunikat bez identyfikatorów lub tokenów.
+- **Granice:** brak migracji, API, sieci, realnego resume, workera paid/browser, UI reconciliation i cyklicznego schedulera reapera.
+- **Weryfikacja:** stale/fresh/terminalne runy, blokada reapera przed recovery wygasłego lease, recovery→NEEDS, zachowanie rezerwacji, sukces/failure race, dwa osobne połączenia SQLite z Barrier, reopen/integrity, no-dispatch i CLI temp DB. **529 passed**, koszt 0 USD.
+- **Kto podjął:** właściciel zatwierdził ograniczony offline scope; wykonanie: Codex.

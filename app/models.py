@@ -119,6 +119,13 @@ class JobRecoveryResult(BaseModel):
     failed_count: int = 0
 
 
+class RunReaperResult(BaseModel):
+    """Wynik jednego, jawnie uruchomionego przebiegu reapera runów."""
+
+    checked_count: int = 0
+    stopped_count: int = 0
+
+
 class SystemFlag(BaseModel):
     """Runtime flaga bezpieczeństwa odczytywana z bazy przy każdym checku."""
 

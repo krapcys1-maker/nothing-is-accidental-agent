@@ -223,3 +223,10 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Zakres decyzji właściciela:** usztywnić `attach_job_run` po account/topic/workflow/research_runs oraz zatrzymać po expiry RESEARCH z istniejącym `run_id` w NEEDS_VERIFICATION; wolno dodać testy offline i minimalne typowane błędy.
 - **Zakazy:** bez reapera `runs`, realnego resume, Anthropic API, sieci, realnego researchu, `data/agent.db`, migracji, paid/browser workera, publikacji, Playwrighta, commita, pushu, PR i merge; instrukcja pisania poza zakresem.
 - **Efekt:** przypięty run jest trwały i nie może być zastąpiony runem innego account/topic/workflow/flow. RESEARCH bez `run_id` nadal może wrócić do QUEUED, lecz z `run_id` zachowuje rezerwację i trafia fail-closed do NEEDS_VERIFICATION; worker go nie uruchamia ponownie. Pełny suite 512 testów, koszt 0 USD.
+
+### [2026-07-13] APPROVAL — jawny stale reaper runów i sanitacja audit error
+
+- **Typ:** IMPLEMENTATION BOUNDARY / OFFLINE ONLY.
+- **Zakres decyzji właściciela:** dodać atomowy reaper `RUNNING→STOPPED` po recovery joba, bezpieczną komendę `reap-runs --once`, testy SQLite/Barrier oraz zawężoną sanitację `JobRunRelationError`.
+- **Zakazy:** bez API, sieci, realnego researchu/resume, `data/agent.db`, migracji, workera paid/browser, publikacji, Playwrighta, schedulera cyklicznego, commita, pushu, PR i merge; instrukcja pisania poza zakresem.
+- **Efekt:** tylko stale run bez joba `QUEUED/LEASED/RUNNING` może przejść do STOPPED; po expiry RESEARCH z `run_id` zostaje NEEDS_VERIFICATION, rezerwacja pozostaje, a reaper nie daje dispatchu/resume. Pełny suite 529 testów, koszt 0 USD.

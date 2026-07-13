@@ -435,3 +435,11 @@ Kolejna mała korekta dotyczy chwili między powstaniem researchu a końcem joba
 Wybraliśmy trzecią drogę: `run_id` zostaje trwałym śladem, a job przechodzi do `NEEDS_VERIFICATION` z krótkim reason code. Rezerwacja budżetu też zostaje, bo system nie zgaduje, czy etap nie zdążył zrobić czegoś istotnego. Nie ma tu resume, nie ma nowego API i nie ma automatycznej naprawy stanu — jest świadome zatrzymanie przed dublem.
 
 Przy okazji CAS przestał znaczyć tylko „to samo konto”. Przed przypięciem SQLite sprawdza rodzaj joba, workflow, topic, workflow runu oraz właściwy wpis `research_runs`. Testy symulują nie ten topic, konto, flow, owner i wygasły lease; po każdym przypadku baza jest otwierana ponownie. Wynik: **512 testów**, zero sieci, API i koszt **0 USD**.
+
+## 2026-07-13 — Zatrzymanie osieroconego runu nie jest wznowieniem
+
+Gdy proces znikał w połowie pracy, rekord `RUNNING` mógł zostać w bazie bez końca. Nowy reaper nie zgaduje wyniku i nie budzi researchu ponownie. Dostaje jawny próg wieku, najpierw prosi kolejkę o recovery lease, a dopiero potem może wpisać `STOPPED` z krótkim reasonem audytowym.
+
+Najważniejszy hamulec jest celowo nudny: run z jobem `QUEUED`, `LEASED` albo `RUNNING` nie jest dotykany. Po wygasłym lease przypięty research staje się `NEEDS_VERIFICATION`; wtedy run można zamknąć, ale rezerwacja zostaje i worker nie ma czego claimować. Dwa reapery i terminalizacja ścigają się na SQLite przez CAS, więc kończy się dokładnie jeden stan.
+
+Komenda `reap-runs --once --stale-after-seconds X` jest osobnym, ręcznie wywoływanym narzędziem offline. Nie uruchamia API, nie startuje workera, nie jest schedulerem i nie jest resume. Po tej korekcie suite ma **529 testów**, nadal przy koszcie **0 USD**.

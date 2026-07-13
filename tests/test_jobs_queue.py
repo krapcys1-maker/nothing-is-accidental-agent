@@ -72,16 +72,28 @@ def _worker_research_run(
     research_status: ResearchRunStatus = ResearchRunStatus.PENDING,
     flow: ResearchFlow = ResearchFlow.SINGLE,
     research_account=None,
+    started_at: datetime = NOW,
 ) -> str:
     """Creates the exact run/research_run pair the offline worker binds."""
     research_account = research_account or account
     storage.create_run(Run(
         id=run_id, account_id=account.id, workflow=WorkflowType.RESEARCH,
-        status=run_status,
+        status=run_status, started_at=started_at,
     ))
     storage.create_research_run(ResearchRun(
         id=run_id, account_id=research_account.id, topic_id=int(topic.id),
         flow=flow, status=research_status,
+    ))
+    return run_id
+
+
+def _orphaned_running_run(
+    storage: SqliteStorage, account, run_id: str, *, started_at: datetime,
+) -> str:
+    storage.ensure_account(account)
+    storage.create_run(Run(
+        id=run_id, account_id=account.id, workflow=WorkflowType.RESEARCH,
+        status=RunStatus.RUNNING, started_at=started_at,
     ))
     return run_id
 
@@ -778,6 +790,334 @@ def test_two_recovery_workers_do_not_reconcile_same_job_twice(settings, account)
     assert persisted.status is JobStatus.NEEDS_VERIFICATION and persisted.run_id == run_id
     assert reopened.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     reopened.close()
+
+
+def test_reaper_stops_orphaned_stale_running_run(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    run_id = _orphaned_running_run(
+        storage, account, "reaper-orphan", started_at=NOW - timedelta(seconds=10),
+    )
+
+    result = storage.reap_orphaned_stale_runs(NOW - timedelta(seconds=1), now=NOW)
+
+    stopped = storage.get_run(run_id)
+    assert result.model_dump() == {"checked_count": 1, "stopped_count": 1}
+    assert stopped.status is RunStatus.STOPPED
+    assert stopped.finished_at == NOW.replace(tzinfo=None)
+    assert stopped.error == "STALE_RUN_REAPER: stale RUNNING run has no executable job lease."
+    storage.close()
+
+
+def test_reaper_does_not_stop_recent_running_run(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    run_id = _orphaned_running_run(storage, account, "reaper-recent", started_at=NOW)
+
+    result = storage.reap_orphaned_stale_runs(NOW - timedelta(seconds=1), now=NOW)
+
+    assert result.model_dump() == {"checked_count": 0, "stopped_count": 0}
+    assert storage.get_run(run_id).status is RunStatus.RUNNING
+    storage.close()
+
+
+def test_reaper_does_not_stop_run_with_fresh_active_lease(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "reaper-fresh-job", "reaper-fresh-job", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ), lease_seconds=30)
+    run_id = _worker_research_run(
+        storage, account, topic, "reaper-fresh-run", run_status=RunStatus.RUNNING,
+        started_at=NOW - timedelta(seconds=10),
+    )
+    storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+
+    result = storage.reap_orphaned_stale_runs(NOW - timedelta(seconds=1), now=NOW)
+
+    assert result.model_dump() == {"checked_count": 1, "stopped_count": 0}
+    assert storage.get_run(run_id).status is RunStatus.RUNNING
+    assert storage.get_job(job.id).status is JobStatus.LEASED
+    storage.close()
+
+
+def test_reaper_waits_for_job_recovery_before_stopping_expired_run(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "reaper-expired-job", "reaper-expired-job", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    run_id = _worker_research_run(
+        storage, account, topic, "reaper-expired-run", run_status=RunStatus.RUNNING,
+        started_at=NOW - timedelta(seconds=10),
+    )
+    storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+
+    result = storage.reap_orphaned_stale_runs(
+        NOW - timedelta(seconds=1), now=NOW + timedelta(seconds=6),
+    )
+
+    assert result.model_dump() == {"checked_count": 1, "stopped_count": 0}
+    assert storage.get_job(job.id).status is JobStatus.LEASED
+    assert storage.get_run(run_id).status is RunStatus.RUNNING
+    storage.close()
+
+
+def test_reaper_can_stop_run_after_lease_expiry_and_job_reconciliation(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "reaper-reconcile-job", "reaper-reconcile-job",
+        kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    run_id = _worker_research_run(
+        storage, account, topic, "reaper-reconcile-run", run_status=RunStatus.RUNNING,
+        started_at=NOW - timedelta(seconds=10),
+    )
+    storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+
+    recovery = storage.release_or_requeue_expired_leases(now=NOW + timedelta(seconds=6))
+    result = storage.reap_orphaned_stale_runs(NOW - timedelta(seconds=1), now=NOW + timedelta(seconds=6))
+
+    assert recovery.needs_verification_count == 1
+    assert result.model_dump() == {"checked_count": 1, "stopped_count": 1}
+    assert storage.get_job(job.id).status is JobStatus.NEEDS_VERIFICATION
+    assert storage.get_run(run_id).status is RunStatus.STOPPED
+    storage.close()
+
+
+def test_reaper_does_not_change_success_run(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    run_id = _orphaned_running_run(
+        storage, account, "reaper-success", started_at=NOW - timedelta(seconds=10),
+    )
+    storage.finish_run(run_id, RunStatus.SUCCESS.value, 0.0)
+
+    result = storage.reap_orphaned_stale_runs(NOW - timedelta(seconds=1), now=NOW)
+
+    assert result.model_dump() == {"checked_count": 0, "stopped_count": 0}
+    assert storage.get_run(run_id).status is RunStatus.SUCCESS
+    storage.close()
+
+
+def test_reaper_does_not_change_failed_run(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    run_id = _orphaned_running_run(
+        storage, account, "reaper-failed", started_at=NOW - timedelta(seconds=10),
+    )
+    storage.finish_run(run_id, RunStatus.FAILED.value, 0.0, error="existing failure")
+
+    result = storage.reap_orphaned_stale_runs(NOW - timedelta(seconds=1), now=NOW)
+
+    assert result.model_dump() == {"checked_count": 0, "stopped_count": 0}
+    failed = storage.get_run(run_id)
+    assert failed.status is RunStatus.FAILED and failed.error == "existing failure"
+    storage.close()
+
+
+def test_reaper_does_not_change_dry_run(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    storage.ensure_account(account)
+    run_id = "reaper-dry-run"
+    storage.create_run(Run(
+        id=run_id, account_id=account.id, workflow=WorkflowType.RESEARCH,
+        status=RunStatus.DRY_RUN, started_at=NOW - timedelta(seconds=10),
+    ))
+
+    result = storage.reap_orphaned_stale_runs(NOW - timedelta(seconds=1), now=NOW)
+
+    assert result.model_dump() == {"checked_count": 0, "stopped_count": 0}
+    assert storage.get_run(run_id).status is RunStatus.DRY_RUN
+    storage.close()
+
+
+def test_reaper_is_idempotent_for_already_stopped_run(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    run_id = _orphaned_running_run(
+        storage, account, "reaper-stopped", started_at=NOW - timedelta(seconds=10),
+    )
+    storage.finish_run(run_id, RunStatus.STOPPED.value, 0.0, error="prior stale stop")
+
+    result = storage.reap_orphaned_stale_runs(NOW - timedelta(seconds=1), now=NOW)
+
+    assert result.model_dump() == {"checked_count": 0, "stopped_count": 0}
+    stopped = storage.get_run(run_id)
+    assert stopped.status is RunStatus.STOPPED and stopped.error == "prior stale stop"
+    storage.close()
+
+
+def _assert_reaper_loses_terminal_race(settings, account, target: RunStatus) -> None:
+    setup = SqliteStorage.open(settings.db_path)
+    run_id = _orphaned_running_run(
+        setup, account, f"reaper-race-{target.value.lower()}", started_at=NOW - timedelta(seconds=10),
+    )
+    setup.close()
+    lock_held = threading.Event()
+    release_terminalizer = threading.Event()
+    reaper_entered = threading.Event()
+    barrier = threading.Barrier(2)
+    results: list = []
+    failures: list[BaseException] = []
+
+    def terminalize() -> None:
+        storage = SqliteStorage.open(settings.db_path)
+        try:
+            storage.conn.execute("BEGIN IMMEDIATE")
+            cursor = storage.conn.execute(
+                "UPDATE runs SET status=?, error=?, finished_at=? "
+                "WHERE id=? AND status='RUNNING' AND finished_at IS NULL",
+                (
+                    target.value,
+                    f"terminal {target.value}",
+                    NOW.replace(tzinfo=None).isoformat(sep=" "),
+                    run_id,
+                ),
+            )
+            assert cursor.rowcount == 1
+            lock_held.set()
+            barrier.wait()
+            assert release_terminalizer.wait(timeout=2)
+            storage.conn.commit()
+        except BaseException as exc:
+            failures.append(exc)
+            if storage.conn.in_transaction:
+                storage.conn.rollback()
+        finally:
+            storage.close()
+
+    def reap() -> None:
+        storage = SqliteStorage.open(settings.db_path)
+        try:
+            assert lock_held.wait(timeout=2)
+            barrier.wait()
+            reaper_entered.set()
+            results.append(storage.reap_orphaned_stale_runs(NOW - timedelta(seconds=1), now=NOW))
+        except BaseException as exc:
+            failures.append(exc)
+        finally:
+            storage.close()
+
+    terminal_thread = threading.Thread(target=terminalize)
+    reaper_thread = threading.Thread(target=reap)
+    terminal_thread.start()
+    assert lock_held.wait(timeout=2)
+    reaper_thread.start()
+    assert reaper_entered.wait(timeout=2)
+    release_terminalizer.set()
+    terminal_thread.join()
+    reaper_thread.join()
+
+    reopened = SqliteStorage.open(settings.db_path)
+    terminal = reopened.get_run(run_id)
+    assert failures == []
+    assert [result.stopped_count for result in results] == [0]
+    assert terminal.status is target and terminal.error == f"terminal {target.value}"
+    assert reopened.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    reopened.close()
+
+
+def test_reaper_loses_race_to_success_terminalization(settings, account):
+    _assert_reaper_loses_terminal_race(settings, account, RunStatus.SUCCESS)
+
+
+def test_reaper_loses_race_to_failed_terminalization(settings, account):
+    _assert_reaper_loses_terminal_race(settings, account, RunStatus.FAILED)
+
+
+def test_two_reapers_stop_run_exactly_once(settings, account):
+    setup = SqliteStorage.open(settings.db_path)
+    run_id = _orphaned_running_run(
+        setup, account, "reaper-two-workers", started_at=NOW - timedelta(seconds=10),
+    )
+    setup.close()
+    barrier = threading.Barrier(2)
+    results: list = []
+    failures: list[BaseException] = []
+
+    def reap() -> None:
+        storage = SqliteStorage.open(settings.db_path)
+        try:
+            barrier.wait()
+            results.append(storage.reap_orphaned_stale_runs(NOW - timedelta(seconds=1), now=NOW))
+        except BaseException as exc:
+            failures.append(exc)
+        finally:
+            storage.close()
+
+    threads = [threading.Thread(target=reap) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    reopened = SqliteStorage.open(settings.db_path)
+    assert failures == []
+    assert sum(result.stopped_count for result in results) == 1
+    assert reopened.get_run(run_id).status is RunStatus.STOPPED
+    assert reopened.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    reopened.close()
+
+
+def test_reaper_preserves_job_needs_verification(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = storage.enqueue_job(_job(
+        account, "reaper-needs-job", "reaper-needs-job", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    storage.reserve_job_budget(job.id, 0.25, daily_limit_usd=2.0, monthly_limit_usd=40.0, now=NOW)
+    assert storage.claim_next_job("worker-a", 5, now=NOW).job.id == job.id
+    run_id = _worker_research_run(
+        storage, account, topic, "reaper-needs-run", run_status=RunStatus.RUNNING,
+        started_at=NOW - timedelta(seconds=10),
+    )
+    storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+    storage.release_or_requeue_expired_leases(now=NOW + timedelta(seconds=6))
+
+    result = storage.reap_orphaned_stale_runs(NOW - timedelta(seconds=1), now=NOW + timedelta(seconds=6))
+
+    persisted = storage.get_job(job.id)
+    assert result.stopped_count == 1
+    assert persisted.status is JobStatus.NEEDS_VERIFICATION
+    assert persisted.run_id == run_id
+    assert persisted.reserved_cost_usd == 0.25 and persisted.budget_reserved_at is not None
+    storage.close()
+
+
+def test_reaper_integrity_check_after_reopen(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    run_id = _orphaned_running_run(
+        storage, account, "reaper-reopen", started_at=NOW - timedelta(seconds=10),
+    )
+    storage.reap_orphaned_stale_runs(NOW - timedelta(seconds=1), now=NOW)
+    storage.close()
+
+    reopened = SqliteStorage.open(settings.db_path)
+    stopped = reopened.get_run(run_id)
+    assert stopped.status is RunStatus.STOPPED and stopped.finished_at == NOW.replace(tzinfo=None)
+    assert stopped.error == "STALE_RUN_REAPER: stale RUNNING run has no executable job lease."
+    assert reopened.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    reopened.close()
+
+
+def test_job_run_reconciliation_error_is_sanitized_and_bounded(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    unsafe_job_id = "job\nBearer sk-test-token-should-not-persist\r" + ("x" * 1000)
+    job = _claim(storage, _job(
+        account, unsafe_job_id, "safe-reconciliation-key", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    run_id = _worker_research_run(
+        storage, account, topic, "reaper-sanitized-run", run_status=RunStatus.RUNNING,
+        started_at=NOW - timedelta(seconds=10),
+    )
+    storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+
+    storage.release_or_requeue_expired_leases(now=NOW + timedelta(seconds=6))
+
+    error = storage.get_job(job.id).last_error
+    assert error is not None and len(error) <= 240
+    assert "\n" not in error and "\r" not in error
+    assert "sk-test-token-should-not-persist" not in error
+    assert unsafe_job_id not in error
+    storage.close()
 
 
 def test_release_budget_rejected_after_external_effect_started(settings, account):

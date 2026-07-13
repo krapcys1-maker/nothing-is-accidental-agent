@@ -26,6 +26,7 @@ from app.models import (
     ResearchStageName,
     ResearchStageStatus,
     Run,
+    RunReaperResult,
     RunStatus,
     Source,
     SourceCandidateRecord,
@@ -87,6 +88,7 @@ _SECURITY_FLAG_DEFAULTS = {
     "paid_actions_enabled": False,
     "browser_actions_enabled": False,
 }
+_STALE_RUN_REAPER_REASON = "STALE_RUN_REAPER: stale RUNNING run has no executable job lease."
 
 
 def _ts(dt: datetime | None = None) -> str:
@@ -1014,6 +1016,62 @@ class SqliteStorage:
                     allowed_source_statuses=(JobStatus.LEASED.value, JobStatus.RUNNING.value),
                     detail="Expired-lease recovery compare-and-swap failed.",
                 )
+            self.conn.commit()
+            return result
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def reap_orphaned_stale_runs(
+        self, stale_before: datetime, *, now: datetime | None = None,
+    ) -> RunReaperResult:
+        """Stops only stale RUNNING runs that cannot be legally executed.
+
+        Callers must first recover expired job leases. The reaper deliberately
+        blocks on every QUEUED/LEASED/RUNNING job referencing the run, including an
+        expired lease, so it cannot create ``job=QUEUED`` plus ``run=STOPPED``.
+        Reconciled RESEARCH jobs are ``NEEDS_VERIFICATION`` and therefore remain
+        durable audit records without authorizing a resume.
+        """
+        current_ts = _persisted_ts(self._job_now(now))
+        stale_ts = _persisted_ts(stale_before)
+        if stale_ts >= current_ts:
+            raise ValueError("stale_before must be earlier than now.")
+
+        result = RunReaperResult()
+        blocking_statuses = (
+            JobStatus.QUEUED.value,
+            JobStatus.LEASED.value,
+            JobStatus.RUNNING.value,
+        )
+        placeholders = ", ".join("?" for _ in blocking_statuses)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            candidates = self.conn.execute(
+                "SELECT id FROM runs WHERE status='RUNNING' AND finished_at IS NULL "
+                "AND started_at < ? ORDER BY id",
+                (stale_ts,),
+            ).fetchall()
+            result.checked_count = len(candidates)
+            for candidate in candidates:
+                cursor = self.conn.execute(
+                    "UPDATE runs SET status='STOPPED', error=?, finished_at=? "
+                    "WHERE id=? AND status='RUNNING' AND finished_at IS NULL "
+                    "AND started_at < ? AND NOT EXISTS ("
+                    "SELECT 1 FROM jobs WHERE jobs.run_id=runs.id "
+                    f"AND jobs.status IN ({placeholders})"
+                    ")",
+                    (
+                        _STALE_RUN_REAPER_REASON,
+                        current_ts,
+                        candidate["id"],
+                        stale_ts,
+                        *blocking_statuses,
+                    ),
+                )
+                if cursor.rowcount == 1:
+                    result.stopped_count += 1
             self.conn.commit()
             return result
         except Exception:

@@ -1,11 +1,11 @@
 # MASTER_ARCHITECTURE — Nothing Is Accidental Agent
 
 > **STATUS: JEDYNE ŹRÓDŁO PRAWDY O ARCHITEKTURZE.**
-> Data: 2026-07-13 · Wersja: 1.3 · Zastępuje: `ARCHITECTURE.md` (V1), `docs/IMPLEMENTATION_PLAN.md` (CZĘŚCI A–F), `docs/AUDYT_ARCHITEKTURY_2026-07-12.md`, `docs/architecture/SUBSTACK_INTEGRATION.md` — wszystkie przeniesione do `docs/archive/superseded_plans/`.
+> Data: 2026-07-13 · Wersja: 1.4 · Zastępuje: `ARCHITECTURE.md` (V1), `docs/IMPLEMENTATION_PLAN.md` (CZĘŚCI A–F), `docs/AUDYT_ARCHITEKTURY_2026-07-12.md`, `docs/architecture/SUBSTACK_INTEGRATION.md` — wszystkie przeniesione do `docs/archive/superseded_plans/`.
 >
 > Kolejność prac: `IMPLEMENTATION_ROADMAP.md`. Aktualny stan: `CURRENT_PROJECT_STATE.md`. Rejestr decyzji (ADR): `docs/DECISIONS.md` (nadal obowiązujący — ten dokument konsoliduje decyzje, nie zastępuje rejestru).
 >
-> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie i testach (512 passed, 2026-07-13) albo pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
+> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie i testach (529 passed, 2026-07-13) albo pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
 
 ---
 
@@ -17,8 +17,8 @@
 |---|---|---|
 | Konfiguracja (.env + YAML, zero ścieżek absolutnych) | `app/core/config.py` | testy + 4 realne runy |
 | Modele domenowe (Pydantic v2) | `app/models.py` | testy |
-| SQLite + 9 migracji + repozytoria | `app/storage/` | `tests/test_storage.py`, `tests/test_research_run_flow.py`, `tests/test_jobs_queue.py` i in.; `0008` utrwala force staged runu, `0009` dodaje jobs i system_flags |
-| Trwała kolejka + worker offline | `app/storage/repositories.py`, `app/scheduler/` | atomowy enqueue/idempotency, lease, runtime flags, zamknięty dispatcher LOCAL/RESEARCH dry-run oraz ścisły CAS job→run→research_run; expiry RESEARCH z `run_id` → NEEDS_VERIFICATION, bez auto-resume; testy plikowej SQLite z Barrier/reopen |
+| SQLite + 9 migracji + repozytoria | `app/storage/` | `tests/test_storage.py`, `tests/test_research_run_flow.py`, `tests/test_jobs_queue.py` i in.; `0008` utrwala force staged runu, `0009` dodaje jobs i system_flags; reaper nie wymaga migracji |
+| Trwała kolejka + worker offline | `app/storage/repositories.py`, `app/scheduler/`, `app/main.py` | atomowy enqueue/idempotency, lease, runtime flags, zamknięty dispatcher LOCAL/RESEARCH dry-run, ścisły CAS job→run→research_run oraz jawny stale reaper; expiry RESEARCH z `run_id` → NEEDS_VERIFICATION, bez auto-resume; testy plikowej SQLite z Barrier/reopen |
 | Policy Engine (kill-switch, runtime flags workera z SQLite, aktywność konta, budżet dzienny/miesięczny z priorytetem miesięcznym ADR-012, progi tematów) | `app/policies/policy_engine.py` | `tests/test_policy_engine.py`, `tests/test_worker_runtime.py` |
 | Księgowanie kosztów (model_usage + COSTS.csv, flaga dry_run) | `app/llm/usage_tracker.py` | 4 realne runy i kontrolowany resume potwierdziły poprawność |
 | Pipeline tematów (generacja+scoring+dedup+progi) | `app/workflows/topics/` | testy; realnie NIGDY nie uruchomiony (`NOT VERIFIED` na żywym API) |
@@ -45,7 +45,7 @@
 ### 1.4. Co jest błędne lub nieużywane (martwy kod)
 
 - `EnvSecretStore` i `LocalFileStore` — zdefiniowane, zero wywołań w całym repo (config czyta `os.getenv` bezpośrednio).
-- `RunStatus.STOPPED` — nigdy nie zapisywany (zarezerwowany dla przyszłego reapera).
+- Brak osobnego cyklicznego schedulera reapera — `reap-runs --once` jest jawny i offline, lecz nie jest uruchamiany przez worker.
 - Legacy pipeline'y researchu (`run_research_pipeline` jednoetapowy, `run_two_stage_research_pipeline`) — działają i mają testy, ale są NIEZALECANE (ADR-016→020); pierwszy sukces staged osiągnięto, lecz roadmapa wymaga ≥2 przed oznaczeniem legacy jako DEPRECATED.
 
 ### 1.5. Duplikacja logiki
@@ -109,9 +109,9 @@ Pełna lista 14 rozbieżności była w audycie 12.07 (zarchiwizowany). Wszystkie
 | Moduł | Odpowiedzialność | Granica (czego NIE robi) | Stan |
 |---|---|---|---|
 | **Orchestration layer** (`app/orchestrator/`) | składanie zależności, jedyny punkt egzekucji akcji zewnętrznych i płatnych | zero logiki domenowej; model językowy NIGDY nie woła portów bezpośrednio | zalążek (runner.py) |
-| **Scheduler** (`app/scheduler/`) | jeden worker `run_once`/kontrolowane `run_forever`, wybór według istniejącego atomowego claimu; CLI `worker --once` | nie planuje okien redakcyjnych ani nie wykonuje paid/browser actions | VERIFIED OFFLINE |
+| **Scheduler** (`app/scheduler/`) | jeden worker `run_once`/kontrolowane `run_forever`, wybór według istniejącego atomowego claimu; CLI `worker --once` i osobne `reap-runs --once` | nie planuje okien redakcyjnych ani nie wykonuje paid/browser actions; nie uruchamia reapera cyklicznie | VERIFIED OFFLINE |
 | **Task queue** | ta sama tabela `jobs` (kolejka = scheduler w SQLite, nie osobny system) | brak zewnętrznego brokera | VERIFIED OFFLINE |
-| **Workers** | jeden proces workera, lease/heartbeat/CAS; zamknięty dispatcher LOCAL noop i RESEARCH dry-run | brak puli procesów, paid/browser, auto-resume przypiętego runu oraz reapera `runs` w MVP | VERIFIED OFFLINE |
+| **Workers** | jeden proces workera, lease/heartbeat/CAS; zamknięty dispatcher LOCAL noop i RESEARCH dry-run; osobny reaper stale runów | brak puli procesów, paid/browser, auto-resume przypiętego runu oraz cyklicznego schedulera reapera | VERIFIED OFFLINE |
 | **Research engine** (`app/research/`, `app/workflows/research/`) | A1 discovery → A2 per-source extraction (z fetch treści — docelowo) → B synthesis; wznawialność; evidence | nie pisze artykułów; nie publikuje | WORKING |
 | **Content planner** | wybór: artykuł vs Note, Article Brief, kandydaci harmonogramu i `SKIP` z reason code | nie generuje treści ani nie wymusza publikacji | NOT_STARTED; blueprint PROPOSED |
 | **Writing engine** (`app/workflows/content/`, przyszły) | draft artykułu/Note wg `instrukcja dla pisania artykulow/`; rewrite po audytach | nie publikuje; startuje ZAWSZE od bramki Policy | NOT_STARTED |
@@ -127,7 +127,7 @@ Pełna lista 14 rozbieżności była w audycie 12.07 (zarchiwizowany). Wszystkie
 | **Approval & autonomy** | poziomy LEVEL_0–3 (ADR-017), macierz akcji×poziom, tabela `approvals`, SAFE MODE | autonomia dotyczy WYKONANIA, nie ujawniania natury agenta (ADR-018) | NOT_STARTED (specyfikacja: sekcja 7) |
 | **Audit log** | `runs` + `research_stage_results` + `autonomous_decisions` (przyszła) + `HUMAN_INTERVENTIONS.md`; każda decyzja/koszt/błąd/interwencja zapisywalna | — | PARTIAL |
 | **Retry system** | retry TYLKO błędów transient (timeout), twardy limit prób, re-check budżetu przed każdą próbą, estymata ×(1+retries); błąd parsowania NIGDY nie jest ponawiany | ŻADNEGO auto-retry publikacji (UNCERTAIN → człowiek/odczyt stanu) | WORKING dla researchu; topics nie retry'uje parse/schema errors |
-| **Failure recovery** | stany trwałe w SQLite po każdym etapie; wznowienie po restarcie czyta BAZĘ, nie pamięć; reaper osieroconych RUNNING | — | WORKING dla researchu; reaper NOT_STARTED |
+| **Failure recovery** | stany trwałe w SQLite po każdym etapie; wznowienie po restarcie czyta BAZĘ, nie pamięć; jawny reaper osieroconych RUNNING po recovery jobów | brak auto-resume i brak cyklicznego schedulera reapera | WORKING OFFLINE |
 | **Configuration system** | `.env` (sekrety, modele, tryby) + `config/*.yaml` (polityki, wagi, limity); wartości NIGDY w kodzie | — | WORKING |
 | **Secrets management** | `.env` + `.gitignore` (ADR-010); docelowo przez `SecretStorePort` (adapter istnieje, nieużywany — podpiąć zamiast `os.getenv`) | zero haseł Substacka gdziekolwiek | WORKING (adapter martwy — dług) |
 | **Backend API / frontend** | panel FastAPI, localhost-only (ADR-009): readonly stan + approvals + kill-switch (flaga DB) | brak wystawiania na sieć publiczną w MVP | NOT_STARTED |
@@ -250,7 +250,8 @@ runs.status:
   DRY_RUN → DRY_RUN | FAILED
   FAILED → FAILED  (NIE przez finish_run; wyłącznie `finish_resumed_research_run` z poprawną relacją run–research–topic–account, flow/status i tokenem CAS)
   identyczne powtórzenie terminalizacji = no-op; inny terminal = błąd
-  reaper (Etap 1): RUNNING starszy niż X bez żywego procesu → STOPPED(stale)
+  reaper (Etap 1, wdrożony offline): po recovery jobów RUNNING starszy niż jawny X
+  bez joba QUEUED/LEASED/RUNNING → STOPPED(stale); NEEDS_VERIFICATION nie daje resume
 
 topics.status:
   DISCOVERED → SCORED | SELECTED | REJECTED | DUPLICATE
@@ -393,6 +394,7 @@ Obowiązujące ADR-y: 001–024 (statusy PROPOSED dla 001/002/003/005/006 trakto
 | D10 | Jawność AI | anonimowa marka redakcyjna, NO_REPLY, zero impersonacji (ADR-018) | publiczne ujawnienie AI (pierwotne założenia — SUPERSEDED) | decyzja właściciela; brak ujawnienia ≠ podszywanie się |
 | D11 | Prowadzenie dokumentacji | 3 dokumenty źródła prawdy (ten + roadmapa + stan) i JEDNO archiwum; logi (BUILD_LOG, DECISIONS, ERRORS…) i kronika `opis-budowy-substack/` pozostają | wiele równoległych planów/audytów w głównych katalogach | kolejny model nie może zgadywać, który dokument obowiązuje |
 | D12 | Fallback modeli | brak auto-fallbacku; awaria → trwały stan + jawne wznowienie | automatyczna zmiana modelu | nieprzewidywalny koszt/jakość; wznowienia są tanie dzięki trwałym etapom |
+| D13 | Osierocony `RUNNING` | po recovery jobów jawny stale reaper CAS `RUNNING→STOPPED`; job `QUEUED/LEASED/RUNNING` blokuje stop | auto-resume, zatrzymanie mimo aktywnej kolejki, cykliczna pętla bez decyzji | zatrzymuje tylko audit bez tworzenia `QUEUED+STOPPED`; RESEARCH z runem zostaje NEEDS_VERIFICATION (ADR-040) |
 
 ---
 

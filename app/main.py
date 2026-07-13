@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 import sys
+from datetime import timedelta
 from uuid import uuid4
 
 from app.core.clock import SystemClock
@@ -133,6 +135,38 @@ def _cmd_worker(args: argparse.Namespace) -> int:
         storage.close()
 
 
+def _positive_seconds(value: str) -> float:
+    try:
+        seconds = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("musi być liczbą dodatnią.") from exc
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise argparse.ArgumentTypeError("musi być skończoną liczbą dodatnią.")
+    return seconds
+
+
+def _cmd_reap_runs(args: argparse.Namespace) -> int:
+    """Runs one offline-only recovery plus stale-run reaper pass."""
+    settings = load_settings()
+    storage = SqliteStorage.open(settings.db_path)
+    try:
+        now = SystemClock().now()
+        recovery = storage.release_or_requeue_expired_leases(now=now)
+        result = storage.reap_orphaned_stale_runs(
+            now - timedelta(seconds=args.stale_after_seconds), now=now,
+        )
+        print(
+            "REAPER: "
+            f"checked={result.checked_count} stopped={result.stopped_count} "
+            f"recovered(requeued={recovery.requeued_count}, "
+            f"needs_verification={recovery.needs_verification_count}, "
+            f"failed={recovery.failed_count})"
+        )
+        return 0
+    finally:
+        storage.close()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="app.main", description="Nothing Is Accidental agent (MVP).")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -165,6 +199,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Uruchom kontrolowaną pętlę z podanym interwałem (> 0).",
     )
     p_worker.set_defaults(func=_cmd_worker)
+
+    p_reaper = sub.add_parser("reap-runs", help="Jednorazowo odzyskaj joby i zatrzymaj osierocone runy offline.")
+    p_reaper.add_argument("--once", action="store_true", required=True,
+                          help="Jawnie wykonaj dokładnie jeden przebieg reapera.")
+    p_reaper.add_argument("--stale-after-seconds", type=_positive_seconds, required=True,
+                          help="Jawny dodatni próg wieku RUNNING runu.")
+    p_reaper.set_defaults(func=_cmd_reap_runs)
     return parser
 
 

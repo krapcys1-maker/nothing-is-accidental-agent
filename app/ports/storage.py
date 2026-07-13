@@ -24,6 +24,7 @@ from app.models import (
     ResearchStageName,
     ResearchStageStatus,
     Run,
+    RunReaperResult,
     RunStatus,
     SourceCandidateRecord,
     SourceCandidateRetryResult,
@@ -46,10 +47,18 @@ class JobConflictError(RuntimeError):
 class JobRunRelationError(RuntimeError):
     """Research job nie może zostać bezpiecznie powiązany z podanym runem."""
 
+    _MAX_AUDIT_MESSAGE_LENGTH = 240
+
     def __init__(self, code: str, job_id: str, detail: str) -> None:
         self.code = code
         self.job_id = job_id
-        super().__init__(f"{code}: job {job_id}: {detail}")
+        # ``job_id`` is retained as structured exception data, but never rendered
+        # into an audit string. Jobs can originate in persisted input, so including
+        # their raw identifier could leak a token-like value or a newline into
+        # ``jobs.last_error``.
+        normalized_detail = " ".join(detail.split())
+        message = f"{code}: {normalized_detail}"
+        super().__init__(message[:self._MAX_AUDIT_MESSAGE_LENGTH])
 
 
 class JobRunConflictError(JobRunRelationError):
@@ -59,7 +68,7 @@ class JobRunConflictError(JobRunRelationError):
         super().__init__(
             "JOB_RUN_ALREADY_ATTACHED",
             job_id,
-            f"existing run_id={existing_run_id!r} differs from requested run_id={requested_run_id!r}.",
+            "a different run_id is already attached.",
         )
 
 
@@ -188,6 +197,12 @@ class StoragePort(Protocol):
     def release_or_requeue_expired_leases(
         self, *, now: datetime | None = None,
     ) -> JobRecoveryResult: ...
+
+    def reap_orphaned_stale_runs(
+        self, stale_before: datetime, *, now: datetime | None = None,
+    ) -> RunReaperResult:
+        """Fail-closed RUNNING→STOPPED reaper after job recovery/reconciliation."""
+        ...
 
     def heartbeat_job_lease(
         self, job_id: str, lease_owner: str, lease_seconds: int,

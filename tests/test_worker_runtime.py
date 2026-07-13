@@ -390,6 +390,64 @@ def test_research_job_with_run_id_is_not_dispatched_again(settings, account):
     recovered.close()
 
 
+def test_reaper_does_not_dispatch_or_resume_research(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    clock = MutableClock()
+    topic = _selected_topic(storage, account)
+    _enable_offline_worker(storage, clock)
+    job = storage.enqueue_job(_research_job(account, topic, "reaper-no-resume"))
+    assert storage.claim_next_job("crashed-worker", 5, now=clock.now()) is not None
+    run_id = "reaper-no-resume-run"
+    storage.create_run(Run(
+        id=run_id, account_id=account.id, workflow=WorkflowType.RESEARCH,
+        status=RunStatus.RUNNING, started_at=clock.now() - timedelta(seconds=10),
+    ))
+    storage.create_research_run(ResearchRun(
+        id=run_id, account_id=account.id, topic_id=int(topic.id),
+        flow=ResearchFlow.SINGLE, status=ResearchRunStatus.PENDING,
+    ))
+    storage.attach_job_run(job.id, "crashed-worker", run_id, now=clock.now())
+    clock.advance(6)
+    storage.release_or_requeue_expired_leases(now=clock.now())
+    storage.reap_orphaned_stale_runs(clock.now() - timedelta(seconds=1), now=clock.now())
+    dispatches = 0
+
+    class CountingDispatcher:
+        def dispatch(self, *_args, **_kwargs):
+            nonlocal dispatches
+            dispatches += 1
+
+    result = _worker(
+        settings, storage, clock, owner="restarted-worker", dispatcher=CountingDispatcher(),
+    ).run_once()
+
+    assert result.status is WorkerIterationStatus.IDLE
+    assert dispatches == 0
+    assert storage.get_job(job.id).status is JobStatus.NEEDS_VERIFICATION
+    assert storage.get_run(run_id).status is RunStatus.STOPPED
+    storage.close()
+
+
+def test_reaper_cli_uses_temp_database(settings, account, monkeypatch, capsys):
+    setup = SqliteStorage.open(settings.db_path)
+    setup.ensure_account(account)
+    setup.create_run(Run(
+        id="reaper-cli-run", account_id=account.id, workflow=WorkflowType.RESEARCH,
+        status=RunStatus.RUNNING, started_at=datetime(2000, 1, 1, tzinfo=timezone.utc),
+    ))
+    setup.close()
+    monkeypatch.setattr("app.main.load_settings", lambda: settings)
+
+    assert main(["reap-runs", "--once", "--stale-after-seconds", "1"]) == 0
+
+    output = capsys.readouterr().out
+    verify = SqliteStorage.open(settings.db_path)
+    assert "REAPER: checked=1 stopped=1" in output
+    assert verify.get_run("reaper-cli-run").status is RunStatus.STOPPED
+    assert verify.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    verify.close()
+
+
 def test_worker_does_not_retry_external_effect_job(settings, storage, account):
     clock = MutableClock()
     storage.ensure_account(account)
