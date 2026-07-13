@@ -58,6 +58,7 @@ Brak blockerów Etapu 0 — kryterium zakończenia spełnione. P1 polegające na
 - **ADR-020:** research staged A1/A2/B; **ADR-019:** trwałość etapów; **ADR-017/018:** cel = pełna autonomia operacyjna + anonimowa marka redakcyjna bez proaktywnego ujawniania AI (NO_REPLY, zero impersonacji).
 - **ADR-029:** retry błędów Anthropic jest dozwolone wyłącznie dla jawnie typowanych timeout/SDK-network/429/500/502/503/504; 400/401/403/404/422, unknown, parse, truncation i validation są terminalne dla próby.
 - **Korekta ADR-031 po końcowym review F4:** COMPLETE nie omija kontraktu `StagedFinalizationContext`; terminalny no-op odrzuca sprzeczny fresh/force/resume mode oraz niezgodny CAS bez mutacji. `finalize_research_success` i `mark_research_run_complete` są legacy-only i odrzucają `staged` we wszystkich stanach, także COMPLETE i FAILED.
+- **ADR-032–036 (ACCEPTED, wyłącznie dokumentacyjnie):** modularny system redakcyjny, prawo do `SKIP`, izolacja NIA/build logu, rozdzielenie follows i subscribers oraz Notes dry-run w Etapie 3/publiczne operacje w Etapie 6. Pełny snapshot Fable jest w `docs/research/FABLE_GROWTH_EDITORIAL_REPORT.md`; wszystkie elementy wdrożeniowe pozostają PLANNED/NOT_STARTED.
 - **2026-07-12 (ten audyt):** konsolidacja dokumentacji do 3 dokumentów źródła prawdy; stare plany w `docs/archive/superseded_plans/` (ADR-023).
 
 ## Etapy
