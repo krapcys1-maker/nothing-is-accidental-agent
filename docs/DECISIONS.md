@@ -515,3 +515,16 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Granice:** nie dodano `app/scheduler/`, dispatchera, runtime PolicyEngine, API, Playwrighta, publikacji ani realnego researchu; migracji nie uruchamiano na `data/agent.db`.
 - **Weryfikacja:** fresh 0001→0009, upgrade 0008→0009, fault rollback migracji, re-run migratora; Barrier + osobne połączenia SQLite dla claimu jednego/dwóch jobów, enqueue, topic locku, rezerwacji, heartbeat/recovery, complete/recovery i cancel/claim; reopen i integrity_check. **463 passed**, koszt 0 USD.
 - **Kto podjął:** właściciel zatwierdził zakres Etapu 1; wykonanie: Codex.
+
+### ADR-038: Minimalny worker Etapu 1 jest offline-only i fail-closed
+
+- **Data:** 2026-07-13
+- **Status:** ACCEPTED / wdrożone i zweryfikowane offline.
+- **Kontekst:** `0009` zapewniło trwały claim, lease i runtime flag storage, lecz bez workera kolejka nie mogła wykonać nawet bezpiecznego dry-run. Worker nie może równocześnie stać się bocznym wejściem do płatnego researchu, browsera ani arbitralnego kodu z payloadu.
+- **Decyzja:** jeden proces wykonuje `run_once()` przez istniejący atomowy claim, przejście LEASED→RUNNING, checkpointy istniejącego heartbeat i CAS terminalizacji. Dispatcher ma zamkniętą, typowaną tabelę: `LOCAL/ANALYTICS` z dokładnym payloadem `{"dry_run": true, "action": "noop"}` oraz `RESEARCH/RESEARCH` z dokładnym `account_id`, `topic_id`, `dry_run=true`. Nie ma dynamicznych importów, nazw funkcji, ścieżek ani parametrów API w payloadzie.
+- **Runtime Policy:** przed claimem i po nim PolicyEngine czyta bez cache z SQLite `kill_switch`, `worker_enabled`, `safe_mode`, `paid_actions_enabled` i `browser_actions_enabled`. Brak, zły JSON/typ albo błąd odczytu blokuje worker. Aktywne konto i drugi check Policy są wymagane przed dispatch. W tym etapie `dry_run=false`, paid oraz browser/public pozostają BLOCKED niezależnie od wartości flag pozwalających.
+- **Trwałość i recovery:** nowy research run jest wiązany z jobem przez CAS `attach_job_run` zaraz po utworzeniu `runs`/`research_runs`. Utrata lease uniemożliwia DONE; bez markera external effect wygasły LOCAL/RESEARCH odzyskują istniejący mechanizm recovery, a BROWSER/job po markerze pozostaje NEEDS_VERIFICATION. Worker nie robi reapera `runs` i nie retry'uje validation, policy denial, unsupported ani niepewnego efektu.
+- **CLI i granice:** `worker --once` wykonuje najwyżej jeden job; ciągły tryb wymaga jawnego `--poll-seconds`; nie ma `--real`. Research worker korzysta z istniejącego `run_research_pipeline` przez offline-only punkt składania zależności (FakeResearchClient), bez sieci, Anthropic, resume, `run_capped_research.py` ani zapisu do `RESEARCH_LOG.md`.
+- **Weryfikacja:** 19 nowych testów (LOCAL, RESEARCH dry-run, real-mode refusal, pięć flag, unsupported/payload, dwa połączenia SQLite z Barrier, restart/reopen, external-effect recovery, heartbeat, lost lease, terminalność, backoff pustej kolejki i CLI temp DB); pełny suite **489 passed**, `PRAGMA integrity_check=ok` w scenariuszach trwałości, 0 USD.
+- **Poza zakresem:** live API = NOT VERIFIED; paid worker = BLOCKED; browser/public worker = BLOCKED; reaper `runs` = NOT_STARTED; brak migracji, zmian `data/agent.db`, publikacji i API.
+- **Kto podjął:** właściciel zatwierdził ograniczony zakres; wykonanie: Codex.

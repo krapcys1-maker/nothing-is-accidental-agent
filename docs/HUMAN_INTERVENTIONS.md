@@ -209,3 +209,10 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Zakres decyzji właściciela:** zbudować `0009`, modele/port/repozytorium jobs, lease/recovery/idempotency, blokadę research per topic, runtime storage flags i globalną rezerwację budżetu wraz z testami offline.
 - **Zakazy:** bez worker loopa, schedulera runtime, API, realnego researchu/resume, migracji historycznej bazy, publikacji/Playwrighta, commita, pushu, PR i merge; instrukcja pisania poza zakresem.
 - **Efekt:** storage foundation wdrożona offline; worker i runtime PolicyEngine flags pozostają nierozpoczęte. 463 testy, koszt 0 USD.
+
+### [2026-07-13] APPROVAL — minimalny worker Etapu 1, tylko offline
+
+- **Typ:** IMPLEMENTATION BOUNDARY / NO EXTERNAL ACTION.
+- **Zakres decyzji właściciela:** dodać pojedynczy worker, jawny dispatcher, runtime PolicyEngine/system_flags, CLI `worker --once`, recovery i testy; wolno zintegrować wyłącznie istniejący dry-run research pipeline oraz trwałe wiązanie job→run.
+- **Zakazy:** bez Anthropic API, sieci, realnego researchu/resume, `data/agent.db`, publikacji, Playwrighta, browser/public actions, paid actions, reapera runs, migracji, commita, pushu, PR i merge; instrukcja pisania poza zakresem.
+- **Efekt:** LOCAL noop i RESEARCH `dry_run=true` są zweryfikowane offline; runtime flags fail-closed i CAS lease chronią lifecycle. Live API pozostaje NOT VERIFIED, paid/browser BLOCKED, reaper NOT_STARTED. Pełny suite 489 testów, koszt 0 USD.

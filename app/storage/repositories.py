@@ -79,6 +79,7 @@ _RELEASABLE_RESERVATION_STATUSES = (
 )
 _SECURITY_FLAG_DEFAULTS = {
     "kill_switch": True,
+    "worker_enabled": False,
     "safe_mode": True,
     "paid_actions_enabled": False,
     "browser_actions_enabled": False,
@@ -725,6 +726,55 @@ class SqliteStorage:
                 target_status=JobStatus.RUNNING.value,
                 allowed_source_statuses=(JobStatus.LEASED.value,),
                 detail="Lease owner or expiry did not match.",
+            )
+            self.conn.commit()
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def attach_job_run(
+        self, job_id: str, lease_owner: str, run_id: str, *, now: datetime | None = None,
+    ) -> None:
+        """Durably binds a just-created run to the current job lease.
+
+        The relation is written only while the caller still owns a fresh lease.
+        Repeating the exact same binding is harmless; replacing a different run
+        is rejected so a restarted worker cannot rewrite execution history.
+        """
+        if not run_id.strip():
+            raise ValueError("run_id must be non-empty.")
+        current_ts = _persisted_ts(self._job_now(now))
+        allowed = (JobStatus.LEASED.value, JobStatus.RUNNING.value)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            job = self.conn.execute(
+                "SELECT account_id,run_id,status,lease_owner,lease_expires_at FROM jobs WHERE id=?",
+                (job_id,),
+            ).fetchone()
+            run = self.conn.execute("SELECT account_id FROM runs WHERE id=?", (run_id,)).fetchone()
+            if job is None or run is None or run["account_id"] != job["account_id"]:
+                raise self._job_lifecycle_error(
+                    job_id, "RUN_ATTACHED", allowed,
+                    detail="Job and run must exist and belong to the same account.",
+                )
+            if (
+                job["run_id"] == run_id
+                and job["status"] in allowed
+                and job["lease_owner"] == lease_owner
+                and job["lease_expires_at"] >= current_ts
+            ):
+                self.conn.commit()
+                return
+            cursor = self.conn.execute(
+                "UPDATE jobs SET run_id=?, updated_at=? WHERE id=? AND run_id IS NULL "
+                "AND status IN ('LEASED','RUNNING') AND lease_owner=? AND lease_expires_at >= ?",
+                (run_id, current_ts, job_id, lease_owner, current_ts),
+            )
+            self._require_one_transition(
+                cursor, table="jobs", entity="job", identifier=job_id,
+                target_status="RUN_ATTACHED", allowed_source_statuses=allowed,
+                detail="Run binding requires a fresh lease and an empty run_id.",
             )
             self.conn.commit()
         except Exception:

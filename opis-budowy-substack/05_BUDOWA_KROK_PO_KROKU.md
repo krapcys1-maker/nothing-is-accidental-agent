@@ -417,3 +417,13 @@ Worker jeszcze nie istnieje, ale jego przyszły błąd można było zobaczyć za
 Dlatego najpierw powstała sama granica: job ma klucz idempotencji, research ma jeden aktywny temat na konto, a lease bierze się i przedłuża wyłącznie atomowo. Gdy lease browsera znika, system nie udaje, że wie, czy kliknięcie zaszło — zapisuje `NEEDS_VERIFICATION`. Zwykły lokalny krok może wrócić do kolejki, ale tylko przed wyczerpaniem prób.
 
 Druga granica jest finansowa. Rezerwacja nie udaje kosztu i nie zmienia `model_usage`; tylko blokuje miejsce w limicie, zanim dwa przyszłe joby osobno uznają, że stać je na ten sam dolar. Dziewięć nowych testów używa osobnych SQLite, bariery i reopen. **463 testy**, zero API i 0 USD. Worker pozostaje następnym, osobnym krokiem.
+
+## 2026-07-13 — Worker może być mały, jeśli umie odmówić
+
+Następny krok nie zamienił kolejki w autonomiczny automat od wszystkiego. Jeden worker bierze najwyżej jeden job, a dispatcher zna tylko dwa bezpieczne zdania: lokalne „nic nie rób” oraz research z dosłownym `dry_run=true`. Nie rozumie nazw funkcji, modułów, ścieżek ani opcji, które ktoś mógłby przemycić w JSON-ie.
+
+Przed każdym jobem pyta bazę o pięć flag. Brak flagi jest odmową, uszkodzony JSON jest odmową, safe mode jest odmową. To ważniejsze niż wygodny default: worker może zatrzymać się zbyt wcześnie, ale nie może przypadkiem zacząć płatnego researchu albo kliknąć w publiczny interfejs. Nawet gdy flaga paid/browser byłaby ustawiona, ten etap wciąż odmawia obu klas akcji.
+
+Research nie dostał drugiego pipeline'u. Worker wszedł przez istniejący offlineowy punkt i użył FakeResearchClienta; zaraz po powstaniu runu zapisał jego ID w jobie przez CAS. Jeśli lease zniknie, worker nie może już powiedzieć „DONE”. Jeśli poprzedni proces zniknął przed skutkiem zewnętrznym, istniejąca recovery oddaje bezpieczny job kolejce; po markerze skutku pozostaje `NEEDS_VERIFICATION`.
+
+To nadal nie jest dowód gotowości do działania na zewnątrz. Jest dowód lokalny: **19 nowych testów**, dwa połączenia SQLite z barierą, restart/reopen, heartbeat, utrata lease i kontrolowane oczekiwanie pustej kolejki; pełny suite ma **489 testów**. API, sieć, realna baza, paid/browser i koszt pozostały nietknięte: **0 USD**.

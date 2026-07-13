@@ -2,17 +2,19 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Callable
 
-from app.core.clock import SystemClock
+from app.core.clock import Clock, SystemClock
 from app.core.config import Settings, load_settings
 from app.llm.anthropic_client import AnthropicLLMClient
 from app.llm.base import LLMClient
 from app.llm.fake_client import FakeLLMClient
 from app.llm.model_router import ModelRouter
 from app.llm.usage_tracker import UsageTracker
-from app.models import TopicStatus
+from app.models import Account, Topic, TopicStatus
 from app.policies.policy_engine import PolicyEngine
 from app.ports.notification import LogNotification
+from app.ports.storage import StoragePort
 from app.research.anthropic_client import AnthropicResearchClient
 from app.research.base import ResearchClient
 from app.research.fake_client import FakeResearchClient
@@ -130,4 +132,35 @@ def run_research(topic_id: int | None = None, account_id: str = DEFAULT_ACCOUNT,
         usage_tracker=usage_tracker, policy=policy, notifier=notifier,
         clock=clock, research_log=research_log,
         force_re_research=force_re_research,
+    )
+
+
+def run_research_dry_run(
+    account: Account,
+    topic: Topic,
+    *,
+    settings: Settings,
+    storage: StoragePort,
+    policy: PolicyEngine,
+    clock: Clock,
+    run_created_callback: Callable[[str], None] | None = None,
+) -> ResearchRunSummary:
+    """Runs the existing manual research pipeline through its offline-only path.
+
+    The worker supplies already-open dependencies, so this helper never opens a
+    second database connection and never writes the human research log.  It is
+    deliberately unable to select a real client or force a resume.
+    """
+    if not settings.dry_run:
+        raise RuntimeError("Worker research accepts only dry_run=True.")
+    research_client = _build_research_client(settings, force_real=False)
+    usage_tracker = UsageTracker(settings, storage)
+    notifier = LogNotification()
+    return run_research_pipeline(
+        account, topic,
+        settings=settings, storage=storage, research_client=research_client,
+        usage_tracker=usage_tracker, policy=policy, notifier=notifier,
+        clock=clock, research_log=None,
+        run_created_callback=run_created_callback,
+        force_re_research=False,
     )

@@ -10,8 +10,15 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from uuid import uuid4
 
+from app.core.clock import SystemClock
+from app.core.config import Settings, load_settings
 from app.orchestrator.runner import DEFAULT_ACCOUNT, run_research, run_topics
+from app.policies.policy_engine import PolicyEngine
+from app.scheduler.dispatcher import JobDispatcher
+from app.scheduler.worker import Worker, WorkerIterationStatus
+from app.storage.repositories import SqliteStorage
 
 
 def _configure_output() -> None:
@@ -96,6 +103,36 @@ def _cmd_run_research(args: argparse.Namespace) -> int:
     return 0
 
 
+def _build_worker(settings: Settings) -> tuple[Worker, SqliteStorage]:
+    """Composes the same runtime dependencies used by the application, once."""
+    storage = SqliteStorage.open(settings.db_path)
+    clock = SystemClock()
+    policy = PolicyEngine(settings, storage, clock)
+    dispatcher = JobDispatcher(
+        settings=settings, storage=storage, policy=policy, clock=clock,
+    )
+    return Worker(
+        storage=storage, policy=policy, dispatcher=dispatcher,
+        lease_owner=f"cli-worker-{uuid4()}", clock=clock,
+    ), storage
+
+
+def _cmd_worker(args: argparse.Namespace) -> int:
+    settings = load_settings()
+    worker, storage = _build_worker(settings)
+    try:
+        if args.once:
+            result = worker.run_once()
+            print(f"WORKER: {result.status.value}" + (f" job={result.job_id}" if result.job_id else ""))
+            return 0 if result.status is not WorkerIterationStatus.BLOCKED else 2
+        # `--poll-seconds` is required by the parser for this branch, so no CLI
+        # invocation can accidentally become a continuous worker.
+        worker.run_forever(poll_seconds=args.poll_seconds)
+        return 0
+    finally:
+        storage.close()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="app.main", description="Nothing Is Accidental agent (MVP).")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -119,6 +156,15 @@ def build_parser() -> argparse.ArgumentParser:
                             help="Jawnie zezwól na nowy research tematu z kompletną kartą. "
                                  "Może uruchomić kosztowny research; nie omija innych bramek.")
     p_research.set_defaults(func=_cmd_run_research)
+
+    p_worker = sub.add_parser("worker", help="Wykonaj bezpieczny, trwały job offline.")
+    worker_mode = p_worker.add_mutually_exclusive_group(required=True)
+    worker_mode.add_argument("--once", action="store_true", help="Podejmij najwyżej jeden job.")
+    worker_mode.add_argument(
+        "--poll-seconds", type=float,
+        help="Uruchom kontrolowaną pętlę z podanym interwałem (> 0).",
+    )
+    p_worker.set_defaults(func=_cmd_worker)
     return parser
 
 

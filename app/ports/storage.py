@@ -130,6 +130,12 @@ class StoragePort(Protocol):
         self, job_id: str, lease_owner: str, *, now: datetime | None = None,
     ) -> None: ...
 
+    def attach_job_run(
+        self, job_id: str, lease_owner: str, run_id: str, *, now: datetime | None = None,
+    ) -> None:
+        """CAS-links a claimed job with the run it has just created."""
+        ...
+
     def mark_job_external_effect_started(
         self, job_id: str, lease_owner: str, *, now: datetime | None = None,
     ) -> None:

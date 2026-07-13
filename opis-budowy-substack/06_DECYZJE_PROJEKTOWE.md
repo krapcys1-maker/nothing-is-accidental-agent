@@ -222,3 +222,10 @@ Po review doprecyzowano: realny pipeline bez capu odmawia, cap resume jest absol
 - **Wybór:** `jobs` dostaje UNIQUE idempotency, partial UNIQUE aktywnego research per account/topic i atomowy claim w `BEGIN IMMEDIATE`. `attempts` liczy udane claimy, a `external_effect_started_at` jest trwałą granicą przed pierwszym skutkiem. Browser/publication-like lub job po tym markerze po expiry zawsze przechodzi do `NEEDS_VERIFICATION`; tylko lokalne/research bez markera mogą wrócić do QUEUED. Rezerwacja liczy `model_usage` plus wszystkie aktywne rezerwacje w tej samej transakcji.
 - **Granica:** to storage foundation, nie worker ani Policy runtime. Rezerwacja nie jest wydatkiem; `model_usage` pozostaje kanonem. Brak/uszkodzenie bezpieczeństwa w `system_flags` jest fail-closed.
 - **Dowód:** migracja 0009 oraz testy Barrier/reopen dla claimu, idempotency, topic locku, rezerwacji, heartbeat/recovery, completion/recovery i cancel/claim; 463 testy offline, 0 USD.
+
+### [2026-07-13] D-38: worker otrzymuje tylko zamknięty język zadań
+
+- **Problem:** sama trwała kolejka nie mówi, kto i na jakich zasadach wykonuje payload. Dynamiczna nazwa funkcji albo `dry_run=false` w JSON-ie zamieniłyby worker w boczne wejście do API lub browsera.
+- **Wybór:** jeden worker używa claimu, lifecycle i heartbeat z repozytorium; dispatcher przyjmuje tylko `LOCAL/ANALYTICS` noop oraz `RESEARCH/RESEARCH` z dokładnym `account_id`, `topic_id`, `dry_run=true`. Każdy job przechodzi runtime PolicyEngine, który odczytuje pięć flag SQLite bez cache. Run researchu wiąże się z jobem przez CAS zaraz po utworzeniu.
+- **Granica:** paid i browser/public są bezwarunkowo BLOCKED; brak flagi lub uszkodzony JSON blokują; nie ma dynamicznych importów, API, sieci, resume, reapera runs ani automatycznego retry po niepewnym skutku.
+- **Dowód:** 19 testów offline, w tym Barrier/reopen, heartbeat, lost lease, recovery, backoff pustej kolejki i CLI temp DB; pełny suite 489 passed, 0 USD.

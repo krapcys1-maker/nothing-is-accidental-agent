@@ -105,6 +105,7 @@ class ResearchRunSummary:
 
 
 ResearchLogWriter = Callable[[ResearchCard, Topic, "ResearchRunSummary"], None]
+ResearchRunCreatedCallback = Callable[[str], None]
 _LOGGER = logging.getLogger(__name__)
 _AUDIT_ERROR_MESSAGE_LIMIT = 500
 _AUDIT_SECRET_PATTERNS = (
@@ -514,6 +515,7 @@ def run_research_pipeline(
     notifier: NotificationPort,
     clock: Clock | None = None,
     research_log: ResearchLogWriter | None = None,
+    run_created_callback: ResearchRunCreatedCallback | None = None,
     force_re_research: bool = False,
     max_retries: int | None = None,
     run_cap_usd: float | None = None,
@@ -564,6 +566,8 @@ def run_research_pipeline(
         id=run_id, account_id=account.id, topic_id=int(topic.id),
         flow=ResearchFlow.SINGLE, status=ResearchRunStatus.PENDING,
     ))
+    if run_created_callback is not None:
+        run_created_callback(run_id)
 
     _configure_attempt_control(
         research_client, policy=policy, account=account, storage=storage,

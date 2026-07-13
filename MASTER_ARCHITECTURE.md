@@ -1,11 +1,11 @@
 # MASTER_ARCHITECTURE — Nothing Is Accidental Agent
 
 > **STATUS: JEDYNE ŹRÓDŁO PRAWDY O ARCHITEKTURZE.**
-> Data: 2026-07-13 · Wersja: 1.1 · Zastępuje: `ARCHITECTURE.md` (V1), `docs/IMPLEMENTATION_PLAN.md` (CZĘŚCI A–F), `docs/AUDYT_ARCHITEKTURY_2026-07-12.md`, `docs/architecture/SUBSTACK_INTEGRATION.md` — wszystkie przeniesione do `docs/archive/superseded_plans/`.
+> Data: 2026-07-13 · Wersja: 1.2 · Zastępuje: `ARCHITECTURE.md` (V1), `docs/IMPLEMENTATION_PLAN.md` (CZĘŚCI A–F), `docs/AUDYT_ARCHITEKTURY_2026-07-12.md`, `docs/architecture/SUBSTACK_INTEGRATION.md` — wszystkie przeniesione do `docs/archive/superseded_plans/`.
 >
 > Kolejność prac: `IMPLEMENTATION_ROADMAP.md`. Aktualny stan: `CURRENT_PROJECT_STATE.md`. Rejestr decyzji (ADR): `docs/DECISIONS.md` (nadal obowiązujący — ten dokument konsoliduje decyzje, nie zastępuje rejestru).
 >
-> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie, testach (454 passed, 2026-07-13) lub pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
+> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie i testach (489 passed, 2026-07-13) albo pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
 
 ---
 
@@ -18,8 +18,8 @@
 | Konfiguracja (.env + YAML, zero ścieżek absolutnych) | `app/core/config.py` | testy + 4 realne runy |
 | Modele domenowe (Pydantic v2) | `app/models.py` | testy |
 | SQLite + 9 migracji + repozytoria | `app/storage/` | `tests/test_storage.py`, `tests/test_research_run_flow.py`, `tests/test_jobs_queue.py` i in.; `0008` utrwala force staged runu, `0009` dodaje jobs i system_flags |
-| Trwała kolejka storage (bez worker loop) | `app/storage/repositories.py` | atomowy enqueue/idempotency, lease, recovery, rezerwacja budżetu i runtime flags; testy plikowej SQLite z Barrier/reopen |
-| Policy Engine (kill-switch, aktywność konta, budżet dzienny/miesięczny z priorytetem miesięcznym ADR-012, progi tematów) | `app/policies/policy_engine.py` | `tests/test_policy_engine.py` |
+| Trwała kolejka + worker offline | `app/storage/repositories.py`, `app/scheduler/` | atomowy enqueue/idempotency, lease, recovery, runtime flags, zamknięty dispatcher LOCAL/RESEARCH dry-run oraz CAS `job.run_id`; testy plikowej SQLite z Barrier/reopen |
+| Policy Engine (kill-switch, runtime flags workera z SQLite, aktywność konta, budżet dzienny/miesięczny z priorytetem miesięcznym ADR-012, progi tematów) | `app/policies/policy_engine.py` | `tests/test_policy_engine.py`, `tests/test_worker_runtime.py` |
 | Księgowanie kosztów (model_usage + COSTS.csv, flaga dry_run) | `app/llm/usage_tracker.py` | 4 realne runy i kontrolowany resume potwierdziły poprawność |
 | Pipeline tematów (generacja+scoring+dedup+progi) | `app/workflows/topics/` | testy; realnie NIGDY nie uruchomiony (`NOT VERIFIED` na żywym API) |
 | Deduplikacja tematów (lokalna, bez kosztu, ADR-014) | `app/workflows/topics/dedup.py` | `tests/test_dedup.py` |
@@ -33,7 +33,7 @@
 
 ### 1.2. Co jest częściowe
 
-- **Policy Engine** — centralnie egzekwuje cap per-run oraz budżet dzienny/miesięczny przez `check_run_budget`; miesięczny zachowuje priorytet ADR-012. Brak nadal: egzekucji `autonomy_level`, `AccountMode`, limitów per konto, cooldownów, SAFE MODE i runtime kill-switcha.
+- **Policy Engine** — centralnie egzekwuje cap per-run oraz budżet dzienny/miesięczny przez `check_run_budget`; miesięczny zachowuje priorytet ADR-012. Worker odczytuje przy każdym jobie pięć flag SQLite fail-closed (`kill_switch`, `worker_enabled`, `safe_mode`, paid i browser), lecz paid/browser pozostają bezwarunkowo zablokowane. Brak nadal: egzekucji `autonomy_level`, `AccountMode`, limitów per konto, cooldownów i automatycznego wejścia SAFE MODE.
 - **Klient Anthropic dla tematów** (`app/llm/anthropic_client.py`) — offline zweryfikowany kontrakt response→Usage→parse, typowane provider/parse/schema errors, jeden zewnętrzny code fence i księgowanie dostępnego usage przez workflow także przy błędzie; nadal nigdy nie uruchomiony realnie (`NOT VERIFIED live`).
 - **Maszyna stanów researchu** — Etap 0 / Tasks 1–9 ukończone. Task 9 zachował A1 i 4×A2 po uciętym pierwszym B, następnie kontrolowany repair ustawił prawdziwy audit FAILED, a osobno zatwierdzony resume wykonał dokładnie jedno B bez search/retry. Finalizacja ustawiła `research_runs=COMPLETE`, `runs=SUCCESS`, topic `USED` i kartę #2 przy 4 VERIFIED oraz koszcie 0,183964 USD. Karta ma jakościowe `REJECT`, więc nie jest wejściem do treści. Staged B ma typowany context fresh/resume/force; marker force jest trwały per run, a resume wymaga CAS `FAILED/finished_at/error` i wcześniejszego B FAILED. Także identyczny terminalny no-op najpierw rewaliduje mode, marker force i trwały snapshot resume; sprzeczny context kończy się błędem bez mutacji. Historyczny `research_runs.error` po sukcesie pozostaje z pierwszego B jako nieblokujący P2-20; historia prób jest poprawnie zachowana również w `research_stage_results`. Rezydualne P2-17/P2-18/P2-19 pozostają bez zmian.
 
@@ -109,9 +109,9 @@ Pełna lista 14 rozbieżności była w audycie 12.07 (zarchiwizowany). Wszystkie
 | Moduł | Odpowiedzialność | Granica (czego NIE robi) | Stan |
 |---|---|---|---|
 | **Orchestration layer** (`app/orchestrator/`) | składanie zależności, jedyny punkt egzekucji akcji zewnętrznych i płatnych | zero logiki domenowej; model językowy NIGDY nie woła portów bezpośrednio | zalążek (runner.py) |
-| **Scheduler** (`app/scheduler/`, przyszły) | tabela `jobs` + pętla workera; wybór zadania wg priority/earliest_run_at/deadline; okna redakcyjne | nie wykonuje akcji sam — deleguje do orchestratora | NOT_STARTED |
-| **Task queue** | ta sama tabela `jobs` (kolejka = scheduler w SQLite, nie osobny system) | brak zewnętrznego brokera | NOT_STARTED |
-| **Workers** | jeden proces workera; lease z wygasaniem; `kind='browser'` serializowany (jeden Chromium — inwariant) | brak puli procesów w MVP | NOT_STARTED |
+| **Scheduler** (`app/scheduler/`) | jeden worker `run_once`/kontrolowane `run_forever`, wybór według istniejącego atomowego claimu; CLI `worker --once` | nie planuje okien redakcyjnych ani nie wykonuje paid/browser actions | VERIFIED OFFLINE |
+| **Task queue** | ta sama tabela `jobs` (kolejka = scheduler w SQLite, nie osobny system) | brak zewnętrznego brokera | VERIFIED OFFLINE |
+| **Workers** | jeden proces workera, lease/heartbeat/CAS; zamknięty dispatcher LOCAL noop i RESEARCH dry-run | brak puli procesów, paid/browser oraz reapera `runs` w MVP | VERIFIED OFFLINE |
 | **Research engine** (`app/research/`, `app/workflows/research/`) | A1 discovery → A2 per-source extraction (z fetch treści — docelowo) → B synthesis; wznawialność; evidence | nie pisze artykułów; nie publikuje | WORKING |
 | **Content planner** | wybór: artykuł vs Note, Article Brief, kandydaci harmonogramu i `SKIP` z reason code | nie generuje treści ani nie wymusza publikacji | NOT_STARTED; blueprint PROPOSED |
 | **Writing engine** (`app/workflows/content/`, przyszły) | draft artykułu/Note wg `instrukcja dla pisania artykulow/`; rewrite po audytach | nie publikuje; startuje ZAWSZE od bramki Policy | NOT_STARTED |
@@ -200,7 +200,7 @@ Wyjątek `ResearchError` niesie `usage`/`model` z udanego wywołania API, które
 
 Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → budżet). `runs.cost_usd`, `research_runs.total_cost_usd` = cache. **Izolacja kont: `account_id` obowiązkowy w każdej encji per-konto.**
 
-### 4.1. Encje istniejące (migracje 0001–0008)
+### 4.1. Encje istniejące (migracje 0001–0009)
 
 | Encja | Przeznaczenie | Kluczowe pola | Statusy | Relacje / idempotencja |
 |---|---|---|---|---|
@@ -213,6 +213,8 @@ Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → bu
 | `research_cards` + `sources` | karta badawcza (= **research card**) + źródła finalne | question, working_thesis, confirmed/uncertain_claims, contradictions, confidence, recommendation | PROCEED/REVISE/REJECT (rekomendacja) | karta zapisywana też po odrzuceniu |
 | `research_stage_results` | log KAŻDEJ próby etapu (= **retry**/**failure** log researchu) | stage (A/A1/A2/B), status, error | SUCCESS/FAILED | append-only |
 | `model_usage` | wywołanie modelu (= **model call** + **cost record**) | run_id, task, tokeny, web_search_requests, estimated_cost_usd, dry_run | — | append-only; koszt zapisywany TAKŻE przy błędzie |
+| `jobs` | trwałe zadanie kolejki | kind, workflow, payload_json, status, priority, idempotency_key, lease, attempts, `run_id`, marker skutku i rezerwacja | QUEUED→LEASED→RUNNING→DONE/FAILED/NEEDS_VERIFICATION/CANCELLED | UNIQUE idempotency; partial UNIQUE aktywnego researchu per account/topic; worker offline wiąże nowy run przez CAS |
+| `system_flags` | runtime safety flags workera | key, value_json, reason, updated_at | JSON boolean albo fail-closed | odczyt SQLite bez cache; `kill_switch`, `worker_enabled`, `safe_mode`, paid/browser |
 | `content_items` | artykuł/Note (= **draft**, **article**, **note**) — SCHEMAT BEZ KODU | type, title, body, status, score, research_card_id, external_url | docelowe: sekcja 5 | — |
 | `interactions` | komentarz/odpowiedź/lajk (= **interaction**, **comment**, **reply**) — SCHEMAT BEZ KODU | target_item_id, type, body, status | docelowe: sekcja 5 | — |
 | `target_items` | cudza publikacja do interakcji — SCHEMAT BEZ KODU | author, item_url, relevance_score | — | UNIQUE(account_id, item_url) |
@@ -226,8 +228,6 @@ Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → bu
 
 | Encja | Etap | Przeznaczenie / kluczowe pola |
 |---|---|---|
-| `jobs` (= **publication job** i każde inne zadanie kolejki) | 1 | **WDROŻONE OFFLINE: storage foundation** — kind, account_id, payload_json, status (QUEUED/LEASED/RUNNING/DONE/FAILED/NEEDS_VERIFICATION/CANCELLED), priority, earliest_run_at, deadline_at, **idempotency_key UNIQUE**, lease_owner, lease_expires_at, attempts, `external_effect_started_at`, last_error, schedule_reason, rezerwacja kosztu; worker nadal NOT_STARTED |
-| `system_flags` | 1 | **WDROŻONE OFFLINE: repozytorium** — key, value_json, reason, updated_at; bezpieczne defaulty i odczyt przy każdym wywołaniu repozytorium. PolicyEngine runtime integration nadal PLANNED |
 | `research_source_candidates.attempts` (kolumna) | 0 | jawny, capowany retry nieudanych kandydatów |
 | `evaluations` (= **evaluation**) | 3 | wynik audytu treści: content_id, kind (fact/style/growth), score, findings_json |
 | `autonomous_decisions` | 4 | log każdej decyzji podjętej bez człowieka: action, inputs, thresholds, outcome |
@@ -278,7 +278,7 @@ content_items.status (docelowe, Etap 3–5):
   PENDING_APPROVAL → REJECTED (→ DRAFT po poprawkach)
   UNCERTAIN: wyjście WYŁĄCZNIE przez odczyt stanu lub człowieka — NIGDY auto-retry
 
-jobs.status (Etap 1: storage foundation WDROŻONE OFFLINE, worker NOT_STARTED):
+jobs.status (Etap 1: storage i worker VERIFIED OFFLINE):
   QUEUED → LEASED → RUNNING → DONE | FAILED | NEEDS_VERIFICATION
   LEASED|RUNNING --(lease wygasł)--> QUEUED | FAILED | NEEDS_VERIFICATION
   (tylko LOCAL/RESEARCH bez `external_effect_started_at` mogą wrócić do QUEUED poniżej capu;
@@ -329,7 +329,7 @@ SAFE MODE: flaga w system_flags, ortogonalna do statusów; wejście automatyczne
 - **Budżety:** 2,00 USD/dzień, 40,00 USD/miesiąc; miesięczny NADRZĘDNY (ADR-012). Egzekwowane przed każdym płatnym wywołaniem. ZBUDOWANE.
 - **Cap pojedynczej akcji:** `--max-cost-usd` jest egzekwowany bibliotecznie przez `PolicyEngine.check_run_budget`; przed etapem obejmuje pełny worst-case retry, a przed próbą bieżący koszt runu + koszt następnego calla. Realny limit w locie nadal wyznaczają `max_tokens` + `max_uses`.
 - **Limity publikacji/interakcji:** `AccountPolicy` (daily_comment_limit=5, daily_note_limit=2, weekly_article_limit=2, max_per_author_per_day=1, link_ratio) — skonfigurowane, egzekucja w Etapie 4 (PRZED generatorami treści, nie po).
-- **Kill switch:** `KILL_SWITCH` w .env (sprawdzany przez PolicyEngine) pozostaje snapshotem przy starcie. Tabela/repozytorium `system_flags` istnieje od 0009 i czyta wartość przy każdym wywołaniu (brak/uszkodzenie safety flag = fail-closed), ale podpięcie PolicyEngine do runtime flag pozostaje osobnym krokiem Etapu 1.
+- **Kill switch i runtime worker:** `KILL_SWITCH` w .env pozostaje dodatkowym snapshotem dla starszych ręcznych wejść. Worker sprawdza bez cache SQLite `kill_switch`, `worker_enabled`, `safe_mode`, `paid_actions_enabled` i `browser_actions_enabled` przed claimem oraz ponownie przed dispatch; brak/uszkodzenie dowolnej flagi jest fail-closed. W tym etapie paid i browser/public actions są zawsze BLOCKED.
 - **Tryb offline / dry run:** `DRY_RUN=true` domyślnie; Fake-klienty bez sieci; koszt oznaczony `dry_run=1` nie liczy się do budżetu. ZBUDOWANE.
 - **Approval required:** macierz akcja×poziom w PolicyEngine (Etap 4); publikacja przed Etapem 5 = niemożliwa fizycznie (`DisabledBrowser` podnosi wyjątek).
 - **SAFE MODE:** automatyczne wejście przy progach błędów (kolejne błędy przeglądarki/API), blokuje akcje zewnętrzne, wyjście tylko ręczne (Etap 4).

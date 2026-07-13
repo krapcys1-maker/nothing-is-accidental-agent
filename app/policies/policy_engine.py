@@ -10,7 +10,7 @@ import math
 
 from app.core.clock import Clock, SystemClock
 from app.core.config import Settings
-from app.models import Account, TopicStatus
+from app.models import Account, JobKind, TopicStatus
 from app.ports.storage import StoragePort
 
 
@@ -42,6 +42,72 @@ class PolicyEngine:
         if not account.active:
             return PolicyDecision.block("ACCOUNT_INACTIVE", f"Konto {account.id} jest nieaktywne.")
         return PolicyDecision.ok()
+
+    def check_worker_runtime(
+        self,
+        account: Account | None = None,
+        *,
+        job_kind: JobKind | None = None,
+        dry_run: bool = True,
+    ) -> PolicyDecision:
+        """Checks uncached SQLite safety flags for one worker iteration.
+
+        Runtime flags are intentionally separate from the legacy configuration
+        kill-switch: the latter remains an additional fail-closed boundary for
+        existing manual workflows.  Every required flag must be present and a
+        JSON boolean before even a local dry-run may proceed.
+        """
+        flag_keys = (
+            "kill_switch",
+            "worker_enabled",
+            "safe_mode",
+            "paid_actions_enabled",
+            "browser_actions_enabled",
+        )
+        flags: dict[str, bool] = {}
+        for key in flag_keys:
+            try:
+                flag = self._storage.get_system_flag(key)
+            except Exception:
+                return PolicyDecision.block(
+                    "RUNTIME_FLAG_READ_FAILED",
+                    "Nie można bezpiecznie odczytać runtime flagi workera.",
+                )
+            if flag is None or not flag.is_valid:
+                return PolicyDecision.block(
+                    "RUNTIME_FLAG_INVALID",
+                    f"Runtime flaga bezpieczeństwa {key!r} jest nieobecna lub nieprawidłowa.",
+                )
+            flags[key] = flag.value
+
+        if self._settings.kill_switch or flags["kill_switch"]:
+            return PolicyDecision.block(
+                "KILL_SWITCH", "Globalny wyłącznik bezpieczeństwa jest włączony."
+            )
+        if not flags["worker_enabled"]:
+            return PolicyDecision.block(
+                "WORKER_DISABLED", "Worker jest wyłączony przez runtime flagę bezpieczeństwa."
+            )
+        if flags["safe_mode"]:
+            return PolicyDecision.block(
+                "SAFE_MODE", "Tryb bezpieczny blokuje wykonanie workera."
+            )
+
+        if account is None:
+            return PolicyDecision.ok("WORKER_RUNTIME_OK")
+        if not account.active:
+            return PolicyDecision.block("ACCOUNT_INACTIVE", f"Konto {account.id} jest nieaktywne.")
+        if job_kind is JobKind.BROWSER:
+            return PolicyDecision.block(
+                "BROWSER_ACTIONS_BLOCKED",
+                "Akcje browser/public pozostają zablokowane w tym etapie.",
+            )
+        if not dry_run:
+            return PolicyDecision.block(
+                "PAID_ACTIONS_BLOCKED",
+                "Płatne i niedry-runowe akcje pozostają zablokowane w tym etapie.",
+            )
+        return PolicyDecision.ok("WORKER_JOB_ALLOWED")
 
     def check_budget(self, estimated_cost_usd: float) -> PolicyDecision:
         """Backward-compatible global budget check for non-research workflows."""

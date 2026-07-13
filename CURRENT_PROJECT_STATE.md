@@ -1,13 +1,13 @@
 # CURRENT_PROJECT_STATE — Nothing Is Accidental Agent
 
 > **STATUS: JEDYNY OBOWIĄZUJĄCY OBRAZ STANU PROJEKTU.**
-> Data weryfikacji: **2026-07-13** (`python -m pytest` → **463 passed**; Etap 0 zamknięty, a foundation Etapu 1 — jobs/system_flags/lease/idempotency/rezerwacja — jest wdrożona offline i oczekuje na niezależne review; worker i scheduler runtime nierozpoczęte).
+> Data weryfikacji: **2026-07-13** (`python -m pytest` → **489 passed**; Etap 0 zamknięty, a foundation Etapu 1 oraz minimalny worker LOCAL/RESEARCH dry-run są zweryfikowane offline. Live API = NOT VERIFIED; paid i browser/public worker = BLOCKED; reaper runs = NOT_STARTED).
 > Architektura: `MASTER_ARCHITECTURE.md` · Kolejność prac: `IMPLEMENTATION_ROADMAP.md`.
 > Aktualizować przy każdej zmianie stanu modułu; statusy tylko z zestawu: `NOT_STARTED / SKELETON / PARTIAL / WORKING / VERIFIED / BLOCKED / DEPRECATED`. `VERIFIED` wyłącznie dla kodu URUCHOMIONEGO i przetestowanego.
 
 ## Liczby kontrolne (zweryfikowane)
 
-- Testy: **463 passed** (offline, deterministyczne, bez sieci; F4 plus 0009 jobs/system_flags: idempotentny enqueue, partial UNIQUE active research topic, `BEGIN IMMEDIATE` claim i globalna rezerwacja, lease/heartbeat/recovery, browser→NEEDS_VERIFICATION, runtime flag fail-closed oraz Barrier/reopen na plikowej SQLite). Worker nie został uruchomiony. Gałąź: `dev/first-successful-research-card`.
+- Testy: **489 passed** (offline, deterministyczne, bez sieci; F4 plus 0009 jobs/system_flags, 19 testów workera: atomowy claim, runtime flags bez cache, LOCAL noop, RESEARCH dry-run, CAS `job.run_id`, heartbeat, recovery, utrata lease, pusty queue backoff, Barrier/reopen i CLI na tymczasowej SQLite). Gałąź: `dev/first-successful-research-card`.
 - Realny koszt projektu: **0,684580 USD** (13 wpisów `model_usage` z `dry_run=0`; Task 9 łącznie **0,183964 USD**, w tym resume B **0,013914 USD**; limit miesięczny 40 USD → wykorzystane 1,71%).
 - Realne próby researchu: **4** (+1 diagnostyka pojedynczego źródła) — **1 ukończona Research Card na żywym API** (oraz 1 dry_run). Karta realna #2 ma rekomendację jakościową REJECT i nie przechodzi do treści.
 - Baza po kontrolowanym resume Task 9: runs = 4×DRY_RUN + 3×FAILED + 1×SUCCESS (`c01171bc`); research_runs = 2×COMPLETE (1 dry-run, 1 real), 2×FAILED i 1×PARTIAL (`9bbeb020`). Run `c01171bc` ma kartę #2, 4×EXTRACTED/VERIFIED, topic USED, 7 usage i koszt 0,183964 USD; drugie B zakończyło się `end_turn` bez retry.
@@ -19,8 +19,8 @@
 |---|---|---|---|---|---|---|---|
 | Konfiguracja (`app/core/config.py`) | VERIFIED | 90 | .env+YAML, zero ścieżek absolutnych, fallback na *.example | kill-switch czytany raz przy starcie (runtime — Etap 1) | pośrednie (fixtures) | 2026-07-12 | bez zmian do Etapu 1 |
 | Modele domenowe (`app/models.py`) | VERIFIED | 92 | wszystkie enumy/modele zbudowanej części; `TopicStatus.USED` aktywny po COMPLETE | `RunStatus.STOPPED` — martwa wartość | tak | 2026-07-12 | bez zmian w Task 6 |
-| Storage SQLite + 9 migracji | VERIFIED | 99 | repozytoria, flow, WAL/busy timeout, atomowy koszt, claim A2/F4 oraz `0009`: jobs, flags, lease, idempotency, active-topic partial UNIQUE i rezerwacje | starsze migracje bez transakcji; worker integration nie istnieje | storage + flow + candidate attempts + finalization + jobs queue concurrency | 2026-07-13 | niezależne review F4 + Etap 1 foundation |
-| Policy Engine | PARTIAL | 40 | kill-switch (statyczny), active, centralny `check_run_budget` z capem runu oraz budżetem D/M (miesięczny nadrzędny), progi tematów | brak: autonomy_level, AccountMode, limity AccountPolicy, cooldowny, SAFE MODE | test_policy_engine + research_run_budget | 2026-07-12 | reszta Etap 4 |
+| Storage SQLite + 9 migracji | VERIFIED | 99 | repozytoria, flow, WAL/busy timeout, atomowy koszt, claim A2/F4 oraz `0009`: jobs, flags, lease, idempotency, active-topic partial UNIQUE, rezerwacje i CAS `job.run_id` | starsze migracje bez transakcji; reaper `runs` nie istnieje | storage + flow + candidate attempts + finalization + jobs queue + worker concurrency | 2026-07-13 | reaper runs osobno |
+| Policy Engine | PARTIAL | 50 | kill-switch statyczny, aktywność konta, centralny `check_run_budget`, progi oraz runtime check pięciu flag SQLite bez cache dla workera | brak: autonomy_level, AccountMode, limity AccountPolicy, cooldowny i automatyczne wejście SAFE MODE; paid/browser są celowo BLOCKED | test_policy_engine + research_run_budget + worker runtime | 2026-07-13 | reszta Etapu 1/4 |
 | UsageTracker (koszty) | VERIFIED | 95 | model_usage+COSTS.csv, dry_run flaga, koszt przy błędach researchu; Task 9: 7 wpisów i 0,183964 USD zgodne z cache runu | równoległy append CSV nieodporny (przyszły worker) | tak + 4 realne runy + resume B | 2026-07-13 | eksport z DB przy Etapie 8 |
 | ModelRouter | VERIFIED | 90 | zadanie→model z .env | scripts omijają router (P2-8) | tak | 2026-07-12 | P2-8 przy Etapie 0/1 |
 | FakeLLMClient / FakeResearchClient | VERIFIED | 100 | deterministyczne dry_run/testy, scenariusze brzegowe | — | tak | 2026-07-12 | — |
@@ -32,14 +32,14 @@
 | Research legacy (single, two-stage) | WORKING | 100 | działa, 24 testy | NIEZALECANY (ADR-016→020); do DEPRECATED po sukcesie staged live | tak | 2026-07-12 | Etap 2 zad. 6 |
 | Walidacja + injection guard | VERIFIED | 90 | deterministyczna bramka, min_verified_sources, neutralizacja injection | wzorce EN-only (P2-7) | tak | 2026-07-12 | rozszerzenie przy Etapie 2 |
 | Diagnostyka odpowiedzi | VERIFIED | 95 | raw+stop_reason per etap, potwierdzona na żywo | nadpisuje poprzednią próbę tego samego etapu (P2-13, świadome) | tak | 2026-07-12 | — |
-| CLI `app/main.py` + runner | VERIFIED | 85 | run-topics, run-research (dry), blokada `--real` (P0-3) | docelowo jedyne wejście — scripts do wchłonięcia (Etap 1) | tak | 2026-07-12 | — |
+| CLI `app/main.py` + runner | VERIFIED | 90 | run-topics, run-research (dry), blokada `--real` (P0-3), `worker --once` oraz jawny `--poll-seconds` | brak paid/browser CLI i realnego resume przez worker (celowo) | tak + CLI worker na tymczasowej SQLite | 2026-07-13 | reaper runs osobno |
 | `scripts/run_capped_research.py` | VERIFIED | 94 | pre-flight deleguje do `PolicyEngine.check_run_budget`; estymata obejmuje `1+max_retries`; estimate-only bez klienta; resume uwzględnia zapisany usage | `--max-sources 0` znaczy „wszyscy" (P2-15) | black-box CLI + budget delegation | 2026-07-12 | bez zmian w Task 6 |
-| Porty: Storage/Notification | VERIFIED / WORKING | 95/70 | Storage obejmuje też typed jobs, lease, flagi i rezerwacje; Notification bez zmian | PolicyEngine jeszcze nie używa flag runtime | `test_jobs_queue` + pośrednie | 2026-07-13 | integracja worker/Policy w Etapie 1 |
+| Porty: Storage/Notification | VERIFIED / WORKING | 96/70 | Storage obejmuje typed jobs, lease, flagi, rezerwacje i CAS powiązanie job→run; Notification bez zmian | reaper runs pozostaje poza kontraktem | `test_jobs_queue` + `test_worker_runtime` | 2026-07-13 | reaper runs osobno |
 | Porty: SecretStore/FileStore | SKELETON | 20 | kod adapterów istnieje | **martwy kod — zero wywołań** (config używa os.getenv wprost) | brak | 2026-07-12 | podpiąć w Etapie 8 (lub usunąć decyzją) |
-| Porty: Browser/Scheduler | SKELETON | 10 | celowe stuby; DisabledBrowser blokuje każdą akcję | to zabezpieczenie, nie brak | — | 2026-07-12 | Etap 1 (scheduler), Etap 5 (browser) |
+| Porty: Browser/Scheduler | SKELETON / VERIFIED | 10/65 | DisabledBrowser blokuje każdą akcję; jeden trwały worker jest w `app/scheduler/` | browser/public worker pozostaje BLOCKED, brak okien redakcyjnych i reapera | `test_worker_runtime` | 2026-07-13 | Etap 5 / reaper runs |
 | Tabele bez kodu (content_items, interactions, target_items, approvals, metrics_daily, screenshots) | SKELETON | 5 | schemat od migracji 0001 | żaden kod ich nie dotyka | — | 2026-07-12 | Etapy 3–7 |
-| Task queue storage (jobs/flags/lease/rezerwacja) | VERIFIED | 90 | `0009`, atomowy claim, idempotency, recovery, trwały marker skutku zewnętrznego, NEEDS_VERIFICATION, runtime flag repo i budżet globalny | brak worker loop i podpięcia PolicyEngine | `test_jobs_queue` (Barrier/reopen) | 2026-07-13 | niezależne review Etapu 1 foundation |
-| Worker loop / scheduler runtime | NOT_STARTED | 0 | — | brak `app/scheduler/`, dispatchera, reaper runs, runtime Policy i CLI worker | — | — | po review foundation Etapu 1 |
+| Task queue storage (jobs/flags/lease/rezerwacja) | VERIFIED | 95 | `0009`, atomowy claim, idempotency, recovery, marker skutku zewnętrznego, NEEDS_VERIFICATION, runtime flags, globalny budżet i CAS `job.run_id` | reaper `runs` nie istnieje | `test_jobs_queue` + worker Barrier/reopen | 2026-07-13 | reaper runs osobno |
+| Worker loop / scheduler runtime | VERIFIED | 65 | `run_once`, kontrolowane `run_forever`, jawny dispatcher, `worker --once`, LOCAL noop i RESEARCH dry-run przez istniejący pipeline | live API NOT VERIFIED; paid worker BLOCKED; browser/public worker BLOCKED; reaper runs NOT_STARTED; brak okien redakcyjnych | `test_worker_runtime` (19) + pełny suite | 2026-07-13 | reaper runs, potem osobne granice paid/browser |
 | Content pipeline (artykuły/Notes) | NOT_STARTED | 0 | pełny snapshot Fable + blueprint: Article Brief, A1–A9, N1–N16 dry-run, audyty, SEO i diversity memory | brak kodu, migracji i generatorów; raport/blueprint nie są wdrożeniem, a kosztorysy są niewalidowane | — | 2026-07-13 | Etap 3 po Etapach 1–2 |
 | Approval/autonomy + panel FastAPI | NOT_STARTED | 0 | — | — | — | — | Etap 4 |
 | Publishing (Playwright/Substack) | NOT_STARTED | 0 | — | — | — | — | Etap 5 |
@@ -49,7 +49,7 @@
 
 ## Aktualne blokery
 
-Brak blockerów Etapu 0 — kryterium zakończenia spełnione. Foundation Etapu 1 zamknęła storage findingi kolejki: durable claim, active-topic lock i globalną rezerwację. Przed płatnym workerem pozostają niezależne review oraz podpięcie runtime PolicyEngine do `system_flags`; worker/scheduler nie istnieją. Karta #2 ma `publication_recommendation=REJECT`, więc nie może zasilić przyszłego content pipeline bez poprawy dowodów. Historyczny run `9bbeb020` i P2-20 pozostają długiem technicznym.
+Brak blockerów Etapu 0 — kryterium zakończenia spełnione. Etap 1 ma trwały claim, active-topic lock, rezerwację, runtime PolicyEngine i minimalny worker zweryfikowany wyłącznie offline. Przed każdym płatnym albo browser/public workerem pozostają osobne granice bezpieczeństwa i zgoda właściciela; oba typy są teraz BLOCKED. Reaper `runs.status=RUNNING→STOPPED` jest NOT_STARTED. Karta #2 ma `publication_recommendation=REJECT`, więc nie może zasilić przyszłego content pipeline bez poprawy dowodów. Historyczny run `9bbeb020` i P2-20 pozostają długiem technicznym.
 
 ## Ostatnie ważne decyzje
 
@@ -58,19 +58,20 @@ Brak blockerów Etapu 0 — kryterium zakończenia spełnione. Foundation Etapu 
 - **ADR-021:** repo GitHub PRIVATE, main stabilny + branche dev.
 - **ADR-020:** research staged A1/A2/B; **ADR-019:** trwałość etapów; **ADR-017/018:** cel = pełna autonomia operacyjna + anonimowa marka redakcyjna bez proaktywnego ujawniania AI (NO_REPLY, zero impersonacji).
 - **ADR-029:** retry błędów Anthropic jest dozwolone wyłącznie dla jawnie typowanych timeout/SDK-network/429/500/502/503/504; 400/401/403/404/422, unknown, parse, truncation i validation są terminalne dla próby.
-- **ADR-037 (ACCEPTED / wdrożone offline, review wymagane):** jobs+lease+idempotency+active-topic lock+global reservation oraz `system_flags`; BROWSER po lease expiry → NEEDS_VERIFICATION. Runtime PolicyEngine/worker pozostają PLANNED.
+- **ADR-037 (ACCEPTED / zweryfikowane offline):** jobs+lease+idempotency+active-topic lock+global reservation oraz `system_flags`; BROWSER po lease expiry → NEEDS_VERIFICATION.
+- **ADR-038 (ACCEPTED / zweryfikowane offline):** jeden worker odczytuje runtime flags bez cache, wykonuje tylko LOCAL noop i RESEARCH `dry_run=true`, wiąże `job.run_id` przez CAS; paid/browser pozostają BLOCKED, reaper NOT_STARTED.
 - **Korekta ADR-031 po końcowym review F4:** COMPLETE nie omija kontraktu `StagedFinalizationContext`; terminalny no-op odrzuca sprzeczny fresh/force/resume mode oraz niezgodny CAS bez mutacji. `finalize_research_success` i `mark_research_run_complete` są legacy-only i odrzucają `staged` we wszystkich stanach, także COMPLETE i FAILED.
 - **ADR-032–036 (ACCEPTED, wyłącznie dokumentacyjnie):** modularny system redakcyjny, prawo do `SKIP`, izolacja NIA/build logu, rozdzielenie follows i subscribers oraz Notes dry-run w Etapie 3/publiczne operacje w Etapie 6. Pełny snapshot Fable jest w `docs/research/FABLE_GROWTH_EDITORIAL_REPORT.md`; wszystkie elementy wdrożeniowe pozostają PLANNED/NOT_STARTED.
 - **2026-07-12 (ten audyt):** konsolidacja dokumentacji do 3 dokumentów źródła prawdy; stare plany w `docs/archive/superseded_plans/` (ADR-023).
 
 ## Etapy
 
-- **Aktywny etap roadmapy:** Etap 1 — storage foundation jobs/system_flags/lease/rezerwacja jest gotowa offline i oczekuje na niezależne review. Worker, scheduler runtime i runtime PolicyEngine pozostają nierozpoczęte.
+- **Aktywny etap roadmapy:** Etap 1 — storage foundation, runtime PolicyEngine oraz minimalny worker są zweryfikowane offline. Paid/browser są BLOCKED, live API NOT VERIFIED, reaper runs NOT_STARTED.
 - **Ostatni ukończony krok:** Etap 0 / zadanie 9 — kontrolowany resume B dał pierwszą realną kompletną Research Card; **Etap 0 formalnie zakończony**.
 - **Następne trzy zadania:**
-  1. Niezależne review typed provider errors/F4 oraz Etapu 1 queue foundation; bez API.
-  2. Po akceptacji worker loop, dispatch przez orchestrator i runtime PolicyEngine flags.
-  3. Nie uruchamiać płatnych workerów przed domknięciem pozostałych blockerów wykonawczych Etapu 1.
+  1. Niezależne review typed provider errors/F4 oraz minimalnego runtime Etapu 1; bez API.
+  2. Reaper osieroconych `runs` jako osobne, offline zadanie.
+  3. Nie uruchamiać płatnych ani browser/public workerów przed osobnym zakresem bezpieczeństwa i zgodą właściciela.
 
 ## Znane długi techniczne (poza blokerami; numeracja z audytu 12.07)
 
