@@ -274,3 +274,11 @@ Po poprawce terminalny no-op najpierw porównuje context z trwałym markerem for
 Ostatni P1 F4 nie był już problemem samego execution mode. Publiczny legacy helper mógł przyjąć staged `SYNTHESIS_PENDING`, a jego alias prowadził tą samą drogą. W ten sposób karta, koszt i lifecycle mogły ominąć typed context, A2 i atomowy zapis B SUCCESS; w COMPLETE identyczny payload był nawet traktowany jako no-op.
 
 Naprawa nie usuwa legacy. Zawęża je do `single` i `two_stage`, a każdy staged stan odrzuca typowanym błędem przed no-opem, zmianą statusu i użyciem przekazanego kosztu. W trakcie audytu zamknięto też węższą furtkę `finish_run`: staged SUCCESS/DRY_RUN są odrzucone, lecz legalne FAILED pozostaje. Tylko helper staged zapisuje sukces z kanonicznym kosztem `model_usage`. Snapshot po reopen obejmuje wszystkie artefakty i pola lifecycle; **454 testy**, zero API i 0 USD. Brak migracji, workerów i commita/pushu — zmiany pozostają do niezależnego review.
+
+## 2026-07-13 — Lease po kliknięciu nie jest zaproszeniem do retry
+
+Najłatwiejsza wersja kolejki brzmiała: „gdy lease wygaśnie, oddaj job do QUEUED”. To byłoby poprawne tylko wtedy, gdy system na pewno nie zrobił jeszcze niczego na zewnątrz. Przy przyszłym browserze timeout może oznaczać zarówno brak kliknięcia, jak i publikację bez odpowiedzi.
+
+Warstwa storage rozdziela te dwa przypadki zanim powstanie worker. `external_effect_started_at` jest trwałym znacznikiem pierwszego skutku: `BROWSER` albo job po tym markerze po expiry idzie do `NEEDS_VERIFICATION`; nie istnieje automatyczna ścieżka z powrotem do wykonania. LOCAL i research bez markera mogą wrócić do QUEUED, lecz cap attempts kończy się FAILED. Osobny błąd, który nie zdążył powstać: dwa joby rezerwujące ten sam ostatni budżet. Jedna transakcja widzi teraz oba realne usage i aktywne rezerwacje.
+
+To nie jest test publikacji ani API. Bariery na dwóch połączeniach SQLite dowodzą, że wygrywa dokładnie jedno przejście; reopen nie zostawia pół-lease ani podwójnej rezerwacji. **463 testy**, 0 USD, worker wciąż nie istnieje.

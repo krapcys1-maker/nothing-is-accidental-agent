@@ -215,3 +215,10 @@ Po review doprecyzowano: realny pipeline bez capu odmawia, cap resume jest absol
 - **Problem:** historyczny `finalize_research_success` i jego alias pozwalały wywołać staged finał poza typowanym contextem i atomowym helperem.
 - **Wybór:** `single` i `two_stage` zachowują publiczny genericzny finalizer; każdy `staged`, także COMPLETE i FAILED, jest odrzucany przed no-opem i użyciem kosztu. Audyt obejmuje też `finish_run`: staged SUCCESS/DRY_RUN są odrzucone, a legalne FAILED pozostaje dostępne dla obsługi błędów. Wyłącznie `finalize_staged_research_with_card` ma prawo utrwalić kartę, źródła, B SUCCESS, COMPLETE/SUCCESS/USED oraz kanoniczny koszt `model_usage`.
 - **Granica:** nie dodano tabeli, migracji, workerów ani automatyki; P2 dotyczące constraintów pozostają bez zmian.
+
+### [2026-07-13] D-37: lease jest prawem do pracy, nie dowodem wykonania
+
+- **Problem:** worker bez trwałego claimu może zdublować zadanie, a wygasły lease browsera nie mówi, czy efekt publiczny już powstał. Niezależne pre-flighty budżetu też nie chronią przed sumą równoległych decyzji.
+- **Wybór:** `jobs` dostaje UNIQUE idempotency, partial UNIQUE aktywnego research per account/topic i atomowy claim w `BEGIN IMMEDIATE`. `attempts` liczy udane claimy, a `external_effect_started_at` jest trwałą granicą przed pierwszym skutkiem. Browser/publication-like lub job po tym markerze po expiry zawsze przechodzi do `NEEDS_VERIFICATION`; tylko lokalne/research bez markera mogą wrócić do QUEUED. Rezerwacja liczy `model_usage` plus wszystkie aktywne rezerwacje w tej samej transakcji.
+- **Granica:** to storage foundation, nie worker ani Policy runtime. Rezerwacja nie jest wydatkiem; `model_usage` pozostaje kanonem. Brak/uszkodzenie bezpieczeństwa w `system_flags` jest fail-closed.
+- **Dowód:** migracja 0009 oraz testy Barrier/reopen dla claimu, idempotency, topic locku, rezerwacji, heartbeat/recovery, completion/recovery i cancel/claim; 463 testy offline, 0 USD.

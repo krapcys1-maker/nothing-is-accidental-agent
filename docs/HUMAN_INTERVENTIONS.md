@@ -202,3 +202,10 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Zakres decyzji właściciela:** naprawić wyłącznie akceptację sprzecznego `StagedFinalizationContext` przez COMPLETE/no-op i dodać powiązane testy; wolno doprecyzować trwały snapshot B FAILED bez migracji.
 - **Zakazy:** bez API, realnego researchu/resume, zmian historycznej bazy, schedulerów, jobs, workerów, rezerwacji budżetowych, commita, pushu, PR i merge; instrukcja pisania poza zakresem.
 - **Efekt:** mode, marker force i CAS resume są walidowane przed no-op; 449 testów offline, koszt 0 USD. Zmiany oczekują na niezależne review.
+
+### [2026-07-13] APPROVAL — Etap 1, wyłącznie foundation kolejki
+
+- **Typ:** IMPLEMENTATION BOUNDARY / NO EXTERNAL ACTION.
+- **Zakres decyzji właściciela:** zbudować `0009`, modele/port/repozytorium jobs, lease/recovery/idempotency, blokadę research per topic, runtime storage flags i globalną rezerwację budżetu wraz z testami offline.
+- **Zakazy:** bez worker loopa, schedulera runtime, API, realnego researchu/resume, migracji historycznej bazy, publikacji/Playwrighta, commita, pushu, PR i merge; instrukcja pisania poza zakresem.
+- **Efekt:** storage foundation wdrożona offline; worker i runtime PolicyEngine flags pozostają nierozpoczęte. 463 testy, koszt 0 USD.

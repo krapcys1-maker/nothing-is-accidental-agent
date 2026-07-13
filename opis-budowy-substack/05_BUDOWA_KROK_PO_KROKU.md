@@ -409,3 +409,11 @@ Po poprzednich poprawkach staged B miało prawidłowy atomowy finał, ale starsz
 Teraz `finalize_research_success` i jego alias są czytelnie legacy: tylko `single` i `two_stage`. Każdy staged run — oczekujący, ukończony lub nieudany — kończy się typowanym błędem zanim kod użyje kosztu albo dotknie lifecycle. Audyt znalazł jeszcze ogólny `finish_run`, który potrafił wpisać samo staged `SUCCESS` lub `DRY_RUN`; dla tych dwóch wyników też odmawia, nie blokując zapisu porażki. Jedyny finał staged pozostaje w helperze, który sam liczy koszt z `model_usage`.
 
 Testy zamykają bazę i otwierają ją od nowa po każdej odmowie. Porównują kartę, źródła, audit B, usage, koszty, timestampy, błędy, ID karty i marker force. Legacy dalej działa. Wynik: **454 testy**, brak API, realnego researchu, migracji i koszt **0 USD**; zmiany nadal czekają na niezależne review.
+
+## 2026-07-13 — Kolejka zaczyna się od odmowy dubla
+
+Worker jeszcze nie istnieje, ale jego przyszły błąd można było zobaczyć zawczasu: dwa procesy patrzą na ten sam pusty job, oba uznają go za swój, a potem każdy ma uczciwie wyglądający log. To nie jest problem kolejki w pamięci, tylko problem trwałego prawa do działania.
+
+Dlatego najpierw powstała sama granica: job ma klucz idempotencji, research ma jeden aktywny temat na konto, a lease bierze się i przedłuża wyłącznie atomowo. Gdy lease browsera znika, system nie udaje, że wie, czy kliknięcie zaszło — zapisuje `NEEDS_VERIFICATION`. Zwykły lokalny krok może wrócić do kolejki, ale tylko przed wyczerpaniem prób.
+
+Druga granica jest finansowa. Rezerwacja nie udaje kosztu i nie zmienia `model_usage`; tylko blokuje miejsce w limicie, zanim dwa przyszłe joby osobno uznają, że stać je na ten sam dolar. Dziewięć nowych testów używa osobnych SQLite, bariery i reopen. **463 testy**, zero API i 0 USD. Worker pozostaje następnym, osobnym krokiem.

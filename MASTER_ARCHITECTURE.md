@@ -17,7 +17,8 @@
 |---|---|---|
 | Konfiguracja (.env + YAML, zero ścieżek absolutnych) | `app/core/config.py` | testy + 4 realne runy |
 | Modele domenowe (Pydantic v2) | `app/models.py` | testy |
-| SQLite + 8 migracji + repozytoria | `app/storage/` | `tests/test_storage.py`, `tests/test_research_run_flow.py`, `tests/test_candidate_attempts.py` i in.; `0008` utrwala force staged runu |
+| SQLite + 9 migracji + repozytoria | `app/storage/` | `tests/test_storage.py`, `tests/test_research_run_flow.py`, `tests/test_jobs_queue.py` i in.; `0008` utrwala force staged runu, `0009` dodaje jobs i system_flags |
+| Trwała kolejka storage (bez worker loop) | `app/storage/repositories.py` | atomowy enqueue/idempotency, lease, recovery, rezerwacja budżetu i runtime flags; testy plikowej SQLite z Barrier/reopen |
 | Policy Engine (kill-switch, aktywność konta, budżet dzienny/miesięczny z priorytetem miesięcznym ADR-012, progi tematów) | `app/policies/policy_engine.py` | `tests/test_policy_engine.py` |
 | Księgowanie kosztów (model_usage + COSTS.csv, flaga dry_run) | `app/llm/usage_tracker.py` | 4 realne runy i kontrolowany resume potwierdziły poprawność |
 | Pipeline tematów (generacja+scoring+dedup+progi) | `app/workflows/topics/` | testy; realnie NIGDY nie uruchomiony (`NOT VERIFIED` na żywym API) |
@@ -225,8 +226,8 @@ Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → bu
 
 | Encja | Etap | Przeznaczenie / kluczowe pola |
 |---|---|---|
-| `jobs` (= **publication job** i każde inne zadanie kolejki) | 1 | kind, account_id, payload_json, status (QUEUED/LEASED/DONE/FAILED/CANCELLED), priority, earliest_run_at, deadline_at, **idempotency_key UNIQUE**, lease_owner, lease_expires_at, attempts, last_error, schedule_reason |
-| `system_flags` | 1 | kill-switch/SAFE MODE runtime (key, value, reason, updated_at) — czytane przy KAŻDYM checku Policy |
+| `jobs` (= **publication job** i każde inne zadanie kolejki) | 1 | **WDROŻONE OFFLINE: storage foundation** — kind, account_id, payload_json, status (QUEUED/LEASED/RUNNING/DONE/FAILED/NEEDS_VERIFICATION/CANCELLED), priority, earliest_run_at, deadline_at, **idempotency_key UNIQUE**, lease_owner, lease_expires_at, attempts, `external_effect_started_at`, last_error, schedule_reason, rezerwacja kosztu; worker nadal NOT_STARTED |
+| `system_flags` | 1 | **WDROŻONE OFFLINE: repozytorium** — key, value_json, reason, updated_at; bezpieczne defaulty i odczyt przy każdym wywołaniu repozytorium. PolicyEngine runtime integration nadal PLANNED |
 | `research_source_candidates.attempts` (kolumna) | 0 | jawny, capowany retry nieudanych kandydatów |
 | `evaluations` (= **evaluation**) | 3 | wynik audytu treści: content_id, kind (fact/style/growth), score, findings_json |
 | `autonomous_decisions` | 4 | log każdej decyzji podjętej bez człowieka: action, inputs, thresholds, outcome |
@@ -277,9 +278,11 @@ content_items.status (docelowe, Etap 3–5):
   PENDING_APPROVAL → REJECTED (→ DRAFT po poprawkach)
   UNCERTAIN: wyjście WYŁĄCZNIE przez odczyt stanu lub człowieka — NIGDY auto-retry
 
-jobs.status (docelowe, Etap 1):
-  QUEUED → LEASED → DONE | FAILED       LEASED --(lease wygasł)--> QUEUED
-  (joby publikacyjne po wygaśnięciu lease → NEEDS_VERIFICATION, nie ponowne wykonanie)
+jobs.status (Etap 1: storage foundation WDROŻONE OFFLINE, worker NOT_STARTED):
+  QUEUED → LEASED → RUNNING → DONE | FAILED | NEEDS_VERIFICATION
+  LEASED|RUNNING --(lease wygasł)--> QUEUED | FAILED | NEEDS_VERIFICATION
+  (tylko LOCAL/RESEARCH bez `external_effect_started_at` mogą wrócić do QUEUED poniżej capu;
+   BROWSER/publication-like albo job po markerze → NEEDS_VERIFICATION, nigdy auto-retry)
 
 approvals.decision: PENDING → APPROVED | REJECTED (terminal)
 
@@ -326,7 +329,7 @@ SAFE MODE: flaga w system_flags, ortogonalna do statusów; wejście automatyczne
 - **Budżety:** 2,00 USD/dzień, 40,00 USD/miesiąc; miesięczny NADRZĘDNY (ADR-012). Egzekwowane przed każdym płatnym wywołaniem. ZBUDOWANE.
 - **Cap pojedynczej akcji:** `--max-cost-usd` jest egzekwowany bibliotecznie przez `PolicyEngine.check_run_budget`; przed etapem obejmuje pełny worst-case retry, a przed próbą bieżący koszt runu + koszt następnego calla. Realny limit w locie nadal wyznaczają `max_tokens` + `max_uses`.
 - **Limity publikacji/interakcji:** `AccountPolicy` (daily_comment_limit=5, daily_note_limit=2, weekly_article_limit=2, max_per_author_per_day=1, link_ratio) — skonfigurowane, egzekucja w Etapie 4 (PRZED generatorami treści, nie po).
-- **Kill switch:** `KILL_SWITCH` w .env (sprawdzany przez PolicyEngine) — dziś snapshot przy starcie; docelowo flaga w `system_flags` czytana przy każdym checku (Etap 1).
+- **Kill switch:** `KILL_SWITCH` w .env (sprawdzany przez PolicyEngine) pozostaje snapshotem przy starcie. Tabela/repozytorium `system_flags` istnieje od 0009 i czyta wartość przy każdym wywołaniu (brak/uszkodzenie safety flag = fail-closed), ale podpięcie PolicyEngine do runtime flag pozostaje osobnym krokiem Etapu 1.
 - **Tryb offline / dry run:** `DRY_RUN=true` domyślnie; Fake-klienty bez sieci; koszt oznaczony `dry_run=1` nie liczy się do budżetu. ZBUDOWANE.
 - **Approval required:** macierz akcja×poziom w PolicyEngine (Etap 4); publikacja przed Etapem 5 = niemożliwa fizycznie (`DisabledBrowser` podnosi wyjątek).
 - **SAFE MODE:** automatyczne wejście przy progach błędów (kolejne błędy przeglądarki/API), blokuje akcje zewnętrzne, wyjście tylko ręczne (Etap 4).

@@ -10,11 +10,16 @@ from typing import Protocol, Sequence
 
 from app.models import (
     Account,
+    Job,
+    JobLease,
+    JobRecoveryResult,
+    JobReservation,
     ModelUsage,
     ResearchCard,
     ResearchFlow,
     ResearchRun,
     StagedFinalizationContext,
+    SystemFlag,
     ResearchSourceRecord,
     ResearchStageName,
     ResearchStageStatus,
@@ -32,6 +37,18 @@ from app.models import (
 
 class ResearchTopicIntegrityError(RuntimeError):
     """Stan researchu tematu przeczy jego trwałej semantyce."""
+
+
+class JobConflictError(RuntimeError):
+    """Idempotency albo aktywna blokada topicu nie pozwala utworzyć joba."""
+
+
+class BudgetReservationError(RuntimeError):
+    """Rezerwacja przekracza limit lub przeczy istniejącej rezerwacji joba."""
+
+
+class SystemFlagError(ValueError):
+    """Nieprawidłowa wartość runtime flagi bezpieczeństwa."""
 
 
 class LifecycleTransitionError(ValueError):
@@ -94,6 +111,71 @@ class StoragePort(Protocol):
         """Suma estimated_cost_usd dla realnych (nie dry_run) wpisów, których
         created_at zaczyna się od podanego prefiksu (np. '2026-07' dla miesiąca)."""
         ...
+
+    # --- Etap 1: trwała kolejka, lease i runtime flags (bez worker loop) ---
+
+    def enqueue_job(self, job: Job) -> Job:
+        """Atomowo zapisuje QUEUED job lub zwraca identyczny idempotentny rekord."""
+        ...
+
+    def get_job(self, job_id: str) -> Job | None: ...
+
+    def claim_next_job(
+        self, lease_owner: str, lease_seconds: int, *, now: datetime | None = None,
+    ) -> JobLease | None:
+        """Atomowo przydziela najwyżej jeden eligible QUEUED job."""
+        ...
+
+    def mark_job_running(
+        self, job_id: str, lease_owner: str, *, now: datetime | None = None,
+    ) -> None: ...
+
+    def mark_job_external_effect_started(
+        self, job_id: str, lease_owner: str, *, now: datetime | None = None,
+    ) -> None:
+        """Trwale zaznacza granicę, po której expiry nie może auto-retry'ować joba."""
+        ...
+
+    def complete_job(
+        self, job_id: str, lease_owner: str, *, now: datetime | None = None,
+    ) -> None: ...
+
+    def fail_job(
+        self, job_id: str, lease_owner: str, error: str, *, now: datetime | None = None,
+    ) -> None: ...
+
+    def mark_job_needs_verification(
+        self, job_id: str, lease_owner: str, error: str, *, now: datetime | None = None,
+    ) -> None: ...
+
+    def release_or_requeue_expired_leases(
+        self, *, now: datetime | None = None,
+    ) -> JobRecoveryResult: ...
+
+    def heartbeat_job_lease(
+        self, job_id: str, lease_owner: str, lease_seconds: int,
+        *, now: datetime | None = None,
+    ) -> None: ...
+
+    def cancel_job(self, job_id: str, *, now: datetime | None = None) -> None: ...
+
+    def reserve_job_budget(
+        self, job_id: str, amount_usd: float, *, daily_limit_usd: float,
+        monthly_limit_usd: float, now: datetime | None = None,
+    ) -> JobReservation:
+        """Jedna transakcja: realne usage + aktywne rezerwacje + nowa rezerwacja."""
+        ...
+
+    def release_job_budget(self, job_id: str, *, now: datetime | None = None) -> None: ...
+
+    def get_system_flag(self, key: str) -> SystemFlag | None:
+        """Brak/uszkodzenie flag bezpieczeństwa zwraca bezpieczną wartość runtime."""
+        ...
+
+    def set_system_flag(
+        self, key: str, value: bool, *, updated_by: str | None = None,
+        reason: str | None = None, now: datetime | None = None,
+    ) -> SystemFlag: ...
 
     def add_research_card(self, card: ResearchCard) -> ResearchCard: ...
 

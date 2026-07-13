@@ -503,3 +503,15 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Status:** dokumentacyjna korekta kompletności, nie nowa decyzja wykonawcza.
 - **Decyzja dokumentacyjna:** pełny materiał źródłowy Fable jest utrwalony wyłącznie w `docs/research/FABLE_GROWTH_EDITORIAL_REPORT.md`, z oznaczeniami [OF]/[TW]/[AN]/[WN], statusem `NOT IMPLEMENTED` oraz ostrzeżeniem `COST ESTIMATES — UNVALIDATED`. `docs/CONTENT_AND_GROWTH_BLUEPRINT.md` mapuje wszystkie 16 sekcji raportu na Etapy 2/3/6/7 i statusy DECIDED/PROPOSED/PLANNED/DEFERRED.
 - **Granica:** nie przyjęto jako faktu danych anegdotycznych ani wniosków Fable; nie zmieniono kodu, polityki, poziomu autonomii ani instrukcji pisania.
+
+### ADR-037: Trwała kolejka Etapu 1 rezerwuje prawo do wykonania i budżet przed workerem
+
+- **Data:** 2026-07-13
+- **Status:** ACCEPTED / wdrożone offline, oczekuje na niezależne review.
+- **Problem:** dwa przyszłe workery mogły osobno przejść check-then-act dla tego samego joba, tego samego topicu researchu albo budżetu. Wygasły lease akcji browser/publication-like nie daje wiedzy, czy efekt zewnętrzny już nastąpił.
+- **Decyzja:** migracja `0009_jobs_system_flags.sql` dodaje `jobs` i `system_flags`. Enqueue, claim oraz rezerwacja używają `BEGIN IMMEDIATE`; `idempotency_key` jest UNIQUE, a partial UNIQUE blokuje drugi aktywny `RESEARCH` job dla `(account_id, topic_id)`. `attempts` oznacza liczbę skutecznych claimów. Worker przyszłości musi przed pierwszym skutkiem zapisać `external_effect_started_at`: tylko LOCAL/RESEARCH bez tego markera po expiry mogą wrócić do QUEUED poniżej capu, a BROWSER lub job po markerze przechodzi do `NEEDS_VERIFICATION`.
+- **Budżet:** `model_usage` nadal jest jedynym kanonem wydatku. `jobs.reserved_cost_usd` to wyłącznie konserwatywna rezerwacja: jedna transakcja sumuje realny koszt D/M, wszystkie aktywne rezerwacje i nową kwotę. Identyczna rezerwacja jest no-op, inna kwota konfliktem; DONE/FAILED/CANCELLED zwalniają rezerwację, a `NEEDS_VERIFICATION` ją zachowuje fail-closed.
+- **Flagi:** repozytorium odczytuje SQLite przy każdym wywołaniu; brak lub semantycznie uszkodzona flaga bezpieczeństwa jest fail-closed (`kill_switch`/`safe_mode` true, `paid_actions_enabled`/`browser_actions_enabled` false). Podpięcie tych flag do `PolicyEngine` runtime jest poza tym krokiem.
+- **Granice:** nie dodano `app/scheduler/`, dispatchera, runtime PolicyEngine, API, Playwrighta, publikacji ani realnego researchu; migracji nie uruchamiano na `data/agent.db`.
+- **Weryfikacja:** fresh 0001→0009, upgrade 0008→0009, fault rollback migracji, re-run migratora; Barrier + osobne połączenia SQLite dla claimu jednego/dwóch jobów, enqueue, topic locku, rezerwacji, heartbeat/recovery, complete/recovery i cancel/claim; reopen i integrity_check. **463 passed**, koszt 0 USD.
+- **Kto podjął:** właściciel zatwierdził zakres Etapu 1; wykonanie: Codex.

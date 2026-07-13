@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -37,6 +38,96 @@ class WorkflowType(str, Enum):
     NOTE = "NOTE"
     COMMENT = "COMMENT"
     ANALYTICS = "ANALYTICS"
+
+
+class JobStatus(str, Enum):
+    """Trwały lifecycle zadania kolejki Etapu 1."""
+
+    QUEUED = "QUEUED"
+    LEASED = "LEASED"
+    RUNNING = "RUNNING"
+    DONE = "DONE"
+    FAILED = "FAILED"
+    NEEDS_VERIFICATION = "NEEDS_VERIFICATION"
+    CANCELLED = "CANCELLED"
+
+
+class JobKind(str, Enum):
+    """Klasa bezpieczeństwa zadania, niezależna od jego workflow.
+
+    ``BROWSER`` obejmuje przyszłe publikacje i inne akcje o niepewnym efekcie
+    zewnętrznym. Wygasły lease takiego joba nigdy nie wraca automatycznie do
+    kolejki.
+    """
+
+    LOCAL = "LOCAL"
+    RESEARCH = "RESEARCH"
+    BROWSER = "BROWSER"
+
+
+class Job(BaseModel):
+    """Jedno trwałe zadanie kolejki; utworzenie zawsze zaczyna lifecycle od QUEUED."""
+
+    id: str
+    account_id: str
+    kind: JobKind
+    workflow: WorkflowType
+    idempotency_key: str
+    priority: int = 0
+    topic_id: int | None = None
+    run_id: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    schedule_reason: str = ""
+    earliest_run_at: datetime = Field(default_factory=_utcnow)
+    deadline_at: datetime | None = None
+    status: JobStatus = JobStatus.QUEUED
+    lease_owner: str | None = None
+    lease_expires_at: datetime | None = None
+    attempts: int = 0
+    max_attempts: int = 1
+    reserved_cost_usd: float = 0.0
+    budget_reserved_at: datetime | None = None
+    external_effect_started_at: datetime | None = None
+    last_error: str | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
+class JobLease(BaseModel):
+    """Wynik atomowego claimu: konkretny job i lease należący do workera."""
+
+    job: Job
+    lease_owner: str
+    lease_expires_at: datetime
+
+
+class JobReservation(BaseModel):
+    """Aktywna, konserwatywna rezerwacja budżetu — nie jest realnym wydatkiem."""
+
+    job_id: str
+    amount_usd: float
+    reserved_at: datetime
+
+
+class JobRecoveryResult(BaseModel):
+    """Deterministyczny wynik jednego przebiegu recovery wygasłych lease."""
+
+    requeued_count: int = 0
+    needs_verification_count: int = 0
+    failed_count: int = 0
+
+
+class SystemFlag(BaseModel):
+    """Runtime flaga bezpieczeństwa odczytywana z bazy przy każdym checku."""
+
+    key: str
+    value: bool
+    updated_at: datetime = Field(default_factory=_utcnow)
+    updated_by: str | None = None
+    reason: str | None = None
+    is_valid: bool = True
 
 
 class RunStatus(str, Enum):

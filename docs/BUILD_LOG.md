@@ -524,3 +524,10 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Cel:** dokończyć wyłącznie dokumentacyjną integrację pełnego fragmentu „Growth & Editorial Operating System” z dostarczonego materiału, bez audytu technicznego i bez promptu źródłowego.
 - **Wynik:** `docs/research/FABLE_GROWTH_EDITORIAL_REPORT.md` zawiera 16 kompletnych sekcji, formaty A1–A9/N1–N16/K1–K8, routing, trzy warianty kosztowe, E1–E10, granice autonomii i oznaczenia [OF]/[TW]/[AN]/[WN]. Blueprint zawiera tylko statusy i mapowanie, bez deklaracji wdrożenia.
 - **Granica:** brak kodu, migracji, bazy, testów, API, researchu, publikacji, commita i pushu; koszt 0 USD. Kosztorysy są oznaczone jako niewalidowane, a zmiany pozostają do niezależnego review.
+
+### 2026-07-13 — Etap 1: trwała foundation jobs, lease i budżetu — [INFRA | OFFLINE]
+
+- **Cel:** zbudować wyłącznie storage layer kolejki przed worker loopem: `jobs`, `system_flags`, lease, idempotency, blokadę aktywnego research topicu i globalną rezerwację budżetu.
+- **Zmiana:** `0009_jobs_system_flags.sql` jest migracją addytywną/atomową. `SqliteStorage` ma typed enqueue/claim/lifecycle/heartbeat/recovery, flagi runtime i rezerwacje w `BEGIN IMMEDIATE`; marker `external_effect_started_at` zatrzymuje auto-retry po pierwszym skutku, więc BROWSER lub job po markerze przechodzi do NEEDS_VERIFICATION, a terminalne joby zwalniają rezerwację.
+- **Kanon i granice:** realny wydatek pozostaje wyłącznie w `model_usage`; rezerwacja nie jest kosztem i pozostaje zablokowana w NEEDS_VERIFICATION. Nie powstał worker, scheduler runtime, dispatcher, PolicyEngine runtime integration, API ani akcja zewnętrzna.
+- **Weryfikacja:** fresh/upgrade/rollback/re-run 0009 oraz 9 nowych testów kolejki z plikową SQLite, Barrier i reopen; pełne `python -m pytest`: **463 passed in 27.40s**. Koszt **0 USD**; bez commita i pushu, do niezależnego review.

@@ -2,13 +2,20 @@
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Sequence
 
 from app.models import (
     Account,
+    Job,
+    JobKind,
+    JobLease,
+    JobRecoveryResult,
+    JobReservation,
+    JobStatus,
     ModelUsage,
     ResearchCard,
     ResearchRecommendation,
@@ -29,11 +36,18 @@ from app.models import (
     StagedFinalizationContext,
     StagedFinalizationFaultPoint,
     StagedFinalizationMode,
+    SystemFlag,
     Topic,
     TopicStatus,
     WorkflowType,
 )
-from app.ports.storage import LifecycleTransitionError, ResearchTopicIntegrityError
+from app.ports.storage import (
+    BudgetReservationError,
+    JobConflictError,
+    LifecycleTransitionError,
+    ResearchTopicIntegrityError,
+    SystemFlagError,
+)
 from app.storage.db import apply_migrations, connect
 
 
@@ -46,6 +60,29 @@ _RESEARCH_USAGE_TASKS = (
     "research_synthesize_cards",
 )
 _RESEARCH_USAGE_PLACEHOLDERS = ", ".join("?" for _ in _RESEARCH_USAGE_TASKS)
+
+_ACTIVE_JOB_STATUSES = (
+    JobStatus.QUEUED.value,
+    JobStatus.LEASED.value,
+    JobStatus.RUNNING.value,
+    JobStatus.NEEDS_VERIFICATION.value,
+)
+_TERMINAL_JOB_STATUSES = (
+    JobStatus.DONE.value,
+    JobStatus.FAILED.value,
+    JobStatus.CANCELLED.value,
+)
+_RELEASABLE_RESERVATION_STATUSES = (
+    JobStatus.QUEUED.value,
+    JobStatus.LEASED.value,
+    JobStatus.RUNNING.value,
+)
+_SECURITY_FLAG_DEFAULTS = {
+    "kill_switch": True,
+    "safe_mode": True,
+    "paid_actions_enabled": False,
+    "browser_actions_enabled": False,
+}
 
 
 def _ts(dt: datetime | None = None) -> str:
@@ -423,6 +460,596 @@ class SqliteStorage:
             (f"{since_prefix}%",),
         ).fetchone()
         return float(row["total"])
+
+    # --- Etap 1: trwała kolejka, lease i runtime system flags ---
+
+    @staticmethod
+    def _job_from_row(row: sqlite3.Row) -> Job:
+        try:
+            payload = json.loads(row["payload_json"])
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise JobConflictError(f"Job {row['id']} has malformed payload_json.") from exc
+        if not isinstance(payload, dict):
+            raise JobConflictError(f"Job {row['id']} payload_json must be an object.")
+        return Job(
+            id=row["id"], account_id=row["account_id"], kind=JobKind(row["kind"]),
+            workflow=WorkflowType(row["workflow"]), status=JobStatus(row["status"]),
+            priority=int(row["priority"]), idempotency_key=row["idempotency_key"],
+            topic_id=row["topic_id"], run_id=row["run_id"], payload=payload,
+            schedule_reason=row["schedule_reason"], earliest_run_at=row["earliest_run_at"],
+            deadline_at=row["deadline_at"], lease_owner=row["lease_owner"],
+            lease_expires_at=row["lease_expires_at"], attempts=int(row["attempts"]),
+            max_attempts=int(row["max_attempts"]),
+            reserved_cost_usd=float(row["reserved_cost_usd"]),
+            budget_reserved_at=row["budget_reserved_at"], last_error=row["last_error"],
+            external_effect_started_at=row["external_effect_started_at"],
+            created_at=row["created_at"], started_at=row["started_at"],
+            finished_at=row["finished_at"], updated_at=row["updated_at"],
+        )
+
+    @staticmethod
+    def _job_now(now: datetime | None) -> datetime:
+        return now or datetime.now(timezone.utc)
+
+    @staticmethod
+    def _canonical_payload(payload: dict) -> str:
+        try:
+            return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        except (TypeError, ValueError) as exc:
+            raise JobConflictError("Job payload must be JSON-serializable.") from exc
+
+    @staticmethod
+    def _job_context_matches(row: sqlite3.Row, job: Job, payload_json: str) -> bool:
+        return (
+            row["account_id"] == job.account_id
+            and row["kind"] == job.kind.value
+            and row["workflow"] == job.workflow.value
+            and row["topic_id"] == job.topic_id
+            and row["run_id"] == job.run_id
+            and row["payload_json"] == payload_json
+            and row["schedule_reason"] == job.schedule_reason
+            and int(row["priority"]) == job.priority
+            and row["earliest_run_at"] == _persisted_ts(job.earliest_run_at)
+            and row["deadline_at"] == (
+                None if job.deadline_at is None else _persisted_ts(job.deadline_at)
+            )
+            and int(row["max_attempts"]) == job.max_attempts
+        )
+
+    def _validate_job_enqueue_relation(self, job: Job) -> None:
+        if not job.idempotency_key.strip():
+            raise JobConflictError("Job idempotency_key cannot be blank.")
+        if job.status != JobStatus.QUEUED or job.lease_owner is not None or job.lease_expires_at is not None:
+            raise JobConflictError("enqueue_job accepts only a fresh QUEUED job without a lease.")
+        if job.attempts != 0 or job.started_at is not None or job.finished_at is not None:
+            raise JobConflictError("enqueue_job accepts only a job without prior attempts or lifecycle timestamps.")
+        if (
+            job.max_attempts < 1 or job.reserved_cost_usd != 0.0
+            or job.budget_reserved_at is not None or job.external_effect_started_at is not None
+        ):
+            raise JobConflictError("enqueue_job requires max_attempts >= 1 and no pre-existing budget reservation.")
+        if job.deadline_at is not None and job.deadline_at < job.earliest_run_at:
+            raise JobConflictError("Job deadline_at cannot precede earliest_run_at.")
+        if job.topic_id is not None:
+            topic = self.conn.execute(
+                "SELECT account_id FROM topics WHERE id=?", (job.topic_id,),
+            ).fetchone()
+            if topic is None or topic["account_id"] != job.account_id:
+                raise JobConflictError("Job topic must belong to the same account.")
+        if job.run_id is not None:
+            run = self.conn.execute(
+                "SELECT account_id FROM runs WHERE id=?", (job.run_id,),
+            ).fetchone()
+            if run is None or run["account_id"] != job.account_id:
+                raise JobConflictError("Job run must belong to the same account.")
+
+    def enqueue_job(self, job: Job) -> Job:
+        """Atomowo tworzy QUEUED job lub zwraca identyczny job idempotentny."""
+        payload_json = self._canonical_payload(job.payload)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            existing = self.conn.execute(
+                "SELECT * FROM jobs WHERE idempotency_key=?", (job.idempotency_key,),
+            ).fetchone()
+            if existing is not None:
+                if self._job_context_matches(existing, job, payload_json):
+                    result = self._job_from_row(existing)
+                    self.conn.commit()
+                    return result
+                raise JobConflictError(
+                    f"idempotency_key {job.idempotency_key!r} already belongs to a different job context."
+                )
+
+            self._validate_job_enqueue_relation(job)
+            now = self._job_now(None)
+            created_at = _persisted_ts(job.created_at)
+            self.conn.execute(
+                "INSERT INTO jobs (id,account_id,kind,workflow,status,priority,idempotency_key,"
+                "topic_id,run_id,payload_json,schedule_reason,earliest_run_at,deadline_at,"
+                "lease_owner,lease_expires_at,attempts,max_attempts,reserved_cost_usd,"
+                "budget_reserved_at,external_effect_started_at,last_error,created_at,started_at,finished_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    job.id, job.account_id, job.kind.value, job.workflow.value,
+                    JobStatus.QUEUED.value, job.priority, job.idempotency_key,
+                    job.topic_id, job.run_id, payload_json, job.schedule_reason,
+                    _persisted_ts(job.earliest_run_at),
+                    None if job.deadline_at is None else _persisted_ts(job.deadline_at),
+                    None, None, 0, job.max_attempts, 0.0, None, None, None,
+                    created_at, None, None, _persisted_ts(now),
+                ),
+            )
+            row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job.id,)).fetchone()
+            self.conn.commit()
+            assert row is not None
+            return self._job_from_row(row)
+        except sqlite3.IntegrityError as exc:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            active = self.conn.execute(
+                "SELECT id FROM jobs WHERE account_id=? AND topic_id=? AND kind='RESEARCH' "
+                "AND status IN ('QUEUED','LEASED','RUNNING','NEEDS_VERIFICATION')",
+                (job.account_id, job.topic_id),
+            ).fetchone()
+            if job.kind == JobKind.RESEARCH and job.topic_id is not None and active is not None:
+                raise JobConflictError(
+                    f"Active research job {active['id']} already exists for topic {job.topic_id}."
+                ) from exc
+            raise JobConflictError("Job violates a durable queue constraint.") from exc
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def get_job(self, job_id: str) -> Job | None:
+        row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        return None if row is None else self._job_from_row(row)
+
+    def _job_lifecycle_error(
+        self, job_id: str, target: JobStatus | str, allowed: Sequence[str], *, detail: str,
+    ) -> LifecycleTransitionError:
+        current = self._current_status("jobs", job_id)
+        return LifecycleTransitionError("job", job_id, str(target), allowed, current, detail=detail)
+
+    def claim_next_job(
+        self, lease_owner: str, lease_seconds: int, *, now: datetime | None = None,
+    ) -> JobLease | None:
+        """Claims exactly one queued job in a BEGIN IMMEDIATE transaction.
+
+        ``attempts`` counts successful lease acquisitions, including a later claim
+        after a safe recovery. Expired deadlines and exhausted queued jobs become
+        explicit FAILED records before selection; they are never silently run.
+        """
+        if not lease_owner.strip() or lease_seconds <= 0:
+            raise ValueError("lease_owner must be non-empty and lease_seconds must be positive.")
+        current = self._job_now(now)
+        current_ts = _persisted_ts(current)
+        lease_until = _persisted_ts(current + timedelta(seconds=lease_seconds))
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            self.conn.execute(
+                "UPDATE jobs SET status='FAILED', last_error='Deadline elapsed before claim.', "
+                "finished_at=?, updated_at=?, reserved_cost_usd=0.0, budget_reserved_at=NULL "
+                "WHERE status='QUEUED' AND deadline_at IS NOT NULL AND deadline_at < ?",
+                (current_ts, current_ts, current_ts),
+            )
+            self.conn.execute(
+                "UPDATE jobs SET status='FAILED', last_error='Maximum attempts exhausted before claim.', "
+                "finished_at=?, updated_at=?, reserved_cost_usd=0.0, budget_reserved_at=NULL "
+                "WHERE status='QUEUED' AND attempts >= max_attempts",
+                (current_ts, current_ts),
+            )
+            selected = self.conn.execute(
+                "SELECT id FROM jobs WHERE status='QUEUED' AND earliest_run_at <= ? "
+                "AND (deadline_at IS NULL OR deadline_at >= ?) AND attempts < max_attempts "
+                "ORDER BY priority DESC, deadline_at IS NULL ASC, deadline_at ASC, created_at ASC, id ASC "
+                "LIMIT 1",
+                (current_ts, current_ts),
+            ).fetchone()
+            if selected is None:
+                self.conn.commit()
+                return None
+            cursor = self.conn.execute(
+                "UPDATE jobs SET status='LEASED', lease_owner=?, lease_expires_at=?, "
+                "attempts=attempts+1, started_at=COALESCE(started_at, ?), updated_at=? "
+                "WHERE id=? AND status='QUEUED' AND earliest_run_at <= ? "
+                "AND (deadline_at IS NULL OR deadline_at >= ?) AND attempts < max_attempts",
+                (lease_owner, lease_until, current_ts, current_ts, selected["id"], current_ts, current_ts),
+            )
+            self._require_one_transition(
+                cursor, table="jobs", entity="job", identifier=selected["id"],
+                target_status=JobStatus.LEASED.value,
+                allowed_source_statuses=(JobStatus.QUEUED.value,),
+                detail="Atomic claim compare-and-swap failed.",
+            )
+            row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (selected["id"],)).fetchone()
+            self.conn.commit()
+            assert row is not None
+            claimed = self._job_from_row(row)
+            assert claimed.lease_expires_at is not None
+            return JobLease(
+                job=claimed, lease_owner=lease_owner, lease_expires_at=claimed.lease_expires_at,
+            )
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def _transition_leased_job(
+        self, job_id: str, lease_owner: str, target: JobStatus, *, error: str | None,
+        now: datetime | None, release_budget: bool,
+    ) -> None:
+        current = self._job_now(now)
+        current_ts = _persisted_ts(current)
+        allowed = (JobStatus.LEASED.value, JobStatus.RUNNING.value)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            terminal_fields = (
+                ", finished_at=?, reserved_cost_usd=0.0, budget_reserved_at=NULL"
+                if release_budget else ""
+            )
+            params: list[object] = [target.value, error, current_ts]
+            if release_budget:
+                params.append(current_ts)
+            params.extend([job_id, lease_owner, current_ts])
+            cursor = self.conn.execute(
+                "UPDATE jobs SET status=?, last_error=?, lease_owner=NULL, lease_expires_at=NULL, "
+                "updated_at=?" + terminal_fields + " WHERE id=? "
+                "AND status IN ('LEASED','RUNNING') AND lease_owner=? AND lease_expires_at >= ?",
+                tuple(params),
+            )
+            self._require_one_transition(
+                cursor, table="jobs", entity="job", identifier=job_id,
+                target_status=target.value, allowed_source_statuses=allowed,
+                detail="Lease owner, lease freshness, or lifecycle state did not match.",
+            )
+            self.conn.commit()
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def mark_job_running(
+        self, job_id: str, lease_owner: str, *, now: datetime | None = None,
+    ) -> None:
+        current_ts = _persisted_ts(self._job_now(now))
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            cursor = self.conn.execute(
+                "UPDATE jobs SET status='RUNNING', updated_at=? WHERE id=? AND status='LEASED' "
+                "AND lease_owner=? AND lease_expires_at >= ?",
+                (current_ts, job_id, lease_owner, current_ts),
+            )
+            self._require_one_transition(
+                cursor, table="jobs", entity="job", identifier=job_id,
+                target_status=JobStatus.RUNNING.value,
+                allowed_source_statuses=(JobStatus.LEASED.value,),
+                detail="Lease owner or expiry did not match.",
+            )
+            self.conn.commit()
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def mark_job_external_effect_started(
+        self, job_id: str, lease_owner: str, *, now: datetime | None = None,
+    ) -> None:
+        """Records the durable boundary after which automatic retry is unsafe."""
+        current_ts = _persisted_ts(self._job_now(now))
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            row = self.conn.execute(
+                "SELECT status,lease_owner,lease_expires_at,external_effect_started_at "
+                "FROM jobs WHERE id=?", (job_id,),
+            ).fetchone()
+            if (
+                row is not None
+                and row["external_effect_started_at"] is not None
+                and row["status"] in (JobStatus.LEASED.value, JobStatus.RUNNING.value)
+                and row["lease_owner"] == lease_owner
+                and row["lease_expires_at"] >= current_ts
+            ):
+                self.conn.commit()
+                return
+            cursor = self.conn.execute(
+                "UPDATE jobs SET external_effect_started_at=?, updated_at=? WHERE id=? "
+                "AND status IN ('LEASED','RUNNING') AND lease_owner=? AND lease_expires_at >= ? "
+                "AND external_effect_started_at IS NULL",
+                (current_ts, current_ts, job_id, lease_owner, current_ts),
+            )
+            self._require_one_transition(
+                cursor, table="jobs", entity="job", identifier=job_id,
+                target_status="EXTERNAL_EFFECT_STARTED", allowed_source_statuses=(
+                    JobStatus.LEASED.value, JobStatus.RUNNING.value,
+                ), detail="Lease owner, expiry, or lifecycle state did not match.",
+            )
+            self.conn.commit()
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def complete_job(
+        self, job_id: str, lease_owner: str, *, now: datetime | None = None,
+    ) -> None:
+        self._transition_leased_job(
+            job_id, lease_owner, JobStatus.DONE, error=None, now=now, release_budget=True,
+        )
+
+    def fail_job(
+        self, job_id: str, lease_owner: str, error: str, *, now: datetime | None = None,
+    ) -> None:
+        self._transition_leased_job(
+            job_id, lease_owner, JobStatus.FAILED, error=error, now=now, release_budget=True,
+        )
+
+    def mark_job_needs_verification(
+        self, job_id: str, lease_owner: str, error: str, *, now: datetime | None = None,
+    ) -> None:
+        self._transition_leased_job(
+            job_id, lease_owner, JobStatus.NEEDS_VERIFICATION, error=error,
+            now=now, release_budget=False,
+        )
+
+    def heartbeat_job_lease(
+        self, job_id: str, lease_owner: str, lease_seconds: int,
+        *, now: datetime | None = None,
+    ) -> None:
+        if not lease_owner.strip() or lease_seconds <= 0:
+            raise ValueError("lease_owner must be non-empty and lease_seconds must be positive.")
+        current = self._job_now(now)
+        current_ts = _persisted_ts(current)
+        lease_until = _persisted_ts(current + timedelta(seconds=lease_seconds))
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            cursor = self.conn.execute(
+                "UPDATE jobs SET lease_expires_at=CASE WHEN lease_expires_at >= ? "
+                "THEN lease_expires_at ELSE ? END, updated_at=? WHERE id=? "
+                "AND status IN ('LEASED','RUNNING') AND lease_owner=? AND lease_expires_at >= ?",
+                (lease_until, lease_until, current_ts, job_id, lease_owner, current_ts),
+            )
+            self._require_one_transition(
+                cursor, table="jobs", entity="job", identifier=job_id,
+                target_status="HEARTBEAT", allowed_source_statuses=(
+                    JobStatus.LEASED.value, JobStatus.RUNNING.value,
+                ), detail="Lease owner, expiry, or lifecycle state did not match.",
+            )
+            self.conn.commit()
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def release_or_requeue_expired_leases(
+        self, *, now: datetime | None = None,
+    ) -> JobRecoveryResult:
+        """Recovers each expired lease exactly once under a write transaction.
+
+        Browser jobs move to NEEDS_VERIFICATION because their external effect is
+        uncertain. LOCAL and RESEARCH jobs are requeued only before max_attempts.
+        """
+        current_ts = _persisted_ts(self._job_now(now))
+        result = JobRecoveryResult()
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            rows = self.conn.execute(
+                "SELECT id,kind,attempts,max_attempts,external_effect_started_at FROM jobs "
+                "WHERE status IN ('LEASED','RUNNING') AND lease_expires_at < ? ORDER BY id",
+                (current_ts,),
+            ).fetchall()
+            for row in rows:
+                if row["kind"] == JobKind.BROWSER.value or row["external_effect_started_at"] is not None:
+                    target = JobStatus.NEEDS_VERIFICATION
+                    release_budget = False
+                    result.needs_verification_count += 1
+                    error = "Lease expired; external effect requires verification."
+                elif int(row["attempts"]) >= int(row["max_attempts"]):
+                    target = JobStatus.FAILED
+                    release_budget = True
+                    result.failed_count += 1
+                    error = "Lease expired after maximum attempts."
+                else:
+                    target = JobStatus.QUEUED
+                    release_budget = False
+                    result.requeued_count += 1
+                    error = "Lease expired before an external effect; safely requeued."
+                fields = (
+                    ", finished_at=?, reserved_cost_usd=0.0, budget_reserved_at=NULL"
+                    if release_budget else ""
+                )
+                params: list[object] = [target.value, error, current_ts]
+                if release_budget:
+                    params.append(current_ts)
+                params.extend([row["id"], current_ts])
+                cursor = self.conn.execute(
+                    "UPDATE jobs SET status=?, last_error=?, lease_owner=NULL, lease_expires_at=NULL, "
+                    "updated_at=?" + fields + " WHERE id=? "
+                    "AND status IN ('LEASED','RUNNING') AND lease_expires_at < ?",
+                    tuple(params),
+                )
+                self._require_one_transition(
+                    cursor, table="jobs", entity="job", identifier=row["id"],
+                    target_status=target.value,
+                    allowed_source_statuses=(JobStatus.LEASED.value, JobStatus.RUNNING.value),
+                    detail="Expired-lease recovery compare-and-swap failed.",
+                )
+            self.conn.commit()
+            return result
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def cancel_job(self, job_id: str, *, now: datetime | None = None) -> None:
+        current_ts = _persisted_ts(self._job_now(now))
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            cursor = self.conn.execute(
+                "UPDATE jobs SET status='CANCELLED', finished_at=?, updated_at=?, "
+                "reserved_cost_usd=0.0, budget_reserved_at=NULL WHERE id=? AND status='QUEUED'",
+                (current_ts, current_ts, job_id),
+            )
+            self._require_one_transition(
+                cursor, table="jobs", entity="job", identifier=job_id,
+                target_status=JobStatus.CANCELLED.value,
+                allowed_source_statuses=(JobStatus.QUEUED.value,),
+            )
+            self.conn.commit()
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def reserve_job_budget(
+        self, job_id: str, amount_usd: float, *, daily_limit_usd: float,
+        monthly_limit_usd: float, now: datetime | None = None,
+    ) -> JobReservation:
+        """Atomically reserves one conservative budget amount for an active job."""
+        values = (amount_usd, daily_limit_usd, monthly_limit_usd)
+        if any(not math.isfinite(value) or value < 0 for value in values):
+            raise BudgetReservationError("Reservation amount and limits must be finite and non-negative.")
+        current = self._job_now(now)
+        current_ts = _persisted_ts(current)
+        day_prefix = current.strftime("%Y-%m-%d")
+        month_prefix = current.strftime("%Y-%m")
+        placeholders = ", ".join("?" for _ in _ACTIVE_JOB_STATUSES)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            job = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if job is None or job["status"] not in _ACTIVE_JOB_STATUSES:
+                raise self._job_lifecycle_error(
+                    job_id, "BUDGET_RESERVED", _ACTIVE_JOB_STATUSES,
+                    detail="Only an active non-terminal job may hold a reservation.",
+                )
+            if job["budget_reserved_at"] is not None:
+                if float(job["reserved_cost_usd"]) == float(amount_usd):
+                    result = JobReservation(
+                        job_id=job_id, amount_usd=float(job["reserved_cost_usd"]),
+                        reserved_at=job["budget_reserved_at"],
+                    )
+                    self.conn.commit()
+                    return result
+                raise BudgetReservationError(
+                    f"Job {job_id} already has a different active budget reservation."
+                )
+            day_real = float(self.conn.execute(
+                "SELECT COALESCE(SUM(estimated_cost_usd), 0.0) AS total FROM model_usage "
+                "WHERE dry_run=0 AND created_at LIKE ?", (f"{day_prefix}%",),
+            ).fetchone()["total"])
+            month_real = float(self.conn.execute(
+                "SELECT COALESCE(SUM(estimated_cost_usd), 0.0) AS total FROM model_usage "
+                "WHERE dry_run=0 AND created_at LIKE ?", (f"{month_prefix}%",),
+            ).fetchone()["total"])
+            active_reserved = float(self.conn.execute(
+                "SELECT COALESCE(SUM(reserved_cost_usd), 0.0) AS total FROM jobs "
+                f"WHERE status IN ({placeholders}) AND budget_reserved_at IS NOT NULL",
+                _ACTIVE_JOB_STATUSES,
+            ).fetchone()["total"])
+            if any(not math.isfinite(value) or value < 0 for value in (
+                day_real, month_real, active_reserved,
+            )):
+                raise BudgetReservationError("Persisted budget state is invalid.")
+            if month_real + active_reserved + amount_usd > monthly_limit_usd:
+                raise BudgetReservationError("Reservation would exceed the global monthly limit.")
+            if day_real + active_reserved + amount_usd > daily_limit_usd:
+                raise BudgetReservationError("Reservation would exceed the global daily limit.")
+            cursor = self.conn.execute(
+                "UPDATE jobs SET reserved_cost_usd=?, budget_reserved_at=?, updated_at=? "
+                "WHERE id=? AND budget_reserved_at IS NULL AND status IN "
+                f"({placeholders})",
+                (amount_usd, current_ts, current_ts, job_id, *_ACTIVE_JOB_STATUSES),
+            )
+            if cursor.rowcount != 1:
+                raise BudgetReservationError("Concurrent reservation compare-and-swap failed.")
+            self.conn.commit()
+            return JobReservation(job_id=job_id, amount_usd=amount_usd, reserved_at=current_ts)
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def release_job_budget(self, job_id: str, *, now: datetime | None = None) -> None:
+        current_ts = _persisted_ts(self._job_now(now))
+        placeholders = ", ".join("?" for _ in _RELEASABLE_RESERVATION_STATUSES)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            cursor = self.conn.execute(
+                "UPDATE jobs SET reserved_cost_usd=0.0, budget_reserved_at=NULL, updated_at=? "
+                f"WHERE id=? AND status IN ({placeholders}) AND budget_reserved_at IS NOT NULL "
+                "AND external_effect_started_at IS NULL",
+                (current_ts, job_id, *_RELEASABLE_RESERVATION_STATUSES),
+            )
+            if cursor.rowcount == 0:
+                job = self.conn.execute(
+                    "SELECT status, external_effect_started_at FROM jobs WHERE id=?", (job_id,),
+                ).fetchone()
+                if job is None or job["status"] not in _RELEASABLE_RESERVATION_STATUSES:
+                    raise self._job_lifecycle_error(
+                        job_id, "BUDGET_RELEASED", _RELEASABLE_RESERVATION_STATUSES,
+                        detail=(
+                            "Only a queued or leased/running job without an uncertain external "
+                            "effect can release a reservation."
+                        ),
+                    )
+                if job["external_effect_started_at"] is not None:
+                    raise LifecycleTransitionError(
+                        "job", job_id, "BUDGET_RELEASED", _RELEASABLE_RESERVATION_STATUSES,
+                        str(job["status"]),
+                        detail="A job whose external effect has started must retain its reservation.",
+                    )
+            self.conn.commit()
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def get_system_flag(self, key: str) -> SystemFlag | None:
+        """Reads SQLite on every call; safety flags fail closed when absent or malformed."""
+        row = self.conn.execute("SELECT * FROM system_flags WHERE key=?", (key,)).fetchone()
+        if row is None:
+            if key not in _SECURITY_FLAG_DEFAULTS:
+                return None
+            return SystemFlag(key=key, value=_SECURITY_FLAG_DEFAULTS[key], is_valid=False)
+        try:
+            value = json.loads(row["value_json"])
+            if not isinstance(value, bool):
+                raise ValueError("safety flag must contain a JSON boolean")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            if key not in _SECURITY_FLAG_DEFAULTS:
+                raise SystemFlagError(f"System flag {key!r} has malformed JSON.")
+            return SystemFlag(
+                key=key, value=_SECURITY_FLAG_DEFAULTS[key], updated_at=row["updated_at"],
+                updated_by=row["updated_by"], reason=row["reason"], is_valid=False,
+            )
+        return SystemFlag(
+            key=key, value=value, updated_at=row["updated_at"], updated_by=row["updated_by"],
+            reason=row["reason"], is_valid=True,
+        )
+
+    def set_system_flag(
+        self, key: str, value: bool, *, updated_by: str | None = None,
+        reason: str | None = None, now: datetime | None = None,
+    ) -> SystemFlag:
+        if not key.strip() or not isinstance(value, bool):
+            raise SystemFlagError("System flag key must be non-empty and value must be boolean.")
+        current_ts = _persisted_ts(self._job_now(now))
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            self.conn.execute(
+                "INSERT INTO system_flags(key,value_json,updated_at,updated_by,reason) VALUES (?,?,?,?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json, "
+                "updated_at=excluded.updated_at, updated_by=excluded.updated_by, reason=excluded.reason",
+                (key, json.dumps(value), current_ts, updated_by, reason),
+            )
+            self.conn.commit()
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+        flag = self.get_system_flag(key)
+        assert flag is not None
+        return flag
 
     # --- research cards + źródła ---
     def add_research_card(self, card: ResearchCard) -> ResearchCard:

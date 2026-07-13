@@ -8,6 +8,7 @@ MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0007_candidate_attempts",
     "0008_staged_force_reresearch",
+    "0009_jobs_system_flags",
 })
 
 
