@@ -58,4 +58,8 @@ Pełny raport Fable dodaje jako **PLANNED** dashboard i E1–E10; nie daje jeszc
 
 ## [2026-07-13] Maintenance Etapu 1 nie dodaje wyniku publicznego
 
-Zweryfikowane offline `maintain --once/--poll` porządkuje wyłącznie lokalne lease i stale runy. Nie uruchamia workera, nie wykonuje researchu, nie publikuje ani nie zbiera metryk, więc nie zmienia baseline’u: nadal 0 artykułów, 0 Notes, 0 komentarzy i brak danych NIA. One-shot oraz poll są VERIFIED OFFLINE; usługa schedulera systemowego i okna redakcyjne pozostają NOT_STARTED, a API live i działania paid/browser/public nie zostały uruchomione. Koszt: 0 USD.
+Zweryfikowane offline `maintain --once/--poll` porządkuje wyłącznie lokalne lease i stale runy. Nie uruchamia workera, nie wykonuje researchu, nie publikuje ani nie zbiera metryk, więc nie zmienia baseline’u: nadal 0 artykułów, 0 Notes, 0 komentarzy i brak danych NIA. One-shot oraz poll są VERIFIED OFFLINE; usługa schedulera systemowego pozostaje NOT_STARTED. Polityka okien redakcyjnych została później zweryfikowana offline, nadal bez publicznego działania; API live i działania paid/browser/public nie zostały uruchomione. Koszt: 0 USD.
+
+## [2026-07-13] Harmonogram jobów nie jest wynikiem Substacka
+
+Polityka okien redakcyjnych zapisuje jedynie przyszłą lokalną decyzję jako UTC w kolejce i odmawia jobowi prawa do claimu przed jego czasem. Nie wykonuje dispatchu, researchu, API, publikacji, komentarza ani odczytu metryk. Baseline publiczny pozostaje bez zmian: 0 artykułów, 0 Notes, 0 komentarzy i brak danych NIA. Polityka i eligibility są VERIFIED OFFLINE; usługa systemowa i końcowa akceptacja restartu są NOT_STARTED; paid/browser/public pozostają BLOCKED. Koszt: 0 USD.

@@ -18,6 +18,16 @@ global_limits:
   kill_switch: false
   dry_run: true
 
+# Harmonogram redakcyjny jest opcjonalny, ale jego brak blokuje bezpiecznie
+# `enqueue-research`. Czasy są lokalne dla jawnej strefy IANA; wybierz tylko
+# okna tego samego dnia (start < end) i nie nakładaj ich na siebie.
+# editorial_schedule:
+#   timezone: Europe/Bucharest
+#   windows:
+#     - weekdays: [0, 1, 2, 3, 4]  # poniedziałek–piątek
+#       start: "09:00"
+#       end: "17:00"
+
 comment_policy:
   min_target_score: 70
   max_per_account_per_day: 5

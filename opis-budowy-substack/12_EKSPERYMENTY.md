@@ -92,4 +92,8 @@ Pełny raport zapisuje dziesięć proponowanych eksperymentów E1–E10 wraz z h
 
 ## [2026-07-13] Kontrola utrzymaniowa Etapu 1 — nie jest eksperymentem redakcyjnym
 
-`MaintenanceRunner` testuje tylko trwałość lokalnego recovery/reapera: kolejność recovery→reaper, brak nakładających się cykli, fail-closed błędów z zachowaniem primary/cleanup diagnostic oraz zachowanie SQLite po close→reopen w dwóch połączeniach. Nie generuje treści, nie publikuje i nie mierzy reakcji odbiorców, dlatego nie jest wynikiem ani uruchomieniem EXP-01–EXP-08, E1–E10 lub eksperymentu wzrostowego. Status techniczny: one-shot/poll VERIFIED OFFLINE; system scheduler/service i okna redakcyjne NOT_STARTED; koszt 0 USD.
+`MaintenanceRunner` testuje tylko trwałość lokalnego recovery/reapera: kolejność recovery→reaper, brak nakładających się cykli, fail-closed błędów z zachowaniem primary/cleanup diagnostic oraz zachowanie SQLite po close→reopen w dwóch połączeniach. Nie generuje treści, nie publikuje i nie mierzy reakcji odbiorców, dlatego nie jest wynikiem ani uruchomieniem EXP-01–EXP-08, E1–E10 lub eksperymentu wzrostowego. Status techniczny: one-shot/poll VERIFIED OFFLINE; system scheduler/service NOT_STARTED. Polityka okien redakcyjnych została później zweryfikowana offline jako osobna kontrola techniczna poniżej; koszt 0 USD.
+
+## [2026-07-13] Polityka okien redakcyjnych — kontrola techniczna, nie eksperyment
+
+Deterministyczne wyznaczenie `earliest_run_at` i `schedule_reason` przed enqueue nie tworzy artykułu, Note’a, publikacji ani wariantu E1–E10. Testuje wyłącznie lokalną regułę: IANA/DST, okno, czas wskazany przez operatora i eligibility claimu. Job oczekujący nie jest uruchamiany ani obserwowany na Substacku, więc nie istnieje hipoteza, metryka ani wynik eksperymentu. Status techniczny: polityka okien i claim eligibility VERIFIED OFFLINE; akceptacja restartu oraz system scheduler/service NOT_STARTED; koszt 0 USD.

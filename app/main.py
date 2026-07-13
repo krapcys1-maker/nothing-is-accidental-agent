@@ -11,15 +11,18 @@ import argparse
 import logging
 import math
 import sys
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from app.core.clock import SystemClock
-from app.core.config import Settings, load_settings
+from app.core.config import ConfigError, Settings, load_settings
+from app.models import JobKind, WorkflowType
 from app.orchestrator.runner import DEFAULT_ACCOUNT, run_research, run_topics
 from app.policies.policy_engine import PolicyEngine
 from app.scheduler.dispatcher import JobDispatcher
+from app.scheduler.enqueue import ScheduledJobEnqueuer, ScheduledJobRequest
 from app.scheduler.maintenance import MaintenanceRunner
+from app.scheduler.scheduling import SchedulingPolicy, SchedulingValidationError
 from app.scheduler.worker import Worker, WorkerIterationStatus
 from app.storage.repositories import SqliteStorage
 
@@ -104,6 +107,56 @@ def _cmd_run_research(args: argparse.Namespace) -> int:
                   f"(verif={s.verification_status.value})")
     print("=" * 60)
     return 0
+
+
+def _parse_requested_at(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("musi być datą ISO-8601 z jawną strefą czasową.") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise argparse.ArgumentTypeError("musi zawierać jawną strefę czasową.")
+    return parsed.astimezone(timezone.utc)
+
+
+def _cmd_enqueue_research(args: argparse.Namespace) -> int:
+    """Creates exactly one scheduled RESEARCH dry-run job; never starts a worker."""
+    settings = load_settings()
+    try:
+        policy = SchedulingPolicy.from_config(settings.editorial_schedule)
+        account = settings.get_account(args.account_id)
+    except (ConfigError, SchedulingValidationError) as exc:
+        # Missing/invalid schedule configuration is deliberately fail-closed.
+        print(f"ENQUEUE: failed closed: {exc}", file=sys.stderr)
+        return 2
+
+    storage = SqliteStorage.open(settings.db_path)
+    try:
+        storage.ensure_account(account)
+        result = ScheduledJobEnqueuer(
+            storage=storage, scheduling_policy=policy, clock=SystemClock(),
+        ).enqueue(ScheduledJobRequest(
+            id=f"enqueue-research-{uuid4()}",
+            account_id=account.id,
+            kind=JobKind.RESEARCH,
+            workflow=WorkflowType.RESEARCH,
+            idempotency_key=f"enqueue-research:{account.id}:{args.topic_id}:{uuid4()}",
+            topic_id=args.topic_id,
+            payload={"account_id": account.id, "topic_id": args.topic_id, "dry_run": True},
+            requested_at=args.requested_at,
+        ))
+        local = result.decision.earliest_run_at.astimezone(policy.timezone)
+        print(f"ENQUEUE: job_id={result.job.id}")
+        print(f"earliest_run_at_utc={result.decision.earliest_run_at.isoformat()}")
+        print(f"earliest_run_at_local={local.isoformat()}")
+        print(f"schedule_reason={result.decision.reason.value}")
+        print("dry_run=true")
+        return 0
+    except (SchedulingValidationError, ValueError) as exc:
+        print(f"ENQUEUE: failed closed: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        storage.close()
 
 
 def _build_worker(settings: Settings) -> tuple[Worker, SqliteStorage]:
@@ -225,6 +278,21 @@ def build_parser() -> argparse.ArgumentParser:
                             help="Jawnie zezwól na nowy research tematu z kompletną kartą. "
                                  "Może uruchomić kosztowny research; nie omija innych bramek.")
     p_research.set_defaults(func=_cmd_run_research)
+
+    p_enqueue_research = sub.add_parser(
+        "enqueue-research", help="Dodaj wyłącznie zaplanowany job RESEARCH dry-run bez uruchamiania workera.",
+    )
+    p_enqueue_research.add_argument("--account-id", required=True, help="ID aktywnego konta.")
+    p_enqueue_research.add_argument("--topic-id", required=True, type=int, help="ID tematu dla dry-run.")
+    p_enqueue_research.add_argument(
+        "--requested-at", type=_parse_requested_at,
+        help="Opcjonalny ISO-8601 z jawną strefą czasową; polityka odroczy czas poza oknem.",
+    )
+    p_enqueue_research.add_argument(
+        "--show-schedule", action="store_true",
+        help="Akceptowane dla jawności; harmonogram jest zawsze wypisywany.",
+    )
+    p_enqueue_research.set_defaults(func=_cmd_enqueue_research)
 
     p_worker = sub.add_parser("worker", help="Wykonaj bezpieczny, trwały job offline.")
     worker_mode = p_worker.add_mutually_exclusive_group(required=True)

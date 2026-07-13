@@ -56,7 +56,7 @@ def _job(
     return Job(
         id=job_id, account_id=account.id, kind=kind, workflow=workflow,
         idempotency_key=key, topic_id=topic_id, priority=priority,
-        payload=payload or {"contract": "queue-v1"}, schedule_reason="test",
+        payload=payload or {"contract": "queue-v1"}, schedule_reason="WITHIN_EDITORIAL_WINDOW",
         earliest_run_at=earliest, deadline_at=deadline, max_attempts=max_attempts,
         created_at=NOW,
     )

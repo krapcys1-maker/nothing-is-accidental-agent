@@ -245,3 +245,10 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Zakres decyzji właściciela:** dodać oddzielny runner maintenance i CLI `maintain --once/--poll`, który zawsze robi recovery wygasłych lease przed stale-run reaperem, z osobnym połączeniem SQLite na cykl, walidacją progów, jawnym stopem i testami współbieżności/fail-closed.
 - **Zakazy:** bez claimu jobów, dispatchu, workera, researchu, resume, API, sieci, paid/browser/public action, okien redakcyjnych, cron/service/autostartu, migracji, zmian `data/agent.db`, commita, pushu, PR i merge; instrukcje pisania poza zakresem.
 - **Efekt:** one-shot i poll są zweryfikowane offline. Błąd factory/recovery/reapera/close/waitera zatrzymuje poll; przy podwójnym błędzie recovery/reapera + `close()` pierwszeństwo diagnostyczne ma operation error, a cleanup error pozostaje zachowany. Równoległe runnery używają istniejących transakcji SQLite/CAS. Usługa schedulera systemowego i okna redakcyjne pozostają NOT_STARTED, realne resume NOT IMPLEMENTED, live API NOT VERIFIED, paid/browser/public BLOCKED. 26 testów maintenance, pełny suite 592 passed, koszt 0 USD.
+
+### [2026-07-13] APPROVAL — deterministyczne okna redakcyjne przed enqueue Etapu 1
+
+- **Typ:** IMPLEMENTATION BOUNDARY / OFFLINE ONLY.
+- **Zakres decyzji właściciela:** dodać czystą politykę harmonogramu dla istniejących `earliest_run_at` i `schedule_reason`, centralny enqueue, eligibility claimu, dry-run CLI oraz testy IANA/DST, restartu, idempotencji i współbieżności SQLite.
+- **Zakazy:** bez API, sieci, realnego researchu, dispatchu, workera paid/browser/public, realnego resume, usługi systemowego schedulera, zmian `data/agent.db`, migracji, `docs/BUILD_LOG.md`, instrukcji pisania, commita, pushu, PR i merge.
+- **Efekt:** `SchedulingPolicy` wyznacza lokalne okno z jawnej strefy IANA, przechowuje UTC `earliest_run_at` i zamknięty `schedule_reason`; future job pozostaje bez lease/attempt, a `enqueue-research` tworzy tylko RESEARCH `dry_run`. 31 testów scheduling, pełny suite 623 test cases passed, hash `data/agent.db` bez zmiany, koszt 0 USD.

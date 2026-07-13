@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 from dotenv import load_dotenv
@@ -61,6 +62,9 @@ class Settings:
     research_min_source_quality: float = 0.50
     research_max_retries: int = 2
     research_timeout_seconds: int = 60
+
+    # growth_policy.editorial_schedule; brak konfiguracji blokuje tylko enqueue CLI.
+    editorial_schedule: dict[str, Any] = field(default_factory=dict)
 
     # sekrety
     anthropic_api_key: str | None = None
@@ -134,6 +138,9 @@ def load_settings() -> Settings:
     topic_policy = growth.get("topic_policy", {}) or {}
     weights = growth.get("topic_scoring_weights", {}) or {}
     research_policy = growth.get("research_policy", {}) or {}
+    editorial_schedule = growth.get("editorial_schedule", {}) or {}
+    if not isinstance(editorial_schedule, dict):
+        raise ConfigError("editorial_schedule musi być mapą konfiguracji.")
 
     data_dir = PROJECT_ROOT / "data"
 
@@ -168,6 +175,7 @@ def load_settings() -> Settings:
         research_min_source_quality=float(research_policy.get("min_source_quality_score", 0.50)),
         research_max_retries=int(research_policy.get("max_retries", 2)),
         research_timeout_seconds=int(research_policy.get("timeout_seconds", 60)),
+        editorial_schedule=dict(editorial_schedule),
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
         accounts=_load_accounts(config_dir),
     )

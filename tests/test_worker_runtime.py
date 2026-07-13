@@ -152,7 +152,7 @@ def _local_job(account, job_id: str, *, payload: dict | None = None, max_attempt
     return Job(
         id=job_id, account_id=account.id, kind=JobKind.LOCAL, workflow=WorkflowType.ANALYTICS,
         idempotency_key=f"key-{job_id}", payload=payload or {"dry_run": True, "action": "noop"},
-        schedule_reason="worker-test", earliest_run_at=NOW, created_at=NOW,
+        schedule_reason="WITHIN_EDITORIAL_WINDOW", earliest_run_at=NOW, created_at=NOW,
         max_attempts=max_attempts,
     )
 
@@ -162,7 +162,7 @@ def _research_job(account, topic: Topic, job_id: str, *, dry_run: bool = True) -
         id=job_id, account_id=account.id, kind=JobKind.RESEARCH, workflow=WorkflowType.RESEARCH,
         idempotency_key=f"key-{job_id}", topic_id=topic.id,
         payload={"account_id": account.id, "topic_id": topic.id, "dry_run": dry_run},
-        schedule_reason="worker-test", earliest_run_at=NOW, created_at=NOW, max_attempts=2,
+        schedule_reason="WITHIN_EDITORIAL_WINDOW", earliest_run_at=NOW, created_at=NOW, max_attempts=2,
     )
 
 
@@ -362,7 +362,7 @@ def test_unsupported_job_fails_without_retry(settings, storage, account):
     job = Job(
         id="unsupported", account_id=account.id, kind=JobKind.LOCAL, workflow=WorkflowType.TOPIC,
         idempotency_key="unsupported", payload={"dry_run": True, "action": "noop"},
-        schedule_reason="test", earliest_run_at=NOW, created_at=NOW, max_attempts=2,
+        schedule_reason="WITHIN_EDITORIAL_WINDOW", earliest_run_at=NOW, created_at=NOW, max_attempts=2,
     )
     storage.enqueue_job(job)
 

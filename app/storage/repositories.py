@@ -523,8 +523,18 @@ class SqliteStorage:
         )
 
     def _validate_job_enqueue_relation(self, job: Job) -> None:
+        # Local import avoids loading the scheduler composition package while the
+        # SQLite adapter itself is still being imported.
+        from app.scheduler.scheduling import SchedulingValidationError, validate_schedule_reason
+
         if not job.idempotency_key.strip():
             raise JobConflictError("Job idempotency_key cannot be blank.")
+        try:
+            validate_schedule_reason(job.schedule_reason)
+        except SchedulingValidationError as exc:
+            raise JobConflictError(
+                "Job schedule_reason must be a controlled, bounded scheduling code."
+            ) from exc
         if job.status != JobStatus.QUEUED or job.lease_owner is not None or job.lease_expires_at is not None:
             raise JobConflictError("enqueue_job accepts only a fresh QUEUED job without a lease.")
         if job.attempts != 0 or job.started_at is not None or job.finished_at is not None:

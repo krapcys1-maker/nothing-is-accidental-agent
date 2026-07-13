@@ -465,3 +465,11 @@ Jednorazowy reaper umiał odzyskać wygasły lease i zatrzymać stary run, ale n
 `maintain --once` robi dokładnie jeden przebieg. `maintain --poll` zaczyna od razu, czeka stały interwał dopiero po zakończonym cyklu i nigdy nie nakłada cykli na siebie. Stop event, zły próg, błąd factory, recovery, reapera, close albo waitera kończą pętlę zamiast uruchamiać retry. To nadal nie jest cron ani usługa działająca sama po starcie.
 
 Najważniejsza granica pozostała nudna: maintenance nie claimuje jobów, nie uruchamia workera, researchu ani resume i nie zgaduje sukcesu. Działa nawet przy wyłączonym workerze, safe mode i kill switchu, bo porządkowanie trwałego audytu nie jest akcją zewnętrzną. **26 deterministycznych testów** obejmuje kolejność, active Event wait, błędy primary/cleanup, cleanup po `KeyboardInterrupt`, rezerwację/run_id, dwa połączenia SQLite po close→reopen i CLI; pełny suite ma **592 passed**. Bez API, sieci, zmiany realnej bazy i kosztu: **0 USD**.
+
+## 2026-07-13 — Godzina joba staje się decyzją, zanim kolejka go zobaczy
+
+Kolejka miała już pole na najwcześniejszą godzinę uruchomienia, lecz sama liczba w bazie nie tworzy jeszcze harmonogramu. Nowa polityka wybiera tę godzinę **przed** zapisem joba: dostaje jawny czas „teraz”, strefę IANA oraz listę lokalnych okien redakcyjnych. Jeśli bieżąca chwila mieści się w oknie, job może wejść do kolejki od razu; jeśli nie, trafia na początek następnego. Wskazana przyszła godzina zostaje zachowana tylko wtedy, gdy należy do okna. Czas z przeszłości jest odmową, nie pretekstem do cichego „uruchom teraz”.
+
+To ważne zwłaszcza w dni zmiany czasu. Niejednoznaczna godzina jesienią ma z góry wybraną wcześniejszą interpretację, a nieistniejący start wiosną przesuwa się do pierwszej prawdziwej minuty po luce. Wszystko jest zapisywane w UTC wraz z krótkim kodem przyczyny, a nie wolnym komentarzem. Dopiero atomowy claim sprawdza, czy `earliest_run_at` już nadeszło. Job czekający nie dostaje lease, nie zwiększa attempts i nie uruchamia workera.
+
+Dodana komenda tworzy wyłącznie lokalny job researchu z `dry_run=true`; nie ma trybu realnego, dispatchu, API, sieci ani researchu. **31 testów** sprawdza okna, weekend, DST, zapis/reopen, współbieżność SQLite i idempotencję; pełny suite ma **623 test cases passed**. Nie zmieniono migracji ani prawdziwej bazy. Koszt: **0 USD**.

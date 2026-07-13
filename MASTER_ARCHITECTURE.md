@@ -5,7 +5,7 @@
 >
 > Kolejność prac: `IMPLEMENTATION_ROADMAP.md`. Aktualny stan: `CURRENT_PROJECT_STATE.md`. Rejestr decyzji (ADR): `docs/DECISIONS.md` (nadal obowiązujący — ten dokument konsoliduje decyzje, nie zastępuje rejestru).
 >
-> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie i testach (529 passed, 2026-07-13) albo pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
+> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie i testach (623 test cases passed, 2026-07-13) albo pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
 
 ---
 
@@ -18,7 +18,7 @@
 | Konfiguracja (.env + YAML, zero ścieżek absolutnych) | `app/core/config.py` | testy + 4 realne runy |
 | Modele domenowe (Pydantic v2) | `app/models.py` | testy |
 | SQLite + 9 migracji + repozytoria | `app/storage/` | `tests/test_storage.py`, `tests/test_research_run_flow.py`, `tests/test_jobs_queue.py` i in.; `0008` utrwala force staged runu, `0009` dodaje jobs i system_flags; reaper nie wymaga migracji |
-| Trwała kolejka + worker offline | `app/storage/repositories.py`, `app/scheduler/`, `app/main.py` | atomowy enqueue/idempotency, lease, runtime flags, zamknięty dispatcher LOCAL/RESEARCH dry-run, ścisły CAS job→run→research_run, jawny stale reaper oraz osobny `MaintenanceRunner` one-shot/poll. Każdy cykl maintenance na osobnym SQLite robi recovery lease przed reaperem i kontrolowanie zamyka połączenie: błąd operacji pozostaje primary, a jednoczesny błąd `close()` jest zachowany jako cleanup error; sam `close()` po udanej operacji kończy cykl błędem. Maintenance nie claimuje jobów, nie dispatchuje ani nie uruchamia researchu, więc działa także przy disabled/safe/kill. Podczas dispatchu daemon guard odnawia istniejący lease przez osobne połączenie SQLite (60 s/20 s). Daemon jest osłoną procesu, nie zamiennikiem cleanupu: stop event, `wake`, bounded join i `is_alive()` są zawsze podejmowane; timeout blokuje `DONE`, a odblokowany później guard nie robi kolejnego heartbeat. `lost_lease`/`failure` są in-memory, natomiast SQLite oraz recovery/reconciliation rozstrzygają stan trwały; expiry RESEARCH z `run_id` → NEEDS_VERIFICATION, bez auto-resume; testy plikowej SQLite z Barrier/reopen |
+| Trwała kolejka + worker offline | `app/storage/repositories.py`, `app/scheduler/`, `app/main.py` | atomowy enqueue/idempotency, lease, runtime flags, centralny `SchedulingPolicy` przed enqueue (IANA/DST → UTC `earliest_run_at` + zamknięty `schedule_reason`), zamknięty dispatcher LOCAL/RESEARCH dry-run, ścisły CAS job→run→research_run, jawny stale reaper oraz osobny `MaintenanceRunner` one-shot/poll. Claim wybiera tylko job z `earliest_run_at <= now`; job przyszły nie dostaje lease ani attempts. Każdy cykl maintenance na osobnym SQLite robi recovery lease przed reaperem i kontrolowanie zamyka połączenie. Maintenance nie claimuje jobów, nie dispatchuje ani nie uruchamia researchu. Podczas dispatchu daemon guard odnawia istniejący lease przez osobne połączenie SQLite (60 s/20 s). Daemon jest osłoną procesu, nie zamiennikiem cleanupu: stop event, `wake`, bounded join i `is_alive()` są zawsze podejmowane; timeout blokuje `DONE`, a odblokowany później guard nie robi kolejnego heartbeat. `lost_lease`/`failure` są in-memory, natomiast SQLite oraz recovery/reconciliation rozstrzygają stan trwały; expiry RESEARCH z `run_id` → NEEDS_VERIFICATION, bez auto-resume; testy plikowej SQLite z Barrier/reopen |
 | Policy Engine (kill-switch, runtime flags workera z SQLite, aktywność konta, budżet dzienny/miesięczny z priorytetem miesięcznym ADR-012, progi tematów) | `app/policies/policy_engine.py` | `tests/test_policy_engine.py`, `tests/test_worker_runtime.py` |
 | Księgowanie kosztów (model_usage + COSTS.csv, flaga dry_run) | `app/llm/usage_tracker.py` | 4 realne runy i kontrolowany resume potwierdziły poprawność |
 | Pipeline tematów (generacja+scoring+dedup+progi) | `app/workflows/topics/` | testy; realnie NIGDY nie uruchomiony (`NOT VERIFIED` na żywym API) |
@@ -109,7 +109,7 @@ Pełna lista 14 rozbieżności była w audycie 12.07 (zarchiwizowany). Wszystkie
 | Moduł | Odpowiedzialność | Granica (czego NIE robi) | Stan |
 |---|---|---|---|
 | **Orchestration layer** (`app/orchestrator/`) | składanie zależności, jedyny punkt egzekucji akcji zewnętrznych i płatnych | zero logiki domenowej; model językowy NIGDY nie woła portów bezpośrednio | zalążek (runner.py) |
-| **Scheduler** (`app/scheduler/`) | jeden worker `run_once`/kontrolowane `run_forever`, wybór według istniejącego atomowego claimu; CLI `worker --once`, `reap-runs --once` oraz osobne `maintain --once/--poll`; guard heartbeat utrzymuje lease wyłącznie podczas synchronicznego dispatchu, a maintenance zawsze robi recovery→reaper na osobnym SQLite | nie planuje okien redakcyjnych ani nie wykonuje paid/browser actions; nie ma usługi schedulera systemowego ani retry dispatchu | VERIFIED OFFLINE |
+| **Scheduler** (`app/scheduler/`) | czysty `SchedulingPolicy` planuje przed enqueue według jawnego `growth_policy.editorial_schedule` (IANA timezone/DST, UTC `earliest_run_at`, kontrolowany reason); jeden worker `run_once`/kontrolowane `run_forever` wybiera job wyłącznie przez atomowy claim eligibility; CLI `worker --once`, dry-run `enqueue-research`, `reap-runs --once` oraz osobne `maintain --once/--poll`; guard heartbeat utrzymuje lease wyłącznie podczas synchronicznego dispatchu, a maintenance zawsze robi recovery→reaper na osobnym SQLite | nie wykonuje paid/browser actions; nie ma usługi schedulera systemowego, retry dispatchu ani końcowej akceptacji restartu | VERIFIED OFFLINE |
 | **Task queue** | ta sama tabela `jobs` (kolejka = scheduler w SQLite, nie osobny system) | brak zewnętrznego brokera | VERIFIED OFFLINE |
 | **Workers** | jeden proces workera, lease/CAS i daemon periodic heartbeat guard z osobnym storage podczas dispatchu; normalny cleanup dołącza wątek, lecz bounded timeout blokuje `DONE` i pozostawia daemon tylko do odblokowania zależności; zamknięty dispatcher LOCAL noop i RESEARCH dry-run; osobny reaper stale runów oraz niezależna pętla maintenance recovery→reaper | brak puli procesów, paid/browser, auto-resume przypiętego runu, retry dispatchu oraz usługi schedulera systemowego | VERIFIED OFFLINE |
 | **Research engine** (`app/research/`, `app/workflows/research/`) | A1 discovery → A2 per-source extraction (z fetch treści — docelowo) → B synthesis; wznawialność; evidence | nie pisze artykułów; nie publikuje | WORKING |
@@ -279,9 +279,11 @@ content_items.status (docelowe, Etap 3–5):
   PENDING_APPROVAL → REJECTED (→ DRAFT po poprawkach)
   UNCERTAIN: wyjście WYŁĄCZNIE przez odczyt stanu lub człowieka — NIGDY auto-retry
 
-jobs.status (Etap 1: storage i worker VERIFIED OFFLINE):
+jobs.status (Etap 1: storage, worker i eligibility harmonogramu VERIFIED OFFLINE):
   QUEUED → LEASED → RUNNING → DONE | FAILED | NEEDS_VERIFICATION
   LEASED|RUNNING --(lease wygasł)--> QUEUED | FAILED | NEEDS_VERIFICATION
+
+Claim jest legalny wyłącznie dla `status=QUEUED AND earliest_run_at <= now`; `earliest_run_at` jest zapisywany w UTC przez centralną politykę przed enqueue, a `schedule_reason` należy do zamkniętego zestawu kodów. Job oczekujący nie dostaje lease ani zwiększenia `attempts`.
   (LOCAL oraz RESEARCH bez `run_id` i bez `external_effect_started_at` mogą wrócić do QUEUED poniżej capu;
    RESEARCH z `run_id`, BROWSER/publication-like albo job po markerze → NEEDS_VERIFICATION,
    nigdy auto-retry ani auto-resume)
