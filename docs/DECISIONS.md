@@ -549,3 +549,14 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Granice:** brak migracji, API, sieci, realnego resume, workera paid/browser, UI reconciliation i cyklicznego schedulera reapera.
 - **Weryfikacja:** stale/fresh/terminalne runy, blokada reapera przed recovery wygasłego lease, recovery→NEEDS, zachowanie rezerwacji, sukces/failure race, dwa osobne połączenia SQLite z Barrier, reopen/integrity, no-dispatch i CLI temp DB. **529 passed**, koszt 0 USD.
 - **Kto podjął:** właściciel zatwierdził ograniczony offline scope; wykonanie: Codex.
+
+### ADR-041: Okresowy heartbeat jest strażnikiem prawa do pracy, nie retry dispatchu
+
+- **Data:** 2026-07-13
+- **Status:** ACCEPTED / wdrożone i zweryfikowane offline.
+- **Kontekst:** checkpoint heartbeat przed/po dispatchu nie chronił długiej synchronicznej pracy przed wygaśnięciem lease. Współdzielenie podstawowego połączenia SQLite z wątkiem byłoby niebezpieczne, a nowy lease protocol lub automatyczne retry rozszerzyłyby zakres Etapu 1.
+- **Decyzja:** worker uruchamia wyłącznie podczas dispatchu daemon `HeartbeatGuard` z osobnym połączeniem storage. Daemon jest wyłącznie ostatnią osłoną przed zablokowaniem zamknięcia procesu: worker zawsze ustawia stop event, wywołuje `wake`, wykonuje bounded `join(timeout=...)` i sprawdza `is_alive()`. Normalnie wątek kończy się i jest dołączony; timeout może pozostawić go żywego do odblokowania zależności infrastrukturalnej, lecz wtedy worker nie ma prawa do `DONE`. Po późniejszym odblokowaniu guard widzi stop event i nie wykonuje kolejnego heartbeat. Guard używa istniejącego `heartbeat_job_lease`, otrzymuje interwał przez kompozycję. Produkcyjnie lease wynosi 60 s, a interwał 20 s; konstruktor odrzuca wartości nie-dodatnie, nieskończone i nie krótsze od lease.
+- **Semantyka:** błąd heartbeat albo utrata lease blokują terminalne `DONE`; utrata lease ma pierwszeństwo przed wyjątkiem dispatchu. `lost_lease` i `failure` są wyłącznie stanem in-memory guarda, a trwałe rozstrzygnięcie pozostaje po stronie SQLite oraz recovery/reconciliation. Guard nie wznawia wygasłego lease, nie wykonuje dispatchu, nie retry’uje go i nie zmienia lifecycle poza istniejącym odnowieniem lease.
+- **Granice:** dowód dotyczy tylko LOCAL oraz RESEARCH `dry_run` offline. Live API pozostaje NOT VERIFIED; paid worker i browser/public worker pozostają BLOCKED; realne resume, cykliczny scheduler reapera i okna redakcyjne nie są wdrożone.
+- **Weryfikacja:** **15** pierwotnych deterministycznych testów periodic heartbeat Event/Barrier bez `sleep` oraz **11** testów bounded lifecycle/P1 (łącznie **26** bezpośrednich testów heartbeat); `tests/test_worker_runtime.py`: **59 passed**, pełny suite **566 passed**, hash `data/agent.db` bez zmiany, koszt 0 USD.
+- **Kto podjął:** właściciel zlecił ograniczony offline scope; wykonanie: Codex.

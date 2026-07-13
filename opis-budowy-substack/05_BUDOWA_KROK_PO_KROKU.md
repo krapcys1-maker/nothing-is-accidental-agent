@@ -443,3 +443,17 @@ Gdy proces znikał w połowie pracy, rekord `RUNNING` mógł zostać w bazie bez
 Najważniejszy hamulec jest celowo nudny: run z jobem `QUEUED`, `LEASED` albo `RUNNING` nie jest dotykany. Po wygasłym lease przypięty research staje się `NEEDS_VERIFICATION`; wtedy run można zamknąć, ale rezerwacja zostaje i worker nie ma czego claimować. Dwa reapery i terminalizacja ścigają się na SQLite przez CAS, więc kończy się dokładnie jeden stan.
 
 Komenda `reap-runs --once --stale-after-seconds X` jest osobnym, ręcznie wywoływanym narzędziem offline. Nie uruchamia API, nie startuje workera, nie jest schedulerem i nie jest resume. Po tej korekcie suite ma **529 testów**, nadal przy koszcie **0 USD**.
+
+## 2026-07-13 — Długi job nie może zgubić prawa do pracy
+
+Worker potrafił już przypomnieć o lease przed i po pracy, ale między tymi punktami mógł wykonywać synchroniczny dispatch długo na tyle, by prawo do joba wygasło. Nie dodaliśmy drugiej kolejki ani nowej definicji lease. Zamiast tego na czas dispatchu powstaje mały, niedaemonowy strażnik z własnym połączeniem SQLite. Co dwadzieścia sekund prosi istniejący atomowy heartbeat o przedłużenie sześćdziesięciosekundowego lease, a potem zawsze kończy i czeka na własny wątek.
+
+To nie jest mechanizm ratowania pracy za wszelką cenę. Jeśli lease przejął ktoś inny albo już wygasł, strażnik nie może go wskrzesić. Worker nie zapisuje wtedy `DONE`; nawet gdy dispatcher równocześnie zgłasza własny błąd, utrata lease ma pierwszeństwo. Nie ma retry dispatchu, API, sieci, realnego researchu ani testu na publicznym koncie.
+
+Piętnaście testów sterowanych Event/Barrier sprawdziło długi dispatch, recovery, obcego właściciela, wygaśnięcie, zamknięcie wątku, pustą kolejkę i offlineowy research dry-run. Pełny suite ma **548 testów**, a hash prawdziwej bazy przed i po jest identyczny. Koszt: **0 USD**.
+
+## 2026-07-13 — Korekta P1: strażnik nie może zatrzymać procesu
+
+Powyższy wpis opisuje pierwszy wariant strażnika. Po review P1 wątek jest daemonem wyłącznie jako ostatnia osłona procesu, nie jako zastępstwo sprzątania. Worker nadal zawsze ustawia stop event, budzi waiter, czeka tylko przez ograniczony timeout i sprawdza, czy wątek nadal żyje. Zwykle strażnik kończy się i zostaje dołączony. Jeżeli factory, heartbeat, waiter albo `close` pozostają zablokowane, timeout nie czeka dalej: worker nie może wtedy zapisać `DONE`, a odblokowany później strażnik widzi stop event, zanim wykona kolejny heartbeat.
+
+`lost_lease` i `failure` żyją tylko w pamięci strażnika. Stan trwały pozostaje w SQLite, a nierozstrzygnięte sytuacje trafiają do recovery/reconciliation. Pierwotnych **15** testów periodic heartbeat uzupełniło **11** testów bounded start/stop i błędów infrastrukturalnych: razem **26** bezpośrednich testów heartbeat. `test_worker_runtime.py` ma **59 passed**, pełny suite **566 passed**, hash `data/agent.db` pozostał identyczny, bez API, sieci i researchu. Koszt: **0 USD**.

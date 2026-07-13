@@ -115,7 +115,12 @@ def _build_worker(settings: Settings) -> tuple[Worker, SqliteStorage]:
     )
     return Worker(
         storage=storage, policy=policy, dispatcher=dispatcher,
-        lease_owner=f"cli-worker-{uuid4()}", clock=clock,
+        lease_owner=f"cli-worker-{uuid4()}", lease_seconds=60,
+        heartbeat_interval_seconds=20.0,
+        heartbeat_startup_timeout_seconds=5.0,
+        heartbeat_shutdown_timeout_seconds=5.0,
+        heartbeat_storage_factory=lambda: SqliteStorage.open(settings.db_path),
+        clock=clock,
     ), storage
 
 

@@ -230,3 +230,11 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Zakres decyzji właściciela:** dodać atomowy reaper `RUNNING→STOPPED` po recovery joba, bezpieczną komendę `reap-runs --once`, testy SQLite/Barrier oraz zawężoną sanitację `JobRunRelationError`.
 - **Zakazy:** bez API, sieci, realnego researchu/resume, `data/agent.db`, migracji, workera paid/browser, publikacji, Playwrighta, schedulera cyklicznego, commita, pushu, PR i merge; instrukcja pisania poza zakresem.
 - **Efekt:** tylko stale run bez joba `QUEUED/LEASED/RUNNING` może przejść do STOPPED; po expiry RESEARCH z `run_id` zostaje NEEDS_VERIFICATION, rezerwacja pozostaje, a reaper nie daje dispatchu/resume. Pełny suite 529 testów, koszt 0 USD.
+
+### [2026-07-13] APPROVAL — okresowy heartbeat wyłącznie dla długiego dispatchu offline
+
+- **Typ:** IMPLEMENTATION BOUNDARY / OFFLINE ONLY.
+- **Zakres decyzji właściciela:** dodać bezpieczny okresowy guard heartbeat oparty na istniejącym `heartbeat_job_lease`, z osobnym połączeniem SQLite, kontrolowanym zakończeniem wątku oraz deterministycznymi testami utraty lease i współbieżności.
+- **Zakazy:** bez nowej migracji lub implementacji lease, retry dispatchu, API, sieci, realnego researchu/resume, `data/agent.db`, paid/browser workera, schedulerów cyklicznych, okien redakcyjnych, commita, pushu, PR i merge; instrukcja pisania poza zakresem.
+- **Efekt:** guard działa tylko w LOCAL/RESEARCH `dry_run`, zawsze jest joinowany i blokuje `DONE` po utracie lease/błędzie guarda. Pełny suite 548 testów, koszt 0 USD.
+- **Korekta P1:** guard jest daemonem wyłącznie jako osłona procesu; worker zawsze podejmuje stop event, `wake`, bounded join i kontrolę `is_alive()`. Timeout nie daje prawa do `DONE`, a po odblokowaniu guard widzi stop event przed kolejnym heartbeat. Aktualny wynik: 15 pierwotnych testów periodic heartbeat + 11 testów bounded lifecycle/P1 = 26; `test_worker_runtime.py` 59 passed, pełny suite 566 passed, koszt 0 USD.

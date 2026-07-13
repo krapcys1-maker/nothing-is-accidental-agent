@@ -243,3 +243,16 @@ Po review doprecyzowano: realny pipeline bez capu odmawia, cap resume jest absol
 - **Wybór:** ręczna komenda najpierw robi recovery jobów, następnie atomowo zatrzymuje stale run tylko bez joba `QUEUED`, `LEASED` lub `RUNNING`. RESEARCH z trwałym `run_id` zostaje `NEEDS_VERIFICATION`; reaper może zamknąć audit, ale nie wznawia pipeline’u ani nie zwalnia rezerwacji.
 - **Granica:** nie ma cyklicznego schedulera, realnego resume, API, paid/browser workera ani UI reconciliation. `JobRunRelationError` nie wypisuje surowego ID joba do trwałego komunikatu.
 - **Dowód:** dwa reapery i terminalizacje konkurują przez plikową SQLite/Barrier/CAS, reaper blokuje się przed recovery wygasłego lease, jest reopen/integrity i CLI temp DB; pełny suite 529 passed, 0 USD.
+
+### [2026-07-13] D-41: heartbeat pilnuje lease, nie wyniku pracy
+
+- **Problem:** checkpoint przed i po synchronicznym dispatchu nie wystarcza, gdy sama praca trwa dłużej niż lease. Wątek heartbeat nie może też współdzielić zwykłego połączenia SQLite workera.
+- **Wybór:** na czas dispatchu worker uruchamia niedaemonowy guard z osobnym storage, stop eventem i `join`. Guard wywołuje istniejące `heartbeat_job_lease`; lease 60 s i interwał 20 s są jawne w kompozycji. Foreign/expired owner pozostaje odrzucony przez istniejący CAS.
+- **Granica:** utrata lease lub błąd guarda blokuje `DONE`; utrata lease wygrywa z błędem dispatchu. Nie ma retry, nowej migracji, API, paid/browser, realnego resume, cyklicznego reapera ani okien redakcyjnych.
+- **Dowód:** 15 testów Event/Barrier bez `sleep`, pełny suite 548 passed, hash `data/agent.db` bez zmiany, koszt 0 USD.
+
+### [2026-07-13] D-41a: bounded lifecycle jest częścią decyzji heartbeat
+
+- **Korekta:** poprzedni wpis opisuje wariant sprzed review P1. Guard działa w osobnym wątku daemon wyłącznie jako osłona procesu. Worker zawsze wykonuje stop event, `wake`, bounded join z timeoutem i kontrolę `is_alive()`. Normalnie wątek kończy się i zostaje dołączony; timeout może pozostawić go żywego do odblokowania infrastruktury, ale blokuje `DONE`. Po odblokowaniu guard widzi stop event przed kolejnym heartbeat.
+- **Trwałość:** `lost_lease` i `failure` są in-memory. SQLite oraz recovery/reconciliation rozstrzygają później trwały stan joba.
+- **Dowód po korekcie:** 15 pierwotnych testów periodic heartbeat + 11 testów bounded lifecycle/P1 = 26 bezpośrednich testów heartbeat; `test_worker_runtime.py` 59 passed, pełny suite 566 passed, hash `data/agent.db` bez zmiany, koszt 0 USD.
