@@ -11,6 +11,7 @@ from typing import Sequence
 from app.models import (
     Account,
     Job,
+    JobEnqueueContext,
     JobKind,
     JobLease,
     JobRecoveryResult,
@@ -506,21 +507,8 @@ class SqliteStorage:
 
     @staticmethod
     def _job_context_matches(row: sqlite3.Row, job: Job, payload_json: str) -> bool:
-        return (
-            row["account_id"] == job.account_id
-            and row["kind"] == job.kind.value
-            and row["workflow"] == job.workflow.value
-            and row["topic_id"] == job.topic_id
-            and row["run_id"] == job.run_id
-            and row["payload_json"] == payload_json
-            and row["schedule_reason"] == job.schedule_reason
-            and int(row["priority"]) == job.priority
-            and row["earliest_run_at"] == _persisted_ts(job.earliest_run_at)
-            and row["deadline_at"] == (
-                None if job.deadline_at is None else _persisted_ts(job.deadline_at)
-            )
-            and int(row["max_attempts"]) == job.max_attempts
-        )
+        del payload_json
+        return JobEnqueueContext.from_row(row) == JobEnqueueContext.from_job(job)
 
     def _validate_job_enqueue_relation(self, job: Job) -> None:
         # Local import avoids loading the scheduler composition package while the
@@ -619,6 +607,12 @@ class SqliteStorage:
 
     def get_job(self, job_id: str) -> Job | None:
         row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        return None if row is None else self._job_from_row(row)
+
+    def get_job_by_idempotency_key(self, idempotency_key: str) -> Job | None:
+        row = self.conn.execute(
+            "SELECT * FROM jobs WHERE idempotency_key=?", (idempotency_key,),
+        ).fetchone()
         return None if row is None else self._job_from_row(row)
 
     def _job_lifecycle_error(

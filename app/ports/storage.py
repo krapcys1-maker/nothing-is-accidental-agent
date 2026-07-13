@@ -160,6 +160,10 @@ class StoragePort(Protocol):
 
     def get_job(self, job_id: str) -> Job | None: ...
 
+    def get_job_by_idempotency_key(self, idempotency_key: str) -> Job | None:
+        """Zwraca trwały job dla klucza bez przeliczania jego harmonogramu."""
+        ...
+
     def claim_next_job(
         self, lease_owner: str, lease_seconds: int, *, now: datetime | None = None,
     ) -> JobLease | None:

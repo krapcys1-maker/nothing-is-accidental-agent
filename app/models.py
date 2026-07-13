@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+import json
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -93,6 +94,99 @@ class Job(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     updated_at: datetime = Field(default_factory=_utcnow)
+
+
+@dataclass(frozen=True)
+class JobEnqueueContext:
+    """Trwała intencja requestu używana do idempotentnego enqueue.
+
+    Harmonogram (`earliest_run_at`, `schedule_reason`) jest wynikiem pierwszego
+    udanego enqueue, a nie częścią tożsamości requestu. `requested_at` i
+    `immediate_contract` także nie są tu przechowywane: wpływają wyłącznie na
+    pierwszą decyzję harmonogramu; ponowne planowanie wymaga nowego klucza.
+    """
+
+    idempotency_key: str
+    account_id: str
+    kind: str
+    workflow: str
+    priority: int
+    topic_id: int | None
+    run_id: str | None
+    payload_json: str
+    deadline_at: str | None
+    max_attempts: int
+
+    @staticmethod
+    def _payload_json(payload: dict[str, Any]) -> str:
+        try:
+            return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Job payload must be JSON-serializable.") from exc
+
+    @staticmethod
+    def _timestamp(value: datetime | None) -> str | None:
+        if value is None:
+            return None
+        return value.strftime("%Y-%m-%d %H:%M:%S.%f") if value.microsecond else value.strftime("%Y-%m-%d %H:%M:%S")
+
+    @classmethod
+    def from_values(
+        cls,
+        *,
+        idempotency_key: str,
+        account_id: str,
+        kind: JobKind,
+        workflow: WorkflowType,
+        priority: int,
+        topic_id: int | None,
+        run_id: str | None,
+        payload: dict[str, Any],
+        deadline_at: datetime | None,
+        max_attempts: int,
+    ) -> "JobEnqueueContext":
+        return cls(
+            idempotency_key=idempotency_key,
+            account_id=account_id,
+            kind=kind.value,
+            workflow=workflow.value,
+            priority=priority,
+            topic_id=topic_id,
+            run_id=run_id,
+            payload_json=cls._payload_json(payload),
+            deadline_at=cls._timestamp(deadline_at),
+            max_attempts=max_attempts,
+        )
+
+    @classmethod
+    def from_job(cls, job: Job) -> "JobEnqueueContext":
+        return cls.from_values(
+            idempotency_key=job.idempotency_key,
+            account_id=job.account_id,
+            kind=job.kind,
+            workflow=job.workflow,
+            priority=job.priority,
+            topic_id=job.topic_id,
+            run_id=job.run_id,
+            payload=job.payload,
+            deadline_at=job.deadline_at,
+            max_attempts=job.max_attempts,
+        )
+
+    @classmethod
+    def from_row(cls, row: Any) -> "JobEnqueueContext":
+        return cls(
+            idempotency_key=row["idempotency_key"],
+            account_id=row["account_id"],
+            kind=row["kind"],
+            workflow=row["workflow"],
+            priority=int(row["priority"]),
+            topic_id=row["topic_id"],
+            run_id=row["run_id"],
+            payload_json=row["payload_json"],
+            deadline_at=row["deadline_at"],
+            max_attempts=int(row["max_attempts"]),
+        )
 
 
 class JobLease(BaseModel):
