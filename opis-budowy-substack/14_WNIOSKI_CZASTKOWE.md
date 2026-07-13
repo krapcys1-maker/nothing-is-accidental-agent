@@ -174,3 +174,7 @@ Po każdym etapie: co nas zaskoczyło, co działało, co nie, co agent robił le
 ### 2026-07-13 — wniosek po pierwszym realnym B
 
 „Dane są odzyskiwalne” i „audit mówi prawdę” to dwa niezależne wymagania. `SOURCES_COMPLETE` uratowało cztery opłacone źródła, ale pozostawione `RUNNING` fałszowało stan procesu. Poprawny kontrakt musi zachować oba fakty naraz: szczegółowy research jest wznawialny, ogólny run jest terminalnie FAILED. Drugi wniosek: podniesienie limitu ma sens wyłącznie razem z pomiarem, zwięzłym promptem i przeliczeniem capu.
+
+### 2026-07-13 — wniosek po kontrolowanym repair
+
+Historyczne dane można naprawiać bez utraty audytowalności, jeśli zgoda, preconditions, CAS, `rowcount`, backup i porównanie po reopen są częścią jednej procedury. Terminalny FAILED nie usuwa odzyskiwalności B: `research_runs=SOURCES_COMPLETE` nadal mówi, skąd można wznowić, a `runs=FAILED` mówi prawdę o zakończonej próbie. Resume pozostaje osobną, potencjalnie płatną decyzją.

@@ -89,3 +89,7 @@ Dziennik każdego researchu prowadzonego przez agenta. Dla każdego tematu zapis
 #### Korekta techniczna po analizie offline (bez nowego researchu)
 
 Nie wykonano nowego calla ani resume. Przyczyną B był wyczerpany limit 2200, nie losowy parse error. Przyszłe B użyje jawnego defaultu 3000, typowanego truncation bez retry i pełnego pre-flightu (B conservative 0,026250 USD; projected z dotychczasowym usage 0,196300 USD). Historyczny wynik, cztery VERIFIED, koszt 0,170050 USD i brak Research Card pozostają bez zmian. Repair auditu i resume wymagają osobnych zgód.
+
+#### Kontrolowany repair auditu (2026-07-13, bez researchu/API)
+
+Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego samego runu. Po backupie i ponownym sprawdzeniu relacji run–research–topic–account, 4×EXTRACTED/VERIFIED `attempts=1`, sześciu wpisów usage, sumy 0,170050 USD, FAILED Stage B oraz prywatnej diagnostyki `stop_reason=max_tokens`, warunkowy UPDATE zmienił wyłącznie `runs.status RUNNING→FAILED`, `finished_at=2026-07-13 05:39:30 UTC` i `runs.error`. `rowcount=1`, `total_changes=1`. Research pozostał `SOURCES_COMPLETE`, topic `SELECTED`, brak karty; koszt i usage bez zmian. Nie wykonano resume ani A1/A2/B. Techniczna gotowość do resume wyłącznie B nie jest zgodą na płatny call.

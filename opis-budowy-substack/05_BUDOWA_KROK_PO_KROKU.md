@@ -351,3 +351,7 @@ Pre-flight przed pierwszym callem okazał się konieczny, ale niewystarczający.
 ### 2026-07-13 — Task 9: naprawa po pierwszym realnym B, bez ponowienia
 
 Realne A1 i cztery A2 przetrwały, lecz B wyczerpało 2200 tokenów i urwało JSON. Offline dodano osobny błąd truncation, limit 3000 poparty estymatą oraz krótsze pola promptu. Błąd nie uruchamia retry: zapisuje usage raz, nie tworzy karty, zostawia research w `SOURCES_COMPLETE`, a ogólny audit kończy `FAILED` z czasem i przyczyną. Salvage poprawnych linii JSONL A1 pozostał bez zmian, a prior usage jest liczony dokładnie raz. Historycznej bazy nie zmieniono. 174 testy celowane (włącznie z cost ledger) i 351 pełnych przeszło bez API; 0 USD.
+
+### 2026-07-13 — kontrolowana naprawa historycznego auditu
+
+Po osobnej zgodzie właściciela utworzono backup SQLite i snapshoty wszystkich rekordów powiązanych z runem. W transakcji `BEGIN IMMEDIATE` ponownie sprawdzono konto, topic, staged `SOURCES_COMPLETE`, cztery VERIFIED, sześć wpisów usage, koszt 0,170050 USD oraz ślad `max_tokens`/truncation. Warunkowy UPDATE z CAS zmienił dokładnie jeden rekord i tylko trzy pola: `runs.status`, `finished_at`, `error`. Po zamknięciu i ponownym otwarciu bazy hash każdego pozostałego zbioru był identyczny. Nie wykonano API ani resume; dodatkowy koszt 0 USD.

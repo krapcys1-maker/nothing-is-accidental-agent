@@ -229,3 +229,9 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Minimalna korekta: limit 3000 (+36%), zwięzły schema prompt, zero auto-retry; conservative B 0,026250 USD, fresh 0,516375 USD, projected resume 0,196300 USD.
   - Test na plikowej SQLite dowodzi, że źródła zostają w `SOURCES_COMPLETE`, audit kończy się `FAILED`, a karta nie powstaje częściowo; osobne testy zachowują salvage JSONL A1 i liczą prior usage dokładnie raz. 351 testów offline, koszt dodatkowy 0 USD.
   - Historycznej bazy nie „upiększono”; plan repair jest osobnym, audytowalnym krokiem wymagającym zgody. To dowód, że dokumentacja odróżnia naprawiony kod od naprawionych danych.
+
+- **[2026-07-13] Historia poprawiona jawnie, nie po cichu** (sekcja: 3, 6, 15)
+  - Materiał: po osobnej zgodzie właściciela wykonano lokalną operację maintenance na historycznym runie Task 9. Backup SQLite, SHA-256, snapshoty logiczne i warunkowy UPDATE pozwoliły wykazać, że zmieniły się tylko `runs.status`, `runs.finished_at` i `runs.error`.
+  - Liczby: `rowcount=1`; 4 candidates nadal EXTRACTED/VERIFIED, 6 wpisów usage nadal sumuje się do 0,170050 USD, brak Research Card; dodatkowy koszt 0 USD.
+  - Dlaczego trafi do artykułu: pokazuje różnicę między korektą prawdziwości auditu a przepisywaniem historii. Opłacone dane i wznawialny `SOURCES_COMPLETE` zostały zachowane, lecz zakończony proces nie figuruje już jako `RUNNING`.
+  - Dowód: `docs/BUILD_LOG.md`, `docs/ERRORS_AND_FAILURES.md`, `docs/HUMAN_INTERVENTIONS.md`; bez API i bez resume.

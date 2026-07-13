@@ -156,7 +156,7 @@ Rekomendowany zatwierdzany cap: **0,55 USD**. Maksymalna liczba wyszukiwań wyni
 | **Realny koszt API do dziś (zmierzony, potwierdzony w bazie)** | **0,670666 USD** |
 | Szacunek dry_run do dziś (nie liczy się do budżetu) | ~0.062 USD |
 | Prognoza 30 dni | ~20–55 USD |
-| Wykorzystanie budżetu miesięcznego (40 USD) | 1,25% |
+| Wykorzystanie budżetu miesięcznego (40 USD) | 1,68% |
 | Udanych, kompletnych kart researchu | **0** (diagnostyka udowodniła tylko poprawne A2 dla jednego źródła) |
 | Czas budowy (człowiek) | do policzenia osobno |
 
@@ -175,6 +175,11 @@ Automatycznie: `UsageTracker` liczy koszt z cennika i dopisuje wiersz do `model_
 
 ### 2026-07-13 — koszt poprawki offline
 
-- Nowe wywołania API: **0**; dodatkowy koszt: **0 USD**. `docs/COSTS.csv` nie dostał sztucznego wpisu.
+- Nowe wywołania API: **0**; dodatkowy koszt: **0 USD**. Do `docs/COSTS.csv` nie dodano wiersza udającego realne usage.
 - Historyczny Task 9 pozostaje **0,170050 USD**.
 - Nowy limit B=3000: expected **0,017500 USD**, conservative **0,026250 USD**; fresh worst-case **0,516375 USD**, projected resume z prior usage **0,196300 USD**.
+
+### 2026-07-13 — koszt kontrolowanego repair auditu
+
+- Operacja była wyłącznie lokalna: **0,000000 USD**, bez API i resume.
+- Nie zmieniono sześciu wpisów `model_usage` ani `runs.cost_usd`; historyczny koszt Task 9 pozostaje **0,170050 USD**.

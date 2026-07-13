@@ -218,3 +218,10 @@ Odczyt bazy przyniósł jeszcze jedną lekcję: szczegółowy research był popr
 - Finding: provider powiedział `max_tokens`, ale system nazywał to ogólnym parse error i zostawił audit RUNNING.
 - Naprawa: typowany truncation, zero retry, limit 3000 (+36%) z conservative 0,026250 USD, terminalny FAILED + wznawialny SOURCES_COMPLETE.
 - Etyka auditu: kod naprawiono, lecz historycznego rekordu nie zmieniono bez osobnej zgody. 351 testów offline, brak kolejnego rachunku.
+
+### Materiał: „Trzy pola, których nie wolno zmienić po cichu”
+
+- Osobna zgoda właściciela objęła wyłącznie korektę statusu historycznego runu.
+- Backup i snapshoty logiczne wykazały, że operacja zmieniła tylko `status`, `finished_at` i `error`; `rowcount=1`.
+- Cztery VERIFIED, sześć wpisów usage, 0,170050 USD i brak Research Card pozostały faktami historycznymi.
+- **Zdanie do artykułu:** „Dobra naprawa nie sprawia, że porażka znika. Sprawia, że baza nazywa ją po imieniu, nie zmieniając rachunku ani tego, co udało się ocalić.”

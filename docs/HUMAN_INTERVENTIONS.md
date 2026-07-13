@@ -151,3 +151,14 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Typ:** IMPLEMENTATION BOUNDARY / NO EXTERNAL ACTION.
 - **Zakres decyzji właściciela:** naprawić truncation B i fałszywe RUNNING, dodać testy i dokumentację; nie wykonywać API, resume, drugiego runu, retry failed candidates, force ani ręcznej mutacji realnej bazy.
 - **Efekt:** kod i 351 testów offline gotowe do niezależnego review. Historyczny run, main i świat zewnętrzny pozostały bez zmian; kolejna operacja lifecycle oraz płatny resume wymagają osobnych zgód.
+
+### [2026-07-13] APPROVAL — kontrolowana naprawa statusu historycznego runu Task 9
+- **Typ:** APPROVAL / MAINTENANCE
+- **Konto:** nothing_is_accidental
+- **Obiekt:** run `c01171bc-7ff5-4b83-bbfa-c0b164137793`
+- **Co agent chciał zrobić:** uzgodnić ogólny audit runu z faktem, że realny etap B zakończył się `stop_reason=max_tokens` i błędem parsowania uciętego JSON.
+- **Dlaczego człowiek zareagował:** mutacja historycznej bazy wymaga osobnej, jawnej zgody oraz ścisłych preconditions i dowodu niezmienności opłaconych danych.
+- **Co zostało zmienione:** właściciel dopuścił wyłącznie lokalne `RUNNING → FAILED`, ustawienie `finished_at` i audytowalnego `error`; zakazał API, resume, retry, A1, A2, B i zmian kosztu. Operacja warunkowa zmieniła dokładnie jeden rekord (`rowcount=1`).
+- **Jaki był efekt:** `research_runs=SOURCES_COMPLETE`, topic `SELECTED`, 4× EXTRACTED/VERIFIED, sześć wpisów usage i koszt 0,170050 USD pozostały bez zmian; run jest gotowy wyłącznie do osobno zatwierdzonego resume B. Dodatkowy koszt: 0 USD.
+- **Czas człowieka:** niezmierzony (instrukcja tekstowa).
+- **Wpływ na strategię:** brak zmiany architektury; jest to kontrolowana korekta auditu historycznego.

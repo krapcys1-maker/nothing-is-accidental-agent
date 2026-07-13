@@ -10,7 +10,7 @@
 - Testy: **351 passed** (offline, deterministyczne, bez sieci; w tym typowane truncation wyłącznie B, zachowany salvage JSONL A1, prior usage liczone raz, brak retry, budżet resume z limitem 3000, terminalizacja fresh B failure, jawny resume audit CAS oraz race tests na plikowej SQLite). Gałąź: `dev/first-successful-research-card`.
 - Realny koszt projektu: **0,670666 USD** (12 wpisów `model_usage` z `dry_run=0`; Task 9 kosztował **0,170050 USD**; limit miesięczny 40 USD → wykorzystane 1,68%).
 - Realne próby researchu: **4** (+1 diagnostyka pojedynczego źródła) — **0 ukończonych Research Card na żywym API** (1 karta istnieje wyłącznie z dry_run).
-- Baza po Task 9: runs = 4×DRY_RUN + 3×FAILED + 1×RUNNING (`c01171bc`); research_runs = 1×COMPLETE (dry-run), 2×FAILED, 1×PARTIAL (`9bbeb020`) i 1×SOURCES_COMPLETE (`c01171bc`). Nowy run ma 4×EXTRACTED/VERIFIED, ale B zakończył się `max_tokens` i parse-error; nie wykonano resume.
+- Baza po kontrolowanym repair Task 9: runs = 4×DRY_RUN + 4×FAILED; run `c01171bc` ma `finished_at=2026-07-13 05:39:30 UTC` i audytowalny maintenance error. `research_runs` pozostało 1×COMPLETE (dry-run), 2×FAILED, 1×PARTIAL (`9bbeb020`) i 1×SOURCES_COMPLETE (`c01171bc`). Cztery EXTRACTED/VERIFIED, topic SELECTED, brak karty i koszt 0,170050 USD nie zmieniły się; nie wykonano resume.
 - Publikacje na Substacku: **0** (fizycznie zablokowane przez `DisabledBrowser`).
 
 ## Tabela stanu modułów
@@ -28,7 +28,7 @@
 | AnthropicResearchClient (3 generacje metod) | WORKING | 93 | A1 i 4×A2 zakończone realnie; `stop_reason=max_tokens` daje typowany `ResearchTruncatedError` z usage i bez retry; jawny/konfigurowalny limit B=3000; zwięzły prompt B | historyczne realne B zakończyło się przy limicie 2200; nowy kontrakt niezweryfikowany live; `timeout-billed-unrecorded`; A2 = search-o-URL, nie fetch treści | offline + realny Task 9 | 2026-07-13 | niezależne review przed osobną decyzją o resume B |
 | Estymator kosztów | VERIFIED | 85 | conservative+expected z 2 realnych obserwacji, margines ≥50% | dwie kalibracje (legacy z cennika vs staged stałe) — P2-1; kalibracja n=2 | tak | 2026-07-12 | ujednolicić przy Etapie 2 |
 | Workflow tematów + dedup | VERIFIED | 90 | pełny przepływ dry_run, dedup lokalny, progi, SUCCESS-fix | realny run tematów nigdy nie wykonany | tak | 2026-07-12 | realny run po Etap 0 zad. 6 |
-| Research staged A1/A2/B + resume | WORKING | 96 | realne A1 oraz 4×A2 SUCCESS; 4 VERIFIED; fresh B failure kończy `runs=FAILED` z `finished_at/error`, zachowując `research_runs=SOURCES_COMPLETE`; resume wykonuje tylko B i korzysta z CAS | historyczny run nadal ma RUNNING, bo nie wykonano repair; brak realnej karty; nie wolno zaczynać Etapu 1 | 351 offline + Task 9 live | 2026-07-13 | review, potem osobna zgoda na kontrolowany repair i ewentualny resume B |
+| Research staged A1/A2/B + resume | WORKING | 96 | realne A1 oraz 4×A2 SUCCESS; 4 VERIFIED; B failure kończy `runs=FAILED` z `finished_at/error`, zachowując `research_runs=SOURCES_COMPLETE`; historyczny audit naprawiony kontrolowanym CAS maintenance; resume wykonuje tylko B | brak realnej karty; B z limitem 3000 nadal niezweryfikowane live; nie wolno zaczynać Etapu 1 | 351 offline + Task 9 live + repair audit | 2026-07-13 | osobna zgoda na ewentualny płatny resume B |
 | Research legacy (single, two-stage) | WORKING | 100 | działa, 24 testy | NIEZALECANY (ADR-016→020); do DEPRECATED po sukcesie staged live | tak | 2026-07-12 | Etap 2 zad. 6 |
 | Walidacja + injection guard | VERIFIED | 90 | deterministyczna bramka, min_verified_sources, neutralizacja injection | wzorce EN-only (P2-7) | tak | 2026-07-12 | rozszerzenie przy Etapie 2 |
 | Diagnostyka odpowiedzi | VERIFIED | 95 | raw+stop_reason per etap, potwierdzona na żywo | nadpisuje poprzednią próbę tego samego etapu (P2-13, świadome) | tak | 2026-07-12 | — |
@@ -50,7 +50,7 @@
 
 1. **Task 9 nie spełnił kryterium zakończenia Etapu 0** — zatwierdzony run `c01171bc-7ff5-4b83-bbfa-c0b164137793` zachował 4 VERIFIED, ale B zwróciło ucięty JSON (`stop_reason=max_tokens`). Każde resume/ponowienie wymaga nowej, osobnej zgody; w tej pracy nie wykonano drugiego calla.
 2. **Run `9bbeb020` pozostaje niezmieniony w źródłowej bazie** — po migracji jego historyczne `EXTRACTION_FAILED` dostaną konserwatywną dolną granicę `attempts=1`; legalna droga prowadzi wyłącznie przez jawną komendę retry i nie jest uruchamiana przez zwykłe resume.
-3. **Historyczny ogólny audit runu nadal jest nieterminalny** — ścieżkę kodu naprawiono offline: przyszły kontrolowany B failure ustawia `runs=FAILED`, `finished_at` i przyczynę, a `research_runs` wraca do `SOURCES_COMPLETE`. Run `c01171bc` celowo pozostał niezmieniony; wymaga osobno zatwierdzonej, warunkowej operacji lifecycle, nie ręcznego SQL.
+3. **Historyczny ogólny audit runu został naprawiony za osobną zgodą** — po backupie i pełnym preflightcie jeden warunkowy UPDATE (`rowcount=1`, `total_changes=1`) zmienił wyłącznie `runs.status RUNNING→FAILED`, `finished_at` i `error`. `research_runs=SOURCES_COMPLETE`, topic SELECTED, 4 kandydatów, usage/koszt i brak karty pozostały bitowo/logicznie niezmienione. Run jest gotowy technicznie do resume wyłącznie B, ale taki płatny krok nadal wymaga kolejnej osobnej zgody.
 
 ## Ostatnie ważne decyzje
 
@@ -64,9 +64,9 @@
 - **Aktywny etap roadmapy:** Etap 0 — Stabilizacja (zadania 1–9).
 - **Ostatni ukończony krok:** Etap 0 / zadanie 8. Task 9 został uruchomiony raz, ale nieukończony: A1/A2 sukces, B błąd `max_tokens`; **Etap 0 pozostaje aktywny**.
 - **Następne trzy zadania:**
-  1. Niezależne review offline naprawy truncation i lifecycle oraz planu naprawy historycznego `runs=RUNNING`, bez API.
-  2. Osobna zgoda na kontrolowany repair historycznego auditu, a dopiero potem ewentualna osobna zgoda na resume wyłącznie B; Etap 1 dopiero po realnym COMPLETE/SUCCESS.
-  3. Dalsze zadania wyłącznie według `IMPLEMENTATION_ROADMAP.md` i po zamknięciu aktywnego etapu.
+  1. Nie wykonywać resume bez nowej, osobnej zgody właściciela; jeśli zostanie udzielona, powtórzyć pełny pre-flight wyłącznie B.
+  2. Po ewentualnym zatwierdzonym resume zweryfikować realne COMPLETE/SUCCESS, Research Card, topic USED i końcowy koszt.
+  3. Etap 1 rozpocząć wyłącznie po spełnieniu kryterium Task 9 i zamknięciu Etapu 0.
 
 ## Znane długi techniczne (poza blokerami; numeracja z audytu 12.07)
 

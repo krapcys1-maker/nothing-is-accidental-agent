@@ -113,3 +113,8 @@ Na obecnym etapie (przed generacją treści i publikacją) interwencje człowiek
 - Dozwolone: kod, fake callery, plikowa SQLite, testy i dokumentacja.
 - Niedozwolone: API, resume, drugi run, ręczna zmiana realnej bazy, Playwright, publikacja, commit i push.
 - Efekt: 351 testów zielonych, koszt 0 USD; osobna zgoda nadal potrzebna zarówno na repair auditu, jak i późniejszy płatny resume B.
+
+### [2026-07-13] Właściciel osobno zatwierdził lokalny repair auditu
+- Dozwolone: backup, pełne preconditions, warunkowa zmiana `RUNNING → FAILED`, `finished_at`, audytowalny `error` i weryfikacja po reopen.
+- Niedozwolone: API, resume, retry, A1, A2, B, drugi run oraz jakakolwiek zmiana kosztu lub danych researchu.
+- Efekt: jeden rekord zmieniony (`rowcount=1`), koszt historyczny nadal 0,170050 USD, koszt operacji 0 USD; staged research jest gotowy tylko do osobno zatwierdzonego resume B.

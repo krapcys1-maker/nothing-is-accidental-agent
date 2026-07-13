@@ -194,3 +194,10 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_task9-offline-truncation-lifecycle-tests.png`
 - **Co pokazuje:** zanonimizowany wynik `174 passed` testów celowanych (włącznie z cost ledger, prior usage liczone raz i zachowaniem JSONL A1) oraz `351 passed` pełnego suite, bez danych raw/API.
 - **Status:** SCREENSHOT REQUIRED — w zadaniu nie uruchamiano Playwrighta ani nie tworzono automatycznie obrazu; obecny dowód to log testów i diff kodu.
+
+### [2026-07-13] task9-controlled-status-repair
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_task9-controlled-status-repair.png`
+- **Co pokazuje:** zanonimizowany raport maintenance: spełnione preconditions, `rowcount=1`, zmianę tylko `status`/`finished_at`/`error`, niezmienione `SOURCES_COMPLETE`, 4× VERIFIED, 6 usage i koszt 0,170050 USD.
+- **Dlaczego ważny:** dokumentuje, że historyczny audit został naprawiony kontrolowanie, bez zmiany danych researchu, kosztu ani uruchomienia resume.
+- **CZEGO NIE MOŻE BYĆ WIDAĆ:** surowej odpowiedzi providera, treści `.env`, kluczy, URL-i źródeł ani danych uwierzytelnienia.
+- **Status:** SCREENSHOT REQUIRED — zgodnie z zakazem nie używano Playwrighta; dowodem bieżącym są snapshoty logiczne, SHA-256 i log operacji.

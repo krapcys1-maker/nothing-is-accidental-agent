@@ -93,3 +93,7 @@ Na 2026-07-11 **nie wykonano jeszcze żadnego screenshotu** — dotychczasowa pr
 ### Task 9 — dowód poprawki offline
 
 Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior usage liczone raz i zachowaniem JSONL A1) oraz 351/351 pełnego suite. Screenshot pozostaje oznaczony `SCREENSHOT REQUIRED`: nie użyto Playwrighta ani przeglądarki i nie wolno eksponować prywatnego raw response. Dowodem trwałym przed screenshotem są testy, diff oraz wpis `SS-TASK9-FIX` w indeksie.
+
+### Task 9 — dowód kontrolowanej naprawy statusu
+
+`SCREENSHOT REQUIRED`: bezpieczny kadr może później pokazać jedynie zanonimizowane preconditions, `rowcount=1`, trzy zmienione pola i niezmienne agregaty kosztu/researchu. Playwrighta nie użyto. Obecny dowód stanowią SHA-256 backupu i bazy, logiczne snapshoty przed/po oraz wpis `task9-controlled-status-repair` w `docs/SCREENSHOT_INDEX.md`.

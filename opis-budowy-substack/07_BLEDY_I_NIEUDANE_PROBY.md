@@ -230,3 +230,7 @@ Koszt 0,170050 USD został zapisany w całości. `research_runs` wrócił do `SO
 ### Co naprawiono offline
 
 Przyczyna nie była już zagadką: provider jawnie zwrócił `stop_reason=max_tokens`. Klient rozpoznaje teraz ten stan przed parserem, zachowuje usage i nie próbuje ponownie. Limit 3000 oraz krótszy prompt pozostają pod kontrolą estymatora. Drugi błąd był warunkiem w pipeline: tylko porażka jawnego resume terminalizowała główny run. Fresh failure również kończy teraz `FAILED`, zachowując źródła do B. Test reopen SQLite potwierdza brak częściowych mutacji. Historyczny rekord celowo pozostał RUNNING do osobnego repair.
+
+### [2026-07-13] Historyczny RUNNING naprawiony operacją maintenance
+
+Osobna zgoda pozwoliła skorygować wyłącznie audit runu po nieudanym B. Backup, kontrola SHA-256 i snapshoty logiczne poprzedziły warunkowy UPDATE wymagający `RUNNING`, pustego `finished_at`, pustego `error`, właściwego konta/workflow i kosztu 0,170050 USD. `rowcount=1`; po reopen zmieniły się tylko status na FAILED, czas zakończenia i pełny opis `max_tokens`/parse-truncation/maintenance. `SOURCES_COMPLETE`, topic SELECTED, cztery VERIFIED, sześć usage i brak karty pozostały niezmienione. Bez API, bez resume, 0 USD.

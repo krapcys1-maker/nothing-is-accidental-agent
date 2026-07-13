@@ -441,3 +441,12 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Kosztorys:** B expected 0,017500 / conservative 0,026250 USD; fresh worst-case 0,516375 < 0,55; resume z prior 0,170050 daje 0,196300 < 0,20. Limit jest konfigurowalny i przekazywany do estymatora/policy.
 - **Weryfikacja:** 174 testy celowane (włącznie z cost ledger, prior usage liczone raz i zachowanie JSONL A1), pełne **351 passed**, `git diff --check` bez błędów. Testy użyły fake callerów i plikowej SQLite; dodatkowy koszt 0 USD.
 - **Stan historyczny:** run `c01171bc-7ff5-4b83-bbfa-c0b164137793` nie został zmieniony. Repair i późniejszy płatny resume wymagają oddzielnych zgód. Etap 0 pozostaje aktywny.
+
+### 2026-07-13 — kontrolowany maintenance repair auditu runu Task 9
+
+- **Zgoda:** właściciel zezwolił wyłącznie na lokalną naprawę statusu `c01171bc-7ff5-4b83-bbfa-c0b164137793`; bez API, resume, retry, force i bez A1/A2/B.
+- **Brama:** branch/HEAD/upstream zgodne, working tree clean, **351 passed**, `git diff --check` czysty. Preconditions: RESEARCH/RUNNING/NULL/0,170050; staged/SOURCES_COMPLETE/no card/topic #2; konto zgodne; 4×EXTRACTED/VERIFIED/attempts=1; 6 usage sumujących się do 0,170050; B FAILED z parse error i diagnostyką `max_tokens`.
+- **Backup:** `data/backups/agent_before_task9_status_repair_c01171bc_20260713.db`, `integrity_check=ok`, SHA-256 `F338F4C03353C8D90ACAF9796C2F4A48ADB44F111BEAAEA0152329A7BD7C67A0`; logiczny snapshot powiązanych rekordów identyczny ze źródłem. SHA źródła przed: `908A339978272259C99549CA7549A02AA0442385F1977E95774CF3406F2B8908`.
+- **Operacja:** `BEGIN IMMEDIATE`; ponowny preflight; warunkowy UPDATE po run_id/account/workflow/status/NULL finished/error/dokładnym koszcie; `rowcount=1`, `total_changes=1`; commit, WAL checkpoint, reopen i `integrity_check=ok`.
+- **Wynik:** zmieniły się wyłącznie `runs.status=FAILED`, `finished_at=2026-07-13 05:39:30 UTC`, `error=[maintenance][synthesize_from_cards] ... stop_reason=max_tokens ...`. SHA bazy po: `B7B84176B73936F1948E27D3417E1FB0CF18D5121ACF8BB9C98F2BB3BBC9F3D3`.
+- **Niezmienione:** koszt, usage, research_run, topic, candidates, stage log, account, karty i źródła. Koszt dodatkowy 0 USD. Etap 0 nadal nieukończony; resume B wymaga nowej zgody.
