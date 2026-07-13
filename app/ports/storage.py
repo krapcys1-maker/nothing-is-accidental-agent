@@ -43,6 +43,37 @@ class JobConflictError(RuntimeError):
     """Idempotency albo aktywna blokada topicu nie pozwala utworzyć joba."""
 
 
+class JobRunRelationError(RuntimeError):
+    """Research job nie może zostać bezpiecznie powiązany z podanym runem."""
+
+    def __init__(self, code: str, job_id: str, detail: str) -> None:
+        self.code = code
+        self.job_id = job_id
+        super().__init__(f"{code}: job {job_id}: {detail}")
+
+
+class JobRunConflictError(JobRunRelationError):
+    """Job ma już trwałe powiązanie z innym runem."""
+
+    def __init__(self, job_id: str, existing_run_id: str, requested_run_id: str) -> None:
+        super().__init__(
+            "JOB_RUN_ALREADY_ATTACHED",
+            job_id,
+            f"existing run_id={existing_run_id!r} differs from requested run_id={requested_run_id!r}.",
+        )
+
+
+class JobRunReconciliationRequired(JobRunRelationError):
+    """Wygasły job z przypiętym runem wymaga jawnej, przyszłej reconciliacji."""
+
+    def __init__(self, job_id: str) -> None:
+        super().__init__(
+            "RESEARCH_RUN_RECONCILIATION_REQUIRED",
+            job_id,
+            "attached research run is not automatically restarted after lease expiry.",
+        )
+
+
 class BudgetReservationError(RuntimeError):
     """Rezerwacja przekracza limit lub przeczy istniejącej rezerwacji joba."""
 
@@ -133,7 +164,7 @@ class StoragePort(Protocol):
     def attach_job_run(
         self, job_id: str, lease_owner: str, run_id: str, *, now: datetime | None = None,
     ) -> None:
-        """CAS-links a claimed job with the run it has just created."""
+        """CAS-links a compatible worker RESEARCH job with its newly created run."""
         ...
 
     def mark_job_external_effect_started(

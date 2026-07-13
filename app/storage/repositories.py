@@ -44,6 +44,9 @@ from app.models import (
 from app.ports.storage import (
     BudgetReservationError,
     JobConflictError,
+    JobRunConflictError,
+    JobRunReconciliationRequired,
+    JobRunRelationError,
     LifecycleTransitionError,
     ResearchTopicIntegrityError,
     SystemFlagError,
@@ -739,8 +742,11 @@ class SqliteStorage:
         """Durably binds a just-created run to the current job lease.
 
         The relation is written only while the caller still owns a fresh lease.
-        Repeating the exact same binding is harmless; replacing a different run
-        is rejected so a restarted worker cannot rewrite execution history.
+        Both sides must be the exact single-flow relation created by the offline
+        worker: RESEARCH job/workflow, same account/topic, RESEARCH run and its
+        matching ``research_runs`` row. Repeating that exact relation is harmless;
+        replacing a different run is rejected so a restarted worker cannot rewrite
+        execution history.
         """
         if not run_id.strip():
             raise ValueError("run_id must be non-empty.")
@@ -749,17 +755,94 @@ class SqliteStorage:
         try:
             self.conn.execute("BEGIN IMMEDIATE")
             job = self.conn.execute(
-                "SELECT account_id,run_id,status,lease_owner,lease_expires_at FROM jobs WHERE id=?",
+                "SELECT account_id,kind,workflow,topic_id,run_id,status,lease_owner,lease_expires_at "
+                "FROM jobs WHERE id=?",
                 (job_id,),
             ).fetchone()
-            run = self.conn.execute("SELECT account_id FROM runs WHERE id=?", (run_id,)).fetchone()
-            if job is None or run is None or run["account_id"] != job["account_id"]:
+            if job is None:
                 raise self._job_lifecycle_error(
                     job_id, "RUN_ATTACHED", allowed,
-                    detail="Job and run must exist and belong to the same account.",
+                    detail="Job must exist before a run can be attached.",
+                )
+            if job["kind"] != JobKind.RESEARCH.value:
+                raise JobRunRelationError(
+                    "JOB_KIND_MISMATCH", job_id,
+                    "only kind=RESEARCH may attach a research run.",
+                )
+            if job["workflow"] != WorkflowType.RESEARCH.value:
+                raise JobRunRelationError(
+                    "JOB_WORKFLOW_MISMATCH", job_id,
+                    "only workflow=RESEARCH may attach a research run.",
+                )
+            if job["topic_id"] is None:
+                raise JobRunRelationError(
+                    "JOB_TOPIC_MISSING", job_id,
+                    "research job must have a topic_id before a run can be attached.",
+                )
+            if job["status"] not in allowed:
+                raise self._job_lifecycle_error(
+                    job_id, "RUN_ATTACHED", allowed,
+                    detail="Run binding requires an active job lifecycle state.",
+                )
+            if job["run_id"] is not None and job["run_id"] != run_id:
+                raise JobRunConflictError(job_id, job["run_id"], run_id)
+
+            run = self.conn.execute(
+                "SELECT account_id,workflow,status FROM runs WHERE id=?", (run_id,),
+            ).fetchone()
+            if run is None:
+                raise JobRunRelationError(
+                    "RUN_MISSING", job_id, "requested run does not exist.",
+                )
+            if run["workflow"] != WorkflowType.RESEARCH.value:
+                raise JobRunRelationError(
+                    "RUN_WORKFLOW_MISMATCH", job_id,
+                    "requested run must have workflow=RESEARCH.",
+                )
+            if run["account_id"] != job["account_id"]:
+                raise JobRunRelationError(
+                    "JOB_RUN_ACCOUNT_MISMATCH", job_id,
+                    "job and run must belong to the same account.",
+                )
+            research_run = self.conn.execute(
+                "SELECT account_id,topic_id,flow,status FROM research_runs WHERE id=?", (run_id,),
+            ).fetchone()
+            if research_run is None:
+                raise JobRunRelationError(
+                    "RESEARCH_RUN_MISSING", job_id,
+                    "requested research run extension does not exist.",
+                )
+            if research_run["account_id"] != job["account_id"]:
+                raise JobRunRelationError(
+                    "JOB_RESEARCH_RUN_ACCOUNT_MISMATCH", job_id,
+                    "job and research run must belong to the same account.",
+                )
+            if research_run["topic_id"] != job["topic_id"]:
+                raise JobRunRelationError(
+                    "JOB_RUN_TOPIC_MISMATCH", job_id,
+                    "job and research run must refer to the same topic.",
+                )
+            if research_run["flow"] != ResearchFlow.SINGLE.value:
+                raise JobRunRelationError(
+                    "RESEARCH_RUN_FLOW_UNSUPPORTED", job_id,
+                    "offline worker accepts only the single research flow.",
+                )
+
+            existing_binding = job["run_id"] == run_id
+            if not existing_binding and run["status"] not in (
+                RunStatus.RUNNING.value, RunStatus.DRY_RUN.value,
+            ):
+                raise JobRunRelationError(
+                    "RUN_STATUS_NOT_ATTACHABLE", job_id,
+                    "new binding requires a running or dry-run research run.",
+                )
+            if not existing_binding and research_run["status"] != ResearchRunStatus.PENDING.value:
+                raise JobRunRelationError(
+                    "RESEARCH_RUN_STATUS_NOT_ATTACHABLE", job_id,
+                    "new binding requires a pending single-flow research run.",
                 )
             if (
-                job["run_id"] == run_id
+                existing_binding
                 and job["status"] in allowed
                 and job["lease_owner"] == lease_owner
                 and job["lease_expires_at"] >= current_ts
@@ -876,15 +959,17 @@ class SqliteStorage:
     ) -> JobRecoveryResult:
         """Recovers each expired lease exactly once under a write transaction.
 
-        Browser jobs move to NEEDS_VERIFICATION because their external effect is
-        uncertain. LOCAL and RESEARCH jobs are requeued only before max_attempts.
+        Browser jobs and any job after an external effect move to
+        NEEDS_VERIFICATION. LOCAL and RESEARCH jobs without a durable ``run_id``
+        are requeued only before max_attempts; an attached RESEARCH run requires
+        explicit future reconciliation instead of an automatic restart.
         """
         current_ts = _persisted_ts(self._job_now(now))
         result = JobRecoveryResult()
         try:
             self.conn.execute("BEGIN IMMEDIATE")
             rows = self.conn.execute(
-                "SELECT id,kind,attempts,max_attempts,external_effect_started_at FROM jobs "
+                "SELECT id,kind,run_id,attempts,max_attempts,external_effect_started_at FROM jobs "
                 "WHERE status IN ('LEASED','RUNNING') AND lease_expires_at < ? ORDER BY id",
                 (current_ts,),
             ).fetchall()
@@ -894,6 +979,11 @@ class SqliteStorage:
                     release_budget = False
                     result.needs_verification_count += 1
                     error = "Lease expired; external effect requires verification."
+                elif row["kind"] == JobKind.RESEARCH.value and row["run_id"] is not None:
+                    target = JobStatus.NEEDS_VERIFICATION
+                    release_budget = False
+                    result.needs_verification_count += 1
+                    error = str(JobRunReconciliationRequired(row["id"]))
                 elif int(row["attempts"]) >= int(row["max_attempts"]):
                     target = JobStatus.FAILED
                     release_budget = True

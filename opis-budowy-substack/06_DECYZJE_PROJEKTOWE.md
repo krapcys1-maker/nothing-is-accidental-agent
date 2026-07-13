@@ -229,3 +229,10 @@ Po review doprecyzowano: realny pipeline bez capu odmawia, cap resume jest absol
 - **Wybór:** jeden worker używa claimu, lifecycle i heartbeat z repozytorium; dispatcher przyjmuje tylko `LOCAL/ANALYTICS` noop oraz `RESEARCH/RESEARCH` z dokładnym `account_id`, `topic_id`, `dry_run=true`. Każdy job przechodzi runtime PolicyEngine, który odczytuje pięć flag SQLite bez cache. Run researchu wiąże się z jobem przez CAS zaraz po utworzeniu.
 - **Granica:** paid i browser/public są bezwarunkowo BLOCKED; brak flagi lub uszkodzony JSON blokują; nie ma dynamicznych importów, API, sieci, resume, reapera runs ani automatycznego retry po niepewnym skutku.
 - **Dowód:** 19 testów offline, w tym Barrier/reopen, heartbeat, lost lease, recovery, backoff pustej kolejki i CLI temp DB; pełny suite 489 passed, 0 USD.
+
+### [2026-07-13] D-39: przypięty run po awarii jest sygnałem do zatrzymania
+
+- **Problem:** po crashu między CAS `job.run_id` a terminalizacją job mógł wrócić do QUEUED. Nie tworzył dubla od razu, ale nowy worker nie ma bezpiecznego resume tego samego runu i nie może zaczynać od zera.
+- **Wybór:** `attach_job_run` wymaga zgodnej relacji RESEARCH job→run→research_run dla tego samego account/topicu i flow `single`. Po expiry RESEARCH bez `run_id` może wrócić do QUEUED; z przypiętym `run_id` przechodzi do `NEEDS_VERIFICATION`, zachowując run i rezerwację. Terminalny sukces nie jest zgadywany.
+- **Granica:** brak realnego resume, reapera runs, API, paid/browser workera i manualnego UI. Reconciliation pozostaje osobnym krokiem.
+- **Dowód:** literalna macierz relation/CAS i recovery z reopen oraz dwoma workerami recovery; pełny suite 512 passed, 0 USD.

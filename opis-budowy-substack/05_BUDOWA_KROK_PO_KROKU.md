@@ -427,3 +427,11 @@ Przed każdym jobem pyta bazę o pięć flag. Brak flagi jest odmową, uszkodzon
 Research nie dostał drugiego pipeline'u. Worker wszedł przez istniejący offlineowy punkt i użył FakeResearchClienta; zaraz po powstaniu runu zapisał jego ID w jobie przez CAS. Jeśli lease zniknie, worker nie może już powiedzieć „DONE”. Jeśli poprzedni proces zniknął przed skutkiem zewnętrznym, istniejąca recovery oddaje bezpieczny job kolejce; po markerze skutku pozostaje `NEEDS_VERIFICATION`.
 
 To nadal nie jest dowód gotowości do działania na zewnątrz. Jest dowód lokalny: **19 nowych testów**, dwa połączenia SQLite z barierą, restart/reopen, heartbeat, utrata lease i kontrolowane oczekiwanie pustej kolejki; pełny suite ma **489 testów**. API, sieć, realna baza, paid/browser i koszt pozostały nietknięte: **0 USD**.
+
+## 2026-07-13 — Sam identyfikator runu jest już historią, nie zaproszeniem do retry
+
+Kolejna mała korekta dotyczy chwili między powstaniem researchu a końcem joba. Worker zdążył utworzyć run i zapisać jego ID, ale mógł zniknąć zanim zapisał `DONE`. Dawniej recovery oddałoby taki job kolejce, a nowy worker musiałby wybierać między ponownym researchiem i ślepą odmową.
+
+Wybraliśmy trzecią drogę: `run_id` zostaje trwałym śladem, a job przechodzi do `NEEDS_VERIFICATION` z krótkim reason code. Rezerwacja budżetu też zostaje, bo system nie zgaduje, czy etap nie zdążył zrobić czegoś istotnego. Nie ma tu resume, nie ma nowego API i nie ma automatycznej naprawy stanu — jest świadome zatrzymanie przed dublem.
+
+Przy okazji CAS przestał znaczyć tylko „to samo konto”. Przed przypięciem SQLite sprawdza rodzaj joba, workflow, topic, workflow runu oraz właściwy wpis `research_runs`. Testy symulują nie ten topic, konto, flow, owner i wygasły lease; po każdym przypadku baza jest otwierana ponownie. Wynik: **512 testów**, zero sieci, API i koszt **0 USD**.

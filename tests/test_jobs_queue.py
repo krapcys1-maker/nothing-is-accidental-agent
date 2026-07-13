@@ -14,6 +14,9 @@ from app.models import (
     JobKind,
     JobStatus,
     ModelUsage,
+    ResearchFlow,
+    ResearchRun,
+    ResearchRunStatus,
     Run,
     RunStatus,
     Topic,
@@ -23,6 +26,8 @@ from app.models import (
 from app.ports.storage import (
     BudgetReservationError,
     JobConflictError,
+    JobRunConflictError,
+    JobRunRelationError,
     LifecycleTransitionError,
     SystemFlagError,
 )
@@ -55,6 +60,45 @@ def _job(
         earliest_run_at=earliest, deadline_at=deadline, max_attempts=max_attempts,
         created_at=NOW,
     )
+
+
+def _worker_research_run(
+    storage: SqliteStorage,
+    account,
+    topic: Topic,
+    run_id: str,
+    *,
+    run_status: RunStatus = RunStatus.DRY_RUN,
+    research_status: ResearchRunStatus = ResearchRunStatus.PENDING,
+    flow: ResearchFlow = ResearchFlow.SINGLE,
+    research_account=None,
+) -> str:
+    """Creates the exact run/research_run pair the offline worker binds."""
+    research_account = research_account or account
+    storage.create_run(Run(
+        id=run_id, account_id=account.id, workflow=WorkflowType.RESEARCH,
+        status=run_status,
+    ))
+    storage.create_research_run(ResearchRun(
+        id=run_id, account_id=research_account.id, topic_id=int(topic.id),
+        flow=flow, status=research_status,
+    ))
+    return run_id
+
+
+def _claim(storage: SqliteStorage, job: Job, *, owner: str = "worker-a", lease_seconds: int = 5) -> Job:
+    enqueued = storage.enqueue_job(job)
+    lease = storage.claim_next_job(owner, lease_seconds, now=NOW)
+    assert lease is not None and lease.job.id == enqueued.id
+    return enqueued
+
+
+def _reopen_job(settings, storage: SqliteStorage, job_id: str):
+    storage.close()
+    reopened = SqliteStorage.open(settings.db_path)
+    job = reopened.get_job(job_id)
+    assert job is not None
+    return reopened, job
 
 
 def _copy_migrations_through_0008(destination: Path) -> None:
@@ -271,6 +315,468 @@ def test_expired_recovery_is_safe_idempotent_and_reopens(settings, account):
     assert reopened.get_job(browser.id).status == JobStatus.NEEDS_VERIFICATION
     assert reopened.get_job(external.id).status == JobStatus.NEEDS_VERIFICATION
     assert reopened.get_job(safe.id).status == JobStatus.FAILED
+    reopened.close()
+
+
+def test_attach_job_run_accepts_matching_research_relation(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "attach-matching", "attach-matching", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    run_id = _worker_research_run(storage, account, topic, "attach-matching-run")
+
+    storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.status is JobStatus.LEASED
+    assert persisted.run_id == run_id
+    assert reopened.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    reopened.close()
+
+
+def test_attach_job_run_is_idempotent_for_same_run(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "attach-idempotent", "attach-idempotent", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    run_id = _worker_research_run(storage, account, topic, "attach-idempotent-run")
+    storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+    first = storage.get_job(job.id)
+
+    storage.attach_job_run(job.id, "worker-a", run_id, now=NOW + timedelta(seconds=1))
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.run_id == run_id
+    assert persisted.updated_at == first.updated_at
+    reopened.close()
+
+
+def test_attach_job_run_rejects_non_research_job(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    local = _claim(storage, _job(account, "attach-local", "attach-local"))
+    run_id = _worker_research_run(storage, account, topic, "attach-local-run")
+
+    with pytest.raises(JobRunRelationError) as exc:
+        storage.attach_job_run(local.id, "worker-a", run_id, now=NOW)
+    assert exc.value.code == "JOB_KIND_MISMATCH"
+
+    reopened, persisted = _reopen_job(settings, storage, local.id)
+    assert persisted.run_id is None and persisted.status is JobStatus.LEASED
+    reopened.close()
+
+
+def test_attach_job_run_rejects_non_research_workflow(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    malformed = _job(
+        account, "attach-wrong-workflow", "attach-wrong-workflow",
+        kind=JobKind.RESEARCH, topic_id=topic.id,
+    ).model_copy(update={"workflow": WorkflowType.ANALYTICS})
+    job = _claim(storage, malformed)
+    run_id = _worker_research_run(storage, account, topic, "attach-wrong-workflow-run")
+
+    with pytest.raises(JobRunRelationError) as exc:
+        storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+    assert exc.value.code == "JOB_WORKFLOW_MISMATCH"
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.run_id is None
+    reopened.close()
+
+
+def test_attach_job_run_rejects_run_workflow_mismatch(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "attach-run-workflow", "attach-run-workflow", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    storage.create_run(Run(
+        id="attach-run-workflow-run", account_id=account.id,
+        workflow=WorkflowType.TOPIC, status=RunStatus.DRY_RUN,
+    ))
+
+    with pytest.raises(JobRunRelationError) as exc:
+        storage.attach_job_run(job.id, "worker-a", "attach-run-workflow-run", now=NOW)
+    assert exc.value.code == "RUN_WORKFLOW_MISMATCH"
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.run_id is None
+    reopened.close()
+
+
+def test_attach_job_run_rejects_account_mismatch(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    other = account.model_copy(update={"id": "other-attach-account"})
+    other_topic = _topic(storage, other)
+    job = _claim(storage, _job(
+        account, "attach-account", "attach-account", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    run_id = _worker_research_run(storage, other, other_topic, "attach-account-run")
+
+    with pytest.raises(JobRunRelationError) as exc:
+        storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+    assert exc.value.code == "JOB_RUN_ACCOUNT_MISMATCH"
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.run_id is None
+    reopened.close()
+
+
+def test_attach_job_run_rejects_research_run_account_mismatch(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    other = account.model_copy(update={"id": "other-research-run-account"})
+    storage.ensure_account(other)
+    job = _claim(storage, _job(
+        account, "attach-research-account", "attach-research-account",
+        kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    run_id = _worker_research_run(
+        storage, account, topic, "attach-research-account-run", research_account=other,
+    )
+
+    with pytest.raises(JobRunRelationError) as exc:
+        storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+    assert exc.value.code == "JOB_RESEARCH_RUN_ACCOUNT_MISMATCH"
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.run_id is None
+    reopened.close()
+
+
+def test_attach_job_run_rejects_topic_mismatch(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    other_topic = storage.add_topic(account.id, Topic(
+        account_id=account.id, title="Different research topic", score=91, status=TopicStatus.SELECTED,
+    ))
+    job = _claim(storage, _job(
+        account, "attach-topic", "attach-topic", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    run_id = _worker_research_run(storage, account, other_topic, "attach-topic-run")
+
+    with pytest.raises(JobRunRelationError) as exc:
+        storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+    assert exc.value.code == "JOB_RUN_TOPIC_MISMATCH"
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.run_id is None
+    reopened.close()
+
+
+def test_attach_job_run_rejects_missing_research_run(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "attach-missing-research", "attach-missing-research",
+        kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    storage.create_run(Run(
+        id="attach-missing-research-run", account_id=account.id,
+        workflow=WorkflowType.RESEARCH, status=RunStatus.DRY_RUN,
+    ))
+
+    with pytest.raises(JobRunRelationError) as exc:
+        storage.attach_job_run(job.id, "worker-a", "attach-missing-research-run", now=NOW)
+    assert exc.value.code == "RESEARCH_RUN_MISSING"
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.run_id is None
+    reopened.close()
+
+
+def test_attach_job_run_rejects_disallowed_research_flow(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "attach-staged-flow", "attach-staged-flow", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    run_id = _worker_research_run(
+        storage, account, topic, "attach-staged-flow-run", flow=ResearchFlow.STAGED,
+        research_status=ResearchRunStatus.DISCOVERY_PENDING,
+    )
+
+    with pytest.raises(JobRunRelationError) as exc:
+        storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+    assert exc.value.code == "RESEARCH_RUN_FLOW_UNSUPPORTED"
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.run_id is None
+    reopened.close()
+
+
+def test_attach_job_run_rejects_different_existing_run_id(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "attach-different", "attach-different", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    first_run = _worker_research_run(storage, account, topic, "attach-different-first")
+    second_run = _worker_research_run(storage, account, topic, "attach-different-second")
+    storage.attach_job_run(job.id, "worker-a", first_run, now=NOW)
+
+    with pytest.raises(JobRunConflictError) as exc:
+        storage.attach_job_run(job.id, "worker-a", second_run, now=NOW + timedelta(seconds=1))
+    assert exc.value.code == "JOB_RUN_ALREADY_ATTACHED"
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.run_id == first_run
+    reopened.close()
+
+
+def test_attach_job_run_rejects_foreign_lease_owner(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "attach-foreign-owner", "attach-foreign-owner", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    run_id = _worker_research_run(storage, account, topic, "attach-foreign-owner-run")
+
+    with pytest.raises(LifecycleTransitionError):
+        storage.attach_job_run(job.id, "worker-b", run_id, now=NOW)
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.run_id is None and persisted.lease_owner == "worker-a"
+    reopened.close()
+
+
+def test_attach_job_run_rejects_expired_lease(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "attach-expired", "attach-expired", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    run_id = _worker_research_run(storage, account, topic, "attach-expired-run")
+
+    with pytest.raises(LifecycleTransitionError):
+        storage.attach_job_run(job.id, "worker-a", run_id, now=NOW + timedelta(seconds=6))
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.run_id is None
+    reopened.close()
+
+
+def test_attach_job_run_rejects_terminal_job(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "attach-terminal", "attach-terminal", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    run_id = _worker_research_run(storage, account, topic, "attach-terminal-run")
+    storage.complete_job(job.id, "worker-a", now=NOW + timedelta(seconds=1))
+
+    with pytest.raises(LifecycleTransitionError):
+        storage.attach_job_run(job.id, "worker-a", run_id, now=NOW + timedelta(seconds=2))
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.status is JobStatus.DONE and persisted.run_id is None
+    reopened.close()
+
+
+def test_research_job_without_run_id_recovers_to_queued(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "recovery-no-run", "recovery-no-run", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    storage.mark_job_running(job.id, "worker-a", now=NOW)
+
+    result = storage.release_or_requeue_expired_leases(now=NOW + timedelta(seconds=6))
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert result.model_dump() == {
+        "requeued_count": 1, "needs_verification_count": 0, "failed_count": 0,
+    }
+    assert persisted.status is JobStatus.QUEUED and persisted.run_id is None
+    reopened.close()
+
+
+def test_research_job_with_run_id_recovers_to_needs_verification(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = storage.enqueue_job(_job(
+        account, "recovery-attached", "recovery-attached", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    storage.reserve_job_budget(job.id, 0.25, daily_limit_usd=2.0, monthly_limit_usd=40.0, now=NOW)
+    assert storage.claim_next_job("worker-a", 5, now=NOW).job.id == job.id
+    storage.mark_job_running(job.id, "worker-a", now=NOW)
+    run_id = _worker_research_run(storage, account, topic, "recovery-attached-run")
+    storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+
+    result = storage.release_or_requeue_expired_leases(now=NOW + timedelta(seconds=6))
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert result.model_dump() == {
+        "requeued_count": 0, "needs_verification_count": 1, "failed_count": 0,
+    }
+    assert persisted.status is JobStatus.NEEDS_VERIFICATION
+    assert persisted.run_id == run_id
+    assert persisted.reserved_cost_usd == 0.25 and persisted.budget_reserved_at is not None
+    assert persisted.last_error.startswith("RESEARCH_RUN_RECONCILIATION_REQUIRED:")
+    reopened.close()
+
+
+def test_research_job_with_external_effect_keeps_existing_behavior(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = storage.enqueue_job(_job(
+        account, "recovery-external", "recovery-external", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    storage.reserve_job_budget(job.id, 0.25, daily_limit_usd=2.0, monthly_limit_usd=40.0, now=NOW)
+    assert storage.claim_next_job("worker-a", 5, now=NOW).job.id == job.id
+    storage.mark_job_running(job.id, "worker-a", now=NOW)
+    run_id = _worker_research_run(storage, account, topic, "recovery-external-run")
+    storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+    storage.mark_job_external_effect_started(job.id, "worker-a", now=NOW + timedelta(seconds=1))
+
+    result = storage.release_or_requeue_expired_leases(now=NOW + timedelta(seconds=6))
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert result.model_dump() == {
+        "requeued_count": 0, "needs_verification_count": 1, "failed_count": 0,
+    }
+    assert persisted.status is JobStatus.NEEDS_VERIFICATION and persisted.run_id == run_id
+    assert persisted.reserved_cost_usd == 0.25 and persisted.budget_reserved_at is not None
+    assert persisted.last_error == "Lease expired; external effect requires verification."
+    reopened.close()
+
+
+def test_research_job_with_terminal_success_run_reconciles_safely(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "recovery-terminal", "recovery-terminal", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    storage.mark_job_running(job.id, "worker-a", now=NOW)
+    run_id = _worker_research_run(storage, account, topic, "recovery-terminal-run")
+    storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+    storage.conn.execute("UPDATE runs SET status='SUCCESS' WHERE id=?", (run_id,))
+    storage.conn.execute("UPDATE research_runs SET status='COMPLETE' WHERE id=?", (run_id,))
+    storage.conn.commit()
+
+    result = storage.release_or_requeue_expired_leases(now=NOW + timedelta(seconds=6))
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert result.needs_verification_count == 1
+    assert persisted.status is JobStatus.NEEDS_VERIFICATION and persisted.run_id == run_id
+    assert reopened.get_run(run_id).status is RunStatus.SUCCESS
+    assert reopened.get_research_run(run_id).status is ResearchRunStatus.COMPLETE
+    reopened.close()
+
+
+def test_research_job_with_failed_or_partial_run_is_not_restarted_from_scratch(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    storage.ensure_account(account)
+    for suffix, run_status, research_status in (
+        ("failed", RunStatus.FAILED, ResearchRunStatus.FAILED),
+        ("partial", RunStatus.DRY_RUN, ResearchRunStatus.PARTIAL),
+    ):
+        topic = storage.add_topic(account.id, Topic(
+            account_id=account.id, title=f"Recovery {suffix} topic", score=90,
+            status=TopicStatus.SELECTED,
+        ))
+        job = _claim(storage, _job(
+            account, f"recovery-{suffix}", f"recovery-{suffix}",
+            kind=JobKind.RESEARCH, topic_id=topic.id,
+        ))
+        storage.mark_job_running(job.id, "worker-a", now=NOW)
+        run_id = _worker_research_run(storage, account, topic, f"recovery-{suffix}-run")
+        storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+        storage.conn.execute("UPDATE runs SET status=? WHERE id=?", (run_status.value, run_id))
+        storage.conn.execute("UPDATE research_runs SET status=? WHERE id=?", (research_status.value, run_id))
+        storage.conn.commit()
+
+    result = storage.release_or_requeue_expired_leases(now=NOW + timedelta(seconds=6))
+    storage.close()
+    reopened = SqliteStorage.open(settings.db_path)
+    assert result.model_dump() == {
+        "requeued_count": 0, "needs_verification_count": 2, "failed_count": 0,
+    }
+    for suffix in ("failed", "partial"):
+        persisted = reopened.get_job(f"recovery-{suffix}")
+        assert persisted.status is JobStatus.NEEDS_VERIFICATION
+        assert persisted.run_id == f"recovery-{suffix}-run"
+    reopened.close()
+
+
+def test_recovery_does_not_clear_existing_run_id(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = _claim(storage, _job(
+        account, "recovery-keeps-run", "recovery-keeps-run", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    run_id = _worker_research_run(storage, account, topic, "recovery-keeps-run-id")
+    storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+
+    storage.release_or_requeue_expired_leases(now=NOW + timedelta(seconds=6))
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.status is JobStatus.NEEDS_VERIFICATION and persisted.run_id == run_id
+    reopened.close()
+
+
+def test_recovery_with_run_id_preserves_budget_reservation(settings, account):
+    storage = SqliteStorage.open(settings.db_path)
+    topic = _topic(storage, account)
+    job = storage.enqueue_job(_job(
+        account, "recovery-keeps-budget", "recovery-keeps-budget",
+        kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    storage.reserve_job_budget(job.id, 0.40, daily_limit_usd=2.0, monthly_limit_usd=40.0, now=NOW)
+    assert storage.claim_next_job("worker-a", 5, now=NOW).job.id == job.id
+    run_id = _worker_research_run(storage, account, topic, "recovery-keeps-budget-run")
+    storage.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+
+    storage.release_or_requeue_expired_leases(now=NOW + timedelta(seconds=6))
+
+    reopened, persisted = _reopen_job(settings, storage, job.id)
+    assert persisted.status is JobStatus.NEEDS_VERIFICATION and persisted.run_id == run_id
+    assert persisted.reserved_cost_usd == 0.40 and persisted.budget_reserved_at is not None
+    with pytest.raises(LifecycleTransitionError):
+        reopened.release_job_budget(job.id, now=NOW + timedelta(seconds=6))
+    reopened.close()
+
+
+def test_two_recovery_workers_do_not_reconcile_same_job_twice(settings, account):
+    setup = SqliteStorage.open(settings.db_path)
+    topic = _topic(setup, account)
+    job = _claim(setup, _job(
+        account, "recovery-concurrent", "recovery-concurrent", kind=JobKind.RESEARCH, topic_id=topic.id,
+    ))
+    run_id = _worker_research_run(setup, account, topic, "recovery-concurrent-run")
+    setup.attach_job_run(job.id, "worker-a", run_id, now=NOW)
+    setup.close()
+
+    barrier = threading.Barrier(2)
+    results: list = []
+    failures: list[BaseException] = []
+
+    def recover() -> None:
+        storage = SqliteStorage.open(settings.db_path)
+        try:
+            barrier.wait()
+            results.append(storage.release_or_requeue_expired_leases(now=NOW + timedelta(seconds=6)))
+        except BaseException as exc:
+            failures.append(exc)
+        finally:
+            storage.close()
+
+    threads = [threading.Thread(target=recover) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    reopened = SqliteStorage.open(settings.db_path)
+    persisted = reopened.get_job(job.id)
+    assert failures == []
+    assert sum(result.needs_verification_count for result in results) == 1
+    assert persisted.status is JobStatus.NEEDS_VERIFICATION and persisted.run_id == run_id
+    assert reopened.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     reopened.close()
 
 

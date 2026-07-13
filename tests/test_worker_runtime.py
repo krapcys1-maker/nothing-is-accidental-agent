@@ -6,7 +6,19 @@ import threading
 
 from app.core.clock import Clock
 from app.main import main
-from app.models import Job, JobKind, JobStatus, RunStatus, Topic, TopicStatus, WorkflowType
+from app.models import (
+    Job,
+    JobKind,
+    JobStatus,
+    ResearchFlow,
+    ResearchRun,
+    ResearchRunStatus,
+    Run,
+    RunStatus,
+    Topic,
+    TopicStatus,
+    WorkflowType,
+)
 from app.policies.policy_engine import PolicyEngine
 from app.scheduler.dispatcher import JobDispatcher
 from app.scheduler.worker import Worker, WorkerIterationStatus
@@ -331,6 +343,49 @@ def test_worker_restart_recovers_safe_expired_job(settings, account):
     assert result.status is WorkerIterationStatus.DONE
     assert recovered.get_job(job.id).status is JobStatus.DONE
     assert recovered.get_job(job.id).attempts == 2
+    assert recovered.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    recovered.close()
+
+
+def test_research_job_with_run_id_is_not_dispatched_again(settings, account):
+    initial = SqliteStorage.open(settings.db_path)
+    clock = MutableClock()
+    topic = _selected_topic(initial, account)
+    _enable_offline_worker(initial, clock)
+    job = initial.enqueue_job(_research_job(account, topic, "research-recovery-attached"))
+    assert initial.claim_next_job("crashed-worker", 5, now=clock.now()) is not None
+    initial.mark_job_running(job.id, "crashed-worker", now=clock.now())
+    run_id = "research-recovery-attached-run"
+    initial.create_run(Run(
+        id=run_id, account_id=account.id, workflow=WorkflowType.RESEARCH,
+        status=RunStatus.DRY_RUN,
+    ))
+    initial.create_research_run(ResearchRun(
+        id=run_id, account_id=account.id, topic_id=int(topic.id),
+        flow=ResearchFlow.SINGLE, status=ResearchRunStatus.PENDING,
+    ))
+    initial.attach_job_run(job.id, "crashed-worker", run_id, now=clock.now())
+    initial.close()
+
+    clock.advance(6)
+    recovered = SqliteStorage.open(settings.db_path)
+    assert recovered.release_or_requeue_expired_leases(now=clock.now()).needs_verification_count == 1
+    dispatches = 0
+
+    class CountingDispatcher:
+        def dispatch(self, *_args, **_kwargs):
+            nonlocal dispatches
+            dispatches += 1
+
+    result = _worker(
+        settings, recovered, clock, owner="restarted-worker", dispatcher=CountingDispatcher(),
+    ).run_once()
+
+    persisted = recovered.get_job(job.id)
+    assert result.status is WorkerIterationStatus.IDLE
+    assert dispatches == 0
+    assert persisted.status is JobStatus.NEEDS_VERIFICATION and persisted.run_id == run_id
+    assert persisted.last_error.startswith("RESEARCH_RUN_RECONCILIATION_REQUIRED:")
     assert recovered.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     recovered.close()
 

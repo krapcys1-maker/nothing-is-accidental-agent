@@ -1,11 +1,11 @@
 # MASTER_ARCHITECTURE — Nothing Is Accidental Agent
 
 > **STATUS: JEDYNE ŹRÓDŁO PRAWDY O ARCHITEKTURZE.**
-> Data: 2026-07-13 · Wersja: 1.2 · Zastępuje: `ARCHITECTURE.md` (V1), `docs/IMPLEMENTATION_PLAN.md` (CZĘŚCI A–F), `docs/AUDYT_ARCHITEKTURY_2026-07-12.md`, `docs/architecture/SUBSTACK_INTEGRATION.md` — wszystkie przeniesione do `docs/archive/superseded_plans/`.
+> Data: 2026-07-13 · Wersja: 1.3 · Zastępuje: `ARCHITECTURE.md` (V1), `docs/IMPLEMENTATION_PLAN.md` (CZĘŚCI A–F), `docs/AUDYT_ARCHITEKTURY_2026-07-12.md`, `docs/architecture/SUBSTACK_INTEGRATION.md` — wszystkie przeniesione do `docs/archive/superseded_plans/`.
 >
 > Kolejność prac: `IMPLEMENTATION_ROADMAP.md`. Aktualny stan: `CURRENT_PROJECT_STATE.md`. Rejestr decyzji (ADR): `docs/DECISIONS.md` (nadal obowiązujący — ten dokument konsoliduje decyzje, nie zastępuje rejestru).
 >
-> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie i testach (489 passed, 2026-07-13) albo pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
+> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie i testach (512 passed, 2026-07-13) albo pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
 
 ---
 
@@ -18,7 +18,7 @@
 | Konfiguracja (.env + YAML, zero ścieżek absolutnych) | `app/core/config.py` | testy + 4 realne runy |
 | Modele domenowe (Pydantic v2) | `app/models.py` | testy |
 | SQLite + 9 migracji + repozytoria | `app/storage/` | `tests/test_storage.py`, `tests/test_research_run_flow.py`, `tests/test_jobs_queue.py` i in.; `0008` utrwala force staged runu, `0009` dodaje jobs i system_flags |
-| Trwała kolejka + worker offline | `app/storage/repositories.py`, `app/scheduler/` | atomowy enqueue/idempotency, lease, recovery, runtime flags, zamknięty dispatcher LOCAL/RESEARCH dry-run oraz CAS `job.run_id`; testy plikowej SQLite z Barrier/reopen |
+| Trwała kolejka + worker offline | `app/storage/repositories.py`, `app/scheduler/` | atomowy enqueue/idempotency, lease, runtime flags, zamknięty dispatcher LOCAL/RESEARCH dry-run oraz ścisły CAS job→run→research_run; expiry RESEARCH z `run_id` → NEEDS_VERIFICATION, bez auto-resume; testy plikowej SQLite z Barrier/reopen |
 | Policy Engine (kill-switch, runtime flags workera z SQLite, aktywność konta, budżet dzienny/miesięczny z priorytetem miesięcznym ADR-012, progi tematów) | `app/policies/policy_engine.py` | `tests/test_policy_engine.py`, `tests/test_worker_runtime.py` |
 | Księgowanie kosztów (model_usage + COSTS.csv, flaga dry_run) | `app/llm/usage_tracker.py` | 4 realne runy i kontrolowany resume potwierdziły poprawność |
 | Pipeline tematów (generacja+scoring+dedup+progi) | `app/workflows/topics/` | testy; realnie NIGDY nie uruchomiony (`NOT VERIFIED` na żywym API) |
@@ -111,7 +111,7 @@ Pełna lista 14 rozbieżności była w audycie 12.07 (zarchiwizowany). Wszystkie
 | **Orchestration layer** (`app/orchestrator/`) | składanie zależności, jedyny punkt egzekucji akcji zewnętrznych i płatnych | zero logiki domenowej; model językowy NIGDY nie woła portów bezpośrednio | zalążek (runner.py) |
 | **Scheduler** (`app/scheduler/`) | jeden worker `run_once`/kontrolowane `run_forever`, wybór według istniejącego atomowego claimu; CLI `worker --once` | nie planuje okien redakcyjnych ani nie wykonuje paid/browser actions | VERIFIED OFFLINE |
 | **Task queue** | ta sama tabela `jobs` (kolejka = scheduler w SQLite, nie osobny system) | brak zewnętrznego brokera | VERIFIED OFFLINE |
-| **Workers** | jeden proces workera, lease/heartbeat/CAS; zamknięty dispatcher LOCAL noop i RESEARCH dry-run | brak puli procesów, paid/browser oraz reapera `runs` w MVP | VERIFIED OFFLINE |
+| **Workers** | jeden proces workera, lease/heartbeat/CAS; zamknięty dispatcher LOCAL noop i RESEARCH dry-run | brak puli procesów, paid/browser, auto-resume przypiętego runu oraz reapera `runs` w MVP | VERIFIED OFFLINE |
 | **Research engine** (`app/research/`, `app/workflows/research/`) | A1 discovery → A2 per-source extraction (z fetch treści — docelowo) → B synthesis; wznawialność; evidence | nie pisze artykułów; nie publikuje | WORKING |
 | **Content planner** | wybór: artykuł vs Note, Article Brief, kandydaci harmonogramu i `SKIP` z reason code | nie generuje treści ani nie wymusza publikacji | NOT_STARTED; blueprint PROPOSED |
 | **Writing engine** (`app/workflows/content/`, przyszły) | draft artykułu/Note wg `instrukcja dla pisania artykulow/`; rewrite po audytach | nie publikuje; startuje ZAWSZE od bramki Policy | NOT_STARTED |
@@ -213,7 +213,7 @@ Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → bu
 | `research_cards` + `sources` | karta badawcza (= **research card**) + źródła finalne | question, working_thesis, confirmed/uncertain_claims, contradictions, confidence, recommendation | PROCEED/REVISE/REJECT (rekomendacja) | karta zapisywana też po odrzuceniu |
 | `research_stage_results` | log KAŻDEJ próby etapu (= **retry**/**failure** log researchu) | stage (A/A1/A2/B), status, error | SUCCESS/FAILED | append-only |
 | `model_usage` | wywołanie modelu (= **model call** + **cost record**) | run_id, task, tokeny, web_search_requests, estimated_cost_usd, dry_run | — | append-only; koszt zapisywany TAKŻE przy błędzie |
-| `jobs` | trwałe zadanie kolejki | kind, workflow, payload_json, status, priority, idempotency_key, lease, attempts, `run_id`, marker skutku i rezerwacja | QUEUED→LEASED→RUNNING→DONE/FAILED/NEEDS_VERIFICATION/CANCELLED | UNIQUE idempotency; partial UNIQUE aktywnego researchu per account/topic; worker offline wiąże nowy run przez CAS |
+| `jobs` | trwałe zadanie kolejki | kind, workflow, payload_json, status, priority, idempotency_key, lease, attempts, `run_id`, marker skutku i rezerwacja | QUEUED→LEASED→RUNNING→DONE/FAILED/NEEDS_VERIFICATION/CANCELLED | UNIQUE idempotency; partial UNIQUE aktywnego researchu per account/topic; worker wiąże wyłącznie zgodny single-flow run tego samego account/topic; expiry z `run_id` wymaga reconciliation |
 | `system_flags` | runtime safety flags workera | key, value_json, reason, updated_at | JSON boolean albo fail-closed | odczyt SQLite bez cache; `kill_switch`, `worker_enabled`, `safe_mode`, paid/browser |
 | `content_items` | artykuł/Note (= **draft**, **article**, **note**) — SCHEMAT BEZ KODU | type, title, body, status, score, research_card_id, external_url | docelowe: sekcja 5 | — |
 | `interactions` | komentarz/odpowiedź/lajk (= **interaction**, **comment**, **reply**) — SCHEMAT BEZ KODU | target_item_id, type, body, status | docelowe: sekcja 5 | — |
@@ -281,8 +281,9 @@ content_items.status (docelowe, Etap 3–5):
 jobs.status (Etap 1: storage i worker VERIFIED OFFLINE):
   QUEUED → LEASED → RUNNING → DONE | FAILED | NEEDS_VERIFICATION
   LEASED|RUNNING --(lease wygasł)--> QUEUED | FAILED | NEEDS_VERIFICATION
-  (tylko LOCAL/RESEARCH bez `external_effect_started_at` mogą wrócić do QUEUED poniżej capu;
-   BROWSER/publication-like albo job po markerze → NEEDS_VERIFICATION, nigdy auto-retry)
+  (LOCAL oraz RESEARCH bez `run_id` i bez `external_effect_started_at` mogą wrócić do QUEUED poniżej capu;
+   RESEARCH z `run_id`, BROWSER/publication-like albo job po markerze → NEEDS_VERIFICATION,
+   nigdy auto-retry ani auto-resume)
 
 approvals.decision: PENDING → APPROVED | REJECTED (terminal)
 
