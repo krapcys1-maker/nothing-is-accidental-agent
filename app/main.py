@@ -11,6 +11,7 @@ import argparse
 import logging
 import math
 import sys
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -40,6 +41,9 @@ def _configure_output() -> None:
 
 
 def _cmd_run_topics(args: argparse.Namespace) -> int:
+    if args.real:
+        print("STOP: run-topics is offline-only. Real provider calls are not available here.")
+        return 2
     summary = run_topics(count=args.count, account_id=args.account, force_real=args.real)
 
     print("\n=== WALKING SKELETON — TOPIC RUN ===")
@@ -64,6 +68,9 @@ def _cmd_run_topics(args: argparse.Namespace) -> int:
 
 
 def _cmd_run_research(args: argparse.Namespace) -> int:
+    if args.real:
+        print("STOP: run-research is offline-only. Use scripts/run_capped_research.py --real.")
+        return 2
     summary = run_research(
         topic_id=args.topic_id, account_id=args.account, force_real=args.real,
         force_re_research=args.force_re_research,
@@ -161,6 +168,7 @@ def _cmd_enqueue_research(args: argparse.Namespace) -> int:
 
 def _build_worker(settings: Settings) -> tuple[Worker, SqliteStorage]:
     """Composes the same runtime dependencies used by the application, once."""
+    settings = replace(settings, dry_run=True)
     storage = SqliteStorage.open(settings.db_path)
     clock = SystemClock()
     policy = PolicyEngine(settings, storage, clock)
@@ -179,7 +187,7 @@ def _build_worker(settings: Settings) -> tuple[Worker, SqliteStorage]:
 
 
 def _cmd_worker(args: argparse.Namespace) -> int:
-    settings = load_settings()
+    settings = replace(load_settings(), dry_run=True)
     worker, storage = _build_worker(settings)
     try:
         if args.once:
@@ -209,10 +217,11 @@ def _cmd_reap_runs(args: argparse.Namespace) -> int:
     settings = load_settings()
     storage = SqliteStorage.open(settings.db_path)
     try:
-        now = SystemClock().now()
-        recovery = storage.release_or_requeue_expired_leases(now=now)
+        clock = SystemClock()
+        now = clock.now()
+        recovery = storage.release_or_requeue_expired_leases(clock=clock)
         result = storage.reap_orphaned_stale_runs(
-            now - timedelta(seconds=args.stale_after_seconds), now=now,
+            now - timedelta(seconds=args.stale_after_seconds), clock=clock,
         )
         print(
             "REAPER: "

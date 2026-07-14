@@ -428,6 +428,14 @@ Research nie dostał drugiego pipeline'u. Worker wszedł przez istniejący offli
 
 To nadal nie jest dowód gotowości do działania na zewnątrz. Jest dowód lokalny: **19 nowych testów**, dwa połączenia SQLite z barierą, restart/reopen, heartbeat, utrata lease i kontrolowane oczekiwanie pustej kolejki; pełny suite ma **489 testów**. API, sieć, realna baza, paid/browser i koszt pozostały nietknięte: **0 USD**.
 
+### 2026-07-13 — Odczyt zegara przenieśliśmy za drzwi SQLite
+
+Końcowe review znalazło detal, który w systemie współbieżnym nie był detalem: część operacji zapamiętywała „teraz”, a dopiero potem czekała na write lock. Jeśli lease kończył się podczas czekania, stary czas mógłby udawać świeże uprawnienie. Każda chroniona operacja lifecycle, recovery i rezerwacji bierze więc `Clock.now()` dopiero po `BEGIN IMMEDIATE`; granica pozostała prosta: owner ma prawo dokładnie do `lease_expires_at >= now`, recovery działa dopiero dla `< now`.
+
+Drugi problem dotyczył pliku, który wyglądał jak księga, choć nią nie jest. `model_usage` w SQLite jest kanonem. `COSTS.csv` powstaje po commitcie jako wygodny, odtwarzalny eksport; kontrolowana awaria appendu daje ostrzeżenie, nie może już zmienić poprawnego wyniku researchu. Trzeci P1 domknął nietypowy wyjątek po utworzeniu runu: zamiast zakończyć sam job, worker atomowo ustawia job, run i research_run na `FAILED`.
+
+Testy użyły prawdziwych wątków, osobnych połączeń plikowej SQLite i kontrolowanego zegara: operacja startowała przed expiry, blokowała się na locku, zegar przechodził za granicę, a po zwolnieniu locka nie mogła nic zapisać. Ta sama próba obejmuje fenced usage, success, failure oraz rezerwację/zwolnienie. Jest też test heartbeat↔recovery, dwa testy awarii CSV i reopen z `integrity_check=ok`. Wynik: **42 restart acceptance**, **683 testy** pełnego suite, 0 USD, bez API, browsera, publikacji ani zmiany prawdziwej bazy. Etap 1 wraca tylko do **candidate complete, awaiting independent review**.
+
 ## 2026-07-13 — Sam identyfikator runu jest już historią, nie zaproszeniem do retry
 
 Kolejna mała korekta dotyczy chwili między powstaniem researchu a końcem joba. Worker zdążył utworzyć run i zapisać jego ID, ale mógł zniknąć zanim zapisał `DONE`. Dawniej recovery oddałoby taki job kolejce, a nowy worker musiałby wybierać między ponownym researchiem i ślepą odmową.
@@ -473,3 +481,40 @@ Kolejka miała już pole na najwcześniejszą godzinę uruchomienia, lecz sama l
 To ważne zwłaszcza w dni zmiany czasu. Niejednoznaczna godzina jesienią ma z góry wybraną wcześniejszą interpretację, a nieistniejący start wiosną przesuwa się do pierwszej prawdziwej minuty po luce. Wszystko jest zapisywane w UTC wraz z krótkim kodem przyczyny, a nie wolnym komentarzem. Dopiero atomowy claim sprawdza, czy `earliest_run_at` już nadeszło. Job czekający nie dostaje lease, nie zwiększa attempts i nie uruchamia workera.
 
 Dodana komenda tworzy wyłącznie lokalny job researchu z `dry_run=true`; nie ma trybu realnego, dispatchu, API, sieci ani researchu. **31 testów** sprawdza okna, weekend, DST, zapis/reopen, współbieżność SQLite i idempotencję; pełny suite ma **623 test cases passed**. Nie zmieniono migracji ani prawdziwej bazy. Koszt: **0 USD**.
+
+## 2026-07-13 — Trzy commity to nie jedna historia
+
+Końcowy test restartu znalazł wadę, której zwykłe zielone testy nie pokazały. Worker najpierw trwale zapisywał run, potem jego researchowy odpowiednik, a dopiero na końcu wpisywał ID do joba. Gdy proces znikał w tej szczelinie, baza miała dwa osierocone rekordy, a kolejny worker — całkiem logicznie, lecz błędnie — tworzył drugi komplet.
+
+Naprawa nie szuka „podobnego” runu i niczego nie sprząta po cichu. Jedna operacja `initialize_research_run_for_job` otwiera `BEGIN IMMEDIATE`, sprawdza prawo workera do lease, tworzy oba rekordy i wykonuje CAS `jobs.run_id IS NULL`; dopiero wtedy commit. Przerwanie przed commitem zostawia nic. Przerwanie po nim zostawia jeden, jasno przypięty komplet, który po expiry trafia do `NEEDS_VERIFICATION`, nie do powtórnego researchu.
+
+Czternaście deterministycznych scenariuszy użyło plikowej SQLite, nowych runtime’ów po reopen, failpointów SQL oraz dwóch połączeń z `Barrier`. Sprawdziły też parity bezpośredniej usługi i workera, fencing starego ownera i granicę joba przyszłego. Pełny suite: **655 passed**. Nie było API, sieci, publikacji ani realnego kosztu. Etap 1 jest **candidate complete, awaiting independent review**.
+## 2026-07-13 — Drugi P1 był sześć linijek za pierwszym
+
+Pierwsza poprawka sprawiła, że job, run i research_run powstawały razem. Niezależne review zadało jednak lepsze pytanie: co może zrobić stary proces już po tym commicie? Odpowiedź była niewygodna. Zanim główny worker wracał z dispatchera i oglądał swój guard, pipeline potrafił dopisać usage, koszt, FAILED albo całą kartę. Lease wygasł, recovery przejęło historię, ale stary kod nadal miał zwykłe metody zapisu.
+
+Naprawa nie polega na częstszym pytaniu wątku heartbeat. Po atomowej inicjalizacji powstaje zamknięty context z jobem, ownerem, runem i zegarem. Każdy zapis jobowego researchu otwiera SQLite `BEGIN IMMEDIATE`, dopiero po zdobyciu locka pobiera aktualny czas UTC i sprawdza pełną relację. Jeśli owner jest stary, lease wygasł albo job jest już `NEEDS_VERIFICATION`, pipeline kończy się bez usage, bez kosztu, bez FAILED i bez karty.
+
+Macierz 26 scenariuszy psuje execution przed recovery, po recovery i podczas klienta. Dwa połączenia ruszają jednocześnie z recovery i stale write; oba nie mogą wygrać. Osobne failpointy psują moment po CAS i sam rollback, a pierwotny błąd nadal pozostaje pierwotny. Pełny suite ma 667 zielonych testów. Bez API, browsera i realnego researchu; koszt 0 USD. Etap 1 wraca tylko do **candidate complete, awaiting independent review**.
+
+## 2026-07-14 — Sukces nie może mieć epilogu, który go unieważnia
+
+Ostatni P1 był zdradliwie krótki. Pipeline RESEARCH umiał już atomowo zapisać kartę, źródła, wynik runu i zużyty temat. Po powrocie do workera następował jednak „porządkowy” heartbeat i zwykłe `complete_job`. To były dwa dodatkowe miejsca, w których po trwałym sukcesie mógł pojawić się wyjątek. Szeroki catch potrafił wtedy oznaczyć sam job jako FAILED — baza nie była uszkodzona technicznie, lecz opowiadała dwie sprzeczne historie.
+
+Granica sukcesu została więc przesunięta tam, gdzie należy: do jednej transakcji SQLite. `finalize_job_research_execution` zapisuje teraz także `jobs=DONE`, końcowe czasy, wyczyszczony lease i zwolnioną rezerwację. Dispatcher zwraca mały, typowany wynik: workflow może powiedzieć, że sam zakończył lifecycle; tylko workflow wymagający ogólnego zakończenia oddaje tę pracę workerowi. Dlatego LOCAL nadal przechodzi przez generic completion, ale RESEARCH po commicie nie wykonuje już dodatkowego heartbeat, complete ani fail.
+
+Test najpierw wymusił błąd czwartego heartbeat i był czerwony. Po naprawie sprawdza 53 scenariusze: awarie przed i po UPDATE joba, crash po commicie, pełną macierz wygasłego ownera przed recovery, zegar claimu po write locku oraz prawdziwy błąd ścieżki katalogu dla `COSTS.csv`. Wszystko działa wyłącznie na plikowej SQLite i fake researchu: **695 testów zielonych**, `integrity_check=ok`, bez API, browsera, publikacji i realnego researchu. Koszt tej pracy: **0 USD**. Etap 1 pozostaje **candidate complete, awaiting independent review**.
+
+## 2026-07-14 — Jedna zgoda nie może zamienić się w trzy żądania
+
+Następny audyt nie kwestionował już kolejki. Znalazł coś wcześniejszego: moment, w którym program oddaje sterowanie bibliotece dostawcy. Jedna linia bez jawnego ustawienia retry znaczyła, że SDK mogło po timeout albo 429 spróbować jeszcze raz. Dla zwykłej aplikacji bywa to wygodne. Dla systemu z limitem dziennym i osobną zgodą na każde płatne wywołanie jest to ukryte drugie „tak”.
+
+WAVE 0A odjęła temu miejscu domysły. Każdy klient SDK dostaje zero retry i skończony timeout. Sam klient research też nie przechodzi drugi raz przez własną pętlę. Zwykłe komendy i worker stały się bezwarunkowo offline, nawet gdy środowisko przypadkiem zawiera klucz i `DRY_RUN=false`. Realny adapter może powstać tylko z jednej, jawnej komendy capped z `--real`; bez tej flagi zostaje estymata, nie klient. Cennik jest teraz bramką, a nie ozdobą: brak, zero, liczba ujemna, `NaN` lub nieskończoność zatrzymują realny run przed konstrukcją adaptera.
+
+To nie zamyka Etapu 1. To przywraca znaczenie słowu „jedna próba”, ale ten etap naprawy przypomniał jeszcze jedną rzecz: test też może naruszyć granicę, którą ma sprawdzać. Pierwsza wersja testu zwykłego CLI nie przekazała ustawień aż do runnera i zapisała fake/dry-run artefakty do domyślnej bazy. Test został odizolowany, nie było sieci, API, publikacji ani kosztu, lecz nie znaleziono bitowej kopii poprzedniego pliku.
+
+Po forensic review właściciel zatwierdził wariant **APPROVE WITH P2**. Nie próbowaliśmy udawać, że odnaleźliśmy dawną wersję pliku. Zamiast tego na osobnej kopii usunęliśmy tylko rekordy, które potrafiliśmy nazwać po ID i powiązać z testem, odtworzyliśmy cztery sekwencje, a potem dwa razy otworzyliśmy wynik tylko do odczytu. Zachowały się wszystkie prawdziwe ślady: trzynaście wpisów kosztowych o łącznej wartości 0,684580 USD oraz run `c01171bc` z kartą #2, czterema zweryfikowanymi źródłami i siedmioma wpisami usage. Dopiero wtedy, po backupie stanu po incydencie, kandydat zastąpił główny plik bazy.
+
+Nowy baseline ma SHA-256 `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`. To **logiczne** odtworzenie, nie magiczne cofnięcie historii bajt po bajcie: brak starego snapshotu pozostaje faktem. Nie stwierdziliśmy utraty realnych danych.
+
+Po niezależnym review WAVE 0A została formalnie zamknięta jako **APPROVED WITH P2**. Trzy punkty, które wymagały tej fali — P0-01 o ukrytej próbie SDK oraz P1-01/P1-02 o niejawnej ścieżce realnej i fail-open pricingu — są zamknięte. To nie jest jednak finał Etapu 1: pozostałe P1 nadal go blokują. Do backlogu trafiają trzy mniejsze rzeczy: twardszy test dokładnie na granicy `messages.create`, pełne wyprowadzenie cen do parametrów i poprawna kolejność aktualizowania dokumentów. Tak wygląda uczciwe zamknięcie: nie „wszystko gotowe”, tylko dokładnie wiadomo, co zostało domknięte, co nie, i dlaczego.

@@ -2,20 +2,16 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Callable
 
 from app.core.clock import Clock, SystemClock
 from app.core.config import Settings, load_settings
-from app.llm.anthropic_client import AnthropicLLMClient
 from app.llm.base import LLMClient
 from app.llm.fake_client import FakeLLMClient
-from app.llm.model_router import ModelRouter
 from app.llm.usage_tracker import UsageTracker
-from app.models import Account, Topic, TopicStatus
+from app.models import Account, ResearchJobExecution, Topic, TopicStatus
 from app.policies.policy_engine import PolicyEngine
 from app.ports.notification import LogNotification
 from app.ports.storage import StoragePort
-from app.research.anthropic_client import AnthropicResearchClient
 from app.research.base import ResearchClient
 from app.research.fake_client import FakeResearchClient
 from app.storage.repositories import SqliteStorage
@@ -29,29 +25,21 @@ from app.workflows.topics.discover import TopicRunSummary, run_topic_discovery
 
 DEFAULT_ACCOUNT = "nothing_is_accidental"
 
+_REAL_PROVIDER_ROOT_MESSAGE = (
+    "Ordinary app.main and worker roots are permanently offline. Real research requires "
+    "scripts/run_capped_research.py --real; real topic generation is unsupported."
+)
+
 
 def _build_llm(settings: Settings, force_real: bool) -> LLMClient:
-    use_real = force_real or not settings.dry_run
-    router = ModelRouter(settings)
-    if use_real:
-        if not settings.anthropic_api_key:
-            raise RuntimeError("Brak ANTHROPIC_API_KEY w .env — nie mogę wołać realnego API.")
-        return AnthropicLLMClient(settings.anthropic_api_key, router.model_for("topics"))
-    # dry_run: klient zastępczy; etykieta modelu z env (jeśli jest), inaczej marker.
+    if force_real:
+        raise RuntimeError(_REAL_PROVIDER_ROOT_MESSAGE)
     return FakeLLMClient(model=settings.model_fast or "dry-run-fake")
 
 
 def _build_research_client(settings: Settings, force_real: bool) -> ResearchClient:
-    use_real = force_real or not settings.dry_run
-    router = ModelRouter(settings)
-    if use_real:
-        if not settings.anthropic_api_key:
-            raise RuntimeError("Brak ANTHROPIC_API_KEY w .env — nie mogę wołać realnego API.")
-        return AnthropicResearchClient(
-            settings.anthropic_api_key, router.model_for("research"),
-            max_retries=settings.research_max_retries,
-            timeout_seconds=settings.research_timeout_seconds,
-        )
+    if force_real:
+        raise RuntimeError(_REAL_PROVIDER_ROOT_MESSAGE)
     return FakeResearchClient(scenario="good",
                               model=settings.model_quality or "dry-run-fake-research")
 
@@ -60,7 +48,8 @@ def run_topics(count: int = 6, account_id: str = DEFAULT_ACCOUNT,
                force_real: bool = False, settings: Settings | None = None) -> TopicRunSummary:
     settings = settings or load_settings()
     if force_real:
-        settings = replace(settings, dry_run=False)  # realny run: koszt liczony jako realny
+        raise RuntimeError(_REAL_PROVIDER_ROOT_MESSAGE)
+    settings = replace(settings, dry_run=True)
     storage = SqliteStorage.open(settings.db_path)
     clock = SystemClock()
 
@@ -96,8 +85,7 @@ def run_research(topic_id: int | None = None, account_id: str = DEFAULT_ACCOUNT,
             "--estimate-only)."
         )
     settings = settings or load_settings()
-    if force_real:
-        settings = replace(settings, dry_run=False)  # realny run: koszt liczony jako realny
+    settings = replace(settings, dry_run=True)
     storage = SqliteStorage.open(settings.db_path)
     clock = SystemClock()
 
@@ -143,7 +131,7 @@ def run_research_dry_run(
     storage: StoragePort,
     policy: PolicyEngine,
     clock: Clock,
-    run_created_callback: Callable[[str], None] | None = None,
+    job_execution: ResearchJobExecution,
 ) -> ResearchRunSummary:
     """Runs the existing manual research pipeline through its offline-only path.
 
@@ -151,8 +139,7 @@ def run_research_dry_run(
     second database connection and never writes the human research log.  It is
     deliberately unable to select a real client or force a resume.
     """
-    if not settings.dry_run:
-        raise RuntimeError("Worker research accepts only dry_run=True.")
+    settings = replace(settings, dry_run=True)
     research_client = _build_research_client(settings, force_real=False)
     usage_tracker = UsageTracker(settings, storage)
     notifier = LogNotification()
@@ -161,6 +148,6 @@ def run_research_dry_run(
         settings=settings, storage=storage, research_client=research_client,
         usage_tracker=usage_tracker, policy=policy, notifier=notifier,
         clock=clock, research_log=None,
-        run_created_callback=run_created_callback,
+        job_execution=job_execution,
         force_re_research=False,
     )

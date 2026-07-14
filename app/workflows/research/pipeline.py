@@ -29,8 +29,10 @@ from app.llm.base import Usage
 from app.llm.usage_tracker import UsageTracker
 from app.models import (
     Account,
+    JobExecutionContext,
     ResearchCard,
     ResearchFlow,
+    ResearchJobExecution,
     ResearchRecommendation,
     ResearchRun,
     ResearchRunStatus,
@@ -105,7 +107,6 @@ class ResearchRunSummary:
 
 
 ResearchLogWriter = Callable[[ResearchCard, Topic, "ResearchRunSummary"], None]
-ResearchRunCreatedCallback = Callable[[str], None]
 _LOGGER = logging.getLogger(__name__)
 _AUDIT_ERROR_MESSAGE_LIMIT = 500
 _AUDIT_SECRET_PATTERNS = (
@@ -116,6 +117,22 @@ _AUDIT_SECRET_PATTERNS = (
     ),
     re.compile(r"(?i)\bbearer\s+[^\s,;]+"),
 )
+
+
+class ResearchExecutionAlreadyInitialized(RuntimeError):
+    """Worker znalazł już trwały run; kontynuacja wymaga jawnej weryfikacji."""
+
+
+def _best_effort_worker_terminal_diagnostic(effect: Callable[[], None], *, label: str) -> None:
+    """Keep post-commit diagnostics from rewriting a worker's canonical result."""
+    try:
+        effect()
+    except Exception as exc:
+        _LOGGER.warning(
+            "WORKER_TERMINAL_DIAGNOSTIC_FAILED label=%s error=%s",
+            label,
+            type(exc).__name__,
+        )
 
 
 def _sanitize_audit_error_text(value: object, *, limit: int) -> str:
@@ -214,6 +231,7 @@ def _configure_attempt_control(
     estimated_attempt_cost: float,
     task: str,
     dry_run: bool,
+    job_execution: JobExecutionContext | None = None,
 ) -> None:
     """Connect a client retry loop to workflow-owned policy and persistence."""
     configure = getattr(research_client, "configure_attempt_control", None)
@@ -221,6 +239,8 @@ def _configure_attempt_control(
         return
 
     def budget_callback(context: AttemptBudgetContext) -> None:
+        if job_execution is not None:
+            storage.assert_job_execution_active(job_execution)
         current = _current_run_cost(storage, run_id)
         projected = round(current + context.estimated_attempt_cost, 6)
         decision = policy.check_run_budget(
@@ -233,7 +253,12 @@ def _configure_attempt_control(
             raise ResearchBudgetError(decision.reason, code=decision.code)
 
     def retry_usage_callback(usage: Usage, model: str) -> None:
-        usage_tracker.record(run_id, model, usage, task=task, dry_run=dry_run)
+        if job_execution is None:
+            usage_tracker.record(run_id, model, usage, task=task, dry_run=dry_run)
+        else:
+            usage_tracker.record_job(
+                job_execution, model, usage, task=task, dry_run=dry_run,
+            )
 
     configure(
         budget_callback=budget_callback,
@@ -515,7 +540,7 @@ def run_research_pipeline(
     notifier: NotificationPort,
     clock: Clock | None = None,
     research_log: ResearchLogWriter | None = None,
-    run_created_callback: ResearchRunCreatedCallback | None = None,
+    job_execution: ResearchJobExecution | None = None,
     force_re_research: bool = False,
     max_retries: int | None = None,
     run_cap_usd: float | None = None,
@@ -524,6 +549,7 @@ def run_research_pipeline(
     clock = clock or SystemClock()
     summary = ResearchRunSummary(run_id=None, account_id=account.id,
                                  topic_id=int(topic.id), dry_run=settings.dry_run)
+    execution_context: JobExecutionContext | None = None
 
     # 1. Bramka idempotencji przed polityką, budżetem, runem i klientem.
     ensure_topic_can_start_research(storage, account, topic, force_re_research)
@@ -555,30 +581,53 @@ def run_research_pipeline(
         summary.block_code, summary.block_reason = budget.code, budget.reason
         return summary
 
-    # 4. Run.
-    run_id = new_run_id()
+    # 4. Run. Worker Etapu 1 przekazuje trwałe uprawnienie lease; wtedy trzy
+    # rekordy (run, research_run, jobs.run_id) muszą powstać w jednej transakcji.
+    if job_execution is None:
+        run_id = new_run_id()
+        run_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.RUNNING
+        storage.create_run(Run(id=run_id, account_id=account.id,
+                               workflow=WorkflowType.RESEARCH, status=run_status,
+                               current_state="research"))
+        storage.create_research_run(ResearchRun(
+            id=run_id, account_id=account.id, topic_id=int(topic.id),
+            flow=ResearchFlow.SINGLE, status=ResearchRunStatus.PENDING,
+        ))
+    else:
+        initialized = storage.initialize_research_run_for_job(
+            job_execution.job_id, job_execution.lease_owner, new_run_id(),
+            clock=clock,
+        )
+        run_id = initialized.run.id
+        if not initialized.created:
+            raise ResearchExecutionAlreadyInitialized(
+                "A durable research run is already attached to this active job."
+            )
+        execution_context = JobExecutionContext(
+            job_id=job_execution.job_id,
+            lease_owner=job_execution.lease_owner,
+            run_id=run_id,
+            clock=clock,
+        )
+        # Pierwszy authoritative checkpoint po atomowym związaniu job→run.
+        storage.assert_job_execution_active(execution_context)
     summary.run_id = run_id
-    run_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.RUNNING
-    storage.create_run(Run(id=run_id, account_id=account.id,
-                           workflow=WorkflowType.RESEARCH, status=run_status,
-                           current_state="research"))
-    storage.create_research_run(ResearchRun(
-        id=run_id, account_id=account.id, topic_id=int(topic.id),
-        flow=ResearchFlow.SINGLE, status=ResearchRunStatus.PENDING,
-    ))
-    if run_created_callback is not None:
-        run_created_callback(run_id)
 
     _configure_attempt_control(
         research_client, policy=policy, account=account, storage=storage,
         usage_tracker=usage_tracker, run_id=run_id, run_cap_usd=run_cap_usd,
         estimated_attempt_cost=worst_case.total_usd, task="research",
-        dry_run=settings.dry_run)
+        dry_run=settings.dry_run, job_execution=execution_context)
 
     # 5. Wywołanie klienta (web search). Błędy: timeout/parse -> run FAILED.
     try:
+        if execution_context is not None:
+            storage.assert_job_execution_active(execution_context)
         result = research_client.run_research(plan)
     except ResearchError as exc:
+        if execution_context is not None:
+            # Utrata lease ma pierwszeństwo: nie wolno utrwalić ani usage, ani FAILED.
+            storage.assert_job_execution_active(execution_context)
         _mark_budget_block(summary, exc)
         audit_error = _format_audit_error("run_research", exc)
         # Nawet gdy research się nie powiódł (np. ucięty/niepoprawny JSON), wywołanie
@@ -587,10 +636,16 @@ def run_research_pipeline(
         cost = 0.0
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
-            usage_row = usage_tracker.record(
-                run_id, getattr(exc, "model", None) or "unknown", exc_usage,
-                task="research", dry_run=settings.dry_run,
-            )
+            if execution_context is None:
+                usage_row = usage_tracker.record(
+                    run_id, getattr(exc, "model", None) or "unknown", exc_usage,
+                    task="research", dry_run=settings.dry_run,
+                )
+            else:
+                usage_row = usage_tracker.record_job(
+                    execution_context, getattr(exc, "model", None) or "unknown",
+                    exc_usage, task="research", dry_run=settings.dry_run,
+                )
             cost = usage_row.estimated_cost_usd
             summary.cost_usd = cost
             summary.model = getattr(exc, "model", None) or ""
@@ -599,11 +654,26 @@ def run_research_pipeline(
             summary.web_search_requests = usage_row.web_search_requests
         cost = _current_run_cost(storage, run_id)
         summary.cost_usd = cost
-        storage.finish_run(run_id, RunStatus.FAILED.value, cost, error=audit_error)
-        storage.mark_research_run_failed(run_id, error=audit_error)
-        notifier.notify("error", "Research nieudany", str(exc), account.id)
+        if execution_context is None:
+            storage.finish_run(run_id, RunStatus.FAILED.value, cost, error=audit_error)
+            storage.mark_research_run_failed(run_id, error=audit_error)
+        else:
+            storage.fail_job_research_execution(
+                execution_context, cost, error=audit_error, terminalize_job=True,
+            )
+        if execution_context is None:
+            notifier.notify("error", "Research nieudany", str(exc), account.id)
+        else:
+            _best_effort_worker_terminal_diagnostic(
+                lambda: notifier.notify("error", "Research nieudany", str(exc), account.id),
+                label="research_failure_notification",
+            )
         summary.error = str(exc)
         return summary
+
+    if execution_context is not None:
+        # Długie wywołanie mogło zakończyć się po expiry/recovery.
+        storage.assert_job_execution_active(execution_context)
 
     draft = result.draft
 
@@ -621,8 +691,16 @@ def run_research_pipeline(
                         account.id)
 
     # 7. Koszt.
-    usage_row = usage_tracker.record(run_id, result.model, result.usage,
-                                     task="research", dry_run=settings.dry_run)
+    if execution_context is None:
+        usage_row = usage_tracker.record(
+            run_id, result.model, result.usage,
+            task="research", dry_run=settings.dry_run,
+        )
+    else:
+        usage_row = usage_tracker.record_job(
+            execution_context, result.model, result.usage,
+            task="research", dry_run=settings.dry_run,
+        )
     summary.cost_usd = _current_run_cost(storage, run_id)
     summary.model = result.model
     summary.input_tokens = usage_row.input_tokens
@@ -657,25 +735,46 @@ def run_research_pipeline(
             for s in draft.sources
         ],
     )
-    card = storage.add_research_card(card)
+    if execution_context is None:
+        card = storage.add_research_card(card)
+    else:
+        storage.assert_job_execution_active(execution_context)
+        card = storage.finalize_job_research_execution(
+            execution_context, card, total_cost_usd=summary.cost_usd,
+            terminal_run_status=(
+                RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS
+            ),
+        )
     summary.card = card
     summary.sources_count = len(card.sources)
 
     # 10. Jedna granica transakcji: COMPLETE + terminalny runs + USED.
-    storage.finalize_research_success(
-        run_id, research_card_id=int(card.id), total_cost_usd=summary.cost_usd,
-        stage_b_completed=False,
-        terminal_run_status=RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS,
-    )
+    if execution_context is None:
+        storage.finalize_research_success(
+            run_id, research_card_id=int(card.id), total_cost_usd=summary.cost_usd,
+            stage_b_completed=False,
+            terminal_run_status=RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS,
+        )
 
     # 11. Aktualizacja dokumentacji (opcjonalna — realny run dopisuje do RESEARCH_LOG.md).
     if research_log is not None:
-        research_log(card, topic, summary)
+        if execution_context is None:
+            research_log(card, topic, summary)
+        else:
+            _best_effort_worker_terminal_diagnostic(
+                lambda: research_log(card, topic, summary), label="research_success_log",
+            )
 
-    notifier.notify(
+    success_notification = lambda: notifier.notify(
         "info", "Research zakończony",
         f"rekomendacja={summary.recommendation}, źródła={summary.sources_count}, "
         f"koszt~{summary.cost_usd:.6f} USD (dry_run={settings.dry_run})", account.id)
+    if execution_context is None:
+        success_notification()
+    else:
+        _best_effort_worker_terminal_diagnostic(
+            success_notification, label="research_success_notification",
+        )
     return summary
 
 

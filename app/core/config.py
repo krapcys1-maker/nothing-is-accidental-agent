@@ -10,6 +10,7 @@ Zasady:
 from __future__ import annotations
 
 import os
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 class ConfigError(RuntimeError):
     pass
+
+
+REAL_PROVIDER_PRICING_KEYS = (
+    "input_per_mtok",
+    "output_per_mtok",
+    "cache_read_per_mtok",
+    "cache_write_per_mtok",
+    "web_search_per_1k",
+)
 
 
 @dataclass
@@ -77,6 +87,30 @@ class Settings:
         if acc is None:
             raise ConfigError(f"Nie znaleziono konta o id={account_id!r} w konfiguracji.")
         return acc
+
+
+def require_valid_real_provider_pricing(settings: Settings) -> None:
+    """Fail closed before constructing a paid provider client.
+
+    Dry-run calculations intentionally keep accepting an incomplete price table:
+    they are useful offline and must never be confused with permission to make a
+    paid call.  A real request, on the other hand, needs every cost component
+    that its provider can report, including cache and server-side web search.
+    """
+    invalid: list[str] = []
+    for key in REAL_PROVIDER_PRICING_KEYS:
+        value = settings.pricing.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            invalid.append(key)
+            continue
+        numeric = float(value)
+        if not math.isfinite(numeric) or numeric <= 0:
+            invalid.append(key)
+    if invalid:
+        raise ConfigError(
+            "Realny provider zablokowany: brakujÄ…cy, niepoprawny albo niedodatni "
+            f"cennik dla: {', '.join(invalid)}. Nie tworzÄ™ klienta ani nie woÅ‚am API."
+        )
 
 
 def _first_existing(*paths: Path) -> Path | None:

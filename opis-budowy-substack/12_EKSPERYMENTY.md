@@ -96,4 +96,31 @@ Pełny raport zapisuje dziesięć proponowanych eksperymentów E1–E10 wraz z h
 
 ## [2026-07-13] Polityka okien redakcyjnych — kontrola techniczna, nie eksperyment
 
-Deterministyczne wyznaczenie `earliest_run_at` i `schedule_reason` przed enqueue nie tworzy artykułu, Note’a, publikacji ani wariantu E1–E10. Testuje wyłącznie lokalną regułę: IANA/DST, okno, czas wskazany przez operatora i eligibility claimu. Job oczekujący nie jest uruchamiany ani obserwowany na Substacku, więc nie istnieje hipoteza, metryka ani wynik eksperymentu. Status techniczny: polityka okien i claim eligibility VERIFIED OFFLINE; akceptacja restartu oraz system scheduler/service NOT_STARTED; koszt 0 USD.
+Deterministyczne wyznaczenie `earliest_run_at` i `schedule_reason` przed enqueue nie tworzy artykułu, Note’a, publikacji ani wariantu E1–E10. Testuje wyłącznie lokalną regułę: IANA/DST, okno, czas wskazany przez operatora i eligibility claimu. Job oczekujący nie jest uruchamiany ani obserwowany na Substacku, więc nie istnieje hipoteza, metryka ani wynik eksperymentu. Status techniczny: polityka okien i claim eligibility VERIFIED OFFLINE; koszt 0 USD.
+
+## [2026-07-13] Final restart acceptance — kontrola techniczna, nie eksperyment wzrostowy
+
+To nie jest test odbiorców ani publikacji. Zbiór 14 scenariuszy odtwarzał wyłącznie lokalne stany SQLite: crash przed commitem i po nim, recovery, stale-owner fencing, future-job boundary, parity direct service–worker i integrity. Najważniejszy wynik: atomowa inicjalizacja run/research_run/`job.run_id` nie zostawia osieroconego kompletu i nie tworzy dubla po restarcie.
+
+Nie zmieniły się żadne metryki Substacka, nie wykonano API ani realnego researchu, a koszt rzeczywisty wyniósł 0 USD. Wynik techniczny: Etap 1 candidate complete, awaiting independent review; system scheduler/service nadal NOT_STARTED.
+## [2026-07-13] Old-owner fencing — kontrola bezpieczeństwa, nie eksperyment
+
+Macierz 26 restart acceptance tests nie uruchamia hipotezy redakcyjnej ani wariantu wzrostowego. Sprawdza wyłącznie lokalny inwariant: po expiry/recovery stary worker nie zapisze usage, kosztu, karty ani terminalnego statusu, a recovery i stale write na dwóch połączeniach SQLite nie mogą oba wygrać.
+
+Nie wykonano API, browsera, publikacji, researchu live ani obserwacji odbiorców. Wynik techniczny: 667 testów zielonych, Etap 1 candidate awaiting independent review, koszt 0 USD. EXP-01–EXP-08 i E1–E10 pozostają nieuruchomione.
+
+## [2026-07-13] Post-lock lease i CSV — kontrola techniczna, nie eksperyment
+
+Siedem scenariuszy odpala operacje kolejki przed expiry i blokuje je na prawdziwym `BEGIN IMMEDIATE`, aby zegar przekroczył expiry przed dopuszczeniem zapisu. Osobne testy sprawdzają race heartbeat↔recovery, awarię pochodnego `COSTS.csv` i atomowy failure po inicjalizacji. To test praw zapisu i trwałości, nie wariant treści, hipoteza wzrostowa ani obserwacja odbiorców.
+
+Nie uruchomiono API, browsera, publikacji ani realnego researchu. Wynik: 42 restart acceptance, 683 testy, `integrity_check=ok`, koszt 0 USD; Etap 1 pozostaje candidate awaiting independent review. EXP-01–EXP-08 i E1–E10 nie zmieniły statusu.
+
+## [2026-07-14] Zamknięty wynik dispatchu — kontrola techniczna, nie eksperyment wzrostowy
+
+Test nie mierzył odbiorców ani treści. Na syntetycznej plikowej SQLite odtworzono kontrolowany failure RESEARCH, błędny string zamiast enumu oraz świadomie uszkodzony wynik po realnym atomic success. Badano wyłącznie inwariant: po terminalizacji workflow worker nie ma prawa do dalszego canonical write.
+
+Wynik: `WORKFLOW_FAILED` nie wywołuje generic `fail_job`; malformed result kończy się jawnym błędem kontraktu bez heartbeat, completion, failure albo `LOST_LEASE`; atomic success pozostaje DONE/COMPLETE/USED z kartą po reopen. Dodatkowy fault test zachowuje primary error, gdy rollback sam zawodzi. 58 acceptance i pełny suite 700 passed, `integrity_check=ok`, koszt 0 USD. Nie uruchomiono API, browsera, publikacji ani realnego researchu; EXP-01–EXP-08 i E1–E10 pozostają PLANNED.
+
+## [2026-07-14] Zamknięcie WAVE 0A nie jest eksperymentem
+
+Niezależne review potwierdziło P0=0 i P1=0 dla WAVE 0A, a kontrola bazy potwierdziła zachowanie realnych danych po logicznym odtworzeniu. To wciąż nie jest eksperyment z odbiorcami, wzrostem ani publikacją: nie użyto API, browsera, sieci ani kosztu. WAVE 0A została formalnie zamknięta jako **APPROVED WITH P2**; Etap 1 pozostaje BLOCKED przez inne P1, a E1–E10 nie zmieniają statusu.

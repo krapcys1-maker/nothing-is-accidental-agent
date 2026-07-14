@@ -2,15 +2,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Callable, Protocol
 
 from app.core.clock import Clock, SystemClock
 from app.core.config import ConfigError, Settings
-from app.models import Account, Job, JobKind, Topic, WorkflowType
+from app.models import Account, Job, JobKind, ResearchJobExecution, Topic, WorkflowType
 from app.orchestrator.runner import run_research_dry_run
 from app.policies.policy_engine import PolicyDecision, PolicyEngine
 from app.ports.storage import StoragePort
-from app.workflows.research.pipeline import ResearchRunSummary
+from app.workflows.research.pipeline import (
+    ResearchExecutionAlreadyInitialized,
+    ResearchRunSummary,
+)
 
 
 class DispatchError(RuntimeError):
@@ -32,12 +36,44 @@ class PolicyDeniedError(DispatchError):
 
 
 class UncertainExternalEffectError(DispatchError):
-    """Reserved for a future dispatcher after a durable effect marker exists."""
+    """Durable execution state exists, but this worker cannot safely continue it."""
+
+
+class DispatchContractError(TypeError):
+    """Dispatcher returned a value outside the closed worker terminalization contract."""
+
+
+class TerminalizationMode(str, Enum):
+    """Explicitly assigns the durable terminalization owner for one dispatch."""
+
+    WORKER_MUST_COMPLETE = "WORKER_MUST_COMPLETE"
+    WORKFLOW_TERMINALIZED = "WORKFLOW_TERMINALIZED"
+    WORKFLOW_FAILED = "WORKFLOW_FAILED"
 
 
 @dataclass(frozen=True)
 class DispatchResult:
+    terminalization: TerminalizationMode
     run_id: str | None = None
+    detail: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.terminalization, TerminalizationMode):
+            raise DispatchContractError(
+                "DispatchResult.terminalization must be a TerminalizationMode."
+            )
+
+    @classmethod
+    def worker_must_complete(cls, *, run_id: str | None = None, detail: str | None = None) -> "DispatchResult":
+        return cls(TerminalizationMode.WORKER_MUST_COMPLETE, run_id, detail)
+
+    @classmethod
+    def workflow_succeeded(cls, *, run_id: str | None = None, detail: str | None = None) -> "DispatchResult":
+        return cls(TerminalizationMode.WORKFLOW_TERMINALIZED, run_id, detail)
+
+    @classmethod
+    def workflow_failed(cls, *, run_id: str | None = None, detail: str | None = None) -> "DispatchResult":
+        return cls(TerminalizationMode.WORKFLOW_FAILED, run_id, detail)
 
 
 class ResearchDryRunCallable(Protocol):
@@ -50,7 +86,7 @@ class ResearchDryRunCallable(Protocol):
         storage: StoragePort,
         policy: PolicyEngine,
         clock: Clock,
-        run_created_callback: Callable[[str], None] | None = None,
+        job_execution: ResearchJobExecution,
     ) -> ResearchRunSummary: ...
 
 
@@ -91,7 +127,7 @@ class JobDispatcher:
         if job.kind is JobKind.LOCAL:
             self._validate_local(job)
             heartbeat()
-            return DispatchResult()
+            return DispatchResult.worker_must_complete()
         if job.kind is JobKind.RESEARCH:
             return self._dispatch_research_dry_run(job, account, lease_owner, heartbeat)
         raise UnsupportedJobError("Unsupported job kind for the offline worker.")
@@ -124,25 +160,30 @@ class JobDispatcher:
         # alive without a second, competing heartbeat implementation.
         heartbeat()
 
-        def attach_run(run_id: str) -> None:
-            self._storage.attach_job_run(
-                job.id, lease_owner, run_id, now=self._clock.now(),
+        try:
+            summary = self._research_dry_run(
+                account, topic,
+                settings=self._settings, storage=self._storage, policy=self._policy,
+                clock=self._clock,
+                job_execution=ResearchJobExecution(job_id=job.id, lease_owner=lease_owner),
             )
-
-        summary = self._research_dry_run(
-            account, topic,
-            settings=self._settings, storage=self._storage, policy=self._policy,
-            clock=self._clock, run_created_callback=attach_run,
-        )
-        heartbeat()
+        except ResearchExecutionAlreadyInitialized as exc:
+            raise UncertainExternalEffectError(
+                "Research execution was already initialized; verification is required."
+            ) from exc
         if summary.blocked:
             raise PolicyDeniedError(PolicyDecision.block(
                 summary.block_code or "PIPELINE_BLOCKED",
                 "Existing research pipeline rejected the dry-run.",
             ))
         if summary.error or summary.run_id is None:
-            raise DispatchError("Research dry-run did not produce a durable run.")
-        return DispatchResult(run_id=summary.run_id)
+            return DispatchResult.workflow_failed(
+                run_id=summary.run_id,
+                detail="Research dry-run failed.",
+            )
+        return DispatchResult.workflow_succeeded(
+            run_id=summary.run_id,
+        )
 
     def _validate_research_payload(self, job: Job) -> Topic:
         if job.workflow is not WorkflowType.RESEARCH:

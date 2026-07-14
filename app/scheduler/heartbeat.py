@@ -6,6 +6,7 @@ import threading
 from datetime import datetime
 from typing import Callable, Protocol
 
+from app.core.clock import Clock
 from app.ports.storage import LifecycleTransitionError
 
 
@@ -14,7 +15,7 @@ class HeartbeatStorage(Protocol):
 
     def heartbeat_job_lease(
         self, job_id: str, lease_owner: str, lease_seconds: int,
-        *, now: datetime | None = None,
+        *, now: datetime | None = None, clock: Clock | None = None,
     ) -> None: ...
 
     def close(self) -> None: ...
@@ -100,7 +101,8 @@ class HeartbeatGuard:
         startup_timeout_seconds: float,
         shutdown_timeout_seconds: float,
         storage_factory: Callable[[], HeartbeatStorage],
-        now: Callable[[], datetime],
+        now: Callable[[], datetime] | None = None,
+        clock: Clock | None = None,
         waiter: HeartbeatWaiter,
         ready_waiter: ReadyWaiter = _wait_for_ready,
         thread_joiner: ThreadJoiner = _join_thread,
@@ -127,7 +129,10 @@ class HeartbeatGuard:
         self._startup_timeout_seconds = startup_timeout_seconds
         self._shutdown_timeout_seconds = shutdown_timeout_seconds
         self._storage_factory = storage_factory
+        if now is not None and clock is not None:
+            raise ValueError("Pass either now or clock, not both.")
         self._now = now
+        self._clock = clock
         self._waiter = waiter
         self._ready_waiter = ready_waiter
         self._thread_joiner = thread_joiner
@@ -239,12 +244,21 @@ class HeartbeatGuard:
                 if self._stop_event.is_set():
                     return
                 try:
-                    storage.heartbeat_job_lease(
-                        self._job_id,
-                        self._lease_owner,
-                        self._lease_seconds,
-                        now=self._now(),
-                    )
+                    if self._clock is not None:
+                        storage.heartbeat_job_lease(
+                            self._job_id,
+                            self._lease_owner,
+                            self._lease_seconds,
+                            clock=self._clock,
+                        )
+                    else:
+                        assert self._now is not None
+                        storage.heartbeat_job_lease(
+                            self._job_id,
+                            self._lease_owner,
+                            self._lease_seconds,
+                            now=self._now(),
+                        )
                 except LifecycleTransitionError as exc:
                     self.record_lost_lease(exc)
                     return

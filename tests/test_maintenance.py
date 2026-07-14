@@ -48,13 +48,13 @@ class RecordingStorage:
     def __init__(self, events: list[str]) -> None:
         self.events = events
 
-    def release_or_requeue_expired_leases(self, *, now=None) -> JobRecoveryResult:
-        assert now is NOW
+    def release_or_requeue_expired_leases(self, *, now=None, clock=None) -> JobRecoveryResult:
+        assert (clock.now() if clock is not None else now) is NOW
         self.events.append("recovery")
         return JobRecoveryResult(requeued_count=1)
 
-    def reap_orphaned_stale_runs(self, stale_before, *, now=None) -> RunReaperResult:
-        assert now is NOW
+    def reap_orphaned_stale_runs(self, stale_before, *, now=None, clock=None) -> RunReaperResult:
+        assert (clock.now() if clock is not None else now) is NOW
         assert stale_before == NOW - timedelta(seconds=5)
         self.events.append("reaper")
         return RunReaperResult(checked_count=1, stopped_count=1)
@@ -443,14 +443,18 @@ class BarrierStorage:
         self._barrier = barrier
         self._barrier_method = barrier_method
 
-    def release_or_requeue_expired_leases(self, *, now=None):
+    def release_or_requeue_expired_leases(self, *, now=None, clock=None):
         if self._barrier_method == "recovery":
             self._barrier.wait()
+        if clock is not None:
+            return self._storage.release_or_requeue_expired_leases(clock=clock)
         return self._storage.release_or_requeue_expired_leases(now=now)
 
-    def reap_orphaned_stale_runs(self, stale_before, *, now=None):
+    def reap_orphaned_stale_runs(self, stale_before, *, now=None, clock=None):
         if self._barrier_method == "reaper":
             self._barrier.wait()
+        if clock is not None:
+            return self._storage.reap_orphaned_stale_runs(stale_before, clock=clock)
         return self._storage.reap_orphaned_stale_runs(stale_before, now=now)
 
     def close(self) -> None:
@@ -566,12 +570,12 @@ def test_maintenance_concurrency_preserves_sqlite_integrity(settings, storage, a
 
 
 class FailingRecoveryStorage(RecordingStorage):
-    def release_or_requeue_expired_leases(self, *, now=None):
+    def release_or_requeue_expired_leases(self, *, now=None, clock=None):
         raise RuntimeError("recovery failed")
 
 
 class FailingReaperStorage(RecordingStorage):
-    def reap_orphaned_stale_runs(self, stale_before, *, now=None):
+    def reap_orphaned_stale_runs(self, stale_before, *, now=None, clock=None):
         raise RuntimeError("reaper failed")
 
 
@@ -815,7 +819,7 @@ def test_maintenance_keyboard_interrupt_closes_open_storage(settings, monkeypatc
     events: list[str] = []
 
     class InterruptingRecoveryStorage(RecordingStorage):
-        def release_or_requeue_expired_leases(self, *, now=None):
+        def release_or_requeue_expired_leases(self, *, now=None, clock=None):
             self.events.append("recovery")
             raise KeyboardInterrupt("sk-ant-maintenance-test-secret")
 

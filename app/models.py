@@ -13,6 +13,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.core.clock import Clock
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -195,6 +197,33 @@ class JobLease(BaseModel):
     job: Job
     lease_owner: str
     lease_expires_at: datetime
+
+
+@dataclass(frozen=True)
+class ResearchJobExecution:
+    """Uprawnienie workera do jednorazowej atomowej inicjalizacji researchu."""
+
+    job_id: str
+    lease_owner: str
+
+
+@dataclass(frozen=True)
+class JobExecutionContext:
+    """Zamknięte uprawnienie do mutacji jednego runu pod aktywnym lease.
+
+    Powstaje dopiero z wyniku atomowej inicjalizacji. Zegar jest zależnością
+    procesu, nie wartością z payloadu; każda mutacja pobiera z niego świeży czas.
+    """
+
+    job_id: str
+    lease_owner: str
+    run_id: str
+    clock: Clock
+    kind: JobKind = JobKind.RESEARCH
+    workflow: WorkflowType = WorkflowType.RESEARCH
+
+    def now(self) -> datetime:
+        return self.clock.now()
 
 
 class JobReservation(BaseModel):
@@ -475,6 +504,16 @@ class ResearchRun(BaseModel):
     error: str | None = None
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
+
+
+@dataclass(frozen=True)
+class ResearchRunInitialization:
+    """Wynik atomowego utworzenia albo odczytu runu przypiętego do joba."""
+
+    job: Job
+    run: Run
+    research_run: ResearchRun
+    created: bool
 
 
 class ResearchSourceRecord(BaseModel):

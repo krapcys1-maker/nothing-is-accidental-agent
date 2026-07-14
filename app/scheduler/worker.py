@@ -8,11 +8,14 @@ import time
 from typing import Callable, Protocol
 
 from app.core.clock import Clock, SystemClock
-from app.models import Job
+from app.models import Job, JobExecutionContext, JobKind, WorkflowType
 from app.policies.policy_engine import PolicyEngine
-from app.ports.storage import LifecycleTransitionError, StoragePort
+from app.ports.storage import LifecycleTransitionError, StaleJobExecutionError, StoragePort
 from app.scheduler.dispatcher import (
+    DispatchContractError,
     DispatchError,
+    DispatchResult,
+    TerminalizationMode,
     UncertainExternalEffectError,
 )
 from app.scheduler.heartbeat import (
@@ -46,7 +49,7 @@ class WorkerIterationResult:
 class Dispatcher(Protocol):
     def dispatch(
         self, job: Job, *, lease_owner: str, heartbeat: Callable[[], None],
-    ) -> object: ...
+    ) -> DispatchResult: ...
 
 
 class Worker:
@@ -109,7 +112,7 @@ class Worker:
             return WorkerIterationResult(WorkerIterationStatus.BLOCKED, detail=runtime.code)
 
         lease = self._storage.claim_next_job(
-            self._lease_owner, self._lease_seconds, now=self._clock.now(),
+            self._lease_owner, self._lease_seconds, clock=self._clock,
         )
         if lease is None:
             return WorkerIterationResult(WorkerIterationStatus.IDLE)
@@ -123,7 +126,7 @@ class Worker:
 
         guard: HeartbeatGuard | None = None
         try:
-            self._storage.mark_job_running(job.id, self._lease_owner, now=self._clock.now())
+            self._storage.mark_job_running(job.id, self._lease_owner, clock=self._clock)
             self._heartbeat(job.id)
             guard = HeartbeatGuard(
                 job_id=job.id,
@@ -133,7 +136,7 @@ class Worker:
                 startup_timeout_seconds=self._heartbeat_startup_timeout_seconds,
                 shutdown_timeout_seconds=self._heartbeat_shutdown_timeout_seconds,
                 storage_factory=self._heartbeat_storage_factory,
-                now=self._clock.now,
+                clock=self._clock,
                 waiter=self._heartbeat_waiter_factory(),
                 ready_waiter=self._heartbeat_ready_waiter,
                 thread_joiner=self._heartbeat_thread_joiner,
@@ -145,8 +148,9 @@ class Worker:
                 return self._heartbeat_guard_failure(job, guard)
 
             dispatch_error: Exception | None = None
+            dispatch_result: object | None = None
             try:
-                self._dispatcher.dispatch(
+                dispatch_result = self._dispatcher.dispatch(
                     job,
                     lease_owner=self._lease_owner,
                     heartbeat=lambda: self._dispatcher_heartbeat(job.id, guard),
@@ -156,8 +160,32 @@ class Worker:
             finally:
                 guard.stop()
 
-            # Lost lease wins over every dispatcher exception: the original worker
-            # no longer owns the right to record any terminal result.
+            if isinstance(dispatch_error, DispatchContractError):
+                raise dispatch_error
+
+            if dispatch_error is None:
+                terminalization = self._dispatch_terminalization(dispatch_result)
+
+                # A workflow that committed its own terminal transaction owns the
+                # canonical outcome. Guard cleanup can observe the now-cleared lease,
+                # but it must never overwrite that durable result.
+                if terminalization is TerminalizationMode.WORKFLOW_TERMINALIZED:
+                    assert isinstance(dispatch_result, DispatchResult)
+                    return WorkerIterationResult(
+                        WorkerIterationStatus.DONE, job.id, dispatch_result.detail,
+                    )
+                if terminalization is TerminalizationMode.WORKFLOW_FAILED:
+                    assert isinstance(dispatch_result, DispatchResult)
+                    return WorkerIterationResult(
+                        WorkerIterationStatus.FAILED, job.id, dispatch_result.detail,
+                    )
+                if terminalization is not TerminalizationMode.WORKER_MUST_COMPLETE:
+                    raise DispatchContractError(
+                        f"Unsupported dispatch terminalization mode: {terminalization!r}."
+                    )
+
+            # Lost lease wins over every non-terminal dispatcher exception: the
+            # original worker no longer owns the right to record any result.
             if guard.lost_lease is not None:
                 return self._lost_lease(job)
             if guard.failure is not None:
@@ -165,9 +193,13 @@ class Worker:
             if dispatch_error is not None:
                 return self._dispatch_failure(job, dispatch_error)
 
+            # Only the explicit local/non-research ownership mode reaches generic
+            # worker finalization.  Every workflow-owned terminal mode returned above.
             self._heartbeat(job.id)
-            self._storage.complete_job(job.id, self._lease_owner, now=self._clock.now())
+            self._storage.complete_job(job.id, self._lease_owner, clock=self._clock)
             return WorkerIterationResult(WorkerIterationStatus.DONE, job.id)
+        except DispatchContractError:
+            raise
         except LifecycleTransitionError:
             return self._lost_lease(job)
         except Exception:
@@ -194,7 +226,7 @@ class Worker:
 
     def _heartbeat(self, job_id: str) -> None:
         self._storage.heartbeat_job_lease(
-            job_id, self._lease_owner, self._lease_seconds, now=self._clock.now(),
+            job_id, self._lease_owner, self._lease_seconds, clock=self._clock,
         )
 
     def _dispatcher_heartbeat(self, job_id: str, guard: HeartbeatGuard) -> None:
@@ -204,14 +236,58 @@ class Worker:
             guard.record_lost_lease(exc)
             raise
 
+    @staticmethod
+    def _dispatch_terminalization(result: object | None) -> TerminalizationMode:
+        if not isinstance(result, DispatchResult):
+            raise DispatchContractError("Dispatcher did not return a DispatchResult.")
+        if not isinstance(result.terminalization, TerminalizationMode):
+            raise DispatchContractError(
+                "Dispatcher returned a DispatchResult with an invalid terminalization mode."
+            )
+        return result.terminalization
+
     def _dispatch_failure(self, job: Job, error: Exception) -> WorkerIterationResult:
+        if isinstance(error, StaleJobExecutionError):
+            return self._lost_lease(job)
         if isinstance(error, UncertainExternalEffectError):
             return self._needs_verification(job, "External effect outcome is uncertain.")
         if isinstance(error, LifecycleTransitionError):
             return self._lost_lease(job)
         if isinstance(error, DispatchError):
             return self._fail(job, self._safe_dispatch_error(error))
-        return self._fail(job, "Worker execution failed before a confirmed external effect.")
+        return self._fail_unexpected_research_pipeline(job)
+
+    def _fail_unexpected_research_pipeline(self, job: Job) -> WorkerIterationResult:
+        """Close every attached research record together after an unknown error."""
+        current = self._storage.get_job(job.id)
+        if (
+            current is None
+            or current.run_id is None
+            or current.kind is not JobKind.RESEARCH
+            or current.workflow is not WorkflowType.RESEARCH
+        ):
+            return self._fail(job, "Worker execution failed before a confirmed external effect.")
+        error = "UNEXPECTED_RESEARCH_PIPELINE_EXCEPTION"
+        execution = JobExecutionContext(
+            job_id=current.id,
+            lease_owner=self._lease_owner,
+            run_id=current.run_id,
+            clock=self._clock,
+        )
+        try:
+            self._storage.fail_job_research_execution(
+                execution,
+                None,
+                error,
+                terminalize_job=True,
+            )
+        except (LifecycleTransitionError, StaleJobExecutionError):
+            return self._lost_lease(job)
+        except Exception:
+            # The failure boundary itself is unavailable; do not fall back to a
+            # standalone job failure that could orphan the initialized run.
+            return self._lost_lease(job)
+        return WorkerIterationResult(WorkerIterationStatus.FAILED, job.id, error)
 
     @staticmethod
     def _lost_lease(job: Job) -> WorkerIterationResult:
@@ -233,7 +309,7 @@ class Worker:
 
     def _fail(self, job: Job, error: str) -> WorkerIterationResult:
         try:
-            self._storage.fail_job(job.id, self._lease_owner, error, now=self._clock.now())
+            self._storage.fail_job(job.id, self._lease_owner, error, clock=self._clock)
         except LifecycleTransitionError:
             return WorkerIterationResult(WorkerIterationStatus.LOST_LEASE, job.id)
         return WorkerIterationResult(WorkerIterationStatus.FAILED, job.id, error)
@@ -241,7 +317,7 @@ class Worker:
     def _needs_verification(self, job: Job, error: str) -> WorkerIterationResult:
         try:
             self._storage.mark_job_needs_verification(
-                job.id, self._lease_owner, error, now=self._clock.now(),
+                job.id, self._lease_owner, error, clock=self._clock,
             )
         except LifecycleTransitionError:
             return WorkerIterationResult(WorkerIterationStatus.LOST_LEASE, job.id)

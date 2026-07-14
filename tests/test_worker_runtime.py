@@ -25,7 +25,7 @@ from app.models import (
 )
 from app.policies.policy_engine import PolicyEngine
 from app.research.fake_client import FakeResearchClient
-from app.scheduler.dispatcher import DispatchError, JobDispatcher
+from app.scheduler.dispatcher import DispatchError, DispatchResult, JobDispatcher
 from app.scheduler.heartbeat import HeartbeatGuard, HeartbeatWaiter
 from app.scheduler.worker import Worker, WorkerIterationStatus
 from app.storage.repositories import SqliteStorage
@@ -249,6 +249,27 @@ def test_worker_executes_local_job_once(settings, storage, account):
     assert completed.status is JobStatus.DONE
     assert completed.attempts == 1
     assert completed.started_at is not None and completed.finished_at is not None
+
+
+def test_non_research_workflow_still_uses_worker_completion(settings, storage, account, monkeypatch):
+    clock = MutableClock()
+    storage.ensure_account(account)
+    _enable_offline_worker(storage, clock)
+    job = storage.enqueue_job(_local_job(account, "local-generic-completion"))
+    complete_calls = 0
+    original_complete = storage.complete_job
+
+    def complete_spy(*args, **kwargs):
+        nonlocal complete_calls
+        complete_calls += 1
+        return original_complete(*args, **kwargs)
+
+    monkeypatch.setattr(storage, "complete_job", complete_spy)
+    result = _worker(settings, storage, clock).run_once()
+
+    assert result.status is WorkerIterationStatus.DONE
+    assert complete_calls == 1
+    assert storage.get_job(job.id).status is JobStatus.DONE
 
 
 def test_worker_executes_research_dry_run(settings, storage, account):
@@ -496,6 +517,7 @@ def test_research_job_with_run_id_is_not_dispatched_again(settings, account):
         def dispatch(self, *_args, **_kwargs):
             nonlocal dispatches
             dispatches += 1
+            return DispatchResult.worker_must_complete()
 
     result = _worker(
         settings, recovered, clock, owner="restarted-worker", dispatcher=CountingDispatcher(),
@@ -536,6 +558,7 @@ def test_reaper_does_not_dispatch_or_resume_research(settings, account):
         def dispatch(self, *_args, **_kwargs):
             nonlocal dispatches
             dispatches += 1
+            return DispatchResult.worker_must_complete()
 
     result = _worker(
         settings, storage, clock, owner="restarted-worker", dispatcher=CountingDispatcher(),
@@ -597,6 +620,7 @@ def test_worker_heartbeat_keeps_lease_alive(settings, storage, account):
             heartbeat()
             clock.advance(6)
             heartbeat()
+            return DispatchResult.worker_must_complete()
 
     result = _worker(
         settings, storage, clock, dispatcher=LongLocalDispatcher(), lease_seconds=10,
@@ -615,6 +639,7 @@ def test_lost_lease_prevents_terminal_success(settings, storage, account):
     class LeaseLosingDispatcher:
         def dispatch(self, _job, *, lease_owner, heartbeat):
             clock.advance(11)
+            return DispatchResult.worker_must_complete()
 
     result = _worker(
         settings, storage, clock, dispatcher=LeaseLosingDispatcher(), lease_seconds=10,
@@ -638,6 +663,7 @@ def test_terminal_job_is_not_dispatched_again(settings, storage, account):
             nonlocal calls
             calls += 1
             heartbeat()
+            return DispatchResult.worker_must_complete()
 
     worker = _worker(settings, storage, clock, dispatcher=CountingDispatcher())
     assert worker.run_once().status is WorkerIterationStatus.DONE
@@ -709,6 +735,7 @@ def test_periodic_heartbeat_extends_lease_during_dispatch(settings, storage, acc
         def dispatch(self, *_args, **_kwargs):
             dispatch_started.set()
             assert release_dispatch.wait(timeout=2)
+            return DispatchResult.worker_must_complete()
 
     worker_factory = _thread_worker_factory(
         settings, clock, dispatcher=BlockingDispatcher(), lease_seconds=10,
@@ -753,6 +780,7 @@ def test_periodic_heartbeat_prevents_recovery_during_long_dispatch(settings, sto
             dispatches += 1
             dispatch_started.set()
             assert release_dispatch.wait(timeout=2)
+            return DispatchResult.worker_must_complete()
 
     worker_factory = _thread_worker_factory(
         settings, clock, dispatcher=BlockingDispatcher(), lease_seconds=10,
@@ -795,6 +823,7 @@ def test_lost_lease_during_dispatch_prevents_done(settings, storage, account):
         def dispatch(self, *_args, **_kwargs):
             dispatch_started.set()
             assert release_dispatch.wait(timeout=2)
+            return DispatchResult.worker_must_complete()
 
     worker_factory = _thread_worker_factory(
         settings, clock, dispatcher=BlockingDispatcher(), lease_seconds=10,
@@ -923,6 +952,7 @@ def test_heartbeat_guard_stops_after_lost_lease(settings, storage, account):
         def dispatch(self, *_args, **_kwargs):
             dispatch_started.set()
             assert release_dispatch.wait(timeout=2)
+            return DispatchResult.worker_must_complete()
 
     worker_factory = _thread_worker_factory(
         settings, clock, dispatcher=BlockingDispatcher(), lease_seconds=10,
@@ -1003,6 +1033,7 @@ def test_two_workers_still_execute_job_exactly_once_with_periodic_heartbeat(sett
             dispatch_started.set()
             barrier.wait()
             assert release_dispatch.wait(timeout=2)
+            return DispatchResult.worker_must_complete()
 
     def first_worker() -> None:
         store = SqliteStorage.open(settings.db_path)
@@ -1198,6 +1229,7 @@ def test_heartbeat_guard_start_timeout_fails_closed(settings, storage, account):
         def dispatch(self, *_args, **_kwargs):
             nonlocal dispatches
             dispatches += 1
+            return DispatchResult.worker_must_complete()
 
     def timeout_ready_waiter(_event, _timeout):
         assert factory_started.wait(timeout=1)
@@ -1288,6 +1320,7 @@ def _shutdown_timeout_result(settings, storage, account, *, dispatch_error: Exce
             assert release_dispatch.wait(timeout=1)
             if dispatch_error is not None:
                 raise dispatch_error
+            return DispatchResult.worker_must_complete()
 
     worker_factory = _thread_worker_factory(
         settings, clock, dispatcher=BlockingDispatcher(), lease_seconds=10,
@@ -1330,6 +1363,7 @@ def test_heartbeat_storage_factory_exception_blocks_dispatch(settings, storage, 
         def dispatch(self, *_args, **_kwargs):
             nonlocal dispatches
             dispatches += 1
+            return DispatchResult.worker_must_complete()
 
     def broken_factory():
         raise RuntimeError("factory failure")
@@ -1368,6 +1402,7 @@ def test_unexpected_heartbeat_storage_error_prevents_done(settings, storage, acc
         def dispatch(self, *_args, **_kwargs):
             dispatch_started.set()
             assert release_dispatch.wait(timeout=1)
+            return DispatchResult.worker_must_complete()
 
     worker_factory = _thread_worker_factory(
         settings, clock, dispatcher=BlockingDispatcher(), lease_seconds=10,
@@ -1443,6 +1478,7 @@ def test_heartbeat_waiter_wake_error_does_not_block_shutdown(settings, storage, 
     class WaitingDispatcher:
         def dispatch(self, *_args, **_kwargs):
             assert waiter.waiting.wait(timeout=1)
+            return DispatchResult.worker_must_complete()
 
     result = _worker(
         settings, storage, clock, dispatcher=WaitingDispatcher(),

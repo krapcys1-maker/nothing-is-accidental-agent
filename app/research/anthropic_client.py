@@ -30,6 +30,7 @@ Zasady (obowiązują we wszystkich trzech metodach):
 from __future__ import annotations
 
 import json
+import math
 from typing import Callable
 
 from app.llm.base import Usage
@@ -64,6 +65,7 @@ from app.research.base import (
 )
 
 _RETRYABLE_SERVER_STATUS_CODES = frozenset({500, 502, 503, 504})
+_SDK_MAX_RETRIES = 0
 
 Caller = Callable[[ResearchPlan], tuple[str, Usage]]
 GatherCaller = Callable[[ResearchPlan], tuple[str, Usage]]
@@ -300,7 +302,7 @@ class AnthropicResearchClient:
                  discover_caller: "DiscoverCaller | None" = None,
                  extract_caller: "ExtractCaller | None" = None,
                  synthesize_from_cards_caller: "SynthesizeFromCardsCaller | None" = None,
-                 max_retries: int = 2, timeout_seconds: int = 60,
+                 max_retries: int = 0, timeout_seconds: float = 60,
                  max_web_searches: int | None = None,
                  gather_max_tokens: int = 1200,
                  synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
@@ -308,7 +310,9 @@ class AnthropicResearchClient:
                  extract_max_tokens: int = 1500,
                  max_web_searches_per_source: int = 1) -> None:
         if max_retries < 0:
-            raise ValueError("max_retries musi być >= 0.")
+            raise ValueError("max_retries must be non-negative.")
+        if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be finite and positive.")
         self.model = model
         self._api_key = api_key
         self._caller = caller or self._default_caller
@@ -318,6 +322,8 @@ class AnthropicResearchClient:
         self._extract_caller = extract_caller or self._default_extract_caller
         self._synthesize_from_cards_caller = (
             synthesize_from_cards_caller or self._default_synthesize_from_cards_caller)
+        # Kept as metadata so offline pipeline estimates can preserve their
+        # historical contract. It never controls a client-side retry loop.
         self._max_retries = max_retries
         self.max_retries = max_retries
         self._timeout_seconds = timeout_seconds
@@ -337,7 +343,6 @@ class AnthropicResearchClient:
         self._max_web_searches_per_source = max_web_searches_per_source
         self.call_count = 0
         self._attempt_budget_callback: AttemptBudgetCallback | None = None
-        self._retry_usage_callback: RetryUsageCallback | None = None
         self._estimated_attempt_cost = 0.0
 
     def configure_attempt_control(
@@ -355,49 +360,35 @@ class AnthropicResearchClient:
         if estimated_attempt_cost < 0:
             raise ValueError("estimated_attempt_cost musi być >= 0.")
         self._attempt_budget_callback = budget_callback
-        self._retry_usage_callback = retry_usage_callback
+        # Preserved only for compatible workflow hooks. A real client never
+        # retries, so it never emits retry-specific usage.
+        del retry_usage_callback
         self._estimated_attempt_cost = estimated_attempt_cost
 
     def _before_attempt(self, attempt: int) -> None:
         if self._attempt_budget_callback is not None:
             self._attempt_budget_callback(AttemptBudgetContext(
                 attempt_number=attempt + 1,
-                max_attempts=self._max_retries + 1,
+                max_attempts=1,
                 estimated_attempt_cost=self._estimated_attempt_cost,
             ))
 
-    def _record_provider_usage_before_retry(self, exc: ResearchProviderError) -> None:
-        if exc.usage is None or self._retry_usage_callback is None:
-            return
-        self._retry_usage_callback(exc.usage, exc.model or self.model)
-        # Ownership moved to model_usage; prevent the outer workflow from
-        # recording the same usage again if a later attempt also fails.
-        exc.usage = None
-
-    # --- wspólny szkielet retry + parsowanie (dzielony przez wszystkie 3 metody) ---
     def _run_with_retry_and_parse(self, call_fn, parse_fn, empty_error_msg: str):
-        last_error: Exception | None = None
-        for attempt in range(self._max_retries + 1):
-            self._before_attempt(attempt)
-            self.call_count += 1
-            try:
-                text, usage = call_fn()
-            except ResearchProviderError as exc:
-                last_error = exc
-                if exc.retryable and attempt < self._max_retries:
-                    self._record_provider_usage_before_retry(exc)
-                    continue
-                raise
-            try:
-                parsed = parse_fn(text)
-            except ResearchParseError as exc:
-                # Wywołanie API się powiodło (mamy realny `usage`) — dopinamy je do
-                # wyjątku, żeby rzeczywisty koszt nie zniknął z księgowości pipeline'u.
-                exc.usage = usage
-                exc.model = self.model
-                raise
-            return parsed, usage
-        raise last_error or ResearchTimeout(empty_error_msg)
+        # One logical attempt is exactly one caller invocation. Do not turn a
+        # transient typed error into another potentially paid provider request.
+        del empty_error_msg
+        self._before_attempt(0)
+        self.call_count += 1
+        text, usage = call_fn()
+        try:
+            parsed = parse_fn(text)
+        except ResearchParseError as exc:
+            # A successful provider response may still fail to parse; preserve
+            # its real usage for the workflow ledger.
+            exc.usage = usage
+            exc.model = self.model
+            raise
+        return parsed, usage
 
     def run_research(self, plan: ResearchPlan) -> ResearchResult:
         """Pojedyncze wywołanie: search + analiza naraz. Działa, ale patrz docstring
@@ -433,38 +424,29 @@ class AnthropicResearchClient:
         self, call_fn, parse_fn, empty_error_msg: str, *,
         stage: str, max_output_tokens: int, typed_truncation: bool = False,
     ):
-        last_error: Exception | None = None
-        for attempt in range(self._max_retries + 1):
-            self._before_attempt(attempt)
-            self.call_count += 1
-            try:
-                text, usage, stop_reason = call_fn()
-            except ResearchProviderError as exc:
-                last_error = exc
-                if exc.retryable and attempt < self._max_retries:
-                    self._record_provider_usage_before_retry(exc)
-                    continue
-                raise
-            # Stage A1 intentionally salvages complete JSONL rows before a cut
-            # final row; A2 retains its established parse-error contract. Only
-            # stage B is all-or-nothing and needs the dedicated truncation type.
-            if typed_truncation and stop_reason == "max_tokens":
-                raise ResearchTruncatedError(
-                    f"{stage}: odpowiedź ucięta; stop_reason=max_tokens; "
-                    f"max_output_tokens={max_output_tokens}.",
-                    usage=usage, model=self.model, raw_text=text,
-                    stop_reason=stop_reason,
-                )
-            try:
-                parsed = parse_fn(text)
-            except ResearchParseError as exc:
-                exc.usage = usage
-                exc.model = self.model
-                exc.raw_text = text
-                exc.stop_reason = stop_reason
-                raise
-            return parsed, usage, text, stop_reason
-        raise last_error or ResearchTimeout(empty_error_msg)
+        del empty_error_msg
+        self._before_attempt(0)
+        self.call_count += 1
+        text, usage, stop_reason = call_fn()
+        # Stage A1 intentionally salvages complete JSONL rows before a cut
+        # final row; A2 retains its established parse-error contract. Only
+        # stage B is all-or-nothing and needs the dedicated truncation type.
+        if typed_truncation and stop_reason == "max_tokens":
+            raise ResearchTruncatedError(
+                f"{stage}: odpowiedź ucięta; stop_reason=max_tokens; "
+                f"max_output_tokens={max_output_tokens}.",
+                usage=usage, model=self.model, raw_text=text,
+                stop_reason=stop_reason,
+            )
+        try:
+            parsed = parse_fn(text)
+        except ResearchParseError as exc:
+            exc.usage = usage
+            exc.model = self.model
+            exc.raw_text = text
+            exc.stop_reason = stop_reason
+            raise
+        return parsed, usage, text, stop_reason
 
     def discover_sources(self, plan: ResearchPlan, max_searches: int = 3) -> DiscoveryResult:
         """Etap A1: TYLKO web search + lista kandydatów URL (url+title, JSONL).
@@ -582,6 +564,14 @@ class AnthropicResearchClient:
             )
         return ResearchUnknownProviderError(message, status_code=status_code, **common)
 
+    def _new_anthropic_client(self, anthropic):  # pragma: no cover
+        """Create an SDK client with no hidden paid retry path."""
+        return anthropic.Anthropic(
+            api_key=self._api_key,
+            max_retries=_SDK_MAX_RETRIES,
+            timeout=self._timeout_seconds,
+        )
+
     def _call_anthropic(self, client, prompt: str, *, tools: list[dict] | None,
                         max_tokens: int) -> tuple[str, Usage, str | None]:  # pragma: no cover
         kwargs = dict(model=self.model, max_tokens=max_tokens, system=_SYSTEM,
@@ -612,7 +602,7 @@ class AnthropicResearchClient:
 
     def _default_caller(self, plan: ResearchPlan) -> tuple[str, Usage]:  # pragma: no cover
         anthropic = self._import_anthropic()
-        client = anthropic.Anthropic(api_key=self._api_key)
+        client = self._new_anthropic_client(anthropic)
         prompt = (
             f"Research question: {plan.question}\nNiche: {', '.join(plan.niche)}\n"
             "Use web search. Return JSON with keys: question, working_thesis, main_mechanism, "
@@ -630,7 +620,7 @@ class AnthropicResearchClient:
 
     def _default_gather_caller(self, plan: ResearchPlan) -> tuple[str, Usage]:  # pragma: no cover
         anthropic = self._import_anthropic()
-        client = anthropic.Anthropic(api_key=self._api_key)
+        client = self._new_anthropic_client(anthropic)
         prompt = (
             f"Research question: {plan.question}\nNiche: {', '.join(plan.niche)}\n"
             "Use web search to find sources. Do NOT analyze or draw conclusions yet — "
@@ -651,7 +641,7 @@ class AnthropicResearchClient:
     def _default_synthesize_caller(self, plan: ResearchPlan,
                                    gathered: SourceGatheringResult) -> tuple[str, Usage]:  # pragma: no cover
         anthropic = self._import_anthropic()
-        client = anthropic.Anthropic(api_key=self._api_key)
+        client = self._new_anthropic_client(anthropic)
         sources_block = "\n".join(
             f"- {s.url} | {s.title} | facts: {'; '.join(s.key_facts)}"
             for s in gathered.sources
@@ -684,7 +674,7 @@ class AnthropicResearchClient:
     def _default_discover_caller(self, plan: ResearchPlan,
                                  max_searches: int) -> tuple[str, Usage, str | None]:  # pragma: no cover
         anthropic = self._import_anthropic()
-        client = anthropic.Anthropic(api_key=self._api_key)
+        client = self._new_anthropic_client(anthropic)
         prompt = (
             f"Research question: {plan.question}\nNiche: {', '.join(plan.niche)}\n"
             "Use web search to find CANDIDATE sources. Do NOT analyze, extract facts, or "
@@ -702,7 +692,7 @@ class AnthropicResearchClient:
     def _default_extract_caller(self, plan: ResearchPlan,
                                 candidate: SourceCandidate) -> tuple[str, Usage, str | None]:  # pragma: no cover
         anthropic = self._import_anthropic()
-        client = anthropic.Anthropic(api_key=self._api_key)
+        client = self._new_anthropic_client(anthropic)
         can_search = self._max_web_searches_per_source > 0
         search_instruction = (
             "Use web search if needed to verify and extract information specifically FROM "
@@ -740,7 +730,7 @@ class AnthropicResearchClient:
             self, plan: ResearchPlan,
             cards: list[SourceCardDraft]) -> tuple[str, Usage, str | None]:  # pragma: no cover
         anthropic = self._import_anthropic()
-        client = anthropic.Anthropic(api_key=self._api_key)
+        client = self._new_anthropic_client(anthropic)
         cards_block = "\n".join(
             f"- {c.url} | {c.title} | claims: {'; '.join(c.supported_claims)} | "
             f"facts: {'; '.join(c.numeric_facts)} | quality={c.source_quality_score}"

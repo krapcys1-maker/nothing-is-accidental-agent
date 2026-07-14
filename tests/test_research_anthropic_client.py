@@ -86,7 +86,7 @@ def _raise_from_messages(exc):
     return type("Provider", (), {"messages": _Messages()})()
 
 
-def test_retry_then_success():
+def test_timeout_is_propagated_after_exactly_one_attempt():
     state = {"n": 0}
 
     def caller(plan):
@@ -96,19 +96,20 @@ def test_retry_then_success():
         return _GOOD_JSON, _USAGE
 
     client = AnthropicResearchClient("key", "m", caller=caller, max_retries=2)
-    result = client.run_research(_PLAN)
-    assert result.draft.working_thesis == "Because dynamic pricing."
-    assert client.call_count == 2  # 1 timeout + 1 sukces
+    with pytest.raises(ResearchTimeout):
+        client.run_research(_PLAN)
+    assert state["n"] == 1
+    assert client.call_count == 1
 
 
-def test_timeout_exhausts_retries():
+def test_timeout_never_retries_even_when_legacy_metadata_is_nonzero():
     def caller(plan):
         raise ResearchTimeout("always")
 
     client = AnthropicResearchClient("key", "m", caller=caller, max_retries=2)
     with pytest.raises(ResearchTimeout):
         client.run_research(_PLAN)
-    assert client.call_count == 3  # max_retries + 1, bez nieskończonego retry
+    assert client.call_count == 1
 
 
 def test_timeout_is_not_retried_when_max_retries_is_zero():
@@ -134,7 +135,7 @@ def test_timeout_is_not_retried_when_max_retries_is_zero():
         lambda: ResearchServerError("504", status_code=504, retryable=True),
     ],
 )
-def test_only_typed_transient_provider_errors_are_retried(error_factory):
+def test_typed_transient_provider_errors_are_not_retried(error_factory):
     state = {"calls": 0}
 
     def caller(plan):
@@ -143,11 +144,11 @@ def test_only_typed_transient_provider_errors_are_retried(error_factory):
             raise error_factory()
         return _GOOD_JSON, _USAGE
 
-    client = AnthropicResearchClient("key", "m", caller=caller, max_retries=1)
-    result = client.run_research(_PLAN)
-
-    assert result.usage == _USAGE
-    assert client.call_count == 2
+    error = error_factory()
+    client = AnthropicResearchClient("key", "m", caller=lambda _plan: (_ for _ in ()).throw(error), max_retries=1)
+    with pytest.raises(type(error)):
+        client.run_research(_PLAN)
+    assert client.call_count == 1
 
 
 @pytest.mark.parametrize(
@@ -241,19 +242,17 @@ def test_sdk_response_body_never_becomes_domain_error_or_audit_message():
     assert error.__cause__ is sdk_error
 
 
-def test_504_retries_once_after_budget_callback_and_records_usage_once():
+def test_504_is_propagated_once_without_retry_usage_callback():
     calls = []
     budget_attempts = []
     recorded_usage = []
 
     def caller(plan):
         calls.append(1)
-        if len(calls) == 1:
-            raise ResearchServerError(
-                "gateway timeout", status_code=504, retryable=True,
-                usage=_USAGE, model="m",
-            )
-        return _GOOD_JSON, _USAGE
+        raise ResearchServerError(
+            "gateway timeout", status_code=504, retryable=True,
+            usage=_USAGE, model="m",
+        )
 
     client = AnthropicResearchClient("offline", "m", caller=caller, max_retries=1)
     client.configure_attempt_control(
@@ -262,13 +261,14 @@ def test_504_retries_once_after_budget_callback_and_records_usage_once():
         estimated_attempt_cost=0.08,
     )
 
-    result = client.run_research(_PLAN)
+    with pytest.raises(ResearchServerError) as caught:
+        client.run_research(_PLAN)
 
-    assert result.usage == _USAGE
-    assert calls == [1, 1]
-    assert client.call_count == 2
-    assert budget_attempts == [1, 2]
-    assert recorded_usage == [(_USAGE, "m")]
+    assert caught.value.usage == _USAGE
+    assert calls == [1]
+    assert client.call_count == 1
+    assert budget_attempts == [1]
+    assert recorded_usage == []
 
 
 def test_504_with_zero_retries_makes_one_attempt_and_preserves_usage():
@@ -457,21 +457,15 @@ def test_staged_a1_a2_b_preserve_typed_provider_errors(
         else:
             client.synthesize_from_cards(_PLAN, [])
 
-    expected_calls = 4 if retryable else 1
     assert excinfo.value.status_code == expected_status
     assert excinfo.value.retryable is retryable
-    assert len(caller_calls) == expected_calls
-    assert client.call_count == expected_calls
+    assert len(caller_calls) == 1
+    assert client.call_count == 1
 
 
-def test_budget_callback_runs_before_every_attempt():
+def test_budget_callback_runs_before_the_single_attempt():
     attempts = []
-    state = {"n": 0}
-
     def caller(plan):
-        state["n"] += 1
-        if state["n"] == 1:
-            raise ResearchTimeout("retry")
         return _GOOD_JSON, _USAGE
 
     client = AnthropicResearchClient("key", "m", caller=caller, max_retries=1)
@@ -481,7 +475,7 @@ def test_budget_callback_runs_before_every_attempt():
         estimated_attempt_cost=0.08,
     )
     client.run_research(_PLAN)
-    assert attempts == [1, 2]
+    assert attempts == [1]
 
 
 def test_budget_denial_before_first_attempt_makes_zero_calls():
@@ -503,27 +497,29 @@ def test_budget_denial_before_first_attempt_makes_zero_calls():
     assert client.call_count == 0
 
 
-def test_budget_denial_before_retry_is_not_retried():
+def test_timeout_does_not_trigger_a_second_budget_check():
     calls = []
 
     def caller(plan):
         calls.append(1)
         raise ResearchTimeout("timeout")
 
+    attempts = []
+
     def guard(context):
-        if context.attempt_number == 2:
-            raise ResearchBudgetError("daily", code="BUDGET_DAILY_EXCEEDED")
+        attempts.append(context.attempt_number)
 
     client = AnthropicResearchClient("key", "m", caller=caller, max_retries=3)
     client.configure_attempt_control(
         budget_callback=guard, retry_usage_callback=None, estimated_attempt_cost=0.08)
-    with pytest.raises(ResearchBudgetError):
+    with pytest.raises(ResearchTimeout):
         client.run_research(_PLAN)
     assert len(calls) == 1
     assert client.call_count == 1
+    assert attempts == [1]
 
 
-def test_timeout_usage_is_recorded_before_retry():
+def test_timeout_usage_is_preserved_without_retry_callback():
     recorded = []
     state = {"n": 0}
 
@@ -539,8 +535,10 @@ def test_timeout_usage_is_recorded_before_retry():
         retry_usage_callback=lambda usage, model: recorded.append((usage, model)),
         estimated_attempt_cost=0.08,
     )
-    client.run_research(_PLAN)
-    assert recorded == [(_USAGE, "m")]
+    with pytest.raises(ResearchTimeout) as caught:
+        client.run_research(_PLAN)
+    assert caught.value.usage == _USAGE
+    assert recorded == []
 
 
 def test_negative_max_retries_is_rejected():
@@ -565,7 +563,7 @@ def test_web_search_max_uses_passed_to_tool_spec(monkeypatch):
             raise RuntimeError("stop-before-network")  # nie łączymy się z siecią w teście
 
     class _FakeAnthropicClient:
-        def __init__(self, api_key):
+        def __init__(self, api_key, **_kwargs):
             self.messages = _FakeMessages()
 
     fake_module = types.ModuleType("anthropic")
@@ -597,7 +595,7 @@ def _capture_extract_call_kwargs(monkeypatch, client: AnthropicResearchClient) -
             raise RuntimeError("stop-before-network")
 
     class _FakeAnthropicClient:
-        def __init__(self, api_key):
+        def __init__(self, api_key, **_kwargs):
             self.messages = _FakeMessages()
 
     fake_module = types.ModuleType("anthropic")
@@ -639,7 +637,7 @@ def _capture_synthesis_call_kwargs(monkeypatch, client: AnthropicResearchClient)
             raise RuntimeError("stop-before-network")
 
     class _FakeAnthropicClient:
-        def __init__(self, api_key):
+        def __init__(self, api_key, **_kwargs):
             self.messages = _FakeMessages()
 
     fake_module = types.ModuleType("anthropic")

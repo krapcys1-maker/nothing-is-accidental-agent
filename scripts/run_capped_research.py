@@ -65,7 +65,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.clock import SystemClock  # noqa: E402
-from app.core.config import load_settings  # noqa: E402
+from app.core.config import (  # noqa: E402
+    ConfigError,
+    load_settings,
+    require_valid_real_provider_pricing,
+)
 from app.llm.usage_tracker import UsageTracker  # noqa: E402
 from app.models import ResearchFlow, ResearchRunStatus, SourceCandidateStatus  # noqa: E402
 from app.orchestrator.runner import DEFAULT_ACCOUNT  # noqa: E402
@@ -139,6 +143,23 @@ def _print_staged_estimate(label: str, e) -> None:
           f"expected={e.expected_usd:.4f} USD")
 
 
+def _activate_explicit_real_mode(args: argparse.Namespace, settings):
+    """Return paid settings only after the explicit root and pricing gate.
+
+    This is deliberately called after an estimate-only exit, so offline
+    estimation remains useful even when the price table is incomplete.
+    """
+    if not getattr(args, "real", False):
+        print("STOP: brak --real. Pozostaję w trybie offline/estimate; nie tworzę klienta API.")
+        return None, 0
+    try:
+        require_valid_real_provider_pricing(settings)
+    except ConfigError as exc:
+        print(f"STOP: {exc}")
+        return None, 1
+    return replace(settings, dry_run=False), None
+
+
 def main(argv: list[str] | None = None) -> int:
     _configure_output()
     parser = argparse.ArgumentParser(
@@ -146,6 +167,11 @@ def main(argv: list[str] | None = None) -> int:
                     "A1 discovery + A2 per-source extraction + B synthesis, ADR-020).")
     parser.add_argument("--topic-id", type=int, default=None,
                         help="ID tematu (wymagane, chyba że --resume).")
+    parser.add_argument(
+        "--real", action="store_true",
+        help="Jawnie zezwól na capowane wywołania providera. Bez flagi skrypt działa "
+             "wyłącznie offline/pre-flight i nie tworzy klienta API.",
+    )
     parser.add_argument("--resume", default=None, metavar="RESEARCH_RUN_ID",
                         help="Wznów DOKŁADNIE JEDEN kolejny etap dla istniejącego "
                              "research_run_id — status w bazie decyduje który (A2/B dla "
@@ -173,8 +199,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-web-searches", type=int, default=4,
                         help="[two-stage/single] Cap liczby web searchy w etapie zbierania "
                              "źródeł (API max_uses).")
-    parser.add_argument("--max-retries", type=int, default=1,
-                        help="Retry tylko dla błędów technicznych/timeout, max N prób dodatkowych.")
+    parser.add_argument("--max-retries", type=int, default=0,
+                        help="Musi wynosić 0: realny provider nie wykonuje auto-retry.")
     parser.add_argument("--gather-max-tokens", type=int, default=1200,
                         help="[two-stage] max_tokens dla etapu gather_sources.")
     parser.add_argument(
@@ -217,8 +243,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.max_extraction_attempts < 1:
         print("STOP: --max-extraction-attempts musi być dodatnie.")
         return 1
-    if args.max_retries < 0:
-        print("STOP: --max-retries musi być nieujemne.")
+    if args.max_retries != 0:
+        print("STOP: --max-retries musi wynosić 0; auto-retry realnego providera jest zablokowany.")
         return 1
     if args.retry_failed_candidates and args.resume is None:
         print("STOP: --retry-failed-candidates wymaga --resume RESEARCH_RUN_ID.")
@@ -245,7 +271,10 @@ def _run_fresh(args: argparse.Namespace) -> int:
     max_cost_usd = args.max_cost_usd if args.max_cost_usd is not None else _DEFAULT_MAX_COST[args.mode]
 
     settings = load_settings()
-    settings = replace(settings, dry_run=False)  # to jest REALNE, płatne wywołanie (gdy nie --estimate-only)
+    if getattr(args, "real", False) and not args.estimate_only:
+        settings, stop_code = _activate_explicit_real_mode(args, settings)
+        if stop_code is not None:
+            return stop_code
 
     print("=" * 70)
     print("PRE-FLIGHT CHECKS (przed jakimkolwiek wywołaniem API)")
@@ -326,6 +355,12 @@ def _run_fresh(args: argparse.Namespace) -> int:
         print("\n--estimate-only: kończę tutaj. ZERO wywołań API, ZERO kosztu.")
         return 0
 
+    if not getattr(args, "real", False):
+        _offline_settings, stop_code = _activate_explicit_real_mode(args, settings)
+        del _offline_settings
+        if stop_code is not None:
+            return stop_code
+
     policy = PolicyEngine(settings, storage, clock)
     stop = _preflight_stop(
         settings, policy, account, worst_case, max_cost_usd, current_run_cost=0.0)
@@ -336,7 +371,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
 
     research_client = AnthropicResearchClient(
         settings.anthropic_api_key, settings.model_quality,
-        max_retries=args.max_retries,
+        max_retries=0,
         timeout_seconds=settings.research_timeout_seconds,
         max_web_searches=args.max_web_searches,
         gather_max_tokens=args.gather_max_tokens,
@@ -373,7 +408,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
             synthesize_max_tokens=args.synthesize_max_tokens,
             forwarded_context_tokens=args.forwarded_context_tokens,
             force_re_research=args.force_re_research,
-            max_retries=args.max_retries,
+            max_retries=0,
             run_cap_usd=max_cost_usd,
         )
     elif args.mode == "two-stage":
@@ -387,7 +422,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
             synthesize_max_tokens=args.synthesize_max_tokens,
             forwarded_context_tokens=args.forwarded_context_tokens,
             force_re_research=args.force_re_research,
-            max_retries=args.max_retries,
+            max_retries=0,
             run_cap_usd=max_cost_usd,
         )
     else:
@@ -397,7 +432,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
             usage_tracker=usage_tracker, policy=policy, notifier=notifier,
             clock=clock, research_log=research_log,
             force_re_research=args.force_re_research,
-            max_retries=args.max_retries,
+            max_retries=0,
             run_cap_usd=max_cost_usd,
         )
 
@@ -411,7 +446,10 @@ def _run_resume(args: argparse.Namespace) -> int:
     opiera się wyłącznie na zapisanym `research_runs.flow`; status ani obecność
     rekordów w tabelach źródeł nie służą już do rozpoznawania przepływu."""
     settings = load_settings()
-    settings = replace(settings, dry_run=False)
+    if getattr(args, "real", False) and not args.estimate_only:
+        settings, stop_code = _activate_explicit_real_mode(args, settings)
+        if stop_code is not None:
+            return stop_code
 
     storage = SqliteStorage.open(settings.db_path)
     clock = SystemClock()
@@ -524,6 +562,9 @@ def _run_resume_legacy(args, settings, storage, clock, research_run, prior_cost,
     if args.estimate_only:
         print("\n--estimate-only: kończę tutaj. ZERO wywołań API, ZERO kosztu.")
         return 0
+    settings, stop_code = _activate_explicit_real_mode(args, settings)
+    if stop_code is not None:
+        return stop_code
     account = settings.get_account(args.account)
     policy = PolicyEngine(settings, storage, clock)
     stop = _preflight_stop(
@@ -534,7 +575,7 @@ def _run_resume_legacy(args, settings, storage, clock, research_run, prior_cost,
 
     storage.ensure_account(account)
     research_client = AnthropicResearchClient(
-        settings.anthropic_api_key, settings.model_quality, max_retries=args.max_retries,
+        settings.anthropic_api_key, settings.model_quality, max_retries=0,
         timeout_seconds=settings.research_timeout_seconds,
         synthesize_max_tokens=args.synthesize_max_tokens,
     )
@@ -555,7 +596,7 @@ def _run_resume_legacy(args, settings, storage, clock, research_run, prior_cost,
         clock=clock, research_log=research_log,
         synthesize_max_tokens=args.synthesize_max_tokens,
         forwarded_context_tokens=args.forwarded_context_tokens,
-        max_retries=args.max_retries,
+        max_retries=0,
         run_cap_usd=max_cost_usd,
     )
     _print_result(summary, max_cost_usd, worst_case, max_web_searches=0)
@@ -601,6 +642,9 @@ def _run_resume_staged(args, settings, storage, clock, research_run, prior_cost,
     if args.estimate_only:
         print("\n--estimate-only: kończę tutaj. ZERO wywołań API, ZERO kosztu.")
         return 0
+    settings, stop_code = _activate_explicit_real_mode(args, settings)
+    if stop_code is not None:
+        return stop_code
     account = settings.get_account(args.account)
     policy = PolicyEngine(settings, storage, clock)
     stop = _preflight_stop(
@@ -611,7 +655,7 @@ def _run_resume_staged(args, settings, storage, clock, research_run, prior_cost,
 
     storage.ensure_account(account)
     research_client = AnthropicResearchClient(
-        settings.anthropic_api_key, settings.model_quality, max_retries=args.max_retries,
+        settings.anthropic_api_key, settings.model_quality, max_retries=0,
         timeout_seconds=settings.research_timeout_seconds,
         synthesize_max_tokens=args.synthesize_max_tokens,
         discover_max_tokens=args.discovery_max_tokens,
@@ -639,7 +683,7 @@ def _run_resume_staged(args, settings, storage, clock, research_run, prior_cost,
         max_attempts=getattr(args, "max_extraction_attempts", 2),
         synthesize_max_tokens=args.synthesize_max_tokens,
         forwarded_context_tokens=args.forwarded_context_tokens,
-        max_retries=args.max_retries,
+        max_retries=0,
         run_cap_usd=max_cost_usd,
     )
     _print_result(summary, max_cost_usd, worst_case, max_web_searches=0)

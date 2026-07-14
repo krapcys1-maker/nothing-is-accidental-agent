@@ -271,3 +271,38 @@ Po review doprecyzowano: realny pipeline bez capu odmawia, cap resume jest absol
 - **Egzekwowanie:** tylko centralny enqueuer buduje nowy job; repozytorium nie przyjmuje dowolnego `schedule_reason`. Ten sam atomowy claim sprawdza `earliest_run_at <= now`, zatem oczekujący job nie dostaje lease ani próby. Idempotency porównuje stabilną intencję wykonawczą, a harmonogram jest niezmiennym wynikiem pierwszego enqueue: retry po zmianie czasu lub polityki zwraca pierwszy job, nie przelicza historii i nie tworzy dubla.
 - **Granica:** `enqueue-research` tworzy wyłącznie RESEARCH `dry_run`; nie ma opcji realnej, dispatchu, API, sieci, paid/browser/public workera, systemowego schedulera ani realnego resume. Nie dodano migracji, ponieważ wymagane pola i indeks są w `0009`.
 - **Dowód:** 49 testów scheduling obejmuje IANA/DST, persistence/reopen, eligibility, reason, stabilną idempotencję po zmianie czasu/polityki, konflikty intencji, dwa połączenia SQLite z Barrier oraz `Worker.run_once()` dla future/boundary; pełny suite 641 test cases passed, hash prawdziwej bazy bez zmiany, koszt 0 USD.
+
+### [2026-07-13] D-44: komplet execution musi mieć jedną granicę trwałości
+
+- **Problem:** `create_run`, `create_research_run` i `attach_job_run` miały osobne commity. Awaria między nimi pozostawiała aktywny komplet bez `jobs.run_id`, a recovery mogło utworzyć drugi run.
+- **Wybór:** jedna operacja `initialize_research_run_for_job` w `BEGIN IMMEDIATE`: walidacja RESEARCH joba, aktywnego statusu, ownera i świeżego lease; następnie INSERT run, INSERT research_run i CAS joba z `run_id IS NULL`. Tylko po wszystkich trzech zmianach następuje commit. Gdy job już ma run_id, adapter waliduje i zwraca istniejący komplet bez nowego INSERT.
+- **Granica:** crash przed commitem rollbackuje komplet; crash po commicie nie jest zgadywany z pamięci i prowadzi po reopen do istniejącego kontraktu `NEEDS_VERIFICATION`. Nie ma adopcji sierot, auto-cleanupu, auto-resume, migracji, API ani akcji publicznej.
+- **Dowód:** failpointy po INSERT run, przed CAS i po commicie, idempotencja, fencing, dwa połączenia SQLite/Barrier, parity i future boundary; 14 acceptance scenarios, pełny suite 655 passed, 0 USD.
+### [2026-07-13] D-45: lease musi ogrodzić skutek, nie tylko wejście
+
+- **Problem:** atomowa inicjalizacja nie zabraniała staremu procesowi późniejszych zapisów usage, kosztu, błędu, karty i terminalnego statusu.
+- **Wybór:** `JobExecutionContext` powstaje dopiero z udanego związania job→run. Worker-only mutacje sprawdzają job ID, run ID, ownera, świeży lease, `LEASED|RUNNING`, kind/workflow i relację researchu w tej samej transakcji co zapis. Czas jest próbkowany po uzyskaniu SQLite write locka i normalizowany do UTC.
+- **Semantyka odmowy:** `StaleJobExecutionError` kończy pipeline jako utratę lease. Nie zapisuje FAILED „na pocieszenie”, nie retry’uje i oddaje trwałe rozstrzygnięcie recovery. Manualne pipeline’y bez joba pozostają osobną ścieżką.
+- **Granica:** offline dry-run = verified. Paid/live i browser/public nadal zablokowane. Realny koszt po utracie lease wymaga przyszłego idempotentnego ledgeru provider request ID.
+- **Dowód:** 26 acceptance, old-owner matrix, expiry przed recovery, race dwóch SQLite connections, close→reopen/integrity; full 667, 0 USD.
+
+### [2026-07-13] D-46: czas jest częścią fence, a CSV nie jest kanonem
+
+- **Problem:** timestamp pobrany przed write lockiem mógł przeżyć oczekiwanie dłuższe niż pozostały lease. Dodatkowo błąd pomocniczego appendu `COSTS.csv` po trwałym commicie SQLite mógł uruchomić niewłaściwą ścieżkę failure workera.
+- **Wybór:** chronione operacje lifecycle pobierają czas dopiero po `BEGIN IMMEDIATE` przez `Clock`; aktywna granica to `>=`, recovery to `<`. SQLite `model_usage` jest jedyną księgą kosztu; CSV jest best-effort, odtwarzalnym eksportem z kontrolowanym warningiem. Nieoczekiwany wyjątek po inicjalizacji używa jednej fenced transakcji dla `jobs/runs/research_runs=FAILED`.
+- **Granica:** bez outboxa, eksportera, retry CSV, migracji, API, działań paid/browser/public lub zmian prawdziwej bazy. Przed Etapem 8 wymagany audyt KEEP/DEPRECATE/REMOVE dla CSV.
+- **Dowód:** 7 lifecycle i 5 fenced-write testów lock-wait na file SQLite, race heartbeat↔recovery, CSV success/failure i atomic unexpected failure; 42 acceptance, full 683, 0 USD.
+
+### [2026-07-14] D-47: wynik dispatchu jest prawem do dotknięcia końca historii
+
+- **Problem:** enum zapisany tylko jako adnotacja typu był przepuszczalny dla stringa. Worker rozpoznawał wyłącznie tożsamość enumu, więc po zakończonej już transakcji mógł potraktować zły wynik jak lokalne zadanie i spróbować kolejnego heartbeat. Drugi błąd był bardziej subtelny: `WORKFLOW_FAILED` musi oznaczać ten sam pełny, atomowy koniec co sukces — nie zaproszenie do dodatkowego `fail_job`.
+- **Wybór:** `DispatchResult` wymaga jawnego trybu i sprawdza go przy konstrukcji. Worker sprawdza ponownie obiekt i enum, rozgałęzia trzy znane tryby bez domyślnego fallbacku oraz propaguje wadliwy wynik jako błąd kontraktu bez zapisu. Workflow-owning success zwraca DONE, workflow-owning failure zwraca FAILED, a zwykłe domknięcie pozostaje wyłącznie prawem LOCAL.
+- **Dodatkowa granica:** karta i każde źródło muszą potwierdzić pojedynczy INSERT przez `rowcount`; brak dowodu jednego rekordu rollbackuje cały sukces. Błąd rollbacku może być tylko przypisem do błędu pierwotnego, nigdy jego zamiennikiem.
+- **Dowód:** literalny string był czerwony przed zmianą; po niej 58 restart acceptance i pełny suite 700 passed potwierdzają brak heartbeat/complete/fail/LOST po malformed result, spójny atomic failure i reopen/integrity. Koszt 0 USD, bez API, browsera lub publikacji.
+
+### [2026-07-14] D-49–D-51: jedna zgoda, jeden root i uczciwe zamknięcie
+
+- **Problem:** biblioteka providera mogła powtórzyć request bez nowej zgody, zwykłe CLI mogło złożyć realny adapter, a niepełny cennik mógł przepuścić request z pozornym kosztem zero. Równocześnie test bezpieczeństwa zapisał fake/dry-run artefakty do domyślnej bazy.
+- **Wybór:** każdy SDK ma `max_retries=0` i dodatni timeout, normalne rooty są zawsze fake/offline, a jedyny realny root wymaga `--real` oraz pełnych cen. Incydent bazy odtwarzamy logicznie tylko z identyfikowalnych rekordów testowych; nie udajemy odzyskania bitowego snapshotu. Nowy SHA baseline to `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`.
+- **Decyzja o statusie:** niezależne review zamknęło P0-01, P1-01 i P1-02. WAVE 0A jest **APPROVED WITH P2** i formalnie zamknięta; Etap 1 nadal jest BLOCKED przez inne P1.
+- **Backlog:** mocniejszy regression test na granicy `messages.create`, pełna parametryzacja pricingu i poprawna kolejność aktualizacji dokumentacji.

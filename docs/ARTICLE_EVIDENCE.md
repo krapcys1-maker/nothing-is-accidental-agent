@@ -259,3 +259,27 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Decyzja: force jest zapisem per run, resume porównuje trwały ślad nieudanego B, a przed następnym potencjalnym kosztem system wykonuje niemutujący preflight. Pomyłka nie robi „spróbuj mimo wszystko”; nie wywołuje nawet klienta.
   - Dowód: 13 crash points z zamknięciem i reopen SQLite, force→failure→resume oraz test braku usage po odmowie. Kolejność tych samych źródeł nie zmienia wyniku — dowód jest zbiorem, nie przypadkiem kolejności listy.
   - Koszt: 0 USD; 446 testów offline, bez API.
+- **[2026-07-13] Lease nie jest sugestią dla wątku, tylko prawem do każdego zapisu** (sekcja: 3, 6, 15)
+  - Materiał: pierwsza naprawa restartu scaliła trzy commity inicjalizacji, lecz niezależne review przesunęło crash o kilka linijek dalej. Stary proces po expiry nadal mógł dopisać usage, koszt, FAILED albo kartę, zanim worker sprawdził in-memory guard.
+  - Decyzja: zamknięty context powstaje dopiero po atomowym związaniu joba z runem. Każdy kolejny zapis bierze SQLite write lock, dopiero wtedy odczytuje canonical UTC i atomowo sprawdza job, run, owner, expiry oraz stan wykonawczy. Odmowa nie tworzy nawet „pomocniczego” FAILED.
+  - Zwrot narracyjny: heartbeat mówi procesowi, co prawdopodobnie jest prawdą; transakcja rozstrzyga, kto naprawdę ma prawo zmienić historię. Test dwóch połączeń dowodzi, że recovery i stary zapis nie mogą oba wygrać.
+  - Granica wiedzy: realny provider może naliczyć koszt po utracie lease. System celowo nie fałszuje wtedy canonical ledgeru; osobny idempotentny rejestr request ID pozostaje przyszłą pracą przed paid workerem.
+  - Dowód: ADR-045, 26 restart acceptance, full 667, close→reopen/integrity, koszt 0 USD, hash prawdziwej bazy bez zmiany.
+
+- **[2026-07-13] „Chwila” musi być pobrana po zdobyciu prawa do zapisu** (sekcja: 3, 6, 15)
+  - Materiał: test zaczyna mutację przed expiry, zatrzymuje ją na prawdziwym write locku SQLite, przesuwa zegar i zwalnia lock dopiero po expiry. Dawny timestamp nie może już dać prawa do heartbeat ani terminalizacji.
+  - Zwrot narracyjny: zegar nie jest neutralnym parametrem; w systemie współbieżnym miejsce jego odczytu określa, kto ma prawo zmienić historię.
+  - Drugi wniosek: plik `COSTS.csv` nie jest księgą główną. Gdy append po commitcie zawodzi, job nadal kończy się zgodnie z SQLite, a błąd zostaje widoczny jako ostrzeżenie, nie jako fałszywa awaria procesu.
+  - Dowód: ADR-046, 42 restart acceptance, full 683, close→reopen/integrity, koszt 0 USD, hash prawdziwej bazy bez zmiany.
+
+- **[2026-07-14] „Sukces” nie może potrzebować ostatniego, ryzykownego kroku** (sekcja: 3, 6, 15)
+  - Materiał: pipeline zdążył zapisać kartę i COMPLETE, ale worker miał jeszcze wykonać heartbeat oraz zwykłe zakończenie joba. Awaria tego epilogu mogła zostawić job FAILED obok trwałego sukcesu researchu.
+  - Decyzja: jedna transakcja obejmuje artefakt, lifecycle researchu oraz `jobs=DONE`; typowany wynik dispatchera mówi workerowi, czy wolno mu jeszcze dotknąć lifecycle. Po sukcesie RESEARCH nie ma już dodatkowego heartbeat, complete ani fail.
+  - Zwrot narracyjny: najgroźniejsze rozjazdy nie powstają zawsze w środku złożonej operacji. Czasem tworzy je „ostatnia porządkowa linijka”, która próbuje dopisać drugie zakończenie do historii już zatwierdzonej.
+  - Dowód: ADR-047, literalny test czerwony→zielony, 53 restart acceptance, failpointy po obu stronach UPDATE joba, crash po commicie, reopen/integrity i full 695; brak API, browsera, publikacji i kosztu.
+
+- **[2026-07-14] „Typ” jest obietnicą, dopóki nie spotka złego stringa** (sekcja: 3, 6, 15)
+  - Materiał: po naprawie sukcesu pozostała szczelina w najmniejszym komunikacie między modułami. `DispatchResult` wyglądał jak typowany, ale runtime przyjmował string. Jedna zła wartość mogła uruchomić porządkowy heartbeat po pełnym commicie i zmienić opowieść workera na fałszywe „lost lease”.
+  - Decyzja: rezultat nie ma domyślnego właściciela. Konstruktor i Worker sprawdzają ten sam zamknięty enum, a zły komunikat nie może naprawiać historii przez kolejny zapis — musi przerwać proces jawnie i bez mutacji.
+  - Zwrot narracyjny: niezawodność nie kończy się w momencie commitu. Kończy się dopiero wtedy, gdy każdy późniejszy komponent rozumie, że nie wolno mu już niczego „posprzątać”.
+  - Dowód: ADR-048, literalny czerwony string, atomic failure z 0 generic `fail_job`, 58 restart acceptance, reopen/integrity i full 700; bez API, browsera, publikacji i kosztu.

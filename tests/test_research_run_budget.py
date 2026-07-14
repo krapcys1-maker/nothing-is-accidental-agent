@@ -1,4 +1,4 @@
-"""Offline integration tests for Task 5 retry-aware research budgets."""
+"""Offline integration tests for single-attempt research budgets."""
 from __future__ import annotations
 
 import json
@@ -73,7 +73,7 @@ def _run(settings, storage, account, client, *, cap):
     )
 
 
-def test_timeout_usage_is_persisted_before_retry_budget_denial(settings, storage, account):
+def test_timeout_usage_is_persisted_without_automatic_retry(settings, storage, account):
     calls = []
     billed_timeout = Usage(output_tokens=40_000)  # 0.60 USD in fixture pricing
 
@@ -86,16 +86,15 @@ def test_timeout_usage_is_persisted_before_retry_budget_denial(settings, storage
 
     assert len(calls) == 1
     assert client.call_count == 1
-    assert summary.blocked
-    assert summary.block_code == "RUN_CAP_EXCEEDED"
-    assert "timeout" not in (summary.block_reason or "").lower()
+    assert not summary.blocked
+    assert "timeout" in (summary.error or "").lower()
     usage = storage.get_research_usage(summary.run_id)
     assert len(usage) == 1
     assert usage[0].estimated_cost_usd == pytest.approx(0.60)
     assert storage.get_run(summary.run_id).cost_usd == pytest.approx(0.60)
 
 
-def test_allowed_retry_keeps_first_usage_and_success_usage(settings, storage, account):
+def test_timeout_stops_before_a_second_billable_attempt(settings, storage, account):
     state = {"calls": 0}
     first_usage = Usage(input_tokens=100, output_tokens=50)
     success_usage = Usage(input_tokens=200, output_tokens=100)
@@ -109,18 +108,18 @@ def test_allowed_retry_keeps_first_usage_and_success_usage(settings, storage, ac
     client = AnthropicResearchClient("offline", "m", caller=caller, max_retries=1)
     summary = _run(settings, storage, account, client, cap=2.0)
 
-    assert state["calls"] == 2
+    assert state["calls"] == 1
     assert not summary.blocked
-    assert summary.error is None
+    assert "timeout" in (summary.error or "").lower()
     usage = storage.get_research_usage(summary.run_id)
-    assert len(usage) == 2
+    assert len(usage) == 1
     expected = sum(row.estimated_cost_usd for row in usage)
     assert summary.cost_usd == pytest.approx(expected)
-    assert storage.get_run(summary.run_id).status == RunStatus.DRY_RUN
+    assert storage.get_run(summary.run_id).status == RunStatus.FAILED
     assert storage.get_run(summary.run_id).cost_usd == pytest.approx(expected)
 
 
-def test_rate_limit_usage_is_persisted_exactly_once_before_retry(
+def test_rate_limit_usage_is_persisted_exactly_once_without_retry(
         settings, storage, account):
     state = {"calls": 0}
     billed_rate_limit = Usage(input_tokens=100, output_tokens=50)
@@ -136,12 +135,13 @@ def test_rate_limit_usage_is_persisted_exactly_once_before_retry(
     client = AnthropicResearchClient("offline", "m", caller=caller, max_retries=1)
     summary = _run(settings, storage, account, client, cap=2.0)
 
+    assert state["calls"] == 1
     assert not summary.blocked
-    assert summary.error is None
+    assert "rate limit" in (summary.error or "").lower()
     usage = storage.get_research_usage(summary.run_id)
-    assert len(usage) == 2
+    assert len(usage) == 1
     assert [(row.input_tokens, row.output_tokens) for row in usage] == [
-        (100, 50), (200, 100),
+        (100, 50),
     ]
     assert storage.get_run(summary.run_id).cost_usd == pytest.approx(
         sum(row.estimated_cost_usd for row in usage))

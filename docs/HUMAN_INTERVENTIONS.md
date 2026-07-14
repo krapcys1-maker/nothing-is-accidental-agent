@@ -252,3 +252,37 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Zakres decyzji właściciela:** dodać czystą politykę harmonogramu dla istniejących `earliest_run_at` i `schedule_reason`, centralny enqueue, eligibility claimu, dry-run CLI oraz testy IANA/DST, restartu, idempotencji i współbieżności SQLite.
 - **Zakazy:** bez API, sieci, realnego researchu, dispatchu, workera paid/browser/public, realnego resume, usługi systemowego schedulera, zmian `data/agent.db`, migracji, `docs/BUILD_LOG.md`, instrukcji pisania, commita, pushu, PR i merge.
 - **Efekt:** `SchedulingPolicy` wyznacza lokalne okno z jawnej strefy IANA, przechowuje UTC `earliest_run_at` i zamknięty `schedule_reason`; future job pozostaje bez lease/attempt, a `enqueue-research` tworzy tylko RESEARCH `dry_run`. 31 testów scheduling, pełny suite 623 test cases passed, hash `data/agent.db` bez zmiany, koszt 0 USD.
+
+### [2026-07-13] APPROVAL — naprawa P1 atomowej inicjalizacji RESEARCH i końcowy restart acceptance
+
+- **Typ:** IMPLEMENTATION BOUNDARY / OFFLINE ONLY.
+- **Zakres decyzji właściciela:** naprawić wykryty P1 między utworzeniem `run`/`research_run` a `jobs.run_id`; wolno dodać jedną atomową operację StoragePort, zmienić wyłącznie ścieżkę RESEARCH workera, zachować test acceptance i dopisać failpointy/reopen/concurrency oraz dokumentację.
+- **Zakazy:** bez migracji i bez zmiany `data/agent.db`; bez adopcji lub kasowania historycznych sierot, API, sieci, realnego researchu, browsera, publikacji, paid actions, commita, pushu, PR i merge. `docs/BUILD_LOG.md` oraz katalog instrukcji pisania pozostają poza zakresem.
+- **Efekt:** `initialize_research_run_for_job` łączy run, research_run i CAS `job.run_id` w jednym `BEGIN IMMEDIATE`; pre-commit crash rollbackuje komplet, post-commit crash zachowuje jeden komplet i recovery wybiera NEEDS_VERIFICATION. 14 scenariuszy restart acceptance oraz pełny suite 655 passed, realny koszt 0 USD, hash prawdziwej bazy bez zmiany. Etap 1: candidate complete, awaiting independent review.
+## [2026-07-13] Właściciel ponownie zablokował Etap 1 po niezależnym review old-owner fencing
+
+- **Typ:** korekta bezpieczeństwa P1 i decyzja o granicy zakresu.
+- **Decyzja człowieka:** zachować atomową inicjalizację ADR-044, ale cofnąć status Etapu 1 do `BLOCKED — old-owner research fencing P1`, dopóki każda późniejsza mutacja pipeline’u nie będzie sprawdzać aktualnego lease w SQLite. Zakazano commita/pushu, API, browsera, publikacji i realnego researchu; wymagano literalnej macierzy old-owner, race i ponownego niezależnego review.
+- **Wpływ na implementację:** dodano zamknięty `JobExecutionContext`, worker-only fenced API oraz `StaleJobExecutionError`; manualne pipeline’y bez joba pozostały oddzielne. Dodatkowe P2 objęły primary-vs-rollback, walidację `created=False`, failpoint po CAS i canonical UTC.
+- **Wynik:** 26 acceptance tests i pełny suite 667 passed offline; po testach status przywrócono wyłącznie do `candidate complete, awaiting independent review`, nie do formalnie ukończonego. `data/agent.db` niezmieniona, koszt 0 USD.
+
+## [2026-07-13] Właściciel zlecił naprawę trzech P1 końcowego review Etapu 1
+
+- **Typ:** korekta bezpieczeństwa P1 / OFFLINE ONLY.
+- **Zakres decyzji właściciela:** pobierać czas lifecycle dopiero po write locku, potraktować `COSTS.csv` jako pochodny eksport odporny na błąd oraz atomowo zamknąć job/run/research_run po nieoczekiwanym błędzie pipeline’u. Wymagane były deterministyczne testy z realnymi wątkami i plikową SQLite, reopen/integrity oraz matrix expiry.
+- **Zakazy:** bez API, sieci, browsera, publikacji, działań paid, retry kosztownych/publikujących, migracji, zmian `data/agent.db`, commita, pushu, PR, merge, `docs/BUILD_LOG.md` i katalogu instrukcji pisania.
+- **Wynik:** ADR-046; 42 acceptance i pełny suite 683 passed offline. Etap 1 wrócił wyłącznie do `candidate complete, awaiting independent review`; koszt 0 USD, hash prawdziwej bazy bez zmiany.
+
+## [2026-07-14] Właściciel zlecił naprawę ostatniego potwierdzonego P1 terminalizacji po dispatchu
+
+- **Typ:** korekta bezpieczeństwa P1 / OFFLINE ONLY.
+- **Zakres decyzji właściciela:** sukces jobowego RESEARCH ma atomowo zapisać także `jobs=DONE`; dispatcher ma przekazać jawny wynik terminalizacji, a worker nie może wykonać heartbeat, generic completion ani generic failure po trwałym sukcesie workflow. Wymagane były literalny czerwony repro, failpointy success/failure, matrix expiry, delayed claim, prawdziwy błąd katalogu CSV i ponowne niezależne review.
+- **Zakazy:** bez API, sieci, browsera, publikacji, działań paid, retry kosztownych/publikujących, migracji, zmian `data/agent.db`, commita, pushu, PR, merge, `docs/BUILD_LOG.md` i katalogu instrukcji pisania.
+- **Wynik:** ADR-047; 53 acceptance, runtime 60 i pełny suite 695 passed offline. Etap 1 jest wyłącznie `candidate complete, awaiting independent review`; koszt 0 USD, hash prawdziwej bazy bez zmiany.
+
+## [2026-07-14] Właściciel zlecił naprawę kontraktu terminalizacji DispatchResult
+
+- **Typ:** korekta bezpieczeństwa P1/P2 / OFFLINE ONLY.
+- **Decyzja człowieka:** zamknąć kontrakt trzech trybów terminalizacji, usunąć implicit default, odrzucać malformed wynik bez canonical write i udowodnić to po rzeczywistym atomic success/failure. Dodać kontrolę pojedynczego INSERT karty i źródeł oraz test primary-vs-rollback dla sukcesu.
+- **Zakazy:** bez API, sieci, browsera, publikacji, paid actions, realnego researchu, migracji, zmiany `data/agent.db`, commita, pushu, PR, merge, `docs/BUILD_LOG.md` i katalogu instrukcji pisania.
+- **Wynik:** ADR-048; status podczas naprawy `BLOCKED — DispatchResult terminalization contract P1`, po zielonej macierzy `candidate complete, awaiting independent review`. 58 acceptance, runtime 60 i pełny suite 700 passed offline; koszt 0 USD, hash prawdziwej bazy bez zmiany.

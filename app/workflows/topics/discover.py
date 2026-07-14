@@ -11,6 +11,7 @@ from app.core.clock import Clock, SystemClock
 from app.core.config import Settings
 from app.core.ids import new_run_id
 from app.llm.base import LLMClient, LLMClientError, Usage
+from app.llm.anthropic_client import TOPIC_MAX_OUTPUT_TOKENS
 from app.llm.usage_tracker import UsageTracker
 from app.models import Account, Run, RunStatus, Topic, TopicStatus, WorkflowType
 from app.policies.policy_engine import PolicyEngine
@@ -64,7 +65,9 @@ def run_topic_discovery(
                                blocked=True, block_code=can_run.code, block_reason=can_run.reason)
 
     # 2. Bramka budżetu (pre-estymacja przed wywołaniem).
-    pre_estimate = usage_tracker.estimate_cost(Usage(input_tokens=1500, output_tokens=1000))
+    pre_estimate = usage_tracker.estimate_cost(
+        Usage(input_tokens=1500, output_tokens=TOPIC_MAX_OUTPUT_TOKENS)
+    )
     budget = policy.check_budget(pre_estimate)
     if not budget.allowed:
         notifier.notify("warning", "Budżet — stop", budget.reason, account.id)

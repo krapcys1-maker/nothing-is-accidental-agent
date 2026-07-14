@@ -14,7 +14,7 @@ from app.orchestrator import runner
 from app.policies.policy_engine import PolicyEngine
 from app.ports.storage import JobConflictError
 from app.research.fake_client import FakeResearchClient
-from app.scheduler.dispatcher import JobDispatcher
+from app.scheduler.dispatcher import DispatchResult, JobDispatcher
 from app.scheduler.enqueue import ScheduledJobEnqueuer, ScheduledJobRequest
 from app.scheduler.scheduling import (
     MAX_SCHEDULE_REASON_LENGTH,
@@ -89,7 +89,7 @@ class DispatchSpy:
     def dispatch(self, job: Job, *, lease_owner: str, heartbeat):
         self.calls += 1
         if self._delegate is None:
-            return None
+            return DispatchResult.worker_must_complete()
         if job.kind is JobKind.LOCAL:
             self.local_calls += 1
         if job.kind is JobKind.RESEARCH:
@@ -382,7 +382,11 @@ def test_worker_claims_job_at_earliest_run_at_boundary(storage, account):
         account, int(topic.id), requested_at=NOW + timedelta(days=1),
     )).job
 
-    lease = storage.claim_next_job("worker", 30, now=job.earliest_run_at)
+    # SQLite stores canonical UTC without an offset; lifecycle APIs deliberately
+    # reject naïve input, so the adapter boundary must restore the known UTC zone.
+    lease = storage.claim_next_job(
+        "worker", 30, now=job.earliest_run_at.replace(tzinfo=UTC),
+    )
     assert lease is not None and lease.job.id == job.id
 
 

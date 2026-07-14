@@ -6,6 +6,7 @@ W walking skeleton NIE jest wywoływany. Pakiet `anthropic` importowany leniwie,
 from __future__ import annotations
 
 import json
+import math
 from typing import Callable
 
 from app.llm.base import (
@@ -21,6 +22,10 @@ from app.llm.base import (
 from app.models import Account
 
 TopicCaller = Callable[[Account, int], tuple[str, Usage]]
+
+TOPIC_MAX_OUTPUT_TOKENS = 1500
+DEFAULT_PROVIDER_TIMEOUT_SECONDS = 60.0
+SDK_MAX_RETRIES = 0
 
 _SYSTEM = (
     "You are a topic scout for the English-language Substack 'Nothing Is Accidental', "
@@ -126,10 +131,14 @@ class AnthropicLLMClient(LLMClient):
         model: str,
         *,
         caller: TopicCaller | None = None,
+        timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS,
     ) -> None:
+        if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+            raise ValueError("timeout_seconds musi byÄ‡ skoÅ„czonÄ… liczbÄ… dodatniÄ….")
         self.model = model
         self._api_key = api_key
         self._caller = caller or self._default_caller
+        self._timeout_seconds = timeout_seconds
 
     def generate_and_score_topics(self, account: Account, count: int) -> TopicGenerationResult:
         text, usage = self._caller(account, count)
@@ -148,13 +157,20 @@ class AnthropicLLMClient(LLMClient):
                 "pip install -e .[llm] (potrzebne tylko poza dry_run)."
             ) from exc
 
-        client = anthropic.Anthropic(api_key=self._api_key)
+        # The SDK retries by default. A logical attempt in this application is
+        # exactly one provider request, therefore retries are explicitly off.
+        client = anthropic.Anthropic(
+            api_key=self._api_key,
+            max_retries=SDK_MAX_RETRIES,
+            timeout=self._timeout_seconds,
+        )
         try:
             message = client.messages.create(
                 model=self.model,
-                max_tokens=1500,
+                max_tokens=TOPIC_MAX_OUTPUT_TOKENS,
                 system=_SYSTEM,
                 messages=[{"role": "user", "content": _build_prompt(account, count)}],
+                timeout=self._timeout_seconds,
             )
         except anthropic.APIError as exc:
             raise LLMProviderError(

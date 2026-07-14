@@ -8,15 +8,18 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Protocol, Sequence
 
+from app.core.clock import Clock
 from app.models import (
     Account,
     Job,
+    JobExecutionContext,
     JobLease,
     JobRecoveryResult,
     JobReservation,
     ModelUsage,
     ResearchCard,
     ResearchFlow,
+    ResearchRunInitialization,
     ResearchRun,
     StagedFinalizationContext,
     SystemFlag,
@@ -81,6 +84,13 @@ class JobRunReconciliationRequired(JobRunRelationError):
             job_id,
             "attached research run is not automatically restarted after lease expiry.",
         )
+
+
+class StaleJobExecutionError(JobRunRelationError):
+    """Mutacja workera została odrzucona przez autorytatywny fence SQLite."""
+
+    def __init__(self, job_id: str, detail: str = "job execution lease is no longer active.") -> None:
+        super().__init__("STALE_JOB_EXECUTION", job_id, detail)
 
 
 class BudgetReservationError(RuntimeError):
@@ -166,63 +176,117 @@ class StoragePort(Protocol):
 
     def claim_next_job(
         self, lease_owner: str, lease_seconds: int, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> JobLease | None:
         """Atomowo przydziela najwyżej jeden eligible QUEUED job."""
         ...
 
     def mark_job_running(
         self, job_id: str, lease_owner: str, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> None: ...
 
     def attach_job_run(
         self, job_id: str, lease_owner: str, run_id: str, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> None:
         """CAS-links a compatible worker RESEARCH job with its newly created run."""
         ...
 
+    def initialize_research_run_for_job(
+        self, job_id: str, lease_owner: str, run_id: str, *, now: datetime | None = None,
+        clock: Clock | None = None,
+    ) -> ResearchRunInitialization:
+        """Atomowo tworzy run, jego rozszerzenie research i wiąże je z aktywnym jobem."""
+        ...
+
+    def assert_job_execution_active(self, execution: JobExecutionContext) -> None:
+        """Sprawdza zamknięty job→run→lease fence w krótkiej transakcji SQLite."""
+        ...
+
+    def add_job_model_usage(
+        self, execution: JobExecutionContext, usage: ModelUsage,
+    ) -> ModelUsage:
+        """Atomowo zapisuje usage i koszt wyłącznie pod świeżym fence workera."""
+        ...
+
+    def fail_job_research_execution(
+        self, execution: JobExecutionContext, cost_usd: float | None, error: str,
+        *, terminalize_job: bool = False,
+    ) -> None:
+        """Atomowo zapisuje FAILED runu/researchu; optionalnie tak\u017ce joba."""
+        ...
+
+    def finalize_job_research_execution(
+        self, execution: JobExecutionContext, card: ResearchCard, total_cost_usd: float,
+        *, terminal_run_status: RunStatus,
+    ) -> ResearchCard:
+        """Atomowo zapisuje sukces single flow oraz terminalny job pod fence."""
+        ...
+
+    def reserve_job_budget_for_execution(
+        self, execution: JobExecutionContext, amount_usd: float, *,
+        daily_limit_usd: float, monthly_limit_usd: float,
+    ) -> JobReservation:
+        """Wariant rezerwacji dostępny dla aktywnego execution workera."""
+        ...
+
+    def release_job_budget_for_execution(self, execution: JobExecutionContext) -> None:
+        """Wariant zwolnienia dostępny dla aktywnego execution workera."""
+        ...
+
     def mark_job_external_effect_started(
         self, job_id: str, lease_owner: str, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> None:
         """Trwale zaznacza granicę, po której expiry nie może auto-retry'ować joba."""
         ...
 
     def complete_job(
         self, job_id: str, lease_owner: str, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> None: ...
 
     def fail_job(
         self, job_id: str, lease_owner: str, error: str, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> None: ...
 
     def mark_job_needs_verification(
         self, job_id: str, lease_owner: str, error: str, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> None: ...
 
     def release_or_requeue_expired_leases(
-        self, *, now: datetime | None = None,
+        self, *, now: datetime | None = None, clock: Clock | None = None,
     ) -> JobRecoveryResult: ...
 
     def reap_orphaned_stale_runs(
         self, stale_before: datetime, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> RunReaperResult:
         """Fail-closed RUNNING→STOPPED reaper after job recovery/reconciliation."""
         ...
 
     def heartbeat_job_lease(
         self, job_id: str, lease_owner: str, lease_seconds: int,
-        *, now: datetime | None = None,
+        *, now: datetime | None = None, clock: Clock | None = None,
     ) -> None: ...
 
-    def cancel_job(self, job_id: str, *, now: datetime | None = None) -> None: ...
+    def cancel_job(
+        self, job_id: str, *, now: datetime | None = None, clock: Clock | None = None,
+    ) -> None: ...
 
     def reserve_job_budget(
         self, job_id: str, amount_usd: float, *, daily_limit_usd: float,
-        monthly_limit_usd: float, now: datetime | None = None,
+        monthly_limit_usd: float, now: datetime | None = None, clock: Clock | None = None,
     ) -> JobReservation:
         """Jedna transakcja: realne usage + aktywne rezerwacje + nowa rezerwacja."""
         ...
 
-    def release_job_budget(self, job_id: str, *, now: datetime | None = None) -> None: ...
+    def release_job_budget(
+        self, job_id: str, *, now: datetime | None = None, clock: Clock | None = None,
+    ) -> None: ...
 
     def get_system_flag(self, key: str) -> SystemFlag | None:
         """Brak/uszkodzenie flag bezpieczeństwa zwraca bezpieczną wartość runtime."""

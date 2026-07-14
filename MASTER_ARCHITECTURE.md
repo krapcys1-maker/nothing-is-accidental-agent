@@ -1,11 +1,11 @@
 # MASTER_ARCHITECTURE — Nothing Is Accidental Agent
 
 > **STATUS: JEDYNE ŹRÓDŁO PRAWDY O ARCHITEKTURZE.**
-> Data: 2026-07-13 · Wersja: 1.4 · Zastępuje: `ARCHITECTURE.md` (V1), `docs/IMPLEMENTATION_PLAN.md` (CZĘŚCI A–F), `docs/AUDYT_ARCHITEKTURY_2026-07-12.md`, `docs/architecture/SUBSTACK_INTEGRATION.md` — wszystkie przeniesione do `docs/archive/superseded_plans/`.
+> Data: 2026-07-14 · Wersja: 1.5 · Zastępuje: `ARCHITECTURE.md` (V1), `docs/IMPLEMENTATION_PLAN.md` (CZĘŚCI A–F), `docs/AUDYT_ARCHITEKTURY_2026-07-12.md`, `docs/architecture/SUBSTACK_INTEGRATION.md` — wszystkie przeniesione do `docs/archive/superseded_plans/`.
 >
 > Kolejność prac: `IMPLEMENTATION_ROADMAP.md`. Aktualny stan: `CURRENT_PROJECT_STATE.md`. Rejestr decyzji (ADR): `docs/DECISIONS.md` (nadal obowiązujący — ten dokument konsoliduje decyzje, nie zastępuje rejestru).
 >
-> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie i testach (623 test cases passed, 2026-07-13) albo pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
+> Każde twierdzenie o stanie obecnym w tym dokumencie zostało zweryfikowane w kodzie i testach (700 test cases passed, 2026-07-14) albo pamięciowej kopii `data/agent.db`. Twierdzenia niezweryfikowane oznaczono `NOT VERIFIED`.
 
 ---
 
@@ -18,9 +18,9 @@
 | Konfiguracja (.env + YAML, zero ścieżek absolutnych) | `app/core/config.py` | testy + 4 realne runy |
 | Modele domenowe (Pydantic v2) | `app/models.py` | testy |
 | SQLite + 9 migracji + repozytoria | `app/storage/` | `tests/test_storage.py`, `tests/test_research_run_flow.py`, `tests/test_jobs_queue.py` i in.; `0008` utrwala force staged runu, `0009` dodaje jobs i system_flags; reaper nie wymaga migracji |
-| Trwała kolejka + worker offline | `app/storage/repositories.py`, `app/scheduler/`, `app/main.py` | atomowy enqueue/idempotency, lease, runtime flags, centralny `SchedulingPolicy` przed enqueue (IANA/DST → UTC `earliest_run_at` + zamknięty `schedule_reason`), zamknięty dispatcher LOCAL/RESEARCH dry-run, ścisły CAS job→run→research_run, jawny stale reaper oraz osobny `MaintenanceRunner` one-shot/poll. Claim wybiera tylko job z `earliest_run_at <= now`; job przyszły nie dostaje lease ani attempts. Każdy cykl maintenance na osobnym SQLite robi recovery lease przed reaperem i kontrolowanie zamyka połączenie. Maintenance nie claimuje jobów, nie dispatchuje ani nie uruchamia researchu. Podczas dispatchu daemon guard odnawia istniejący lease przez osobne połączenie SQLite (60 s/20 s). Daemon jest osłoną procesu, nie zamiennikiem cleanupu: stop event, `wake`, bounded join i `is_alive()` są zawsze podejmowane; timeout blokuje `DONE`, a odblokowany później guard nie robi kolejnego heartbeat. `lost_lease`/`failure` są in-memory, natomiast SQLite oraz recovery/reconciliation rozstrzygają stan trwały; expiry RESEARCH z `run_id` → NEEDS_VERIFICATION, bez auto-resume; testy plikowej SQLite z Barrier/reopen |
+| Trwała kolejka + worker offline | `app/storage/repositories.py`, `app/scheduler/`, `app/main.py` | atomowy enqueue/idempotency, lease, runtime flags, centralny `SchedulingPolicy`, zamknięty dispatcher LOCAL/RESEARCH dry-run, atomowa inicjalizacja job→run→research_run, reaper i `MaintenanceRunner`. Po inicjalizacji zamknięty `JobExecutionContext` przenosi job ID, ownera, run ID i wstrzyknięty Clock; usage+koszt, failure, karta+źródła+COMPLETE i workerowe rezerwacje sprawdzają świeży lease oraz pełną relację w tym samym `BEGIN IMMEDIATE` co zapis. `StaleJobExecutionError` przerywa pipeline bez wtórnego FAILED. Guard jest sygnałem in-memory, SQLite pozostaje autorytetem. Expiry przypiętego RESEARCH → NEEDS_VERIFICATION, bez auto-resume; testy plikowej SQLite z Barrier/reopen |
 | Policy Engine (kill-switch, runtime flags workera z SQLite, aktywność konta, budżet dzienny/miesięczny z priorytetem miesięcznym ADR-012, progi tematów) | `app/policies/policy_engine.py` | `tests/test_policy_engine.py`, `tests/test_worker_runtime.py` |
-| Księgowanie kosztów (model_usage + COSTS.csv, flaga dry_run) | `app/llm/usage_tracker.py` | 4 realne runy i kontrolowany resume potwierdziły poprawność |
+| Księgowanie kosztów (model_usage + COSTS.csv, flaga dry_run) | `app/llm/usage_tracker.py` | SQLite `model_usage` jest kanonem; `COSTS.csv` to odtwarzalny eksport best-effort po commicie |
 | Pipeline tematów (generacja+scoring+dedup+progi) | `app/workflows/topics/` | testy; realnie NIGDY nie uruchomiony (`NOT VERIFIED` na żywym API) |
 | Deduplikacja tematów (lokalna, bez kosztu, ADR-014) | `app/workflows/topics/dedup.py` | `tests/test_dedup.py` |
 | Research etapowy A1/A2/B (ADR-020) + wznawialność po restarcie | `app/workflows/research/pipeline.py` | 351 testów; na żywo Task 9: A1 ✅, A2 4/4 ✅, pierwsze B `max_tokens`, kontrolowany resume wyłącznie B ✅; karta #2, COMPLETE/SUCCESS/USED, 4 VERIFIED, 0,183964 USD |
@@ -46,7 +46,7 @@
 
 - `EnvSecretStore` i `LocalFileStore` — zdefiniowane, zero wywołań w całym repo (config czyta `os.getenv` bezpośrednio).
 - Brak usługi schedulera systemowego — `reap-runs --once` i `maintain --once/--poll` są jawne oraz offline, lecz nie ma cron/service/autostartu ani pętli uruchamianej przez worker.
-- Legacy pipeline'y researchu (`run_research_pipeline` jednoetapowy, `run_two_stage_research_pipeline`) — działają i mają testy, ale są NIEZALECANE (ADR-016→020); pierwszy sukces staged osiągnięto, lecz roadmapa wymaga ≥2 przed oznaczeniem legacy jako DEPRECATED.
+- Legacy pipeline'y researchu (`run_research_pipeline` jednoetapowy, `run_two_stage_research_pipeline`) — działają i mają testy, ale są NIEZALECANE (ADR-016→020). Manualne wywołanie bez joba zachowuje dawne mutacje; jedynie zamknięta gałąź workera tego samego single pipeline używa worker-only fenced API i nie może wywołać legacy finalizerów.
 
 ### 1.5. Duplikacja logiki
 
@@ -213,7 +213,7 @@ Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → bu
 | `research_cards` + `sources` | karta badawcza (= **research card**) + źródła finalne | question, working_thesis, confirmed/uncertain_claims, contradictions, confidence, recommendation | PROCEED/REVISE/REJECT (rekomendacja) | karta zapisywana też po odrzuceniu |
 | `research_stage_results` | log KAŻDEJ próby etapu (= **retry**/**failure** log researchu) | stage (A/A1/A2/B), status, error | SUCCESS/FAILED | append-only |
 | `model_usage` | wywołanie modelu (= **model call** + **cost record**) | run_id, task, tokeny, web_search_requests, estimated_cost_usd, dry_run | — | append-only; koszt zapisywany TAKŻE przy błędzie |
-| `jobs` | trwałe zadanie kolejki | kind, workflow, payload_json, status, priority, idempotency_key, lease, attempts, `run_id`, marker skutku i rezerwacja | QUEUED→LEASED→RUNNING→DONE/FAILED/NEEDS_VERIFICATION/CANCELLED | UNIQUE idempotency; partial UNIQUE aktywnego researchu per account/topic; worker wiąże wyłącznie zgodny single-flow run tego samego account/topic; expiry z `run_id` wymaga reconciliation |
+| `jobs` | trwałe zadanie kolejki | kind, workflow, payload_json, status, priority, idempotency_key, lease, attempts, `run_id`, marker skutku i rezerwacja | QUEUED→LEASED→RUNNING→DONE/FAILED/NEEDS_VERIFICATION/CANCELLED | UNIQUE idempotency; partial UNIQUE aktywnego researchu per account/topic; worker atomowo tworzy zgodny single-flow run, research_run i `run_id`; expiry z `run_id` wymaga reconciliation |
 | `system_flags` | runtime safety flags workera | key, value_json, reason, updated_at | JSON boolean albo fail-closed | odczyt SQLite bez cache; `kill_switch`, `worker_enabled`, `safe_mode`, paid/browser |
 | `content_items` | artykuł/Note (= **draft**, **article**, **note**) — SCHEMAT BEZ KODU | type, title, body, status, score, research_card_id, external_url | docelowe: sekcja 5 | — |
 | `interactions` | komentarz/odpowiedź/lajk (= **interaction**, **comment**, **reply**) — SCHEMAT BEZ KODU | target_item_id, type, body, status | docelowe: sekcja 5 | — |
@@ -237,7 +237,7 @@ Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → bu
 
 1. Operacje płatne: nigdy nie powtarzaj automatycznie etapu, który zostawił trwały wynik (resume wykonuje wyłącznie NASTĘPNY etap).
 2. Publikacja: `idempotency_key` + verify-before-publish + wynik UNCERTAIN nigdy nie jest retry'owany automatycznie.
-3. Zapisy stanu: przejście statusu + dane w JEDNEJ transakcji (wzór: `mark_research_stage_a_success` oraz staged B `finalize_staged_research_with_card`). `finalize_research_success` i `mark_research_run_complete` obsługują wyłącznie legacy `single`/`two_stage`, a ogólny `finish_run` odmawia staged `SUCCESS`/`DRY_RUN`; wszystkie trzy blokady działają przed no-opem lub użyciem kosztu. Staged B zapisuje kartę, wszystkie jej źródła, wynik B SUCCESS i COMPLETE/SUCCESS-or-DRY_RUN/USED w jednym `BEGIN IMMEDIATE`; jego kanoniczny koszt pochodzi wyłącznie z `model_usage`. Zgoda na fresh/resume/force jest jednym typowanym contextem, a nie luźnymi booleanami; preflight sprawdza go przed B.
+3. Zapisy stanu: przejście statusu + dane w JEDNEJ transakcji. RESEARCH worker używa `initialize_research_run_for_job`: po weryfikacji joba, kind/workflow, ownera i świeżego lease `BEGIN IMMEDIATE` tworzy `runs`, `research_runs` i CAS `jobs.run_id IS NULL`; każdy `BaseException` przed commitem rollbackuje cały komplet. Gdy `run_id` już istnieje, adapter waliduje i zwraca istniejący komplet, a worker fail-closed kieruje go do weryfikacji zamiast go wykonywać. Staged B nadal używa własnego atomowego finalizera; kanoniczny koszt pochodzi wyłącznie z `model_usage`.
 4. Każdy istniejący helper zmieniający status waliduje stan poprzedni w tym samym UPDATE (`WHERE status IN (...)`, a dla researchu także `flow`) i wymaga dokładnie jednego zmienionego wiersza. `rowcount=0` daje typowany błąd z aktualnym stanem, z wyjątkiem jawnych no-opów idempotencji; `rowcount>1` jest błędem integralności.
 
 ---
@@ -400,6 +400,10 @@ Obowiązujące ADR-y: 001–024 (statusy PROPOSED dla 001/002/003/005/006 trakto
 
 ---
 
+### 9.1. Aktualizacja wykonawcza Etapu 1 — final restart acceptance (2026-07-14)
+
+Wcześniejsze liczby 26/42/53 acceptance oraz 667/683/695 testów są historyczne. ADR-044 atomizuje `initialize_research_run_for_job`, ADR-045 zamyka old-owner research fencing, ADR-046 wymaga czasu po `BEGIN IMMEDIATE`, ADR-047 przenosi sukces joba do transakcji workflow, a ADR-048 domyka runtime kontrakt `DispatchResult`. `finalize_job_research_execution` zapisuje w jednej fenced transakcji kartę i źródła, `research_runs=COMPLETE`, terminalny run, topic `USED`, `jobs=DONE`, timestampy, kanoniczny koszt i wyczyszczony lease. `DispatchResult` nie ma domyślnego ownera terminalizacji, waliduje `TerminalizationMode` przy konstrukcji, a Worker waliduje go ponownie przed jakimkolwiek końcowym zapisem: `WORKFLOW_TERMINALIZED` zwraca DONE, `WORKFLOW_FAILED` zwraca FAILED, a wyłącznie `WORKER_MUST_COMPLETE` może wykonać generic heartbeat i `complete_job`. Naruszenie kontraktu jest propagowane jako niemutujący `DispatchContractError`, nie jako LOST_LEASE ani generic failure. Każdy INSERT karty i źródła wymaga `rowcount == 1`; błąd rollbacku pozostaje notą wtórną przy błędzie pierwotnym. 58 scenariuszy file-SQLite/reopen/failpoint/Barrier oraz pełny suite 700 passed potwierdzają kontrakt. Review WAVE 0A ma `APPROVE WITH P2`, a database baseline został logicznie odtworzony; formalne zamknięcie Etapu 1 nie zostało ogłoszone. System scheduler/service, paid/live oraz browser/public nie są tym odblokowane. Przed Etapem 8 wymagany jest audyt KEEP/DEPRECATE/REMOVE dla eksportu CSV; nie wdrożono outboxa ani ledgeru provider request ID.
+
 ## 10. Rzeczy, których OBECNIE NIE ROBIMY (nie rozbudowywać bez decyzji właściciela)
 
 1. **Postgres, Docker, mikroserwisy, zewnętrzne kolejki (Redis/Celery), vector store** — SQLite+WAL i monolit wystarczą daleko poza obecną skalę (Docker dopiero w Etapie 8).
@@ -414,3 +418,13 @@ Obowiązujące ADR-y: 001–024 (statusy PROPOSED dla 001/002/003/005/006 trakto
 10. **Web UI ponad panel localhost FastAPI** — żaden hosting publiczny w MVP.
 11. **Multi-konto w praktyce** — architektura wielokontowa jest i zostaje testowana, ale aktywne jest wyłącznie `nothing_is_accidental` (ADR-007).
 12. **Samodzielne zmiany polityk bezpieczeństwa przez strategy engine** — strategia koryguje parametry treści, nigdy limity/blokady.
+
+---
+
+## 11. WAVE 0A — inwariant pojedynczego realnego żądania (2026-07-14)
+
+Status: **WAVE 0A formally closed / `APPROVED WITH P2`; Etap 1 pozostaje BLOCKED przez pozostałe P1.** P0-01, P1-01 i P1-02 są zamknięte. Realny adapter Anthropic może powstać wyłącznie w `scripts/run_capped_research.py` po jawnej fladze `--real`, osobnej zgodzie właściciela i pełnym pre-flight. Każda konstrukcja SDK przekazuje `max_retries=0` oraz skończony dodatni timeout. Klient nie wykonuje własnej pętli retry: timeout, connection, 429, 5xx i błąd nieznany wracają jako typowany wynik pierwszej próby, bez drugiego requestu.
+
+`app.main run-topics`, `app.main run-research` i `worker` są bezwarunkowo offline/fake; wartość `DRY_RUN=false` ani obecność klucza nie zmienia tego wyboru. Brak `--real` w capped entrypoint kończy się estymatą/offline bez klienta API. Przed konstrukcją realnego klienta wymagane są wszystkie komponenty cennika (`input`, `output`, `cache read`, `cache write`, `web search`), każdy dodatni i skończony; brak, zero, wartość ujemna, `NaN` i `inf` blokują wykonanie. Dry-run może działać bez cen. Estymata tematów używa tego samego limitu outputu co request (1500).
+
+Weryfikacja kodu: 14 testów WAVE 0A oraz pełny suite **714 passed** po odizolowaniu testu od domyślnej bazy; bez sieci, API, publikacji ani kosztu. Po zatwierdzonym review `APPROVED WITH P2` wykonano kontrolowane logiczne odtworzenie wyłącznie potwierdzonych artefaktów fake/dry-run na kopii, a następnie podmieniono główny plik po backupie stanu po incydencie. Nowy baseline `data/agent.db` to SHA-256 `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`; dwa reopeny potwierdziły integrity i FK oraz zachowanie danych realnych. Incydent bazy jest zamknięty; brak bitowej kopii starego SHA pozostaje faktem forensycznym. P2 backlog obejmuje test granicy `messages.create`, pełną parametryzację pricingu i kolejność aktualizacji dokumentacji. Nie deklarować ukończenia Etapu 1.

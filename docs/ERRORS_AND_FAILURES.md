@@ -1,5 +1,13 @@
 # ERRORS_AND_FAILURES
 
+### [2026-07-13] P1 — rozdzielona inicjalizacja RESEARCH tworzyła osierocone runy po crashu
+
+- **Kategoria:** TECH
+- **Co miało działać:** restart workera nie może tworzyć drugiego runu dla jednego joba RESEARCH.
+- **Co się zepsuło:** crash po `create_run` i `create_research_run`, lecz przed `attach_job_run`, zostawiał `jobs.run_id=NULL`; recovery requeue’owało job i drugi worker tworzył drugi komplet.
+- **Przyczyna:** trzy osobne commity nie utrzymywały inwariantu „run i research_run istnieją tylko wraz z `jobs.run_id`”.
+- **Naprawa i dowód:** ADR-044 wprowadza jeden `BEGIN IMMEDIATE` dla run, research_run i CAS joba; failpointy przed i po commicie, reopen/recovery, fencing i `Barrier` potwierdzają brak duplikatu. Brak API, zmiany `data/agent.db` i kosztu rzeczywistego.
+
 ## Cel
 
 Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system zachował się źle lub wymagał zatrzymania. Służy trzem rzeczom: (1) nauce i poprawie, (2) uczciwemu materiałowi do końcowego artykułu na „Chaos Engine" (błędy są częścią eksperymentu), (3) mierzeniu, jak często agent zawodzi i dlaczego. Odróżniamy błąd techniczny (wyjątek, awaria selektora) od błędu jakościowego (halucynacja źródła, słaby komentarz, powtarzalność).
@@ -448,3 +456,63 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Zabezpieczenie:** claim, enqueue i rezerwacja są pojedynczymi transakcjami `BEGIN IMMEDIATE` z rowcount/CAS. Partial UNIQUE blokuje drugi aktywny research job per account/topic. BROWSER po expiry idzie do NEEDS_VERIFICATION, nie do auto-retry; tylko LOCAL/RESEARCH przed efektem zewnętrznym mogą wrócić do QUEUED.
 - **Dług świadomy:** nie ma jeszcze workera, więc queue nie wie jeszcze, kiedy future research przekroczył granicę płatnego calla; jego dispatcher musi przed tym mieć osobną, trwałą semantykę skutku. PolicyEngine nadal nie czyta `system_flags` runtime (P1-7 pozostaje otwarte do integracji).
 - **Dowód:** Barrier/reopen dla 8 klas wyścigów, 0009 rollback oraz **463 passed**, bez API i kosztu.
+## 2026-07-13 — P1: stary worker zapisywał research po utracie lease
+
+- **Wykrycie:** niezależne review końcowej akceptacji restartu po ADR-044.
+- **Scenariusz:** worker A claimował job i atomowo inicjalizował run. Po expiry recovery ustawiał `NEEDS_VERIFICATION`, ale A pozostawał wewnątrz synchronicznego pipeline’u. Ponieważ `add_model_usage`, aktualizacja cache kosztu, `finish_run`, `mark_research_run_failed`, `add_research_card` i `finalize_research_success` nie znały job ID ani lease ownera, stary proces mógł zmienić canonical stan po recovery.
+- **Skutek:** możliwe usage/koszt, FAILED albo COMPLETE i karta zapisane przez proces bez aktualnego prawa wykonania; `complete_job` odrzucał starego ownera dopiero za późno. To był P1, nie kosmetyka guardu.
+- **Naprawa:** ADR-045. Po atomowej inicjalizacji powstaje `JobExecutionContext`; każda jobowa mutacja single-flow używa krótkiego `BEGIN IMMEDIATE` i sprawdza pełny job→run→owner→fresh lease fence w tej samej transakcji. `StaleJobExecutionError` przerywa pipeline bez wtórnego failure write.
+- **Dowód:** expiry przed recovery, pełna old-owner matrix po recovery, utrata lease podczas klienta i race dwóch połączeń. Po close→reopen snapshot jest identyczny, usage/card nie istnieją, run pozostaje DRY_RUN/PENDING, job jest pod kontrolą recovery, integrity `ok`.
+- **Granica:** realny provider może naliczyć koszt mimo utraty lease podczas calla. Nie wolno wtedy pozwolić staremu workerowi zapisać canonical wynik; przyszłe rozliczenie wymaga idempotentnego ledgeru provider request ID. Nie implementowano go w tym offline zadaniu.
+
+## 2026-07-13 — P1: czas lease pobrany przed `BEGIN IMMEDIATE` i CSV jako fałszywa granica trwałości
+
+- **Wykrycie:** niezależne końcowe review Etapu 1 po ADR-045.
+- **Scenariusz lease:** operacja startowała przed expiry, lecz czekała na cudzy SQLite write lock. Zamrożony czas sprzed czekania pozwalałby po zwolnieniu locka zatwierdzić `RUNNING`, heartbeat, inicjalizację lub terminalizację już wygasłego lease.
+- **Scenariusz CSV:** `record_job` najpierw poprawnie commitował `model_usage` i koszt do SQLite, ale błąd appendu `COSTS.csv` propagował się do ogólnego catcha workera. Ten mógł sfinalizować sam job, pozostawiając run/research_run w aktywnym stanie.
+- **Naprawa:** czas jest odczytywany dopiero po `BEGIN IMMEDIATE`; runtime przekazuje `Clock`. `COSTS.csv` po commicie jest best-effort i loguje wyłącznie kontrolowane ostrzeżenie. Nieoczekiwany wyjątek po inicjalizacji uruchamia atomową fenced terminalizację job/run/research_run.
+- **Dowód:** 42 restart acceptance, w tym 7 lifecycle i 5 fenced-write testów real-thread/file-SQLite lock wait i reopen, race heartbeat↔recovery, CSV success/failure oraz unexpected pipeline error; pełny suite 683 passed, `integrity_check=ok`, koszt 0 USD.
+- **Pozostawiony dług:** przed Etapem 8 decyzja KEEP/DEPRECATE/REMOVE dla eksportu `COSTS.csv`; nie budowano eksportera ani outboxa. Realny provider request po utracie lease nadal wymaga odrębnego idempotentnego ledgeru.
+
+### Nieudane próby podczas naprawy
+
+1. Pierwsze uruchomienie najwęższego testu zakończyło się błędem kolekcji `ImportError: JobExecutionContext` — zamierzony czerwony dowód, że kontrakt jeszcze nie istniał; nie zmieniło bazy.
+2. Pierwsza regresja maintenance+scheduling+queue+storage miała 1 failure: stary test granicy scheduling przekazywał naïwny timestamp odczytany z SQLite jako `now`. Nowy kontrakt UTC ma takie dane odrzucać, więc test jawnie przywraca znaną strefę UTC na granicy adaptera; walidacji produkcyjnej nie poluzowano.
+3. Nie wykonywano retry płatnej ani publikującej operacji. Obie porażki były lokalne, deterministyczne i kosztowały 0 USD.
+
+## 2026-07-14 — P1: post-dispatch heartbeat mógł częściowo terminalizować sukces RESEARCH
+
+- **Wykrycie:** literalny restart acceptance po poprzednich naprawach Etapu 1.
+- **Scenariusz:** pipeline workera commitował kartę, źródła, `research_runs=COMPLETE`, run i topic, a następnie `Worker.run_once()` wywoływał jeszcze końcowy heartbeat oraz `complete_job`. Wyjątek z tej ogólnej ścieżki trafiał do szerokiego catcha i mógł wykonać samotne `fail_job`.
+- **Skutek przed naprawą:** reprodukcja z awarią czwartego heartbeat dawała `worker=FAILED`, `job=FAILED`, a `run=DRY_RUN` i `research_run=COMPLETE`. Baza była technicznie poprawna, lecz lifecycle semantycznie sprzeczny.
+- **Naprawa:** ADR-047. Finalizacja jobowego success zapisuje `jobs=DONE` w tym samym commicie co artefakt i lifecycle researchu. Typowany wynik dispatchera zatrzymuje worker przed dodatkowym heartbeat/complete/fail. Diagnostyka po commicie jest best-effort i nie zmienia kanonu SQLite.
+- **Dowód:** test był czerwony przed zmianą i zielony po niej; failpointy przed job UPDATE, po nim oraz po commicie wykazują odpowiednio pełny rollback albo trwały pełny sukces. Dodatkowo failure transaction zachowuje primary error mimo błędu rollbacku, a rzeczywisty path katalogu `COSTS.csv` nie zmienia wyniku. 53 acceptance i 695 testów offline, `integrity_check=ok`, 0 USD.
+- **Pozostawiony dług:** nie powstał outbox ani ledger provider request ID; CSV pozostaje utrzymanym eksportem best-effort do audytu przed Etapem 8.
+
+## 2026-07-14 — P1: runtime nie walidował właściciela terminalizacji DispatchResult
+
+- **Wykrycie:** końcowy pakiet review Etapu 1 po ADR-047.
+- **Reprodukcja:** `DispatchResult(terminalization="WORKFLOW_TERMINALIZED")` przyjmował string. Po rzeczywistym atomic success worker nie rozpoznawał go przez identity, próbował post-terminal heartbeat, widział wyczyszczony lease i raportował `LOST_LEASE`, mimo że baza była już DONE/COMPLETE.
+- **Drugi inwariant:** `WORKFLOW_FAILED` jest własnością workflow dopiero, gdy workflow atomowo zamknął job, run i research_run; worker nie może po nim wywołać generic `fail_job` ani zmienić canonical error.
+- **Naprawa:** ADR-048 wymaga enumu w zamrożonym `DispatchResult`, a Worker waliduje obiekt i enum ponownie, przed guardem i przed każdą finalną mutacją. Contract error jest propagowany, nie mapowany na failure ani LOST_LEASE. Inserty karty/źródeł wymagają `rowcount == 1`; rollback failure zostaje secondary note.
+- **Dowód:** literalny konstruktor był czerwony przed zmianą; atomic failure ma 0 generic `fail_job`. 58 acceptance i pełny suite 700 passed, reopen/snapshot/integrity poprawne, koszt 0 USD.
+- **Nieudana lokalna regresja:** po wymaganiu jawnego wyniku siedem osiągalnych fake dispatcherów testowych zwracało `None`; testy heartbeat oczekiwały wtedy LOST_LEASE. Doprecyzowano je do jawnego `WORKER_MUST_COMPLETE`, bez zmiany produkcyjnej semantyki i bez dotykania bazy.
+
+## 2026-07-14 — P0: SDK mogło wydać więcej niż jedna logiczna próba
+
+- **Wykrycie:** niezależny audyt końcowego pakietu Etapu 1.
+- **Problem:** konstrukcje `anthropic.Anthropic(...)` nie przekazywały `max_retries=0`, więc SDK mogło po timeout, błędzie połączenia, 429 albo 5xx wysłać następny płatny request. Klient research miał dodatkowo własną pętlę retry. Równolegle zwykłe `app.main` ufało `DRY_RUN=false`, a ceny zero/brakujące mogły obniżyć estymatę do zera przed realnym wywołaniem.
+- **Skutek potencjalny:** jedna zatwierdzona próba mogła oznaczać więcej niż jedno żądanie i koszt niezgodny z pre-flightem; nie wykryto nowego realnego wydatku podczas tej naprawy.
+- **Naprawa WAVE 0A:** SDK dostaje `max_retries=0` i dodatni timeout; klient wykonuje jedną próbę i propaguje typowany błąd. Normalne CLI i worker są fake/offline niezależnie od env. Tylko capped root z `--real` może utworzyć adapter, po fail-closed walidacji pięciu cen. Brak `--real` nie tworzy klienta. Estymata tematów została wyrównana do requestu 1500 tokenów outputu.
+- **Dowód:** testy fake/spy obejmują SDK config, timeout/429/5xx z licznikiem jednej próby, normalne CLI/worker z realnym kluczem, brak `--real`, ceny missing/0/negative/NaN/inf, dry-run bez ceny i zgodność limitu. Kodowa regresja ma 14 testów WAVE 0A i pełny suite 714 passed. **Niezależny review: `APPROVED WITH P2`; P0-01, P1-01 i P1-02 są zamknięte, a WAVE 0A formalnie zamknięta. Etap 1 pozostaje BLOCKED przez pozostałe P1.**
+- **Granice:** bez sieci, API, publikacji, browsera ani kosztu; nie dodano ledgeru provider request ID ani reconciliation. Naruszenie lokalnej bramki `data/agent.db` jest opisane poniżej.
+
+## 2026-07-14 — Naruszenie bramki acceptance: test WAVE 0A otworzył domyślną bazę
+
+- **Wykrycie:** porównanie SHA-256 po pełnej regresji WAVE 0A.
+- **Przyczyna:** test normalnego CLI podmienił `app.main.load_settings`, ale wywoływany runner ładował ustawienia w swoim module. W rezultacie test użył domyślnej ścieżki `data/agent.db` i zapisał wyłącznie artefakty fake/dry-run zamiast bazy tymczasowej.
+- **Zakres:** zapisano 10 powtarzalnych runów/research cardów/topiców i 20 wierszy usage fake/dry-run; nie wykonano sieci, API, publikacji ani płatnego requestu. `PRAGMA integrity_check=ok`, ale hash zmienił się z `C92D9565DDA322997DE0D6A78D3943336E58CD9261229949E0BCFE4E43F9A63C` na `77F84B30F9E53A1964EFA2A44E4DBF821848758FFF86A29DB7A028AA55A3B22B`.
+- **Działanie:** test zastąpiono bezpośrednim wywołaniem runnera z jawnym `Settings` wskazującym bazę tymczasową; jego 14 testów i pełny suite 714 passed nie zmieniły już bieżącego hashu. Nie wykonano kolejnego zapisu do `data/agent.db` ani nie próbowano „naprawy” bez źródłowej kopii.
+- **Blokada historyczna:** przeszukane lokalne kopie projektu, katalog tymczasowy i zachowane artefakty nie zawierały pliku o hash bazowym `C92D9565DDA322997DE0D6A78D3943336E58CD9261229949E0BCFE4E43F9A63C`.
+- **Kontrolowane odtworzenie po review:** właściciel zatwierdził wariant `APPROVE WITH P2` (P0=0, P1=0). Forensic analysis zaklasyfikowała artefakty testu jako klasę A, sekwencje jako klasę B, a istniejące UPSERT/`topics.id=1` jako klasę C nieudowadnialną historycznie. Na osobnej kopii usunięto tylko A i przywrócono B, następnie po dwóch reopenach (`integrity_check=ok`, `foreign_key_check=[]`) podmieniono wyłącznie główny plik po zachowaniu backupów. Nowy baseline to `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`.
+- **Wynik i granica dowodu:** nie stwierdzono utraty realnych danych: 13 wpisów `dry_run=0` nadal sumuje 0,684580 USD, a `c01171bc` ma 0,183964 USD, Card #2, cztery VERIFIED sources i siedem usage. Werdykt `NOT PROVABLY RESTORABLE` dla dawnego pliku pozostaje prawdziwy — ustanowiono nowy baseline logiczny, nie odzyskano bitowego snapshotu. **Incydent bazy jest zamknięty; nie jest to zamknięcie Etapu 1.**

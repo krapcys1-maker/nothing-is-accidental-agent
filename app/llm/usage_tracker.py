@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import csv
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 
 from app.core.config import Settings
 from app.llm.base import Usage
-from app.models import ModelUsage
+from app.models import JobExecutionContext, ModelUsage
 from app.ports.storage import StoragePort
 
 _CSV_COLUMNS = [
@@ -15,6 +16,7 @@ _CSV_COLUMNS = [
     "cache_read_tokens", "cache_write_tokens", "web_search_requests", "image_count",
     "estimated_cost_usd", "notes",
 ]
+_LOGGER = logging.getLogger(__name__)
 
 
 class UsageTracker:
@@ -47,8 +49,45 @@ class UsageTracker:
             estimated_cost_usd=cost, dry_run=dry_run,
         )
         self._storage.add_model_usage(row)
-        self._append_csv(row)
+        self._append_csv_safely(row)
         return row
+
+    def record_job(
+        self,
+        execution: JobExecutionContext,
+        model: str,
+        usage: Usage,
+        task: str,
+        dry_run: bool,
+        provider: str = "anthropic",
+    ) -> ModelUsage:
+        """Worker-only path: SQLite fence succeeds before any CSV side effect."""
+        cost = self.estimate_cost(usage)
+        row = ModelUsage(
+            run_id=execution.run_id, provider=provider, model=model, task=task,
+            input_tokens=usage.input_tokens, output_tokens=usage.output_tokens,
+            cache_read_tokens=usage.cache_read_tokens,
+            cache_write_tokens=usage.cache_write_tokens,
+            web_search_requests=usage.web_search_requests,
+            estimated_cost_usd=cost, dry_run=dry_run,
+        )
+        self._storage.add_job_model_usage(execution, row)
+        self._append_csv_safely(row)
+        return row
+
+    def _append_csv_safely(self, row: ModelUsage) -> None:
+        """Best-effort derived export; SQLite remains the cost authority."""
+        try:
+            self._append_csv(row)
+        except Exception as exc:
+            # COSTS.csv is intentionally a rebuildable operator convenience, not
+            # a second durability boundary after the fenced SQLite commit.
+            _LOGGER.warning(
+                "COSTS_CSV_DERIVED_EXPORT_FAILED run_id=%s task=%s error_type=%s",
+                row.run_id,
+                row.task,
+                type(exc).__name__,
+            )
 
     def _append_csv(self, row: ModelUsage) -> None:
         notes = "dry_run estimate (no real charge)" if row.dry_run else "actual"

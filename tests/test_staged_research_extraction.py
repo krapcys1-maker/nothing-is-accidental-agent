@@ -221,7 +221,7 @@ def test_b_resume_is_blocked_before_client_when_3000_token_projection_exceeds_ca
     assert storage.get_research_run(run_id).status == ResearchRunStatus.SOURCES_COMPLETE
 
 
-def test_a1_timeout_usage_blocks_second_attempt(settings, storage, account):
+def test_a1_timeout_usage_is_recorded_without_second_attempt(settings, storage, account):
     topic = _selected_topic(storage, account)
     calls = []
 
@@ -231,20 +231,21 @@ def test_a1_timeout_usage_blocks_second_attempt(settings, storage, account):
             "A1 timeout", usage=Usage(output_tokens=40_000), model="m")
 
     client = AnthropicResearchClient(
-        "offline", "m", discover_caller=discover_caller, max_retries=1)
+        "offline", "m", discover_caller=discover_caller, max_retries=0)
     summary = run_source_discovery(
         account, topic, settings=settings, storage=storage, research_client=client,
         usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
         policy=PolicyEngine(settings, storage), notifier=LogNotification(),
-        max_searches=1, max_output_tokens=600, max_retries=1, run_cap_usd=0.50)
+        max_searches=1, max_output_tokens=600, max_retries=0, run_cap_usd=0.50)
 
     assert calls == [1]
-    assert summary.blocked and summary.block_code == "RUN_CAP_EXCEEDED"
+    assert not summary.blocked
+    assert "timeout" in (summary.error or "").lower()
     usage = storage.get_research_usage(summary.run_id)
     assert len(usage) == 1 and usage[0].task == "research_discover"
 
 
-def test_a2_timeout_usage_blocks_second_attempt_for_one_source(
+def test_a2_timeout_usage_is_recorded_without_second_attempt_for_one_source(
         settings, storage, account):
     topic = _selected_topic(storage, account)
     run_id = _seeded_run_with_candidates(storage, account, topic, n=1)
@@ -256,23 +257,25 @@ def test_a2_timeout_usage_blocks_second_attempt_for_one_source(
             "A2 timeout", usage=Usage(output_tokens=40_000), model="m")
 
     client = AnthropicResearchClient(
-        "offline", "m", extract_caller=extract_caller, max_retries=1)
+        "offline", "m", extract_caller=extract_caller, max_retries=0)
     summary = run_source_extraction(
         run_id, account, settings=settings, storage=storage, research_client=client,
         usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
         policy=PolicyEngine(settings, storage), notifier=LogNotification(),
         max_sources=1, max_web_searches_per_source=1, max_output_tokens=1500,
-        max_retries=1, run_cap_usd=0.50)
+        max_retries=0, run_cap_usd=0.50)
 
     assert len(calls) == 1
-    assert summary.blocked and summary.block_code == "RUN_CAP_EXCEEDED"
+    assert not summary.blocked
+    assert summary.error is None
+    assert summary.sources_failed == 1
     usage = storage.get_research_usage(run_id)
     assert len(usage) == 1 and usage[0].task == "research_extract"
     candidate = storage.list_source_candidates(run_id)[0]
     assert candidate.status == SourceCandidateStatus.EXTRACTION_FAILED
 
 
-def test_b_timeout_usage_blocks_retry_and_restores_sources_complete(
+def test_b_timeout_usage_restores_sources_complete_without_retry(
         settings, storage, account):
     topic = _selected_topic(storage, account)
     run_id = _seeded_run_with_candidates(storage, account, topic, n=3)
@@ -288,16 +291,17 @@ def test_b_timeout_usage_blocks_retry_and_restores_sources_complete(
 
     client = AnthropicResearchClient(
         "offline", "m", synthesize_from_cards_caller=synthesize_caller,
-        max_retries=1)
+        max_retries=0)
     summary = run_synthesis_from_cards(
         run_id, account, settings=settings, storage=storage, research_client=client,
         usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
         policy=PolicyEngine(settings, storage), notifier=LogNotification(),
         synthesize_max_tokens=3000, forwarded_context_tokens=2500,
-        max_retries=1, run_cap_usd=0.50)
+        max_retries=0, run_cap_usd=0.50)
 
     assert calls == [1]
-    assert summary.blocked and summary.block_code == "RUN_CAP_EXCEEDED"
+    assert not summary.blocked
+    assert "timeout" in (summary.error or "").lower()
     assert storage.get_research_run(run_id).status == ResearchRunStatus.SOURCES_COMPLETE
     usage = storage.get_research_usage(run_id)
     assert len(usage) == prior_count + 1
@@ -850,11 +854,11 @@ def test_fresh_b_max_tokens_records_usage_once_and_finishes_failed_after_reopen(
 
     client = AnthropicResearchClient(
         "offline", "m", synthesize_from_cards_caller=truncated_b,
-        synthesize_max_tokens=3000, max_retries=2,
+        synthesize_max_tokens=3000, max_retries=0,
     )
     summary = _run_synthesis(
         real_settings, storage, account, run_id, client,
-        synthesize_max_tokens=3000, max_retries=2,
+        synthesize_max_tokens=3000, max_retries=0,
     )
 
     assert calls == [1]
@@ -971,7 +975,7 @@ def test_typed_non_retryable_discovery_with_usage_is_recorded_once_after_reopen(
 
     summary = _run_discovery(
         real_settings, storage, account, topic, client,
-        max_retries=3, run_cap_usd=10.0,
+        max_retries=0, run_cap_usd=10.0,
     )
 
     assert client.discover_calls == 1
@@ -1125,7 +1129,7 @@ def test_audit_error_formatter_redacts_standalone_bearer_tokens(message):
     assert "Bearer [REDACTED]" in formatted
 
 
-def test_exhausted_429_audit_keeps_type_and_records_each_attempt_once_after_reopen(
+def test_429_audit_keeps_type_and_records_the_single_attempt_after_reopen(
         settings, storage, account):
     real_settings = replace(settings, dry_run=False)
     topic = _selected_topic(storage, account)
@@ -1142,20 +1146,20 @@ def test_exhausted_429_audit_keeps_type_and_records_each_attempt_once_after_reop
 
     client = AnthropicResearchClient(
         "offline", "typed-provider-model",
-        discover_caller=rate_limited, max_retries=1,
+        discover_caller=rate_limited, max_retries=0,
     )
     summary = _run_discovery(
         real_settings, storage, account, topic, client,
-        max_retries=1, run_cap_usd=10.0,
+        max_retries=0, run_cap_usd=10.0,
     )
 
-    assert calls == [1, 1]
+    assert calls == [1]
     reopened = SqliteStorage.open(real_settings.db_path)
     try:
         usage = reopened.get_research_usage(summary.run_id)
-        assert len(usage) == 2
+        assert len(usage) == 1
         assert [(row.input_tokens, row.output_tokens) for row in usage] == [
-            (100, 20), (100, 20),
+            (100, 20),
         ]
         run = reopened.get_run(summary.run_id)
         research_run = reopened.get_research_run(summary.run_id)

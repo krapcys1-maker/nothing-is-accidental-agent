@@ -25,3 +25,5 @@ date,run_id,task,provider,model,input_tokens,output_tokens,cache_read_tokens,cac
 2026-07-13,c01171bc-7ff5-4b83-bbfa-c0b164137793,research_synthesize_cards,anthropic,claude-sonnet-5,1904,2200,0,0,0,0,0.012904,actual
 # 2026-07-13 - kontrolowana lokalna naprawa statusu runu c01171bc-7ff5-4b83-bbfa-c0b164137793 - 0.000000 USD; bez API i bez resume; historyczny koszt runu pozostal 0.170050 USD.
 2026-07-13,c01171bc-7ff5-4b83-bbfa-c0b164137793,research_synthesize_cards,anthropic,claude-sonnet-5,1904,2402,0,0,0,0,0.013914,actual
+# 2026-07-13 - offline old-owner research fencing P1, 26 restart acceptance + 667 full suite - 0.000000 USD; bez API, sieci, browsera, publikacji i realnego researchu.
+# 2026-07-14 - offline DispatchResult terminalization contract P1/P2, 58 restart acceptance + 700 full suite - 0.000000 USD; bez API, sieci, browsera, publikacji i realnego researchu.

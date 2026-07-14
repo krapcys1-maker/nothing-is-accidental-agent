@@ -229,3 +229,30 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co ma pokazywać:** zanonimizowany wynik lokalnych testów: FRESH→FRESH i FORCE→FORCE jako no-op oraz fresh/force/resume conflicts po reopen bez zmiany timestampów, kosztu, runu, research_runu ani topicu.
 - **CZEGO NIE MOŻE BYĆ WIDAĆ:** `.env`, kluczy API, raw response, historycznej bazy i zewnętrznego konta.
 - **Status:** SCREENSHOT REQUIRED — brak Playwrighta i API; materiał może powstać tylko z syntetycznej SQLite testowej.
+### 2026-07-13 — Etap 1: old-owner research fencing P1
+
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_stage1-old-owner-fencing-matrix.png`
+- **Co ma pokazywać:** zanonimizowany raport z syntetycznej plikowej SQLite: job po expiry/recovery w `NEEDS_VERIFICATION`, każda próba starego ownera odrzucona, przed/po identyczny snapshot run/research_run/usage/card/koszt/timestamps oraz `integrity_check=ok`; obok wynik race dwóch połączeń.
+- **CZEGO NIE MOŻE BYĆ WIDAĆ:** `.env`, kluczy, danych prawdziwej bazy, treści provider response, danych zewnętrznego konta ani identyfikatorów realnych runów.
+- **Status:** SCREENSHOT REQUIRED — zadanie nie używało browsera ani Playwrighta; dowodem bieżącym są deterministyczne testy na syntetycznej SQLite, reopen i SHA-256 prawdziwej bazy.
+
+### 2026-07-13 — Etap 1: post-lock lease i pochodny koszt
+
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_stage1-post-lock-lease-csv.png`
+- **Co ma pokazywać:** zanonimizowany raport z syntetycznej plikowej SQLite: mutacja rozpoczęta przed expiry blokuje się na `BEGIN IMMEDIATE`, po przesunięciu zegara jest odrzucona bez zmiany snapshotu; obok job/run/research_run kończące się poprawnie mimo kontrolowanej awarii appendu `COSTS.csv`.
+- **CZEGO NIE MOŻE BYĆ WIDAĆ:** `.env`, kluczy, danych prawdziwej bazy, raw response, ścieżek prywatnych ani danych zewnętrznego konta.
+- **Status:** SCREENSHOT REQUIRED — brak Playwrighta i API; dowodem są testy na syntetycznej SQLite, reopen, `PRAGMA integrity_check` i niezmieniony hash prawdziwej bazy.
+
+### 2026-07-14 — Etap 1: atomowy sukces RESEARCH obejmuje job
+
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_stage1-workflow-terminalization.png`
+- **Co ma pokazywać:** zanonimizowany raport z syntetycznej plikowej SQLite po reopen: jedna karta i komplet źródeł, `research_run=COMPLETE`, terminalny run, topic `USED`, `job=DONE`, brak ownera/lease/error; obok failpoint przed i po `UPDATE jobs SET status='DONE'`, w obu przypadkach brak częściowego sukcesu.
+- **CZEGO NIE MOŻE BYĆ WIDAĆ:** `.env`, kluczy, danych prawdziwej bazy, raw response, prywatnych ścieżek ani danych konta zewnętrznego.
+- **Status:** SCREENSHOT REQUIRED — dowodem bieżącym są deterministyczne testy file-SQLite, reopen i `PRAGMA integrity_check`; browser, Playwright i API nie były używane.
+
+### 2026-07-14 — Etap 1: zamknięty kontrakt DispatchResult
+
+- **Plik:** `docs/screenshots/YYYY-MM-DD_HHMM_stage1-dispatch-contract.png`
+- **Co ma pokazywać:** zanonimizowany raport z syntetycznej file-SQLite: atomic failure z `generic fail_job=0`; odrzucony string terminalizacji bez heartbeat/complete/fail/LOST; osobny atomic success pozostający `job=DONE`, `research_run=COMPLETE`, topic `USED` i z kartą po reopen.
+- **CZEGO NIE MOŻE BYĆ WIDAĆ:** `.env`, kluczy, danych prawdziwej bazy, raw response, prywatnych ścieżek ani danych konta zewnętrznego.
+- **Status:** SCREENSHOT REQUIRED — zadanie wykonało tylko testy offline i nie używało browsera, Playwrighta ani API.

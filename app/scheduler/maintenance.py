@@ -70,11 +70,12 @@ class MaintenanceStorage(Protocol):
     """The narrow storage contract needed by a single maintenance cycle."""
 
     def release_or_requeue_expired_leases(
-        self, *, now: datetime | None = None,
+        self, *, now: datetime | None = None, clock: Clock | None = None,
     ) -> JobRecoveryResult: ...
 
     def reap_orphaned_stale_runs(
         self, stale_before: datetime, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> RunReaperResult: ...
 
     def close(self) -> None: ...
@@ -131,9 +132,9 @@ class MaintenanceRunner:
         now = self._clock.now()
         storage = self._storage_factory()
         try:
-            recovery = storage.release_or_requeue_expired_leases(now=now)
+            recovery = storage.release_or_requeue_expired_leases(clock=self._clock)
             reaper = storage.reap_orphaned_stale_runs(
-                now - timedelta(seconds=self._stale_after_seconds), now=now,
+                now - timedelta(seconds=self._stale_after_seconds), clock=self._clock,
             )
         except BaseException as primary_error:
             try:

@@ -2,15 +2,18 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Sequence
 
+from app.core.clock import Clock
 from app.models import (
     Account,
     Job,
+    JobExecutionContext,
     JobEnqueueContext,
     JobKind,
     JobLease,
@@ -21,6 +24,7 @@ from app.models import (
     ResearchCard,
     ResearchRecommendation,
     ResearchRun,
+    ResearchRunInitialization,
     ResearchFlow,
     ResearchRunStatus,
     ResearchSourceRecord,
@@ -51,6 +55,7 @@ from app.ports.storage import (
     JobRunRelationError,
     LifecycleTransitionError,
     ResearchTopicIntegrityError,
+    StaleJobExecutionError,
     SystemFlagError,
 )
 from app.storage.db import apply_migrations, connect
@@ -82,6 +87,10 @@ _RELEASABLE_RESERVATION_STATUSES = (
     JobStatus.LEASED.value,
     JobStatus.RUNNING.value,
 )
+_EXECUTABLE_JOB_STATUSES = (
+    JobStatus.LEASED.value,
+    JobStatus.RUNNING.value,
+)
 _SECURITY_FLAG_DEFAULTS = {
     "kill_switch": True,
     "worker_enabled": False,
@@ -90,6 +99,7 @@ _SECURITY_FLAG_DEFAULTS = {
     "browser_actions_enabled": False,
 }
 _STALE_RUN_REAPER_REASON = "STALE_RUN_REAPER: stale RUNNING run has no executable job lease."
+_LOGGER = logging.getLogger(__name__)
 
 
 def _ts(dt: datetime | None = None) -> str:
@@ -428,6 +438,10 @@ class SqliteStorage:
         r = self.conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
         if r is None:
             return None
+        return self._run_from_row(r)
+
+    @staticmethod
+    def _run_from_row(r: sqlite3.Row) -> Run:
         return Run(
             id=r["id"], account_id=r["account_id"],
             workflow=WorkflowType(r["workflow"]), status=RunStatus(r["status"]),
@@ -495,8 +509,70 @@ class SqliteStorage:
         )
 
     @staticmethod
-    def _job_now(now: datetime | None) -> datetime:
-        return now or datetime.now(timezone.utc)
+    def _job_now(now: datetime | None = None, *, clock: Clock | None = None) -> datetime:
+        """Read lifecycle time only after the caller owns the SQLite write lock.
+
+        ``now`` remains a narrow deterministic-test compatibility argument. Runtime
+        callers must pass ``clock`` so waiting on ``BEGIN IMMEDIATE`` can never
+        preserve a pre-lock timestamp as a fresh lease authorization.
+        """
+        if now is not None and clock is not None:
+            raise ValueError("Pass either now or clock, not both.")
+        current = clock.now() if clock is not None else (now or datetime.now(timezone.utc))
+        if current.tzinfo is None or current.utcoffset() is None:
+            raise ValueError("Job lifecycle timestamps must be timezone-aware UTC instants.")
+        return current.astimezone(timezone.utc)
+
+    @staticmethod
+    def _rollback_preserving_primary(primary: BaseException, rollback) -> None:
+        """Best-effort rollback that never replaces the operation's primary error."""
+        try:
+            rollback()
+        except BaseException as rollback_error:
+            primary.add_note(
+                "Secondary SQLite rollback failure: "
+                f"{type(rollback_error).__name__}. Primary error was preserved."
+            )
+            _LOGGER.error(
+                "SQLite rollback failed while preserving primary %s",
+                type(primary).__name__,
+                exc_info=rollback_error,
+            )
+
+    def _job_execution_timestamp(self, execution: JobExecutionContext) -> str:
+        if not execution.job_id.strip() or not execution.lease_owner.strip() or not execution.run_id.strip():
+            raise ValueError("Job execution identifiers must be non-empty.")
+        if execution.kind is not JobKind.RESEARCH or execution.workflow is not WorkflowType.RESEARCH:
+            raise StaleJobExecutionError(
+                execution.job_id, "execution kind/workflow does not authorize research mutation.",
+            )
+        return _persisted_ts(self._job_now(execution.now()))
+
+    def _require_job_execution_fence(
+        self, execution: JobExecutionContext, current_ts: str,
+    ) -> sqlite3.Row:
+        row = self.conn.execute(
+            "SELECT j.status AS job_status,j.kind,j.workflow,j.run_id,j.lease_owner,"
+            "j.lease_expires_at,r.status AS run_status,r.account_id AS run_account_id,"
+            "rr.status AS research_status,rr.account_id AS research_account_id,"
+            "rr.topic_id,rr.flow,t.account_id AS topic_account_id "
+            "FROM jobs j JOIN runs r ON r.id=j.run_id "
+            "JOIN research_runs rr ON rr.id=r.id "
+            "JOIN topics t ON t.id=rr.topic_id "
+            "WHERE j.id=? AND j.run_id=? AND j.lease_owner=? "
+            "AND j.lease_expires_at>=? AND j.status IN ('LEASED','RUNNING') "
+            "AND j.kind='RESEARCH' AND j.workflow='RESEARCH' "
+            "AND r.workflow='RESEARCH' AND r.account_id=j.account_id "
+            "AND rr.account_id=j.account_id AND rr.topic_id=j.topic_id "
+            "AND rr.flow='single' AND t.account_id=j.account_id",
+            (
+                execution.job_id, execution.run_id, execution.lease_owner,
+                current_ts,
+            ),
+        ).fetchone()
+        if row is None:
+            raise StaleJobExecutionError(execution.job_id)
+        return row
 
     @staticmethod
     def _canonical_payload(payload: dict) -> str:
@@ -623,6 +699,7 @@ class SqliteStorage:
 
     def claim_next_job(
         self, lease_owner: str, lease_seconds: int, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> JobLease | None:
         """Claims exactly one queued job in a BEGIN IMMEDIATE transaction.
 
@@ -632,11 +709,11 @@ class SqliteStorage:
         """
         if not lease_owner.strip() or lease_seconds <= 0:
             raise ValueError("lease_owner must be non-empty and lease_seconds must be positive.")
-        current = self._job_now(now)
-        current_ts = _persisted_ts(current)
-        lease_until = _persisted_ts(current + timedelta(seconds=lease_seconds))
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+            current = self._job_now(now, clock=clock)
+            current_ts = _persisted_ts(current)
+            lease_until = _persisted_ts(current + timedelta(seconds=lease_seconds))
             self.conn.execute(
                 "UPDATE jobs SET status='FAILED', last_error='Deadline elapsed before claim.', "
                 "finished_at=?, updated_at=?, reserved_cost_usd=0.0, budget_reserved_at=NULL "
@@ -687,13 +764,13 @@ class SqliteStorage:
 
     def _transition_leased_job(
         self, job_id: str, lease_owner: str, target: JobStatus, *, error: str | None,
-        now: datetime | None, release_budget: bool,
+        now: datetime | None, clock: Clock | None, release_budget: bool,
     ) -> None:
-        current = self._job_now(now)
-        current_ts = _persisted_ts(current)
         allowed = (JobStatus.LEASED.value, JobStatus.RUNNING.value)
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+            current = self._job_now(now, clock=clock)
+            current_ts = _persisted_ts(current)
             terminal_fields = (
                 ", finished_at=?, reserved_cost_usd=0.0, budget_reserved_at=NULL"
                 if release_budget else ""
@@ -721,10 +798,11 @@ class SqliteStorage:
 
     def mark_job_running(
         self, job_id: str, lease_owner: str, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> None:
-        current_ts = _persisted_ts(self._job_now(now))
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = _persisted_ts(self._job_now(now, clock=clock))
             cursor = self.conn.execute(
                 "UPDATE jobs SET status='RUNNING', updated_at=? WHERE id=? AND status='LEASED' "
                 "AND lease_owner=? AND lease_expires_at >= ?",
@@ -742,8 +820,424 @@ class SqliteStorage:
                 self.conn.rollback()
             raise
 
+    def initialize_research_run_for_job(
+        self, job_id: str, lease_owner: str, run_id: str, *, now: datetime | None = None,
+        clock: Clock | None = None,
+    ) -> ResearchRunInitialization:
+        """Atomically initializes the offline single-flow execution for one job lease.
+
+        This is deliberately the only Stage 1 worker path that may create a
+        research ``Run``.  The new run, its one-to-one ``research_runs`` row,
+        and the job's CAS binding either commit together or do not exist at all.
+        A retry while the same fresh lease already sees an attached run returns
+        that durable relation instead of creating a second execution.
+        """
+        if not run_id.strip():
+            raise ValueError("run_id must be non-empty.")
+        if not lease_owner.strip():
+            raise ValueError("lease_owner must be non-empty.")
+
+        allowed = (JobStatus.LEASED.value, JobStatus.RUNNING.value)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current = self._job_now(now, clock=clock)
+            current_ts = _persisted_ts(current)
+            job_row = self.conn.execute(
+                "SELECT * FROM jobs WHERE id=?", (job_id,),
+            ).fetchone()
+            if job_row is None:
+                raise self._job_lifecycle_error(
+                    job_id, "RESEARCH_EXECUTION_INITIALIZED", allowed,
+                    detail="Job must exist before research execution can be initialized.",
+                )
+            job = self._job_from_row(job_row)
+            if job.kind is not JobKind.RESEARCH:
+                raise JobRunRelationError(
+                    "JOB_KIND_MISMATCH", job_id,
+                    "only kind=RESEARCH may initialize a research run.",
+                )
+            if job.workflow is not WorkflowType.RESEARCH:
+                raise JobRunRelationError(
+                    "JOB_WORKFLOW_MISMATCH", job_id,
+                    "only workflow=RESEARCH may initialize a research run.",
+                )
+            if job.topic_id is None:
+                raise JobRunRelationError(
+                    "JOB_TOPIC_MISSING", job_id,
+                    "research job must have a topic_id before initialization.",
+                )
+            if job.status.value not in allowed:
+                raise self._job_lifecycle_error(
+                    job_id, "RESEARCH_EXECUTION_INITIALIZED", allowed,
+                    detail="Initialization requires an active job lifecycle state.",
+                )
+            if job.lease_owner != lease_owner or job.lease_expires_at is None or (
+                _persisted_ts(job.lease_expires_at) < current_ts
+            ):
+                raise self._job_lifecycle_error(
+                    job_id, "RESEARCH_EXECUTION_INITIALIZED", allowed,
+                    detail="Initialization requires the caller's fresh lease.",
+                )
+            if job.payload != {
+                "account_id": job.account_id,
+                "topic_id": int(job.topic_id),
+                "dry_run": True,
+            }:
+                raise JobRunRelationError(
+                    "RESEARCH_PAYLOAD_UNSUPPORTED", job_id,
+                    "offline initialization accepts only the dry-run research payload.",
+                )
+            topic = self.conn.execute(
+                "SELECT 1 FROM topics WHERE id=? AND account_id=?",
+                (job.topic_id, job.account_id),
+            ).fetchone()
+            if topic is None:
+                raise JobRunRelationError(
+                    "JOB_TOPIC_ACCOUNT_MISMATCH", job_id,
+                    "research job topic must belong to its account.",
+                )
+
+            if job.run_id is not None:
+                run_row = self.conn.execute(
+                    "SELECT * FROM runs WHERE id=?", (job.run_id,),
+                ).fetchone()
+                research_row = self.conn.execute(
+                    "SELECT * FROM research_runs WHERE id=?", (job.run_id,),
+                ).fetchone()
+                if run_row is None or research_row is None:
+                    raise JobRunRelationError(
+                        "ATTACHED_RESEARCH_RUN_MISSING", job_id,
+                        "attached job run must have both run and research-run records.",
+                    )
+                run = self._run_from_row(run_row)
+                research_run = self._research_run_from_row(research_row)
+                if (
+                    run.account_id != job.account_id
+                    or run.workflow is not WorkflowType.RESEARCH
+                    or research_run.account_id != job.account_id
+                    or research_run.topic_id != job.topic_id
+                    or research_run.flow is not ResearchFlow.SINGLE
+                ):
+                    raise JobRunRelationError(
+                        "ATTACHED_RESEARCH_RUN_INVALID", job_id,
+                        "attached run relation is incompatible with the research job.",
+                    )
+                allowed_existing_state = (
+                    run.status is RunStatus.DRY_RUN
+                    and run_row["finished_at"] is None
+                    and run_row["error"] is None
+                    and float(run_row["cost_usd"]) == 0.0
+                    and research_run.status is ResearchRunStatus.PENDING
+                    and research_row["research_card_id"] is None
+                    and research_row["error"] is None
+                    and float(research_row["total_cost_usd"]) == 0.0
+                )
+                if not allowed_existing_state:
+                    raise JobRunRelationError(
+                        "ATTACHED_RESEARCH_RUN_STATE_INVALID", job_id,
+                        "an existing worker initialization must remain exactly "
+                        "DRY_RUN+single:PENDING without result, error, cost, or finished_at.",
+                    )
+                self.conn.commit()
+                return ResearchRunInitialization(
+                    job=job, run=run, research_run=research_run, created=False,
+                )
+
+            self.conn.execute(
+                "INSERT INTO runs (id, account_id, workflow, status, current_state, started_at) "
+                "VALUES (?,?,?,?,?,?)",
+                (
+                    run_id, job.account_id, WorkflowType.RESEARCH.value,
+                    RunStatus.DRY_RUN.value, "research", current_ts,
+                ),
+            )
+            self.conn.execute(
+                "INSERT INTO research_runs (id, account_id, topic_id, flow, status, "
+                "is_force_reresearch, total_cost_usd, created_at, updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                (
+                    run_id, job.account_id, job.topic_id, ResearchFlow.SINGLE.value,
+                    ResearchRunStatus.PENDING.value, 0, 0.0, current_ts, current_ts,
+                ),
+            )
+            cursor = self.conn.execute(
+                "UPDATE jobs SET run_id=?, updated_at=? WHERE id=? AND run_id IS NULL "
+                "AND status IN ('LEASED','RUNNING') AND lease_owner=? AND lease_expires_at >= ?",
+                (run_id, current_ts, job_id, lease_owner, current_ts),
+            )
+            self._require_one_transition(
+                cursor, table="jobs", entity="job", identifier=job_id,
+                target_status="RESEARCH_EXECUTION_INITIALIZED", allowed_source_statuses=allowed,
+                detail="Initialization requires a fresh lease and an empty run_id.",
+            )
+            initialized_job_row = self.conn.execute(
+                "SELECT * FROM jobs WHERE id=?", (job_id,),
+            ).fetchone()
+            run_row = self.conn.execute(
+                "SELECT * FROM runs WHERE id=?", (run_id,),
+            ).fetchone()
+            research_row = self.conn.execute(
+                "SELECT * FROM research_runs WHERE id=?", (run_id,),
+            ).fetchone()
+            if initialized_job_row is None or run_row is None or research_row is None:
+                raise JobRunRelationError(
+                    "RESEARCH_EXECUTION_INITIALIZATION_INCOMPLETE", job_id,
+                    "transaction did not expose every required execution record.",
+                )
+            initialized = ResearchRunInitialization(
+                job=self._job_from_row(initialized_job_row),
+                run=self._run_from_row(run_row),
+                research_run=self._research_run_from_row(research_row),
+                created=True,
+            )
+            self.conn.commit()
+            return initialized
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def assert_job_execution_active(self, execution: JobExecutionContext) -> None:
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            self._require_job_execution_fence(execution, current_ts)
+            self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def add_job_model_usage(
+        self, execution: JobExecutionContext, usage: ModelUsage,
+    ) -> ModelUsage:
+        """Worker-only usage write; insert and run-cost refresh share the fence lock."""
+        if usage.run_id != execution.run_id:
+            raise StaleJobExecutionError(
+                execution.job_id, "usage run_id does not match the fenced execution.",
+            )
+        if usage.task not in _RESEARCH_USAGE_TASKS:
+            raise StaleJobExecutionError(
+                execution.job_id, "usage task is not a research task.",
+            )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current = self._job_now(execution.now())
+            current_ts = _persisted_ts(current)
+            fence = self._require_job_execution_fence(execution, current_ts)
+            expected_dry_run = fence["run_status"] == RunStatus.DRY_RUN.value
+            if bool(usage.dry_run) != expected_dry_run:
+                raise StaleJobExecutionError(
+                    execution.job_id, "usage dry_run marker conflicts with the fenced run.",
+                )
+            cur = self.conn.execute(
+                "INSERT INTO model_usage (run_id, provider, model, task, input_tokens,"
+                " output_tokens, cache_read_tokens, cache_write_tokens, web_search_requests,"
+                " estimated_cost_usd, dry_run, created_at) "
+                "SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS ("
+                "SELECT 1 FROM jobs WHERE id=? AND run_id=? AND lease_owner=? "
+                "AND lease_expires_at>=? AND status IN ('LEASED','RUNNING'))",
+                (
+                    usage.run_id, usage.provider, usage.model, usage.task,
+                    usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
+                    usage.cache_write_tokens, usage.web_search_requests,
+                    usage.estimated_cost_usd, int(usage.dry_run), current_ts,
+                    execution.job_id, execution.run_id, execution.lease_owner, current_ts,
+                ),
+            )
+            if cur.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            self._set_run_cost_from_research_usage(execution.run_id)
+            self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+        usage.id = int(cur.lastrowid)
+        usage.created_at = current
+        return usage
+
+    def fail_job_research_execution(
+        self, execution: JobExecutionContext, cost_usd: float | None, error: str,
+        *, terminalize_job: bool = False,
+    ) -> None:
+        """Worker-only failure boundary for the legacy single research flow.
+
+        ``terminalize_job`` is reserved for an unexpected post-initialization
+        pipeline exception. It makes jobs/runs/research_runs fail in the same
+        fenced SQLite transaction instead of leaving an active execution behind.
+        """
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            fence = self._require_job_execution_fence(execution, current_ts)
+            canonical = round(float(self.conn.execute(
+                "SELECT COALESCE(SUM(estimated_cost_usd),0.0) AS total FROM model_usage "
+                "WHERE run_id=? AND task IN (" + _RESEARCH_USAGE_PLACEHOLDERS + ")",
+                (execution.run_id, *_RESEARCH_USAGE_TASKS),
+            ).fetchone()["total"]), 6)
+            if cost_usd is not None and canonical != round(float(cost_usd), 6):
+                raise ResearchTopicIntegrityError(
+                    "Worker research failure cost must equal canonical model usage."
+                )
+            if fence["run_status"] not in (RunStatus.RUNNING.value, RunStatus.DRY_RUN.value) or \
+                    fence["research_status"] != ResearchRunStatus.PENDING.value:
+                raise StaleJobExecutionError(
+                    execution.job_id, "research lifecycle is no longer mutable by this execution.",
+                )
+            run_cursor = self.conn.execute(
+                "UPDATE runs SET status='FAILED',cost_usd=?,error=?,finished_at=? "
+                "WHERE id=? AND status IN ('RUNNING','DRY_RUN') AND finished_at IS NULL "
+                "AND EXISTS (SELECT 1 FROM jobs WHERE id=? AND run_id=runs.id "
+                "AND lease_owner=? AND lease_expires_at>=? "
+                "AND status IN ('LEASED','RUNNING'))",
+                (
+                    canonical, error, current_ts, execution.run_id, execution.job_id,
+                    execution.lease_owner, current_ts,
+                ),
+            )
+            research_cursor = self.conn.execute(
+                "UPDATE research_runs SET status='FAILED',error=?,total_cost_usd=?,updated_at=? "
+                "WHERE id=? AND flow='single' AND status='PENDING' "
+                "AND research_card_id IS NULL AND EXISTS (SELECT 1 FROM jobs "
+                "WHERE id=? AND run_id=research_runs.id AND lease_owner=? "
+                "AND lease_expires_at>=? AND status IN ('LEASED','RUNNING'))",
+                (
+                    error, canonical, current_ts, execution.run_id, execution.job_id,
+                    execution.lease_owner, current_ts,
+                ),
+            )
+            if run_cursor.rowcount != 1 or research_cursor.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            if terminalize_job:
+                job_cursor = self.conn.execute(
+                    "UPDATE jobs SET status='FAILED',last_error=?,lease_owner=NULL,"
+                    "lease_expires_at=NULL,updated_at=?,finished_at=?,"
+                    "reserved_cost_usd=0.0,budget_reserved_at=NULL WHERE id=? "
+                    "AND run_id=? AND lease_owner=? AND lease_expires_at>=? "
+                    "AND status IN ('LEASED','RUNNING')",
+                    (
+                        error, current_ts, current_ts, execution.job_id,
+                        execution.run_id, execution.lease_owner, current_ts,
+                    ),
+                )
+                if job_cursor.rowcount != 1:
+                    raise StaleJobExecutionError(execution.job_id)
+            self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def finalize_job_research_execution(
+        self, execution: JobExecutionContext, card: ResearchCard, total_cost_usd: float,
+        *, terminal_run_status: RunStatus,
+    ) -> ResearchCard:
+        """Worker-only atomic card/source/lifecycle finalization for single flow."""
+        if terminal_run_status not in (RunStatus.SUCCESS, RunStatus.DRY_RUN):
+            raise ValueError("Worker research success requires SUCCESS or DRY_RUN.")
+        if card.id is not None:
+            raise ResearchTopicIntegrityError("A worker finalization card must not be pre-persisted.")
+        original_card_id = card.id
+        original_sources = [(source.id, source.research_card_id) for source in card.sources]
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            fence = self._require_job_execution_fence(execution, current_ts)
+            expected_run_status = (
+                RunStatus.DRY_RUN.value
+                if terminal_run_status is RunStatus.DRY_RUN
+                else RunStatus.RUNNING.value
+            )
+            if fence["run_status"] != expected_run_status or \
+                    fence["research_status"] != ResearchRunStatus.PENDING.value or \
+                    int(fence["topic_id"]) != int(card.topic_id):
+                raise StaleJobExecutionError(
+                    execution.job_id, "research lifecycle no longer matches finalization preconditions.",
+                )
+            canonical = round(float(self.conn.execute(
+                "SELECT COALESCE(SUM(estimated_cost_usd),0.0) AS total FROM model_usage "
+                "WHERE run_id=? AND task IN (" + _RESEARCH_USAGE_PLACEHOLDERS + ")",
+                (execution.run_id, *_RESEARCH_USAGE_TASKS),
+            ).fetchone()["total"]), 6)
+            if canonical != round(float(total_cost_usd), 6):
+                raise ResearchTopicIntegrityError(
+                    "Worker research finalization cost must equal canonical model usage."
+                )
+            topic = self.conn.execute(
+                "SELECT status FROM topics WHERE id=? AND account_id=?",
+                (card.topic_id, fence["research_account_id"]),
+            ).fetchone()
+            if topic is None or topic["status"] != TopicStatus.SELECTED.value:
+                raise ResearchTopicIntegrityError(
+                    "Worker research finalization requires its selected topic."
+                )
+
+            self._insert_finalization_card(card)
+            for source in card.sources:
+                source.research_card_id = card.id
+                self._insert_finalization_source(source)
+
+            research_cursor = self.conn.execute(
+                "UPDATE research_runs SET status='COMPLETE',research_card_id=?,"
+                "total_cost_usd=?,error=NULL,updated_at=? WHERE id=? AND flow='single' "
+                "AND status='PENDING' AND research_card_id IS NULL AND EXISTS ("
+                "SELECT 1 FROM jobs WHERE id=? AND run_id=research_runs.id "
+                "AND lease_owner=? AND lease_expires_at>=? "
+                "AND status IN ('LEASED','RUNNING'))",
+                (
+                    card.id, canonical, current_ts, execution.run_id, execution.job_id,
+                    execution.lease_owner, current_ts,
+                ),
+            )
+            run_cursor = self.conn.execute(
+                "UPDATE runs SET status=?,cost_usd=?,error=NULL,finished_at=? "
+                "WHERE id=? AND status=? AND finished_at IS NULL AND EXISTS ("
+                "SELECT 1 FROM jobs WHERE id=? AND run_id=runs.id AND lease_owner=? "
+                "AND lease_expires_at>=? AND status IN ('LEASED','RUNNING'))",
+                (
+                    terminal_run_status.value, canonical, current_ts, execution.run_id,
+                    expected_run_status, execution.job_id, execution.lease_owner, current_ts,
+                ),
+            )
+            topic_cursor = self.conn.execute(
+                "UPDATE topics SET status='USED' WHERE id=? AND account_id=? "
+                "AND status='SELECTED' AND EXISTS (SELECT 1 FROM jobs WHERE id=? "
+                "AND run_id=? AND lease_owner=? AND lease_expires_at>=? "
+                "AND status IN ('LEASED','RUNNING'))",
+                (
+                    card.topic_id, fence["research_account_id"], execution.job_id,
+                    execution.run_id, execution.lease_owner, current_ts,
+                ),
+            )
+            job_cursor = self.conn.execute(
+                "UPDATE jobs SET status='DONE',last_error=NULL,lease_owner=NULL,"
+                "lease_expires_at=NULL,updated_at=?,finished_at=?,"
+                "reserved_cost_usd=0.0,budget_reserved_at=NULL WHERE id=? "
+                "AND run_id=? AND lease_owner=? AND lease_expires_at>=? "
+                "AND status IN ('LEASED','RUNNING')",
+                (
+                    current_ts, current_ts, execution.job_id, execution.run_id,
+                    execution.lease_owner, current_ts,
+                ),
+            )
+            if research_cursor.rowcount != 1 or run_cursor.rowcount != 1 or \
+                    topic_cursor.rowcount != 1 or job_cursor.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            self.conn.commit()
+            return card
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            card.id = original_card_id
+            for source, (source_id, research_card_id) in zip(card.sources, original_sources):
+                source.id = source_id
+                source.research_card_id = research_card_id
+            raise
+
     def attach_job_run(
         self, job_id: str, lease_owner: str, run_id: str, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> None:
         """Durably binds a just-created run to the current job lease.
 
@@ -756,10 +1250,10 @@ class SqliteStorage:
         """
         if not run_id.strip():
             raise ValueError("run_id must be non-empty.")
-        current_ts = _persisted_ts(self._job_now(now))
         allowed = (JobStatus.LEASED.value, JobStatus.RUNNING.value)
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = _persisted_ts(self._job_now(now, clock=clock))
             job = self.conn.execute(
                 "SELECT account_id,kind,workflow,topic_id,run_id,status,lease_owner,lease_expires_at "
                 "FROM jobs WHERE id=?",
@@ -873,11 +1367,12 @@ class SqliteStorage:
 
     def mark_job_external_effect_started(
         self, job_id: str, lease_owner: str, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> None:
         """Records the durable boundary after which automatic retry is unsafe."""
-        current_ts = _persisted_ts(self._job_now(now))
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = _persisted_ts(self._job_now(now, clock=clock))
             row = self.conn.execute(
                 "SELECT status,lease_owner,lease_expires_at,external_effect_started_at "
                 "FROM jobs WHERE id=?", (job_id,),
@@ -911,37 +1406,42 @@ class SqliteStorage:
 
     def complete_job(
         self, job_id: str, lease_owner: str, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> None:
         self._transition_leased_job(
-            job_id, lease_owner, JobStatus.DONE, error=None, now=now, release_budget=True,
+            job_id, lease_owner, JobStatus.DONE, error=None, now=now, clock=clock,
+            release_budget=True,
         )
 
     def fail_job(
         self, job_id: str, lease_owner: str, error: str, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> None:
         self._transition_leased_job(
-            job_id, lease_owner, JobStatus.FAILED, error=error, now=now, release_budget=True,
+            job_id, lease_owner, JobStatus.FAILED, error=error, now=now, clock=clock,
+            release_budget=True,
         )
 
     def mark_job_needs_verification(
         self, job_id: str, lease_owner: str, error: str, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> None:
         self._transition_leased_job(
             job_id, lease_owner, JobStatus.NEEDS_VERIFICATION, error=error,
-            now=now, release_budget=False,
+            now=now, clock=clock, release_budget=False,
         )
 
     def heartbeat_job_lease(
         self, job_id: str, lease_owner: str, lease_seconds: int,
-        *, now: datetime | None = None,
+        *, now: datetime | None = None, clock: Clock | None = None,
     ) -> None:
         if not lease_owner.strip() or lease_seconds <= 0:
             raise ValueError("lease_owner must be non-empty and lease_seconds must be positive.")
-        current = self._job_now(now)
-        current_ts = _persisted_ts(current)
-        lease_until = _persisted_ts(current + timedelta(seconds=lease_seconds))
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+            current = self._job_now(now, clock=clock)
+            current_ts = _persisted_ts(current)
+            lease_until = _persisted_ts(current + timedelta(seconds=lease_seconds))
             cursor = self.conn.execute(
                 "UPDATE jobs SET lease_expires_at=CASE WHEN lease_expires_at >= ? "
                 "THEN lease_expires_at ELSE ? END, updated_at=? WHERE id=? "
@@ -961,7 +1461,7 @@ class SqliteStorage:
             raise
 
     def release_or_requeue_expired_leases(
-        self, *, now: datetime | None = None,
+        self, *, now: datetime | None = None, clock: Clock | None = None,
     ) -> JobRecoveryResult:
         """Recovers each expired lease exactly once under a write transaction.
 
@@ -970,10 +1470,10 @@ class SqliteStorage:
         are requeued only before max_attempts; an attached RESEARCH run requires
         explicit future reconciliation instead of an automatic restart.
         """
-        current_ts = _persisted_ts(self._job_now(now))
         result = JobRecoveryResult()
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = _persisted_ts(self._job_now(now, clock=clock))
             rows = self.conn.execute(
                 "SELECT id,kind,run_id,attempts,max_attempts,external_effect_started_at FROM jobs "
                 "WHERE status IN ('LEASED','RUNNING') AND lease_expires_at < ? ORDER BY id",
@@ -1029,6 +1529,7 @@ class SqliteStorage:
 
     def reap_orphaned_stale_runs(
         self, stale_before: datetime, *, now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> RunReaperResult:
         """Stops only stale RUNNING runs that cannot be legally executed.
 
@@ -1038,11 +1539,7 @@ class SqliteStorage:
         Reconciled RESEARCH jobs are ``NEEDS_VERIFICATION`` and therefore remain
         durable audit records without authorizing a resume.
         """
-        current_ts = _persisted_ts(self._job_now(now))
         stale_ts = _persisted_ts(stale_before)
-        if stale_ts >= current_ts:
-            raise ValueError("stale_before must be earlier than now.")
-
         result = RunReaperResult()
         blocking_statuses = (
             JobStatus.QUEUED.value,
@@ -1052,6 +1549,9 @@ class SqliteStorage:
         placeholders = ", ".join("?" for _ in blocking_statuses)
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = _persisted_ts(self._job_now(now, clock=clock))
+            if stale_ts >= current_ts:
+                raise ValueError("stale_before must be earlier than now.")
             candidates = self.conn.execute(
                 "SELECT id FROM runs WHERE status='RUNNING' AND finished_at IS NULL "
                 "AND started_at < ? ORDER BY id",
@@ -1083,10 +1583,12 @@ class SqliteStorage:
                 self.conn.rollback()
             raise
 
-    def cancel_job(self, job_id: str, *, now: datetime | None = None) -> None:
-        current_ts = _persisted_ts(self._job_now(now))
+    def cancel_job(
+        self, job_id: str, *, now: datetime | None = None, clock: Clock | None = None,
+    ) -> None:
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = _persisted_ts(self._job_now(now, clock=clock))
             cursor = self.conn.execute(
                 "UPDATE jobs SET status='CANCELLED', finished_at=?, updated_at=?, "
                 "reserved_cost_usd=0.0, budget_reserved_at=NULL WHERE id=? AND status='QUEUED'",
@@ -1105,19 +1607,19 @@ class SqliteStorage:
 
     def reserve_job_budget(
         self, job_id: str, amount_usd: float, *, daily_limit_usd: float,
-        monthly_limit_usd: float, now: datetime | None = None,
+        monthly_limit_usd: float, now: datetime | None = None, clock: Clock | None = None,
     ) -> JobReservation:
         """Atomically reserves one conservative budget amount for an active job."""
         values = (amount_usd, daily_limit_usd, monthly_limit_usd)
         if any(not math.isfinite(value) or value < 0 for value in values):
             raise BudgetReservationError("Reservation amount and limits must be finite and non-negative.")
-        current = self._job_now(now)
-        current_ts = _persisted_ts(current)
-        day_prefix = current.strftime("%Y-%m-%d")
-        month_prefix = current.strftime("%Y-%m")
         placeholders = ", ".join("?" for _ in _ACTIVE_JOB_STATUSES)
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+            current = self._job_now(now, clock=clock)
+            current_ts = _persisted_ts(current)
+            day_prefix = current.strftime("%Y-%m-%d")
+            month_prefix = current.strftime("%Y-%m")
             job = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
             if job is None or job["status"] not in _ACTIVE_JOB_STATUSES:
                 raise self._job_lifecycle_error(
@@ -1171,11 +1673,13 @@ class SqliteStorage:
                 self.conn.rollback()
             raise
 
-    def release_job_budget(self, job_id: str, *, now: datetime | None = None) -> None:
-        current_ts = _persisted_ts(self._job_now(now))
+    def release_job_budget(
+        self, job_id: str, *, now: datetime | None = None, clock: Clock | None = None,
+    ) -> None:
         placeholders = ", ".join("?" for _ in _RELEASABLE_RESERVATION_STATUSES)
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = _persisted_ts(self._job_now(now, clock=clock))
             cursor = self.conn.execute(
                 "UPDATE jobs SET reserved_cost_usd=0.0, budget_reserved_at=NULL, updated_at=? "
                 f"WHERE id=? AND status IN ({placeholders}) AND budget_reserved_at IS NOT NULL "
@@ -1204,6 +1708,115 @@ class SqliteStorage:
         except Exception:
             if self.conn.in_transaction:
                 self.conn.rollback()
+            raise
+
+    def reserve_job_budget_for_execution(
+        self, execution: JobExecutionContext, amount_usd: float, *,
+        daily_limit_usd: float, monthly_limit_usd: float,
+    ) -> JobReservation:
+        """Owner-aware reservation path; queue-level reservations remain separate."""
+        values = (amount_usd, daily_limit_usd, monthly_limit_usd)
+        if any(not math.isfinite(value) or value < 0 for value in values):
+            raise BudgetReservationError(
+                "Reservation amount and limits must be finite and non-negative."
+            )
+        placeholders = ", ".join("?" for _ in _ACTIVE_JOB_STATUSES)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current = self._job_now(execution.now())
+            current_ts = _persisted_ts(current)
+            day_prefix = current.strftime("%Y-%m-%d")
+            month_prefix = current.strftime("%Y-%m")
+            self._require_job_execution_fence(execution, current_ts)
+            job = self.conn.execute(
+                "SELECT reserved_cost_usd,budget_reserved_at FROM jobs WHERE id=?",
+                (execution.job_id,),
+            ).fetchone()
+            assert job is not None
+            if job["budget_reserved_at"] is not None:
+                if float(job["reserved_cost_usd"]) == float(amount_usd):
+                    result = JobReservation(
+                        job_id=execution.job_id,
+                        amount_usd=float(job["reserved_cost_usd"]),
+                        reserved_at=job["budget_reserved_at"],
+                    )
+                    self.conn.commit()
+                    return result
+                raise BudgetReservationError(
+                    "Job execution already has a different active budget reservation."
+                )
+            day_real = float(self.conn.execute(
+                "SELECT COALESCE(SUM(estimated_cost_usd),0.0) AS total FROM model_usage "
+                "WHERE dry_run=0 AND created_at LIKE ?", (f"{day_prefix}%",),
+            ).fetchone()["total"])
+            month_real = float(self.conn.execute(
+                "SELECT COALESCE(SUM(estimated_cost_usd),0.0) AS total FROM model_usage "
+                "WHERE dry_run=0 AND created_at LIKE ?", (f"{month_prefix}%",),
+            ).fetchone()["total"])
+            active_reserved = float(self.conn.execute(
+                "SELECT COALESCE(SUM(reserved_cost_usd),0.0) AS total FROM jobs "
+                f"WHERE status IN ({placeholders}) AND budget_reserved_at IS NOT NULL",
+                _ACTIVE_JOB_STATUSES,
+            ).fetchone()["total"])
+            if any(not math.isfinite(value) or value < 0 for value in (
+                day_real, month_real, active_reserved,
+            )):
+                raise BudgetReservationError("Persisted budget state is invalid.")
+            if month_real + active_reserved + amount_usd > monthly_limit_usd:
+                raise BudgetReservationError("Reservation would exceed the global monthly limit.")
+            if day_real + active_reserved + amount_usd > daily_limit_usd:
+                raise BudgetReservationError("Reservation would exceed the global daily limit.")
+            cursor = self.conn.execute(
+                "UPDATE jobs SET reserved_cost_usd=?,budget_reserved_at=?,updated_at=? "
+                "WHERE id=? AND run_id=? AND lease_owner=? AND lease_expires_at>=? "
+                "AND status IN ('LEASED','RUNNING') AND budget_reserved_at IS NULL",
+                (
+                    amount_usd, current_ts, current_ts, execution.job_id,
+                    execution.run_id, execution.lease_owner, current_ts,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            self.conn.commit()
+            return JobReservation(
+                job_id=execution.job_id, amount_usd=amount_usd, reserved_at=current,
+            )
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def release_job_budget_for_execution(self, execution: JobExecutionContext) -> None:
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            self._require_job_execution_fence(execution, current_ts)
+            job = self.conn.execute(
+                "SELECT budget_reserved_at,external_effect_started_at FROM jobs WHERE id=?",
+                (execution.job_id,),
+            ).fetchone()
+            assert job is not None
+            if job["external_effect_started_at"] is not None:
+                raise StaleJobExecutionError(
+                    execution.job_id,
+                    "an execution with a started external effect must retain its reservation.",
+                )
+            if job["budget_reserved_at"] is not None:
+                cursor = self.conn.execute(
+                    "UPDATE jobs SET reserved_cost_usd=0.0,budget_reserved_at=NULL,updated_at=? "
+                    "WHERE id=? AND run_id=? AND lease_owner=? AND lease_expires_at>=? "
+                    "AND status IN ('LEASED','RUNNING') AND external_effect_started_at IS NULL",
+                    (
+                        current_ts, execution.job_id, execution.run_id,
+                        execution.lease_owner, current_ts,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise StaleJobExecutionError(execution.job_id)
+            self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
             raise
 
     def get_system_flag(self, key: str) -> SystemFlag | None:
@@ -1532,6 +2145,14 @@ class SqliteStorage:
                 card.rejection_reason, _ts(card.created_at),
             ),
         )
+        if cur.rowcount != 1:
+            raise ResearchTopicIntegrityError(
+                "Worker finalization must insert exactly one research card."
+            )
+        if cur.lastrowid is None:
+            raise ResearchTopicIntegrityError(
+                "Worker finalization card insert did not return its row id."
+            )
         card.id = int(cur.lastrowid)
 
     def _insert_finalization_source(self, source: Source) -> None:
@@ -1547,6 +2168,14 @@ class SqliteStorage:
                 source.verification_status.value,
             ),
         )
+        if cur.rowcount != 1:
+            raise ResearchTopicIntegrityError(
+                "Worker finalization must insert exactly one source per source record."
+            )
+        if cur.lastrowid is None:
+            raise ResearchTopicIntegrityError(
+                "Worker finalization source insert did not return its row id."
+            )
         source.id = int(cur.lastrowid)
 
     def _insert_finalization_stage_b_success(self, research_run_id: str) -> None:
@@ -1822,6 +2451,10 @@ class SqliteStorage:
         ).fetchone()
         if r is None:
             return None
+        return self._research_run_from_row(r)
+
+    @staticmethod
+    def _research_run_from_row(r: sqlite3.Row) -> ResearchRun:
         return ResearchRun(
             id=r["id"], account_id=r["account_id"], topic_id=r["topic_id"],
             flow=ResearchFlow(r["flow"]),
