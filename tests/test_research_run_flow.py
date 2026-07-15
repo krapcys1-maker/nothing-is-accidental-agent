@@ -139,7 +139,8 @@ def test_migration_0006_backfills_all_historical_flows(tmp_path: Path):
 
     assert apply_migrations(conn) == [
         "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
-        "0009_jobs_system_flags",
+        "0009_jobs_system_flags", "0010_provider_attempts", "0011_provider_attempt_invariants",
+        "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
     ]
 
     rows = {
@@ -203,7 +204,8 @@ def test_migration_0006_runs_on_clean_empty_database(tmp_path: Path):
 
     assert apply_migrations(conn) == [
         "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
-        "0009_jobs_system_flags",
+        "0009_jobs_system_flags", "0010_provider_attempts", "0011_provider_attempt_invariants",
+        "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
     ]
     assert conn.execute("SELECT count(*) FROM research_runs").fetchone()[0] == 0
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
@@ -224,7 +226,8 @@ def test_migration_0006_without_paid_single_uuid(tmp_path: Path):
 
     assert apply_migrations(conn) == [
         "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
-        "0009_jobs_system_flags",
+        "0009_jobs_system_flags", "0010_provider_attempts", "0011_provider_attempt_invariants",
+        "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
     ]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
@@ -243,7 +246,8 @@ def test_migration_0006_without_either_local_single_uuid(tmp_path: Path):
 
     assert apply_migrations(conn) == [
         "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
-        "0009_jobs_system_flags",
+        "0009_jobs_system_flags", "0010_provider_attempts", "0011_provider_attempt_invariants",
+        "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
     ]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
@@ -304,7 +308,8 @@ def test_database_rejects_invalid_or_missing_flow(tmp_path: Path):
     conn = _database_through_0005(tmp_path / "flow-constraints.db")
     assert apply_migrations(conn) == [
         "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
-        "0009_jobs_system_flags",
+        "0009_jobs_system_flags", "0010_provider_attempts", "0011_provider_attempt_invariants",
+        "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
     ]
     conn.execute(
         "INSERT INTO accounts "
@@ -349,7 +354,8 @@ def test_migration_0007_backfills_conservative_historical_attempt_lower_bound(tm
 
     assert apply_migrations(conn) == [
         "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
-        "0009_jobs_system_flags",
+        "0009_jobs_system_flags", "0010_provider_attempts", "0011_provider_attempt_invariants",
+        "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
     ]
 
     attempts_column = next(
@@ -400,6 +406,8 @@ def test_migration_0007_rolls_back_schema_when_ledger_insert_fails(tmp_path: Pat
     conn.commit()
     assert apply_migrations(conn) == [
         "0007_candidate_attempts", "0008_staged_force_reresearch", "0009_jobs_system_flags",
+        "0010_provider_attempts", "0011_provider_attempt_invariants",
+        "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
     ]
     assert "attempts" in {
         row["name"] for row in conn.execute("PRAGMA table_info(research_source_candidates)")
@@ -432,7 +440,11 @@ def test_migration_0008_rolls_back_force_marker_when_ledger_insert_fails(tmp_pat
 
     conn.execute("DROP TRIGGER reject_force_marker_ledger")
     conn.commit()
-    assert apply_migrations(conn) == ["0008_staged_force_reresearch", "0009_jobs_system_flags"]
+    assert apply_migrations(conn) == [
+        "0008_staged_force_reresearch", "0009_jobs_system_flags", "0010_provider_attempts",
+        "0011_provider_attempt_invariants", "0012_provider_ledger_hardening",
+        "0013_provider_attempt_usage_integrity",
+    ]
     force_column = next(
         row for row in conn.execute("PRAGMA table_info(research_runs)")
         if row["name"] == "is_force_reresearch"
@@ -631,7 +643,6 @@ def test_cli_resume_rejects_non_resumable_status_before_any_work(
     def forbidden(*args, **kwargs):
         raise AssertionError("invalid resume created a client or called a pipeline path")
 
-    monkeypatch.setattr(capped_script, "AnthropicResearchClient", forbidden)
     monkeypatch.setattr(capped_script, "_run_resume_legacy", forbidden)
     monkeypatch.setattr(capped_script, "_run_resume_staged", forbidden)
 

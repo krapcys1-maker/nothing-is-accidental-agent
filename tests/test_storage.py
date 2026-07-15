@@ -15,6 +15,7 @@ from app.models import (
 )
 from app.storage.db import connect
 from app.storage.repositories import SqliteStorage
+from tests.conftest import seed_historical_real_usage
 
 
 def _create_research_run(storage, account, run_id: str) -> Run:
@@ -61,8 +62,8 @@ def test_sum_real_cost_excludes_dry_run(storage, account):
     storage.ensure_account(account)
     run = storage.create_run(Run(id="run-1", account_id=account.id,
                                  workflow=WorkflowType.TOPIC, status=RunStatus.DRY_RUN))
-    storage.add_model_usage(ModelUsage(run_id=run.id, model="m", estimated_cost_usd=0.50,
-                                       dry_run=False))
+    seed_historical_real_usage(storage, ModelUsage(run_id=run.id, model="m", estimated_cost_usd=0.50,
+                                                    dry_run=False))
     storage.add_model_usage(ModelUsage(run_id=run.id, model="m", estimated_cost_usd=99.0,
                                        dry_run=True))
     from datetime import datetime, timezone
@@ -93,10 +94,10 @@ def test_sync_run_cost_uses_research_usage_and_is_idempotent(storage, account):
                                  workflow=WorkflowType.RESEARCH, status=RunStatus.RUNNING))
     storage.add_model_usage(ModelUsage(run_id=run.id, model="m", task="research_discover",
                                        estimated_cost_usd=0.12, dry_run=True))
-    storage.add_model_usage(ModelUsage(run_id=run.id, model="m", task="research_extract",
-                                       estimated_cost_usd=0.34, dry_run=False))
-    storage.add_model_usage(ModelUsage(run_id=run.id, model="m", task="topics",
-                                       estimated_cost_usd=9.99, dry_run=False))
+    seed_historical_real_usage(storage, ModelUsage(run_id=run.id, model="m", task="research_extract",
+                                                    estimated_cost_usd=0.34, dry_run=False))
+    seed_historical_real_usage(storage, ModelUsage(run_id=run.id, model="m", task="topics",
+                                                    estimated_cost_usd=9.99, dry_run=False))
     storage.finish_run(run.id, RunStatus.FAILED.value, cost_usd=99.0, error="keep me")
 
     assert storage.sync_run_cost_from_research_usage(run.id) == 0.46
@@ -112,7 +113,7 @@ def test_research_usage_write_and_cache_persist_in_one_transaction(tmp_path, acc
     db_path = tmp_path / "atomic-research-usage.db"
     storage = SqliteStorage.open(db_path)
     run = _create_research_run(storage, account, "atomic-research-usage")
-    storage.add_model_usage(ModelUsage(
+    seed_historical_real_usage(storage, ModelUsage(
         run_id=run.id, model="m", task="research_extract", estimated_cost_usd=0.123456,
     ))
     storage.close()
@@ -140,7 +141,7 @@ def test_research_usage_write_rolls_back_when_cache_update_fails(tmp_path, accou
     storage.conn.commit()
 
     with pytest.raises(sqlite3.IntegrityError, match="forced cache update failure"):
-        storage.add_model_usage(ModelUsage(
+        seed_historical_real_usage(storage, ModelUsage(
             run_id=run.id, model="m", task="research_extract", estimated_cost_usd=0.123456,
         ))
     storage.close()
@@ -157,11 +158,11 @@ def test_research_usage_write_rolls_back_when_cache_update_fails(tmp_path, accou
 
 def test_research_usage_atomic_writes_rebuild_cache_from_all_rows(storage, account):
     run = _create_research_run(storage, account, "atomic-research-several")
-    storage.add_model_usage(ModelUsage(
+    seed_historical_real_usage(storage, ModelUsage(
         run_id=run.id, model="m", task="research_discover", estimated_cost_usd=0.10,
     ))
     storage.finish_run(run.id, RunStatus.FAILED.value, cost_usd=99.0, error="stale cache")
-    storage.add_model_usage(ModelUsage(
+    seed_historical_real_usage(storage, ModelUsage(
         run_id=run.id, model="m", task="research_extract", estimated_cost_usd=0.20,
     ))
 
@@ -179,7 +180,7 @@ def test_research_usage_dry_run_is_cached_but_excluded_from_budget(storage, acco
         run_id=run.id, model="m", task="research_discover",
         estimated_cost_usd=0.12, dry_run=True,
     ))
-    storage.add_model_usage(ModelUsage(
+    seed_historical_real_usage(storage, ModelUsage(
         run_id=run.id, model="m", task="research_extract",
         estimated_cost_usd=0.34, dry_run=False,
     ))

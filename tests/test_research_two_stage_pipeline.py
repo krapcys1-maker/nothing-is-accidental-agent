@@ -27,6 +27,7 @@ from app.ports.notification import LogNotification
 from app.research.base import ResearchParseError, ResearchPlan, SourceGatheringResult
 from app.research.fake_client import FakeResearchClient
 from app.research.validation import TOO_FEW_SOURCES
+from tests.conftest import seed_historical_real_usage
 from app.workflows.research.pipeline import (
     CompletedResearchExistsError,
     run_two_stage_research_pipeline,
@@ -56,8 +57,8 @@ def _seed_real_cost(storage, account, cost: float) -> None:
     storage.ensure_account(account)
     storage.create_run(Run(id="seed", account_id=account.id,
                            workflow=WorkflowType.RESEARCH, status=RunStatus.RUNNING))
-    storage.add_model_usage(ModelUsage(run_id="seed", model="m",
-                                       estimated_cost_usd=cost, dry_run=False))
+    seed_historical_real_usage(storage, ModelUsage(run_id="seed", model="m",
+                                                    estimated_cost_usd=cost, dry_run=False))
 
 
 class _CountingFake(FakeResearchClient):

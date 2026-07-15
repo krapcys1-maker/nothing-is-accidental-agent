@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 
 from app.core.config import Settings
+from app.core.money import decimal_from, usd_float
 from app.llm.base import Usage
 from app.models import JobExecutionContext, ModelUsage
 from app.ports.storage import StoragePort
@@ -29,16 +30,26 @@ class UsageTracker:
     def estimate_cost(self, usage: Usage) -> float:
         p = self._settings.pricing
         cost = (
-            usage.input_tokens / 1_000_000 * p.get("input_per_mtok", 0.0)
-            + usage.output_tokens / 1_000_000 * p.get("output_per_mtok", 0.0)
-            + usage.cache_read_tokens / 1_000_000 * p.get("cache_read_per_mtok", 0.0)
-            + usage.cache_write_tokens / 1_000_000 * p.get("cache_write_per_mtok", 0.0)
-            + usage.web_search_requests / 1_000 * p.get("web_search_per_1k", 0.0)
+            decimal_from(usage.input_tokens) / decimal_from("1000000")
+            * decimal_from(p.get("input_per_mtok", 0.0), label="pricing.input_per_mtok")
+            + decimal_from(usage.output_tokens) / decimal_from("1000000")
+            * decimal_from(p.get("output_per_mtok", 0.0), label="pricing.output_per_mtok")
+            + decimal_from(usage.cache_read_tokens) / decimal_from("1000000")
+            * decimal_from(p.get("cache_read_per_mtok", 0.0), label="pricing.cache_read_per_mtok")
+            + decimal_from(usage.cache_write_tokens) / decimal_from("1000000")
+            * decimal_from(p.get("cache_write_per_mtok", 0.0), label="pricing.cache_write_per_mtok")
+            + decimal_from(usage.web_search_requests) / decimal_from("1000")
+            * decimal_from(p.get("web_search_per_1k", 0.0), label="pricing.web_search_per_1k")
         )
-        return round(cost, 6)
+        return usd_float(cost, label="usage cost")
 
     def record(self, run_id: str, model: str, usage: Usage, task: str,
                dry_run: bool, provider: str = "anthropic") -> ModelUsage:
+        # A no-key client is the deterministic offline/fake composition used by
+        # ordinary roots. It cannot establish a paid provider effect, even when
+        # a legacy test or caller supplied dry_run=False. Keep the ledger honest
+        # instead of fabricating a real usage without a durable request_id.
+        effective_dry_run = dry_run or not bool(self._settings.anthropic_api_key)
         cost = self.estimate_cost(usage)
         row = ModelUsage(
             run_id=run_id, provider=provider, model=model, task=task,
@@ -46,7 +57,7 @@ class UsageTracker:
             cache_read_tokens=usage.cache_read_tokens,
             cache_write_tokens=usage.cache_write_tokens,
             web_search_requests=usage.web_search_requests,
-            estimated_cost_usd=cost, dry_run=dry_run,
+            estimated_cost_usd=cost, dry_run=effective_dry_run,
         )
         self._storage.add_model_usage(row)
         self._append_csv_safely(row)
@@ -60,6 +71,7 @@ class UsageTracker:
         task: str,
         dry_run: bool,
         provider: str = "anthropic",
+        request_id: str | None = None,
     ) -> ModelUsage:
         """Worker-only path: SQLite fence succeeds before any CSV side effect."""
         cost = self.estimate_cost(usage)
@@ -70,6 +82,7 @@ class UsageTracker:
             cache_write_tokens=usage.cache_write_tokens,
             web_search_requests=usage.web_search_requests,
             estimated_cost_usd=cost, dry_run=dry_run,
+            request_id=request_id,
         )
         self._storage.add_job_model_usage(execution, row)
         self._append_csv_safely(row)

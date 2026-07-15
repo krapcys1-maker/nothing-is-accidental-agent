@@ -125,7 +125,7 @@ def test_parse_error_with_usage_is_recorded_once_and_run_fails(
     assert run["status"] == RunStatus.FAILED.value
     assert run["error"] == "truncated topics JSON"
     assert run["cost_usd"] == pytest.approx(rows[0]["estimated_cost_usd"])
-    assert rows[0]["dry_run"] == 0
+    assert rows[0]["dry_run"] == 1
 
 
 def test_parse_error_without_usage_creates_no_artificial_cost(
@@ -172,7 +172,7 @@ def test_success_paths_keep_exactly_one_usage_row(settings, storage, account):
         "SELECT * FROM model_usage WHERE run_id=?", (real_summary.run_id,)
     ).fetchall()
     assert len(real_rows) == 1
-    assert real_rows[0]["dry_run"] == 0
+    assert real_rows[0]["dry_run"] == 1
     assert storage.get_run(real_summary.run_id).status == RunStatus.SUCCESS
 
 

@@ -6,10 +6,11 @@ nad dziennym — ADR-012) oraz progi scoringu tematu.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import math
+from decimal import Decimal
 
 from app.core.clock import Clock, SystemClock
 from app.core.config import Settings
+from app.core.money import decimal_from, quantize_usd, usd_float
 from app.models import Account, JobKind, TopicStatus
 from app.ports.storage import StoragePort
 
@@ -35,6 +36,16 @@ class PolicyEngine:
         self._settings = settings
         self._storage = storage
         self._clock = clock or SystemClock()
+
+    @property
+    def daily_limit_usd(self) -> float:
+        """Configured limit exposed for the storage-backed reservation boundary."""
+        return usd_float(self._settings.max_daily_cost_usd, label="daily budget limit")
+
+    @property
+    def monthly_limit_usd(self) -> float:
+        """Configured limit exposed for the storage-backed reservation boundary."""
+        return usd_float(self._settings.max_monthly_cost_usd, label="monthly budget limit")
 
     def check_can_run(self, account: Account) -> PolicyDecision:
         if self._settings.kill_switch:
@@ -102,7 +113,7 @@ class PolicyEngine:
                 "BROWSER_ACTIONS_BLOCKED",
                 "Akcje browser/public pozostają zablokowane w tym etapie.",
             )
-        if not dry_run:
+        if not dry_run and not flags["paid_actions_enabled"]:
             return PolicyDecision.block(
                 "PAID_ACTIONS_BLOCKED",
                 "Płatne i niedry-runowe akcje pozostają zablokowane w tym etapie.",
@@ -135,23 +146,37 @@ class PolicyEngine:
         legacy non-research callers; every paid research entry point supplies a
         concrete cap.
         """
-        values = (estimated_total, current_run_cost)
-        if any(not math.isfinite(value) or value < 0 for value in values):
+        try:
+            estimated_raw = decimal_from(estimated_total, label="estimated total cost")
+            current_raw = decimal_from(current_run_cost, label="current run cost")
+            cap_raw = None if cap is None else decimal_from(cap, label="run cap")
+            if (
+                estimated_raw < Decimal("0")
+                or current_raw < Decimal("0")
+                or (cap_raw is not None and cap_raw < Decimal("0"))
+            ):
+                raise ValueError("negative monetary amount")
+            estimated_amount = quantize_usd(
+                estimated_raw, label="estimated total cost",
+            )
+            current_amount = quantize_usd(
+                current_raw, label="current run cost",
+            )
+            cap_amount = (
+                None
+                if cap is None
+                else quantize_usd(cap_raw, label="run cap")
+            )
+        except ValueError:
             return PolicyDecision.block(
                 "BUDGET_INVALID_INPUT",
                 "Estymowany i aktualny koszt runu muszą być skończone i nieujemne.",
             )
-        if estimated_total < current_run_cost:
+        if estimated_amount < current_amount:
             return PolicyDecision.block(
                 "BUDGET_INVALID_INPUT",
                 "Estymowany koszt całkowity nie może być niższy od już zapisanego kosztu runu.",
             )
-        if cap is not None and (not math.isfinite(cap) or cap < 0):
-            return PolicyDecision.block(
-                "RUN_CAP_INVALID",
-                "Cap runu musi być skończony i nieujemny.",
-            )
-
         if account is not None:
             can_run = self.check_can_run(account)
             if not can_run.allowed:
@@ -166,42 +191,54 @@ class PolicyEngine:
         day_prefix = now.strftime("%Y-%m-%d")
         month_spent = self._storage.sum_real_cost_usd(month_prefix)
         day_spent = self._storage.sum_real_cost_usd(day_prefix)
-        monthly = self._settings.max_monthly_cost_usd
-        daily = self._settings.max_daily_cost_usd
-
-        budget_state = (month_spent, day_spent, monthly, daily)
-        if any(not math.isfinite(value) or value < 0 for value in budget_state):
+        try:
+            month_raw = decimal_from(month_spent, label="monthly spend")
+            day_raw = decimal_from(day_spent, label="daily spend")
+            monthly_raw = decimal_from(
+                self._settings.max_monthly_cost_usd, label="monthly budget limit",
+            )
+            daily_raw = decimal_from(
+                self._settings.max_daily_cost_usd, label="daily budget limit",
+            )
+            if any(amount < Decimal("0") for amount in (
+                month_raw, day_raw, monthly_raw, daily_raw,
+            )):
+                raise ValueError("negative budget state")
+            month_amount = quantize_usd(month_raw, label="monthly spend")
+            day_amount = quantize_usd(day_raw, label="daily spend")
+            monthly = quantize_usd(monthly_raw, label="monthly budget limit")
+            daily = quantize_usd(daily_raw, label="daily budget limit")
+        except ValueError:
             return PolicyDecision.block(
                 "BUDGET_INVALID_STATE",
                 "Limity oraz zapisane wykorzystanie budżetu muszą być skończone "
                 "i nieujemne.",
             )
-
         # Limit miesięczny ma bezwzględny priorytet (ADR-012).
-        if self._settings.monthly_limit_has_priority and month_spent >= monthly:
+        if self._settings.monthly_limit_has_priority and month_amount >= monthly:
             return PolicyDecision.block(
                 "BUDGET_MONTHLY_REACHED",
-                f"Osiągnięto limit miesięczny {monthly:.2f} USD (wydano {month_spent:.4f}). "
+                f"Osiągnięto limit miesięczny {monthly:.2f} USD (wydano {month_amount:.4f}). "
                 "Wszystkie płatne działania zatrzymane.",
             )
-        incremental_estimate = estimated_total - current_run_cost
-        if month_spent + incremental_estimate > monthly:
+        incremental_estimate = estimated_amount - current_amount
+        if month_amount + incremental_estimate > monthly:
             return PolicyDecision.block(
                 "BUDGET_MONTHLY_EXCEEDED",
                 f"Koszt przekroczyłby limit miesięczny {monthly:.2f} USD "
-                f"(wydano {month_spent:.4f}, szac. +{incremental_estimate:.4f}).",
+                f"(wydano {month_amount:.4f}, szac. +{incremental_estimate:.4f}).",
             )
-        if cap is not None and estimated_total > cap:
+        if cap_amount is not None and estimated_amount > cap_amount:
             return PolicyDecision.block(
                 "RUN_CAP_EXCEEDED",
-                f"Koszt runu przekroczyłby cap {cap:.4f} USD "
-                f"(projekcja {estimated_total:.4f}, zapisano {current_run_cost:.4f}).",
+                f"Koszt runu przekroczyłby cap {cap_amount:.4f} USD "
+                f"(projekcja {estimated_amount:.4f}, zapisano {current_amount:.4f}).",
             )
-        if day_spent + incremental_estimate > daily:
+        if day_amount + incremental_estimate > daily:
             return PolicyDecision.block(
                 "BUDGET_DAILY_EXCEEDED",
                 f"Koszt przekroczyłby limit dzienny {daily:.2f} USD "
-                f"(wydano dziś {day_spent:.4f}, szac. +{incremental_estimate:.4f}).",
+                f"(wydano dziś {day_amount:.4f}, szac. +{incremental_estimate:.4f}).",
             )
         return PolicyDecision.ok()
 

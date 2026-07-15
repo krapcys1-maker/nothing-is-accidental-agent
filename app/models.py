@@ -200,6 +200,14 @@ class JobLease(BaseModel):
 
 
 @dataclass(frozen=True)
+class JobEnqueueResult:
+    """Atomowy wynik enqueue rozróżniający nowy i już zapisany intent."""
+
+    job: Job
+    created: bool
+
+
+@dataclass(frozen=True)
 class ResearchJobExecution:
     """Uprawnienie workera do jednorazowej atomowej inicjalizacji researchu."""
 
@@ -226,12 +234,64 @@ class JobExecutionContext:
         return self.clock.now()
 
 
+@dataclass(frozen=True)
+class DurableProviderAttemptContext:
+    """Niemutowalny kontrakt wymagany bezpośrednio przed płatnym callerem.
+
+    To nie jest payload joba ani luźny zestaw argumentów.  Callback klienta musi
+    potwierdzić ten konkretny context w SQLite tuż przed przekroczeniem granicy SDK.
+    """
+
+    job_id: str
+    run_id: str
+    stage: str
+    attempt_no: int
+    request_id: str
+    lease_owner: str
+    fence_token: str
+    # Wyłącznie ślad diagnostyczny chwili zbudowania contextu. Nie autoryzuje
+    # lease: storage pobiera świeży czas z execution clock w swojej transakcji.
+    checked_at: datetime | None = None
+
+
 class JobReservation(BaseModel):
     """Aktywna, konserwatywna rezerwacja budżetu — nie jest realnym wydatkiem."""
 
     job_id: str
     amount_usd: float
     reserved_at: datetime
+
+
+class ProviderAttemptStatus(str, Enum):
+    """Trwały stan jednej logicznej próby odpłatnego dostawcy.
+
+    Nie jest to retry SDK: WAVE 0B celowo wykonuje najwyżej jedno wywołanie
+    providera dla takiej próby.  Stan ``NEEDS_RECONCILIATION`` zachowuje
+    rezerwację po niejednoznacznym wyniku transportowym.
+    """
+
+    RESERVED = "RESERVED"
+    REQUEST_STARTED = "REQUEST_STARTED"
+    SETTLED = "SETTLED"
+    RELEASED = "RELEASED"
+    NEEDS_RECONCILIATION = "NEEDS_RECONCILIATION"
+
+
+class ProviderAttempt(BaseModel):
+    """Jedna trwała tożsamość wywołania dostawcy w ramach joba."""
+
+    job_id: str
+    stage: str
+    attempt_no: int
+    request_id: str
+    execution_intent_fingerprint: str | None = None
+    status: ProviderAttemptStatus
+    reserved_amount_usd: float
+    reserved_at: datetime
+    request_started_at: datetime | None = None
+    settled_at: datetime | None = None
+    actual_cost_usd: float | None = None
+    error_code: str | None = None
 
 
 class JobRecoveryResult(BaseModel):
@@ -363,6 +423,7 @@ class ModelUsage(BaseModel):
     web_search_requests: int = 0
     estimated_cost_usd: float = 0.0
     dry_run: bool = False
+    request_id: str | None = None
     created_at: datetime = Field(default_factory=_utcnow)
 
 

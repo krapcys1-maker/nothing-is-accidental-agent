@@ -161,7 +161,8 @@ def _load_accounts(config_dir: Path) -> dict[str, Account]:
 
 def load_settings() -> Settings:
     """Buduje Settings z .env + config/*.yaml. Nie tworzy plików."""
-    load_dotenv(PROJECT_ROOT / ".env")
+    if not os.environ.get("NIA_TEST_MODE"):
+        load_dotenv(PROJECT_ROOT / ".env")
 
     config_dir = PROJECT_ROOT / "config"
     gp_path = _first_existing(

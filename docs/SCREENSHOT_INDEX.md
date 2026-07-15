@@ -256,3 +256,58 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co ma pokazywać:** zanonimizowany raport z syntetycznej file-SQLite: atomic failure z `generic fail_job=0`; odrzucony string terminalizacji bez heartbeat/complete/fail/LOST; osobny atomic success pozostający `job=DONE`, `research_run=COMPLETE`, topic `USED` i z kartą po reopen.
 - **CZEGO NIE MOŻE BYĆ WIDAĆ:** `.env`, kluczy, danych prawdziwej bazy, raw response, prywatnych ścieżek ani danych konta zewnętrznego.
 - **Status:** SCREENSHOT REQUIRED — zadanie wykonało tylko testy offline i nie używało browsera, Playwrighta ani API.
+
+## 2026-07-14 — WAVE 0B.1 durable-boundary verification
+
+- **Status:** `SCREENSHOT REQUIRED`.
+- **Co powinien pokazać:** terminal z wynikiem offline `741 passed`, `PRAGMA integrity_check=ok`, pustym `foreign_key_check` oraz niezmienionym SHA-256 `data/agent.db`.
+- **Dlaczego nie utworzono teraz:** zadanie zakazywało browsera i zmian w danych, a dowodem wdrożeniowym są powtarzalne testy oraz log terminala; nie wykonano zrzutu mogącego przypadkowo ujawnić dane lokalne.
+
+## 2026-07-14 — WAVE 0B.2 provider-ledger hardening
+
+- **Status:** `SCREENSHOT REQUIRED`.
+- **Co powinien pokazać:** zanonimizowany terminal: `752 passed`, `integrity_check=ok`, pusty `foreign_key_check`, hash baselineu oraz testy migration rollback/context gate bez requestu sieciowego.
+- **Czego nie może pokazać:** `.env`, kluczy, danych historycznej bazy, raw provider response ani prywatnych ścieżek.
+- **Dlaczego nie utworzono teraz:** zadanie było offline-only i nie używało browsera ani Playwrighta; dowodem są testy i logi terminala.
+
+## 2026-07-14 — WAVE 0B.3 derived identity / fresh lease verification
+
+- **Status:** `SCREENSHOT REQUIRED`.
+- **Co powinien pokazać:** zanonimizowany terminal: `770 passed`, arbitrary identity `caller=0`, exact expiry/renewal/takeover results, `messages.create=0` po takeover, `integrity_check=ok`, pusty `foreign_key_check` i baseline SHA.
+- **Czego nie może pokazać:** `.env`, kluczy, danych historycznej bazy, raw provider response ani prywatnych ścieżek.
+- **Dlaczego nie utworzono teraz:** zadanie zakazywało browsera i działań zewnętrznych; dowodem są deterministyczne testy offline.
+
+## 2026-07-15 — WAVE 0B corrective closeout: procesy testowe, snapshot requestu i lifecycle
+
+- **Status:** `SCREENSHOT REQUIRED`.
+- **Co powinien pokazać:** zanonimizowany terminal historycznej weryfikacji przed W0B-REV-06: collect/full `861 passed`, wynik subprocessów raw SQLite/dbapi2/URI, socket/DNS/SDK i scrub lowercase environment; dalej macierz question/niche/stage i parametrów intentu oraz run/research_run z `caller=0`, usage/koszt/settlement 0, `NEEDS_RECONCILIATION`, reopen SQLite, odmowę A2/B `--real --resume`, `integrity_check=ok`, pusty `foreign_key_check` i hash baselineu.
+- **Czego nie może pokazać:** `.env`, kluczy, wartości proxy, danych historycznej bazy, raw provider response, prywatnych ścieżek ani danych zewnętrznego konta.
+- **Dlaczego nie utworzono teraz:** zakres zakazuje browsera i sieci; aktualnym dowodem są deterministyczne testy na syntetycznych bazach oraz read-only kontrole baselineu.
+
+## 2026-07-15 — W0B-REV-06: trwały limit i fail-closed settlement
+
+- **Status:** `SCREENSHOT REQUIRED`.
+- **Co powinien pokazać:** zanonimizowany terminal z **historycznym** collect/full `873`, czterema rozłącznymi grupami 206+218+226+223 oraz wynikiem `PARTITION COVERAGE OK`; dalej syntetyczną SQLite z `max_tokens` 2999/3000/3001 po reopen, exact estimate/reservation/caller, settlement `<=` jako `SETTLED` i settlement `>` jako `NEEDS_RECONCILIATION` z jednym usage oraz brakiem attempt #2.
+- **Czego nie może pokazać:** `.env`, kluczy API, raw provider response, danych `data/agent.db`, prywatnych ścieżek, wartości proxy ani danych konta zewnętrznego.
+- **Dlaczego nie utworzono teraz:** zakres zabraniał browsera, sieci i API; dowodem są wyłącznie fake callery, tymczasowe bazy, testy deterministyczne oraz read-only kontrola baselineu.
+
+## 2026-07-15 — W0B-REV-09/10: końcowa weryfikacja kroniki i ROUND_HALF_UP
+
+- **Status:** `SCREENSHOT REQUIRED`.
+- **Co powinien pokazać:** zanonimizowany terminal z historycznym collect/full **887**, partycjami **211+222+229+225**, `PARTITION COVERAGE OK`; obok syntetyczny raport granic `0.0000004/.5/.6`, cache read/write/web i settlement exact/±0.000001. Opis musi wymienić `Decimal(str(value)) → 0.000001/ROUND_HALF_UP`, `durable_research_intent_v2`, 13 migracji, WAVE 0B `CANDIDATE`, Etap 1 `BLOCKED` i live API `ZABRONIONE`.
+- **Czego nie może pokazać:** `.env`, kluczy, danych `data/agent.db`, raw provider response, prywatnych ścieżek ani danych konta zewnętrznego.
+- **Dlaczego nie utworzono teraz:** zakres był offline-only; dowodem są fake callery, tymczasowe SQLite i read-only hash/integrity baselineu.
+
+## 2026-07-15 — Formalny checkpoint WAVE 0B
+
+- **Status:** `SCREENSHOT REQUIRED`.
+- **Co powinien pokazać:** zanonimizowany terminal z branch/HEAD/upstream, inwentarzem 50/1/21 = 72, stagingiem zatwierdzonych plików, `894 collected/passed`, partycjami 213/224/231/226, `compileall`, `git diff --cached --check` oraz niezmienionym SHA/rozmiarem/mtime chronionej bazy. Opis wymienia `APPROVED WITH P2 — READY FOR CHECKPOINT`, 13 migracji, `ROUND_HALF_UP`, `durable_research_intent_v2`, jeden aktywny durable paid-execution flow, Etap 1 `BLOCKED` i live API `ZABRONIONE`.
+- **Czego nie może pokazać:** `.env`, kluczy, danych `data/agent.db`, raw provider response, prywatnych ścieżek ani danych konta zewnętrznego.
+- **Dlaczego nie utworzono teraz:** bieżące polecenie wymaga formalnego stagingu i walidacji, nie tworzenia artefaktu graficznego; dowody pozostają tekstowe i read-only.
+
+## 2026-07-15 — W0B-RR-01: Decimal do końca i cleanup resume
+
+- **Status:** `SCREENSHOT REQUIRED`.
+- **Co powinien pokazać:** zanonimizowany terminal z collect/full **894**, partycjami **213+224+231+226**, `PARTITION COVERAGE OK`, `compileall` i `git diff --check`; raport granic `2×`/`3×0.0000005`, `0.1+0.2` wobec `0.3` w policy/ledgerze/CLI, settlement ±1 mikro-USD oraz statyczną asercję braku konstruktora klienta w helperach resume. Opis wymienia 13 migracji, `durable_research_intent_v2`, jeden `max_tokens` dla estimate/rezerwacji/callera, `NEEDS_RECONCILIATION` po nadwyżce, WAVE 0B `CANDIDATE`, Etap 1 `BLOCKED` i live API `ZABRONIONE`.
+- **Czego nie może pokazać:** `.env`, kluczy, danych `data/agent.db`, raw provider response, prywatnych ścieżek ani danych konta zewnętrznego.
+- **Dlaczego nie utworzono teraz:** zakres był offline-only; dowodem są fake callery, tymczasowe SQLite i read-only hash/integrity baselineu.

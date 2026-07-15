@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import inspect
 
 from app.llm.usage_tracker import UsageTracker
 from app.models import Topic, TopicStatus
@@ -38,11 +39,6 @@ def test_cli_refuses_completed_topic_before_constructing_api_client(
     topic = _selected_topic(storage, account)
     _complete_research(settings, storage, account, topic)
     monkeypatch.setattr(run_capped_research, "load_settings", lambda: settings)
-
-    def forbidden_client(*args, **kwargs):
-        raise AssertionError("completed topic must not construct an API client")
-
-    monkeypatch.setattr(run_capped_research, "AnthropicResearchClient", forbidden_client)
 
     assert run_capped_research.main(["--topic-id", str(topic.id)]) == 1
     assert "--force-re-research" in capsys.readouterr().out
@@ -92,10 +88,6 @@ def test_capped_cli_force_cannot_bypass_corrupt_used_state_before_client_or_muta
     }
     monkeypatch.setattr(run_capped_research, "load_settings", lambda: settings)
 
-    def forbidden_client(*args, **kwargs):
-        raise AssertionError("corrupt USED must stop before API client construction")
-
-    monkeypatch.setattr(run_capped_research, "AnthropicResearchClient", forbidden_client)
     assert run_capped_research.main([
         "--topic-id", str(topic.id), "--force-re-research",
     ]) == 1
@@ -116,10 +108,6 @@ def test_capped_cli_force_cannot_cross_account_before_client_or_mutation(
     other_settings = replace(settings, accounts={account.id: account, other.id: other})
     monkeypatch.setattr(run_capped_research, "load_settings", lambda: other_settings)
 
-    def forbidden_client(*args, **kwargs):
-        raise AssertionError("account mismatch must stop before API client construction")
-
-    monkeypatch.setattr(run_capped_research, "AnthropicResearchClient", forbidden_client)
     counts_before = {
         table: storage.conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
         for table in ("runs", "research_runs", "model_usage", "research_cards")
@@ -133,3 +121,15 @@ def test_capped_cli_force_cannot_cross_account_before_client_or_mutation(
         for table in counts_before
     }
     assert counts_after == counts_before
+
+
+def test_private_resume_helpers_never_construct_a_real_provider_client():
+    from scripts import run_capped_research
+
+    assert "AnthropicResearchClient" not in inspect.getsource(
+        run_capped_research._run_resume_legacy,
+    )
+    assert "AnthropicResearchClient" not in inspect.getsource(
+        run_capped_research._run_resume_staged,
+    )
+    assert "AnthropicResearchClient" not in inspect.getsource(run_capped_research)

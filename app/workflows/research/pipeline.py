@@ -25,10 +25,12 @@ from typing import Callable
 from app.core.clock import Clock, SystemClock
 from app.core.config import Settings
 from app.core.ids import new_run_id
+from app.core.money import decimal_from, sum_usd, usd_float
 from app.llm.base import Usage
 from app.llm.usage_tracker import UsageTracker
 from app.models import (
     Account,
+    DurableProviderAttemptContext,
     JobExecutionContext,
     ResearchCard,
     ResearchFlow,
@@ -53,15 +55,24 @@ from app.models import (
 )
 from app.policies.policy_engine import PolicyEngine
 from app.ports.notification import NotificationPort
-from app.ports.storage import StoragePort
+from app.ports.storage import (
+    BudgetReservationError,
+    ProviderAttemptOverReservationError,
+    ProviderAttemptReconciliationRequired,
+    StoragePort,
+)
 from app.research import injection_guard
 from app.research.base import (
     AttemptBudgetContext,
     DEFAULT_SYNTHESIS_MAX_TOKENS,
+    DurableProviderAttemptContextError,
     GatheredSource,
     ResearchClient,
     ResearchBudgetError,
+    ResearchConnectionError,
     ResearchError,
+    ResearchTimeout,
+    ResearchUnknownProviderError,
     ResearchPlan,
     SourceCandidate,
     SourceCardDraft,
@@ -123,6 +134,34 @@ class ResearchExecutionAlreadyInitialized(RuntimeError):
     """Worker znalazł już trwały run; kontynuacja wymaga jawnej weryfikacji."""
 
 
+class ResearchExecutionNeedsReconciliation(RuntimeError):
+    """Wynik requestu jest niejednoznaczny; automatyczne wznowienie jest zakazane."""
+
+
+class ResearchExecutionRequiresDurableJob(RuntimeError):
+    """Fresh real research cannot bypass the durable job/lease/fence boundary."""
+
+
+class ResearchResumeRequiresDurableJob(RuntimeError):
+    """Real A2/B resume is deferred until it has its own durable job flow."""
+
+
+class DurablePromptSourceSnapshotMismatch(DurableProviderAttemptContextError):
+    """Mutable dispatch input diverged from the frozen durable prompt input."""
+
+
+def _reject_non_durable_real_resume(settings: Settings, research_client: ResearchClient) -> None:
+    """Fail before any workflow mutation for unsupported real A2/B resumes."""
+    if (
+        not settings.dry_run
+        and bool(getattr(research_client, "requires_durable_provider_context", False))
+    ):
+        raise ResearchResumeRequiresDurableJob(
+            "Real A2/B resume requires a durable job; WAVE 1A has not implemented "
+            "that scheduler flow. No workflow state was changed."
+        )
+
+
 def _best_effort_worker_terminal_diagnostic(effect: Callable[[], None], *, label: str) -> None:
     """Keep post-commit diagnostics from rewriting a worker's canonical result."""
     try:
@@ -176,7 +215,10 @@ def _format_audit_error(stage: str, exc: Exception) -> str:
 def _current_run_cost(storage: StoragePort, run_id: str | None) -> float:
     if run_id is None:
         return 0.0
-    return round(sum(row.estimated_cost_usd for row in storage.get_research_usage(run_id)), 6)
+    return float(sum_usd(
+        (row.estimated_cost_usd for row in storage.get_research_usage(run_id)),
+        label="research usage total",
+    ))
 
 
 def _resolve_max_retries(
@@ -210,7 +252,10 @@ def _check_stage_budget(
             "Realny research wymaga jawnego run_cap_usd; brak capu jest fail-closed."
         )
     current = _current_run_cost(storage, run_id)
-    projected = round(current + estimate_with_retries(base_estimate, max_retries), 6)
+    projected = float(sum_usd(
+        (current, estimate_with_retries(base_estimate, max_retries)),
+        label="projected research cost",
+    ))
     return policy.check_run_budget(
         projected,
         run_cap_usd,
@@ -232,17 +277,58 @@ def _configure_attempt_control(
     task: str,
     dry_run: bool,
     job_execution: JobExecutionContext | None = None,
+    before_provider_assertion: Callable[[], None] | None = None,
 ) -> None:
     """Connect a client retry loop to workflow-owned policy and persistence."""
-    configure = getattr(research_client, "configure_attempt_control", None)
-    if not callable(configure):
+    if (
+        not dry_run
+        and job_execution is None
+        and bool(getattr(research_client, "requires_durable_provider_context", False))
+    ):
+        # This is the common last gate before every legacy/two-stage/staged
+        # caller. WAVE 0B has a durable implementation only for single flow.
+        raise ResearchExecutionRequiresDurableJob(
+            "Real two-stage and staged execution require a durable provider "
+            "context and are deferred to WAVE 1A."
+        )
+
+    requires_durable = bool(getattr(research_client, "requires_durable_provider_context", False))
+    configure_durable = getattr(research_client, "configure_durable_attempt_control", None)
+    if requires_durable and not callable(configure_durable):
+        raise DurableProviderAttemptContextError(
+            "Real research client does not expose the required durable-attempt contract."
+        )
+    if not requires_durable:
         return
 
-    def budget_callback(context: AttemptBudgetContext) -> None:
+    assert callable(configure_durable)
+
+    def assert_prompt_source_snapshot(context: DurableProviderAttemptContext) -> None:
+        if before_provider_assertion is None:
+            return
+        try:
+            before_provider_assertion()
+        except DurablePromptSourceSnapshotMismatch:
+            # REQUEST_STARTED is committed before this final gate. Preserve its
+            # identity for explicit reconciliation; never auto-release or retry.
+            storage.mark_provider_attempt_needs_reconciliation(
+                job_execution, context.request_id,
+                error_code="PROMPT_SOURCE_SNAPSHOT_MISMATCH",
+            )
+            raise
+
+    def context_callback(context: AttemptBudgetContext) -> DurableProviderAttemptContext:
+        if job_execution is None:
+            raise DurableProviderAttemptContextError(
+                "Real Anthropic research requires a durable job execution context."
+            )
         if job_execution is not None:
             storage.assert_job_execution_active(job_execution)
         current = _current_run_cost(storage, run_id)
-        projected = round(current + context.estimated_attempt_cost, 6)
+        projected = float(sum_usd(
+            (current, context.estimated_attempt_cost),
+            label="projected provider attempt cost",
+        ))
         decision = policy.check_run_budget(
             projected,
             run_cap_usd,
@@ -251,18 +337,60 @@ def _configure_attempt_control(
         )
         if not decision.allowed:
             raise ResearchBudgetError(decision.reason, code=decision.code)
-
-    def retry_usage_callback(usage: Usage, model: str) -> None:
-        if job_execution is None:
-            usage_tracker.record(run_id, model, usage, task=task, dry_run=dry_run)
-        else:
-            usage_tracker.record_job(
-                job_execution, model, usage, task=task, dry_run=dry_run,
+        try:
+            attempt = storage.begin_provider_attempt(
+                job_execution,
+                stage=context.stage,
+                attempt_no=context.attempt_number,
+                max_cost_usd=context.estimated_attempt_cost,
+                daily_limit_usd=policy.daily_limit_usd,
+                monthly_limit_usd=policy.monthly_limit_usd,
             )
+        except BudgetReservationError as exc:
+            raise ResearchBudgetError(
+                "Atomic provider reservation rejected the request.",
+                code="BUDGET_RESERVATION_DENIED",
+            ) from exc
+        except ProviderAttemptReconciliationRequired as exc:
+            raise ResearchExecutionNeedsReconciliation(
+                "Provider attempt requires explicit reconciliation before another request."
+            ) from exc
+        return DurableProviderAttemptContext(
+            job_id=job_execution.job_id,
+            run_id=job_execution.run_id,
+            stage=attempt.stage,
+            attempt_no=attempt.attempt_no,
+            request_id=attempt.request_id,
+            lease_owner=job_execution.lease_owner,
+            fence_token=(
+                f"{job_execution.job_id}:{job_execution.run_id}:{job_execution.lease_owner}"
+            ),
+            checked_at=job_execution.now(),
+        )
 
-    configure(
-        budget_callback=budget_callback,
-        retry_usage_callback=retry_usage_callback,
+    def activation_callback(context: DurableProviderAttemptContext):
+        if context.fence_token != (
+            f"{job_execution.job_id}:{job_execution.run_id}:{job_execution.lease_owner}"
+        ):
+            raise DurableProviderAttemptContextError(
+                "Durable provider context fence token does not match the active execution."
+            )
+        storage.mark_provider_attempt_request_started(job_execution, context.request_id)
+        assert_prompt_source_snapshot(context)
+        return storage.assert_durable_provider_attempt_active(
+            context, clock=job_execution.clock,
+        )
+
+    def assertion_callback(context: DurableProviderAttemptContext):
+        assert_prompt_source_snapshot(context)
+        return storage.assert_durable_provider_attempt_active(
+            context, clock=job_execution.clock,
+        )
+
+    configure_durable(
+        context_callback=context_callback,
+        activation_callback=activation_callback,
+        assertion_callback=assertion_callback,
         estimated_attempt_cost=estimated_attempt_cost,
     )
 
@@ -544,9 +672,26 @@ def run_research_pipeline(
     force_re_research: bool = False,
     max_retries: int | None = None,
     run_cap_usd: float | None = None,
+    max_web_searches: int = 6,
+    request_max_tokens: int | None = None,
+    durable_plan: ResearchPlan | None = None,
 ) -> ResearchRunSummary:
     max_retries = _resolve_max_retries(research_client, max_retries)
+    if isinstance(max_web_searches, bool) or not isinstance(max_web_searches, int) or max_web_searches < 0:
+        raise ValueError("max_web_searches musi być liczbą całkowitą >= 0.")
+    if request_max_tokens is None:
+        if durable_plan is not None and not settings.dry_run:
+            raise ResearchExecutionRequiresDurableJob(
+                "Durable real research requires its persisted request_max_tokens."
+            )
+        request_max_tokens = 3000
+    if isinstance(request_max_tokens, bool) or not isinstance(request_max_tokens, int) or request_max_tokens < 1:
+        raise ValueError("request_max_tokens must be a positive integer.")
     clock = clock or SystemClock()
+    if not settings.dry_run and job_execution is None:
+        raise ResearchExecutionRequiresDurableJob(
+            "Fresh real research requires a durable leased job execution."
+        )
     summary = ResearchRunSummary(run_id=None, account_id=account.id,
                                  topic_id=int(topic.id), dry_run=settings.dry_run)
     execution_context: JobExecutionContext | None = None
@@ -562,8 +707,30 @@ def run_research_pipeline(
         summary.block_code, summary.block_reason = can_run.code, can_run.reason
         return summary
 
-    # 3. Plan researchu (lokalny, bez kosztu).
-    plan = build_research_plan(topic, account)
+    # 3. Plan researchu (lokalny, bez kosztu).  Durable paid work supplies a
+    # canonical plan reconstructed from its persisted execution_intent; it must
+    # never be rebuilt from mutable topic/account prompt fields after enqueue.
+    if durable_plan is None:
+        plan = build_research_plan(topic, account)
+        prompt_source_validator = None
+    else:
+        if durable_plan.topic_id != int(topic.id) or durable_plan.account_id != account.id:
+            raise ResearchExecutionRequiresDurableJob(
+                "Durable prompt snapshot identity does not match the dispatched account/topic."
+            )
+        plan = durable_plan
+
+        def prompt_source_validator() -> None:
+            current = build_research_plan(topic, account)
+            if (
+                current.question != plan.question
+                or current.niche != plan.niche
+                or current.required_depth != plan.required_depth
+                or current.guidance != plan.guidance
+            ):
+                raise DurablePromptSourceSnapshotMismatch(
+                    "Current topic/account prompt inputs diverged from the durable snapshot."
+                )
 
     # 3. Bramka budżetu PRZED web search — pesymistyczny, KALIBROWANY szacunek
     # (ADR-016). Poprzedni płaski szacunek (Usage 3500/1500/5) zaniżył realny koszt
@@ -571,7 +738,7 @@ def run_research_pipeline(
     # Uwaga: ta ścieżka (jednoetapowa) jest zachowana, ale NIEZALECANA dla realnych
     # runów — patrz run_two_stage_research_pipeline() niżej.
     worst_case = estimate_worst_case_search_call_usd(
-        settings, max_web_searches=6, max_output_tokens=3000)
+        settings, max_web_searches=max_web_searches, max_output_tokens=request_max_tokens)
     budget = _check_stage_budget(
         settings, policy, account, storage, None, base_estimate=worst_case.total_usd,
         max_retries=max_retries, run_cap_usd=run_cap_usd)
@@ -617,7 +784,8 @@ def run_research_pipeline(
         research_client, policy=policy, account=account, storage=storage,
         usage_tracker=usage_tracker, run_id=run_id, run_cap_usd=run_cap_usd,
         estimated_attempt_cost=worst_case.total_usd, task="research",
-        dry_run=settings.dry_run, job_execution=execution_context)
+        dry_run=settings.dry_run, job_execution=execution_context,
+        before_provider_assertion=prompt_source_validator)
 
     # 5. Wywołanie klienta (web search). Błędy: timeout/parse -> run FAILED.
     try:
@@ -625,6 +793,23 @@ def run_research_pipeline(
             storage.assert_job_execution_active(execution_context)
         result = research_client.run_research(plan)
     except ResearchError as exc:
+        if execution_context is not None and not settings.dry_run and not isinstance(exc, ResearchBudgetError):
+            request_id = getattr(exc, "request_id", None)
+            if not request_id:
+                raise ResearchExecutionNeedsReconciliation(
+                    "Real provider failure has no durable request identity."
+                ) from exc
+            if isinstance(exc, (ResearchTimeout, ResearchConnectionError, ResearchUnknownProviderError)):
+                storage.mark_provider_attempt_needs_reconciliation(
+                    execution_context, request_id, error_code=type(exc).__name__,
+                )
+                raise ResearchExecutionNeedsReconciliation(
+                    "Provider outcome is unknown; reservation and request identity were retained."
+                ) from exc
+            if getattr(exc, "usage", None) is None:
+                storage.settle_provider_attempt_without_usage(
+                    execution_context, request_id, error_code=type(exc).__name__,
+                )
         if execution_context is not None:
             # Utrata lease ma pierwszeństwo: nie wolno utrwalić ani usage, ani FAILED.
             storage.assert_job_execution_active(execution_context)
@@ -636,16 +821,22 @@ def run_research_pipeline(
         cost = 0.0
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
-            if execution_context is None:
-                usage_row = usage_tracker.record(
-                    run_id, getattr(exc, "model", None) or "unknown", exc_usage,
-                    task="research", dry_run=settings.dry_run,
-                )
-            else:
-                usage_row = usage_tracker.record_job(
-                    execution_context, getattr(exc, "model", None) or "unknown",
-                    exc_usage, task="research", dry_run=settings.dry_run,
-                )
+            try:
+                if execution_context is None:
+                    usage_row = usage_tracker.record(
+                        run_id, getattr(exc, "model", None) or "unknown", exc_usage,
+                        task="research", dry_run=settings.dry_run,
+                    )
+                else:
+                    usage_row = usage_tracker.record_job(
+                        execution_context, getattr(exc, "model", None) or "unknown",
+                        exc_usage, task="research", dry_run=settings.dry_run,
+                        request_id=getattr(exc, "request_id", None),
+                    )
+            except ProviderAttemptOverReservationError as over_reservation:
+                raise ResearchExecutionNeedsReconciliation(
+                    "Recorded provider usage exceeded its durable reservation."
+                ) from over_reservation
             cost = usage_row.estimated_cost_usd
             summary.cost_usd = cost
             summary.model = getattr(exc, "model", None) or ""
@@ -691,16 +882,22 @@ def run_research_pipeline(
                         account.id)
 
     # 7. Koszt.
-    if execution_context is None:
-        usage_row = usage_tracker.record(
-            run_id, result.model, result.usage,
-            task="research", dry_run=settings.dry_run,
-        )
-    else:
-        usage_row = usage_tracker.record_job(
-            execution_context, result.model, result.usage,
-            task="research", dry_run=settings.dry_run,
-        )
+    try:
+        if execution_context is None:
+            usage_row = usage_tracker.record(
+                run_id, result.model, result.usage,
+                task="research", dry_run=settings.dry_run,
+            )
+        else:
+            usage_row = usage_tracker.record_job(
+                execution_context, result.model, result.usage,
+                task="research", dry_run=settings.dry_run,
+                request_id=getattr(result, "request_id", None),
+            )
+    except ProviderAttemptOverReservationError as exc:
+        raise ResearchExecutionNeedsReconciliation(
+            "Recorded provider usage exceeded its durable reservation."
+        ) from exc
     summary.cost_usd = _current_run_cost(storage, run_id)
     summary.model = result.model
     summary.input_tokens = usage_row.input_tokens
@@ -1089,6 +1286,7 @@ def resume_research_stage_b(
     to działa również po pełnym restarcie procesu (prawdziwa odporność na awarię,
     nie tylko "w ramach jednego wywołania funkcji").
     """
+    _reject_non_durable_real_resume(settings, research_client)
     max_retries = _resolve_max_retries(research_client, max_retries)
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
@@ -1151,8 +1349,7 @@ def resume_research_stage_b(
     summary.sources_count = len(gathered.sources)
 
     # Koszt dotychczasowy (etap A + ewentualne wcześniejsze nieudane próby etapu B).
-    prior_usage = storage.get_research_usage(research_run_id)
-    total_cost = sum(u.estimated_cost_usd for u in prior_usage)
+    total_cost = _current_run_cost(storage, research_run_id)
 
     # Bramka budżetu PRZED (ponowną) próbą etapu 2.
     stage_b_estimate = estimate_no_search_call_usd(
@@ -1452,6 +1649,8 @@ def run_source_extraction(
     wznowienie po restarcie kontynuuje dokładnie tam, gdzie się skończyło (czyta
     kandydatów PENDING_EXTRACTION z BAZY, nie z pamięci procesu). Wołalne zarówno
     świeżo (zaraz po A1), jak i jawnie jako wznowienie z `explicit_resume=True`."""
+    if explicit_resume:
+        _reject_non_durable_real_resume(settings, research_client)
     max_retries = _resolve_max_retries(research_client, max_retries)
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
@@ -1512,8 +1711,7 @@ def run_source_extraction(
     if max_sources is not None:
         pending = pending[:max_sources]
 
-    prior_usage = storage.get_research_usage(research_run_id)
-    total_cost = sum(u.estimated_cost_usd for u in prior_usage)
+    total_cost = _current_run_cost(storage, research_run_id)
     per_source_estimate = estimate_extraction_cost_per_source_usd(
         settings, max_web_searches_per_source, max_output_tokens)
 
@@ -1523,7 +1721,7 @@ def run_source_extraction(
     call_input_tokens = 0
     call_output_tokens = 0
     call_web_search_requests = 0
-    call_cost = 0.0
+    call_cost = decimal_from("0", label="extraction call cost")
     for candidate_record in pending:
         budget = _check_stage_budget(
             settings, policy, account, storage, research_run_id,
@@ -1563,8 +1761,10 @@ def run_source_extraction(
                     usage_tracker, storage, research_run_id,
                     getattr(exc, "model", None) or "unknown", exc_usage,
                     task="research_extract", dry_run=settings.dry_run)
-                total_cost += usage_row.estimated_cost_usd
-                call_cost += usage_row.estimated_cost_usd
+                total_cost = _current_run_cost(storage, research_run_id)
+                call_cost += decimal_from(
+                    usage_row.estimated_cost_usd, label="extraction call cost",
+                )
                 call_model = getattr(exc, "model", None) or call_model
                 call_input_tokens += usage_row.input_tokens
                 call_output_tokens += usage_row.output_tokens
@@ -1586,8 +1786,10 @@ def run_source_extraction(
         usage_row = _record_staged_usage(
             usage_tracker, storage, research_run_id, extraction.model, extraction.usage,
             task="research_extract", dry_run=settings.dry_run)
-        total_cost += usage_row.estimated_cost_usd
-        call_cost += usage_row.estimated_cost_usd
+        total_cost = _current_run_cost(storage, research_run_id)
+        call_cost += decimal_from(
+            usage_row.estimated_cost_usd, label="extraction call cost",
+        )
         call_model = extraction.model or call_model
         call_input_tokens += usage_row.input_tokens
         call_output_tokens += usage_row.output_tokens
@@ -1642,7 +1844,7 @@ def run_source_extraction(
     summary.input_tokens = call_input_tokens
     summary.output_tokens = call_output_tokens
     summary.web_search_requests = call_web_search_requests
-    summary.cost_usd = round(call_cost, 6)
+    summary.cost_usd = usd_float(call_cost, label="extraction call cost")
 
     all_candidates = storage.list_source_candidates(research_run_id)
     if len(all_extracted) >= settings.research_min_sources:
@@ -1702,6 +1904,8 @@ def run_synthesis_from_cards(
     """Etap B: synteza WYŁĄCZNIE z już wyekstrahowanych Source Cards (etap A2). Zero
     web search. Błąd -> status WRACA do SOURCES_COMPLETE (źródła nietknięte) — można
     ponowić WYŁĄCZNIE ten etap z `explicit_resume=True`, bez powtarzania A1/A2."""
+    if explicit_resume:
+        _reject_non_durable_real_resume(settings, research_client)
     max_retries = _resolve_max_retries(research_client, max_retries)
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
@@ -1780,8 +1984,7 @@ def run_synthesis_from_cards(
     ]
     summary.sources_count = len(cards)
 
-    prior_usage = storage.get_research_usage(research_run_id)
-    total_cost = sum(u.estimated_cost_usd for u in prior_usage)
+    total_cost = _current_run_cost(storage, research_run_id)
 
     estimate = estimate_synthesis_cost_usd(settings, synthesize_max_tokens, forwarded_context_tokens)
     budget = _check_stage_budget(
@@ -2019,6 +2222,7 @@ def resume_staged_research(
     - SOURCES_COMPLETE -> wznawia WYŁĄCZNIE B (synteza), NIGDY nie woła A1/A2.
     - inne statusy (DISCOVERY_PENDING/COMPLETE/FAILED oraz statusy starego
       przepływu) -> ValueError, nic do wznowienia tą funkcją."""
+    _reject_non_durable_real_resume(settings, research_client)
     max_retries = _resolve_max_retries(research_client, max_retries)
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:

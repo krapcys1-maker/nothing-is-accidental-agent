@@ -20,6 +20,12 @@ from app.llm.base import (
     Usage,
 )
 from app.models import Account
+from app.research.base import (
+    DurableAttemptActivationCallback,
+    DurableAttemptAssertionCallback,
+    DurableAttemptContextCallback,
+    DurableProviderBoundary,
+)
 
 TopicCaller = Callable[[Account, int], tuple[str, Usage]]
 
@@ -138,10 +144,39 @@ class AnthropicLLMClient(LLMClient):
         self.model = model
         self._api_key = api_key
         self._caller = caller or self._default_caller
+        self._uses_default_caller = caller is None
         self._timeout_seconds = timeout_seconds
+        self._durable_boundary = DurableProviderBoundary(provider_label="Real Anthropic topic")
+
+    def configure_durable_attempt_control(
+        self,
+        *,
+        context_callback: DurableAttemptContextCallback | None,
+        activation_callback: DurableAttemptActivationCallback | None,
+        assertion_callback: DurableAttemptAssertionCallback | None,
+    ) -> None:
+        """Installs the non-optional paid-request contract for the SDK path."""
+        self._durable_boundary.configure(
+            context_callback=context_callback,
+            activation_callback=activation_callback,
+            assertion_callback=assertion_callback,
+        )
+
+    def _activate_durable_attempt(self) -> None:
+        self._durable_boundary.activate(
+            stage="topics", attempt_no=1, estimated_attempt_cost=0.0,
+        )
+
+    def _assert_active_durable_provider_attempt(self) -> str:
+        return self._durable_boundary.assert_immediately_before_provider_call()
 
     def generate_and_score_topics(self, account: Account, count: int) -> TopicGenerationResult:
-        text, usage = self._caller(account, count)
+        if self._uses_default_caller:
+            self._activate_durable_attempt()
+        try:
+            text, usage = self._caller(account, count)
+        finally:
+            self._durable_boundary.clear()
         try:
             ideas = _parse_topic_response(text)
         except LLMResponseError as exc:
@@ -165,12 +200,16 @@ class AnthropicLLMClient(LLMClient):
             timeout=self._timeout_seconds,
         )
         try:
+            # The durable assertion deliberately happens after SDK construction
+            # and immediately before the externally effective method call.
+            request_id = self._assert_active_durable_provider_attempt()
             message = client.messages.create(
                 model=self.model,
                 max_tokens=TOPIC_MAX_OUTPUT_TOKENS,
                 system=_SYSTEM,
                 messages=[{"role": "user", "content": _build_prompt(account, count)}],
                 timeout=self._timeout_seconds,
+                extra_headers={"Idempotency-Key": request_id},
             )
         except anthropic.APIError as exc:
             raise LLMProviderError(

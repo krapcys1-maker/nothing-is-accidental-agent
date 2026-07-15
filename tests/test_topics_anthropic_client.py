@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -14,6 +15,51 @@ from app.llm.base import (
     LLMSchemaValidationError,
     Usage,
 )
+from app.models import (
+    DurableProviderAttemptContext,
+    ProviderAttempt,
+    ProviderAttemptStatus,
+)
+
+
+_NOW = datetime(2026, 7, 14, tzinfo=timezone.utc)
+
+
+def _configure_durable_topic_attempt(client: AnthropicLLMClient) -> AnthropicLLMClient:
+    context = DurableProviderAttemptContext(
+        job_id="topics-job",
+        run_id="topics-run",
+        stage="topics",
+        attempt_no=1,
+        request_id="topics-job:topics:1",
+        lease_owner="test-worker",
+        fence_token="topics-job:topics-run:test-worker",
+        checked_at=_NOW,
+    )
+    client.configure_durable_attempt_control(
+        context_callback=lambda _budget: context,
+        activation_callback=lambda _context: ProviderAttempt(
+            job_id=context.job_id,
+            stage=context.stage,
+            attempt_no=context.attempt_no,
+            request_id=context.request_id,
+            status=ProviderAttemptStatus.REQUEST_STARTED,
+            reserved_amount_usd=0.1,
+            reserved_at=_NOW,
+            request_started_at=_NOW,
+        ),
+        assertion_callback=lambda _context: ProviderAttempt(
+            job_id=context.job_id,
+            stage=context.stage,
+            attempt_no=context.attempt_no,
+            request_id=context.request_id,
+            status=ProviderAttemptStatus.REQUEST_STARTED,
+            reserved_amount_usd=0.1,
+            reserved_at=_NOW,
+            request_started_at=_NOW,
+        ),
+    )
+    return client
 
 
 def _payload(*, title: str = "Why queues form") -> str:
@@ -177,7 +223,7 @@ def test_default_adapter_preserves_provider_usage_before_parse_error(
     monkeypatch.setitem(sys.modules, "anthropic", fake_module)
 
     with pytest.raises(LLMParseError) as caught:
-        AnthropicLLMClient("offline-key", "topics-model") \
+        _configure_durable_topic_attempt(AnthropicLLMClient("offline-key", "topics-model")) \
             .generate_and_score_topics(account, 1)
 
     assert calls == 1
@@ -209,7 +255,7 @@ def test_default_adapter_types_provider_error_without_artificial_usage(
     monkeypatch.setitem(sys.modules, "anthropic", fake_module)
 
     with pytest.raises(LLMProviderError) as caught:
-        AnthropicLLMClient("offline-key", "topics-model") \
+        _configure_durable_topic_attempt(AnthropicLLMClient("offline-key", "topics-model")) \
             .generate_and_score_topics(account, 1)
 
     assert calls == 1

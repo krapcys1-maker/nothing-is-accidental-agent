@@ -516,3 +516,84 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Blokada historyczna:** przeszukane lokalne kopie projektu, katalog tymczasowy i zachowane artefakty nie zawierały pliku o hash bazowym `C92D9565DDA322997DE0D6A78D3943336E58CD9261229949E0BCFE4E43F9A63C`.
 - **Kontrolowane odtworzenie po review:** właściciel zatwierdził wariant `APPROVE WITH P2` (P0=0, P1=0). Forensic analysis zaklasyfikowała artefakty testu jako klasę A, sekwencje jako klasę B, a istniejące UPSERT/`topics.id=1` jako klasę C nieudowadnialną historycznie. Na osobnej kopii usunięto tylko A i przywrócono B, następnie po dwóch reopenach (`integrity_check=ok`, `foreign_key_check=[]`) podmieniono wyłącznie główny plik po zachowaniu backupów. Nowy baseline to `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`.
 - **Wynik i granica dowodu:** nie stwierdzono utraty realnych danych: 13 wpisów `dry_run=0` nadal sumuje 0,684580 USD, a `c01171bc` ma 0,183964 USD, Card #2, cztery VERIFIED sources i siedem usage. Werdykt `NOT PROVABLY RESTORABLE` dla dawnego pliku pozostaje prawdziwy — ustanowiono nowy baseline logiczny, nie odzyskano bitowego snapshotu. **Incydent bazy jest zamknięty; nie jest to zamknięcie Etapu 1.**
+
+## 2026-07-14 — prewencja: niejednoznaczny skutek providera po restartcie
+
+- **Ryzyko:** timeout, connection error albo awaria procesu tuż po wysłaniu requestu mogły pozostawić koszt bez odpowiedzi/usage. Ponowienie z nowym losowym identyfikatorem mogłoby stworzyć drugi koszt, a zwolnienie całej rezerwacji przed rozstrzygnięciem zaniżyłoby dostępny budżet.
+- **Zmiana WAVE 0B:** `provider_attempts` zapisuje stabilne request_id i maksymalną rezerwację przed SDK. Po przekroczeniu granicy `REQUEST_STARTED` nie ma automatycznego retry; nieznany wynik zachowuje rezerwację w `NEEDS_RECONCILIATION`. Znamy za to różnicę między błędem przed requestem, odpowiedzią z usage i potwierdzonym błędem bez usage.
+- **Dowód:** offline ledger/race/reopen/pipeline/CLI tests na tymczasowej SQLite; testowy guard odrzuca prawdziwą ścieżkę `data/agent.db`. Nie wykonano API, sieci, browsera, publikacji ani kosztu. Status: `WAVE 0B CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; to nie jest dowód live ani zamknięcie Etapu 1.
+
+## 2026-07-14 — niezależne review WAVE 0B: trzy findingi P1
+
+- **P1 — obejście durable joba:** `run_two_stage_research_pipeline` i `run_staged_research_pipeline` pozwalały realnemu klientowi rozpocząć świeżą pracę bez joba, lease i request ledgeru. Naprawa zatrzymuje rzeczywistego providera przed pierwszym wywołaniem i wskazuje WAVE 1A; fake/dry-run pozostają testowalne offline.
+- **P1 — lokalna tożsamość operation key:** identyczny klucz nie był globalnym kontraktem semanticznego intentu, a komunikat CLI zależał od wyścigu między odczytem i insertem. Naprawa używa globalnego `real-research:<operation_key>` oraz atomowego wyniku enqueue; różny payload daje jawne `OPERATION_KEY_CONFLICT`.
+- **P1 — zbyt słaby ledger attemptów:** wcześniejszy schemat pozwalał zapisać nieprawidłowy stan, request_id lub nowy real usage bez powiązanego requestu. Migracja `0011` wymusza kształt stanów, przejścia i request-bound usage; historii nie udaje się rekonstrukcji, tylko oznacza ją `is_legacy_usage=1`.
+- **Dowód naprawy:** testy negatywne SQLite, test migracji poprawnej/uszkodzonej historii, testy wyścigu operation key i budżetu z niezależnych konekcji oraz pełny suite 741 passed. Bez API, sieci, browsera, publikacji, kosztu i zmiany `data/agent.db`.
+
+## 2026-07-14 — WAVE 0B.2: drugi REJECT ujawnił brak dowodu, nie brak happy path
+
+- **P1-01:** niski poziom realnego klienta dopuszczał caller bez contextu/ID; teraz każda taka próba kończy się typowanym błędem przed callerem i `messages.create`.
+- **P1-02:** operation key nie był pełnym snapshotem wykonania; canonical intent zapisuje konfigurację, a test worker parity dowodzi użycia snapshotu po zmianie ENV.
+- **P1-03:** ledger wymagał rozróżnienia braku dawnych danych od sprzecznych danych. `0012` wycofuje migrację dla arbitralnego request_id, obcego runu i brakującego attemptu, zamiast ukrywać je jako legacy.
+- **Wynik:** 752 testy offline, zero API/sieci/kosztu i niezmieniony baseline bazy. Pozostaje wymagane niezależne re-review; operator reconciliation i WAVE 1A nie zostały wdrożone.
+
+## 2026-07-14 — WAVE 0B.3: równe stringi nie są dowodem identity ani świeżego lease
+
+- **P1-01:** context i callback mogły zwrócić ten sam arbitralny `request_id`, a klient porównywał wyłącznie ich wzajemną równość. Naprawa wyprowadza ID z trwałych pól i odrzuca arbitralne, job/stage/attempt mismatch oraz separator w stage przed callerem.
+- **P1-02:** asercja lease odczytywała stare `context.checked_at`; po realnym expiry caller mógł nadal ruszyć. Naprawa pobiera czas execution clock wewnątrz nowej transakcji storage, a druga asercja chroni samo `messages.create`.
+- **Dowód:** 770 testów offline obejmuje expiry, granicę równą expiry, odnowienie, takeover, zmianę run/fence i `NEEDS_RECONCILIATION`; 0 API, sieci, browsera, publikacji i kosztu; baseline bazy niezmieniony.
+
+## 2026-07-15 — P1: testowy kernel nie dziedziczył granic bezpieczeństwa do subprocessów
+
+- **Kategoria:** SAFETY
+- **Co się zepsuło:** monkeypatch w `conftest.py` chronił główny interpreter, lecz subprocess mógł ominąć ochronę przez `sqlite3.dbapi2`, URI SQLite, proxy/NO_PROXY albo konstrukcję realnego SDK. To nie wywołało sieci ani nie zmieniło bazy podczas tego zadania, ale naruszało wymagany dowód izolacji.
+- **Naprawa:** test-only `sitecustomize.py` ładuje dziedziczony kernel przed collection oraz w subprocessach. Blokuje surowe SQLite dla pełnej kanonizacji ścieżki, socket/DNS/SDK i czyści sekrety oraz proxy; tymczasowe SQLite i fake SDK pozostają dostępne.
+- **Dowód:** main/subprocess raw+dbapi2+URI, socket/DNS, SDK oraz scrub environment; 823 testy offline, 0 USD, bez API i z niezmienionym SHA baselineu.
+- **Status:** FIXED; niezależny review WAVE 0B nadal wymagany.
+
+## 2026-07-15 — P1: provider attempt nie wiązał trwałego intentu z ostatnią granicą callera
+
+- **Kategoria:** SAFETY
+- **Co się zepsuło:** attempt miał request identity i fresh lease, ale nie trwały fingerprint wszystkich pól execution intentu. Zmiana `jobs.payload_json` po rezerwacji mogła rozjechać payload z attemptem przed fake/SDK callerem.
+- **Naprawa:** `0013` przechowuje niezmienny SHA-256 canonical `execution_intent`; finalna transakcja przed callerem liczy go ponownie. Rozbieżność lub malformed/missing intent zostawia attempt w `NEEDS_RECONCILIATION`, bez callera, usage, kosztu i settlementu. `--real --resume` jest odmówione przed SQLite i `ensure_account`.
+- **Dowód:** model/provider/token/timeout/cap/pricing/workflow/mode/prompt/pipeline są parametryzowane jako późne zmiany; każda ma `caller=0`, `usage=0`, `cost=0` i typed code. Weryfikacja full suite: 823 offline, 0 USD, bez API/sieci/browsera.
+- **Status:** FIXED; nie jest to deklaracja zamknięcia WAVE 0B.
+
+## 2026-07-15 — W0B-REV-01–05: snapshot techniczny nie obejmował jeszcze całego requestu
+
+- **Kategoria:** SAFETY / consistency.
+- **Co znaleziono:** fingerprint trwałego intentu obejmował parametry techniczne, lecz realny prompt nadal czerpał `topic.question` i `account.niche` z mutowalnych obiektów. Finalna asercja nie weryfikowała pełnego lifecycle `runs` i `research_runs`; brakowało też testów stage, prompt inputs, restartu oraz wariantów safety kernela.
+- **Naprawa:** `durable_research_intent_v2` utrwala kanoniczne prompt-input i stage, a worker buduje plan wyłącznie z niego. Finalna transakcja odmawia po każdej niezgodności job/run/research_run/attempt/intent i zachowuje started attempt do reconciliation. Kernel czyści lowercase secret i fail-closed odrzuca nielokalny SQLite URI authority.
+- **Dowód historyczny przed W0B-REV-06:** 861 testów offline obejmuje osobne mutacje parametrów requestu, terminalne/niespójne runy i research_runs, reopen SQLite, fake caller `0`, usage/koszt/settlement `0` oraz brak attempt #2. Nie użyto API, sieci, browsera ani chronionej bazy.
+- **Status:** FIXED technicznie; WAVE 0B pozostaje `CANDIDATE` do niezależnego re-review, Etap 1 = `BLOCKED`.
+
+## 2026-07-15 — CRITICAL W0B-REV-06: limit requestu rozchodził się z rezerwacją
+
+- **Kategoria:** SAFETY / accounting consistency.
+- **Co się zepsuło:** durable intent dopuszczał dodatni `max_tokens`, a caller używał `intent.max_tokens`, lecz single pipeline wyliczał koszt i rezerwował attempt z niezależnym `max_output_tokens=3000`. Request z limitem większym od 3000 mógł więc otrzymać actual usage cost większy od reservation, a dawny settlement zapisywał go jako zwykły `SETTLED`.
+- **Naprawa:** dispatcher przekazuje literalny persisted limit do pipeline; pipeline przekazuje go do estymatora, policy i rezerwacji. Settlement canonicalizuje obie kwoty do sześciu miejsc USD (`ROUND_HALF_UP`). Nadwyżka nie znika: w tej samej transakcji zapisuje się jeden usage i koszt runu, attempt przechodzi do `NEEDS_RECONCILIATION` z `PROVIDER_ATTEMPT_COST_EXCEEDS_RESERVATION`, a typed outcome blokuje sukces i attempt #2.
+- **Dowód historyczny po REV-06:** poprawne durable intenty 2999/3000/3001, reopen, mutacja po attempt, exact estimate/reservation/caller, rounding boundary oraz actual under/over są testowane wyłącznie fake callerami i tymczasową SQLite. Pełna regresja: 873 node IDs, rozłączne partycje 206+218+226+223, wszystkie zielone; 0 USD, bez API/sieci/browsera/publikacji.
+- **Status:** FIXED technicznie; `WAVE 0B CANDIDATE — AWAITING INDEPENDENT RE-REVIEW`, Etap 1 `BLOCKED`, live API `ZABRONIONE`. Operator reconciliation pozostaje przyszłą pracą i nie jest udawany przez automatyczny retry.
+
+## 2026-07-15 — W0B-REV-09/10: kronika nie nadążała, a dwa sposoby roundingu mogły rozjechać pieniądze
+
+- **Kategorie:** documentation integrity / accounting consistency.
+- **Co znaleziono:** obowiązkowa kronika `opis-budowy-substack/` nie opisywała zamkniętych W0B-REV-06/07/08, historycznych liczników ani bezpiecznego snapshotu. Równocześnie estymator i `UsageTracker` używały Pythonowego banker's `round`, podczas gdy intent i storage używały `Decimal/ROUND_HALF_UP`.
+- **Naprawa:** wspólny `app.core.money` realizuje literalny kontrakt `Decimal(str(value)) → quantize(0.000001, ROUND_HALF_UP)`. Przed zapisem i przy porównaniach estimate/reservation/actual każda kwota jest kanoniczna; suma komponentów powstaje przed pojedynczym roundingiem. Usunięto nieosiągalny fresh legacy provider block po return oraz nieużywaną stałą DB-API bez zmiany rootu paid execution.
+- **Dowód historyczny:** granice `0.0000004/.5/.6`, `0.0000015`, `0.1234565`, `0.1234575`, cache read/write/web, storage cache, settlement równe oraz ±1 mikro-USD i fake caller → usage → settlement. Historycznie 887 testów, partycje 211+222+229+225; bez API/sieci/browsera/kosztu i bez zapisu do chronionej bazy.
+- **Status:** W0B-REV-09 i W0B-REV-10 są technicznie zamknięte; wcześniejszy REJECT z CRITICAL W0B-REV-06 nie jest formalnie zastąpiony przez akceptację. WAVE 0B nadal `CANDIDATE`, Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
+## 2026-07-15 — MAJOR W0B-RR-01: poprawny helper nie obejmował całego przepływu
+
+- **Kategoria:** accounting consistency / review escape.
+- **Co znaleziono:** `ROUND_HALF_UP` działał na granicach helpera, ale staged estimate najpierw kwantyzował koszt jednego źródła, potem mnożył publiczny float. Policy Engine, niektóre sumy persisted kwot, pipeline i check CLI także pozwalały, by float uczestniczył w decyzji. Wyniki `0.1 + 0.2` oraz wielokrotności pół-mikro-USD nie miały więc jednego dowodliwego kontraktu end-to-end.
+- **Naprawa:** estymator przechowuje raw komponenty jako `Decimal` do jednej końcowej granicy; policy, storage, pipeline i CLI canonicalizują do `Decimal` przed sumą lub porównaniem. Zamiast SQL `SUM(REAL)` storage sumuje kanoniczne wiersze. Usunięto ponadto dwa martwe konstruktory klienta z prywatnych helperów resume; real resume nadal fail-closed, bez konstruktora i bez providera.
+- **Dowód:** regresje `2×` i `3×0.0000005`, `0.1+0.2 == 0.3` dla policy, ledgeru i CLI, granice ±1 mikro-USD, estimator, budget, durable provider, execution intent, usage, settlement, storage, restart, migracje, maintenance i CLI resume. Pełny wynik: 894 testy, partycje 213+224+231+226, exact-once coverage i brak BOM; wyłącznie fake callery oraz tymczasowe SQLite.
+- **Status:** FIXED technicznie; WAVE 0B pozostaje `CANDIDATE` do krótkiego niezależnego re-review, Etap 1 `BLOCKED`, live API `ZABRONIONE`. Nie wykonano API, sieci, browsera, kosztu ani zapisu do `data/agent.db`.
+
+## 2026-07-15 — P2 checkpointu: rozbieżność inwentarza Git
+
+- **Kategoria:** documentation / release-control accuracy.
+- **Co znaleziono:** implementer zadeklarował 71 wpisów Git, lecz niezależny gate zliczył rzeczywisty stan jako 50 modified, 1 deleted i 21 untracked, czyli 72 wpisy.
+- **Naprawa:** checkpoint używa wyłącznie inwentarza 72 i rozdziela zatwierdzony zakres do stage od plików chronionych pozostających unstaged.
+- **Status:** `APPROVED WITH P2 — READY FOR CHECKPOINT`; nie jest to `CLOSED` przed commitem. Etap 1 `BLOCKED`, live API `ZABRONIONE`; nie wykonano API, sieci, browsera, kosztu ani mutacji `data/agent.db`.

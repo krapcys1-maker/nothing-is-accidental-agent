@@ -33,16 +33,30 @@ import json
 import math
 from typing import Callable
 
+from app.core.money import decimal_from, usd_float
 from app.llm.base import Usage
-from app.models import SourceType, SourceVerification
+from app.ports.storage import StaleJobExecutionError
+from app.models import (
+    DurableProviderAttemptContext,
+    ProviderAttempt,
+    ProviderAttemptStatus,
+    SourceType,
+    SourceVerification,
+)
 from app.research.base import (
     AttemptBudgetCallback,
     AttemptBudgetContext,
     DEFAULT_SYNTHESIS_MAX_TOKENS,
+    DurableAttemptActivationCallback,
+    DurableAttemptAssertionCallback,
+    DurableAttemptContextCallback,
+    DurableProviderBoundary,
+    DurableProviderAttemptContextError,
     DiscoveryResult,
     ExtractionResult,
     GatheredSource,
     ResearchDraft,
+    ResearchError,
     ResearchAuthenticationError,
     ResearchConnectionError,
     ResearchInvalidRequestError,
@@ -50,6 +64,7 @@ from app.research.base import (
     ResearchParseError,
     ResearchPlan,
     ResearchPermissionError,
+    ProviderRequestIdentityMismatch,
     ResearchProviderError,
     ResearchRateLimitError,
     ResearchResult,
@@ -62,7 +77,19 @@ from app.research.base import (
     SourceDraft,
     SourceGatheringResult,
     RetryUsageCallback,
+    expected_provider_request_id,
 )
+
+
+def _canonical_attempt_cost(value: object) -> float:
+    """Keep the adapter's retry metadata on the shared USD contract."""
+    try:
+        amount = decimal_from(value, label="estimated_attempt_cost")
+    except ValueError as exc:
+        raise ValueError("estimated_attempt_cost must be a finite USD amount.") from exc
+    if amount < 0:
+        raise ValueError("estimated_attempt_cost musi być >= 0.")
+    return usd_float(amount, label="estimated_attempt_cost")
 
 _RETRYABLE_SERVER_STATUS_CODES = frozenset({500, 502, 503, 504})
 _SDK_MAX_RETRIES = 0
@@ -296,6 +323,8 @@ def _parse_synthesis_from_cards(text: str, cards: list[SourceCardDraft]) -> Rese
 
 
 class AnthropicResearchClient:
+    requires_durable_provider_context = True
+
     def __init__(self, api_key: str, model: str, *, caller: Caller | None = None,
                  gather_caller: GatherCaller | None = None,
                  synthesize_caller: SynthesizeCaller | None = None,
@@ -304,6 +333,7 @@ class AnthropicResearchClient:
                  synthesize_from_cards_caller: "SynthesizeFromCardsCaller | None" = None,
                  max_retries: int = 0, timeout_seconds: float = 60,
                  max_web_searches: int | None = None,
+                 research_max_tokens: int = 3000,
                  gather_max_tokens: int = 1200,
                  synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
                  discover_max_tokens: int = 600,
@@ -313,15 +343,27 @@ class AnthropicResearchClient:
             raise ValueError("max_retries must be non-negative.")
         if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be finite and positive.")
+        if (
+            isinstance(research_max_tokens, bool)
+            or not isinstance(research_max_tokens, int)
+            or research_max_tokens < 1
+        ):
+            raise ValueError("research_max_tokens must be a positive integer.")
         self.model = model
         self._api_key = api_key
         self._caller = caller or self._default_caller
+        self._caller_is_default = caller is None
         self._gather_caller = gather_caller or self._default_gather_caller
+        self._gather_caller_is_default = gather_caller is None
         self._synthesize_caller = synthesize_caller or self._default_synthesize_caller
+        self._synthesize_caller_is_default = synthesize_caller is None
         self._discover_caller = discover_caller or self._default_discover_caller
+        self._discover_caller_is_default = discover_caller is None
         self._extract_caller = extract_caller or self._default_extract_caller
+        self._extract_caller_is_default = extract_caller is None
         self._synthesize_from_cards_caller = (
             synthesize_from_cards_caller or self._default_synthesize_from_cards_caller)
+        self._synthesize_from_cards_caller_is_default = synthesize_from_cards_caller is None
         # Kept as metadata so offline pipeline estimates can preserve their
         # historical contract. It never controls a client-side retry loop.
         self._max_retries = max_retries
@@ -331,6 +373,7 @@ class AnthropicResearchClient:
         # None = brak jawnego capu (zachowanie sprzed tej zmiany). Używany zarówno
         # przez `run_research` (etap jednorazowy), jak i `gather_sources` (etap 1).
         self._max_web_searches = max_web_searches
+        self._research_max_tokens = research_max_tokens
         self._gather_max_tokens = gather_max_tokens
         self._synthesize_max_tokens = synthesize_max_tokens
         # Nowe (A1/A2/B, 2026-07-12) — patrz docs/COSTS.csv i docs/DECISIONS.md ADR-020
@@ -342,79 +385,109 @@ class AnthropicResearchClient:
         self._extract_max_tokens = extract_max_tokens
         self._max_web_searches_per_source = max_web_searches_per_source
         self.call_count = 0
-        self._attempt_budget_callback: AttemptBudgetCallback | None = None
         self._estimated_attempt_cost = 0.0
+        self._durable_boundary = DurableProviderBoundary(provider_label="Real Anthropic research")
 
-    def configure_attempt_control(
+    def configure_durable_attempt_control(
         self,
         *,
-        budget_callback: AttemptBudgetCallback | None,
-        retry_usage_callback: RetryUsageCallback | None,
+        context_callback: DurableAttemptContextCallback | None,
+        activation_callback: DurableAttemptActivationCallback | None,
+        assertion_callback: DurableAttemptAssertionCallback | None,
         estimated_attempt_cost: float,
     ) -> None:
-        """Install workflow-owned hooks used immediately before each attempt.
+        """Instaluje obowiązkowy kontrakt durable dla każdego realnego requestu."""
+        canonical_attempt_cost = _canonical_attempt_cost(estimated_attempt_cost)
+        self._durable_boundary.configure(
+            context_callback=context_callback,
+            activation_callback=activation_callback,
+            assertion_callback=assertion_callback,
+        )
+        self._estimated_attempt_cost = canonical_attempt_cost
 
-        The client remains independent of SQLite and PolicyEngine. The workflow
-        owns persistence and policy and supplies simple callbacks instead.
+    def _before_attempt(self, attempt: int, *, stage: str) -> str | None:
+        if not self.requires_durable_provider_context:
+            return None
+        return self._durable_boundary.activate(
+            stage=stage,
+            attempt_no=attempt + 1,
+            estimated_attempt_cost=self._estimated_attempt_cost,
+        )
+
+    def _assert_active_durable_provider_attempt(self) -> str:
+        """Re-check durable state immediately before the SDK request boundary."""
+        return self._durable_boundary.assert_immediately_before_provider_call()
+
+    def _call_injected_provider_caller(self, caller, *args):
+        """Keep injected test callers behind the same final durable assertion.
+
+        Production callers make this assertion inside ``_call_anthropic`` after
+        constructing the SDK.  An injected caller is itself the request-boundary
+        stand-in, so it is asserted directly before invocation.
         """
-        if estimated_attempt_cost < 0:
-            raise ValueError("estimated_attempt_cost musi być >= 0.")
-        self._attempt_budget_callback = budget_callback
-        # Preserved only for compatible workflow hooks. A real client never
-        # retries, so it never emits retry-specific usage.
-        del retry_usage_callback
-        self._estimated_attempt_cost = estimated_attempt_cost
+        if self.requires_durable_provider_context:
+            self._assert_active_durable_provider_attempt()
+        return caller(*args)
 
-    def _before_attempt(self, attempt: int) -> None:
-        if self._attempt_budget_callback is not None:
-            self._attempt_budget_callback(AttemptBudgetContext(
-                attempt_number=attempt + 1,
-                max_attempts=1,
-                estimated_attempt_cost=self._estimated_attempt_cost,
-            ))
-
-    def _run_with_retry_and_parse(self, call_fn, parse_fn, empty_error_msg: str):
+    def _run_with_retry_and_parse(self, call_fn, parse_fn, empty_error_msg: str, *, stage: str):
         # One logical attempt is exactly one caller invocation. Do not turn a
         # transient typed error into another potentially paid provider request.
         del empty_error_msg
-        self._before_attempt(0)
+        request_id = self._before_attempt(0, stage=stage)
         self.call_count += 1
-        text, usage = call_fn()
         try:
-            parsed = parse_fn(text)
-        except ResearchParseError as exc:
-            # A successful provider response may still fail to parse; preserve
-            # its real usage for the workflow ledger.
-            exc.usage = usage
-            exc.model = self.model
-            raise
-        return parsed, usage
+            try:
+                text, usage = call_fn()
+            except ResearchError as exc:
+                exc.request_id = request_id
+                raise
+            try:
+                parsed = parse_fn(text)
+            except ResearchParseError as exc:
+                # A successful provider response may still fail to parse; preserve
+                # its real usage for the workflow ledger.
+                exc.usage = usage
+                exc.model = self.model
+                exc.request_id = request_id
+                raise
+            return parsed, usage, request_id
+        finally:
+            self._durable_boundary.clear()
 
     def run_research(self, plan: ResearchPlan) -> ResearchResult:
         """Pojedyncze wywołanie: search + analiza naraz. Działa, ale patrz docstring
         modułu — po incydencie 2026-07-11 zalecana jest ścieżka dwuetapowa."""
-        draft, usage = self._run_with_retry_and_parse(
-            lambda: self._caller(plan), _parse,
-            "Research nieudany bez konkretnego błędu.")
-        return ResearchResult(draft=draft, usage=usage, model=self.model)
+        draft, usage, request_id = self._run_with_retry_and_parse(
+            lambda: (
+                self._caller(plan) if self._caller_is_default
+                else self._call_injected_provider_caller(self._caller, plan)
+            ), _parse,
+            "Research nieudany bez konkretnego błędu.", stage="research")
+        return ResearchResult(draft=draft, usage=usage, model=self.model, request_id=request_id)
 
     def gather_sources(self, plan: ResearchPlan) -> SourceGatheringResult:
         """Etap 1: TYLKO web search + wyodrębnienie źródeł i krótkich, surowych
         faktów. Bez analizy — lekki schemat, mniejsze ryzyko ucięcia JSON-a."""
-        sources, usage = self._run_with_retry_and_parse(
-            lambda: self._gather_caller(plan), _parse_gathered_sources,
-            "Zbieranie źródeł nieudane bez konkretnego błędu.")
-        return SourceGatheringResult(sources=sources, usage=usage, model=self.model)
+        sources, usage, request_id = self._run_with_retry_and_parse(
+            lambda: (
+                self._gather_caller(plan) if self._gather_caller_is_default
+                else self._call_injected_provider_caller(self._gather_caller, plan)
+            ), _parse_gathered_sources,
+            "Zbieranie źródeł nieudane bez konkretnego błędu.", stage="research_gather")
+        return SourceGatheringResult(sources=sources, usage=usage, model=self.model, request_id=request_id)
 
     def synthesize_card(self, plan: ResearchPlan,
                         gathered: SourceGatheringResult) -> ResearchResult:
         """Etap 2: TYLKO synteza (teza, mechanizm, sprzeczności, confidence) na
         bazie już zebranych źródeł. Zero web search — input pod naszą kontrolą."""
-        draft, usage = self._run_with_retry_and_parse(
-            lambda: self._synthesize_caller(plan, gathered),
+        draft, usage, request_id = self._run_with_retry_and_parse(
+            lambda: (
+                self._synthesize_caller(plan, gathered) if self._synthesize_caller_is_default
+                else self._call_injected_provider_caller(self._synthesize_caller, plan, gathered)
+            ),
             lambda text: _parse_synthesis(text, gathered),
-            "Synteza karty nieudana bez konkretnego błędu.")
-        return ResearchResult(draft=draft, usage=usage, model=self.model)
+            "Synteza karty nieudana bez konkretnego błędu.", stage="research_synthesize")
+        return ResearchResult(draft=draft, usage=usage, model=self.model, request_id=request_id)
 
     # --- wspólny szkielet dla A1/A2/B: jak wyżej, ale niesie DODATKOWO raw_text i
     # stop_reason (na sukces I na błąd) — potrzebne do diagnostyki (patrz
@@ -425,66 +498,87 @@ class AnthropicResearchClient:
         stage: str, max_output_tokens: int, typed_truncation: bool = False,
     ):
         del empty_error_msg
-        self._before_attempt(0)
+        request_id = self._before_attempt(0, stage=stage)
         self.call_count += 1
-        text, usage, stop_reason = call_fn()
-        # Stage A1 intentionally salvages complete JSONL rows before a cut
-        # final row; A2 retains its established parse-error contract. Only
-        # stage B is all-or-nothing and needs the dedicated truncation type.
-        if typed_truncation and stop_reason == "max_tokens":
-            raise ResearchTruncatedError(
-                f"{stage}: odpowiedź ucięta; stop_reason=max_tokens; "
-                f"max_output_tokens={max_output_tokens}.",
-                usage=usage, model=self.model, raw_text=text,
-                stop_reason=stop_reason,
-            )
         try:
-            parsed = parse_fn(text)
-        except ResearchParseError as exc:
-            exc.usage = usage
-            exc.model = self.model
-            exc.raw_text = text
-            exc.stop_reason = stop_reason
-            raise
-        return parsed, usage, text, stop_reason
+            try:
+                text, usage, stop_reason = call_fn()
+            except ResearchError as exc:
+                exc.request_id = request_id
+                raise
+            # Stage A1 intentionally salvages complete JSONL rows before a cut
+            # final row; A2 retains its established parse-error contract. Only
+            # stage B is all-or-nothing and needs the dedicated truncation type.
+            if typed_truncation and stop_reason == "max_tokens":
+                exc = ResearchTruncatedError(
+                    f"{stage}: odpowiedź ucięta; stop_reason=max_tokens; "
+                    f"max_output_tokens={max_output_tokens}.",
+                    usage=usage, model=self.model, raw_text=text,
+                    stop_reason=stop_reason, request_id=request_id,
+                )
+                raise exc
+            try:
+                parsed = parse_fn(text)
+            except ResearchParseError as exc:
+                exc.usage = usage
+                exc.model = self.model
+                exc.raw_text = text
+                exc.stop_reason = stop_reason
+                exc.request_id = request_id
+                raise
+            return parsed, usage, text, stop_reason, request_id
+        finally:
+            self._durable_boundary.clear()
 
     def discover_sources(self, plan: ResearchPlan, max_searches: int = 3) -> DiscoveryResult:
         """Etap A1: TYLKO web search + lista kandydatów URL (url+title, JSONL).
         Zero analizy — najlżejszy możliwy schemat, celowo (patrz base.py)."""
-        candidates, usage, raw_text, stop_reason = self._run_with_retry_and_parse_v2(
-            lambda: self._discover_caller(plan, max_searches),
+        candidates, usage, raw_text, stop_reason, request_id = self._run_with_retry_and_parse_v2(
+            lambda: (
+                self._discover_caller(plan, max_searches) if self._discover_caller_is_default
+                else self._call_injected_provider_caller(
+                    self._discover_caller, plan, max_searches)
+            ),
             _parse_discovery_candidates_jsonl,
             "Odkrywanie źródeł nieudane bez konkretnego błędu.",
             stage="discover_sources", max_output_tokens=self._discover_max_tokens)
         return DiscoveryResult(candidates=candidates, usage=usage, model=self.model,
-                               raw_text=raw_text, stop_reason=stop_reason)
+                               raw_text=raw_text, stop_reason=stop_reason, request_id=request_id)
 
     def extract_source(self, plan: ResearchPlan,
                        candidate: SourceCandidate) -> ExtractionResult:
         """Etap A2: JEDNO źródło na wywołanie — pełna analiza (autor, data, 2-4
         twierdzenia, fakty liczbowe, ocena jakości). Wołane RAZ NA KANDYDATA — awaria
         jednego źródła nie ma wpływu na pozostałe (każde to osobne wywołanie API)."""
-        card, usage, raw_text, stop_reason = self._run_with_retry_and_parse_v2(
-            lambda: self._extract_caller(plan, candidate),
+        card, usage, raw_text, stop_reason, request_id = self._run_with_retry_and_parse_v2(
+            lambda: (
+                self._extract_caller(plan, candidate) if self._extract_caller_is_default
+                else self._call_injected_provider_caller(self._extract_caller, plan, candidate)
+            ),
             lambda text: _parse_source_card(text, candidate),
             "Ekstrakcja źródła nieudana bez konkretnego błędu.",
             stage="extract_source", max_output_tokens=self._extract_max_tokens)
         return ExtractionResult(card=card, usage=usage, model=self.model,
-                                raw_text=raw_text, stop_reason=stop_reason)
+                                raw_text=raw_text, stop_reason=stop_reason, request_id=request_id)
 
     def synthesize_from_cards(self, plan: ResearchPlan,
                               cards: list[SourceCardDraft]) -> ResearchResult:
         """Etap B na bazie już wyekstrahowanych Source Cards (etap A2). Zero web
         search — semantycznie to samo zadanie co stary `synthesize_card`, ale na
         bogatszym, per-źródło zweryfikowanym materiale zamiast surowych faktów."""
-        draft, usage, raw_text, stop_reason = self._run_with_retry_and_parse_v2(
-            lambda: self._synthesize_from_cards_caller(plan, cards),
+        draft, usage, raw_text, stop_reason, request_id = self._run_with_retry_and_parse_v2(
+            lambda: (
+                self._synthesize_from_cards_caller(plan, cards)
+                if self._synthesize_from_cards_caller_is_default
+                else self._call_injected_provider_caller(
+                    self._synthesize_from_cards_caller, plan, cards)
+            ),
             lambda text: _parse_synthesis_from_cards(text, cards),
             "Synteza karty (z kart źródeł) nieudana bez konkretnego błędu.",
             stage="synthesize_from_cards", max_output_tokens=self._synthesize_max_tokens,
             typed_truncation=True)
         return ResearchResult(draft=draft, usage=usage, model=self.model,
-                              raw_text=raw_text, stop_reason=stop_reason)
+                              raw_text=raw_text, stop_reason=stop_reason, request_id=request_id)
 
     # --- domyślne (realne) callery — leniwy import `anthropic`, nieużywane w testach ---
     @staticmethod
@@ -573,14 +667,23 @@ class AnthropicResearchClient:
         )
 
     def _call_anthropic(self, client, prompt: str, *, tools: list[dict] | None,
-                        max_tokens: int) -> tuple[str, Usage, str | None]:  # pragma: no cover
+                         max_tokens: int) -> tuple[str, Usage, str | None]:  # pragma: no cover
         kwargs = dict(model=self.model, max_tokens=max_tokens, system=_SYSTEM,
-                     messages=[{"role": "user", "content": prompt}],
-                     timeout=self._timeout_seconds)
+                      messages=[{"role": "user", "content": prompt}],
+                      timeout=self._timeout_seconds)
         if tools:
             kwargs["tools"] = tools
         try:
+            # The SDK object already exists when we make this authoritative
+            # SQLite-backed assertion.  No caller-provided timestamp can bridge
+            # the gap between activation and ``messages.create``.
+            if self.requires_durable_provider_context:
+                request_id = self._assert_active_durable_provider_attempt()
+                kwargs["extra_headers"] = {"Idempotency-Key": request_id}
             message = client.messages.create(**kwargs)
+        except (DurableProviderAttemptContextError, ProviderRequestIdentityMismatch,
+                StaleJobExecutionError):
+            raise
         except Exception as exc:
             anthropic = self._import_anthropic()
             raise self._map_anthropic_error(exc, anthropic) from exc
@@ -615,7 +718,7 @@ class AnthropicResearchClient:
         if self._max_web_searches is not None:
             web_search_tool["max_uses"] = self._max_web_searches
         text, usage, _stop_reason = self._call_anthropic(
-            client, prompt, tools=[web_search_tool], max_tokens=3000)
+            client, prompt, tools=[web_search_tool], max_tokens=self._research_max_tokens)
         return text, usage
 
     def _default_gather_caller(self, plan: ResearchPlan) -> tuple[str, Usage]:  # pragma: no cover
@@ -751,3 +854,87 @@ class AnthropicResearchClient:
         )
         return self._call_anthropic(client, prompt, tools=None,
                                     max_tokens=self._synthesize_max_tokens)
+
+
+class OfflineAnthropicResearchClient(AnthropicResearchClient):
+    """Jawny adapter testowy/offline; nigdy nie jest produkcyjnym rootem providera."""
+
+    requires_durable_provider_context = False
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        *,
+        caller: Caller | None = None,
+        gather_caller: GatherCaller | None = None,
+        synthesize_caller: SynthesizeCaller | None = None,
+        discover_caller: "DiscoverCaller | None" = None,
+        extract_caller: "ExtractCaller | None" = None,
+        synthesize_from_cards_caller: "SynthesizeFromCardsCaller | None" = None,
+        **kwargs,
+    ) -> None:
+        """Build an offline client only with an explicit fake root caller.
+
+        Missing method-specific fakes fail before any SDK construction.  This
+        prevents an innocuous-looking test adapter from falling through to an
+        inherited real default caller when a staged method is exercised.
+        """
+        if caller is None:
+            raise ValueError(
+                "OfflineAnthropicResearchClient requires an explicit fake caller."
+            )
+        super().__init__(
+            api_key,
+            model,
+            caller=caller,
+            gather_caller=gather_caller or self._missing_fake_caller("gather_sources"),
+            synthesize_caller=synthesize_caller or self._missing_fake_caller("synthesize_card"),
+            discover_caller=discover_caller or self._missing_fake_caller("discover_sources"),
+            extract_caller=extract_caller or self._missing_fake_caller("extract_source"),
+            synthesize_from_cards_caller=(
+                synthesize_from_cards_caller
+                or self._missing_fake_caller("synthesize_from_cards")
+            ),
+            **kwargs,
+        )
+
+    @staticmethod
+    def _missing_fake_caller(method: str):
+        def missing(*_args, **_kwargs):
+            raise RuntimeError(
+                f"OfflineAnthropicResearchClient requires an explicit fake caller for {method}."
+            )
+        return missing
+
+    def _new_anthropic_client(self, _anthropic):  # pragma: no cover - defensive hard stop
+        raise RuntimeError("OfflineAnthropicResearchClient never constructs an Anthropic SDK client.")
+
+    def configure_attempt_control(
+        self, *, budget_callback, retry_usage_callback, estimated_attempt_cost: float,
+    ) -> None:
+        """Zgodność wyłącznie z dawnymi testami adaptera offline.
+
+        Interfejs nie istnieje na kliencie produkcyjnym, więc nie może otworzyć
+        drogi do realnego SDK bez contextu durable.
+        """
+        canonical_attempt_cost = _canonical_attempt_cost(estimated_attempt_cost)
+        self._offline_budget_callback = budget_callback
+        self._offline_retry_usage_callback = retry_usage_callback
+        self._estimated_attempt_cost = canonical_attempt_cost
+
+    def _before_attempt(self, attempt: int, *, stage: str) -> str | None:
+        callback = getattr(self, "_offline_budget_callback", None)
+        if not callable(callback):
+            self._durable_boundary.clear()
+            return None
+        prepared = callback(AttemptBudgetContext(
+            attempt_number=attempt + 1,
+            max_attempts=1,
+            estimated_attempt_cost=self._estimated_attempt_cost,
+            stage=stage,
+        ))
+        request_id = getattr(prepared, "request_id", None)
+        if request_id is not None and (not isinstance(request_id, str) or not request_id.strip()):
+            raise DurableProviderAttemptContextError("Offline request_id must be a non-empty string.")
+        return request_id

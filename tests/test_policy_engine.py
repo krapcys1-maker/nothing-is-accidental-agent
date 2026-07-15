@@ -5,6 +5,8 @@ from dataclasses import replace
 
 import pytest
 
+from tests.conftest import seed_historical_real_usage
+
 from app.models import ModelUsage, Run, RunStatus, TopicStatus, WorkflowType
 from app.policies.policy_engine import PolicyEngine
 
@@ -13,8 +15,8 @@ def _seed_real_cost(storage, account, cost: float) -> None:
     storage.ensure_account(account)
     storage.create_run(Run(id="seed", account_id=account.id,
                            workflow=WorkflowType.TOPIC, status=RunStatus.RUNNING))
-    storage.add_model_usage(ModelUsage(run_id="seed", model="m",
-                                       estimated_cost_usd=cost, dry_run=False))
+    seed_historical_real_usage(storage, ModelUsage(run_id="seed", model="m",
+                                                    estimated_cost_usd=cost, dry_run=False))
 
 
 def test_kill_switch_blocks(settings, storage, account):
@@ -105,7 +107,7 @@ def test_dry_run_usage_does_not_consume_real_budget(settings, storage, account):
     storage.ensure_account(account)
     storage.create_run(Run(id="dry", account_id=account.id,
                            workflow=WorkflowType.RESEARCH, status=RunStatus.DRY_RUN))
-    storage.add_model_usage(ModelUsage(
+    seed_historical_real_usage(storage, ModelUsage(
         run_id="dry", model="m", estimated_cost_usd=100.0, dry_run=True))
     decision = PolicyEngine(settings, storage).check_run_budget(0.10, 0.50, account=account)
     assert decision.allowed
@@ -151,3 +153,27 @@ def test_daily_and_monthly_exact_boundaries_are_allowed(settings, storage, accou
     storage.conn.commit()
     assert PolicyEngine(monthly_settings, storage).check_run_budget(
         0.05, 1.0, account=account).allowed
+
+
+def test_policy_uses_decimal_for_float_artifact_and_run_cap_boundaries(
+        settings, storage, account):
+    bounded = replace(settings, max_daily_cost_usd=100.0, max_monthly_cost_usd=100.0)
+    engine = PolicyEngine(bounded, storage)
+
+    assert engine.check_run_budget(0.1 + 0.2, 0.3, account=account).allowed
+    assert engine.check_run_budget(0.3, 0.3, current_run_cost=0.3, account=account).allowed
+    assert engine.check_run_budget(0.299999, 0.3, account=account).allowed
+    assert engine.check_run_budget(0.300001, 0.3, account=account).code == "RUN_CAP_EXCEEDED"
+
+
+def test_policy_uses_decimal_for_daily_and_monthly_exact_boundaries(
+        settings, storage, account, monkeypatch):
+    bounded = replace(settings, max_daily_cost_usd=0.3, max_monthly_cost_usd=0.3)
+    monkeypatch.setattr(storage, "sum_real_cost_usd", lambda _prefix: 0.1)
+    engine = PolicyEngine(bounded, storage)
+
+    assert engine.check_run_budget(0.1 + 0.2, 1.0, current_run_cost=0.1, account=account).allowed
+    assert engine.check_run_budget(0.299999, 1.0, current_run_cost=0.1, account=account).allowed
+    assert engine.check_run_budget(0.300001, 1.0, current_run_cost=0.1, account=account).code == (
+        "BUDGET_MONTHLY_EXCEEDED"
+    )

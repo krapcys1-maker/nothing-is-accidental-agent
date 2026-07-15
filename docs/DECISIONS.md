@@ -672,3 +672,105 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Stan bazy:** incydent testowy jest zamknięty, a obowiązujący baseline SQLite ma SHA-256 `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`. Historyczny brak bitowego snapshotu pozostaje udokumentowany, bez stwierdzonej utraty realnych danych.
 - **Backlog P2:** (1) mocniejszy regression test na granicy `messages.create`, (2) pełna parametryzacja pricingu, (3) poprawna kolejność aktualizacji dokumentacji.
 - **Granice:** Etap 1 pozostaje BLOCKED przez pozostałe P1; brak nowych funkcji, WAVE 0B, API, sieci, browsera, publikacji, kosztu, PR i merge.
+
+### ADR-052: Durable provider attempt i controlled real enqueue (WAVE 0B)
+
+- **Status:** `WAVE 0B CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.
+- **Problem:** pojedyncza logiczna próba realnego providera nie mogła wcześniej udowodnić stałej tożsamości requestu ani atomowo utrzymać budżetu po timeout/connection/restart. Bez tego worker nie może bezpiecznie rozstrzygnąć, czy ponowienie stworzy drugi płatny skutek.
+- **Decyzja:** nowa addytywna migracja `0010_provider_attempts` jest ledgerem `(job_id, stage, attempt_no)`. `request_id` jest deterministyczne (`job_id:stage:attempt_no`), zapisane przed SDK i przekazywane jako `Idempotency-Key`; `operation-key` identyfikuje tylko intent enqueue. Atomowe `BEGIN IMMEDIATE` porównuje realny usage oraz wszystkie aktywne rezerwacje, a następnie zapisuje maksymalną rezerwację. `REQUEST_STARTED` utrwala granicę external effect. `model_usage.request_id` w tej samej transakcji zapisuje usage i przeprowadza settlement raz.
+- **Semantyka błędów:** pre-request reservation można zwolnić wyłącznie ze stanu `RESERVED`; udany response albo parse-error z usage rozlicza koszt; potwierdzony błąd bez usage rozlicza 0; timeout, connection i unknown result przechodzą do `NEEDS_RECONCILIATION` z zachowaną rezerwacją i bez automatic retry. Lease expiry po `REQUEST_STARTED` prowadzi istniejącą ścieżką do `NEEDS_VERIFICATION`.
+- **Root i granice:** `scripts/run_capped_research.py --real --operation-key` robi pre-flight/pricing i durable enqueue tylko dla świeżego single flow. Komunikuje `JOB_ENQUEUED`, `JOB_ALREADY_EXISTS`, `BLOCKED_BY_BUDGET` lub `INVALID_CONFIGURATION`; nie deklaruje sukcesu researchu i nie konstruuje klienta. Wykonanie jest dostępne tylko workerowi z jobem, lease/fence i runtime `paid_actions_enabled`. Dry fake pozostaje odrębny. WAVE 1 obejmie durable real A1/A2/B, real resume i operator UI reconciliation.
+- **Bezpieczeństwo testów i bazy:** testowe połączenia odrzucają po `resolve()` chronione `data/agent.db`, a testy używają plików tymczasowych. Nie migrowano ani nie zmieniono baselineu bazy projektu: `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`.
+- **Weryfikacja:** offline testy obejmują stabilny request id/settlement, współdzielony limit 0.30 dla dwóch rezerwacji 0.20, reopen przed requestem, unknown po request boundary, ledger w pipeline, idempotentny CLI enqueue i twardy guard testowego DB. Pełny suite: 720 passed; `compileall` i `git diff --check` zielone. Bez API, sieci, browsera, publikacji i kosztu.
+
+### ADR-053: Domknięcie trzech findingów P1 z niezależnego review WAVE 0B
+
+- **Data:** 2026-07-14
+- **Status:** `WAVE 0B.1 CANDIDATE COMPLETE — AWAITING INDEPENDENT RE-REVIEW`.
+- **Kto podjął:** właściciel wyznaczył zakres napraw; wykonanie: Codex. Niezależny re-review pozostaje wymagany.
+- **Decyzja — granica wykonania:** rzeczywisty klient providera oznacza `requires_durable_provider_context`. Świeże wywołania `run_two_stage_research_pipeline` i `run_staged_research_pipeline` bez kontekstu durable joba kończą się typowanym błędem przed pierwszym wywołaniem providera; komunikat kieruje do WAVE 1A. Zachowano działanie fake/dry-run, a brak klucza API zapisuje usage jako `dry_run`.
+- **Decyzja — operation key:** dla realnego durable researchu klucz ma globalną przestrzeń `real-research:<operation_key>`. Atomowy `enqueue_job_result()` zwraca razem job i flagę `created`; tylko ten wynik wybiera `JOB_ENQUEUED` albo `JOB_ALREADY_EXISTS`. Ten sam klucz z innym kanonicznym payloadem powoduje `OPERATION_KEY_CONFLICT`, również między workflowami.
+- **Decyzja — ledger i historia:** migracja `0011_provider_attempt_invariants` zaostrza `provider_attempts` (tożsamość, dodatnia rezerwacja, dozwolone stany i przejścia) oraz wymaga request_id dla każdego nowego realnego `model_usage`, z istniejącym attemptem `REQUEST_STARTED`. Historyczne wiersze real usage są oznaczone `is_legacy_usage=1`, ponieważ ich powiązania nie da się uczciwie odtworzyć; nie są przepisywane ani kasowane.
+- **Decyzja — budżet:** wartości pieniężne są porównywane jako `Decimal` zaokrąglony do 6 miejsc; test obejmuje granicę `0.10 + 0.20 = 0.30` i dwie niezależne konekcje SQLite rywalizujące o ostatnią rezerwację.
+- **Weryfikacja i granice:** 741 testów offline przeszło; migracja 0011 ma test poprawnej i uszkodzonej historii wraz z rollbackiem, a `integrity_check` i `foreign_key_check` są zielone. Nie uruchomiono API, sieci, browsera, publikacji, płatnej akcji ani migracji `data/agent.db`. Nie wdrożono WAVE 1A: durable realnego A1/A2/B, realnego resume ani UI reconciliation.
+
+### ADR-054: Hardening contextu providera i dowodliwego ledgeru (WAVE 0B.2)
+
+- **Data:** 2026-07-14
+- **Status:** historyczny wynik 752 testów, zastąpiony przez WAVE 0B.3.
+- **Kto podjął:** właściciel wyznaczył zamknięty zakres P1-01/P1-02/P1-03; wykonanie: Codex. Brak decyzji o formalnym zamknięciu.
+- **Decyzja:** produkcyjny client Anthropic nie wykonuje callera ani `messages.create` bez `DurableProviderAttemptContext` i callbacku potwierdzającego dokładny aktywny attempt po `REQUEST_STARTED`. Snapshot durable intentu kanonizuje money do sześciu miejsc (`ROUND_HALF_UP`) oraz integerowe limity, a worker używa snapshotu modelu, timeoutu, pricingu, tokenów i wersji kontraktu zamiast późniejszego ENV.
+- **Ledger:** addytywna `0012_provider_ledger_hardening` preflightuje historyczne request_id i sprzeczne usage przed wymianą tabel. Udowodnione request-bound usage jest non-legacy; tylko brak historycznego request_id jest legacy z immutable proofem. Runtime nie może deklarować legacy. Trigger i StoragePort wiążą request z attemptem, jobem i tym samym runem; attempt #2 po aktywnym/niejednoznacznym stanie wymaga przyszłego resolvera.
+- **Granice:** bez WAVE 1A, pełnego reconciliation, API, sieci, browsera, publikacji, kosztu, migracji `data/agent.db`, commita, pushu, PR i merge.
+- **Weryfikacja:** 752 testy offline, w tym direct gate caller=0, migration rollback/classification, race reconciliation, worker parity po zmianie ENV, parse-error settlement i polityka sub-quantum. Baseline bazy niezmieniony.
+
+### ADR-055: Derived request identity i świeża asercja lease (WAVE 0B.3)
+
+- **Data:** 2026-07-14
+- **Status:** `WAVE 0B.3 CANDIDATE COMPLETE — AWAITING INDEPENDENT RE-REVIEW`.
+- **Kto podjął:** właściciel zlecił wyłącznie naprawę P1-01 i P1-02 po re-review WAVE 0B.2; wykonanie: Codex.
+- **Decyzja — identity:** centralna bramka klienta wylicza `expected_request_id = f"{job_id}:{stage}:{attempt_no}"` bez trimowania ani case-foldingu. Context i potwierdzony `ProviderAttempt` muszą literalnie równać się tej wartości, podobnie jak `Idempotency-Key`; pusty job, niedodatni attempt i stage z `:` są odrzucane typed error przed callerem, usage i kosztem.
+- **Decyzja — czas lease:** `checked_at` jest tylko diagnostycznym znacznikiem zbudowania contextu. Storage rozpoczyna własną krótką transakcję i pobiera bieżący czas z injected execution clock w chwili asercji, sprawdzając job→run→owner→lease→attempt. Druga asercja jest wykonywana bezpośrednio przed `messages.create`.
+- **Granice:** nie zmieniono operation intentu, `0012`, legacy usage, budżetu, settlementu ani `data/agent.db`; bez WAVE 1A, API, sieci, browsera, publikacji, kosztu, commita, pushu, PR i merge.
+- **Weryfikacja:** direct-client regresje obejmują arbitralne/mismatched identity (`caller=0`), poprawną identity (`caller=1`), dokładny nagłówek, expiry boundary, renewal, takeover, zmianę run/fence, `NEEDS_RECONCILIATION` oraz SDK `messages.create=0` po utracie lease. Pełny suite: 770 testów offline; baseline bazy bez zmiany.
+
+### ADR-056: Historyczny procesowy kernel testów i niezmienny `execution_intent` (WAVE 0B)
+
+- **Data:** 2026-07-15
+- **Status:** historyczny wynik zastąpiony przez ADR-057; implementacja pozostaje częścią aktualnego kontraktu, ale wynik 823 testów nie jest bieżącym statusem WAVE 0B.
+- **Kto podjął:** właściciel zlecił zamknięty zakres po niezależnym review; wykonanie: Codex.
+- **Kontekst:** ochrony `conftest.py` obejmowały wyłącznie bieżący interpreter i nie rozpoznawały wszystkich form SQLite/proxy ani konstrukcji SDK w subprocessie. Provider attempt nie dowodził też, że `jobs.payload_json` zachował ten sam execution intent do finalnej granicy callera. Legacy real resume tworzył account zanim odmówił.
+- **Decyzja — kernel:** `sitecustomize.py` aktywuje `app.testing.safety_kernel` tylko dla pytest albo dziedziczonego `NIA_TEST_MODE`; poza tym środowiskiem nie włącza patchy. Kernel czyści klucz Anthropic i pełny zestaw proxy z `NO_PROXY/no_proxy`, propaguje kontrolowany `PYTHONPATH` do subprocessów i blokuje `sqlite3.connect`, `sqlite3.dbapi2.connect`, socket/DNS oraz konstrukcję realnych `Anthropic` i dostępnego `AsyncAnthropic`. Kanonizacja używa `urlparse`/`unquote`, resolve, Windows drive letters i case-foldingu dla ścieżek zwykłych oraz URI; wyłącznie `data/agent.db` jest zakazane, tymczasowe bazy są legalne.
+- **Decyzja — intent:** jedyny kontrakt to `durable_provider_v2`; v1 zwraca `UNSUPPORTED_EXECUTION_CONTRACT`. Przy rezerwacji attemptu canonical SHA-256 całego `execution_intent` zostaje zapisany w `provider_attempts.execution_intent_fingerprint`. Finalna transakcja przed callerem ponownie parsuje i kanonizuje `jobs.payload_json`; zmiana przechodzi fail-closed do `NEEDS_RECONCILIATION`, nie uruchamia callera, nie zapisuje usage/kosztu ani settlementu. Diagnostyka jest typowana jako `MALFORMED_DURABLE_V2_PAYLOAD`, `MISSING_EXECUTION_INTENT` albo `INVALID_EXECUTION_INTENT_FINGERPRINT`.
+- **Decyzja — resume i migracje:** niedurable `--real --resume` jest odrzucane w `main()` przed ustawieniami, SQLite, `ensure_account`, polityką, klientem, usage trackerem i logami. Fake/offline resume nie zmienia kontraktu. `0013_provider_attempt_usage_integrity` pozostaje trzynastą migracją; kolejne addytywne migracje zaczynają numerację od `0014` i nie mogą przepisać historii.
+- **Granice:** bez nowej granicy providera, durable kontraktu, fallbacku v1, auto-retry, attempt #2, realnego API, sieci, browsera, publikacji, kosztu, migracji `data/agent.db`, stage, commita, pushu, PR i merge.
+- **Weryfikacja:** 823 testy zebrane i zielone offline; coverage obejmuje kernel parent/subprocess, raw/dbapi2 SQLite i URI, socket/DNS/SDK, scrub sekretów/proxy, wszystkie wymagane zmiany intentu (`caller=0`, usage/cost=0, `NEEDS_RECONCILIATION`), semantycznie równy JSON, A2/B real-resume no-mutation, diagnostykę v1 i pełny durable v2/ledger/budget/unknown/migration 0013. Hash baselineu pozostał `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`.
+
+### ADR-057: Jeden snapshot requestu i pełna asercja lifecycle (końcowa fala WAVE 0B)
+
+- **Data:** 2026-07-15
+- **Status:** ACCEPTED / wdrożone i zweryfikowane offline; `WAVE 0B CANDIDATE — AWAITING INDEPENDENT RE-REVIEW`. Etap 1 pozostaje `BLOCKED`; live API = `ZABRONIONE`.
+- **Kto podjął:** właściciel zlecił zamknięty zakres końcowej fali naprawczej; wykonanie: Codex. Formalne zamknięcie nie należy do implementera.
+- **Decyzja — snapshot:** jedynym źródłem semantyki paid single requestu jest `durable_research_intent_v2` wewnątrz `durable_provider_v2`. Zapisuje canonical prompt-input (`question`, `niche`, `required_depth`, `guidance`), stage, account/topic, provider/model, tokeny, web-search limit, timeout, pricing+fingerprint, cap, workflow/mode, retry, flags oraz wersje schema/prompt/pipeline. Worker buduje `ResearchPlan` wyłącznie z tego snapshotu. Bieżący topic/account może tylko ujawnić drift i zatrzymać request, nigdy zmienić jego treść. Stary v1/v2 payload bez pełnego snapshotu jest fail-closed; nie ma migracji SQL, ponieważ zmienia się wersjonowany JSON payload, a nie schemat tabel.
+- **Decyzja — finalna transakcja:** bezpośrednio przed callerem storage sprawdza w jednym `BEGIN IMMEDIATE` pełną relację `job→run→research_run→attempt→intent`: tożsamość, owner/lease/fence, workflow i account/topic, `runs=RUNNING` bez terminalnych pól, `research_runs=single:PENDING` bez terminalnych timestampów/card/cost/error, `REQUEST_STARTED` bez settlementu oraz świeżo obliczony fingerprint. Rozbieżność zatrzymuje fake/SDK caller, usage, koszt, settlement i attempt #2; started attempt ma typed diagnostic i pozostaje `NEEDS_RECONCILIATION`.
+- **Decyzja — safety kernel:** coverage obejmuje dostępny `AsyncAnthropic`, lowercase `anthropic_api_key`, Windows drive case, backslash oraz lokalne/nielokalne SQLite URI authority. Nielokalny authority jest fail-closed przed interpretacją SQLite.
+- **Granice:** brak API, sieci, browsera, publikacji, kosztu, migracji `data/agent.db`, commita, pushu, PR i merge. Durable real A1/A2/B, real resume i operator reconciliation nadal nie istnieją.
+- **Weryfikacja historyczna przed W0B-REV-06:** 861 testów collected/passed offline; macierze requestu i lifecycle, reopen SQLite, testy migracji i safety kernelu; `data/agent.db` zachował SHA-256 `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`.
+
+### ADR-058: Jeden trwały `max_tokens` i fail-closed over-reservation (W0B-REV-06)
+
+- **Data:** 2026-07-15
+- **Status:** ACCEPTED / wdrożone i zweryfikowane offline; `WAVE 0B CANDIDATE — AWAITING INDEPENDENT RE-REVIEW`. Etap 1 pozostaje `BLOCKED`; live API = `ZABRONIONE`.
+- **Kto podjął:** właściciel zlecił naprawę potwierdzonego findingu CRITICAL W0B-REV-06; wykonanie: Codex. Formalne zamknięcie WAVE ani Etapu 1 nie należy do implementera.
+- **Decyzja — limit:** dodatnie `max_tokens` jest wspieranym polem `durable_research_intent_v2` i częścią fingerprintu. Dispatcher przekazuje je literalnie do klienta i pipeline; pipeline używa go w estymacie, policy checku i rezerwacji. Nie utrzymujemy hybrydy ani niezależnej stałej 3000 dla durable paid single flow.
+- **Decyzja — settlement:** rezerwacja i actual usage są canonicalizowane do sześciu miejsc USD z `ROUND_HALF_UP`. Przy `actual_cost <= reserved_amount` attempt jest `SETTLED`. Przy nadwyżce jedna transakcja zachowuje usage i koszt runu, ustawia `NEEDS_RECONCILIATION` z `PROVIDER_ATTEMPT_COST_EXCEEDS_RESERVATION` oraz zwraca typed outcome blokujący SUCCESS i attempt #2. `model_usage` jest kanonem znanego kosztu; operator reconciliation nadal nie istnieje.
+- **Weryfikacja historyczna po REV-06:** 873 collected/passed offline, formalny rozłączny podział 206+218+226+223; fake caller, tymczasowe SQLite, restart, mutacje `max_tokens`/`required_depth`/`guidance`, rounding boundary, settlement under/over oraz brak attempt #2. `scripts/run_test_partitions.py` używa pełnego SHA-256 UTF-8 node ID jako integer modulo partycji i testuje brak BOM/exact-once coverage. Chroniona baza pozostała niezmieniona.
+
+### ADR-059: Jeden finansowy kontrakt ROUND_HALF_UP i zamknięcie W0B-REV-09/10
+
+- **Data:** 2026-07-15
+- **Status:** ACCEPTED / wdrożone i zweryfikowane offline; `WAVE 0B CANDIDATE — AWAITING INDEPENDENT RE-REVIEW`. Etap 1 pozostaje `BLOCKED`; live API = `ZABRONIONE`.
+- **Kto podjął:** właściciel zlecił jedną końcową falę obejmującą zaległą kronikę i rozbieżność roundingu; wykonanie: Codex. Formalne zamknięcie WAVE ani Etapu 1 nie należy do implementera.
+- **Decyzja — kwoty:** jedynym kontraktem USD jest `Decimal(str(value)) → quantize(Decimal("0.000001"), ROUND_HALF_UP)`. Wspólny helper służy estymatorowi, `UsageTracker`, trwałemu intentowi, projekcjom pipeline, rezerwacjom, comparison actual/reserved, sumom usage i cache kosztu runu. Komponenty sumują się jako Decimal przed pojedynczą granicą; nie używa się `Decimal(float)` ani aktywnego Pythonowego `round(..., 6)` dla pieniędzy.
+- **Decyzja — granice i cleanup:** testy pokrywają wartości pół-kwantowe, cache read/write, web search, sumę przed/po rounding, actual równe oraz ±0.000001 względem rezerwacji i pełny fake caller → usage → settlement. Usunięto tylko potwierdzony martwy blok świeżego legacy providera po bezwarunkowym `return` oraz nieużywane `_ORIGINAL_DBAPI2_CONNECT`; fresh real nadal wyłącznie enqueuje job, real resume pozostaje fail-closed, a dispatcher pozostaje jedynym real-client construction rootem.
+- **Kronika i status:** W0B-REV-09 aktualizuje obowiązkowe `opis-budowy-substack/`; historyczne 770/823/861/873 są jawnie oznaczone. W0B-REV-06/07/08 pozostają technicznie zamknięte. Przed bieżącym niezależnym re-review nie stwierdzono nowego CRITICAL ani MAJOR w kodzie.
+- **Weryfikacja historyczna:** 887 collected/passed offline; partycje 211+222+229+225, pełny SHA-256 UTF-8 node ID jako big-endian integer modulo 4, exact-once, brak BOM, duplikatów, pominięć i nadmiaru. Nie wykonano API, sieci, browsera, publikacji, kosztu ani zapisu/migracji `data/agent.db`.
+
+### ADR-060: Kwota pozostaje Decimal aż do jednej granicy kontraktu (W0B-RR-01)
+
+- **Data:** 2026-07-15
+- **Status:** ACCEPTED / wdrożone i zweryfikowane offline; `WAVE 0B CANDIDATE — AWAITING INDEPENDENT RE-REVIEW`. Etap 1 pozostaje `BLOCKED`; live API = `ZABRONIONE`.
+- **Kto podjął:** właściciel zlecił domykającą naprawę potwierdzonego MAJOR W0B-RR-01 oraz cleanup W0B-CLEAN-01; wykonanie: Codex. Formalne zamknięcie WAVE ani Etapu 1 nie należy do implementera.
+- **Decyzja — arytmetyka:** wejście kwoty przechodzi przez `Decimal(str(value))`; wszystkie składniki, mnożenia, sumy i porównania pozostają `Decimal`; dokładnie jedna granica publiczna wywołuje `quantize(Decimal("0.000001"), ROUND_HALF_UP)`. Dotyczy to raw staged estimate, policy, ledgerowych sum persisted usage/rezerwacji, pipeline i CLI. `float` jest dopuszczalny wyłącznie na granicy zgodności starego API po canonicalizacji; nie ma `Decimal(float)`, `round(..., 6)`, SQL `SUM(REAL)` ani decyzji pieniężnej na float.
+- **Decyzja — zakres:** nie zmieniono `max_tokens`, lifecycle, request identity, attempt #2, durable intentu, schematu ani migracji. Przy `actual_cost > reservation` nadal pozostaje jeden usage i `NEEDS_RECONCILIATION`, bez SUCCESS, karty i kolejnej próby.
+- **Cleanup:** z prywatnych helperów resume w `scripts/run_capped_research.py` usunięto dwa nieosiągalne konstruktory `AnthropicResearchClient`; real resume nadal odmawia przed klientem, a dispatcher jest jedynym rootem realnego klienta.
+- **Weryfikacja:** 894 collected/passed offline; partycje 213+224+231+226, pełny SHA-256 UTF-8 node ID jako big-endian integer modulo 4, exact-once, brak BOM, duplikatów, pominięć i nadmiaru. Granice obejmują agregację `2×`/`3×0.0000005`, `0.1+0.2` względem `0.3`, policy ±1 mikro-USD, usage, settlement, restart, storage, maintenance i CLI. Nie wykonano API, sieci, browsera, publikacji, kosztu ani zapisu/migracji `data/agent.db`.
+
+### ADR-061: Niezależne zatwierdzenie WAVE 0B i granica checkpointu
+
+- **Data:** 2026-07-15
+- **Status:** `APPROVED WITH P2 — READY FOR CHECKPOINT`; WAVE 0B nie jest `CLOSED` przed commitem checkpointu. Etap 1 pozostaje `BLOCKED`; live API = `ZABRONIONE`.
+- **Kto podjął:** niezależny końcowy review przekazany przez właściciela; przygotowanie formalnego stagingu: Codex.
+- **Podstawa:** 894/894 testów offline, partycje 213/224/231/226, brak MAJOR i CRITICAL, W0B-RR-01 oraz W0B-CLEAN-01 zamknięte, W0B-REV-06 bez regresji, chroniony baseline `data/agent.db` identyczny, aktywna dokumentacja spójna, 13 migracji i jeden aktywny durable paid-execution flow `durable_provider_v2` z `durable_research_intent_v2`.
+- **P2:** deklaracja implementera o 71 wpisach Git została skorygowana przez niezależny gate do rzeczywistego inwentarza 72 (50 modified, 1 deleted, 21 untracked). Nie jest to zgoda na commit ani push.
+- **Granice:** staging obejmuje tylko zatwierdzony zakres WAVE 0B; `data/agent.db`, `docs/BUILD_LOG.md`, cały katalog `instrukcja dla pisania artykulow/`, `.env*`, sekrety, lokalne artefakty i snapshoty pozostają poza indeksem. Commit wymaga osobnej autoryzacji właściciela, a push kolejnej, odrębnej autoryzacji; bez PR i merge.

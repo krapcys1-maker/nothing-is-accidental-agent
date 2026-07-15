@@ -1,5 +1,7 @@
 # 05 — BUDOWA KROK PO KROKU
 
+> **Checkpoint WAVE 0B:** `APPROVED WITH P2 — READY FOR CHECKPOINT`, na podstawie 894 testów offline i partycji 213/224/231/226. Rzeczywisty inwentarz wynosi 72 wpisy; Etap 1 `BLOCKED`, live API `ZABRONIONE`, bez `CLOSED` przed commitem.
+
 ## Cel pliku
 Pełna **chronologia** budowy. Po każdym większym etapie: co chcieliśmy osiągnąć, co zbudowaliśmy, jakie pliki powstały, jak to działa, jak przetestowaliśmy, jaki był wynik, co jeszcze nie działa, jaki jest następny krok. **Nie zapisujemy tylko efektu końcowego — zachowujemy przebieg.**
 
@@ -518,3 +520,53 @@ Po forensic review właściciel zatwierdził wariant **APPROVE WITH P2**. Nie pr
 Nowy baseline ma SHA-256 `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`. To **logiczne** odtworzenie, nie magiczne cofnięcie historii bajt po bajcie: brak starego snapshotu pozostaje faktem. Nie stwierdziliśmy utraty realnych danych.
 
 Po niezależnym review WAVE 0A została formalnie zamknięta jako **APPROVED WITH P2**. Trzy punkty, które wymagały tej fali — P0-01 o ukrytej próbie SDK oraz P1-01/P1-02 o niejawnej ścieżce realnej i fail-open pricingu — są zamknięte. To nie jest jednak finał Etapu 1: pozostałe P1 nadal go blokują. Do backlogu trafiają trzy mniejsze rzeczy: twardszy test dokładnie na granicy `messages.create`, pełne wyprowadzenie cen do parametrów i poprawna kolejność aktualizowania dokumentów. Tak wygląda uczciwe zamknięcie: nie „wszystko gotowe”, tylko dokładnie wiadomo, co zostało domknięte, co nie, i dlaczego.
+
+### [2026-07-14] WAVE 0B — od „uruchom” do trwałej intencji
+
+Świeży `--real` nie robi już researchu w tym samym procesie. Po pricing/pre-flight zapisuje tylko durable job i wypisuje jego identyfikator; ten sam `--operation-key` wraca do tego samego joba. Dopiero leased worker może przekroczyć granicę providera. Tuż przed nią powstaje atomowa rezerwacja oraz request_id, a po odpowiedzi usage rozlicza dokładny koszt w tym samym ledgerze. Nieznany wynik nie jest pretekstem do drugiego pytania — zostaje do ręcznej reconciliacji. Zrobiliśmy wyłącznie testy offline na bazach tymczasowych; nie było API ani kosztu. **`WAVE 0B CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`**. Nie oznacza to zakończenia Etapu 1 ani gotowości realnego staged/resume.
+
+## 2026-07-14 — Mała naprawa, dużo granic
+
+Naprawa WAVE 0B.1 nie dodała kolejnego „sprytnego retry”. Zablokowała świeże realne wejścia bez durable joba, uczyniła operation key globalnym identity intentu i przebudowała constraints ledgeru. Testy obejmują zarówno poprawne ścieżki, jak i próby wstawienia niemożliwych stanów, wyścig dwóch procesów oraz historię, której nie wolno udawać, że jest kompletna.
+
+## 2026-07-14 — WAVE 0B.2: ostatnia bramka jest przed callem
+
+Drugi niezależny REJECT przesunął uwagę z kolejki na ostatnią linię przed płatnym requestem. Nie wystarczało, że workflow zwykle tworzył attempt: sam realny klient musi odmówić bez typowanego contextu, request_id i potwierdzenia `REQUEST_STARTED`. To zamyka drogę przez bezpośredni import, a nie tylko przez poprawny CLI.
+
+Równolegle job przestał być poleceniem „uruchom research kiedyś”. Zawiera snapshot modelu, timeoutu, tokenów, cennika i wersji kontraktu; worker nie może po restarcie cicho przyjąć nowych ustawień środowiska. Migracja 0012 rozróżnia brak dawnych danych od sprzeczności: tylko pierwszy przypadek jest legacy, drugi zatrzymuje upgrade rollbackiem. Wszystko sprawdzone offline (752 testy, 0 USD); ten historyczny kandydat został później zastąpiony przez WAVE 0B.3.
+
+## 2026-07-14 — WAVE 0B.3: czas z wczoraj nie może pozwolić na request jutro
+
+Trzecia fala nie zmieniła kolejki ani budżetu. Pokazała coś mniejszego i groźniejszego: dwa równe napisy mogą być równie błędne, a timestamp zbudowany minutę wcześniej nie jest pozwoleniem na wysłanie requestu minutę później. Request ID jest teraz literalnie wyliczany z joba, etapu i numeru próby. Lease jest sprawdzany jeszcze raz z bieżącego zegara execution w transakcji tuż przed SDK.
+
+To nie dodało ani jednego retry ani żadnej funkcji WAVE 1A. Dodało odmowę: arbitralne identity, expiry, takeover, zmieniony fence i `NEEDS_RECONCILIATION` kończą się przed callerem. Testy offline: 770, koszt: 0 USD. Status pozostaje kandydatem do niezależnego re-review.
+
+## 2026-07-15 — Prompt też jest częścią obietnicy requestu
+
+Końcowe review WAVE 0B znalazło prostą, lecz ważną lukę. System umiał zamrozić model, cennik i limit tokenów, ale nadal mógł wziąć pytanie i niszę z bieżącego obiektu już po enqueue. To znaczyło, że hash opisywał jedną obietnicę, a caller mógł dostać drugą.
+
+Nie zapisaliśmy gotowego tekstu promptu ani dwóch równoległych wersji prawdy. Zapisujemy kanoniczne dane wejściowe promptu — pytanie, niszę, głębokość i guidance — razem ze stage oraz pełnym kontraktem requestu. Worker tworzy z nich plan po restarcie. Jeśli bieżący temat lub konto odpłyną od snapshotu, system nie „odświeża” promptu; zatrzymuje request przed fake callerem i zostawia attempt do reconciliation.
+
+Druga połowa naprawy to kontrola historii tuż przed granicą callera. Jedna krótka transakcja sprawdza już nie tylko lease, lecz cały łańcuch job → run → research_run → attempt → intent. Terminalny run, brak research_run, zły flow, timestamp etapu albo zmieniony payload nie mogą zostawić usage, kosztu ani settlementu. Macierz 861 testów działała wyłącznie na fake callerach i tymczasowych SQLite; chroniona baza zachowała ten sam hash. To nadal nie jest formalne zamknięcie WAVE 0B: materiał czeka na niezależny re-review.
+
+## 2026-07-15 — WAVE 0B: trzy stare liczniki, jedna aktualna liczba
+
+**HISTORYCZNE:** 2026-07-14 wynik W0B-REV-05 wynosił 770 testów; 2026-07-15 procesowy kernel i trwały intent dały 823; bezpośrednio przed W0B-REV-06 pełny lifecycle miał 861. Po naprawie limitu requestu W0B-REV-06 historyczna kontrola miała 873 testy i partycje 206/218/226/223. Każda z tych liczb opisuje zakończony moment, nie bieżący working tree.
+
+Wcześniejszy REJECT obejmował CRITICAL W0B-REV-06: `max_tokens` zapisywał się i docierał do callera, ale rezerwacja wciąż liczyła stałe 3000. Poprawka poprowadziła jedną trwałą wartość przez `intent.max_tokens → caller → estimate → policy → reservation → usage → settlement`. Jeśli actual przekracza rezerwację, jedna transakcja utrwala dokładnie jeden usage, ustawia `NEEDS_RECONCILIATION` i kod `PROVIDER_ATTEMPT_COST_EXCEEDS_RESERVATION`; nie ma SUCCESS, Research Card ani attempt #2. W0B-REV-06/07/08 są technicznie zamknięte; ówczesny audyt Claude’a, poprzedzający bieżący re-review W0B-RR-01, nie znalazł nowego CRITICAL ani MAJOR w kodzie.
+
+## 2026-07-15 — W0B-REV-09/10: kronika i arytmetyka muszą mówić to samo
+
+W0B-REV-09 był niewygodny, lecz prosty: ta obowiązkowa kronika nie nadążyła za naprawami. W0B-REV-10 był jeszcze mniejszy: estymator i `UsageTracker` zaokrąglały Pythonowym `round`, gdy intent i storage używały `ROUND_HALF_UP`. Nie powstał drugi paid pipeline. Zamiast tego wspólny helper ustalił jedną regułę: `Decimal(str(value)) → quantize(Decimal("0.000001"), ROUND_HALF_UP)`. Najpierw sumujemy małe składniki, potem raz przekraczamy granicę kwoty; cache kosztu, rezerwacja, usage i settlement widzą tę samą wartość.
+
+Usunięto też tylko dwa potwierdzone śmieciowe ślady: legacy fresh-provider block znajdował się po bezwarunkowym `return`, a `_ORIGINAL_DBAPI2_CONNECT` nie miał żadnego użycia. Świeży real nadal tylko enqueuje, real resume nadal odmawia, a dispatcher pozostał jedynym rootem realnego klienta.
+
+Historyczny runner W0B-REV-09/10 użył pełnego SHA-256 każdego UTF-8 node ID, potraktowanego jako big-endian integer modulo 4. Pokrycie exact-once wyniosło **211 / 222 / 229 / 225 = 887**, bez BOM, duplikatów, pominięć ani nadmiarowych node IDs. Granice `0.0000004/.5/.6`, `0.0000015`, `0.1234565`, `0.1234575`, cache read/write/web, storage, settlement ±1 mikro-USD i fake caller → usage → settlement są testowane wyłącznie na fake callerach i tymczasowych SQLite. WAVE 0B pozostaje `CANDIDATE` do niezależnego re-review; Etap 1 `BLOCKED`; live API `ZABRONIONE`.
+
+Bezpieczny snapshot przed naprawą tokenów: `C:\Users\user\Desktop\agent-project-snapshots\wave0b-pre-token-fix-20260715-112833`. Niepełny snapshot `wave0b-pre-token-fix-20260715-112526` jest oznaczony **NIE UŻYWAĆ**. Chroniona baza nie została zmieniona.
+
+## 2026-07-15 — W0B-RR-01: ostatnie zaokrąglenie jest jedynym zaokrągleniem
+
+Niezależny re-review znalazł MAJOR ukryty między modułami: koszt pojedynczego źródła był już skwantyzowany, gdy potem mnożono go dla staged research. Policy, persisted sumy i CLI również nie wszędzie odcinały float przed decyzją. Naprawa nie zrobiła nowej architektury. Zostawiła składowe jako `Decimal`, mnoży je i sumuje tam, gdzie są jeszcze surowe, a raz `ROUND_HALF_UP` zamyka publiczną kwotę. Dwa razy `0.0000005` kończą jako `0.000001`, trzy razy jako `0.000002`.
+
+Po tej zmianie pełny runner ma **894** testy: **213 / 224 / 231 / 226**, dokładnie raz każdy UTF-8 node ID przez pełny SHA-256 modulo 4, bez BOM, duplikatów, pominięć i nadmiaru. Testy używają fake callerów i tymczasowych SQLite. `max_tokens` pozostaje wspólną wartością dla estimate, rezerwacji i callera; nadwyżka actual nadal daje jeden usage oraz `NEEDS_RECONCILIATION`. WAVE 0B pozostaje `CANDIDATE`; Etap 1 `BLOCKED`; live API `ZABRONIONE`.

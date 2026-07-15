@@ -33,6 +33,7 @@ from app.ports.storage import (
 )
 from app.storage.db import MIGRATIONS_DIR, apply_migrations, connect
 from app.storage.repositories import SqliteStorage
+from tests.conftest import seed_historical_real_usage
 
 
 NOW = datetime(2026, 7, 13, 12, 0, 0, tzinfo=timezone.utc)
@@ -1231,7 +1232,7 @@ def test_budget_reservation_uses_real_usage_active_reservations_and_idempotency(
         id="real-usage", account_id=account.id, workflow=WorkflowType.RESEARCH,
         status=RunStatus.RUNNING,
     ))
-    storage.add_model_usage(ModelUsage(
+    seed_historical_real_usage(storage, ModelUsage(
         run_id="real-usage", model="offline", estimated_cost_usd=0.30,
         dry_run=False, created_at=NOW,
     ))

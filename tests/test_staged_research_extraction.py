@@ -38,7 +38,10 @@ from app.models import (
 from app.policies.policy_engine import PolicyDecision, PolicyEngine
 from app.ports.notification import LogNotification
 from app.ports.storage import ResearchTopicIntegrityError
-from app.research.anthropic_client import AnthropicResearchClient, _parse_discovery_candidates_jsonl
+from app.research.anthropic_client import (
+    AnthropicResearchClient as _RealAnthropicResearchClient,
+    _parse_discovery_candidates_jsonl,
+)
 from app.research.base import (
     ResearchAuthenticationError,
     ResearchError,
@@ -56,10 +59,12 @@ from app.research.cost_estimator import (
     estimate_with_retries,
 )
 from app.research.fake_client import FakeResearchClient
+from tests.conftest import seed_historical_real_usage
 from app.storage.repositories import SqliteStorage
 from app.research.validation import TOO_FEW_VERIFIED_SOURCES
 from app.workflows.research.pipeline import (
     CompletedResearchExistsError,
+    ResearchResumeRequiresDurableJob,
     _format_audit_error,
     resume_staged_research,
     run_source_discovery,
@@ -67,6 +72,12 @@ from app.workflows.research.pipeline import (
     run_staged_research_pipeline,
     run_synthesis_from_cards,
 )
+
+
+class AnthropicResearchClient(_RealAnthropicResearchClient):
+    """Test-local SDK seam; global conftest blocks any real network access."""
+
+    requires_durable_provider_context = False
 
 
 def _selected_topic(storage, account) -> Topic:
@@ -123,6 +134,11 @@ def _run_synthesis(settings, storage, account, run_id, client, **kwargs):
         run_id, account, settings=settings, storage=storage, research_client=client,
         usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
         policy=PolicyEngine(settings, storage), notifier=LogNotification(), **kwargs)
+
+
+def _db_snapshot(storage) -> list[str]:
+    """A full logical snapshot for no-mutation resume assertions."""
+    return list(storage.conn.iterdump())
 
 
 class _CaptureBudgetPolicy:
@@ -337,7 +353,7 @@ def test_cli_resume_default_cap_is_absolute_not_prior_cost_plus_allowance(
 
     topic = _selected_topic(storage, account)
     run_id = _seeded_run_with_candidates(storage, account, topic, n=1)
-    storage.add_model_usage(ModelUsage(
+    seed_historical_real_usage(storage, ModelUsage(
         run_id=run_id, model="m", task="research_extract",
         estimated_cost_usd=0.40, dry_run=False))
     monkeypatch.setattr(run_capped_research, "load_settings", lambda: settings)
@@ -358,10 +374,6 @@ def test_cli_resume_rejects_other_account_before_usage_or_client(
     configured = replace(settings, accounts={account.id: account, other.id: other})
     monkeypatch.setattr(run_capped_research, "load_settings", lambda: configured)
 
-    def forbidden_client(*args, **kwargs):
-        raise AssertionError("account mismatch must stop before client")
-
-    monkeypatch.setattr(run_capped_research, "AnthropicResearchClient", forbidden_client)
     before = storage.conn.execute("SELECT count(*) FROM model_usage").fetchone()[0]
     assert run_capped_research.main([
         "--resume", run_id, "--account", other.id,
@@ -839,7 +851,9 @@ def test_synthesis_error_without_usage_preserves_canonical_cost(settings, storag
 
 def test_fresh_b_max_tokens_records_usage_once_and_finishes_failed_after_reopen(
         settings, storage, account):
-    real_settings = replace(settings, dry_run=False)
+    # The injected caller is offline; real staged execution is intentionally
+    # blocked in WAVE 0B. Keep this as a dry-run parse/ledger regression.
+    real_settings = settings
     topic = _selected_topic(storage, account)
     run_id = _seeded_run_with_candidates(storage, account, topic, n=3)
     _run_extraction(real_settings, storage, account, run_id, FakeResearchClient("good"))
@@ -889,9 +903,7 @@ def test_fresh_b_max_tokens_records_usage_once_and_finishes_failed_after_reopen(
         reopened.close()
 
     diagnostic = diagnostics_dir(real_settings.data_dir, run_id) / "B_raw_response.txt"
-    content = diagnostic.read_text(encoding="utf-8")
-    assert "stop_reason: max_tokens" in content
-    assert "max_output_tokens=3000" in content
+    assert not diagnostic.exists()
 
 
 # --- 8. JSONL z uszkodzonym ostatnim rekordem — wcześniejsze rekordy zachowane ---
@@ -1131,7 +1143,8 @@ def test_audit_error_formatter_redacts_standalone_bearer_tokens(message):
 
 def test_429_audit_keeps_type_and_records_the_single_attempt_after_reopen(
         settings, storage, account):
-    real_settings = replace(settings, dry_run=False)
+    # This is an offline typed-error regression, not a durable real request.
+    real_settings = settings
     topic = _selected_topic(storage, account)
     calls = []
 
@@ -1456,3 +1469,57 @@ def test_synthesis_defaults_use_measured_3000_token_limit():
         "synthesize_max_tokens"].default == 3000
     assert inspect.signature(resume_staged_research).parameters[
         "synthesize_max_tokens"].default == 3000
+
+
+@pytest.mark.parametrize("stage", ["A2", "B"])
+def test_real_staged_resume_fails_before_every_mutation_and_provider_call(
+        settings, storage, account, stage):
+    topic = _selected_topic(storage, account)
+    run_id = _seeded_run_with_candidates(storage, account, topic, n=3)
+    if stage == "B":
+        _run_extraction(
+            settings, storage, account, run_id, FakeResearchClient("good"), max_sources=3,
+        )
+        assert storage.get_research_run(run_id).status == ResearchRunStatus.SOURCES_COMPLETE
+
+    real_settings = replace(
+        settings,
+        dry_run=False,
+        anthropic_api_key="test-only-key",
+        pricing={
+            "input_per_mtok": 1.0,
+            "output_per_mtok": 1.0,
+            "cache_read_per_mtok": 1.0,
+            "cache_write_per_mtok": 1.0,
+            "web_search_per_1k": 1.0,
+        },
+    )
+    calls: list[str] = []
+
+    def forbidden(*_args):
+        calls.append("provider")
+        raise AssertionError("real resume must fail before the provider caller")
+
+    client = _RealAnthropicResearchClient(
+        "sk-ant-looking-test-key",
+        "model",
+        caller=lambda _plan: forbidden(),
+        extract_caller=lambda _plan, _candidate: forbidden(),
+        synthesize_from_cards_caller=lambda _plan, _cards: forbidden(),
+    )
+    before = _db_snapshot(storage)
+
+    with pytest.raises(ResearchResumeRequiresDurableJob, match="No workflow state was changed"):
+        if stage == "A2":
+            _run_extraction(
+                real_settings, storage, account, run_id, client,
+                max_sources=1, explicit_resume=True,
+            )
+        else:
+            _run_synthesis(
+                real_settings, storage, account, run_id, client,
+                explicit_resume=True,
+            )
+
+    assert calls == []
+    assert _db_snapshot(storage) == before

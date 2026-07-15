@@ -2,11 +2,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
+from app.testing.safety_kernel import activate
+
+
+# ``sitecustomize`` applies this before collection and subprocesses inherit it.
+# The idempotent call keeps direct/constrained pytest launchers fail-closed too.
+activate()
+
 from app.core.config import Settings
-from app.models import Account, AccountMode, AutonomyLevel
+from app.models import Account, AccountMode, AutonomyLevel, Job, JobKind
 from app.storage.repositories import SqliteStorage
 
 STANDARD_WEIGHTS = {
@@ -33,6 +41,51 @@ def make_account(active: bool = True) -> Account:
         writing_profile_path="./config/prompts/nothing_is_accidental.md",
         allowed_actions=["research", "draft_article", "draft_note"],
     )
+
+
+def seed_historical_real_usage(storage: SqliteStorage, usage):
+    """Creates test spend through the same durable relation as new real usage.
+
+    Despite its retained name, this fixture no longer writes migration-only
+    legacy rows.  0012 deliberately makes that impossible after migration.
+    For real test usage it builds a completed synthetic request->job->run
+    relation, then uses the public storage API.  Dry-run fixtures remain dry.
+    """
+    if usage.dry_run:
+        return storage.add_model_usage(usage)
+
+    run = storage.get_run(usage.run_id)
+    if run is None:
+        raise AssertionError(f"Test usage requires existing run {usage.run_id!r}.")
+    token = uuid4().hex
+    job = storage.enqueue_job(Job(
+        id=f"test-ledger-{token}", account_id=run.account_id, kind=JobKind.LOCAL,
+        workflow=run.workflow, idempotency_key=f"test-ledger-{token}", run_id=run.id,
+        payload={"test_fixture": "durable_usage"}, schedule_reason="WITHIN_EDITORIAL_WINDOW",
+        earliest_run_at=usage.created_at, max_attempts=1, created_at=usage.created_at,
+    ))
+    request_id = f"{job.id}:research:1"
+    timestamp = usage.created_at.strftime("%Y-%m-%d %H:%M:%S")
+    reserved_amount = max(float(usage.estimated_cost_usd), 0.000001)
+    storage.conn.execute(
+        "INSERT INTO provider_attempts (job_id,stage,attempt_no,request_id,status,"
+        "reserved_amount_usd,reserved_at) VALUES (?,?,?,?,?,?,?)",
+        (job.id, "research", 1, request_id, "RESERVED", reserved_amount, timestamp),
+    )
+    storage.conn.execute(
+        "UPDATE provider_attempts SET status='REQUEST_STARTED',request_started_at=? "
+        "WHERE request_id=?", (timestamp, request_id),
+    )
+    storage.conn.commit()
+    usage.request_id = request_id
+    stored = storage.add_model_usage(usage)
+    storage.conn.execute(
+        "UPDATE provider_attempts SET status='SETTLED',settled_at=?,actual_cost_usd=? "
+        "WHERE request_id=?",
+        (timestamp, float(usage.estimated_cost_usd), request_id),
+    )
+    storage.conn.commit()
+    return stored
 
 
 @pytest.fixture

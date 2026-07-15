@@ -1,5 +1,7 @@
 # 06 — DECYZJE PROJEKTOWE
 
+> **Stan decyzji checkpointu:** niezależny końcowy review ustanowił `WAVE 0B APPROVED WITH P2 — READY FOR CHECKPOINT`. Commit wymaga osobnej autoryzacji, push kolejnej; Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
 ## Cel pliku
 Redakcyjny zapis **każdej ważnej decyzji**: problem, opcje, wybór, dlaczego, zalety, wady, ryzyka, kto podjął, czy zmieniona później. Pełny, techniczny rejestr ADR jest w `docs/DECISIONS.md` — tu jest wersja narracyjna do artykułów.
 
@@ -306,3 +308,27 @@ Po review doprecyzowano: realny pipeline bez capu odmawia, cap resume jest absol
 - **Wybór:** każdy SDK ma `max_retries=0` i dodatni timeout, normalne rooty są zawsze fake/offline, a jedyny realny root wymaga `--real` oraz pełnych cen. Incydent bazy odtwarzamy logicznie tylko z identyfikowalnych rekordów testowych; nie udajemy odzyskania bitowego snapshotu. Nowy SHA baseline to `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`.
 - **Decyzja o statusie:** niezależne review zamknęło P0-01, P1-01 i P1-02. WAVE 0A jest **APPROVED WITH P2** i formalnie zamknięta; Etap 1 nadal jest BLOCKED przez inne P1.
 - **Backlog:** mocniejszy regression test na granicy `messages.create`, pełna parametryzacja pricingu i poprawna kolejność aktualizacji dokumentacji.
+
+## D-52 — request_id nie jest operation-key (WAVE 0B)
+
+- **Decyzja:** operation-key opisuje intencję operatora i idempotencję enqueue; request_id opisuje pojedynczą próbę dostawcy i jest trwałym `job_id:stage:attempt_no`. Oba nie mogą być losowe ani zależne od czasu.
+- **Granica:** rezerwacja maksymalnego kosztu, request state i zapis usage są kontrolowane przez SQLite/fence. Timeout, connection i unknown zatrzymują automatyczne ponowienie; WAVE 1 ma dopiero rozszerzyć tę zasadę na staged flow, real resume i ekran reconciliacji.
+- **Status:** `WAVE 0B CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; bez API, sieci, browsera, publikacji i zmiany prawdziwej bazy.
+
+## D-053 — Niepewnej historii nie „naprawiamy” przez wymyślenie powiązań
+
+Migracja 0011 egzekwuje request-bound usage dla nowych realnych wywołań. Stare rekordy, dla których nie ma dowodu powiązania z attemptem, dostają jawny znacznik `is_legacy_usage=1`. To mniej wygodne niż fikcyjny foreign key, ale chroni wiarygodność historii. Status decyzji: WAVE 0B.1 candidate complete, oczekuje na niezależny re-review.
+
+## D-059 — kwota jest kontraktem, nie formatowaniem (W0B-REV-10)
+
+- **Decyzja:** wszystkie aktywne obliczenia USD stosują `Decimal(str(value)) → quantize(Decimal("0.000001"), ROUND_HALF_UP)`. Dotyczy to durable intentu, estymatora, `UsageTracker`, projekcji pipeline, rezerwacji, porównań actual/reserved, sum usage i cache kosztu. Składniki są sumowane przed pojedynczą granicą rounding.
+- **Powód:** Pythonowy banker's `round` w estimatorze i trackerze był sprzeczny z intentem/storage i mógł rozdzielić estimate, reservation oraz settlement na granicy pół-kwantu.
+- **Granica:** nie zmieniono `max_tokens`, retry, lifecycle, attempt #2 ani paid rootu. Przy over-reservation nadal zostaje jeden usage i `NEEDS_RECONCILIATION`, bez SUCCESS lub karty. Usunięto wyłącznie blok legacy fresh providera po return i nieużywaną stałą DB-API.
+- **Status:** W0B-REV-09/10 technicznie zamknięte; 887 testów offline to wynik historyczny, 13 migracji. WAVE 0B `CANDIDATE`, Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
+## D-060 — granica kwoty jest po agregacji, nie po komponencie (W0B-RR-01)
+
+- **Decyzja:** `Decimal(str(value))` jest typem wewnętrznym od wejścia kwoty przez raw staged estimate, policy, ledger, pipeline i CLI. Jedno `quantize(Decimal("0.000001"), ROUND_HALF_UP)` następuje dopiero na granicy kontraktu; `float` może być wyłącznie wyjściem zgodności po tej granicy.
+- **Powód:** wcześniejszy kontrakt poprawnie opisywał helper, lecz staged mnożył już publicznie zaokrąglony koszt, a kilka decyzji nadal używało float. To mogło rozdzielić wynik `2×`/`3×0.0000005` albo `0.1+0.2` od tego samego limitu.
+- **Granica:** bez zmian `max_tokens`, lifecycle, request identity, attempt #2, schematu lub migracji. `actual_cost > reservation` nadal zachowuje jeden usage i ustawia `NEEDS_RECONCILIATION`; real resume nadal odmawia przed klientem.
+- **Status:** 894 testy offline, 13 migracji, WAVE 0B `CANDIDATE`, Etap 1 `BLOCKED`, live API `ZABRONIONE`; decyzja wymaga krótkiego niezależnego re-review, nie jest zamknięciem fali.

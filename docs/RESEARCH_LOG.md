@@ -118,3 +118,21 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Jedyny nowy call:** `stop_reason=end_turn`, input/output 1904/2402, zero web search, koszt B 0,013914 USD; bez retry i bez A1/A2. Siedem wpisów usage sumuje się do 0,183964 USD i dokładnie odpowiada `runs.cost_usd` oraz `research_runs.total_cost_usd`.
 - **Stan po reopen:** `runs=SUCCESS`, `research_runs=COMPLETE`, `stage_b_completed_at=2026-07-13 05:57:57 UTC`, topic `USED`, research_card #2, 4 źródła VERIFIED. Karta jest kompletna, ale bramka jakości zwróciła `REJECT` (`THESIS_UNSUPPORTED`, `CLAIMS_WITHOUT_SOURCES`), więc nie wolno użyć jej do treści.
 - **Zamknięcie:** techniczne kryterium Etapu 0 zostało spełnione. Etap 1 nie został rozpoczęty. `research_runs.error` zachował historyczny parse-error pierwszego B — jawny P2-20 do review, bez mutacji w tej pracy.
+
+## 2026-07-14 — WAVE 0B.2 offline verification
+
+- **Zakres:** wyłącznie syntetyczne SQLite i injected callery; brak researchu, API, sieci oraz kosztu.
+- **Dowód:** durable parse-error zachowuje usage i rozlicza jeden attempt; worker po zmianie ENV korzysta z persisted intentu; migracja 0012 wycofuje sprzeczną historię.
+- **Stan historyczny:** wynik WAVE 0B.2 został zastąpiony przez WAVE 0B.3; żadnego wpisu researchu ani kosztu nie dopisano.
+
+## 2026-07-14 — WAVE 0B.3 offline verification
+
+- **Zakres:** syntetyczne SQLite, injected callery i fake SDK; bez researchu, API, sieci oraz kosztu.
+- **Dowód:** derived `request_id` blokuje arbitralne identity przed callerem, a storage używa świeżego execution clock dla expiry/renewal/takeover/fence/reconciliation.
+- **Stan:** `WAVE 0B.3 CANDIDATE COMPLETE — AWAITING INDEPENDENT RE-REVIEW`; 770 testów offline, żadnego wpisu researchu ani kosztu nie dopisano.
+
+## 2026-07-15 — Formalny checkpoint WAVE 0B
+
+- **Zakres:** wyłącznie kontrola repozytorium i staging zatwierdzonego zakresu; brak researchu, API, sieci, browsera i kosztu.
+- **Podstawa:** niezależny końcowy review potwierdził 894/894 testów i partycje 213/224/231/226; chroniona baza pozostała identyczna.
+- **Stan:** `WAVE 0B APPROVED WITH P2 — READY FOR CHECKPOINT`; Etap 1 `BLOCKED`, live API `ZABRONIONE`. Formalne zamknięcie wymaga przyszłego, osobno autoryzowanego commita.

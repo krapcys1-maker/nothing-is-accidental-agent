@@ -12,14 +12,21 @@ from app.models import RunStatus, Topic, TopicStatus
 from app.policies.policy_engine import PolicyEngine
 from app.policies.policy_engine import PolicyDecision
 from app.ports.notification import LogNotification
-from app.research.anthropic_client import AnthropicResearchClient
+from app.research.anthropic_client import AnthropicResearchClient as _RealAnthropicResearchClient
 from app.research.base import ResearchRateLimitError, ResearchTimeout
+
+
+class AnthropicResearchClient(_RealAnthropicResearchClient):
+    """Test-local SDK seam; global conftest blocks any real network access."""
+
+    requires_durable_provider_context = False
 from app.research.cost_estimator import (
     estimate_with_retries,
     estimate_worst_case_search_call_usd,
 )
 from app.research.fake_client import FakeResearchClient
 from app.workflows.research.pipeline import (
+    ResearchExecutionRequiresDurableJob,
     run_research_pipeline,
     run_two_stage_research_pipeline,
 )
@@ -219,7 +226,7 @@ def test_real_pipeline_without_run_cap_fails_before_caller(settings, storage, ac
         caller=lambda plan: calls.append(1) or (_good_json(), Usage()),
         max_retries=0,
     )
-    with pytest.raises(ValueError, match="wymaga jawnego run_cap_usd"):
+    with pytest.raises(ResearchExecutionRequiresDurableJob):
         run_research_pipeline(
             account, _topic(storage, account), settings=real_settings, storage=storage,
             research_client=client,

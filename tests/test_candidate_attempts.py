@@ -238,11 +238,6 @@ def test_cli_retry_is_explicit_reports_counts_and_never_constructs_model_client(
     cost_before = storage.get_run(run_id).cost_usd
     monkeypatch.setattr(capped_script, "load_settings", lambda: settings)
 
-    def forbidden(*args, **kwargs):
-        raise AssertionError("retry-failed-candidates must not construct an API client")
-
-    monkeypatch.setattr(capped_script, "AnthropicResearchClient", forbidden)
-
     assert capped_script.main([
         "--resume", run_id, "--retry-failed-candidates", "--max-extraction-attempts", "2",
     ]) == 0

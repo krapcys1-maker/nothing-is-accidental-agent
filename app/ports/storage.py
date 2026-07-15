@@ -12,10 +12,13 @@ from app.core.clock import Clock
 from app.models import (
     Account,
     Job,
+    JobEnqueueResult,
     JobExecutionContext,
     JobLease,
     JobRecoveryResult,
     JobReservation,
+    DurableProviderAttemptContext,
+    ProviderAttempt,
     ModelUsage,
     ResearchCard,
     ResearchFlow,
@@ -45,6 +48,35 @@ class ResearchTopicIntegrityError(RuntimeError):
 
 class JobConflictError(RuntimeError):
     """Idempotency albo aktywna blokada topicu nie pozwala utworzyć joba."""
+
+
+class JobPayloadValidationError(JobConflictError):
+    """Typed enqueue rejection for a durable execution contract."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        self.code = code
+        super().__init__(f"{code}: {detail}")
+
+
+class ModelUsageRequestIdError(ValueError):
+    """Nowy realny usage nie ma durable request_id powiązanego z attemptem."""
+
+
+class ProviderAttemptReconciliationRequired(RuntimeError):
+    """Poprzednia próba ma niejednoznaczny skutek i blokuje nowy request."""
+
+
+class ProviderAttemptOverReservationError(ProviderAttemptReconciliationRequired):
+    """Persisted actual usage exceeded its pre-request durable reservation."""
+
+    code = "PROVIDER_ATTEMPT_COST_EXCEEDS_RESERVATION"
+
+    def __init__(self, *, reserved_amount_usd: float, actual_cost_usd: float) -> None:
+        self.reserved_amount_usd = reserved_amount_usd
+        self.actual_cost_usd = actual_cost_usd
+        super().__init__(
+            "Provider usage exceeded the durable reservation; reconciliation is required."
+        )
 
 
 class JobRunRelationError(RuntimeError):
@@ -95,6 +127,10 @@ class StaleJobExecutionError(JobRunRelationError):
 
 class BudgetReservationError(RuntimeError):
     """Rezerwacja przekracza limit lub przeczy istniejącej rezerwacji joba."""
+
+
+class AmountBelowMinimumPrecisionError(BudgetReservationError):
+    """Dodatnia kwota znikałaby po canonicalizacji do sześciu miejsc USD."""
 
 
 class SystemFlagError(ValueError):
@@ -168,6 +204,10 @@ class StoragePort(Protocol):
         """Atomowo zapisuje QUEUED job lub zwraca identyczny idempotentny rekord."""
         ...
 
+    def enqueue_job_result(self, job: Job) -> JobEnqueueResult:
+        """Atomowo zapisuje intent i jawnie wskazuje, czy utworzył nowy rekord."""
+        ...
+
     def get_job(self, job_id: str) -> Job | None: ...
 
     def get_job_by_idempotency_key(self, idempotency_key: str) -> Job | None:
@@ -208,6 +248,43 @@ class StoragePort(Protocol):
         self, execution: JobExecutionContext, usage: ModelUsage,
     ) -> ModelUsage:
         """Atomowo zapisuje usage i koszt wyłącznie pod świeżym fence workera."""
+        ...
+
+    def begin_provider_attempt(
+        self, execution: JobExecutionContext, *, stage: str, attempt_no: int,
+        max_cost_usd: float, daily_limit_usd: float, monthly_limit_usd: float,
+    ) -> ProviderAttempt:
+        """Atomowo odzyskuje/tworzy próbę i rezerwuje jej maksymalny koszt."""
+        ...
+
+    def mark_provider_attempt_request_started(
+        self, execution: JobExecutionContext, request_id: str,
+    ) -> ProviderAttempt:
+        """Utrwala granicę tuż przed przekazaniem requestu do SDK."""
+        ...
+
+    def assert_durable_provider_attempt_active(
+        self, context: DurableProviderAttemptContext, *, clock: Clock,
+    ) -> ProviderAttempt:
+        """Potwierdza request→job→run→lease dla realnego callera tuż przed SDK."""
+        ...
+
+    def release_provider_attempt_before_request(
+        self, execution: JobExecutionContext, request_id: str, *, error_code: str,
+    ) -> None:
+        """Zwalnia rezerwację tylko gdy request nie przekroczył granicy SDK."""
+        ...
+
+    def mark_provider_attempt_needs_reconciliation(
+        self, execution: JobExecutionContext, request_id: str, *, error_code: str,
+    ) -> None:
+        """Zachowuje rezerwację po timeout/connection/nieznanym wyniku."""
+        ...
+
+    def settle_provider_attempt_without_usage(
+        self, execution: JobExecutionContext, request_id: str, *, error_code: str,
+    ) -> None:
+        """Zamyka potwierdzony błąd dostawcy, gdy nie zwrócił usage."""
         ...
 
     def fail_job_research_execution(

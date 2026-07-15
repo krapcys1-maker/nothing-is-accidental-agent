@@ -18,6 +18,7 @@ from app.models import (
 )
 from app.ports.storage import ResearchTopicIntegrityError
 from app.storage.repositories import SqliteStorage
+from tests.conftest import seed_historical_real_usage
 from app.workflows.research.pipeline import (
     CompletedResearchExistsError,
     ensure_topic_can_start_research,
@@ -106,7 +107,7 @@ def _staged_rejection_snapshot(storage, run_id: str, topic_id: int) -> dict[str,
 
 
 def _add_existing_usage(storage, run_id: str) -> None:
-    storage.add_model_usage(ModelUsage(
+    seed_historical_real_usage(storage, ModelUsage(
         run_id=run_id, provider="test", model="test", task="research_synthesize_cards",
         input_tokens=1, output_tokens=1, estimated_cost_usd=0.123,
     ))

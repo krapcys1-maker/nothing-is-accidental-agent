@@ -1,5 +1,7 @@
 # 16 — MATERIAŁ DO PIERWSZEGO ARTYKUŁU
 
+> **Stan materiału:** WAVE 0B = `APPROVED WITH P2 — READY FOR CHECKPOINT`, nie `CLOSED`; dowody to 894 testy offline, 13 migracji i niezmieniona chroniona baza. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
 ## Cel pliku
 Zebrać w jednym miejscu **gotowy surowiec** do pierwszego artykułu na „Chaos Engine": początek projektu, pomysł, wybór niszy, konto, pierwsza architektura, pierwsze decyzje, walking skeleton, pierwsze koszty i błędy, screeny, fragmenty kodu. To „skrzynka narzędziowa" — z tego pisze się artykuł 1 (i częściowo 2).
 
@@ -232,3 +234,17 @@ Odczyt bazy przyniósł jeszcze jedną lekcję: szczegółowy research był popr
 - `end_turn`, karta #2, SUCCESS/COMPLETE/USED i cztery VERIFIED spełniły techniczne kryterium Etapu 0.
 - Ta sama karta dostała REJECT za `THESIS_UNSUPPORTED` i `CLAIMS_WITHOUT_SOURCES`, więc nie stała się artykułem.
 - **Zdanie do artykułu:** „Pierwszym prawdziwym sukcesem agenta nie było napisanie tekstu. Było nim dokończenie przerwanej pracy bez ponownego rachunku — i odwaga, by własny wynik odrzucić.”
+
+### Materiał: „Trzy pół-koszty nie są trzema pełnymi kosztami” (W0B-REV-10)
+
+- System miał już ledger, ale nie miał jeszcze jednej definicji połowy mikro-USD: estymator i tracker zaokrąglały inaczej niż storage.
+- Naprawa mówi prostym zdaniem: najpierw sumujemy `0.0000005 + 0.0000005 + 0.0000005`, a dopiero potem raz wybieramy `0.000002` przez `ROUND_HALF_UP`.
+- To nie jest opowieść o „sprytniejszej matematyce”, tylko o uczciwej historii: kiedy actual przekracza rezerwację, zostaje jeden usage i zatrzymany attempt, bez udawania sukcesu ani drugiego rachunku.
+- Dowód historyczny: 887 testów offline; kronika wyraźnie oddziela historyczne 770/823/861/873 od bieżącego wyniku. WAVE 0B nie jest zamknięta, Etap 1 pozostaje BLOCKED, live API ZABRONIONE.
+
+### Materiał: „Nie zaokrąglaj opowieści po każdym zdaniu” (W0B-RR-01)
+
+- Review odkrył, że dobra reguła w jednym miejscu może przegrać z przedwczesnym zaokrągleniem w następnym. To samo stało się z kosztem jednego źródła, zanim system pomnożył go przez liczbę źródeł.
+- Naprawa ma obraz prostszy niż kod: dopóki historia się składa, liczby pozostają surowe. Dopiero po ostatnim zdaniu wybieramy jeden wynik `ROUND_HALF_UP`.
+- Dowód: 894 testy offline, partycje 213/224/231/226, `0.1+0.2` oraz pół-mikro-USD sprawdzone w policy, ledgerze i CLI; zero API, sieci, kosztu i zmiany chronionej bazy.
+- Zdanie do artykułu: „Najłatwiej oszukać rachunek nie wtedy, gdy źle liczysz — tylko wtedy, gdy kończysz liczyć zbyt wcześnie.”

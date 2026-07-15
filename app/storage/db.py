@@ -1,6 +1,7 @@
 """Połączenie SQLite i uruchamianie migracji."""
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
 
@@ -9,10 +10,25 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0007_candidate_attempts",
     "0008_staged_force_reresearch",
     "0009_jobs_system_flags",
+    "0010_provider_attempts",
+    "0011_provider_attempt_invariants",
+    "0012_provider_ledger_hardening",
+    "0013_provider_attempt_usage_integrity",
 })
 
 
+def _is_test_protected_database(db_path: Path | str) -> bool:
+    """Reject the production DB for pytest collection, setup and subprocesses."""
+    if not os.environ.get("NIA_TEST_MODE"):
+        return False
+    from app.testing.safety_kernel import is_protected_sqlite_database
+
+    return is_protected_sqlite_database(db_path)
+
+
 def connect(db_path: Path | str) -> sqlite3.Connection:
+    if _is_test_protected_database(db_path):
+        raise RuntimeError("Tests must not open the project data/agent.db.")
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import replace
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -17,11 +18,17 @@ from app.llm.anthropic_client import AnthropicLLMClient, TOPIC_MAX_OUTPUT_TOKENS
 from app.llm.base import Usage
 from app.llm.fake_client import FakeLLMClient
 from app.llm.usage_tracker import UsageTracker
-from app.models import Topic, TopicStatus
+from app.models import (
+    DurableProviderAttemptContext,
+    ProviderAttempt,
+    ProviderAttemptStatus,
+    Topic,
+    TopicStatus,
+)
 from app.orchestrator import runner
 from app.policies.policy_engine import PolicyEngine
 from app.ports.notification import LogNotification
-from app.research.anthropic_client import AnthropicResearchClient
+from app.research.anthropic_client import AnthropicResearchClient, OfflineAnthropicResearchClient
 from app.research.base import (
     ResearchPlan,
     ResearchRateLimitError,
@@ -72,8 +79,42 @@ def test_every_real_sdk_client_disables_sdk_retry_and_sets_timeout(monkeypatch, 
     fake_sdk = SimpleNamespace(Anthropic=FakeAnthropic, APIError=FakeAPIError)
     monkeypatch.setitem(sys.modules, "anthropic", fake_sdk)
 
+    context = DurableProviderAttemptContext(
+        job_id="topics-job",
+        run_id="topics-run",
+        stage="topics",
+        attempt_no=1,
+        request_id="topics-job:topics:1",
+        lease_owner="test-worker",
+        fence_token="topics-job:topics-run:test-worker",
+        checked_at=datetime(2026, 7, 14, tzinfo=timezone.utc),
+    )
+    topic_client = AnthropicLLMClient("key", "model")
+    topic_client.configure_durable_attempt_control(
+        context_callback=lambda _budget: context,
+        activation_callback=lambda _context: ProviderAttempt(
+            job_id=context.job_id,
+            stage=context.stage,
+            attempt_no=context.attempt_no,
+            request_id=context.request_id,
+            status=ProviderAttemptStatus.REQUEST_STARTED,
+            reserved_amount_usd=0.1,
+            reserved_at=context.checked_at,
+            request_started_at=context.checked_at,
+        ),
+        assertion_callback=lambda _context: ProviderAttempt(
+            job_id=context.job_id,
+            stage=context.stage,
+            attempt_no=context.attempt_no,
+            request_id=context.request_id,
+            status=ProviderAttemptStatus.REQUEST_STARTED,
+            reserved_amount_usd=0.1,
+            reserved_at=context.checked_at,
+            request_started_at=context.checked_at,
+        ),
+    )
     with pytest.raises(Exception):
-        AnthropicLLMClient("key", "model").generate_and_score_topics(account, 1)
+        topic_client.generate_and_score_topics(account, 1)
     AnthropicResearchClient("key", "model")._new_anthropic_client(fake_sdk)
 
     assert len(constructed) == 2
@@ -98,7 +139,7 @@ def test_typed_provider_failure_makes_exactly_one_sdk_attempt(error):
         calls += 1
         raise error
 
-    client = AnthropicResearchClient("offline", "model", caller=caller, max_retries=99)
+    client = OfflineAnthropicResearchClient("offline", "model", caller=caller, max_retries=99)
     with pytest.raises(type(error)):
         client.run_research(_PLAN)
 
@@ -147,11 +188,6 @@ def test_capped_runner_without_real_flag_never_constructs_provider_client(
 
     topic = _selected_topic(storage, account)
     monkeypatch.setattr(run_capped_research, "load_settings", lambda: settings)
-    monkeypatch.setattr(
-        run_capped_research,
-        "AnthropicResearchClient",
-        lambda *_args, **_kwargs: pytest.fail("missing --real must not construct a provider client"),
-    )
 
     assert run_capped_research.main(["--topic-id", str(topic.id)]) == 0
 
@@ -168,11 +204,6 @@ def test_invalid_price_values_fail_closed_before_real_client_construction(
         settings, dry_run=False, anthropic_api_key="test-real-key", pricing=broken_prices,
     )
     monkeypatch.setattr(run_capped_research, "load_settings", lambda: broken)
-    monkeypatch.setattr(
-        run_capped_research,
-        "AnthropicResearchClient",
-        lambda *_args, **_kwargs: pytest.fail("invalid pricing must block before construction"),
-    )
 
     assert run_capped_research.main(["--topic-id", str(topic.id), "--real"]) == 1
 
@@ -187,11 +218,6 @@ def test_missing_prices_block_real_mode_but_dry_run_remains_usable(
         require_valid_real_provider_pricing(missing)
 
     monkeypatch.setattr(run_capped_research, "load_settings", lambda: missing)
-    monkeypatch.setattr(
-        run_capped_research,
-        "AnthropicResearchClient",
-        lambda *_args, **_kwargs: pytest.fail("missing pricing must block real construction"),
-    )
     assert run_capped_research.main([
         "--topic-id", str(topic.id), "--real", "--estimate-only",
     ]) == 0

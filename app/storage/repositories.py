@@ -3,16 +3,21 @@ from __future__ import annotations
 
 import json
 import logging
-import math
+import os
 import sqlite3
+from dataclasses import replace
+from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Sequence
+from typing import Iterable, Sequence
 
 from app.core.clock import Clock
+from app.core.money import decimal_from, quantize_usd, sum_usd
 from app.models import (
     Account,
+    DurableProviderAttemptContext,
     Job,
+    JobEnqueueResult,
     JobExecutionContext,
     JobEnqueueContext,
     JobKind,
@@ -21,6 +26,8 @@ from app.models import (
     JobReservation,
     JobStatus,
     ModelUsage,
+    ProviderAttempt,
+    ProviderAttemptStatus,
     ResearchCard,
     ResearchRecommendation,
     ResearchRun,
@@ -48,15 +55,26 @@ from app.models import (
     WorkflowType,
 )
 from app.ports.storage import (
+    AmountBelowMinimumPrecisionError,
     BudgetReservationError,
     JobConflictError,
+    JobPayloadValidationError,
     JobRunConflictError,
     JobRunReconciliationRequired,
     JobRunRelationError,
     LifecycleTransitionError,
+    ModelUsageRequestIdError,
+    ProviderAttemptOverReservationError,
+    ProviderAttemptReconciliationRequired,
     ResearchTopicIntegrityError,
     StaleJobExecutionError,
     SystemFlagError,
+)
+from app.research.durable_intent import (
+    DurableExecutionIntentError,
+    DurableResearchExecutionIntent,
+    canonicalize_durable_research_payload,
+    durable_execution_intent_fingerprint,
 )
 from app.storage.db import apply_migrations, connect
 
@@ -114,6 +132,60 @@ def _ts_precise(dt: datetime | None = None) -> str:
 
 def _persisted_ts(dt: datetime) -> str:
     return _ts_precise(dt) if dt.microsecond else _ts(dt)
+
+
+def _money(value: object, *, positive: bool, label: str) -> Decimal:
+    """Canonical six-decimal money value without binary-float boundary errors."""
+    try:
+        amount = decimal_from(value, label=label)
+    except ValueError as exc:
+        raise BudgetReservationError(f"{label} must be a finite numeric amount.") from exc
+    if not amount.is_finite() or (amount <= 0 if positive else amount < 0):
+        relation = "positive" if positive else "non-negative"
+        raise BudgetReservationError(f"{label} must be finite and {relation}.")
+    canonical = quantize_usd(amount, label=label)
+    if positive and canonical == Decimal("0.000000"):
+        raise AmountBelowMinimumPrecisionError(
+            f"{label} is below the minimum USD precision of 0.000001 (ROUND_HALF_UP)."
+        )
+    return canonical
+
+
+def _money_sum(values: Sequence[object], *, label: str) -> Decimal:
+    """Sum decimal-string inputs first and apply the USD contract once."""
+    try:
+        return sum_usd(values, label=label)
+    except ValueError as exc:
+        raise BudgetReservationError(f"{label} must be a finite numeric amount.") from exc
+
+
+def _money_equal(left: object, right: object, *, label: str) -> bool:
+    """Compare persisted USD values only after the common Decimal boundary."""
+    try:
+        return (
+            _money(left, positive=False, label=label)
+            == _money(right, positive=False, label=label)
+        )
+    except BudgetReservationError:
+        return False
+
+
+def _is_positive_money(value: object, *, label: str) -> bool:
+    try:
+        _money(value, positive=True, label=label)
+    except BudgetReservationError:
+        return False
+    return True
+
+
+def _sum_money_rows(
+    rows: Iterable[sqlite3.Row],
+    column: str,
+    *,
+    label: str,
+) -> Decimal:
+    """Aggregate persisted REAL values as Decimal strings, never SQLite floats."""
+    return _money_sum(tuple(row[column] for row in rows), label=label)
 
 
 class SqliteStorage:
@@ -184,6 +256,14 @@ class SqliteStorage:
     # --- fabryka ---
     @classmethod
     def open(cls, db_path: Path | str) -> "SqliteStorage":
+        # A test must never silently point a writable SQLite adapter at the
+        # project's forensic/runtime database, even through a relative path or
+        # a Windows junction/symlink.  Production processes do not set this
+        # pytest marker and retain their explicit operational contract.
+        if os.environ.get("PYTEST_CURRENT_TEST") and str(db_path) != ":memory:":
+            target = (Path(__file__).resolve().parents[2] / "data" / "agent.db").resolve()
+            if Path(db_path).resolve() == target:
+                raise RuntimeError("Tests must not open the project data/agent.db for writing.")
         conn = connect(db_path)
         apply_migrations(conn)
         return cls(conn)
@@ -290,6 +370,9 @@ class SqliteStorage:
 
     def finish_run(self, run_id: str, status: str, cost_usd: float,
                    error: str | None = None) -> None:
+        canonical_cost = _money(
+            cost_usd, positive=False, label="Finished run cost",
+        )
         try:
             target = RunStatus(status)
         except ValueError as exc:
@@ -327,7 +410,11 @@ class SqliteStorage:
         if existing is not None and existing["finished_at"] is not None:
             if (
                 existing["status"] == target.value
-                and float(existing["cost_usd"]) == float(cost_usd)
+                and _money_equal(
+                    existing["cost_usd"],
+                    canonical_cost,
+                    label="Repeated run finalization cost",
+                )
                 and existing["error"] == error
             ):
                 return
@@ -343,7 +430,7 @@ class SqliteStorage:
                 "UPDATE runs SET status=?, cost_usd=?, error=?, finished_at=? "
                 f"WHERE id=? AND status IN ({placeholders}) "
                 "AND finished_at IS NULL",
-                (target.value, cost_usd, error, _ts(), run_id, *allowed),
+                (target.value, float(canonical_cost), error, _ts(), run_id, *allowed),
             )
             self._require_one_transition(
                 cursor, table="runs", entity="run", identifier=run_id,
@@ -364,6 +451,9 @@ class SqliteStorage:
         attempt. It is the compare-and-swap token: two resumptions of the same
         snapshot cannot both rewrite the audit event.
         """
+        canonical_cost = _money(
+            cost_usd, positive=False, label="Resumed research failure cost",
+        )
         allowed_research_statuses = {
             ResearchFlow.TWO_STAGE: (ResearchRunStatus.PARTIAL.value,),
             ResearchFlow.STAGED: (
@@ -417,7 +507,7 @@ class SqliteStorage:
                 "WHERE rr.id=runs.id AND rr.account_id=? AND t.account_id=? AND rr.flow=? "
                 f"AND rr.status IN ({placeholders}))",
                 (
-                    RunStatus.FAILED.value, cost_usd, error, _ts_precise(), run_id,
+                    RunStatus.FAILED.value, float(canonical_cost), error, _ts_precise(), run_id,
                     account_id, RunStatus.FAILED.value, expected_finished,
                     account_id, account_id, expected_flow.value,
                     *allowed_research_statuses,
@@ -452,17 +542,25 @@ class SqliteStorage:
     # --- zużycie modelu / koszty ---
     def add_model_usage(self, usage: ModelUsage) -> ModelUsage:
         """Persist usage; research usage atomically refreshes the run cost cache."""
+        if not usage.dry_run and not usage.request_id:
+            raise ModelUsageRequestIdError(
+                "New real model usage requires a durable provider request_id."
+            )
+        canonical_cost = _money(
+            usage.estimated_cost_usd, positive=False, label="Model usage cost",
+        )
         self.conn.execute("BEGIN")
         try:
             cur = self.conn.execute(
                 "INSERT INTO model_usage (run_id, provider, model, task, input_tokens,"
                 " output_tokens, cache_read_tokens, cache_write_tokens, web_search_requests,"
-                " estimated_cost_usd, dry_run, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                " estimated_cost_usd, dry_run, request_id, is_legacy_usage, created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     usage.run_id, usage.provider, usage.model, usage.task, usage.input_tokens,
                     usage.output_tokens, usage.cache_read_tokens, usage.cache_write_tokens,
-                    usage.web_search_requests, usage.estimated_cost_usd, int(usage.dry_run),
-                    _ts(usage.created_at),
+                    usage.web_search_requests, float(canonical_cost), int(usage.dry_run), usage.request_id,
+                    0, _ts(usage.created_at),
                 ),
             )
             if usage.task in _RESEARCH_USAGE_TASKS:
@@ -472,15 +570,28 @@ class SqliteStorage:
             self.conn.rollback()
             raise
         usage.id = int(cur.lastrowid)
+        usage.estimated_cost_usd = float(canonical_cost)
         return usage
 
     def sum_real_cost_usd(self, since_prefix: str) -> float:
-        row = self.conn.execute(
-            "SELECT COALESCE(SUM(estimated_cost_usd), 0.0) AS total FROM model_usage"
+        rows = self.conn.execute(
+            "SELECT estimated_cost_usd FROM model_usage"
             " WHERE dry_run=0 AND created_at LIKE ?",
             (f"{since_prefix}%",),
-        ).fetchone()
-        return float(row["total"])
+        ).fetchall()
+        return float(_sum_money_rows(
+            rows, "estimated_cost_usd", label="Persisted real usage total",
+        ))
+
+    def _research_usage_total(self, research_run_id: str) -> Decimal:
+        rows = self.conn.execute(
+            "SELECT estimated_cost_usd FROM model_usage "
+            "WHERE run_id=? AND task IN (" + _RESEARCH_USAGE_PLACEHOLDERS + ")",
+            (research_run_id, *_RESEARCH_USAGE_TASKS),
+        ).fetchall()
+        return _sum_money_rows(
+            rows, "estimated_cost_usd", label="Canonical research usage total",
+        )
 
     # --- Etap 1: trwała kolejka, lease i runtime system flags ---
 
@@ -575,16 +686,53 @@ class SqliteStorage:
         return row
 
     @staticmethod
+    def _provider_attempt_from_row(row: sqlite3.Row) -> ProviderAttempt:
+        return ProviderAttempt(
+            job_id=row["job_id"], stage=row["stage"], attempt_no=int(row["attempt_no"]),
+            request_id=row["request_id"], status=ProviderAttemptStatus(row["status"]),
+            execution_intent_fingerprint=row["execution_intent_fingerprint"],
+            reserved_amount_usd=float(row["reserved_amount_usd"]),
+            reserved_at=row["reserved_at"], request_started_at=row["request_started_at"],
+            settled_at=row["settled_at"], actual_cost_usd=row["actual_cost_usd"],
+            error_code=row["error_code"],
+        )
+
+    @staticmethod
+    def _provider_request_id(job_id: str, stage: str, attempt_no: int) -> str:
+        """Stable, deterministic provider identity; never time/random based."""
+        return f"{job_id}:{stage}:{attempt_no}"
+
+    @staticmethod
+    def _validate_provider_attempt_identity(stage: str, attempt_no: int) -> None:
+        if not stage or len(stage) > 64 or any(char not in "abcdefghijklmnopqrstuvwxyz0123456789_-" for char in stage):
+            raise ValueError("Provider attempt stage must be a controlled lowercase identifier.")
+        if attempt_no < 1:
+            raise ValueError("Provider attempt number must be positive.")
+
+    @staticmethod
     def _canonical_payload(payload: dict) -> str:
         try:
-            return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            normalized: dict = payload
+            if payload.get("execution") == "durable_provider_v1":
+                raise DurableExecutionIntentError(
+                    "durable_provider_v1 is retired; use durable_provider_v2.",
+                    code="UNSUPPORTED_EXECUTION_CONTRACT",
+                )
+            if payload.get("execution") == "durable_provider_v2":
+                normalized = canonicalize_durable_research_payload(payload)
+            return json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        except DurableExecutionIntentError as exc:
+            raise JobPayloadValidationError(exc.code, str(exc)) from exc
         except (TypeError, ValueError) as exc:
-            raise JobConflictError("Job payload must be JSON-serializable.") from exc
+            raise JobPayloadValidationError(
+                "MALFORMED_JOB_PAYLOAD", "Job payload must be JSON-serializable."
+            ) from exc
 
     @staticmethod
     def _job_context_matches(row: sqlite3.Row, job: Job, payload_json: str) -> bool:
-        del payload_json
-        return JobEnqueueContext.from_row(row) == JobEnqueueContext.from_job(job)
+        return JobEnqueueContext.from_row(row) == replace(
+            JobEnqueueContext.from_job(job), payload_json=payload_json,
+        )
 
     def _validate_job_enqueue_relation(self, job: Job) -> None:
         # Local import avoids loading the scheduler composition package while the
@@ -604,7 +752,10 @@ class SqliteStorage:
         if job.attempts != 0 or job.started_at is not None or job.finished_at is not None:
             raise JobConflictError("enqueue_job accepts only a job without prior attempts or lifecycle timestamps.")
         if (
-            job.max_attempts < 1 or job.reserved_cost_usd != 0.0
+            job.max_attempts < 1
+            or not _money_equal(
+                job.reserved_cost_usd, Decimal("0"), label="Fresh job reservation",
+            )
             or job.budget_reserved_at is not None or job.external_effect_started_at is not None
         ):
             raise JobConflictError("enqueue_job requires max_attempts >= 1 and no pre-existing budget reservation.")
@@ -624,6 +775,9 @@ class SqliteStorage:
                 raise JobConflictError("Job run must belong to the same account.")
 
     def enqueue_job(self, job: Job) -> Job:
+        return self.enqueue_job_result(job).job
+
+    def enqueue_job_result(self, job: Job) -> JobEnqueueResult:
         """Atomowo tworzy QUEUED job lub zwraca identyczny job idempotentny."""
         payload_json = self._canonical_payload(job.payload)
         try:
@@ -635,7 +789,7 @@ class SqliteStorage:
                 if self._job_context_matches(existing, job, payload_json):
                     result = self._job_from_row(existing)
                     self.conn.commit()
-                    return result
+                    return JobEnqueueResult(job=result, created=False)
                 raise JobConflictError(
                     f"idempotency_key {job.idempotency_key!r} already belongs to a different job context."
                 )
@@ -662,7 +816,7 @@ class SqliteStorage:
             row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job.id,)).fetchone()
             self.conn.commit()
             assert row is not None
-            return self._job_from_row(row)
+            return JobEnqueueResult(job=self._job_from_row(row), created=True)
         except sqlite3.IntegrityError as exc:
             if self.conn.in_transaction:
                 self.conn.rollback()
@@ -878,15 +1032,38 @@ class SqliteStorage:
                     job_id, "RESEARCH_EXECUTION_INITIALIZED", allowed,
                     detail="Initialization requires the caller's fresh lease.",
                 )
-            if job.payload != {
+            dry_payload = {
                 "account_id": job.account_id,
                 "topic_id": int(job.topic_id),
                 "dry_run": True,
-            }:
-                raise JobRunRelationError(
-                    "RESEARCH_PAYLOAD_UNSUPPORTED", job_id,
-                    "offline initialization accepts only the dry-run research payload.",
-                )
+            }
+            if job.payload == dry_payload:
+                expected_run_status = RunStatus.DRY_RUN
+            else:
+                if job.payload.get("execution") == "durable_provider_v1":
+                    raise JobRunRelationError(
+                        "DURABLE_PROVIDER_V1_UNSUPPORTED",
+                        job_id,
+                        "durable_provider_v1 is retired; enqueue a durable_provider_v2 intent.",
+                    )
+                try:
+                    normalized = canonicalize_durable_research_payload(job.payload)
+                except DurableExecutionIntentError as exc:
+                    raise JobRunRelationError(
+                        exc.code,
+                        job_id,
+                        "initialization requires a valid durable_provider_v2 payload.",
+                    ) from exc
+                if (
+                    normalized["account_id"] != job.account_id
+                    or normalized["topic_id"] != int(job.topic_id)
+                ):
+                    raise JobRunRelationError(
+                        "RESEARCH_PAYLOAD_IDENTITY_MISMATCH",
+                        job_id,
+                        "durable_provider_v2 payload identity must match the job.",
+                    )
+                expected_run_status = RunStatus.RUNNING
             topic = self.conn.execute(
                 "SELECT 1 FROM topics WHERE id=? AND account_id=?",
                 (job.topic_id, job.account_id),
@@ -923,20 +1100,26 @@ class SqliteStorage:
                         "attached run relation is incompatible with the research job.",
                     )
                 allowed_existing_state = (
-                    run.status is RunStatus.DRY_RUN
+                    run.status is expected_run_status
                     and run_row["finished_at"] is None
                     and run_row["error"] is None
-                    and float(run_row["cost_usd"]) == 0.0
+                    and _money_equal(
+                        run_row["cost_usd"], Decimal("0"), label="Attached run cost",
+                    )
                     and research_run.status is ResearchRunStatus.PENDING
                     and research_row["research_card_id"] is None
                     and research_row["error"] is None
-                    and float(research_row["total_cost_usd"]) == 0.0
+                    and _money_equal(
+                        research_row["total_cost_usd"],
+                        Decimal("0"),
+                        label="Attached research run cost",
+                    )
                 )
                 if not allowed_existing_state:
                     raise JobRunRelationError(
                         "ATTACHED_RESEARCH_RUN_STATE_INVALID", job_id,
                         "an existing worker initialization must remain exactly "
-                        "DRY_RUN+single:PENDING without result, error, cost, or finished_at.",
+                        "the expected run status plus single:PENDING without result, error, cost, or finished_at.",
                     )
                 self.conn.commit()
                 return ResearchRunInitialization(
@@ -948,7 +1131,7 @@ class SqliteStorage:
                 "VALUES (?,?,?,?,?,?)",
                 (
                     run_id, job.account_id, WorkflowType.RESEARCH.value,
-                    RunStatus.DRY_RUN.value, "research", current_ts,
+                    expected_run_status.value, "research", current_ts,
                 ),
             )
             self.conn.execute(
@@ -1008,6 +1191,251 @@ class SqliteStorage:
                 self._rollback_preserving_primary(primary, self.conn.rollback)
             raise
 
+    def assert_durable_provider_attempt_active(
+        self, context: DurableProviderAttemptContext, *, clock: Clock,
+    ) -> ProviderAttempt:
+        """Atomically prove the complete single-research lifecycle before SDK.
+
+        This is intentionally stricter than a lease check.  The request can
+        cross the provider boundary only while one current job, run,
+        research_run, attempt and durable snapshot still describe the same
+        pre-request single-flow lifecycle.
+        """
+        expected_fence = f"{context.job_id}:{context.run_id}:{context.lease_owner}"
+        if context.fence_token != expected_fence:
+            raise StaleJobExecutionError(
+                context.job_id, "durable provider context fence token is invalid.",
+            )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            # checked_at is diagnostic evidence only. Lease authorization uses
+            # the execution clock freshly inside this SQLite transaction.
+            current_ts = _persisted_ts(self._job_now(clock=clock))
+            # WAVE 0B's paid durable contract supports exactly the persisted
+            # ``research`` stage.  Existing non-provider boundary regression
+            # tests use other controlled labels; preserve their older lease-only
+            # guard rather than silently pretending they are durable single
+            # research requests.
+            if context.stage != "research":
+                legacy = self.conn.execute(
+                    "SELECT p.* FROM provider_attempts p "
+                    "JOIN jobs j ON j.id=p.job_id "
+                    "JOIN runs r ON r.id=j.run_id "
+                    "WHERE p.request_id=? AND p.job_id=? AND p.stage=? AND p.attempt_no=? "
+                    "AND p.status='REQUEST_STARTED' AND j.run_id=? AND j.lease_owner=? "
+                    "AND j.lease_expires_at>=? AND j.status IN ('LEASED','RUNNING') "
+                    "AND j.kind='RESEARCH' AND j.workflow='RESEARCH' "
+                    "AND r.id=? AND r.account_id=j.account_id",
+                    (
+                        context.request_id, context.job_id, context.stage, context.attempt_no,
+                        context.run_id, context.lease_owner, current_ts, context.run_id,
+                    ),
+                ).fetchone()
+                if legacy is None:
+                    raise StaleJobExecutionError(
+                        context.job_id,
+                        "non-durable provider boundary is not active for the current job/run/lease.",
+                    )
+                self.conn.commit()
+                return self._provider_attempt_from_row(legacy)
+            row = self.conn.execute(
+                "SELECT "
+                "p.job_id AS p_job_id,p.stage AS p_stage,p.attempt_no AS p_attempt_no,"
+                "p.request_id AS p_request_id,p.status AS p_status,"
+                "p.execution_intent_fingerprint AS p_fingerprint,"
+                "p.reserved_amount_usd AS p_reserved_amount,p.reserved_at AS p_reserved_at,"
+                "p.request_started_at AS p_request_started_at,"
+                "p.settled_at AS p_settled_at,p.actual_cost_usd AS p_actual_cost,"
+                "p.error_code AS p_error_code,"
+                "j.id AS j_id,j.account_id AS j_account_id,j.kind AS j_kind,"
+                "j.workflow AS j_workflow,j.topic_id AS j_topic_id,j.run_id AS j_run_id,"
+                "j.status AS j_status,j.lease_owner AS j_lease_owner,"
+                "j.lease_expires_at AS j_lease_expires_at,j.finished_at AS j_finished_at,"
+                "j.payload_json AS j_payload_json,"
+                "r.id AS r_id,r.account_id AS r_account_id,r.workflow AS r_workflow,"
+                "r.status AS r_status,r.finished_at AS r_finished_at,r.error AS r_error,"
+                "rr.id AS rr_id,rr.account_id AS rr_account_id,rr.topic_id AS rr_topic_id,"
+                "rr.flow AS rr_flow,rr.status AS rr_status,"
+                "rr.stage_a_completed_at AS rr_stage_a_completed_at,"
+                "rr.stage_b_completed_at AS rr_stage_b_completed_at,"
+                "rr.research_card_id AS rr_research_card_id,rr.total_cost_usd AS rr_total_cost,"
+                "rr.error AS rr_error,rr.is_force_reresearch AS rr_is_force_reresearch "
+                "FROM provider_attempts p "
+                "LEFT JOIN jobs j ON j.id=p.job_id "
+                "LEFT JOIN runs r ON r.id=j.run_id "
+                "LEFT JOIN research_runs rr ON rr.id=r.id "
+                "WHERE p.request_id=?",
+                (context.request_id,),
+            ).fetchone()
+
+            def reject(code: str, detail: str, *, stale: bool = False) -> None:
+                """Retain a started request for explicit reconciliation, then refuse."""
+                if (
+                    row is not None
+                    and row["p_job_id"] == context.job_id
+                    and row["p_status"] == ProviderAttemptStatus.REQUEST_STARTED.value
+                ):
+                    cursor = self.conn.execute(
+                        "UPDATE provider_attempts SET status='NEEDS_RECONCILIATION',error_code=? "
+                        "WHERE request_id=? AND job_id=? AND status='REQUEST_STARTED'",
+                        (code, context.request_id, context.job_id),
+                    )
+                    if cursor.rowcount != 1:
+                        raise StaleJobExecutionError(
+                            context.job_id,
+                            "durable provider attempt could not be retained for reconciliation.",
+                        )
+                self.conn.commit()
+                if stale:
+                    raise StaleJobExecutionError(context.job_id, detail)
+                raise JobRunRelationError(code, context.job_id, detail)
+
+            if row is None:
+                reject(
+                    "FINAL_LIFECYCLE_ATTEMPT_MISSING",
+                    "provider attempt disappeared before the provider boundary.",
+                )
+            assert row is not None
+            if (
+                row["p_job_id"] != context.job_id
+                or row["p_stage"] != context.stage
+                or row["p_attempt_no"] != context.attempt_no
+                or row["p_request_id"] != context.request_id
+            ):
+                reject(
+                    "FINAL_LIFECYCLE_ATTEMPT_IDENTITY_MISMATCH",
+                    "provider attempt identity no longer matches the durable context.",
+                )
+            if (
+                row["p_status"] != ProviderAttemptStatus.REQUEST_STARTED.value
+                or not _is_positive_money(
+                    row["p_reserved_amount"], label="Persisted provider reservation",
+                )
+                or not isinstance(row["p_reserved_at"], str)
+                or not row["p_reserved_at"].strip()
+                or not isinstance(row["p_request_started_at"], str)
+                or not row["p_request_started_at"].strip()
+                or row["p_settled_at"] is not None
+                or row["p_actual_cost"] is not None
+                or row["p_error_code"] is not None
+            ):
+                reject(
+                    "FINAL_LIFECYCLE_ATTEMPT_STATE_INVALID",
+                    "provider attempt is not an un-settled request-started attempt.",
+                )
+            if row["j_id"] is None:
+                reject(
+                    "FINAL_LIFECYCLE_JOB_MISSING",
+                    "provider attempt no longer has its research job.",
+                )
+            if (
+                row["j_id"] != context.job_id
+                or row["j_run_id"] != context.run_id
+                or row["j_kind"] != JobKind.RESEARCH.value
+                or row["j_workflow"] != WorkflowType.RESEARCH.value
+                or row["j_status"] not in _EXECUTABLE_JOB_STATUSES
+                or row["j_finished_at"] is not None
+                or row["j_lease_owner"] != context.lease_owner
+                or row["j_lease_expires_at"] is None
+                or row["j_lease_expires_at"] < current_ts
+            ):
+                reject(
+                    "STALE_JOB_EXECUTION",
+                    "job/run/workflow/lease state is not executable at the provider boundary.",
+                    stale=True,
+                )
+            if row["r_id"] is None:
+                reject(
+                    "FINAL_LIFECYCLE_RUN_MISSING",
+                    "research job no longer has its attached run.",
+                )
+            if (
+                row["r_id"] != context.run_id
+                or row["r_account_id"] != row["j_account_id"]
+                or row["r_workflow"] != WorkflowType.RESEARCH.value
+                or row["r_status"] != RunStatus.RUNNING.value
+                or row["r_finished_at"] is not None
+                or row["r_error"] is not None
+            ):
+                reject(
+                    "FINAL_LIFECYCLE_RUN_INVALID",
+                    "run is not an unfinished error-free RUNNING research lifecycle.",
+                )
+            if row["rr_id"] is None:
+                reject(
+                    "FINAL_LIFECYCLE_RESEARCH_RUN_MISSING",
+                    "research run extension is missing at the provider boundary.",
+                )
+            try:
+                payload = json.loads(row["j_payload_json"])
+                if not isinstance(payload, dict):
+                    raise DurableExecutionIntentError(
+                        "persisted durable payload must be a JSON object."
+                    )
+                canonical_payload = canonicalize_durable_research_payload(payload)
+                intent_raw = canonical_payload["execution_intent"]
+                assert isinstance(intent_raw, dict)
+                intent = DurableResearchExecutionIntent.from_payload(intent_raw)
+                current_fingerprint = durable_execution_intent_fingerprint(payload)
+            except (TypeError, json.JSONDecodeError) as exc:
+                intent_error = DurableExecutionIntentError(
+                    "persisted durable payload is not valid JSON."
+                )
+                intent_error.__cause__ = exc
+            except DurableExecutionIntentError as exc:
+                intent_error = exc
+            else:
+                intent_error = None
+
+            if intent_error is not None:
+                code = (
+                    intent_error.code
+                )
+                reject(code, "persisted execution_intent is malformed.")
+            assert intent_error is None
+            if (
+                row["j_account_id"] != intent.account_id
+                or row["j_topic_id"] != intent.topic_id
+                or row["rr_account_id"] != intent.account_id
+                or row["rr_topic_id"] != intent.topic_id
+                or row["rr_flow"] != ResearchFlow.SINGLE.value
+                or row["rr_status"] != ResearchRunStatus.PENDING.value
+                or row["rr_stage_a_completed_at"] is not None
+                or row["rr_stage_b_completed_at"] is not None
+                or row["rr_research_card_id"] is not None
+                or not _money_equal(
+                    row["rr_total_cost"],
+                    Decimal("0"),
+                    label="Fresh durable research run cost",
+                )
+                or row["rr_error"] is not None
+                or bool(row["rr_is_force_reresearch"])
+            ):
+                reject(
+                    "FINAL_LIFECYCLE_RESEARCH_RUN_INVALID",
+                    "research_run is not the fresh single:PENDING lifecycle for this intent.",
+                )
+            if intent.stage != context.stage:
+                reject(
+                    "FINAL_LIFECYCLE_STAGE_MISMATCH",
+                    "persisted provider stage does not match the provider attempt context.",
+                )
+            if row["p_fingerprint"] != current_fingerprint:
+                reject(
+                    "INVALID_EXECUTION_INTENT_FINGERPRINT",
+                    "persisted execution_intent fingerprint no longer matches the attempt.",
+                )
+            self.conn.commit()
+            attempt_row = self.conn.execute(
+                "SELECT * FROM provider_attempts WHERE request_id=?", (context.request_id,),
+            ).fetchone()
+            assert attempt_row is not None
+            return self._provider_attempt_from_row(attempt_row)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
     def add_job_model_usage(
         self, execution: JobExecutionContext, usage: ModelUsage,
     ) -> ModelUsage:
@@ -1030,23 +1458,79 @@ class SqliteStorage:
                 raise StaleJobExecutionError(
                     execution.job_id, "usage dry_run marker conflicts with the fenced run.",
                 )
+            if not expected_dry_run and not usage.request_id:
+                raise StaleJobExecutionError(
+                    execution.job_id,
+                    "real worker usage requires a durable provider request_id.",
+                )
+            actual_amount = _money(
+                usage.estimated_cost_usd, positive=False,
+                label="Provider actual usage cost",
+            )
+            if usage.request_id:
+                attempt = self.conn.execute(
+                    "SELECT p.* FROM provider_attempts p JOIN jobs j ON j.id=p.job_id "
+                    "WHERE p.request_id=? AND p.job_id=? AND j.run_id=?",
+                    (usage.request_id, execution.job_id, execution.run_id),
+                ).fetchone()
+                if attempt is None or attempt["job_id"] != execution.job_id or \
+                        attempt["status"] != ProviderAttemptStatus.REQUEST_STARTED.value:
+                    raise StaleJobExecutionError(
+                        execution.job_id,
+                        "usage request_id is not an active provider attempt for this execution.",
+                    )
+                reserved_amount = _money(
+                    attempt["reserved_amount_usd"], positive=True,
+                    label="Persisted provider reservation",
+                )
+                over_reservation = actual_amount > reserved_amount
+            else:
+                reserved_amount = None
+                over_reservation = False
             cur = self.conn.execute(
                 "INSERT INTO model_usage (run_id, provider, model, task, input_tokens,"
                 " output_tokens, cache_read_tokens, cache_write_tokens, web_search_requests,"
-                " estimated_cost_usd, dry_run, created_at) "
-                "SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS ("
+                " estimated_cost_usd, dry_run, request_id, created_at) "
+                "SELECT ?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS ("
                 "SELECT 1 FROM jobs WHERE id=? AND run_id=? AND lease_owner=? "
                 "AND lease_expires_at>=? AND status IN ('LEASED','RUNNING'))",
                 (
                     usage.run_id, usage.provider, usage.model, usage.task,
                     usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
                     usage.cache_write_tokens, usage.web_search_requests,
-                    usage.estimated_cost_usd, int(usage.dry_run), current_ts,
+                    float(actual_amount),
+                    int(usage.dry_run), usage.request_id, current_ts,
                     execution.job_id, execution.run_id, execution.lease_owner, current_ts,
                 ),
             )
             if cur.rowcount != 1:
                 raise StaleJobExecutionError(execution.job_id)
+            if usage.request_id:
+                assert reserved_amount is not None and actual_amount is not None
+                if over_reservation:
+                    settled = self.conn.execute(
+                        "UPDATE provider_attempts SET status='NEEDS_RECONCILIATION',"
+                        "actual_cost_usd=NULL,settled_at=NULL,error_code=? WHERE request_id=? "
+                        "AND job_id=? AND status='REQUEST_STARTED'",
+                        (
+                            ProviderAttemptOverReservationError.code, usage.request_id,
+                            execution.job_id,
+                        ),
+                    )
+                else:
+                    settled = self.conn.execute(
+                        "UPDATE provider_attempts SET status='SETTLED',actual_cost_usd=?,"
+                        "settled_at=?,error_code=NULL WHERE request_id=? "
+                        "AND job_id=? AND status='REQUEST_STARTED'",
+                        (
+                            float(actual_amount), current_ts, usage.request_id,
+                            execution.job_id,
+                        ),
+                    )
+                if settled.rowcount != 1:
+                    raise StaleJobExecutionError(
+                        execution.job_id, "provider attempt could not be settled with usage.",
+                    )
             self._set_run_cost_from_research_usage(execution.run_id)
             self.conn.commit()
         except BaseException as primary:
@@ -1055,7 +1539,248 @@ class SqliteStorage:
             raise
         usage.id = int(cur.lastrowid)
         usage.created_at = current
+        usage.estimated_cost_usd = float(actual_amount)
+        if over_reservation:
+            assert reserved_amount is not None and actual_amount is not None
+            raise ProviderAttemptOverReservationError(
+                reserved_amount_usd=float(reserved_amount),
+                actual_cost_usd=float(actual_amount),
+            )
         return usage
+
+    def begin_provider_attempt(
+        self, execution: JobExecutionContext, *, stage: str, attempt_no: int,
+        max_cost_usd: float, daily_limit_usd: float, monthly_limit_usd: float,
+    ) -> ProviderAttempt:
+        """Creates or returns the one durable pre-network provider attempt.
+
+        SQLite's write lock covers the fence, real spend, every still-active
+        reservation and this insertion.  Therefore two workers/jobs cannot
+        both pass a shared daily/monthly budget check for the same funds.
+        """
+        self._validate_provider_attempt_identity(stage, attempt_no)
+        max_cost = _money(max_cost_usd, positive=True, label="Provider reservation")
+        daily_limit = _money(daily_limit_usd, positive=False, label="Daily provider limit")
+        monthly_limit = _money(monthly_limit_usd, positive=False, label="Monthly provider limit")
+        request_id = self._provider_request_id(execution.job_id, stage, attempt_no)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current = self._job_now(execution.now())
+            current_ts = _persisted_ts(current)
+            self._require_job_execution_fence(execution, current_ts)
+            payload_row = self.conn.execute(
+                "SELECT payload_json FROM jobs WHERE id=?", (execution.job_id,),
+            ).fetchone()
+            if payload_row is None:
+                raise StaleJobExecutionError(execution.job_id)
+            try:
+                payload = json.loads(payload_row["payload_json"])
+                if not isinstance(payload, dict):
+                    raise DurableExecutionIntentError(
+                        "persisted durable payload must be a JSON object."
+                    )
+                canonical_payload = canonicalize_durable_research_payload(payload)
+                intent_raw = canonical_payload["execution_intent"]
+                assert isinstance(intent_raw, dict)
+                DurableResearchExecutionIntent.from_payload(intent_raw)
+                intent_fingerprint = durable_execution_intent_fingerprint(payload)
+            except (TypeError, json.JSONDecodeError) as exc:
+                raise JobRunRelationError(
+                    "MALFORMED_DURABLE_V2_PAYLOAD",
+                    execution.job_id,
+                    "provider attempt requires a valid persisted durable payload.",
+                ) from exc
+            except DurableExecutionIntentError as exc:
+                raise JobRunRelationError(exc.code, execution.job_id, str(exc)) from exc
+            stage_attempts = self.conn.execute(
+                "SELECT * FROM provider_attempts WHERE job_id=? AND stage=? ORDER BY attempt_no",
+                (execution.job_id, stage),
+            ).fetchall()
+            existing = next(
+                (row for row in stage_attempts if int(row["attempt_no"]) == attempt_no),
+                None,
+            )
+            if existing is not None:
+                attempt = self._provider_attempt_from_row(existing)
+                if attempt.status is ProviderAttemptStatus.RESERVED:
+                    self.conn.commit()
+                    return attempt
+                if attempt.status is ProviderAttemptStatus.NEEDS_RECONCILIATION:
+                    raise ProviderAttemptReconciliationRequired(
+                        "Provider attempt is NEEDS_RECONCILIATION; WAVE 1 resolver is required."
+                    )
+                raise StaleJobExecutionError(
+                    execution.job_id,
+                    "provider attempt already crossed the request boundary and requires reconciliation.",
+                )
+            if attempt_no > 1 and stage_attempts:
+                raise ProviderAttemptReconciliationRequired(
+                    "A prior provider attempt exists; WAVE 0B.2 does not authorize a new attempt number."
+                )
+            day_prefix = current.strftime("%Y-%m-%d")
+            month_prefix = current.strftime("%Y-%m")
+            day_real_rows = self.conn.execute(
+                "SELECT estimated_cost_usd FROM model_usage "
+                "WHERE dry_run=0 AND created_at LIKE ?", (f"{day_prefix}%",),
+            ).fetchall()
+            month_real_rows = self.conn.execute(
+                "SELECT estimated_cost_usd FROM model_usage "
+                "WHERE dry_run=0 AND created_at LIKE ?", (f"{month_prefix}%",),
+            ).fetchall()
+            active_attempt_rows = self.conn.execute(
+                "SELECT reserved_amount_usd FROM provider_attempts "
+                "WHERE status IN ('RESERVED','REQUEST_STARTED','NEEDS_RECONCILIATION')",
+            ).fetchall()
+            active_job_rows = self.conn.execute(
+                "SELECT reserved_cost_usd FROM jobs "
+                "WHERE status IN ('QUEUED','LEASED','RUNNING','NEEDS_VERIFICATION') "
+                "AND budget_reserved_at IS NOT NULL",
+            ).fetchall()
+            day_real_amount = _sum_money_rows(
+                day_real_rows, "estimated_cost_usd", label="Persisted daily provider cost",
+            )
+            month_real_amount = _sum_money_rows(
+                month_real_rows, "estimated_cost_usd", label="Persisted monthly provider cost",
+            )
+            attempt_reserved_amount = _sum_money_rows(
+                active_attempt_rows,
+                "reserved_amount_usd",
+                label="Persisted provider reservation",
+            )
+            job_reserved_amount = _sum_money_rows(
+                active_job_rows, "reserved_cost_usd", label="Persisted job reservation",
+            )
+            total_reserved = _money_sum(
+                (attempt_reserved_amount, job_reserved_amount, max_cost),
+                label="Total provider reservation",
+            )
+            if month_real_amount + total_reserved > monthly_limit:
+                raise BudgetReservationError("Provider reservation would exceed the global monthly limit.")
+            if day_real_amount + total_reserved > daily_limit:
+                raise BudgetReservationError("Provider reservation would exceed the global daily limit.")
+            self.conn.execute(
+                "INSERT INTO provider_attempts (job_id,stage,attempt_no,request_id,status,"
+                "execution_intent_fingerprint,reserved_amount_usd,reserved_at) VALUES (?,?,?,?,?,?,?,?)",
+                (
+                    execution.job_id, stage, attempt_no, request_id,
+                    ProviderAttemptStatus.RESERVED.value, intent_fingerprint,
+                    float(max_cost), current_ts,
+                ),
+            )
+            row = self.conn.execute(
+                "SELECT * FROM provider_attempts WHERE request_id=?", (request_id,),
+            ).fetchone()
+            assert row is not None
+            self.conn.commit()
+            return self._provider_attempt_from_row(row)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def mark_provider_attempt_request_started(
+        self, execution: JobExecutionContext, request_id: str,
+    ) -> ProviderAttempt:
+        """Durably records the last point before the SDK can submit a request."""
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            self._require_job_execution_fence(execution, current_ts)
+            cursor = self.conn.execute(
+                "UPDATE provider_attempts SET status='REQUEST_STARTED',request_started_at=? "
+                "WHERE request_id=? AND job_id=? AND status='RESERVED'",
+                (current_ts, request_id, execution.job_id),
+            )
+            if cursor.rowcount != 1:
+                raise StaleJobExecutionError(
+                    execution.job_id, "provider attempt is not reserved for request start.",
+                )
+            # This protects recovery even if the process dies immediately after
+            # commit but before/inside the SDK call.
+            effect = self.conn.execute(
+                "UPDATE jobs SET external_effect_started_at=COALESCE(external_effect_started_at,?),"
+                "updated_at=? WHERE id=? AND run_id=? AND lease_owner=? AND "
+                "lease_expires_at>=? AND status IN ('LEASED','RUNNING')",
+                (
+                    current_ts, current_ts, execution.job_id, execution.run_id,
+                    execution.lease_owner, current_ts,
+                ),
+            )
+            if effect.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            row = self.conn.execute(
+                "SELECT * FROM provider_attempts WHERE request_id=?", (request_id,),
+            ).fetchone()
+            assert row is not None
+            self.conn.commit()
+            return self._provider_attempt_from_row(row)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def release_provider_attempt_before_request(
+        self, execution: JobExecutionContext, request_id: str, *, error_code: str,
+    ) -> None:
+        """Releases only a reservation which demonstrably did not reach the SDK."""
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            self._require_job_execution_fence(execution, current_ts)
+            cursor = self.conn.execute(
+                "UPDATE provider_attempts SET status='RELEASED',released_at=?,error_code=? "
+                "WHERE request_id=? AND job_id=? AND status='RESERVED'",
+                (current_ts, error_code, request_id, execution.job_id),
+            )
+            if cursor.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def mark_provider_attempt_needs_reconciliation(
+        self, execution: JobExecutionContext, request_id: str, *, error_code: str,
+    ) -> None:
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            self._require_job_execution_fence(execution, current_ts)
+            cursor = self.conn.execute(
+                "UPDATE provider_attempts SET status='NEEDS_RECONCILIATION',error_code=? "
+                "WHERE request_id=? AND job_id=? AND status='REQUEST_STARTED'",
+                (error_code, request_id, execution.job_id),
+            )
+            if cursor.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def settle_provider_attempt_without_usage(
+        self, execution: JobExecutionContext, request_id: str, *, error_code: str,
+    ) -> None:
+        """Settles a provider-confirmed no-usage error once, never retries it."""
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            self._require_job_execution_fence(execution, current_ts)
+            cursor = self.conn.execute(
+                "UPDATE provider_attempts SET status='SETTLED',actual_cost_usd=0.0,"
+                "settled_at=?,error_code=? WHERE request_id=? AND job_id=? "
+                "AND status='REQUEST_STARTED'",
+                (current_ts, error_code, request_id, execution.job_id),
+            )
+            if cursor.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
 
     def fail_job_research_execution(
         self, execution: JobExecutionContext, cost_usd: float | None, error: str,
@@ -1071,12 +1796,9 @@ class SqliteStorage:
             self.conn.execute("BEGIN IMMEDIATE")
             current_ts = self._job_execution_timestamp(execution)
             fence = self._require_job_execution_fence(execution, current_ts)
-            canonical = round(float(self.conn.execute(
-                "SELECT COALESCE(SUM(estimated_cost_usd),0.0) AS total FROM model_usage "
-                "WHERE run_id=? AND task IN (" + _RESEARCH_USAGE_PLACEHOLDERS + ")",
-                (execution.run_id, *_RESEARCH_USAGE_TASKS),
-            ).fetchone()["total"]), 6)
-            if cost_usd is not None and canonical != round(float(cost_usd), 6):
+            canonical = self._research_usage_total(execution.run_id)
+            if cost_usd is not None and canonical != _money(
+                    cost_usd, positive=False, label="Worker research failure cost"):
                 raise ResearchTopicIntegrityError(
                     "Worker research failure cost must equal canonical model usage."
                 )
@@ -1092,7 +1814,7 @@ class SqliteStorage:
                 "AND lease_owner=? AND lease_expires_at>=? "
                 "AND status IN ('LEASED','RUNNING'))",
                 (
-                    canonical, error, current_ts, execution.run_id, execution.job_id,
+                    float(canonical), error, current_ts, execution.run_id, execution.job_id,
                     execution.lease_owner, current_ts,
                 ),
             )
@@ -1103,7 +1825,7 @@ class SqliteStorage:
                 "WHERE id=? AND run_id=research_runs.id AND lease_owner=? "
                 "AND lease_expires_at>=? AND status IN ('LEASED','RUNNING'))",
                 (
-                    error, canonical, current_ts, execution.run_id, execution.job_id,
+                    error, float(canonical), current_ts, execution.run_id, execution.job_id,
                     execution.lease_owner, current_ts,
                 ),
             )
@@ -1155,12 +1877,9 @@ class SqliteStorage:
                 raise StaleJobExecutionError(
                     execution.job_id, "research lifecycle no longer matches finalization preconditions.",
                 )
-            canonical = round(float(self.conn.execute(
-                "SELECT COALESCE(SUM(estimated_cost_usd),0.0) AS total FROM model_usage "
-                "WHERE run_id=? AND task IN (" + _RESEARCH_USAGE_PLACEHOLDERS + ")",
-                (execution.run_id, *_RESEARCH_USAGE_TASKS),
-            ).fetchone()["total"]), 6)
-            if canonical != round(float(total_cost_usd), 6):
+            canonical = self._research_usage_total(execution.run_id)
+            if canonical != _money(
+                    total_cost_usd, positive=False, label="Worker research finalization cost"):
                 raise ResearchTopicIntegrityError(
                     "Worker research finalization cost must equal canonical model usage."
                 )
@@ -1186,7 +1905,7 @@ class SqliteStorage:
                 "AND lease_owner=? AND lease_expires_at>=? "
                 "AND status IN ('LEASED','RUNNING'))",
                 (
-                    card.id, canonical, current_ts, execution.run_id, execution.job_id,
+                    card.id, float(canonical), current_ts, execution.run_id, execution.job_id,
                     execution.lease_owner, current_ts,
                 ),
             )
@@ -1196,7 +1915,7 @@ class SqliteStorage:
                 "SELECT 1 FROM jobs WHERE id=? AND run_id=runs.id AND lease_owner=? "
                 "AND lease_expires_at>=? AND status IN ('LEASED','RUNNING'))",
                 (
-                    terminal_run_status.value, canonical, current_ts, execution.run_id,
+                    terminal_run_status.value, float(canonical), current_ts, execution.run_id,
                     expected_run_status, execution.job_id, execution.lease_owner, current_ts,
                 ),
             )
@@ -1610,9 +2329,9 @@ class SqliteStorage:
         monthly_limit_usd: float, now: datetime | None = None, clock: Clock | None = None,
     ) -> JobReservation:
         """Atomically reserves one conservative budget amount for an active job."""
-        values = (amount_usd, daily_limit_usd, monthly_limit_usd)
-        if any(not math.isfinite(value) or value < 0 for value in values):
-            raise BudgetReservationError("Reservation amount and limits must be finite and non-negative.")
+        amount = _money(amount_usd, positive=False, label="Job reservation")
+        daily_limit = _money(daily_limit_usd, positive=False, label="Daily job limit")
+        monthly_limit = _money(monthly_limit_usd, positive=False, label="Monthly job limit")
         placeholders = ", ".join("?" for _ in _ACTIVE_JOB_STATUSES)
         try:
             self.conn.execute("BEGIN IMMEDIATE")
@@ -1625,11 +2344,14 @@ class SqliteStorage:
                 raise self._job_lifecycle_error(
                     job_id, "BUDGET_RESERVED", _ACTIVE_JOB_STATUSES,
                     detail="Only an active non-terminal job may hold a reservation.",
-                )
+            )
             if job["budget_reserved_at"] is not None:
-                if float(job["reserved_cost_usd"]) == float(amount_usd):
+                persisted_amount = _money(
+                    job["reserved_cost_usd"], positive=False, label="Persisted job reservation",
+                )
+                if persisted_amount == amount:
                     result = JobReservation(
-                        job_id=job_id, amount_usd=float(job["reserved_cost_usd"]),
+                        job_id=job_id, amount_usd=float(persisted_amount),
                         reserved_at=job["budget_reserved_at"],
                     )
                     self.conn.commit()
@@ -1637,37 +2359,48 @@ class SqliteStorage:
                 raise BudgetReservationError(
                     f"Job {job_id} already has a different active budget reservation."
                 )
-            day_real = float(self.conn.execute(
-                "SELECT COALESCE(SUM(estimated_cost_usd), 0.0) AS total FROM model_usage "
-                "WHERE dry_run=0 AND created_at LIKE ?", (f"{day_prefix}%",),
-            ).fetchone()["total"])
-            month_real = float(self.conn.execute(
-                "SELECT COALESCE(SUM(estimated_cost_usd), 0.0) AS total FROM model_usage "
-                "WHERE dry_run=0 AND created_at LIKE ?", (f"{month_prefix}%",),
-            ).fetchone()["total"])
-            active_reserved = float(self.conn.execute(
-                "SELECT COALESCE(SUM(reserved_cost_usd), 0.0) AS total FROM jobs "
-                f"WHERE status IN ({placeholders}) AND budget_reserved_at IS NOT NULL",
-                _ACTIVE_JOB_STATUSES,
-            ).fetchone()["total"])
-            if any(not math.isfinite(value) or value < 0 for value in (
-                day_real, month_real, active_reserved,
-            )):
-                raise BudgetReservationError("Persisted budget state is invalid.")
-            if month_real + active_reserved + amount_usd > monthly_limit_usd:
+            day_real = _sum_money_rows(
+                self.conn.execute(
+                    "SELECT estimated_cost_usd FROM model_usage "
+                    "WHERE dry_run=0 AND created_at LIKE ?", (f"{day_prefix}%",),
+                ).fetchall(),
+                "estimated_cost_usd",
+                label="Persisted daily job cost",
+            )
+            month_real = _sum_money_rows(
+                self.conn.execute(
+                    "SELECT estimated_cost_usd FROM model_usage "
+                    "WHERE dry_run=0 AND created_at LIKE ?", (f"{month_prefix}%",),
+                ).fetchall(),
+                "estimated_cost_usd",
+                label="Persisted monthly job cost",
+            )
+            active_reserved = _sum_money_rows(
+                self.conn.execute(
+                    "SELECT reserved_cost_usd FROM jobs "
+                    f"WHERE status IN ({placeholders}) AND budget_reserved_at IS NOT NULL",
+                    _ACTIVE_JOB_STATUSES,
+                ).fetchall(),
+                "reserved_cost_usd",
+                label="Persisted active job reservation",
+            )
+            total_reserved = _money_sum(
+                (active_reserved, amount), label="Total job reservation",
+            )
+            if month_real + total_reserved > monthly_limit:
                 raise BudgetReservationError("Reservation would exceed the global monthly limit.")
-            if day_real + active_reserved + amount_usd > daily_limit_usd:
+            if day_real + total_reserved > daily_limit:
                 raise BudgetReservationError("Reservation would exceed the global daily limit.")
             cursor = self.conn.execute(
                 "UPDATE jobs SET reserved_cost_usd=?, budget_reserved_at=?, updated_at=? "
                 "WHERE id=? AND budget_reserved_at IS NULL AND status IN "
                 f"({placeholders})",
-                (amount_usd, current_ts, current_ts, job_id, *_ACTIVE_JOB_STATUSES),
+                (float(amount), current_ts, current_ts, job_id, *_ACTIVE_JOB_STATUSES),
             )
             if cursor.rowcount != 1:
                 raise BudgetReservationError("Concurrent reservation compare-and-swap failed.")
             self.conn.commit()
-            return JobReservation(job_id=job_id, amount_usd=amount_usd, reserved_at=current_ts)
+            return JobReservation(job_id=job_id, amount_usd=float(amount), reserved_at=current_ts)
         except Exception:
             if self.conn.in_transaction:
                 self.conn.rollback()
@@ -1715,11 +2448,9 @@ class SqliteStorage:
         daily_limit_usd: float, monthly_limit_usd: float,
     ) -> JobReservation:
         """Owner-aware reservation path; queue-level reservations remain separate."""
-        values = (amount_usd, daily_limit_usd, monthly_limit_usd)
-        if any(not math.isfinite(value) or value < 0 for value in values):
-            raise BudgetReservationError(
-                "Reservation amount and limits must be finite and non-negative."
-            )
+        amount = _money(amount_usd, positive=False, label="Job execution reservation")
+        daily_limit = _money(daily_limit_usd, positive=False, label="Daily job limit")
+        monthly_limit = _money(monthly_limit_usd, positive=False, label="Monthly job limit")
         placeholders = ", ".join("?" for _ in _ACTIVE_JOB_STATUSES)
         try:
             self.conn.execute("BEGIN IMMEDIATE")
@@ -1734,10 +2465,13 @@ class SqliteStorage:
             ).fetchone()
             assert job is not None
             if job["budget_reserved_at"] is not None:
-                if float(job["reserved_cost_usd"]) == float(amount_usd):
+                persisted_amount = _money(
+                    job["reserved_cost_usd"], positive=False, label="Persisted job reservation",
+                )
+                if persisted_amount == amount:
                     result = JobReservation(
                         job_id=execution.job_id,
-                        amount_usd=float(job["reserved_cost_usd"]),
+                        amount_usd=float(persisted_amount),
                         reserved_at=job["budget_reserved_at"],
                     )
                     self.conn.commit()
@@ -1745,33 +2479,44 @@ class SqliteStorage:
                 raise BudgetReservationError(
                     "Job execution already has a different active budget reservation."
                 )
-            day_real = float(self.conn.execute(
-                "SELECT COALESCE(SUM(estimated_cost_usd),0.0) AS total FROM model_usage "
-                "WHERE dry_run=0 AND created_at LIKE ?", (f"{day_prefix}%",),
-            ).fetchone()["total"])
-            month_real = float(self.conn.execute(
-                "SELECT COALESCE(SUM(estimated_cost_usd),0.0) AS total FROM model_usage "
-                "WHERE dry_run=0 AND created_at LIKE ?", (f"{month_prefix}%",),
-            ).fetchone()["total"])
-            active_reserved = float(self.conn.execute(
-                "SELECT COALESCE(SUM(reserved_cost_usd),0.0) AS total FROM jobs "
-                f"WHERE status IN ({placeholders}) AND budget_reserved_at IS NOT NULL",
-                _ACTIVE_JOB_STATUSES,
-            ).fetchone()["total"])
-            if any(not math.isfinite(value) or value < 0 for value in (
-                day_real, month_real, active_reserved,
-            )):
-                raise BudgetReservationError("Persisted budget state is invalid.")
-            if month_real + active_reserved + amount_usd > monthly_limit_usd:
+            day_real = _sum_money_rows(
+                self.conn.execute(
+                    "SELECT estimated_cost_usd FROM model_usage "
+                    "WHERE dry_run=0 AND created_at LIKE ?", (f"{day_prefix}%",),
+                ).fetchall(),
+                "estimated_cost_usd",
+                label="Persisted daily job cost",
+            )
+            month_real = _sum_money_rows(
+                self.conn.execute(
+                    "SELECT estimated_cost_usd FROM model_usage "
+                    "WHERE dry_run=0 AND created_at LIKE ?", (f"{month_prefix}%",),
+                ).fetchall(),
+                "estimated_cost_usd",
+                label="Persisted monthly job cost",
+            )
+            active_reserved = _sum_money_rows(
+                self.conn.execute(
+                    "SELECT reserved_cost_usd FROM jobs "
+                    f"WHERE status IN ({placeholders}) AND budget_reserved_at IS NOT NULL",
+                    _ACTIVE_JOB_STATUSES,
+                ).fetchall(),
+                "reserved_cost_usd",
+                label="Persisted active job reservation",
+            )
+            total_reserved = _money_sum(
+                (active_reserved, amount), label="Total job execution reservation",
+            )
+            if month_real + total_reserved > monthly_limit:
                 raise BudgetReservationError("Reservation would exceed the global monthly limit.")
-            if day_real + active_reserved + amount_usd > daily_limit_usd:
+            if day_real + total_reserved > daily_limit:
                 raise BudgetReservationError("Reservation would exceed the global daily limit.")
             cursor = self.conn.execute(
                 "UPDATE jobs SET reserved_cost_usd=?,budget_reserved_at=?,updated_at=? "
                 "WHERE id=? AND run_id=? AND lease_owner=? AND lease_expires_at>=? "
                 "AND status IN ('LEASED','RUNNING') AND budget_reserved_at IS NULL",
                 (
-                    amount_usd, current_ts, current_ts, execution.job_id,
+                    float(amount), current_ts, current_ts, execution.job_id,
                     execution.run_id, execution.lease_owner, current_ts,
                 ),
             )
@@ -1779,7 +2524,7 @@ class SqliteStorage:
                 raise StaleJobExecutionError(execution.job_id)
             self.conn.commit()
             return JobReservation(
-                job_id=execution.job_id, amount_usd=amount_usd, reserved_at=current,
+                job_id=execution.job_id, amount_usd=float(amount), reserved_at=current,
             )
         except BaseException as primary:
             if self.conn.in_transaction:
@@ -2216,13 +2961,9 @@ class SqliteStorage:
                     terminal_repeat=True,
                 )
 
-            canonical_row = self.conn.execute(
-                "SELECT COALESCE(SUM(estimated_cost_usd), 0.0) AS total FROM model_usage"
-                " WHERE run_id=? AND task IN (" + _RESEARCH_USAGE_PLACEHOLDERS + ")",
-                (research_run_id, *_RESEARCH_USAGE_TASKS),
-            ).fetchone()
-            canonical_cost = round(float(canonical_row["total"]), 6)
-            if canonical_cost != round(float(total_cost_usd), 6):
+            canonical_cost = self._research_usage_total(research_run_id)
+            if canonical_cost != _money(
+                    total_cost_usd, positive=False, label="Staged research finalization cost"):
                 raise ResearchTopicIntegrityError(
                     f"Koszt finalizacji {total_cost_usd} nie jest kanoniczną sumą usage "
                     f"{canonical_cost} dla {research_run_id}."
@@ -2240,9 +2981,15 @@ class SqliteStorage:
                 identical = (
                     persisted is not None
                     and self._same_card_payload(persisted, card)
-                    and float(row["research_cost"]) == canonical_cost
+                    and _money_equal(
+                        row["research_cost"], canonical_cost,
+                        label="Repeated staged research cost",
+                    )
                     and row["run_status"] == terminal_run_status.value
-                    and float(row["run_cost"]) == canonical_cost
+                    and _money_equal(
+                        row["run_cost"], canonical_cost,
+                        label="Repeated staged run cost",
+                    )
                     and row["run_error"] is None
                     and row["finished_at"] is not None
                     and row["stage_b_completed_at"] is not None
@@ -2342,7 +3089,7 @@ class SqliteStorage:
                 "UPDATE research_runs SET status=?, stage_b_completed_at=?, research_card_id=?,"
                 " total_cost_usd=?, updated_at=? WHERE id=? AND account_id=? AND topic_id=?"
                 " AND flow=? AND status=? AND research_card_id IS NULL",
-                (ResearchRunStatus.COMPLETE.value, _ts(), card.id, canonical_cost, _ts(),
+                (ResearchRunStatus.COMPLETE.value, _ts(), card.id, float(canonical_cost), _ts(),
                  research_run_id, row["research_account_id"], row["topic_id"],
                  ResearchFlow.STAGED.value, ResearchRunStatus.SYNTHESIS_PENDING.value),
             )
@@ -2353,7 +3100,7 @@ class SqliteStorage:
             cursor = self.conn.execute(
                 "UPDATE runs SET status=?, cost_usd=?, error=NULL, finished_at=? "
                 "WHERE id=? AND account_id=? AND workflow=? AND status=?",
-                (terminal_run_status.value, canonical_cost, _ts(), research_run_id,
+                (terminal_run_status.value, float(canonical_cost), _ts(), research_run_id,
                  row["research_account_id"], WorkflowType.RESEARCH.value, row["run_status"]),
             )
             if cursor.rowcount != 1:
@@ -2430,7 +3177,12 @@ class SqliteStorage:
 
     def create_research_run(self, research_run: ResearchRun) -> ResearchRun:
         """`research_run.id` musi być TYM SAMYM id co odpowiadający `Run` (rozszerzenie 1:1) —
-        wołający tworzy najpierw `create_run(...)`, potem to, z tym samym id."""
+       wołający tworzy najpierw `create_run(...)`, potem to, z tym samym id."""
+        canonical_cost = _money(
+            research_run.total_cost_usd,
+            positive=False,
+            label="Initial research run cost",
+        )
         self.conn.execute(
             "INSERT INTO research_runs (id, account_id, topic_id, flow, status,"
             " is_force_reresearch, total_cost_usd, created_at, updated_at)"
@@ -2438,11 +3190,12 @@ class SqliteStorage:
             (
                 research_run.id, research_run.account_id, research_run.topic_id,
                 research_run.flow.value, research_run.status.value,
-                int(research_run.is_force_reresearch), research_run.total_cost_usd,
+                int(research_run.is_force_reresearch), float(canonical_cost),
                 _ts(research_run.created_at), _ts(research_run.updated_at),
             ),
         )
         self.conn.commit()
+        research_run.total_cost_usd = float(canonical_cost)
         return research_run
 
     def get_research_run(self, research_run_id: str) -> ResearchRun | None:
@@ -2529,6 +3282,11 @@ class SqliteStorage:
         """
         if terminal_run_status not in (RunStatus.SUCCESS, RunStatus.DRY_RUN):
             raise ValueError("Finalizacja sukcesu wymaga statusu SUCCESS albo DRY_RUN.")
+        canonical_cost = _money(
+            total_cost_usd,
+            positive=False,
+            label="Legacy research finalization cost",
+        )
         self.conn.execute("BEGIN")
         try:
             row = self.conn.execute(
@@ -2574,9 +3332,15 @@ class SqliteStorage:
             if row["research_status"] == ResearchRunStatus.COMPLETE.value:
                 identical = (
                     row["stored_card_id"] == research_card_id
-                    and float(row["research_cost"]) == float(total_cost_usd)
+                    and _money_equal(
+                        row["research_cost"], canonical_cost,
+                        label="Repeated legacy research cost",
+                    )
                     and row["run_status"] == terminal_run_status.value
-                    and float(row["run_cost"]) == float(total_cost_usd)
+                    and _money_equal(
+                        row["run_cost"], canonical_cost,
+                        label="Repeated legacy run cost",
+                    )
                     and row["run_error"] is None
                     and row["finished_at"] is not None
                     and row["topic_status"] == TopicStatus.USED.value
@@ -2630,7 +3394,7 @@ class SqliteStorage:
                     "UPDATE research_runs SET status=?, stage_b_completed_at=?, research_card_id=?,"
                     " total_cost_usd=?, updated_at=? WHERE id=? AND account_id=? AND topic_id=?"
                     " AND status IN (?) AND research_card_id IS NULL",
-                    (ResearchRunStatus.COMPLETE.value, _ts(), research_card_id, total_cost_usd,
+                    (ResearchRunStatus.COMPLETE.value, _ts(), research_card_id, float(canonical_cost),
                      _ts(), research_run_id, row["research_account_id"], row["topic_id"],
                      row["research_status"]),
                 )
@@ -2639,7 +3403,7 @@ class SqliteStorage:
                     "UPDATE research_runs SET status=?, research_card_id=?, total_cost_usd=?,"
                     " updated_at=? WHERE id=? AND account_id=? AND topic_id=?"
                     " AND status IN (?) AND research_card_id IS NULL",
-                    (ResearchRunStatus.COMPLETE.value, research_card_id, total_cost_usd,
+                    (ResearchRunStatus.COMPLETE.value, research_card_id, float(canonical_cost),
                      _ts(), research_run_id, row["research_account_id"], row["topic_id"],
                      row["research_status"]),
                 )
@@ -2649,7 +3413,7 @@ class SqliteStorage:
             cursor = self.conn.execute(
                 "UPDATE runs SET status=?, cost_usd=?, error=?, finished_at=? "
                 "WHERE id=? AND account_id=? AND status IN (?)",
-                (terminal_run_status.value, total_cost_usd, None, _ts(), research_run_id,
+                (terminal_run_status.value, float(canonical_cost), None, _ts(), research_run_id,
                  row["research_account_id"], row["run_status"]),
             )
             if cursor.rowcount != 1:
@@ -2875,6 +3639,7 @@ class SqliteStorage:
                 cache_write_tokens=r["cache_write_tokens"],
                 web_search_requests=r["web_search_requests"],
                 estimated_cost_usd=r["estimated_cost_usd"], dry_run=bool(r["dry_run"]),
+                request_id=r["request_id"],
             )
             for r in rows
         ]
@@ -2885,12 +3650,10 @@ class SqliteStorage:
         Celowo nie filtruje dry_run: cache runu zachowuje koszt zapisany w
         model_usage, a budżet odróżnia realne użycie przez sum_real_cost_usd.
         """
+        total = self._research_usage_total(research_run_id)
         cursor = self.conn.execute(
-            "UPDATE runs SET cost_usd=COALESCE(("
-            " SELECT SUM(estimated_cost_usd) FROM model_usage"
-            f" WHERE run_id=? AND task IN ({_RESEARCH_USAGE_PLACEHOLDERS})"
-            "), 0.0) WHERE id=?",
-            (research_run_id, *_RESEARCH_USAGE_TASKS, research_run_id),
+            "UPDATE runs SET cost_usd=? WHERE id=?",
+            (float(total), research_run_id),
         )
         if cursor.rowcount != 1:
             raise ValueError(f"Nie znaleziono run #{research_run_id} do synchronizacji kosztu.")

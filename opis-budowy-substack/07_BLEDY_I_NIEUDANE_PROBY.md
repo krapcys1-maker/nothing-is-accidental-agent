@@ -1,5 +1,7 @@
 # 07 — BŁĘDY I NIEUDANE PRÓBY
 
+> **Stan checkpointu:** pozostały P2 dotyczy rzeczywistego inwentarza 72, nie deklarowanych 71 wpisów Git. WAVE 0B = `APPROVED WITH P2 — READY FOR CHECKPOINT`, nie `CLOSED`; Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
 ## Cel pliku
 Uczciwy rejestr błędów i nieudanych prób: błędy kodu, API, złe decyzje agenta, słabe teksty/komentarze, problemy z Playwrightem/Substackiem, przekroczenia limitów, koszty, rzeczy do przebudowy. **Bez ukrywania porażek** — to jeden z najcenniejszych materiałów do artykułu.
 
@@ -282,3 +284,23 @@ Najłatwiejsza wersja kolejki brzmiała: „gdy lease wygaśnie, oddaj job do QU
 Warstwa storage rozdziela te dwa przypadki zanim powstanie worker. `external_effect_started_at` jest trwałym znacznikiem pierwszego skutku: `BROWSER` albo job po tym markerze po expiry idzie do `NEEDS_VERIFICATION`; nie istnieje automatyczna ścieżka z powrotem do wykonania. LOCAL i research bez markera mogą wrócić do QUEUED, lecz cap attempts kończy się FAILED. Osobny błąd, który nie zdążył powstać: dwa joby rezerwujące ten sam ostatni budżet. Jedna transakcja widzi teraz oba realne usage i aktywne rezerwacje.
 
 To nie jest test publikacji ani API. Bariery na dwóch połączeniach SQLite dowodzą, że wygrywa dokładnie jedno przejście; reopen nie zostawia pół-lease ani podwójnej rezerwacji. **463 testy**, 0 USD, worker wciąż nie istnieje.
+
+## Ryzyko, którego nie wolno „naprawić retry” (WAVE 0B)
+
+Timeout nie mówi, czy dostawca nie dostał pytania, czy zdążył naliczyć koszt, a odpowiedź zginęła po drodze. Nowy ledger nie udaje odpowiedzi: po przekroczeniu granicy requestu zachowuje ID i rezerwację, zmienia stan na `NEEDS_RECONCILIATION` i blokuje automatyczne ponowienie. To jest świadome ograniczenie, nie niedokończona obsługa błędu. Testy zasymulowały restart przed wysłaniem, wyścig limitu dwóch jobów i unknown po wysłaniu — bez sieci i bez bazy projektu.
+
+## 2026-07-14 — Trzy P1, których test happy path nie pokazał
+
+Review znalazło trzy ryzyka: realne wywołanie bez durable joba, klucz operation key działający zbyt lokalnie i ledger pozwalający na niepoprawne stany. To przypomnienie, że w systemie kosztownych efektów zewnętrznych najważniejsze są negatywne przypadki: co stanie się przed requestem, w wyścigu i po odziedziczonej historii.
+
+## 2026-07-15 — Błąd mniejszy od mikrodolara, który nie mógł pozostać „tylko formatowaniem”
+
+Po zamknięciu CRITICAL W0B-REV-06 znaleźliśmy W0B-REV-10: dwie aktywne ścieżki kosztu używały Pythonowego banker's rounding, a intent i storage `ROUND_HALF_UP`. Nie doszło do wydatku ani uszkodzenia bazy; problem był w tym, że system nie miał jednej udowadnialnej definicji pół-kwantu. W0B-REV-09 ujawnił równolegle zaległą kronikę, która opisywała dawną liczbę testów jako bieżącą.
+
+Naprawa jest mała i celowa: `Decimal(str(value))`, suma składników, a następnie `0.000001/ROUND_HALF_UP`. Testy obejmują zarówno wartości 0.0000005 i 0.1234565, jak i cache read/write/web, storage oraz actual równe, większe i mniejsze o jeden mikro-USD. Nadwyżka nadal daje jeden usage i `NEEDS_RECONCILIATION`, nie success. Wynik 887 testów offline jest historyczny; WAVE 0B pozostaje kandydatem, Etap 1 zablokowany, live API zabronione.
+
+## 2026-07-15 — Review escape: reguła była poprawna, jej granica zbyt krótka
+
+MAJOR W0B-RR-01 nie był kolejnym błędem zaokrąglenia w helperze. Był błędem granicy: staged estimate kwantyzował komponent przed mnożeniem, a kilka decyzji finansowych jeszcze ufało float. To istotne, bo trzy pół-mikro-USD nie są trzema osobnymi końcowymi kosztami. Zostały surowe `Decimal`, dopóki system nie zsumował ich do jednej kwoty.
+
+Regresje wykazały `2×` i `3×0.0000005` oraz `0.1+0.2` wobec `0.3` w policy, ledgerze i CLI. Usunięto też dwa martwe konstruktory klienta z prywatnego resume, bez odblokowania realnego resume. Pełny wynik to 894 testy offline; WAVE 0B jest kandydatem do re-review, Etap 1 nadal BLOCKED, live API zabronione.

@@ -16,15 +16,17 @@ Obowiązujące dodatkowo (logi, nie plany): `docs/DECISIONS.md` (rejestr ADR), `
 
 ## Stan projektu (skrót — pełny obraz w CURRENT_PROJECT_STATE.md)
 
-- Zbudowane i przetestowane: konfiguracja, SQLite+migracje, Policy Engine (budżety, kill-switch), księgowanie kosztów, pipeline tematów z deduplikacją, etapowy research A1/A2/B z wznawialnością po restarcie, deterministyczna bramka jakości, injection guard, diagnostyka odpowiedzi. **139 testów, wszystkie offline.**
-- Niezbudowane: scheduler/kolejka, artykuły/Notes, approval/autonomia, publikacja (Playwright), interakcje, analityka, panel.
+- Zbudowane i przetestowane offline: konfiguracja, SQLite z **13 migracjami** (ostatnia `0013`), Policy Engine, kolejka/worker, ledger provider attempt oraz durable single-research `durable_provider_v2`. Kontrakt requestu utrwala kanoniczny snapshot wejść promptu, parametrów providera i stage; `max_tokens` z intentu jest tą samą wartością dla requestu, estymaty, polityki i rezerwacji. Każda kwota USD przechodzi przez `Decimal(str(value))`, obliczenia `Decimal` i jedno końcowe `ROUND_HALF_UP` do sześciu miejsc; staged aggregation, policy, cache, reservation i CLI nie podejmują decyzji na float. Settlement porównuje tę samą postać, a przekroczenie rezerwacji zapisuje usage, przechodzi do `NEEDS_RECONCILIATION` i blokuje sukces oraz attempt #2. **894 testy, wszystkie offline.**
+- WAVE 0B ma status **`APPROVED WITH P2 — READY FOR CHECKPOINT`** po niezależnym końcowym review; nie jest jeszcze `CLOSED`, ponieważ commit checkpointu nie został wykonany. Etap 1 pozostaje `BLOCKED`; `durable_provider_v1` jest historyczny i fail-closed; aktywny jest jeden durable paid-execution flow `durable_provider_v2` z `durable_research_intent_v2`. Live API jest **ZABRONIONE**.
+- Niezbudowane: durable realne A1/A2/B, realne resume i operator reconciliation, artykuły/Notes, approval/autonomia, publikacja (Playwright), interakcje, analityka i panel.
 - Zero publikacji na Substacku; realny koszt dotąd: ~0,50 USD z limitu 40 USD/mies.
 
 ## Uruchomienie
 
 ```bash
 pip install -e .[dev]           # + .[llm] tylko do realnych wywołań API
-python -m pytest                # 139 testów, bez sieci
+python -m pytest                # 894 testy, bez sieci
+python scripts/run_test_partitions.py --parts 4 --verify  # pełne SHA-256 node ID
 python -m app.main run-topics --count 6      # dry_run (zero kosztu)
 python -m app.main run-research              # dry_run (zero kosztu)
 # realny research: WYŁĄCZNIE scripts/run_capped_research.py (pre-flight, capy,

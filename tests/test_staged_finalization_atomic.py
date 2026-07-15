@@ -32,6 +32,7 @@ from app.models import (
 )
 from app.ports.storage import ResearchTopicIntegrityError
 from app.storage.repositories import SqliteStorage
+from tests.conftest import seed_historical_real_usage
 
 
 def _prepared_staged_run(
@@ -67,7 +68,7 @@ def _prepared_staged_run(
         )
     storage.mark_sources_complete(run_id)
     storage.mark_synthesis_pending(run_id)
-    storage.add_model_usage(ModelUsage(
+    seed_historical_real_usage(storage, ModelUsage(
         run_id=run_id, provider="fake", model="fake", task="research_synthesize_cards",
         input_tokens=10, output_tokens=10, estimated_cost_usd=0.123,
     ))

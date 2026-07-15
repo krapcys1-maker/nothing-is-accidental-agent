@@ -1,5 +1,7 @@
 # 08 — INTERWENCJE CZŁOWIEKA
 
+> **Stan checkpointu:** właściciel przekazał wynik `APPROVE WITH MINOR/P2` i zlecił wyłącznie staging oraz walidację. WAVE 0B = `APPROVED WITH P2 — READY FOR CHECKPOINT`; bez commita, pushu, PR lub merge.
+
 ## Cel pliku
 Rejestr każdej sytuacji, w której **człowiek** wkroczył: odrzucił temat, poprawił artykuł/Note/komentarz, zatrzymał publikację, zmienił strategię, poprawił kod, zmienił poziom autonomii albo użył kill switcha. Dla każdej: co agent chciał zrobić, dlaczego człowiek zareagował, co zmieniono, jaki efekt, ile czasu. To bezpośredni pomiar odpowiedzi na pytanie eksperymentu: **ile nadzoru agent naprawdę potrzebuje.**
 
@@ -128,3 +130,25 @@ Na obecnym etapie (przed generacją treści i publikacją) interwencje człowiek
 - Dozwolone: typowane mapowanie błędów Anthropic, zamknięta polityka retry, testy offline i dokumentacja.
 - Niedozwolone: API, research/resume, scheduler, jobs, workery, rezerwacje budżetowe, commit i push przed niezależnym review.
 - Efekt: kontrakt gotowy w working tree, 382 testy, koszt 0 USD; infrastruktura wykonawcza Etapu 1 nadal nie powstała.
+
+## [2026-07-14] Właściciel zlecił WAVE 0B
+
+- Zakres: trwałe request_id, operation-key, job-only fresh real research, atomowa rezerwacja przed providerem i fail-closed reconciliation.
+- Zakazy: API, sieć, browser, publikacja, koszt, modyfikacja `data/agent.db`, WAVE 1, commit, push i merge.
+- Stan przekazania: `WAVE 0B CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; Etap 1 nie jest zamknięty.
+
+## 2026-07-14 — Właściciel zawęża naprawę WAVE 0B.1
+
+Właściciel zlecił usunięcie dokładnie trzech P1 z niezależnego review oraz tylko bezpośrednio związanych testów P2. Zakres wykluczał API, sieć, browser, publikację, płatne akcje, zapis produkcyjnej bazy i rozpoczęcie WAVE 1A. Rezultat pozostaje kandydatem do niezależnego ponownego review, nie decyzją o zamknięciu etapu.
+
+## 2026-07-15 — Właściciel zlecił jedną końcową falę W0B-REV-09/10
+
+- Zakres: ujednolicić rounding kosztów, dopisać regresje graniczne i uzupełnić kronikę; P2 usunąć wyłącznie po dowodzie nieosiągalności lub braku użycia.
+- Zakazy: API, sieć, browser, realny provider, koszt, zapis lub migracja `data/agent.db`, stage, commit, push, PR i merge.
+- Granica decyzji: nie wolno zamknąć WAVE 0B ani Etapu 1. Wynik ma być przekazany do niezależnego re-review.
+
+## 2026-07-15 — Właściciel zlecił domknięcie W0B-RR-01 / W0B-CLEAN-01
+
+- Zakres: usunąć tylko potwierdzoną lukę w agregacji round-half-up i decyzjach finansowych oraz dwa martwe konstruktory klienta w prywatnym resume; dodać regresje graniczne i zaktualizować dokumentację po testach.
+- Zakazy: API, sieć, browser, realny SDK/provider, koszt, zmiana `data/agent.db`, zmiana lifecycle, request identity, `max_tokens`, schematu lub migracji, stage, commit, push, PR i merge.
+- Granica decyzji: po walidacji working tree ma wrócić do krótkiego niezależnego re-review. WAVE 0B i Etap 1 nie są zamykane.

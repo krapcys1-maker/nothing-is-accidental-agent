@@ -19,8 +19,19 @@ runach. Domyślny margines bezpieczeństwa >=50% jest wymagany właśnie dlatego
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 
 from app.core.config import Settings
+from app.core.money import decimal_from, usd_float
+
+
+_PER_MILLION = decimal_from("1000000")
+_PER_THOUSAND = decimal_from("1000")
+_CALIBRATION_REAL_TOKEN_COST_USD = decimal_from("0.21")
+_CALIBRATION_MAX_OUTPUT_TOKENS = decimal_from("3000")
+_CALIBRATION_ACTUAL_SEARCHES = decimal_from("4")
+_CONSERVATIVE_PER_SEARCH_TOKEN_COST_USD = decimal_from("0.04875")
+_EXPECTED_PER_SEARCH_TOKEN_COST_USD = decimal_from("0.02095575")
 
 
 def estimate_with_retries(base_estimate: float, max_retries: int) -> float:
@@ -29,32 +40,35 @@ def estimate_with_retries(base_estimate: float, max_retries: int) -> float:
         raise ValueError("base_estimate musi być >= 0.")
     if max_retries < 0:
         raise ValueError("max_retries musi być >= 0.")
-    return round(base_estimate * (1 + max_retries), 6)
+    return usd_float(
+        decimal_from(base_estimate, label="base_estimate") * (1 + max_retries),
+        label="worst-case estimate",
+    )
 
 # --- Kalibracja z jedynej znanej realnej obserwacji (2026-07-11, run 1b649314) ---
 # Konfiguracja tamtego runu: max_uses=6 (limit), ~4 realnie wykonane wyszukiwania
 # (wywnioskowane z 0.04 USD / 0.01 USD za wyszukiwanie), max_tokens=3000 (padło na
 # limicie -> ucięty JSON, więc output prawdopodobnie ~= max_tokens).
-_CALIBRATION_REAL_TOKEN_COST_USD = 0.21   # z konsoli Anthropic (token-related, input+output)
-_CALIBRATION_ACTUAL_SEARCHES = 4
-_CALIBRATION_MAX_OUTPUT_TOKENS = 3000
-
 MIN_SAFETY_MARGIN = 0.50  # wymagane od 2026-07-11 (patrz ERRORS_AND_FAILURES.md)
 
 
-def _reconstructed_input_cost_per_search_usd(settings: Settings) -> float:
+def _pricing(settings: Settings, key: str) -> object:
+    return decimal_from(settings.pricing.get(key, 0.0), label=f"pricing.{key}")
+
+
+def _reconstructed_input_cost_per_search_usd(settings: Settings):
     """Rekonstrukcja, NIE pomiar wprost — konsola Anthropic dała tylko sumy
     kategorii (tokeny / web search), nie rozbicie input/output per wywołanie.
     Zakładamy output ~= max_tokens tamtego runu (uzasadnione uciętym JSON-em),
     resztę token-cost przypisujemy do inputu napędzanego wynikami wyszukiwania,
     rozłożonego równo na faktycznie wykonane wyszukiwania.
     """
-    price_output_per_mtok = settings.pricing.get("output_per_mtok", 5.0)
+    price_output_per_mtok = _pricing(settings, "output_per_mtok")
     reconstructed_output_cost = (
-        _CALIBRATION_MAX_OUTPUT_TOKENS / 1_000_000 * price_output_per_mtok
+        _CALIBRATION_MAX_OUTPUT_TOKENS / _PER_MILLION * price_output_per_mtok
     )
     reconstructed_input_cost = max(
-        0.0, _CALIBRATION_REAL_TOKEN_COST_USD - reconstructed_output_cost
+        decimal_from("0"), _CALIBRATION_REAL_TOKEN_COST_USD - reconstructed_output_cost
     )
     return reconstructed_input_cost / _CALIBRATION_ACTUAL_SEARCHES
 
@@ -89,24 +103,23 @@ def estimate_worst_case_search_call_usd(
             f"({MIN_SAFETY_MARGIN}) — patrz docs/ERRORS_AND_FAILURES.md."
         )
 
-    p = settings.pricing
-    search_fee = max_web_searches / 1_000 * p.get("web_search_per_1k", 0.0)
+    search_fee = decimal_from(max_web_searches) / _PER_THOUSAND * _pricing(settings, "web_search_per_1k")
 
     input_cost_per_search = _reconstructed_input_cost_per_search_usd(settings)
-    search_driven_token_cost = max_web_searches * input_cost_per_search
+    search_driven_token_cost = decimal_from(max_web_searches) * input_cost_per_search
 
-    output_cost = max_output_tokens / 1_000_000 * p.get("output_per_mtok", 0.0)
+    output_cost = decimal_from(max_output_tokens) / _PER_MILLION * _pricing(settings, "output_per_mtok")
 
     subtotal = search_fee + search_driven_token_cost + output_cost
-    total = subtotal * (1 + safety_margin)
+    total = subtotal * (decimal_from("1") + decimal_from(safety_margin, label="safety_margin"))
 
     return WorstCaseEstimate(
-        search_fee_usd=round(search_fee, 6),
-        search_driven_token_cost_usd=round(search_driven_token_cost, 6),
-        output_cost_usd=round(output_cost, 6),
-        subtotal_usd=round(subtotal, 6),
+        search_fee_usd=usd_float(search_fee),
+        search_driven_token_cost_usd=usd_float(search_driven_token_cost),
+        output_cost_usd=usd_float(output_cost),
+        subtotal_usd=usd_float(subtotal),
         safety_margin=safety_margin,
-        total_usd=round(total, 6),
+        total_usd=usd_float(total),
     )
 
 
@@ -138,8 +151,8 @@ def estimate_worst_case_search_call_usd(
 #     przewidywanego kosztu" w ERRORS_AND_FAILURES.md).
 # ============================================================================
 
-CONSERVATIVE_PER_SEARCH_TOKEN_COST_USD = 0.04875     # incydent 1 (rekonstrukcja, 2026-07-11)
-EXPECTED_PER_SEARCH_TOKEN_COST_USD = 0.083823 / 4     # incydent 2 (pomiar wprost, 2026-07-12)
+CONSERVATIVE_PER_SEARCH_TOKEN_COST_USD = float(_CONSERVATIVE_PER_SEARCH_TOKEN_COST_USD)
+EXPECTED_PER_SEARCH_TOKEN_COST_USD = float(_EXPECTED_PER_SEARCH_TOKEN_COST_USD)
 
 HISTORICAL_REAL_RUNS = [
     {"date": "2026-07-11", "run_id": "1b649314-27cf-4b29-857e-287175664a3f",
@@ -162,6 +175,56 @@ class CostEstimate:
     safety_margin: float
 
 
+@dataclass(frozen=True)
+class _RawCostEstimate:
+    """Decimal-only staged estimate before a public USD boundary is crossed."""
+
+    search_fee_usd: Decimal
+    output_cost_usd: Decimal
+    conservative_usd: Decimal
+    expected_usd: Decimal
+
+
+def _public_cost_estimate(
+    raw: _RawCostEstimate,
+    *,
+    label: str,
+    safety_margin: float,
+) -> CostEstimate:
+    """Expose a staged estimate only after its complete Decimal calculation."""
+    return CostEstimate(
+        label=label,
+        search_fee_usd=usd_float(raw.search_fee_usd, label=f"{label} search fee"),
+        output_cost_usd=usd_float(raw.output_cost_usd, label=f"{label} output cost"),
+        conservative_usd=usd_float(raw.conservative_usd, label=f"{label} conservative estimate"),
+        expected_usd=usd_float(raw.expected_usd, label=f"{label} expected estimate"),
+        safety_margin=safety_margin,
+    )
+
+
+def _scale_raw_estimate(raw: _RawCostEstimate, multiplier: int) -> _RawCostEstimate:
+    """Scale a complete Decimal estimate without first rounding one source."""
+    if multiplier < 0:
+        raise ValueError("source count must be >= 0.")
+    factor = decimal_from(multiplier, label="source count")
+    return _RawCostEstimate(
+        search_fee_usd=raw.search_fee_usd * factor,
+        output_cost_usd=raw.output_cost_usd * factor,
+        conservative_usd=raw.conservative_usd * factor,
+        expected_usd=raw.expected_usd * factor,
+    )
+
+
+def _combine_raw_estimates(*raw_estimates: _RawCostEstimate) -> _RawCostEstimate:
+    """Aggregate staged Decimal components before any USD quantization."""
+    return _RawCostEstimate(
+        search_fee_usd=sum((raw.search_fee_usd for raw in raw_estimates), decimal_from("0")),
+        output_cost_usd=sum((raw.output_cost_usd for raw in raw_estimates), decimal_from("0")),
+        conservative_usd=sum((raw.conservative_usd for raw in raw_estimates), decimal_from("0")),
+        expected_usd=sum((raw.expected_usd for raw in raw_estimates), decimal_from("0")),
+    )
+
+
 def estimate_discovery_cost_usd(
     settings: Settings, max_searches: int, max_output_tokens: int,
     safety_margin: float = MIN_SAFETY_MARGIN,
@@ -169,8 +232,10 @@ def estimate_discovery_cost_usd(
     """Etap A1 (discover_sources): TYLKO web search + lista URL, zero analizy —
     najlżejszy schemat, więc `max_output_tokens` powinno być małe (patrz
     docs/DECISIONS.md ADR-020 dla uzasadnienia konkretnej domyślnej wartości)."""
-    return _estimate_search_driven(settings, max_searches, max_output_tokens,
-                                   safety_margin, label="A1 discovery")
+    raw = _estimate_search_driven_raw(
+        settings, max_searches, max_output_tokens, safety_margin,
+    )
+    return _public_cost_estimate(raw, label="A1 discovery", safety_margin=safety_margin)
 
 
 def estimate_extraction_cost_per_source_usd(
@@ -180,12 +245,20 @@ def estimate_extraction_cost_per_source_usd(
     """Etap A2 (extract_source): JEDNO źródło na wywołanie. Pomnóż `.conservative_usd`/
     `.expected_usd` przez liczbę źródeł, które faktycznie planujesz ekstrahować, żeby
     dostać projekcję całego etapu A2 (patrz `estimate_staged_research_cost_usd`)."""
-    return _estimate_search_driven(settings, max_web_searches_per_source, max_output_tokens,
-                                   safety_margin, label="A2 extraction (per source)")
+    raw = _estimate_search_driven_raw(
+        settings, max_web_searches_per_source, max_output_tokens, safety_margin,
+    )
+    return _public_cost_estimate(
+        raw, label="A2 extraction (per source)", safety_margin=safety_margin,
+    )
 
 
-def _estimate_search_driven(settings: Settings, searches: int, max_output_tokens: int,
-                            safety_margin: float, label: str) -> CostEstimate:
+def _estimate_search_driven_raw(
+    settings: Settings,
+    searches: int,
+    max_output_tokens: int,
+    safety_margin: float,
+) -> _RawCostEstimate:
     if searches < 0 or max_output_tokens < 0:
         raise ValueError("searches i max_output_tokens muszą być >= 0.")
     if safety_margin < MIN_SAFETY_MARGIN:
@@ -193,19 +266,40 @@ def _estimate_search_driven(settings: Settings, searches: int, max_output_tokens
             f"safety_margin ({safety_margin}) poniżej wymaganego minimum "
             f"({MIN_SAFETY_MARGIN}) — patrz docs/ERRORS_AND_FAILURES.md.")
 
-    p = settings.pricing
-    search_fee = searches / 1_000 * p.get("web_search_per_1k", 0.0)
-    output_cost = max_output_tokens / 1_000_000 * p.get("output_per_mtok", 0.0)
+    search_fee = decimal_from(searches) / _PER_THOUSAND * _pricing(settings, "web_search_per_1k")
+    output_cost = decimal_from(max_output_tokens) / _PER_MILLION * _pricing(settings, "output_per_mtok")
 
-    conservative_subtotal = search_fee + searches * CONSERVATIVE_PER_SEARCH_TOKEN_COST_USD + output_cost
-    expected_subtotal = search_fee + searches * EXPECTED_PER_SEARCH_TOKEN_COST_USD + output_cost
+    conservative_subtotal = (
+        search_fee + decimal_from(searches) * _CONSERVATIVE_PER_SEARCH_TOKEN_COST_USD + output_cost
+    )
+    expected_subtotal = search_fee + decimal_from(searches) * _EXPECTED_PER_SEARCH_TOKEN_COST_USD + output_cost
 
-    return CostEstimate(
-        label=label,
-        search_fee_usd=round(search_fee, 6),
-        output_cost_usd=round(output_cost, 6),
-        conservative_usd=round(conservative_subtotal * (1 + safety_margin), 6),
-        expected_usd=round(expected_subtotal, 6),
+    return _RawCostEstimate(
+        search_fee_usd=search_fee,
+        output_cost_usd=output_cost,
+        conservative_usd=(
+            conservative_subtotal
+            * (decimal_from("1") + decimal_from(safety_margin, label="safety_margin"))
+        ),
+        expected_usd=expected_subtotal,
+    )
+
+
+def estimate_extraction_cost_for_sources_usd(
+    settings: Settings,
+    source_count: int,
+    max_web_searches_per_source: int,
+    max_output_tokens: int,
+    safety_margin: float = MIN_SAFETY_MARGIN,
+) -> CostEstimate:
+    """Estimate A2 for N sources from raw Decimal components, rounded once at output."""
+    raw_per_source = _estimate_search_driven_raw(
+        settings, max_web_searches_per_source, max_output_tokens, safety_margin,
+    )
+    raw_total = _scale_raw_estimate(raw_per_source, source_count)
+    return _public_cost_estimate(
+        raw_total,
+        label=f"A2 extraction (x{source_count} sources)",
         safety_margin=safety_margin,
     )
 
@@ -224,15 +318,37 @@ def estimate_synthesis_cost_usd(
             f"safety_margin ({safety_margin}) poniżej wymaganego minimum "
             f"({MIN_SAFETY_MARGIN}) — patrz docs/ERRORS_AND_FAILURES.md.")
 
-    p = settings.pricing
-    input_cost = forwarded_context_tokens / 1_000_000 * p.get("input_per_mtok", 0.0)
-    output_cost = max_output_tokens / 1_000_000 * p.get("output_per_mtok", 0.0)
-    subtotal = input_cost + output_cost
+    raw = _estimate_synthesis_raw(
+        settings, max_output_tokens, forwarded_context_tokens, safety_margin,
+    )
+    return _public_cost_estimate(raw, label="B synthesis", safety_margin=safety_margin)
 
-    return CostEstimate(
-        label="B synthesis", search_fee_usd=0.0, output_cost_usd=round(output_cost, 6),
-        conservative_usd=round(subtotal * (1 + safety_margin), 6),
-        expected_usd=round(subtotal, 6), safety_margin=safety_margin,
+
+def _estimate_synthesis_raw(
+    settings: Settings,
+    max_output_tokens: int,
+    forwarded_context_tokens: int,
+    safety_margin: float,
+) -> _RawCostEstimate:
+    input_cost = (
+        decimal_from(forwarded_context_tokens)
+        / _PER_MILLION
+        * _pricing(settings, "input_per_mtok")
+    )
+    output_cost = (
+        decimal_from(max_output_tokens)
+        / _PER_MILLION
+        * _pricing(settings, "output_per_mtok")
+    )
+    subtotal = input_cost + output_cost
+    return _RawCostEstimate(
+        search_fee_usd=decimal_from("0"),
+        output_cost_usd=output_cost,
+        conservative_usd=(
+            subtotal
+            * (decimal_from("1") + decimal_from(safety_margin, label="safety_margin"))
+        ),
+        expected_usd=subtotal,
     )
 
 
@@ -246,31 +362,34 @@ def estimate_staged_research_cost_usd(
     to ile źródeł PLANUJEMY wyekstrahować (ile faktycznie zapłacimy za A2), nie ile A1
     może znaleźć — to jest właśnie dźwignia kosztu, którą kontroluje `--max-sources`
     w scripts/run_capped_research.py."""
-    discovery = estimate_discovery_cost_usd(
-        settings, discovery_max_searches, discovery_max_tokens, safety_margin)
-    per_source = estimate_extraction_cost_per_source_usd(
-        settings, max_web_searches_per_source, extraction_max_tokens, safety_margin)
-    synthesis = estimate_synthesis_cost_usd(
-        settings, synthesize_max_tokens, forwarded_context_tokens, safety_margin)
+    discovery_raw = _estimate_search_driven_raw(
+        settings, discovery_max_searches, discovery_max_tokens, safety_margin,
+    )
+    per_source_raw = _estimate_search_driven_raw(
+        settings, max_web_searches_per_source, extraction_max_tokens, safety_margin,
+    )
+    extraction_raw = _scale_raw_estimate(per_source_raw, expected_source_count)
+    synthesis_raw = _estimate_synthesis_raw(
+        settings, synthesize_max_tokens, forwarded_context_tokens, safety_margin,
+    )
+    total_raw = _combine_raw_estimates(discovery_raw, extraction_raw, synthesis_raw)
 
-    extraction_total = CostEstimate(
-        label=f"A2 extraction (x{expected_source_count} źródeł)",
-        search_fee_usd=round(per_source.search_fee_usd * expected_source_count, 6),
-        output_cost_usd=round(per_source.output_cost_usd * expected_source_count, 6),
-        conservative_usd=round(per_source.conservative_usd * expected_source_count, 6),
-        expected_usd=round(per_source.expected_usd * expected_source_count, 6),
+    discovery = _public_cost_estimate(
+        discovery_raw, label="A1 discovery", safety_margin=safety_margin,
+    )
+    per_source = _public_cost_estimate(
+        per_source_raw, label="A2 extraction (per source)", safety_margin=safety_margin,
+    )
+    extraction_total = _public_cost_estimate(
+        extraction_raw,
+        label=f"A2 extraction (x{expected_source_count} sources)",
         safety_margin=safety_margin,
     )
-    total = CostEstimate(
-        label="TOTAL (A1 + A2 + B)",
-        search_fee_usd=round(discovery.search_fee_usd + extraction_total.search_fee_usd, 6),
-        output_cost_usd=round(
-            discovery.output_cost_usd + extraction_total.output_cost_usd + synthesis.output_cost_usd, 6),
-        conservative_usd=round(
-            discovery.conservative_usd + extraction_total.conservative_usd + synthesis.conservative_usd, 6),
-        expected_usd=round(
-            discovery.expected_usd + extraction_total.expected_usd + synthesis.expected_usd, 6),
-        safety_margin=safety_margin,
+    synthesis = _public_cost_estimate(
+        synthesis_raw, label="B synthesis", safety_margin=safety_margin,
+    )
+    total = _public_cost_estimate(
+        total_raw, label="TOTAL (A1 + A2 + B)", safety_margin=safety_margin,
     )
     return {
         "discovery": discovery, "extraction_per_source": per_source,
@@ -297,17 +416,16 @@ def estimate_no_search_call_usd(
             f"({MIN_SAFETY_MARGIN}) — patrz docs/ERRORS_AND_FAILURES.md."
         )
 
-    p = settings.pricing
-    input_cost = forwarded_context_tokens / 1_000_000 * p.get("input_per_mtok", 0.0)
-    output_cost = max_output_tokens / 1_000_000 * p.get("output_per_mtok", 0.0)
+    input_cost = decimal_from(forwarded_context_tokens) / _PER_MILLION * _pricing(settings, "input_per_mtok")
+    output_cost = decimal_from(max_output_tokens) / _PER_MILLION * _pricing(settings, "output_per_mtok")
     subtotal = input_cost + output_cost
-    total = subtotal * (1 + safety_margin)
+    total = subtotal * (decimal_from("1") + decimal_from(safety_margin, label="safety_margin"))
 
     return WorstCaseEstimate(
         search_fee_usd=0.0,
-        search_driven_token_cost_usd=round(input_cost, 6),
-        output_cost_usd=round(output_cost, 6),
-        subtotal_usd=round(subtotal, 6),
+        search_driven_token_cost_usd=usd_float(input_cost),
+        output_cost_usd=usd_float(output_cost),
+        subtotal_usd=usd_float(subtotal),
         safety_margin=safety_margin,
-        total_usd=round(total, 6),
+        total_usd=usd_float(total),
     )

@@ -283,3 +283,70 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
   - Decyzja: rezultat nie ma domyślnego właściciela. Konstruktor i Worker sprawdzają ten sam zamknięty enum, a zły komunikat nie może naprawiać historii przez kolejny zapis — musi przerwać proces jawnie i bez mutacji.
   - Zwrot narracyjny: niezawodność nie kończy się w momencie commitu. Kończy się dopiero wtedy, gdy każdy późniejszy komponent rozumie, że nie wolno mu już niczego „posprzątać”.
   - Dowód: ADR-048, literalny czerwony string, atomic failure z 0 generic `fail_job`, 58 restart acceptance, reopen/integrity i full 700; bez API, browsera, publikacji i kosztu.
+
+## 2026-07-14 — Materiał: „Dlaczego stary rekord nie powinien udawać nowego dowodu”
+
+- Niezależne review ujawniło trzy niewidoczne w happy path ryzyka: obejście durable granicy, lokalny operation key i ledger bez wystarczających ograniczeń.
+- Konkretny ślad techniczny: migracja 0011 nie dopisuje zmyślonych relacji do dawnych usage, lecz oznacza je `is_legacy_usage=1`; przyszłe realne usage wymaga request_id rozpoczętego attemptu.
+- Kontrast narracyjny: ograniczenie systemu („WAVE 1A dopiero później”) jest sukcesem bezpieczeństwa, nie brakiem funkcji. Status materiału: offline candidate, wymaga niezależnego re-review przed publicznym twierdzeniem o zamknięciu.
+
+## 2026-07-14 — Materiał: „Dowód musi dotrzeć aż do ostatniego calla”
+
+- Fakt: drugi review nie podważył happy path, lecz ujawnił, że opłacony caller nadal mógł ominąć dowód trwałej próby, a stary rekord mógł ukryć sprzeczność jako legacy.
+- Zwrot: poprawka nie dodała retry; dodała odmowę przed callerem, snapshot intencji i migrację, która woli rollback od wymyślonej historii.
+- Dowód: 752 testy offline, context gate `caller=0`, migration rollback i parse-error settlement; 0 USD oraz bez API.
+- Granica: realne A1/A2/B, resume i operator reconciliation nadal nie istnieją. Materiał nie jest ogłoszeniem ukończenia WAVE 0B.
+
+## 2026-07-14 — Materiał: „Dwie zgodne etykiety nie są jeszcze tożsamością”
+
+- Fakt: re-review znalazł przypadek, w którym dwie równe, lecz arbitralne etykiety requestu mogły przekroczyć bramkę.
+- Zwrot: poprawka nie naprawia etykiety — wylicza ją z joba, etapu i numeru próby, a potem sprawdza ją ponownie tuż przed SDK względem świeżego lease.
+- Dowód: 770 testów offline, arbitralne/mismatched ID `caller=0`, dokładny `Idempotency-Key`, expiry/takeover `messages.create=0`; 0 USD i bez API.
+
+## 2026-07-15 — Materiał: „Test nie jest bezpieczny, dopóki jego dziecko nie jest bezpieczne”
+
+- Fakt: izolacja w jednym interpreterze nie chroni procesu uruchomionego przez test. Ścieżka bazy może mieć URI, kod może użyć `dbapi2`, a proxy może przeżyć pod małą literą.
+- Decyzja: kernel startuje przed collection przez `sitecustomize`, dziedziczy tylko testową konfigurację do subprocessów, rozpoznaje kanoniczny `data/agent.db` i blokuje sieć, DNS oraz realny SDK bez blokowania tymczasowej SQLite.
+- Dowód: raw SQLite/dbapi2/URI, socket/DNS/SDK, sekrety i proxy w parent/subprocess oraz 823 testy offline; 0 USD, brak API/browsera/publikacji, baseline bazy niezmieniony.
+- Zwrot narracyjny: bezpieczeństwo testu nie jest właściwością testu, lecz całego drzewa procesów, które może uruchomić.
+
+## 2026-07-15 — Materiał: „Idempotency-Key nie opisuje całej obietnicy”
+
+- Fakt: stabilny identyfikator requestu mówi, która próba jest wykonywana, ale nie dowodzi, że wszystkie parametry tej próby nadal są takie same.
+- Decyzja: attempt przechowuje canonical fingerprint całego `execution_intent`; tuż przed callerem system porównuje trwały snapshot z aktualnym payloadem. Różnica nie „naprawia” się retry, tylko zostaje jako `NEEDS_RECONCILIATION`.
+- Dowód: dziesięć klas późnej zmiany ma `caller=0`, usage/koszt 0 i brak settlementu; semantycznie równy JSON zachowuje fingerprint. Real resume A2/B jest odmówione przed mutacją.
+
+## 2026-07-15 — Materiał: „Zamrożony prompt nie jest skrótem do zamrożonej rzeczywistości”
+
+- Fakt: request może mieć stabilny identyfikator, a mimo to po enqueue zmienić znaczenie, jeśli prompt powstaje ponownie z żywego pytania tematu albo niszy konta.
+- Decyzja: trwały intent przechowuje kanoniczne dane wejściowe promptu i stage; worker nie odbudowuje requestu z mutowalnych tabel. Bieżący source może tylko wykazać drift i zatrzymać caller, nie podmienić treść requestu.
+- Dowód historyczny przed W0B-REV-06: 861 testów offline, osobne mutacje question/niche, parametrów providera i lifecycle dają `caller=0`, usage/koszt/settlement=0 i brak attempt #2; reopen SQLite zachowuje ten sam snapshot. Bez API, browsera i kosztu.
+- Status materiału: techniczny kandydat, nie ogłoszenie zamknięcia WAVE 0B ani Etapu 1.
+
+## 2026-07-15 — Materiał: „Jedna liczba w żądaniu nie może znaczyć czego innego w rachunku”
+
+- Fakt: system trwałe zapisywał limit `max_tokens` i przekazywał go do callera, ale koszt przed requestem nadal był liczony jak dla stałego limitu 3000. To tworzyło możliwość realnego usage większego od rezerwacji.
+- Decyzja: jedna wartość z durable intentu przechodzi przez request → estimate → policy → reservation → usage → settlement. Kwoty są porównywane po canonicalizacji do sześciu miejsc; nadwyżka zostaje w ledgerze, lecz nie może zostać cichym sukcesem.
+- Zwrot narracyjny: bezpieczny system nie mówi „rezerwacja była tylko przybliżeniem”. Gdy rachunek przekracza obietnicę, zachowuje dowód rachunku i zatrzymuje dalsze działanie do reconciliation.
+- Dowód historyczny po W0B-REV-06: fake caller, tymczasowa SQLite, restart limitu 2999/3000/3001, mutacje snapshotu, rounding boundary, `NEEDS_RECONCILIATION`, brak attempt #2; 873 offline testy w czterech rozłącznych partycjach. Zero API, sieci, kosztu, browsera i publikacji.
+- Status materiału: WAVE 0B pozostaje `CANDIDATE`, Etap 1 `BLOCKED`, live API `ZABRONIONE`; to materiał do niezależnego re-review, nie deklaracja zakończenia.
+
+## 2026-07-15 — Materiał: „Pół centa w siódmym miejscu potrafi zmienić historię”
+
+- Fakt: po zamknięciu luki `max_tokens` audyt wykrył rozbieżność mniejszą niż mikrodolar: część systemu używała banker's rounding, a ledger już `ROUND_HALF_UP`. To nie był powód do nowej architektury, tylko do jednej definicji pieniędzy.
+- Zwrot: trzy mikroskopijne składniki po `0.0000005` nie są trzema osobno zaokrąglonymi rachunkami. Najpierw stają się `0.0000015`, potem jednym `0.000002` — i ta kolejność jest częścią obietnicy systemu.
+- Dowód historyczny: 887 offline testów, partycje 211+222+229+225, cache read/write/web, rezerwacja ±1 mikro-USD oraz fake caller → usage → settlement. Kronika przyznała, że 770/823/861/873 były wynikami historycznymi, nie bieżącym stanem.
+- Granica: WAVE 0B pozostaje `CANDIDATE`, Etap 1 `BLOCKED`, live API `ZABRONIONE`; nie było API, sieci, browsera, publikacji ani kosztu.
+
+## 2026-07-15 — Dowód: checkpoint nie jest zamknięciem
+
+- Fakt: niezależny końcowy review zaakceptował WAVE 0B jako `APPROVED WITH P2 — READY FOR CHECKPOINT`, bez findingów MAJOR i CRITICAL.
+- Dowód: 894 testy offline, partycje 213/224/231/226, 13 migracji, `durable_research_intent_v2`, jeden aktywny durable paid-execution flow i niezmieniony hash chronionej bazy.
+- Granica: formalne `CLOSED` nie następuje przed commitem; Etap 1 pozostaje `BLOCKED`, a live API `ZABRONIONE`.
+
+## 2026-07-15 — Materiał: „Zaokrąglenie nie może nastąpić za wcześnie”
+
+- Fakt: niezależny review zauważył, że poprawna reguła w jednym helperze nie wystarcza, jeśli system zaokrągla koszt jednego źródła, a dopiero potem go mnoży lub porównuje przez float.
+- Zwrot: `0.0000005` dwa razy daje `0.000001`, trzy razy daje `0.000002`. To nie są trzy osobne paragony; to jedna suma, która dopiero na końcu staje się kwotą.
+- Dowód: 894 testy offline, partycje 213+224+231+226, przypadki `0.1+0.2` dla policy, ledgeru i CLI, bez sieci, API, kosztu lub prawdziwej bazy.
+- Granica: nie powstał nowy workflow ani nowy attempt. `max_tokens` nadal jest jednym źródłem estimate/rezerwacji/callera, a actual ponad rezerwacją nadal kończy się `NEEDS_RECONCILIATION` z jednym usage.

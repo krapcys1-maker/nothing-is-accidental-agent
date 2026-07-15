@@ -1,5 +1,7 @@
 # 03 — ARCHITEKTURA AGENTA
 
+> **Stan WAVE 0B:** `APPROVED WITH P2 — READY FOR CHECKPOINT`; nie `CLOSED` przed osobno autoryzowanym commitem. Etap 1 `BLOCKED`, live API `ZABRONIONE`; 13 migracji i jeden aktywny durable paid-execution flow `durable_provider_v2` z `durable_research_intent_v2`.
+
 ## Cel pliku
 Opis architektury: diagramy, moduły, warstwy, rola Anthropic API, Policy Engine, SQLite, Playwright, tryby pracy, poziomy autonomii i gotowość do migracji do chmury. **Każda większa zmiana architektury dopisywana z datą i wyjaśnieniem** (sekcja „Ewolucja architektury").
 
@@ -115,3 +117,23 @@ Właściciel doprecyzował (ADR-017), że architektura docelowa to **LEVEL_3 —
 - `docs/ARCHITECTURE_EVOLUTION.md` (źródło ewolucji), `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` §B.1–B.6, CZĘŚĆ D
 - `docs/DECISIONS.md` — ADR-006/011/012/013/014/015/016/017
 - diagramy: `diagrams/` (do wyeksportowania)
+
+## WAVE 0B — pamięć pojedynczego pytania do dostawcy (2026-07-14)
+
+Do architektury dodaliśmy mały, ale ważny zapis: zanim jedno płatne pytanie opuści proces, baza zapisuje jego stałą nazwę i odkłada maksymalny koszt. Nazwa nie powstaje z zegara ani losowania — jest złożona z joba, etapu i numeru próby. Jeśli program upadnie przed wysłaniem, po restarcie może bezpiecznie wrócić do tej samej nazwy. Jeśli upadnie po granicy wysłania albo dostanie timeout, nie zgaduje: zatrzymuje job do reconciliacji i zachowuje rezerwację. To kandydat do niezależnego review, nie dowód działania na żywym API: `WAVE 0B CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.
+
+## 2026-07-14 — WAVE 0B.1: granica, która nie udaje workera
+
+Niezależne review wykazało ważną różnicę między „kodem, który umie zrobić research” a bezpiecznym wykonaniem realnej akcji. Two-stage i staged mogły ominąć trwały job. Od teraz rzeczywisty klient bez kontekstu durable jest zatrzymywany przed providerem; pełne przeniesienie tych ścieżek do workera pozostaje pracą WAVE 1A. Drugą warstwą architektury jest migracja 0011: attempt ma ściśle określoną tożsamość i drogę stanu, a nowe realne usage musi wskazać rozpoczęty attempt.
+
+## 2026-07-15 — W0B-REV-10: jedna definicja mikrodolara w całym łańcuchu
+
+`durable_research_intent_v2` nadal jest jedynym snapshotem paid single requestu: `intent.max_tokens → caller → estimate → policy → reservation → usage → settlement`. W0B-REV-10 nie zmienia tego łańcucha ani lifecycle. Wprowadza wspólną definicję kwoty: `Decimal(str(value)) → quantize(Decimal("0.000001"), ROUND_HALF_UP)`. Estymator, `UsageTracker`, pipeline, storage, porównanie actual/rezerwacji oraz cache kosztu używają jej w tej samej kolejności: składniki sumują się jako Decimal, a kwantyzacja następuje na granicy kontraktu.
+
+To zachowuje istotną odmowę W0B-REV-06: gdy actual jest większy od rezerwacji, dokładnie jeden usage pozostaje w ledgerze, attempt przechodzi do `NEEDS_RECONCILIATION` z `PROVIDER_ATTEMPT_COST_EXCEEDS_RESERVATION`, nie ma SUCCESS, Research Card ani attempt #2. Jest 13 migracji; real fresh nadal wyłącznie enqueuje job, real resume jest fail-closed, a dispatcher pozostaje jedynym rootem konstrukcji realnego klienta. WAVE 0B to nadal `CANDIDATE`, Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
+## 2026-07-15 — W0B-RR-01: definicja kwoty musi przetrwać drogę do decyzji
+
+Review przypomniał rzecz nieefektowną, ale ważną: helper z dobrą regułą nie chroni systemu, jeśli ktoś wychodzi z niego za wcześnie. Koszt jednego źródła został już wyświetlony jako kwota, gdy staged pipeline mnożył go przez liczbę źródeł. W innych miejscach float mógł jeszcze wejść do policy, sumy usage albo krótkiego komunikatu CLI.
+
+Teraz surowe składniki pozostają `Decimal` aż do jednej granicy `ROUND_HALF_UP`. Dopiero wtedy stają się publiczną kwotą. Policy, rezerwacja, ledger, pipeline i CLI porównują tę samą kanoniczną wartość. Nie zmieniono intencji, lifecycle ani `max_tokens`; jest nadal 13 migracji, WAVE 0B `CANDIDATE`, Etap 1 `BLOCKED`, live API `ZABRONIONE`. Usunięcie dwóch martwych konstruktorów klienta z helperów resume nie otworzyło drogi realnego resume — dispatcher wciąż jest jedynym rootem klienta.

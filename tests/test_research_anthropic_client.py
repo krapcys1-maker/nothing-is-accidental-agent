@@ -6,8 +6,9 @@ import json
 import pytest
 
 from app.llm.base import Usage
-from app.research.anthropic_client import AnthropicResearchClient
+from app.research.anthropic_client import AnthropicResearchClient as _RealAnthropicResearchClient
 from app.research.base import (
+    AttemptBudgetContext,
     ResearchAuthenticationError,
     ResearchBudgetError,
     ResearchConnectionError,
@@ -24,6 +25,31 @@ from app.research.base import (
     ResearchUnknownProviderError,
     SourceCandidate,
 )
+
+
+class AnthropicResearchClient(_RealAnthropicResearchClient):
+    """Test-local SDK seam; global conftest blocks any real network access."""
+
+    requires_durable_provider_context = False
+
+    def configure_attempt_control(
+        self, *, budget_callback, retry_usage_callback, estimated_attempt_cost: float,
+    ) -> None:
+        self._test_budget_callback = budget_callback
+        self._test_retry_usage_callback = retry_usage_callback
+        self._test_estimated_attempt_cost = estimated_attempt_cost
+
+    def _before_attempt(self, attempt: int, *, stage: str) -> str | None:
+        callback = getattr(self, "_test_budget_callback", None)
+        if not callable(callback):
+            return None
+        prepared = callback(AttemptBudgetContext(
+            attempt_number=attempt + 1,
+            max_attempts=1,
+            estimated_attempt_cost=self._test_estimated_attempt_cost,
+            stage=stage,
+        ))
+        return getattr(prepared, "request_id", None)
 
 _PLAN = ResearchPlan(topic_id=1, account_id="acc", question="Why?", niche=["x"])
 

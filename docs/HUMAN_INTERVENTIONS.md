@@ -286,3 +286,36 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Decyzja człowieka:** zamknąć kontrakt trzech trybów terminalizacji, usunąć implicit default, odrzucać malformed wynik bez canonical write i udowodnić to po rzeczywistym atomic success/failure. Dodać kontrolę pojedynczego INSERT karty i źródeł oraz test primary-vs-rollback dla sukcesu.
 - **Zakazy:** bez API, sieci, browsera, publikacji, paid actions, realnego researchu, migracji, zmiany `data/agent.db`, commita, pushu, PR, merge, `docs/BUILD_LOG.md` i katalogu instrukcji pisania.
 - **Wynik:** ADR-048; status podczas naprawy `BLOCKED — DispatchResult terminalization contract P1`, po zielonej macierzy `candidate complete, awaiting independent review`. 58 acceptance, runtime 60 i pełny suite 700 passed offline; koszt 0 USD, hash prawdziwej bazy bez zmiany.
+
+## [2026-07-14] Zlecenie WAVE 0B — durable real-provider boundary
+
+- **Typ:** IMPLEMENTATION BOUNDARY / OFFLINE ONLY.
+- **Decyzja człowieka:** dodać stabilny request_id, durable enqueue z operation-key, atomową per-request rezerwację i fail-closed reconciliation; usunąć fresh real bypass joba/lease/fence, zachowując istniejące resume poza nową ścieżką.
+- **Zakazy:** bez API, sieci, browsera, publikacji, kosztu, pełnego realnego resume, WAVE 1A/1B, modyfikacji `data/agent.db`, commita, pushu, PR, merge, `docs/BUILD_LOG.md` i katalogu instrukcji pisania.
+- **Wynik:** `0010_provider_attempts`, request-bound usage i single durable worker path są zaimplementowane oraz przetestowane offline. `data/agent.db` pozostaje na SHA `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`. **`WAVE 0B CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`**; Etap 1 nie jest zamknięty.
+
+## [2026-07-14] Zlecenie WAVE 0B.1 — naprawa trzech P1 z niezależnego review
+
+- **Typ:** korekta bezpieczeństwa P1 z bezpośrednio sprzężonymi P2 / OFFLINE ONLY.
+- **Decyzja człowieka:** naprawić wyłącznie świeży bypass realnego two-stage/staged, globalną tożsamość `operation_key` i constraints/state machine `provider_attempts`/`model_usage`; nie rozpoczynać WAVE 1A ani pełnej reconciliation.
+- **Zakazy:** bez API, sieci, browsera, publikacji, kosztu, migracji lub zapisu `data/agent.db`, commita, pushu, PR, merge, `docs/BUILD_LOG.md` i katalogu instrukcji pisania.
+- **Wynik:** `0011_provider_attempt_invariants`, globalny atomowy enqueue i fail-closed real-provider gate są gotowe offline. Status: **`WAVE 0B.1 CANDIDATE COMPLETE — AWAITING INDEPENDENT RE-REVIEW`**; Etap 1 nie jest zamknięty.
+
+## [2026-07-14] Zlecenie WAVE 0B.2 po drugim niezależnym REJECT
+
+- **Decyzja człowieka:** naprawić wyłącznie P1-01/P1-02/P1-03 oraz bezpośrednio sprzężone P2; dodać 0012, ale nie zmieniać 0010/0011.
+- **Zakazy:** bez WAVE 1A, pełnej reconciliation, API, sieci, browsera, publikacji, kosztu, `data/agent.db`, commita, pushu, PR i merge.
+- **Wynik historyczny:** kandydat WAVE 0B.2 został zastąpiony przez WAVE 0B.3; Etap 1 pozostaje BLOCKED.
+
+## [2026-07-14] Zlecenie WAVE 0B.3 — dwa P1 z re-review WAVE 0B.2
+
+- **Decyzja człowieka:** naprawić wyłącznie derived request identity i świeżą asercję lease; nie zmieniać intentu, migracji 0012, legacy usage, budżetu ani settlementu bez konieczności.
+- **Zakazy:** bez WAVE 1A, API, sieci, browsera, publikacji, kosztu, zapisu `data/agent.db`, commita, pushu, PR, merge, `docs/BUILD_LOG.md` i katalogu instrukcji pisania.
+- **Wynik roboczy:** `WAVE 0B.3 CANDIDATE COMPLETE — AWAITING INDEPENDENT RE-REVIEW`; Etap 1 pozostaje BLOCKED, 770 testów offline i baseline bazy bez zmiany.
+
+## [2026-07-15] Wynik niezależnego końcowego review WAVE 0B i zgoda na staging checkpointu
+
+- **Decyzja człowieka / podstawa:** review wydał `APPROVE WITH MINOR/P2`: 894/894 testów, partycje 213/224/231/226, brak MAJOR i CRITICAL, zamknięte W0B-RR-01 oraz W0B-CLEAN-01, brak regresji W0B-REV-06 i niezmieniona chroniona baza.
+- **Zakres:** przygotować tylko staging zatwierdzonego checkpointu WAVE 0B oraz niezależnie go sprawdzić. Rzeczywisty inwentarz wynosi 72 wpisy (50 modified, 1 deleted, 21 untracked).
+- **Zakazy:** bez commita, pushu, PR, merge, API, sieci, browsera, kosztu, zmiany `data/agent.db` oraz stagingu `docs/BUILD_LOG.md` i katalogu instrukcji pisania.
+- **Stan:** WAVE 0B = `APPROVED WITH P2 — READY FOR CHECKPOINT`, nie `CLOSED`; Etap 1 `BLOCKED`, live API `ZABRONIONE`.
