@@ -275,6 +275,69 @@ class ProviderAttemptStatus(str, Enum):
     SETTLED = "SETTLED"
     RELEASED = "RELEASED"
     NEEDS_RECONCILIATION = "NEEDS_RECONCILIATION"
+    RECONCILED_SETTLED = "RECONCILED_SETTLED"
+    RECONCILED_RELEASED = "RECONCILED_RELEASED"
+
+
+class FinancialResolution(str, Enum):
+    """Manual, auditable resolution of the financial provider outcome."""
+
+    CHARGED_KNOWN = "CHARGED_KNOWN"
+    NOT_CHARGED = "NOT_CHARGED"
+    CHARGE_UNKNOWN = "CHARGE_UNKNOWN"
+
+
+class ExecutionResolution(str, Enum):
+    """Manual resolution of the already-persisted job/run lifecycle."""
+
+    EXECUTION_FAILED = "EXECUTION_FAILED"
+    RESULT_ALREADY_FINALIZED = "RESULT_ALREADY_FINALIZED"
+    MANUAL_REVIEW_REMAINS_REQUIRED = "MANUAL_REVIEW_REMAINS_REQUIRED"
+
+
+class ReconciliationEventType(str, Enum):
+    """Append-only durable audit entry kinds for one provider attempt.
+
+    ``UNRESOLVED_OBSERVATION`` is the first operator note on an ambiguous attempt,
+    ``FOLLOW_UP`` any later note while it stays unresolved, ``FINAL_RESOLUTION``
+    the single terminal settlement/release decision, and ``AUTO_ESCALATION`` the
+    durable audit record written when maintenance or the worker failure boundary
+    escalates a RESERVED/REQUEST_STARTED attempt into the operator queue.
+    """
+
+    UNRESOLVED_OBSERVATION = "UNRESOLVED_OBSERVATION"
+    FOLLOW_UP = "FOLLOW_UP"
+    FINAL_RESOLUTION = "FINAL_RESOLUTION"
+    AUTO_ESCALATION = "AUTO_ESCALATION"
+
+
+class ReconciliationFaultPoint(str, Enum):
+    """Test-only checkpoints inside the resolver's one SQLite transaction."""
+
+    AFTER_USAGE_WRITE = "AFTER_USAGE_WRITE"
+    AFTER_ATTEMPT_UPDATE = "AFTER_ATTEMPT_UPDATE"
+    AFTER_EVENT_INSERT = "AFTER_EVENT_INSERT"
+    AFTER_CACHE_REFRESH = "AFTER_CACHE_REFRESH"
+    AFTER_JOB_UPDATE = "AFTER_JOB_UPDATE"
+    AFTER_RUN_UPDATE = "AFTER_RUN_UPDATE"
+    AFTER_RESEARCH_RUN_UPDATE = "AFTER_RESEARCH_RUN_UPDATE"
+    BEFORE_COMMIT = "BEFORE_COMMIT"
+
+
+class ResearchExecutionFailureOutcome(str, Enum):
+    """Durable result of the shared worker research failure boundary.
+
+    The caller must not infer a terminal job from an exception class.  Storage
+    first inspects the linked provider attempt in the same transaction and then
+    reports which durable branch was committed.
+    """
+
+    TERMINALIZED_FAILED = "TERMINALIZED_FAILED"
+    ESCALATED_RESERVED = "ESCALATED_RESERVED"
+    ESCALATED_REQUEST_STARTED = "ESCALATED_REQUEST_STARTED"
+    ALREADY_NEEDS_RECONCILIATION = "ALREADY_NEEDS_RECONCILIATION"
+    PRESERVED_NEEDS_VERIFICATION = "PRESERVED_NEEDS_VERIFICATION"
+    ALREADY_TERMINALIZED = "ALREADY_TERMINALIZED"
 
 
 class ProviderAttempt(BaseModel):
@@ -290,8 +353,66 @@ class ProviderAttempt(BaseModel):
     reserved_at: datetime
     request_started_at: datetime | None = None
     settled_at: datetime | None = None
+    released_at: datetime | None = None
     actual_cost_usd: float | None = None
     error_code: str | None = None
+    reconciled_at: datetime | None = None
+    reconciled_by: str | None = None
+    reconciliation_note: str | None = None
+    reconciliation_resolution: str | None = None
+
+
+class ReconciliationEvent(BaseModel):
+    """One append-only entry in the durable operator reconciliation history."""
+
+    id: int
+    request_id: str
+    sequence_number: int
+    event_type: ReconciliationEventType
+    financial_resolution: FinancialResolution
+    execution_resolution: ExecutionResolution
+    operator: str
+    note: str
+    previous_attempt_status: ProviderAttemptStatus
+    resulting_attempt_status: ProviderAttemptStatus
+    created_at: datetime
+    idempotency_key: str
+
+
+class ProviderAttemptReconciliationResult(BaseModel):
+    """Stable result returned by an operator reconciliation transaction."""
+
+    attempt: ProviderAttempt
+    financial_resolution: FinancialResolution
+    execution_resolution: ExecutionResolution
+    usage_id: int | None = None
+    idempotent: bool = False
+    observed: bool = False
+    event: ReconciliationEvent | None = None
+
+
+class ReconciliationPreview(BaseModel):
+    """Read-only durable snapshot returned before an operator confirms.
+
+    ``version_token`` is a fingerprint of the exact durable state the preview
+    observed; confirm re-reads under ``BEGIN IMMEDIATE`` and fails closed if the
+    token no longer matches.
+    """
+
+    request_id: str
+    account_id: str
+    attempt_status: ProviderAttemptStatus
+    job_status: str | None = None
+    run_status: str | None = None
+    research_run_status: str | None = None
+    usage_count: int = 0
+    canonical_cost_usd: str = "0.000000"
+    reserved_amount_usd: float = 0.0
+    reservation_active: bool = False
+    research_card_id: int | None = None
+    event_count: int = 0
+    latest_event: ReconciliationEvent | None = None
+    version_token: str
 
 
 class JobRecoveryResult(BaseModel):
@@ -300,6 +421,7 @@ class JobRecoveryResult(BaseModel):
     requeued_count: int = 0
     needs_verification_count: int = 0
     failed_count: int = 0
+    escalated_reconciliation_count: int = 0
 
 
 class RunReaperResult(BaseModel):

@@ -14,6 +14,7 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0011_provider_attempt_invariants",
     "0012_provider_ledger_hardening",
     "0013_provider_attempt_usage_integrity",
+    "0014_provider_attempt_reconciliation",
 })
 
 

@@ -315,6 +315,7 @@ def test_expired_recovery_is_safe_idempotent_and_reopens(settings, account):
         storage.release_job_budget(external.id, now=NOW + timedelta(seconds=6))
     assert storage.release_or_requeue_expired_leases(now=NOW + timedelta(seconds=7)).model_dump() == {
         "requeued_count": 0, "needs_verification_count": 0, "failed_count": 0,
+        "escalated_reconciliation_count": 0,
     }
 
     lease = storage.claim_next_job("worker", 5, now=NOW + timedelta(seconds=8))
@@ -603,6 +604,7 @@ def test_research_job_without_run_id_recovers_to_queued(settings, account):
     reopened, persisted = _reopen_job(settings, storage, job.id)
     assert result.model_dump() == {
         "requeued_count": 1, "needs_verification_count": 0, "failed_count": 0,
+        "escalated_reconciliation_count": 0,
     }
     assert persisted.status is JobStatus.QUEUED and persisted.run_id is None
     reopened.close()
@@ -625,6 +627,7 @@ def test_research_job_with_run_id_recovers_to_needs_verification(settings, accou
     reopened, persisted = _reopen_job(settings, storage, job.id)
     assert result.model_dump() == {
         "requeued_count": 0, "needs_verification_count": 1, "failed_count": 0,
+        "escalated_reconciliation_count": 0,
     }
     assert persisted.status is JobStatus.NEEDS_VERIFICATION
     assert persisted.run_id == run_id
@@ -651,6 +654,7 @@ def test_research_job_with_external_effect_keeps_existing_behavior(settings, acc
     reopened, persisted = _reopen_job(settings, storage, job.id)
     assert result.model_dump() == {
         "requeued_count": 0, "needs_verification_count": 1, "failed_count": 0,
+        "escalated_reconciliation_count": 0,
     }
     assert persisted.status is JobStatus.NEEDS_VERIFICATION and persisted.run_id == run_id
     assert persisted.reserved_cost_usd == 0.25 and persisted.budget_reserved_at is not None
@@ -708,6 +712,7 @@ def test_research_job_with_failed_or_partial_run_is_not_restarted_from_scratch(s
     reopened = SqliteStorage.open(settings.db_path)
     assert result.model_dump() == {
         "requeued_count": 0, "needs_verification_count": 2, "failed_count": 0,
+        "escalated_reconciliation_count": 0,
     }
     for suffix in ("failed", "partial"):
         persisted = reopened.get_job(f"recovery-{suffix}")
@@ -1162,6 +1167,7 @@ def test_external_effect_job_recovery_keeps_reservation(settings, account):
     result = storage.release_or_requeue_expired_leases(now=NOW + timedelta(seconds=6))
     assert result.model_dump() == {
         "requeued_count": 0, "needs_verification_count": 1, "failed_count": 0,
+        "escalated_reconciliation_count": 0,
     }
     recovered = storage.get_job(job.id)
     assert recovered.status == JobStatus.NEEDS_VERIFICATION

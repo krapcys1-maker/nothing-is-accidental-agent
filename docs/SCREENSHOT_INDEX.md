@@ -1,5 +1,11 @@
 # SCREENSHOT_INDEX
 
+## 2026-07-16 — W1A-R4-01 / czwarty niezależny reject
+
+- **Status:** `SCREENSHOT REQUIRED` — w tej fali nie uruchamiano browsera ani interfejsu zewnętrznego.
+- **Co ma pokazywać:** terminal offline z trzema dowodami bez sekretów: pełny suite 1036/1036, partycje exact-once 248+253+267+268 oraz niezależną kontrpróbę `Worker.run_once`, w której `REQUEST_STARTED` po lokalnym błędzie staje się widocznym `NEEDS_RECONCILIATION` bez attemptu #2 i bez provider calla.
+- **Warunki bezpieczeństwa:** wyłącznie temp DB/fake; bez `.env`, kluczy, zawartości `data/` i danych konta; status `WAVE 1A — CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW` musi być widoczny bez sugestii zamknięcia WAVE lub odblokowania Etapu 1.
+
 ## Cel
 
 Indeks wszystkich screenshotów eksperymentu. Screenshoty są dowodem działania i materiałem do końcowego artykułu. Pliki leżą w `docs/screenshots/`. Ten plik to czytelny spis; przy automatyzacji przeglądarki źródłem prawdy dla zrzutów systemowych jest też tabela `screenshots` w bazie.

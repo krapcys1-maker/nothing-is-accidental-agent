@@ -798,6 +798,7 @@ def test_periodic_heartbeat_prevents_recovery_during_long_dispatch(settings, sto
     recovery = SqliteStorage.open(settings.db_path)
     assert recovery.release_or_requeue_expired_leases(now=clock.now()).model_dump() == {
         "requeued_count": 0, "needs_verification_count": 0, "failed_count": 0,
+        "escalated_reconciliation_count": 0,
     }
     recovery.close()
     assert storage.get_job(job.id).status is JobStatus.RUNNING

@@ -649,7 +649,7 @@ def test_migration_0011_preserves_valid_0010_history_and_is_idempotent(tmp_path:
     _seed_0010_provider_history(conn, valid=True)
     assert apply_migrations(conn) == [
         "0011_provider_attempt_invariants", "0012_provider_ledger_hardening",
-        "0013_provider_attempt_usage_integrity",
+            "0013_provider_attempt_usage_integrity", "0014_provider_attempt_reconciliation",
     ]
     attempt = conn.execute(
         "SELECT status,actual_cost_usd,released_at FROM provider_attempts"
@@ -1372,8 +1372,13 @@ def test_research_final_boundary_blocks_late_state_changes_without_usage_or_cost
     client = _storage_gated_direct_client(
         storage, seed, context, calls, before_sdk_assertion=mutate_before_provider,
     )
-    with pytest.raises(StaleJobExecutionError):
+    expected_error = sqlite3.IntegrityError if mutation == "job-status" else StaleJobExecutionError
+    with pytest.raises(expected_error) as raised:
         client.run_research(ResearchPlan(topic_id=1, account_id=account.id, question="Why?"))
+    if mutation == "job-status":
+        assert "provider_attempt normalization" in str(raised.value)
+        storage.conn.rollback()
+        assert storage.get_job(seed.job_id).status is JobStatus.RUNNING
     assert calls == []
     assert storage.get_research_usage(seed.run_id) == []
     assert storage.get_run(seed.run_id).cost_usd == 0.0
@@ -1448,8 +1453,13 @@ def test_topics_final_boundary_blocks_all_late_state_changes_without_usage_or_co
         activation_callback=activation_callback,
         assertion_callback=assertion_callback,
     )
-    with pytest.raises(StaleJobExecutionError):
+    expected_error = sqlite3.IntegrityError if mutation == "job-status" else StaleJobExecutionError
+    with pytest.raises(expected_error) as raised:
         client.generate_and_score_topics(account, 1)
+    if mutation == "job-status":
+        assert "provider_attempt normalization" in str(raised.value)
+        storage.conn.rollback()
+        assert storage.get_job(seed.job_id).status is JobStatus.RUNNING
     assert message_calls == []
     assert storage.get_research_usage(seed.run_id) == []
     assert storage.get_run(seed.run_id).cost_usd == 0.0
@@ -1877,7 +1887,8 @@ def test_migration_0012_keeps_provable_usage_nonlegacy_and_reopens_cleanly(tmp_p
     _upgrade_0010_to_0011_only(conn, tmp_path)
     _add_linked_0011_usage(conn)
     assert apply_migrations(conn) == [
-        "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
+            "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
+            "0014_provider_attempt_reconciliation",
     ]
     states = {
         row["model"]: row["is_legacy_usage"]

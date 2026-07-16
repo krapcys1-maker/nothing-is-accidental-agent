@@ -10,21 +10,25 @@ from __future__ import annotations
 import argparse
 import logging
 import math
+import sqlite3
 import sys
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 
 from app.core.clock import SystemClock
 from app.core.config import ConfigError, Settings, load_settings
-from app.models import JobKind, WorkflowType
+from app.models import ExecutionResolution, FinancialResolution, JobKind, WorkflowType
+from app.ports.storage import (
+    ProviderAttemptReconciliationError,
+    ReconciliationPreviewStaleError,
+)
 from app.orchestrator.runner import DEFAULT_ACCOUNT, run_research, run_topics
 from app.policies.policy_engine import PolicyEngine
-from app.scheduler.dispatcher import JobDispatcher
 from app.scheduler.enqueue import ScheduledJobEnqueuer, ScheduledJobRequest
 from app.scheduler.maintenance import MaintenanceRunner
 from app.scheduler.scheduling import SchedulingPolicy, SchedulingValidationError
-from app.scheduler.worker import Worker, WorkerIterationStatus
 from app.storage.repositories import SqliteStorage
 
 
@@ -168,6 +172,12 @@ def _cmd_enqueue_research(args: argparse.Namespace) -> int:
 
 def _build_worker(settings: Settings) -> tuple[Worker, SqliteStorage]:
     """Composes the same runtime dependencies used by the application, once."""
+    # Keep paid-provider imports out of the CLI module import graph.  In
+    # particular the reconciliation commands must stay usable with no SDK or
+    # worker/client composition at all.
+    from app.scheduler.dispatcher import JobDispatcher
+    from app.scheduler.worker import Worker
+
     settings = replace(settings, dry_run=True)
     storage = SqliteStorage.open(settings.db_path)
     clock = SystemClock()
@@ -187,6 +197,8 @@ def _build_worker(settings: Settings) -> tuple[Worker, SqliteStorage]:
 
 
 def _cmd_worker(args: argparse.Namespace) -> int:
+    from app.scheduler.worker import WorkerIterationStatus
+
     settings = replace(load_settings(), dry_run=True)
     worker, storage = _build_worker(settings)
     try:
@@ -228,7 +240,8 @@ def _cmd_reap_runs(args: argparse.Namespace) -> int:
             f"checked={result.checked_count} stopped={result.stopped_count} "
             f"recovered(requeued={recovery.requeued_count}, "
             f"needs_verification={recovery.needs_verification_count}, "
-            f"failed={recovery.failed_count})"
+            f"failed={recovery.failed_count}, "
+            f"escalated_reconciliations={recovery.escalated_reconciliation_count})"
         )
         return 0
     finally:
@@ -251,7 +264,8 @@ def _cmd_maintain(args: argparse.Namespace) -> int:
                 f"checked={result.reaper.checked_count} stopped={result.reaper.stopped_count} "
                 f"recovered(requeued={result.recovery.requeued_count}, "
                 f"needs_verification={result.recovery.needs_verification_count}, "
-                f"failed={result.recovery.failed_count})"
+                f"failed={result.recovery.failed_count}, "
+                f"escalated_reconciliations={result.recovery.escalated_reconciliation_count})"
             )
             return 0
         runner.run_forever(interval_seconds=args.interval_seconds)
@@ -262,6 +276,162 @@ def _cmd_maintain(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"MAINTENANCE: failed closed: {exc}", file=sys.stderr)
         return 1
+
+
+def _cmd_list_reconciliations(args: argparse.Namespace) -> int:
+    """Local read-only L1 queue; it has no provider or worker composition root.
+
+    Every stage — configuration, storage open, the queue query, result
+    formatting and the storage close — maps onto the same controlled exit
+    codes as ``reconcile-attempt`` (config -> 3, storage/OS -> 6); no stage may
+    escape as an uncontrolled traceback.
+    """
+    try:
+        settings = load_settings()
+    except ConfigError as exc:
+        print(f"RECONCILIATION: config error: {exc}", file=sys.stderr)
+        return _RECONCILE_EXIT_CONFIG
+    except (OSError, RuntimeError, sqlite3.Error) as exc:
+        print(f"RECONCILIATION: storage error: {exc}", file=sys.stderr)
+        return _RECONCILE_EXIT_STORAGE
+    storage = None
+    try:
+        storage = SqliteStorage.open(settings.db_path)
+        attempts = storage.list_provider_attempts_needing_reconciliation(account_id=args.account_id)
+        for attempt in attempts:
+            print(
+                f"request_id={attempt.request_id} status={attempt.status.value} "
+                f"reserved_amount_usd={attempt.reserved_amount_usd:.6f} stage={attempt.stage}"
+            )
+        print(f"RECONCILIATIONS: {len(attempts)}")
+        closing, storage = storage, None
+        closing.close()
+        return 0
+    except (OSError, RuntimeError, sqlite3.Error) as exc:
+        print(f"RECONCILIATION: storage error: {exc}", file=sys.stderr)
+        return _RECONCILE_EXIT_STORAGE
+    finally:
+        if storage is not None:
+            try:
+                storage.close()
+            except (OSError, RuntimeError, sqlite3.Error):
+                # Best-effort close on an error path: the primary controlled
+                # exit code above already reports the failure.
+                pass
+
+
+# reconcile-attempt controlled exit codes (deterministic; documented contract):
+#   0  preview shown / confirmed / idempotent no-op / observation recorded
+#   2  reconciliation rejected (wrong account or database, missing request,
+#      invalid combination, already-reconciled-conflicting, ledger/card/relation)
+#   3  configuration error
+#   4  invalid CLI input (cost NaN/Infinity/format, or missing version token)
+#   5  stale preview token
+#   6  storage / OS error
+_RECONCILE_EXIT_OK = 0
+_RECONCILE_EXIT_REJECTED = 2
+_RECONCILE_EXIT_CONFIG = 3
+_RECONCILE_EXIT_INPUT = 4
+_RECONCILE_EXIT_STALE = 5
+_RECONCILE_EXIT_STORAGE = 6
+
+
+def _cli_cost_is_finite(raw: str) -> bool:
+    """Reject NaN/Infinity/non-decimal before the durable money contract runs."""
+    try:
+        parsed = Decimal(raw)
+    except (InvalidOperation, ValueError, TypeError):
+        return False
+    return parsed.is_finite()
+
+
+def _cmd_reconcile_attempt(args: argparse.Namespace) -> int:
+    """Manual resolver: read-only preview by default; one atomic write with --confirm."""
+    financial = FinancialResolution(args.financial_resolution)
+    execution = ExecutionResolution(args.execution_resolution)
+    if args.actual_cost_usd is not None and not _cli_cost_is_finite(args.actual_cost_usd):
+        print("RECONCILIATION: invalid --actual-cost-usd (must be a finite decimal).", file=sys.stderr)
+        return _RECONCILE_EXIT_INPUT
+    try:
+        settings = load_settings()
+        storage = SqliteStorage.open(settings.db_path)
+    except ConfigError as exc:
+        print(f"RECONCILIATION: config error: {exc}", file=sys.stderr)
+        return _RECONCILE_EXIT_CONFIG
+    except (OSError, RuntimeError, sqlite3.Error) as exc:
+        print(f"RECONCILIATION: storage error: {exc}", file=sys.stderr)
+        return _RECONCILE_EXIT_STORAGE
+    try:
+        if not args.confirm:
+            preview = storage.preview_provider_attempt_reconciliation(
+                request_id=args.request_id, account_id=args.account_id,
+            )
+            print("RECONCILIATION PREVIEW")
+            print(f"request_id={preview.request_id}")
+            print(f"account_id={preview.account_id}")
+            print(f"attempt_status={preview.attempt_status.value}")
+            print(f"job_status={preview.job_status}")
+            print(f"run_status={preview.run_status}")
+            print(f"research_run_status={preview.research_run_status}")
+            print(f"usage_count={preview.usage_count} canonical_cost_usd={preview.canonical_cost_usd}")
+            print(
+                f"reserved_amount_usd={preview.reserved_amount_usd:.6f} "
+                f"reservation_active={str(preview.reservation_active).lower()}"
+            )
+            print(f"research_card_id={preview.research_card_id}")
+            print(f"event_count={preview.event_count}")
+            print(f"proposed_financial_resolution={financial.value}")
+            print(f"proposed_execution_resolution={execution.value}")
+            print(
+                "proposed_actual_cost_usd="
+                f"{args.actual_cost_usd if args.actual_cost_usd is not None else '<none>'}"
+            )
+            print("provider_call=false enqueue=false retry=false attempt_2=false")
+            print(f"version_token={preview.version_token}")
+            print("PREVIEW ONLY: pass --confirm and --version-token from this preview to execute.")
+            return _RECONCILE_EXIT_OK
+        if not args.version_token or not args.version_token.strip():
+            print("RECONCILIATION: --confirm requires --version-token from a fresh preview.", file=sys.stderr)
+            return _RECONCILE_EXIT_INPUT
+        result = storage.resolve_provider_attempt_reconciliation(
+            request_id=args.request_id,
+            account_id=args.account_id,
+            financial_resolution=financial,
+            execution_resolution=execution,
+            actual_cost_usd=args.actual_cost_usd,
+            reconciled_by=args.reconciled_by,
+            note=args.note,
+            expected_version_token=args.version_token,
+        )
+        if result.observed:
+            seq = result.event.sequence_number if result.event is not None else 0
+            print(
+                "OBSERVED — STILL NEEDS_RECONCILIATION: "
+                f"attempt_status={result.attempt.status.value} event_seq={seq} "
+                f"idempotent={str(result.idempotent).lower()}"
+            )
+            return _RECONCILE_EXIT_OK
+        print(
+            f"RECONCILED: status={result.attempt.status.value} usage_id={result.usage_id} "
+            f"idempotent={str(result.idempotent).lower()}"
+        )
+        return _RECONCILE_EXIT_OK
+    except ReconciliationPreviewStaleError as exc:
+        print(f"RECONCILIATION: stale preview: {exc}", file=sys.stderr)
+        return _RECONCILE_EXIT_STALE
+    except ProviderAttemptReconciliationError as exc:
+        print(f"RECONCILIATION: failed closed: {exc}", file=sys.stderr)
+        return _RECONCILE_EXIT_REJECTED
+    except (ValueError, RuntimeError, sqlite3.Error, OSError) as exc:
+        print(f"RECONCILIATION: storage error: {exc}", file=sys.stderr)
+        return _RECONCILE_EXIT_STORAGE
+    finally:
+        try:
+            storage.close()
+        except (OSError, RuntimeError, sqlite3.Error):
+            # The command outcome was already decided (and any confirm already
+            # committed); a close failure must not become an uncontrolled crash.
+            pass
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -333,6 +503,33 @@ def build_parser() -> argparse.ArgumentParser:
     p_maintain.add_argument("--stale-after-seconds", type=_positive_seconds, required=True,
                             help="Jawny dodatni próg wieku RUNNING runu.")
     p_maintain.set_defaults(func=_cmd_maintain)
+
+    p_list_reconciliations = sub.add_parser(
+        "list-reconciliations", help="Read-only list of durable provider attempts awaiting an L1 operator.",
+    )
+    p_list_reconciliations.add_argument("--account-id", help="Optional account isolation filter.")
+    p_list_reconciliations.set_defaults(func=_cmd_list_reconciliations)
+
+    p_reconcile = sub.add_parser(
+        "reconcile-attempt", help="Resolve one persisted NEEDS_RECONCILIATION attempt without a provider call.",
+    )
+    p_reconcile.add_argument("--request-id", required=True)
+    p_reconcile.add_argument("--account-id", required=True)
+    p_reconcile.add_argument("--financial-resolution", required=True,
+                             choices=[item.value for item in FinancialResolution],
+                             type=lambda value: value.upper().replace("-", "_"))
+    p_reconcile.add_argument("--execution-resolution", required=True,
+                             choices=[item.value for item in ExecutionResolution],
+                             type=lambda value: value.upper().replace("-", "_"))
+    p_reconcile.add_argument("--actual-cost-usd", type=str)
+    p_reconcile.add_argument("--reconciled-by", required=True)
+    p_reconcile.add_argument("--note", required=True)
+    p_reconcile.add_argument("--confirm", action="store_true")
+    p_reconcile.add_argument(
+        "--version-token",
+        help="State fingerprint from a fresh preview; required with --confirm and rejected if stale.",
+    )
+    p_reconcile.set_defaults(func=_cmd_reconcile_attempt)
     return parser
 
 

@@ -18,7 +18,13 @@ from app.models import (
     JobRecoveryResult,
     JobReservation,
     DurableProviderAttemptContext,
+    ExecutionResolution,
+    FinancialResolution,
     ProviderAttempt,
+    ProviderAttemptReconciliationResult,
+    ReconciliationEvent,
+    ReconciliationPreview,
+    ResearchExecutionFailureOutcome,
     ModelUsage,
     ResearchCard,
     ResearchFlow,
@@ -77,6 +83,14 @@ class ProviderAttemptOverReservationError(ProviderAttemptReconciliationRequired)
         super().__init__(
             "Provider usage exceeded the durable reservation; reconciliation is required."
         )
+
+
+class ProviderAttemptReconciliationError(ProviderAttemptReconciliationRequired):
+    """Operator resolution conflicts with the durable attempt or lifecycle."""
+
+
+class ReconciliationPreviewStaleError(ProviderAttemptReconciliationError):
+    """The durable state changed since the preview token was issued."""
 
 
 class JobRunRelationError(RuntimeError):
@@ -287,11 +301,55 @@ class StoragePort(Protocol):
         """Zamyka potwierdzony błąd dostawcy, gdy nie zwrócił usage."""
         ...
 
+    def list_provider_attempts_needing_reconciliation(
+        self, *, account_id: str | None = None,
+    ) -> list[ProviderAttempt]:
+        """Read-only L1 queue; it never creates a provider or worker action."""
+        ...
+
+    def preview_provider_attempt_reconciliation(
+        self, *, request_id: str, account_id: str,
+    ) -> ReconciliationPreview:
+        """Read-only durable snapshot and version token; performs no mutation."""
+        ...
+
+    def list_reconciliation_events(
+        self, *, request_id: str, account_id: str,
+    ) -> list[ReconciliationEvent]:
+        """Read-only, ordered append-only reconciliation history for one attempt."""
+        ...
+
+    def resolve_provider_attempt_reconciliation(
+        self,
+        *,
+        request_id: str,
+        account_id: str,
+        financial_resolution: FinancialResolution,
+        execution_resolution: ExecutionResolution,
+        actual_cost_usd: float | str | None,
+        reconciled_by: str,
+        note: str,
+        expected_version_token: str | None = None,
+    ) -> ProviderAttemptReconciliationResult:
+        """Atomically resolves or observes an existing NEEDS_RECONCILIATION attempt.
+
+        ``expected_version_token`` (from a prior preview) fails closed if the
+        durable state changed since the preview.
+        """
+        ...
+
+    def fail_or_escalate_job_research_execution(
+        self, execution: JobExecutionContext, cost_usd: float | None, error: str,
+        *, terminalize_job: bool = False, preserve_for_verification: bool = False,
+    ) -> ResearchExecutionFailureOutcome:
+        """Atomically fail a safe execution or escalate its active provider attempt."""
+        ...
+
     def fail_job_research_execution(
         self, execution: JobExecutionContext, cost_usd: float | None, error: str,
         *, terminalize_job: bool = False,
-    ) -> None:
-        """Atomowo zapisuje FAILED runu/researchu; optionalnie tak\u017ce joba."""
+    ) -> ResearchExecutionFailureOutcome:
+        """Compatibility alias for the centralized fail-or-escalate operation."""
         ...
 
     def finalize_job_research_execution(

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import importlib
 import json
 from pathlib import Path
+import sqlite3
 import subprocess
 import sys
 
@@ -328,9 +329,16 @@ def _assert_final_lifecycle_mutation_blocks_caller(
         ),
         estimated_attempt_cost=0.1,
     )
-    with pytest.raises(JobRunRelationError) as raised:
+    with pytest.raises((JobRunRelationError, sqlite3.IntegrityError)) as raised:
         client.run_research(ResearchPlan(topic_id=int(topic.id), account_id=account.id, question="Why?"))
-    assert raised.value.code == expected_code
+    sqlite_guarded = expected_code == "SQLITE_PROVIDER_ATTEMPT_NORMALIZATION_REQUIRED"
+    if sqlite_guarded:
+        assert isinstance(raised.value, sqlite3.IntegrityError)
+        assert "provider_attempt normalization" in str(raised.value)
+        storage.conn.rollback()
+    else:
+        assert isinstance(raised.value, JobRunRelationError)
+        assert raised.value.code == expected_code
     assert caller_count == 0
     assert storage.conn.execute(
         "SELECT count(*) FROM model_usage WHERE run_id=?", (execution.run_id,),
@@ -339,9 +347,14 @@ def _assert_final_lifecycle_mutation_blocks_caller(
         "SELECT status,error_code,settled_at,actual_cost_usd FROM provider_attempts WHERE request_id=?",
         (attempt.request_id,),
     ).fetchone()
-    assert tuple(attempt_row) == (
-        ProviderAttemptStatus.NEEDS_RECONCILIATION.value, expected_code, None, None,
-    )
+    if sqlite_guarded:
+        assert tuple(attempt_row) == (
+            ProviderAttemptStatus.REQUEST_STARTED.value, None, None, None,
+        )
+    else:
+        assert tuple(attempt_row) == (
+            ProviderAttemptStatus.NEEDS_RECONCILIATION.value, expected_code, None, None,
+        )
     assert storage.conn.execute(
         "SELECT count(*) FROM provider_attempts WHERE job_id=?", (job.id,),
     ).fetchone()[0] == 1
@@ -444,17 +457,17 @@ def _attach_foreign_run(storage, execution, job, topic, account):
     ("mutation", "expected_code"),
     [
         (_invalidate_attempt_reservation, "FINAL_LIFECYCLE_ATTEMPT_STATE_INVALID"),
-        (_set_run_status("SUCCESS"), "FINAL_LIFECYCLE_RUN_INVALID"),
-        (_set_run_status("FAILED"), "FINAL_LIFECYCLE_RUN_INVALID"),
-        (_set_run_status("STOPPED"), "FINAL_LIFECYCLE_RUN_INVALID"),
+        (_set_run_status("SUCCESS"), "SQLITE_PROVIDER_ATTEMPT_NORMALIZATION_REQUIRED"),
+        (_set_run_status("FAILED"), "SQLITE_PROVIDER_ATTEMPT_NORMALIZATION_REQUIRED"),
+        (_set_run_status("STOPPED"), "SQLITE_PROVIDER_ATTEMPT_NORMALIZATION_REQUIRED"),
         (_set_run_finished, "FINAL_LIFECYCLE_RUN_INVALID"),
         (_set_run_error, "FINAL_LIFECYCLE_RUN_INVALID"),
         (_delete_run, "FINAL_LIFECYCLE_RUN_MISSING"),
         (_change_run_account, "FINAL_LIFECYCLE_RUN_INVALID"),
         (_change_run_workflow, "FINAL_LIFECYCLE_RUN_INVALID"),
         (_delete_research_run, "FINAL_LIFECYCLE_RESEARCH_RUN_MISSING"),
-        (_set_research_status("COMPLETE"), "FINAL_LIFECYCLE_RESEARCH_RUN_INVALID"),
-        (_set_research_status("FAILED"), "FINAL_LIFECYCLE_RESEARCH_RUN_INVALID"),
+        (_set_research_status("COMPLETE"), "SQLITE_PROVIDER_ATTEMPT_NORMALIZATION_REQUIRED"),
+        (_set_research_status("FAILED"), "SQLITE_PROVIDER_ATTEMPT_NORMALIZATION_REQUIRED"),
         (_set_research_status("SOURCES_COMPLETE"), "FINAL_LIFECYCLE_RESEARCH_RUN_INVALID"),
         (_change_research_flow, "FINAL_LIFECYCLE_RESEARCH_RUN_INVALID"),
         (_change_research_topic, "FINAL_LIFECYCLE_RESEARCH_RUN_INVALID"),

@@ -356,6 +356,7 @@ def test_maintenance_does_not_dispatch_or_run_research(settings, storage, accoun
 
     assert result.recovery.model_dump() == {
         "requeued_count": 0, "needs_verification_count": 0, "failed_count": 0,
+        "escalated_reconciliation_count": 0,
     }
     assert storage.get_job(job.id).status is JobStatus.QUEUED
     assert storage.conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 0
@@ -419,6 +420,7 @@ def test_maintenance_keeps_fresh_active_job_and_run_untouched(settings, storage,
 
     assert result.recovery.model_dump() == {
         "requeued_count": 0, "needs_verification_count": 0, "failed_count": 0,
+        "escalated_reconciliation_count": 0,
     }
     assert result.reaper.model_dump() == {"checked_count": 0, "stopped_count": 0}
     assert storage.get_job(job.id).status is JobStatus.LEASED

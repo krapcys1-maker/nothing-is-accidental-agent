@@ -1,5 +1,19 @@
 # ARTICLE_EVIDENCE
 
+## Sekcja B — 2026-07-16: „Błąd obsłużony może być groźniejszy niż crash”
+
+- **Fakt:** czwarty niezależny review pokazał, że proces nie musiał się zawiesić, aby zgubić drogę do rozliczenia. Lokalny błąd został „poprawnie” złapany przez Workera, lecz fallback zamknął job jako `FAILED` i pozostawił rozpoczętą próbę poza kolejką operatora.
+- **Decyzja:** terminalizacja researchu nie jest już lokalną decyzją Workera. Jedna atomowa granica sprawdza durable provider attempt: bez próby kończy wykonanie, a przy `RESERVED`/`REQUEST_STARTED` eskaluje do widocznego reconciliation i zachowuje rezerwację do decyzji człowieka.
+- **Dowód:** dokładna kontrpróba przez `Worker.run_once`, 29 nowych testów i baseline **1036/1036**; ten sam inwariant sprawdzony przez reopen, recovery, reaper, resolver, budżet, surowy SQLite i 30-krotne wyścigi. Zero provider calli i kosztu.
+- **Zdanie robocze:** „Najgroźniejsza awaria nie zawsze zabija proces. Czasem zostawia zielony log, zamknięty job i rachunek, którego nikt nie potrafi już rozstrzygnąć.”
+
+## Sekcja B — 2026-07-15: „Rachunek nie jest jeszcze wynikiem"
+
+- **Fakt:** po niepewnym callu system może wiedzieć, że zapłacił, nie wiedząc, czy powstała użyteczna karta; albo mieć kartę, której koszt wymaga jeszcze udowodnienia.
+- **Decyzja:** WAVE 1A rozdziela trzy decyzje o pieniądzach od trzech decyzji o wykonaniu. Jedyna księga kosztu to `model_usage`; `CHARGE_UNKNOWN` pozostaje uczciwym brakiem wiedzy. Operator nie dostaje przycisku retry ani tworzenia wyniku.
+- **Dowód:** migracja 0014 (poprawiana in place po kolejnych `REJECTED — MAJOR`), append-only `reconciliation_events`, pełna tożsamość usage, wyłączna własność karty, pełna walidacja lineage (`W1A-VERIFY-02`), centralna granica failure→reconciliation (`W1A-R4-01`), atomic resolver, **1036 testów offline**, rollback po każdym istotnym kroku, dwa konkurencyjne połączenia i niezmieniona chroniona baza. (Historyczne 1007/919/894/948/955 to wcześniejsze iteracje.)
+- **Zdanie robocze:** „Najłatwiej oszukać system nie wtedy, gdy zgubi rachunek, lecz wtedy, gdy z rachunku próbuje zrobić wynik."
+
 ## Cel
 
 Zbiornik wyselekcjonowanego, cytowalnego materiału dowodowego. Rozdzielony na dwa niezależne strumienie, bo obsługują dwa różne teksty:

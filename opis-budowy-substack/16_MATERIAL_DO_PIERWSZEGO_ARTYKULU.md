@@ -1,8 +1,26 @@
 # 16 — MATERIAŁ DO PIERWSZEGO ARTYKUŁU
 
+> **Nowy materiał `W1A-R4-01` (2026-07-16):** czwarty niezależny review znalazł błąd nie w samym callu, lecz w kodzie, który miał go bezpiecznie obsłużyć. `Worker.run_once` po lokalnym błędzie zamykał job, ale pozostawiał rozpoczętą próbę poza kolejką reconciliation i z aktywną rezerwacją. Systemowa naprawa uczyniła durable attempt źródłem decyzji: albo zwykłe `FAILED` bez próby, albo widoczna eskalacja bez retry. To mocny rozdział o tym, że zielony suite i poprawny recovery nie wystarczą, jeśli fallback ma osobną ścieżkę. Dowód: **1036 testów offline**, race ×30, krytyczne ścieżki ×10, zero kosztu. WAVE nadal otwarta.
+
+## Materiał: „Najgroźniejszy błąd był w obsłudze błędu”
+
+- Cztery niezależne review nie były ceremonią: każde próbowało wyjść poza zakres wcześniejszego zielonego suite.
+- Prawdziwy Worker ujawnił rozjazd dwóch lifecycle'ów, którego izolowane testy resolvera nie pokazywały.
+- **Zdanie do artykułu:** „Crash zostawia ślady. Znacznie groźniejszy bywa wyjątek, który kod grzecznie łapie, zamyka sprawę i chowa jedyny dowód, że rachunek wciąż jest otwarty.”
+
 > **Stan materiału:** WAVE 0B = `APPROVED WITH P2 — READY FOR CHECKPOINT`, nie `CLOSED`; dowody to 894 testy offline, 13 migracji i niezmieniona chroniona baza. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+>
+> **Aktualizacja WAVE 1A (2026-07-15):** powyższy stan jest historyczny. WAVE 0B = `CLOSED — APPROVED WITH P2`; WAVE 1A = `CANDIDATE` po naprawie odrzucenia `REJECTED — MAJOR`. Nowy materiał: „rachunek to nie wynik" — append-only historia operatora, pełna tożsamość usage, wyłączna własność Research Card, brak dead-endu `MANUAL`, spójność ledger↔cache. **980 testów offline, 14 migracji**; historyczne 894/13 są historyczne. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
 
 ## Cel pliku
+
+> **Aktualizacja:** WAVE 0B = `CLOSED — APPROVED WITH P2`; WAVE 1A = `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW` po `W1A-R4-01`, nadal otwarta, 14 migracji i **1036 testów offline**. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
+## Materiał: „Nie każda zapłacona próba jest wynikiem"
+
+- System zatrzymał się przy uczciwym pytaniu: czy provider naliczył koszt i czy pipeline naprawdę wyprodukował kartę? To dwa różne fakty.
+- Nowy resolver wymaga operatora L1 i notatki; koszt znany ląduje w jednej księdze `model_usage`, a nieznany nie jest zastępowany zgadywaniem ani retry.
+- **Zdanie do artykułu:** „Dojrzały system nie pyta tylko, czy zapłacił. Pyta też, czy za tę płatność ma prawo nazwać cokolwiek wynikiem."
 Zebrać w jednym miejscu **gotowy surowiec** do pierwszego artykułu na „Chaos Engine": początek projektu, pomysł, wybór niszy, konto, pierwsza architektura, pierwsze decyzje, walking skeleton, pierwsze koszty i błędy, screeny, fragmenty kodu. To „skrzynka narzędziowa" — z tego pisze się artykuł 1 (i częściowo 2).
 
 **Roboczy tytuł artykułu:** *„Dałem agentowi AI 30 dni, 40 dolarów i własny Substack"*

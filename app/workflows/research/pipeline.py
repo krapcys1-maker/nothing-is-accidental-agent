@@ -32,6 +32,7 @@ from app.models import (
     Account,
     DurableProviderAttemptContext,
     JobExecutionContext,
+    ResearchExecutionFailureOutcome,
     ResearchCard,
     ResearchFlow,
     ResearchJobExecution,
@@ -849,9 +850,13 @@ def run_research_pipeline(
             storage.finish_run(run_id, RunStatus.FAILED.value, cost, error=audit_error)
             storage.mark_research_run_failed(run_id, error=audit_error)
         else:
-            storage.fail_job_research_execution(
+            failure_outcome = storage.fail_or_escalate_job_research_execution(
                 execution_context, cost, error=audit_error, terminalize_job=True,
             )
+            if failure_outcome is not ResearchExecutionFailureOutcome.TERMINALIZED_FAILED:
+                raise ResearchExecutionNeedsReconciliation(
+                    "Research failure retained an active reservation for explicit reconciliation."
+                ) from exc
         if execution_context is None:
             notifier.notify("error", "Research nieudany", str(exc), account.id)
         else:

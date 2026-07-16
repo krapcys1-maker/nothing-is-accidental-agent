@@ -1,8 +1,29 @@
 # 05 — BUDOWA KROK PO KROKU
 
+> **Krok `W1A-R4-01` (2026-07-16):** po czwartym `REJECTED — MAJOR` odtworzyliśmy prawdziwym `Worker.run_once` stan `job=FAILED` + `attempt=REQUEST_STARTED`. Zmapowaliśmy wszystkie terminalne ścieżki i zastąpiliśmy workerowy fallback centralną decyzją StoragePort: bez attemptu normalne `FAILED`, z `RESERVED`/`REQUEST_STARTED` widoczne reconciliation, zachowana rezerwacja i zero drugiej próby. Triggery SQLite zabezpieczają job/run/research_run. Dowód: +29 testów, **1036/1036**, partycje 248+253+267+268, race ×30, krytyczne pliki i QA ×10. WAVE pozostaje otwarta i czeka na niezależny review; Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
+### [2026-07-16] Etap WAVE 1A — systemowa naprawa granicy failure→reconciliation
+- **Co chcieliśmy osiągnąć:** usunąć stan, w którym obsłużony lokalny błąd chowa rozpoczętą próbę providera poza operatorem, a budżet pozostaje zablokowany.
+- **Co zbudowaliśmy:** atomową operację `fail_or_escalate_job_research_execution`, jawne outcomes, dwa powody eskalacji, spójny Worker/pipeline oraz lifecycle guardy w migracji 0014.
+- **Jak to działa:** durable attempt decyduje o wyniku; `RESERVED`/`REQUEST_STARTED` nigdy nie są terminalizowane razem z lifecycle, tylko trafiają do `NEEDS_RECONCILIATION`.
+- **Jak przetestowane:** prawdziwy Worker z fake dispatcherem, temp DB, błędy SQLite/runtime/OS/heartbeat, reopen/recovery/reaper/resolver/budżet/raw SQL i concurrency; pełny suite 1036.
+- **Wynik:** kandydat do niezależnego review, bez sieci, providera i kosztu.
+- **Co jeszcze nie działa:** niezależny reviewer nie zatwierdził WAVE; P2-1 i granica P2-2 pozostają jawne.
+- **Następny krok:** niezależny re-review; WAVE otwarta, Etap 1 zablokowany.
+
 > **Checkpoint WAVE 0B:** `APPROVED WITH P2 — READY FOR CHECKPOINT`, na podstawie 894 testów offline i partycji 213/224/231/226. Rzeczywisty inwentarz wynosi 72 wpisy; Etap 1 `BLOCKED`, live API `ZABRONIONE`, bez `CLOSED` przed commitem.
+>
+> **Aktualizacja WAVE 1A (2026-07-15):** powyższy checkpoint WAVE 0B jest historyczny. WAVE 0B = `CLOSED — APPROVED WITH P2`; WAVE 1A = `CANDIDATE` po naprawie odrzucenia `REJECTED — MAJOR` (append-only `reconciliation_events`, pełna tożsamość usage, wyłączna własność Research Card, brak dead-endu `MANUAL`, spójność ledger↔cache, CLI preview/confirm z version tokenem). **980 testów offline, 14 migracji**; historyczne 894/13 i `READY FOR CHECKPOINT` są historyczne. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
 
 ## Cel pliku
+
+> **Aktualizacja WAVE 1A:** WAVE 0B = `CLOSED — APPROVED WITH P2`; WAVE 1A pozostaje `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW` po `W1A-R4-01`, nie zamknięciem WAVE ani Etapu 1. 14 migracji, **1036 testów offline**, live API `ZABRONIONE`.
+>
+> **Krok `W1A-VERIFY-01` (2026-07-15):** resolver `EXECUTION_FAILED` domyka teraz run zatrzymany przez maintenance-reapera (`STOPPED → FAILED`) w tej samej atomowej transakcji, co reszta rozstrzygnięcia — bez wskrzeszania runu, `DONE` ani drugiej próby. Dodano 7 deterministycznych testów wyścigu resolver↔reaper; suite 948 → **955**.
+
+## 2026-07-15 — WAVE 1A: ręczne domknięcie niepewnej próby
+
+Najpierw sprawdziliśmy, gdzie po timeoutie zostaje rezerwacja: attempt `NEEDS_RECONCILIATION`, job `NEEDS_VERIFICATION`, a worker nie ma prawa wrócić do calla. Następnie dodaliśmy migrację 0014 i jedną transakcję operatorską. Testy psują ją po usage, attempt, runie, research_runie i jobie; po reopen nie zostaje pół rozstrzygnięcia. CLI najpierw tylko pokazuje plan, a zapis następuje wyłącznie z `--confirm`. Żaden z tych kroków nie uruchamia SDK, nie tworzy Research Card i nie robi attemptu #2.
 Pełna **chronologia** budowy. Po każdym większym etapie: co chcieliśmy osiągnąć, co zbudowaliśmy, jakie pliki powstały, jak to działa, jak przetestowaliśmy, jaki był wynik, co jeszcze nie działa, jaki jest następny krok. **Nie zapisujemy tylko efektu końcowego — zachowujemy przebieg.**
 
 ## Szablon wpisu

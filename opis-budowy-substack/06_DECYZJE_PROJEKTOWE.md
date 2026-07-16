@@ -1,8 +1,26 @@
 # 06 — DECYZJE PROJEKTOWE
 
+### D-67: Durable provider attempt ma pierwszeństwo przed workerowym fallbackiem (→ ADR-067)
+
+- **Problem:** Worker potrafił obsłużyć lokalny wyjątek przez terminalne `FAILED`, nie zauważając pozostawionego `RESERVED`/`REQUEST_STARTED`; operator nie widział próby, a rezerwacja blokowała budżet.
+- **Opcje:** poprawić tylko jeden wyjątek; dodać kolejny etap recovery; albo scentralizować każdą terminalną decyzję researchu i dołożyć barierę SQLite.
+- **Wybór:** jedna operacja StoragePort w transakcji `BEGIN IMMEDIATE`, używana przez Worker i pipeline, plus lifecycle guardy SQLite.
+- **Dlaczego:** poprawność zależy od durable stanu attemptu, nie od klasy wyjątku ani lokalnej wiedzy wywołującego.
+- **Zalety / Wady / Ryzyka:** spójna, idempotentna eskalacja i brak retry; większa złożoność macierzy stanów. P2-1 pozostaje fail-closed, a SQLite zapewnia floor trwałego stanu, nie dowód pochodzenia przeciw uprzywilejowanemu autorowi wielu tabel.
+- **Kto podjął:** człowiek autoryzował zakres po niezależnym review; implementacja zgodna z tą decyzją.
+- **Zmieniona później:** nie.
+
 > **Stan decyzji checkpointu:** niezależny końcowy review ustanowił `WAVE 0B APPROVED WITH P2 — READY FOR CHECKPOINT`. Commit wymaga osobnej autoryzacji, push kolejnej; Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+>
+> **Aktualizacja WAVE 1A (2026-07-15):** powyższy checkpoint WAVE 0B jest historyczny. WAVE 0B = `CLOSED — APPROVED WITH P2`; WAVE 1A = `CANDIDATE` po naprawie odrzucenia `REJECTED — MAJOR` (append-only `reconciliation_events`, pełna tożsamość usage, wyłączna własność Research Card, brak dead-endu `MANUAL`, spójność ledger↔cache, CLI preview/confirm z version tokenem, pełna walidacja lineage `W1A-VERIFY-02`). **980 testów offline, 14 migracji**; historyczne 894/13/948/955 i `READY FOR CHECKPOINT` są historyczne. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
 
 ## Cel pliku
+
+> **Aktualizacja:** WAVE 0B = `CLOSED — APPROVED WITH P2`; ADR-062 wprowadza WAVE 1A jako kandydat do niezależnego review. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
+### D-62: Rachunek i wynik są dwiema decyzjami (↔ ADR-062)
+
+Operator L1 wybiera osobno fakt finansowy i fakt wykonawczy. `model_usage` pozostaje jedyną księgą kosztu, dlatego stan reconciled przechowuje wyłącznie audit decyzji. Nieznany koszt nie jest usterką do automatycznego obejścia: zostaje rezerwacją i blokadą. Wynik `DONE` wymaga już istniejącej, prawidłowo powiązanej karty, nie samego rozliczenia. WAVE 1A nie dostaje providera, retry ani attemptu #2.
 Redakcyjny zapis **każdej ważnej decyzji**: problem, opcje, wybór, dlaczego, zalety, wady, ryzyka, kto podjął, czy zmieniona później. Pełny, techniczny rejestr ADR jest w `docs/DECISIONS.md` — tu jest wersja narracyjna do artykułów.
 
 ## Szablon wpisu

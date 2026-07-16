@@ -1,8 +1,32 @@
 # 07 — BŁĘDY I NIEUDANE PRÓBY
 
+> **`W1A-R4-01` — czwarty zielony baseline nie obejmował workerowego fallbacku (2026-07-16).** Reviewer nie testował tylko resolvera: uruchomił prawdziwy `Worker.run_once` i wstrzyknął lokalny `sqlite3.OperationalError` po `REQUEST_STARTED`. Worker zamknął job jako `FAILED`, ale attempt pozostał niewidoczny i nadal blokował budżet. Root cause: dwa osobne obrazy świata — Worker terminalizował lifecycle, a provider ledger żył dalej. Naprawa: jedna transakcja StoragePort wybiera terminalizację albo reconciliation; surowy SQLite nie pozwala już ominąć tej decyzji. Pierwsze partycje po zmianie obaliły stare oczekiwanie testów, że terminalny raw `UPDATE` przejdzie dalej; testy zaktualizowano do silniejszego `IntegrityError` i rollbacku, bez usuwania lub osłabiania asercji. Wynik: **1036/1036**, race ×30, krytyczne pliki i QA ×10.
+
+### [2026-07-16] Obsłużony wyjątek ukrywał rozpoczęty call — SAFETY
+- **Co miało działać:** każda niepewna próba po granicy providera miała być widoczna i rozstrzygalna bez retry.
+- **Co nie zadziałało:** workerowy fallback terminalizował lifecycle bez sprawdzenia active provider attemptu.
+- **Dlaczego:** recovery chroniło crash po wygaśnięciu lease, ale nie lokalny błąd obsłużony przy żywym lease.
+- **Jak naprawiono:** centralna operacja failure→reconciliation, jawne outcomes, jeden event i defense-in-depth SQLite.
+- **Ile prób:** finding ujawnił czwarty niezależny review; podczas walidacji jedna iteracja partycji ujawniła stare, słabsze oczekiwania testów.
+- **Nieudany harness:** pierwsza ręczna próba wyścigu podała Workerowi połączenie SQLite utworzone w innym wątku, więc Worker nie dotarł do testowanej granicy; diagnostyka zostawiła na moment zablokowany katalog temp. Po jawnym cleanupie poprawiona wersja otwierała połączenie we właściwym wątku i potwierdziła zbieżność worker↔maintenance. Lekcja: harness współbieżności także musi respektować ownership zasobów.
+- **Czego się nauczyliśmy:** „obsłużony” wyjątek nie jest bezpieczny, jeśli dwa lifecycle'y mogą skończyć w różnych stanach.
+- **Status:** FIXED OFFLINE / AWAITING INDEPENDENT REVIEW.
+
 > **Stan checkpointu:** pozostały P2 dotyczy rzeczywistego inwentarza 72, nie deklarowanych 71 wpisów Git. WAVE 0B = `APPROVED WITH P2 — READY FOR CHECKPOINT`, nie `CLOSED`; Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+>
+> **Aktualizacja WAVE 1A (2026-07-15):** pierwsza iteracja WAVE 1A została odrzucona (`REJECTED — MAJOR`: W1A-RR-01…06, W1A-NEW-01/02) i naprawiona w jednej fali — append-only `reconciliation_events`, pełna tożsamość usage, wyłączna własność Research Card, usunięty dead-end `MANUAL`, spójność ledger↔cache, migracja 0014 poprawiona in place. WAVE 0B = `CLOSED — APPROVED WITH P2`; WAVE 1A = `CANDIDATE`. **980 testów offline, 14 migracji**; historyczne 894/13 są historyczne. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
 
 ## Cel pliku
+
+> **Aktualizacja:** WAVE 0B = `CLOSED — APPROVED WITH P2`; WAVE 1A = `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW` po `W1A-R4-01`, nadal otwarta; 14 migracji, **1036 testów offline**. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+>
+> **`W1A-VERIFY-01` — flaky test jako lekcja (2026-07-15).** Niezależna weryfikacja nie zaufała deklaracji „948 passed" i faktycznie ją obaliła: jeden test przechodził tylko ~50% czasu. Nie był to fałszywy sukces ani dziura bezpieczeństwa — to był *wyścig*: sprzątacz osieroconych runów (`reap_orphaned_stale_runs`) oznaczał zatrzymany run jako `STOPPED`, a operator-resolver akceptował tylko `RUNNING`/`FAILED`, więc gdy sprzątacz „wygrywał", resolver bezpiecznie odmawiał. Materiał do serii: „zielony test, który był zielony tylko czasem" — determinizm testów jako osobny inwariant. Naprawa: `EXECUTION_FAILED` akceptuje też `STOPPED` (jedno wspólne źródło statusów dla warunku i zapisu, żeby nie mogły się rozjechać — bo to właśnie ich rozjazd był wadą) i domyka `STOPPED → FAILED` bez wskrzeszania runu. Wynik: flaky test 30/30, cały plik 10/10, suite **955**.
+>
+> **`W1A-VERIFY-02` — zielony suite nie znaczy pełny zakres (2026-07-15).** Drugie niezależne review znalazło prawdziwą dziurę bezpieczeństwa, której 955/955 nie łapało: resolver rozliczał attempt, sprawdzając konto i temat tylko na `research_run`, ale **nie na `run`**.  Reviewer podstawił `runs.account_id` = konto obce i `runs.workflow` = `ANALYTICS` (przy właściwym `job` i `research_run`) — resolver terminalizował cudzy run.  Materiał do serii: „przechodzący test dowodzi tego, co testuje, nie tego, czego nie testuje"; lekcja o walidacji *całego* łańcucha pochodzenia (`attempt→job→run→research_run→account→workflow→topic→intent`), nie wygodnego podzbioru.  Naprawa w trzech warstwach: jawna walidacja w aplikacji, rozszerzony version token (zmiana stanu między podglądem a potwierdzeniem = odrzucenie) i trigger w samej bazie.  Wynik: +25 testów lineage, suite 955 → **980**, self-disproof z repo 10/10.
+
+## 2026-07-15 — Zła naprawa timeoutu: zgadnąć koszt albo spróbować ponownie
+
+Najgroźniejszy „łatwy" resolver robiłby jedno z dwóch: wpisywał wymyśloną kwotę albo zwalniał rezerwację i pozwalał na nowy call. Obie wersje niszczą dowód. WAVE 1A zachowuje trzeci stan `CHARGE_UNKNOWN`, odrzuca `NOT_CHARGED` przy istniejącym usage i wymusza jeden terminalny rezultat tylko dla zgodnej decyzji. Kontrpróby obejmują błędne kwoty, stare podglądy CLI, sprzecznych operatorów i awarie po każdym zapisie; wszystkie pracują na tymczasowych SQLite.
 Uczciwy rejestr błędów i nieudanych prób: błędy kodu, API, złe decyzje agenta, słabe teksty/komentarze, problemy z Playwrightem/Substackiem, przekroczenia limitów, koszty, rzeczy do przebudowy. **Bez ukrywania porażek** — to jeden z najcenniejszych materiałów do artykułu.
 
 Każdy wpis: co miało działać · co nie zadziałało · dlaczego · jak naprawiono · ile prób · czego się nauczyliśmy.

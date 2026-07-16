@@ -1,5 +1,14 @@
 # RESEARCH_LOG
 
+## 2026-07-15 — WAVE 1A offline evidence: reconciliation is not research
+
+- **Zakres:** bez nowych źródeł, kart, calli modeli, sieci lub kosztu. To dowód operacyjny przed przyszłym durable-real wykonaniem, nie wynik researchu.
+- **Ustalenie:** koszt znanej próby żyje wyłącznie w `model_usage`; rezultat pipeline'u musi istnieć niezależnie, zanim operator potwierdzi `DONE`. Nieznana opłata pozostaje blokadą, a nie zaproszeniem do retry.
+- **Dowód techniczny:** 0014 fresh/upgrade/rollback + `integrity_check`/`foreign_key_check`, atomic `BEGIN IMMEDIATE`, reopen/failpointy, append-only `reconciliation_events`, wyłączna własność karty, pełna walidacja lineage, centralna granica Worker failure→reconciliation (`W1A-R4-01`) i dwa połączenia SQLite; po czterech niezależnych falach weryfikacji **1036 testów offline**, `data/agent.db` bez zmiany. (Historyczne wyniki iteracji: 1007/980/955/948/919/894.)
+- **Poprawka `W1A-VERIFY-01` (ADR-064):** resolver `EXECUTION_FAILED` rozstrzyga osierocony run zreapowany do `STOPPED` (`STOPPED → FAILED` atomowo, bez wskrzeszenia/`DONE`/attemptu #2); dowód niezmienności ledger↔cache i wyłącznej karty utrzymany. Licznik 948 → **955** (+7 deterministycznych testów), flaky node 30/30, plik 10/10.
+- **Poprawka `W1A-VERIFY-02` (ADR-065):** przed rozliczeniem operator musi mieć spójny cały lineage `attempt→job→run→research_run→account→workflow→topic→intent`.  Wcześniej foreign `runs.account_id`/`workflow=ANALYTICS` był fail-open (nieobjęty 955/955); teraz aplikacja + version token v2 + trigger SQLite wymuszają zgodność, a każda niespójność jest fail-closed bez mutacji.  Licznik 955 → **980** (+25 testów lineage; `scripts/qa/reconciliation_lineage_disproof.py` 10/10).
+- **Status:** WAVE 1A candidate only; Etap 1 `BLOCKED`; live API `ZABRONIONE`.
+
 ## Cel
 
 Dziennik każdego researchu prowadzonego przez agenta. Dla każdego tematu zapisujemy pytanie badawcze, źródła, najważniejsze fakty, elementy niepewne, sprzeczności między źródłami, wniosek oraz wpływ researchu na artykuł/Note/komentarz/decyzję strategiczną. To zabezpieczenie przed halucynacjami (ryzyko R6) i pamięć źródeł. Powiązanie z bazą: `research_cards` + `sources` (źródło prawdy). Materiał najwyższej wartości trafia dodatkowo do `ARTICLE_EVIDENCE.md`.

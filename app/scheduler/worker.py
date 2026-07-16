@@ -8,7 +8,14 @@ import time
 from typing import Callable, Protocol
 
 from app.core.clock import Clock, SystemClock
-from app.models import Job, JobExecutionContext, JobKind, WorkflowType
+from app.models import (
+    Job,
+    JobExecutionContext,
+    JobKind,
+    JobStatus,
+    ResearchExecutionFailureOutcome,
+    WorkflowType,
+)
 from app.policies.policy_engine import PolicyEngine
 from app.ports.storage import LifecycleTransitionError, StaleJobExecutionError, StoragePort
 from app.scheduler.dispatcher import (
@@ -203,7 +210,13 @@ class Worker:
         except LifecycleTransitionError:
             return self._lost_lease(job)
         except Exception:
-            return self._fail(job, "Worker execution failed before a confirmed external effect.")
+            if guard is not None and guard.lost_lease is not None:
+                return self._lost_lease(job)
+            if guard is not None and guard.failure is not None:
+                return self._heartbeat_guard_failure(job, guard)
+            return self._fail_unexpected_research_pipeline(
+                job, "Worker execution failed before a confirmed external effect.",
+            )
         finally:
             if guard is not None:
                 guard.stop()
@@ -254,11 +267,15 @@ class Worker:
         if isinstance(error, LifecycleTransitionError):
             return self._lost_lease(job)
         if isinstance(error, DispatchError):
-            return self._fail(job, self._safe_dispatch_error(error))
+            return self._fail_unexpected_research_pipeline(
+                job, self._safe_dispatch_error(error),
+            )
         return self._fail_unexpected_research_pipeline(job)
 
-    def _fail_unexpected_research_pipeline(self, job: Job) -> WorkerIterationResult:
-        """Close every attached research record together after an unknown error."""
+    def _fail_unexpected_research_pipeline(
+        self, job: Job, error: str = "UNEXPECTED_RESEARCH_PIPELINE_EXCEPTION",
+    ) -> WorkerIterationResult:
+        """Delegate every attached research failure decision to one storage transaction."""
         current = self._storage.get_job(job.id)
         if (
             current is None
@@ -266,8 +283,7 @@ class Worker:
             or current.kind is not JobKind.RESEARCH
             or current.workflow is not WorkflowType.RESEARCH
         ):
-            return self._fail(job, "Worker execution failed before a confirmed external effect.")
-        error = "UNEXPECTED_RESEARCH_PIPELINE_EXCEPTION"
+            return self._fail(job, error)
         execution = JobExecutionContext(
             job_id=current.id,
             lease_owner=self._lease_owner,
@@ -275,7 +291,7 @@ class Worker:
             clock=self._clock,
         )
         try:
-            self._storage.fail_job_research_execution(
+            outcome = self._storage.fail_or_escalate_job_research_execution(
                 execution,
                 None,
                 error,
@@ -287,18 +303,48 @@ class Worker:
             # The failure boundary itself is unavailable; do not fall back to a
             # standalone job failure that could orphan the initialized run.
             return self._lost_lease(job)
+        if outcome in {
+            ResearchExecutionFailureOutcome.ESCALATED_RESERVED,
+            ResearchExecutionFailureOutcome.ESCALATED_REQUEST_STARTED,
+            ResearchExecutionFailureOutcome.ALREADY_NEEDS_RECONCILIATION,
+        }:
+            return WorkerIterationResult(
+                WorkerIterationStatus.NEEDS_VERIFICATION, job.id, error,
+            )
+        if outcome is ResearchExecutionFailureOutcome.ALREADY_TERMINALIZED:
+            durable = self._storage.get_job(job.id)
+            status = (
+                WorkerIterationStatus.DONE
+                if durable is not None and durable.status is JobStatus.DONE
+                else WorkerIterationStatus.FAILED
+            )
+            return WorkerIterationResult(status, job.id, error)
         return WorkerIterationResult(WorkerIterationStatus.FAILED, job.id, error)
 
     @staticmethod
     def _lost_lease(job: Job) -> WorkerIterationResult:
         return WorkerIterationResult(WorkerIterationStatus.LOST_LEASE, job.id)
 
-    @staticmethod
-    def _heartbeat_guard_failure(job: Job, guard: HeartbeatGuard) -> WorkerIterationResult:
-        return WorkerIterationResult(
-            WorkerIterationStatus.LOST_LEASE,
-            job.id,
-            guard.failure_code or "HEARTBEAT_GUARD_FAILURE",
+    def _heartbeat_guard_failure(
+        self, job: Job, guard: HeartbeatGuard,
+    ) -> WorkerIterationResult:
+        # A guard infrastructure failure is not proof that the lease was lost.
+        # If research already has a run/attempt, the same centralized storage
+        # boundary must inspect it before any terminal outcome is chosen.
+        current = self._storage.get_job(job.id)
+        if (
+            current is None
+            or current.run_id is None
+            or current.kind is not JobKind.RESEARCH
+            or current.workflow is not WorkflowType.RESEARCH
+        ):
+            return WorkerIterationResult(
+                WorkerIterationStatus.LOST_LEASE,
+                job.id,
+                guard.failure_code or "HEARTBEAT_GUARD_FAILURE",
+            )
+        return self._fail_unexpected_research_pipeline(
+            job, guard.failure_code or "HEARTBEAT_GUARD_FAILURE",
         )
 
     @staticmethod
@@ -315,6 +361,41 @@ class Worker:
         return WorkerIterationResult(WorkerIterationStatus.FAILED, job.id, error)
 
     def _needs_verification(self, job: Job, error: str) -> WorkerIterationResult:
+        current = self._storage.get_job(job.id)
+        if (
+            current is not None
+            and current.run_id is not None
+            and current.kind is JobKind.RESEARCH
+            and current.workflow is WorkflowType.RESEARCH
+        ):
+            execution = JobExecutionContext(
+                job_id=current.id,
+                lease_owner=self._lease_owner,
+                run_id=current.run_id,
+                clock=self._clock,
+            )
+            try:
+                outcome = self._storage.fail_or_escalate_job_research_execution(
+                    execution,
+                    None,
+                    error,
+                    preserve_for_verification=True,
+                )
+            except (LifecycleTransitionError, StaleJobExecutionError):
+                return WorkerIterationResult(WorkerIterationStatus.LOST_LEASE, job.id)
+            except Exception:
+                return WorkerIterationResult(WorkerIterationStatus.LOST_LEASE, job.id)
+            if outcome is ResearchExecutionFailureOutcome.ALREADY_TERMINALIZED:
+                durable = self._storage.get_job(job.id)
+                status = (
+                    WorkerIterationStatus.DONE
+                    if durable is not None and durable.status is JobStatus.DONE
+                    else WorkerIterationStatus.FAILED
+                )
+                return WorkerIterationResult(status, job.id, error)
+            return WorkerIterationResult(
+                WorkerIterationStatus.NEEDS_VERIFICATION, job.id, error,
+            )
         try:
             self._storage.mark_job_needs_verification(
                 job.id, self._lease_owner, error, clock=self._clock,

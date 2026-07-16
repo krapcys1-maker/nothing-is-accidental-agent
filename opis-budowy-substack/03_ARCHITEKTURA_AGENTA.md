@@ -1,8 +1,18 @@
 # 03 — ARCHITEKTURA AGENTA
 
+> **Aktualizacja `W1A-R4-01` (2026-07-16):** czwarty niezależny review ujawnił lukę pomiędzy poprawnym provider lifecycle a workerowym fallbackiem: po lokalnym błędzie job mógł stać się `FAILED`, gdy attempt nadal był `REQUEST_STARTED`. Wszystkie failure boundaries przypiętego researchu korzystają teraz z jednej atomowej operacji StoragePort. Brak active attemptu kończy lifecycle; `RESERVED`/`REQUEST_STARTED` eskaluje do widocznego `NEEDS_RECONCILIATION`, zachowuje rezerwację i zabrania retry. SQLite blokuje terminalne job/run/research_run obok aktywnego attemptu. **1036 testów offline**; WAVE 1A = `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`, nadal otwarta; Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
 > **Stan WAVE 0B:** `APPROVED WITH P2 — READY FOR CHECKPOINT`; nie `CLOSED` przed osobno autoryzowanym commitem. Etap 1 `BLOCKED`, live API `ZABRONIONE`; 13 migracji i jeden aktywny durable paid-execution flow `durable_provider_v2` z `durable_research_intent_v2`.
+>
+> **Aktualizacja WAVE 1A (2026-07-15):** powyższy stan jest historyczny. WAVE 0B = `CLOSED — APPROVED WITH P2`; WAVE 1A = `CANDIDATE` po naprawie odrzucenia `REJECTED — MAJOR`. Dodano **14. migrację** `0014` (append-only `reconciliation_events`, wyłączna własność Research Card przez `UNIQUE research_runs(research_card_id)`), operatorski resolver L1 z pełną tożsamością usage i spójnością ledger↔cache; dispatcher pozostaje jedynym rootem realnego klienta, `model_usage` jedynym kanonem. **980 testów offline, 14 migracji**; historyczne 894/13 są historyczne. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
 
 ## Cel pliku
+
+> **Aktualizacja WAVE 1A:** WAVE 0B = `CLOSED — APPROVED WITH P2`; WAVE 1A = `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW` po `W1A-R4-01`, nadal otwarta. Jest 14 migracji i **1036 testów offline**; Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
+## 2026-07-15 — Resolver nie jest drugim workerem
+
+Resolver L1 nie zna providera ani nie uruchamia pipeline'u. Otwiera jedną transakcję SQLite, odczytuje attempt, księgę kosztu i lifecycle, a potem zapisuje decyzję człowieka. Pieniądze mają trzy odpowiedzi: znany koszt trafia do `model_usage`, potwierdzony brak kosztu zwalnia rezerwację, a nieznany koszt zostaje blokadą. Wynik wykonawczy ma osobną odpowiedź: dopiero już istniejąca karta pozwala potwierdzić sukces. To chroni przed wygodnym, lecz fałszywym skrótem „skoro rozliczyliśmy koszt, to job jest DONE".
 Opis architektury: diagramy, moduły, warstwy, rola Anthropic API, Policy Engine, SQLite, Playwright, tryby pracy, poziomy autonomii i gotowość do migracji do chmury. **Każda większa zmiana architektury dopisywana z datą i wyjaśnieniem** (sekcja „Ewolucja architektury").
 
 ## Szablon wpisu ewolucji
