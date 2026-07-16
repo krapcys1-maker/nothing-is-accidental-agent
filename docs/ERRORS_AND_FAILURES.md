@@ -668,3 +668,26 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Co znaleziono:** implementer zadeklarował 71 wpisów Git, lecz niezależny gate zliczył rzeczywisty stan jako 50 modified, 1 deleted i 21 untracked, czyli 72 wpisy.
 - **Naprawa:** checkpoint używa wyłącznie inwentarza 72 i rozdziela zatwierdzony zakres do stage od plików chronionych pozostających unstaged.
 - **Status:** `APPROVED WITH P2 — READY FOR CHECKPOINT`; nie jest to `CLOSED` przed commitem. Etap 1 `BLOCKED`, live API `ZABRONIONE`; nie wykonano API, sieci, browsera, kosztu ani mutacji `data/agent.db`.
+
+## [2026-07-16] Skonsolidowany Etap 1 — błędne założenia wykryte w kontrpróbach
+
+- **Kontekst:** pierwsza seria 16 nowych testów offline dla Task Scheduler, raportu read-only, migracji kopii i Unicode.
+- **Nieudana próba 1:** test launchera szukał składni argumentów z podwójnymi cudzysłowami, podczas gdy prawidłowy PowerShell używał tablicy literałów w pojedynczych. To był błąd asercji, nie entrypointu; test zawężono do faktycznego kanonicznego argument list.
+- **Nieudana próba 2:** test „SDK niezaładowane” sprawdzał absolutną nieobecność `anthropic` w `sys.modules`. Kernel bezpieczeństwa pytest może wstępnie zainstalować blokujący moduł testowy, więc warunek dawał false positive. Kontrpróba mierzy teraz wyłącznie nowe moduły załadowane przez import CLI; realny SDK nadal nie jest importowany.
+- **Nieudana próba 3:** raport migracyjny opisywał rollback pojedynczym stringiem. Test oczekiwał dowodliwej struktury. Raport zmieniono na jawne `method=full_file_restore`, źródło backupu i zakaz reverse SQL.
+- **Nieudana komenda walidacyjna:** pierwszy targeted run wskazał nieistniejący `tests/test_config.py` i zakończył się kodem 1 przed collection. Poprawiono listę plików; właściwy zestaw przeszedł 144/144.
+- **Dodatkowa korekta przed testem:** pusty `IdleSettings` w Task Scheduler XML zastąpiono jawnymi `StopOnIdleEnd=false` i `RestartOnIdle=false`, aby nie polegać na niejednoznacznym default/schema parsera Windows.
+- **Skutek:** brak API, sieci, SDK, browsera, publikacji i kosztu; brak zapisu/migracji `data/agent.db`. Findingi zamknięto przed pełną regresją.
+
+## [2026-07-16] Rzeczywisty copy-preflight odrzucony przez istniejące sidecary SQLite
+
+- **Próba:** po zielonej migracji syntetycznej bazy 0009 podjęto niezależną próbę utworzenia tymczasowej kopii rzeczywistych bajtów chronionej bazy, bez zamiaru jej podmiany.
+- **Wynik:** procedura zatrzymała się przed kopiowaniem i przed otwarciem SQLite: wykryła `data/agent.db-wal` oraz odmówiła kodem 2. Sidecary mają timestamp 2026-07-15, sprzed bieżącego pakietu (`-wal` 0 B, `-shm` 32768 B).
+- **Decyzja defensywna:** nie usunięto sidecarów, nie wykonano checkpointu i nie otwarto produkcyjnej bazy do zapisu. Przyszły live-preflight wymaga osobno zatwierdzonego zatrzymania procesów, wyjaśnienia właściciela sidecarów i kontrolowanego checkpointu przed kopią.
+- **Wpływ:** nie blokuje implementacji copy-only narzędzia ani testu na produkcyjnie ukształtowanej bazie tymczasowej; pozostaje jawnym warunkiem przed rzeczywistą migracją produkcyjną, która i tak należy do kryterium acceptance. Produkcyjna migracja nie została wykonana.
+
+## [2026-07-16] Kontrpróby inline — pierwsze wywołanie utraciło cudzysłowy
+
+- **Objaw:** trzy niezależne skrypty przekazane jako zmienna do `python -c` zostały zinterpretowane przez Windows/PowerShell bez wewnętrznych cudzysłowów i zakończyły się `SyntaxError`; nie uruchomiły logiki aplikacji.
+- **Naprawa:** ten sam kod przekazano bez zapisu pliku przez stdin (`$code | python -`). Kontrpróby przeszły: read-only write zablokowany, baza temp byte/metadata unchanged, 5 flag UNKNOWN, maintenance UNKNOWN, 0 nowych importów SDK, systemowy real runner 0 calli, worker+maintenance nie zmieniły flag paid/browser.
+- **Wpływ:** wyłącznie błąd quoting harnessu; bez dostępu do produkcyjnej bazy, API, sieci i kosztu.

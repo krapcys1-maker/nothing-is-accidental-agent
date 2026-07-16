@@ -328,3 +328,7 @@ Naprawa jest mała i celowa: `Decimal(str(value))`, suma składników, a następ
 MAJOR W0B-RR-01 nie był kolejnym błędem zaokrąglenia w helperze. Był błędem granicy: staged estimate kwantyzował komponent przed mnożeniem, a kilka decyzji finansowych jeszcze ufało float. To istotne, bo trzy pół-mikro-USD nie są trzema osobnymi końcowymi kosztami. Zostały surowe `Decimal`, dopóki system nie zsumował ich do jednej kwoty.
 
 Regresje wykazały `2×` i `3×0.0000005` oraz `0.1+0.2` wobec `0.3` w policy, ledgerze i CLI. Usunięto też dwa martwe konstruktory klienta z prywatnego resume, bez odblokowania realnego resume. Pełny wynik to 894 testy offline; WAVE 0B jest kandydatem do re-review, Etap 1 nadal BLOCKED, live API zabronione.
+
+## 2026-07-16 — test potrafi pomylić blokadę SDK z importem SDK
+
+Pierwsza kontrpróba raportu wymagała, aby `anthropic` w ogóle nie istniał w `sys.modules`. Kernel bezpieczeństwa testów może jednak zainstalować atrapę, której jedyną rolą jest blokada realnego SDK. Test mierzy teraz moduły doładowane przez CLI, nie stan całego procesu. Dwie inne próby poprawiły dowodliwość: literal launchera dopasowano do prawdziwej tablicy PowerShell, a rollback migracji zmieniono ze stringa na strukturę `full_file_restore`. Żaden błąd nie dotknął produkcyjnej bazy ani sieci.

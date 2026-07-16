@@ -63,6 +63,7 @@ htmlcov/
 # === Logi i pliki tymczasowe ===
 *.log
 logs/
+runtime/
 *.tmp
 *.temp
 *.bak

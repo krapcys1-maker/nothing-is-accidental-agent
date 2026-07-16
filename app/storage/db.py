@@ -49,6 +49,26 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
         raise
 
 
+def connect_read_only(db_path: Path | str) -> sqlite3.Connection:
+    """Open an existing SQLite file without migrations or writable pragmas."""
+    if _is_test_protected_database(db_path):
+        raise RuntimeError("Tests must not open the project data/agent.db.")
+    path = Path(db_path).resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"SQLite database does not exist: {path}")
+    uri = f"{path.as_uri()}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True)
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("PRAGMA busy_timeout=5000;")
+        conn.execute("PRAGMA query_only=ON;")
+        return conn
+    except Exception:
+        conn.close()
+        raise
+
+
 def _ensure_migrations_table(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE TABLE IF NOT EXISTS schema_migrations ("

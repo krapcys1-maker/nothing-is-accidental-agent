@@ -62,6 +62,11 @@ research_policy:
   max_retries: 2              # limit ponawiania kosztownych wywołań (bez nieskończonego retry)
   timeout_seconds: 60
 
+# Domyślny cap claimów dla bezpiecznych jobów tworzonych przez composition root
+# aplikacji. Paid durable research zachowuje osobny, niekonfigurowalny cap 1.
+worker_policy:
+  default_max_attempts: 1
+
 learning_policy:
   minimum_days_before_strategy_change: 7
   one_primary_variable_per_experiment: true

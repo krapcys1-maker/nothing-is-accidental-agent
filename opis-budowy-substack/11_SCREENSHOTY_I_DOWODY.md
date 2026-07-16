@@ -101,3 +101,7 @@ Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior u
 ### Task 9 — pierwsza realna karta po resume B
 
 `SCREENSHOT REQUIRED`: zanonimizowany lokalny raport powinien pokazać SUCCESS/COMPLETE/USED, card #2, 4 VERIFIED, `end_turn`, koszt nowego B 0,013914 i runu 0,183964/0,20 USD oraz jakościowe REJECT. Nie użyto Playwrighta ani przeglądarki; obecnym dowodem są SQLite po reopen, usage ledger i wpis `task9-first-real-card-resume-b` w indeksie.
+
+### 2026-07-16 — skonsolidowany Etap 1
+
+`SCREENSHOT REQUIRED` dopiero po niezależnym review. Bezpieczny kadr powinien pokazać: oba polecenia `plan` z `SYSTEM TASK NOT REGISTERED`, raport read-only z jawnym `UNKNOWN/BLOCKED`, copy-preflight na kopii z 14 migracjami/13 legacy/0,684580 i końcową weryfikację niezmiennego baselineu. Nie może pokazywać `.env`, danych bazy, prywatnych ścieżek ani sugerować, że zadania zarejestrowano lub produkcję zmigrowano.

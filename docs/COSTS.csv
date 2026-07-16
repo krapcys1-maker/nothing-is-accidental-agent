@@ -27,3 +27,4 @@ date,run_id,task,provider,model,input_tokens,output_tokens,cache_read_tokens,cac
 2026-07-13,c01171bc-7ff5-4b83-bbfa-c0b164137793,research_synthesize_cards,anthropic,claude-sonnet-5,1904,2402,0,0,0,0,0.013914,actual
 # 2026-07-13 - offline old-owner research fencing P1, 26 restart acceptance + 667 full suite - 0.000000 USD; bez API, sieci, browsera, publikacji i realnego researchu.
 # 2026-07-14 - offline DispatchResult terminalization contract P1/P2, 58 restart acceptance + 700 full suite - 0.000000 USD; bez API, sieci, browsera, publikacji i realnego researchu.
+# 2026-07-16 - skonsolidowany pakiet Etapu 1: Task Scheduler plan, raport read-only, copy-only migration rehearsal, testy i dokumentacja - 0.000000 USD; bez API, SDK, sieci, browsera i publikacji.

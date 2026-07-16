@@ -26,6 +26,7 @@ from app.models import (
     ReconciliationPreview,
     ResearchExecutionFailureOutcome,
     ModelUsage,
+    OperationalReport,
     ResearchCard,
     ResearchFlow,
     ResearchRunInitialization,
@@ -210,6 +211,12 @@ class StoragePort(Protocol):
     def sum_real_cost_usd(self, since_prefix: str) -> float:
         """Suma estimated_cost_usd dla realnych (nie dry_run) wpisów, których
         created_at zaczyna się od podanego prefiksu (np. '2026-07' dla miesiąca)."""
+        ...
+
+    def read_operational_report(
+        self, *, now: datetime | None = None, clock: Clock | None = None,
+    ) -> OperationalReport:
+        """Query-only snapshot; unavailable persisted facts remain explicitly unknown."""
         ...
 
     # --- Etap 1: trwała kolejka, lease i runtime flags (bez worker loop) ---

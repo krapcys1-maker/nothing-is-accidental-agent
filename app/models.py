@@ -442,6 +442,49 @@ class SystemFlag(BaseModel):
     is_valid: bool = True
 
 
+class OperationalFieldStatus(str, Enum):
+    OK = "OK"
+    UNKNOWN = "UNKNOWN"
+
+
+class OperationalScalar(BaseModel):
+    """Jedna wartość raportu; UNKNOWN nigdy nie jest renderowane jako zero."""
+
+    status: OperationalFieldStatus
+    value: int | str | None = None
+    detail: str | None = None
+
+
+class OperationalFlagState(BaseModel):
+    """Stan runtime flagi wraz z jawną semantyką fail-closed."""
+
+    key: str
+    status: OperationalFieldStatus
+    value: bool | None = None
+    effective_fail_closed_value: bool
+    detail: str | None = None
+
+
+class OperationalReport(BaseModel):
+    """Read-only snapshot operacyjny Etapu 1."""
+
+    schema_migrations: OperationalScalar
+    job_counts: dict[str, int] | None = None
+    job_counts_status: OperationalFieldStatus = OperationalFieldStatus.UNKNOWN
+    active_leases: OperationalScalar
+    needs_verification_jobs: OperationalScalar
+    needs_reconciliation_attempts: OperationalScalar
+    active_reservations: OperationalScalar
+    active_reserved_cost_usd: OperationalScalar
+    system_flags: dict[str, OperationalFlagState] = Field(default_factory=dict)
+    last_maintenance_at: OperationalScalar
+    unknown_reasons: list[str] = Field(default_factory=list)
+
+    @property
+    def complete(self) -> bool:
+        return not self.unknown_reasons
+
+
 class RunStatus(str, Enum):
     RUNNING = "RUNNING"
     SUCCESS = "SUCCESS"

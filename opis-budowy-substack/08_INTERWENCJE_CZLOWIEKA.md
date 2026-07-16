@@ -184,3 +184,10 @@ Właściciel zlecił usunięcie dokładnie trzech P1 z niezależnego review oraz
 - Zakres: usunąć tylko potwierdzoną lukę w agregacji round-half-up i decyzjach finansowych oraz dwa martwe konstruktory klienta w prywatnym resume; dodać regresje graniczne i zaktualizować dokumentację po testach.
 - Zakazy: API, sieć, browser, realny SDK/provider, koszt, zmiana `data/agent.db`, zmiana lifecycle, request identity, `max_tokens`, schematu lub migracji, stage, commit, push, PR i merge.
 - Granica decyzji: po walidacji working tree ma wrócić do krótkiego niezależnego re-review. WAVE 0B i Etap 1 nie są zamykane.
+
+## 2026-07-16 — człowiek rozdzielił „gotowe technicznie” od „wolno uruchomić”
+
+- Właściciel wybrał minimalny Windows Task Scheduler, ale nie zezwolił na rejestrację zadań.
+- Zezwolił na przygotowanie i test migracji tylko na kopii; nie zezwolił na migrację ani podmianę `data/agent.db`.
+- Live API, real SDK, browser, publikacja i koszt pozostały zabronione. Osobna przyszła zgoda ma obejmować dokładnie jeden job, jeden request, twardy cap i `max_retries=0`.
+- Końcowy status implementera jest kandydacki. Formalne zamknięcie Etapu 1 pozostaje decyzją właściciela po niezależnym review i live acceptance.

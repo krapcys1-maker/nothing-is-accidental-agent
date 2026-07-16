@@ -29,6 +29,10 @@ from app.models import (
     JobReservation,
     JobStatus,
     ModelUsage,
+    OperationalFieldStatus,
+    OperationalFlagState,
+    OperationalReport,
+    OperationalScalar,
     ProviderAttempt,
     ProviderAttemptReconciliationResult,
     ProviderAttemptStatus,
@@ -87,7 +91,7 @@ from app.research.durable_intent import (
     canonicalize_durable_research_payload,
     durable_execution_intent_fingerprint,
 )
-from app.storage.db import apply_migrations, connect
+from app.storage.db import apply_migrations, connect, connect_read_only
 
 
 _RESEARCH_USAGE_TASKS = (
@@ -326,6 +330,11 @@ class SqliteStorage:
         conn = connect(db_path)
         apply_migrations(conn)
         return cls(conn)
+
+    @classmethod
+    def open_read_only(cls, db_path: Path | str) -> "SqliteStorage":
+        """Open an existing database with query_only and without migrations."""
+        return cls(connect_read_only(db_path))
 
     def close(self) -> None:
         self.conn.close()
@@ -3585,6 +3594,227 @@ class SqliteStorage:
             if self.conn.in_transaction:
                 self._rollback_preserving_primary(primary, self.conn.rollback)
             raise
+
+    def read_operational_report(
+        self, *, now: datetime | None = None, clock: Clock | None = None,
+    ) -> OperationalReport:
+        """Collect a query-only Stage 1 snapshot without inferring missing data as zero."""
+        current = self._job_now(now, clock=clock)
+        current_ts = _persisted_ts(current)
+        tables = {
+            str(row["name"])
+            for row in self.conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        unknown_reasons: list[str] = []
+
+        if "schema_migrations" not in tables:
+            schema_migrations = OperationalScalar(
+                status=OperationalFieldStatus.UNKNOWN,
+                detail="schema_migrations table is missing.",
+            )
+            unknown_reasons.append("schema_migrations is unavailable")
+        else:
+            versions = [
+                str(row["version"])
+                for row in self.conn.execute(
+                    "SELECT version FROM schema_migrations ORDER BY version"
+                )
+            ]
+            schema_migrations = OperationalScalar(
+                status=OperationalFieldStatus.OK,
+                value=len(versions),
+                detail=",".join(versions),
+            )
+            if len(versions) != 14:
+                unknown_reasons.append(
+                    f"schema has {len(versions)} migrations; current code requires 14"
+                )
+
+        job_counts: dict[str, int] | None = None
+        job_counts_status = OperationalFieldStatus.UNKNOWN
+        active_leases = OperationalScalar(
+            status=OperationalFieldStatus.UNKNOWN,
+            detail="jobs table is missing.",
+        )
+        needs_verification = OperationalScalar(
+            status=OperationalFieldStatus.UNKNOWN,
+            detail="jobs table is missing.",
+        )
+        active_reservations = OperationalScalar(
+            status=OperationalFieldStatus.UNKNOWN,
+            detail="jobs table is missing.",
+        )
+        active_reserved_cost = OperationalScalar(
+            status=OperationalFieldStatus.UNKNOWN,
+            detail="jobs table is missing.",
+        )
+        if "jobs" not in tables:
+            unknown_reasons.append("jobs data is unavailable")
+        else:
+            status_rows = self.conn.execute(
+                "SELECT status,COUNT(*) AS count FROM jobs GROUP BY status"
+            ).fetchall()
+            raw_counts = {str(row["status"]): int(row["count"]) for row in status_rows}
+            expected_statuses = {status.value for status in JobStatus}
+            unexpected = sorted(set(raw_counts) - expected_statuses)
+            if unexpected:
+                unknown_reasons.append(
+                    "jobs contains unknown statuses: " + ",".join(unexpected)
+                )
+            else:
+                job_counts = {
+                    status.value: raw_counts.get(status.value, 0)
+                    for status in JobStatus
+                }
+                job_counts_status = OperationalFieldStatus.OK
+
+            invalid_active_lease = self.conn.execute(
+                "SELECT COUNT(*) AS count FROM jobs "
+                "WHERE status IN ('LEASED','RUNNING') "
+                "AND (lease_owner IS NULL OR trim(lease_owner)='' OR lease_expires_at IS NULL)"
+            ).fetchone()["count"]
+            if int(invalid_active_lease):
+                unknown_reasons.append("active job lease data is malformed")
+                active_leases = OperationalScalar(
+                    status=OperationalFieldStatus.UNKNOWN,
+                    detail="LEASED/RUNNING job has incomplete lease fields.",
+                )
+            else:
+                count = self.conn.execute(
+                    "SELECT COUNT(*) AS count FROM jobs "
+                    "WHERE status IN ('LEASED','RUNNING') AND lease_owner IS NOT NULL "
+                    "AND lease_expires_at>=?",
+                    (current_ts,),
+                ).fetchone()["count"]
+                active_leases = OperationalScalar(
+                    status=OperationalFieldStatus.OK, value=int(count),
+                )
+
+            needs_count = self.conn.execute(
+                "SELECT COUNT(*) AS count FROM jobs WHERE status='NEEDS_VERIFICATION'"
+            ).fetchone()["count"]
+            needs_verification = OperationalScalar(
+                status=OperationalFieldStatus.OK, value=int(needs_count),
+            )
+
+            reservation_rows = self.conn.execute(
+                "SELECT status,reserved_cost_usd,budget_reserved_at FROM jobs "
+                "WHERE reserved_cost_usd!=0.0 OR budget_reserved_at IS NOT NULL"
+            ).fetchall()
+            allowed_reservation_statuses = {
+                JobStatus.QUEUED.value,
+                JobStatus.LEASED.value,
+                JobStatus.RUNNING.value,
+                JobStatus.NEEDS_VERIFICATION.value,
+            }
+            reservation_values: list[object] = []
+            reservation_invalid = False
+            for row in reservation_rows:
+                try:
+                    amount = decimal_from(
+                        row["reserved_cost_usd"], label="Operational reservation",
+                    )
+                except ValueError:
+                    reservation_invalid = True
+                    break
+                if (
+                    not amount.is_finite()
+                    or amount <= 0
+                    or row["budget_reserved_at"] is None
+                    or str(row["status"]) not in allowed_reservation_statuses
+                ):
+                    reservation_invalid = True
+                    break
+                reservation_values.append(amount)
+            if reservation_invalid:
+                unknown_reasons.append("active cost reservation data is malformed")
+                active_reservations = OperationalScalar(
+                    status=OperationalFieldStatus.UNKNOWN,
+                    detail="Reservation amount, timestamp, or lifecycle is inconsistent.",
+                )
+                active_reserved_cost = OperationalScalar(
+                    status=OperationalFieldStatus.UNKNOWN,
+                    detail="Reservation total is not trustworthy.",
+                )
+            else:
+                total = sum_usd(
+                    reservation_values, label="Operational active reservations",
+                )
+                active_reservations = OperationalScalar(
+                    status=OperationalFieldStatus.OK,
+                    value=len(reservation_values),
+                )
+                active_reserved_cost = OperationalScalar(
+                    status=OperationalFieldStatus.OK,
+                    value=f"{total:.6f}",
+                )
+
+        if "provider_attempts" not in tables:
+            needs_reconciliation = OperationalScalar(
+                status=OperationalFieldStatus.UNKNOWN,
+                detail="provider_attempts table is unavailable before migration 0010.",
+            )
+            unknown_reasons.append("provider reconciliation data is unavailable")
+        else:
+            count = self.conn.execute(
+                "SELECT COUNT(*) AS count FROM provider_attempts "
+                "WHERE status='NEEDS_RECONCILIATION'"
+            ).fetchone()["count"]
+            needs_reconciliation = OperationalScalar(
+                status=OperationalFieldStatus.OK, value=int(count),
+            )
+
+        flag_states: dict[str, OperationalFlagState] = {}
+        for key, fail_closed_value in _SECURITY_FLAG_DEFAULTS.items():
+            if "system_flags" not in tables:
+                flag_states[key] = OperationalFlagState(
+                    key=key,
+                    status=OperationalFieldStatus.UNKNOWN,
+                    effective_fail_closed_value=fail_closed_value,
+                    detail="system_flags table is missing; effective value is fail-closed.",
+                )
+                unknown_reasons.append(f"system flag {key} is unavailable")
+                continue
+            flag = self.get_system_flag(key)
+            if flag is None or not flag.is_valid:
+                flag_states[key] = OperationalFlagState(
+                    key=key,
+                    status=OperationalFieldStatus.UNKNOWN,
+                    effective_fail_closed_value=fail_closed_value,
+                    detail="missing or malformed; effective value is fail-closed.",
+                )
+                unknown_reasons.append(f"system flag {key} is missing or malformed")
+            else:
+                flag_states[key] = OperationalFlagState(
+                    key=key,
+                    status=OperationalFieldStatus.OK,
+                    value=flag.value,
+                    effective_fail_closed_value=fail_closed_value,
+                )
+
+        # MaintenanceRunner currently persists effects, not a cycle timestamp.
+        # The report must not invent one from job.updated_at or return zero.
+        last_maintenance = OperationalScalar(
+            status=OperationalFieldStatus.UNKNOWN,
+            detail="No durable maintenance-cycle timestamp exists in schema 0014.",
+        )
+        unknown_reasons.append("last maintenance-cycle timestamp is not persisted")
+
+        return OperationalReport(
+            schema_migrations=schema_migrations,
+            job_counts=job_counts,
+            job_counts_status=job_counts_status,
+            active_leases=active_leases,
+            needs_verification_jobs=needs_verification,
+            needs_reconciliation_attempts=needs_reconciliation,
+            active_reservations=active_reservations,
+            active_reserved_cost_usd=active_reserved_cost,
+            system_flags=flag_states,
+            last_maintenance_at=last_maintenance,
+            unknown_reasons=unknown_reasons,
+        )
 
     def get_system_flag(self, key: str) -> SystemFlag | None:
         """Reads SQLite on every call; safety flags fail closed when absent or malformed."""

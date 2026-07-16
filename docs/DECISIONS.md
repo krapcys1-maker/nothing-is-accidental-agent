@@ -859,3 +859,38 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Podstawa:** 894/894 testów offline, partycje 213/224/231/226, brak MAJOR i CRITICAL, W0B-RR-01 oraz W0B-CLEAN-01 zamknięte, W0B-REV-06 bez regresji, chroniony baseline `data/agent.db` identyczny, aktywna dokumentacja spójna, 13 migracji i jeden aktywny durable paid-execution flow `durable_provider_v2` z `durable_research_intent_v2`.
 - **P2:** deklaracja implementera o 71 wpisach Git została skorygowana przez niezależny gate do rzeczywistego inwentarza 72 (50 modified, 1 deleted, 21 untracked). Nie jest to zgoda na commit ani push.
 - **Granice:** staging obejmuje tylko zatwierdzony zakres WAVE 0B; `data/agent.db`, `docs/BUILD_LOG.md`, cały katalog `instrukcja dla pisania artykulow/`, `.env*`, sekrety, lokalne artefakty i snapshoty pozostają poza indeksem. Commit wymaga osobnej autoryzacji właściciela, a push kolejnej, odrębnej autoryzacji; bez PR i merge.
+
+### ADR-069: Windows Task Scheduler jest minimalnym launcherem Etapu 1
+
+- **Data:** 2026-07-16
+- **Status:** ACCEPTED / wdrożone i zweryfikowane offline; zadania systemowe NIEZAREJESTROWANE.
+- **Kto podjął:** właściciel wskazał preferowany wariant i granice skonsolidowanego pakietu; Codex wykonał implementację. ADR nie jest zgodą na rejestrację zadania.
+- **Kontekst:** Etap 1 wymaga, aby system mógł sam uruchamiać już zakolejkowaną pracę. Worker, maintenance, lease, eligibility i Policy Engine już istnieją. Nowy daemon, usługa Windows w Pythonie albo zewnętrzny broker dublowałby logikę i poszerzał powierzchnię awarii.
+- **Decyzja:** Windows Task Scheduler uruchamia wyłącznie dwa istniejące one-shot entrypointy: worker co minutę i maintenance co pięć minut. XML przypina aktualny interpreter, projektowy CWD, konto interaktywne `LeastPrivilege`, `IgnoreNew`, brak schedulerowego retry, brak wymagania sieci i brak hard-kill timeoutu. PowerShell launchery uruchamiają proces ukryty, logują stdout/stderr do gitignored `runtime/logs/` i propagują exit code. Zarządzanie odbywa się per zadanie, z osobnym przełącznikiem potwierdzającym instalację/usunięcie.
+- **Granica paid/browser:** systemowy worker zawsze ma `--offline-only`; dispatcher blokuje `dry_run=false` kodem `SYSTEM_SCHEDULER_OFFLINE_ONLY` zanim osiągnie real runner, niezależnie od runtime flags. Maintenance nie claimuje. Launchery nie ustawiają flag, nie tworzą providera i nie publikują.
+- **Timeout/overlap:** `IgnoreNew` zabrania równoległej instancji tego samego zadania. `ExecutionTimeLimit=PT0S` zapobiega zabiciu Pythonowego wątku podczas SQLite write; trwałe rozstrzygnięcie nadal zapewniają lease/heartbeat/recovery. Globalny dispatch timeout pozostaje descope/P2.
+- **Weryfikacja:** wyłącznie offline: parsowanie wygenerowanego XML, argumenty jako listy bez shell, command-injection rejection, literalne entrypointy launcherów, brak wywołania `schtasks` w planie i bez potwierdzenia oraz kontrpróba real job → runner call count 0. Pełny suite 1052/1052; partycje exact-once 1052/4. Nie wykonano rejestracji, API, SDK, browsera ani kosztu.
+
+### ADR-070: Jedno zamknięte kryterium formalnego zakończenia Etapu 1
+
+- **Data:** 2026-07-16
+- **Status:** ACCEPTED jako kryterium; Etap 1 pozostaje `OPEN / BLOCKED PENDING REVIEW AND CONTROLLED LIVE ACCEPTANCE`.
+- **Kto podjął:** właściciel zdefiniował rozdzielenie techniczne/live/formalne; Codex utrwalił je w źródłach prawdy. Tylko właściciel może wydać końcową decyzję `CLOSED`.
+- **Wykonane technicznie:** trwała kolejka; claim; lease; fencing; heartbeat; restart; recovery; maintenance; reaper; scheduling policy; runtime flags; dry-run worker; durable provider boundary; usage/settlement; reconciliation operatorskie; kontrolowany launcher Windows Task Scheduler; minimalny read-only raport.
+- **Przed live testem:** niezależny review pakietu; osobno zatwierdzona migracja produkcji `0009→0014`; nowy baseline SHA; jawna inicjalizacja pięciu flag; dokładny live-test contract; twardy cap; `max_retries=0`; dokładnie jeden job i jeden provider request; osobna zgoda właściciela.
+- **Przed formalnym CLOSED:** pozytywny wynik jednego kontrolowanego live testu durable single flow; niezależny review trwałego stanu po teście; brak otwartego MAJOR/CRITICAL; formalna decyzja właściciela.
+- **Niewymagane:** browser, publikacja, FetchPort, evidence excerpts, content pipeline, panel FastAPI, autonomia, interakcje, analytics, Etap 2+ i backlog P2 bez osiągalnego naruszenia.
+- **Skutek:** nie istnieje już otwarta etykieta „pozostałe P1”. Zamknięta lista blockerów to niespełnione punkty dwóch poprzednich akapitów. Bieżący status implementera to `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; live API nadal `ZABRONIONE`.
+
+### ADR-071: Pierwsza migracja produkcji jest zatwierdzanym copy-preflightem i pełnym restore
+
+- **Data:** 2026-07-16
+- **Status:** ACCEPTED jako plan / narzędzie zweryfikowane na tymczasowych kopiach; produkcyjna migracja NIE WYKONANA.
+- **Kto podjął:** właściciel zatwierdził wyłącznie przygotowanie i test procedury, zakazując migracji produkcji; Codex zaimplementował copy-only preflight.
+- **Stan wejściowy:** kod zna migracje `0001`–`0014`; chroniona `data/agent.db` fizycznie ma `0001`–`0009`, 13 historycznych real `model_usage`, koszt `0.684580` USD i puste `system_flags`. Baseline wejściowy: SHA-256 `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`, 294912 B, mtime UTC `2026-07-14T15:59:24.9521212Z`.
+- **Decyzja:** narzędzie wymaga zatwierdzonych branch/HEAD/SHA/size/mtime i pustego workspace poza źródłem. Odmawia przy WAL/SHM. Tworzy pełny byte/metadata-identical backup, sprawdza SHA/integrity/FK, kopiuje go do kandydata, stosuje tylko `0010`–`0014`, ponawia migrator jako no-op i weryfikuje ledger 14 migracji, zamknięty zbiór triggerów, 13 legacy proofs, niezmieniony koszt oraz integrity/FK. Źródło nigdy nie jest zastępowane.
+- **Flagi kandydata:** `kill_switch=false`, `worker_enabled=false`, `safe_mode=false`, `paid_actions_enabled=false`, `browser_actions_enabled=false`. Istniejące niepuste flagi powodują odmowę zamiast nadpisania. Paid i browser nigdy nie są aktywowane.
+- **Nowy baseline:** SHA kandydata jest wyłącznie propozycją w raporcie. Baseline produkcyjny może ustanowić dopiero właściciel po osobno zatwierdzonej zamianie pliku i ponownych checks. Rejestracja workera systemowego jest jeszcze osobniejszą decyzją.
+- **Rollback:** wyłącznie pełne odtworzenie zweryfikowanego backupu przy zatrzymanych procesach, potem SHA/integrity/FK. Ręczne reverse `UPDATE`/`DELETE` lub edycja `schema_migrations` są zabronione.
+- **Dowód:** deterministyczna syntetyczna baza 0009 o produkcyjnym kształcie przeszła migrację na kopii, zachowała 13 legacy rows i `0.684580`, ustanowiła pięć wyłączonych flag, miała 14 wpisów i wymagane triggery, a drugi przebieg był no-op. Chroniona baza nie została otwarta do zapisu ani zmigrowana.
+- **Kontrpróba rzeczywistego źródła:** próba copy-preflight została odrzucona przed kopiowaniem z powodu istniejących sidecarów `agent.db-wal`/`agent.db-shm` z 2026-07-15. Nie wykonano checkpointu ani usunięcia. Quiesce i rozstrzygnięcie sidecarów wymagają osobnej zgody przed przyszłą migracją.

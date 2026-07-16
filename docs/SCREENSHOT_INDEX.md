@@ -304,6 +304,13 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Czego nie może pokazać:** `.env`, kluczy, danych `data/agent.db`, raw provider response, prywatnych ścieżek ani danych konta zewnętrznego.
 - **Dlaczego nie utworzono teraz:** zakres był offline-only; dowodem są fake callery, tymczasowe SQLite i read-only hash/integrity baselineu.
 
+## 2026-07-16 — skonsolidowany pakiet końcowy Etapu 1
+
+- **Status:** `SCREENSHOT REQUIRED` po niezależnym review; w bieżącym zadaniu nie tworzono screenshotu.
+- **Co powinien pokazać:** zanonimizowany terminal z nowym collect/full suite, weryfikacją czterech partycji, `compileall`, `git diff --check`, planem obu zadań systemowych zakończonym `SYSTEM TASK NOT REGISTERED`, read-only raportem z `UNKNOWN/BLOCKED`, copy-preflightem 0009→0014 na kopii oraz niezmienionym SHA/size/mtime chronionej bazy.
+- **Czego nie może pokazać:** `.env`, kluczy/proxy, zawartości historycznej bazy, raw provider response, prywatnych danych konta ani plików instrukcji pisania.
+- **Dlaczego nie utworzono:** zakres zakazywał browsera i działań zewnętrznych, a dowodem są logi/testy offline. Screenshot nie może sugerować rejestracji Task Scheduler, migracji produkcji ani wykonania live API.
+
 ## 2026-07-15 — Formalny checkpoint WAVE 0B
 
 - **Status:** `SCREENSHOT REQUIRED`.

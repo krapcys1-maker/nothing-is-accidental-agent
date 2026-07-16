@@ -168,6 +168,7 @@ class JobDispatcher:
         clock: Clock | None = None,
         research_dry_run: ResearchDryRunCallable = run_research_dry_run,
         research_real: ResearchDryRunCallable = _run_durable_real_research,
+        allow_real_research: bool = True,
     ) -> None:
         self._settings = settings
         self._storage = storage
@@ -175,6 +176,7 @@ class JobDispatcher:
         self._clock = clock or SystemClock()
         self._research_dry_run = research_dry_run
         self._research_real = research_real
+        self._allow_real_research = allow_real_research
 
     def dispatch(
         self,
@@ -222,6 +224,11 @@ class JobDispatcher:
         lease_owner: str,
         heartbeat: Callable[[], None],
     ) -> DispatchResult:
+        if job.payload.get("dry_run") is False and not self._allow_real_research:
+            raise PolicyDeniedError(PolicyDecision.block(
+                "SYSTEM_SCHEDULER_OFFLINE_ONLY",
+                "The system-scheduled worker cannot execute paid research.",
+            ))
         topic, is_real = self._validate_research_payload(job)
 
         # A checkpoint before entering the existing pipeline keeps a long lease

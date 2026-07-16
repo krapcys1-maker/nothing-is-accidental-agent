@@ -266,3 +266,10 @@ Odczyt bazy przyniósł jeszcze jedną lekcję: szczegółowy research był popr
 - Naprawa ma obraz prostszy niż kod: dopóki historia się składa, liczby pozostają surowe. Dopiero po ostatnim zdaniu wybieramy jeden wynik `ROUND_HALF_UP`.
 - Dowód: 894 testy offline, partycje 213/224/231/226, `0.1+0.2` oraz pół-mikro-USD sprawdzone w policy, ledgerze i CLI; zero API, sieci, kosztu i zmiany chronionej bazy.
 - Zdanie do artykułu: „Najłatwiej oszukać rachunek nie wtedy, gdy źle liczysz — tylko wtedy, gdy kończysz liczyć zbyt wcześnie.”
+
+### Materiał: „Zegar nie dostał kluczy”
+
+- Windows Task Scheduler może obudzić proces, ale nie może włączyć płatnych akcji, zmienić flag ani opublikować tekstu. Uprawnienie nadal pochodzi z trwałych bramek aplikacji.
+- Gdy raport nie ma trwałego timestampu maintenance, mówi `UNKNOWN`, zamiast układać wiarygodnie brzmiącą historię z ostatniego `updated_at`.
+- Migracja jest ćwiczona na kopii, a rollback oznacza odtworzenie całego pliku. Produkcja nadal ma schemat 0009.
+- Zdanie do artykułu: „Najbezpieczniejsza automatyzacja nie robi więcej — tylko regularnie puka do tych samych, zamkniętych drzwi.”

@@ -140,7 +140,7 @@ class AnthropicLLMClient(LLMClient):
         timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS,
     ) -> None:
         if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
-            raise ValueError("timeout_seconds musi byÄ‡ skoÅ„czonÄ… liczbÄ… dodatniÄ….")
+            raise ValueError("timeout_seconds musi być skończoną liczbą dodatnią.")
         self.model = model
         self._api_key = api_key
         self._caller = caller or self._default_caller

@@ -364,3 +364,11 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Zwrot: `0.0000005` dwa razy daje `0.000001`, trzy razy daje `0.000002`. To nie są trzy osobne paragony; to jedna suma, która dopiero na końcu staje się kwotą.
 - Dowód: 894 testy offline, partycje 213+224+231+226, przypadki `0.1+0.2` dla policy, ledgeru i CLI, bez sieci, API, kosztu lub prawdziwej bazy.
 - Granica: nie powstał nowy workflow ani nowy attempt. `max_tokens` nadal jest jednym źródłem estimate/rezerwacji/callera, a actual ponad rezerwacją nadal kończy się `NEEDS_RECONCILIATION` z jednym usage.
+
+## 2026-07-16 — Materiał: „Automatyzacja zaczyna się od prawa do odmowy”
+
+- Systemowy scheduler nie dostał własnej logiki. Umie wyłącznie uruchomić istniejący worker i maintenance; overlap jest blokowany przez `IgnoreNew`, a real research dodatkowym `--offline-only` przed runnerem.
+- Raport operacyjny jest ciekawszy tam, gdzie odmawia zgadywania: brak trwałego czasu maintenance i brak flag nie stają się zerem/false, tylko widocznym `UNKNOWN/BLOCKED`.
+- Migracja produkcyjna została rozbita na dowód na kopii i osobną decyzję o zmianie źródła. Backup jest identycznym plikiem, koszt historyczny musi pozostać `0.684580`, drugi przebieg migracji ma być no-op, a rollback oznacza pełne odtworzenie pliku, nie „odkręcanie” SQL-em.
+- Kontrast narracyjny: `CANDIDATE COMPLETE` nie znaczy `CLOSED`. Brakujący live acceptance jest jawnie nazwanym warunkiem, nie ukrytym „pozostałym P1”.
+- Dowód: nowe testy Task Scheduler/report/migration/Unicode, pełna regresja i partycje offline, brak API/sieci/SDK/browsera/publikacji, koszt 0 USD, chroniona baza niezmieniona.

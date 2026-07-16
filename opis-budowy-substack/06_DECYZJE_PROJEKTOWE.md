@@ -350,3 +350,9 @@ Migracja 0011 egzekwuje request-bound usage dla nowych realnych wywołań. Stare
 - **Powód:** wcześniejszy kontrakt poprawnie opisywał helper, lecz staged mnożył już publicznie zaokrąglony koszt, a kilka decyzji nadal używało float. To mogło rozdzielić wynik `2×`/`3×0.0000005` albo `0.1+0.2` od tego samego limitu.
 - **Granica:** bez zmian `max_tokens`, lifecycle, request identity, attempt #2, schematu lub migracji. `actual_cost > reservation` nadal zachowuje jeden usage i ustawia `NEEDS_RECONCILIATION`; real resume nadal odmawia przed klientem.
 - **Status:** 894 testy offline, 13 migracji, WAVE 0B `CANDIDATE`, Etap 1 `BLOCKED`, live API `ZABRONIONE`; decyzja wymaga krótkiego niezależnego re-review, nie jest zamknięciem fali.
+
+## D-069/070/071 — launcher, kryterium zamknięcia i migracja przez kopię
+
+- **Launcher:** Windows Task Scheduler tylko uruchamia kanoniczne one-shot entrypointy. Systemowy worker ma dodatkowe `--offline-only`; nie ustawia flags i nie może dotrzeć do paid runnera. Rejestracja każdego zadania wymaga osobnej zgody.
+- **Kryterium:** techniczna kompletność nie jest formalnym `CLOSED`. Przed zamknięciem pozostają: review pakietu, kontrolowana migracja i baseline, jeden live job/request z capem i `max_retries=0`, review trwałego wyniku, brak MAJOR/CRITICAL i decyzja właściciela.
+- **Migracja:** źródło pozostaje nietknięte; pełny backup jest dowodem i jedyną drogą rollbacku. Kandydat musi zachować cost/legacy/integrity, a paid/browser flags pozostają false. Produkcyjna migracja nie została wykonana.

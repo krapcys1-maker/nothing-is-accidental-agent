@@ -73,6 +73,10 @@ class Settings:
     research_max_retries: int = 2
     research_timeout_seconds: int = 60
 
+    # Trwała kolejka. Dotyczy wyłącznie bezpiecznych enqueue z composition root
+    # aplikacji; durable paid research zachowuje osobny, twardy max_attempts=1.
+    worker_default_max_attempts: int = 1
+
     # growth_policy.editorial_schedule; brak konfiguracji blokuje tylko enqueue CLI.
     editorial_schedule: dict[str, Any] = field(default_factory=dict)
 
@@ -108,8 +112,8 @@ def require_valid_real_provider_pricing(settings: Settings) -> None:
             invalid.append(key)
     if invalid:
         raise ConfigError(
-            "Realny provider zablokowany: brakujÄ…cy, niepoprawny albo niedodatni "
-            f"cennik dla: {', '.join(invalid)}. Nie tworzÄ™ klienta ani nie woÅ‚am API."
+            "Realny provider zablokowany: brakujący, niepoprawny albo niedodatni "
+            f"cennik dla: {', '.join(invalid)}. Nie tworzę klienta ani nie wołam API."
         )
 
 
@@ -126,6 +130,12 @@ def _as_bool(value, default: bool) -> bool:
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _positive_int(value: Any, *, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ConfigError(f"{label} musi być dodatnią liczbą całkowitą.")
+    return value
 
 
 def _load_yaml(path: Path) -> dict:
@@ -173,6 +183,9 @@ def load_settings() -> Settings:
     topic_policy = growth.get("topic_policy", {}) or {}
     weights = growth.get("topic_scoring_weights", {}) or {}
     research_policy = growth.get("research_policy", {}) or {}
+    worker_policy = growth.get("worker_policy", {}) or {}
+    if not isinstance(worker_policy, dict):
+        raise ConfigError("worker_policy musi być mapą konfiguracji.")
     editorial_schedule = growth.get("editorial_schedule", {}) or {}
     if not isinstance(editorial_schedule, dict):
         raise ConfigError("editorial_schedule musi być mapą konfiguracji.")
@@ -210,6 +223,10 @@ def load_settings() -> Settings:
         research_min_source_quality=float(research_policy.get("min_source_quality_score", 0.50)),
         research_max_retries=int(research_policy.get("max_retries", 2)),
         research_timeout_seconds=int(research_policy.get("timeout_seconds", 60)),
+        worker_default_max_attempts=_positive_int(
+            worker_policy.get("default_max_attempts", 1),
+            label="worker_policy.default_max_attempts",
+        ),
         editorial_schedule=dict(editorial_schedule),
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
         accounts=_load_accounts(config_dir),

@@ -19,7 +19,14 @@ from uuid import uuid4
 
 from app.core.clock import SystemClock
 from app.core.config import ConfigError, Settings, load_settings
-from app.models import ExecutionResolution, FinancialResolution, JobKind, WorkflowType
+from app.models import (
+    ExecutionResolution,
+    FinancialResolution,
+    JobKind,
+    OperationalFieldStatus,
+    OperationalScalar,
+    WorkflowType,
+)
 from app.ports.storage import (
     ProviderAttemptReconciliationError,
     ReconciliationPreviewStaleError,
@@ -155,6 +162,7 @@ def _cmd_enqueue_research(args: argparse.Namespace) -> int:
             topic_id=args.topic_id,
             payload={"account_id": account.id, "topic_id": args.topic_id, "dry_run": True},
             requested_at=args.requested_at,
+            max_attempts=settings.worker_default_max_attempts,
         ))
         local = result.decision.earliest_run_at.astimezone(policy.timezone)
         print(f"ENQUEUE: job_id={result.job.id}")
@@ -170,7 +178,9 @@ def _cmd_enqueue_research(args: argparse.Namespace) -> int:
         storage.close()
 
 
-def _build_worker(settings: Settings) -> tuple[Worker, SqliteStorage]:
+def _build_worker(
+    settings: Settings, offline_only: bool = False,
+) -> tuple[Worker, SqliteStorage]:
     """Composes the same runtime dependencies used by the application, once."""
     # Keep paid-provider imports out of the CLI module import graph.  In
     # particular the reconciliation commands must stay usable with no SDK or
@@ -184,6 +194,7 @@ def _build_worker(settings: Settings) -> tuple[Worker, SqliteStorage]:
     policy = PolicyEngine(settings, storage, clock)
     dispatcher = JobDispatcher(
         settings=settings, storage=storage, policy=policy, clock=clock,
+        allow_real_research=not offline_only,
     )
     return Worker(
         storage=storage, policy=policy, dispatcher=dispatcher,
@@ -200,7 +211,7 @@ def _cmd_worker(args: argparse.Namespace) -> int:
     from app.scheduler.worker import WorkerIterationStatus
 
     settings = replace(load_settings(), dry_run=True)
-    worker, storage = _build_worker(settings)
+    worker, storage = _build_worker(settings, args.offline_only)
     try:
         if args.once:
             result = worker.run_once()
@@ -276,6 +287,83 @@ def _cmd_maintain(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"MAINTENANCE: failed closed: {exc}", file=sys.stderr)
         return 1
+
+
+_REPORT_EXIT_OK = 0
+_REPORT_EXIT_DEGRADED = 2
+_REPORT_EXIT_CONFIG = 3
+_REPORT_EXIT_STORAGE = 6
+
+
+def _operational_value(field: OperationalScalar) -> str:
+    if field.status is OperationalFieldStatus.OK:
+        return str(field.value)
+    detail = f" ({field.detail})" if field.detail else ""
+    return f"UNKNOWN/BLOCKED{detail}"
+
+
+def _cmd_operational_report(args: argparse.Namespace) -> int:
+    """Render a read-only snapshot; opening the database never runs migrations."""
+    del args
+    try:
+        settings = load_settings()
+    except ConfigError as exc:
+        print(f"OPERATIONAL REPORT: config error: {exc}", file=sys.stderr)
+        return _REPORT_EXIT_CONFIG
+    storage = None
+    try:
+        storage = SqliteStorage.open_read_only(settings.db_path)
+        report = storage.read_operational_report(clock=SystemClock())
+        closing, storage = storage, None
+        closing.close()
+    except (OSError, RuntimeError, sqlite3.Error, ValueError) as exc:
+        print(f"OPERATIONAL REPORT: storage error: {exc}", file=sys.stderr)
+        return _REPORT_EXIT_STORAGE
+    finally:
+        if storage is not None:
+            try:
+                storage.close()
+            except (OSError, RuntimeError, sqlite3.Error):
+                pass
+
+    print("OPERATIONAL REPORT — READ ONLY")
+    print(f"schema_migrations={_operational_value(report.schema_migrations)}")
+    if report.job_counts_status is OperationalFieldStatus.OK and report.job_counts is not None:
+        for status, count in report.job_counts.items():
+            print(f"jobs.{status}={count}")
+    else:
+        print("jobs=UNKNOWN/BLOCKED")
+    print(f"active_leases={_operational_value(report.active_leases)}")
+    print(
+        "needs_verification_jobs="
+        f"{_operational_value(report.needs_verification_jobs)}"
+    )
+    print(
+        "needs_reconciliation_attempts="
+        f"{_operational_value(report.needs_reconciliation_attempts)}"
+    )
+    print(f"active_reservations={_operational_value(report.active_reservations)}")
+    print(
+        "active_reserved_cost_usd="
+        f"{_operational_value(report.active_reserved_cost_usd)}"
+    )
+    for key, flag in report.system_flags.items():
+        if flag.status is OperationalFieldStatus.OK:
+            rendered = str(flag.value).lower()
+        else:
+            rendered = (
+                "UNKNOWN/BLOCKED "
+                f"(effective_fail_closed={str(flag.effective_fail_closed_value).lower()})"
+            )
+        print(f"system_flag.{key}={rendered}")
+    print(f"last_maintenance_at={_operational_value(report.last_maintenance_at)}")
+    if report.unknown_reasons:
+        for reason in report.unknown_reasons:
+            print(f"unknown_reason={reason}")
+        print("REPORT_STATUS=DEGRADED_UNKNOWN")
+        return _REPORT_EXIT_DEGRADED
+    print("REPORT_STATUS=OK")
+    return _REPORT_EXIT_OK
 
 
 def _cmd_list_reconciliations(args: argparse.Namespace) -> int:
@@ -480,6 +568,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--poll-seconds", type=float,
         help="Uruchom kontrolowaną pętlę z podanym interwałem (> 0).",
     )
+    p_worker.add_argument(
+        "--offline-only", action="store_true",
+        help="Zablokuj durable paid research niezależnie od runtime flags; wymagane przez system scheduler.",
+    )
     p_worker.set_defaults(func=_cmd_worker)
 
     p_reaper = sub.add_parser("reap-runs", help="Jednorazowo odzyskaj joby i zatrzymaj osierocone runy offline.")
@@ -509,6 +601,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_list_reconciliations.add_argument("--account-id", help="Optional account isolation filter.")
     p_list_reconciliations.set_defaults(func=_cmd_list_reconciliations)
+
+    p_operational_report = sub.add_parser(
+        "operational-report",
+        help="Read-only Stage 1 status report; never migrates, claims, dispatches or loads an SDK.",
+    )
+    p_operational_report.set_defaults(func=_cmd_operational_report)
 
     p_reconcile = sub.add_parser(
         "reconcile-attempt", help="Resolve one persisted NEEDS_RECONCILIATION attempt without a provider call.",

@@ -188,3 +188,7 @@ Resumability przyniosło mierzalny zwrot: zamiast powtarzać pięć calli A1/A2,
 Scheduler nie może decydować o ponowieniu na podstawie etykiety „provider error”. Potrzebuje zamkniętej taksonomii i domyślnej odmowy: dopiero jawny timeout, network, 429 albo wybrany 5xx jest kandydatem do retry, a i wtedy budżet może zatrzymać kolejną próbę. Błędy formatu i walidacji nie stają się bardziej poprawne przez drugi płatny call. Brak lokalnego usage również nie dowodzi braku rachunku — P2-19 pozostaje granicą obserwowalności.
 
 Typowany wyjątek ma wartość także po zakończeniu procesu. Jeśli przy zapisie zostaje z niego tylko komunikat, przyszły operator lub worker nie odróżni 401 od 422 bez ponownej interpretacji tekstu. Trwały audit musi więc zachować klasę i bezpieczne skalarne metadane, ale nie provider payload ani raw response.
+
+### 2026-07-16 — automatyzacja nie musi oznaczać większego prawa
+
+Task Scheduler zwiększa regularność uruchomienia, ale nie uprawnienia. Ten sam Policy Engine, lease i SQLite nadal rozstrzygają wykonanie, a `--offline-only` dodatkowo odcina paid runner. Podobnie raport jest użyteczny właśnie dlatego, że nie „uzupełnia” braków zerem. Migracja jest bezpieczniejsza, kiedy procedura kończy się kandydatem i raportem, a nie automatyczną podmianą produkcji. `CANDIDATE COMPLETE` opisuje stan dowodu, nie zgodę na live.

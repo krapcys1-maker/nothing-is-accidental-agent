@@ -191,3 +191,9 @@ Automatycznie: `UsageTracker` liczy koszt z cennika i dopisuje wiersz do `model_
 - Prior usage: **0,170050 USD**; conservative B: **0,026250 USD**; projected: **0,196300 USD**; cap całego runu: **0,20 USD**.
 - Rzeczywisty nowy B: **0,013914 USD** (1904 input, 2402 output, zero search). Łączny Task 9: **0,183964 USD**, czyli 91,98% capu; zapas po fakcie **0,016036 USD**.
 - Łączny realny koszt projektu: **0,684580 USD**, czyli 1,71% miesięcznego budżetu 40 USD. Siedem usage Task 9 i cache runu są zgodne; nie było retry ani drugiego calla.
+
+### 2026-07-16 — skonsolidowany pakiet Etapu 1
+
+- Koszt nowej pracy: **0,000000 USD**.
+- Nie wykonano API, realnego SDK, web search, browsera ani publikacji.
+- Migracja kopii sprawdza, że historyczne **0,684580 USD** pozostaje dokładnie tą samą kwotą przed i po `0009→0014`; nie dopisuje nowego usage.

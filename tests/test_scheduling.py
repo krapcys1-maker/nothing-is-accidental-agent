@@ -973,6 +973,7 @@ def test_research_dry_run_is_scheduled_without_execution(storage, account):
 
 
 def test_enqueue_research_cli_only_creates_dry_run_job(settings, account, monkeypatch, capsys):
+    settings.worker_default_max_attempts = 2
     settings.editorial_schedule = {
         "timezone": "Europe/Bucharest",
         "windows": [{"weekdays": [0, 1, 2, 3, 4], "start": "09:00", "end": "17:00"}],
@@ -988,6 +989,7 @@ def test_enqueue_research_cli_only_creates_dry_run_job(settings, account, monkey
     try:
         job = verify.conn.execute("SELECT * FROM jobs").fetchone()
         assert job["kind"] == "RESEARCH"
+        assert job["max_attempts"] == 2
         assert job["payload_json"] == f'{{"account_id":"{account.id}","dry_run":true,"topic_id":{topic.id}}}'
         assert "earliest_run_at_utc=" in capsys.readouterr().out
     finally:

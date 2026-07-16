@@ -367,3 +367,10 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Zakres:** przygotować tylko staging zatwierdzonego checkpointu WAVE 0B oraz niezależnie go sprawdzić. Rzeczywisty inwentarz wynosi 72 wpisy (50 modified, 1 deleted, 21 untracked).
 - **Zakazy:** bez commita, pushu, PR, merge, API, sieci, browsera, kosztu, zmiany `data/agent.db` oraz stagingu `docs/BUILD_LOG.md` i katalogu instrukcji pisania.
 - **Stan:** WAVE 0B = `APPROVED WITH P2 — READY FOR CHECKPOINT`, nie `CLOSED`; Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
+## [2026-07-16] Zlecenie jednego skonsolidowanego pakietu końcowego Etapu 1
+
+- **Decyzja człowieka:** nie otwierać ponownie WAVE 0A/0B/1A i nie przebudowywać durable provider lifecycle. Zrealizować minimalny Windows Task Scheduler, audyt attempts/timeout, read-only raport, copy-only plan migracji `0009→0014`, dwie poprawki F-02 oraz jedno zamknięte kryterium acceptance.
+- **Granice:** zero sieci/DNS/socketów/API/real SDK/browsera/publikacji/kosztu; wyłącznie fake callery i tymczasowe bazy. Nie migrować ani nie zapisywać `data/agent.db`; nie otwierać `.env`; nie modyfikować `docs/BUILD_LOG.md` ani katalogu instrukcji pisania; bez stage/commit/push/PR/merge.
+- **Decyzja o uprawnieniach:** przygotowanie konfiguracji Task Scheduler nie jest zgodą na rejestrację. Każde zadanie systemowe wymaga osobnej jawnej zgody. Copy-preflight nie jest zgodą na podmianę produkcyjnej bazy. Live test wymaga jeszcze osobnej zgody, twardego capu, jednego joba/requestu i `max_retries=0`.
+- **Kryterium właściciela:** po pakiecie status może być wyłącznie `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; Etap 1 pozostaje otwarty/blokowany do review, kontrolowanego live acceptance i formalnej decyzji człowieka.
