@@ -12,6 +12,8 @@
 
 > **Historyczna aktualizacja po czwartym review, przed finalnym re-review (2026-07-16):** właściciel przekazał dokładną kontrpróbę `W1A-R4-01` i autoryzował pełną naprawę systemową, testy oraz dokumentację, jednocześnie utrzymując zakaz sieci, providera, kosztu, zapisu do chronionej bazy i operacji Git. Człowiek wymusił test przez prawdziwy `Worker.run_once`, pełną mapę ścieżek terminalnych i niezależną próbę obalenia. Efekt: centralna atomowa granica, defense-in-depth SQLite i **1036 testów offline**. Na tym historycznym etapie człowiek nie zatwierdził ani nie zamknął WAVE: status implementera brzmiał `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; Etap 1 `BLOCKED`, live API `ZABRONIONE`.
 
+> **Post-migration review QP-01 (2026-07-16):** właściciel dostarczył ukończony niezależny review z werdyktem `APPROVE WITH MINOR/P2`. Reviewer nie modyfikował repozytorium; implementer checkpointu nie wykonywał review. QP-01 jest `APPROVED`, produkcja `VERIFIED / SCHEMA 0014`, nowy baseline `VERIFIED`. Człowiek zezwolił na checkpoint po wykluczeniu prywatnych zmian, utrzymując Etap 1 `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE` i zakaz live API.
+
 ## [2026-07-16] POPRAWKA KODU — czwarty niezależny reject
 
 - **Co agent chciał zrobić:** uznać lokalny wyjątek wykonania za zwykłe niepowodzenie joba.

@@ -10,9 +10,11 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import shutil
 import sqlite3
 import subprocess
+import time
 from typing import Any, Callable
 
 from app.core.money import sum_usd
@@ -116,10 +118,26 @@ class DatabaseFileSetFingerprint:
 
 
 @dataclass(frozen=True)
+class QuiesceProcessIdentity:
+    pid: int
+    parent_pid: int
+    executable: str
+    command_line: str
+    creation_time_utc: str
+    classification: str
+    reason_codes: tuple[str, ...]
+    blocking: bool
+
+
+@dataclass(frozen=True)
 class QuiesceReport:
     project_process_ids: tuple[int, ...] = ()
     locked_paths: tuple[str, ...] = ()
     scheduled_tasks: tuple[str, ...] = ()
+    probe_current_pid: int | None = None
+    probe_parent_pid: int | None = None
+    probe_helper_process_ids: tuple[int, ...] = ()
+    process_diagnostics: tuple[QuiesceProcessIdentity, ...] = ()
 
     @property
     def is_quiescent(self) -> bool:
@@ -144,6 +162,15 @@ QuiesceProbe = Callable[[Path, Path], QuiesceReport]
 
 
 GitIdentityProvider = Callable[[Path], tuple[str, str]]
+
+
+@dataclass(frozen=True)
+class _WindowsProcessSnapshot:
+    pid: int
+    parent_pid: int
+    executable: str
+    command_line: str
+    creation_time_utc: str
 
 
 def _sha256(path: Path) -> str:
@@ -203,6 +230,34 @@ def _file_set_as_dict(value: DatabaseFileSetFingerprint) -> dict[str, Any]:
         "database": value.database.__dict__,
         "wal": value.wal.__dict__ if value.wal is not None else None,
         "shm": value.shm.__dict__ if value.shm is not None else None,
+    }
+
+
+def _process_identity_as_dict(value: QuiesceProcessIdentity) -> dict[str, Any]:
+    return {
+        "pid": value.pid,
+        "parent_pid": value.parent_pid,
+        "executable": value.executable,
+        "command_line": value.command_line,
+        "creation_time_utc": value.creation_time_utc,
+        "classification": value.classification,
+        "reason_codes": list(value.reason_codes),
+        "blocking": value.blocking,
+    }
+
+
+def _quiesce_report_as_dict(value: QuiesceReport) -> dict[str, Any]:
+    return {
+        "project_process_ids": list(value.project_process_ids),
+        "locked_paths": list(value.locked_paths),
+        "scheduled_tasks": list(value.scheduled_tasks),
+        "probe_current_pid": value.probe_current_pid,
+        "probe_parent_pid": value.probe_parent_pid,
+        "probe_helper_process_ids": list(value.probe_helper_process_ids),
+        "process_diagnostics": [
+            _process_identity_as_dict(process)
+            for process in value.process_diagnostics
+        ],
     }
 
 
@@ -269,40 +324,370 @@ def _windows_locked_paths(source: Path) -> tuple[str, ...]:
     return tuple(locked)
 
 
+def _process_snapshot_from_payload(value: object) -> _WindowsProcessSnapshot:
+    if not isinstance(value, dict):
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: process inventory contains a non-object record."
+        )
+    try:
+        pid = int(value["pid"])
+        parent_pid = int(value["parent_pid"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: process inventory has an invalid PID relation."
+        ) from exc
+    if pid < 0 or parent_pid < 0:
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: process inventory has a negative PID."
+        )
+    return _WindowsProcessSnapshot(
+        pid=pid,
+        parent_pid=parent_pid,
+        executable=str(value.get("executable") or ""),
+        command_line=str(value.get("command_line") or ""),
+        creation_time_utc=str(value.get("creation_time_utc") or ""),
+    )
+
+
+def _parse_process_inventory(payload: object) -> tuple[_WindowsProcessSnapshot, ...]:
+    if not isinstance(payload, dict):
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: PowerShell returned a non-object payload."
+        )
+    raw_processes = payload.get("processes")
+    if isinstance(raw_processes, dict):
+        raw_processes = [raw_processes]
+    if not isinstance(raw_processes, list):
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: process inventory is missing."
+        )
+    processes = tuple(_process_snapshot_from_payload(value) for value in raw_processes)
+    process_ids = [value.pid for value in processes]
+    if len(process_ids) != len(set(process_ids)):
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: process inventory contains duplicate PIDs."
+        )
+    return processes
+
+
+def _string_tuple_from_payload(value: object, *, label: str) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value,)
+    if not isinstance(value, list):
+        raise Stage1MigrationPreflightError(
+            f"Cannot prove full quiescence: {label} is not a list."
+        )
+    if any(not isinstance(item, str) for item in value):
+        raise Stage1MigrationPreflightError(
+            f"Cannot prove full quiescence: {label} contains a non-string value."
+        )
+    return tuple(value)
+
+
+def _process_role_reason(command_line: str) -> str | None:
+    main_command = re.search(
+        r"(?i)-m\s+app\.main\s+([a-z][a-z0-9-]*)",
+        command_line,
+    )
+    if main_command is None:
+        main_command = re.search(
+            r"(?i)app[\\/]+main\.py[\"']?\s+([a-z][a-z0-9-]*)",
+            command_line,
+        )
+    if main_command is not None:
+        command = main_command.group(1).lower()
+        if command == "worker":
+            return "APP_ROLE_WORKER"
+        if command == "maintain":
+            return "APP_ROLE_MAINTENANCE"
+        return "APP_ROLE_OPERATOR_CLI"
+
+    normalized = command_line.replace("\\", "/").casefold()
+    if "scripts/run_worker_task.ps1" in normalized:
+        return "APP_ROLE_WORKER"
+    if "scripts/run_maintenance_task.ps1" in normalized:
+        return "APP_ROLE_MAINTENANCE"
+    operator_entrypoints = (
+        "scripts/prepare_stage1_db_migration.py",
+        "scripts/manage_windows_tasks.py",
+        "scripts/run_capped_research.py",
+        "scripts/run_topics.py",
+    )
+    if any(entrypoint in normalized for entrypoint in operator_entrypoints):
+        return "APP_ROLE_OPERATOR_CLI"
+    return None
+
+
+def _command_line_contains_root(command_line: str, project_root: Path) -> bool:
+    normalized_command = command_line.replace("/", "\\").casefold()
+    normalized_root = str(project_root.resolve()).replace("/", "\\").casefold()
+    return normalized_root in normalized_command
+
+
+def _identity_is_complete(process: _WindowsProcessSnapshot) -> bool:
+    return bool(
+        process.executable
+        and process.command_line
+        and process.creation_time_utc
+    )
+
+
+def _classify_windows_processes(
+    processes: tuple[_WindowsProcessSnapshot, ...],
+    *,
+    project_root: Path,
+    current_pid: int,
+    parent_pid: int,
+    helper_process_ids: frozenset[int],
+) -> tuple[QuiesceProcessIdentity, ...]:
+    diagnostics: list[QuiesceProcessIdentity] = []
+    for process in processes:
+        role_reason = _process_role_reason(process.command_line)
+        contains_root = _command_line_contains_root(process.command_line, project_root)
+        executable_name = Path(process.executable).name.casefold()
+        blocking = False
+        classification: str | None = None
+        reasons: list[str] = []
+
+        if process.pid == current_pid:
+            classification = "PROBE_CURRENT"
+            reasons.append("PROBE_CURRENT_PID")
+        elif process.pid in helper_process_ids:
+            classification = "PROBE_HELPER"
+            reasons.append("PROBE_REGISTERED_HELPER_IDENTITY")
+        elif (
+            process.pid == parent_pid
+            and executable_name in {"powershell.exe", "pwsh.exe"}
+            and role_reason not in {"APP_ROLE_WORKER", "APP_ROLE_MAINTENANCE"}
+        ):
+            classification = "PROBE_PARENT_LAUNCHER"
+            reasons.append("PROBE_PARENT_LAUNCHER")
+            if role_reason == "APP_ROLE_OPERATOR_CLI":
+                reasons.append("PARENT_COMMAND_REFERENCES_OPERATOR_ENTRYPOINT")
+        elif process.pid == parent_pid and role_reason is None:
+            classification = "PROBE_PARENT_LAUNCHER"
+            reasons.append("PROBE_PARENT_LAUNCHER")
+        elif role_reason is not None:
+            classification = "BLOCKING_APPLICATION_PROCESS"
+            reasons.append(role_reason)
+            blocking = True
+            if not _identity_is_complete(process):
+                reasons.append("PROCESS_IDENTITY_INCOMPLETE")
+        elif contains_root:
+            if _identity_is_complete(process):
+                classification = "OBSERVED_NONBLOCKING"
+                reasons.append("PROJECT_ROOT_COMMAND_LINE_ONLY")
+            else:
+                classification = "BLOCKING_AMBIGUOUS_PROCESS"
+                reasons.extend(
+                    ("PROJECT_ROOT_COMMAND_LINE_ONLY", "PROCESS_IDENTITY_INCOMPLETE")
+                )
+                blocking = True
+        elif (
+            executable_name in {"python.exe", "pythonw.exe", "powershell.exe", "pwsh.exe"}
+            and not process.command_line
+        ):
+            classification = "BLOCKING_AMBIGUOUS_PROCESS"
+            reasons.append("APPLICATION_HOST_COMMAND_LINE_UNREADABLE")
+            blocking = True
+
+        if classification is None:
+            continue
+        diagnostics.append(
+            QuiesceProcessIdentity(
+                pid=process.pid,
+                parent_pid=process.parent_pid,
+                executable=process.executable,
+                command_line=process.command_line,
+                creation_time_utc=process.creation_time_utc,
+                classification=classification,
+                reason_codes=tuple(reasons),
+                blocking=blocking,
+            )
+        )
+    return tuple(sorted(diagnostics, key=lambda value: value.pid))
+
+
+def _validate_probe_process_identities(
+    *,
+    payload: dict[str, object],
+    processes: tuple[_WindowsProcessSnapshot, ...],
+    nonce: str,
+    current_pid: int,
+    helper_pid: int,
+    started_ns: int,
+    completed_ns: int,
+) -> None:
+    if payload.get("probe_nonce") != nonce:
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: probe nonce mismatch."
+        )
+    try:
+        reported_helper_pid = int(payload["helper_pid"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: helper PID is missing."
+        ) from exc
+    if reported_helper_pid != helper_pid:
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: spawned and reported helper PIDs differ."
+        )
+
+    by_pid = {value.pid: value for value in processes}
+    current = by_pid.get(current_pid)
+    helper = by_pid.get(helper_pid)
+    if current is None or not _identity_is_complete(current):
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: current Python process identity is incomplete."
+        )
+    if helper is None or not _identity_is_complete(helper):
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: helper process identity is incomplete."
+        )
+    if helper.parent_pid != current_pid:
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: helper parent PID does not match current PID."
+        )
+    if Path(helper.executable).name.casefold() not in {"powershell.exe", "pwsh.exe"}:
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: helper executable is not PowerShell."
+        )
+    if nonce not in helper.command_line:
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: helper command line does not contain its nonce."
+        )
+    try:
+        helper_created_ns = parse_mtime_utc_ns(helper.creation_time_utc)
+    except ValueError as exc:
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: helper creation time is invalid."
+        ) from exc
+    tolerance_ns = 2_000_000_000
+    if not (
+        started_ns - tolerance_ns
+        <= helper_created_ns
+        <= completed_ns + tolerance_ns
+    ):
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: helper creation time does not match this probe."
+        )
+
+
+def _run_windows_process_inventory(
+    project_root: Path,
+) -> tuple[dict[str, object], tuple[_WindowsProcessSnapshot, ...], int]:
+    escaped_root = str(project_root.resolve()).replace("'", "''")
+    nonce = secrets.token_hex(16)
+    script = (
+        "$ErrorActionPreference='Stop';"
+        "$OutputEncoding=[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new();"
+        f"$root='{escaped_root}';$nonce='{nonce}';"
+        "$processes=@(Get-CimInstance Win32_Process | ForEach-Object {"
+        "$created=if ($null -eq $_.CreationDate) {$null} "
+        "else {([datetime]$_.CreationDate).ToUniversalTime().ToString('o')};"
+        "[pscustomobject]@{pid=[int]$_.ProcessId;parent_pid=[int]$_.ParentProcessId;"
+        "executable=[string]$_.ExecutablePath;command_line=[string]$_.CommandLine;"
+        "creation_time_utc=$created}"
+        "});"
+        "$tasks=@(Get-ScheduledTask | Where-Object {"
+        "$text=(($_.Actions | ForEach-Object {\"$($_.Execute) $($_.Arguments) $($_.WorkingDirectory)\"}) -join ' ');"
+        "$text.Contains($root)"
+        "} | ForEach-Object {\"$($_.TaskPath)$($_.TaskName)\"});"
+        "[pscustomobject]@{probe_nonce=$nonce;helper_pid=[int]$PID;"
+        "processes=$processes;scheduled_tasks=$tasks}"
+        "|ConvertTo-Json -Depth 5 -Compress"
+    )
+    started_ns = time.time_ns()
+    try:
+        helper = subprocess.Popen(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+            text=True,
+            encoding="utf-8",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as exc:
+        raise Stage1MigrationPreflightError(
+            f"Cannot prove full quiescence: cannot start PowerShell helper: {exc}"
+        ) from exc
+
+    try:
+        try:
+            stdout, stderr = helper.communicate(timeout=30)
+        except subprocess.TimeoutExpired as exc:
+            helper.terminate()
+            try:
+                helper.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                helper.kill()
+                helper.communicate()
+            raise Stage1MigrationPreflightError(
+                "Cannot prove full quiescence: PowerShell helper timed out and was stopped."
+            ) from exc
+    finally:
+        if helper.poll() is None:
+            helper.kill()
+            helper.communicate()
+    completed_ns = time.time_ns()
+    if helper.returncode != 0:
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: PowerShell helper failed: "
+            f"{stderr.strip() or f'exit code {helper.returncode}'}"
+        )
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise Stage1MigrationPreflightError(
+            f"Cannot prove full quiescence: invalid PowerShell JSON: {exc}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: PowerShell payload is not an object."
+        )
+    processes = _parse_process_inventory(payload)
+    _validate_probe_process_identities(
+        payload=payload,
+        processes=processes,
+        nonce=nonce,
+        current_pid=os.getpid(),
+        helper_pid=helper.pid,
+        started_ns=started_ns,
+        completed_ns=completed_ns,
+    )
+    return payload, processes, helper.pid
+
+
 def _default_quiesce_probe(project_root: Path, source: Path) -> QuiesceReport:
     """Detect project processes/tasks and file handles without changing system state."""
     if os.name != "nt":
         raise Stage1MigrationPreflightError(
             "The packaged production quiesce probe is Windows-only and fails closed elsewhere."
         )
-    escaped_root = str(project_root.resolve()).replace("'", "''")
-    script = (
-        "$ErrorActionPreference='Stop';"
-        f"$root='{escaped_root}';$self={os.getpid()};"
-        "$p=@(Get-CimInstance Win32_Process | Where-Object {"
-        "$_.ProcessId -ne $self -and $_.CommandLine -and $_.CommandLine.Contains($root)"
-        "} | Select-Object -ExpandProperty ProcessId);"
-        "$t=@(Get-ScheduledTask | Where-Object {"
-        "$text=(($_.Actions | ForEach-Object {\"$($_.Execute) $($_.Arguments) $($_.WorkingDirectory)\"}) -join ' ');"
-        "$text.Contains($root)"
-        "} | ForEach-Object {\"$($_.TaskPath)$($_.TaskName)\"});"
-        "[pscustomobject]@{process_ids=$p;scheduled_tasks=$t}|ConvertTo-Json -Compress"
+    current_pid = os.getpid()
+    parent_pid = os.getppid()
+    payload, processes, helper_pid = _run_windows_process_inventory(project_root)
+    diagnostics = _classify_windows_processes(
+        processes,
+        project_root=project_root,
+        current_pid=current_pid,
+        parent_pid=parent_pid,
+        helper_process_ids=frozenset({helper_pid}),
     )
-    try:
-        completed = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
-            check=True,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        payload = json.loads(completed.stdout)
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
-        raise Stage1MigrationPreflightError(f"Cannot prove full quiescence: {exc}") from exc
     return QuiesceReport(
-        project_process_ids=tuple(int(value) for value in payload.get("process_ids") or ()),
+        project_process_ids=tuple(
+            value.pid for value in diagnostics if value.blocking
+        ),
         locked_paths=_windows_locked_paths(source),
-        scheduled_tasks=tuple(str(value) for value in payload.get("scheduled_tasks") or ()),
+        scheduled_tasks=_string_tuple_from_payload(
+            payload.get("scheduled_tasks"),
+            label="scheduled task inventory",
+        ),
+        probe_current_pid=current_pid,
+        probe_parent_pid=parent_pid,
+        probe_helper_process_ids=(helper_pid,),
+        process_diagnostics=diagnostics,
     )
 
 
@@ -315,10 +700,17 @@ def _require_quiescence(
     _assert_sidecar_contract(source, snapshot)
     report = probe(project_root, source)
     if not report.is_quiescent:
+        blocking_processes = [
+            _process_identity_as_dict(process)
+            for process in report.process_diagnostics
+            if process.blocking
+        ]
         raise Stage1MigrationPreflightError(
             "Full quiescence was not proven: "
             f"processes={report.project_process_ids}, handles={report.locked_paths}, "
-            f"tasks={report.scheduled_tasks}."
+            f"tasks={report.scheduled_tasks}, "
+            "process_details="
+            f"{json.dumps(blocking_processes, ensure_ascii=False, sort_keys=True)}."
         )
     return report
 
@@ -978,9 +1370,9 @@ def run_stage1_in_place_migration(
             "source_pre_mutation": _file_set_as_dict(source_pre_mutation),
             "source_after": _file_set_as_dict(source_after),
             "quiesce": {
-                "initial": quiesce_initial.__dict__,
-                "after_backup": quiesce_after_backup.__dict__,
-                "pre_mutation": quiesce_pre_mutation.__dict__,
+                "initial": _quiesce_report_as_dict(quiesce_initial),
+                "after_backup": _quiesce_report_as_dict(quiesce_after_backup),
+                "pre_mutation": _quiesce_report_as_dict(quiesce_pre_mutation),
             },
             "backup_dir": str(backup_dir),
             "backup_verified_unchanged": True,

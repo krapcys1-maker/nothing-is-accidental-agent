@@ -342,3 +342,41 @@ Poprawka nie osłabia kontroli. Zamiast pytać „czy sidecar istnieje?”, proc
 Usunęliśmy też dwie konkurencyjne definicje flag. Storage i migracja czytają teraz jeden niemodyfikowalny profil: kill switch i safe mode włączone, worker, paid i browser wyłączone. Jeden opakowany executor najpierw dowodzi branchu, starego baseline'u, quiesce, backupu, rehearsal i świeżości, a dopiero później może otworzyć produkcję. Czternaście kontrprób wykonuje się na bazach tymczasowych, w tym wymuszony błąd po migracji i bitowy restore DB/WAL/SHM.
 
 Najważniejsze: przygotowanie bezpieczniejszej drugiej próby nie jest zgodą na drugą próbę. Nie wykonano jej, nowy baseline nie istnieje, live API i zadania systemowe pozostają wyłączone, a Etap 1 nadal jest otwarty i zablokowany.
+
+## 2026-07-16 — Bezpieczna migracja czasem kończy się, zanim powstanie backup
+
+Właściciel zatwierdził drugą próbę, tym razem przez jeden zacommitowany executor. Ręczny gate nie widział procesów projektu, ale własny gate executora chwilę później zobaczył dwa PID-y. To wystarczyło: program odmówił jeszcze przed utworzeniem workspace. Nie było kopii, rehearsal, otwarcia produkcyjnej SQLite ani migracji.
+
+Po zakończeniu oba procesy już nie istniały, a trzy pliki produkcji miały dokładnie stare hashe, rozmiary i czasy. Nie próbowaliśmy zgadywać, czym były, wstrzykiwać własnego probe'a ani uruchamiać polecenia drugi raz. Bezpieczeństwo tej próby polegało właśnie na tym, że nie zamieniła krótkiej niepewności w pozwolenie na mutację. Baza pozostała na 0009, nowy baseline nie powstał, a następna próba — jeśli będzie — wymaga nowej zgody.
+
+## 2026-07-16 — Strażnik zobaczył własny cień
+
+Przed ponowną próbą naprawdę było cicho: nie działał worker, maintenance ani operator, baza nie miała holderów, a tasków projektu nie było. Mimo tego executor ponownie odmówił. Tym razem obserwacja trwała równolegle i zdążyła zapisać tożsamość wskazanego PID-u.
+
+Procesem projektu okazał się PowerShell uruchomiony przez samą bramkę quiesce. W jego command line znajdowała się ścieżka repozytorium, bo skrypt przekazywał ją sobie jako wartość `$root`. Następnie ten sam skrypt wyszukiwał każdy proces, którego command line zawiera `$root`. Wykluczył rodzica w Pythonie, ale nie własny proces potomny — i dlatego strażnik uznał samego siebie za intruza.
+
+To nie jest powód, aby osłabić quiesce ani ominąć filtr. To lokalny finding `QP-01`, który wymaga osobnego zadania. W tej próbie kod pozostał nietknięty, executor nie został uruchomiony drugi raz, produkcyjna SQLite nie została otwarta, a backup i rehearsal nawet się nie rozpoczęły. Baza nadal ma schemat 0009 i stary baseline; live API pozostało zabronione.
+
+## 2026-07-16 — Strażnik dostał identyfikator, nie opaskę na oczy
+
+Najprostsza „naprawa” brzmiałaby: pomiń PID, który właśnie nas zablokował. To byłby numer zapisany na chwilę i żadna ochrona przed kolejnym uruchomieniem. Druga kusząca wersja — pomiń wszystkie dzieci probe'a — byłaby gorsza, bo prawdziwy worker mógłby zniknąć w zbyt szerokim wyjątku.
+
+Probe dostał więc wąski kontrakt tożsamości. Wie, kim jest bieżący Python, kto go uruchomił i jaki dokładnie PowerShell został przez niego stworzony. Helper musi zgadzać się nie tylko PID-em, ale też rodzicem, executable, czasem powstania i jednorazowym nonce. Tylko taka tożsamość jest wyłączona. Potomek, którego nie zarejestrowano, wraca do zwykłej klasyfikacji; marker workera użyty w kontrpróbie nadal zatrzymał operację.
+
+Sama ścieżka katalogu przestała być wyrokiem. Niezależny PowerShell może ją mieć w command line choćby dlatego, że coś sprawdza. Dostaje reason code i pozostaje widoczny, ale bez roli aplikacyjnej nie blokuje. Worker, maintenance, operator i uchwyt do bazy nadal blokują, a niepełna tożsamość kończy się odmową. Trzynaście nowych testów obejmuje także dwa równoległe probe'y, PID reuse, cleanup i proces krótkotrwały. Produkcyjna baza nie została przy tym otwarta; poprawka czeka na niezależny review.
+
+## 2026-07-16 — Trzy razy ta sama bramka, ani razu ten sam cień
+
+Po lokalnej poprawce właściciel zgodził się na jedną kontrolowaną próbę. To ważne rozróżnienie: nie na serię prób aż do skutku, tylko na jeden przebieg tego samego pakietowego executora, w tym samym łańcuchu PowerShell → Python → helper PowerShell, który wcześniej ujawnił QP-01.
+
+Tym razem helper nie zniknął z obserwacji. Został rozpoznany jako `PROBE_HELPER` na podstawie pełnej tożsamości i dostał reason code `PROBE_REGISTERED_HELPER_IDENTITY`. Nie blokował jednak operacji, bo był dokładnie tym procesem, który probe sam zarejestrował. Executor powtórzył tę kontrolę trzy razy: przed backupem, po backupie i bezpośrednio przed mutacją. Za każdym razem liczba realnych procesów blokujących, holderów bazy i tasków wynosiła zero.
+
+Dopiero wtedy powstał zweryfikowany backup starego schema 0009, rehearsal przeszedł na kopii, a produkcja otrzymała migracje 0010–0014. Końcowa weryfikacja policzyła 14 migracji i 35 triggerów, odtworzyła 13 legacy proofs, potwierdziła integralność i brak naruszeń foreign keys. Historyczne runy, research runs i koszt 0.684580 USD nie zmieniły się. Flagi bezpieczeństwa pozostały zamknięte: kill switch i safe mode włączone, worker, paid actions i browser actions wyłączone.
+
+Nowy hash bazy nie jest już chwilowym wynikiem cofniętej próby, lecz ustanowionym baseline'em schema 0014: `630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6`. Nie było drugiego uruchomienia, live API, publikacji, tasków Windows ani nowego kosztu. Migracja zamknęła techniczny problem bazy, ale nie zamknęła Etapu 1: kontrolowana akceptacja live nadal pozostaje osobną, zablokowaną bramką.
+
+## 2026-07-16 — Review nie wymazał śladów, tylko zmienił bieżący status
+
+Niezależny reviewer wrócił do trwałego stanu po migracji i do poprawki QP-01. Odtworzył nie tylko zielony wynik, ale też granicę bezpieczeństwa: 13 testów implementera uzupełnił 23 własnymi kontrpróbami. Potwierdził schema 0014, nowy hash, 35 triggerów, 13 legacy proofs i 18 digestów historycznych. Nie znalazł CRITICAL ani MAJOR/P1 i wydał `APPROVE WITH MINOR/P2`.
+
+Ważne było to, czego review nie zrobił. Nie usunął zapisu rollbacku, odrzuconych prób ani PID 15404; nie przepisał historii tak, jakby droga była prosta. Zmienił wyłącznie stan bieżący: QP-01 jest zatwierdzone, baza 0014 i baseline są zweryfikowane, a checkpoint może powstać po odseparowaniu prywatnych zmian. Etap 1 nadal czeka na osobną kontrolowaną akceptację live.

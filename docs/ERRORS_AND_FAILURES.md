@@ -694,8 +694,52 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Naprawa:** jeden executor dopuszcza WAL absent/0 B i obecny SHM, blokuje nonzero WAL/journal/process/handle/task oraz każdy drift, a istniejący zestaw DB/WAL/SHM zawsze backupuje i odtwarza jako całość. Produkcja nie jest otwierana przed backupem, rehearsal i ostatnim freshness gate. Jedyny profil flag pochodzi z `app.core.security_flags.SECURITY_FLAG_DEFAULTS`.
 - **Dowód:** 14 kontrprób na bazach tymczasowych obejmuje wszystkie warianty sidecarów, drift, Git/confirmation, kanoniczny runner, wymuszony post-failure i bitowy restore. Druga migracja nie została wykonana; nowy baseline nie istnieje; bez API, kosztu, workera, browsera, tasków i Git.
 
+## [2026-07-16] Druga zatwierdzona migracja odrzucona przez pierwszy gate quiesce
+
+- **Kategoria:** CONTROLLED OPERATION / fail-closed before mutation.
+- **Próba:** po poprawnym repository i baseline gate uruchomiono wyłącznie zacommitowany `execute-in-place` z literalnym confirmation i nowym workspace poza repozytorium.
+- **Wynik:** executor odmówił na pierwszym quiesce: `processes=(17196, 34228), handles=(), tasks=()`. Polecenie zakończyło się przed utworzeniem workspace. Zgłoszone procesy nie istniały już podczas kontroli po zakończeniu.
+- **Wpływ:** zero otwarcia produkcyjnej SQLite, backupu, rehearsal, migracji, flag, rollbacku i nowego baseline'u. DB/WAL/SHM pozostały bitowo i metadanymi identyczne ze starym baseline'em.
+- **Działanie:** nie obchodzono probe'a, nie tworzono skryptu ad-hoc i nie wykonano ponownej próby. Wynik formalny: `MIGRATION REJECTED BEFORE MUTATION`; kolejne uruchomienie wymaga nowej zgody.
+
 ## [2026-07-16] Kontrpróby inline — pierwsze wywołanie utraciło cudzysłowy
 
 - **Objaw:** trzy niezależne skrypty przekazane jako zmienna do `python -c` zostały zinterpretowane przez Windows/PowerShell bez wewnętrznych cudzysłowów i zakończyły się `SyntaxError`; nie uruchomiły logiki aplikacji.
 - **Naprawa:** ten sam kod przekazano bez zapisu pliku przez stdin (`$code | python -`). Kontrpróby przeszły: read-only write zablokowany, baza temp byte/metadata unchanged, 5 flag UNKNOWN, maintenance UNKNOWN, 0 nowych importów SDK, systemowy real runner 0 calli, worker+maintenance nie zmieniły flag paid/browser.
 - **Wpływ:** wyłącznie błąd quoting harnessu; bez dostępu do produkcyjnej bazy, API, sieci i kosztu.
+
+## [2026-07-16] QP-01 — filtr quiesce wykrył własny proces potomny
+
+- **Kategoria:** MIGRATION TOOLING / local process-filter false positive.
+- **Kontekst:** przed ponowną próbą ręczny gate wykazał zero procesów projektu, zero uchwytów DB/WAL/SHM i zero tasków. Właściwy executor został uruchomiony dokładnie raz po ustawieniu poprawnego import path.
+- **Wynik:** pierwszy gate executora odmówił z `processes=(15404,), handles=(), tasks=()`.
+- **Identyfikacja:** PID `15404`, parent PID `10216`, `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, creation UTC `2026-07-16T18:59:17.5919140Z`; reason match: command line zawiera resolved project root.
+- **Przyczyna lokalna:** `_default_quiesce_probe` uruchamia potomny PowerShell z literalnym `$root` w jego własnej command line. Predykat skanujący `CommandLine.Contains($root)` wyklucza parent Python, lecz nie wyklucza bieżącego procesu potomnego, więc dopasowuje samego siebie.
+- **Wcześniejszy błąd uruchomienia:** pierwsze polecenie launchera zakończyło się `ModuleNotFoundError: app` przed importem executora i przed wykonaniem jakiejkolwiek bramki; po ponownym potwierdzeniu czystego gate'u ustawiono repozytorium jako `PYTHONPATH`. Nie była to próba migracyjna ani mutacja.
+- **Wpływ:** executor zatrzymał się przed workspace, backupem, rehearsal i otwarciem produkcyjnej SQLite. DB/WAL/SHM pozostały niezmienione, schema nadal `0009`, nowy baseline nie powstał.
+- **Działanie:** zgodnie z instrukcją nie zmieniono kodu, nie wykonano pełnego audytu i nie uruchomiono executora ponownie. Finding pozostaje lokalny i otwarty do osobnego zadania.
+
+## [2026-07-16] QP-01 — poprawka kandydacka zweryfikowanej tożsamości helpera
+
+- **Naprawa:** skan PowerShell nie wybiera już blokujących PID-ów. Zwraca pełny snapshot, a Python rejestruje helper przez PID + parent PID + executable + creation time + nonce i dopiero potem klasyfikuje role.
+- **Ochrona przed nadmiernym wykluczeniem:** wykluczenie nie dziedziczy się na potomków. Test umieszcza realny marker workera jako niezarejestrowanego potomka helpera i potwierdza STOP. Parent będący maintenance także blokuje.
+- **Ochrona przed PID reuse i lingerem:** helper musi powstać w oknie czasowym bieżącego probe'a i zawierać jego nonce; timeout wykonuje terminate/kill z `communicate`. Test realnego helpera potwierdza, że PID po raporcie nie żyje.
+- **Klasyfikacja root-only:** niezależny PowerShell z root w command line jest zachowany w diagnostyce jako `PROJECT_ROOT_COMMAND_LINE_ONLY`, ale nie blokuje bez roli aplikacyjnej. Brak pełnej tożsamości daje STOP.
+- **Niezmienione blokady:** worker, maintenance, operator CLI, task projektu oraz uchwyt DB/WAL/SHM nadal zatrzymują. Proces bez project root, ale trzymający temp DB, został zatrzymany przez handle gate.
+- **Weryfikacja:** dedykowane 13/13; dotychczasowe testy migracji 17/17; collect i pełny suite 1079/1079; partycje 259+264+277+279; exact-once 1079; `compileall` i `git diff --check` poprawne.
+- **Wpływ:** tylko kod probe'a, jego serializowana diagnostyka, testy i dokumentacja. Produkcyjna baza nie została otwarta ani zmigrowana; live API i Windows Tasks nie zostały uruchomione.
+
+## [2026-07-16] QP-01 — kontrpróba produkcyjna potwierdziła brak nawrotu
+
+- **Próba:** jedna jawnie zatwierdzona migracja przez ten sam PowerShell → Python entrypoint → helper PowerShell, który wcześniej ujawniał self-detection.
+- **Wynik:** trzy kolejne gate'y quiesce miały zero blocking processes, uchwytów i tasków. Helper za każdym razem miał `PROBE_REGISTERED_HELPER_IDENTITY` i nie pojawił się w blocking set.
+- **Skutek:** QP-01 nie powtórzył się; migracja zakończyła się sukcesem bez rollbacku. Późniejszy niezależny review zatwierdził QP-01 i trwały stan schema 0014 wynikiem `APPROVE WITH MINOR/P2`; finding nie jest bieżącym blockerem.
+- **Bezpieczeństwo:** nie obchodzono gate'ów i nie wykonywano drugiej próby. Brak live API, workera, maintenance, browsera, publikacji, tasków i operacji Git.
+
+## 2026-07-16 — Niezależny review zamknął QP-01 bez usuwania historii odmów
+
+- **Zakres:** reviewer sprawdził migrację `0009→0014`, trwały baseline, QP-01, dokumentację i zakres checkpointu bez modyfikowania repozytorium.
+- **Wynik:** `APPROVE WITH MINOR/P2`; QP-01 `APPROVED`; produkcja `VERIFIED / SCHEMA 0014`; nowy baseline `VERIFIED`; brak CRITICAL i MAJOR/P1.
+- **Kontrpróby:** 13/13 testów implementera i 23/23 niezależne kontrpróby QP-01; pełna regresja 1079/1079 i cztery partycje exact-once.
+- **Historia zachowana:** rollback pierwszej migracji, odrzucone próby, PID 15404 i pierwotny status kandydacki pozostają w rejestrze jako chronologia. Zmieniono wyłącznie aktualny status.
+- **Pozostałe P2:** synchronizacja statusów, selektywny `BUILD_LOG` i materializacja pochodzenia review; żaden nie jest findingiem technicznym MAJOR/P1.

@@ -4,7 +4,7 @@
 > Data: 2026-07-13 · Architektura docelowa: `MASTER_ARCHITECTURE.md` · Stan bieżący: `CURRENT_PROJECT_STATE.md`.
 > Zastępuje plany etapów z `docs/IMPLEMENTATION_PLAN.md` (§B.11, CZĘŚCI D–F) i plan napraw z audytu 12.07 — oba w `docs/archive/superseded_plans/`.
 >
-> **ETAP 0 ZAKOŃCZONY. AKTUALNY ETAP: 1 — CANDIDATE COMPLETE / formalnie BLOCKED.** **WAVE 0A/0B/1A = `CLOSED — APPROVED WITH P2`.** Bieżący baseline kodu to 14 migracji i **1052 testy offline**; produkcyjna baza nadal ma 9 migracji. Historyczne 1036/1007/980/982/894 są wcześniejszymi iteracjami. Zamknięcie WAVE nie zamyka Etapu 1, nie odblokowuje live API i nie rozpoczyna Etapu 2. Każde realne uruchomienie wymaga osobnej, jawnej zgody właściciela.
+> **ETAP 0 ZAKOŃCZONY. AKTUALNY ETAP: 1 — OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE.** **WAVE 0A/0B/1A = `CLOSED — APPROVED WITH P2`.** Bieżący kod zna 14 migracji i ma **1079 testów offline**; produkcyjna baza została kontrolowanie zmigrowana do 0014 i ma nowy baseline SHA `630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6`. Historyczne 1052/1036/1007/980/982/894 są wcześniejszymi iteracjami. Migracja nie zamyka Etapu 1, nie odblokowuje live API i nie rozpoczyna Etapu 2.
 
 Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; findingi przeniesione tutaj i do `CURRENT_PROJECT_STATE.md`). ✅ = już wykonane (nie jest zadaniem).
 
@@ -12,7 +12,7 @@ Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; finding
 
 ## Formalne zamknięcie WAVE 1A — 2026-07-16
 
-Implementer przekazał skonsolidowany pakiet Etapu 1 jako **`CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`**. WAVE 0A, 0B i 1A pozostają formalnie `CLOSED — APPROVED WITH P2` i nie są ponownie otwierane. Minimalny Windows Task Scheduler launcher, typowany cap attempts, read-only raport i copy-only plan migracji `0009→0014` są wdrożone oraz sprawdzone offline; zadań systemowych nie zarejestrowano, a produkcyjnej bazy nie zmigrowano. Etap 1 pozostaje `BLOCKED` do spełnienia zamkniętego kryterium acceptance poniżej, live API `ZABRONIONE`, Etap 2 nie został rozpoczęty.
+Skonsolidowany pakiet Etapu 1, QP-01 oraz trwały stan po produkcyjnej migracji przeszły niezależny review z wynikiem **`APPROVE WITH MINOR/P2`**. WAVE 0A, 0B i 1A pozostają formalnie `CLOSED — APPROVED WITH P2` i nie są ponownie otwierane. Produkcyjna baza jest zweryfikowana jako schema `0014`, a nowy baseline jako `VERIFIED`. Minimalny Windows Task Scheduler launcher, typowany cap attempts i read-only raport są wdrożone; zadań systemowych nie zarejestrowano. Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`, live API `ZABRONIONE`, Etap 2 nie został rozpoczęty.
 
 ## Historia implementacji — WAVE 1A (2026-07-15–2026-07-16)
 
@@ -70,8 +70,8 @@ WAVE 0B jest formalnie `CLOSED — APPROVED WITH P2`. WAVE 1A wdraża ręczny re
   7. **✅ WYKONANE —** okna redakcyjne przed enqueue: czysty `SchedulingPolicy` czyta wyłącznie jawną konfigurację `growth_policy.editorial_schedule`, waliduje IANA timezone, okna tego samego dnia bez nakładania oraz deterministyczne DST. Zapisuje UTC `earliest_run_at` i zamknięty `schedule_reason`; czas przeszły, brak/niepoprawna konfiguracja i dowolny reason code są odrzucane fail-closed. Atomowy claim wybiera tylko `QUEUED` z `earliest_run_at <= now`, więc job przyszły pozostaje bez lease i attempts. `enqueue-research` tworzy wyłącznie job RESEARCH `dry_run`; nie uruchamia workera, dispatchu, API ani researchu.
      - **✅ CANDIDATE 2026-07-14 —** końcowa akceptacja restartu procesu dla jobów zaplanowanych: 58 scenariuszy plikowej SQLite/reopen. ADR-044 atomizuje inicjalizację; ADR-045 fence’uje późniejsze mutacje; ADR-046 wzmacnia czas i CSV; ADR-047 atomowo zamyka success joba; ADR-048 zamyka runtime kontrakt `DispatchResult`. Old-owner matrix, expiry przed recovery, claim po locku, crash/failpointy finalizacji, post-terminal diagnostic, malformed terminalization i realny CSV directory path są zielone. Wymagane ponowne niezależne review.
      - **⬜ NOT_STARTED —** usługa schedulera systemowego (cron/service/autostart), która jedynie uruchamia istniejące pętle; nie jest częścią polityki okien.
-- **Migracje:** 0009 (`jobs` + `system_flags`) — WDROŻONA OFFLINE; fresh 0001→0009, upgrade 0008→0009, rollback ledger fault i ponowny runner są przetestowane bez dotykania `data/agent.db`.
-- **Testy:** WAVE 0B miała historycznie 894 testy, zaakceptowany baseline WAVE 1A — 1036, a skonsolidowany pakiet — **1052 passed / collected offline**. Baseline `data/agent.db` pozostaje `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`. Kod zna 14 migracji, produkcja ma 9; Etap 1 formalnie `BLOCKED`, live API `ZABRONIONE`.
+- **Migracje:** produkcja ma dokładnie `0001`–`0014`. Kontrolowany executor zastosował `0010`–`0014` po zweryfikowanym backupie i rehearsal; post-verification potwierdziło 35 triggerów, 13 legacy proofs, koszt `0.684580`, 0 jobs/attempts/events i kanoniczne flagi. Nowy baseline DB to `630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6`.
+- **Testy:** WAVE 0B miała historycznie 894 testy, zaakceptowany baseline WAVE 1A — 1036, skonsolidowany pakiet — 1052, a poprawka QP-01 — **1079 passed / collected offline** z partycjami 259+264+277+279. Etap 1 formalnie `BLOCKED`, live API `ZABRONIONE`.
 - **Kryteria akceptacji/zakończenia:** WAVE 0A jest **formally closed / `APPROVED WITH P2`**; P0-01, P1-01 i P1-02 są zamknięte. Nie jest to zamknięcie Etapu 1, który pozostaje zablokowany wyłącznie przez zamknięte kryterium review/migration/live/formal decision z ADR-070. Dry-run job ma atomową inicjalizację i wszystkie późniejsze trwałe mutacje fenced w SQLite. Minimalny launcher systemowy istnieje, lecz nie został zarejestrowany; paid/browser pozostają nieodblokowane.
 - **WAVE 0A (2026-07-14, `APPROVED WITH P2` / FORMALLY CLOSED):** P0-01, P1-01 i P1-02 są zamknięte. Każdy realny SDK Anthropic jest tworzony z `max_retries=0` i skończonym dodatnim timeoutem; jedna logiczna próba klienta research wykonuje jedno żądanie. Zamknięcie fali nie odblokowuje paid workera, live API ani Etapu 2; bieżące warunki Etapu 1 są wymienione wyłącznie w ADR-070.
 - **Ryzyka:** współbieżność SQLite (mitygacja: WAL z Etapu 0, jeden worker, lease); nadmierna komplikacja (mitygacja: ZERO zewnętrznych zależności — czysty SQLite).
@@ -195,17 +195,17 @@ WAVE 0B jest formalnie `CLOSED — APPROVED WITH P2`. WAVE 1A wdraża ręczny re
 
 ---
 
-## AKTUALNY ETAP: **Etap 1 — CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW**
+## AKTUALNY ETAP: **Etap 1 — OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE**
 
 Etap 0 spełnił kryterium zakończenia 2026-07-13. Techniczny zakres Etapu 1 jest kandydatem kompletnym: kolejka, claim/lease/fence/heartbeat, restart/recovery, maintenance/reaper, scheduling policy, runtime flags, dry-run worker, durable provider/usage/settlement/reconciliation, minimalny launcher Windows Task Scheduler i read-only raport. Kod obsługuje 14 migracji, ale chroniona baza fizycznie pozostaje na 0009. Zadania systemowe nie są zarejestrowane. Browser/public worker pozostaje BLOCKED; live API jest ZABRONIONE.
 
 ### Zamknięte kryterium zakończenia Etapu 1
 
-- **Przed kontrolowanym live testem:** niezależny review tego pakietu; osobno zatwierdzona migracja produkcji `0009→0014`; akceptacja nowego SHA; inicjalizacja pięciu flag; dokładny kontrakt testu z twardym capem, `max_retries=0`, jednym jobem i jednym requestem; osobna zgoda właściciela.
+- **Przed kontrolowanym live testem:** dokładny kontrakt testu z twardym capem, `max_retries=0`, jednym jobem i jednym requestem; osobna zgoda właściciela. Migracja `0009→0014`, nowy baseline, inicjalizacja pięciu flag oraz niezależny review QP-01 i trwałego wyniku migracji są wykonane.
 - **Przed formalnym CLOSED:** pozytywny jeden live durable single flow; niezależny review trwałego stanu po teście; brak otwartego MAJOR/CRITICAL; formalna decyzja właściciela.
 - **Poza kryterium:** browser/publikacja, FetchPort/evidence excerpts, content/panel/autonomia/interakcje/analytics, Etap 2+ i P2 bez osiągalnego naruszenia.
 
-Do chwili spełnienia dwóch pierwszych punktów status pozostaje `OPEN / BLOCKED PENDING REVIEW AND CONTROLLED LIVE ACCEPTANCE`. Nie wolno rozpoczynać Etapu 2.
+Do chwili kontrolowanego live acceptance, review trwałego wyniku po tym teście i formalnej decyzji właściciela status pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`. Nie wolno rozpoczynać Etapu 2.
 
 ### WAVE 0B.2 — zapis historyczny provider ledger hardening (2026-07-14)
 

@@ -908,3 +908,63 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Backup, rehearsal i restore:** istniejący zestaw DB/WAL/SHM jest kopiowany i weryfikowany bitowo oraz metadanymi. Na świeżej kopii wykonywane jest dokładnie `0010`–`0014`, drugi przebieg musi być no-op, a wynik przechodzi pełną weryfikację danych i bezpieczeństwa. Dowolny błąd po otwarciu produkcji wymusza odtworzenie całego pierwotnego zestawu; reverse SQL i częściowy restore są zabronione.
 - **Granice:** executor nie uruchamia API, SDK, browsera, workera, maintenance ani publikacji; nie rejestruje zadań, nie tworzy kosztu i nie wykonuje operacji Git. Druga próba wymaga osobnej, nowej zgody właściciela. Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`.
 - **Weryfikacja kandydacka:** 14 niezależnych kontrprób na tymczasowych bazach obejmuje dozwolony WAL/SHM, nonzero WAL/journal/aktywny writer, drift DB/WAL, Git/confirmation, jeden profil, kanoniczny migrator, post-failure restore, bitową reprodukcję DB/WAL/SHM i brak API/kosztu. Collect i pełny suite: 1066/1066 offline. Exact-once: 1066 node IDs; wszystkie partycje wykonane i zielone: 256 + 261 + 275 + 274. `compileall` i `git diff --check` zielone.
+
+### ADR-073: Druga zgoda migracyjna została zużyta przez fail-closed quiesce
+
+- **Data:** 2026-07-16
+- **Status:** `MIGRATION REJECTED BEFORE MUTATION`; produkcja nadal `0009`; nowy baseline nie istnieje.
+- **Kto podjął:** właściciel udzielił jawnej, jednorazowej zgody na uruchomienie zacommitowanego executora na HEAD `ddc3c63190eb82bca171174dc7ee70c2d0a1ec15`; wykonanie: Codex.
+- **Gate wejściowy:** branch/HEAD/upstream `0/0`, pusty staging, brak operacji Git, dokładnie osiem chronionych wpisów dirty, brak runtime, journala, zadań i wykrytych przed poleceniem procesów projektu. DB/WAL/SHM odpowiadały staremu baseline'owi.
+- **Wynik executora:** pierwsza bramka quiesce zwróciła `processes=(17196, 34228), handles=(), tasks=()` i przerwała polecenie. Zgłoszone PID-y nie istniały już podczas kontroli po zakończeniu; ich tożsamości nie rekonstruowano przez własne kryteria. Nie użyto custom probe, SQL ani skryptu ad-hoc.
+- **Granica mutacji:** workspace nie powstał. Nie rozpoczęto backupu, rehearsal ani otwarcia produkcyjnej SQLite; nie zastosowano migracji ani flag i nie utworzono nowego baseline'u. Pełny restore nie był potrzebny, ponieważ nie rozpoczęła się mutacja.
+- **Stan końcowy:** stary fingerprint DB/WAL/SHM jest dokładnie zachowany; WAL ma 0 B, SHM 32768 B, journal jest nieobecny. Bez API, SDK, workera, maintenance, browsera, publikacji, kosztu, tasków i operacji Git.
+- **Decyzja:** zgodnie z zakazem automatycznej drugiej próby nie ponawiano executora. Każde przyszłe uruchomienie wymaga nowej, osobnej zgody właściciela. Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`.
+
+### ADR-074: Ponowna próba zatrzymana przez samodopasowanie procesu probe'a quiesce
+
+- **Data:** 2026-07-16
+- **Status:** `MIGRATION REJECTED — QUIESCE PROCESS IDENTIFIED`; produkcja nadal `0009`; nowy baseline nie istnieje.
+- **Kto podjął:** właściciel zezwolił na jedną ponowną próbę po czystym quiesce i nakazał zatrzymać się z jednym lokalnym findingiem, jeśli gate ponownie odmówi; wykonanie: Codex.
+- **Gate wejściowy:** wymagany branch/HEAD, upstream `0/0`, pusty staging, brak wykrytych procesów projektu, workera, maintenance, operatora CLI, uchwytów DB/WAL/SHM, tasków, runtime i journala; stary fingerprint DB/WAL/SHM zgodny.
+- **Wynik:** pierwsza bramka executora zwróciła `processes=(15404,), handles=(), tasks=()`. PID `15404` był potomnym PowerShellem domyślnego probe'a, parent PID `10216`, utworzonym `2026-07-16T18:59:17.5919140Z`.
+- **Finding QP-01:** command line potomnego PowerShella zawiera literalną ścieżkę repozytorium jako `$root`. Ten sam proces wykonuje predykat `CommandLine.Contains($root)`, więc filtr zalicza proces probe'a do procesów projektu mimo wykluczenia parent Python przez `$self`.
+- **Granica mutacji:** odmowa nastąpiła przed workspace, backupem, rehearsal i otwarciem produkcyjnej SQLite. Nie zastosowano `0010`–`0014`, nie zapisano flag i nie ustanowiono baseline'u; rollback nie był potrzebny.
+- **Decyzja operacyjna:** bez zmiany kodu, bez kolejnego uruchomienia i bez rozszerzenia na audyt systemu. Naprawa lub review filtra procesów wymagają osobnego zadania. Live API i Windows Tasks pozostają zabronione; Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`.
+
+### ADR-075: Quiesce klasyfikuje zweryfikowane tożsamości, nie samą ścieżkę command line
+
+- **Data:** 2026-07-16
+- **Status:** ACCEPTED jako kandydat poprawki do niezależnego review; migracja produkcyjna niewykonana.
+- **Kto podjął:** właściciel zlecił wyłącznie lokalną naprawę QP-01, pełną diagnostykę procesu i kontrpróby; implementacja: Codex.
+- **Problem:** PowerShell wykonywał filtr `CommandLine.Contains(project_root)` we własnym procesie, którego command line zawierała ten sam literalny root. Wykluczenie parent Python nie obejmowało child PowerShell, więc helper blokował samego siebie.
+- **Decyzja:** PowerShell wyłącznie zbiera snapshot procesów i tasków. Klasyfikacja odbywa się w Pythonie, który zna current PID, parent PID i PID każdego uruchomionego helpera. Helper jest wykluczany tylko po zgodności PID, parent PID, executable, creation time i jednorazowego nonce; PID reuse lub niekompletna tożsamość blokują fail-closed.
+- **Granica wykluczenia:** nie wyklucza się całego drzewa potomków. Zarejestrowany helper jest nieblokujący; jego niezarejestrowany potomek z rolą worker/maintenance/operator nadal blokuje. Parent PowerShell launchera jest jawnie nieblokujący, lecz parent mający realną rolę worker albo maintenance blokuje.
+- **Reason codes:** `APP_ROLE_WORKER`, `APP_ROLE_MAINTENANCE` i `APP_ROLE_OPERATOR_CLI` blokują; `PROCESS_IDENTITY_INCOMPLETE` i `APPLICATION_HOST_COMMAND_LINE_UNREADABLE` zachowują fail-closed. Sam `PROJECT_ROOT_COMMAND_LINE_ONLY` jest raportowany, lecz przy pełnej tożsamości i braku roli nie jest wystarczającym dowodem blokującym.
+- **Uchwyty i taski:** niezależny gate file handles dla DB/WAL/SHM oraz gate Windows Tasks pozostają bez osłabienia. Proces bez root, ale z uchwytem do temp DB, nadal blokuje.
+- **Diagnostyka:** raport zawiera current/parent/helper PIDs oraz dla każdego istotnego procesu PID, parent PID, executable, command line, creation time, classification, reason codes i blocking. Tożsamość procesu krótkotrwałego pozostaje w snapshotcie po jego zakończeniu.
+- **Dowód:** 13 nowych kontrprób na Windows i temp DB; realny subprocess odtwarza Python → probe → child PowerShell z root w command line. Pełna regresja 1079/1079; partycje 259+264+277+279, exact-once 1079; `compileall` i `git diff --check` zielone.
+- **Granice:** bez sieci, API, SDK, browsera, publikacji, kosztu, produkcyjnej migracji, zapisu `data/agent.db`, Windows Tasks i operacji Git. Status: `QUIESCE PROBE CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.
+
+### ADR-076: Kontrolowana migracja 0009→0014 ustanowiła nowy baseline
+
+- **Data:** 2026-07-16
+- **Status:** `MIGRATION COMPLETE — NEW BASELINE ESTABLISHED`; Etap 1 nadal `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`.
+- **Kto podjął:** właściciel udzielił jawnej zgody na dokładnie jedną próbę pakietowego executora po QP-01; wykonanie: Codex.
+- **Wejście:** branch `dev/first-successful-research-card`, HEAD `ddc3c63190eb82bca171174dc7ee70c2d0a1ec15`, staging pusty, brak operacji Git, procesów projektu, tasków, journala i holderów. Stary baseline DB/WAL/SHM był dokładnie zgodny.
+- **QP-01:** initial, after-backup i pre-mutation miały po zero blocking processes/handles/tasks. Każdy helper został rozpoznany jako `PROBE_HELPER` z `PROBE_REGISTERED_HELPER_IDENTITY`; false positive nie powtórzył się.
+- **Wykonanie:** zweryfikowany pełny backup schematu 0009, rehearsal kanonicznym runnerem, produkcyjne `0010`–`0014`, inicjalizacja jedynego profilu flag i post-verification. Nie było błędu ani rollbacku.
+- **Dowód:** 14 migracji, 35 triggerów, 13 legacy proofs, koszt `0.684580`, historyczne tabele bez zmiany, 0 jobs, 0 provider attempts, 0 reconciliation events, `integrity_check=ok` i `foreign_key_check=[]`.
+- **Flagi:** `kill_switch=true`, `safe_mode=true`, `worker_enabled=false`, `paid_actions_enabled=false`, `browser_actions_enabled=false`.
+- **Nowy baseline:** DB SHA-256 `630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6`, 335872 B, mtime `2026-07-16T19:42:25.5377560Z`; WAL 0 B z SHA pustego pliku; SHM 32768 B z niezmienionym SHA `FD4C9…89EB`.
+- **Granice:** dokładnie jedna próba; brak live API, workera, maintenance, browsera, publikacji, paid action, kosztu, zmian Windows Tasks i operacji Git. Migracja nie stanowi zgody live ani formalnego zamknięcia Etapu 1.
+
+### ADR-077: Dostarczony niezależny review zatwierdza QP-01 i trwały stan schema 0014
+
+- **Data:** 2026-07-16
+- **Status:** ACCEPTED; `TECHNICAL VERDICT: APPROVE WITH MINOR/P2`.
+- **Kto podjął:** niezależny reviewer wydał werdykt bez modyfikowania repozytorium; właściciel dostarczył ukończony wynik i autoryzował jego materializację oraz checkpoint po wykluczeniu chronionych zmian; implementer checkpointu nie wykonywał review.
+- **Zakres:** produkcyjna migracja `0009→0014`, nowy baseline, QP-01, dokumentacja i zakres checkpointu.
+- **Wynik:** produkcja `VERIFIED / SCHEMA 0014`, baseline `VERIFIED` (`630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6`), QP-01 `APPROVED`; 14 migracji, 35/35 triggerów, 13 legacy proofs, 18 zgodnych digestów, `integrity_check=ok`, `foreign_key_check=[]`, koszt `0.684580` USD i 0/0/0 jobs/provider attempts/reconciliation events.
+- **Dowód QP-01:** 13/13 testów implementera oraz 23/23 niezależne kontrpróby; pełny suite 1079/1079, partycje 259+264+277+279 exact-once.
+- **Findings P2:** P2-A — bieżące statusy wymagały synchronizacji z dostarczonym review; P2-B — mieszany dirty state `docs/BUILD_LOG.md` wymaga selektywnego stagingu; P2-C — wynik review wymagał osobnego repozytoryjnego artefaktu pochodzenia. Findings są proceduralne i nie są MAJOR/P1.
+- **Skutek:** checkpoint QP-01 i stanu po migracji jest autoryzowany wyłącznie po wykluczeniu prywatnych zmian użytkownika. Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`; live API pozostaje `FORBIDDEN`.

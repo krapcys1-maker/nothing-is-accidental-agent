@@ -1,6 +1,6 @@
 # Etap 1 — operacje lokalne, scheduler i migracja produkcyjna
 
-Status: **`CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`**. Etap 1 pozostaje otwarty i zablokowany do kontrolowanego live acceptance. Live API jest zabronione. Ten dokument nie jest zgodą na rejestrację zadań systemowych, migrację produkcji ani wywołanie providera.
+Status: **`POST-MIGRATION REVIEW — APPROVE WITH MINOR/P2`; QP-01 = `APPROVED`; produkcja = `VERIFIED / SCHEMA 0014`; nowy baseline = `VERIFIED`.** Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`. Live API jest zabronione. Ten dokument nie jest zgodą na rejestrację zadań systemowych, ponowną migrację ani wywołanie providera.
 
 ## Minimalny Windows Task Scheduler
 
@@ -124,3 +124,106 @@ Akcja `execute-in-place` jest niedostępna bez literalnego `--confirm-in-place-p
 Pomocniczy `execute-copy-preflight` pozostaje wyłącznie rehearsal na kopii i nie jest alternatywnym executorem produkcyjnym. Nie wolno tworzyć ad-hoc skryptów, ręcznej listy migracji ani drugiego profilu flag.
 
 Rollback produkcji jest wyłącznie pełnym odtworzeniem zweryfikowanego zestawu DB/WAL/SHM przy zatrzymanych procesach. Zabronione są reverse `UPDATE`, `DELETE`, ręczna edycja `schema_migrations` i częściowe odtwarzanie samego `agent.db`.
+
+### Wynik drugiej zatwierdzonej próby — 2026-07-16
+
+Jednorazowo zatwierdzone uruchomienie zacommitowanego executora na HEAD `ddc3c63190eb82bca171174dc7ee70c2d0a1ec15` zostało odrzucone na pierwszej bramce quiesce:
+
+```text
+STAGE 1 MIGRATION: failed closed: Full quiescence was not proven:
+processes=(17196, 34228), handles=(), tasks=().
+```
+
+Był to wynik **`MIGRATION REJECTED BEFORE MUTATION`**. Bramka następuje przed utworzeniem workspace, backupem, otwarciem kopii i produkcyjnej SQLite, dlatego nie powstały backup, rehearsal ani manifest nowego baseline'u. Kontrola po zakończeniu wykazała nieobecność obu przejściowych PID-ów, brak procesów projektu, journala, runtime i tasków oraz dokładnie niezmienione SHA/size/mtime DB/WAL/SHM. Produkcja pozostaje na `0009`; rollback nie był potrzebny. Nie wolno automatycznie ponawiać tej próby; następne uruchomienie wymaga nowej zgody właściciela.
+
+### Wynik ponownej próby po clean quiesce — 2026-07-16
+
+Przed poleceniem potwierdzono czysty quiesce: brak procesów projektu, uchwytów DB/WAL/SHM, operatora CLI, workera, maintenance i zadań Windows projektu. Branch i HEAD były zgodne, a DB/WAL/SHM odpowiadały staremu baseline'owi. Jedna faktyczna próba executora zakończyła się:
+
+```text
+STAGE 1 MIGRATION: failed closed: Full quiescence was not proven:
+processes=(15404,), handles=(), tasks=().
+```
+
+Zarejestrowany proces:
+
+| Pole | Wartość |
+|---|---|
+| PID | `15404` |
+| Parent PID | `10216` |
+| Executable | `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe` |
+| Creation time UTC | `2026-07-16T18:59:17.5919140Z` |
+| Reason match | `CommandLine contains resolved project root` |
+| Command line | `powershell.exe -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop';$root='C:\Users\user\Desktop\agent project';$self=10216;..."` |
+
+Finding `QP-01`: jest to proces potomny uruchomiony przez `_default_quiesce_probe`. Probe wyklucza parent Python przez `$self=10216`, lecz jego własny potomny PowerShell ma w command line literalny `$root`; predykat `CommandLine.Contains($root)` dopasowuje więc sam proces sprawdzający. Pełna command line jest zachowana w raporcie `docs/migration-reports/STAGE1_DATABASE_RETRY_QUIESCE_PROCESS_IDENTIFIED_2026-07-16.md`.
+
+Odrzucenie nastąpiło przed utworzeniem workspace i przed otwarciem SQLite. Nie wykonano backupu, rehearsal, migracji, inicjalizacji flag, rollbacku ani nowego baseline'u. Nie wykonano kolejnej próby i nie zmieniono filtra. Wynik: **`MIGRATION REJECTED — QUIESCE PROCESS IDENTIFIED`**.
+
+### Kontrakt klasyfikacji procesów po QP-01
+
+Poprawiony probe nie pozwala PowerShellowi samodzielnie rozstrzygać, co jest procesem projektu. Helper zwraca atomowy snapshot `Win32_Process` zawierający PID, parent PID, executable, command line i creation time oraz listę tasków. Python zna własny PID i parent PID, rejestruje PID uruchomionego przez siebie helpera z jednorazowym nonce i akceptuje wykluczenie helpera dopiero po zgodności:
+
+- reported PID = PID zwrócony przez `Popen`;
+- parent PID helpera = current Python PID;
+- executable = `powershell.exe` albo `pwsh.exe`;
+- command line zawiera nonce tej instancji;
+- creation time mieści się w oknie tej instancji probe'a.
+
+Nie istnieje wykluczenie „wszystkich potomków”. Niezarejestrowany potomek helpera jest klasyfikowany od początku i realny worker nadal blokuje. Direct parent launcher jest nieblokujący tylko jako jawny launcher; parent będący workerem lub maintenance blokuje. Dokładnie zarejestrowany helper dostaje `PROBE_REGISTERED_HELPER_IDENTITY` i nie może zostać zablokowany samym `PROJECT_ROOT_COMMAND_LINE_ONLY`.
+
+Zamknięte blocking reason codes:
+
+| Reason code | Skutek |
+|---|---|
+| `APP_ROLE_WORKER` | STOP |
+| `APP_ROLE_MAINTENANCE` | STOP |
+| `APP_ROLE_OPERATOR_CLI` | STOP |
+| `PROCESS_IDENTITY_INCOMPLETE` | STOP dla procesu kandydującego |
+| `APPLICATION_HOST_COMMAND_LINE_UNREADABLE` | STOP |
+| uchwyt DB/WAL/SHM | STOP przez niezależny file-handle gate |
+| task wskazujący repozytorium | STOP |
+
+`PROJECT_ROOT_COMMAND_LINE_ONLY` jest pełną, raportowaną obserwacją nieblokującą, jeżeli proces ma kompletną tożsamość i nie ma roli aplikacyjnej. Dzięki temu dwa równoległe probe'y nie blokują się wzajemnie. Każdy blocking process jest renderowany z pełną tożsamością i reason codes także wtedy, gdy zniknie przed obsługą błędu.
+
+Historyczny status bezpośrednio po implementacji QP-01 brzmiał **`CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`** i nie stanowił zgody na migrację; produkcja miała wtedy schemat `0009`. Późniejszy niezależny review zatwierdził QP-01, a osobno autoryzowana kontrolowana próba ustanowiła schema `0014` i nowy baseline.
+
+### Wynik jednej kontrolowanej próby po QP-01 — sukces
+
+Właściciel udzielił osobnej zgody na dokładnie jedną próbę. Użyto tego samego entrypointu `scripts/prepare_stage1_db_migration.py execute-in-place`, interpretera `C:\Users\user\AppData\Local\Programs\Python\Python312\python.exe`, CWD repozytorium i subprocess flow PowerShell → Python → helper PowerShell.
+
+Każdy z trzech gate'ów miał:
+
+```text
+blocking_processes=0
+locked_paths=0
+scheduled_tasks=0
+helper_classification=PROBE_HELPER
+helper_reason=PROBE_REGISTERED_HELPER_IDENTITY
+```
+
+QP-01 nie powtórzył się. Executor zweryfikował backup starego zestawu bez driftu, przeprowadził rehearsal, zastosował `0010`–`0014` w produkcji i zakończył post-verification. Wynik:
+
+- dokładnie 14 migracji i 35 triggerów;
+- `integrity_check=ok`, `foreign_key_check=[]`;
+- 13 legacy proofs i koszt `0.684580` USD bez zmiany;
+- historyczne tabele bez zmiany, w tym `runs` 9 wierszy i `research_runs` 5;
+- 0 jobs, 0 provider attempts, 0 reconciliation events;
+- `kill_switch=true`, `safe_mode=true`, worker/paid/browser `false`;
+- brak live API, workera, paid/browser actions i zmian Windows Tasks.
+
+Nowy baseline:
+
+| Plik | SHA-256 | Rozmiar | mtime UTC |
+|---|---|---:|---|
+| `data/agent.db` | `630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6` | 335872 B | `2026-07-16T19:42:25.5377560Z` |
+| `data/agent.db-wal` | `E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855` | 0 B | `2026-07-16T19:42:25.5417557Z` |
+| `data/agent.db-shm` | `FD4C9FDA9CD3F9AE7C962B0DDF37232294D55580E1AA165AA06129B8549389EB` | 32768 B | `2026-07-16T19:42:25.5507558Z` |
+
+Backup, report i baseline znajdują się poza repozytorium w `C:\Users\user\Desktop\agent-project-backups\stage1-second-migration-20260716-ddc3c63190eb82bc-attempt-4`. Migracji nie wolno ponawiać w tej sesji. Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`.
+
+### Niezależny review trwałego wyniku migracji i QP-01
+
+Właściciel dostarczył ukończony niezależny review bazowego HEAD `ddc3c63190eb82bca171174dc7ee70c2d0a1ec15`. Reviewer nie modyfikował repozytorium. Werdykt `APPROVE WITH MINOR/P2` potwierdził QP-01, schema `0014`, baseline `630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6`, 14 migracji, 35/35 triggerów, 13 legacy proofs, 18 zgodnych digestów historycznych, `integrity_check=ok`, pusty `foreign_key_check`, koszt `0.684580` USD oraz 0/0/0 jobs/provider attempts/reconciliation events.
+
+Review obejmował 13/13 testów implementera QP-01, 23/23 niezależne kontrpróby, pełny suite 1079/1079 i partycje 259+264+277+279. Checkpoint jest autoryzowany po wykluczeniu chronionych zmian użytkownika. Review nie zamyka Etapu 1, nie zezwala na live API i nie jest zgodą na ponowną migrację ani rejestrację Windows Tasks.

@@ -16,12 +16,12 @@ Obowiązujące dodatkowo (logi, nie plany): `docs/DECISIONS.md` (rejestr ADR), `
 
 ## Stan projektu (skrót — pełny obraz w CURRENT_PROJECT_STATE.md)
 
-- Zbudowane i przetestowane offline: konfiguracja, SQLite z **14 migracjami** (ostatnia `0014_provider_attempt_reconciliation`), Policy Engine, kolejka/worker, ledger provider attempt, durable single-research `durable_provider_v2`, minimalny launcher systemowy, raport read-only i copy-preflight migracji. `model_usage` pozostaje jedynym ledgerem kosztu; operatorski resolver L1 rozdziela fakt finansowy od wyniku wykonawczego, z append-only historią `reconciliation_events`, pełną weryfikacją lineage i bez retry/attemptu #2. **1052 testy, wszystkie offline.**
-- WAVE 0A, WAVE 0B i WAVE 1A są formalnie **`CLOSED — APPROVED WITH P2`**. Skonsolidowany Etap 1 ma status implementera **`CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`**, ale formalnie pozostaje `BLOCKED`. Minimalny Windows Task Scheduler launcher i read-only raport są zweryfikowane offline; nie zarejestrowano zadań systemowych. Kod zna 14 migracji, produkcyjna `data/agent.db` nadal ma 9 i nie została zmigrowana. Live API jest **ZABRONIONE**.
+- Zbudowane i przetestowane offline: konfiguracja, SQLite z **14 migracjami** (ostatnia `0014_provider_attempt_reconciliation`), Policy Engine, kolejka/worker, ledger provider attempt, durable single-research `durable_provider_v2`, minimalny launcher systemowy, raport read-only i kontrolowany executor migracji. `model_usage` pozostaje jedynym ledgerem kosztu; operatorski resolver L1 rozdziela fakt finansowy od wyniku wykonawczego, z append-only historią `reconciliation_events`, pełną weryfikacją lineage i bez retry/attemptu #2. **1079 testów, wszystkie offline.**
+- WAVE 0A, WAVE 0B i WAVE 1A są formalnie **`CLOSED — APPROVED WITH P2`**. Niezależny post-migration review wydał **`APPROVE WITH MINOR/P2`**, zatwierdził QP-01 oraz zweryfikował produkcyjną `data/agent.db` jako schema `0014` z baseline'em `630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6`. Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`. Nie zarejestrowano zadań systemowych; live API jest **ZABRONIONE**.
 
 Operacyjne instrukcje dla schedulera, raportu, konfiguracji attempts i przyszłej migracji copy-preflight są w [`docs/STAGE1_OPERATIONS.md`](docs/STAGE1_OPERATIONS.md). `python -m app.main operational-report` otwiera bazę wyłącznie read-only i pokazuje braki jako `UNKNOWN/BLOCKED`. `python scripts/manage_windows_tasks.py plan --task worker` oraz analogiczne `--task maintenance` tylko generują plan; instalacja każdego zadania wymaga osobnej zgody i jawnego przełącznika potwierdzającego.
 
-Formalne zamknięcie Etapu 1 wymaga kolejno: niezależnego review tego pakietu; osobno zatwierdzonej migracji produkcji `0009→0014`, nowego baseline SHA i inicjalizacji pięciu flag; jednego kontrolowanego live durable single flow z twardym capem, `max_retries=0`, dokładnie jednym jobem i jednym requestem; niezależnego review trwałego wyniku; braku MAJOR/CRITICAL; formalnej decyzji właściciela. Browser, publikacja, FetchPort, content pipeline, panel FastAPI, autonomia, interakcje, analytics i Etap 2+ nie należą do tego kryterium.
+Migracja produkcji `0009→0014`, nowy baseline, inicjalizacja pięciu flag oraz niezależny review QP-01 i trwałego wyniku migracji są zakończone. Formalne zamknięcie Etapu 1 nadal wymaga jednego kontrolowanego live durable single flow z twardym capem, `max_retries=0`, dokładnie jednym jobem i jednym requestem; niezależnego review trwałego wyniku po teście; braku MAJOR/CRITICAL; formalnej decyzji właściciela. Browser, publikacja, FetchPort, content pipeline, panel FastAPI, autonomia, interakcje, analytics i Etap 2+ nie należą do tego kryterium.
 - Niezbudowane: durable realne A1/A2/B, realne resume, artykuły/Notes, approval/autonomia, publikacja (Playwright), interakcje, analityka i panel.
 - Zero publikacji na Substacku; realny koszt dotąd: 0,684580 USD z limitu 40 USD/mies.
 
@@ -39,7 +39,7 @@ WAVE 0B jest formalnie **`CLOSED — APPROVED WITH P2`** po checkpointowym commi
 
 ```bash
 pip install -e .[dev]           # + .[llm] tylko do realnych wywołań API
-python -m pytest                # 1052 testy, bez sieci
+python -m pytest                # 1079 testów, bez sieci
 python scripts/run_test_partitions.py --parts 4 --verify  # pełne SHA-256 node ID
 python -m app.main run-topics --count 6      # dry_run (zero kosztu)
 python -m app.main run-research              # dry_run (zero kosztu)

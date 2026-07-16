@@ -381,3 +381,37 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Wymagany profil:** `kill_switch=true`, `safe_mode=true`, `worker_enabled=false`, `paid_actions_enabled=false`, `browser_actions_enabled=false`.
 - **Granice:** nie wykonywać drugiej migracji produkcyjnej, nie ustanawiać nowego baseline'u, nie uruchamiać live API, SDK, browsera, workera ani maintenance, nie rejestrować Windows Task Scheduler i nie wykonywać stage/commit/push/PR/merge. `docs/BUILD_LOG.md` pozostaje nietknięty.
 - **Status:** narzędzie może otrzymać wyłącznie `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`. Druga próba wymaga nowej, osobnej zgody właściciela; Etap 1 nadal `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`.
+
+## [2026-07-16] Jednorazowa zgoda na drugą kontrolowaną migrację
+
+- **Zgoda człowieka:** użyć wyłącznie zacommitowanego `run_stage1_in_place_migration` na HEAD `ddc3c63190eb82bca171174dc7ee70c2d0a1ec15`, z pełnym quiesce, backupem, rehearsal i ewentualną migracją `0009→0014`; bez API, SDK, workera, maintenance, browsera, tasków i Git.
+- **Warunek:** każdy failure quiesce przed mutacją ma dać `MIGRATION REJECTED BEFORE MUTATION`; bez automatycznej ponownej próby.
+- **Wynik:** executor odrzucił operację na pierwszym gate quiesce z dwoma przejściowymi PID-ami. Workspace nie powstał, produkcja pozostała na `0009`, a zgoda nie została rozszerzona na kolejne uruchomienie.
+
+## [2026-07-16] Zgoda na jedną ponowną próbę po clean quiesce
+
+- **Zgoda człowieka:** zamknąć procesy projektu, potwierdzić brak workera, maintenance, operatora CLI, holderów DB/WAL/SHM i tasków, a następnie jeden raz uruchomić zatwierdzony executor na HEAD `ddc3c63190eb82bca171174dc7ee70c2d0a1ec15` z literalnym confirmation.
+- **Warunek odmowy:** jeśli quiesce ponownie nie przejdzie, nie migrować; zapisać PID, parent PID, executable, command line, creation time i reason match, bez kolejnego audytu całego systemu, po czym zatrzymać się z jednym findingiem filtra procesów.
+- **Wynik:** executor wskazał PID `15404`, będący potomnym PowerShellem własnego probe'a. Finding `QP-01` opisuje samodopasowanie literalnej ścieżki repozytorium w command line. Operacja zakończyła się `MIGRATION REJECTED — QUIESCE PROCESS IDENTIFIED` przed mutacją.
+- **Granice zachowane:** bez zmiany kodu, kolejnej próby, live API, workera, maintenance, browsera, Windows Tasks i operacji Git. Produkcja pozostaje na `0009`; Etap 1 nadal jest otwarty i zablokowany.
+
+## [2026-07-16] Zlecenie lokalnej poprawki QP-01 bez migracji
+
+- **Decyzja człowieka:** naprawić wyłącznie self-detection child PowerShell w quiesce probe; nie uruchamiać produkcyjnej migracji i nie zmieniać executora poza minimalnym zakresem probe'a oraz diagnostyki.
+- **Wymagany kontrakt:** śledzić current PID, parent PID, helper PIDs, relacje parent/child, executable, command line, creation time i reason code; helper nie może blokować sam siebie, ale worker, maintenance, operator, handle i stan niejednoznaczny nadal muszą zatrzymywać.
+- **Wymagane kontrpróby:** PID reuse, linger/cleanup, niezarejestrowany potomek, dwa równoległe probe'y, root-only PowerShell, realne role aplikacyjne, uchwyt do temp DB oraz pełna regresja offline.
+- **Wynik:** kandydat QP-01 spełnia kontrakt; 13 nowych testów i 1079/1079 pełnego suite są zielone. Nie wykonano migracji, live API, Windows Tasks ani operacji Git. Poprawka czeka na niezależny review.
+
+## [2026-07-16] Zgoda na jedną kontrolowaną migrację po QP-01
+
+- **Zgoda człowieka:** po pełnym gate wejściowym uruchomić dokładnie jedną próbę `run_stage1_in_place_migration` przez realny pakietowy entrypoint, z literalnym `--confirm-in-place-production-migration` i tym samym subprocess flow, który ujawniał QP-01.
+- **Warunek:** przy realnym blockerze zatrzymać się bez ponowienia; przy czystym quiesce wykonać backup, rehearsal, `0010`–`0014`, flagi, post-verification i nowy baseline. Bez review/audytu, live API, workerów, tasków i Git.
+- **Wynik:** jedyna próba przeszła wszystkie trzy gate'y i zakończyła się `MIGRATION COMPLETE — NEW BASELINE ESTABLISHED`. QP-01 nie powtórzył się; produkcja ma schemat 0014 i kanoniczne flagi fail-closed.
+- **Dalsza granica:** zgoda została zużyta. Nie wolno wykonywać drugiej migracji w tej sesji. Live acceptance nadal wymaga osobnej zgody i review trwałego wyniku.
+
+## [2026-07-16] Właściciel dostarczył końcowy niezależny review QP-01 i stanu po migracji
+
+- **Decyzja człowieka:** właściciel dostarczył ukończony raport niezależnego review i autoryzował materializację wyniku, synchronizację statusu oraz checkpoint wyłącznie po odseparowaniu chronionych zmian użytkownika.
+- **Werdykt:** `APPROVE WITH MINOR/P2`; produkcja `VERIFIED / SCHEMA 0014`; nowy baseline `VERIFIED`; QP-01 `APPROVED`; checkpoint dozwolony po wykluczeniu chronionych zmian.
+- **Rozdzielenie odpowiedzialności:** implementer checkpointu nie wykonywał review i nie przedstawia dostarczonego wyniku jako własnej oceny. Reviewer nie modyfikował repozytorium.
+- **Granice:** Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`; live API `FORBIDDEN`; ponowna migracja i rejestracja Windows Tasks niedozwolone.
