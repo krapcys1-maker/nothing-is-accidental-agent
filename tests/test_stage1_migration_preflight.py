@@ -11,12 +11,12 @@ import pytest
 from app.operations.stage1_migration import (
     MIGRATIONS_0010_TO_0014,
     REQUIRED_STAGE1_TRIGGERS,
-    STAGE1_BLOCKED_FLAGS,
     Stage1MigrationPreflightError,
     Stage1MigrationRequest,
     fingerprint,
     run_stage1_copy_preflight,
 )
+from app.core.security_flags import SECURITY_FLAG_DEFAULTS
 from app.storage.db import MIGRATIONS_DIR, apply_migrations
 
 
@@ -107,7 +107,7 @@ def test_copy_preflight_preserves_source_and_backup_and_proves_candidate(tmp_pat
             row[0]: json.loads(row[1])
             for row in candidate.execute("SELECT key,value_json FROM system_flags")
         }
-        assert flags == STAGE1_BLOCKED_FLAGS
+        assert flags == dict(SECURITY_FLAG_DEFAULTS)
         assert apply_migrations(candidate) == []
     finally:
         backup.close()

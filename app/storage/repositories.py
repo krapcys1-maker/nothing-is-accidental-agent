@@ -14,6 +14,7 @@ from typing import Iterable, Sequence
 
 from app.core.clock import Clock
 from app.core.money import decimal_from, quantize_usd, sum_usd
+from app.core.security_flags import SECURITY_FLAG_DEFAULTS
 from app.models import (
     Account,
     DurableProviderAttemptContext,
@@ -172,13 +173,6 @@ _EXECUTABLE_JOB_STATUSES = (
     JobStatus.LEASED.value,
     JobStatus.RUNNING.value,
 )
-_SECURITY_FLAG_DEFAULTS = {
-    "kill_switch": True,
-    "worker_enabled": False,
-    "safe_mode": True,
-    "paid_actions_enabled": False,
-    "browser_actions_enabled": False,
-}
 _STALE_RUN_REAPER_REASON = "STALE_RUN_REAPER: stale RUNNING run has no executable job lease."
 _LOGGER = logging.getLogger(__name__)
 
@@ -3767,7 +3761,7 @@ class SqliteStorage:
             )
 
         flag_states: dict[str, OperationalFlagState] = {}
-        for key, fail_closed_value in _SECURITY_FLAG_DEFAULTS.items():
+        for key, fail_closed_value in SECURITY_FLAG_DEFAULTS.items():
             if "system_flags" not in tables:
                 flag_states[key] = OperationalFlagState(
                     key=key,
@@ -3820,18 +3814,18 @@ class SqliteStorage:
         """Reads SQLite on every call; safety flags fail closed when absent or malformed."""
         row = self.conn.execute("SELECT * FROM system_flags WHERE key=?", (key,)).fetchone()
         if row is None:
-            if key not in _SECURITY_FLAG_DEFAULTS:
+            if key not in SECURITY_FLAG_DEFAULTS:
                 return None
-            return SystemFlag(key=key, value=_SECURITY_FLAG_DEFAULTS[key], is_valid=False)
+            return SystemFlag(key=key, value=SECURITY_FLAG_DEFAULTS[key], is_valid=False)
         try:
             value = json.loads(row["value_json"])
             if not isinstance(value, bool):
                 raise ValueError("safety flag must contain a JSON boolean")
         except (TypeError, ValueError, json.JSONDecodeError):
-            if key not in _SECURITY_FLAG_DEFAULTS:
+            if key not in SECURITY_FLAG_DEFAULTS:
                 raise SystemFlagError(f"System flag {key!r} has malformed JSON.")
             return SystemFlag(
-                key=key, value=_SECURITY_FLAG_DEFAULTS[key], updated_at=row["updated_at"],
+                key=key, value=SECURITY_FLAG_DEFAULTS[key], updated_at=row["updated_at"],
                 updated_by=row["updated_by"], reason=row["reason"], is_valid=False,
             )
         return SystemFlag(

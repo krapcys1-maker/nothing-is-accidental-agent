@@ -332,3 +332,13 @@ Regresje wykazały `2×` i `3×0.0000005` oraz `0.1+0.2` wobec `0.3` w policy, l
 ## 2026-07-16 — test potrafi pomylić blokadę SDK z importem SDK
 
 Pierwsza kontrpróba raportu wymagała, aby `anthropic` w ogóle nie istniał w `sys.modules`. Kernel bezpieczeństwa testów może jednak zainstalować atrapę, której jedyną rolą jest blokada realnego SDK. Test mierzy teraz moduły doładowane przez CLI, nie stan całego procesu. Dwie inne próby poprawiły dowodliwość: literal launchera dopasowano do prawdziwej tablicy PowerShell, a rollback migracji zmieniono ze stringa na strukturę `full_file_restore`. Żaden błąd nie dotknął produkcyjnej bazy ani sieci.
+
+## 2026-07-16 — Dobra migracja może zostać cofnięta przez zły test końcowy
+
+Pierwsza produkcyjna migracja `0009→0014` wykonała dokładnie to, co miała: kanoniczny runner zastosował pięć kolejnych migracji, historia i koszt nie drgnęły, triggery oraz flagi były poprawne. Mimo to procedura uznała wynik za porażkę. Nie zawiodła baza, lecz dopisany poza kontraktem warunek, że po odczycie SQLite pliki WAL i SHM muszą całkowicie zniknąć. W trybie WAL pusty WAL i obecny SHM są normalnym stanem. Ponieważ po mutacji obowiązywał bezwzględny rollback, pełny zestaw DB/WAL/SHM został odtworzony i zweryfikowany bitowo. Baza wróciła do 0009; chwilowy hash 0014 nie stał się baseline'em.
+
+Poprawka nie osłabia kontroli. Zamiast pytać „czy sidecar istnieje?”, procedura pyta „czy WAL ma niezatwierdzone bajty, czy istnieje journal, writer, uchwyt albo task, i czy którykolwiek plik zmienił się między bramkami?”. Pusty WAL przechodzi, SHM jest raportowany, nonzero WAL zatrzymuje. Cały istniejący zestaw trafia do backupu i tylko pełny zestaw może zostać przywrócony.
+
+Usunęliśmy też dwie konkurencyjne definicje flag. Storage i migracja czytają teraz jeden niemodyfikowalny profil: kill switch i safe mode włączone, worker, paid i browser wyłączone. Jeden opakowany executor najpierw dowodzi branchu, starego baseline'u, quiesce, backupu, rehearsal i świeżości, a dopiero później może otworzyć produkcję. Czternaście kontrprób wykonuje się na bazach tymczasowych, w tym wymuszony błąd po migracji i bitowy restore DB/WAL/SHM.
+
+Najważniejsze: przygotowanie bezpieczniejszej drugiej próby nie jest zgodą na drugą próbę. Nie wykonano jej, nowy baseline nie istnieje, live API i zadania systemowe pozostają wyłączone, a Etap 1 nadal jest otwarty i zablokowany.

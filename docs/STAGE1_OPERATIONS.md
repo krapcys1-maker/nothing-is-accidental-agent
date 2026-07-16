@@ -66,43 +66,61 @@ Schemat 0014 nie ma trwałego timestampu ukończenia cyklu maintenance, dlatego 
 
 Exit codes: 0 = kompletny raport bez UNKNOWN; 2 = raport odczytany, ale zdegradowany przez UNKNOWN/BLOCKED; 3 = błąd konfiguracji; 6 = kontrolowany błąd storage/OS. Przy obecnym schemacie brak timestampu maintenance oznacza kontrolowany kod 2.
 
-## Pierwsza migracja produkcyjnej bazy `0009→0014`
+## Kontrolowana migracja produkcyjnej bazy `0009→0014`
 
-Stan rozdzielony jawnie:
+Stan obowiązujący po pierwszej próbie z 2026-07-16:
 
-- kod obsługuje 14 migracji (`0001`–`0014`);
-- chroniona `data/agent.db` ma obecnie 9 wpisów `schema_migrations`;
-- produkcyjna migracja nie została wykonana;
-- przyszła migracja i zamiana pliku wymagają osobnej zgody właściciela.
+- pierwsza migracja była technicznie poprawna: kanoniczny runner zastosował dokładnie `0010`–`0014`, a wszystkie kontrole schematu, danych, kosztu, triggerów i flag przeszły;
+- rollback uruchomił wyłącznie niezamówiony warunek `WAL=ABSENT` i `SHM=ABSENT`; kontrolowany odczyt SQLite prawidłowo pozostawił pusty WAL i SHM;
+- pełny restore DB/WAL/SHM został niezależnie zweryfikowany bitowo i metadanymi;
+- chroniona `data/agent.db` nadal ma schemat `0009` i stary obowiązujący SHA-256 `CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB`;
+- nowy baseline nie istnieje; chwilowego SHA po pierwszej migracji nie wolno używać;
+- druga migracja nie została wykonana i wymaga nowej, osobnej zgody właściciela.
 
-Plan bez otwarcia bazy i bez tworzenia plików:
+### Jedyny kanoniczny kontrakt sidecarów i flag
+
+`agent.db-wal` może być nieobecny albo mieć dokładnie 0 B. Niezerowy WAL blokuje operację. `agent.db-shm` może istnieć i jest raportowany wraz z SHA, rozmiarem i mtime; jego obecność nie jest błędem. `agent.db-journal`, proces projektu, aktywny uchwyt albo zadanie systemowe wskazujące repozytorium blokuje operację. Baseline wymaga SHA głównego DB; WAL/SHM są metadanymi stanu plików, które muszą pozostać bez driftu pomiędzy bramkami i wejść do backupu/restore.
+
+Jedyny profil inicjalizowany po migracji pochodzi z `app.core.security_flags.SECURITY_FLAG_DEFAULTS`:
+
+| Flaga | Wartość |
+|---|---|
+| `kill_switch` | `true` |
+| `safe_mode` | `true` |
+| `worker_enabled` | `false` |
+| `paid_actions_enabled` | `false` |
+| `browser_actions_enabled` | `false` |
+
+### Kanoniczne narzędzie
+
+`scripts/prepare_stage1_db_migration.py` jest jedynym opakowanym entrypointem. Akcja `plan` nie tworzy plików i nie otwiera bazy:
 
 ```powershell
 python scripts/prepare_stage1_db_migration.py plan `
   --source-db data/agent.db `
-  --workspace C:\stage1-db-preflight `
+  --workspace C:\Users\user\Desktop\agent-project-backups\stage1-second-migration `
   --expected-branch dev/first-successful-research-card `
-  --expected-head 637d1f21fbac164d7f78b11590facc7098182559 `
+  --expected-head 0658e8b221b99bcdaa549cf538ee140a9dc02613 `
   --expected-source-sha256 CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB `
   --expected-source-size 294912 `
   --expected-source-mtime-utc 2026-07-14T15:59:24.9521212Z
 ```
 
-Po osobnej zgodzie wyłącznie na copy-preflight używa się `execute-copy-preflight` i `--confirm-copy-preflight-only`. Workspace musi być pusty, poza katalogiem źródłowej bazy. Procedura fail-closed:
+Akcja `execute-in-place` jest niedostępna bez literalnego `--confirm-in-place-production-migration`. Samo istnienie kodu i tego dokumentu nie stanowi zgody na jej użycie. Po osobnej zgodzie właściciela executor wykonuje kolejno i fail-closed:
 
-1. sprawdza branch/HEAD oraz zatwierdzone SHA-256, rozmiar i mtime źródła;
-2. odmawia przy sidecarach `-wal`/`-shm`;
-3. tworzy pełny backup `copy2` i weryfikuje jego identyczny SHA/rozmiar/mtime;
-4. sprawdza `integrity_check=ok` i pusty `foreign_key_check` backupu;
-5. tworzy osobną candidate copy, wymaga dokładnie migracji `0001`–`0009`, a następnie stosuje dokładnie `0010`–`0014`;
-6. ponawia migrator i wymaga no-opu;
-7. sprawdza 14 wpisów, zamknięty zbiór wymaganych triggerów, 13 legacy proofs i niezmieniony koszt `0.684580` USD;
-8. inicjalizuje wyłącznie na kandydacie: `kill_switch=false`, `worker_enabled=false`, `safe_mode=false`, `paid_actions_enabled=false`, `browser_actions_enabled=false`;
-9. ponawia integrity/FK, liczy nowy SHA kandydata i dowodzi, że źródło oraz backup nie zmieniły się;
-10. zapisuje lokalny JSON report. Nigdy nie podmienia produkcyjnej bazy.
+1. sprawdza jawne potwierdzenie oraz dokładny branch/HEAD;
+2. bez otwierania SQLite sprawdza stary SHA/size/mtime DB, stan WAL/SHM i brak journala;
+3. dowodzi pełnego quiesce: brak procesów projektu, uchwytów i zadań systemowych;
+4. kopiuje i bitowo/metadanymi weryfikuje cały istniejący zestaw DB/WAL/SHM poza repozytorium;
+5. ponownie fingerprintuje źródło po backupie i blokuje każdy drift;
+6. na świeżej kopii backupu wykonuje rehearsal kanonicznym `app.storage.db.apply_migrations`, dokładnie `0010`–`0014`, a drugi przebieg musi być no-op;
+7. weryfikuje `integrity_check`, FK, ledger 14 migracji, wymagane triggery, 13 legacy proofs, historię, koszt `0.684580` i jedyny profil flag;
+8. bezpośrednio przed mutacją ponawia branch/HEAD, quiesce oraz fingerprint DB/WAL/SHM i odrzuca drift;
+9. dopiero wtedy otwiera produkcję, używa tego samego kanonicznego runnera i inicjalizuje profil flag;
+10. po zamknięciu połączenia wykonuje pełną weryfikację i dopiero wtedy zapisuje nowy wymagany SHA głównej bazy;
+11. przy dowolnym błędzie po otwarciu produkcji odtwarza pełny zestaw DB/WAL/SHM ze zweryfikowanego backupu i sprawdza identyczność;
+12. nigdy nie używa reverse SQL, nie uruchamia workera/API/browsera, nie rejestruje zadań i nie wykonuje płatnej akcji.
 
-Po review raportu osobna decyzja migracyjna musi zatrzymać worker/maintenance, ponownie sprawdzić tożsamość plików i dopiero kontrolowanie ustanowić zweryfikowanego kandydata jako produkcyjną bazę. Nowy SHA staje się baseline wyłącznie po ponownych integrity/FK, odczycie 14 migracji/flag i jawnej akceptacji właściciela. Rejestracja systemowego workera następuje później, osobną decyzją.
+Pomocniczy `execute-copy-preflight` pozostaje wyłącznie rehearsal na kopii i nie jest alternatywnym executorem produkcyjnym. Nie wolno tworzyć ad-hoc skryptów, ręcznej listy migracji ani drugiego profilu flag.
 
-Próba copy-preflight rzeczywistych bajtów z 2026-07-16 została prawidłowo odrzucona przed kopiowaniem, ponieważ obok chronionej bazy istnieją sidecary `agent.db-wal` (0 B) i `agent.db-shm` (32768 B) z 2026-07-15. Nie zostały usunięte ani checkpointowane. Przed przyszłą próbą właściciel musi osobno zatwierdzić quiesce procesów i bezpieczne rozstrzygnięcie sidecarów; nie wolno omijać tej bramki przez kopiowanie samego głównego pliku.
-
-Rollback jest wyłącznie pełnym odtworzeniem zweryfikowanego backupu przy zatrzymanych procesach, a następnie ponowną weryfikacją SHA/integrity/FK. Zabronione jest ręczne cofanie migracji przez `UPDATE`, `DELETE` lub edycję `schema_migrations`.
+Rollback produkcji jest wyłącznie pełnym odtworzeniem zweryfikowanego zestawu DB/WAL/SHM przy zatrzymanych procesach. Zabronione są reverse `UPDATE`, `DELETE`, ręczna edycja `schema_migrations` i częściowe odtwarzanie samego `agent.db`.

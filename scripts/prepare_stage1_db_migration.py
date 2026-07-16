@@ -1,4 +1,4 @@
-"""Plan or execute a copy-only rehearsal of the future production DB migration."""
+"""Canonical CLI for Stage 1 migration planning, rehearsal, and in-place execution."""
 from __future__ import annotations
 
 import argparse
@@ -9,6 +9,7 @@ from app.operations.stage1_migration import (
     Stage1MigrationPreflightError,
     Stage1MigrationRequest,
     run_stage1_copy_preflight,
+    run_stage1_in_place_migration,
 )
 
 
@@ -17,9 +18,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Stage 1 DB migration rehearsal. It never replaces or migrates --source-db.",
+        description="Canonical fail-closed Stage 1 database migration procedure.",
     )
-    parser.add_argument("action", choices=("plan", "execute-copy-preflight"))
+    parser.add_argument(
+        "action", choices=("plan", "execute-copy-preflight", "execute-in-place")
+    )
     parser.add_argument("--project-root", type=Path, default=PROJECT_ROOT)
     parser.add_argument("--source-db", type=Path, required=True)
     parser.add_argument("--workspace", type=Path, required=True)
@@ -31,6 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expected-legacy-usage-count", type=int, default=13)
     parser.add_argument("--expected-real-cost-usd", default="0.684580")
     parser.add_argument("--confirm-copy-preflight-only", action="store_true")
+    parser.add_argument("--confirm-in-place-production-migration", action="store_true")
     return parser
 
 
@@ -38,12 +42,13 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.action == "plan":
         print("PLAN ONLY — NO FILES CREATED, NO DATABASE OPENED")
-        print("source -> exact full backup -> candidate copy -> migrate candidate 0009→0014")
-        print("checks: SHA/size/mtime, integrity, FK, 14 migrations, required triggers")
-        print("checks: 13 legacy proofs, cost 0.684580, five blocked system_flags")
-        print("source replacement=false rollback=full verified backup only")
+        print("source -> verified DB/WAL/SHM backup -> rehearsal -> exact 0009→0014")
+        print("gates: explicit approval, branch/HEAD, baseline, quiesce, drift checks")
+        print("flags: kill_switch/safe_mode=true; worker/paid/browser=false")
+        print("rollback: full verified DB/WAL/SHM restore only; never reverse SQL")
+        print("plan_only=true database_opened=false live_api=false")
         return 0
-    if not args.confirm_copy_preflight_only:
+    if args.action == "execute-copy-preflight" and not args.confirm_copy_preflight_only:
         print(
             "COPY PREFLIGHT: execution requires --confirm-copy-preflight-only. "
             "This is not permission to migrate or replace production data.",
@@ -63,14 +68,28 @@ def main(argv: list[str] | None = None) -> int:
         expected_real_cost_usd=args.expected_real_cost_usd,
     )
     try:
-        result = run_stage1_copy_preflight(request)
+        if args.action == "execute-copy-preflight":
+            result = run_stage1_copy_preflight(request)
+        else:
+            result = run_stage1_in_place_migration(
+                request,
+                confirm_in_place_production_migration=(
+                    args.confirm_in_place_production_migration
+                ),
+            )
     except (Stage1MigrationPreflightError, OSError, ValueError) as exc:
-        print(f"COPY PREFLIGHT: failed closed: {exc}", file=sys.stderr)
+        print(f"STAGE 1 MIGRATION: failed closed: {exc}", file=sys.stderr)
         return 2
-    print("COPY PREFLIGHT: PASSED — PRODUCTION DATABASE NOT MIGRATED")
-    print(f"backup={result.backup_path}")
-    print(f"candidate={result.candidate_path}")
-    print(f"candidate_sha256={result.candidate.sha256}")
+    if args.action == "execute-copy-preflight":
+        print("COPY PREFLIGHT: PASSED — PRODUCTION DATABASE NOT MIGRATED")
+        print(f"backup={result.backup_path}")
+        print(f"candidate={result.candidate_path}")
+        print(f"candidate_sha256={result.candidate.sha256}")
+    else:
+        print("IN-PLACE MIGRATION: PASSED — NEW SCHEMA-0014 BASELINE ESTABLISHED")
+        print(f"backup_dir={result.backup_dir}")
+        print(f"database_sha256={result.source_after.database.sha256}")
+        print(f"baseline={result.baseline_path}")
     print(f"legacy_proofs={result.legacy_proof_count}")
     print(f"real_cost_usd={result.real_cost_usd}")
     print(f"report={result.report_path}")

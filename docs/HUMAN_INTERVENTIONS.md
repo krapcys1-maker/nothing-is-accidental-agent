@@ -374,3 +374,10 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Granice:** zero sieci/DNS/socketów/API/real SDK/browsera/publikacji/kosztu; wyłącznie fake callery i tymczasowe bazy. Nie migrować ani nie zapisywać `data/agent.db`; nie otwierać `.env`; nie modyfikować `docs/BUILD_LOG.md` ani katalogu instrukcji pisania; bez stage/commit/push/PR/merge.
 - **Decyzja o uprawnieniach:** przygotowanie konfiguracji Task Scheduler nie jest zgodą na rejestrację. Każde zadanie systemowe wymaga osobnej jawnej zgody. Copy-preflight nie jest zgodą na podmianę produkcyjnej bazy. Live test wymaga jeszcze osobnej zgody, twardego capu, jednego joba/requestu i `max_retries=0`.
 - **Kryterium właściciela:** po pakiecie status może być wyłącznie `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; Etap 1 pozostaje otwarty/blokowany do review, kontrolowanego live acceptance i formalnej decyzji człowieka.
+
+## [2026-07-16] Zlecenie skonsolidowanej poprawki procedury po pełnym rollbacku
+
+- **Decyzja człowieka:** usunąć rozbieżność profilu flag, zastąpić błędny warunek sidecarów jednym kontraktem WAL/SHM, przygotować jeden opakowany executor in-place z quiesce, trzema bramkami świeżości, pełnym backupem/rehearsal/restore i kanonicznym migratorem oraz wykonać kontrpróby wyłącznie na bazach tymczasowych.
+- **Wymagany profil:** `kill_switch=true`, `safe_mode=true`, `worker_enabled=false`, `paid_actions_enabled=false`, `browser_actions_enabled=false`.
+- **Granice:** nie wykonywać drugiej migracji produkcyjnej, nie ustanawiać nowego baseline'u, nie uruchamiać live API, SDK, browsera, workera ani maintenance, nie rejestrować Windows Task Scheduler i nie wykonywać stage/commit/push/PR/merge. `docs/BUILD_LOG.md` pozostaje nietknięty.
+- **Status:** narzędzie może otrzymać wyłącznie `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`. Druga próba wymaga nowej, osobnej zgody właściciela; Etap 1 nadal `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`.

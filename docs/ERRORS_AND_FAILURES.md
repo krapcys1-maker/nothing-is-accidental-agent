@@ -683,8 +683,16 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 
 - **Próba:** po zielonej migracji syntetycznej bazy 0009 podjęto niezależną próbę utworzenia tymczasowej kopii rzeczywistych bajtów chronionej bazy, bez zamiaru jej podmiany.
 - **Wynik:** procedura zatrzymała się przed kopiowaniem i przed otwarciem SQLite: wykryła `data/agent.db-wal` oraz odmówiła kodem 2. Sidecary mają timestamp 2026-07-15, sprzed bieżącego pakietu (`-wal` 0 B, `-shm` 32768 B).
-- **Decyzja defensywna:** nie usunięto sidecarów, nie wykonano checkpointu i nie otwarto produkcyjnej bazy do zapisu. Przyszły live-preflight wymaga osobno zatwierdzonego zatrzymania procesów, wyjaśnienia właściciela sidecarów i kontrolowanego checkpointu przed kopią.
-- **Wpływ:** nie blokuje implementacji copy-only narzędzia ani testu na produkcyjnie ukształtowanej bazie tymczasowej; pozostaje jawnym warunkiem przed rzeczywistą migracją produkcyjną, która i tak należy do kryterium acceptance. Produkcyjna migracja nie została wykonana.
+- **Historyczna decyzja defensywna:** nie usunięto sidecarów, nie wykonano checkpointu i nie otwarto produkcyjnej bazy do zapisu. Późniejszy incydent migracyjny dowiódł, że sama obecność pustego WAL i poprawnego SHM nie jest błędem; wymaganie ich nieobecności zostało zastąpione przez ADR-072.
+- **Wpływ aktualny:** obowiązuje pełny quiesce, WAL nieobecny lub 0 B, brak journala i brak driftu DB/WAL/SHM. Produkcja po pełnym rollbacku nadal ma 0009; druga migracja wymaga osobnej zgody.
+
+## [2026-07-16] Technicznie poprawna migracja cofnięta przez niezamówiony warunek ABSENT
+
+- **Kategoria:** PROCEDURE / safety false negative.
+- **Co się wydarzyło:** kanoniczna migracja produkcyjna zastosowała dokładnie `0010`–`0014`; integrity, FK, ledger, wymagane tabele/triggery, 13 legacy proofs, koszt, historia i profil flag przeszły. Końcowy harness mimo to zwrócił FAIL, ponieważ wymagał `WAL=ABSENT` i `SHM=ABSENT`. Kontrolowany odczyt SQLite pozostawił legalny WAL 0 B i SHM 32768 B.
+- **Skutek:** zgodnie z fail-closed kontraktem wykonano pełny restore DB/WAL/SHM. SHA, size i mtime wszystkich trzech plików niezależnie potwierdziły powrót do starego baseline'u i schematu 0009. Chwilowy SHA 0014 nie jest baseline'em.
+- **Naprawa:** jeden executor dopuszcza WAL absent/0 B i obecny SHM, blokuje nonzero WAL/journal/process/handle/task oraz każdy drift, a istniejący zestaw DB/WAL/SHM zawsze backupuje i odtwarza jako całość. Produkcja nie jest otwierana przed backupem, rehearsal i ostatnim freshness gate. Jedyny profil flag pochodzi z `app.core.security_flags.SECURITY_FLAG_DEFAULTS`.
+- **Dowód:** 14 kontrprób na bazach tymczasowych obejmuje wszystkie warianty sidecarów, drift, Git/confirmation, kanoniczny runner, wymuszony post-failure i bitowy restore. Druga migracja nie została wykonana; nowy baseline nie istnieje; bez API, kosztu, workera, browsera, tasków i Git.
 
 ## [2026-07-16] Kontrpróby inline — pierwsze wywołanie utraciło cudzysłowy
 
