@@ -1,5 +1,53 @@
 # HUMAN_INTERVENTIONS
 
+## [2026-07-16] Właściciel formalnie zamknął WAVE 1A po niezależnym `APPROVE WITH MINOR/P2`
+
+- **Stan wejściowy:** implementer po systemowej naprawie `W1A-R4-01` zadeklarował `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; nie miał uprawnienia do zamknięcia WAVE.
+- **Niezależny wynik:** reviewer odtworzył 1036 collected i 1036/1036 passed, cztery partycje exact-once, `compileall` i `git diff --check`; dodatkowo wykonał 149/149 własnych kontrprób przez prawdziwy `Worker.run_once`, 36/36 sprawdzeń SQLite floor oraz 30/30 recovery/reaper/crash-window. Nie stwierdził osiągalnego MAJOR ani CRITICAL i wydał `APPROVE WITH MINOR/P2` z rekomendacją zamknięcia WAVE.
+- **Formalna decyzja człowieka:** właściciel ustawił WAVE 1A na `CLOSED — APPROVED WITH P2` z datą 2026-07-16. To decyzja właściciela następująca po niezależnym review, nie samopotwierdzenie implementera.
+- **Pozostające P2:** P2-1 zachowuje fail-closed fingerprint mismatch, widoczność operatora, brak przepisywania intentu, retry i attemptu #2. P2-2 uznaje atomowość StoragePort i spójny trwały floor SQLite, ale nie przypisuje SQLite dowodu pochodzenia przeciw uprzywilejowanemu autorowi wielu tabel.
+- **Granica decyzji:** zamknięcie WAVE 1A nie zamyka Etapu 1, nie odblokowuje live API i nie rozpoczyna Etapu 2. Etap 1 pozostaje `BLOCKED`; live API pozostaje `ZABRONIONE`.
+
+## [2026-07-16] Właściciel przekazał CZWARTY niezależny `REJECTED — MAJOR` i autoryzował `W1A-R4-01`
+
+- **Zakres i decyzja człowieka:** odtworzyć kontrpróbę przez prawdziwy `Worker.run_once`, zmapować wszystkie terminalne ścieżki job/run/research_run, naprawić systemowo każde workerowe failure boundary i dodać defense-in-depth w SQLite. Bez pytania o dodatkową zgodę dozwolona była pełna fala napraw oraz dokumentacji.
+- **Twarde warunki:** attempt `RESERVED`/`REQUEST_STARTED` po lokalnej awarii ma trafić do widocznego `NEEDS_RECONCILIATION` z zachowaną rezerwacją, bez retry, attemptu #2 i providera; brak attemptu ma zachować zwykłe `FAILED`; istniejące reconciliation ma być idempotentne. Obowiązkowe były testy reopen/recovery/reaper/resolver/budżetu/raw SQLite/concurrency i niezależna próba obalenia.
+- **Zakazy człowieka:** zero sieci/DNS/socketów/API/SDK/browsera/publikacji/kosztu; tylko fake i temp DB; bez zapisu do `data/agent.db`; bez stage/commit/push/PR/merge i innych zakazanych operacji Git; `docs/BUILD_LOG.md` oraz `instrukcja dla pisania artykulow/` nietykane. Zakaz zamykania WAVE, odblokowania Etapu 1 i live API.
+- **Efekt offline:** centralna atomowa operacja StoragePort, wszystkie workerowe ścieżki przełączone na nią, trzy lifecycle guardy SQLite i +29 trwałych testów. Suite 1036/1036; partycje 248+253+267+268; concurrency 38×30; krytyczne pliki ×10; QA ×10; E2E Worker w 10 świeżych procesach; 0 USD i chroniona baza niezmieniona. Status: `WAVE 1A — CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; WAVE nadal otwarta, Etap 1 `BLOCKED`, live API `ZABRONIONE`. Szczegóły: ADR-067.
+
+## [2026-07-16] Właściciel przekazał TRZECI niezależny `REJECTED — MAJOR` i autoryzował pełną falę naprawczą
+
+- **Zakres i decyzja człowieka:** naprawić w jednej spójnej fali wszystkie potwierdzone findingi trzeciego review: W1A-AUD-04 jako MAJOR BLOCKING (eskalacja crash-window `RESERVED`/`REQUEST_STARTED` z martwym lease do `NEEDS_RECONCILIATION` z trwałym powodem i audytem, widoczna dla operatora, bez retry/attemptu #2/providera), W1A-SQLITE-01 (pełna atomowość terminalizacji na poziomie SQLite: event `FINAL_RESOLUTION` + terminalny lifecycle + zwolniona rezerwacja + zgodne cache, attempt flipowany jako ostatnia mutacja), W1A-SQLITE-02 (niezmienność kanonicznego `model_usage` i zamrożenie cache po terminalu), pełne W1A-AUD-01 (błędy query/close w CLI), W1A-DOC-01 (sweep baseline'ów) i W1A-QA-01 (cleanup QA). Migracja 0014 in-place, bez 0015. Obowiązkowe testy crash/recovery (20) i raw-SQLite (20), powtórzenia 30×/10×, drugi pełny audyt. Zakaz zamykania WAVE, APPROVE, odblokowania Etapu 1 i live API.
+- **Zakazy:** zero sieci/DNS/socketów/API/SDK/browsera/publikacji/kosztu; tylko fake SDK i tymczasowe bazy; brak zapisu do `data/agent.db`; brak stage/commit/push/PR/merge; `docs/BUILD_LOG.md` i `instrukcja dla pisania artykulow/` nietykane.
+- **Efekt offline:** wszystkie trzy MAJOR + trzy mniejsze naprawione defense-in-depth (aplikacja + triggery 0014 + testy); +25 trwałych testów, licznik **982 → 1007**, suite 1007/1007, partycje 4/4, concurrency 33×30, pliki 10/10, QA 10/10 bez pozostałości, kontrpróby 5/5, chroniona baza byte-identical. Szczegóły: ADR-066 i `docs/ERRORS_AND_FAILURES.md` (wpis 2026-07-16). WAVE 1A = `CANDIDATE — AWAITING INDEPENDENT REVIEW`; Etap 1 `BLOCKED`; live API `ZABRONIONE`.
+
+## [2026-07-16] Właściciel zlecił pełny audyt software-assurance całego working tree z autoryzacją jednej fali napraw
+
+- **Zakres i decyzja człowieka:** pełny read-only audit HEAD `c25e125` oraz wszystkich niecommitowanych zmian (nie tylko `W1A-VERIFY-02`/resolvera), z niezależną weryfikacją każdej deklaracji poprzedniego implementera (980 testów, 14 migracji, partycje, concurrency, QA, chroniona baza) i regresji wszystkich wcześniejszych findingów. Po pełnej fazie audytowej autoryzowana natychmiastowa naprawa wszystkich potwierdzonych problemów w jednej skonsolidowanej fali, bez pytania o dodatkową zgodę. Zakaz zamykania WAVE 1A, odblokowania Etapu 1 i autoryzacji live API.
+- **Zakazy:** zero sieci/DNS/socketów/realnego API/SDK/browsera/publikacji/kosztu; tylko fake SDK i tymczasowe bazy; brak zapisu do `data/agent.db`; brak stage/commit/push/PR/merge; bez otwierania `docs/BUILD_LOG.md` i katalogu `instrukcja dla pisania artykulow/`.
+- **Wynik:** wszystkie deklaracje implementera potwierdzone (w tym 980/980 przed naprawami); zero MAJOR/CRITICAL; trzy MINOR naprawione (W1A-AUD-01…03), jeden P2 report-only (W1A-AUD-04, styczne do P2-19 — decyzja właściciela wymagana dla rozszerzenia kontraktu resolvera); licznik testów **980 → 982**; chroniona baza byte-identical. Szczegóły: `docs/ERRORS_AND_FAILURES.md` (wpis 2026-07-16). WAVE 1A pozostaje `CANDIDATE — AWAITING INDEPENDENT REVIEW`; Etap 1 `BLOCKED`; live API `ZABRONIONE`.
+
+## [2026-07-15] Właściciel autoryzował wyłącznie naprawę `W1A-VERIFY-02` (pełna walidacja lineage)
+
+- **Zakres i decyzja człowieka:** po drugim niezależnym review (`REJECTED — MAJOR`) naprawić **tylko** finding `W1A-VERIFY-02` — resolver musi przed jakąkolwiek mutacją zweryfikować pełną, jednoznaczną relację `provider_attempt → job → run → research_run → account → workflow → topic → durable intent`.  Nie zmieniać semantyki `RESULT_ALREADY_FINALIZED`, kontraktu finansowego ani zakresu WAVE 1A.
+- **Twarde inwarianty (potwierdzone testami):** każda niespójność lineage ⇒ fail-closed bez mutacji attemptu/joba/runu/research_runu/rezerwacji/usage/eventu, bez retry/attemptu #2/providera.
+- **Naprawa (defense-in-depth):** warstwa aplikacji (`_reconciliation_require_consistent_lineage`) + version token v2 (wszystkie pola lineage) + trigger SQLite `provider_attempts_reconcile_requires_consistent_lineage` (0014 in-place).  Trwałe dowody w repo: `tests/test_reconciliation_lineage.py` i `scripts/qa/reconciliation_lineage_disproof.py`.
+- **Zakazy:** brak sieci, API, SDK, browsera, publikacji, kosztu, zmiany `data/agent.db`, stagingu, commita, pushu, PR i merge.
+- **Efekt offline:** licznik **955 → 980**, suite 980/980, 4 partycje exact-once, concurrency 30/30, lineage disproof 10/10, chroniona baza niezmieniona.  WAVE 1A pozostaje `CANDIDATE — AWAITING INDEPENDENT REVIEW`; Etap 1 `BLOCKED`; live API `ZABRONIONE`.  Szczegóły: ADR-065.
+
+## [2026-07-15] Właściciel autoryzował wyłącznie naprawę `W1A-VERIFY-01` (resolver vs reaper STOPPED)
+
+- **Zakres i decyzja człowieka:** naprawić **tylko** finding `W1A-VERIFY-01` — resolver `EXECUTION_FAILED` ma umożliwić rozstrzygnięcie osieroconego runu `STOPPED → FAILED` w istniejącej atomowej operacji reconciliation. Nie zmieniać semantyki `RESULT_ALREADY_FINALIZED`, kontraktu finansowego ani zakresu WAVE 1A.
+- **Twarde inwarianty (potwierdzone testami):** obsługa `STOPPED` nie wskrzesza runu, nie ustawia `RUNNING`, nie robi requeue/retry/attemptu #2, nie woła providera, nie usuwa historii reaper/maintenance, nie pozwala na `DONE`, nie omija version tokenu, nie osłabia CAS, nie akceptuje sukcesowego run/research_run ani cudzego joba/konta.
+- **Zakazy:** brak sieci, API, SDK, browsera, publikacji, kosztu, zmiany `data/agent.db`, stagingu, commita, pushu, PR i merge.
+- **Efekt offline:** dodano `_EXECUTION_FAILED_RUN_STATUSES` (wspólne źródło warunku i CAS) + 7 deterministycznych testów; flaky node **30/30**, plik **10/10**, pełny suite **955**, 20/20 kontrprób BLOCKED, chroniona baza niezmieniona. WAVE 1A pozostaje `CANDIDATE — AWAITING INDEPENDENT REVIEW`; Etap 1 `BLOCKED`; live API `ZABRONIONE`. Szczegóły: ADR-064.
+
+## [2026-07-15] Właściciel zlecił WAVE 1A — resolver operatorski L1
+
+- **Zakres i decyzja człowieka:** wdrożyć wyłącznie lokalne, audytowalne reconciliation `NEEDS_RECONCILIATION` / `NEEDS_VERIFICATION`; rozdzielić koszt od wyniku pipeline'u i nie tworzyć drugiego ledgeru.
+- **Zakazy:** brak API, sieci, SDK providera, retry, attemptu #2, resume, browsera, publikacji, kosztu, modyfikacji `data/agent.db`, stagingu, commita, pushu, PR i merge.
+- **Efekt offline:** WAVE 0B jest formalnie `CLOSED — APPROVED WITH P2`; WAVE 1A jest kandydatem do niezależnego review. Resolver wymaga jawnego operatora, notatki i `--confirm`; podgląd (preview) jest tylko-do-odczytu i zwraca version token. Po naprawie odrzucenia `REJECTED — MAJOR` (append-only `reconciliation_events`, pełna tożsamość usage, wyłączna własność karty, brak dead-endu `MANUAL`, spójność ledger↔cache): **955 testów**, 14 migracji, Etap 1 `BLOCKED`, live API `ZABRONIONE`. Historyczne 919/894 to wartości wcześniejszych iteracji.
+
 ## Cel
 
 Rejestr każdej ingerencji człowieka: akceptacji, odrzucenia, edycji treści, ręcznego zatrzymania, korekty strategii, ręcznego logowania. Kluczowa metryka eksperymentu brzmi „ile nadzoru agent nadal potrzebuje?" — ten plik na nią odpowiada. Pozwala policzyć: procent treści przyjętych bez zmian, liczbę poprawek na artykuł, czas człowieka dziennie, liczbę ręcznych zatrzymań.

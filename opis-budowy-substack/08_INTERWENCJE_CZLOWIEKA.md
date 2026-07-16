@@ -1,8 +1,40 @@
 # 08 — INTERWENCJE CZŁOWIEKA
 
+> **Formalne zamknięcie WAVE 1A (2026-07-16):** implementer zadeklarował `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; niezależny reviewer odtworzył 1036/1036 i wykonał własne kontrpróby (149/149 `Worker.run_once`, 36/36 SQLite floor, 30/30 recovery/reaper/crash-window), po czym wydał `APPROVE WITH MINOR/P2`. Właściciel formalnie zamknął WAVE 1A jako `CLOSED — APPROVED WITH P2`. P2-1 i P2-2 pozostają jawne, lecz nieblokujące. Etap 1 nadal `BLOCKED`, live API nadal `ZABRONIONE`; Etap 2 nie został rozpoczęty.
+
+## [2026-07-16] DECYZJA STRATEGICZNA — formalne zamknięcie WAVE 1A
+
+- **Co agent chciał zrobić:** przekazać naprawę `W1A-R4-01` jako kandydata do niezależnego review, bez samodzielnego zamknięcia WAVE.
+- **Dlaczego człowiek zareagował:** dopiero niezależne odtworzenie testów i własne kontrpróby reviewera dały podstawę do formalnej decyzji.
+- **Co zmieniono:** właściciel przyjął werdykt `APPROVE WITH MINOR/P2` i zamknął wyłącznie WAVE 1A; P2-1/P2-2 pozostają opisanymi granicami.
+- **Efekt:** WAVE 1A = `CLOSED — APPROVED WITH P2`; Etap 1 = `BLOCKED`; live API = `ZABRONIONE`.
+- **Czas człowieka:** nie podano; interwencja była formalną decyzją zakresową.
+
+> **Historyczna aktualizacja po czwartym review, przed finalnym re-review (2026-07-16):** właściciel przekazał dokładną kontrpróbę `W1A-R4-01` i autoryzował pełną naprawę systemową, testy oraz dokumentację, jednocześnie utrzymując zakaz sieci, providera, kosztu, zapisu do chronionej bazy i operacji Git. Człowiek wymusił test przez prawdziwy `Worker.run_once`, pełną mapę ścieżek terminalnych i niezależną próbę obalenia. Efekt: centralna atomowa granica, defense-in-depth SQLite i **1036 testów offline**. Na tym historycznym etapie człowiek nie zatwierdził ani nie zamknął WAVE: status implementera brzmiał `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
+## [2026-07-16] POPRAWKA KODU — czwarty niezależny reject
+
+- **Co agent chciał zrobić:** uznać lokalny wyjątek wykonania za zwykłe niepowodzenie joba.
+- **Dlaczego człowiek zareagował:** kontrpróba pokazała, że rozpoczęty attempt pozostaje poza kolejką operatora i nadal blokuje budżet.
+- **Co zmieniono:** każda terminalna decyzja przypiętego researchu przechodzi przez StoragePort, który sprawdza durable attempt; SQLite blokuje obejście.
+- **Efekt:** `RESERVED`/`REQUEST_STARTED` są widoczne jako reconciliation, bez retry i bez provider calla; pełny suite 1036/1036.
+- **Czas człowieka:** nie podano; interwencja obejmowała decyzję zakresową i warunki akceptacji, nie ręczne rozstrzygnięcie danych produkcyjnych.
+
 > **Stan checkpointu:** właściciel przekazał wynik `APPROVE WITH MINOR/P2` i zlecił wyłącznie staging oraz walidację. WAVE 0B = `APPROVED WITH P2 — READY FOR CHECKPOINT`; bez commita, pushu, PR lub merge.
+>
+> **Aktualizacja WAVE 1A (2026-07-15):** powyższy checkpoint WAVE 0B jest historyczny. Właściciel zlecił naprawę odrzuconej fali WAVE 1A (`REJECTED — MAJOR`) wyłącznie offline, bez stagingu/commita/pushu/PR/merge. WAVE 0B = `CLOSED — APPROVED WITH P2`; WAVE 1A = `CANDIDATE`. **980 testów offline, 14 migracji**; historyczne 894/13 i `READY FOR CHECKPOINT` są historyczne. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+>
+> **Aktualizacja audyt (2026-07-16):** właściciel zlecił pełny audyt software-assurance całego working tree z autoryzacją jednej fali napraw. Wynik: zero MAJOR/CRITICAL, trzy MINOR naprawione (kontrolowane błędy CLI `list-reconciliations`, martwe pole `version_token`, anotacja typu kosztu), jeden P2 report-only (stuck attempt po crashu i wygaśnięciu lease — konserwatywny, wymaga decyzji właściciela). Testy **980 → 982**, chroniona baza byte-identical. WAVE 1A nadal `CANDIDATE — AWAITING INDEPENDENT REVIEW`.
+>
+> **Aktualizacja po trzecim review (2026-07-16):** niezależny reviewer przeklasyfikował stuck attempt na **MAJOR BLOCKING** i wykazał dwa kolejne MAJOR na surowym SQLite (terminalizacja bez pełnego lifecycle/eventu; mutowalny kanon kosztu po settlement). Właściciel autoryzował pełną falę naprawczą: recovery eskaluje oba crash-windows do kolejki operatora z trwałym audytem `AUTO_ESCALATION`; nigdy-niestartowany request może być rozstrzygnięty wyłącznie `NOT_CHARGED`; terminalizacja attemptu wymaga na poziomie SQLite pełnego spójnego stanu końcowego, a kanon i cache są po niej zamrożone. Testy **982 → 1007**, chroniona baza byte-identical. WAVE 1A nadal `CANDIDATE — AWAITING INDEPENDENT REVIEW`; decyzja o człowieku pozostaje w środku pętli: automat tylko eskaluje i czeka na operatora.
 
 ## Cel pliku
+
+> **Aktualizacja:** WAVE 0B i WAVE 1A są `CLOSED — APPROVED WITH P2`. WAVE 1A nadal wymaga operatora L1 w przewidzianych stanach P2; jej formalne zamknięcie nie zamyka Etapu 1. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
+## [2026-07-15] Decyzja człowieka pozostaje częścią reconciliation
+
+Właściciel zezwolił na narzędzie, nie na automatyczną decyzję. Operator musi podać account, attempt, wynik finansowy, wynik wykonawczy, własną identyfikację i notatkę, a CLI najpierw pokazuje podgląd. Ta interwencja jest celowa: system nie może sam zdecydować, czy zaginiona odpowiedź dostawcy oznacza koszt zero, koszt znany czy koszt nadal nieznany.
 Rejestr każdej sytuacji, w której **człowiek** wkroczył: odrzucił temat, poprawił artykuł/Note/komentarz, zatrzymał publikację, zmienił strategię, poprawił kod, zmienił poziom autonomii albo użył kill switcha. Dla każdej: co agent chciał zrobić, dlaczego człowiek zareagował, co zmieniono, jaki efekt, ile czasu. To bezpośredni pomiar odpowiedzi na pytanie eksperymentu: **ile nadzoru agent naprawdę potrzebuje.**
 
 > **Ważne rozróżnienie (ADR-017):** dwa typy interwencji mają zupełnie inną trajektorię oczekiwaną w czasie. **Zmiana poziomu autonomii** i **decyzje strategiczne** pozostają na stałe rolą człowieka — to nie ma zniknąć, docelowo to JEDYNA trwała bramka „per decyzja" (nie per treść). **Poprawki pojedynczych treści** (artykuł/Note/komentarz) i **odrzucenia tematów** powinny z czasem **maleć** w miarę przechodzenia na wyższe poziomy autonomii — to jest dokładnie to, co ten plik ma pokazać liczbowo. Jeśli po przejściu na LEVEL_2 poprawki treści nie maleją, to sygnał, że progi jakości (scoring) są ustawione za nisko, nie że trzeba wrócić do ręcznej akceptacji na stałe.
