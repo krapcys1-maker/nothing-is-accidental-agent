@@ -57,7 +57,6 @@ Użycie:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import sys
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -72,6 +71,12 @@ from app.core.config import (  # noqa: E402
     require_valid_real_provider_pricing,
 )
 from app.core.money import quantize_usd, sum_usd  # noqa: E402
+from app.core.pricing import (  # noqa: E402
+    PricingConfigError,
+    default_pricing_profiles_path,
+    load_pricing_profiles,
+    resolve_real_pricing_profile,
+)
 from app.models import (  # noqa: E402
     Job, JobKind, ResearchFlow, ResearchRunStatus, SourceCandidateStatus, WorkflowType,
 )
@@ -87,7 +92,14 @@ from app.research.cost_estimator import (  # noqa: E402
     estimate_with_retries,
     estimate_worst_case_search_call_usd,
 )
-from app.research.durable_intent import DurableResearchExecutionIntent  # noqa: E402
+from app.research.durable_intent import (  # noqa: E402
+    DEFAULT_REQUEST_MAX_TOKENS,
+    DurableExecutionIntentError,
+    DurableResearchExecutionIntent,
+    controlled_research_job_id,
+    controlled_session_contract,
+    validate_cli_max_tokens,
+)
 from app.storage.repositories import SqliteStorage  # noqa: E402
 from app.workflows.research.pipeline import (  # noqa: E402
     CompletedResearchExistsError,
@@ -191,6 +203,17 @@ def main(argv: list[str] | None = None) -> int:
         "--operation-key", default=None,
         help="Required for fresh --real: durable intent key; same key and parameters return the same job.",
     )
+    parser.add_argument(
+        "--pricing-profile", default=None,
+        help="Required for fresh --real: id of an APPROVED, versioned pricing profile in "
+             "config/pricing_profiles.yaml (LA-01-A). Example/unversioned/mismatched profiles are refused.",
+    )
+    parser.add_argument(
+        "--max-tokens", type=int, default=None,
+        help=f"Durable request output cap persisted in the job (LA-01-C). Integer within "
+             f"the approved provider bound; default {DEFAULT_REQUEST_MAX_TOKENS} when omitted. "
+             "A controlled acceptance may freeze a lower value explicitly.",
+    )
     parser.add_argument("--max-cost-usd", type=float, default=None,
                         help="Cap pesymistycznego (conservative) szacunku uruchomienia "
                              "(domyślnie 0.45 three-stage / 0.45 two-stage / 0.60 single / "
@@ -276,7 +299,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, account, topic,
-                              settings, *, max_cost_usd: float) -> int:
+                              settings, *, max_cost_usd: float, request_max_tokens: int,
+                              approved_profile=None) -> int:
     """Persist fresh paid intent only; this process never creates a provider client."""
     if args.mode != "single" or args.force_re_research:
         print("INVALID_CONFIGURATION: WAVE 0B durable real jobs support only fresh --mode single.")
@@ -288,11 +312,24 @@ def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, 
     if len(operation_key) > 96 or not operation_key.replace("-", "").replace("_", "").isalnum():
         print("INVALID_CONFIGURATION: --operation-key accepts only letters, digits, - and _ (max 96).")
         return 2
+    # LA-01-A: a fresh real paid job may only be persisted against an explicitly
+    # approved, versioned, model-matched authoritative pricing profile.  The
+    # example/unversioned config only ever blocks; there is no ENV-authoritative path.
+    profile = approved_profile
+    if profile is None:
+        try:
+            profiles = load_pricing_profiles(default_pricing_profiles_path(settings.project_root))
+            profile = resolve_real_pricing_profile(
+                profiles, profile_id=args.pricing_profile, model=settings.model_quality,
+            )
+        except PricingConfigError as exc:
+            print(f"STOP: {exc}")
+            return 2
     # WAVE 0B namespace is global per durable real-research workflow: the
     # operation key identifies the logical enqueue request, never a topic-local retry.
     idempotency_key = f"real-research:{operation_key}"
-    digest = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:32]
-    job_id = f"real-research-{digest}"
+    job_id = controlled_research_job_id(operation_key)
+    session_contract = controlled_session_contract(operation_key, job_id=job_id)
     intent = DurableResearchExecutionIntent.from_settings(
         settings=settings,
         account_id=account.id,
@@ -301,6 +338,12 @@ def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, 
         max_web_searches=args.max_web_searches,
         question=topic.question or f"Why does '{topic.title}' work the way it does?",
         niche=account.niche,
+        max_tokens=request_max_tokens,
+        pricing_prices=profile.prices,
+        pricing_profile_id=profile.profile_id,
+        pricing_profile_version=profile.version,
+        pricing_currency=profile.currency,
+        pricing_unit=profile.unit,
     )
     job = Job(
         id=job_id,
@@ -317,6 +360,7 @@ def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, 
             "mode": "single",
             "max_cost_usd": intent.cap_usd,
             "execution_intent": intent.as_payload(),
+            "controlled_session": session_contract,
         },
         schedule_reason="WITHIN_EDITORIAL_WINDOW",
         earliest_run_at=datetime.now(timezone.utc),
@@ -336,11 +380,42 @@ def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, 
 def _run_fresh(args: argparse.Namespace) -> int:
     max_cost_usd = args.max_cost_usd if args.max_cost_usd is not None else _DEFAULT_MAX_COST[args.mode]
 
+    # LA-01-C: the single durable request output cap is validated once and reused
+    # by both the pre-flight cost projection and the persisted job, so CLI ==
+    # projection == persisted == provider max_tokens can never diverge.
+    try:
+        request_max_tokens = validate_cli_max_tokens(
+            DEFAULT_REQUEST_MAX_TOKENS if args.max_tokens is None else args.max_tokens
+        )
+    except DurableExecutionIntentError as exc:
+        print(f"STOP: {exc}")
+        return 2
+
     settings = load_settings()
     if getattr(args, "real", False) and not args.estimate_only:
         settings, stop_code = _activate_explicit_real_mode(args, settings)
         if stop_code is not None:
             return stop_code
+    approved_profile = None
+    if getattr(args, "real", False):
+        try:
+            profiles = load_pricing_profiles(
+                default_pricing_profiles_path(settings.project_root)
+            )
+            approved_profile = resolve_real_pricing_profile(
+                profiles,
+                profile_id=args.pricing_profile,
+                model=settings.model_quality,
+            )
+        except PricingConfigError as exc:
+            print(f"STOP: {exc}")
+            return 2
+        # Every real preflight projection below now uses the exact profile that
+        # will be persisted; ambient settings pricing is excluded.
+        settings = replace(
+            settings,
+            pricing={key: float(value) for key, value in approved_profile.prices.items()},
+        )
 
     print("=" * 70)
     print("PRE-FLIGHT CHECKS (przed jakimkolwiek wywołaniem API)")
@@ -408,7 +483,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
         print(f"  COMBINED (etap1 + etap2, jedna próba/call): {base_worst_case:.4f} USD")
     else:
         single = estimate_worst_case_search_call_usd(
-            settings, max_web_searches=args.max_web_searches, max_output_tokens=3000)
+            settings, max_web_searches=args.max_web_searches, max_output_tokens=request_max_tokens)
         _print_estimate("SINGLE-CALL (search + analiza naraz, NIEZALECANE)", single)
         base_worst_case = single.total_usd
 
@@ -438,7 +513,9 @@ def _run_fresh(args: argparse.Namespace) -> int:
     if getattr(args, "real", False):
         try:
             return _enqueue_durable_real_job(
-                args, storage, account, topic, settings, max_cost_usd=max_cost_usd,
+                args, storage, account, topic, settings,
+                max_cost_usd=max_cost_usd, request_max_tokens=request_max_tokens,
+                approved_profile=approved_profile,
             )
         finally:
             storage.close()

@@ -415,3 +415,25 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Werdykt:** `APPROVE WITH MINOR/P2`; produkcja `VERIFIED / SCHEMA 0014`; nowy baseline `VERIFIED`; QP-01 `APPROVED`; checkpoint dozwolony po wykluczeniu chronionych zmian.
 - **Rozdzielenie odpowiedzialności:** implementer checkpointu nie wykonywał review i nie przedstawia dostarczonego wyniku jako własnej oceny. Reviewer nie modyfikował repozytorium.
 - **Granice:** Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`; live API `FORBIDDEN`; ponowna migracja i rejestracja Windows Tasks niedozwolone.
+
+### 2026-07-17 — WAVE LA-01 (implementacja kandydacka, bez realnego wykonania)
+
+- **Zlecenie właściciela:** zaimplementować jeden kanoniczny operatorski kontrakt controlled live acceptance i naprawić trzy blokery LA-01-A/B/C w jednej fali; nie wykonywać realnego live acceptance.
+- **Decyzje właściciela (przed kodem):** recovery marker jako plik w `runtime/` (bez migracji — produkcyjna baza zamrożona na 0014); autorytatywny cennik jako wersjonowany YAML z jawnym `status: approved` + `--pricing-profile`; implementacja pełnego kandydata w tej turze.
+- **Wymagane działanie właściciela przed realnym acceptance:** ręcznie wpisać i zatwierdzić konkretne ceny oraz model w `config/pricing_profiles.yaml` (`status: approved`, `approved_by`). Ceny nie są pobierane z internetu. Operatorski wrapper istnieje, ale **nie został autoryzowany do realnego użycia** (`REAL_CONTROLLED_LIVE_ENABLED=false`).
+- **Granice wykonania:** zero sieci/API/SDK/browsera/publikacji/kosztu; wyłącznie fake worker i temp DB; produkcyjna `data/agent.db` i produkcyjne `system_flags` niezmienione; brak stage/commit/push/PR/merge; brak Windows Tasks; chroniony katalog `instrukcja dla pisania artykulow/` i prywatny dirty state `docs/BUILD_LOG.md` nietknięte.
+- **Wynik:** `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; suite `1127/1127`; Etap 1 nadal `OPEN`.
+
+### 2026-07-17 — Właściciel przekazał `REJECTED — MAJOR` dla LA-01 i autoryzował LA-01-R1
+
+- **Decyzja człowieka:** naprawić w jednej spójnej fali wszystkie findings P1-01…P1-06 i P2-01…P2-04; nie wykonywać realnego live acceptance, realnego API/SDK, sieci, browsera, publikacji ani kosztu.
+- **Twarde granice:** tylko fake worker/callery i tymczasowe bazy; bez zapisu produkcyjnej SQLite/system flags, bez Windows Tasks i bez operacji Git; chroniony katalog instrukcji pisania oraz prywatny dirty state `docs/BUILD_LOG.md` zachować.
+- **Kontrakt:** pełny approved pricing z `Decimal`; kanoniczny CLI→wrapper→fake worker test; trwałe ownership/fencing; raport przed marker clear; sanitizer; recovery czytający `REQUEST_STARTED`; prawdziwy reopen; fsync; pełny atomowy profil pięciu flag.
+- **Wynik implementacji:** LA-01-R1 `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; 1151/1151 offline i exact-once 275+282+291+303. Real live acceptance nadal niewykonany, a Etap 1 pozostaje otwarty.
+
+### 2026-07-17 — Właściciel zatwierdził checkpoint i push LA-01-R1 po niezależnym review
+
+- **Decyzja człowieka:** przyjąć werdykt `APPROVE WITH MINOR/P2`, uznać P1-01…P1-06, pricing, wrapper i max_tokens za zatwierdzone oraz utworzyć dokładnie jeden selektywny commit `feat: add controlled live acceptance infrastructure` i wypchnąć wyłącznie bieżącą gałąź.
+- **Open P2:** rekomendacja rekurencyjnej sanitizacji nieosiągalnego fallbacku jest jawna i nieblokująca; właściciel zabronił dodawania tej dodatkowej poprawki do reviewed diffu.
+- **Ochrona:** prywatny blok `BUILD_LOG` oraz cały katalog instrukcji pisania pozostają lokalne; DB/WAL/SHM, `.env`, runtime i realny pricing profile są wykluczone.
+- **Granica:** ta decyzja nie autoryzuje controlled live acceptance, realnego API, realnego cennika, browsera, publikacji, merge ani PR. Etap 1 pozostaje otwarty.

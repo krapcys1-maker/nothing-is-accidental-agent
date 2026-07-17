@@ -372,3 +372,12 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Migracja produkcyjna została rozbita na dowód na kopii i osobną decyzję o zmianie źródła. Backup jest identycznym plikiem, koszt historyczny musi pozostać `0.684580`, drugi przebieg migracji ma być no-op, a rollback oznacza pełne odtworzenie pliku, nie „odkręcanie” SQL-em.
 - Kontrast narracyjny: `CANDIDATE COMPLETE` nie znaczy `CLOSED`. Brakujący live acceptance jest jawnie nazwanym warunkiem, nie ukrytym „pozostałym P1”.
 - Dowód: nowe testy Task Scheduler/report/migration/Unicode, pełna regresja i partycje offline, brak API/sieci/SDK/browsera/publikacji, koszt 0 USD, chroniona baza niezmieniona.
+
+## 2026-07-17 — Materiał: „Sukces jest zdarzeniem trwałym, nie napisem w pamięci”
+
+- Pierwszy wrapper wyglądał bezpiecznie, dopóki review nie odłączył napisu `SUCCEEDED` od prawdziwego joba, odebrał możliwość zapisania raportu i zmienił cennik pod tym samym ID. Wszystkie trzy kontrpróby ujawniły tę samą wadę: system ufał nazwie, a nie pełnej tożsamości.
+- LA-01-R1 wiąże cenę, job, request, attempt i worker fence z jednym trwałym planem. Sukces istnieje dopiero, gdy nowe połączenie widzi terminalny lifecycle, jeden usage, zgodny settlement, zamknięte flagi i raport zapisany przed usunięciem markera.
+- Recovery nie może „uspokajać” historii. Jeżeli `request_started_at` istnieje, wynik może być nieznany; zapis przechodzi do reconciliation bez retry.
+- Dowód: 1151/1151 offline, exact-once 275+282+291+303; kontrpróby foreign result, bare claim, brak usage/settlement, report failure, marker failure, sekret w wyjątku i `REQUEST_STARTED`. Zero sieci/API/kosztu; realny acceptance niewykonany.
+- Ostatnia kontrpróba po zielonej regresji pokazała jeszcze jedną użyteczną lekcję: osobno poprawny enqueue i osobno poprawny wrapper mogą razem tworzyć system, którego nie da się uruchomić. Enqueue nie zapisywał kontraktu sesji wymaganego później przez wrapper. Dopiero wspólna deterministyczna tożsamość i test pełnej ścieżki `enqueue → wrapper bez prawa tworzenia joba → fake worker` stały się dowodem kompozycji.
+- Niezależny review zatwierdził LA-01-R1 z jednym P2, który nie jest osiągalnym naruszeniem: ostatni fallback sanitizera powinien mimo to ponownie przepuścić tekst przez redactor. To materiał o różnicy między findingiem blokującym a świadomym defense-in-depth — oraz o tym, dlaczego checkpoint nie powinien przemycać nawet rozsądnej poprawki spoza reviewed diffu.

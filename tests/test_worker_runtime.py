@@ -138,14 +138,13 @@ class TrackingHeartbeatFactory:
 
 
 def _enable_offline_worker(storage: SqliteStorage, clock: Clock) -> None:
-    for key, value in {
-        "kill_switch": False,
-        "worker_enabled": True,
-        "safe_mode": False,
-        "paid_actions_enabled": False,
-        "browser_actions_enabled": False,
-    }.items():
-        storage.set_system_flag(key, value, updated_by="test", reason="offline", now=clock.now())
+    storage.apply_security_flag_profile([
+        ("worker_enabled", True),
+        ("safe_mode", False),
+        ("paid_actions_enabled", False),
+        ("browser_actions_enabled", False),
+        ("kill_switch", False),
+    ], updated_by="test", reason="offline", now=clock.now())
 
 
 def _local_job(account, job_id: str, *, payload: dict | None = None, max_attempts: int = 2) -> Job:
@@ -309,11 +308,9 @@ def test_worker_rejects_research_real_mode(settings, storage, account):
 def test_worker_fails_closed_when_worker_flag_missing(settings, storage, account):
     clock = MutableClock()
     storage.ensure_account(account)
-    for key, value in {
-        "kill_switch": False, "safe_mode": False,
-        "paid_actions_enabled": False, "browser_actions_enabled": False,
-    }.items():
-        storage.set_system_flag(key, value, now=clock.now())
+    _enable_offline_worker(storage, clock)
+    storage.conn.execute("DELETE FROM system_flags WHERE key='worker_enabled'")
+    storage.conn.commit()
     job = storage.enqueue_job(_local_job(account, "missing-worker-flag"))
 
     result = _worker(settings, storage, clock).run_once()

@@ -145,3 +145,15 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Zakres:** wyłącznie kontrola repozytorium i staging zatwierdzonego zakresu; brak researchu, API, sieci, browsera i kosztu.
 - **Podstawa:** niezależny końcowy review potwierdził 894/894 testów i partycje 213/224/231/226; chroniona baza pozostała identyczna.
 - **Stan:** `WAVE 0B APPROVED WITH P2 — READY FOR CHECKPOINT`; Etap 1 `BLOCKED`, live API `ZABRONIONE`. Formalne zamknięcie wymaga przyszłego, osobno autoryzowanego commita.
+
+## 2026-07-17 — LA-01-R1 offline verification
+
+- **Zakres:** wyłącznie testy kontraktu wykonania na fake workerach/callerach i tymczasowych SQLite; nie prowadzono researchu treściowego ani wyszukiwania.
+- **Dowód:** 1151/1151 oraz exact-once 275+282+291+303; pełny frozen pricing, ownership/fencing, durable report, recovery bez retry i prawdziwy reopen.
+- **Koszt i stan:** 0 USD; bez API/SDK/sieci. Nie powstał Research Card z realnego providera i nie wykonano controlled live acceptance.
+
+## 2026-07-17 — Checkpoint LA-01-R1 po niezależnym review
+
+- **Zakres:** formalna materializacja werdyktu, selektywny staging, testy i Git; bez researchu treściowego, providera, browsera i publikacji.
+- **Wynik review:** `APPROVE WITH MINOR/P2`; open P2 sanitizera jest nieblokującą rekomendacją.
+- **Koszt:** 0 USD; żadnego wpisu model usage ani Research Card.

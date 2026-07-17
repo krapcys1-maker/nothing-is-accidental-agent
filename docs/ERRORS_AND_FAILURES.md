@@ -743,3 +743,31 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Kontrpróby:** 13/13 testów implementera i 23/23 niezależne kontrpróby QP-01; pełna regresja 1079/1079 i cztery partycje exact-once.
 - **Historia zachowana:** rollback pierwszej migracji, odrzucone próby, PID 15404 i pierwotny status kandydacki pozostają w rejestrze jako chronologia. Zmieniono wyłącznie aktualny status.
 - **Pozostałe P2:** synchronizacja statusów, selektywny `BUILD_LOG` i materializacja pochodzenia review; żaden nie jest findingiem technicznym MAJOR/P1.
+
+### 2026-07-17 — WAVE LA-01: trzy blokery controlled live acceptance i ich naprawa
+
+- **Blokery preflightu:** LA-01-A — wersjonowany cennik był jawnie przykładowy i nieautorytatywny (realny koszt czerpany z `.env`); LA-01-B — brak kanonicznego atomowego otwarcia flag i bezwarunkowego przywrócenia fail-closed (istniał tylko jednoflagowy `set_system_flag`); LA-01-C — canonical CLI utrwalał `max_tokens=3000` bez możliwości zamrożenia niższej wartości.
+- **Naprawa:** autorytatywny `config/pricing_profiles.yaml` z `status: approved` + gate `--pricing-profile`; atomowy `apply_security_flag_profile` (jedna transakcja, `kill_switch` ostatni przy otwarciu / pierwszy przy zamknięciu); `--max-tokens` z zamkniętym kontraktem `[256, 8192]` i inwariantem CLI==persisted==provider==projekcja==raport.
+- **Ryzyko crashu pomiędzy zmianami flag:** rozwiązane filesystem markerem O_EXCL `runtime/controlled_live_session.json`; niedomknięta sesja wymusza fail-closed przy następnym starcie i jest raportowana przez `operational-report`. Nie tworzy się mechanizmu, który po crashu pozostawia system otwarty bez trwałego śladu.
+- **Świadome ograniczenie:** bare `worker --once` wykonałby durable real job, gdyby flagi były już otwarte; jedynym kodem otwierającym flagi paid/worker jest wrapper `controlled-live-once` (zawsze przywraca fail-closed), więc bez wrappera flagi pozostają fail-closed. Zapisano jako P2, nie jako MAJOR.
+- **Dowód offline:** 48 nowych testów LA-01; pełny suite **1127/1127**; zero sieci/API/kosztu; produkcyjna baza niezmieniona. Realny controlled live acceptance NADAL niewykonany.
+
+### 2026-07-17 — Niezależny review odrzucił pierwszą LA-01 (`REJECTED — MAJOR`), naprawa LA-01-R1
+
+- **P1-01:** wrapper i dispatcher porównywały za mało pól pricing profile; ten sam ID z inną wersją/ceną/fingerprintem mógł przejść. **Root cause:** autoryzacja profilu została potraktowana jak lookup po ID zamiast niezmiennego kontraktu wykonania.
+- **P1-02/P1-04:** status sukcesu nie był ściśle zależny od trwałego raportu, a raport mógł przejąć surowy tekst wyjątku. **Root cause:** finalizacja raportu i markera nie była osobną fail-closed maszyną stanów z sanitizerem.
+- **P1-03/P2-03:** tekst `SUCCEEDED` nie dowodził ownership joba/requestu; bare worker mógł wygrać claim. **Root cause:** brak trwałego session fence obejmującego worker execution token.
+- **P1-05:** recovery hardcodował brak startu requestu. **Root cause:** recovery nie czytał kanonicznego `provider_attempt` i `request_started_at`.
+- **P1-06:** CLI zawierało placeholder zamiast pełnego composition root. **Root cause:** wrapper, worker i entrypoint nie były złożone przez jedną ścieżkę.
+- **P2-01/P2-02/P2-04:** marker nie miał kompletnego kontraktu fsync, częściowe flagi można było otwierać pojedynczo, a aktywna dokumentacja opisywała odrzucony stan jako bieżący.
+- **Naprawa:** ADR-079: pełny frozen pricing contract i projekcja z approved profile; dispatcher recheck; session/job/request/attempt/token fencing; walidacja durable evidence; sanitizer; raport przed marker clear; recovery bez retry; prawdziwy reopen; O_EXCL+fsync; pełny atomowy profil flag; kanoniczny CLI.
+- **Nieudane próby podczas naprawy:** pierwszy focused run ujawnił konflikt `now`+`clock` w nowej metodzie recovery i stare helpery testowe otwierające flagi pojedynczo; pierwsza pełna regresja dała 1149/1151, bo dwa historyczne testy oczekiwały starszego reason textu/ambient estimate. Poprawiono przyczynę recovery i zaktualizowano testy do silniejszego kontraktu bez osłabiania blokad.
+- **Końcowa kontrpróba obaliła kompozycję mimo zielonych testów:** capped enqueue nie zawierał `controlled_session`, podczas gdy realny wrapper wymagał jego dokładnej zgodności i nie mógł go dopisać. Skutek był bezpieczny (odmowa przed providerem), ale przyszły acceptance był niewykonalny. Naprawa: jeden deterministyczny helper tożsamości job/session używany przez enqueue i wrapper; test sukcesu przechodzi teraz przez kanoniczny enqueue i `allow_job_creation=false`.
+- **Nieudane uruchomienia harnessu/gate:** jedna próba pełnego pytest została przerwana przez omyłkowy timeout 1 s, pierwsza próba partycji użyła nieobsługiwanego `--part/-q` zamiast `--index`, a pierwsze formatowanie pustej listy operacji Git wywołało niekończący kontroli błąd PowerShell `String.Join`. Były to błędy operatorskie bez mutacji danych; poprawne komendy zakończyły się 1151/1151, czterema zielonymi partycjami i czystym repository gate.
+- **Dowód końcowy:** 1151/1151 offline; exact-once i cztery partycje 275/282/291/303. Zero realnego SDK/API, sieci, browsera, publikacji i kosztu. Produkcyjna baza nieotwierana do zapisu.
+
+### 2026-07-17 — LA-01-R1 zatwierdzona; pozostaje open P2 sanitizera
+
+- **Wynik review:** `APPROVE WITH MINOR/P2`; wszystkie P1 są zamknięte i finding nie blokuje checkpointu ani controlled live acceptance.
+- **P2:** fallback `return str(value)` w `sanitize_report_payload` jest obecnie nieosiągalny dzięki zamkniętej walidacji typów, ale sam nie wykonuje ponownej sanitizacji. Rekomendowana późniejsza poprawka defense-in-depth: `return sanitize_report_payload(str(value))`.
+- **Decyzja checkpointu:** nie zmieniać sanitizera poza reviewed diffem; zachować finding jawnie do przyszłej osobno zatwierdzonej poprawki.

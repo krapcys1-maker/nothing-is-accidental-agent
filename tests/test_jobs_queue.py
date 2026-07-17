@@ -1274,10 +1274,21 @@ def test_system_flags_are_runtime_fail_closed_atomic_and_persistent(settings, ac
     assert first.get_system_flag("kill_switch").value is True
 
     second = SqliteStorage.open(settings.db_path)
-    changed = second.set_system_flag(
-        "paid_actions_enabled", True, updated_by="owner", reason="offline contract", now=NOW,
-    )
-    assert changed.value is True and changed.is_valid is True
+    with pytest.raises(SystemFlagError):
+        second.set_system_flag(
+            "paid_actions_enabled", True,
+            updated_by="owner",
+            reason="single opening forbidden",
+            now=NOW,
+        )
+    changed = second.apply_security_flag_profile([
+        ("kill_switch", True),
+        ("worker_enabled", False),
+        ("safe_mode", True),
+        ("paid_actions_enabled", True),
+        ("browser_actions_enabled", False),
+    ], updated_by="owner", reason="offline contract", now=NOW)
+    assert changed["paid_actions_enabled"] is True
     assert first.get_system_flag("paid_actions_enabled").value is True
     second.conn.execute(
         "UPDATE system_flags SET value_json='\"not-a-boolean\"' WHERE key='paid_actions_enabled'"

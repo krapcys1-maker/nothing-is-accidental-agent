@@ -28,3 +28,5 @@ date,run_id,task,provider,model,input_tokens,output_tokens,cache_read_tokens,cac
 # 2026-07-13 - offline old-owner research fencing P1, 26 restart acceptance + 667 full suite - 0.000000 USD; bez API, sieci, browsera, publikacji i realnego researchu.
 # 2026-07-14 - offline DispatchResult terminalization contract P1/P2, 58 restart acceptance + 700 full suite - 0.000000 USD; bez API, sieci, browsera, publikacji i realnego researchu.
 # 2026-07-16 - skonsolidowany pakiet Etapu 1: Task Scheduler plan, raport read-only, copy-only migration rehearsal, testy i dokumentacja - 0.000000 USD; bez API, SDK, sieci, browsera i publikacji.
+# 2026-07-17 - LA-01-R1: fake controlled-live, pricing/fencing/recovery/report regression i dokumentacja - 0.000000 USD; bez API, SDK, sieci, browsera, publikacji i live acceptance.
+# 2026-07-17 - checkpoint LA-01-R1 po APPROVE WITH MINOR/P2: selektywny staging, testy, commit i push - 0.000000 USD; bez API, SDK, browsera, publikacji i live acceptance.

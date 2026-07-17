@@ -603,3 +603,32 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Dowód:** baseline `630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6`, 14 migracji, 35/35 triggerów, 13 legacy proofs, 18 zgodnych digestów, `integrity_check=ok`, `foreign_key_check=[]`, koszt `0.684580` USD, 0/0/0 jobs/provider attempts/reconciliation events; QP-01 13/13 testów implementera i 23/23 niezależne kontrpróby; suite 1079/1079.
 - **P2:** synchronizacja bieżących statusów, selektywne odseparowanie prywatnego bloku `BUILD_LOG` oraz repozytoryjny artefakt pochodzenia review. Brak CRITICAL i MAJOR/P1.
 - **Granice:** Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`; live API `FORBIDDEN`; bez ponownej migracji i bez Windows Tasks.
+
+### 2026-07-17 — WAVE LA-01: kanoniczny operator controlled live acceptance (LA-01-A/B/C) — [STAGE 1 | OFFLINE CANDIDATE]
+
+- **Cel:** zaimplementować jeden spójny operatorski kontrakt umożliwiający w przyszłości dokładnie jeden controlled live acceptance i naprawić trzy blokery preflightu; bez realnego wykonania.
+- **LA-01-A (autorytatywny cennik):** `app/core/pricing.py` + `config/pricing_profiles.yaml`(`.example`); wersjonowane profile z `status: example|approved`; realny enqueue wymaga `--pricing-profile` zatwierdzonego, wersjonowanego, zgodnego modelem profilu; durable job utrwala `pricing_profile_id`+`version`; `.env` przestał być autorytatywny dla realnego kosztu.
+- **LA-01-C (max_tokens):** `--max-tokens` w kanonicznym CLI, kontrakt `[256, 8192]` bez float; inwariant CLI==persisted==provider==projekcja==raport; default 3000.
+- **LA-01-B (wrapper):** `app/operations/controlled_live.py` + `app.main controlled-live-once`; preflight, zamrożony plan, atomowe otwarcie profilu (`kill_switch` ostatni), jeden `worker --once`, bezwarunkowe fail-closed (`kill_switch` pierwszy), reopen+potwierdzenie, raport bez sekretów; filesystem recovery marker O_EXCL; atomowy `apply_security_flag_profile` (bez migracji).
+- **Blokada:** `REAL_CONTROLLED_LIVE_ENABLED=false`; `controlled-live-once` odmawia realnego wykonania; jedynym kodem otwierającym flagi paid/worker jest wrapper (zawsze przywraca fail-closed).
+- **Weryfikacja:** 48 nowych testów; pełny suite **1127/1127**; `compileall` i `git diff --check` zielone. Zero sieci/API/kosztu; produkcyjna `data/agent.db`, produkcyjne `system_flags` i Windows Tasks niezmienione; bez commita i pushu. Status: `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.
+
+### 2026-07-17 — WAVE LA-01-R1: pełna naprawa po `REJECTED — MAJOR` — [STAGE 1 | OFFLINE CANDIDATE]
+
+- **Pozycja roadmapy:** Etap 1 pozostaje `OPEN / BLOCKED PENDING LA-01-R1 REVIEW AND CONTROLLED LIVE ACCEPTANCE`; Etap 2 nie rozpoczęty.
+- **Review wejściowy:** pierwsza LA-01 odrzucona. Naprawiono P1-01…P1-06 i P2-01…P2-04 bez mikropoprawek i bez live acceptance.
+- **Pricing:** wymagane `approved_by`, wersja, model, jawna waluta/jednostki i dokładnie pięć dodatnich cen `Decimal`; fingerprint obejmuje cały kontrakt. Durable intent utrwala ceny, ID/wersję/model, fingerprint, max tokens/searches, cap oraz projected/pessimistic cost. `run_capped_research.py`, wrapper i dispatcher używają i ponownie sprawdzają ten sam approved profile; direct/sentinel enqueue nie dochodzi do provider boundary.
+- **Wrapper i ownership:** `controlled-live-once` rzeczywiście wywołuje wrapper; normalny composition root składa storage, Policy Engine, dispatcher, kanoniczny worker adapter, pricing resolver, zatwierdzony quiescence probe, report writer i recovery. Session marker oraz payload wiążą session/operation/job/request/attempt/token fence. Sam `SUCCEEDED` nie wystarcza.
+- **Raport/recovery:** sukces wymaga kompletnego durable evidence, nowego połączenia po restoration i trwałego zanonimizowanego raportu. Marker używa O_EXCL, file fsync, replace i directory barrier; jest usuwany dopiero po raporcie. `REQUEST_STARTED` pozostaje możliwym unknown outcome, trafia do reconciliation i nigdy nie jest retryowany.
+- **Flagi:** pełny profil pięciu flag jest atomowy; `kill_switch` ostatni przy otwarciu i pierwszy przy zamknięciu. Pojedynczy setter może tylko przywracać fail-closed.
+- **Weryfikacja:** collect/full **1151/1151**; exact-once **275+282+291+303=1151**; cztery partycje zielone. Kontrpróby obejmują forged pricing, direct enqueue, foreign result/request/fence, brak attemptu/usage/settlementu, attempt #2, bare claim, report/marker/restoration failure, sekret/prompt, recovery `REQUEST_STARTED`, prawdziwy reopen, future `earliest_run_at`, branch/HEAD i partial flags.
+- **Końcowa kontrpróba kompozycji:** audit po pierwszej zielonej regresji wykazał, że kanoniczny enqueue nie zapisywał jeszcze `controlled_session`, więc realny wrapper z `allow_job_creation=false` zawsze odmówiłby. Wspólny deterministyczny helper job/session identity został użyty przez enqueue i wrapper, a istniejący test pełnego sukcesu zmieniono tak, aby najpierw wykonał kanoniczny enqueue, potem wrapper bez prawa tworzenia joba. Ponowny pełny suite i wszystkie partycje pozostały zielone: **1151/1151**.
+- **Granice:** zero sieci, realnego API/SDK, browsera, publikacji i kosztu; wyłącznie fake worker/callery i tymczasowe bazy. Produkcyjna DB/WAL/SHM oraz system flags niezmienione; brak Windows Tasks i operacji Git. Prywatny wcześniejszy blok tego pliku zachowany.
+- **Status:** `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; controlled live acceptance niewykonany.
+
+### 2026-07-17 — Niezależny review LA-01-R1 i autoryzacja selektywnego checkpointu — [REVIEW | CHECKPOINT]
+
+- **Werdykt:** `APPROVE WITH MINOR/P2`; LA-01-R1, pricing contract, controlled-live wrapper i max_tokens zatwierdzone; P1-01…P1-06 zamknięte.
+- **Open P2:** nieosiągalny fallback `sanitize_report_payload` powinien rekurencyjnie sanitizować `str(value)`. Rekomendacja jest nieblokująca i nie została dodana do reviewed diffu.
+- **Checkpoint:** właściciel autoryzował jeden selektywny commit i push wyłącznie `dev/first-successful-research-card`. Prywatny blok „Instrukcja pisania → wersja 2.1” oraz cały katalog instrukcji pisania muszą pozostać poza stagingiem.
+- **Granice:** bez live acceptance, realnego pricing profile, API/SDK, browsera, publikacji, Windows Tasks, PR i merge. Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`.

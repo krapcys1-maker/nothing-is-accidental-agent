@@ -403,6 +403,20 @@ class StoragePort(Protocol):
         self, *, now: datetime | None = None, clock: Clock | None = None,
     ) -> JobRecoveryResult: ...
 
+    def recover_controlled_live_session(
+        self,
+        *,
+        expected_job_id: str,
+        expected_request_id: str,
+        now: datetime | None = None,
+        clock: Clock | None = None,
+    ) -> dict[str, object]:
+        """Fence an interrupted controlled session and escalate its active attempt.
+
+        This is local durable recovery only: it never invokes or retries a provider.
+        """
+        ...
+
     def reap_orphaned_stale_runs(
         self, stale_before: datetime, *, now: datetime | None = None,
         clock: Clock | None = None,
@@ -437,7 +451,25 @@ class StoragePort(Protocol):
     def set_system_flag(
         self, key: str, value: bool, *, updated_by: str | None = None,
         reason: str | None = None, now: datetime | None = None,
-    ) -> SystemFlag: ...
+    ) -> SystemFlag:
+        """Single-flag writes are fail-closed only.
+
+        Opening worker/paid/browser or removing kill/safe mode requires the
+        atomic five-flag profile operation.
+        """
+        ...
+
+    def apply_security_flag_profile(
+        self, ordered_updates: list[tuple[str, bool]], *,
+        updated_by: str | None = None, reason: str | None = None,
+        now: datetime | None = None,
+    ) -> dict[str, bool]:
+        """Atomically set the complete five-flag profile in ONE transaction, applying the pairs
+        in the given order (LA-01-B).  Callers use this so opening a controlled
+        profile (kill_switch removed last) and restoring fail-closed (kill_switch
+        set first) can never be observed as five independent, half-applied commits.
+        """
+        ...
 
     def add_research_card(self, card: ResearchCard) -> ResearchCard: ...
 

@@ -1,5 +1,9 @@
 # 08 — INTERWENCJE CZŁOWIEKA
 
+> **2026-07-17 — decyzja LA-01-R1:** właściciel przekazał werdykt niezależnego review `REJECTED — MAJOR` i autoryzował jedną pełną falę napraw P1-01…P1-06/P2-01…P2-04. Jednocześnie zabronił realnego API/SDK, sieci, browsera, publikacji, kosztu, produkcyjnych zapisów, Windows Tasks i operacji Git. Wynik kandydacki: 1151/1151 offline; realny controlled acceptance pozostaje niewykonany.
+
+> **2026-07-17 — review i checkpoint LA-01-R1:** kolejny niezależny review zatwierdził naprawę jako `APPROVE WITH MINOR/P2`; właściciel autoryzował jeden selektywny commit i push bieżącej gałęzi. Open P2 sanitizera pozostaje jawny, nieblokujący i poza reviewed diffem. Prywatne instrukcje oraz wcześniejszy blok BUILD_LOG pozostają lokalne. Ta decyzja nie autoryzuje live acceptance ani realnego API.
+
 > **Formalne zamknięcie WAVE 1A (2026-07-16):** implementer zadeklarował `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; niezależny reviewer odtworzył 1036/1036 i wykonał własne kontrpróby (149/149 `Worker.run_once`, 36/36 SQLite floor, 30/30 recovery/reaper/crash-window), po czym wydał `APPROVE WITH MINOR/P2`. Właściciel formalnie zamknął WAVE 1A jako `CLOSED — APPROVED WITH P2`. P2-1 i P2-2 pozostają jawne, lecz nieblokujące. Etap 1 nadal `BLOCKED`, live API nadal `ZABRONIONE`; Etap 2 nie został rozpoczęty.
 
 ## [2026-07-16] DECYZJA STRATEGICZNA — formalne zamknięcie WAVE 1A

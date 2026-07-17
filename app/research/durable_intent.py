@@ -5,16 +5,39 @@ from dataclasses import dataclass
 import hashlib
 import json
 import math
+from types import SimpleNamespace
 from typing import Mapping
 
 from app.core.config import REAL_PROVIDER_PRICING_KEYS, Settings
 from app.core.money import decimal_from, quantize_usd
+from app.core.pricing import (
+    REQUIRED_CURRENCY,
+    REQUIRED_UNIT,
+    PricingConfigError,
+    pricing_contract_fingerprint,
+)
+from app.research.cost_estimator import estimate_worst_case_search_call_usd
 
 
-_SCHEMA = "durable_research_intent_v2"
+_SCHEMA = "durable_research_intent_v3"
 _PIPELINE_VERSION = "single_research_pipeline_v2"
 _PROMPT_CONTRACT_VERSION = "anthropic_research_single_v2"
 _PROVIDER_STAGE = "research"
+
+# Sentinel pricing-profile identity for non-authoritative paths (dry-run estimation,
+# legacy tests).  Real paid enqueue MUST override these with an approved, versioned
+# profile resolved from app.core.pricing; the sentinel never authorizes a real call.
+SENTINEL_PRICING_PROFILE_ID = "unversioned-adhoc"
+SENTINEL_PRICING_PROFILE_VERSION = "0"
+
+# Closed max_tokens contract for the durable request output cap (LA-01-C).  The
+# lower bound keeps a controlled acceptance from freezing a nonsensically small
+# value; the upper bound is the approved provider ceiling.  The default matches
+# the historical synthesis cap and stays available for the ordinary flow, while a
+# controlled acceptance may freeze a lower value explicitly.
+MIN_REQUEST_MAX_TOKENS = 256
+MAX_REQUEST_MAX_TOKENS = 8192
+DEFAULT_REQUEST_MAX_TOKENS = 3000
 
 
 class DurableExecutionIntentError(ValueError):
@@ -56,6 +79,37 @@ def _integer(value: object, *, field: str, minimum: int = 0) -> int:
     return int(value)
 
 
+def _bounded_max_tokens(value: object, *, field: str = "max_tokens") -> int:
+    """Persistence-level max_tokens guard: integral value within the provider bound.
+
+    Integral floats (e.g. ``3000.0``) remain accepted so equivalent JSON numeric
+    forms do not change request identity; the CLI applies a stricter integer-only
+    contract before this is ever reached.
+    """
+    parsed = _integer(value, field=field, minimum=1)
+    if parsed < MIN_REQUEST_MAX_TOKENS or parsed > MAX_REQUEST_MAX_TOKENS:
+        raise DurableExecutionIntentError(
+            f"{field} {parsed} is outside the approved provider bound "
+            f"[{MIN_REQUEST_MAX_TOKENS}, {MAX_REQUEST_MAX_TOKENS}].",
+            code="MAX_TOKENS_OUT_OF_RANGE",
+        )
+    return parsed
+
+
+def validate_cli_max_tokens(value: object) -> int:
+    """Strict CLI/operator contract for --max-tokens (LA-01-C): integer, in range.
+
+    Rejects bool and float outright (no silent truncation), then applies the same
+    approved provider bound that request identity enforces.
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise DurableExecutionIntentError(
+            "max_tokens must be a plain integer (no float, no bool).",
+            code="MAX_TOKENS_NOT_INTEGER",
+        )
+    return _bounded_max_tokens(value, field="max_tokens")
+
+
 def _text(value: object, *, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise DurableExecutionIntentError(f"{field} must be a non-empty string.")
@@ -63,6 +117,53 @@ def _text(value: object, *, field: str) -> str:
     # makes harmless JSON/whitespace representation changes non-semantic while
     # preventing the caller from later using a different mutable table value.
     return " ".join(value.split())
+
+
+def controlled_research_job_id(operation_key: object) -> str:
+    """Return the durable job identity shared by enqueue and controlled execution."""
+    canonical_key = _text(operation_key, field="operation_key")
+    idempotency_key = f"real-research:{canonical_key}"
+    digest = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:32]
+    return f"real-research-{digest}"
+
+
+def controlled_session_contract(
+    operation_key: object,
+    *,
+    job_id: object | None = None,
+) -> dict[str, object]:
+    """Build the deterministic, durable ownership fence for one logical operation.
+
+    The values are identities/fences rather than credentials.  Determinism lets an
+    idempotent enqueue and the later controlled wrapper independently derive the
+    same complete contract without an ambient or in-memory hand-off.
+    """
+    canonical_key = _text(operation_key, field="operation_key")
+    expected_job_id = (
+        controlled_research_job_id(canonical_key)
+        if job_id is None
+        else _text(job_id, field="expected_job_id")
+    )
+    canonical_job_id = controlled_research_job_id(canonical_key)
+    if expected_job_id != canonical_job_id:
+        raise DurableExecutionIntentError(
+            "expected_job_id is inconsistent with operation_key.",
+            code="CONTROLLED_SESSION_IDENTITY_MISMATCH",
+        )
+    session_id = hashlib.sha256(
+        f"controlled-live-session:{canonical_key}".encode("utf-8")
+    ).hexdigest()[:32]
+    worker_fence = hashlib.sha256(
+        f"controlled-live-worker:{expected_job_id}:{session_id}".encode("utf-8")
+    ).hexdigest()[:32]
+    return {
+        "session_id": session_id,
+        "operation_key": canonical_key,
+        "expected_job_id": expected_job_id,
+        "expected_request_id": f"{expected_job_id}:{_PROVIDER_STAGE}:1",
+        "expected_attempt_no": 1,
+        "worker_execution_token": f"controlled-live:{session_id}:{worker_fence}",
+    }
 
 
 def _text_list(value: object, *, field: str) -> list[str]:
@@ -80,9 +181,45 @@ def _pricing_profile(pricing: Mapping[str, object]) -> dict[str, str]:
     }
 
 
-def _pricing_fingerprint(profile: Mapping[str, str]) -> str:
-    canonical = json.dumps(dict(profile), sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+def _pricing_fingerprint(
+    *,
+    profile_id: str,
+    version: str,
+    model: str,
+    currency: str,
+    unit: str,
+    profile: Mapping[str, str],
+) -> str:
+    try:
+        return pricing_contract_fingerprint(
+            profile_id=profile_id,
+            version=version,
+            model=model,
+            currency=currency,
+            unit=unit,
+            prices=profile,
+        )
+    except PricingConfigError as exc:
+        raise DurableExecutionIntentError(
+            "pricing contract cannot be fingerprinted."
+        ) from exc
+
+
+def _cost_projection(
+    *,
+    profile: Mapping[str, str],
+    max_web_searches: int,
+    max_tokens: int,
+) -> tuple[str, str]:
+    estimate = estimate_worst_case_search_call_usd(
+        SimpleNamespace(pricing=dict(profile)),
+        max_web_searches=max_web_searches,
+        max_output_tokens=max_tokens,
+    )
+    return (
+        _money(estimate.subtotal_usd, field="projected_cost_usd", allow_zero=True),
+        _money(estimate.total_usd, field="pessimistic_cost_usd", allow_zero=True),
+    )
 
 
 @dataclass(frozen=True)
@@ -99,6 +236,12 @@ class DurableResearchExecutionIntent:
     timeout_seconds: int
     pricing_profile: dict[str, str]
     pricing_fingerprint: str
+    pricing_profile_id: str
+    pricing_profile_version: str
+    pricing_currency: str
+    pricing_unit: str
+    projected_cost_usd: str
+    pessimistic_cost_usd: str
     pipeline_version: str
     prompt_contract_version: str
     max_retries: int
@@ -107,11 +250,36 @@ class DurableResearchExecutionIntent:
     def from_settings(
         cls, *, settings: Settings, account_id: str, topic_id: int,
         cap_usd: object, max_web_searches: object, question: object,
-        niche: object, max_tokens: object = 3000, required_depth: object = "standard", guidance: object = (
+        niche: object, max_tokens: object = 3000, required_depth: object = "standard",
+        pricing_prices: Mapping[str, object] | None = None,
+        pricing_profile_id: object = SENTINEL_PRICING_PROFILE_ID,
+        pricing_profile_version: object = SENTINEL_PRICING_PROFILE_VERSION,
+        pricing_currency: object = REQUIRED_CURRENCY,
+        pricing_unit: object = REQUIRED_UNIT,
+        guidance: object = (
             "Prefer primary sources; separate fact from interpretation; flag uncertainty."
         ),
     ) -> "DurableResearchExecutionIntent":
-        profile = _pricing_profile(settings.pricing)
+        # Real paid enqueue passes the approved profile's prices/id/version; other
+        # callers fall back to settings pricing with the non-authoritative sentinel.
+        source_prices = settings.pricing if pricing_prices is None else pricing_prices
+        profile = _pricing_profile(source_prices)
+        model = _text(settings.model_quality, field="model")
+        profile_id = _text(pricing_profile_id, field="pricing_profile_id")
+        profile_version = _text(
+            pricing_profile_version, field="pricing_profile_version",
+        )
+        currency = _text(pricing_currency, field="pricing_currency")
+        unit = _text(pricing_unit, field="pricing_unit")
+        bounded_tokens = _bounded_max_tokens(max_tokens, field="max_tokens")
+        bounded_searches = _integer(
+            max_web_searches, field="max_web_searches", minimum=0,
+        )
+        projected, pessimistic = _cost_projection(
+            profile=profile,
+            max_web_searches=bounded_searches,
+            max_tokens=bounded_tokens,
+        )
         return cls(
             account_id=_text(account_id, field="account_id"),
             topic_id=_integer(topic_id, field="topic_id", minimum=1),
@@ -126,12 +294,25 @@ class DurableResearchExecutionIntent:
             stage=_PROVIDER_STAGE,
             cap_usd=_money(cap_usd, field="cap_usd"),
             provider="anthropic",
-            model=_text(settings.model_quality, field="model"),
-            max_tokens=_integer(max_tokens, field="max_tokens", minimum=1),
-            max_web_searches=_integer(max_web_searches, field="max_web_searches", minimum=0),
+            model=model,
+            max_tokens=bounded_tokens,
+            max_web_searches=bounded_searches,
             timeout_seconds=_integer(settings.research_timeout_seconds, field="timeout_seconds", minimum=1),
             pricing_profile=profile,
-            pricing_fingerprint=_pricing_fingerprint(profile),
+            pricing_fingerprint=_pricing_fingerprint(
+                profile_id=profile_id,
+                version=profile_version,
+                model=model,
+                currency=currency,
+                unit=unit,
+                profile=profile,
+            ),
+            pricing_profile_id=profile_id,
+            pricing_profile_version=profile_version,
+            pricing_currency=currency,
+            pricing_unit=unit,
+            projected_cost_usd=projected,
+            pessimistic_cost_usd=pessimistic,
             pipeline_version=_PIPELINE_VERSION,
             prompt_contract_version=_PROMPT_CONTRACT_VERSION,
             max_retries=0,
@@ -142,7 +323,10 @@ class DurableResearchExecutionIntent:
         expected = {
             "schema", "account_id", "topic_id", "workflow", "mode", "cap_usd", "provider",
             "model", "max_tokens", "max_web_searches", "timeout_seconds", "pricing_profile",
-            "pricing_fingerprint", "pipeline_version", "prompt_contract_version", "max_retries",
+            "pricing_fingerprint", "pricing_profile_id", "pricing_profile_version",
+            "pricing_currency", "pricing_unit", "projected_cost_usd",
+            "pessimistic_cost_usd",
+            "pipeline_version", "prompt_contract_version", "max_retries",
             "flags", "stage", "prompt_input",
         }
         if set(payload) != expected:
@@ -173,9 +357,48 @@ class DurableResearchExecutionIntent:
         if not isinstance(profile_raw, Mapping):
             raise DurableExecutionIntentError("pricing_profile must be an object.")
         profile = _pricing_profile(profile_raw)
+        pricing_profile_id = _text(payload["pricing_profile_id"], field="pricing_profile_id")
+        pricing_profile_version = _text(
+            payload["pricing_profile_version"], field="pricing_profile_version",
+        )
+        pricing_currency = _text(payload["pricing_currency"], field="pricing_currency")
+        pricing_unit = _text(payload["pricing_unit"], field="pricing_unit")
+        model = _text(payload["model"], field="model")
         fingerprint = _text(payload["pricing_fingerprint"], field="pricing_fingerprint")
-        if fingerprint != _pricing_fingerprint(profile):
-            raise DurableExecutionIntentError("pricing fingerprint does not match the persisted profile.")
+        if fingerprint != _pricing_fingerprint(
+            profile_id=pricing_profile_id,
+            version=pricing_profile_version,
+            model=model,
+            currency=pricing_currency,
+            unit=pricing_unit,
+            profile=profile,
+        ):
+            raise DurableExecutionIntentError(
+                "pricing fingerprint does not match the complete frozen contract."
+            )
+        max_tokens = _bounded_max_tokens(payload["max_tokens"], field="max_tokens")
+        max_web_searches = _integer(
+            payload["max_web_searches"], field="max_web_searches", minimum=0,
+        )
+        expected_projected, expected_pessimistic = _cost_projection(
+            profile=profile,
+            max_web_searches=max_web_searches,
+            max_tokens=max_tokens,
+        )
+        projected = _money(
+            payload["projected_cost_usd"],
+            field="projected_cost_usd",
+            allow_zero=True,
+        )
+        pessimistic = _money(
+            payload["pessimistic_cost_usd"],
+            field="pessimistic_cost_usd",
+            allow_zero=True,
+        )
+        if (projected, pessimistic) != (expected_projected, expected_pessimistic):
+            raise DurableExecutionIntentError(
+                "persisted cost projections do not match frozen pricing and limits."
+            )
         pipeline_version = _text(payload["pipeline_version"], field="pipeline_version")
         prompt_contract_version = _text(payload["prompt_contract_version"], field="prompt_contract_version")
         retries = _integer(payload["max_retries"], field="max_retries", minimum=0)
@@ -186,12 +409,18 @@ class DurableResearchExecutionIntent:
             stage=_PROVIDER_STAGE,
             cap_usd=_money(payload["cap_usd"], field="cap_usd"),
             provider=_text(payload["provider"], field="provider"),
-            model=_text(payload["model"], field="model"),
-            max_tokens=_integer(payload["max_tokens"], field="max_tokens", minimum=1),
-            max_web_searches=_integer(payload["max_web_searches"], field="max_web_searches", minimum=0),
+            model=model,
+            max_tokens=max_tokens,
+            max_web_searches=max_web_searches,
             timeout_seconds=_integer(payload["timeout_seconds"], field="timeout_seconds", minimum=1),
             pricing_profile=profile,
             pricing_fingerprint=fingerprint,
+            pricing_profile_id=pricing_profile_id,
+            pricing_profile_version=pricing_profile_version,
+            pricing_currency=pricing_currency,
+            pricing_unit=pricing_unit,
+            projected_cost_usd=projected,
+            pessimistic_cost_usd=pessimistic,
             pipeline_version=pipeline_version,
             prompt_contract_version=prompt_contract_version,
             max_retries=retries,
@@ -219,6 +448,12 @@ class DurableResearchExecutionIntent:
             "timeout_seconds": self.timeout_seconds,
             "pricing_profile": dict(self.pricing_profile),
             "pricing_fingerprint": self.pricing_fingerprint,
+            "pricing_profile_id": self.pricing_profile_id,
+            "pricing_profile_version": self.pricing_profile_version,
+            "pricing_currency": self.pricing_currency,
+            "pricing_unit": self.pricing_unit,
+            "projected_cost_usd": self.projected_cost_usd,
+            "pessimistic_cost_usd": self.pessimistic_cost_usd,
             "pipeline_version": self.pipeline_version,
             "prompt_contract_version": self.prompt_contract_version,
             "max_retries": self.max_retries,
@@ -252,7 +487,7 @@ class DurableResearchExecutionIntent:
 
 
 def canonicalize_durable_research_payload(payload: Mapping[str, object]) -> dict[str, object]:
-    expected = {
+    required = {
         "account_id", "topic_id", "dry_run", "execution", "mode", "max_cost_usd",
         "execution_intent",
     }
@@ -261,7 +496,8 @@ def canonicalize_durable_research_payload(payload: Mapping[str, object]) -> dict
             "durable real job payload is missing execution_intent.",
             code="MISSING_EXECUTION_INTENT",
         )
-    if set(payload) != expected:
+    allowed = required | {"controlled_session"}
+    if set(payload) not in (required, allowed):
         raise DurableExecutionIntentError("durable real job payload has unsupported or missing fields.")
     if payload["execution"] != "durable_provider_v2":
         raise DurableExecutionIntentError(
@@ -279,7 +515,7 @@ def canonicalize_durable_research_payload(payload: Mapping[str, object]) -> dict
     cap = _money(payload["max_cost_usd"], field="max_cost_usd")
     if (account_id, topic_id, cap) != (intent.account_id, intent.topic_id, intent.cap_usd):
         raise DurableExecutionIntentError("payload identity/cap must match execution_intent.")
-    return {
+    result = {
         "account_id": account_id,
         "topic_id": topic_id,
         "dry_run": False,
@@ -288,6 +524,54 @@ def canonicalize_durable_research_payload(payload: Mapping[str, object]) -> dict
         "max_cost_usd": cap,
         "execution_intent": intent.as_payload(),
     }
+    if "controlled_session" in payload:
+        raw_session = payload["controlled_session"]
+        if not isinstance(raw_session, Mapping) or set(raw_session) != {
+            "session_id",
+            "operation_key",
+            "expected_job_id",
+            "expected_request_id",
+            "expected_attempt_no",
+            "worker_execution_token",
+        }:
+            raise DurableExecutionIntentError(
+                "controlled_session must contain the complete ownership contract."
+            )
+        session = {
+            "session_id": _text(raw_session["session_id"], field="controlled_session.session_id"),
+            "operation_key": _text(
+                raw_session["operation_key"], field="controlled_session.operation_key",
+            ),
+            "expected_job_id": _text(
+                raw_session["expected_job_id"], field="controlled_session.expected_job_id",
+            ),
+            "expected_request_id": _text(
+                raw_session["expected_request_id"],
+                field="controlled_session.expected_request_id",
+            ),
+            "expected_attempt_no": _integer(
+                raw_session["expected_attempt_no"],
+                field="controlled_session.expected_attempt_no",
+                minimum=1,
+            ),
+            "worker_execution_token": _text(
+                raw_session["worker_execution_token"],
+                field="controlled_session.worker_execution_token",
+            ),
+        }
+        if session["expected_attempt_no"] != 1:
+            raise DurableExecutionIntentError(
+                "controlled_session expected_attempt_no must be exactly 1."
+            )
+        expected_request_id = (
+            f"{session['expected_job_id']}:{intent.stage}:{session['expected_attempt_no']}"
+        )
+        if session["expected_request_id"] != expected_request_id:
+            raise DurableExecutionIntentError(
+                "controlled_session request identity is inconsistent."
+            )
+        result["controlled_session"] = session
+    return result
 
 
 def durable_execution_intent_fingerprint(payload: Mapping[str, object]) -> str:

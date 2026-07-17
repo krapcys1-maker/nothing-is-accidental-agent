@@ -220,7 +220,7 @@ def test_missing_prices_block_real_mode_but_dry_run_remains_usable(
     monkeypatch.setattr(run_capped_research, "load_settings", lambda: missing)
     assert run_capped_research.main([
         "--topic-id", str(topic.id), "--real", "--estimate-only",
-    ]) == 0
+    ]) == 2
     assert run_capped_research.main(["--topic-id", str(topic.id), "--real"]) == 1
 
     summary = runner.run_topics(count=1, settings=missing)

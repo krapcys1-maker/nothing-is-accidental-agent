@@ -170,14 +170,13 @@ class HeartbeatStorageFactorySpy:
 
 
 def _enable_offline_worker(storage: SqliteStorage, now: datetime) -> None:
-    for key, value in {
-        "kill_switch": False,
-        "worker_enabled": True,
-        "safe_mode": False,
-        "paid_actions_enabled": False,
-        "browser_actions_enabled": False,
-    }.items():
-        storage.set_system_flag(key, value, updated_by="test", reason="scheduling", now=now)
+    storage.apply_security_flag_profile([
+        ("worker_enabled", True),
+        ("safe_mode", False),
+        ("paid_actions_enabled", False),
+        ("browser_actions_enabled", False),
+        ("kill_switch", False),
+    ], updated_by="test", reason="scheduling", now=now)
 
 
 def _worker(

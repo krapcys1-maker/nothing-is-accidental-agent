@@ -14,6 +14,7 @@ import sys
 import pytest
 
 from app.core.config import REAL_PROVIDER_PRICING_KEYS
+from app.core.pricing import load_pricing_profiles, resolve_real_pricing_profile
 from app.llm.base import Usage
 from app.models import (
     DurableProviderAttemptContext,
@@ -36,6 +37,7 @@ from app.research.durable_intent import (
 )
 from app.storage.repositories import SqliteStorage
 from app.workflows.research.pipeline import ResearchExecutionNeedsReconciliation
+from tests.conftest import write_approved_pricing_profile
 
 
 NOW = datetime(2026, 7, 15, 12, 0, tzinfo=timezone.utc)
@@ -47,13 +49,31 @@ class FixedClock:
         return NOW
 
 
-def _payload(settings, account, topic, *, cap: object = 1.0, max_tokens: object = 3000) -> dict:
+def _payload(
+    settings,
+    account,
+    topic,
+    *,
+    cap: object = 1.0,
+    max_tokens: object = 3000,
+    pricing_profile=None,
+) -> dict:
+    pricing_kwargs = {}
+    if pricing_profile is not None:
+        pricing_kwargs = {
+            "pricing_prices": pricing_profile.prices,
+            "pricing_profile_id": pricing_profile.profile_id,
+            "pricing_profile_version": pricing_profile.version,
+            "pricing_currency": pricing_profile.currency,
+            "pricing_unit": pricing_profile.unit,
+        }
     intent = DurableResearchExecutionIntent.from_settings(
         settings=settings, account_id=account.id, topic_id=int(topic.id),
         cap_usd=cap, max_web_searches=3,
         question=topic.question or f"Why does '{topic.title}' work the way it does?",
         niche=account.niche,
         max_tokens=max_tokens,
+        **pricing_kwargs,
     )
     return {
         "account_id": account.id,
@@ -167,15 +187,15 @@ def _mutated_payload(kind: str, settings, account, topic, payload: dict) -> dict
 @pytest.mark.parametrize(
     ("kind", "expected_code"),
     [
-        ("model", "INVALID_EXECUTION_INTENT_FINGERPRINT"),
+        ("model", "MALFORMED_DURABLE_V2_PAYLOAD"),
         ("provider", "INVALID_EXECUTION_INTENT_FINGERPRINT"),
         ("prompt_question", "INVALID_EXECUTION_INTENT_FINGERPRINT"),
         ("prompt_niche", "INVALID_EXECUTION_INTENT_FINGERPRINT"),
         ("prompt_required_depth", "INVALID_EXECUTION_INTENT_FINGERPRINT"),
         ("prompt_guidance", "INVALID_EXECUTION_INTENT_FINGERPRINT"),
         ("stage", "MALFORMED_DURABLE_V2_PAYLOAD"),
-        ("max_tokens", "INVALID_EXECUTION_INTENT_FINGERPRINT"),
-        ("max_web_searches", "INVALID_EXECUTION_INTENT_FINGERPRINT"),
+        ("max_tokens", "MALFORMED_DURABLE_V2_PAYLOAD"),
+        ("max_web_searches", "MALFORMED_DURABLE_V2_PAYLOAD"),
         ("timeout", "INVALID_EXECUTION_INTENT_FINGERPRINT"),
         ("cap", "INVALID_EXECUTION_INTENT_FINGERPRINT"),
         ("pricing", "INVALID_EXECUTION_INTENT_FINGERPRINT"),
@@ -553,7 +573,22 @@ def test_mutable_prompt_source_change_after_attempt_is_refused_before_fake_calle
         settings, dry_run=False, anthropic_api_key="test-only-key",
         pricing={key: 1.0 for key in REAL_PROVIDER_PRICING_KEYS},
     )
-    payload = _payload(real_settings, account, topic)
+    profile_id, pricing_path = write_approved_pricing_profile(
+        settings.project_root,
+        model=real_settings.model_quality,
+        prices=dict(real_settings.pricing),
+    )
+    pricing_profile = resolve_real_pricing_profile(
+        load_pricing_profiles(pricing_path),
+        profile_id=profile_id,
+        model=real_settings.model_quality,
+    )
+    payload = _payload(
+        real_settings,
+        account,
+        topic,
+        pricing_profile=pricing_profile,
+    )
     job = storage.enqueue_job(Job(
         id=f"prompt-source-{source}", account_id=account.id, kind=JobKind.RESEARCH,
         workflow=WorkflowType.RESEARCH, idempotency_key=f"prompt-source-{source}",
@@ -563,14 +598,13 @@ def test_mutable_prompt_source_change_after_attempt_is_refused_before_fake_calle
     lease = storage.claim_next_job(f"prompt-source-{source}", 120, now=NOW)
     assert lease is not None
     storage.mark_job_running(job.id, lease.lease_owner, now=NOW)
-    for key, value in {
-        "kill_switch": False,
-        "worker_enabled": True,
-        "safe_mode": False,
-        "paid_actions_enabled": True,
-        "browser_actions_enabled": False,
-    }.items():
-        storage.set_system_flag(key, value, updated_by="test", reason="prompt-source", now=NOW)
+    storage.apply_security_flag_profile([
+        ("worker_enabled", True),
+        ("safe_mode", False),
+        ("paid_actions_enabled", True),
+        ("browser_actions_enabled", False),
+        ("kill_switch", False),
+    ], updated_by="test", reason="prompt-source", now=NOW)
 
     original_begin = storage.begin_provider_attempt
 
@@ -616,6 +650,141 @@ def test_mutable_prompt_source_change_after_attempt_is_refused_before_fake_calle
     assert storage.conn.execute(
         "SELECT count(*) FROM provider_attempts WHERE job_id=?", (job.id,),
     ).fetchone()[0] == 1
+
+
+def test_dispatcher_rejects_changed_approved_pricing_before_client(
+    monkeypatch, storage, settings, account,
+):
+    from app.scheduler import dispatcher
+
+    storage.ensure_account(account)
+    topic = storage.add_topic(account.id, Topic(
+        account_id=account.id,
+        title="Pricing changed after enqueue",
+        question="Why?",
+        score=90.0,
+        status=TopicStatus.SELECTED,
+    ))
+    real = replace(
+        settings,
+        dry_run=False,
+        anthropic_api_key="offline-only",
+        pricing={key: 1.0 for key in REAL_PROVIDER_PRICING_KEYS},
+    )
+    profile_id, pricing_path = write_approved_pricing_profile(
+        real.project_root,
+        model=real.model_quality,
+        prices=dict(real.pricing),
+    )
+    profile = resolve_real_pricing_profile(
+        load_pricing_profiles(pricing_path),
+        profile_id=profile_id,
+        model=real.model_quality,
+    )
+    job = storage.enqueue_job(Job(
+        id="dispatcher-pricing-drift",
+        account_id=account.id,
+        kind=JobKind.RESEARCH,
+        workflow=WorkflowType.RESEARCH,
+        idempotency_key="dispatcher-pricing-drift",
+        topic_id=int(topic.id),
+        payload=_payload(real, account, topic, pricing_profile=profile),
+        schedule_reason="WITHIN_EDITORIAL_WINDOW",
+        earliest_run_at=NOW,
+        max_attempts=1,
+    ))
+    lease = storage.claim_next_job("dispatcher-pricing-drift", 120, now=NOW)
+    assert lease is not None
+    storage.mark_job_running(job.id, lease.lease_owner, now=NOW)
+    write_approved_pricing_profile(
+        real.project_root,
+        model=real.model_quality,
+        profile_id=profile_id,
+        version="changed-after-enqueue",
+        prices={key: 2.0 for key in REAL_PROVIDER_PRICING_KEYS},
+    )
+    monkeypatch.setattr(
+        dispatcher,
+        "AnthropicResearchClient",
+        lambda *_args, **_kwargs: pytest.fail(
+            "provider client must not be constructed"
+        ),
+    )
+    with pytest.raises(dispatcher.PayloadValidationError, match="not currently approved"):
+        dispatcher._run_durable_real_research(
+            account,
+            topic,
+            settings=real,
+            storage=storage,
+            policy=PolicyEngine(real, storage, FixedClock()),
+            clock=FixedClock(),
+            job_execution=ResearchJobExecution(
+                job_id=job.id,
+                lease_owner=lease.lease_owner,
+            ),
+        )
+
+
+def test_direct_storage_enqueue_with_unapproved_contract_cannot_reach_provider(
+    monkeypatch, storage, settings, account,
+):
+    from app.scheduler import dispatcher
+
+    storage.ensure_account(account)
+    topic = storage.add_topic(account.id, Topic(
+        account_id=account.id,
+        title="Direct internal enqueue",
+        question="Why?",
+        score=90.0,
+        status=TopicStatus.SELECTED,
+    ))
+    real = replace(
+        settings,
+        dry_run=False,
+        anthropic_api_key="offline-only",
+        pricing={key: 1.0 for key in REAL_PROVIDER_PRICING_KEYS},
+    )
+    write_approved_pricing_profile(
+        real.project_root,
+        model=real.model_quality,
+        profile_id="different-approved-profile",
+        prices=dict(real.pricing),
+    )
+    job = storage.enqueue_job(Job(
+        id="direct-unapproved-intent",
+        account_id=account.id,
+        kind=JobKind.RESEARCH,
+        workflow=WorkflowType.RESEARCH,
+        idempotency_key="direct-unapproved-intent",
+        topic_id=int(topic.id),
+        payload=_payload(real, account, topic),
+        schedule_reason="WITHIN_EDITORIAL_WINDOW",
+        earliest_run_at=NOW,
+        max_attempts=1,
+    ))
+    lease = storage.claim_next_job("direct-unapproved-intent", 120, now=NOW)
+    assert lease is not None
+    storage.mark_job_running(job.id, lease.lease_owner, now=NOW)
+    monkeypatch.setattr(
+        dispatcher,
+        "AnthropicResearchClient",
+        lambda *_args, **_kwargs: pytest.fail(
+            "provider client must not be constructed"
+        ),
+    )
+    with pytest.raises(dispatcher.PayloadValidationError, match="not currently approved"):
+        dispatcher._run_durable_real_research(
+            account,
+            topic,
+            settings=real,
+            storage=storage,
+            policy=PolicyEngine(real, storage, FixedClock()),
+            clock=FixedClock(),
+            job_execution=ResearchJobExecution(
+                job_id=job.id,
+                lease_owner=lease.lease_owner,
+            ),
+        )
 
 
 @pytest.mark.parametrize(

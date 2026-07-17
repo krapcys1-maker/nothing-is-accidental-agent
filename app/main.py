@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 import logging
 import math
+import os
+from pathlib import Path
 import sqlite3
 import sys
 from dataclasses import replace
@@ -311,9 +313,31 @@ def _cmd_operational_report(args: argparse.Namespace) -> int:
         print(f"OPERATIONAL REPORT: config error: {exc}", file=sys.stderr)
         return _REPORT_EXIT_CONFIG
     storage = None
+    controlled_live_marker = None
+    controlled_live_attempt_state = None
     try:
         storage = SqliteStorage.open_read_only(settings.db_path)
         report = storage.read_operational_report(clock=SystemClock())
+        from app.operations.controlled_live import read_session_marker
+
+        controlled_live_marker = read_session_marker(
+            settings.project_root / "runtime"
+        )
+        if controlled_live_marker is not None:
+            request_id = controlled_live_marker.get("expected_request_id")
+            if isinstance(request_id, str) and request_id:
+                row = storage.conn.execute(
+                    "SELECT status,request_started_at,request_id FROM provider_attempts "
+                    "WHERE request_id=?",
+                    (request_id,),
+                ).fetchone()
+                if row is not None:
+                    controlled_live_attempt_state = {
+                        "status": str(row["status"]),
+                        "request_id": str(row["request_id"]),
+                        "provider_request_started": row["request_started_at"]
+                        is not None,
+                    }
         closing, storage = storage, None
         closing.close()
     except (OSError, RuntimeError, sqlite3.Error, ValueError) as exc:
@@ -357,13 +381,188 @@ def _cmd_operational_report(args: argparse.Namespace) -> int:
             )
         print(f"system_flag.{key}={rendered}")
     print(f"last_maintenance_at={_operational_value(report.last_maintenance_at)}")
+    # LA-01-B: surface an unclosed controlled-live session (read-only filesystem
+    # marker).  The read-only report never forces flags; it makes the operator and
+    # the entrypoint aware that fail-closed must be forced before any provider work.
+    controlled_live_recovery = False
+    if controlled_live_marker is not None:
+        controlled_live_recovery = True
+        print(
+            "controlled_live_session=RECOVERY_REQUIRED "
+            f"(session={controlled_live_marker.get('session_id')}, "
+            f"status={controlled_live_marker.get('status')})"
+        )
+        if controlled_live_attempt_state is not None:
+            print(
+                "controlled_live_provider_attempt="
+                f"{controlled_live_attempt_state['status']} "
+                "provider_request_started="
+                f"{str(controlled_live_attempt_state['provider_request_started']).lower()}"
+            )
+        else:
+            print("controlled_live_provider_attempt=none_or_unknown")
+    else:
+        print("controlled_live_session=none")
     if report.unknown_reasons:
         for reason in report.unknown_reasons:
             print(f"unknown_reason={reason}")
         print("REPORT_STATUS=DEGRADED_UNKNOWN")
         return _REPORT_EXIT_DEGRADED
+    if controlled_live_recovery:
+        print("REPORT_STATUS=DEGRADED_CONTROLLED_LIVE_RECOVERY")
+        return _REPORT_EXIT_DEGRADED
     print("REPORT_STATUS=OK")
     return _REPORT_EXIT_OK
+
+
+def _cmd_controlled_live_once(args: argparse.Namespace) -> int:
+    """Canonical composition root for one fenced controlled-live session."""
+    from app.operations.controlled_live import (
+        CanonicalControlledWorkerAdapter,
+        ControlledLiveRequest,
+        DbFingerprint,
+        DeterministicFakeControlledWorkerAdapter,
+        REAL_CONTROLLED_LIVE_ENABLED,
+        default_quiescence_probe,
+        run_controlled_live_once,
+    )
+
+    settings = load_settings()
+    fake_mode = (
+        os.environ.get("NIA_TEST_MODE") == "1"
+        and os.environ.get("NIA_CONTROLLED_LIVE_FAKE") == "1"
+    )
+    runtime_dir = settings.project_root / "runtime"
+    if fake_mode:
+        test_db = os.environ.get("NIA_CONTROLLED_LIVE_TEST_DB_PATH")
+        test_runtime = os.environ.get("NIA_CONTROLLED_LIVE_TEST_RUNTIME_DIR")
+        if not test_db or not test_runtime:
+            print(
+                "CONTROLLED-LIVE-ONCE: fake gate requires temporary DB and runtime paths.",
+                file=sys.stderr,
+            )
+            return 2
+        protected = (settings.project_root / "data" / "agent.db").resolve()
+        if Path(test_db).resolve() == protected:
+            print(
+                "CONTROLLED-LIVE-ONCE: fake gate refuses the production database.",
+                file=sys.stderr,
+            )
+            return 2
+        settings = replace(
+            settings,
+            db_path=Path(test_db),
+            model_quality=args.model,
+            dry_run=False,
+        )
+        runtime_dir = Path(test_runtime)
+
+    request = ControlledLiveRequest(
+        account_id=args.account,
+        topic_id=args.topic_id,
+        operation_key=args.operation_key,
+        model=args.model,
+        pricing_profile_id=args.pricing_profile,
+        max_tokens=args.max_tokens,
+        max_web_searches=args.max_web_searches,
+        max_cost_usd=args.max_cost_usd,
+        expected_db_sha256=args.expected_db_sha,
+        expected_schema=args.expected_schema,
+        expected_branch=args.expected_branch,
+        expected_head=args.expected_head,
+        max_attempts=args.max_attempts,
+        max_retries=args.max_retries,
+    )
+    storage = SqliteStorage.open(settings.db_path)
+    clock = SystemClock()
+    policy = PolicyEngine(settings, storage, clock)
+
+    if fake_mode:
+        worker_adapter = DeterministicFakeControlledWorkerAdapter(
+            storage=storage,
+            settings=settings,
+            clock=clock,
+        )
+        quiescence = lambda: {
+            "project_process_ids": (),
+            "scheduled_tasks": (),
+            "locked_paths": (),
+        }
+        database_fingerprint = lambda _path: DbFingerprint(
+            sha256=args.expected_db_sha,
+            size=Path(settings.db_path).stat().st_size,
+            schema_tail=args.expected_schema,
+        )
+    else:
+        from app.scheduler.dispatcher import JobDispatcher
+        from app.scheduler.worker import Worker
+
+        dispatcher = JobDispatcher(
+            settings=settings,
+            storage=storage,
+            policy=policy,
+            clock=clock,
+            allow_real_research=True,
+        )
+
+        def worker_factory(lease_owner: str):
+            return Worker(
+                storage=storage,
+                policy=policy,
+                dispatcher=dispatcher,
+                lease_owner=lease_owner,
+                lease_seconds=60,
+                heartbeat_interval_seconds=20.0,
+                heartbeat_startup_timeout_seconds=5.0,
+                heartbeat_shutdown_timeout_seconds=5.0,
+                heartbeat_storage_factory=lambda: SqliteStorage.open(
+                    settings.db_path
+                ),
+                clock=clock,
+            )
+
+        worker_adapter = CanonicalControlledWorkerAdapter(
+            storage=storage,
+            worker_factory=worker_factory,
+        )
+        quiescence = lambda: default_quiescence_probe(
+            settings.project_root,
+            settings.db_path,
+        )
+        database_fingerprint = None
+
+    try:
+        kwargs = {}
+        if database_fingerprint is not None:
+            kwargs["db_fingerprint"] = database_fingerprint
+        outcome = run_controlled_live_once(
+            request,
+            settings=settings,
+            storage=storage,
+            storage_reopener=lambda: SqliteStorage.open(settings.db_path),
+            project_root=settings.project_root,
+            runtime_dir=runtime_dir,
+            worker_runner=worker_adapter,
+            quiescence_probe=quiescence,
+            clock=clock,
+            allow_execution=fake_mode or REAL_CONTROLLED_LIVE_ENABLED,
+            allow_job_creation=fake_mode,
+            **kwargs,
+        )
+    finally:
+        try:
+            storage.close()
+        except (OSError, RuntimeError, sqlite3.Error):
+            pass
+    print(
+        f"CONTROLLED-LIVE-ONCE: {outcome.status} "
+        f"session={outcome.session_id}"
+    )
+    if outcome.report_path is not None:
+        print(f"operator_report={outcome.report_path}")
+    if outcome.detail:
+        print(outcome.detail)
+    return outcome.exit_code
 
 
 def _cmd_list_reconciliations(args: argparse.Namespace) -> int:
@@ -607,6 +806,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Read-only Stage 1 status report; never migrates, claims, dispatches or loads an SDK.",
     )
     p_operational_report.set_defaults(func=_cmd_operational_report)
+
+    p_controlled_live = sub.add_parser(
+        "controlled-live-once",
+        help="LA-01 candidate: canonical operator wrapper for exactly one controlled live "
+             "acceptance. Real execution is not yet authorized (fail-closed).",
+    )
+    p_controlled_live.add_argument("--account", default=DEFAULT_ACCOUNT)
+    p_controlled_live.add_argument("--topic-id", type=int, required=True)
+    p_controlled_live.add_argument("--operation-key", required=True)
+    p_controlled_live.add_argument("--model", required=True)
+    p_controlled_live.add_argument("--pricing-profile", required=True)
+    p_controlled_live.add_argument("--max-tokens", type=int, required=True)
+    p_controlled_live.add_argument("--max-web-searches", type=int, default=4)
+    p_controlled_live.add_argument("--max-cost-usd", required=True)
+    p_controlled_live.add_argument("--expected-db-sha", required=True)
+    p_controlled_live.add_argument("--expected-schema", required=True)
+    p_controlled_live.add_argument("--expected-branch", required=True)
+    p_controlled_live.add_argument("--expected-head", required=True)
+    p_controlled_live.add_argument("--max-attempts", type=int, default=1)
+    p_controlled_live.add_argument("--max-retries", type=int, default=0)
+    p_controlled_live.set_defaults(func=_cmd_controlled_live_once)
 
     p_reconcile = sub.add_parser(
         "reconcile-attempt", help="Resolve one persisted NEEDS_RECONCILIATION attempt without a provider call.",

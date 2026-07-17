@@ -44,14 +44,13 @@ NOW = datetime(2026, 7, 16, 10, 0, tzinfo=timezone.utc)
 
 
 def _enable_worker(storage: SqliteStorage) -> None:
-    for key, value in {
-        "kill_switch": False,
-        "worker_enabled": True,
-        "safe_mode": False,
-        "paid_actions_enabled": False,
-        "browser_actions_enabled": False,
-    }.items():
-        storage.set_system_flag(key, value, updated_by="test", reason="offline", now=NOW)
+    storage.apply_security_flag_profile([
+        ("worker_enabled", True),
+        ("safe_mode", False),
+        ("paid_actions_enabled", False),
+        ("browser_actions_enabled", False),
+        ("kill_switch", False),
+    ], updated_by="test", reason="offline", now=NOW)
 
 
 def _enqueue_durable_job(storage: SqliteStorage, account, suffix: str) -> Job:
@@ -862,7 +861,10 @@ def test_fingerprint_mismatch_stays_visible_reserved_and_resolver_fail_closed(
     assert storage.preview_provider_attempt_reconciliation(
         request_id=attempt.request_id, account_id=account.id,
     ).reservation_active
-    with pytest.raises(ProviderAttemptReconciliationError, match="fingerprint"):
+    with pytest.raises(
+        ProviderAttemptReconciliationError,
+        match="fingerprint|identity",
+    ):
         storage.resolve_provider_attempt_reconciliation(
             request_id=attempt.request_id,
             account_id=account.id,

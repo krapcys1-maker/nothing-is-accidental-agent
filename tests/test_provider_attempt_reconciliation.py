@@ -262,7 +262,10 @@ def test_tampered_execution_intent_fingerprint_fails_closed_before_usage(storage
         "UPDATE jobs SET payload_json=? WHERE id=?", (json.dumps(payload), row["job_id"]),
     )
     storage.conn.commit()
-    with pytest.raises(ProviderAttemptReconciliationError, match="fingerprint"):
+    with pytest.raises(
+        ProviderAttemptReconciliationError,
+        match="fingerprint|identity",
+    ):
         storage.resolve_provider_attempt_reconciliation(
             request_id=request_id, account_id=account.id,
             financial_resolution=FinancialResolution.CHARGED_KNOWN,

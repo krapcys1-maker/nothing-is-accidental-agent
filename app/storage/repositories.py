@@ -1024,7 +1024,9 @@ class SqliteStorage:
     ) -> None:
         try:
             self.conn.execute("BEGIN IMMEDIATE")
-            current_ts = _persisted_ts(self._job_now(now, clock=clock))
+            current_ts = _persisted_ts(
+                self._job_now(now, clock=None if now is not None else clock)
+            )
             cursor = self.conn.execute(
                 "UPDATE jobs SET status='RUNNING', updated_at=? WHERE id=? AND status='LEASED' "
                 "AND lease_owner=? AND lease_expires_at >= ?",
@@ -3271,6 +3273,167 @@ class SqliteStorage:
                 self.conn.rollback()
             raise
 
+    def recover_controlled_live_session(
+        self,
+        *,
+        expected_job_id: str,
+        expected_request_id: str,
+        now: datetime | None = None,
+        clock: Clock | None = None,
+    ) -> dict[str, object]:
+        """Durably fence one interrupted controlled-live execution.
+
+        The marker is the authorization for this narrowly scoped recovery.  A
+        live/queued job becomes NEEDS_VERIFICATION, its lease is cleared, and a
+        RESERVED/REQUEST_STARTED attempt becomes NEEDS_RECONCILIATION with an
+        append-only AUTO_ESCALATION event.  No provider or retry path exists here.
+        """
+        if not expected_job_id.strip() or not expected_request_id.strip():
+            raise ValueError("Controlled-live recovery requires expected job/request ids.")
+        result: dict[str, object] = {
+            "job_found": False,
+            "job_status": None,
+            "attempt_found": False,
+            "attempt_status": None,
+            "provider_request_started": False,
+            "possible_unknown_provider_outcome": False,
+            "reconciliation_required": False,
+            "retry_performed": False,
+        }
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = _persisted_ts(
+                self._job_now(now, clock=None if now is not None else clock)
+            )
+            job = self.conn.execute(
+                "SELECT id,status FROM jobs WHERE id=?",
+                (expected_job_id,),
+            ).fetchone()
+            if job is not None:
+                result["job_found"] = True
+                if job["status"] in (
+                    JobStatus.QUEUED.value,
+                    JobStatus.LEASED.value,
+                    JobStatus.RUNNING.value,
+                ):
+                    cursor = self.conn.execute(
+                        "UPDATE jobs SET status='NEEDS_VERIFICATION',"
+                        "lease_owner=NULL,lease_expires_at=NULL,last_error=?,updated_at=? "
+                        "WHERE id=? AND status IN ('QUEUED','LEASED','RUNNING')",
+                        (
+                            "CONTROLLED_LIVE_SESSION_INTERRUPTED",
+                            current_ts,
+                            expected_job_id,
+                        ),
+                    )
+                    if cursor.rowcount != 1:
+                        raise JobRunRelationError(
+                            "CONTROLLED_LIVE_RECOVERY_FENCE_LOST",
+                            expected_job_id,
+                            "controlled-live recovery lost its job compare-and-swap.",
+                        )
+
+            attempts = self.conn.execute(
+                "SELECT * FROM provider_attempts WHERE job_id=? ORDER BY attempt_no",
+                (expected_job_id,),
+            ).fetchall()
+            if len(attempts) > 1:
+                raise JobRunRelationError(
+                    "CONTROLLED_LIVE_MULTIPLE_ATTEMPTS",
+                    expected_job_id,
+                    "controlled-live recovery found more than one provider attempt.",
+                )
+            attempt = attempts[0] if attempts else None
+            if attempt is not None:
+                if attempt["request_id"] != expected_request_id or int(attempt["attempt_no"]) != 1:
+                    raise JobRunRelationError(
+                        "CONTROLLED_LIVE_REQUEST_OWNERSHIP_MISMATCH",
+                        expected_job_id,
+                        "controlled-live recovery found a foreign request identity.",
+                    )
+                result["attempt_found"] = True
+                original_status = str(attempt["status"])
+                provider_started = attempt["request_started_at"] is not None
+                result["provider_request_started"] = provider_started
+                result["possible_unknown_provider_outcome"] = (
+                    original_status
+                    in (
+                        ProviderAttemptStatus.REQUEST_STARTED.value,
+                        ProviderAttemptStatus.NEEDS_RECONCILIATION.value,
+                    )
+                    and provider_started
+                )
+                if original_status in (
+                    ProviderAttemptStatus.RESERVED.value,
+                    ProviderAttemptStatus.REQUEST_STARTED.value,
+                ):
+                    reason = (
+                        _LEASE_EXPIRED_AFTER_REQUEST_STARTED
+                        if provider_started
+                        else _LEASE_EXPIRED_BEFORE_REQUEST_STARTED
+                    )
+                    cursor = self.conn.execute(
+                        "UPDATE provider_attempts SET status='NEEDS_RECONCILIATION',"
+                        "error_code=? WHERE request_id=? AND status=?",
+                        (reason, expected_request_id, original_status),
+                    )
+                    if cursor.rowcount != 1:
+                        raise ProviderAttemptReconciliationError(
+                            "Controlled-live recovery lost its attempt compare-and-swap."
+                        )
+                    operator = "controlled-live-recovery"
+                    note = (
+                        "Controlled-live recovery: provider request boundary was crossed; "
+                        "the financial outcome may be unknown."
+                        if provider_started
+                        else
+                        "Controlled-live recovery: the reserved attempt did not cross the "
+                        "provider request boundary."
+                    )
+                    financial = (
+                        FinancialResolution.CHARGE_UNKNOWN
+                        if provider_started
+                        else FinancialResolution.NOT_CHARGED
+                    )
+                    self._append_reconciliation_event(
+                        request_id=expected_request_id,
+                        event_type=ReconciliationEventType.AUTO_ESCALATION,
+                        financial_resolution=financial,
+                        execution_resolution=ExecutionResolution.MANUAL_REVIEW_REMAINS_REQUIRED,
+                        operator=operator,
+                        note=note,
+                        previous_status=original_status,
+                        resulting_status=ProviderAttemptStatus.NEEDS_RECONCILIATION.value,
+                        idempotency_key=self._reconciliation_idempotency_key(
+                            expected_request_id,
+                            financial,
+                            ExecutionResolution.MANUAL_REVIEW_REMAINS_REQUIRED,
+                            operator,
+                            note,
+                            "CONTROLLED_LIVE_RECOVERY",
+                        ),
+                        created_at=current_ts,
+                    )
+                    result["attempt_status"] = ProviderAttemptStatus.NEEDS_RECONCILIATION.value
+                    result["reconciliation_required"] = True
+                else:
+                    result["attempt_status"] = original_status
+                    result["reconciliation_required"] = (
+                        original_status
+                        == ProviderAttemptStatus.NEEDS_RECONCILIATION.value
+                    )
+            refreshed = self.conn.execute(
+                "SELECT status FROM jobs WHERE id=?",
+                (expected_job_id,),
+            ).fetchone()
+            result["job_status"] = None if refreshed is None else str(refreshed["status"])
+            self.conn.commit()
+            return result
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
     def reap_orphaned_stale_runs(
         self, stale_before: datetime, *, now: datetime | None = None,
         clock: Clock | None = None,
@@ -3839,6 +4002,11 @@ class SqliteStorage:
     ) -> SystemFlag:
         if not key.strip() or not isinstance(value, bool):
             raise SystemFlagError("System flag key must be non-empty and value must be boolean.")
+        if key in SECURITY_FLAG_DEFAULTS and value != SECURITY_FLAG_DEFAULTS[key]:
+            raise SystemFlagError(
+                "A single system-flag setter may only move a security flag fail-closed; "
+                "opening requires apply_security_flag_profile with all five flags."
+            )
         current_ts = _persisted_ts(self._job_now(now))
         try:
             self.conn.execute("BEGIN IMMEDIATE")
@@ -3856,6 +4024,65 @@ class SqliteStorage:
         flag = self.get_system_flag(key)
         assert flag is not None
         return flag
+
+    def apply_security_flag_profile(
+        self, ordered_updates: list[tuple[str, bool]], *,
+        updated_by: str | None = None, reason: str | None = None,
+        now: datetime | None = None,
+    ) -> dict[str, bool]:
+        """Set a full security-flag profile atomically, in the caller's order.
+
+        One ``BEGIN IMMEDIATE`` covers every write, so a crash cannot leave the
+        profile half-applied within this call.  The order is honoured only for the
+        durable write sequence; on success every listed flag is committed together.
+        """
+        if len(ordered_updates) != len(SECURITY_FLAG_DEFAULTS):
+            raise SystemFlagError("Security flag profile requires all five flags.")
+        seen: set[str] = set()
+        for key, value in ordered_updates:
+            if not isinstance(key, str) or not key.strip():
+                raise SystemFlagError("Security flag key must be a non-empty string.")
+            if key not in SECURITY_FLAG_DEFAULTS:
+                raise SystemFlagError(f"Unknown security flag {key!r}; refusing to write.")
+            if not isinstance(value, bool):
+                raise SystemFlagError(f"Security flag {key!r} value must be boolean.")
+            if key in seen:
+                raise SystemFlagError(f"Security flag {key!r} appears twice in the profile.")
+            seen.add(key)
+        if seen != set(SECURITY_FLAG_DEFAULTS):
+            raise SystemFlagError(
+                "Security flag profile must contain exactly the canonical five flags."
+            )
+        profile = dict(ordered_updates)
+        kill_index = next(
+            index for index, (key, _value) in enumerate(ordered_updates)
+            if key == "kill_switch"
+        )
+        if profile["kill_switch"] is True and kill_index != 0:
+            raise SystemFlagError(
+                "Closing profile must write kill_switch first."
+            )
+        if profile["kill_switch"] is False and kill_index != len(ordered_updates) - 1:
+            raise SystemFlagError(
+                "Opening profile must write kill_switch last."
+            )
+        current_ts = _persisted_ts(self._job_now(now))
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            for key, value in ordered_updates:
+                self.conn.execute(
+                    "INSERT INTO system_flags(key,value_json,updated_at,updated_by,reason) "
+                    "VALUES (?,?,?,?,?) ON CONFLICT(key) DO UPDATE SET "
+                    "value_json=excluded.value_json, updated_at=excluded.updated_at, "
+                    "updated_by=excluded.updated_by, reason=excluded.reason",
+                    (key, json.dumps(value), current_ts, updated_by, reason),
+                )
+            self.conn.commit()
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+        return {key: value for key, value in ordered_updates}
 
     # --- research cards + źródła ---
     def add_research_card(self, card: ResearchCard) -> ResearchCard:

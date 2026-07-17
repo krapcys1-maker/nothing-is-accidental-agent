@@ -1,6 +1,6 @@
 # Etap 1 — operacje lokalne, scheduler i migracja produkcyjna
 
-Status: **`POST-MIGRATION REVIEW — APPROVE WITH MINOR/P2`; QP-01 = `APPROVED`; produkcja = `VERIFIED / SCHEMA 0014`; nowy baseline = `VERIFIED`.** Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`. Live API jest zabronione. Ten dokument nie jest zgodą na rejestrację zadań systemowych, ponowną migrację ani wywołanie providera.
+Status: **`POST-MIGRATION REVIEW — APPROVE WITH MINOR/P2`; QP-01 = `APPROVED`; produkcja = `VERIFIED / SCHEMA 0014`; nowy baseline = `VERIFIED`; pierwsza LA-01 = `REJECTED — MAJOR`; LA-01-R1 = `APPROVED WITH MINOR/P2 — CHECKPOINT AUTHORIZED`.** Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`. Live API jest zabronione. Ten dokument nie jest zgodą na rejestrację zadań systemowych, ponowną migrację ani wywołanie providera.
 
 ## Minimalny Windows Task Scheduler
 
@@ -68,7 +68,7 @@ Exit codes: 0 = kompletny raport bez UNKNOWN; 2 = raport odczytany, ale zdegrado
 
 ## Kontrolowana migracja produkcyjnej bazy `0009→0014`
 
-Stan obowiązujący po pierwszej próbie z 2026-07-16:
+Historyczny stan bezpośrednio po pierwszej, później cofniętej próbie z 2026-07-16 (nie jest stanem bieżącym):
 
 - pierwsza migracja była technicznie poprawna: kanoniczny runner zastosował dokładnie `0010`–`0014`, a wszystkie kontrole schematu, danych, kosztu, triggerów i flag przeszły;
 - rollback uruchomił wyłącznie niezamówiony warunek `WAL=ABSENT` i `SHM=ABSENT`; kontrolowany odczyt SQLite prawidłowo pozostawił pusty WAL i SHM;
@@ -227,3 +227,21 @@ Backup, report i baseline znajdują się poza repozytorium w `C:\Users\user\Desk
 Właściciel dostarczył ukończony niezależny review bazowego HEAD `ddc3c63190eb82bca171174dc7ee70c2d0a1ec15`. Reviewer nie modyfikował repozytorium. Werdykt `APPROVE WITH MINOR/P2` potwierdził QP-01, schema `0014`, baseline `630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6`, 14 migracji, 35/35 triggerów, 13 legacy proofs, 18 zgodnych digestów historycznych, `integrity_check=ok`, pusty `foreign_key_check`, koszt `0.684580` USD oraz 0/0/0 jobs/provider attempts/reconciliation events.
 
 Review obejmował 13/13 testów implementera QP-01, 23/23 niezależne kontrpróby, pełny suite 1079/1079 i partycje 259+264+277+279. Checkpoint jest autoryzowany po wykluczeniu chronionych zmian użytkownika. Review nie zamyka Etapu 1, nie zezwala na live API i nie jest zgodą na ponowną migrację ani rejestrację Windows Tasks.
+
+## WAVE LA-01-R1 — kanoniczny operator controlled live acceptance (2026-07-17)
+
+Pierwsza LA-01 została odrzucona przez niezależny review (`REJECTED — MAJOR`, P1-01…P1-06, P2-01…P2-04). LA-01-R1 przeszła niezależny review z wynikiem `APPROVE WITH MINOR/P2`; wszystkie P1 są zamknięte, a checkpoint jest dozwolony. **Realne wykonanie pozostaje zablokowane** (`REAL_CONTROLLED_LIVE_ENABLED=false`); `controlled-live-once` odmawia przed otwarciem profilu i nie woła API.
+
+Kanoniczny entrypoint przyszłego, osobno autoryzowanego użycia: `python -m app.main controlled-live-once --account ... --topic-id N --operation-key K --model M --pricing-profile PID --max-tokens T --max-web-searches W --max-cost-usd C --expected-db-sha SHA --expected-schema 0014 --expected-branch BRANCH --expected-head HEAD --max-attempts 1 --max-retries 0`.
+
+Przed uruchomieniem realnego wrappera job musi zostać wcześniej utrwalony wyłącznie przez `scripts/run_capped_research.py --real` z tym samym operation key i zatwierdzonym profilem. Enqueue zapisuje pełny `controlled_session`, a wrapper przez ten sam deterministyczny helper wyprowadza identyczne job/request/attempt/fence i wymaga dokładnego porównania. Wrapper realny nie tworzy joba. Automatyczne utworzenie joba istnieje wyłącznie w procesie z obiema zmiennymi `NIA_TEST_MODE=1` i `NIA_CONTROLLED_LIVE_FAKE=1`, na jawnej tymczasowej bazie różnej od `data/agent.db`.
+
+Sekwencja: trwały marker O_EXCL + fsync → preflight i recheck (branch/HEAD/schema/DB SHA, zatwierdzony quiescence probe, brak procesów/tasków/uchwytów/lease/rezerwacji, dokładnie jeden expected claimable job, `earliest_run_at≤now`, `max_attempts=1`, `max_retries=0`) → pełne porównanie frozen pricing contract → atomowe otwarcie pełnego profilu pięciu flag (`kill_switch` OSTATNI) → jeden worker z trwałym session/job/request/attempt/token fence → bezwarunkowe restoration (`kill_switch` PIERWSZY) → zamknięcie storage i nowe połączenie → walidacja job/run/research_run/attempt/usage/settlement/lease/rezerwacji → sanitizacja → trwały raport + fsync → dopiero potem unlink markera + fsync katalogu.
+
+Sukces wymaga zgodnego expected joba, requestu, attemptu #1, execution fence, dokładnie jednego `SETTLED`, jednego canonical usage, zgodnego settlementu, terminalnych stanów i braku lease/rezerwacji. Sam tekst `SUCCEEDED` nie wystarcza. Brak raportu, błąd report write, błąd marker clear, brak usage/settlement, attempt #2 albo obcy wynik dają niezerowy exit i brak formalnego `COMPLETED`.
+
+Recovery odczytuje trwały `provider_attempt` i `request_started_at`. `REQUEST_STARTED` jest raportowany jako możliwy unknown provider outcome, eskalowany do `NEEDS_RECONCILIATION` bez retry; marker jest usuwany dopiero po trwałym raporcie recovery. `operational-report` pozostaje read-only.
+
+Autorytatywny cennik: przed realnym enqueue właściciel musi ręcznie wpisać zweryfikowane ceny do nieśledzonego `config/pricing_profiles.yaml`, oznaczyć `status: approved`, podać niepuste `approved_by`, wersję, model, walutę i jednostki, oraz wskazać profil przez `--pricing-profile`. Ceny są parsowane jako `Decimal` i nie są pobierane z internetu. `.env` ani ambient `settings.pricing` nie autoryzują realnej projekcji.
+
+Dowód zatwierdzony przez review: `1151/1151` offline, exact-once `275+282+291+303`, zero live API, sieci i kosztu. Open P2: nieosiągalny fallback `sanitize_report_payload` powinien rekurencyjnie sanitizować `str(value)`; rekomendacja jest nieblokująca i nie jest częścią tego checkpointu. Controlled live acceptance nie został wykonany.

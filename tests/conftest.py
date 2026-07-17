@@ -28,6 +28,34 @@ STANDARD_WEIGHTS = {
 }
 
 
+def write_approved_pricing_profile(
+    project_root: Path, *, model: str, profile_id: str = "test-approved-profile",
+    version: str = "test-2026-01-01", status: str = "approved",
+    prices: dict | None = None,
+) -> tuple[str, Path]:
+    """Write an authoritative pricing_profiles.yaml under a temp project root (LA-01-A).
+
+    Offline helper only: real prices stay the owner's responsibility. Values here
+    are deterministic test placeholders written into ``tmp_path`` config.
+    """
+    import yaml
+
+    config_dir = project_root / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    path = config_dir / "pricing_profiles.yaml"
+    resolved_prices = prices if prices is not None else {
+        "input_per_mtok": 3.0, "output_per_mtok": 15.0, "cache_read_per_mtok": 0.3,
+        "cache_write_per_mtok": 3.75, "web_search_per_1k": 10.0,
+    }
+    document = {"version": 1, "profiles": [{
+        "profile_id": profile_id, "version": version, "model": model,
+        "currency": "USD", "unit": "usd_per_mtok__web_search_per_1k",
+        "status": status, "approved_by": "test-owner", "prices": resolved_prices,
+    }]}
+    path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+    return profile_id, path
+
+
 def make_account(active: bool = True) -> Account:
     return Account(
         id="nothing_is_accidental",

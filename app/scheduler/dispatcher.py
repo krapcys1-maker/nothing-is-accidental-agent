@@ -7,6 +7,13 @@ from typing import Callable, Protocol
 
 from app.core.clock import Clock, SystemClock
 from app.core.config import ConfigError, Settings, require_valid_real_provider_pricing
+from app.core.pricing import (
+    PricingConfigError,
+    assert_frozen_pricing_contract,
+    default_pricing_profiles_path,
+    load_pricing_profiles,
+    resolve_real_pricing_profile,
+)
 from app.llm.usage_tracker import UsageTracker
 from app.models import Account, Job, JobKind, ResearchJobExecution, Topic, WorkflowType
 from app.orchestrator.runner import run_research_dry_run
@@ -131,6 +138,29 @@ def _run_durable_real_research(
 ) -> ResearchRunSummary:
     """The paid execution root accepts only an already leased durable job."""
     intent = _durable_job_intent(storage, job_execution.job_id)
+    try:
+        profiles = load_pricing_profiles(
+            default_pricing_profiles_path(settings.project_root)
+        )
+        approved = resolve_real_pricing_profile(
+            profiles,
+            profile_id=intent.pricing_profile_id,
+            model=intent.model,
+        )
+        assert_frozen_pricing_contract(
+            profile=approved,
+            profile_id=intent.pricing_profile_id,
+            version=intent.pricing_profile_version,
+            model=intent.model,
+            currency=intent.pricing_currency,
+            unit=intent.pricing_unit,
+            prices=intent.pricing_profile,
+            fingerprint=intent.pricing_fingerprint,
+        )
+    except PricingConfigError as exc:
+        raise PayloadValidationError(
+            "Durable real research pricing contract is not currently approved."
+        ) from exc
     real_settings = replace(
         settings,
         dry_run=False,
@@ -229,7 +259,7 @@ class JobDispatcher:
                 "SYSTEM_SCHEDULER_OFFLINE_ONLY",
                 "The system-scheduled worker cannot execute paid research.",
             ))
-        topic, is_real = self._validate_research_payload(job)
+        topic, is_real = self._validate_research_payload(job, lease_owner=lease_owner)
 
         # A checkpoint before entering the existing pipeline keeps a long lease
         # alive without a second, competing heartbeat implementation.
@@ -266,7 +296,9 @@ class JobDispatcher:
     # real request and can be removed with the legacy dry-only test harness.
     _dispatch_research_dry_run = _dispatch_research
 
-    def _validate_research_payload(self, job: Job) -> tuple[Topic, bool]:
+    def _validate_research_payload(
+        self, job: Job, *, lease_owner: str | None = None,
+    ) -> tuple[Topic, bool]:
         if job.workflow is not WorkflowType.RESEARCH:
             raise UnsupportedJobError("RESEARCH jobs support only the RESEARCH workflow.")
         if job.topic_id is None:
@@ -278,7 +310,8 @@ class JobDispatcher:
             "account_id", "topic_id", "dry_run", "execution", "mode", "max_cost_usd",
             "execution_intent",
         }
-        if set(job.payload) not in (dry_keys, real_keys):
+        controlled_real_keys = real_keys | {"controlled_session"}
+        if set(job.payload) not in (dry_keys, real_keys, controlled_real_keys):
             raise PayloadValidationError("RESEARCH payload contains unsupported fields.")
         if job.payload["account_id"] != job.account_id or job.payload["topic_id"] != job.topic_id:
             raise PayloadValidationError("RESEARCH payload account_id/topic_id must match the job.")
@@ -299,6 +332,16 @@ class JobDispatcher:
                 raise PayloadValidationError("RESEARCH real payload intent is invalid.") from exc
             if intent.account_id != job.account_id or intent.topic_id != job.topic_id:
                 raise PayloadValidationError("RESEARCH real payload intent does not match job identity.")
+            controlled = normalized.get("controlled_session")
+            if controlled is not None:
+                assert isinstance(controlled, dict)
+                if (
+                    controlled["expected_job_id"] != job.id
+                    or controlled["worker_execution_token"] != lease_owner
+                ):
+                    raise PayloadValidationError(
+                        "Controlled-live session fence does not own this worker execution."
+                    )
         topic = next(
             (candidate for candidate in self._storage.list_topics(job.account_id)
              if candidate.id == job.topic_id),

@@ -324,3 +324,16 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co powinien pokazać:** zanonimizowany terminal z collect/full **894**, partycjami **213+224+231+226**, `PARTITION COVERAGE OK`, `compileall` i `git diff --check`; raport granic `2×`/`3×0.0000005`, `0.1+0.2` wobec `0.3` w policy/ledgerze/CLI, settlement ±1 mikro-USD oraz statyczną asercję braku konstruktora klienta w helperach resume. Opis wymienia 13 migracji, `durable_research_intent_v2`, jeden `max_tokens` dla estimate/rezerwacji/callera, `NEEDS_RECONCILIATION` po nadwyżce, WAVE 0B `CANDIDATE`, Etap 1 `BLOCKED` i live API `ZABRONIONE`.
 - **Czego nie może pokazać:** `.env`, kluczy, danych `data/agent.db`, raw provider response, prywatnych ścieżek ani danych konta zewnętrznego.
 - **Dlaczego nie utworzono teraz:** zakres był offline-only; dowodem są fake callery, tymczasowe SQLite i read-only hash/integrity baselineu.
+
+## 2026-07-17 — LA-01-R1 po `REJECTED — MAJOR`
+
+- **Status:** `SCREENSHOT REQUIRED` dopiero po niezależnym review; w tej fali nie tworzono obrazu.
+- **Co powinien pokazać:** zanonimizowany terminal z `1151 passed`, `PARTITION COVERAGE OK: 1151`, partycjami `275+282+291+303`, `compileall` i `git diff --check`; obok syntetyczny raport fake controlled session z `COMPLETED_FAIL_CLOSED`, jednym attemptem/usage/settlementem, usuniętym markerem i redacted prompt/sekretem.
+- **Czego nie może pokazać:** `.env`, API keys, Authorization, promptu, provider payloadu, zawartości `data/agent.db`, chronionych instrukcji pisania ani prywatnych ścieżek.
+- **Dlaczego nie utworzono:** wymagany zakres zakazywał browsera i używał wyłącznie fake workera oraz baz tymczasowych. Dowodem są deterministyczne testy i fingerprinty; realny live acceptance nie został wykonany.
+
+## 2026-07-17 — Checkpoint LA-01-R1 po `APPROVE WITH MINOR/P2`
+
+- **Status:** `SCREENSHOT REQUIRED` po pushu; w bieżącym checkpointcie nie tworzono obrazu.
+- **Co powinien pokazać:** zanonimizowany `git show --name-status --format=fuller`, upstream `0/0`, staging pusty, prywatny blok BUILD_LOG i katalog instrukcji pozostające lokalnie oraz niezmienione fingerprinty DB/WAL/SHM.
+- **Czego nie może pokazać:** remote URL z credentialami, `.env`, kluczy, zawartości produkcyjnej bazy, promptów, chronionych instrukcji ani prywatnego bloku użytkownika.

@@ -1,5 +1,7 @@
 # 06 — DECYZJE PROJEKTOWE
 
+> **Stan bieżący LA-01-R1 (2026-07-17):** pierwsza LA-01 = `REJECTED — MAJOR`; LA-01-R1 = `APPROVED WITH MINOR/P2 — CHECKPOINT AUTHORIZED`. Wybrano pełny frozen pricing contract (`Decimal`), trwałe session/job/request/attempt/token fencing, raport przed marker clear, recovery bez retry, prawdziwy reopen i wyłącznie pełny atomowy profil pięciu flag. Open P2 rekurencyjnej sanitizacji fallbacku jest jawny, nieblokujący i nie jest dokładany do reviewed diffu. Bieżący dowód to **1151/1151**, schema produkcji `0014`, 14 migracji. Live API i controlled acceptance niewykonane; Etap 1 otwarty.
+
 ### D-67: Durable provider attempt ma pierwszeństwo przed workerowym fallbackiem (→ ADR-067)
 
 - **Problem:** Worker potrafił obsłużyć lokalny wyjątek przez terminalne `FAILED`, nie zauważając pozostawionego `RESERVED`/`REQUEST_STARTED`; operator nie widział próby, a rezerwacja blokowała budżet.

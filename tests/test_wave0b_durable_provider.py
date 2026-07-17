@@ -16,6 +16,7 @@ import pytest
 
 from app.core.clock import FixedClock
 from app.core.config import REAL_PROVIDER_PRICING_KEYS
+from app.core.pricing import load_pricing_profiles, resolve_real_pricing_profile
 from app.llm.base import Usage
 from app.llm.anthropic_client import AnthropicLLMClient
 from app.models import (
@@ -36,6 +37,7 @@ from app.ports.storage import (
     AmountBelowMinimumPrecisionError,
     BudgetReservationError,
     JobConflictError,
+    JobPayloadValidationError,
     ModelUsageRequestIdError,
     ProviderAttemptOverReservationError,
     ProviderAttemptReconciliationRequired,
@@ -65,6 +67,7 @@ from app.workflows.research.pipeline import (
 from app.models import ResearchJobExecution
 from app.scheduler.dispatcher import JobDispatcher
 from app.scheduler.worker import Worker, WorkerIterationStatus
+from tests.conftest import write_approved_pricing_profile
 
 
 NOW = datetime(2026, 7, 14, 12, 0, tzinfo=timezone.utc)
@@ -988,13 +991,21 @@ def test_real_cli_enqueues_only_and_operation_key_is_idempotent(
         monkeypatch, capsys, settings, storage, account):
     from scripts import run_capped_research
 
+    from tests.conftest import write_approved_pricing_profile
+
     topic = _topic(storage, account, "cli")
     real_settings = replace(
         settings, dry_run=False, anthropic_api_key="test-key",
         pricing={key: 1.0 for key in REAL_PROVIDER_PRICING_KEYS},
     )
+    profile_id, _ = write_approved_pricing_profile(
+        real_settings.project_root, model=real_settings.model_quality,
+    )
     monkeypatch.setattr(run_capped_research, "load_settings", lambda: real_settings)
-    argv = ["--topic-id", str(topic.id), "--real", "--operation-key", "wave0b-cli"]
+    argv = [
+        "--topic-id", str(topic.id), "--real", "--operation-key", "wave0b-cli",
+        "--pricing-profile", profile_id,
+    ]
     assert run_capped_research.main(argv) == 0
     assert "JOB_ENQUEUED" in capsys.readouterr().out
     assert run_capped_research.main(argv) == 0
@@ -1004,10 +1015,12 @@ def test_real_cli_enqueues_only_and_operation_key_is_idempotent(
     second = _topic(storage, account, "cli-second")
     assert run_capped_research.main([
         "--topic-id", str(second.id), "--real", "--operation-key", "wave0b-cli",
+        "--pricing-profile", profile_id,
     ]) == 2
     assert "OPERATION_KEY_CONFLICT" in capsys.readouterr().out
     assert run_capped_research.main([
         "--topic-id", str(second.id), "--real", "--operation-key", "wave0b-cli-second",
+        "--pricing-profile", profile_id,
     ]) == 0
     jobs = storage.conn.execute("SELECT id,payload_json FROM jobs WHERE id LIKE 'real-research-%'").fetchall()
     assert len(jobs) == 2
@@ -1531,11 +1544,22 @@ def test_direct_real_sdk_helper_cannot_reach_messages_create_without_context(mon
 
 
 def _durable_payload(settings, account, topic, *, cap: object = 1.0,
-                     max_tokens: object = 3000, intent_changes: dict | None = None) -> dict:
+                     max_tokens: object = 3000, intent_changes: dict | None = None,
+                     pricing_profile=None) -> dict:
+    pricing_kwargs = {}
+    if pricing_profile is not None:
+        pricing_kwargs = {
+            "pricing_prices": pricing_profile.prices,
+            "pricing_profile_id": pricing_profile.profile_id,
+            "pricing_profile_version": pricing_profile.version,
+            "pricing_currency": pricing_profile.currency,
+            "pricing_unit": pricing_profile.unit,
+        }
     intent = DurableResearchExecutionIntent.from_settings(
         settings=settings, account_id=account.id, topic_id=int(topic.id),
         cap_usd=cap, max_web_searches=3, question=topic.question or topic.title,
         niche=account.niche, max_tokens=max_tokens,
+        **pricing_kwargs,
     ).as_payload()
     if intent_changes:
         intent.update(intent_changes)
@@ -1580,7 +1604,7 @@ def test_operation_intent_is_schema_canonical_and_conflicts_on_execution_change(
     repriced = replace(real, pricing={**real.pricing, "input_per_mtok": 2.0})
     changed_payloads.append(_durable_payload(repriced, account, topic))
     for number, payload in enumerate(changed_payloads):
-        with pytest.raises(JobConflictError, match="different job context"):
+        with pytest.raises((JobConflictError, JobPayloadValidationError)):
             storage.enqueue_job_result(_operation_job(
                 account, topic, f"intent-change-{number}", "intent-key", payload=payload,
             ))
@@ -1653,7 +1677,24 @@ def test_worker_uses_persisted_intent_after_runtime_settings_change(
         research_timeout_seconds=37,
         pricing={key: 1.0 for key in REAL_PROVIDER_PRICING_KEYS},
     )
-    payload = _durable_payload(queued_settings, account, topic, cap=0.7, max_tokens=3107)
+    profile_id, pricing_path = write_approved_pricing_profile(
+        queued_settings.project_root,
+        model=queued_settings.model_quality,
+        prices=dict(queued_settings.pricing),
+    )
+    pricing_profile = resolve_real_pricing_profile(
+        load_pricing_profiles(pricing_path),
+        profile_id=profile_id,
+        model=queued_settings.model_quality,
+    )
+    payload = _durable_payload(
+        queued_settings,
+        account,
+        topic,
+        cap=0.7,
+        max_tokens=3107,
+        pricing_profile=pricing_profile,
+    )
     job = storage.enqueue_job(_operation_job(
         account, topic, "worker-intent", "worker-intent", cap=0.7, payload=payload,
     ))
@@ -1787,18 +1828,33 @@ def test_durable_v2_worker_flow_calls_fake_provider_once_and_terminalizes(
         research_timeout_seconds=31,
         pricing={key: 1.0 for key in REAL_PROVIDER_PRICING_KEYS},
     )
-    payload = _durable_payload(real_settings, account, topic, cap=1.0)
+    profile_id, pricing_path = write_approved_pricing_profile(
+        real_settings.project_root,
+        model=real_settings.model_quality,
+        prices=dict(real_settings.pricing),
+    )
+    pricing_profile = resolve_real_pricing_profile(
+        load_pricing_profiles(pricing_path),
+        profile_id=profile_id,
+        model=real_settings.model_quality,
+    )
+    payload = _durable_payload(
+        real_settings,
+        account,
+        topic,
+        cap=1.0,
+        pricing_profile=pricing_profile,
+    )
     job = storage.enqueue_job(_operation_job(
         account, topic, "worker-v2-e2e", "worker-v2-e2e", cap=1.0, payload=payload,
     ))
-    for key, value in {
-        "kill_switch": False,
-        "worker_enabled": True,
-        "safe_mode": False,
-        "paid_actions_enabled": True,
-        "browser_actions_enabled": False,
-    }.items():
-        storage.set_system_flag(key, value, updated_by="test", reason="v2-e2e", now=NOW)
+    storage.apply_security_flag_profile([
+        ("worker_enabled", True),
+        ("safe_mode", False),
+        ("paid_actions_enabled", True),
+        ("browser_actions_enabled", False),
+        ("kill_switch", False),
+    ], updated_by="test", reason="v2-e2e", now=NOW)
 
     calls: list[str] = []
 

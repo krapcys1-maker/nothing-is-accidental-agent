@@ -33,14 +33,13 @@ def _create_schema_0009(path: Path, migration_dir: Path) -> None:
 
 def test_report_connection_is_query_only_and_does_not_change_database(settings):
     writer = SqliteStorage.open(settings.db_path)
-    for key, value in {
-        "kill_switch": False,
-        "worker_enabled": False,
-        "safe_mode": False,
-        "paid_actions_enabled": False,
-        "browser_actions_enabled": False,
-    }.items():
-        writer.set_system_flag(key, value, updated_by="test", now=NOW)
+    writer.apply_security_flag_profile([
+        ("worker_enabled", False),
+        ("safe_mode", False),
+        ("paid_actions_enabled", False),
+        ("browser_actions_enabled", False),
+        ("kill_switch", False),
+    ], updated_by="test", now=NOW)
     writer.close()
     before = fingerprint(settings.db_path)
 
