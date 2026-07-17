@@ -1004,3 +1004,49 @@ Rejestr decyzji projektowych i architektonicznych — zwłaszcza tych rozstrzyga
 - **Zakres zatwierdzony:** kod, przykład konfiguracji, testy i dokumentacja LA-01/LA-01-R1 opisane w ADR-078/079. Historia pierwszego `REJECTED — MAJOR` pozostaje niezmieniona.
 - **Open P2:** nieosiągalny obecnie fallback `sanitize_report_payload` zwraca `str(value)`; rekomendacja defense-in-depth brzmi `return sanitize_report_payload(str(value))`. P2 nie blokuje checkpointu ani controlled live acceptance. Zgodnie z decyzją właściciela poprawka nie jest dodawana do reviewed diffu.
 - **Granice:** brak live acceptance, realnego pricing profile, API/SDK, browsera, publikacji i Windows Tasks. Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`; `REAL_CONTROLLED_LIVE_ENABLED=false`.
+
+### ADR-081: Zatwierdzony realny pricing profile i dwuetapowe zamrożenie live preflight
+
+- **Data:** 2026-07-17.
+- **Status:** ACCEPTED przez właściciela dla przygotowania lokalnego profilu i planu; nie jest zgodą na enqueue ani provider request.
+- **Kto podjął:** właściciel `owner:krapcys1-maker`; walidacja lokalna: Codex.
+- **Profil:** provider `anthropic`, model `claude-sonnet-5`, ID `anthropic-sonnet-5-intro-2026-07`, wersja `sonnet-5-intro-pricing-valid-through-2026-08-31` uznana jawnie za zatwierdzony identyfikator wersji. `approved_at` pozostaje pominięte, ponieważ właściciel nie podał timestampu i zatwierdził alternatywę opartą na identyfikatorze wersji. Jednostka jest dokładnie kanoniczna: `usd_per_mtok__web_search_per_1k`.
+- **Ceny i limity:** input `2.00`, output `10.00`, cache write `2.50`, cache read `0.20` USD/MTok; web search `10.00` USD/1000; `max_tokens=1500`, `max_web_searches=1`, cap `0.12 USD`, `max_attempts=1`, `max_retries=0`.
+- **Dowód:** resolver zatwierdził wszystkie ceny jako `Decimal`; fingerprint profilu `1b98c7c9656c5b7791ac4f8eb189d538386c31f52b760920a3f2d89f78bb4062`; projected `0.070000 USD`, pessimistic `0.105000 USD`, headroom `0.015000 USD`; focused offline regression `70 passed`.
+- **Sekwencja fail-closed:** bieżąca zgoda tworzy tylko lokalny `config/pricing_profiles.yaml` i plan. Realny wrapper wymaga istniejącego joba, natomiast enqueue zmienia stan SQLite. Dlatego finalny `expected-db-sha` wolno zamrozić dopiero po osobno autoryzowanym enqueue i ponownym read-only fingerprintcie. Obecny pre-enqueue SHA nie może być przedstawiony jako wykonywalny post-enqueue kontrakt.
+- **Granice:** brak zmiany gate, enqueue, flag, workera, API/SDK, browsera, publikacji, retry, fallbacku, kosztu i operacji Git. Etap 1 pozostaje otwarty.
+
+### ADR-082: Jedyna autoryzowana komenda live kończy się fail-closed `PREFLIGHT_FAILED`
+
+- **Data:** 2026-07-17.
+- **Status:** ACCEPTED jako trwały wynik operacyjny; `LIVE ACCEPTANCE FAILED — INVARIANT BREACH` do niezależnego review.
+- **Kto podjął:** właściciel autoryzował dokładnie jeden istniejący job/request/session i jedną komendę; wykonanie: Codex.
+- **Preflight zewnętrzny:** branch/HEAD/upstream/staging/Git ops, post-enqueue DB SHA, schema, dokładnie jeden claimable job, brak attempts/usage/lease/rezerwacji/markera/tasks/processes, topic, pricing/intent fingerprint i flags — PASS.
+- **Gate:** jedyna zmiana `False→True` miała diff 1/1, HEAD pozostał zgodny i nic nie zostało staged. Po wyniku gate natychmiast przywrócono do `False`; diff zniknął.
+- **Wynik komendy:** exit `1`, `CONTROLLED-LIVE-ONCE: PREFLIGHT_FAILED`; trwały raport ma reason `PREFLIGHT_FAILED`, `provider_request_started=false`, `marker_cleared=true`, pełny profil fail-closed i sanitizowany diagnostic fingerprint `5214cc3c…20f`.
+- **Trwały stan:** job nadal `QUEUED`, `attempts=0`, run/research_run brak, provider attempts/usage/reconciliation=0, lease/rezerwacja=0, koszt miesiąca niezmieniony `0.684580 USD`.
+- **Decyzja bezpieczeństwa:** nie uruchamiać wrappera ponownie, nie diagnozować przez retry i nie otwierać flags. Szczegółowa przyczyna wewnętrznego preflightu wymaga osobnego offline review i nowej zgody właściciela.
+
+### ADR-083: LA-02 — wykluczenie launchera wyłącznie przez zweryfikowane ancestry i trwały inner reason
+
+- **Data:** 2026-07-17.
+- **Status:** ACCEPTED jako implementacja kandydacka; `LA-02 CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`. Nie jest zgodą na drugi controlled-live ani provider request.
+- **Kto podjął:** właściciel zlecił lokalną naprawę observer effect i diagnostyki z zakazem sieci/API/SDK/browsera/publikacji/kosztu, produkcyjnych zapisów, gate'u i Git; implementacja: Codex.
+- **Potwierdzona przyczyna:** pierwsza komenda z ADR-082 zatrzymała się na `app/operations/controlled_live.py` check nr 6 z inner `PROCESSES_PRESENT`. Klasyfikator wyłączał tylko bezpośredni parent i tylko PowerShell/pwsh. Dalszy PowerShell/cmd/bash launcher z `-m app.main controlled-live-once` dostawał `APP_ROLE_OPERATOR_CLI`. Adapter controlled-live usuwał `process_diagnostics`, a `_safe_error` zastępował inner code ogólnym `PREFLIGHT_FAILED`.
+- **Decyzja ancestry:** jeden Windows inventory snapshot jest jedynym źródłem PID/PPID/identity. Current PID musi mieć zgodny systemowy PPID oraz pełne executable/command line/creation time. Wykluczany przodek musi być kolejnym rzeczywistym parentem, mieć pełną identity, ten sam jednoznaczny entrypoint i creation time niepóźniejszy niż dziecko. Rodzaj shella nie daje zwolnienia. PID reuse, cycle, PPID mismatch, invalid/changed creation time i incomplete identity blokują fail-closed.
+- **Granica wykluczenia:** current i potwierdzeni przodkowie bieżącego entrypointu są nonblocking i oznaczeni `belongs_to_probe_ancestry=true`; helper pozostaje osobno rejestrowany PID/PPID/executable/time/nonce. Worker i maintenance mają pierwszeństwo przed ancestry. Niezależny operator z identycznym command line, drugi controlled-live, scheduler/operator CLI, unregistered descendant, DB holder i Windows Task nadal blokują.
+- **Diagnostyka:** adapter zachowuje pełny snapshot diagnostics. Trwały raport ma top-level `PREFLIGHT_FAILED`, inner `PROCESSES_PRESENT`, invariant/check order, blocking PIDs oraz deterministyczne PID/parent/executable/redacted command/classification/reason codes/ancestry/fingerprint. Fallback sanitizera wykonuje ponowną rekurencyjną sanitizację, domykając defense-in-depth P2 z ADR-080 w zakresie jawnie wymaganym przez LA-02.
+- **Standalone:** `python -m app.main controlled-live-quiescence-check [--db-path ...]` używa tego samego composition rootu probe'a i klasyfikatora. Nie otwiera SQLite/storage, nie tworzy providera/job/attempt/usage/markera, nie zmienia flags/gate'u; raportuje `PASS/STOP` oraz DB/WAL/SHM before/after.
+- **Dowód:** 21 nowych testów LA-02 i jedna regresja fake controlled-live ancestry; 1174/1174 pełnej regresji, exact-once `284+284+298+308`; legalne PowerShell/pwsh/cmd/bash i ancestry wielopoziomowe; drugi entrant/worker/maintenance/scheduler; realny proces workera; PID reuse/creation/identity; raport/redakcja; pełny subprocess standalone na temp DB. Zero sieci/API/SDK/browsera/publikacji/kosztu.
+- **Stan produkcji:** schema `0014`, post-enqueue SHA `5FF5DBA3FA57A2DFBB8B638DD7E6CC9E84825A96C6080AA17F8A05B188D97B78`, job `QUEUED/attempts=0`, attempts/usage=0, flags fail-closed, marker brak, gate `False`. Etap 1 pozostaje `OPEN / BLOCKED PENDING LA-02 REVIEW AND NEW OWNER AUTHORIZATION`.
+
+### ADR-084: Niezależny review zatwierdza LA-02; checkpoint nie autoryzuje drugiej próby
+
+- **Data:** 2026-07-17.
+- **Status:** ACCEPTED; `LA-02 = APPROVED WITH MINOR/P2 — CHECKPOINTED`; root cause `PROCESSES_PRESENT = CLOSED`.
+- **Kto podjął:** niezależny reviewer wydał werdykt `APPROVE WITH MINOR/P2`; właściciel przekazał wynik i autoryzował wyłącznie P2 cleanup, selektywny checkpoint oraz push gałęzi `dev/first-successful-research-card`. Implementer checkpointu nie wykonuje ponownego review.
+- **P2-1 — dokumentacja:** zamknięte. Bieżące źródła prawdy i README podają 1174 collected/passed, partycje `284+284+298+308`, exact-once 1174, zatwierdzoną LA-02, zamknięty root cause, provider request `NOT EXECUTED`, job `QUEUED/attempts=0` i Etap 1 `OPEN`. Zapisy historyczne zachowują własne dawne liczby i statusy.
+- **P2-2 — operacyjny false STOP:** `OPEN OBSERVATION / DOCUMENTED`, nie blocker checkpointu. Przed przyszłym live operator zamyka inne terminale/edytory/shelle mogące zawierać pełny tekst komendy i uruchamia `controlled-live-quiescence-check` z dokładnie tego samego launchera. Każde `PROCESSES_PRESENT` lub `STOP` kończy autoryzację; live nie jest ponawiane bez nowej jawnej decyzji właściciela. Logiki klasyfikatora nie zmieniono w checkpointcie.
+- **P2-3 — pricing profile:** zamknięte. `.gitignore` zawiera dokładną regułę `config/pricing_profiles.yaml`; nie wprowadzono ogólnego `config/*.yaml`. Lokalny realny profil pozostaje poza indeksem i commitem.
+- **Granice:** zero live API, sieci providera, SDK, browsera, publikacji i kosztu; `controlled-live-once` niewykonane; gate pozostaje `False`; flagi fail-closed; brak nowego joba, attemptu, usage, runu i markera. Druga próba nie jest autoryzowana.
+- **Stan po decyzji:** produkcyjna DB/WAL/SHM pozostają byte-identical (te same SHA i rozmiary), schema `0014`, DB SHA `5FF5DBA3FA57A2DFBB8B638DD7E6CC9E84825A96C6080AA17F8A05B188D97B78`; metadata-only mtime SHM pozostaje osobną open observation. Job `real-research-09fd6a30e07e63e96699ca002dbaead4` ma `QUEUED/attempts=0`; provider attempts i usage dla requestu wynoszą zero. Etap 1 = `OPEN / READY FOR NEW OWNER AUTHORIZATION AFTER STANDALONE QUIESCENCE CHECK`.

@@ -337,3 +337,30 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Status:** `SCREENSHOT REQUIRED` po pushu; w bieżącym checkpointcie nie tworzono obrazu.
 - **Co powinien pokazać:** zanonimizowany `git show --name-status --format=fuller`, upstream `0/0`, staging pusty, prywatny blok BUILD_LOG i katalog instrukcji pozostające lokalnie oraz niezmienione fingerprinty DB/WAL/SHM.
 - **Czego nie może pokazać:** remote URL z credentialami, `.env`, kluczy, zawartości produkcyjnej bazy, promptów, chronionych instrukcji ani prywatnego bloku użytkownika.
+
+## 2026-07-17 — Real pricing profile i finalny preflight
+
+- **Status:** `SCREENSHOT REQUIRED` po osobno autoryzowanym enqueue i ponownym zamrożeniu SHA; teraz obrazu nie utworzono.
+- **Co powinien pokazać:** zanonimizowany resolver `approved`, typy `Decimal`, pricing fingerprint, projected/pessimistic/cap, topic `3`, dokładnie jeden post-enqueue claimable job, nowy DB SHA, fail-closed flags i `REAL_CONTROLLED_LIVE_ENABLED=false` przed decyzją właściciela.
+- **Czego nie może pokazać:** `.env`, klucza API, promptu/question, worker execution tokenu, provider payloadu, danych prywatnych, zawartości produkcyjnej bazy ani chronionych instrukcji.
+- **Dlaczego nie utworzono:** bieżący zakres zakazuje enqueue, gate i provider requestu; screenshot przed post-enqueue fingerprintem mógłby fałszywie sugerować finalną gotowość.
+
+## 2026-07-17 — Jedyna autoryzowana komenda live: `PREFLIGHT_FAILED`
+
+- **Status:** `SCREENSHOT REQUIRED` dla niezależnego review; nie utworzono go w trakcie próby.
+- **Co powinien pokazać:** zanonimizowany wynik zewnętrznego preflight PASS, dokładny gate diff 1/1, pojedynczy `CONTROLLED-LIVE-ONCE: PREFLIGHT_FAILED`, trwały raport z `provider_request_started=false` i `marker_cleared=true`, końcowe flags fail-closed oraz gate `False` bez diffu.
+- **Czego nie może pokazać:** `.env`, API key, prompt/question, execution token, provider payload ani zawartość produkcyjnej SQLite.
+
+## 2026-07-17 — WAVE LA-02 ancestry i diagnostics
+
+- **Status:** `SCREENSHOT REQUIRED` dla niezależnego review; obrazu nie tworzono w lokalnej fali.
+- **Co powinien pokazać:** zanonimizowany wynik `1174 passed`, exact-once partycji, standalone `PASS` na temp DB i `STOP` z realnym testowym workerem, durable fake report z outer `PREFLIGHT_FAILED`, inner `PROCESSES_PRESENT`, blocking PIDs, ancestry i `[REDACTED]`.
+- **Czego nie może pokazać:** `.env`, API key, prompt/question, pełnych command lines z prywatnymi wartościami, execution tokenu, provider payloadu, zawartości produkcyjnej SQLite ani chronionych instrukcji.
+- **Dlaczego nie utworzono:** dowodem są deterministyczne testy/subprocessy i fingerprinty; screenshot nie jest potrzebny do implementacji, a mógłby ujawnić lokalne command lines. Browser i publikacja pozostają zabronione.
+
+## 2026-07-17 — Checkpoint LA-02 po `APPROVE WITH MINOR/P2`
+
+- **Status:** `SCREENSHOT REQUIRED`; w checkpointcie nie tworzono obrazu.
+- **Co powinien pokazać:** zanonimizowany terminal z `1174 collected`, `1174 passed`, partycjami `284+284+298+308`, exact-once `1174`, `compileall`, `git diff --check`, listą staged files, regułą `git check-ignore -v config/pricing_profiles.yaml`, commitem checkpointu i upstream `0/0`; obok read-only gate z DB SHA `5FF5DB…97B78`, schema 0014, jobem `QUEUED/attempts=0`, attempts/usage 0, gate `False`, markerem absent i flagami fail-closed.
+- **Czego nie może pokazać:** treści lokalnego pricing profile, `.env`, kluczy, pełnych command lines, promptu/question, DB contents, runtime reportów, prywatnego `BUILD_LOG` ani chronionych instrukcji pisania.
+- **Dlaczego nie utworzono:** dowody są tekstowe i deterministyczne; screenshot command lines mógłby ujawnić dane lokalne. Brak obrazu nie zmienia werdyktu review ani braku autoryzacji live.

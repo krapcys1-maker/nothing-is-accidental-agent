@@ -88,9 +88,16 @@ _ATTEMPT_NO = 1
 
 
 class ControlledLiveError(RuntimeError):
-    def __init__(self, detail: str, *, code: str) -> None:
+    def __init__(
+        self,
+        detail: str,
+        *,
+        code: str,
+        diagnostics: Mapping[str, object] | None = None,
+    ) -> None:
         self.code = code
         self.detail = detail
+        self.diagnostics = dict(diagnostics or {})
         super().__init__(f"{code}: {detail}")
 
 
@@ -431,16 +438,121 @@ def default_db_fingerprint(db_path: Path) -> DbFingerprint:
 
 def default_quiescence_probe(
     project_root: Path, db_path: Path,
-) -> Mapping[str, tuple]:
+) -> Mapping[str, object]:
     """Use the approved Windows process/task/handle inventory; never an empty stub."""
-    from app.operations.stage1_migration import _default_quiesce_probe
+    from app.operations.stage1_migration import (
+        _default_quiesce_probe,
+        _process_identity_as_dict,
+    )
 
     report = _default_quiesce_probe(project_root, db_path)
     return {
         "project_process_ids": tuple(report.project_process_ids),
         "scheduled_tasks": tuple(report.scheduled_tasks),
         "locked_paths": tuple(report.locked_paths),
+        "probe_current_pid": getattr(report, "probe_current_pid", None),
+        "probe_parent_pid": getattr(report, "probe_parent_pid", None),
+        "probe_ancestry_process_ids": tuple(
+            getattr(report, "probe_ancestry_process_ids", ())
+        ),
+        "probe_helper_process_ids": tuple(
+            getattr(report, "probe_helper_process_ids", ())
+        ),
+        "process_diagnostics": tuple(
+            _process_identity_as_dict(process)
+            for process in getattr(report, "process_diagnostics", ())
+        ),
     }
+
+
+def _file_set_fingerprint_as_dict(value: object) -> dict[str, object]:
+    def one(item: object | None) -> dict[str, object] | None:
+        if item is None:
+            return None
+        return {
+            "sha256": str(getattr(item, "sha256")),
+            "size": int(getattr(item, "size")),
+            "mtime_ns": int(getattr(item, "mtime_ns")),
+            "mtime_utc": str(getattr(item, "mtime_utc")),
+        }
+
+    return {
+        "database": one(getattr(value, "database")),
+        "wal": one(getattr(value, "wal")),
+        "shm": one(getattr(value, "shm")),
+    }
+
+
+def run_controlled_live_quiescence_check(
+    *,
+    project_root: Path,
+    db_path: Path,
+    quiescence_probe: Callable[[Path, Path], Mapping[str, object]] = (
+        default_quiescence_probe
+    ),
+) -> tuple[int, Mapping[str, object]]:
+    """Run the canonical probe without SQLite, storage, provider, marker or gate."""
+    from app.operations.stage1_migration import database_file_set_fingerprint
+
+    before = database_file_set_fingerprint(db_path)
+    try:
+        quiescence = dict(quiescence_probe(project_root, db_path))
+        probe_error: BaseException | None = None
+    except BaseException as exc:
+        quiescence = {}
+        probe_error = exc
+    after = database_file_set_fingerprint(db_path)
+    database_unchanged = before == after
+    blocked = bool(
+        probe_error
+        or quiescence.get("project_process_ids")
+        or quiescence.get("scheduled_tasks")
+        or quiescence.get("locked_paths")
+        or not database_unchanged
+    )
+    payload: dict[str, object] = {
+        "status": "STOP" if blocked else "PASS",
+        "reason_code": (
+            "QUIESCENCE_PROBE_FAILED"
+            if probe_error is not None
+            else "DATABASE_CHANGED_DURING_CHECK"
+            if not database_unchanged
+            else "PROCESSES_PRESENT"
+            if quiescence.get("project_process_ids")
+            else "TASKS_PRESENT"
+            if quiescence.get("scheduled_tasks")
+            else "DB_HANDLES_PRESENT"
+            if quiescence.get("locked_paths")
+            else "QUIESCENT"
+        ),
+        "project_process_ids": quiescence.get("project_process_ids", ()),
+        "scheduled_tasks": quiescence.get("scheduled_tasks", ()),
+        "locked_paths": quiescence.get("locked_paths", ()),
+        "probe_current_pid": quiescence.get("probe_current_pid"),
+        "probe_parent_pid": quiescence.get("probe_parent_pid"),
+        "probe_ancestry_process_ids": quiescence.get(
+            "probe_ancestry_process_ids", ()
+        ),
+        "probe_helper_process_ids": quiescence.get(
+            "probe_helper_process_ids", ()
+        ),
+        "process_diagnostics": _ordered_process_diagnostics(
+            quiescence.get("process_diagnostics", ())
+        ),
+        "database_before": _file_set_fingerprint_as_dict(before),
+        "database_after": _file_set_fingerprint_as_dict(after),
+        "database_unchanged": database_unchanged,
+        "provider_constructed": False,
+        "provider_request_started": False,
+        "storage_opened": False,
+        "session_marker_created": False,
+        "real_execution_gate_required": False,
+    }
+    if probe_error is not None:
+        payload["error"] = _safe_error(probe_error, "QUIESCENCE_PROBE_FAILED")
+    safe = sanitize_report_payload(payload)
+    assert isinstance(safe, Mapping)
+    return (2 if blocked else 0), safe
 
 
 def _persisted_now(moment: datetime) -> str:
@@ -704,7 +816,7 @@ def run_preflight(
     contract: ControlledWorkerContract,
     git_identity: Callable[[Path], tuple[str, str]],
     db_fingerprint: Callable[[Path], DbFingerprint],
-    quiescence_probe: Callable[[], Mapping[str, tuple]],
+    quiescence_probe: Callable[[], Mapping[str, object]],
     pricing_profiles_path: Path | None,
     clock: Clock,
     now: datetime | None = None,
@@ -733,9 +845,28 @@ def run_preflight(
 
     quiescence = quiescence_probe()
     if quiescence.get("project_process_ids"):
+        blocking_process_ids = tuple(
+            sorted(int(pid) for pid in quiescence["project_process_ids"])
+        )
         raise ControlledLiveError(
             "project processes are active.",
             code="PROCESSES_PRESENT",
+            diagnostics={
+                "failing_invariant": "QUIESCENCE_PROJECT_PROCESSES",
+                "check_order": 6,
+                "blocking_process_ids": blocking_process_ids,
+                "probe_current_pid": quiescence.get("probe_current_pid"),
+                "probe_parent_pid": quiescence.get("probe_parent_pid"),
+                "probe_ancestry_process_ids": quiescence.get(
+                    "probe_ancestry_process_ids", ()
+                ),
+                "probe_helper_process_ids": quiescence.get(
+                    "probe_helper_process_ids", ()
+                ),
+                "process_diagnostics": _ordered_process_diagnostics(
+                    quiescence.get("process_diagnostics", ())
+                ),
+            },
         )
     if quiescence.get("scheduled_tasks"):
         raise ControlledLiveError(
@@ -832,6 +963,52 @@ _KEY_VALUE = re.compile(
     r"(?i)\b(api[_ -]?key|secret|password|token)\s*[:=]\s*[^\s,;]+"
 )
 _PROVIDER_KEY = re.compile(r"\b(?:sk|ant|key)-[A-Za-z0-9_-]{8,}\b")
+_CLI_SENSITIVE_VALUE = re.compile(
+    r"(?is)(?P<prefix>(?:^|\s)--(?:authorization|api[-_]?key|secret|password|"
+    r"token|prompt|question|guidance|payload)(?:\s*=\s*|\s+))"
+    r"(?P<value>.*?)(?=(?:\s+--[a-z0-9_-]+(?:\s|=))|$)"
+)
+
+
+def _ordered_process_diagnostics(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    diagnostics: list[dict[str, object]] = []
+    for item in value:
+        if not isinstance(item, Mapping):
+            continue
+        reason_codes = item.get("reason_codes", ())
+        if not isinstance(reason_codes, (list, tuple)):
+            reason_codes = ()
+        record: dict[str, object] = {
+            "pid": item.get("pid"),
+            "parent_pid": item.get("parent_pid"),
+            "executable": item.get("executable", ""),
+            "command_line": item.get("command_line", ""),
+            "creation_time_utc": item.get("creation_time_utc", ""),
+            "classification": item.get("classification", ""),
+            "reason_codes": tuple(str(code) for code in reason_codes),
+            "blocking": bool(item.get("blocking", False)),
+            "belongs_to_probe_ancestry": bool(
+                item.get("belongs_to_probe_ancestry", False)
+            ),
+        }
+        safe_record = sanitize_report_payload(record)
+        assert isinstance(safe_record, Mapping)
+        safe_dict = dict(safe_record)
+        safe_dict["identity_fingerprint"] = _diagnostic_hash(
+            json.dumps(safe_dict, ensure_ascii=True, sort_keys=True)
+        )
+        diagnostics.append(safe_dict)
+
+    def sort_key(item: Mapping[str, object]) -> tuple[int, str]:
+        try:
+            pid = int(item.get("pid", -1))
+        except (TypeError, ValueError):
+            pid = -1
+        return pid, str(item.get("classification", ""))
+
+    return sorted(diagnostics, key=sort_key)
 
 
 def sanitize_report_payload(value: object, *, key: str = "") -> object:
@@ -858,6 +1035,9 @@ def sanitize_report_payload(value: object, *, key: str = "") -> object:
         redacted = _AUTH_VALUE.sub(r"\1[REDACTED]", value)
         redacted = _KEY_VALUE.sub("[REDACTED]", redacted)
         redacted = _PROVIDER_KEY.sub("[REDACTED]", redacted)
+        redacted = _CLI_SENSITIVE_VALUE.sub(
+            lambda match: f"{match.group('prefix')}[REDACTED]", redacted
+        )
         for env_key, env_value in os.environ.items():
             if (
                 env_value
@@ -868,7 +1048,7 @@ def sanitize_report_payload(value: object, *, key: str = "") -> object:
         return redacted
     if value is None or isinstance(value, (bool, int, float)):
         return value
-    return str(value)
+    return sanitize_report_payload(str(value), key=key)
 
 
 _OPERATOR_MESSAGES = {
@@ -889,9 +1069,18 @@ _OPERATOR_MESSAGES = {
 def _safe_error(exc: BaseException | None, reason_code: str) -> dict[str, object] | None:
     if exc is None:
         return None
-    return {
+    inner_reason_code = (
+        exc.code if isinstance(exc, ControlledLiveError) else reason_code
+    )
+    payload: dict[str, object] = {}
+    if isinstance(exc, ControlledLiveError) and exc.diagnostics:
+        safe_diagnostics = sanitize_report_payload(exc.diagnostics)
+        if isinstance(safe_diagnostics, Mapping):
+            payload.update(safe_diagnostics)
+    payload.update({
         "error_class": type(exc).__name__,
-        "reason_code": reason_code,
+        "outer_reason_code": reason_code,
+        "reason_code": inner_reason_code,
         "operator_message": _OPERATOR_MESSAGES.get(
             reason_code,
             "Controlled-live stopped fail-closed; inspect durable state.",
@@ -899,7 +1088,8 @@ def _safe_error(exc: BaseException | None, reason_code: str) -> dict[str, object
         "diagnostic_fingerprint": _diagnostic_hash(
             f"{type(exc).__name__}:{exc}"
         ),
-    }
+    })
+    return payload
 
 
 def write_operator_report(
@@ -1334,7 +1524,7 @@ def run_controlled_live_once(
     worker_runner: Callable[[ControlledWorkerContract], WorkerOnceResult],
     git_identity: Callable[[Path], tuple[str, str]] | None = None,
     db_fingerprint: Callable[[Path], DbFingerprint] = default_db_fingerprint,
-    quiescence_probe: Callable[[], Mapping[str, tuple]] | None = None,
+    quiescence_probe: Callable[[], Mapping[str, object]] | None = None,
     pricing_profiles_path: Path | None = None,
     reports_dir: Path | None = None,
     clock: Clock | None = None,

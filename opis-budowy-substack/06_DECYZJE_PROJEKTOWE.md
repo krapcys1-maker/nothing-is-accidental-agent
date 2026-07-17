@@ -1,5 +1,7 @@
 # 06 — DECYZJE PROJEKTOWE
 
+> **Stan bieżący LA-02 (2026-07-17):** `APPROVED WITH MINOR/P2 — CHECKPOINTED`; root cause `PROCESSES_PRESENT = CLOSED`; P2-2 false STOP = `OPEN OBSERVATION / DOCUMENTED`. Dowód: **1174/1174**, exact-once **284+284+298+308**, schema 0014, job `QUEUED/attempts=0`, provider request niewykonany, gate `False`, flags fail-closed. Etap 1 jest otwarty i czeka na nową autoryzację dopiero po standalone quiescence check z tego samego launchera.
+
 > **Stan bieżący LA-01-R1 (2026-07-17):** pierwsza LA-01 = `REJECTED — MAJOR`; LA-01-R1 = `APPROVED WITH MINOR/P2 — CHECKPOINT AUTHORIZED`. Wybrano pełny frozen pricing contract (`Decimal`), trwałe session/job/request/attempt/token fencing, raport przed marker clear, recovery bez retry, prawdziwy reopen i wyłącznie pełny atomowy profil pięciu flag. Open P2 rekurencyjnej sanitizacji fallbacku jest jawny, nieblokujący i nie jest dokładany do reviewed diffu. Bieżący dowód to **1151/1151**, schema produkcji `0014`, 14 migracji. Live API i controlled acceptance niewykonane; Etap 1 otwarty.
 
 ### D-67: Durable provider attempt ma pierwszeństwo przed workerowym fallbackiem (→ ADR-067)
@@ -358,3 +360,9 @@ Migracja 0011 egzekwuje request-bound usage dla nowych realnych wywołań. Stare
 - **Launcher:** Windows Task Scheduler tylko uruchamia kanoniczne one-shot entrypointy. Systemowy worker ma dodatkowe `--offline-only`; nie ustawia flags i nie może dotrzeć do paid runnera. Rejestracja każdego zadania wymaga osobnej zgody.
 - **Kryterium:** techniczna kompletność nie jest formalnym `CLOSED`. Przed zamknięciem pozostają: review pakietu, kontrolowana migracja i baseline, jeden live job/request z capem i `max_retries=0`, review trwałego wyniku, brak MAJOR/CRITICAL i decyzja właściciela.
 - **Migracja:** źródło pozostaje nietknięte; pełny backup jest dowodem i jedyną drogą rollbacku. Kandydat musi zachować cost/legacy/integrity, a paid/browser flags pozostają false. Produkcyjna migracja nie została wykonana.
+## D-084 — Review techniczne nie jest autoryzacją operacyjną
+
+- **Decyzja:** przyjąć `APPROVE WITH MINOR/P2` dla LA-02 i zamknąć root cause, ale pozostawić drugą próbę controlled-live nieautoryzowaną.
+- **P2-2:** nie rozszerzać wyjątku klasyfikatora. Inny terminal/edytor/shell z pełnym tekstem komendy może wywołać bezpieczny false STOP; operator ma zamknąć takie procesy i wykonać standalone check z tego samego launchera.
+- **P2-3:** ignorowany jest dokładnie `config/pricing_profiles.yaml`, nie wszystkie `config/*.yaml`.
+- **Granica:** checkpoint nie zmienia DB, joba, flag, gate'u, providera ani kosztu. Etap 1 pozostaje `OPEN`.

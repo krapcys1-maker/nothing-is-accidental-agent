@@ -1,6 +1,6 @@
 # Etap 1 — operacje lokalne, scheduler i migracja produkcyjna
 
-Status: **`POST-MIGRATION REVIEW — APPROVE WITH MINOR/P2`; QP-01 = `APPROVED`; produkcja = `VERIFIED / SCHEMA 0014`; nowy baseline = `VERIFIED`; pierwsza LA-01 = `REJECTED — MAJOR`; LA-01-R1 = `APPROVED WITH MINOR/P2 — CHECKPOINT AUTHORIZED`.** Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`. Live API jest zabronione. Ten dokument nie jest zgodą na rejestrację zadań systemowych, ponowną migrację ani wywołanie providera.
+Status: **`POST-MIGRATION REVIEW — APPROVE WITH MINOR/P2`; QP-01 = `APPROVED`; produkcja = `VERIFIED / SCHEMA 0014`; pierwsza LA-01 = `REJECTED — MAJOR`; LA-01-R1 i LA-02 = `APPROVED WITH MINOR/P2 — CHECKPOINTED`.** Root cause `PROCESSES_PRESENT` jest `CLOSED`; P2-2 false STOP pozostaje `OPEN OBSERVATION / DOCUMENTED`. Etap 1 ma status `OPEN / READY FOR NEW OWNER AUTHORIZATION AFTER STANDALONE QUIESCENCE CHECK`. Live API jest zabronione. Ten dokument nie jest zgodą na rejestrację zadań systemowych, ponowną migrację, drugą próbę controlled-live ani wywołanie providera.
 
 ## Minimalny Windows Task Scheduler
 
@@ -65,6 +65,36 @@ Raport otwiera istniejący plik w SQLite URI `mode=ro`, włącza `query_only` i 
 Schemat 0014 nie ma trwałego timestampu ukończenia cyklu maintenance, dlatego `last_maintenance_at=UNKNOWN/BLOCKED`. Nie jest wyprowadzany z `jobs.updated_at`.
 
 Exit codes: 0 = kompletny raport bez UNKNOWN; 2 = raport odczytany, ale zdegradowany przez UNKNOWN/BLOCKED; 3 = błąd konfiguracji; 6 = kontrolowany błąd storage/OS. Przy obecnym schemacie brak timestampu maintenance oznacza kontrolowany kod 2.
+
+## LA-02 — standalone quiescence check przed nową autoryzacją
+
+Status techniczny: **`APPROVED WITH MINOR/P2 — CHECKPOINTED`**. Root cause pierwszej odmowy jest zamknięty. Poniższa procedura jest obowiązkowa, ale nie stanowi autoryzacji live.
+
+Pierwsza autoryzowana próba controlled-live została zatrzymana przez wewnętrzny check nr 6: `QUIESCENCE_PROJECT_PROCESSES / PROCESSES_PRESENT`. Provider request nie rozpoczął się. Własny PowerShell/cmd/bash launcher wrappera zawierający tekst `-m app.main controlled-live-once` był traktowany jak niezależny operator; stary raport nie zachował blocking PID ani reason codes.
+
+Canonical check diagnostyczny:
+
+```powershell
+python -m app.main controlled-live-quiescence-check --db-path data/agent.db
+```
+
+Komenda zwraca jedną sanitizowaną strukturę JSON i linię `CONTROLLED-LIVE-QUIESCENCE: PASS|STOP`. Używa dokładnie `default_quiescence_probe` z controlled-live i tego samego klasyfikatora Stage 1. Fingerprintuje main DB i opcjonalne WAL/SHM przed i po, ale nie otwiera SQLite ani `SqliteStorage`, nie czyta/zmienia flags, nie tworzy joba, attemptu, usage, providera, workera lub session marker i nie wymaga `REAL_CONTROLLED_LIVE_ENABLED`. `PASS` nie jest autoryzacją requestu; służy wyłącznie jako część przyszłego preflightu.
+
+### Procedura operacyjna P2-2 — false STOP
+
+1. Zamknąć wszystkie inne terminale, edytory, shelle i procesy pomocnicze, które mogą mieć w command line pełny tekst planowanej komendy `controlled-live-once`. Samo pozostawienie takiego tekstu w niezależnym procesie może legalnie wywołać fail-closed false STOP.
+2. Z tego samego launchera i tego samego łańcucha shelli, który miałby później uruchomić live, wykonać wyłącznie `python -m app.main controlled-live-quiescence-check --db-path data/agent.db`.
+3. Wymagać `CONTROLLED-LIVE-QUIESCENCE: PASS`, `reason_code=QUIESCENT`, pustych `project_process_ids`, `locked_paths` i `scheduled_tasks` oraz `database_unchanged=true`.
+4. Każde `PROCESSES_PRESENT`, każdy `STOP`, brak pełnej identity albo drift DB/WAL/SHM traktować jako bezwarunkowy `STOP`. Nie omijać, nie reinterpretować i nie uruchamiać live w tej samej autoryzacji.
+5. Po każdym `STOP` nie ponawiać live. Nowa próba wymaga nowej, jawnej autoryzacji właściciela po ponownym zamrożeniu całego gate'u.
+
+P2-2 pozostaje **`OPEN OBSERVATION / DOCUMENTED`**: procedura ogranicza ryzyko operacyjne, ale w tym checkpointcie nie zmieniono już logiki klasyfikatora. Observation nie blokuje checkpointu LA-02 i nie daje prawa do live.
+
+Wykluczenie launchera wymaga wszystkich dowodów: bieżący current PID, dokładne kolejne PID/PPID, kompletne executable/command line/creation time, jednoznaczny identyczny entrypoint oraz nieodwróconą kolejność creation time. Nazwa `powershell.exe`, `pwsh.exe`, `cmd.exe`, `bash.exe` lub innego shella sama nie wystarcza. Zarejestrowany helper ma dodatkowo nonce i zgodność czasu z oknem probe'a. Niezależny operator z identyczną komendą, drugi controlled-live, worker, maintenance, scheduler/operator CLI, niezarejestrowany potomek, holder DB, Windows Task, PID reuse, cycle i niepełna identity zawsze dają `STOP` albo fail-closed probe error.
+
+Przy odmowie właściwego wrappera trwały raport ma zewnętrzny `reason_code=PREFLIGHT_FAILED`, a `error.reason_code=PROCESSES_PRESENT`, `outer_reason_code=PREFLIGHT_FAILED`, `failing_invariant`, `check_order`, deterministyczne `blocking_process_ids`, identity procesów, `belongs_to_probe_ancestry` i fingerprinty. Command lines przechodzą redakcję API key/Authorization/token/secret/password/prompt/question/guidance/payload oraz wartości wrażliwych ENV. Raport nigdy nie jest powodem do retry.
+
+Stan po checkpointcie LA-02: real gate `False`, flags fail-closed, job `real-research-09fd6a30e07e63e96699ca002dbaead4` nadal `QUEUED/attempts=0`, provider attempts/usage=0, schema `0014`, post-enqueue DB SHA `5FF5DBA3FA57A2DFBB8B638DD7E6CC9E84825A96C6080AA17F8A05B188D97B78`. Następny krok to standalone quiescence check z tego samego launchera i dopiero potem nowa jawna zgoda właściciela.
 
 ## Kontrolowana migracja produkcyjnej bazy `0009→0014`
 
@@ -245,3 +275,37 @@ Recovery odczytuje trwały `provider_attempt` i `request_started_at`. `REQUEST_S
 Autorytatywny cennik: przed realnym enqueue właściciel musi ręcznie wpisać zweryfikowane ceny do nieśledzonego `config/pricing_profiles.yaml`, oznaczyć `status: approved`, podać niepuste `approved_by`, wersję, model, walutę i jednostki, oraz wskazać profil przez `--pricing-profile`. Ceny są parsowane jako `Decimal` i nie są pobierane z internetu. `.env` ani ambient `settings.pricing` nie autoryzują realnej projekcji.
 
 Dowód zatwierdzony przez review: `1151/1151` offline, exact-once `275+282+291+303`, zero live API, sieci i kosztu. Open P2: nieosiągalny fallback `sanitize_report_payload` powinien rekurencyjnie sanitizować `str(value)`; rekomendacja jest nieblokująca i nie jest częścią tego checkpointu. Controlled live acceptance nie został wykonany.
+
+### Finalny pricing preflight 2026-07-17 — profil gotowy, runtime zablokowany
+
+Zatwierdzony profil lokalny: `anthropic-sonnet-5-intro-2026-07`, wersja `sonnet-5-intro-pricing-valid-through-2026-08-31`, model `claude-sonnet-5`, fingerprint `1b98c7c9656c5b7791ac4f8eb189d538386c31f52b760920a3f2d89f78bb4062`. Dla topicu `3`, `max_tokens=1500`, jednego web search i capu `0.12 USD` frozen projected wynosi `0.070000`, a pessimistic `0.105000 USD`.
+
+Planowana tożsamość jest deterministyczna: job `real-research-09fd6a30e07e63e96699ca002dbaead4`, request `real-research-09fd6a30e07e63e96699ca002dbaead4:research:1`, attempt `1`. Produkcyjna baza nie zawiera jeszcze tego joba, ponieważ właściciel zakazał enqueue. Nie wolno wykonać wrappera z pre-enqueue SHA `630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6`: wrapper zatrzyma się na braku joba, a po enqueue SHA musi zostać ponownie odczytany i jawnie zamrożony.
+
+Po przyszłej osobnej zgodzie kolejność jest bezwzględna: (1) jednorazowa zmiana `REAL_CONTROLLED_LIVE_ENABLED = False` na `True`; (2) kanoniczny enqueue bez providera z tym samym operation key; (3) zamknięcie procesu enqueue i read-only repository/database gate; (4) wpisanie uzyskanego post-enqueue SHA do poniższej komendy; (5) ponowne potwierdzenie właściciela dla dokładnie jednego requestu; (6) pojedyncze uruchomienie wrappera. Jeżeli zmieni się HEAD, schema, topic, profil, fingerprint, claimable jobs, lease, rezerwacja, marker albo flagi, plan jest nieważny.
+
+```powershell
+python -m app.main controlled-live-once `
+  --account nothing_is_accidental `
+  --topic-id 3 `
+  --operation-key stage1-live-acceptance-20260717 `
+  --model claude-sonnet-5 `
+  --pricing-profile anthropic-sonnet-5-intro-2026-07 `
+  --max-tokens 1500 `
+  --max-web-searches 1 `
+  --max-cost-usd 0.12 `
+  --expected-db-sha POST_ENQUEUE_SHA_NOT_YET_AUTHORIZED_OR_KNOWN `
+  --expected-schema 0014 `
+  --expected-branch dev/first-successful-research-card `
+  --expected-head af17ce21ffcebe25d619e1f8bf186a5c7affba12 `
+  --max-attempts 1 `
+  --max-retries 0
+```
+
+To jest zamrożony szkielet parametrów, nie gotowa komenda wykonawcza: placeholder DB SHA jest celowym blockerem. Nie wolno zastępować go dynamicznym hashem pobranym w tym samym poleceniu, bo zniosłoby to niezależną bramkę operatora.
+
+#### Wynik jedynej autoryzowanej komendy — 2026-07-17
+
+Job został osobno enqueue’owany, a post-enqueue SHA zamrożono jako `5FF5DBA3FA57A2DFBB8B638DD7E6CC9E84825A96C6080AA17F8A05B188D97B78`. Właściciel autoryzował dokładnie jedną komendę. Zewnętrzny hard preflight przeszedł, gate zmieniono wyłącznie `False→True`, a diff wynosił 1/1. Komenda zakończyła się `PREFLIGHT_FAILED` przed provider boundary.
+
+Raport `runtime/controlled_live_reports/99f52dd3889688440ef8dc8f26f5e318.json` potwierdza `provider_request_started=false`, `marker_cleared=true` i końcowe flags fail-closed. Nie powstał provider attempt, usage, run ani research_run; koszt pozostał `0.684580 USD`; job nadal jest `QUEUED`. Gate przywrócono do `False`, a diff usunięto. **Nie uruchamiać ponownie.** Szczegółową przyczynę wolno analizować wyłącznie offline w osobnym zakresie.

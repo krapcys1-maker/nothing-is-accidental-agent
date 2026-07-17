@@ -1,5 +1,7 @@
 # 07 — BŁĘDY I NIEUDANE PRÓBY
 
+> **Stan bieżący LA-02 (2026-07-17):** niezależny review zatwierdził naprawę jako `APPROVE WITH MINOR/P2`; root cause jest `CLOSED`. P2-2 false STOP pozostaje otwartą obserwacją proceduralną, nie blockerem checkpointu. Druga live próba nadal nie ma autoryzacji.
+
 > **LA-01-R1 (2026-07-17):** zielone 1127/1127 pierwszej LA-01 nie objęło kilku granic zaufania. Review wykazał obejście profilu cenowego, fałszywy sukces bez raportu, obcy job/result, surowy wyjątek w raporcie, fałszywe `provider_request_started=false`, placeholder CLI, brak fsync i brak fencing bare workera. Pierwsze testy naprawy ujawniły też konflikt `now`+`clock`; pierwsza pełna regresja zatrzymała się na 1149/1151 przez stare oczekiwania. Końcowa kontrpróba kompozycji znalazła jeszcze bezpieczną, lecz całkowitą odmowę: enqueue nie zapisywał sesji wymaganej przez realny wrapper. Wspólny deterministyczny helper oraz test pełnej ścieżki enqueue→wrapper bez tworzenia joba domknęły tę lukę. Po naprawie: **1151/1151**, partycje **275+282+291+303**, bez API/sieci/kosztu. Finalny review wydał `APPROVE WITH MINOR/P2`; pozostał wyłącznie nieblokujący fallback sanitizera. To nie jest live acceptance.
 
 > **`W1A-R4-01` — czwarty zielony baseline nie obejmował workerowego fallbacku (2026-07-16).** Reviewer nie testował tylko resolvera: uruchomił prawdziwy `Worker.run_once` i wstrzyknął lokalny `sqlite3.OperationalError` po `REQUEST_STARTED`. Worker zamknął job jako `FAILED`, ale attempt pozostał niewidoczny i nadal blokował budżet. Root cause: dwa osobne obrazy świata — Worker terminalizował lifecycle, a provider ledger żył dalej. Naprawa: jedna transakcja StoragePort wybiera terminalizację albo reconciliation; surowy SQLite nie pozwala już ominąć tej decyzji. Pierwsze partycje po zmianie obaliły stare oczekiwanie testów, że terminalny raw `UPDATE` przejdzie dalej; testy zaktualizowano do silniejszego `IntegrityError` i rollbacku, bez usuwania lub osłabiania asercji. Wynik: **1036/1036**, race ×30, krytyczne pliki i QA ×10.
@@ -382,3 +384,20 @@ Nowy hash bazy nie jest już chwilowym wynikiem cofniętej próby, lecz ustanowi
 Niezależny reviewer wrócił do trwałego stanu po migracji i do poprawki QP-01. Odtworzył nie tylko zielony wynik, ale też granicę bezpieczeństwa: 13 testów implementera uzupełnił 23 własnymi kontrpróbami. Potwierdził schema 0014, nowy hash, 35 triggerów, 13 legacy proofs i 18 digestów historycznych. Nie znalazł CRITICAL ani MAJOR/P1 i wydał `APPROVE WITH MINOR/P2`.
 
 Ważne było to, czego review nie zrobił. Nie usunął zapisu rollbacku, odrzuconych prób ani PID 15404; nie przepisał historii tak, jakby droga była prosta. Zmienił wyłącznie stan bieżący: QP-01 jest zatwierdzone, baza 0014 i baseline są zweryfikowane, a checkpoint może powstać po odseparowaniu prywatnych zmian. Etap 1 nadal czeka na osobną kontrolowaną akceptację live.
+# 2026-07-17 — jedyna autoryzowana komenda live nie przekroczyła preflightu
+
+Zewnętrzny gate potwierdził branch, HEAD, SHA bazy, jeden job, brak attemptów i pełny profil bezpieczeństwa. Mimo to właściwy wrapper zakończył się `PREFLIGHT_FAILED` zanim utworzył provider attempt. Raport zachował bezpieczny reason code i fingerprint, ale nie surowy detal. Nie było requestu, kosztu ani retry. Job pozostał w kolejce; druga próba została zabroniona. To dobry materiał o różnicy między „brak szkody” a „acceptance zakończony sukcesem”.
+
+## 2026-07-17 — `PROCESSES_PRESENT`: przodek udawał konkurenta
+
+Offline review odtworzył szczegół, którego trwały raport nie zachował: pierwszym failing invariantem były procesy projektu. Nie był to worker ani drugi operator. Był to własny wielopoziomowy launcher, którego command line zawierał nazwę uruchamianej komendy. Stary wyjątek znał tylko bezpośredni PowerShell/pwsh parent, więc dalszy cmd/bash/PowerShell stawał się `APP_ROLE_OPERATOR_CLI`.
+
+To ujawniło także wadę raportu: adapter wyrzucał process diagnostics, a bezpieczny wrapper zamieniał wewnętrzny kod na ogólny `PREFLIGHT_FAILED`. Naprawa zachowuje dwa poziomy przyczyny i redaguje command line zamiast usuwać diagnozę. Próba obalenia znalazła jeszcze artefakt harnessu: automatyczna nazwa parametryzowanego testu sama zawierała `-m app.main`, więc probe fail-closed zatrzymał standalone PASS. Nazwy testów dostały neutralne identyfikatory; klasyfikator nie został osłabiony. Jedna przypadkowo przerwana przez timeout regresja również została jawnie powtórzona. Żadna z tych prób nie dotknęła produkcji ani providera.
+
+## 2026-07-17 — False STOP pozostaje możliwy i to jest jawne
+
+Niezależny proces może zawierać pełny tekst planowanej komendy choćby dlatego, że operator wkleił go do innego terminala albo edytor uruchomił helper. Klasyfikator nie powinien zgadywać intencji i przepuszczać takiego procesu. Dlatego P2-2 nie został „naprawiony” kolejnym wyjątkiem: każde `PROCESSES_PRESENT` nadal oznacza STOP.
+
+Procedura jest prosta, ale twarda: zamknąć inne procesy z pełnym tekstem komendy, uruchomić standalone check z tego samego launchera i nie ponawiać live po odmowie bez nowej zgody. Review uznał to za MINOR/P2, nie za blocker LA-02.
+
+Podczas checkpointu wystąpiły też dwie małe pomyłki read-only: `operational-report` nie przyjmuje `--db-path`, a poprawne wywołanie zwraca niezerowy `DEGRADED_UNKNOWN`, bo schema 0014 nie przechowuje timestampu maintenance. Żadna nie otworzyła drogi do live ani nie zmieniła produkcji.

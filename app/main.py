@@ -8,6 +8,7 @@ Domyślnie działa w dry_run (klient zastępczy, brak realnego kosztu, zero akcj
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import math
 import os
@@ -565,6 +566,34 @@ def _cmd_controlled_live_once(args: argparse.Namespace) -> int:
     return outcome.exit_code
 
 
+def _cmd_controlled_live_quiescence_check(args: argparse.Namespace) -> int:
+    """Read-only canonical process/task/handle check; never opens storage."""
+    from app.operations.controlled_live import run_controlled_live_quiescence_check
+
+    settings = load_settings()
+    db_path = Path(args.db_path).resolve() if args.db_path else settings.db_path
+    try:
+        exit_code, payload = run_controlled_live_quiescence_check(
+            project_root=settings.project_root,
+            db_path=db_path,
+        )
+    except BaseException as exc:
+        # The CLI remains fail-closed even if the DB cannot be fingerprinted.
+        payload = {
+            "status": "STOP",
+            "reason_code": "QUIESCENCE_CHECK_FAILED",
+            "error_class": type(exc).__name__,
+            "provider_constructed": False,
+            "provider_request_started": False,
+            "storage_opened": False,
+            "session_marker_created": False,
+        }
+        exit_code = 2
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    print(f"CONTROLLED-LIVE-QUIESCENCE: {payload['status']}")
+    return exit_code
+
+
 def _cmd_list_reconciliations(args: argparse.Namespace) -> int:
     """Local read-only L1 queue; it has no provider or worker composition root.
 
@@ -827,6 +856,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_controlled_live.add_argument("--max-attempts", type=int, default=1)
     p_controlled_live.add_argument("--max-retries", type=int, default=0)
     p_controlled_live.set_defaults(func=_cmd_controlled_live_once)
+
+    p_quiescence_check = sub.add_parser(
+        "controlled-live-quiescence-check",
+        help="Read-only LA-02 check using the canonical controlled-live quiescence probe.",
+    )
+    p_quiescence_check.add_argument(
+        "--db-path",
+        help="Optional DB path; defaults to the configured database and is never opened as SQLite.",
+    )
+    p_quiescence_check.set_defaults(func=_cmd_controlled_live_quiescence_check)
 
     p_reconcile = sub.add_parser(
         "reconcile-attempt", help="Resolve one persisted NEEDS_RECONCILIATION attempt without a provider call.",

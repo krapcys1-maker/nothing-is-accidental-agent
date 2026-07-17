@@ -1,8 +1,14 @@
 # 08 — INTERWENCJE CZŁOWIEKA
 
+> **2026-07-17 — checkpoint LA-02:** właściciel przekazał `APPROVE WITH MINOR/P2` i pozwolił wyłącznie na P2 cleanup, jeden selektywny commit oraz push bieżącej gałęzi. Jednocześnie utrzymał zakaz live/API/SDK/providera/browsera/publikacji/kosztu, zmiany gate/flags/DB, nowego enqueue, PR i merge. P2-2 pozostaje otwartą obserwacją; druga próba nie jest autoryzowana.
+
 > **2026-07-17 — decyzja LA-01-R1:** właściciel przekazał werdykt niezależnego review `REJECTED — MAJOR` i autoryzował jedną pełną falę napraw P1-01…P1-06/P2-01…P2-04. Jednocześnie zabronił realnego API/SDK, sieci, browsera, publikacji, kosztu, produkcyjnych zapisów, Windows Tasks i operacji Git. Wynik kandydacki: 1151/1151 offline; realny controlled acceptance pozostaje niewykonany.
 
 > **2026-07-17 — review i checkpoint LA-01-R1:** kolejny niezależny review zatwierdził naprawę jako `APPROVE WITH MINOR/P2`; właściciel autoryzował jeden selektywny commit i push bieżącej gałęzi. Open P2 sanitizera pozostaje jawny, nieblokujący i poza reviewed diffem. Prywatne instrukcje oraz wcześniejszy blok BUILD_LOG pozostają lokalne. Ta decyzja nie autoryzuje live acceptance ani realnego API.
+
+> **2026-07-17 — ceny i granice przyszłego acceptance:** właściciel zatwierdził konkretny profil Anthropic/Sonnet 5, topic `3`, `1500` tokenów, jeden web search i cap `0.12 USD`, ale wyłącznie do utworzenia lokalnego profilu i preflightu. Jawnie nie zezwolił na gate, enqueue, flagi, workera, API, retry ani Git. Preflight uszanował tę granicę: profil jest gotowy, wykonanie pozostaje zablokowane do osobnej decyzji i post-enqueue fingerprintu.
+
+> **2026-07-17 — dokładnie jedna autoryzowana komenda:** właściciel zatwierdził istniejący job/request/session i jeden provider boundary, bez retry ani attemptu #2. Komenda zakończyła się jednak `PREFLIGHT_FAILED` przed providerem. Zgodnie z decyzją człowieka nie uruchomiono jej drugi raz; gate przywrócono do `False`, flags pozostały fail-closed, a wynik czeka na niezależny review.
 
 > **Formalne zamknięcie WAVE 1A (2026-07-16):** implementer zadeklarował `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; niezależny reviewer odtworzył 1036/1036 i wykonał własne kontrpróby (149/149 `Worker.run_once`, 36/36 SQLite floor, 30/30 recovery/reaper/crash-window), po czym wydał `APPROVE WITH MINOR/P2`. Właściciel formalnie zamknął WAVE 1A jako `CLOSED — APPROVED WITH P2`. P2-1 i P2-2 pozostają jawne, lecz nieblokujące. Etap 1 nadal `BLOCKED`, live API nadal `ZABRONIONE`; Etap 2 nie został rozpoczęty.
 
@@ -197,3 +203,17 @@ Właściciel zlecił usunięcie dokładnie trzech P1 z niezależnego review oraz
 - Zezwolił na przygotowanie i test migracji tylko na kopii; nie zezwolił na migrację ani podmianę `data/agent.db`.
 - Live API, real SDK, browser, publikacja i koszt pozostały zabronione. Osobna przyszła zgoda ma obejmować dokładnie jeden job, jeden request, twardy cap i `max_retries=0`.
 - Końcowy status implementera jest kandydacki. Formalne zamknięcie Etapu 1 pozostaje decyzją właściciela po niezależnym review i live acceptance.
+
+## 2026-07-17 — człowiek odseparował naprawę obserwatora od prawa do ponowienia
+
+- Właściciel pozwolił naprawić tylko observer effect, diagnostykę i standalone check oraz uruchomić testy na temp DB/fake callerach.
+- Nie pozwolił włączyć gate'u, zmieniać flags, uruchamiać workera, providera lub drugiej próby controlled-live. Nie zezwolił też na sieć, browser, publikację, koszt ani Git.
+- Wymusił testy legalnych launcherów i realnych blokerów, w tym drugiego entranta, workera, PID reuse, holdera DB oraz wycieku sekretu.
+- Wynik pozostaje kandydatem LA-02 do niezależnego review. Nawet zielone 1174 testy nie zastępują nowej autoryzacji operacyjnej.
+
+## 2026-07-17 — człowiek zamknął review LA-02, ale nie otworzył live
+
+- Przyjęty werdykt: `APPROVE WITH MINOR/P2`; root cause `PROCESSES_PRESENT` uznany za `CLOSED`.
+- Dozwolone: aktualizacja bieżącej dokumentacji, procedura P2-2, dokładna reguła ignore pricing profile, pełne testy offline, selektywny commit i push tej gałęzi.
+- Niedozwolone: `controlled-live-once`, provider, SDK, sieć wykonawcza, nowy job, zmiana flags/gate, produkcyjny zapis, PR i merge.
+- Następna decyzja właściciela może nastąpić dopiero po standalone quiescence check z tego samego launchera; każde `PROCESSES_PRESENT` zużywa plan i kończy się STOP.

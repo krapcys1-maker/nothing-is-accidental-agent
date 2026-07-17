@@ -127,6 +127,7 @@ class QuiesceProcessIdentity:
     classification: str
     reason_codes: tuple[str, ...]
     blocking: bool
+    belongs_to_probe_ancestry: bool = False
 
 
 @dataclass(frozen=True)
@@ -136,6 +137,7 @@ class QuiesceReport:
     scheduled_tasks: tuple[str, ...] = ()
     probe_current_pid: int | None = None
     probe_parent_pid: int | None = None
+    probe_ancestry_process_ids: tuple[int, ...] = ()
     probe_helper_process_ids: tuple[int, ...] = ()
     process_diagnostics: tuple[QuiesceProcessIdentity, ...] = ()
 
@@ -243,20 +245,27 @@ def _process_identity_as_dict(value: QuiesceProcessIdentity) -> dict[str, Any]:
         "classification": value.classification,
         "reason_codes": list(value.reason_codes),
         "blocking": value.blocking,
+        "belongs_to_probe_ancestry": value.belongs_to_probe_ancestry,
     }
 
 
 def _quiesce_report_as_dict(value: QuiesceReport) -> dict[str, Any]:
+    process_diagnostics = getattr(value, "process_diagnostics", ())
     return {
         "project_process_ids": list(value.project_process_ids),
         "locked_paths": list(value.locked_paths),
         "scheduled_tasks": list(value.scheduled_tasks),
-        "probe_current_pid": value.probe_current_pid,
-        "probe_parent_pid": value.probe_parent_pid,
-        "probe_helper_process_ids": list(value.probe_helper_process_ids),
+        "probe_current_pid": getattr(value, "probe_current_pid", None),
+        "probe_parent_pid": getattr(value, "probe_parent_pid", None),
+        "probe_ancestry_process_ids": list(
+            getattr(value, "probe_ancestry_process_ids", ())
+        ),
+        "probe_helper_process_ids": list(
+            getattr(value, "probe_helper_process_ids", ())
+        ),
         "process_diagnostics": [
             _process_identity_as_dict(process)
-            for process in value.process_diagnostics
+            for process in process_diagnostics
         ],
     }
 
@@ -386,22 +395,44 @@ def _string_tuple_from_payload(value: object, *, label: str) -> tuple[str, ...]:
     return tuple(value)
 
 
+_APP_MAIN_MODULE_COMMAND = re.compile(
+    r"(?i)-m\s+app\.main\s+([a-z][a-z0-9-]*)"
+)
+_APP_MAIN_FILE_COMMAND = re.compile(
+    r"(?i)app[\\/]+main\.py[\"']?\s+([a-z][a-z0-9-]*)"
+)
+_APPLICATION_HOST_EXECUTABLES = frozenset(
+    {
+        "python.exe",
+        "pythonw.exe",
+        "powershell.exe",
+        "pwsh.exe",
+        "cmd.exe",
+        "bash.exe",
+        "sh.exe",
+        "zsh.exe",
+        "fish.exe",
+        "wsl.exe",
+    }
+)
+
+
+def _app_main_commands(command_line: str) -> tuple[str, ...]:
+    commands = {
+        match.group(1).casefold()
+        for pattern in (_APP_MAIN_MODULE_COMMAND, _APP_MAIN_FILE_COMMAND)
+        for match in pattern.finditer(command_line)
+    }
+    return tuple(sorted(commands))
+
+
 def _process_role_reason(command_line: str) -> str | None:
-    main_command = re.search(
-        r"(?i)-m\s+app\.main\s+([a-z][a-z0-9-]*)",
-        command_line,
-    )
-    if main_command is None:
-        main_command = re.search(
-            r"(?i)app[\\/]+main\.py[\"']?\s+([a-z][a-z0-9-]*)",
-            command_line,
-        )
-    if main_command is not None:
-        command = main_command.group(1).lower()
-        if command == "worker":
-            return "APP_ROLE_WORKER"
-        if command == "maintain":
-            return "APP_ROLE_MAINTENANCE"
+    commands = _app_main_commands(command_line)
+    if "worker" in commands:
+        return "APP_ROLE_WORKER"
+    if "maintain" in commands:
+        return "APP_ROLE_MAINTENANCE"
+    if commands:
         return "APP_ROLE_OPERATOR_CLI"
 
     normalized = command_line.replace("\\", "/").casefold()
@@ -420,6 +451,31 @@ def _process_role_reason(command_line: str) -> str | None:
     return None
 
 
+def _operator_entrypoint_signature(command_line: str) -> str | None:
+    """Return the exact operator entrypoint named by one command line.
+
+    Multiple distinct app entrypoints are intentionally ambiguous: a launcher
+    that also names a worker/maintenance command is never ancestry-exempt.
+    """
+    commands = _app_main_commands(command_line)
+    if len(commands) == 1:
+        return f"app.main:{commands[0]}"
+    normalized = command_line.replace("\\", "/").casefold()
+    script_entrypoints = tuple(
+        entrypoint
+        for entrypoint in (
+            "scripts/prepare_stage1_db_migration.py",
+            "scripts/manage_windows_tasks.py",
+            "scripts/run_capped_research.py",
+            "scripts/run_topics.py",
+        )
+        if entrypoint in normalized
+    )
+    if not commands and len(script_entrypoints) == 1:
+        return f"script:{script_entrypoints[0]}"
+    return None
+
+
 def _command_line_contains_root(command_line: str, project_root: Path) -> bool:
     normalized_command = command_line.replace("/", "\\").casefold()
     normalized_root = str(project_root.resolve()).replace("/", "\\").casefold()
@@ -434,6 +490,72 @@ def _identity_is_complete(process: _WindowsProcessSnapshot) -> bool:
     )
 
 
+def _creation_time_ns(process: _WindowsProcessSnapshot) -> int:
+    try:
+        return parse_mtime_utc_ns(process.creation_time_utc)
+    except ValueError as exc:
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: process creation time is invalid."
+        ) from exc
+
+
+def _verified_launcher_ancestry(
+    processes: tuple[_WindowsProcessSnapshot, ...],
+    *,
+    current_pid: int,
+    parent_pid: int,
+) -> frozenset[int]:
+    """Prove only the launchers carrying this probe's exact entrypoint.
+
+    PID/PPID comes from one immutable inventory snapshot. Creation times prevent
+    accepting a reused PID, and executable/command line completeness prevents a
+    shell name alone from becoming proof of ancestry.
+    """
+    by_pid = {process.pid: process for process in processes}
+    current = by_pid.get(current_pid)
+    if current is None or not _identity_is_complete(current):
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: current process identity is incomplete."
+        )
+    if current.parent_pid != parent_pid:
+        raise Stage1MigrationPreflightError(
+            "Cannot prove full quiescence: current PID/PPID relation is inconsistent."
+        )
+    current_created_ns = _creation_time_ns(current)
+    signature = _operator_entrypoint_signature(current.command_line)
+    verified = {current_pid}
+    if signature is None:
+        return frozenset(verified)
+
+    child = current
+    child_created_ns = current_created_ns
+    visited = {current_pid}
+    while child.parent_pid:
+        parent = by_pid.get(child.parent_pid)
+        if parent is None:
+            break
+        if parent.pid in visited:
+            raise Stage1MigrationPreflightError(
+                "Cannot prove full quiescence: process ancestry contains a PID cycle."
+            )
+        if _operator_entrypoint_signature(parent.command_line) != signature:
+            break
+        if not _identity_is_complete(parent):
+            raise Stage1MigrationPreflightError(
+                "Cannot prove full quiescence: launcher ancestry identity is incomplete."
+            )
+        parent_created_ns = _creation_time_ns(parent)
+        if parent_created_ns > child_created_ns:
+            raise Stage1MigrationPreflightError(
+                "Cannot prove full quiescence: launcher creation time contradicts PID ancestry."
+            )
+        verified.add(parent.pid)
+        visited.add(parent.pid)
+        child = parent
+        child_created_ns = parent_created_ns
+    return frozenset(verified)
+
+
 def _classify_windows_processes(
     processes: tuple[_WindowsProcessSnapshot, ...],
     *,
@@ -442,6 +564,11 @@ def _classify_windows_processes(
     parent_pid: int,
     helper_process_ids: frozenset[int],
 ) -> tuple[QuiesceProcessIdentity, ...]:
+    ancestry = _verified_launcher_ancestry(
+        processes,
+        current_pid=current_pid,
+        parent_pid=parent_pid,
+    )
     diagnostics: list[QuiesceProcessIdentity] = []
     for process in processes:
         role_reason = _process_role_reason(process.command_line)
@@ -450,6 +577,7 @@ def _classify_windows_processes(
         blocking = False
         classification: str | None = None
         reasons: list[str] = []
+        belongs_to_ancestry = process.pid in ancestry
 
         if process.pid == current_pid:
             classification = "PROBE_CURRENT"
@@ -457,18 +585,22 @@ def _classify_windows_processes(
         elif process.pid in helper_process_ids:
             classification = "PROBE_HELPER"
             reasons.append("PROBE_REGISTERED_HELPER_IDENTITY")
-        elif (
-            process.pid == parent_pid
-            and executable_name in {"powershell.exe", "pwsh.exe"}
-            and role_reason not in {"APP_ROLE_WORKER", "APP_ROLE_MAINTENANCE"}
-        ):
-            classification = "PROBE_PARENT_LAUNCHER"
-            reasons.append("PROBE_PARENT_LAUNCHER")
-            if role_reason == "APP_ROLE_OPERATOR_CLI":
-                reasons.append("PARENT_COMMAND_REFERENCES_OPERATOR_ENTRYPOINT")
-        elif process.pid == parent_pid and role_reason is None:
-            classification = "PROBE_PARENT_LAUNCHER"
-            reasons.append("PROBE_PARENT_LAUNCHER")
+        elif role_reason in {"APP_ROLE_WORKER", "APP_ROLE_MAINTENANCE"}:
+            classification = "BLOCKING_APPLICATION_PROCESS"
+            reasons.append(role_reason)
+            blocking = True
+            if belongs_to_ancestry:
+                reasons.append("FORBIDDEN_ROLE_IN_LAUNCHER_ANCESTRY")
+        elif belongs_to_ancestry:
+            classification = "PROBE_ANCESTRY_LAUNCHER"
+            reasons.extend(
+                (
+                    "VERIFIED_PROBE_ANCESTRY",
+                    "PID_PPID_RELATION_VERIFIED",
+                    "CREATION_ORDER_VERIFIED",
+                    "ENTRYPOINT_SIGNATURE_MATCH",
+                )
+            )
         elif role_reason is not None:
             classification = "BLOCKING_APPLICATION_PROCESS"
             reasons.append(role_reason)
@@ -486,7 +618,7 @@ def _classify_windows_processes(
                 )
                 blocking = True
         elif (
-            executable_name in {"python.exe", "pythonw.exe", "powershell.exe", "pwsh.exe"}
+            executable_name in _APPLICATION_HOST_EXECUTABLES
             and not process.command_line
         ):
             classification = "BLOCKING_AMBIGUOUS_PROCESS"
@@ -505,6 +637,7 @@ def _classify_windows_processes(
                 classification=classification,
                 reason_codes=tuple(reasons),
                 blocking=blocking,
+                belongs_to_probe_ancestry=belongs_to_ancestry,
             )
         )
     return tuple(sorted(diagnostics, key=lambda value: value.pid))
@@ -668,6 +801,11 @@ def _default_quiesce_probe(project_root: Path, source: Path) -> QuiesceReport:
     current_pid = os.getpid()
     parent_pid = os.getppid()
     payload, processes, helper_pid = _run_windows_process_inventory(project_root)
+    ancestry = _verified_launcher_ancestry(
+        processes,
+        current_pid=current_pid,
+        parent_pid=parent_pid,
+    )
     diagnostics = _classify_windows_processes(
         processes,
         project_root=project_root,
@@ -686,6 +824,7 @@ def _default_quiesce_probe(project_root: Path, source: Path) -> QuiesceReport:
         ),
         probe_current_pid=current_pid,
         probe_parent_pid=parent_pid,
+        probe_ancestry_process_ids=tuple(sorted(ancestry)),
         probe_helper_process_ids=(helper_pid,),
         process_diagnostics=diagnostics,
     )

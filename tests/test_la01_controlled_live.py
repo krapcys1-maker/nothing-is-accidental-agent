@@ -324,6 +324,126 @@ def test_real_quiescence_dimensions_block(
     assert outcome.exit_code != 0
 
 
+def test_process_preflight_report_preserves_inner_code_and_safe_diagnostics(
+    storage, settings, account, tmp_path,
+):
+    topic, pricing = _prepare(storage, account, tmp_path)
+    secret = "sk-live-super-secret-value"
+    private_prompt = "private unreleased prompt words"
+    diagnostics = (
+        {
+            "pid": 902,
+            "parent_pid": 90,
+            "executable": r"C:\Python\python.exe",
+            "command_line": (
+                "python.exe -m app.main worker --once "
+                f"--api-key {secret} --prompt \"{private_prompt}\" --max-tokens 5"
+            ),
+            "creation_time_utc": "2026-07-17T10:00:02.0000000Z",
+            "classification": "BLOCKING_APPLICATION_PROCESS",
+            "reason_codes": ("APP_ROLE_WORKER",),
+            "blocking": True,
+            "belongs_to_probe_ancestry": False,
+        },
+        {
+            "pid": 321,
+            "parent_pid": 123,
+            "executable": r"C:\Windows\System32\cmd.exe",
+            "command_line": "cmd /c python -m app.main controlled-live-once",
+            "creation_time_utc": "2026-07-17T10:00:01.0000000Z",
+            "classification": "BLOCKING_APPLICATION_PROCESS",
+            "reason_codes": ("APP_ROLE_OPERATOR_CLI",),
+            "blocking": True,
+            "belongs_to_probe_ancestry": False,
+        },
+    )
+    outcome = _run(
+        storage,
+        settings,
+        account,
+        tmp_path,
+        topic,
+        pricing,
+        quiescence={
+            "project_process_ids": (902, 321),
+            "scheduled_tasks": (),
+            "locked_paths": (),
+            "probe_current_pid": 100,
+            "probe_parent_pid": 90,
+            "probe_ancestry_process_ids": (90, 100),
+            "probe_helper_process_ids": (101,),
+            "process_diagnostics": diagnostics,
+        },
+    )
+
+    report_text = outcome.report_path.read_text(encoding="utf-8")
+    report = json.loads(report_text)
+    error = report["error"]
+    assert report["reason_code"] == "PREFLIGHT_FAILED"
+    assert report["final_status"] == "PREFLIGHT_FAILED"
+    assert error["outer_reason_code"] == "PREFLIGHT_FAILED"
+    assert error["reason_code"] == "PROCESSES_PRESENT"
+    assert error["failing_invariant"] == "QUIESCENCE_PROJECT_PROCESSES"
+    assert error["check_order"] == 6
+    assert error["blocking_process_ids"] == [321, 902]
+    assert [item["pid"] for item in error["process_diagnostics"]] == [321, 902]
+    assert error["process_diagnostics"][0]["classification"]
+    assert error["process_diagnostics"][0]["reason_codes"]
+    assert error["process_diagnostics"][0]["belongs_to_probe_ancestry"] is False
+    assert error["process_diagnostics"][0]["identity_fingerprint"]
+    assert error["diagnostic_fingerprint"]
+    assert secret not in report_text
+    assert private_prompt not in report_text
+    assert "[REDACTED]" in report_text
+    assert report["provider_request_started"] is False
+
+
+def test_fake_controlled_live_flow_does_not_block_on_verified_ancestry(
+    storage, settings, account, tmp_path,
+):
+    topic, pricing = _prepare(storage, account, tmp_path)
+    quiescence = {
+        "project_process_ids": (),
+        "scheduled_tasks": (),
+        "locked_paths": (),
+        "probe_current_pid": 100,
+        "probe_parent_pid": 90,
+        "probe_ancestry_process_ids": (80, 90, 100),
+        "probe_helper_process_ids": (101,),
+        "process_diagnostics": (
+            {
+                "pid": 80,
+                "parent_pid": 1,
+                "executable": "cmd.exe",
+                "command_line": "cmd /c python -m app.main controlled-live-once",
+                "creation_time_utc": "2026-07-17T10:00:00.0000000Z",
+                "classification": "PROBE_ANCESTRY_LAUNCHER",
+                "reason_codes": ("VERIFIED_PROBE_ANCESTRY",),
+                "blocking": False,
+                "belongs_to_probe_ancestry": True,
+            },
+        ),
+    }
+
+    outcome = _run(
+        storage,
+        settings,
+        account,
+        tmp_path,
+        topic,
+        pricing,
+        quiescence=quiescence,
+    )
+
+    assert outcome.status == "COMPLETED_FAIL_CLOSED"
+    assert outcome.exit_code == 0
+    assert outcome.worker_result.attempt_no == 1
+    assert storage.conn.execute(
+        "SELECT COUNT(*) FROM provider_attempts WHERE job_id=?",
+        (outcome.plan.job_id,),
+    ).fetchone()[0] == 1
+
+
 def test_default_quiescence_probe_delegates_to_approved_probe(monkeypatch, tmp_path):
     seen = []
 

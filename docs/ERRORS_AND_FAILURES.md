@@ -771,3 +771,55 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Wynik review:** `APPROVE WITH MINOR/P2`; wszystkie P1 są zamknięte i finding nie blokuje checkpointu ani controlled live acceptance.
 - **P2:** fallback `return str(value)` w `sanitize_report_payload` jest obecnie nieosiągalny dzięki zamkniętej walidacji typów, ale sam nie wykonuje ponownej sanitizacji. Rekomendowana późniejsza poprawka defense-in-depth: `return sanitize_report_payload(str(value))`.
 - **Decyzja checkpointu:** nie zmieniać sanitizera poza reviewed diffem; zachować finding jawnie do przyszłej osobno zatwierdzonej poprawki.
+
+### 2026-07-17 — Finalny preflight nie może zamrozić post-enqueue DB SHA bez enqueue
+
+- **Objaw:** wszystkie dane pricing i koszt przechodzą walidację, ale w produkcyjnej bazie nie ma oczekiwanego joba. Realny wrapper ma `allow_job_creation=false`, więc komenda z bieżącym SHA zatrzyma się na `EXPECTED_JOB_MISSING`.
+- **Przyczyna:** poprawna sekwencja LA-01-R1 rozdziela kanoniczny enqueue od wrappera. Enqueue zmienia stan SQLite, a wrapper wymaga fingerprintu bazy po tej zmianie. Bieżąca zgoda zakazuje enqueue, więc post-enqueue SHA jest jeszcze niepoznawalny.
+- **Bezpieczny skutek:** live preflight ma status `BLOCKED`, nie wykonano gate, enqueue, flag, workera ani providera. Następny zakres musi jawnie zezwolić na enqueue bez API, po czym ponownie zamrozić read-only SHA i dopiero potem dopuścić dokładnie jeden request.
+- **Nieudane helpery lokalne:** pierwsza walidacja read-only użyła nieistniejącej kolumny `accounts.display_name`, a kolejna historycznych nazw kluczy flag. Obie zakończyły się przed jakąkolwiek mutacją; po odczycie schematu poprawna walidacja przeszła. To błąd operatorskiego założenia, nie danych.
+
+### 2026-07-17 — Jedyna komenda live zatrzymana przez wewnętrzny `PREFLIGHT_FAILED`
+
+- **Objaw:** zewnętrzny hard preflight przeszedł wszystkie jawne warunki, gate diff był dokładny, lecz jedyna komenda `controlled-live-once` zakończyła się exit 1 i `PREFLIGHT_FAILED` po około dwóch sekundach.
+- **Granica skutku:** provider boundary nie został osiągnięty (`provider_request_started=false`), nie powstał attempt, usage, run, research_run ani koszt. Job pozostaje `QUEUED` i nie może być wykonany bez nowej zgody.
+- **Recovery:** flags były fail-closed natychmiast po odmowie; gate przywrócono do `False`; marker usunięty po trwałym raporcie. Raport zawiera wyłącznie klasę, zamknięty reason code, bezpieczny komunikat i diagnostic fingerprint.
+- **Root cause:** nierozstrzygnięty. Trwały raport celowo nie ujawnia wewnętrznego detalu poza `PREFLIGHT_FAILED`. Nie uruchomiono ponownej próby diagnostycznej, ponieważ właściciel zakazał retry i drugiego uruchomienia.
+- **Następny krok:** niezależny offline review ścieżki realnego preflightu i sposobu zachowania bezpiecznego, bardziej szczegółowego closed reason code; bez providera i bez mutacji joba.
+
+### 2026-07-17 — LA-02: observer effect launchera i utracona diagnostyka — FIXED / APPROVED WITH MINOR/P2
+
+- **Co miało działać:** canonical quiescence miał ignorować wyłącznie własny legalny launcher controlled-live, a przy prawdziwym blockerze raportować dokładny closed reason.
+- **Co nie zadziałało:** dalszy PowerShell/cmd/bash przodek z literalnym `-m app.main controlled-live-once` dostał `APP_ROLE_OPERATOR_CLI → BLOCKING_APPLICATION_PROCESS → PROCESSES_PRESENT`. `default_quiescence_probe` usunął `process_diagnostics`, a `_safe_error` zastąpił inner code ogólnym `PREFLIGHT_FAILED`.
+- **Dlaczego:** wyjątek opierał się na jednym bezpośrednim parent PID i allowliście executable (`powershell.exe`/`pwsh.exe`), nie na udowodnionym ancestry. Granica raportowa nie przenosiła typowanej diagnostyki wyjątku.
+- **Jak naprawiono:** dokładny PID/PPID chain, kompletna identity, zgodny jednoznaczny entrypoint i monotoniczny creation time; tylko udowodnieni przodkowie są nonblocking. Inner reason, invariant/check order, blocking PIDs i redacted identities są trwałe. Dodano canonical standalone PASS/STOP bez storage/providera/gate'u.
+- **Ile prób:** jedna wcześniej autoryzowana próba live (bez providera) ujawniła problem; zero ponownych prób live. Naprawa i wszystkie testy wyłącznie offline/temp DB.
+- **Czego się nauczyliśmy:** samo fail-closed chroni skutki, ale nie wystarcza do operacyjnej diagnozy. Wyjątek procesu musi wynikać z relacji tożsamości, nie z nazwy shella; zewnętrzny status i wewnętrzny reason są odrębnymi polami.
+- **Status:** root cause `CLOSED`; niezależny review wydał `APPROVE WITH MINOR/P2`; provider request nadal niewykonany, a druga próba nieautoryzowana.
+
+### 2026-07-17 — Lokalne awarie harnessu podczas LA-02 — FIXED
+
+- **Co miało działać:** pełny pytest i cztery partycje exact-once miały przejść jednym przebiegiem.
+- **Co nie zadziałało:** pierwsze pełne `pytest` zostało przerwane przez omyłkowy 1-sekundowy timeout narzędzia. Pierwszy przebieg partycji 2 zatrzymał standalone PASS, bo automatyczny node ID parametryzowanego testu zawierał literalne `-m app.main ...`; długi command line parent runnera wyglądał dla fail-closed probe'a jak niezależny operator. Pierwszy końcowy helper immutable użył nieistniejącej kolumny `reconciliation_events.job_id`.
+- **Dlaczego:** błąd operatorskiego limitu, dane testowe umieszczone przez pytest w nazwie procesu oraz błędne założenie o schemacie kolumny; nie były to wady produkcyjnego ancestry ani trwałych danych.
+- **Jak naprawiono:** ponowiono pełny suite z właściwym limitem; parametry dostały neutralne jawne `ids`, bez osłabiania klasyfikatora; schemat odczytano przez immutable `PRAGMA table_info`, po czym poprawne zapytanie użyło `request_id`. Partycja 2, pełny subprocess standalone i finalny immutable gate przeszły.
+- **Ile prób:** jeden przerwany full suite, jeden odrzucony przebieg partycji i jeden odrzucony helper read-only; wszystkie bez sieci, API i mutacji produkcji.
+- **Checkpoint — read-only pomyłki operatorskie:** pierwsze wywołanie `operational-report` dostało nieobsługiwany argument `--db-path` i zakończyło się błędem parsera bez otwarcia bazy. Poprawne wywołanie bez argumentu zwróciło oczekiwany niezerowy `DEGRADED_UNKNOWN`, ponieważ schema 0014 nie utrwala timestampu maintenance; pozostałe pola raportu były poprawne. Nie wykonano retry live ani mutacji.
+- **Czego się nauczyliśmy:** test quiescence obserwuje także harness. Nazwy przypadków są częścią środowiska procesu i nie powinny imitować realnych entrypointów, jeśli przypadek testuje czysty stan.
+- **Status:** FIXED.
+
+### 2026-07-17 — Mtime produkcyjnego SHM różni się między najwcześniejszym a końcowym gate'em — OPEN OBSERVATION
+
+- **Co miało działać:** końcowy gate miał odtworzyć SHA/size/mtime DB/WAL/SHM z wejścia LA-02.
+- **Co zaobserwowano:** main DB i WAL są identyczne w SHA/size/mtime. SHM ma identyczny SHA `FD4C9F…9389EB` i rozmiar 32768 B, ale najwcześniej zapisany mtime `07:55:01Z` różni się od końcowego `08:02:20Z`.
+- **Granica dowodu:** canonical standalone zmierzył wszystkie trzy pliki przed/po i zwrócił `database_unchanged=true`; późniejszy odczyt SQLite `mode=ro&immutable=1` również zachował wszystkie SHA/size/mtime. Żaden z tych dwóch końcowych gate'ów nie spowodował driftu. Nie ustalono procesu, który wcześniej zmienił wyłącznie metadane SHM; nie wolno przypisywać przyczyny bez dowodu.
+- **Wpływ:** durable main DB pozostaje SHA `5FF5DB…97B78`, schema 0014; WAL pusty; zawartość SHM byte-identical; job/attempts/usage/flags bez zmian. Obserwacja nie autoryzuje retry i powinna być widoczna reviewerowi.
+- **Status:** OPEN OBSERVATION — metadata only; nie blokuje zatwierdzonego checkpointu LA-02 i nie autoryzuje live.
+- **Checkpoint LA-02:** pierwszy standalone gate widział SHM mtime `2026-07-17T09:10:44.1065777Z`; po read-only kontrolach późniejszy gate widział `2026-07-17T09:26:57.3374625Z`. Interweniujące `operational-report` było jedynym poleceniem otwierającym produkcyjną SQLite i użyło `mode=ro`/`query_only`, ale nie przypisujemy mu przyczyny bez dowodu. DB, WAL i SHM zachowały dokładne SHA/rozmiary; późniejszy standalone przed/po oraz immutable query nie wykazały dalszego driftu. To nie jest zapis danych ani podstawa do retry.
+
+### 2026-07-17 — P2-2: niezależny proces z pełnym tekstem komendy może wywołać false STOP — OPEN OBSERVATION
+
+- **Obserwacja:** terminal, edytor lub shell niezwiązany z legalnym ancestry może mieć w command line pełny tekst planowanej komendy `controlled-live-once`. Klasyfikator nie ma dowodu, że to wyłącznie tekst pomocniczy, więc `PROCESSES_PRESENT` jest bezpiecznym wynikiem fail-closed.
+- **Decyzja checkpointu:** nie zmieniać klasyfikatora. Przed przyszłym live zamknąć takie procesy i uruchomić standalone quiescence check z dokładnie tego samego launchera.
+- **Warunek STOP:** każde `PROCESSES_PRESENT`, `STOP`, niepełna identity lub drift DB/WAL/SHM kończy operację. Live nie jest ponawiane bez nowej jawnej autoryzacji właściciela.
+- **Status:** `OPEN OBSERVATION / DOCUMENTED`; nie jest blockerem checkpointu LA-02.

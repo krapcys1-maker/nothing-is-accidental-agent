@@ -157,3 +157,27 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Zakres:** formalna materializacja werdyktu, selektywny staging, testy i Git; bez researchu treściowego, providera, browsera i publikacji.
 - **Wynik review:** `APPROVE WITH MINOR/P2`; open P2 sanitizera jest nieblokującą rekomendacją.
 - **Koszt:** 0 USD; żadnego wpisu model usage ani Research Card.
+
+## 2026-07-17 — Real pricing profile i live acceptance preflight
+
+- **Zakres:** wyłącznie lokalna walidacja cennika, odczyt topicu `3` i stanu operacyjnego bazy w trybie read-only; bez researchu treściowego i bez web search.
+- **Wynik:** topic `Why supermarkets put essentials at the back` pozostaje `SELECTED`, bez Research Card. Nie utworzono joba ani attemptu.
+- **Koszt:** `0.000000 USD`; provider, SDK i sieć nie zostały użyte. Projected `0.070000` i pessimistic `0.105000 USD` są planem przyszłej operacji, nie poniesionym kosztem.
+
+## 2026-07-17 — Jedyna autoryzowana komenda live zatrzymana przed providerem
+
+- **Zakres:** wrapper uruchomiono dokładnie raz dla topicu `3`; wewnętrzny preflight zwrócił `PREFLIGHT_FAILED` przed requestem.
+- **Wynik researchu:** brak run/research_run, brak źródeł i Research Card; topic pozostaje `SELECTED`.
+- **Koszt:** `0.000000 USD`; provider attempts i usage równe zero, miesięczny koszt nadal `0.684580 USD`.
+
+## 2026-07-17 — LA-02 offline, bez researchu treściowego
+
+- **Zakres:** lokalna analiza kodu i procesów, fake callery oraz tymczasowe bazy; nie wykonywano web search ani researchu treściowego.
+- **Wynik:** przyczyna `PROCESSES_PRESENT` zamknięta kandydacko przez ancestry contract; żadnego źródła, runu, Research Card ani provider requestu.
+- **Koszt:** `0.000000 USD`; job produkcyjny pozostaje `QUEUED/attempts=0`, provider attempts/usage=0.
+
+## 2026-07-17 — Checkpoint LA-02 po niezależnym review
+
+- **Zakres:** formalna materializacja `APPROVE WITH MINOR/P2`, P2 cleanup, pełne testy offline i selektywny Git; bez researchu treściowego, web search, providera, browsera i publikacji.
+- **Wynik:** nie powstał run, research_run, źródło ani Research Card. Produkcyjny job pozostaje `QUEUED/attempts=0`; provider request, attempts i usage są zerowe.
+- **Koszt:** `0.000000 USD`; Etap 1 pozostaje otwarty do nowej decyzji właściciela po standalone quiescence check.

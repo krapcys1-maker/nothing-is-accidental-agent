@@ -4,7 +4,16 @@
 > Data: 2026-07-13 · Architektura docelowa: `MASTER_ARCHITECTURE.md` · Stan bieżący: `CURRENT_PROJECT_STATE.md`.
 > Zastępuje plany etapów z `docs/IMPLEMENTATION_PLAN.md` (§B.11, CZĘŚCI D–F) i plan napraw z audytu 12.07 — oba w `docs/archive/superseded_plans/`.
 >
-> **ETAP 0 ZAKOŃCZONY. AKTUALNY ETAP: 1 — OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE.** **WAVE 0A/0B/1A = `CLOSED — APPROVED WITH P2`; pierwsza WAVE LA-01 = `REJECTED — MAJOR`; LA-01-R1 = `APPROVED WITH MINOR/P2 — CHECKPOINT AUTHORIZED`.** Bieżący kod zna 14 migracji i ma **1151/1151 testów offline**, exact-once `275+282+291+303`. Produkcyjna baza jest na schema `0014` z baseline SHA `630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6`. Historyczne 1127/1079/1052/1036/1007/980/982/894 są wcześniejszymi iteracjami. P1-01…P1-06 są zamknięte; jedyny open P2 sanitizera jest nieblokującą rekomendacją defense-in-depth. **Realny controlled live acceptance nadal niewykonany i nieautoryzowany** (`REAL_CONTROLLED_LIVE_ENABLED=false`), live API `ZABRONIONE`, Etap 2 nierozpoczęty.
+> **ETAP 0 ZAKOŃCZONY. AKTUALNY ETAP: 1 — OPEN / READY FOR NEW OWNER AUTHORIZATION AFTER STANDALONE QUIESCENCE CHECK.** **WAVE 0A/0B/1A = `CLOSED — APPROVED WITH P2`; pierwsza WAVE LA-01 = `REJECTED — MAJOR`; LA-01-R1 i LA-02 = `APPROVED WITH MINOR/P2 — CHECKPOINTED`.** Bieżący kod zna 14 migracji i ma **1174/1174 testów offline**. Jedyna autoryzowana komenda live zakończyła się `PREFLIGHT_FAILED / PROCESSES_PRESENT` przed provider boundary: observer effect własnego launchera, zero attempts/usage/kosztu, job `QUEUED/attempts=0`, marker brak, gate `False`, flagi fail-closed. Root cause jest `CLOSED`; P2-2 false STOP pozostaje otwartą, udokumentowaną obserwacją. LA-02 **nie autoryzuje drugiej próby**. Live API `ZABRONIONE`, Etap 2 nierozpoczęty.
+
+> **Live attempt 2026-07-17:** profil, job i post-enqueue SHA zostały osobno zatwierdzone. Zewnętrzny hard preflight przeszedł, ale jedyna komenda wrappera zwróciła `PREFLIGHT_FAILED`; `provider_request_started=false`. Analiza offline ustaliła `PROCESSES_PRESENT` i gap diagnostics, a niezależny review zatwierdził LA-02. Następna dozwolona kolejność to: zamknąć inne terminale/edytory/shelle zawierające pełny tekst komendy → uruchomić standalone quiescence check z dokładnie tego samego launchera → jawna nowa decyzja właściciela → ponownie zamrożony preflight → najwyżej jedna nowa próba. Każde `PROCESSES_PRESENT` oznacza `STOP`; żadnego kroku nie wolno pominąć.
+
+## WAVE LA-02 — lokalna naprawa observer effect i diagnostics (zatwierdzona)
+
+- **Wykonane offline:** ancestry launchera oparte na rzeczywistym PID/PPID, pełnej identity, zgodnym entrypoincie i creation order; PowerShell/pwsh/cmd/bash bez wyjątków opartych wyłącznie na nazwie; blokady drugiego entranta, workera, maintenance, schedulera, holdera, tasku, PID reuse i niespójnej identity pozostają.
+- **Diagnostyka:** zewnętrzny `PREFLIGHT_FAILED` nie usuwa inner `PROCESSES_PRESENT`; raport obejmuje invariant/check order, blocking PIDs, redacted command line, classification, reason codes, ancestry i fingerprint. Standalone `controlled-live-quiescence-check` używa canonical probe'a bez DB open/storage/provider/markera/gate'u.
+- **Dowód:** 1174/1174 offline, exact-once `284+284+298+308`; 21 testów LA-02 plus nowa regresja fake controlled-live ancestry i wcześniejsze LA-01-R1/QP-01; temp DB/fake callery, zero sieci/API/SDK/browsera/publikacji/kosztu.
+- **Status:** `APPROVED WITH MINOR/P2 — CHECKPOINTED`. Root cause `PROCESSES_PRESENT` jest `CLOSED`; P2-2 false STOP pozostaje `OPEN OBSERVATION / DOCUMENTED` i nie blokuje checkpointu. Produkcja schema 0014 i post-enqueue SHA `5FF5DBA3FA57A2DFBB8B638DD7E6CC9E84825A96C6080AA17F8A05B188D97B78` są niezmienione; job `QUEUED/attempts=0`; gate `False`; druga próba niedozwolona.
 
 Oznaczenia P0-x/P1-x/P2-x pochodzą z audytu 2026-07-12 (zarchiwizowany; findingi przeniesione tutaj i do `CURRENT_PROJECT_STATE.md`). ✅ = już wykonane (nie jest zadaniem).
 
@@ -195,9 +204,9 @@ WAVE 0B jest formalnie `CLOSED — APPROVED WITH P2`. WAVE 1A wdraża ręczny re
 
 ---
 
-## AKTUALNY ETAP: **Etap 1 — OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE**
+## AKTUALNY ETAP: **Etap 1 — OPEN / READY FOR NEW OWNER AUTHORIZATION AFTER STANDALONE QUIESCENCE CHECK**
 
-Etap 0 spełnił kryterium zakończenia 2026-07-13. Techniczny zakres Etapu 1 jest kandydatem kompletnym: kolejka, claim/lease/fence/heartbeat, restart/recovery, maintenance/reaper, scheduling policy, runtime flags, dry-run worker, durable provider/usage/settlement/reconciliation, minimalny launcher Windows Task Scheduler, read-only raport i LA-01-R1. Kod oraz chroniona produkcyjna baza mają schema `0014` i 14 migracji; wymagany baseline DB to `630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6`. Zadania systemowe nie są zarejestrowane. Browser/public worker pozostaje BLOCKED; live API jest ZABRONIONE.
+Etap 0 spełnił kryterium zakończenia 2026-07-13. Techniczny zakres Etapu 1 obejmuje kolejkę, claim/lease/fence/heartbeat, restart/recovery, maintenance/reaper, scheduling policy, runtime flags, dry-run worker, durable provider/usage/settlement/reconciliation, minimalny launcher Windows Task Scheduler, read-only raport, LA-01-R1 i kandydacką LA-02. Kod oraz produkcyjna baza mają schema `0014` i 14 migracji; aktualny post-enqueue SHA to `5FF5DBA3FA57A2DFBB8B638DD7E6CC9E84825A96C6080AA17F8A05B188D97B78`. Zadania systemowe nie są zarejestrowane. Browser/public worker pozostaje BLOCKED; live API jest ZABRONIONE.
 
 ### Zamknięte kryterium zakończenia Etapu 1
 
@@ -205,7 +214,7 @@ Etap 0 spełnił kryterium zakończenia 2026-07-13. Techniczny zakres Etapu 1 je
 - **Przed formalnym CLOSED:** pozytywny jeden live durable single flow; niezależny review trwałego stanu po teście; brak otwartego MAJOR/CRITICAL; formalna decyzja właściciela.
 - **Poza kryterium:** browser/publikacja, FetchPort/evidence excerpts, content/panel/autonomia/interakcje/analytics, Etap 2+ i P2 bez osiągalnego naruszenia.
 
-Review LA-01-R1 jest zakończony wynikiem `APPROVE WITH MINOR/P2`. Do chwili kontrolowanego live acceptance, review trwałego wyniku po tym teście i formalnej decyzji właściciela status pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`. Nie wolno rozpoczynać Etapu 2.
+Review LA-01-R1 i LA-02 są zakończone wynikiem `APPROVE WITH MINOR/P2`. Pierwsza próba live nie zaliczyła acceptance; jej root cause `PROCESSES_PRESENT` jest zamknięty technicznie. Do chwili standalone quiescence check z tego samego launchera, nowej autoryzacji właściciela, pozytywnego controlled live acceptance, review jego trwałego wyniku i formalnej decyzji właściciela status pozostaje `OPEN`. Nie wolno rozpoczynać Etapu 2.
 
 ### WAVE 0B.2 — zapis historyczny provider ledger hardening (2026-07-14)
 
@@ -217,7 +226,7 @@ Review LA-01-R1 jest zakończony wynikiem `APPROVE WITH MINOR/P2`. Do chwili kon
 
 ### WAVE 0B — domykająca fala po review (2026-07-15)
 
-**Status historyczny przed checkpointem WAVE 0B: `WAVE 0B APPROVED WITH P2 — READY FOR CHECKPOINT`; Etap 1 = `BLOCKED`; live API = `ZABRONIONE`.** `0013_provider_attempt_usage_integrity` była wtedy trzynastą migracją. **Stan obecny:** WAVE 0B i WAVE 1A są `CLOSED — APPROVED WITH P2`; pierwsza LA-01 jest `REJECTED — MAJOR`, a LA-01-R1 jest `APPROVED WITH MINOR/P2`; kod i produkcja mają `0014` oraz 14 migracji, baseline DB `630E3411…36A6`, a bieżąca regresja wynosi 1151/1151.
+**Status historyczny przed checkpointem WAVE 0B: `WAVE 0B APPROVED WITH P2 — READY FOR CHECKPOINT`; Etap 1 = `BLOCKED`; live API = `ZABRONIONE`.** `0013_provider_attempt_usage_integrity` była wtedy trzynastą migracją. **Stan obecny:** WAVE 0B i WAVE 1A są `CLOSED — APPROVED WITH P2`; pierwsza LA-01 jest `REJECTED — MAJOR`, a LA-01-R1 i LA-02 są `APPROVED WITH MINOR/P2 — CHECKPOINTED`; kod i produkcja mają `0014` oraz 14 migracji, post-enqueue DB SHA `5FF5DB…97B78`, a bieżąca regresja wynosi 1174/1174.
 
 Intent jest jedynym snapshotem semantyki requestu: zawiera dane prompt-input (`question`, `niche`, `required_depth`, `guidance`), stage, account/topic, provider/model, limity, pricing+fingerprint, cap, workflow/mode, retry, flags i wersje schema/prompt/pipeline. Worker buduje `ResearchPlan` z tego snapshotu, a guard bieżącego topic/account wyłącznie odmawia po drift — nie odbudowuje requestu z mutowalnych danych. Finalna transakcja przed callerem sprawdza cały lifecycle `job→run→research_run→attempt`, terminalne pola oraz ponownie wyliczony fingerprint. Każda rozbieżność daje `caller=0`, usage/koszt/settlement=0, brak attempt #2 i kontrolowane `NEEDS_RECONCILIATION`.
 

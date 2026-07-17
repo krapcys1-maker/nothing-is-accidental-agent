@@ -197,3 +197,27 @@ Automatycznie: `UsageTracker` liczy koszt z cennika i dopisuje wiersz do `model_
 - Koszt nowej pracy: **0,000000 USD**.
 - Nie wykonano API, realnego SDK, web search, browsera ani publikacji.
 - Migracja kopii sprawdza, że historyczne **0,684580 USD** pozostaje dokładnie tą samą kwotą przed i po `0009→0014`; nie dopisuje nowego usage.
+
+### 2026-07-17 — zatwierdzony cap przyszłego controlled live
+
+- Koszt bieżącego preflightu: **0,000000 USD**; bez providera, SDK i web search.
+- Dla `max_tokens=1500` i jednego web search kod `Decimal` wyliczył: input-calibration `0,045000`, output max `0,015000`, search `0,010000`, projected `0,070000`, pessimistic z marginesem 50% `0,105000 USD`.
+- Zatwierdzony cap wynosi `0,120000 USD`, więc zapas planu to `0,015000 USD`. Historyczny koszt miesiąca pozostaje `0,684580 USD`; maksymalny dopuszczony wzrost dla tej jednej operacji to `0,120000 USD`, ale nic nie zostało naliczone.
+
+### 2026-07-17 — jedyna komenda live zatrzymana przed kosztem
+
+- Rzeczywisty nowy koszt: **0,000000 USD**.
+- Wrapper zakończył się `PREFLIGHT_FAILED` z `provider_request_started=false`; provider attempts i usage pozostały zerowe.
+- Koszt miesiąca pozostał dokładnie **0,684580 USD**. Projected `0,070000` i pessimistic `0,105000 USD` nie stały się rachunkiem.
+
+### 2026-07-17 — LA-02, naprawa bez requestu
+
+- Rzeczywisty koszt WAVE LA-02: **0,000000 USD**.
+- 1174 testy, Windows process snapshots i standalone subprocessy działały lokalnie na fake callerach i temp DB; nie użyto API, SDK ani web search.
+- Job live pozostał `QUEUED/attempts=0`; brak provider attemptu i usage oznacza, że koszt miesiąca nadal wynosi **0,684580 USD**.
+
+### 2026-07-17 — checkpoint LA-02 i P2 cleanup
+
+- Rzeczywisty koszt checkpointu: **0,000000 USD**.
+- Nie wykonano provider requestu, SDK, web search, browsera ani publikacji; nie powstał attempt ani usage.
+- Koszt miesiąca pozostaje **0,684580 USD**. Planowane `0,070000`/`0,105000` i cap `0,120000 USD` nadal nie są rachunkiem ani zgodą na wydatek.

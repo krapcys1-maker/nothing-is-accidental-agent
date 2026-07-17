@@ -437,3 +437,31 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Open P2:** rekomendacja rekurencyjnej sanitizacji nieosiągalnego fallbacku jest jawna i nieblokująca; właściciel zabronił dodawania tej dodatkowej poprawki do reviewed diffu.
 - **Ochrona:** prywatny blok `BUILD_LOG` oraz cały katalog instrukcji pisania pozostają lokalne; DB/WAL/SHM, `.env`, runtime i realny pricing profile są wykluczone.
 - **Granica:** ta decyzja nie autoryzuje controlled live acceptance, realnego API, realnego cennika, browsera, publikacji, merge ani PR. Etap 1 pozostaje otwarty.
+
+### 2026-07-17 — Właściciel zatwierdził parametry pricing i przygotowanie jednego live acceptance
+
+- **Decyzja człowieka:** zatwierdzić provider `anthropic`, model `claude-sonnet-5`, profil `anthropic-sonnet-5-intro-2026-07`, wersję ważną do 2026-08-31, pięć jawnych cen, `max_tokens=1500`, jeden web search, cap `0.12 USD`, topic `3` i operation key `stage1-live-acceptance-20260717` wyłącznie do lokalnego profilu, walidacji i zamrożenia planu.
+- **Tożsamość zatwierdzającego:** `owner:krapcys1-maker`; właściciel jawnie uznał wersję profilu za zatwierdzony identyfikator, więc brak `approved_at` nie jest uzupełniany domysłem.
+- **Zakaz:** bez włączenia `REAL_CONTROLLED_LIVE_ENABLED`, enqueue, zmiany flag, startu workera, requestu API, browsera, publikacji, retry/fallbacku/attempt #2 i operacji Git.
+- **Wynik preflightu:** profil gotowy; wykonanie nadal zablokowane do osobnej zgody na enqueue, post-enqueue fingerprint i dokładnie jeden request.
+
+### 2026-07-17 — Właściciel autoryzował dokładnie jedną komendę controlled live
+
+- **Decyzja:** zezwolić na jedną komendę dla joba `real-research-09fd6a30e07e63e96699ca002dbaead4`, requestu `…:research:1` i sesji `99f52dd3889688440ef8dc8f26f5e318`; bez retry, fallbacku, attemptu #2, browsera, publikacji i Git.
+- **Wynik:** wrapper zwrócił `PREFLIGHT_FAILED` przed provider boundary. Autoryzowana próba została zakończona; drugie uruchomienie jest zabronione.
+- **Ochrona po wyniku:** flags potwierdzone fail-closed, gate przywrócony do `False`, marker usunięty po raporcie, zero attempts/usage/kosztu.
+
+### 2026-07-17 — Właściciel zlecił WAVE LA-02 bez drugiej próby live
+
+- **Decyzja człowieka:** naprawić w jednym lokalnym pakiecie observer effect quiescence i utratę diagnostyki `PROCESSES_PRESENT`; dodać canonical standalone check i pełne kontrpróby launcherów/blokerów.
+- **Twarde granice:** zero sieci/API/SDK/browsera/publikacji/kosztu; temp DB/fake callery; bez zapisu produkcyjnej bazy/flags, bez gate'u, workera, providera, retry/attemptu #2 i bez operacji Git. `config/pricing_profiles.yaml` tylko do ewentualnego odczytu, bez modyfikacji.
+- **Wymagany status:** kandydat do niezależnego review, nie samodzielne zatwierdzenie. Kolejna próba controlled-live wymaga osobnej nowej decyzji właściciela po raporcie review.
+- **Wynik:** LA-02 wdrożona i zweryfikowana offline; pierwsza próba pozostaje formalnie failed pre-provider, job `QUEUED/attempts=0`, gate `False`, flags fail-closed, koszt 0 USD.
+
+### 2026-07-17 — Właściciel przekazał zatwierdzenie LA-02 i autoryzował checkpoint P2 cleanup
+
+- **Decyzja człowieka:** przyjąć niezależny werdykt `APPROVE WITH MINOR/P2`, uznać LA-02 za technicznie zatwierdzoną i root cause `PROCESSES_PRESENT` za zamknięty; wykonać wyłącznie P2-1/P2-2/P2-3, jeden selektywny commit i push bieżącej gałęzi.
+- **P2-2:** pozostawić jako `OPEN OBSERVATION / DOCUMENTED`, bez zmiany klasyfikatora. Przed przyszłym live wymagany jest standalone quiescence check z tego samego launchera po zamknięciu innych terminali/edytorów/shelli zawierających pełny tekst komendy.
+- **Twarde zakazy:** bez live API, SDK, providera, browsera, publikacji, kosztu, `controlled-live-once`, zmiany gate/flags, zapisu produkcyjnej DB, nowego enqueue, PR i merge.
+- **Ochrona:** realny `config/pricing_profiles.yaml`, DB/WAL/SHM, runtime, prywatny `BUILD_LOG` i cały katalog instrukcji pisania pozostają poza stagingiem i commitem.
+- **Stan Etapu 1:** `OPEN / READY FOR NEW OWNER AUTHORIZATION AFTER STANDALONE QUIESCENCE CHECK`; druga próba nadal nieautoryzowana.

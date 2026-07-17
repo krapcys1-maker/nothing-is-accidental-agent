@@ -381,3 +381,31 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Dowód: 1151/1151 offline, exact-once 275+282+291+303; kontrpróby foreign result, bare claim, brak usage/settlement, report failure, marker failure, sekret w wyjątku i `REQUEST_STARTED`. Zero sieci/API/kosztu; realny acceptance niewykonany.
 - Ostatnia kontrpróba po zielonej regresji pokazała jeszcze jedną użyteczną lekcję: osobno poprawny enqueue i osobno poprawny wrapper mogą razem tworzyć system, którego nie da się uruchomić. Enqueue nie zapisywał kontraktu sesji wymaganego później przez wrapper. Dopiero wspólna deterministyczna tożsamość i test pełnej ścieżki `enqueue → wrapper bez prawa tworzenia joba → fake worker` stały się dowodem kompozycji.
 - Niezależny review zatwierdził LA-01-R1 z jednym P2, który nie jest osiągalnym naruszeniem: ostatni fallback sanitizera powinien mimo to ponownie przepuścić tekst przez redactor. To materiał o różnicy między findingiem blokującym a świadomym defense-in-depth — oraz o tym, dlaczego checkpoint nie powinien przemycać nawet rozsądnej poprawki spoza reviewed diffu.
+
+## 2026-07-17 — Materiał: „Zamrożony plan ma dwa odciski czasu”
+
+- Właściciel zatwierdził konkretne ceny i limit `0.12 USD`; kod wyliczył `0.070000` projected oraz `0.105000` pessimistic, z `0.015000` zapasu.
+- Mimo kompletnego cennika system odmówił deklaracji `READY`: job jeszcze nie istnieje, a jego enqueue zmieni bazę, której SHA jest częścią późniejszego kontraktu wrappera.
+- Zwrot narracyjny: preflight przed enqueue może zatwierdzić zamiar, ale nie może udawać preflightu po enqueue. Bezpieczna automatyzacja zachowuje tę różnicę jako blocker zamiast wpisywać wygodny, lecz nieprawdziwy hash.
+- Dowód: lokalny profil `Decimal`, dwa fingerprinty, 70 testów offline, produkcyjna baza bez zmian, koszt 0 USD i zero provider requestów.
+
+## 2026-07-17 — Materiał: „Najbezpieczniejszy live request to ten, który nie przekroczył progu”
+
+- Wszystkie jawne bramki operatora przeszły, lecz wewnętrzna maszyna wrappera nadal odmówiła przed provider boundary. To nie jest sukces acceptance, ale jest sukcesem zasady fail-closed: zero requestów, attempts, usage i kosztu.
+- Trwały raport nie zachował surowego wyjątku ani promptu; zachował closed reason code, klasę i fingerprint diagnostyczny. Ceną tej sanitizacji jest brak szczegółowego root cause w raporcie operatorskim.
+- Job pozostał `QUEUED`, więc brak provider requestu nie oznacza, że można „spróbować jeszcze raz”. Autoryzacja była jednorazowa i została zużyta przez komendę, nie przez rachunek providera.
+
+## 2026-07-17 — Materiał: „Obserwator był jednym z procesów”
+
+- Pierwsza live próba nie przegrała u providera. Przegrała dlatego, że PowerShell/cmd/bash, który uruchomił wrapper, zawierał w swoim command line nazwę tego wrappera. Strażnik uznał własny łańcuch za obcego operatora.
+- Zbyt szeroka naprawa — „ignoruj controlled-live-once” — ukryłaby drugi entrant i niezależnego operatora. Właściwy dowód to relacja: PID→PPID, pełna identity, creation time i ten sam jednoznaczny entrypoint. Nazwa shella nie jest tożsamością.
+- Druga lekcja dotyczy raportowania: outer `PREFLIGHT_FAILED` opisuje etap, inner `PROCESSES_PRESENT` opisuje przyczynę. Usunięcie drugiego kodu nie zwiększa bezpieczeństwa; tylko odbiera operatorowi możliwość diagnozy. Redakcja sekretów i diagnostyka mogą współistnieć.
+- Standalone check sprawdza ten sam canonical probe bez storage, providera i gate'u. Testy pokazują `PASS` dla legalnego ancestry i `STOP` dla prawdziwego testowego workera, zachowując DB byte-identical.
+- Dowód: 21 nowych przypadków LA-02, regresja fake controlled-live ancestry i pełny suite 1174/1174; zero API, kosztu i drugiej live próby. Job nadal czeka w `QUEUED/attempts=0` — poprawka kodu nie jest autoryzacją operacji.
+
+## 2026-07-17 — Materiał: „Review zamyka przyczynę, nie otwiera bramki”
+
+- Niezależny review zatwierdził LA-02 jako `APPROVE WITH MINOR/P2`, więc techniczny root cause `PROCESSES_PRESENT` jest zamknięty. To nie zmieniło ani jednej flagi, joba czy attemptu.
+- P2-2 pokazuje różnicę między poprawnością klasyfikatora a higieną operacyjną. Niezależny terminal lub edytor z pełnym tekstem komendy może wyglądać jak realny konkurent i prawidłowo wywołać fail-closed `STOP`; dlatego przyszły standalone check musi przejść z tego samego launchera po zamknięciu takich procesów.
+- Checkpoint zachowuje najważniejszą granicę: provider request `NOT EXECUTED`, druga próba `NOT AUTHORIZED`, job `QUEUED/attempts=0`, gate `False`, flags fail-closed i koszt `0.000000 USD`.
+- Dowód repozytoryjny: 1174/1174 offline, exact-once `284+284+298+308`, jawna procedura P2-2 i dokładna reguła ignore dla lokalnego pricing profile bez ukrywania innych plików YAML.

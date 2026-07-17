@@ -117,7 +117,14 @@ def test_classifier_tracks_current_parent_helper_and_root_only_process(tmp_path:
     root_text = str(root.resolve())
     diagnostics = _diagnostics_by_pid(
         (
-            _snapshot(100, 90, command_line=f"python executor.py {root_text}"),
+            _snapshot(
+                100,
+                90,
+                command_line=(
+                    "python "
+                    f"{root_text}\\scripts\\prepare_stage1_db_migration.py plan"
+                ),
+            ),
             _snapshot(
                 90,
                 80,
@@ -145,9 +152,12 @@ def test_classifier_tracks_current_parent_helper_and_root_only_process(tmp_path:
 
     assert diagnostics[100].reason_codes == ("PROBE_CURRENT_PID",)
     assert diagnostics[90].reason_codes == (
-        "PROBE_PARENT_LAUNCHER",
-        "PARENT_COMMAND_REFERENCES_OPERATOR_ENTRYPOINT",
+        "VERIFIED_PROBE_ANCESTRY",
+        "PID_PPID_RELATION_VERIFIED",
+        "CREATION_ORDER_VERIFIED",
+        "ENTRYPOINT_SIGNATURE_MATCH",
     )
+    assert diagnostics[90].belongs_to_probe_ancestry is True
     assert diagnostics[101].reason_codes == ("PROBE_REGISTERED_HELPER_IDENTITY",)
     assert diagnostics[102].reason_codes == ("PROJECT_ROOT_COMMAND_LINE_ONLY",)
     assert not any(value.blocking for value in diagnostics.values())
