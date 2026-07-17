@@ -569,6 +569,17 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Stan i rozstrzygnięcie:** `lost_lease` i `failure` są tylko in-memory w guardzie; trwały stan joba zachowuje SQLite, a późniejsze rozstrzygnięcie należy do recovery/reconciliation.
 - **Weryfikacja po korekcie:** **15** pierwotnych testów periodic heartbeat + **11** bounded lifecycle/P1 = **26** bezpośrednich testów heartbeat; `tests/test_worker_runtime.py`: **59 passed**; pełny suite: **566 passed**. Hash `data/agent.db` pozostał bez zmiany; brak API, sieci, realnego researchu, migracji, commita i pushu; koszt **0 USD**.
 
+### [2026-07-13] Instrukcja pisania → wersja 2.1 + rozbicie na trzy artefakty (redakcja, zero kodu, zero API)
+- **Cel zadania:** na polecenie właściciela: przygotować wersję 2.1 podręcznika stylu gotową pod autonomiczny content pipeline (Etap 3), nie przepisując od zera i zachowując mocne elementy (Moduł A, rejestr pochodzenia, 4 poziomy pewności, nierówna alokacja uwagi, opinia z kosztem, profile CE/NIA, formaty Notes/komentarzy, diversity memory, zakaz fikcyjnych doświadczeń, przejmowanie funkcji stylu zamiast fraz).
+- **Kontekst wersji:** poprzednia tura podniosła plik z 1.0 do 2.0 (afirmatywny głos, profil NIA-EN, warsztat humoru, sekcja EN B8, repertuar 12 autorów, protokół różnorodności). Ta tura to 2.1 — nadbudowa pod pipeline. Wpis 2.0 do BUILD_LOG nie powstał wcześniej (klasyfikator narzędzi był chwilowo niedostępny); ten wpis pokrywa całość 1.0→2.1.
+- **Naprawione sprzeczności:** (1) Moduł 0 deklarował „limity tylko w D", a limity były też w B/C → ujednolicono: limity tekstu w D, limity rotacji w E, B/C bez liczb; (2) B7/B8 „ograniczaj" vs dawne F9 „zero" → rozdzielono `HARD_BANNED_PHRASES` (binarny stop) i `WATCHLIST_PHRASES` (flaga z uzasadnieniem); (3) D1 „osobisty głos" (ryzyko fikcyjnych doświadczeń NIA) → „wyrazisty głos zgodny z C1 albo C2"; (4) reguła „każda sekcja ma liczbę lub scenę" (dopychanie na siłę) → „sekcja bez dowodu/sceny/mechanizmu połącz albo usuń".
+- **Nowe elementy 2.1:** Moduł A-GATE (bramka Research Card PROCEED/REVISE/REJECT + obowiązkowy lineage claim→źródło→evidence, zakaz faktów spoza materiału, teza nie szersza niż claimy); reguła anty-intencjonalności w C2 (brak centralnego projektanta i domniemanej intencji; mechanizm = bodziec/ograniczenie/efekt emergentny/pozostałość historyczna/błąd koordynacji/niezamierzona konsekwencja; zakaz narracji konspiracyjnej bez dowodu); twarda izolacja kontekstu NIA (zero AI/bota/pipeline/API/testów/kosztów budowy/architektury/build logu, zero mieszania z Chaos Engine); Moduł F rozbity na trzy niezależne audyty (F-FACT/F-STYLE/F-EDITORIAL) z jawną zasadą „samoocena writera nie jest dowodem faktów"; reguła „dopasowanie i rzetelność > rotacja" z reason code `DIVERSITY_OVERRIDE`.
+- **Trzy artefakty (pliki):** A. `CLAUDE_INSTRUKCJA_NATURALNEGO_PISANIA.md` — pełny podręcznik 2.1 (5685 słów); B. `WRITER_RUNTIME_CORE.md` — skrót do generowania w locie (1308 słów, limit 1800; bez aneksu, rejestru zmian, nazwisk autorów i objaśnień historycznych); C. `WRITING_CONTRACT.md` — kontrakt WritingBrief/WritingResult, reason codes SKIP/NEEDS_RESEARCH, kolejność writer→fact→style→editorial (1092 słowa). Wszystkie trzy zsynchronizowane do kopii `Desktop/ssubstack/claud instrukcja/`.
+- **Świadomie bez zmian:** bibliografia w aneksie (nie weryfikowano ponownie źródeł — dodano notę, że wymagają potwierdzenia przed publicznym powołaniem); repertuar 12 autorów (funkcje, nie frazy); rdzeń Modułu A.
+- **Granice:** zero zmian w kodzie aplikacji, zero API, zero publikacji, bez commita/pushu. Kopia instrukcji w zasobach pluginu skilla `chaos-engine-writer` NIE ruszona (zarządzana przez plugin).
+- **Koszt:** 0,00 USD.
+- **Następny krok:** review właściciela; przy Etapie 3 — implementacja WritingBrief/WritingResult, trzech audytów jako osobnych przebiegów i tabeli rejestru serii; Fact Audit oparty na `claim_map`, nie na samoocenie writera.
+
 ### 2026-07-13 — Etap 1: osobny maintenance loop recovery → stale reaper — [DURABILITY | OFFLINE]
 
 - **Cel:** umożliwić kontrolowane, powtarzalne porządkowanie wygasłych lease i osieroconych runów bez przekształcania reapera w workera, schedulera systemowego albo boczne wejście do researchu.
@@ -632,3 +643,79 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Open P2:** nieosiągalny fallback `sanitize_report_payload` powinien rekurencyjnie sanitizować `str(value)`. Rekomendacja jest nieblokująca i nie została dodana do reviewed diffu.
 - **Checkpoint:** właściciel autoryzował jeden selektywny commit i push wyłącznie `dev/first-successful-research-card`. Prywatny blok „Instrukcja pisania → wersja 2.1” oraz cały katalog instrukcji pisania muszą pozostać poza stagingiem.
 - **Granice:** bez live acceptance, realnego pricing profile, API/SDK, browsera, publikacji, Windows Tasks, PR i merge. Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`.
+
+### 2026-07-17 — Real pricing profile i finalny preflight bez API — [STAGE 1 | PREFLIGHT]
+
+- **Pozycja roadmapy:** Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`; Etap 2 nie został rozpoczęty.
+- **Zrobiono:** utworzono wyłącznie lokalny, niecommitowany `config/pricing_profiles.yaml` z wartości zatwierdzonych przez właściciela; zweryfikowano resolver, model, wersję, status, `approved_by`, USD, kanoniczną jednostkę, pięć dodatnich `Decimal`, pricing fingerprint, frozen intent i cap.
+- **Identity:** account `nothing_is_accidental`, topic `3` (`SELECTED`, bez Research Card), operation key `stage1-live-acceptance-20260717`, planowany job `real-research-09fd6a30e07e63e96699ca002dbaead4`, request `…:research:1`, attempt `1`, retries `0`.
+- **Koszt:** projected input `0.045000`, max output `0.015000`, jeden web search `0.010000`; projected razem `0.070000`, pessimistic `0.105000`, cap `0.120000`, headroom `0.015000` USD. Maksymalny dopuszczony wzrost miesięczny tej operacji: `0.120000 USD`; bieżący historyczny koszt miesiąca `0.684580 USD`.
+- **Weryfikacja:** focused offline/fake suite `70 passed`; bez providera, SDK, sieci i produkcyjnych mutacji.
+- **Wynik:** real pricing profile `READY`; runtime live preflight `BLOCKED` fail-closed, ponieważ job nie został enqueue’owany zgodnie z zakresem, a finalny DB SHA musi zostać zamrożony po osobno autoryzowanym enqueue. Gate pozostaje false.
+- **Ochrona:** prywatny wcześniejszy blok tego pliku i cały katalog instrukcji pisania zachowane; brak stage/commit/push/PR/merge.
+
+### 2026-07-17 — Jedyna autoryzowana komenda controlled live — [STAGE 1 | FAILED PRE-PROVIDER]
+
+- **Zgoda:** dokładnie jeden istniejący job/request/session, provider Anthropic, Sonnet 5, `max_tokens=1500`, jeden search, cap `0.12`, attempt 1, retry 0.
+- **Hard preflight:** PASS dla zamrożonego branch/HEAD/DB SHA/schema/job/fingerprintów/ciszy/flags.
+- **Gate:** dokładnie jedna linia `False→True`, diff 1/1, bez stagingu; po wyniku natychmiast `True→False`, brak pozostałego diffu.
+- **Komenda:** uruchomiona dokładnie raz; exit 1, `PREFLIGHT_FAILED` przed provider boundary. Nie wykonano retry ani drugiej próby.
+- **Post-verification:** `provider_request_started=false`; attempts/usage/reconciliation=0; job `QUEUED`, bez run/research_run/lease/rezerwacji; marker usunięty po trwałym sanitizowanym raporcie; flags fail-closed; nowy koszt 0 USD.
+- **Status:** `LIVE ACCEPTANCE FAILED — INVARIANT BREACH`; Etap 1 otwarty do niezależnego review. Prywatny wcześniejszy blok tego pliku zachowany.
+
+### [2026-07-17 11:27] Etap 1 / WAVE LA-02 — ancestry quiescence i trwała diagnostyka preflightu
+
+- **Cel zadania:** usunąć observer effect `PROCESSES_PRESENT` bez szerokiego ignorowania procesów i zachować bezpieczny inner reason w trwałym raporcie; bez drugiej próby live.
+- **Co zostało wykonane:** wdrożono zweryfikowany ancestry contract PID/PPID/full identity/creation order/entrypoint; zachowano pełne diagnostics w adapterze; `_safe_error` rozdziela outer/inner reason; sanitizer redaguje wrażliwe flagi CLI i rekurencyjny fallback; dodano `controlled-live-quiescence-check` bez SQLite/storage/providera/markera/gate'u.
+- **Pliki utworzone / zmienione:** `app/operations/stage1_migration.py`, `app/operations/controlled_live.py`, `app/main.py`, `tests/test_la02_quiescence.py`, regresje LA-01/QP-01 oraz obowiązkowe źródła prawdy, rejestry i kronika.
+- **Wynik:** 21 nowych testów LA-02 i jedna regresja fake controlled-live ancestry; full collect/pass 1174/1174, exact-once partycje `284+284+298+308`. PowerShell/pwsh/cmd/bash i wielopoziomowe ancestry przechodzą; niezależny operator/worker/maintenance/scheduler/drugi entrant, holder/task/PID reuse/incomplete identity blokują. Durable report zachowuje `PREFLIGHT_FAILED / PROCESSES_PRESENT` i sanitizowane PIDs/reasons.
+- **Czego jeszcze brakuje:** niezależny review LA-02, nowa jawna autoryzacja właściciela oraz pozytywny controlled live acceptance. Etap 1 pozostaje OPEN/BLOCKED; druga próba nie jest dozwolona.
+- **Koszt:** `0.000000 USD`; zero sieci/API/SDK/browsera/publikacji. Produkcyjna schema 0014, job `QUEUED/attempts=0`, flags fail-closed i gate `False` zachowane.
+- **Następny krok:** przekazać LA-02 do niezależnego review. Nie uruchamiać `controlled-live-once` bez nowej osobnej zgody.
+
+### 2026-07-17 — LA-03: pre-storage quiescence i pierwszy rzeczywisty provider request — [STAGE 1 | CONTROLLED LIVE]
+
+- **Pozycja roadmapy:** Etap 1 pozostaje `OPEN`; pierwszy durable request jest rozliczony, ale brak pozytywnej Research Card i niezależnego review trwałego wyniku.
+- **Naprawa composition rootu:** canonical DB/WAL/SHM probe działa przed głównym `SqliteStorage.open`; po PASS powstaje jedno główne storage, trwała rewalidacja DB/schema/job/pricing/intent/flags, dopiero potem marker O_EXCL, drugi recheck, flag transition, claim, reservation i provider boundary. Probe nie został wyłączony.
+- **Pliki kodu/testów:** `app/main.py`, `app/operations/controlled_live.py`, `tests/test_la01_controlled_live.py`, `tests/test_la02_quiescence.py`.
+- **Dowód offline:** focused 71/71, full 1181/1181, exact-once cover 1181, dedicated full fake CLI oraz standalone temp PASS. Foreign read-only/writable SQLite i WAL/SHM dają STOP; drift między pre-storage/open i drugi wrapper dają STOP; własne storage po PASS nie self-blockuje.
+- **Wynik realny:** produkcyjny standalone PASS; dokładnie jeden Anthropic request (HTTP 200), attempt #1 `REQUEST_STARTED → SETTLED`, jedno usage `0.053182 USD`, zero retry/attemptu #2/reconciliation. Odpowiedź miała niepoprawny JSON; typowany `ResearchParseError` zakończył job/run/research_run jako `FAILED`, bez Research Card.
+- **Ochrona po wyniku:** settlement trwały, lease i rezerwacja zwolnione, marker cleared, reopen/restoration potwierdzone, flags fail-closed, gate przywrócony `False`, browser/publikacja niewykonane, Git ops none.
+
+| # | reason code | provider reached | root cause | pliki zmienione | zabezpieczenie naprawione, nie wyłączone | test regresyjny | fake flow | real flow | koszt | stan joba |
+|---:|---|---|---|---|---|---|---|---|---:|---|
+| 1 | `PROCESSES_PRESENT` | no | własny wielopoziomowy launcher uznany za obcego operatora | LA-02: probe/diagnostics/tests | ancestry identity; proces probe nadal aktywny | LA-02 21 + full | PASS | historyczny STOP pre-provider | 0.000000 | wtedy `QUEUED/0` |
+| 2 | `DB_HANDLES_PRESENT` | no | główne storage otwarte przed zero-sharing handle probe | `app/main.py`, `controlled_live.py`, testy LA-01/02 | probe przeniesiony pre-storage; foreign DB/WAL/SHM nadal STOP | order/4 handle/drift/contention | PASS | preflight PASS po naprawie | 0.000000 | przed requestem `QUEUED/0` |
+| 3 | `VALIDATION_FAILED / WORKER_NOT_SUCCEEDED` | yes, exactly 1 | HTTP 200 zawierał niepoprawny JSON; brak Research Card | bez naprawy/retry po provider boundary | usage i settlement zachowane; job terminalny | istniejące parse/settlement + full | PASS | one request, typed failure | 0.053182 | `FAILED/1` |
+
+### 2026-07-17 — P2 po review LA-03: single-response contract i append-preserving reports — [STAGE 1 | CONTROLLED LIVE]
+
+- **Review wejściowy:** LA-03 otrzymała `APPROVE WITH MINOR/P2`. Reviewer potwierdził 1181 testów, dokładnie jeden request/attempt/`REQUEST_STARTED`, jedno usage/settlement, zero attemptu #2 i pełne fail-closed. P2 dotyczyły historii raportów, README i ukrytego `quiescence_probe=None`.
+- **Forensics:** immutable SQLite wskazało run `f74165fb-9677-4e6d-abfd-09607bd4dd78`, jeden `SETTLED=0.053182`, jedno usage 13306/1657/1 i parse location line 29/column 6/char 4376. Katalog diagnostyczny runu nie istnieje; stara single path odrzucała stop reason i raw. Konkretna forma uszkodzenia jest `INSUFFICIENT DURABLE EVIDENCE`.
+- **Kod:** `app/research/anthropic_client.py` dostał zamknięty pojedynczy JSON contract, ścisły schema validator i zachowanie raw/stop reason; `app/research/base.py` typuje schema/truncation; `pipeline.py` zapisuje prywatną diagnostykę SINGLE po terminalizacji. `controlled_live.py` używa invocation-specific report key i obowiązkowego frozen payloadu; `app/main.py` przekazuje mapping bez hidden probe.
+- **Testy:** dodano 14-case matrix oraz tripwire caller=1; durable parse/schema/truncation dowodzą jednego usage/settlement; dwa invocation tej samej operation identity zachowują oba raporty; recovery wiąże prior report key; brak/None frozen payload zatrzymuje przed worker/providerem. Full 1200/1200; exact-once verify 1200; partycje `290+293+304+313` wszystkie zielone.
+- **Nieudana próba:** pierwszy full run po zmianie dał 1199/1200, ponieważ historyczna testowa fixture `test_research_run_budget._good_json` nie zawierała nowo wymaganych nullable source fields. Zmieniono wyłącznie fixture do bieżącego kontraktu; drugi full run 1200/1200. Wcześniej focused matrix wymagał test-local offline client seam, bo produkcyjny klient poprawnie odmówił bez durable attempt context.
+- **Audyt kopii:** pierwszy helper końcowy użył nieistniejącej kolumny `system_flags.value`; zakończył się na kopii temp po udanych `integrity_check`/FK, bez dotknięcia produkcji. Po immutable `PRAGMA table_info` użyto `value_json`; powtórzenie dało `integrity_check=ok`, FK `[]`, jeden terminalny job/attempt/usage, zero kart i fail-closed flags.
+- **Granice:** brak sieci/provider requestu, browsera, publikacji, kosztu, enqueue, gate/flags, produkcyjnego workera i operacji Git. Lokalnie odczytano jedynie metadane zainstalowanego SDK 0.116.0, bez `messages.create`, aby stwierdzić obecność `output_config`; parameter nie został włączony bez dowodu kompatybilności model+web-search.
+- **Status:** implementacja P2 zakończona kandydacko; Etap 1 pozostaje `OPEN`; wymagany niezależny review. Nowy request nie jest autoryzowany.
+
+### 2026-07-17 — NIA-P2-RV-01…05 po `REJECT — MAJOR` — [STAGE 1 | OFFLINE REPAIR]
+
+- **Pozycja roadmapy:** Etap 1 pozostaje `OPEN / FIRST REAL DURABLE REQUEST SETTLED; NO RESEARCH CARD`; naprawa nie rozpoczyna następnego etapu i nie otwiera nowego requestu.
+- **Review wejściowy:** trzy MAJOR i dwa MINOR/P2: score overflow omijający ledger, niesanitizowany raw diagnostic, mieszany zegar testu, dwie rozbieżności parsera i aktywne sprzeczności stanu projektu.
+- **Kod:** dodano wspólny `app/core/sanitization.py`; diagnostic jest sanitizowany i atomowy best-effort; score przechodzi przez `Decimal`; parser wymaga literalnego fence `json`, rozpoznaje drugą legalną wartość i klasyfikuje root scalar/array jako schema; enqueue przyjmuje jawny `now`.
+- **Testy:** macierz single-response wzrosła 14→28; dodano durable huge-number/non-finite/range/type failures i boundary success, end-to-end pięć klas sekretów, cztery failpointy diagnostic oraz granice zegara before/equal/after. Bieżący collect/full: 1235/1235; exact-once partycje `294+299+311+331`.
+- **Nieudane próby podczas implementacji:** wspólny sanitizer początkowo usunął bezpieczne etykiety z istniejącego formatu audytu (4 regresje full suite); tryb zachowania etykiet naprawił kompatybilność bez zachowania sekretu. Jedna asercja zegara zakładała aware datetime mimo naiwnego UTC zwracanego przez SQLite; porównanie skorygowano do istniejącego kontraktu storage. Pierwsza asercja diagnostic oczekiwała pozostawienia etykiety `api_key`; została zmieniona na wymaganie braku sekretu i pola.
+- **Granice:** fake callery/SDK seam, temp DB, zero sieci/API/browsera/publikacji/kosztu, bez migracji i Git ops. Produkcyjny DB/WAL/SHM niezmieniony; koszt miesiąca nadal `0.737762 USD`.
+- **Status:** naprawa `APPROVE WITH MINOR/P2` (niezależny re-review); patrz wpis zamknięcia niżej.
+
+### [2026-07-17] Formalne zamknięcie Etapu 1 — [STAGE 1 | OWNER DECISION | DOCS-ONLY]
+
+- **Cel zadania:** zapisać formalną decyzję właściciela o zamknięciu Etapu 1 po pozytywnym niezależnym re-review naprawy NIA-P2-RV-01…05.
+- **Pozycja roadmapy:** **Etap 1 = `CLOSED`**. Etap 2 nierozpoczęty; live API nadal wymaga oddzielnej jawnej decyzji właściciela.
+- **Podstawa:** niezależny re-review `APPROVE WITH MINOR/P2` — zero CRITICAL, zero MAJOR, pięć findings technicznie zamknięte; suite 1235/1235; exact-once `1235` node ID; partycje `294+299+311+331`; `compileall` i `git diff --check` czyste; audyt produkcyjnej DB wyłącznie na byte-identycznej kopii; własne kontrpróby reviewera bez regresji.
+- **Research Card:** brak pozytywnej Research Card z ostatniego controlled-live NIE był bramką zamknięcia; job jest terminalny (`FAILED`) i nie może być retry'owany.
+- **Backlog Etapu 2 (nieblokujący):** `RV-R2-P2-1` (prose od `N`/`I` → `json_syntax` zamiast `prose_outside_json`) i `RV-R2-P2-2` (trailing comma → `incomplete_json` zamiast `json_syntax`) — nie naprawiane teraz, bez nowej fali.
+- **Pliki zmienione:** wyłącznie dokumentacja statusowa — `CURRENT_PROJECT_STATE.md`, `IMPLEMENTATION_ROADMAP.md`, `README.md`, `MASTER_ARCHITECTURE.md`, `docs/DECISIONS.md` (ADR-088), `docs/BUILD_LOG.md`, kronika `opis-budowy-substack/`.
+- **Granice:** bez zmian w kodzie, testach, migracjach, providerze, storage i runtime. Produkcyjna DB/WAL/SHM byte-identical (SHA `5BEA9E26597E6A628EF875A7F5115465E94CB600B38213A67794EE94232C6D10`, `335872 B`, bez sidecarów); zero sieci/API/browsera/publikacji/kosztu; bez stage/commit/push/PR/merge.
+- **Status:** `ETAP 1 FORMALLY CLOSED` (ADR-088).

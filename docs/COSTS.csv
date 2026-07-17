@@ -34,3 +34,7 @@ date,run_id,task,provider,model,input_tokens,output_tokens,cache_read_tokens,cac
 # 2026-07-17 - checkpoint LA-01-R1 po APPROVE WITH MINOR/P2: selektywny staging, testy, commit i push - 0.000000 USD; bez API, SDK, browsera, publikacji i live acceptance.
 # 2026-07-17 - WAVE LA-02: ancestry quiescence, preflight diagnostics, standalone check i 1174 testy offline - 0.000000 USD; bez API, SDK, sieci, browsera, publikacji i drugiej próby live.
 # 2026-07-17 - checkpoint LA-02 po APPROVE WITH MINOR/P2 oraz P2 cleanup: dokumentacja, selektywny Git i testy offline - 0.000000 USD; provider request NOT EXECUTED; druga próba NOT AUTHORIZED.
+2026-07-17,f74165fb-9677-4e6d-abfd-09607bd4dd78,research,anthropic,claude-sonnet-5,13306,1657,0,0,1,0,0.053182,actual
+# 2026-07-17 - LA-03 controlled-live: exactly one request/attempt, REQUEST_STARTED + SETTLED, terminal ResearchParseError, zero retry; month total 0.737762 USD.
+# 2026-07-17 - P2 po review LA-03: forensics immutable, parser/report/frozen-prestorage, 1200 testow fake/temp - 0.000000 USD; bez provider requestu, web search, browsera i publikacji; month total bez zmian 0.737762 USD.
+# 2026-07-17 - NIA-P2-RV-01..05 po REJECT MAJOR: parser, sanitizer diagnostic, jawny clock i dokumentacja, 1235 testow fake/temp - 0.000000 USD; bez provider requestu, sieci, browsera i publikacji; month total bez zmian 0.737762 USD.

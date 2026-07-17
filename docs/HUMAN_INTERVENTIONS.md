@@ -465,3 +465,25 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Twarde zakazy:** bez live API, SDK, providera, browsera, publikacji, kosztu, `controlled-live-once`, zmiany gate/flags, zapisu produkcyjnej DB, nowego enqueue, PR i merge.
 - **Ochrona:** realny `config/pricing_profiles.yaml`, DB/WAL/SHM, runtime, prywatny `BUILD_LOG` i cały katalog instrukcji pisania pozostają poza stagingiem i commitem.
 - **Stan Etapu 1:** `OPEN / READY FOR NEW OWNER AUTHORIZATION AFTER STANDALONE QUIESCENCE CHECK`; druga próba nadal nieautoryzowana.
+
+### 2026-07-17 — Właściciel autoryzował LA-03 i dokładnie jeden realny request
+
+- **Decyzja człowieka:** kontynuować po kolejnych false STOP-ach aż canonical `controlled-live-once` przejdzie preflight i wykona dokładnie jeden rzeczywisty provider request.
+- **Twarde granice:** cap `0.12 USD`, `max_attempts=1`, `max_retries=0`, brak fallbacku, attemptu #2, direct SDK poza durable lifecycle, browsera, publikacji i Git. Po każdym STOP wolno poprawiać wyłącznie local composition/self-observation i testować na fake/temp DB.
+- **Wynik:** zamknięto self-handle `DB_HANDLES_PRESENT`, wykonano 1181 testów i fake CLI, następnie jedną komendę live. Provider reached exactly once; settlement `0.053182 USD`; terminalny `ResearchParseError`, bez karty.
+- **Granica po decyzji:** autoryzacja została zużyta przy `REQUEST_STARTED`. Kolejny request jest zabroniony bez nowej jawnej decyzji, niezależnie od tego, że odpowiedź nie dała Research Card.
+
+### 2026-07-17 — Właściciel przekazał review LA-03 i zlecił wyłącznie offline P2
+
+- **Decyzja człowieka:** przyjąć niezależny werdykt `APPROVE WITH MINOR/P2` dla LA-03 i potraktować Stage 1 jako nadal `OPEN`; poprawić forensic evidence, parser jednej odpowiedzi, historyczne raporty, README i jawny frozen pre-storage payload.
+- **Twarde granice:** nie wykonywać nowego realnego requestu, enqueue, gate/flags changes, workera produkcyjnego, browsera, publikacji, kosztu ani operacji Git. Testy wyłącznie fake caller/SDK seam i temp DB; produkcyjna DB byte-identical.
+- **Wymóg epistemiczny:** wskazać konkretną przyczynę parse failure tylko, jeśli istnieje trwały raw/stop reason. Przy braku evidence nie zgadywać; odtworzyć klasy błędów offline.
+- **Wymóg exact-once:** jedna odpowiedź, bez repair requestu, retry, fallbacku i attemptu #2; parse/schema/truncation po providerze zachowują dokładnie jedno usage i settlement.
+- **Wynik implementacji:** 1200/1200 i exact-once `290+293+304+313`; pakiet ma status kandydacki do niezależnego review. Terminalny job pozostaje nieponawialny, a nowy request nadal wymaga osobnej jawnej decyzji.
+
+### 2026-07-17 — Właściciel przekazał `REJECT — MAJOR` i zamknął zakres naprawy NIA-P2-RV-01…05
+
+- **Decyzja człowieka:** naprawić wyłącznie score overflow, sanitizację diagnostyki, deterministyczny zegar, klasyfikację parsera i aktywne sprzeczności `CURRENT_PROJECT_STATE.md`; nie otwierać żadnych innych P2 ani nie wykonywać pełnego audytu projektu.
+- **Twarde granice:** zero sieci/API/browsera/publikacji/kosztu; fake SDK/callery i temp DB; bez produkcyjnego joba, realnego `controlled-live-once`, zapisu DB/flags, migracji i operacji Git. Produkcyjna DB/WAL/SHM byte-identical; chronione prywatne pliki nietknięte.
+- **Wymagany status:** wyłącznie `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; implementer nie może wydać `APPROVE` ani zamknąć Etapu 1.
+- **Wynik implementacji:** 1235/1235 i exact-once `294+299+311+331`; pięć findings zamkniętych technicznie w dozwolonym zakresie. Nowy request pozostaje zabroniony do pozytywnego review i nowej jawnej decyzji właściciela.

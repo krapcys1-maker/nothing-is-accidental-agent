@@ -409,3 +409,28 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - P2-2 pokazuje różnicę między poprawnością klasyfikatora a higieną operacyjną. Niezależny terminal lub edytor z pełnym tekstem komendy może wyglądać jak realny konkurent i prawidłowo wywołać fail-closed `STOP`; dlatego przyszły standalone check musi przejść z tego samego launchera po zamknięciu takich procesów.
 - Checkpoint zachowuje najważniejszą granicę: provider request `NOT EXECUTED`, druga próba `NOT AUTHORIZED`, job `QUEUED/attempts=0`, gate `False`, flags fail-closed i koszt `0.000000 USD`.
 - Dowód repozytoryjny: 1174/1174 offline, exact-once `284+284+298+308`, jawna procedura P2-2 i dokładna reguła ignore dla lokalnego pricing profile bez ukrywania innych plików YAML.
+
+## 2026-07-17 — Materiał: „Strażnik zablokował własny klucz do drzwi”
+
+- Drugi false STOP nie pochodził od obcego procesu. Wrapper najpierw otwierał SQLite, a potem pytał Windows, czy ktokolwiek trzyma SQLite. Odpowiedź „tak” była poprawna; błędna była kolejność pytań.
+- Naprawa nie wyłączyła czujnika. Przeniosła go przed otwarcie zasobu, a po PASS zamroziła dowód i ponownie sprawdziła trwały stan. Testy z obcym read-only/writable DB oraz WAL/SHM nadal kończą się STOP.
+- Pierwszy request pokazuje drugą warstwę fail-closed: HTTP 200 nie oznacza sukcesu produktu. Niepoprawny JSON dał terminalny `FAILED`, ale koszt nie zniknął — `REQUEST_STARTED`, usage i settlement zostały zachowane dokładnie raz.
+- Liczby: 1181/1181 offline, jeden realny request, 13306 input + 1657 output + jeden search, `0.053182 USD`, zero retry, job `FAILED`, gate/flags zamknięte.
+
+## 2026-07-17 — Gdy system wie, gdzie parser upadł, ale nie wie dlaczego
+
+- Najmocniejszy motyw: ledger zachował koszt, request identity i terminalizację idealnie, lecz starsza granica diagnostyczna wyrzuciła dwa małe pola — raw response i stop reason. `line 29 column 6` brzmi precyzyjnie, ale nie wystarcza do uczciwego opisania znaku ani przyczyny.
+- Dowód epistemiczny: brak katalogu diagnostycznego konkretnego runu i jawne `_stop_reason` odrzucone w `_default_caller`. Wniosek redakcyjny: dokładność lokalizacji nie jest tym samym co kompletność dowodu.
+- Motyw architektoniczny: stable identity i historyczna identity nie powinny być jednym kluczem. Deterministyczny session ID ułatwia fencing, ale bez invocation discriminator niszczył starszy raport. Rozdzielenie tych ról zachowuje i idempotencję, i historię.
+- Kontrpróby: 14 klas odpowiedzi, każda dokładnie jeden caller; parse/schema/truncation po fake durable boundary tworzą jedno usage i jeden settlement. 1200/1200, partycje `290+293+304+313`.
+- Cytowalna zasada: „Nie naprawiaj odpowiedzi drugim requestem, jeśli kontrakt obiecuje dokładnie jeden request; popraw dowód i parser przed następną osobną autoryzacją.”
+- Koszt nowej pracy: `0.000000 USD`; historyczny koszt requestu pozostaje `0.053182 USD`, suma miesiąca `0.737762 USD`.
+- Zwrot narracyjny: system może jednocześnie osiągnąć cel infrastrukturalny „pierwszy provider request” i nie osiągnąć celu redakcyjnego „Research Card”. Dobre statusy muszą umieć powiedzieć obie rzeczy naraz.
+
+## 2026-07-17 — Materiał: „Plik prywatny też jest granicą bezpieczeństwa”
+
+- Finding: gitignore chroni repozytorium, ale nie chroni lokalnego dysku przed utrwaleniem bearer tokenu, headers ani sekretu schowanego w nested exception.
+- Naprawa: operator report, prywatna diagnostyka i trwały błąd przechodzą przez jeden rekurencyjny sanitizer; zapis diagnostyczny ma ten sam atomowy rytuał temp→fsync→replace→directory fsync, a jego awaria nie zmienia ledgeru ani lifecycle.
+- Drugi finding pokazuje granicę typów: legalny JSON może zawierać liczbę zbyt dużą dla `float`. Walidacja `Decimal` przed konwersją sprawia, że błąd danych pozostaje błędem schema, a dokładnie jedno usage i settlement nie znikają.
+- Dowód: 28 przypadków parsera, durable huge/non-finite score, pięć klas sekretów i cztery failpointy; 1235/1235 oraz exact-once `294+299+311+331`, koszt `0.000000 USD`.
+- Granica: to kandydat po wcześniejszym `REJECT — MAJOR`, nie zatwierdzenie. Etap 1 pozostaje otwarty i kolejny request jest zabroniony.

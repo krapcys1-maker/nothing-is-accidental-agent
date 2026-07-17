@@ -628,3 +628,25 @@ Review zatwierdził ancestry i diagnostykę bez potrzeby drugiego live. P2 clean
 Najważniejszy stan nie zmienił się ani o krok: provider request nie powstał, job wciąż ma `QUEUED/attempts=0`, gate jest `False`, a pięć flag pozostaje fail-closed. Checkpoint kończy LA-02 jako artefakt techniczny; nie zamienia jej w prawo do uruchomienia.
 
 Przed przyszłą decyzją operator musi zamknąć procesy, które mogą nieść pełny tekst komendy, i z tego samego launchera uruchomić standalone quiescence check. Każdy `PROCESSES_PRESENT` kończy próbę jeszcze przed autoryzacją live.
+
+## 2026-07-17 — Najpierw sprawdź klamkę, potem otwórz drzwi
+
+Kolejny blocker był jeszcze bardziej dosłowny. Program otwierał bazę, a potem pytał system operacyjny, czy baza jest otwarta. Windows odpowiadał poprawnie: tak. Composition root brał własne połączenie za obcy uchwyt i nigdy nie mógł dojść do providera.
+
+Sekwencję rozdzielono na dwie fazy. Najpierw ten sam canonical probe co w standalone sprawdza procesy, taski oraz DB/WAL/SHM bez otwierania SQLite. Dopiero PASS pozwala otworzyć główne storage. Potem system sprawdza ponownie SHA, schema, job, ceny, intent i flagi, tworzy marker i dopiero po drugim rechecku otwiera minimalny profil wykonania. Obcy read-only lub writable SQLite i osobne uchwyty WAL/SHM nadal blokują.
+
+Po 1181 testach, pełnym fake CLI i standalone PASS jedna autoryzowana komenda dotarła do Anthropic dokładnie raz. HTTP 200 nie dał jednak karty: model zwrócił niepoprawny JSON. Ledger zachował `REQUEST_STARTED`, jedno usage i settlement 0,053182 USD, a job zakończył się `FAILED`. Infrastruktura osiągnęła pierwszy provider request; redakcja nie dostała jeszcze Research Card.
+
+## 2026-07-17 — Jedna odpowiedź dostała własny kontrakt i własną teczkę
+
+Review zatwierdził lifecycle LA-03, ale wskazał, że deterministyczny numer sesji pełnił dwie role naraz. Dobrze identyfikował tę samą logiczną operację, źle identyfikował kolejne fizyczne uruchomienia: każde trafiało do tego samego pliku i mogło przykryć poprzedni raport. Teraz nazwa teczki zachowuje stabilny session, lecz dodaje attempt, czas UTC i nonce. Idempotencja nie zjada historii.
+
+Druga zmiana dotyczy odpowiedzi modelu. System przyjmuje jeden obiekt JSON albo jeden kompletny fence i niczego nie wycina ze środka prose. Każde pole ma jawny typ, a truncation jest nazywana truncation tylko wtedy, gdy provider naprawdę zwróci `stop_reason=max_tokens`. Raw i stop reason trafiają do prywatnej diagnostyki po tym samym jednym callu. W czternastu kontrpróbach caller nigdy nie został wywołany drugi raz.
+
+Ostatni detal jest czysto kompozycyjny: wrapper nie może już sam wymyślić probe'a po otwarciu bazy. Musi dostać zamrożony wynik sprawdzenia wykonanego wcześniej. 1200 testów i cztery partycje potwierdzają całość offline. Nie powstał nowy request ani nowy koszt; Etap 1 nadal jest otwarty.
+
+## 2026-07-17 — Naprawa po odrzuceniu pierwszego pakietu P2
+
+Review wykazał, że ogromny legalny numer JSON mógł wyjść poza typowaną ścieżkę i ominąć księgowanie. Score jest teraz sprawdzany jako `Decimal` przed konwersją. Ten sam pakiet zaostrzył fence do literalnego `json`, rozpoznaje drugi scalar przez `raw_decode`, używa jednego jawnego czasu enqueue/wrappera oraz wspólnego sanitizera dla raportu i diagnostyki.
+
+Diagnostic zapisuje sanitizowaną treść przez temp, file fsync, replace i directory fsync. Awaria każdego z tych kroków pozostaje best-effort: jedno usage, settlement i terminalny `FAILED` nie zmieniają się. Dowód kandydacki to 1235 testów i partycje `294+299+311+331`; zero nowego requestu i kosztu.

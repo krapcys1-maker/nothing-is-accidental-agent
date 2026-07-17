@@ -105,3 +105,15 @@ Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior u
 ### 2026-07-16 — skonsolidowany Etap 1
 
 `SCREENSHOT REQUIRED` dopiero po niezależnym review. Bezpieczny kadr powinien pokazać: oba polecenia `plan` z `SYSTEM TASK NOT REGISTERED`, raport read-only z jawnym `UNKNOWN/BLOCKED`, copy-preflight na kopii z 14 migracjami/13 legacy/0,684580 i końcową weryfikację niezmiennego baselineu. Nie może pokazywać `.env`, danych bazy, prywatnych ścieżek ani sugerować, że zadania zarejestrowano lub produkcję zmigrowano.
+
+### 2026-07-17 — LA-03 i pierwszy request
+
+`SCREENSHOT REQUIRED`: zanonimizowany kadr powinien pokazać 1181/1181, fake CLI success, standalone PASS oraz bezpieczny trwały summary jednego attemptu: `REQUEST_STARTED`, `SETTLED`, 0,053182 USD, job/run/research_run `FAILED`, marker absent, flags i gate fail-closed, zero retry. Nie może zawierać klucza, promptu, raw response, execution tokenu ani pełnych command lines. Obrazu nie wykonano, bo przeglądarka była zabroniona, a terminal zawierał prywatne ścieżki.
+
+### 2026-07-17 — P2 po review LA-03
+
+`SCREENSHOT REQUIRED`: bezpieczny kadr powinien pokazać 1200/1200, partycje `290+293+304+313`, 14-case matrix oraz dwa różne report filenames zaczynające się tym samym session ID. Nie może pokazywać raw response, prywatnego katalogu debug, promptu, `.env`, pricing profile ani pełnej ścieżki chronionych plików. W tej fali obraz nie powstał; dowód pozostaje tekstowy i testowy.
+
+## 2026-07-17 — Dowód naprawy NIA-P2-RV
+
+`SCREENSHOT REQUIRED`: bezpieczny kadr może pokazać wyłącznie 1235/1235, partycje `294+299+311+331` i zanonimizowane wyniki kontrprób huge score, secret sanitizer, jawnego clocka, object+true oraz bare fence. Nie może zawierać raw payloadu sekretów, `.env`, pełnych command lines, produkcyjnej bazy ani prywatnych plików. Obraz nie powstał; mocniejszym dowodem są deterministyczne testy i byte-identical DB.

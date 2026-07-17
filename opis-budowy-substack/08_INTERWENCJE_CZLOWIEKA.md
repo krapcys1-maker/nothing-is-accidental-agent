@@ -217,3 +217,24 @@ Właściciel zlecił usunięcie dokładnie trzech P1 z niezależnego review oraz
 - Dozwolone: aktualizacja bieżącej dokumentacji, procedura P2-2, dokładna reguła ignore pricing profile, pełne testy offline, selektywny commit i push tej gałęzi.
 - Niedozwolone: `controlled-live-once`, provider, SDK, sieć wykonawcza, nowy job, zmiana flags/gate, produkcyjny zapis, PR i merge.
 - Następna decyzja właściciela może nastąpić dopiero po standalone quiescence check z tego samego launchera; każde `PROCESSES_PRESENT` zużywa plan i kończy się STOP.
+
+## 2026-07-17 — człowiek zezwolił dojść do pierwszego requestu, ale tylko raz
+
+- Właściciel zlecił naprawianie kolejnych false STOP-ów aż wrapper przejdzie preflight i wykona dokładnie jeden rzeczywisty request.
+- Nie pozwolił wyłączyć żadnego zabezpieczenia: attempt #1, retry 0, cap 0,12 USD, request identity, ledger, settlement, lease, fence, marker i reconciliation pozostały obowiązkowe.
+- Po `REQUEST_STARTED` autoryzacja została zużyta. Niepoprawny JSON i brak Research Card nie dają prawa do drugiego calla.
+- Wynik: exactly one request, koszt 0,053182 USD, job terminalny `FAILED`, gate i flagi fail-closed, browser/publikacja/Git niewykonane.
+
+## 2026-07-17 — człowiek zaakceptował review, ale nie wydał drugiej zgody live
+
+- Właściciel przekazał `APPROVE WITH MINOR/P2` dla LA-03 i zlecił naprawę trzech P2 wyłącznie offline.
+- Zażądał, by brak raw/stop reason został nazwany brakiem dowodu, nie pretekstem do ponownego requestu.
+- Utrzymał granicę: terminalny job ma jeden wykorzystany attempt i nie może być retry'owany. Następny call wymaga nowej decyzji i nowego dozwolonego joba.
+- Wynik P2 to kandydat do kolejnego niezależnego review, nie samodzielne zatwierdzenie i nie zamknięcie Etapu 1.
+
+## 2026-07-17 — Właściciel ograniczył naprawę po `REJECT — MAJOR`
+
+- Naprawić dokładnie NIA-P2-RV-01…05 i nie otwierać innych P2.
+- Używać wyłącznie fake callerów/SDK seam i tymczasowych baz; zero sieci, kosztu, browsera, publikacji, produkcyjnego joba i operacji Git.
+- Zachować produkcyjną DB/WAL/SHM byte-identical oraz nie dotykać chronionych prywatnych plików.
+- Wynik może mieć tylko status `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; Etap 1 pozostaje otwarty.

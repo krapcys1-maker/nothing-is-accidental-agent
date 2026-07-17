@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import hashlib
+import inspect
 import json
 import os
 from pathlib import Path
@@ -166,7 +167,7 @@ def _run(
         worker_runner=runner,
         git_identity=git or _git(),
         db_fingerprint=_db(),
-        quiescence_probe=lambda: quiescence or _clean_quiescence(),
+        frozen_quiescence=quiescence or _clean_quiescence(),
         pricing_profiles_path=pricing,
         clock=clock,
         now=NOW,
@@ -205,8 +206,10 @@ def test_full_fake_success_has_owned_terminal_state_report_and_no_marker(
         max_cost_usd=0.5,
         request_max_tokens=1000,
         approved_profile=profile,
+        now=NOW,
     ) == 0
     persisted = storage.get_job(_request(topic, account).job_id())
+    assert persisted.earliest_run_at == NOW.replace(tzinfo=None)
     assert persisted.payload["controlled_session"] == controlled_session_contract(
         "controlled-once",
         job_id=persisted.id,
@@ -231,16 +234,24 @@ def test_full_fake_success_has_owned_terminal_state_report_and_no_marker(
     job = storage.get_job(outcome.plan.job_id)
     assert job.status.value == "DONE"
     attempts = storage.conn.execute(
-        "SELECT status,attempt_no,request_id FROM provider_attempts WHERE job_id=?",
+        "SELECT status,attempt_no,request_id,request_started_at,actual_cost_usd "
+        "FROM provider_attempts WHERE job_id=?",
         (job.id,),
     ).fetchall()
     assert [(row["status"], row["attempt_no"], row["request_id"]) for row in attempts] == [
         ("SETTLED", 1, outcome.plan.request_id)
     ]
+    assert attempts[0]["request_started_at"] is not None
+    assert attempts[0]["actual_cost_usd"] is not None
+    assert job.attempts == 1
     assert storage.conn.execute(
         "SELECT COUNT(*) FROM model_usage WHERE request_id=?",
         (outcome.plan.request_id,),
     ).fetchone()[0] == 1
+    assert storage.conn.execute(
+        "SELECT COUNT(*) FROM provider_attempts WHERE job_id=? AND attempt_no<>1",
+        (job.id,),
+    ).fetchone()[0] == 0
 
 
 def test_open_and_close_profiles_are_atomic_and_ordered(
@@ -718,6 +729,33 @@ def test_future_earliest_run_at_is_not_claimable(
     assert controlled._claimable_job_ids(storage, NOW) == ()
 
 
+@pytest.mark.parametrize(
+    ("clock_offset", "claimable"),
+    [
+        (timedelta(microseconds=-1), False),
+        (timedelta(0), True),
+        (timedelta(microseconds=1), True),
+    ],
+    ids=("before-earliest", "exactly-earliest", "after-earliest"),
+)
+def test_claimability_uses_one_explicit_clock_at_earliest_boundary(
+    storage, account, clock_offset, claimable,
+):
+    storage.ensure_account(account)
+    storage.enqueue_job(Job(
+        id="clock-boundary",
+        account_id=account.id,
+        kind=JobKind.LOCAL,
+        workflow=WorkflowType.ANALYTICS,
+        idempotency_key="clock-boundary",
+        payload={"dry_run": True, "action": "noop"},
+        schedule_reason="WITHIN_EDITORIAL_WINDOW",
+        earliest_run_at=NOW,
+    ))
+    observed = controlled._claimable_job_ids(storage, NOW + clock_offset)
+    assert (observed == ("clock-boundary",)) is claimable
+
+
 def test_report_write_failure_is_nonzero_and_retains_marker(
     storage, settings, account, tmp_path,
 ):
@@ -770,6 +808,36 @@ def test_report_is_durable_before_marker_removal(
     first_clear = next(index for index, event in enumerate(order) if event[0] == "clear")
     assert any(event == ("report", True) for event in order[:first_clear])
     assert order[first_clear] == ("clear", True)
+
+
+def test_same_operation_key_preserves_preflight_and_terminal_report_history(
+    storage, settings, account, tmp_path,
+):
+    topic, pricing = _prepare(storage, account, tmp_path)
+
+    first = _run(
+        storage,
+        settings,
+        account,
+        tmp_path,
+        topic,
+        pricing,
+        request_changes={"expected_head": "b" * 40},
+    )
+    second = _run(storage, settings, account, tmp_path, topic, pricing)
+
+    assert first.status == "PREFLIGHT_FAILED"
+    assert second.status == "COMPLETED_FAIL_CLOSED"
+    assert first.session_id == second.session_id
+    assert first.report_path != second.report_path
+    reports = sorted((tmp_path / "runtime" / "controlled_live_reports").glob("*.json"))
+    assert reports == sorted([first.report_path, second.report_path])
+    payloads = [json.loads(path.read_text(encoding="utf-8")) for path in reports]
+    assert {payload["final_status"] for payload in payloads} == {
+        "PREFLIGHT_FAILED", "COMPLETED_FAIL_CLOSED",
+    }
+    assert len({payload["invocation_id"] for payload in payloads}) == 2
+    assert all(path.stem.startswith(first.session_id + "--") for path in reports)
 
 
 def test_marker_clear_failure_is_nonzero_and_explicit(
@@ -855,6 +923,64 @@ def test_true_reopen_uses_new_storage_object(
     assert len(calls) == 1
 
 
+def test_frozen_quiescence_is_required_and_none_rejects_without_hidden_probe(
+    storage, settings, account, tmp_path, monkeypatch,
+):
+    topic, pricing = _prepare(storage, account, tmp_path)
+    parameter = inspect.signature(run_controlled_live_once).parameters[
+        "frozen_quiescence"
+    ]
+    assert parameter.default is inspect.Parameter.empty
+    default_probe_calls = 0
+    worker_calls = 0
+
+    def forbidden_default_probe(*_args):
+        nonlocal default_probe_calls
+        default_probe_calls += 1
+        raise AssertionError("open storage must never trigger a hidden handle probe")
+
+    def forbidden_worker(_contract):
+        nonlocal worker_calls
+        worker_calls += 1
+        raise AssertionError("invalid construction must stop before worker/provider")
+
+    monkeypatch.setattr(controlled, "default_quiescence_probe", forbidden_default_probe)
+    with pytest.raises(TypeError, match="frozen_quiescence"):
+        run_controlled_live_once(
+            _request(topic, account),
+            settings=replace(settings, model_quality=MODEL, dry_run=False),
+            storage=storage,
+            storage_reopener=lambda: SqliteStorage.open(settings.db_path),
+            project_root=tmp_path,
+            runtime_dir=tmp_path / "runtime",
+            worker_runner=forbidden_worker,
+            frozen_quiescence=None,
+            git_identity=_git(),
+            db_fingerprint=_db(),
+            pricing_profiles_path=pricing,
+            clock=FixedClock(),
+            now=NOW,
+            allow_execution=True,
+            allow_job_creation=True,
+        )
+    assert default_probe_calls == 0
+    assert worker_calls == 0
+    assert storage.conn.execute("SELECT COUNT(*) FROM provider_attempts").fetchone()[0] == 0
+
+
+def test_open_storage_uses_only_explicit_frozen_quiescence(
+    storage, settings, account, tmp_path, monkeypatch,
+):
+    topic, pricing = _prepare(storage, account, tmp_path)
+
+    def forbidden_default_probe(*_args):
+        raise AssertionError("default handle probe is forbidden after storage open")
+
+    monkeypatch.setattr(controlled, "default_quiescence_probe", forbidden_default_probe)
+    outcome = _run(storage, settings, account, tmp_path, topic, pricing)
+    assert outcome.status == "COMPLETED_FAIL_CLOSED"
+
+
 def test_reopen_returning_same_object_fails_and_retains_marker(
     storage, settings, account, tmp_path,
 ):
@@ -873,7 +999,7 @@ def test_reopen_returning_same_object_fails_and_retains_marker(
         worker_runner=adapter,
         git_identity=_git(),
         db_fingerprint=_db(),
-        quiescence_probe=_clean_quiescence,
+        frozen_quiescence=_clean_quiescence(),
         pricing_profiles_path=pricing,
         clock=FixedClock(),
         now=NOW,
@@ -987,6 +1113,9 @@ def test_startup_recovery_reads_persistent_provider_state_and_never_calls_worker
         report_writer=fail_report,
     )
     assert first.status == "REPORT_WRITE_FAILED_RECOVERY_REQUIRED"
+    retained_marker = read_session_marker(tmp_path / "runtime")
+    assert retained_marker is not None
+    retained_report_key = retained_marker["report_key"]
     calls = 0
 
     def forbidden(_contract):
@@ -1009,6 +1138,10 @@ def test_startup_recovery_reads_persistent_provider_state_and_never_calls_worker
     assert second.recovery["provider_request_started"] is True
     assert second.recovery["possible_unknown_provider_outcome"] is True
     assert second.recovery["retry_performed"] is False
+    assert second.recovery["recovered_report_key"] == retained_report_key
+    assert second.report_path.stem != retained_report_key
+    recovery_report = json.loads(second.report_path.read_text(encoding="utf-8"))
+    assert recovery_report["recovery"]["recovered_report_key"] == retained_report_key
     assert not marker_path(tmp_path / "runtime").exists()
 
 
@@ -1097,7 +1230,7 @@ def test_real_execution_gate_calls_wrapper_but_does_not_open_profile(
         worker_runner=worker,
         git_identity=_git(),
         db_fingerprint=_db(),
-        quiescence_probe=_clean_quiescence,
+        frozen_quiescence=_clean_quiescence(),
         pricing_profiles_path=pricing,
         clock=FixedClock(),
         now=NOW,
@@ -1171,7 +1304,7 @@ def test_canonical_fake_subprocess_runs_cli_wrapper_worker_restore_and_report(
         "--max-cost-usd",
         "0.5",
         "--expected-db-sha",
-        DB_SHA,
+        hashlib.sha256(db_path.read_bytes()).hexdigest().upper(),
         "--expected-schema",
         "0014",
         "--expected-branch",
@@ -1201,6 +1334,171 @@ def test_canonical_fake_subprocess_runs_cli_wrapper_worker_restore_and_report(
         "COMPLETED_FAIL_CLOSED"
     )
     assert not marker_path(runtime).exists()
+
+
+def _controlled_cli_args(*, topic_id: int, expected_sha: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        account="nothing_is_accidental",
+        topic_id=topic_id,
+        operation_key="composition-once",
+        model=MODEL,
+        pricing_profile="p-approved",
+        max_tokens=1000,
+        max_web_searches=2,
+        max_cost_usd="0.5",
+        expected_db_sha=expected_sha,
+        expected_schema="0014",
+        expected_branch=BRANCH,
+        expected_head=HEAD,
+        max_attempts=1,
+        max_retries=0,
+    )
+
+
+def test_cli_composition_runs_canonical_pre_storage_probe_before_main_open(
+    settings, account, tmp_path, monkeypatch,
+):
+    import app.main as main_module
+    import app.operations.stage1_migration as migration
+
+    db_path = tmp_path / "composition" / "agent.db"
+    runtime = tmp_path / "composition-runtime"
+    seed = SqliteStorage.open(db_path)
+    topic, pricing = _prepare(seed, account, tmp_path)
+    seed.close()
+    expected_sha = hashlib.sha256(db_path.read_bytes()).hexdigest().upper()
+    effective = replace(settings, project_root=tmp_path, db_path=db_path)
+    monkeypatch.setattr(main_module, "load_settings", lambda: effective)
+    monkeypatch.setattr(migration, "_git_identity", lambda _root: (BRANCH, HEAD))
+    monkeypatch.setenv("NIA_TEST_MODE", "1")
+    monkeypatch.setenv("NIA_CONTROLLED_LIVE_FAKE", "1")
+    monkeypatch.setenv("NIA_CONTROLLED_LIVE_TEST_DB_PATH", str(db_path))
+    monkeypatch.setenv("NIA_CONTROLLED_LIVE_TEST_RUNTIME_DIR", str(runtime))
+    monkeypatch.setenv("NIA_PRICING_PROFILES_PATH", str(pricing))
+
+    events: list[str] = []
+    real_check = controlled.run_controlled_live_quiescence_check
+    real_open = SqliteStorage.open
+
+    def check_spy(**kwargs):
+        events.append("pre_storage_probe")
+        assert "main_storage_open" not in events
+        return real_check(**kwargs)
+
+    def open_spy(cls, path):
+        del cls
+        events.append("main_storage_open")
+        return real_open(path)
+
+    monkeypatch.setattr(controlled, "run_controlled_live_quiescence_check", check_spy)
+    monkeypatch.setattr(SqliteStorage, "open", classmethod(open_spy))
+
+    exit_code = main_module._cmd_controlled_live_once(
+        _controlled_cli_args(topic_id=int(topic.id), expected_sha=expected_sha)
+    )
+
+    assert exit_code == 0
+    assert events[0] == "pre_storage_probe"
+    assert events.count("pre_storage_probe") == 1
+    assert events.index("pre_storage_probe") < events.index("main_storage_open")
+    assert not marker_path(runtime).exists()
+
+
+def test_database_change_between_pre_storage_pass_and_main_open_stops(
+    settings, tmp_path, monkeypatch,
+):
+    import app.main as main_module
+    import app.operations.stage1_migration as migration
+
+    db_path = tmp_path / "drift" / "agent.db"
+    seed = SqliteStorage.open(db_path)
+    seed.close()
+    expected_sha = hashlib.sha256(db_path.read_bytes()).hexdigest().upper()
+    effective = replace(settings, project_root=tmp_path, db_path=db_path, dry_run=False)
+    monkeypatch.setattr(main_module, "load_settings", lambda: effective)
+    monkeypatch.setattr(migration, "_git_identity", lambda _root: (BRANCH, HEAD))
+    monkeypatch.delenv("NIA_CONTROLLED_LIVE_FAKE", raising=False)
+    monkeypatch.setattr(controlled, "REAL_CONTROLLED_LIVE_ENABLED", True)
+
+    def clean_pre_storage(**_kwargs):
+        record = {
+            "sha256": expected_sha,
+            "size": db_path.stat().st_size,
+            "mtime_ns": db_path.stat().st_mtime_ns,
+            "mtime_utc": "2026-07-17T00:00:00Z",
+        }
+        return 0, {
+            "status": "PASS",
+            "reason_code": "QUIESCENT",
+            "project_process_ids": (),
+            "scheduled_tasks": (),
+            "locked_paths": (),
+            "database_before": {"database": record, "wal": None, "shm": None},
+            "database_after": {"database": record, "wal": None, "shm": None},
+            "database_unchanged": True,
+        }
+
+    real_open = SqliteStorage.open
+    opened = False
+
+    def drifting_open(cls, path):
+        nonlocal opened
+        del cls
+        if not opened:
+            opened = True
+            connection = sqlite3.connect(path)
+            try:
+                connection.execute("CREATE TABLE drift_after_pre_storage(id INTEGER)")
+                connection.commit()
+            finally:
+                connection.close()
+        return real_open(path)
+
+    monkeypatch.setattr(
+        controlled, "run_controlled_live_quiescence_check", clean_pre_storage
+    )
+    monkeypatch.setattr(SqliteStorage, "open", classmethod(drifting_open))
+
+    exit_code = main_module._cmd_controlled_live_once(
+        _controlled_cli_args(topic_id=1, expected_sha=expected_sha)
+    )
+
+    assert exit_code != 0
+    assert opened is True
+    assert not marker_path(tmp_path / "runtime").exists()
+    check = sqlite3.connect(db_path)
+    try:
+        assert check.execute("SELECT COUNT(*) FROM provider_attempts").fetchone()[0] == 0
+        assert check.execute("SELECT COUNT(*) FROM model_usage").fetchone()[0] == 0
+    finally:
+        check.close()
+
+
+def test_second_wrapper_loses_marker_fence_before_worker(
+    storage, settings, account, tmp_path, monkeypatch,
+):
+    topic, pricing = _prepare(storage, account, tmp_path)
+    worker_calls = 0
+
+    def worker(_contract):
+        nonlocal worker_calls
+        worker_calls += 1
+        raise AssertionError("contending wrapper must not run the worker")
+
+    monkeypatch.setattr(controlled, "acquire_session_marker", lambda *_args: False)
+    outcome = _run(
+        storage,
+        settings,
+        account,
+        tmp_path,
+        topic,
+        pricing,
+        worker=worker,
+    )
+
+    assert outcome.status == "SESSION_CONTENTION"
+    assert worker_calls == 0
+    assert storage.conn.execute("SELECT COUNT(*) FROM provider_attempts").fetchone()[0] == 0
 
 
 def test_production_db_path_is_forbidden_in_tests():

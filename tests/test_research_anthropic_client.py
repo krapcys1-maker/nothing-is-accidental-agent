@@ -65,7 +65,8 @@ _GOOD_JSON = json.dumps({
     "visual_idea": "diagram",
     "confidence_score": 0.8,
     "source_quality_score": 0.7,
-    "sources": [{"url": "https://x", "title": "T", "source_type": "PRIMARY",
+    "sources": [{"url": "https://x", "title": "T", "author_or_org": None,
+                 "published_at": None, "source_type": "PRIMARY",
                  "supports_claim": "A"}],
 })
 _USAGE = Usage(input_tokens=100, output_tokens=50, web_search_requests=2)

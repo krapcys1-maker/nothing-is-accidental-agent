@@ -401,3 +401,31 @@ Niezależny proces może zawierać pełny tekst planowanej komendy choćby dlate
 Procedura jest prosta, ale twarda: zamknąć inne procesy z pełnym tekstem komendy, uruchomić standalone check z tego samego launchera i nie ponawiać live po odmowie bez nowej zgody. Review uznał to za MINOR/P2, nie za blocker LA-02.
 
 Podczas checkpointu wystąpiły też dwie małe pomyłki read-only: `operational-report` nie przyjmuje `--db-path`, a poprawne wywołanie zwraca niezerowy `DEGRADED_UNKNOWN`, bo schema 0014 nie przechowuje timestampu maintenance. Żadna nie otworzyła drogi do live ani nie zmieniła produkcji.
+
+## 2026-07-17 — Baza blokowała sama siebie
+
+`DB_HANDLES_PRESENT` wyglądało jak dowód obcego workera, ale uchwyt należał do samego wrappera. Problemem nie był zbyt surowy probe. Problemem była kompozycja: `SqliteStorage.open` następowało przed sprawdzeniem, które wymagało braku wszystkich uchwytów.
+
+Nie dodano wyjątku „ignoruj własną bazę”. Probe przeniesiono przed open, a po open system używa zamrożonego wyniku i ponownie waliduje dane trwałe. Cztery realne testy Windows potwierdzają, że obcy read-only DB, writable DB, WAL i SHM nadal kończą się STOP.
+
+Pierwszy prawdziwy request zakończył się innym rodzajem porażki: HTTP 200 z niepoprawnym JSON-em. To już nie false blocker. Koszt 0,053182 USD został zapisany, attempt rozliczony, a job/run/research_run terminalnie oznaczone `FAILED`. Drugi request byłby retry, więc nie został wykonany.
+
+Pierwszy helper post-live także się pomylił: założył kolumny, których schema 0014 nie ma. Immutable query upadło bez mutacji; po `PRAGMA table_info` poprawny odczyt potwierdził trwały wynik.
+
+## 2026-07-17 — Precyzyjna pozycja błędu nie zastępuje brakującego dowodu
+
+Ledger mówi: linia 29, kolumna 6, znak 4376. Nie mówi, co w tym miejscu było. Single caller wyrzucił stop reason, wyjątek nie zachował raw, a katalog diagnostyczny tego runu nie powstał. Dlatego nie wolno dopisać, że model użył prose, fence albo urwał string. Potrafimy udowodnić klasę `json_syntax`; reszta pozostaje niepoznawalna.
+
+Pierwsza macierz testowa także zatrzymała się wcześniej, niż planowaliśmy. Użyliśmy produkcyjnej klasy klienta bez durable attempt context, więc guard poprawnie nie dopuścił nawet fake callera. Test dostał jawny offline seam. Później pełna regresja dała 1199/1200, bo stara fixture nie miała nowych nullable pól źródła. Uzupełniliśmy fixture, nie parser; następny przebieg i wszystkie partycje były zielone.
+
+Najbardziej materialny P2 był prostszy: dwa invocation tej samej operacji miały jeden plik raportu. Nowa nazwa zachowuje oba. Utraconej historycznej wersji nie rekonstruujemy, bo byłaby kolejnym artefaktem bez dowodu.
+
+## 2026-07-17 — Legalny JSON, nielegalny dla kontraktu
+
+400-cyfrowy integer nie jest błędem składni JSON. Był jednak zbyt duży dla `float()` i rzucał `OverflowError` już po rozpoczęciu requestu, omijając usage i settlement. Naprawa przesunęła granicę walidacji przed konwersję i mapuje wszystkie ogromne, nieskończone, tekstowe lub pozazakresowe score na `ResearchSchemaError`.
+
+Pierwszy wspólny sanitizer zepsuł cztery stare asercje formatu audytu, bo usuwał także bezpieczne etykiety pól. Osobny jawny tryb zachowuje etykietę z `[REDACTED]` tylko tam, gdzie wymaga tego istniejący audit; diagnostic i report nadal usuwają wrażliwe pola silniej. Była też jedna korekta reprezentacji czasu SQLite (naive UTC kontra aware UTC), bez zmiany semantyki zegara.
+
+Pierwszy samodzielny counterprobe nie podał `NIA_TEST_PROTECTED_DB` i kernel zatrzymał go jeszcze przed otwarciem temp SQLite. Po jawnym wskazaniu chronionej produkcyjnej ścieżki ten sam proces wykonał pięć kontrprób wyłącznie w katalogu tymczasowym. Ochrona fail-closed sama stała się dodatkowym dowodem.
+
+Pierwsza wersja końcowego audytu kopii próbowała sortować `provider_attempts` po nieistniejącym `created_at`. Hash kopii i źródła już wtedy był zgodny; błąd dotyczył tylko prezentacji. Powtórzenie po `rowid` potwierdziło integralność i ujawniło potrzebne doprecyzowanie: 19 wierszy usage łącznie, ale 14 realnych składających się na 0,737762 USD.

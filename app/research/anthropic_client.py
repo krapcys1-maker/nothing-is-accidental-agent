@@ -31,6 +31,8 @@ from __future__ import annotations
 
 import json
 import math
+import re
+from decimal import Decimal, InvalidOperation
 from typing import Callable
 
 from app.core.money import decimal_from, usd_float
@@ -68,6 +70,7 @@ from app.research.base import (
     ResearchProviderError,
     ResearchRateLimitError,
     ResearchResult,
+    ResearchSchemaError,
     ResearchServerError,
     ResearchTimeout,
     ResearchTruncatedError,
@@ -94,7 +97,7 @@ def _canonical_attempt_cost(value: object) -> float:
 _RETRYABLE_SERVER_STATUS_CODES = frozenset({500, 502, 503, 504})
 _SDK_MAX_RETRIES = 0
 
-Caller = Callable[[ResearchPlan], tuple[str, Usage]]
+Caller = Callable[[ResearchPlan], tuple[str, Usage] | tuple[str, Usage, "str | None"]]
 GatherCaller = Callable[[ResearchPlan], tuple[str, Usage]]
 SynthesizeCaller = Callable[[ResearchPlan, SourceGatheringResult], tuple[str, Usage]]
 
@@ -128,37 +131,207 @@ def _strip_code_fence(text: str) -> str:
     return stripped.strip()
 
 
+_SINGLE_RESEARCH_KEYS = frozenset({
+    "question",
+    "working_thesis",
+    "main_mechanism",
+    "confirmed_claims",
+    "uncertain_claims",
+    "contradictions",
+    "strongest_counterargument",
+    "citable_numbers",
+    "visual_idea",
+    "confidence_score",
+    "source_quality_score",
+    "sources",
+})
+_COMPLETE_JSON_FENCE = re.compile(
+    r"\A```json[ \t]*\r?\n(?P<body>.*?)(?:\r?\n)?```\Z",
+    re.DOTALL,
+)
+
+
+def _single_json_candidate(text: str) -> str:
+    """Return one unambiguous JSON value, optionally inside one complete fence.
+
+    We never search for braces inside prose.  Accepting a guessed substring would
+    silently turn an ambiguous provider response into authoritative research.
+    """
+    if not isinstance(text, str):
+        raise ResearchParseError(
+            "Research response classification=non_text_response.",
+            classification="non_text_response",
+        )
+    stripped = text.strip()
+    if not stripped:
+        raise ResearchParseError(
+            "Research response classification=empty_response.",
+            classification="empty_response",
+        )
+    if stripped.startswith("```"):
+        fenced = _COMPLETE_JSON_FENCE.fullmatch(stripped)
+        if fenced is None:
+            raise ResearchParseError(
+                "Research response classification=incomplete_or_invalid_code_fence.",
+                classification="incomplete_or_invalid_code_fence",
+            )
+        stripped = fenced.group("body").strip()
+        if not stripped:
+            raise ResearchParseError(
+                "Research response classification=empty_response.",
+                classification="empty_response",
+            )
+    elif "```" in stripped:
+        raise ResearchParseError(
+            "Research response classification=prose_outside_json.",
+            classification="prose_outside_json",
+        )
+    return stripped
+
+
+def _decode_single_json_object(text: str) -> dict[str, object]:
+    candidate = _single_json_candidate(text)
+    if candidate[0] not in "{[\"-0123456789tfnNI":
+        raise ResearchParseError(
+            "Research response classification=prose_outside_json.",
+            classification="prose_outside_json",
+        )
+    decoder = json.JSONDecoder()
+    try:
+        payload, end = decoder.raw_decode(candidate)
+    except json.JSONDecodeError as exc:
+        if exc.pos == 0 and candidate[0] not in "{[\"-0123456789NI":
+            classification = "prose_outside_json"
+        else:
+            classification = (
+                "incomplete_json"
+                if exc.msg.startswith("Unterminated string")
+                or exc.pos >= len(candidate) - 1
+                else "json_syntax"
+            )
+        raise ResearchParseError(
+            "Research response "
+            f"classification={classification}; {exc.msg}; "
+            f"line={exc.lineno}; column={exc.colno}; char={exc.pos}.",
+            classification=classification,
+        ) from exc
+    trailing = candidate[end:].strip()
+    if trailing:
+        try:
+            decoder.raw_decode(trailing)
+        except json.JSONDecodeError:
+            classification = "prose_outside_json"
+        else:
+            classification = "multiple_json_values"
+        raise ResearchParseError(
+            f"Research response classification={classification}.",
+            classification=classification,
+        )
+    if not isinstance(payload, dict):
+        raise ResearchSchemaError(
+            "Research response classification=schema; root must be an object."
+        )
+    return payload
+
+
+def _schema_error(field: str, requirement: str) -> ResearchSchemaError:
+    return ResearchSchemaError(
+        f"Research response classification=schema; field={field}; expected={requirement}."
+    )
+
+
+def _required_string(payload: dict[str, object], field: str, *, nullable: bool = False):
+    value = payload[field]
+    if nullable and value is None:
+        return None
+    if not isinstance(value, str):
+        raise _schema_error(field, "string" + ("_or_null" if nullable else ""))
+    if field in {"question", "working_thesis"} and not value.strip():
+        raise _schema_error(field, "non_empty_string")
+    return value
+
+
+def _required_string_list(payload: dict[str, object], field: str) -> list[str]:
+    value = payload[field]
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise _schema_error(field, "array_of_strings")
+    return list(value)
+
+
+def _required_score(payload: dict[str, object], field: str) -> float:
+    value = payload[field]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise _schema_error(field, "number_0_to_1")
+    try:
+        score = Decimal(value) if isinstance(value, int) else Decimal(str(value))
+    except (InvalidOperation, OverflowError, ValueError):
+        raise _schema_error(field, "number_0_to_1")
+    if not score.is_finite() or not Decimal("0") <= score <= Decimal("1"):
+        raise _schema_error(field, "number_0_to_1")
+    return float(score)
+
+
+def _validated_single_research_payload(payload: dict[str, object]) -> dict[str, object]:
+    missing = sorted(_SINGLE_RESEARCH_KEYS - payload.keys())
+    extra = sorted(payload.keys() - _SINGLE_RESEARCH_KEYS)
+    if missing:
+        raise _schema_error("root", "required_keys:" + ",".join(missing))
+    if extra:
+        raise _schema_error("root", "no_extra_keys:" + ",".join(extra))
+    return payload
+
+
 def _parse(text: str) -> ResearchDraft:
     """Parser dla pojedynczego (jednoetapowego) wywołania `run_research`."""
-    try:
-        payload = json.loads(_strip_code_fence(text))
-    except (json.JSONDecodeError, TypeError) as exc:
-        raise ResearchParseError(f"Niepoprawny JSON z modelu: {exc}") from exc
+    payload = _validated_single_research_payload(_decode_single_json_object(text))
 
     sources = []
-    for s in payload.get("sources", []):
+    raw_sources = payload["sources"]
+    if not isinstance(raw_sources, list):
+        raise _schema_error("sources", "array_of_source_objects")
+    for index, s in enumerate(raw_sources):
+        if not isinstance(s, dict):
+            raise _schema_error(f"sources[{index}]", "object")
+        required_source_keys = {
+            "url", "title", "author_or_org", "published_at", "source_type",
+            "supports_claim",
+        }
+        if set(s) != required_source_keys:
+            raise _schema_error(
+                f"sources[{index}]", "exact_keys:" + ",".join(sorted(required_source_keys))
+            )
+        for field in ("url", "title", "source_type"):
+            if not isinstance(s[field], str) or not s[field].strip():
+                raise _schema_error(f"sources[{index}].{field}", "non_empty_string")
+        for field in ("author_or_org", "published_at", "supports_claim"):
+            if s[field] is not None and not isinstance(s[field], str):
+                raise _schema_error(f"sources[{index}].{field}", "string_or_null")
         try:
-            stype = SourceType(s.get("source_type", "OTHER"))
-        except ValueError:
-            stype = SourceType.OTHER
+            stype = SourceType(s["source_type"])
+        except ValueError as exc:
+            raise _schema_error(
+                f"sources[{index}].source_type", "PRIMARY|SECONDARY|DATA|OTHER"
+            ) from exc
         sources.append(SourceDraft(
-            url=s.get("url", ""), title=s.get("title", ""),
-            author_or_org=s.get("author_or_org"), published_at=s.get("published_at"),
-            source_type=stype, supports_claim=s.get("supports_claim"),
+            url=s["url"], title=s["title"],
+            author_or_org=s["author_or_org"], published_at=s["published_at"],
+            source_type=stype, supports_claim=s["supports_claim"],
             verification=SourceVerification.UNVERIFIED,
         ))
     return ResearchDraft(
-        question=payload.get("question", ""),
-        working_thesis=payload.get("working_thesis", ""),
-        main_mechanism=payload.get("main_mechanism"),
-        confirmed_claims=list(payload.get("confirmed_claims", [])),
-        uncertain_claims=list(payload.get("uncertain_claims", [])),
-        contradictions=list(payload.get("contradictions", [])),
-        strongest_counterargument=payload.get("strongest_counterargument"),
-        citable_numbers=list(payload.get("citable_numbers", [])),
-        visual_idea=payload.get("visual_idea"),
-        confidence_score=float(payload.get("confidence_score", 0.0)),
-        source_quality_score=float(payload.get("source_quality_score", 0.0)),
+        question=_required_string(payload, "question"),
+        working_thesis=_required_string(payload, "working_thesis"),
+        main_mechanism=_required_string(payload, "main_mechanism", nullable=True),
+        confirmed_claims=_required_string_list(payload, "confirmed_claims"),
+        uncertain_claims=_required_string_list(payload, "uncertain_claims"),
+        contradictions=_required_string_list(payload, "contradictions"),
+        strongest_counterargument=_required_string(
+            payload, "strongest_counterargument", nullable=True
+        ),
+        citable_numbers=_required_string_list(payload, "citable_numbers"),
+        visual_idea=_required_string(payload, "visual_idea", nullable=True),
+        confidence_score=_required_score(payload, "confidence_score"),
+        source_quality_score=_required_score(payload, "source_quality_score"),
         sources=sources,
     )
 
@@ -429,7 +602,10 @@ class AnthropicResearchClient:
             self._assert_active_durable_provider_attempt()
         return caller(*args)
 
-    def _run_with_retry_and_parse(self, call_fn, parse_fn, empty_error_msg: str, *, stage: str):
+    def _run_with_retry_and_parse(
+        self, call_fn, parse_fn, empty_error_msg: str, *, stage: str,
+        max_output_tokens: int | None = None,
+    ):
         # One logical attempt is exactly one caller invocation. Do not turn a
         # transient typed error into another potentially paid provider request.
         del empty_error_msg
@@ -437,10 +613,26 @@ class AnthropicResearchClient:
         self.call_count += 1
         try:
             try:
-                text, usage = call_fn()
+                response = call_fn()
+                if len(response) == 2:
+                    text, usage = response
+                    stop_reason = None
+                elif len(response) == 3:
+                    text, usage, stop_reason = response
+                else:
+                    raise ResearchUnknownProviderError(
+                        "Provider caller returned an invalid response tuple."
+                    )
             except ResearchError as exc:
                 exc.request_id = request_id
                 raise
+            if stop_reason == "max_tokens":
+                raise ResearchTruncatedError(
+                    f"{stage}: response truncated; stop_reason=max_tokens; "
+                    f"max_output_tokens={max_output_tokens}.",
+                    usage=usage, model=self.model, raw_text=text,
+                    stop_reason=stop_reason, request_id=request_id,
+                )
             try:
                 parsed = parse_fn(text)
             except ResearchParseError as exc:
@@ -448,27 +640,33 @@ class AnthropicResearchClient:
                 # its real usage for the workflow ledger.
                 exc.usage = usage
                 exc.model = self.model
+                exc.raw_text = text
+                exc.stop_reason = stop_reason
                 exc.request_id = request_id
                 raise
-            return parsed, usage, request_id
+            return parsed, usage, text, stop_reason, request_id
         finally:
             self._durable_boundary.clear()
 
     def run_research(self, plan: ResearchPlan) -> ResearchResult:
         """Pojedyncze wywołanie: search + analiza naraz. Działa, ale patrz docstring
         modułu — po incydencie 2026-07-11 zalecana jest ścieżka dwuetapowa."""
-        draft, usage, request_id = self._run_with_retry_and_parse(
+        draft, usage, raw_text, stop_reason, request_id = self._run_with_retry_and_parse(
             lambda: (
                 self._caller(plan) if self._caller_is_default
                 else self._call_injected_provider_caller(self._caller, plan)
             ), _parse,
-            "Research nieudany bez konkretnego błędu.", stage="research")
-        return ResearchResult(draft=draft, usage=usage, model=self.model, request_id=request_id)
+            "Research nieudany bez konkretnego błędu.", stage="research",
+            max_output_tokens=self._research_max_tokens)
+        return ResearchResult(
+            draft=draft, usage=usage, model=self.model, raw_text=raw_text,
+            stop_reason=stop_reason, request_id=request_id,
+        )
 
     def gather_sources(self, plan: ResearchPlan) -> SourceGatheringResult:
         """Etap 1: TYLKO web search + wyodrębnienie źródeł i krótkich, surowych
         faktów. Bez analizy — lekki schemat, mniejsze ryzyko ucięcia JSON-a."""
-        sources, usage, request_id = self._run_with_retry_and_parse(
+        sources, usage, _raw_text, _stop_reason, request_id = self._run_with_retry_and_parse(
             lambda: (
                 self._gather_caller(plan) if self._gather_caller_is_default
                 else self._call_injected_provider_caller(self._gather_caller, plan)
@@ -480,14 +678,17 @@ class AnthropicResearchClient:
                         gathered: SourceGatheringResult) -> ResearchResult:
         """Etap 2: TYLKO synteza (teza, mechanizm, sprzeczności, confidence) na
         bazie już zebranych źródeł. Zero web search — input pod naszą kontrolą."""
-        draft, usage, request_id = self._run_with_retry_and_parse(
+        draft, usage, raw_text, stop_reason, request_id = self._run_with_retry_and_parse(
             lambda: (
                 self._synthesize_caller(plan, gathered) if self._synthesize_caller_is_default
                 else self._call_injected_provider_caller(self._synthesize_caller, plan, gathered)
             ),
             lambda text: _parse_synthesis(text, gathered),
             "Synteza karty nieudana bez konkretnego błędu.", stage="research_synthesize")
-        return ResearchResult(draft=draft, usage=usage, model=self.model, request_id=request_id)
+        return ResearchResult(
+            draft=draft, usage=usage, model=self.model, raw_text=raw_text,
+            stop_reason=stop_reason, request_id=request_id,
+        )
 
     # --- wspólny szkielet dla A1/A2/B: jak wyżej, ale niesie DODATKOWO raw_text i
     # stop_reason (na sukces I na błąd) — potrzebne do diagnostyki (patrz
@@ -703,7 +904,9 @@ class AnthropicResearchClient:
         stop_reason = getattr(message, "stop_reason", None)
         return text, usage, stop_reason
 
-    def _default_caller(self, plan: ResearchPlan) -> tuple[str, Usage]:  # pragma: no cover
+    def _default_caller(
+        self, plan: ResearchPlan,
+    ) -> tuple[str, Usage, str | None]:  # pragma: no cover
         anthropic = self._import_anthropic()
         client = self._new_anthropic_client(anthropic)
         prompt = (
@@ -711,15 +914,21 @@ class AnthropicResearchClient:
             "Use web search. Return JSON with keys: question, working_thesis, main_mechanism, "
             "confirmed_claims, uncertain_claims, contradictions, strongest_counterargument, "
             "citable_numbers, visual_idea, confidence_score, source_quality_score, sources. "
-            "Each source: url, title, author_or_org, published_at, source_type, supports_claim. "
-            "Return ONLY the JSON object, no prose before or after it."
+            "Every key is required. String lists must contain only strings. Scores must be "
+            "numbers from 0 to 1. Each source must contain exactly: url, title, "
+            "author_or_org, published_at, source_type, supports_claim; nullable values must "
+            "be JSON null. source_type must be PRIMARY, SECONDARY, DATA, or OTHER. "
+            "Keep it concise: thesis <= 80 words, mechanism <= 120 words, 4-6 confirmed "
+            "claims <= 35 words each, at most 3 uncertain claims, 3 contradictions, 6 "
+            "citable numbers, and 6 sources. Return exactly ONE JSON object, with no "
+            "markdown fence and no prose before or after it."
         )
         web_search_tool: dict = {"type": "web_search_20250305", "name": "web_search"}
         if self._max_web_searches is not None:
             web_search_tool["max_uses"] = self._max_web_searches
-        text, usage, _stop_reason = self._call_anthropic(
+        text, usage, stop_reason = self._call_anthropic(
             client, prompt, tools=[web_search_tool], max_tokens=self._research_max_tokens)
-        return text, usage
+        return text, usage, stop_reason
 
     def _default_gather_caller(self, plan: ResearchPlan) -> tuple[str, Usage]:  # pragma: no cover
         anthropic = self._import_anthropic()

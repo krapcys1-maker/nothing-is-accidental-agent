@@ -1,6 +1,6 @@
 # Etap 1 — operacje lokalne, scheduler i migracja produkcyjna
 
-Status: **`POST-MIGRATION REVIEW — APPROVE WITH MINOR/P2`; QP-01 = `APPROVED`; produkcja = `VERIFIED / SCHEMA 0014`; pierwsza LA-01 = `REJECTED — MAJOR`; LA-01-R1 i LA-02 = `APPROVED WITH MINOR/P2 — CHECKPOINTED`.** Root cause `PROCESSES_PRESENT` jest `CLOSED`; P2-2 false STOP pozostaje `OPEN OBSERVATION / DOCUMENTED`. Etap 1 ma status `OPEN / READY FOR NEW OWNER AUTHORIZATION AFTER STANDALONE QUIESCENCE CHECK`. Live API jest zabronione. Ten dokument nie jest zgodą na rejestrację zadań systemowych, ponowną migrację, drugą próbę controlled-live ani wywołanie providera.
+Status: **`POST-MIGRATION REVIEW — APPROVE WITH MINOR/P2`; QP-01 = `APPROVED`; produkcja = `VERIFIED / SCHEMA 0014`; pierwsza LA-01 = `REJECTED — MAJOR`; LA-01-R1 i LA-02 = `APPROVED WITH MINOR/P2 — CHECKPOINTED`; LA-03 = `APPROVE WITH MINOR/P2`; P2 po LA-03 (NIA-P2-RV-01…05) = `APPROVE WITH MINOR/P2`.** Root causes `PROCESSES_PRESENT` i `DB_HANDLES_PRESENT` są `CLOSED`; P2-2 false STOP pozostaje `OPEN OBSERVATION / DOCUMENTED`. **Etap 1 = `CLOSED`** (formalna decyzja właściciela 2026-07-17, ADR-088); pierwszy realny durable request został rozliczony bez Research Card, co nie było bramką zamknięcia. Live API jest zabronione bez nowej, oddzielnej zgody właściciela. Terminalny job `real-research-09fd6a30e07e63e96699ca002dbaead4` nie może być ponawiany; ten dokument nie jest zgodą na rejestrację zadań systemowych, migrację, nowy controlled-live ani wywołanie providera.
 
 ## Minimalny Windows Task Scheduler
 
@@ -95,6 +95,16 @@ Wykluczenie launchera wymaga wszystkich dowodów: bieżący current PID, dokład
 Przy odmowie właściwego wrappera trwały raport ma zewnętrzny `reason_code=PREFLIGHT_FAILED`, a `error.reason_code=PROCESSES_PRESENT`, `outer_reason_code=PREFLIGHT_FAILED`, `failing_invariant`, `check_order`, deterministyczne `blocking_process_ids`, identity procesów, `belongs_to_probe_ancestry` i fingerprinty. Command lines przechodzą redakcję API key/Authorization/token/secret/password/prompt/question/guidance/payload oraz wartości wrażliwych ENV. Raport nigdy nie jest powodem do retry.
 
 Stan po checkpointcie LA-02: real gate `False`, flags fail-closed, job `real-research-09fd6a30e07e63e96699ca002dbaead4` nadal `QUEUED/attempts=0`, provider attempts/usage=0, schema `0014`, post-enqueue DB SHA `5FF5DBA3FA57A2DFBB8B638DD7E6CC9E84825A96C6080AA17F8A05B188D97B78`. Następny krok to standalone quiescence check z tego samego launchera i dopiero potem nowa jawna zgoda właściciela.
+
+## Stan po LA-03 i kontrakt przyszłego osobno autoryzowanego invocation
+
+Historyczny job wykonał exactly one attempt i jest terminalny `FAILED/max_attempts=1`; jego request ma trwałe `REQUEST_STARTED`, jedno usage i `SETTLED=0.053182 USD`. Nie wolno uruchamiać go ponownie. Ewentualny przyszły controlled-live wymaga osobnej decyzji właściciela, nowego dozwolonego operation/job, nowego post-enqueue SHA oraz standalone PASS.
+
+Production CLI zawsze wykonuje canonical quiescence/DB-WAL-SHM check przed `SqliteStorage.open`, zamraża cały payload i jawnie przekazuje go do `run_controlled_live_once`. Wrapper nie ma `quiescence_probe=None` ani fallbacku uruchamianego po open. Brak/None payloadu jest błędem konstrukcji przed worker/provider boundary.
+
+Raport nie ma już nazwy `<session_id>.json`. Format to `<session_id>--attempt-1-<UTC timestamp>-<nonce>.json`; recovery używa `recovery-...`. Stable session wiąże logiczną operację, a invocation discriminator zachowuje historię. Marker niesie `report_key`; provisional/final jednego invocation promują ten sam plik atomowo, lecz kolejne invocation nie nadpisują się.
+
+Jedna provider response przechodzi jeden zamknięty parser. Dozwolony jest dokładnie jeden JSON object lub jeden kompletny zewnętrzny fence. Prose, dwa obiekty, niepełny fence, brak pola albo zły typ kończą się fail-closed po tym samym jednym usage/settlement; `stop_reason=max_tokens` jest typowaną truncation. Nie istnieje repair request, retry ani attempt #2. Raw/stop reason są zapisywane wyłącznie prywatnie w `data/debug/research/<run_id>/SINGLE_raw_response.txt` i nigdy nie trafiają do raportu operatorskiego.
 
 ## Kontrolowana migracja produkcyjnej bazy `0009→0014`
 
@@ -250,7 +260,7 @@ Nowy baseline:
 | `data/agent.db-wal` | `E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855` | 0 B | `2026-07-16T19:42:25.5417557Z` |
 | `data/agent.db-shm` | `FD4C9FDA9CD3F9AE7C962B0DDF37232294D55580E1AA165AA06129B8549389EB` | 32768 B | `2026-07-16T19:42:25.5507558Z` |
 
-Backup, report i baseline znajdują się poza repozytorium w `C:\Users\user\Desktop\agent-project-backups\stage1-second-migration-20260716-ddc3c63190eb82bc-attempt-4`. Migracji nie wolno ponawiać w tej sesji. Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`.
+Backup, report i baseline znajdują się poza repozytorium w `C:\Users\user\Desktop\agent-project-backups\stage1-second-migration-20260716-ddc3c63190eb82bc-attempt-4`. Migracji nie wolno ponawiać w tej sesji. (Stan historyczny na 2026-07-16: Etap 1 pozostawał wtedy `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`. Etap 1 został formalnie zamknięty 2026-07-17 — patrz nagłówek dokumentu i ADR-088.)
 
 ### Niezależny review trwałego wyniku migracji i QP-01
 
@@ -266,7 +276,7 @@ Kanoniczny entrypoint przyszłego, osobno autoryzowanego użycia: `python -m app
 
 Przed uruchomieniem realnego wrappera job musi zostać wcześniej utrwalony wyłącznie przez `scripts/run_capped_research.py --real` z tym samym operation key i zatwierdzonym profilem. Enqueue zapisuje pełny `controlled_session`, a wrapper przez ten sam deterministyczny helper wyprowadza identyczne job/request/attempt/fence i wymaga dokładnego porównania. Wrapper realny nie tworzy joba. Automatyczne utworzenie joba istnieje wyłącznie w procesie z obiema zmiennymi `NIA_TEST_MODE=1` i `NIA_CONTROLLED_LIVE_FAKE=1`, na jawnej tymczasowej bazie różnej od `data/agent.db`.
 
-Sekwencja: trwały marker O_EXCL + fsync → preflight i recheck (branch/HEAD/schema/DB SHA, zatwierdzony quiescence probe, brak procesów/tasków/uchwytów/lease/rezerwacji, dokładnie jeden expected claimable job, `earliest_run_at≤now`, `max_attempts=1`, `max_retries=0`) → pełne porównanie frozen pricing contract → atomowe otwarcie pełnego profilu pięciu flag (`kill_switch` OSTATNI) → jeden worker z trwałym session/job/request/attempt/token fence → bezwarunkowe restoration (`kill_switch` PIERWSZY) → zamknięcie storage i nowe połączenie → walidacja job/run/research_run/attempt/usage/settlement/lease/rezerwacji → sanitizacja → trwały raport + fsync → dopiero potem unlink markera + fsync katalogu.
+Sekwencja: canonical pre-storage quiescence/handle check bez SQLite → zamrożenie payloadu → otwarcie głównego storage → pełny durable preflight (branch/HEAD/schema/DB SHA, frozen quiescence, brak lease/rezerwacji, dokładnie jeden expected claimable job, `earliest_run_at≤now`, `max_attempts=1`, `max_retries=0`, pełny frozen pricing) → marker O_EXCL + fsync → drugi identyczny durable recheck → atomowe otwarcie pełnego profilu pięciu flag (`kill_switch` OSTATNI) → jeden worker z trwałym session/job/request/attempt/token fence → bezwarunkowe restoration (`kill_switch` PIERWSZY) → zamknięcie storage i nowe połączenie → walidacja job/run/research_run/attempt/usage/settlement/lease/rezerwacji → sanitizacja → trwały invocation report + fsync → dopiero potem unlink markera + fsync katalogu → finalna promocja raportu.
 
 Sukces wymaga zgodnego expected joba, requestu, attemptu #1, execution fence, dokładnie jednego `SETTLED`, jednego canonical usage, zgodnego settlementu, terminalnych stanów i braku lease/rezerwacji. Sam tekst `SUCCEEDED` nie wystarcza. Brak raportu, błąd report write, błąd marker clear, brak usage/settlement, attempt #2 albo obcy wynik dają niezerowy exit i brak formalnego `COMPLETED`.
 
@@ -308,4 +318,4 @@ To jest zamrożony szkielet parametrów, nie gotowa komenda wykonawcza: placehol
 
 Job został osobno enqueue’owany, a post-enqueue SHA zamrożono jako `5FF5DBA3FA57A2DFBB8B638DD7E6CC9E84825A96C6080AA17F8A05B188D97B78`. Właściciel autoryzował dokładnie jedną komendę. Zewnętrzny hard preflight przeszedł, gate zmieniono wyłącznie `False→True`, a diff wynosił 1/1. Komenda zakończyła się `PREFLIGHT_FAILED` przed provider boundary.
 
-Raport `runtime/controlled_live_reports/99f52dd3889688440ef8dc8f26f5e318.json` potwierdza `provider_request_started=false`, `marker_cleared=true` i końcowe flags fail-closed. Nie powstał provider attempt, usage, run ani research_run; koszt pozostał `0.684580 USD`; job nadal jest `QUEUED`. Gate przywrócono do `False`, a diff usunięto. **Nie uruchamiać ponownie.** Szczegółową przyczynę wolno analizować wyłącznie offline w osobnym zakresie.
+Historycznie raport `runtime/controlled_live_reports/99f52dd3889688440ef8dc8f26f5e318.json` potwierdzał `provider_request_started=false`, lecz deterministyczna ścieżka została później nadpisana wynikiem LA-03 dla tej samej operation identity. ADR-082 zachowuje stan pierwszej odmowy; utraconego pliku nie rekonstruujemy. Nowy invocation-specific naming zapobiega takim nadpisaniom. **Terminalnego joba nie uruchamiać ponownie.**

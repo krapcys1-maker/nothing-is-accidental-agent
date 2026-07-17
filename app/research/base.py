@@ -133,11 +133,31 @@ class ResearchUnknownProviderError(ResearchProviderError):
 
 
 class ResearchParseError(ResearchError):
-    """Model zwrócił niepoprawny JSON (NIE ponawiamy — to nie jest błąd transient)."""
+    """Model zwrócił niepoprawny format (NIE ponawiamy — to nie jest transient)."""
+
+    def __init__(self, message: str, *, classification: str = "json_syntax",
+                 usage: Usage | None = None, model: str | None = None,
+                 raw_text: str | None = None, stop_reason: str | None = None,
+                 request_id: str | None = None) -> None:
+        super().__init__(message, usage=usage, model=model, raw_text=raw_text,
+                         stop_reason=stop_reason, request_id=request_id)
+        self.classification = classification
+
+
+class ResearchSchemaError(ResearchParseError):
+    """JSON jest kompletny, ale nie spełnia zamkniętego kontraktu ResearchDraft."""
+
+    def __init__(self, message: str, **kwargs) -> None:
+        kwargs.setdefault("classification", "schema")
+        super().__init__(message, **kwargs)
 
 
 class ResearchTruncatedError(ResearchParseError):
     """Provider zakończył generację przez limit outputu; nigdy nie retry'ujemy."""
+
+    def __init__(self, message: str, **kwargs) -> None:
+        kwargs.setdefault("classification", "truncation")
+        super().__init__(message, **kwargs)
 
 
 class ResearchBudgetError(ResearchError):

@@ -300,7 +300,8 @@ def main(argv: list[str] | None = None) -> int:
 
 def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, account, topic,
                               settings, *, max_cost_usd: float, request_max_tokens: int,
-                              approved_profile=None) -> int:
+                              approved_profile=None,
+                              now: datetime | None = None) -> int:
     """Persist fresh paid intent only; this process never creates a provider client."""
     if args.mode != "single" or args.force_re_research:
         print("INVALID_CONFIGURATION: WAVE 0B durable real jobs support only fresh --mode single.")
@@ -345,6 +346,7 @@ def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, 
         pricing_currency=profile.currency,
         pricing_unit=profile.unit,
     )
+    enqueue_time = now if now is not None else datetime.now(timezone.utc)
     job = Job(
         id=job_id,
         account_id=account.id,
@@ -363,7 +365,7 @@ def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, 
             "controlled_session": session_contract,
         },
         schedule_reason="WITHIN_EDITORIAL_WINDOW",
-        earliest_run_at=datetime.now(timezone.utc),
+        earliest_run_at=enqueue_time,
         max_attempts=1,
     )
     try:
@@ -445,7 +447,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
     if args.force_re_research:
         print("UWAGA: --force-re-research jest jawnie włączone; pozostałe bramki bezpieczeństwa działają.")
 
-    now = datetime.now(timezone.utc)
+    now = clock.now()
     month_spent = storage.sum_real_cost_usd(now.strftime("%Y-%m"))
     day_spent = storage.sum_real_cost_usd(now.strftime("%Y-%m-%d"))
     print(f"budżet miesięczny: wydano dotąd {month_spent:.6f} / limit {settings.max_monthly_cost_usd:.2f} USD")
@@ -516,6 +518,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
                 args, storage, account, topic, settings,
                 max_cost_usd=max_cost_usd, request_max_tokens=request_max_tokens,
                 approved_profile=approved_profile,
+                now=now,
             )
         finally:
             storage.close()

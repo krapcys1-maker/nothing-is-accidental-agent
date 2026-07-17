@@ -466,6 +466,86 @@ def _run_standalone_cli(db_path: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _controlled_probe_paths(tmp_path: Path) -> tuple[Path, Path]:
+    project_root = tmp_path / "probe-project"
+    db_path = tmp_path / "probe-db" / "agent.db"
+    project_root.mkdir()
+    db_path.parent.mkdir()
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("CREATE TABLE held(id INTEGER)")
+        connection.commit()
+    finally:
+        connection.close()
+    return project_root, db_path
+
+
+@WINDOWS_ONLY
+@pytest.mark.parametrize("mode", ("read_only", "writable"))
+def test_canonical_pre_storage_stops_for_foreign_sqlite_handle(
+    tmp_path: Path, mode: str,
+):
+    project_root, db_path = _controlled_probe_paths(tmp_path)
+    if mode == "read_only":
+        holder_code = (
+            "import pathlib,sqlite3,sys,time;"
+            "uri=pathlib.Path(sys.argv[1]).resolve().as_uri()+'?mode=ro';"
+            "connection=sqlite3.connect(uri,uri=True);"
+            "print('READY',flush=True);time.sleep(60)"
+        )
+    else:
+        holder_code = (
+            "import sqlite3,sys,time;"
+            "connection=sqlite3.connect(sys.argv[1]);"
+            "connection.execute('SELECT 1');"
+            "print('READY',flush=True);time.sleep(60)"
+        )
+
+    with _ready_process([sys.executable, "-c", holder_code, str(db_path)]):
+        exit_code, payload = controlled.run_controlled_live_quiescence_check(
+            project_root=project_root,
+            db_path=db_path,
+        )
+
+    assert exit_code == 2
+    assert payload["status"] == "STOP"
+    assert payload["reason_code"] == "DB_HANDLES_PRESENT"
+    assert str(db_path) in payload["locked_paths"]
+    assert payload["storage_opened"] is False
+
+
+@WINDOWS_ONLY
+@pytest.mark.parametrize("suffix", ("-wal", "-shm"))
+def test_canonical_pre_storage_stops_for_foreign_sidecar_handle(
+    tmp_path: Path, suffix: str,
+):
+    project_root, db_path = _controlled_probe_paths(tmp_path)
+    held_path = Path(f"{db_path}{suffix}")
+    held_path.write_bytes(b"held-sidecar")
+    holder_code = (
+        "import ctypes,sys,time;from ctypes import wintypes;"
+        "create=ctypes.windll.kernel32.CreateFileW;"
+        "create.argtypes=(wintypes.LPCWSTR,wintypes.DWORD,wintypes.DWORD,"
+        "wintypes.LPVOID,wintypes.DWORD,wintypes.DWORD,wintypes.HANDLE);"
+        "create.restype=wintypes.HANDLE;"
+        "handle=create(sys.argv[1],0x80000000,1,None,3,0x80,None);"
+        "assert handle != ctypes.c_void_p(-1).value;"
+        "print('READY',flush=True);time.sleep(60)"
+    )
+
+    with _ready_process([sys.executable, "-c", holder_code, str(held_path)]):
+        exit_code, payload = controlled.run_controlled_live_quiescence_check(
+            project_root=project_root,
+            db_path=db_path,
+        )
+
+    assert exit_code == 2
+    assert payload["status"] == "STOP"
+    assert payload["reason_code"] == "DB_HANDLES_PRESENT"
+    assert str(held_path) in payload["locked_paths"]
+    assert payload["storage_opened"] is False
+
+
 @WINDOWS_ONLY
 def test_full_standalone_entrypoint_passes_and_preserves_db(tmp_path: Path):
     db_path = tmp_path / "agent.db"

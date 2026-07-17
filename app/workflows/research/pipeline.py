@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import logging
-import re
 import sys
 from typing import Callable
 
@@ -26,6 +25,7 @@ from app.core.clock import Clock, SystemClock
 from app.core.config import Settings
 from app.core.ids import new_run_id
 from app.core.money import decimal_from, sum_usd, usd_float
+from app.core.sanitization import sanitize_persistent_text
 from app.llm.base import Usage
 from app.llm.usage_tracker import UsageTracker
 from app.models import (
@@ -121,16 +121,6 @@ class ResearchRunSummary:
 ResearchLogWriter = Callable[[ResearchCard, Topic, "ResearchRunSummary"], None]
 _LOGGER = logging.getLogger(__name__)
 _AUDIT_ERROR_MESSAGE_LIMIT = 500
-_AUDIT_SECRET_PATTERNS = (
-    re.compile(r"\bsk-ant-[A-Za-z0-9_-]+\b"),
-    re.compile(
-        r"(?i)\b(x-api-key|api[_ -]?key|authorization)\b\s*[:=]\s*"
-        r"(?:bearer\s+)?[^\s,;]+"
-    ),
-    re.compile(r"(?i)\bbearer\s+[^\s,;]+"),
-)
-
-
 class ResearchExecutionAlreadyInitialized(RuntimeError):
     """Worker znalazł już trwały run; kontynuacja wymaga jawnej weryfikacji."""
 
@@ -176,11 +166,9 @@ def _best_effort_worker_terminal_diagnostic(effect: Callable[[], None], *, label
 
 
 def _sanitize_audit_error_text(value: object, *, limit: int) -> str:
-    text = " ".join(str(value).split())
-    text = _AUDIT_SECRET_PATTERNS[0].sub("[REDACTED]", text)
-    text = _AUDIT_SECRET_PATTERNS[1].sub(
-        lambda match: f"{match.group(1)}=[REDACTED]", text)
-    text = _AUDIT_SECRET_PATTERNS[2].sub("Bearer [REDACTED]", text)
+    text = " ".join(
+        sanitize_persistent_text(value, preserve_safe_labels=True).split()
+    )
     if len(text) > limit:
         text = f"{text[:limit - 3]}..."
     return text
@@ -857,6 +845,21 @@ def run_research_pipeline(
                 raise ResearchExecutionNeedsReconciliation(
                     "Research failure retained an active reservation for explicit reconciliation."
                 ) from exc
+        diagnostic = lambda: _record_diagnostics(
+            settings,
+            run_id,
+            "SINGLE",
+            usage=exc_usage or Usage(),
+            raw_text=getattr(exc, "raw_text", None) or "",
+            stop_reason=getattr(exc, "stop_reason", None),
+            parse_error_location=str(exc),
+        )
+        if execution_context is None:
+            diagnostic()
+        else:
+            _best_effort_worker_terminal_diagnostic(
+                diagnostic, label="research_single_failure_diagnostic",
+            )
         if execution_context is None:
             notifier.notify("error", "Research nieudany", str(exc), account.id)
         else:
@@ -956,6 +959,21 @@ def run_research_pipeline(
             run_id, research_card_id=int(card.id), total_cost_usd=summary.cost_usd,
             stage_b_completed=False,
             terminal_run_status=RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS,
+        )
+
+    diagnostic = lambda: _record_diagnostics(
+        settings,
+        run_id,
+        "SINGLE",
+        usage=result.usage,
+        raw_text=getattr(result, "raw_text", ""),
+        stop_reason=getattr(result, "stop_reason", None),
+    )
+    if execution_context is None:
+        diagnostic()
+    else:
+        _best_effort_worker_terminal_diagnostic(
+            diagnostic, label="research_single_success_diagnostic",
         )
 
     # 11. Aktualizacja dokumentacji (opcjonalna — realny run dopisuje do RESEARCH_LOG.md).

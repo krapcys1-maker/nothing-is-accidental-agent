@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
+import json
 import sqlite3
 import threading
 import shutil
@@ -190,15 +191,43 @@ def _operation_job(account, topic, job_id: str, operation_key: str, *, cap: floa
 
 
 def _valid_research_response() -> str:
-    return (
-        '{"question":"Why?","working_thesis":"A mechanism.",'
-        '"confidence_score":0.9,"source_quality_score":0.9,"sources":['
-        '{"url":"https://a.example","title":"A","source_type":"PRIMARY",'
-        '"supports_claim":"A","verification":"VERIFIED"},'
-        '{"url":"https://b.example","title":"B","source_type":"PRIMARY",'
-        '"supports_claim":"B","verification":"VERIFIED"},'
-        '{"url":"https://c.example","title":"C","source_type":"PRIMARY",'
-        '"supports_claim":"C","verification":"VERIFIED"}]}'
+    return json.dumps({
+        "question": "Why?",
+        "working_thesis": "A mechanism.",
+        "main_mechanism": "A durable mechanism.",
+        "confirmed_claims": ["A", "B", "C"],
+        "uncertain_claims": [],
+        "contradictions": [],
+        "strongest_counterargument": "A counterargument.",
+        "citable_numbers": [],
+        "visual_idea": "A diagram.",
+        "confidence_score": 0.9,
+        "source_quality_score": 0.9,
+        "sources": [
+            {
+                "url": f"https://{name.lower()}.example",
+                "title": name,
+                "author_or_org": None,
+                "published_at": None,
+                "source_type": "PRIMARY",
+                "supports_claim": name,
+            }
+            for name in ("A", "B", "C")
+        ],
+    })
+
+
+def _research_response_with_score(value: object) -> str:
+    payload = json.loads(_valid_research_response())
+    payload["confidence_score"] = value
+    return json.dumps(payload)
+
+
+def _research_response_with_score_literal(value: str) -> str:
+    return _valid_research_response().replace(
+        '"confidence_score": 0.9',
+        f'"confidence_score": {value}',
+        1,
     )
 
 
@@ -715,7 +744,7 @@ def test_client_receives_stable_request_id_without_network():
 
     def caller(_plan):
         captured.append("called")
-        return ('{"question":"Why?","working_thesis":"T","sources":[]}', Usage())
+        return (_valid_research_response(), Usage())
 
     client = OfflineAnthropicResearchClient("offline", "test", caller=caller)
     client.configure_attempt_control(
@@ -799,16 +828,9 @@ def test_real_single_pipeline_uses_attempt_ledger_before_injected_provider(
 
     def caller(_plan):
         calls.append("provider")
-        return (
-            '{"question":"Why?","working_thesis":"A mechanism.",'
-            '"confidence_score":0.9,"source_quality_score":0.9,"sources":['
-            '{"url":"https://a.example","title":"A","source_type":"PRIMARY",'
-            '"supports_claim":"A","verification":"VERIFIED"},'
-            '{"url":"https://b.example","title":"B","source_type":"PRIMARY",'
-            '"supports_claim":"B","verification":"VERIFIED"},'
-            '{"url":"https://c.example","title":"C","source_type":"PRIMARY",'
-            '"supports_claim":"C","verification":"VERIFIED"}]}'
-        ), Usage(input_tokens=10, output_tokens=10, web_search_requests=1)
+        return _valid_research_response(), Usage(
+            input_tokens=10, output_tokens=10, web_search_requests=1
+        )
 
     summary = run_research_pipeline(
         account, topic, settings=real_settings, storage=storage,
@@ -931,10 +953,72 @@ def test_durable_pipeline_over_reservation_retains_usage_and_blocks_success(
     assert storage.get_run(run_id).status is RunStatus.RUNNING
 
 
-def test_durable_parse_error_settles_usage_once(storage, settings, account):
-    topic = _topic(storage, account, "parse-settlement")
-    job = storage.enqueue_job(_real_job(account, topic, "parse-settlement", 1.0))
-    lease = storage.claim_next_job("worker-parse-settlement", 120, now=NOW)
+@pytest.mark.parametrize(
+    ("case", "response", "stop_reason", "classification"),
+    [
+        ("parse", "not valid json", "end_turn", "prose_outside_json"),
+        (
+            "schema",
+            json.dumps({
+                key: value
+                for key, value in json.loads(_valid_research_response()).items()
+                if key != "working_thesis"
+            }),
+            "end_turn",
+            "classification=schema",
+        ),
+        ("truncation", '{"question":"cut', "max_tokens", "stop_reason=max_tokens"),
+        (
+            "score-400-digit",
+            _research_response_with_score(int("9" * 400)),
+            "end_turn",
+            "classification=schema",
+        ),
+        (
+            "score-huge-exponent",
+            _research_response_with_score_literal("1e400"),
+            "end_turn",
+            "classification=schema",
+        ),
+        (
+            "score-positive-infinity",
+            _research_response_with_score_literal("Infinity"),
+            "end_turn",
+            "classification=schema",
+        ),
+        (
+            "score-negative-infinity",
+            _research_response_with_score_literal("-Infinity"),
+            "end_turn",
+            "classification=schema",
+        ),
+        (
+            "score-nan",
+            _research_response_with_score_literal("NaN"),
+            "end_turn",
+            "classification=schema",
+        ),
+        (
+            "score-out-of-range",
+            _research_response_with_score(1.01),
+            "end_turn",
+            "classification=schema",
+        ),
+        (
+            "score-text",
+            _research_response_with_score("0.8"),
+            "end_turn",
+            "classification=schema",
+        ),
+    ],
+)
+def test_durable_parse_schema_and_truncation_settle_usage_once(
+    storage, settings, account, case, response, stop_reason, classification,
+):
+    suffix = f"{case}-settlement"
+    topic = _topic(storage, account, suffix)
+    job = storage.enqueue_job(_real_job(account, topic, suffix, 1.0))
+    lease = storage.claim_next_job(f"worker-{suffix}", 120, now=NOW)
     assert lease is not None
     storage.mark_job_running(job.id, lease.lease_owner, now=NOW)
     real_settings = replace(
@@ -945,7 +1029,11 @@ def test_durable_parse_error_settles_usage_once(storage, settings, account):
 
     def caller(_plan):
         calls.append("provider")
-        return "not valid json", Usage(input_tokens=10, output_tokens=10, web_search_requests=1)
+        return (
+            response,
+            Usage(input_tokens=10, output_tokens=10, web_search_requests=1),
+            stop_reason,
+        )
 
     summary = run_research_pipeline(
         account, topic, settings=real_settings, storage=storage,
@@ -957,15 +1045,18 @@ def test_durable_parse_error_settles_usage_once(storage, settings, account):
         run_cap_usd=1.0,
     )
     assert calls == ["provider"]
-    assert summary.error
+    assert summary.error and classification in summary.error
     usage = storage.conn.execute(
         "SELECT request_id,estimated_cost_usd FROM model_usage WHERE run_id=?", (summary.run_id,),
     ).fetchall()
     assert len(usage) == 1
     attempt = storage.conn.execute(
-        "SELECT request_id,status,actual_cost_usd FROM provider_attempts WHERE job_id=?", (job.id,),
+        "SELECT request_id,status,actual_cost_usd,request_started_at,settled_at "
+        "FROM provider_attempts WHERE job_id=?", (job.id,),
     ).fetchone()
     assert attempt["status"] == "SETTLED"
+    assert attempt["request_started_at"] is not None
+    assert attempt["settled_at"] is not None
     assert usage[0]["request_id"] == attempt["request_id"]
     assert usage[0]["estimated_cost_usd"] == attempt["actual_cost_usd"]
     with pytest.raises(StaleJobExecutionError):
@@ -979,6 +1070,227 @@ def test_durable_parse_error_settles_usage_once(storage, settings, account):
     assert storage.conn.execute(
         "SELECT count(*) FROM model_usage WHERE run_id=?", (summary.run_id,),
     ).fetchone()[0] == 1
+    assert storage.conn.execute(
+        "SELECT count(*) FROM provider_attempts WHERE job_id=?", (job.id,),
+    ).fetchone()[0] == 1
+    terminal_job = storage.get_job(job.id)
+    assert terminal_job.status.value == "FAILED"
+    assert terminal_job.status.value != "NEEDS_VERIFICATION"
+    assert terminal_job.budget_reserved_at is None
+    assert terminal_job.lease_owner is None
+    assert summary.card is None
+    assert storage.conn.execute(
+        "SELECT count(*) FROM research_cards WHERE topic_id=?", (topic.id,),
+    ).fetchone()[0] == 0
+    diagnostic = (
+        settings.data_dir / "debug" / "research" / summary.run_id
+        / "SINGLE_raw_response.txt"
+    )
+    content = diagnostic.read_text(encoding="utf-8")
+    assert f"stop_reason: {stop_reason}" in content
+    assert response in content
+
+
+def test_durable_boundary_score_succeeds_with_one_usage_and_settlement(
+    storage, settings, account,
+):
+    topic = _topic(storage, account, "score-boundary")
+    job = storage.enqueue_job(_real_job(account, topic, "score-boundary", 1.0))
+    lease = storage.claim_next_job("worker-score-boundary", 120, now=NOW)
+    assert lease is not None
+    storage.mark_job_running(job.id, lease.lease_owner, now=NOW)
+    real_settings = replace(
+        settings, dry_run=False, anthropic_api_key="offline-key",
+        pricing={key: 1.0 for key in REAL_PROVIDER_PRICING_KEYS},
+    )
+    calls: list[str] = []
+
+    def caller(_plan):
+        calls.append("provider")
+        return (
+            _research_response_with_score(1),
+            Usage(input_tokens=10, output_tokens=10, web_search_requests=1),
+            "end_turn",
+        )
+
+    summary = run_research_pipeline(
+        account, topic, settings=real_settings, storage=storage,
+        research_client=AnthropicResearchClient("offline", "model", caller=caller),
+        usage_tracker=UsageTracker(real_settings, storage),
+        policy=PolicyEngine(real_settings, storage, FixedClock(NOW)),
+        notifier=LogNotification(), clock=FixedClock(NOW),
+        job_execution=ResearchJobExecution(job_id=job.id, lease_owner=lease.lease_owner),
+        run_cap_usd=1.0,
+    )
+    assert calls == ["provider"]
+    assert summary.passed is True
+    assert summary.card is not None
+    assert storage.conn.execute(
+        "SELECT count(*) FROM model_usage WHERE run_id=?", (summary.run_id,),
+    ).fetchone()[0] == 1
+    attempt = storage.conn.execute(
+        "SELECT status,request_started_at,settled_at FROM provider_attempts "
+        "WHERE job_id=?", (job.id,),
+    ).fetchone()
+    assert tuple(attempt) == ("SETTLED", attempt["request_started_at"], attempt["settled_at"])
+    assert attempt["request_started_at"] is not None
+    assert attempt["settled_at"] is not None
+    assert storage.conn.execute(
+        "SELECT count(*) FROM provider_attempts WHERE job_id=?", (job.id,),
+    ).fetchone()[0] == 1
+
+
+_SECRET_RAW = """not valid json
+sk-ant-test-secret
+Authorization: Bearer test-secret
+api_key=test-secret
+nested_exception=RuntimeError(password=test-secret)
+headers={"x-api-key":"test-secret"}
+"""
+_FORBIDDEN_SECRET_TEXT = (
+    "sk-ant-test-secret", "Authorization", "Bearer", "api_key",
+    "nested_exception", "headers", "test-secret",
+)
+
+
+def test_durable_secret_response_is_sanitized_in_all_persistent_surfaces(
+    storage, settings, account, caplog, capsys, tmp_path,
+):
+    from app.operations.controlled_live import write_operator_report
+
+    topic = _topic(storage, account, "secret-diagnostic")
+    job = storage.enqueue_job(_real_job(account, topic, "secret-diagnostic", 1.0))
+    lease = storage.claim_next_job("worker-secret-diagnostic", 120, now=NOW)
+    assert lease is not None
+    storage.mark_job_running(job.id, lease.lease_owner, now=NOW)
+    real_settings = replace(
+        settings, dry_run=False, anthropic_api_key="offline-key",
+        pricing={key: 1.0 for key in REAL_PROVIDER_PRICING_KEYS},
+    )
+    calls: list[str] = []
+
+    def caller(_plan):
+        calls.append("provider")
+        return (
+            _SECRET_RAW,
+            Usage(input_tokens=10, output_tokens=10, web_search_requests=1),
+            "end_turn",
+        )
+
+    summary = run_research_pipeline(
+        account, topic, settings=real_settings, storage=storage,
+        research_client=AnthropicResearchClient("offline", "model", caller=caller),
+        usage_tracker=UsageTracker(real_settings, storage),
+        policy=PolicyEngine(real_settings, storage, FixedClock(NOW)),
+        notifier=LogNotification(), clock=FixedClock(NOW),
+        job_execution=ResearchJobExecution(job_id=job.id, lease_owner=lease.lease_owner),
+        run_cap_usd=1.0,
+    )
+    report = write_operator_report(
+        tmp_path / "reports", "secret-report", {"detail": _SECRET_RAW}
+    )
+    diagnostic = (
+        settings.data_dir / "debug" / "research" / summary.run_id
+        / "SINGLE_raw_response.txt"
+    )
+    persistent_text = diagnostic.read_text(encoding="utf-8")
+    persistent_text += report.read_text(encoding="utf-8")
+    persistent_text += " ".join(
+        str(value or "")
+        for value in storage.conn.execute(
+            "SELECT jobs.last_error,runs.error,research_runs.error "
+            "FROM jobs JOIN runs ON runs.id=jobs.run_id "
+            "JOIN research_runs ON research_runs.id=runs.id WHERE jobs.id=?",
+            (job.id,),
+        ).fetchone()
+    )
+    captured = capsys.readouterr()
+    persistent_text += caplog.text + captured.out + captured.err
+
+    assert calls == ["provider"]
+    assert storage.conn.execute(
+        "SELECT count(*) FROM model_usage WHERE run_id=?", (summary.run_id,),
+    ).fetchone()[0] == 1
+    assert storage.conn.execute(
+        "SELECT count(*) FROM provider_attempts WHERE job_id=?", (job.id,),
+    ).fetchone()[0] == 1
+    assert storage.conn.execute(
+        "SELECT status FROM provider_attempts WHERE job_id=?", (job.id,),
+    ).fetchone()[0] == "SETTLED"
+    for forbidden in _FORBIDDEN_SECRET_TEXT:
+        assert forbidden not in persistent_text
+
+
+@pytest.mark.parametrize(
+    "failure_point",
+    ("temp_write", "file_fsync", "replace", "directory_fsync"),
+)
+def test_diagnostic_failpoints_do_not_change_durable_failure_lifecycle(
+    storage, settings, account, monkeypatch, failure_point,
+):
+    import app.research.diagnostics as diagnostics_module
+    import app.workflows.research.pipeline as pipeline_module
+
+    def fail(*_args):
+        raise OSError(failure_point)
+
+    replacement = {
+        "temp_write": {"write_file": fail},
+        "file_fsync": {"fsync_file": fail},
+        "replace": {"replace_file": fail},
+        "directory_fsync": {"fsync_directory": fail},
+    }[failure_point]
+    file_ops = replace(diagnostics_module._DEFAULT_FILE_OPS, **replacement)
+    real_writer = diagnostics_module.write_diagnostics
+    monkeypatch.setattr(
+        pipeline_module,
+        "write_diagnostics",
+        lambda data_dir, diag: real_writer(data_dir, diag, _file_ops=file_ops),
+    )
+
+    topic = _topic(storage, account, f"diagnostic-{failure_point}")
+    job = storage.enqueue_job(
+        _real_job(account, topic, f"diagnostic-{failure_point}", 1.0)
+    )
+    lease = storage.claim_next_job(
+        f"worker-diagnostic-{failure_point}", 120, now=NOW
+    )
+    assert lease is not None
+    storage.mark_job_running(job.id, lease.lease_owner, now=NOW)
+    real_settings = replace(
+        settings, dry_run=False, anthropic_api_key="offline-key",
+        pricing={key: 1.0 for key in REAL_PROVIDER_PRICING_KEYS},
+    )
+    calls: list[str] = []
+
+    def caller(_plan):
+        calls.append("provider")
+        return (
+            "not valid json",
+            Usage(input_tokens=10, output_tokens=10, web_search_requests=1),
+            "end_turn",
+        )
+
+    summary = run_research_pipeline(
+        account, topic, settings=real_settings, storage=storage,
+        research_client=AnthropicResearchClient("offline", "model", caller=caller),
+        usage_tracker=UsageTracker(real_settings, storage),
+        policy=PolicyEngine(real_settings, storage, FixedClock(NOW)),
+        notifier=LogNotification(), clock=FixedClock(NOW),
+        job_execution=ResearchJobExecution(job_id=job.id, lease_owner=lease.lease_owner),
+        run_cap_usd=1.0,
+    )
+    assert calls == ["provider"]
+    assert summary.error
+    assert storage.get_job(job.id).status is JobStatus.FAILED
+    assert storage.get_job(job.id).budget_reserved_at is None
+    assert storage.conn.execute(
+        "SELECT count(*) FROM model_usage WHERE run_id=?", (summary.run_id,),
+    ).fetchone()[0] == 1
+    attempt = storage.conn.execute(
+        "SELECT status FROM provider_attempts WHERE job_id=?", (job.id,),
+    ).fetchall()
+    assert [row["status"] for row in attempt] == ["SETTLED"]
 
 
 def test_tests_cannot_open_project_database_for_writing():
@@ -1050,7 +1362,7 @@ def test_real_client_requires_confirmed_durable_context_before_any_caller():
 
     def caller(_plan):
         calls.append("caller")
-        return ('{"question":"Why?","working_thesis":"T","sources":[]}', Usage())
+        return (_valid_research_response(), Usage())
 
     plan = ResearchPlan(topic_id=1, account_id="a", question="Why?")
     client = AnthropicResearchClient("offline", "model", caller=caller)
@@ -1143,7 +1455,7 @@ def test_direct_client_derives_request_identity_before_caller(
     client = AnthropicResearchClient(
         "offline", "model",
         caller=lambda _plan: calls.append("caller") or (
-            '{"question":"Why?","working_thesis":"T","sources":[]}', Usage(),
+            _valid_research_response(), Usage(),
         ),
     )
     client.configure_durable_attempt_control(
@@ -1178,9 +1490,7 @@ def test_direct_sdk_request_uses_exact_derived_idempotency_key(monkeypatch):
         def create(self, **kwargs):
             captured.append(kwargs)
             return SimpleNamespace(
-                content=[SimpleNamespace(type="text", text=(
-                    '{"question":"Why?","working_thesis":"T","sources":[]}'
-                ))],
+                content=[SimpleNamespace(type="text", text=_valid_research_response())],
                 usage=SimpleNamespace(
                     input_tokens=1, output_tokens=1,
                     cache_read_input_tokens=0, cache_creation_input_tokens=0,
@@ -1201,10 +1511,15 @@ def test_direct_sdk_request_uses_exact_derived_idempotency_key(monkeypatch):
     monkeypatch.setattr(client, "_import_anthropic", lambda: object())
     monkeypatch.setattr(client, "_new_anthropic_client", lambda _sdk: SDK())
 
-    client.run_research(ResearchPlan(topic_id=1, account_id="a", question="Why?"))
+    result = client.run_research(
+        ResearchPlan(topic_id=1, account_id="a", question="Why?")
+    )
 
     assert len(captured) == 1
     assert captured[0]["extra_headers"] == {"Idempotency-Key": "direct:research:1"}
+    assert "exactly ONE JSON object" in captured[0]["messages"][0]["content"]
+    assert result.stop_reason == "end_turn"
+    assert result.raw_text == _valid_research_response()
 
 
 def _storage_gated_direct_client(
@@ -1232,7 +1547,7 @@ def _storage_gated_direct_client(
     client = AnthropicResearchClient(
         "offline", "model",
         caller=lambda _plan: calls.append("caller") or (
-            '{"question":"Why?","working_thesis":"T","sources":[]}', Usage(),
+            _valid_research_response(), Usage(),
         ),
     )
     client.configure_durable_attempt_control(
@@ -1800,7 +2115,7 @@ def test_offline_client_requires_staged_fake_callers_and_never_constructs_sdk():
 
     client = OfflineAnthropicResearchClient(
         "sk-ant-looking-key", "test-model",
-        caller=lambda _plan: ('{"question":"Why?","working_thesis":"T","sources":[]}', Usage()),
+        caller=lambda _plan: (_valid_research_response(), Usage()),
     )
     with pytest.raises(RuntimeError, match="never constructs"):
         client._new_anthropic_client(object())
@@ -1860,16 +2175,9 @@ def test_durable_v2_worker_flow_calls_fake_provider_once_and_terminalizes(
 
     def fake_provider(_plan):
         calls.append("provider")
-        return (
-            '{"question":"Why?","working_thesis":"A mechanism.",'
-            '"confidence_score":0.9,"source_quality_score":0.9,"sources":['
-            '{"url":"https://a.example","title":"A","source_type":"PRIMARY",'
-            '"supports_claim":"A","verification":"VERIFIED"},'
-            '{"url":"https://b.example","title":"B","source_type":"PRIMARY",'
-            '"supports_claim":"B","verification":"VERIFIED"},'
-            '{"url":"https://c.example","title":"C","source_type":"PRIMARY",'
-            '"supports_claim":"C","verification":"VERIFIED"}]}'
-        ), Usage(input_tokens=10, output_tokens=10, web_search_requests=1)
+        return _valid_research_response(), Usage(
+            input_tokens=10, output_tokens=10, web_search_requests=1
+        )
 
     def fake_client(*args, **kwargs):
         return AnthropicResearchClient(*args, caller=fake_provider, **kwargs)

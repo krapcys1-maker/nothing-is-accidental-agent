@@ -192,3 +192,29 @@ Typowany wyjątek ma wartość także po zakończeniu procesu. Jeśli przy zapis
 ### 2026-07-16 — automatyzacja nie musi oznaczać większego prawa
 
 Task Scheduler zwiększa regularność uruchomienia, ale nie uprawnienia. Ten sam Policy Engine, lease i SQLite nadal rozstrzygają wykonanie, a `--offline-only` dodatkowo odcina paid runner. Podobnie raport jest użyteczny właśnie dlatego, że nie „uzupełnia” braków zerem. Migracja jest bezpieczniejsza, kiedy procedura kończy się kandydatem i raportem, a nie automatyczną podmianą produkcji. `CANDIDATE COMPLETE` opisuje stan dowodu, nie zgodę na live.
+
+### 2026-07-17 — poprawny czujnik może być źle wpięty
+
+`DB_HANDLES_PRESENT` nie był błędnym pomiarem. System naprawdę widział otwartą bazę. Błąd leżał poziom wyżej: composition root sam tworzył stan, którego probe miał zabronić. To ważne rozróżnienie, bo naprawą nie jest poluzowanie czujnika, tylko zmiana kolejności zasobów.
+
+Pierwszy realny request pokazał też, że „provider odpowiedział” i „workflow odniósł sukces” są osobnymi zdarzeniami. HTTP 200 uruchamia obowiązek księgowy, nie gwarancję Research Card. Usage i settlement muszą przetrwać nawet wtedy, gdy parser odrzuci odpowiedź. W tym przebiegu infrastruktura osiągnęła cel exact-once, a produkt zakończył się uczciwym `FAILED`.
+
+### 2026-07-17 — stabilny identyfikator nie zawsze powinien być nazwą pliku
+
+Session ID ma być deterministyczny, bo wiąże job, request i fence. Raport ma być historyczny, więc musi rozróżniać invocation. Użycie jednego klucza do obu zadań wygląda elegancko, dopóki drugi przebieg nie zastąpi pierwszego dowodu. Dobre modele tożsamości rozdzielają „to samo logicznie” od „inne zdarzenie w czasie”.
+
+Podobnie parser nie powinien udawać, że wydobycie obiektu ze środka prose jest naprawą bez kosztu poznawczego. Jeśli kontrakt mówi „jeden object”, prose przed lub po jest błędem, a nie materiałem do zgadywania. Pełny fence jest jednoznaczną warstwą transportową; dwa obiekty już nie. Exact-once obejmuje także pokusę, by po nieudanym parse poprosić model o poprawkę.
+
+Najważniejszy wniosek z forensics jest negatywny: czasem najbardziej uczciwym wynikiem jest `INSUFFICIENT DURABLE EVIDENCE`. System może poprawić przyszły dowód, ale nie może cofnąć się i dopisać brakującego stop reason do historii.
+
+## 2026-07-17 — Prywatność i typy są częścią lifecycle
+
+Prywatny plik nie może być wyjątkiem od redakcji sekretów. Jeżeli zapis diagnostyki jest best-effort, jego failure nie może też zmieniać wyniku finansowego ani uruchamiać ponowienia. Wspólny sanitizer i atomowy zapis oddzielają jakość dowodu od wyniku requestu.
+
+Drugi wniosek: poprawna składnia nie oznacza poprawnej wartości. 400-cyfrowy integer jest legalnym JSON-em, ale nielegalnym score. Typowana walidacja musi nastąpić przed stratną konwersją, inaczej błąd reprezentacji może rozerwać exact-once ledger.
+
+## 2026-07-17 — Zamknięcie Etapu 1: sukces nie jest tym samym co udany artykuł
+
+Etap 1 został formalnie zamknięty, mimo że jedyny realny request skończył się błędem parsowania i nie powstała Research Card. To był świadomy wybór kryterium: celem Etapu 1 był domknięty, audytowalny lifecycle jednego realnego, capowanego requestu — dokładnie jeden attempt, `REQUEST_STARTED → SETTLED`, jedno usage, terminalny `FAILED`, zero retry, fail-closed flagi i bajt-w-bajt nietknięta produkcyjna baza. Wszystko to zaszło i zostało niezależnie zweryfikowane (`APPROVE WITH MINOR/P2`). Pozytywna karta researchowa to cel Etapu 2, nie bramka Etapu 1.
+
+Drugi wniosek: rola „reviewera" i rola „właściciela zamykającego etap" muszą być rozdzielone. Reviewer stwierdził brak MAJOR/CRITICAL i rekomendował możliwość zamknięcia; formalną decyzję podjął właściciel. Dwa pozostałe drobne P2 dotyczą wyłącznie etykiet diagnostycznych parsera (zachowanie fail-closed jest poprawne) — trafiły do backlogu Etapu 2, a nie do kolejnej fali naprawczej. Dyscyplina „nie naprawiaj przy okazji" to część tego, co pozwoliło etap zamknąć bez ryzyka regresji.

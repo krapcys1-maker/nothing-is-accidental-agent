@@ -221,3 +221,22 @@ Automatycznie: `UsageTracker` liczy koszt z cennika i dopisuje wiersz do `model_
 - Rzeczywisty koszt checkpointu: **0,000000 USD**.
 - Nie wykonano provider requestu, SDK, web search, browsera ani publikacji; nie powstał attempt ani usage.
 - Koszt miesiąca pozostaje **0,684580 USD**. Planowane `0,070000`/`0,105000` i cap `0,120000 USD` nadal nie są rachunkiem ani zgodą na wydatek.
+
+### 2026-07-17 — pierwszy request LA-03
+
+- Rzeczywisty koszt: **0,053182 USD** przy capie `0,120000 USD` i rezerwacji `0,105000 USD`.
+- Usage: 13306 input tokens, 1657 output tokens, jeden web search; dokładnie jeden attempt i zero retry.
+- Provider zwrócił HTTP 200, ale niepoprawny JSON nie dał Research Card. Koszt został poprawnie rozliczony jako `SETTLED`, a job zakończył się `FAILED`.
+- Miesięczny koszt wzrósł z **0,684580** do **0,737762 USD**. Niewykorzystana część rezerwacji została zwolniona.
+
+### 2026-07-17 — P2 po review LA-03
+
+- Forensics, parser matrix, historyczne raporty i frozen pre-storage wykonano offline: **0,000000 USD**.
+- Nie było web search, provider requestu, retry, repair calla ani attemptu #2.
+- Miesięczny koszt pozostaje **0,737762 USD**. Koszt historycznego failed requestu nie został usunięty ani policzony drugi raz.
+
+## 2026-07-17 — Koszt naprawy NIA-P2-RV
+
+- Nowe płatne wywołania: **0**.
+- Koszt fali: **0,000000 USD**.
+- Wszystkie próby korzystały z fake callerów i tymczasowych SQLite. Miesięczna suma pozostaje **0,737762 USD**; istniejącego usage nie zmieniono ani nie zdublowano.

@@ -22,6 +22,7 @@ from uuid import uuid4
 
 from app.core.clock import Clock, SystemClock
 from app.core.config import Settings
+from app.core.sanitization import sanitize_persistent_payload
 from app.core.pricing import (
     PricingConfigError,
     PricingProfile,
@@ -381,6 +382,14 @@ def confirm_flags(storage: StoragePort) -> dict[str, bool]:
             )
         result[key] = flag.value
     return result
+
+
+def _flags_snapshot_for_report(storage: StoragePort) -> dict[str, bool]:
+    """Best-effort evidence only; never masks the original preflight failure."""
+    try:
+        return confirm_flags(storage)
+    except (ControlledLiveError, OSError, RuntimeError, sqlite3.Error):
+        return {}
 
 
 def is_fail_closed(flags: Mapping[str, bool]) -> bool:
@@ -823,12 +832,6 @@ def run_preflight(
     allow_job_creation: bool = False,
 ) -> PreflightResult:
     moment = now if now is not None else clock.now()
-    flags_before = confirm_flags(storage)
-    if not is_fail_closed(flags_before):
-        raise ControlledLiveError(
-            "system is not fail-closed at entry.",
-            code="NOT_FAIL_CLOSED_AT_START",
-        )
     branch, head = git_identity(project_root)
     if branch != request.expected_branch:
         raise ControlledLiveError("branch mismatch.", code="BRANCH_MISMATCH")
@@ -877,6 +880,13 @@ def run_preflight(
         raise ControlledLiveError(
             "database paths have active handles.",
             code="DB_HANDLES_PRESENT",
+        )
+
+    flags_before = confirm_flags(storage)
+    if not is_fail_closed(flags_before):
+        raise ControlledLiveError(
+            "system is not fail-closed at entry.",
+            code="NOT_FAIL_CLOSED_AT_START",
         )
 
     operational = storage.read_operational_report(clock=clock)
@@ -954,22 +964,6 @@ def run_preflight(
     )
 
 
-_SENSITIVE_KEY = re.compile(
-    r"(authorization|api[_-]?key|secret|password|token|prompt|question|guidance|payload)",
-    re.IGNORECASE,
-)
-_AUTH_VALUE = re.compile(r"(?i)\b(authorization\s*:\s*)(?:bearer\s+)?[^\s,;]+")
-_KEY_VALUE = re.compile(
-    r"(?i)\b(api[_ -]?key|secret|password|token)\s*[:=]\s*[^\s,;]+"
-)
-_PROVIDER_KEY = re.compile(r"\b(?:sk|ant|key)-[A-Za-z0-9_-]{8,}\b")
-_CLI_SENSITIVE_VALUE = re.compile(
-    r"(?is)(?P<prefix>(?:^|\s)--(?:authorization|api[-_]?key|secret|password|"
-    r"token|prompt|question|guidance|payload)(?:\s*=\s*|\s+))"
-    r"(?P<value>.*?)(?=(?:\s+--[a-z0-9_-]+(?:\s|=))|$)"
-)
-
-
 def _ordered_process_diagnostics(value: object) -> list[dict[str, object]]:
     if not isinstance(value, (list, tuple)):
         return []
@@ -1012,43 +1006,8 @@ def _ordered_process_diagnostics(value: object) -> list[dict[str, object]]:
 
 
 def sanitize_report_payload(value: object, *, key: str = "") -> object:
-    """Redact secrets and private/provider payloads before durable serialization."""
-    if _SENSITIVE_KEY.search(key) and key not in {
-        "worker_execution_token_hash",
-        "pricing_fingerprint",
-        "execution_intent_fingerprint",
-        "preflight_fingerprint",
-        "diagnostic_fingerprint",
-        "max_tokens",
-    }:
-        return "[REDACTED]"
-    if isinstance(value, Mapping):
-        return {
-            str(item_key): sanitize_report_payload(item_value, key=str(item_key))
-            for item_key, item_value in value.items()
-        }
-    if isinstance(value, (list, tuple)):
-        return [sanitize_report_payload(item, key=key) for item in value]
-    if isinstance(value, Path):
-        return value.name
-    if isinstance(value, str):
-        redacted = _AUTH_VALUE.sub(r"\1[REDACTED]", value)
-        redacted = _KEY_VALUE.sub("[REDACTED]", redacted)
-        redacted = _PROVIDER_KEY.sub("[REDACTED]", redacted)
-        redacted = _CLI_SENSITIVE_VALUE.sub(
-            lambda match: f"{match.group('prefix')}[REDACTED]", redacted
-        )
-        for env_key, env_value in os.environ.items():
-            if (
-                env_value
-                and len(env_value) >= 8
-                and _SENSITIVE_KEY.search(env_key)
-            ):
-                redacted = redacted.replace(env_value, "[REDACTED]")
-        return redacted
-    if value is None or isinstance(value, (bool, int, float)):
-        return value
-    return sanitize_report_payload(str(value), key=key)
+    """Compatibility wrapper around the canonical durable sanitizer."""
+    return sanitize_persistent_payload(value, key=key)
 
 
 _OPERATOR_MESSAGES = {
@@ -1094,15 +1053,33 @@ def _safe_error(exc: BaseException | None, reason_code: str) -> dict[str, object
 
 def write_operator_report(
     reports_dir: Path,
-    session_id: str,
+    report_key: str,
     payload: Mapping[str, object],
 ) -> Path:
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,239}", report_key) is None:
+        raise ControlledLiveError(
+            "operator report identity is invalid.",
+            code="REPORT_IDENTITY_INVALID",
+        )
     safe = sanitize_report_payload(payload)
     assert isinstance(safe, Mapping)
     return _durable_json_replace(
-        reports_dir / f"{session_id}.json",
+        reports_dir / f"{report_key}.json",
         safe,
     )
+
+
+def _new_report_identity(
+    session_id: str,
+    moment: datetime,
+    *,
+    kind: str = "attempt-1",
+) -> tuple[str, str]:
+    """Create an invocation-specific append-preserving operator report identity."""
+    normalized = moment if moment.tzinfo is not None else moment.replace(tzinfo=timezone.utc)
+    timestamp = normalized.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    invocation_id = f"{kind}-{timestamp}-{uuid4().hex[:12]}"
+    return invocation_id, f"{session_id}--{invocation_id}"
 
 
 def _execution_evidence(
@@ -1309,6 +1286,7 @@ def _write_then_clear_marker(
     reports_dir: Path,
     runtime_dir: Path,
     session_id: str,
+    report_key: str,
     payload: Mapping[str, object],
     final_status: str,
     report_writer: Callable[[Path, str, Mapping[str, object]], Path],
@@ -1319,7 +1297,7 @@ def _write_then_clear_marker(
     provisional["final_status"] = "REPORT_DURABLE_AWAITING_MARKER_CLEAR"
     provisional["candidate_status"] = final_status
     try:
-        report_path = report_writer(reports_dir, session_id, provisional)
+        report_path = report_writer(reports_dir, report_key, provisional)
     except BaseException:
         return None, "REPORT_WRITE_FAILED"
     try:
@@ -1329,7 +1307,7 @@ def _write_then_clear_marker(
         failed["final_status"] = "MARKER_CLEAR_FAILED_RECOVERY_REQUIRED"
         failed["candidate_status"] = final_status
         try:
-            report_writer(reports_dir, session_id, failed)
+            report_writer(reports_dir, report_key, failed)
         except BaseException:
             pass
         return report_path, "MARKER_CLEAR_FAILED"
@@ -1337,7 +1315,7 @@ def _write_then_clear_marker(
     final["final_status"] = final_status
     final["marker_cleared"] = True
     try:
-        report_path = report_writer(reports_dir, session_id, final)
+        report_path = report_writer(reports_dir, report_key, final)
     except BaseException:
         # Recreate a durable recovery marker if final report promotion fails.
         try:
@@ -1345,6 +1323,8 @@ def _write_then_clear_marker(
                 runtime_dir,
                 {
                     "session_id": session_id,
+                    "invocation_id": payload.get("invocation_id"),
+                    "report_key": report_key,
                     "status": "REPORT_FINALIZATION_FAILED",
                     "operator_attention_required": True,
                 },
@@ -1388,11 +1368,20 @@ def _recover_existing_session(
     report_writer: Callable[[Path, str, Mapping[str, object]], Path],
     marker_clearer: Callable[[Path], None],
 ) -> ControlledLiveOutcome:
-    session_id = uuid4().hex
+    recovered_session_id = marker.get("session_id")
+    session_id = (
+        recovered_session_id
+        if isinstance(recovered_session_id, str) and recovered_session_id
+        else uuid4().hex
+    )
     moment = now if now is not None else clock.now()
+    invocation_id, report_key = _new_report_identity(
+        session_id, moment, kind="recovery"
+    )
     flags_after: dict[str, bool] = {}
     recovery: dict[str, object] = {
         "recovered_session": marker.get("session_id"),
+        "recovered_report_key": marker.get("report_key"),
         "prior_status": marker.get("status"),
         "retry_performed": False,
     }
@@ -1447,6 +1436,8 @@ def _recover_existing_session(
     if error is not None:
         payload = {
             "session_id": session_id,
+            "invocation_id": invocation_id,
+            "report_key": report_key,
             "timestamp": moment.isoformat(),
             "recovery": recovery,
             "flags_after": flags_after,
@@ -1454,7 +1445,7 @@ def _recover_existing_session(
             "operator_attention_required": True,
         }
         try:
-            report_path = report_writer(reports_dir, session_id, payload)
+            report_path = report_writer(reports_dir, report_key, payload)
         except BaseException:
             report_path = None
         return ControlledLiveOutcome(
@@ -1469,6 +1460,8 @@ def _recover_existing_session(
 
     payload = {
         "session_id": session_id,
+        "invocation_id": invocation_id,
+        "report_key": report_key,
         "timestamp": moment.isoformat(),
         "recovery": recovery,
         "flags_after": flags_after,
@@ -1484,6 +1477,7 @@ def _recover_existing_session(
         reports_dir=reports_dir,
         runtime_dir=runtime_dir,
         session_id=session_id,
+        report_key=report_key,
         payload=payload,
         final_status="RECOVERY_FORCED_FAIL_CLOSED",
         report_writer=report_writer,
@@ -1522,9 +1516,9 @@ def run_controlled_live_once(
     project_root: Path,
     runtime_dir: Path,
     worker_runner: Callable[[ControlledWorkerContract], WorkerOnceResult],
+    frozen_quiescence: Mapping[str, object],
     git_identity: Callable[[Path], tuple[str, str]] | None = None,
     db_fingerprint: Callable[[Path], DbFingerprint] = default_db_fingerprint,
-    quiescence_probe: Callable[[], Mapping[str, object]] | None = None,
     pricing_profiles_path: Path | None = None,
     reports_dir: Path | None = None,
     clock: Clock | None = None,
@@ -1540,14 +1534,14 @@ def run_controlled_live_once(
     clock = clock or SystemClock()
     moment = now if now is not None else clock.now()
     reports_dir = reports_dir or runtime_dir / "controlled_live_reports"
+    if not isinstance(frozen_quiescence, Mapping):
+        raise TypeError("frozen_quiescence must be an explicit pre-storage mapping.")
+    frozen_quiescence_payload = dict(frozen_quiescence)
+    quiescence_probe = lambda: dict(frozen_quiescence_payload)
     if git_identity is None:
         from app.operations.stage1_migration import _git_identity
 
         git_identity = _git_identity
-    if quiescence_probe is None:
-        quiescence_probe = lambda: default_quiescence_probe(
-            project_root, settings.db_path
-        )
 
     existing_marker = read_session_marker(runtime_dir)
     if existing_marker is not None:
@@ -1579,20 +1573,15 @@ def run_controlled_live_once(
     expected_job_id = contract.expected_job_id
     expected_request_id = contract.expected_request_id
     worker_execution_token = contract.worker_execution_token
+    invocation_id, report_key = _new_report_identity(session_id, moment)
     marker = {
         **contract.as_dict(),
+        "invocation_id": invocation_id,
+        "report_key": report_key,
         "status": "ACQUIRED",
         "opened_at": moment.isoformat(),
         "operator_attention_required": True,
     }
-    if not acquire_session_marker(runtime_dir, marker):
-        return ControlledLiveOutcome(
-            status="SESSION_CONTENTION",
-            exit_code=2,
-            session_id=session_id,
-            flags_after=confirm_flags(storage),
-            detail="Another controlled-live session owns the marker.",
-        )
 
     try:
         preflight = run_preflight(
@@ -1610,31 +1599,27 @@ def run_controlled_live_once(
             allow_job_creation=allow_job_creation,
         )
     except BaseException as exc:
-        flags_after = confirm_flags(storage)
+        flags_after = _flags_snapshot_for_report(storage)
         payload = {
             "session_id": session_id,
+            "invocation_id": invocation_id,
+            "report_key": report_key,
             "timestamp": moment.isoformat(),
             "reason_code": "PREFLIGHT_FAILED",
             "error": _safe_error(exc, "PREFLIGHT_FAILED"),
             "flags_after": flags_after,
             "provider_request_started": False,
+            "session_marker_created": False,
+            "final_status": "PREFLIGHT_FAILED",
         }
-        report_path, finalization_error = _write_then_clear_marker(
-            reports_dir=reports_dir,
-            runtime_dir=runtime_dir,
-            session_id=session_id,
-            payload=payload,
-            final_status="PREFLIGHT_FAILED",
-            report_writer=report_writer,
-            marker_clearer=marker_clearer,
-        )
-        status = (
-            f"{finalization_error}_RECOVERY_REQUIRED"
-            if finalization_error
-            else "PREFLIGHT_FAILED"
-        )
+        try:
+            report_path = report_writer(reports_dir, report_key, payload)
+            finalization_error = None
+        except BaseException:
+            report_path = None
+            finalization_error = "REPORT_WRITE_FAILED"
         return ControlledLiveOutcome(
-            status=status,
+            status=finalization_error or "PREFLIGHT_FAILED",
             exit_code=5 if finalization_error else 2,
             session_id=session_id,
             report_path=report_path,
@@ -1644,7 +1629,28 @@ def run_controlled_live_once(
             ],
         )
 
+    # Acquire the durable filesystem fence only after storage is open and the
+    # complete durable state has been validated.  A second entrant may also
+    # reach this point, but O_EXCL guarantees that exactly one can proceed.
+    if not acquire_session_marker(runtime_dir, marker):
+        return ControlledLiveOutcome(
+            status="SESSION_CONTENTION",
+            exit_code=2,
+            session_id=session_id,
+            flags_after=confirm_flags(storage),
+            detail="Another controlled-live session owns the marker.",
+        )
+
     try:
+        durable_marker = read_session_marker(runtime_dir)
+        if durable_marker is None or any(
+            durable_marker.get(key) != value
+            for key, value in contract.as_dict().items()
+        ):
+            raise ControlledLiveError(
+                "session marker does not preserve the expected ownership contract.",
+                code="SESSION_MARKER_MISMATCH",
+            )
         recheck = run_preflight(
             request,
             settings=settings,
@@ -1665,9 +1671,11 @@ def run_controlled_live_once(
                 code="STALE_PREFLIGHT",
             )
     except BaseException as exc:
-        flags_after = confirm_flags(storage)
+        flags_after = _flags_snapshot_for_report(storage)
         payload = {
             "session_id": session_id,
+            "invocation_id": invocation_id,
+            "report_key": report_key,
             "timestamp": moment.isoformat(),
             "reason_code": "STALE_PREFLIGHT",
             "error": _safe_error(exc, "STALE_PREFLIGHT"),
@@ -1678,6 +1686,7 @@ def run_controlled_live_once(
             reports_dir=reports_dir,
             runtime_dir=runtime_dir,
             session_id=session_id,
+            report_key=report_key,
             payload=payload,
             final_status="STALE_PREFLIGHT",
             report_writer=report_writer,
@@ -1864,6 +1873,8 @@ def run_controlled_live_once(
 
     payload = {
         "session_id": session_id,
+        "invocation_id": invocation_id,
+        "report_key": report_key,
         "timestamp": moment.isoformat(),
         "plan": plan.as_dict(),
         "flags_before": preflight.flags_before,
@@ -1898,7 +1909,7 @@ def run_controlled_live_once(
         retained["final_status"] = candidate_status
         retained["marker_retained_for_recovery"] = True
         try:
-            report_path = report_writer(reports_dir, session_id, retained)
+            report_path = report_writer(reports_dir, report_key, retained)
             finalization_error = None
         except BaseException:
             report_path = None
@@ -1908,6 +1919,7 @@ def run_controlled_live_once(
             reports_dir=reports_dir,
             runtime_dir=runtime_dir,
             session_id=session_id,
+            report_key=report_key,
             payload=payload,
             final_status=candidate_status,
             report_writer=report_writer,

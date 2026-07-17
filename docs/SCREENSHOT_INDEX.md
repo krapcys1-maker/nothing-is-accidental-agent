@@ -364,3 +364,24 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co powinien pokazać:** zanonimizowany terminal z `1174 collected`, `1174 passed`, partycjami `284+284+298+308`, exact-once `1174`, `compileall`, `git diff --check`, listą staged files, regułą `git check-ignore -v config/pricing_profiles.yaml`, commitem checkpointu i upstream `0/0`; obok read-only gate z DB SHA `5FF5DB…97B78`, schema 0014, jobem `QUEUED/attempts=0`, attempts/usage 0, gate `False`, markerem absent i flagami fail-closed.
 - **Czego nie może pokazać:** treści lokalnego pricing profile, `.env`, kluczy, pełnych command lines, promptu/question, DB contents, runtime reportów, prywatnego `BUILD_LOG` ani chronionych instrukcji pisania.
 - **Dlaczego nie utworzono:** dowody są tekstowe i deterministyczne; screenshot command lines mógłby ujawnić dane lokalne. Brak obrazu nie zmienia werdyktu review ani braku autoryzacji live.
+
+## 2026-07-17 — LA-03 i pierwszy realny durable request
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie utworzono podczas operacji.
+- **Co powinien pokazać:** zanonimizowany focused 71/71, full 1181/1181, exact-once cover 1181, fake CLI `COMPLETED_FAIL_CLOSED`, standalone PASS oraz trwały live summary: exactly one attempt #1, `REQUEST_STARTED`, `SETTLED`, usage `0.053182 USD`, job/run/research_run `FAILED`, marker absent, flags/gate fail-closed, zero retry/attemptu #2.
+
+## 2026-07-17 — P2 po review LA-03
+
+- **Status:** `SCREENSHOT REQUIRED` — w tym zakresie nie wykonano screenshota, aby nie ryzykować pokazania prywatnej odpowiedzi, promptu, ścieżek debug ani lokalnych sekretów.
+- **Co powinien pokazać:** wyłącznie zanonimizowany wynik 1200/1200, exact-once `290+293+304+313`, 14-case parser matrix, test dwóch odrębnych report filenames dla jednego session ID oraz końcowy DB hash `5BEA9E…C6D10` zgodny przed/po.
+- **Czego nie pokazywać:** `data/debug/`, raw response, `.env`, pricing profile, pełny prompt/question, token/API headers, chronione instrukcje pisania i command line mogące zawierać sekrety.
+- **Dowód tekstowy:** `docs/BUILD_LOG.md`, ADR-086, wynik pytest i końcowy integrity audit. Nie wykonano nowego provider requestu.
+- **Czego nie może pokazać:** `.env`, klucza API, promptu/question, provider payloadu/raw response, execution fence, pełnych command lines, treści lokalnego pricing profile ani prywatnych plików użytkownika.
+- **Dlaczego nie utworzono:** przeglądarka i publikacja były zabronione; terminal zawierał prywatne ścieżki i potencjalnie wrażliwe command lines. Dowodem są trwały raport, immutable SQLite i testy.
+
+## 2026-07-17 — Naprawa NIA-P2-RV-01…05 po `REJECT — MAJOR`
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie tworzono w fali offline.
+- **Co powinien pokazać:** zanonimizowane 1235/1235, partycje `294+299+311+331`, kontrpróby huge score/object+true/bare fence/jawnego clocka oraz potwierdzenie braku pięciu klas sekretów w diagnostic/report/SQLite/logach.
+- **Czego nie może pokazać:** surowego payloadu sekretów, `.env`, raw response, pełnych command lines, pricing profile, zawartości produkcyjnej DB ani chronionych plików użytkownika.
+- **Dlaczego nie utworzono:** screenshot nie wzmacnia deterministycznego dowodu, a mógłby utrwalić prywatne ścieżki lub wartości użyte w próbach. Browser pozostawał zabroniony.

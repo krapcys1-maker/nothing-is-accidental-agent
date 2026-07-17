@@ -181,3 +181,27 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Zakres:** formalna materializacja `APPROVE WITH MINOR/P2`, P2 cleanup, pełne testy offline i selektywny Git; bez researchu treściowego, web search, providera, browsera i publikacji.
 - **Wynik:** nie powstał run, research_run, źródło ani Research Card. Produkcyjny job pozostaje `QUEUED/attempts=0`; provider request, attempts i usage są zerowe.
 - **Koszt:** `0.000000 USD`; Etap 1 pozostaje otwarty do nowej decyzji właściciela po standalone quiescence check.
+
+## 2026-07-17 — LA-03: pierwszy durable provider request
+
+- **Zakres:** topic `3`, provider Anthropic, model `claude-sonnet-5`, maks. 1500 tokenów, jeden web search, cap `0.12 USD`, attempt #1, zero retry.
+- **Preflight:** canonical standalone i real pre-storage check PASS; DB SHA wejściowe `5FF5DB…97B78`, dokładnie jeden claimable job, approved pricing fingerprint `1b98c7…4062`, flags fail-closed, brak attemptów/usage/lease/rezerwacji/markera.
+- **Request:** dokładnie jeden HTTP 200; usage 13306 input, 1657 output, jeden web search, koszt `0.053182 USD`.
+- **Wynik researchu:** odpowiedź nie była poprawnym JSON-em; `ResearchParseError` zakończył run i research_run jako `FAILED`, bez źródeł/karty wynikowej i bez retry.
+- **Trwały ledger:** attempt #1 `SETTLED`, `request_started_at` obecny, jedno usage, brak attemptu #2/reconciliation, spójny koszt run/research_run `0.053182 USD`.
+- **Stan końcowy:** job `FAILED/attempts=1`; marker absent; flags/gate fail-closed; post-live DB SHA `5BEA9E…C6D10`; kolejny request nieautoryzowany.
+
+## 2026-07-17 — Forensics odpowiedzi LA-03 i offline parser matrix
+
+- **Zakres:** wyłącznie immutable query produkcyjnego ledgeru, odczyt sanitizowanego raportu i analiza kodu parsera/diagnostyki; zero web search, providera i nowego researchu.
+- **Trwały dowód:** request `…:research:1`, run `f74165fb-9677-4e6d-abfd-09607bd4dd78`, attempt #1 `SETTLED`, usage 13306 input / 1657 output / 1 search / `0.053182 USD`, parse error `line 29 column 6 char 4376`.
+- **Brak dowodu:** nie ma `data/debug/research/<run_id>/`; single caller odrzucił stop reason i nie zachował raw. Konkretna forma wadliwej odpowiedzi pozostaje niepoznawalna. Nie wykonano ponownego requestu.
+- **Reprodukcja offline:** 14 klas fake response obejmuje good JSON, jeden pełny fence, prose before/after, dwa obiekty, truncated/unclosed, missing/bad fields/types/root/fence i `stop_reason=max_tokens`. Każdy przypadek ma caller count=1; failures mają zero retry/attemptu #2.
+- **Ledger test:** parse/schema/truncation na temp durable flow mają dokładnie jedno usage, jeden `SETTLED` i terminalny `FAILED`, bez Research Card i reconciliation.
+- **Koszt nowy:** `0.000000 USD`; suma historyczna pozostaje `0.737762 USD`.
+
+## 2026-07-17 — Naprawa NIA-P2-RV-01…05 bez researchu treściowego
+
+- **Zakres:** fake response, fake SDK/callery i tymczasowe SQLite; nie wykonano web search, providera ani nowego researchu.
+- **Wynik:** parser, score validation, diagnostic sanitizer i jawny zegar zostały sprawdzone offline; nie powstał run, źródło ani Research Card w produkcji.
+- **Koszt:** `0.000000 USD`; historyczne usage i suma miesiąca `0.737762 USD` nie zmieniły się.

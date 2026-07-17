@@ -823,3 +823,97 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Decyzja checkpointu:** nie zmieniać klasyfikatora. Przed przyszłym live zamknąć takie procesy i uruchomić standalone quiescence check z dokładnie tego samego launchera.
 - **Warunek STOP:** każde `PROCESSES_PRESENT`, `STOP`, niepełna identity lub drift DB/WAL/SHM kończy operację. Live nie jest ponawiane bez nowej jawnej autoryzacji właściciela.
 - **Status:** `OPEN OBSERVATION / DOCUMENTED`; nie jest blockerem checkpointu LA-02.
+
+### 2026-07-17 — `DB_HANDLES_PRESENT`: wrapper wykrywał własne storage — FIXED
+
+- **Co miało działać:** zero-sharing probe miał blokować obce uchwyty DB/WAL/SHM przed jednorazowym provider requestem.
+- **Co nie działało:** `app.main` otwierał główne `SqliteStorage` przed `run_controlled_live_once`; `CreateFileW(..., dwShareMode=0)` deterministycznie widział własne połączenie jako blokadę.
+- **Root cause:** błędna kolejność composition rootu (`open resource → probe → self-block`), nie wada Windows probe'a.
+- **Naprawa:** wspólny standalone/wrapper probe działa pre-storage; po PASS wynik jest zamrożony, storage otwierane raz, a trwały stan rewalidowany przed markerem/flagami/providerem. Obce read-only/writable SQLite i WAL/SHM nadal STOP.
+- **Dowód:** focused 71/71, full 1181/1181, fake CLI PASS, standalone PASS, test driftu i contention. Provider nie został użyty podczas diagnozy/naprawy.
+- **Status:** false blocker `CLOSED`.
+
+### 2026-07-17 — Pierwszy realny request: HTTP 200, ale niepoprawny JSON — TERMINAL / NO RETRY
+
+- **Objaw:** jedyna autoryzowana komenda doszła do Anthropic i otrzymała HTTP 200, po czym pipeline zgłosił `ResearchParseError` (`Expecting property name enclosed in double quotes`).
+- **Skutek trwały:** dokładnie jeden attempt #1, `REQUEST_STARTED`, jedno usage, `SETTLED=0.053182 USD`; job/run/research_run `FAILED`, brak Research Card, zero attemptu #2 i reconciliation.
+- **Ochrona:** wrapper zwrócił `VALIDATION_FAILED_FAIL_CLOSED`; restore/reopen i marker clear potwierdzone; gate `False`, flags fail-closed. Nie wykonano ponowienia ani lokalnego „naprawiania” odpowiedzi poza durable lifecycle.
+- **Status:** znany terminalny failure treści, nie false preflight blocker. Kolejny request wymaga nowej autoryzacji.
+
+### 2026-07-17 — Pierwszy post-live helper read-only użył nieistniejących kolumn — FIXED
+
+- **Objaw:** helper weryfikacyjny odpytał `research_runs.finished_at`, `provider_attempts.final_event` i `model_usage.web_searches`, których schema 0014 nie zawiera.
+- **Skutek:** wyłącznie `sqlite3.OperationalError` w połączeniu `mode=ro&immutable=1`; bez mutacji, providera i retry.
+- **Naprawa:** odczytano `PRAGMA table_info` i powtórzono immutable query z właściwymi kolumnami (`updated_at`, stan attemptu, `web_search_requests`).
+- **Status:** błąd operatorskiego helpera `FIXED`; trwały wynik requestu bez zmian.
+
+### 2026-07-17 — Historyczny single request nie zachował raw ani stop reason — EVIDENCE GAP CLOSED FOR FUTURE
+
+- **Objaw:** durable ledger zna dokładne miejsce błędu parsera (`line 29 column 6 char 4376`), ale nie istnieje prywatny plik diagnostyczny dla runu `f74165fb-9677-4e6d-abfd-09607bd4dd78`.
+- **Przyczyna:** stara `_default_caller` odbierała trzy elementy z `_call_anthropic`, po czym jawnie odrzucała `_stop_reason` i zwracała tylko text+usage. `_run_with_retry_and_parse` nie dopinał raw/stop reason do wyjątku, a single pipeline nie wywoływał `_record_diagnostics`.
+- **Granica wiedzy:** `Expecting property name enclosed in double quotes` dowodzi błędu składni w określonej pozycji. Bez znaku i otoczenia nie rozstrzyga prose, fence, truncation, niezamknięcia ani innej klasy. Każde bardziej szczegółowe wyjaśnienie byłoby zgadywaniem.
+- **Naprawa:** przyszła single response zachowuje raw/stop reason w tym samym jednym callu; pipeline po kanonicznej terminalizacji zapisuje prywatne `SINGLE_raw_response.txt` best-effort. `max_tokens` daje typowaną truncation wyłącznie przy jawnym stop reason.
+- **Status:** historycznego evidence nie da się odtworzyć; luka jest zamknięta dla przyszłych odpowiedzi. Nie wykonano requestu diagnostycznego ani retry.
+
+### 2026-07-17 — Deterministyczny session report nadpisywał poprzedni invocation — FIXED
+
+- **Objaw:** ten sam operation key dawał ten sam `session_id` i tę samą ścieżkę `<session_id>.json`; nowszy wynik LA-03 zastąpił wcześniejszy raport preflight.
+- **Przyczyna:** logiczna tożsamość sesji była równocześnie użyta jako tożsamość fizycznego invocation reportu.
+- **Naprawa:** report key zawiera stabilny session, attempt discriminator, UTC timestamp i nonce. Provisional/final jednego invocation nadal promują jeden plik atomowo; osobne invocation tworzą osobne pliki. Marker zachowuje report key, a recovery wskazuje poprzedni.
+- **Dowód:** test pierwszego `PREFLIGHT_FAILED` i drugiego terminalnego invocation dla tego samego operation key zachowuje dwa raporty; recovery tworzy trzeci odrębny report i wiąże prior key.
+- **Status:** `FIXED`; istniejącego historycznego pliku nie przepisano ani nie sfabrykowano utraconej wersji.
+
+### 2026-07-17 — Pierwsza pełna regresja P2: jedna stara fixture nie spełniała nowego schema contract — FIXED
+
+- **Objaw:** full run zakończył się 1199/1200; `test_pipeline_infers_retry_count_from_anthropic_client` podał źródła bez jawnych `author_or_org` i `published_at`.
+- **Przyczyna:** fixture opisywała wcześniejszy parser z defaultami, a nowy zamknięty kontrakt wymaga wszystkich kluczy i jawnego JSON null.
+- **Naprawa:** uzupełniono wyłącznie fixture; nie osłabiono parsera. Drugi full run przeszedł 1200/1200, a cztery partycje `290+293+304+313` były zielone.
+- **Dodatkowa nieudana kontrpróba:** pierwsze 14 przypadków użyło produkcyjnej klasy klienta bez durable attempt context i wszystkie poprawnie zatrzymały się przed fake callerem. Test dostał jawny test-local offline seam, bez zmiany production guard.
+- **Status:** `FIXED`; zero sieci, API, kosztu i mutacji produkcji.
+
+### 2026-07-17 — Końcowy helper integralności kopii użył historycznej nazwy kolumny flag — FIXED
+
+- **Objaw:** po 210/210 focused tests, `compileall`, `diff --check` i zgodnym produkcyjnym hashu helper kopii rzucił `sqlite3.OperationalError: no such column: value`.
+- **Przyczyna:** `system_flags` przechowuje JSON w `value_json`; helper założył skróconą nazwę `value` bez uprzedniego odczytu schematu.
+- **Granica skutku:** błąd nastąpił na pliku tymczasowym po skopiowaniu bazy. Produkcyjny DB hash pozostał `5BEA9E…C6D10`, WAL/SHM nie istniały; nie było API, providera ani mutacji.
+- **Naprawa:** immutable `PRAGMA table_info(system_flags)` potwierdziło kolumny; helper użył `json.loads(value_json)`. Powtórzenie: `integrity_check=ok`, `foreign_key_check=[]`, fail-closed flags, jeden terminalny job/attempt/usage, zero kart i identyczny hash kopii/produkcji.
+- **Status:** `FIXED`; to błąd operatorskiego helpera, nie schematu ani danych.
+
+### 2026-07-17 — Końcowy audyt PowerShell zatrzymał się na ostrzeżeniu LF→CRLF — FIXED
+
+- **Objaw:** pierwsza zbiorcza komenda audytowa miała `$ErrorActionPreference = 'Stop'`; `git diff --check` wypisał na stderr wyłącznie ostrzeżenia o przyszłej konwersji LF→CRLF, które PowerShell potraktował jako wyjątek i przerwał helper.
+- **Granica skutku:** Git zwrócił później kod `0`; nie stwierdzono błędu whitespace, nie zmieniono plików, stagingu ani historii Git. Nie było sieci, API, providera ani otwarcia produkcyjnej SQLite.
+- **Naprawa:** powtórzono te same kontrole bez przerywania na samym stderr i oceniono jawne exit codes. Wynik: `git diff --check = 0`, staging pusty, brak aktywnej operacji Git, branch i HEAD bez zmian; hash produkcyjnej bazy nadal `5BEA9E…C6D10`, WAL/SHM nie istnieją.
+- **Status:** `FIXED`; ostrzeżenia line-ending pozostają informacyjne.
+
+### 2026-07-17 — Pierwszy review pakietu P2: `REJECT — MAJOR` — NIA-P2-RV-01…05
+
+- **RV-01:** legalny 400-cyfrowy integer dochodził do `float(value)` i rzucał `OverflowError` poza typowaną ścieżką; po jednym `REQUEST_STARTED` brakowało usage/settlement, a fallback eskalował lifecycle.
+- **RV-02:** prywatny `SINGLE_raw_response.txt` utrwalał raw verbatim, więc mógł zachować klucz, bearer, nazwany sekret, headers i nested exception.
+- **RV-03:** fixture wrappera miała stały zegar, lecz enqueue używał bieżącego czasu systemowego; po przekroczeniu daty fixture job stawał się nieclaimable.
+- **RV-04:** bare fence był przyjmowany; object+scalar trafiał do prose zamiast `multiple_json_values`; root scalar był prose zamiast schema.
+- **RV-05:** niższe aktywne sekcje stanu projektu nadal przedstawiały pre-live baseline, koszt i brak wykonania acceptance jako stan bieżący.
+- **Naprawa:** wyłącznie zamknięty zakres ADR-087; bez zmian schedulera, workera, storage, recovery, reconciliation, pricingu, migracji i ledgeru poza minimalnym spięciem wymaganych ścieżek.
+- **Status:** technicznie naprawione i oczekujące niezależnego review; nie jest to `APPROVE` ani zamknięcie Etapu 1.
+
+### 2026-07-17 — Iteracyjne regresje naprawy NIA-P2-RV — FIXED
+
+- **Focused diagnostic:** pierwsza asercja wymagała pozostawienia tekstu `api_key=[REDACTED]`, podczas gdy kanoniczny sanitizer poprawnie usunął całe nazwane pole. Skorygowano test do właściwego wymagania: brak sekretu i brak wrażliwego pola.
+- **Clock fixture:** pierwsza asercja porównywała aware UTC z naiwym UTC odczytanym przez istniejący adapter SQLite. Zmieniono wyłącznie reprezentację oczekiwaną; jawny czas i semantyka claimability pozostały bez zmian.
+- **Pierwszy full suite po wspólnym sanitizerze:** cztery istniejące testy audit formattera nie znalazły bezpiecznych etykiet `authorization/api_key/token`, bo sanitizer diagnostyczny usuwał całe pola. Dodano w kanonicznej funkcji jawny tryb `preserve_safe_labels=True` używany tylko przez ustalony format audit error; wartości nadal są `[REDACTED]`, diagnostics/report używają trybu silniejszego.
+- **Dowód po korekcie:** testy audit formattera 9/9, relevant diagnostic 21/21, focused parser/diagnostics 102/102, durable provider 94/94, controlled-live+LA-02 77/77 i ledger/usage/reconciliation 226/226.
+- **Skutek:** wszystkie nieudane próby były offline na fake/temp DB; zero API, sieci, kosztu i mutacji produkcyjnej SQLite.
+
+### 2026-07-17 — Pierwszy samodzielny counterprobe nie wskazał chronionej DB — FIXED
+
+- **Objaw:** świeży proces z `NIA_TEST_MODE=1` zatrzymał się przed otwarciem tymczasowej SQLite komunikatem `NIA_TEST_MODE requires NIA_TEST_PROTECTED_DB`.
+- **Przyczyna:** kontrpróba nie przekazała kernelowi jawnej kanonicznej ścieżki bazy, której ma zabraniać. Kernel zadziałał fail-closed; produkcyjna i tymczasowa baza nie zostały otwarte.
+- **Naprawa:** powtórzono ten sam samodzielny skrypt z `NIA_TEST_PROTECTED_DB` wskazującym `data/agent.db`. Pięć kontrprób przeszło na temp DB/fake: huge integer→schema, pięć klas sekretów→redacted, jawny clock mimo symulowanego systemowego 2035→brak `JOB_NOT_CLAIMABLE`, object+true→multiple, bare fence→invalid fence.
+- **Status:** `FIXED`; jest to dowód działania testowego safety kernela, nie finding produkcyjny.
+
+### 2026-07-17 — Pierwszy końcowy audit copy użył nieistniejącego `provider_attempts.created_at` — FIXED
+
+- **Objaw:** po zgodnym hashu kopii immutable helper wykonał `integrity_check`, lecz zatrzymał się przy porządkowaniu attemptów po kolumnie `created_at`, której tabela nie ma.
+- **Granica skutku:** błąd wystąpił wyłącznie na kopii w zweryfikowanym katalogu tymczasowym. Kopia przed/po i źródło miały SHA `5BEA9E…C6D10`; WAL/SHM/journal nie istniały, a temp został usunięty.
+- **Naprawa:** helper użył stabilnego lokalnego `rowid` wyłącznie do prezentacji. Powtórzenie dało `integrity_check=ok`, pusty FK check, 14 migracji, jeden job/run/research_run `FAILED`, jeden attempt `SETTLED`, brak karty/rezerwacji/lease i flags fail-closed.
+- **Doprecyzowanie stanu:** tabela ma 19 wierszy `model_usage` łącznie, z czego 14 realnych (`dry_run=0`) sumuje się do `0.737762 USD`; aktywna linia `CURRENT_PROJECT_STATE.md` została skorygowana bez mutacji DB.

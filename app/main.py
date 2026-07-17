@@ -424,8 +424,8 @@ def _cmd_controlled_live_once(args: argparse.Namespace) -> int:
         DbFingerprint,
         DeterministicFakeControlledWorkerAdapter,
         REAL_CONTROLLED_LIVE_ENABLED,
-        default_quiescence_probe,
         run_controlled_live_once,
+        run_controlled_live_quiescence_check,
     )
 
     settings = load_settings()
@@ -474,6 +474,68 @@ def _cmd_controlled_live_once(args: argparse.Namespace) -> int:
         max_attempts=args.max_attempts,
         max_retries=args.max_retries,
     )
+    if fake_mode:
+        def fake_pre_storage_probe(_project_root: Path, _db_path: Path):
+            return {
+                "project_process_ids": (),
+                "scheduled_tasks": (),
+                "locked_paths": (),
+            }
+
+        pre_storage_kwargs = {"quiescence_probe": fake_pre_storage_probe}
+    else:
+        pre_storage_kwargs = {}
+
+    # LA-03: the zero-sharing DB/WAL/SHM probe must run before the main
+    # SqliteStorage connection exists.  The payload is then frozen and reused by
+    # the durable wrapper; probing again after open would deterministically
+    # classify our own connection as a foreign handle.
+    pre_storage_exit, pre_storage = run_controlled_live_quiescence_check(
+        project_root=settings.project_root,
+        db_path=settings.db_path,
+        **pre_storage_kwargs,
+    )
+    if pre_storage_exit != 0:
+        print(
+            "CONTROLLED-LIVE-ONCE: PREFLIGHT_FAILED "
+            f"reason={pre_storage.get('reason_code', 'QUIESCENCE_CHECK_FAILED')}"
+        )
+        print(json.dumps(pre_storage, ensure_ascii=False, sort_keys=True))
+        return pre_storage_exit
+
+    database_after = pre_storage.get("database_after")
+    database_record = (
+        database_after.get("database")
+        if isinstance(database_after, dict)
+        else None
+    )
+    observed_pre_storage_sha = (
+        database_record.get("sha256")
+        if isinstance(database_record, dict)
+        else None
+    )
+    if (
+        not isinstance(observed_pre_storage_sha, str)
+        or observed_pre_storage_sha.upper() != args.expected_db_sha.upper()
+    ):
+        print("CONTROLLED-LIVE-ONCE: PREFLIGHT_FAILED reason=DB_SHA_MISMATCH")
+        return 2
+
+    frozen_quiescence = {
+        "project_process_ids": pre_storage.get("project_process_ids", ()),
+        "scheduled_tasks": pre_storage.get("scheduled_tasks", ()),
+        "locked_paths": pre_storage.get("locked_paths", ()),
+        "probe_current_pid": pre_storage.get("probe_current_pid"),
+        "probe_parent_pid": pre_storage.get("probe_parent_pid"),
+        "probe_ancestry_process_ids": pre_storage.get(
+            "probe_ancestry_process_ids", ()
+        ),
+        "probe_helper_process_ids": pre_storage.get(
+            "probe_helper_process_ids", ()
+        ),
+        "process_diagnostics": pre_storage.get("process_diagnostics", ()),
+    }
+
     storage = SqliteStorage.open(settings.db_path)
     clock = SystemClock()
     policy = PolicyEngine(settings, storage, clock)
@@ -484,11 +546,9 @@ def _cmd_controlled_live_once(args: argparse.Namespace) -> int:
             settings=settings,
             clock=clock,
         )
-        quiescence = lambda: {
-            "project_process_ids": (),
-            "scheduled_tasks": (),
-            "locked_paths": (),
-        }
+        # The fake CLI may create its temp-only job during durable preflight, so
+        # its injected fingerprint remains stable by construction.  Real mode
+        # always uses the physical post-open fingerprint below.
         database_fingerprint = lambda _path: DbFingerprint(
             sha256=args.expected_db_sha,
             size=Path(settings.db_path).stat().st_size,
@@ -526,10 +586,6 @@ def _cmd_controlled_live_once(args: argparse.Namespace) -> int:
             storage=storage,
             worker_factory=worker_factory,
         )
-        quiescence = lambda: default_quiescence_probe(
-            settings.project_root,
-            settings.db_path,
-        )
         database_fingerprint = None
 
     try:
@@ -544,7 +600,7 @@ def _cmd_controlled_live_once(args: argparse.Namespace) -> int:
             project_root=settings.project_root,
             runtime_dir=runtime_dir,
             worker_runner=worker_adapter,
-            quiescence_probe=quiescence,
+            frozen_quiescence=frozen_quiescence,
             clock=clock,
             allow_execution=fake_mode or REAL_CONTROLLED_LIVE_ENABLED,
             allow_job_creation=fake_mode,

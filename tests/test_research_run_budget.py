@@ -59,6 +59,7 @@ def _good_json():
         "source_quality_score": 0.9,
         "sources": [
             {"url": f"https://example.org/{i}", "title": f"Source {i}",
+             "author_or_org": None, "published_at": None,
              "source_type": "PRIMARY", "supports_claim": "Retries can cost money."}
             for i in range(3)
         ],
