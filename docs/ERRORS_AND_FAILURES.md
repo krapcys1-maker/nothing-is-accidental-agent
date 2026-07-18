@@ -1016,3 +1016,11 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Nieudane próby / regresje tej rundy:** pierwsze uruchomienie partycji exact-once padło na CRLF w listach plików (znana pułapka `tr -d '\r'`) — poprawione bez zmian kodu.
 - **Weryfikacja:** collect/full `1454/1454`; exact-once `366+372+406+310` (1454 unikalne node ID, 0 dup, 0 skip); QA evidence floor `35/35`, schema gate `21/21`, recovery `4/4`, lineage `10/10`; własny harness naprawy `22/22`; migracje `0001–0015` byte-identical z `origin/main`.
 - **Status:** `FIXED — REPAIR CANDIDATE, AWAITING INDEPENDENT RE-REVIEW`; P2 z review świadomie NIE naprawione (backlog); produkcja `0014` byte-identical, `0015`/`0016` niezastosowane; live `NOT AUTHORIZED`; zero kosztu; bez merge.
+
+## 2026-07-18 — E1-RR-P2-01: historyczny rozkład partycji nie jest rozkładem post-merge
+
+- **Kategoria:** DOCUMENTATION / REPRODUCIBILITY — MINOR/P2, nieblokujące.
+- **Obserwacja:** historyczne wpisy implementera po naprawie B01–B04 podają `366+372+406+310=1454`. Na zmergowanym `main` kanoniczny runner zwrócił `352+355+366+381=1454`.
+- **Wpływ:** wyłącznie odtwarzalność liczbowego podziału między partycjami; bez wpływu na evidence integrity, account isolation, migrację lub runtime. `--verify` potwierdził 1454 unikalne node ID, zero luk i duplikatów, a wszystkie cztery partycje zakończyły się exit 0.
+- **Decyzja:** nie przepisywać historycznych raportów implementera; aktywne dokumenty używają wyniku post-merge, a starszy rozkład jest jawnie oznaczony jako historyczny. P2 pozostaje nieblokującym zapisem różnicy odtwarzalności; ta formalizacja nie zmienia runnera i nie otwiera żadnego innego P2.
+- **Granice:** bez zmian testu partycjonującego, kodu, migracji, konfiguracji i bazy; nie naprawiano innych P2.

@@ -508,6 +508,14 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Wynik:** autoryzacja została zużyta przez jeden HTTP 200 z `stop_reason=end_turn`. Schema validation odrzuciła `sources[0].supports_claim`; koszt `0.077160 USD`, attempt `SETTLED`, terminalny `FAILED`, brak karty.
 - **Granica po:** gate i flags przywrócone fail-closed; kolejny live wymaga nowej jawnej decyzji właściciela.
 
+### 2026-07-18 — Właściciel formalnie zamknął Etap 2 / WAVE E1
+
+- **Decyzja człowieka:** przyjąć niezależny re-review `APPROVE WITH MINOR/P2` oraz zielony checkpoint po merge PR #3 i ustawić **WAVE E1 = `CLOSED — APPROVED WITH MINOR/P2`**.
+- **Status nadrzędny:** cały Etap 2 = `IN PROGRESS — E1 CLOSED, E2 NOT STARTED`; decyzja nie rozpoczyna E2.
+- **Podstawa:** implementacja E1; pierwszy review `REJECT`; jedna dozwolona naprawa B01–B04; re-review `APPROVE WITH MINOR/P2`; merge commit `42762a76d8c151cdb13d07fa384d32c9bfef0231`; post-merge 1454/1454 i exact-once `352+355+366+381`.
+- **P2:** `E1-RR-P2-01` pozostaje nieblokującym backlogiem; historycznych raportów implementera nie przepisuje się.
+- **Twarde granice:** bez zmian kodu/testów/migracji/runtime/DB; bez produkcyjnych `0015`/`0016`, E2, live API, providera, browsera, publikacji i kosztu.
+
 ### 2026-07-18 — Właściciel zlecił mały post-merge checkpoint po PR #1
 
 - **Decyzja człowieka:** po formalnym merge PR #1 naprawić wyłącznie deterministyczny test zależny od starej nazwy brancha i zsynchronizować aktywną dokumentację statusową.
