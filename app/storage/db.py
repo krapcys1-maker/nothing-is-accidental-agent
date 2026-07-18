@@ -86,18 +86,45 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     try:
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
-        conn.execute("PRAGMA busy_timeout=5000;")
-        if str(db_path) != ":memory:":
-            journal_mode = conn.execute("PRAGMA journal_mode=WAL;").fetchone()[0].lower()
-            if journal_mode != "wal":
-                raise RuntimeError(
-                    f"SQLite database {db_path} did not enable WAL (active mode: {journal_mode})."
-                )
+        prepare_writable_connection(conn, db_path)
         return conn
     except Exception:
         conn.close()
         raise
+
+
+def connect_existing_writable(db_path: Path | str) -> sqlite3.Connection:
+    """Open one existing database with ``mode=rw`` and no mutating PRAGMA.
+
+    Runtime must validate the schema on this exact handle before calling
+    :func:`prepare_writable_connection`.
+    """
+    if _is_test_protected_database(db_path):
+        raise RuntimeError("Tests must not open the project data/agent.db.")
+    path = Path(db_path).resolve()
+    try:
+        conn = sqlite3.connect(f"{path.as_uri()}?mode=rw", uri=True)
+    except sqlite3.Error as exc:
+        raise SchemaVersionUnavailable(
+            f"cannot open existing SQLite database for runtime: {path}"
+        ) from exc
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def prepare_writable_connection(
+    conn: sqlite3.Connection,
+    db_path: Path | str,
+) -> None:
+    """Apply the established writable-connection settings after schema gates."""
+    conn.execute("PRAGMA foreign_keys = ON;")
+    conn.execute("PRAGMA busy_timeout=5000;")
+    if str(db_path) != ":memory:":
+        journal_mode = conn.execute("PRAGMA journal_mode=WAL;").fetchone()[0].lower()
+        if journal_mode != "wal":
+            raise RuntimeError(
+                f"SQLite database {db_path} did not enable WAL (active mode: {journal_mode})."
+            )
 
 
 def connect_read_only(db_path: Path | str) -> sqlite3.Connection:

@@ -95,7 +95,9 @@ from app.research.durable_intent import (
 from app.storage.db import (
     RUNTIME_SCHEMA_VERSION,
     connect,
+    connect_existing_writable,
     connect_read_only,
+    prepare_writable_connection,
     require_connection_schema,
     require_database_schema,
 )
@@ -337,10 +339,11 @@ class SqliteStorage:
             if Path(db_path).resolve() == target:
                 raise RuntimeError("Tests must not open the project data/agent.db for writing.")
         require_database_schema(db_path, required_version=RUNTIME_SCHEMA_VERSION)
-        conn = connect(db_path)
+        conn = connect_existing_writable(db_path)
         try:
-            # Recheck after the writable open closes the preflight/open race.
+            # Recheck on the mode=rw handle before any mutating connection setup.
             require_connection_schema(conn, required_version=RUNTIME_SCHEMA_VERSION)
+            prepare_writable_connection(conn, db_path)
             return cls(conn)
         except Exception:
             conn.close()

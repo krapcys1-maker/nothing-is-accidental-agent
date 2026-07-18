@@ -804,3 +804,13 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Weryfikacja:** collect/full `1328/1328`; verifier exact-once `1328`; partycje `318+322+339+349`; `compileall` OK; QA lineage `10/10`, recovery `4/4`, schema-gate `8/8`.
 - **Produkcja:** przed i po `0014`, 14 migracji, SHA `9906AFBFB580BE8F576A6449B0930C41ED964FED814D99C947D1C28C5B060836`, `364544 B`, bez WAL/SHM/journal. Odczyty wyłącznie `mode=ro&immutable=1`; `0015` nie została zastosowana.
 - **Koszt i zewnętrzne skutki:** `0.000000 USD`; zero API, Anthropic, providera/SDK, browsera, publikacji i controlled-live. Kandydat, nie approval; bez merge.
+
+### [2026-07-18] PR1-MAJ-005-RR-01 — drugi schema gate przed mutacją writable connectora — [CANDIDATE FOR ONE NARROW INDEPENDENT RE-REVIEW]
+
+- **Etap roadmapy:** utrzymanie bezpieczeństwa zamkniętego Etapu 1; Etap 2 pozostaje `NOT STARTED`.
+- **Root cause:** po immutable preflighcie `SqliteStorage.open()` używał ogólnego `connect()`, który przed drugim gate’em robił `mkdir`, zwykłe `sqlite3.connect(path)` i `journal_mode=WAL`. Usunięty plik był odtwarzany; podmieniony plik mógł być mutowany przed typowaną odmową.
+- **Minimalna naprawa:** nowy runtime-only connector otwiera istniejący plik przez SQLite URI `mode=rw` bez PRAGMA. `SqliteStorage.open()` wykonuje drugi exact-schema gate na tym handle i dopiero po PASS wywołuje dotychczasowe przygotowanie writable. Ogólnego API inicjalizacji/migracji nie przebudowano.
+- **Testy race:** usunięcie `0015` po preflight → `SchemaVersionUnavailable`, plik nieodtworzony, brak sidecarów/runtime/provider boundary; podmiana na `0014` w trybie journal DELETE → `SchemaVersionTooOld`, identyczne SHA/size/mtime/schema/ledger/liczniki i brak sidecarów. Stabilne `0015` otwiera się z `mode=rw` i kolejnością gate→PRAGMA; stabilne `0014` oraz missing DB odmawiają bez mutacji.
+- **Weryfikacja:** schema gate 20/20; targeted schema/recovery/lineage 68/68; collect/full `1331/1331`; exact-once `1331`; cztery partycje sekwencyjnie `320+322+339+350`; QA schema gate `17/17`, recovery `4/4`, lineage `10/10`; `compileall app scripts` i `git diff --check` OK.
+- **Produkcja:** przed i po `0014`, 14 migracji, SHA `9906AFBFB580BE8F576A6449B0930C41ED964FED814D99C947D1C28C5B060836`, `364544 B`, integrity `ok`, FK 0, bez WAL/SHM/journal. Odczyty wyłącznie `mode=ro&immutable=1`; `0015` nie została zastosowana.
+- **Granice:** koszt `0.000000 USD`; zero sieci badawczej/API/Anthropic/provider/SDK/browsera/publikacji/controlled-live/retry/attemptu/usage. Bez merge. Status `CANDIDATE`, nie `APPROVED`.

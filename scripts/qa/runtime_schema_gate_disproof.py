@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from shutil import copy2
+import sqlite3
 import sys
 import tempfile
 
@@ -19,10 +21,12 @@ from app.storage.db import (  # noqa: E402
     RUNTIME_SCHEMA_VERSION,
     STAGE1_SCHEMA_VERSION,
     SchemaVersionTooOld,
+    SchemaVersionUnavailable,
     database_schema_versions,
     initialize_database,
     migrate_0014_to_0015,
 )
+import app.storage.repositories as repositories_module  # noqa: E402
 from app.storage.repositories import SqliteStorage  # noqa: E402
 
 
@@ -37,11 +41,25 @@ def _fingerprint(path: Path):
     )
 
 
+def _sidecars(path: Path) -> tuple[bool, bool, bool]:
+    return tuple(Path(f"{path}{suffix}").exists() for suffix in ("-wal", "-shm", "-journal"))
+
+
+def _force_delete_journal_mode(path: Path) -> None:
+    conn = sqlite3.connect(path)
+    try:
+        assert conn.execute("PRAGMA journal_mode=DELETE").fetchone()[0].lower() == "delete"
+    finally:
+        conn.close()
+
+
 def main() -> int:
     checks: list[bool] = []
     with tempfile.TemporaryDirectory(prefix="nia-runtime-schema-gate-") as tmp:
-        path = Path(tmp) / "schema-gate.db"
+        root = Path(tmp)
+        path = root / "schema-gate.db"
         initialize_database(path, through=STAGE1_SCHEMA_VERSION)
+        _force_delete_journal_mode(path)
         before = _fingerprint(path)
         checks.append(before[3] == (False, False, False))
         try:
@@ -53,6 +71,64 @@ def main() -> int:
         checks.append(_fingerprint(path) == before)
         checks.append(len(before[4]) == 14 and before[4][-1] == STAGE1_SCHEMA_VERSION)
 
+        deleted = root / "deleted-after-preflight.db"
+        initialize_database(deleted)
+        original_preflight = repositories_module.require_database_schema
+        original_prepare = repositories_module.prepare_writable_connection
+        deletion_prepared: list[bool] = []
+
+        def delete_after_preflight(db_path, **kwargs):
+            versions = original_preflight(db_path, **kwargs)
+            Path(db_path).unlink()
+            return versions
+
+        repositories_module.require_database_schema = delete_after_preflight
+        repositories_module.prepare_writable_connection = (
+            lambda *_args, **_kwargs: deletion_prepared.append(True)
+        )
+        try:
+            SqliteStorage.open(deleted)
+        except SchemaVersionUnavailable:
+            checks.append(True)
+        else:
+            checks.append(False)
+        finally:
+            repositories_module.require_database_schema = original_preflight
+            repositories_module.prepare_writable_connection = original_prepare
+        checks.append(not deleted.exists())
+        checks.append(_sidecars(deleted) == (False, False, False))
+        checks.append(deletion_prepared == [])
+
+        replaced = root / "replaced-after-preflight.db"
+        replacement = root / "replacement-0014.db"
+        initialize_database(replaced)
+        initialize_database(replacement, through=STAGE1_SCHEMA_VERSION)
+        _force_delete_journal_mode(replacement)
+        replacement_before: list[tuple[object, ...]] = []
+        replacement_prepared: list[bool] = []
+
+        def replace_after_preflight(db_path, **kwargs):
+            versions = original_preflight(db_path, **kwargs)
+            copy2(replacement, db_path)
+            replacement_before.append(_fingerprint(Path(db_path)))
+            return versions
+
+        repositories_module.require_database_schema = replace_after_preflight
+        repositories_module.prepare_writable_connection = (
+            lambda *_args, **_kwargs: replacement_prepared.append(True)
+        )
+        try:
+            SqliteStorage.open(replaced)
+        except SchemaVersionTooOld:
+            checks.append(True)
+        else:
+            checks.append(False)
+        finally:
+            repositories_module.require_database_schema = original_preflight
+            repositories_module.prepare_writable_connection = original_prepare
+        checks.append(len(replacement_before) == 1 and _fingerprint(replaced) == replacement_before[0])
+        checks.append(replacement_prepared == [])
+
         migrated = migrate_0014_to_0015(path)
         checks.append(migrated.applied_migrations == (RUNTIME_SCHEMA_VERSION,))
         checks.append(len(database_schema_versions(path)) == 15)
@@ -62,9 +138,18 @@ def main() -> int:
         repeated = migrate_0014_to_0015(path)
         checks.append(repeated.idempotent and repeated.applied_migrations == ())
 
+        missing = root / "missing" / "runtime.db"
+        try:
+            SqliteStorage.open(missing)
+        except SchemaVersionUnavailable:
+            checks.append(True)
+        else:
+            checks.append(False)
+        checks.append(not missing.exists() and not missing.parent.exists())
+
     passed = sum(checks)
     print(f"[BLOCKED] runtime schema-gate disproof: {passed}/{len(checks)}")
-    return 0 if passed == len(checks) == 8 else 1
+    return 0 if passed == len(checks) == 17 else 1
 
 
 if __name__ == "__main__":

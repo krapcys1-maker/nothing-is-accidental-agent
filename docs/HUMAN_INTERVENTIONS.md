@@ -515,6 +515,14 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Autoryzacja Git:** dopiero po pełnej walidacji jeden commit `fix: require explicit schema migration for runtime` i zwykły push na istniejący `origin/dev/first-successful-research-card`; bez force i bez pushu do `main`.
 - **Oczekiwany status:** implementer może ogłosić wyłącznie `CANDIDATE FOR INDEPENDENT RE-REVIEW`; nie jest to approval ani zgoda na produkcyjną migrację, live lub merge.
 
+### 2026-07-18 — Właściciel zlecił ostatnią wąską poprawkę PR1-MAJ-005-RR-01
+
+- **Decyzja człowieka:** naprawić wyłącznie race, w którym ogólny writable connector tworzył/uszkadzał plik przed drugim schema gate; nie otwierać ponownie PR1-MAJ-001/002/003 ani P2-004.
+- **Wymagany kontrakt:** runtime otwiera tylko istniejący plik przez URI `mode=rw`, nie wykonuje `mkdir`, nie tworzy DB i nie uruchamia mutujących PRAGMA przed drugim gate’em na tym samym handle. Deletion/replacement mają być typowane, fail-closed i bez mutacji/runtime/providera/kosztu.
+- **Twarde granice:** tylko temp DB i fake’i; produkcyjna DB wyłącznie `mode=ro&immutable=1`; bez API, Anthropic, SDK providera, browsera, publikacji, controlled-live, kosztu, migracji produkcji, Etapu 2 i merge.
+- **Autoryzacja Git:** po pełnej walidacji jeden commit `fix: prevent schema gate preflight race mutation` i zwykły push na istniejący branch; bez force, rebase, pushu do `main` i przepisywania historii.
+- **Wynik implementacji:** RR-01 spełnia kontrakt; 1331/1331, partycje `320+322+339+350`, QA `17/17`, `4/4`, `10/10`. Status pozostaje `CANDIDATE FOR ONE NARROW INDEPENDENT RE-REVIEW`, nie approval.
+
 ### 2026-07-18 — Właściciel zawęził cleanup PR #1 do końcowego drzewa
 
 - **Decyzja człowieka:** nie przepisywać historii PR #1. Materiały z `instrukcja dla pisania artykulow/` mogą pozostać w historii prywatnego brancha, ponieważ review nie wykrył sekretów, ale nie mogą występować w końcowym diffie ani zmienić końcowego drzewa `main`.
