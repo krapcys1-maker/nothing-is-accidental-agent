@@ -4,6 +4,7 @@
 !.env.example
 config/accounts.yaml
 config/growth_policy.yaml
+config/pricing_profiles.yaml
 
 # === Dane runtime ===
 data/*
@@ -63,6 +64,7 @@ htmlcov/
 # === Logi i pliki tymczasowe ===
 *.log
 logs/
+runtime/
 *.tmp
 *.temp
 *.bak

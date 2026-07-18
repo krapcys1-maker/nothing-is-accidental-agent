@@ -17,16 +17,25 @@ docs/ERRORS_AND_FAILURES.md.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
+import sys
 from typing import Callable
 
 from app.core.clock import Clock, SystemClock
 from app.core.config import Settings
 from app.core.ids import new_run_id
+from app.core.money import decimal_from, sum_usd, usd_float
+from app.core.sanitization import sanitize_persistent_text
 from app.llm.base import Usage
 from app.llm.usage_tracker import UsageTracker
 from app.models import (
     Account,
+    DurableProviderAttemptContext,
+    JobExecutionContext,
+    ResearchExecutionFailureOutcome,
     ResearchCard,
+    ResearchFlow,
+    ResearchJobExecution,
     ResearchRecommendation,
     ResearchRun,
     ResearchRunStatus,
@@ -37,19 +46,34 @@ from app.models import (
     RunStatus,
     Source,
     SourceCandidateRecord,
+    SourceCandidateRetryResult,
     SourceCandidateStatus,
     SourceVerification,
+    StagedFinalizationContext,
+    StagedFinalizationMode,
     Topic,
     WorkflowType,
 )
 from app.policies.policy_engine import PolicyEngine
 from app.ports.notification import NotificationPort
-from app.ports.storage import StoragePort
+from app.ports.storage import (
+    BudgetReservationError,
+    ProviderAttemptOverReservationError,
+    ProviderAttemptReconciliationRequired,
+    StoragePort,
+)
 from app.research import injection_guard
 from app.research.base import (
+    AttemptBudgetContext,
+    DEFAULT_SYNTHESIS_MAX_TOKENS,
+    DurableProviderAttemptContextError,
     GatheredSource,
     ResearchClient,
+    ResearchBudgetError,
+    ResearchConnectionError,
     ResearchError,
+    ResearchTimeout,
+    ResearchUnknownProviderError,
     ResearchPlan,
     SourceCandidate,
     SourceCardDraft,
@@ -60,6 +84,7 @@ from app.research.cost_estimator import (
     estimate_extraction_cost_per_source_usd,
     estimate_no_search_call_usd,
     estimate_synthesis_cost_usd,
+    estimate_with_retries,
     estimate_worst_case_search_call_usd,
 )
 from app.research.diagnostics import ResponseDiagnostics, write_diagnostics
@@ -94,6 +119,504 @@ class ResearchRunSummary:
 
 
 ResearchLogWriter = Callable[[ResearchCard, Topic, "ResearchRunSummary"], None]
+_LOGGER = logging.getLogger(__name__)
+_AUDIT_ERROR_MESSAGE_LIMIT = 500
+class ResearchExecutionAlreadyInitialized(RuntimeError):
+    """Worker znalazł już trwały run; kontynuacja wymaga jawnej weryfikacji."""
+
+
+class ResearchExecutionNeedsReconciliation(RuntimeError):
+    """Wynik requestu jest niejednoznaczny; automatyczne wznowienie jest zakazane."""
+
+
+class ResearchExecutionRequiresDurableJob(RuntimeError):
+    """Fresh real research cannot bypass the durable job/lease/fence boundary."""
+
+
+class ResearchResumeRequiresDurableJob(RuntimeError):
+    """Real A2/B resume is deferred until it has its own durable job flow."""
+
+
+class DurablePromptSourceSnapshotMismatch(DurableProviderAttemptContextError):
+    """Mutable dispatch input diverged from the frozen durable prompt input."""
+
+
+def _reject_non_durable_real_resume(settings: Settings, research_client: ResearchClient) -> None:
+    """Fail before any workflow mutation for unsupported real A2/B resumes."""
+    if (
+        not settings.dry_run
+        and bool(getattr(research_client, "requires_durable_provider_context", False))
+    ):
+        raise ResearchResumeRequiresDurableJob(
+            "Real A2/B resume requires a durable job; WAVE 1A has not implemented "
+            "that scheduler flow. No workflow state was changed."
+        )
+
+
+def _best_effort_worker_terminal_diagnostic(effect: Callable[[], None], *, label: str) -> None:
+    """Keep post-commit diagnostics from rewriting a worker's canonical result."""
+    try:
+        effect()
+    except Exception as exc:
+        _LOGGER.warning(
+            "WORKER_TERMINAL_DIAGNOSTIC_FAILED label=%s error=%s",
+            label,
+            type(exc).__name__,
+        )
+
+
+def _sanitize_audit_error_text(value: object, *, limit: int) -> str:
+    text = " ".join(
+        sanitize_persistent_text(value, preserve_safe_labels=True).split()
+    )
+    if len(text) > limit:
+        text = f"{text[:limit - 3]}..."
+    return text
+
+
+def _format_audit_error(stage: str, exc: Exception) -> str:
+    """Return a deterministic, bounded audit string without provider payloads.
+
+    Only the exception message and selected scalar metadata are used.  In
+    particular, ``raw_text``, the SDK exception object/cause, request headers
+    and response objects are never serialized into persistent audit fields.
+    """
+    metadata = []
+    status_code = getattr(exc, "status_code", None)
+    if status_code is not None:
+        metadata.append(f"status_code={status_code}")
+    retryable = getattr(exc, "retryable", None)
+    if retryable is not None:
+        metadata.append(f"retryable={retryable}")
+    stop_reason = getattr(exc, "stop_reason", None)
+    if stop_reason is not None:
+        safe_stop_reason = _sanitize_audit_error_text(stop_reason, limit=80)
+        metadata.append(f"stop_reason={safe_stop_reason}")
+
+    type_and_metadata = type(exc).__name__
+    if metadata:
+        type_and_metadata = f"{type_and_metadata}({', '.join(metadata)})"
+    message = _sanitize_audit_error_text(exc, limit=_AUDIT_ERROR_MESSAGE_LIMIT)
+    suffix = f": {message}" if message else ""
+    return f"[{stage}] {type_and_metadata}{suffix}"
+
+
+def _current_run_cost(storage: StoragePort, run_id: str | None) -> float:
+    if run_id is None:
+        return 0.0
+    return float(sum_usd(
+        (row.estimated_cost_usd for row in storage.get_research_usage(run_id)),
+        label="research usage total",
+    ))
+
+
+def _resolve_max_retries(
+    research_client: ResearchClient,
+    configured_max_retries: int | None,
+) -> int:
+    client_max_retries = getattr(research_client, "max_retries", None)
+    if configured_max_retries is None:
+        return int(client_max_retries) if client_max_retries is not None else 0
+    if client_max_retries is not None and configured_max_retries != client_max_retries:
+        raise ValueError(
+            "max_retries workflowu musi być zgodne z max_retries klienta; "
+            "rozbieżność mogłaby zaniżyć estymatę budżetu."
+        )
+    return configured_max_retries
+
+
+def _check_stage_budget(
+    settings: Settings,
+    policy: PolicyEngine,
+    account: Account,
+    storage: StoragePort,
+    run_id: str | None,
+    *,
+    base_estimate: float,
+    max_retries: int,
+    run_cap_usd: float | None,
+):
+    if not settings.dry_run and run_cap_usd is None:
+        raise ValueError(
+            "Realny research wymaga jawnego run_cap_usd; brak capu jest fail-closed."
+        )
+    current = _current_run_cost(storage, run_id)
+    projected = float(sum_usd(
+        (current, estimate_with_retries(base_estimate, max_retries)),
+        label="projected research cost",
+    ))
+    return policy.check_run_budget(
+        projected,
+        run_cap_usd,
+        current_run_cost=current,
+        account=account,
+    )
+
+
+def _configure_attempt_control(
+    research_client: ResearchClient,
+    *,
+    policy: PolicyEngine,
+    account: Account,
+    storage: StoragePort,
+    usage_tracker: UsageTracker,
+    run_id: str,
+    run_cap_usd: float | None,
+    estimated_attempt_cost: float,
+    task: str,
+    dry_run: bool,
+    job_execution: JobExecutionContext | None = None,
+    before_provider_assertion: Callable[[], None] | None = None,
+) -> None:
+    """Connect a client retry loop to workflow-owned policy and persistence."""
+    if (
+        not dry_run
+        and job_execution is None
+        and bool(getattr(research_client, "requires_durable_provider_context", False))
+    ):
+        # This is the common last gate before every legacy/two-stage/staged
+        # caller. WAVE 0B has a durable implementation only for single flow.
+        raise ResearchExecutionRequiresDurableJob(
+            "Real two-stage and staged execution require a durable provider "
+            "context and are deferred to WAVE 1A."
+        )
+
+    requires_durable = bool(getattr(research_client, "requires_durable_provider_context", False))
+    configure_durable = getattr(research_client, "configure_durable_attempt_control", None)
+    if requires_durable and not callable(configure_durable):
+        raise DurableProviderAttemptContextError(
+            "Real research client does not expose the required durable-attempt contract."
+        )
+    if not requires_durable:
+        return
+
+    assert callable(configure_durable)
+
+    def assert_prompt_source_snapshot(context: DurableProviderAttemptContext) -> None:
+        if before_provider_assertion is None:
+            return
+        try:
+            before_provider_assertion()
+        except DurablePromptSourceSnapshotMismatch:
+            # REQUEST_STARTED is committed before this final gate. Preserve its
+            # identity for explicit reconciliation; never auto-release or retry.
+            storage.mark_provider_attempt_needs_reconciliation(
+                job_execution, context.request_id,
+                error_code="PROMPT_SOURCE_SNAPSHOT_MISMATCH",
+            )
+            raise
+
+    def context_callback(context: AttemptBudgetContext) -> DurableProviderAttemptContext:
+        if job_execution is None:
+            raise DurableProviderAttemptContextError(
+                "Real Anthropic research requires a durable job execution context."
+            )
+        if job_execution is not None:
+            storage.assert_job_execution_active(job_execution)
+        current = _current_run_cost(storage, run_id)
+        projected = float(sum_usd(
+            (current, context.estimated_attempt_cost),
+            label="projected provider attempt cost",
+        ))
+        decision = policy.check_run_budget(
+            projected,
+            run_cap_usd,
+            current_run_cost=current,
+            account=account,
+        )
+        if not decision.allowed:
+            raise ResearchBudgetError(decision.reason, code=decision.code)
+        try:
+            attempt = storage.begin_provider_attempt(
+                job_execution,
+                stage=context.stage,
+                attempt_no=context.attempt_number,
+                max_cost_usd=context.estimated_attempt_cost,
+                daily_limit_usd=policy.daily_limit_usd,
+                monthly_limit_usd=policy.monthly_limit_usd,
+            )
+        except BudgetReservationError as exc:
+            raise ResearchBudgetError(
+                "Atomic provider reservation rejected the request.",
+                code="BUDGET_RESERVATION_DENIED",
+            ) from exc
+        except ProviderAttemptReconciliationRequired as exc:
+            raise ResearchExecutionNeedsReconciliation(
+                "Provider attempt requires explicit reconciliation before another request."
+            ) from exc
+        return DurableProviderAttemptContext(
+            job_id=job_execution.job_id,
+            run_id=job_execution.run_id,
+            stage=attempt.stage,
+            attempt_no=attempt.attempt_no,
+            request_id=attempt.request_id,
+            lease_owner=job_execution.lease_owner,
+            fence_token=(
+                f"{job_execution.job_id}:{job_execution.run_id}:{job_execution.lease_owner}"
+            ),
+            checked_at=job_execution.now(),
+        )
+
+    def activation_callback(context: DurableProviderAttemptContext):
+        if context.fence_token != (
+            f"{job_execution.job_id}:{job_execution.run_id}:{job_execution.lease_owner}"
+        ):
+            raise DurableProviderAttemptContextError(
+                "Durable provider context fence token does not match the active execution."
+            )
+        storage.mark_provider_attempt_request_started(job_execution, context.request_id)
+        assert_prompt_source_snapshot(context)
+        return storage.assert_durable_provider_attempt_active(
+            context, clock=job_execution.clock,
+        )
+
+    def assertion_callback(context: DurableProviderAttemptContext):
+        assert_prompt_source_snapshot(context)
+        return storage.assert_durable_provider_attempt_active(
+            context, clock=job_execution.clock,
+        )
+
+    configure_durable(
+        context_callback=context_callback,
+        activation_callback=activation_callback,
+        assertion_callback=assertion_callback,
+        estimated_attempt_cost=estimated_attempt_cost,
+    )
+
+
+def _mark_budget_block(summary: "ResearchRunSummary", exc: ResearchError) -> None:
+    if isinstance(exc, ResearchBudgetError):
+        summary.blocked = True
+        summary.block_code = exc.code
+        summary.block_reason = str(exc)
+
+
+class CompletedResearchExistsError(RuntimeError):
+    """Świeży research wymaga jawnego potwierdzenia, gdy karta już istnieje."""
+
+
+def ensure_topic_can_start_research(
+    storage: StoragePort, account: Account, topic: Topic, force_re_research: bool,
+) -> None:
+    """Jedyna bramka świeżego researchu: integralność zawsze, force tylko dla re-researchu."""
+    has_completed_card = storage.has_valid_completed_research_card_for_topic(
+        account.id, int(topic.id),
+    )
+    if has_completed_card and not force_re_research:
+        raise CompletedResearchExistsError(
+            f"Temat #{topic.id} ma już kompletną kartę researchu. "
+            "Aby rozpocząć nowy, potencjalnie płatny research, podaj --force-re-research."
+        )
+
+
+def _validate_resume_flow(research_run: ResearchRun, expected: ResearchFlow) -> None:
+    """Reject cross-flow resume before status checks or any paid work."""
+    if research_run.flow != expected:
+        raise ValueError(
+            f"research_run #{research_run.id}: expected flow '{expected.value}', "
+            f"stored flow '{research_run.flow.value}'."
+        )
+
+
+def _validate_research_run_account(research_run: ResearchRun, account: Account) -> None:
+    if research_run.account_id != account.id:
+        raise ValueError(
+            f"research_run #{research_run.id} należy do konta {research_run.account_id}, "
+            f"nie do wybranego konta {account.id}."
+        )
+
+
+def _explicit_resume_run_snapshot(
+    storage: StoragePort, research_run_id: str, account: Account,
+) -> Run:
+    run = storage.get_run(research_run_id)
+    if run is None:
+        raise ValueError(f"Nie znaleziono run #{research_run_id} dla jawnego resume.")
+    if run.account_id != account.id:
+        raise ValueError(
+            f"run #{research_run_id} należy do konta {run.account_id}, "
+            f"nie do wybranego konta {account.id}."
+        )
+    if run.status not in (RunStatus.RUNNING, RunStatus.DRY_RUN, RunStatus.FAILED):
+        raise ValueError(
+            f"run #{research_run_id} ma terminalny status {run.status.value}; "
+            "jawne resume wymaga RUNNING, DRY_RUN albo FAILED."
+        )
+    if run.status == RunStatus.FAILED and run.finished_at is None:
+        raise ValueError(f"run #{research_run_id} ma FAILED bez finished_at.")
+    return run
+
+
+def _staged_finalization_context(
+    research_run: ResearchRun,
+    run_snapshot: Run,
+    *,
+    explicit_resume: bool,
+) -> StagedFinalizationContext:
+    """Build the only legal staged-B mode from durable state, never loose flags."""
+    if explicit_resume:
+        if run_snapshot.status != RunStatus.FAILED or \
+                run_snapshot.finished_at is None or not run_snapshot.error:
+            raise ValueError(
+                "Resume staged B wymaga trwałego FAILED z finished_at i markerem błędu."
+            )
+        return StagedFinalizationContext(
+            mode=(
+                StagedFinalizationMode.FORCE_RERESEARCH_RESUME_B
+                if research_run.is_force_reresearch else StagedFinalizationMode.RESUME_B
+            ),
+            expected_run_status=RunStatus.FAILED,
+            expected_research_status=ResearchRunStatus.SOURCES_COMPLETE,
+            expected_finished_at=run_snapshot.finished_at,
+            expected_failure_marker=run_snapshot.error,
+        )
+
+    if run_snapshot.status not in (RunStatus.RUNNING, RunStatus.DRY_RUN) or \
+            run_snapshot.finished_at is not None or run_snapshot.error is not None:
+        raise ValueError(
+            "Świeże staged B wymaga trwałego RUNNING/DRY_RUN bez finished_at i błędu."
+        )
+    return StagedFinalizationContext(
+        mode=(
+            StagedFinalizationMode.FORCE_RERESEARCH
+            if research_run.is_force_reresearch else StagedFinalizationMode.FRESH
+        ),
+        # Offline dry runs are created as DRY_RUN; real fresh runs are RUNNING.
+        # The exact durable status becomes part of the CAS context.
+        expected_run_status=run_snapshot.status,
+        expected_research_status=ResearchRunStatus.SOURCES_COMPLETE,
+    )
+
+
+def _finish_explicit_resume_failure(
+    storage: StoragePort, snapshot: Run, expected_flow: ResearchFlow,
+    cost_usd: float, error: str,
+) -> None:
+    if snapshot.status == RunStatus.FAILED:
+        assert snapshot.finished_at is not None
+        storage.finish_resumed_research_run(
+            snapshot.id, snapshot.account_id, expected_flow,
+            snapshot.finished_at, cost_usd, error,
+        )
+        return
+    storage.finish_run(snapshot.id, RunStatus.FAILED.value, cost_usd, error=error)
+
+
+def _sync_staged_run_cost(
+    storage: StoragePort,
+    research_run_id: str,
+    *,
+    preserve_original_error: bool = False,
+) -> float | None:
+    """Odświeża cache kosztu bez zmiany statusu workflow.
+
+    Gdy pierwotny wyjątek jest już propagowany, błąd synchronizacji trafia do logu,
+    aby nie zastępować przyczyny biznesowej mniej istotnym błędem cache'a.
+    """
+    try:
+        return storage.sync_run_cost_from_research_usage(research_run_id)
+    except Exception:
+        if preserve_original_error:
+            _LOGGER.exception(
+                "Nie udało się zsynchronizować runs.cost_usd dla research_run %s; "
+                "zachowuję pierwotny wyjątek.",
+                research_run_id,
+            )
+            return None
+        raise
+
+
+def _extraction_is_exhausted(
+    candidates: list[SourceCandidateRecord], *, min_sources: int, max_attempts: int,
+) -> bool:
+    """Czy A2 nie ma już legalnego ruchu bez nowego discovery lub podniesienia capu?"""
+    extracted = sum(c.status == SourceCandidateStatus.EXTRACTED for c in candidates)
+    if extracted >= min_sources:
+        return False
+    return not any(
+        (c.status == SourceCandidateStatus.PENDING_EXTRACTION and c.attempts < max_attempts)
+        or c.status == SourceCandidateStatus.EXTRACTION_IN_PROGRESS
+        or (c.status == SourceCandidateStatus.EXTRACTION_FAILED and c.attempts < max_attempts)
+        for c in candidates
+    )
+
+
+def retry_failed_source_candidates(
+    research_run_id: str,
+    *,
+    settings: Settings,
+    storage: StoragePort,
+    account_id: str,
+    max_attempts: int = 2,
+) -> SourceCandidateRetryResult:
+    """Jawna, bezpłatna operacja przygotowania capped retry A2.
+
+    Nie tworzy klienta modelu, nie zapisuje usage i nie uruchamia ekstrakcji. Zwykłe
+    resume nadal czyta wyłącznie kandydatów PENDING_EXTRACTION. PARTIAL_EXHAUSTED
+    może zostać odblokowany wyłącznie tą operacją i wyłącznie po jawnym podniesieniu capu.
+    """
+    if max_attempts < 1:
+        raise ValueError("max_attempts musi być dodatnie.")
+    research_run = storage.get_research_run(research_run_id)
+    if research_run is None:
+        raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
+    if research_run.account_id != account_id:
+        raise ValueError(
+            f"research_run #{research_run_id} należy do konta {research_run.account_id}, "
+            f"nie do wybranego konta {account_id}."
+        )
+    _validate_resume_flow(research_run, ResearchFlow.STAGED)
+    if research_run.status not in (
+        ResearchRunStatus.PARTIAL, ResearchRunStatus.PARTIAL_EXHAUSTED,
+    ):
+        raise ValueError(
+            f"research_run #{research_run_id} ma status {research_run.status.value} — "
+            "retry-failed-candidates wymaga statusu PARTIAL lub PARTIAL_EXHAUSTED."
+        )
+    result = storage.retry_failed_source_candidates(
+        research_run_id, max_attempts=max_attempts,
+    )
+    candidates = storage.list_source_candidates(research_run_id)
+    if research_run.status == ResearchRunStatus.PARTIAL and _extraction_is_exhausted(
+        candidates, min_sources=settings.research_min_sources, max_attempts=max_attempts,
+    ):
+        storage.mark_research_run_partial_exhausted(
+            research_run_id,
+            error=("Za mało wyekstrahowanych źródeł i brak kandydatów kwalifikujących się "
+                   "do retry w aktualnym limicie attempts."),
+        )
+    return result
+
+
+def _record_staged_usage(
+    usage_tracker: UsageTracker,
+    storage: StoragePort,
+    research_run_id: str,
+    model: str,
+    usage: Usage,
+    *,
+    task: str,
+    dry_run: bool,
+):
+    """Księguje usage i w finally odświeża cache po zapisie model_usage."""
+    try:
+        return usage_tracker.record(research_run_id, model, usage, task=task, dry_run=dry_run)
+    finally:
+        _sync_staged_run_cost(
+            storage,
+            research_run_id,
+            preserve_original_error=sys.exc_info()[0] is not None,
+        )
+
+
+def _finish_staged_summary(
+    storage: StoragePort,
+    research_run_id: str,
+    summary: "ResearchRunSummary",
+) -> "ResearchRunSummary":
+    """Synchronizuje także bezpłatne/idempotentne wyjścia etapu przed zwrotem."""
+    _sync_staged_run_cost(storage, research_run_id)
+    return summary
 
 
 def _record_diagnostics(settings: Settings, run_id: str, stage: str, *, usage: Usage,
@@ -110,6 +633,7 @@ def _record_diagnostics(settings: Settings, run_id: str, stage: str, *, usage: U
         cache_read_tokens=usage.cache_read_tokens, cache_write_tokens=usage.cache_write_tokens,
         web_search_requests=usage.web_search_requests, raw_response=raw_text,
         parse_error_location=parse_error_location,
+        thinking_tokens=getattr(usage, "thinking_tokens", 0),
     ))
 
 
@@ -134,12 +658,38 @@ def run_research_pipeline(
     notifier: NotificationPort,
     clock: Clock | None = None,
     research_log: ResearchLogWriter | None = None,
+    job_execution: ResearchJobExecution | None = None,
+    force_re_research: bool = False,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
+    max_web_searches: int = 6,
+    request_max_tokens: int | None = None,
+    durable_plan: ResearchPlan | None = None,
 ) -> ResearchRunSummary:
+    max_retries = _resolve_max_retries(research_client, max_retries)
+    if isinstance(max_web_searches, bool) or not isinstance(max_web_searches, int) or max_web_searches < 0:
+        raise ValueError("max_web_searches musi być liczbą całkowitą >= 0.")
+    if request_max_tokens is None:
+        if durable_plan is not None and not settings.dry_run:
+            raise ResearchExecutionRequiresDurableJob(
+                "Durable real research requires its persisted request_max_tokens."
+            )
+        request_max_tokens = 3000
+    if isinstance(request_max_tokens, bool) or not isinstance(request_max_tokens, int) or request_max_tokens < 1:
+        raise ValueError("request_max_tokens must be a positive integer.")
     clock = clock or SystemClock()
+    if not settings.dry_run and job_execution is None:
+        raise ResearchExecutionRequiresDurableJob(
+            "Fresh real research requires a durable leased job execution."
+        )
     summary = ResearchRunSummary(run_id=None, account_id=account.id,
                                  topic_id=int(topic.id), dry_run=settings.dry_run)
+    execution_context: JobExecutionContext | None = None
 
-    # 1. Bramka: czy wolno działać?
+    # 1. Bramka idempotencji przed polityką, budżetem, runem i klientem.
+    ensure_topic_can_start_research(storage, account, topic, force_re_research)
+
+    # 2. Bramka: czy wolno działać?
     can_run = policy.check_can_run(account)
     if not can_run.allowed:
         notifier.notify("warning", "Research zablokowany", can_run.reason, account.id)
@@ -147,8 +697,30 @@ def run_research_pipeline(
         summary.block_code, summary.block_reason = can_run.code, can_run.reason
         return summary
 
-    # 2. Plan researchu (lokalny, bez kosztu).
-    plan = build_research_plan(topic, account)
+    # 3. Plan researchu (lokalny, bez kosztu).  Durable paid work supplies a
+    # canonical plan reconstructed from its persisted execution_intent; it must
+    # never be rebuilt from mutable topic/account prompt fields after enqueue.
+    if durable_plan is None:
+        plan = build_research_plan(topic, account)
+        prompt_source_validator = None
+    else:
+        if durable_plan.topic_id != int(topic.id) or durable_plan.account_id != account.id:
+            raise ResearchExecutionRequiresDurableJob(
+                "Durable prompt snapshot identity does not match the dispatched account/topic."
+            )
+        plan = durable_plan
+
+        def prompt_source_validator() -> None:
+            current = build_research_plan(topic, account)
+            if (
+                current.question != plan.question
+                or current.niche != plan.niche
+                or current.required_depth != plan.required_depth
+                or current.guidance != plan.guidance
+            ):
+                raise DurablePromptSourceSnapshotMismatch(
+                    "Current topic/account prompt inputs diverged from the durable snapshot."
+                )
 
     # 3. Bramka budżetu PRZED web search — pesymistyczny, KALIBROWANY szacunek
     # (ADR-016). Poprzedni płaski szacunek (Usage 3500/1500/5) zaniżył realny koszt
@@ -156,46 +728,152 @@ def run_research_pipeline(
     # Uwaga: ta ścieżka (jednoetapowa) jest zachowana, ale NIEZALECANA dla realnych
     # runów — patrz run_two_stage_research_pipeline() niżej.
     worst_case = estimate_worst_case_search_call_usd(
-        settings, max_web_searches=6, max_output_tokens=3000)
-    budget = policy.check_budget(worst_case.total_usd)
+        settings, max_web_searches=max_web_searches, max_output_tokens=request_max_tokens)
+    budget = _check_stage_budget(
+        settings, policy, account, storage, None, base_estimate=worst_case.total_usd,
+        max_retries=max_retries, run_cap_usd=run_cap_usd)
     if not budget.allowed:
         notifier.notify("warning", "Budżet — stop (research)", budget.reason, account.id)
         summary.blocked = True
         summary.block_code, summary.block_reason = budget.code, budget.reason
         return summary
 
-    # 4. Run.
-    run_id = new_run_id()
+    # 4. Run. Worker Etapu 1 przekazuje trwałe uprawnienie lease; wtedy trzy
+    # rekordy (run, research_run, jobs.run_id) muszą powstać w jednej transakcji.
+    if job_execution is None:
+        run_id = new_run_id()
+        run_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.RUNNING
+        storage.create_run(Run(id=run_id, account_id=account.id,
+                               workflow=WorkflowType.RESEARCH, status=run_status,
+                               current_state="research"))
+        storage.create_research_run(ResearchRun(
+            id=run_id, account_id=account.id, topic_id=int(topic.id),
+            flow=ResearchFlow.SINGLE, status=ResearchRunStatus.PENDING,
+        ))
+    else:
+        initialized = storage.initialize_research_run_for_job(
+            job_execution.job_id, job_execution.lease_owner, new_run_id(),
+            clock=clock,
+        )
+        run_id = initialized.run.id
+        if not initialized.created:
+            raise ResearchExecutionAlreadyInitialized(
+                "A durable research run is already attached to this active job."
+            )
+        execution_context = JobExecutionContext(
+            job_id=job_execution.job_id,
+            lease_owner=job_execution.lease_owner,
+            run_id=run_id,
+            clock=clock,
+        )
+        # Pierwszy authoritative checkpoint po atomowym związaniu job→run.
+        storage.assert_job_execution_active(execution_context)
     summary.run_id = run_id
-    run_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.RUNNING
-    storage.create_run(Run(id=run_id, account_id=account.id,
-                           workflow=WorkflowType.RESEARCH, status=run_status,
-                           current_state="research"))
+
+    _configure_attempt_control(
+        research_client, policy=policy, account=account, storage=storage,
+        usage_tracker=usage_tracker, run_id=run_id, run_cap_usd=run_cap_usd,
+        estimated_attempt_cost=worst_case.total_usd, task="research",
+        dry_run=settings.dry_run, job_execution=execution_context,
+        before_provider_assertion=prompt_source_validator)
 
     # 5. Wywołanie klienta (web search). Błędy: timeout/parse -> run FAILED.
     try:
+        if execution_context is not None:
+            storage.assert_job_execution_active(execution_context)
         result = research_client.run_research(plan)
     except ResearchError as exc:
+        if execution_context is not None and not settings.dry_run and not isinstance(exc, ResearchBudgetError):
+            request_id = getattr(exc, "request_id", None)
+            if not request_id:
+                raise ResearchExecutionNeedsReconciliation(
+                    "Real provider failure has no durable request identity."
+                ) from exc
+            if isinstance(exc, (ResearchTimeout, ResearchConnectionError, ResearchUnknownProviderError)):
+                storage.mark_provider_attempt_needs_reconciliation(
+                    execution_context, request_id, error_code=type(exc).__name__,
+                )
+                raise ResearchExecutionNeedsReconciliation(
+                    "Provider outcome is unknown; reservation and request identity were retained."
+                ) from exc
+            if getattr(exc, "usage", None) is None:
+                storage.settle_provider_attempt_without_usage(
+                    execution_context, request_id, error_code=type(exc).__name__,
+                )
+        if execution_context is not None:
+            # Utrata lease ma pierwszeństwo: nie wolno utrwalić ani usage, ani FAILED.
+            storage.assert_job_execution_active(execution_context)
+        _mark_budget_block(summary, exc)
+        audit_error = _format_audit_error("run_research", exc)
         # Nawet gdy research się nie powiódł (np. ucięty/niepoprawny JSON), wywołanie
         # API mogło być realne i kosztować — jeśli wyjątek niesie `usage`, zaksięguj je,
         # żeby rzeczywisty koszt nigdy nie zniknął z model_usage/COSTS.csv.
         cost = 0.0
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
-            usage_row = usage_tracker.record(
-                run_id, getattr(exc, "model", None) or "unknown", exc_usage,
-                task="research", dry_run=settings.dry_run,
-            )
+            try:
+                if execution_context is None:
+                    usage_row = usage_tracker.record(
+                        run_id, getattr(exc, "model", None) or "unknown", exc_usage,
+                        task="research", dry_run=settings.dry_run,
+                    )
+                else:
+                    usage_row = usage_tracker.record_job(
+                        execution_context, getattr(exc, "model", None) or "unknown",
+                        exc_usage, task="research", dry_run=settings.dry_run,
+                        request_id=getattr(exc, "request_id", None),
+                    )
+            except ProviderAttemptOverReservationError as over_reservation:
+                raise ResearchExecutionNeedsReconciliation(
+                    "Recorded provider usage exceeded its durable reservation."
+                ) from over_reservation
             cost = usage_row.estimated_cost_usd
             summary.cost_usd = cost
             summary.model = getattr(exc, "model", None) or ""
             summary.input_tokens = usage_row.input_tokens
             summary.output_tokens = usage_row.output_tokens
             summary.web_search_requests = usage_row.web_search_requests
-        storage.finish_run(run_id, RunStatus.FAILED.value, cost, error=str(exc))
-        notifier.notify("error", "Research nieudany", str(exc), account.id)
+        cost = _current_run_cost(storage, run_id)
+        summary.cost_usd = cost
+        if execution_context is None:
+            storage.finish_run(run_id, RunStatus.FAILED.value, cost, error=audit_error)
+            storage.mark_research_run_failed(run_id, error=audit_error)
+        else:
+            failure_outcome = storage.fail_or_escalate_job_research_execution(
+                execution_context, cost, error=audit_error, terminalize_job=True,
+            )
+            if failure_outcome is not ResearchExecutionFailureOutcome.TERMINALIZED_FAILED:
+                raise ResearchExecutionNeedsReconciliation(
+                    "Research failure retained an active reservation for explicit reconciliation."
+                ) from exc
+        diagnostic = lambda: _record_diagnostics(
+            settings,
+            run_id,
+            "SINGLE",
+            usage=exc_usage or Usage(),
+            raw_text=getattr(exc, "raw_text", None) or "",
+            stop_reason=getattr(exc, "stop_reason", None),
+            parse_error_location=str(exc),
+        )
+        if execution_context is None:
+            diagnostic()
+        else:
+            _best_effort_worker_terminal_diagnostic(
+                diagnostic, label="research_single_failure_diagnostic",
+            )
+        if execution_context is None:
+            notifier.notify("error", "Research nieudany", str(exc), account.id)
+        else:
+            _best_effort_worker_terminal_diagnostic(
+                lambda: notifier.notify("error", "Research nieudany", str(exc), account.id),
+                label="research_failure_notification",
+            )
         summary.error = str(exc)
         return summary
+
+    if execution_context is not None:
+        # Długie wywołanie mogło zakończyć się po expiry/recovery.
+        storage.assert_job_execution_active(execution_context)
 
     draft = result.draft
 
@@ -213,9 +891,23 @@ def run_research_pipeline(
                         account.id)
 
     # 7. Koszt.
-    usage_row = usage_tracker.record(run_id, result.model, result.usage,
-                                     task="research", dry_run=settings.dry_run)
-    summary.cost_usd = usage_row.estimated_cost_usd
+    try:
+        if execution_context is None:
+            usage_row = usage_tracker.record(
+                run_id, result.model, result.usage,
+                task="research", dry_run=settings.dry_run,
+            )
+        else:
+            usage_row = usage_tracker.record_job(
+                execution_context, result.model, result.usage,
+                task="research", dry_run=settings.dry_run,
+                request_id=getattr(result, "request_id", None),
+            )
+    except ProviderAttemptOverReservationError as exc:
+        raise ResearchExecutionNeedsReconciliation(
+            "Recorded provider usage exceeded its durable reservation."
+        ) from exc
+    summary.cost_usd = _current_run_cost(storage, run_id)
     summary.model = result.model
     summary.input_tokens = usage_row.input_tokens
     summary.output_tokens = usage_row.output_tokens
@@ -249,24 +941,61 @@ def run_research_pipeline(
             for s in draft.sources
         ],
     )
-    storage.add_research_card(card)
+    if execution_context is None:
+        card = storage.add_research_card(card)
+    else:
+        storage.assert_job_execution_active(execution_context)
+        card = storage.finalize_job_research_execution(
+            execution_context, card, total_cost_usd=summary.cost_usd,
+            terminal_run_status=(
+                RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS
+            ),
+        )
     summary.card = card
     summary.sources_count = len(card.sources)
 
-    # 10. Zamknięcie runu. P0-1 (AUDYT 2026-07-12): terminal statusu sukcesu musi być
-    # SUCCESS dla realnych runów — run_status (RUNNING/DRY_RUN) jest poprawny tylko
-    # jako stan POCZĄTKOWY (create_run wyżej), nie końcowy.
-    terminal_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS
-    storage.finish_run(run_id, terminal_status.value, usage_row.estimated_cost_usd)
+    # 10. Jedna granica transakcji: COMPLETE + terminalny runs + USED.
+    if execution_context is None:
+        storage.finalize_research_success(
+            run_id, research_card_id=int(card.id), total_cost_usd=summary.cost_usd,
+            stage_b_completed=False,
+            terminal_run_status=RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS,
+        )
+
+    diagnostic = lambda: _record_diagnostics(
+        settings,
+        run_id,
+        "SINGLE",
+        usage=result.usage,
+        raw_text=getattr(result, "raw_text", ""),
+        stop_reason=getattr(result, "stop_reason", None),
+    )
+    if execution_context is None:
+        diagnostic()
+    else:
+        _best_effort_worker_terminal_diagnostic(
+            diagnostic, label="research_single_success_diagnostic",
+        )
 
     # 11. Aktualizacja dokumentacji (opcjonalna — realny run dopisuje do RESEARCH_LOG.md).
     if research_log is not None:
-        research_log(card, topic, summary)
+        if execution_context is None:
+            research_log(card, topic, summary)
+        else:
+            _best_effort_worker_terminal_diagnostic(
+                lambda: research_log(card, topic, summary), label="research_success_log",
+            )
 
-    notifier.notify(
+    success_notification = lambda: notifier.notify(
         "info", "Research zakończony",
         f"rekomendacja={summary.recommendation}, źródła={summary.sources_count}, "
         f"koszt~{summary.cost_usd:.6f} USD (dry_run={settings.dry_run})", account.id)
+    if execution_context is None:
+        success_notification()
+    else:
+        _best_effort_worker_terminal_diagnostic(
+            success_notification, label="research_success_notification",
+        )
     return summary
 
 
@@ -284,8 +1013,11 @@ def run_two_stage_research_pipeline(
     research_log: ResearchLogWriter | None = None,
     max_web_searches: int = 4,
     gather_max_tokens: int = 1200,
-    synthesize_max_tokens: int = 2200,
+    synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
     forwarded_context_tokens: int = 2500,
+    force_re_research: bool = False,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
 ) -> ResearchRunSummary:
     """Dwuetapowy research (ZALECANY od 2026-07-11, ADR-016, docs/ERRORS_AND_FAILURES.md).
 
@@ -301,11 +1033,15 @@ def run_two_stage_research_pipeline(
     zbudowano `research_client` (patrz AnthropicResearchClient) — inaczej szacunek nie
     będzie pasował do realnie stosowanych capów.
     """
+    max_retries = _resolve_max_retries(research_client, max_retries)
     clock = clock or SystemClock()
     summary = ResearchRunSummary(run_id=None, account_id=account.id,
                                  topic_id=int(topic.id), dry_run=settings.dry_run)
 
-    # 1. Bramka: czy wolno działać?
+    # 1. Bramka idempotencji przed polityką, budżetem, runem i klientem.
+    ensure_topic_can_start_research(storage, account, topic, force_re_research)
+
+    # 2. Bramka: czy wolno działać?
     can_run = policy.check_can_run(account)
     if not can_run.allowed:
         notifier.notify("warning", "Research zablokowany", can_run.reason, account.id)
@@ -319,7 +1055,9 @@ def run_two_stage_research_pipeline(
     # 3. Bramka budżetu PRZED etapem 1 (kalibrowany pesymistyczny szacunek).
     stage_a_estimate = estimate_worst_case_search_call_usd(
         settings, max_web_searches=max_web_searches, max_output_tokens=gather_max_tokens)
-    budget_a = policy.check_budget(stage_a_estimate.total_usd)
+    budget_a = _check_stage_budget(
+        settings, policy, account, storage, None, base_estimate=stage_a_estimate.total_usd,
+        max_retries=max_retries, run_cap_usd=run_cap_usd)
     if not budget_a.allowed:
         notifier.notify("warning", "Budżet — stop (etap 1: gather_sources)",
                         budget_a.reason, account.id)
@@ -336,15 +1074,23 @@ def run_two_stage_research_pipeline(
                            current_state="gather_sources"))
     storage.create_research_run(ResearchRun(
         id=run_id, account_id=account.id, topic_id=int(topic.id),
-        status=ResearchRunStatus.PENDING,
+        flow=ResearchFlow.TWO_STAGE, status=ResearchRunStatus.PENDING,
     ))
     total_cost = 0.0
+
+    _configure_attempt_control(
+        research_client, policy=policy, account=account, storage=storage,
+        usage_tracker=usage_tracker, run_id=run_id, run_cap_usd=run_cap_usd,
+        estimated_attempt_cost=stage_a_estimate.total_usd, task="research_gather",
+        dry_run=settings.dry_run)
 
     # 5. Etap 1: gather_sources. Błąd -> run FAILED, ale realny koszt (jeśli był) zaksięgowany.
     #    Brak trwałych źródeł -> nie ma czego wznawiać (research_runs.status=FAILED).
     try:
         gathered = research_client.gather_sources(plan)
     except ResearchError as exc:
+        _mark_budget_block(summary, exc)
+        audit_error = _format_audit_error("gather_sources", exc)
         cost = 0.0
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
@@ -357,18 +1103,19 @@ def run_two_stage_research_pipeline(
             summary.input_tokens = usage_row.input_tokens
             summary.output_tokens = usage_row.output_tokens
             summary.web_search_requests = usage_row.web_search_requests
-        summary.cost_usd = cost
-        storage.finish_run(run_id, RunStatus.FAILED.value, cost, error=f"[gather_sources] {exc}")
-        storage.mark_research_run_failed(run_id, error=f"[gather_sources] {exc}")
+        total_cost = _current_run_cost(storage, run_id)
+        summary.cost_usd = total_cost
+        storage.finish_run(run_id, RunStatus.FAILED.value, total_cost, error=audit_error)
+        storage.mark_research_run_failed(run_id, error=audit_error)
         storage.add_research_stage_result(run_id, ResearchStageName.A,
-                                          ResearchStageStatus.FAILED, error=str(exc))
+                                          ResearchStageStatus.FAILED, error=audit_error)
         notifier.notify("error", "Zbieranie źródeł nieudane", str(exc), account.id)
         summary.error = str(exc)
         return summary
 
     gather_usage_row = usage_tracker.record(run_id, gathered.model, gathered.usage,
                                             task="research_gather", dry_run=settings.dry_run)
-    total_cost += gather_usage_row.estimated_cost_usd
+    total_cost = _current_run_cost(storage, run_id)
     summary.model = gathered.model
 
     # 6. Ochrona przed prompt injection — treść źródeł to niezaufany materiał (już tu,
@@ -422,7 +1169,9 @@ def run_two_stage_research_pipeline(
     stage_b_estimate = estimate_no_search_call_usd(
         settings, max_output_tokens=synthesize_max_tokens,
         forwarded_context_tokens=forwarded_context_tokens)
-    budget_b = policy.check_budget(stage_b_estimate.total_usd)
+    budget_b = _check_stage_budget(
+        settings, policy, account, storage, run_id, base_estimate=stage_b_estimate.total_usd,
+        max_retries=max_retries, run_cap_usd=run_cap_usd)
     if not budget_b.allowed:
         summary.cost_usd = total_cost
         summary.sources_count = len(gathered.sources)
@@ -437,23 +1186,30 @@ def run_two_stage_research_pipeline(
     # 9. Etap 2: synthesize_card. Błąd -> run PARTIAL (nie FAILED!) — źródła z etapu 1
     # zostają nietknięte w research_sources, można wznowić WYŁĄCZNIE etap 2
     # (resume_research_stage_b), bez ponownego web search.
+    _configure_attempt_control(
+        research_client, policy=policy, account=account, storage=storage,
+        usage_tracker=usage_tracker, run_id=run_id, run_cap_usd=run_cap_usd,
+        estimated_attempt_cost=stage_b_estimate.total_usd, task="research_synthesize",
+        dry_run=settings.dry_run)
     try:
         synthesized = research_client.synthesize_card(plan, gathered)
     except ResearchError as exc:
+        _mark_budget_block(summary, exc)
+        audit_error = _format_audit_error("synthesize_card", exc)
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
             usage_row = usage_tracker.record(
                 run_id, getattr(exc, "model", None) or "unknown", exc_usage,
                 task="research_synthesize", dry_run=settings.dry_run,
             )
-            total_cost += usage_row.estimated_cost_usd
+            total_cost = _current_run_cost(storage, run_id)
         summary.cost_usd = total_cost
         summary.sources_count = len(gathered.sources)
         storage.finish_run(run_id, RunStatus.FAILED.value, total_cost,
-                           error=f"[synthesize_card] {exc}")
-        storage.mark_research_run_partial(run_id, error=f"[synthesize_card] {exc}")
+                           error=audit_error)
+        storage.mark_research_run_partial(run_id, error=audit_error)
         storage.add_research_stage_result(run_id, ResearchStageName.B,
-                                          ResearchStageStatus.FAILED, error=str(exc))
+                                          ResearchStageStatus.FAILED, error=audit_error)
         notifier.notify("error", "Synteza karty nieudana — źródła zachowane, można wznowić "
                         "wyłącznie etap 2", str(exc), account.id)
         summary.error = str(exc)
@@ -461,7 +1217,7 @@ def run_two_stage_research_pipeline(
 
     synth_usage_row = usage_tracker.record(run_id, synthesized.model, synthesized.usage,
                                            task="research_synthesize", dry_run=settings.dry_run)
-    total_cost += synth_usage_row.estimated_cost_usd
+    total_cost = _current_run_cost(storage, run_id)
     summary.cost_usd = total_cost
     summary.input_tokens = gather_usage_row.input_tokens + synth_usage_row.input_tokens
     summary.output_tokens = gather_usage_row.output_tokens + synth_usage_row.output_tokens
@@ -513,11 +1269,11 @@ def run_two_stage_research_pipeline(
     summary.sources_count = len(card.sources)
     storage.add_research_stage_result(run_id, ResearchStageName.B, ResearchStageStatus.SUCCESS)
 
-    # 13. Zamknięcie runu (koszt = suma obu etapów). P0-1: SUCCESS dla realnych runów.
-    terminal_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS
-    storage.finish_run(run_id, terminal_status.value, total_cost)
-    storage.mark_research_run_complete(run_id, research_card_id=card.id,
-                                       total_cost_usd=total_cost)
+    # 13. Jedna granica transakcji: COMPLETE + terminalny runs + USED.
+    storage.finalize_research_success(
+        run_id, research_card_id=card.id, total_cost_usd=total_cost, stage_b_completed=True,
+        terminal_run_status=RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS,
+    )
 
     # 14. Aktualizacja dokumentacji.
     if research_log is not None:
@@ -543,8 +1299,10 @@ def resume_research_stage_b(
     notifier: NotificationPort,
     clock: Clock | None = None,
     research_log: ResearchLogWriter | None = None,
-    synthesize_max_tokens: int = 2200,
+    synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
     forwarded_context_tokens: int = 2500,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
 ) -> ResearchRunSummary:
     """Wznawia WYŁĄCZNIE etap 2 dla już istniejącego `research_run_id` w stanie
     SOURCE_COLLECTED lub PARTIAL. NIGDY nie woła `gather_sources` / web search —
@@ -552,10 +1310,15 @@ def resume_research_stage_b(
     to działa również po pełnym restarcie procesu (prawdziwa odporność na awarię,
     nie tylko "w ramach jednego wywołania funkcji").
     """
-    clock = clock or SystemClock()
+    _reject_non_durable_real_resume(settings, research_client)
+    max_retries = _resolve_max_retries(research_client, max_retries)
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
+    _validate_research_run_account(research_run, account)
+    _validate_resume_flow(research_run, ResearchFlow.TWO_STAGE)
+    resume_run_snapshot = _explicit_resume_run_snapshot(storage, research_run_id, account)
+    clock = clock or SystemClock()
     if research_run.status not in (ResearchRunStatus.SOURCE_COLLECTED, ResearchRunStatus.PARTIAL):
         raise ValueError(
             f"research_run #{research_run_id} ma status {research_run.status.value} — "
@@ -610,14 +1373,16 @@ def resume_research_stage_b(
     summary.sources_count = len(gathered.sources)
 
     # Koszt dotychczasowy (etap A + ewentualne wcześniejsze nieudane próby etapu B).
-    prior_usage = storage.get_research_usage(research_run_id)
-    total_cost = sum(u.estimated_cost_usd for u in prior_usage)
+    total_cost = _current_run_cost(storage, research_run_id)
 
     # Bramka budżetu PRZED (ponowną) próbą etapu 2.
     stage_b_estimate = estimate_no_search_call_usd(
         settings, max_output_tokens=synthesize_max_tokens,
         forwarded_context_tokens=forwarded_context_tokens)
-    budget_b = policy.check_budget(stage_b_estimate.total_usd)
+    budget_b = _check_stage_budget(
+        settings, policy, account, storage, research_run_id,
+        base_estimate=stage_b_estimate.total_usd, max_retries=max_retries,
+        run_cap_usd=run_cap_usd)
     if not budget_b.allowed:
         summary.cost_usd = total_cost
         notifier.notify("warning", "Budżet — stop (wznowienie etapu 2)",
@@ -628,20 +1393,39 @@ def resume_research_stage_b(
 
     run_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.RUNNING
 
+    _configure_attempt_control(
+        research_client, policy=policy, account=account, storage=storage,
+        usage_tracker=usage_tracker, run_id=research_run_id, run_cap_usd=run_cap_usd,
+        estimated_attempt_cost=stage_b_estimate.total_usd, task="research_synthesize",
+        dry_run=settings.dry_run)
     try:
         synthesized = research_client.synthesize_card(plan, gathered)
     except ResearchError as exc:
+        _mark_budget_block(summary, exc)
+        audit_error = _format_audit_error("synthesize_card", exc)
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
             usage_row = usage_tracker.record(
                 research_run_id, getattr(exc, "model", None) or "unknown", exc_usage,
                 task="research_synthesize", dry_run=settings.dry_run,
             )
-            total_cost += usage_row.estimated_cost_usd
+            total_cost = _current_run_cost(storage, research_run_id)
         summary.cost_usd = total_cost
-        storage.mark_research_run_partial(research_run_id, error=f"[synthesize_card] {exc}")
-        storage.add_research_stage_result(research_run_id, ResearchStageName.B,
-                                          ResearchStageStatus.FAILED, error=str(exc))
+        resume_error = audit_error
+        storage.mark_research_run_partial(research_run_id, error=resume_error)
+        _finish_explicit_resume_failure(
+            storage, resume_run_snapshot, ResearchFlow.TWO_STAGE,
+            total_cost, resume_error,
+        )
+        failed_snapshot = storage.get_run(research_run_id)
+        if failed_snapshot is None or failed_snapshot.finished_at is None:
+            raise RuntimeError(
+                f"Staged B failure for {research_run_id} lacks durable finished_at snapshot."
+            )
+        storage.add_research_stage_result(
+            research_run_id, ResearchStageName.B, ResearchStageStatus.FAILED,
+            error=audit_error, finished_at=failed_snapshot.finished_at,
+        )
         notifier.notify("error", "Wznowienie: synteza karty nadal nieudana "
                         "(źródła pozostają zachowane, można spróbować ponownie)",
                         str(exc), account.id)
@@ -650,7 +1434,7 @@ def resume_research_stage_b(
 
     synth_usage_row = usage_tracker.record(research_run_id, synthesized.model, synthesized.usage,
                                            task="research_synthesize", dry_run=settings.dry_run)
-    total_cost += synth_usage_row.estimated_cost_usd
+    total_cost = _current_run_cost(storage, research_run_id)
     summary.cost_usd = total_cost
     summary.model = synthesized.model
     summary.input_tokens = synth_usage_row.input_tokens
@@ -697,11 +1481,11 @@ def resume_research_stage_b(
     storage.add_research_stage_result(research_run_id, ResearchStageName.B,
                                       ResearchStageStatus.SUCCESS)
 
-    # P0-1: SUCCESS dla realnych runów (nie tylko RUNNING).
-    terminal_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS
-    storage.finish_run(research_run_id, terminal_status.value, total_cost)
-    storage.mark_research_run_complete(research_run_id, research_card_id=card.id,
-                                       total_cost_usd=total_cost)
+    storage.finalize_research_success(
+        research_run_id, research_card_id=card.id, total_cost_usd=total_cost,
+        stage_b_completed=True,
+        terminal_run_status=RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS,
+    )
 
     if research_log is not None:
         research_log(card, topic, summary)
@@ -746,15 +1530,21 @@ def run_source_discovery(
     clock: Clock | None = None,
     max_searches: int = 3,
     max_output_tokens: int = 600,
+    force_re_research: bool = False,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
 ) -> ResearchRunSummary:
     """Etap A1: TYLKO web search + krótka lista kandydatów URL (JSONL, url+title).
     Zero analizy — najlżejszy możliwy ładunek (patrz app/research/base.py). Kandydaci
     zapisywani ATOMOWO natychmiast po sukcesie (jak dawny etap A, ADR-019) — to
     dopiero PIERWSZY z trzech etapów, nie jedyny. Błąd -> FAILED, nic do wznowienia
     (bez trwałych kandydatów nie ma czego ekstrahować)."""
+    max_retries = _resolve_max_retries(research_client, max_retries)
     clock = clock or SystemClock()
     summary = ResearchRunSummary(run_id=None, account_id=account.id,
                                  topic_id=int(topic.id), dry_run=settings.dry_run)
+
+    ensure_topic_can_start_research(storage, account, topic, force_re_research)
 
     can_run = policy.check_can_run(account)
     if not can_run.allowed:
@@ -766,7 +1556,9 @@ def run_source_discovery(
     plan = build_research_plan(topic, account)
 
     estimate = estimate_discovery_cost_usd(settings, max_searches, max_output_tokens)
-    budget = policy.check_budget(estimate.conservative_usd)
+    budget = _check_stage_budget(
+        settings, policy, account, storage, None, base_estimate=estimate.conservative_usd,
+        max_retries=max_retries, run_cap_usd=run_cap_usd)
     if not budget.allowed:
         notifier.notify("warning", "Budżet — stop (etap A1: discover_sources)",
                         budget.reason, account.id)
@@ -781,39 +1573,51 @@ def run_source_discovery(
                            status=run_status, current_state="discover_sources"))
     storage.create_research_run(ResearchRun(
         id=run_id, account_id=account.id, topic_id=int(topic.id),
-        status=ResearchRunStatus.DISCOVERY_PENDING,
+        flow=ResearchFlow.STAGED, status=ResearchRunStatus.DISCOVERY_PENDING,
+        is_force_reresearch=force_re_research,
     ))
+    _sync_staged_run_cost(storage, run_id)
+
+    _configure_attempt_control(
+        research_client, policy=policy, account=account, storage=storage,
+        usage_tracker=usage_tracker, run_id=run_id, run_cap_usd=run_cap_usd,
+        estimated_attempt_cost=estimate.conservative_usd, task="research_discover",
+        dry_run=settings.dry_run)
 
     try:
         discovered = research_client.discover_sources(plan, max_searches)
     except ResearchError as exc:
+        _mark_budget_block(summary, exc)
+        audit_error = _format_audit_error("discover_sources", exc)
         cost = 0.0
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
-            usage_row = usage_tracker.record(
-                run_id, getattr(exc, "model", None) or "unknown", exc_usage,
-                task="research_discover", dry_run=settings.dry_run)
+            usage_row = _record_staged_usage(
+                usage_tracker, storage, run_id, getattr(exc, "model", None) or "unknown",
+                exc_usage, task="research_discover", dry_run=settings.dry_run)
             cost = usage_row.estimated_cost_usd
             summary.model = getattr(exc, "model", None) or ""
             summary.input_tokens = usage_row.input_tokens
             summary.output_tokens = usage_row.output_tokens
             summary.web_search_requests = usage_row.web_search_requests
-        summary.cost_usd = cost
+        summary.cost_usd = _current_run_cost(storage, run_id)
         _record_diagnostics(settings, run_id, "A1", usage=exc_usage or Usage(),
                             raw_text=getattr(exc, "raw_text", "") or "",
                             stop_reason=getattr(exc, "stop_reason", None),
                             parse_error_location=str(exc))
-        storage.finish_run(run_id, RunStatus.FAILED.value, cost, error=f"[discover_sources] {exc}")
-        storage.mark_research_run_failed(run_id, error=f"[discover_sources] {exc}")
+        storage.finish_run(run_id, RunStatus.FAILED.value, summary.cost_usd,
+                           error=audit_error)
+        storage.mark_research_run_failed(run_id, error=audit_error)
         storage.add_research_stage_result(run_id, ResearchStageName.A1,
-                                          ResearchStageStatus.FAILED, error=str(exc))
+                                          ResearchStageStatus.FAILED, error=audit_error)
         notifier.notify("error", "Odkrywanie źródeł nieudane", str(exc), account.id)
         summary.error = str(exc)
-        return summary
+        return _finish_staged_summary(storage, run_id, summary)
 
-    usage_row = usage_tracker.record(run_id, discovered.model, discovered.usage,
-                                     task="research_discover", dry_run=settings.dry_run)
-    summary.cost_usd = usage_row.estimated_cost_usd
+    usage_row = _record_staged_usage(
+        usage_tracker, storage, run_id, discovered.model, discovered.usage,
+        task="research_discover", dry_run=settings.dry_run)
+    summary.cost_usd = _current_run_cost(storage, run_id)
     summary.model = discovered.model
     summary.input_tokens = usage_row.input_tokens
     summary.output_tokens = usage_row.output_tokens
@@ -842,7 +1646,7 @@ def run_source_discovery(
         "info", "Odkrywanie źródeł (A1) zakończone",
         f"kandydaci={summary.candidates_discovered}, koszt~{summary.cost_usd:.6f} USD "
         f"(dry_run={settings.dry_run})", account.id)
-    return summary
+    return _finish_staged_summary(storage, run_id, summary)
 
 
 def run_source_extraction(
@@ -859,16 +1663,36 @@ def run_source_extraction(
     max_sources: int | None = None,
     max_web_searches_per_source: int = 1,
     max_output_tokens: int = 1500,
+    max_attempts: int = 2,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
+    explicit_resume: bool = False,
 ) -> ResearchRunSummary:
     """Etap A2: JEDNO źródło na wywołanie API. Zapisywane do bazy NATYCHMIAST po
     KAŻDYM źródle (sukces LUB błąd) — awaria źródła N nie ma wpływu na 1..N-1, i
     wznowienie po restarcie kontynuuje dokładnie tam, gdzie się skończyło (czyta
     kandydatów PENDING_EXTRACTION z BAZY, nie z pamięci procesu). Wołalne zarówno
-    świeżo (zaraz po A1) jak i jako wznowienie (osobne wywołanie, później)."""
-    clock = clock or SystemClock()
+    świeżo (zaraz po A1), jak i jawnie jako wznowienie z `explicit_resume=True`."""
+    if explicit_resume:
+        _reject_non_durable_real_resume(settings, research_client)
+    max_retries = _resolve_max_retries(research_client, max_retries)
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
+    _validate_research_run_account(research_run, account)
+    _validate_resume_flow(research_run, ResearchFlow.STAGED)
+    resume_run_snapshot = (
+        _explicit_resume_run_snapshot(storage, research_run_id, account)
+        if explicit_resume else None
+    )
+    if max_attempts < 1:
+        raise ValueError("max_attempts musi być dodatnie.")
+    clock = clock or SystemClock()
+    if research_run.status == ResearchRunStatus.PARTIAL_EXHAUSTED:
+        raise ValueError(
+            f"research_run #{research_run_id} is PARTIAL_EXHAUSTED; no candidates are eligible "
+            "for retry under the current attempts cap."
+        )
     if research_run.status not in (
         ResearchRunStatus.DISCOVERY_COMPLETE, ResearchRunStatus.EXTRACTION_IN_PROGRESS,
         ResearchRunStatus.PARTIAL,
@@ -877,15 +1701,26 @@ def run_source_extraction(
             f"research_run #{research_run_id} ma status {research_run.status.value} — "
             "ekstrakcja wymaga DISCOVERY_COMPLETE, EXTRACTION_IN_PROGRESS lub PARTIAL.")
 
+    uncertain = storage.list_source_candidates(
+        research_run_id, SourceCandidateStatus.EXTRACTION_IN_PROGRESS,
+    )
+    if uncertain:
+        raise ValueError(
+            f"research_run #{research_run_id} has {len(uncertain)} candidate(s) in "
+            "EXTRACTION_IN_PROGRESS; ordinary resume refuses uncertain A2 attempts and "
+            "requires explicit recovery."
+        )
+
     summary = ResearchRunSummary(run_id=research_run_id, account_id=account.id,
                                  topic_id=research_run.topic_id, dry_run=settings.dry_run)
+    _sync_staged_run_cost(storage, research_run_id)
 
     can_run = policy.check_can_run(account)
     if not can_run.allowed:
         notifier.notify("warning", "Ekstrakcja źródeł zablokowana", can_run.reason, account.id)
         summary.blocked = True
         summary.block_code, summary.block_reason = can_run.code, can_run.reason
-        return summary
+        return _finish_staged_summary(storage, research_run_id, summary)
 
     topic = next((t for t in storage.list_topics(account.id)
                   if t.id == research_run.topic_id), None)
@@ -900,8 +1735,7 @@ def run_source_extraction(
     if max_sources is not None:
         pending = pending[:max_sources]
 
-    prior_usage = storage.get_research_usage(research_run_id)
-    total_cost = sum(u.estimated_cost_usd for u in prior_usage)
+    total_cost = _current_run_cost(storage, research_run_id)
     per_source_estimate = estimate_extraction_cost_per_source_usd(
         settings, max_web_searches_per_source, max_output_tokens)
 
@@ -911,9 +1745,12 @@ def run_source_extraction(
     call_input_tokens = 0
     call_output_tokens = 0
     call_web_search_requests = 0
-    call_cost = 0.0
+    call_cost = decimal_from("0", label="extraction call cost")
     for candidate_record in pending:
-        budget = policy.check_budget(per_source_estimate.conservative_usd)
+        budget = _check_stage_budget(
+            settings, policy, account, storage, research_run_id,
+            base_estimate=per_source_estimate.conservative_usd,
+            max_retries=max_retries, run_cap_usd=run_cap_usd)
         if not budget.allowed:
             notifier.notify(
                 "warning", "Budżet — stop w trakcie etapu A2 (extract_source)",
@@ -923,17 +1760,35 @@ def run_source_extraction(
             summary.block_code, summary.block_reason = budget.code, budget.reason
             break
 
+        try:
+            storage.claim_source_candidate_attempt(
+                candidate_record.id, max_attempts=max_attempts,
+            )
+        except ValueError:
+            # Another executor may have claimed this snapshot row first, or a stale
+            # PENDING row may already be at cap. In both cases this process must not call.
+            continue
         candidate = SourceCandidate(url=candidate_record.url, title=candidate_record.title)
+        _configure_attempt_control(
+            research_client, policy=policy, account=account, storage=storage,
+            usage_tracker=usage_tracker, run_id=research_run_id, run_cap_usd=run_cap_usd,
+            estimated_attempt_cost=per_source_estimate.conservative_usd,
+            task="research_extract", dry_run=settings.dry_run)
         try:
             extraction = research_client.extract_source(plan, candidate)
         except ResearchError as exc:
+            _mark_budget_block(summary, exc)
+            audit_error = _format_audit_error("extract_source", exc)
             exc_usage = getattr(exc, "usage", None)
             if exc_usage is not None:
-                usage_row = usage_tracker.record(
-                    research_run_id, getattr(exc, "model", None) or "unknown", exc_usage,
+                usage_row = _record_staged_usage(
+                    usage_tracker, storage, research_run_id,
+                    getattr(exc, "model", None) or "unknown", exc_usage,
                     task="research_extract", dry_run=settings.dry_run)
-                total_cost += usage_row.estimated_cost_usd
-                call_cost += usage_row.estimated_cost_usd
+                total_cost = _current_run_cost(storage, research_run_id)
+                call_cost += decimal_from(
+                    usage_row.estimated_cost_usd, label="extraction call cost",
+                )
                 call_model = getattr(exc, "model", None) or call_model
                 call_input_tokens += usage_row.input_tokens
                 call_output_tokens += usage_row.output_tokens
@@ -942,18 +1797,23 @@ def run_source_extraction(
                 settings, research_run_id, f"A2_source_{candidate_record.id}",
                 usage=exc_usage or Usage(), raw_text=getattr(exc, "raw_text", "") or "",
                 stop_reason=getattr(exc, "stop_reason", None), parse_error_location=str(exc))
-            storage.mark_source_candidate_failed(candidate_record.id, error=str(exc))
+            storage.mark_source_candidate_failed(candidate_record.id, error=audit_error)
             storage.add_research_stage_result(research_run_id, ResearchStageName.A2,
-                                              ResearchStageStatus.FAILED, error=str(exc))
+                                              ResearchStageStatus.FAILED, error=audit_error)
             notifier.notify("warning", f"Ekstrakcja źródła nieudana ({candidate_record.url})",
                             str(exc), account.id)
             failed_now += 1
+            if isinstance(exc, ResearchBudgetError):
+                break
             continue
 
-        usage_row = usage_tracker.record(research_run_id, extraction.model, extraction.usage,
-                                         task="research_extract", dry_run=settings.dry_run)
-        total_cost += usage_row.estimated_cost_usd
-        call_cost += usage_row.estimated_cost_usd
+        usage_row = _record_staged_usage(
+            usage_tracker, storage, research_run_id, extraction.model, extraction.usage,
+            task="research_extract", dry_run=settings.dry_run)
+        total_cost = _current_run_cost(storage, research_run_id)
+        call_cost += decimal_from(
+            usage_row.estimated_cost_usd, label="extraction call cost",
+        )
         call_model = extraction.model or call_model
         call_input_tokens += usage_row.input_tokens
         call_output_tokens += usage_row.output_tokens
@@ -963,7 +1823,7 @@ def run_source_extraction(
                             stop_reason=extraction.stop_reason)
 
         card = extraction.card
-        # P0-2a (docs/AUDYT_ARCHITEKTURY_2026-07-12.md): gdy etap A2 nie miał dostępu do
+        # P0-2a (docs/archive/superseded_plans/AUDYT_ARCHITEKTURY_2026-07-12.md): gdy etap A2 nie miał dostępu do
         # narzędzia wyszukiwania (max_web_searches_per_source<=0), model nie miał jak
         # NAPRAWDĘ zweryfikować źródła — samoocena "VERIFIED" w tej sytuacji byłaby
         # dokładnie tym, przed czym projekt ma chronić (wiedza modelu zastępująca dowód).
@@ -1008,8 +1868,9 @@ def run_source_extraction(
     summary.input_tokens = call_input_tokens
     summary.output_tokens = call_output_tokens
     summary.web_search_requests = call_web_search_requests
-    summary.cost_usd = round(call_cost, 6)
+    summary.cost_usd = usd_float(call_cost, label="extraction call cost")
 
+    all_candidates = storage.list_source_candidates(research_run_id)
     if len(all_extracted) >= settings.research_min_sources:
         storage.mark_sources_complete(research_run_id)
         notifier.notify(
@@ -1019,16 +1880,31 @@ def run_source_extraction(
     else:
         error_msg = (f"Za mało wyekstrahowanych źródeł ({len(all_extracted)} < "
                      f"{settings.research_min_sources}) po etapie A2.")
-        storage.mark_research_run_partial(research_run_id, error=error_msg)
+        if _extraction_is_exhausted(
+            all_candidates, min_sources=settings.research_min_sources,
+            max_attempts=max_attempts,
+        ):
+            error_msg += " Brak kandydatów legalnych w aktualnym attempts cap."
+            storage.mark_research_run_partial_exhausted(research_run_id, error=error_msg)
+        else:
+            storage.mark_research_run_partial(research_run_id, error=error_msg)
         summary.recommendation = ResearchRecommendation.REJECT.value
         summary.reasons = [TOO_FEW_SOURCES]
-        storage.finish_run(research_run_id, RunStatus.FAILED.value, total_cost, error=error_msg)
+        if resume_run_snapshot is None:
+            storage.finish_run(
+                research_run_id, RunStatus.FAILED.value, total_cost, error=error_msg,
+            )
+        else:
+            _finish_explicit_resume_failure(
+                storage, resume_run_snapshot, ResearchFlow.STAGED,
+                total_cost, error_msg,
+            )
         notifier.notify(
             "info", "Ekstrakcja zatrzymana (za mało źródeł) — etap B pominięty",
             f"{len(all_extracted)} < {settings.research_min_sources}, "
             f"koszt dotąd~{total_cost:.6f} USD.", account.id)
 
-    return summary
+    return _finish_staged_summary(storage, research_run_id, summary)
 
 
 def run_synthesis_from_cards(
@@ -1043,16 +1919,40 @@ def run_synthesis_from_cards(
     notifier: NotificationPort,
     clock: Clock | None = None,
     research_log: ResearchLogWriter | None = None,
-    synthesize_max_tokens: int = 2200,
+    synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
     forwarded_context_tokens: int = 2500,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
+    explicit_resume: bool = False,
 ) -> ResearchRunSummary:
     """Etap B: synteza WYŁĄCZNIE z już wyekstrahowanych Source Cards (etap A2). Zero
     web search. Błąd -> status WRACA do SOURCES_COMPLETE (źródła nietknięte) — można
-    ponowić WYŁĄCZNIE ten etap, dowolną liczbę razy, bez powtarzania A1/A2."""
-    clock = clock or SystemClock()
+    ponowić WYŁĄCZNIE ten etap z `explicit_resume=True`, bez powtarzania A1/A2."""
+    if explicit_resume:
+        _reject_non_durable_real_resume(settings, research_client)
+    max_retries = _resolve_max_retries(research_client, max_retries)
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
+    _validate_research_run_account(research_run, account)
+    _validate_resume_flow(research_run, ResearchFlow.STAGED)
+    resume_run_snapshot = (
+        _explicit_resume_run_snapshot(storage, research_run_id, account)
+        if explicit_resume else None
+    )
+    current_run_snapshot = resume_run_snapshot or storage.get_run(research_run_id)
+    if current_run_snapshot is None:
+        raise ValueError(f"Nie znaleziono run #{research_run_id} dla staged B.")
+
+    uncertain = storage.list_source_candidates(
+        research_run_id, SourceCandidateStatus.EXTRACTION_IN_PROGRESS,
+    )
+    if uncertain:
+        raise ValueError(
+            f"research_run #{research_run_id} has {len(uncertain)} candidate(s) in "
+            "EXTRACTION_IN_PROGRESS; ordinary resume requires explicit recovery."
+        )
+    clock = clock or SystemClock()
     if research_run.status != ResearchRunStatus.SOURCES_COMPLETE:
         raise ValueError(
             f"research_run #{research_run_id} ma status {research_run.status.value} — "
@@ -1060,13 +1960,14 @@ def run_synthesis_from_cards(
 
     summary = ResearchRunSummary(run_id=research_run_id, account_id=account.id,
                                  topic_id=research_run.topic_id, dry_run=settings.dry_run)
+    _sync_staged_run_cost(storage, research_run_id)
 
     can_run = policy.check_can_run(account)
     if not can_run.allowed:
         notifier.notify("warning", "Synteza zablokowana", can_run.reason, account.id)
         summary.blocked = True
         summary.block_code, summary.block_reason = can_run.code, can_run.reason
-        return summary
+        return _finish_staged_summary(storage, research_run_id, summary)
 
     topic = next((t for t in storage.list_topics(account.id)
                   if t.id == research_run.topic_id), None)
@@ -1084,7 +1985,17 @@ def run_synthesis_from_cards(
         notifier.notify(
             "info", "Synteza odrzucona — nadal za mało wyekstrahowanych źródeł",
             f"{len(extracted)} < {settings.research_min_sources}; nie wołam API.", account.id)
-        return summary
+        return _finish_staged_summary(storage, research_run_id, summary)
+
+    terminal_run_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS
+    finalization_context = _staged_finalization_context(
+        research_run, current_run_snapshot, explicit_resume=explicit_resume,
+    )
+    # Before the budget/provider path, prove that B can later commit legally.
+    storage.preflight_staged_finalization(
+        research_run_id, terminal_run_status=terminal_run_status,
+        context=finalization_context,
+    )
 
     cards = [
         SourceCardDraft(
@@ -1097,47 +2008,75 @@ def run_synthesis_from_cards(
     ]
     summary.sources_count = len(cards)
 
-    prior_usage = storage.get_research_usage(research_run_id)
-    total_cost = sum(u.estimated_cost_usd for u in prior_usage)
+    total_cost = _current_run_cost(storage, research_run_id)
 
     estimate = estimate_synthesis_cost_usd(settings, synthesize_max_tokens, forwarded_context_tokens)
-    budget = policy.check_budget(estimate.conservative_usd)
+    budget = _check_stage_budget(
+        settings, policy, account, storage, research_run_id,
+        base_estimate=estimate.conservative_usd, max_retries=max_retries,
+        run_cap_usd=run_cap_usd)
     if not budget.allowed:
         summary.cost_usd = total_cost
         notifier.notify("warning", "Budżet — stop (etap B: synthesize_from_cards)",
                         budget.reason, account.id)
         summary.blocked = True
         summary.block_code, summary.block_reason = budget.code, budget.reason
-        return summary
+        return _finish_staged_summary(storage, research_run_id, summary)
 
     storage.mark_synthesis_pending(research_run_id)
-    run_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.RUNNING
 
+    _configure_attempt_control(
+        research_client, policy=policy, account=account, storage=storage,
+        usage_tracker=usage_tracker, run_id=research_run_id, run_cap_usd=run_cap_usd,
+        estimated_attempt_cost=estimate.conservative_usd,
+        task="research_synthesize_cards", dry_run=settings.dry_run)
     try:
         synthesized = research_client.synthesize_from_cards(plan, cards)
     except ResearchError as exc:
+        _mark_budget_block(summary, exc)
+        audit_error = _format_audit_error("synthesize_from_cards", exc)
         exc_usage = getattr(exc, "usage", None)
         if exc_usage is not None:
-            usage_row = usage_tracker.record(
-                research_run_id, getattr(exc, "model", None) or "unknown", exc_usage,
+            usage_row = _record_staged_usage(
+                usage_tracker, storage, research_run_id,
+                getattr(exc, "model", None) or "unknown", exc_usage,
                 task="research_synthesize_cards", dry_run=settings.dry_run)
-            total_cost += usage_row.estimated_cost_usd
+            total_cost = _current_run_cost(storage, research_run_id)
         _record_diagnostics(settings, research_run_id, "B", usage=exc_usage or Usage(),
                             raw_text=getattr(exc, "raw_text", "") or "",
                             stop_reason=getattr(exc, "stop_reason", None),
                             parse_error_location=str(exc))
         summary.cost_usd = total_cost
-        storage.revert_to_sources_complete(research_run_id, error=f"[synthesize_from_cards] {exc}")
-        storage.add_research_stage_result(research_run_id, ResearchStageName.B,
-                                          ResearchStageStatus.FAILED, error=str(exc))
+        resume_error = audit_error
+        storage.revert_to_sources_complete(research_run_id, error=resume_error)
+        if resume_run_snapshot is None:
+            storage.finish_run(
+                research_run_id, RunStatus.FAILED.value,
+                total_cost, error=resume_error,
+            )
+        else:
+            _finish_explicit_resume_failure(
+                storage, resume_run_snapshot, ResearchFlow.STAGED,
+                total_cost, resume_error,
+            )
+        failed_snapshot = storage.get_run(research_run_id)
+        if failed_snapshot is None or failed_snapshot.finished_at is None:
+            raise RuntimeError(
+                f"Staged B failure for {research_run_id} lacks durable finished_at snapshot."
+            )
+        storage.add_research_stage_result(
+            research_run_id, ResearchStageName.B, ResearchStageStatus.FAILED,
+            error=audit_error, finished_at=failed_snapshot.finished_at,
+        )
         notifier.notify("error", "Synteza karty nieudana — źródła zachowane, można ponowić "
                         "wyłącznie etap B", str(exc), account.id)
         summary.error = str(exc)
-        return summary
+        return _finish_staged_summary(storage, research_run_id, summary)
 
-    usage_row = usage_tracker.record(research_run_id, synthesized.model, synthesized.usage,
-                                     task="research_synthesize_cards", dry_run=settings.dry_run)
-    total_cost += usage_row.estimated_cost_usd
+    usage_row = _record_staged_usage(
+        usage_tracker, storage, research_run_id, synthesized.model, synthesized.usage,
+        task="research_synthesize_cards", dry_run=settings.dry_run)
+    total_cost = _current_run_cost(storage, research_run_id)
     _record_diagnostics(settings, research_run_id, "B", usage=synthesized.usage,
                         raw_text=synthesized.raw_text, stop_reason=synthesized.stop_reason)
 
@@ -1156,7 +2095,7 @@ def run_synthesis_from_cards(
             draft.strongest_counterargument = injection_guard.neutralize(
                 draft.strongest_counterargument)
 
-    # P0-2b (docs/AUDYT_ARCHITEKTURY_2026-07-12.md): dla REALNYCH runów wymagamy, żeby
+    # P0-2b (docs/archive/superseded_plans/AUDYT_ARCHITEKTURY_2026-07-12.md): dla REALNYCH runów wymagamy, żeby
     # co najmniej `research_min_sources` źródeł było faktycznie VERIFIED, nie tylko
     # nie-FAILED — inaczej karta zbudowana z samych UNVERIFIED (np. etap A2 bez dostępu
     # do wyszukiwania, patrz run_source_extraction niżej) przechodziłaby bramkę. W
@@ -1188,16 +2127,20 @@ def run_synthesis_from_cards(
             for s in draft.sources
         ],
     )
-    storage.add_research_card(card)
+    card = storage.finalize_staged_research_with_card(
+        research_run_id, card, total_cost,
+        terminal_run_status=RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS,
+        min_sources=settings.research_min_sources,
+        # REJECT nadal jest kompletną kartą audytową. Wymóg VERIFIED jest więc
+        # twardym precondition zapisu tylko dla jakościowo pozytywnego wyniku;
+        # inaczej brak search w A2 nie mógłby zostać trwale udokumentowany.
+        min_verified_sources=(
+            min_verified if outcome.recommendation != ResearchRecommendation.REJECT else 0
+        ),
+        context=finalization_context,
+    )
     summary.card = card
     summary.sources_count = len(card.sources)
-    storage.add_research_stage_result(research_run_id, ResearchStageName.B, ResearchStageStatus.SUCCESS)
-
-    # P0-1: SUCCESS dla realnych runów (nie tylko RUNNING).
-    terminal_status = RunStatus.DRY_RUN if settings.dry_run else RunStatus.SUCCESS
-    storage.finish_run(research_run_id, terminal_status.value, total_cost)
-    storage.mark_research_run_complete(research_run_id, research_card_id=card.id,
-                                       total_cost_usd=total_cost)
 
     if research_log is not None:
         research_log(card, topic, summary)
@@ -1206,7 +2149,7 @@ def run_synthesis_from_cards(
         "info", "Synteza (etap B) zakończona",
         f"rekomendacja={summary.recommendation}, źródła={summary.sources_count}, "
         f"koszt całkowity~{summary.cost_usd:.6f} USD (dry_run={settings.dry_run})", account.id)
-    return summary
+    return _finish_staged_summary(storage, research_run_id, summary)
 
 
 def run_staged_research_pipeline(
@@ -1226,17 +2169,24 @@ def run_staged_research_pipeline(
     max_sources: int | None = None,
     max_web_searches_per_source: int = 1,
     extraction_max_tokens: int = 1500,
-    synthesize_max_tokens: int = 2200,
+    max_attempts: int = 2,
+    synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
     forwarded_context_tokens: int = 2500,
+    force_re_research: bool = False,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
 ) -> ResearchRunSummary:
     """Świeży, pełny etapowy research: A1 (discovery) -> A2 (extraction, per źródło)
     -> B (synthesis). Zatrzymuje się BEZ przechodzenia dalej, jeśli poprzedni etap
     się nie powiódł/zablokował lub dał za mało źródeł — zero synthesis, jeśli source
     collection się nie powiodła (ta sama zasada co w starym dwuetapowym przepływie)."""
+    max_retries = _resolve_max_retries(research_client, max_retries)
     discovery_summary = run_source_discovery(
         account, topic, settings=settings, storage=storage, research_client=research_client,
         usage_tracker=usage_tracker, policy=policy, notifier=notifier, clock=clock,
-        max_searches=discovery_max_searches, max_output_tokens=discovery_max_tokens)
+        max_searches=discovery_max_searches, max_output_tokens=discovery_max_tokens,
+        force_re_research=force_re_research, max_retries=max_retries,
+        run_cap_usd=run_cap_usd)
     if discovery_summary.blocked or discovery_summary.error or discovery_summary.run_id is None:
         return discovery_summary
 
@@ -1245,7 +2195,8 @@ def run_staged_research_pipeline(
         research_client=research_client, usage_tracker=usage_tracker, policy=policy,
         notifier=notifier, clock=clock, max_sources=max_sources,
         max_web_searches_per_source=max_web_searches_per_source,
-        max_output_tokens=extraction_max_tokens)
+        max_output_tokens=extraction_max_tokens, max_attempts=max_attempts,
+        max_retries=max_retries, run_cap_usd=run_cap_usd)
     extraction_summary.candidates_discovered = discovery_summary.candidates_discovered
 
     research_run = storage.get_research_run(discovery_summary.run_id)
@@ -1258,7 +2209,8 @@ def run_staged_research_pipeline(
         research_client=research_client, usage_tracker=usage_tracker, policy=policy,
         notifier=notifier, clock=clock, research_log=research_log,
         synthesize_max_tokens=synthesize_max_tokens,
-        forwarded_context_tokens=forwarded_context_tokens)
+        forwarded_context_tokens=forwarded_context_tokens,
+        max_retries=max_retries, run_cap_usd=run_cap_usd)
     synthesis_summary.candidates_discovered = discovery_summary.candidates_discovered
     synthesis_summary.sources_extracted = extraction_summary.sources_extracted
     synthesis_summary.sources_failed = extraction_summary.sources_failed
@@ -1280,8 +2232,11 @@ def resume_staged_research(
     max_sources: int | None = None,
     max_web_searches_per_source: int = 1,
     extraction_max_tokens: int = 1500,
-    synthesize_max_tokens: int = 2200,
+    max_attempts: int = 2,
+    synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
     forwarded_context_tokens: int = 2500,
+    max_retries: int | None = None,
+    run_cap_usd: float | None = None,
 ) -> ResearchRunSummary:
     """Wznawia DOKŁADNIE JEDEN kolejny etap — nigdy nie kaskaduje automatycznie do
     następnego płatnego etapu (jedno wywołanie = zero automatycznych ponowień, ta
@@ -1291,9 +2246,28 @@ def resume_staged_research(
     - SOURCES_COMPLETE -> wznawia WYŁĄCZNIE B (synteza), NIGDY nie woła A1/A2.
     - inne statusy (DISCOVERY_PENDING/COMPLETE/FAILED oraz statusy starego
       przepływu) -> ValueError, nic do wznowienia tą funkcją."""
+    _reject_non_durable_real_resume(settings, research_client)
+    max_retries = _resolve_max_retries(research_client, max_retries)
     research_run = storage.get_research_run(research_run_id)
     if research_run is None:
         raise ValueError(f"Nie znaleziono research_run #{research_run_id}.")
+    _validate_research_run_account(research_run, account)
+    _validate_resume_flow(research_run, ResearchFlow.STAGED)
+
+    if research_run.status == ResearchRunStatus.PARTIAL_EXHAUSTED:
+        raise ValueError(
+            f"research_run #{research_run_id} is PARTIAL_EXHAUSTED; no candidates are eligible "
+            "for retry under the current attempts cap."
+        )
+
+    uncertain = storage.list_source_candidates(
+        research_run_id, SourceCandidateStatus.EXTRACTION_IN_PROGRESS,
+    )
+    if uncertain:
+        raise ValueError(
+            f"research_run #{research_run_id} has {len(uncertain)} candidate(s) in "
+            "EXTRACTION_IN_PROGRESS; ordinary resume requires explicit recovery."
+        )
 
     if research_run.status in (
         ResearchRunStatus.DISCOVERY_COMPLETE, ResearchRunStatus.EXTRACTION_IN_PROGRESS,
@@ -1304,7 +2278,9 @@ def resume_staged_research(
             research_client=research_client, usage_tracker=usage_tracker, policy=policy,
             notifier=notifier, clock=clock, max_sources=max_sources,
             max_web_searches_per_source=max_web_searches_per_source,
-            max_output_tokens=extraction_max_tokens)
+            max_output_tokens=extraction_max_tokens, max_attempts=max_attempts,
+            max_retries=max_retries, run_cap_usd=run_cap_usd,
+            explicit_resume=True)
 
     if research_run.status == ResearchRunStatus.SOURCES_COMPLETE:
         return run_synthesis_from_cards(
@@ -1312,7 +2288,9 @@ def resume_staged_research(
             research_client=research_client, usage_tracker=usage_tracker, policy=policy,
             notifier=notifier, clock=clock, research_log=research_log,
             synthesize_max_tokens=synthesize_max_tokens,
-            forwarded_context_tokens=forwarded_context_tokens)
+            forwarded_context_tokens=forwarded_context_tokens,
+            max_retries=max_retries, run_cap_usd=run_cap_usd,
+            explicit_resume=True)
 
     raise ValueError(
         f"research_run #{research_run_id} ma status {research_run.status.value} — "

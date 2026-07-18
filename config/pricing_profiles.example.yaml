@@ -1,0 +1,52 @@
+# =============================================================================
+# AUTORYTATYWNY CENNIK PROFILI (LA-01-A) — PLIK PRZYKŁADOWY
+# =============================================================================
+# To jest PRZYKŁAD formatu. Wszystkie profile poniżej mają status: example i
+# dlatego NIE autoryzują żadnego realnego, płatnego wywołania providera.
+#
+# Aby umożliwić kontrolowany real acceptance, WŁAŚCICIEL musi:
+#   1. skopiować ten plik do config/pricing_profiles.yaml,
+#   2. wpisać RĘCZNIE zweryfikowane, aktualne ceny konkretnego modelu,
+#   3. ustawić status: approved oraz approved_by,
+#   4. nadać jednoznaczny profile_id i version (np. datę zatwierdzenia),
+#   5. wskazać ten profil operatorsko przez --pricing-profile <profile_id>.
+#
+# Ceny NIE są i nie mają być pobierane z internetu przez agenta. Wartości poniżej
+# to wyłącznie placeholdery formatu — nie są prawdziwym cennikiem żadnego modelu.
+#
+# Jednostki:
+#   *_per_mtok    = USD za 1 000 000 tokenów (input/output/cache read/cache write)
+#   web_search_per_1k = USD za 1 000 wywołań web search
+# =============================================================================
+version: 1
+
+profiles:
+  # Profil przykładowy — ZABLOKOWANY dla realnego wykonania (status: example).
+  - profile_id: example-quality-model
+    version: "example-0000-00-00"
+    model: example-quality-model-id
+    currency: USD
+    unit: usd_per_mtok__web_search_per_1k
+    status: example
+    approved_by: ""
+    prices:
+      input_per_mtok: 3.0
+      output_per_mtok: 15.0
+      cache_read_per_mtok: 0.3
+      cache_write_per_mtok: 3.75
+      web_search_per_1k: 10.0
+
+  # Drugi profil przykładowy dla innego modelu — również ZABLOKOWANY.
+  - profile_id: example-fast-model
+    version: "example-0000-00-00"
+    model: example-fast-model-id
+    currency: USD
+    unit: usd_per_mtok__web_search_per_1k
+    status: example
+    approved_by: ""
+    prices:
+      input_per_mtok: 0.8
+      output_per_mtok: 4.0
+      cache_read_per_mtok: 0.08
+      cache_write_per_mtok: 1.0
+      web_search_per_1k: 10.0

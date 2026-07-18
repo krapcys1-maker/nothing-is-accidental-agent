@@ -12,6 +12,7 @@ from app.llm.base import Usage
 from app.llm.usage_tracker import UsageTracker
 from app.models import (
     ModelUsage,
+    ResearchFlow,
     ResearchRunStatus,
     Run,
     RunStatus,
@@ -23,6 +24,7 @@ from app.policies.policy_engine import PolicyEngine
 from app.ports.notification import LogNotification
 from app.research.base import ResearchParseError, ResearchPlan, SourceGatheringResult
 from app.research.fake_client import FakeResearchClient
+from tests.conftest import seed_historical_real_usage
 from app.workflows.research.pipeline import (
     resume_research_stage_b,
     run_two_stage_research_pipeline,
@@ -63,8 +65,8 @@ def _seed_real_cost(storage, account, cost: float) -> None:
     storage.ensure_account(account)
     storage.create_run(Run(id="seed", account_id=account.id,
                            workflow=WorkflowType.RESEARCH, status=RunStatus.RUNNING))
-    storage.add_model_usage(ModelUsage(run_id="seed", model="m",
-                                       estimated_cost_usd=cost, dry_run=False))
+    seed_historical_real_usage(storage, ModelUsage(run_id="seed", model="m",
+                                                    estimated_cost_usd=cost, dry_run=False))
 
 
 class _BrokenSynthesizeOnceClient(FakeResearchClient):
@@ -114,6 +116,7 @@ def test_stage_a_success_persists_research_run_and_sources(settings, storage, ac
 
     research_run = storage.get_research_run(summary.run_id)
     assert research_run is not None
+    assert research_run.flow == ResearchFlow.TWO_STAGE
     assert research_run.status == ResearchRunStatus.PARTIAL  # etap 2 padł, ale etap 1 trwały
     assert research_run.stage_a_completed_at is not None
     assert research_run.stage_b_completed_at is None
@@ -177,6 +180,26 @@ def test_resume_stage_b_never_calls_gather_sources_and_survives_restart(settings
     research_run = storage.get_research_run(summary1.run_id)
     assert research_run.status == ResearchRunStatus.COMPLETE
     assert research_run.research_card_id is not None
+
+
+def test_failed_two_stage_resume_updates_only_explicit_resume_audit(settings, storage, account):
+    topic = _selected_topic(storage, account)
+    first_failure = _BrokenSynthesizeOnceClient("good")
+    summary = _run_fresh(settings, storage, account, topic, first_failure)
+    before = storage.get_run(summary.run_id)
+    assert before.status == RunStatus.FAILED
+
+    second_failure = _BrokenSynthesizeOnceClient("good")
+    resumed = _resume(settings, storage, account, summary.run_id, second_failure)
+
+    after = storage.get_run(summary.run_id)
+    assert resumed.error is not None
+    assert after.status == RunStatus.FAILED
+    assert after.error.startswith("[synthesize_card]")
+    assert after.finished_at != before.finished_at
+    assert after.cost_usd == sum(
+        usage.estimated_cost_usd for usage in storage.get_research_usage(summary.run_id)
+    )
 
 
 # --- 6. Realny usage zachowany przy błędzie (już etap 2, ale w nowej ścieżce) ---

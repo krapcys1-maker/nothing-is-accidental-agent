@@ -117,6 +117,50 @@ Po każdym etapie: co nas zaskoczyło, co działało, co nie, co agent robił le
 - **Lekcja kosztowa:** koszt jednego calla (0,028969 USD), koszt skumulowany runu (0,126793 USD) i koszt całego projektu (0,500616 USD) to trzy różne metryki. Podsumowanie CLI powinno opisywać bieżącą inwokację A2, baza — całą historię runu. Conservative estimate 0,1256 USD był bezpieczny, ale ~4,34× wyższy od calla, więc nie należy nazywać go dokładnym.
 - **Co pozostaje otwarte:** brak P1-5 (retry failed candidates), brak prawdziwego fetch źródła i brak pełnej realnej Research Card. Naprawa limitu nie jest dowodem gotowości epistemicznej całego pipeline'u.
 
+### Wnioski z offline preflight pierwszej kompletnej karty (2026-07-12)
+
+- Cztery źródła są celowym minimum odporności: przy progu trzech źródeł pozwalają przeżyć jeden błąd A2, ale nie dwa.
+- Trzeba rozdzielać koszt oczekiwany (0,201280 USD), konserwatywny (0,510375 USD) i limit zatwierdzany przez człowieka (0,55 USD). Cap nie jest prognozą.
+- Zabezpieczenia strukturalne działają: tryb staged jest domyślny, legacy real path jest blokowany, retry można wyzerować, a limity źródeł i wyszukiwań są przekazywane do narzędzi.
+- Nadal istnieją luki: cap działa przed rozpoczęciem, nie w trakcie; timeout może pozostawić nieznany koszt; A2 nie pobiera strony bezpośrednio; dwa błędy ekstrakcji zatrzymają syntezę; B nie ma jeszcze realnego sukcesu.
+- Wynik preflight pozwala poprosić właściciela o zgodę, ale nie jest obietnicą powstania karty. Werdykt techniczny: READY FOR OWNER APPROVAL.
+
+### Wnioski po uszczelnieniu cache'a kosztu i SQLite (2026-07-12)
+- **Co zaskoczyło:** koszty można księgować poprawnie przy każdym pojedynczym wywołaniu, a mimo to mieć błędne podsumowanie całego runu, jeśli pole cache'a jest aktualizowane lokalną zmienną tylko z bieżącego etapu.
+- **Co działa:** append-only `model_usage` jako kanon; dla researchu zapis usage i absolutne odtworzenie `runs.cost_usd` z tej księgi są jedną transakcją. Idempotentny helper pozostaje dla sukcesu, błędu, resume i wtedy, gdy żadnego nowego calla nie było.
+- **Granica rozwiązania:** WAL jest potwierdzany dla bazy plikowej, a timeout 5000 ms jest ustawiany przed próbą przełączenia trybu; nie zastępuje to przyszłego workera, lease ani walidacji przejść stanów.
+- **Materiał do artykułu:** dobra, zwięzła lekcja: „pole z całkowitym kosztem nie powinno być drugim księgowym; powinno być odtwarzalnym widokiem księgi".
+
+### Wnioski po jawnym retry A2 (2026-07-12, ADR-024)
+- **Co zaskoczyło:** „wznów run” i „spróbuj ponownie tego samego źródła” brzmią podobnie, ale są różnymi decyzjami kosztowymi. Zlanie ich w jedno zwykłe resume ukryłoby następne wywołanie modelu.
+- **Co działa:** `attempts` zapisuje rozpoczęte A2, retry jest osobnym ruchem z capem, a wyczerpanie daje `PARTIAL_EXHAUSTED` zamiast pętli pozornie wznawialnych komend. Reset jest bezpłatny i idempotentny.
+- **Granica rozwiązania:** licznik chroni przed niekontrolowanym retry, nie tworzy nowych kandydatów ani nie poprawia P0-2c; re-discovery pozostaje przyszłą, odrębną decyzją.
+- **Dowód:** pamięciowa kopia historycznej bazy przeszła oba pragma, 14 regresji Task 3 i 153 testy pełne; koszt pracy 0 USD i zero API.
+
+### Wnioski po korekcie retry przez niezależne review (2026-07-12)
+- **Co zaskoczyło:** „inkrementuj tuż przed callem” jest dobrą ostrożnością kosztową, ale nie jest opisem faktu, że call na pewno dotarł. Awaria zamienia tę różnicę w decyzję produktową.
+- **Co działa:** atomowy claim zapisuje rezerwację i `EXTRACTION_IN_PROGRESS`; zwykłe resume zatrzymuje się przy niepewności. Historyczna baza dostaje minimalną wiedzę 0/1, nie wygodną fikcję zera.
+- **Granica rozwiązania:** nie ma automatycznego timeout recovery. Przyszły worker musi kiedyś dostarczyć jawny lease/recovery, ale dziś bezpieczniej odmówić niż kupić kolejny call.
+- **Materiał do artykułu:** „Najważniejszą informacją po awarii nie jest to, ile razy próbowaliśmy. Jest nią to, czy wolno nam udawać, że wiemy, co stało się ostatnim razem.”
+
+### Wnioski po walidacji lifecycle (2026-07-12, ADR-027)
+- **Co zaskoczyło:** poprawna lista statusów nie chroni przed race, jeśli SELECT i UPDATE są osobnymi krokami.
+- **Co działa:** status źródłowy i docelowy spotykają się w jednym atomowym UPDATE; `rowcount` jest dowodem wygranej albo konfliktu, a no-op istnieje tylko tam, gdzie kontrakt mówi o nim wprost.
+- **Granica:** nie jest to rozwiązanie P2-17 dla dwóch świeżych researchów tego samego tematu; przyszły claim tematu nadal wymaga osobnej decyzji.
+- **Dowód:** plikowa SQLite, race terminalizacji, resume i claimu, rollback po reopen, 330 testów i 0 USD.
+
+### Wnioski z korekty dwóch P1 Task 8 (2026-07-13)
+- **Jawność:** wyjątek nie jest jawny dlatego, że komentarz nazywa go resume; musi mieć osobny kontrakt i wymagane dane domenowe.
+- **Concurrency:** dwa połączenia sekwencyjne dowodzą warunku statusu, ale nie dowodzą zachowania przy wspólnym starcie. `Barrier` zmienia test jakościowo.
+- **SQLite:** SELECT w rozpoczętej transakcji może stworzyć konflikt upgrade-lock. Bezpieczeństwo powinien nieść warunkowy UPDATE i CAS, a nie utrzymywany read-lock.
+- **Dowód:** dwa race tests powtórzone 10 razy, 337 testów, 0 USD.
+
+### Wnioski z pierwszego realnego Task 9 (2026-07-13)
+- **Trwałość zadziałała:** A1 i cztery A2 zostały opłacone raz, zapisane i nie zniknęły po błędzie B.
+- **Bramka sukcesu zadziałała:** cztery VERIFIED nie wystarczyły do ogłoszenia wyniku; bez poprawnej Research Card cały Task 9 pozostaje nieudany.
+- **Cap był bezpieczny:** 0,170050 USD wobec 0,510375 USD conservative i 0,55 USD limitu; zero retry.
+- **Nowa luka:** odzyskiwalny `research_runs=SOURCES_COMPLETE` współistnieje z ogólnym `runs=RUNNING` po zakończeniu procesu. Odzyskiwalność i prawdziwość audytu to dwa różne wymagania.
+
 ## Otwarte pytania (do rozstrzygnięcia danymi, nie opinią)
 - Czy szacunek kosztu dry_run jest bliski rzeczywistości?
 - Jaki procent szkiców agenta przejdzie bez poprawek człowieka?
@@ -126,3 +170,63 @@ Po każdym etapie: co nas zaskoczyło, co działało, co nie, co agent robił le
 
 ## Powiązania
 - `07_BLEDY_I_NIEUDANE_PROBY.md`, `08_INTERWENCJE_CZLOWIEKA.md`, `09_KOSZTY.md`, `15_PLAN_SERII_ARTYKULOW.md`, `docs/DECISIONS.md` ADR-017, ADR-019, ADR-020
+
+### 2026-07-13 — wniosek po pierwszym realnym B
+
+„Dane są odzyskiwalne” i „audit mówi prawdę” to dwa niezależne wymagania. `SOURCES_COMPLETE` uratowało cztery opłacone źródła, ale pozostawione `RUNNING` fałszowało stan procesu. Poprawny kontrakt musi zachować oba fakty naraz: szczegółowy research jest wznawialny, ogólny run jest terminalnie FAILED. Drugi wniosek: podniesienie limitu ma sens wyłącznie razem z pomiarem, zwięzłym promptem i przeliczeniem capu.
+
+### 2026-07-13 — wniosek po kontrolowanym repair
+
+Historyczne dane można naprawiać bez utraty audytowalności, jeśli zgoda, preconditions, CAS, `rowcount`, backup i porównanie po reopen są częścią jednej procedury. Terminalny FAILED nie usuwa odzyskiwalności B: `research_runs=SOURCES_COMPLETE` nadal mówi, skąd można wznowić, a `runs=FAILED` mówi prawdę o zakończonej próbie. Resume pozostaje osobną, potencjalnie płatną decyzją.
+
+### 2026-07-13 — wniosek po pierwszej realnej karcie
+
+Resumability przyniosło mierzalny zwrot: zamiast powtarzać pięć calli A1/A2, system zapłacił 0,013914 USD wyłącznie za B i domknął run. Jednocześnie COMPLETE nie znaczy „publikowalne”: REJECT wykazał brak wystarczającego mapowania tezy i twierdzeń do źródeł. Etap 0 dowiódł odporności technicznej; jakość dowodów pozostaje pracą Etapu 2. P2-20 przypomina, że bieżące pole error powinno mieć jednoznaczną semantykę względem historycznego stage logu.
+
+### 2026-07-13 — wniosek przed automatyzacją retry
+
+Scheduler nie może decydować o ponowieniu na podstawie etykiety „provider error”. Potrzebuje zamkniętej taksonomii i domyślnej odmowy: dopiero jawny timeout, network, 429 albo wybrany 5xx jest kandydatem do retry, a i wtedy budżet może zatrzymać kolejną próbę. Błędy formatu i walidacji nie stają się bardziej poprawne przez drugi płatny call. Brak lokalnego usage również nie dowodzi braku rachunku — P2-19 pozostaje granicą obserwowalności.
+
+Typowany wyjątek ma wartość także po zakończeniu procesu. Jeśli przy zapisie zostaje z niego tylko komunikat, przyszły operator lub worker nie odróżni 401 od 422 bez ponownej interpretacji tekstu. Trwały audit musi więc zachować klasę i bezpieczne skalarne metadane, ale nie provider payload ani raw response.
+
+### 2026-07-16 — automatyzacja nie musi oznaczać większego prawa
+
+Task Scheduler zwiększa regularność uruchomienia, ale nie uprawnienia. Ten sam Policy Engine, lease i SQLite nadal rozstrzygają wykonanie, a `--offline-only` dodatkowo odcina paid runner. Podobnie raport jest użyteczny właśnie dlatego, że nie „uzupełnia” braków zerem. Migracja jest bezpieczniejsza, kiedy procedura kończy się kandydatem i raportem, a nie automatyczną podmianą produkcji. `CANDIDATE COMPLETE` opisuje stan dowodu, nie zgodę na live.
+
+### 2026-07-17 — poprawny czujnik może być źle wpięty
+
+`DB_HANDLES_PRESENT` nie był błędnym pomiarem. System naprawdę widział otwartą bazę. Błąd leżał poziom wyżej: composition root sam tworzył stan, którego probe miał zabronić. To ważne rozróżnienie, bo naprawą nie jest poluzowanie czujnika, tylko zmiana kolejności zasobów.
+
+Pierwszy realny request pokazał też, że „provider odpowiedział” i „workflow odniósł sukces” są osobnymi zdarzeniami. HTTP 200 uruchamia obowiązek księgowy, nie gwarancję Research Card. Usage i settlement muszą przetrwać nawet wtedy, gdy parser odrzuci odpowiedź. W tym przebiegu infrastruktura osiągnęła cel exact-once, a produkt zakończył się uczciwym `FAILED`.
+
+### 2026-07-17 — stabilny identyfikator nie zawsze powinien być nazwą pliku
+
+Session ID ma być deterministyczny, bo wiąże job, request i fence. Raport ma być historyczny, więc musi rozróżniać invocation. Użycie jednego klucza do obu zadań wygląda elegancko, dopóki drugi przebieg nie zastąpi pierwszego dowodu. Dobre modele tożsamości rozdzielają „to samo logicznie” od „inne zdarzenie w czasie”.
+
+Podobnie parser nie powinien udawać, że wydobycie obiektu ze środka prose jest naprawą bez kosztu poznawczego. Jeśli kontrakt mówi „jeden object”, prose przed lub po jest błędem, a nie materiałem do zgadywania. Pełny fence jest jednoznaczną warstwą transportową; dwa obiekty już nie. Exact-once obejmuje także pokusę, by po nieudanym parse poprosić model o poprawkę.
+
+Najważniejszy wniosek z forensics jest negatywny: czasem najbardziej uczciwym wynikiem jest `INSUFFICIENT DURABLE EVIDENCE`. System może poprawić przyszły dowód, ale nie może cofnąć się i dopisać brakującego stop reason do historii.
+
+## 2026-07-17 — Prywatność i typy są częścią lifecycle
+
+Prywatny plik nie może być wyjątkiem od redakcji sekretów. Jeżeli zapis diagnostyki jest best-effort, jego failure nie może też zmieniać wyniku finansowego ani uruchamiać ponowienia. Wspólny sanitizer i atomowy zapis oddzielają jakość dowodu od wyniku requestu.
+
+Drugi wniosek: poprawna składnia nie oznacza poprawnej wartości. 400-cyfrowy integer jest legalnym JSON-em, ale nielegalnym score. Typowana walidacja musi nastąpić przed stratną konwersją, inaczej błąd reprezentacji może rozerwać exact-once ledger.
+
+## 2026-07-17 — Zamknięcie Etapu 1: sukces nie jest tym samym co udany artykuł
+
+Etap 1 został formalnie zamknięty, mimo że jedyny realny request skończył się błędem parsowania i nie powstała Research Card. To był świadomy wybór kryterium: celem Etapu 1 był domknięty, audytowalny lifecycle jednego realnego, capowanego requestu — dokładnie jeden attempt, `REQUEST_STARTED → SETTLED`, jedno usage, terminalny `FAILED`, zero retry, fail-closed flagi i bajt-w-bajt nietknięta produkcyjna baza. Wszystko to zaszło i zostało niezależnie zweryfikowane (`APPROVE WITH MINOR/P2`). Pozytywna karta researchowa to cel Etapu 2, nie bramka Etapu 1.
+
+Drugi wniosek: rola „reviewera" i rola „właściciela zamykającego etap" muszą być rozdzielone. Reviewer stwierdził brak MAJOR/CRITICAL i rekomendował możliwość zamknięcia; formalną decyzję podjął właściciel. Dwa pozostałe drobne P2 dotyczą wyłącznie etykiet diagnostycznych parsera (zachowanie fail-closed jest poprawne) — trafiły do backlogu Etapu 2, a nie do kolejnej fali naprawczej. Dyscyplina „nie naprawiaj przy okazji" to część tego, co pozwoliło etap zamknąć bez ryzyka regresji.
+
+## 2026-07-17 — Cel operacji nie rozszerza jej autoryzacji
+
+Jeśli pozytywny wynik wymaga działania jawnie zabronionego, poprawnym rezultatem nie jest obejście z późniejszym przywróceniem stanu. Jest nim zatrzymanie przed pierwszą mutacją. „Net zero diff” nie oznacza „zero zmian kodu”.
+
+## 2026-07-18 — Limit, którego nie mierzysz, nie jest limitem
+
+Dwa ucięcia przy różnych wartościach `max_tokens` miały wspólną przyczynę: budżet wyjścia konsumowały niewidoczne tokeny (rozumowanie, tool-use, cytowania), których nikt nie liczył. Wniosek pierwszy: kontrakt rozmiaru musi być jawny po obu stronach — model dostaje limity per pole, a system deterministycznie je egzekwuje, zamiast ufać dobrej woli modelu. Wniosek drugi: wartość limitu ma wynikać z rachunku (payload na granicach + zmierzony narzut + margines), nie z tego, że poprzednia była za mała. Wniosek trzeci: przekroczenie budżetu to typowany, terminalny błąd z zachowanym kosztem — ciche obcinanie treści byłoby gorsze niż porażka, bo ukrywałoby utratę danych w produkcie.
+
+## 2026-07-18 — Rozliczenie i wykonanie potrzebują osobnych dowodów
+
+Attempt `SETTLED` mówi, że pieniądze zostały rozliczone, ale nie dowodzi jeszcze, że wszystkie encje wykonawcze są terminalne. Recovery po crashu musi więc zachować finansowy finał i dopisać osobny, walidowany fakt wykonawczy. Ta sama zasada porządkuje review: historia prywatnego brancha i końcowe drzewo produktu są różnymi artefaktami, więc właściciel może świadomie zaakceptować pierwsze i wymagać czystości drugiego.

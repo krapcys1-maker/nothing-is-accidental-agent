@@ -1,6 +1,26 @@
 # 16 — MATERIAŁ DO PIERWSZEGO ARTYKUŁU
 
+> **Nowy materiał `W1A-R4-01` (2026-07-16):** czwarty niezależny review znalazł błąd nie w samym callu, lecz w kodzie, który miał go bezpiecznie obsłużyć. `Worker.run_once` po lokalnym błędzie zamykał job, ale pozostawiał rozpoczętą próbę poza kolejką reconciliation i z aktywną rezerwacją. Systemowa naprawa uczyniła durable attempt źródłem decyzji: albo zwykłe `FAILED` bez próby, albo widoczna eskalacja bez retry. To mocny rozdział o tym, że zielony suite i poprawny recovery nie wystarczą, jeśli fallback ma osobną ścieżkę. Dowód: **1036 testów offline**, race ×30, krytyczne ścieżki ×10, zero kosztu. WAVE nadal otwarta.
+
+## Materiał: „Najgroźniejszy błąd był w obsłudze błędu”
+
+- Cztery niezależne review nie były ceremonią: każde próbowało wyjść poza zakres wcześniejszego zielonego suite.
+- Prawdziwy Worker ujawnił rozjazd dwóch lifecycle'ów, którego izolowane testy resolvera nie pokazywały.
+- **Zdanie do artykułu:** „Crash zostawia ślady. Znacznie groźniejszy bywa wyjątek, który kod grzecznie łapie, zamyka sprawę i chowa jedyny dowód, że rachunek wciąż jest otwarty.”
+
+> **Stan materiału:** WAVE 0B = `APPROVED WITH P2 — READY FOR CHECKPOINT`, nie `CLOSED`; dowody to 894 testy offline, 13 migracji i niezmieniona chroniona baza. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+>
+> **Aktualizacja WAVE 1A (2026-07-15):** powyższy stan jest historyczny. WAVE 0B = `CLOSED — APPROVED WITH P2`; WAVE 1A = `CANDIDATE` po naprawie odrzucenia `REJECTED — MAJOR`. Nowy materiał: „rachunek to nie wynik" — append-only historia operatora, pełna tożsamość usage, wyłączna własność Research Card, brak dead-endu `MANUAL`, spójność ledger↔cache. **980 testów offline, 14 migracji**; historyczne 894/13 są historyczne. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
 ## Cel pliku
+
+> **Aktualizacja:** WAVE 0B = `CLOSED — APPROVED WITH P2`; WAVE 1A = `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW` po `W1A-R4-01`, nadal otwarta, 14 migracji i **1036 testów offline**. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
+## Materiał: „Nie każda zapłacona próba jest wynikiem"
+
+- System zatrzymał się przy uczciwym pytaniu: czy provider naliczył koszt i czy pipeline naprawdę wyprodukował kartę? To dwa różne fakty.
+- Nowy resolver wymaga operatora L1 i notatki; koszt znany ląduje w jednej księdze `model_usage`, a nieznany nie jest zastępowany zgadywaniem ani retry.
+- **Zdanie do artykułu:** „Dojrzały system nie pyta tylko, czy zapłacił. Pyta też, czy za tę płatność ma prawo nazwać cokolwiek wynikiem."
 Zebrać w jednym miejscu **gotowy surowiec** do pierwszego artykułu na „Chaos Engine": początek projektu, pomysł, wybór niszy, konto, pierwsza architektura, pierwsze decyzje, walking skeleton, pierwsze koszty i błędy, screeny, fragmenty kodu. To „skrzynka narzędziowa" — z tego pisze się artykuł 1 (i częściowo 2).
 
 **Roboczy tytuł artykułu:** *„Dałem agentowi AI 30 dni, 40 dolarów i własny Substack"*
@@ -142,6 +162,118 @@ Naturalne domknięcie punktu 18 — bo pokazuje, co się stało zaraz PO tym, ja
 
 **Dlaczego to dobry materiał:** rzadki, uczciwy przykład dwóch KOLEJNYCH podejść do tego samego problemu tego samego dnia — pierwsze płytsze (podnieś limit), drugie głębsze (zmień konstrukcję) — z jasno pokazanym momentem, w którym ktoś (człowiek, nie agent) zatrzymał tę pierwszą, gorszą ścieżkę.
 
+## 20. Najdroższa rzecz, której jeszcze nie uruchomiliśmy — świadomy preflight (2026-07-12)
+
+Po sześciu realnych requestach i koszcie projektu 0,500616 USD nadal nie było kompletnej Research Card. Następnej próby nie uruchomiono odruchowo. Najpierw offline policzono każdy etap świeżego runu: A1 0,033956 USD, cztery A2 łącznie 0,153824 USD, B 0,013500 USD, czyli 0,201280 USD oczekiwanego kosztu. Konserwatywna kalkulacja wyniosła 0,510375 USD, a limit przedstawiony właścicielowi — 0,55 USD.
+
+Cztery źródła są interesującym kompromisem narracyjnym i technicznym: pipeline potrzebuje trzech udanych ekstrakcji, więc czwarte źródło kupuje odporność na dokładnie jedną awarię. Retry pozostaje wyłączony, a dwie awarie zakończą próbę bez syntezy.
+
+**Zdanie do artykułu:** „Pierwszy raz sukces nie oznaczał kliknięcia Enter. Oznaczał, że potrafiliśmy dokładnie powiedzieć, ile możemy stracić, gdzie możemy przegrać i dlaczego jeszcze niczego nie uruchomiliśmy”.
+
+Koszt przygotowania: 0,000000 USD; zero API, zero Playwrighta i zero zmian statusów. Wynik był gotowością do decyzji człowieka, nie zgodą udzieloną przez system.
+
+## 21. Drugi licznik nie może prowadzić własnej księgowości (2026-07-12)
+
+Po ustabilizowaniu typów runów przyszła mniej widowiskowa, ale bardzo praktyczna poprawka: jeden research składa się z A1, wielu A2 i B, więc `runs.cost_usd` łatwo mógł pamiętać tylko ostatni fragment albo policzyć coś drugi raz po wznowieniu. Rozwiązanie nie polegało na nowym estymatorze. Jedyną księgą pozostała tabela `model_usage`, a pole w `runs` stało się odtwarzalnym widokiem jej aktualnej sumy.
+
+Niezależne review odsłoniło jeszcze subtelniejszą wersję tego ryzyka: dwa osobne, poprawne commity mogły po awarii zostawić księgę z nowym wpisem i stary widok. Naprawa związała INSERT usage, ponowne zsumowanie księgi i UPDATE cache'a jedną transakcją SQLite. Test rollbacku wymuszony triggerem sprawdza, że nie zostaje nawet częściowy wpis.
+
+To ma dobry wymiar narracyjny: po pierwszym incydencie nauczyliśmy się, że koszt może zniknąć przy błędzie parsowania. Następna lekcja była subtelniejsza — nawet zapisany koszt może być źle pokazany przez wygodny cache. Testy obejmowały błąd po samym zapisie usage, żeby sprawdzić właśnie tę granicę.
+
+**Zdanie do artykułu:** „Najpierw nauczyliśmy agenta zapisywać rachunki. Potem musieliśmy nauczyć go, że podsumowanie rachunków nie może mieć własnej pamięci."
+
+## 22. Retry jako decyzja, nie odruch (2026-07-12, ADR-024)
+
+Po serii błędów A2 pojawiła się kusząca „prosta” naprawa: gdy run jest częściowy, po prostu spróbuj failed jeszcze raz przy zwykłym resume. Taki mechanizm wyglądałby jak odzyskiwanie, ale w praktyce ukrywałby następny płatny request za komendą, która miała tylko kontynuować nieprzetworzone dane.
+
+Zamiast tego każdy kandydat dostał licznik rozpoczętych prób. Pierwszy call zmienia 0 na 1; dopiero osobna, jasno nazwana komenda może przywrócić failed do kolejki, i tylko poniżej capu 2. Sam reset nie woła modelu ani nie tworzy kosztu. Jeśli nic legalnego już nie zostało, system mówi `PARTIAL_EXHAUSTED` i odmawia zwykłego resume.
+
+**Zdanie do artykułu:** „Najbezpieczniejszy retry to taki, którego nie da się pomylić ze zwykłym wznowieniem.”
+
+To zrobiono całkowicie offline: test migracji na pamięciowej kopii prawdziwej bazy, 14 nowych regresji i **153 testy zielone**, 0 USD. Nie naprawiono jeszcze pobierania faktycznej treści strony ani nie uruchomiono historycznego runu — bezpieczeństwo mechanizmu nie jest dowodem jakości researchu.
+
+## 23. Licznik, który musiał przyznać się do niepewności (2026-07-12)
+
+Review wykazał, że pierwsza wersja retry opowiadała zbyt prostą historię. `attempts=0` dla starego błędu sugerowało brak wcześniejszej próby, choć sam status mówił coś przeciwnego. A licznik zwiększany przed callem zostawiał po awarii rekord wyglądający jak zwykła praca do zrobienia. Następne resume mogło więc kupić kolejną próbę pod niewinną nazwą „wznów”.
+
+Naprawa nie polegała na lepszym zgadywaniu. Rekord dostał stan `EXTRACTION_IN_PROGRESS`: próba jest zarezerwowana, ale jej wynik nie jest jeszcze zapisany. To nie jest porażka ani sukces — to uczciwe „nie wiemy”. Zwykłe resume ma wtedy się zatrzymać. Tylko jawna polityka recovery może kiedyś zdecydować, co dalej.
+
+**Zdanie do artykułu:** „Dobry system po awarii nie udaje pamięci. Zostawia miejsce na zdanie: nie wiemy, czy to już się wydarzyło.”
+
+Ta korekta dodała też atomiczność migracji i możliwość świadomego podniesienia capu, jeśli exhausted run naprawdę odzyskuje legalny ruch. Wszystko sprawdzone offline: **164 testy**, 0 USD, zero API i bez zmian źródłowej bazy.
+
+## 24. Jeden UPDATE jako granica prawdy (2026-07-12)
+
+Odczyt statusu i późniejszy zapis wyglądają bezpiecznie tylko w świecie z jednym procesem. Gdy dwa wykonania widzą `RUNNING`, oba mogą uznać, że wolno im zakończyć run. Task 8 przeniósł pytanie „czy nadal jestem w dozwolonym stanie?” do tego samego UPDATE, który zapisuje wynik. Jeden konkurent zmienia jeden wiersz; drugi dostaje zero i typowany konflikt.
+
+**Zdanie do artykułu:** „W systemie współbieżnym prawda nie mieści się w SELECT. Mieści się w warunku zapisu, który może wygrać tylko raz.”
+
+Test na dwóch połączeniach SQLite, konkurencyjne resume, rollback źródeł po reopen i pełne 330 testów powstały bez API i kosztu. To nie naprawia wyścigu dwóch świeżych researchów tematu — ten nadal czeka na trwały claim w późniejszym etapie.
+
+## 25. Dwa połączenia to jeszcze nie wyścig (2026-07-13)
+
+Test może używać dwóch bazodanowych połączeń i nadal nie testować współbieżności. Jeśli drugie zaczyna dopiero po commicie pierwszego, zna już wynik. `Barrier` zmusił oba do startu z tego samego momentu i natychmiast odsłonił nowy problem: read-locki przed UPDATE dawały `database is locked` zamiast domenowego rozstrzygnięcia.
+
+**Zdanie do artykułu:** „Wyścigu nie tworzy liczba uczestników. Tworzy go moment, w którym obaj wierzą, że nadal mogą wygrać.”
+
+Po korekcie jeden warunkowy UPDATE wygrywa, drugi dostaje typowany konflikt. Tak samo oddzielono ogólny koniec runu od jawnego resume researchu. 337 testów, 0 USD, brak API.
+
+## 26. Cztery źródła to jeszcze nie wynik (2026-07-13)
+
+Pierwszy realny staged run po stabilizacji zrobił niemal wszystko dobrze. A1 znalazł cztery kandydaty. Cztery osobne A2 zakończyły się sukcesem i zapisały VERIFIED. Koszt całości pozostawał daleko pod capem: 0,170050 USD wobec 0,55 USD.
+
+Synteza B wykorzystała jednak pełne 2200 tokenów. `stop_reason=max_tokens` potwierdziło, że JSON nie był po prostu „dziwny” — został ucięty. System zachował cztery opłacone karty źródłowe, zaksięgował koszt i odmówił stworzenia finalnej karty. Nie wykonał drugiego calla.
+
+**Zdanie do artykułu:** „Odporność nie polega na tym, że wszystko kończy się sukcesem. Polega na tym, że po porażce dokładnie wiadomo, za co zapłaciliśmy i czego nadal nie mamy.”
+
+Odczyt bazy przyniósł jeszcze jedną lekcję: szczegółowy research był poprawnie wznawialny jako `SOURCES_COMPLETE`, ale ogólny run nadal udawał aktywny proces. To finding do review, nie poprawiony po cichu w trakcie płatnego eksperymentu.
+
 ## Powiązania
-- Źródła: `00`–`10`, `docs/BUILD_LOG.md`, `docs/DECISIONS.md` (ADR-017, ADR-019, ADR-020), `docs/COSTS.csv`, `docs/IMPLEMENTATION_PLAN.md` CZĘŚĆ D, CZĘŚĆ E, CZĘŚĆ F
+- Źródła: `00`–`10`, `docs/BUILD_LOG.md`, `docs/DECISIONS.md` (ADR-017, ADR-019, ADR-020), `docs/COSTS.csv`, `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` CZĘŚĆ D, CZĘŚĆ E, CZĘŚĆ F
 - Następny krok redakcyjny: szkic w `article-series/artykul-01-dlaczego-wlasny-substack.md`
+
+### Materiał: „Nie naprawiaj historii po cichu” (Task 9)
+
+- Fakt: 4 VERIFIED i 0,170050 USD przetrwały ucięcie B; nie powstała częściowa karta.
+- Finding: provider powiedział `max_tokens`, ale system nazywał to ogólnym parse error i zostawił audit RUNNING.
+- Naprawa: typowany truncation, zero retry, limit 3000 (+36%) z conservative 0,026250 USD, terminalny FAILED + wznawialny SOURCES_COMPLETE.
+- Etyka auditu: kod naprawiono, lecz historycznego rekordu nie zmieniono bez osobnej zgody. 351 testów offline, brak kolejnego rachunku.
+
+### Materiał: „Trzy pola, których nie wolno zmienić po cichu”
+
+- Osobna zgoda właściciela objęła wyłącznie korektę statusu historycznego runu.
+- Backup i snapshoty logiczne wykazały, że operacja zmieniła tylko `status`, `finished_at` i `error`; `rowcount=1`.
+- Cztery VERIFIED, sześć wpisów usage, 0,170050 USD i brak Research Card pozostały faktami historycznymi.
+- **Zdanie do artykułu:** „Dobra naprawa nie sprawia, że porażka znika. Sprawia, że baza nazywa ją po imieniu, nie zmieniając rachunku ani tego, co udało się ocalić.”
+
+### Materiał: „Sukces systemu, odmowa redakcji”
+
+- Jedyny resume B kosztował 0,013914 USD zamiast ponownego opłacenia A1 i czterech A2; run zamknął się na 0,183964 USD przy capie 0,20.
+- `end_turn`, karta #2, SUCCESS/COMPLETE/USED i cztery VERIFIED spełniły techniczne kryterium Etapu 0.
+- Ta sama karta dostała REJECT za `THESIS_UNSUPPORTED` i `CLAIMS_WITHOUT_SOURCES`, więc nie stała się artykułem.
+- **Zdanie do artykułu:** „Pierwszym prawdziwym sukcesem agenta nie było napisanie tekstu. Było nim dokończenie przerwanej pracy bez ponownego rachunku — i odwaga, by własny wynik odrzucić.”
+
+### Materiał: „Trzy pół-koszty nie są trzema pełnymi kosztami” (W0B-REV-10)
+
+- System miał już ledger, ale nie miał jeszcze jednej definicji połowy mikro-USD: estymator i tracker zaokrąglały inaczej niż storage.
+- Naprawa mówi prostym zdaniem: najpierw sumujemy `0.0000005 + 0.0000005 + 0.0000005`, a dopiero potem raz wybieramy `0.000002` przez `ROUND_HALF_UP`.
+- To nie jest opowieść o „sprytniejszej matematyce”, tylko o uczciwej historii: kiedy actual przekracza rezerwację, zostaje jeden usage i zatrzymany attempt, bez udawania sukcesu ani drugiego rachunku.
+- Dowód historyczny: 887 testów offline; kronika wyraźnie oddziela historyczne 770/823/861/873 od bieżącego wyniku. WAVE 0B nie jest zamknięta, Etap 1 pozostaje BLOCKED, live API ZABRONIONE.
+
+### Materiał: „Nie zaokrąglaj opowieści po każdym zdaniu” (W0B-RR-01)
+
+- Review odkrył, że dobra reguła w jednym miejscu może przegrać z przedwczesnym zaokrągleniem w następnym. To samo stało się z kosztem jednego źródła, zanim system pomnożył go przez liczbę źródeł.
+- Naprawa ma obraz prostszy niż kod: dopóki historia się składa, liczby pozostają surowe. Dopiero po ostatnim zdaniu wybieramy jeden wynik `ROUND_HALF_UP`.
+- Dowód: 894 testy offline, partycje 213/224/231/226, `0.1+0.2` oraz pół-mikro-USD sprawdzone w policy, ledgerze i CLI; zero API, sieci, kosztu i zmiany chronionej bazy.
+- Zdanie do artykułu: „Najłatwiej oszukać rachunek nie wtedy, gdy źle liczysz — tylko wtedy, gdy kończysz liczyć zbyt wcześnie.”
+
+### Materiał: „Zegar nie dostał kluczy”
+
+- Windows Task Scheduler może obudzić proces, ale nie może włączyć płatnych akcji, zmienić flag ani opublikować tekstu. Uprawnienie nadal pochodzi z trwałych bramek aplikacji.
+- Gdy raport nie ma trwałego timestampu maintenance, mówi `UNKNOWN`, zamiast układać wiarygodnie brzmiącą historię z ostatniego `updated_at`.
+- Migracja jest ćwiczona na kopii, a rollback oznacza odtworzenie całego pliku. Produkcja nadal ma schemat 0009.
+- Zdanie do artykułu: „Najbezpieczniejsza automatyzacja nie robi więcej — tylko regularnie puka do tych samych, zamkniętych drzwi.”
+
+## 2026-07-17 — Zgoda na efekt nie jest zgodą na każdy środek
+
+Najciekawszy moment tej próby wydarzył się przed siecią. Właściciel zezwolił na jeden płatny request, ale zabronił zmian kodu. System miał kodową bramkę ustawioną na `False`. Można ją było przełączyć na chwilę i po wszystkim ukryć ślad przez przywrócenie pliku — lecz to nadal byłaby dokładnie ta czynność, której zakazano. Request nie powstał. Koszt tej dyscypliny: zero dolarów; wartość: dowód, że operator odróżnia cel od zakresu uprawnień.

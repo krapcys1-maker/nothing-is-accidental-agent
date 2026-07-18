@@ -18,7 +18,12 @@ Zasady bezpieczeństwa (obowiązkowe):
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
+from typing import BinaryIO, Callable
+from uuid import uuid4
+
+from app.core.sanitization import sanitize_persistent_text
 
 
 @dataclass
@@ -33,6 +38,9 @@ class ResponseDiagnostics:
     web_search_requests: int
     raw_response: str
     parse_error_location: str | None = None
+    # Niewidoczne tokeny rozumowania wliczone w output_tokens (patrz app/llm/base.py).
+    # Domyślnie 0 dla zapisów sprzed tej diagnostyki i dla fake'ów.
+    thinking_tokens: int = 0
 
     @property
     def response_length_chars(self) -> int:
@@ -43,7 +51,78 @@ def diagnostics_dir(data_dir: Path, run_id: str) -> Path:
     return Path(data_dir) / "debug" / "research" / run_id
 
 
-def write_diagnostics(data_dir: Path, diag: ResponseDiagnostics) -> Path:
+def _fsync_directory(directory: Path) -> None:
+    if os.name != "nt":
+        fd = os.open(str(directory), os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        return
+    barrier = directory / f".dirsync-{uuid4().hex}.tmp"
+    fd = os.open(str(barrier), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    try:
+        with os.fdopen(fd, "wb", closefd=False) as handle:
+            handle.write(b"directory durability barrier\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    finally:
+        os.close(fd)
+    barrier.unlink()
+
+
+@dataclass(frozen=True)
+class _DiagnosticFileOps:
+    open_file: Callable[[str, int], int]
+    write_file: Callable[[BinaryIO, bytes], object]
+    fsync_file: Callable[[int], None]
+    replace_file: Callable[[Path, Path], None]
+    fsync_directory: Callable[[Path], None]
+
+
+_DEFAULT_FILE_OPS = _DiagnosticFileOps(
+    open_file=os.open,
+    write_file=lambda handle, data: handle.write(data),
+    fsync_file=os.fsync,
+    replace_file=os.replace,
+    fsync_directory=_fsync_directory,
+)
+
+
+def _atomic_text_replace(
+    path: Path,
+    text: str,
+    *,
+    file_ops: _DiagnosticFileOps,
+) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    encoded = text.encode("utf-8")
+    try:
+        fd = file_ops.open_file(
+            str(temporary), os.O_CREAT | os.O_EXCL | os.O_WRONLY
+        )
+        try:
+            with os.fdopen(fd, "wb", closefd=False) as handle:
+                file_ops.write_file(handle, encoded)
+                handle.flush()
+                file_ops.fsync_file(handle.fileno())
+        finally:
+            os.close(fd)
+        file_ops.replace_file(temporary, path)
+        file_ops.fsync_directory(path.parent)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    return path
+
+
+def write_diagnostics(
+    data_dir: Path,
+    diag: ResponseDiagnostics,
+    *,
+    _file_ops: _DiagnosticFileOps = _DEFAULT_FILE_OPS,
+) -> Path:
     """Zapisuje surową odpowiedź do
     `data/debug/research/<run_id>/<stage>_raw_response.txt`.
 
@@ -65,6 +144,7 @@ def write_diagnostics(data_dir: Path, diag: ResponseDiagnostics) -> Path:
         f"stop_reason: {diag.stop_reason}",
         f"input_tokens: {diag.input_tokens}",
         f"output_tokens: {diag.output_tokens}",
+        f"thinking_tokens: {diag.thinking_tokens}",
         f"cache_read_tokens: {diag.cache_read_tokens}",
         f"cache_write_tokens: {diag.cache_write_tokens}",
         f"web_search_requests: {diag.web_search_requests}",
@@ -73,5 +153,10 @@ def write_diagnostics(data_dir: Path, diag: ResponseDiagnostics) -> Path:
         "-" * 70,
         "",
     ]
-    path.write_text("\n".join(header_lines) + diag.raw_response, encoding="utf-8")
-    return path
+    safe_raw_response = sanitize_persistent_text(diag.raw_response)
+    safe_header = sanitize_persistent_text("\n".join(header_lines))
+    return _atomic_text_replace(
+        path,
+        safe_header + safe_raw_response,
+        file_ops=_file_ops,
+    )

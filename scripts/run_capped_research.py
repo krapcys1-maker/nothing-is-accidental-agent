@@ -65,53 +65,62 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.clock import SystemClock  # noqa: E402
-from app.core.config import load_settings  # noqa: E402
-from app.llm.usage_tracker import UsageTracker  # noqa: E402
-from app.models import ResearchRunStatus, SourceCandidateStatus  # noqa: E402
+from app.core.config import (  # noqa: E402
+    ConfigError,
+    load_settings,
+    require_valid_real_provider_pricing,
+)
+from app.core.money import quantize_usd, sum_usd  # noqa: E402
+from app.core.pricing import (  # noqa: E402
+    PricingConfigError,
+    default_pricing_profiles_path,
+    load_pricing_profiles,
+    resolve_real_pricing_profile,
+)
+from app.models import (  # noqa: E402
+    Job, JobKind, ResearchFlow, ResearchRunStatus, SourceCandidateStatus, WorkflowType,
+)
 from app.orchestrator.runner import DEFAULT_ACCOUNT  # noqa: E402
 from app.policies.policy_engine import PolicyEngine  # noqa: E402
-from app.ports.notification import LogNotification  # noqa: E402
-from app.research.anthropic_client import AnthropicResearchClient  # noqa: E402
+from app.ports.storage import JobConflictError, ResearchTopicIntegrityError  # noqa: E402
+from app.research.base import DEFAULT_SYNTHESIS_MAX_TOKENS  # noqa: E402
 from app.research.cost_estimator import (  # noqa: E402
-    CostEstimate,
-    estimate_extraction_cost_per_source_usd,
+    estimate_extraction_cost_for_sources_usd,
     estimate_no_search_call_usd,
     estimate_staged_research_cost_usd,
     estimate_synthesis_cost_usd,
+    estimate_with_retries,
     estimate_worst_case_search_call_usd,
 )
+from app.research.durable_intent import (  # noqa: E402
+    DEFAULT_REQUEST_MAX_TOKENS,
+    DurableExecutionIntentError,
+    DurableResearchExecutionIntent,
+    controlled_research_job_id,
+    controlled_session_contract,
+    validate_cli_max_tokens,
+)
+from app.storage.db import SchemaVersionError  # noqa: E402
 from app.storage.repositories import SqliteStorage  # noqa: E402
-from app.workflows.research.docs_writer import make_research_log_writer  # noqa: E402
 from app.workflows.research.pipeline import (  # noqa: E402
-    resume_research_stage_b,
-    resume_staged_research,
-    run_research_pipeline,
-    run_staged_research_pipeline,
-    run_two_stage_research_pipeline,
+    CompletedResearchExistsError,
+    ensure_topic_can_start_research,
+    retry_failed_source_candidates,
 )
 
 _DEFAULT_MAX_COST = {"three-stage": 0.45, "two-stage": 0.45, "single": 0.60}
-# Statusy jednoznacznie nowego (etapowego A1/A2/B) przepływu -- nie istniały przed
-# ADR-020, więc nie mogą pochodzić ze starego, dwuetapowego runu.
-_STAGED_ONLY_STATUSES = {
-    ResearchRunStatus.DISCOVERY_COMPLETE.value, ResearchRunStatus.EXTRACTION_IN_PROGRESS.value,
-    ResearchRunStatus.SOURCES_COMPLETE.value,
+_RESUMABLE_STATUSES = {
+    ResearchFlow.TWO_STAGE: frozenset({
+        ResearchRunStatus.SOURCE_COLLECTED,
+        ResearchRunStatus.PARTIAL,
+    }),
+    ResearchFlow.STAGED: frozenset({
+        ResearchRunStatus.DISCOVERY_COMPLETE,
+        ResearchRunStatus.EXTRACTION_IN_PROGRESS,
+        ResearchRunStatus.PARTIAL,
+        ResearchRunStatus.SOURCES_COMPLETE,
+    }),
 }
-# SOURCE_COLLECTED istnieje TYLKO w starym przepływie. PARTIAL jest WSPÓLNY dla obu
-# przepływów (ADR-019 i ADR-020) -- dla PARTIAL trzeba sprawdzić, w której tabeli
-# faktycznie są dane (patrz _detect_flow niżej), nie da się rozstrzygnąć po samym statusie.
-
-
-def _detect_flow(storage, research_run_id: str) -> str:
-    """Rozstrzyga: 'staged' (A1/A2/B, research_source_candidates) czy 'legacy'
-    (gather_sources+synthesize_card, research_sources) -- na podstawie tego, w
-    której tabeli faktycznie są zapisane dane dla tego research_run_id. Potrzebne
-    TYLKO dla statusu PARTIAL, który jest współdzielony przez oba przepływy."""
-    if storage.list_source_candidates(research_run_id):
-        return "staged"
-    if storage.list_research_sources(research_run_id):
-        return "legacy"
-    return "unknown"
 
 
 def _configure_output() -> None:
@@ -142,6 +151,23 @@ def _print_staged_estimate(label: str, e) -> None:
           f"expected={e.expected_usd:.4f} USD")
 
 
+def _activate_explicit_real_mode(args: argparse.Namespace, settings):
+    """Return paid settings only after the explicit root and pricing gate.
+
+    This is deliberately called after an estimate-only exit, so offline
+    estimation remains useful even when the price table is incomplete.
+    """
+    if not getattr(args, "real", False):
+        print("STOP: brak --real. Pozostaję w trybie offline/estimate; nie tworzę klienta API.")
+        return None, 0
+    try:
+        require_valid_real_provider_pricing(settings)
+    except ConfigError as exc:
+        print(f"STOP: {exc}")
+        return None, 1
+    return replace(settings, dry_run=False), None
+
+
 def main(argv: list[str] | None = None) -> int:
     _configure_output()
     parser = argparse.ArgumentParser(
@@ -149,18 +175,46 @@ def main(argv: list[str] | None = None) -> int:
                     "A1 discovery + A2 per-source extraction + B synthesis, ADR-020).")
     parser.add_argument("--topic-id", type=int, default=None,
                         help="ID tematu (wymagane, chyba że --resume).")
+    parser.add_argument(
+        "--real", action="store_true",
+        help="Jawnie zezwól na capowane wywołania providera. Bez flagi skrypt działa "
+             "wyłącznie offline/pre-flight i nie tworzy klienta API.",
+    )
     parser.add_argument("--resume", default=None, metavar="RESEARCH_RUN_ID",
                         help="Wznów DOKŁADNIE JEDEN kolejny etap dla istniejącego "
                              "research_run_id — status w bazie decyduje który (A2/B dla "
                              "three-stage, etap 2 dla starszych runów). Nigdy nie powtarza "
-                             "już wykonanych płatnych etapów.")
+                              "już wykonanych płatnych etapów.")
+    parser.add_argument("--retry-failed-candidates", action="store_true",
+                        help="Wyłącznie z --resume: jawnie resetuje eligible EXTRACTION_FAILED "
+                              "do PENDING_EXTRACTION. Nie wykonuje API ani A2; po nim potrzebne "
+                              "jest osobne --resume.")
+    parser.add_argument("--force-re-research", action="store_true",
+                        help="Tylko dla świeżego researchu: jawnie zezwala na nowy, potencjalnie "
+                             "płatny run tematu z istniejącą kompletną kartą. Nie omija capu, "
+                             "budżetu, kill switcha ani innych bramek.")
     parser.add_argument("--account", default=DEFAULT_ACCOUNT)
     parser.add_argument("--mode", choices=["three-stage", "two-stage", "single"],
-                        default="three-stage",
+                        default="single",
                         help="three-stage (ZALECANE od 2026-07-12, ADR-020: A1 discovery + "
                              "A2 per-source extraction + B synthesis) / two-stage (starsze, "
                              "ADR-016/019, NIEZALECANE) / single (najstarsze, NIEZALECANE); "
                              "ignorowane przy --resume (status runu decyduje, który etap wznowić).")
+    parser.add_argument(
+        "--operation-key", default=None,
+        help="Required for fresh --real: durable intent key; same key and parameters return the same job.",
+    )
+    parser.add_argument(
+        "--pricing-profile", default=None,
+        help="Required for fresh --real: id of an APPROVED, versioned pricing profile in "
+             "config/pricing_profiles.yaml (LA-01-A). Example/unversioned/mismatched profiles are refused.",
+    )
+    parser.add_argument(
+        "--max-tokens", type=int, default=None,
+        help=f"Durable request output cap persisted in the job (LA-01-C). Integer within "
+             f"the approved provider bound; default {DEFAULT_REQUEST_MAX_TOKENS} when omitted. "
+             "A controlled acceptance may freeze a lower value explicitly.",
+    )
     parser.add_argument("--max-cost-usd", type=float, default=None,
                         help="Cap pesymistycznego (conservative) szacunku uruchomienia "
                              "(domyślnie 0.45 three-stage / 0.45 two-stage / 0.60 single / "
@@ -168,12 +222,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-web-searches", type=int, default=4,
                         help="[two-stage/single] Cap liczby web searchy w etapie zbierania "
                              "źródeł (API max_uses).")
-    parser.add_argument("--max-retries", type=int, default=1,
-                        help="Retry tylko dla błędów technicznych/timeout, max N prób dodatkowych.")
+    parser.add_argument("--max-retries", type=int, default=0,
+                        help="Musi wynosić 0: realny provider nie wykonuje auto-retry.")
     parser.add_argument("--gather-max-tokens", type=int, default=1200,
                         help="[two-stage] max_tokens dla etapu gather_sources.")
-    parser.add_argument("--synthesize-max-tokens", type=int, default=2200,
-                        help="max_tokens dla etapu syntezy (B, wspólne dla three-stage/two-stage).")
+    parser.add_argument(
+        "--synthesize-max-tokens", type=int, default=DEFAULT_SYNTHESIS_MAX_TOKENS,
+        help=("max_tokens dla etapu syntezy B (domyślnie 3000 po realnym "
+              "stop_reason=max_tokens przy 2200; uwzględniane w estymacie)."),
+    )
     parser.add_argument("--forwarded-context-tokens", type=int, default=2500,
                         help="szacowany rozmiar kontekstu przekazywanego do etapu B (syntezy).")
     # --- three-stage (A1/A2/B, ADR-020) ---
@@ -197,26 +254,175 @@ def main(argv: list[str] | None = None) -> int:
                              "1500 (podniesione ze starego 500 po diagnostyce 2026-07-12 — "
                              "udana diagnostyka kandydata id=3 zwróciła 915 tokenów; "
                              "jednorazowe 5000 nie jest defaultem produkcyjnym, "
-                             "patrz docs/ERRORS_AND_FAILURES.md).")
+                              "patrz docs/ERRORS_AND_FAILURES.md).")
+    parser.add_argument("--max-extraction-attempts", type=int, default=2,
+                        help="[three-stage] Łączny cap rozpoczętych prób A2 na kandydata: "
+                             "domyślnie 2 (pierwsza próba + najwyżej jedno jawne retry). "
+                             "To nie jest --max-retries transportowego klienta.")
     parser.add_argument("--estimate-only", action="store_true",
                         help="Pokaż pełną estymację i zakończ — ZERO wywołań API.")
     args = parser.parse_args(argv)
 
+    if args.max_extraction_attempts < 1:
+        print("STOP: --max-extraction-attempts musi być dodatnie.")
+        return 1
+    if args.max_retries != 0:
+        print("STOP: --max-retries musi wynosić 0; auto-retry realnego providera jest zablokowany.")
+        return 1
+    if args.retry_failed_candidates and args.resume is None:
+        print("STOP: --retry-failed-candidates wymaga --resume RESEARCH_RUN_ID.")
+        return 1
+    if args.retry_failed_candidates and args.estimate_only:
+        print("STOP: --retry-failed-candidates nie łączy się z --estimate-only.")
+        return 1
+    if args.force_re_research and args.resume is not None:
+        print("STOP: --force-re-research dotyczy wyłącznie świeżego researchu, nie --resume.")
+        return 1
     if args.resume is None and args.topic_id is None:
         print("STOP: podaj --topic-id (nowy research) lub --resume RESEARCH_RUN_ID "
               "(wznowienie dokładnie jednego kolejnego etapu).")
         return 1
+    # WAVE 0B has a durable fresh-enqueue path only.  A legacy A2/B resume has
+    # no durable job/attempt identity, so refuse it before settings, SQLite,
+    # account policy, client, log or usage construction can mutate anything.
+    if args.resume is not None and args.real and not args.estimate_only:
+        print(
+            "STOP: real resume requires a durable job; legacy A2/B resume is "
+            "refused before any database mutation."
+        )
+        return 2
 
-    if args.resume is not None:
-        return _run_resume(args)
-    return _run_fresh(args)
+    try:
+        if args.retry_failed_candidates:
+            return _run_retry_failed_candidates(args)
+        if args.resume is not None:
+            return _run_resume(args)
+        return _run_fresh(args)
+    except SchemaVersionError as exc:
+        print(f"STOP: schema gate failed closed: {exc}")
+        return 2
+
+
+def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, account, topic,
+                              settings, *, max_cost_usd: float, request_max_tokens: int,
+                              approved_profile=None,
+                              now: datetime | None = None) -> int:
+    """Persist fresh paid intent only; this process never creates a provider client."""
+    if args.mode != "single" or args.force_re_research:
+        print("INVALID_CONFIGURATION: WAVE 0B durable real jobs support only fresh --mode single.")
+        return 2
+    if not isinstance(args.operation_key, str) or not args.operation_key.strip():
+        print("INVALID_CONFIGURATION: fresh --real requires a non-empty --operation-key.")
+        return 2
+    operation_key = args.operation_key.strip()
+    if len(operation_key) > 96 or not operation_key.replace("-", "").replace("_", "").isalnum():
+        print("INVALID_CONFIGURATION: --operation-key accepts only letters, digits, - and _ (max 96).")
+        return 2
+    # LA-01-A: a fresh real paid job may only be persisted against an explicitly
+    # approved, versioned, model-matched authoritative pricing profile.  The
+    # example/unversioned config only ever blocks; there is no ENV-authoritative path.
+    profile = approved_profile
+    if profile is None:
+        try:
+            profiles = load_pricing_profiles(default_pricing_profiles_path(settings.project_root))
+            profile = resolve_real_pricing_profile(
+                profiles, profile_id=args.pricing_profile, model=settings.model_quality,
+            )
+        except PricingConfigError as exc:
+            print(f"STOP: {exc}")
+            return 2
+    # WAVE 0B namespace is global per durable real-research workflow: the
+    # operation key identifies the logical enqueue request, never a topic-local retry.
+    idempotency_key = f"real-research:{operation_key}"
+    job_id = controlled_research_job_id(operation_key)
+    session_contract = controlled_session_contract(operation_key, job_id=job_id)
+    intent = DurableResearchExecutionIntent.from_settings(
+        settings=settings,
+        account_id=account.id,
+        topic_id=int(topic.id),
+        cap_usd=max_cost_usd,
+        max_web_searches=args.max_web_searches,
+        question=topic.question or f"Why does '{topic.title}' work the way it does?",
+        niche=account.niche,
+        max_tokens=request_max_tokens,
+        pricing_prices=profile.prices,
+        pricing_profile_id=profile.profile_id,
+        pricing_profile_version=profile.version,
+        pricing_currency=profile.currency,
+        pricing_unit=profile.unit,
+    )
+    enqueue_time = now if now is not None else datetime.now(timezone.utc)
+    job = Job(
+        id=job_id,
+        account_id=account.id,
+        kind=JobKind.RESEARCH,
+        workflow=WorkflowType.RESEARCH,
+        idempotency_key=idempotency_key,
+        topic_id=int(topic.id),
+        payload={
+            "account_id": account.id,
+            "topic_id": int(topic.id),
+            "dry_run": False,
+            "execution": "durable_provider_v2",
+            "mode": "single",
+            "max_cost_usd": intent.cap_usd,
+            "execution_intent": intent.as_payload(),
+            "controlled_session": session_contract,
+        },
+        schedule_reason="WITHIN_EDITORIAL_WINDOW",
+        earliest_run_at=enqueue_time,
+        max_attempts=1,
+    )
+    try:
+        enqueue_result = storage.enqueue_job_result(job)
+    except JobConflictError as exc:
+        print(f"OPERATION_KEY_CONFLICT: {exc}")
+        return 2
+    marker = "JOB_ENQUEUED" if enqueue_result.created else "JOB_ALREADY_EXISTS"
+    print(f"{marker}: job_id={enqueue_result.job.id}")
+    print("No provider request was made. A leased worker is required for execution.")
+    return 0
 
 
 def _run_fresh(args: argparse.Namespace) -> int:
     max_cost_usd = args.max_cost_usd if args.max_cost_usd is not None else _DEFAULT_MAX_COST[args.mode]
 
+    # LA-01-C: the single durable request output cap is validated once and reused
+    # by both the pre-flight cost projection and the persisted job, so CLI ==
+    # projection == persisted == provider max_tokens can never diverge.
+    try:
+        request_max_tokens = validate_cli_max_tokens(
+            DEFAULT_REQUEST_MAX_TOKENS if args.max_tokens is None else args.max_tokens
+        )
+    except DurableExecutionIntentError as exc:
+        print(f"STOP: {exc}")
+        return 2
+
     settings = load_settings()
-    settings = replace(settings, dry_run=False)  # to jest REALNE, płatne wywołanie (gdy nie --estimate-only)
+    if getattr(args, "real", False) and not args.estimate_only:
+        settings, stop_code = _activate_explicit_real_mode(args, settings)
+        if stop_code is not None:
+            return stop_code
+    approved_profile = None
+    if getattr(args, "real", False):
+        try:
+            profiles = load_pricing_profiles(
+                default_pricing_profiles_path(settings.project_root)
+            )
+            approved_profile = resolve_real_pricing_profile(
+                profiles,
+                profile_id=args.pricing_profile,
+                model=settings.model_quality,
+            )
+        except PricingConfigError as exc:
+            print(f"STOP: {exc}")
+            return 2
+        # Every real preflight projection below now uses the exact profile that
+        # will be persisted; ambient settings pricing is excluded.
+        settings = replace(
+            settings,
+            pricing={key: float(value) for key, value in approved_profile.prices.items()},
+        )
 
     print("=" * 70)
     print("PRE-FLIGHT CHECKS (przed jakimkolwiek wywołaniem API)")
@@ -229,7 +435,24 @@ def _run_fresh(args: argparse.Namespace) -> int:
     storage = SqliteStorage.open(settings.db_path)
     clock = SystemClock()
 
-    now = datetime.now(timezone.utc)
+    account = settings.get_account(args.account)
+    topic = next((t for t in storage.list_topics(account.id) if t.id == args.topic_id), None)
+    if topic is None:
+        print(f"STOP: nie znaleziono tematu #{args.topic_id} dla konta {account.id}.")
+        return 1
+    try:
+        ensure_topic_can_start_research(storage, account, topic, args.force_re_research)
+    except CompletedResearchExistsError as exc:
+        print(f"STOP: {exc}")
+        return 1
+    except ResearchTopicIntegrityError as exc:
+        print(f"STOP: błąd integralności researchu tematu: {exc}")
+        return 1
+    print(f"\ntemat: #{topic.id} [{topic.status.value}] score={topic.score} — {topic.title!r}")
+    if args.force_re_research:
+        print("UWAGA: --force-re-research jest jawnie włączone; pozostałe bramki bezpieczeństwa działają.")
+
+    now = clock.now()
     month_spent = storage.sum_real_cost_usd(now.strftime("%Y-%m"))
     day_spent = storage.sum_real_cost_usd(now.strftime("%Y-%m-%d"))
     print(f"budżet miesięczny: wydano dotąd {month_spent:.6f} / limit {settings.max_monthly_cost_usd:.2f} USD")
@@ -253,7 +476,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
         print(f"  TOTAL (conservative sufit):  {est['total'].conservative_usd:.4f} USD")
         print(f"  TOTAL (expected, z 2 realnych obserwacji, BEZ marginesu): "
               f"{est['total'].expected_usd:.4f} USD")
-        worst_case = est["total"].conservative_usd
+        base_worst_case = est["total"].conservative_usd
     elif args.mode == "two-stage":
         stage_a = estimate_worst_case_search_call_usd(
             settings, max_web_searches=args.max_web_searches,
@@ -263,13 +486,16 @@ def _run_fresh(args: argparse.Namespace) -> int:
             forwarded_context_tokens=args.forwarded_context_tokens)
         _print_estimate("ETAP 1 (gather_sources, TYLKO search)", stage_a)
         _print_estimate("ETAP 2 (synthesize_card, ZERO search)", stage_b)
-        worst_case = stage_a.total_usd + stage_b.total_usd
-        print(f"  COMBINED (etap1 + etap2):                    {worst_case:.4f} USD")
+        base_worst_case = float(sum_usd((stage_a.total_usd, stage_b.total_usd)))
+        print(f"  COMBINED (etap1 + etap2, jedna próba/call): {base_worst_case:.4f} USD")
     else:
         single = estimate_worst_case_search_call_usd(
-            settings, max_web_searches=args.max_web_searches, max_output_tokens=3000)
+            settings, max_web_searches=args.max_web_searches, max_output_tokens=request_max_tokens)
         _print_estimate("SINGLE-CALL (search + analiza naraz, NIEZALECANE)", single)
-        worst_case = single.total_usd
+        base_worst_case = single.total_usd
+
+    worst_case = estimate_with_retries(base_worst_case, args.max_retries)
+    print(f"  WORST-CASE z retry x(1+{args.max_retries}): {worst_case:.4f} USD")
 
     print(f"\ncap tego uruchomienia (--max-cost-usd): {max_cost_usd:.2f} USD")
 
@@ -277,103 +503,86 @@ def _run_fresh(args: argparse.Namespace) -> int:
         print("\n--estimate-only: kończę tutaj. ZERO wywołań API, ZERO kosztu.")
         return 0
 
-    if not settings.anthropic_api_key:
-        print("STOP: brak ANTHROPIC_API_KEY w .env. Nie wołam API.")
-        return 1
-    if settings.kill_switch:
-        print("STOP: KILL_SWITCH aktywny. Nie wołam API.")
-        return 1
-    if worst_case > max_cost_usd:
-        print(f"STOP: pesymistyczny szacunek ({worst_case:.4f} USD) przekracza cap tego "
-              f"uruchomienia ({max_cost_usd:.2f} USD). Nie wołam API.")
-        return 1
-    if month_spent + worst_case > settings.max_monthly_cost_usd or \
-            day_spent + worst_case > settings.max_daily_cost_usd:
-        print("STOP: nawet pesymistyczny szacunek przekroczyłby dzienny/miesięczny budżet.")
-        return 1
-    print(f"OK: pesymistyczny szacunek ({worst_case:.4f} USD) mieści się w capie "
-          f"({max_cost_usd:.2f} USD) i w budżecie dziennym/miesięcznym.")
+    if not getattr(args, "real", False):
+        _offline_settings, stop_code = _activate_explicit_real_mode(args, settings)
+        del _offline_settings
+        if stop_code is not None:
+            return stop_code
 
-    account = settings.get_account(args.account)
-    storage.ensure_account(account)
-    topic = next((t for t in storage.list_topics(account.id) if t.id == args.topic_id), None)
-    if topic is None:
-        print(f"STOP: nie znaleziono tematu #{args.topic_id} dla konta {account.id}.")
-        return 1
-    print(f"\ntemat: #{topic.id} [{topic.status.value}] score={topic.score} — {topic.title!r}")
-
-    research_client = AnthropicResearchClient(
-        settings.anthropic_api_key, settings.model_quality,
-        max_retries=args.max_retries,
-        timeout_seconds=settings.research_timeout_seconds,
-        max_web_searches=args.max_web_searches,
-        gather_max_tokens=args.gather_max_tokens,
-        synthesize_max_tokens=args.synthesize_max_tokens,
-        discover_max_tokens=args.discovery_max_tokens,
-        extract_max_tokens=args.extraction_max_tokens,
-        max_web_searches_per_source=args.max_web_searches_per_source,
-    )
-    usage_tracker = UsageTracker(settings, storage)
     policy = PolicyEngine(settings, storage, clock)
-    notifier = LogNotification()
-    research_log = make_research_log_writer(settings.project_root / "docs" / "RESEARCH_LOG.md")
+    stop = _preflight_stop(
+        settings, policy, account, worst_case, max_cost_usd, current_run_cost=0.0)
+    if stop:
+        return stop
 
-    search_desc = (f"max {args.discovery_max_searches} discovery + "
-                  f"max {args.max_web_searches_per_source}/źródło extraction (x{args.max_sources})"
-                  if args.mode == "three-stage" else f"max {args.max_web_searches} web searchy")
-    print("\n" + "=" * 70)
-    print(f"URUCHAMIAM REALNE WYWOŁANIE(A) — tryb={args.mode}, {search_desc}, "
-          f"max {args.max_retries} retry (tylko błąd techniczny), cap {max_cost_usd:.2f} USD")
-    print("Nie publikuję nic. Nie generuję artykułu. Nie dotykam przeglądarki.")
-    print("=" * 70)
+    storage.ensure_account(account)
 
-    if args.mode == "three-stage":
-        summary = run_staged_research_pipeline(
-            account, topic,
-            settings=settings, storage=storage, research_client=research_client,
-            usage_tracker=usage_tracker, policy=policy, notifier=notifier,
-            clock=clock, research_log=research_log,
-            discovery_max_searches=args.discovery_max_searches,
-            discovery_max_tokens=args.discovery_max_tokens,
-            max_sources=args.max_sources,
-            max_web_searches_per_source=args.max_web_searches_per_source,
-            extraction_max_tokens=args.extraction_max_tokens,
-            synthesize_max_tokens=args.synthesize_max_tokens,
-            forwarded_context_tokens=args.forwarded_context_tokens,
-        )
-    elif args.mode == "two-stage":
-        summary = run_two_stage_research_pipeline(
-            account, topic,
-            settings=settings, storage=storage, research_client=research_client,
-            usage_tracker=usage_tracker, policy=policy, notifier=notifier,
-            clock=clock, research_log=research_log,
-            max_web_searches=args.max_web_searches,
-            gather_max_tokens=args.gather_max_tokens,
-            synthesize_max_tokens=args.synthesize_max_tokens,
-            forwarded_context_tokens=args.forwarded_context_tokens,
-        )
-    else:
-        summary = run_research_pipeline(
-            account, topic,
-            settings=settings, storage=storage, research_client=research_client,
-            usage_tracker=usage_tracker, policy=policy, notifier=notifier,
-            clock=clock, research_log=research_log,
-        )
+    if getattr(args, "real", False):
+        try:
+            return _enqueue_durable_real_job(
+                args, storage, account, topic, settings,
+                max_cost_usd=max_cost_usd, request_max_tokens=request_max_tokens,
+                approved_profile=approved_profile,
+                now=now,
+            )
+        finally:
+            storage.close()
 
-    _print_result(summary, max_cost_usd, worst_case, args.max_web_searches)
-    return 0
+    # Every supported fresh branch returned above: dry mode stopped before
+    # pre-flight and real mode persisted a job.  Keep a defensive hard stop
+    # here so a future control-flow change cannot revive a direct
+    # fresh-provider path without an explicit architectural change.
+    storage.close()
+    print("INVALID_CONFIGURATION: fresh research execution requires a durable job.")
+    return 2
 
 
 def _run_resume(args: argparse.Namespace) -> int:
     """Wznawia dokładnie JEDEN kolejny etap dla istniejącego research_run_id — bez
-    ponownego web search tam, gdzie to już zostało wykonane. Rozstrzyga MIĘDZY
-    starym dwuetapowym przepływem (resume_research_stage_b) a nowym, etapowym A1/A2/B
-    (resume_staged_research) na podstawie statusu runu i — dla współdzielonego
-    statusu PARTIAL — na podstawie tego, w której tabeli faktycznie są dane
-    (_detect_flow). Wszystko wczytywane z BAZY, więc działa nawet po pełnym
-    restarcie procesu."""
+    ponownego web search tam, gdzie to już zostało wykonane. Wybór funkcji resume
+    opiera się wyłącznie na zapisanym `research_runs.flow`; status ani obecność
+    rekordów w tabelach źródeł nie służą już do rozpoznawania przepływu."""
     settings = load_settings()
-    settings = replace(settings, dry_run=False)
+
+    storage = SqliteStorage.open(settings.db_path)
+    clock = SystemClock()
+
+    research_run = storage.get_research_run(args.resume)
+    if research_run is None:
+        print(f"STOP: nie znaleziono research_run #{args.resume}.")
+        return 1
+    selected_account_id = getattr(args, "account", DEFAULT_ACCOUNT)
+    if research_run.account_id != selected_account_id:
+        print(
+            f"STOP: research_run #{args.resume} należy do konta "
+            f"{research_run.account_id}, nie do wybranego konta {selected_account_id}."
+        )
+        return 1
+    status = research_run.status.value
+    print(f"status research_run:          {status}")
+    flow = research_run.flow
+    print(f"zapisany flow:                 {flow.value}")
+
+    allowed_statuses = _RESUMABLE_STATUSES.get(flow, frozenset())
+    if research_run.status not in allowed_statuses:
+        allowed_values = sorted(item.value for item in allowed_statuses)
+        allowed_description = allowed_values or ["brak — ten flow nie ma trwałego resume"]
+        print(
+            f"STOP: research_run #{args.resume}: flow={flow.value}, status={status}; "
+            f"dozwolone statusy dla tego flow: {allowed_description}."
+        )
+        return 1
+    if flow == ResearchFlow.STAGED:
+        uncertain = storage.list_source_candidates(
+            args.resume, SourceCandidateStatus.EXTRACTION_IN_PROGRESS,
+        )
+        if uncertain:
+            print(
+                f"STOP: research_run #{args.resume} ma {len(uncertain)} kandydatÃ³w "
+                "EXTRACTION_IN_PROGRESS; zwykÅ‚e resume wymaga jawnej decyzji recovery "
+                "i nie tworzy klienta API."
+            )
+            return 1
 
     print("=" * 70)
     print("PRE-FLIGHT CHECKS — WZNOWIENIE (przed jakimkolwiek wywołaniem API)")
@@ -383,39 +592,10 @@ def _run_resume(args: argparse.Namespace) -> int:
     print(f"model (research/quality):     {settings.model_quality!r}")
     print(f"kill_switch:                  {settings.kill_switch}")
 
-    storage = SqliteStorage.open(settings.db_path)
-    clock = SystemClock()
-
-    research_run = storage.get_research_run(args.resume)
-    if research_run is None:
-        print(f"STOP: nie znaleziono research_run #{args.resume}.")
-        return 1
-    status = research_run.status.value
-    print(f"status research_run:          {status}")
-
-    if status in _STAGED_ONLY_STATUSES:
-        flow = "staged"
-    elif status == ResearchRunStatus.SOURCE_COLLECTED.value:
-        flow = "legacy"
-    elif status == ResearchRunStatus.PARTIAL.value:
-        flow = _detect_flow(storage, args.resume)
-    else:
-        flow = "none"
-
-    if flow == "none":
-        print(f"STOP: status {status} nie pozwala wznowić niczego (wymagane: "
-              f"{sorted(_STAGED_ONLY_STATUSES)} lub SOURCE_COLLECTED/PARTIAL).")
-        return 1
-    if flow == "unknown":
-        print(f"STOP: status {status} to PARTIAL, ale nie znaleziono danych ani w "
-              "research_source_candidates, ani w research_sources — nie da się rozstrzygnąć, "
-              "który etap wznowić.")
-        return 1
-    print(f"wykryty przepływ:             {flow} "
-          f"({'A1 discovery + A2 extraction + B synthesis' if flow == 'staged' else 'gather_sources + synthesize_card (legacy)'})")
-
     prior_usage = storage.get_research_usage(args.resume)
-    prior_cost = sum(u.estimated_cost_usd for u in prior_usage)
+    prior_cost = float(sum_usd(
+        (u.estimated_cost_usd for u in prior_usage), label="persisted prior research cost",
+    ))
     print(f"koszt już poniesiony:          {prior_cost:.6f} USD")
 
     now = datetime.now(timezone.utc)
@@ -424,11 +604,38 @@ def _run_resume(args: argparse.Namespace) -> int:
     print(f"budżet miesięczny: wydano dotąd {month_spent:.6f} / limit {settings.max_monthly_cost_usd:.2f} USD")
     print(f"budżet dzienny:    wydano dotąd {day_spent:.6f} / limit {settings.max_daily_cost_usd:.2f} USD")
 
-    if flow == "legacy":
+    if flow == ResearchFlow.TWO_STAGE:
         return _run_resume_legacy(args, settings, storage, clock, research_run, prior_cost,
                                   month_spent, day_spent)
-    return _run_resume_staged(args, settings, storage, clock, research_run, prior_cost,
-                              month_spent, day_spent)
+    if flow == ResearchFlow.STAGED:
+        return _run_resume_staged(args, settings, storage, clock, research_run, prior_cost,
+                                  month_spent, day_spent)
+    raise ValueError(
+        f"research_run #{args.resume}: unsupported stored flow '{flow.value}'."
+    )
+
+
+def _run_retry_failed_candidates(args: argparse.Namespace) -> int:
+    """Bezpłatna, jawna mutacja kandydatów; celowo bez preflightu i bez klienta API."""
+    settings = load_settings()
+    storage = SqliteStorage.open(settings.db_path)
+    try:
+        result = retry_failed_source_candidates(
+            args.resume, settings=settings, storage=storage,
+            account_id=args.account,
+            max_attempts=args.max_extraction_attempts,
+        )
+    except ValueError as exc:
+        print(f"STOP: {exc}")
+        return 1
+    research_run = storage.get_research_run(args.resume)
+    print("retry-failed-candidates: API nie zostało wywołane; A2 nie zostało uruchomione.")
+    print(f"reset={result.reset_count} skipped_cap={result.skipped_cap_count} "
+          f"already_pending={result.already_pending_count} "
+          f"in_progress={result.in_progress_count} reopened={int(result.reopened_run)} "
+          f"remaining_failed={result.remaining_failed_count}")
+    print(f"status research_run: {research_run.status.value}")
+    return 0
 
 
 def _run_resume_legacy(args, settings, storage, clock, research_run, prior_cost,
@@ -443,44 +650,21 @@ def _run_resume_legacy(args, settings, storage, clock, research_run, prior_cost,
         settings, max_output_tokens=args.synthesize_max_tokens,
         forwarded_context_tokens=args.forwarded_context_tokens)
     _print_estimate("ETAP 2 (synthesize_card, ZERO search)", stage_b)
-    worst_case = stage_b.total_usd
+    worst_case = estimate_with_retries(stage_b.total_usd, args.max_retries)
+    print(f"  WORST-CASE z retry x(1+{args.max_retries}): {worst_case:.4f} USD")
     print(f"\ncap tego wznowienia (--max-cost-usd): {max_cost_usd:.2f} USD")
 
     if args.estimate_only:
         print("\n--estimate-only: kończę tutaj. ZERO wywołań API, ZERO kosztu.")
         return 0
-    stop = _preflight_stop(settings, worst_case, max_cost_usd, month_spent, day_spent)
-    if stop:
-        return stop
-
-    account = settings.get_account(args.account)
-    storage.ensure_account(account)
-    research_client = AnthropicResearchClient(
-        settings.anthropic_api_key, settings.model_quality, max_retries=args.max_retries,
-        timeout_seconds=settings.research_timeout_seconds,
-        synthesize_max_tokens=args.synthesize_max_tokens,
+    settings, stop_code = _activate_explicit_real_mode(args, settings)
+    if stop_code is not None:
+        return stop_code
+    print(
+        "STOP: real resume requires its own durable job flow; no provider client "
+        "or runtime is constructed by this legacy helper."
     )
-    usage_tracker = UsageTracker(settings, storage)
-    policy = PolicyEngine(settings, storage, clock)
-    notifier = LogNotification()
-    research_log = make_research_log_writer(settings.project_root / "docs" / "RESEARCH_LOG.md")
-
-    print("\n" + "=" * 70)
-    print(f"WZNAWIAM WYŁĄCZNIE ETAP 2 (legacy) — ZERO web search, max {args.max_retries} retry "
-          f"(tylko błąd techniczny), cap {max_cost_usd:.2f} USD")
-    print("Nie publikuję nic. Nie generuję artykułu. Nie dotykam przeglądarki.")
-    print("=" * 70)
-
-    summary = resume_research_stage_b(
-        args.resume, account,
-        settings=settings, storage=storage, research_client=research_client,
-        usage_tracker=usage_tracker, policy=policy, notifier=notifier,
-        clock=clock, research_log=research_log,
-        synthesize_max_tokens=args.synthesize_max_tokens,
-        forwarded_context_tokens=args.forwarded_context_tokens,
-    )
-    _print_result(summary, max_cost_usd, worst_case, max_web_searches=0)
-    return 0
+    return 2
 
 
 def _run_resume_staged(args, settings, storage, clock, research_run, prior_cost,
@@ -499,90 +683,61 @@ def _run_resume_staged(args, settings, storage, clock, research_run, prior_cost,
                         if c.status == SourceCandidateStatus.PENDING_EXTRACTION)
         n = min(remaining, args.max_sources) if args.max_sources else remaining
         print(f"\n--- KALIBROWANA ESTYMACJA (wznowienie etapu A2 — do {n} pozostałych źródeł) ---")
-        per_source = estimate_extraction_cost_per_source_usd(
-            settings, args.max_web_searches_per_source, args.extraction_max_tokens)
-        _print_staged_estimate(f"A2 extraction (x{n} pozostałych)", CostEstimate(
-            label="", search_fee_usd=per_source.search_fee_usd * n,
-            output_cost_usd=per_source.output_cost_usd * n,
-            conservative_usd=per_source.conservative_usd * n,
-            expected_usd=per_source.expected_usd * n, safety_margin=per_source.safety_margin))
-        worst_case = per_source.conservative_usd * n
+        extraction_total = estimate_extraction_cost_for_sources_usd(
+            settings, n, args.max_web_searches_per_source, args.extraction_max_tokens,
+        )
+        _print_staged_estimate(f"A2 extraction (x{n} pozostałych)", extraction_total)
+        base_worst_case = extraction_total.conservative_usd
     else:
         print("\n--- KALIBROWANA ESTYMACJA (wznowienie etapu B — zero web search) ---")
         synth = estimate_synthesis_cost_usd(
             settings, args.synthesize_max_tokens, args.forwarded_context_tokens)
         _print_staged_estimate("B synthesis", synth)
-        worst_case = synth.conservative_usd
+        base_worst_case = synth.conservative_usd
+
+    worst_case = estimate_with_retries(base_worst_case, args.max_retries)
+    print(f"  WORST-CASE z retry x(1+{args.max_retries}): {worst_case:.4f} USD")
 
     print(f"\ncap tego wznowienia (--max-cost-usd): {max_cost_usd:.2f} USD")
 
     if args.estimate_only:
         print("\n--estimate-only: kończę tutaj. ZERO wywołań API, ZERO kosztu.")
         return 0
-    stop = _preflight_stop(settings, worst_case, max_cost_usd, month_spent, day_spent)
-    if stop:
-        return stop
-
-    account = settings.get_account(args.account)
-    storage.ensure_account(account)
-    research_client = AnthropicResearchClient(
-        settings.anthropic_api_key, settings.model_quality, max_retries=args.max_retries,
-        timeout_seconds=settings.research_timeout_seconds,
-        synthesize_max_tokens=args.synthesize_max_tokens,
-        discover_max_tokens=args.discovery_max_tokens,
-        extract_max_tokens=args.extraction_max_tokens,
-        max_web_searches_per_source=args.max_web_searches_per_source,
+    settings, stop_code = _activate_explicit_real_mode(args, settings)
+    if stop_code is not None:
+        return stop_code
+    print(
+        "STOP: real resume requires its own durable job flow; no provider client "
+        "or runtime is constructed by this staged helper."
     )
-    usage_tracker = UsageTracker(settings, storage)
-    policy = PolicyEngine(settings, storage, clock)
-    notifier = LogNotification()
-    research_log = make_research_log_writer(settings.project_root / "docs" / "RESEARCH_LOG.md")
-
-    stage_label = "A2 (extraction)" if resuming_extraction else "B (synthesis)"
-    print("\n" + "=" * 70)
-    print(f"WZNAWIAM WYŁĄCZNIE ETAP {stage_label} — max {args.max_retries} retry "
-          f"(tylko błąd techniczny), cap {max_cost_usd:.2f} USD")
-    print("Nie publikuję nic. Nie generuję artykułu. Nie dotykam przeglądarki.")
-    print("=" * 70)
-
-    summary = resume_staged_research(
-        args.resume, account,
-        settings=settings, storage=storage, research_client=research_client,
-        usage_tracker=usage_tracker, policy=policy, notifier=notifier,
-        clock=clock, research_log=research_log, max_sources=args.max_sources,
-        max_web_searches_per_source=args.max_web_searches_per_source,
-        extraction_max_tokens=args.extraction_max_tokens,
-        synthesize_max_tokens=args.synthesize_max_tokens,
-        forwarded_context_tokens=args.forwarded_context_tokens,
-    )
-    _print_result(summary, max_cost_usd, worst_case, max_web_searches=0)
-    return 0
+    return 2
 
 
-def _preflight_stop(settings, worst_case: float, max_cost_usd: float,
-                    month_spent: float, day_spent: float) -> int | None:
+def _preflight_stop(settings, policy: PolicyEngine, account, estimated_total: float,
+                    max_cost_usd: float, *, current_run_cost: float) -> int | None:
     """Wspólne bramki PRZED wywołaniem API. Zwraca kod wyjścia, jeśli trzeba się
     zatrzymać, albo None, jeśli wolno kontynuować."""
     if not settings.anthropic_api_key:
-        print("STOP: brak ANTHROPIC_API_KEY w .env. Nie wołam API.")
+        print("INVALID_CONFIGURATION: missing ANTHROPIC_API_KEY. No provider request was made.")
+        return 2
+    decision = policy.check_run_budget(
+        estimated_total,
+        max_cost_usd,
+        current_run_cost=current_run_cost,
+        account=account,
+    )
+    if not decision.allowed:
+        marker = "BLOCKED_BY_BUDGET" if decision.code.startswith(("BUDGET_", "RUN_CAP_")) else "INVALID_CONFIGURATION"
+        print(f"{marker} [{decision.code}]: {decision.reason} No provider request was made.")
         return 1
-    if settings.kill_switch:
-        print("STOP: KILL_SWITCH aktywny. Nie wołam API.")
-        return 1
-    if worst_case > max_cost_usd:
-        print(f"STOP: pesymistyczny szacunek ({worst_case:.4f} USD) przekracza cap "
-              f"({max_cost_usd:.2f} USD). Nie wołam API.")
-        return 1
-    if month_spent + worst_case > settings.max_monthly_cost_usd or \
-            day_spent + worst_case > settings.max_daily_cost_usd:
-        print("STOP: nawet pesymistyczny szacunek przekroczyłby dzienny/miesięczny budżet.")
-        return 1
-    print(f"OK: pesymistyczny szacunek ({worst_case:.4f} USD) mieści się w capie "
+    print(f"OK: projekcja kosztu runu ({estimated_total:.4f} USD) mieści się w capie "
           f"({max_cost_usd:.2f} USD) i w budżecie dziennym/miesięcznym.")
     return None
 
 
 def _print_result(summary, max_cost_usd: float, worst_case: float, max_web_searches: int) -> None:
+    actual_cost = quantize_usd(summary.cost_usd, label="CLI summary cost")
+    run_cap = quantize_usd(max_cost_usd, label="CLI run cap")
     print("\n" + "=" * 70)
     print("WYNIK")
     print("=" * 70)
@@ -593,10 +748,10 @@ def _print_result(summary, max_cost_usd: float, worst_case: float, max_web_searc
     print(f"input_tokens:        {summary.input_tokens}")
     print(f"output_tokens:       {summary.output_tokens}")
     print(f"web_search_requests: {summary.web_search_requests}  (cap był {max_web_searches})")
-    print(f"koszt RZECZYWISTY:   {summary.cost_usd:.6f} USD")
+    print(f"koszt RZECZYWISTY:   {actual_cost:.6f} USD")
     print(f"pesymistyczny szacunek: {worst_case:.4f} USD")
-    print(f"cap tego runu:       {max_cost_usd:.2f} USD  "
-          f"-> {'PRZEKROCZONY!!!' if summary.cost_usd > max_cost_usd else 'OK, w limicie'}")
+    print(f"cap tego runu:       {run_cap:.2f} USD  "
+          f"-> {'PRZEKROCZONY!!!' if actual_cost > run_cap else 'OK, w limicie'}")
     print(f"injection_flags:     {summary.injection_flags}")
     print(f"recommendation:      {summary.recommendation}  reasons={summary.reasons}")
     print(f"sources_count:       {summary.sources_count}")

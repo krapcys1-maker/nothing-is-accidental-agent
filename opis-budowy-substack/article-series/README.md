@@ -1,7 +1,9 @@
 # article-series/
 
 ## Cel
-Robocze szkice artykułów z serii (jeden plik na artykuł). Plan całej serii i statusy materiału są w `../15_PLAN_SERII_ARTYKULOW.md`; tutaj piszemy właściwe teksty na „Chaos Engine".
+Robocze szkice artykułów z serii (jeden plik na artykuł). Aktualnym redakcyjnym źródłem prawdy dla planu całej serii, kolejności tekstów, briefów i statusów materiału jest `ARTICLE_SERIES_MASTER_PLAN.md`; tutaj piszemy właściwe teksty na „Chaos Engine".
+
+`../15_PLAN_SERII_ARTYKULOW.md` pozostaje dokumentem historycznym. Nie jest aktualnym planem redakcyjnym i nie należy używać go do ustalania bieżącej kolejności ani zakresu artykułów.
 
 ## Nazewnictwo
 `artykul-01-<slug>.md`, `artykul-02-<slug>.md`, …

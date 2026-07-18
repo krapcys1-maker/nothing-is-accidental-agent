@@ -1,6 +1,18 @@
 # 03 — ARCHITEKTURA AGENTA
 
+> **Aktualizacja `W1A-R4-01` (2026-07-16):** czwarty niezależny review ujawnił lukę pomiędzy poprawnym provider lifecycle a workerowym fallbackiem: po lokalnym błędzie job mógł stać się `FAILED`, gdy attempt nadal był `REQUEST_STARTED`. Wszystkie failure boundaries przypiętego researchu korzystają teraz z jednej atomowej operacji StoragePort. Brak active attemptu kończy lifecycle; `RESERVED`/`REQUEST_STARTED` eskaluje do widocznego `NEEDS_RECONCILIATION`, zachowuje rezerwację i zabrania retry. SQLite blokuje terminalne job/run/research_run obok aktywnego attemptu. **1036 testów offline**; WAVE 1A = `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`, nadal otwarta; Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
+> **Stan WAVE 0B:** `APPROVED WITH P2 — READY FOR CHECKPOINT`; nie `CLOSED` przed osobno autoryzowanym commitem. Etap 1 `BLOCKED`, live API `ZABRONIONE`; 13 migracji i jeden aktywny durable paid-execution flow `durable_provider_v2` z `durable_research_intent_v2`.
+>
+> **Aktualizacja WAVE 1A (2026-07-15):** powyższy stan jest historyczny. WAVE 0B = `CLOSED — APPROVED WITH P2`; WAVE 1A = `CANDIDATE` po naprawie odrzucenia `REJECTED — MAJOR`. Dodano **14. migrację** `0014` (append-only `reconciliation_events`, wyłączna własność Research Card przez `UNIQUE research_runs(research_card_id)`), operatorski resolver L1 z pełną tożsamością usage i spójnością ledger↔cache; dispatcher pozostaje jedynym rootem realnego klienta, `model_usage` jedynym kanonem. **980 testów offline, 14 migracji**; historyczne 894/13 są historyczne. Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
 ## Cel pliku
+
+> **Aktualizacja WAVE 1A:** WAVE 0B = `CLOSED — APPROVED WITH P2`; WAVE 1A = `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW` po `W1A-R4-01`, nadal otwarta. Jest 14 migracji i **1036 testów offline**; Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
+## 2026-07-15 — Resolver nie jest drugim workerem
+
+Resolver L1 nie zna providera ani nie uruchamia pipeline'u. Otwiera jedną transakcję SQLite, odczytuje attempt, księgę kosztu i lifecycle, a potem zapisuje decyzję człowieka. Pieniądze mają trzy odpowiedzi: znany koszt trafia do `model_usage`, potwierdzony brak kosztu zwalnia rezerwację, a nieznany koszt zostaje blokadą. Wynik wykonawczy ma osobną odpowiedź: dopiero już istniejąca karta pozwala potwierdzić sukces. To chroni przed wygodnym, lecz fałszywym skrótem „skoro rozliczyliśmy koszt, to job jest DONE".
 Opis architektury: diagramy, moduły, warstwy, rola Anthropic API, Policy Engine, SQLite, Playwright, tryby pracy, poziomy autonomii i gotowość do migracji do chmury. **Każda większa zmiana architektury dopisywana z datą i wyjaśnieniem** (sekcja „Ewolucja architektury").
 
 ## Szablon wpisu ewolucji
@@ -75,7 +87,7 @@ Za `BrowserPort`. Osobny persistent context per konto w `data/browser-profiles/<
 - **RESEARCH_ONLY** — tylko tematy/źródła/autorzy.
 
 ## Poziomy autonomii
-> **Cel końcowy = LEVEL_3, nie LEVEL_1/2 (ADR-017).** Człowiek zatwierdza poziom autonomii i granice działania, nie każdą pojedynczą akcję. Pełna specyfikacja: `docs/IMPLEMENTATION_PLAN.md` CZĘŚĆ D.
+> **Cel końcowy = LEVEL_3, nie LEVEL_1/2 (ADR-017).** Człowiek zatwierdza poziom autonomii i granice działania, nie każdą pojedynczą akcję. Pełna specyfikacja: `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` CZĘŚĆ D.
 
 LEVEL_0 (dry_run, tylko szkice, offline) → LEVEL_1 (kontrolowane realne testy, publikacja tylko za jawną, jednorazową zgodą — **etap przejściowy, dziś tu jesteśmy**, nie stan docelowy) → LEVEL_2 (pierwszy realny poziom autonomiczny: Notes/komentarze/odpowiedzi/lajki/subskrypcje/research/**artykuły** publikowane samodzielnie po przejściu scoringu, bez ręcznej akceptacji pojedynczej akcji) → LEVEL_3 (cel końcowy: pełna autonomia operacyjna — własny harmonogram, zarządzanie Topic Inventory, drobne zmiany strategii w twardych granicach; człowiek zachowuje kill switch, budżet, wgląd w logi, możliwość zatrzymania).
 
@@ -108,10 +120,30 @@ Zmiana architektoniczna wywołana incydentem V2.1: pesymistyczny szacunek kosztu
 **Następna planowana wersja (nie zbudowana):** V4 — realne uruchomienie dwuetapowego pipeline'u (wymaga nowej, osobnej zgody właściciela), generator artykułów/Notes + panel FastAPI.
 
 ### [2026-07-11] Redefinicja stanu DOCELOWEGO (nie nowa wersja kodu — korekta celu)
-Właściciel doprecyzował (ADR-017), że architektura docelowa to **LEVEL_3 — pełna autonomia operacyjna**, nie asystent wymagający ręcznej akceptacji każdej akcji na stałe. Poprzednie sformułowania („LEVEL_2 — docelowy sufit, artykuły/komentarze zawsze za akceptacją") opisywały fazę startową, nie cel. **Stan faktyczny kodu się nie zmienił** (wciąż V3 wyżej) — to korekta dokumentacji celu, nie nowa implementacja. Pełna specyfikacja: `docs/IMPLEMENTATION_PLAN.md` CZĘŚĆ D.
+Właściciel doprecyzował (ADR-017), że architektura docelowa to **LEVEL_3 — pełna autonomia operacyjna**, nie asystent wymagający ręcznej akceptacji każdej akcji na stałe. Poprzednie sformułowania („LEVEL_2 — docelowy sufit, artykuły/komentarze zawsze za akceptacją") opisywały fazę startową, nie cel. **Stan faktyczny kodu się nie zmienił** (wciąż V3 wyżej) — to korekta dokumentacji celu, nie nowa implementacja. Pełna specyfikacja: `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` CZĘŚĆ D.
 
 ## Powiązania
 - `ARCHITECTURE.md` (architektura docelowa, §4 zaktualizowane wg ADR-017)
-- `docs/ARCHITECTURE_EVOLUTION.md` (źródło ewolucji), `docs/IMPLEMENTATION_PLAN.md` §B.1–B.6, CZĘŚĆ D
+- `docs/ARCHITECTURE_EVOLUTION.md` (źródło ewolucji), `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` §B.1–B.6, CZĘŚĆ D
 - `docs/DECISIONS.md` — ADR-006/011/012/013/014/015/016/017
 - diagramy: `diagrams/` (do wyeksportowania)
+
+## WAVE 0B — pamięć pojedynczego pytania do dostawcy (2026-07-14)
+
+Do architektury dodaliśmy mały, ale ważny zapis: zanim jedno płatne pytanie opuści proces, baza zapisuje jego stałą nazwę i odkłada maksymalny koszt. Nazwa nie powstaje z zegara ani losowania — jest złożona z joba, etapu i numeru próby. Jeśli program upadnie przed wysłaniem, po restarcie może bezpiecznie wrócić do tej samej nazwy. Jeśli upadnie po granicy wysłania albo dostanie timeout, nie zgaduje: zatrzymuje job do reconciliacji i zachowuje rezerwację. To kandydat do niezależnego review, nie dowód działania na żywym API: `WAVE 0B CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.
+
+## 2026-07-14 — WAVE 0B.1: granica, która nie udaje workera
+
+Niezależne review wykazało ważną różnicę między „kodem, który umie zrobić research” a bezpiecznym wykonaniem realnej akcji. Two-stage i staged mogły ominąć trwały job. Od teraz rzeczywisty klient bez kontekstu durable jest zatrzymywany przed providerem; pełne przeniesienie tych ścieżek do workera pozostaje pracą WAVE 1A. Drugą warstwą architektury jest migracja 0011: attempt ma ściśle określoną tożsamość i drogę stanu, a nowe realne usage musi wskazać rozpoczęty attempt.
+
+## 2026-07-15 — W0B-REV-10: jedna definicja mikrodolara w całym łańcuchu
+
+`durable_research_intent_v2` nadal jest jedynym snapshotem paid single requestu: `intent.max_tokens → caller → estimate → policy → reservation → usage → settlement`. W0B-REV-10 nie zmienia tego łańcucha ani lifecycle. Wprowadza wspólną definicję kwoty: `Decimal(str(value)) → quantize(Decimal("0.000001"), ROUND_HALF_UP)`. Estymator, `UsageTracker`, pipeline, storage, porównanie actual/rezerwacji oraz cache kosztu używają jej w tej samej kolejności: składniki sumują się jako Decimal, a kwantyzacja następuje na granicy kontraktu.
+
+To zachowuje istotną odmowę W0B-REV-06: gdy actual jest większy od rezerwacji, dokładnie jeden usage pozostaje w ledgerze, attempt przechodzi do `NEEDS_RECONCILIATION` z `PROVIDER_ATTEMPT_COST_EXCEEDS_RESERVATION`, nie ma SUCCESS, Research Card ani attempt #2. Jest 13 migracji; real fresh nadal wyłącznie enqueuje job, real resume jest fail-closed, a dispatcher pozostaje jedynym rootem konstrukcji realnego klienta. WAVE 0B to nadal `CANDIDATE`, Etap 1 `BLOCKED`, live API `ZABRONIONE`.
+
+## 2026-07-15 — W0B-RR-01: definicja kwoty musi przetrwać drogę do decyzji
+
+Review przypomniał rzecz nieefektowną, ale ważną: helper z dobrą regułą nie chroni systemu, jeśli ktoś wychodzi z niego za wcześnie. Koszt jednego źródła został już wyświetlony jako kwota, gdy staged pipeline mnożył go przez liczbę źródeł. W innych miejscach float mógł jeszcze wejść do policy, sumy usage albo krótkiego komunikatu CLI.
+
+Teraz surowe składniki pozostają `Decimal` aż do jednej granicy `ROUND_HALF_UP`. Dopiero wtedy stają się publiczną kwotą. Policy, rezerwacja, ledger, pipeline i CLI porównują tę samą kanoniczną wartość. Nie zmieniono intencji, lifecycle ani `max_tokens`; jest nadal 13 migracji, WAVE 0B `CANDIDATE`, Etap 1 `BLOCKED`, live API `ZABRONIONE`. Usunięcie dwóch martwych konstruktorów klienta z helperów resume nie otworzyło drogi realnego resume — dispatcher wciąż jest jedynym rootem klienta.

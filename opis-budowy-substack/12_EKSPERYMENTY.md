@@ -59,7 +59,7 @@ Te „eksperymenty" nie testują treści, tylko samą zdolność systemu do bezp
 - **Status:** PLANNED (wymaga zbudowania SAFE MODE — nie zbudowane).
 
 ### EXP-08 — Test przejścia LEVEL_1 → LEVEL_2
-- **Hipoteza:** po spełnieniu warunków (`IMPLEMENTATION_PLAN.md §D.3`) system może bezpiecznie działać bez ręcznej akceptacji pojedynczych Notes/komentarzy, utrzymując jakość porównywalną z LEVEL_1.
+- **Hipoteza:** po spełnieniu warunków (`docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md §D.3`) system może bezpiecznie działać bez ręcznej akceptacji pojedynczych Notes/komentarzy, utrzymując jakość porównywalną z LEVEL_1.
 - **Zmienna:** poziom autonomii (LEVEL_1 z ręczną akceptacją vs LEVEL_2 bez niej, przy tych samych progach scoringu).
 - **Metryka sukcesu:** wskaźnik odrzuceń/ukryć po publikacji na LEVEL_2 nie wyższy niż na LEVEL_1; zero naruszeń limitów.
 - **Okres:** minimum kilka dni po przejściu, zanim wyciągniemy wnioski.
@@ -71,4 +71,56 @@ Te „eksperymenty" nie testują treści, tylko samą zdolność systemu do bezp
 - Nie zmieniać wielu zmiennych naraz.
 
 ## Powiązania
-- `docs/experiments/_TEMPLATE.md` (szablon techniczny), `13_WYNIKI_SUBSTACKA.md`, `docs/IMPLEMENTATION_PLAN.md` §A.9 (atrybucja)
+- `docs/experiments/_TEMPLATE.md` (szablon techniczny), `13_WYNIKI_SUBSTACKA.md`, `docs/archive/superseded_plans/IMPLEMENTATION_PLAN.md` §A.9 (atrybucja)
+
+### [2026-07-13] Eksperyment: czy staged resume zachowa płatne A1/A2
+
+- **Hipoteza:** po uciętym B oficjalny resume ze stanu SOURCES_COMPLETE wykona tylko jedno B, nie dublując discovery/extraction ani prior usage.
+- **Kontrola:** run `c01171bc`, 4 VERIFIED, prior 0,170050, `max_retries=0`, B=3000, absolutny cap 0,20; pełny read-only preflight i PolicyEngine przed klientem.
+- **Wynik:** dokładnie jeden nowy usage `research_synthesize_cards`, zero search, 1904/2402 tokenów, 0,013914 USD; A1/A2 bez nowych wpisów. SUCCESS/COMPLETE/USED, card #2.
+- **Wniosek:** hipoteza potwierdzona technicznie; karta jakościowo REJECT, więc odporność wykonawcza nie zastępuje bramki dowodowej.
+
+## [2026-07-13] Proponowane eksperymenty redakcyjne — bez uruchomienia
+
+Blueprint dodaje propozycje EXP-G1–EXP-G5: typ otwarcia, format Note, pojedynczy CTA, tytuł i rotację formatów. Każdy zmienia jedną zmienną, ma minimalny czas lub n≥30 i nie może obchodzić fact audit, SEO contractu ani granic autonomii.
+
+Wynik przy n<30 będzie oznaczany **SIGNAL, NOT PROOF**. To opis przyszłego Etapu 7, nie wykonany test i nie podstawa do zmiany strategii.
+
+## [2026-07-13] E1–E10 z raportu Fable — backlog, nie wyniki
+
+Pełny raport zapisuje dziesięć proponowanych eksperymentów E1–E10 wraz z hipotezą, zmienną, metryką, minimalnym czasem, kryterium decyzji i ryzykiem małej próby. Są one zmapowane na Etap 7 i nie uruchomiono żadnego z nich. Reguła pozostaje bez zmian: `n < 30 = SIGNAL, NOT PROOF`.
+
+## [2026-07-13] Kontrola utrzymaniowa Etapu 1 — nie jest eksperymentem redakcyjnym
+
+`MaintenanceRunner` testuje tylko trwałość lokalnego recovery/reapera: kolejność recovery→reaper, brak nakładających się cykli, fail-closed błędów z zachowaniem primary/cleanup diagnostic oraz zachowanie SQLite po close→reopen w dwóch połączeniach. Nie generuje treści, nie publikuje i nie mierzy reakcji odbiorców, dlatego nie jest wynikiem ani uruchomieniem EXP-01–EXP-08, E1–E10 lub eksperymentu wzrostowego. Status techniczny: one-shot/poll VERIFIED OFFLINE; system scheduler/service NOT_STARTED. Polityka okien redakcyjnych została później zweryfikowana offline jako osobna kontrola techniczna poniżej; koszt 0 USD.
+
+## [2026-07-13] Polityka okien redakcyjnych — kontrola techniczna, nie eksperyment
+
+Deterministyczne wyznaczenie `earliest_run_at` i `schedule_reason` przed enqueue nie tworzy artykułu, Note’a, publikacji ani wariantu E1–E10. Testuje wyłącznie lokalną regułę: IANA/DST, okno, czas wskazany przez operatora i eligibility claimu. Job oczekujący nie jest uruchamiany ani obserwowany na Substacku, więc nie istnieje hipoteza, metryka ani wynik eksperymentu. Status techniczny: polityka okien i claim eligibility VERIFIED OFFLINE; koszt 0 USD.
+
+## [2026-07-13] Final restart acceptance — kontrola techniczna, nie eksperyment wzrostowy
+
+To nie jest test odbiorców ani publikacji. Zbiór 14 scenariuszy odtwarzał wyłącznie lokalne stany SQLite: crash przed commitem i po nim, recovery, stale-owner fencing, future-job boundary, parity direct service–worker i integrity. Najważniejszy wynik: atomowa inicjalizacja run/research_run/`job.run_id` nie zostawia osieroconego kompletu i nie tworzy dubla po restarcie.
+
+Nie zmieniły się żadne metryki Substacka, nie wykonano API ani realnego researchu, a koszt rzeczywisty wyniósł 0 USD. Wynik techniczny: Etap 1 candidate complete, awaiting independent review; system scheduler/service nadal NOT_STARTED.
+## [2026-07-13] Old-owner fencing — kontrola bezpieczeństwa, nie eksperyment
+
+Macierz 26 restart acceptance tests nie uruchamia hipotezy redakcyjnej ani wariantu wzrostowego. Sprawdza wyłącznie lokalny inwariant: po expiry/recovery stary worker nie zapisze usage, kosztu, karty ani terminalnego statusu, a recovery i stale write na dwóch połączeniach SQLite nie mogą oba wygrać.
+
+Nie wykonano API, browsera, publikacji, researchu live ani obserwacji odbiorców. Wynik techniczny: 667 testów zielonych, Etap 1 candidate awaiting independent review, koszt 0 USD. EXP-01–EXP-08 i E1–E10 pozostają nieuruchomione.
+
+## [2026-07-13] Post-lock lease i CSV — kontrola techniczna, nie eksperyment
+
+Siedem scenariuszy odpala operacje kolejki przed expiry i blokuje je na prawdziwym `BEGIN IMMEDIATE`, aby zegar przekroczył expiry przed dopuszczeniem zapisu. Osobne testy sprawdzają race heartbeat↔recovery, awarię pochodnego `COSTS.csv` i atomowy failure po inicjalizacji. To test praw zapisu i trwałości, nie wariant treści, hipoteza wzrostowa ani obserwacja odbiorców.
+
+Nie uruchomiono API, browsera, publikacji ani realnego researchu. Wynik: 42 restart acceptance, 683 testy, `integrity_check=ok`, koszt 0 USD; Etap 1 pozostaje candidate awaiting independent review. EXP-01–EXP-08 i E1–E10 nie zmieniły statusu.
+
+## [2026-07-14] Zamknięty wynik dispatchu — kontrola techniczna, nie eksperyment wzrostowy
+
+Test nie mierzył odbiorców ani treści. Na syntetycznej plikowej SQLite odtworzono kontrolowany failure RESEARCH, błędny string zamiast enumu oraz świadomie uszkodzony wynik po realnym atomic success. Badano wyłącznie inwariant: po terminalizacji workflow worker nie ma prawa do dalszego canonical write.
+
+Wynik: `WORKFLOW_FAILED` nie wywołuje generic `fail_job`; malformed result kończy się jawnym błędem kontraktu bez heartbeat, completion, failure albo `LOST_LEASE`; atomic success pozostaje DONE/COMPLETE/USED z kartą po reopen. Dodatkowy fault test zachowuje primary error, gdy rollback sam zawodzi. 58 acceptance i pełny suite 700 passed, `integrity_check=ok`, koszt 0 USD. Nie uruchomiono API, browsera, publikacji ani realnego researchu; EXP-01–EXP-08 i E1–E10 pozostają PLANNED.
+
+## [2026-07-14] Zamknięcie WAVE 0A nie jest eksperymentem
+
+Niezależne review potwierdziło P0=0 i P1=0 dla WAVE 0A, a kontrola bazy potwierdziła zachowanie realnych danych po logicznym odtworzeniu. To wciąż nie jest eksperyment z odbiorcami, wzrostem ani publikacją: nie użyto API, browsera, sieci ani kosztu. WAVE 0A została formalnie zamknięta jako **APPROVED WITH P2**; Etap 1 pozostaje BLOCKED przez inne P1, a E1–E10 nie zmieniają statusu.

@@ -9,7 +9,7 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - Jeden wpis = jeden zamknięty etap.
 - Data i godzina absolutne (YYYY-MM-DD HH:MM).
 - Bez sekretów: żadnych kluczy, haseł, zawartości `.env`.
-- Odnoś się do etapu z `IMPLEMENTATION_PLAN.md` (Etap 0–7).
+- Odnoś się do etapu z `IMPLEMENTATION_ROADMAP.md` (Etap 0–8). (Wpisy historyczne sprzed 2026-07-12 odwołują się do etapów z archiwalnego `IMPLEMENTATION_PLAN.md` — nie przepisujemy ich.)
 
 ## Szablon wpisu
 
@@ -234,3 +234,583 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Pliki zmienione w całym częściowym zadaniu (widoczne w workspace):** `app/workflows/research/pipeline.py`, `app/research/anthropic_client.py`, `scripts/run_capped_research.py`, `tests/test_research_anthropic_client.py`, `tests/test_staged_research_extraction.py`, `docs/COSTS.csv` (automatyczny wiersz wcześniejszej diagnostyki), `docs/BUILD_LOG.md`, `docs/DECISIONS.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/ERRORS_AND_FAILURES.md`, `docs/ARTICLE_EVIDENCE.md`, `opis-budowy-substack/05_BUDOWA_KROK_PO_KROKU.md`, `07_BLEDY_I_NIEUDANE_PROBY.md`, `09_KOSZTY.md`, `14_WNIOSKI_CZASTKOWE.md`. `pyproject.toml` celowo bez zmiany.
 - **Ograniczenia / czego nie zrobiono:** brak retry dla `EXTRACTION_FAILED` (P1-5 nadal otwarte); kandydaci 1 i 2 nie zostali ponowieni; brak web fetch P0-2c; brak ręcznych zmian statusów w bazie; brak nowego/wznowionego runu; zero API i zero Playwrighta podczas dokończenia.
 - **Następny krok:** kod jest gotowy do kolejnego kontrolowanego realnego researchu pod względem limitu A2 i podsumowania CLI, ale sam istniejący run pozostaje niedomykalny bez P1-5/dodatkowych kandydatów, a A2 nadal nie wykonuje prawdziwego web fetch (P0-2c). Każde przyszłe płatne uruchomienie wymaga osobnej zgody i aktualnej estymacji dla defaultu 1500.
+
+### [2026-07-12] Etap 1N — inicjalizacja Git i publikacja do nowego prywatnego repozytorium GitHub
+- **Cel zadania:** objąć bieżący stabilny stan projektu kontrolą wersji i opublikować go do NOWEGO repozytorium GitHub, bez ujawnienia sekretów/danych runtime, bez zmian logiki aplikacji, bez Playwrighta i bez API researchowych.
+- **Audyt przed Git:** rozszerzono `.gitignore` o ogólne wzorce baz SQLite (`*.db`, `*.sqlite*` wraz z WAL/SHM), profile/sesje przeglądarki, `playwright/.auth`, cookies/storage-state, klucze/certyfikaty, logi, pliki tymczasowe, coverage i dodatkowe pliki IDE. Istniejące reguły nadal wykluczają `.env`, `.env.*` (z wyjątkiem bezpiecznego `.env.example`), `.venv`, lokalne configi i całe `data/*` poza `.gitkeep`.
+- **Skan sekretów:** poprawny przebieg przed inicjalizacją objął 124 tekstowe pliki kandydackie. 12 trafień nazw `api_key` ręcznie sklasyfikowano jako placeholder w `.env.example` albo nazwy parametrów/zmiennych w kodzie. Po stagingu przeskanowano ponownie dokładnie 124 tekstowe pliki spośród 125 staged files: 0 high-confidence secret hits, 0 forbidden paths; jedyny review hit = jawny placeholder w `.env.example`. Nie znaleziono realnych kluczy, haseł, tokenów, private keys, cookies ani session data.
+- **Nieudana próba:** pierwszy jednorazowy skrypt skanu użył niedostępnej w lokalnym PowerShellu metody `GetRelativePath`; wynik odrzucono jako niewiarygodny i skan powtórzono poprawnie. Pełny wpis: `docs/ERRORS_AND_FAILURES.md`.
+- **Walidacja ignorowania:** `git check-ignore -v` potwierdził wykluczenie `.env`, `.venv`, `data/agent.db`, `data/debug/`, `config/accounts.yaml` i `config/growth_policy.yaml`. W staged files nie było żadnej zakazanej ścieżki.
+- **Git lokalny:** repo zainicjalizowane na `main`; initial commit `df418dd613c40260e985713cd78da4411d0ae46e` (`Initialize Nothing Is Accidental agent`), 125 plików. `git diff --cached --check` przed commitem bez błędów. Pełny test suite przed commitem: **102 passed**.
+- **GitHub:** utworzono `krapcys1-maker/nothing-is-accidental-agent`, URL `https://github.com/krapcys1-maker/nothing-is-accidental-agent`; widoczność zweryfikowana przez GitHub CLI jako **PRIVATE** PRZED pierwszym push. `main` wypchnięty jako `origin/main`.
+- **Branch rozwojowy:** utworzono `dev/a2-stabilization`; ten wpis dokumentacyjny powstał na branchu rozwojowym i branch został wypchnięty z upstreamem. Nie wykonano merge do `main`.
+- **Pliki zmienione w tym etapie:** `.gitignore`, `docs/ERRORS_AND_FAILURES.md`, `docs/DECISIONS.md` (ADR-021), `docs/BUILD_LOG.md`, `docs/SCREENSHOT_INDEX.md`, `docs/ARTICLE_EVIDENCE.md`; plus lokalne metadane `.git/` (nie są częścią commita).
+- **Koszt / działania zewnętrzne:** 0,00 USD. Jedynymi wywołaniami zewnętrznymi były wymagane operacje GitHub/Git (auth/status, utworzenie prywatnego repo, weryfikacja widoczności i push). Zero Anthropic/OpenAI/research API, zero Playwrighta.
+- **Wynik:** prywatny backup i historia wersji działają; `main` pozostaje stabilnym initial snapshotem, bieżący branch lokalny = `dev/a2-stabilization`.
+- **Następny krok:** dalsze poprawki A2 wykonywać na `dev/a2-stabilization`; merge do `main` dopiero po osobnej decyzji/review.
+
+### [2026-07-12] Etap 1O — offline pre-flight pierwszej kompletnej realnej Research Card (bez uruchomienia API)
+- **Cel zadania:** przygotować najbezpieczniejszą konfigurację ŚWIEŻEGO trzyetapowego runu A1/A2/B, który ma szansę utworzyć pierwszą kompletną Research Card; wyłącznie analiza, testy i `--estimate-only`, bez startu/wznowienia researchu.
+- **Branch:** `dev/first-successful-research-card` utworzony z aktualnego `dev/a2-stabilization`; logika aplikacji pozostała nietknięta.
+- **Potwierdzone defaulty i kontrolki:** `--mode three-stage`; A1=`discovery_max_searches=1`, `discovery_max_tokens=600`; A2=`max_sources=4`, `max_web_searches_per_source=1`, `extraction_max_tokens=1500`; `max_retries=0`; B=`synthesize_max_tokens=2200`, `forwarded_context_tokens=2500`, zero web search. Unsafe `python -m app.main run-research --real` nadal twardo zablokowane przez `RuntimeError` (P0-3).
+- **Dlaczego 4 źródła:** próg syntezy/jakości wynosi 3 zweryfikowane źródła. Cztery próby A2 dają tolerancję jednego błędu bez implementowania P1-5; więcej podnosiłoby koszt i ekspozycję bez dowodu, że jest potrzebne. A1 przy jednym searchu prosi maksymalnie o 4 kandydatów — zgodne z limitem A2.
+- **Twarde granice pojedynczego runu:** maksymalnie 1 web search w A1 + maksymalnie 4 osobne calle A2 × 1 search = maksymalnie 5 searchy; maksymalnie 4 źródła A2; B bez search; `max_retries=0` = dokładnie jedna próba każdego calla. Offline probe z wstrzykniętym timeoutem potwierdził `client.call_count=1`.
+- **Testy:** pełny `pytest` = **102 passed in 10.57s**. Pokrycie obejmuje blokadę unsafe real path, zachowanie usage na błędach A1/A2/B, per-source trwałość, diagnostykę `raw_text`/`stop_reason`, source cap i status SUCCESS dla real-mode na fake client.
+- **Read-only stan bazy:** topic `#2` istnieje i ma status `SELECTED`; istniejące runy dla tego tematu pozostają `FAILED=1`, `PARTIAL=1`. Po `--estimate-only` stan identyczny, łącznie 2 research_runs — zero nowego runu i zero zmiany statusów.
+- **Estymacja etapów (dokładna, z aktualnego estymatora):** A1 expected=0,033956 / conservative=0,092625 USD; A2×4 expected=0,153824 / conservative=0,397500 USD (per source 0,038456 / 0,099375); B expected=0,013500 / conservative=0,020250 USD. TOTAL expected=**0,201280 USD**, conservative=**0,510375 USD**.
+- **Rekomendowany cap do zatwierdzenia:** **0,55 USD** — o 0,039625 USD (7,76%) powyżej conservative, który już zawiera 50% margines bezpieczeństwa. To bramka pre-flight, NIE twardy limit trwającego requestu; prawdziwe limity to `max_tokens`, `max_uses`, `max_sources` i brak retry.
+- **Budżet:** przed runem real project spend=0,500616 USD; day spend=0,250616/2,00; month spend=0,500616/40,00. Dodanie conservative nadal mieści się w obu limitach (dzień 0,760991; miesiąc 1,010991 USD).
+- **Exact proposed command:** `.venv\Scripts\python.exe scripts/run_capped_research.py --topic-id 2 --account nothing_is_accidental --mode three-stage --discovery-max-searches 1 --discovery-max-tokens 600 --max-sources 4 --max-web-searches-per-source 1 --extraction-max-tokens 1500 --max-retries 0 --synthesize-max-tokens 2200 --forwarded-context-tokens 2500 --max-cost-usd 0.55`
+- **Dlaczego to świeży run:** komenda zawiera `--topic-id 2` i NIE zawiera `--resume`; `_run_fresh()` uruchamia A1 i tworzy nowy `run_id`. Istniejący PARTIAL nie jest czytany jako źródło tego przebiegu.
+- **Ryzyka pozostające:** P0-2c (A2 używa search-o-URL, nie real page fetch); P1-2 (cache `runs.cost_usd` może być nieświeży po błędzie B, choć `model_usage` zachowuje kanoniczny koszt); P1-3 timeout może być zbilowany bez lokalnego usage, ale retry=0 usuwa ryzyko drugiej automatycznej opłaty; P1-4 cap żyje w CLI, nie bibliotece; P1-5 brak retry failed candidates; P1-6 brak guardu ponownego researchu tego samego tematu; B nadal nieprzetestowane na żywym API.
+- **Błędy podczas zadania:** jedna komenda `rg` została źle zacytowana w PowerShell i potraktowała fragment regexu jako polecenie; poprawiono quoting, zero zmian/efektów ubocznych, wpis w `ERRORS_AND_FAILURES.md`.
+- **Koszt i zakres:** **0,00 USD**, zero Anthropic/OpenAI/research API, zero Playwrighta, zero nowego/wznowionego runu, zero ręcznych zmian statusów. `docs/COSTS.csv` celowo bez nowego wiersza.
+- **Wynik:** **READY FOR OWNER APPROVAL** dla jednego świeżego, kontrolowanego runu; nie jest to gwarancja sukcesu ani zgoda na wykonanie.
+- **Pliki zmienione:** wyłącznie dokumentacja: `docs/BUILD_LOG.md`, `docs/ERRORS_AND_FAILURES.md`, `docs/DECISIONS.md`, `docs/HUMAN_INTERVENTIONS.md`, `docs/ARTICLE_EVIDENCE.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/SCREENSHOT_INDEX.md`, `opis-budowy-substack/05_BUDOWA_KROK_PO_KROKU.md`, `07_BLEDY_I_NIEUDANE_PROBY.md`, `09_KOSZTY.md`, `14_WNIOSKI_CZASTKOWE.md`, `16_MATERIAL_DO_PIERWSZEGO_ARTYKULU.md`.
+- **Następny krok:** STOP — czekać na jawną zgodę właściciela przed wykonaniem exact proposed command.
+
+### [2026-07-12] Etap 1P — pełny audyt architektury + konsolidacja dokumentacji do trzech dokumentów źródła prawdy (ADR-023)
+- **Cel zadania:** na polecenie właściciela: pełny audyt architektury (kod, testy, baza, dokumenty) i sprowadzenie dokumentacji architektonicznej do JEDNEGO obowiązującego zestawu, tak aby kolejny model nie zgadywał, który plan obowiązuje. Zero zmian logiki aplikacji, zero API, zero Playwrighta.
+- **Audyt (weryfikacja, nie przypuszczenia):** przeczytany cały kod `app/` + `scripts/` + testy + 5 migracji; `python -m pytest` = **102 passed**; inspekcja `data/agent.db` (runs: 4×DRY_RUN+3×FAILED, zero osieroconych RUNNING; research_runs: FAILED+PARTIAL; realny koszt 0,500616 USD zgodny z COSTS.csv). Potwierdzone: naprawy P0-1/P0-2a,b/P0-3 z audytu 12.07 są w kodzie i mają testy regresyjne. Nowe findingi: `AnthropicLLMClient` (tematy) NIE księguje kosztu przy błędzie parsowania JSON (w przeciwieństwie do klienta researchu) i nie ma testów parsera; `EnvSecretStore`/`LocalFileStore` to martwy kod (zero wywołań).
+- **Utworzone dokumenty (korzeń repo):** `MASTER_ARCHITECTURE.md` (stan faktyczny + architektura docelowa + przepływy + model danych + maszyny stanów + warstwa providerów + autonomia + rozszerzalność + skonsolidowane decyzje + lista „czego NIE robimy"), `IMPLEMENTATION_ROADMAP.md` (Etapy 0–8; aktywny = Etap 0; pierwsze 5 zadań wskazane wprost), `CURRENT_PROJECT_STATE.md` (tabela stanu modułów ze statusami NOT_STARTED…VERIFIED, blokery, długi techniczne).
+- **Zarchiwizowane do `docs/archive/superseded_plans/` (git mv + baner „ARCHIVED — NOT A SOURCE OF TRUTH"):** `ARCHITECTURE.md`, `IMPLEMENTATION_PROMPT.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/AUDYT_ARCHITEKTURY_2026-07-12.md`, `docs/architecture/SUBSTACK_INTEGRATION.md` (+README katalogu), `zalozenia projektu/…`, `zalzoewnia dla agenta/…`; puste katalogi usunięte. Dzienniki i kronika `opis-budowy-substack/` NIETKNIĘTE (to logi, nie plany).
+- **Inne zmiany porządkowe:** README przepisany (sekcja „Source of Truth"); AGENTS.md dostał baner z 3 korektami (GROWTH_MASTER nie jest nadrzędny; jawność AI wg ADR-018; akceptacje wg ADR-017); ARCHITECTURE_EVOLUTION.md oznaczony jako kronika historyczna; odwołania w komentarzach/komunikatach kodu do przeniesionych plików zaktualizowane na ścieżki archiwum (11 plików, zero zmian logiki); ADR-023 w DECISIONS.md.
+- **Wynik testów po zmianach:** pełny `pytest` = **102 passed** (identycznie jak przed — zmiany dotyczyły wyłącznie stringów/komentarzy i dokumentów).
+- **Koszt:** 0,00 USD (zero wywołań API).
+- **Następny krok:** Etap 0 roadmapy — zadania 1–5 (flow-kolumna, świeży runs.cost_usd+WAL, retry nieudanych kandydatów, topics→USED, szczelny budżet przy retry), potem wyrównanie klienta tematów; realny run ADR-022 (cap 0,55 USD) wyłącznie po jawnej zgodzie właściciela.
+
+### [2026-07-12] Etap 1P — uzupełnienie: 4 korekty spójności po review właściciela (przed commitem)
+- **Cel zadania:** właściciel zatwierdził konsolidację kierunkowo (8,5/10) i wskazał 4 pozostałe niespójności do usunięcia przed commitem; zakaz zmian architektury i logiki aplikacji, zakaz startu Etapu 0 i płatnych runów.
+- **Co zostało wykonane:** (1) CURRENT_PROJECT_STATE.md — blokery przepisane: bloker #1 to ukończenie zadań 1–8 Etapu 0; zgoda właściciela na realny run ADR-022 (zad. 9) wymagana dopiero PO nich; spójnie poprawiono wiersz tabeli researchu i sekcję decyzji. (2) ARCHITECTURE_EVOLUTION.md — zasada wskazuje MASTER_ARCHITECTURE.md + IMPLEMENTATION_ROADMAP.md; stare odwołania w historycznych wpisach V0/meta jawnie oznaczone jako archiwalne. (3) AGENTS.md przepisany od zera na krótką wersję 2.0 (źródło prawdy, ADR-017/018, zasady nadrzędne, obowiązek dokumentacji z kroniką, styl, format odpowiedzi); stary import Cowork przeniesiony do docs/archive/superseded_plans/AGENTS_imported_cowork_instructions_2026-07.md z banerem ARCHIVED — koniec konstrukcji „baner odwołuje resztę pliku". (4) BUILD_LOG.md zasady → IMPLEMENTATION_ROADMAP.md (Etap 0–8); szablon DECISIONS.md → MASTER_ARCHITECTURE/ROADMAP + nota o historycznych powiązaniach. Dodatkowo sweep: wszystkie normatywne odwołania („pełna specyfikacja/powiązania/źródła/CO OTWORZYĆ") w opis-budowy-substack/01,02,03,04,06,07,12,16 i docs/SCREENSHOT_INDEX.md przepisane na ścieżki docs/archive/superseded_plans/; wpisy czysto narracyjne (00, 05, 08, timeline, RELEASE_TIMELINE, historyczne ADR-y i wpisy BUILD_LOG/ERRORS) celowo NIEZMIENIONE jako historia.
+- **Pliki zmienione:** CURRENT_PROJECT_STATE.md, AGENTS.md (przepisany), docs/archive/superseded_plans/AGENTS_imported_cowork_instructions_2026-07.md (nowy), docs/ARCHITECTURE_EVOLUTION.md, docs/BUILD_LOG.md, docs/DECISIONS.md (szablon+nota), docs/SCREENSHOT_INDEX.md, docs/HUMAN_INTERVENTIONS.md, opis-budowy-substack/01,02,03,04,06,07,12,16.
+- **Wynik:** pełny pytest po korektach — patrz commit; zero zmian w app/ poza wcześniejszymi aktualizacjami ścieżek w komentarzach.
+- **Koszt:** 0,00 USD.
+- **Następny krok:** jeden commit dokumentacyjny; potem Etap 0 zadanie 1 (migracja 0006 flow) — jako osobne zadanie implementacyjne, po decyzji właściciela.
+
+### [2026-07-12] Etap 0 / zadanie 1 — jawny `research_runs.flow` i bezpieczne resume
+
+- **Cel:** usunąć niejednoznaczność wspólnego statusu `PARTIAL` i całkowicie zastąpić runtime sniffing tabel jawnym, trwałym typem przepływu.
+- **Migracja:** dodano `0006_research_run_flow.sql` z `BEGIN IMMEDIATE/COMMIT`. Przebudowuje `research_runs`, aby `flow` było `NOT NULL`, bez wartości domyślnej, z CHECK ograniczającym wartości do `single|two_stage|staged`. Nazwane guardy przerywają transakcję, gdy historyczny run ma zero lub więcej niż jeden jednoznaczny sygnał albo nie da się go powiązać z `research_runs`.
+- **Backfill po korekcie review:** nie używa statusu ani `current_state`. Dwa udokumentowane runy single mapuje wyłącznie po pełnym UUID + koncie + topicu (dla `bda661bc-59c9-4f4e-9313-86c659bde74d` także po dokładnym `research_card_id=1`); brak któregokolwiek z nich w innej instalacji jest bezpieczny. Two-stage i staged rozpoznaje tylko po jednoznacznych, trwałych śladach strukturalnych: nazwach tasków/etapów i właściwych tabelach źródeł. Usunięto dopasowanie po prefiksie UUID i oknie czasowym karty.
+- **Weryfikacja realnej historii bez zmiany bazy:** migrację uruchomiono na pamięciowej kopii `data/agent.db`. Wynik: `bda661bc`→single/COMPLETE/topic1/card1, `1b649314`→single/FAILED/topic2, `2a3b4bb9`→two_stage/FAILED/topic2, `9bbeb020`→staged/PARTIAL/topic2; `PRAGMA integrity_check` = `ok`, `PRAGMA foreign_key_check` = 0 błędów. Hash SHA-256 źródłowej bazy przed i po był identyczny, a baza nadal ma 5 zastosowanych migracji — nie została zmodyfikowana.
+- **Kod:** `ResearchFlow` jest wymaganym polem modelu; repozytorium zapisuje/odczytuje je jawnie. Pipeline single, two-stage i staged przekazują odpowiednio `SINGLE`, `TWO_STAGE`, `STAGED`. Single dostaje własne zamknięcie bez fałszywego znacznika etapu B.
+- **Resume:** `resume_research_stage_b` wymaga `two_stage`; `resume_staged_research`, `run_source_extraction` i `run_synthesis_from_cards` wymagają `staged`. Błąd zawiera run ID, oczekiwany flow i zapisany flow. CLI dispatchuje wyłącznie po `research_run.flow` i przed nagłówkiem pre-flight, odczytem usage, estymacją, klientem lub `--estimate-only` wymaga statusu z jawnej macierzy: two-stage = `SOURCE_COLLECTED|PARTIAL`, staged = `DISCOVERY_COMPLETE|EXTRACTION_IN_PROGRESS|PARTIAL|SOURCES_COMPLETE`, single = brak resume. `_detect_flow` i wybór ścieżki po statusie/tabelach zostały usunięte.
+- **Testy po korekcie review:** testy celowane = **70 passed in 9.14s**; pełny `python -m pytest` = **127 passed in 12.07s** (wcześniej 102, dodano 25). Pokrycie obejmuje black-box CLI (odmowa przed jakimkolwiek helperem oraz prawidłowy dispatch), czystą i pustą bazę, brak obu lokalnych historycznych UUID, konflikt sygnałów, zachowanie kolumn/defaultów/PK/indeksów/triggerów, DB-level NOT NULL/CHECK, rollback niejednoznacznej historii, `integrity_check`, `foreign_key_check`, tworzenie wszystkich flow i cross-flow resume.
+- **Korekta dokumentacji po review:** roadmapa nie opisuje już 0006 jako migracji addytywnej. Rollback wymaga kopii sprzed migracji albo jawnej migracji odwrotnej; powrót wyłącznie do starego kodu jest niekompatybilny z obowiązkowym `flow`.
+- **Incydent lokalny:** trzy pomocnicze warianty `python -c` do odczytu SQLite nie wystartowały przez quoting PowerShell; czwarty wariant przez stdin odczytał bazę, lecz trafił na kodowanie cp1252; po ustawieniu UTF-8 kontrola zakończyła się poprawnie. Zero zapisów i kosztu; szczegóły w `docs/ERRORS_AND_FAILURES.md`.
+- **Zakres:** nie zmieniono promptów, tokenów, estymatora, retry, Policy Engine, statusów kandydatów, klienta Anthropic ani zadań 2–9 Etapu 0.
+- **Koszt:** **0,000000 USD**; zero API, zero Playwrighta, zero prawdziwych nowych lub wznowionych runów.
+- **Następny krok:** STOP po zadaniu 1; zadanie 2 wymaga osobnego polecenia właściciela.
+
+### [2026-07-12] Etap 0 / zadanie 2 — kanoniczny cache kosztu staged + WAL SQLite
+
+- **Cel:** usunąć rozjazdy `runs.cost_usd` względem kanonicznego `model_usage` na ścieżkach A1/A2/B oraz przygotować SQLite na bezpieczniejszą współbieżność odczytu/zapisu.
+- **Kod:** `SqliteStorage.sync_run_cost_from_research_usage()` wykonuje idempotentny `UPDATE` cache'a z sumy tych samych tasków, które zwraca `get_research_usage`; nie zmienia statusu ani błędu runu, nie używa estymatora i nie filtruje dry-run (zgodnie z dotychczasową semantyką cache'a; budżet nadal filtruje `dry_run=0`). Staged A1/A2/B synchronizują przy wejściu/zwrocie, a zapis usage ma dodatkowy `finally`, więc koszt pozostaje spójny także po wyjątku następującym po trwałym zapisie usage.
+- **SQLite:** centralne `connect()` ustawia `PRAGMA journal_mode=WAL` oraz `PRAGMA busy_timeout=5000`; `foreign_keys=ON` pozostaje bez zmian.
+- **Testy:** celowane storage/staged/flow = **54 passed**; pełny `python -m pytest` = **131 passed in 4.51s** (127 przed zadaniem, +4). Nowe regresje obejmują WAL/timeout, idempotencję i zachowanie statusu, dry-run, pełny sukces, błędy A1/B, częściową i wznowioną A2, odrzuconą po płatnym B walidację, wyjście bez nowego calla oraz wyjątek po zapisie usage.
+- **Zakres:** nie zmieniono `UsageTracker`, estymatora, retry, statusów kandydatów, `research_runs.total_cost_usd`, P1-5 ani żadnego późniejszego zadania.
+- **Koszt:** **0,000000 USD**; zero API, zero Playwrighta, zero prawdziwych nowych lub wznowionych runów.
+- **Następny krok:** STOP po zadaniu 2; zadanie 3 wymaga osobnego polecenia właściciela.
+
+### [2026-07-12] Etap 0 / zadanie 2 — korekta P1 po niezależnym review: atomowy usage+cache
+
+- **Cel:** zamknąć trzy P1 z review Task 2 bez rozpoczynania zadania 3: lukę między commitem `model_usage` a cache'em runu, brakujące ścieżki regresyjne oraz nieaktualny licznik README.
+- **Wykryty problem:** wcześniejszy wariant zatwierdzał INSERT `model_usage` przed osobnym UPDATE `runs.cost_usd`. Diagnostyka na plikowej bazie odtworzyła trwały rozjazd: `persisted_usage=0.123456`, `persisted_run_cache=0.000000`.
+- **Kod:** `SqliteStorage.add_model_usage()` dla pięciu tasków researchowych obejmuje teraz jednym `BEGIN`/commit: INSERT usage, kanoniczną sumę wpisów researchowych tego samego `run_id` i absolutny UPDATE `runs.cost_usd`. Wyjątek powoduje rollback całej transakcji. `sync_run_cost_from_research_usage()` pozostaje idempotentną ścieżką naprawczą dla resume/no-call/ponownego wejścia w etap.
+- **SQLite:** `busy_timeout=5000` jest ustawiany przed przełączeniem journal mode; dla bazy plikowej `connect()` odczytuje wynik `journal_mode=WAL`, zamyka połączenie i zgłasza błąd, jeśli WAL nie został aktywowany. `:memory:` zachowuje obsługiwany tryb bez wymogu WAL.
+- **Testy:** dodano trwały zapis po reopen (`0.123456` w usage i cache), rollback wymuszony triggerem SQLite między INSERT a UPDATE, kilka wpisów bez inkrementowania starego cache'a, dry-run w cache lecz poza budżetem, zero usage, A1/B error bez usage i wielokrotne no-call resume. Pełny wynik: **139 passed**; celowane storage/staged/flow/policy: **69 passed**.
+- **Dokumentacja:** README i dokumenty bieżącego stanu wskazują 139 testów; szczegóły wykrytej luki i naprawy zapisano także w `ERRORS_AND_FAILURES.md`.
+- **Koszt / zakres:** **0.000000 USD**; zero API, zero Playwrighta, zero prawdziwego researchu, zero zmian `research_runs.total_cost_usd`, retry, statusów workflow ani Task 3.
+- **Następny krok:** STOP po Task 2 i pozostawienie working tree do drugiego review; Task 3 wymaga osobnego polecenia właściciela.
+
+### [2026-07-12] Etap 0 / Task 3 — jawny, capowany retry nieudanych kandydatów A2
+- **Cel:** domknąć lukę P1-5 bez automatycznego kupowania kolejnych prób: umożliwić jawny reset `EXTRACTION_FAILED`, zachować historię prób i rozpoznać run wyczerpany pod aktualnym limitem.
+- **Wykonanie:** migracja `0007_candidate_attempts.sql` dodaje `INTEGER NOT NULL DEFAULT 0`; `attempts` oznacza rozpoczęte A2 i zwiększa się tuż przed pojedynczym call'em. Dane historyczne dostają 0, bo wcześniejszy schemat nie zapisywał liczby prób. Typowany wynik resetu podaje resetowane, pominięte przez cap, już pending i pozostałe failed.
+- **Bezpieczeństwo:** zwykłe resume nadal czyta wyłącznie `PENDING_EXTRACTION` i nigdy nie resetuje failed. `--retry-failed-candidates` wymaga `--resume`, działa tylko dla staged `PARTIAL`, nie tworzy klienta, nie wykonuje A2 i nie zapisuje usage ani kosztu. Domyślny `--max-extraction-attempts=2` to pierwsza próba i najwyżej jedno ręcznie zlecone retry; nie jest tym samym co techniczne `--max-retries`.
+- **Stan terminalny:** gdy EXTRACTED < minimum, nie ma pending i żaden failed nie jest poniżej capu, run przechodzi do `PARTIAL_EXHAUSTED`; zwykłe resume odmawia przed klientem i przed nowym `model_usage`.
+- **Kontrola migracji:** na pamięciowej kopii `data/agent.db` zastosowano 0006+0007, `integrity_check=ok`, `foreign_key_check=[]`; istniejący układ kandydatów otrzymał `attempts=0`. Źródłowa baza i run `9bbeb020` nie zostały zmienione.
+- **Testy:** 14 nowych regresji (migracja, sukces/błąd A2, drugi attempt, cap, idempotencja, zestaw mieszany, PARTIAL/PARTIAL_EXHAUSTED, cross-flow, koszt 0 i black-box CLI). Celowane: **76 passed**; pełne: **153 passed**.
+- **Koszt / zakres:** **0.000000 USD**; zero API, zero realnego researchu, zero Playwrighta, zero commita/pushu, Task 4 nierozpoczęty.
+- **Następny krok:** niezależne review working tree; potem wyłącznie Task 4 po osobnej dyspozycji.
+
+### [2026-07-12] Etap 0 / Task 3 — korekta P1/P2 po niezależnym review
+- **Cel:** usunąć cztery P1 z review bez rozszerzania Task 3: fałszywe historyczne zero, claim bez capu, trwały status zależny od dynamicznego parametru i rozdzieloną transakcję migracji/ledgeru.
+- **Kod:** 0007 backfilluje `PENDING=0`, `EXTRACTED=1`, `EXTRACTION_FAILED=1` jako dolną granicę historii. A2 używa warunkowego claimu `PENDING + attempts < cap → EXTRACTION_IN_PROGRESS`; tylko z tego stanu można trwale zapisać sukces albo obsłużony błąd. Zwykłe resume odmawia przy niepewnym kandydacie i nie tworzy klienta. Retry z wyższym capem może atomowo odblokować `PARTIAL_EXHAUSTED → PARTIAL`; CLI porównuje też konto runu z `--account`.
+- **Migracja:** 0007 nie ma własnego BEGIN/COMMIT. Runner wykonuje DDL, lower-bound backfill i INSERT do `schema_migrations` w jednej transakcji; trigger wymuszający błąd ledgeru wycofuje również kolumnę.
+- **Testy:** dodano regresje dla trzech historycznych statusów, jedynego retry historycznego failed, claimu/race na dwóch połączeniach, capu `==` i `>`, crash-window `EXTRACTION_IN_PROGRESS`, higher-cap reopen, account isolation oraz rollbacku ledgeru. Celowane: **87 passed**; pełne: **164 passed**.
+- **Koszt / zakres:** **0.000000 USD**; zero API, zero realnego researchu, zero Playwrighta, zero commita/pushu, Task 4 nierozpoczęty. Baza źródłowa i `9bbeb020` nie zostały zmienione.
+- **Następny krok:** drugie niezależne review working tree; brak działania na historycznym runie bez osobnej zgody właściciela.
+
+### [2026-07-12] Etap 0 / Task 4 — użycie tematu i jawny re-research
+
+- **Cel:** po COMPLETE ustawić temat jako `USED`, a drugi świeży research kompletnej karty zatrzymać przed potencjalnym kosztem bez jawnego force.
+- **Kod:** `mark_research_run_complete` oraz legacy `mark_single_research_run_complete` aktualizują `research_runs` i `topics.status=USED` w jednej transakcji. Bramka domenowa obejmuje single, two-stage i staged przed polityką, budżetem, runem oraz klientem; `--force-re-research` przechodzi przez oba CLI, a capped CLI odmawia też kombinacji z `--resume`.
+- **Bezpieczeństwo:** brak flagi nie tworzy runu, usage ani klienta API. Force zezwala tylko na nowy świeży run i nie omija kill switcha, limitu per-run, budżetu ani policy gates. Nie ma automatycznego płatnego ponowienia.
+- **Testy:** celowane research/CLI/runner = **54 passed**; pełne `python -m pytest` = **169 passed in 7.73s**. Regresje obejmują `USED` dla single/two-stage/staged, blokadę przed callem i explicite force oraz odmowę force z resume.
+- **Koszt / zakres:** **0,000000 USD**; zero API, Playwrighta, realnego researchu, commita/pushu i zmian produkcyjnej bazy.
+- **Następny krok:** Etap 0 / Task 5 — szczelny budżet retry i centralny cap per-run, wyłącznie po osobnej dyspozycji właściciela.
+
+### [2026-07-12] Etap 0 / Task 4 — korekta P1/P2 po niezależnym review
+
+- **Wykryty problem:** pierwsza wersja atomowo chroniła tylko parę COMPLETE+USED. Mogła przyjąć kartę innego tematu, a `runs.SUCCESS` był commitowany wcześniej; dodatkowo standardowy runner tworzył klienta przed guardem.
+- **Kod:** `finalize_research_success` jest jedyną granicą końcową: waliduje run–topic–card–account, po czym w jednej transakcji zapisuje research COMPLETE, terminalny run i USED. Poprawna karta może istnieć wcześniej, ale błąd finalizacji nie pozostawia SUCCESS/COMPLETE/USED. Guard jest kanoniczny, wykonywany przed klientem także w runnerze; `USED` lub COMPLETE bez poprawnej relacji kończy się fail-closed i force tego nie omija.
+- **Testy:** dodano plikową SQLite z reopen dla single/two-stage/staged, rollback błędu `topics` i `runs`, kartę innego tematu/konta, uszkodzone COMPLETE/USED, pre-guard runnera, force dla trzech flow oraz budget/kill switch. Celowane: **129 passed in 8.19s**; pełne `python -m pytest`: **186 passed in 10.16s**.
+- **P2 pozostawione:** dwa równoległe świeże procesy mogą minąć guard przed utworzeniem runu; wymaga trwałego claimu/lease w Etapie 1.
+- **Koszt / zakres:** **0,000000 USD**; zero API, Playwrighta, realnego researchu, commita/pushu i zmian produkcyjnej bazy.
+
+### [2026-07-12] Etap 0 / Task 4 — ostatnia korekta po drugim review
+
+- **Cel:** zamknąć dwa P1: nieidempotentną ponowną finalizację i niepełną macierz regresji.
+- **Kod:** `finalize_research_success` przyjmuje jawny terminalny status, waliduje flow i dozwolone stany źródłowe, wykonuje UPDATE z warunkiem na poprzedni status oraz kontrolą `rowcount`. COMPLETE z identycznym payloadem kończy się no-op bez zmiany `research_card_id`, `cost_usd`, błędów ani timestampów; inna karta, koszt, status, Stage B lub uszkodzony stan są odrzucane i wycofywane.
+- **Testy:** dodano reopen dla identycznej i sprzecznej refinalizacji, SELECTED+COMPLETE, historię FAILED/PARTIAL/COMPLETE w obu kolejnościach, force dla uszkodzonego USED/COMPLETE i złego konta w runnerze oraz capped CLI, a także nieudany forced run dla single/two-stage/staged z zachowaniem starej karty i USED. Celowane: **149 passed**; pełne: **206 passed in 13.32s**.
+- **P2 bez zmian:** P2-17 (dwa równoległe świeże procesy) pozostaje długiem Etapu 1; nie wprowadzono claimu/lease.
+- **Koszt / zakres:** **0,000000 USD**; zero API, realnego researchu i Playwrighta; bez commita, pushu, merge i bez rozpoczęcia Task 5.
+
+### [2026-07-12] Etap 0 / Task 4 — domknięcie dowodów po trzecim review
+
+- **Zakres:** kod produkcyjny pozostał bez zmian. Review odrzuciło poprawną implementację, ponieważ testy nie dowodziły literalnie całego kontraktu.
+- **Testy dodane:** sprzeczna semantyka Stage B dla single i two-stage; COMPLETE z timestampem Stage B niezgodnym z single/staged; ponowna finalizacja kartą innego topicu i innego konta — wszystkie z plikową SQLite, reopen i pełnym porównaniem stanu. Runner oraz capped CLI sprawdzają po account mismatch niezmienność `runs`, `research_runs`, `model_usage` i `research_cards` oraz zakaz konstrukcji klienta.
+- **Wynik:** najbliższe testy **43 passed**; celowane Task 1–4 **155 passed in 12.30s**; pełne `python -m pytest` **212 passed in 13.87s**. Nowe testy nie ujawniły błędu produkcyjnego.
+- **P2:** zapisano P2-18 — dokładne `float == float` może fałszywie odrzucić semantycznie identyczny koszt (`0.1 + 0.2` vs `0.3`), lecz zachowanie pozostaje bezpieczne fail-closed. P2-17 bez zmian.
+- **Koszt / zakres:** **0,000000 USD**; zero API, realnego researchu i Playwrighta; bez commita, pushu, merge i bez rozpoczęcia Task 5.
+
+### [2026-07-12] Etap 0 / Task 5 — szczelny budżet researchu
+
+- **Cel:** domknąć P1-3/P1-4: policzyć wszystkie techniczne próby, ponawiać kontrolę przed retry i usunąć drugą implementację polityki z CLI.
+- **Kod:** dodano `PolicyEngine.check_run_budget(projected_total, cap, current_run_cost, account)` z walidacją fail-closed, priorytetem miesięcznym ADR-012 i kanonem `model_usage(dry_run=0)`. `estimate_with_retries` liczy `base × (1 + max_retries)`. `AnthropicResearchClient` wywołuje workflow-owned callback przed każdą próbą; dostępne usage timeoutu jest utrwalane przed kolejną bramką. Single, two-stage, A1, A2, B i resume przekazują cap/retry. CLI deleguje decyzję i zachowuje estimate-only przed konstrukcją klienta.
+- **Błędy/obserwacje:** pierwsza wersja błędnie omijała budżet, gdy `settings.dry_run=True`; testy istniejącej semantyki wykryły fail-open i skrót usunięto. Miesięczny limit ustawiono przed capem runu, aby zachować ADR-012. Ryzyko `timeout-billed-unrecorded` zapisano bez sztucznego usage.
+- **Testy:** estimator 0/1/2 i wartości ujemne; cap poniżej/równo/powyżej, D/M, dry-run, NaN i zero; callback przed każdą próbą, zero/one call przy odmowie, usage przed retry; integracja persistence+cap; mnożnik A1/A2/B z resume; delegacja i kody CLI; inferencja oraz fail-closed mismatch retry klient↔workflow. Celowane: **86 passed**; pełne `python -m pytest`: **242 passed in 11.88s**.
+- **Zakres:** 0 USD, zero API, realnego researchu i Playwrighta; Task 6 nierozpoczęty; P2-17/P2-18 bez zmian; bez commita i pushu.
+
+### [2026-07-12] Etap 0 / Task 5 — poprawki P1 po pełnym self-review
+
+- **Findingi:** realny pipeline przyjmował brak capu; domyślny cap resume rósł razem z `prior_cost`; CLI/pipeline odczytywały stan obcego runu przed walidacją konta; NaN/Infinity limitów mogły fail-open; brakowało prób timeout→usage→deny osobno dla A1/A2/B.
+- **Reprodukcje:** fake real-mode wykonał pipeline bez capu i zapisał 0.0276 USD; limity NaN/Infinity zwracały `OK`; staged default cap rósł `0.30→0.45→0.60` wraz z kosztem.
+- **Poprawki:** obowiązkowy cap realnego pipeline, stałe capy resume, wczesny account guard, `BUDGET_INVALID_STATE` oraz pełne regresje SQLite/caller dla wszystkich etapów i legacy multiplier.
+- **Wynik:** celowane **224 passed**; pełne **257 passed in 10.60s**; `git diff --check` czysty. Koszt 0 USD, zero API, Playwrighta, commita i pushu.
+
+### [2026-07-12] Etap 0 / Task 6 — wyrównanie klienta tematów
+
+- **Cel:** przed pierwszym realnym runem tematów usunąć lukę, w której płatna odpowiedź mogła zakończyć się parse-error bez lokalnego kosztu, oraz zaakceptować pojedynczy poprawny Markdown code fence bez heurystycznego naprawiania JSON-u.
+- **Kod:** `AnthropicLLMClient` stosuje kolejność response → `Usage` → text → parse. Czysty parser zdejmuje dokładnie jeden kompletny zewnętrzny fence i rozróżnia `LLMProviderError`, `LLMParseError` oraz `LLMSchemaValidationError`. Parse/schema error przenosi usage/model do workflow; klient nie zna SQLite ani `UsageTracker`.
+- **Workflow:** `run_topic_discovery` zapisuje dostępne usage dokładnie raz do `model_usage`, ustawia zgodny `runs.cost_usd`, kończy run `FAILED`, nie zapisuje częściowych topics i ponownie rzuca typowany błąd. Brak usage nie tworzy sztucznego kosztu. Parse error nie ma retry.
+- **Self-review:** pierwsza wersja budowała usage dopiero po złożeniu tekstu odpowiedzi. Nie gubiło to kosztu przy `json.loads`, ale nie spełniało literalnego kontraktu „usage natychmiast po response”; kolejność poprawiono i dodano test domyślnego adaptera z fałszywym SDK.
+- **Testy:** parser raw/fence/whitespace/backticks/truncation/prefix/suffix/schema; klient przez caller i fake SDK; workflow na prawdziwej SQLite dla usage/cost/FAILED/zero topics/policy/account. Celowane topics: **35 passed**; pełne `python -m pytest`: **286 passed**.
+- **Zakres:** 0 USD, zero API, realnego generowania tematów, researchu i Playwrighta; bez commita/pushu; Task 7 nierozpoczęty; P2-17/P2-18/P2-19 bez zmian.
+
+### [2026-07-12] Etap 0 / Task 7 — higiena rejestru decyzji
+
+- **Cel:** zamknąć P2-9 przez sprawdzenie, czy ADR-001/002/003/005/006 nadal opisują aktualną architekturę i faktyczny kierunek wdrożenia, zamiast mechanicznie zmieniać pięć etykiet.
+- **Weryfikacja:** ADR-001 — config i scoring tematów; ADR-002 — jedyny `growth_policy` i brak konkurencyjnej funkcji celu; ADR-003 — brak zewnętrznego generatora grafik w MVP; ADR-005 — fizyczny brak publikacji i `DisabledBrowser`; ADR-006 — jedna SQLite, scoping i testy izolacji kont.
+- **Rozstrzygnięcie numeracji:** zapis „publikacja od Etapu 4” w ADR-005 pochodził sprzed konsolidacji ADR-023. Aktualna roadmapa umieszcza publikację w Etapie 5; nie zmienia to decyzji o braku publikacji w MVP-0 ani wymogu jawnej zgody.
+- **Wynik:** wszystkie pięć ADR-ów pozostaje zgodnych, wdrożonych w aktualnym zakresie i niezastąpionych; statusy zmieniono `PROPOSED → ACCEPTED`. Nie znaleziono P0/P1 ani nowego P2.
+- **Zakres:** wyłącznie dokumentacja; 286 testów offline; `git diff --check` czysty; 0 USD, zero API, researchu, generowania tematów i Playwrighta; Task 8/9 nierozpoczęte.
+
+### [2026-07-12] Etap 0 / Task 8 — walidacja przejść stanów
+
+- **Cel i inwentaryzacja:** przejrzano wszystkie statusowe UPDATE, nie tylko `mark_*`. Zakres wykonawczy obejmuje `finish_run`, helpery single/two-stage/staged, claim/finalizację kandydatów, jawny retry oraz `finalize_research_success`. `research_sources` nie mają statusu; tabele content/approval/interaction nie mają używanych helperów i nie dostały sztucznej logiki.
+- **Kod:** dodano `LifecycleTransitionError` z encją, ID, celem, dozwolonymi źródłami i stanem aktualnym. Każda mutacja ma `status IN (...)`, właściwy `flow`, kontrolę `rowcount` i rollback. Stage A oraz A1 zmieniają status i zapisują źródła/kandydatów w jednej transakcji. Zachowano `ResearchTopicIntegrityError` i atomową finalizację Task 4.
+- **Macierz i idempotencja:** `runs` obsługuje RUNNING→SUCCESS/FAILED/STOPPED, DRY_RUN→DRY_RUN/FAILED oraz jawny wyjątek FAILED→FAILED dla kolejnej próby resume. Staged zachowuje A1/A2/B, PARTIAL i jawny reopen z PARTIAL_EXHAUSTED. Kandydat przechodzi tylko przez claim, a failed wraca do pending wyłącznie przez retry. Identyczne finalizacje, extraction-start i PARTIAL są no-op; sprzeczne terminalne powtórzenia są odrzucane.
+- **Nieudana iteracja i korekta:** pierwsza macierz była zbyt wąska dla legalnego staged `DISCOVERY_COMPLETE→PARTIAL` oraz dla ponownego zapisu wyniku jawnego resume w `runs.FAILED`. Cztery istniejące testy ujawniły regresję; wyjątki zawężono do faktycznych kontraktów resume, bez osłabiania cross-flow ani terminal→inny terminal.
+- **Testy:** `tests/test_status_transitions.py` = **44 passed**. Celowane lifecycle/finalization/candidate = **96 passed**. Pełne `python -m pytest` = **330 passed**. Testy plikowej SQLite dowodzą, że w wyścigu terminalizacji i konkurencyjnej refinalizacji resume dokładnie jeden UPDATE wygrywa, a istniejący race claimu daje jeden claim; rollback po reopen nie zostawia częściowych źródeł, kandydatów ani pól.
+- **Zakres i koszt:** zero migracji, API, realnego researchu, generowania tematów, Playwrighta, Task 9, commita i pushu. P2-17/P2-18/P2-19 bez zmian. Koszt **0,000000 USD**; źródłowa baza i main bez zmian.
+
+### [2026-07-13] Task 8 — korekta dwóch P1 z końcowego review
+
+- **P1-1:** ogólny `finish_run` nie dopuszcza już zmienionego FAILED→FAILED. Jawne nieudane resume korzysta z osobnego `finish_resumed_research_run`, który weryfikuje workflow RESEARCH, relację run–research_run–topic–account, konto, flow i status wznawialny także w warunku UPDATE. Snapshot wcześniejszego `finished_at` jest tokenem CAS; nowy timestamp ma mikrosekundy, więc dwa zakończenia tego samego snapshotu nie mogą oba wygrać.
+- **Workflow:** two-stage oraz staged A2/B oznaczają ścieżkę resume jawnie. Zwykłe i niereseachowe runy nie mają dostępu do wyjątku. Finalizacja sukcesu staged/two-stage przyjmuje FAILED wyłącznie przy poprawnym stanie szczegółowego flow.
+- **P1-2:** sekwencyjny test dwóch połączeń candidate zastąpiono dwoma wątkami, osobnymi połączeniami plikowej SQLite i `Barrier`. Dokładnie jeden claim wygrywa, drugi dostaje `LifecycleTransitionError`; `database is locked` nie jest akceptowane, po reopen pozostaje `attempts=1` i `EXTRACTION_IN_PROGRESS`.
+- **Nieudane próby lokalne:** pierwsza wersja resume CAS zaczynała transakcję przed diagnostycznym SELECT, więc dwa czytające połączenia próbowały podnieść lock i jedno dostało `database is locked`. SELECT przeniesiono przed warunkowy UPDATE; bezpieczeństwo zapewnia CAS w samym UPDATE. Dwa istniejące testy ujawniły też miejsca wymagające jawnego `explicit_resume` i sukces staged po wcześniejszym FAILED.
+- **Weryfikacja:** oba race tests przeszły 10 kolejnych uruchomień; pełny `python -m pytest` = **337 passed**. Koszt 0 USD, zero API, realnego researchu, Playwrighta, Task 9, commita i pushu.
+
+### [2026-07-13] Etap 0 / Task 9 — jeden realny staged run, A1/A2 sukces, B nieudane
+
+- **Zgoda i granice:** właściciel jawnie zatwierdził dokładnie jeden realny run, cap 0,55 USD, `max_retries=0`; zakazał drugiego runu, retry, resume, force, Playwrighta, publikacji i Etapu 1.
+- **Baseline:** branch `dev/first-successful-research-card`, HEAD `c3bd76879f50fc4706fc1621addf18ddf25990b2`, upstream 0/0, clean, **337 passed**, `git diff --check` czysty.
+- **Pre-flight offline:** topic #2 SELECTED i zgodny z aktywnym kontem; brak kompletnego wcześniejszego researchu; kill switch false; klucz/model/SDK gotowe bez ujawnienia sekretu; expected 0,201280 USD, conservative 0,510375 USD, cap 0,550000 USD; daily remaining 2,000000 USD, monthly remaining 39,499384 USD; centralny PolicyEngine `OK`.
+- **Komenda:** `python scripts/run_capped_research.py --topic-id 2 --mode three-stage --discovery-max-searches 1 --max-sources 4 --max-web-searches-per-source 1 --extraction-max-tokens 1500 --max-retries 0 --max-cost-usd 0.55`.
+- **Wynik:** run `c01171bc-7ff5-4b83-bbfa-c0b164137793`. A1 SUCCESS (4 candidates); A2 4/4 SUCCESS, EXTRACTED i VERIFIED; B FAILED po 2200 output tokens, `stop_reason=max_tokens`, ucięty JSON/`ResearchParseError`. Brak Research Card.
+- **Koszt:** A1 0,029243; A2 0,127903; B 0,012904; razem **0,170050 USD**, czyli 30,92% capu. Sześć wpisów `model_usage` sumuje się dokładnie do `runs.cost_usd`; `docs/COSTS.csv` uzupełniony automatycznie.
+- **Stan po procesie:** `research_runs=SOURCES_COMPLETE`, topic SELECTED, 4 VERIFIED, `research_card_id=NULL`. Ogólny run pozostał `RUNNING` z `finished_at=NULL`; zapisano jako otwarty blocker do review, bez poprawiania kodu.
+- **Decyzja:** Task 9 i Etap 0 **nieukończone**. Nie wykonano ponowienia, resume ani force; dokumentacja pozostawiona bez commita do niezależnego review.
+
+### 2026-07-13 — Etap 0 / Task 9: offline naprawa blockerów pierwszego realnego B
+
+- **Zakres:** bez API, bez resume i bez mutacji realnej bazy. Rozpoznanie `stop_reason=max_tokens` przed parse, jawny limit B=3000, ograniczenia długości promptu oraz terminalizacja fresh B failure.
+- **Kontrakt:** truncation przenosi usage i jest księgowane dokładnie raz, bez retry i bez częściowej karty. `runs=FAILED` dostaje `finished_at/error`, `research_runs=SOURCES_COMPLETE`, topic pozostaje SELECTED; jawny resume nadal wykonuje wyłącznie B przez CAS Task 8.
+- **Kosztorys:** B expected 0,017500 / conservative 0,026250 USD; fresh worst-case 0,516375 < 0,55; resume z prior 0,170050 daje 0,196300 < 0,20. Limit jest konfigurowalny i przekazywany do estymatora/policy.
+- **Weryfikacja:** 174 testy celowane (włącznie z cost ledger, prior usage liczone raz i zachowanie JSONL A1), pełne **351 passed**, `git diff --check` bez błędów. Testy użyły fake callerów i plikowej SQLite; dodatkowy koszt 0 USD.
+- **Stan historyczny:** run `c01171bc-7ff5-4b83-bbfa-c0b164137793` nie został zmieniony. Repair i późniejszy płatny resume wymagają oddzielnych zgód. Etap 0 pozostaje aktywny.
+
+### 2026-07-13 — kontrolowany maintenance repair auditu runu Task 9
+
+- **Zgoda:** właściciel zezwolił wyłącznie na lokalną naprawę statusu `c01171bc-7ff5-4b83-bbfa-c0b164137793`; bez API, resume, retry, force i bez A1/A2/B.
+- **Brama:** branch/HEAD/upstream zgodne, working tree clean, **351 passed**, `git diff --check` czysty. Preconditions: RESEARCH/RUNNING/NULL/0,170050; staged/SOURCES_COMPLETE/no card/topic #2; konto zgodne; 4×EXTRACTED/VERIFIED/attempts=1; 6 usage sumujących się do 0,170050; B FAILED z parse error i diagnostyką `max_tokens`.
+- **Backup:** `data/backups/agent_before_task9_status_repair_c01171bc_20260713.db`, `integrity_check=ok`, SHA-256 `F338F4C03353C8D90ACAF9796C2F4A48ADB44F111BEAAEA0152329A7BD7C67A0`; logiczny snapshot powiązanych rekordów identyczny ze źródłem. SHA źródła przed: `908A339978272259C99549CA7549A02AA0442385F1977E95774CF3406F2B8908`.
+- **Operacja:** `BEGIN IMMEDIATE`; ponowny preflight; warunkowy UPDATE po run_id/account/workflow/status/NULL finished/error/dokładnym koszcie; `rowcount=1`, `total_changes=1`; commit, WAL checkpoint, reopen i `integrity_check=ok`.
+- **Wynik:** zmieniły się wyłącznie `runs.status=FAILED`, `finished_at=2026-07-13 05:39:30 UTC`, `error=[maintenance][synthesize_from_cards] ... stop_reason=max_tokens ...`. SHA bazy po: `B7B84176B73936F1948E27D3417E1FB0CF18D5121ACF8BB9C98F2BB3BBC9F3D3`.
+- **Niezmienione:** koszt, usage, research_run, topic, candidates, stage log, account, karty i źródła. Koszt dodatkowy 0 USD. Etap 0 nadal nieukończony; resume B wymaga nowej zgody.
+
+### 2026-07-13 — kontrolowany realny resume wyłącznie B zamyka Etap 0
+
+- **Zgoda i zakres:** właściciel dopuścił dokładnie jeden płatny call B istniejącego runu `c01171bc-7ff5-4b83-bbfa-c0b164137793`, cap całego runu 0,20 USD, `max_retries=0`; zakazał nowego runu, A1/A2, discovery/extraction, force, drugiego B, Playwrighta i Etapu 1.
+- **Komenda:** `python scripts/run_capped_research.py --resume c01171bc-7ff5-4b83-bbfa-c0b164137793 --account nothing_is_accidental --synthesize-max-tokens 3000 --forwarded-context-tokens 2500 --max-retries 0 --max-cost-usd 0.20`.
+- **Preflight:** 351 testów; repo clean i 0/0; run FAILED/0,170050, research staged/SOURCES_COMPLETE/no card, topic #2 SELECTED, 4 VERIFIED, 6 usage; poprzednie B `max_tokens`, brak wcześniejszego sukcesu B. PolicyEngine: allowed, projected 0,196300, cap 0,20, zapas 0,003700 przed callem.
+- **Wynik calla:** dokładnie jedno B, `stop_reason=end_turn`, 1904 input / 2402 output, zero search, koszt 0,013914 USD. Bez retry, A1/A2 i nowego runu.
+- **Finalizacja:** `runs=SUCCESS`, `research_runs=COMPLETE`, topic USED, card #2, 4 VERIFIED; siedem usage i cache kosztu = 0,183964 USD ≤ 0,20. Karta kompletna, ale jakościowo REJECT (`THESIS_UNSUPPORTED`, `CLAIMS_WITHOUT_SOURCES`), więc nie przechodzi do treści.
+- **Stan projektu:** literalne kryterium roadmapy spełnione; Etap 0 zakończony, Etap 1 nierozpoczęty. P2-20: bieżące `research_runs.error` zachowało historyczny błąd pierwszego B mimo COMPLETE; bez naprawy w tym zadaniu.
+
+### 2026-07-13 — Etap 1 / blocker 1: typowane błędy Anthropic i bezpieczny retry
+
+- **Cel:** usunąć przed płatnymi workerami P1, w którym każdy wyjątek `messages.create` stawał się retryowalnym `ResearchTimeout`.
+- **Kod:** dodano zamkniętą hierarchię `ResearchProviderError` dla timeout, SDK-network, 429, 5xx, 401, 403, 400/422, 404 i unknown. Mapper SDK jest wspólny dla A1/A2/B. Retry dopuszcza wyłącznie timeout, SDK-network, 429 oraz 500/502/503/504; inne 5xx i unknown są fail-closed.
+- **Koszt i polityka:** `_before_attempt` nadal wywołuje callback budżetowy przed każdą próbą. Dostępne usage błędu transient jest zapisywane przez callback dokładnie raz przed retry; brak usage nie tworzy zera. P2-19 pozostaje otwarte.
+- **Testy:** timeout z retry i przy `max_retries=0`; connection/429/500/502/503; 400/401/403/404/422/501/unknown; parse/truncation/validation; odmowa budżetu przed drugą próbą; usage exactly once w SQLite; zachowanie typów A1/A2/B. Celowane **64 passed**, pełne **382 passed**.
+- **Zakres:** bez Anthropic API, researchu, resume, schedulerów, jobs, workerów, migracji i rezerwacji budżetowych. Koszt 0 USD. Zmiany pozostawiono bez commita/pushu do niezależnego review.
+
+### 2026-07-13 — korekta P1: typ błędu zachowany w trwałym audycie
+
+- **Root cause:** pipeline łapał typowany `ResearchError`, lecz przed zapisem redukował go do `str(exc)`, więc etap pozostawał, a klasa domenowa i metadane znikały.
+- **Naprawa:** wspólny `_format_audit_error` zapisuje etap, klasę, `status_code`, `retryable`, `stop_reason` i ograniczony komunikat. Ten sam tekst trafia do run/research_run/stage/candidate audit; raw response, cause i obiekty SDK nie są serializowane, a wzorce sekretów są redagowane.
+- **Regresje:** 422 non-retryable z jednym usage po reopen; 401/unknown/plain; 429 po wyczerpaniu retry z dwoma callami i dwoma wpisami; literalne 504; pełna macierz 15 A1/A2/B×typ. Celowane **156 passed**, pełne **406 passed**.
+- **Zakres:** brak zmian retry, mappera, budżetów, usage, kosztu i lifecycle; zero API, scheduler/jobs/workers i kosztu; bez commita/pushu do review.
+
+### 2026-07-13 — korekta dwóch P1: body SDK i samodzielny Bearer poza audytem
+
+- **Root cause:** mapper kopiował `str(APIStatusError)`, a Anthropic SDK 0.116.0 może w nim umieścić całe body odpowiedzi; formatter redagował `Bearer` tylko po nazwanym nagłówku.
+- **Naprawa:** komunikat mappera SDK powstaje teraz wyłącznie z kontrolowanej klasy/statusu, więc body/payload/headers/request nie mogą wejść do błędu domenowego ani audit fields. Formatter redaguje każdy, niezależny od wielkości liter wariant `Bearer <token>`.
+- **Regresje:** syntetyczne 422 z `RAW_RESPONSE_MARKER` zachowuje typ/status/cause, lecz marker nie trafia do run/research_run/stage/candidate audit; trzy warianty Bearer, named keys, `sk-ant-*`, raw_text i długi komunikat są bezpieczne. Pełne **411 passed**, zero API i 0 USD.
+- **Zakres:** retry, mapowanie statusów, usage, koszt i lifecycle bez zmian; bez schedulera/jobs/workers, commita i pushu przed ponownym review.
+
+### 2026-07-13 — F4: atomowy zapis Research Card po staged B — [P1 | DURABILITY]
+
+- **Przyczyna:** sukces B był persystowany w czterech commitach: karta, źródła, audit B SUCCESS, a następnie COMPLETE/run/topic. Crash pozostawiał częściowy artefakt bez poprawnego lifecycle.
+- **Zmiana:** `finalize_staged_research_with_card` wykonuje pełną finalizację staged B w jednym `BEGIN IMMEDIATE`; sprawdza relację run–research_run–topic–account, flow/status, A2, kanon `model_usage` i rowcount.
+- **Odtwarzalność:** fault injection dla karty, drugiego źródła, B SUCCESS i lifecycle; po reopen nie ma wtedy karty, źródeł ani B SUCCESS. Dwa połączenia SQLite dają jedną kartę i jeden B SUCCESS.
+- **Granice:** brak migracji, brak zmiany historycznej bazy, brak API/researchu/resume realnego/Playwrighta. `--force-re-research` i jawne resume B są obsłużone wyłącznie jawnie przez workflow. Koszt **0 USD**.
+- **Wynik:** **420 passed** offline; zmiana oczekuje na niezależne review, bez commita i pushu.
+
+### 2026-07-13 — F4: trzy P1 po review — trwała zgoda force, CAS resume i pełny rollback po reopen
+
+- **Root cause:** atomowość nie ograniczała jeszcze tego, kto wolno finalizować. Dwa luźne booleany rozszerzały lifecycle w pamięci procesu; force nie przetrwał awarii B; cztery fault points nie dowodziły rollbacku całego transaction scope po zamknięciu połączenia.
+- **Zmiana:** `StagedFinalizationContext` rozróżnia `FRESH`, `RESUME_B`, `FORCE_RERESEARCH` i `FORCE_RERESEARCH_RESUME_B`. Migracja `0008_staged_force_reresearch.sql` zapisuje force dla konkretnego staged runu. Resume wymaga w bazie zgodnego `FAILED`, `finished_at`, markera błędu oraz B FAILED; preflight jest niemutujący i działa przed budżetem oraz clientem B.
+- **Atomowość:** dodano 13 kontrolowanych crash points od przed insertem karty do po `topics.USED`; każdy test używa plikowej SQLite, zamyka połączenie i otwiera ją ponownie. Stan po reopen jest dokładnie sprzed finalizacji: brak karty/źródeł/B SUCCESS, brak COMPLETE/terminalnego sukcesu/USED, usage i koszt bez zmian. Genericzny audit nie może ominąć helpera przez staged `B SUCCESS`.
+- **Kontrakt danych:** kolejność źródeł nie jest tożsamością karty — identyczny multiset jest no-opem. Konflikty źródła, topicu i kosztu są fail-closed. Dwa różne runy finalizują się równolegle bez `database is locked` i bez fałszywego konfliktu; ten sam run pozostaje dokładnie-once.
+- **Zakres i wynik:** aktualizacja wyłącznie offline; brak API, realnego researchu/resume, historycznej bazy, schedulera/jobs/workerów, commita i pushu. Celowane regresje oraz pełny suite: **446 passed**; koszt 0 USD. Przed niezależnym review pozostawiono working tree.
+
+### 2026-07-13 — Growth & Editorial Operating System: integracja wyłącznie dokumentacyjna — [ROADMAP 3/6/7 | PROPOSED]
+
+- **Cel:** opisać docelowy system treści i wzrostu bez rozpoczęcia Etapu 3, 6 lub 7.
+- **Dokumenty:** dodano `docs/research/FABLE_GROWTH_EDITORIAL_REPORT.md` jako oznaczone źródło zewnętrzne oraz `docs/CONTENT_AND_GROWTH_BLUEPRINT.md` ze statusem PROPOSED.
+- **Decyzje:** ADR-032–036 ustalają modularizację, `SKIP`, izolację NIA/build logu, rozdzielenie followers/subscribers oraz granicę Notes: dry-run w Etapie 3, publiczne operacje w Etapie 6.
+- **Zakres:** zaktualizowano krótkie odwołania w architekturze, roadmapie, stanie i kronice. Bez kodu, konfiguracji, migracji, bazy, API, publikacji, commita i pushu; koszt 0 USD. Zmiany pozostają do niezależnego review.
+
+### 2026-07-13 — F4: COMPLETE nie omija już execution mode — [P1 | DURABILITY]
+
+- **Przyczyna:** terminalna gałąź idempotentna porównywała kartę, źródła, koszt i lifecycle przed `StagedFinalizationContext`, więc zgodny payload mógł ukryć sprzeczny mode.
+- **Naprawa:** finalizer waliduje context przed no-opem. FRESH/force sprawdzają trwały marker i brak semantyki resume; resume dodatkowo wymaga zachowanego markeru oraz B FAILED z tym samym `finished_at` snapshotu.
+- **Regresje:** literalne FRESH→FRESH, FRESH→FORCE, FRESH→RESUME, FORCE→FORCE, FORCE→FRESH, force-resume bez snapshotu i resume CAS mismatch; konflikty sprawdzone po reopen bez mutacji. Pełne **449 passed**, 0 USD, bez API.
+- **Zakres:** brak migracji, historycznej bazy, schedulerów, jobs, workerów, commita i pushu; do ponownego niezależnego review.
+
+### 2026-07-13 — F4 P1: publiczna finalizacja legacy nie omija staged helpera — [DURABILITY]
+
+- **Przyczyna:** `finalize_research_success` i alias `mark_research_run_complete` nadal przyjmowały staged `SYNTHESIS_PENDING`; były więc alternatywną ścieżką do COMPLETE/SUCCESS/USED bez typed contextu, pełnej transakcji karty i źródeł ani kanonicznej sumy `model_usage`. Gałąź COMPLETE mogła dodatkowo zwrócić legacy no-op.
+- **Naprawa:** oba wejścia są teraz wyłącznie dla `single`/`two_stage` i odrzucają każdy staged run zaraz po odczycie relacji, przed payloadem, terminalnym no-opem, lifecycle i użyciem przekazanego kosztu. Audyt alternatyw wykazał ogólny `finish_run`, który mógł wpisać staged `SUCCESS`/`DRY_RUN`; dostał wąską odmowę tylko dla tych sukcesów, bez zmiany legalnych porażek. Staged sukces pozostaje wyłącznie w `finalize_staged_research_with_card`.
+- **Regresje:** generic sprawdza staged SYNTHESIS_PENDING z arbitralnym kosztem, COMPLETE z identyczną kartą i kosztem oraz FAILED; alias sprawdza SYNTHESIS_PENDING i COMPLETE; `finish_run` sprawdza SUCCESS i DRY_RUN. Każdy przypadek porównuje po reopen pełny stan kart, źródeł, auditu B, usage, cache kosztu, timestampów, błędów, card ID i force markera. Legacy single/two-stage oraz no-op są zachowane.
+- **Wynik i zakres:** celowane 151 testów oraz pełne `python -m pytest` = **454 passed in 17.88s**; `git diff --check` czysty. Zero API, realnego researchu, bazy produkcyjnej, migracji, schedulerów/jobs/workerów, commita i pushu; koszt **0 USD**. Zmiany czekają na powtórne niezależne review.
+
+### 2026-07-13 — pełny snapshot Fable i mapa roadmapy — [DOCS | ROADMAP 2/3/6/7]
+
+- **Cel:** dokończyć wyłącznie dokumentacyjną integrację pełnego fragmentu „Growth & Editorial Operating System” z dostarczonego materiału, bez audytu technicznego i bez promptu źródłowego.
+- **Wynik:** `docs/research/FABLE_GROWTH_EDITORIAL_REPORT.md` zawiera 16 kompletnych sekcji, formaty A1–A9/N1–N16/K1–K8, routing, trzy warianty kosztowe, E1–E10, granice autonomii i oznaczenia [OF]/[TW]/[AN]/[WN]. Blueprint zawiera tylko statusy i mapowanie, bez deklaracji wdrożenia.
+- **Granica:** brak kodu, migracji, bazy, testów, API, researchu, publikacji, commita i pushu; koszt 0 USD. Kosztorysy są oznaczone jako niewalidowane, a zmiany pozostają do niezależnego review.
+
+### 2026-07-13 — Etap 1: trwała foundation jobs, lease i budżetu — [INFRA | OFFLINE]
+
+- **Cel:** zbudować wyłącznie storage layer kolejki przed worker loopem: `jobs`, `system_flags`, lease, idempotency, blokadę aktywnego research topicu i globalną rezerwację budżetu.
+- **Zmiana:** `0009_jobs_system_flags.sql` jest migracją addytywną/atomową. `SqliteStorage` ma typed enqueue/claim/lifecycle/heartbeat/recovery, flagi runtime i rezerwacje w `BEGIN IMMEDIATE`; marker `external_effect_started_at` zatrzymuje auto-retry po pierwszym skutku, więc BROWSER lub job po markerze przechodzi do NEEDS_VERIFICATION, a terminalne joby zwalniają rezerwację.
+- **Kanon i granice:** realny wydatek pozostaje wyłącznie w `model_usage`; rezerwacja nie jest kosztem i pozostaje zablokowana w NEEDS_VERIFICATION. Nie powstał worker, scheduler runtime, dispatcher, PolicyEngine runtime integration, API ani akcja zewnętrzna.
+- **Weryfikacja:** fresh/upgrade/rollback/re-run 0009 oraz 9 nowych testów kolejki z plikową SQLite, Barrier i reopen; pełne `python -m pytest`: **463 passed in 27.40s**. Koszt **0 USD**; bez commita i pushu, do niezależnego review.
+
+### 2026-07-13 — Etap 1: minimalny durable worker LOCAL/RESEARCH dry-run — [INFRA | OFFLINE]
+
+- **Cel:** wykonać najwyżej jeden bezpieczny job przez istniejący atomowy claim bez odblokowania kosztu, sieci lub działań publicznych.
+- **Zmiana:** dodano `app/scheduler/worker.py` i zamknięty `dispatcher.py`; lifecycle to QUEUED→LEASED→RUNNING→DONE/FAILED/NEEDS_VERIFICATION z istniejącym heartbeatem i CAS. `PolicyEngine` czyta bez cache pięć flag SQLite przy każdej iteracji. `worker --once` używa tych samych zależności; tryb ciągły wymaga jawnego `--poll-seconds`.
+- **Research:** zaakceptowany jest wyłącznie ścisły payload `dry_run=true`. Dispatcher wywołuje istniejący jednoetapowy pipeline przez offline-only punkt runnera z FakeResearchClientem, a callback zaraz po utworzeniu runu wiąże `jobs.run_id` przez CAS. Nie powstała druga logika pipeline'u ani zapis do `RESEARCH_LOG.md`.
+- **Bezpieczeństwo:** brak/uszkodzenie dowolnej flagi blokuje; `dry_run=false`, paid oraz browser/public są BLOCKED. Nie ma dynamicznego importu, wykonywania callable z payloadu, API, sieci, resume, `run_capped_research.py`, migracji ani modyfikacji `data/agent.db`.
+- **Weryfikacja:** 19 nowych testów workera obejmuje dwa połączenia SQLite z Barrier, recovery/reopen, heartbeat, utratę lease, terminalność, backoff pustej kolejki i CLI na temp DB. Celowane: worker + jobs + policy + research flow zielone; pełne `python -m pytest`: **489 passed in 21.07s**. Koszt **0 USD**; bez commita i pushu.
+
+### 2026-07-13 — Etap 1: ścisłe job→run i fail-closed recovery przypiętego researchu — [DURABILITY | OFFLINE]
+
+- **Cel:** domknąć dwa P2 workera bez budowania reapera ani resume: job może wiązać tylko swój właściwy workerowy research run, a crash po zapisaniu `run_id` nie może prowadzić do nowego pipeline'u.
+- **Zmiana:** `attach_job_run` w `BEGIN IMMEDIATE` waliduje `kind=RESEARCH`, workflow, topic, account, owner, aktywny lease, `runs.workflow/status` oraz odpowiadający `research_runs` tego samego topicu i dozwolonego flow `single`. Inny `run_id` daje typowany konflikt, a relacja niezgodna kończy się kontrolowanym błędem bez mutacji.
+- **Recovery:** wygasły LOCAL oraz RESEARCH bez `run_id` zachowują bezpieczny powrót do QUEUED. RESEARCH z `run_id` przechodzi do NEEDS_VERIFICATION z `RESEARCH_RUN_RECONCILIATION_REQUIRED`; `run_id` i rezerwacja budżetu pozostają trwałe, a worker nie dispatchuje joba ponownie. External effect ma pierwszeństwo i zachowuje poprzedni reason.
+- **Granice:** brak zmian research pipeline A1/A2/B, promptów, realnego resume, klienta Anthropic, migracji, API, sieci, `data/agent.db`, paid/browser workera oraz reapera `runs`.
+- **Weryfikacja:** 22 nowe testy kolejki i 1 test workera obejmują pełną macierz relation/CAS, terminalność, owner/expiry, recovery bez/z runem, terminalny/failed/partial run, rezerwację, external effect, no-dispatch i dwa workery recovery z Barrier/reopen. Celowane: jobs **38**, worker **20**, research flow **29**, storage **12**; pełne `python -m pytest`: **512 passed in 22.45s**. Koszt **0 USD**; bez commita i pushu, do niezależnego review.
+
+### 2026-07-13 — Etap 1: jawny stale reaper osieroconych runów — [DURABILITY | OFFLINE]
+
+- **Cel:** domknąć trwały audit `RUNNING`, nie tworząc automatycznego resume, scheduler loop ani dostępu do API.
+- **Zmiana:** `reap_orphaned_stale_runs(stale_before, now)` działa w `BEGIN IMMEDIATE`; wybiera tylko stare `RUNNING`, a każdy `UPDATE` ma CAS po statusie, `finished_at`, `started_at` i braku joba `QUEUED/LEASED/RUNNING` z tym `run_id`. Sukces zapisuje `STOPPED`, deterministyczny `finished_at` i krótki `STALE_RUN_REAPER`.
+- **Kolejność:** CLI `reap-runs --once --stale-after-seconds X` najpierw odzyskuje lease jobów. Przypięty RESEARCH trafia wówczas do `NEEDS_VERIFICATION`; reaper może zatrzymać jego run, lecz worker nie dispatchuje ani nie wznawia joba. Cykliczny scheduler reapera nie powstał.
+- **Sanitacja:** `JobRunRelationError` nie renderuje już `job_id` do `last_error`; komunikat ma jedną linię, limit 240 znaków i nie może przenieść tokenopodobnego ID.
+- **Weryfikacja:** 16 literalnych testów reapera + 1 test sanitacji, obejmujących stale/fresh, blokadę przed recovery wygasłego lease, terminalne statusy, expiry/reconciliation, race SUCCESS/FAILED, dwa reapery z Barrier, reopen/integrity, no-dispatch i CLI temp DB. Celowane: jobs **53**, worker **22**, research flow **29**, storage **12**; pełne `python -m pytest`: **529 passed**. Brak API, sieci i zmian `data/agent.db`; koszt **0 USD**; bez commita i pushu, do niezależnego review.
+
+### 2026-07-13 — Etap 1: okresowy heartbeat podczas synchronicznego dispatchu — [DURABILITY | OFFLINE]
+
+- **Cel:** utrzymać istniejący lease przez długi synchroniczny dispatch bez tworzenia nowego mechanizmu lease, retry dispatchu, schedulera ani działania zewnętrznego.
+- **Zmiana:** `HeartbeatGuard` otwiera własne połączenie SQLite wyłącznie na czas dispatchu. Jest niedaemonowy, używa stop eventu i zawsze jest zatrzymany oraz joinowany. Worker korzysta nadal z istniejącego `heartbeat_job_lease`; produkcyjna kompozycja ma lease 60 s i interwał 20 s. Wątek nie współdzieli połączenia SQLite workera.
+- **Semantyka bezpieczeństwa:** foreign owner i wygasły lease są odrzucane przez istniejący CAS, więc guard nie wskrzesza lease. Utrata lease albo błąd guarda blokuje `DONE`; utrata lease ma pierwszeństwo przed wyjątkiem dispatchu. Local/Research dry-run nie dostają retry dispatchu.
+- **Weryfikacja:** 15 literalnych testów bez `sleep` sterowanych Event/Barrier obejmuje odnowienie lease, recovery, ownera/expiry, zakończenie wątku po sukcesie/błędzie/utracie lease, priorytet utraty lease, terminalność, konfigurację fail-closed, pustą kolejkę, policy denial, dwa workery i RESEARCH dry-run. Celowane: worker **41**, jobs + research flow + storage zielone; pełne `python -m pytest`: **548 passed**. `data/agent.db` ma ten sam SHA-256 przed i po testach; koszt **0 USD**, bez API, sieci, realnego researchu, migracji, commita i pushu.
+
+### 2026-07-13 — Korekta P1: bounded lifecycle heartbeat guarda — [DURABILITY | OFFLINE]
+
+- **Korekta modelu wątku:** wcześniejszy wpis opisuje stan sprzed review P1. Guard jest daemonem wyłącznie jako ostatnia osłona procesu, nie jako zamiennik cleanupu. Worker zawsze ustawia stop event, wywołuje `wake`, wykonuje bounded join z timeoutem i sprawdza `is_alive()`. Normalnie wątek kończy się i jest dołączony; timeout może pozostawić go żywego do czasu odblokowania factory, heartbeat, waiter albo `close`, lecz taki worker nie może oznaczyć joba `DONE`. Po późniejszym odblokowaniu guard widzi stop event przed kolejnym heartbeat.
+- **Stan i rozstrzygnięcie:** `lost_lease` i `failure` są tylko in-memory w guardzie; trwały stan joba zachowuje SQLite, a późniejsze rozstrzygnięcie należy do recovery/reconciliation.
+- **Weryfikacja po korekcie:** **15** pierwotnych testów periodic heartbeat + **11** bounded lifecycle/P1 = **26** bezpośrednich testów heartbeat; `tests/test_worker_runtime.py`: **59 passed**; pełny suite: **566 passed**. Hash `data/agent.db` pozostał bez zmiany; brak API, sieci, realnego researchu, migracji, commita i pushu; koszt **0 USD**.
+
+### 2026-07-13 — Etap 1: osobny maintenance loop recovery → stale reaper — [DURABILITY | OFFLINE]
+
+- **Cel:** umożliwić kontrolowane, powtarzalne porządkowanie wygasłych lease i osieroconych runów bez przekształcania reapera w workera, schedulera systemowego albo boczne wejście do researchu.
+- **Zmiana:** nowy `MaintenanceRunner` otwiera na każdy cykl własne SQLite, odczytuje jeden czas, zawsze najpierw uruchamia istniejące `release_or_requeue_expired_leases(now)`, potem `reap_orphaned_stale_runs(now - stale_after, now)` i kontrolowanie zamyka połączenie. `MaintenanceCycleResult` utrwala wyniki obu istniejących helperów; nie dodano duplikatu logiki storage.
+- **CLI i poll:** `maintain --once --stale-after-seconds X` wykonuje dokładnie jeden cykl. `maintain --poll --interval-seconds X --stale-after-seconds Y` zaczyna od razu, czeka stały interwał wyłącznie po ukończonym cyklu, nie nakłada iteracji i ma jawny stop event. Na `KeyboardInterrupt` CLI kończy się kontrolowanym kodem niezerowym. Na błąd factory, recovery, reapera, close lub waitera pętla zatrzymuje się fail-closed, bez retry. Jeśli recovery/reaper i `close()` zawodzą razem, kontrolowany komunikat zachowuje primary operation error oraz secondary cleanup error; sam błąd `close()` nie może wyglądać jak sukces.
+- **Granice:** maintenance nie claimuje jobów, nie instancjuje workera/dispatchera/pipeline’u, nie wykonuje API, sieci, paid/browser/public action ani resume i nie zgaduje `DONE`. Nie odczytuje worker flags celowo: safety cleanup działa przy `worker_enabled=false`, `safe_mode=true` i `kill_switch=true`. One-shot/poll są VERIFIED OFFLINE; cron/service/autostart i okna redakcyjne pozostają NOT_STARTED, realne resume NOT IMPLEMENTED, live API NOT VERIFIED, paid/browser/public BLOCKED.
+- **Weryfikacja:** 26 deterministycznych testów Event/Barrier/fake waiter/injected clock/temp SQLite obejmuje porządek recovery→reaper, one-shot, poll/stop/fixed delay i aktywny Event waiter, błędy primary/cleanup i `KeyboardInterrupt` z cleanupem, RESEARCH `run_id`+rezerwację, dwa runnery/CAS/close→reopen, integrity, CLI i niezmienne wyłączone flagi workera. Celowane: maintenance **26**, worker runtime **59**, jobs queue **53**; pełny `python -m pytest`: **592 passed**. Hash `data/agent.db` bez zmiany, brak API/sieci/researchu, koszt **0 USD**. Bez commita i pushu, do niezależnego review.
+
+### 2026-07-16 — Etap 1: QP-01, quiesce bez self-detection child PowerShell — [MIGRATION SAFETY | OFFLINE]
+
+- **Cel:** usunąć wyłącznie false positive, w którym `_default_quiesce_probe` blokował własny child PowerShell przez literalną ścieżkę repozytorium w command line.
+- **Zmiana:** PowerShell zwraca pełny snapshot procesów, a Python klasyfikuje current PID, parent launcher, dokładnie zarejestrowany helper oraz realne role. Helper wymaga zgodności PID/parent/executable/creation time/nonce; nie ma wykluczenia całego drzewa. Pełna diagnostyka blocking process jest zachowywana w wyjątku i raporcie.
+- **Bezpieczeństwo:** worker, maintenance, operator CLI, task i uchwyt DB/WAL/SHM nadal zatrzymują. Sam project root jest nieblokującą obserwacją tylko przy kompletnej tożsamości i braku roli; niejednoznaczność jest fail-closed. Timeout helpera ma terminate/kill/communicate cleanup.
+- **Weryfikacja:** 13/13 dedykowanych kontrprób Windows/temp DB; 17/17 istniejących testów migracji; collect i pełny suite **1079/1079**; cztery partycje **259 + 264 + 277 + 279 = 1079**, exact-once; `compileall` i `git diff --check` zielone.
+- **Granice:** zero sieci/API/SDK/browsera/publikacji/kosztu; bez migracji, zapisu `data/agent.db`, tasków Windows i operacji Git. Status: **`CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`**.
+
+### 2026-07-16 — Etap 1: kontrolowana migracja produkcyjna 0009 → 0014 po QP-01 — [PRODUCTION DATABASE | CONTROLLED]
+
+- **Zgoda i zakres:** właściciel zatwierdził dokładnie jedną próbę pakietowego executora `run_stage1_in_place_migration` z jawnym `--confirm-in-place-production-migration`, na branchu `dev/first-successful-research-card` i HEAD `ddc3c63190eb82bca171174dc7ee70c2d0a1ec15`. Nie wykonywano review, pełnego audytu ani drugiej próby.
+- **Gate wejściowy:** branch, HEAD, upstream `0/0`, pusty staging i brak aktywnej operacji Git były zgodne. Nie było procesu projektu, workera, maintenance, operator CLI, taska Windows projektu ani `agent.db-journal`; WAL miał 0 B. DB/WAL/SHM odpowiadały staremu baseline'owi schema 0009.
+- **QP-01:** helper PowerShell otrzymał klasyfikację `PROBE_HELPER` z reason code `PROBE_REGISTERED_HELPER_IDENTITY` i nie był procesem blokującym. Ten sam wynik uzyskano w trzech gate'ach executora: initial, after-backup i pre-mutation. QP-01 nie powtórzył się.
+- **Wykonanie:** executor zweryfikował pełny backup schema 0009, rehearsal na kopii, świeżość produkcyjnych plików, następnie zastosował migracje 0010–0014 i wykonał post-verification. Wynik: **`MIGRATION COMPLETE — NEW BASELINE ESTABLISHED`**.
+- **Dowody:** 14 migracji, 35/35 triggerów, 13 legacy proofs, `integrity_check=ok`, `foreign_key_check=[]`, 0 jobs, 0 provider attempts i 0 reconciliation events. Historyczne `runs` i `research_runs` są bitowo zgodne ze snapshotem executora; koszt historyczny pozostał `0.684580 USD`.
+- **Flagi fail-closed:** `kill_switch=true`, `safe_mode=true`, `worker_enabled=false`, `paid_actions_enabled=false`, `browser_actions_enabled=false`.
+- **Nowy baseline:** `data/agent.db` ma SHA-256 `630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6`, rozmiar 335872 B i mtime UTC `2026-07-16T19:42:25.5377560Z`. Pusty WAL i SHM zostały ujęte w baseline.
+- **Granice:** zero live API, sieci, SDK, browsera, publikacji, nowego kosztu i Windows Tasks; worker i maintenance nie zostały uruchomione. Nie wykonano stage, commita, pushu, PR ani merge. Etap 1 pozostaje **OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE**.
+
+### 2026-07-16 — Materializacja niezależnego review QP-01 i stanu po migracji — [REVIEW | CHECKPOINT]
+
+- **Pochodzenie:** właściciel dostarczył ukończony wynik niezależnego review; implementer checkpointu nie wykonywał review, a reviewer nie modyfikował repozytorium.
+- **Werdykt:** `APPROVE WITH MINOR/P2`; QP-01 `APPROVED`; produkcja `VERIFIED / SCHEMA 0014`; nowy baseline `VERIFIED`; checkpoint autoryzowany po wykluczeniu chronionych zmian użytkownika.
+- **Dowód:** baseline `630E3411F2FDFBD232F593DC7E7F3B0DF3EB8125274365815CDBDBC2A3C036A6`, 14 migracji, 35/35 triggerów, 13 legacy proofs, 18 zgodnych digestów, `integrity_check=ok`, `foreign_key_check=[]`, koszt `0.684580` USD, 0/0/0 jobs/provider attempts/reconciliation events; QP-01 13/13 testów implementera i 23/23 niezależne kontrpróby; suite 1079/1079.
+- **P2:** synchronizacja bieżących statusów, selektywne odseparowanie prywatnego bloku `BUILD_LOG` oraz repozytoryjny artefakt pochodzenia review. Brak CRITICAL i MAJOR/P1.
+- **Granice:** Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`; live API `FORBIDDEN`; bez ponownej migracji i bez Windows Tasks.
+
+### 2026-07-17 — WAVE LA-01: kanoniczny operator controlled live acceptance (LA-01-A/B/C) — [STAGE 1 | OFFLINE CANDIDATE]
+
+- **Cel:** zaimplementować jeden spójny operatorski kontrakt umożliwiający w przyszłości dokładnie jeden controlled live acceptance i naprawić trzy blokery preflightu; bez realnego wykonania.
+- **LA-01-A (autorytatywny cennik):** `app/core/pricing.py` + `config/pricing_profiles.yaml`(`.example`); wersjonowane profile z `status: example|approved`; realny enqueue wymaga `--pricing-profile` zatwierdzonego, wersjonowanego, zgodnego modelem profilu; durable job utrwala `pricing_profile_id`+`version`; `.env` przestał być autorytatywny dla realnego kosztu.
+- **LA-01-C (max_tokens):** `--max-tokens` w kanonicznym CLI, kontrakt `[256, 8192]` bez float; inwariant CLI==persisted==provider==projekcja==raport; default 3000.
+- **LA-01-B (wrapper):** `app/operations/controlled_live.py` + `app.main controlled-live-once`; preflight, zamrożony plan, atomowe otwarcie profilu (`kill_switch` ostatni), jeden `worker --once`, bezwarunkowe fail-closed (`kill_switch` pierwszy), reopen+potwierdzenie, raport bez sekretów; filesystem recovery marker O_EXCL; atomowy `apply_security_flag_profile` (bez migracji).
+- **Blokada:** `REAL_CONTROLLED_LIVE_ENABLED=false`; `controlled-live-once` odmawia realnego wykonania; jedynym kodem otwierającym flagi paid/worker jest wrapper (zawsze przywraca fail-closed).
+- **Weryfikacja:** 48 nowych testów; pełny suite **1127/1127**; `compileall` i `git diff --check` zielone. Zero sieci/API/kosztu; produkcyjna `data/agent.db`, produkcyjne `system_flags` i Windows Tasks niezmienione; bez commita i pushu. Status: `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.
+
+### 2026-07-17 — WAVE LA-01-R1: pełna naprawa po `REJECTED — MAJOR` — [STAGE 1 | OFFLINE CANDIDATE]
+
+- **Pozycja roadmapy:** Etap 1 pozostaje `OPEN / BLOCKED PENDING LA-01-R1 REVIEW AND CONTROLLED LIVE ACCEPTANCE`; Etap 2 nie rozpoczęty.
+- **Review wejściowy:** pierwsza LA-01 odrzucona. Naprawiono P1-01…P1-06 i P2-01…P2-04 bez mikropoprawek i bez live acceptance.
+- **Pricing:** wymagane `approved_by`, wersja, model, jawna waluta/jednostki i dokładnie pięć dodatnich cen `Decimal`; fingerprint obejmuje cały kontrakt. Durable intent utrwala ceny, ID/wersję/model, fingerprint, max tokens/searches, cap oraz projected/pessimistic cost. `run_capped_research.py`, wrapper i dispatcher używają i ponownie sprawdzają ten sam approved profile; direct/sentinel enqueue nie dochodzi do provider boundary.
+- **Wrapper i ownership:** `controlled-live-once` rzeczywiście wywołuje wrapper; normalny composition root składa storage, Policy Engine, dispatcher, kanoniczny worker adapter, pricing resolver, zatwierdzony quiescence probe, report writer i recovery. Session marker oraz payload wiążą session/operation/job/request/attempt/token fence. Sam `SUCCEEDED` nie wystarcza.
+- **Raport/recovery:** sukces wymaga kompletnego durable evidence, nowego połączenia po restoration i trwałego zanonimizowanego raportu. Marker używa O_EXCL, file fsync, replace i directory barrier; jest usuwany dopiero po raporcie. `REQUEST_STARTED` pozostaje możliwym unknown outcome, trafia do reconciliation i nigdy nie jest retryowany.
+- **Flagi:** pełny profil pięciu flag jest atomowy; `kill_switch` ostatni przy otwarciu i pierwszy przy zamknięciu. Pojedynczy setter może tylko przywracać fail-closed.
+- **Weryfikacja:** collect/full **1151/1151**; exact-once **275+282+291+303=1151**; cztery partycje zielone. Kontrpróby obejmują forged pricing, direct enqueue, foreign result/request/fence, brak attemptu/usage/settlementu, attempt #2, bare claim, report/marker/restoration failure, sekret/prompt, recovery `REQUEST_STARTED`, prawdziwy reopen, future `earliest_run_at`, branch/HEAD i partial flags.
+- **Końcowa kontrpróba kompozycji:** audit po pierwszej zielonej regresji wykazał, że kanoniczny enqueue nie zapisywał jeszcze `controlled_session`, więc realny wrapper z `allow_job_creation=false` zawsze odmówiłby. Wspólny deterministyczny helper job/session identity został użyty przez enqueue i wrapper, a istniejący test pełnego sukcesu zmieniono tak, aby najpierw wykonał kanoniczny enqueue, potem wrapper bez prawa tworzenia joba. Ponowny pełny suite i wszystkie partycje pozostały zielone: **1151/1151**.
+- **Granice:** zero sieci, realnego API/SDK, browsera, publikacji i kosztu; wyłącznie fake worker/callery i tymczasowe bazy. Produkcyjna DB/WAL/SHM oraz system flags niezmienione; brak Windows Tasks i operacji Git. Prywatny wcześniejszy blok tego pliku zachowany.
+- **Status:** `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; controlled live acceptance niewykonany.
+
+### 2026-07-17 — Niezależny review LA-01-R1 i autoryzacja selektywnego checkpointu — [REVIEW | CHECKPOINT]
+
+- **Werdykt:** `APPROVE WITH MINOR/P2`; LA-01-R1, pricing contract, controlled-live wrapper i max_tokens zatwierdzone; P1-01…P1-06 zamknięte.
+- **Open P2:** nieosiągalny fallback `sanitize_report_payload` powinien rekurencyjnie sanitizować `str(value)`. Rekomendacja jest nieblokująca i nie została dodana do reviewed diffu.
+- **Checkpoint:** właściciel autoryzował jeden selektywny commit i push wyłącznie `dev/first-successful-research-card`. Prywatny blok „Instrukcja pisania → wersja 2.1” oraz cały katalog instrukcji pisania muszą pozostać poza stagingiem.
+- **Granice:** bez live acceptance, realnego pricing profile, API/SDK, browsera, publikacji, Windows Tasks, PR i merge. Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`.
+
+### 2026-07-17 — Real pricing profile i finalny preflight bez API — [STAGE 1 | PREFLIGHT]
+
+- **Pozycja roadmapy:** Etap 1 pozostaje `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`; Etap 2 nie został rozpoczęty.
+- **Zrobiono:** utworzono wyłącznie lokalny, niecommitowany `config/pricing_profiles.yaml` z wartości zatwierdzonych przez właściciela; zweryfikowano resolver, model, wersję, status, `approved_by`, USD, kanoniczną jednostkę, pięć dodatnich `Decimal`, pricing fingerprint, frozen intent i cap.
+- **Identity:** account `nothing_is_accidental`, topic `3` (`SELECTED`, bez Research Card), operation key `stage1-live-acceptance-20260717`, planowany job `real-research-09fd6a30e07e63e96699ca002dbaead4`, request `…:research:1`, attempt `1`, retries `0`.
+- **Koszt:** projected input `0.045000`, max output `0.015000`, jeden web search `0.010000`; projected razem `0.070000`, pessimistic `0.105000`, cap `0.120000`, headroom `0.015000` USD. Maksymalny dopuszczony wzrost miesięczny tej operacji: `0.120000 USD`; bieżący historyczny koszt miesiąca `0.684580 USD`.
+- **Weryfikacja:** focused offline/fake suite `70 passed`; bez providera, SDK, sieci i produkcyjnych mutacji.
+- **Wynik:** real pricing profile `READY`; runtime live preflight `BLOCKED` fail-closed, ponieważ job nie został enqueue’owany zgodnie z zakresem, a finalny DB SHA musi zostać zamrożony po osobno autoryzowanym enqueue. Gate pozostaje false.
+- **Ochrona:** prywatny wcześniejszy blok tego pliku i cały katalog instrukcji pisania zachowane; brak stage/commit/push/PR/merge.
+
+### 2026-07-17 — Jedyna autoryzowana komenda controlled live — [STAGE 1 | FAILED PRE-PROVIDER]
+
+- **Zgoda:** dokładnie jeden istniejący job/request/session, provider Anthropic, Sonnet 5, `max_tokens=1500`, jeden search, cap `0.12`, attempt 1, retry 0.
+- **Hard preflight:** PASS dla zamrożonego branch/HEAD/DB SHA/schema/job/fingerprintów/ciszy/flags.
+- **Gate:** dokładnie jedna linia `False→True`, diff 1/1, bez stagingu; po wyniku natychmiast `True→False`, brak pozostałego diffu.
+- **Komenda:** uruchomiona dokładnie raz; exit 1, `PREFLIGHT_FAILED` przed provider boundary. Nie wykonano retry ani drugiej próby.
+- **Post-verification:** `provider_request_started=false`; attempts/usage/reconciliation=0; job `QUEUED`, bez run/research_run/lease/rezerwacji; marker usunięty po trwałym sanitizowanym raporcie; flags fail-closed; nowy koszt 0 USD.
+- **Status:** `LIVE ACCEPTANCE FAILED — INVARIANT BREACH`; Etap 1 otwarty do niezależnego review. Prywatny wcześniejszy blok tego pliku zachowany.
+
+### [2026-07-17 11:27] Etap 1 / WAVE LA-02 — ancestry quiescence i trwała diagnostyka preflightu
+
+- **Cel zadania:** usunąć observer effect `PROCESSES_PRESENT` bez szerokiego ignorowania procesów i zachować bezpieczny inner reason w trwałym raporcie; bez drugiej próby live.
+- **Co zostało wykonane:** wdrożono zweryfikowany ancestry contract PID/PPID/full identity/creation order/entrypoint; zachowano pełne diagnostics w adapterze; `_safe_error` rozdziela outer/inner reason; sanitizer redaguje wrażliwe flagi CLI i rekurencyjny fallback; dodano `controlled-live-quiescence-check` bez SQLite/storage/providera/markera/gate'u.
+- **Pliki utworzone / zmienione:** `app/operations/stage1_migration.py`, `app/operations/controlled_live.py`, `app/main.py`, `tests/test_la02_quiescence.py`, regresje LA-01/QP-01 oraz obowiązkowe źródła prawdy, rejestry i kronika.
+- **Wynik:** 21 nowych testów LA-02 i jedna regresja fake controlled-live ancestry; full collect/pass 1174/1174, exact-once partycje `284+284+298+308`. PowerShell/pwsh/cmd/bash i wielopoziomowe ancestry przechodzą; niezależny operator/worker/maintenance/scheduler/drugi entrant, holder/task/PID reuse/incomplete identity blokują. Durable report zachowuje `PREFLIGHT_FAILED / PROCESSES_PRESENT` i sanitizowane PIDs/reasons.
+- **Czego jeszcze brakuje:** niezależny review LA-02, nowa jawna autoryzacja właściciela oraz pozytywny controlled live acceptance. Etap 1 pozostaje OPEN/BLOCKED; druga próba nie jest dozwolona.
+- **Koszt:** `0.000000 USD`; zero sieci/API/SDK/browsera/publikacji. Produkcyjna schema 0014, job `QUEUED/attempts=0`, flags fail-closed i gate `False` zachowane.
+- **Następny krok:** przekazać LA-02 do niezależnego review. Nie uruchamiać `controlled-live-once` bez nowej osobnej zgody.
+
+### 2026-07-17 — LA-03: pre-storage quiescence i pierwszy rzeczywisty provider request — [STAGE 1 | CONTROLLED LIVE]
+
+- **Pozycja roadmapy:** Etap 1 pozostaje `OPEN`; pierwszy durable request jest rozliczony, ale brak pozytywnej Research Card i niezależnego review trwałego wyniku.
+- **Naprawa composition rootu:** canonical DB/WAL/SHM probe działa przed głównym `SqliteStorage.open`; po PASS powstaje jedno główne storage, trwała rewalidacja DB/schema/job/pricing/intent/flags, dopiero potem marker O_EXCL, drugi recheck, flag transition, claim, reservation i provider boundary. Probe nie został wyłączony.
+- **Pliki kodu/testów:** `app/main.py`, `app/operations/controlled_live.py`, `tests/test_la01_controlled_live.py`, `tests/test_la02_quiescence.py`.
+- **Dowód offline:** focused 71/71, full 1181/1181, exact-once cover 1181, dedicated full fake CLI oraz standalone temp PASS. Foreign read-only/writable SQLite i WAL/SHM dają STOP; drift między pre-storage/open i drugi wrapper dają STOP; własne storage po PASS nie self-blockuje.
+- **Wynik realny:** produkcyjny standalone PASS; dokładnie jeden Anthropic request (HTTP 200), attempt #1 `REQUEST_STARTED → SETTLED`, jedno usage `0.053182 USD`, zero retry/attemptu #2/reconciliation. Odpowiedź miała niepoprawny JSON; typowany `ResearchParseError` zakończył job/run/research_run jako `FAILED`, bez Research Card.
+- **Ochrona po wyniku:** settlement trwały, lease i rezerwacja zwolnione, marker cleared, reopen/restoration potwierdzone, flags fail-closed, gate przywrócony `False`, browser/publikacja niewykonane, Git ops none.
+
+| # | reason code | provider reached | root cause | pliki zmienione | zabezpieczenie naprawione, nie wyłączone | test regresyjny | fake flow | real flow | koszt | stan joba |
+|---:|---|---|---|---|---|---|---|---|---:|---|
+| 1 | `PROCESSES_PRESENT` | no | własny wielopoziomowy launcher uznany za obcego operatora | LA-02: probe/diagnostics/tests | ancestry identity; proces probe nadal aktywny | LA-02 21 + full | PASS | historyczny STOP pre-provider | 0.000000 | wtedy `QUEUED/0` |
+| 2 | `DB_HANDLES_PRESENT` | no | główne storage otwarte przed zero-sharing handle probe | `app/main.py`, `controlled_live.py`, testy LA-01/02 | probe przeniesiony pre-storage; foreign DB/WAL/SHM nadal STOP | order/4 handle/drift/contention | PASS | preflight PASS po naprawie | 0.000000 | przed requestem `QUEUED/0` |
+| 3 | `VALIDATION_FAILED / WORKER_NOT_SUCCEEDED` | yes, exactly 1 | HTTP 200 zawierał niepoprawny JSON; brak Research Card | bez naprawy/retry po provider boundary | usage i settlement zachowane; job terminalny | istniejące parse/settlement + full | PASS | one request, typed failure | 0.053182 | `FAILED/1` |
+
+### 2026-07-17 — P2 po review LA-03: single-response contract i append-preserving reports — [STAGE 1 | CONTROLLED LIVE]
+
+- **Review wejściowy:** LA-03 otrzymała `APPROVE WITH MINOR/P2`. Reviewer potwierdził 1181 testów, dokładnie jeden request/attempt/`REQUEST_STARTED`, jedno usage/settlement, zero attemptu #2 i pełne fail-closed. P2 dotyczyły historii raportów, README i ukrytego `quiescence_probe=None`.
+- **Forensics:** immutable SQLite wskazało run `f74165fb-9677-4e6d-abfd-09607bd4dd78`, jeden `SETTLED=0.053182`, jedno usage 13306/1657/1 i parse location line 29/column 6/char 4376. Katalog diagnostyczny runu nie istnieje; stara single path odrzucała stop reason i raw. Konkretna forma uszkodzenia jest `INSUFFICIENT DURABLE EVIDENCE`.
+- **Kod:** `app/research/anthropic_client.py` dostał zamknięty pojedynczy JSON contract, ścisły schema validator i zachowanie raw/stop reason; `app/research/base.py` typuje schema/truncation; `pipeline.py` zapisuje prywatną diagnostykę SINGLE po terminalizacji. `controlled_live.py` używa invocation-specific report key i obowiązkowego frozen payloadu; `app/main.py` przekazuje mapping bez hidden probe.
+- **Testy:** dodano 14-case matrix oraz tripwire caller=1; durable parse/schema/truncation dowodzą jednego usage/settlement; dwa invocation tej samej operation identity zachowują oba raporty; recovery wiąże prior report key; brak/None frozen payload zatrzymuje przed worker/providerem. Full 1200/1200; exact-once verify 1200; partycje `290+293+304+313` wszystkie zielone.
+- **Nieudana próba:** pierwszy full run po zmianie dał 1199/1200, ponieważ historyczna testowa fixture `test_research_run_budget._good_json` nie zawierała nowo wymaganych nullable source fields. Zmieniono wyłącznie fixture do bieżącego kontraktu; drugi full run 1200/1200. Wcześniej focused matrix wymagał test-local offline client seam, bo produkcyjny klient poprawnie odmówił bez durable attempt context.
+- **Audyt kopii:** pierwszy helper końcowy użył nieistniejącej kolumny `system_flags.value`; zakończył się na kopii temp po udanych `integrity_check`/FK, bez dotknięcia produkcji. Po immutable `PRAGMA table_info` użyto `value_json`; powtórzenie dało `integrity_check=ok`, FK `[]`, jeden terminalny job/attempt/usage, zero kart i fail-closed flags.
+- **Granice:** brak sieci/provider requestu, browsera, publikacji, kosztu, enqueue, gate/flags, produkcyjnego workera i operacji Git. Lokalnie odczytano jedynie metadane zainstalowanego SDK 0.116.0, bez `messages.create`, aby stwierdzić obecność `output_config`; parameter nie został włączony bez dowodu kompatybilności model+web-search.
+- **Status:** implementacja P2 zakończona kandydacko; Etap 1 pozostaje `OPEN`; wymagany niezależny review. Nowy request nie jest autoryzowany.
+
+### 2026-07-17 — NIA-P2-RV-01…05 po `REJECT — MAJOR` — [STAGE 1 | OFFLINE REPAIR]
+
+- **Pozycja roadmapy:** Etap 1 pozostaje `OPEN / FIRST REAL DURABLE REQUEST SETTLED; NO RESEARCH CARD`; naprawa nie rozpoczyna następnego etapu i nie otwiera nowego requestu.
+- **Review wejściowy:** trzy MAJOR i dwa MINOR/P2: score overflow omijający ledger, niesanitizowany raw diagnostic, mieszany zegar testu, dwie rozbieżności parsera i aktywne sprzeczności stanu projektu.
+- **Kod:** dodano wspólny `app/core/sanitization.py`; diagnostic jest sanitizowany i atomowy best-effort; score przechodzi przez `Decimal`; parser wymaga literalnego fence `json`, rozpoznaje drugą legalną wartość i klasyfikuje root scalar/array jako schema; enqueue przyjmuje jawny `now`.
+- **Testy:** macierz single-response wzrosła 14→28; dodano durable huge-number/non-finite/range/type failures i boundary success, end-to-end pięć klas sekretów, cztery failpointy diagnostic oraz granice zegara before/equal/after. Bieżący collect/full: 1235/1235; exact-once partycje `294+299+311+331`.
+- **Nieudane próby podczas implementacji:** wspólny sanitizer początkowo usunął bezpieczne etykiety z istniejącego formatu audytu (4 regresje full suite); tryb zachowania etykiet naprawił kompatybilność bez zachowania sekretu. Jedna asercja zegara zakładała aware datetime mimo naiwnego UTC zwracanego przez SQLite; porównanie skorygowano do istniejącego kontraktu storage. Pierwsza asercja diagnostic oczekiwała pozostawienia etykiety `api_key`; została zmieniona na wymaganie braku sekretu i pola.
+- **Granice:** fake callery/SDK seam, temp DB, zero sieci/API/browsera/publikacji/kosztu, bez migracji i Git ops. Produkcyjny DB/WAL/SHM niezmieniony; koszt miesiąca nadal `0.737762 USD`.
+- **Status:** naprawa `APPROVE WITH MINOR/P2` (niezależny re-review); patrz wpis zamknięcia niżej.
+
+### [2026-07-17] Formalne zamknięcie Etapu 1 — [STAGE 1 | OWNER DECISION | DOCS-ONLY]
+
+- **Cel zadania:** zapisać formalną decyzję właściciela o zamknięciu Etapu 1 po pozytywnym niezależnym re-review naprawy NIA-P2-RV-01…05.
+- **Pozycja roadmapy:** **Etap 1 = `CLOSED`**. Etap 2 nierozpoczęty; live API nadal wymaga oddzielnej jawnej decyzji właściciela.
+- **Podstawa:** niezależny re-review `APPROVE WITH MINOR/P2` — zero CRITICAL, zero MAJOR, pięć findings technicznie zamknięte; suite 1235/1235; exact-once `1235` node ID; partycje `294+299+311+331`; `compileall` i `git diff --check` czyste; audyt produkcyjnej DB wyłącznie na byte-identycznej kopii; własne kontrpróby reviewera bez regresji.
+- **Research Card:** brak pozytywnej Research Card z ostatniego controlled-live NIE był bramką zamknięcia; job jest terminalny (`FAILED`) i nie może być retry'owany.
+- **Backlog Etapu 2 (nieblokujący):** `RV-R2-P2-1` (prose od `N`/`I` → `json_syntax` zamiast `prose_outside_json`) i `RV-R2-P2-2` (trailing comma → `incomplete_json` zamiast `json_syntax`) — nie naprawiane teraz, bez nowej fali.
+- **Pliki zmienione:** wyłącznie dokumentacja statusowa — `CURRENT_PROJECT_STATE.md`, `IMPLEMENTATION_ROADMAP.md`, `README.md`, `MASTER_ARCHITECTURE.md`, `docs/DECISIONS.md` (ADR-088), `docs/BUILD_LOG.md`, kronika `opis-budowy-substack/`.
+- **Granice:** bez zmian w kodzie, testach, migracjach, providerze, storage i runtime. Produkcyjna DB/WAL/SHM byte-identical (SHA `5BEA9E26597E6A628EF875A7F5115465E94CB600B38213A67794EE94232C6D10`, `335872 B`, bez sidecarów); zero sieci/API/browsera/publikacji/kosztu; bez stage/commit/push/PR/merge.
+- **Status:** `ETAP 1 FORMALLY CLOSED` (ADR-088).
+
+### [2026-07-17] Controlled-live zatrzymany przed mutacją — [POST-STAGE 1 | PREFLIGHT BLOCKED]
+
+- **Cel zadania:** wykonać dokładnie jeden nowy durable request Anthropic (`claude-sonnet-5`, `max_tokens=1500`, jeden web search, cap i pessimistic cost `0.105000 USD`) bez retry, fallbacku, browsera, publikacji i zmian kodu.
+- **Preflight zgodny:** branch `dev/first-successful-research-card`, HEAD/upstream `085bd7702b398eacb382e72d5b332eaedec4ff10`, ahead/behind `0/0`, staging i aktywne operacje Git puste; chroniony kod bez diffu. Canonical quiescence zwrócił `PASS`, DB przed/po była byte-identical (`5BEA9E…C6D10`, `335872 B`, bez WAL/SHM/journal), ENV były obecne bez ujawnienia sekretów, model i approved pricing fingerprint `1b98c7…4062` były zgodne, projected/pessimistic `0.070000/0.105000 USD`, `max_retries=0`, `max_attempts=1`, koszt miesiąca `0.737762/40.000000 USD`.
+- **Blocker:** kanoniczny real composition root ma w chronionym, zgodnym z HEAD kodzie `REAL_CONTROLLED_LIVE_ENABLED = False`. Jedynym sposobem dopuszczenia bieżącego entrypointu byłaby zmiana kodu; właściciel wyraźnie jej nie autoryzował.
+- **Skutek:** zatrzymano zadanie przed enqueue, markerem, flagami, workerem, SDK i provider boundary. Nie utworzono operation key, joba, runu, research_runu, request ID, attemptu, usage, Research Card ani nowego operator reportu. Istniejący durable stan pozostał: 1 job `FAILED`, 1 attempt `SETTLED`, 19 usage (14 realnych), 2 Research Cards, zero lease/rezerwacji/reconciliation, flags fail-closed.
+- **Nieudane helpery read-only:** dwa lokalne skrypty raportowe zakończyły się odpowiednio na nieistniejącej metodzie `build` i próbie serializacji metody `fingerprint`; oba przed jakąkolwiek mutacją, bez SDK/API. Poprawiony immutable snapshot zakończył się powodzeniem. Uruchomiony między dwoma canonical probes `operational-report` pozostawił pusty WAL (0 B) i odtwarzalny SHM (32768 B), mimo niezmiennej głównej DB. Po ponownym quiescence `PASS`, braku uchwytów i weryfikacji dokładnych ścieżek/rozmiarów usunięto wyłącznie te dwa artefakty; końcowy baseline znów nie ma sidecarów.
+- **Werdykt:** `BLOCKED — LIVE PREFLIGHT DRIFT`. Autoryzacji nie wolno automatycznie wznawiać; nowy przebieg wymaga nowej jawnej decyzji i zgodnego, niekodowego mechanizmu otwarcia gate albo osobnej zgody na dokładną zmianę gate.
+
+### [2026-07-17 19:18 UTC] Drugi osobno autoryzowany controlled-live — [POST-STAGE 1 | FAILED / NO RETRY]
+
+- **Decyzja L1:** właściciel jawnie zastąpił interpretację ADR-089 i autoryzował dokładnie `False→True→False` dla `REAL_CONTROLLED_LIVE_ENABLED`, jeden nowy durable job/request, cap `0.105000 USD`, `max_tokens=1500`, jeden web search, `max_attempts=1`, SDK retry `0`.
+- **Preflight:** branch/HEAD/upstream `085bd770…/0/0`, staging/Git ops puste; istniejący diff hash `53c35a0c149d8447ee1d46f5c8efc7ed3ea5007b`; quiescence `PASS`; DB wejściowa `5BEA9E…C6D10`, 335872 B, bez sidecarów; topic 3 `SELECTED`, zero kart/aktywnych jobów; approved pricing `0.070000/0.105000`, budżety i fail-closed flags zgodne.
+- **Gate i enqueue:** jedyny code diff miał `1/1` w `app/operations/controlled_live.py:84`. Operation `positive-live-20260717-dc1c29aa0b3640c6` utworzyła job `real-research-9f244684711acf4f82a07da8d4a139ea`; post-enqueue SHA `34E111EB…CD22`; przed live job `QUEUED`, attempts `0/1`, provider attempts `0`.
+- **Wynik jedynego requestu:** HTTP 200, `stop_reason=max_tokens`; usage 16704 input / 1667 output / 1 search, `0.060078 USD`; typowany `ResearchTruncatedError`; brak Research Card. Job/run/research_run `FAILED`; attempt #1 `SETTLED`; zero retry/attemptu #2/fallbacku/verification/reconciliation; brak lease i rezerwacji.
+- **Restore:** przed analizą gate wrócił do `False`; diff `app/`, `scripts/`, `config/` pusty, staging pusty. Flags fail-closed, marker cleared, report append-preserving utworzony. DB końcowa `10C5C9…C10AB`, 344064 B, bez WAL/SHM/journal; miesięczny koszt `0.797840 USD`.
+- **Werdykt:** `CONTROLLED-LIVE FAILED — NO RETRY PERFORMED`.
+
+### [2026-07-17 19:44 UTC] Trzeci osobno autoryzowany controlled-live — [POST-STAGE 1 | FAILED / NO RETRY]
+
+- **Decyzja L1:** właściciel autoryzował jednorazowe `False→True→False`, nową durable identity, dokładnie jeden request `claude-sonnet-5`, `max_tokens=3000`, jeden web search, `max_attempts=1`, SDK retry `0` i cap `0.127500 USD`.
+- **Preflight:** branch/HEAD/upstream `dev/first-successful-research-card` / `085bd770…` / `0/0`, staging i Git ops puste; chroniony kod bez diffu; canonical quiescence `PASS`; DB wejściowa `10C5C9…C10AB`, `344064 B`, bez sidecarów; approved pricing projected/pessimistic `0.085000/0.127500 USD`; budżety i fail-closed flags zgodne.
+- **Gate i enqueue:** jedyny code diff miał `1/1` w `app/operations/controlled_live.py:84`. Operation `positive-live-3000-20260717-9dcb59eef3674138` utworzyła job `real-research-e33abc717c655c7c7b6abeccd43554f3`; post-enqueue SHA `D0094F27…B9940`; przed live job `QUEUED`, attempts `0/1`, provider attempts `0`.
+- **Wynik jedynego requestu:** HTTP 200, `stop_reason=end_turn`; usage 19945 input / 2727 output / 1 search, `0.077160 USD`. Fail-closed `ResearchSchemaError`: `sources[0].supports_claim` nie spełniło `string_or_null`; brak Research Card. Job/run/research_run `FAILED`; attempt #1 `SETTLED`; zero retry/attemptu #2/fallbacku/verification/reconciliation.
+- **Restore:** przed analizą gate wrócił do `False`; diff `app/`, `scripts/`, `config/` i staging puste. Flags fail-closed, marker cleared, report append-preserving. DB końcowa `540CF8F2…1248AA`, `348160 B`, bez WAL/SHM/journal; miesięczny koszt `0.875000 USD`.
+- **Status:** terminalne niepowodzenie bez ponowienia; Etap 1 pozostaje `CLOSED`, Etap 2 nierozpoczęty.
+
+### [2026-07-17] Naprawa kontraktu typu `sources[].supports_claim` — [POST-STAGE 1 | NARROW FIX]
+
+- **Root cause (trwała, sanitizowana diagnostyka):** w `data/debug/research/<run_id>/SINGLE_raw_response.txt` model zwrócił `"supports_claim": true` (boolean) dla każdego źródła. Schema i domena wymagają `string | null` (tekst potwierdzanego claimu). Prompt listował `supports_claim` jako wymagany klucz, ale nie podawał jego typu, a sama nazwa pola czyta się jak pytanie tak/nie — stąd boolean. Walidator był poprawny; wada była po stronie promptu.
+- **Dowód kontraktu domenowego:** `app/models.py:603` i `app/research/base.py:342` (`supports_claim: str | None`), kolumna `sources.supports_claim TEXT` (0003), `validation.py:66` przecina wartości z `confirmed_claims` (stringi), `pipeline.py:882-886` uruchamia na nich injection guard (operacje na stringach) — boolean psułby wszystkich konsumentów.
+- **Minimalna zmiana (tylko prompt, `app/research/anthropic_client.py` `_default_caller`):** (1) `supports_claim` musi być JSON stringiem równym tekstowi potwierdzanego claimu albo JSON null, nigdy boolean/array/object/number, z przykładem; (2) ta sama name-vs-type klasa dotyczy `citable_numbers` (nazwa sugeruje liczby, schema wymaga listy stringów) — jawnie nazwano pola listy stringów i dodano przykład `"42 percent"`. Zero zmian schematu, parsera-walidatora, lifecycle, settlementu, retry, pricingu i migracji.
+- **Testy:** +13 w `tests/test_la04_single_response_contract.py` (poprawne string/null/mixed; błędne boolean-true [dokładny typ z live]/false/array/object/int/float; brak pola; oraz `citable_numbers` liczby→schema i number-strings→OK). Pełny suite **1248 passed** (1235→1248), partycje exact-once **298+299+317+334=1248**, `compileall` exit 0, `git diff --check` czysty.
+- **Fake durable E2E (temp DB, prawdziwy Worker→Dispatcher→pipeline→parser→storage):** string `supports_claim` (multi-source, jeden null) → dokładnie 1 Research Card, job `DONE`/run `SUCCESS`/research_run `COMPLETE`, 1 usage, 1 `SETTLED`, 0 retry/attempt#2/reconciliation, brak lease/rezerwacji, fail-closed. Boolean `true` → terminalny `FAILED` z identycznym `ResearchSchemaError` jak w live, 1 usage/1 `SETTLED`, brak karty.
+- **Granice:** zero sieci/API/kosztu/browsera/publikacji; produkcyjna DB `540CF8F2…1248AA`, `348160 B`, bez WAL/SHM/journal — bajt-identyczna, nigdy nie otwierana przez SQLite. Bez stage/commit/push/PR/merge; istniejące niecommitowane zmiany dokumentacyjne zachowane.
+- **Status:** `CANDIDATE COMPLETE — AWAITING NARROW REVIEW`.
+
+### [2026-07-17 20:46 UTC] Controlled-live po `APPROVE` naprawy kontraktu — [POST-STAGE 1 | FAILED / NO RETRY]
+
+- **Decyzja L1:** właściciel przekazał niezależny review `APPROVE` i autoryzował jednorazowe `False→True→False`, nową durable identity, dokładnie jeden request `claude-sonnet-5`, `max_tokens=3000`, jeden web search, `max_attempts=1`, SDK retry `0` i cap `0.127500 USD`.
+- **Preflight:** branch/HEAD/upstream `dev/first-successful-research-card` / `085bd770…` / `0/0`, staging i Git ops puste; istniejący zaakceptowany diff kodu/testów zamrożony (`e35cc089…`), gate bez diffu; canonical quiescence `PASS`; DB wejściowa `540CF8F2…1248AA`, `348160 B`, bez sidecarów; monthly `0.875000 USD`, pricing `0.085000/0.127500 USD`, flags fail-closed.
+- **Gate i enqueue:** jedyny diff pliku gate miał `1/1`. Operation `positive-live-contract-20260717-ee093a1d54cd4111` utworzyła job `real-research-85151c312b180759cd2387c5458f1248`; post-enqueue SHA `E97D9A57…E1D10`; przed live job `QUEUED`, attempts `0/1`, provider attempts i usage `0`.
+- **Wynik jedynego requestu:** HTTP 200, `stop_reason=max_tokens`; usage 16381 input / 3155 output / 1 search, `0.074312 USD`; `ResearchTruncatedError` przed schema validation; brak Research Card. Job/run/research_run `FAILED`; attempt #1 `SETTLED`; zero retry/attemptu #2/fallbacku/repair/verification/reconciliation.
+- **Restore:** przed analizą gate wrócił do `False`, gate diff i staging są puste, hash wcześniejszego diffu kodu/testów pozostał `e35cc089…`. Flags fail-closed, marker cleared, report append-preserving. DB końcowa `3FAD98FD…C91C8`, `352256 B`, bez WAL/SHM/journal; miesięczny koszt `0.949312 USD`.
+
+### [2026-07-18] WAVE OUTPUT-SIZE CONTRACT — kontrakt rozmiaru Research Card — [CANDIDATE COMPLETE]
+
+- **Audyt flow:** `max_tokens` pochodzi wyłącznie z zamrożonego durable intent (CLI `--max-tokens` → `validate_cli_max_tokens` [256, 8192] → fingerprint) i żadna warstwa go nie nadpisuje; jedyny osiągalny płatny prompt to `run_research`/`_default_caller` (mode single); ścieżki two-stage/staged pozostają nieosiągalne dla real. Trzy composition roots: `scripts/run_capped_research.py --real` (enqueue), `app.main controlled-live-once` (wrapper), `app.main worker` (egzekutor) — wszystkie zbiegają się w `intent.max_tokens`.
+- **Root cause:** niewidoczne tokeny outputu (rozumowanie `output_tokens_details.thinking_tokens` + tool-use/cytowania) liczą się do per-segmentowego limitu `max_tokens`, z wariancją ~0.7–2.2k tokenów przy identycznym promptcie; usage sumuje segmenty (stąd 1667>1500 i 3155>3000 zgodnie z kontraktem SDK). Szczegóły: docs/ERRORS_AND_FAILURES.md 2026-07-18.
+- **Zmiany:** nowy `app/research/output_contract.py` (budżet pól, sufit odpowiedzi 16000 znaków, profil tokenowy 6000=3198+2300+502, profil operacyjny 1 web search / cap 0.20 USD); prompt v3 (`build_single_research_prompt`, kompaktowy jednoliniowy JSON, jawne limity każdego pola, priorytet domknięcia JSON); `ResearchCardSizeContractError` (fail-closed, usage+settlement, zero retry); `prompt_contract_version` v2→v3; `Usage.thinking_tokens` + linia w diagnostyce + doprecyzowany komunikat truncation (per-segment cap).
+- **Testy:** +40 (34 `tests/test_research_card_size_contract.py`: 4 payloady profilowe przez prawdziwy parser [minimal/realistic/max-at-caps/unicode+długie URL-e], 19 przekroczeń → typowany `size_contract`, sufit odpowiedzi przed dekodowaniem, usage zachowane/zero retry, priorytet truncation, spójność promptu z budżetem, profil tokenowy i operacyjny, stale v2 intent fail-closed; 6 `tests/test_research_card_size_e2e.py`: A realistyczny sukces, B sukces dokładnie na granicach bez truncation, C przekroczenie pola, D truncation z `thinking_tokens` w diagnostyce, E supports_claim=true i raw number — wszystkie przez prawdziwy Worker→Dispatcher→pipeline→storage→settlement na temp DB). Jedna aktualizacja pinu frazy promptu w `tests/test_wave0b_durable_provider.py`.
+- **Wyniki:** pełny suite **1288/1288** (1248→1288, JUnit: 0 failed/0 skipped/0 duplikatów), partycje exact-once **306+312+328+342=1288** (4/4 exit 0), `compileall` OK, `git diff --check` czysty.
+- **Granice:** zero sieci/API/SDK requestów/browsera/publikacji/kosztu; produkcyjna DB `3FAD98FD…C91C8`, `352256 B`, bez WAL/SHM/journal — bajt-identyczna (SHA przed=po), nie otwierana przez SQLite; bez stage/commit/push/PR/merge; wcześniejsze niecommitowane zmiany zachowane.
+- **Status:** `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; live API `FORBIDDEN UNTIL REVIEW APPROVE`.
+
+### [2026-07-18 04:48 UTC] Zamknięcie WAVE OUTPUT-SIZE CONTRACT i pierwszy pozytywny Research Card live — [POST-STAGE 1 | SUCCESS]
+
+- **Pozycja roadmapy:** WAVE OUTPUT-SIZE CONTRACT = `CLOSED — APPROVED WITH MINOR/P2`; Etap 1 pozostaje `CLOSED`, Etap 2 nierozpoczęty.
+- **Review/decyzja:** właściciel przyjął sześć P2 opisanych w ADR-094 i autoryzował dokładnie jeden request profilu prompt v3 / 6000 tokenów / 1 search / 0 retry / cap 0.20 USD.
+- **Wynik:** jeden HTTP 200, `end_turn`, usage 16834/1961, `thinking_tokens=51`, koszt `0.063278 USD`; raw 4928≤16000, JSON/schema/field-size/injection guard przeszły; utworzono Research Card `id=3` z pięcioma źródłami. Redakcyjny wynik karty: `REJECT/WEAK_SOURCES`.
+- **Durable:** job `DONE`, run `SUCCESS`, research_run `COMPLETE`, attempt #1 `SETTLED`, jedno usage/provider attempt; zero retry/attemptu #2/reconciliation/lease/rezerwacji.
+- **Restore/audyt:** gate przywrócony do `False` przed analizą; gate diff i staging puste; wcześniejszy zaakceptowany diff kodu/testów zachowany; flags fail-closed, marker i DB sidecary brak. DB `9906AFBF…B060836`, `364544 B`; miesiąc `1.012590 USD`.
+- **Nieudane helpery read-only:** pierwszy lokalny preflight zaimportował nieistniejące `OUTPUT_TOKEN_MARGIN` (poprawiono nazwę na `RESEARCH_CARD_TOKEN_SAFETY_MARGIN`), a jedna komenda `rg` nie znalazła alternatyw i zwróciła exit 1. Obie sytuacje przed/poza provider boundary, bez mutacji i bez dodatkowego requestu.
+- **Granice:** bez fallbacku, repair/verification, resume, zmian promptu/schema/output/token/pricing, P2/refaktoru, browsera, publikacji oraz stage/commit/push/PR/merge. Zgoda zużyta.
+
+### [2026-07-18] Formalne zamknięcie bramki positive-live — [DOCS ONLY | CANDIDATE FOR CHECKPOINT]
+
+- **Zakres:** wyłącznie formalny zapis decyzji właściciela i ujednolicenie aktywnej dokumentacji; zero zmian kodu, testów, migracji, runtime config i produkcyjnej DB.
+- **Łańcuch odpowiedzialności:** deklaracja implementera → pełne testy implementera 1288/1288 i exact-once `306+312+328+342` → własne wąskie testy niezależnego review 223/223 → niezależny werdykt `APPROVE` bez CRITICAL/MAJOR/nowych MINOR → formalna decyzja właściciela (ADR-095).
+- **Stan formalny:** WAVE OUTPUT-SIZE CONTRACT `CLOSED — APPROVED WITH MINOR/P2`; positive controlled-live `INDEPENDENTLY CONFIRMED`; Etap 2 positive-live gate `FORMALLY ACCEPTED`; Etap 2 `NOT STARTED`; kolejny live `NOT AUTHORIZED`; browser/publikacja `BLOCKED`.
+- **Trwały wynik:** `0.063278 USD`, miesiąc `1.012590 USD`, job/run/research_run `DONE/SUCCESS/COMPLETE`, attempt `SETTLED`, karta `id=3`, redakcyjne `REJECT/WEAK_SOURCES`; zero retry/attemptu #2/fallbacku/repair/recovery mutation/reconciliation.
+- **Checkpoint verification:** collect `1288`; pełny suite `1288/1288`, exit 0; `--parts 4 --verify` potwierdził exact-once coverage wszystkich 1288 node ID; osobno wykonane partycje `306+312+328+342`, wszystkie exit 0; `compileall app scripts` exit 0; `git diff --check` exit 0.
+- **Nieblokujące obserwacje weryfikacji:** każdy runner partycji wypisał istniejący `PytestAssertRewriteWarning` dla wcześniej zaimportowanego `anyio`; Git zgłasza ostrzeżenia o przyszłej konwersji LF→CRLF. Oba ostrzeżenia nie zmieniły plików śledzonych, wyniku testów ani integralności DB.
+- **Granice Git:** bez stage, commita, pushu, PR i merge; commit wymaga osobnej autoryzacji właściciela.
+
+### [2026-07-18] Fala naprawcza PR #1 — recovery po `SETTLED` i cleanup final tree — [CANDIDATE FOR INDEPENDENT RE-REVIEW]
+
+- **Etap roadmapy:** utrzymanie bezpieczeństwa Etapu 1 przed rozpoczęciem Etapu 2; Etap 2 pozostaje `NOT STARTED`.
+- **PR1-MAJ-001:** dodano migrację `0015`, append-only `EXECUTION_RECOVERY`, resolver operatora i maintenance recovery. Ścieżka odtwarza terminalny lifecycle po crashu następującym po finansowym `SETTLED`, bez drugiego settlementu, usage, kosztu, requestu i retry.
+- **Kontrakty fail-closed:** dokładnie jedna kanoniczna karta; zgodne lineage i cache; martwy fence; brak aktywnej rezerwacji; jedno usage; attempt nadal `SETTLED`. Raw SQL nie może ominąć warunków, a konflikt lub drift pozostawia stan bez mutacji.
+- **PR1-MAJ-002/003:** zgodnie z decyzją właściciela nie przepisano historii. Końcowe drzewo przywrócono do jednego kanonicznego podręcznika zgodnego z `main`, usunięto aktywne referencje do wariantów i prywatny fragment raportu; finalny staged diff katalogu jest pusty względem `origin/main`.
+- **P2:** z raportów migracyjnych i instrukcji operacyjnych usunięto prywatne absolutne ścieżki, zastępując je przenośnymi placeholderami.
+- **Weryfikacja:** pełny suite `1311/1311`; verifier `1311`; partycje `314+319+333+345`, wszystkie exit 0; istniejący QA lineage `10/10` i nowy `scripts/qa/settled_execution_recovery_disproof.py` `4/4`; `compileall app scripts` exit 0.
+- **Koszt i operacje zewnętrzne:** `0.000000 USD`; wyłącznie fake/temp DB. Zero provider/API/SDK, browsera, publikacji i mutacji produkcyjnej DB.
+- **Stan:** kandydat do niezależnego końcowego re-review. Merge nie jest wykonywany w tej fali.
+
+### [2026-07-18] PR1-MAJ-005 — rozdzielenie runtime open od jawnej migracji — [CANDIDATE FOR INDEPENDENT RE-REVIEW]
+
+- **Etap roadmapy:** utrzymanie bezpieczeństwa zamkniętego Etapu 1 przed Etapem 2; Etap 2 pozostaje `NOT STARTED`.
+- **Root cause:** `SqliteStorage.open()` łączył composition runtime z `apply_migrations()`. Start na bazie `0014` nie odmawiał, tylko automatycznie stosował `0015`.
+- **Kod:** runtime wykonuje immutable exact-schema preflight i wymaga `0015`, nie tworzy/migruje bazy; po writable connect ponawia gate. Dodano typowane błędy, jawną inicjalizację nowych baz i osobny, potwierdzany migrator exact `0014→0015`. `app.main`, runner, worker, enqueue, maintenance, reaper, reconciliation, controlled-live i capped CLI kończą się kontrolowanie przed ścieżką wykonawczą. `list-reconciliations` i `operational-report` pozostają read-only. Historyczny migrator Etapu 1 nadal kończy na `0014`.
+- **Testy:** +17 w `tests/test_runtime_schema_gate.py`; istniejące fixture/setupy tworzące nowe temp DB przełączono na jawną inicjalizację. Własna kontrpróba odtwarza finding: `0014` → fingerprint → zwykły runtime open → `SchemaVersionTooOld` → identyczny SHA/size/mtime/ledger i brak sidecarów.
+- **Weryfikacja:** collect/full `1328/1328`; verifier exact-once `1328`; partycje `318+322+339+349`; `compileall` OK; QA lineage `10/10`, recovery `4/4`, schema-gate `8/8`.
+- **Produkcja:** przed i po `0014`, 14 migracji, SHA `9906AFBFB580BE8F576A6449B0930C41ED964FED814D99C947D1C28C5B060836`, `364544 B`, bez WAL/SHM/journal. Odczyty wyłącznie `mode=ro&immutable=1`; `0015` nie została zastosowana.
+- **Koszt i zewnętrzne skutki:** `0.000000 USD`; zero API, Anthropic, providera/SDK, browsera, publikacji i controlled-live. Kandydat, nie approval; bez merge.
+
+### [2026-07-18] PR1-MAJ-005-RR-01 — drugi schema gate przed mutacją writable connectora — [CANDIDATE FOR ONE NARROW INDEPENDENT RE-REVIEW]
+
+- **Etap roadmapy:** utrzymanie bezpieczeństwa zamkniętego Etapu 1; Etap 2 pozostaje `NOT STARTED`.
+- **Root cause:** po immutable preflighcie `SqliteStorage.open()` używał ogólnego `connect()`, który przed drugim gate’em robił `mkdir`, zwykłe `sqlite3.connect(path)` i `journal_mode=WAL`. Usunięty plik był odtwarzany; podmieniony plik mógł być mutowany przed typowaną odmową.
+- **Minimalna naprawa:** nowy runtime-only connector otwiera istniejący plik przez SQLite URI `mode=rw` bez PRAGMA. `SqliteStorage.open()` wykonuje drugi exact-schema gate na tym handle i dopiero po PASS wywołuje dotychczasowe przygotowanie writable. Ogólnego API inicjalizacji/migracji nie przebudowano.
+- **Testy race:** usunięcie `0015` po preflight → `SchemaVersionUnavailable`, plik nieodtworzony, brak sidecarów/runtime/provider boundary; podmiana na `0014` w trybie journal DELETE → `SchemaVersionTooOld`, identyczne SHA/size/mtime/schema/ledger/liczniki i brak sidecarów. Stabilne `0015` otwiera się z `mode=rw` i kolejnością gate→PRAGMA; stabilne `0014` oraz missing DB odmawiają bez mutacji.
+- **Weryfikacja:** schema gate 20/20; targeted schema/recovery/lineage 68/68; collect/full `1331/1331`; exact-once `1331`; cztery partycje sekwencyjnie `320+322+339+350`; QA schema gate `17/17`, recovery `4/4`, lineage `10/10`; `compileall app scripts` i `git diff --check` OK.
+- **Produkcja:** przed i po `0014`, 14 migracji, SHA `9906AFBFB580BE8F576A6449B0930C41ED964FED814D99C947D1C28C5B060836`, `364544 B`, integrity `ok`, FK 0, bez WAL/SHM/journal. Odczyty wyłącznie `mode=ro&immutable=1`; `0015` nie została zastosowana.
+- **Granice:** koszt `0.000000 USD`; zero sieci badawczej/API/Anthropic/provider/SDK/browsera/publikacji/controlled-live/retry/attemptu/usage. Bez merge. Status `CANDIDATE`, nie `APPROVED`.

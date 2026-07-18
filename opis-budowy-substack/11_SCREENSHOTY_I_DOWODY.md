@@ -79,6 +79,8 @@ Na 2026-07-11 **nie wykonano jeszcze żadnego screenshotu** — dotychczasowa pr
 - **SS-14** Pierwsze statystyki publikacji — Etap 5. `SCREENSHOT REQUIRED`
 - **SS-15** Pierwszy subskrybent — po publikacji. `SCREENSHOT REQUIRED`
 - **SS-16** Pierwsza zmiana strategii (raport tygodniowy) — po ≥7 dniach. `SCREENSHOT REQUIRED`
+- **SS-Task8** Lifecycle race — terminal z 44 testami Task 8 oraz pełnym `330 passed`, bez danych produkcyjnej bazy. `SCREENSHOT REQUIRED`; w zadaniu nie użyto Playwrighta.
+- **SS-Task9** Pierwszy realny staged run — bezpieczny widok statusów A1/A2/B, 4 VERIFIED, `max_tokens`, koszt 0,170050 USD i cap 0,55 USD; bez raw response i sekretów. `SCREENSHOT REQUIRED`; do wykonania ręcznie po review, bez Playwrighta.
 
 ## Podsumowanie
 - Dowodów zrobionych: **0**.
@@ -87,3 +89,39 @@ Na 2026-07-11 **nie wykonano jeszcze żadnego screenshotu** — dotychczasowa pr
 
 ## Powiązania
 - `docs/SCREENSHOT_INDEX.md` (indeks techniczny), `screenshots/` (pliki), `16_MATERIAL_DO_PIERWSZEGO_ARTYKULU.md`
+
+### Task 9 — dowód poprawki offline
+
+Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior usage liczone raz i zachowaniem JSONL A1) oraz 351/351 pełnego suite. Screenshot pozostaje oznaczony `SCREENSHOT REQUIRED`: nie użyto Playwrighta ani przeglądarki i nie wolno eksponować prywatnego raw response. Dowodem trwałym przed screenshotem są testy, diff oraz wpis `SS-TASK9-FIX` w indeksie.
+
+### Task 9 — dowód kontrolowanej naprawy statusu
+
+`SCREENSHOT REQUIRED`: bezpieczny kadr może później pokazać jedynie zanonimizowane preconditions, `rowcount=1`, trzy zmienione pola i niezmienne agregaty kosztu/researchu. Playwrighta nie użyto. Obecny dowód stanowią SHA-256 backupu i bazy, logiczne snapshoty przed/po oraz wpis `task9-controlled-status-repair` w `docs/SCREENSHOT_INDEX.md`.
+
+### Task 9 — pierwsza realna karta po resume B
+
+`SCREENSHOT REQUIRED`: zanonimizowany lokalny raport powinien pokazać SUCCESS/COMPLETE/USED, card #2, 4 VERIFIED, `end_turn`, koszt nowego B 0,013914 i runu 0,183964/0,20 USD oraz jakościowe REJECT. Nie użyto Playwrighta ani przeglądarki; obecnym dowodem są SQLite po reopen, usage ledger i wpis `task9-first-real-card-resume-b` w indeksie.
+
+### 2026-07-16 — skonsolidowany Etap 1
+
+`SCREENSHOT REQUIRED` dopiero po niezależnym review. Bezpieczny kadr powinien pokazać: oba polecenia `plan` z `SYSTEM TASK NOT REGISTERED`, raport read-only z jawnym `UNKNOWN/BLOCKED`, copy-preflight na kopii z 14 migracjami/13 legacy/0,684580 i końcową weryfikację niezmiennego baselineu. Nie może pokazywać `.env`, danych bazy, prywatnych ścieżek ani sugerować, że zadania zarejestrowano lub produkcję zmigrowano.
+
+### 2026-07-17 — LA-03 i pierwszy request
+
+`SCREENSHOT REQUIRED`: zanonimizowany kadr powinien pokazać 1181/1181, fake CLI success, standalone PASS oraz bezpieczny trwały summary jednego attemptu: `REQUEST_STARTED`, `SETTLED`, 0,053182 USD, job/run/research_run `FAILED`, marker absent, flags i gate fail-closed, zero retry. Nie może zawierać klucza, promptu, raw response, execution tokenu ani pełnych command lines. Obrazu nie wykonano, bo przeglądarka była zabroniona, a terminal zawierał prywatne ścieżki.
+
+### 2026-07-17 — P2 po review LA-03
+
+`SCREENSHOT REQUIRED`: bezpieczny kadr powinien pokazać 1200/1200, partycje `290+293+304+313`, 14-case matrix oraz dwa różne report filenames zaczynające się tym samym session ID. Nie może pokazywać raw response, prywatnego katalogu debug, promptu, `.env`, pricing profile ani pełnej ścieżki chronionych plików. W tej fali obraz nie powstał; dowód pozostaje tekstowy i testowy.
+
+## 2026-07-17 — Dowód naprawy NIA-P2-RV
+
+`SCREENSHOT REQUIRED`: bezpieczny kadr może pokazać wyłącznie 1235/1235, partycje `294+299+311+331` i zanonimizowane wyniki kontrprób huge score, secret sanitizer, jawnego clocka, object+true oraz bare fence. Nie może zawierać raw payloadu sekretów, `.env`, pełnych command lines, produkcyjnej bazy ani prywatnych plików. Obraz nie powstał; mocniejszym dowodem są deterministyczne testy i byte-identical DB.
+
+### 2026-07-17 — Gate pozostał zamknięty
+
+`SCREENSHOT REQUIRED`: bezpieczny kadr może później pokazać quiescence `PASS`, zanonimizowany DB hash/rozmiar, pricing/cap, fail-closed flags i `REAL_CONTROLLED_LIVE_ENABLED=false`, bez `.env`, klucza, command lines i danych SQLite. Obrazu nie wykonano, bo browser był zabroniony.
+
+### 2026-07-18 — Recovery po `SETTLED`
+
+`SCREENSHOT REQUIRED`: bezpieczny kadr powinien pokazać `1311/1311`, partycje `314+319+333+345`, QA `4/4`, pusty finalny diff katalogu podręcznika względem `main` i niezmienny hash produkcyjnej DB. Nie może zawierać prywatnych ścieżek, `.env`, tokenów ani zawartości bazy. Dowodem tej fali pozostają logi testowe i kontrole Git/SQLite.

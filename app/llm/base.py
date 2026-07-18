@@ -25,6 +25,42 @@ class Usage:
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
     web_search_requests: int = 0
+    # Podzbiór output_tokens zużyty na niewidoczne wewnętrzne rozumowanie (SDK:
+    # usage.output_tokens_details.thinking_tokens). Wyłącznie diagnostyka rozmiaru
+    # odpowiedzi — nie wchodzi do księgowania kosztów (output_tokens już je zawiera)
+    # i nie jest utrwalany w model_usage.
+    thinking_tokens: int = 0
+
+
+class LLMClientError(RuntimeError):
+    """Base error for an LLM call with optional provider billing context."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        usage: Usage | None = None,
+        model: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.usage = usage
+        self.model = model
+
+
+class LLMProviderError(LLMClientError):
+    """The provider call failed before a response could be parsed."""
+
+
+class LLMResponseError(LLMClientError):
+    """The provider returned a response that cannot be accepted."""
+
+
+class LLMParseError(LLMResponseError):
+    """The response body is not valid JSON."""
+
+
+class LLMSchemaValidationError(LLMResponseError):
+    """The JSON response does not satisfy the topic response contract."""
 
 
 @dataclass
