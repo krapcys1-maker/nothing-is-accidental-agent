@@ -1036,3 +1036,12 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Objaw:** pierwsza próba uruchomienia czterech partycji jednocześnie dała failure w Windows-only LA-02: oczekiwane `DB_HANDLES_PRESENT`, otrzymane `PROCESSES_PRESENT`.
 - **Root cause:** test quiescence prawidłowo wykrył trzy pozostałe procesy pytest. Partycje są exact-once pod względem node ID, ale ta suita nie może być wykonywana współbieżnie, bo obecność obcego procesu jest częścią testowanego kontraktu.
 - **Rozstrzygnięcie:** bez zmian kodu; wszystkie cztery partycje powtórzono sekwencyjnie. Po dodaniu dwóch końcowych regresji bieżący exact-once wynik to `357+361+369+387=1474`.
+
+## 2026-07-18 — E2-A: trzy P2 z niezależnego review (formalne zamknięcie, ADR-103)
+
+Niezależny review WAVE E2-A wydał `APPROVE WITH MINOR/P2`. Trzy findings przyjęto jako P2 bez naprawy w tej fali; żaden nie ma kosztu, nie tworzy fałszywego sukcesu i nie wywołuje działania zewnętrznego. Rejestr utrzymuje ich widoczność oraz warunki ponownej oceny; formalne zamknięcie E2-A jest wyłącznie dokumentacyjne.
+
+- **`E2-A-P2-01` — QA harness nie aktywuje sam safety kernela.** Zakres: `scripts/qa/e2a_lineage_disproof.py`. Skrypt nie aktywuje samodzielnie safety kernela; przy niepełnym ENV zatrzymuje się fail-closed przed wykonaniem sond. Wpływ: brak wpływu na runtime produktu, brak kosztu, brak wpływu na produkcyjną bazę; problem ergonomii i spójności QA. Status: **`OPEN P2 / BACKLOG`**.
+- **`E2-A-P2-02` — shape-invalid payload i `NEEDS_VERIFICATION`.** Niepoprawny strukturalnie payload zmieniony poza wspieranym flow po przypięciu runu może zakończyć się `NEEDS_VERIFICATION` zamiast `FAILED`. Wpływ: brak kosztu, brak fałszywego sukcesu, brak działania zewnętrznego; stan wymaga operatora; istnieje skuteczna bariera i operatorski sposób obsługi. Status: **`ACCEPTED P2`**.
+- **`E2-A-P2-03` — brak SQL-owej niemutowalności `jobs.payload_json`.** `jobs.payload_json` nie posiada triggera blokującego UPDATE po enqueue; aktualne wspierane flow ponownie waliduje payload i odrzuca niespójny stan. Wpływ obecnie: brak potwierdzonego problemu w offline E2-A, brak kosztu, brak fałszywego sukcesu, composition roots działają fail-closed. **MUST REASSESS BEFORE:** paid staged recovery; realny staged provider; controlled-live; działanie zewnętrzne zależne od trwałego intentu. Status: **`OPEN P2 — FUTURE PAID/LIVE GATE`**.
+- **Granice:** żaden P2 nie był naprawiany; bez zmian kodu, testów, migracji, konfiguracji i produkcyjnej bazy.

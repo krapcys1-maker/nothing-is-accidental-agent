@@ -569,3 +569,12 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 
 - Właściciel zlecił rozpoczęcie i pełne wykonanie WAVE E2-A: wyłącznie offline CLI→Worker→Dispatcher→STAGED→FakeFetch→E1→Research Card, z jednym commitem, pushem i PR po zielonej walidacji.
 - Granice właściciela: bez live, realnego Fetch/HTTP, providera, browsera, publikacji, migracji produkcyjnej, merge i E2-B.
+
+## [2026-07-18] Właściciel formalnie zamknął WAVE E2-A po niezależnym `APPROVE WITH MINOR/P2` i merge PR #5
+
+- **Stan wejściowy:** implementer po E2-A (ADR-102) zadeklarował `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; nie miał uprawnienia do zamknięcia WAVE.
+- **Niezależny wynik:** review wydał `APPROVE WITH MINOR/P2`, potwierdzając offline evidence integration spine przez pełny subprocess acceptance i post-merge checkpoint `1474/1474` (exact-once `357+361+369+387`), przy job `DONE`, run `DRY_RUN` (koszt 0), research_run `COMPLETE`, 1 Research Card, 3/3 candidates `VERIFIED` oraz zerowych provider_attempts/model_usage/reservations/settlements.
+- **Formalna decyzja człowieka:** właściciel zmergował PR #5 jako merge commit `404d2d306bbfa24fc08f2f5db68931e7441f040a` (rodzice `07fda5e68a61c7b9ff68e4388b2689acdca55818` i zatwierdzony head `61a509bd9c0a457ac78bb8893438664017a14063`) i ustawił WAVE E2-A na `CLOSED — APPROVED WITH MINOR/P2` z datą 2026-07-18 (ADR-103). To decyzja właściciela po niezależnym review, nie samopotwierdzenie implementera.
+- **Przyjęte P2 (bez naprawy):** `E2-A-P2-01` (QA harness — `OPEN P2 / BACKLOG`), `E2-A-P2-02` (shape-invalid payload → `NEEDS_VERIFICATION` — `ACCEPTED P2`), `E2-A-P2-03` (brak SQL-owej niemutowalności `jobs.payload_json` — `OPEN P2 — FUTURE PAID/LIVE GATE`, MUST REASSESS przed paid staged recovery / realnym staged providerem / controlled-live / działaniem zewnętrznym zależnym od trwałego intentu).
+- **Zlecenie dokumentacyjne:** właściciel zlecił wyłącznie formalne, dokumentacyjne zamknięcie E2-A — jeden commit, push i draft PR, bez zmian kodu, testów, migracji, konfiguracji i produkcyjnej bazy, bez naprawy P2 i bez rozpoczynania E2-B. Sam PR dokumentacyjny pozostaje kandydatem do niezależnego review.
+- **Granica decyzji:** zamknięcie WAVE E2-A nie zamyka całego Etapu 2, nie odblokowuje live, realnego Fetch, realnego staged providera, controlled-live, browsera ani publikacji i nie rozpoczyna E2-B. Produkcja pozostaje na `0014`; runtime kodu wymaga `0017`.

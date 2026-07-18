@@ -230,3 +230,9 @@ Dwa ucięcia przy różnych wartościach `max_tokens` miały wspólną przyczyn�
 ## 2026-07-18 — Rozliczenie i wykonanie potrzebują osobnych dowodów
 
 Attempt `SETTLED` mówi, że pieniądze zostały rozliczone, ale nie dowodzi jeszcze, że wszystkie encje wykonawcze są terminalne. Recovery po crashu musi więc zachować finansowy finał i dopisać osobny, walidowany fakt wykonawczy. Ta sama zasada porządkuje review: historia prywatnego brancha i końcowe drzewo produktu są różnymi artefaktami, więc właściciel może świadomie zaakceptować pierwsze i wymagać czystości drugiego.
+
+## 2026-07-18 — Zamknięcie może być czynnością wyłącznie dokumentacyjną
+
+Kiedy kod przeszedł niezależny review i został zmergowany, „zamknięcie fali" nie oznacza już pisania kodu. WAVE E2-A zamknięto zmianą wyłącznie dokumentów: stanu projektu, rejestru decyzji i kroniki. Kod, testy, migracje i produkcyjna baza pozostały bajt w bajt takie same. Ta dyscyplina — oddzielić moment implementacji od momentu formalnego zapisu — pozwala zamknąć falę bez ryzyka wprowadzenia nowej regresji przy okazji porządków, a rozdzielenie ról implementera, reviewera i właściciela zamykającego etap chroni przed samopotwierdzeniem.
+
+Drugi wniosek dotyczy drobnych ustaleń review. Nie każdy finding trzeba naprawić od razu; część rozsądniej jest jawnie przyjąć jako P2 z opisanym wpływem i — co najważniejsze — z warunkiem ponownej oceny. „Brak triggera niemutowalności payloadu" nie jest dziś problemem, bo wspierane flow re-waliduje payload — ale musi zostać ponownie rozpatrzony, zanim pojawi się cokolwiek płatnego lub działającego na zewnątrz. Zapisany warunek `MUST REASSESS` zamienia cichy dług w widoczną bramkę przyszłego etapu.
