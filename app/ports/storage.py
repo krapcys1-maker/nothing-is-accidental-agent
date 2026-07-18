@@ -18,6 +18,8 @@ from app.models import (
     JobRecoveryResult,
     JobReservation,
     DurableProviderAttemptContext,
+    EvidenceExcerpt,
+    EvidenceRetrieval,
     ExecutionResolution,
     FinancialResolution,
     ProviderAttempt,
@@ -47,6 +49,7 @@ from app.models import (
     Topic,
     TopicStatus,
 )
+from app.ports.fetch import FetchedDocument
 
 
 class ResearchTopicIntegrityError(RuntimeError):
@@ -264,6 +267,14 @@ class StoragePort(Protocol):
     def assert_job_execution_active(self, execution: JobExecutionContext) -> None:
         """Sprawdza zamknięty job→run→lease fence w krótkiej transakcji SQLite."""
         ...
+
+    def initialize_offline_evidence_run_for_job(
+        self, job_id: str, lease_owner: str, run_id: str, *, clock: Clock,
+    ) -> ResearchRunInitialization: ...
+
+    def assert_offline_evidence_execution_active(
+        self, execution: JobExecutionContext,
+    ) -> None: ...
 
     def add_job_model_usage(
         self, execution: JobExecutionContext, usage: ModelUsage,
@@ -584,3 +595,33 @@ class StoragePort(Protocol):
     def mark_synthesis_pending(self, research_run_id: str) -> None: ...
 
     def revert_to_sources_complete(self, research_run_id: str, error: str) -> None: ...
+
+    def persist_offline_evidence_discovery(
+        self, execution: JobExecutionContext, candidates: list[SourceCandidateRecord],
+    ) -> list[SourceCandidateRecord]: ...
+
+    def get_offline_evidence_lineage(self, research_run_id: str) -> list[object]: ...
+
+    def persist_offline_evidence_retrieval(
+        self, execution: JobExecutionContext, candidate_id: int, document: FetchedDocument,
+    ) -> EvidenceRetrieval: ...
+
+    def persist_offline_verified_excerpt(
+        self, execution: JobExecutionContext, candidate_id: int, *,
+        claim_text: str, excerpt_text: str, start_offset: int, end_offset: int,
+        title: str | None, author_or_org: str | None, published_at: str | None,
+        source_type: SourceType, source_quality_score: float,
+    ) -> EvidenceExcerpt: ...
+
+    def prepare_offline_evidence_synthesis(
+        self, execution: JobExecutionContext, *, min_verified_sources: int,
+    ) -> None: ...
+
+    def finalize_offline_evidence_execution(
+        self, execution: JobExecutionContext, card: ResearchCard, *,
+        min_verified_sources: int,
+    ) -> ResearchCard: ...
+
+    def fail_offline_evidence_execution(
+        self, execution: JobExecutionContext, error: str,
+    ) -> None: ...

@@ -1024,3 +1024,15 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Wpływ:** wyłącznie odtwarzalność liczbowego podziału między partycjami; bez wpływu na evidence integrity, account isolation, migrację lub runtime. `--verify` potwierdził 1454 unikalne node ID, zero luk i duplikatów, a wszystkie cztery partycje zakończyły się exit 0.
 - **Decyzja:** nie przepisywać historycznych raportów implementera; aktywne dokumenty używają wyniku post-merge, a starszy rozkład jest jawnie oznaczony jako historyczny. P2 pozostaje nieblokującym zapisem różnicy odtwarzalności; ta formalizacja nie zmienia runnera i nie otwiera żadnego innego P2.
 - **Granice:** bez zmian testu partycjonującego, kodu, migracji, konfiguracji i bazy; nie naprawiano innych P2.
+## 2026-07-18 — E2-A: pierwszy full suite ujawnił 11 nieaktualnych oczekiwań liczby migracji
+
+- **Objaw:** po dodaniu `0017` pełna suita miała 11 failure; wszystkie oczekiwały listy kończącej się na `0016` lub liczby 16.
+- **Root cause:** historyczne testy migracji i operational report miały literalny poprzedni runtime count; kod produktu E2-A i targeted acceptance były zielone.
+- **Naprawa:** oczekiwania rozszerzono o addytywne `0017`; operational report używa teraz kanonicznej liczby migracji i dokładnego `RUNTIME_SCHEMA_VERSION`, zamiast starego hardcode `15`.
+- **Koszt/skutki zewnętrzne:** `0.000000 USD`; tylko tymczasowe bazy, bez sieci i bez produkcyjnej mutacji.
+
+## 2026-07-18 — E2-A: równoległe partycje kolidują z testami quiescence
+
+- **Objaw:** pierwsza próba uruchomienia czterech partycji jednocześnie dała failure w Windows-only LA-02: oczekiwane `DB_HANDLES_PRESENT`, otrzymane `PROCESSES_PRESENT`.
+- **Root cause:** test quiescence prawidłowo wykrył trzy pozostałe procesy pytest. Partycje są exact-once pod względem node ID, ale ta suita nie może być wykonywana współbieżnie, bo obecność obcego procesu jest częścią testowanego kontraktu.
+- **Rozstrzygnięcie:** bez zmian kodu; wszystkie cztery partycje powtórzono sekwencyjnie. Po dodaniu dwóch końcowych regresji bieżący exact-once wynik to `357+361+369+387=1474`.

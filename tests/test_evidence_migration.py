@@ -18,6 +18,7 @@ import sqlite3
 import pytest
 
 import scripts.migrate_schema_0016 as migration_cli_0016
+import scripts.migrate_schema_0017 as migration_cli_0017
 from app.research.evidence import (
     MAX_EXCERPT_CHARS,
     MIN_EXCERPT_CHARS,
@@ -26,6 +27,7 @@ from app.research.evidence import (
     sha256_hex,
 )
 from app.storage.db import (
+    EVIDENCE_PIPELINE_SCHEMA_VERSION,
     EVIDENCE_SCHEMA_VERSION,
     ExplicitMigrationError,
     MIGRATIONS_DIR,
@@ -40,6 +42,7 @@ from app.storage.db import (
     initialize_database,
     migrate_0014_to_0015,
     migrate_0015_to_0016,
+    migrate_0016_to_0017,
     register_evidence_hash_function,
     require_database_schema,
 )
@@ -152,19 +155,20 @@ def evidence_db(tmp_path: Path) -> Path:
 
 # --- Drabina jawnych migracji i dokładny runtime gate ---
 
-def test_runtime_schema_version_is_the_evidence_migration():
-    assert RUNTIME_SCHEMA_VERSION == EVIDENCE_SCHEMA_VERSION == "0016_evidence_foundation"
+def test_runtime_schema_version_is_the_evidence_pipeline_migration():
+    assert RUNTIME_SCHEMA_VERSION == EVIDENCE_PIPELINE_SCHEMA_VERSION
+    assert EVIDENCE_SCHEMA_VERSION == "0016_evidence_foundation"
     canonical = canonical_migration_versions()
-    assert canonical[-1] == EVIDENCE_SCHEMA_VERSION
-    assert canonical[-2] == SETTLED_RECOVERY_SCHEMA_VERSION
-    assert len(canonical) == 16
+    assert canonical[-1] == EVIDENCE_PIPELINE_SCHEMA_VERSION
+    assert canonical[-2] == EVIDENCE_SCHEMA_VERSION
+    assert len(canonical) == 17
 
 
-def test_fresh_initialization_reaches_0016_and_creates_evidence_tables(tmp_path):
+def test_fresh_initialization_reaches_0017_and_creates_evidence_tables(tmp_path):
     path = tmp_path / "fresh.db"
     applied = initialize_database(path)
-    assert len(applied) == 16
-    assert applied[-1] == EVIDENCE_SCHEMA_VERSION
+    assert len(applied) == 17
+    assert applied[-1] == EVIDENCE_PIPELINE_SCHEMA_VERSION
     storage = SqliteStorage.open(path)
     try:
         names = {
@@ -207,14 +211,80 @@ def test_explicit_0015_to_0016_is_exact_and_second_pass_is_idempotent(tmp_path):
     assert first.applied_migrations == (EVIDENCE_SCHEMA_VERSION,)
     assert first.idempotent is False
     assert len(database_schema_versions(path)) == 16
-    storage = SqliteStorage.open(path)
-    storage.close()
+    with pytest.raises(SchemaVersionTooOld):
+        SqliteStorage.open(path)
 
     before = _fingerprint(path)
     second = migrate_0015_to_0016(path)
     assert second.idempotent is True
     assert second.applied_migrations == ()
     assert _fingerprint(path) == before
+
+
+def test_explicit_0016_to_0017_is_exact_and_idempotent(tmp_path):
+    path = tmp_path / "lineage-ladder.db"
+    initialize_database(path, through=EVIDENCE_SCHEMA_VERSION)
+    first = migrate_0016_to_0017(path)
+    assert first.source_version == EVIDENCE_SCHEMA_VERSION
+    assert first.target_version == EVIDENCE_PIPELINE_SCHEMA_VERSION
+    assert first.applied_migrations == (EVIDENCE_PIPELINE_SCHEMA_VERSION,)
+    assert len(database_schema_versions(path)) == 17
+    SqliteStorage.open(path).close()
+    before = _fingerprint(path)
+    second = migrate_0016_to_0017(path)
+    assert second.idempotent is True
+    assert second.applied_migrations == ()
+    assert _fingerprint(path) == before
+
+
+def test_0017_cli_requires_confirmation_and_applies_one_step(tmp_path, capsys):
+    path = tmp_path / "lineage-cli.db"
+    initialize_database(path, through=EVIDENCE_SCHEMA_VERSION)
+    before = _fingerprint(path)
+    assert migration_cli_0017.main(["--db-path", str(path)]) == 2
+    assert _fingerprint(path) == before
+    assert migration_cli_0017.main([
+        "--db-path", str(path), "--confirm-0016-to-0017",
+    ]) == 0
+    assert database_schema_versions(path)[-1] == EVIDENCE_PIPELINE_SCHEMA_VERSION
+    assert "source=0016_evidence_foundation" in capsys.readouterr().out
+
+
+def test_runtime_refuses_0016_without_mutation(tmp_path):
+    path = tmp_path / "e1-only.db"
+    initialize_database(path, through=EVIDENCE_SCHEMA_VERSION)
+    before = _fingerprint(path)
+    with pytest.raises(SchemaVersionTooOld, match="SCHEMA_VERSION_TOO_OLD"):
+        SqliteStorage.open(path)
+    assert _fingerprint(path) == before
+
+
+def test_explicit_0017_rolls_back_ledger_and_lineage_schema_on_fault(tmp_path):
+    path = tmp_path / "lineage-rollback.db"
+    initialize_database(path, through=EVIDENCE_SCHEMA_VERSION)
+    migration_dir = tmp_path / "faulty-lineage"
+    migration_dir.mkdir()
+    source = MIGRATIONS_DIR / f"{EVIDENCE_PIPELINE_SCHEMA_VERSION}.sql"
+    target = migration_dir / source.name
+    target.write_text(
+        source.read_text(encoding="utf-8")
+        + "\nTHIS IS A CONTROLLED INVALID STATEMENT;\n",
+        encoding="utf-8",
+    )
+    before = _fingerprint(path)
+    with pytest.raises(Exception, match="syntax|near"):
+        migrate_0016_to_0017(path, migrations_dir=migration_dir)
+    assert _fingerprint(path) == before
+    assert database_schema_versions(path)[-1] == EVIDENCE_SCHEMA_VERSION
+    check = SqliteStorage.open_read_only(path)
+    try:
+        assert check.conn.execute(
+            "SELECT count(*) FROM sqlite_master "
+            "WHERE name IN ('evidence_candidate_retrievals',"
+            "'evidence_candidate_excerpts','evidence_source_lineage')"
+        ).fetchone()[0] == 0
+    finally:
+        check.close()
 
 
 def test_explicit_0015_to_0016_fails_closed_for_0014_source(tmp_path):

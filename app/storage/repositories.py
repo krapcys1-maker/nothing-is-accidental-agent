@@ -95,6 +95,10 @@ from app.research.durable_intent import (
     canonicalize_durable_research_payload,
     durable_execution_intent_fingerprint,
 )
+from app.research.offline_evidence_intent import (
+    OfflineEvidenceIntentError,
+    canonicalize_offline_evidence_payload,
+)
 from app.ports.fetch import FetchedDocument
 from app.research.evidence import (
     EvidenceRejectionReason,
@@ -108,6 +112,7 @@ from app.research.evidence import (
 )
 from app.storage.db import (
     RUNTIME_SCHEMA_VERSION,
+    canonical_migration_versions,
     connect,
     connect_existing_writable,
     connect_read_only,
@@ -761,6 +766,7 @@ class SqliteStorage:
 
     def _require_job_execution_fence(
         self, execution: JobExecutionContext, current_ts: str,
+        *, flow: ResearchFlow = ResearchFlow.SINGLE,
     ) -> sqlite3.Row:
         row = self.conn.execute(
             "SELECT j.status AS job_status,j.kind,j.workflow,j.run_id,j.lease_owner,"
@@ -775,10 +781,10 @@ class SqliteStorage:
             "AND j.kind='RESEARCH' AND j.workflow='RESEARCH' "
             "AND r.workflow='RESEARCH' AND r.account_id=j.account_id "
             "AND rr.account_id=j.account_id AND rr.topic_id=j.topic_id "
-            "AND rr.flow='single' AND t.account_id=j.account_id",
+            "AND rr.flow=? AND t.account_id=j.account_id",
             (
                 execution.job_id, execution.run_id, execution.lease_owner,
-                current_ts,
+                current_ts, flow.value,
             ),
         ).fetchone()
         if row is None:
@@ -826,9 +832,12 @@ class SqliteStorage:
                 )
             if payload.get("execution") == "durable_provider_v2":
                 normalized = canonicalize_durable_research_payload(payload)
+            elif payload.get("execution") == "offline_evidence_v1":
+                normalized = canonicalize_offline_evidence_payload(payload)
             return json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        except DurableExecutionIntentError as exc:
-            raise JobPayloadValidationError(exc.code, str(exc)) from exc
+        except (DurableExecutionIntentError, OfflineEvidenceIntentError) as exc:
+            code = getattr(exc, "code", "OFFLINE_EVIDENCE_INTENT_INVALID")
+            raise JobPayloadValidationError(code, str(exc)) from exc
         except (TypeError, ValueError) as exc:
             raise JobPayloadValidationError(
                 "MALFORMED_JOB_PAYLOAD", "Job payload must be JSON-serializable."
@@ -1293,6 +1302,143 @@ class SqliteStorage:
             self.conn.execute("BEGIN IMMEDIATE")
             current_ts = self._job_execution_timestamp(execution)
             self._require_job_execution_fence(execution, current_ts)
+            self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def initialize_offline_evidence_run_for_job(
+        self, job_id: str, lease_owner: str, run_id: str, *,
+        clock: Clock,
+    ) -> ResearchRunInitialization:
+        """Create or resume the exact E2-A STAGED run under a fresh job lease."""
+        if not run_id.strip() or not lease_owner.strip():
+            raise ValueError("offline evidence execution identifiers must be non-empty.")
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = _persisted_ts(self._job_now(clock=clock))
+            row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                raise JobRunRelationError("JOB_MISSING", job_id, "offline evidence job is missing.")
+            job = self._job_from_row(row)
+            try:
+                payload = canonicalize_offline_evidence_payload(job.payload)
+            except OfflineEvidenceIntentError as exc:
+                raise JobRunRelationError(
+                    "OFFLINE_EVIDENCE_INTENT_INVALID", job_id, str(exc),
+                ) from exc
+            if (
+                job.kind is not JobKind.RESEARCH
+                or job.workflow is not WorkflowType.RESEARCH
+                or job.topic_id is None
+                or payload["account_id"] != job.account_id
+                or payload["topic_id"] != job.topic_id
+            ):
+                raise JobRunRelationError(
+                    "OFFLINE_EVIDENCE_IDENTITY_MISMATCH", job_id,
+                    "job, payload, account and topic identity must match.",
+                )
+            if (
+                job.status not in (JobStatus.LEASED, JobStatus.RUNNING)
+                or job.lease_owner != lease_owner
+                or job.lease_expires_at is None
+                or _persisted_ts(job.lease_expires_at) < now
+            ):
+                raise StaleJobExecutionError(job_id)
+            if self.conn.execute(
+                "SELECT 1 FROM topics WHERE id=? AND account_id=?",
+                (job.topic_id, job.account_id),
+            ).fetchone() is None:
+                raise JobRunRelationError(
+                    "JOB_TOPIC_ACCOUNT_MISMATCH", job_id,
+                    "offline evidence topic must belong to the job account.",
+                )
+
+            if job.run_id is None:
+                self.conn.execute(
+                    "INSERT INTO runs (id,account_id,workflow,status,current_state,started_at,"
+                    "cost_usd) VALUES (?,?,?,?,?,?,0)",
+                    (run_id, job.account_id, WorkflowType.RESEARCH.value,
+                     RunStatus.DRY_RUN.value, "offline_evidence", now),
+                )
+                self.conn.execute(
+                    "INSERT INTO research_runs (id,account_id,topic_id,flow,status,"
+                    "is_force_reresearch,total_cost_usd,created_at,updated_at)"
+                    " VALUES (?,?,?,?,?,0,0,?,?)",
+                    (run_id, job.account_id, job.topic_id, ResearchFlow.STAGED.value,
+                     ResearchRunStatus.DISCOVERY_PENDING.value, now, now),
+                )
+                cursor = self.conn.execute(
+                    "UPDATE jobs SET run_id=?,updated_at=? WHERE id=? AND run_id IS NULL "
+                    "AND lease_owner=? AND lease_expires_at>=? AND status IN ('LEASED','RUNNING')",
+                    (run_id, now, job_id, lease_owner, now),
+                )
+                if cursor.rowcount != 1:
+                    raise StaleJobExecutionError(job_id)
+                created = True
+                attached_run_id = run_id
+            else:
+                created = False
+                attached_run_id = job.run_id
+
+            run_row = self.conn.execute(
+                "SELECT * FROM runs WHERE id=?", (attached_run_id,),
+            ).fetchone()
+            research_row = self.conn.execute(
+                "SELECT * FROM research_runs WHERE id=?", (attached_run_id,),
+            ).fetchone()
+            if run_row is None or research_row is None:
+                raise JobRunRelationError(
+                    "ATTACHED_RESEARCH_RUN_MISSING", job_id,
+                    "offline evidence run relation is incomplete.",
+                )
+            run = self._run_from_row(run_row)
+            research_run = self._research_run_from_row(research_row)
+            resumable = {
+                ResearchRunStatus.DISCOVERY_PENDING,
+                ResearchRunStatus.DISCOVERY_COMPLETE,
+                ResearchRunStatus.EXTRACTION_IN_PROGRESS,
+                ResearchRunStatus.SOURCES_COMPLETE,
+                ResearchRunStatus.SYNTHESIS_PENDING,
+            }
+            if (
+                run.account_id != job.account_id
+                or run.workflow is not WorkflowType.RESEARCH
+                or run.status is not RunStatus.DRY_RUN
+                or run_row["finished_at"] is not None
+                or float(run_row["cost_usd"]) != 0
+                or research_run.account_id != job.account_id
+                or research_run.topic_id != job.topic_id
+                or research_run.flow is not ResearchFlow.STAGED
+                or research_run.status not in resumable
+                or research_run.research_card_id is not None
+                or float(research_run.total_cost_usd) != 0
+            ):
+                raise JobRunRelationError(
+                    "ATTACHED_OFFLINE_EVIDENCE_RUN_INVALID", job_id,
+                    "attached run is not a zero-cost resumable E2-A checkpoint.",
+                )
+            job = self._job_from_row(self.conn.execute(
+                "SELECT * FROM jobs WHERE id=?", (job_id,),
+            ).fetchone())
+            result = ResearchRunInitialization(
+                job=job, run=run, research_run=research_run, created=created,
+            )
+            self.conn.commit()
+            return result
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def assert_offline_evidence_execution_active(
+        self, execution: JobExecutionContext,
+    ) -> None:
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            self._require_job_execution_fence(execution, now, flow=ResearchFlow.STAGED)
             self.conn.commit()
         except BaseException as primary:
             if self.conn.in_transaction:
@@ -3569,16 +3715,69 @@ class SqliteStorage:
             self.conn.execute("BEGIN IMMEDIATE")
             current_ts = _persisted_ts(self._job_now(now, clock=clock))
             rows = self.conn.execute(
-                "SELECT id,kind,run_id,attempts,max_attempts,external_effect_started_at FROM jobs "
+                "SELECT id,kind,run_id,attempts,max_attempts,external_effect_started_at,"
+                "payload_json,reserved_cost_usd,budget_reserved_at FROM jobs "
                 "WHERE status IN ('LEASED','RUNNING') AND lease_expires_at < ? ORDER BY id",
                 (current_ts,),
             ).fetchall()
             for row in rows:
+                safe_offline_resume = False
+                if (
+                    row["kind"] == JobKind.RESEARCH.value
+                    and row["run_id"] is not None
+                    and row["external_effect_started_at"] is None
+                    and float(row["reserved_cost_usd"]) == 0
+                    and row["budget_reserved_at"] is None
+                ):
+                    try:
+                        payload = canonicalize_offline_evidence_payload(
+                            json.loads(row["payload_json"])
+                        )
+                    except (json.JSONDecodeError, OfflineEvidenceIntentError):
+                        payload = None
+                    if payload is not None:
+                        state = self.conn.execute(
+                            "SELECT r.status AS run_status,r.finished_at,r.cost_usd,"
+                            "rr.flow,rr.status AS research_status,rr.research_card_id,"
+                            "rr.total_cost_usd,"
+                            "(SELECT count(*) FROM model_usage mu WHERE mu.run_id=r.id) AS usage_count,"
+                            "(SELECT count(*) FROM provider_attempts pa WHERE pa.job_id=?) AS attempt_count "
+                            "FROM runs r JOIN research_runs rr ON rr.id=r.id WHERE r.id=?",
+                            (row["id"], row["run_id"]),
+                        ).fetchone()
+                        safe_offline_resume = bool(
+                            state is not None
+                            and state["run_status"] == RunStatus.DRY_RUN.value
+                            and state["finished_at"] is None
+                            and float(state["cost_usd"]) == 0
+                            and state["flow"] == ResearchFlow.STAGED.value
+                            and state["research_status"] in {
+                                ResearchRunStatus.DISCOVERY_PENDING.value,
+                                ResearchRunStatus.DISCOVERY_COMPLETE.value,
+                                ResearchRunStatus.EXTRACTION_IN_PROGRESS.value,
+                                ResearchRunStatus.SOURCES_COMPLETE.value,
+                                ResearchRunStatus.SYNTHESIS_PENDING.value,
+                            }
+                            and state["research_card_id"] is None
+                            and float(state["total_cost_usd"]) == 0
+                            and int(state["usage_count"]) == 0
+                            and int(state["attempt_count"]) == 0
+                        )
                 if row["kind"] == JobKind.BROWSER.value or row["external_effect_started_at"] is not None:
                     target = JobStatus.NEEDS_VERIFICATION
                     release_budget = False
                     result.needs_verification_count += 1
                     error = "Lease expired; external effect requires verification."
+                elif safe_offline_resume and int(row["attempts"]) < int(row["max_attempts"]):
+                    target = JobStatus.QUEUED
+                    release_budget = False
+                    result.requeued_count += 1
+                    error = "Lease expired at a durable zero-cost E2-A checkpoint; safely requeued."
+                elif safe_offline_resume:
+                    target = JobStatus.FAILED
+                    release_budget = True
+                    result.failed_count += 1
+                    error = "Offline E2-A lease expired after maximum attempts."
                 elif row["kind"] == JobKind.RESEARCH.value and row["run_id"] is not None:
                     target = JobStatus.NEEDS_VERIFICATION
                     release_budget = False
@@ -4140,9 +4339,15 @@ class SqliteStorage:
                 value=len(versions),
                 detail=",".join(versions),
             )
-            if len(versions) != 15:
+            required_count = len(canonical_migration_versions())
+            if (
+                len(versions) != required_count
+                or not versions
+                or versions[-1] != RUNTIME_SCHEMA_VERSION
+            ):
                 unknown_reasons.append(
-                    f"schema has {len(versions)} migrations; current code requires 15"
+                    f"schema has {len(versions)} migrations; current code requires "
+                    f"{required_count} ending at {RUNTIME_SCHEMA_VERSION}"
                 )
 
         job_counts: dict[str, int] | None = None
@@ -5961,6 +6166,413 @@ class SqliteStorage:
             self.conn.commit()
         except Exception:
             self.conn.rollback()
+            raise
+
+    # --- E2-A: lease-fenced offline staged evidence integration ---
+
+    def persist_offline_evidence_discovery(
+        self,
+        execution: JobExecutionContext,
+        candidates: list[SourceCandidateRecord],
+    ) -> list[SourceCandidateRecord]:
+        """Persist A1 and its STAGED checkpoint in one fenced transaction."""
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            fence = self._require_job_execution_fence(
+                execution, now, flow=ResearchFlow.STAGED,
+            )
+            if fence["research_status"] != ResearchRunStatus.DISCOVERY_PENDING.value:
+                raise StaleJobExecutionError(
+                    execution.job_id, "offline A1 checkpoint is no longer pending.",
+                )
+            if not candidates or len({item.url for item in candidates}) != len(candidates):
+                raise ResearchTopicIntegrityError("offline A1 candidates must be non-empty and unique.")
+            for candidate in candidates:
+                cursor = self.conn.execute(
+                    "INSERT INTO research_source_candidates "
+                    "(research_run_id,url,title,status,discovered_at) VALUES (?,?,?,?,?)",
+                    (execution.run_id, candidate.url, candidate.title,
+                     SourceCandidateStatus.PENDING_EXTRACTION.value, now),
+                )
+                candidate.id = int(cursor.lastrowid)
+                candidate.research_run_id = execution.run_id
+            cursor = self.conn.execute(
+                "UPDATE research_runs SET status=?,updated_at=? WHERE id=? AND flow=? AND status=?",
+                (ResearchRunStatus.DISCOVERY_COMPLETE.value, now, execution.run_id,
+                 ResearchFlow.STAGED.value, ResearchRunStatus.DISCOVERY_PENDING.value),
+            )
+            if cursor.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            self.conn.execute(
+                "INSERT INTO research_stage_results "
+                "(research_run_id,stage,status,finished_at,error) VALUES (?,?,?,?,NULL)",
+                (execution.run_id, ResearchStageName.A1.value,
+                 ResearchStageStatus.SUCCESS.value, now),
+            )
+            self.conn.commit()
+            return candidates
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def get_offline_evidence_lineage(
+        self, research_run_id: str,
+    ) -> list[sqlite3.Row]:
+        """Read the complete candidate→evidence→card relation for resume/audit."""
+        return self.conn.execute(
+            "SELECT c.*,cr.retrieval_id,ce.excerpt_id,sl.source_id,sl.research_card_id "
+            "FROM research_source_candidates c "
+            "LEFT JOIN evidence_candidate_retrievals cr ON cr.candidate_id=c.id "
+            "LEFT JOIN evidence_candidate_excerpts ce ON ce.candidate_id=c.id "
+            "LEFT JOIN evidence_source_lineage sl ON sl.candidate_id=c.id "
+            "WHERE c.research_run_id=? ORDER BY c.id",
+            (research_run_id,),
+        ).fetchall()
+
+    def persist_offline_evidence_retrieval(
+        self,
+        execution: JobExecutionContext,
+        candidate_id: int,
+        document: FetchedDocument,
+    ) -> EvidenceRetrieval:
+        """Record the E1 retrieval and candidate lineage under the same lease."""
+        retrieval: EvidenceRetrieval | None = None
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            fence = self._require_job_execution_fence(
+                execution, now, flow=ResearchFlow.STAGED,
+            )
+            candidate = self.conn.execute(
+                "SELECT * FROM research_source_candidates WHERE id=? AND research_run_id=?",
+                (candidate_id, execution.run_id),
+            ).fetchone()
+            if candidate is None or candidate["url"] != document.requested_url:
+                raise ResearchTopicIntegrityError("retrieval candidate/run/url identity mismatch.")
+            existing = self.conn.execute(
+                "SELECT er.* FROM evidence_candidate_retrievals cr "
+                "JOIN evidence_retrievals er ON er.id=cr.retrieval_id "
+                "WHERE cr.candidate_id=? AND cr.research_run_id=? AND cr.account_id=?",
+                (candidate_id, execution.run_id, fence["research_account_id"]),
+            ).fetchone()
+            if existing is not None:
+                self.conn.commit()
+                return self._row_to_evidence_retrieval(existing)
+            retrieval = build_evidence_retrieval(
+                document, account_id=fence["research_account_id"],
+                now=execution.now(),
+            )
+            canonical = retrieval.canonical_text
+            cursor = self.conn.execute(
+                "INSERT INTO evidence_retrievals (account_id,requested_url,final_url,"
+                "fetched_at,status,http_status,content_type,fetch_error,raw_size_bytes,"
+                "raw_sha256,extracted_chars,extracted_sha256,canonical_text,canonical_chars,"
+                "canonical_sha256,truncated,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    retrieval.account_id, retrieval.requested_url, retrieval.final_url,
+                    _ts_precise(retrieval.fetched_at), retrieval.status.value,
+                    retrieval.http_status, retrieval.content_type, retrieval.fetch_error,
+                    retrieval.raw_size_bytes, retrieval.raw_sha256,
+                    retrieval.extracted_chars, retrieval.extracted_sha256,
+                    canonical, len(canonical), sha256_hex(canonical),
+                    int(retrieval.truncated), _ts_precise(retrieval.created_at),
+                ),
+            )
+            retrieval.id = int(cursor.lastrowid)
+            self.conn.execute(
+                "INSERT INTO evidence_candidate_retrievals "
+                "(candidate_id,research_run_id,account_id,retrieval_id,created_at)"
+                " VALUES (?,?,?,?,?)",
+                (candidate_id, execution.run_id, fence["research_account_id"],
+                 retrieval.id, now),
+            )
+            self.conn.commit()
+            return retrieval
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def persist_offline_verified_excerpt(
+        self,
+        execution: JobExecutionContext,
+        candidate_id: int,
+        *,
+        claim_text: str,
+        excerpt_text: str,
+        start_offset: int,
+        end_offset: int,
+        title: str | None,
+        author_or_org: str | None,
+        published_at: str | None,
+        source_type: SourceType,
+        source_quality_score: float,
+    ) -> EvidenceExcerpt:
+        """Run the E1 verifier and only then set the candidate to VERIFIED."""
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            fence = self._require_job_execution_fence(
+                execution, now, flow=ResearchFlow.STAGED,
+            )
+            row = self.conn.execute(
+                "SELECT er.* "
+                "FROM research_source_candidates c "
+                "JOIN evidence_candidate_retrievals cr ON cr.candidate_id=c.id "
+                "JOIN evidence_retrievals er ON er.id=cr.retrieval_id "
+                "WHERE c.id=? AND c.research_run_id=? AND cr.research_run_id=? "
+                "AND cr.account_id=? AND er.account_id=?",
+                (candidate_id, execution.run_id, execution.run_id,
+                 fence["research_account_id"], fence["research_account_id"]),
+            ).fetchone()
+            if row is None:
+                raise EvidenceVerificationError(EvidenceVerdict.rejected(
+                    EvidenceRejectionReason.RETRIEVAL_NOT_FOUND,
+                    "candidate has no retrieval in this run/account",
+                ))
+            existing = self.conn.execute(
+                "SELECT ee.* FROM evidence_candidate_excerpts ce "
+                "JOIN evidence_excerpts ee ON ee.id=ce.excerpt_id "
+                "WHERE ce.candidate_id=? AND ce.research_run_id=? AND ce.account_id=?",
+                (candidate_id, execution.run_id, fence["research_account_id"]),
+            ).fetchone()
+            if existing is not None:
+                self.conn.commit()
+                return EvidenceExcerpt(
+                    id=existing["id"], account_id=existing["account_id"],
+                    retrieval_id=existing["retrieval_id"], claim_text=existing["claim_text"],
+                    claim_sha256=existing["claim_sha256"], excerpt_text=existing["excerpt_text"],
+                    start_offset=existing["start_offset"], end_offset=existing["end_offset"],
+                    created_at=existing["created_at"],
+                )
+            retrieval = self._row_to_evidence_retrieval(row)
+            verdict = verify_evidence_excerpt(
+                retrieval, claim_text=claim_text, excerpt_text=excerpt_text,
+                start_offset=start_offset, end_offset=end_offset,
+            )
+            if not verdict.approved:
+                raise EvidenceVerificationError(verdict)
+            cursor = self.conn.execute(
+                "INSERT INTO evidence_excerpts "
+                "(account_id,retrieval_id,claim_text,claim_sha256,excerpt_text,"
+                "start_offset,end_offset,created_at) VALUES (?,?,?,?,?,?,?,?)",
+                (fence["research_account_id"], retrieval.id, claim_text,
+                 sha256_hex(claim_text), excerpt_text, start_offset, end_offset, now),
+            )
+            excerpt_id = int(cursor.lastrowid)
+            self.conn.execute(
+                "INSERT INTO evidence_candidate_excerpts "
+                "(candidate_id,research_run_id,account_id,retrieval_id,excerpt_id,created_at)"
+                " VALUES (?,?,?,?,?,?)",
+                (candidate_id, execution.run_id, fence["research_account_id"],
+                 retrieval.id, excerpt_id, now),
+            )
+            cursor = self.conn.execute(
+                "UPDATE research_source_candidates SET title=?,author_or_org=?,published_at=?,"
+                "source_type=?,supported_claims_json=?,numeric_facts_json='[]',"
+                "verification_status='VERIFIED',source_quality_score=?,status='EXTRACTED',"
+                "attempts=attempts+1,extraction_error=NULL,extracted_at=? "
+                "WHERE id=? AND research_run_id=? AND status='PENDING_EXTRACTION'",
+                (title, author_or_org, published_at, source_type.value,
+                 json.dumps([claim_text]), source_quality_score, now,
+                 candidate_id, execution.run_id),
+            )
+            if cursor.rowcount != 1:
+                raise ResearchTopicIntegrityError("candidate is not pending local verification.")
+            self.conn.execute(
+                "UPDATE research_runs SET status=?,updated_at=? WHERE id=? AND status IN (?,?)",
+                (ResearchRunStatus.EXTRACTION_IN_PROGRESS.value, now, execution.run_id,
+                 ResearchRunStatus.DISCOVERY_COMPLETE.value,
+                 ResearchRunStatus.EXTRACTION_IN_PROGRESS.value),
+            )
+            self.conn.execute(
+                "INSERT INTO research_stage_results "
+                "(research_run_id,stage,status,finished_at,error) VALUES (?,?,?,?,NULL)",
+                (execution.run_id, ResearchStageName.A2.value,
+                 ResearchStageStatus.SUCCESS.value, now),
+            )
+            self.conn.commit()
+            return EvidenceExcerpt(
+                id=excerpt_id, account_id=fence["research_account_id"],
+                retrieval_id=int(retrieval.id), claim_text=claim_text,
+                claim_sha256=sha256_hex(claim_text), excerpt_text=excerpt_text,
+                start_offset=start_offset, end_offset=end_offset,
+                created_at=execution.now(),
+            )
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def prepare_offline_evidence_synthesis(
+        self, execution: JobExecutionContext, *, min_verified_sources: int,
+    ) -> None:
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            self._require_job_execution_fence(execution, now, flow=ResearchFlow.STAGED)
+            count = int(self.conn.execute(
+                "SELECT count(*) FROM research_source_candidates c "
+                "JOIN evidence_candidate_excerpts ce ON ce.candidate_id=c.id "
+                "WHERE c.research_run_id=? AND c.status='EXTRACTED' "
+                "AND c.verification_status='VERIFIED'",
+                (execution.run_id,),
+            ).fetchone()[0])
+            if count < min_verified_sources:
+                raise ResearchTopicIntegrityError("insufficient locally verified evidence.")
+            cursor = self.conn.execute(
+                "UPDATE research_runs SET status='SYNTHESIS_PENDING',stage_a_completed_at=?,"
+                "updated_at=? WHERE id=? AND flow='staged' "
+                "AND status IN ('EXTRACTION_IN_PROGRESS','SOURCES_COMPLETE')",
+                (now, now, execution.run_id),
+            )
+            if cursor.rowcount != 1:
+                raise StaleJobExecutionError(
+                    execution.job_id, "offline synthesis checkpoint is unavailable.",
+                )
+            self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def finalize_offline_evidence_execution(
+        self,
+        execution: JobExecutionContext,
+        card: ResearchCard,
+        *,
+        min_verified_sources: int,
+    ) -> ResearchCard:
+        """Atomically commit card, evidence lineage, run/topic and job DONE."""
+        original_card_id = card.id
+        original_sources = [(item.id, item.research_card_id) for item in card.sources]
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            fence = self._require_job_execution_fence(
+                execution, now, flow=ResearchFlow.STAGED,
+            )
+            if (
+                fence["research_status"] != ResearchRunStatus.SYNTHESIS_PENDING.value
+                or fence["run_status"] != RunStatus.DRY_RUN.value
+                or card.id is not None
+                or card.topic_id != fence["topic_id"]
+                or len(card.sources) < min_verified_sources
+            ):
+                raise ResearchTopicIntegrityError("offline finalization preconditions failed.")
+            lineage = {
+                row["url"]: row for row in self.conn.execute(
+                    "SELECT c.id AS candidate_id,c.url,cr.retrieval_id,ce.excerpt_id "
+                    "FROM research_source_candidates c "
+                    "JOIN evidence_candidate_retrievals cr ON cr.candidate_id=c.id "
+                    "JOIN evidence_candidate_excerpts ce ON ce.candidate_id=c.id "
+                    "WHERE c.research_run_id=? AND c.status='EXTRACTED' "
+                    "AND c.verification_status='VERIFIED'",
+                    (execution.run_id,),
+                ).fetchall()
+            }
+            if (
+                len({source.url for source in card.sources}) != len(card.sources)
+                or any(
+                    source.verification_status is not SourceVerification.VERIFIED
+                    or source.url not in lineage
+                    for source in card.sources
+                )
+            ):
+                raise ResearchTopicIntegrityError(
+                    "card sources must be backed by locally VERIFIED excerpts.",
+                )
+            self._insert_finalization_card(card)
+            for source in card.sources:
+                source.research_card_id = card.id
+                self._insert_finalization_source(source)
+                item = lineage[source.url]
+                self.conn.execute(
+                    "INSERT INTO evidence_source_lineage "
+                    "(source_id,research_card_id,candidate_id,research_run_id,account_id,"
+                    "retrieval_id,excerpt_id,created_at) VALUES (?,?,?,?,?,?,?,?)",
+                    (source.id, card.id, item["candidate_id"], execution.run_id,
+                     fence["research_account_id"], item["retrieval_id"],
+                     item["excerpt_id"], now),
+                )
+            self.conn.execute(
+                "INSERT INTO research_stage_results "
+                "(research_run_id,stage,status,finished_at,error) VALUES (?,?,?,?,NULL)",
+                (execution.run_id, ResearchStageName.B.value,
+                 ResearchStageStatus.SUCCESS.value, now),
+            )
+            research = self.conn.execute(
+                "UPDATE research_runs SET status='COMPLETE',stage_b_completed_at=?,"
+                "research_card_id=?,total_cost_usd=0,error=NULL,updated_at=? "
+                "WHERE id=? AND flow='staged' AND status='SYNTHESIS_PENDING'",
+                (now, card.id, now, execution.run_id),
+            )
+            run = self.conn.execute(
+                "UPDATE runs SET status='DRY_RUN',cost_usd=0,error=NULL,finished_at=? "
+                "WHERE id=? AND status='DRY_RUN' AND finished_at IS NULL",
+                (now, execution.run_id),
+            )
+            topic = self.conn.execute(
+                "UPDATE topics SET status='USED' WHERE id=? AND account_id=? AND status='SELECTED'",
+                (fence["topic_id"], fence["research_account_id"]),
+            )
+            job = self.conn.execute(
+                "UPDATE jobs SET status='DONE',last_error=NULL,lease_owner=NULL,"
+                "lease_expires_at=NULL,updated_at=?,finished_at=?,reserved_cost_usd=0,"
+                "budget_reserved_at=NULL WHERE id=? AND run_id=? AND lease_owner=? "
+                "AND lease_expires_at>=? AND status IN ('LEASED','RUNNING')",
+                (now, now, execution.job_id, execution.run_id,
+                 execution.lease_owner, now),
+            )
+            if any(cursor.rowcount != 1 for cursor in (research, run, topic, job)):
+                raise StaleJobExecutionError(execution.job_id)
+            self.conn.commit()
+            return card
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            card.id = original_card_id
+            for source, state in zip(card.sources, original_sources):
+                source.id, source.research_card_id = state
+            raise
+
+    def fail_offline_evidence_execution(
+        self, execution: JobExecutionContext, error: str,
+    ) -> None:
+        """Atomically terminalize a confirmed zero-external-effect E2-A failure."""
+        safe_error = " ".join(error.split())[:240] or "OFFLINE_EVIDENCE_FAILED"
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            self._require_job_execution_fence(
+                execution, now, flow=ResearchFlow.STAGED,
+            )
+            research = self.conn.execute(
+                "UPDATE research_runs SET status='FAILED',error=?,total_cost_usd=0,"
+                "updated_at=? WHERE id=? AND flow='staged' AND status NOT IN ('COMPLETE','FAILED')",
+                (safe_error, now, execution.run_id),
+            )
+            run = self.conn.execute(
+                "UPDATE runs SET status='FAILED',error=?,cost_usd=0,finished_at=? "
+                "WHERE id=? AND status='DRY_RUN' AND finished_at IS NULL",
+                (safe_error, now, execution.run_id),
+            )
+            job = self.conn.execute(
+                "UPDATE jobs SET status='FAILED',last_error=?,lease_owner=NULL,"
+                "lease_expires_at=NULL,updated_at=?,finished_at=?,reserved_cost_usd=0,"
+                "budget_reserved_at=NULL WHERE id=? AND run_id=? AND lease_owner=? "
+                "AND lease_expires_at>=? AND status IN ('LEASED','RUNNING')",
+                (safe_error, now, now, execution.job_id, execution.run_id,
+                 execution.lease_owner, now),
+            )
+            if research.rowcount != 1 or run.rowcount != 1 or job.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
             raise
 
     # --- Lokalny fundament evidence (Etap 2, fala E1; ADR-099 + ADR-100) ---
