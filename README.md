@@ -16,6 +16,7 @@ Obowiązujące dodatkowo (logi, nie plany): `docs/DECISIONS.md` (rejestr ADR), `
 
 ## Stan projektu (skrót — pełny obraz w CURRENT_PROJECT_STATE.md)
 
+- **PR #1 został zmergowany do `main`** jako merge commit `548cc65cad70eaef631fafff7c350845984d18e6`. Historyczny branch `dev/first-successful-research-card` jest technicznie zakończony; dalsza praca powstaje na nowych branchach z aktualnego `main`. Mały checkpoint `fix/post-merge-branch-sensitive-test` usuwa wyłącznie zaszytą w teście starą nazwę brancha, nie zmieniając produkcyjnego branch gate'u. Produkcja nadal ma schema `0014`; migracja `0015` wymaga osobnej autoryzacji; Etap 2 jest `NOT STARTED`, a live `NOT AUTHORIZED`.
 - Zbudowane i przetestowane offline: konfiguracja, kod SQLite z **15 migracjami** (produkcja nadal zweryfikowana na `0014`/14), Policy Engine, kolejka/worker, ledger provider attempt, durable single-research v3, output-size contract, kanoniczny wrapper `controlled-live-once`, fencing i raporty/recovery bez retry. `0015` domyka execution-only crash po `SETTLED` bez zmiany kosztu/usage i bez providera. Runtime `SqliteStorage.open()` wymaga dokładnie `0015`, nie migruje ani nie tworzy DB: immutable preflight → URI `mode=rw` istniejącego pliku → drugi gate na tym handle → writable PRAGMA. Inicjalizacja i `0014→0015` są osobnymi, jawnymi operacjami. **1331/1331 testów; partycje exact-once 320+322+339+350; QA schema-gate 17/17, recovery 4/4, lineage 10/10.**
 - **WAVE OUTPUT-SIZE CONTRACT = `CLOSED — APPROVED WITH MINOR/P2`; POSITIVE CONTROLLED-LIVE = `INDEPENDENTLY CONFIRMED`; ETAP 2 POSITIVE-LIVE GATE = `FORMALLY ACCEPTED`; ETAP 2 = `NOT STARTED`.** Implementer wykazał 1288/1288, niezależny końcowy review wykonał 223/223 własnych wąskich testów i wydał `APPROVE` bez CRITICAL/MAJOR/nowych MINOR, a właściciel formalnie przyjął bramkę (ADR-095). Trwały wynik: koszt `0.063278 USD`, job `DONE`, run `SUCCESS`, research_run `COMPLETE`, attempt `SETTLED`, Research Card `id=3`, redakcyjne `REJECT/WEAK_SOURCES`. Kolejny live jest `NOT AUTHORIZED`; browser i publikacja pozostają `BLOCKED`; gate `False`, flagi fail-closed.
 
@@ -51,7 +52,7 @@ WAVE 0B jest formalnie **`CLOSED — APPROVED WITH P2`** po checkpointowym commi
 
 ```bash
 pip install -e .[dev]           # + .[llm] tylko do realnych wywołań API
-python -m pytest                # 1328 testów, bez sieci
+python -m pytest                # 1331 testów, bez sieci
 python scripts/run_test_partitions.py --parts 4 --verify  # pełne SHA-256 node ID
 python -m app.main run-topics --count 6      # dry_run (zero kosztu)
 python -m app.main run-research              # dry_run (zero kosztu)

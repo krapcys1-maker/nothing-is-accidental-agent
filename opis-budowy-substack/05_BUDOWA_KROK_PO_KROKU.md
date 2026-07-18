@@ -710,3 +710,11 @@ Wąski re-review znalazł jeszcze jedną szczelinę. Pierwsza kontrola była bez
 Poprawka jest mała: runtime otwiera teraz wyłącznie istniejący plik przez `mode=rw`, bez tworzenia katalogu, bazy i bez PRAGMA. Na dokładnie tym uchwycie ponownie czyta ledger. Dopiero schema `0015` pozwala przygotować połączenie do zapisu. Test usunięcia kończy się bez odtworzonego pliku; test podmiany zachowuje identyczne SHA, rozmiar, mtime, ledger i brak sidecarów. Worker i granica providera nie powstają.
 
 Pełny suite ma teraz 1331 testów, cztery sekwencyjne partycje `320+322+339+350`, a QA schema gate `17/17`. Produkcyjna baza pozostała na `0014` i nie została otwarta do zapisu. Nie było API, kosztu, browsera, publikacji ani merge. PR #1 jest wyłącznie kandydatem do jednego wąskiego re-review tej kolejności: preflight → `mode=rw` → drugi gate → PRAGMA.
+
+## 2026-07-18 — Merge zamknął branch, ale test nadal w nim mieszkał
+
+Niezależny re-review wydał `APPROVE`, a PR #1 trafił do `main` jako merge commit `548cc65cad70eaef631fafff7c350845984d18e6`. Kod i historia przeszły poprawnie, produkcyjna baza pozostała na `0014`, lecz pierwszy pełny suite już na `main` dał jeden failure. Nie zawiódł system bezpieczeństwa — przeciwnie, zadziałał dokładnie tak, jak miał. Test przekazał mu na sztywno starą nazwę `dev/first-successful-research-card`, więc branch gate odpowiedział „nie”.
+
+Mały checkpoint nie poluzował bramki. Test najpierw pyta kontrolowane repo, jaki branch i HEAD naprawdę symuluje, a potem przekazuje te wartości do subprocessu. Osobna negatywna próba nadal podaje obcy branch i potwierdza, że worker nie rusza. Dzięki temu test sprawdza kontrakt, nie pamiątkę po zakończonym branchu.
+
+Po poprawce wrócił pełny wynik 1331/1331, exact-once `320+322+339+350`, QA `10/10`, `4/4` i `17/17`. Historyczny branch pozostaje zachowany, ale technicznie zakończony; każda kolejna praca zaczyna się na nowym branchu z `main`. Etap 2 nadal nie wystartował, live nie jest autoryzowany, migracja `0015` nie została zastosowana, a produkcyjna DB jest bajtowo identyczna.
