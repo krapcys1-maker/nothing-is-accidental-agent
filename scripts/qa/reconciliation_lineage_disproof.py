@@ -41,6 +41,7 @@ from app.ports.storage import (
     ProviderAttemptReconciliationError, ReconciliationPreviewStaleError,
 )
 from app.research.durable_intent import DurableResearchExecutionIntent
+from app.storage.db import initialize_database
 from app.storage.repositories import SqliteStorage
 
 NOW = datetime(2026, 7, 15, 12, 0, tzinfo=timezone.utc)
@@ -83,6 +84,7 @@ def _settings(tmp: str) -> Settings:
 def _fresh_store() -> tuple[SqliteStorage, Account]:
     tmp = tempfile.mkdtemp(prefix=_TMP_PREFIX)
     _TMPDIRS.append(tmp)
+    initialize_database(_settings(tmp).db_path)
     store = SqliteStorage.open(_settings(tmp).db_path)
     owner = _account("nothing_is_accidental")
     store.ensure_account(owner)

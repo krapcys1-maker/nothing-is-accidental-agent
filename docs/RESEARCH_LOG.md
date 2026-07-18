@@ -254,3 +254,9 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Zakres:** deterministyczne testy odzyskiwania lifecycle po `SETTLED`, final-tree cleanup oraz dokumentacja; fake callery i tymczasowe bazy SQLite.
 - **Research/provider:** zero zapytań, web search, SDK, requestów, usage i nowych kart. Nie użyto materiału zewnętrznego.
 - **Koszt i stan:** `0.000000 USD`; miesięczny ledger pozostaje `1.012590 USD`; Etap 2 `NOT STARTED`, kolejny live `NOT AUTHORIZED`.
+
+## 2026-07-18 — PR1-MAJ-005 bez nowego researchu
+
+- **Zakres:** wyłącznie offline schema-gate, jawny migrator i kontrpróby na tymczasowych SQLite; żadnych danych internetowych ani materiału researchowego.
+- **Research/provider:** zero API, SDK, providera, web search, requestów, usage i nowych kart.
+- **Koszt i stan:** `0.000000 USD`; miesięczny ledger pozostaje `1.012590 USD`; produkcja nadal schema `0014`, Etap 2 `NOT STARTED`, kolejny live `NOT AUTHORIZED`.

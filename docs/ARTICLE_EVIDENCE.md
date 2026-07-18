@@ -476,3 +476,9 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Najtrudniejsze okno awarii pojawia się po trwałym rozliczeniu kosztu, lecz przed zapisaniem terminalnego wyniku procesu. Cofnięcie `SETTLED` groziłoby podwójnym kosztem; pozostawienie joba w ruchu blokowałoby kolejkę.
 - Rozwiązaniem nie jest retry finansowy, lecz osobny append-only dowód wykonawczy: `EXECUTION_RECOVERY`. Koszt i usage pozostają nietykalne, a lifecycle kończy się wyłącznie po sprawdzeniu karty, lineage, fence, rezerwacji i cache.
 - Cytowalna zasada: „Terminalny stan pieniędzy i terminalny stan pracy to dwa różne fakty; awaria między nimi wymaga dowodu, nie ponownej płatności.”
+
+## 2026-07-18 — Materiał: „Uruchomienie programu nie jest zgodą na zmianę danych”
+
+- Finding PR1-MAJ-005 pokazał, że wygodna fabryka SQLite łączyła dwie różne decyzje: otwarcie aplikacji i migrację schematu. Zwykły start mógł automatycznie zastosować `0015` do bazy `0014`.
+- Po naprawie runtime najpierw wykonuje immutable exact-version check i odmawia bez zmiany SHA, rozmiaru, mtime, ledgera i sidecarów. Migracja ma osobny, jawny root, konkretny plik docelowy i exact preflight.
+- Cytowalna zasada: „Kompatybilność schematu jest warunkiem startu; migracja jest osobną autoryzowaną operacją, nigdy skutkiem ubocznym `open()`.”

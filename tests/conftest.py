@@ -15,6 +15,7 @@ activate()
 
 from app.core.config import Settings
 from app.models import Account, AccountMode, AutonomyLevel, Job, JobKind
+from app.storage.db import initialize_database
 from app.storage.repositories import SqliteStorage
 
 STANDARD_WEIGHTS = {
@@ -124,6 +125,7 @@ def account() -> Account:
 @pytest.fixture
 def settings(tmp_path: Path, account: Account) -> Settings:
     data_dir = tmp_path / "data"
+    initialize_database(data_dir / "agent.db")
     return Settings(
         project_root=tmp_path,
         data_dir=data_dir,

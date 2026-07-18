@@ -508,6 +508,13 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Wynik:** autoryzacja została zużyta przez jeden HTTP 200 z `stop_reason=end_turn`. Schema validation odrzuciła `sources[0].supports_claim`; koszt `0.077160 USD`, attempt `SETTLED`, terminalny `FAILED`, brak karty.
 - **Granica po:** gate i flags przywrócone fail-closed; kolejny live wymaga nowej jawnej decyzji właściciela.
 
+### 2026-07-18 — Właściciel zlecił wąską naprawę PR1-MAJ-005 i jawny schema gate
+
+- **Decyzja człowieka:** oddzielić zwykłe otwarcie runtime od migracji, wymagać kontrolowanej odmowy na `0014` bez jakiejkolwiek mutacji i dodać osobny, jawny mechanizm `0014→0015`.
+- **Twarde granice:** produkcyjna DB wyłącznie `mode=ro&immutable=1`; nie stosować na niej `0015`; bez API, Anthropic, providera/SDK, browsera, publikacji, controlled-live i kosztu; historyczne narzędzia Etapu 1 nadal kończą na `0014`; bez Etapu 2 i bez merge.
+- **Autoryzacja Git:** dopiero po pełnej walidacji jeden commit `fix: require explicit schema migration for runtime` i zwykły push na istniejący `origin/dev/first-successful-research-card`; bez force i bez pushu do `main`.
+- **Oczekiwany status:** implementer może ogłosić wyłącznie `CANDIDATE FOR INDEPENDENT RE-REVIEW`; nie jest to approval ani zgoda na produkcyjną migrację, live lub merge.
+
 ### 2026-07-18 — Właściciel zawęził cleanup PR #1 do końcowego drzewa
 
 - **Decyzja człowieka:** nie przepisywać historii PR #1. Materiały z `instrukcja dla pisania artykulow/` mogą pozostać w historii prywatnego brancha, ponieważ review nie wykrył sekretów, ale nie mogą występować w końcowym diffie ani zmienić końcowego drzewa `main`.

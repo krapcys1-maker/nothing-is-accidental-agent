@@ -30,6 +30,7 @@ from app.models import (
     ModelUsage, Topic, TopicStatus, WorkflowType,
 )
 from app.research.durable_intent import DurableResearchExecutionIntent
+from app.storage.db import initialize_database
 from app.storage.repositories import SqliteStorage
 
 
@@ -108,6 +109,7 @@ def _run() -> int:
     failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="nia-settled-recovery-disproof-") as tmp:
         db_path = pathlib.Path(tmp) / "probe.db"
+        initialize_database(db_path)
         store = SqliteStorage.open(db_path)
         job_id, run_id, request_id, _usage_id = _crash(store, "terminal")
         result = store.release_or_requeue_expired_leases(now=EXPIRED)

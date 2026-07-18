@@ -29,6 +29,7 @@ from app.models import (
 )
 from app.ports.storage import ProviderAttemptReconciliationError
 from app.research.durable_intent import DurableResearchExecutionIntent
+from app.storage.db import initialize_database
 from app.storage.repositories import SqliteStorage
 
 
@@ -281,6 +282,7 @@ def test_raw_terminalization_and_post_recovery_mutation_are_blocked(storage, acc
 
 def test_concurrent_maintenance_creates_one_recovery_event(tmp_path, account):
     db_path = tmp_path / "concurrent-settled.db"
+    initialize_database(db_path)
     seed = SqliteStorage.open(db_path)
     crash = _settled_crash(seed, account, "concurrent")
     seed.close()
@@ -349,6 +351,7 @@ def test_resolver_before_reaper_is_terminal_and_reaper_is_noop(storage, account)
 
 def test_two_concurrent_resolvers_are_one_idempotent_operation(tmp_path, account):
     db_path = tmp_path / "concurrent-resolvers.db"
+    initialize_database(db_path)
     seed = SqliteStorage.open(db_path)
     crash = _settled_crash(seed, account, "two-resolvers")
     seed.close()
@@ -384,6 +387,7 @@ def test_two_concurrent_resolvers_are_one_idempotent_operation(tmp_path, account
 
 def test_concurrent_maintenance_and_resolver_converge(tmp_path, account):
     db_path = tmp_path / "maintenance-resolver.db"
+    initialize_database(db_path)
     seed = SqliteStorage.open(db_path)
     crash = _settled_crash(seed, account, "maintenance-resolver")
     seed.close()

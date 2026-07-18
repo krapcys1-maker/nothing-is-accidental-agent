@@ -36,6 +36,7 @@ from app.scheduler.enqueue import ScheduledJobEnqueuer, ScheduledJobRequest
 from app.scheduler.maintenance import MaintenanceRunner
 from app.scheduler.scheduling import EditorialWindow, SchedulingPolicy
 from app.scheduler.worker import Worker, WorkerIterationStatus
+from app.storage.db import initialize_database
 from app.storage.repositories import SqliteStorage
 from app.ports.storage import (
     JobRunRelationError,
@@ -1816,6 +1817,7 @@ def test_research_worker_dry_run_matches_direct_cli_semantics(settings, account)
         costs_csv_path=worker_root / "COSTS.csv",
     )
     clock = MutableUtcClock()
+    initialize_database(worker_settings.db_path)
     worker_store = SqliteStorage.open(worker_settings.db_path)
     worker_topic = _selected_topic(worker_store, account)
     _enable_offline_worker(worker_store, clock)

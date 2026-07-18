@@ -39,6 +39,7 @@ from app.operations.controlled_live import (
 )
 from app.core.pricing import load_pricing_profiles, resolve_real_pricing_profile
 from app.research.durable_intent import controlled_session_contract
+from app.storage.db import initialize_database
 from app.storage.repositories import SqliteStorage
 from scripts import run_capped_research
 
@@ -1249,6 +1250,7 @@ def test_canonical_fake_subprocess_runs_cli_wrapper_worker_restore_and_report(
 ):
     db_path = tmp_path / "subprocess" / "agent.db"
     db_path.parent.mkdir(parents=True)
+    initialize_database(db_path)
     seed = SqliteStorage.open(db_path)
     seed.ensure_account(account)
     seed.apply_security_flag_profile(
@@ -1363,6 +1365,7 @@ def test_cli_composition_runs_canonical_pre_storage_probe_before_main_open(
 
     db_path = tmp_path / "composition" / "agent.db"
     runtime = tmp_path / "composition-runtime"
+    initialize_database(db_path)
     seed = SqliteStorage.open(db_path)
     topic, pricing = _prepare(seed, account, tmp_path)
     seed.close()
@@ -1411,6 +1414,7 @@ def test_database_change_between_pre_storage_pass_and_main_open_stops(
     import app.operations.stage1_migration as migration
 
     db_path = tmp_path / "drift" / "agent.db"
+    initialize_database(db_path)
     seed = SqliteStorage.open(db_path)
     seed.close()
     expected_sha = hashlib.sha256(db_path.read_bytes()).hexdigest().upper()

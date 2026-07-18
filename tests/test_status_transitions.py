@@ -22,6 +22,7 @@ from app.models import (
     WorkflowType,
 )
 from app.ports.storage import LifecycleTransitionError
+from app.storage.db import initialize_database
 from app.storage.repositories import SqliteStorage
 
 
@@ -255,6 +256,7 @@ def test_dry_run_can_finish_as_dry_run_and_identical_repeat_is_no_op(storage, ac
 
 def test_competing_terminal_run_transitions_only_one_wins(tmp_path, account):
     db_path = tmp_path / "run-race.db"
+    initialize_database(db_path)
     seed = SqliteStorage.open(db_path)
     seed.ensure_account(account)
     seed.create_run(Run(
@@ -282,6 +284,7 @@ def test_competing_terminal_run_transitions_only_one_wins(tmp_path, account):
 
 def test_competing_failed_resume_finalizations_use_compare_and_swap(tmp_path, account):
     db_path = tmp_path / "failed-resume-race.db"
+    initialize_database(db_path)
     seed = SqliteStorage.open(db_path)
     run_id = _research_run(
         seed, account, ResearchFlow.STAGED, ResearchRunStatus.PARTIAL,

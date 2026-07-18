@@ -398,6 +398,12 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co powinien pokazać:** zanonimizowane minimal gate diff `1/1`, jeden HTTP 200, `stop_reason=max_tokens`, attempt `SETTLED`, usage `0.060078 USD`, job/run/research_run `FAILED`, brak karty, gate/flags fail-closed i brak sidecarów.
 - **Czego nie może pokazać:** `.env`, klucza, promptu, raw/truncated response, execution tokenu, pełnych command lines ani zawartości DB.
 
+## 2026-07-18 — PR1-MAJ-005 runtime schema gate
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ dowodem jest wynik CLI/testów, a screenshot terminala mógłby ujawnić lokalne ścieżki. Browser nie był używany.
+- **Co powinien pokazać:** zanonimizowane: temp DB `0014`, typowany `SCHEMA_VERSION_TOO_OLD`, identyczny SHA/size/mtime/ledger przed i po, brak WAL/SHM/journal, jawna migracja temp `0014→0015`, runtime PASS na `0015`, 1328/1328 i QA `8/8`.
+- **Czego nie może pokazać:** lokalnych ścieżek, `.env`, kluczy, treści produkcyjnej DB, raw response ani identyfikatorów prywatnego środowiska.
+
 ## 2026-07-18 — PR #1 recovery po `SETTLED`
 
 - **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ dowodem są deterministyczne testy, a terminal zawiera prywatne ścieżki robocze.

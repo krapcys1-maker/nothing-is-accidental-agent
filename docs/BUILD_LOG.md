@@ -794,3 +794,13 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Weryfikacja:** pełny suite `1311/1311`; verifier `1311`; partycje `314+319+333+345`, wszystkie exit 0; istniejący QA lineage `10/10` i nowy `scripts/qa/settled_execution_recovery_disproof.py` `4/4`; `compileall app scripts` exit 0.
 - **Koszt i operacje zewnętrzne:** `0.000000 USD`; wyłącznie fake/temp DB. Zero provider/API/SDK, browsera, publikacji i mutacji produkcyjnej DB.
 - **Stan:** kandydat do niezależnego końcowego re-review. Merge nie jest wykonywany w tej fali.
+
+### [2026-07-18] PR1-MAJ-005 — rozdzielenie runtime open od jawnej migracji — [CANDIDATE FOR INDEPENDENT RE-REVIEW]
+
+- **Etap roadmapy:** utrzymanie bezpieczeństwa zamkniętego Etapu 1 przed Etapem 2; Etap 2 pozostaje `NOT STARTED`.
+- **Root cause:** `SqliteStorage.open()` łączył composition runtime z `apply_migrations()`. Start na bazie `0014` nie odmawiał, tylko automatycznie stosował `0015`.
+- **Kod:** runtime wykonuje immutable exact-schema preflight i wymaga `0015`, nie tworzy/migruje bazy; po writable connect ponawia gate. Dodano typowane błędy, jawną inicjalizację nowych baz i osobny, potwierdzany migrator exact `0014→0015`. `app.main`, runner, worker, enqueue, maintenance, reaper, reconciliation, controlled-live i capped CLI kończą się kontrolowanie przed ścieżką wykonawczą. `list-reconciliations` i `operational-report` pozostają read-only. Historyczny migrator Etapu 1 nadal kończy na `0014`.
+- **Testy:** +17 w `tests/test_runtime_schema_gate.py`; istniejące fixture/setupy tworzące nowe temp DB przełączono na jawną inicjalizację. Własna kontrpróba odtwarza finding: `0014` → fingerprint → zwykły runtime open → `SchemaVersionTooOld` → identyczny SHA/size/mtime/ledger i brak sidecarów.
+- **Weryfikacja:** collect/full `1328/1328`; verifier exact-once `1328`; partycje `318+322+339+349`; `compileall` OK; QA lineage `10/10`, recovery `4/4`, schema-gate `8/8`.
+- **Produkcja:** przed i po `0014`, 14 migracji, SHA `9906AFBFB580BE8F576A6449B0930C41ED964FED814D99C947D1C28C5B060836`, `364544 B`, bez WAL/SHM/journal. Odczyty wyłącznie `mode=ro&immutable=1`; `0015` nie została zastosowana.
+- **Koszt i zewnętrzne skutki:** `0.000000 USD`; zero API, Anthropic, providera/SDK, browsera, publikacji i controlled-live. Kandydat, nie approval; bez merge.

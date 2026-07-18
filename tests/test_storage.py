@@ -13,7 +13,7 @@ from app.models import (
     TopicStatus,
     WorkflowType,
 )
-from app.storage.db import connect
+from app.storage.db import connect, initialize_database
 from app.storage.repositories import SqliteStorage
 from tests.conftest import seed_historical_real_usage
 
@@ -111,6 +111,7 @@ def test_sync_run_cost_uses_research_usage_and_is_idempotent(storage, account):
 
 def test_research_usage_write_and_cache_persist_in_one_transaction(tmp_path, account):
     db_path = tmp_path / "atomic-research-usage.db"
+    initialize_database(db_path)
     storage = SqliteStorage.open(db_path)
     run = _create_research_run(storage, account, "atomic-research-usage")
     seed_historical_real_usage(storage, ModelUsage(
@@ -131,6 +132,7 @@ def test_research_usage_write_and_cache_persist_in_one_transaction(tmp_path, acc
 
 def test_research_usage_write_rolls_back_when_cache_update_fails(tmp_path, account):
     db_path = tmp_path / "atomic-research-rollback.db"
+    initialize_database(db_path)
     storage = SqliteStorage.open(db_path)
     run = _create_research_run(storage, account, "atomic-research-rollback")
     storage.conn.execute(

@@ -100,6 +100,7 @@ from app.research.durable_intent import (  # noqa: E402
     controlled_session_contract,
     validate_cli_max_tokens,
 )
+from app.storage.db import SchemaVersionError  # noqa: E402
 from app.storage.repositories import SqliteStorage  # noqa: E402
 from app.workflows.research.pipeline import (  # noqa: E402
     CompletedResearchExistsError,
@@ -291,11 +292,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
-    if args.retry_failed_candidates:
-        return _run_retry_failed_candidates(args)
-    if args.resume is not None:
-        return _run_resume(args)
-    return _run_fresh(args)
+    try:
+        if args.retry_failed_candidates:
+            return _run_retry_failed_candidates(args)
+        if args.resume is not None:
+            return _run_resume(args)
+        return _run_fresh(args)
+    except SchemaVersionError as exc:
+        print(f"STOP: schema gate failed closed: {exc}")
+        return 2
 
 
 def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, account, topic,

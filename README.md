@@ -16,10 +16,12 @@ Obowiązujące dodatkowo (logi, nie plany): `docs/DECISIONS.md` (rejestr ADR), `
 
 ## Stan projektu (skrót — pełny obraz w CURRENT_PROJECT_STATE.md)
 
-- Zbudowane i przetestowane offline: konfiguracja, kod SQLite z **15 migracjami** (produkcja nadal zweryfikowana na `0014`/14), Policy Engine, kolejka/worker, ledger provider attempt, durable single-research v3, output-size contract, kanoniczny wrapper `controlled-live-once`, fencing i raporty/recovery bez retry. `0015` domyka execution-only crash po `SETTLED` bez zmiany kosztu/usage i bez providera. `model_usage` pozostaje jedynym ledgerem kosztu. **1311/1311 testów; partycje exact-once 314+319+333+345; QA naprawy 4/4.**
+- Zbudowane i przetestowane offline: konfiguracja, kod SQLite z **15 migracjami** (produkcja nadal zweryfikowana na `0014`/14), Policy Engine, kolejka/worker, ledger provider attempt, durable single-research v3, output-size contract, kanoniczny wrapper `controlled-live-once`, fencing i raporty/recovery bez retry. `0015` domyka execution-only crash po `SETTLED` bez zmiany kosztu/usage i bez providera. Runtime `SqliteStorage.open()` wymaga dokładnie `0015` i nigdy nie migruje; inicjalizacja i `0014→0015` są osobnymi, jawnymi operacjami. `model_usage` pozostaje jedynym ledgerem kosztu. **1328/1328 testów; partycje exact-once 318+322+339+349; QA schema-gate 8/8, recovery 4/4, lineage 10/10.**
 - **WAVE OUTPUT-SIZE CONTRACT = `CLOSED — APPROVED WITH MINOR/P2`; POSITIVE CONTROLLED-LIVE = `INDEPENDENTLY CONFIRMED`; ETAP 2 POSITIVE-LIVE GATE = `FORMALLY ACCEPTED`; ETAP 2 = `NOT STARTED`.** Implementer wykazał 1288/1288, niezależny końcowy review wykonał 223/223 własnych wąskich testów i wydał `APPROVE` bez CRITICAL/MAJOR/nowych MINOR, a właściciel formalnie przyjął bramkę (ADR-095). Trwały wynik: koszt `0.063278 USD`, job `DONE`, run `SUCCESS`, research_run `COMPLETE`, attempt `SETTLED`, Research Card `id=3`, redakcyjne `REJECT/WEAK_SOURCES`. Kolejny live jest `NOT AUTHORIZED`; browser i publikacja pozostają `BLOCKED`; gate `False`, flagi fail-closed.
 
 Operacyjne instrukcje dla schedulera, raportu, konfiguracji attempts i przyszłej migracji copy-preflight są w [`docs/STAGE1_OPERATIONS.md`](docs/STAGE1_OPERATIONS.md). `python -m app.main operational-report` otwiera bazę wyłącznie read-only i pokazuje braki jako `UNKNOWN/BLOCKED`. `python scripts/manage_windows_tasks.py plan --task worker` oraz analogiczne `--task maintenance` tylko generują plan; instalacja każdego zadania wymaga osobnej zgody i jawnego przełącznika potwierdzającego.
+
+Migracja schema `0014→0015` nie jest wykonywana podczas startu aplikacji. Jedyny jawny root to `python scripts/migrate_schema_0015.py --db-path <PATH> --confirm-0014-to-0015`; wymaga wskazania konkretnego pliku, exact preflight `0014`, stosuje tylko `0015` i nie uruchamia runtime. Sam przełącznik CLI nie zastępuje osobnej zgody właściciela, quiescence ani backupu. Produkcyjna baza nie została tym poleceniem zmigrowana.
 
 Migracja produkcji `0009→0014`, nowy baseline, inicjalizacja pięciu flag, niezależny review QP-01/trwałego wyniku migracji, review LA-01-R1/LA-02/LA-03 oraz niezależny re-review naprawy NIA-P2-RV-01…05 są zakończone. Etap 1 został formalnie zamknięty przez właściciela 2026-07-17 na podstawie werdyktu `APPROVE WITH MINOR/P2` (zero MAJOR/CRITICAL); wykonano jeden kontrolowany live durable single flow z twardym capem, `max_retries=0`, dokładnie jednym jobem i jednym requestem. Browser, publikacja, FetchPort, content pipeline, panel FastAPI, autonomia, interakcje, analytics i Etap 2+ nie należały do tego kryterium.
 - Niezbudowane: durable realne A1/A2/B, realne resume, artykuły/Notes, approval/autonomia, publikacja (Playwright), interakcje, analityka i panel.
@@ -49,7 +51,7 @@ WAVE 0B jest formalnie **`CLOSED — APPROVED WITH P2`** po checkpointowym commi
 
 ```bash
 pip install -e .[dev]           # + .[llm] tylko do realnych wywołań API
-python -m pytest                # 1311 testów, bez sieci
+python -m pytest                # 1328 testów, bez sieci
 python scripts/run_test_partitions.py --parts 4 --verify  # pełne SHA-256 node ID
 python -m app.main run-topics --count 6      # dry_run (zero kosztu)
 python -m app.main run-research              # dry_run (zero kosztu)

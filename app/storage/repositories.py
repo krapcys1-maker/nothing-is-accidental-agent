@@ -92,7 +92,13 @@ from app.research.durable_intent import (
     canonicalize_durable_research_payload,
     durable_execution_intent_fingerprint,
 )
-from app.storage.db import apply_migrations, connect, connect_read_only
+from app.storage.db import (
+    RUNTIME_SCHEMA_VERSION,
+    connect,
+    connect_read_only,
+    require_connection_schema,
+    require_database_schema,
+)
 
 
 _RESEARCH_USAGE_TASKS = (
@@ -318,6 +324,10 @@ class SqliteStorage:
     # --- fabryka ---
     @classmethod
     def open(cls, db_path: Path | str) -> "SqliteStorage":
+        """Open runtime storage only after an immutable exact-schema preflight.
+
+        This method never creates a database and never applies migrations.
+        """
         # A test must never silently point a writable SQLite adapter at the
         # project's forensic/runtime database, even through a relative path or
         # a Windows junction/symlink.  Production processes do not set this
@@ -326,9 +336,15 @@ class SqliteStorage:
             target = (Path(__file__).resolve().parents[2] / "data" / "agent.db").resolve()
             if Path(db_path).resolve() == target:
                 raise RuntimeError("Tests must not open the project data/agent.db for writing.")
+        require_database_schema(db_path, required_version=RUNTIME_SCHEMA_VERSION)
         conn = connect(db_path)
-        apply_migrations(conn)
-        return cls(conn)
+        try:
+            # Recheck after the writable open closes the preflight/open race.
+            require_connection_schema(conn, required_version=RUNTIME_SCHEMA_VERSION)
+            return cls(conn)
+        except Exception:
+            conn.close()
+            raise
 
     @classmethod
     def open_read_only(cls, db_path: Path | str) -> "SqliteStorage":

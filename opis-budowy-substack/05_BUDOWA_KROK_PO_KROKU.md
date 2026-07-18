@@ -694,3 +694,11 @@ To zamknięcie jest granicą dowodową, nie startem kolejnego etapu. Etap 2 nada
 Końcowy review PR #1 znalazł okno, w którym attempt był już finansowo `SETTLED`, ale crash mógł przerwać zapis terminalnych stanów joba i runów. Nowa migracja `0015` wprowadza osobne zdarzenie `EXECUTION_RECOVERY`: nie dotyka kosztu ani usage, tylko domyka lifecycle po sprawdzeniu kanonicznego wyniku, lineage i braku żywego fence. Zgodne powtórzenie jest idempotentne, a każdy konflikt zatrzymuje naprawę.
 
 Właściciel nie wymagał przepisywania historii prywatnego brancha. Zamiast tego końcowe drzewo przywrócono do jednego kanonicznego podręcznika pisania zgodnego z `main`. Kandydat przeszedł 1311 testów, cztery partycje i niezależne kontrpróby; nie uruchomiono providera, produkcyjnej migracji, browsera ani publikacji.
+
+## 2026-07-18 — Otwarcie programu nie może być zgodą na migrację
+
+Kolejny review pokazał prosty, ale poważny błąd granicy: zwykłe otwarcie SQLite uruchamiało wszystkie brakujące migracje. To oznaczało, że kod potrzebujący nowej tabeli mógł sam zmienić produkcję z `0014` na `0015`, choć właściciel zatwierdził dotąd tylko kod i wymagał osobnej decyzji dla danych.
+
+Rozdzieliliśmy te czynności. Runtime najpierw zagląda do istniejącego ledgera w trybie immutable. Jeżeli nie widzi dokładnie wersji, dla której został zbudowany, zatrzymuje się zanim powstanie worker, job, marker, zmiana flag lub możliwość dotarcia do providera. Samo `open()` nie zakłada już bazy i nie „pomaga” przez migrację. Utworzenie nowej bazy oraz przejście `0014→0015` mają jawne, osobno nazwane wejścia; drugie wymaga konkretnej ścieżki i potwierdzenia, stosuje tylko jedną migrację i bezpiecznie rozpoznaje powtórzenie.
+
+Najważniejsza kontrpróba odtworzyła wcześniejszy błąd na kopii tymczasowej: zapisaliśmy SHA, rozmiar, mtime, ledger i brak sidecarów schematu `0014`, uruchomiliśmy zwykły runtime i dostaliśmy typowaną odmowę. Każdy bajt oraz wszystkie liczniki pozostały takie same. Pełny wynik wzrósł do 1328 testów, cztery sekwencyjne partycje dały `318+322+339+349`, a trzy QA zakończyły się `8/8`, `4/4` i `10/10`. Produkcyjna baza nadal ma `0014`; nie uruchomiliśmy migracji, API, browsera ani publikacji. To nadal kandydat do niezależnego review, nie zgoda na merge.

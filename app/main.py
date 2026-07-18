@@ -39,6 +39,7 @@ from app.policies.policy_engine import PolicyEngine
 from app.scheduler.enqueue import ScheduledJobEnqueuer, ScheduledJobRequest
 from app.scheduler.maintenance import MaintenanceRunner
 from app.scheduler.scheduling import SchedulingPolicy, SchedulingValidationError
+from app.storage.db import SchemaVersionError, require_database_schema
 from app.storage.repositories import SqliteStorage
 
 
@@ -462,6 +463,10 @@ def _cmd_controlled_live_once(args: argparse.Namespace) -> int:
         )
         runtime_dir = Path(test_runtime)
 
+    # Schema authorization precedes quiescence, marker/report work, flags,
+    # worker composition and any provider-capable path.
+    require_database_schema(settings.db_path)
+
     request = ControlledLiveRequest(
         account_id=args.account,
         topic_id=args.topic_id,
@@ -672,7 +677,7 @@ def _cmd_list_reconciliations(args: argparse.Namespace) -> int:
         return _RECONCILE_EXIT_STORAGE
     storage = None
     try:
-        storage = SqliteStorage.open(settings.db_path)
+        storage = SqliteStorage.open_read_only(settings.db_path)
         attempts = storage.list_provider_attempts_needing_reconciliation(account_id=args.account_id)
         for attempt in attempts:
             print(
@@ -958,7 +963,11 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("maintain --poll wymaga --interval-seconds.")
     if args.command == "maintain" and args.once and args.interval_seconds is not None:
         parser.error("maintain --once nie przyjmuje --interval-seconds.")
-    return args.func(args)
+    try:
+        return args.func(args)
+    except SchemaVersionError as exc:
+        print(f"SCHEMA GATE: failed closed: {exc}", file=sys.stderr)
+        return 7
 
 
 if __name__ == "__main__":

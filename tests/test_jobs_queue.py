@@ -31,7 +31,7 @@ from app.ports.storage import (
     LifecycleTransitionError,
     SystemFlagError,
 )
-from app.storage.db import MIGRATIONS_DIR, apply_migrations, connect
+from app.storage.db import MIGRATIONS_DIR, apply_migrations, connect, initialize_database
 from app.storage.repositories import SqliteStorage
 from tests.conftest import seed_historical_real_usage
 
@@ -122,6 +122,7 @@ def _copy_migrations_through_0008(destination: Path) -> None:
 
 def test_0009_fresh_schema_and_upgrade_from_0008_are_repeatable(tmp_path, account):
     fresh_path = tmp_path / "fresh-0009.db"
+    initialize_database(fresh_path)
     fresh = SqliteStorage.open(fresh_path)
     fresh.ensure_account(account)
     tables = {
