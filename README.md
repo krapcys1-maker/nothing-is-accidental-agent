@@ -16,7 +16,7 @@ Obowiązujące dodatkowo (logi, nie plany): `docs/DECISIONS.md` (rejestr ADR), `
 
 ## Stan projektu (skrót — pełny obraz w CURRENT_PROJECT_STATE.md)
 
-- Zbudowane i przetestowane offline: konfiguracja, SQLite z **14 migracjami**, Policy Engine, kolejka/worker, ledger provider attempt, durable single-research v3, output-size contract, kanoniczny wrapper `controlled-live-once`, fencing i raporty/recovery bez retry. `model_usage` pozostaje jedynym ledgerem kosztu. **1288/1288 testów; partycje exact-once 306+312+328+342.**
+- Zbudowane i przetestowane offline: konfiguracja, kod SQLite z **15 migracjami** (produkcja nadal zweryfikowana na `0014`/14), Policy Engine, kolejka/worker, ledger provider attempt, durable single-research v3, output-size contract, kanoniczny wrapper `controlled-live-once`, fencing i raporty/recovery bez retry. `0015` domyka execution-only crash po `SETTLED` bez zmiany kosztu/usage i bez providera. `model_usage` pozostaje jedynym ledgerem kosztu. **1311/1311 testów; partycje exact-once 314+319+333+345; QA naprawy 4/4.**
 - **WAVE OUTPUT-SIZE CONTRACT = `CLOSED — APPROVED WITH MINOR/P2`; POSITIVE CONTROLLED-LIVE = `INDEPENDENTLY CONFIRMED`; ETAP 2 POSITIVE-LIVE GATE = `FORMALLY ACCEPTED`; ETAP 2 = `NOT STARTED`.** Implementer wykazał 1288/1288, niezależny końcowy review wykonał 223/223 własnych wąskich testów i wydał `APPROVE` bez CRITICAL/MAJOR/nowych MINOR, a właściciel formalnie przyjął bramkę (ADR-095). Trwały wynik: koszt `0.063278 USD`, job `DONE`, run `SUCCESS`, research_run `COMPLETE`, attempt `SETTLED`, Research Card `id=3`, redakcyjne `REJECT/WEAK_SOURCES`. Kolejny live jest `NOT AUTHORIZED`; browser i publikacja pozostają `BLOCKED`; gate `False`, flagi fail-closed.
 
 Operacyjne instrukcje dla schedulera, raportu, konfiguracji attempts i przyszłej migracji copy-preflight są w [`docs/STAGE1_OPERATIONS.md`](docs/STAGE1_OPERATIONS.md). `python -m app.main operational-report` otwiera bazę wyłącznie read-only i pokazuje braki jako `UNKNOWN/BLOCKED`. `python scripts/manage_windows_tasks.py plan --task worker` oraz analogiczne `--task maintenance` tylko generują plan; instalacja każdego zadania wymaga osobnej zgody i jawnego przełącznika potwierdzającego.
@@ -49,7 +49,7 @@ WAVE 0B jest formalnie **`CLOSED — APPROVED WITH P2`** po checkpointowym commi
 
 ```bash
 pip install -e .[dev]           # + .[llm] tylko do realnych wywołań API
-python -m pytest                # 1288 testów, bez sieci
+python -m pytest                # 1311 testów, bez sieci
 python scripts/run_test_partitions.py --parts 4 --verify  # pełne SHA-256 node ID
 python -m app.main run-topics --count 6      # dry_run (zero kosztu)
 python -m app.main run-research              # dry_run (zero kosztu)

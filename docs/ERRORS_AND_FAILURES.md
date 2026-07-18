@@ -971,3 +971,11 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Odrębny wynik redakcyjny:** `publication_recommendation=REJECT`, `reason=WEAK_SOURCES`. System poprawnie zachował kartę badawczą, ale nie rekomenduje jej publikacji; nie wolno utożsamiać sukcesu technicznego z jakością źródeł.
 - **Helpery read-only:** import błędnej nazwy stałej `OUTPUT_TOKEN_MARGIN` i zapytanie o nieistniejącą kolumnę `research_sources.research_card_id` zakończyły pomocnicze odczyty; poprawiono je przez użycie właściwej stałej i immutable introspection. Jedna komenda `rg` zwróciła exit 1 z powodu braku dopasowania. Żaden przypadek nie dotknął provider boundary, nie zmienił DB i nie wywołał retry.
 - **Granica:** zero attemptu #2, repair/fallback/verification i automatycznego resume; kolejne live wymaga nowej decyzji właściciela.
+
+## 2026-07-18 — PR #1: crash po `SETTLED` nie miał legalnej naprawy lifecycle
+
+- **Finding PR1-MAJ-001:** finansowy attempt był już poprawnie `SETTLED`, lecz crash przed terminalizacją job/run/research_run pozostawiał wykonanie zawieszone. Reaper słusznie nie cofał settlementu, ale nie miał odrębnego zdarzenia do odzyskania fazy wykonawczej.
+- **Naprawa:** `EXECUTION_RECOVERY` w migracji `0015` rozdziela niezmienny finał finansowy od terminalizacji lifecycle. Warunki są egzekwowane zarówno w repozytorium, jak i przez triggery SQLite.
+- **Nieudana kontrpróba implementacyjna:** pierwsza wersja walidacji cache traktowała `PENDING` research_run tak, jakby musiał już zawierać koszt terminalny. Test poprawnego crash-window wykrył to zaostrzenie; kontrakt skorygowano tak, aby preterminalny cache wynosił zero, a terminalny — dokładny koszt kanoniczny.
+- **Regresja kompatybilności komunikatu:** pierwszy pełny suite miał jeden failure, bo nowy trigger zwracał bardziej precyzyjny tekst bez oczekiwanego tokenu `NEEDS_RECONCILIATION`. Komunikat uzupełniono bez osłabienia warunku; kolejny pełny suite przeszedł `1311/1311`.
+- **Pozostałe findings:** PR1-MAJ-002 zdegradowano decyzją właściciela do cleanupu final tree bez przepisywania historii; PR1-MAJ-003 zamknięto przez przywrócenie jednego kanonicznego podręcznika. Żadne z tych działań nie dotknęło provider boundary ani produkcyjnej DB.

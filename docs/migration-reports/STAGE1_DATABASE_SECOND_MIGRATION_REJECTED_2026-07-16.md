@@ -2,7 +2,7 @@
 
 Data operacji: 2026-07-16
 
-Repozytorium: `C:\Users\user\Desktop\agent project`
+Repozytorium: `<project-root>`
 
 Branch: `dev/first-successful-research-card`
 

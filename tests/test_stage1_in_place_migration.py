@@ -237,8 +237,8 @@ def test_counter_11_canonical_migration_runner_is_used(monkeypatch, tmp_path: Pa
     _, _, request = _case(tmp_path)
     calls: list[tuple[str, ...]] = []
 
-    def recording_runner(conn):
-        applied = tuple(storage_db.apply_migrations(conn))
+    def recording_runner(conn, *, through=None):
+        applied = tuple(storage_db.apply_migrations(conn, through=through))
         calls.append(applied)
         return list(applied)
 

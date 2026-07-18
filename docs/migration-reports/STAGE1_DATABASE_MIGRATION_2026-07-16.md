@@ -1,7 +1,7 @@
 # Kontrolowana migracja produkcyjnej bazy Etapu 1 — raport
 
 Data operacji: 2026-07-16
-Repozytorium: `C:\Users\user\Desktop\agent project`
+Repozytorium: `<project-root>`
 Branch: `dev/first-successful-research-card`
 HEAD: `0658e8b221b99bcdaa549cf538ee140a9dc02613`
 
@@ -49,7 +49,7 @@ Właściciel jawnie zatwierdził jedną kontrolowaną migrację produkcyjnej baz
 
 Zweryfikowany backup znajduje się poza repozytorium i poza `data/`:
 
-`C:\Users\user\Desktop\agent-project-backups\stage1-db-20260716T1731542164698Z-CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB-0658e8b221b99bcdaa549cf538ee140a9dc02613`
+`%USERPROFILE%\Desktop\agent-project-backups\stage1-db-20260716T1731542164698Z-CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB-0658e8b221b99bcdaa549cf538ee140a9dc02613`
 
 Manifest: `backup-manifest.json`
 SHA-256 manifestu: `0B2AA2CFE4DBD7CB28D7C9A605701DA4697204BA30D08B6CC59673860667B3FC`

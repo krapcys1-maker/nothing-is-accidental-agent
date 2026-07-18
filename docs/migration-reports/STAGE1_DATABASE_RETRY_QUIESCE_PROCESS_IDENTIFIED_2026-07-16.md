@@ -1,7 +1,7 @@
 # Ponowna próba migracji produkcyjnej Etapu 1 — quiesce process identified
 
 Data: 2026-07-16
-Repozytorium: `C:\Users\user\Desktop\agent project`
+Repozytorium: `<project-root>`
 Branch: `dev/first-successful-research-card`
 HEAD: `ddc3c63190eb82bca171174dc7ee70c2d0a1ec15`
 
@@ -20,7 +20,7 @@ Zatwierdzony executor wykonał pierwszy gate quiesce i zatrzymał się przed utw
 - uchwyty DB/WAL/SHM: brak;
 - zadania Windows wskazujące repozytorium: brak;
 - `runtime/` i `data/agent.db-journal`: nieobecne;
-- workspace `C:\Users\user\Desktop\agent-project-backups\stage1-second-migration-20260716-ddc3c63190eb82bc-attempt-3`: nieobecny.
+- workspace `%USERPROFILE%\Desktop\agent-project-backups\stage1-second-migration-20260716-ddc3c63190eb82bc-attempt-3`: nieobecny.
 
 Stary baseline:
 
@@ -54,7 +54,7 @@ processes=(15404,), handles=(), tasks=().
 Pełna zarejestrowana command line:
 
 ```text
-powershell.exe -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop';$root='C:\Users\user\Desktop\agent project';$self=10216;$p=@(Get-CimInstance Win32_Process | Where-Object {$_.ProcessId -ne $self -and $_.CommandLine -and $_.CommandLine.Contains($root)} | Select-Object -ExpandProperty ProcessId);$t=@(Get-ScheduledTask | Where-Object {$text=(($_.Actions | ForEach-Object {"$($_.Execute) $($_.Arguments) $($_.WorkingDirectory)"}) -join ' ');$text.Contains($root)} | ForEach-Object {"$($_.TaskPath)$($_.TaskName)"});[pscustomobject]@{process_ids=$p;scheduled_tasks=$t}|ConvertTo-Json -Compress"
+powershell.exe -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop';$root='<project-root>';$self=10216;$p=@(Get-CimInstance Win32_Process | Where-Object {$_.ProcessId -ne $self -and $_.CommandLine -and $_.CommandLine.Contains($root)} | Select-Object -ExpandProperty ProcessId);$t=@(Get-ScheduledTask | Where-Object {$text=(($_.Actions | ForEach-Object {"$($_.Execute) $($_.Arguments) $($_.WorkingDirectory)"}) -join ' ');$text.Contains($root)} | ForEach-Object {"$($_.TaskPath)$($_.TaskName)"});[pscustomobject]@{process_ids=$p;scheduled_tasks=$t}|ConvertTo-Json -Compress"
 ```
 
 Dane procesu przechwycono przez równoległą, wyłącznie odczytową obserwację systemu. Obserwator nie otwierał plików bazy, nie modyfikował executora i nie tworzył pliku skryptowego.

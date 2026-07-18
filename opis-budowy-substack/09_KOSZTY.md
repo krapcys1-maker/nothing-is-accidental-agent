@@ -248,3 +248,7 @@ Nowy koszt: `0.000000 USD`. Provider calls: 0; nowe usage: 0. Suma miesiąca poz
 ## 2026-07-18 — Fala kontraktu rozmiaru: 0 USD
 
 Nowy koszt: `0.000000 USD` (zero requestów, fake callery i tymczasowe bazy). Suma miesiąca bez zmian: `0.949312 USD`. Następna próba — dopiero po niezależnym APPROVE i nowej zgodzie — ma wyliczony pesymistyczny sufit `0.172500 USD` (6000 tokenów, jeden web search, rekomendowany cap `0.20 USD`); nawet w najgorszym wariancie miesiąc zamknąłby się na `1.121812 USD` z 40 USD budżetu.
+
+## 2026-07-18 — Naprawa PR #1: 0 USD
+
+Implementacja recovery po `SETTLED`, 1311 testów, cztery partycje i skrypty QA użyły wyłącznie fake callerów i tymczasowych SQLite. Nowy koszt: `0.000000 USD`; suma miesiąca pozostaje `1.012590 USD`. Nie było provider calla, web search, browsera ani publikacji.

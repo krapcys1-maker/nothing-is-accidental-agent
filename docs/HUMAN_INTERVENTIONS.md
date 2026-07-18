@@ -508,6 +508,12 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Wynik:** autoryzacja została zużyta przez jeden HTTP 200 z `stop_reason=end_turn`. Schema validation odrzuciła `sources[0].supports_claim`; koszt `0.077160 USD`, attempt `SETTLED`, terminalny `FAILED`, brak karty.
 - **Granica po:** gate i flags przywrócone fail-closed; kolejny live wymaga nowej jawnej decyzji właściciela.
 
+### 2026-07-18 — Właściciel zawęził cleanup PR #1 do końcowego drzewa
+
+- **Decyzja człowieka:** nie przepisywać historii PR #1. Materiały z `instrukcja dla pisania artykulow/` mogą pozostać w historii prywatnego brancha, ponieważ review nie wykrył sekretów, ale nie mogą występować w końcowym diffie ani zmienić końcowego drzewa `main`.
+- **Klasyfikacja:** PR1-MAJ-002 przestaje być blockerem historii i staje się obowiązkowym cleanupem final tree. PR1-MAJ-001 pozostaje blockerem merge. PR1-MAJ-003 wymaga jednego działającego kanonicznego podręcznika i spójnych aktywnych referencji.
+- **Autoryzowany wynik:** normalny commit i push na istniejący branch po pełnej walidacji; bez force-push, bez merge i bez rozpoczęcia Etapu 2.
+
 ### 2026-07-18 — Właściciel formalnie przyjął positive-live gate Etapu 2
 
 - **Decyzja człowieka:** przyjąć niezależny finalny review `APPROVE` i ustanowić `POSITIVE CONTROLLED-LIVE = INDEPENDENTLY CONFIRMED` oraz `ETAP 2 POSITIVE-LIVE GATE = FORMALLY ACCEPTED`.

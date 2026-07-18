@@ -226,3 +226,7 @@ Jeśli pozytywny wynik wymaga działania jawnie zabronionego, poprawnym rezultat
 ## 2026-07-18 — Limit, którego nie mierzysz, nie jest limitem
 
 Dwa ucięcia przy różnych wartościach `max_tokens` miały wspólną przyczynę: budżet wyjścia konsumowały niewidoczne tokeny (rozumowanie, tool-use, cytowania), których nikt nie liczył. Wniosek pierwszy: kontrakt rozmiaru musi być jawny po obu stronach — model dostaje limity per pole, a system deterministycznie je egzekwuje, zamiast ufać dobrej woli modelu. Wniosek drugi: wartość limitu ma wynikać z rachunku (payload na granicach + zmierzony narzut + margines), nie z tego, że poprzednia była za mała. Wniosek trzeci: przekroczenie budżetu to typowany, terminalny błąd z zachowanym kosztem — ciche obcinanie treści byłoby gorsze niż porażka, bo ukrywałoby utratę danych w produkcie.
+
+## 2026-07-18 — Rozliczenie i wykonanie potrzebują osobnych dowodów
+
+Attempt `SETTLED` mówi, że pieniądze zostały rozliczone, ale nie dowodzi jeszcze, że wszystkie encje wykonawcze są terminalne. Recovery po crashu musi więc zachować finansowy finał i dopisać osobny, walidowany fakt wykonawczy. Ta sama zasada porządkuje review: historia prywatnego brancha i końcowe drzewo produktu są różnymi artefaktami, więc właściciel może świadomie zaakceptować pierwsze i wymagać czystości drugiego.

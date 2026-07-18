@@ -255,7 +255,9 @@ def _cmd_reap_runs(args: argparse.Namespace) -> int:
             f"recovered(requeued={recovery.requeued_count}, "
             f"needs_verification={recovery.needs_verification_count}, "
             f"failed={recovery.failed_count}, "
-            f"escalated_reconciliations={recovery.escalated_reconciliation_count})"
+            f"escalated_reconciliations={recovery.escalated_reconciliation_count}, "
+            f"settled_execution_recovered={recovery.settled_execution_recovery_count}, "
+            f"settled_execution_blocked={recovery.settled_execution_blocked_count})"
         )
         return 0
     finally:
@@ -279,7 +281,9 @@ def _cmd_maintain(args: argparse.Namespace) -> int:
                 f"recovered(requeued={result.recovery.requeued_count}, "
                 f"needs_verification={result.recovery.needs_verification_count}, "
                 f"failed={result.recovery.failed_count}, "
-                f"escalated_reconciliations={result.recovery.escalated_reconciliation_count})"
+                f"escalated_reconciliations={result.recovery.escalated_reconciliation_count}, "
+                f"settled_execution_recovered={result.recovery.settled_execution_recovery_count}, "
+                f"settled_execution_blocked={result.recovery.settled_execution_blocked_count})"
             )
             return 0
         runner.run_forever(interval_seconds=args.interval_seconds)

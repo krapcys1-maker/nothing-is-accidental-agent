@@ -108,7 +108,9 @@ def test_copy_preflight_preserves_source_and_backup_and_proves_candidate(tmp_pat
             for row in candidate.execute("SELECT key,value_json FROM system_flags")
         }
         assert flags == dict(SECURITY_FLAG_DEFAULTS)
-        assert apply_migrations(candidate) == []
+        assert apply_migrations(
+            candidate, through="0014_provider_attempt_reconciliation",
+        ) == []
     finally:
         backup.close()
         candidate.close()

@@ -370,3 +370,7 @@ Migracja 0011 egzekwuje request-bound usage dla nowych realnych wywołań. Stare
 ## ADR-089 — Zakaz zmiany kodu pozostawia realny gate zamknięty
 
 Autoryzacja płatnego requestu nie rozszerza automatycznie zgody na zmianę mechanizmu bezpieczeństwa. Ponieważ właściciel jawnie zabronił zmian kodu, a jedyna produkcyjna bramka była stałą `False`, nie wykonano tymczasowego przełączenia. Wynik: preflight blocked przed enqueue; zero requestu, retry i resume.
+
+## ADR-096 — Finansowy finał nie zastępuje finału wykonawczego
+
+Po `SETTLED` nie wolno cofać attemptu ani wykonywać drugiego settlementu. Jeżeli crash nastąpi przed terminalizacją lifecycle, jedyną legalną naprawą jest osobne append-only `EXECUTION_RECOVERY`, które potwierdza wynik wykonawczy bez mutacji pieniędzy. Dla cleanupu PR #1 właściciel wymaga final tree zgodnego z `main`, ale świadomie nie wymaga przepisywania historii prywatnego brancha.

@@ -313,3 +313,7 @@ Kryterium wyjścia: właściciel akceptuje głos na próbce, zanim cokolwiek zob
 Sources (research zewnętrzny użyty w tym raporcie): Substack metrics guide (support) · What is following on Substack (support) · Substack growth features (official) · The Notes algorithm explained (cytaty Mike'a Cohena, head of ML) · How to grow Substack from zero in 2026 — Jenny Ouyang, 0→4500 · Substack Notes Strategy 2026 (60% of my growth) · Followers vs Subscribers guide · 26,000 followers vs subscribers · Substack changed everything in 2025 · How to grow your Substack audience in 2026 · Substack statistics 2025 · 2026 Notes playbook.
 
 Raport jest blueprintem do niezależnej weryfikacji — nic nie zostało zaimplementowane, żaden plik nie został zmieniony, zero wywołań płatnych API projektu i zero akcji na Substacku.
+
+## 17. Nota zgodności PR1-MAJ-001
+
+Przed przyszłym wykonaniem tego planu maintenance/recovery musi obejmować kontrakt `EXECUTION_RECOVERY` z migracji `0015`: crash po finansowym `SETTLED` nie może powodować drugiego settlementu ani pozostawiać nieterminalnego lifecycle. Nota nie uruchamia planu, Etapu 2, requestu, browsera ani publikacji; raport nadal jest wyłącznie materiałem planistycznym.

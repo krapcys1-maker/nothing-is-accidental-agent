@@ -470,3 +470,9 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Implementer może zadeklarować sukces i pokazać pełny suite, ale nie zatwierdza własnej pracy. Niezależny reviewer może wykonać własne 223 kontrpróby i wydać `APPROVE`, ale nie podejmuje decyzji produktowej. Dopiero właściciel formalnie przyjmuje bramkę.
 - Bieżący przykład rozdziela pięć faktów: deklarację implementera, 1288 testów implementera, 223 testy reviewera, niezależny werdykt i decyzję właściciela. To chroni przed zamianą jednego zielonego logu w nieograniczoną autoryzację.
 - Bramka positive-live została przyjęta, ale Etap 2 nie został rozpoczęty, a browser, publikacja i kolejny request pozostają zablokowane. Cytowalna zasada: „Potwierdzona zdolność systemu nie jest jeszcze zgodą na jej ponowne użycie.”
+
+## 2026-07-18 — Materiał: „Pieniądze rozliczone, praca niedokończona”
+
+- Najtrudniejsze okno awarii pojawia się po trwałym rozliczeniu kosztu, lecz przed zapisaniem terminalnego wyniku procesu. Cofnięcie `SETTLED` groziłoby podwójnym kosztem; pozostawienie joba w ruchu blokowałoby kolejkę.
+- Rozwiązaniem nie jest retry finansowy, lecz osobny append-only dowód wykonawczy: `EXECUTION_RECOVERY`. Koszt i usage pozostają nietykalne, a lifecycle kończy się wyłącznie po sprawdzeniu karty, lineage, fence, rezerwacji i cache.
+- Cytowalna zasada: „Terminalny stan pieniędzy i terminalny stan pracy to dwa różne fakty; awaria między nimi wymaga dowodu, nie ponownej płatności.”

@@ -398,6 +398,12 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co powinien pokazać:** zanonimizowane minimal gate diff `1/1`, jeden HTTP 200, `stop_reason=max_tokens`, attempt `SETTLED`, usage `0.060078 USD`, job/run/research_run `FAILED`, brak karty, gate/flags fail-closed i brak sidecarów.
 - **Czego nie może pokazać:** `.env`, klucza, promptu, raw/truncated response, execution tokenu, pełnych command lines ani zawartości DB.
 
+## 2026-07-18 — PR #1 recovery po `SETTLED`
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ dowodem są deterministyczne testy, a terminal zawiera prywatne ścieżki robocze.
+- **Co powinien pokazać:** zanonimizowane `1311/1311`, partycje `314+319+333+345`, QA recovery `4/4`, pusty finalny diff katalogu podręcznika względem `main` i niezmienny hash produkcyjnej DB.
+- **Czego nie może pokazać:** `.env`, kluczy, execution tokenów, danych SQLite, pełnych ścieżek użytkownika ani pełnych command lines.
+
 ## 2026-07-18 04:48 UTC — Pozytywny controlled-live Research Card
 
 - **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ browser i publikacja były jawnie zabronione, a terminal zawiera prywatne ścieżki.

@@ -242,3 +242,7 @@ Właściciel zlecił usunięcie dokładnie trzech P1 z niezależnego review oraz
 ## 2026-07-17 — Człowiek zezwolił na request, ale nie na zmianę gate
 
 Granice decyzji były celowo węższe niż technicznie potrzebne do uruchomienia bieżącego entrypointu: jeden request był dozwolony, zmiana kodu nie. Operator nie potraktował celu jako zgody dorozumianej na `False→True→False`; zakończył przed enqueue z `BLOCKED — LIVE PREFLIGHT DRIFT`. Następny przebieg wymaga nowej decyzji, nie automatycznego resume.
+
+## 2026-07-18 — Historia PR może zostać, final tree nie
+
+Właściciel jawnie zrezygnował z przepisywania historii prywatnego brancha PR #1. Obowiązek dotyczy końcowego diffu i drzewa `main`: ma pozostać jeden kanoniczny podręcznik, bez wariantów z PR. Jednocześnie crash po `SETTLED` pozostał blockerem merge i musiał otrzymać pełną naprawę oraz testy przed zwykłym pushem.

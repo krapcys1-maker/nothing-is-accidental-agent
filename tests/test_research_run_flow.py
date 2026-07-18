@@ -141,7 +141,7 @@ def test_migration_0006_backfills_all_historical_flows(tmp_path: Path):
         "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
         "0009_jobs_system_flags", "0010_provider_attempts", "0011_provider_attempt_invariants",
             "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
-            "0014_provider_attempt_reconciliation",
+            "0014_provider_attempt_reconciliation", "0015_settled_execution_recovery",
     ]
 
     rows = {
@@ -194,16 +194,18 @@ def test_migration_0006_backfills_all_historical_flows(tmp_path: Path):
             "WHERE type='trigger' AND tbl_name='research_runs'"
         )
     }
-    # 0014 deliberately adds the reconciliation cost-cache freeze plus the
-    # W1A-R4-01 guard against terminalizing beside RESERVED/REQUEST_STARTED.
-    added_0014_triggers = {
+    # 0014 adds reconciliation guards; 0015 adds the SETTLED execution-only
+    # authorization and freezes its terminal research lifecycle.
+    added_reconciliation_triggers = {
         "research_runs_cost_cache_frozen_after_reconciliation",
         "research_runs_terminal_requires_provider_attempt_normalized",
+        "research_runs_settled_recovery_requires_event",
+        "research_runs_execution_recovery_terminal_is_immutable",
     }
-    assert added_0014_triggers <= new_triggers.keys()
+    assert added_reconciliation_triggers <= new_triggers.keys()
     assert {
         name: sql for name, sql in new_triggers.items()
-        if name not in added_0014_triggers
+        if name not in added_reconciliation_triggers
     } == old_triggers
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
@@ -217,7 +219,7 @@ def test_migration_0006_runs_on_clean_empty_database(tmp_path: Path):
         "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
         "0009_jobs_system_flags", "0010_provider_attempts", "0011_provider_attempt_invariants",
             "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
-            "0014_provider_attempt_reconciliation",
+            "0014_provider_attempt_reconciliation", "0015_settled_execution_recovery",
     ]
     assert conn.execute("SELECT count(*) FROM research_runs").fetchone()[0] == 0
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
@@ -240,7 +242,7 @@ def test_migration_0006_without_paid_single_uuid(tmp_path: Path):
         "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
         "0009_jobs_system_flags", "0010_provider_attempts", "0011_provider_attempt_invariants",
             "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
-            "0014_provider_attempt_reconciliation",
+            "0014_provider_attempt_reconciliation", "0015_settled_execution_recovery",
     ]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
@@ -261,7 +263,7 @@ def test_migration_0006_without_either_local_single_uuid(tmp_path: Path):
         "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
         "0009_jobs_system_flags", "0010_provider_attempts", "0011_provider_attempt_invariants",
             "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
-            "0014_provider_attempt_reconciliation",
+            "0014_provider_attempt_reconciliation", "0015_settled_execution_recovery",
     ]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
@@ -324,7 +326,7 @@ def test_database_rejects_invalid_or_missing_flow(tmp_path: Path):
         "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
         "0009_jobs_system_flags", "0010_provider_attempts", "0011_provider_attempt_invariants",
             "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
-            "0014_provider_attempt_reconciliation",
+            "0014_provider_attempt_reconciliation", "0015_settled_execution_recovery",
     ]
     conn.execute(
         "INSERT INTO accounts "
@@ -371,7 +373,7 @@ def test_migration_0007_backfills_conservative_historical_attempt_lower_bound(tm
         "0006_research_run_flow", "0007_candidate_attempts", "0008_staged_force_reresearch",
         "0009_jobs_system_flags", "0010_provider_attempts", "0011_provider_attempt_invariants",
             "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
-            "0014_provider_attempt_reconciliation",
+            "0014_provider_attempt_reconciliation", "0015_settled_execution_recovery",
     ]
 
     attempts_column = next(
@@ -424,7 +426,7 @@ def test_migration_0007_rolls_back_schema_when_ledger_insert_fails(tmp_path: Pat
         "0007_candidate_attempts", "0008_staged_force_reresearch", "0009_jobs_system_flags",
         "0010_provider_attempts", "0011_provider_attempt_invariants",
             "0012_provider_ledger_hardening", "0013_provider_attempt_usage_integrity",
-            "0014_provider_attempt_reconciliation",
+            "0014_provider_attempt_reconciliation", "0015_settled_execution_recovery",
     ]
     assert "attempts" in {
         row["name"] for row in conn.execute("PRAGMA table_info(research_source_candidates)")
@@ -461,6 +463,7 @@ def test_migration_0008_rolls_back_force_marker_when_ledger_insert_fails(tmp_pat
         "0008_staged_force_reresearch", "0009_jobs_system_flags", "0010_provider_attempts",
         "0011_provider_attempt_invariants", "0012_provider_ledger_hardening",
             "0013_provider_attempt_usage_integrity", "0014_provider_attempt_reconciliation",
+            "0015_settled_execution_recovery",
     ]
     force_column = next(
         row for row in conn.execute("PRAGMA table_info(research_runs)")

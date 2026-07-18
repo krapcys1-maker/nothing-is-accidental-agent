@@ -15,6 +15,7 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0012_provider_ledger_hardening",
     "0013_provider_attempt_usage_integrity",
     "0014_provider_attempt_reconciliation",
+    "0015_settled_execution_recovery",
 })
 
 
@@ -78,13 +79,20 @@ def _ensure_migrations_table(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def apply_migrations(conn: sqlite3.Connection, migrations_dir: Path = MIGRATIONS_DIR) -> list[str]:
+def apply_migrations(
+    conn: sqlite3.Connection,
+    migrations_dir: Path = MIGRATIONS_DIR,
+    *,
+    through: str | None = None,
+) -> list[str]:
     """Stosuje niezaaplikowane pliki .sql w kolejności nazw. Zwraca listę zastosowanych wersji."""
     _ensure_migrations_table(conn)
     applied = {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
     newly: list[str] = []
     for sql_file in sorted(Path(migrations_dir).glob("*.sql")):
         version = sql_file.stem
+        if through is not None and version > through:
+            continue
         if version in applied:
             continue
         sql = sql_file.read_text(encoding="utf-8")

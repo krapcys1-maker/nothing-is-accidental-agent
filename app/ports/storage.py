@@ -337,11 +337,14 @@ class StoragePort(Protocol):
         reconciled_by: str,
         note: str,
         expected_version_token: str | None = None,
+        now: datetime | None = None,
     ) -> ProviderAttemptReconciliationResult:
-        """Atomically resolves or observes an existing NEEDS_RECONCILIATION attempt.
+        """Atomically resolves financial uncertainty or a settled execution crash.
 
         ``expected_version_token`` (from a prior preview) fails closed if the
-        durable state changed since the preview.
+        durable state changed since the preview.  A SETTLED attempt keeps its
+        financial status and canonical usage; only its execution lifecycle is
+        terminalized through an append-only EXECUTION_RECOVERY event.
         """
         ...
 

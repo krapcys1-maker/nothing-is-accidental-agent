@@ -309,6 +309,7 @@ class ReconciliationEventType(str, Enum):
     FOLLOW_UP = "FOLLOW_UP"
     FINAL_RESOLUTION = "FINAL_RESOLUTION"
     AUTO_ESCALATION = "AUTO_ESCALATION"
+    EXECUTION_RECOVERY = "EXECUTION_RECOVERY"
 
 
 class ReconciliationFaultPoint(str, Enum):
@@ -422,6 +423,8 @@ class JobRecoveryResult(BaseModel):
     needs_verification_count: int = 0
     failed_count: int = 0
     escalated_reconciliation_count: int = 0
+    settled_execution_recovery_count: int = 0
+    settled_execution_blocked_count: int = 0
 
 
 class RunReaperResult(BaseModel):

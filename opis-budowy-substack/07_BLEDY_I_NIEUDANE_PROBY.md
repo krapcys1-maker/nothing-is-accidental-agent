@@ -439,3 +439,7 @@ Dodatkowa lekcja operatorska: standardowy `operational-report` pozostawił pusty
 ## 2026-07-18 — Dlaczego 3000 tokenów raz wystarczało, a raz nie
 
 Trzy realne próby dały trzy różne wyniki przy tym samym temacie: 1500 → ucięcie, 3000 → kompletny JSON (poległ na typie pola), 3000 po naprawie → znowu ucięcie. Kuszące wyjaśnienie „model się rozgadał" okazało się fałszywe: w uciętej próbie widoczny JSON miał tylko 4038 znaków (~1000 tokenów), a segment finalny zjadł pełne 3000. Prawie dwie trzecie limitu skonsumowały tokeny, których nie widać w odpowiedzi — wewnętrzne rozumowanie modelu i metadane cytowań, o wariancji ~0,7–2,2k między próbami. Stały limit nie mógł być stabilny, bo płaciliśmy za coś, czego nie mierzyliśmy. Lekcja: zanim podniesiesz limit, ustal, na co dokładnie idzie obecny.
+
+## 2026-07-18 — Zielony settlement nie oznaczał zielonego lifecycle
+
+Review PR #1 wykazał, że crash po `SETTLED` mógł zostawić job i runy nieterminalne. Pierwsza wersja naprawy była zbyt surowa wobec zerowego cache preterminalnego; test poprawnego okna crashu to ujawnił. Po korekcie pełny suite znalazł jeszcze jedną niezgodność tekstu błędu oczekiwanego przez starszy test. Oba problemy usunięto bez rozluźniania warunków i bez dotykania produkcyjnej bazy.

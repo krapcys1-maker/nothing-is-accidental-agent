@@ -121,3 +121,7 @@ Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior u
 ### 2026-07-17 — Gate pozostał zamknięty
 
 `SCREENSHOT REQUIRED`: bezpieczny kadr może później pokazać quiescence `PASS`, zanonimizowany DB hash/rozmiar, pricing/cap, fail-closed flags i `REAL_CONTROLLED_LIVE_ENABLED=false`, bez `.env`, klucza, command lines i danych SQLite. Obrazu nie wykonano, bo browser był zabroniony.
+
+### 2026-07-18 — Recovery po `SETTLED`
+
+`SCREENSHOT REQUIRED`: bezpieczny kadr powinien pokazać `1311/1311`, partycje `314+319+333+345`, QA `4/4`, pusty finalny diff katalogu podręcznika względem `main` i niezmienny hash produkcyjnej DB. Nie może zawierać prywatnych ścieżek, `.env`, tokenów ani zawartości bazy. Dowodem tej fali pozostają logi testowe i kontrole Git/SQLite.

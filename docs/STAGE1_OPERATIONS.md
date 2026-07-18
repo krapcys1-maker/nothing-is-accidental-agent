@@ -13,7 +13,7 @@ Generowane zadania:
 | `NothingIsAccidental-WorkerOffline` | 1 minuta | `python -m app.main worker --once --offline-only` | `--offline-only` blokuje real research niezależnie od runtime flags |
 | `NothingIsAccidental-Maintenance` | 5 minut | `python -m app.main maintain --once --stale-after-seconds 300` | tylko recovery → reaper; bez claimu i dispatchu |
 
-Oba zadania używają jawnego interpretera bieżącego środowiska, `C:\Users\user\Desktop\agent project` jako `WorkingDirectory`, konta interaktywnego bez podwyższania uprawnień, `MultipleInstancesPolicy=IgnoreNew`, braku schedulerowego retry oraz braku hard-kill timeoutu. `ExecutionTimeLimit=PT0S` jest celowe: Task Scheduler nie może przerwać wątku w trakcie zapisu SQLite. Stdout/stderr trafiają do gitignored `runtime/logs/`; launchery propagują exit code procesu, a własny błąd launchera zwraca 70. Nie zapisują ani nie zmieniają `system_flags`.
+Oba zadania używają jawnego interpretera bieżącego środowiska, `<project-root>` jako `WorkingDirectory`, konta interaktywnego bez podwyższania uprawnień, `MultipleInstancesPolicy=IgnoreNew`, braku schedulerowego retry oraz braku hard-kill timeoutu. `ExecutionTimeLimit=PT0S` jest celowe: Task Scheduler nie może przerwać wątku w trakcie zapisu SQLite. Stdout/stderr trafiają do gitignored `runtime/logs/`; launchery propagują exit code procesu, a własny błąd launchera zwraca 70. Nie zapisują ani nie zmieniają `system_flags`.
 
 Plan bez rejestracji:
 
@@ -138,7 +138,7 @@ Jedyny profil inicjalizowany po migracji pochodzi z `app.core.security_flags.SEC
 ```powershell
 python scripts/prepare_stage1_db_migration.py plan `
   --source-db data/agent.db `
-  --workspace C:\Users\user\Desktop\agent-project-backups\stage1-second-migration `
+  --workspace %USERPROFILE%\Desktop\agent-project-backups\stage1-second-migration `
   --expected-branch dev/first-successful-research-card `
   --expected-head 0658e8b221b99bcdaa549cf538ee140a9dc02613 `
   --expected-source-sha256 CAEDDA05B4E9BCA70346031F5812D5EA38C4A7390D1E52E22FDFA12AF4EBFEFB `
@@ -194,7 +194,7 @@ Zarejestrowany proces:
 | Executable | `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe` |
 | Creation time UTC | `2026-07-16T18:59:17.5919140Z` |
 | Reason match | `CommandLine contains resolved project root` |
-| Command line | `powershell.exe -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop';$root='C:\Users\user\Desktop\agent project';$self=10216;..."` |
+| Command line | `powershell.exe -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop';$root='<project-root>';$self=10216;..."` |
 
 Finding `QP-01`: jest to proces potomny uruchomiony przez `_default_quiesce_probe`. Probe wyklucza parent Python przez `$self=10216`, lecz jego własny potomny PowerShell ma w command line literalny `$root`; predykat `CommandLine.Contains($root)` dopasowuje więc sam proces sprawdzający. Pełna command line jest zachowana w raporcie `docs/migration-reports/STAGE1_DATABASE_RETRY_QUIESCE_PROCESS_IDENTIFIED_2026-07-16.md`.
 
@@ -230,7 +230,7 @@ Historyczny status bezpośrednio po implementacji QP-01 brzmiał **`CANDIDATE CO
 
 ### Wynik jednej kontrolowanej próby po QP-01 — sukces
 
-Właściciel udzielił osobnej zgody na dokładnie jedną próbę. Użyto tego samego entrypointu `scripts/prepare_stage1_db_migration.py execute-in-place`, interpretera `C:\Users\user\AppData\Local\Programs\Python\Python312\python.exe`, CWD repozytorium i subprocess flow PowerShell → Python → helper PowerShell.
+Właściciel udzielił osobnej zgody na dokładnie jedną próbę. Użyto tego samego entrypointu `scripts/prepare_stage1_db_migration.py execute-in-place`, interpretera `<python-path>`, CWD repozytorium i subprocess flow PowerShell → Python → helper PowerShell.
 
 Każdy z trzech gate'ów miał:
 
@@ -260,7 +260,7 @@ Nowy baseline:
 | `data/agent.db-wal` | `E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855` | 0 B | `2026-07-16T19:42:25.5417557Z` |
 | `data/agent.db-shm` | `FD4C9FDA9CD3F9AE7C962B0DDF37232294D55580E1AA165AA06129B8549389EB` | 32768 B | `2026-07-16T19:42:25.5507558Z` |
 
-Backup, report i baseline znajdują się poza repozytorium w `C:\Users\user\Desktop\agent-project-backups\stage1-second-migration-20260716-ddc3c63190eb82bc-attempt-4`. Migracji nie wolno ponawiać w tej sesji. (Stan historyczny na 2026-07-16: Etap 1 pozostawał wtedy `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`. Etap 1 został formalnie zamknięty 2026-07-17 — patrz nagłówek dokumentu i ADR-088.)
+Backup, report i baseline znajdują się poza repozytorium w `%USERPROFILE%\Desktop\agent-project-backups\stage1-second-migration-20260716-ddc3c63190eb82bc-attempt-4`. Migracji nie wolno ponawiać w tej sesji. (Stan historyczny na 2026-07-16: Etap 1 pozostawał wtedy `OPEN / BLOCKED PENDING CONTROLLED LIVE ACCEPTANCE`. Etap 1 został formalnie zamknięty 2026-07-17 — patrz nagłówek dokumentu i ADR-088.)
 
 ### Niezależny review trwałego wyniku migracji i QP-01
 

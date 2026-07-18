@@ -248,3 +248,9 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Rozróżnienie testów:** reviewer nie uruchamiał ponownie pełnego 1288; potwierdził bajtową identyczność kodu/testów z wcześniej zaakceptowanym wynikiem implementera 1288/1288 i partycjami `306+312+328+342`.
 - **Decyzja:** reviewer wydał `APPROVE`, a właściciel formalnie przyjął positive-live gate w ADR-095. Karta `id=3` pozostaje redakcyjnie `REJECT/WEAK_SOURCES`.
 - **Koszt i granice:** nowy research/provider call/usage/koszt = `0`; miesięczny ledger pozostaje `1.012590 USD`; kolejny live `NOT AUTHORIZED`, Etap 2 `NOT STARTED`.
+
+## 2026-07-18 — Fala naprawcza PR #1 bez nowego researchu
+
+- **Zakres:** deterministyczne testy odzyskiwania lifecycle po `SETTLED`, final-tree cleanup oraz dokumentacja; fake callery i tymczasowe bazy SQLite.
+- **Research/provider:** zero zapytań, web search, SDK, requestów, usage i nowych kart. Nie użyto materiału zewnętrznego.
+- **Koszt i stan:** `0.000000 USD`; miesięczny ledger pozostaje `1.012590 USD`; Etap 2 `NOT STARTED`, kolejny live `NOT AUTHORIZED`.

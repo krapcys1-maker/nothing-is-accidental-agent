@@ -152,6 +152,11 @@ _UNEXPECTED_FAILURE_AFTER_REQUEST_STARTED = (
 )
 _ESCALATION_OPERATOR = "maintenance-recovery"
 _WORKER_FAILURE_ESCALATION_OPERATOR = "worker-failure-boundary"
+_SETTLED_EXECUTION_RECOVERY_OPERATOR = "maintenance-settled-execution-recovery"
+_SETTLED_EXECUTION_RECOVERY_NOTE = (
+    "Automatic execution-only recovery after a known SETTLED provider outcome."
+)
+_SETTLED_EXECUTION_RECOVERY_BLOCKED = "SETTLED_EXECUTION_RECOVERY_BLOCKED"
 
 _ACTIVE_JOB_STATUSES = (
     JobStatus.QUEUED.value,
@@ -1948,6 +1953,66 @@ class SqliteStorage:
             self._recovery_fault_point("AFTER_ESCALATION_EVENT")
             result.escalated_reconciliation_count += 1
 
+    def _recover_settled_execution_attempts(
+        self, current_ts: str, result: JobRecoveryResult,
+    ) -> None:
+        """Close financially-known SETTLED crash windows without provider work.
+
+        Expired leases have already been fenced into NEEDS_VERIFICATION by the
+        caller.  Each attempt is isolated by a savepoint: ordinary valid states
+        become one audited terminal result, while tampered or incomplete lineage
+        remains explicitly reviewable and cannot roll back unrelated lease
+        recovery.  No attempt, usage, cost or reservation is created or changed.
+        """
+        rows = self.conn.execute(
+            "SELECT p.request_id FROM provider_attempts p JOIN jobs j ON j.id=p.job_id "
+            "WHERE p.status='SETTLED' AND j.status='NEEDS_VERIFICATION' "
+            "AND NOT EXISTS (SELECT 1 FROM reconciliation_events e "
+            "WHERE e.request_id=p.request_id AND e.event_type='EXECUTION_RECOVERY') "
+            "ORDER BY p.request_id"
+        ).fetchall()
+        for candidate in rows:
+            self.conn.execute("SAVEPOINT settled_execution_recovery")
+            try:
+                row = self._reconciliation_state_row(candidate["request_id"])
+                if row is None:
+                    raise ProviderAttemptReconciliationError(
+                        "SETTLED execution disappeared during recovery."
+                    )
+                resolution = (
+                    ExecutionResolution.RESULT_ALREADY_FINALIZED
+                    if row["research_card_id"] is not None
+                    else ExecutionResolution.EXECUTION_FAILED
+                )
+                actual = _money(
+                    row["actual_cost_usd"], positive=True,
+                    label="SETTLED execution actual cost",
+                )
+                self._resolve_settled_execution_in_transaction(
+                    row=row, account_id=row["job_account_id"],
+                    execution_resolution=resolution, actual_amount=actual,
+                    operator=_SETTLED_EXECUTION_RECOVERY_OPERATOR,
+                    note_text=_SETTLED_EXECUTION_RECOVERY_NOTE,
+                    current_ts=current_ts,
+                )
+                self._recovery_fault_point("AFTER_SETTLED_EXECUTION_RECOVERY")
+            except (ProviderAttemptReconciliationError, BudgetReservationError):
+                self.conn.execute("ROLLBACK TO settled_execution_recovery")
+                self.conn.execute("RELEASE settled_execution_recovery")
+                self.conn.execute(
+                    "UPDATE jobs SET last_error=?,updated_at=? WHERE id=("
+                    "SELECT job_id FROM provider_attempts WHERE request_id=?"
+                    ") AND status='NEEDS_VERIFICATION'",
+                    (
+                        _SETTLED_EXECUTION_RECOVERY_BLOCKED, current_ts,
+                        candidate["request_id"],
+                    ),
+                )
+                result.settled_execution_blocked_count += 1
+            else:
+                self.conn.execute("RELEASE settled_execution_recovery")
+                result.settled_execution_recovery_count += 1
+
     @staticmethod
     def _reconciliation_text(value: object, *, label: str, limit: int) -> str:
         if not isinstance(value, str):
@@ -1962,12 +2027,15 @@ class SqliteStorage:
         return self.conn.execute(
             "SELECT p.*,j.account_id AS job_account_id,j.status AS job_status,j.kind AS job_kind,"
             "j.workflow AS job_workflow,j.run_id,j.topic_id,j.payload_json,"
-            "j.lease_owner,j.lease_expires_at,"
+            "j.lease_owner,j.lease_expires_at,j.reserved_cost_usd,j.budget_reserved_at,"
             "r.status AS run_status,r.account_id AS run_account_id,r.workflow AS run_workflow,"
+            "r.cost_usd AS run_cost_usd,"
             "rr.status AS research_status,rr.research_card_id,rr.topic_id AS research_topic_id,"
-            "rr.account_id AS research_account_id,rr.flow AS research_flow "
+            "rr.account_id AS research_account_id,rr.flow AS research_flow,"
+            "rr.total_cost_usd AS research_cost_usd,t.status AS topic_status "
             "FROM provider_attempts p JOIN jobs j ON j.id=p.job_id "
             "LEFT JOIN runs r ON r.id=j.run_id LEFT JOIN research_runs rr ON rr.id=j.run_id "
+            "LEFT JOIN topics t ON t.id=j.topic_id "
             "WHERE p.request_id=?",
             (request_id,),
         ).fetchone()
@@ -2007,7 +2075,7 @@ class SqliteStorage:
         ).fetchone()[0]
         material = json.dumps(
             [
-                "reconciliation-token-v2", str(request_id), str(row["status"]),
+                "reconciliation-token-v3", str(request_id), str(row["status"]),
                 str(row["job_status"]), str(row["run_status"]), str(row["research_status"]),
                 None if row["research_card_id"] is None else int(row["research_card_id"]),
                 int(usage_count), format(canonical_cost, "f"), int(max_seq),
@@ -2019,6 +2087,10 @@ class SqliteStorage:
                 str(row["research_account_id"]),
                 None if row["research_topic_id"] is None else int(row["research_topic_id"]),
                 str(row["research_flow"]), str(row["execution_intent_fingerprint"]),
+                str(row["lease_owner"]), str(row["lease_expires_at"]),
+                str(row["reserved_cost_usd"]), str(row["budget_reserved_at"]),
+                str(row["actual_cost_usd"]), str(row["run_cost_usd"]),
+                str(row["research_cost_usd"]), str(row["topic_status"]),
             ],
             ensure_ascii=True,
         )
@@ -2180,6 +2252,38 @@ class SqliteStorage:
                 "Ledger and cost cache diverged after reconciliation."
             )
 
+    def _reconciliation_assert_settled_execution_cache_prestate(
+        self, row: sqlite3.Row, expected_total: Decimal,
+    ) -> None:
+        """Validate the real post-usage/pre-finalization cache contract.
+
+        ``add_job_model_usage`` immediately refreshes ``runs.cost_usd``.  The
+        single-flow ``research_runs.total_cost_usd`` cache is intentionally
+        finalized later with the lifecycle, so PENDING legitimately remains
+        zero in the crash window.  Already-terminal compatible prestates must
+        already carry the canonical total.
+        """
+        canonical = self._research_usage_total(row["run_id"])
+        if canonical != expected_total or not _money_equal(
+            row["run_cost_usd"], canonical, label="run cost cache",
+        ):
+            raise ProviderAttemptReconciliationError(
+                "Canonical ledger and run cost cache diverged before execution recovery."
+            )
+        research_amount = _money(
+            row["research_cost_usd"], positive=False,
+            label="research_run pre-finalization cost cache",
+        )
+        expected_research = (
+            Decimal("0")
+            if row["research_status"] == ResearchRunStatus.PENDING.value
+            else canonical
+        )
+        if research_amount != expected_research:
+            raise ProviderAttemptReconciliationError(
+                "research_run cost cache is not a legal pre-finalization value."
+            )
+
     def _append_reconciliation_event(
         self, *, request_id: str, event_type: ReconciliationEventType,
         financial_resolution: FinancialResolution, execution_resolution: ExecutionResolution,
@@ -2220,6 +2324,182 @@ class SqliteStorage:
                 (request_id,),
             )
         ]
+
+    def _require_settled_execution_card(self, row: sqlite3.Row) -> None:
+        """Validate a card persisted before lifecycle terminalization.
+
+        Unlike the financial reconciliation helper, this proof deliberately
+        accepts RUNNING/STOPPED + PENDING: those are the exact crash states this
+        recovery closes.  The card must already be exclusively linked to this
+        single research_run and to its account-owned topic.
+        """
+        card_id = row["research_card_id"]
+        if card_id is None:
+            raise ProviderAttemptReconciliationError(
+                "RESULT_ALREADY_FINALIZED requires a durable Research Card."
+            )
+        if row["run_status"] not in (
+            RunStatus.RUNNING.value, RunStatus.STOPPED.value, RunStatus.SUCCESS.value,
+        ) or row["research_status"] not in (
+            ResearchRunStatus.PENDING.value, ResearchRunStatus.COMPLETE.value,
+        ):
+            raise ProviderAttemptReconciliationError(
+                "Recovered Research Card has an incompatible pre-terminal lifecycle."
+            )
+        card = self.conn.execute(
+            "SELECT c.id FROM research_cards c JOIN topics t ON t.id=c.topic_id "
+            "WHERE c.id=? AND c.topic_id=? AND t.account_id=?",
+            (card_id, row["topic_id"], row["job_account_id"]),
+        ).fetchone()
+        owners = self.conn.execute(
+            "SELECT id FROM research_runs WHERE research_card_id=?", (card_id,),
+        ).fetchall()
+        if card is None or len(owners) != 1 or owners[0]["id"] != row["run_id"]:
+            raise ProviderAttemptReconciliationError(
+                "Recovered Research Card lineage or exclusive ownership is inconsistent."
+            )
+
+    def _resolve_settled_execution_in_transaction(
+        self,
+        *,
+        row: sqlite3.Row,
+        account_id: str,
+        execution_resolution: ExecutionResolution,
+        actual_amount: Decimal,
+        operator: str,
+        note_text: str,
+        current_ts: str,
+    ) -> ProviderAttemptReconciliationResult:
+        """Resolve only execution state for an already-known SETTLED charge.
+
+        ``EXECUTION_RECOVERY`` is inserted once and the 0015 AFTER trigger
+        terminalizes the lifecycle.  The provider attempt, actual cost and sole
+        canonical usage are never changed or recreated.
+        """
+        request_id = str(row["request_id"])
+        if row["status"] != ProviderAttemptStatus.SETTLED.value:
+            raise ProviderAttemptReconciliationError(
+                "Execution-only recovery requires a SETTLED provider attempt."
+            )
+        if execution_resolution not in (
+            ExecutionResolution.EXECUTION_FAILED,
+            ExecutionResolution.RESULT_ALREADY_FINALIZED,
+        ):
+            raise ProviderAttemptReconciliationError(
+                "SETTLED execution recovery requires a terminal execution resolution."
+            )
+        if not _money_equal(
+            row["actual_cost_usd"], actual_amount, label="Settled provider actual cost",
+        ):
+            raise ProviderAttemptReconciliationError(
+                "SETTLED execution recovery cannot change the provider actual cost."
+            )
+
+        usage_rows = self.conn.execute(
+            "SELECT * FROM model_usage WHERE request_id=? AND dry_run=0 "
+            "AND is_legacy_usage=0 ORDER BY id",
+            (request_id,),
+        ).fetchall()
+        if len(usage_rows) != 1:
+            raise ProviderAttemptReconciliationError(
+                "SETTLED execution recovery requires exactly one canonical usage."
+            )
+        intent = self._reconciliation_require_consistent_lineage(row, account_id)
+        self._reconciliation_verify_usage_identity(
+            row, usage_rows[0], actual_amount, intent=intent,
+        )
+        self._reconciliation_assert_settled_execution_cache_prestate(row, actual_amount)
+
+        if row["lease_owner"] is not None or row["lease_expires_at"] is not None:
+            raise ProviderAttemptReconciliationError(
+                "SETTLED execution recovery requires a dead execution fence."
+            )
+        if row["job_status"] != JobStatus.NEEDS_VERIFICATION.value:
+            existing = self.conn.execute(
+                "SELECT * FROM reconciliation_events WHERE request_id=? "
+                "AND event_type='EXECUTION_RECOVERY'",
+                (request_id,),
+            ).fetchone()
+            if existing is None:
+                raise ProviderAttemptReconciliationError(
+                    "SETTLED execution resolver requires NEEDS_VERIFICATION."
+                )
+        if not _money_equal(
+            row["reserved_cost_usd"], Decimal("0"), label="Recovered job reservation",
+        ) or row["budget_reserved_at"] is not None:
+            raise ProviderAttemptReconciliationError(
+                "SETTLED execution recovery requires a fully settled reservation."
+            )
+
+        if execution_resolution is ExecutionResolution.EXECUTION_FAILED:
+            if row["research_card_id"] is not None:
+                raise ProviderAttemptReconciliationError(
+                    "EXECUTION_FAILED cannot coexist with a Research Card."
+                )
+            if row["run_status"] not in _EXECUTION_FAILED_RUN_STATUSES or \
+                    row["research_status"] not in (
+                        ResearchRunStatus.PENDING.value, ResearchRunStatus.FAILED.value,
+                    ):
+                raise ProviderAttemptReconciliationError(
+                    "SETTLED execution failure has an incompatible lifecycle."
+                )
+        else:
+            self._require_settled_execution_card(row)
+
+        idempotency_key = self._reconciliation_idempotency_key(
+            request_id, FinancialResolution.CHARGED_KNOWN, execution_resolution,
+            operator, note_text, "EXECUTION_RECOVERY",
+        )
+        existing = self.conn.execute(
+            "SELECT * FROM reconciliation_events WHERE request_id=? "
+            "AND event_type='EXECUTION_RECOVERY'",
+            (request_id,),
+        ).fetchone()
+        if existing is not None:
+            event = self._reconciliation_event_from_row(existing)
+            if event.financial_resolution is not FinancialResolution.CHARGED_KNOWN or \
+                    event.execution_resolution is not execution_resolution:
+                raise ProviderAttemptReconciliationError(
+                    "SETTLED execution was already recovered with different parameters."
+                )
+            return ProviderAttemptReconciliationResult(
+                attempt=self._provider_attempt_from_row(row),
+                financial_resolution=FinancialResolution.CHARGED_KNOWN,
+                execution_resolution=execution_resolution,
+                usage_id=int(usage_rows[0]["id"]), idempotent=True, event=event,
+            )
+
+        event = self._append_reconciliation_event(
+            request_id=request_id,
+            event_type=ReconciliationEventType.EXECUTION_RECOVERY,
+            financial_resolution=FinancialResolution.CHARGED_KNOWN,
+            execution_resolution=execution_resolution,
+            operator=operator, note=note_text,
+            previous_status=ProviderAttemptStatus.SETTLED.value,
+            resulting_status=ProviderAttemptStatus.SETTLED.value,
+            idempotency_key=idempotency_key, created_at=current_ts,
+        )
+        self._reconciliation_fault_point(ReconciliationFaultPoint.AFTER_EVENT_INSERT)
+        resolved = self._reconciliation_state_row(request_id)
+        assert resolved is not None
+        expected = (
+            (JobStatus.FAILED.value, RunStatus.FAILED.value, ResearchRunStatus.FAILED.value)
+            if execution_resolution is ExecutionResolution.EXECUTION_FAILED
+            else (JobStatus.DONE.value, RunStatus.SUCCESS.value, ResearchRunStatus.COMPLETE.value)
+        )
+        if (
+            resolved["job_status"], resolved["run_status"], resolved["research_status"]
+        ) != expected or resolved["status"] != ProviderAttemptStatus.SETTLED.value:
+            raise ProviderAttemptReconciliationError(
+                "EXECUTION_RECOVERY did not create the expected terminal lifecycle."
+            )
+        self._reconciliation_assert_ledger_cache_consistent(row["run_id"], actual_amount)
+        return ProviderAttemptReconciliationResult(
+            attempt=self._provider_attempt_from_row(resolved),
+            financial_resolution=FinancialResolution.CHARGED_KNOWN,
+            execution_resolution=execution_resolution,
+            usage_id=int(usage_rows[0]["id"]), event=event,
+        )
 
     def preview_provider_attempt_reconciliation(
         self, *, request_id: str, account_id: str,
@@ -2278,14 +2558,18 @@ class SqliteStorage:
         reconciled_by: str,
         note: str,
         expected_version_token: str | None = None,
+        now: datetime | None = None,
     ) -> ProviderAttemptReconciliationResult:
-        """Resolve one durable uncertainty in a single ``BEGIN IMMEDIATE`` transaction.
+        """Resolve financial uncertainty or a SETTLED execution crash atomically.
 
         The method is intentionally outside worker fences: a human resolves an
         already stopped job.  It never calls a provider.  ``CHARGE_UNKNOWN`` only
         appends an audit observation; ``CHARGED_KNOWN``/``NOT_CHARGED`` terminalize
         the attempt, the append-only history, the canonical ``model_usage`` ledger,
         the cost cache, and the job lifecycle together, or roll everything back.
+        A pre-existing SETTLED outcome takes a separate execution-only branch: its
+        attempt, usage and cost remain unchanged while EXECUTION_RECOVERY closes
+        the lifecycle through the additive 0015 SQLite contract.
         """
         if not isinstance(financial_resolution, FinancialResolution):
             financial_resolution = FinancialResolution(financial_resolution)
@@ -2327,6 +2611,7 @@ class SqliteStorage:
                 raise ReconciliationPreviewStaleError(
                     "Preview is stale: durable state changed since the preview token was issued."
                 )
+            resolution_ts = _persisted_ts(self._job_now(now))
             usage_rows = self.conn.execute(
                 "SELECT * FROM model_usage WHERE request_id=? AND dry_run=0 AND is_legacy_usage=0 ORDER BY id",
                 (request_id,),
@@ -2334,6 +2619,41 @@ class SqliteStorage:
             if len(usage_rows) > 1:
                 raise ProviderAttemptReconciliationError("Attempt has duplicate non-legacy usage rows.")
             status = row["status"]
+
+            # ---- known financial outcome, missing execution terminalization ----
+            if status == ProviderAttemptStatus.SETTLED.value:
+                if financial_resolution is not FinancialResolution.CHARGED_KNOWN or actual_amount is None:
+                    raise ProviderAttemptReconciliationError(
+                        "SETTLED execution recovery requires CHARGED_KNOWN with the unchanged actual cost."
+                    )
+                if row["job_status"] in (
+                    JobStatus.LEASED.value, JobStatus.RUNNING.value,
+                ):
+                    cursor = self.conn.execute(
+                        "UPDATE jobs SET status='NEEDS_VERIFICATION',last_error=?,"
+                        "lease_owner=NULL,lease_expires_at=NULL,updated_at=?,finished_at=NULL "
+                        "WHERE id=? AND status IN ('LEASED','RUNNING') "
+                        "AND lease_expires_at IS NOT NULL AND lease_expires_at < ?",
+                        (
+                            "SETTLED_EXECUTION_RECOVERY_REQUIRED", resolution_ts,
+                            row["job_id"], resolution_ts,
+                        ),
+                    )
+                    if cursor.rowcount != 1:
+                        raise ProviderAttemptReconciliationError(
+                            "A live execution fence cannot be resolved as a SETTLED crash."
+                        )
+                    row = self._reconciliation_state_row(request_id)
+                    assert row is not None
+                result = self._resolve_settled_execution_in_transaction(
+                    row=row, account_id=account_id,
+                    execution_resolution=execution_resolution,
+                    actual_amount=actual_amount, operator=operator,
+                    note_text=note_text, current_ts=resolution_ts,
+                )
+                self._reconciliation_fault_point(ReconciliationFaultPoint.BEFORE_COMMIT)
+                self.conn.commit()
+                return result
 
             # ---- CHARGE_UNKNOWN: append-only observation, never terminal ----
             if financial_resolution is FinancialResolution.CHARGE_UNKNOWN:
@@ -3265,6 +3585,9 @@ class SqliteStorage:
             # dead-fence RESERVED/REQUEST_STARTED attempt into the operator
             # queue, so no reservation can stay invisible and unresolvable.
             self._escalate_crash_window_attempts(current_ts, result)
+            # PR1-MAJ-001: a known SETTLED charge is not financial uncertainty.
+            # Resolve only its missing execution outcome through the 0015 audit.
+            self._recover_settled_execution_attempts(current_ts, result)
             self._recovery_fault_point("BEFORE_COMMIT")
             self.conn.commit()
             return result
@@ -3784,9 +4107,9 @@ class SqliteStorage:
                 value=len(versions),
                 detail=",".join(versions),
             )
-            if len(versions) != 14:
+            if len(versions) != 15:
                 unknown_reasons.append(
-                    f"schema has {len(versions)} migrations; current code requires 14"
+                    f"schema has {len(versions)} migrations; current code requires 15"
                 )
 
         job_counts: dict[str, int] | None = None

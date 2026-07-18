@@ -592,7 +592,7 @@ Usunięto też tylko dwa potwierdzone śmieciowe ślady: legacy fresh-provider b
 
 Historyczny runner W0B-REV-09/10 użył pełnego SHA-256 każdego UTF-8 node ID, potraktowanego jako big-endian integer modulo 4. Pokrycie exact-once wyniosło **211 / 222 / 229 / 225 = 887**, bez BOM, duplikatów, pominięć ani nadmiarowych node IDs. Granice `0.0000004/.5/.6`, `0.0000015`, `0.1234565`, `0.1234575`, cache read/write/web, storage, settlement ±1 mikro-USD i fake caller → usage → settlement są testowane wyłącznie na fake callerach i tymczasowych SQLite. WAVE 0B pozostaje `CANDIDATE` do niezależnego re-review; Etap 1 `BLOCKED`; live API `ZABRONIONE`.
 
-Bezpieczny snapshot przed naprawą tokenów: `C:\Users\user\Desktop\agent-project-snapshots\wave0b-pre-token-fix-20260715-112833`. Niepełny snapshot `wave0b-pre-token-fix-20260715-112526` jest oznaczony **NIE UŻYWAĆ**. Chroniona baza nie została zmieniona.
+Bezpieczny snapshot przed naprawą tokenów: `%USERPROFILE%\Desktop\agent-project-snapshots\wave0b-pre-token-fix-20260715-112833`. Niepełny snapshot `wave0b-pre-token-fix-20260715-112526` jest oznaczony **NIE UŻYWAĆ**. Chroniona baza nie została zmieniona.
 
 ## 2026-07-15 — W0B-RR-01: ostatnie zaokrąglenie jest jedynym zaokrągleniem
 
@@ -688,3 +688,9 @@ To nie był jednak skrót do publikacji. Karta zawierała pięć źródeł, lecz
 Po wyniku technicznym implementera przyszedł osobny review. Reviewer nie udawał, że wykonał drugi pełny suite: uruchomił 223 własne wąskie testy, sprawdził exact-once oraz bajtową identyczność kodu i testów z wcześniej zaakceptowanym wynikiem 1288/1288. Nie znalazł CRITICAL, MAJOR ani nowego MINOR i wydał `APPROVE`. Dopiero potem właściciel formalnie przyjął positive-live gate Etapu 2.
 
 To zamknięcie jest granicą dowodową, nie startem kolejnego etapu. Etap 2 nadal nie ruszył, następny request nie jest autoryzowany, browser i publikacja pozostają zablokowane, a gate i pięć flag są fail-closed. Working tree może przejść do checkpointu dopiero po osobnej zgodzie właściciela na commit.
+
+## 2026-07-18 — Naprawa okna awarii po rozliczeniu
+
+Końcowy review PR #1 znalazł okno, w którym attempt był już finansowo `SETTLED`, ale crash mógł przerwać zapis terminalnych stanów joba i runów. Nowa migracja `0015` wprowadza osobne zdarzenie `EXECUTION_RECOVERY`: nie dotyka kosztu ani usage, tylko domyka lifecycle po sprawdzeniu kanonicznego wyniku, lineage i braku żywego fence. Zgodne powtórzenie jest idempotentne, a każdy konflikt zatrzymuje naprawę.
+
+Właściciel nie wymagał przepisywania historii prywatnego brancha. Zamiast tego końcowe drzewo przywrócono do jednego kanonicznego podręcznika pisania zgodnego z `main`. Kandydat przeszedł 1311 testów, cztery partycje i niezależne kontrpróby; nie uruchomiono providera, produkcyjnej migracji, browsera ani publikacji.

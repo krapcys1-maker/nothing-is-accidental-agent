@@ -935,9 +935,10 @@ def run_stage1_copy_preflight(
     now: datetime | None = None,
 ) -> Stage1MigrationResult:
     """Create exact backup + candidate and migrate only the candidate to 0014."""
-    if len(EXPECTED_MIGRATIONS) != 14:
+    if len(EXPECTED_MIGRATIONS) < 14 or TARGET_MIGRATIONS[-1] != \
+            "0014_provider_attempt_reconciliation":
         raise Stage1MigrationPreflightError(
-            f"Current code exposes {len(EXPECTED_MIGRATIONS)} migrations, expected 14."
+            "Current code no longer contains the closed canonical 0001..0014 ledger."
         )
     project_root = request.project_root.resolve()
     source = request.source_db.resolve()
@@ -1011,14 +1012,14 @@ def run_stage1_copy_preflight(
             raise Stage1MigrationPreflightError(
                 f"Pre-migration real cost is {cost_before:.6f}, expected {expected_cost:.6f}."
             )
-        applied = tuple(apply_migrations(candidate_conn))
+        applied = tuple(apply_migrations(candidate_conn, through=TARGET_MIGRATIONS[-1]))
         if applied != MIGRATIONS_0010_TO_0014:
             raise Stage1MigrationPreflightError(
                 f"Applied migration set is {applied!r}, expected 0010..0014."
             )
         timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
         _initialize_blocked_flags(candidate_conn, timestamp=timestamp)
-        second_pass = tuple(apply_migrations(candidate_conn))
+        second_pass = tuple(apply_migrations(candidate_conn, through=TARGET_MIGRATIONS[-1]))
         if second_pass:
             raise Stage1MigrationPreflightError(
                 f"Migration runner is not idempotent; second pass applied {second_pass!r}."
@@ -1275,7 +1276,7 @@ def _migrate_exact_0010_to_0014(
     try:
         if _migration_versions(conn) != SOURCE_MIGRATIONS:
             raise Stage1MigrationPreflightError("Mutation target is not exact schema 0001..0009.")
-        applied = tuple(apply_migrations(conn))
+        applied = tuple(apply_migrations(conn, through=TARGET_MIGRATIONS[-1]))
         if applied != MIGRATIONS_0010_TO_0014:
             raise Stage1MigrationPreflightError(
                 f"Canonical runner applied {applied!r}, expected exact 0010..0014."
@@ -1290,7 +1291,7 @@ def _migrate_exact_0010_to_0014(
             ),
         )
         if verify_runner_noop:
-            second_pass = tuple(apply_migrations(conn))
+            second_pass = tuple(apply_migrations(conn, through=TARGET_MIGRATIONS[-1]))
             if second_pass:
                 raise Stage1MigrationPreflightError(
                     f"Canonical runner was not a no-op on its second pass: {second_pass!r}."
@@ -1398,7 +1399,9 @@ def run_stage1_in_place_migration(
         raise Stage1MigrationPreflightError(
             "Explicit --confirm-in-place-production-migration approval is required."
         )
-    if len(EXPECTED_MIGRATIONS) != 14 or MIGRATIONS_0010_TO_0014 != TARGET_MIGRATIONS[9:14]:
+    if len(EXPECTED_MIGRATIONS) < 14 or TARGET_MIGRATIONS[-1] != \
+            "0014_provider_attempt_reconciliation" or \
+            MIGRATIONS_0010_TO_0014 != TARGET_MIGRATIONS[9:14]:
         raise Stage1MigrationPreflightError("The canonical migration ledger is not exact 0001..0014.")
     project_root = request.project_root.resolve()
     source = request.source_db.resolve()

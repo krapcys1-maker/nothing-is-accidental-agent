@@ -1,13 +1,13 @@
 # Etap 1 — kontrolowana migracja produkcyjnej bazy 0009 → 0014 po QP-01
 
 Data: 2026-07-16
-Repozytorium: `C:\Users\user\Desktop\agent project`
+Repozytorium: `<project-root>`
 Branch: `dev/first-successful-research-card`
 HEAD: `ddc3c63190eb82bca171174dc7ee70c2d0a1ec15`
 
 ## 1. Autoryzacja i granice
 
-Właściciel zatwierdził dokładnie jedną próbę pakietowego executora `run_stage1_in_place_migration` z obowiązkowym `--confirm-in-place-production-migration`. Wykorzystano ten sam realny flow, który ujawnił QP-01: PowerShell uruchomiony z katalogu repozytorium → interpreter `C:\Users\user\AppData\Local\Programs\Python\Python312\python.exe` → `scripts/prepare_stage1_db_migration.py execute-in-place` → helper PowerShell probe'a.
+Właściciel zatwierdził dokładnie jedną próbę pakietowego executora `run_stage1_in_place_migration` z obowiązkowym `--confirm-in-place-production-migration`. Wykorzystano ten sam realny flow, który ujawnił QP-01: PowerShell uruchomiony z katalogu repozytorium → interpreter `<python-path>` → `scripts/prepare_stage1_db_migration.py execute-in-place` → helper PowerShell probe'a.
 
 Nie wykonywano review, pełnego audytu, zmian kodu, drugiej próby, live API, workera, maintenance, browsera, publikacji, rejestracji Windows Tasks ani operacji zapisujących Git.
 
@@ -112,7 +112,7 @@ Status baseline'u: `NEW_SCHEMA_0014_BASELINE_ESTABLISHED`.
 
 Workspace poza repozytorium:
 
-`C:\Users\user\Desktop\agent-project-backups\stage1-second-migration-20260716-ddc3c63190eb82bc-attempt-4`
+`%USERPROFILE%\Desktop\agent-project-backups\stage1-second-migration-20260716-ddc3c63190eb82bc-attempt-4`
 
 Zawiera:
 
