@@ -374,3 +374,7 @@ Autoryzacja płatnego requestu nie rozszerza automatycznie zgody na zmianę mech
 ## ADR-096 — Finansowy finał nie zastępuje finału wykonawczego
 
 Po `SETTLED` nie wolno cofać attemptu ani wykonywać drugiego settlementu. Jeżeli crash nastąpi przed terminalizacją lifecycle, jedyną legalną naprawą jest osobne append-only `EXECUTION_RECOVERY`, które potwierdza wynik wykonawczy bez mutacji pieniędzy. Dla cleanupu PR #1 właściciel wymaga final tree zgodnego z `main`, ale świadomie nie wymaga przepisywania historii prywatnego brancha.
+
+## ADR-099 — Offsety cytatu wskazują kanon, nie wspomnienie o stronie
+
+Evidence ma sens tylko wtedy, gdy cytat da się mechanicznie sprawdzić po dowolnym czasie. Dlatego istnieje dokładnie jedna funkcja kanonizacji tekstu, a zakres cytatu odnosi się wyłącznie do utrwalonego tekstu kanonicznego — nigdy do HTML-a, nigdy do tekstu sprzed normalizacji. Weryfikator przelicza hash i długość kanonu przy każdym zapisie, a te same reguły są wkompilowane w triggery SQLite (exact substring, granice zakresu, zakaz cytowania uciętego ogona, append-only). Realny fetch z sieci celowo nie istnieje w tej fali; pipeline nie jest podłączony, a semantyka dotychczasowego `verification_status` nie zmienia się do czasu fali integracyjnej.

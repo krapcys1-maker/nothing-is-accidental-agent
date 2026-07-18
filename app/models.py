@@ -800,3 +800,53 @@ class SourceCandidateRetryResult(BaseModel):
     in_progress_count: int = 0
     remaining_failed_count: int = 0
     reopened_run: bool = False
+
+
+# --- Lokalny fundament evidence (Etap 2, fala E1; ADR-099) ---
+
+class EvidenceRetrievalStatus(str, Enum):
+    OK = "OK"
+    FAILED = "FAILED"
+
+
+class EvidenceRetrieval(BaseModel):
+    """Trwały zapis jednego pobrania treści źródła.
+
+    `canonical_text` jest JEDYNYM tekstem adresowalnym offsetami excerptów;
+    pierwotna ekstrakcja istnieje wyłącznie jako fingerprint (hash + długość).
+    Łańcuch pochodzenia: raw bajty → ekstrakcja → kanonizacja; hash każdego
+    ogniwa dotyczy dokładnie danych wejściowych następnego kroku."""
+
+    id: int | None = None
+    requested_url: str
+    final_url: str
+    fetched_at: datetime
+    status: EvidenceRetrievalStatus
+    http_status: int | None = None
+    content_type: str | None = None
+    fetch_error: str | None = None
+    raw_size_bytes: int = 0
+    raw_sha256: str
+    extracted_chars: int = 0
+    extracted_sha256: str
+    canonical_text: str = ""
+    canonical_chars: int = 0
+    canonical_sha256: str
+    truncated: bool = False
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class EvidenceExcerpt(BaseModel):
+    """Trwałe powiązanie claim → excerpt → offsety → retrieval.
+
+    Offsety adresują wyłącznie utrwalony `canonical_text` retrievalu; zapis
+    przechodzi przez deterministyczny weryfikator (i podłogi SQLite 0016)."""
+
+    id: int | None = None
+    retrieval_id: int
+    claim_text: str
+    claim_sha256: str
+    excerpt_text: str
+    start_offset: int
+    end_offset: int
+    created_at: datetime = Field(default_factory=_utcnow)

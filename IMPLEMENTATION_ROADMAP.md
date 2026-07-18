@@ -121,7 +121,7 @@ WAVE 0B jest formalnie `CLOSED — APPROVED WITH P2`. WAVE 1A wdraża ręczny re
 
 ## Etap 2 — Research pipeline: dowód zamiast opinii (dokończenie)
 
-- **Status:** `NOT STARTED`. Bramka positive-live została formalnie przyjęta (ADR-095), lecz właściciel nie autoryzował rozpoczęcia implementacji Etapu 2, nowego realnego requestu, browsera ani publikacji.
+- **Status:** `IN PROGRESS — WAVE E1 CANDIDATE`. Bramka positive-live została formalnie przyjęta (ADR-095). Właściciel autoryzował pierwszą falę implementacyjną E1 (izolowany fundament evidence): migracja `0016_evidence_foundation`, jedna kanonizacja tekstu i kanoniczne offsety, deterministyczny weryfikator, `FetchPort` (fake/disabled, bez realnego adaptera sieciowego), jawna drabina `0015→0016` i runtime gate `0016` — status `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW` (ADR-099). Pipeline researchu NIE jest jeszcze zintegrowany z evidence; nowy realny request, browser i publikacja pozostają nieautoryzowane. Uwaga korygująca do zadań poniżej: numer migracji evidence to `0016` (zapis „migracja 0010" w tej sekcji jest historyczny i nieaktualny), a warunkiem `VERIFIED` będzie lokalny corpus + deterministyczny matcher, nie provider-side web_fetch.
 - **Cel:** A2 czyta TREŚĆ źródła (nie „opinię o URL-u") i utrwala dowód per twierdzenie; kontrola sprzeczności; porządki po legacy.
 - **Uzasadnienie:** P0-2c — bez fetch treści nazwa „extraction" jest na wyrost, a przyszły fact-audit artykułów (Etap 3) nie ma na czym pracować.
 - **Zależności:** Etap 0 (pierwszy sukces staged na żywo); niezależny od Etapu 1 (może iść równolegle, ale nie przed Etapem 0).

@@ -18,6 +18,9 @@ from app.core.security_flags import SECURITY_FLAG_DEFAULTS
 from app.models import (
     Account,
     DurableProviderAttemptContext,
+    EvidenceExcerpt,
+    EvidenceRetrieval,
+    EvidenceRetrievalStatus,
     ExecutionResolution,
     FinancialResolution,
     Job,
@@ -91,6 +94,13 @@ from app.research.durable_intent import (
     DurableResearchExecutionIntent,
     canonicalize_durable_research_payload,
     durable_execution_intent_fingerprint,
+)
+from app.research.evidence import (
+    EvidenceRejectionReason,
+    EvidenceVerdict,
+    EvidenceVerificationError,
+    sha256_hex,
+    verify_evidence_excerpt,
 )
 from app.storage.db import (
     RUNTIME_SCHEMA_VERSION,
@@ -5948,3 +5958,145 @@ class SqliteStorage:
         except Exception:
             self.conn.rollback()
             raise
+
+    # --- Lokalny fundament evidence (Etap 2, fala E1; ADR-099) ---
+    # Warstwa NIE jest zintegrowana z pipeline'em researchu w tej fali.
+    # Jedyna droga zapisu excerptu prowadzi przez deterministyczny weryfikator;
+    # podłogi SQLite migracji 0016 bronią tych samych relacji przed raw writerem.
+
+    def add_evidence_retrieval(self, retrieval: EvidenceRetrieval) -> EvidenceRetrieval:
+        """Utrwala jeden retrieval dokładnie tak, jak zbudował go recorder."""
+        cur = self.conn.execute(
+            "INSERT INTO evidence_retrievals (requested_url, final_url, fetched_at,"
+            " status, http_status, content_type, fetch_error, raw_size_bytes,"
+            " raw_sha256, extracted_chars, extracted_sha256, canonical_text,"
+            " canonical_chars, canonical_sha256, truncated, created_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                retrieval.requested_url, retrieval.final_url,
+                _ts_precise(retrieval.fetched_at), retrieval.status.value,
+                retrieval.http_status, retrieval.content_type, retrieval.fetch_error,
+                retrieval.raw_size_bytes, retrieval.raw_sha256,
+                retrieval.extracted_chars, retrieval.extracted_sha256,
+                retrieval.canonical_text, retrieval.canonical_chars,
+                retrieval.canonical_sha256, int(retrieval.truncated),
+                _ts_precise(retrieval.created_at),
+            ),
+        )
+        self.conn.commit()
+        stored = retrieval.model_copy()
+        stored.id = int(cur.lastrowid)
+        return stored
+
+    @staticmethod
+    def _row_to_evidence_retrieval(row) -> EvidenceRetrieval:
+        return EvidenceRetrieval(
+            id=row["id"], requested_url=row["requested_url"],
+            final_url=row["final_url"], fetched_at=row["fetched_at"],
+            status=EvidenceRetrievalStatus(row["status"]),
+            http_status=row["http_status"], content_type=row["content_type"],
+            fetch_error=row["fetch_error"], raw_size_bytes=row["raw_size_bytes"],
+            raw_sha256=row["raw_sha256"], extracted_chars=row["extracted_chars"],
+            extracted_sha256=row["extracted_sha256"],
+            canonical_text=row["canonical_text"],
+            canonical_chars=row["canonical_chars"],
+            canonical_sha256=row["canonical_sha256"],
+            truncated=bool(row["truncated"]), created_at=row["created_at"],
+        )
+
+    def get_evidence_retrieval(self, retrieval_id: int) -> EvidenceRetrieval | None:
+        row = self.conn.execute(
+            "SELECT * FROM evidence_retrievals WHERE id=?", (retrieval_id,),
+        ).fetchone()
+        return self._row_to_evidence_retrieval(row) if row is not None else None
+
+    def list_evidence_retrievals(
+        self, *, final_url: str | None = None,
+    ) -> list[EvidenceRetrieval]:
+        if final_url is None:
+            rows = self.conn.execute(
+                "SELECT * FROM evidence_retrievals ORDER BY id",
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM evidence_retrievals WHERE final_url=? ORDER BY id",
+                (final_url,),
+            ).fetchall()
+        return [self._row_to_evidence_retrieval(row) for row in rows]
+
+    def record_verified_evidence_excerpt(
+        self,
+        retrieval_id: int,
+        *,
+        claim_text: str,
+        excerpt_text: str,
+        start_offset: int,
+        end_offset: int,
+        now: datetime | None = None,
+    ) -> EvidenceExcerpt:
+        """Jedyna aplikacyjna droga zapisu excerptu — najpierw weryfikator.
+
+        Weryfikacja przebiega przeciwko stanowi retrievalu odczytanemu z bazy
+        (nie przeciwko obiektowi wywołującego); odmowa nie utrwala niczego.
+        """
+        retrieval = self.get_evidence_retrieval(retrieval_id)
+        if retrieval is None:
+            raise EvidenceVerificationError(EvidenceVerdict.rejected(
+                EvidenceRejectionReason.RETRIEVAL_NOT_FOUND,
+                f"retrieval id={retrieval_id} does not exist",
+            ))
+        verdict = verify_evidence_excerpt(
+            retrieval,
+            claim_text=claim_text,
+            excerpt_text=excerpt_text,
+            start_offset=start_offset,
+            end_offset=end_offset,
+        )
+        if not verdict.approved:
+            raise EvidenceVerificationError(verdict)
+        excerpt = EvidenceExcerpt(
+            retrieval_id=retrieval_id,
+            claim_text=claim_text,
+            claim_sha256=sha256_hex(claim_text),
+            excerpt_text=excerpt_text,
+            start_offset=start_offset,
+            end_offset=end_offset,
+            created_at=now or datetime.now(timezone.utc),
+        )
+        try:
+            cur = self.conn.execute(
+                "INSERT INTO evidence_excerpts (retrieval_id, claim_text,"
+                " claim_sha256, excerpt_text, start_offset, end_offset, created_at)"
+                " VALUES (?,?,?,?,?,?,?)",
+                (
+                    excerpt.retrieval_id, excerpt.claim_text, excerpt.claim_sha256,
+                    excerpt.excerpt_text, excerpt.start_offset, excerpt.end_offset,
+                    _ts_precise(excerpt.created_at),
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
+            self.conn.rollback()
+            if "UNIQUE" in str(exc).upper():
+                raise EvidenceVerificationError(EvidenceVerdict.rejected(
+                    EvidenceRejectionReason.DUPLICATE_EXCERPT,
+                    "identical excerpt already recorded for this claim and range",
+                )) from exc
+            raise
+        self.conn.commit()
+        excerpt.id = int(cur.lastrowid)
+        return excerpt
+
+    def list_evidence_excerpts(self, retrieval_id: int) -> list[EvidenceExcerpt]:
+        rows = self.conn.execute(
+            "SELECT * FROM evidence_excerpts WHERE retrieval_id=? ORDER BY id",
+            (retrieval_id,),
+        ).fetchall()
+        return [
+            EvidenceExcerpt(
+                id=row["id"], retrieval_id=row["retrieval_id"],
+                claim_text=row["claim_text"], claim_sha256=row["claim_sha256"],
+                excerpt_text=row["excerpt_text"], start_offset=row["start_offset"],
+                end_offset=row["end_offset"], created_at=row["created_at"],
+            )
+            for row in rows
+        ]

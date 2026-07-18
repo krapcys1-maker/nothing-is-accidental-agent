@@ -8,7 +8,9 @@ from pathlib import Path
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 STAGE1_SCHEMA_VERSION = "0014_provider_attempt_reconciliation"
-RUNTIME_SCHEMA_VERSION = "0015_settled_execution_recovery"
+SETTLED_RECOVERY_SCHEMA_VERSION = "0015_settled_execution_recovery"
+EVIDENCE_SCHEMA_VERSION = "0016_evidence_foundation"
+RUNTIME_SCHEMA_VERSION = EVIDENCE_SCHEMA_VERSION
 _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0007_candidate_attempts",
     "0008_staged_force_reresearch",
@@ -19,6 +21,7 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0013_provider_attempt_usage_integrity",
     "0014_provider_attempt_reconciliation",
     "0015_settled_execution_recovery",
+    "0016_evidence_foundation",
 })
 
 
@@ -61,7 +64,7 @@ class ExplicitMigrationError(RuntimeError):
 
 @dataclass(frozen=True)
 class ExplicitMigrationResult:
-    """Auditable result of the one allowed 0014 -> 0015 schema operation."""
+    """Auditable result of one explicit single-step schema operation."""
 
     source_version: str
     target_version: str
@@ -317,67 +320,102 @@ def initialize_database(
         conn.close()
 
 
-def migrate_0014_to_0015(
+def _migrate_single_step(
     db_path: Path | str,
     *,
+    source_version: str,
+    target_version: str,
     migrations_dir: Path = MIGRATIONS_DIR,
 ) -> ExplicitMigrationResult:
-    """Explicit, idempotent and transactional 0014 -> 0015 migration only.
+    """Explicit, idempotent and transactional single-step migration only.
 
-    The caller must separately own operational authorization, quiescence and
-    backup policy.  This function is never reached by ``SqliteStorage.open``.
+    The ladder is deliberately made of exact one-version steps: each step has
+    its own confirmed CLI, preflight and authorization.  The caller must
+    separately own operational authorization, quiescence and backup policy.
+    This function is never reached by ``SqliteStorage.open``.
     """
+    step = f"{source_version[:4]} -> {target_version[:4]}"
     before = database_schema_versions(db_path)
     if not before:
-        raise ExplicitMigrationError("0014 -> 0015 preflight found an empty migration ledger")
+        raise ExplicitMigrationError(f"{step} preflight found an empty migration ledger")
     canonical = canonical_migration_versions()
     _validate_schema_versions(before, required_version=before[-1])
-    if before[-1] == RUNTIME_SCHEMA_VERSION:
+    if before[-1] == target_version:
         return ExplicitMigrationResult(
-            source_version=RUNTIME_SCHEMA_VERSION,
-            target_version=RUNTIME_SCHEMA_VERSION,
+            source_version=target_version,
+            target_version=target_version,
             applied_migrations=(),
             idempotent=True,
         )
-    if before[-1] != STAGE1_SCHEMA_VERSION:
+    if before[-1] != source_version:
         raise ExplicitMigrationError(
-            f"0014 -> 0015 preflight requires exact {STAGE1_SCHEMA_VERSION}; "
+            f"{step} preflight requires exact {source_version}; "
             f"observed {before[-1]}"
         )
-    expected_before = canonical[:canonical.index(STAGE1_SCHEMA_VERSION) + 1]
+    expected_before = canonical[:canonical.index(source_version) + 1]
     if before != expected_before:
-        raise ExplicitMigrationError("0014 ledger is not the exact canonical prefix")
+        raise ExplicitMigrationError(
+            f"{source_version[:4]} ledger is not the exact canonical prefix"
+        )
     candidates = tuple(
         path.stem for path in sorted(Path(migrations_dir).glob("*.sql"))
-        if path.stem not in before and path.stem <= RUNTIME_SCHEMA_VERSION
+        if path.stem not in before and path.stem <= target_version
     )
-    if candidates != (RUNTIME_SCHEMA_VERSION,):
+    if candidates != (target_version,):
         raise ExplicitMigrationError(
-            f"explicit migration directory must offer only {RUNTIME_SCHEMA_VERSION}; "
+            f"explicit migration directory must offer only {target_version}; "
             f"observed {candidates!r}"
         )
     conn: sqlite3.Connection | None = None
     try:
         conn = connect(db_path)
-        require_connection_schema(conn, required_version=STAGE1_SCHEMA_VERSION)
+        require_connection_schema(conn, required_version=source_version)
         applied = tuple(
-            apply_migrations(conn, migrations_dir, through=RUNTIME_SCHEMA_VERSION)
+            apply_migrations(conn, migrations_dir, through=target_version)
         )
-        if applied != (RUNTIME_SCHEMA_VERSION,):
+        if applied != (target_version,):
             raise ExplicitMigrationError(
-                f"explicit migration applied {applied!r}, expected only 0015"
+                f"explicit migration applied {applied!r}, expected only {target_version}"
             )
-        require_connection_schema(conn, required_version=RUNTIME_SCHEMA_VERSION)
+        require_connection_schema(conn, required_version=target_version)
     except (ExplicitMigrationError, SchemaVersionError):
         raise
     except sqlite3.Error as exc:
-        raise ExplicitMigrationError(f"0014 -> 0015 migration failed: {exc}") from exc
+        raise ExplicitMigrationError(f"{step} migration failed: {exc}") from exc
     finally:
         if conn is not None:
             conn.close()
     return ExplicitMigrationResult(
-        source_version=STAGE1_SCHEMA_VERSION,
-        target_version=RUNTIME_SCHEMA_VERSION,
-        applied_migrations=(RUNTIME_SCHEMA_VERSION,),
+        source_version=source_version,
+        target_version=target_version,
+        applied_migrations=(target_version,),
         idempotent=False,
+    )
+
+
+def migrate_0014_to_0015(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Explicit, idempotent and transactional 0014 -> 0015 migration only."""
+    return _migrate_single_step(
+        db_path,
+        source_version=STAGE1_SCHEMA_VERSION,
+        target_version=SETTLED_RECOVERY_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0015_to_0016(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Explicit, idempotent and transactional 0015 -> 0016 migration only."""
+    return _migrate_single_step(
+        db_path,
+        source_version=SETTLED_RECOVERY_SCHEMA_VERSION,
+        target_version=EVIDENCE_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
     )
