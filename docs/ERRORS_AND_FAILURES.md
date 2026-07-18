@@ -996,3 +996,12 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Kontrpróba po naprawie:** deletion nie odtwarza DB ani sidecarów; replacement zachowuje SHA/size/mtime/schema/ledger i nie dochodzi do przygotowania połączenia, runtime ani provider boundary. Stabilne `0014`/`0015` i missing DB zachowują kontrakt.
 - **Nieudane próby / regresje tej rundy:** brak. Wszystkie targeted, full, partycje, trzy QA, compileall i diff check przeszły w pierwszym przebiegu po implementacji.
 - **Status:** `FIXED — CANDIDATE FOR ONE NARROW INDEPENDENT RE-REVIEW`; produkcja nadal `0014`, `0015` niewykonana, Etap 2 `NOT STARTED`, live `NOT AUTHORIZED`, zero kosztu i bez merge.
+
+## 2026-07-18 — Post-merge suite zależny od historycznej nazwy brancha — FIXED / CHECKPOINT CANDIDATE
+
+- **Finding:** po merge PR #1 do `main` pełny suite zebrał 1331 testów, ale zakończył się `1330 passed, 1 failed`. `test_canonical_fake_subprocess_runs_cli_wrapper_worker_restore_and_report` przekazywał na sztywno `--expected-branch dev/first-successful-research-card`.
+- **Dowód root cause:** na `main` controlled-live preflight poprawnie zwrócił `PREFLIGHT_FAILED`; osobne powtórzenie failing node dało ten sam wynik. Produkcyjny gate działał prawidłowo, a błąd leżał w testowym setupie.
+- **Naprawa:** test odczytuje bieżący branch i HEAD z tego samego kontrolowanego repo, w którym uruchamia subprocess CLI. Nie zmieniono kodu produkcyjnego, runtime, storage ani providera.
+- **Kontrpróba:** canonical subprocess test przechodzi, a `expected_branch="foreign"` nadal daje niezerowy wynik i nie uruchamia workera. Produkcyjna asercja branch mismatch pozostała niezmieniona.
+- **Weryfikacja:** targeted `6/6`; collect/full `1331/1331`; exact-once `320+322+339+350`; QA lineage `10/10`, recovery `4/4`, schema gate `17/17`; compileall exit 0.
+- **Status:** `FIXED — POST-MERGE CHECKPOINT CANDIDATE`; produkcja nadal `0014`, `0015` niezastosowana, Etap 2 `NOT STARTED`, live `NOT AUTHORIZED`, bez kosztu i bez merge nowego PR.

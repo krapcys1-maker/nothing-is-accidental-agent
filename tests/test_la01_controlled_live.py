@@ -1248,6 +1248,22 @@ def test_real_execution_gate_calls_wrapper_but_does_not_open_profile(
 def test_canonical_fake_subprocess_runs_cli_wrapper_worker_restore_and_report(
     settings, account, tmp_path,
 ):
+    project_root = Path(__file__).resolve().parents[1]
+    current_branch = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    current_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert current_branch
     db_path = tmp_path / "subprocess" / "agent.db"
     db_path.parent.mkdir(parents=True)
     initialize_database(db_path)
@@ -1310,19 +1326,13 @@ def test_canonical_fake_subprocess_runs_cli_wrapper_worker_restore_and_report(
         "--expected-schema",
         "0014",
         "--expected-branch",
-        "dev/first-successful-research-card",
+        current_branch,
         "--expected-head",
-        subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=Path(__file__).resolve().parents[1],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.strip(),
+        current_head,
     ]
     result = subprocess.run(
         command,
-        cwd=Path(__file__).resolve().parents[1],
+        cwd=project_root,
         capture_output=True,
         text=True,
         env=env,

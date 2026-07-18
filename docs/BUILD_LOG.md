@@ -814,3 +814,13 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Weryfikacja:** schema gate 20/20; targeted schema/recovery/lineage 68/68; collect/full `1331/1331`; exact-once `1331`; cztery partycje sekwencyjnie `320+322+339+350`; QA schema gate `17/17`, recovery `4/4`, lineage `10/10`; `compileall app scripts` i `git diff --check` OK.
 - **Produkcja:** przed i po `0014`, 14 migracji, SHA `9906AFBFB580BE8F576A6449B0930C41ED964FED814D99C947D1C28C5B060836`, `364544 B`, integrity `ok`, FK 0, bez WAL/SHM/journal. Odczyty wyłącznie `mode=ro&immutable=1`; `0015` nie została zastosowana.
 - **Granice:** koszt `0.000000 USD`; zero sieci badawczej/API/Anthropic/provider/SDK/browsera/publikacji/controlled-live/retry/attemptu/usage. Bez merge. Status `CANDIDATE`, nie `APPROVED`.
+
+### [2026-07-18] Post-merge checkpoint — usunięcie zależności testu od historycznego brancha — [CANDIDATE]
+
+- **Etap roadmapy:** checkpoint po merge zamkniętego Etapu 1; Etap 2 pozostaje `NOT STARTED`.
+- **Stan wejściowy:** PR #1 `MERGED` jako `548cc65cad70eaef631fafff7c350845984d18e6`; produkcja nadal `0014`; pierwszy suite na `main` zebrał 1331 i dał `1330 passed, 1 failed`.
+- **Root cause:** canonical fake subprocess test przekazywał literalny historyczny branch `dev/first-successful-research-card`. Produkcyjny preflight poprawnie odmówił na `main`; kod runtime nie był wadliwy.
+- **Minimalna zmiana:** test pobiera bieżący branch i HEAD z kontrolowanego repo testowego i przekazuje je do CLI. Produkcyjny branch gate i fail-closed assertions są niezmienione; celowy mismatch nadal zatrzymuje worker.
+- **Dokumentacja:** źródła prawdy, README, ADR i kronika rozróżniają zmergowany PR #1 od osobnego post-merge checkpointu; historyczne wpisy pozostają zapisami stanu z chwili ich powstania.
+- **Weryfikacja:** failure odtworzony na `main`; targeted po poprawce `6/6`; collect/full `1331/1331`; exact-once `320+322+339+350`; QA lineage `10/10`, recovery `4/4`, schema gate `17/17`; `compileall app scripts` exit 0.
+- **Granice:** produkcyjna DB tylko immutable read-only i byte-identical; `0015` niezastosowana; zero Etapu 2, live, providera, browsera, publikacji i kosztu. Jeden osobny commit/branch/PR; bez merge tego PR.

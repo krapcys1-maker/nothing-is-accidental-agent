@@ -508,6 +508,14 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Wynik:** autoryzacja została zużyta przez jeden HTTP 200 z `stop_reason=end_turn`. Schema validation odrzuciła `sources[0].supports_claim`; koszt `0.077160 USD`, attempt `SETTLED`, terminalny `FAILED`, brak karty.
 - **Granica po:** gate i flags przywrócone fail-closed; kolejny live wymaga nowej jawnej decyzji właściciela.
 
+### 2026-07-18 — Właściciel zlecił mały post-merge checkpoint po PR #1
+
+- **Decyzja człowieka:** po formalnym merge PR #1 naprawić wyłącznie deterministyczny test zależny od starej nazwy brancha i zsynchronizować aktywną dokumentację statusową.
+- **Autoryzowany Git:** nowy branch `fix/post-merge-branch-sensitive-test` z merge commita `548cc65cad70eaef631fafff7c350845984d18e6`, jeden commit `test: remove stale branch dependency after merge`, zwykły push i mały PR do `main`; bez merge nowego PR i bez usuwania historycznego brancha.
+- **Wymagany kontrakt:** test ma pobierać branch z kontrolowanego kontekstu repo, nie akceptować dowolnej nazwy i zachować negatywną kontrpróbę mismatch; produkcyjny branch gate pozostaje bez zmian.
+- **Twarde granice:** bez Etapu 2, storage/runtime/provider changes, nowych migracji, produkcyjnej migracji `0015`, live, aplikacyjnego API, providera, browsera, publikacji i kosztu. Produkcyjna DB wyłącznie `mode=ro&immutable=1`.
+- **Wynik implementacji przed checkpointem Git:** failure odtworzony na `main`; po minimalnej poprawce targeted `6/6`, collect/full `1331/1331`, exact-once `320+322+339+350`, QA `10/10`, `4/4`, `17/17`; produkcja nadal `0014`.
+
 ### 2026-07-18 — Właściciel zlecił wąską naprawę PR1-MAJ-005 i jawny schema gate
 
 - **Decyzja człowieka:** oddzielić zwykłe otwarcie runtime od migracji, wymagać kontrolowanej odmowy na `0014` bez jakiejkolwiek mutacji i dodać osobny, jawny mechanizm `0014→0015`.
