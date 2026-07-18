@@ -18,6 +18,9 @@ from app.core.security_flags import SECURITY_FLAG_DEFAULTS
 from app.models import (
     Account,
     DurableProviderAttemptContext,
+    EvidenceExcerpt,
+    EvidenceRetrieval,
+    EvidenceRetrievalStatus,
     ExecutionResolution,
     FinancialResolution,
     Job,
@@ -91,6 +94,17 @@ from app.research.durable_intent import (
     DurableResearchExecutionIntent,
     canonicalize_durable_research_payload,
     durable_execution_intent_fingerprint,
+)
+from app.ports.fetch import FetchedDocument
+from app.research.evidence import (
+    EvidenceRejectionReason,
+    EvidenceVerdict,
+    EvidenceVerificationError,
+    MAX_CANONICAL_CHARS,
+    MAX_RAW_FETCH_BYTES,
+    build_evidence_retrieval,
+    sha256_hex,
+    verify_evidence_excerpt,
 )
 from app.storage.db import (
     RUNTIME_SCHEMA_VERSION,
@@ -5948,3 +5962,207 @@ class SqliteStorage:
         except Exception:
             self.conn.rollback()
             raise
+
+    # --- Lokalny fundament evidence (Etap 2, fala E1; ADR-099 + ADR-100) ---
+    # Warstwa NIE jest zintegrowana z pipeline'em researchu w tej fali.
+    # Publiczna ścieżka zapisu retrievalu przyjmuje wyłącznie surowy
+    # FetchedDocument — wszystkie hashe wylicza recorder; excerpt przechodzi
+    # przez deterministyczny weryfikator. Podłogi SQLite migracji 0016 bronią
+    # tych samych relacji przed raw writerem. Wszystkie operacje działają w
+    # jawnym zakresie jednego konta.
+
+    def record_evidence_retrieval(
+        self,
+        document: FetchedDocument,
+        *,
+        account_id: str,
+        now: datetime | None = None,
+        max_raw_bytes: int = MAX_RAW_FETCH_BYTES,
+        max_canonical_chars: int = MAX_CANONICAL_CHARS,
+    ) -> EvidenceRetrieval:
+        """Jedyna publiczna droga zapisu retrievalu — od surowego dokumentu.
+
+        Wywołujący nie może przekazać żadnego gotowego hasha: ``raw_sha256``,
+        ``extracted_sha256`` i ``canonical_sha256`` wylicza wyłącznie recorder
+        z rzeczywistych bajtów/tekstów ogniw łańcucha.
+        """
+        retrieval = build_evidence_retrieval(
+            document,
+            account_id=account_id,
+            now=now,
+            max_raw_bytes=max_raw_bytes,
+            max_canonical_chars=max_canonical_chars,
+        )
+        return self._insert_evidence_retrieval(retrieval)
+
+    def _insert_evidence_retrieval(self, retrieval: EvidenceRetrieval) -> EvidenceRetrieval:
+        """Wewnętrzny insert recordera — nie jest publicznym API zapisu.
+
+        Nie ufa zdeklarowanym polom kanonu: przelicza długość i hash z
+        rzeczywiście utrwalanego ``canonical_text`` i odmawia przy każdej
+        rozbieżności (ten sam warunek egzekwuje trigger SQLite 0016).
+        """
+        canonical = retrieval.canonical_text
+        if "\x00" in canonical:
+            raise ValueError(
+                "Evidence canonical_text must not contain NUL characters."
+            )
+        if retrieval.canonical_chars != len(canonical):
+            raise ValueError(
+                "Evidence canonical_chars must equal len(canonical_text); "
+                f"declared={retrieval.canonical_chars} actual={len(canonical)}",
+            )
+        if retrieval.canonical_sha256 != sha256_hex(canonical):
+            raise ValueError(
+                "Evidence canonical_sha256 must be recomputed from the persisted "
+                "canonical_text; a caller-declared hash is not accepted as proof.",
+            )
+        cur = self.conn.execute(
+            "INSERT INTO evidence_retrievals (account_id, requested_url, final_url,"
+            " fetched_at, status, http_status, content_type, fetch_error,"
+            " raw_size_bytes, raw_sha256, extracted_chars, extracted_sha256,"
+            " canonical_text, canonical_chars, canonical_sha256, truncated,"
+            " created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                retrieval.account_id, retrieval.requested_url, retrieval.final_url,
+                _ts_precise(retrieval.fetched_at), retrieval.status.value,
+                retrieval.http_status, retrieval.content_type, retrieval.fetch_error,
+                retrieval.raw_size_bytes, retrieval.raw_sha256,
+                retrieval.extracted_chars, retrieval.extracted_sha256,
+                canonical, len(canonical), sha256_hex(canonical),
+                int(retrieval.truncated), _ts_precise(retrieval.created_at),
+            ),
+        )
+        self.conn.commit()
+        stored = retrieval.model_copy()
+        stored.id = int(cur.lastrowid)
+        return stored
+
+    @staticmethod
+    def _row_to_evidence_retrieval(row) -> EvidenceRetrieval:
+        return EvidenceRetrieval(
+            id=row["id"], account_id=row["account_id"],
+            requested_url=row["requested_url"],
+            final_url=row["final_url"], fetched_at=row["fetched_at"],
+            status=EvidenceRetrievalStatus(row["status"]),
+            http_status=row["http_status"], content_type=row["content_type"],
+            fetch_error=row["fetch_error"], raw_size_bytes=row["raw_size_bytes"],
+            raw_sha256=row["raw_sha256"], extracted_chars=row["extracted_chars"],
+            extracted_sha256=row["extracted_sha256"],
+            canonical_text=row["canonical_text"],
+            canonical_chars=row["canonical_chars"],
+            canonical_sha256=row["canonical_sha256"],
+            truncated=bool(row["truncated"]), created_at=row["created_at"],
+        )
+
+    def get_evidence_retrieval(
+        self, retrieval_id: int, *, account_id: str,
+    ) -> EvidenceRetrieval | None:
+        row = self.conn.execute(
+            "SELECT * FROM evidence_retrievals WHERE id=? AND account_id=?",
+            (retrieval_id, account_id),
+        ).fetchone()
+        return self._row_to_evidence_retrieval(row) if row is not None else None
+
+    def list_evidence_retrievals(
+        self, *, account_id: str, final_url: str | None = None,
+    ) -> list[EvidenceRetrieval]:
+        if final_url is None:
+            rows = self.conn.execute(
+                "SELECT * FROM evidence_retrievals WHERE account_id=? ORDER BY id",
+                (account_id,),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM evidence_retrievals"
+                " WHERE account_id=? AND final_url=? ORDER BY id",
+                (account_id, final_url),
+            ).fetchall()
+        return [self._row_to_evidence_retrieval(row) for row in rows]
+
+    def record_verified_evidence_excerpt(
+        self,
+        retrieval_id: int,
+        *,
+        account_id: str,
+        claim_text: str,
+        excerpt_text: str,
+        start_offset: int,
+        end_offset: int,
+        now: datetime | None = None,
+    ) -> EvidenceExcerpt:
+        """Jedyna aplikacyjna droga zapisu excerptu — najpierw weryfikator.
+
+        Weryfikacja przebiega przeciwko stanowi retrievalu odczytanemu z bazy
+        w zakresie tego samego konta (nie przeciwko obiektowi wywołującego);
+        retrieval innego konta jest nieodróżnialny od nieistniejącego.
+        ``claim_sha256`` wylicza wyłącznie ta metoda — wywołujący nie może
+        przekazać gotowego hasha. Odmowa nie utrwala niczego.
+        """
+        retrieval = self.get_evidence_retrieval(retrieval_id, account_id=account_id)
+        if retrieval is None:
+            raise EvidenceVerificationError(EvidenceVerdict.rejected(
+                EvidenceRejectionReason.RETRIEVAL_NOT_FOUND,
+                f"retrieval id={retrieval_id} does not exist for this account",
+            ))
+        verdict = verify_evidence_excerpt(
+            retrieval,
+            claim_text=claim_text,
+            excerpt_text=excerpt_text,
+            start_offset=start_offset,
+            end_offset=end_offset,
+        )
+        if not verdict.approved:
+            raise EvidenceVerificationError(verdict)
+        excerpt = EvidenceExcerpt(
+            account_id=account_id,
+            retrieval_id=retrieval_id,
+            claim_text=claim_text,
+            claim_sha256=sha256_hex(claim_text),
+            excerpt_text=excerpt_text,
+            start_offset=start_offset,
+            end_offset=end_offset,
+            created_at=now or datetime.now(timezone.utc),
+        )
+        try:
+            cur = self.conn.execute(
+                "INSERT INTO evidence_excerpts (account_id, retrieval_id,"
+                " claim_text, claim_sha256, excerpt_text, start_offset,"
+                " end_offset, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                (
+                    excerpt.account_id, excerpt.retrieval_id, excerpt.claim_text,
+                    excerpt.claim_sha256, excerpt.excerpt_text,
+                    excerpt.start_offset, excerpt.end_offset,
+                    _ts_precise(excerpt.created_at),
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
+            self.conn.rollback()
+            if "UNIQUE" in str(exc).upper():
+                raise EvidenceVerificationError(EvidenceVerdict.rejected(
+                    EvidenceRejectionReason.DUPLICATE_EXCERPT,
+                    "identical excerpt already recorded for this claim and range",
+                )) from exc
+            raise
+        self.conn.commit()
+        excerpt.id = int(cur.lastrowid)
+        return excerpt
+
+    def list_evidence_excerpts(
+        self, retrieval_id: int, *, account_id: str,
+    ) -> list[EvidenceExcerpt]:
+        rows = self.conn.execute(
+            "SELECT * FROM evidence_excerpts WHERE retrieval_id=? AND account_id=?"
+            " ORDER BY id",
+            (retrieval_id, account_id),
+        ).fetchall()
+        return [
+            EvidenceExcerpt(
+                id=row["id"], account_id=row["account_id"],
+                retrieval_id=row["retrieval_id"],
+                claim_text=row["claim_text"], claim_sha256=row["claim_sha256"],
+                excerpt_text=row["excerpt_text"], start_offset=row["start_offset"],
+                end_offset=row["end_offset"], created_at=row["created_at"],
+            )
+            for row in rows
+        ]

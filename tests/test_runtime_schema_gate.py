@@ -19,6 +19,7 @@ from app.storage.db import (
     ExplicitMigrationError,
     MIGRATIONS_DIR,
     RUNTIME_SCHEMA_VERSION,
+    SETTLED_RECOVERY_SCHEMA_VERSION,
     STAGE1_SCHEMA_VERSION,
     SchemaVersionTooOld,
     SchemaVersionUnavailable,
@@ -182,7 +183,7 @@ def test_runtime_open_never_creates_or_migrates_a_missing_database(tmp_path):
     assert not path.parent.exists()
 
 
-def test_explicit_fresh_initialization_then_runtime_open_does_not_reapply_0015(tmp_path):
+def test_explicit_fresh_initialization_then_runtime_open_does_not_reapply_migrations(tmp_path):
     path = tmp_path / "fresh.db"
     applied = initialize_database(path)
     assert applied[-1] == RUNTIME_SCHEMA_VERSION
@@ -192,7 +193,7 @@ def test_explicit_fresh_initialization_then_runtime_open_does_not_reapply_0015(t
     after = database_schema_versions(path)
     assert before == after
     assert after[-1] == RUNTIME_SCHEMA_VERSION
-    assert len(after) == 15
+    assert len(after) == 16
 
 
 def test_runtime_open_uses_mode_rw_and_gates_before_writable_preparation(
@@ -234,8 +235,8 @@ def test_explicit_0014_to_0015_is_exact_and_second_pass_is_idempotent(tmp_path):
     _old_database(path)
     first = migrate_0014_to_0015(path)
     assert first.source_version == STAGE1_SCHEMA_VERSION
-    assert first.target_version == RUNTIME_SCHEMA_VERSION
-    assert first.applied_migrations == (RUNTIME_SCHEMA_VERSION,)
+    assert first.target_version == SETTLED_RECOVERY_SCHEMA_VERSION
+    assert first.applied_migrations == (SETTLED_RECOVERY_SCHEMA_VERSION,)
     assert first.idempotent is False
     assert len(database_schema_versions(path)) == 15
 
@@ -260,7 +261,7 @@ def test_explicit_0015_rolls_back_ledger_and_partial_schema_on_fault(tmp_path):
     _old_database(path)
     migration_dir = tmp_path / "faulty-migrations"
     migration_dir.mkdir()
-    source = MIGRATIONS_DIR / f"{RUNTIME_SCHEMA_VERSION}.sql"
+    source = MIGRATIONS_DIR / f"{SETTLED_RECOVERY_SCHEMA_VERSION}.sql"
     target = migration_dir / source.name
     copy2(source, target)
     target.write_text(
@@ -277,7 +278,7 @@ def test_explicit_0015_rolls_back_ledger_and_partial_schema_on_fault(tmp_path):
     try:
         assert check.conn.execute(
             "SELECT COUNT(*) FROM schema_migrations WHERE version=?",
-            (RUNTIME_SCHEMA_VERSION,),
+            (SETTLED_RECOVERY_SCHEMA_VERSION,),
         ).fetchone()[0] == 0
         assert check.conn.execute(
             "SELECT COUNT(*) FROM sqlite_master WHERE name='reconciliation_events_0014_old'"

@@ -374,3 +374,11 @@ Autoryzacja płatnego requestu nie rozszerza automatycznie zgody na zmianę mech
 ## ADR-096 — Finansowy finał nie zastępuje finału wykonawczego
 
 Po `SETTLED` nie wolno cofać attemptu ani wykonywać drugiego settlementu. Jeżeli crash nastąpi przed terminalizacją lifecycle, jedyną legalną naprawą jest osobne append-only `EXECUTION_RECOVERY`, które potwierdza wynik wykonawczy bez mutacji pieniędzy. Dla cleanupu PR #1 właściciel wymaga final tree zgodnego z `main`, ale świadomie nie wymaga przepisywania historii prywatnego brancha.
+
+## ADR-099 — Offsety cytatu wskazują kanon, nie wspomnienie o stronie
+
+Evidence ma sens tylko wtedy, gdy cytat da się mechanicznie sprawdzić po dowolnym czasie. Dlatego istnieje dokładnie jedna funkcja kanonizacji tekstu, a zakres cytatu odnosi się wyłącznie do utrwalonego tekstu kanonicznego — nigdy do HTML-a, nigdy do tekstu sprzed normalizacji. Weryfikator przelicza hash i długość kanonu przy każdym zapisie, a te same reguły są wkompilowane w triggery SQLite (exact substring, granice zakresu, zakaz cytowania uciętego ogona, append-only). Realny fetch z sieci celowo nie istnieje w tej fali; pipeline nie jest podłączony, a semantyka dotychczasowego `verification_status` nie zmienia się do czasu fali integracyjnej.
+
+## ADR-100 — Podłoga, która nie umie liczyć hashy, nie jest podłogą
+
+Review obalił cztery obietnice pierwszej fali evidence, więc naprawa przenosi dowód tam, gdzie faktycznie da się go wymusić. Baza sama przelicza hash kanonu i hash claimu (deterministyczna funkcja na każdym kontrolowanym połączeniu; bez niej zapis w ogóle nie przechodzi), zakazuje NUL i nie-tekstowych wartości w kolumnach cytowalnych, wymusza właściciela-konto na każdym dowodzie i odrzuca cytat sięgający do retrievalu innego konta nawet przy wyłączonych kluczach obcych. Czego baza wymusić nie może, tego nie udajemy: hashe surowych bajtów i ekstrakcji są jawnie metadanymi recordera, a jedyną publiczną drogą zapisu jest surowy dokument — nie gotowe, deklarowane hashe. Statycznie ukryty HTML nie jest treścią cytowalną. Granica zaufania jest zapisana wprost: schemat nie broni przed kimś, kto zmienia schemat.
