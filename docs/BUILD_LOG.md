@@ -846,3 +846,12 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Weryfikacja:** collect/full `1454/1454` (+46 regresji), exact-once partycje `366+372+406+310`, QA evidence floor `35/35`, schema gate `21/21`, recovery `4/4`, lineage `10/10`, `compileall` OK, `git diff --check` czysty; migracje `0001–0015` byte-identical z `origin/main`; drabina `0014→0015→0016` i rollback 0016 potwierdzone.
 - **Produkcja:** przed i po `0014`/14 migracji, SHA `9906AFBFB580BE8F576A6449B0930C41ED964FED814D99C947D1C28C5B060836`, `364544 B`, integrity `ok`, FK `0`, bez sidecarów; wyłącznie `mode=ro&immutable=1`; zero sieci/API/providera/browsera/publikacji/kosztu.
 - **Proces:** jeden commit naprawczy na `dev/stage2-e1-evidence-foundation`, zwykły push, PR #3 zaktualizowany; bez rebase/force-push/merge. Kandydat naprawy, nie approval.
+
+### [2026-07-18] ETAP 2 / WAVE E1 — formalne zamknięcie po merge PR #3 — [CLOSED — APPROVED WITH MINOR/P2]
+
+- **Etap roadmapy:** formalne zamknięcie wyłącznie WAVE E1; cały Etap 2 = `IN PROGRESS — E1 CLOSED, E2 NOT STARTED` (ADR-101).
+- **Podstawa:** pierwszy niezależny review = `REJECT`; jedna fala naprawcza B01–B04; niezależny re-review = `APPROVE WITH MINOR/P2`; merge PR #3 jako `42762a76d8c151cdb13d07fa384d32c9bfef0231` z zatwierdzonym headem `f42790b4cbfdc9a2ede4ae02443e4973c14203a5`; formalna decyzja właściciela po checkpointcie.
+- **Checkpoint post-merge:** collect/full `1454/1454`, zero skipped; exact-once 1454 unikalne node ID bez luk i duplikatów, partycje `352+355+366+381`; evidence `79/79`, migration `44/44`; QA `35/35`, `21/21`, `4/4`, `10/10`; `compileall app scripts` i `git diff --check` zielone. Rozkład `366+372+406+310` z poprzedniego wpisu jest historycznym wynikiem implementera przed merge, nie bieżącym checkpointem.
+- **Granice:** brak zmian kodu, testów, migracji i runtime config; brak E2, integracji pipeline'u, zmiany `verification_status`, realnego Fetch/HTTP/API/providera, controlled-live, browsera, publikacji i kosztu.
+- **Produkcja:** wyłącznie immutable read-only; nadal `0014`, 14 migracji, SHA `9906AFBFB580BE8F576A6449B0930C41ED964FED814D99C947D1C28C5B060836`, `364544 B`, integrity `ok`, FK `0`, brak sidecarów; `0015`/`0016` niezastosowane.
+- **Backlog:** `E1-RR-P2-01` pozostaje nieblokującym zapisem różnicy odtwarzalności partycji; aktywne dokumenty używają rzeczywistego wyniku post-merge, historyczny przebieg implementera pozostaje nieprzepisany, a kod runnera i inne P2 nie były zmieniane.

@@ -382,3 +382,9 @@ Evidence ma sens tylko wtedy, gdy cytat da się mechanicznie sprawdzić po dowol
 ## ADR-100 — Podłoga, która nie umie liczyć hashy, nie jest podłogą
 
 Review obalił cztery obietnice pierwszej fali evidence, więc naprawa przenosi dowód tam, gdzie faktycznie da się go wymusić. Baza sama przelicza hash kanonu i hash claimu (deterministyczna funkcja na każdym kontrolowanym połączeniu; bez niej zapis w ogóle nie przechodzi), zakazuje NUL i nie-tekstowych wartości w kolumnach cytowalnych, wymusza właściciela-konto na każdym dowodzie i odrzuca cytat sięgający do retrievalu innego konta nawet przy wyłączonych kluczach obcych. Czego baza wymusić nie może, tego nie udajemy: hashe surowych bajtów i ekstrakcji są jawnie metadanymi recordera, a jedyną publiczną drogą zapisu jest surowy dokument — nie gotowe, deklarowane hashe. Statycznie ukryty HTML nie jest treścią cytowalną. Granica zaufania jest zapisana wprost: schemat nie broni przed kimś, kto zmienia schemat.
+
+## ADR-101 — Zamknięcie fali wymaga review, merge i dowodu na `main`
+
+WAVE E1 ma status `CLOSED — APPROVED WITH MINOR/P2`, ponieważ przeszła pełny łańcuch odpowiedzialności: implementację, niezależny `REJECT`, jedną naprawę B01–B04, niezależny re-review `APPROVE WITH MINOR/P2`, merge PR #3 i zielony checkpoint już na zmergowanym `main`. Sam implementer ani sam merge nie zamykają fali. Rzeczywisty dowód post-merge to 1454/1454 i exact-once `352+355+366+381`; wcześniejszy rozkład implementera pozostaje historyczny.
+
+Zamknięcie dotyczy izolowanego fundamentu evidence, nie całego Etapu 2. Bieżący status to `IN PROGRESS — E1 CLOSED, E2 NOT STARTED`. Pipeline nadal nie używa evidence, `verification_status` nie zmienił semantyki, realny Fetch i HTTP nie istnieją, a migracje `0015`/`0016` nie trafiły do produkcji. Decyzja nie autoryzuje E2, live API, providera, browsera, publikacji ani kosztu.
