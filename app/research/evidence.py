@@ -7,8 +7,10 @@ Trzy odpowiedzialności — i tylko one:
    `canonical_text`; pierwotna ekstrakcja jest wyłącznie fingerprintowana
    (hash + długość), nigdy adresowana.
 2. **Deterministyczna budowa retrievalu.** `build_evidence_retrieval` zamienia
-   surowy `FetchedDocument` w kompletny, klasyfikowany rekord evidence
-   (status OK/FAILED, hashe łańcucha raw → extracted → canonical, truncation).
+   surowy `FetchedDocument` w kompletny, klasyfikowany rekord evidence dla
+   jawnie wskazanego konta (status OK/FAILED, hashe łańcucha raw → extracted
+   → canonical, truncation). Hashe wylicza wyłącznie builder — publiczna
+   ścieżka zapisu nie przyjmuje gotowych hashy od wywołujących.
 3. **Deterministyczny weryfikator.** `verify_evidence_excerpt` zatwierdza
    excerpt wyłącznie przeciwko utrwalonemu stanowi retrievalu — przelicza
    długość i hash, nie ufa żadnemu polu deklarowanemu.
@@ -105,17 +107,24 @@ def _decode_body(body: bytes, content_type: str) -> str:
 def build_evidence_retrieval(
     document: FetchedDocument,
     *,
+    account_id: str,
     now: datetime | None = None,
     max_raw_bytes: int = MAX_RAW_FETCH_BYTES,
     max_canonical_chars: int = MAX_CANONICAL_CHARS,
 ) -> EvidenceRetrieval:
     """Deterministycznie klasyfikuje jedno pobranie i buduje rekord retrievalu.
 
+    Rekord należy zawsze do jawnie wskazanego konta (``account_id``).
     Łańcuch pochodzenia: surowe bajty (przycięte do ``max_raw_bytes``)
     → dekodowanie wg charsetu → ekstrakcja (HTML) albo passthrough (plain)
-    → kanonizacja → przycięcie do ``max_canonical_chars``. Hash każdego ogniwa
-    dotyczy dokładnie tych danych, które weszły do następnego kroku.
+    → kanonizacja → przycięcie do ``max_canonical_chars``. Wszystkie hashe
+    wylicza wyłącznie ten builder z rzeczywistych danych każdego ogniwa;
+    ``raw_sha256`` i ``extracted_sha256`` są metadanymi audytowymi (ich
+    źródła nie są utrwalane w bazie), ``canonical_sha256`` jest dodatkowo
+    egzekwowany przez trigger SQLite przy zapisie.
     """
+    if not account_id or not account_id.strip():
+        raise ValueError("Evidence retrieval requires a non-empty account_id.")
     if not document.requested_url.strip() or not document.final_url.strip():
         raise ValueError("FetchedDocument requires non-empty requested/final URL.")
     if max_raw_bytes < 1 or max_canonical_chars < 1:
@@ -158,6 +167,7 @@ def build_evidence_retrieval(
 
     if failure is not None:
         return EvidenceRetrieval(
+            account_id=account_id,
             requested_url=document.requested_url,
             final_url=document.final_url,
             fetched_at=document.fetched_at,
@@ -177,6 +187,7 @@ def build_evidence_retrieval(
         )
 
     return EvidenceRetrieval(
+        account_id=account_id,
         requested_url=document.requested_url,
         final_url=document.final_url,
         fetched_at=document.fetched_at,

@@ -1,6 +1,7 @@
 """Połączenie SQLite, jawne migracje i fail-closed schema gate runtime."""
 from __future__ import annotations
 
+import hashlib
 import os
 import sqlite3
 from dataclasses import dataclass
@@ -72,6 +73,33 @@ class ExplicitMigrationResult:
     idempotent: bool
 
 
+# Nazwa deterministycznej funkcji SQL wkompilowanej w triggery migracji 0016.
+EVIDENCE_HASH_SQL_FUNCTION = "evidence_sha256_hex"
+
+
+def _evidence_sha256_hex(value: str | bytes | None) -> str | None:
+    if value is None:
+        return None
+    data = value.encode("utf-8") if isinstance(value, str) else bytes(value)
+    return hashlib.sha256(data).hexdigest()
+
+
+def register_evidence_hash_function(conn: sqlite3.Connection) -> None:
+    """Rejestruje ``evidence_sha256_hex`` na jednym połączeniu SQLite.
+
+    Triggery 0016 wiążą ``canonical_sha256``/``claim_sha256`` z rzeczywiście
+    utrwalonym tekstem przez tę funkcję.  Kontrakt jest fail-closed: writer,
+    który jej nie zarejestrował, nie może w ogóle INSERT-ować do tabel
+    evidence ("no such function"), a writer z prawdziwą funkcją nie może
+    utrwalić fałszywego hasha.  Granica zaufania: floor NIE broni przed
+    autorem, który zmienia schemat, usuwa triggery albo celowo rejestruje
+    pod tą nazwą fałszywą funkcję — taki autor jest poza modelem zagrożeń E1.
+    """
+    conn.create_function(
+        EVIDENCE_HASH_SQL_FUNCTION, 1, _evidence_sha256_hex, deterministic=True,
+    )
+
+
 def _is_test_protected_database(db_path: Path | str) -> bool:
     """Reject the production DB for pytest collection, setup and subprocesses."""
     if not os.environ.get("NIA_TEST_MODE"):
@@ -89,6 +117,7 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     try:
         conn.row_factory = sqlite3.Row
+        register_evidence_hash_function(conn)
         prepare_writable_connection(conn, db_path)
         return conn
     except Exception:
@@ -112,6 +141,7 @@ def connect_existing_writable(db_path: Path | str) -> sqlite3.Connection:
             f"cannot open existing SQLite database for runtime: {path}"
         ) from exc
     conn.row_factory = sqlite3.Row
+    register_evidence_hash_function(conn)
     return conn
 
 
@@ -141,6 +171,7 @@ def connect_read_only(db_path: Path | str) -> sqlite3.Connection:
     conn = sqlite3.connect(uri, uri=True)
     try:
         conn.row_factory = sqlite3.Row
+        register_evidence_hash_function(conn)
         conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("PRAGMA busy_timeout=5000;")
         conn.execute("PRAGMA query_only=ON;")

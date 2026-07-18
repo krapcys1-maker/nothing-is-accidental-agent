@@ -810,14 +810,16 @@ class EvidenceRetrievalStatus(str, Enum):
 
 
 class EvidenceRetrieval(BaseModel):
-    """Trwały zapis jednego pobrania treści źródła.
+    """Trwały zapis jednego pobrania treści źródła — zawsze w zakresie konta.
 
     `canonical_text` jest JEDYNYM tekstem adresowalnym offsetami excerptów;
     pierwotna ekstrakcja istnieje wyłącznie jako fingerprint (hash + długość).
-    Łańcuch pochodzenia: raw bajty → ekstrakcja → kanonizacja; hash każdego
-    ogniwa dotyczy dokładnie danych wejściowych następnego kroku."""
+    Łańcuch pochodzenia: raw bajty → ekstrakcja → kanonizacja; `raw_sha256`
+    i `extracted_sha256` to metadane audytowe wyliczane przez recorder z
+    rzeczywistych danych wejściowych — ich źródła nie są utrwalane w bazie."""
 
     id: int | None = None
+    account_id: str
     requested_url: str
     final_url: str
     fetched_at: datetime
@@ -837,12 +839,14 @@ class EvidenceRetrieval(BaseModel):
 
 
 class EvidenceExcerpt(BaseModel):
-    """Trwałe powiązanie claim → excerpt → offsety → retrieval.
+    """Trwałe powiązanie claim → excerpt → offsety → retrieval w jednym koncie.
 
     Offsety adresują wyłącznie utrwalony `canonical_text` retrievalu; zapis
-    przechodzi przez deterministyczny weryfikator (i podłogi SQLite 0016)."""
+    przechodzi przez deterministyczny weryfikator (i podłogi SQLite 0016).
+    Excerpt musi należeć do tego samego konta co cytowany retrieval."""
 
     id: int | None = None
+    account_id: str
     retrieval_id: int
     claim_text: str
     claim_sha256: str

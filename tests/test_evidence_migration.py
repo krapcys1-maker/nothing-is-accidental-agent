@@ -2,6 +2,11 @@
 
 Wszystkie próby zapisowe działają wyłącznie na tymczasowych bazach; podłogi są
 atakowane surowym ``sqlite3`` z celowo WYŁĄCZONYM ``PRAGMA foreign_keys``.
+Surowy writer w tych testach rejestruje PRAWDZIWĄ funkcję
+``evidence_sha256_hex`` (uczciwy writer poza aplikacją); osobny test dowodzi,
+że writer bez tej funkcji w ogóle nie może INSERT-ować (fail-closed). Podłogi
+nie bronią przed autorem zmieniającym schemat, usuwającym triggery albo
+rejestrującym celowo fałszywą funkcję — to jawna granica kontraktu E1.
 """
 from __future__ import annotations
 
@@ -35,14 +40,31 @@ from app.storage.db import (
     initialize_database,
     migrate_0014_to_0015,
     migrate_0015_to_0016,
+    register_evidence_hash_function,
     require_database_schema,
 )
 from app.storage.repositories import SqliteStorage
 
 NOW = "2026-07-18 12:00:00.000000"
+ACCOUNT_A = "qa-account-a"
+ACCOUNT_B = "qa-account-b"
 PROBE_TEXT = canonicalize_text(
     "Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu "
     "xi omicron pi rho sigma tau upsilon phi chi psi omega. " * 8
+)
+
+_RETRIEVAL_SQL = (
+    "INSERT INTO evidence_retrievals (account_id, requested_url, final_url,"
+    " fetched_at, status, http_status, content_type, fetch_error,"
+    " raw_size_bytes, raw_sha256, extracted_chars, extracted_sha256,"
+    " canonical_text, canonical_chars, canonical_sha256, truncated, created_at)"
+    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+)
+
+_EXCERPT_SQL = (
+    "INSERT INTO evidence_excerpts (account_id, retrieval_id, claim_text,"
+    " claim_sha256, excerpt_text, start_offset, end_offset, created_at)"
+    " VALUES (?,?,?,?,?,?,?,?)"
 )
 
 
@@ -65,12 +87,27 @@ def _raw_connection(path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     # Celowo bez PRAGMA foreign_keys: podłogi muszą bronić także bez FK.
+    # Uczciwy writer rejestruje prawdziwą funkcję hash; bez niej INSERT-y do
+    # tabel evidence w ogóle nie przechodzą (osobny test poniżej).
+    register_evidence_hash_function(conn)
     return conn
+
+
+def _seed_accounts(conn: sqlite3.Connection) -> None:
+    for account_id in (ACCOUNT_A, ACCOUNT_B):
+        conn.execute(
+            "INSERT OR IGNORE INTO accounts (id, name, mode, autonomy_level,"
+            " active, browser_profile_path, writing_profile_path)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (account_id, account_id, "full_publication", "L1", 0, "./x", "./y"),
+        )
+    conn.commit()
 
 
 def _insert_retrieval(
     conn: sqlite3.Connection,
     *,
+    account_id: str = ACCOUNT_A,
     status: str = "OK",
     canonical_text: str = PROBE_TEXT,
     truncated: int = 0,
@@ -79,14 +116,10 @@ def _insert_retrieval(
 ) -> int:
     text = canonical_text if status == "OK" else ""
     cur = conn.execute(
-        "INSERT INTO evidence_retrievals (requested_url, final_url, fetched_at,"
-        " status, http_status, content_type, fetch_error, raw_size_bytes,"
-        " raw_sha256, extracted_chars, extracted_sha256, canonical_text,"
-        " canonical_chars, canonical_sha256, truncated, created_at)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        _RETRIEVAL_SQL,
         (
-            "https://example.org/floor", "https://example.org/floor", NOW,
-            status, http_status, "text/html", fetch_error,
+            account_id, "https://example.org/floor", "https://example.org/floor",
+            NOW, status, http_status, "text/html", fetch_error,
             len(text.encode("utf-8")), sha256_hex(text.encode("utf-8")),
             len(text), sha256_hex(text), text, len(text), sha256_hex(text),
             truncated, NOW,
@@ -94,12 +127,6 @@ def _insert_retrieval(
     )
     conn.commit()
     return int(cur.lastrowid)
-
-
-_EXCERPT_SQL = (
-    "INSERT INTO evidence_excerpts (retrieval_id, claim_text, claim_sha256,"
-    " excerpt_text, start_offset, end_offset, created_at) VALUES (?,?,?,?,?,?,?)"
-)
 
 
 def _aligned(text: str, length: int, *, start: int = 0) -> tuple[int, int]:
@@ -115,6 +142,11 @@ def _aligned(text: str, length: int, *, start: int = 0) -> tuple[int, int]:
 def evidence_db(tmp_path: Path) -> Path:
     path = tmp_path / "evidence-floor.db"
     initialize_database(path)
+    conn = _raw_connection(path)
+    try:
+        _seed_accounts(conn)
+    finally:
+        conn.close()
     return path
 
 
@@ -141,6 +173,18 @@ def test_fresh_initialization_reaches_0016_and_creates_evidence_tables(tmp_path)
             )
         }
         assert {"evidence_retrievals", "evidence_excerpts"} <= names
+        columns = {
+            row["name"] for row in storage.conn.execute(
+                "PRAGMA table_info(evidence_retrievals)"
+            )
+        }
+        assert "account_id" in columns
+        excerpt_columns = {
+            row["name"] for row in storage.conn.execute(
+                "PRAGMA table_info(evidence_excerpts)"
+            )
+        }
+        assert "account_id" in excerpt_columns
     finally:
         storage.close()
 
@@ -216,6 +260,10 @@ def test_explicit_0016_rolls_back_ledger_and_partial_schema_on_fault(tmp_path):
         assert check.conn.execute(
             "SELECT COUNT(*) FROM sqlite_master WHERE name='evidence_retrievals'"
         ).fetchone()[0] == 0
+        assert check.conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master"
+            " WHERE type IN ('trigger','index') AND name LIKE '%evidence%'"
+        ).fetchone()[0] == 0
     finally:
         check.close()
 
@@ -276,7 +324,8 @@ def test_floor_accepts_exact_consistent_excerpt(evidence_db):
         rid = _insert_retrieval(conn)
         start, end = _aligned(PROBE_TEXT, 60)
         conn.execute(_EXCERPT_SQL, (
-            rid, "claim", sha256_hex("claim"), PROBE_TEXT[start:end], start, end, NOW,
+            ACCOUNT_A, rid, "claim", sha256_hex("claim"),
+            PROBE_TEXT[start:end], start, end, NOW,
         ))
         conn.commit()
         assert conn.execute(
@@ -332,7 +381,9 @@ def test_floor_rejects_inconsistent_excerpts(evidence_db, case):
         rid, excerpt_text, s, e = cases[case]
         claim_hash = "XYZ-not-hex" if case == "malformed_claim_hash" else sha256_hex("claim")
         with pytest.raises(sqlite3.Error):
-            conn.execute(_EXCERPT_SQL, (rid, "claim", claim_hash, excerpt_text, s, e, NOW))
+            conn.execute(_EXCERPT_SQL, (
+                ACCOUNT_A, rid, "claim", claim_hash, excerpt_text, s, e, NOW,
+            ))
         conn.rollback()
         assert conn.execute("SELECT COUNT(*) FROM evidence_excerpts").fetchone()[0] == 0
     finally:
@@ -345,7 +396,8 @@ def test_floor_tables_are_append_only(evidence_db):
         rid = _insert_retrieval(conn)
         start, end = _aligned(PROBE_TEXT, 60)
         conn.execute(_EXCERPT_SQL, (
-            rid, "claim", sha256_hex("claim"), PROBE_TEXT[start:end], start, end, NOW,
+            ACCOUNT_A, rid, "claim", sha256_hex("claim"),
+            PROBE_TEXT[start:end], start, end, NOW,
         ))
         conn.commit()
         for statement, params in (
@@ -381,13 +433,9 @@ def test_floor_rejects_inconsistent_retrieval_rows(evidence_db, mutation):
         text = base["canonical_text"] if base["status"] == "OK" else ""
         with pytest.raises(sqlite3.Error):
             conn.execute(
-                "INSERT INTO evidence_retrievals (requested_url, final_url,"
-                " fetched_at, status, http_status, content_type, fetch_error,"
-                " raw_size_bytes, raw_sha256, extracted_chars, extracted_sha256,"
-                " canonical_text, canonical_chars, canonical_sha256, truncated,"
-                " created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                _RETRIEVAL_SQL,
                 (
-                    "https://x", "https://x", NOW, base["status"],
+                    ACCOUNT_A, "https://x", "https://x", NOW, base["status"],
                     base["http_status"], "text/html", base["fetch_error"],
                     len(text.encode("utf-8")), sha256_hex(text.encode("utf-8")),
                     len(text), sha256_hex(text),
@@ -407,27 +455,298 @@ def test_floor_rejects_declared_length_and_hash_format_lies(evidence_db):
     conn = _raw_connection(evidence_db)
     try:
         common = (
-            "https://x", "https://x", NOW, "OK", 200, "text/html", None,
+            ACCOUNT_A, "https://x", "https://x", NOW, "OK", 200, "text/html", None,
             4, sha256_hex(b"wxyz"), 4, sha256_hex("wxyz"),
         )
         with pytest.raises(sqlite3.IntegrityError):
-            conn.execute(
-                "INSERT INTO evidence_retrievals (requested_url, final_url,"
-                " fetched_at, status, http_status, content_type, fetch_error,"
-                " raw_size_bytes, raw_sha256, extracted_chars, extracted_sha256,"
-                " canonical_text, canonical_chars, canonical_sha256, truncated,"
-                " created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (*common, "wxyz", 40, sha256_hex("wxyz"), 0, NOW),
-            )
+            conn.execute(_RETRIEVAL_SQL, (*common, "wxyz", 40, sha256_hex("wxyz"), 0, NOW))
         conn.rollback()
         with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(_RETRIEVAL_SQL, (*common, "wxyz", 4, "UPPER-NOT-HEX", 0, NOW))
+        conn.rollback()
+    finally:
+        conn.close()
+
+
+# --- E1-B01: NUL i zgodność interpretacji zakresów (repair po review) ---
+
+def _nul_retrieval_params(text: str, *, declared_chars: int | None = None):
+    return (
+        ACCOUNT_A, "https://example.org/nul", "https://example.org/nul", NOW,
+        "OK", 200, "text/html", None,
+        len(text.encode("utf-8")), sha256_hex(text.encode("utf-8")),
+        len(text), sha256_hex(text), text,
+        declared_chars if declared_chars is not None else len(text),
+        sha256_hex(text), 0, NOW,
+    )
+
+
+@pytest.mark.parametrize("position", ["before_range", "inside_range", "after_range"])
+def test_floor_rejects_nul_anywhere_in_canonical_text(evidence_db, position):
+    """NUL przed, w środku i po legalnym zakresie — zawsze odrzucony."""
+    conn = _raw_connection(evidence_db)
+    try:
+        offsets = {"before_range": 2, "inside_range": 30, "after_range": len(PROBE_TEXT) - 3}
+        at = offsets[position]
+        text = PROBE_TEXT[:at] + "\x00" + PROBE_TEXT[at + 1:]
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(_RETRIEVAL_SQL, _nul_retrieval_params(text))
+        conn.rollback()
+        assert conn.execute("SELECT COUNT(*) FROM evidence_retrievals").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_floor_blocks_historical_length_stops_at_nul_exploit(evidence_db):
+    """Dokładny exploit z review: length() SQLite zatrzymuje się na NUL, więc
+    ``canonical_chars = length(canonical_text)`` dało się spełnić deklaracją
+    liczby znaków sprzed NUL, desynchronizując substr() od Python slicing.
+    Podłoga NUL musi zablokować taki wiersz w całości."""
+    conn = _raw_connection(evidence_db)
+    try:
+        visible = PROBE_TEXT[:50]
+        smuggled = visible + "\x00" + "HIDDEN TAIL NEVER ADDRESSABLE BY SQL"
+        sqlite_length = conn.execute("SELECT length(?)", (smuggled,)).fetchone()[0]
+        assert sqlite_length == 50  # potwierdzenie zachowania będącego exploitem
+        with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
-                "INSERT INTO evidence_retrievals (requested_url, final_url,"
-                " fetched_at, status, http_status, content_type, fetch_error,"
-                " raw_size_bytes, raw_sha256, extracted_chars, extracted_sha256,"
-                " canonical_text, canonical_chars, canonical_sha256, truncated,"
-                " created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (*common, "wxyz", 4, "UPPER-NOT-HEX", 0, NOW),
+                _RETRIEVAL_SQL,
+                _nul_retrieval_params(smuggled, declared_chars=sqlite_length),
+            )
+        conn.rollback()
+        assert conn.execute("SELECT COUNT(*) FROM evidence_retrievals").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_floor_rejects_nul_in_excerpt_text(evidence_db):
+    conn = _raw_connection(evidence_db)
+    try:
+        rid = _insert_retrieval(conn)
+        start, end = _aligned(PROBE_TEXT, 60)
+        smuggled = PROBE_TEXT[start:end - 1] + "\x00"
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(_EXCERPT_SQL, (
+                ACCOUNT_A, rid, "claim", sha256_hex("claim"), smuggled, start, end, NOW,
+            ))
+        conn.rollback()
+        assert conn.execute("SELECT COUNT(*) FROM evidence_excerpts").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_floor_rejects_nul_in_claim_text(evidence_db):
+    conn = _raw_connection(evidence_db)
+    try:
+        rid = _insert_retrieval(conn)
+        start, end = _aligned(PROBE_TEXT, 60)
+        claim = "claim\x00with smuggled tail"
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(_EXCERPT_SQL, (
+                ACCOUNT_A, rid, claim, sha256_hex(claim),
+                PROBE_TEXT[start:end], start, end, NOW,
+            ))
+        conn.rollback()
+    finally:
+        conn.close()
+
+
+def test_floor_rejects_blob_canonical_text(evidence_db):
+    """Kolumny tekstowe muszą być TEXT: BLOB miałby bajtową, nie znakową
+    semantykę length()/substr() i rozjechałby offsety z Pythonem."""
+    conn = _raw_connection(evidence_db)
+    try:
+        payload = PROBE_TEXT.encode("utf-8")
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                _RETRIEVAL_SQL,
+                (
+                    ACCOUNT_A, "https://x", "https://x", NOW, "OK", 200,
+                    "text/html", None, len(payload), sha256_hex(payload),
+                    len(PROBE_TEXT), sha256_hex(PROBE_TEXT), payload,
+                    len(payload), sha256_hex(payload), 0, NOW,
+                ),
+            )
+        conn.rollback()
+    finally:
+        conn.close()
+
+
+# --- E1-B02: authoritative canonical/claim hash (repair po review) ---
+
+def test_floor_fails_closed_for_writer_without_hash_function(evidence_db):
+    """Writer bez zarejestrowanej ``evidence_sha256_hex`` nie może INSERT-ować
+    do tabel evidence w ogóle — kontrakt jest fail-closed, nie fail-open."""
+    conn = sqlite3.connect(evidence_db)  # celowo BEZ rejestracji funkcji
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="no such function"):
+            conn.execute(
+                _RETRIEVAL_SQL,
+                (
+                    ACCOUNT_A, "https://x", "https://x", NOW, "OK", 200,
+                    "text/html", None, 4, sha256_hex(b"wxyz"), 4,
+                    sha256_hex("wxyz"), "wxyz", 4, sha256_hex("wxyz"), 0, NOW,
+                ),
+            )
+        conn.rollback()
+        assert conn.execute("SELECT COUNT(*) FROM evidence_retrievals").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_floor_rejects_plausible_but_false_canonical_hash(evidence_db):
+    """Poprawnie wyglądający (64 hex), ale fałszywy canonical_sha256 nie może
+    utworzyć rekordu uznawanego przez kontrakt E1 za poprawny."""
+    conn = _raw_connection(evidence_db)
+    try:
+        false_hash = sha256_hex("completely different text")
+        assert false_hash != sha256_hex(PROBE_TEXT)
+        with pytest.raises(sqlite3.IntegrityError, match="canonical_sha256"):
+            conn.execute(
+                _RETRIEVAL_SQL,
+                (
+                    ACCOUNT_A, "https://x", "https://x", NOW, "OK", 200,
+                    "text/html", None,
+                    len(PROBE_TEXT.encode("utf-8")), sha256_hex(PROBE_TEXT.encode("utf-8")),
+                    len(PROBE_TEXT), sha256_hex(PROBE_TEXT), PROBE_TEXT,
+                    len(PROBE_TEXT), false_hash, 0, NOW,
+                ),
+            )
+        conn.rollback()
+        assert conn.execute("SELECT COUNT(*) FROM evidence_retrievals").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_floor_rejects_plausible_but_false_claim_hash(evidence_db):
+    conn = _raw_connection(evidence_db)
+    try:
+        rid = _insert_retrieval(conn)
+        start, end = _aligned(PROBE_TEXT, 60)
+        false_hash = sha256_hex("not this claim")
+        with pytest.raises(sqlite3.IntegrityError, match="claim_sha256"):
+            conn.execute(_EXCERPT_SQL, (
+                ACCOUNT_A, rid, "claim", false_hash,
+                PROBE_TEXT[start:end], start, end, NOW,
+            ))
+        conn.rollback()
+        assert conn.execute("SELECT COUNT(*) FROM evidence_excerpts").fetchone()[0] == 0
+    finally:
+        conn.close()
+
+
+def test_floor_blocks_logical_duplicate_alt_claim_hash(evidence_db):
+    """Dokładna kontrpróba reviewera (`logical_duplicate_alt_claim_hash`):
+    ten sam account, retrieval, claim text i zakres NIE może zostać zapisany
+    ponownie przez podmianę ``claim_sha256`` na inny, poprawnie wyglądający
+    hash. Blokują go dwie niezależne podłogi: trigger authoritative claim hash
+    oraz unikalność logicznej tożsamości (retrieval, claim_text, zakres)."""
+    conn = _raw_connection(evidence_db)
+    try:
+        rid = _insert_retrieval(conn)
+        start, end = _aligned(PROBE_TEXT, 60)
+        good = PROBE_TEXT[start:end]
+        conn.execute(_EXCERPT_SQL, (
+            ACCOUNT_A, rid, "claim", sha256_hex("claim"), good, start, end, NOW,
+        ))
+        conn.commit()
+        # Wariant 1: alternatywny, poprawnie wyglądający hash -> trigger.
+        alt_hash = sha256_hex("claim-alternative-fingerprint")
+        assert alt_hash != sha256_hex("claim") and len(alt_hash) == 64
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(_EXCERPT_SQL, (
+                ACCOUNT_A, rid, "claim", alt_hash, good, start, end, NOW,
+            ))
+        conn.rollback()
+        # Wariant 2: nawet z PRAWDZIWYM hashem duplikat logicznej tożsamości
+        # zatrzymuje unikalność (retrieval_id, claim_text, start, end).
+        with pytest.raises(sqlite3.IntegrityError, match="UNIQUE"):
+            conn.execute(_EXCERPT_SQL, (
+                ACCOUNT_A, rid, "claim", sha256_hex("claim"), good, start, end, NOW,
+            ))
+        conn.rollback()
+        assert conn.execute("SELECT COUNT(*) FROM evidence_excerpts").fetchone()[0] == 1
+    finally:
+        conn.close()
+
+
+# --- E1-B03: trwały account scope (repair po review) ---
+
+def test_floor_requires_non_blank_account_on_both_tables(evidence_db):
+    conn = _raw_connection(evidence_db)
+    try:
+        for bad_account in (None, "", "   "):
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    _RETRIEVAL_SQL,
+                    (
+                        bad_account, "https://x", "https://x", NOW, "OK", 200,
+                        "text/html", None,
+                        len(PROBE_TEXT.encode("utf-8")),
+                        sha256_hex(PROBE_TEXT.encode("utf-8")),
+                        len(PROBE_TEXT), sha256_hex(PROBE_TEXT), PROBE_TEXT,
+                        len(PROBE_TEXT), sha256_hex(PROBE_TEXT), 0, NOW,
+                    ),
+                )
+            conn.rollback()
+        rid = _insert_retrieval(conn)
+        start, end = _aligned(PROBE_TEXT, 60)
+        for bad_account in (None, "", "   "):
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(_EXCERPT_SQL, (
+                    bad_account, rid, "claim", sha256_hex("claim"),
+                    PROBE_TEXT[start:end], start, end, NOW,
+                ))
+            conn.rollback()
+    finally:
+        conn.close()
+
+
+def test_floor_rejects_cross_account_excerpt_even_without_fk(evidence_db):
+    """Excerpt konta B nie może cytować retrievalu konta A — lineage trigger
+    działa także przy wyłączonym PRAGMA foreign_keys."""
+    conn = _raw_connection(evidence_db)
+    try:
+        rid_a = _insert_retrieval(conn, account_id=ACCOUNT_A)
+        start, end = _aligned(PROBE_TEXT, 60)
+        with pytest.raises(sqlite3.IntegrityError, match="same account"):
+            conn.execute(_EXCERPT_SQL, (
+                ACCOUNT_B, rid_a, "claim", sha256_hex("claim"),
+                PROBE_TEXT[start:end], start, end, NOW,
+            ))
+        conn.rollback()
+        # Ta sama treść w zakresie własnego konta pozostaje legalna.
+        rid_b = _insert_retrieval(conn, account_id=ACCOUNT_B)
+        conn.execute(_EXCERPT_SQL, (
+            ACCOUNT_B, rid_b, "claim", sha256_hex("claim"),
+            PROBE_TEXT[start:end], start, end, NOW,
+        ))
+        conn.commit()
+        rows = conn.execute(
+            "SELECT account_id, retrieval_id FROM evidence_excerpts"
+        ).fetchall()
+        assert [(row["account_id"], row["retrieval_id"]) for row in rows] == [
+            (ACCOUNT_B, rid_b),
+        ]
+    finally:
+        conn.close()
+
+
+def test_floor_enforces_account_reference_when_fk_is_on(evidence_db):
+    conn = _raw_connection(evidence_db)
+    try:
+        conn.execute("PRAGMA foreign_keys=ON")
+        with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
+            conn.execute(
+                _RETRIEVAL_SQL,
+                (
+                    "no-such-account", "https://x", "https://x", NOW, "OK", 200,
+                    "text/html", None,
+                    len(PROBE_TEXT.encode("utf-8")),
+                    sha256_hex(PROBE_TEXT.encode("utf-8")),
+                    len(PROBE_TEXT), sha256_hex(PROBE_TEXT), PROBE_TEXT,
+                    len(PROBE_TEXT), sha256_hex(PROBE_TEXT), 0, NOW,
+                ),
             )
         conn.rollback()
     finally:
