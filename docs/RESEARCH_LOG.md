@@ -205,3 +205,46 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Zakres:** fake response, fake SDK/callery i tymczasowe SQLite; nie wykonano web search, providera ani nowego researchu.
 - **Wynik:** parser, score validation, diagnostic sanitizer i jawny zegar zostały sprawdzone offline; nie powstał run, źródło ani Research Card w produkcji.
 - **Koszt:** `0.000000 USD`; historyczne usage i suma miesiąca `0.737762 USD` nie zmieniły się.
+
+## 2026-07-17 — Nowy controlled-live zatrzymany przed researchem
+
+- **Zakres:** read-only preflight planowanego pojedynczego requestu `claude-sonnet-5`, bez web search i bez provider calla.
+- **Wynik:** canonical quiescence `PASS`, pricing i budżet zgodne, ale real gate pozostał `False`, a właściciel zabronił zmiany kodu. Nie utworzono joba, runu, research_runu, źródła ani Research Card.
+- **Koszt:** `0.000000 USD`; miesięczny realny koszt nadal `0.737762 USD`.
+- **Status:** `BLOCKED — LIVE PREFLIGHT DRIFT`; zero retry i automatycznego resume.
+
+## 2026-07-17 19:18 UTC — Jednorazowy controlled-live zakończony truncation
+
+- **Tożsamość:** operation `positive-live-20260717-dc1c29aa0b3640c6`, job `real-research-9f244684711acf4f82a07da8d4a139ea`, run/research_run `8bcf15e4-c4e9-48ed-95f7-64f0b93fcee5`, request `…:research:1`.
+- **Request:** Anthropic `claude-sonnet-5`, HTTP 200, `max_tokens=1500`, 1 web search, `stop_reason=max_tokens`; 16704 input i 1667 output tokens.
+- **Wynik:** `ResearchTruncatedError`, brak Research Card; job/run/research_run `FAILED`; attempt `SETTLED`, koszt `0.060078 USD`, miesięcznie `0.797840 USD`.
+- **Granice:** zero retry, repair/fallback/verification requestu i attemptu #2.
+
+## 2026-07-17 19:44 UTC — Jednorazowy controlled-live 3000 zakończony schema failure
+
+- **Tożsamość:** operation `positive-live-3000-20260717-9dcb59eef3674138`, job `real-research-e33abc717c655c7c7b6abeccd43554f3`, run/research_run `65841541-10c9-4aa6-aee8-8fe1161d8f85`, request `…:research:1`.
+- **Request:** Anthropic `claude-sonnet-5`, HTTP 200, `max_tokens=3000`, 1 web search, `stop_reason=end_turn`; 19945 input i 2727 output tokens.
+- **Wynik:** `ResearchSchemaError` dla `sources[0].supports_claim` (`expected=string_or_null`), brak Research Card; job/run/research_run `FAILED`; attempt `SETTLED`, koszt `0.077160 USD`, miesięcznie `0.875000 USD`.
+- **Granice:** zero retry, repair/fallback/verification requestu, attemptu #2 i zmian parsera/schema/promptu.
+
+## 2026-07-17 20:46 UTC — Live po naprawie kontraktu zakończony truncation
+
+- **Tożsamość:** operation `positive-live-contract-20260717-ee093a1d54cd4111`, job `real-research-85151c312b180759cd2387c5458f1248`, run/research_run `08aa35eb-a87c-4ec0-bf3c-b2d608165e85`, request `…:research:1`.
+- **Request:** Anthropic `claude-sonnet-5`, HTTP 200, `max_tokens=3000`, 1 web search, `stop_reason=max_tokens`; 16381 input i 3155 output tokens.
+- **Wynik:** `ResearchTruncatedError` przed schema validation, brak Research Card; job/run/research_run `FAILED`; attempt `SETTLED`, koszt `0.074312 USD`, miesięcznie `0.949312 USD`.
+- **Granice:** zero retry, repair/fallback/verification requestu i attemptu #2; poprawione kontrakty `supports_claim`/`citable_numbers` nie zostały ocenione live.
+
+## 2026-07-18 04:48 UTC — Pierwszy kompletny Research Card z controlled-live
+
+- **Tożsamość:** operation `positive-live-output-size-20260718-09fe2f3684f14919`, job `real-research-b153efbd48d44e0e6388ec98e5e7afb0`, run `bd0dd102-2526-4b2d-8c04-6b96ed9f8ef6`, request `…:research:1`, karta `id=3` dla topic `3`.
+- **Request:** Anthropic `claude-sonnet-5`, prompt v3, HTTP 200, `max_tokens=6000`, 1 web search, `stop_reason=end_turn`; 16834 input, 1961 output, `thinking_tokens=51`, raw payload 4928 znaków.
+- **Wynik techniczny:** raw-size, JSON, schema, limity pól i injection guard przeszły; pięć źródeł; job `DONE`, run `SUCCESS`, research_run `COMPLETE`, attempt `SETTLED`.
+- **Ocena redakcyjna:** `REJECT/WEAK_SOURCES`; karta pozostaje dowodem poprawności pipeline'u, nie rekomendacją publikacji.
+- **Koszt/granice:** `0.063278 USD`, miesiąc `1.012590 USD`; dokładnie jeden attempt/provider request, zero retry, repair, fallbacku i drugiego live.
+
+## 2026-07-18 — Niezależne potwierdzenie positive-live bez nowego researchu
+
+- **Zakres:** niezależny końcowy review trwałego wyniku i zaakceptowanego working tree; 223/223 własnych wąskich testów, exact-once, zero CRITICAL/MAJOR/nowych MINOR.
+- **Rozróżnienie testów:** reviewer nie uruchamiał ponownie pełnego 1288; potwierdził bajtową identyczność kodu/testów z wcześniej zaakceptowanym wynikiem implementera 1288/1288 i partycjami `306+312+328+342`.
+- **Decyzja:** reviewer wydał `APPROVE`, a właściciel formalnie przyjął positive-live gate w ADR-095. Karta `id=3` pozostaje redakcyjnie `REJECT/WEAK_SOURCES`.
+- **Koszt i granice:** nowy research/provider call/usage/koszt = `0`; miesięczny ledger pozostaje `1.012590 USD`; kolejny live `NOT AUTHORIZED`, Etap 2 `NOT STARTED`.

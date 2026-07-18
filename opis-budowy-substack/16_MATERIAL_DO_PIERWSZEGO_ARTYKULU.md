@@ -273,3 +273,7 @@ Odczyt bazy przyniósł jeszcze jedną lekcję: szczegółowy research był popr
 - Gdy raport nie ma trwałego timestampu maintenance, mówi `UNKNOWN`, zamiast układać wiarygodnie brzmiącą historię z ostatniego `updated_at`.
 - Migracja jest ćwiczona na kopii, a rollback oznacza odtworzenie całego pliku. Produkcja nadal ma schemat 0009.
 - Zdanie do artykułu: „Najbezpieczniejsza automatyzacja nie robi więcej — tylko regularnie puka do tych samych, zamkniętych drzwi.”
+
+## 2026-07-17 — Zgoda na efekt nie jest zgodą na każdy środek
+
+Najciekawszy moment tej próby wydarzył się przed siecią. Właściciel zezwolił na jeden płatny request, ale zabronił zmian kodu. System miał kodową bramkę ustawioną na `False`. Można ją było przełączyć na chwilę i po wszystkim ukryć ślad przez przywrócenie pliku — lecz to nadal byłaby dokładnie ta czynność, której zakazano. Request nie powstał. Koszt tej dyscypliny: zero dolarów; wartość: dowód, że operator odróżnia cel od zakresu uprawnień.

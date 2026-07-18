@@ -21,7 +21,10 @@ from app.research.cost_estimator import estimate_worst_case_search_call_usd
 
 _SCHEMA = "durable_research_intent_v3"
 _PIPELINE_VERSION = "single_research_pipeline_v2"
-_PROMPT_CONTRACT_VERSION = "anthropic_research_single_v2"
+# v3 (2026-07-18): jawny kontrakt rozmiaru odpowiedzi — limity liczności i długości
+# każdego pola w prompcie + deterministyczna walidacja (app/research/output_contract.py).
+# Zamrożone intenty v2 pozostają fail-closed nieobsługiwane przez ten worker.
+_PROMPT_CONTRACT_VERSION = "anthropic_research_single_v3"
 _PROVIDER_STAGE = "research"
 
 # Sentinel pricing-profile identity for non-authoritative paths (dry-run estimation,

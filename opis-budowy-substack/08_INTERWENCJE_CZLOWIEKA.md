@@ -238,3 +238,7 @@ Właściciel zlecił usunięcie dokładnie trzech P1 z niezależnego review oraz
 - Używać wyłącznie fake callerów/SDK seam i tymczasowych baz; zero sieci, kosztu, browsera, publikacji, produkcyjnego joba i operacji Git.
 - Zachować produkcyjną DB/WAL/SHM byte-identical oraz nie dotykać chronionych prywatnych plików.
 - Wynik może mieć tylko status `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; Etap 1 pozostaje otwarty.
+
+## 2026-07-17 — Człowiek zezwolił na request, ale nie na zmianę gate
+
+Granice decyzji były celowo węższe niż technicznie potrzebne do uruchomienia bieżącego entrypointu: jeden request był dozwolony, zmiana kodu nie. Operator nie potraktował celu jako zgody dorozumianej na `False→True→False`; zakończył przed enqueue z `BLOCKED — LIVE PREFLIGHT DRIFT`. Następny przebieg wymaga nowej decyzji, nie automatycznego resume.

@@ -117,3 +117,7 @@ Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior u
 ## 2026-07-17 — Dowód naprawy NIA-P2-RV
 
 `SCREENSHOT REQUIRED`: bezpieczny kadr może pokazać wyłącznie 1235/1235, partycje `294+299+311+331` i zanonimizowane wyniki kontrprób huge score, secret sanitizer, jawnego clocka, object+true oraz bare fence. Nie może zawierać raw payloadu sekretów, `.env`, pełnych command lines, produkcyjnej bazy ani prywatnych plików. Obraz nie powstał; mocniejszym dowodem są deterministyczne testy i byte-identical DB.
+
+### 2026-07-17 — Gate pozostał zamknięty
+
+`SCREENSHOT REQUIRED`: bezpieczny kadr może później pokazać quiescence `PASS`, zanonimizowany DB hash/rozmiar, pricing/cap, fail-closed flags i `REAL_CONTROLLED_LIVE_ENABLED=false`, bez `.env`, klucza, command lines i danych SQLite. Obrazu nie wykonano, bo browser był zabroniony.

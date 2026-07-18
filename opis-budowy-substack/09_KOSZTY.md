@@ -240,3 +240,11 @@ Automatycznie: `UsageTracker` liczy koszt z cennika i dopisuje wiersz do `model_
 - Nowe płatne wywołania: **0**.
 - Koszt fali: **0,000000 USD**.
 - Wszystkie próby korzystały z fake callerów i tymczasowych SQLite. Miesięczna suma pozostaje **0,737762 USD**; istniejącego usage nie zmieniono ani nie zdublowano.
+
+## 2026-07-17 — Zablokowany controlled-live
+
+Nowy koszt: `0.000000 USD`. Provider calls: 0; nowe usage: 0. Suma miesiąca pozostała `0.737762 USD`. Cap `0.105000 USD` został zweryfikowany, ale nie zarezerwowany, ponieważ zatrzymanie nastąpiło przed enqueue.
+
+## 2026-07-18 — Fala kontraktu rozmiaru: 0 USD
+
+Nowy koszt: `0.000000 USD` (zero requestów, fake callery i tymczasowe bazy). Suma miesiąca bez zmian: `0.949312 USD`. Następna próba — dopiero po niezależnym APPROVE i nowej zgodzie — ma wyliczony pesymistyczny sufit `0.172500 USD` (6000 tokenów, jeden web search, rekomendowany cap `0.20 USD`); nawet w najgorszym wariancie miesiąc zamknąłby się na `1.121812 USD` z 40 USD budżetu.

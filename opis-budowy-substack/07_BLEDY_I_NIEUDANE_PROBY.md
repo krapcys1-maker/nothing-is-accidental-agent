@@ -429,3 +429,13 @@ Pierwszy wspólny sanitizer zepsuł cztery stare asercje formatu audytu, bo usuw
 Pierwszy samodzielny counterprobe nie podał `NIA_TEST_PROTECTED_DB` i kernel zatrzymał go jeszcze przed otwarciem temp SQLite. Po jawnym wskazaniu chronionej produkcyjnej ścieżki ten sam proces wykonał pięć kontrprób wyłącznie w katalogu tymczasowym. Ochrona fail-closed sama stała się dodatkowym dowodem.
 
 Pierwsza wersja końcowego audytu kopii próbowała sortować `provider_attempts` po nieistniejącym `created_at`. Hash kopii i źródła już wtedy był zgodny; błąd dotyczył tylko prezentacji. Powtórzenie po `rowid` potwierdziło integralność i ujawniło potrzebne doprecyzowanie: 19 wierszy usage łącznie, ale 14 realnych składających się na 0,737762 USD.
+
+## 2026-07-17 — Wszystko było gotowe poza legalną drogą otwarcia gate
+
+Quiescence, DB, ENV, model, pricing i budżet przeszły. Nie przeszedł warunek osiągalności real execution: kod zawierał gate `False`, a zakres zabraniał jego zmiany. Dwa pomocnicze raporty read-only miały drobne błędy API/serializacji; oba zakończyły się bez mutacji, a poprawiony immutable snapshot potwierdził niezmienny durable stan. Provider nie został skonstruowany.
+
+Dodatkowa lekcja operatorska: standardowy `operational-report` pozostawił pusty WAL i 32 KiB SHM, choć główna DB się nie zmieniła. Drugi canonical probe potwierdził brak uchwytów; oba jawnie zweryfikowane, odtwarzalne sidecary usunięto bez dotykania DB. „Read-only na poziomie danych” nie zawsze oznacza „zero artefaktów na filesystemie”.
+
+## 2026-07-18 — Dlaczego 3000 tokenów raz wystarczało, a raz nie
+
+Trzy realne próby dały trzy różne wyniki przy tym samym temacie: 1500 → ucięcie, 3000 → kompletny JSON (poległ na typie pola), 3000 po naprawie → znowu ucięcie. Kuszące wyjaśnienie „model się rozgadał" okazało się fałszywe: w uciętej próbie widoczny JSON miał tylko 4038 znaków (~1000 tokenów), a segment finalny zjadł pełne 3000. Prawie dwie trzecie limitu skonsumowały tokeny, których nie widać w odpowiedzi — wewnętrzne rozumowanie modelu i metadane cytowań, o wariancji ~0,7–2,2k między próbami. Stały limit nie mógł być stabilny, bo płaciliśmy za coś, czego nie mierzyliśmy. Lekcja: zanim podniesiesz limit, ustal, na co dokładnie idzie obecny.

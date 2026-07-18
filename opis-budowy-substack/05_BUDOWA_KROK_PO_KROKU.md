@@ -650,3 +650,41 @@ Ostatni detal jest czysto kompozycyjny: wrapper nie może już sam wymyślić pr
 Review wykazał, że ogromny legalny numer JSON mógł wyjść poza typowaną ścieżkę i ominąć księgowanie. Score jest teraz sprawdzany jako `Decimal` przed konwersją. Ten sam pakiet zaostrzył fence do literalnego `json`, rozpoznaje drugi scalar przez `raw_decode`, używa jednego jawnego czasu enqueue/wrappera oraz wspólnego sanitizera dla raportu i diagnostyki.
 
 Diagnostic zapisuje sanitizowaną treść przez temp, file fsync, replace i directory fsync. Awaria każdego z tych kroków pozostaje best-effort: jedno usage, settlement i terminalny `FAILED` nie zmieniają się. Dowód kandydacki to 1235 testów i partycje `294+299+311+331`; zero nowego requestu i kosztu.
+
+## 2026-07-17 — Pozytywny live zatrzymany przed pierwszą mutacją
+
+Właściciel zatwierdził dokładnie jeden nowy request z pessimistic capem `0.105000 USD`, ale równocześnie zabronił zmian kodu. Preflight potwierdził branch/HEAD, czystą strefę chronionego kodu, approved pricing, budżet, fail-closed flags i canonical quiescence `PASS`. Tracked composition root nadal miał `REAL_CONTROLLED_LIVE_ENABLED = False`; bez zmiany kodu nie dało się przekazać `allow_execution=True`. Operacja zatrzymała się przed enqueue, markerem, workerem i SDK. DB pozostała `5BEA9E…C6D10`, nowy koszt `0.000000 USD`, werdykt `BLOCKED — LIVE PREFLIGHT DRIFT`.
+
+## 2026-07-17 19:18 UTC — Późniejsza decyzja L1 i dokładnie jeden request
+
+Właściciel jawnie zastąpił wcześniejszą interpretację i zezwolił implementerowi na minimalne `False→True→False`. Powstał nowy durable job, a canonical wrapper wykonał dokładnie jeden request Anthropic. HTTP 200 zakończył się `stop_reason=max_tokens`; parser zwrócił `ResearchTruncatedError`, więc karty nie utworzono. Koszt `0.060078 USD` został rozliczony raz, attempt ma `SETTLED`, wszystkie trzy stany wykonawcze są `FAILED`, a gate, flags, marker, lease i rezerwacja zostały domknięte. Nie wykonano retry.
+
+## 2026-07-17 19:44 UTC — Większy sufit odsłonił drugi rodzaj granicy
+
+Właściciel osobno autoryzował jeden request z `max_tokens=3000` i capem `0.127500 USD`. Tym razem Anthropic zakończył naturalnie (`stop_reason=end_turn`) przy 2727 output tokens, więc odpowiedź nie była ucięta. Nie stała się jednak poprawnym artefaktem: pole `sources[0].supports_claim` nie spełniło kontraktu `string_or_null` i fail-closed validator odmówił zapisania Research Card.
+
+System rozliczył dokładnie jedną próbę: 19945 input, 2727 output, jeden search i `0.077160 USD`; attempt jest `SETTLED`, a job/run/research_run `FAILED`. Gate wrócił do `False` przed analizą, flags są fail-closed, marker zniknął, baza nie ma sidecarów. Nie wykonano retry ani naprawy odpowiedzi drugim requestem.
+
+## 2026-07-17 20:46 UTC — Naprawiony kontrakt nie dostał kompletnej odpowiedzi
+
+Po niezależnym `APPROVE` naprawy typów promptu właściciel autoryzował jeden nowy request z `max_tokens=3000`. Tym razem eksperyment nie dotarł do miejsca, które miał sprawdzić: Anthropic zakończył HTTP 200 z `stop_reason=max_tokens`, a parser poprawnie nazwał wynik `ResearchTruncatedError` zamiast walidować fragment JSON. Typy `supports_claim` i `citable_numbers` nie zostały więc ocenione live.
+
+System rozliczył dokładnie jedną próbę: 16381 input, 3155 output, jeden search i `0.074312 USD`. Attempt jest `SETTLED`, job/run/research_run `FAILED`, karta nie powstała. Gate wrócił do `False` przed analizą, flags są fail-closed, marker zniknął, baza nie ma sidecarów. Nie wykonano retry ani drugiego requestu.
+
+## 2026-07-18 — Kontrakt rozmiaru odpowiedzi zamiast zgadywania limitu
+
+Po trzech realnych próbach, w których dwa razy odpowiedź została ucięta mimo różnych limitów, przestaliśmy podnosić `max_tokens` na wyczucie. Fala offline prześledziła cały płatny flow (limit pochodzi wyłącznie z zamrożonego intentu — żadna warstwa go nie nadpisuje) i z zapisanych surowych odpowiedzi wyliczyła dwie rzeczy: limit działa osobno na każdy segment generacji (dlatego usage 3155 przy limicie 3000 to nie błąd rozliczeń), a rachunek za output obejmuje niewidoczne tokeny wewnętrznego rozumowania i cytowań — od ~0,7k do ~2,2k tokenów przy identycznym prompcie.
+
+Rozwiązanie ma trzy warstwy: prompt v3 z jawnym limitem liczności i długości każdego pola karty (kompaktowy jednoliniowy JSON, priorytet domknięcia obiektu nad szczegółami), deterministyczna walidacja po naszej stronie (przekroczenie = typowany błąd, koszt zaksięgowany, zero retry i zero cichego obcinania) oraz wyliczony profil: 6000 tokenów = 3198 (payload dokładnie na granicach kontraktu) + 2300 (najgorszy zmierzony niewidoczny narzut) + 502 marginesu. Do tego pomiar `thinking_tokens` w diagnostyce — następne ucięcie będzie policzalne, nie zgadywane. Regresja wzrosła z 1248 do 1288 testów; produkcyjna baza pozostała bajt-identyczna, a live czeka na niezależny review.
+
+## 2026-07-18 04:48 UTC — Pierwsza kompletna karta, nadal bez automatycznej publikacji
+
+Niezależny review zamknął falę z sześcioma nieblokującymi uwagami P2, a właściciel dopuścił dokładnie jeden request. Tym razem limit nie został zgadnięty: prompt v3 dostał 6000 tokenów i jeden search. Anthropic zakończył `end_turn`; odpowiedź miała 4928 znaków, przeszła parser, schema, wszystkie limity pól i bramkę injection. Po raz pierwszy realny pipeline zapisał Research Card — job, run i research_run zakończyły się odpowiednio `DONE`, `SUCCESS` i `COMPLETE`.
+
+To nie był jednak skrót do publikacji. Karta zawierała pięć źródeł, lecz gate redakcyjny wydał `REJECT/WEAK_SOURCES`. System udowodnił więc dwie rzeczy naraz: potrafi bez retry utworzyć kompletny artefakt i potrafi odmówić rekomendacji, gdy jakość dowodów jest za słaba. Jedyny request kosztował `0.063278 USD`; gate wrócił do `False`, a kolejna próba nie jest autoryzowana.
+
+## 2026-07-18 — Niezależne potwierdzenie nie jest przyciskiem „uruchom ponownie”
+
+Po wyniku technicznym implementera przyszedł osobny review. Reviewer nie udawał, że wykonał drugi pełny suite: uruchomił 223 własne wąskie testy, sprawdził exact-once oraz bajtową identyczność kodu i testów z wcześniej zaakceptowanym wynikiem 1288/1288. Nie znalazł CRITICAL, MAJOR ani nowego MINOR i wydał `APPROVE`. Dopiero potem właściciel formalnie przyjął positive-live gate Etapu 2.
+
+To zamknięcie jest granicą dowodową, nie startem kolejnego etapu. Etap 2 nadal nie ruszył, następny request nie jest autoryzowany, browser i publikacja pozostają zablokowane, a gate i pięć flag są fail-closed. Working tree może przejść do checkpointu dopiero po osobnej zgodzie właściciela na commit.

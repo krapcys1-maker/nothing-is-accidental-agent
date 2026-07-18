@@ -434,3 +434,39 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Drugi finding pokazuje granicę typów: legalny JSON może zawierać liczbę zbyt dużą dla `float`. Walidacja `Decimal` przed konwersją sprawia, że błąd danych pozostaje błędem schema, a dokładnie jedno usage i settlement nie znikają.
 - Dowód: 28 przypadków parsera, durable huge/non-finite score, pięć klas sekretów i cztery failpointy; 1235/1235 oraz exact-once `294+299+311+331`, koszt `0.000000 USD`.
 - Granica: to kandydat po wcześniejszym `REJECT — MAJOR`, nie zatwierdzenie. Etap 1 pozostaje otwarty i kolejny request jest zabroniony.
+
+## 2026-07-17 — Materiał: „Zgoda na request nie jest zgodą na zmianę przełącznika”
+
+- Wszystkie techniczne warunki requestu mogły być poprawne jednocześnie: quiescence PASS, model i pricing zgodne, budżet dostępny, koszt maksymalny policzony co do mikrocenta, brak lease i rezerwacji. Mimo to request nie był legalnie osiągalny, bo kodowy gate pozostał `False`.
+- Najważniejsza granica operatorska: tymczasowa zmiana `False→True→False` nie przestaje być zmianą kodu tylko dlatego, że po operacji diff znika. Jawny zakaz właściciela ma pierwszeństwo przed oczekiwanym pozytywnym wynikiem.
+- Cytowalny rezultat: zero heroicznego obejścia, zero „tylko jednej małej zmiany”, zero requestu. System zakończył `BLOCKED — LIVE PREFLIGHT DRIFT`, zachowując DB i koszt miesiąca bez zmian.
+
+## 2026-07-17 — Materiał: „HTTP 200 może znaczyć pełne rozliczenie i zero wyniku”
+
+- Późniejsza decyzja właściciela legalnie otworzyła gate dokładnie na jeden request. Sieć odpowiedziała sukcesem transportowym HTTP 200, ale `stop_reason=max_tokens` dowiódł niepełnej odpowiedzi; parser odmówił tworzenia karty.
+- Ledger zachował to, co nieodwracalne: 16704 input, 1667 output, jeden search i `0.060078 USD`. Produkt zachował to, co ważniejsze: brak pozornego sukcesu, zero retry i terminalny `FAILED`.
+- Cytowalna zasada: „Płatność za pełny request nie jest dowodem pełnej odpowiedzi; HTTP 200 nie jest zgodą na dokończenie jej drugim requestem.”
+
+## 2026-07-17 — Materiał: „Większy limit rozwiązał ucięcie, nie kontrakt danych”
+
+- Osobno autoryzowany request zwiększył `max_tokens` z 1500 do 3000. Tym razem provider zakończył `end_turn` przy 2727 output tokens, więc poprzedni problem truncation rzeczywiście nie wystąpił.
+- Kompletność transportowa i długość odpowiedzi nie gwarantują jednak zgodności schema: `sources[0].supports_claim` miało zły typ. Fail-closed validator odmówił utworzenia Research Card, zachowując jedno usage, settlement i terminalny failure.
+- Ledger: 19945 input, 2727 output, jeden search, `0.077160 USD`; zero retry. Cytowalna zasada: „Więcej miejsca na odpowiedź usuwa sufit, ale nie zastępuje kontraktu typów.”
+
+## 2026-07-17 — Materiał: „Naprawiona schema nie pomaga odpowiedzi, która nie dobiegła do końca”
+
+- Narrow review zatwierdził jawne typy `supports_claim` i `citable_numbers`, ale kolejny osobno autoryzowany request znów zakończył się `max_tokens` przy limicie 3000. Naprawiony kontrakt nie został więc sprawdzony live — walidator nigdy nie dostał kompletnego obiektu.
+- Ledger zachował jednoznaczne minimum: jeden request, 16381 input, 3155 output, jeden search, `0.074312 USD`, jedno usage i settlement; zero retry i brak karty.
+- Cytowalna zasada: „Poprawny kontrakt ocenia kompletną odpowiedź; truncation zatrzymuje eksperyment wcześniej i nie daje prawa do drugiego requestu.”
+
+## 2026-07-18 — Materiał: „Pierwsza karta to jeszcze nie materiał do publikacji”
+
+- Wyliczony kontrakt 6000 tokenów zakończył odpowiedź naturalnie: jeden request, `end_turn`, 4928 znaków raw, poprawny JSON/schema/limity i trwale zapisana Research Card. Ledger: 16834 input, 1961 output, 51 thinking, jeden search, `0.063278 USD`.
+- Ten sam pipeline odrzucił kartę redakcyjnie jako `WEAK_SOURCES`. To pożądane rozdzielenie: infrastruktura może działać poprawnie, a gate jakości nadal może powiedzieć „nie publikuj”.
+- Cytowalna zasada: „Pierwszy kompletny artefakt jest dowodem działania pipeline'u, nie automatycznie dowodem jakości materiału.”
+
+## 2026-07-18 — Materiał: „Pięć warstw jednego zatwierdzenia”
+
+- Implementer może zadeklarować sukces i pokazać pełny suite, ale nie zatwierdza własnej pracy. Niezależny reviewer może wykonać własne 223 kontrpróby i wydać `APPROVE`, ale nie podejmuje decyzji produktowej. Dopiero właściciel formalnie przyjmuje bramkę.
+- Bieżący przykład rozdziela pięć faktów: deklarację implementera, 1288 testów implementera, 223 testy reviewera, niezależny werdykt i decyzję właściciela. To chroni przed zamianą jednego zielonego logu w nieograniczoną autoryzację.
+- Bramka positive-live została przyjęta, ale Etap 2 nie został rozpoczęty, a browser, publikacja i kolejny request pozostają zablokowane. Cytowalna zasada: „Potwierdzona zdolność systemu nie jest jeszcze zgodą na jej ponowne użycie.”

@@ -487,3 +487,44 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Twarde granice:** zero sieci/API/browsera/publikacji/kosztu; fake SDK/callery i temp DB; bez produkcyjnego joba, realnego `controlled-live-once`, zapisu DB/flags, migracji i operacji Git. Produkcyjna DB/WAL/SHM byte-identical; chronione prywatne pliki nietknięte.
 - **Wymagany status:** wyłącznie `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; implementer nie może wydać `APPROVE` ani zamknąć Etapu 1.
 - **Wynik implementacji:** 1235/1235 i exact-once `294+299+311+331`; pięć findings zamkniętych technicznie w dozwolonym zakresie. Nowy request pozostaje zabroniony do pozytywnego review i nowej jawnej decyzji właściciela.
+
+### 2026-07-17 — Właściciel autoryzował jeden request, ale zabronił zmiany kodowego gate
+
+- **Decyzja człowieka:** dopuścić dokładnie jeden nowy request Anthropic z capem `0.105000 USD`, `max_tokens=1500`, jednym web search, `max_attempts=1` i `max_retries=0`; nowy job i identity wyłącznie przez durable flow.
+- **Równoczesne zakazy:** bez drugiego requestu, retry, fallbacku, verification requestu, browsera, publikacji, zmian kodu/migracji/pricing config i mutujących operacji Git.
+- **Konsekwencja:** ponieważ tracked real gate pozostał `False`, wykonawca nie mógł legalnie otworzyć `allow_execution`. Zatrzymał się przed enqueue i provider boundary z `BLOCKED — LIVE PREFLIGHT DRIFT`.
+- **Dalsza granica:** obecnej zgody nie wolno automatycznie resume’ować. Kolejna operacja wymaga nowej jawnej decyzji właściciela oraz rozstrzygnięcia mechanizmu gate bez domyślnego rozszerzania zakresu.
+
+### 2026-07-17 — Właściciel wydał późniejszą decyzję L1 i autoryzował jednorazowe `False→True→False`
+
+- **Decyzja człowieka:** odrzucić wcześniejszą interpretację, że gate może przełączyć wyłącznie właściciel poza czatem; delegować implementerowi jedną dokładną zmianę linii, jeden job/request i bezwarunkowe przywrócenie gate.
+- **Wynik:** autoryzacja doszła do `REQUEST_STARTED` i została zużyta. HTTP 200 zakończył się `stop_reason=max_tokens`, kosztem `0.060078 USD` i terminalnym `FAILED` bez karty.
+- **Granica po:** zero retry, attemptu #2 i resume; kolejny live wymaga nowej jawnej decyzji właściciela.
+
+### 2026-07-17 — Właściciel autoryzował jedną próbę z `max_tokens=3000`
+
+- **Decyzja człowieka:** dopuścić implementerowi jednorazowe `False→True→False`, nowy job/request, `claude-sonnet-5`, `max_tokens=3000`, jeden web search, `max_attempts=1`, SDK retry `0` i cap `0.127500 USD`.
+- **Twarde granice:** bez drugiego requestu, retry, fallbacku, repair/verification, resume, browsera, publikacji, refaktoru, zmian schema/migracji/pricing/schedulera/recovery/reconciliation oraz bez stage/commit/push/PR/merge.
+- **Wynik:** autoryzacja została zużyta przez jeden HTTP 200 z `stop_reason=end_turn`. Schema validation odrzuciła `sources[0].supports_claim`; koszt `0.077160 USD`, attempt `SETTLED`, terminalny `FAILED`, brak karty.
+- **Granica po:** gate i flags przywrócone fail-closed; kolejny live wymaga nowej jawnej decyzji właściciela.
+
+### 2026-07-18 — Właściciel formalnie przyjął positive-live gate Etapu 2
+
+- **Decyzja człowieka:** przyjąć niezależny finalny review `APPROVE` i ustanowić `POSITIVE CONTROLLED-LIVE = INDEPENDENTLY CONFIRMED` oraz `ETAP 2 POSITIVE-LIVE GATE = FORMALLY ACCEPTED`.
+- **Podstawa:** niezależny reviewer wykonał 223/223 własnych wąskich testów, potwierdził exact-once i bajtową identyczność kodu/testów z zaakceptowanym pełnym baseline'em 1288/1288; zero CRITICAL, MAJOR i nowych MINOR. Pełnego suite nie uruchamiał ponownie w ramach review.
+- **Niezmienione granice:** Etap 2 pozostaje `NOT STARTED`; kolejny live `NOT AUTHORIZED`; browser/publikacja `BLOCKED`; gate `False`, flagi fail-closed; sześć P2 ADR-094 pozostaje backlogiem.
+- **Operacje zewnętrzne:** decyzja jest wyłącznie dokumentacyjna i nie autoryzuje API, SDK providera, kosztu, commita ani rozpoczęcia implementacji Etapu 2.
+
+### 2026-07-18 — Właściciel zamknął WAVE OUTPUT-SIZE CONTRACT i autoryzował jedną próbę
+
+- **Decyzja człowieka:** przyjąć niezależny review `APPROVE WITH MINOR/P2`, formalnie zamknąć falę i przyjąć sześć P2 zapisanych w ADR-094 bez ich naprawiania w tej operacji.
+- **Autoryzowany zakres:** jedno `False→True→False`, jedna nowa durable identity i dokładnie jeden request `claude-sonnet-5` z promptem v3, `max_tokens=6000`, 1 web search, `max_attempts=1`, SDK retry `0`, cap `0.20 USD`.
+- **Wynik:** jeden request utworzył Research Card `id=3`; koszt `0.063278 USD`, lifecycle technicznie udany, redakcyjna rekomendacja `REJECT/WEAK_SOURCES`. Bez retry i drugiego requestu.
+- **Granica po:** gate/flags fail-closed; decyzja zużyta i nie obejmuje kolejnego live.
+
+### 2026-07-17 — Właściciel autoryzował live po niezależnym `APPROVE` naprawy kontraktu
+
+- **Decyzja człowieka:** uznać narrow review naprawy `supports_claim`/`citable_numbers` za `APPROVE` i dopuścić implementerowi jednorazowe `False→True→False`, nowy job/request, `claude-sonnet-5`, `max_tokens=3000`, jeden web search, `max_attempts=1`, SDK retry `0` i cap `0.127500 USD`.
+- **Twarde granice:** bez drugiego requestu, retry, fallbacku, repair/verification, resume, zmian promptu/parsera/schema, refaktoru, backlogu, pricingu/migracji, browsera, publikacji oraz stage/commit/push/PR/merge.
+- **Wynik:** autoryzacja została zużyta przez jeden HTTP 200 z `stop_reason=max_tokens`; `ResearchTruncatedError`, koszt `0.074312 USD`, attempt `SETTLED`, terminalny `FAILED`, brak karty. Schema naprawionych pól nie została osiągnięta.
+- **Granica po:** gate i flags przywrócone fail-closed; kolejny live wymaga nowej jawnej decyzji właściciela.

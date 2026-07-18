@@ -366,3 +366,7 @@ Migracja 0011 egzekwuje request-bound usage dla nowych realnych wywołań. Stare
 - **P2-2:** nie rozszerzać wyjątku klasyfikatora. Inny terminal/edytor/shell z pełnym tekstem komendy może wywołać bezpieczny false STOP; operator ma zamknąć takie procesy i wykonać standalone check z tego samego launchera.
 - **P2-3:** ignorowany jest dokładnie `config/pricing_profiles.yaml`, nie wszystkie `config/*.yaml`.
 - **Granica:** checkpoint nie zmienia DB, joba, flag, gate'u, providera ani kosztu. Etap 1 pozostaje `OPEN`.
+
+## ADR-089 — Zakaz zmiany kodu pozostawia realny gate zamknięty
+
+Autoryzacja płatnego requestu nie rozszerza automatycznie zgody na zmianę mechanizmu bezpieczeństwa. Ponieważ właściciel jawnie zabronił zmian kodu, a jedyna produkcyjna bramka była stałą `False`, nie wykonano tymczasowego przełączenia. Wynik: preflight blocked przed enqueue; zero requestu, retry i resume.

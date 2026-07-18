@@ -38,6 +38,9 @@ class ResponseDiagnostics:
     web_search_requests: int
     raw_response: str
     parse_error_location: str | None = None
+    # Niewidoczne tokeny rozumowania wliczone w output_tokens (patrz app/llm/base.py).
+    # Domyślnie 0 dla zapisów sprzed tej diagnostyki i dla fake'ów.
+    thinking_tokens: int = 0
 
     @property
     def response_length_chars(self) -> int:
@@ -141,6 +144,7 @@ def write_diagnostics(
         f"stop_reason: {diag.stop_reason}",
         f"input_tokens: {diag.input_tokens}",
         f"output_tokens: {diag.output_tokens}",
+        f"thinking_tokens: {diag.thinking_tokens}",
         f"cache_read_tokens: {diag.cache_read_tokens}",
         f"cache_write_tokens: {diag.cache_write_tokens}",
         f"web_search_requests: {diag.web_search_requests}",

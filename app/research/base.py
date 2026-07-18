@@ -152,6 +152,20 @@ class ResearchSchemaError(ResearchParseError):
         super().__init__(message, **kwargs)
 
 
+class ResearchCardSizeContractError(ResearchSchemaError):
+    """Kompletny JSON przekracza jawny kontrakt rozmiaru Research Card.
+
+    Podklasa `ResearchSchemaError`, więc dziedziczy w całości udowodnioną na
+    żywo ścieżkę fail-closed: usage/settlement zachowane, terminalny FAILED,
+    zero retry (patrz app/research/output_contract.py). Nigdy nie obcinamy
+    treści po cichu — przekroczenie budżetu to zawsze jawny, typowany błąd.
+    """
+
+    def __init__(self, message: str, **kwargs) -> None:
+        kwargs.setdefault("classification", "size_contract")
+        super().__init__(message, **kwargs)
+
+
 class ResearchTruncatedError(ResearchParseError):
     """Provider zakończył generację przez limit outputu; nigdy nie retry'ujemy."""
 

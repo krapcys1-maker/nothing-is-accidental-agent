@@ -218,3 +218,11 @@ Drugi wniosek: poprawna składnia nie oznacza poprawnej wartości. 400-cyfrowy i
 Etap 1 został formalnie zamknięty, mimo że jedyny realny request skończył się błędem parsowania i nie powstała Research Card. To był świadomy wybór kryterium: celem Etapu 1 był domknięty, audytowalny lifecycle jednego realnego, capowanego requestu — dokładnie jeden attempt, `REQUEST_STARTED → SETTLED`, jedno usage, terminalny `FAILED`, zero retry, fail-closed flagi i bajt-w-bajt nietknięta produkcyjna baza. Wszystko to zaszło i zostało niezależnie zweryfikowane (`APPROVE WITH MINOR/P2`). Pozytywna karta researchowa to cel Etapu 2, nie bramka Etapu 1.
 
 Drugi wniosek: rola „reviewera" i rola „właściciela zamykającego etap" muszą być rozdzielone. Reviewer stwierdził brak MAJOR/CRITICAL i rekomendował możliwość zamknięcia; formalną decyzję podjął właściciel. Dwa pozostałe drobne P2 dotyczą wyłącznie etykiet diagnostycznych parsera (zachowanie fail-closed jest poprawne) — trafiły do backlogu Etapu 2, a nie do kolejnej fali naprawczej. Dyscyplina „nie naprawiaj przy okazji" to część tego, co pozwoliło etap zamknąć bez ryzyka regresji.
+
+## 2026-07-17 — Cel operacji nie rozszerza jej autoryzacji
+
+Jeśli pozytywny wynik wymaga działania jawnie zabronionego, poprawnym rezultatem nie jest obejście z późniejszym przywróceniem stanu. Jest nim zatrzymanie przed pierwszą mutacją. „Net zero diff” nie oznacza „zero zmian kodu”.
+
+## 2026-07-18 — Limit, którego nie mierzysz, nie jest limitem
+
+Dwa ucięcia przy różnych wartościach `max_tokens` miały wspólną przyczynę: budżet wyjścia konsumowały niewidoczne tokeny (rozumowanie, tool-use, cytowania), których nikt nie liczył. Wniosek pierwszy: kontrakt rozmiaru musi być jawny po obu stronach — model dostaje limity per pole, a system deterministycznie je egzekwuje, zamiast ufać dobrej woli modelu. Wniosek drugi: wartość limitu ma wynikać z rachunku (payload na granicach + zmierzony narzut + margines), nie z tego, że poprzednia była za mała. Wniosek trzeci: przekroczenie budżetu to typowany, terminalny błąd z zachowanym kosztem — ciche obcinanie treści byłoby gorsze niż porażka, bo ukrywałoby utratę danych w produkcie.

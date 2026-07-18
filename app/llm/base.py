@@ -25,6 +25,11 @@ class Usage:
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
     web_search_requests: int = 0
+    # Podzbiór output_tokens zużyty na niewidoczne wewnętrzne rozumowanie (SDK:
+    # usage.output_tokens_details.thinking_tokens). Wyłącznie diagnostyka rozmiaru
+    # odpowiedzi — nie wchodzi do księgowania kosztów (output_tokens już je zawiera)
+    # i nie jest utrwalany w model_usage.
+    thinking_tokens: int = 0
 
 
 class LLMClientError(RuntimeError):

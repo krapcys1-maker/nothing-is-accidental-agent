@@ -16,22 +16,26 @@ Obowiązujące dodatkowo (logi, nie plany): `docs/DECISIONS.md` (rejestr ADR), `
 
 ## Stan projektu (skrót — pełny obraz w CURRENT_PROJECT_STATE.md)
 
-- Zbudowane i przetestowane offline: konfiguracja, SQLite z **14 migracjami** (ostatnia `0014_provider_attempt_reconciliation`), Policy Engine, kolejka/worker, ledger provider attempt, durable single-research `durable_provider_v2`, ścisły kontrakt jednej odpowiedzi JSON, pełny zatwierdzony kontrakt cenowy (`Decimal`), kanoniczny operatorski wrapper `controlled-live-once`, trwałe session/job/request fencing, historyczne raporty per invocation i recovery bez retry, minimalny launcher systemowy, raport read-only i kontrolowany executor migracji. `model_usage` pozostaje jedynym ledgerem kosztu. **1235/1235 testów, wszystkie offline; partycje exact-once 294+299+311+331.**
-- WAVE 0A/0B/1A są formalnie **`CLOSED — APPROVED WITH P2`**. Pierwsza WAVE LA-01 została odrzucona jako **`REJECTED — MAJOR`**; LA-01-R1 i LA-02 są **`APPROVED WITH MINOR/P2 — CHECKPOINTED`**. Niezależny review LA-03 wydał **`APPROVE WITH MINOR/P2`**. Jeden realny request został wykonany dokładnie raz: attempt #1 `REQUEST_STARTED → SETTLED`, jedno usage `0.053182 USD`, zero retry/attemptu #2; HTTP 200 zakończył się `ResearchParseError`, więc job/run/research_run są terminalnie `FAILED`, a Research Card nie powstała. Pakiet P2 po LA-03 (NIA-P2-RV-01…05) przeszedł niezależny re-review z wynikiem **`APPROVE WITH MINOR/P2`**. **Etap 1 = `CLOSED`** (formalna decyzja właściciela 2026-07-17, ADR-088); brak Research Card nie był bramką zamknięcia. Kolejny realny request wymaga osobnej, jawnej zgody właściciela i nowego joba — terminalnego joba nie wolno retry'ować.
+- Zbudowane i przetestowane offline: konfiguracja, SQLite z **14 migracjami**, Policy Engine, kolejka/worker, ledger provider attempt, durable single-research v3, output-size contract, kanoniczny wrapper `controlled-live-once`, fencing i raporty/recovery bez retry. `model_usage` pozostaje jedynym ledgerem kosztu. **1288/1288 testów; partycje exact-once 306+312+328+342.**
+- **WAVE OUTPUT-SIZE CONTRACT = `CLOSED — APPROVED WITH MINOR/P2`; POSITIVE CONTROLLED-LIVE = `INDEPENDENTLY CONFIRMED`; ETAP 2 POSITIVE-LIVE GATE = `FORMALLY ACCEPTED`; ETAP 2 = `NOT STARTED`.** Implementer wykazał 1288/1288, niezależny końcowy review wykonał 223/223 własnych wąskich testów i wydał `APPROVE` bez CRITICAL/MAJOR/nowych MINOR, a właściciel formalnie przyjął bramkę (ADR-095). Trwały wynik: koszt `0.063278 USD`, job `DONE`, run `SUCCESS`, research_run `COMPLETE`, attempt `SETTLED`, Research Card `id=3`, redakcyjne `REJECT/WEAK_SOURCES`. Kolejny live jest `NOT AUTHORIZED`; browser i publikacja pozostają `BLOCKED`; gate `False`, flagi fail-closed.
 
 Operacyjne instrukcje dla schedulera, raportu, konfiguracji attempts i przyszłej migracji copy-preflight są w [`docs/STAGE1_OPERATIONS.md`](docs/STAGE1_OPERATIONS.md). `python -m app.main operational-report` otwiera bazę wyłącznie read-only i pokazuje braki jako `UNKNOWN/BLOCKED`. `python scripts/manage_windows_tasks.py plan --task worker` oraz analogiczne `--task maintenance` tylko generują plan; instalacja każdego zadania wymaga osobnej zgody i jawnego przełącznika potwierdzającego.
 
 Migracja produkcji `0009→0014`, nowy baseline, inicjalizacja pięciu flag, niezależny review QP-01/trwałego wyniku migracji, review LA-01-R1/LA-02/LA-03 oraz niezależny re-review naprawy NIA-P2-RV-01…05 są zakończone. Etap 1 został formalnie zamknięty przez właściciela 2026-07-17 na podstawie werdyktu `APPROVE WITH MINOR/P2` (zero MAJOR/CRITICAL); wykonano jeden kontrolowany live durable single flow z twardym capem, `max_retries=0`, dokładnie jednym jobem i jednym requestem. Browser, publikacja, FetchPort, content pipeline, panel FastAPI, autonomia, interakcje, analytics i Etap 2+ nie należały do tego kryterium.
 - Niezbudowane: durable realne A1/A2/B, realne resume, artykuły/Notes, approval/autonomia, publikacja (Playwright), interakcje, analityka i panel.
-- Zero publikacji na Substacku; realny koszt dotąd: 0,737762 USD z limitu 40 USD/mies.
+- Zero publikacji na Substacku; miesięczny ledger: `1.012590 USD` z limitu 40 USD.
 
-## Aktualizacja controlled-live po review LA-03 (2026-07-17)
+## Formalne przyjęcie bramki positive-live (2026-07-18)
+
+Niezależny review nie uruchamiał ponownie pełnych 1288 testów: wykonał własne wąskie `223/223`, potwierdził exact-once i bajtową identyczność kodu/testów z wcześniej zaakceptowanym pełnym baseline'em, a następnie wydał `APPROVE`. Właściciel formalnie przyjął bramkę w ADR-095. Sześć P2 ADR-094 pozostaje nieblokującym backlogiem, w tym ryzyko ponownego dryfu liczby testów w README mimo synchronizacji bieżącej wartości. Przyjęcie bramki nie rozpoczyna Etapu 2 i nie upoważnia do nowego requestu ani działania publicznego.
+
+## Historyczna aktualizacja controlled-live po review LA-03 (2026-07-17)
 
 Review potwierdził 1181/1181, dokładnie jeden realny request, `max_retries=0`, brak attemptu #2, jedno usage i settlement oraz pełny powrót fail-closed. Wskazał trzy P2: nadpisywanie raportu przy deterministycznym `session_id`, nieaktualny README oraz ukryty fallback `quiescence_probe=None` po otwarciu storage.
 
 Pierwszy pakiet P2 został odrzucony w niezależnym review jako `REJECT — MAJOR`. Zamknięta fala naprawcza NIA-P2-RV-01…05 zachowuje każdy raport w pliku `<session_id>--<attempt/timestamp/invocation>.json`, wymaga jawnego zamrożonego payloadu pre-storage, waliduje score przed konwersją, akceptuje wyłącznie literalny fence `json`, sanitizuje diagnostic i raport jednym rekurencyjnym mechanizmem oraz atomowo utrwala diagnostykę. Enqueue i controlled-live test używają jednego jawnego czasu. Dowód: 1235/1235 i exact-once `294+299+311+331`, wyłącznie fake/temp DB, koszt `0.000000 USD`. Status: niezależny re-review wydał `APPROVE WITH MINOR/P2`, na tej podstawie właściciel formalnie zamknął Etap 1 (ADR-088). Dwa nieblokujące MINOR/P2 parsera (`RV-R2-P2-1`, `RV-R2-P2-2`) przeniesiono do backlogu Etapu 2. Zamknięcie nie autoryzuje nowego requestu.
 
-## Formalne zamknięcie WAVE 1A (2026-07-16)
+## Formalne zamknięcie WAVE 1A (2026-07-16; zapis historyczny)
 
 Implementer zadeklarował `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`. Niezależny finalny re-review odtworzył 1036/1036, cztery partycje exact-once, `compileall` i `git diff --check`, a także wykonał własne kontrpróby: 149/149 przez prawdziwy `Worker.run_once`, 36/36 SQLite floor oraz 30/30 recovery/reaper/crash-window. Werdykt `APPROVE WITH MINOR/P2` został przyjęty przez właściciela, który formalnie ustawił WAVE 1A na `CLOSED — APPROVED WITH P2`. Pozostają P2-1 (fingerprint mismatch: fail-closed, widoczny operatorowi, bez przepisywania intentu i bez retry) oraz P2-2 (atomowy StoragePort i spójny stan SQLite nie dowodzą pochodzenia przeciw uprzywilejowanemu autorowi wielu tabel). Etap 1 pozostaje `BLOCKED`, live API `ZABRONIONE`; Etap 2 nie został rozpoczęty.
 
@@ -45,7 +49,7 @@ WAVE 0B jest formalnie **`CLOSED — APPROVED WITH P2`** po checkpointowym commi
 
 ```bash
 pip install -e .[dev]           # + .[llm] tylko do realnych wywołań API
-python -m pytest                # 1235 testów, bez sieci
+python -m pytest                # 1288 testów, bez sieci
 python scripts/run_test_partitions.py --parts 4 --verify  # pełne SHA-256 node ID
 python -m app.main run-topics --count 6      # dry_run (zero kosztu)
 python -m app.main run-research              # dry_run (zero kosztu)
@@ -61,5 +65,5 @@ Konfiguracja: `.env` (sekrety, modele — patrz `.env.example`) + `config/*.yaml
 - Nie wpisuj hasła do Substacka nigdzie — logowanie zawsze ręczne w osobnym profilu przeglądarki.
 - Każde płatne lub publikujące uruchomienie wymaga osobnej, jawnej zgody właściciela.
 - Realny koszt jest autorytatywnie definiowany wyłącznie przez `config/pricing_profiles.yaml` (profil `status: approved`), NIE przez `.env`. Właściciel musi ręcznie zatwierdzić ceny i model przed realnym uruchomieniem; ceny nie są pobierane z internetu.
-- Kontrolowany live acceptance przechodzi wyłącznie przez `python -m app.main controlled-live-once`. Autoryzacja z 2026-07-17 została zużyta przez dokładnie jeden request; jej job jest terminalnie `FAILED/max_attempts=1` i nie może być ponawiany. Przed ewentualną nową, osobną autoryzacją trzeba utworzyć nowy dozwolony job, uruchomić `controlled-live-quiescence-check` z dokładnie tego samego launchera, zamknąć inne terminale/edytory/shelle zawierające pełny tekst komendy i potraktować każde `PROCESSES_PRESENT` jako `STOP`. Realny wrapper wymaga wcześniej utrwalonego, dokładnie jednego claimable joba z zatwierdzonym frozen pricing contract; jedynym operatorskim kodem otwierającym flagi paid/worker pozostaje ten wrapper. Bieżący gate jest `False`, a flags fail-closed.
+- Kontrolowany live acceptance przechodzi wyłącznie przez `python -m app.main controlled-live-once`. Ostatnia autoryzacja została zużyta przez dokładnie jeden request; job jest terminalnie `DONE/max_attempts=1` i nie może być ponawiany. Formalne przyjęcie bramki positive-live nie jest nową autoryzacją. Bieżący gate jest `False`, flags fail-closed, a każdy przyszły realny request wymaga nowej jawnej decyzji właściciela i nowej durable identity.
 - Repozytorium jest PRIVATE (ADR-021); jawność AI reguluje ADR-018.

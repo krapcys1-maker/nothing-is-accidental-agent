@@ -633,6 +633,7 @@ def _record_diagnostics(settings: Settings, run_id: str, stage: str, *, usage: U
         cache_read_tokens=usage.cache_read_tokens, cache_write_tokens=usage.cache_write_tokens,
         web_search_requests=usage.web_search_requests, raw_response=raw_text,
         parse_error_location=parse_error_location,
+        thinking_tokens=getattr(usage, "thinking_tokens", 0),
     ))
 
 

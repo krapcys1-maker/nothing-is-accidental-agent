@@ -7,7 +7,7 @@ import json
 import pytest
 
 from app.llm.base import Usage
-from app.research.anthropic_client import AnthropicResearchClient
+from app.research.anthropic_client import AnthropicResearchClient, _parse
 from app.research.base import (
     ResearchParseError,
     ResearchPlan,
@@ -165,3 +165,99 @@ def test_single_response_matrix_is_exact_once_and_fail_closed(
 
     assert calls == [1]
     assert client.call_count == 1
+
+
+# --- sources[].supports_claim type contract (live 2026-07-17 returned boolean) -----
+# Root cause of that controlled-live failure: the model returned
+# `"supports_claim": true` (boolean) because the field name reads as a yes/no
+# question, while the schema/domain contract is `string | null` (the exact text of
+# the confirmed claim the source supports).  These tests lock the parser contract;
+# the fix itself is prompt-only (the validator was already correct).
+
+
+def _source_full(supports_claim: object, *, url: str = "https://example.test/source") -> dict:
+    return {
+        "url": url,
+        "title": "Source",
+        "author_or_org": None,
+        "published_at": None,
+        "source_type": "PRIMARY",
+        "supports_claim": supports_claim,
+    }
+
+
+def _payload_with_sources(sources: list[dict]) -> str:
+    payload = _payload()
+    payload["sources"] = sources
+    return _json(payload)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("Because incentives shape the system.", id="nonempty-string"),
+        pytest.param("Claim A", id="claim-text-string"),
+        pytest.param(None, id="json-null"),
+    ],
+)
+def test_supports_claim_valid_types_parse_and_preserve_value(value):
+    draft = _parse(_payload_with_sources([_source_full(value)]))
+    assert draft.sources[0].supports_claim == value
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(True, id="boolean-true-exact-live-failure"),
+        pytest.param(False, id="boolean-false"),
+        pytest.param(["Claim A", "Claim B"], id="array"),
+        pytest.param({"claim": "Claim A"}, id="object"),
+        pytest.param(3, id="integer"),
+        pytest.param(2.5, id="float"),
+    ],
+)
+def test_supports_claim_invalid_types_are_schema_rejected(value):
+    with pytest.raises(ResearchSchemaError) as excinfo:
+        _parse(_payload_with_sources([_source_full(value)]))
+    assert "sources[0].supports_claim" in str(excinfo.value)
+    assert "string_or_null" in str(excinfo.value)
+    assert excinfo.value.classification == "schema"
+
+
+def test_supports_claim_mixed_string_and_null_across_sources_parse():
+    draft = _parse(_payload_with_sources([
+        _source_full("Claim A", url="https://a.test"),
+        _source_full(None, url="https://b.test"),
+        _source_full("Claim B", url="https://c.test"),
+    ]))
+    assert [s.supports_claim for s in draft.sources] == ["Claim A", None, "Claim B"]
+
+
+def test_source_missing_supports_claim_key_is_rejected():
+    source = _source_full("Claim A")
+    del source["supports_claim"]
+    with pytest.raises(ResearchSchemaError) as excinfo:
+        _parse(_payload_with_sources([source]))
+    assert "sources[0]" in str(excinfo.value)
+    assert excinfo.value.classification == "schema"
+
+
+# --- citable_numbers is a string list despite its numeric-sounding name -----------
+# Same class of prompt/name-vs-type trap as supports_claim; hardened in the same
+# narrow prompt change.  The validator already required strings; these lock it.
+
+
+def test_citable_numbers_raw_numbers_are_schema_rejected():
+    payload = _payload()
+    payload["citable_numbers"] = [42, 3.14]
+    with pytest.raises(ResearchSchemaError) as excinfo:
+        _parse(_json(payload))
+    assert "citable_numbers" in str(excinfo.value)
+    assert excinfo.value.classification == "schema"
+
+
+def test_citable_numbers_number_strings_are_accepted():
+    payload = _payload()
+    payload["citable_numbers"] = ["42 percent", "3.14 events per year"]
+    draft = _parse(_json(payload))
+    assert draft.citable_numbers == ["42 percent", "3.14 events per year"]

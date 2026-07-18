@@ -917,3 +917,57 @@ Rejestr błędów, awarii, nieudanych uruchomień i sytuacji, w których system 
 - **Granica skutku:** błąd wystąpił wyłącznie na kopii w zweryfikowanym katalogu tymczasowym. Kopia przed/po i źródło miały SHA `5BEA9E…C6D10`; WAL/SHM/journal nie istniały, a temp został usunięty.
 - **Naprawa:** helper użył stabilnego lokalnego `rowid` wyłącznie do prezentacji. Powtórzenie dało `integrity_check=ok`, pusty FK check, 14 migracji, jeden job/run/research_run `FAILED`, jeden attempt `SETTLED`, brak karty/rezerwacji/lease i flags fail-closed.
 - **Doprecyzowanie stanu:** tabela ma 19 wierszy `model_usage` łącznie, z czego 14 realnych (`dry_run=0`) sumuje się do `0.737762 USD`; aktywna linia `CURRENT_PROJECT_STATE.md` została skorygowana bez mutacji DB.
+
+### 2026-07-17 — Controlled-live zablokowany przez zamknięty real gate — FAIL-CLOSED / NO REQUEST
+
+- **Objaw:** wszystkie parametry, pricing, budżet, DB fingerprint, quiescence i durable stan przeszły read-only preflight, ale kanoniczny entrypoint nadal przekazuje `allow_execution=False` z `REAL_CONTROLLED_LIVE_ENABLED = False`.
+- **Przyczyna:** właściciel zabronił zmian kodu. Obecna architektura nie ma oddzielnego, niekodowego runtime switcha dla real controlled-live; chwilowe przełączenie stałej byłoby zmianą kodu.
+- **Bezpieczny skutek:** zatrzymanie przed enqueue i provider boundary. Provider calls/attempts/usage/koszt nowy = `0`; marker i nowy operator report nie powstały; DB i fail-closed flags pozostały niezmienione.
+- **Błędy helperów:** pierwszy raport in-memory użył nieistniejącej metody `DurableResearchExecutionIntent.build`, drugi próbował serializować metodę `PricingProfile.fingerprint` zamiast jej wynik. Oba błędy były read-only, przed mutacją i bez SDK/API; trzecia, poprawiona próba immutable zakończyła się powodzeniem.
+- **Sidecary po raporcie read-only:** `operational-report` uruchomiony po pierwszym quiescence `PASS` pozostawił `agent.db-wal` 0 B i `agent.db-shm` 32768 B z tym samym timestampem; główna DB zachowała SHA/rozmiar/mtime. Drugi canonical probe dał `PASS`, zero locked paths i zero project processes. Po dokładnej weryfikacji ścieżek oraz niezmiennych rozmiarów usunięto wyłącznie oba odtwarzalne sidecary; głównej DB nie usuwano ani nie zapisywano.
+- **Werdykt:** `BLOCKED — LIVE PREFLIGHT DRIFT`; brak retry i brak automatycznego resume.
+
+### 2026-07-17 19:18 UTC — Drugi controlled-live: HTTP 200 z `stop_reason=max_tokens` — TERMINAL FAILED
+
+- **Objaw:** jedyny request osiągnął provider boundary i otrzymał HTTP 200, ale zakończył generację przy `max_tokens=1500`. Parser poprawnie zgłosił `ResearchTruncatedError(stop_reason=max_tokens)` zamiast próbować sparsować niepełną odpowiedź.
+- **Lifecycle:** dokładnie jeden attempt i jedno usage; `REQUEST_STARTED→SETTLED`, koszt `0.060078 USD`; job/run/research_run terminalnie `FAILED`; brak Research Card, retry, repair calla, attemptu #2 i reconciliation.
+- **Cleanup:** gate i wszystkie flags fail-closed, marker usunięty, lease/rezerwacja zwolnione, DB bez sidecarów.
+- **Obserwacja diagnostyczna:** po truncation nie znaleziono nowego pliku w oczekiwanym `data/debug/research/<run_id>/`; nie wykonywano naprawy ani kolejnego requestu, zgodnie z zakazem P2 i retry.
+
+### 2026-07-17 19:44 UTC — Controlled-live 3000: kompletna odpowiedź odrzucona przez schema — TERMINAL FAILED
+
+- **Objaw:** jedyny request osiągnął provider boundary i otrzymał HTTP 200 z `stop_reason=end_turn`. Limit `max_tokens=3000` nie uciął odpowiedzi, ale walidator odrzucił `sources[0].supports_claim`, ponieważ kontrakt wymaga `string_or_null`.
+- **Lifecycle:** dokładnie jeden attempt i jedno usage; `REQUEST_STARTED→SETTLED`, koszt `0.077160 USD`; job/run/research_run terminalnie `FAILED`; brak Research Card, retry, repair calla, attemptu #2 i reconciliation.
+- **Cleanup:** gate i wszystkie flags fail-closed, marker usunięty, lease/rezerwacja zwolnione, DB bez WAL/SHM/journal.
+- **Granica:** nie zmieniano parsera, promptu, schema ani limitów po wyniku i nie wykonywano drugiego requestu. Root cause tej próby jest kontraktem typu pola odpowiedzi, a nie truncation.
+- **Nieudane helpery lokalne przed requestem:** dwa odczyty kontraktu identity błędnie założyły obiekt atrybutowy i klucz `request_id` zamiast słownika z `expected_request_id`; helper snapshotu importował nieistniejący `app.config`, a pierwszy PowerShellowy odczyt SHA użył niedostępnej metody `SHA256.HashData`. Wszystkie zakończyły się przed enqueue/providerem albo były wyłącznie read-only; poprawione odczyty nie utworzyły dodatkowej identity trwałej, attemptu ani requestu.
+
+### 2026-07-17 — Rozwiązanie (kandydat) root cause `supports_claim` — PROMPT TYPE CONTRACT
+
+- **Potwierdzenie z trwałej diagnostyki:** sanitizowany `SINGLE_raw_response.txt` runu pokazał `"supports_claim": true` (boolean) dla każdego źródła; kontrakt domenowy i schema to `string | null`. Wada leżała w promptcie (brak typu pola + myląca nazwa), nie w walidatorze.
+- **Naprawa (tylko prompt, `_default_caller`):** `supports_claim` musi być JSON stringiem albo null (nigdy boolean/array/object/number), z przykładem; utwardzono też tę samą klasę dla `citable_numbers` (lista stringów, nie liczby). Schema, parser-walidator, lifecycle, settlement, retry, pricing i migracje bez zmian.
+- **Weryfikacja:** +13 testów typu pola; pełny suite 1248, partycje 298+299+317+334; fake E2E odtwarza dokładnie ten błąd (boolean→terminalny `FAILED` z settlementem) i potwierdza sukces (string→Research Card). Zero requestu/sieci/kosztu; produkcyjna DB bajt-identyczna.
+- **Status:** `CANDIDATE COMPLETE — AWAITING NARROW REVIEW`; kolejny live wymaga osobnej decyzji właściciela.
+
+### 2026-07-17 20:46 UTC — Live po naprawie kontraktu: truncation przy 3000 — TERMINAL FAILED
+
+- **Objaw:** jedyny request po niezależnym `APPROVE` naprawy promptu otrzymał HTTP 200, ale zakończył `stop_reason=max_tokens` przy `max_tokens=3000`. Ledger zapisał 16381 input, 3155 output i jeden web search.
+- **Wynik parsera/schema:** typowany `ResearchTruncatedError`; parser nie próbował interpretować uciętego JSON, a schema validation nie została osiągnięta. Nie ma dowodu live ani sukcesu, ani porażki poprawionych typów `supports_claim`/`citable_numbers`.
+- **Lifecycle:** dokładnie jeden attempt i jedno usage; `REQUEST_STARTED→SETTLED`, koszt `0.074312 USD`; job/run/research_run terminalnie `FAILED`; brak Research Card, retry, repair calla, attemptu #2 i reconciliation.
+- **Cleanup:** gate i flags fail-closed, marker usunięty, lease/rezerwacja zwolnione, DB bez sidecarów; zaakceptowany wcześniejszy diff kodu/testów zachowany.
+- **Nieudany helper read-only:** zbiorczy preflight `rg` zwrócił kod 1 przez nieistniejącą ścieżkę `app/research/dispatcher.py`; pozostałe odczyty zostały powtórzone poprawnie. Nie otworzył gate, nie zmienił DB i nie wykonał requestu.
+
+### 2026-07-18 — Root cause zmiennego rozmiaru odpowiedzi — OUTPUT-SIZE CONTRACT (kandydat)
+
+- **Rozróżnienie trzech żywych porażek:** (1) run `8bcf15e4`, `max_tokens=1500` → truncation (usage output 1667 > 1500); (2) run `65841541`, `max_tokens=3000` → `end_turn`, kompletny JSON 6697 znaków, terminalny schema failure `supports_claim` (kontrakt typu, nie rozmiar); (3) run `08aa35eb`, `max_tokens=3000` → truncation (usage output 3155 > 3000, widoczny JSON tylko 4038 znaków, ucięty przed `sources`). Porażka #2 ma inną przyczynę niż #1/#3; naprawa typu z #2 nie mogła zapobiec #3.
+- **Fakt 1 (semantyka SDK, korekta diagnostyki):** `max_tokens` ogranicza KAŻDY segment generacji osobno, a `usage.output_tokens` to suma segmentów ("inclusive, authoritative total used for billing" — docstring lokalnego SDK). Web search dodaje segment przed wyszukiwaniem (~155–167 tokenów zmierzone w obu uciętych próbach), więc 1667>1500 i 3155>3000 są ZGODNE z kontraktem SDK — to nie jest błąd rozliczeń.
+- **Fakt 2 (właściwy root cause):** zafakturowany output zawiera niewidoczne tokeny (wewnętrzne rozumowanie — `usage.output_tokens_details.thinking_tokens` w SDK — oraz bloki tool-use/cytowań), które liczą się do limitu segmentu, ale nie trafiają do `text`. Zmierzone: próba #2 ≈ 715–1237 tokenów narzutu; próba #3 ≈ 1963–2232 tokenów narzutu w segmencie finalnym przy IDENTYCZNYM promptcie. Ta wariancja sprawia, że stały limit 3000 nie może dawać stabilnego zakończenia — czasem mieści JSON + narzut (#2), a czasem nie (#3).
+- **Naprawa (fala 2026-07-18):** jawny kontrakt rozmiaru `app/research/output_contract.py` (budżet liczności i długości każdego pola + sufit całej odpowiedzi 16000 znaków), prompt v3 z jawnym limitem dla każdego pola i wymogiem kompaktowego jednoliniowego JSON, deterministyczna walidacja fail-closed (`ResearchCardSizeContractError`, podklasa `ResearchSchemaError`: usage/settlement zachowane, terminalny `FAILED`, zero retry, zero cichego obcinania), `prompt_contract_version` v2→v3 (stare intenty fail-closed nieobsługiwane), pomiar `thinking_tokens` w Usage/diagnostyce oraz profil tokenowy `RESEARCH_CARD_MAX_TOKENS=6000` = 3198 (payload na granicach, konserwatywnie /3.5 znaka na token) + 2300 (najgorszy zmierzony narzut) + 502 marginesu. Kandydaci 3500/4000 są mniejsze niż suma dwóch realnych obserwacji; 5000 daje ujemny margines (3198+2300=5498).
+- **Status:** `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; live API pozostaje `FORBIDDEN UNTIL REVIEW APPROVE`.
+
+## 2026-07-18 — Pozytywny live kontraktu rozmiaru; redakcyjne odrzucenie słabych źródeł
+
+- **Nie jest awarią wykonania:** jedyny request zakończył się `end_turn`, przeszedł raw-size, JSON, schema, limity pól i injection guard; lifecycle `DONE/SUCCESS/COMPLETE`, karta `id=3` istnieje, attempt jest `SETTLED`.
+- **Odrębny wynik redakcyjny:** `publication_recommendation=REJECT`, `reason=WEAK_SOURCES`. System poprawnie zachował kartę badawczą, ale nie rekomenduje jej publikacji; nie wolno utożsamiać sukcesu technicznego z jakością źródeł.
+- **Helpery read-only:** import błędnej nazwy stałej `OUTPUT_TOKEN_MARGIN` i zapytanie o nieistniejącą kolumnę `research_sources.research_card_id` zakończyły pomocnicze odczyty; poprawiono je przez użycie właściwej stałej i immutable introspection. Jedna komenda `rg` zwróciła exit 1 z powodu braku dopasowania. Żaden przypadek nie dotknął provider boundary, nie zmienił DB i nie wywołał retry.
+- **Granica:** zero attemptu #2, repair/fallback/verification i automatycznego resume; kolejne live wymaga nowej decyzji właściciela.

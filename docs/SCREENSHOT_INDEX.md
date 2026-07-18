@@ -385,3 +385,33 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co powinien pokazać:** zanonimizowane 1235/1235, partycje `294+299+311+331`, kontrpróby huge score/object+true/bare fence/jawnego clocka oraz potwierdzenie braku pięciu klas sekretów w diagnostic/report/SQLite/logach.
 - **Czego nie może pokazać:** surowego payloadu sekretów, `.env`, raw response, pełnych command lines, pricing profile, zawartości produkcyjnej DB ani chronionych plików użytkownika.
 - **Dlaczego nie utworzono:** screenshot nie wzmacnia deterministycznego dowodu, a mógłby utrwalić prywatne ścieżki lub wartości użyte w próbach. Browser pozostawał zabroniony.
+
+## 2026-07-17 — Controlled-live zatrzymany na kodowym gate
+
+- **Status:** `SCREENSHOT REQUIRED`; screenshotu nie wykonano, ponieważ browser był jawnie zabroniony.
+- **Co powinien pokazać:** zanonimizowane branch/HEAD/upstream `0/0`, staging pusty, quiescence `PASS`, DB `5BEA9E…C6D10`/`335872 B` bez sidecarów, pricing `0.070000/0.105000`, koszt miesiąca `0.737762`, flags fail-closed oraz tracked `REAL_CONTROLLED_LIVE_ENABLED=false`; obok `provider_request_started=false` i brak nowego joba/reportu.
+- **Czego nie może pokazać:** `.env`, API key, prompt/question, pełnych command lines, pricing file contents, execution tokenu ani zawartości SQLite.
+
+## 2026-07-17 19:18 UTC — Drugi controlled-live, terminalne truncation
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ browser był zabroniony.
+- **Co powinien pokazać:** zanonimizowane minimal gate diff `1/1`, jeden HTTP 200, `stop_reason=max_tokens`, attempt `SETTLED`, usage `0.060078 USD`, job/run/research_run `FAILED`, brak karty, gate/flags fail-closed i brak sidecarów.
+- **Czego nie może pokazać:** `.env`, klucza, promptu, raw/truncated response, execution tokenu, pełnych command lines ani zawartości DB.
+
+## 2026-07-18 04:48 UTC — Pozytywny controlled-live Research Card
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ browser i publikacja były jawnie zabronione, a terminal zawiera prywatne ścieżki.
+- **Co powinien pokazać:** zanonimizowane: jeden HTTP 200/`end_turn`, raw 4928≤16000, usage 16834/1961/51, jeden search, koszt `0.063278 USD`, karta `id=3`, lifecycle `DONE/SUCCESS/COMPLETE`, attempt `SETTLED`, gate/flags fail-closed i brak sidecarów.
+- **Czego nie może pokazać:** `.env`, klucza, promptu, raw response, treści karty/źródeł, execution tokenu, pełnych command lines ani zawartości DB.
+
+## 2026-07-17 19:44 UTC — Controlled-live 3000, terminalny schema failure
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ browser był zabroniony, a terminal zawiera prywatne ścieżki.
+- **Co powinien pokazać:** zanonimizowane minimal gate diff `1/1`, jeden HTTP 200, `stop_reason=end_turn`, attempt `SETTLED`, usage `0.077160 USD`, schema failure pola `sources[0].supports_claim`, job/run/research_run `FAILED`, brak karty, gate/flags fail-closed i brak sidecarów.
+- **Czego nie może pokazać:** `.env`, klucza, promptu, raw response, execution tokenu, pełnych command lines ani zawartości DB.
+
+## 2026-07-17 20:46 UTC — Live po naprawie kontraktu, terminalne truncation
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ browser był zabroniony, a terminal zawiera prywatne ścieżki.
+- **Co powinien pokazać:** zanonimizowane gate diff `1/1`, jeden HTTP 200, `stop_reason=max_tokens` przy limicie 3000, attempt `SETTLED`, usage `0.074312 USD`, `ResearchTruncatedError` przed schema, job/run/research_run `FAILED`, brak karty, gate/flags fail-closed i brak sidecarów.
+- **Czego nie może pokazać:** `.env`, klucza, promptu, raw/truncated response, execution tokenu, pełnych command lines ani zawartości DB.

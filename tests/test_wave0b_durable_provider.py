@@ -1517,7 +1517,7 @@ def test_direct_sdk_request_uses_exact_derived_idempotency_key(monkeypatch):
 
     assert len(captured) == 1
     assert captured[0]["extra_headers"] == {"Idempotency-Key": "direct:research:1"}
-    assert "exactly ONE JSON object" in captured[0]["messages"][0]["content"]
+    assert "exactly ONE compact single-line JSON object" in captured[0]["messages"][0]["content"]
     assert result.stop_reason == "end_turn"
     assert result.raw_text == _valid_research_response()
 
