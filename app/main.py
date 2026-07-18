@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 
-from app.core.clock import SystemClock
+from app.core.clock import Clock, SystemClock
 from app.core.config import ConfigError, Settings, load_settings
 from app.models import (
     ExecutionResolution,
@@ -41,6 +41,11 @@ from app.scheduler.maintenance import MaintenanceRunner
 from app.scheduler.scheduling import SchedulingPolicy, SchedulingValidationError
 from app.storage.db import SchemaVersionError, require_database_schema
 from app.storage.repositories import SqliteStorage
+from app.research.offline_evidence_intent import (
+    OFFLINE_EVIDENCE_EXECUTION,
+    OfflineEvidenceIntent,
+    OfflineEvidenceIntentError,
+)
 
 
 def _configure_output() -> None:
@@ -182,8 +187,63 @@ def _cmd_enqueue_research(args: argparse.Namespace) -> int:
         storage.close()
 
 
+def _cmd_enqueue_offline_evidence(args: argparse.Namespace) -> int:
+    """Freeze one local fixture into a durable, versioned E2-A job intent."""
+    settings = load_settings()
+    try:
+        policy = SchedulingPolicy.from_config(settings.editorial_schedule)
+        account = settings.get_account(args.account_id)
+        raw = json.loads(args.fixture_path.read_text(encoding="utf-8"))
+        intent = OfflineEvidenceIntent.from_payload(raw)
+    except (
+        ConfigError, SchedulingValidationError, OfflineEvidenceIntentError,
+        OSError, json.JSONDecodeError,
+    ) as exc:
+        print(f"ENQUEUE OFFLINE EVIDENCE: failed closed: {exc}", file=sys.stderr)
+        return 2
+
+    storage = SqliteStorage.open(settings.db_path)
+    try:
+        storage.ensure_account(account)
+        payload = {
+            "account_id": account.id,
+            "topic_id": args.topic_id,
+            "dry_run": True,
+            "execution": OFFLINE_EVIDENCE_EXECUTION,
+            "execution_intent": raw,
+        }
+        result = ScheduledJobEnqueuer(
+            storage=storage, scheduling_policy=policy, clock=SystemClock(),
+        ).enqueue(ScheduledJobRequest(
+            id=f"offline-evidence-{uuid4()}",
+            account_id=account.id,
+            kind=JobKind.RESEARCH,
+            workflow=WorkflowType.RESEARCH,
+            idempotency_key=f"offline-evidence:{account.id}:{args.topic_id}:{uuid4()}",
+            topic_id=args.topic_id,
+            payload=payload,
+            requested_at=args.requested_at,
+            # Three explicit crash checkpoints are safely resumable because the
+            # path has no provider/external-effect boundary.
+            max_attempts=max(settings.worker_default_max_attempts, 4),
+        ))
+        print(f"ENQUEUE OFFLINE EVIDENCE: job_id={result.job.id}")
+        print(f"earliest_run_at_utc={result.decision.earliest_run_at.isoformat()}")
+        print(f"intent_version={intent.version}")
+        print("execution=offline_evidence_v1")
+        print("dry_run=true")
+        return 0
+    except (SchedulingValidationError, ValueError) as exc:
+        print(f"ENQUEUE OFFLINE EVIDENCE: failed closed: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        storage.close()
+
+
 def _build_worker(
-    settings: Settings, offline_only: bool = False,
+    settings: Settings, offline_only: bool = False, *,
+    clock: Clock | None = None,
+    lease_owner: str | None = None,
 ) -> tuple[Worker, SqliteStorage]:
     """Composes the same runtime dependencies used by the application, once."""
     # Keep paid-provider imports out of the CLI module import graph.  In
@@ -194,7 +254,7 @@ def _build_worker(
 
     settings = replace(settings, dry_run=True)
     storage = SqliteStorage.open(settings.db_path)
-    clock = SystemClock()
+    clock = clock or SystemClock()
     policy = PolicyEngine(settings, storage, clock)
     dispatcher = JobDispatcher(
         settings=settings, storage=storage, policy=policy, clock=clock,
@@ -202,7 +262,7 @@ def _build_worker(
     )
     return Worker(
         storage=storage, policy=policy, dispatcher=dispatcher,
-        lease_owner=f"cli-worker-{uuid4()}", lease_seconds=60,
+        lease_owner=lease_owner or f"cli-worker-{uuid4()}", lease_seconds=60,
         heartbeat_interval_seconds=20.0,
         heartbeat_startup_timeout_seconds=5.0,
         heartbeat_shutdown_timeout_seconds=5.0,
@@ -853,6 +913,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Akceptowane dla jawności; harmonogram jest zawsze wypisywany.",
     )
     p_enqueue_research.set_defaults(func=_cmd_enqueue_research)
+
+    p_enqueue_evidence = sub.add_parser(
+        "enqueue-offline-evidence-research",
+        help="Dodaj wersjonowany, zero-cost job E2-A z lokalnego fixture JSON.",
+    )
+    p_enqueue_evidence.add_argument("--account-id", required=True)
+    p_enqueue_evidence.add_argument("--topic-id", required=True, type=int)
+    p_enqueue_evidence.add_argument("--fixture-path", required=True, type=Path)
+    p_enqueue_evidence.add_argument("--requested-at", type=_parse_requested_at)
+    p_enqueue_evidence.set_defaults(func=_cmd_enqueue_offline_evidence)
 
     p_worker = sub.add_parser("worker", help="Wykonaj bezpieczny, trwały job offline.")
     worker_mode = p_worker.add_mutually_exclusive_group(required=True)

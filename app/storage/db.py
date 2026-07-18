@@ -11,7 +11,8 @@ MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 STAGE1_SCHEMA_VERSION = "0014_provider_attempt_reconciliation"
 SETTLED_RECOVERY_SCHEMA_VERSION = "0015_settled_execution_recovery"
 EVIDENCE_SCHEMA_VERSION = "0016_evidence_foundation"
-RUNTIME_SCHEMA_VERSION = EVIDENCE_SCHEMA_VERSION
+EVIDENCE_PIPELINE_SCHEMA_VERSION = "0017_evidence_pipeline_lineage"
+RUNTIME_SCHEMA_VERSION = EVIDENCE_PIPELINE_SCHEMA_VERSION
 _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0007_candidate_attempts",
     "0008_staged_force_reresearch",
@@ -23,6 +24,7 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0014_provider_attempt_reconciliation",
     "0015_settled_execution_recovery",
     "0016_evidence_foundation",
+    "0017_evidence_pipeline_lineage",
 })
 
 
@@ -448,5 +450,19 @@ def migrate_0015_to_0016(
         db_path,
         source_version=SETTLED_RECOVERY_SCHEMA_VERSION,
         target_version=EVIDENCE_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0016_to_0017(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the separately authorized E2-A lineage migration."""
+    return _migrate_single_step(
+        db_path,
+        source_version=EVIDENCE_SCHEMA_VERSION,
+        target_version=EVIDENCE_PIPELINE_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )

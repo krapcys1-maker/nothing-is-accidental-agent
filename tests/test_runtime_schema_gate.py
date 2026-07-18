@@ -193,7 +193,7 @@ def test_explicit_fresh_initialization_then_runtime_open_does_not_reapply_migrat
     after = database_schema_versions(path)
     assert before == after
     assert after[-1] == RUNTIME_SCHEMA_VERSION
-    assert len(after) == 16
+    assert len(after) == 17
 
 
 def test_runtime_open_uses_mode_rw_and_gates_before_writable_preparation(

@@ -565,3 +565,7 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Twarde granice:** bez drugiego requestu, retry, fallbacku, repair/verification, resume, zmian promptu/parsera/schema, refaktoru, backlogu, pricingu/migracji, browsera, publikacji oraz stage/commit/push/PR/merge.
 - **Wynik:** autoryzacja została zużyta przez jeden HTTP 200 z `stop_reason=max_tokens`; `ResearchTruncatedError`, koszt `0.074312 USD`, attempt `SETTLED`, terminalny `FAILED`, brak karty. Schema naprawionych pól nie została osiągnięta.
 - **Granica po:** gate i flags przywrócone fail-closed; kolejny live wymaga nowej jawnej decyzji właściciela.
+### 2026-07-18 — Autoryzacja zakresu E2-A
+
+- Właściciel zlecił rozpoczęcie i pełne wykonanie WAVE E2-A: wyłącznie offline CLI→Worker→Dispatcher→STAGED→FakeFetch→E1→Research Card, z jednym commitem, pushem i PR po zielonej walidacji.
+- Granice właściciela: bez live, realnego Fetch/HTTP, providera, browsera, publikacji, migracji produkcyjnej, merge i E2-B.

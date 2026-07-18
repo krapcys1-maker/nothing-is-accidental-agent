@@ -1,5 +1,7 @@
 # IMPLEMENTATION_ROADMAP — Nothing Is Accidental Agent
 
+> **E2-A = `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW` (2026-07-18, ADR-102).** Ukończony kandydat obejmuje tylko offline integration spine: CLI→job→Worker→Dispatcher→STAGED A1/A2/B→`FakeFetch`→E1 verifier/evidence→Research Card→atomową terminalizację oraz migrację `0017` z minimalnym lineage. Nie rozpoczyna E2-B. Live może być rozważone dopiero po review i merge E2-A, osobnej fali realnego Fetch adaptera, trwałym controlled-live staged provider lifecycle, estymacie kosztu i osobnej zgodzie właściciela na dokładny job/model/cap/termin; bez publikacji.
+
 > **STATUS: JEDYNA OBOWIĄZUJĄCA KOLEJNOŚĆ DALSZYCH PRAC.**
 > Data: 2026-07-13 · Architektura docelowa: `MASTER_ARCHITECTURE.md` · Stan bieżący: `CURRENT_PROJECT_STATE.md`.
 > Zastępuje plany etapów z `docs/IMPLEMENTATION_PLAN.md` (§B.11, CZĘŚCI D–F) i plan napraw z audytu 12.07 — oba w `docs/archive/superseded_plans/`.

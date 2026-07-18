@@ -26,6 +26,13 @@ from app.research.durable_intent import (
     DurableResearchExecutionIntent,
     canonicalize_durable_research_payload,
 )
+from app.research.offline_evidence_intent import (
+    OFFLINE_EVIDENCE_EXECUTION,
+    OfflineEvidenceIntent,
+    OfflineEvidenceIntentError,
+    canonicalize_offline_evidence_payload,
+)
+from app.workflows.research.offline_evidence import run_offline_evidence_research
 from app.workflows.research.pipeline import (
     ResearchExecutionAlreadyInitialized,
     ResearchExecutionNeedsReconciliation,
@@ -104,6 +111,14 @@ class ResearchDryRunCallable(Protocol):
         policy: PolicyEngine,
         clock: Clock,
         job_execution: ResearchJobExecution,
+    ) -> ResearchRunSummary: ...
+
+
+class OfflineEvidenceCallable(Protocol):
+    def __call__(
+        self, account: Account, topic: Topic, *, settings: Settings,
+        storage: StoragePort, policy: PolicyEngine, clock: Clock,
+        job_execution: ResearchJobExecution, intent: OfflineEvidenceIntent,
     ) -> ResearchRunSummary: ...
 
 
@@ -198,6 +213,7 @@ class JobDispatcher:
         clock: Clock | None = None,
         research_dry_run: ResearchDryRunCallable = run_research_dry_run,
         research_real: ResearchDryRunCallable = _run_durable_real_research,
+        research_offline_evidence: OfflineEvidenceCallable = run_offline_evidence_research,
         allow_real_research: bool = True,
     ) -> None:
         self._settings = settings
@@ -206,6 +222,7 @@ class JobDispatcher:
         self._clock = clock or SystemClock()
         self._research_dry_run = research_dry_run
         self._research_real = research_real
+        self._research_offline_evidence = research_offline_evidence
         self._allow_real_research = allow_real_research
 
     def dispatch(
@@ -266,13 +283,21 @@ class JobDispatcher:
         heartbeat()
 
         try:
-            runner = self._research_real if is_real else self._research_dry_run
-            summary = runner(
-                account, topic,
-                settings=self._settings, storage=self._storage, policy=self._policy,
-                clock=self._clock,
-                job_execution=ResearchJobExecution(job_id=job.id, lease_owner=lease_owner),
-            )
+            execution = ResearchJobExecution(job_id=job.id, lease_owner=lease_owner)
+            if job.payload.get("execution") == OFFLINE_EVIDENCE_EXECUTION:
+                intent = OfflineEvidenceIntent.from_payload(job.payload["execution_intent"])
+                summary = self._research_offline_evidence(
+                    account, topic, settings=self._settings, storage=self._storage,
+                    policy=self._policy, clock=self._clock,
+                    job_execution=execution, intent=intent,
+                )
+            else:
+                runner = self._research_real if is_real else self._research_dry_run
+                summary = runner(
+                    account, topic,
+                    settings=self._settings, storage=self._storage, policy=self._policy,
+                    clock=self._clock, job_execution=execution,
+                )
         except (ResearchExecutionAlreadyInitialized, ResearchExecutionNeedsReconciliation) as exc:
             raise UncertainExternalEffectError(
                 "Research execution requires verification before any further provider request."
@@ -303,7 +328,8 @@ class JobDispatcher:
             raise UnsupportedJobError("RESEARCH jobs support only the RESEARCH workflow.")
         if job.topic_id is None:
             raise PayloadValidationError("RESEARCH job requires topic_id.")
-        if job.run_id is not None:
+        is_offline_evidence = job.payload.get("execution") == OFFLINE_EVIDENCE_EXECUTION
+        if job.run_id is not None and not is_offline_evidence:
             raise PayloadValidationError("RESEARCH worker accepts only a job without a prior run_id.")
         dry_keys = {"account_id", "topic_id", "dry_run"}
         real_keys = {
@@ -311,13 +337,31 @@ class JobDispatcher:
             "execution_intent",
         }
         controlled_real_keys = real_keys | {"controlled_session"}
-        if set(job.payload) not in (dry_keys, real_keys, controlled_real_keys):
+        offline_evidence_keys = {
+            "account_id", "topic_id", "dry_run", "execution", "execution_intent",
+        }
+        if set(job.payload) not in (
+            dry_keys, real_keys, controlled_real_keys, offline_evidence_keys,
+        ):
             raise PayloadValidationError("RESEARCH payload contains unsupported fields.")
         if job.payload["account_id"] != job.account_id or job.payload["topic_id"] != job.topic_id:
             raise PayloadValidationError("RESEARCH payload account_id/topic_id must match the job.")
         is_real = job.payload["dry_run"] is False
         if not is_real and job.payload["dry_run"] is not True:
             raise PayloadValidationError("RESEARCH payload dry_run must be boolean.")
+        if is_offline_evidence:
+            try:
+                normalized_offline = canonicalize_offline_evidence_payload(job.payload)
+            except OfflineEvidenceIntentError as exc:
+                raise PayloadValidationError("RESEARCH offline evidence intent is invalid.") from exc
+            if (
+                normalized_offline["account_id"] != job.account_id
+                or normalized_offline["topic_id"] != job.topic_id
+                or is_real
+            ):
+                raise PayloadValidationError(
+                    "RESEARCH offline evidence intent does not match job identity or mode."
+                )
         if is_real and (
             job.payload.get("execution") != "durable_provider_v2"
         ):

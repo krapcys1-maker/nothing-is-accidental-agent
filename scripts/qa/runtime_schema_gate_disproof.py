@@ -18,6 +18,8 @@ from app.testing.safety_kernel import activate as _activate_safety_kernel  # noq
 _activate_safety_kernel()
 
 from app.storage.db import (  # noqa: E402
+    EVIDENCE_PIPELINE_SCHEMA_VERSION,
+    EVIDENCE_SCHEMA_VERSION,
     ExplicitMigrationError,
     RUNTIME_SCHEMA_VERSION,
     SETTLED_RECOVERY_SCHEMA_VERSION,
@@ -28,6 +30,7 @@ from app.storage.db import (  # noqa: E402
     initialize_database,
     migrate_0014_to_0015,
     migrate_0015_to_0016,
+    migrate_0016_to_0017,
 )
 import app.storage.repositories as repositories_module  # noqa: E402
 from app.storage.repositories import SqliteStorage  # noqa: E402
@@ -143,8 +146,17 @@ def main() -> int:
         else:
             checks.append(False)
         evidence = migrate_0015_to_0016(path)
-        checks.append(evidence.applied_migrations == (RUNTIME_SCHEMA_VERSION,))
+        checks.append(evidence.applied_migrations == (EVIDENCE_SCHEMA_VERSION,))
         checks.append(len(database_schema_versions(path)) == 16)
+        try:
+            SqliteStorage.open(path)
+        except SchemaVersionTooOld:
+            checks.append(True)
+        else:
+            checks.append(False)
+        lineage = migrate_0016_to_0017(path)
+        checks.append(lineage.applied_migrations == (EVIDENCE_PIPELINE_SCHEMA_VERSION,))
+        checks.append(len(database_schema_versions(path)) == 17)
         runtime = SqliteStorage.open(path)
         runtime.close()
         checks.append(True)
@@ -155,7 +167,7 @@ def main() -> int:
             checks.append(True)
         else:
             checks.append(False)
-        repeated_evidence = migrate_0015_to_0016(path)
+        repeated_evidence = migrate_0016_to_0017(path)
         checks.append(
             repeated_evidence.idempotent and repeated_evidence.applied_migrations == ()
         )
@@ -171,7 +183,7 @@ def main() -> int:
 
     passed = sum(checks)
     print(f"[BLOCKED] runtime schema-gate disproof: {passed}/{len(checks)}")
-    return 0 if passed == len(checks) == 21 else 1
+    return 0 if passed == len(checks) == 24 else 1
 
 
 if __name__ == "__main__":
