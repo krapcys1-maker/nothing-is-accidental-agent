@@ -199,17 +199,92 @@ def test_parent_is_not_exempt_when_it_is_a_real_application_role(tmp_path: Path)
 def test_unreadable_application_host_fails_closed(tmp_path: Path):
     root = tmp_path / "project"
     root.mkdir()
+    live_pid = os.getpid()
     diagnostics = _diagnostics_by_pid(
         (
             _snapshot(100, 90),
             _snapshot(101, 100, command_line="powershell.exe registered-helper"),
-            _snapshot(200, 1, command_line="", creation_time_utc=""),
+            _snapshot(live_pid, 1, command_line="", creation_time_utc=""),
         ),
         root,
     )
 
-    assert diagnostics[200].blocking is True
-    assert diagnostics[200].reason_codes == ("APPLICATION_HOST_COMMAND_LINE_UNREADABLE",)
+    assert diagnostics[live_pid].blocking is True
+    assert diagnostics[live_pid].reason_codes == ("APPLICATION_HOST_COMMAND_LINE_UNREADABLE",)
+
+
+@WINDOWS_ONLY
+def test_unreadable_application_host_downgrades_when_confirmed_exited(tmp_path: Path):
+    root = tmp_path / "project"
+    root.mkdir()
+    exited = subprocess.Popen([sys.executable, "-c", "pass"])
+    exited_pid = exited.pid
+    exited.wait(timeout=10)
+    del exited
+    assert not _windows_pid_is_running(exited_pid)
+
+    diagnostics = _diagnostics_by_pid(
+        (
+            _snapshot(100, 90),
+            _snapshot(101, 100, command_line="powershell.exe registered-helper"),
+            _snapshot(exited_pid, 1, command_line="", creation_time_utc=""),
+        ),
+        root,
+    )
+
+    assert diagnostics[exited_pid].blocking is False
+    assert diagnostics[exited_pid].classification == (
+        "OBSERVED_HOST_PROCESS_EXITED_DURING_INVENTORY"
+    )
+    assert diagnostics[exited_pid].reason_codes == (
+        "APPLICATION_HOST_COMMAND_LINE_UNREADABLE",
+        "PROCESS_CONFIRMED_EXITED_AFTER_SNAPSHOT",
+    )
+
+
+@WINDOWS_ONLY
+def test_unreadable_application_host_stays_blocking_while_genuinely_alive(
+    tmp_path: Path,
+):
+    root = tmp_path / "project"
+    root.mkdir()
+    with _ready_process(_sleeping_python()) as alive:
+        diagnostics = _diagnostics_by_pid(
+            (
+                _snapshot(100, 90),
+                _snapshot(101, 100, command_line="powershell.exe registered-helper"),
+                _snapshot(alive.pid, 1, command_line="", creation_time_utc=""),
+            ),
+            root,
+        )
+
+    assert diagnostics[alive.pid].blocking is True
+    assert diagnostics[alive.pid].classification == "BLOCKING_AMBIGUOUS_PROCESS"
+    assert diagnostics[alive.pid].reason_codes == (
+        "APPLICATION_HOST_COMMAND_LINE_UNREADABLE",
+    )
+
+
+def test_unreadable_application_host_ignores_pid_that_never_existed(tmp_path: Path):
+    root = tmp_path / "project"
+    root.mkdir()
+    never_allocated_pid = 999_999_999
+    diagnostics = _diagnostics_by_pid(
+        (
+            _snapshot(100, 90),
+            _snapshot(101, 100, command_line="powershell.exe registered-helper"),
+            _snapshot(never_allocated_pid, 1, command_line="", creation_time_utc=""),
+        ),
+        root,
+    )
+
+    detail = diagnostics[never_allocated_pid]
+    if os.name == "nt":
+        assert detail.blocking is False
+        assert detail.classification == "OBSERVED_HOST_PROCESS_EXITED_DURING_INVENTORY"
+    else:
+        assert detail.blocking is True
+        assert detail.classification == "BLOCKING_AMBIGUOUS_PROCESS"
 
 
 def test_helper_creation_time_prevents_pid_reuse_acceptance():
