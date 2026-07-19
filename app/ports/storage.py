@@ -11,6 +11,10 @@ from typing import Protocol, Sequence
 from app.core.clock import Clock
 from app.models import (
     Account,
+    ControlledFetchApproval,
+    ControlledFetchAttempt,
+    ControlledFetchFailureOutcome,
+    ControlledFetchInitialization,
     Job,
     JobEnqueueResult,
     JobExecutionContext,
@@ -141,6 +145,25 @@ class StaleJobExecutionError(JobRunRelationError):
 
     def __init__(self, job_id: str, detail: str = "job execution lease is no longer active.") -> None:
         super().__init__("STALE_JOB_EXECUTION", job_id, detail)
+
+
+class ControlledFetchRetrievalNotOk(RuntimeError):
+    """Typowany wynik pobrania nie klasyfikuje się jako OK — sukces odmówiony.
+
+    Wynik requestu jest jednoznaczny (request się odbył i zawiódł), więc
+    wywołujący kieruje go na granicę błędu z dokumentem, nigdy na eskalację."""
+
+
+class ControlledFetchAuthorizationError(RuntimeError):
+    """Kontrolowana odmowa autoryzacji kontrolowanego pobrania (E2-B).
+
+    Podnoszona PRZED granicą transportu — brak/niezgodność/wygaśnięcie/zużycie
+    zgody L1 albo niezgodny fingerprint intentu. Nic zewnętrznego nie zostało
+    wykonane, więc wynik jest jednoznaczny (terminalny FAILED bez eskalacji)."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        self.code = code
+        super().__init__(f"{code}: {detail}")
 
 
 class BudgetReservationError(RuntimeError):
@@ -275,6 +298,51 @@ class StoragePort(Protocol):
     def assert_offline_evidence_execution_active(
         self, execution: JobExecutionContext,
     ) -> None: ...
+
+    def record_controlled_fetch_approval(
+        self, *, job_id: str, account_id: str, approved_by: str,
+        expires_at: datetime, clock: Clock,
+    ) -> ControlledFetchApproval:
+        """Zapisuje jednorazową zgodę L1 wywiedzioną z zamrożonego kontraktu joba."""
+        ...
+
+    def get_controlled_fetch_approval_for_job(
+        self, job_id: str,
+    ) -> ControlledFetchApproval | None: ...
+
+    def get_controlled_fetch_attempt_for_job(
+        self, job_id: str,
+    ) -> ControlledFetchAttempt | None: ...
+
+    def initialize_controlled_fetch_run_for_job(
+        self, job_id: str, lease_owner: str, run_id: str, *, clock: Clock,
+    ) -> ControlledFetchInitialization: ...
+
+    def begin_controlled_fetch_attempt(
+        self, execution: JobExecutionContext,
+    ) -> ControlledFetchAttempt:
+        """Atomowo konsumuje approval i tworzy RESERVED attempt w jednym fence."""
+        ...
+
+    def mark_controlled_fetch_request_started(
+        self, execution: JobExecutionContext, attempt_id: int,
+    ) -> None:
+        """Utrwala granicę tuż przed przekroczeniem transportu HTTP."""
+        ...
+
+    def finalize_controlled_fetch_success(
+        self, execution: JobExecutionContext, attempt_id: int,
+        document: FetchedDocument,
+    ) -> EvidenceRetrieval:
+        """Atomowo utrwala retrieval OK, SUCCEEDED attempt i terminalny job/run."""
+        ...
+
+    def fail_controlled_fetch_execution(
+        self, execution: JobExecutionContext, error: str, *,
+        document: FetchedDocument | None = None,
+    ) -> ControlledFetchFailureOutcome:
+        """Deterministyczna granica błędu: FAILED albo eskalacja NEEDS_VERIFICATION."""
+        ...
 
     def add_job_model_usage(
         self, execution: JobExecutionContext, usage: ModelUsage,

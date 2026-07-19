@@ -17,6 +17,12 @@ from app.core.money import decimal_from, quantize_usd, sum_usd
 from app.core.security_flags import SECURITY_FLAG_DEFAULTS
 from app.models import (
     Account,
+    CONTROLLED_FETCH_ACTION_TYPE,
+    ControlledFetchApproval,
+    ControlledFetchAttempt,
+    ControlledFetchAttemptStatus,
+    ControlledFetchFailureOutcome,
+    ControlledFetchInitialization,
     DurableProviderAttemptContext,
     EvidenceExcerpt,
     EvidenceRetrieval,
@@ -74,6 +80,8 @@ from app.models import (
 from app.ports.storage import (
     AmountBelowMinimumPrecisionError,
     BudgetReservationError,
+    ControlledFetchAuthorizationError,
+    ControlledFetchRetrievalNotOk,
     JobConflictError,
     JobPayloadValidationError,
     JobRunConflictError,
@@ -98,6 +106,13 @@ from app.research.durable_intent import (
 from app.research.offline_evidence_intent import (
     OfflineEvidenceIntentError,
     canonicalize_offline_evidence_payload,
+)
+from app.research.controlled_fetch_intent import (
+    CONTROLLED_FETCH_EXECUTION,
+    ControlledFetchIntent,
+    ControlledFetchIntentError,
+    canonicalize_controlled_fetch_payload,
+    controlled_fetch_intent_fingerprint,
 )
 from app.ports.fetch import FetchedDocument
 from app.research.evidence import (
@@ -3700,6 +3715,121 @@ class SqliteStorage:
                 self.conn.rollback()
             raise
 
+    def _recover_controlled_fetch_expired_lease(
+        self, row: sqlite3.Row, current_ts: str,
+    ) -> tuple[JobStatus, bool, str] | None:
+        """Decide and normalize one expired controlled fetch lease (E2-B).
+
+        Zwraca (target, release_budget, error) albo ``None`` gdy job nie jest
+        kontrolowanym pobraniem. Attempt i run są normalizowane w TEJ samej
+        transakcji recovery, zanim generyczny UPDATE dotknie joba — podłogi
+        0018 wymuszają tę kolejność. RESERVED = jednoznacznie żaden request nie
+        wyszedł, ale jednorazowa zgoda została zużyta → terminalny FAILED (bez
+        wskrzeszania zgody). REQUEST_STARTED = wynik niejednoznaczny →
+        NEEDS_VERIFICATION bez automatycznego ponowienia.
+        """
+        if row["kind"] != JobKind.RESEARCH.value:
+            return None
+        try:
+            canonicalize_controlled_fetch_payload(json.loads(row["payload_json"]))
+        except (json.JSONDecodeError, ControlledFetchIntentError):
+            return None
+
+        def _fail_run(error: str) -> None:
+            if row["run_id"] is not None:
+                self.conn.execute(
+                    "UPDATE runs SET status='FAILED',error=?,cost_usd=0,finished_at=? "
+                    "WHERE id=? AND status='RUNNING' AND finished_at IS NULL",
+                    (error, current_ts, row["run_id"]),
+                )
+
+        attempt = self.conn.execute(
+            "SELECT id,status FROM controlled_fetch_attempts WHERE job_id=?",
+            (row["id"],),
+        ).fetchone()
+        if attempt is None:
+            run_state = None
+            if row["run_id"] is not None:
+                run_state = self.conn.execute(
+                    "SELECT status,finished_at,cost_usd FROM runs WHERE id=?",
+                    (row["run_id"],),
+                ).fetchone()
+            clean_run = row["run_id"] is None or (
+                run_state is not None
+                and run_state["status"] == RunStatus.RUNNING.value
+                and run_state["finished_at"] is None
+                and float(run_state["cost_usd"]) == 0
+            )
+            if (
+                row["external_effect_started_at"] is None
+                and clean_run
+                and int(row["attempts"]) < int(row["max_attempts"])
+            ):
+                return (
+                    JobStatus.QUEUED, False,
+                    "Lease expired before any controlled fetch approval was consumed; safely requeued.",
+                )
+            error = "Controlled fetch lease expired without a safely repeatable state."
+            _fail_run(error)
+            return (JobStatus.FAILED, True, error)
+        if attempt["status"] == ControlledFetchAttemptStatus.RESERVED.value:
+            error = (
+                "CONTROLLED_FETCH_"
+                + _LEASE_EXPIRED_BEFORE_REQUEST_STARTED
+                + ": one-shot approval was consumed and cannot be replayed."
+            )
+            cursor = self.conn.execute(
+                "UPDATE controlled_fetch_attempts SET status=?,terminalized_at=?,"
+                "outcome_reason=? WHERE id=? AND status=?",
+                (
+                    ControlledFetchAttemptStatus.FAILED.value, current_ts,
+                    _LEASE_EXPIRED_BEFORE_REQUEST_STARTED, attempt["id"],
+                    ControlledFetchAttemptStatus.RESERVED.value,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise LifecycleTransitionError(
+                    "controlled_fetch_attempt", attempt["id"],
+                    ControlledFetchAttemptStatus.FAILED.value,
+                    (ControlledFetchAttemptStatus.RESERVED.value,),
+                    str(attempt["status"]),
+                    detail="Recovery attempt normalization compare-and-swap failed.",
+                )
+            _fail_run(error)
+            return (JobStatus.FAILED, True, error)
+        if attempt["status"] == ControlledFetchAttemptStatus.REQUEST_STARTED.value:
+            error = (
+                "CONTROLLED_FETCH_"
+                + _LEASE_EXPIRED_AFTER_REQUEST_STARTED
+                + ": request outcome requires verification."
+            )
+            cursor = self.conn.execute(
+                "UPDATE controlled_fetch_attempts SET status=?,terminalized_at=?,"
+                "outcome_reason=? WHERE id=? AND status=?",
+                (
+                    ControlledFetchAttemptStatus.NEEDS_VERIFICATION.value, current_ts,
+                    _LEASE_EXPIRED_AFTER_REQUEST_STARTED, attempt["id"],
+                    ControlledFetchAttemptStatus.REQUEST_STARTED.value,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise LifecycleTransitionError(
+                    "controlled_fetch_attempt", attempt["id"],
+                    ControlledFetchAttemptStatus.NEEDS_VERIFICATION.value,
+                    (ControlledFetchAttemptStatus.REQUEST_STARTED.value,),
+                    str(attempt["status"]),
+                    detail="Recovery attempt normalization compare-and-swap failed.",
+                )
+            _fail_run(error)
+            return (JobStatus.NEEDS_VERIFICATION, False, error)
+        # Terminalny attempt przy niedomkniętym jobie nie powstaje w żadnej
+        # naszej transakcji; fail-closed do kolejki operatora bez mutacji attemptu.
+        _fail_run("Controlled fetch attempt is terminal but the job lease expired unresolved.")
+        return (
+            JobStatus.NEEDS_VERIFICATION, False,
+            "Controlled fetch attempt is terminal but the job lease expired unresolved.",
+        )
+
     def release_or_requeue_expired_leases(
         self, *, now: datetime | None = None, clock: Clock | None = None,
     ) -> JobRecoveryResult:
@@ -3763,7 +3893,18 @@ class SqliteStorage:
                             and int(state["usage_count"]) == 0
                             and int(state["attempt_count"]) == 0
                         )
-                if row["kind"] == JobKind.BROWSER.value or row["external_effect_started_at"] is not None:
+                controlled_fetch_recovery = self._recover_controlled_fetch_expired_lease(
+                    row, current_ts,
+                )
+                if controlled_fetch_recovery is not None:
+                    target, release_budget, error = controlled_fetch_recovery
+                    if target is JobStatus.QUEUED:
+                        result.requeued_count += 1
+                    elif target is JobStatus.NEEDS_VERIFICATION:
+                        result.needs_verification_count += 1
+                    else:
+                        result.failed_count += 1
+                elif row["kind"] == JobKind.BROWSER.value or row["external_effect_started_at"] is not None:
                     target = JobStatus.NEEDS_VERIFICATION
                     release_budget = False
                     result.needs_verification_count += 1
@@ -6570,6 +6711,630 @@ class SqliteStorage:
             if research.rowcount != 1 or run.rowcount != 1 or job.rowcount != 1:
                 raise StaleJobExecutionError(execution.job_id)
             self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    # --- Controlled Fetch foundation (Etap 2, fala E2-B) ---
+    # Trwały lifecycle jednego zatwierdzonego pobrania: approval L1 → RESERVED
+    # → REQUEST_STARTED → SUCCEEDED | FAILED | NEEDS_VERIFICATION. Każda
+    # mutacja działa pod tym samym rodzajem fence co research (job→run→topic,
+    # świeży lease), a podłogi SQLite migracji 0018 wiążą approval, attempt,
+    # payload i retrieval w jeden niepodrabialny łańcuch.
+
+    @staticmethod
+    def _controlled_fetch_approval_from_row(row: sqlite3.Row) -> ControlledFetchApproval:
+        return ControlledFetchApproval(
+            id=int(row["id"]), job_id=row["job_id"], account_id=row["account_id"],
+            action_type=row["action_type"], requested_url=row["requested_url"],
+            intent_fingerprint=row["intent_fingerprint"],
+            timeout_seconds=int(row["timeout_seconds"]),
+            max_bytes=int(row["max_bytes"]),
+            max_redirects=int(row["max_redirects"]),
+            approved_by=row["approved_by"], approved_at=row["approved_at"],
+            expires_at=row["expires_at"], consumed_at=row["consumed_at"],
+        )
+
+    @staticmethod
+    def _controlled_fetch_attempt_from_row(row: sqlite3.Row) -> ControlledFetchAttempt:
+        return ControlledFetchAttempt(
+            id=int(row["id"]), job_id=row["job_id"], run_id=row["run_id"],
+            account_id=row["account_id"], topic_id=int(row["topic_id"]),
+            approval_id=int(row["approval_id"]), attempt_no=int(row["attempt_no"]),
+            source_identity=row["source_identity"],
+            requested_url=row["requested_url"],
+            intent_fingerprint=row["intent_fingerprint"],
+            status=ControlledFetchAttemptStatus(row["status"]),
+            lease_owner=row["lease_owner"], reserved_at=row["reserved_at"],
+            request_started_at=row["request_started_at"],
+            terminalized_at=row["terminalized_at"],
+            retrieval_id=row["retrieval_id"], outcome_reason=row["outcome_reason"],
+        )
+
+    def get_controlled_fetch_approval_for_job(
+        self, job_id: str,
+    ) -> ControlledFetchApproval | None:
+        row = self.conn.execute(
+            "SELECT * FROM controlled_fetch_approvals WHERE job_id=?", (job_id,),
+        ).fetchone()
+        return None if row is None else self._controlled_fetch_approval_from_row(row)
+
+    def get_controlled_fetch_attempt_for_job(
+        self, job_id: str,
+    ) -> ControlledFetchAttempt | None:
+        row = self.conn.execute(
+            "SELECT * FROM controlled_fetch_attempts WHERE job_id=?", (job_id,),
+        ).fetchone()
+        return None if row is None else self._controlled_fetch_attempt_from_row(row)
+
+    def record_controlled_fetch_approval(
+        self, *, job_id: str, account_id: str, approved_by: str,
+        expires_at: datetime, clock: Clock,
+    ) -> ControlledFetchApproval:
+        """L1: derive the approval entirely from the frozen job contract.
+
+        URL, fingerprint i limity NIE są przyjmowane od wywołującego — pochodzą
+        wyłącznie z kanonizowanego, zamrożonego payloadu joba, więc zgoda nigdy
+        nie może opisywać czegoś innego niż wykonywany kontrakt.
+        """
+        if not approved_by.strip():
+            raise ControlledFetchAuthorizationError(
+                "APPROVER_MISSING", "approved_by must identify the human L1 operator.",
+            )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now_dt = self._job_now(clock=clock)
+            now = _persisted_ts(now_dt)
+            expiry_dt = self._job_now(expires_at)
+            if expiry_dt <= now_dt:
+                raise ControlledFetchAuthorizationError(
+                    "APPROVAL_EXPIRY_INVALID", "expires_at must be in the future.",
+                )
+            row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                raise ControlledFetchAuthorizationError(
+                    "JOB_MISSING", f"job {job_id!r} does not exist.",
+                )
+            job = self._job_from_row(row)
+            try:
+                payload = canonicalize_controlled_fetch_payload(job.payload)
+            except ControlledFetchIntentError as exc:
+                raise ControlledFetchAuthorizationError(
+                    "INTENT_INVALID", str(exc),
+                ) from exc
+            intent = ControlledFetchIntent.from_payload(payload["execution_intent"])
+            if job.account_id != account_id or intent.account_id != account_id:
+                raise ControlledFetchAuthorizationError(
+                    "ACCOUNT_MISMATCH", "approval account must own the frozen job contract.",
+                )
+            if job.status is not JobStatus.QUEUED:
+                raise ControlledFetchAuthorizationError(
+                    "JOB_NOT_APPROVABLE",
+                    f"approval must precede execution; job status is {job.status.value}.",
+                )
+            if now_dt >= intent.expires_at_datetime():
+                raise ControlledFetchAuthorizationError(
+                    "INTENT_EXPIRED", "the frozen intent has already expired.",
+                )
+            if self.conn.execute(
+                "SELECT 1 FROM controlled_fetch_approvals WHERE job_id=?", (job_id,),
+            ).fetchone() is not None:
+                raise ControlledFetchAuthorizationError(
+                    "APPROVAL_ALREADY_EXISTS", "the job already carries its one approval.",
+                )
+            cursor = self.conn.execute(
+                "INSERT INTO controlled_fetch_approvals (job_id,account_id,action_type,"
+                "requested_url,intent_fingerprint,timeout_seconds,max_bytes,max_redirects,"
+                "approved_by,approved_at,expires_at,consumed_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL)",
+                (
+                    job_id, account_id, CONTROLLED_FETCH_ACTION_TYPE,
+                    intent.requested_url, intent.fingerprint,
+                    intent.timeout_seconds, intent.max_bytes, intent.max_redirects,
+                    approved_by.strip(), now, _persisted_ts(expiry_dt),
+                ),
+            )
+            approval_id = int(cursor.lastrowid)
+            stored = self.conn.execute(
+                "SELECT * FROM controlled_fetch_approvals WHERE id=?", (approval_id,),
+            ).fetchone()
+            self.conn.commit()
+            assert stored is not None
+            return self._controlled_fetch_approval_from_row(stored)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def initialize_controlled_fetch_run_for_job(
+        self, job_id: str, lease_owner: str, run_id: str, *, clock: Clock,
+    ) -> ControlledFetchInitialization:
+        """Create or resume the single controlled fetch run under a fresh lease."""
+        if not run_id.strip() or not lease_owner.strip():
+            raise ValueError("controlled fetch execution identifiers must be non-empty.")
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = _persisted_ts(self._job_now(clock=clock))
+            row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                raise JobRunRelationError("JOB_MISSING", job_id, "controlled fetch job is missing.")
+            job = self._job_from_row(row)
+            try:
+                payload = canonicalize_controlled_fetch_payload(job.payload)
+            except ControlledFetchIntentError as exc:
+                raise JobRunRelationError(
+                    "CONTROLLED_FETCH_INTENT_INVALID", job_id, str(exc),
+                ) from exc
+            if (
+                job.kind is not JobKind.RESEARCH
+                or job.workflow is not WorkflowType.RESEARCH
+                or job.topic_id is None
+                or payload["account_id"] != job.account_id
+                or payload["topic_id"] != job.topic_id
+            ):
+                raise JobRunRelationError(
+                    "CONTROLLED_FETCH_IDENTITY_MISMATCH", job_id,
+                    "job, payload, account and topic identity must match.",
+                )
+            if (
+                job.status not in (JobStatus.LEASED, JobStatus.RUNNING)
+                or job.lease_owner != lease_owner
+                or job.lease_expires_at is None
+                or _persisted_ts(job.lease_expires_at) < now
+            ):
+                raise StaleJobExecutionError(job_id)
+            if self.conn.execute(
+                "SELECT 1 FROM topics WHERE id=? AND account_id=?",
+                (job.topic_id, job.account_id),
+            ).fetchone() is None:
+                raise JobRunRelationError(
+                    "JOB_TOPIC_ACCOUNT_MISMATCH", job_id,
+                    "controlled fetch topic must belong to the job account.",
+                )
+
+            if job.run_id is None:
+                self.conn.execute(
+                    "INSERT INTO runs (id,account_id,workflow,status,current_state,"
+                    "started_at,cost_usd) VALUES (?,?,?,?,?,?,0)",
+                    (run_id, job.account_id, WorkflowType.RESEARCH.value,
+                     RunStatus.RUNNING.value, "controlled_fetch", now),
+                )
+                cursor = self.conn.execute(
+                    "UPDATE jobs SET run_id=?,updated_at=? WHERE id=? AND run_id IS NULL "
+                    "AND lease_owner=? AND lease_expires_at>=? AND status IN ('LEASED','RUNNING')",
+                    (run_id, now, job_id, lease_owner, now),
+                )
+                if cursor.rowcount != 1:
+                    raise StaleJobExecutionError(job_id)
+                created = True
+                attached_run_id = run_id
+            else:
+                created = False
+                attached_run_id = job.run_id
+
+            run_row = self.conn.execute(
+                "SELECT * FROM runs WHERE id=?", (attached_run_id,),
+            ).fetchone()
+            if run_row is None:
+                raise JobRunRelationError(
+                    "ATTACHED_RUN_MISSING", job_id,
+                    "controlled fetch run relation is incomplete.",
+                )
+            run = self._run_from_row(run_row)
+            if (
+                run.account_id != job.account_id
+                or run.workflow is not WorkflowType.RESEARCH
+                or run.status is not RunStatus.RUNNING
+                or run_row["finished_at"] is not None
+                or float(run_row["cost_usd"]) != 0
+                or run_row["current_state"] != "controlled_fetch"
+            ):
+                raise JobRunRelationError(
+                    "ATTACHED_CONTROLLED_FETCH_RUN_INVALID", job_id,
+                    "attached run is not a zero-cost active controlled fetch run.",
+                )
+            attempt = self.get_controlled_fetch_attempt_for_job(job_id)
+            job = self._job_from_row(self.conn.execute(
+                "SELECT * FROM jobs WHERE id=?", (job_id,),
+            ).fetchone())
+            result = ControlledFetchInitialization(
+                job=job, run=run, attempt=attempt, created=created,
+            )
+            self.conn.commit()
+            return result
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def _require_controlled_fetch_fence(
+        self, execution: JobExecutionContext, current_ts: str,
+    ) -> sqlite3.Row:
+        """Jedna transakcyjna kontrola aktualności job→run→topic→payload."""
+        row = self.conn.execute(
+            "SELECT j.status AS job_status,j.account_id AS job_account_id,"
+            "j.topic_id AS job_topic_id,j.payload_json,j.external_effect_started_at,"
+            "r.status AS run_status "
+            "FROM jobs j JOIN runs r ON r.id=j.run_id "
+            "JOIN topics t ON t.id=j.topic_id "
+            "WHERE j.id=? AND j.run_id=? AND j.lease_owner=? "
+            "AND j.lease_expires_at>=? AND j.status IN ('LEASED','RUNNING') "
+            "AND j.kind='RESEARCH' AND j.workflow='RESEARCH' "
+            "AND r.workflow='RESEARCH' AND r.account_id=j.account_id "
+            "AND r.status='RUNNING' AND r.finished_at IS NULL "
+            "AND t.account_id=j.account_id "
+            "AND json_extract(j.payload_json,'$.execution')=?",
+            (
+                execution.job_id, execution.run_id, execution.lease_owner,
+                current_ts, CONTROLLED_FETCH_EXECUTION,
+            ),
+        ).fetchone()
+        if row is None:
+            raise StaleJobExecutionError(execution.job_id)
+        return row
+
+    def _controlled_fetch_intent_from_fence(
+        self, fence: sqlite3.Row, job_id: str,
+    ) -> ControlledFetchIntent:
+        """Re-read the executed contract from the durable payload, never memory."""
+        try:
+            payload = canonicalize_controlled_fetch_payload(
+                json.loads(fence["payload_json"])
+            )
+        except (json.JSONDecodeError, ControlledFetchIntentError) as exc:
+            raise ControlledFetchAuthorizationError(
+                "INTENT_INVALID", f"job {job_id!r} payload is not a valid frozen intent.",
+            ) from exc
+        return ControlledFetchIntent.from_payload(payload["execution_intent"])
+
+    def begin_controlled_fetch_attempt(
+        self, execution: JobExecutionContext,
+    ) -> ControlledFetchAttempt:
+        """Atomically consume the one-shot approval and reserve the attempt.
+
+        W jednej transakcji przed granicą transportu: fence (job/run/topic/
+        lease/fencing), świeży odczyt zamrożonego intentu z payloadu, ważność
+        intentu i approval, zgodność approval↔intent, brak wcześniejszego
+        startu — potem konsumpcja approval i INSERT attemptu RESERVED.
+        """
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            fence = self._require_controlled_fetch_fence(execution, now)
+            intent = self._controlled_fetch_intent_from_fence(fence, execution.job_id)
+            now_dt = self._job_now(execution.now())
+            if now_dt >= intent.expires_at_datetime():
+                raise ControlledFetchAuthorizationError(
+                    "INTENT_EXPIRED", "the frozen intent expired before execution.",
+                )
+            if self.conn.execute(
+                "SELECT 1 FROM controlled_fetch_attempts WHERE job_id=?",
+                (execution.job_id,),
+            ).fetchone() is not None:
+                raise ControlledFetchAuthorizationError(
+                    "ATTEMPT_ALREADY_EXISTS",
+                    "the single controlled fetch attempt was already reserved.",
+                )
+            approval_row = self.conn.execute(
+                "SELECT * FROM controlled_fetch_approvals WHERE job_id=?",
+                (execution.job_id,),
+            ).fetchone()
+            if approval_row is None:
+                raise ControlledFetchAuthorizationError(
+                    "APPROVAL_MISSING", "no L1 approval exists for this job.",
+                )
+            if approval_row["account_id"] != fence["job_account_id"]:
+                raise ControlledFetchAuthorizationError(
+                    "APPROVAL_ACCOUNT_MISMATCH", "approval account does not own the job.",
+                )
+            if approval_row["action_type"] != CONTROLLED_FETCH_ACTION_TYPE:
+                raise ControlledFetchAuthorizationError(
+                    "APPROVAL_ACTION_MISMATCH", "approval action type is not CONTROLLED_FETCH.",
+                )
+            if approval_row["requested_url"] != intent.requested_url:
+                raise ControlledFetchAuthorizationError(
+                    "APPROVAL_URL_MISMATCH", "approval URL differs from the frozen intent.",
+                )
+            if approval_row["intent_fingerprint"] != intent.fingerprint:
+                raise ControlledFetchAuthorizationError(
+                    "APPROVAL_FINGERPRINT_MISMATCH",
+                    "approval fingerprint differs from the frozen intent.",
+                )
+            if (
+                int(approval_row["timeout_seconds"]) != intent.timeout_seconds
+                or int(approval_row["max_bytes"]) != intent.max_bytes
+                or int(approval_row["max_redirects"]) != intent.max_redirects
+            ):
+                raise ControlledFetchAuthorizationError(
+                    "APPROVAL_LIMITS_MISMATCH", "approval limits differ from the frozen intent.",
+                )
+            if approval_row["consumed_at"] is not None:
+                raise ControlledFetchAuthorizationError(
+                    "APPROVAL_ALREADY_CONSUMED", "the one-shot approval was already consumed.",
+                )
+            if str(approval_row["expires_at"]) <= now:
+                raise ControlledFetchAuthorizationError(
+                    "APPROVAL_EXPIRED", "the approval expired before execution.",
+                )
+            consumed = self.conn.execute(
+                "UPDATE controlled_fetch_approvals SET consumed_at=? "
+                "WHERE id=? AND consumed_at IS NULL",
+                (now, approval_row["id"]),
+            )
+            if consumed.rowcount != 1:
+                raise ControlledFetchAuthorizationError(
+                    "APPROVAL_CONSUME_RACE", "approval consumption compare-and-swap failed.",
+                )
+            cursor = self.conn.execute(
+                "INSERT INTO controlled_fetch_attempts (job_id,run_id,account_id,"
+                "topic_id,approval_id,attempt_no,source_identity,requested_url,"
+                "intent_fingerprint,status,lease_owner,reserved_at) "
+                "VALUES (?,?,?,?,?,1,?,?,?,?,?,?)",
+                (
+                    execution.job_id, execution.run_id, fence["job_account_id"],
+                    fence["job_topic_id"], approval_row["id"],
+                    intent.source_identity, intent.requested_url,
+                    intent.fingerprint,
+                    ControlledFetchAttemptStatus.RESERVED.value,
+                    execution.lease_owner, now,
+                ),
+            )
+            attempt_id = int(cursor.lastrowid)
+            stored = self.conn.execute(
+                "SELECT * FROM controlled_fetch_attempts WHERE id=?", (attempt_id,),
+            ).fetchone()
+            self.conn.commit()
+            assert stored is not None
+            return self._controlled_fetch_attempt_from_row(stored)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def mark_controlled_fetch_request_started(
+        self, execution: JobExecutionContext, attempt_id: int,
+    ) -> None:
+        """Durable boundary right before the transport; retry stops being safe."""
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            self._require_controlled_fetch_fence(execution, now)
+            attempt = self.conn.execute(
+                "UPDATE controlled_fetch_attempts SET status=?,request_started_at=? "
+                "WHERE id=? AND job_id=? AND status=? AND lease_owner=?",
+                (
+                    ControlledFetchAttemptStatus.REQUEST_STARTED.value, now,
+                    attempt_id, execution.job_id,
+                    ControlledFetchAttemptStatus.RESERVED.value,
+                    execution.lease_owner,
+                ),
+            )
+            if attempt.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            job = self.conn.execute(
+                "UPDATE jobs SET external_effect_started_at=?,updated_at=? "
+                "WHERE id=? AND status IN ('LEASED','RUNNING') AND lease_owner=? "
+                "AND lease_expires_at>=? AND external_effect_started_at IS NULL",
+                (now, now, execution.job_id, execution.lease_owner, now),
+            )
+            if job.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def _insert_controlled_fetch_retrieval(
+        self, retrieval: EvidenceRetrieval,
+    ) -> EvidenceRetrieval:
+        canonical = retrieval.canonical_text
+        cursor = self.conn.execute(
+            "INSERT INTO evidence_retrievals (account_id,requested_url,final_url,"
+            "fetched_at,status,http_status,content_type,fetch_error,raw_size_bytes,"
+            "raw_sha256,extracted_chars,extracted_sha256,canonical_text,canonical_chars,"
+            "canonical_sha256,truncated,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                retrieval.account_id, retrieval.requested_url, retrieval.final_url,
+                _ts_precise(retrieval.fetched_at), retrieval.status.value,
+                retrieval.http_status, retrieval.content_type, retrieval.fetch_error,
+                retrieval.raw_size_bytes, retrieval.raw_sha256,
+                retrieval.extracted_chars, retrieval.extracted_sha256,
+                canonical, len(canonical), sha256_hex(canonical),
+                int(retrieval.truncated), _ts_precise(retrieval.created_at),
+            ),
+        )
+        retrieval.id = int(cursor.lastrowid)
+        return retrieval
+
+    def finalize_controlled_fetch_success(
+        self, execution: JobExecutionContext, attempt_id: int,
+        document: FetchedDocument,
+    ) -> EvidenceRetrieval:
+        """Atomically persist retrieval OK + SUCCEEDED attempt + terminal job/run."""
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            fence = self._require_controlled_fetch_fence(execution, now)
+            attempt_row = self.conn.execute(
+                "SELECT * FROM controlled_fetch_attempts WHERE id=? AND job_id=?",
+                (attempt_id, execution.job_id),
+            ).fetchone()
+            if (
+                attempt_row is None
+                or attempt_row["status"] != ControlledFetchAttemptStatus.REQUEST_STARTED.value
+                or attempt_row["lease_owner"] != execution.lease_owner
+                or attempt_row["requested_url"] != document.requested_url
+            ):
+                raise StaleJobExecutionError(
+                    execution.job_id, "controlled fetch attempt is not finalizable.",
+                )
+            retrieval = build_evidence_retrieval(
+                document, account_id=fence["job_account_id"], now=execution.now(),
+            )
+            if retrieval.status is not EvidenceRetrievalStatus.OK:
+                raise ControlledFetchRetrievalNotOk(
+                    retrieval.fetch_error or "RETRIEVAL_NOT_OK"
+                )
+            retrieval = self._insert_controlled_fetch_retrieval(retrieval)
+            attempt = self.conn.execute(
+                "UPDATE controlled_fetch_attempts SET status=?,terminalized_at=?,"
+                "retrieval_id=? WHERE id=? AND status=?",
+                (
+                    ControlledFetchAttemptStatus.SUCCEEDED.value, now,
+                    retrieval.id, attempt_id,
+                    ControlledFetchAttemptStatus.REQUEST_STARTED.value,
+                ),
+            )
+            run = self.conn.execute(
+                "UPDATE runs SET status='SUCCESS',cost_usd=0,error=NULL,finished_at=? "
+                "WHERE id=? AND status='RUNNING' AND finished_at IS NULL",
+                (now, execution.run_id),
+            )
+            job = self.conn.execute(
+                "UPDATE jobs SET status='DONE',last_error=NULL,lease_owner=NULL,"
+                "lease_expires_at=NULL,updated_at=?,finished_at=?,reserved_cost_usd=0,"
+                "budget_reserved_at=NULL WHERE id=? AND run_id=? AND lease_owner=? "
+                "AND lease_expires_at>=? AND status IN ('LEASED','RUNNING')",
+                (now, now, execution.job_id, execution.run_id,
+                 execution.lease_owner, now),
+            )
+            if any(cursor.rowcount != 1 for cursor in (attempt, run, job)):
+                raise StaleJobExecutionError(execution.job_id)
+            self.conn.commit()
+            return retrieval
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def fail_controlled_fetch_execution(
+        self, execution: JobExecutionContext, error: str, *,
+        document: FetchedDocument | None = None,
+    ) -> ControlledFetchFailureOutcome:
+        """Deterministic failure boundary of one controlled fetch execution.
+
+        Bez attemptu i przy RESERVED wynik jest jednoznaczny (żaden request nie
+        wyszedł) → terminalny FAILED. Po REQUEST_STARTED typowany dokument
+        błędu również terminalizuje FAILED (request odbył się i zawiódł);
+        brak typowanego wyniku = niejednoznaczność → NEEDS_VERIFICATION bez
+        automatycznego ponowienia.
+        """
+        safe_error = " ".join(error.split())[:240] or "CONTROLLED_FETCH_FAILED"
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            fence = self._require_controlled_fetch_fence(execution, now)
+            attempt_row = self.conn.execute(
+                "SELECT * FROM controlled_fetch_attempts WHERE job_id=?",
+                (execution.job_id,),
+            ).fetchone()
+
+            def _terminal_run() -> None:
+                run = self.conn.execute(
+                    "UPDATE runs SET status='FAILED',error=?,cost_usd=0,finished_at=? "
+                    "WHERE id=? AND status='RUNNING' AND finished_at IS NULL",
+                    (safe_error, now, execution.run_id),
+                )
+                if run.rowcount != 1:
+                    raise StaleJobExecutionError(execution.job_id)
+
+            def _terminal_job(status: JobStatus, *, release_budget: bool) -> None:
+                fields = (
+                    ",finished_at=?,reserved_cost_usd=0,budget_reserved_at=NULL"
+                    if release_budget else ""
+                )
+                params: list[object] = [status.value, safe_error, now]
+                if release_budget:
+                    params.append(now)
+                params.extend([
+                    execution.job_id, execution.run_id, execution.lease_owner, now,
+                ])
+                job = self.conn.execute(
+                    "UPDATE jobs SET status=?,last_error=?,lease_owner=NULL,"
+                    "lease_expires_at=NULL,updated_at=?" + fields +
+                    " WHERE id=? AND run_id=? AND lease_owner=? "
+                    "AND lease_expires_at>=? AND status IN ('LEASED','RUNNING')",
+                    tuple(params),
+                )
+                if job.rowcount != 1:
+                    raise StaleJobExecutionError(execution.job_id)
+
+            if attempt_row is None:
+                _terminal_run()
+                _terminal_job(JobStatus.FAILED, release_budget=True)
+                self.conn.commit()
+                return ControlledFetchFailureOutcome.FAILED_NO_ATTEMPT
+
+            status = ControlledFetchAttemptStatus(attempt_row["status"])
+            if status is ControlledFetchAttemptStatus.RESERVED:
+                attempt = self.conn.execute(
+                    "UPDATE controlled_fetch_attempts SET status=?,terminalized_at=?,"
+                    "outcome_reason=? WHERE id=? AND status=?",
+                    (
+                        ControlledFetchAttemptStatus.FAILED.value, now, safe_error,
+                        attempt_row["id"], ControlledFetchAttemptStatus.RESERVED.value,
+                    ),
+                )
+                if attempt.rowcount != 1:
+                    raise StaleJobExecutionError(execution.job_id)
+                _terminal_run()
+                _terminal_job(JobStatus.FAILED, release_budget=True)
+                self.conn.commit()
+                return ControlledFetchFailureOutcome.FAILED_BEFORE_REQUEST
+
+            if status is ControlledFetchAttemptStatus.REQUEST_STARTED:
+                retrieval_id: int | None = None
+                if document is not None:
+                    retrieval = build_evidence_retrieval(
+                        document, account_id=fence["job_account_id"],
+                        now=execution.now(),
+                    )
+                    if retrieval.status is EvidenceRetrievalStatus.FAILED:
+                        retrieval_id = self._insert_controlled_fetch_retrieval(
+                            retrieval,
+                        ).id
+                    else:
+                        # Dokument klasyfikuje się jako OK — to nie jest typowany
+                        # błąd; wynik pozostaje niejednoznaczny dla tej granicy.
+                        document = None
+                if document is not None:
+                    attempt = self.conn.execute(
+                        "UPDATE controlled_fetch_attempts SET status=?,terminalized_at=?,"
+                        "retrieval_id=?,outcome_reason=? WHERE id=? AND status=?",
+                        (
+                            ControlledFetchAttemptStatus.FAILED.value, now,
+                            retrieval_id, safe_error, attempt_row["id"],
+                            ControlledFetchAttemptStatus.REQUEST_STARTED.value,
+                        ),
+                    )
+                    if attempt.rowcount != 1:
+                        raise StaleJobExecutionError(execution.job_id)
+                    _terminal_run()
+                    _terminal_job(JobStatus.FAILED, release_budget=True)
+                    self.conn.commit()
+                    return ControlledFetchFailureOutcome.FAILED_AFTER_REQUEST
+                attempt = self.conn.execute(
+                    "UPDATE controlled_fetch_attempts SET status=?,terminalized_at=?,"
+                    "outcome_reason=? WHERE id=? AND status=?",
+                    (
+                        ControlledFetchAttemptStatus.NEEDS_VERIFICATION.value, now,
+                        safe_error, attempt_row["id"],
+                        ControlledFetchAttemptStatus.REQUEST_STARTED.value,
+                    ),
+                )
+                if attempt.rowcount != 1:
+                    raise StaleJobExecutionError(execution.job_id)
+                _terminal_run()
+                _terminal_job(JobStatus.NEEDS_VERIFICATION, release_budget=False)
+                self.conn.commit()
+                return ControlledFetchFailureOutcome.ESCALATED_NEEDS_VERIFICATION
+
+            # Attempt terminalny przy żywym fence nie powstaje w żadnej naszej
+            # transakcji; pozostawiamy stan operatorowi bez dalszych mutacji.
+            self.conn.commit()
+            return ControlledFetchFailureOutcome.ALREADY_TERMINALIZED
         except BaseException as primary:
             if self.conn.in_transaction:
                 self._rollback_preserving_primary(primary, self.conn.rollback)

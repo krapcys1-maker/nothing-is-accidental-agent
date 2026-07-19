@@ -12,7 +12,8 @@ STAGE1_SCHEMA_VERSION = "0014_provider_attempt_reconciliation"
 SETTLED_RECOVERY_SCHEMA_VERSION = "0015_settled_execution_recovery"
 EVIDENCE_SCHEMA_VERSION = "0016_evidence_foundation"
 EVIDENCE_PIPELINE_SCHEMA_VERSION = "0017_evidence_pipeline_lineage"
-RUNTIME_SCHEMA_VERSION = EVIDENCE_PIPELINE_SCHEMA_VERSION
+CONTROLLED_FETCH_SCHEMA_VERSION = "0018_controlled_fetch_lifecycle"
+RUNTIME_SCHEMA_VERSION = CONTROLLED_FETCH_SCHEMA_VERSION
 _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0007_candidate_attempts",
     "0008_staged_force_reresearch",
@@ -25,6 +26,7 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0015_settled_execution_recovery",
     "0016_evidence_foundation",
     "0017_evidence_pipeline_lineage",
+    "0018_controlled_fetch_lifecycle",
 })
 
 
@@ -464,5 +466,19 @@ def migrate_0016_to_0017(
         db_path,
         source_version=EVIDENCE_SCHEMA_VERSION,
         target_version=EVIDENCE_PIPELINE_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0017_to_0018(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the separately authorized E2-B controlled fetch migration."""
+    return _migrate_single_step(
+        db_path,
+        source_version=EVIDENCE_PIPELINE_SCHEMA_VERSION,
+        target_version=CONTROLLED_FETCH_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )
