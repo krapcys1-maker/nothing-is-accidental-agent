@@ -491,3 +491,12 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Dowód: `1572/1572`, exact-once `378+389+394+411`, 13/13 nowych kontrprób i 13/13 regresyjnych; jawne failpointy czterech okien lifecycle `4/4`; zero realnej sieci i koszt `0.000000 USD`.
 - Cytowalna zasada: „Nie wystarczy sprawdzić, dokąd prowadzi nazwa. Bezpieczeństwo zaczyna się wtedy, gdy przewód prowadzi dokładnie do adresu, który sprawdziłeś.”
 - Granica: to kandydat do niezależnego review, nie zgoda na otwarcie przewodu. Produkcja nadal ma schema `0014`; controlled-live pozostaje `NOT READY`.
+
+## 2026-07-19 — Materiał: „Backup nie zamyka wyścigu”
+
+- Najbardziej zdradliwa luka nie leżała w SQL migracji, lecz między poprawnym preflightem a chwilą otwarcia pliku do zapisu. Snapshot mógł być idealny, a źródłowa baza już inna.
+- Orchestrator wiąże zgodę z path/SHA/size, robi zweryfikowany snapshot, po czym odrzuca wcześniejszy wynik i jeszcze raz czyta tożsamość pliku, ledger i sidecary. Ostatni pełny gate następuje po obu oknach failpoint i bezpośrednio przed `mode=rw`.
+- WAL, SHM i journal nie są „śmieciami do posprzątania", tylko dowodem, że założenie o spokojnym pliku może być fałszywe. System ich nie usuwa ani nie scala; zatrzymuje się i oddaje decyzję operatorowi.
+- Druga lekcja: cztery poprawne transakcje nie tworzą magicznie jednej transakcji. Raport mówi prawdę: które szczeble są trwałe, który nie został wykonany i że resume wymaga nowego SHA, snapshotu oraz zgody.
+- Dowód: 18 okien failpoint, 58/58 testów orchestratora, pełne/exact-once 1630/1630; produkcja pozostała bajtowo identyczna na `0014`.
+- Cytowalna zasada: „Backup chroni stan sprzed operacji. Dopiero ponowne sprawdzenie chroni decyzję, że wolno ją zacząć.”

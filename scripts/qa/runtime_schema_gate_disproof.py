@@ -18,12 +18,14 @@ from app.testing.safety_kernel import activate as _activate_safety_kernel  # noq
 _activate_safety_kernel()
 
 from app.storage.db import (  # noqa: E402
+    CONTROLLED_FETCH_SCHEMA_VERSION,
     EVIDENCE_PIPELINE_SCHEMA_VERSION,
     EVIDENCE_SCHEMA_VERSION,
     ExplicitMigrationError,
     RUNTIME_SCHEMA_VERSION,
     SETTLED_RECOVERY_SCHEMA_VERSION,
     STAGE1_SCHEMA_VERSION,
+    SchemaVersionInvalid,
     SchemaVersionTooOld,
     SchemaVersionUnavailable,
     database_schema_versions,
@@ -31,6 +33,7 @@ from app.storage.db import (  # noqa: E402
     migrate_0014_to_0015,
     migrate_0015_to_0016,
     migrate_0016_to_0017,
+    migrate_0017_to_0018,
 )
 import app.storage.repositories as repositories_module  # noqa: E402
 from app.storage.repositories import SqliteStorage  # noqa: E402
@@ -157,6 +160,19 @@ def main() -> int:
         lineage = migrate_0016_to_0017(path)
         checks.append(lineage.applied_migrations == (EVIDENCE_PIPELINE_SCHEMA_VERSION,))
         checks.append(len(database_schema_versions(path)) == 17)
+        before_0017_refusal = _fingerprint(path)
+        try:
+            SqliteStorage.open(path)
+        except SchemaVersionTooOld:
+            checks.append(True)
+        else:
+            checks.append(False)
+        checks.append(_fingerprint(path) == before_0017_refusal)
+        controlled_fetch = migrate_0017_to_0018(path)
+        checks.append(
+            controlled_fetch.applied_migrations == (CONTROLLED_FETCH_SCHEMA_VERSION,)
+        )
+        checks.append(len(database_schema_versions(path)) == 18)
         runtime = SqliteStorage.open(path)
         runtime.close()
         checks.append(True)
@@ -167,10 +183,30 @@ def main() -> int:
             checks.append(True)
         else:
             checks.append(False)
-        repeated_evidence = migrate_0016_to_0017(path)
+        repeated_controlled_fetch = migrate_0017_to_0018(path)
         checks.append(
-            repeated_evidence.idempotent and repeated_evidence.applied_migrations == ()
+            repeated_controlled_fetch.idempotent
+            and repeated_controlled_fetch.applied_migrations == ()
         )
+
+        future_before_refusal: tuple[object, ...]
+        conn = sqlite3.connect(path)
+        try:
+            conn.execute(
+                "INSERT INTO schema_migrations(version) "
+                "VALUES ('0019_not_supported_by_runtime')"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        future_before_refusal = _fingerprint(path)
+        try:
+            SqliteStorage.open(path)
+        except SchemaVersionInvalid:
+            checks.append(True)
+        else:
+            checks.append(False)
+        checks.append(_fingerprint(path) == future_before_refusal)
 
         missing = root / "missing" / "runtime.db"
         try:
@@ -183,7 +219,7 @@ def main() -> int:
 
     passed = sum(checks)
     print(f"[BLOCKED] runtime schema-gate disproof: {passed}/{len(checks)}")
-    return 0 if passed == len(checks) == 24 else 1
+    return 0 if passed == len(checks) == 30 else 1
 
 
 if __name__ == "__main__":

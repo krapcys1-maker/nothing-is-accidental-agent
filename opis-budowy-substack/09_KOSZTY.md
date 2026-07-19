@@ -256,3 +256,7 @@ Implementacja recovery po `SETTLED`, 1311 testów, cztery partycje i skrypty QA 
 ## 2026-07-19 — E2-C live-readiness: 0 USD
 
 Pełna suita 1572, cztery partycje exact-once oraz harnessy E2-C `13/13` i E2-B `13/13` użyły wyłącznie fake resolverów, transportów/callerów i tymczasowych baz. Nowy koszt: `0.000000 USD`; suma miesiąca pozostaje `1.012590 USD`. Realny Fetch, DNS, HTTP, API, provider, browser i publikacja: 0.
+
+## 2026-07-19 — Production Schema Migration Orchestrator: 0 USD
+
+58 testów orchestratora, pełna suita/exact-once 1630, partycje `390+398+412+430`, QA i harnessy wykonały wyłącznie lokalne operacje na nowych temp SQLite. Nowy koszt: `0.000000 USD`; suma miesiąca pozostaje `1.012590 USD`. Produkcyjnej migracji, API, sieci, providera, browsera i publikacji: 0.

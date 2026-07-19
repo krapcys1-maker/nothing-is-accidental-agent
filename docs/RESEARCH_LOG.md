@@ -267,3 +267,10 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Research/provider:** zero danych internetowych, web search, DNS, HTTP, API, SDK providera, usage i Research Card; test transportu użył wyłącznie in-memory fake socket/TLS/HTTP callerów.
 - **Dowód:** pełna suita `1572/1572`, exact-once `378+389+394+411`, harness E2-C `13/13` i E2-B `13/13`; produkcja `0014` byte-identical.
 - **Koszt i granica:** `0.000000 USD`; miesięczny ledger pozostaje `1.012590 USD`; controlled-live = `NOT READY`, pierwszy realny Fetch nadal nieautoryzowany.
+
+## 2026-07-19 — Production Schema Migration Orchestrator bez nowego researchu
+
+- **Zakres:** wyłącznie lokalna implementacja, syntetyczne failpointy i deterministyczne testy na nowych tymczasowych SQLite.
+- **Research/provider:** zero danych internetowych, web search, DNS, socketów, HTTP, API, SDK providera, usage i Research Card. Nie wykonywano Fetch ani migracji produkcji.
+- **Dowód:** orchestrator `58/58`, pełna suita/exact-once `1630/1630`, partycje `390+398+412+430`, runtime QA `30/30`, harnessy E2-B/E2-C `13/13+13/13`; produkcja `0014` byte-identical.
+- **Koszt:** `0.000000 USD`; miesięczny ledger pozostaje `1.012590 USD`.

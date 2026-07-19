@@ -441,6 +441,7 @@ def _process_role_reason(command_line: str) -> str | None:
     if "scripts/run_maintenance_task.ps1" in normalized:
         return "APP_ROLE_MAINTENANCE"
     operator_entrypoints = (
+        "scripts/migrate_production_schema_0014_to_0018.py",
         "scripts/prepare_stage1_db_migration.py",
         "scripts/manage_windows_tasks.py",
         "scripts/run_capped_research.py",
@@ -464,6 +465,7 @@ def _operator_entrypoint_signature(command_line: str) -> str | None:
     script_entrypoints = tuple(
         entrypoint
         for entrypoint in (
+            "scripts/migrate_production_schema_0014_to_0018.py",
             "scripts/prepare_stage1_db_migration.py",
             "scripts/manage_windows_tasks.py",
             "scripts/run_capped_research.py",

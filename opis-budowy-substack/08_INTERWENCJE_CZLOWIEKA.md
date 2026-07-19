@@ -252,3 +252,9 @@ Właściciel jawnie zrezygnował z przepisywania historii prywatnego brancha PR 
 Właściciel dopuścił wyłącznie naprawę konstrukcji transportu, DNS TOCTOU i aktywacji bez edycji kodu. Osobno zabronił realnego Fetch, DNS, socketów, HTTP, API, providera, browsera, publikacji i migracji produkcji oraz pozostawił poza zakresem cztery nazwane P2/obserwacje.
 
 Po zielonej walidacji autoryzował jeden branch, dokładnie jeden commit, zwykły push i draft PR — bez merge i amend. Status implementera może być wyłącznie `E2-C CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.
+
+## 2026-07-19 — Człowiek dopuścił orchestrator, ale zabronił migracji
+
+Właściciel wskazał dokładnie cztery blockery: jeden root `0014→0018`, ponowny file-state gate przed zapisem, STOP na WAL/SHM/journal i aktualizację runtime QA do `0018`. Jednocześnie zakazał migracji `data/agent.db`, realnej sieci, providera, browsera, publikacji i zmian controlled Fetch oraz niezwiązanych P2.
+
+Po zielonej walidacji autoryzował branch `dev/stage2-production-migration-orchestrator`, jeden commit, zwykły push i draft PR. Nie autoryzował merge ani ogłoszenia gotowości migracji lub controlled-live.

@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import os
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -291,38 +292,58 @@ def apply_migrations(
     migrations_dir: Path = MIGRATIONS_DIR,
     *,
     through: str | None = None,
+    transaction_failpoint: Callable[[str], None] | None = None,
 ) -> list[str]:
-    """Stosuje niezaaplikowane pliki .sql w kolejności nazw. Zwraca listę zastosowanych wersji."""
+    """Stosuje niezaaplikowane pliki .sql w kolejności nazw.
+
+    ``transaction_failpoint`` jest wyłącznie kontrolowanym hakiem testowym
+    wykonywanym wewnątrz transakcji migracji 0007+ — po SQL schematu, lecz
+    przed wpisem do ledgeru i COMMIT. Wyjątek z haka wycofuje zarówno schemat,
+    jak i ledger danego kroku. Domyślna ścieżka produkcyjna nie instaluje haka.
+    """
     _ensure_migrations_table(conn)
     applied = {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
     newly: list[str] = []
-    for sql_file in sorted(Path(migrations_dir).glob("*.sql")):
-        version = sql_file.stem
-        if through is not None and version > through:
-            continue
-        if version in applied:
-            continue
-        sql = sql_file.read_text(encoding="utf-8")
-        if version in _RUNNER_TRANSACTIONAL_MIGRATIONS:
-            quoted_version = conn.execute("SELECT quote(?)", (version,)).fetchone()[0]
-            try:
-                conn.executescript(
-                    "BEGIN IMMEDIATE;\n"
-                    f"{sql}\n"
-                    f"INSERT INTO schema_migrations(version) VALUES ({quoted_version});\n"
-                    "COMMIT;"
+    failpoint_function = "_nia_transactional_migration_failpoint"
+    if transaction_failpoint is not None:
+        conn.create_function(failpoint_function, 1, transaction_failpoint)
+    try:
+        for sql_file in sorted(Path(migrations_dir).glob("*.sql")):
+            version = sql_file.stem
+            if through is not None and version > through:
+                continue
+            if version in applied:
+                continue
+            sql = sql_file.read_text(encoding="utf-8")
+            if version in _RUNNER_TRANSACTIONAL_MIGRATIONS:
+                quoted_version = conn.execute("SELECT quote(?)", (version,)).fetchone()[0]
+                failpoint_sql = (
+                    f"SELECT {failpoint_function}({quoted_version});\n"
+                    if transaction_failpoint is not None
+                    else ""
                 )
-            except Exception:
-                if conn.in_transaction:
-                    conn.rollback()
-                raise
-        else:
-            # 0001-0006 retain their historical migration contract; 0006 has its
-            # own BEGIN IMMEDIATE/COMMIT and must not be nested here.
-            conn.executescript(sql)
-            conn.execute("INSERT INTO schema_migrations(version) VALUES (?)", (version,))
-            conn.commit()
-        newly.append(version)
+                try:
+                    conn.executescript(
+                        "BEGIN IMMEDIATE;\n"
+                        f"{sql}\n"
+                        f"{failpoint_sql}"
+                        f"INSERT INTO schema_migrations(version) VALUES ({quoted_version});\n"
+                        "COMMIT;"
+                    )
+                except Exception:
+                    if conn.in_transaction:
+                        conn.rollback()
+                    raise
+            else:
+                # 0001-0006 retain their historical migration contract; 0006 has its
+                # own BEGIN IMMEDIATE/COMMIT and must not be nested here.
+                conn.executescript(sql)
+                conn.execute("INSERT INTO schema_migrations(version) VALUES (?)", (version,))
+                conn.commit()
+            newly.append(version)
+    finally:
+        if transaction_failpoint is not None:
+            conn.create_function(failpoint_function, 1, None)
     return newly
 
 

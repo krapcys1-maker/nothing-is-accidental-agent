@@ -49,6 +49,7 @@ Po każdym większym zadaniu, ZANIM uznasz je za ukończone:
 | `16_MATERIAL_DO_PIERWSZEGO_ARTYKULU.md` | Zebrany materiał do artykułu #1 |
 | `17_CONTROLLED_FETCH_ZGODA_L1.md` | E2-B: jednorazowa zgoda i lifecycle kontrolowanego pobrania |
 | `18_ADRES_SPRAWDZONY_I_ADRES_UZYTY.md` | E2-C: capability, aktywacja YAML i przypięcie adresu do transportu |
+| `19_BACKUP_NIE_ZAMYKA_WYSCIGU.md` | Orchestrator migracji 0014→0018: snapshot, rewalidacja, sidecary i recovery |
 
 Podfoldery: `timeline/`, `screenshots/`, `diagrams/`, `code-snippets/`, `weekly-summaries/`, `article-series/`.
 
