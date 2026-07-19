@@ -443,3 +443,13 @@ Trzy realne próby dały trzy różne wyniki przy tym samym temacie: 1500 → uc
 ## 2026-07-18 — Zielony settlement nie oznaczał zielonego lifecycle
 
 Review PR #1 wykazał, że crash po `SETTLED` mógł zostawić job i runy nieterminalne. Pierwsza wersja naprawy była zbyt surowa wobec zerowego cache preterminalnego; test poprawnego okna crashu to ujawnił. Po korekcie pełny suite znalazł jeszcze jedną niezgodność tekstu błędu oczekiwanego przez starszy test. Oba problemy usunięto bez rozluźniania warunków i bez dotykania produkcyjnej bazy.
+
+## 2026-07-19 — Sprawdziliśmy adres, ale transport mógł użyć innego
+
+E2-B walidował wynik wstrzykniętego resolvera, po czym urllib rozwiązywał hostname jeszcze raz. Obie operacje były poprawne lokalnie, ale ich wynik nie był jednym faktem. E2-C przypina sprawdzony numeryczny IP i przekazuje go transportowi bez drugiego DNS.
+
+Pierwszy targeted run ujawnił błąd stref czasowych przy ponownej kontroli expiry ze SQLite oraz stare oczekiwania testów dotyczące publicznego konstruktora i stałej kodowej. Naprawiono normalizację UTC i testy kontraktu. Harness E2-B nadal wymaga UTF-8 na Windows — to jawny P2 poza zakresem, więc walidację uruchomiono z `PYTHONUTF8=1`, bez zmiany tego długu.
+
+Końcowy helper exact-once najpierw nie dostał node ID przez projektowy tryb quiet, a potem PowerShell uznał `[hidden]` i `[HIDDEN]` za ten sam tekst. Ordinalne porównanie pokazało prawdę: `1572/1572`, zero duplikatów. Kilka jednolinijkowych prób immutable odczytu SQLite rozbiło się wcześniej na quoting Windows; żadna nie otworzyła bazy. Poprawione wywołanie `mode=ro&immutable=1` potwierdziło 14 migracji, integrity `ok` i zero naruszeń FK.
+
+Jeszcze jeden zbiorczy raport źle uciekł ścieżki WAL/SHM/journal i zwrócił mylący kod procesu `0` obok błędów `Test-Path`. Tego wyniku nie policzono jako dowodu; poprawiona osobna kontrola potwierdziła brak wszystkich trzech sidecarów.

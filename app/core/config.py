@@ -73,6 +73,11 @@ class Settings:
     research_max_retries: int = 2
     research_timeout_seconds: int = 60
 
+    # Globalna dostępność prawdziwego transportu controlled fetch. To nie jest
+    # zgoda na request: każdy request nadal wymaga trwałego, jednorazowego L1.
+    # Źródłem jest wyłącznie jawna konfiguracja YAML, nigdy zwykłe ENV.
+    controlled_fetch_real_enabled: bool = False
+
     # Trwała kolejka. Dotyczy wyłącznie bezpiecznych enqueue z composition root
     # aplikacji; durable paid research zachowuje osobny, twardy max_attempts=1.
     worker_default_max_attempts: int = 1
@@ -183,6 +188,16 @@ def load_settings() -> Settings:
     topic_policy = growth.get("topic_policy", {}) or {}
     weights = growth.get("topic_scoring_weights", {}) or {}
     research_policy = growth.get("research_policy", {}) or {}
+    controlled_fetch_policy = growth.get("controlled_fetch_policy", {}) or {}
+    if not isinstance(controlled_fetch_policy, dict):
+        raise ConfigError("controlled_fetch_policy musi być mapą konfiguracji.")
+    controlled_fetch_real_enabled = controlled_fetch_policy.get(
+        "real_transport_enabled", False,
+    )
+    if not isinstance(controlled_fetch_real_enabled, bool):
+        raise ConfigError(
+            "controlled_fetch_policy.real_transport_enabled musi być boolean."
+        )
     worker_policy = growth.get("worker_policy", {}) or {}
     if not isinstance(worker_policy, dict):
         raise ConfigError("worker_policy musi być mapą konfiguracji.")
@@ -223,6 +238,7 @@ def load_settings() -> Settings:
         research_min_source_quality=float(research_policy.get("min_source_quality_score", 0.50)),
         research_max_retries=int(research_policy.get("max_retries", 2)),
         research_timeout_seconds=int(research_policy.get("timeout_seconds", 60)),
+        controlled_fetch_real_enabled=controlled_fetch_real_enabled,
         worker_default_max_attempts=_positive_int(
             worker_policy.get("default_max_attempts", 1),
             label="worker_policy.default_max_attempts",

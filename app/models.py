@@ -925,6 +925,89 @@ class ControlledFetchAttempt(BaseModel):
     outcome_reason: str | None = None
 
 
+_CONTROLLED_FETCH_TRANSPORT_AUTHORIZATION_SEAL = object()
+
+
+@dataclass(frozen=True)
+class ControlledFetchTransportAuthorization:
+    """Ephemeral capability issued only from a verified durable RESERVED attempt.
+
+    This object is not persisted and is not an alternative approval. Storage
+    issues it after re-reading the frozen intent, consumed L1 approval, active
+    lease fence and attempt #1 in one transaction. The real transport factory
+    rejects objects that do not carry the module-private issuance seal.
+    """
+
+    job_id: str
+    run_id: str
+    account_id: str
+    topic_id: int
+    approval_id: int
+    attempt_id: int
+    requested_url: str
+    source_identity: str
+    intent_fingerprint: str
+    timeout_seconds: int
+    max_bytes: int
+    max_redirects: int
+    allowed_content_types: tuple[str, ...]
+    approval_expires_at: datetime
+    _seal: object
+
+    def assert_storage_issued(self) -> None:
+        if self._seal is not _CONTROLLED_FETCH_TRANSPORT_AUTHORIZATION_SEAL:
+            raise TypeError(
+                "controlled fetch transport authorization must be issued by storage."
+            )
+
+    def assert_usable_at(self, moment: datetime) -> None:
+        self.assert_storage_issued()
+        if moment.tzinfo is None or moment.utcoffset() is None:
+            raise TypeError("controlled fetch authorization clock must be timezone-aware.")
+        expires_at = self.approval_expires_at
+        if expires_at.tzinfo is None or expires_at.utcoffset() is None:
+            raise TypeError("controlled fetch authorization expiry must be timezone-aware.")
+        if moment.astimezone(timezone.utc) >= expires_at.astimezone(timezone.utc):
+            raise TypeError("controlled fetch transport authorization has expired.")
+
+
+def _issue_controlled_fetch_transport_authorization(
+    *,
+    job_id: str,
+    run_id: str,
+    account_id: str,
+    topic_id: int,
+    approval_id: int,
+    attempt_id: int,
+    requested_url: str,
+    source_identity: str,
+    intent_fingerprint: str,
+    timeout_seconds: int,
+    max_bytes: int,
+    max_redirects: int,
+    allowed_content_types: tuple[str, ...],
+    approval_expires_at: datetime,
+) -> ControlledFetchTransportAuthorization:
+    """Private issuer used by the storage composition boundary."""
+    return ControlledFetchTransportAuthorization(
+        job_id=job_id,
+        run_id=run_id,
+        account_id=account_id,
+        topic_id=topic_id,
+        approval_id=approval_id,
+        attempt_id=attempt_id,
+        requested_url=requested_url,
+        source_identity=source_identity,
+        intent_fingerprint=intent_fingerprint,
+        timeout_seconds=timeout_seconds,
+        max_bytes=max_bytes,
+        max_redirects=max_redirects,
+        allowed_content_types=allowed_content_types,
+        approval_expires_at=approval_expires_at,
+        _seal=_CONTROLLED_FETCH_TRANSPORT_AUTHORIZATION_SEAL,
+    )
+
+
 @dataclass(frozen=True)
 class ControlledFetchInitialization:
     """Wynik atomowego utworzenia albo wznowienia runu kontrolowanego pobrania."""

@@ -235,3 +235,20 @@ def zapisz_diagnostyke(folder_danych, run_id, etap, usage, surowa_odpowiedz, pow
 
 ## Powiązania
 - `docs/CODE_EXAMPLES.md` (źródło), `docs/code-snippets/` (dłuższe wycinki), `code-snippets/` (kopie redakcyjne)
+
+## E2-C — host binding zamiast drugiego DNS
+
+Reprezentatywny kontrakt jest frozen i oddziela adres połączenia od tożsamości HTTP/TLS:
+
+```python
+@dataclass(frozen=True)
+class BoundHttpTarget:
+    url: str
+    selected_address: str
+    approved_addresses: tuple[str, ...]
+    request_target: str
+    host_header: str
+    tls_server_name: str | None
+```
+
+Resolver tworzy ten obiekt raz dla initial URL. Transport łączy się z `selected_address`; `host_header` i `tls_server_name` zachowują nazwę. Przed konstrukcją realnego transportu root wymaga `ControlledFetchTransportAuthorization` wydanej przez storage po zużyciu L1. Pełny kod: `app/ports/controlled_fetch.py` i `app/storage/repositories.py`.

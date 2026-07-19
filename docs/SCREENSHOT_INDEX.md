@@ -427,3 +427,10 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ browser był zabroniony, a terminal zawiera prywatne ścieżki.
 - **Co powinien pokazać:** zanonimizowane gate diff `1/1`, jeden HTTP 200, `stop_reason=max_tokens` przy limicie 3000, attempt `SETTLED`, usage `0.074312 USD`, `ResearchTruncatedError` przed schema, job/run/research_run `FAILED`, brak karty, gate/flags fail-closed i brak sidecarów.
 - **Czego nie może pokazać:** `.env`, klucza, promptu, raw/truncated response, execution tokenu, pełnych command lines ani zawartości DB.
+
+## 2026-07-19 — E2-C controlled fetch live-readiness candidate
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ browser był zabroniony, a dowodem są deterministyczne logi/testy i trwałe inwarianty.
+- **Co powinien pokazać:** zanonimizowane `1572/1572`, exact-once `378+389+394+411`, harness E2-C `13/13`, E2-B `13/13`, failpointy `4/4`, `compileall`/`git diff --check` PASS oraz produkcyjne `0014`, 14 migracji, SHA `9906AF…060836`, `364544 B`, integrity `ok`, FK `0`, sidecary `0`.
+- **Dodatkowy kadr techniczny:** kontrpróba, w której resolver zwraca publiczny IP tylko raz, fake transport otrzymuje dokładnie ten sam `selected_address`, Host/SNI zachowują hostname, a zmiana resolvera przed requestem nie zmienia celu; obok odrzucenie forged capability i niespójnego bindingu.
+- **Czego nie może pokazać:** `.env`, kluczy, cookies, pełnych lokalnych ścieżek, treści produkcyjnej SQLite, realnego URL przyszłego requestu, surowych payloadów ani danych logowania. Nie może sugerować `APPROVE`, gotowości live ani wykonanego realnego Fetch.

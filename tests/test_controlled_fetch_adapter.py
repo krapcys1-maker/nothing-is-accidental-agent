@@ -7,10 +7,16 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
 from app.core.clock import FixedClock
+from app.core.config import Settings
+from app.models import (
+    EvidenceRetrievalStatus,
+    _issue_controlled_fetch_transport_authorization,
+)
 from app.ports.controlled_fetch import (
     ControlledFetchContractViolation,
     ControlledFetchRequestContract,
@@ -18,6 +24,7 @@ from app.ports.controlled_fetch import (
     ControlledHttpFetch,
     FakeControlledHttpTransport,
     TransportResponse,
+    bind_url_target,
     fake_resolver_from_fixture,
     validate_url_boundary,
     validate_url_syntax,
@@ -30,9 +37,6 @@ from app.research.controlled_fetch_intent import (
     controlled_fetch_intent_fingerprint,
 )
 from app.research.evidence import build_evidence_retrieval
-from app.models import EvidenceRetrievalStatus
-
-
 NOW = datetime(2026, 7, 18, 12, 0, 0, tzinfo=timezone.utc)
 CLOCK = FixedClock(NOW)
 PUBLIC_IP = "93.184.216.34"
@@ -69,6 +73,35 @@ def make_contract(intent: ControlledFetchIntent) -> ControlledFetchRequestContra
         max_bytes=intent.max_bytes,
         max_redirects=intent.max_redirects,
         allowed_content_types=tuple(intent.allowed_content_types),
+    )
+
+
+def make_authorization(intent: ControlledFetchIntent):
+    return _issue_controlled_fetch_transport_authorization(
+        job_id="job-e2c-unit",
+        run_id="run-e2c-unit",
+        account_id=intent.account_id,
+        topic_id=intent.topic_id,
+        approval_id=1,
+        attempt_id=1,
+        requested_url=intent.requested_url,
+        source_identity=intent.source_identity,
+        intent_fingerprint=intent.fingerprint,
+        timeout_seconds=intent.timeout_seconds,
+        max_bytes=intent.max_bytes,
+        max_redirects=intent.max_redirects,
+        allowed_content_types=tuple(intent.allowed_content_types),
+        approval_expires_at=NOW + timedelta(hours=1),
+    )
+
+
+def make_settings(*, real_enabled: bool = False) -> Settings:
+    return Settings(
+        project_root=Path("."),
+        data_dir=Path("."),
+        db_path=Path("test.db"),
+        costs_csv_path=Path("costs.csv"),
+        controlled_fetch_real_enabled=real_enabled,
     )
 
 
@@ -335,8 +368,15 @@ def test_adapter_preflight_boundary_rejects_before_any_transport_call():
 
 def test_fake_transport_never_returns_more_than_the_cap():
     transport = FakeControlledHttpTransport({"https://example.com/doc": _html(body="y" * 100)})
+    binding = bind_url_target(
+        "https://example.com/doc",
+        resolver=_resolver(),
+    )
+    assert binding.target is not None
     response = transport.request(
-        "https://example.com/doc", timeout_seconds=5, max_read_bytes=10,
+        binding.target,
+        timeout_seconds=5,
+        max_read_bytes=10,
     )
     assert len(response.body) == 10 and response.body_complete is False
 
@@ -348,10 +388,8 @@ def test_transport_error_carries_controlled_code_only():
 
 # --- Composition gate -----------------------------------------------------------
 
-def test_real_controlled_fetch_remains_unauthorized_constant():
-    from app.workflows.research import controlled_fetch as module
-
-    assert module.REAL_CONTROLLED_FETCH_ENABLED is False
+def test_real_controlled_fetch_is_globally_disabled_by_default():
+    assert make_settings().controlled_fetch_real_enabled is False
 
 
 def test_composition_gate_fails_closed_without_fake_fixture(monkeypatch):
@@ -360,19 +398,31 @@ def test_composition_gate_fails_closed_without_fake_fixture(monkeypatch):
         resolve_controlled_fetch_port,
     )
 
-    intent = make_intent()
+    authorization = make_authorization(make_intent())
     monkeypatch.delenv("NIA_CONTROLLED_FETCH_FAKE", raising=False)
     monkeypatch.delenv("NIA_CONTROLLED_FETCH_FIXTURE", raising=False)
-    with pytest.raises(ControlledFetchUnavailableError, match="not authorized"):
-        resolve_controlled_fetch_port(intent, clock=CLOCK)
+    with pytest.raises(ControlledFetchUnavailableError, match="globally disabled"):
+        resolve_controlled_fetch_port(
+            authorization,
+            settings=make_settings(),
+            clock=CLOCK,
+        )
 
     monkeypatch.setenv("NIA_CONTROLLED_FETCH_FAKE", "1")
     with pytest.raises(ControlledFetchUnavailableError, match="fixture"):
-        resolve_controlled_fetch_port(intent, clock=CLOCK)
+        resolve_controlled_fetch_port(
+            authorization,
+            settings=make_settings(),
+            clock=CLOCK,
+        )
 
     monkeypatch.delenv("NIA_TEST_MODE", raising=False)
     with pytest.raises(ControlledFetchUnavailableError, match="NIA_TEST_MODE"):
-        resolve_controlled_fetch_port(intent, clock=CLOCK)
+        resolve_controlled_fetch_port(
+            authorization,
+            settings=make_settings(),
+            clock=CLOCK,
+        )
 
 
 def test_composition_gate_builds_fake_port_from_explicit_fixture(tmp_path, monkeypatch):
@@ -389,7 +439,11 @@ def test_composition_gate_builds_fake_port_from_explicit_fixture(tmp_path, monke
     }), encoding="utf-8")
     monkeypatch.setenv("NIA_CONTROLLED_FETCH_FAKE", "1")
     monkeypatch.setenv("NIA_CONTROLLED_FETCH_FIXTURE", str(fixture))
-    port = resolve_controlled_fetch_port(intent, clock=CLOCK)
+    port = resolve_controlled_fetch_port(
+        make_authorization(intent),
+        settings=make_settings(),
+        clock=CLOCK,
+    )
     assert isinstance(port, ControlledHttpFetch)
     document = port.fetch(intent.requested_url)
     assert document.error is None and document.http_status == 200

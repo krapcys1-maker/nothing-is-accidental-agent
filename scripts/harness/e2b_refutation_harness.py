@@ -260,32 +260,47 @@ def h4_stale_worker_request():
             storage.close()
 
 
-# --- H5: adapter zbudowany w offline flow (composition gate) ---
+# --- H5: adapter bez storage-issued capability (composition gate) ---
 def h5_gate_offline():
-    from app.workflows.research.controlled_fetch import (
-        ControlledFetchUnavailableError, resolve_controlled_fetch_port)
+    from app.models import ControlledFetchTransportAuthorization
+    from app.workflows.research.controlled_fetch import resolve_controlled_fetch_port
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d); acc = account(); settings = make_settings(tmp)
         topic, job_id, intent = seed(settings, acc)
         for var in ("NIA_CONTROLLED_FETCH_FAKE", "NIA_CONTROLLED_FETCH_FIXTURE"):
             os.environ.pop(var, None)
+        forged = ControlledFetchTransportAuthorization(
+            job_id=job_id, run_id="forged", account_id=acc.id,
+            topic_id=topic.id, approval_id=1, attempt_id=1,
+            requested_url=intent.requested_url,
+            source_identity=intent.source_identity,
+            intent_fingerprint=intent.fingerprint,
+            timeout_seconds=intent.timeout_seconds,
+            max_bytes=intent.max_bytes,
+            max_redirects=intent.max_redirects,
+            allowed_content_types=tuple(intent.allowed_content_types),
+            approval_expires_at=NOW + timedelta(hours=1),
+            _seal=object(),
+        )
         blocked = False
         try:
-            resolve_controlled_fetch_port(intent, clock=FixedClock(NOW))
-        except ControlledFetchUnavailableError:
+            resolve_controlled_fetch_port(
+                forged, settings=settings, clock=FixedClock(NOW),
+            )
+        except TypeError:
             blocked = True
-        record("H5 real adapter refuses to build without explicit fake fixture", blocked)
+        record("H5 adapter refuses a capability not issued by storage", blocked)
 
 
-# --- H6: środowisko włącza proxy ---
+# --- H6: realny transport nie wykonuje DNS i nie używa urllib/proxy ---
 def h6_proxy_scrubbed():
-    from app.ports.controlled_fetch import RealControlledHttpTransport
-    # Safety kernel scrubuje proxy env; realny transport i tak jawnie tnie proxy.
+    from app.ports.controlled_fetch import _RealControlledHttpTransport
     import inspect
-    src = inspect.getsource(RealControlledHttpTransport.request)
+    src = inspect.getsource(_RealControlledHttpTransport.request)
     scrubbed = all(k not in os.environ for k in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"))
-    record("H6 proxy env is scrubbed and transport pins ProxyHandler({})",
-           scrubbed and "ProxyHandler({})" in src)
+    record("H6 real transport uses pinned IP with no DNS/urllib/proxy path",
+           scrubbed and "selected_address" in src
+           and "getaddrinfo" not in src and "urllib" not in src)
 
 
 # --- H7: odpowiedź przekracza limit ---

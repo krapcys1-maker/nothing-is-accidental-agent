@@ -15,6 +15,7 @@ from app.models import (
     ControlledFetchAttempt,
     ControlledFetchFailureOutcome,
     ControlledFetchInitialization,
+    ControlledFetchTransportAuthorization,
     Job,
     JobEnqueueResult,
     JobExecutionContext,
@@ -322,6 +323,12 @@ class StoragePort(Protocol):
         self, execution: JobExecutionContext,
     ) -> ControlledFetchAttempt:
         """Atomowo konsumuje approval i tworzy RESERVED attempt w jednym fence."""
+        ...
+
+    def authorize_controlled_fetch_transport(
+        self, execution: JobExecutionContext, attempt_id: int,
+    ) -> ControlledFetchTransportAuthorization:
+        """Wydaje capability transportu po ponownej kontroli trwałego RESERVED."""
         ...
 
     def mark_controlled_fetch_request_started(

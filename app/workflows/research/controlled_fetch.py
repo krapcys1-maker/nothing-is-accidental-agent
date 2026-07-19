@@ -1,14 +1,11 @@
-"""E2-B controlled fetch runner — jedno zatwierdzone pobranie, zero modelu.
+"""E2-C controlled fetch runner — jedno zatwierdzone pobranie, zero modelu.
 
-Przepływ: trwały run → deterministyczna granica adresu → atomowa konsumpcja
-approval L1 + RESERVED → REQUEST_STARTED → wstrzyknięty transport → trwała
-terminalizacja (SUCCEEDED z retrievalem OK | FAILED z typowanym błędem |
-NEEDS_VERIFICATION przy niejednoznaczności). Żadna gałąź nie tworzy kosztu,
-provider attemptu, syntezy Research Card ani akcji browser/publikacji.
-
-Composition gate: realny transport pozostaje NIEAUTORYZOWANY
-(``REAL_CONTROLLED_FETCH_ENABLED = False``). Jedyna wykonywalna ścieżka w tej
-fali to jawny fake transport fixture'owy pod ``NIA_TEST_MODE``.
+Przepływ: trwały run → atomowa konsumpcja approval L1 + RESERVED → storage
+capability → composition root → przypięcie adresu → REQUEST_STARTED →
+wstrzyknięty transport → trwała terminalizacja (SUCCEEDED z retrievalem OK |
+FAILED z typowanym błędem | NEEDS_VERIFICATION przy niejednoznaczności).
+Żadna gałąź nie tworzy kosztu, provider attemptu, syntezy Research Card ani
+akcji browser/publikacji.
 """
 from __future__ import annotations
 
@@ -23,6 +20,7 @@ from app.models import (
     Account,
     ControlledFetchAttemptStatus,
     ControlledFetchFailureOutcome,
+    ControlledFetchTransportAuthorization,
     JobExecutionContext,
     ResearchJobExecution,
     Topic,
@@ -32,8 +30,7 @@ from app.ports.controlled_fetch import (
     ControlledFetchRequestContract,
     ControlledHttpFetch,
     FakeControlledHttpTransport,
-    RealControlledHttpTransport,
-    default_address_resolver,
+    build_real_controlled_fetch_port,
     fake_resolver_from_fixture,
 )
 from app.ports.fetch import FetchPort
@@ -45,10 +42,6 @@ from app.ports.storage import (
 )
 from app.research.controlled_fetch_intent import ControlledFetchIntent
 from app.workflows.research.pipeline import ResearchRunSummary
-
-# Twarda bramka realnego transportu. Włączenie wymaga osobnej, jawnej zgody
-# właściciela w przyszłej fali controlled-live (ADR) — nigdy zmiany ENV.
-REAL_CONTROLLED_FETCH_ENABLED = False
 
 CONTROLLED_FETCH_MODEL_LABEL = "controlled-fetch-no-model"
 
@@ -62,20 +55,24 @@ class ControlledFetchNeedsVerification(RuntimeError):
 
 
 def resolve_controlled_fetch_port(
-    intent: ControlledFetchIntent, *, clock: Clock,
+    authorization: ControlledFetchTransportAuthorization,
+    *,
+    settings: Settings,
+    clock: Clock,
 ) -> FetchPort:
-    """The ONLY composition root able to build the real FetchPort adapter.
+    """Composition root for an already consumed, exactly bound L1 approval.
 
-    Kolejność bramek jest częścią kontraktu: jawny fake fixture (wyłącznie pod
-    ``NIA_TEST_MODE``) przed twardą stałą ``REAL_CONTROLLED_FETCH_ENABLED``;
-    każda inna kombinacja kończy się kontrolowaną odmową bez żadnego efektu.
+    ENV może wybrać wyłącznie fake w test mode. Realna zdolność jest globalnie
+    włączana jawnym booleanem YAML, ale samo ustawienie nigdy nie zastępuje
+    capability ze storage.
     """
+    authorization.assert_usable_at(clock.now())
     contract = ControlledFetchRequestContract(
-        requested_url=intent.requested_url,
-        timeout_seconds=intent.timeout_seconds,
-        max_bytes=intent.max_bytes,
-        max_redirects=intent.max_redirects,
-        allowed_content_types=tuple(intent.allowed_content_types),
+        requested_url=authorization.requested_url,
+        timeout_seconds=authorization.timeout_seconds,
+        max_bytes=authorization.max_bytes,
+        max_redirects=authorization.max_redirects,
+        allowed_content_types=authorization.allowed_content_types,
     )
     fake_requested = os.environ.get("NIA_CONTROLLED_FETCH_FAKE") == "1"
     if fake_requested:
@@ -100,16 +97,13 @@ def resolve_controlled_fetch_port(
             resolver=fake_resolver_from_fixture(data),
             clock=clock,
         )
-    if REAL_CONTROLLED_FETCH_ENABLED:
-        return ControlledHttpFetch(
-            contract=contract,
-            transport=RealControlledHttpTransport(),
-            resolver=default_address_resolver,
+    if settings.controlled_fetch_real_enabled:
+        return build_real_controlled_fetch_port(
+            authorization,
             clock=clock,
         )
     raise ControlledFetchUnavailableError(
-        "real controlled fetch transport is not authorized "
-        "(REAL_CONTROLLED_FETCH_ENABLED=False); a future owner decision is required."
+        "real controlled fetch transport is globally disabled by YAML policy."
     )
 
 
@@ -126,7 +120,7 @@ def run_controlled_fetch(
     fetch_port_factory=resolve_controlled_fetch_port,
 ) -> ResearchRunSummary:
     """Execute exactly one approved controlled fetch; every write is fenced."""
-    del settings, policy  # zamknięty kontrakt runnera; bramki sprawdza dispatcher
+    del policy  # zamknięty kontrakt runnera; bramki sprawdza dispatcher
     initialized = storage.initialize_controlled_fetch_run_for_job(
         job_execution.job_id, job_execution.lease_owner, new_run_id(), clock=clock,
     )
@@ -149,8 +143,6 @@ def run_controlled_fetch(
         return summary
 
     try:
-        # Trwały intent jest re-walidowany przy każdej transakcji storage;
-        # tutaj potrzebny wyłącznie do granicy adresu i konstrukcji adaptera.
         attempt = initialized.attempt
         if attempt is not None:
             # Jedyna próba już istnieje. Jednorazowa zgoda nie odradza się po
@@ -161,17 +153,24 @@ def run_controlled_fetch(
                 f"CONTROLLED_FETCH_NOT_RESUMABLE:{attempt.status.value}"
             )
         try:
-            fetch = fetch_port_factory(intent, clock=clock)
-        except ControlledFetchUnavailableError as exc:
+            attempt = storage.begin_controlled_fetch_attempt(execution)
+            authorization = storage.authorize_controlled_fetch_transport(
+                execution,
+                attempt.id,
+            )
+        except ControlledFetchAuthorizationError as exc:
+            return _fail(f"CONTROLLED_FETCH_REFUSED:{exc.code}")
+        try:
+            fetch = fetch_port_factory(
+                authorization,
+                settings=settings,
+                clock=clock,
+            )
+        except (ControlledFetchUnavailableError, TypeError) as exc:
             return _fail(f"CONTROLLED_FETCH_UNAVAILABLE: {exc}")
         boundary = fetch.preflight_boundary()
         if not boundary.allowed:
-            # Jednoznaczna odmowa przed konsumpcją zgody i przed transportem.
             return _fail(f"URL_POLICY_REJECTED:{boundary.code}")
-        try:
-            attempt = storage.begin_controlled_fetch_attempt(execution)
-        except ControlledFetchAuthorizationError as exc:
-            return _fail(f"CONTROLLED_FETCH_REFUSED:{exc.code}")
         storage.mark_controlled_fetch_request_started(execution, attempt.id)
         try:
             document = fetch.fetch(intent.requested_url)

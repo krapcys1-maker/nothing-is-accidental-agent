@@ -312,7 +312,11 @@ def _cmd_enqueue_controlled_fetch(args: argparse.Namespace) -> int:
         print(f"requested_url={intent.requested_url}")
         print(f"intent_expires_at={intent.expires_at}")
         print("execution=controlled_fetch_v1")
-        print("dry_run=false approval_required=true real_transport_authorized=false")
+        print(
+            "dry_run=false approval_required=true "
+            "real_transport_globally_enabled="
+            f"{str(settings.controlled_fetch_real_enabled).lower()}"
+        )
         return 0
     except (SchedulingValidationError, ControlledFetchIntentError, ValueError) as exc:
         print(f"ENQUEUE CONTROLLED FETCH: failed closed: {exc}", file=sys.stderr)

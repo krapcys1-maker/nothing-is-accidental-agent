@@ -47,3 +47,33 @@ def test_typed_worker_max_attempts_is_loaded_and_invalid_values_fail_closed(
     policy.write_text("worker_policy:\n  default_max_attempts: true\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="worker_policy.default_max_attempts"):
         config.load_settings()
+
+
+def test_controlled_fetch_real_gate_is_yaml_only_and_strict_boolean(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    policy = config_dir / "growth_policy.yaml"
+    monkeypatch.setattr(config, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setenv("NIA_TEST_MODE", "1")
+    monkeypatch.setenv("REAL_CONTROLLED_FETCH_ENABLED", "1")
+
+    policy.write_text("", encoding="utf-8")
+    assert config.load_settings().controlled_fetch_real_enabled is False
+
+    policy.write_text(
+        "controlled_fetch_policy:\n  real_transport_enabled: true\n",
+        encoding="utf-8",
+    )
+    assert config.load_settings().controlled_fetch_real_enabled is True
+
+    policy.write_text(
+        "controlled_fetch_policy:\n  real_transport_enabled: 'true'\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ConfigError,
+        match="controlled_fetch_policy.real_transport_enabled",
+    ):
+        config.load_settings()
