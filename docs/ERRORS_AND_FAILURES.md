@@ -1076,3 +1076,20 @@ Niezależny review WAVE E2-B wydał `APPROVE WITH MINOR/P2`. Findings są jawne 
 - **Zbiorczy replay źle uciekł ścieżkę sidecarów.** Trzy wywołania `Test-Path` zakończyły się niekończącym błędem PowerShell, więc mimo kodu procesu `0` nie zostały uznane za dowód. Osobna poprawiona kontrola literalnych ścieżek potwierdziła brak WAL/SHM/journal; helper nie wykonał zapisu ani operacji na DB.
 - **Jedna mechaniczna próba patcha transportu nie dopasowała kontekstu.** Powodem było wyświetlenie UTF-8 w domyślnym kodowaniu PowerShell jako mojibake; patch nie zastosował żadnej części. Plik odczytano jawnie jako UTF-8 i ponowiono w małych hunkach.
 - **Skutki zewnętrzne i koszt:** brak. Wszystkie testy używały fake callerów/resolverów/transportów i tymczasowych baz; zero realnego DNS/socketu/HTTP/API/providera/browsera/publikacji, koszt `0.000000 USD`; produkcja pozostała byte-identical.
+
+## 2026-07-19 — E2-C: findings po niezależnym review i formalnym zamknięciu (ADR-107)
+
+Niezależny review PR #9 wydał `APPROVE WITH MINOR/P2`. Po merge i zielonym checkpointcie właściciel formalnie zamknął E2-C. To zamknięcie dokumentacyjne nie naprawia P2 i nie zmienia kodu.
+
+- **`E2B-F-01` — status:** `TECHNICALLY CLOSED IN MERGED E2-C`. Wspierany flow wymaga storage-issued capability po atomowym zużyciu dokładnego approval L1, a realny transport powstaje przez kontrolowany composition root. Granica nie obejmuje autora dowolnego własnego kodu Python.
+- **`E2B-F-02` — status:** `TECHNICALLY CLOSED IN MERGED E2-C`. Immutable `BoundHttpTarget` wiąże transport z numerycznym adresem, który przeszedł politykę; transport nie wykonuje ponownego DNS, a każdy redirect przechodzi nowe pełne wiązanie.
+- **`E2B-F-03` — status:** `TECHNICALLY CLOSED IN MERGED E2-C`. Globalna dostępność jest strict booleanem YAML domyślnie `false`, bez aktywacji przez ENV; konfiguracja nie zastępuje approval L1 konkretnego joba.
+- **`E2B-F-04`:** pozostaje `MINOR/P2 — defense-in-depth`; nienaprawione.
+- **`E2B-F-05`:** pozostaje `P2 — QA ergonomics`; nienaprawione.
+- **`E2B-OBS-02`:** pozostaje informational / non-blocking.
+- **`PR8-DOC-P2-01`:** pozostaje `P2`; nienaprawione.
+- **`F-DOC-01`:** pozostaje `P2` dokładności raportowania. Review skorygował opis skali diffu do 34 plików i około `+2000/-165`; nie wpływa to na techniczny wynik E2-C.
+- **`F-01-RESIDUAL`:** pozostaje `P2` poza wspieranym runtime. Prywatność nazw i pieczęć factory nie są granicą bezpieczeństwa wobec uprzywilejowanego autora dowolnego Pythona; prawidłowe twierdzenie brzmi: „Realny transport jest chroniony w granicach wspieranego runtime i composition roots.”
+- **Nieudana próba helpera dokumentacyjnego:** read-only polecenie do porównania wcześniejszego zamknięcia złożyło niepoprawny zakres PowerShell/Git (`$base..$head`) i zwróciło wyłącznie pomoc `git diff`. Nie wykonało mutacji; dane odczytano ponownie poprawnym poleceniem.
+- **Pierwsza końcowa sonda immutable SQLite utraciła cudzysłowy na granicy PowerShell/argv.** Python zakończył się `SyntaxError` przed wywołaniem `sqlite3.connect`, więc baza nie została otwarta ani zmieniona. Powtórzenie z kodem przekazanym jako jeden argument otworzyło wyłącznie `mode=ro&immutable=1` i potwierdziło 14 migracji, latest `0014_provider_attempt_reconciliation`, integrity `ok`, FK `0` oraz brak sidecarów.
+- **Granice i produkcja:** bez napraw P2, bez pełnej suity, bez zmian kodu/testów/migracji/config/runtime/DB. Produkcja pozostaje `0014`, runtime wymaga `0018`; controlled-live = `NOT READY`; następna operacja = `NOT STARTED`.

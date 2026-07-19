@@ -918,3 +918,16 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Granice:** zero realnego Fetch/DNS/socketu/HTTP/API/providera/browsera/publikacji/Research Card; zero migracji produkcji i kosztu (`0.000000 USD`). Proxy wyczyszczone, `NO_PROXY=*`; `.env` nie otwierano ani nie drukowano.
 - **Poza zakresem:** `E2B-F-04`, `E2B-F-05`, `E2B-OBS-02`, `PR8-DOC-P2-01` i pozostały backlog — bez zmian.
 - **Status:** `E2-C CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`. Brak `APPROVE`, merge, zamknięcia E2-C, gotowości controlled-live i zgody na pierwszy realny Fetch.
+
+## 2026-07-19 — Formalne zamknięcie WAVE E2-C — CLOSURE DOCUMENTATION CANDIDATE
+
+- **Etap roadmapy:** ETAP 2 / WAVE E2-C — Controlled Fetch Live-Readiness Foundation; ADR-107.
+- **Podstawa:** kandydat implementera ADR-106; niezależny review `APPROVE WITH MINOR/P2`; merge PR #9 `ff323746c35f733507a7b0a30837ebf645020b2b` z zatwierdzonym headem `c508646be011a51fe973e42c197d23ddbca7fcd6`; zielony checkpoint post-merge.
+- **Decyzja właściciela:** E2-C = `CLOSED — APPROVED WITH MINOR/P2`. E1/E2-A/E2-B/E2-C są zamknięte, lecz cały Etap 2 pozostaje `IN PROGRESS`; controlled-live = `NOT READY`; następna operacja techniczna = `NOT STARTED`.
+- **Dowód przyjęty z checkpointu:** collect/exact-once/full `1572/1572`, zero skipped, partycje `378+389+394+411`, targeted `478/478`, basic `101/101`, harness E2-C `13/13`, harness E2-B `13/13`, `compileall` PASS, `git diff --check` PASS; koszt `0.000000 USD`, zero działań zewnętrznych.
+- **Findings:** `E2B-F-01`, `E2B-F-02`, `E2B-F-03` = `TECHNICALLY CLOSED IN MERGED E2-C`. Otwarte i nienaprawiane pozostają `E2B-F-04`, `E2B-F-05`, `E2B-OBS-02`, `PR8-DOC-P2-01`, `F-DOC-01`, `F-01-RESIDUAL`.
+- **Granica:** realny transport jest chroniony w granicach wspieranego runtime i composition roots. Globalny strict boolean YAML nie zastępuje trwałego approval L1 konkretnego joba; host binding wiąże transport z adresem, który przeszedł politykę.
+- **Produkcja:** przed i po dokumentacji schema `0014`, 14 migracji, SHA-256 `9906AFBFB580BE8F576A6449B0930C41ED964FED814D99C947D1C28C5B060836`, `364544 B`, integrity `ok`, FK `0`, bez WAL/SHM/journal. Runtime wymaga `0018`; produkcji nie migrowano.
+- **Zakres zmian:** wyłącznie aktywne dokumenty źródłowe, logi i kronika. Bez zmian `app/`, `tests/`, `scripts/`, migracji, konfiguracji, runtime i bazy; bez pełnej suity zgodnie z instrukcją dla dokumentacyjnego zamknięcia.
+- **Walidacja dokumentacyjna:** `git diff --check`, lista zmienionych plików, kontrola aktywnych statusów i historycznych snapshotów, końcowy status Git oraz ponowny file-level/read-only checkpoint produkcyjnej bazy.
+- **Status dokumentacji:** `E2-C FORMAL CLOSURE DOCUMENTATION — CANDIDATE COMPLETE, AWAITING INDEPENDENT REVIEW`.

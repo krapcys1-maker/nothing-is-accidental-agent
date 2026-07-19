@@ -1,6 +1,6 @@
 # 18 — ADRES SPRAWDZONY I ADRES UŻYTY MUSZĄ BYĆ TYM SAMYM ADRESEM
 
-> **Fala E2-C (2026-07-19, ADR-106) — `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.** E2-B pozostaje formalnie zamknięte, Etap 2 trwa, a controlled-live nadal ma status `NOT READY`. Nie wykonano realnego DNS, połączenia ani pobrania.
+> **Fala E2-C (2026-07-19, ADR-107) — `CLOSED — APPROVED WITH MINOR/P2`.** Kandydat ADR-106 przeszedł niezależny review, merge PR #9 (`ff323746c35f733507a7b0a30837ebf645020b2b`) i zielony post-merge checkpoint `1572/1572`; właściciel formalnie zamknął falę. Etap 2 nadal trwa, controlled-live ma status `NOT READY`, a następna operacja techniczna = `NOT STARTED`. Nie wykonano realnego DNS, połączenia ani pobrania.
 
 ## Dziura między dwiema poprawnymi funkcjami
 
@@ -71,6 +71,8 @@ Wszystko odbyło się na fake resolverach, fake transportach, fake callerach i t
 
 Nie było realnego DNS, socketu, HTTP, Fetch, API, providera, browsera, publikacji ani kosztu. Nie migrowano produkcji. Globalny gate pozostaje domyślnie `false`.
 
-Przed pierwszym realnym pobraniem potrzebne są jeszcze niezależny review, formalna decyzja właściciela, osobna migracja produkcji do `0018`, jawne globalne włączenie zdolności oraz nowa jednorazowa zgoda na dokładny job. Kandydat E2-C nie udziela żadnej z tych zgód.
+`E2B-F-01`, `E2B-F-02` i `E2B-F-03` są technicznie zamknięte w zmergowanym E2-C. Realny transport jest chroniony w granicach wspieranego runtime i composition roots; nie jest to obietnica ochrony przed autorem dowolnego Pythona. Pozostałe P2 i obserwacje nie zostały naprawione.
+
+Przed pierwszym realnym pobraniem nadal potrzebne są osobna decyzja właściciela, snapshot i kontrolowana migracja produkcji `0014→0018`, jawne globalne włączenie zdolności oraz nowa jednorazowa zgoda na dokładny job. Ewentualna operacja ma status `NOT STARTED`; jeśli zostanie osobno autoryzowana, może obejmować dokładnie jeden minimalny realny controlled Fetch bez auto-retry, z pełnym audytem. Formalne zamknięcie E2-C nie udziela żadnej z tych zgód i nie zamyka całego Etapu 2.
 
 **Zdanie do artykułu:** „Nie wystarczy sprawdzić, dokąd prowadzi nazwa. Bezpieczeństwo zaczyna się wtedy, gdy przewód prowadzi dokładnie do adresu, który sprawdziłeś.”
