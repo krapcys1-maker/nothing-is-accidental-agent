@@ -1,6 +1,6 @@
 # 17 — CONTROLLED FETCH: JAK ZBUDOWAĆ DRZWI DO INTERNETU, KTÓRE JESZCZE SIĘ NIE OTWIERAJĄ
 
-> **Fala E2-B (2026-07-19, ADR-104) — `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.** Agent dostał pierwszy prawdziwy adapter sieciowy (`FetchPort`), zdolny pobrać jeden dokument z internetu — i ani razu go nie użył. Cała fala jest offline: fake transport, fake resolver, fake SDK, sieć zablokowana dla całego procesu. To materiał o tym, że najbezpieczniejszy moment na zbudowanie niebezpiecznej zdolności to moment, w którym jeszcze jej nie włączasz. Dowód: **1551 testów offline**, harness kontrprób **13/13**, produkcyjna baza bajt-w-bajt niezmieniona, koszt `0.000000 USD`.
+> **Fala E2-B (2026-07-19, ADR-105) — `CLOSED — APPROVED WITH MINOR/P2`; controlled-live = `NOT READY`.** Agent dostał pierwszy prawdziwy adapter sieciowy (`FetchPort`), zdolny pobrać jeden dokument z internetu — i ani razu go nie użył. Cała fala jest offline: fake transport, fake resolver, fake SDK, sieć zablokowana dla całego procesu. Niezależny review wydał `APPROVE WITH MINOR/P2`, właściciel zmergował PR #7 i formalnie zamknął falę (decyzja właściciela, nie implementera). To materiał o tym, że najbezpieczniejszy moment na zbudowanie niebezpiecznej zdolności to moment, w którym jeszcze jej nie włączasz. Dowód: **1551 testów offline**, harness kontrprób **13/13**, produkcyjna baza bajt-w-bajt niezmieniona, koszt `0.000000 USD`.
 
 ## O czym jest ten rozdział
 
@@ -40,7 +40,7 @@ Kluczowa decyzja projektowa: **żaden stan niejednoznaczny nie jest automatyczni
 
 ## Materiał: „Adapter, którego nie da się zbudować przez pomyłkę”
 
-Prawdziwy transport sieciowy istnieje w kodzie, ale jest za twardą stałą `REAL_CONTROLLED_FETCH_ENABLED = False`. Jedyna droga do zbudowania działającego adaptera prowadzi przez poprawny kontrakt pobrania i wszystkie trwałe bramki. Żaden zwykły przepływ — offline, dry-run, płatny research, maintenance, reaper — nie potrafi go skonstruować, nawet przypadkiem. To nie jest „wyłączone flagą w konfiguracji”; to jest „nie ma ścieżki w kodzie, która by tu dotarła bez zgody”.
+Prawdziwy transport sieciowy istnieje w kodzie, ale jest za twardą stałą `REAL_CONTROLLED_FETCH_ENABLED = False`. We wspieranym przepływie jedyna droga do zbudowania działającego adaptera prowadzi przez `resolve_controlled_fetch_port` — poprawny kontrakt pobrania i wszystkie trwałe bramki. Żaden zwykły przepływ — offline, dry-run, płatny research, maintenance, reaper — nie skonstruuje go przez pomyłkę. **Uczciwa granica (finding `E2B-F-01` z niezależnego review):** stała chroni tę funkcję, nie sam import klasy — dowolny własny kod poza composition root może ręcznie skonstruować transport. Dlatego poprawne, węższe twierdzenie brzmi: „realny transport pozostaje nieosiągalny przez wspierane composition roots i runtime flow przy `REAL_CONTROLLED_FETCH_ENABLED=False`”, a nie „nie da się go zbudować w żadnym kodzie Pythona”. To różnica między „nie ma ścieżki w produkcyjnym przepływie” a „nie ma ścieżki w ogóle” — i tylko tę pierwszą, węższą prawdę wolno nam napisać.
 
 **Zdanie do artykułu:** „Bezpieczna zdolność to nie ta, której nie używasz. To ta, której nie da się użyć bez przejścia przez wszystkie drzwi, które sam postawiłeś.”
 
@@ -52,6 +52,6 @@ Przed ogłoszeniem kandydata powstał osobny program (`scripts/harness/e2b_refut
 
 ## Stan materiału i granice
 
-- **Status:** `E2-B CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`. Bez APPROVE, bez merge, bez gotowości live.
+- **Status:** `E2-B CLOSED — APPROVED WITH MINOR/P2` (ADR-105) — niezależny `APPROVE WITH MINOR/P2`, merge PR #7, formalna decyzja właściciela. Controlled-live = `NOT READY`; kolejna fala techniczna = `NOT STARTED`. Findings review (`E2B-F-01…F-05`, `E2B-OBS-02`) są jawne i nieblokujące dla zamknięcia; `E2B-F-01…F-03` blokują wyłącznie controlled-live.
 - **Co NIE zostało zrobione:** żadne realne pobranie, żaden realny request HTTP/DNS, żaden koszt, żaden model, żaden browser, żadna publikacja. Produkcyjna baza pozostaje na migracji `0014`, bajt-w-bajt niezmieniona.
-- **Zanim internet zostanie realnie dotknięty:** potrzebne będą niezależny review i merge tej fali, osobna fala domykająca okno czasowe między sprawdzeniem adresu a połączeniem (realny `urllib` rozwiązuje nazwę sam), migracja produkcji do `0018` i osobna, jednorazowa zgoda właściciela na dokładny dokument. To jest następny rozdział, nie ten.
+- **Zanim internet zostanie realnie dotknięty:** review i merge tej fali są już za nami; przed pierwszym realnym pobraniem potrzebne będą osobna fala domykająca okno czasowe między sprawdzeniem adresu a połączeniem (realny `urllib` rozwiązuje nazwę sam — finding `E2B-F-02`), runtime'owy mechanizm aktywacji zamiast przełączania stałej w kodzie (finding `E2B-F-03`), migracja produkcji do `0018` i osobna, jednorazowa zgoda właściciela na dokładny dokument. To jest następny rozdział, nie ten — i pozostaje `NOT STARTED`.
