@@ -603,3 +603,13 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Autoryzacja Git:** po zielonej walidacji nowy branch z aktualnego `main`, dokładnie jeden commit `feat: prepare controlled fetch live readiness`, zwykły push i draft PR do `main`; bez merge, pushu do `main`, force-pushu, amend po pushu i drugiego commita.
 - **Wynik implementera przed niezależnym review:** capability ze storage po atomowym zużyciu L1, prywatny sealed transport factory, strict globalny boolean YAML, immutable numeryczny host binding bez ponownego DNS, nowa kontrola redirectów; brak nowej migracji. Dowód offline `1572/1572`, exact-once `378+389+394+411`, harness E2-C `13/13`, E2-B `13/13`, cztery failpointy lifecycle `4/4`, produkcja byte-identical, koszt `0.000000 USD`.
 - **Granica decyzji:** status może być wyłącznie `E2-C CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; właściciel nie udzielił `APPROVE`, zgody na merge, migrację produkcji, globalne włączenie zdolności ani pierwszy realny Fetch.
+
+## 2026-07-19 — Właściciel formalnie zamknął WAVE E2-C i autoryzował dokumentacyjny checkpoint
+
+- **Stan wejściowy:** implementer dostarczył `E2-C CANDIDATE COMPLETE` (ADR-106); niezależny review wydał `APPROVE WITH MINOR/P2`.
+- **Merge i checkpoint:** właściciel przyjął merge PR #9 jako `ff323746c35f733507a7b0a30837ebf645020b2b` (rodzice `cf3d083bc66387b2fa35f1dce4435ad0eb527b21` i zatwierdzony head `c508646be011a51fe973e42c197d23ddbca7fcd6`) oraz zielony checkpoint post-merge `1572/1572`, targeted `478/478`, basic `101/101`, harnessy `13/13+13/13`, compile/diff PASS.
+- **Formalna decyzja człowieka:** właściciel ustawił E2-C na `CLOSED — APPROVED WITH MINOR/P2` (ADR-107). Implementer nie zamknął fali samodzielnie.
+- **Findings:** właściciel przyjął `E2B-F-01`/`F-02`/`F-03` jako `TECHNICALLY CLOSED IN MERGED E2-C`; pozostałe P2 i obserwacje zachowują dotychczasowe statusy i nie są naprawiane.
+- **Granica decyzji:** cały Etap 2 pozostaje `IN PROGRESS`, controlled-live = `NOT READY`, następna operacja techniczna = `NOT STARTED`; produkcja pozostaje na `0014`, runtime wymaga `0018`. Zamknięcie nie autoryzuje migracji, prawdziwego Fetch, realnego staged A1/A2/B, browsera ani publikacji.
+- **Zlecenie dokumentacyjne:** wyłącznie formalne zamknięcie w aktywnych dokumentach; dokładnie jeden commit, zwykły push i draft PR do `main`, bez merge, force-pushu, amend i drugiego commita. Bez zmian kodu, testów, migracji, konfiguracji, runtime i produkcyjnej bazy.
+- **Ewentualny następny krok:** dopiero po osobnej decyzji może objąć snapshot produkcji, kontrolowaną migrację `0014→0018`, osobny approval właściciela, jeden minimalny realny controlled Fetch bez auto-retry oraz pełny audit trwałego wyniku.
