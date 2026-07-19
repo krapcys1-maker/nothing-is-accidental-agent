@@ -613,3 +613,11 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Granica decyzji:** cały Etap 2 pozostaje `IN PROGRESS`, controlled-live = `NOT READY`, następna operacja techniczna = `NOT STARTED`; produkcja pozostaje na `0014`, runtime wymaga `0018`. Zamknięcie nie autoryzuje migracji, prawdziwego Fetch, realnego staged A1/A2/B, browsera ani publikacji.
 - **Zlecenie dokumentacyjne:** wyłącznie formalne zamknięcie w aktywnych dokumentach; dokładnie jeden commit, zwykły push i draft PR do `main`, bez merge, force-pushu, amend i drugiego commita. Bez zmian kodu, testów, migracji, konfiguracji, runtime i produkcyjnej bazy.
 - **Ewentualny następny krok:** dopiero po osobnej decyzji może objąć snapshot produkcji, kontrolowaną migrację `0014→0018`, osobny approval właściciela, jeden minimalny realny controlled Fetch bez auto-retry oraz pełny audit trwałego wyniku.
+
+## 2026-07-19 — Właściciel autoryzował wyłącznie kandydata Production Schema Migration Orchestrator
+
+- **Zlecenie człowieka:** usunąć cztery nazwane blockery gotowości migracji: brak jednego rootu `0014→0018`, brak ponownej file-state kontroli przed writable open, brak kontrolowanego STOP na WAL/SHM/journal i nieaktualny QA runtime `0017`.
+- **Twarde granice:** nie zmieniać migracji `0015–0018` bez niezależnego dowodu wady; nie dotykać controlled Fetch/L1/capability/host binding/Workera/Dispatchera/providera/Research Card/browsera/publikacji/modeli/kosztów ani niezwiązanych P2. Zero realnej sieci i wszystkie zapisy tylko do nowych temp DB.
+- **Produkcja:** właściciel wprost zakazał migracji `data/agent.db`; dozwolone były wyłącznie file hash i `mode=ro&immutable=1`. Zakazał automatycznego usuwania sidecarów i przywracania snapshotu.
+- **Git:** po zielonej walidacji właściciel autoryzował branch `dev/stage2-production-migration-orchestrator`, dokładnie jeden commit `feat: add controlled production schema migration orchestrator`, zwykły push i draft PR do `main`; bez merge, pushu do main, force-pushu, amend i drugiego commita.
+- **Granica statusu:** implementer może ogłosić wyłącznie `PRODUCTION MIGRATION ORCHESTRATOR — CANDIDATE COMPLETE, AWAITING INDEPENDENT REVIEW`. Nie może ogłosić gotowości do autoryzacji migracji, zmigrowanej produkcji, zamkniętego Etapu 2 ani gotowości controlled-live.

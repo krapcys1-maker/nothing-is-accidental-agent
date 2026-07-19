@@ -252,3 +252,18 @@ class BoundHttpTarget:
 ```
 
 Resolver tworzy ten obiekt raz dla initial URL. Transport łączy się z `selected_address`; `host_header` i `tls_server_name` zachowują nazwę. Przed konstrukcją realnego transportu root wymaga `ControlledFetchTransportAuthorization` wydanej przez storage po zużyciu L1. Pełny kod: `app/ports/controlled_fetch.py` i `app/storage/repositories.py`.
+
+### 2026-07-19 — Ostatni gate przed writable open
+
+```python
+pre_open = _revalidate_source(
+    source,
+    initial=initial,
+    canonical=canonical,
+    quiescence_probe=effective_quiescence_probe,
+    phase="immediate_pre_writable_open",
+)
+connection = _open_verified_writable(source, expected=pre_open)
+```
+
+Pierwszy wynik preflightu nie jest „przepustką na zawsze". Po snapshotcie źródło jest czytane ponownie, a po dwóch kontrolowanych oknach interposition jeszcze raz bezpośrednio przed `mode=rw`. Writable handle ponownie porównuje ledger i file identity przed migracją. Pełny kod: `app/operations/production_schema_migration.py`.

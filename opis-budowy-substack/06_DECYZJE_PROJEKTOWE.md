@@ -394,3 +394,9 @@ Zamknięcie dotyczy izolowanego fundamentu evidence, nie całego Etapu 2. Bież�
 E2-C rozdziela dwie decyzje, które łatwo pomylić. Strict boolean YAML może globalnie udostępnić realny transport, lecz domyślnie pozostaje `false` i nie pochodzi z ENV. Dokładny request nadal wymaga jednorazowego L1. Dopiero po atomowym zużyciu tej zgody storage wydaje wygasającą capability, bez której composition root nie zbuduje realnego transportu.
 
 Druga decyzja zamyka szczelinę DNS: transport nie dostaje nazwy do ponownego rozstrzygnięcia, lecz frozen binding z dokładnym publicznym IP, który przeszedł politykę. Host i TLS SNI zachowują nazwę, połączenie idzie do przypiętego adresu, a redirect zaczyna kontrolę od nowa. Status pozostaje kandydacki; to nie autoryzuje realnego Fetch.
+
+## ADR-108 — Snapshot nie zastępuje ponownej decyzji o aktualności pliku
+
+Wybrano jeden wąski CLI dokładnego `0014→0018`, a nie ogólny migrator. Zgoda wiąże path, SHA, size, wersję początkową i docelową oraz nowy snapshot. Snapshot powstaje przed writable open, ale po jego weryfikacji źródło jest niezależnie sprawdzane ponownie. Sidecar jest reason code’em odmowy, nie plikiem do sprzątnięcia.
+
+Cała drabina nie jest przedstawiana jako jedna transakcja. Transakcyjna jest każda migracja wraz z własnym wpisem ledgeru; po awarii resume zaczyna się od udowodnionego trwałego szczebla i wymaga nowej zgody właściciela. Finalny błąd nie wywołuje automatycznego restore. Status: kandydat do niezależnego review, bez migracji produkcji.

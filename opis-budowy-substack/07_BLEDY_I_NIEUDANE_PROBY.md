@@ -453,3 +453,9 @@ Pierwszy targeted run ujawnił błąd stref czasowych przy ponownej kontroli exp
 Końcowy helper exact-once najpierw nie dostał node ID przez projektowy tryb quiet, a potem PowerShell uznał `[hidden]` i `[HIDDEN]` za ten sam tekst. Ordinalne porównanie pokazało prawdę: `1572/1572`, zero duplikatów. Kilka jednolinijkowych prób immutable odczytu SQLite rozbiło się wcześniej na quoting Windows; żadna nie otworzyła bazy. Poprawione wywołanie `mode=ro&immutable=1` potwierdziło 14 migracji, integrity `ok` i zero naruszeń FK.
 
 Jeszcze jeden zbiorczy raport źle uciekł ścieżki WAL/SHM/journal i zwrócił mylący kod procesu `0` obok błędów `Test-Path`. Tego wyniku nie policzono jako dowodu; poprawiona osobna kontrola potwierdziła brak wszystkich trzech sidecarów.
+
+## 2026-07-19 — Dwie czerwone kontrpróby fixture i jedna myląca cecha Windows
+
+Pierwszy targeted run orchestratora miał dwa failures. Dwie puste bazy utworzone w tej samej sekundzie były bajtowo identyczne, więc test „wrong path" nie stworzył różnej tożsamości; dodano jawny `user_version`. Drugi test po celowym uszkodzeniu `sqlite_master` próbował jeszcze wykonać `PRAGMA journal_mode=DELETE` i zatrzymywał się na własnym malformed schema — zbędny krok usunięto.
+
+Ręczna sonda najpierw próbowała zaimportować prywatny helper przez `import *` i dostała `NameError` przed migracją. Dodatkowo Windows pokazał różne reprezentacje `ctime` między uchwytem i path stat. Stabilność jednego odczytu oparto więc na dev/inode/size/mtime/nlink+SHA, a ctime zachowano do porównania kolejnych stanów. Wszystkie poprawki dotyczyły temp DB; produkcja pozostała nietknięta.

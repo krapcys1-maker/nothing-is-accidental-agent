@@ -129,3 +129,7 @@ Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior u
 ### 2026-07-19 — E2-C: sprawdzony adres trafia do transportu
 
 `SCREENSHOT REQUIRED`: bezpieczny, zanonimizowany kadr powinien pokazać `1572/1572`, exact-once `378+389+394+411`, harnessy E2-C `13/13` i E2-B `13/13`, failpointy `4/4` oraz kontrpróbę: jeden resolver call, ten sam publiczny `selected_address` w fake transporcie, zachowany Host/SNI. Obrazu nie wykonano z powodu zakazu browsera i prywatnych ścieżek terminala. Nie wolno pokazać `.env`, pełnej bazy, prawdziwego przyszłego URL ani sugerować wykonanego Fetch.
+
+### 2026-07-19 — Orchestrator migracji odmawia na późnym sidecarze
+
+`SCREENSHOT REQUIRED`: bezpieczny kadr powinien pokazać `58/58`, full/exact-once `1630/1630`, partycje `390+398+412+430`, QA `30/30` oraz kontrpróbę z syntetycznym `-journal` utworzonym tuż przed writable open: `STALE_DATABASE_STATE`, brak migracji, sidecar nadal istnieje. Obrazu nie wykonano z powodu zakazu browsera i prywatnych ścieżek. Nie wolno pokazywać pełnego production SHA/path, `.env`, zawartości DB/snapshotu ani sugerować wykonanej migracji.

@@ -434,3 +434,10 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co powinien pokazać:** zanonimizowane `1572/1572`, exact-once `378+389+394+411`, harness E2-C `13/13`, E2-B `13/13`, failpointy `4/4`, `compileall`/`git diff --check` PASS oraz produkcyjne `0014`, 14 migracji, SHA `9906AF…060836`, `364544 B`, integrity `ok`, FK `0`, sidecary `0`.
 - **Dodatkowy kadr techniczny:** kontrpróba, w której resolver zwraca publiczny IP tylko raz, fake transport otrzymuje dokładnie ten sam `selected_address`, Host/SNI zachowują hostname, a zmiana resolvera przed requestem nie zmienia celu; obok odrzucenie forged capability i niespójnego bindingu.
 - **Czego nie może pokazać:** `.env`, kluczy, cookies, pełnych lokalnych ścieżek, treści produkcyjnej SQLite, realnego URL przyszłego requestu, surowych payloadów ani danych logowania. Nie może sugerować `APPROVE`, gotowości live ani wykonanego realnego Fetch.
+
+## 2026-07-19 — Production Schema Migration Orchestrator candidate
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ browser był zabroniony, a terminal zawiera pełne lokalne ścieżki i fingerprinty operacyjne.
+- **Co powinien pokazać:** zanonimizowany kontrakt CLI, `58/58`, full/exact-once `1630/1630`, partycje `390+398+412+430`, QA `30/30`, harnessy `13/13+13/13`, compile/diff PASS oraz produkcyjne `0014`, 14 migracji, SHA skrócone `9906AF…060836`, `364544 B`, integrity `ok`, FK `0`, sidecary `0`.
+- **Dodatkowy kadr:** syntetyczny sidecar pojawiający się między snapshotem a writable open kończy się `STALE_DATABASE_STATE`/`WAL_PRESENT` bez migracji i bez usunięcia pliku; obok failpoint podczas `0017` pokazuje trwałe `0016` i bezpieczny owner-approved resume.
+- **Czego nie może pokazać:** `.env`, pełnego SHA przyszłej autoryzacji, zawartości produkcyjnej DB/snapshotu, prywatnych ścieżek, command lines ani danych logowania. Nie może sugerować wykonanej migracji, `APPROVE`, zamknięcia Etapu 2 ani controlled-live readiness.

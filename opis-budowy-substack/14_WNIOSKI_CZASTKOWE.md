@@ -236,3 +236,9 @@ Attempt `SETTLED` mówi, że pieniądze zostały rozliczone, ale nie dowodzi jes
 Kiedy kod przeszedł niezależny review i został zmergowany, „zamknięcie fali" nie oznacza już pisania kodu. WAVE E2-A zamknięto zmianą wyłącznie dokumentów: stanu projektu, rejestru decyzji i kroniki. Kod, testy, migracje i produkcyjna baza pozostały bajt w bajt takie same. Ta dyscyplina — oddzielić moment implementacji od momentu formalnego zapisu — pozwala zamknąć falę bez ryzyka wprowadzenia nowej regresji przy okazji porządków, a rozdzielenie ról implementera, reviewera i właściciela zamykającego etap chroni przed samopotwierdzeniem.
 
 Drugi wniosek dotyczy drobnych ustaleń review. Nie każdy finding trzeba naprawić od razu; część rozsądniej jest jawnie przyjąć jako P2 z opisanym wpływem i — co najważniejsze — z warunkiem ponownej oceny. „Brak triggera niemutowalności payloadu" nie jest dziś problemem, bo wspierane flow re-waliduje payload — ale musi zostać ponownie rozpatrzony, zanim pojawi się cokolwiek płatnego lub działającego na zewnątrz. Zapisany warunek `MUST REASSESS` zamienia cichy dług w widoczną bramkę przyszłego etapu.
+
+## 2026-07-19 — Stan sprawdzony chwilę temu nie jest stanem autoryzowanym teraz
+
+Preflight i snapshot mogą oba być poprawne, a mimo to decyzja o zapisie może być już nieaktualna. Dlatego granica bezpieczeństwa nie kończy się na „mamy backup". Musi ponownie związać fizyczny plik, jego hash, rozmiar, ledger i brak sidecarów z chwilą writable open.
+
+Drugi wniosek: „recovery" nie oznacza automatycznego retry ani ukrytego restore. Jeżeli migracje commitują per krok, uczciwy system raportuje ostatni trwały szczebel i wymaga nowej decyzji właściciela. Bezpieczne wznowienie jest nową operacją, nie kontynuacją starego pozwolenia.
