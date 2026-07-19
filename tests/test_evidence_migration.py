@@ -155,20 +155,27 @@ def evidence_db(tmp_path: Path) -> Path:
 
 # --- Drabina jawnych migracji i dokładny runtime gate ---
 
-def test_runtime_schema_version_is_the_evidence_pipeline_migration():
-    assert RUNTIME_SCHEMA_VERSION == EVIDENCE_PIPELINE_SCHEMA_VERSION
+def test_runtime_schema_version_is_the_controlled_fetch_migration():
+    # E2-B: runtime gate wymaga dokładnie 0018; 0016/0017 pozostają w drabinie.
+    from app.storage.db import CONTROLLED_FETCH_SCHEMA_VERSION
+
+    assert RUNTIME_SCHEMA_VERSION == CONTROLLED_FETCH_SCHEMA_VERSION
+    assert CONTROLLED_FETCH_SCHEMA_VERSION == "0018_controlled_fetch_lifecycle"
     assert EVIDENCE_SCHEMA_VERSION == "0016_evidence_foundation"
     canonical = canonical_migration_versions()
-    assert canonical[-1] == EVIDENCE_PIPELINE_SCHEMA_VERSION
-    assert canonical[-2] == EVIDENCE_SCHEMA_VERSION
-    assert len(canonical) == 17
+    assert canonical[-1] == CONTROLLED_FETCH_SCHEMA_VERSION
+    assert canonical[-2] == EVIDENCE_PIPELINE_SCHEMA_VERSION
+    assert canonical[-3] == EVIDENCE_SCHEMA_VERSION
+    assert len(canonical) == 18
 
 
-def test_fresh_initialization_reaches_0017_and_creates_evidence_tables(tmp_path):
+def test_fresh_initialization_reaches_0018_and_creates_evidence_tables(tmp_path):
+    from app.storage.db import CONTROLLED_FETCH_SCHEMA_VERSION
+
     path = tmp_path / "fresh.db"
     applied = initialize_database(path)
-    assert len(applied) == 17
-    assert applied[-1] == EVIDENCE_PIPELINE_SCHEMA_VERSION
+    assert len(applied) == 18
+    assert applied[-1] == CONTROLLED_FETCH_SCHEMA_VERSION
     storage = SqliteStorage.open(path)
     try:
         names = {
@@ -229,7 +236,9 @@ def test_explicit_0016_to_0017_is_exact_and_idempotent(tmp_path):
     assert first.target_version == EVIDENCE_PIPELINE_SCHEMA_VERSION
     assert first.applied_migrations == (EVIDENCE_PIPELINE_SCHEMA_VERSION,)
     assert len(database_schema_versions(path)) == 17
-    SqliteStorage.open(path).close()
+    # E2-B: runtime wymaga 0018, więc baza 0017 pozostaje odrzucona bez mutacji.
+    with pytest.raises(SchemaVersionTooOld):
+        SqliteStorage.open(path)
     before = _fingerprint(path)
     second = migrate_0016_to_0017(path)
     assert second.idempotent is True

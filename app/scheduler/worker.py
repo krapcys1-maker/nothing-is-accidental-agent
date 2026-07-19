@@ -284,6 +284,8 @@ class Worker:
             or current.workflow is not WorkflowType.RESEARCH
         ):
             return self._fail(job, error)
+        if current.payload.get("execution") == "controlled_fetch_v1":
+            return self._fail_controlled_fetch_boundary(current, error)
         execution = JobExecutionContext(
             job_id=current.id,
             lease_owner=self._lease_owner,
@@ -320,6 +322,40 @@ class Worker:
             )
             return WorkerIterationResult(status, job.id, error)
         return WorkerIterationResult(WorkerIterationStatus.FAILED, job.id, error)
+
+    def _fail_controlled_fetch_boundary(
+        self, current: Job, error: str,
+    ) -> WorkerIterationResult:
+        """Route an escaped controlled fetch failure through its storage boundary."""
+        from app.models import ControlledFetchFailureOutcome
+
+        execution = JobExecutionContext(
+            job_id=current.id,
+            lease_owner=self._lease_owner,
+            run_id=current.run_id,
+            clock=self._clock,
+        )
+        try:
+            outcome = self._storage.fail_controlled_fetch_execution(execution, error)
+        except (LifecycleTransitionError, StaleJobExecutionError):
+            return self._lost_lease(current)
+        except Exception:
+            # The failure boundary itself is unavailable; never invent a
+            # standalone terminal outcome around a possibly live attempt.
+            return self._lost_lease(current)
+        if outcome is ControlledFetchFailureOutcome.ESCALATED_NEEDS_VERIFICATION:
+            return WorkerIterationResult(
+                WorkerIterationStatus.NEEDS_VERIFICATION, current.id, error,
+            )
+        if outcome is ControlledFetchFailureOutcome.ALREADY_TERMINALIZED:
+            durable = self._storage.get_job(current.id)
+            status = (
+                WorkerIterationStatus.DONE
+                if durable is not None and durable.status is JobStatus.DONE
+                else WorkerIterationStatus.FAILED
+            )
+            return WorkerIterationResult(status, current.id, error)
+        return WorkerIterationResult(WorkerIterationStatus.FAILED, current.id, error)
 
     @staticmethod
     def _lost_lease(job: Job) -> WorkerIterationResult:
@@ -362,6 +398,13 @@ class Worker:
 
     def _needs_verification(self, job: Job, error: str) -> WorkerIterationResult:
         current = self._storage.get_job(job.id)
+        # A workflow that already escalated durably (e.g. controlled fetch)
+        # cleared the lease and owns the canonical NEEDS_VERIFICATION outcome;
+        # the worker must report it, never re-derive it.
+        if current is not None and current.status is JobStatus.NEEDS_VERIFICATION:
+            return WorkerIterationResult(
+                WorkerIterationStatus.NEEDS_VERIFICATION, job.id, error,
+            )
         if (
             current is not None
             and current.run_id is not None

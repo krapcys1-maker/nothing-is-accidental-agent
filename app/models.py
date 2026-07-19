@@ -854,3 +854,82 @@ class EvidenceExcerpt(BaseModel):
     start_offset: int
     end_offset: int
     created_at: datetime = Field(default_factory=_utcnow)
+
+
+# --- Controlled Fetch foundation (Etap 2, fala E2-B) ---
+
+CONTROLLED_FETCH_ACTION_TYPE = "CONTROLLED_FETCH"
+
+
+class ControlledFetchAttemptStatus(str, Enum):
+    """Zamknięty lifecycle jednej próby kontrolowanego pobrania."""
+
+    RESERVED = "RESERVED"
+    REQUEST_STARTED = "REQUEST_STARTED"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    NEEDS_VERIFICATION = "NEEDS_VERIFICATION"
+
+
+class ControlledFetchFailureOutcome(str, Enum):
+    """Deterministyczny wynik granicy błędu kontrolowanego pobrania."""
+
+    FAILED_NO_ATTEMPT = "FAILED_NO_ATTEMPT"
+    FAILED_BEFORE_REQUEST = "FAILED_BEFORE_REQUEST"
+    FAILED_AFTER_REQUEST = "FAILED_AFTER_REQUEST"
+    ESCALATED_NEEDS_VERIFICATION = "ESCALATED_NEEDS_VERIFICATION"
+    ALREADY_TERMINALIZED = "ALREADY_TERMINALIZED"
+
+
+class ControlledFetchApproval(BaseModel):
+    """Jednorazowa zgoda L1 na dokładnie jedno pobranie jednego joba.
+
+    Zgoda wiąże job, konto, dokładny URL i fingerprint intentu; wygasa,
+    jest konsumowana atomowo najwyżej raz i nigdy nie przenosi się na inny
+    job ani URL (podłogi SQLite migracji 0018)."""
+
+    id: int | None = None
+    job_id: str
+    account_id: str
+    action_type: str = CONTROLLED_FETCH_ACTION_TYPE
+    requested_url: str
+    intent_fingerprint: str
+    timeout_seconds: int
+    max_bytes: int
+    max_redirects: int
+    approved_by: str
+    approved_at: datetime
+    expires_at: datetime
+    consumed_at: datetime | None = None
+
+
+class ControlledFetchAttempt(BaseModel):
+    """Trwały zapis dokładnie jednej próby requestu kontrolowanego pobrania."""
+
+    id: int | None = None
+    job_id: str
+    run_id: str
+    account_id: str
+    topic_id: int
+    approval_id: int
+    attempt_no: int = 1
+    source_identity: str
+    requested_url: str
+    intent_fingerprint: str
+    status: ControlledFetchAttemptStatus = ControlledFetchAttemptStatus.RESERVED
+    lease_owner: str
+    reserved_at: datetime
+    request_started_at: datetime | None = None
+    terminalized_at: datetime | None = None
+    retrieval_id: int | None = None
+    outcome_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class ControlledFetchInitialization:
+    """Wynik atomowego utworzenia albo wznowienia runu kontrolowanego pobrania."""
+
+    job: Job
+    run: Run
+    attempt: ControlledFetchAttempt | None
+    created: bool

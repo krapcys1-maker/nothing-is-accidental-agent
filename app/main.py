@@ -46,6 +46,13 @@ from app.research.offline_evidence_intent import (
     OfflineEvidenceIntent,
     OfflineEvidenceIntentError,
 )
+from app.research.controlled_fetch_intent import (
+    CONTROLLED_FETCH_EXECUTION,
+    ControlledFetchIntent,
+    ControlledFetchIntentError,
+    SUPPORTED_FETCH_CONTENT_TYPES,
+    canonicalize_controlled_fetch_payload,
+)
 
 
 def _configure_output() -> None:
@@ -235,6 +242,116 @@ def _cmd_enqueue_offline_evidence(args: argparse.Namespace) -> int:
         return 0
     except (SchedulingValidationError, ValueError) as exc:
         print(f"ENQUEUE OFFLINE EVIDENCE: failed closed: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        storage.close()
+
+
+def _cmd_enqueue_controlled_fetch(args: argparse.Namespace) -> int:
+    """Freeze exactly one approved-source fetch into a durable versioned intent.
+
+    Enqueue nie wykonuje żadnego pobrania i nie uruchamia workera; wykonanie
+    wymaga jeszcze jednorazowej zgody L1 (`approve-controlled-fetch`) oraz
+    autoryzowanego transportu (w E2-B realny transport pozostaje wyłączony).
+    """
+    from app.ports.controlled_fetch import validate_url_syntax
+
+    settings = load_settings()
+    try:
+        policy = SchedulingPolicy.from_config(settings.editorial_schedule)
+        account = settings.get_account(args.account_id)
+        boundary = validate_url_syntax(args.url)
+        if not boundary.allowed:
+            raise ControlledFetchIntentError(
+                f"URL rejected by the local boundary policy: {boundary.code}."
+            )
+        intent = ControlledFetchIntent.build(
+            account_id=account.id,
+            topic_id=args.topic_id,
+            source_identity=args.source_identity,
+            requested_url=args.url,
+            timeout_seconds=args.timeout_seconds,
+            max_bytes=args.max_bytes,
+            max_redirects=args.max_redirects,
+            allowed_content_types=list(SUPPORTED_FETCH_CONTENT_TYPES),
+            requested_at=datetime.now(timezone.utc),
+            expires_at=args.expires_at,
+        )
+    except (ConfigError, SchedulingValidationError, ControlledFetchIntentError) as exc:
+        print(f"ENQUEUE CONTROLLED FETCH: failed closed: {exc}", file=sys.stderr)
+        return 2
+
+    storage = SqliteStorage.open(settings.db_path)
+    try:
+        storage.ensure_account(account)
+        payload = {
+            "account_id": account.id,
+            "topic_id": args.topic_id,
+            "dry_run": False,
+            "execution": CONTROLLED_FETCH_EXECUTION,
+            "execution_intent": intent.as_payload(),
+        }
+        canonicalize_controlled_fetch_payload(payload)
+        result = ScheduledJobEnqueuer(
+            storage=storage, scheduling_policy=policy, clock=SystemClock(),
+        ).enqueue(ScheduledJobRequest(
+            id=f"controlled-fetch-{uuid4()}",
+            account_id=account.id,
+            kind=JobKind.RESEARCH,
+            workflow=WorkflowType.RESEARCH,
+            idempotency_key=f"controlled-fetch:{account.id}:{args.topic_id}:{uuid4()}",
+            topic_id=args.topic_id,
+            payload=payload,
+            requested_at=args.requested_at,
+            max_attempts=settings.worker_default_max_attempts,
+        ))
+        print(f"ENQUEUE CONTROLLED FETCH: job_id={result.job.id}")
+        print(f"earliest_run_at_utc={result.decision.earliest_run_at.isoformat()}")
+        print(f"intent_version={intent.version}")
+        print(f"intent_fingerprint={intent.fingerprint}")
+        print(f"requested_url={intent.requested_url}")
+        print(f"intent_expires_at={intent.expires_at}")
+        print("execution=controlled_fetch_v1")
+        print("dry_run=false approval_required=true real_transport_authorized=false")
+        return 0
+    except (SchedulingValidationError, ControlledFetchIntentError, ValueError) as exc:
+        print(f"ENQUEUE CONTROLLED FETCH: failed closed: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        storage.close()
+
+
+def _cmd_approve_controlled_fetch(args: argparse.Namespace) -> int:
+    """Record the one-shot human L1 approval bound to one frozen fetch job."""
+    from app.ports.storage import ControlledFetchAuthorizationError
+
+    try:
+        settings = load_settings()
+        settings.get_account(args.account_id)
+    except ConfigError as exc:
+        print(f"APPROVE CONTROLLED FETCH: failed closed: {exc}", file=sys.stderr)
+        return 2
+    storage = SqliteStorage.open(settings.db_path)
+    try:
+        approval = storage.record_controlled_fetch_approval(
+            job_id=args.job_id,
+            account_id=args.account_id,
+            approved_by=args.approved_by,
+            expires_at=args.expires_at,
+            clock=SystemClock(),
+        )
+        print(f"APPROVE CONTROLLED FETCH: approval_id={approval.id}")
+        print(f"job_id={approval.job_id}")
+        print(f"requested_url={approval.requested_url}")
+        print(f"intent_fingerprint={approval.intent_fingerprint}")
+        print(f"expires_at={approval.expires_at}")
+        print("action_type=CONTROLLED_FETCH single_use=true transferable=false")
+        return 0
+    except ControlledFetchAuthorizationError as exc:
+        print(f"APPROVE CONTROLLED FETCH: failed closed: {exc}", file=sys.stderr)
+        return 2
+    except (ValueError, sqlite3.Error) as exc:
+        print(f"APPROVE CONTROLLED FETCH: failed closed: {exc}", file=sys.stderr)
         return 2
     finally:
         storage.close()
@@ -923,6 +1040,37 @@ def build_parser() -> argparse.ArgumentParser:
     p_enqueue_evidence.add_argument("--fixture-path", required=True, type=Path)
     p_enqueue_evidence.add_argument("--requested-at", type=_parse_requested_at)
     p_enqueue_evidence.set_defaults(func=_cmd_enqueue_offline_evidence)
+
+    p_enqueue_fetch = sub.add_parser(
+        "enqueue-controlled-fetch",
+        help="E2-B: zamroź trwały intent jednego kontrolowanego pobrania "
+             "(bez wykonania; wymaga późniejszej zgody L1).",
+    )
+    p_enqueue_fetch.add_argument("--account-id", required=True)
+    p_enqueue_fetch.add_argument("--topic-id", required=True, type=int)
+    p_enqueue_fetch.add_argument("--url", required=True,
+                                 help="Dokładny jawny URL http/https jednego dokumentu.")
+    p_enqueue_fetch.add_argument("--source-identity", required=True,
+                                 help="Stabilna tożsamość źródła (np. slug dokumentu).")
+    p_enqueue_fetch.add_argument("--timeout-seconds", required=True, type=int)
+    p_enqueue_fetch.add_argument("--max-bytes", required=True, type=int)
+    p_enqueue_fetch.add_argument("--max-redirects", required=True, type=int)
+    p_enqueue_fetch.add_argument("--expires-at", required=True, type=_parse_requested_at,
+                                 help="ISO-8601 z jawną strefą; po tym czasie intent wygasa.")
+    p_enqueue_fetch.add_argument("--requested-at", type=_parse_requested_at)
+    p_enqueue_fetch.set_defaults(func=_cmd_enqueue_controlled_fetch)
+
+    p_approve_fetch = sub.add_parser(
+        "approve-controlled-fetch",
+        help="E2-B: jednorazowa zgoda L1 dla dokładnie jednego joba controlled fetch.",
+    )
+    p_approve_fetch.add_argument("--job-id", required=True)
+    p_approve_fetch.add_argument("--account-id", required=True)
+    p_approve_fetch.add_argument("--approved-by", required=True,
+                                 help="Tożsamość człowieka L1 podejmującego decyzję.")
+    p_approve_fetch.add_argument("--expires-at", required=True, type=_parse_requested_at,
+                                 help="ISO-8601 z jawną strefą; zgoda wygasa najpóźniej wtedy.")
+    p_approve_fetch.set_defaults(func=_cmd_approve_controlled_fetch)
 
     p_worker = sub.add_parser("worker", help="Wykonaj bezpieczny, trwały job offline.")
     worker_mode = p_worker.add_mutually_exclusive_group(required=True)

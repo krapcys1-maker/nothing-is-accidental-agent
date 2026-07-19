@@ -60,6 +60,7 @@ class PolicyEngine:
         *,
         job_kind: JobKind | None = None,
         dry_run: bool = True,
+        controlled_fetch: bool = False,
     ) -> PolicyDecision:
         """Checks uncached SQLite safety flags for one worker iteration.
 
@@ -113,6 +114,17 @@ class PolicyEngine:
                 "BROWSER_ACTIONS_BLOCKED",
                 "Akcje browser/public pozostają zablokowane w tym etapie.",
             )
+        if controlled_fetch:
+            # Controlled fetch (E2-B) nie jest akcją płatną ani browserową:
+            # zero modelu, zero providera. Jego właściwą bramką jest trwała,
+            # jednorazowa zgoda L1 sprawdzana w transakcji startu — flaga
+            # paid_actions_enabled celowo NIE otwiera i NIE zamyka tej ścieżki.
+            if job_kind is not JobKind.RESEARCH:
+                return PolicyDecision.block(
+                    "CONTROLLED_FETCH_KIND_INVALID",
+                    "Controlled fetch może wykonywać wyłącznie job RESEARCH.",
+                )
+            return PolicyDecision.ok("WORKER_JOB_ALLOWED")
         if not dry_run and not flags["paid_actions_enabled"]:
             return PolicyDecision.block(
                 "PAID_ACTIONS_BLOCKED",

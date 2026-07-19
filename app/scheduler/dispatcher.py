@@ -32,6 +32,16 @@ from app.research.offline_evidence_intent import (
     OfflineEvidenceIntentError,
     canonicalize_offline_evidence_payload,
 )
+from app.research.controlled_fetch_intent import (
+    CONTROLLED_FETCH_EXECUTION,
+    ControlledFetchIntent,
+    ControlledFetchIntentError,
+    canonicalize_controlled_fetch_payload,
+)
+from app.workflows.research.controlled_fetch import (
+    ControlledFetchNeedsVerification,
+    run_controlled_fetch,
+)
 from app.workflows.research.offline_evidence import run_offline_evidence_research
 from app.workflows.research.pipeline import (
     ResearchExecutionAlreadyInitialized,
@@ -119,6 +129,14 @@ class OfflineEvidenceCallable(Protocol):
         self, account: Account, topic: Topic, *, settings: Settings,
         storage: StoragePort, policy: PolicyEngine, clock: Clock,
         job_execution: ResearchJobExecution, intent: OfflineEvidenceIntent,
+    ) -> ResearchRunSummary: ...
+
+
+class ControlledFetchCallable(Protocol):
+    def __call__(
+        self, account: Account, topic: Topic, *, settings: Settings,
+        storage: StoragePort, policy: PolicyEngine, clock: Clock,
+        job_execution: ResearchJobExecution, intent: ControlledFetchIntent,
     ) -> ResearchRunSummary: ...
 
 
@@ -214,6 +232,7 @@ class JobDispatcher:
         research_dry_run: ResearchDryRunCallable = run_research_dry_run,
         research_real: ResearchDryRunCallable = _run_durable_real_research,
         research_offline_evidence: OfflineEvidenceCallable = run_offline_evidence_research,
+        research_controlled_fetch: ControlledFetchCallable = run_controlled_fetch,
         allow_real_research: bool = True,
     ) -> None:
         self._settings = settings
@@ -223,6 +242,7 @@ class JobDispatcher:
         self._research_dry_run = research_dry_run
         self._research_real = research_real
         self._research_offline_evidence = research_offline_evidence
+        self._research_controlled_fetch = research_controlled_fetch
         self._allow_real_research = allow_real_research
 
     def dispatch(
@@ -235,8 +255,12 @@ class JobDispatcher:
         """Runs one supported local operation after a fresh PolicyEngine check."""
         account = self._account_for(job)
         dry_run = job.payload.get("dry_run") is True
+        controlled_fetch = (
+            job.payload.get("execution") == CONTROLLED_FETCH_EXECUTION
+        )
         decision = self._policy.check_worker_runtime(
             account, job_kind=job.kind, dry_run=dry_run,
+            controlled_fetch=controlled_fetch,
         )
         if not decision.allowed:
             raise PolicyDeniedError(decision)
@@ -291,6 +315,15 @@ class JobDispatcher:
                     policy=self._policy, clock=self._clock,
                     job_execution=execution, intent=intent,
                 )
+            elif job.payload.get("execution") == CONTROLLED_FETCH_EXECUTION:
+                fetch_intent = ControlledFetchIntent.from_payload(
+                    job.payload["execution_intent"]
+                )
+                summary = self._research_controlled_fetch(
+                    account, topic, settings=self._settings, storage=self._storage,
+                    policy=self._policy, clock=self._clock,
+                    job_execution=execution, intent=fetch_intent,
+                )
             else:
                 runner = self._research_real if is_real else self._research_dry_run
                 summary = runner(
@@ -298,6 +331,10 @@ class JobDispatcher:
                     settings=self._settings, storage=self._storage, policy=self._policy,
                     clock=self._clock, job_execution=execution,
                 )
+        except ControlledFetchNeedsVerification as exc:
+            raise UncertainExternalEffectError(
+                "Controlled fetch outcome requires verification; no automatic retry."
+            ) from exc
         except (ResearchExecutionAlreadyInitialized, ResearchExecutionNeedsReconciliation) as exc:
             raise UncertainExternalEffectError(
                 "Research execution requires verification before any further provider request."
@@ -329,7 +366,8 @@ class JobDispatcher:
         if job.topic_id is None:
             raise PayloadValidationError("RESEARCH job requires topic_id.")
         is_offline_evidence = job.payload.get("execution") == OFFLINE_EVIDENCE_EXECUTION
-        if job.run_id is not None and not is_offline_evidence:
+        is_controlled_fetch = job.payload.get("execution") == CONTROLLED_FETCH_EXECUTION
+        if job.run_id is not None and not (is_offline_evidence or is_controlled_fetch):
             raise PayloadValidationError("RESEARCH worker accepts only a job without a prior run_id.")
         dry_keys = {"account_id", "topic_id", "dry_run"}
         real_keys = {
@@ -340,8 +378,10 @@ class JobDispatcher:
         offline_evidence_keys = {
             "account_id", "topic_id", "dry_run", "execution", "execution_intent",
         }
+        controlled_fetch_keys = offline_evidence_keys
         if set(job.payload) not in (
             dry_keys, real_keys, controlled_real_keys, offline_evidence_keys,
+            controlled_fetch_keys,
         ):
             raise PayloadValidationError("RESEARCH payload contains unsupported fields.")
         if job.payload["account_id"] != job.account_id or job.payload["topic_id"] != job.topic_id:
@@ -349,6 +389,19 @@ class JobDispatcher:
         is_real = job.payload["dry_run"] is False
         if not is_real and job.payload["dry_run"] is not True:
             raise PayloadValidationError("RESEARCH payload dry_run must be boolean.")
+        if is_controlled_fetch:
+            try:
+                normalized_fetch = canonicalize_controlled_fetch_payload(job.payload)
+            except ControlledFetchIntentError as exc:
+                raise PayloadValidationError("RESEARCH controlled fetch intent is invalid.") from exc
+            if (
+                normalized_fetch["account_id"] != job.account_id
+                or normalized_fetch["topic_id"] != job.topic_id
+                or not is_real
+            ):
+                raise PayloadValidationError(
+                    "RESEARCH controlled fetch intent does not match job identity or mode."
+                )
         if is_offline_evidence:
             try:
                 normalized_offline = canonicalize_offline_evidence_payload(job.payload)
@@ -362,11 +415,11 @@ class JobDispatcher:
                 raise PayloadValidationError(
                     "RESEARCH offline evidence intent does not match job identity or mode."
                 )
-        if is_real and (
+        if is_real and not is_controlled_fetch and (
             job.payload.get("execution") != "durable_provider_v2"
         ):
             raise PayloadValidationError("RESEARCH real payload is not a durable single-attempt contract.")
-        if is_real:
+        if is_real and not is_controlled_fetch:
             try:
                 normalized = canonicalize_durable_research_payload(job.payload)
                 intent_raw = normalized["execution_intent"]
