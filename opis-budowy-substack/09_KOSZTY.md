@@ -252,3 +252,7 @@ Nowy koszt: `0.000000 USD` (zero requestów, fake callery i tymczasowe bazy). Su
 ## 2026-07-18 — Naprawa PR #1: 0 USD
 
 Implementacja recovery po `SETTLED`, 1311 testów, cztery partycje i skrypty QA użyły wyłącznie fake callerów i tymczasowych SQLite. Nowy koszt: `0.000000 USD`; suma miesiąca pozostaje `1.012590 USD`. Nie było provider calla, web search, browsera ani publikacji.
+
+## 2026-07-19 — E2-C live-readiness: 0 USD
+
+Pełna suita 1572, cztery partycje exact-once oraz harnessy E2-C `13/13` i E2-B `13/13` użyły wyłącznie fake resolverów, transportów/callerów i tymczasowych baz. Nowy koszt: `0.000000 USD`; suma miesiąca pozostaje `1.012590 USD`. Realny Fetch, DNS, HTTP, API, provider, browser i publikacja: 0.

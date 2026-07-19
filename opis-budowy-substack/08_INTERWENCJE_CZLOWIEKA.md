@@ -246,3 +246,9 @@ Granice decyzji były celowo węższe niż technicznie potrzebne do uruchomienia
 ## 2026-07-18 — Historia PR może zostać, final tree nie
 
 Właściciel jawnie zrezygnował z przepisywania historii prywatnego brancha PR #1. Obowiązek dotyczy końcowego diffu i drzewa `main`: ma pozostać jeden kanoniczny podręcznik, bez wariantów z PR. Jednocześnie crash po `SETTLED` pozostał blockerem merge i musiał otrzymać pełną naprawę oraz testy przed zwykłym pushem.
+
+## 2026-07-19 — Człowiek wyznaczył trzy blockery E2-C i nie otworzył internetu
+
+Właściciel dopuścił wyłącznie naprawę konstrukcji transportu, DNS TOCTOU i aktywacji bez edycji kodu. Osobno zabronił realnego Fetch, DNS, socketów, HTTP, API, providera, browsera, publikacji i migracji produkcji oraz pozostawił poza zakresem cztery nazwane P2/obserwacje.
+
+Po zielonej walidacji autoryzował jeden branch, dokładnie jeden commit, zwykły push i draft PR — bez merge i amend. Status implementera może być wyłącznie `E2-C CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.

@@ -388,3 +388,9 @@ Review obalił cztery obietnice pierwszej fali evidence, więc naprawa przenosi 
 WAVE E1 ma status `CLOSED — APPROVED WITH MINOR/P2`, ponieważ przeszła pełny łańcuch odpowiedzialności: implementację, niezależny `REJECT`, jedną naprawę B01–B04, niezależny re-review `APPROVE WITH MINOR/P2`, merge PR #3 i zielony checkpoint już na zmergowanym `main`. Sam implementer ani sam merge nie zamykają fali. Rzeczywisty dowód post-merge to 1454/1454 i exact-once `352+355+366+381`; wcześniejszy rozkład implementera pozostaje historyczny.
 
 Zamknięcie dotyczy izolowanego fundamentu evidence, nie całego Etapu 2. Bieżący status to `IN PROGRESS — E1 CLOSED, E2 NOT STARTED`. Pipeline nadal nie używa evidence, `verification_status` nie zmienił semantyki, realny Fetch i HTTP nie istnieją, a migracje `0015`/`0016` nie trafiły do produkcji. Decyzja nie autoryzuje E2, live API, providera, browsera, publikacji ani kosztu.
+
+## ADR-106 — Przełącznik udostępnia zdolność, capability dopuszcza request
+
+E2-C rozdziela dwie decyzje, które łatwo pomylić. Strict boolean YAML może globalnie udostępnić realny transport, lecz domyślnie pozostaje `false` i nie pochodzi z ENV. Dokładny request nadal wymaga jednorazowego L1. Dopiero po atomowym zużyciu tej zgody storage wydaje wygasającą capability, bez której composition root nie zbuduje realnego transportu.
+
+Druga decyzja zamyka szczelinę DNS: transport nie dostaje nazwy do ponownego rozstrzygnięcia, lecz frozen binding z dokładnym publicznym IP, który przeszedł politykę. Host i TLS SNI zachowują nazwę, połączenie idzie do przypiętego adresu, a redirect zaczyna kontrolę od nowa. Status pozostaje kandydacki; to nie autoryzuje realnego Fetch.

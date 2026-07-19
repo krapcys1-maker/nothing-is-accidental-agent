@@ -482,3 +482,12 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Finding PR1-MAJ-005 pokazał, że wygodna fabryka SQLite łączyła dwie różne decyzje: otwarcie aplikacji i migrację schematu. Zwykły start mógł automatycznie zastosować `0015` do bazy `0014`.
 - Po naprawie runtime najpierw wykonuje immutable exact-version check i odmawia bez zmiany SHA, rozmiaru, mtime, ledgera i sidecarów. Migracja ma osobny, jawny root, konkretny plik docelowy i exact preflight.
 - Cytowalna zasada: „Kompatybilność schematu jest warunkiem startu; migracja jest osobną autoryzowaną operacją, nigdy skutkiem ubocznym `open()`.”
+
+## 2026-07-19 — Materiał: „Sprawdzić adres to za mało — trzeba połączyć się z tym samym”
+
+- Finding E2B-F-02 pokazał pozornie bezpieczny układ: lokalny resolver sprawdzał publiczny IP, ale później biblioteka HTTP rozwiązywała hostname drugi raz. Między tymi krokami cel mógł się zmienić, więc poprawna walidacja nie była jeszcze dowodem poprawnego połączenia.
+- E2-C zastępuje dwa luźne kroki jednym trwałym w wykonaniu faktem: immutable `BoundHttpTarget` niesie dokładny numeryczny IP, który przeszedł politykę; transport łączy się z nim bez DNS, zachowując nazwę tylko w HTTP Host i TLS SNI. Redirect nie dziedziczy starego pozwolenia — dostaje nowe wiązanie.
+- Druga lekcja dotyczy zgody: globalny boolean mówi jedynie „zdolność może istnieć", a nie „ten request jest dozwolony". Factory wymaga capability wydanej przez storage dopiero po atomowym zużyciu L1 konkretnego joba i intentu.
+- Dowód: `1572/1572`, exact-once `378+389+394+411`, 13/13 nowych kontrprób i 13/13 regresyjnych; jawne failpointy czterech okien lifecycle `4/4`; zero realnej sieci i koszt `0.000000 USD`.
+- Cytowalna zasada: „Nie wystarczy sprawdzić, dokąd prowadzi nazwa. Bezpieczeństwo zaczyna się wtedy, gdy przewód prowadzi dokładnie do adresu, który sprawdziłeś.”
+- Granica: to kandydat do niezależnego review, nie zgoda na otwarcie przewodu. Produkcja nadal ma schema `0014`; controlled-live pozostaje `NOT READY`.

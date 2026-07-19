@@ -125,3 +125,7 @@ Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior u
 ### 2026-07-18 — Recovery po `SETTLED`
 
 `SCREENSHOT REQUIRED`: bezpieczny kadr powinien pokazać `1311/1311`, partycje `314+319+333+345`, QA `4/4`, pusty finalny diff katalogu podręcznika względem `main` i niezmienny hash produkcyjnej DB. Nie może zawierać prywatnych ścieżek, `.env`, tokenów ani zawartości bazy. Dowodem tej fali pozostają logi testowe i kontrole Git/SQLite.
+
+### 2026-07-19 — E2-C: sprawdzony adres trafia do transportu
+
+`SCREENSHOT REQUIRED`: bezpieczny, zanonimizowany kadr powinien pokazać `1572/1572`, exact-once `378+389+394+411`, harnessy E2-C `13/13` i E2-B `13/13`, failpointy `4/4` oraz kontrpróbę: jeden resolver call, ten sam publiczny `selected_address` w fake transporcie, zachowany Host/SNI. Obrazu nie wykonano z powodu zakazu browsera i prywatnych ścieżek terminala. Nie wolno pokazać `.env`, pełnej bazy, prawdziwego przyszłego URL ani sugerować wykonanego Fetch.

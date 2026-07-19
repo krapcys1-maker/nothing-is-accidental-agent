@@ -575,11 +575,12 @@ def test_offline_and_paid_flows_never_reach_the_controlled_fetch_runner(
 
 # --- Lokalna polityka adresów i limity w pełnym flow ----------------------------
 
-def test_url_policy_rejection_terminates_before_consuming_the_approval(
+def test_url_policy_rejection_consumes_approval_before_authorized_binding(
     settings, account, tmp_path, monkeypatch,
 ):
     topic = _seed(settings, account, monkeypatch)
-    # Host rozwiązuje się na adres prywatny — granica odrzuca przed transportem.
+    # Capability transportu powstaje dopiero po zużyciu L1; prywatny adres
+    # kończy RESERVED jako FAILED, nadal przed REQUEST_STARTED i transportem.
     _fixture_env(
         tmp_path, monkeypatch,
         resolved={"example.com": ["192.168.7.7"]},
@@ -595,10 +596,74 @@ def test_url_policy_rejection_terminates_before_consuming_the_approval(
         job = storage.get_job(job_id)
         assert "URL_POLICY_REJECTED:ADDRESS_PRIVATE" in (job.last_error or "")
         approval = storage.get_controlled_fetch_approval_for_job(job_id)
-        assert approval.consumed_at is None, "policy rejection must precede consumption"
-        assert storage.conn.execute("SELECT count(*) FROM controlled_fetch_attempts").fetchone()[0] == 0
+        assert approval.consumed_at is not None
+        attempt = storage.get_controlled_fetch_attempt_for_job(job_id)
+        assert attempt.status is ControlledFetchAttemptStatus.FAILED
+        assert attempt.request_started_at is None
+        assert storage.conn.execute("SELECT count(*) FROM controlled_fetch_attempts").fetchone()[0] == 1
         assert storage.conn.execute("SELECT count(*) FROM evidence_retrievals").fetchone()[0] == 0
         assert job.external_effect_started_at is None
+    finally:
+        storage.close()
+
+
+def test_storage_issues_transport_capability_only_for_consumed_reserved_attempt(
+    settings, account, tmp_path, monkeypatch,
+):
+    topic = _seed(settings, account, monkeypatch)
+    _fixture_env(tmp_path, monkeypatch)
+    job_id = _enqueue(settings, account, topic)
+    _approve(account, job_id)
+    moment = _claim_moment(settings, job_id)
+    clock = FixedClock(moment)
+
+    storage = SqliteStorage.open(settings.db_path)
+    try:
+        lease = storage.claim_next_job("e2c-capability-worker", 60, clock=clock)
+        assert lease is not None and lease.job.id == job_id
+        initialized = storage.initialize_controlled_fetch_run_for_job(
+            job_id,
+            "e2c-capability-worker",
+            "run-e2c-capability",
+            clock=clock,
+        )
+        execution = JobExecutionContext(
+            job_id=job_id,
+            lease_owner="e2c-capability-worker",
+            run_id=initialized.run.id,
+            clock=clock,
+        )
+
+        with pytest.raises(
+            ControlledFetchAuthorizationError,
+            match="ATTEMPT_NOT_TRANSPORT_AUTHORIZABLE",
+        ):
+            storage.authorize_controlled_fetch_transport(execution, 999)
+
+        attempt = storage.begin_controlled_fetch_attempt(execution)
+        authorization = storage.authorize_controlled_fetch_transport(
+            execution,
+            attempt.id,
+        )
+        authorization.assert_storage_issued()
+        assert authorization.job_id == job_id
+        assert authorization.run_id == initialized.run.id
+        assert authorization.account_id == account.id
+        assert authorization.topic_id == topic.id
+        assert authorization.approval_id == attempt.approval_id
+        assert authorization.attempt_id == attempt.id
+        assert authorization.requested_url == URL
+        assert authorization.intent_fingerprint == attempt.intent_fingerprint
+        assert storage.get_controlled_fetch_approval_for_job(
+            job_id,
+        ).consumed_at is not None
+
+        storage.mark_controlled_fetch_request_started(execution, attempt.id)
+        with pytest.raises(
+            ControlledFetchAuthorizationError,
+            match="ATTEMPT_NOT_TRANSPORT_AUTHORIZABLE",
+        ):
+            storage.authorize_controlled_fetch_transport(execution, attempt.id)
     finally:
         storage.close()
 
@@ -906,6 +971,119 @@ def test_request_started_with_expired_lease_escalates_needs_verification(
         storage.close()
 
 
+@pytest.mark.parametrize(
+    "boundary",
+    [
+        "before_request_started",
+        "after_request_started",
+        "after_response_before_retrieval",
+        "after_retrieval_before_terminalization",
+    ],
+)
+def test_controlled_fetch_failpoint_windows_reopen_without_retry(
+    settings, account, tmp_path, monkeypatch, boundary,
+):
+    """Every crash window preserves attempt #1 and refuses a second request."""
+    from app.ports.controlled_fetch import ControlledHttpFetch
+
+    topic = _seed(settings, account, monkeypatch)
+    _fixture_env(tmp_path, monkeypatch)
+    job_id = _enqueue(settings, account, topic)
+    _approve(account, job_id)
+
+    if boundary == "before_request_started":
+        def fail_preflight(_self):
+            raise RuntimeError("failpoint before REQUEST_STARTED")
+
+        monkeypatch.setattr(
+            ControlledHttpFetch,
+            "preflight_boundary",
+            fail_preflight,
+        )
+    elif boundary == "after_request_started":
+        def fail_fetch(_self, _url):
+            raise RuntimeError("failpoint directly after REQUEST_STARTED")
+
+        monkeypatch.setattr(ControlledHttpFetch, "fetch", fail_fetch)
+    elif boundary == "after_response_before_retrieval":
+        def fail_finalize(_self, _execution, _attempt_id, _document):
+            raise RuntimeError("failpoint after fake response before retrieval")
+
+        monkeypatch.setattr(
+            SqliteStorage,
+            "finalize_controlled_fetch_success",
+            fail_finalize,
+        )
+    else:
+        original_insert = SqliteStorage._insert_controlled_fetch_retrieval
+
+        def insert_then_fail(self, retrieval):
+            original_insert(self, retrieval)
+            raise RuntimeError("failpoint after retrieval before terminalization")
+
+        monkeypatch.setattr(
+            SqliteStorage,
+            "_insert_controlled_fetch_retrieval",
+            insert_then_fail,
+        )
+
+    moment = _claim_moment(settings, job_id)
+    result = _run_worker(settings, moment, f"e2c-fail-{boundary}")
+    expected_worker = (
+        WorkerIterationStatus.FAILED
+        if boundary == "before_request_started"
+        else WorkerIterationStatus.NEEDS_VERIFICATION
+    )
+    assert result.status is expected_worker
+
+    storage = SqliteStorage.open(settings.db_path)
+    try:
+        job = storage.get_job(job_id)
+        attempt = storage.get_controlled_fetch_attempt_for_job(job_id)
+        approval = storage.get_controlled_fetch_approval_for_job(job_id)
+        assert attempt.attempt_no == 1
+        assert approval.consumed_at is not None
+        assert storage.conn.execute(
+            "SELECT count(*) FROM controlled_fetch_attempts WHERE job_id=?",
+            (job_id,),
+        ).fetchone()[0] == 1
+        assert storage.conn.execute(
+            "SELECT count(*) FROM evidence_retrievals",
+        ).fetchone()[0] == 0
+        if boundary == "before_request_started":
+            assert job.status is JobStatus.FAILED
+            assert attempt.status is ControlledFetchAttemptStatus.FAILED
+            assert attempt.request_started_at is None
+        else:
+            assert job.status is JobStatus.NEEDS_VERIFICATION
+            assert (
+                attempt.status
+                is ControlledFetchAttemptStatus.NEEDS_VERIFICATION
+            )
+            assert attempt.request_started_at is not None
+    finally:
+        storage.close()
+
+    second = _run_worker(
+        settings,
+        moment + timedelta(seconds=5),
+        f"e2c-second-{boundary}",
+    )
+    assert second.status is WorkerIterationStatus.IDLE
+
+    reopened = SqliteStorage.open(settings.db_path)
+    try:
+        assert reopened.conn.execute(
+            "SELECT count(*) FROM controlled_fetch_attempts WHERE job_id=?",
+            (job_id,),
+        ).fetchone()[0] == 1
+        assert reopened.conn.execute(
+            "SELECT count(*) FROM evidence_retrievals",
+        ).fetchone()[0] == 0
+    finally:
+        reopened.close()
+
+
 def test_unexpected_exception_after_request_started_escalates_via_worker(
     settings, account, tmp_path, monkeypatch,
 ):
@@ -932,7 +1110,7 @@ def test_unexpected_exception_after_request_started_escalates_via_worker(
     def exploding_runner(account_, topic_, **kwargs):
         return run_controlled_fetch(
             account_, topic_,
-            fetch_port_factory=lambda intent, clock: ExplodingPort(),
+            fetch_port_factory=lambda authorization, settings, clock: ExplodingPort(),
             **kwargs,
         )
 

@@ -23,6 +23,8 @@ from app.models import (
     ControlledFetchAttemptStatus,
     ControlledFetchFailureOutcome,
     ControlledFetchInitialization,
+    ControlledFetchTransportAuthorization,
+    _issue_controlled_fetch_transport_authorization,
     DurableProviderAttemptContext,
     EvidenceExcerpt,
     EvidenceRetrieval,
@@ -7087,6 +7089,102 @@ class SqliteStorage:
             self.conn.commit()
             assert stored is not None
             return self._controlled_fetch_attempt_from_row(stored)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def authorize_controlled_fetch_transport(
+        self, execution: JobExecutionContext, attempt_id: int,
+    ) -> ControlledFetchTransportAuthorization:
+        """Issue an ephemeral transport capability from durable state only.
+
+        The transaction re-reads the active fence, frozen intent, consumed L1
+        approval and the single RESERVED attempt. No in-memory intent or ENV
+        value can mint this capability.
+        """
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            now_dt = self._job_now(execution.now())
+            fence = self._require_controlled_fetch_fence(execution, now)
+            intent = self._controlled_fetch_intent_from_fence(
+                fence, execution.job_id,
+            )
+            attempt_row = self.conn.execute(
+                "SELECT * FROM controlled_fetch_attempts "
+                "WHERE id=? AND job_id=?",
+                (attempt_id, execution.job_id),
+            ).fetchone()
+            if (
+                attempt_row is None
+                or attempt_row["run_id"] != execution.run_id
+                or attempt_row["lease_owner"] != execution.lease_owner
+                or int(attempt_row["attempt_no"]) != 1
+                or attempt_row["status"]
+                != ControlledFetchAttemptStatus.RESERVED.value
+                or attempt_row["request_started_at"] is not None
+                or attempt_row["terminalized_at"] is not None
+                or attempt_row["retrieval_id"] is not None
+            ):
+                raise ControlledFetchAuthorizationError(
+                    "ATTEMPT_NOT_TRANSPORT_AUTHORIZABLE",
+                    "transport requires the single active RESERVED attempt.",
+                )
+            approval_row = self.conn.execute(
+                "SELECT * FROM controlled_fetch_approvals WHERE id=? AND job_id=?",
+                (attempt_row["approval_id"], execution.job_id),
+            ).fetchone()
+            if approval_row is None:
+                raise ControlledFetchAuthorizationError(
+                    "APPROVAL_MISSING", "the attempt has no durable L1 approval.",
+                )
+            approval = self._controlled_fetch_approval_from_row(approval_row)
+            if (
+                approval.action_type != CONTROLLED_FETCH_ACTION_TYPE
+                or approval.account_id != fence["job_account_id"]
+                or approval.requested_url != intent.requested_url
+                or approval.intent_fingerprint != intent.fingerprint
+                or approval.timeout_seconds != intent.timeout_seconds
+                or approval.max_bytes != intent.max_bytes
+                or approval.max_redirects != intent.max_redirects
+                or approval.consumed_at is None
+                or approval_row["consumed_at"] != attempt_row["reserved_at"]
+                or str(approval_row["expires_at"]) <= now
+                or now_dt >= intent.expires_at_datetime()
+                or fence["external_effect_started_at"] is not None
+                or attempt_row["account_id"] != fence["job_account_id"]
+                or int(attempt_row["topic_id"]) != int(fence["job_topic_id"])
+                or attempt_row["requested_url"] != intent.requested_url
+                or attempt_row["intent_fingerprint"] != intent.fingerprint
+                or attempt_row["source_identity"] != intent.source_identity
+            ):
+                raise ControlledFetchAuthorizationError(
+                    "TRANSPORT_AUTHORIZATION_MISMATCH",
+                    "durable approval, attempt and frozen intent do not match.",
+                )
+            authorization = _issue_controlled_fetch_transport_authorization(
+                job_id=execution.job_id,
+                run_id=execution.run_id,
+                account_id=fence["job_account_id"],
+                topic_id=int(fence["job_topic_id"]),
+                approval_id=int(approval.id),
+                attempt_id=int(attempt_row["id"]),
+                requested_url=intent.requested_url,
+                source_identity=intent.source_identity,
+                intent_fingerprint=intent.fingerprint,
+                timeout_seconds=intent.timeout_seconds,
+                max_bytes=intent.max_bytes,
+                max_redirects=intent.max_redirects,
+                allowed_content_types=tuple(intent.allowed_content_types),
+                approval_expires_at=(
+                    approval.expires_at.replace(tzinfo=timezone.utc)
+                    if approval.expires_at.tzinfo is None
+                    else approval.expires_at.astimezone(timezone.utc)
+                ),
+            )
+            self.conn.commit()
+            return authorization
         except BaseException as primary:
             if self.conn.in_transaction:
                 self._rollback_preserving_primary(primary, self.conn.rollback)

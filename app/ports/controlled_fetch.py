@@ -1,4 +1,4 @@
-"""Controlled Fetch — realny adapter FetchPort z jawną granicą zaufania (E2-B).
+"""Controlled Fetch — adapter FetchPort z przypiętym celem połączenia (E2-C).
 
 Warstwa zawiera trzy zamknięte elementy:
 
@@ -8,11 +8,13 @@ Warstwa zawiera trzy zamknięte elementy:
    klasyfikuje wyłącznie wstrzykiwany resolver; moduł sam nigdy nie wykonuje
    DNS. To nie jest ogólny system filtrowania internetu — wyłącznie granica
    jednego kontrolowanego pobrania.
-2. **Wstrzykiwalny transport HTTP**: `FakeControlledHttpTransport` (testy)
-   oraz `RealControlledHttpTransport` (urllib; bez proxy z ENV, bez cookies,
-   bez credentials, bez automatycznych przekierowań). W fali E2-B realny
-   transport nie jest nigdzie wykonywany.
-3. **Adapter `ControlledHttpFetch`** implementujący istniejący `FetchPort`:
+2. **Immutable host binding**: dokładny adres używany przez transport pochodzi
+   z tego samego, jednorazowego rozstrzygnięcia, które przeszło politykę.
+   Transport nie otrzymuje hostname do ponownej resolucji.
+3. **Wstrzykiwalny transport HTTP**: publiczny fake dla testów oraz prywatny
+   transport realny budowany wyłącznie przez factory wymagające capability
+   wydanej przez storage po zużyciu approvalu L1.
+4. **Adapter `ControlledHttpFetch`** implementujący istniejący `FetchPort`:
    przyjmuje wyłącznie jawny URL z trwałego intentu, egzekwuje timeout,
    twardy limit bajtów, limit przekierowań i allowlistę typów treści; zwraca
    typowany `FetchedDocument` (wynik albo kontrolowany kod błędu, nigdy
@@ -23,9 +25,10 @@ from __future__ import annotations
 import ipaddress
 from dataclasses import dataclass
 from typing import Callable, Protocol
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from app.core.clock import Clock
+from app.models import ControlledFetchTransportAuthorization
 from app.ports.fetch import FetchedDocument
 
 SUPPORTED_URL_SCHEMES = ("http", "https")
@@ -49,6 +52,32 @@ class UrlPolicyDecision:
     @staticmethod
     def rejected(code: str, detail: str = "") -> "UrlPolicyDecision":
         return UrlPolicyDecision(False, code, detail)
+
+
+@dataclass(frozen=True)
+class BoundHttpTarget:
+    """Immutable URL→address binding consumed directly by a transport.
+
+    `selected_address` is numeric and has already passed the local policy.
+    `host_header` and `tls_server_name` preserve the original HTTP/TLS
+    identity while the socket connects only to the selected numeric address.
+    """
+
+    url: str
+    scheme: str
+    hostname: str
+    port: int
+    selected_address: str
+    approved_addresses: tuple[str, ...]
+    request_target: str
+    host_header: str
+    tls_server_name: str | None
+
+
+@dataclass(frozen=True)
+class UrlTargetBinding:
+    decision: UrlPolicyDecision
+    target: BoundHttpTarget | None = None
 
 
 def _classify_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str | None:
@@ -103,17 +132,19 @@ def validate_url_syntax(url: str) -> UrlPolicyDecision:
     return UrlPolicyDecision.ok()
 
 
-def validate_url_boundary(url: str, *, resolver: AddressResolver) -> UrlPolicyDecision:
-    """Full address boundary: syntax plus range classification of every address.
+def bind_url_target(url: str, *, resolver: AddressResolver) -> UrlTargetBinding:
+    """Validate and pin one exact numeric connection target.
 
-    Literal IP hosts are classified directly; hostnames only through the
-    injected resolver. Every returned address must independently pass — one
-    disallowed address rejects the whole URL (fail-closed).
+    Hostnames are resolved exactly once for this binding. Every returned
+    address must pass; the deterministic first address (IP version + packed
+    bytes ordering) becomes the socket target. The complete approved set stays
+    in the immutable binding for audit and validation.
     """
     syntactic = validate_url_syntax(url)
     if not syntactic.allowed:
-        return syntactic
-    hostname = urlsplit(url).hostname
+        return UrlTargetBinding(syntactic)
+    parts = urlsplit(url)
+    hostname = parts.hostname
     assert hostname is not None
     try:
         literal = ipaddress.ip_address(hostname)
@@ -122,23 +153,155 @@ def validate_url_boundary(url: str, *, resolver: AddressResolver) -> UrlPolicyDe
     if literal is not None:
         code = _classify_address(literal)
         if code is not None:
-            return UrlPolicyDecision.rejected(code, f"literal address {hostname}")
-        return UrlPolicyDecision.ok()
+            return UrlTargetBinding(
+                UrlPolicyDecision.rejected(code, f"literal address {hostname}")
+            )
+        addresses = (literal,)
+    else:
+        try:
+            resolved = resolver(hostname)
+        except OSError as exc:
+            return UrlTargetBinding(
+                UrlPolicyDecision.rejected(
+                    "DNS_RESOLUTION_FAILED", type(exc).__name__
+                )
+            )
+        if not resolved:
+            return UrlTargetBinding(
+                UrlPolicyDecision.rejected(
+                    "DNS_RESOLUTION_FAILED", "resolver returned no address"
+                )
+            )
+        parsed: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+        seen: set[tuple[int, bytes]] = set()
+        for item in resolved:
+            try:
+                address = ipaddress.ip_address(item)
+            except ValueError:
+                return UrlTargetBinding(
+                    UrlPolicyDecision.rejected(
+                        "DNS_RESOLUTION_FAILED",
+                        "resolver returned a non-address",
+                    )
+                )
+            code = _classify_address(address)
+            if code is not None:
+                return UrlTargetBinding(
+                    UrlPolicyDecision.rejected(
+                        code, f"resolved address for {hostname}"
+                    )
+                )
+            key = (address.version, address.packed)
+            if key not in seen:
+                seen.add(key)
+                parsed.append(address)
+        if not parsed:
+            return UrlTargetBinding(
+                UrlPolicyDecision.rejected(
+                    "DNS_RESOLUTION_FAILED", "resolver returned no usable address"
+                )
+            )
+        addresses = tuple(parsed)
+
+    ordered = tuple(sorted(addresses, key=lambda item: (item.version, item.packed)))
+    canonical_addresses = tuple(str(item) for item in ordered)
+    selected = canonical_addresses[0]
+    scheme = parts.scheme.lower()
+    port = parts.port if parts.port is not None else (443 if scheme == "https" else 80)
+    host_for_header = f"[{hostname}]" if ":" in hostname else hostname
+    host_header = (
+        f"{host_for_header}:{port}" if parts.port is not None else host_for_header
+    )
+    request_target = urlunsplit(("", "", parts.path or "/", parts.query, ""))
+    target = BoundHttpTarget(
+        url=url,
+        scheme=scheme,
+        hostname=hostname,
+        port=port,
+        selected_address=selected,
+        approved_addresses=canonical_addresses,
+        request_target=request_target,
+        host_header=host_header,
+        tls_server_name=hostname if scheme == "https" else None,
+    )
     try:
-        resolved = resolver(hostname)
-    except OSError as exc:
-        return UrlPolicyDecision.rejected("DNS_RESOLUTION_FAILED", type(exc).__name__)
-    if not resolved:
-        return UrlPolicyDecision.rejected("DNS_RESOLUTION_FAILED", "resolver returned no address")
-    for item in resolved:
+        _validate_bound_target(target)
+    except ControlledFetchTransportError as exc:
+        return UrlTargetBinding(
+            UrlPolicyDecision.rejected(exc.code, "bound target is inconsistent")
+        )
+    return UrlTargetBinding(UrlPolicyDecision.ok(), target)
+
+
+def validate_url_boundary(url: str, *, resolver: AddressResolver) -> UrlPolicyDecision:
+    """Compatibility policy view over the immutable binding operation."""
+    return bind_url_target(url, resolver=resolver).decision
+
+
+def _validate_bound_target(target: BoundHttpTarget) -> None:
+    """Reject a forged or internally inconsistent transport binding without DNS."""
+    syntactic = validate_url_syntax(target.url)
+    if not syntactic.allowed:
+        raise ControlledFetchTransportError(
+            "BOUND_TARGET_INVALID", syntactic.code,
+        )
+    parts = urlsplit(target.url)
+    hostname = parts.hostname
+    if hostname is None:
+        raise ControlledFetchTransportError("BOUND_TARGET_INVALID", "missing host")
+    scheme = parts.scheme.lower()
+    port = parts.port if parts.port is not None else (443 if scheme == "https" else 80)
+    host_for_header = f"[{hostname}]" if ":" in hostname else hostname
+    expected_host_header = (
+        f"{host_for_header}:{port}" if parts.port is not None else host_for_header
+    )
+    expected_request_target = urlunsplit(
+        ("", "", parts.path or "/", parts.query, "")
+    )
+    expected_tls_name = hostname if scheme == "https" else None
+    if (
+        target.scheme != scheme
+        or target.hostname != hostname
+        or target.port != port
+        or target.host_header != expected_host_header
+        or target.request_target != expected_request_target
+        or target.tls_server_name != expected_tls_name
+        or not target.approved_addresses
+        or target.selected_address != target.approved_addresses[0]
+    ):
+        raise ControlledFetchTransportError(
+            "BOUND_TARGET_INVALID", "host, SNI, port or request target mismatch"
+        )
+    parsed_addresses: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    for item in target.approved_addresses:
         try:
             address = ipaddress.ip_address(item)
         except ValueError:
-            return UrlPolicyDecision.rejected("DNS_RESOLUTION_FAILED", "resolver returned a non-address")
+            raise ControlledFetchTransportError(
+                "BOUND_TARGET_INVALID", "approved address is not numeric"
+            )
         code = _classify_address(address)
         if code is not None:
-            return UrlPolicyDecision.rejected(code, f"resolved address for {hostname}")
-    return UrlPolicyDecision.ok()
+            raise ControlledFetchTransportError(
+                "BOUND_TARGET_INVALID", f"approved address violates {code}"
+            )
+        if str(address) != item:
+            raise ControlledFetchTransportError(
+                "BOUND_TARGET_INVALID", "approved address is not canonical"
+            )
+        parsed_addresses.append(address)
+    expected_addresses = tuple(
+        str(item)
+        for item in sorted(
+            set(parsed_addresses),
+            key=lambda item: (item.version, item.packed),
+        )
+    )
+    if target.approved_addresses != expected_addresses:
+        raise ControlledFetchTransportError(
+            "BOUND_TARGET_INVALID",
+            "approved address set is duplicated or non-deterministic",
+        )
 
 
 def default_address_resolver(hostname: str) -> tuple[str, ...]:
@@ -174,7 +337,7 @@ class ControlledFetchTransportError(RuntimeError):
 
 class ControlledHttpTransport(Protocol):
     def request(
-        self, url: str, *, timeout_seconds: int, max_read_bytes: int,
+        self, target: BoundHttpTarget, *, timeout_seconds: int, max_read_bytes: int,
     ) -> TransportResponse: ...
 
 
@@ -203,13 +366,20 @@ class FakeControlledHttpTransport:
         return cls(responses)
 
     def request(
-        self, url: str, *, timeout_seconds: int, max_read_bytes: int,
+        self, target: BoundHttpTarget, *, timeout_seconds: int, max_read_bytes: int,
     ) -> TransportResponse:
+        _validate_bound_target(target)
         self.calls.append({
-            "url": url, "timeout_seconds": timeout_seconds,
+            "url": target.url,
+            "selected_address": target.selected_address,
+            "approved_addresses": target.approved_addresses,
+            "host_header": target.host_header,
+            "tls_server_name": target.tls_server_name,
+            "request_target": target.request_target,
+            "timeout_seconds": timeout_seconds,
             "max_read_bytes": max_read_bytes,
         })
-        response = self._responses.get(url)
+        response = self._responses.get(target.url)
         if response is None:
             raise ControlledFetchTransportError(
                 "FAKE_URL_NOT_REGISTERED", "fake transport has no scripted response"
@@ -241,63 +411,99 @@ def fake_resolver_from_fixture(data: dict) -> AddressResolver:
     return resolve
 
 
-class RealControlledHttpTransport:
-    """Prawdziwy transport urllib — kod istnieje, ale w E2-B nie jest wykonywany.
+_REAL_TRANSPORT_CONSTRUCTOR_SEAL = object()
 
-    Kontrakt: metoda GET; ``ProxyHandler({})`` odcina proxy z ENV; brak cookie
-    processora i brak handlerów auth = zero cookies i zero credentials; brak
-    automatycznego podążania za przekierowaniami (3xx wraca jako typowana
-    odpowiedź z ``location``); odczyt zatrzymuje się na ``max_read_bytes``.
-    Znane ograniczenie (ADR): polityka adresów klasyfikuje adresy przed
-    requestem, a urllib wykonuje własną resolucję nazwy przy połączeniu —
-    okno TOCTOU DNS pozostaje jawnie otwarte do zamknięcia przed pierwszym
-    realnym użyciem.
+
+class _RealControlledHttpTransport:
+    """Minimalny transport łączący się wyłącznie z przypiętym adresem IP.
+
+    Konstruktor wymaga prywatnej pieczęci wspieranego factory. Właściwą
+    barierą runtime factory jest capability wydana przez storage dopiero po
+    zużyciu zgody L1. Transport nie używa proxy, cookies ani automatycznych
+    przekierowań i nigdy nie rozwiązuje nazwy hosta. Oryginalna tożsamość
+    pozostaje w nagłówku Host oraz TLS SNI.
     """
 
     _USER_AGENT = "nia-controlled-fetch/1"
 
+    def __init__(self, *, _seal: object) -> None:
+        if _seal is not _REAL_TRANSPORT_CONSTRUCTOR_SEAL:
+            raise TypeError(
+                "Real controlled transport can only be built by the authorized factory."
+            )
+
     def request(
-        self, url: str, *, timeout_seconds: int, max_read_bytes: int,
+        self,
+        target: BoundHttpTarget,
+        *,
+        timeout_seconds: int,
+        max_read_bytes: int,
     ) -> TransportResponse:
+        import http.client
         import socket
-        import urllib.error
-        import urllib.request
+        import ssl
 
-        class _NoRedirect(urllib.request.HTTPRedirectHandler):
-            def redirect_request(self, req, fp, code, msg, headers, newurl):
-                return None
+        _validate_bound_target(target)
+        address = ipaddress.ip_address(target.selected_address)
+        family = socket.AF_INET6 if address.version == 6 else socket.AF_INET
+        connect_address: tuple[object, ...]
+        if address.version == 6:
+            connect_address = (target.selected_address, target.port, 0, 0)
+        else:
+            connect_address = (target.selected_address, target.port)
 
-        opener = urllib.request.build_opener(
-            _NoRedirect(), urllib.request.ProxyHandler({}),
-        )
-        request = urllib.request.Request(
-            url, method="GET",
-            headers={"User-Agent": self._USER_AGENT, "Accept": "text/html, text/plain"},
-        )
+        raw_socket = None
+        stream = None
+        connection = None
         try:
-            try:
-                response = opener.open(request, timeout=timeout_seconds)
-            except urllib.error.HTTPError as exc:
-                # 3xx/4xx/5xx z nagłówkami — to nadal typowana odpowiedź HTTP.
-                response = exc
-            with response:
-                status = int(getattr(response, "status", None) or response.getcode())
-                content_type = response.headers.get("Content-Type")
-                location = response.headers.get("Location")
-                body = response.read(max_read_bytes)
-                body_complete = len(response.read(1)) == 0
+            raw_socket = socket.socket(family, socket.SOCK_STREAM)
+            raw_socket.settimeout(timeout_seconds)
+            raw_socket.connect(connect_address)
+            stream = raw_socket
+            if target.scheme == "https":
+                context = ssl.create_default_context()
+                stream = context.wrap_socket(
+                    raw_socket,
+                    server_hostname=target.tls_server_name,
+                )
+            connection = http.client.HTTPConnection(
+                target.hostname,
+                target.port,
+                timeout=timeout_seconds,
+            )
+            connection.sock = stream
+            connection.request(
+                "GET",
+                target.request_target,
+                headers={
+                    "Host": target.host_header,
+                    "User-Agent": self._USER_AGENT,
+                    "Accept": "text/html, text/plain",
+                    "Connection": "close",
+                },
+            )
+            response = connection.getresponse()
+            body_with_sentinel = response.read(max_read_bytes + 1)
             return TransportResponse(
-                status=status, content_type=content_type, location=location,
-                body=body, body_complete=body_complete,
+                status=int(response.status),
+                content_type=response.getheader("Content-Type"),
+                location=response.getheader("Location"),
+                body=body_with_sentinel[:max_read_bytes],
+                body_complete=len(body_with_sentinel) <= max_read_bytes,
             )
         except (socket.timeout, TimeoutError) as exc:
             raise ControlledFetchTransportError("TIMEOUT") from exc
-        except urllib.error.URLError as exc:
+        except (http.client.HTTPException, ssl.SSLError, OSError) as exc:
             raise ControlledFetchTransportError(
-                "CONNECTION_FAILED", type(getattr(exc, "reason", exc)).__name__
+                "CONNECTION_FAILED", type(exc).__name__
             ) from exc
-        except OSError as exc:
-            raise ControlledFetchTransportError("CONNECTION_FAILED", type(exc).__name__) from exc
+        finally:
+            if connection is not None:
+                connection.close()
+            elif stream is not None:
+                stream.close()
+            elif raw_socket is not None:
+                raw_socket.close()
 
 
 @dataclass(frozen=True)
@@ -313,6 +519,30 @@ class ControlledFetchRequestContract:
 
 class ControlledFetchContractViolation(RuntimeError):
     """Adapter został użyty poza swoim zamrożonym kontraktem (błąd programu)."""
+
+
+def build_real_controlled_fetch_port(
+    authorization: ControlledFetchTransportAuthorization,
+    *,
+    clock: Clock,
+) -> "ControlledHttpFetch":
+    """Build the live adapter only from a storage-issued, consumed approval."""
+    authorization.assert_usable_at(clock.now())
+    contract = ControlledFetchRequestContract(
+        requested_url=authorization.requested_url,
+        timeout_seconds=authorization.timeout_seconds,
+        max_bytes=authorization.max_bytes,
+        max_redirects=authorization.max_redirects,
+        allowed_content_types=authorization.allowed_content_types,
+    )
+    return ControlledHttpFetch(
+        contract=contract,
+        transport=_RealControlledHttpTransport(
+            _seal=_REAL_TRANSPORT_CONSTRUCTOR_SEAL,
+        ),
+        resolver=default_address_resolver,
+        clock=clock,
+    )
 
 
 def _media_type(content_type: str | None) -> str | None:
@@ -340,12 +570,16 @@ class ControlledHttpFetch:
         self._transport = transport
         self._resolver = resolver
         self._clock = clock
+        self._initial_binding: UrlTargetBinding | None = None
 
     def preflight_boundary(self) -> UrlPolicyDecision:
-        """Pełna kontrola granicy adresu dla zamrożonego URL — bez transportu."""
-        return validate_url_boundary(
-            self._contract.requested_url, resolver=self._resolver,
-        )
+        """Resolve, validate and cache the exact initial connection target."""
+        if self._initial_binding is None:
+            self._initial_binding = bind_url_target(
+                self._contract.requested_url,
+                resolver=self._resolver,
+            )
+        return self._initial_binding.decision
 
     def _error_document(self, final_url: str, code: str) -> FetchedDocument:
         return FetchedDocument(
@@ -360,36 +594,65 @@ class ControlledHttpFetch:
             raise ControlledFetchContractViolation(
                 "ControlledHttpFetch accepts only the exact frozen intent URL."
             )
-        current_url = contract.requested_url
+        if self._initial_binding is None:
+            self.preflight_boundary()
+        assert self._initial_binding is not None
+        if (
+            not self._initial_binding.decision.allowed
+            or self._initial_binding.target is None
+        ):
+            return self._error_document(
+                contract.requested_url,
+                f"URL_POLICY_REJECTED:{self._initial_binding.decision.code}",
+            )
+        current_target = self._initial_binding.target
         redirects_used = 0
         while True:
-            decision = validate_url_boundary(current_url, resolver=self._resolver)
-            if not decision.allowed:
-                prefix = "URL_POLICY_REJECTED" if redirects_used == 0 else "REDIRECT_POLICY_REJECTED"
-                return self._error_document(current_url, f"{prefix}:{decision.code}")
             try:
                 response = self._transport.request(
-                    current_url,
+                    current_target,
                     timeout_seconds=contract.timeout_seconds,
                     max_read_bytes=contract.max_bytes,
                 )
             except ControlledFetchTransportError as exc:
-                return self._error_document(current_url, exc.code)
+                return self._error_document(current_target.url, exc.code)
             if 300 <= response.status < 400 and response.location:
                 redirects_used += 1
                 if redirects_used > contract.max_redirects:
-                    return self._error_document(current_url, "TOO_MANY_REDIRECTS")
-                current_url = urljoin(current_url, response.location)
+                    return self._error_document(
+                        current_target.url,
+                        "TOO_MANY_REDIRECTS",
+                    )
+                redirect_url = urljoin(current_target.url, response.location)
+                redirect_binding = bind_url_target(
+                    redirect_url,
+                    resolver=self._resolver,
+                )
+                if (
+                    not redirect_binding.decision.allowed
+                    or redirect_binding.target is None
+                ):
+                    return self._error_document(
+                        redirect_url,
+                        "REDIRECT_POLICY_REJECTED:"
+                        f"{redirect_binding.decision.code}",
+                    )
+                current_target = redirect_binding.target
                 continue
             if not response.body_complete:
-                return self._error_document(current_url, "RESPONSE_TOO_LARGE")
+                return self._error_document(
+                    current_target.url,
+                    "RESPONSE_TOO_LARGE",
+                )
             media = _media_type(response.content_type)
             if 200 <= response.status < 300 and media not in contract.allowed_content_types:
                 return self._error_document(
-                    current_url, f"CONTENT_TYPE_REJECTED:{media or 'missing'}"
+                    current_target.url,
+                    f"CONTENT_TYPE_REJECTED:{media or 'missing'}",
                 )
             return FetchedDocument(
-                requested_url=contract.requested_url, final_url=current_url,
+                requested_url=contract.requested_url,
+                final_url=current_target.url,
                 fetched_at=self._clock.now(), http_status=response.status,
                 content_type=response.content_type, body=response.body, error=None,
             )

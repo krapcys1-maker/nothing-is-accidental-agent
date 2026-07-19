@@ -62,6 +62,12 @@ research_policy:
   max_retries: 2              # limit ponawiania kosztownych wywołań (bez nieskończonego retry)
   timeout_seconds: 60
 
+# Globalna dostępność prawdziwego transportu controlled fetch. `false` jest
+# domyślne i fail-closed. Ustawienie `true` NIE autoryzuje requestu: nadal
+# wymagany jest trwały, jednorazowy approval L1 dokładnego joba/intentu.
+controlled_fetch_policy:
+  real_transport_enabled: false
+
 # Domyślny cap claimów dla bezpiecznych jobów tworzonych przez composition root
 # aplikacji. Paid durable research zachowuje osobny, niekonfigurowalny cap 1.
 worker_policy:

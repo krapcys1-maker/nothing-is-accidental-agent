@@ -260,3 +260,10 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Zakres:** wyłącznie offline schema-gate, jawny migrator i kontrpróby na tymczasowych SQLite; żadnych danych internetowych ani materiału researchowego.
 - **Research/provider:** zero API, SDK, providera, web search, requestów, usage i nowych kart.
 - **Koszt i stan:** `0.000000 USD`; miesięczny ledger pozostaje `1.012590 USD`; produkcja nadal schema `0014`, Etap 2 `NOT STARTED`, kolejny live `NOT AUTHORIZED`.
+
+## 2026-07-19 — E2-C bez nowego researchu
+
+- **Zakres:** wyłącznie lokalna implementacja i deterministyczna walidacja runtime capability, aktywacji YAML i host bindingu controlled fetch.
+- **Research/provider:** zero danych internetowych, web search, DNS, HTTP, API, SDK providera, usage i Research Card; test transportu użył wyłącznie in-memory fake socket/TLS/HTTP callerów.
+- **Dowód:** pełna suita `1572/1572`, exact-once `378+389+394+411`, harness E2-C `13/13` i E2-B `13/13`; produkcja `0014` byte-identical.
+- **Koszt i granica:** `0.000000 USD`; miesięczny ledger pozostaje `1.012590 USD`; controlled-live = `NOT READY`, pierwszy realny Fetch nadal nieautoryzowany.
