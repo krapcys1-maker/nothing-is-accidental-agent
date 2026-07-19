@@ -558,6 +558,31 @@ def _verified_launcher_ancestry(
     return frozenset(verified)
 
 
+def _confirm_process_no_longer_exists(pid: int) -> bool:
+    """Positively prove one PID is gone; never used to prove a PID is alive.
+
+    ``OpenProcess`` returning NULL is not itself proof of absence: Windows
+    also fails it with ``ERROR_ACCESS_DENIED`` for processes that exist but
+    are access-restricted (confirmed against PID 4 / System). Only the
+    specific ``ERROR_INVALID_PARAMETER`` failure is Windows' contract for
+    "no process currently has this PID". Every other outcome — the open
+    succeeding, or failing for any other reason — must stay unconfirmed.
+    """
+    if os.name != "nt":
+        return False
+    import ctypes
+
+    process_query_limited_information = 0x1000
+    error_invalid_parameter = 87
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    ctypes.set_last_error(0)
+    handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+    if handle:
+        kernel32.CloseHandle(handle)
+        return False
+    return ctypes.get_last_error() == error_invalid_parameter
+
+
 def _classify_windows_processes(
     processes: tuple[_WindowsProcessSnapshot, ...],
     *,
@@ -623,9 +648,13 @@ def _classify_windows_processes(
             executable_name in _APPLICATION_HOST_EXECUTABLES
             and not process.command_line
         ):
-            classification = "BLOCKING_AMBIGUOUS_PROCESS"
             reasons.append("APPLICATION_HOST_COMMAND_LINE_UNREADABLE")
-            blocking = True
+            if _confirm_process_no_longer_exists(process.pid):
+                classification = "OBSERVED_HOST_PROCESS_EXITED_DURING_INVENTORY"
+                reasons.append("PROCESS_CONFIRMED_EXITED_AFTER_SNAPSHOT")
+            else:
+                classification = "BLOCKING_AMBIGUOUS_PROCESS"
+                blocking = True
 
         if classification is None:
             continue
