@@ -1,5 +1,7 @@
 # Backup nie zamyka wyścigu
 
+> **Fala Production Schema Migration Orchestrator (2026-07-19, ADR-109) — `CLOSED — APPROVED WITH MINOR/P2`.** Kandydat ADR-108 przeszedł niezależny review `APPROVE WITH MINOR/P2`, merge PR #11 (`7faf62e5f71c838c20e00e61121ea052f4bf9348`) i zielony post-merge checkpoint `1630/1630`; właściciel formalnie zamknął falę. Gotowość migracyjna jest zweryfikowana w zmergowanym kodzie, ale produkcja nadal ma `0014` — rzeczywistej migracji nie wykonano i właściciel jeszcze na nią nie zezwolił. Etap 2 trwa, controlled-live ma status `NOT READY`, a następna operacja techniczna = `NOT STARTED`.
+
 ## Problem
 
 Kod aplikacji wymagał już schematu `0018`, a produkcyjna baza nadal miała `0014`. Istniały cztery poprawne polecenia migracji — po jednym na każdy szczebel — ale nie istniała jedna kontrolowana operacja, która wiązałaby zgodę właściciela z dokładnym plikiem, jego SHA i rozmiarem, snapshotem oraz finalnym dowodem.
@@ -40,4 +42,14 @@ Orchestrator przeszedł 58/58 testów, w tym 18 okien failpoint. Pełna suita i 
 
 Wszystkie zapisy trafiły do nowych temp DB. Produkcyjna baza pozostała na `0014`, byte-identical z wejściowym SHA i rozmiarem. Nie było sieci, API, providera, browsera, publikacji ani kosztu.
 
-Status: `PRODUCTION MIGRATION ORCHESTRATOR — CANDIDATE COMPLETE, AWAITING INDEPENDENT REVIEW`. To nie jest zgoda na migrację produkcji ani controlled-live.
+Status implementera w chwili oddania kandydata: `PRODUCTION MIGRATION ORCHESTRATOR — CANDIDATE COMPLETE, AWAITING INDEPENDENT REVIEW`.
+
+## Epilog: review, merge i formalne zamknięcie
+
+Niezależny review potwierdził wszystkie cztery usunięte blockery i wydał `APPROVE WITH MINOR/P2` — trzy drobne P2 (statystyka diffu w raporcie, nieaktualna liczba testów w README, semantyka argumentu wersji startowej przy resume) nie dotykały samej ochrony. PR #11 został zmergowany, a checkpoint po merge przeszedł na czysto: `1630/1630`.
+
+Po drodze zdarzyła się pouczająca wpadka operacyjna: pierwszy przebieg pełnej suity dał `1628/1630`, bo równolegle działały procesy acceptance z prawdziwą sondą procesów — i dwa testy quiescence zobaczyły w systemie „obce procesy projektu" zamiast oczekiwanego powodu z uchwytem pliku. Ochrona i tak zatrzymała się fail-closed; w izolacji i w czystym rerunie wszystko przeszło. Lekcja: nawet testy bezpieczeństwa potrafią interferować ze sobą, gdy dwa niezależne mechanizmy skanują ten sam system jednocześnie.
+
+Właściciel formalnie zamknął falę (ADR-109): `CLOSED — APPROVED WITH MINOR/P2`. Gotowość migracyjna jest zweryfikowana w zmergowanym kodzie, ale to nadal nie jest zgoda na migrację produkcji ani controlled-live — rzeczywista migracja `0014→0018` pozostaje osobną, nieudzieloną decyzją.
+
+**Zdanie do artykułu:** „Backup mówi ci, co było prawdą wczoraj. Zgoda na zapis musi być oparta na tym, co jest prawdą teraz."
