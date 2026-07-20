@@ -1230,9 +1230,23 @@ def test_migration_cli_0018_requires_confirmation_and_is_exact(tmp_path, capsys)
         "--db-path", str(path), "--confirm-0017-to-0018",
     ]) == 0
     assert database_schema_versions(path)[-1] == CONTROLLED_FETCH_SCHEMA_VERSION
-    SqliteStorage.open(path).close()
     assert migration_cli_0018.main([
         "--db-path", str(path), "--confirm-0017-to-0018",
+    ]) == 0
+    assert "idempotent=true" in capsys.readouterr().out
+    # E3: runtime gate wymaga teraz dokładnie 0019 — 0018 to o jeden krok za mało;
+    # kolejny jawny szczebel drabiny otwiera runtime.
+    import scripts.migrate_schema_0019 as migration_cli_0019
+
+    with pytest.raises(SchemaVersionTooOld):
+        SqliteStorage.open(path)
+    assert migration_cli_0019.main(["--db-path", str(path)]) == 2
+    assert migration_cli_0019.main([
+        "--db-path", str(path), "--confirm-0018-to-0019",
+    ]) == 0
+    SqliteStorage.open(path).close()
+    assert migration_cli_0019.main([
+        "--db-path", str(path), "--confirm-0018-to-0019",
     ]) == 0
     assert "idempotent=true" in capsys.readouterr().out
 

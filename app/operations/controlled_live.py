@@ -81,7 +81,13 @@ FAIL_CLOSED_ORDER: list[tuple[str, bool]] = [
 ]
 FAIL_CLOSED_PROFILE = MappingProxyType(dict(SECURITY_FLAG_DEFAULTS))
 
-REAL_CONTROLLED_LIVE_ENABLED = False
+# E3: właściwą zgodą właściciela na realne wykonanie jest TRWAŁY, jednorazowy
+# approval L1 EVIDENCE_RESEARCH w SQLite (patrz
+# `evidence_research_execution_authorized` niżej) — nigdy edycja źródeł.
+# Poniższa stała jest WYŁĄCZNIE awaryjną blokadą bezpieczeństwa (True =
+# twardy stop wszystkich realnych uruchomień); nie reprezentuje approval
+# człowieka i nie wymaga zmiany dla zatwierdzonych jobów.
+REAL_CONTROLLED_LIVE_EMERGENCY_STOP = False
 _MARKER_NAME = "controlled_live_session.json"
 _UPDATED_BY = "controlled-live-once"
 _ATTEMPT_STAGE = "research"
@@ -576,6 +582,51 @@ def _persisted_now(moment: datetime) -> str:
         if utc.microsecond
         else utc.strftime("%Y-%m-%d %H:%M:%S")
     )
+
+
+def evidence_research_execution_authorized(
+    storage: StoragePort, expected_job_id: str, *, now: datetime,
+) -> bool:
+    """Durable owner consent for exactly one evidence-research controlled run.
+
+    True WYŁĄCZNIE gdy: oczekiwany job istnieje, jego trwały payload jest
+    poprawnym durable intentem z evidence_input, a w SQLite istnieje
+    NIEskonsumowana, nieprzeterminowana zgoda L1 EVIDENCE_RESEARCH tego samego
+    konta i tematu, której fingerprint odpowiada bieżącemu payloadowi.
+    Każdy inny stan (w tym każdy wyjątek) = fail-closed False.  To jest
+    właściwa zgoda per job; stała REAL_CONTROLLED_LIVE_EMERGENCY_STOP pozostaje
+    wyłącznie awaryjną blokadą.
+    """
+    try:
+        job = storage.get_job(expected_job_id)
+        if job is None:
+            return False
+        canonical = canonicalize_durable_research_payload(job.payload)
+        intent_raw = canonical["execution_intent"]
+        if not isinstance(intent_raw, dict):
+            return False
+        intent = DurableResearchExecutionIntent.from_payload(intent_raw)
+        if intent.evidence_input is None:
+            return False
+        approval = storage.get_evidence_research_approval_for_job(expected_job_id)
+        if approval is None or approval.consumed_at is not None:
+            return False
+        if (
+            approval.account_id != job.account_id
+            or job.topic_id is None
+            or approval.topic_id != int(job.topic_id)
+        ):
+            return False
+        expires = approval.expires_at
+        if expires.tzinfo is None or expires.utcoffset() is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if expires <= now.astimezone(timezone.utc):
+            return False
+        return approval.intent_fingerprint == durable_execution_intent_fingerprint(
+            job.payload
+        )
+    except Exception:
+        return False
 
 
 def _as_utc(moment: datetime) -> datetime:

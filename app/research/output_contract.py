@@ -63,6 +63,16 @@ MAX_SUPPORTS_CLAIM_CHARS = MAX_CLAIM_CHARS  # dokładny tekst jednego confirmed 
 # jawny zapas na escapowanie (np. \" i \uXXXX potrafią zwielokrotnić znaki).
 MAX_RESPONSE_CHARS = 16000
 
+# --- E3 (evidence research, prompt anthropic_research_evidence_v1): każde
+# źródło może dodatkowo nieść jeden dosłowny cytat z kanonu. Limit znaków
+# excerptu == istniejący kontrakt weryfikatora E1 (evidence.MAX_EXCERPT_CHARS,
+# 600); sufit odpowiedzi rośnie dokładnie o budżet excerptów z zapasem na
+# escapowanie JSON (x2, bo cytat z kanonu może zawierać znaki wymagające \").
+MAX_SOURCE_EXCERPT_CHARS = 600
+EVIDENCE_MAX_RESPONSE_CHARS = (
+    MAX_RESPONSE_CHARS + MAX_SOURCES * MAX_SOURCE_EXCERPT_CHARS * 2
+)  # = 23200
+
 # --- Profil tokenowy Research Card (jawny profil TEJ operacji, nie globalny).
 # Kanoniczny payload z KAŻDYM polem dokładnie na granicy kontraktu (ASCII)
 # serializuje się do dokładnie 11192 znaków (pinowane testem). Konserwatywna
@@ -187,4 +197,24 @@ def enforce_single_research_draft_budget(draft: ResearchDraft) -> None:
         _check_string(
             source.supports_claim, field=f"{prefix}.supports_claim",
             max_chars=MAX_SUPPORTS_CLAIM_CHARS,
+        )
+
+
+def enforce_evidence_research_response_size(text: str) -> None:
+    """Sufit surowej odpowiedzi evidence — v1 kontrakt plus budżet excerptów."""
+    if isinstance(text, str) and len(text) > EVIDENCE_MAX_RESPONSE_CHARS:
+        raise _size_error(
+            "response", f"at_most_{EVIDENCE_MAX_RESPONSE_CHARS}_chars",
+        )
+
+
+def enforce_evidence_supporting_excerpts_budget(
+    excerpts_by_url: dict[str, str],
+) -> None:
+    """Górna granica każdego dosłownego cytatu źródła (fail-closed)."""
+    for url, excerpt in excerpts_by_url.items():
+        _check_string(
+            excerpt,
+            field=f"sources[url={url}].supporting_excerpt",
+            max_chars=MAX_SOURCE_EXCERPT_CHARS,
         )

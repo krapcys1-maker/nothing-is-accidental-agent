@@ -14,7 +14,8 @@ SETTLED_RECOVERY_SCHEMA_VERSION = "0015_settled_execution_recovery"
 EVIDENCE_SCHEMA_VERSION = "0016_evidence_foundation"
 EVIDENCE_PIPELINE_SCHEMA_VERSION = "0017_evidence_pipeline_lineage"
 CONTROLLED_FETCH_SCHEMA_VERSION = "0018_controlled_fetch_lifecycle"
-RUNTIME_SCHEMA_VERSION = CONTROLLED_FETCH_SCHEMA_VERSION
+EVIDENCE_RESEARCH_SCHEMA_VERSION = "0019_evidence_research_approvals"
+RUNTIME_SCHEMA_VERSION = EVIDENCE_RESEARCH_SCHEMA_VERSION
 _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0007_candidate_attempts",
     "0008_staged_force_reresearch",
@@ -28,6 +29,10 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0016_evidence_foundation",
     "0017_evidence_pipeline_lineage",
     "0018_controlled_fetch_lifecycle",
+    # 0019 is intentionally ABSENT: rebuilding controlled_fetch_approvals with
+    # incoming foreign keys requires PRAGMA foreign_keys=OFF, which is a no-op
+    # inside the runner transaction — the migration manages its own explicit
+    # BEGIN IMMEDIATE/COMMIT (the same contract as 0006).
 })
 
 
@@ -501,5 +506,19 @@ def migrate_0017_to_0018(
         db_path,
         source_version=EVIDENCE_PIPELINE_SCHEMA_VERSION,
         target_version=CONTROLLED_FETCH_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0018_to_0019(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the separately authorized E3 evidence-approvals migration."""
+    return _migrate_single_step(
+        db_path,
+        source_version=CONTROLLED_FETCH_SCHEMA_VERSION,
+        target_version=EVIDENCE_RESEARCH_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )

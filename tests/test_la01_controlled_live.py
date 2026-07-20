@@ -1432,7 +1432,12 @@ def test_database_change_between_pre_storage_pass_and_main_open_stops(
     monkeypatch.setattr(main_module, "load_settings", lambda: effective)
     monkeypatch.setattr(migration, "_git_identity", lambda _root: (BRANCH, HEAD))
     monkeypatch.delenv("NIA_CONTROLLED_LIVE_FAKE", raising=False)
-    monkeypatch.setattr(controlled, "REAL_CONTROLLED_LIVE_ENABLED", True)
+    # E3: właściwa zgoda per job to trwały approval EVIDENCE_RESEARCH; ten test
+    # bada wyłącznie drift bazy PO bramce, więc autoryzację stubujemy wprost.
+    monkeypatch.setattr(
+        controlled, "evidence_research_execution_authorized",
+        lambda *_args, **_kwargs: True,
+    )
 
     def clean_pre_storage(**_kwargs):
         record = {

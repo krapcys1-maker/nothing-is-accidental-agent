@@ -78,7 +78,8 @@ from app.core.pricing import (  # noqa: E402
     resolve_real_pricing_profile,
 )
 from app.models import (  # noqa: E402
-    Job, JobKind, ResearchFlow, ResearchRunStatus, SourceCandidateStatus, WorkflowType,
+    EvidenceRetrievalStatus, Job, JobKind, ResearchFlow, ResearchRunStatus,
+    SourceCandidateStatus, WorkflowType,
 )
 from app.orchestrator.runner import DEFAULT_ACCOUNT  # noqa: E402
 from app.policies.policy_engine import PolicyEngine  # noqa: E402
@@ -98,6 +99,9 @@ from app.research.durable_intent import (  # noqa: E402
     DurableResearchExecutionIntent,
     controlled_research_job_id,
     controlled_session_contract,
+    evidence_forwarded_context_tokens,
+    evidence_input_payload,
+    evidence_input_total_chars,
     validate_cli_max_tokens,
 )
 from app.storage.db import SchemaVersionError  # noqa: E402
@@ -222,6 +226,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-web-searches", type=int, default=4,
                         help="[two-stage/single] Cap liczby web searchy w etapie zbierania "
                              "źródeł (API max_uses).")
+    parser.add_argument("--evidence-retrieval-id", type=int, action="append",
+                        dest="evidence_retrieval_ids", default=None,
+                        metavar="RETRIEVAL_ID",
+                        help="[single, fresh --real] E3: powtarzalny ID istniejącego "
+                             "wiersza evidence_retrievals tego konta. Zamraża evidence "
+                             "research: syntezę WYŁĄCZNIE z zatwierdzonego kanonu, zero "
+                             "web search, zero nowego Fetchu. Wymaga --mode single i "
+                             "--max-web-searches 0; wykonanie wymaga jeszcze zgody L1 "
+                             "(approve-evidence-research).")
     parser.add_argument("--max-retries", type=int, default=0,
                         help="Musi wynosić 0: realny provider nie wykonuje auto-retry.")
     parser.add_argument("--gather-max-tokens", type=int, default=1200,
@@ -282,6 +295,16 @@ def main(argv: list[str] | None = None) -> int:
         print("STOP: podaj --topic-id (nowy research) lub --resume RESEARCH_RUN_ID "
               "(wznowienie dokładnie jednego kolejnego etapu).")
         return 1
+    if args.evidence_retrieval_ids:
+        if args.resume is not None:
+            print("STOP: --evidence-retrieval-id dotyczy wyłącznie świeżego researchu.")
+            return 1
+        if args.mode != "single":
+            print("STOP: --evidence-retrieval-id wymaga --mode single (jeden durable request).")
+            return 1
+        if args.max_web_searches != 0:
+            print("STOP: evidence research wymaga --max-web-searches 0 (zero web search).")
+            return 1
     # WAVE 0B has a durable fresh-enqueue path only.  A legacy A2/B resume has
     # no durable job/attempt identity, so refuse it before settings, SQLite,
     # account policy, client, log or usage construction can mutate anything.
@@ -303,10 +326,45 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
 
+def _build_evidence_input(storage: SqliteStorage, account, retrieval_ids):
+    """Freeze (retrieval_id, canonical_sha256, canonical_chars) from durable rows.
+
+    E3: wpisy pochodzą WYŁĄCZNIE z istniejących wierszy evidence_retrievals
+    tego konta (status OK); żaden hash ani rozmiar nie jest przyjmowany z CLI.
+    """
+    entries = []
+    for retrieval_id in retrieval_ids:
+        retrieval = storage.get_evidence_retrieval(
+            int(retrieval_id), account_id=account.id,
+        )
+        if retrieval is None:
+            print(
+                f"STOP: evidence retrieval #{retrieval_id} nie istnieje dla konta "
+                f"{account.id}."
+            )
+            return None, 1
+        if retrieval.status is not EvidenceRetrievalStatus.OK:
+            print(
+                f"STOP: evidence retrieval #{retrieval_id} ma status "
+                f"{retrieval.status.value}; wymagany OK."
+            )
+            return None, 1
+        entries.append((
+            int(retrieval.id), retrieval.canonical_sha256,
+            int(retrieval.canonical_chars),
+        ))
+    try:
+        return evidence_input_payload(entries), None
+    except DurableExecutionIntentError as exc:
+        print(f"STOP: {exc}")
+        return None, 1
+
+
 def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, account, topic,
                               settings, *, max_cost_usd: float, request_max_tokens: int,
                               approved_profile=None,
-                              now: datetime | None = None) -> int:
+                              now: datetime | None = None,
+                              evidence_input=None) -> int:
     """Persist fresh paid intent only; this process never creates a provider client."""
     if args.mode != "single" or args.force_re_research:
         print("INVALID_CONFIGURATION: WAVE 0B durable real jobs support only fresh --mode single.")
@@ -336,21 +394,26 @@ def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, 
     idempotency_key = f"real-research:{operation_key}"
     job_id = controlled_research_job_id(operation_key)
     session_contract = controlled_session_contract(operation_key, job_id=job_id)
-    intent = DurableResearchExecutionIntent.from_settings(
-        settings=settings,
-        account_id=account.id,
-        topic_id=int(topic.id),
-        cap_usd=max_cost_usd,
-        max_web_searches=args.max_web_searches,
-        question=topic.question or f"Why does '{topic.title}' work the way it does?",
-        niche=account.niche,
-        max_tokens=request_max_tokens,
-        pricing_prices=profile.prices,
-        pricing_profile_id=profile.profile_id,
-        pricing_profile_version=profile.version,
-        pricing_currency=profile.currency,
-        pricing_unit=profile.unit,
-    )
+    try:
+        intent = DurableResearchExecutionIntent.from_settings(
+            settings=settings,
+            account_id=account.id,
+            topic_id=int(topic.id),
+            cap_usd=max_cost_usd,
+            max_web_searches=args.max_web_searches,
+            question=topic.question or f"Why does '{topic.title}' work the way it does?",
+            niche=account.niche,
+            max_tokens=request_max_tokens,
+            pricing_prices=profile.prices,
+            pricing_profile_id=profile.profile_id,
+            pricing_profile_version=profile.version,
+            pricing_currency=profile.currency,
+            pricing_unit=profile.unit,
+            evidence_input=evidence_input,
+        )
+    except DurableExecutionIntentError as exc:
+        print(f"STOP: {exc}")
+        return 2
     enqueue_time = now if now is not None else datetime.now(timezone.utc)
     job = Job(
         id=job_id,
@@ -380,6 +443,18 @@ def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, 
         return 2
     marker = "JOB_ENQUEUED" if enqueue_result.created else "JOB_ALREADY_EXISTS"
     print(f"{marker}: job_id={enqueue_result.job.id}")
+    if evidence_input is not None:
+        frozen_ids = ",".join(
+            str(entry["retrieval_id"]) for entry in evidence_input["retrievals"]
+        )
+        print(f"evidence_retrieval_ids={frozen_ids}")
+        print(f"evidence_total_chars={evidence_input_total_chars(evidence_input)}")
+        print(f"intent_projected_cost_usd={intent.projected_cost_usd}")
+        print(f"intent_pessimistic_cost_usd={intent.pessimistic_cost_usd}")
+        print(
+            "evidence_approval_required=true "
+            "(python -m app.main approve-evidence-research)"
+        )
     print("No provider request was made. A leased worker is required for execution.")
     return 0
 
@@ -459,6 +534,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
     print(f"budżet dzienny:    wydano dotąd {day_spent:.6f} / limit {settings.max_daily_cost_usd:.2f} USD")
 
     print(f"\n--- KALIBROWANA ESTYMACJA (margines bezpieczeństwa >= 50%, patrz ERRORS_AND_FAILURES.md) ---")
+    evidence_input = None
     if args.mode == "three-stage":
         est = estimate_staged_research_cost_usd(
             settings, discovery_max_searches=args.discovery_max_searches,
@@ -488,6 +564,26 @@ def _run_fresh(args: argparse.Namespace) -> int:
         _print_estimate("ETAP 2 (synthesize_card, ZERO search)", stage_b)
         base_worst_case = float(sum_usd((stage_a.total_usd, stage_b.total_usd)))
         print(f"  COMBINED (etap1 + etap2, jedna próba/call): {base_worst_case:.4f} USD")
+    elif getattr(args, "evidence_retrieval_ids", None):
+        # E3: TA SAMA domena projekcji co zamrożony intent (estimate_no_search +
+        # evidence_forwarded_context_tokens) — zero osobnej kalkulacji CLI.
+        evidence_input, stop_code = _build_evidence_input(
+            storage, account, args.evidence_retrieval_ids,
+        )
+        if stop_code is not None:
+            return stop_code
+        evidence_est = estimate_no_search_call_usd(
+            settings, max_output_tokens=request_max_tokens,
+            forwarded_context_tokens=evidence_forwarded_context_tokens(evidence_input),
+        )
+        _print_estimate(
+            "EVIDENCE-SYNTHESIS (zero web search, zamrożony corpus)", evidence_est,
+        )
+        print(
+            f"  evidence corpus: {len(evidence_input['retrievals'])} retrieval(i), "
+            f"{evidence_input_total_chars(evidence_input)} znaków kanonu"
+        )
+        base_worst_case = evidence_est.total_usd
     else:
         single = estimate_worst_case_search_call_usd(
             settings, max_web_searches=args.max_web_searches, max_output_tokens=request_max_tokens)
@@ -524,6 +620,7 @@ def _run_fresh(args: argparse.Namespace) -> int:
                 max_cost_usd=max_cost_usd, request_max_tokens=request_max_tokens,
                 approved_profile=approved_profile,
                 now=now,
+                evidence_input=evidence_input,
             )
         finally:
             storage.close()

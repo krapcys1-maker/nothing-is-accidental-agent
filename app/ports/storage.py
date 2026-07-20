@@ -24,6 +24,7 @@ from app.models import (
     JobReservation,
     DurableProviderAttemptContext,
     EvidenceExcerpt,
+    EvidenceResearchApproval,
     EvidenceRetrieval,
     ExecutionResolution,
     FinancialResolution,
@@ -161,6 +162,20 @@ class ControlledFetchAuthorizationError(RuntimeError):
     Podnoszona PRZED granicą transportu — brak/niezgodność/wygaśnięcie/zużycie
     zgody L1 albo niezgodny fingerprint intentu. Nic zewnętrznego nie zostało
     wykonane, więc wynik jest jednoznaczny (terminalny FAILED bez eskalacji)."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        self.code = code
+        super().__init__(f"{code}: {detail}")
+
+
+class EvidenceResearchAuthorizationError(RuntimeError):
+    """Kontrolowana odmowa autoryzacji evidence research (E3).
+
+    Podnoszona PRZED granicą providera — brak/niezgodność/wygaśnięcie/zużycie
+    zgody L1 EVIDENCE_RESEARCH, rozjazd zamrożonego intentu z payloadem joba
+    albo rozjazd retrievali/hashy/limitów corpusu z zatwierdzonym evidence.
+    Nic zewnętrznego nie zostało wykonane: zero konsumpcji zgody, zero
+    provider attemptu, zero requestu, zero usage, zero kosztu."""
 
     def __init__(self, code: str, detail: str) -> None:
         self.code = code
@@ -310,6 +325,36 @@ class StoragePort(Protocol):
     def get_controlled_fetch_approval_for_job(
         self, job_id: str,
     ) -> ControlledFetchApproval | None: ...
+
+    def record_evidence_research_approval(
+        self, *, job_id: str, account_id: str, approved_by: str,
+        expires_at: datetime, clock: Clock,
+    ) -> EvidenceResearchApproval:
+        """Zapisuje jednorazową zgodę L1 EVIDENCE_RESEARCH z pełnym preimage intentu."""
+        ...
+
+    def get_evidence_research_approval_for_job(
+        self, job_id: str,
+    ) -> EvidenceResearchApproval | None: ...
+
+    def load_evidence_research_corpus(
+        self, execution: JobExecutionContext,
+    ) -> "EvidenceResearchCorpus":
+        """Fail-closed pre-rezerwacyjna walidacja approvalu i corpusu evidence."""
+        ...
+
+    def assert_evidence_research_snapshot(
+        self, execution: JobExecutionContext, *, expected_intent_fingerprint: str,
+    ) -> None:
+        """Ponowna kontrola intentu/approvalu/evidence przy granicy providera."""
+        ...
+
+    def record_job_verified_evidence_excerpt(
+        self, execution: JobExecutionContext, retrieval_id: int, *,
+        claim_text: str, excerpt_text: str, start_offset: int, end_offset: int,
+    ) -> EvidenceExcerpt:
+        """E1-weryfikacja i zapis excerptu pod świeżym fence workera."""
+        ...
 
     def get_controlled_fetch_attempt_for_job(
         self, job_id: str,

@@ -58,11 +58,18 @@ from app.policies.policy_engine import PolicyEngine
 from app.ports.notification import NotificationPort
 from app.ports.storage import (
     BudgetReservationError,
+    EvidenceResearchAuthorizationError,
     ProviderAttemptOverReservationError,
     ProviderAttemptReconciliationRequired,
     StoragePort,
 )
 from app.research import injection_guard
+from app.research.durable_intent import (
+    DurableExecutionIntentError,
+    DurableResearchExecutionIntent,
+    canonicalize_durable_research_payload,
+)
+from app.research.evidence import EvidenceVerificationError
 from app.research.base import (
     AttemptBudgetContext,
     DEFAULT_SYNTHESIS_MAX_TOKENS,
@@ -382,6 +389,78 @@ def _configure_attempt_control(
         assertion_callback=assertion_callback,
         estimated_attempt_cost=estimated_attempt_cost,
     )
+
+
+def _load_evidence_intent(
+    storage: StoragePort, job_id: str,
+) -> DurableResearchExecutionIntent | None:
+    """Read the persisted durable intent and return it only for evidence mode.
+
+    E3: tryb evidence jest wykrywany WYŁĄCZNIE z trwałego payloadu joba (nigdy
+    z pamięci ani ENV), tym samym wzorcem co dispatcher.
+    """
+    job = storage.get_job(job_id)
+    if job is None:
+        raise ResearchExecutionRequiresDurableJob(
+            "Durable research job disappeared before execution."
+        )
+    try:
+        canonical = canonicalize_durable_research_payload(job.payload)
+        intent_raw = canonical["execution_intent"]
+        assert isinstance(intent_raw, dict)
+        intent = DurableResearchExecutionIntent.from_payload(intent_raw)
+    except DurableExecutionIntentError as exc:
+        raise ResearchExecutionRequiresDurableJob(
+            "Durable research payload is invalid for evidence-mode detection."
+        ) from exc
+    return intent if intent.evidence_input is not None else None
+
+
+def _persist_verified_evidence_excerpts(
+    storage: StoragePort,
+    execution: JobExecutionContext,
+    draft,
+    corpus,
+) -> int:
+    """E1-verify and persist model-proposed excerpts; only they grant VERIFIED.
+
+    Provider output nigdy samodzielnie nie nadaje statusu VERIFIED: źródło
+    zostaje VERIFIED wyłącznie wtedy, gdy deterministyczny weryfikator E1
+    zatwierdził dokładny zakres kanonu i excerpt został trwale zapisany.
+    Odrzucony excerpt jest pomijany (źródło zostaje UNVERIFIED) — to decyzja
+    editorial, nie awaria pipeline'u.
+    """
+    excerpts = getattr(draft, "evidence_supporting_excerpts", None) or {}
+    by_url = {retrieval.requested_url: retrieval for retrieval in corpus.retrievals}
+    verified_urls: set[str] = set()
+    for source in draft.sources:
+        retrieval = by_url.get(source.url)
+        excerpt = excerpts.get(source.url)
+        claim = source.supports_claim
+        if retrieval is None or not excerpt or not claim or not claim.strip():
+            continue
+        start = retrieval.canonical_text.find(excerpt)
+        if start < 0:
+            continue
+        try:
+            storage.record_job_verified_evidence_excerpt(
+                execution,
+                int(retrieval.id),
+                claim_text=claim,
+                excerpt_text=excerpt,
+                start_offset=start,
+                end_offset=start + len(excerpt),
+            )
+        except EvidenceVerificationError:
+            continue
+        verified_urls.add(source.url)
+    for source in draft.sources:
+        source.verification = (
+            SourceVerification.VERIFIED
+            if source.url in verified_urls
+            else SourceVerification.UNVERIFIED
+        )
+    return len(verified_urls)
 
 
 def _mark_budget_block(summary: "ResearchRunSummary", exc: ResearchError) -> None:
@@ -722,15 +801,27 @@ def run_research_pipeline(
                     "Current topic/account prompt inputs diverged from the durable snapshot."
                 )
 
+    # E3: tryb evidence jest wykrywany z trwałego payloadu joba; jego jedyną
+    # projekcją kosztu jest ZAMROŻONA pesymistyczna projekcja intentu — ta sama
+    # liczba zasila intent, bramkę Policy Engine i rezerwację (zero osobnych,
+    # rozjeżdżających się kalkulacji).
+    evidence_intent: DurableResearchExecutionIntent | None = None
+    if durable_plan is not None and not settings.dry_run and job_execution is not None:
+        evidence_intent = _load_evidence_intent(storage, job_execution.job_id)
+
     # 3. Bramka budżetu PRZED web search — pesymistyczny, KALIBROWANY szacunek
     # (ADR-016). Poprzedni płaski szacunek (Usage 3500/1500/5) zaniżył realny koszt
     # o ~163% na pierwszym realnym runie (docs/ERRORS_AND_FAILURES.md, 2026-07-11).
     # Uwaga: ta ścieżka (jednoetapowa) jest zachowana, ale NIEZALECANA dla realnych
     # runów — patrz run_two_stage_research_pipeline() niżej.
-    worst_case = estimate_worst_case_search_call_usd(
-        settings, max_web_searches=max_web_searches, max_output_tokens=request_max_tokens)
+    if evidence_intent is not None:
+        attempt_cost_ceiling = float(evidence_intent.pessimistic_cost_usd)
+    else:
+        worst_case = estimate_worst_case_search_call_usd(
+            settings, max_web_searches=max_web_searches, max_output_tokens=request_max_tokens)
+        attempt_cost_ceiling = worst_case.total_usd
     budget = _check_stage_budget(
-        settings, policy, account, storage, None, base_estimate=worst_case.total_usd,
+        settings, policy, account, storage, None, base_estimate=attempt_cost_ceiling,
         max_retries=max_retries, run_cap_usd=run_cap_usd)
     if not budget.allowed:
         notifier.notify("warning", "Budżet — stop (research)", budget.reason, account.id)
@@ -770,12 +861,75 @@ def run_research_pipeline(
         storage.assert_job_execution_active(execution_context)
     summary.run_id = run_id
 
+    # E3: fail-closed walidacja approvalu i corpusu PRZED rezerwacją attemptu.
+    evidence_corpus = None
+    before_provider_assertion = prompt_source_validator
+    if evidence_intent is not None:
+        assert execution_context is not None
+
+        def _fail_evidence_before_reservation(code: str) -> ResearchRunSummary:
+            # Rozjazd przed rezerwacją: zero konsumpcji zgody, zero provider
+            # attemptu, zero requestu, zero usage, zero kosztu.
+            audit_error = f"EVIDENCE_RESEARCH_REFUSED:{code}"
+            failure_outcome = storage.fail_or_escalate_job_research_execution(
+                execution_context,
+                _current_run_cost(storage, run_id),
+                error=audit_error,
+                terminalize_job=True,
+            )
+            if failure_outcome is not ResearchExecutionFailureOutcome.TERMINALIZED_FAILED:
+                raise ResearchExecutionNeedsReconciliation(
+                    "Evidence refusal retained an active reservation for explicit reconciliation."
+                )
+            summary.error = audit_error
+            return summary
+
+        try:
+            evidence_corpus = storage.load_evidence_research_corpus(execution_context)
+        except EvidenceResearchAuthorizationError as exc:
+            return _fail_evidence_before_reservation(exc.code)
+        configure_evidence = getattr(
+            research_client, "configure_evidence_synthesis", None,
+        )
+        if not callable(configure_evidence):
+            return _fail_evidence_before_reservation("EVIDENCE_CLIENT_UNSUPPORTED")
+        from app.research.anthropic_client import EvidenceSynthesisDocument
+
+        configure_evidence([
+            EvidenceSynthesisDocument(
+                retrieval_id=int(retrieval.id),
+                url=retrieval.requested_url,
+                canonical_text=retrieval.canonical_text,
+            )
+            for retrieval in evidence_corpus.retrievals
+        ])
+        base_validator = prompt_source_validator
+        expected_fingerprint = evidence_corpus.intent_fingerprint
+
+        def evidence_snapshot_validator() -> None:
+            # Ponowna kontrola intentu/approvalu/evidence przy granicy providera
+            # (aktualny wzorzec snapshotu): rozjazd po REQUEST_STARTED trafia w
+            # istniejący kontrakt NEEDS_RECONCILIATION, nigdy w drugi request.
+            if base_validator is not None:
+                base_validator()
+            try:
+                storage.assert_evidence_research_snapshot(
+                    execution_context,
+                    expected_intent_fingerprint=expected_fingerprint,
+                )
+            except EvidenceResearchAuthorizationError as snapshot_exc:
+                raise DurablePromptSourceSnapshotMismatch(
+                    f"evidence snapshot diverged: {snapshot_exc.code}"
+                ) from snapshot_exc
+
+        before_provider_assertion = evidence_snapshot_validator
+
     _configure_attempt_control(
         research_client, policy=policy, account=account, storage=storage,
         usage_tracker=usage_tracker, run_id=run_id, run_cap_usd=run_cap_usd,
-        estimated_attempt_cost=worst_case.total_usd, task="research",
+        estimated_attempt_cost=attempt_cost_ceiling, task="research",
         dry_run=settings.dry_run, job_execution=execution_context,
-        before_provider_assertion=prompt_source_validator)
+        before_provider_assertion=before_provider_assertion)
 
     # 5. Wywołanie klienta (web search). Błędy: timeout/parse -> run FAILED.
     try:
@@ -912,6 +1066,17 @@ def run_research_pipeline(
     summary.input_tokens = usage_row.input_tokens
     summary.output_tokens = usage_row.output_tokens
     summary.web_search_requests = usage_row.web_search_requests
+
+    # 7b. E3: weryfikator E1 kontroluje excerpty i JAKO JEDYNY nadaje VERIFIED;
+    # provider output nigdy nie nadaje tego statusu samodzielnie.
+    if (
+        evidence_intent is not None
+        and evidence_corpus is not None
+        and execution_context is not None
+    ):
+        summary.sources_extracted = _persist_verified_evidence_excerpts(
+            storage, execution_context, draft, evidence_corpus,
+        )
 
     # 8. Walidacja jakości (bramka).
     outcome = validate_draft(
