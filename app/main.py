@@ -361,6 +361,53 @@ def _cmd_approve_controlled_fetch(args: argparse.Namespace) -> int:
         storage.close()
 
 
+def _cmd_approve_evidence_research(args: argparse.Namespace) -> int:
+    """Record the one-shot human L1 approval bound to one frozen evidence job.
+
+    E3: to jest właściwa, trwała zgoda właściciela na dokładnie jeden realny
+    evidence research — audytowalna w SQLite, z expiry, konsumowana atomowo
+    dokładnie raz w tej samej transakcji co rezerwacja provider attemptu.
+    """
+    from app.ports.storage import EvidenceResearchAuthorizationError
+
+    storage = None
+    try:
+        settings = load_settings()
+        settings.get_account(args.account_id)
+        storage = SqliteStorage.open(settings.db_path)
+        approval = storage.record_evidence_research_approval(
+            job_id=args.job_id,
+            account_id=args.account_id,
+            approved_by=args.approved_by,
+            expires_at=args.expires_at,
+            clock=SystemClock(),
+        )
+        print(f"APPROVE EVIDENCE RESEARCH: approval_id={approval.id}")
+        print(f"job_id={approval.job_id}")
+        print(f"topic_id={approval.topic_id}")
+        print(f"intent_fingerprint={approval.intent_fingerprint}")
+        print(f"expires_at={approval.expires_at}")
+        print("action_type=EVIDENCE_RESEARCH single_use=true transferable=false")
+        return 0
+    except SchemaVersionError:
+        # The runtime schema gate keeps its dedicated exit code (main -> 7).
+        raise
+    except (
+        ConfigError, EvidenceResearchAuthorizationError,
+        ValueError, RuntimeError, OSError, sqlite3.Error,
+    ) as exc:
+        # Every refusal path (config, protected/unavailable storage,
+        # authorization) is one controlled fail-closed exit.
+        print(f"APPROVE EVIDENCE RESEARCH: failed closed: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        if storage is not None:
+            try:
+                storage.close()
+            except (OSError, RuntimeError, sqlite3.Error):
+                pass
+
+
 def _build_worker(
     settings: Settings, offline_only: bool = False, *,
     clock: Clock | None = None,
@@ -609,10 +656,12 @@ def _cmd_controlled_live_once(args: argparse.Namespace) -> int:
         ControlledLiveRequest,
         DbFingerprint,
         DeterministicFakeControlledWorkerAdapter,
-        REAL_CONTROLLED_LIVE_ENABLED,
+        REAL_CONTROLLED_LIVE_EMERGENCY_STOP,
+        evidence_research_execution_authorized,
         run_controlled_live_once,
         run_controlled_live_quiescence_check,
     )
+    from app.research.durable_intent import controlled_research_job_id
 
     settings = load_settings()
     fake_mode = (
@@ -778,6 +827,22 @@ def _cmd_controlled_live_once(args: argparse.Namespace) -> int:
         )
         database_fingerprint = None
 
+    # E3: właściwą zgodą właściciela na realne wykonanie jest trwały,
+    # jednorazowy, audytowalny approval L1 EVIDENCE_RESEARCH w SQLite —
+    # nigdy edycja źródeł. Stała emergency-stop pozostaje wyłącznie awaryjną
+    # blokadą bezpieczeństwa ponad zgodą.
+    if fake_mode:
+        real_execution_authorized = False
+    else:
+        real_execution_authorized = (
+            not REAL_CONTROLLED_LIVE_EMERGENCY_STOP
+            and evidence_research_execution_authorized(
+                storage,
+                controlled_research_job_id(args.operation_key),
+                now=clock.now(),
+            )
+        )
+
     try:
         kwargs = {}
         if database_fingerprint is not None:
@@ -792,7 +857,7 @@ def _cmd_controlled_live_once(args: argparse.Namespace) -> int:
             worker_runner=worker_adapter,
             frozen_quiescence=frozen_quiescence,
             clock=clock,
-            allow_execution=fake_mode or REAL_CONTROLLED_LIVE_ENABLED,
+            allow_execution=fake_mode or real_execution_authorized,
             allow_job_creation=fake_mode,
             **kwargs,
         )
@@ -1075,6 +1140,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_approve_fetch.add_argument("--expires-at", required=True, type=_parse_requested_at,
                                  help="ISO-8601 z jawną strefą; zgoda wygasa najpóźniej wtedy.")
     p_approve_fetch.set_defaults(func=_cmd_approve_controlled_fetch)
+
+    p_approve_evidence = sub.add_parser(
+        "approve-evidence-research",
+        help="E3: jednorazowa zgoda L1 dla dokładnie jednego joba evidence research.",
+    )
+    p_approve_evidence.add_argument("--job-id", required=True)
+    p_approve_evidence.add_argument("--account-id", required=True)
+    p_approve_evidence.add_argument("--approved-by", required=True,
+                                    help="Tożsamość człowieka L1 podejmującego decyzję.")
+    p_approve_evidence.add_argument("--expires-at", required=True, type=_parse_requested_at,
+                                    help="ISO-8601 z jawną strefą; zgoda wygasa najpóźniej wtedy.")
+    p_approve_evidence.set_defaults(func=_cmd_approve_evidence_research)
 
     p_worker = sub.add_parser("worker", help="Wykonaj bezpieczny, trwały job offline.")
     worker_mode = p_worker.add_mutually_exclusive_group(required=True)

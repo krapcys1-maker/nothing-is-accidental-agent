@@ -16,7 +16,12 @@ from app.core.pricing import (
     PricingConfigError,
     pricing_contract_fingerprint,
 )
-from app.research.cost_estimator import estimate_worst_case_search_call_usd
+from app.research.cost_estimator import (
+    estimate_no_search_call_usd,
+    estimate_worst_case_search_call_usd,
+)
+from app.research.evidence import MAX_CANONICAL_CHARS
+from app.research.output_contract import CONSERVATIVE_CHARS_PER_TOKEN, MAX_SOURCES
 
 
 _SCHEMA = "durable_research_intent_v3"
@@ -25,7 +30,30 @@ _PIPELINE_VERSION = "single_research_pipeline_v2"
 # każdego pola w prompcie + deterministyczna walidacja (app/research/output_contract.py).
 # Zamrożone intenty v2 pozostają fail-closed nieobsługiwane przez ten worker.
 _PROMPT_CONTRACT_VERSION = "anthropic_research_single_v3"
+# E3: tryb evidence — synteza WYŁĄCZNIE z zatwierdzonego lokalnego canonical
+# evidence (zero web search, zero Fetchu). Osobna wersja kontraktu promptu
+# jest częścią fingerprintowanej domeny intentu.
+EVIDENCE_PROMPT_CONTRACT_VERSION = "anthropic_research_evidence_v1"
 _PROVIDER_STAGE = "research"
+
+# --- E3: zamknięty kontrakt evidence_input_v1 (pinowany testami; zmiana = nowa
+# decyzja i nowa wersja). Limity są WYWIEDZIONE z istniejących kontraktów:
+#   * MAX_EVIDENCE_RETRIEVALS == output_contract.MAX_SOURCES (6) — górna granica
+#     liczby źródeł jednej Research Card;
+#   * MAX_EVIDENCE_CHARS_PER_RETRIEVAL == evidence.MAX_CANONICAL_CHARS (100000)
+#     — istniejący sufit E1 pojedynczego kanonu (egzekwowany też CHECK-iem 0016);
+#   * MAX_EVIDENCE_TOTAL_CHARS — iloczyn obu powyższych (sufit corpusu).
+EVIDENCE_INPUT_VERSION = "evidence_input_v1"
+MAX_EVIDENCE_RETRIEVALS = MAX_SOURCES
+MAX_EVIDENCE_CHARS_PER_RETRIEVAL = MAX_CANONICAL_CHARS
+MAX_EVIDENCE_TOTAL_CHARS = MAX_EVIDENCE_RETRIEVALS * MAX_EVIDENCE_CHARS_PER_RETRIEVAL
+# Pinowany budżet znaków promptu POZA corpusem (system + instrukcje kontraktu
+# v1 + pytanie/niche/guidance/nagłówki dokumentów). Test kontraktowy dowodzi,
+# że realny szablon promptu evidence z polami na granicach mieści się w tym
+# budżecie. Przeliczenie znaki->tokeny używa ISTNIEJĄCEJ konserwatywnej stałej
+# output_contract.CONSERVATIVE_CHARS_PER_TOKEN (3.5 znaka/token).
+EVIDENCE_PROMPT_OVERHEAD_CHARS = 8000
+_SHA256_HEX_CHARS = frozenset("0123456789abcdef")
 
 # Sentinel pricing-profile identity for non-authoritative paths (dry-run estimation,
 # legacy tests).  Real paid enqueue MUST override these with an approved, versioned
@@ -208,17 +236,163 @@ def _pricing_fingerprint(
         ) from exc
 
 
+def _sha256_hex_text(value: object, *, field: str) -> str:
+    text = _text(value, field=field)
+    if len(text) != 64 or any(char not in _SHA256_HEX_CHARS for char in text):
+        raise DurableExecutionIntentError(
+            f"{field} must be 64 lowercase hex characters.",
+            code="EVIDENCE_INPUT_INVALID",
+        )
+    return text
+
+
+def _evidence_input(raw: object) -> dict[str, object]:
+    """Validate the closed evidence_input_v1 contract; returns the canonical dict."""
+
+    def _reject(detail: str) -> DurableExecutionIntentError:
+        return DurableExecutionIntentError(detail, code="EVIDENCE_INPUT_INVALID")
+
+    if not isinstance(raw, Mapping) or set(raw) != {"version", "retrievals", "limits"}:
+        raise _reject(
+            "evidence_input must contain exactly version, retrievals and limits."
+        )
+    if raw["version"] != EVIDENCE_INPUT_VERSION:
+        raise _reject("evidence_input version is unsupported.")
+    limits = raw["limits"]
+    if not isinstance(limits, Mapping) or set(limits) != {
+        "max_retrievals", "max_chars_per_retrieval", "max_total_chars",
+    }:
+        raise _reject(
+            "evidence_input.limits must contain exactly max_retrievals, "
+            "max_chars_per_retrieval and max_total_chars."
+        )
+    if (
+        limits["max_retrievals"] != MAX_EVIDENCE_RETRIEVALS
+        or limits["max_chars_per_retrieval"] != MAX_EVIDENCE_CHARS_PER_RETRIEVAL
+        or limits["max_total_chars"] != MAX_EVIDENCE_TOTAL_CHARS
+    ):
+        raise _reject(
+            "evidence_input.limits must equal the closed evidence_input_v1 limits."
+        )
+    retrievals_raw = raw["retrievals"]
+    if not isinstance(retrievals_raw, list) or not retrievals_raw:
+        raise _reject("evidence_input.retrievals must be a non-empty array.")
+    if len(retrievals_raw) > MAX_EVIDENCE_RETRIEVALS:
+        raise _reject(
+            f"evidence_input.retrievals exceeds the closed maximum of "
+            f"{MAX_EVIDENCE_RETRIEVALS} retrievals."
+        )
+    retrievals: list[dict[str, object]] = []
+    seen_ids: set[int] = set()
+    total_chars = 0
+    for index, entry in enumerate(retrievals_raw):
+        label = f"evidence_input.retrievals[{index}]"
+        if not isinstance(entry, Mapping) or set(entry) != {
+            "retrieval_id", "canonical_sha256", "canonical_chars",
+        }:
+            raise _reject(
+                f"{label} must contain exactly retrieval_id, canonical_sha256 "
+                "and canonical_chars."
+            )
+        retrieval_id = _integer(
+            entry["retrieval_id"], field=f"{label}.retrieval_id", minimum=1,
+        )
+        if retrieval_id in seen_ids:
+            raise _reject(f"{label}.retrieval_id duplicates an earlier entry.")
+        seen_ids.add(retrieval_id)
+        canonical_sha256 = _sha256_hex_text(
+            entry["canonical_sha256"], field=f"{label}.canonical_sha256",
+        )
+        canonical_chars = _integer(
+            entry["canonical_chars"], field=f"{label}.canonical_chars", minimum=1,
+        )
+        if canonical_chars > MAX_EVIDENCE_CHARS_PER_RETRIEVAL:
+            raise _reject(
+                f"{label}.canonical_chars exceeds the per-retrieval limit of "
+                f"{MAX_EVIDENCE_CHARS_PER_RETRIEVAL} characters."
+            )
+        total_chars += canonical_chars
+        retrievals.append({
+            "retrieval_id": retrieval_id,
+            "canonical_sha256": canonical_sha256,
+            "canonical_chars": canonical_chars,
+        })
+    if total_chars > MAX_EVIDENCE_TOTAL_CHARS:
+        raise _reject(
+            f"evidence corpus of {total_chars} characters exceeds the closed "
+            f"total limit of {MAX_EVIDENCE_TOTAL_CHARS} characters."
+        )
+    return {
+        "version": EVIDENCE_INPUT_VERSION,
+        "retrievals": retrievals,
+        "limits": {
+            "max_retrievals": MAX_EVIDENCE_RETRIEVALS,
+            "max_chars_per_retrieval": MAX_EVIDENCE_CHARS_PER_RETRIEVAL,
+            "max_total_chars": MAX_EVIDENCE_TOTAL_CHARS,
+        },
+    }
+
+
+def evidence_input_payload(
+    retrievals: list[tuple[int, str, int]],
+) -> dict[str, object]:
+    """Build one canonical evidence_input_v1 payload from (id, sha256, chars)."""
+    return _evidence_input({
+        "version": EVIDENCE_INPUT_VERSION,
+        "retrievals": [
+            {
+                "retrieval_id": retrieval_id,
+                "canonical_sha256": canonical_sha256,
+                "canonical_chars": canonical_chars,
+            }
+            for retrieval_id, canonical_sha256, canonical_chars in retrievals
+        ],
+        "limits": {
+            "max_retrievals": MAX_EVIDENCE_RETRIEVALS,
+            "max_chars_per_retrieval": MAX_EVIDENCE_CHARS_PER_RETRIEVAL,
+            "max_total_chars": MAX_EVIDENCE_TOTAL_CHARS,
+        },
+    })
+
+
+def evidence_input_total_chars(evidence_input: Mapping[str, object]) -> int:
+    """Frozen corpus size in characters, straight from the validated intent."""
+    retrievals = evidence_input["retrievals"]
+    assert isinstance(retrievals, list)
+    return sum(int(entry["canonical_chars"]) for entry in retrievals)
+
+
+def evidence_forwarded_context_tokens(evidence_input: Mapping[str, object]) -> int:
+    """Deterministic, conservative chars->input-tokens contract for evidence.
+
+    Uses the frozen corpus size plus the pinned prompt-overhead budget divided
+    by the EXISTING conservative constant (3.5 chars/token, output_contract).
+    """
+    total_chars = evidence_input_total_chars(evidence_input) + EVIDENCE_PROMPT_OVERHEAD_CHARS
+    return math.ceil(total_chars / CONSERVATIVE_CHARS_PER_TOKEN)
+
+
 def _cost_projection(
     *,
     profile: Mapping[str, str],
     max_web_searches: int,
     max_tokens: int,
+    evidence_input: Mapping[str, object] | None = None,
 ) -> tuple[str, str]:
-    estimate = estimate_worst_case_search_call_usd(
-        SimpleNamespace(pricing=dict(profile)),
-        max_web_searches=max_web_searches,
-        max_output_tokens=max_tokens,
-    )
+    if evidence_input is not None:
+        # E3: pełny input evidence wchodzi do projekcji przez ISTNIEJĄCY
+        # kontrakt no-search (jawny człon input_per_mtok + margines >= 50%).
+        estimate = estimate_no_search_call_usd(
+            SimpleNamespace(pricing=dict(profile)),
+            max_output_tokens=max_tokens,
+            forwarded_context_tokens=evidence_forwarded_context_tokens(evidence_input),
+        )
+    else:
+        estimate = estimate_worst_case_search_call_usd(
+            SimpleNamespace(pricing=dict(profile)),
+            max_web_searches=max_web_searches,
+            max_output_tokens=max_tokens,
+        )
     return (
         _money(estimate.subtotal_usd, field="projected_cost_usd", allow_zero=True),
         _money(estimate.total_usd, field="pessimistic_cost_usd", allow_zero=True),
@@ -248,6 +422,7 @@ class DurableResearchExecutionIntent:
     pipeline_version: str
     prompt_contract_version: str
     max_retries: int
+    evidence_input: dict[str, object] | None = None
 
     @classmethod
     def from_settings(
@@ -262,6 +437,7 @@ class DurableResearchExecutionIntent:
         guidance: object = (
             "Prefer primary sources; separate fact from interpretation; flag uncertainty."
         ),
+        evidence_input: Mapping[str, object] | None = None,
     ) -> "DurableResearchExecutionIntent":
         # Real paid enqueue passes the approved profile's prices/id/version; other
         # callers fall back to settings pricing with the non-authoritative sentinel.
@@ -278,10 +454,17 @@ class DurableResearchExecutionIntent:
         bounded_searches = _integer(
             max_web_searches, field="max_web_searches", minimum=0,
         )
+        evidence = None if evidence_input is None else _evidence_input(evidence_input)
+        if evidence is not None and bounded_searches != 0:
+            raise DurableExecutionIntentError(
+                "evidence research requires max_web_searches=0.",
+                code="EVIDENCE_REQUIRES_ZERO_SEARCHES",
+            )
         projected, pessimistic = _cost_projection(
             profile=profile,
             max_web_searches=bounded_searches,
             max_tokens=bounded_tokens,
+            evidence_input=evidence,
         )
         return cls(
             account_id=_text(account_id, field="account_id"),
@@ -317,8 +500,13 @@ class DurableResearchExecutionIntent:
             projected_cost_usd=projected,
             pessimistic_cost_usd=pessimistic,
             pipeline_version=_PIPELINE_VERSION,
-            prompt_contract_version=_PROMPT_CONTRACT_VERSION,
+            prompt_contract_version=(
+                EVIDENCE_PROMPT_CONTRACT_VERSION
+                if evidence is not None
+                else _PROMPT_CONTRACT_VERSION
+            ),
             max_retries=0,
+            evidence_input=evidence,
         )
 
     @classmethod
@@ -332,7 +520,7 @@ class DurableResearchExecutionIntent:
             "pipeline_version", "prompt_contract_version", "max_retries",
             "flags", "stage", "prompt_input",
         }
-        if set(payload) != expected:
+        if set(payload) not in (expected, expected | {"evidence_input"}):
             raise DurableExecutionIntentError("durable execution intent has unsupported or missing fields.")
         if payload["schema"] != _SCHEMA or payload["workflow"] != "RESEARCH" or payload["mode"] != "single":
             raise DurableExecutionIntentError("durable execution intent schema/workflow/mode is invalid.")
@@ -383,10 +571,21 @@ class DurableResearchExecutionIntent:
         max_web_searches = _integer(
             payload["max_web_searches"], field="max_web_searches", minimum=0,
         )
+        evidence = (
+            _evidence_input(payload["evidence_input"])
+            if "evidence_input" in payload
+            else None
+        )
+        if evidence is not None and max_web_searches != 0:
+            raise DurableExecutionIntentError(
+                "evidence research requires max_web_searches=0.",
+                code="EVIDENCE_REQUIRES_ZERO_SEARCHES",
+            )
         expected_projected, expected_pessimistic = _cost_projection(
             profile=profile,
             max_web_searches=max_web_searches,
             max_tokens=max_tokens,
+            evidence_input=evidence,
         )
         projected = _money(
             payload["projected_cost_usd"],
@@ -404,6 +603,14 @@ class DurableResearchExecutionIntent:
             )
         pipeline_version = _text(payload["pipeline_version"], field="pipeline_version")
         prompt_contract_version = _text(payload["prompt_contract_version"], field="prompt_contract_version")
+        if (evidence is not None) != (
+            prompt_contract_version == EVIDENCE_PROMPT_CONTRACT_VERSION
+        ):
+            raise DurableExecutionIntentError(
+                "evidence_input and the evidence prompt contract version must "
+                "appear together.",
+                code="EVIDENCE_PROMPT_CONTRACT_MISMATCH",
+            )
         retries = _integer(payload["max_retries"], field="max_retries", minimum=0)
         return cls(
             account_id=_text(payload["account_id"], field="account_id"),
@@ -427,10 +634,11 @@ class DurableResearchExecutionIntent:
             pipeline_version=pipeline_version,
             prompt_contract_version=prompt_contract_version,
             max_retries=retries,
+            evidence_input=evidence,
         )
 
     def as_payload(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "schema": _SCHEMA,
             "account_id": self.account_id,
             "topic_id": self.topic_id,
@@ -462,6 +670,15 @@ class DurableResearchExecutionIntent:
             "max_retries": self.max_retries,
             "flags": {"force_re_research": False},
         }
+        if self.evidence_input is not None:
+            payload["evidence_input"] = {
+                "version": self.evidence_input["version"],
+                "retrievals": [
+                    dict(entry) for entry in self.evidence_input["retrievals"]
+                ],
+                "limits": dict(self.evidence_input["limits"]),
+            }
+        return payload
 
     def as_research_plan(self):
         """Build the provider plan solely from this persisted canonical snapshot."""
@@ -481,10 +698,15 @@ class DurableResearchExecutionIntent:
 
     def is_supported_by_current_worker(self) -> bool:
         """Whether the snapshot is executable by this single-provider worker."""
+        expected_prompt_contract = (
+            EVIDENCE_PROMPT_CONTRACT_VERSION
+            if self.evidence_input is not None
+            else _PROMPT_CONTRACT_VERSION
+        )
         return (
             self.provider == "anthropic"
             and self.pipeline_version == _PIPELINE_VERSION
-            and self.prompt_contract_version == _PROMPT_CONTRACT_VERSION
+            and self.prompt_contract_version == expected_prompt_contract
             and self.max_retries == 0
         )
 
@@ -589,7 +811,25 @@ def durable_execution_intent_fingerprint(payload: Mapping[str, object]) -> str:
     versioned by ``prompt_contract_version``; no mutable account/topic value is
     consulted by the durable worker after enqueue.
     """
+    return frozen_execution_intent_json(payload)[1]
+
+
+def canonical_execution_intent_json(intent_payload: Mapping[str, object]) -> str:
+    """The exact fingerprint preimage encoding of one canonical intent payload."""
+    return json.dumps(
+        intent_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+    )
+
+
+def frozen_execution_intent_json(payload: Mapping[str, object]) -> tuple[str, str]:
+    """Return (canonical intent JSON, its SHA-256 fingerprint) for one payload.
+
+    The JSON string is the literal preimage of the fingerprint; the durable
+    EVIDENCE_RESEARCH approval stores it verbatim, and the SQLite floor
+    recomputes the hash from the stored text (0019).
+    """
     canonical = canonicalize_durable_research_payload(payload)
     intent = canonical["execution_intent"]
-    encoded = json.dumps(intent, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    assert isinstance(intent, dict)
+    encoded = canonical_execution_intent_json(intent)
+    return encoded, hashlib.sha256(encoded.encode("utf-8")).hexdigest()

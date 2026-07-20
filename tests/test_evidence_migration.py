@@ -155,27 +155,32 @@ def evidence_db(tmp_path: Path) -> Path:
 
 # --- Drabina jawnych migracji i dokładny runtime gate ---
 
-def test_runtime_schema_version_is_the_controlled_fetch_migration():
-    # E2-B: runtime gate wymaga dokładnie 0018; 0016/0017 pozostają w drabinie.
-    from app.storage.db import CONTROLLED_FETCH_SCHEMA_VERSION
+def test_runtime_schema_version_is_the_evidence_research_migration():
+    # E3: runtime gate wymaga dokładnie 0019; 0016-0018 pozostają w drabinie.
+    from app.storage.db import (
+        CONTROLLED_FETCH_SCHEMA_VERSION,
+        EVIDENCE_RESEARCH_SCHEMA_VERSION,
+    )
 
-    assert RUNTIME_SCHEMA_VERSION == CONTROLLED_FETCH_SCHEMA_VERSION
+    assert RUNTIME_SCHEMA_VERSION == EVIDENCE_RESEARCH_SCHEMA_VERSION
+    assert EVIDENCE_RESEARCH_SCHEMA_VERSION == "0019_evidence_research_approvals"
     assert CONTROLLED_FETCH_SCHEMA_VERSION == "0018_controlled_fetch_lifecycle"
     assert EVIDENCE_SCHEMA_VERSION == "0016_evidence_foundation"
     canonical = canonical_migration_versions()
-    assert canonical[-1] == CONTROLLED_FETCH_SCHEMA_VERSION
-    assert canonical[-2] == EVIDENCE_PIPELINE_SCHEMA_VERSION
-    assert canonical[-3] == EVIDENCE_SCHEMA_VERSION
-    assert len(canonical) == 18
+    assert canonical[-1] == EVIDENCE_RESEARCH_SCHEMA_VERSION
+    assert canonical[-2] == CONTROLLED_FETCH_SCHEMA_VERSION
+    assert canonical[-3] == EVIDENCE_PIPELINE_SCHEMA_VERSION
+    assert canonical[-4] == EVIDENCE_SCHEMA_VERSION
+    assert len(canonical) == 19
 
 
-def test_fresh_initialization_reaches_0018_and_creates_evidence_tables(tmp_path):
-    from app.storage.db import CONTROLLED_FETCH_SCHEMA_VERSION
+def test_fresh_initialization_reaches_0019_and_creates_evidence_tables(tmp_path):
+    from app.storage.db import EVIDENCE_RESEARCH_SCHEMA_VERSION
 
     path = tmp_path / "fresh.db"
     applied = initialize_database(path)
-    assert len(applied) == 18
-    assert applied[-1] == CONTROLLED_FETCH_SCHEMA_VERSION
+    assert len(applied) == 19
+    assert applied[-1] == EVIDENCE_RESEARCH_SCHEMA_VERSION
     storage = SqliteStorage.open(path)
     try:
         names = {

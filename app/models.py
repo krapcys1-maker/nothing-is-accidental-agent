@@ -903,6 +903,32 @@ class ControlledFetchApproval(BaseModel):
     consumed_at: datetime | None = None
 
 
+EVIDENCE_RESEARCH_ACTION_TYPE = "EVIDENCE_RESEARCH"
+
+
+class EvidenceResearchApproval(BaseModel):
+    """Jednorazowa zgoda L1 na dokładnie jeden evidence research jednego joba.
+
+    Zgoda wiąże job, konto, temat i fingerprint zamrożonego execution intentu
+    oraz trwale przechowuje jego pełny kanoniczny JSON (preimage fingerprintu:
+    retrieval IDs, canonical hashe, provider, model, limity, cap, projekcje).
+    Wygasa, jest konsumowana atomowo najwyżej raz — w tej samej transakcji co
+    rezerwacja provider attemptu — i nigdy nie przenosi się na inny job
+    (podłogi SQLite migracji 0019, ta sama tabela co zgody controlled fetch)."""
+
+    id: int | None = None
+    job_id: str
+    account_id: str
+    topic_id: int
+    action_type: str = EVIDENCE_RESEARCH_ACTION_TYPE
+    intent_fingerprint: str
+    execution_intent_json: str
+    approved_by: str
+    approved_at: datetime
+    expires_at: datetime
+    consumed_at: datetime | None = None
+
+
 class ControlledFetchAttempt(BaseModel):
     """Trwały zapis dokładnie jednej próby requestu kontrolowanego pobrania."""
 

@@ -6,7 +6,7 @@ import json
 import logging
 import os
 import sqlite3
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -26,7 +26,9 @@ from app.models import (
     ControlledFetchTransportAuthorization,
     _issue_controlled_fetch_transport_authorization,
     DurableProviderAttemptContext,
+    EVIDENCE_RESEARCH_ACTION_TYPE,
     EvidenceExcerpt,
+    EvidenceResearchApproval,
     EvidenceRetrieval,
     EvidenceRetrievalStatus,
     ExecutionResolution,
@@ -84,6 +86,7 @@ from app.ports.storage import (
     BudgetReservationError,
     ControlledFetchAuthorizationError,
     ControlledFetchRetrievalNotOk,
+    EvidenceResearchAuthorizationError,
     JobConflictError,
     JobPayloadValidationError,
     JobRunConflictError,
@@ -102,8 +105,11 @@ from app.ports.storage import (
 from app.research.durable_intent import (
     DurableExecutionIntentError,
     DurableResearchExecutionIntent,
+    MAX_EVIDENCE_CHARS_PER_RETRIEVAL,
+    MAX_EVIDENCE_TOTAL_CHARS,
     canonicalize_durable_research_payload,
     durable_execution_intent_fingerprint,
+    frozen_execution_intent_json,
 )
 from app.research.offline_evidence_intent import (
     OfflineEvidenceIntentError,
@@ -137,6 +143,20 @@ from app.storage.db import (
     require_connection_schema,
     require_database_schema,
 )
+
+
+@dataclass(frozen=True)
+class EvidenceResearchCorpus:
+    """Approved evidence corpus of one durable evidence-research execution.
+
+    Retrievale są w dokładnej kolejności zamrożonego intentu; JSON i
+    fingerprint to autorytatywny snapshot z payloadu, zweryfikowany bajt-w-bajt
+    z wierszem approvalu w tej samej transakcji, w której powstał ten obiekt.
+    """
+
+    retrievals: tuple[EvidenceRetrieval, ...]
+    execution_intent_json: str
+    intent_fingerprint: str
 
 
 _RESEARCH_USAGE_TASKS = (
@@ -1853,8 +1873,8 @@ class SqliteStorage:
                 canonical_payload = canonicalize_durable_research_payload(payload)
                 intent_raw = canonical_payload["execution_intent"]
                 assert isinstance(intent_raw, dict)
-                DurableResearchExecutionIntent.from_payload(intent_raw)
-                intent_fingerprint = durable_execution_intent_fingerprint(payload)
+                intent = DurableResearchExecutionIntent.from_payload(intent_raw)
+                intent_json, intent_fingerprint = frozen_execution_intent_json(payload)
             except (TypeError, json.JSONDecodeError) as exc:
                 raise JobRunRelationError(
                     "MALFORMED_DURABLE_V2_PAYLOAD",
@@ -1929,6 +1949,17 @@ class SqliteStorage:
                 raise BudgetReservationError("Provider reservation would exceed the global monthly limit.")
             if day_real_amount + total_reserved > daily_limit:
                 raise BudgetReservationError("Provider reservation would exceed the global daily limit.")
+            if intent.evidence_input is not None:
+                # E3: konsumpcja jednorazowej zgody L1 i rezerwacja attemptu są
+                # JEDNĄ transakcją. Każda odmowa poniżej wycofuje całość: zero
+                # konsumpcji, zero attemptu, zero requestu, zero kosztu.
+                self._consume_evidence_research_approval(
+                    execution,
+                    intent,
+                    canonical_intent_json=intent_json,
+                    intent_fingerprint=intent_fingerprint,
+                    current_ts=current_ts,
+                )
             self.conn.execute(
                 "INSERT INTO provider_attempts (job_id,stage,attempt_no,request_id,status,"
                 "execution_intent_fingerprint,reserved_amount_usd,reserved_at) VALUES (?,?,?,?,?,?,?,?)",
@@ -7445,6 +7476,437 @@ class SqliteStorage:
     # przez deterministyczny weryfikator. Podłogi SQLite migracji 0016 bronią
     # tych samych relacji przed raw writerem. Wszystkie operacje działają w
     # jawnym zakresie jednego konta.
+
+    # --- Evidence research approval (Etap 2, fala E3) ---
+    # Jednorazowa zgoda L1 EVIDENCE_RESEARCH żyje w TEJ SAMEJ tabeli co zgody
+    # controlled fetch (0019 generalizuje 0018 — brak nowej rodziny tabel).
+    # Wiersz zgody trwale przechowuje pełny kanoniczny execution_intent JSON
+    # (preimage fingerprintu), więc autorytatywny evidence input przeżywa
+    # restart i każdą późniejszą mutację jobs.payload_json. Konsumpcja odbywa
+    # się atomowo w transakcji `begin_provider_attempt`.
+
+    @staticmethod
+    def _evidence_research_approval_from_row(row: sqlite3.Row) -> EvidenceResearchApproval:
+        return EvidenceResearchApproval(
+            id=int(row["id"]), job_id=row["job_id"], account_id=row["account_id"],
+            topic_id=int(row["topic_id"]), action_type=row["action_type"],
+            intent_fingerprint=row["intent_fingerprint"],
+            execution_intent_json=row["execution_intent_json"],
+            approved_by=row["approved_by"], approved_at=row["approved_at"],
+            expires_at=row["expires_at"], consumed_at=row["consumed_at"],
+        )
+
+    def get_evidence_research_approval_for_job(
+        self, job_id: str,
+    ) -> EvidenceResearchApproval | None:
+        row = self.conn.execute(
+            "SELECT * FROM controlled_fetch_approvals WHERE job_id=? AND action_type=?",
+            (job_id, EVIDENCE_RESEARCH_ACTION_TYPE),
+        ).fetchone()
+        return None if row is None else self._evidence_research_approval_from_row(row)
+
+    def _frozen_evidence_contract_from_payload(
+        self, payload_text: str, job_id: str,
+    ) -> tuple[DurableResearchExecutionIntent, str, str]:
+        """Re-derive (intent, canonical JSON, fingerprint) from one payload text."""
+        try:
+            payload = json.loads(payload_text)
+            if not isinstance(payload, dict):
+                raise EvidenceResearchAuthorizationError(
+                    "INTENT_INVALID", f"job {job_id!r} payload is not a JSON object.",
+                )
+            canonical = canonicalize_durable_research_payload(payload)
+            intent_raw = canonical["execution_intent"]
+            assert isinstance(intent_raw, dict)
+            intent = DurableResearchExecutionIntent.from_payload(intent_raw)
+            intent_json, fingerprint = frozen_execution_intent_json(payload)
+        except (json.JSONDecodeError, TypeError, DurableExecutionIntentError) as exc:
+            raise EvidenceResearchAuthorizationError(
+                "INTENT_INVALID", f"job {job_id!r} payload is not a valid durable intent.",
+            ) from exc
+        if intent.evidence_input is None:
+            raise EvidenceResearchAuthorizationError(
+                "INTENT_NOT_EVIDENCE",
+                f"job {job_id!r} durable intent carries no evidence_input.",
+            )
+        return intent, intent_json, fingerprint
+
+    def _validate_evidence_rows(
+        self, account_id: str, evidence_input: dict[str, object],
+    ) -> list[sqlite3.Row]:
+        """Fail-closed comparison of the frozen evidence entries with the rows.
+
+        Każdy wpis intentu musi wskazywać ISTNIEJĄCY retrieval tego samego
+        konta w statusie OK, którego kanon zgadza się literalnie (hash zapisany
+        i hash PRZELICZONY z utrwalonego tekstu) i długościowo z zamrożonym
+        kontraktem; limity corpusu są rewalidowane w całości.
+        """
+        retrievals = evidence_input["retrievals"]
+        assert isinstance(retrievals, list)
+        rows: list[sqlite3.Row] = []
+        total_chars = 0
+        for entry in retrievals:
+            retrieval_id = int(entry["retrieval_id"])
+            expected_sha = str(entry["canonical_sha256"])
+            expected_chars = int(entry["canonical_chars"])
+            row = self.conn.execute(
+                "SELECT * FROM evidence_retrievals WHERE id=? AND account_id=?",
+                (retrieval_id, account_id),
+            ).fetchone()
+            if row is None:
+                raise EvidenceResearchAuthorizationError(
+                    "EVIDENCE_RETRIEVAL_MISSING",
+                    f"retrieval id={retrieval_id} does not exist for this account.",
+                )
+            if row["status"] != EvidenceRetrievalStatus.OK.value:
+                raise EvidenceResearchAuthorizationError(
+                    "EVIDENCE_RETRIEVAL_NOT_OK",
+                    f"retrieval id={retrieval_id} status={row['status']} is not usable.",
+                )
+            canonical_text = row["canonical_text"]
+            if (
+                row["canonical_sha256"] != expected_sha
+                or sha256_hex(canonical_text) != expected_sha
+            ):
+                raise EvidenceResearchAuthorizationError(
+                    "EVIDENCE_HASH_MISMATCH",
+                    f"retrieval id={retrieval_id} canonical hash diverged from the frozen intent.",
+                )
+            if (
+                int(row["canonical_chars"]) != expected_chars
+                or len(canonical_text) != expected_chars
+            ):
+                raise EvidenceResearchAuthorizationError(
+                    "EVIDENCE_CHARS_MISMATCH",
+                    f"retrieval id={retrieval_id} canonical size diverged from the frozen intent.",
+                )
+            if expected_chars > MAX_EVIDENCE_CHARS_PER_RETRIEVAL:
+                raise EvidenceResearchAuthorizationError(
+                    "EVIDENCE_CORPUS_LIMIT_EXCEEDED",
+                    f"retrieval id={retrieval_id} exceeds the per-retrieval character limit.",
+                )
+            total_chars += expected_chars
+            rows.append(row)
+        if total_chars > MAX_EVIDENCE_TOTAL_CHARS:
+            raise EvidenceResearchAuthorizationError(
+                "EVIDENCE_CORPUS_LIMIT_EXCEEDED",
+                f"evidence corpus of {total_chars} characters exceeds the total limit.",
+            )
+        return rows
+
+    def _require_usable_evidence_research_approval(
+        self, job_id: str, *, account_id: str, topic_id: int,
+        canonical_intent_json: str, intent_fingerprint: str, current_ts: str,
+        require_consumed: bool = False,
+    ) -> sqlite3.Row:
+        """One closed matrix of approval refusals, shared by every caller."""
+        row = self.conn.execute(
+            "SELECT * FROM controlled_fetch_approvals WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+        if row is None:
+            raise EvidenceResearchAuthorizationError(
+                "APPROVAL_MISSING", "no L1 evidence research approval exists for this job.",
+            )
+        if row["action_type"] != EVIDENCE_RESEARCH_ACTION_TYPE:
+            raise EvidenceResearchAuthorizationError(
+                "APPROVAL_ACTION_MISMATCH",
+                "the job approval is not an EVIDENCE_RESEARCH approval.",
+            )
+        if row["account_id"] != account_id:
+            raise EvidenceResearchAuthorizationError(
+                "APPROVAL_ACCOUNT_MISMATCH", "approval account does not own the job.",
+            )
+        if int(row["topic_id"]) != int(topic_id):
+            raise EvidenceResearchAuthorizationError(
+                "APPROVAL_TOPIC_MISMATCH", "approval topic does not match the job.",
+            )
+        if require_consumed:
+            if row["consumed_at"] is None:
+                raise EvidenceResearchAuthorizationError(
+                    "APPROVAL_NOT_CONSUMED",
+                    "the approval was not consumed by this execution.",
+                )
+        elif row["consumed_at"] is not None:
+            raise EvidenceResearchAuthorizationError(
+                "APPROVAL_ALREADY_CONSUMED", "the one-shot approval was already consumed.",
+            )
+        if str(row["expires_at"]) <= current_ts and not require_consumed:
+            raise EvidenceResearchAuthorizationError(
+                "APPROVAL_EXPIRED", "the approval expired before execution.",
+            )
+        if (
+            row["intent_fingerprint"] != intent_fingerprint
+            or row["execution_intent_json"] != canonical_intent_json
+        ):
+            raise EvidenceResearchAuthorizationError(
+                "INTENT_MISMATCH",
+                "the current job payload diverged from the approved frozen intent.",
+            )
+        return row
+
+    def record_evidence_research_approval(
+        self, *, job_id: str, account_id: str, approved_by: str,
+        expires_at: datetime, clock: Clock,
+    ) -> EvidenceResearchApproval:
+        """L1: derive the approval entirely from the frozen durable job contract.
+
+        Fingerprint i pełny kanoniczny execution_intent JSON NIE są przyjmowane
+        od wywołującego — pochodzą wyłącznie z kanonizowanego payloadu joba,
+        więc zgoda nigdy nie może opisywać czegoś innego niż wykonywany
+        kontrakt; retrievale są walidowane względem bazy już przy zgodzie.
+        """
+        if not approved_by.strip():
+            raise EvidenceResearchAuthorizationError(
+                "APPROVER_MISSING", "approved_by must identify the human L1 operator.",
+            )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now_dt = self._job_now(clock=clock)
+            now = _persisted_ts(now_dt)
+            expiry_dt = self._job_now(expires_at)
+            if expiry_dt <= now_dt:
+                raise EvidenceResearchAuthorizationError(
+                    "APPROVAL_EXPIRY_INVALID", "expires_at must be in the future.",
+                )
+            row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                raise EvidenceResearchAuthorizationError(
+                    "JOB_MISSING", f"job {job_id!r} does not exist.",
+                )
+            job = self._job_from_row(row)
+            intent, intent_json, fingerprint = self._frozen_evidence_contract_from_payload(
+                row["payload_json"], job_id,
+            )
+            if job.account_id != account_id or intent.account_id != account_id:
+                raise EvidenceResearchAuthorizationError(
+                    "ACCOUNT_MISMATCH", "approval account must own the frozen job contract.",
+                )
+            if job.topic_id is None or int(job.topic_id) != intent.topic_id:
+                raise EvidenceResearchAuthorizationError(
+                    "TOPIC_MISMATCH", "job topic must match the frozen intent.",
+                )
+            if job.status is not JobStatus.QUEUED:
+                raise EvidenceResearchAuthorizationError(
+                    "JOB_NOT_APPROVABLE",
+                    f"approval must precede execution; job status is {job.status.value}.",
+                )
+            if self.conn.execute(
+                "SELECT 1 FROM controlled_fetch_approvals WHERE job_id=?", (job_id,),
+            ).fetchone() is not None:
+                raise EvidenceResearchAuthorizationError(
+                    "APPROVAL_ALREADY_EXISTS", "the job already carries its one approval.",
+                )
+            assert intent.evidence_input is not None
+            self._validate_evidence_rows(account_id, intent.evidence_input)
+            cursor = self.conn.execute(
+                "INSERT INTO controlled_fetch_approvals (job_id,account_id,action_type,"
+                "requested_url,intent_fingerprint,timeout_seconds,max_bytes,max_redirects,"
+                "topic_id,execution_intent_json,approved_by,approved_at,expires_at,"
+                "consumed_at) VALUES (?,?,?,NULL,?,NULL,NULL,NULL,?,?,?,?,?,NULL)",
+                (
+                    job_id, account_id, EVIDENCE_RESEARCH_ACTION_TYPE,
+                    fingerprint, intent.topic_id, intent_json,
+                    approved_by.strip(), now, _persisted_ts(expiry_dt),
+                ),
+            )
+            approval_id = int(cursor.lastrowid)
+            stored = self.conn.execute(
+                "SELECT * FROM controlled_fetch_approvals WHERE id=?", (approval_id,),
+            ).fetchone()
+            self.conn.commit()
+            assert stored is not None
+            return self._evidence_research_approval_from_row(stored)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def _consume_evidence_research_approval(
+        self, execution: JobExecutionContext, intent: DurableResearchExecutionIntent,
+        *, canonical_intent_json: str, intent_fingerprint: str, current_ts: str,
+    ) -> None:
+        """Atomic one-shot consumption inside the reservation transaction.
+
+        Wywoływane WYŁĄCZNIE z `begin_provider_attempt` (ta sama transakcja co
+        INSERT RESERVED). Każda odmowa wycofuje całą transakcję — zero
+        konsumpcji, zero attemptu.
+        """
+        assert intent.evidence_input is not None
+        approval_row = self._require_usable_evidence_research_approval(
+            execution.job_id,
+            account_id=intent.account_id,
+            topic_id=intent.topic_id,
+            canonical_intent_json=canonical_intent_json,
+            intent_fingerprint=intent_fingerprint,
+            current_ts=current_ts,
+        )
+        self._validate_evidence_rows(intent.account_id, intent.evidence_input)
+        consumed = self.conn.execute(
+            "UPDATE controlled_fetch_approvals SET consumed_at=? "
+            "WHERE id=? AND consumed_at IS NULL",
+            (current_ts, approval_row["id"]),
+        )
+        if consumed.rowcount != 1:
+            raise EvidenceResearchAuthorizationError(
+                "APPROVAL_CONSUME_RACE", "approval consumption compare-and-swap failed.",
+            )
+
+    def load_evidence_research_corpus(
+        self, execution: JobExecutionContext,
+    ) -> "EvidenceResearchCorpus":
+        """Fail-closed pre-reservation validation of approval and evidence.
+
+        Zwraca zatwierdzony corpus (retrievale w kolejności zamrożonego
+        intentu). Rozjazd przed rezerwacją = typowana odmowa: zero konsumpcji
+        zgody, zero attemptu, zero requestu, zero usage, zero kosztu.
+        """
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            self._require_job_execution_fence(execution, now, flow=ResearchFlow.SINGLE)
+            payload_row = self.conn.execute(
+                "SELECT payload_json FROM jobs WHERE id=?", (execution.job_id,),
+            ).fetchone()
+            if payload_row is None:
+                raise StaleJobExecutionError(execution.job_id)
+            intent, intent_json, fingerprint = self._frozen_evidence_contract_from_payload(
+                payload_row["payload_json"], execution.job_id,
+            )
+            self._require_usable_evidence_research_approval(
+                execution.job_id,
+                account_id=intent.account_id,
+                topic_id=intent.topic_id,
+                canonical_intent_json=intent_json,
+                intent_fingerprint=fingerprint,
+                current_ts=now,
+            )
+            rows = self._validate_evidence_rows(
+                intent.account_id, intent.evidence_input,
+            )
+            corpus = EvidenceResearchCorpus(
+                retrievals=tuple(self._row_to_evidence_retrieval(row) for row in rows),
+                execution_intent_json=intent_json,
+                intent_fingerprint=fingerprint,
+            )
+            self.conn.commit()
+            return corpus
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def assert_evidence_research_snapshot(
+        self, execution: JobExecutionContext, *, expected_intent_fingerprint: str,
+    ) -> None:
+        """Provider-boundary recheck of the frozen intent, approval and evidence.
+
+        Zgodnie z aktualnym wzorcem kontroli aktualności trwałego stanu:
+        wołane po REQUEST_STARTED i tuż przed granicą SDK. Rozjazd podnosi
+        typowaną odmowę, którą pipeline mapuje na istniejący kontrakt
+        NEEDS_RECONCILIATION — nigdy na drugi request.
+        """
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            self._require_job_execution_fence(execution, now, flow=ResearchFlow.SINGLE)
+            payload_row = self.conn.execute(
+                "SELECT payload_json FROM jobs WHERE id=?", (execution.job_id,),
+            ).fetchone()
+            if payload_row is None:
+                raise StaleJobExecutionError(execution.job_id)
+            intent, intent_json, fingerprint = self._frozen_evidence_contract_from_payload(
+                payload_row["payload_json"], execution.job_id,
+            )
+            if fingerprint != expected_intent_fingerprint:
+                raise EvidenceResearchAuthorizationError(
+                    "INTENT_MISMATCH",
+                    "the persisted payload diverged from the frozen evidence snapshot.",
+                )
+            self._require_usable_evidence_research_approval(
+                execution.job_id,
+                account_id=intent.account_id,
+                topic_id=intent.topic_id,
+                canonical_intent_json=intent_json,
+                intent_fingerprint=fingerprint,
+                current_ts=now,
+                require_consumed=True,
+            )
+            self._validate_evidence_rows(intent.account_id, intent.evidence_input)
+            self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def record_job_verified_evidence_excerpt(
+        self, execution: JobExecutionContext, retrieval_id: int, *,
+        claim_text: str, excerpt_text: str, start_offset: int, end_offset: int,
+    ) -> EvidenceExcerpt:
+        """E1 verifier plus persistence, fenced by the active job execution.
+
+        Ten sam deterministyczny weryfikator co spine offline; zapis jest
+        możliwy wyłącznie pod świeżym lease (old-owner/expired lease nie może
+        utrwalić excerptu). Odmowa weryfikatora nie utrwala niczego.
+        """
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_execution_timestamp(execution)
+            fence = self._require_job_execution_fence(
+                execution, now, flow=ResearchFlow.SINGLE,
+            )
+            account_id = fence["research_account_id"]
+            row = self.conn.execute(
+                "SELECT * FROM evidence_retrievals WHERE id=? AND account_id=?",
+                (retrieval_id, account_id),
+            ).fetchone()
+            if row is None:
+                raise EvidenceVerificationError(EvidenceVerdict.rejected(
+                    EvidenceRejectionReason.RETRIEVAL_NOT_FOUND,
+                    f"retrieval id={retrieval_id} does not exist for this account",
+                ))
+            retrieval = self._row_to_evidence_retrieval(row)
+            verdict = verify_evidence_excerpt(
+                retrieval,
+                claim_text=claim_text,
+                excerpt_text=excerpt_text,
+                start_offset=start_offset,
+                end_offset=end_offset,
+            )
+            if not verdict.approved:
+                raise EvidenceVerificationError(verdict)
+            try:
+                cursor = self.conn.execute(
+                    "INSERT INTO evidence_excerpts (account_id, retrieval_id,"
+                    " claim_text, claim_sha256, excerpt_text, start_offset,"
+                    " end_offset, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                    (
+                        account_id, retrieval_id, claim_text,
+                        sha256_hex(claim_text), excerpt_text,
+                        start_offset, end_offset, now,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                if "UNIQUE" in str(exc).upper():
+                    raise EvidenceVerificationError(EvidenceVerdict.rejected(
+                        EvidenceRejectionReason.DUPLICATE_EXCERPT,
+                        "identical excerpt already recorded for this claim and range",
+                    )) from exc
+                raise
+            excerpt_id = int(cursor.lastrowid)
+            self.conn.commit()
+            return EvidenceExcerpt(
+                id=excerpt_id, account_id=account_id, retrieval_id=retrieval_id,
+                claim_text=claim_text, claim_sha256=sha256_hex(claim_text),
+                excerpt_text=excerpt_text, start_offset=start_offset,
+                end_offset=end_offset, created_at=execution.now(),
+            )
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    # --- Evidence foundation (Etap 2, fala E1) ---
 
     def record_evidence_retrieval(
         self,

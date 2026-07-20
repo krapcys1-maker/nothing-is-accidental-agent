@@ -38,6 +38,35 @@ from app.storage.db import (
 QUIESCENT = lambda _path: ()  # noqa: E731
 
 
+@pytest.fixture(autouse=True)
+def _frozen_supported_0018_ladder(monkeypatch):
+    """Pin the CLOSED 0014->0018 orchestrator to its frozen 18-step ladder.
+
+    Wykonana i zamknięta produkcyjna migracja 0014->0018 była zwalidowana na
+    dokładnej drabinie 0001..0018.  Repo zawiera już 0019 (E3), więc w realnym
+    repozytorium orchestrator odmawia trwale fail-closed
+    (MIGRATION_CONTRACT_INVALID — pinowane osobnym testem w
+    test_e3_migration_0019.py).  Te historyczne testy nadal dowodzą pełnego
+    zachowania narzędzia względem JEGO zamrożonego kontraktu.
+    """
+    from app.storage.db import MIGRATIONS_DIR, canonical_migration_versions
+
+    real = canonical_migration_versions()
+    frozen = tuple(
+        version for version in real
+        if version <= CONTROLLED_FETCH_SCHEMA_VERSION
+    )
+    assert len(frozen) == 18 and frozen[-1] == CONTROLLED_FETCH_SCHEMA_VERSION
+
+    def frozen_ladder(migrations_dir=MIGRATIONS_DIR):
+        del migrations_dir
+        return frozen
+
+    monkeypatch.setattr(
+        migration_module, "canonical_migration_versions", frozen_ladder,
+    )
+
+
 def _force_delete_journal_mode(path: Path) -> None:
     connection = sqlite3.connect(path)
     try:
