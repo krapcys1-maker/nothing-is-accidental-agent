@@ -408,6 +408,87 @@ def _cmd_approve_evidence_research(args: argparse.Namespace) -> int:
                 pass
 
 
+def _cmd_controlled_fetch_live_once(args: argparse.Namespace) -> int:
+    """One-shot executor for exactly one approved CONTROLLED_FETCH job.
+
+    Opens the minimal security profile process-locally (no YAML/.env/flag edits),
+    executes ONLY the named job through the existing dispatcher and runner, and
+    always restores fail-closed.  The durable single-use L1 approval remains the
+    only authorization; this command creates neither a job nor an approval.
+    """
+    from app.operations.controlled_fetch_live import (
+        ControlledFetchLiveRequest,
+        run_controlled_fetch_live_once,
+    )
+    from app.operations.controlled_live import is_fail_closed
+
+    settings = load_settings()
+    fake_mode = (
+        os.environ.get("NIA_TEST_MODE") == "1"
+        and os.environ.get("NIA_CONTROLLED_FETCH_LIVE_FAKE") == "1"
+    )
+    if fake_mode:
+        test_db = os.environ.get("NIA_CONTROLLED_FETCH_LIVE_TEST_DB_PATH")
+        if not test_db:
+            print(
+                "CONTROLLED-FETCH-LIVE-ONCE: fake gate requires a temporary DB path.",
+                file=sys.stderr,
+            )
+            return 2
+        protected = (settings.project_root / "data" / "agent.db").resolve()
+        if Path(test_db).resolve() == protected:
+            print(
+                "CONTROLLED-FETCH-LIVE-ONCE: fake gate refuses the production database.",
+                file=sys.stderr,
+            )
+            return 2
+        settings = replace(settings, db_path=Path(test_db))
+
+    # Schema authorization precedes any storage or gate work.
+    require_database_schema(settings.db_path)
+
+    request = ControlledFetchLiveRequest(
+        job_id=args.job_id,
+        account_id=args.account_id,
+        expected_db_sha256=args.expected_db_sha,
+        expected_schema=args.expected_schema,
+        expected_branch=args.expected_branch,
+        expected_head=args.expected_head,
+    )
+    storage = SqliteStorage.open(settings.db_path)
+    try:
+        outcome = run_controlled_fetch_live_once(
+            request,
+            settings=settings,
+            storage=storage,
+            project_root=settings.project_root,
+            clock=SystemClock(),
+        )
+    finally:
+        storage.close()
+
+    print(
+        f"CONTROLLED-FETCH-LIVE-ONCE: {outcome.status} reason={outcome.reason_code}"
+        + (
+            f" retrieval_id={outcome.retrieval_id}"
+            if outcome.retrieval_id is not None
+            else ""
+        )
+    )
+    print(json.dumps(
+        {
+            "status": outcome.status,
+            "reason_code": outcome.reason_code,
+            "retrieval_id": outcome.retrieval_id,
+            "worker_status": outcome.worker_status,
+            "flags_after": outcome.flags_after,
+            "fail_closed": bool(outcome.flags_after) and is_fail_closed(outcome.flags_after),
+        },
+        ensure_ascii=False, sort_keys=True,
+    ))
+    return outcome.exit_code
+
+
 def _build_worker(
     settings: Settings, offline_only: bool = False, *,
     clock: Clock | None = None,
@@ -1220,6 +1301,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_controlled_live.add_argument("--max-attempts", type=int, default=1)
     p_controlled_live.add_argument("--max-retries", type=int, default=0)
     p_controlled_live.set_defaults(func=_cmd_controlled_live_once)
+
+    p_fetch_live = sub.add_parser(
+        "controlled-fetch-live-once",
+        help="Execute exactly one approved CONTROLLED_FETCH job: opens the minimal "
+             "security profile process-locally and always restores fail-closed. "
+             "URL/timeout/limits come only from the frozen job intent.",
+    )
+    p_fetch_live.add_argument("--job-id", required=True)
+    p_fetch_live.add_argument("--account-id", required=True)
+    p_fetch_live.add_argument("--expected-db-sha", required=True)
+    p_fetch_live.add_argument("--expected-schema", required=True)
+    p_fetch_live.add_argument("--expected-branch", required=True)
+    p_fetch_live.add_argument("--expected-head", required=True)
+    p_fetch_live.set_defaults(func=_cmd_controlled_fetch_live_once)
 
     p_quiescence_check = sub.add_parser(
         "controlled-live-quiescence-check",

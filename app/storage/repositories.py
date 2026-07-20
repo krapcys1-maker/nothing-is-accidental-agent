@@ -1068,6 +1068,51 @@ class SqliteStorage:
                 self.conn.rollback()
             raise
 
+    def claim_specific_job(
+        self, job_id: str, lease_owner: str, lease_seconds: int, *,
+        now: datetime | None = None, clock: Clock | None = None,
+    ) -> JobLease | None:
+        """Atomically leases EXACTLY the named QUEUED job, never any other.
+
+        Unlike :meth:`claim_next_job` this performs no queue-wide deadline/attempt
+        sweep and no priority selection: it only compare-and-swaps the one
+        ``job_id`` from QUEUED to LEASED. Other queued jobs are never selected,
+        failed, or mutated by this call. If the named job is not currently an
+        eligible QUEUED row (wrong id, already leased/terminal, deadline elapsed,
+        or attempts exhausted) it returns ``None`` and touches nothing.
+        """
+        if not lease_owner.strip() or lease_seconds <= 0:
+            raise ValueError("lease_owner must be non-empty and lease_seconds must be positive.")
+        if not job_id.strip():
+            raise ValueError("job_id must be non-empty.")
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current = self._job_now(now, clock=clock)
+            current_ts = _persisted_ts(current)
+            lease_until = _persisted_ts(current + timedelta(seconds=lease_seconds))
+            cursor = self.conn.execute(
+                "UPDATE jobs SET status='LEASED', lease_owner=?, lease_expires_at=?, "
+                "attempts=attempts+1, started_at=COALESCE(started_at, ?), updated_at=? "
+                "WHERE id=? AND status='QUEUED' AND earliest_run_at <= ? "
+                "AND (deadline_at IS NULL OR deadline_at >= ?) AND attempts < max_attempts",
+                (lease_owner, lease_until, current_ts, current_ts, job_id, current_ts, current_ts),
+            )
+            if cursor.rowcount != 1:
+                self.conn.commit()
+                return None
+            row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            self.conn.commit()
+            assert row is not None
+            claimed = self._job_from_row(row)
+            assert claimed.lease_expires_at is not None
+            return JobLease(
+                job=claimed, lease_owner=lease_owner, lease_expires_at=claimed.lease_expires_at,
+            )
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
     def _transition_leased_job(
         self, job_id: str, lease_owner: str, target: JobStatus, *, error: str | None,
         now: datetime | None, clock: Clock | None, release_budget: bool,

@@ -75,6 +75,7 @@ class Worker:
         policy: PolicyEngine,
         dispatcher: Dispatcher,
         lease_owner: str,
+        target_job_id: str | None = None,
         lease_seconds: int = 60,
         heartbeat_interval_seconds: float,
         heartbeat_startup_timeout_seconds: float,
@@ -102,6 +103,7 @@ class Worker:
         self._policy = policy
         self._dispatcher = dispatcher
         self._lease_owner = lease_owner
+        self._target_job_id = target_job_id
         self._lease_seconds = lease_seconds
         self._heartbeat_interval_seconds = heartbeat_interval_seconds
         self._heartbeat_startup_timeout_seconds = heartbeat_startup_timeout_seconds
@@ -118,9 +120,17 @@ class Worker:
         if not runtime.allowed:
             return WorkerIterationResult(WorkerIterationStatus.BLOCKED, detail=runtime.code)
 
-        lease = self._storage.claim_next_job(
-            self._lease_owner, self._lease_seconds, clock=self._clock,
-        )
+        if self._target_job_id is None:
+            lease = self._storage.claim_next_job(
+                self._lease_owner, self._lease_seconds, clock=self._clock,
+            )
+        else:
+            # One-shot single-job composition root: lease ONLY the named job so a
+            # concurrently queued job can never be claimed or run by this worker.
+            lease = self._storage.claim_specific_job(
+                self._target_job_id, self._lease_owner, self._lease_seconds,
+                clock=self._clock,
+            )
         if lease is None:
             return WorkerIterationResult(WorkerIterationStatus.IDLE)
         job = lease.job
