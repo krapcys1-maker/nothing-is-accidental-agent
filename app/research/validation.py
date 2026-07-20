@@ -4,6 +4,7 @@ Artykuł nie przechodzi dalej, jeśli spełniona jest któraś twarda reguła od
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from app.models import ResearchRecommendation, SourceVerification
@@ -30,6 +31,43 @@ class ValidationOutcome:
         return self.recommendation == ResearchRecommendation.PROCEED
 
 
+def count_distinct_verified_evidence_sources(
+    sources: Iterable[object],
+    corpus_retrievals: Iterable[object],
+) -> int:
+    """E3: liczba źródeł evidence research = odrębne ZATWIERDZONE retrievale.
+
+    Unikalna tożsamość źródła jest wyprowadzana z trwałego lineage —
+    `evidence_retrieval_id` zatwierdzonego korpusu, NIE z liczby rekordów
+    `sources` ani liczby excerptów. Reguły (zgodne z kontraktem E3):
+    - liczą się WYŁĄCZNIE źródła `VERIFIED` (UNVERIFIED/FAILED poza count);
+    - źródło musi mapować się (po `requested_url` lub `final_url`) na retrieval
+      zatwierdzonego korpusu — URL spoza korpusu nie tworzy nowego źródła;
+    - wiele rekordów/fragmentów wskazujących ten sam retrieval = jedno źródło;
+    - różne URL-e wskazujące ten sam retrieval nie zwiększają count.
+    """
+    identity_by_url: dict[str, int] = {}
+    for retrieval in corpus_retrievals:
+        retrieval_id = getattr(retrieval, "id", None)
+        if retrieval_id is None:
+            continue
+        for url in (
+            getattr(retrieval, "requested_url", None),
+            getattr(retrieval, "final_url", None),
+        ):
+            if isinstance(url, str) and url:
+                identity_by_url[url] = int(retrieval_id)
+    identities: set[int] = set()
+    for source in sources:
+        if getattr(source, "verification", None) != SourceVerification.VERIFIED:
+            continue
+        retrieval_id = identity_by_url.get(getattr(source, "url", None))
+        if retrieval_id is None:
+            continue
+        identities.add(retrieval_id)
+    return len(identities)
+
+
 def validate_draft(
     draft: ResearchDraft,
     *,
@@ -37,6 +75,7 @@ def validate_draft(
     min_confidence: float,
     min_source_quality: float,
     min_verified_sources: int = 0,
+    evidence_source_count: int | None = None,
 ) -> ValidationOutcome:
     """`min_verified_sources` (P0-2b, docs/archive/superseded_plans/AUDYT_ARCHITEKTURY_2026-07-12.md): domyślnie 0
     (nieaktywne — zachowuje dotychczasowe zachowanie dla wywołujących, którzy tego nie
@@ -48,7 +87,15 @@ def validate_draft(
 
     sensible_sources = [s for s in draft.sources
                         if s.verification != SourceVerification.FAILED]
-    if len(sensible_sources) < min_sources:
+    # E3: dla evidence research wywołujący podaje liczbę ODRĘBNYCH zatwierdzonych
+    # retrievali (evidence_source_count), bo trwały lineage source→retrieval jest
+    # znany tylko tam; wiele rekordów jednego retrievalu = jedno źródło. Bez tego
+    # (legacy web-search/offline) count = liczba sensownych rekordów — bez zmian.
+    effective_source_count = (
+        len(sensible_sources) if evidence_source_count is None
+        else evidence_source_count
+    )
+    if effective_source_count < min_sources:
         reasons.append(TOO_FEW_SOURCES)
 
     if min_verified_sources > 0:

@@ -95,7 +95,11 @@ from app.research.cost_estimator import (
     estimate_worst_case_search_call_usd,
 )
 from app.research.diagnostics import ResponseDiagnostics, write_diagnostics
-from app.research.validation import TOO_FEW_SOURCES, validate_draft
+from app.research.validation import (
+    TOO_FEW_SOURCES,
+    count_distinct_verified_evidence_sources,
+    validate_draft,
+)
 
 
 @dataclass
@@ -1078,12 +1082,21 @@ def run_research_pipeline(
             storage, execution_context, draft, evidence_corpus,
         )
 
-    # 8. Walidacja jakości (bramka).
+    # 8. Walidacja jakości (bramka). E3: dla evidence research liczba źródeł to
+    # liczba ODRĘBNYCH zatwierdzonych retrievali (lineage source→retrieval), nie
+    # liczba rekordów source — jeden retrieval zacytowany kilkukrotnie = jedno
+    # źródło i przy min_sources musi dać TOO_FEW_SOURCES.
+    evidence_source_count = None
+    if evidence_intent is not None and evidence_corpus is not None:
+        evidence_source_count = count_distinct_verified_evidence_sources(
+            draft.sources, evidence_corpus.retrievals,
+        )
     outcome = validate_draft(
         draft,
         min_sources=settings.research_min_sources,
         min_confidence=settings.research_min_confidence,
         min_source_quality=settings.research_min_source_quality,
+        evidence_source_count=evidence_source_count,
     )
     summary.passed = outcome.passed
     summary.recommendation = outcome.recommendation.value

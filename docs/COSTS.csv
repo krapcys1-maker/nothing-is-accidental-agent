@@ -53,3 +53,4 @@ date,run_id,task,provider,model,input_tokens,output_tokens,cache_read_tokens,cac
 # 2026-07-18 - ETAP 2 / E2-A offline evidence integration spine: fake/temp SQLite, FakeFetch, zero API/SDK/HTTP/provider/browser/publikacji - 0.000000 USD; month total bez zmian 1.012590 USD.
 # 2026-07-19 - ETAP 2 / E2-C controlled fetch live-readiness foundation: 1572 testy offline, exact-once, fake transport/resolver/socket-TLS-HTTP caller, harness E2-C 13/13 + E2-B 13/13 - 0.000000 USD; zero realnego Fetch/DNS/socketu/HTTP/API/provider/browser/publikacji; month total bez zmian 1.012590 USD.
 # 2026-07-19 - Production Schema Migration Orchestrator: 58 testow orchestratora, full/exact-once 1630, partycje i harnessy na temp SQLite - 0.000000 USD; zero migracji produkcji, sieci/API/providera/browsera/publikacji; month total bez zmian 1.012590 USD.
+2026-07-20,95b6b856-f248-45d0-85c7-03bcdebf299c,research,anthropic,claude-sonnet-5,30857,2200,0,0,0,0,0.083714,actual

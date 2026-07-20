@@ -1257,3 +1257,110 @@ def test_fenced_excerpt_writer_rejects_non_canonical_ranges(
     )
     assert stored.id is not None
     assert stored.retrieval_id == int(retrieval.id)
+
+
+# ---------------------------------------------------------------------------
+# Regresja cardinality źródeł: jeden retrieval = jedno źródło (live shape)
+# ---------------------------------------------------------------------------
+
+def _evidence_response_multi(url, entries):
+    """Odpowiedź evidence z wieloma źródłami wskazującymi TEN SAM URL/retrieval."""
+    return json.dumps({
+        "question": "Why?",
+        "working_thesis": "Layout drives basket size.",
+        "main_mechanism": "Forced path exposure.",
+        "confirmed_claims": [claim for claim, _ in entries],
+        "uncertain_claims": [],
+        "contradictions": [],
+        "strongest_counterargument": "Convenience placement exists too.",
+        "citable_numbers": [],
+        "visual_idea": "A floor plan.",
+        "confidence_score": 0.9,
+        "source_quality_score": 0.9,
+        "sources": [
+            {
+                "url": url, "title": f"Supermarket layout {index}",
+                "author_or_org": None, "published_at": None,
+                "source_type": "SECONDARY",
+                "supports_claim": claim, "supporting_excerpt": excerpt,
+            }
+            for index, (claim, excerpt) in enumerate(entries)
+        ],
+    })
+
+
+def test_three_excerpts_one_retrieval_reject_too_few_sources(
+        monkeypatch, settings, storage, account):
+    # Dokładny kształt pierwszego realnego live (job real-research-82e36c4b…,
+    # karta id=4): jeden retrieval zacytowany trzykrotnie. Wszystkie 3 excerpty
+    # E1-VERIFIED, ale to JEDNO odrębne źródło → REJECT / TOO_FEW_SOURCES.
+    real_settings, _topic_row, retrieval, job, _intent = _prepared_e2e(
+        settings, storage, account, key="cardinality",
+    )
+    _approve(storage, job.id, account)
+    entries = [
+        ("Essentials sit at the back of the store.",
+         "essential items at the back of the store"),
+        ("Shoppers pass tempting displays.",
+         "walk past tempting displays on every trip"),
+        ("Baskets grow measurably larger.",
+         "measurably larger baskets across chains"),
+    ]
+    # każdy excerpt to dosłowny fragment tego samego canonical text
+    for _claim, excerpt in entries:
+        assert excerpt in retrieval.canonical_text
+    caller = _FakeEvidenceCaller(
+        response=_evidence_response_multi(retrieval.requested_url, entries),
+    )
+    _install_fake_client(monkeypatch, caller)
+
+    result = _worker(real_settings, storage).run_once()
+
+    # Techniczny sukces bez zmian: jeden request, DONE, jedno usage, settlement.
+    assert result.status is WorkerIterationStatus.DONE
+    assert len(caller.calls) == 1
+    job_row = storage.get_job(job.id)
+    assert job_row.status is JobStatus.DONE
+    run_id = job_row.run_id
+    assert storage.get_run(run_id).status is RunStatus.SUCCESS
+    research_run = storage.get_research_run(run_id)
+    assert research_run.status.value == "COMPLETE"
+    assert research_run.research_card_id is not None
+    attempt = storage.conn.execute(
+        "SELECT status FROM provider_attempts WHERE job_id=?", (job.id,),
+    ).fetchone()
+    assert attempt["status"] == "SETTLED"
+    assert storage.conn.execute(
+        "SELECT count(*) FROM model_usage WHERE run_id=? AND dry_run=0", (run_id,),
+    ).fetchone()[0] == 1
+
+    # Trzy rekordy source, wszystkie VERIFIED, wszystkie wskazują ten sam URL/
+    # retrieval — a więc JEDNO odrębne, zatwierdzone źródło.
+    srcs = storage.conn.execute(
+        "SELECT url, verification_status FROM sources WHERE research_card_id=?",
+        (research_run.research_card_id,),
+    ).fetchall()
+    assert len(srcs) == 3
+    assert {s["url"] for s in srcs} == {retrieval.requested_url}
+    assert all(
+        s["verification_status"] == SourceVerification.VERIFIED.value for s in srcs
+    )
+    assert storage.list_evidence_excerpts(
+        int(retrieval.id), account_id=account.id,
+    )  # E1 zweryfikował excerpt(y) z tego jednego retrievalu
+
+    # Bramka jakości: jeden odrębny retrieval < min_sources=3 → TOO_FEW_SOURCES.
+    card_row = storage.conn.execute(
+        "SELECT publication_recommendation, rejection_reason FROM research_cards "
+        "WHERE id=?", (research_run.research_card_id,),
+    ).fetchone()
+    assert card_row["publication_recommendation"] == "REJECT"
+    assert "TOO_FEW_SOURCES" in (card_row["rejection_reason"] or "")
+
+    # Zero nowego retrievalu i zero nowego Fetchu (jak w live).
+    assert storage.conn.execute(
+        "SELECT count(*) FROM evidence_retrievals"
+    ).fetchone()[0] == 1
+    assert storage.conn.execute(
+        "SELECT count(*) FROM controlled_fetch_attempts"
+    ).fetchone()[0] == 0
