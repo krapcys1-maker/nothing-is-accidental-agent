@@ -889,9 +889,16 @@ def run_research_pipeline(
             return summary
 
         try:
+            # Ta walidacja jest zarazem produkcyjnym preflightem finalizacji:
+            # temat, jego status i możliwość dopisania ODRĘBNEJ nowej karty są
+            # potwierdzane przed rezerwacją, więc niemożliwa finalizacja nigdy
+            # nie kosztuje requestu.
             evidence_corpus = storage.load_evidence_research_corpus(execution_context)
         except EvidenceResearchAuthorizationError as exc:
             return _fail_evidence_before_reservation(exc.code)
+        if bool(evidence_corpus.force_re_research) != bool(force_re_research):
+            # Autorytetem trybu jest wyłącznie zamrożony, zatwierdzony intent.
+            return _fail_evidence_before_reservation("RE_RESEARCH_FLAG_MISMATCH")
         configure_evidence = getattr(
             research_client, "configure_evidence_synthesis", None,
         )

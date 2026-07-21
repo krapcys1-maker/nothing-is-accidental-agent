@@ -216,6 +216,7 @@ def _run_durable_real_research(
         max_web_searches=intent.max_web_searches,
         request_max_tokens=intent.max_tokens,
         durable_plan=intent.as_research_plan(),
+        force_re_research=intent.force_re_research,
     )
 
 

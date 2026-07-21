@@ -423,6 +423,7 @@ class DurableResearchExecutionIntent:
     prompt_contract_version: str
     max_retries: int
     evidence_input: dict[str, object] | None = None
+    force_re_research: bool = False
 
     @classmethod
     def from_settings(
@@ -438,6 +439,7 @@ class DurableResearchExecutionIntent:
             "Prefer primary sources; separate fact from interpretation; flag uncertainty."
         ),
         evidence_input: Mapping[str, object] | None = None,
+        force_re_research: object = False,
     ) -> "DurableResearchExecutionIntent":
         # Real paid enqueue passes the approved profile's prices/id/version; other
         # callers fall back to settings pricing with the non-authoritative sentinel.
@@ -459,6 +461,19 @@ class DurableResearchExecutionIntent:
             raise DurableExecutionIntentError(
                 "evidence research requires max_web_searches=0.",
                 code="EVIDENCE_REQUIRES_ZERO_SEARCHES",
+            )
+        if not isinstance(force_re_research, bool):
+            raise DurableExecutionIntentError(
+                "force_re_research must be a boolean.",
+                code="INVALID_FORCE_RE_RESEARCH",
+            )
+        # A durable re-research is only ever a frozen-evidence re-synthesis: it
+        # forces a new run past the completed-card gate without any new web
+        # search or fetch.  It is refused for search-based fresh research.
+        if force_re_research and evidence is None:
+            raise DurableExecutionIntentError(
+                "force_re_research is only supported for evidence re-research.",
+                code="FORCE_RE_RESEARCH_REQUIRES_EVIDENCE",
             )
         projected, pessimistic = _cost_projection(
             profile=profile,
@@ -507,6 +522,7 @@ class DurableResearchExecutionIntent:
             ),
             max_retries=0,
             evidence_input=evidence,
+            force_re_research=force_re_research,
         )
 
     @classmethod
@@ -525,8 +541,13 @@ class DurableResearchExecutionIntent:
         if payload["schema"] != _SCHEMA or payload["workflow"] != "RESEARCH" or payload["mode"] != "single":
             raise DurableExecutionIntentError("durable execution intent schema/workflow/mode is invalid.")
         flags = payload["flags"]
-        if flags != {"force_re_research": False}:
+        if (
+            not isinstance(flags, Mapping)
+            or set(flags) != {"force_re_research"}
+            or not isinstance(flags["force_re_research"], bool)
+        ):
             raise DurableExecutionIntentError("durable execution intent flags are invalid.")
+        force_re_research = bool(flags["force_re_research"])
         if payload["stage"] != _PROVIDER_STAGE:
             raise DurableExecutionIntentError("durable execution intent stage is invalid.")
         prompt_raw = payload["prompt_input"]
@@ -580,6 +601,11 @@ class DurableResearchExecutionIntent:
             raise DurableExecutionIntentError(
                 "evidence research requires max_web_searches=0.",
                 code="EVIDENCE_REQUIRES_ZERO_SEARCHES",
+            )
+        if force_re_research and evidence is None:
+            raise DurableExecutionIntentError(
+                "force_re_research is only supported for evidence re-research.",
+                code="FORCE_RE_RESEARCH_REQUIRES_EVIDENCE",
             )
         expected_projected, expected_pessimistic = _cost_projection(
             profile=profile,
@@ -635,6 +661,7 @@ class DurableResearchExecutionIntent:
             prompt_contract_version=prompt_contract_version,
             max_retries=retries,
             evidence_input=evidence,
+            force_re_research=force_re_research,
         )
 
     def as_payload(self) -> dict[str, object]:
@@ -668,7 +695,7 @@ class DurableResearchExecutionIntent:
             "pipeline_version": self.pipeline_version,
             "prompt_contract_version": self.prompt_contract_version,
             "max_retries": self.max_retries,
-            "flags": {"force_re_research": False},
+            "flags": {"force_re_research": self.force_re_research},
         }
         if self.evidence_input is not None:
             payload["evidence_input"] = {

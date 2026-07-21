@@ -366,8 +366,19 @@ def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, 
                               now: datetime | None = None,
                               evidence_input=None) -> int:
     """Persist fresh paid intent only; this process never creates a provider client."""
-    if args.mode != "single" or args.force_re_research:
+    if args.mode != "single":
         print("INVALID_CONFIGURATION: WAVE 0B durable real jobs support only fresh --mode single.")
+        return 2
+    # An explicit --force-re-research is honoured by the durable path ONLY as a
+    # frozen-evidence re-synthesis (single mode, zero web search, evidence input
+    # present).  It forces a new durable run past the completed-card gate without
+    # any new web search or Fetch; search-based fresh re-research stays refused.
+    if args.force_re_research and evidence_input is None:
+        print(
+            "INVALID_CONFIGURATION: --force-re-research durable path is supported only "
+            "for evidence re-research (requires --evidence-retrieval-id, --mode single, "
+            "--max-web-searches 0)."
+        )
         return 2
     if not isinstance(args.operation_key, str) or not args.operation_key.strip():
         print("INVALID_CONFIGURATION: fresh --real requires a non-empty --operation-key.")
@@ -410,6 +421,7 @@ def _enqueue_durable_real_job(args: argparse.Namespace, storage: SqliteStorage, 
             pricing_currency=profile.currency,
             pricing_unit=profile.unit,
             evidence_input=evidence_input,
+            force_re_research=args.force_re_research,
         )
     except DurableExecutionIntentError as exc:
         print(f"STOP: {exc}")
