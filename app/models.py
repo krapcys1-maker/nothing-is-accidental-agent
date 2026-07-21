@@ -929,6 +929,36 @@ class EvidenceResearchApproval(BaseModel):
     consumed_at: datetime | None = None
 
 
+class OwnerTopicProposal(BaseModel):
+    """Trwała propozycja tematu zgłoszona jawnie przez właściciela (nie przez model).
+
+    Operacja jest lokalna i bezkosztowa: nie ma providera, usage ani attemptu.
+    Wiersz żyje w ogólnej tabeli `approvals` (`object_type=OWNER_TOPIC_PROPOSAL`,
+    `object_id=topic_id`) i trwale przechowuje pełny kanoniczny preimage
+    propozycji oraz jego fingerprint. Zgoda L1 jest jednorazowa: dopiero jej
+    atomowa konsumpcja przenosi temat kandydacki do `SELECTED`.
+    """
+
+    id: int | None = None
+    account_id: str
+    topic_id: int
+    operation_key: str
+    title: str
+    question: str
+    rationale: str | None = None
+    score: float
+    score_breakdown: dict[str, float] = Field(default_factory=dict)
+    fingerprint: str
+    proposal_json: str
+    proposed_by: str
+    topic_status: TopicStatus = TopicStatus.SCORED
+    decision: str = "PENDING"
+    created_at: datetime
+    expires_at: datetime
+    approved_by: str | None = None
+    consumed_at: datetime | None = None
+
+
 class ControlledFetchAttempt(BaseModel):
     """Trwały zapis dokładnie jednej próby requestu kontrolowanego pobrania."""
 

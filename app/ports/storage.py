@@ -6,7 +6,7 @@ Lokalny adapter: app/storage/repositories.py (SQLite). Później: Postgres.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Protocol, Sequence
+from typing import Mapping, Protocol, Sequence
 
 from app.core.clock import Clock
 from app.models import (
@@ -35,6 +35,7 @@ from app.models import (
     ResearchExecutionFailureOutcome,
     ModelUsage,
     OperationalReport,
+    OwnerTopicProposal,
     ResearchCard,
     ResearchFlow,
     ResearchRunInitialization,
@@ -231,6 +232,25 @@ class StoragePort(Protocol):
     def list_topic_titles_for_dedup(self, account_id: str) -> list[tuple[int, str]]: ...
 
     def list_topics_by_status(self, account_id: str, status: TopicStatus) -> Sequence[Topic]: ...
+
+    def get_owner_topic_proposal(self, topic_id: int) -> "OwnerTopicProposal | None": ...
+
+    def record_owner_topic_proposal(
+        self, *, account_id: str, title: str, question: str, rationale: str | None,
+        score_breakdown: Mapping[str, float], score: float, candidate_status: TopicStatus,
+        operation_key: str, proposed_by: str, expires_at: datetime,
+        duplicate_threshold: float, clock: Clock,
+    ) -> "OwnerTopicProposal":
+        """Zapisuje temat kandydacki właściciela wraz z oczekującą zgodą L1."""
+        ...
+
+    def approve_owner_topic_proposal(
+        self, *, account_id: str, topic_id: int, approved_by: str,
+        article_min_score: float, duplicate_threshold: float, clock: Clock,
+        expected_fingerprint: str | None = None,
+    ) -> "OwnerTopicProposal":
+        """Konsumuje zgodę L1 raz i atomowo przenosi temat do `SELECTED`."""
+        ...
 
     def create_run(self, run: Run) -> Run: ...
 

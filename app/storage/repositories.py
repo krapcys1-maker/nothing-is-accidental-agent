@@ -10,7 +10,7 @@ from dataclasses import dataclass, replace
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from app.core.clock import Clock
 from app.core.money import decimal_from, quantize_usd, sum_usd
@@ -47,6 +47,7 @@ from app.models import (
     OperationalFlagState,
     OperationalReport,
     OperationalScalar,
+    OwnerTopicProposal,
     ProviderAttempt,
     ProviderAttemptReconciliationResult,
     ProviderAttemptStatus,
@@ -501,6 +502,373 @@ class SqliteStorage:
 
     def list_topics_by_status(self, account_id: str, status: TopicStatus) -> Sequence[Topic]:
         return [t for t in self.list_topics(account_id) if t.status == status]
+
+    # --- owner-proposed topic intake (lokalny, bezkosztowy; zero providera) ---
+    # Propozycja właściciela żyje w ogólnej tabeli `approvals` z migracji 0001:
+    # `object_type=OWNER_TOPIC_PROPOSAL`, `object_id=topic_id`, `decision`
+    # PENDING->APPROVED jako jednorazowa konsumpcja. `notes` przechowuje kopertę
+    # {proposal, fingerprint, approved_by}; fingerprint liczy się WYŁĄCZNIE z
+    # `proposal`, więc zapis zgody nie zmienia preimage. Zero nowej tabeli, zero
+    # migracji, zero dotknięcia zgód controlled fetch / evidence research.
+
+    @staticmethod
+    def _owner_proposal_envelope(row: sqlite3.Row) -> dict[str, object]:
+        from app.workflows.topics.proposal import OwnerTopicProposalError
+
+        try:
+            envelope = json.loads(row["notes"] or "")
+            proposal = envelope["proposal"]
+            if not isinstance(envelope, dict) or not isinstance(proposal, dict):
+                raise ValueError("owner topic proposal envelope is not an object.")
+        except (TypeError, ValueError, KeyError, json.JSONDecodeError) as exc:
+            raise OwnerTopicProposalError(
+                "PROPOSAL_PAYLOAD_INVALID",
+                f"stored proposal for topic #{row['object_id']} is not readable.",
+            ) from exc
+        return envelope
+
+    def _owner_proposal_from_rows(
+        self, row: sqlite3.Row, topic_row: sqlite3.Row | None,
+    ) -> OwnerTopicProposal:
+        envelope = self._owner_proposal_envelope(row)
+        proposal = envelope["proposal"]
+        assert isinstance(proposal, dict)
+        return OwnerTopicProposal(
+            id=int(row["id"]),
+            account_id=row["account_id"],
+            topic_id=int(row["object_id"]),
+            operation_key=str(proposal["operation_key"]),
+            title=str(proposal["title"]),
+            question=str(proposal["question"]),
+            rationale=proposal["rationale"],
+            score=float(proposal["score"]),
+            score_breakdown={k: float(v) for k, v in proposal["score_breakdown"].items()},
+            fingerprint=str(envelope["fingerprint"]),
+            proposal_json=json.dumps(
+                proposal, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+            ),
+            proposed_by=str(proposal["proposed_by"]),
+            topic_status=(
+                TopicStatus(topic_row["status"]) if topic_row is not None
+                else TopicStatus.REJECTED
+            ),
+            decision=row["decision"],
+            created_at=row["created_at"],
+            expires_at=str(proposal["expires_at"]),
+            approved_by=envelope.get("approved_by"),
+            consumed_at=row["decided_at"],
+        )
+
+    def _owner_proposal_row_for_topic(self, topic_id: int) -> sqlite3.Row | None:
+        from app.workflows.topics.proposal import OWNER_TOPIC_PROPOSAL_OBJECT_TYPE
+
+        return self.conn.execute(
+            "SELECT * FROM approvals WHERE object_type=? AND object_id=?",
+            (OWNER_TOPIC_PROPOSAL_OBJECT_TYPE, int(topic_id)),
+        ).fetchone()
+
+    def _owner_proposal_rows_for_account(self, account_id: str) -> list[sqlite3.Row]:
+        from app.workflows.topics.proposal import OWNER_TOPIC_PROPOSAL_OBJECT_TYPE
+
+        return list(self.conn.execute(
+            "SELECT * FROM approvals WHERE object_type=? AND account_id=? ORDER BY id",
+            (OWNER_TOPIC_PROPOSAL_OBJECT_TYPE, account_id),
+        ).fetchall())
+
+    def _assert_owner_proposal_not_duplicate(
+        self, account_id: str, title: str, *, threshold: float, exclude_topic_id: int | None,
+    ) -> None:
+        """Ta sama deduplikacja co discover — nigdy alternatywny deduplikator."""
+        from app.workflows.topics.dedup import TopicDeduplicator
+        from app.workflows.topics.proposal import OwnerTopicProposalError
+
+        existing = [
+            (topic_id, existing_title)
+            for topic_id, existing_title in self.list_topic_titles_for_dedup(account_id)
+            if exclude_topic_id is None or int(topic_id) != int(exclude_topic_id)
+        ]
+        match = TopicDeduplicator(threshold).find_duplicate(title, existing)
+        if match is not None:
+            raise OwnerTopicProposalError(
+                "DUPLICATE_TOPIC",
+                f"duplicate of topic #{match.existing_id} ('{match.existing_title}') — "
+                f"{match.reason} (score={match.score}).",
+            )
+
+    def get_owner_topic_proposal(self, topic_id: int) -> OwnerTopicProposal | None:
+        row = self._owner_proposal_row_for_topic(topic_id)
+        if row is None:
+            return None
+        topic_row = self.conn.execute(
+            "SELECT status FROM topics WHERE id=?", (int(topic_id),),
+        ).fetchone()
+        return self._owner_proposal_from_rows(row, topic_row)
+
+    def record_owner_topic_proposal(
+        self,
+        *,
+        account_id: str,
+        title: str,
+        question: str,
+        rationale: str | None,
+        score_breakdown: Mapping[str, float],
+        score: float,
+        candidate_status: TopicStatus,
+        operation_key: str,
+        proposed_by: str,
+        expires_at: datetime,
+        duplicate_threshold: float,
+        clock: Clock,
+    ) -> OwnerTopicProposal:
+        """Zapisuje jeden temat kandydacki właściciela wraz z oczekującą zgodą L1.
+
+        Nic tu nie dotyka sieci, providera ani kosztu. Deduplikacja jest
+        wykonywana W TEJ SAMEJ transakcji co zapis, powtórzony operation key z
+        identycznym payloadem jest idempotentny, a temat NIGDY nie powstaje od
+        razu jako `SELECTED` — do tego potrzebna jest osobna zgoda L1.
+        """
+        from app.workflows.topics.proposal import (
+            OWNER_TOPIC_PROPOSAL_OBJECT_TYPE,
+            OWNER_TOPIC_PROPOSAL_SOURCE,
+            OwnerTopicProposalError,
+            canonical_proposal_payload,
+            proposal_fingerprint,
+        )
+
+        if candidate_status not in (TopicStatus.SCORED, TopicStatus.REJECTED):
+            raise ValueError("An owner proposal may only persist a candidate topic status.")
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_now(clock=clock)
+            expiry = self._job_now(expires_at)
+            if expiry <= now:
+                raise OwnerTopicProposalError(
+                    "EXPIRY_INVALID", "expires_at must be in the future.",
+                )
+            if self.conn.execute(
+                "SELECT 1 FROM accounts WHERE id=?", (account_id,),
+            ).fetchone() is None:
+                raise OwnerTopicProposalError(
+                    "ACCOUNT_UNKNOWN", f"account {account_id!r} does not exist.",
+                )
+            payload = canonical_proposal_payload(
+                account_id=account_id,
+                title=title,
+                question=question,
+                rationale=rationale,
+                score_breakdown=score_breakdown,
+                score=score,
+                operation_key=operation_key,
+                proposed_by=proposed_by,
+                owner_authored=True,
+                expires_at=_persisted_ts(expiry),
+            )
+            fingerprint = proposal_fingerprint(payload)
+
+            for existing_row in self._owner_proposal_rows_for_account(account_id):
+                existing = self._owner_proposal_envelope(existing_row)
+                existing_proposal = existing["proposal"]
+                assert isinstance(existing_proposal, dict)
+                if existing_proposal.get("operation_key") != operation_key:
+                    continue
+                if existing["fingerprint"] != fingerprint:
+                    raise OwnerTopicProposalError(
+                        "OPERATION_KEY_CONFLICT",
+                        f"operation_key {operation_key!r} already describes a different proposal.",
+                    )
+                topic_row = self.conn.execute(
+                    "SELECT status FROM topics WHERE id=?", (existing_row["object_id"],),
+                ).fetchone()
+                stored = self._owner_proposal_from_rows(existing_row, topic_row)
+                self.conn.commit()
+                return stored
+
+            self._assert_owner_proposal_not_duplicate(
+                account_id, title, threshold=duplicate_threshold, exclude_topic_id=None,
+            )
+            topic_cursor = self.conn.execute(
+                "INSERT INTO topics (account_id, title, question, score, score_breakdown,"
+                " status, source, duplicate_of, rejection_reason, created_at)"
+                " VALUES (?,?,?,?,?,?,?,NULL,NULL,?)",
+                (
+                    account_id, title, question, float(score),
+                    json.dumps(payload["score_breakdown"], sort_keys=True),
+                    candidate_status.value, OWNER_TOPIC_PROPOSAL_SOURCE, _persisted_ts(now),
+                ),
+            )
+            topic_id = int(topic_cursor.lastrowid)
+            envelope = {
+                "proposal": payload,
+                "fingerprint": fingerprint,
+                "approved_by": None,
+            }
+            approval_cursor = self.conn.execute(
+                "INSERT INTO approvals (account_id, object_type, object_id, decision,"
+                " decided_at, notes, created_at) VALUES (?,?,?,?,NULL,?,?)",
+                (
+                    account_id, OWNER_TOPIC_PROPOSAL_OBJECT_TYPE, topic_id, "PENDING",
+                    json.dumps(envelope, ensure_ascii=False, sort_keys=True,
+                               separators=(",", ":")),
+                    _persisted_ts(now),
+                ),
+            )
+            stored_row = self.conn.execute(
+                "SELECT * FROM approvals WHERE id=?", (int(approval_cursor.lastrowid),),
+            ).fetchone()
+            topic_row = self.conn.execute(
+                "SELECT status FROM topics WHERE id=?", (topic_id,),
+            ).fetchone()
+            assert stored_row is not None and topic_row is not None
+            proposal = self._owner_proposal_from_rows(stored_row, topic_row)
+            self.conn.commit()
+            return proposal
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def approve_owner_topic_proposal(
+        self,
+        *,
+        account_id: str,
+        topic_id: int,
+        approved_by: str,
+        article_min_score: float,
+        duplicate_threshold: float,
+        clock: Clock,
+        expected_fingerprint: str | None = None,
+    ) -> OwnerTopicProposal:
+        """Jednorazowo konsumuje zgodę L1 i atomowo przenosi temat do `SELECTED`.
+
+        Wszystkie kontrole (konto, fingerprint aktualnego wiersza tematu, świeża
+        deduplikacja, status kandydacki, próg selekcji, expiry) i obie zmiany
+        (konsumpcja zgody + status tematu) żyją w jednej transakcji
+        `BEGIN IMMEDIATE`, więc dwie równoległe próby dają najwyżej jeden sukces.
+        """
+        from app.workflows.topics.proposal import (
+            OwnerTopicProposalError,
+            canonical_proposal_payload,
+            proposal_fingerprint,
+        )
+
+        if not approved_by.strip():
+            raise OwnerTopicProposalError(
+                "APPROVER_MISSING", "approved_by must identify the human L1 operator.",
+            )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = self._job_now(clock=clock)
+            current_ts = _persisted_ts(now)
+            row = self._owner_proposal_row_for_topic(topic_id)
+            if row is None:
+                raise OwnerTopicProposalError(
+                    "PROPOSAL_MISSING", f"topic #{topic_id} has no owner proposal.",
+                )
+            envelope = self._owner_proposal_envelope(row)
+            payload = envelope["proposal"]
+            assert isinstance(payload, dict)
+            if row["account_id"] != account_id or payload.get("account_id") != account_id:
+                raise OwnerTopicProposalError(
+                    "ACCOUNT_MISMATCH", "the proposal belongs to a different account.",
+                )
+            if row["decision"] != "PENDING" or row["decided_at"] is not None:
+                raise OwnerTopicProposalError(
+                    "PROPOSAL_ALREADY_DECIDED", "the one-shot proposal was already decided.",
+                )
+            if str(payload["expires_at"]) <= current_ts:
+                raise OwnerTopicProposalError(
+                    "PROPOSAL_EXPIRED", "the proposal expired before approval.",
+                )
+            topic_row = self.conn.execute(
+                "SELECT * FROM topics WHERE id=? AND account_id=?",
+                (int(topic_id), account_id),
+            ).fetchone()
+            if topic_row is None:
+                raise OwnerTopicProposalError(
+                    "TOPIC_MISSING", f"topic #{topic_id} does not exist for this account.",
+                )
+            # Fingerprint jest liczony z AKTUALNEGO wiersza tematu: każda zmiana
+            # title/question/score/breakdown po zgłoszeniu rozjeżdża preimage.
+            current = canonical_proposal_payload(
+                account_id=account_id,
+                title=topic_row["title"],
+                question=topic_row["question"] or "",
+                rationale=payload.get("rationale"),
+                score_breakdown=json.loads(topic_row["score_breakdown"] or "{}"),
+                score=float(topic_row["score"] if topic_row["score"] is not None else 0.0),
+                operation_key=str(payload["operation_key"]),
+                proposed_by=str(payload["proposed_by"]),
+                owner_authored=True,
+                expires_at=str(payload["expires_at"]),
+            )
+            if proposal_fingerprint(current) != envelope["fingerprint"]:
+                raise OwnerTopicProposalError(
+                    "FINGERPRINT_MISMATCH",
+                    "the persisted topic diverged from the approved proposal.",
+                )
+            if expected_fingerprint is not None and expected_fingerprint != envelope["fingerprint"]:
+                raise OwnerTopicProposalError(
+                    "FINGERPRINT_MISMATCH",
+                    "the expected fingerprint does not match the stored proposal.",
+                )
+            if topic_row["status"] != TopicStatus.SCORED.value:
+                raise OwnerTopicProposalError(
+                    "TOPIC_STATUS_NOT_APPROVABLE",
+                    f"topic #{topic_id} status {topic_row['status']} cannot be selected.",
+                )
+            if float(topic_row["score"] or 0.0) < float(article_min_score):
+                raise OwnerTopicProposalError(
+                    "BELOW_SELECTION_THRESHOLD",
+                    f"score {topic_row['score']} is below the selection threshold "
+                    f"{article_min_score}.",
+                )
+            self._assert_owner_proposal_not_duplicate(
+                account_id, topic_row["title"], threshold=duplicate_threshold,
+                exclude_topic_id=int(topic_id),
+            )
+
+            consumed = self.conn.execute(
+                "UPDATE approvals SET decision='APPROVED',decided_at=?,notes=? "
+                "WHERE id=? AND decision='PENDING' AND decided_at IS NULL",
+                (
+                    current_ts,
+                    json.dumps(
+                        {**envelope, "approved_by": approved_by.strip()},
+                        ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+                    ),
+                    int(row["id"]),
+                ),
+            )
+            if consumed.rowcount != 1:
+                raise OwnerTopicProposalError(
+                    "APPROVAL_CONSUME_RACE", "proposal consumption compare-and-swap failed.",
+                )
+            selected = self.conn.execute(
+                "UPDATE topics SET status=? WHERE id=? AND account_id=? AND status=?",
+                (
+                    TopicStatus.SELECTED.value, int(topic_id), account_id,
+                    TopicStatus.SCORED.value,
+                ),
+            )
+            if selected.rowcount != 1:
+                raise OwnerTopicProposalError(
+                    "TOPIC_STATUS_NOT_APPROVABLE",
+                    f"topic #{topic_id} could not transition to SELECTED.",
+                )
+            stored_row = self.conn.execute(
+                "SELECT * FROM approvals WHERE id=?", (int(row["id"]),),
+            ).fetchone()
+            final_topic = self.conn.execute(
+                "SELECT status FROM topics WHERE id=?", (int(topic_id),),
+            ).fetchone()
+            assert stored_row is not None and final_topic is not None
+            proposal = self._owner_proposal_from_rows(stored_row, final_topic)
+            self.conn.commit()
+            return proposal
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
 
     # --- runy ---
     def create_run(self, run: Run) -> Run:

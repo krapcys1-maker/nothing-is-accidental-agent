@@ -28,6 +28,7 @@ from app.models import (
     JobKind,
     OperationalFieldStatus,
     OperationalScalar,
+    TopicStatus,
     WorkflowType,
 )
 from app.ports.storage import (
@@ -399,6 +400,154 @@ def _cmd_approve_evidence_research(args: argparse.Namespace) -> int:
         # Every refusal path (config, protected/unavailable storage,
         # authorization) is one controlled fail-closed exit.
         print(f"APPROVE EVIDENCE RESEARCH: failed closed: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        if storage is not None:
+            try:
+                storage.close()
+            except (OSError, RuntimeError, sqlite3.Error):
+                pass
+
+
+def _parse_score_dimension(value: str) -> tuple[str, float]:
+    """--score dimension=0.90 (powtarzalne); żadnych domyślnych ocen."""
+    name, separator, raw = value.partition("=")
+    if not separator or not name.strip():
+        raise argparse.ArgumentTypeError("wymagany format wymiar=wartość, np. curiosity=0.90.")
+    try:
+        return name.strip(), float(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("wartość oceny musi być liczbą 0..1.") from exc
+
+
+def _cmd_propose_topic(args: argparse.Namespace) -> int:
+    """Trwale rejestruje JEDEN temat zgłoszony jawnie przez właściciela.
+
+    Operacja jest lokalna i bezkosztowa: zero sieci, zero providera, zero
+    `model_usage`, zero `provider_attempts`. Temat NIGDY nie powstaje od razu
+    jako SELECTED — powstaje jako kandydat wraz z oczekującą, jednorazową
+    zgodą L1, którą konsumuje osobna komenda `approve-topic-proposal`.
+    """
+    from app.workflows.topics.discover import compute_weighted_score
+    from app.workflows.topics.proposal import (
+        MAX_QUESTION_CHARS,
+        MAX_RATIONALE_CHARS,
+        MAX_TITLE_CHARS,
+        MAX_PROPOSER_CHARS,
+        OwnerTopicProposalError,
+        normalize_proposal_text,
+        validate_operation_key,
+        validate_score_breakdown,
+    )
+
+    storage = None
+    try:
+        if not args.owner_authored:
+            raise OwnerTopicProposalError(
+                "OWNER_AUTHORSHIP_NOT_CONFIRMED",
+                "--owner-authored is required: the topic must come from the owner, not a model.",
+            )
+        settings = load_settings()
+        account = settings.get_account(args.account_id)
+        title = normalize_proposal_text(
+            args.title, field="title", max_chars=MAX_TITLE_CHARS, code="TITLE_INVALID",
+        )
+        question = normalize_proposal_text(
+            args.question, field="question", max_chars=MAX_QUESTION_CHARS,
+            code="QUESTION_INVALID",
+        )
+        rationale = normalize_proposal_text(
+            args.rationale, field="rationale", max_chars=MAX_RATIONALE_CHARS,
+            code="RATIONALE_INVALID", required=False,
+        )
+        proposed_by = normalize_proposal_text(
+            args.proposed_by, field="proposed_by", max_chars=MAX_PROPOSER_CHARS,
+            code="PROPOSER_INVALID",
+        )
+        operation_key = validate_operation_key(args.operation_key)
+        breakdown = validate_score_breakdown(
+            dict(args.score or []), settings.topic_scoring_weights,
+        )
+        score = compute_weighted_score(breakdown, settings.topic_scoring_weights)
+        # Ten sam deterministyczny próg co dla tematów z modelu; kandydat nigdy
+        # nie jest zapisywany jako SELECTED, więc SCORED to stan „do zgody L1".
+        candidate_status = (
+            TopicStatus.SCORED if score >= settings.note_min_score else TopicStatus.REJECTED
+        )
+        eligible = score >= settings.article_min_score
+
+        storage = SqliteStorage.open(settings.db_path)
+        proposal = storage.record_owner_topic_proposal(
+            account_id=account.id,
+            title=title,
+            question=question,
+            rationale=rationale,
+            score_breakdown=breakdown,
+            score=score,
+            candidate_status=candidate_status,
+            operation_key=operation_key,
+            proposed_by=proposed_by,
+            expires_at=args.expires_at,
+            duplicate_threshold=settings.topic_duplicate_threshold,
+            clock=SystemClock(),
+        )
+        print(f"PROPOSE TOPIC: topic_id={proposal.topic_id} status={proposal.topic_status.value}")
+        print(f"proposal_id={proposal.id} operation_key={proposal.operation_key}")
+        print(f"fingerprint={proposal.fingerprint}")
+        print(f"score={proposal.score} article_min_score={settings.article_min_score} "
+              f"eligible_for_selection={str(eligible).lower()}")
+        print(f"expires_at={proposal.expires_at} decision={proposal.decision}")
+        print("owner_authored=true provider_request=false cost_usd=0.000000")
+        print("L1 approval required: python -m app.main approve-topic-proposal")
+        return 0
+    except SchemaVersionError:
+        raise
+    except (
+        ConfigError, OwnerTopicProposalError,
+        ValueError, RuntimeError, OSError, sqlite3.Error,
+    ) as exc:
+        print(f"PROPOSE TOPIC: failed closed: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        if storage is not None:
+            try:
+                storage.close()
+            except (OSError, RuntimeError, sqlite3.Error):
+                pass
+
+
+def _cmd_approve_topic_proposal(args: argparse.Namespace) -> int:
+    """Konsumuje jednorazową zgodę L1 i atomowo ustawia temat na SELECTED."""
+    from app.workflows.topics.proposal import OwnerTopicProposalError
+
+    storage = None
+    try:
+        settings = load_settings()
+        account = settings.get_account(args.account_id)
+        storage = SqliteStorage.open(settings.db_path)
+        proposal = storage.approve_owner_topic_proposal(
+            account_id=account.id,
+            topic_id=args.topic_id,
+            approved_by=args.approved_by,
+            article_min_score=settings.article_min_score,
+            duplicate_threshold=settings.topic_duplicate_threshold,
+            clock=SystemClock(),
+            expected_fingerprint=args.expected_fingerprint,
+        )
+        print(f"APPROVE TOPIC PROPOSAL: topic_id={proposal.topic_id} "
+              f"status={proposal.topic_status.value}")
+        print(f"proposal_id={proposal.id} operation_key={proposal.operation_key}")
+        print(f"fingerprint={proposal.fingerprint}")
+        print(f"approved_by={proposal.approved_by} consumed_at={proposal.consumed_at}")
+        print("single_use=true transferable=false provider_request=false cost_usd=0.000000")
+        return 0
+    except SchemaVersionError:
+        raise
+    except (
+        ConfigError, OwnerTopicProposalError,
+        ValueError, RuntimeError, OSError, sqlite3.Error,
+    ) as exc:
+        print(f"APPROVE TOPIC PROPOSAL: failed closed: {exc}", file=sys.stderr)
         return 2
     finally:
         if storage is not None:
@@ -1165,6 +1314,48 @@ def build_parser() -> argparse.ArgumentParser:
                             help="Jawnie zezwól na nowy research tematu z kompletną kartą. "
                                  "Może uruchomić kosztowny research; nie omija innych bramek.")
     p_research.set_defaults(func=_cmd_run_research)
+
+    p_propose_topic = sub.add_parser(
+        "propose-topic",
+        help="Zgłoś JEDEN temat od właściciela: walidacja, scoring, dedup i trwały "
+             "kandydat z oczekującą zgodą L1. Zero sieci, providera i kosztu.",
+    )
+    p_propose_topic.add_argument("--account-id", required=True)
+    p_propose_topic.add_argument("--title", required=True)
+    p_propose_topic.add_argument("--question", required=True,
+                                 help="Pytanie badawcze tematu.")
+    p_propose_topic.add_argument("--rationale", default=None,
+                                 help="Opcjonalne uzasadnienie redakcyjne właściciela.")
+    p_propose_topic.add_argument(
+        "--score", action="append", type=_parse_score_dimension, dest="score",
+        metavar="WYMIAR=0.00-1.00", required=True,
+        help="Powtarzalna, jawna ocena redakcyjna właściciela — wymagane dokładnie "
+             "te wymiary co wagi konta (bez domyślnych wartości).",
+    )
+    p_propose_topic.add_argument("--operation-key", required=True,
+                                 help="Jawny klucz operacji; powtórzenie jest idempotentne.")
+    p_propose_topic.add_argument("--expires-at", required=True, type=_parse_requested_at,
+                                 help="ISO-8601 z jawną strefą; po tym czasie zgoda wygasa.")
+    p_propose_topic.add_argument("--proposed-by", required=True,
+                                 help="Tożsamość człowieka zgłaszającego temat.")
+    p_propose_topic.add_argument(
+        "--owner-authored", action="store_true", required=True,
+        help="Jawne potwierdzenie, że temat pochodzi od właściciela, a nie od modelu.",
+    )
+    p_propose_topic.set_defaults(func=_cmd_propose_topic)
+
+    p_approve_topic = sub.add_parser(
+        "approve-topic-proposal",
+        help="Jednorazowa zgoda L1 dla dokładnie jednego owner-proposed topicu; "
+             "atomowo przenosi go do SELECTED.",
+    )
+    p_approve_topic.add_argument("--account-id", required=True)
+    p_approve_topic.add_argument("--topic-id", required=True, type=int)
+    p_approve_topic.add_argument("--approved-by", required=True,
+                                 help="Tożsamość człowieka L1 podejmującego decyzję.")
+    p_approve_topic.add_argument("--expected-fingerprint", default=None,
+                                 help="Opcjonalne wiązanie operatora z konkretnym fingerprintem.")
+    p_approve_topic.set_defaults(func=_cmd_approve_topic_proposal)
 
     p_enqueue_research = sub.add_parser(
         "enqueue-research", help="Dodaj wyłącznie zaplanowany job RESEARCH dry-run bez uruchamiania workera.",
