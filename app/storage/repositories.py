@@ -152,11 +152,14 @@ class EvidenceResearchCorpus:
     Retrievale są w dokładnej kolejności zamrożonego intentu; JSON i
     fingerprint to autorytatywny snapshot z payloadu, zweryfikowany bajt-w-bajt
     z wierszem approvalu w tej samej transakcji, w której powstał ten obiekt.
+    ``force_re_research`` pochodzi WYŁĄCZNIE z tego zamrożonego, zatwierdzonego
+    intentu — nigdy z pamięci wywołującego.
     """
 
     retrievals: tuple[EvidenceRetrieval, ...]
     execution_intent_json: str
     intent_fingerprint: str
+    force_re_research: bool = False
 
 
 _RESEARCH_USAGE_TASKS = (
@@ -1056,6 +1059,51 @@ class SqliteStorage:
                 detail="Atomic claim compare-and-swap failed.",
             )
             row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (selected["id"],)).fetchone()
+            self.conn.commit()
+            assert row is not None
+            claimed = self._job_from_row(row)
+            assert claimed.lease_expires_at is not None
+            return JobLease(
+                job=claimed, lease_owner=lease_owner, lease_expires_at=claimed.lease_expires_at,
+            )
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def claim_specific_job(
+        self, job_id: str, lease_owner: str, lease_seconds: int, *,
+        now: datetime | None = None, clock: Clock | None = None,
+    ) -> JobLease | None:
+        """Atomically leases EXACTLY the named QUEUED job, never any other.
+
+        Unlike :meth:`claim_next_job` this performs no queue-wide deadline/attempt
+        sweep and no priority selection: it only compare-and-swaps the one
+        ``job_id`` from QUEUED to LEASED. Other queued jobs are never selected,
+        failed, or mutated by this call. If the named job is not currently an
+        eligible QUEUED row (wrong id, already leased/terminal, deadline elapsed,
+        or attempts exhausted) it returns ``None`` and touches nothing.
+        """
+        if not lease_owner.strip() or lease_seconds <= 0:
+            raise ValueError("lease_owner must be non-empty and lease_seconds must be positive.")
+        if not job_id.strip():
+            raise ValueError("job_id must be non-empty.")
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current = self._job_now(now, clock=clock)
+            current_ts = _persisted_ts(current)
+            lease_until = _persisted_ts(current + timedelta(seconds=lease_seconds))
+            cursor = self.conn.execute(
+                "UPDATE jobs SET status='LEASED', lease_owner=?, lease_expires_at=?, "
+                "attempts=attempts+1, started_at=COALESCE(started_at, ?), updated_at=? "
+                "WHERE id=? AND status='QUEUED' AND earliest_run_at <= ? "
+                "AND (deadline_at IS NULL OR deadline_at >= ?) AND attempts < max_attempts",
+                (lease_owner, lease_until, current_ts, current_ts, job_id, current_ts, current_ts),
+            )
+            if cursor.rowcount != 1:
+                self.conn.commit()
+                return None
+            row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
             self.conn.commit()
             assert row is not None
             claimed = self._job_from_row(row)
@@ -3420,6 +3468,51 @@ class SqliteStorage:
             execution, cost_usd, error, terminalize_job=terminalize_job,
         )
 
+    @staticmethod
+    def _allowed_finalization_topic_statuses(force_re_research: bool) -> tuple[str, ...]:
+        """Jedyna definicja statusów tematu, z których finalizacja jest legalna.
+
+        Zwykły research kończy się wyłącznie z `SELECTED`. Jawny evidence
+        RE-RESEARCH dopuszcza dodatkowo `USED` — dokładnie ta sama para, którą
+        od dawna finalizują flow staged i legacy, więc temat po sukcesie zostaje
+        `USED`, a stara karta pozostaje nietkniętym rekordem historycznym.
+        """
+        if force_re_research:
+            return (TopicStatus.SELECTED.value, TopicStatus.USED.value)
+        return (TopicStatus.SELECTED.value,)
+
+    def _durable_re_research_authorized(self, job_id: str, current_ts: str) -> bool:
+        """True tylko dla zamrożonego, zatwierdzonego kontraktu re-researchu.
+
+        Autorytetem trybu jest payload joba skonfrontowany bajt-w-bajt ze
+        zużytym wierszem zgody L1 (fingerprint + pełny preimage intentu). Każdy
+        brak, rozjazd albo wyłączona flaga daje False, więc każdy inny przepływ
+        zachowuje ścisłą finalizację tylko ze stanu `SELECTED`.
+        """
+        row = self.conn.execute(
+            "SELECT payload_json FROM jobs WHERE id=?", (job_id,),
+        ).fetchone()
+        if row is None:
+            return False
+        try:
+            intent, intent_json, fingerprint = self._frozen_evidence_contract_from_payload(
+                row["payload_json"], job_id,
+            )
+            if not intent.force_re_research:
+                return False
+            self._require_usable_evidence_research_approval(
+                job_id,
+                account_id=intent.account_id,
+                topic_id=intent.topic_id,
+                canonical_intent_json=intent_json,
+                intent_fingerprint=fingerprint,
+                current_ts=current_ts,
+                require_consumed=True,
+            )
+        except EvidenceResearchAuthorizationError:
+            return False
+        return True
+
     def finalize_job_research_execution(
         self, execution: JobExecutionContext, card: ResearchCard, total_cost_usd: float,
         *, terminal_run_status: RunStatus,
@@ -3452,13 +3545,19 @@ class SqliteStorage:
                 raise ResearchTopicIntegrityError(
                     "Worker research finalization cost must equal canonical model usage."
                 )
+            # Ta sama transakcja BEGIN IMMEDIATE rozstrzyga tryb i stan tematu
+            # PONOWNIE: zmiana statusu między kontrolą sprzed granicy płatności
+            # a finalizacją kończy wykonanie tutaj — bez karty i bez drugiego
+            # requestu (żaden request nie wychodzi z tej ścieżki).
+            re_research = self._durable_re_research_authorized(execution.job_id, current_ts)
+            allowed_topic_statuses = self._allowed_finalization_topic_statuses(re_research)
             topic = self.conn.execute(
                 "SELECT status FROM topics WHERE id=? AND account_id=?",
                 (card.topic_id, fence["research_account_id"]),
             ).fetchone()
-            if topic is None or topic["status"] != TopicStatus.SELECTED.value:
+            if topic is None or topic["status"] not in allowed_topic_statuses:
                 raise ResearchTopicIntegrityError(
-                    "Worker research finalization requires its selected topic."
+                    "Worker research finalization requires an eligible topic status."
                 )
 
             self._insert_finalization_card(card)
@@ -3490,12 +3589,13 @@ class SqliteStorage:
             )
             topic_cursor = self.conn.execute(
                 "UPDATE topics SET status='USED' WHERE id=? AND account_id=? "
-                "AND status='SELECTED' AND EXISTS (SELECT 1 FROM jobs WHERE id=? "
+                f"AND status IN ({','.join('?' for _ in allowed_topic_statuses)}) "
+                "AND EXISTS (SELECT 1 FROM jobs WHERE id=? "
                 "AND run_id=? AND lease_owner=? AND lease_expires_at>=? "
                 "AND status IN ('LEASED','RUNNING'))",
                 (
-                    card.topic_id, fence["research_account_id"], execution.job_id,
-                    execution.run_id, execution.lease_owner, current_ts,
+                    card.topic_id, fence["research_account_id"], *allowed_topic_statuses,
+                    execution.job_id, execution.run_id, execution.lease_owner, current_ts,
                 ),
             )
             job_cursor = self.conn.execute(
@@ -7752,6 +7852,61 @@ class SqliteStorage:
                 "APPROVAL_CONSUME_RACE", "approval consumption compare-and-swap failed.",
             )
 
+    def _assert_evidence_finalization_path(
+        self, *, account_id: str, topic_id: int, fence_topic_id: int,
+        research_card_id: int | None, force_re_research: bool,
+    ) -> None:
+        """Dowód sprzed granicy płatności, że finalizacja TEGO tematu jest legalna.
+
+        Wołane w transakcji walidacji przed rezerwacją: temat musi istnieć,
+        mieć status dopuszczony dla trybu z zamrożonego intentu, a jego
+        dotychczasowa kompletna karta musi mieć nienaruszoną relację
+        run/karta/temat, żeby mogła pozostać rekordem historycznym. Nowa karta
+        powstaje zawsze jako ODRĘBNY wiersz `research_cards` — ten run nie może
+        mieć jeszcze żadnej karty. Każda odmowa jest typowana i pada PRZED
+        rezerwacją: zero konsumpcji zgody, zero attemptu, zero requestu, zero
+        kosztu.
+        """
+        if int(fence_topic_id) != int(topic_id):
+            raise EvidenceResearchAuthorizationError(
+                "INTENT_TOPIC_MISMATCH",
+                "the leased research run does not belong to the frozen intent topic.",
+            )
+        if research_card_id is not None:
+            raise EvidenceResearchAuthorizationError(
+                "RESEARCH_RUN_ALREADY_HAS_CARD",
+                "this execution already carries a research card.",
+            )
+        topic = self.conn.execute(
+            "SELECT status FROM topics WHERE id=? AND account_id=?",
+            (int(topic_id), account_id),
+        ).fetchone()
+        if topic is None:
+            raise EvidenceResearchAuthorizationError(
+                "TOPIC_MISSING", f"topic #{topic_id} does not exist for this account.",
+            )
+        allowed = self._allowed_finalization_topic_statuses(force_re_research)
+        if topic["status"] not in allowed:
+            raise EvidenceResearchAuthorizationError(
+                "TOPIC_NOT_RE_RESEARCHABLE" if force_re_research else "TOPIC_NOT_SELECTED",
+                f"topic #{topic_id} status {topic['status']} has no legal finalization "
+                "path for this execution.",
+            )
+        try:
+            has_completed_card = self.has_valid_completed_research_card_for_topic(
+                account_id, int(topic_id),
+            )
+        except ResearchTopicIntegrityError as exc:
+            raise EvidenceResearchAuthorizationError(
+                "TOPIC_RESEARCH_HISTORY_INVALID", str(exc),
+            ) from exc
+        if has_completed_card and not force_re_research:
+            raise EvidenceResearchAuthorizationError(
+                "COMPLETED_CARD_REQUIRES_FORCE",
+                f"topic #{topic_id} already has a complete research card; only an "
+                "explicit re-research may add another one.",
+            )
+
     def load_evidence_research_corpus(
         self, execution: JobExecutionContext,
     ) -> "EvidenceResearchCorpus":
@@ -7764,7 +7919,9 @@ class SqliteStorage:
         try:
             self.conn.execute("BEGIN IMMEDIATE")
             now = self._job_execution_timestamp(execution)
-            self._require_job_execution_fence(execution, now, flow=ResearchFlow.SINGLE)
+            fence = self._require_job_execution_fence(
+                execution, now, flow=ResearchFlow.SINGLE,
+            )
             payload_row = self.conn.execute(
                 "SELECT payload_json FROM jobs WHERE id=?", (execution.job_id,),
             ).fetchone()
@@ -7784,10 +7941,24 @@ class SqliteStorage:
             rows = self._validate_evidence_rows(
                 intent.account_id, intent.evidence_input,
             )
+            run_row = self.conn.execute(
+                "SELECT research_card_id FROM research_runs WHERE id=?",
+                (execution.run_id,),
+            ).fetchone()
+            if run_row is None:
+                raise StaleJobExecutionError(execution.job_id)
+            self._assert_evidence_finalization_path(
+                account_id=intent.account_id,
+                topic_id=intent.topic_id,
+                fence_topic_id=int(fence["topic_id"]),
+                research_card_id=run_row["research_card_id"],
+                force_re_research=intent.force_re_research,
+            )
             corpus = EvidenceResearchCorpus(
                 retrievals=tuple(self._row_to_evidence_retrieval(row) for row in rows),
                 execution_intent_json=intent_json,
                 intent_fingerprint=fingerprint,
+                force_re_research=intent.force_re_research,
             )
             self.conn.commit()
             return corpus

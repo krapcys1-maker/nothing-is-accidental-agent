@@ -284,6 +284,13 @@ class StoragePort(Protocol):
         """Atomowo przydziela najwyżej jeden eligible QUEUED job."""
         ...
 
+    def claim_specific_job(
+        self, job_id: str, lease_owner: str, lease_seconds: int, *,
+        now: datetime | None = None, clock: Clock | None = None,
+    ) -> JobLease | None:
+        """Atomowo przydziela DOKŁADNIE wskazany QUEUED job (nigdy inny)."""
+        ...
+
     def mark_job_running(
         self, job_id: str, lease_owner: str, *, now: datetime | None = None,
         clock: Clock | None = None,

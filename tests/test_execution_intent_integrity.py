@@ -206,7 +206,7 @@ def _mutated_payload(kind: str, settings, account, topic, payload: dict) -> dict
         ("pipeline_version", "INVALID_EXECUTION_INTENT_FINGERPRINT"),
         ("schema", "MALFORMED_DURABLE_V2_PAYLOAD"),
         ("retry", "INVALID_EXECUTION_INTENT_FINGERPRINT"),
-        ("flags", "MALFORMED_DURABLE_V2_PAYLOAD"),
+        ("flags", "FORCE_RE_RESEARCH_REQUIRES_EVIDENCE"),
         ("missing_required_default", "MALFORMED_DURABLE_V2_PAYLOAD"),
         ("account_identity", "MALFORMED_DURABLE_V2_PAYLOAD"),
         ("topic_identity", "MALFORMED_DURABLE_V2_PAYLOAD"),
