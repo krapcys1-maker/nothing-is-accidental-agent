@@ -952,3 +952,14 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Decyzja:** właściciel formalnie zamknął falę jako `CLOSED — APPROVED WITH MINOR/P2` (ADR-109); implementer nie zamknął jej samodzielnie. P2 `F-PR11-01`/`F-PR11-02`/`F-PR11-03` i obserwacje `OBS-PR11-01..03` zachowane bez naprawy.
 - **Produkcja:** przed i po byte-identical `0014`, 14 migracji, SHA-256 `9906AFBFB580BE8F576A6449B0930C41ED964FED814D99C947D1C28C5B060836`, `364544 B`, integrity `ok`, FK `0`, bez WAL/SHM/journal; runtime wymaga `0018`. Rzeczywista migracja `NOT EXECUTED`; owner authorization `NOT GRANTED`; następna operacja `NOT STARTED`. Koszt `0.000000 USD`.
 - **Status:** `PRODUCTION MIGRATION ORCHESTRATOR FORMAL CLOSURE DOCUMENTATION — CANDIDATE COMPLETE, AWAITING INDEPENDENT REVIEW`.
+
+### [2026-07-22 18:54 +03:00] Etap 2 — F1-BLOCK-01: recovery `SETTLED` dla `TOPIC_GENERATION`
+
+- **Cel zadania:** usunąć wyłącznie martwy stan po jednym rozliczonym requestcie topic-generation, gdy crash następuje przed finalizacją wyniku.
+- **Co zostało wykonane:** rozszerzono maintenance settled recovery i publiczny resolver o ściśle walidowany wariant `TOPIC_GENERATION`; kanon cache kosztu jest workflow-aware; attempt/usage/koszt pozostają niezmienne, a `EXECUTION_RECOVERY` atomowo kończy run/job, czyści lease/marker/rezerwację i odblokowuje konto. Rozszerzono podłogi istniejącej migracji `0020`, bez `0021`, oraz dodano regresje crash/reopen/replay/failpoint/SQLite.
+- **Pliki zmienione w tej fali:** `app/storage/repositories.py`, `app/storage/migrations/0020_topic_generation_lifecycle.sql`, `tests/test_topic_generation_runtime.py`, `tests/test_topic_generation_migration_0020.py`; źródła prawdy i logi w `MASTER_ARCHITECTURE.md`, `IMPLEMENTATION_ROADMAP.md`, `CURRENT_PROJECT_STATE.md`, `docs/` oraz `opis-budowy-substack/`.
+- **Wynik:** collect/exact-once/full `1821/1821`; 23 nowe przypadki względem baseline `1798`; 0 skipped, 0 xfail. Targeted F1, durable provider, RESEARCH settled/reconciliation, migracja `0020`, worker/reaper/maintenance przechodzą. `compileall` i `git diff --check` przechodzą.
+- **Czego jeszcze brakuje:** niezależnego finalnego re-review, ewentualnego approvalu/merge'u oraz osobno autoryzowanej migracji produkcji. Nie zidentyfikowano otwartego findingu w zakresie terminalizacji `TOPIC_GENERATION`.
+- **Koszt:** `0.000000 USD`; fake callery i nowe temp DB, bez sieci/API/SDK/browsera/publikacji.
+- **Produkcja:** niezmieniona `0019`, SHA `AE8EFCE9A9036BEDD2DDBE2969552B3A97FA8F9A68588AC4BAC4E0562A716944`, `634880 B`, integrity `ok`, FK `0`, brak WAL/SHM/journal.
+- **Następny krok:** niezależny finalny re-review. Etap 2 pozostaje `IN PROGRESS`.

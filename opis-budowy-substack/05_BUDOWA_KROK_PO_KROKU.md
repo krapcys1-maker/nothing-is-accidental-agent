@@ -750,3 +750,11 @@ Właściciel na tej podstawie formalnie zamknął wyłącznie WAVE E1 jako `CLOS
 Po E2-C kod wymagał schematu `0018`, a produkcja nadal miała `0014`. Cztery migracje działały osobno, lecz brakowało jednej kontrolowanej operacji właścicielskiej. Nowy orchestrator wymaga dokładnego pliku, SHA, rozmiaru, jawnej zgody i nowego snapshotu poza repo. Po kopii nie ufa staremu preflightowi: jeszcze raz czyta plik, ledger i sidecary, a ostatni gate wykonuje tuż przed writable open.
 
 WAL, SHM albo journal oznaczają STOP — nic nie jest automatycznie usuwane. Każdy krok `0015–0018` pozostaje osobną transakcją, więc raport nie obiecuje atomowości całej drabiny. Po awarii podaje ostatni trwały szczebel i wymaga nowej zgody, SHA i snapshotu. 58 testów orchestratora, 1630/1630 całej suity i 18 okien failpoint przeszło wyłącznie na temp DB. Produkcyjnego `data/agent.db` nie zmigrowano.
+
+## 2026-07-22 — Request zapłacony, wynik nieukończony
+
+Generator tematów miał okno awarii, którego nie zamykała żadna wspierana ścieżka. Provider odpowiedział, rzeczywiste usage trafiło do ledgeru, attempt został `SETTLED`, a proces umarł przed scoringiem. Pieniędzy nie wolno było cofnąć, requestu nie wolno było powtórzyć, lecz job i run nadal wyglądały jak praca w toku i blokowały całe konto.
+
+Naprawa korzysta z tej samej idei co research: fakt finansowy i fakt wykonawczy są osobne. Jedno usage `topics` pozostaje nietknięte. Maintenance albo jawny resolver może dopisać tylko dowód `EXECUTION_RECOVERY`, po uprzednim sprawdzeniu dokładnego requestu, modelu, providera, approval, kosztu, lineage i braku jakiegokolwiek wyniku tematów. Dopiero wtedy run i job kończą jako `FAILED`, a lease, marker i rezerwacja znikają. Jeżeli choć jeden z tych faktów nie pasuje, transakcja niczego nie zmienia.
+
+Najważniejszy test zabija proces dokładnie po settlementcie. Po reopen maintenance domyka lifecycle, drugi maintenance niczego nie zmienia, nowy worker nie wykonuje requestu numer dwa, a konto przyjmuje nowy job. Osobny failpoint zabija samo recovery po zapisie eventu i dowodzi pełnego rollbacku. Cała suita ma 1821/1821 zielonych przypadków — o 23 więcej niż przed falą — wyłącznie na fake callerach i temp DB. Produkcji nie migrowano.

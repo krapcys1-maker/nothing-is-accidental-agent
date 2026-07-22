@@ -459,3 +459,11 @@ Jeszcze jeden zbiorczy raport źle uciekł ścieżki WAL/SHM/journal i zwrócił
 Pierwszy targeted run orchestratora miał dwa failures. Dwie puste bazy utworzone w tej samej sekundzie były bajtowo identyczne, więc test „wrong path" nie stworzył różnej tożsamości; dodano jawny `user_version`. Drugi test po celowym uszkodzeniu `sqlite_master` próbował jeszcze wykonać `PRAGMA journal_mode=DELETE` i zatrzymywał się na własnym malformed schema — zbędny krok usunięto.
 
 Ręczna sonda najpierw próbowała zaimportować prywatny helper przez `import *` i dostała `NameError` przed migracją. Dodatkowo Windows pokazał różne reprezentacje `ctime` między uchwytem i path stat. Stabilność jednego odczytu oparto więc na dev/inode/size/mtime/nlink+SHA, a ctime zachowano do porównania kolejnych stanów. Wszystkie poprawki dotyczyły temp DB; produkcja pozostała nietknięta.
+
+## 2026-07-22 — Settlement tematów był końcem pieniędzy, ale nie końcem pracy
+
+Pierwsza nowa kontrpróba zrobiła dokładnie to, czego nie umiała wcześniejsza suita: fake caller zapisał usage i settlement, po czym proces zginął przed scoringiem. Maintenance odzyskało zero jobów. To potwierdziło blocker bez dotykania API i produkcji.
+
+Pierwsza wersja SQL-owej ochrony poszła za daleko. Dodatkowe triggery traktowały każdy `SETTLED` i nieterminalny run jak recovery, więc blokowały również zwykłą, atomową finalizację sukcesu oraz parse/scoring failure. Testy odrzuciły tę wersję. Podłogę zawężono do istniejącego stanu `NEEDS_VERIFICATION` i eventu `EXECUTION_RECOVERY`; normalna finalizacja pozostała bez zmian.
+
+Druga drobna pułapka siedziała w składni SQL: proste `CASE` wybrało ogólny komunikat zamiast typowanego błędu topic-generation. Searched `CASE` przywrócił jednoznaczny kod. Końcowe 1821/1821 potwierdza, że naprawa domyka crash window, nie rozszerzając go na poprawnie ukończone wyniki ani na RESEARCH.

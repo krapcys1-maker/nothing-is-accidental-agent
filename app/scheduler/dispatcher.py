@@ -49,6 +49,17 @@ from app.workflows.research.pipeline import (
     ResearchRunSummary,
     run_research_pipeline,
 )
+from app.llm.anthropic_client import AnthropicLLMClient
+from app.ports.storage import ProviderAttemptReconciliationRequired
+from app.topics.durable_intent import (
+    DurableTopicGenerationIntent,
+    frozen_topic_generation_contract,
+)
+from app.workflows.topics.generate import (
+    TopicGenerationNeedsVerification,
+    TopicGenerationSummary,
+    run_topic_generation,
+)
 
 
 class DispatchError(RuntimeError):
@@ -138,6 +149,21 @@ class ControlledFetchCallable(Protocol):
         storage: StoragePort, policy: PolicyEngine, clock: Clock,
         job_execution: ResearchJobExecution, intent: ControlledFetchIntent,
     ) -> ResearchRunSummary: ...
+
+
+class TopicGenerationCallable(Protocol):
+    def __call__(
+        self, account: Account, *, settings: Settings, storage: StoragePort,
+        llm: object, usage_tracker: UsageTracker, policy: PolicyEngine,
+        clock: Clock, job_execution: ResearchJobExecution,
+        intent: DurableTopicGenerationIntent, intent_fingerprint: str,
+    ) -> TopicGenerationSummary: ...
+
+
+class TopicGenerationClientFactory(Protocol):
+    def __call__(
+        self, settings: Settings, intent: DurableTopicGenerationIntent,
+    ) -> object: ...
 
 
 def _durable_job_intent(storage: StoragePort, job_id: str) -> DurableResearchExecutionIntent:
@@ -234,7 +260,10 @@ class JobDispatcher:
         research_real: ResearchDryRunCallable = _run_durable_real_research,
         research_offline_evidence: OfflineEvidenceCallable = run_offline_evidence_research,
         research_controlled_fetch: ControlledFetchCallable = run_controlled_fetch,
+        topic_generation: TopicGenerationCallable = run_topic_generation,
+        topic_generation_client_factory: TopicGenerationClientFactory | None = None,
         allow_real_research: bool = True,
+        allow_real_topic_generation: bool = True,
     ) -> None:
         self._settings = settings
         self._storage = storage
@@ -244,7 +273,12 @@ class JobDispatcher:
         self._research_real = research_real
         self._research_offline_evidence = research_offline_evidence
         self._research_controlled_fetch = research_controlled_fetch
+        self._topic_generation = topic_generation
+        self._topic_generation_client = (
+            topic_generation_client_factory or self._default_topic_generation_client
+        )
         self._allow_real_research = allow_real_research
+        self._allow_real_topic_generation = allow_real_topic_generation
 
     def dispatch(
         self,
@@ -272,6 +306,10 @@ class JobDispatcher:
             return DispatchResult.worker_must_complete()
         if job.kind is JobKind.RESEARCH:
             return self._dispatch_research(job, account, lease_owner, heartbeat)
+        if job.kind is JobKind.TOPIC_GENERATION:
+            return self._dispatch_topic_generation(
+                job, account, lease_owner, heartbeat,
+            )
         raise UnsupportedJobError("Unsupported job kind for the offline worker.")
 
     def _account_for(self, job: Job) -> Account:
@@ -352,6 +390,124 @@ class JobDispatcher:
             )
         return DispatchResult.workflow_succeeded(
             run_id=summary.run_id,
+        )
+
+    def _dispatch_topic_generation(
+        self,
+        job: Job,
+        account: Account,
+        lease_owner: str,
+        heartbeat: Callable[[], None],
+    ) -> DispatchResult:
+        """Paid, durable topic generation — the only job kind without a topic."""
+        if not self._allow_real_topic_generation:
+            raise PolicyDeniedError(PolicyDecision.block(
+                "SYSTEM_SCHEDULER_OFFLINE_ONLY",
+                "The system-scheduled worker cannot execute paid topic generation.",
+            ))
+        if job.workflow is not WorkflowType.TOPIC_GENERATION:
+            raise UnsupportedJobError(
+                "TOPIC_GENERATION jobs support only the TOPIC_GENERATION workflow."
+            )
+        if job.topic_id is not None:
+            raise PayloadValidationError(
+                "TOPIC_GENERATION job must not carry a topic_id."
+            )
+        if job.run_id is not None:
+            raise PayloadValidationError(
+                "TOPIC_GENERATION worker accepts only a job without a prior run_id."
+            )
+        try:
+            intent, _, intent_fingerprint = frozen_topic_generation_contract(
+                job.payload,
+            )
+        except DurableExecutionIntentError as exc:
+            raise PayloadValidationError(
+                "TOPIC_GENERATION payload intent is invalid."
+            ) from exc
+        if intent.account_id != job.account_id:
+            raise PayloadValidationError(
+                "TOPIC_GENERATION intent does not match its durable job identity."
+            )
+        if not intent.is_supported_by_current_worker():
+            raise PayloadValidationError(
+                "TOPIC_GENERATION intent is not supported by this worker."
+            )
+
+        try:
+            profiles = load_pricing_profiles(
+                default_pricing_profiles_path(self._settings.project_root)
+            )
+            approved = resolve_real_pricing_profile(
+                profiles, profile_id=intent.pricing_profile_id, model=intent.model,
+            )
+            assert_frozen_pricing_contract(
+                profile=approved,
+                profile_id=intent.pricing_profile_id,
+                version=intent.pricing_profile_version,
+                model=intent.model,
+                currency=intent.pricing_currency,
+                unit=intent.pricing_unit,
+                prices=intent.pricing_profile,
+                fingerprint=intent.pricing_fingerprint,
+            )
+        except PricingConfigError as exc:
+            raise PayloadValidationError(
+                "TOPIC_GENERATION pricing contract is not currently approved."
+            ) from exc
+
+        real_settings = replace(
+            self._settings,
+            dry_run=False,
+            model_quality=intent.model,
+            research_timeout_seconds=intent.timeout_seconds,
+            pricing=intent.runtime_pricing(),
+        )
+        require_valid_real_provider_pricing(real_settings)
+
+        # A checkpoint before entering the workflow keeps a long lease alive
+        # without a second, competing heartbeat implementation.
+        heartbeat()
+
+        client = self._topic_generation_client(real_settings, intent)
+        execution = ResearchJobExecution(job_id=job.id, lease_owner=lease_owner)
+        try:
+            summary = self._topic_generation(
+                account,
+                settings=real_settings, storage=self._storage, llm=client,
+                usage_tracker=UsageTracker(real_settings, self._storage),
+                policy=self._policy, clock=self._clock,
+                job_execution=execution, intent=intent,
+                intent_fingerprint=intent_fingerprint,
+            )
+        except TopicGenerationNeedsVerification as exc:
+            raise UncertainExternalEffectError(
+                "Topic generation outcome requires verification; no automatic retry."
+            ) from exc
+        except ProviderAttemptReconciliationRequired as exc:
+            raise UncertainExternalEffectError(
+                "Topic generation requires verification before any further provider request."
+            ) from exc
+        if summary.blocked:
+            raise PolicyDeniedError(PolicyDecision.block(
+                summary.block_code or "TOPIC_GENERATION_BLOCKED",
+                "Topic generation was refused before any provider request.",
+            ))
+        if summary.error or summary.run_id is None:
+            return DispatchResult.workflow_failed(
+                run_id=summary.run_id, detail="Topic generation job failed.",
+            )
+        return DispatchResult.workflow_succeeded(run_id=summary.run_id)
+
+    @staticmethod
+    def _default_topic_generation_client(
+        settings: Settings, intent: DurableTopicGenerationIntent,
+    ) -> AnthropicLLMClient:
+        return AnthropicLLMClient(
+            settings.anthropic_api_key,
+            intent.model,
+            timeout_seconds=float(intent.timeout_seconds),
+            topic_max_tokens=intent.max_tokens,
         )
 
     # Compatibility seam used by offline maintenance tests.  Dispatch itself

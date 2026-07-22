@@ -630,3 +630,9 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Findings:** właściciel zaakceptował `F-PR11-01`, `F-PR11-02`, `F-PR11-03` jako P2 bez naprawy w tej fali; obserwacje `OBS-PR11-01..03` zachowane; wcześniejsze otwarte findings projektu bez zmian.
 - **Granica decyzji:** production migration readiness = `VERIFIED IN MERGED CODE`, ale owner authorization = `NOT GRANTED` i real production migration = `NOT EXECUTED`; produkcja pozostaje na `0014`, runtime wymaga `0018`; Etap 2 = `IN PROGRESS`; controlled-live = `NOT READY`; następna operacja techniczna (rzeczywista migracja `data/agent.db` `0014→0018`) = `NOT STARTED` i wymaga osobnej jawnej zgody właściciela, aktualnego SHA/size, nowego snapshotu, braku sidecarów i jawnej flagi confirmation.
 - **Zlecenie dokumentacyjne:** wyłącznie formalne zamknięcie w aktywnych dokumentach; dokładnie jeden commit, zwykły push i draft PR do `main`; bez merge, force-pushu, amend po pushu i drugiego commita. Bez zmian kodu, testów, migracji, konfiguracji, runtime i produkcyjnej bazy; bez pełnej suity (zakres dokumentacyjny).
+
+## 2026-07-22 — Właściciel zlecił zamkniętą naprawę F1-BLOCK-01
+
+- **Decyzja człowieka:** naprawić wyłącznie brak terminalizacji `TOPIC_GENERATION + SETTLED + nieterminalny job/run`, bez refaktoru topic flow, bez zmian owner-proposed topic tool i bez napraw niezwiązanych P2.
+- **Granice:** zachować trzy istniejące ścieżki F-1 i RESEARCH; modyfikować niezmergowaną `0020`, bez `0021`; wszystkie zapisy tylko do nowych temp DB; produkcja wyłącznie `mode=ro&immutable=1`; zero API/SDK/sieci/browsera/publikacji/kosztu; bez stage/commit/push/PR/merge.
+- **Wynik implementera:** kandydat `1821/1821`, 0 skipped/xfail, status `CANDIDATE COMPLETE — READY FOR FINAL RE-REVIEW`. Właściciel nie zatwierdził jeszcze kandydata ani migracji produkcji.

@@ -13,6 +13,7 @@ from app.models import (
     Account,
     ControlledFetchApproval,
     ControlledFetchAttempt,
+    GeneratedTopicLineage,
     ControlledFetchFailureOutcome,
     ControlledFetchInitialization,
     ControlledFetchTransportAuthorization,
@@ -53,6 +54,9 @@ from app.models import (
     SourceType,
     SourceVerification,
     Topic,
+    TopicGenerationApproval,
+    TopicGenerationCandidate,
+    TopicGenerationInitialization,
     TopicStatus,
 )
 from app.ports.fetch import FetchedDocument
@@ -176,6 +180,32 @@ class EvidenceResearchAuthorizationError(RuntimeError):
     albo rozjazd retrievali/hashy/limitów corpusu z zatwierdzonym evidence.
     Nic zewnętrznego nie zostało wykonane: zero konsumpcji zgody, zero
     provider attemptu, zero requestu, zero usage, zero kosztu."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        self.code = code
+        super().__init__(f"{code}: {detail}")
+
+
+class TopicGenerationAuthorizationError(RuntimeError):
+    """Kontrolowana odmowa autoryzacji generowania tematów.
+
+    Podnoszona PRZED granicą providera — brak/niezgodność/wygaśnięcie/zużycie
+    jednorazowej zgody L1 albo rozjazd zamrożonego intentu z payloadem joba
+    (inny model, wyższy cap, inne max_tokens, obce konto, zmieniony intent).
+    Nic zewnętrznego nie zostało wykonane: zero konsumpcji zgody, zero provider
+    attemptu, zero requestu, zero usage, zero kosztu, zero tematów."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        self.code = code
+        super().__init__(f"{code}: {detail}")
+
+
+class TopicGenerationResultError(RuntimeError):
+    """Odpowiedź modelu nie spełnia kontraktu wyniku generowania tematów.
+
+    Rozdzielona od błędu autoryzacji, bo w tym momencie request JUŻ się odbył:
+    rzeczywisty koszt musi zostać zaksięgowany dokładnie raz, a żaden częściowy
+    temat ani wiersz lineage nie może powstać."""
 
     def __init__(self, code: str, detail: str) -> None:
         self.code = code
@@ -343,6 +373,61 @@ class StoragePort(Protocol):
     def get_evidence_research_approval_for_job(
         self, job_id: str,
     ) -> EvidenceResearchApproval | None: ...
+
+    def record_topic_generation_approval(
+        self, *, job_id: str, account_id: str, approved_by: str,
+        expires_at: datetime, clock: Clock,
+    ) -> "TopicGenerationApproval":
+        """Zapisuje jednorazową zgodę L1 na jeden topic-generation job.
+
+        Model, cap, max_tokens, fingerprint i pełny kanoniczny preimage intentu
+        pochodzą WYŁĄCZNIE z kanonizowanego payloadu joba — nigdy od
+        wywołującego — więc zgoda nie może opisywać innego kontraktu niż ten,
+        który zostanie wykonany."""
+        ...
+
+    def get_topic_generation_approval_for_job(
+        self, job_id: str,
+    ) -> "TopicGenerationApproval | None": ...
+
+    def initialize_topic_generation_run_for_job(
+        self, job_id: str, lease_owner: str, run_id: str, *, clock: Clock,
+    ) -> "TopicGenerationInitialization":
+        """Atomowo tworzy run TOPIC_GENERATION i wiąże go z aktywnym jobem.
+
+        Nie powstaje żaden `research_run` i żaden temat: fence tej ścieżki to
+        job → run → account → lease → frozen intent."""
+        ...
+
+    def assert_topic_generation_execution_active(
+        self, execution: JobExecutionContext, *,
+        expected_intent_fingerprint: str | None = None,
+    ) -> None:
+        """Świeża kontrola fence TOPIC_GENERATION w krótkiej transakcji."""
+        ...
+
+    def finalize_topic_generation_success(
+        self, execution: JobExecutionContext, *, request_id: str,
+        candidates: "Sequence[TopicGenerationCandidate]", total_cost_usd: float,
+    ) -> "list[GeneratedTopicLineage]":
+        """Jedna transakcja: tematy, lineage, settlement, koszt runu, job DONE.
+
+        Najwyżej jeden kandydat może nieść `is_selected`; podłoga SQLite 0020
+        egzekwuje to niezależnie od aplikacji."""
+        ...
+
+    def fail_or_escalate_topic_generation_execution(
+        self, execution: JobExecutionContext, cost_usd: float | None, error: str,
+        *, terminalize_job: bool = False, preserve_for_verification: bool = False,
+    ) -> ResearchExecutionFailureOutcome:
+        """Atomowo kończy bezpieczne wykonanie albo eskaluje aktywny attempt."""
+        ...
+
+    def list_generated_topics_for_run(
+        self, run_id: str,
+    ) -> "list[GeneratedTopicLineage]":
+        """Read-only lineage jednego generation runu, uporządkowany po randze."""
+        ...
 
     def load_evidence_research_corpus(
         self, execution: JobExecutionContext,

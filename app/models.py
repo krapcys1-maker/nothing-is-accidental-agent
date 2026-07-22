@@ -35,7 +35,10 @@ class AutonomyLevel(str, Enum):
 
 
 class WorkflowType(str, Enum):
+    # Historyczny offline workflow `run-topics` zachowuje niezmienioną semantykę;
+    # TOPIC_GENERATION to odrębny, durable i płatny workflow providera.
     TOPIC = "TOPIC"
+    TOPIC_GENERATION = "TOPIC_GENERATION"
     RESEARCH = "RESEARCH"
     ARTICLE = "ARTICLE"
     NOTE = "NOTE"
@@ -66,6 +69,10 @@ class JobKind(str, Enum):
     LOCAL = "LOCAL"
     RESEARCH = "RESEARCH"
     BROWSER = "BROWSER"
+    # Jedyny płatny job, który z definicji nie ma `topic_id`: temat powstaje
+    # dopiero z odpowiedzi modelu.  Klasa bezpieczeństwa jest odrębna od
+    # RESEARCH, bo fence nie może opierać się na research_run ani na temacie.
+    TOPIC_GENERATION = "TOPIC_GENERATION"
 
 
 class Job(BaseModel):
@@ -745,6 +752,19 @@ class ResearchRunInitialization:
     created: bool
 
 
+@dataclass(frozen=True)
+class TopicGenerationInitialization:
+    """Wynik atomowego utworzenia albo odczytu runu TOPIC_GENERATION joba.
+
+    Celowo nie ma tu `research_run` ani tematu: przed odpowiedzią modelu nie
+    istnieje żaden temat, więc fence opiera się wyłącznie na job → run → konto.
+    """
+
+    job: Job
+    run: Run
+    created: bool
+
+
 class ResearchSourceRecord(BaseModel):
     """Trwały wynik etapu A — jedno źródło, zapisane NIEZALEŻNIE od tego, czy etap B
     kiedykolwiek się wykona. To jest mechanizm "nie trać wyników wyszukiwania".
@@ -927,6 +947,62 @@ class EvidenceResearchApproval(BaseModel):
     approved_at: datetime
     expires_at: datetime
     consumed_at: datetime | None = None
+
+
+class TopicGenerationApproval(BaseModel):
+    """Jednorazowa zgoda L1 na dokładnie jeden topic-generation job.
+
+    Zgoda wiąże job, konto, model, cap USD, max_tokens i fingerprint
+    zamrożonego execution intentu oraz trwale przechowuje jego pełny kanoniczny
+    JSON (preimage fingerprintu).  Z definicji NIE ma `topic_id`: temat powstaje
+    dopiero z odpowiedzi modelu.  Wygasa, jest konsumowana atomowo najwyżej raz
+    — w tej samej transakcji co rezerwacja provider attemptu — i nigdy nie
+    przenosi się na inny job (podłogi SQLite migracji 0020).
+
+    To jest bramka BIEŻĄCEJ FAZY budowy, a nie docelowa logika wyboru tematu:
+    nie opisuje żadnego wymagania LEVEL_3.
+    """
+
+    id: int | None = None
+    job_id: str
+    account_id: str
+    intent_fingerprint: str
+    execution_intent_json: str
+    model: str
+    cap_usd: str
+    max_tokens: int
+    approved_by: str
+    approved_at: datetime
+    expires_at: datetime
+    consumed_at: datetime | None = None
+
+
+class GeneratedTopicLineage(BaseModel):
+    """Trwały dowód, że dany temat powstał z konkretnej odpowiedzi providera.
+
+    Po ponownym otwarciu bazy pozwala wskazać job, run, provider attempt,
+    request_id (a przez nie jedyny wiersz `model_usage`), pozycję kandydata w
+    batchu oraz to, który kandydat został wybrany.  Historyczne, fake i
+    owner-proposed tematy po prostu nie mają takiego wiersza i pozostają legalne.
+    """
+
+    id: int | None = None
+    topic_id: int
+    account_id: str
+    job_id: str
+    run_id: str
+    request_id: str
+    candidate_index: int
+    is_selected: bool = False
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class TopicGenerationCandidate(BaseModel):
+    """Jeden zwalidowany kandydat gotowy do atomowej finalizacji sukcesu."""
+
+    topic: "Topic"
+    candidate_index: int
+    is_selected: bool = False
 
 
 class ControlledFetchAttempt(BaseModel):

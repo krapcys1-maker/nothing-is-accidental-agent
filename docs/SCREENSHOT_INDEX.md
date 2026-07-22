@@ -441,3 +441,9 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co powinien pokazać:** zanonimizowany kontrakt CLI, `58/58`, full/exact-once `1630/1630`, partycje `390+398+412+430`, QA `30/30`, harnessy `13/13+13/13`, compile/diff PASS oraz produkcyjne `0014`, 14 migracji, SHA skrócone `9906AF…060836`, `364544 B`, integrity `ok`, FK `0`, sidecary `0`.
 - **Dodatkowy kadr:** syntetyczny sidecar pojawiający się między snapshotem a writable open kończy się `STALE_DATABASE_STATE`/`WAL_PRESENT` bez migracji i bez usunięcia pliku; obok failpoint podczas `0017` pokazuje trwałe `0016` i bezpieczny owner-approved resume.
 - **Czego nie może pokazać:** `.env`, pełnego SHA przyszłej autoryzacji, zawartości produkcyjnej DB/snapshotu, prywatnych ścieżek, command lines ani danych logowania. Nie może sugerować wykonanej migracji, `APPROVE`, zamknięcia Etapu 2 ani controlled-live readiness.
+
+## 2026-07-22 — F1-BLOCK-01 / TOPIC_GENERATION settled recovery
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ zakres jawnie zabraniał browsera, a log terminala zawiera lokalne ścieżki i identyfikatory operacyjne.
+- **Co powinien pokazać:** zanonimizowaną sekwencję fake caller → `SETTLED`/usage=1 → reopen → maintenance → run/job `FAILED` → drugi maintenance no-op → Worker `IDLE` → nowy enqueue; obok publiczny resolver, odrzucenie innego kosztu/`NOT_CHARGED`/`CHARGE_UNKNOWN`, failpoint rollback oraz wynik `1821/1821`.
+- **Czego nie może pokazać:** `.env`, sekretów, pełnych lokalnych ścieżek, zawartości produkcyjnej DB, request payloadów ani danych logowania. Nie może sugerować approvalu, merge'u, migracji produkcji, live verification ani zamknięcia Etapu 2.
