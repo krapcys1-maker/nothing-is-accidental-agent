@@ -77,7 +77,11 @@ from app.models import (
     StagedFinalizationFaultPoint,
     StagedFinalizationMode,
     SystemFlag,
+    GeneratedTopicLineage,
     Topic,
+    TopicGenerationApproval,
+    TopicGenerationCandidate,
+    TopicGenerationInitialization,
     TopicStatus,
     WorkflowType,
 )
@@ -101,6 +105,8 @@ from app.ports.storage import (
     ResearchTopicIntegrityError,
     StaleJobExecutionError,
     SystemFlagError,
+    TopicGenerationAuthorizationError,
+    TopicGenerationResultError,
 )
 from app.research.durable_intent import (
     DurableExecutionIntentError,
@@ -114,6 +120,13 @@ from app.research.durable_intent import (
 from app.research.offline_evidence_intent import (
     OfflineEvidenceIntentError,
     canonicalize_offline_evidence_payload,
+)
+from app.topics.durable_intent import (
+    PROVIDER_STAGE as TOPIC_GENERATION_PROVIDER_STAGE,
+    TOPIC_GENERATION_EXECUTION,
+    DurableTopicGenerationIntent,
+    canonicalize_topic_generation_payload,
+    frozen_topic_generation_contract,
 )
 from app.research.controlled_fetch_intent import (
     CONTROLLED_FETCH_EXECUTION,
@@ -172,9 +185,15 @@ _RESEARCH_USAGE_TASKS = (
     "research_reconciliation",
 )
 _RESEARCH_USAGE_PLACEHOLDERS = ", ".join("?" for _ in _RESEARCH_USAGE_TASKS)
+# The canonical `model_usage.task` of one paid topic-generation request.  It is
+# deliberately NOT a member of _RESEARCH_USAGE_TASKS: research cost caches and
+# topic-generation cost caches must never contribute to one another.  Both live
+# in the one shared `model_usage` ledger; reconciliation selects the exact task
+# set from the durable job kind.
+TOPIC_GENERATION_USAGE_TASK = "topics"
 # Formal, closed contract for the task of a canonical usage the resolver may bind
 # to a reconciled attempt.  Never widened by a ``startswith('research')`` prefix.
-_RECONCILIATION_ACCEPTABLE_USAGE_TASKS = frozenset(_RESEARCH_USAGE_TASKS)
+_RECONCILIATION_RESEARCH_USAGE_TASKS = frozenset(_RESEARCH_USAGE_TASKS)
 # WAVE 1A lifecycle contract: a terminal financial outcome (CHARGED_KNOWN or
 # NOT_CHARGED) must be paired with a terminal execution outcome, never with
 # MANUAL_REVIEW_REMAINS_REQUIRED (which would strand a terminal attempt on a job
@@ -222,6 +241,9 @@ _WORKER_FAILURE_ESCALATION_OPERATOR = "worker-failure-boundary"
 _SETTLED_EXECUTION_RECOVERY_OPERATOR = "maintenance-settled-execution-recovery"
 _SETTLED_EXECUTION_RECOVERY_NOTE = (
     "Automatic execution-only recovery after a known SETTLED provider outcome."
+)
+_TOPIC_SETTLED_EXECUTION_RECOVERY_NOTE = (
+    "Settled provider execution recovered before topic result finalization."
 )
 _SETTLED_EXECUTION_RECOVERY_BLOCKED = "SETTLED_EXECUTION_RECOVERY_BLOCKED"
 
@@ -457,22 +479,28 @@ class SqliteStorage:
         self.conn.commit()
 
     # --- tematy ---
-    def add_topic(self, account_id: str, topic: Topic) -> Topic:
+    def _insert_topic(self, topic: Topic, account_id: str | None = None) -> Topic:
+        """Insert one topic WITHOUT committing, so a caller can own the transaction."""
+        owner = topic.account_id if account_id is None else account_id
         cur = self.conn.execute(
             "INSERT INTO topics (account_id, title, question, score, score_breakdown,"
             " status, source, duplicate_of, rejection_reason, created_at)"
             " VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
-                account_id, topic.title, topic.question, topic.score,
+                owner, topic.title, topic.question, topic.score,
                 json.dumps(topic.score_breakdown), topic.status.value,
                 topic.source, topic.duplicate_of, topic.rejection_reason,
                 _ts(topic.created_at),
             ),
         )
-        self.conn.commit()
         topic.id = int(cur.lastrowid)
-        topic.account_id = account_id
+        topic.account_id = owner
         return topic
+
+    def add_topic(self, account_id: str, topic: Topic) -> Topic:
+        stored = self._insert_topic(topic, account_id)
+        self.conn.commit()
+        return stored
 
     def list_topics(self, account_id: str) -> Sequence[Topic]:
         rows = self.conn.execute(
@@ -804,10 +832,53 @@ class SqliteStorage:
             )
         return _persisted_ts(self._job_now(execution.now()))
 
+    def _require_topic_generation_fence(
+        self, execution: JobExecutionContext, current_ts: str,
+    ) -> sqlite3.Row:
+        """Closed job -> run -> account -> lease fence for TOPIC_GENERATION.
+
+        There is deliberately no ``research_runs`` and no ``topics`` join: a
+        topic-generation job carries no topic (0020 CHECK), because the topic
+        only comes into existence from the provider response.  The returned row
+        keeps the same column names as the research fence wherever they overlap
+        and pins the research-only columns to NULL, so any research-only caller
+        that is reached by mistake fails its own precondition rather than
+        silently accepting a foreign lifecycle.
+        """
+        row = self.conn.execute(
+            "SELECT j.status AS job_status,j.kind,j.workflow,j.run_id,j.lease_owner,"
+            "j.lease_expires_at,j.account_id AS job_account_id,"
+            "r.status AS run_status,r.account_id AS run_account_id,"
+            "NULL AS research_status,NULL AS research_account_id,"
+            "NULL AS topic_id,NULL AS flow,NULL AS topic_account_id "
+            "FROM jobs j JOIN runs r ON r.id=j.run_id "
+            "WHERE j.id=? AND j.run_id=? AND j.lease_owner=? "
+            "AND j.lease_expires_at>=? AND j.status IN ('LEASED','RUNNING') "
+            "AND j.kind='TOPIC_GENERATION' AND j.workflow='TOPIC_GENERATION' "
+            "AND j.topic_id IS NULL "
+            "AND r.workflow='TOPIC_GENERATION' AND r.account_id=j.account_id",
+            (
+                execution.job_id, execution.run_id, execution.lease_owner,
+                current_ts,
+            ),
+        ).fetchone()
+        if row is None:
+            raise StaleJobExecutionError(execution.job_id)
+        return row
+
     def _require_job_execution_fence(
         self, execution: JobExecutionContext, current_ts: str,
         *, flow: ResearchFlow = ResearchFlow.SINGLE,
     ) -> sqlite3.Row:
+        # One shared entry point keeps every existing caller (usage write,
+        # attempt reservation, request-start, release, escalation, settlement)
+        # on exactly one fence implementation per workflow.  RESEARCH keeps its
+        # original query byte-for-byte below.
+        kind_row = self.conn.execute(
+            "SELECT kind FROM jobs WHERE id=?", (execution.job_id,),
+        ).fetchone()
+        if kind_row is not None and kind_row["kind"] == JobKind.TOPIC_GENERATION.value:
+            return self._require_topic_generation_fence(execution, current_ts)
         row = self.conn.execute(
             "SELECT j.status AS job_status,j.kind,j.workflow,j.run_id,j.lease_owner,"
             "j.lease_expires_at,r.status AS run_status,r.account_id AS run_account_id,"
@@ -874,6 +945,8 @@ class SqliteStorage:
                 normalized = canonicalize_durable_research_payload(payload)
             elif payload.get("execution") == "offline_evidence_v1":
                 normalized = canonicalize_offline_evidence_payload(payload)
+            elif payload.get("execution") == TOPIC_GENERATION_EXECUTION:
+                normalized = canonicalize_topic_generation_payload(payload)
             return json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         except (DurableExecutionIntentError, OfflineEvidenceIntentError) as exc:
             code = getattr(exc, "code", "OFFLINE_EVIDENCE_INTENT_INVALID")
@@ -1555,6 +1628,51 @@ class SqliteStorage:
             # tests use other controlled labels; preserve their older lease-only
             # guard rather than silently pretending they are durable single
             # research requests.
+            # Routing keys on the durable JOB KIND, never on the stage label
+            # alone: existing RESEARCH jobs may legitimately carry other stage
+            # names (including 'topics') and must keep their original guard.
+            kind_row = self.conn.execute(
+                "SELECT kind FROM jobs WHERE id=?", (context.job_id,),
+            ).fetchone()
+            is_topic_generation = (
+                kind_row is not None
+                and kind_row["kind"] == JobKind.TOPIC_GENERATION.value
+            )
+            if is_topic_generation and context.stage == TOPIC_GENERATION_PROVIDER_STAGE:
+                # The paid topic-generation boundary: exactly the same proof as
+                # research minus the research_run/topic relation, which cannot
+                # exist before the model has answered.
+                topic_row = self.conn.execute(
+                    "SELECT p.* FROM provider_attempts p "
+                    "JOIN jobs j ON j.id=p.job_id "
+                    "JOIN runs r ON r.id=j.run_id "
+                    "WHERE p.request_id=? AND p.job_id=? AND p.stage=? "
+                    "AND p.attempt_no=? AND p.status='REQUEST_STARTED' "
+                    "AND j.run_id=? AND j.lease_owner=? AND j.lease_expires_at>=? "
+                    "AND j.status IN ('LEASED','RUNNING') "
+                    "AND j.kind='TOPIC_GENERATION' AND j.workflow='TOPIC_GENERATION' "
+                    "AND j.topic_id IS NULL "
+                    "AND r.id=? AND r.account_id=j.account_id "
+                    "AND r.workflow='TOPIC_GENERATION' AND r.status='RUNNING' "
+                    "AND p.execution_intent_fingerprint IS NOT NULL "
+                    "AND EXISTS (SELECT 1 FROM topic_generation_approvals a "
+                    "  WHERE a.job_id=j.id AND a.consumed_at IS NOT NULL "
+                    "    AND a.expires_at > ? "
+                    "    AND a.intent_fingerprint = p.execution_intent_fingerprint)",
+                    (
+                        context.request_id, context.job_id, context.stage,
+                        context.attempt_no, context.run_id, context.lease_owner,
+                        current_ts, context.run_id, current_ts,
+                    ),
+                ).fetchone()
+                if topic_row is None:
+                    raise StaleJobExecutionError(
+                        context.job_id,
+                        "topic generation provider boundary is not active for the "
+                        "current job/run/lease/approval.",
+                    )
+                self.conn.commit()
+                return self._provider_attempt_from_row(topic_row)
             if context.stage != "research":
                 legacy = self.conn.execute(
                     "SELECT p.* FROM provider_attempts p "
@@ -1783,7 +1901,7 @@ class SqliteStorage:
             raise StaleJobExecutionError(
                 execution.job_id, "usage run_id does not match the fenced execution.",
             )
-        if usage.task not in _RESEARCH_USAGE_TASKS:
+        if usage.task not in _RESEARCH_USAGE_TASKS + (TOPIC_GENERATION_USAGE_TASK,):
             raise StaleJobExecutionError(
                 execution.job_id, "usage task is not a research task.",
             )
@@ -1792,6 +1910,14 @@ class SqliteStorage:
             current = self._job_now(execution.now())
             current_ts = _persisted_ts(current)
             fence = self._require_job_execution_fence(execution, current_ts)
+            # The usage task and the fenced workflow must agree: a research job
+            # can never book topic-generation usage and vice versa, so neither
+            # cost cache can ever be fed from the other workflow's ledger rows.
+            is_topic_generation = fence["kind"] == JobKind.TOPIC_GENERATION.value
+            if is_topic_generation != (usage.task == TOPIC_GENERATION_USAGE_TASK):
+                raise StaleJobExecutionError(
+                    execution.job_id, "usage task does not match the fenced workflow.",
+                )
             expected_dry_run = fence["run_status"] == RunStatus.DRY_RUN.value
             if bool(usage.dry_run) != expected_dry_run:
                 raise StaleJobExecutionError(
@@ -1870,7 +1996,10 @@ class SqliteStorage:
                     raise StaleJobExecutionError(
                         execution.job_id, "provider attempt could not be settled with usage.",
                     )
-            self._set_run_cost_from_research_usage(execution.run_id)
+            if is_topic_generation:
+                self._set_run_cost_from_topic_generation_usage(execution.run_id)
+            else:
+                self._set_run_cost_from_research_usage(execution.run_id)
             self.conn.commit()
         except BaseException as primary:
             if self.conn.in_transaction:
@@ -1918,11 +2047,21 @@ class SqliteStorage:
                     raise DurableExecutionIntentError(
                         "persisted durable payload must be a JSON object."
                     )
-                canonical_payload = canonicalize_durable_research_payload(payload)
-                intent_raw = canonical_payload["execution_intent"]
-                assert isinstance(intent_raw, dict)
-                intent = DurableResearchExecutionIntent.from_payload(intent_raw)
-                intent_json, intent_fingerprint = frozen_execution_intent_json(payload)
+                topic_generation = (
+                    payload.get("execution") == TOPIC_GENERATION_EXECUTION
+                )
+                if topic_generation:
+                    topic_intent, intent_json, intent_fingerprint = (
+                        frozen_topic_generation_contract(payload)
+                    )
+                    intent = None
+                else:
+                    canonical_payload = canonicalize_durable_research_payload(payload)
+                    intent_raw = canonical_payload["execution_intent"]
+                    assert isinstance(intent_raw, dict)
+                    intent = DurableResearchExecutionIntent.from_payload(intent_raw)
+                    topic_intent = None
+                    intent_json, intent_fingerprint = frozen_execution_intent_json(payload)
             except (TypeError, json.JSONDecodeError) as exc:
                 raise JobRunRelationError(
                     "MALFORMED_DURABLE_V2_PAYLOAD",
@@ -1997,7 +2136,19 @@ class SqliteStorage:
                 raise BudgetReservationError("Provider reservation would exceed the global monthly limit.")
             if day_real_amount + total_reserved > daily_limit:
                 raise BudgetReservationError("Provider reservation would exceed the global daily limit.")
-            if intent.evidence_input is not None:
+            if topic_generation:
+                # Konsumpcja jednorazowej zgody L1 i rezerwacja attemptu są
+                # JEDNĄ transakcją. Każda odmowa poniżej wycofuje całość: zero
+                # konsumpcji, zero attemptu, zero requestu, zero kosztu.
+                assert topic_intent is not None
+                self._consume_topic_generation_approval(
+                    execution,
+                    topic_intent,
+                    canonical_intent_json=intent_json,
+                    intent_fingerprint=intent_fingerprint,
+                    current_ts=current_ts,
+                )
+            elif intent is not None and intent.evidence_input is not None:
                 # E3: konsumpcja jednorazowej zgody L1 i rezerwacja attemptu są
                 # JEDNĄ transakcją. Każda odmowa poniżej wycofuje całość: zero
                 # konsumpcji, zero attemptu, zero requestu, zero kosztu.
@@ -2240,8 +2391,10 @@ class SqliteStorage:
         recovery.  No attempt, usage, cost or reservation is created or changed.
         """
         rows = self.conn.execute(
-            "SELECT p.request_id FROM provider_attempts p JOIN jobs j ON j.id=p.job_id "
+            "SELECT p.request_id,j.kind AS job_kind FROM provider_attempts p "
+            "JOIN jobs j ON j.id=p.job_id "
             "WHERE p.status='SETTLED' AND j.status='NEEDS_VERIFICATION' "
+            "AND j.kind IN ('RESEARCH','TOPIC_GENERATION') "
             "AND NOT EXISTS (SELECT 1 FROM reconciliation_events e "
             "WHERE e.request_id=p.request_id AND e.event_type='EXECUTION_RECOVERY') "
             "ORDER BY p.request_id"
@@ -2254,10 +2407,17 @@ class SqliteStorage:
                     raise ProviderAttemptReconciliationError(
                         "SETTLED execution disappeared during recovery."
                     )
+                is_topic_generation = (
+                    row["job_kind"] == JobKind.TOPIC_GENERATION.value
+                )
                 resolution = (
-                    ExecutionResolution.RESULT_ALREADY_FINALIZED
-                    if row["research_card_id"] is not None
-                    else ExecutionResolution.EXECUTION_FAILED
+                    ExecutionResolution.EXECUTION_FAILED
+                    if is_topic_generation
+                    else (
+                        ExecutionResolution.RESULT_ALREADY_FINALIZED
+                        if row["research_card_id"] is not None
+                        else ExecutionResolution.EXECUTION_FAILED
+                    )
                 )
                 actual = _money(
                     row["actual_cost_usd"], positive=True,
@@ -2267,22 +2427,31 @@ class SqliteStorage:
                     row=row, account_id=row["job_account_id"],
                     execution_resolution=resolution, actual_amount=actual,
                     operator=_SETTLED_EXECUTION_RECOVERY_OPERATOR,
-                    note_text=_SETTLED_EXECUTION_RECOVERY_NOTE,
+                    note_text=(
+                        _TOPIC_SETTLED_EXECUTION_RECOVERY_NOTE
+                        if is_topic_generation
+                        else _SETTLED_EXECUTION_RECOVERY_NOTE
+                    ),
                     current_ts=current_ts,
                 )
                 self._recovery_fault_point("AFTER_SETTLED_EXECUTION_RECOVERY")
             except (ProviderAttemptReconciliationError, BudgetReservationError):
                 self.conn.execute("ROLLBACK TO settled_execution_recovery")
                 self.conn.execute("RELEASE settled_execution_recovery")
-                self.conn.execute(
-                    "UPDATE jobs SET last_error=?,updated_at=? WHERE id=("
-                    "SELECT job_id FROM provider_attempts WHERE request_id=?"
-                    ") AND status='NEEDS_VERIFICATION'",
-                    (
-                        _SETTLED_EXECUTION_RECOVERY_BLOCKED, current_ts,
-                        candidate["request_id"],
-                    ),
-                )
+                # Topic-generation invariants are a closed acceptance contract:
+                # an invalid candidate is observed fail-closed, without even a
+                # diagnostic row mutation.  The historical RESEARCH behavior is
+                # deliberately retained byte-for-byte.
+                if candidate["job_kind"] != JobKind.TOPIC_GENERATION.value:
+                    self.conn.execute(
+                        "UPDATE jobs SET last_error=?,updated_at=? WHERE id=("
+                        "SELECT job_id FROM provider_attempts WHERE request_id=?"
+                        ") AND status='NEEDS_VERIFICATION'",
+                        (
+                            _SETTLED_EXECUTION_RECOVERY_BLOCKED, current_ts,
+                            candidate["request_id"],
+                        ),
+                    )
                 result.settled_execution_blocked_count += 1
             else:
                 self.conn.execute("RELEASE settled_execution_recovery")
@@ -2303,14 +2472,20 @@ class SqliteStorage:
             "SELECT p.*,j.account_id AS job_account_id,j.status AS job_status,j.kind AS job_kind,"
             "j.workflow AS job_workflow,j.run_id,j.topic_id,j.payload_json,"
             "j.lease_owner,j.lease_expires_at,j.reserved_cost_usd,j.budget_reserved_at,"
+            "j.external_effect_started_at,"
             "r.status AS run_status,r.account_id AS run_account_id,r.workflow AS run_workflow,"
             "r.cost_usd AS run_cost_usd,"
             "rr.status AS research_status,rr.research_card_id,rr.topic_id AS research_topic_id,"
             "rr.account_id AS research_account_id,rr.flow AS research_flow,"
-            "rr.total_cost_usd AS research_cost_usd,t.status AS topic_status "
+            "rr.total_cost_usd AS research_cost_usd,t.status AS topic_status,"
+            "ta.account_id AS topic_approval_account_id,"
+            "ta.intent_fingerprint AS topic_approval_fingerprint,"
+            "ta.execution_intent_json AS topic_approval_intent_json,"
+            "ta.consumed_at AS topic_approval_consumed_at "
             "FROM provider_attempts p JOIN jobs j ON j.id=p.job_id "
             "LEFT JOIN runs r ON r.id=j.run_id LEFT JOIN research_runs rr ON rr.id=j.run_id "
             "LEFT JOIN topics t ON t.id=j.topic_id "
+            "LEFT JOIN topic_generation_approvals ta ON ta.job_id=j.id "
             "WHERE p.request_id=?",
             (request_id,),
         ).fetchone()
@@ -2342,7 +2517,8 @@ class SqliteStorage:
             (request_id,),
         ).fetchone()[0]
         canonical_cost = (
-            self._research_usage_total(run_id) if run_id is not None else Decimal("0.000000")
+            self._reconciliation_usage_total(row)
+            if run_id is not None else Decimal("0.000000")
         )
         max_seq = self.conn.execute(
             "SELECT COALESCE(MAX(sequence_number),0) FROM reconciliation_events WHERE request_id=?",
@@ -2364,8 +2540,13 @@ class SqliteStorage:
                 str(row["research_flow"]), str(row["execution_intent_fingerprint"]),
                 str(row["lease_owner"]), str(row["lease_expires_at"]),
                 str(row["reserved_cost_usd"]), str(row["budget_reserved_at"]),
+                str(row["external_effect_started_at"]),
                 str(row["actual_cost_usd"]), str(row["run_cost_usd"]),
                 str(row["research_cost_usd"]), str(row["topic_status"]),
+                str(row["topic_approval_account_id"]),
+                str(row["topic_approval_fingerprint"]),
+                str(row["topic_approval_intent_json"]),
+                str(row["topic_approval_consumed_at"]),
             ],
             ensure_ascii=True,
         )
@@ -2384,7 +2565,7 @@ class SqliteStorage:
 
     def _reconciliation_require_consistent_lineage(
         self, row: sqlite3.Row, account_id: str,
-    ) -> DurableResearchExecutionIntent:
+    ) -> DurableResearchExecutionIntent | DurableTopicGenerationIntent:
         """Fail-closed unless the whole durable lineage is present and consistent.
 
         Verifies attempt -> job -> run -> research_run -> account -> workflow ->
@@ -2395,6 +2576,10 @@ class SqliteStorage:
         tampered durable intent — means the attempt is unsafe to reconcile.  Returns
         the fingerprint-verified durable intent for reuse.  Performs no mutation.
         """
+        if row["job_kind"] == JobKind.TOPIC_GENERATION.value:
+            return self._reconciliation_require_topic_generation_lineage(
+                row, account_id,
+            )
         if row["run_id"] is None or row["run_status"] is None or row["research_status"] is None:
             raise ProviderAttemptReconciliationError(
                 "Attempt lacks the required durable job->run->research_run relation."
@@ -2433,8 +2618,118 @@ class SqliteStorage:
             )
         return intent
 
-    def _reconciliation_intent(self, row: sqlite3.Row) -> DurableResearchExecutionIntent:
+    def _reconciliation_require_topic_generation_lineage(
+        self, row: sqlite3.Row, account_id: str,
+    ) -> DurableTopicGenerationIntent:
+        """Validate the distinct job -> run -> attempt topic-generation lineage."""
+        if row["run_id"] is None or row["run_status"] is None:
+            raise ProviderAttemptReconciliationError(
+                "Topic-generation attempt lacks the required durable job->run relation."
+            )
+        intent, expected_json, expected_fingerprint = (
+            self._reconciliation_topic_contract(row)
+        )
+        job_account = row["job_account_id"]
+        problems: list[str] = []
+        if job_account != account_id:
+            problems.append("job.account_id!=operator")
+        if row["job_workflow"] != WorkflowType.TOPIC_GENERATION.value:
+            problems.append("job.workflow")
+        if row["topic_id"] is not None:
+            problems.append("job.topic_id")
+        if row["run_account_id"] != job_account:
+            problems.append("run.account_id!=job.account_id")
+        if row["run_workflow"] != WorkflowType.TOPIC_GENERATION.value:
+            problems.append("run.workflow")
+        if row["research_status"] is not None:
+            problems.append("unexpected research_run")
+        if row["stage"] != TOPIC_GENERATION_PROVIDER_STAGE:
+            problems.append("attempt.stage")
+        if int(row["attempt_no"]) != 1:
+            problems.append("attempt.attempt_no")
+        if row["request_id"] != (
+            f"{row['job_id']}:{TOPIC_GENERATION_PROVIDER_STAGE}:1"
+        ):
+            problems.append("attempt.request_id")
+        attempt_count = self.conn.execute(
+            "SELECT COUNT(*) FROM provider_attempts WHERE job_id=?",
+            (row["job_id"],),
+        ).fetchone()[0]
+        if int(attempt_count) != 1:
+            problems.append("attempt.count")
+        if intent.account_id != job_account:
+            problems.append("intent.account_id")
+        if row["topic_approval_account_id"] != job_account:
+            problems.append("approval.account_id")
+        if row["topic_approval_consumed_at"] is None:
+            problems.append("approval.consumed_at")
+        if row["topic_approval_fingerprint"] != row["execution_intent_fingerprint"]:
+            problems.append("approval.fingerprint")
+        if expected_fingerprint != row["execution_intent_fingerprint"]:
+            problems.append("intent.fingerprint")
+        if row["topic_approval_intent_json"] != expected_json:
+            problems.append("approval.execution_intent_json")
+        self._reconciliation_validate_topic_generated_lineage(row)
+        if problems:
+            raise ProviderAttemptReconciliationError(
+                "Attempt lineage is inconsistent: " + ",".join(problems)
+            )
+        return intent
+
+    def _reconciliation_topic_intent(
+        self, row: sqlite3.Row,
+    ) -> DurableTopicGenerationIntent:
+        return self._reconciliation_topic_contract(row)[0]
+
+    def _reconciliation_topic_contract(
+        self, row: sqlite3.Row,
+    ) -> tuple[DurableTopicGenerationIntent, str, str]:
+        try:
+            payload = json.loads(row["payload_json"])
+            intent, intent_json, fingerprint = frozen_topic_generation_contract(payload)
+        except (TypeError, ValueError, KeyError, json.JSONDecodeError, DurableExecutionIntentError) as exc:
+            raise ProviderAttemptReconciliationError(
+                "Durable topic-generation identity cannot be reconstructed."
+            ) from exc
+        if fingerprint != row["execution_intent_fingerprint"]:
+            raise ProviderAttemptReconciliationError(
+                "Stored durable execution intent fingerprint does not match the attempt."
+            )
+        return intent, intent_json, fingerprint
+
+    def _reconciliation_validate_topic_generated_lineage(
+        self, row: sqlite3.Row,
+    ) -> int:
+        generated = self.conn.execute(
+            "SELECT g.*,t.account_id AS topic_account_id FROM generated_topics g "
+            "LEFT JOIN topics t ON t.id=g.topic_id "
+            "WHERE g.job_id=? OR g.run_id=? OR g.request_id=? ORDER BY g.candidate_index",
+            (row["job_id"], row["run_id"], row["request_id"]),
+        ).fetchall()
+        for item in generated:
+            if (
+                item["job_id"] != row["job_id"]
+                or item["run_id"] != row["run_id"]
+                or item["request_id"] != row["request_id"]
+                or item["account_id"] != row["job_account_id"]
+                or item["topic_account_id"] != row["job_account_id"]
+            ):
+                raise ProviderAttemptReconciliationError(
+                    "Generated topic lineage is inconsistent with the reconciled attempt."
+                )
+        return len(generated)
+
+    def _reconciliation_usage_total(self, row: sqlite3.Row) -> Decimal:
+        if row["job_kind"] == JobKind.TOPIC_GENERATION.value:
+            return self._topic_generation_usage_total(row["run_id"])
+        return self._research_usage_total(row["run_id"])
+
+    def _reconciliation_intent(
+        self, row: sqlite3.Row,
+    ) -> DurableResearchExecutionIntent | DurableTopicGenerationIntent:
         """Reconstruct and fingerprint-verify the durable provider/model identity."""
+        if row["job_kind"] == JobKind.TOPIC_GENERATION.value:
+            return self._reconciliation_topic_intent(row)
         try:
             payload = json.loads(row["payload_json"])
             canonical_payload = canonicalize_durable_research_payload(payload)
@@ -2451,7 +2746,7 @@ class SqliteStorage:
 
     def _reconciliation_verify_usage_identity(
         self, row: sqlite3.Row, usage: sqlite3.Row, actual_amount: Decimal | None,
-        *, intent: DurableResearchExecutionIntent | None = None,
+        *, intent: DurableResearchExecutionIntent | DurableTopicGenerationIntent | None = None,
     ) -> None:
         """Accept an existing usage only on a full identity match, never on cost alone."""
         if intent is None:
@@ -2469,7 +2764,12 @@ class SqliteStorage:
             problems.append("provider")
         if usage["model"] != intent.model:
             problems.append("model")
-        if usage["task"] not in _RECONCILIATION_ACCEPTABLE_USAGE_TASKS:
+        acceptable_tasks = (
+            frozenset((TOPIC_GENERATION_USAGE_TASK,))
+            if row["job_kind"] == JobKind.TOPIC_GENERATION.value
+            else _RECONCILIATION_RESEARCH_USAGE_TASKS
+        )
+        if usage["task"] not in acceptable_tasks:
             problems.append("task")
         if actual_amount is not None and not _money_equal(
                 usage["estimated_cost_usd"], actual_amount, label="Existing reconciled usage"):
@@ -2507,25 +2807,33 @@ class SqliteStorage:
             )
 
     def _reconciliation_assert_ledger_cache_consistent(
-        self, run_id: str, expected_total: Decimal,
+        self, row: sqlite3.Row, expected_total: Decimal,
     ) -> None:
-        """SUM(model_usage) == runs.cost_usd == research_runs.total_cost_usd (Decimal)."""
-        canonical = self._research_usage_total(run_id)
+        """Canonical usage equals every lifecycle-specific cost cache."""
+        run_id = row["run_id"]
+        canonical = self._reconciliation_usage_total(row)
         if canonical != expected_total:
             raise ProviderAttemptReconciliationError(
                 "Canonical ledger total changed during reconciliation."
             )
         run_row = self.conn.execute("SELECT cost_usd FROM runs WHERE id=?", (run_id,)).fetchone()
-        rr_row = self.conn.execute(
-            "SELECT total_cost_usd FROM research_runs WHERE id=?", (run_id,),
-        ).fetchone()
-        if run_row is None or rr_row is None:
+        if run_row is None:
             raise ProviderAttemptReconciliationError("Cost cache rows missing during reconciliation.")
-        if not _money_equal(run_row["cost_usd"], canonical, label="run cost cache") or not _money_equal(
-                rr_row["total_cost_usd"], canonical, label="research_run cost cache"):
+        if not _money_equal(run_row["cost_usd"], canonical, label="run cost cache"):
             raise ProviderAttemptReconciliationError(
                 "Ledger and cost cache diverged after reconciliation."
             )
+        if row["job_kind"] != JobKind.TOPIC_GENERATION.value:
+            rr_row = self.conn.execute(
+                "SELECT total_cost_usd FROM research_runs WHERE id=?", (run_id,),
+            ).fetchone()
+            if rr_row is None or not _money_equal(
+                rr_row["total_cost_usd"], canonical,
+                label="research_run cost cache",
+            ):
+                raise ProviderAttemptReconciliationError(
+                    "Ledger and cost cache diverged after reconciliation."
+                )
 
     def _reconciliation_assert_settled_execution_cache_prestate(
         self, row: sqlite3.Row, expected_total: Decimal,
@@ -2538,13 +2846,19 @@ class SqliteStorage:
         zero in the crash window.  Already-terminal compatible prestates must
         already carry the canonical total.
         """
-        canonical = self._research_usage_total(row["run_id"])
+        canonical = self._reconciliation_usage_total(row)
         if canonical != expected_total or not _money_equal(
             row["run_cost_usd"], canonical, label="run cost cache",
         ):
             raise ProviderAttemptReconciliationError(
                 "Canonical ledger and run cost cache diverged before execution recovery."
             )
+        if row["job_kind"] == JobKind.TOPIC_GENERATION.value:
+            if row["research_status"] is not None or row["research_cost_usd"] is not None:
+                raise ProviderAttemptReconciliationError(
+                    "Topic-generation execution recovery forbids a research_run cache."
+                )
+            return
         research_amount = _money(
             row["research_cost_usd"], positive=False,
             label="research_run pre-finalization cost cache",
@@ -2671,9 +2985,17 @@ class SqliteStorage:
             )
 
         usage_rows = self.conn.execute(
-            "SELECT * FROM model_usage WHERE request_id=? AND dry_run=0 "
-            "AND is_legacy_usage=0 ORDER BY id",
-            (request_id,),
+            (
+                "SELECT * FROM model_usage WHERE run_id=? ORDER BY id"
+                if row["job_kind"] == JobKind.TOPIC_GENERATION.value
+                else "SELECT * FROM model_usage WHERE request_id=? AND dry_run=0 "
+                     "AND is_legacy_usage=0 ORDER BY id"
+            ),
+            (
+                (row["run_id"],)
+                if row["job_kind"] == JobKind.TOPIC_GENERATION.value
+                else (request_id,)
+            ),
         ).fetchall()
         if len(usage_rows) != 1:
             raise ProviderAttemptReconciliationError(
@@ -2684,6 +3006,13 @@ class SqliteStorage:
             row, usage_rows[0], actual_amount, intent=intent,
         )
         self._reconciliation_assert_settled_execution_cache_prestate(row, actual_amount)
+        is_topic_generation = row["job_kind"] == JobKind.TOPIC_GENERATION.value
+        if is_topic_generation and execution_resolution is not (
+            ExecutionResolution.EXECUTION_FAILED
+        ):
+            raise ProviderAttemptReconciliationError(
+                "TOPIC_GENERATION SETTLED recovery supports EXECUTION_FAILED only."
+            )
 
         if row["lease_owner"] is not None or row["lease_expires_at"] is not None:
             raise ProviderAttemptReconciliationError(
@@ -2711,12 +3040,23 @@ class SqliteStorage:
                 raise ProviderAttemptReconciliationError(
                     "EXECUTION_FAILED cannot coexist with a Research Card."
                 )
-            if row["run_status"] not in _EXECUTION_FAILED_RUN_STATUSES or \
-                    row["research_status"] not in (
-                        ResearchRunStatus.PENDING.value, ResearchRunStatus.FAILED.value,
-                    ):
+            research_lifecycle_valid = (
+                row["research_status"] is None
+                if is_topic_generation
+                else row["research_status"] in (
+                    ResearchRunStatus.PENDING.value,
+                    ResearchRunStatus.FAILED.value,
+                )
+            )
+            if row["run_status"] not in _EXECUTION_FAILED_RUN_STATUSES or not (
+                research_lifecycle_valid
+            ):
                 raise ProviderAttemptReconciliationError(
                     "SETTLED execution failure has an incompatible lifecycle."
+                )
+            if is_topic_generation and self._reconciliation_validate_topic_generated_lineage(row):
+                raise ProviderAttemptReconciliationError(
+                    "SETTLED topic execution failure cannot coexist with generated topics."
                 )
         else:
             self._require_settled_execution_card(row)
@@ -2758,9 +3098,21 @@ class SqliteStorage:
         resolved = self._reconciliation_state_row(request_id)
         assert resolved is not None
         expected = (
-            (JobStatus.FAILED.value, RunStatus.FAILED.value, ResearchRunStatus.FAILED.value)
-            if execution_resolution is ExecutionResolution.EXECUTION_FAILED
-            else (JobStatus.DONE.value, RunStatus.SUCCESS.value, ResearchRunStatus.COMPLETE.value)
+            (JobStatus.FAILED.value, RunStatus.FAILED.value, None)
+            if is_topic_generation
+            else (
+                (
+                    JobStatus.FAILED.value,
+                    RunStatus.FAILED.value,
+                    ResearchRunStatus.FAILED.value,
+                )
+                if execution_resolution is ExecutionResolution.EXECUTION_FAILED
+                else (
+                    JobStatus.DONE.value,
+                    RunStatus.SUCCESS.value,
+                    ResearchRunStatus.COMPLETE.value,
+                )
+            )
         )
         if (
             resolved["job_status"], resolved["run_status"], resolved["research_status"]
@@ -2768,7 +3120,7 @@ class SqliteStorage:
             raise ProviderAttemptReconciliationError(
                 "EXECUTION_RECOVERY did not create the expected terminal lifecycle."
             )
-        self._reconciliation_assert_ledger_cache_consistent(row["run_id"], actual_amount)
+        self._reconciliation_assert_ledger_cache_consistent(row, actual_amount)
         return ProviderAttemptReconciliationResult(
             attempt=self._provider_attempt_from_row(resolved),
             financial_resolution=FinancialResolution.CHARGED_KNOWN,
@@ -2793,7 +3145,8 @@ class SqliteStorage:
             ).fetchall()
             run_id = row["run_id"]
             canonical = (
-                self._research_usage_total(run_id) if run_id is not None else Decimal("0.000000")
+                self._reconciliation_usage_total(row)
+                if run_id is not None else Decimal("0.000000")
             )
             events = self.conn.execute(
                 "SELECT * FROM reconciliation_events WHERE request_id=? ORDER BY sequence_number",
@@ -2996,6 +3349,8 @@ class SqliteStorage:
                 ProviderAttemptStatus.RECONCILED_SETTLED.value,
                 ProviderAttemptStatus.RECONCILED_RELEASED.value,
             ):
+                if row["job_kind"] == JobKind.TOPIC_GENERATION.value:
+                    self._reconciliation_require_consistent_lineage(row, account_id)
                 existing_resolution = str(row["reconciliation_resolution"] or "")
                 if status != terminal_status or existing_resolution != combined or \
                         row["reconciled_by"] != operator or row["reconciliation_note"] != note_text:
@@ -3029,6 +3384,11 @@ class SqliteStorage:
             if status != ProviderAttemptStatus.NEEDS_RECONCILIATION.value:
                 raise ProviderAttemptReconciliationError("Only NEEDS_RECONCILIATION may be resolved.")
             intent = self._reconciliation_require_consistent_lineage(row, account_id)
+            is_topic_generation = row["job_kind"] == JobKind.TOPIC_GENERATION.value
+            if is_topic_generation and execution_resolution is not ExecutionResolution.EXECUTION_FAILED:
+                raise ProviderAttemptReconciliationError(
+                    "TOPIC_GENERATION reconciliation supports EXECUTION_FAILED only."
+                )
             # W1A-AUD-04: an escalated RESERVED attempt provably never crossed the
             # request boundary, so the only truthful financial outcome is NOT_CHARGED.
             if row["request_started_at"] is None and financial_resolution is not FinancialResolution.NOT_CHARGED:
@@ -3055,10 +3415,19 @@ class SqliteStorage:
                     raise ProviderAttemptReconciliationError(
                         "EXECUTION_FAILED cannot coexist with a Research Card."
                     )
+                research_lifecycle_valid = (
+                    row["research_status"] is None
+                    if is_topic_generation
+                    else row["research_status"] in ("PENDING", "FAILED")
+                )
                 if row["run_status"] not in _EXECUTION_FAILED_RUN_STATUSES \
-                        or row["research_status"] not in ("PENDING", "FAILED"):
+                        or not research_lifecycle_valid:
                     raise ProviderAttemptReconciliationError(
                         "Execution failure requires a non-success single lifecycle."
+                    )
+                if is_topic_generation and self._reconciliation_validate_topic_generated_lineage(row):
+                    raise ProviderAttemptReconciliationError(
+                        "EXECUTION_FAILED cannot coexist with generated topic lineage."
                     )
                 # Same status set as the precondition (never a divergent literal), so a
                 # reaper-STOPPED run is driven to FAILED under one compare-and-swap.
@@ -3072,12 +3441,16 @@ class SqliteStorage:
                     ("OPERATOR_RECONCILIATION_EXECUTION_FAILED", now, row["run_id"],
                      *_EXECUTION_FAILED_RUN_STATUSES),
                 )
-                research_cursor = self.conn.execute(
-                    "UPDATE research_runs SET status='FAILED',error=?,updated_at=? "
-                    "WHERE id=? AND flow='single' AND status IN ('PENDING','FAILED') AND research_card_id IS NULL",
-                    ("OPERATOR_RECONCILIATION_EXECUTION_FAILED", now, row["run_id"]),
-                )
-                if run_cursor.rowcount != 1 or research_cursor.rowcount != 1:
+                if is_topic_generation:
+                    research_rowcount = 1
+                else:
+                    research_cursor = self.conn.execute(
+                        "UPDATE research_runs SET status='FAILED',error=?,updated_at=? "
+                        "WHERE id=? AND flow='single' AND status IN ('PENDING','FAILED') AND research_card_id IS NULL",
+                        ("OPERATOR_RECONCILIATION_EXECUTION_FAILED", now, row["run_id"]),
+                    )
+                    research_rowcount = research_cursor.rowcount
+                if run_cursor.rowcount != 1 or research_rowcount != 1:
                     raise ProviderAttemptReconciliationError("Execution failure lifecycle update is inconsistent.")
                 job_target = "FAILED"
                 cache_run_status = "FAILED"
@@ -3090,9 +3463,13 @@ class SqliteStorage:
 
             if row["job_status"] != JobStatus.NEEDS_VERIFICATION.value:
                 raise ProviderAttemptReconciliationError("Resolver requires a job already in NEEDS_VERIFICATION.")
+            external_effect_clear = (
+                "external_effect_started_at=NULL," if is_topic_generation else ""
+            )
             job_cursor = self.conn.execute(
                 "UPDATE jobs SET status=?,last_error=?,lease_owner=NULL,lease_expires_at=NULL,"
-                "reserved_cost_usd=0.0,budget_reserved_at=NULL,updated_at=?,finished_at=COALESCE(finished_at,?) "
+                "reserved_cost_usd=0.0,budget_reserved_at=NULL," + external_effect_clear +
+                "updated_at=?,finished_at=COALESCE(finished_at,?) "
                 "WHERE id=? AND status='NEEDS_VERIFICATION'",
                 (job_target, "OPERATOR_RECONCILIATION:" + combined, now, now, row["job_id"]),
             )
@@ -3107,37 +3484,45 @@ class SqliteStorage:
                 if usage_rows:
                     usage_id = int(usage_rows[0]["id"])
                 else:
+                    usage_task = (
+                        TOPIC_GENERATION_USAGE_TASK
+                        if is_topic_generation else "research_reconciliation"
+                    )
                     usage = self.conn.execute(
                         "INSERT INTO model_usage (run_id,provider,model,task,input_tokens,output_tokens,"
                         "cache_read_tokens,cache_write_tokens,web_search_requests,estimated_cost_usd,dry_run,request_id,created_at) "
                         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (row["run_id"], intent.provider, intent.model, "research_reconciliation", 0, 0, 0, 0, 0,
+                        (row["run_id"], intent.provider, intent.model, usage_task, 0, 0, 0, 0, 0,
                          float(actual_amount), 0, request_id, now),
                     )
                     if usage.rowcount != 1:
                         raise ProviderAttemptReconciliationError("Canonical usage insert failed.")
                     usage_id = int(usage.lastrowid)
             self._reconciliation_fault_point(ReconciliationFaultPoint.AFTER_USAGE_WRITE)
-            total = self._research_usage_total(row["run_id"])
+            total = self._reconciliation_usage_total(row)
             run_cache_cursor = self.conn.execute(
                 "UPDATE runs SET cost_usd=? WHERE id=? AND status=?",
                 (float(total), row["run_id"], cache_run_status),
             )
-            if execution_resolution is ExecutionResolution.EXECUTION_FAILED:
+            if is_topic_generation:
+                research_cache_rowcount = 1
+            elif execution_resolution is ExecutionResolution.EXECUTION_FAILED:
                 research_cache_cursor = self.conn.execute(
                     "UPDATE research_runs SET total_cost_usd=?,updated_at=? "
                     "WHERE id=? AND flow='single' AND status='FAILED' AND research_card_id IS NULL",
                     (float(total), now, row["run_id"]),
                 )
+                research_cache_rowcount = research_cache_cursor.rowcount
             else:
                 research_cache_cursor = self.conn.execute(
                     "UPDATE research_runs SET total_cost_usd=?,updated_at=? "
                     "WHERE id=? AND flow='single' AND status='COMPLETE' AND research_card_id=?",
                     (float(total), now, row["run_id"], row["research_card_id"]),
                 )
-            if run_cache_cursor.rowcount != 1 or research_cache_cursor.rowcount != 1:
+                research_cache_rowcount = research_cache_cursor.rowcount
+            if run_cache_cursor.rowcount != 1 or research_cache_rowcount != 1:
                 raise ProviderAttemptReconciliationError("Cost cache refresh is inconsistent.")
-            self._reconciliation_assert_ledger_cache_consistent(row["run_id"], total)
+            self._reconciliation_assert_ledger_cache_consistent(row, total)
             self._reconciliation_fault_point(ReconciliationFaultPoint.AFTER_CACHE_REFRESH)
 
             # ---- Step 3: FINAL_RESOLUTION event precedes the terminal flip; the
@@ -4053,6 +4438,17 @@ class SqliteStorage:
                     result.failed_count += 1
                     error = "Offline E2-A lease expired after maximum attempts."
                 elif row["kind"] == JobKind.RESEARCH.value and row["run_id"] is not None:
+                    target = JobStatus.NEEDS_VERIFICATION
+                    release_budget = False
+                    result.needs_verification_count += 1
+                    error = str(JobRunReconciliationRequired(row["id"]))
+                elif (
+                    row["kind"] == JobKind.TOPIC_GENERATION.value
+                    and row["run_id"] is not None
+                ):
+                    # An attached topic-generation run has already consumed its
+                    # one-shot L1 approval, so a requeue could never legally
+                    # reserve again.  Explicit review, never an automatic restart.
                     target = JobStatus.NEEDS_VERIFICATION
                     release_budget = False
                     result.needs_verification_count += 1
@@ -7851,6 +8247,735 @@ class SqliteStorage:
             raise EvidenceResearchAuthorizationError(
                 "APPROVAL_CONSUME_RACE", "approval consumption compare-and-swap failed.",
             )
+
+    # --- TOPIC_GENERATION: zgoda L1, run, lineage, finalizacja i granica błędu ---
+
+    def _topic_generation_usage_total(self, run_id: str) -> Decimal:
+        rows = self.conn.execute(
+            "SELECT estimated_cost_usd FROM model_usage WHERE run_id=? AND task=?",
+            (run_id, TOPIC_GENERATION_USAGE_TASK),
+        ).fetchall()
+        return _sum_money_rows(
+            rows, "estimated_cost_usd",
+            label="Canonical topic generation usage total",
+        )
+
+    def _set_run_cost_from_topic_generation_usage(self, run_id: str) -> None:
+        total = self._topic_generation_usage_total(run_id)
+        cursor = self.conn.execute(
+            "UPDATE runs SET cost_usd=? WHERE id=?", (float(total), run_id),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError(
+                f"Nie znaleziono run #{run_id} do synchronizacji kosztu tematów."
+            )
+
+    @staticmethod
+    def _topic_generation_approval_from_row(
+        row: sqlite3.Row,
+    ) -> TopicGenerationApproval:
+        return TopicGenerationApproval(
+            id=int(row["id"]), job_id=row["job_id"], account_id=row["account_id"],
+            intent_fingerprint=row["intent_fingerprint"],
+            execution_intent_json=row["execution_intent_json"],
+            model=row["model"], cap_usd=row["cap_usd"],
+            max_tokens=int(row["max_tokens"]),
+            approved_by=row["approved_by"], approved_at=row["approved_at"],
+            expires_at=row["expires_at"], consumed_at=row["consumed_at"],
+        )
+
+    @staticmethod
+    def _generated_topic_from_row(row: sqlite3.Row) -> GeneratedTopicLineage:
+        return GeneratedTopicLineage(
+            id=int(row["id"]), topic_id=int(row["topic_id"]),
+            account_id=row["account_id"], job_id=row["job_id"],
+            run_id=row["run_id"], request_id=row["request_id"],
+            candidate_index=int(row["candidate_index"]),
+            is_selected=bool(row["is_selected"]), created_at=row["created_at"],
+        )
+
+    def _frozen_topic_generation_contract_from_payload(
+        self, payload_text: str, job_id: str,
+    ) -> tuple[DurableTopicGenerationIntent, str, str]:
+        """Re-derive (intent, canonical JSON, fingerprint) from one payload text."""
+        try:
+            payload = json.loads(payload_text)
+            if not isinstance(payload, dict):
+                raise DurableExecutionIntentError(
+                    "persisted topic generation payload must be a JSON object."
+                )
+            intent, intent_json, fingerprint = frozen_topic_generation_contract(payload)
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise TopicGenerationAuthorizationError(
+                "MALFORMED_TOPIC_GENERATION_PAYLOAD",
+                f"job {job_id!r} does not carry a valid frozen topic generation payload.",
+            ) from exc
+        except DurableExecutionIntentError as exc:
+            raise TopicGenerationAuthorizationError(exc.code, str(exc)) from exc
+        return intent, intent_json, fingerprint
+
+    def record_topic_generation_approval(
+        self, *, job_id: str, account_id: str, approved_by: str,
+        expires_at: datetime, clock: Clock,
+    ) -> TopicGenerationApproval:
+        """L1: derive the approval entirely from the frozen durable job contract.
+
+        Model, cap, max_tokens, fingerprint i pełny kanoniczny execution_intent
+        JSON NIE są przyjmowane od wywołującego — pochodzą wyłącznie z
+        kanonizowanego payloadu joba, więc zgoda nigdy nie może opisywać czegoś
+        innego niż kontrakt, który zostanie wykonany.
+        """
+        if not approved_by.strip():
+            raise TopicGenerationAuthorizationError(
+                "APPROVER_MISSING", "approved_by must identify the human L1 operator.",
+            )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now_dt = self._job_now(clock=clock)
+            now = _persisted_ts(now_dt)
+            expiry_dt = self._job_now(expires_at)
+            if expiry_dt <= now_dt:
+                raise TopicGenerationAuthorizationError(
+                    "APPROVAL_EXPIRY_INVALID", "expires_at must be in the future.",
+                )
+            row = self.conn.execute(
+                "SELECT * FROM jobs WHERE id=?", (job_id,),
+            ).fetchone()
+            if row is None:
+                raise TopicGenerationAuthorizationError(
+                    "JOB_MISSING", f"job {job_id!r} does not exist.",
+                )
+            job = self._job_from_row(row)
+            intent, intent_json, fingerprint = (
+                self._frozen_topic_generation_contract_from_payload(
+                    row["payload_json"], job_id,
+                )
+            )
+            if job.account_id != account_id or intent.account_id != account_id:
+                raise TopicGenerationAuthorizationError(
+                    "ACCOUNT_MISMATCH", "approval account must own the frozen job contract.",
+                )
+            if (
+                job.kind is not JobKind.TOPIC_GENERATION
+                or job.workflow is not WorkflowType.TOPIC_GENERATION
+            ):
+                raise TopicGenerationAuthorizationError(
+                    "JOB_KIND_MISMATCH",
+                    "approval requires a TOPIC_GENERATION job and workflow.",
+                )
+            if job.topic_id is not None:
+                raise TopicGenerationAuthorizationError(
+                    "TOPIC_ID_FORBIDDEN",
+                    "a topic generation job must not reference a topic.",
+                )
+            if job.status is not JobStatus.QUEUED:
+                raise TopicGenerationAuthorizationError(
+                    "JOB_NOT_APPROVABLE",
+                    f"approval must precede execution; job status is {job.status.value}.",
+                )
+            if self.conn.execute(
+                "SELECT 1 FROM topic_generation_approvals WHERE job_id=?", (job_id,),
+            ).fetchone() is not None:
+                raise TopicGenerationAuthorizationError(
+                    "APPROVAL_ALREADY_EXISTS", "the job already carries its one approval.",
+                )
+            cursor = self.conn.execute(
+                "INSERT INTO topic_generation_approvals (job_id,account_id,"
+                "intent_fingerprint,execution_intent_json,model,cap_usd,max_tokens,"
+                "approved_by,approved_at,expires_at,consumed_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,NULL)",
+                (
+                    job_id, account_id, fingerprint, intent_json, intent.model,
+                    intent.cap_usd, intent.max_tokens, approved_by.strip(), now,
+                    _persisted_ts(expiry_dt),
+                ),
+            )
+            stored = self.conn.execute(
+                "SELECT * FROM topic_generation_approvals WHERE id=?",
+                (int(cursor.lastrowid),),
+            ).fetchone()
+            self.conn.commit()
+            assert stored is not None
+            return self._topic_generation_approval_from_row(stored)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def get_topic_generation_approval_for_job(
+        self, job_id: str,
+    ) -> TopicGenerationApproval | None:
+        row = self.conn.execute(
+            "SELECT * FROM topic_generation_approvals WHERE job_id=?", (job_id,),
+        ).fetchone()
+        return None if row is None else self._topic_generation_approval_from_row(row)
+
+    def _require_usable_topic_generation_approval(
+        self, job_id: str, *, account_id: str, model: str, cap_usd: str,
+        max_tokens: int, canonical_intent_json: str, intent_fingerprint: str,
+        current_ts: str, require_consumed: bool = False,
+    ) -> sqlite3.Row:
+        """One closed matrix of approval refusals, shared by every caller."""
+        row = self.conn.execute(
+            "SELECT * FROM topic_generation_approvals WHERE job_id=?", (job_id,),
+        ).fetchone()
+        if row is None:
+            raise TopicGenerationAuthorizationError(
+                "APPROVAL_MISSING",
+                "no L1 topic generation approval exists for this job.",
+            )
+        if row["account_id"] != account_id:
+            raise TopicGenerationAuthorizationError(
+                "APPROVAL_ACCOUNT_MISMATCH", "approval account does not own the job.",
+            )
+        if row["model"] != model:
+            raise TopicGenerationAuthorizationError(
+                "APPROVAL_MODEL_MISMATCH",
+                "the approved model differs from the frozen intent model.",
+            )
+        # A cap may only ever shrink relative to what a human approved; a higher
+        # cap is a different, unapproved financial exposure.
+        if _money(row["cap_usd"], positive=True, label="Approved cap") < _money(
+            cap_usd, positive=True, label="Frozen intent cap",
+        ):
+            raise TopicGenerationAuthorizationError(
+                "APPROVAL_CAP_EXCEEDED",
+                "the frozen intent cap exceeds the approved cap.",
+            )
+        if int(row["max_tokens"]) != int(max_tokens):
+            raise TopicGenerationAuthorizationError(
+                "APPROVAL_MAX_TOKENS_MISMATCH",
+                "the approved max_tokens differs from the frozen intent.",
+            )
+        if require_consumed:
+            if row["consumed_at"] is None:
+                raise TopicGenerationAuthorizationError(
+                    "APPROVAL_NOT_CONSUMED",
+                    "the approval was not consumed by this execution.",
+                )
+        elif row["consumed_at"] is not None:
+            raise TopicGenerationAuthorizationError(
+                "APPROVAL_ALREADY_CONSUMED",
+                "the one-shot approval was already consumed.",
+            )
+        if str(row["expires_at"]) <= current_ts and not require_consumed:
+            raise TopicGenerationAuthorizationError(
+                "APPROVAL_EXPIRED", "the approval expired before execution.",
+            )
+        if (
+            row["intent_fingerprint"] != intent_fingerprint
+            or row["execution_intent_json"] != canonical_intent_json
+        ):
+            raise TopicGenerationAuthorizationError(
+                "INTENT_MISMATCH",
+                "the current job payload diverged from the approved frozen intent.",
+            )
+        return row
+
+    def _consume_topic_generation_approval(
+        self, execution: JobExecutionContext,
+        intent: DurableTopicGenerationIntent, *, canonical_intent_json: str,
+        intent_fingerprint: str, current_ts: str,
+    ) -> None:
+        """Atomic one-shot consumption inside the reservation transaction.
+
+        Wywoływane WYŁĄCZNIE z `begin_provider_attempt` (ta sama transakcja co
+        INSERT RESERVED). Każda odmowa wycofuje całą transakcję — zero
+        konsumpcji, zero attemptu, zero requestu, zero kosztu.
+        """
+        approval_row = self._require_usable_topic_generation_approval(
+            execution.job_id,
+            account_id=intent.account_id,
+            model=intent.model,
+            cap_usd=intent.cap_usd,
+            max_tokens=intent.max_tokens,
+            canonical_intent_json=canonical_intent_json,
+            intent_fingerprint=intent_fingerprint,
+            current_ts=current_ts,
+        )
+        consumed = self.conn.execute(
+            "UPDATE topic_generation_approvals SET consumed_at=? "
+            "WHERE id=? AND consumed_at IS NULL",
+            (current_ts, approval_row["id"]),
+        )
+        if consumed.rowcount != 1:
+            raise TopicGenerationAuthorizationError(
+                "APPROVAL_CONSUME_RACE", "approval consumption compare-and-swap failed.",
+            )
+
+    def initialize_topic_generation_run_for_job(
+        self, job_id: str, lease_owner: str, run_id: str, *, clock: Clock,
+    ) -> TopicGenerationInitialization:
+        """Create or resume the one TOPIC_GENERATION run under a fresh lease."""
+        if not run_id.strip() or not lease_owner.strip():
+            raise ValueError("topic generation identifiers must be non-empty.")
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            now = _persisted_ts(self._job_now(clock=clock))
+            row = self.conn.execute(
+                "SELECT * FROM jobs WHERE id=?", (job_id,),
+            ).fetchone()
+            if row is None:
+                raise JobRunRelationError(
+                    "JOB_MISSING", job_id, "topic generation job is missing.",
+                )
+            job = self._job_from_row(row)
+            try:
+                payload = canonicalize_topic_generation_payload(job.payload)
+            except DurableExecutionIntentError as exc:
+                raise JobRunRelationError(
+                    "TOPIC_GENERATION_INTENT_INVALID", job_id, str(exc),
+                ) from exc
+            if (
+                job.kind is not JobKind.TOPIC_GENERATION
+                or job.workflow is not WorkflowType.TOPIC_GENERATION
+                or job.topic_id is not None
+                or payload["account_id"] != job.account_id
+            ):
+                raise JobRunRelationError(
+                    "TOPIC_GENERATION_IDENTITY_MISMATCH", job_id,
+                    "job, payload and account identity must match, without a topic.",
+                )
+            if (
+                job.status not in (JobStatus.LEASED, JobStatus.RUNNING)
+                or job.lease_owner != lease_owner
+                or job.lease_expires_at is None
+                or _persisted_ts(job.lease_expires_at) < now
+            ):
+                raise StaleJobExecutionError(job_id)
+
+            if job.run_id is None:
+                self.conn.execute(
+                    "INSERT INTO runs (id,account_id,workflow,status,current_state,"
+                    "started_at,cost_usd) VALUES (?,?,?,?,?,?,0)",
+                    (
+                        run_id, job.account_id, WorkflowType.TOPIC_GENERATION.value,
+                        RunStatus.RUNNING.value, "generate", now,
+                    ),
+                )
+                cursor = self.conn.execute(
+                    "UPDATE jobs SET run_id=?,updated_at=? WHERE id=? AND run_id IS NULL "
+                    "AND lease_owner=? AND lease_expires_at>=? "
+                    "AND status IN ('LEASED','RUNNING')",
+                    (run_id, now, job_id, lease_owner, now),
+                )
+                if cursor.rowcount != 1:
+                    raise StaleJobExecutionError(job_id)
+                created = True
+                attached_run_id = run_id
+            else:
+                created = False
+                attached_run_id = job.run_id
+
+            run_row = self.conn.execute(
+                "SELECT * FROM runs WHERE id=?", (attached_run_id,),
+            ).fetchone()
+            if run_row is None:
+                raise JobRunRelationError(
+                    "ATTACHED_TOPIC_GENERATION_RUN_MISSING", job_id,
+                    "topic generation run relation is incomplete.",
+                )
+            run = self._run_from_row(run_row)
+            if (
+                run.account_id != job.account_id
+                or run.workflow is not WorkflowType.TOPIC_GENERATION
+                or run.status is not RunStatus.RUNNING
+                or run_row["finished_at"] is not None
+            ):
+                raise JobRunRelationError(
+                    "ATTACHED_TOPIC_GENERATION_RUN_INVALID", job_id,
+                    "attached topic generation run is not resumable.",
+                )
+            refreshed = self.conn.execute(
+                "SELECT * FROM jobs WHERE id=?", (job_id,),
+            ).fetchone()
+            assert refreshed is not None
+            self.conn.commit()
+            return TopicGenerationInitialization(
+                job=self._job_from_row(refreshed), run=run, created=created,
+            )
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def assert_topic_generation_execution_active(
+        self, execution: JobExecutionContext, *,
+        expected_intent_fingerprint: str | None = None,
+    ) -> None:
+        """Fresh fence check; optionally re-proves the frozen intent identity."""
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            self._require_topic_generation_fence(execution, current_ts)
+            if expected_intent_fingerprint is not None:
+                row = self.conn.execute(
+                    "SELECT payload_json FROM jobs WHERE id=?", (execution.job_id,),
+                ).fetchone()
+                if row is None:
+                    raise StaleJobExecutionError(execution.job_id)
+                intent, intent_json, fingerprint = (
+                    self._frozen_topic_generation_contract_from_payload(
+                        row["payload_json"], execution.job_id,
+                    )
+                )
+                if fingerprint != expected_intent_fingerprint:
+                    raise TopicGenerationAuthorizationError(
+                        "INTENT_MISMATCH",
+                        "the durable intent changed after the reservation.",
+                    )
+                # The consumed approval must still be the one that authorized
+                # exactly this frozen contract.
+                self._require_usable_topic_generation_approval(
+                    execution.job_id,
+                    account_id=intent.account_id,
+                    model=intent.model,
+                    cap_usd=intent.cap_usd,
+                    max_tokens=intent.max_tokens,
+                    canonical_intent_json=intent_json,
+                    intent_fingerprint=fingerprint,
+                    current_ts=current_ts,
+                    require_consumed=True,
+                )
+            self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def list_generated_topics_for_run(
+        self, run_id: str,
+    ) -> list[GeneratedTopicLineage]:
+        rows = self.conn.execute(
+            "SELECT * FROM generated_topics WHERE run_id=? ORDER BY candidate_index",
+            (run_id,),
+        ).fetchall()
+        return [self._generated_topic_from_row(row) for row in rows]
+
+    def finalize_topic_generation_success(
+        self, execution: JobExecutionContext, *, request_id: str,
+        candidates: Sequence[TopicGenerationCandidate], total_cost_usd: float,
+    ) -> list[GeneratedTopicLineage]:
+        """One transaction: topics, lineage, settlement, run cost, terminal job.
+
+        Repeating the exact same finalization is refused rather than partially
+        applied: the fence requires a live lease and an unfinished run, both of
+        which the first successful call has already cleared.
+        """
+        if not candidates:
+            raise ValueError("topic generation finalization requires candidates.")
+        selected = [c for c in candidates if c.is_selected]
+        if len(selected) > 1:
+            raise TopicGenerationResultError(
+                "MULTIPLE_SELECTED",
+                "one topic generation execution may select at most one topic.",
+            )
+        indexes = [c.candidate_index for c in candidates]
+        if sorted(indexes) != list(range(len(candidates))):
+            raise TopicGenerationResultError(
+                "CANDIDATE_INDEX_INVALID",
+                "candidate indexes must be a dense zero-based ranking.",
+            )
+        if any(c.topic.id is not None for c in candidates):
+            raise TopicGenerationResultError(
+                "CANDIDATE_PREPERSISTED",
+                "a finalization candidate must not be pre-persisted.",
+            )
+        original_ids = [c.topic.id for c in candidates]
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current = self._job_now(execution.now())
+            current_ts = _persisted_ts(current)
+            fence = self._require_topic_generation_fence(execution, current_ts)
+            if fence["run_status"] != RunStatus.RUNNING.value:
+                raise StaleJobExecutionError(
+                    execution.job_id,
+                    "topic generation run is no longer finalizable.",
+                )
+            account_id = fence["run_account_id"]
+            attempt = self.conn.execute(
+                "SELECT * FROM provider_attempts WHERE request_id=? AND job_id=?",
+                (request_id, execution.job_id),
+            ).fetchone()
+            if attempt is None or attempt["status"] != (
+                ProviderAttemptStatus.SETTLED.value
+            ):
+                raise StaleJobExecutionError(
+                    execution.job_id,
+                    "topic generation finalization requires its settled attempt.",
+                )
+            canonical = self._topic_generation_usage_total(execution.run_id)
+            if canonical != _money(
+                total_cost_usd, positive=False,
+                label="Topic generation finalization cost",
+            ):
+                raise TopicGenerationResultError(
+                    "COST_MISMATCH",
+                    "finalization cost must equal canonical model usage.",
+                )
+            lineage: list[GeneratedTopicLineage] = []
+            for candidate in sorted(candidates, key=lambda c: c.candidate_index):
+                topic = candidate.topic
+                if topic.account_id != account_id:
+                    raise TopicGenerationResultError(
+                        "CANDIDATE_ACCOUNT_MISMATCH",
+                        "a generated topic must belong to the executing account.",
+                    )
+                stored = self._insert_topic(topic)
+                cursor = self.conn.execute(
+                    "INSERT INTO generated_topics (topic_id,account_id,job_id,run_id,"
+                    "request_id,candidate_index,is_selected,created_at) "
+                    "VALUES (?,?,?,?,?,?,?,?)",
+                    (
+                        int(stored.id), account_id, execution.job_id,
+                        execution.run_id, request_id, candidate.candidate_index,
+                        int(bool(candidate.is_selected)), current_ts,
+                    ),
+                )
+                row = self.conn.execute(
+                    "SELECT * FROM generated_topics WHERE id=?",
+                    (int(cursor.lastrowid),),
+                ).fetchone()
+                assert row is not None
+                lineage.append(self._generated_topic_from_row(row))
+
+            run_cursor = self.conn.execute(
+                "UPDATE runs SET status='SUCCESS',cost_usd=?,error=NULL,finished_at=? "
+                "WHERE id=? AND status='RUNNING' AND finished_at IS NULL AND EXISTS ("
+                "SELECT 1 FROM jobs WHERE id=? AND run_id=runs.id AND lease_owner=? "
+                "AND lease_expires_at>=? AND status IN ('LEASED','RUNNING'))",
+                (
+                    float(canonical), current_ts, execution.run_id,
+                    execution.job_id, execution.lease_owner, current_ts,
+                ),
+            )
+            job_cursor = self.conn.execute(
+                "UPDATE jobs SET status='DONE',last_error=NULL,lease_owner=NULL,"
+                "lease_expires_at=NULL,updated_at=?,finished_at=?,"
+                "reserved_cost_usd=0.0,budget_reserved_at=NULL WHERE id=? "
+                "AND run_id=? AND lease_owner=? AND lease_expires_at>=? "
+                "AND status IN ('LEASED','RUNNING')",
+                (
+                    current_ts, current_ts, execution.job_id, execution.run_id,
+                    execution.lease_owner, current_ts,
+                ),
+            )
+            if run_cursor.rowcount != 1 or job_cursor.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            self.conn.commit()
+            return lineage
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            for candidate, original in zip(candidates, original_ids):
+                candidate.topic.id = original
+            raise
+
+    def fail_or_escalate_topic_generation_execution(
+        self, execution: JobExecutionContext, cost_usd: float | None, error: str,
+        *, terminalize_job: bool = False, preserve_for_verification: bool = False,
+    ) -> ResearchExecutionFailureOutcome:
+        """Atomically fail a safe execution or expose its active attempt.
+
+        Mirrors the research boundary contract exactly: RESERVED,
+        REQUEST_STARTED and NEEDS_RECONCILIATION are never hidden behind a
+        terminal job state, the reservation is retained on escalation, and no
+        second provider attempt can ever follow.
+        """
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            lifecycle = self.conn.execute(
+                "SELECT j.status AS job_status,j.run_id,j.lease_owner,"
+                "j.lease_expires_at,r.status AS run_status "
+                "FROM jobs j JOIN runs r ON r.id=j.run_id "
+                "WHERE j.id=? AND j.run_id=? AND j.kind='TOPIC_GENERATION'",
+                (execution.job_id, execution.run_id),
+            ).fetchone()
+            if lifecycle is None:
+                raise StaleJobExecutionError(
+                    execution.job_id,
+                    "topic generation lifecycle relation no longer exists.",
+                )
+            active_attempts = self.conn.execute(
+                "SELECT request_id,status FROM provider_attempts WHERE job_id=? "
+                "AND status IN ('RESERVED','REQUEST_STARTED','NEEDS_RECONCILIATION') "
+                "ORDER BY stage,attempt_no",
+                (execution.job_id,),
+            ).fetchall()
+            if len(active_attempts) > 1:
+                raise ProviderAttemptReconciliationError(
+                    "Topic generation has multiple active provider attempts."
+                )
+
+            if active_attempts:
+                active = active_attempts[0]
+                attempt_status = ProviderAttemptStatus(active["status"])
+                already_preserved = (
+                    lifecycle["job_status"] == JobStatus.NEEDS_VERIFICATION.value
+                )
+                if attempt_status is ProviderAttemptStatus.NEEDS_RECONCILIATION:
+                    if already_preserved:
+                        self.conn.commit()
+                        return (
+                            ResearchExecutionFailureOutcome.ALREADY_NEEDS_RECONCILIATION
+                        )
+                    if lifecycle["job_status"] not in _EXECUTABLE_JOB_STATUSES:
+                        raise ProviderAttemptReconciliationError(
+                            "Active reconciliation is hidden behind a non-reviewable job state."
+                        )
+                    self._require_topic_generation_fence(execution, current_ts)
+                    self._preserve_topic_generation_job(execution, error, current_ts)
+                    self.conn.commit()
+                    return ResearchExecutionFailureOutcome.ALREADY_NEEDS_RECONCILIATION
+
+                if already_preserved:
+                    if lifecycle["lease_owner"] is not None or \
+                            lifecycle["lease_expires_at"] is not None:
+                        raise ProviderAttemptReconciliationError(
+                            "A reviewable job must not retain an execution lease."
+                        )
+                    run_status = lifecycle["run_status"]
+                else:
+                    fence = self._require_topic_generation_fence(execution, current_ts)
+                    run_status = fence["run_status"]
+                if run_status != RunStatus.RUNNING.value:
+                    raise StaleJobExecutionError(
+                        execution.job_id,
+                        "topic generation lifecycle is no longer mutable by this execution.",
+                    )
+                reason = (
+                    _UNEXPECTED_FAILURE_BEFORE_REQUEST_STARTED
+                    if attempt_status is ProviderAttemptStatus.RESERVED
+                    else _UNEXPECTED_FAILURE_AFTER_REQUEST_STARTED
+                )
+                financial = (
+                    FinancialResolution.NOT_CHARGED
+                    if attempt_status is ProviderAttemptStatus.RESERVED
+                    else FinancialResolution.CHARGE_UNKNOWN
+                )
+                attempt_cursor = self.conn.execute(
+                    "UPDATE provider_attempts SET status='NEEDS_RECONCILIATION',"
+                    "error_code=? WHERE request_id=? AND status=?",
+                    (reason, active["request_id"], attempt_status.value),
+                )
+                if attempt_cursor.rowcount != 1:
+                    raise ProviderAttemptReconciliationError(
+                        "Provider attempt changed during failure normalization."
+                    )
+                self._append_reconciliation_event(
+                    request_id=active["request_id"],
+                    event_type=ReconciliationEventType.AUTO_ESCALATION,
+                    financial_resolution=financial,
+                    execution_resolution=ExecutionResolution.MANUAL_REVIEW_REMAINS_REQUIRED,
+                    operator=_WORKER_FAILURE_ESCALATION_OPERATOR,
+                    note=reason,
+                    previous_status=attempt_status.value,
+                    resulting_status=ProviderAttemptStatus.NEEDS_RECONCILIATION.value,
+                    idempotency_key=self._reconciliation_idempotency_key(
+                        active["request_id"], financial,
+                        ExecutionResolution.MANUAL_REVIEW_REMAINS_REQUIRED,
+                        _WORKER_FAILURE_ESCALATION_OPERATOR, reason, "ESCALATION",
+                    ),
+                    created_at=current_ts,
+                )
+                if not already_preserved:
+                    self._preserve_topic_generation_job(execution, error, current_ts)
+                self.conn.commit()
+                return (
+                    ResearchExecutionFailureOutcome.ESCALATED_RESERVED
+                    if attempt_status is ProviderAttemptStatus.RESERVED
+                    else ResearchExecutionFailureOutcome.ESCALATED_REQUEST_STARTED
+                )
+
+            if lifecycle["job_status"] in _TERMINAL_JOB_STATUSES:
+                self.conn.commit()
+                return ResearchExecutionFailureOutcome.ALREADY_TERMINALIZED
+            if preserve_for_verification and lifecycle["job_status"] == (
+                JobStatus.NEEDS_VERIFICATION.value
+            ):
+                self.conn.commit()
+                return ResearchExecutionFailureOutcome.PRESERVED_NEEDS_VERIFICATION
+            if lifecycle["run_status"] == RunStatus.FAILED.value and (
+                not terminalize_job
+                or lifecycle["job_status"] == JobStatus.FAILED.value
+            ):
+                self.conn.commit()
+                return ResearchExecutionFailureOutcome.TERMINALIZED_FAILED
+
+            fence = self._require_topic_generation_fence(execution, current_ts)
+            if preserve_for_verification:
+                if fence["run_status"] != RunStatus.RUNNING.value:
+                    raise StaleJobExecutionError(
+                        execution.job_id,
+                        "topic generation lifecycle cannot be preserved for verification.",
+                    )
+                self._preserve_topic_generation_job(execution, error, current_ts)
+                self.conn.commit()
+                return ResearchExecutionFailureOutcome.PRESERVED_NEEDS_VERIFICATION
+            canonical = self._topic_generation_usage_total(execution.run_id)
+            if cost_usd is not None and canonical != _money(
+                cost_usd, positive=False, label="Topic generation failure cost",
+            ):
+                raise TopicGenerationResultError(
+                    "COST_MISMATCH",
+                    "failure cost must equal canonical model usage.",
+                )
+            if fence["run_status"] != RunStatus.RUNNING.value:
+                raise StaleJobExecutionError(
+                    execution.job_id,
+                    "topic generation lifecycle is no longer mutable by this execution.",
+                )
+            run_cursor = self.conn.execute(
+                "UPDATE runs SET status='FAILED',cost_usd=?,error=?,finished_at=? "
+                "WHERE id=? AND status='RUNNING' AND finished_at IS NULL "
+                "AND EXISTS (SELECT 1 FROM jobs WHERE id=? AND run_id=runs.id "
+                "AND lease_owner=? AND lease_expires_at>=? "
+                "AND status IN ('LEASED','RUNNING'))",
+                (
+                    float(canonical), error, current_ts, execution.run_id,
+                    execution.job_id, execution.lease_owner, current_ts,
+                ),
+            )
+            if run_cursor.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            if terminalize_job:
+                job_cursor = self.conn.execute(
+                    "UPDATE jobs SET status='FAILED',last_error=?,lease_owner=NULL,"
+                    "lease_expires_at=NULL,updated_at=?,finished_at=?,"
+                    "reserved_cost_usd=0.0,budget_reserved_at=NULL WHERE id=? "
+                    "AND run_id=? AND lease_owner=? AND lease_expires_at>=? "
+                    "AND status IN ('LEASED','RUNNING')",
+                    (
+                        error, current_ts, current_ts, execution.job_id,
+                        execution.run_id, execution.lease_owner, current_ts,
+                    ),
+                )
+                if job_cursor.rowcount != 1:
+                    raise StaleJobExecutionError(execution.job_id)
+            self.conn.commit()
+            return ResearchExecutionFailureOutcome.TERMINALIZED_FAILED
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def _preserve_topic_generation_job(
+        self, execution: JobExecutionContext, error: str, current_ts: str,
+    ) -> None:
+        """Move the leased job to NEEDS_VERIFICATION and clear its lease."""
+        job_cursor = self.conn.execute(
+            "UPDATE jobs SET status='NEEDS_VERIFICATION',last_error=?,"
+            "lease_owner=NULL,lease_expires_at=NULL,updated_at=?,finished_at=NULL "
+            "WHERE id=? AND run_id=? AND lease_owner=? AND lease_expires_at>=? "
+            "AND status IN ('LEASED','RUNNING')",
+            (
+                error, current_ts, execution.job_id, execution.run_id,
+                execution.lease_owner, current_ts,
+            ),
+        )
+        if job_cursor.rowcount != 1:
+            raise StaleJobExecutionError(execution.job_id)
 
     def _assert_evidence_finalization_path(
         self, *, account_id: str, topic_id: int, fence_topic_id: int,

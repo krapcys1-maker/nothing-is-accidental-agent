@@ -500,3 +500,11 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Druga lekcja: cztery poprawne transakcje nie tworzą magicznie jednej transakcji. Raport mówi prawdę: które szczeble są trwałe, który nie został wykonany i że resume wymaga nowego SHA, snapshotu oraz zgody.
 - Dowód: 18 okien failpoint, 58/58 testów orchestratora, pełne/exact-once 1630/1630; produkcja pozostała bajtowo identyczna na `0014`.
 - Cytowalna zasada: „Backup chroni stan sprzed operacji. Dopiero ponowne sprawdzenie chroni decyzję, że wolno ją zacząć.”
+
+## 2026-07-22 — Materiał: „Rozliczony request nie może stać się martwym jobem”
+
+- Crash po zapisie usage i `SETTLED`, lecz przed scoringiem tematów, pokazał granicę między nieodwracalnym faktem finansowym a niedokończonym lifecycle. Cofnięcie settlementu albo retry groziłoby drugim kosztem; pozostawienie joba blokowało konto bez operator route.
+- Naprawa nie tworzy drugiego ledgera. Jedno kanoniczne usage pozostaje źródłem kosztu, attempt pozostaje `SETTLED`, a osobny append-only event wykonawczy kończy run/job jako `FAILED` dopiero po sprawdzeniu frozen intentu, approval, lineage, braku attemptu #2 i braku wyniku topiców.
+- Kontrpróba z generated_topics dowodzi granicy wiedzy: recovery odmawia, jeśli istnieje choć ślad wyniku. Atomowa finalizacja aplikacyjna pokazuje zarazem, że wspierany crash w jej środku cofa topics i generated_topics razem.
+- Dowód: 23 nowe przypadki; `1821/1821`, brak skip/xfail; koszt `0.000000 USD`; produkcja niezmieniona.
+- Cytowalna zasada: „Kiedy pieniądze są już faktem, naprawia się lifecycle — nie historię płatności.”

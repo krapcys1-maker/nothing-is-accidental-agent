@@ -31,6 +31,7 @@ from app.models import (
     WorkflowType,
 )
 from app.ports.storage import (
+    JobConflictError,
     ProviderAttemptReconciliationError,
     ReconciliationPreviewStaleError,
 )
@@ -408,6 +409,155 @@ def _cmd_approve_evidence_research(args: argparse.Namespace) -> int:
                 pass
 
 
+def _cmd_enqueue_topic_generation(args: argparse.Namespace) -> int:
+    """Freeze exactly one autonomous topic-generation request into a durable job.
+
+    Enqueue NIE wykonuje żadnego requestu, nie uruchamia workera i nie tworzy
+    ŻADNEGO tematu — temat może powstać dopiero z odpowiedzi modelu.  Wykonanie
+    wymaga jeszcze jednorazowej zgody L1 (`approve-topic-generation`).
+    """
+    from app.core.pricing import (
+        PricingConfigError,
+        default_pricing_profiles_path,
+        load_pricing_profiles,
+        resolve_real_pricing_profile,
+    )
+    from app.llm.base import TOPIC_CRITERIA
+    from app.research.durable_intent import (
+        DurableExecutionIntentError,
+        validate_cli_max_tokens,
+    )
+    from app.topics.durable_intent import (
+        TOPIC_GENERATION_EXECUTION,
+        DurableTopicGenerationIntent,
+        topic_generation_idempotency_key,
+        topic_generation_job_id,
+    )
+
+    settings = load_settings()
+    try:
+        policy = SchedulingPolicy.from_config(settings.editorial_schedule)
+        account = settings.get_account(args.account_id)
+        max_tokens = validate_cli_max_tokens(args.max_tokens)
+        profiles = load_pricing_profiles(
+            default_pricing_profiles_path(settings.project_root)
+        )
+        profile = resolve_real_pricing_profile(
+            profiles, profile_id=args.pricing_profile, model=args.model,
+        )
+        # The scoring dimensions are frozen from the account's ACTIVE weights, so
+        # a later configuration change cannot silently alter what the durable
+        # execution will accept.
+        dimensions = sorted(settings.topic_scoring_weights or {}) or sorted(TOPIC_CRITERIA)
+        intent = DurableTopicGenerationIntent.from_settings(
+            settings=settings,
+            account_id=account.id,
+            cap_usd=args.max_cost_usd,
+            candidate_count=args.count,
+            niche=account.niche or ["hidden everyday systems"],
+            model=args.model,
+            max_tokens=max_tokens,
+            score_dimensions=dimensions,
+            pricing_prices=profile.prices,
+            pricing_profile_id=profile.profile_id,
+            pricing_profile_version=profile.version,
+            pricing_currency=profile.currency,
+            pricing_unit=profile.unit,
+        )
+    except (
+        ConfigError, SchedulingValidationError, PricingConfigError,
+        DurableExecutionIntentError,
+    ) as exc:
+        print(f"ENQUEUE TOPIC GENERATION: failed closed: {exc}", file=sys.stderr)
+        return 2
+
+    storage = SqliteStorage.open(settings.db_path)
+    try:
+        storage.ensure_account(account)
+        result = ScheduledJobEnqueuer(
+            storage=storage, scheduling_policy=policy, clock=SystemClock(),
+        ).enqueue(ScheduledJobRequest(
+            id=topic_generation_job_id(args.operation_key),
+            account_id=account.id,
+            kind=JobKind.TOPIC_GENERATION,
+            workflow=WorkflowType.TOPIC_GENERATION,
+            idempotency_key=topic_generation_idempotency_key(args.operation_key),
+            topic_id=None,
+            payload={
+                "account_id": account.id,
+                "dry_run": False,
+                "execution": TOPIC_GENERATION_EXECUTION,
+                "mode": "single",
+                "max_cost_usd": intent.cap_usd,
+                "execution_intent": intent.as_payload(),
+            },
+            requested_at=args.requested_at,
+            max_attempts=1,
+        ))
+        print(f"ENQUEUE TOPIC GENERATION: job_id={result.job.id}")
+        print(f"earliest_run_at_utc={result.decision.earliest_run_at.isoformat()}")
+        print(f"schedule_reason={result.decision.reason.value}")
+        print(f"model={intent.model} max_tokens={intent.max_tokens}")
+        print(f"candidate_count={intent.candidate_count}")
+        print(f"cap_usd={intent.cap_usd}")
+        print(f"projected_cost_usd={intent.projected_cost_usd}")
+        print(f"pessimistic_cost_usd={intent.pessimistic_cost_usd}")
+        print(f"execution={TOPIC_GENERATION_EXECUTION}")
+        print("dry_run=false topic_id=none provider_request=none")
+        return 0
+    except (SchedulingValidationError, JobConflictError, ValueError) as exc:
+        print(f"ENQUEUE TOPIC GENERATION: failed closed: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        storage.close()
+
+
+def _cmd_approve_topic_generation(args: argparse.Namespace) -> int:
+    """Record the one-shot human L1 approval bound to one frozen topic job.
+
+    To jest bramka BIEŻĄCEJ FAZY budowy dla dokładnie jednego płatnego joba —
+    audytowalna w SQLite, z expiry, konsumowana atomowo dokładnie raz w tej
+    samej transakcji co rezerwacja provider attemptu.  Nie jest i nie stanie się
+    docelowym wymogiem LEVEL_3 ani logiką wyboru tematu.
+    """
+    from app.ports.storage import TopicGenerationAuthorizationError
+
+    storage = None
+    try:
+        settings = load_settings()
+        settings.get_account(args.account_id)
+        storage = SqliteStorage.open(settings.db_path)
+        approval = storage.record_topic_generation_approval(
+            job_id=args.job_id,
+            account_id=args.account_id,
+            approved_by=args.approved_by,
+            expires_at=args.expires_at,
+            clock=SystemClock(),
+        )
+        print(f"APPROVE TOPIC GENERATION: approval_id={approval.id}")
+        print(f"job_id={approval.job_id}")
+        print(f"model={approval.model} cap_usd={approval.cap_usd}")
+        print(f"max_tokens={approval.max_tokens}")
+        print(f"intent_fingerprint={approval.intent_fingerprint}")
+        print(f"expires_at={approval.expires_at}")
+        print("action_type=TOPIC_GENERATION single_use=true transferable=false")
+        return 0
+    except SchemaVersionError:
+        raise
+    except (
+        ConfigError, TopicGenerationAuthorizationError,
+        ValueError, RuntimeError, OSError, sqlite3.Error,
+    ) as exc:
+        print(f"APPROVE TOPIC GENERATION: failed closed: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        if storage is not None:
+            try:
+                storage.close()
+            except (OSError, RuntimeError, sqlite3.Error):
+                pass
+
+
 def _cmd_controlled_fetch_live_once(args: argparse.Namespace) -> int:
     """One-shot executor for exactly one approved CONTROLLED_FETCH job.
 
@@ -508,6 +658,7 @@ def _build_worker(
     dispatcher = JobDispatcher(
         settings=settings, storage=storage, policy=policy, clock=clock,
         allow_real_research=not offline_only,
+        allow_real_topic_generation=not offline_only,
     )
     return Worker(
         storage=storage, policy=policy, dispatcher=dispatcher,
@@ -1233,6 +1384,50 @@ def build_parser() -> argparse.ArgumentParser:
     p_approve_evidence.add_argument("--expires-at", required=True, type=_parse_requested_at,
                                     help="ISO-8601 z jawną strefą; zgoda wygasa najpóźniej wtedy.")
     p_approve_evidence.set_defaults(func=_cmd_approve_evidence_research)
+
+    p_enqueue_topics = sub.add_parser(
+        "enqueue-topic-generation",
+        help="Zamroź dokładnie jeden durable job autonomicznego generowania tematów.",
+    )
+    p_enqueue_topics.add_argument("--account-id", required=True)
+    p_enqueue_topics.add_argument(
+        "--operation-key", required=True,
+        help="Stabilny klucz operacji; wyznacza deterministyczne, idempotentne job_id.",
+    )
+    p_enqueue_topics.add_argument(
+        "--model", required=True,
+        help="Jawny model providera; musi pasować do zatwierdzonego profilu cennika.",
+    )
+    p_enqueue_topics.add_argument(
+        "--pricing-profile", required=True,
+        help="Identyfikator zatwierdzonego profilu cennika (zamrażany w intencie).",
+    )
+    p_enqueue_topics.add_argument(
+        "--max-tokens", required=True, type=int,
+        help="Jawny limit tokenów odpowiedzi (zamrażany w intencie).",
+    )
+    p_enqueue_topics.add_argument(
+        "--max-cost-usd", required=True,
+        help="Jawny twardy cap USD dla tego jednego joba.",
+    )
+    p_enqueue_topics.add_argument(
+        "--count", required=True, type=int,
+        help="Liczba żądanych kandydatów tematów.",
+    )
+    p_enqueue_topics.add_argument("--requested-at", type=_parse_requested_at)
+    p_enqueue_topics.set_defaults(func=_cmd_enqueue_topic_generation)
+
+    p_approve_topics = sub.add_parser(
+        "approve-topic-generation",
+        help="Jednorazowa zgoda L1 dla dokładnie jednego joba generowania tematów.",
+    )
+    p_approve_topics.add_argument("--job-id", required=True)
+    p_approve_topics.add_argument("--account-id", required=True)
+    p_approve_topics.add_argument("--approved-by", required=True,
+                                  help="Tożsamość człowieka L1 podejmującego decyzję.")
+    p_approve_topics.add_argument("--expires-at", required=True, type=_parse_requested_at,
+                                  help="ISO-8601 z jawną strefą; zgoda wygasa najpóźniej wtedy.")
+    p_approve_topics.set_defaults(func=_cmd_approve_topic_generation)
 
     p_worker = sub.add_parser("worker", help="Wykonaj bezpieczny, trwały job offline.")
     worker_mode = p_worker.add_mutually_exclusive_group(required=True)

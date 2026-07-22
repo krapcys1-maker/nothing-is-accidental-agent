@@ -138,14 +138,24 @@ class AnthropicLLMClient(LLMClient):
         *,
         caller: TopicCaller | None = None,
         timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+        topic_max_tokens: int = TOPIC_MAX_OUTPUT_TOKENS,
     ) -> None:
         if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
             raise ValueError("timeout_seconds musi być skończoną liczbą dodatnią.")
+        if (
+            isinstance(topic_max_tokens, bool)
+            or not isinstance(topic_max_tokens, int)
+            or topic_max_tokens < 1
+        ):
+            raise ValueError("topic_max_tokens musi być dodatnią liczbą całkowitą.")
         self.model = model
         self._api_key = api_key
         self._caller = caller or self._default_caller
         self._uses_default_caller = caller is None
         self._timeout_seconds = timeout_seconds
+        self._topic_max_tokens = topic_max_tokens
+        self._estimated_attempt_cost = 0.0
+        self._durable_control_configured = False
         self._durable_boundary = DurableProviderBoundary(provider_label="Real Anthropic topic")
 
     def configure_durable_attempt_control(
@@ -154,26 +164,46 @@ class AnthropicLLMClient(LLMClient):
         context_callback: DurableAttemptContextCallback | None,
         activation_callback: DurableAttemptActivationCallback | None,
         assertion_callback: DurableAttemptAssertionCallback | None,
+        estimated_attempt_cost: float = 0.0,
     ) -> None:
-        """Installs the non-optional paid-request contract for the SDK path."""
+        """Installs the non-optional paid-request contract for the SDK path.
+
+        Once configured, the boundary governs an INJECTED caller too: a fake
+        transport in tests then exercises the identical durable lifecycle
+        (reservation, REQUEST_STARTED, final assertion) as the real SDK.
+        """
         self._durable_boundary.configure(
             context_callback=context_callback,
             activation_callback=activation_callback,
             assertion_callback=assertion_callback,
         )
+        self._estimated_attempt_cost = float(estimated_attempt_cost)
+        self._durable_control_configured = (
+            context_callback is not None and activation_callback is not None
+        )
+
+    def _requires_durable_provider_context(self) -> bool:
+        return self._uses_default_caller or self._durable_control_configured
 
     def _activate_durable_attempt(self) -> None:
         self._durable_boundary.activate(
-            stage="topics", attempt_no=1, estimated_attempt_cost=0.0,
+            stage="topics", attempt_no=1,
+            estimated_attempt_cost=self._estimated_attempt_cost,
         )
 
     def _assert_active_durable_provider_attempt(self) -> str:
         return self._durable_boundary.assert_immediately_before_provider_call()
 
     def generate_and_score_topics(self, account: Account, count: int) -> TopicGenerationResult:
-        if self._uses_default_caller:
+        durable = self._requires_durable_provider_context()
+        if durable:
             self._activate_durable_attempt()
         try:
+            if durable and not self._uses_default_caller:
+                # The production caller makes this assertion inside itself after
+                # constructing the SDK.  An injected caller IS the request
+                # boundary stand-in, so it is asserted directly before invocation.
+                self._assert_active_durable_provider_attempt()
             text, usage = self._caller(account, count)
         finally:
             self._durable_boundary.clear()
@@ -205,7 +235,7 @@ class AnthropicLLMClient(LLMClient):
             request_id = self._assert_active_durable_provider_attempt()
             message = client.messages.create(
                 model=self.model,
-                max_tokens=TOPIC_MAX_OUTPUT_TOKENS,
+                max_tokens=self._topic_max_tokens,
                 system=_SYSTEM,
                 messages=[{"role": "user", "content": _build_prompt(account, count)}],
                 timeout=self._timeout_seconds,

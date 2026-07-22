@@ -15,7 +15,8 @@ EVIDENCE_SCHEMA_VERSION = "0016_evidence_foundation"
 EVIDENCE_PIPELINE_SCHEMA_VERSION = "0017_evidence_pipeline_lineage"
 CONTROLLED_FETCH_SCHEMA_VERSION = "0018_controlled_fetch_lifecycle"
 EVIDENCE_RESEARCH_SCHEMA_VERSION = "0019_evidence_research_approvals"
-RUNTIME_SCHEMA_VERSION = EVIDENCE_RESEARCH_SCHEMA_VERSION
+TOPIC_GENERATION_SCHEMA_VERSION = "0020_topic_generation_lifecycle"
+RUNTIME_SCHEMA_VERSION = TOPIC_GENERATION_SCHEMA_VERSION
 _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0007_candidate_attempts",
     "0008_staged_force_reresearch",
@@ -33,6 +34,9 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     # incoming foreign keys requires PRAGMA foreign_keys=OFF, which is a no-op
     # inside the runner transaction — the migration manages its own explicit
     # BEGIN IMMEDIATE/COMMIT (the same contract as 0006).
+    # 0020 is ABSENT for the same reason: it rebuilds `jobs`, which carries
+    # incoming foreign keys from provider_attempts, controlled_fetch_attempts
+    # and controlled_fetch_approvals.
 })
 
 
@@ -520,5 +524,24 @@ def migrate_0018_to_0019(
         db_path,
         source_version=CONTROLLED_FETCH_SCHEMA_VERSION,
         target_version=EVIDENCE_RESEARCH_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0019_to_0020(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the separately authorized topic-generation migration.
+
+    Production is intentionally NOT migrated by this change; the step exists so
+    that a later, separately authorized operation has the same explicit,
+    idempotent, single-step contract as every rung below it.
+    """
+    return _migrate_single_step(
+        db_path,
+        source_version=EVIDENCE_RESEARCH_SCHEMA_VERSION,
+        target_version=TOPIC_GENERATION_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )

@@ -37,6 +37,14 @@ from app.scheduler.heartbeat import (
 )
 
 
+def _is_topic_generation(job: Job) -> bool:
+    """One predicate for the durable, paid, topic-free workflow."""
+    return (
+        job.kind is JobKind.TOPIC_GENERATION
+        and job.workflow is WorkflowType.TOPIC_GENERATION
+    )
+
+
 class WorkerIterationStatus(str, Enum):
     IDLE = "IDLE"
     BLOCKED = "BLOCKED"
@@ -287,6 +295,10 @@ class Worker:
     ) -> WorkerIterationResult:
         """Delegate every attached research failure decision to one storage transaction."""
         current = self._storage.get_job(job.id)
+        if current is not None and current.run_id is not None and _is_topic_generation(
+            current
+        ):
+            return self._fail_topic_generation_boundary(current, error)
         if (
             current is None
             or current.run_id is None
@@ -332,6 +344,55 @@ class Worker:
             )
             return WorkerIterationResult(status, job.id, error)
         return WorkerIterationResult(WorkerIterationStatus.FAILED, job.id, error)
+
+    def _fail_topic_generation_boundary(
+        self, current: Job, error: str, *, preserve_for_verification: bool = False,
+    ) -> WorkerIterationResult:
+        """Route an escaped topic-generation failure through its storage boundary.
+
+        A TOPIC_GENERATION job whose attempt already crossed REQUEST_STARTED can
+        only be escalated for review here — it is never requeued and never gains
+        a second provider attempt.
+        """
+        assert current.run_id is not None
+        execution = JobExecutionContext(
+            job_id=current.id,
+            lease_owner=self._lease_owner,
+            run_id=current.run_id,
+            clock=self._clock,
+        )
+        try:
+            outcome = self._storage.fail_or_escalate_topic_generation_execution(
+                execution,
+                None,
+                error,
+                terminalize_job=not preserve_for_verification,
+                preserve_for_verification=preserve_for_verification,
+            )
+        except (LifecycleTransitionError, StaleJobExecutionError):
+            return self._lost_lease(current)
+        except Exception:
+            # The failure boundary itself is unavailable; never invent a
+            # standalone terminal outcome around a possibly live attempt.
+            return self._lost_lease(current)
+        if outcome in {
+            ResearchExecutionFailureOutcome.ESCALATED_RESERVED,
+            ResearchExecutionFailureOutcome.ESCALATED_REQUEST_STARTED,
+            ResearchExecutionFailureOutcome.ALREADY_NEEDS_RECONCILIATION,
+            ResearchExecutionFailureOutcome.PRESERVED_NEEDS_VERIFICATION,
+        }:
+            return WorkerIterationResult(
+                WorkerIterationStatus.NEEDS_VERIFICATION, current.id, error,
+            )
+        if outcome is ResearchExecutionFailureOutcome.ALREADY_TERMINALIZED:
+            durable = self._storage.get_job(current.id)
+            status = (
+                WorkerIterationStatus.DONE
+                if durable is not None and durable.status is JobStatus.DONE
+                else WorkerIterationStatus.FAILED
+            )
+            return WorkerIterationResult(status, current.id, error)
+        return WorkerIterationResult(WorkerIterationStatus.FAILED, current.id, error)
 
     def _fail_controlled_fetch_boundary(
         self, current: Job, error: str,
@@ -381,8 +442,13 @@ class Worker:
         if (
             current is None
             or current.run_id is None
-            or current.kind is not JobKind.RESEARCH
-            or current.workflow is not WorkflowType.RESEARCH
+            or (
+                not _is_topic_generation(current)
+                and (
+                    current.kind is not JobKind.RESEARCH
+                    or current.workflow is not WorkflowType.RESEARCH
+                )
+            )
         ):
             return WorkerIterationResult(
                 WorkerIterationStatus.LOST_LEASE,
@@ -414,6 +480,14 @@ class Worker:
         if current is not None and current.status is JobStatus.NEEDS_VERIFICATION:
             return WorkerIterationResult(
                 WorkerIterationStatus.NEEDS_VERIFICATION, job.id, error,
+            )
+        if (
+            current is not None
+            and current.run_id is not None
+            and _is_topic_generation(current)
+        ):
+            return self._fail_topic_generation_boundary(
+                current, error, preserve_for_verification=True,
             )
         if (
             current is not None
