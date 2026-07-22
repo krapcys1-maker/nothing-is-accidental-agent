@@ -242,3 +242,9 @@ Drugi wniosek dotyczy drobnych ustaleń review. Nie każdy finding trzeba napraw
 Preflight i snapshot mogą oba być poprawne, a mimo to decyzja o zapisie może być już nieaktualna. Dlatego granica bezpieczeństwa nie kończy się na „mamy backup". Musi ponownie związać fizyczny plik, jego hash, rozmiar, ledger i brak sidecarów z chwilą writable open.
 
 Drugi wniosek: „recovery" nie oznacza automatycznego retry ani ukrytego restore. Jeżeli migracje commitują per krok, uczciwy system raportuje ostatni trwały szczebel i wymaga nowej decyzji właściciela. Bezpieczne wznowienie jest nową operacją, nie kontynuacją starego pozwolenia.
+
+## 2026-07-22 — Dokładna approval wymaga dokładnego dispatchu
+
+Approval może wiązać wszystkie parametry requestu, a mimo to być niewystarczająca, jeśli publiczny composition root wybiera dowolny rekord kolejki. Granica bezpieczeństwa musi sięgać aż do claimu: ten sam `job_id`, który zatwierdził człowiek, musi trafić do `claim_specific_job`.
+
+Drugi wniosek dotyczy dwóch rodzajów recovery. Przywrócenie policy flags po przerwaniu procesu nie daje prawa do ponowienia płatnego requestu. Marker może naprawić konfigurację, lecz decyzja o dalszym lifecycle pozostaje w trwałym attempt/reconciliation i wymaga jawnej operacji operatora.

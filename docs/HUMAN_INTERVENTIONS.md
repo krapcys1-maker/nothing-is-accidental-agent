@@ -636,3 +636,9 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Decyzja człowieka:** naprawić wyłącznie brak terminalizacji `TOPIC_GENERATION + SETTLED + nieterminalny job/run`, bez refaktoru topic flow, bez zmian owner-proposed topic tool i bez napraw niezwiązanych P2.
 - **Granice:** zachować trzy istniejące ścieżki F-1 i RESEARCH; modyfikować niezmergowaną `0020`, bez `0021`; wszystkie zapisy tylko do nowych temp DB; produkcja wyłącznie `mode=ro&immutable=1`; zero API/SDK/sieci/browsera/publikacji/kosztu; bez stage/commit/push/PR/merge.
 - **Wynik implementera:** kandydat `1821/1821`, 0 skipped/xfail, status `CANDIDATE COMPLETE — READY FOR FINAL RE-REVIEW`. Właściciel nie zatwierdził jeszcze kandydata ani migracji produkcji.
+
+## 2026-07-22 — Właściciel zlecił wyłącznie targetowany publiczny entrypoint TOPIC_GENERATION
+
+- **Decyzja człowieka:** dodać bezpieczny publiczny controlled-live root dla dokładnie jednego istniejącego i wcześniej zatwierdzonego joba `TOPIC_GENERATION`; wykorzystać istniejące `target_job_id`/`claim_specific_job` oraz controlled-live policy/recovery, bez zmiany generatora, scoringu, providera, pricingu, migracji 0020 i durable lifecycle poza koniecznymi zależnościami.
+- **Twarde granice:** nie wykonywać controlled-live, nie tworzyć produkcyjnego joba/approvalu, nie wywoływać realnego API/SDK/sieci/browsera, nie publikować, nie migrować produkcji i nie wykonywać stage/commit/push/PR/merge. Produkcja wyłącznie `mode=ro&immutable=1`; testy wyłącznie na nowych temp DB i fake callerach.
+- **Wymagany status:** implementer może ogłosić tylko `CANDIDATE COMPLETE — READY FOR INDEPENDENT REVIEW`. Etap 2 pozostaje `IN PROGRESS`, a LEVEL_3 readiness nie jest potwierdzona. Każdy realny request nadal wymaga osobnej jawnej zgody właściciela.

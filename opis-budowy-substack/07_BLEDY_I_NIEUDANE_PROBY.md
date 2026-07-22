@@ -467,3 +467,11 @@ Pierwsza nowa kontrpróba zrobiła dokładnie to, czego nie umiała wcześniejsz
 Pierwsza wersja SQL-owej ochrony poszła za daleko. Dodatkowe triggery traktowały każdy `SETTLED` i nieterminalny run jak recovery, więc blokowały również zwykłą, atomową finalizację sukcesu oraz parse/scoring failure. Testy odrzuciły tę wersję. Podłogę zawężono do istniejącego stanu `NEEDS_VERIFICATION` i eventu `EXECUTION_RECOVERY`; normalna finalizacja pozostała bez zmian.
 
 Druga drobna pułapka siedziała w składni SQL: proste `CASE` wybrało ogólny komunikat zamiast typowanego błędu topic-generation. Searched `CASE` przywrócił jednoznaczny kod. Końcowe 1821/1821 potwierdza, że naprawa domyka crash window, nie rozszerzając go na poprawnie ukończone wyniki ani na RESEARCH.
+
+## 2026-07-22 — Dobra blokada i zła ścieżka fake kosztów
+
+Poprzedni preflight zatrzymał live przed requestem, bo publiczny worker nie umiał udowodnić targetowania konkretnego joba. To nie była awaria do zamaskowania, tylko poprawny dowód brakującej granicy. Historyczny wynik pozostaje `BLOCKED`.
+
+Pierwsza immutable sonda użyła błędnej nazwy tabeli `schema_version`; poprawna to `schema_migrations`. Zapytanie zakończyło się bez zapisu, a poprawiona sonda potwierdziła schema 0020. Później pierwszy fake subprocess odziedziczył projektową ścieżkę kosztów i dopisał trzy syntetyczne rows. Diff je wykrył; wiersze usunięto, fake runtime dostał własny temp `COSTS.csv`, a powtórka potwierdziła stabilny hash. Żadne zdarzenie nie było realnym requestem ani kosztem.
+
+Końcowe `python -c` powtórzyło znaną pułapkę Windows i utraciło cudzysłowy jeszcze przed `sqlite3.connect`. Wyniku nie policzono jako dowodu; audyt powtórzono przez stdin z jawnym URI `mode=ro&immutable=1`.

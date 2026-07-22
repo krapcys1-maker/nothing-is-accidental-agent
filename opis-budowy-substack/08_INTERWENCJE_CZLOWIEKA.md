@@ -258,3 +258,9 @@ Po zielonej walidacji autoryzował jeden branch, dokładnie jeden commit, zwykł
 Właściciel wskazał dokładnie cztery blockery: jeden root `0014→0018`, ponowny file-state gate przed zapisem, STOP na WAL/SHM/journal i aktualizację runtime QA do `0018`. Jednocześnie zakazał migracji `data/agent.db`, realnej sieci, providera, browsera, publikacji i zmian controlled Fetch oraz niezwiązanych P2.
 
 Po zielonej walidacji autoryzował branch `dev/stage2-production-migration-orchestrator`, jeden commit, zwykły push i draft PR. Nie autoryzował merge ani ogłoszenia gotowości migracji lub controlled-live.
+
+## 2026-07-22 — Człowiek dopuścił entrypoint, ale nie live
+
+Właściciel zlecił wyłącznie publiczny root dla jednego istniejącego `TOPIC_GENERATION`, z dokładnym job bindingiem i wykorzystaniem obecnego policy/recovery. Zabronił zmian generatora, scoringu, providera, pricingu, migracji 0020 i niezwiązanych lifecycle.
+
+Nie zezwolił na produkcyjny job/approval, realne API/SDK/sieć/browser/publikację, migrację produkcji ani stage/commit/push/PR/merge. Końcowy status może być wyłącznie `CANDIDATE COMPLETE — READY FOR INDEPENDENT REVIEW`; realny request wymaga nowej, osobnej decyzji.

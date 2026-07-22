@@ -281,3 +281,10 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Research/provider:** zero danych internetowych, web search, DNS/HTTP, API, realnego SDK, provider requestów i nowych topiców z modelu.
 - **Dowód:** collect/full `1821/1821`, 0 skipped/xfail; produkcyjna DB tylko immutable read-only i niezmieniona.
 - **Koszt:** `0.000000 USD`; historyczne rzeczywiste wpisy ledgeru pozostają bez zmian.
+
+## 2026-07-22 — Publiczny entrypoint TOPIC_GENERATION bez nowego researchu
+
+- **Zakres:** lokalna kompozycja istniejącego durable topic-generation, policy gates, recovery marker i testy targetowania dokładnego joba.
+- **Research/provider:** zero web search, DNS/HTTP, API, realnego SDK, provider requestów i produkcyjnych tematów; wyłącznie fake callery oraz nowe temp SQLite.
+- **Dowód:** 33 nowe przypadki, collect/full `1854/1854`, 0 skipped/xfail; istniejący research controlled-live i pozostałe composition roots pozostają zielone.
+- **Koszt:** `0.000000 USD`; controlled-live nie wykonano, historyczny ledger bez zmian.
