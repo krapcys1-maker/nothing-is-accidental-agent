@@ -400,3 +400,9 @@ Druga decyzja zamyka szczelinę DNS: transport nie dostaje nazwy do ponownego ro
 Wybrano jeden wąski CLI dokładnego `0014→0018`, a nie ogólny migrator. Zgoda wiąże path, SHA, size, wersję początkową i docelową oraz nowy snapshot. Snapshot powstaje przed writable open, ale po jego weryfikacji źródło jest niezależnie sprawdzane ponownie. Sidecar jest reason code’em odmowy, nie plikiem do sprzątnięcia.
 
 Cała drabina nie jest przedstawiana jako jedna transakcja. Transakcyjna jest każda migracja wraz z własnym wpisem ledgeru; po awarii resume zaczyna się od udowodnionego trwałego szczebla i wymaga nowej zgody właściciela. Finalny błąd nie wywołuje automatycznego restore. Status: kandydat do niezależnego review, bez migracji produkcji.
+
+## ADR-111 — Publiczny controlled-live wskazuje dokładnie zatwierdzony job
+
+Wybrano osobny root `controlled-live-topic-generation`, a nie parametr ogólnego workera. CLI wiąże job i konto z fingerprintem oraz pełnym preimage approval, modelem, limitem tokenów, capem, liczbą kandydatów, schema/SHA bazy i Git branch/HEAD. Brak dowolnego elementu oznacza STOP przed otwarciem gates.
+
+Jedna iteracja `Worker(target_job_id=...)` może użyć tylko `claim_specific_job`. Snapshot i marker recovery chronią pięć flag; browser pozostaje wyłączony. Stan niejednoznaczny po requestcie nie uruchamia providera drugi raz ani maintenance. Status to kandydat do review, bez realnego requestu i bez zamknięcia Etapu 2.

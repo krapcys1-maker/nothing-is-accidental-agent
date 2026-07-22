@@ -508,3 +508,11 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Kontrpróba z generated_topics dowodzi granicy wiedzy: recovery odmawia, jeśli istnieje choć ślad wyniku. Atomowa finalizacja aplikacyjna pokazuje zarazem, że wspierany crash w jej środku cofa topics i generated_topics razem.
 - Dowód: 23 nowe przypadki; `1821/1821`, brak skip/xfail; koszt `0.000000 USD`; produkcja niezmieniona.
 - Cytowalna zasada: „Kiedy pieniądze są już faktem, naprawia się lifecycle — nie historię płatności.”
+
+## 2026-07-22 — Materiał: „Zgoda na job nie jest zgodą na kolejkę”
+
+- Wewnętrzny worker już umiał wskazać konkretny job, ale publiczny root wystawiał tylko queue-wide claim. To wystarczyło, by poprawny preflight odmówił realnego requestu: approval jednego joba nie dawała dowodu, że wykonany zostanie właśnie on.
+- Nowy root wiąże decyzję operatora z jobem, kontem, pełnym intentem, modelem, tokenami, capem, liczbą kandydatów, schema/SHA bazy i stanem Git. Dopiero potem otwiera ograniczony profil policy i wykonuje jedno `run_once` przez `claim_specific_job`.
+- Recovery snapshotu flag jest osobnym kontraktem od recovery płatnego attemptu. Restart może przywrócić flagi, ale nie może automatycznie uruchomić providera, maintenance ani retry.
+- Kontrpróba dwóch jobów i replay pokazała granicę: tylko zatwierdzony target zmienił stan, drugi pozostał nietknięty, a powtórzenie nie wykonało drugiego calla. Dowód: 33 nowe przypadki i `1854/1854`, zero realnej sieci i kosztu.
+- Cytowalna zasada: „Pozwolenie na jeden numer nie otwiera całej kolejki; publiczny przycisk musi wskazywać ten sam rekord, który podpisał człowiek.”

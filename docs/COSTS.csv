@@ -56,3 +56,4 @@ date,run_id,task,provider,model,input_tokens,output_tokens,cache_read_tokens,cac
 2026-07-20,95b6b856-f248-45d0-85c7-03bcdebf299c,research,anthropic,claude-sonnet-5,30857,2200,0,0,0,0,0.083714,actual
 2026-07-21,f8593762-641f-4067-9c19-566c39c46d70,research,anthropic,claude-sonnet-5,34731,2115,0,0,0,0,0.090612,actual
 # 2026-07-22 - F1-BLOCK-01 TOPIC_GENERATION SETTLED recovery: 1821 testow fake/temp, zero API/SDK/sieci/browsera/publikacji i zero migracji produkcji - 0.000000 USD; historyczne actual rows bez zmian.
+# 2026-07-22 - publiczny controlled-live-topic-generation candidate: 1854 testy fake/temp, zero realnego requestu/API/SDK/sieci/browsera/publikacji/migracji - 0.000000 USD; historyczne actual rows bez zmian.

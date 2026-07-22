@@ -133,3 +133,7 @@ Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior u
 ### 2026-07-19 — Orchestrator migracji odmawia na późnym sidecarze
 
 `SCREENSHOT REQUIRED`: bezpieczny kadr powinien pokazać `58/58`, full/exact-once `1630/1630`, partycje `390+398+412+430`, QA `30/30` oraz kontrpróbę z syntetycznym `-journal` utworzonym tuż przed writable open: `STALE_DATABASE_STATE`, brak migracji, sidecar nadal istnieje. Obrazu nie wykonano z powodu zakazu browsera i prywatnych ścieżek. Nie wolno pokazywać pełnego production SHA/path, `.env`, zawartości DB/snapshotu ani sugerować wykonanej migracji.
+
+### 2026-07-22 — Jeden zatwierdzony job, drugi nietknięty
+
+`SCREENSHOT REQUIRED`: zanonimizowany kadr powinien pokazać dwa joby w temp DB, jeden targetowany przez `claim_specific_job`, drugi nadal `QUEUED/attempts=0`, replay z zerem drugich requestów, restore pięciu flag oraz wynik `1854/1854`. Produkcja może być pokazana tylko jako skrócony hash, schema 0020, integrity/FK i brak sidecarów. Obrazu nie wykonano z powodu zakazu browsera i prywatnych bindingów; kadr nie może zawierać `.env`, promptu, approvalu, danych DB ani sugerować wykonanego live.

@@ -447,3 +447,10 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ zakres jawnie zabraniał browsera, a log terminala zawiera lokalne ścieżki i identyfikatory operacyjne.
 - **Co powinien pokazać:** zanonimizowaną sekwencję fake caller → `SETTLED`/usage=1 → reopen → maintenance → run/job `FAILED` → drugi maintenance no-op → Worker `IDLE` → nowy enqueue; obok publiczny resolver, odrzucenie innego kosztu/`NOT_CHARGED`/`CHARGE_UNKNOWN`, failpoint rollback oraz wynik `1821/1821`.
 - **Czego nie może pokazać:** `.env`, sekretów, pełnych lokalnych ścieżek, zawartości produkcyjnej DB, request payloadów ani danych logowania. Nie może sugerować approvalu, merge'u, migracji produkcji, live verification ani zamknięcia Etapu 2.
+
+## 2026-07-22 — Publiczny `controlled-live-topic-generation` candidate
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ zakres zabrania browsera, a terminal zawiera prywatne ścieżki i pełne fingerprinty operacyjne.
+- **Co powinien pokazać:** zanonimizowane targetowanie jednego joba przez `claim_specific_job`, dwa joby na temp DB z drugim nadal `QUEUED/attempts=0`, replay z zerem drugich calli, restore pięciu flag po failpoincie, rozłączne exit codes oraz `1854/1854`, 0 skipped/xfail.
+- **Stan produkcji na kadrze:** wyłącznie skrócony SHA `8f987c…8730af`, schema 0020, `696320 B`, integrity `ok`, FK `0`, sidecary `0`, z adnotacją `mode=ro&immutable=1` i `CONTROLLED-LIVE NOT EXECUTED`.
+- **Czego nie może pokazać:** `.env`, kluczy, pełnych lokalnych ścieżek/SHA bindingu, promptu, intent preimage, approvalu, danych SQLite ani fake fixture. Nie może sugerować `APPROVE`, wykonanego requestu, zamknięcia Etapu 2 lub potwierdzonej LEVEL_3 readiness.

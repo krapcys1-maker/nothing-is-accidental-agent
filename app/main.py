@@ -639,6 +639,200 @@ def _cmd_controlled_fetch_live_once(args: argparse.Namespace) -> int:
     return outcome.exit_code
 
 
+def _topic_generation_fake_client_factory(fixture_path: Path):
+    """Build the test-only fake caller used by public CLI subprocess tests."""
+    from app.llm.anthropic_client import AnthropicLLMClient
+    from app.llm.base import LLMProviderError, Usage
+
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    if not isinstance(fixture, dict):
+        raise ValueError("topic-generation fake fixture must be a JSON object")
+    response = fixture.get("response")
+    usage_raw = fixture.get("usage", {})
+    if not isinstance(usage_raw, dict):
+        raise ValueError("topic-generation fake usage must be a JSON object")
+    usage = Usage(
+        input_tokens=int(usage_raw.get("input_tokens", 120)),
+        output_tokens=int(usage_raw.get("output_tokens", 90)),
+        cache_read_tokens=int(usage_raw.get("cache_read_tokens", 0)),
+        cache_write_tokens=int(usage_raw.get("cache_write_tokens", 0)),
+        web_search_requests=int(usage_raw.get("web_search_requests", 0)),
+    )
+    error_raw = fixture.get("error")
+    call_log = fixture.get("call_log_path")
+
+    def factory(client_settings, intent):
+        def caller(account, count):
+            if call_log is not None:
+                with Path(str(call_log)).open("a", encoding="utf-8") as handle:
+                    handle.write(f"{account.id}:{count}\n")
+            if error_raw is not None:
+                if not isinstance(error_raw, dict):
+                    raise ValueError("topic-generation fake error must be an object")
+                known_usage = usage if bool(error_raw.get("with_usage")) else None
+                raise LLMProviderError(
+                    str(error_raw.get("message", "fake provider failure")),
+                    model=intent.model,
+                    usage=known_usage,
+                )
+            if not isinstance(response, dict):
+                raise ValueError("topic-generation fake response must be an object")
+            return json.dumps(response, ensure_ascii=False), usage
+
+        return AnthropicLLMClient(
+            client_settings.anthropic_api_key,
+            intent.model,
+            caller=caller,
+            timeout_seconds=float(intent.timeout_seconds),
+            topic_max_tokens=intent.max_tokens,
+        )
+
+    return factory, fixture.get("failpoint_after_flags_open")
+
+
+def _cmd_controlled_live_topic_generation(args: argparse.Namespace) -> int:
+    """Public one-shot root for exactly one existing TOPIC_GENERATION job."""
+    from app.operations.controlled_live import run_controlled_live_quiescence_check
+    from app.operations.topic_generation_live import (
+        TopicGenerationLiveRequest,
+        run_topic_generation_live_once,
+    )
+
+    settings = replace(load_settings(), dry_run=False, kill_switch=False)
+    runtime_dir = settings.project_root / "runtime"
+    fake_mode = (
+        os.environ.get("NIA_TEST_MODE") == "1"
+        and os.environ.get("NIA_TOPIC_GENERATION_LIVE_FAKE") == "1"
+    )
+    client_factory = None
+    failpoint = None
+    if fake_mode:
+        test_db = os.environ.get("NIA_TOPIC_GENERATION_LIVE_TEST_DB_PATH")
+        test_runtime = os.environ.get("NIA_TOPIC_GENERATION_LIVE_TEST_RUNTIME_DIR")
+        fixture = os.environ.get("NIA_TOPIC_GENERATION_LIVE_FIXTURE")
+        if not test_db or not test_runtime or not fixture:
+            print(
+                "CONTROLLED-LIVE-TOPIC-GENERATION: fake gate requires temporary "
+                "DB, runtime and fixture paths.",
+                file=sys.stderr,
+            )
+            return 2
+        protected = (settings.project_root / "data" / "agent.db").resolve()
+        if Path(test_db).resolve() == protected:
+            print(
+                "CONTROLLED-LIVE-TOPIC-GENERATION: fake gate refuses the production database.",
+                file=sys.stderr,
+            )
+            return 2
+        settings = replace(
+            settings,
+            db_path=Path(test_db),
+            costs_csv_path=Path(test_runtime) / "COSTS.csv",
+        )
+        runtime_dir = Path(test_runtime)
+        try:
+            client_factory, fake_failpoint = _topic_generation_fake_client_factory(
+                Path(fixture)
+            )
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            print(
+                f"CONTROLLED-LIVE-TOPIC-GENERATION: invalid fake fixture: {exc}",
+                file=sys.stderr,
+            )
+            return 2
+        if fake_failpoint == "exception":
+            failpoint = lambda: (_ for _ in ()).throw(RuntimeError("fake failpoint"))
+        elif fake_failpoint == "keyboard_interrupt":
+            failpoint = lambda: (_ for _ in ()).throw(KeyboardInterrupt())
+        elif fake_failpoint is not None:
+            print(
+                "CONTROLLED-LIVE-TOPIC-GENERATION: unknown fake failpoint.",
+                file=sys.stderr,
+            )
+            return 2
+
+    require_database_schema(settings.db_path)
+    if fake_mode:
+        quiescence_kwargs = {
+            "quiescence_probe": lambda _root, _db: {
+                "project_process_ids": (), "scheduled_tasks": (), "locked_paths": (),
+            }
+        }
+    else:
+        quiescence_kwargs = {}
+    q_exit, quiescence = run_controlled_live_quiescence_check(
+        project_root=settings.project_root,
+        db_path=settings.db_path,
+        **quiescence_kwargs,
+    )
+    if q_exit != 0:
+        payload = {
+            "status": "PREFLIGHT_REFUSED",
+            "reason_code": quiescence.get("reason_code", "RUNTIME_NOT_QUIESCENT"),
+            "exit_code": 2,
+            "job_id": args.job_id,
+            "account_id": args.account_id,
+            "intent_fingerprint": args.expected_intent_fingerprint,
+            "request_id": f"{args.job_id}:topics:1",
+            "attempt_status": None,
+            "attempt_count": 0,
+            "job_status": None,
+            "run_status": None,
+            "approval_status": "unknown",
+            "usage_count": 0,
+            "actual_cost_usd": None,
+            "topics_count": 0,
+            "generated_topics_count": 0,
+            "selected_topic_id": None,
+            "reconciliation_required": False,
+            "policy_flags_restored": True,
+            "detail": "quiescence check refused before storage open",
+        }
+        print("CONTROLLED-LIVE-TOPIC-GENERATION: PREFLIGHT_REFUSED")
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        return 2
+
+    request = TopicGenerationLiveRequest(
+        job_id=args.job_id,
+        account_id=args.account_id,
+        expected_intent_fingerprint=args.expected_intent_fingerprint,
+        expected_model=args.expected_model,
+        expected_max_tokens=args.expected_max_tokens,
+        expected_cap_usd=args.expected_cap_usd,
+        expected_candidate_count=args.expected_candidate_count,
+        expected_db_sha256=args.expected_db_sha,
+        expected_schema=args.expected_schema,
+        expected_branch=args.expected_branch,
+        expected_head=args.expected_head,
+        confirmed=args.confirm_controlled_live_topic_generation,
+    )
+    storage = SqliteStorage.open(settings.db_path)
+    try:
+        outcome = run_topic_generation_live_once(
+            request,
+            settings=settings,
+            storage=storage,
+            storage_reopener=lambda: SqliteStorage.open_read_only(settings.db_path),
+            project_root=settings.project_root,
+            runtime_dir=runtime_dir,
+            frozen_quiescence=quiescence,
+            clock=SystemClock(),
+            topic_generation_client_factory=client_factory,
+            failpoint_after_flags_open=failpoint,
+        )
+    finally:
+        try:
+            storage.close()
+        except (OSError, RuntimeError, sqlite3.Error):
+            pass
+    print(
+        "CONTROLLED-LIVE-TOPIC-GENERATION: "
+        f"{outcome.checkpoint.status} reason={outcome.checkpoint.reason_code}"
+    )
+    print(json.dumps(outcome.checkpoint.as_dict(), ensure_ascii=False, sort_keys=True))
+    return outcome.exit_code
+
+
 def _build_worker(
     settings: Settings, offline_only: bool = False, *,
     clock: Clock | None = None,
@@ -1510,6 +1704,30 @@ def build_parser() -> argparse.ArgumentParser:
     p_fetch_live.add_argument("--expected-branch", required=True)
     p_fetch_live.add_argument("--expected-head", required=True)
     p_fetch_live.set_defaults(func=_cmd_controlled_fetch_live_once)
+
+    p_topic_live = sub.add_parser(
+        "controlled-live-topic-generation",
+        help="Execute exactly one existing, approved TOPIC_GENERATION job by job_id. "
+             "Creates neither a job nor an approval and never retries.",
+    )
+    p_topic_live.add_argument("--job-id", required=True)
+    p_topic_live.add_argument("--account-id", required=True)
+    p_topic_live.add_argument("--expected-intent-fingerprint", required=True)
+    p_topic_live.add_argument("--expected-model", required=True)
+    p_topic_live.add_argument("--expected-max-tokens", required=True, type=int)
+    p_topic_live.add_argument("--expected-cap-usd", required=True)
+    p_topic_live.add_argument("--expected-candidate-count", required=True, type=int)
+    p_topic_live.add_argument("--expected-db-sha", required=True)
+    p_topic_live.add_argument("--expected-schema", required=True)
+    p_topic_live.add_argument("--expected-branch", required=True)
+    p_topic_live.add_argument("--expected-head", required=True)
+    p_topic_live.add_argument(
+        "--confirm-controlled-live-topic-generation",
+        action="store_true",
+        required=True,
+        help="Explicitly confirm one controlled-live attempt for the already-approved job.",
+    )
+    p_topic_live.set_defaults(func=_cmd_controlled_live_topic_generation)
 
     p_quiescence_check = sub.add_parser(
         "controlled-live-quiescence-check",

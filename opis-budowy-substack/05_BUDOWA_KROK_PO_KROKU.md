@@ -758,3 +758,11 @@ Generator tematów miał okno awarii, którego nie zamykała żadna wspierana ś
 Naprawa korzysta z tej samej idei co research: fakt finansowy i fakt wykonawczy są osobne. Jedno usage `topics` pozostaje nietknięte. Maintenance albo jawny resolver może dopisać tylko dowód `EXECUTION_RECOVERY`, po uprzednim sprawdzeniu dokładnego requestu, modelu, providera, approval, kosztu, lineage i braku jakiegokolwiek wyniku tematów. Dopiero wtedy run i job kończą jako `FAILED`, a lease, marker i rezerwacja znikają. Jeżeli choć jeden z tych faktów nie pasuje, transakcja niczego nie zmienia.
 
 Najważniejszy test zabija proces dokładnie po settlementcie. Po reopen maintenance domyka lifecycle, drugi maintenance niczego nie zmienia, nowy worker nie wykonuje requestu numer dwa, a konto przyjmuje nowy job. Osobny failpoint zabija samo recovery po zapisie eventu i dowodzi pełnego rollbacku. Cała suita ma 1821/1821 zielonych przypadków — o 23 więcej niż przed falą — wyłącznie na fake callerach i temp DB. Produkcji nie migrowano.
+
+## 2026-07-22 — Przycisk dla jednego joba, nie dla całej kolejki
+
+Po merge durable generator był gotowy na targetowanie wewnętrzne, ale publiczny `worker --once` nadal pobierał następny job z całej kolejki. To wystarczyło, by poprzedni preflight uczciwie powiedział `BLOCKED`: approval jednego rekordu nie dowodził, że właśnie ten rekord zostanie wykonany.
+
+Nowy publiczny root nie tworzy niczego. Przyjmuje dokładny job, konto i pełne parametry zatwierdzonego intentu, sprawdza niezmienny stan bazy i repo, odrzuca konkurencyjne paid/active/reconciliation states, zapisuje snapshot pięciu flag, a potem wykonuje jedno `run_once` przez `claim_specific_job`. Browser pozostaje wyłączony, a research, Fetch, maintenance, reaper, scheduler i retry nie są wywoływane.
+
+Najważniejsza kontrpróba tworzy dwa joby, zatwierdza tylko jeden i uruchamia rzeczywisty publiczny subprocess z fake callerem. Drugi job pozostaje `QUEUED` z zerem prób, a replay nie wykonuje drugiego calla. Po sukcesie, błędach i przerwaniu flagi wracają do dokładnego snapshotu. 33 nowe przypadki podniosły suitę do 1854/1854. Realnego controlled-live nie wykonano.
