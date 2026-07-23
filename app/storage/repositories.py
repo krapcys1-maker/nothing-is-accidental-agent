@@ -4,14 +4,36 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 import sqlite3
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Callable, Iterable, Sequence
 
+from app.content.foundation import (
+    CONTENT_EXECUTION,
+    CONTENT_PROVIDER_STAGE,
+    ContentCallIntent,
+    ContentContractError,
+    ContentEvaluation,
+    ContentInitialization,
+    ContentInitializationFaultPoint,
+    ContentItem,
+    ContentPreparationRequest,
+    ContentRun,
+    ContentStatus,
+    ContentTransitionResult,
+    ContentType,
+    FrozenContentInput,
+    FrozenEvidenceItem,
+    canonical_json,
+    canonicalize_content_job_payload,
+    content_job_payload,
+    sha256_text,
+)
 from app.core.clock import Clock
 from app.core.money import decimal_from, quantize_usd, sum_usd
 from app.core.security_flags import SECURITY_FLAG_DEFAULTS
@@ -88,6 +110,8 @@ from app.models import (
 from app.ports.storage import (
     AmountBelowMinimumPrecisionError,
     BudgetReservationError,
+    ContentFoundationError,
+    ContentSnapshotError,
     ControlledFetchAuthorizationError,
     ControlledFetchRetrievalNotOk,
     EvidenceResearchAuthorizationError,
@@ -530,6 +554,1529 @@ class SqliteStorage:
     def list_topics_by_status(self, account_id: str, status: TopicStatus) -> Sequence[Topic]:
         return [t for t in self.list_topics(account_id) if t.status == status]
 
+    # --- Etap 3 / WAVE C1: durable content foundation -----------------------
+
+    @staticmethod
+    def _content_item_from_row(row: sqlite3.Row) -> ContentItem:
+        final_result = (
+            None if row["final_result_json"] is None
+            else json.loads(row["final_result_json"])
+        )
+        return ContentItem(
+            id=int(row["id"]),
+            account_id=row["account_id"],
+            research_card_id=int(row["research_card_id"]),
+            content_type=ContentType(row["type"]),
+            status=ContentStatus(row["status"]),
+            job_id=row["job_id"],
+            run_id=row["run_id"],
+            input_sha256=row["input_sha256"],
+            intent_key=row["intent_key"],
+            reason_code=row["reason_code"],
+            final_result=final_result,
+            score=row["score"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    @staticmethod
+    def _content_run_from_row(row: sqlite3.Row) -> ContentRun:
+        final_result = (
+            None if row["final_result_json"] is None
+            else json.loads(row["final_result_json"])
+        )
+        return ContentRun(
+            run_id=row["run_id"],
+            content_id=int(row["content_id"]),
+            job_id=row["job_id"],
+            account_id=row["account_id"],
+            research_card_id=int(row["research_card_id"]),
+            workflow=ContentType(row["workflow"]),
+            input_sha256=row["input_sha256"],
+            status=ContentStatus(row["status"]),
+            reason_code=row["reason_code"],
+            final_result=final_result,
+            score=row["score"],
+            started_at=row["started_at"],
+            updated_at=row["updated_at"],
+            finished_at=row["finished_at"],
+        )
+
+    @staticmethod
+    def _content_fault(
+        point: ContentInitializationFaultPoint,
+        callback: Callable[[ContentInitializationFaultPoint], None] | None,
+    ) -> None:
+        if callback is not None:
+            callback(point)
+
+    def _build_content_snapshot(
+        self,
+        *,
+        account_id: str,
+        research_card_id: int,
+        content_type: ContentType,
+        input_schema_version: str,
+        output_schema_version: str,
+        prompt_version: str,
+        style_guide_version: str,
+        article_brief_placeholder: dict[str, object],
+    ) -> dict[str, object]:
+        """Read and canonicalize one complete account-scoped evidence snapshot."""
+        card = self.conn.execute(
+            "SELECT rc.*,t.account_id AS topic_account_id,t.title AS topic_title,"
+            "t.question AS topic_question FROM research_cards rc "
+            "JOIN topics t ON t.id=rc.topic_id WHERE rc.id=?",
+            (research_card_id,),
+        ).fetchone()
+        if card is None:
+            raise ContentSnapshotError(
+                "CONTENT_CARD_MISSING", "Research Card does not exist.",
+            )
+        if card["topic_account_id"] != account_id:
+            raise ContentSnapshotError(
+                "CONTENT_ACCOUNT_CARD_MISMATCH",
+                "Research Card topic belongs to a different account.",
+            )
+        account = self.conn.execute(
+            "SELECT active FROM accounts WHERE id=?", (account_id,),
+        ).fetchone()
+        if account is None or int(account["active"]) != 1:
+            raise ContentSnapshotError(
+                "CONTENT_ACCOUNT_INACTIVE", "Content requires an active account.",
+            )
+        if card["publication_recommendation"] != ResearchRecommendation.PROCEED.value:
+            raise ContentSnapshotError(
+                "CONTENT_CARD_NOT_PROCEED",
+                "Only a Research Card with publication_recommendation=PROCEED is eligible.",
+            )
+        try:
+            confirmed = json.loads(card["confirmed_claims"] or "[]")
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ContentSnapshotError(
+                "CONTENT_CONFIRMED_CLAIMS_INVALID",
+                "Research Card confirmed_claims is not valid JSON.",
+            ) from exc
+        if (
+            not isinstance(confirmed, list)
+            or not confirmed
+            or any(
+                not isinstance(claim, str)
+                or not claim.strip()
+                or claim != claim.strip()
+                for claim in confirmed
+            )
+        ):
+            raise ContentSnapshotError(
+                "CONTENT_CONFIRMED_CLAIMS_INVALID",
+                "Confirmed claims must be a non-empty list of trimmed strings.",
+            )
+
+        evidence_rows = self.conn.execute(
+            "SELECT sl.source_id,sl.research_card_id,sl.candidate_id,"
+            "sl.research_run_id,sl.research_job_id,sl.account_id,sl.topic_id,"
+            "sl.retrieval_id,sl.excerpt_id,sl.confirmed_claim_id,"
+            "sl.confirmed_claim_ordinal,sl.confirmed_claim_sha256,"
+            "sl.lineage_fingerprint,s.url AS source_url,s.supports_claim,"
+            "ee.id AS excerpt_id,ee.claim_text,ee.claim_sha256,ee.excerpt_text,"
+            "er.id AS retrieval_id,er.requested_url,er.final_url,er.canonical_sha256 "
+            "FROM evidence_source_lineage sl "
+            "JOIN sources s ON s.id=sl.source_id "
+            "JOIN research_source_candidates c ON c.id=sl.candidate_id "
+            "JOIN research_runs rr ON rr.id=sl.research_run_id "
+            "JOIN jobs rj ON rj.id=sl.research_job_id "
+            "JOIN evidence_excerpts ee ON ee.id=sl.excerpt_id "
+            "JOIN evidence_retrievals er ON er.id=sl.retrieval_id "
+            "WHERE sl.research_card_id=? AND sl.account_id=? "
+            "AND sl.topic_id=? AND s.verification_status='VERIFIED' "
+            "AND sl.confirmed_claim_id IS NOT NULL "
+            "AND sl.confirmed_claim_ordinal IS NOT NULL "
+            "AND sl.confirmed_claim_sha256 IS NOT NULL "
+            "AND sl.research_job_id IS NOT NULL "
+            "AND sl.lineage_fingerprint IS NOT NULL "
+            "AND c.status='EXTRACTED' AND c.verification_status='VERIFIED' "
+            "AND rr.account_id=? AND rr.topic_id=? "
+            "AND rj.run_id=rr.id AND rj.account_id=? AND rj.topic_id=? "
+            "AND rj.kind='RESEARCH' AND rj.workflow='RESEARCH' "
+            "AND ee.account_id=? AND er.account_id=? AND er.status='OK' "
+            "ORDER BY sl.confirmed_claim_ordinal,sl.source_id",
+            (
+                research_card_id, account_id, int(card["topic_id"]),
+                account_id, int(card["topic_id"]), account_id,
+                int(card["topic_id"]), account_id, account_id,
+            ),
+        ).fetchall()
+        by_claim_id: dict[str, list[sqlite3.Row]] = {
+            f"research-card:{research_card_id}:confirmed-claim:{ordinal}": []
+            for ordinal in range(len(confirmed))
+        }
+        for row in evidence_rows:
+            claim_ordinal = int(row["confirmed_claim_ordinal"])
+            if claim_ordinal < 0 or claim_ordinal >= len(confirmed):
+                raise ContentSnapshotError(
+                    "CONTENT_LINEAGE_CLAIM_ID_INVALID",
+                    "Evidence lineage points outside the Research Card claim list.",
+                )
+            claim = confirmed[claim_ordinal]
+            claim_id = (
+                f"research-card:{research_card_id}:"
+                f"confirmed-claim:{claim_ordinal}"
+            )
+            lineage_preimage = {
+                "account_id": account_id,
+                "candidate_id": int(row["candidate_id"]),
+                "confirmed_claim_id": claim_id,
+                "confirmed_claim_ordinal": claim_ordinal,
+                "excerpt_id": int(row["excerpt_id"]),
+                "research_card_id": research_card_id,
+                "research_job_id": row["research_job_id"],
+                "research_run_id": row["research_run_id"],
+                "retrieval_id": int(row["retrieval_id"]),
+                "source_id": int(row["source_id"]),
+                "topic_id": int(card["topic_id"]),
+            }
+            if (
+                row["confirmed_claim_id"] != claim_id
+                or row["confirmed_claim_sha256"] != sha256_text(claim)
+                or row["claim_sha256"] != sha256_text(claim)
+                or row["supports_claim"] != claim
+                or row["claim_text"] != claim
+                or row["lineage_fingerprint"]
+                    != sha256_text(canonical_json(lineage_preimage))
+            ):
+                raise ContentSnapshotError(
+                    "CONTENT_LINEAGE_FINGERPRINT_INVALID",
+                    "Authoritative evidence lineage or one of its fingerprints drifted.",
+                )
+            by_claim_id[claim_id].append(row)
+        missing = [
+            claim_id for claim_id, rows in by_claim_id.items() if not rows
+        ]
+        if missing:
+            raise ContentSnapshotError(
+                "CONTENT_EVIDENCE_INCOMPLETE",
+                f"{len(missing)} confirmed claim(s) lack authoritative evidence_source_lineage.",
+            )
+
+        items: list[FrozenEvidenceItem] = []
+        ordinal = 0
+        for claim_ordinal, claim in enumerate(confirmed):
+            claim_id = (
+                f"research-card:{research_card_id}:"
+                f"confirmed-claim:{claim_ordinal}"
+            )
+            for row in by_claim_id[claim_id]:
+                item = FrozenEvidenceItem(
+                    ordinal=ordinal,
+                    account_id=account_id,
+                    topic_id=int(card["topic_id"]),
+                    research_run_id=row["research_run_id"],
+                    research_job_id=row["research_job_id"],
+                    research_card_id=research_card_id,
+                    confirmed_claim_id=claim_id,
+                    confirmed_claim_ordinal=claim_ordinal,
+                    claim_text=claim,
+                    claim_sha256=sha256_text(claim),
+                    candidate_id=int(row["candidate_id"]),
+                    source_id=int(row["source_id"]),
+                    source_url=row["source_url"],
+                    source_url_sha256=sha256_text(row["source_url"]),
+                    source_claim_text=row["supports_claim"],
+                    source_claim_sha256=sha256_text(row["supports_claim"]),
+                    excerpt_id=int(row["excerpt_id"]),
+                    excerpt_text=row["excerpt_text"],
+                    excerpt_sha256=sha256_text(row["excerpt_text"]),
+                    retrieval_id=int(row["retrieval_id"]),
+                    requested_url_sha256=sha256_text(row["requested_url"]),
+                    final_url_sha256=sha256_text(row["final_url"]),
+                    canonical_sha256=row["canonical_sha256"],
+                    lineage_fingerprint=row["lineage_fingerprint"],
+                )
+                items.append(item)
+                ordinal += 1
+
+        card_columns = (
+            "id", "topic_id", "question", "thesis", "mechanism", "facts_json",
+            "counterargument", "citable_numbers", "visual_idea", "confidence",
+            "created_at", "working_thesis", "confirmed_claims", "uncertain_claims",
+            "contradictions", "source_quality_score", "publication_recommendation",
+            "rejection_reason",
+        )
+        card_snapshot = {column: card[column] for column in card_columns}
+        card_snapshot["topic_title"] = card["topic_title"]
+        card_snapshot["topic_question"] = card["topic_question"]
+        card_json = canonical_json(card_snapshot)
+        manifest_data = [item.model_dump(mode="json") for item in items]
+        manifest_json = canonical_json(manifest_data)
+        brief_json = canonical_json(article_brief_placeholder)
+        input_data = {
+            "account_id": account_id,
+            "research_card": card_snapshot,
+            "content_type": content_type.value,
+            "input_schema_version": input_schema_version,
+            "output_schema_version": output_schema_version,
+            "prompt_version": prompt_version,
+            "style_guide_version": style_guide_version,
+            "article_brief_placeholder": article_brief_placeholder,
+            "evidence_manifest": manifest_data,
+        }
+        input_json = canonical_json(input_data)
+        return {
+            "card": card,
+            "card_json": card_json,
+            "manifest_json": manifest_json,
+            "manifest_sha256": sha256_text(manifest_json),
+            "brief_json": brief_json,
+            "brief_sha256": sha256_text(brief_json),
+            "input_json": input_json,
+            "input_sha256": sha256_text(input_json),
+            "items": tuple(items),
+        }
+
+    def _frozen_content_input_from_rows(
+        self,
+        row: sqlite3.Row,
+        evidence_rows: Sequence[sqlite3.Row],
+    ) -> FrozenContentInput:
+        items = tuple(FrozenEvidenceItem(
+            ordinal=int(item["ordinal"]),
+            account_id=item["account_id"],
+            topic_id=int(item["topic_id"]),
+            research_run_id=item["research_run_id"],
+            research_job_id=item["research_job_id"],
+            research_card_id=int(item["research_card_id"]),
+            confirmed_claim_id=item["confirmed_claim_id"],
+            confirmed_claim_ordinal=int(item["confirmed_claim_ordinal"]),
+            claim_text=item["claim_text"],
+            claim_sha256=item["claim_sha256"],
+            candidate_id=int(item["candidate_id"]),
+            source_id=int(item["source_id"]),
+            source_url=item["source_url"],
+            source_url_sha256=item["source_url_sha256"],
+            source_claim_text=item["source_claim_text"],
+            source_claim_sha256=item["source_claim_sha256"],
+            excerpt_id=int(item["excerpt_id"]),
+            excerpt_text=item["excerpt_text"],
+            excerpt_sha256=item["excerpt_sha256"],
+            retrieval_id=int(item["retrieval_id"]),
+            requested_url_sha256=item["requested_url_sha256"],
+            final_url_sha256=item["final_url_sha256"],
+            canonical_sha256=item["canonical_sha256"],
+            lineage_fingerprint=item["lineage_fingerprint"],
+        ) for item in evidence_rows)
+        if int(row["evidence_item_count"]) != len(items):
+            raise ContentSnapshotError(
+                "CONTENT_EVIDENCE_COUNT_DRIFT",
+                "Frozen evidence row count does not match its sealed manifest.",
+            )
+        return FrozenContentInput(
+            content_id=int(row["content_id"]),
+            account_id=row["account_id"],
+            research_card_id=int(row["research_card_id"]),
+            content_type=ContentType(row["content_type"]),
+            input_schema_version=row["input_schema_version"],
+            output_schema_version=row["output_schema_version"],
+            prompt_version=row["prompt_version"],
+            style_guide_version=row["style_guide_version"],
+            article_brief_placeholder_json=row["article_brief_placeholder_json"],
+            article_brief_placeholder_sha256=row["article_brief_placeholder_sha256"],
+            research_card_snapshot_json=row["research_card_snapshot_json"],
+            evidence_manifest_json=row["evidence_manifest_json"],
+            evidence_manifest_sha256=row["evidence_manifest_sha256"],
+            input_snapshot_json=row["input_snapshot_json"],
+            input_sha256=row["input_sha256"],
+            evidence_items=items,
+            created_at=row["created_at"],
+        )
+
+    def get_content_item(
+        self, account_id: str, content_id: int,
+    ) -> ContentItem | None:
+        row = self.conn.execute(
+            "SELECT * FROM content_items WHERE id=? AND account_id=?",
+            (content_id, account_id),
+        ).fetchone()
+        return None if row is None else self._content_item_from_row(row)
+
+    def get_frozen_content_input(
+        self, account_id: str, content_id: int,
+    ) -> FrozenContentInput | None:
+        row = self.conn.execute(
+            "SELECT * FROM content_frozen_inputs WHERE content_id=? AND account_id=?",
+            (content_id, account_id),
+        ).fetchone()
+        if row is None:
+            return None
+        evidence = self.conn.execute(
+            "SELECT * FROM content_evidence_items WHERE content_id=? ORDER BY ordinal",
+            (content_id,),
+        ).fetchall()
+        return self._frozen_content_input_from_rows(row, evidence)
+
+    def _assert_content_snapshot_in_transaction(
+        self, account_id: str, content_id: int,
+    ) -> FrozenContentInput:
+        frozen = self.get_frozen_content_input(account_id, content_id)
+        if frozen is None:
+            raise ContentSnapshotError(
+                "CONTENT_FROZEN_INPUT_MISSING", "Frozen content input is missing.",
+            )
+        current = self._build_content_snapshot(
+            account_id=account_id,
+            research_card_id=frozen.research_card_id,
+            content_type=frozen.content_type,
+            input_schema_version=frozen.input_schema_version,
+            output_schema_version=frozen.output_schema_version,
+            prompt_version=frozen.prompt_version,
+            style_guide_version=frozen.style_guide_version,
+            article_brief_placeholder=json.loads(
+                frozen.article_brief_placeholder_json
+            ),
+        )
+        comparisons = (
+            ("research card", current["card_json"], frozen.research_card_snapshot_json),
+            ("evidence manifest", current["manifest_json"], frozen.evidence_manifest_json),
+            ("input", current["input_json"], frozen.input_snapshot_json),
+            ("input hash", current["input_sha256"], frozen.input_sha256),
+        )
+        for label, observed, expected in comparisons:
+            if observed != expected:
+                raise ContentSnapshotError(
+                    "CONTENT_FROZEN_INPUT_DRIFT",
+                    f"Current {label} no longer equals the frozen snapshot.",
+                )
+        return frozen
+
+    def assert_content_snapshot(
+        self, account_id: str, content_id: int,
+    ) -> FrozenContentInput:
+        owns_transaction = not self.conn.in_transaction
+        if owns_transaction:
+            self.conn.execute("BEGIN")
+        try:
+            frozen = self._assert_content_snapshot_in_transaction(
+                account_id, content_id,
+            )
+            if owns_transaction:
+                self.conn.commit()
+            return frozen
+        except Exception:
+            if owns_transaction and self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def _existing_content_initialization(
+        self,
+        request: ContentPreparationRequest,
+        row: sqlite3.Row,
+    ) -> ContentInitialization:
+        try:
+            payload = canonicalize_content_job_payload(json.loads(row["payload_json"]))
+        except (json.JSONDecodeError, ContentContractError) as exc:
+            raise ContentFoundationError(
+                "CONTENT_IDEMPOTENCY_CONFLICT",
+                "Existing idempotency key has a malformed content payload.",
+            ) from exc
+        if (
+            row["id"] != request.job_id
+            or row["account_id"] != request.account_id
+            or row["kind"] != JobKind.CONTENT.value
+            or row["workflow"] != request.content_type.value
+            or int(row["max_attempts"]) != request.max_attempts
+            or payload["research_card_id"] != request.research_card_id
+            or payload["content_type"] != request.content_type.value
+        ):
+            raise ContentFoundationError(
+                "CONTENT_IDEMPOTENCY_CONFLICT",
+                "Existing idempotency key belongs to a different content intent.",
+            )
+        content = self.get_content_item(
+            request.account_id, int(payload["content_id"]),
+        )
+        if content is None or content.job_id != request.job_id:
+            raise ContentFoundationError(
+                "CONTENT_IDEMPOTENCY_CONFLICT",
+                "Existing content job has no matching content record.",
+            )
+        frozen = self._assert_content_snapshot_in_transaction(
+            request.account_id, content.id,
+        )
+        if (
+            frozen.input_schema_version != request.input_schema_version
+            or frozen.output_schema_version != request.output_schema_version
+            or frozen.prompt_version != request.prompt_version
+            or frozen.style_guide_version != request.style_guide_version
+            or frozen.article_brief_placeholder_json
+                != canonical_json(request.article_brief_placeholder)
+        ):
+            raise ContentFoundationError(
+                "CONTENT_IDEMPOTENCY_CONFLICT",
+                "Repeated preparation changed a frozen contract version.",
+            )
+        run = None
+        if content.run_id is not None:
+            run_row = self.conn.execute(
+                "SELECT * FROM content_runs WHERE run_id=?", (content.run_id,),
+            ).fetchone()
+            if run_row is None:
+                raise ContentFoundationError(
+                    "CONTENT_RUN_RELATION_INVALID",
+                    "Content references a missing content run.",
+                )
+            run = self._content_run_from_row(run_row)
+        return ContentInitialization(
+            content=content, frozen_input=frozen, job_created=False, run=run,
+        )
+
+    def prepare_content_job(
+        self,
+        request: ContentPreparationRequest,
+        *,
+        now: datetime | None = None,
+        clock: Clock | None = None,
+        fault_point: Callable[[ContentInitializationFaultPoint], None] | None = None,
+    ) -> ContentInitialization:
+        """Atomically freeze evidence and enqueue one held CONTENT job.
+
+        The ordinary worker never claims CONTENT in C1.  The job can be leased
+        only through ``claim_specific_job`` for local lifecycle/recovery tests.
+        """
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current = self._job_now(now, clock=clock)
+            current_ts = _persisted_ts(current)
+            existing = self.conn.execute(
+                "SELECT * FROM jobs WHERE idempotency_key=?",
+                (request.idempotency_key,),
+            ).fetchone()
+            if existing is not None:
+                result = self._existing_content_initialization(request, existing)
+                self.conn.commit()
+                return result
+
+            snapshot = self._build_content_snapshot(
+                account_id=request.account_id,
+                research_card_id=request.research_card_id,
+                content_type=request.content_type,
+                input_schema_version=request.input_schema_version,
+                output_schema_version=request.output_schema_version,
+                prompt_version=request.prompt_version,
+                style_guide_version=request.style_guide_version,
+                article_brief_placeholder=request.article_brief_placeholder,
+            )
+            intent_key = sha256_text(canonical_json({
+                "account_id": request.account_id,
+                "research_card_id": request.research_card_id,
+                "content_type": request.content_type.value,
+                "input_sha256": snapshot["input_sha256"],
+                "input_schema_version": request.input_schema_version,
+            }))
+            cursor = self.conn.execute(
+                "INSERT INTO content_items (account_id,type,status,research_card_id,"
+                "created_at,updated_at) VALUES (?,?, 'DRAFT', ?,?,?)",
+                (
+                    request.account_id, request.content_type.value,
+                    request.research_card_id, current_ts, current_ts,
+                ),
+            )
+            if cursor.rowcount != 1 or cursor.lastrowid is None:
+                raise ContentFoundationError(
+                    "CONTENT_INSERT_FAILED",
+                    "Content preparation did not create exactly one record.",
+                )
+            content_id = int(cursor.lastrowid)
+            self._content_fault(
+                ContentInitializationFaultPoint.AFTER_CONTENT_INSERT, fault_point,
+            )
+            self.conn.execute(
+                "INSERT INTO content_frozen_inputs (content_id,account_id,research_card_id,"
+                "content_type,input_schema_version,output_schema_version,prompt_version,"
+                "style_guide_version,article_brief_placeholder_json,"
+                "article_brief_placeholder_sha256,research_card_snapshot_json,"
+                "evidence_manifest_json,evidence_manifest_sha256,evidence_item_count,"
+                "input_snapshot_json,input_sha256,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    content_id, request.account_id, request.research_card_id,
+                    request.content_type.value, request.input_schema_version,
+                    request.output_schema_version, request.prompt_version,
+                    request.style_guide_version, snapshot["brief_json"],
+                    snapshot["brief_sha256"], snapshot["card_json"],
+                    snapshot["manifest_json"], snapshot["manifest_sha256"],
+                    len(snapshot["items"]), snapshot["input_json"],
+                    snapshot["input_sha256"], current_ts,
+                ),
+            )
+            self._content_fault(
+                ContentInitializationFaultPoint.AFTER_FROZEN_INPUT_INSERT,
+                fault_point,
+            )
+            for item in snapshot["items"]:
+                assert isinstance(item, FrozenEvidenceItem)
+                self.conn.execute(
+                    "INSERT INTO content_evidence_items (content_id,account_id,"
+                    "research_card_id,ordinal,topic_id,research_run_id,"
+                    "research_job_id,confirmed_claim_id,confirmed_claim_ordinal,"
+                    "claim_text,claim_sha256,candidate_id,source_id,"
+                    "source_url,source_url_sha256,source_claim_text,"
+                    "source_claim_sha256,excerpt_id,excerpt_text,excerpt_sha256,"
+                    "retrieval_id,requested_url_sha256,final_url_sha256,"
+                    "canonical_sha256,lineage_fingerprint,created_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        content_id, request.account_id, request.research_card_id,
+                        item.ordinal, item.topic_id, item.research_run_id,
+                        item.research_job_id, item.confirmed_claim_id,
+                        item.confirmed_claim_ordinal, item.claim_text,
+                        item.claim_sha256, item.candidate_id, item.source_id,
+                        item.source_url, item.source_url_sha256,
+                        item.source_claim_text, item.source_claim_sha256,
+                        item.excerpt_id, item.excerpt_text, item.excerpt_sha256,
+                        item.retrieval_id, item.requested_url_sha256,
+                        item.final_url_sha256, item.canonical_sha256,
+                        item.lineage_fingerprint, current_ts,
+                    ),
+                )
+            self._content_fault(
+                ContentInitializationFaultPoint.AFTER_EVIDENCE_INSERTS, fault_point,
+            )
+            payload = content_job_payload(
+                account_id=request.account_id,
+                research_card_id=request.research_card_id,
+                content_id=content_id,
+                content_type=request.content_type,
+                frozen_input_sha256=str(snapshot["input_sha256"]),
+                evidence_manifest_sha256=str(snapshot["manifest_sha256"]),
+                intent_key=intent_key,
+            )
+            card = snapshot["card"]
+            assert isinstance(card, sqlite3.Row)
+            job = Job(
+                id=request.job_id,
+                account_id=request.account_id,
+                kind=JobKind.CONTENT,
+                workflow=WorkflowType(request.content_type.value),
+                idempotency_key=request.idempotency_key,
+                topic_id=int(card["topic_id"]),
+                payload=payload,
+                schedule_reason="WITHIN_EDITORIAL_WINDOW",
+                earliest_run_at=current,
+                max_attempts=request.max_attempts,
+                created_at=current,
+                updated_at=current,
+            )
+            self._validate_job_enqueue_relation(job)
+            payload_json = self._canonical_payload(payload)
+            self.conn.execute(
+                "INSERT INTO jobs (id,account_id,kind,workflow,status,priority,"
+                "idempotency_key,topic_id,run_id,payload_json,schedule_reason,"
+                "earliest_run_at,deadline_at,lease_owner,lease_expires_at,attempts,"
+                "max_attempts,reserved_cost_usd,budget_reserved_at,"
+                "external_effect_started_at,last_error,created_at,started_at,"
+                "finished_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    job.id, job.account_id, job.kind.value, job.workflow.value,
+                    JobStatus.QUEUED.value, job.priority, job.idempotency_key,
+                    job.topic_id, None, payload_json, job.schedule_reason,
+                    current_ts, None, None, None, 0, job.max_attempts, 0.0,
+                    None, None, None, current_ts, None, None, current_ts,
+                ),
+            )
+            self._content_fault(
+                ContentInitializationFaultPoint.AFTER_JOB_INSERT, fault_point,
+            )
+            prepared = self.conn.execute(
+                "UPDATE content_items SET status='PREPARED',job_id=?,input_sha256=?,"
+                "intent_key=?,updated_at=? WHERE id=? AND account_id=? AND status='DRAFT'",
+                (
+                    request.job_id, snapshot["input_sha256"], intent_key,
+                    current_ts, content_id, request.account_id,
+                ),
+            )
+            if prepared.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_PREPARATION_FAILED",
+                    "Frozen content preparation did not update exactly one record.",
+                )
+            self._content_fault(
+                ContentInitializationFaultPoint.BEFORE_PREPARATION_COMMIT,
+                fault_point,
+            )
+            self.conn.commit()
+            content = self.get_content_item(request.account_id, content_id)
+            frozen = self.get_frozen_content_input(request.account_id, content_id)
+            assert content is not None and frozen is not None
+            return ContentInitialization(
+                content=content, frozen_input=frozen, job_created=True,
+            )
+        except sqlite3.IntegrityError as exc:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise ContentFoundationError(
+                "CONTENT_DURABLE_CONFLICT",
+                "Content intent conflicts with an existing durable relation.",
+            ) from exc
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def initialize_content_run_for_job(
+        self,
+        job_id: str,
+        lease_owner: str,
+        fence_token: int,
+        run_id: str,
+        *,
+        now: datetime | None = None,
+        clock: Clock | None = None,
+        fault_point: Callable[[ContentInitializationFaultPoint], None] | None = None,
+    ) -> ContentInitialization:
+        """Atomically attach runs/content_runs under the current lease fence."""
+        if (
+            not job_id.strip() or not lease_owner.strip() or not run_id.strip()
+            or fence_token <= 0
+        ):
+            raise ValueError(
+                "job_id, lease_owner and run_id must be non-empty and "
+                "fence_token must be positive."
+            )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current = self._job_now(now, clock=clock)
+            current_ts = _persisted_ts(current)
+            row = self.conn.execute(
+                "SELECT j.*,c.id AS content_id,c.status AS content_status,"
+                "c.run_id AS content_run_id,c.input_sha256,c.intent_key,"
+                "c.research_card_id,c.type AS content_type "
+                "FROM jobs j JOIN content_items c ON c.job_id=j.id WHERE j.id=?",
+                (job_id,),
+            ).fetchone()
+            if (
+                row is None
+                or row["kind"] != JobKind.CONTENT.value
+                or row["workflow"] not in (
+                    WorkflowType.ARTICLE.value, WorkflowType.NOTE.value,
+                )
+                or row["account_id"] is None
+                or row["lease_owner"] != lease_owner
+                or int(row["execution_generation"]) != fence_token
+                or row["lease_expires_at"] is None
+                or row["lease_expires_at"] < current_ts
+                or row["status"] not in _EXECUTABLE_JOB_STATUSES
+            ):
+                raise StaleJobExecutionError(
+                    job_id, "content run initialization lacks an active lease fence.",
+                )
+            payload = canonicalize_content_job_payload(
+                json.loads(row["payload_json"])
+            )
+            if (
+                payload["content_id"] != int(row["content_id"])
+                or payload["account_id"] != row["account_id"]
+                or payload["research_card_id"] != int(row["research_card_id"])
+                or payload["content_type"] != row["content_type"]
+                or payload["frozen_input_sha256"] != row["input_sha256"]
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_JOB_RELATION_INVALID",
+                    "Content job payload does not match the persisted content record.",
+                )
+            frozen = self._assert_content_snapshot_in_transaction(
+                row["account_id"], int(row["content_id"]),
+            )
+            if row["run_id"] is not None:
+                if row["run_id"] != run_id or row["content_run_id"] != run_id:
+                    raise JobRunConflictError(job_id, row["run_id"], run_id)
+                run_row = self.conn.execute(
+                    "SELECT cr.*,r.status AS general_status,r.account_id AS general_account,"
+                    "r.workflow AS general_workflow,r.finished_at AS general_finished "
+                    "FROM content_runs cr JOIN runs r ON r.id=cr.run_id "
+                    "WHERE cr.run_id=?",
+                    (run_id,),
+                ).fetchone()
+                if (
+                    run_row is None
+                    or run_row["content_id"] != row["content_id"]
+                    or run_row["job_id"] != job_id
+                    or run_row["account_id"] != row["account_id"]
+                    or run_row["input_sha256"] != row["input_sha256"]
+                    or run_row["general_status"] != RunStatus.RUNNING.value
+                    or run_row["general_finished"] is not None
+                    or run_row["general_account"] != row["account_id"]
+                    or run_row["general_workflow"] != row["workflow"]
+                    or run_row["status"] not in (
+                        ContentStatus.PREPARED.value,
+                        ContentStatus.RUNNING.value,
+                    )
+                ):
+                    raise ContentFoundationError(
+                        "CONTENT_RUN_RELATION_INVALID",
+                        "Existing content run cannot be resumed safely.",
+                    )
+                if run_row["status"] == ContentStatus.PREPARED.value:
+                    self._apply_content_transition_command(
+                        mode="EXECUTION",
+                        job_id=job_id,
+                        run_id=run_id,
+                        content_id=int(row["content_id"]),
+                        account_id=row["account_id"],
+                        workflow=row["workflow"],
+                        source_status=ContentStatus.PREPARED.value,
+                        target_status=ContentStatus.RUNNING.value,
+                        target_run_status=RunStatus.RUNNING.value,
+                        target_job_status=JobStatus.RUNNING.value,
+                        lease_owner=lease_owner,
+                        execution_generation=fence_token,
+                        lease_expires_at=row["lease_expires_at"],
+                        reason_code=None,
+                        result_json=None,
+                        score=None,
+                        current_ts=current_ts,
+                    )
+                if row["status"] == JobStatus.LEASED.value:
+                    job_started = self.conn.execute(
+                        "UPDATE jobs SET status='RUNNING',updated_at=? WHERE id=? "
+                        "AND status='LEASED' AND lease_owner=? AND lease_expires_at>=? "
+                        "AND execution_generation=?",
+                        (current_ts, job_id, lease_owner, current_ts, fence_token),
+                    )
+                    self._require_one_transition(
+                        job_started,
+                        table="jobs",
+                        entity="job",
+                        identifier=job_id,
+                        target_status=JobStatus.RUNNING.value,
+                        allowed_source_statuses=(JobStatus.LEASED.value,),
+                        detail="Content takeover could not resume the leased job.",
+                    )
+                self.conn.commit()
+                content = self.get_content_item(
+                    row["account_id"], int(row["content_id"]),
+                )
+                persisted_run = self.conn.execute(
+                    "SELECT * FROM content_runs WHERE run_id=?", (run_id,),
+                ).fetchone()
+                assert content is not None and persisted_run is not None
+                return ContentInitialization(
+                    content=content, frozen_input=frozen, job_created=False,
+                    run=self._content_run_from_row(persisted_run),
+                )
+
+            if row["content_status"] != ContentStatus.PREPARED.value:
+                raise ContentFoundationError(
+                    "CONTENT_NOT_PREPARED",
+                    "A new content run requires PREPARED content.",
+                )
+            self.conn.execute(
+                "INSERT INTO runs (id,account_id,workflow,status,current_state,"
+                "started_at,cost_usd,human_intervention_count) "
+                "VALUES (?,?,?,'RUNNING','RUNNING',?,0.0,0)",
+                (run_id, row["account_id"], row["workflow"], current_ts),
+            )
+            self._content_fault(
+                ContentInitializationFaultPoint.AFTER_RUN_INSERT, fault_point,
+            )
+            self.conn.execute(
+                "INSERT INTO content_runs (run_id,content_id,job_id,account_id,"
+                "research_card_id,workflow,input_sha256,status,started_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,'RUNNING',?,?)",
+                (
+                    run_id, row["content_id"], job_id, row["account_id"],
+                    row["research_card_id"], row["workflow"], row["input_sha256"],
+                    current_ts, current_ts,
+                ),
+            )
+            self._content_fault(
+                ContentInitializationFaultPoint.AFTER_CONTENT_RUN_INSERT,
+                fault_point,
+            )
+            attached = self.conn.execute(
+                "UPDATE jobs SET run_id=?,status='RUNNING',updated_at=? "
+                "WHERE id=? AND run_id IS NULL AND status IN ('LEASED','RUNNING') "
+                "AND lease_owner=? AND lease_expires_at>=? "
+                "AND execution_generation=?",
+                (
+                    run_id, current_ts, job_id, lease_owner, current_ts,
+                    fence_token,
+                ),
+            )
+            if attached.rowcount != 1:
+                raise StaleJobExecutionError(job_id)
+            self._content_fault(
+                ContentInitializationFaultPoint.AFTER_JOB_RUN_ATTACH, fault_point,
+            )
+            self._content_fault(
+                ContentInitializationFaultPoint.BEFORE_EXECUTION_SNAPSHOT_RECHECK,
+                fault_point,
+            )
+            # Re-read the authoritative lineage in this same write transaction
+            # immediately before content becomes executable.
+            self._assert_content_snapshot_in_transaction(
+                row["account_id"], int(row["content_id"]),
+            )
+            content_attached = self.conn.execute(
+                "UPDATE content_items SET run_id=?,status='RUNNING',updated_at=? "
+                "WHERE id=? AND job_id=? AND run_id IS NULL AND status='PREPARED'",
+                (run_id, current_ts, row["content_id"], job_id),
+            )
+            if content_attached.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_RUN_ATTACH_FAILED",
+                    "Content run attach did not update exactly one content record.",
+                )
+            self._content_fault(
+                ContentInitializationFaultPoint.BEFORE_RUN_INITIALIZATION_COMMIT,
+                fault_point,
+            )
+            self.conn.commit()
+            content = self.get_content_item(
+                row["account_id"], int(row["content_id"]),
+            )
+            run_row = self.conn.execute(
+                "SELECT * FROM content_runs WHERE run_id=?", (run_id,),
+            ).fetchone()
+            assert content is not None and run_row is not None
+            return ContentInitialization(
+                content=content, frozen_input=frozen, job_created=False,
+                run=self._content_run_from_row(run_row),
+            )
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    @staticmethod
+    def _validate_content_transition_payload(
+        target: ContentStatus,
+        reason_code: str | None,
+        final_result: dict[str, object] | None,
+        score: float | None,
+    ) -> tuple[str | None, str | None, float | None]:
+        reason_required = {
+            ContentStatus.REVISE,
+            ContentStatus.SKIPPED,
+            ContentStatus.FAILED,
+            ContentStatus.NEEDS_VERIFICATION,
+        }
+        if target in reason_required:
+            if (
+                not isinstance(reason_code, str)
+                or not reason_code
+                or reason_code != reason_code.strip()
+                or len(reason_code) > 100
+                or any(ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for ch in reason_code)
+            ):
+                raise ValueError(
+                    "Negative/revision content states require a controlled reason_code."
+                )
+        elif reason_code is not None:
+            raise ValueError(f"{target.value} does not accept a reason_code.")
+        result_json = None if final_result is None else canonical_json(final_result)
+        if score is not None:
+            if not isinstance(score, (int, float)) or not math.isfinite(float(score)):
+                raise ValueError("Content score must be finite.")
+            if not 0 <= float(score) <= 1:
+                raise ValueError("Content score must be between 0 and 1.")
+            score = float(score)
+        return reason_code, result_json, score
+
+    def _apply_content_transition_command(
+        self,
+        *,
+        mode: str,
+        job_id: str,
+        run_id: str,
+        content_id: int,
+        account_id: str,
+        workflow: str,
+        source_status: str,
+        target_status: str,
+        target_run_status: str,
+        target_job_status: str,
+        lease_owner: str,
+        execution_generation: int,
+        lease_expires_at: str,
+        reason_code: str | None,
+        result_json: str | None,
+        score: float | None,
+        current_ts: str,
+    ) -> None:
+        """Insert the one SQL command which owns a content transition."""
+        sequence = int(self.conn.execute(
+            "SELECT COALESCE(MAX(id),0)+1 FROM content_transition_commands"
+        ).fetchone()[0])
+        command_id = sha256_text(canonical_json({
+            "account_id": account_id,
+            "content_id": content_id,
+            "created_at": current_ts,
+            "execution_generation": execution_generation,
+            "job_id": job_id,
+            "mode": mode,
+            "run_id": run_id,
+            "sequence": sequence,
+            "source_status": source_status,
+            "target_job_status": target_job_status,
+            "target_run_status": target_run_status,
+            "target_status": target_status,
+            "workflow": workflow,
+        }))
+        inserted = self.conn.execute(
+            "INSERT INTO content_transition_commands (command_id,mode,job_id,"
+            "run_id,content_id,account_id,workflow,source_content_status,"
+            "target_content_status,target_run_status,target_job_status,"
+            "lease_owner,execution_generation,lease_expires_at,reason_code,"
+            "final_result_json,score,created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                command_id, mode, job_id, run_id, content_id, account_id,
+                workflow, source_status, target_status, target_run_status,
+                target_job_status, lease_owner, execution_generation,
+                lease_expires_at, reason_code, result_json, score, current_ts,
+            ),
+        )
+        if inserted.rowcount != 1:
+            raise ContentFoundationError(
+                "CONTENT_TRANSITION_COMMAND_FAILED",
+                "Content transition command did not affect exactly one row.",
+            )
+
+    def transition_content_execution(
+        self,
+        execution: JobExecutionContext,
+        target: ContentStatus,
+        *,
+        reason_code: str | None = None,
+        final_result: dict[str, object] | None = None,
+        score: float | None = None,
+    ) -> ContentTransitionResult:
+        """One fenced transaction owns content/run/job terminalization."""
+        if target is ContentStatus.DRAFT:
+            raise ValueError("Content cannot transition back to DRAFT.")
+        if (
+            execution.kind is not JobKind.CONTENT
+            or execution.workflow not in (
+                WorkflowType.ARTICLE, WorkflowType.NOTE,
+            )
+            or execution.fence_token <= 0
+        ):
+            raise StaleJobExecutionError(
+                execution.job_id,
+                "Content transition requires a typed context with a positive fence.",
+            )
+        reason_code, result_json, score = self._validate_content_transition_payload(
+            target, reason_code, final_result, score,
+        )
+        allowed = {
+            ContentStatus.PREPARED: (
+                ContentStatus.RUNNING.value, ContentStatus.REVISE.value,
+            ),
+            ContentStatus.RUNNING: (
+                ContentStatus.PREPARED.value, ContentStatus.REVISE.value,
+            ),
+            ContentStatus.REVISE: (ContentStatus.RUNNING.value,),
+            ContentStatus.SKIPPED: (
+                ContentStatus.PREPARED.value, ContentStatus.RUNNING.value,
+                ContentStatus.REVISE.value,
+            ),
+            ContentStatus.PENDING_APPROVAL: (ContentStatus.RUNNING.value,),
+            ContentStatus.FAILED: (
+                ContentStatus.PREPARED.value, ContentStatus.RUNNING.value,
+                ContentStatus.REVISE.value,
+            ),
+            ContentStatus.NEEDS_VERIFICATION: (
+                ContentStatus.PREPARED.value, ContentStatus.RUNNING.value,
+                ContentStatus.REVISE.value,
+            ),
+        }.get(target, ())
+        if not allowed:
+            raise ValueError(f"Unsupported content transition target {target.value}.")
+        terminal_map = {
+            ContentStatus.SKIPPED: (RunStatus.SUCCESS, JobStatus.DONE),
+            ContentStatus.PENDING_APPROVAL: (RunStatus.SUCCESS, JobStatus.DONE),
+            ContentStatus.FAILED: (RunStatus.FAILED, JobStatus.FAILED),
+            ContentStatus.NEEDS_VERIFICATION: (
+                RunStatus.STOPPED, JobStatus.NEEDS_VERIFICATION,
+            ),
+        }
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            row = self.conn.execute(
+                "SELECT cr.*,c.type AS content_type,c.status AS item_status,"
+                "c.id AS item_id,c.job_id AS item_job_id,c.run_id AS item_run_id,"
+                "c.account_id AS item_account,"
+                "c.reason_code AS item_reason,c.final_result_json AS item_result,"
+                "c.score AS item_score,j.status AS job_status,j.account_id AS job_account,"
+                "j.kind AS job_kind,j.workflow AS job_workflow,j.run_id AS job_run_id,"
+                "j.lease_owner,j.lease_expires_at,j.execution_generation,"
+                "r.status AS general_status,"
+                "r.account_id AS general_account,r.workflow AS general_workflow,"
+                "r.finished_at AS general_finished "
+                "FROM content_runs cr JOIN content_items c ON c.id=cr.content_id "
+                "JOIN jobs j ON j.id=cr.job_id JOIN runs r ON r.id=cr.run_id "
+                "WHERE cr.job_id=? AND cr.run_id=?",
+                (execution.job_id, execution.run_id),
+            ).fetchone()
+            if (
+                row is None
+                or row["job_kind"] != JobKind.CONTENT.value
+                or row["content_type"] != execution.workflow.value
+                or row["workflow"] != execution.workflow.value
+                or row["job_workflow"] != row["content_type"]
+                or row["job_run_id"] != execution.run_id
+                or row["item_job_id"] != execution.job_id
+                or row["item_run_id"] != execution.run_id
+                or row["item_account"] != row["account_id"]
+                or row["job_account"] != row["account_id"]
+                or row["general_account"] != row["account_id"]
+                or row["general_workflow"] != row["content_type"]
+                or row["item_status"] != row["status"]
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_EXECUTION_RELATION_INVALID",
+                    "Content/job/run relation is inconsistent.",
+                )
+            if int(row["execution_generation"]) != execution.fence_token:
+                raise StaleJobExecutionError(
+                    execution.job_id,
+                    "Content execution fence no longer matches the durable generation.",
+                )
+            literal_noop = (
+                row["status"] == target.value
+                and row["reason_code"] == reason_code
+                and row["final_result_json"] == result_json
+                and (
+                    (row["score"] is None and score is None)
+                    or (
+                        row["score"] is not None and score is not None
+                        and float(row["score"]) == score
+                    )
+                )
+                and row["item_reason"] == reason_code
+                and row["item_result"] == result_json
+            )
+            if literal_noop:
+                if target in terminal_map:
+                    run_target, job_target = terminal_map[target]
+                    command = self.conn.execute(
+                        "SELECT * FROM content_transition_commands "
+                        "WHERE job_id=? AND run_id=? AND content_id=? "
+                        "AND target_content_status=? AND target_run_status=? "
+                        "AND target_job_status=? AND lease_owner=? "
+                        "AND execution_generation=? AND reason_code IS ? "
+                        "AND final_result_json IS ? AND score IS ? AND applied=1",
+                        (
+                            execution.job_id, execution.run_id,
+                            int(row["content_id"]), target.value,
+                            run_target.value, job_target.value,
+                            execution.lease_owner, execution.fence_token,
+                            reason_code, result_json, score,
+                        ),
+                    ).fetchone()
+                    if (
+                        command is None
+                        or command["workflow"] != execution.workflow.value
+                        or command["lease_expires_at"] < current_ts
+                        or row["job_status"] != job_target.value
+                        or row["general_status"] != run_target.value
+                        or row["general_finished"] is None
+                    ):
+                        raise StaleJobExecutionError(
+                            execution.job_id,
+                            "Terminal replay no longer owns the recorded lease fence.",
+                        )
+                elif (
+                    row["job_status"] not in _EXECUTABLE_JOB_STATUSES
+                    or row["lease_owner"] != execution.lease_owner
+                    or row["lease_expires_at"] is None
+                    or row["lease_expires_at"] < current_ts
+                    or row["general_status"] != RunStatus.RUNNING.value
+                ):
+                    raise StaleJobExecutionError(
+                        execution.job_id,
+                        "Non-terminal replay lacks the current lease fence.",
+                    )
+                content_row = self.conn.execute(
+                    "SELECT * FROM content_items WHERE id=?", (row["content_id"],),
+                ).fetchone()
+                assert content_row is not None
+                self.conn.commit()
+                return ContentTransitionResult(
+                    content=self._content_item_from_row(content_row),
+                    run=self._content_run_from_row(row),
+                    idempotent=True,
+                )
+            if (
+                row["status"] not in allowed
+                or row["job_status"] not in _EXECUTABLE_JOB_STATUSES
+                or row["lease_owner"] != execution.lease_owner
+                or row["lease_expires_at"] is None
+                or row["lease_expires_at"] < current_ts
+                or int(row["execution_generation"]) != execution.fence_token
+                or row["general_status"] != RunStatus.RUNNING.value
+                or row["general_finished"] is not None
+            ):
+                raise LifecycleTransitionError(
+                    "content_run", execution.run_id, target.value, allowed,
+                    row["status"],
+                    detail="Content transition lacks a matching active lease or source state.",
+                )
+            self._assert_content_snapshot_in_transaction(
+                row["account_id"], int(row["content_id"]),
+            )
+            if target in terminal_map:
+                run_target, job_target = terminal_map[target]
+            else:
+                run_target, job_target = RunStatus.RUNNING, JobStatus.RUNNING
+            self._apply_content_transition_command(
+                mode="EXECUTION",
+                job_id=execution.job_id,
+                run_id=execution.run_id,
+                content_id=int(row["content_id"]),
+                account_id=row["account_id"],
+                workflow=execution.workflow.value,
+                source_status=row["status"],
+                target_status=target.value,
+                target_run_status=run_target.value,
+                target_job_status=job_target.value,
+                lease_owner=execution.lease_owner,
+                execution_generation=execution.fence_token,
+                lease_expires_at=row["lease_expires_at"],
+                reason_code=reason_code,
+                result_json=result_json,
+                score=score,
+                current_ts=current_ts,
+            )
+            self.conn.commit()
+            content_row = self.conn.execute(
+                "SELECT * FROM content_items WHERE id=?", (row["content_id"],),
+            ).fetchone()
+            run_row = self.conn.execute(
+                "SELECT * FROM content_runs WHERE run_id=?", (execution.run_id,),
+            ).fetchone()
+            assert content_row is not None and run_row is not None
+            return ContentTransitionResult(
+                content=self._content_item_from_row(content_row),
+                run=self._content_run_from_row(run_row),
+                idempotent=False,
+            )
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def _require_content_execution_fence(
+        self,
+        execution: JobExecutionContext,
+        current_ts: str,
+        *,
+        allowed_content_statuses: Sequence[str] = (
+            ContentStatus.RUNNING.value,
+            ContentStatus.REVISE.value,
+        ),
+    ) -> sqlite3.Row:
+        if (
+            execution.kind is not JobKind.CONTENT
+            or execution.workflow not in (
+                WorkflowType.ARTICLE, WorkflowType.NOTE,
+            )
+            or execution.fence_token <= 0
+        ):
+            raise StaleJobExecutionError(
+                execution.job_id,
+                "content storage requires a typed CONTENT execution context.",
+            )
+        placeholders = ",".join("?" for _ in allowed_content_statuses)
+        row = self.conn.execute(
+            "SELECT c.*,cr.status AS content_run_status,j.status AS job_status,"
+            "j.lease_owner,j.lease_expires_at,j.kind AS job_kind,j.kind AS kind,"
+            "j.workflow AS job_workflow,j.run_id AS job_run_id,"
+            "j.execution_generation,cr.workflow AS content_run_workflow,"
+            "r.workflow AS general_workflow,r.account_id AS general_account,"
+            "r.status AS general_status,r.status AS run_status,"
+            "r.finished_at AS general_finished "
+            "FROM content_items c JOIN content_runs cr ON cr.content_id=c.id "
+            "JOIN jobs j ON j.id=c.job_id "
+            "JOIN runs r ON r.id=cr.run_id "
+            "WHERE j.id=? AND j.run_id=? AND c.run_id=? "
+            "AND j.account_id=c.account_id AND cr.job_id=j.id AND cr.run_id=j.run_id "
+            "AND j.kind='CONTENT' AND j.workflow=c.type AND cr.workflow=c.type "
+            "AND r.workflow=c.type AND r.account_id=c.account_id "
+            "AND r.status='RUNNING' AND r.finished_at IS NULL "
+            "AND j.status IN ('LEASED','RUNNING') "
+            "AND j.lease_owner=? AND j.lease_expires_at>=? "
+            "AND j.execution_generation=? "
+            f"AND c.status IN ({placeholders}) AND cr.status=c.status",
+            (
+                execution.job_id, execution.run_id, execution.run_id,
+                execution.lease_owner, current_ts, execution.fence_token,
+                *allowed_content_statuses,
+            ),
+        ).fetchone()
+        if (
+            row is None
+            or row["type"] != execution.workflow.value
+            or row["job_workflow"] != execution.workflow.value
+            or row["content_run_workflow"] != execution.workflow.value
+            or row["general_workflow"] != execution.workflow.value
+        ):
+            raise StaleJobExecutionError(execution.job_id)
+        return row
+
+    def record_content_article_brief(
+        self,
+        execution: JobExecutionContext,
+        *,
+        brief_schema_version: str,
+        brief: dict[str, object],
+    ) -> str:
+        """Persist a caller-supplied brief contract; C1 generates no brief."""
+        if (
+            not brief_schema_version
+            or brief_schema_version != brief_schema_version.strip()
+            or len(brief_schema_version) > 100
+        ):
+            raise ValueError("brief_schema_version must be a controlled string.")
+        brief_json = canonical_json(brief)
+        brief_sha256 = sha256_text(brief_json)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            row = self._require_content_execution_fence(execution, current_ts)
+            self._assert_content_snapshot_in_transaction(
+                row["account_id"], int(row["id"]),
+            )
+            existing = self.conn.execute(
+                "SELECT * FROM content_article_briefs WHERE content_id=?",
+                (row["id"],),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    existing["job_id"] == execution.job_id
+                    and existing["run_id"] == execution.run_id
+                    and existing["brief_schema_version"] == brief_schema_version
+                    and existing["brief_json"] == brief_json
+                    and existing["brief_sha256"] == brief_sha256
+                ):
+                    self.conn.commit()
+                    return brief_sha256
+                raise ContentFoundationError(
+                    "CONTENT_BRIEF_CONFLICT",
+                    "An immutable Article Brief already exists for this content.",
+                )
+            inserted = self.conn.execute(
+                "INSERT INTO content_article_briefs (content_id,job_id,run_id,"
+                "account_id,brief_schema_version,brief_json,brief_sha256,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (
+                    row["id"], execution.job_id, execution.run_id,
+                    row["account_id"], brief_schema_version, brief_json,
+                    brief_sha256, current_ts,
+                ),
+            )
+            if inserted.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_BRIEF_INSERT_FAILED",
+                    "Article Brief insert did not affect exactly one row.",
+                )
+            self.conn.commit()
+            return brief_sha256
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def record_content_call_intent(
+        self,
+        execution: JobExecutionContext,
+        intent: ContentCallIntent,
+    ) -> ContentCallIntent:
+        """Persist a future paid-call preimage without authorizing an attempt."""
+        preimage = intent.canonical_preimage()
+        fingerprint = intent.fingerprint()
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            row = self._require_content_execution_fence(execution, current_ts)
+            frozen = self._assert_content_snapshot_in_transaction(
+                row["account_id"], int(row["id"]),
+            )
+            if (
+                intent.job_id != execution.job_id
+                or intent.run_id != execution.run_id
+                or intent.content_id != int(row["id"])
+                or intent.account_id != row["account_id"]
+                or intent.research_card_id != int(row["research_card_id"])
+                or intent.content_type.value != row["type"]
+                or intent.frozen_input_sha256 != frozen.input_sha256
+                or intent.evidence_manifest_sha256
+                    != frozen.evidence_manifest_sha256
+                or intent.prompt_version != frozen.prompt_version
+                or intent.style_guide_version != frozen.style_guide_version
+                or intent.output_schema_version != frozen.output_schema_version
+                or _persisted_ts(intent.expires_at) <= current_ts
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_CALL_INTENT_MISMATCH",
+                    "Future paid-call intent does not match the active frozen content execution.",
+                )
+            brief = self.conn.execute(
+                "SELECT brief_sha256 FROM content_article_briefs "
+                "WHERE content_id=? AND job_id=? AND run_id=?",
+                (row["id"], execution.job_id, execution.run_id),
+            ).fetchone()
+            if brief is None or brief["brief_sha256"] != intent.article_brief_sha256:
+                raise ContentFoundationError(
+                    "CONTENT_CALL_BRIEF_MISMATCH",
+                    "Future paid-call intent requires the exact immutable Article Brief.",
+                )
+            existing = self.conn.execute(
+                "SELECT * FROM content_call_intents WHERE intent_id=? OR job_id=?",
+                (intent.intent_id, execution.job_id),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    existing["intent_id"] == intent.intent_id
+                    and existing["job_id"] == intent.job_id
+                    and existing["intent_json"] == preimage
+                    and existing["intent_fingerprint"] == fingerprint
+                ):
+                    self.conn.commit()
+                    return intent
+                raise ContentFoundationError(
+                    "CONTENT_CALL_INTENT_CONFLICT",
+                    "A different immutable call intent already exists.",
+                )
+            inserted = self.conn.execute(
+                "INSERT INTO content_call_intents (intent_id,job_id,run_id,"
+                "content_id,account_id,research_card_id,content_type,stage,"
+                "frozen_input_sha256,article_brief_sha256,evidence_manifest_sha256,"
+                "provider,model,pricing_profile_id,pricing_profile_version,"
+                "pricing_fingerprint,max_input_tokens,max_context_tokens,"
+                "max_output_tokens,web_searches,max_retries,attempt_no,"
+                "prompt_version,style_guide_version,output_schema_version,"
+                "max_cost_usd,expires_at,intent_json,intent_fingerprint,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    intent.intent_id, intent.job_id, intent.run_id,
+                    intent.content_id, intent.account_id, intent.research_card_id,
+                    intent.content_type.value, intent.stage,
+                    intent.frozen_input_sha256,
+                    intent.article_brief_sha256,
+                    intent.evidence_manifest_sha256, intent.provider, intent.model,
+                    intent.pricing_profile_id, intent.pricing_profile_version,
+                    intent.pricing_fingerprint, intent.max_input_tokens,
+                    intent.max_context_tokens, intent.max_output_tokens,
+                    intent.web_searches, intent.max_retries, intent.attempt_no,
+                    intent.prompt_version, intent.style_guide_version,
+                    intent.output_schema_version, intent.max_cost_usd,
+                    _persisted_ts(intent.expires_at), preimage, fingerprint,
+                    _persisted_ts(intent.created_at),
+                ),
+            )
+            if inserted.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_CALL_INTENT_INSERT_FAILED",
+                    "Future call intent insert did not affect exactly one row.",
+                )
+            self.conn.commit()
+            return intent
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def record_content_evaluation(
+        self,
+        execution: JobExecutionContext,
+        evaluation: ContentEvaluation,
+    ) -> ContentEvaluation:
+        """Persist an audit result supplied by C2; C1 runs no audit logic."""
+        findings_json = canonical_json(evaluation.findings)
+        reason_codes_json = canonical_json(evaluation.reason_codes)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            row = self._require_content_execution_fence(
+                execution,
+                current_ts,
+                allowed_content_statuses=(
+                    ContentStatus.RUNNING.value,
+                    ContentStatus.REVISE.value,
+                ),
+            )
+            if (
+                evaluation.content_id != int(row["id"])
+                or evaluation.account_id != row["account_id"]
+                or evaluation.job_id != execution.job_id
+                or evaluation.run_id != execution.run_id
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_EVALUATION_MISMATCH",
+                    "Evaluation does not match the active content execution.",
+                )
+            existing = self.conn.execute(
+                "SELECT * FROM evaluations WHERE content_id=? AND kind=? "
+                "AND audit_version=?",
+                (
+                    evaluation.content_id, evaluation.kind.value,
+                    evaluation.audit_version,
+                ),
+            ).fetchone()
+            if existing is not None:
+                same = (
+                    existing["account_id"] == evaluation.account_id
+                    and existing["job_id"] == evaluation.job_id
+                    and existing["run_id"] == evaluation.run_id
+                    and existing["status"] == evaluation.status.value
+                    and existing["score"] == evaluation.score
+                    and existing["findings_json"] == findings_json
+                    and existing["reason_codes_json"] == reason_codes_json
+                )
+                if same:
+                    self.conn.commit()
+                    values = evaluation.model_dump()
+                    values.update({
+                        "id": int(existing["id"]),
+                        "created_at": existing["created_at"],
+                        "updated_at": existing["updated_at"],
+                    })
+                    return ContentEvaluation(**values)
+                raise ContentFoundationError(
+                    "CONTENT_EVALUATION_CONFLICT",
+                    "A different evaluation already exists for this audit version.",
+                )
+            cursor = self.conn.execute(
+                "INSERT INTO evaluations (content_id,account_id,job_id,run_id,"
+                "kind,audit_version,status,score,findings_json,reason_codes_json,"
+                "created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    evaluation.content_id, evaluation.account_id,
+                    evaluation.job_id, evaluation.run_id, evaluation.kind.value,
+                    evaluation.audit_version, evaluation.status.value,
+                    evaluation.score, findings_json, reason_codes_json,
+                    current_ts, current_ts,
+                ),
+            )
+            if cursor.rowcount != 1 or cursor.lastrowid is None:
+                raise ContentFoundationError(
+                    "CONTENT_EVALUATION_INSERT_FAILED",
+                    "Evaluation insert did not affect exactly one row.",
+                )
+            self.conn.commit()
+            values = evaluation.model_dump()
+            values.update({
+                "id": int(cursor.lastrowid),
+                "created_at": current_ts,
+                "updated_at": current_ts,
+            })
+            return ContentEvaluation(**values)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
     # --- runy ---
     def create_run(self, run: Run) -> Run:
         self.conn.execute(
@@ -543,6 +2090,13 @@ class SqliteStorage:
 
     def finish_run(self, run_id: str, status: str, cost_usd: float,
                    error: str | None = None) -> None:
+        if self.conn.execute(
+            "SELECT 1 FROM content_runs WHERE run_id=?", (run_id,),
+        ).fetchone() is not None:
+            raise ContentFoundationError(
+                "CONTENT_GENERIC_RUN_TERMINALIZATION_FORBIDDEN",
+                "CONTENT runs terminalize only through transition_content_execution.",
+            )
         canonical_cost = _money(
             cost_usd, positive=False, label="Finished run cost",
         )
@@ -783,7 +2337,12 @@ class SqliteStorage:
             topic_id=row["topic_id"], run_id=row["run_id"], payload=payload,
             schedule_reason=row["schedule_reason"], earliest_run_at=row["earliest_run_at"],
             deadline_at=row["deadline_at"], lease_owner=row["lease_owner"],
-            lease_expires_at=row["lease_expires_at"], attempts=int(row["attempts"]),
+            lease_expires_at=row["lease_expires_at"],
+            execution_generation=(
+                int(row["execution_generation"])
+                if "execution_generation" in row.keys() else 0
+            ),
+            attempts=int(row["attempts"]),
             max_attempts=int(row["max_attempts"]),
             reserved_cost_usd=float(row["reserved_cost_usd"]),
             budget_reserved_at=row["budget_reserved_at"], last_error=row["last_error"],
@@ -826,9 +2385,19 @@ class SqliteStorage:
     def _job_execution_timestamp(self, execution: JobExecutionContext) -> str:
         if not execution.job_id.strip() or not execution.lease_owner.strip() or not execution.run_id.strip():
             raise ValueError("Job execution identifiers must be non-empty.")
-        if execution.kind is not JobKind.RESEARCH or execution.workflow is not WorkflowType.RESEARCH:
+        valid_execution = (
+            (
+                execution.kind is JobKind.RESEARCH
+                and execution.workflow is WorkflowType.RESEARCH
+            )
+            or (
+                execution.kind is JobKind.CONTENT
+                and execution.workflow in (WorkflowType.ARTICLE, WorkflowType.NOTE)
+            )
+        )
+        if not valid_execution:
             raise StaleJobExecutionError(
-                execution.job_id, "execution kind/workflow does not authorize research mutation.",
+                execution.job_id, "execution kind/workflow does not authorize this mutation.",
             )
         return _persisted_ts(self._job_now(execution.now()))
 
@@ -879,6 +2448,8 @@ class SqliteStorage:
         ).fetchone()
         if kind_row is not None and kind_row["kind"] == JobKind.TOPIC_GENERATION.value:
             return self._require_topic_generation_fence(execution, current_ts)
+        if kind_row is not None and kind_row["kind"] == JobKind.CONTENT.value:
+            return self._require_content_execution_fence(execution, current_ts)
         row = self.conn.execute(
             "SELECT j.status AS job_status,j.kind,j.workflow,j.run_id,j.lease_owner,"
             "j.lease_expires_at,r.status AS run_status,r.account_id AS run_account_id,"
@@ -947,8 +2518,14 @@ class SqliteStorage:
                 normalized = canonicalize_offline_evidence_payload(payload)
             elif payload.get("execution") == TOPIC_GENERATION_EXECUTION:
                 normalized = canonicalize_topic_generation_payload(payload)
+            elif payload.get("execution") == CONTENT_EXECUTION:
+                normalized = canonicalize_content_job_payload(payload)
             return json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        except (DurableExecutionIntentError, OfflineEvidenceIntentError) as exc:
+        except (
+            ContentContractError,
+            DurableExecutionIntentError,
+            OfflineEvidenceIntentError,
+        ) as exc:
             code = getattr(exc, "code", "OFFLINE_EVIDENCE_INTENT_INVALID")
             raise JobPayloadValidationError(code, str(exc)) from exc
         except (TypeError, ValueError) as exc:
@@ -1099,17 +2676,19 @@ class SqliteStorage:
             self.conn.execute(
                 "UPDATE jobs SET status='FAILED', last_error='Deadline elapsed before claim.', "
                 "finished_at=?, updated_at=?, reserved_cost_usd=0.0, budget_reserved_at=NULL "
-                "WHERE status='QUEUED' AND deadline_at IS NOT NULL AND deadline_at < ?",
+                "WHERE status='QUEUED' AND kind<>'CONTENT' "
+                "AND deadline_at IS NOT NULL AND deadline_at < ?",
                 (current_ts, current_ts, current_ts),
             )
             self.conn.execute(
                 "UPDATE jobs SET status='FAILED', last_error='Maximum attempts exhausted before claim.', "
                 "finished_at=?, updated_at=?, reserved_cost_usd=0.0, budget_reserved_at=NULL "
-                "WHERE status='QUEUED' AND attempts >= max_attempts",
+                "WHERE status='QUEUED' AND kind<>'CONTENT' AND attempts >= max_attempts",
                 (current_ts, current_ts),
             )
             selected = self.conn.execute(
-                "SELECT id FROM jobs WHERE status='QUEUED' AND earliest_run_at <= ? "
+                "SELECT id FROM jobs WHERE status='QUEUED' AND kind<>'CONTENT' "
+                "AND earliest_run_at <= ? "
                 "AND (deadline_at IS NULL OR deadline_at >= ?) AND attempts < max_attempts "
                 "ORDER BY priority DESC, deadline_at IS NULL ASC, deadline_at ASC, created_at ASC, id ASC "
                 "LIMIT 1",
@@ -1120,7 +2699,10 @@ class SqliteStorage:
                 return None
             cursor = self.conn.execute(
                 "UPDATE jobs SET status='LEASED', lease_owner=?, lease_expires_at=?, "
-                "attempts=attempts+1, started_at=COALESCE(started_at, ?), updated_at=? "
+                "attempts=attempts+1,"
+                "execution_generation=execution_generation+CASE "
+                "WHEN kind='CONTENT' THEN 1 ELSE 0 END,"
+                "started_at=COALESCE(started_at, ?), updated_at=? "
                 "WHERE id=? AND status='QUEUED' AND earliest_run_at <= ? "
                 "AND (deadline_at IS NULL OR deadline_at >= ?) AND attempts < max_attempts",
                 (lease_owner, lease_until, current_ts, current_ts, selected["id"], current_ts, current_ts),
@@ -1168,7 +2750,10 @@ class SqliteStorage:
             lease_until = _persisted_ts(current + timedelta(seconds=lease_seconds))
             cursor = self.conn.execute(
                 "UPDATE jobs SET status='LEASED', lease_owner=?, lease_expires_at=?, "
-                "attempts=attempts+1, started_at=COALESCE(started_at, ?), updated_at=? "
+                "attempts=attempts+1,"
+                "execution_generation=execution_generation+CASE "
+                "WHEN kind='CONTENT' THEN 1 ELSE 0 END,"
+                "started_at=COALESCE(started_at, ?), updated_at=? "
                 "WHERE id=? AND status='QUEUED' AND earliest_run_at <= ? "
                 "AND (deadline_at IS NULL OR deadline_at >= ?) AND attempts < max_attempts",
                 (lease_owner, lease_until, current_ts, current_ts, job_id, current_ts, current_ts),
@@ -1198,6 +2783,14 @@ class SqliteStorage:
             self.conn.execute("BEGIN IMMEDIATE")
             current = self._job_now(now, clock=clock)
             current_ts = _persisted_ts(current)
+            kind_row = self.conn.execute(
+                "SELECT kind FROM jobs WHERE id=?", (job_id,),
+            ).fetchone()
+            if kind_row is not None and kind_row["kind"] == JobKind.CONTENT.value:
+                raise ContentFoundationError(
+                    "CONTENT_GENERIC_JOB_TERMINALIZATION_FORBIDDEN",
+                    "CONTENT jobs terminalize only through the dedicated atomic boundary.",
+                )
             terminal_fields = (
                 ", finished_at=?, reserved_cost_usd=0.0, budget_reserved_at=NULL"
                 if release_budget else ""
@@ -1232,6 +2825,14 @@ class SqliteStorage:
             current_ts = _persisted_ts(
                 self._job_now(now, clock=None if now is not None else clock)
             )
+            kind_row = self.conn.execute(
+                "SELECT kind FROM jobs WHERE id=?", (job_id,),
+            ).fetchone()
+            if kind_row is not None and kind_row["kind"] == JobKind.CONTENT.value:
+                raise ContentFoundationError(
+                    "CONTENT_GENERIC_RUNTIME_MUTATION_FORBIDDEN",
+                    "CONTENT execution starts only through initialize_content_run_for_job.",
+                )
             cursor = self.conn.execute(
                 "UPDATE jobs SET status='RUNNING', updated_at=? WHERE id=? AND status='LEASED' "
                 "AND lease_owner=? AND lease_expires_at >= ?",
@@ -1893,6 +3494,23 @@ class SqliteStorage:
                 self._rollback_preserving_primary(primary, self.conn.rollback)
             raise
 
+    def _set_run_cost_from_content_usage(self, run_id: str) -> None:
+        rows = self.conn.execute(
+            "SELECT estimated_cost_usd FROM model_usage "
+            "WHERE run_id=? AND task=?",
+            (run_id, CONTENT_PROVIDER_STAGE),
+        ).fetchall()
+        total = _sum_money_rows(
+            rows, "estimated_cost_usd", label="Canonical content usage total",
+        )
+        cursor = self.conn.execute(
+            "UPDATE runs SET cost_usd=? WHERE id=?", (float(total), run_id),
+        )
+        if cursor.rowcount != 1:
+            raise StaleJobExecutionError(
+                run_id, "Content run cost cache could not be refreshed.",
+            )
+
     def add_job_model_usage(
         self, execution: JobExecutionContext, usage: ModelUsage,
     ) -> ModelUsage:
@@ -1901,7 +3519,9 @@ class SqliteStorage:
             raise StaleJobExecutionError(
                 execution.job_id, "usage run_id does not match the fenced execution.",
             )
-        if usage.task not in _RESEARCH_USAGE_TASKS + (TOPIC_GENERATION_USAGE_TASK,):
+        if usage.task not in _RESEARCH_USAGE_TASKS + (
+            TOPIC_GENERATION_USAGE_TASK, CONTENT_PROVIDER_STAGE,
+        ):
             raise StaleJobExecutionError(
                 execution.job_id, "usage task is not a research task.",
             )
@@ -1914,7 +3534,15 @@ class SqliteStorage:
             # can never book topic-generation usage and vice versa, so neither
             # cost cache can ever be fed from the other workflow's ledger rows.
             is_topic_generation = fence["kind"] == JobKind.TOPIC_GENERATION.value
-            if is_topic_generation != (usage.task == TOPIC_GENERATION_USAGE_TASK):
+            is_content = fence["kind"] == JobKind.CONTENT.value
+            if (
+                is_topic_generation != (usage.task == TOPIC_GENERATION_USAGE_TASK)
+                or is_content != (usage.task == CONTENT_PROVIDER_STAGE)
+                or (
+                    not is_topic_generation and not is_content
+                    and usage.task not in _RESEARCH_USAGE_TASKS
+                )
+            ):
                 raise StaleJobExecutionError(
                     execution.job_id, "usage task does not match the fenced workflow.",
                 )
@@ -1998,6 +3626,8 @@ class SqliteStorage:
                     )
             if is_topic_generation:
                 self._set_run_cost_from_topic_generation_usage(execution.run_id)
+            elif is_content:
+                self._set_run_cost_from_content_usage(execution.run_id)
             else:
                 self._set_run_cost_from_research_usage(execution.run_id)
             self.conn.commit()
@@ -2047,15 +3677,46 @@ class SqliteStorage:
                     raise DurableExecutionIntentError(
                         "persisted durable payload must be a JSON object."
                     )
-                topic_generation = (
+                content_attempt = payload.get("execution") == CONTENT_EXECUTION
+                content_intent = None
+                if content_attempt:
+                    canonicalize_content_job_payload(payload)
+                    content_intent = self.conn.execute(
+                        "SELECT * FROM content_call_intents "
+                        "WHERE job_id=? AND run_id=?",
+                        (execution.job_id, execution.run_id),
+                    ).fetchone()
+                    if (
+                        content_intent is None
+                        or stage != content_intent["stage"]
+                        or stage != CONTENT_PROVIDER_STAGE
+                        or attempt_no != int(content_intent["attempt_no"])
+                        or content_intent["expires_at"] <= current_ts
+                        or not _money_equal(
+                            content_intent["max_cost_usd"],
+                            max_cost,
+                            label="Content provider reservation",
+                        )
+                    ):
+                        raise ContentFoundationError(
+                            "CONTENT_PROVIDER_INTENT_MISMATCH",
+                            "Provider reservation does not match the immutable content call intent.",
+                        )
+                    intent_json = content_intent["intent_json"]
+                    intent_fingerprint = content_intent["intent_fingerprint"]
+                    topic_generation = False
+                    topic_intent = None
+                    intent = None
+                else:
+                    topic_generation = (
                     payload.get("execution") == TOPIC_GENERATION_EXECUTION
-                )
-                if topic_generation:
+                    )
+                if not content_attempt and topic_generation:
                     topic_intent, intent_json, intent_fingerprint = (
                         frozen_topic_generation_contract(payload)
                     )
                     intent = None
-                else:
+                elif not content_attempt:
                     canonical_payload = canonicalize_durable_research_payload(payload)
                     intent_raw = canonical_payload["execution_intent"]
                     assert isinstance(intent_raw, dict)
@@ -2159,6 +3820,26 @@ class SqliteStorage:
                     intent_fingerprint=intent_fingerprint,
                     current_ts=current_ts,
                 )
+            if content_attempt:
+                assert content_intent is not None
+                extension = self.conn.execute(
+                    "INSERT INTO content_provider_attempts (request_id,intent_id,"
+                    "job_id,run_id,content_id,account_id,stage,attempt_no,"
+                    "provider,model,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        request_id, content_intent["intent_id"],
+                        execution.job_id, execution.run_id,
+                        int(content_intent["content_id"]),
+                        content_intent["account_id"], stage, attempt_no,
+                        content_intent["provider"], content_intent["model"],
+                        current_ts,
+                    ),
+                )
+                if extension.rowcount != 1:
+                    raise ContentFoundationError(
+                        "CONTENT_PROVIDER_EXTENSION_FAILED",
+                        "Content attempt extension did not affect exactly one row.",
+                    )
             self.conn.execute(
                 "INSERT INTO provider_attempts (job_id,stage,attempt_no,request_id,status,"
                 "execution_intent_fingerprint,reserved_amount_usd,reserved_at) VALUES (?,?,?,?,?,?,?,?)",
@@ -4147,9 +5828,14 @@ class SqliteStorage:
             self.conn.execute("BEGIN IMMEDIATE")
             current_ts = _persisted_ts(self._job_now(now, clock=clock))
             row = self.conn.execute(
-                "SELECT status,lease_owner,lease_expires_at,external_effect_started_at "
+                "SELECT kind,status,lease_owner,lease_expires_at,external_effect_started_at "
                 "FROM jobs WHERE id=?", (job_id,),
             ).fetchone()
+            if row is not None and row["kind"] == JobKind.CONTENT.value:
+                raise ContentFoundationError(
+                    "CONTENT_GENERIC_RUNTIME_MUTATION_FORBIDDEN",
+                    "CONTENT external markers require its typed execution boundary.",
+                )
             if (
                 row is not None
                 and row["external_effect_started_at"] is not None
@@ -4214,6 +5900,14 @@ class SqliteStorage:
             self.conn.execute("BEGIN IMMEDIATE")
             current = self._job_now(now, clock=clock)
             current_ts = _persisted_ts(current)
+            kind_row = self.conn.execute(
+                "SELECT kind FROM jobs WHERE id=?", (job_id,),
+            ).fetchone()
+            if kind_row is not None and kind_row["kind"] == JobKind.CONTENT.value:
+                raise ContentFoundationError(
+                    "CONTENT_GENERIC_RUNTIME_MUTATION_FORBIDDEN",
+                    "CONTENT lease heartbeats require a typed generation fence.",
+                )
             lease_until = _persisted_ts(current + timedelta(seconds=lease_seconds))
             cursor = self.conn.execute(
                 "UPDATE jobs SET lease_expires_at=CASE WHEN lease_expires_at >= ? "
@@ -4232,6 +5926,230 @@ class SqliteStorage:
             if self.conn.in_transaction:
                 self.conn.rollback()
             raise
+
+    def _recover_content_expired_lease(
+        self, row: sqlite3.Row, current_ts: str,
+    ) -> tuple[JobStatus, bool, str, bool] | None:
+        """Recover one C1 content lease without ever entering a provider path."""
+        if row["kind"] != JobKind.CONTENT.value:
+            return None
+        content = self.conn.execute(
+            "SELECT * FROM content_items WHERE job_id=?", (row["id"],),
+        ).fetchone()
+        if content is None:
+            raise ContentFoundationError(
+                "CONTENT_RECOVERY_RELATION_MISSING",
+                "CONTENT recovery cannot terminalize without all four durable records.",
+            )
+        attempts = int(row["attempts"])
+        max_attempts = int(row["max_attempts"])
+        if row["run_id"] is None:
+            if attempts < max_attempts and row["external_effect_started_at"] is None:
+                return (
+                    JobStatus.QUEUED,
+                    False,
+                    "Content lease expired before run initialization; safely requeued.",
+                    False,
+                )
+            reason = "CONTENT_LEASE_EXPIRED_MAX_ATTEMPTS"
+            recovery_run_id = (
+                f"content-recovery:{row['id']}:"
+                f"{int(row['execution_generation'])}"
+            )
+            self.conn.execute(
+                "INSERT INTO runs (id,account_id,workflow,status,current_state,"
+                "started_at,cost_usd,human_intervention_count) "
+                "VALUES (?,?,?,'RUNNING','RUNNING',?,0.0,0)",
+                (
+                    recovery_run_id, row["account_id"], row["workflow"],
+                    current_ts,
+                ),
+            )
+            self.conn.execute(
+                "INSERT INTO content_runs (run_id,content_id,job_id,account_id,"
+                "research_card_id,workflow,input_sha256,status,started_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,'RUNNING',?,?)",
+                (
+                    recovery_run_id, content["id"], row["id"], row["account_id"],
+                    content["research_card_id"], row["workflow"],
+                    content["input_sha256"], current_ts, current_ts,
+                ),
+            )
+            attached = self.conn.execute(
+                "UPDATE jobs SET run_id=?,updated_at=? WHERE id=? "
+                "AND run_id IS NULL AND status IN ('LEASED','RUNNING') "
+                "AND lease_owner=? AND lease_expires_at=? "
+                "AND execution_generation=?",
+                (
+                    recovery_run_id, current_ts, row["id"], row["lease_owner"],
+                    row["lease_expires_at"], row["execution_generation"],
+                ),
+            )
+            if attached.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_RECOVERY_ATTACH_FAILED",
+                    "Recovery run did not attach to exactly one CONTENT job.",
+                )
+            content_attached = self.conn.execute(
+                "UPDATE content_items SET run_id=?,status='RUNNING',updated_at=? "
+                "WHERE id=? AND job_id=? AND run_id IS NULL AND status='PREPARED'",
+                (recovery_run_id, current_ts, content["id"], row["id"]),
+            )
+            if content_attached.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_RECOVERY_ATTACH_FAILED",
+                    "Recovery run did not attach to exactly one content item.",
+                )
+            self._apply_content_transition_command(
+                mode="RECOVERY",
+                job_id=row["id"],
+                run_id=recovery_run_id,
+                content_id=int(content["id"]),
+                account_id=row["account_id"],
+                workflow=row["workflow"],
+                source_status=ContentStatus.RUNNING.value,
+                target_status=ContentStatus.FAILED.value,
+                target_run_status=RunStatus.FAILED.value,
+                target_job_status=JobStatus.FAILED.value,
+                lease_owner=row["lease_owner"],
+                execution_generation=int(row["execution_generation"]),
+                lease_expires_at=row["lease_expires_at"],
+                reason_code=reason,
+                result_json=None,
+                score=None,
+                current_ts=current_ts,
+            )
+            return (
+                JobStatus.FAILED,
+                True,
+                "Content lease expired after maximum attempts before run initialization.",
+                True,
+            )
+
+        state = self.conn.execute(
+            "SELECT cr.*,r.status AS general_status,r.finished_at AS general_finished,"
+            "r.cost_usd AS general_cost,"
+            "(SELECT count(*) FROM provider_attempts p WHERE p.job_id=cr.job_id) "
+            "AS provider_attempt_count,"
+            "(SELECT count(*) FROM model_usage mu WHERE mu.run_id=cr.run_id) "
+            "AS usage_count "
+            "FROM content_runs cr JOIN runs r ON r.id=cr.run_id "
+            "WHERE cr.job_id=? AND cr.run_id=? AND cr.content_id=? "
+            "AND cr.account_id=? AND cr.input_sha256=?",
+            (
+                row["id"], row["run_id"], content["id"], content["account_id"],
+                content["input_sha256"],
+            ),
+        ).fetchone()
+        if state is None:
+            raise ContentFoundationError(
+                "CONTENT_RECOVERY_RELATION_INVALID",
+                "Attached CONTENT recovery relation is inconsistent.",
+            )
+        safe_zero_cost = (
+            row["external_effect_started_at"] is None
+            and float(row["reserved_cost_usd"]) == 0
+            and row["budget_reserved_at"] is None
+            and int(state["provider_attempt_count"]) == 0
+            and int(state["usage_count"]) == 0
+            and state["general_status"] == RunStatus.RUNNING.value
+            and state["general_finished"] is None
+            and float(state["general_cost"]) == 0
+            and state["status"] in {
+                ContentStatus.PREPARED.value,
+                ContentStatus.RUNNING.value,
+                ContentStatus.REVISE.value,
+            }
+        )
+        if safe_zero_cost and attempts < max_attempts:
+            self._apply_content_transition_command(
+                mode="RECOVERY",
+                job_id=row["id"],
+                run_id=row["run_id"],
+                content_id=int(content["id"]),
+                account_id=row["account_id"],
+                workflow=row["workflow"],
+                source_status=state["status"],
+                target_status=ContentStatus.PREPARED.value,
+                target_run_status=RunStatus.RUNNING.value,
+                target_job_status=JobStatus.QUEUED.value,
+                lease_owner=row["lease_owner"],
+                execution_generation=int(row["execution_generation"]),
+                lease_expires_at=row["lease_expires_at"],
+                reason_code=None,
+                result_json=None,
+                score=None,
+                current_ts=current_ts,
+            )
+            return (
+                JobStatus.QUEUED,
+                False,
+                "Lease expired at a durable zero-cost content checkpoint; safely requeued.",
+                True,
+            )
+        if safe_zero_cost:
+            reason = "CONTENT_LEASE_EXPIRED_MAX_ATTEMPTS"
+            self._apply_content_transition_command(
+                mode="RECOVERY",
+                job_id=row["id"],
+                run_id=row["run_id"],
+                content_id=int(content["id"]),
+                account_id=row["account_id"],
+                workflow=row["workflow"],
+                source_status=state["status"],
+                target_status=ContentStatus.FAILED.value,
+                target_run_status=RunStatus.FAILED.value,
+                target_job_status=JobStatus.FAILED.value,
+                lease_owner=row["lease_owner"],
+                execution_generation=int(row["execution_generation"]),
+                lease_expires_at=row["lease_expires_at"],
+                reason_code=reason,
+                result_json=None,
+                score=None,
+                current_ts=current_ts,
+            )
+            return (
+                JobStatus.FAILED,
+                True,
+                "Content lease expired after maximum safe offline attempts.",
+                True,
+            )
+
+        reason = "CONTENT_LEASE_EXPIRED_AMBIGUOUS"
+        if state["status"] not in {
+            ContentStatus.PREPARED.value,
+            ContentStatus.RUNNING.value,
+            ContentStatus.REVISE.value,
+        }:
+            raise ContentFoundationError(
+                "CONTENT_RECOVERY_RELATION_INVALID",
+                "Ambiguous recovery found an already terminal content_run.",
+            )
+        self._apply_content_transition_command(
+            mode="RECOVERY",
+            job_id=row["id"],
+            run_id=row["run_id"],
+            content_id=int(content["id"]),
+            account_id=row["account_id"],
+            workflow=row["workflow"],
+            source_status=state["status"],
+            target_status=ContentStatus.NEEDS_VERIFICATION.value,
+            target_run_status=RunStatus.STOPPED.value,
+            target_job_status=JobStatus.NEEDS_VERIFICATION.value,
+            lease_owner=row["lease_owner"],
+            execution_generation=int(row["execution_generation"]),
+            lease_expires_at=row["lease_expires_at"],
+            reason_code=reason,
+            result_json=None,
+            score=None,
+            current_ts=current_ts,
+        )
+        return (
+            JobStatus.NEEDS_VERIFICATION,
+            False,
+            "Content lease expired after a possible paid/external boundary; no retry.",
+            True,
+        )
 
     def _recover_controlled_fetch_expired_lease(
         self, row: sqlite3.Row, current_ts: str,
@@ -4363,8 +6281,10 @@ class SqliteStorage:
             self.conn.execute("BEGIN IMMEDIATE")
             current_ts = _persisted_ts(self._job_now(now, clock=clock))
             rows = self.conn.execute(
-                "SELECT id,kind,run_id,attempts,max_attempts,external_effect_started_at,"
-                "payload_json,reserved_cost_usd,budget_reserved_at FROM jobs "
+                "SELECT id,account_id,kind,workflow,run_id,attempts,max_attempts,"
+                "external_effect_started_at,payload_json,reserved_cost_usd,"
+                "budget_reserved_at,lease_owner,lease_expires_at,"
+                "execution_generation FROM jobs "
                 "WHERE status IN ('LEASED','RUNNING') AND lease_expires_at < ? ORDER BY id",
                 (current_ts,),
             ).fetchall()
@@ -4411,11 +6331,23 @@ class SqliteStorage:
                             and int(state["usage_count"]) == 0
                             and int(state["attempt_count"]) == 0
                         )
-                controlled_fetch_recovery = self._recover_controlled_fetch_expired_lease(
+                content_recovery = self._recover_content_expired_lease(
                     row, current_ts,
                 )
-                if controlled_fetch_recovery is not None:
-                    target, release_budget, error = controlled_fetch_recovery
+                controlled_fetch_recovery = (
+                    None if content_recovery is not None
+                    else self._recover_controlled_fetch_expired_lease(row, current_ts)
+                )
+                specialized_recovery = content_recovery or controlled_fetch_recovery
+                content_job_already_updated = False
+                if specialized_recovery is not None:
+                    if content_recovery is not None:
+                        (
+                            target, release_budget, error,
+                            content_job_already_updated,
+                        ) = content_recovery
+                    else:
+                        target, release_budget, error = specialized_recovery
                     if target is JobStatus.QUEUED:
                         result.requeued_count += 1
                     elif target is JobStatus.NEEDS_VERIFICATION:
@@ -4463,6 +6395,8 @@ class SqliteStorage:
                     release_budget = False
                     result.requeued_count += 1
                     error = "Lease expired before an external effect; safely requeued."
+                if content_job_already_updated:
+                    continue
                 fields = (
                     ", finished_at=?, reserved_cost_usd=0.0, budget_reserved_at=NULL"
                     if release_budget else ""
@@ -4721,6 +6655,14 @@ class SqliteStorage:
         try:
             self.conn.execute("BEGIN IMMEDIATE")
             current_ts = _persisted_ts(self._job_now(now, clock=clock))
+            kind_row = self.conn.execute(
+                "SELECT kind FROM jobs WHERE id=?", (job_id,),
+            ).fetchone()
+            if kind_row is not None and kind_row["kind"] == JobKind.CONTENT.value:
+                raise ContentFoundationError(
+                    "CONTENT_GENERIC_JOB_TERMINALIZATION_FORBIDDEN",
+                    "CONTENT jobs cannot be cancelled outside the dedicated content boundary.",
+                )
             cursor = self.conn.execute(
                 "UPDATE jobs SET status='CANCELLED', finished_at=?, updated_at=?, "
                 "reserved_cost_usd=0.0, budget_reserved_at=NULL WHERE id=? AND status='QUEUED'",
@@ -4753,6 +6695,11 @@ class SqliteStorage:
             day_prefix = current.strftime("%Y-%m-%d")
             month_prefix = current.strftime("%Y-%m")
             job = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if job is not None and job["kind"] == JobKind.CONTENT.value:
+                raise ContentFoundationError(
+                    "CONTENT_GENERIC_RUNTIME_MUTATION_FORBIDDEN",
+                    "CONTENT budget mutations require a typed generation fence.",
+                )
             if job is None or job["status"] not in _ACTIVE_JOB_STATUSES:
                 raise self._job_lifecycle_error(
                     job_id, "BUDGET_RESERVED", _ACTIVE_JOB_STATUSES,
@@ -4826,6 +6773,14 @@ class SqliteStorage:
         try:
             self.conn.execute("BEGIN IMMEDIATE")
             current_ts = _persisted_ts(self._job_now(now, clock=clock))
+            kind_row = self.conn.execute(
+                "SELECT kind FROM jobs WHERE id=?", (job_id,),
+            ).fetchone()
+            if kind_row is not None and kind_row["kind"] == JobKind.CONTENT.value:
+                raise ContentFoundationError(
+                    "CONTENT_GENERIC_RUNTIME_MUTATION_FORBIDDEN",
+                    "CONTENT budget mutations require a typed generation fence.",
+                )
             cursor = self.conn.execute(
                 "UPDATE jobs SET reserved_cost_usd=0.0, budget_reserved_at=NULL, updated_at=? "
                 f"WHERE id=? AND status IN ({placeholders}) AND budget_reserved_at IS NOT NULL "
@@ -7159,13 +9114,45 @@ class SqliteStorage:
                 source.research_card_id = card.id
                 self._insert_finalization_source(source)
                 item = lineage[source.url]
+                claim_positions = [
+                    index for index, claim in enumerate(card.confirmed_claims)
+                    if claim == source.supports_claim
+                ]
+                if len(claim_positions) != 1:
+                    raise ResearchTopicIntegrityError(
+                        "source claim must identify exactly one confirmed-claim position."
+                    )
+                claim_ordinal = claim_positions[0]
+                claim_id = (
+                    f"research-card:{card.id}:"
+                    f"confirmed-claim:{claim_ordinal}"
+                )
+                lineage_preimage = {
+                    "account_id": fence["research_account_id"],
+                    "candidate_id": int(item["candidate_id"]),
+                    "confirmed_claim_id": claim_id,
+                    "confirmed_claim_ordinal": claim_ordinal,
+                    "excerpt_id": int(item["excerpt_id"]),
+                    "research_card_id": int(card.id),
+                    "research_job_id": execution.job_id,
+                    "research_run_id": execution.run_id,
+                    "retrieval_id": int(item["retrieval_id"]),
+                    "source_id": int(source.id),
+                    "topic_id": int(card.topic_id),
+                }
                 self.conn.execute(
                     "INSERT INTO evidence_source_lineage "
                     "(source_id,research_card_id,candidate_id,research_run_id,account_id,"
-                    "retrieval_id,excerpt_id,created_at) VALUES (?,?,?,?,?,?,?,?)",
+                    "retrieval_id,excerpt_id,created_at,confirmed_claim_ordinal,"
+                    "confirmed_claim_id,confirmed_claim_sha256,research_job_id,"
+                    "topic_id,lineage_fingerprint) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (source.id, card.id, item["candidate_id"], execution.run_id,
                      fence["research_account_id"], item["retrieval_id"],
-                     item["excerpt_id"], now),
+                     item["excerpt_id"], now, claim_ordinal, claim_id,
+                     sha256_text(card.confirmed_claims[claim_ordinal]),
+                     execution.job_id, card.topic_id,
+                     sha256_text(canonical_json(lineage_preimage))),
                 )
             self.conn.execute(
                 "INSERT INTO research_stage_results "

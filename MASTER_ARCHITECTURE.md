@@ -1,5 +1,7 @@
 # MASTER_ARCHITECTURE — Nothing Is Accidental Agent
 
+> **TECHNICZNY SNAPSHOT 2026-07-23 — WAVE C1 / ADR-114/115 = `REPAIR CANDIDATE COMPLETE — AWAITING INDEPENDENT RE-REVIEW`; NIE ZATWIERDZONE.** Pierwszy niezależny review zakończył się `REJECT — MAJOR` (3 MAJOR). Jedna fala naprawcza ustanawia: wyłącznie autorytatywne durable IDs w evidence lineage; monotoniczny execution generation fence; jedną atomową command boundary terminalizującą job/run/content_run/content_item; ścisłe 1:1 `content_provider_attempts→provider_attempts`; oraz pełne porównanie trwałego workflow ARTICLE/NOTE. C1 nadal nie ma realnego providera ani content dispatchera: może utrwalić tylko pre-network parę ledgerową w testowym/lokalnym flow. Planner/writer/audyty/rewrite/approval/publication nie istnieją. Produkcyjna baza pozostaje na `0020`; C1 i Etap 3 nie są formalnie zamknięte, controlled-live i operacji Git nie wykonano.
+
 > **BIEŻĄCY STAN FORMALNY 2026-07-23 (ADR-113): ETAP 2 = `CLOSED`; durable `TOPIC_GENERATION` = `MERGED AND LIVE VERIFIED`; L1 = `ACTIVE`; LEVEL_3 = `NOT CONFIRMED`; publikacja = `NOT VERIFIED`.** Zmergowany `main` `a4e314ff1d9a9ac6bd24fdcdf159ca3e24356916` wykonał jeden zatwierdzony controlled-live: job `topic-generation-037eb2d3db158a70791e30064ad95403`, request `…:topics:1`, run `4cf8c448-5358-43c6-9d47-e5daf6d0f040`, HTTP 200, jeden attempt/usage, `SETTLED`/`DONE`/`SUCCESS`, koszt `0.013128 USD` przy capie `0.024303 USD`, dwa generated topics i selected topic `21`. Niezależny post-live review wydał `APPROVE WITH MINOR/P2 — ETAP 2 MAY BE FORMALLY CLOSED`; P2 dotyczące proceduralnych sidecarów WAL/SHM, minimalnego JSON raportu i historycznego legacy ledgeru poza tym runem nie blokują zamknięcia. Pojedynczy live nie potwierdza całej autonomii ani przyszłych scenariuszy. Etap 3 może zostać rozpoczęty wyłącznie osobną decyzją właściciela; każde kolejne live lub publikacja nadal wymaga osobnej zgody.
 
 > **HISTORYCZNY SNAPSHOT PRZED MERGE PR #18 I PRZED LIVE — 2026-07-22, ADR-111:** publiczny `controlled-live-topic-generation` miał status `CANDIDATE COMPLETE — READY FOR INDEPENDENT REVIEW`; Etap 2 pozostawał wtedy `IN PROGRESS`, a LEVEL_3 readiness = `NOT CONFIRMED`. PR #17 był zmergowany; `main`/`origin/main` = `9ca53ecbb821a22bd764b1109aac73c747c36674`, a durable `TOPIC_GENERATION` wraz z recovery 0020 był częścią `main`. Produkcyjna `data/agent.db` miała schema `0020_topic_generation_lifecycle`, SHA-256 `8f987c98649d7d9f7846ff3dd18f7866b805b2ceffcd9b8bebddd8c8658730af`, `696320 B`, integrity `ok`, FK `0`, bez WAL/SHM/journal. Potwierdzony preflight controlled-live zatrzymał się historycznie jako `BLOCKED` przed requestem, ponieważ publiczny worker wybierał queue-wide i nie wystawiał istniejącego `target_job_id`/`claim_specific_job`. Kandydat dodał wyłącznie publiczny root dla jednego istniejącego i zatwierdzonego joba: pełne wiązanie CLI z intentem/approvalem, quiescence i konkurencyjny-state STOP, wspólny marker recovery, dokładny snapshot pięciu flag, procesowe otwarcie profilu paid bez browsera, `Worker(target_job_id=...)`, jedną iterację, read-only reopen i maszynowy checkpoint. Nie tworzył joba/approvalu, nie uruchamiał researchu, Fetch, browsera, maintenance ani retry. Walidacja offline: collect/full `1854/1854`, 0 skipped, 0 xfail, 33 nowe przypadki ponad merged baseline `1821`; zero sieci/API/SDK/browsera/publikacji/kosztu. Controlled-live TOPIC_GENERATION nie było jeszcze wykonane; stan został zastąpiony przez merge PR #18, ADR-112 i formalne zamknięcie ADR-113.
@@ -284,7 +286,7 @@ Kanon: **`model_usage` = jedyne źródło prawdy o koszcie** (`dry_run=0` → bu
 | `model_usage` | wywołanie modelu (= **model call** + **cost record**) | run_id, task, tokeny, web_search_requests, estimated_cost_usd, dry_run | — | append-only; koszt zapisywany TAKŻE przy błędzie |
 | `jobs` | trwałe zadanie kolejki | kind, workflow, payload_json, status, priority, idempotency_key, lease, attempts, `run_id`, marker skutku i rezerwacja | QUEUED→LEASED→RUNNING→DONE/FAILED/NEEDS_VERIFICATION/CANCELLED | UNIQUE idempotency; partial UNIQUE aktywnego researchu per account/topic; worker atomowo tworzy zgodny single-flow run, research_run i `run_id`; expiry z `run_id` wymaga reconciliation |
 | `system_flags` | runtime safety flags workera | key, value_json, reason, updated_at | JSON boolean albo fail-closed | odczyt SQLite bez cache; `kill_switch`, `worker_enabled`, `safe_mode`, paid/browser |
-| `content_items` | artykuł/Note (= **draft**, **article**, **note**) — SCHEMAT BEZ KODU | type, title, body, status, score, research_card_id, external_url | docelowe: sekcja 5 | — |
+| `content_items` + `content_frozen_inputs` + `content_evidence_items` + `content_runs` | trwały fundament artykułu/Note (= **draft**, **article**, **note**) — C1 REPAIR CANDIDATE | account/card/type/job/run, autorytatywne lineage IDs+fingerprint, reason/result/score, execution generation | C1: DRAFT/PREPARED/RUNNING/REVISE/SKIPPED/PENDING_APPROVAL/FAILED/NEEDS_VERIFICATION | immutable snapshot; UNIQUE intent; atomowy command job→run→content; real provider/caller nie istnieje |
 | `interactions` | komentarz/odpowiedź/lajk (= **interaction**, **comment**, **reply**) — SCHEMAT BEZ KODU | target_item_id, type, body, status | docelowe: sekcja 5 | — |
 | `target_items` | cudza publikacja do interakcji — SCHEMAT BEZ KODU | author, item_url, relevance_score | — | UNIQUE(account_id, item_url) |
 | `approvals` | decyzja człowieka (= **human intervention** strukturalna) — SCHEMAT BEZ KODU | object_type+object_id, decision, notes | PENDING/APPROVED/REJECTED | — |
@@ -342,10 +344,17 @@ research_source_candidates.status:
   EXTRACTION_IN_PROGRESS → [wymaga jawnego recovery po awarii; zwykłe resume odmawia]
   EXTRACTION_FAILED → PENDING_EXTRACTION   (TYLKO jawny retry, attempts < cap)
 
-content_items.status (docelowe, Etap 3–5):
-  DRAFT → PENDING_APPROVAL → APPROVED → QUEUED → PUBLISHING
+content_items.status (C1, kandydat Etapu 3):
+  DRAFT → PREPARED
+  PREPARED → RUNNING | SKIPPED | FAILED | NEEDS_VERIFICATION
+  RUNNING → PREPARED | REVISE | SKIPPED | PENDING_APPROVAL | FAILED | NEEDS_VERIFICATION
+  REVISE → PREPARED | RUNNING | SKIPPED | FAILED | NEEDS_VERIFICATION
+  SKIPPED | PENDING_APPROVAL | FAILED | NEEDS_VERIFICATION są terminalne w C1
+  identyczna ponowna terminalizacja = no-op; sprzeczna = odmowa bez mutacji
+
+content_items.status (przyszłe Etapy 4–5, NIE zaimplementowane przez C1):
+  PENDING_APPROVAL → APPROVED | REJECTED; APPROVED → QUEUED → PUBLISHING
     → PUBLISHED | UNCERTAIN | FAILED
-  PENDING_APPROVAL → REJECTED (→ DRAFT po poprawkach)
   UNCERTAIN: wyjście WYŁĄCZNIE przez odczyt stanu lub człowieka — NIGDY auto-retry
 
 jobs.status (Etap 1: storage, worker i eligibility harmonogramu VERIFIED OFFLINE):

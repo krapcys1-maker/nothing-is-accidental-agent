@@ -524,3 +524,20 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Dwa tematy powstały atomowo z terminalizacją; selected topic `21` dotyczy ukrytej logistyki przydziału gate’ów lotniskowych. Approval został zużyty i nie może autoryzować replay.
 - Report zachował najważniejszy dowód negatywny: `provider_retry_performed=false`, `maintenance_performed=false`, browser flag false, a wszystkie flagi po wykonaniu są identyczne jak przed nim.
 - Cytowalna zasada: „Najlepszy controlled-live nie wygląda jak magia. Wygląda jak jeden podpis, jeden rachunek i zero niedopowiedzeń.”
+
+## 2026-07-23 — Materiał pierwszego, później odrzuconego kandydata: „Szkic nie powinien pamiętać ruchomej przeszłości”
+
+- C1 zaczyna content nie od promptu, lecz od zamrożenia dowodu. Karta PROCEED, jej potwierdzone claimy, verified sources, dokładne excerpts, retrieval IDs, URL-e i fingerprinty tworzą jeden kanoniczny snapshot z hashem.
+- Przed runem i każdą ważną mutacją system ponownie buduje obraz z bieżących tabel. Zmiana choćby working thesis, source claim, URL-a lub retrieval fingerprintu nie jest „nowszą wersją danych” — jest driftem, który zatrzymuje wykonanie.
+- 27 niedozwolonych krawędzi maszyny stanów zostało zaatakowanych bezpośrednio w SQLite. Identyczny terminalny replay jest bezpiecznym no-op, ale sprzeczny wynik nie może przepisać historii.
+- Najważniejszy dowód negatywny: content job istnieje, lecz zwykły worker go nie wybiera; przyszły paid intent można zapisać, ale attempt jest odrzucany niezależnie przez storage i trigger. Fundament nie udaje jeszcze generatora.
+- Cytowalna zasada: „Treść można przepisać. Dowodu, z którego powstała, nie wolno po cichu podmienić.”
+
+## 2026-07-23 — Materiał: „Tekst jest dowodem dopiero wtedy, gdy ma trwały adres”
+
+- Niezależny review pierwszego C1 pokazał trzy pozornie różne luki, które miały wspólny rdzeń: system ufał podobieństwu zamiast tożsamości. Ten sam tekst claimu, ten sam URL albo ten sam terminalny status nie dowodzą, że chodzi o ten sam rekord, lease lub request.
+- Fala naprawcza zastąpiła podobieństwo trwałymi adresami. Claim ma jawne ID i ordinal, evidence ma dokładne source/excerpt/retrieval/candidate/run/job, wykonanie ma monotoniczną generację, a provider extension ma ten sam wyprowadzony request ID co kanoniczny parent.
+- Terminalizacja nie jest już sekwencją czterech „prawie atomowych” helperów. Jeden append-only command weryfikuje ownera, lease, generation, konto, workflow i wszystkie relacje, po czym SQL zmienia komplet albo nic.
+- 25 kontrprób obejmuje powtórzony tekst, wspólny URL, obcy excerpt, stary owner po takeover, wygasły replay, ABA z tym samym owner string, obce LOCAL/RESEARCH/TOPIC attempts i równoległe terminalizacje na dwóch połączeniach.
+- Dowód kandydacki: 69/69 C1, full 1923/1923, produkcja nadal 0020 i 0 USD. Status pozostaje `AWAITING INDEPENDENT RE-REVIEW`; implementer nie zamyka własnych findings.
+- Cytowalna zasada: „Podobieństwo pomaga szukać. Tożsamość pozwala bezpiecznie działać.”

@@ -461,3 +461,10 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co powinien pokazać:** zanonimizowany checkpoint `SUCCESS`, attempt count 1 / `SETTLED`, usage count 1, job `DONE`, run `SUCCESS`, approval consumed, generated topics 2, selected topic `21`, actual cost `0.013128 USD`, search `0`, reconciliation false i policy flags restored.
 - **Stan produkcji na kadrze:** skrócony SHA `91f593…56a1f`, schema 0020, integrity `ok`, FK `0`; osobno jawna obserwacja pustego WAL `0 B` i SHM `32768 B`, quiescence `PASS`.
 - **Czego nie może pokazać:** `.env`, klucza API, pełnego promptu/intentu, lokalnych ścieżek, pełnych fingerprintów, zawartości SQLite ani surowej odpowiedzi. Nie może sugerować kolejnej zgody, publikacji, zamknięcia Etapu 2 ani LEVEL_3.
+
+## 2026-07-23 — WAVE C1 repair candidate po `REJECT — MAJOR`
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ fala naprawcza jawnie zabrania browsera, a terminal zawiera lokalne ścieżki i fingerprint produkcyjnej bazy. Pierwszy niezależny review = `REJECT — MAJOR`; bieżący wynik = `C1 REPAIR CANDIDATE COMPLETE — AWAITING INDEPENDENT RE-REVIEW`.
+- **Co powinien pokazać:** zanonimizowaną relację jawnych durable IDs Research Card/confirmed claim/source/excerpt/retrieval → frozen fingerprint → held CONTENT job; generation fence i jedną command boundary czterech lifecycle rows; kanoniczny provider parent + ścisłe extension 1:1; 25/25 kontrprób, 69/69 C1, collect 1923 / 1922 różne tekstowo node IDs, full 1923/1923, compile/diff PASS.
+- **Stan produkcji na kadrze:** wyłącznie skrócony SHA `91f593…56a1f`, schema 0020, `700416 B`, integrity `ok`, FK `0`, WAL `0 B`, SHM `32768 B`, journal absent, z adnotacją `mode=ro&immutable=1` i `PRODUCTION MIGRATION NOT EXECUTED`.
+- **Czego nie może pokazać:** `.env`, kluczy, pełnych lokalnych ścieżek, pełnych hashy/input preimages, treści karty lub evidence, danych SQLite ani command lines. Nie może sugerować approvalu, formalnego zamknięcia findings, wygenerowanej treści, C2, migracji produkcji, controlled-live, operacji Git lub zamknięcia Etapu 3.
