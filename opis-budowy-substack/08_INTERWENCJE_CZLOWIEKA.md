@@ -276,3 +276,6 @@ Zgoda została zużyta przez jeden request `…:topics:1` o koszcie `0.013128 US
 Po niezależnym werdykcie `APPROVE WITH MINOR/P2 — ETAP 2 MAY BE FORMALLY CLOSED` koordynator ustanowił `ETAP 2 — CLOSED`. Przyjął trzy pozostające P2 jako nieblokujące: proceduralne WAL/SHM, minimalny JSON raportu i historyczny ledger legacy poza zakończonym runem.
 
 Nie podniósł poziomu autonomii i nie dopuścił następnej akcji. L1 pozostaje aktywne, LEVEL_3 niepotwierdzone, publikacja niezweryfikowana; rozpoczęcie Etapu 3, kolejne live i publikacja wymagają osobnych decyzji właściciela.
+## 2026-07-23 — Autoryzacja WAVE C2
+
+Właściciel zlecił wyłącznie offline pipeline do `PENDING_APPROVAL`, wskazał prywatne źródło stylu oraz logiczny routing Fable 5/Sonnet 5. Jednocześnie zabronił realnego API, sieci, browsera, publikacji, migracji produkcji, prawdziwego artykułu i rozpoczęcia C3–C5. Wynik implementera ma status kandydacki do niezależnego review.

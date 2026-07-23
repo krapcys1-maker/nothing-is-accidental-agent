@@ -296,3 +296,11 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Usage/koszt:** 219 input, 1269 output, cache read/write `0/0`, search `0`; `0.013128 USD` przy capie `0.024303 USD`.
 - **Wynik:** job `DONE`, run `SUCCESS`, attempt #1 `SETTLED`, approval consumed, usage count 1, reconciliation false. Utworzono topics `20` i `21`; selected `21` — „Why Your Flight's Gate Number Isn't Random: The Hidden Logistics of Airport Gate Assignment”.
 - **Granice:** nie wykonano Fetch, browsera, publikacji, maintenance, retry ani attemptu #2; flagi wróciły fail-closed.
+## 2026-07-23 — Lokalna analiza prywatnego korpusu stylu dla C2
+
+- **Zakres:** wyłącznie offline analiza strukturalna `data/style-references/articles/article_style_samples_v1.txt`; bez sieci, API, providera i bez ujawniania raw content.
+- **Integralność PRE:** plik obecny; `57561 B`; SHA-256 `0b05cefa6701e6447c44810b686828a83c19ca7ffb29066778a13c24207acb1d`.
+- **Metoda:** agregaty lokalne dotyczące linii, akapitów, zdań, długości zdań, pierwszej osoby, pytań, em dash, nagłówków/separatorów i sygnałów odrębnych Notes. Żadne pełne zdanie źródłowe nie zostało wpisane do logu.
+- **Wynik:** 226 linii, 108 akapitów, 9418 słów, 392 zdania; mediana długości zdania 21 słów, p90 43; brak wiarygodnych separatorów wielu próbek i brak wystarczającego, odrębnego korpusu Notes. Konserwatywna liczba rozpoznanych próbek = 1.
+- **Decyzja:** powstały wysokopoziomowe profile ARTICLE i negative; Notes = `PROVISIONAL`. Profile nie imitują konkretnego autora, nie zawierają długich cytatów i nie są wejściem do detektorów AI.
+- **Koszt i skutki:** `0.000000 USD`; raw source pozostał gitignored i poza runtime/repo.

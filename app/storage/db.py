@@ -17,7 +17,8 @@ CONTROLLED_FETCH_SCHEMA_VERSION = "0018_controlled_fetch_lifecycle"
 EVIDENCE_RESEARCH_SCHEMA_VERSION = "0019_evidence_research_approvals"
 TOPIC_GENERATION_SCHEMA_VERSION = "0020_topic_generation_lifecycle"
 CONTENT_FOUNDATION_SCHEMA_VERSION = "0021_durable_content_foundation"
-RUNTIME_SCHEMA_VERSION = CONTENT_FOUNDATION_SCHEMA_VERSION
+CONTENT_PIPELINE_SCHEMA_VERSION = "0022_offline_content_pipeline"
+RUNTIME_SCHEMA_VERSION = CONTENT_PIPELINE_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
@@ -37,6 +38,7 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0016_evidence_foundation",
     "0017_evidence_pipeline_lineage",
     "0018_controlled_fetch_lifecycle",
+    CONTENT_PIPELINE_SCHEMA_VERSION,
     # 0019 is intentionally ABSENT: rebuilding controlled_fetch_approvals with
     # incoming foreign keys requires PRAGMA foreign_keys=OFF, which is a no-op
     # inside the runner transaction — the migration manages its own explicit
@@ -597,5 +599,23 @@ def migrate_0020_to_0021(
         db_path,
         source_version=TOPIC_GENERATION_SCHEMA_VERSION,
         target_version=CONTENT_FOUNDATION_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0021_to_0022(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the separately authorized offline C2 content schema.
+
+    The function is intentionally not called by runtime and does not authorize
+    migration of ``data/agent.db``.
+    """
+    return _migrate_single_step(
+        db_path,
+        source_version=CONTENT_FOUNDATION_SCHEMA_VERSION,
+        target_version=CONTENT_PIPELINE_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )

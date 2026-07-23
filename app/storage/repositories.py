@@ -34,6 +34,12 @@ from app.content.foundation import (
     content_job_payload,
     sha256_text,
 )
+from app.content.contracts import (
+    ContentPlan,
+    DraftEvaluation,
+    FakeDraft,
+    WriterIntent,
+)
 from app.core.clock import Clock
 from app.core.money import decimal_from, quantize_usd, sum_usd
 from app.core.security_flags import SECURITY_FLAG_DEFAULTS
@@ -1148,6 +1154,7 @@ class SqliteStorage:
                 frozen_input_sha256=str(snapshot["input_sha256"]),
                 evidence_manifest_sha256=str(snapshot["manifest_sha256"]),
                 intent_key=intent_key,
+                execution_mode=request.execution_mode,
             )
             card = snapshot["card"]
             assert isinstance(card, sqlite3.Row)
@@ -2072,6 +2079,563 @@ class SqliteStorage:
                 "updated_at": current_ts,
             })
             return ContentEvaluation(**values)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def get_content_pipeline_state(self, job_id: str) -> dict[str, object]:
+        """Read the complete durable C2 checkpoint set for one content job."""
+        job = self.conn.execute(
+            "SELECT * FROM jobs WHERE id=? AND kind='CONTENT'", (job_id,),
+        ).fetchone()
+        if job is None:
+            raise ContentFoundationError(
+                "CONTENT_JOB_MISSING", "C2 pipeline job does not exist.",
+            )
+        content = self.conn.execute(
+            "SELECT * FROM content_items WHERE job_id=?", (job_id,),
+        ).fetchone()
+        if content is None:
+            raise ContentFoundationError(
+                "CONTENT_RELATION_MISSING", "C2 pipeline content item is missing.",
+            )
+        plan = self.conn.execute(
+            "SELECT * FROM content_plans WHERE content_id=?", (content["id"],),
+        ).fetchone()
+        brief = self.conn.execute(
+            "SELECT * FROM content_article_briefs WHERE content_id=?", (content["id"],),
+        ).fetchone()
+        intents = self.conn.execute(
+            "SELECT * FROM content_writer_intents WHERE content_id=? ORDER BY attempt_no",
+            (content["id"],),
+        ).fetchall()
+        attempts = self.conn.execute(
+            "SELECT wa.*,pa.status,pa.actual_cost_usd,pa.request_started_at,"
+            "pa.settled_at FROM content_writer_attempts wa "
+            "JOIN provider_attempts pa ON pa.request_id=wa.request_id "
+            "WHERE wa.content_id=? ORDER BY wa.attempt_no",
+            (content["id"],),
+        ).fetchall()
+        drafts = self.conn.execute(
+            "SELECT * FROM content_drafts WHERE content_id=? ORDER BY attempt_no",
+            (content["id"],),
+        ).fetchall()
+        evaluations = self.conn.execute(
+            "SELECT * FROM content_draft_evaluations WHERE content_id=? "
+            "ORDER BY attempt_no,evaluation_type",
+            (content["id"],),
+        ).fetchall()
+
+        def mapping(row: sqlite3.Row | None) -> dict[str, object] | None:
+            return None if row is None else {key: row[key] for key in row.keys()}
+
+        return {
+            "job": mapping(job),
+            "content": mapping(content),
+            "plan": mapping(plan),
+            "brief": mapping(brief),
+            "intents": [mapping(row) for row in intents],
+            "attempts": [mapping(row) for row in attempts],
+            "drafts": [mapping(row) for row in drafts],
+            "evaluations": [mapping(row) for row in evaluations],
+        }
+
+    def record_content_plan(
+        self, execution: JobExecutionContext, plan: ContentPlan,
+    ) -> str:
+        """Persist the immutable planner output under the active content fence."""
+        plan_json = plan.canonical_preimage()
+        fingerprint = plan.fingerprint()
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            row = self._require_content_execution_fence(execution, current_ts)
+            frozen = self._assert_content_snapshot_in_transaction(
+                row["account_id"], int(row["id"]),
+            )
+            if (
+                plan.content_id != int(row["id"])
+                or plan.account_id != row["account_id"]
+                or plan.research_card_id != int(row["research_card_id"])
+                or plan.content_type.value != row["type"]
+                or plan.frozen_input_sha256 != frozen.input_sha256
+                or plan.evidence_manifest_sha256 != frozen.evidence_manifest_sha256
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_PLAN_MISMATCH",
+                    "Content plan does not match the active frozen execution.",
+                )
+            existing = self.conn.execute(
+                "SELECT * FROM content_plans WHERE content_id=?", (row["id"],),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    existing["plan_json"] == plan_json
+                    and existing["plan_fingerprint"] == fingerprint
+                ):
+                    self.conn.commit()
+                    return fingerprint
+                raise ContentFoundationError(
+                    "CONTENT_PLAN_CONFLICT", "A different immutable plan already exists.",
+                )
+            cursor = self.conn.execute(
+                "INSERT INTO content_plans (content_id,job_id,run_id,account_id,"
+                "research_card_id,content_type,plan_schema_version,"
+                "route_config_version,route_config_fingerprint,"
+                "frozen_input_sha256,evidence_manifest_sha256,plan_json,"
+                "plan_fingerprint,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    row["id"], execution.job_id, execution.run_id,
+                    row["account_id"], row["research_card_id"], row["type"],
+                    plan.schema_version, plan.route.config_version,
+                    plan.route.config_fingerprint, frozen.input_sha256,
+                    frozen.evidence_manifest_sha256, plan_json, fingerprint,
+                    current_ts,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_PLAN_INSERT_FAILED", "Content plan insert failed.",
+                )
+            self.conn.commit()
+            return fingerprint
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def record_content_writer_intent(
+        self, execution: JobExecutionContext, intent: WriterIntent,
+    ) -> str:
+        """Persist one of the at most two immutable fake writer intents."""
+        intent_json = intent.canonical_preimage()
+        fingerprint = intent.fingerprint()
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            row = self._require_content_execution_fence(execution, current_ts)
+            frozen = self._assert_content_snapshot_in_transaction(
+                row["account_id"], int(row["id"]),
+            )
+            if (
+                intent.job_id != execution.job_id
+                or intent.run_id != execution.run_id
+                or intent.content_id != int(row["id"])
+                or intent.account_id != row["account_id"]
+                or intent.content_type.value != row["type"]
+                or intent.frozen_input_sha256 != frozen.input_sha256
+                or intent.evidence_manifest_sha256 != frozen.evidence_manifest_sha256
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_WRITER_INTENT_MISMATCH",
+                    "Writer intent does not match the active frozen execution.",
+                )
+            existing = self.conn.execute(
+                "SELECT * FROM content_writer_intents "
+                "WHERE intent_id=? OR (content_id=? AND attempt_no=?)",
+                (intent.intent_id, row["id"], intent.attempt_no),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    existing["intent_id"] == intent.intent_id
+                    and existing["intent_json"] == intent_json
+                    and existing["intent_fingerprint"] == fingerprint
+                ):
+                    self.conn.commit()
+                    return fingerprint
+                raise ContentFoundationError(
+                    "CONTENT_WRITER_INTENT_CONFLICT",
+                    "A different writer intent already exists for this attempt.",
+                )
+            inserted = self.conn.execute(
+                "INSERT INTO content_writer_intents (intent_id,job_id,run_id,"
+                "content_id,account_id,content_type,attempt_no,call_mode,"
+                "route_key,route_config_version,route_config_fingerprint,"
+                "provider_status,api_model_id_status,availability_status,"
+                "pricing_status,plan_fingerprint,brief_sha256,"
+                "frozen_input_sha256,evidence_manifest_sha256,style_profile_id,"
+                "negative_style_profile_id,rewrite_of_draft_fingerprint,"
+                "rewrite_feedback_json,max_cost_usd,intent_json,"
+                "intent_fingerprint,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    intent.intent_id, intent.job_id, intent.run_id,
+                    intent.content_id, intent.account_id,
+                    intent.content_type.value, intent.attempt_no,
+                    intent.call_mode, intent.route.route_key,
+                    intent.route.config_version,
+                    intent.route.config_fingerprint, intent.route.provider,
+                    intent.route.api_model_id, intent.route.availability,
+                    intent.route.pricing_profile, intent.plan_fingerprint,
+                    intent.brief_sha256, intent.frozen_input_sha256,
+                    intent.evidence_manifest_sha256, intent.style_profile_id,
+                    intent.negative_style_profile_id,
+                    intent.rewrite_of_draft_fingerprint,
+                    canonical_json(intent.rewrite_feedback),
+                    intent.max_cost_usd, intent_json, fingerprint, current_ts,
+                ),
+            )
+            if inserted.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_WRITER_INTENT_INSERT_FAILED",
+                    "Writer intent insert failed.",
+                )
+            self.conn.commit()
+            return fingerprint
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def begin_fake_content_writer_attempt(
+        self, execution: JobExecutionContext, attempt_no: int,
+    ) -> ProviderAttempt:
+        """Create the canonical fake attempt without authorizing any transport."""
+        if attempt_no not in (1, 2):
+            raise ValueError("C2 permits only writer attempt 1 or 2.")
+        request_id = self._provider_request_id(
+            execution.job_id, CONTENT_PROVIDER_STAGE, attempt_no,
+        )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            self._require_content_execution_fence(execution, current_ts)
+            intent = self.conn.execute(
+                "SELECT * FROM content_writer_intents "
+                "WHERE job_id=? AND run_id=? AND attempt_no=?",
+                (execution.job_id, execution.run_id, attempt_no),
+            ).fetchone()
+            if (
+                intent is None
+                or intent["call_mode"] != "FAKE"
+                or float(intent["max_cost_usd"]) != 0.0
+                or any(
+                    intent[field] != "UNVERIFIED"
+                    for field in (
+                        "provider_status", "api_model_id_status",
+                        "availability_status", "pricing_status",
+                    )
+                )
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_FAKE_INTENT_REQUIRED",
+                    "Canonical fake attempt requires a zero-cost C2 writer intent.",
+                )
+            existing = self.conn.execute(
+                "SELECT p.* FROM provider_attempts p "
+                "JOIN content_writer_attempts wa ON wa.request_id=p.request_id "
+                "WHERE p.request_id=? AND wa.intent_id=?",
+                (request_id, intent["intent_id"]),
+            ).fetchone()
+            if existing is not None:
+                if existing["status"] not in (
+                    ProviderAttemptStatus.RESERVED.value,
+                    ProviderAttemptStatus.REQUEST_STARTED.value,
+                    ProviderAttemptStatus.SETTLED.value,
+                ):
+                    raise ContentFoundationError(
+                        "CONTENT_FAKE_ATTEMPT_UNSAFE",
+                        "Existing fake attempt is not safely resumable.",
+                    )
+                self.conn.commit()
+                return self._provider_attempt_from_row(existing)
+            extension = self.conn.execute(
+                "INSERT INTO content_writer_attempts (request_id,intent_id,"
+                "job_id,run_id,content_id,account_id,stage,attempt_no,call_mode,"
+                "provider,model,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    request_id, intent["intent_id"], execution.job_id,
+                    execution.run_id, intent["content_id"], intent["account_id"],
+                    CONTENT_PROVIDER_STAGE, attempt_no, "FAKE",
+                    "fake-content-writer", intent["route_key"], current_ts,
+                ),
+            )
+            if extension.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_FAKE_EXTENSION_FAILED",
+                    "Fake writer attempt extension insert failed.",
+                )
+            # The historical canonical ledger has a positive reservation floor.
+            # 0.000001 is a structural placeholder, never a cost or budget hold;
+            # the zero-cost usage settles it to actual_cost_usd=0.0.
+            self.conn.execute(
+                "INSERT INTO provider_attempts (job_id,stage,attempt_no,"
+                "request_id,status,reserved_amount_usd,reserved_at,"
+                "execution_intent_fingerprint) VALUES (?,?,?,?,?,?,?,?)",
+                (
+                    execution.job_id, CONTENT_PROVIDER_STAGE, attempt_no,
+                    request_id, ProviderAttemptStatus.RESERVED.value,
+                    0.000001, current_ts, intent["intent_fingerprint"],
+                ),
+            )
+            row = self.conn.execute(
+                "SELECT * FROM provider_attempts WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            assert row is not None
+            self.conn.commit()
+            return self._provider_attempt_from_row(row)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def mark_fake_content_writer_started(
+        self, execution: JobExecutionContext, request_id: str,
+    ) -> ProviderAttempt:
+        """Mark only the local fake boundary; never set external-effect state."""
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            self._require_content_execution_fence(execution, current_ts)
+            row = self.conn.execute(
+                "SELECT p.* FROM provider_attempts p "
+                "JOIN content_writer_attempts wa ON wa.request_id=p.request_id "
+                "WHERE p.request_id=? AND p.job_id=? AND wa.call_mode='FAKE'",
+                (request_id, execution.job_id),
+            ).fetchone()
+            if row is None:
+                raise StaleJobExecutionError(execution.job_id)
+            if row["status"] == ProviderAttemptStatus.RESERVED.value:
+                cursor = self.conn.execute(
+                    "UPDATE provider_attempts SET status='REQUEST_STARTED',"
+                    "request_started_at=? WHERE request_id=? AND status='RESERVED'",
+                    (current_ts, request_id),
+                )
+                if cursor.rowcount != 1:
+                    raise StaleJobExecutionError(execution.job_id)
+            elif row["status"] not in (
+                ProviderAttemptStatus.REQUEST_STARTED.value,
+                ProviderAttemptStatus.SETTLED.value,
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_FAKE_ATTEMPT_UNSAFE",
+                    "Fake writer attempt cannot cross the local boundary.",
+                )
+            persisted = self.conn.execute(
+                "SELECT * FROM provider_attempts WHERE request_id=?", (request_id,),
+            ).fetchone()
+            assert persisted is not None
+            self.conn.commit()
+            return self._provider_attempt_from_row(persisted)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def record_content_draft(
+        self, execution: JobExecutionContext, intent: WriterIntent, draft: FakeDraft,
+    ) -> int:
+        """Persist one immutable draft after its canonical fake usage settled."""
+        draft_json = draft.canonical_preimage()
+        draft_fingerprint = draft.fingerprint()
+        request_id = self._provider_request_id(
+            execution.job_id, CONTENT_PROVIDER_STAGE, draft.attempt_no,
+        )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            row = self._require_content_execution_fence(execution, current_ts)
+            if (
+                draft.attempt_no != intent.attempt_no
+                or draft.route_key != intent.route.route_key
+                or intent.content_id != int(row["id"])
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_DRAFT_MISMATCH", "Draft does not match its writer intent.",
+                )
+            existing = self.conn.execute(
+                "SELECT * FROM content_drafts WHERE content_id=? AND attempt_no=?",
+                (row["id"], draft.attempt_no),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    existing["draft_json"] == draft_json
+                    and existing["draft_fingerprint"] == draft_fingerprint
+                ):
+                    self.conn.commit()
+                    return int(existing["id"])
+                raise ContentFoundationError(
+                    "CONTENT_DRAFT_CONFLICT",
+                    "A different immutable draft already exists for this attempt.",
+                )
+            cursor = self.conn.execute(
+                "INSERT INTO content_drafts (content_id,job_id,run_id,account_id,"
+                "attempt_no,request_id,intent_id,route_key,title,body,"
+                "evidence_ids_json,unsupported_claims_json,personal_experience,"
+                "style_ok,brief_compliant,rewrite_of_draft_fingerprint,"
+                "draft_json,draft_fingerprint,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    row["id"], execution.job_id, execution.run_id,
+                    row["account_id"], draft.attempt_no, request_id,
+                    intent.intent_id, draft.route_key, draft.title, draft.body,
+                    canonical_json(draft.evidence_ids_used),
+                    canonical_json(draft.unsupported_claims),
+                    int(draft.personal_experience), int(draft.style_ok),
+                    int(draft.brief_compliant),
+                    draft.rewrite_of_draft_fingerprint, draft_json,
+                    draft_fingerprint, current_ts,
+                ),
+            )
+            if cursor.rowcount != 1 or cursor.lastrowid is None:
+                raise ContentFoundationError(
+                    "CONTENT_DRAFT_INSERT_FAILED", "Draft insert failed.",
+                )
+            self.conn.commit()
+            return int(cursor.lastrowid)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def record_content_draft_evaluation(
+        self,
+        execution: JobExecutionContext,
+        *,
+        draft_id: int,
+        attempt_no: int,
+        evaluation: DraftEvaluation,
+    ) -> int:
+        """Persist one of the exact nine append-only C2 evaluation results."""
+        findings_json = canonical_json(evaluation.findings)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            row = self._require_content_execution_fence(execution, current_ts)
+            existing = self.conn.execute(
+                "SELECT * FROM content_draft_evaluations WHERE draft_id=? "
+                "AND evaluation_type=? AND evaluator_version=?",
+                (
+                    draft_id, evaluation.evaluation_type.value,
+                    evaluation.evaluator_version,
+                ),
+            ).fetchone()
+            if existing is not None:
+                same = (
+                    existing["content_id"] == row["id"]
+                    and int(existing["attempt_no"]) == attempt_no
+                    and existing["result"] == evaluation.result
+                    and existing["score"] == evaluation.score
+                    and existing["findings_json"] == findings_json
+                    and existing["draft_fingerprint"] == evaluation.draft_fingerprint
+                    and existing["decision"] == evaluation.decision.value
+                )
+                if same:
+                    self.conn.commit()
+                    return int(existing["id"])
+                raise ContentFoundationError(
+                    "CONTENT_DRAFT_EVALUATION_CONFLICT",
+                    "A different evaluation already exists.",
+                )
+            cursor = self.conn.execute(
+                "INSERT INTO content_draft_evaluations (draft_id,content_id,"
+                "job_id,run_id,attempt_no,evaluation_type,evaluator_version,"
+                "result,score,findings_json,draft_fingerprint,decision,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    draft_id, row["id"], execution.job_id, execution.run_id,
+                    attempt_no, evaluation.evaluation_type.value,
+                    evaluation.evaluator_version, evaluation.result,
+                    evaluation.score, findings_json,
+                    evaluation.draft_fingerprint, evaluation.decision.value,
+                    current_ts,
+                ),
+            )
+            if cursor.rowcount != 1 or cursor.lastrowid is None:
+                raise ContentFoundationError(
+                    "CONTENT_DRAFT_EVALUATION_INSERT_FAILED",
+                    "Draft evaluation insert failed.",
+                )
+            self.conn.commit()
+            return int(cursor.lastrowid)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def finalize_content_draft(
+        self,
+        execution: JobExecutionContext,
+        *,
+        draft_fingerprint: str,
+    ) -> ContentTransitionResult:
+        """Set title/body and use the C1 command for atomic PENDING_APPROVAL."""
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            row = self._require_content_execution_fence(execution, current_ts)
+            draft = self.conn.execute(
+                "SELECT d.*,(SELECT count(*) FROM content_draft_evaluations e "
+                "WHERE e.draft_id=d.id) AS evaluation_count,"
+                "(SELECT count(*) FROM content_draft_evaluations e "
+                "WHERE e.draft_id=d.id AND e.result='PASS' AND e.decision='PASS') "
+                "AS pass_count FROM content_drafts d "
+                "WHERE d.content_id=? AND d.draft_fingerprint=?",
+                (row["id"], draft_fingerprint),
+            ).fetchone()
+            if (
+                draft is None
+                or int(draft["evaluation_count"]) != 9
+                or int(draft["pass_count"]) != 9
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_DRAFT_NOT_APPROVABLE",
+                    "Final draft must have exactly nine passing evaluations.",
+                )
+            updated = self.conn.execute(
+                "UPDATE content_items SET title=?,body=?,updated_at=? "
+                "WHERE id=? AND job_id=? AND run_id=? AND status IN ('RUNNING','REVISE')",
+                (
+                    draft["title"], draft["body"], current_ts, row["id"],
+                    execution.job_id, execution.run_id,
+                ),
+            )
+            if updated.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            score = float(self.conn.execute(
+                "SELECT avg(score) FROM content_draft_evaluations WHERE draft_id=?",
+                (draft["id"],),
+            ).fetchone()[0])
+            result_json = canonical_json({
+                "attempt_no": int(draft["attempt_no"]),
+                "draft_fingerprint": draft_fingerprint,
+                "evaluation_count": 9,
+                "mode": "FAKE_OFFLINE_C2",
+            })
+            self._apply_content_transition_command(
+                mode="EXECUTION",
+                job_id=execution.job_id,
+                run_id=execution.run_id,
+                content_id=int(row["id"]),
+                account_id=row["account_id"],
+                workflow=execution.workflow.value,
+                source_status=row["status"],
+                target_status=ContentStatus.PENDING_APPROVAL.value,
+                target_run_status=RunStatus.SUCCESS.value,
+                target_job_status=JobStatus.DONE.value,
+                lease_owner=execution.lease_owner,
+                execution_generation=execution.fence_token,
+                lease_expires_at=row["lease_expires_at"],
+                reason_code=None,
+                result_json=result_json,
+                score=score,
+                current_ts=current_ts,
+            )
+            self.conn.commit()
+            content_row = self.conn.execute(
+                "SELECT * FROM content_items WHERE id=?", (row["id"],),
+            ).fetchone()
+            run_row = self.conn.execute(
+                "SELECT * FROM content_runs WHERE run_id=?", (execution.run_id,),
+            ).fetchone()
+            assert content_row is not None and run_row is not None
+            return ContentTransitionResult(
+                content=self._content_item_from_row(content_row),
+                run=self._content_run_from_row(run_row),
+                idempotent=False,
+            )
         except BaseException as primary:
             if self.conn.in_transaction:
                 self._rollback_preserving_primary(primary, self.conn.rollback)
@@ -3546,7 +4110,18 @@ class SqliteStorage:
                 raise StaleJobExecutionError(
                     execution.job_id, "usage task does not match the fenced workflow.",
                 )
-            expected_dry_run = fence["run_status"] == RunStatus.DRY_RUN.value
+            fake_content_attempt = False
+            if is_content and usage.request_id:
+                fake_content_attempt = self.conn.execute(
+                    "SELECT 1 FROM content_writer_attempts "
+                    "WHERE request_id=? AND job_id=? AND run_id=? "
+                    "AND call_mode='FAKE'",
+                    (usage.request_id, execution.job_id, execution.run_id),
+                ).fetchone() is not None
+            expected_dry_run = (
+                fence["run_status"] == RunStatus.DRY_RUN.value
+                or fake_content_attempt
+            )
             if bool(usage.dry_run) != expected_dry_run:
                 raise StaleJobExecutionError(
                     execution.job_id, "usage dry_run marker conflicts with the fenced run.",
@@ -3560,6 +4135,10 @@ class SqliteStorage:
                 usage.estimated_cost_usd, positive=False,
                 label="Provider actual usage cost",
             )
+            if fake_content_attempt and actual_amount != Decimal("0.000000"):
+                raise StaleJobExecutionError(
+                    execution.job_id, "fake content usage cost must be exactly zero.",
+                )
             if usage.request_id:
                 attempt = self.conn.execute(
                     "SELECT p.* FROM provider_attempts p JOIN jobs j ON j.id=p.job_id "
@@ -5930,7 +6509,7 @@ class SqliteStorage:
     def _recover_content_expired_lease(
         self, row: sqlite3.Row, current_ts: str,
     ) -> tuple[JobStatus, bool, str, bool] | None:
-        """Recover one C1 content lease without ever entering a provider path."""
+        """Recover C1 or coherent zero-cost C2 checkpoints without transport."""
         if row["kind"] != JobKind.CONTENT.value:
             return None
         content = self.conn.execute(
@@ -6031,8 +6610,19 @@ class SqliteStorage:
             "r.cost_usd AS general_cost,"
             "(SELECT count(*) FROM provider_attempts p WHERE p.job_id=cr.job_id) "
             "AS provider_attempt_count,"
+            "(SELECT count(*) FROM provider_attempts p "
+            "JOIN content_writer_attempts wa ON wa.request_id=p.request_id "
+            "WHERE p.job_id=cr.job_id AND wa.call_mode='FAKE' "
+            "AND p.status IN ('RESERVED','REQUEST_STARTED','SETTLED') "
+            "AND (p.status!='SETTLED' OR p.actual_cost_usd=0.0)) "
+            "AS safe_fake_attempt_count,"
             "(SELECT count(*) FROM model_usage mu WHERE mu.run_id=cr.run_id) "
-            "AS usage_count "
+            "AS usage_count,"
+            "(SELECT count(*) FROM model_usage mu "
+            "JOIN content_writer_attempts wa ON wa.request_id=mu.request_id "
+            "WHERE mu.run_id=cr.run_id AND wa.call_mode='FAKE' "
+            "AND mu.dry_run=1 AND mu.estimated_cost_usd=0.0) "
+            "AS safe_fake_usage_count "
             "FROM content_runs cr JOIN runs r ON r.id=cr.run_id "
             "WHERE cr.job_id=? AND cr.run_id=? AND cr.content_id=? "
             "AND cr.account_id=? AND cr.input_sha256=?",
@@ -6050,8 +6640,10 @@ class SqliteStorage:
             row["external_effect_started_at"] is None
             and float(row["reserved_cost_usd"]) == 0
             and row["budget_reserved_at"] is None
-            and int(state["provider_attempt_count"]) == 0
-            and int(state["usage_count"]) == 0
+            and int(state["provider_attempt_count"]) == int(
+                state["safe_fake_attempt_count"]
+            )
+            and int(state["usage_count"]) == int(state["safe_fake_usage_count"])
             and state["general_status"] == RunStatus.RUNNING.value
             and state["general_finished"] is None
             and float(state["general_cost"]) == 0

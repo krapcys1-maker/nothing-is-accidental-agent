@@ -1,0 +1,18 @@
+version: content_routes_v1
+mode: FAKE_ONLY
+fallback: FORBIDDEN
+routes:
+  ARTICLE:
+    route_key: FABLE_5_ARTICLE
+    logical_model_name: Fable 5
+    provider: UNVERIFIED
+    api_model_id: UNVERIFIED
+    availability: UNVERIFIED
+    pricing_profile: UNVERIFIED
+  NOTE:
+    route_key: SONNET_5_NOTE
+    logical_model_name: Sonnet 5
+    provider: UNVERIFIED
+    api_model_id: UNVERIFIED
+    availability: UNVERIFIED
+    pricing_profile: UNVERIFIED

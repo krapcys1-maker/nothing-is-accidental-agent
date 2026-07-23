@@ -802,3 +802,10 @@ Największa zmiana jest mało widowiskowa: terminalizacja stała się jednym app
 Provider ledger nie został skopiowany. Kanoniczny `provider_attempts` nadal przechowuje status, usage, koszt i reconciliation, a content table jest wyłącznie ścisłym 1:1. Lokalnie można utrwalić atomową parę pre-network, ale nie istnieje content caller SDK ani publiczny dispatcher.
 
 25 nazwanych kontrprób i 69 testów C1 przeszło, podobnie jak pełne 1923/1923. Produkcja nadal ma 0020, nie wykonano controlled-live ani operacji Git, koszt 0 USD. To `C1 REPAIR CANDIDATE COMPLETE — AWAITING INDEPENDENT RE-REVIEW`, nie approval i nie zamknięcie Etapu 3.
+## 2026-07-23 — Etap 3 / WAVE C2: od zamrożonego dowodu do szkicu oczekującego na decyzję
+
+C2 dołożyło do zamkniętego fundamentu C1 pierwszy kompletny, lecz całkowicie offline przepływ redakcyjny. Targetowany job przechodzi przez planner, trwały Content Plan i Article/Note Brief, fake writera, canonical attempt z usage o koszcie zero, dziewięć lokalnych ocen i — tylko gdy trzeba — jedną poprawkę. Sukces nie publikuje tekstu: kończy się w `PENDING_APPROVAL`.
+
+Najważniejszą własnością nie jest sam fake tekst, lecz możliwość bezpiecznego wznowienia. Wymuszone awarie po briefie, rozpoczęciu fake próby, zapisie draftu i decyzji rewrite nie stworzyły podwójnego requestu. Stary worker po takeover nie mógł zapisać, a dwa workery dały jeden wynik i jeden `IDLE`.
+
+Routing pozostaje logiczny: ARTICLE = Fable 5, NOTE = Sonnet 5. Techniczne identyfikatory API, provider, dostępność i pricing są `UNVERIFIED`, więc realny caller nie istnieje. Produkcja pozostała na schema 0020; kandydacka 0022 była używana tylko na nowych bazach tymczasowych.

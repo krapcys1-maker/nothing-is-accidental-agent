@@ -669,3 +669,11 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Twarde granice:** zero sieci/API/SDK/browsera/publikacji/kosztu; testy tylko na nowych temp SQLite i fake/local paths; produkcja wyłącznie `mode=ro&immutable=1`; bez migracji produkcji, cleanupu sidecarów i operacji Git.
 - **Wynik implementera:** kandydat naprawczy z 25/25 wymaganych kontrprób, 69/69 content+migration i pełną suitą 1923/1923. To nie jest decyzja o przyjęciu findings jako zamkniętych.
 - **Granica statusu:** jedyny dozwolony komunikat to `C1 REPAIR CANDIDATE COMPLETE — AWAITING INDEPENDENT RE-REVIEW`. C1 nie jest formalnie zatwierdzone; Etap 3 pozostaje otwarty; produkcyjna migracja 0021, controlled-live i operacje Git nie zostały autoryzowane ani wykonane.
+
+## 2026-07-23 — Właściciel autoryzował implementację wyłącznie WAVE C2
+
+- **Decyzja człowieka:** zbudować kompletny offline pipeline od Research Card `PROCEED` i frozen evidence do `PENDING_APPROVAL`, z trwałym planem/briefem/intencją/draftem/evaluations, fake callerami, maksymalnie jedną poprawką, recovery i concurrency.
+- **Routing właściciela:** ARTICLE final writer = logiczne `Fable 5`; NOTE final writer = logiczne `Sonnet 5`; Haiku nie jest głównym publicznym writerem; brak cichego fallbacku. Dokładne API IDs, provider, availability i pricing pozostają `UNVERIFIED`.
+- **Prywatny materiał:** właściciel wskazał lokalny gitignored `data/style-references/articles/article_style_samples_v1.txt`; dozwolona była tylko lokalna ekstrakcja profili pochodnych i kontrola istnienia/rozmiaru/SHA, bez ujawniania lub kopiowania raw source.
+- **Granice:** zero realnego API, SDK, sieci, browsera, publikacji, controlled-live, prawdziwego artykułu i produkcyjnej migracji; zapisy tylko do nowych temp DB; produkcja tylko read-only/immutable; bez stage/commit/push/PR/merge i bez C3–C5.
+- **Wynik implementera:** `C2 CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`, C2 `22/22`, full/collect/exact unique `1945/1945`, koszt `0.000000 USD`. Jest to raport kandydata, nie formalne przyjęcie przez właściciela.

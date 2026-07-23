@@ -268,3 +268,6 @@ Pełna suita 1572, cztery partycje exact-once oraz harnessy E2-C `13/13` i E2-B 
 ## 2026-07-23 — Pierwszy targetowany TOPIC_GENERATION live: 0,013128 USD
 
 Przed requestem estymata wynosiła `0.016202 USD`, pesymistyczny koszt i cap `0.024303 USD`. Rzeczywiste usage: 219 input, 1269 output, cache `0/0`, web search `0`; actual `0.013128 USD`. Dzienny ledger po operacji: `0.013128 USD`; miesięczny runtime ledger: `1.200044 USD`. Nie było retry ani drugiego attemptu.
+## 2026-07-23 — WAVE C2
+
+Koszt implementacji i QA C2 w ledgerze modelowym: `0.000000 USD`. Wszystkie writer attempts były fake, usage miało `dry_run=1`, a canonical actual cost wynosił zero. Nie wykonano realnego requestu ani kontrolowanego live.

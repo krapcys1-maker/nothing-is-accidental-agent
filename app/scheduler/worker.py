@@ -147,7 +147,48 @@ class Worker:
         # interval in which an operator could have disabled the worker.
         runtime = self._policy.check_worker_runtime()
         if not runtime.allowed:
+            if job.kind is JobKind.CONTENT:
+                # Generic job failure is forbidden for CONTENT. The untouched
+                # leased job is recoverable after expiry under its C1 boundary.
+                return WorkerIterationResult(
+                    WorkerIterationStatus.LOST_LEASE, job.id,
+                    f"Policy denied after claim: {runtime.code}",
+                )
             return self._fail(job, f"Policy denied: {runtime.code}")
+
+        # CONTENT is a targeted, offline-only composition root. C1 deliberately
+        # forbids generic start/heartbeat/terminal mutators for this job class;
+        # the C2 storage boundary initializes it with a generation fence and
+        # owns the complete terminal transaction inside the bounded lease.
+        if job.kind is JobKind.CONTENT:
+            try:
+                result = self._dispatcher.dispatch(
+                    job, lease_owner=self._lease_owner, heartbeat=lambda: None,
+                )
+                terminalization = self._dispatch_terminalization(result)
+                if terminalization is TerminalizationMode.WORKFLOW_TERMINALIZED:
+                    return WorkerIterationResult(
+                        WorkerIterationStatus.DONE, job.id, result.detail,
+                    )
+                if terminalization is TerminalizationMode.WORKFLOW_FAILED:
+                    return WorkerIterationResult(
+                        WorkerIterationStatus.FAILED, job.id, result.detail,
+                    )
+                raise DispatchContractError(
+                    "CONTENT dispatcher must own its terminal transition."
+                )
+            except (LifecycleTransitionError, StaleJobExecutionError):
+                return self._lost_lease(job)
+            except DispatchContractError:
+                raise
+            except Exception as exc:
+                # The generic failure path is intentionally unavailable for
+                # CONTENT. Leave the lease for explicit fenced recovery.
+                return WorkerIterationResult(
+                    WorkerIterationStatus.LOST_LEASE,
+                    job.id,
+                    str(exc).replace("\n", " ")[:240],
+                )
 
         guard: HeartbeatGuard | None = None
         try:

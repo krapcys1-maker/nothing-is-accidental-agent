@@ -468,3 +468,9 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co powinien pokazać:** zanonimizowaną relację jawnych durable IDs Research Card/confirmed claim/source/excerpt/retrieval → frozen fingerprint → held CONTENT job; generation fence i jedną command boundary czterech lifecycle rows; kanoniczny provider parent + ścisłe extension 1:1; 25/25 kontrprób, 69/69 C1, collect 1923 / 1922 różne tekstowo node IDs, full 1923/1923, compile/diff PASS.
 - **Stan produkcji na kadrze:** wyłącznie skrócony SHA `91f593…56a1f`, schema 0020, `700416 B`, integrity `ok`, FK `0`, WAL `0 B`, SHM `32768 B`, journal absent, z adnotacją `mode=ro&immutable=1` i `PRODUCTION MIGRATION NOT EXECUTED`.
 - **Czego nie może pokazać:** `.env`, kluczy, pełnych lokalnych ścieżek, pełnych hashy/input preimages, treści karty lub evidence, danych SQLite ani command lines. Nie może sugerować approvalu, formalnego zamknięcia findings, wygenerowanej treści, C2, migracji produkcji, controlled-live, operacji Git lub zamknięcia Etapu 3.
+## 2026-07-23 — WAVE C2 offline content pipeline candidate
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ zakres jawnie zabrania browsera, a screenshot terminala mógłby ujawnić lokalne ścieżki, pełne SHA lub prywatne źródło stylu.
+- **Co powinien pokazać:** zanonimizowany flow Research Card `PROCEED` → frozen evidence → Content Plan → Article/Note Brief → fake writer intent → canonical attempt/zero-cost usage → draft → 9 evaluations → opcjonalnie jedna poprawka → `PENDING_APPROVAL`; route keys Fable 5/Sonnet 5 i jawne `UNVERIFIED` dla technicznych IDs/pricing.
+- **Dowód tekstowy zastępczy:** C2 `22/22`; full/collect/exact unique `1945/1945`; zero duplikatów, skipped i xfail; produkcja nadal `0020`; koszt `0.000000 USD`.
+- **Czego nie może pokazać:** raw style source, `.env`, sekrety, pełne lokalne ścieżki, produkcyjne rekordy, prawdziwy artykuł, dane API ani sugestię approvalu/merge/C3–C5.

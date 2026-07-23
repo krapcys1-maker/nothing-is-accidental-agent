@@ -7,6 +7,7 @@ import pytest
 
 from app.storage.db import (
     CONTENT_FOUNDATION_SCHEMA_VERSION,
+    CONTENT_PIPELINE_SCHEMA_VERSION,
     RUNTIME_SCHEMA_VERSION,
     TOPIC_GENERATION_SCHEMA_VERSION,
     apply_migrations,
@@ -33,14 +34,14 @@ def _objects(conn) -> dict[str, str]:
     }
 
 
-def test_runtime_schema_is_exactly_0021():
-    assert RUNTIME_SCHEMA_VERSION == CONTENT_FOUNDATION_SCHEMA_VERSION
+def test_0021_remains_the_exact_content_foundation_floor():
+    assert RUNTIME_SCHEMA_VERSION == CONTENT_PIPELINE_SCHEMA_VERSION
     assert CONTENT_FOUNDATION_SCHEMA_VERSION == "0021_durable_content_foundation"
 
 
 def test_fresh_0001_to_0021_has_content_contract_and_clean_integrity(tmp_path):
     path = tmp_path / "fresh.db"
-    applied = initialize_database(path)
+    applied = initialize_database(path, through=CONTENT_FOUNDATION_SCHEMA_VERSION)
     assert applied[-1] == CONTENT_FOUNDATION_SCHEMA_VERSION
     assert len(applied) == 21
 
@@ -136,7 +137,7 @@ def test_upgrade_0020_to_0021_preserves_old_rows_and_objects(tmp_path):
 
 def test_fresh_and_upgrade_schema_objects_are_identical(tmp_path):
     fresh = tmp_path / "fresh.db"
-    initialize_database(fresh)
+    initialize_database(fresh, through=CONTENT_FOUNDATION_SCHEMA_VERSION)
     upgraded = _at_0020(tmp_path, "upgraded.db")
     migrate_0020_to_0021(upgraded)
     a, b = connect(fresh), connect(upgraded)
@@ -155,7 +156,9 @@ def test_0021_rerun_is_idempotent(tmp_path):
     assert repeated.applied_migrations == ()
     conn = connect(path)
     try:
-        assert tuple(apply_migrations(conn)) == ()
+        assert tuple(apply_migrations(
+            conn, through=CONTENT_FOUNDATION_SCHEMA_VERSION,
+        )) == ()
     finally:
         conn.close()
 

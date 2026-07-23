@@ -60,6 +60,13 @@ from app.workflows.topics.generate import (
     TopicGenerationSummary,
     run_topic_generation,
 )
+from app.content.foundation import (
+    ContentExecutionMode,
+    ContentStatus,
+    canonicalize_content_job_payload,
+)
+from app.content.pipeline import ContentPipelineSummary, run_offline_content_pipeline
+from app.content.writer import FakeContentWriter, WriterPort
 
 
 class DispatchError(RuntimeError):
@@ -166,6 +173,19 @@ class TopicGenerationClientFactory(Protocol):
     ) -> object: ...
 
 
+class ContentPipelineCallable(Protocol):
+    def __call__(
+        self,
+        job: Job,
+        *,
+        storage: StoragePort,
+        clock: Clock,
+        lease_owner: str,
+        project_root: object,
+        writer: WriterPort | None = None,
+    ) -> ContentPipelineSummary: ...
+
+
 def _durable_job_intent(storage: StoragePort, job_id: str) -> DurableResearchExecutionIntent:
     """Read and validate the complete persisted execution contract, never ENV."""
     job = storage.get_job(job_id)
@@ -264,6 +284,8 @@ class JobDispatcher:
         topic_generation_client_factory: TopicGenerationClientFactory | None = None,
         allow_real_research: bool = True,
         allow_real_topic_generation: bool = True,
+        content_pipeline: ContentPipelineCallable = run_offline_content_pipeline,
+        content_writer: WriterPort | None = None,
     ) -> None:
         self._settings = settings
         self._storage = storage
@@ -279,6 +301,8 @@ class JobDispatcher:
         )
         self._allow_real_research = allow_real_research
         self._allow_real_topic_generation = allow_real_topic_generation
+        self._content_pipeline = content_pipeline
+        self._content_writer = content_writer or FakeContentWriter()
 
     def dispatch(
         self,
@@ -289,7 +313,7 @@ class JobDispatcher:
     ) -> DispatchResult:
         """Runs one supported local operation after a fresh PolicyEngine check."""
         account = self._account_for(job)
-        dry_run = job.payload.get("dry_run") is True
+        dry_run = job.payload.get("dry_run") is True or job.kind is JobKind.CONTENT
         controlled_fetch = (
             job.payload.get("execution") == CONTROLLED_FETCH_EXECUTION
         )
@@ -310,7 +334,41 @@ class JobDispatcher:
             return self._dispatch_topic_generation(
                 job, account, lease_owner, heartbeat,
             )
+        if job.kind is JobKind.CONTENT:
+            return self._dispatch_content(job, lease_owner)
         raise UnsupportedJobError("Unsupported job kind for the offline worker.")
+
+    def _dispatch_content(self, job: Job, lease_owner: str) -> DispatchResult:
+        """Run the held, targeted, fake-only C2 composition root."""
+        if job.workflow not in (WorkflowType.ARTICLE, WorkflowType.NOTE):
+            raise UnsupportedJobError("CONTENT jobs support only ARTICLE or NOTE.")
+        try:
+            payload = canonicalize_content_job_payload(job.payload)
+        except Exception as exc:
+            raise PayloadValidationError("CONTENT payload contract is invalid.") from exc
+        if payload["execution_mode"] != ContentExecutionMode.OFFLINE_PIPELINE.value:
+            raise UnsupportedJobError(
+                "Dispatcher accepts only the C2 OFFLINE_PIPELINE mode."
+            )
+        if payload["provider_enabled"] is not False:
+            raise PolicyDeniedError(PolicyDecision.block(
+                "CONTENT_REAL_PROVIDER_FORBIDDEN",
+                "C2 does not expose a real content provider.",
+            ))
+        summary = self._content_pipeline(
+            job,
+            storage=self._storage,
+            clock=self._clock,
+            lease_owner=lease_owner,
+            project_root=self._settings.project_root,
+            writer=self._content_writer,
+        )
+        if summary.status is ContentStatus.PENDING_APPROVAL:
+            return DispatchResult.workflow_succeeded(run_id=summary.run_id)
+        return DispatchResult.workflow_failed(
+            run_id=summary.run_id,
+            detail=summary.block_code or "Offline content pipeline failed.",
+        )
 
     def _account_for(self, job: Job) -> Account:
         try:

@@ -1020,3 +1020,15 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Bezpieczeństwo:** tylko nowe plikowe temp SQLite i fake/local paths. Zero aplikacyjnej sieci, DNS/HTTP/API/SDK, browsera, publikacji i kosztu. Nie wykonano controlled-live, migracji produkcji, stage, commita, pushu, PR ani merge.
 - **Produkcja:** wyłącznie `mode=ro&immutable=1`; nadal 20 migracji do `0020_topic_generation_lifecycle`, SHA-256 `91f593923f3ca36cd8d2c816219e551b0ff231bc3149d6d584b025465f656a1f`, `700416 B`, integrity `ok`, FK `0`. Sidecarów nie usuwano.
 - **Następny krok:** wyłącznie niezależny re-review C1. Findings są zaadresowane w kandydacie, ale nie są formalnie zamknięte przez implementera. C2 pozostaje `NOT STARTED`.
+
+### [2026-07-23] Etap 3 / WAVE C2 — offline content pipeline — [CANDIDATE COMPLETE]
+
+- **Etap roadmapy:** Etap 3 pozostaje `IN PROGRESS`; C1 = `CLOSED`; C2 = `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; C3–C5 = `NOT STARTED`; ADR-116.
+- **Zrobiono:** dodano addytywną migrację `0022_offline_content_pipeline`, jawny migrator temp DB, trwałe Content Plans, Article/Note Briefs, fake writer intents/attempt extensions, immutable drafty i dziewięć evaluations. Pipeline jest resumowalny, dopuszcza najwyżej jedną poprawkę i kończy sukces tą samą granicą C1 w `PENDING_APPROVAL`.
+- **Pełny flow:** lokalny targeted entrypoint → wersjonowany config → `claim_specific_job` → dispatcher → planner → storage → fake `WriterPort` → canonical `provider_attempts` → zero-cost `model_usage` → draft → evaluations → rewrite decision → content transition command → `PENDING_APPROVAL`. Zwykły queue-wide worker nadal nie claimuje CONTENT.
+- **Routing:** ARTICLE `FABLE_5_ARTICLE`; NOTE `SONNET_5_NOTE`; fallback `FORBIDDEN`. Provider/API model ID/availability/pricing `UNVERIFIED`; realny resolver jest nieosiągalny.
+- **Style:** utworzono ARTICLE, negative i provisional Notes profile oraz manifest źródeł. Raw source pozostał gitignored; runtime go nie czyta ani nie utrwala.
+- **Recovery/concurrency:** zielone restarty po briefie, fake request start, draftcie i durable rewrite decision; takeover, old fence rejection, terminal replay, dwa targeted workery, brak attemptu #3 i brak podwójnego parenta.
+- **QA:** C2 `22/22`; dotknięte C1/migration/evidence/topic regression `126/126`; provider/research migration regression `123/123`; worker/jobs regression `142/142`; pełna czysta suita `1945/1945`; collect `1945`, exact unique case-sensitive `1945`, duplikaty `0`, zero skipped/xfail. Pierwsza pełna suita miała 3 wersyjne regresje oczekiwań 21/0021; po dodaniu jawnego kroku 0022 i korekcie liczników czysty rerun jest zielony.
+- **Bezpieczeństwo/skutki:** wyłącznie nowe temp SQLite, fake callery i lokalne profile. Zero aplikacyjnej sieci/API/SDK/browsera/publikacji/controlled-live; nie powstał prawdziwy artykuł. Produkcyjna DB była czytana wyłącznie `mode=ro&immutable=1` i nie została zmieniona ani migrowana. Koszt C2 `0.000000 USD`.
+- **Następny krok:** niezależny review C2. C3, produkcyjna migracja C4 i kontrolowany realny writer C5 nie są rozpoczęte ani autoryzowane.
