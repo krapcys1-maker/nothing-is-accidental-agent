@@ -47,7 +47,7 @@ def test_report_connection_is_query_only_and_does_not_change_database(settings):
     try:
         assert reader.conn.execute("PRAGMA query_only").fetchone()[0] == 1
         report = reader.read_operational_report(now=NOW)
-        assert report.schema_migrations.value == 20
+        assert report.schema_migrations.value == 21
         assert report.job_counts is not None
         assert all(value == 0 for value in report.job_counts.values())
         assert report.needs_reconciliation_attempts.value == 0

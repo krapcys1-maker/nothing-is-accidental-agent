@@ -73,6 +73,10 @@ class JobKind(str, Enum):
     # dopiero z odpowiedzi modelu.  Klasa bezpieczeństwa jest odrębna od
     # RESEARCH, bo fence nie może opierać się na research_run ani na temacie.
     TOPIC_GENERATION = "TOPIC_GENERATION"
+    # Stage 3 content uses the existing queue/run lifecycle, but remains a
+    # distinct safety class.  Wave C1 keeps every CONTENT job out of the
+    # ordinary queue and exposes no provider/browser/publication dispatcher.
+    CONTENT = "CONTENT"
 
 
 class Job(BaseModel):
@@ -93,6 +97,7 @@ class Job(BaseModel):
     status: JobStatus = JobStatus.QUEUED
     lease_owner: str | None = None
     lease_expires_at: datetime | None = None
+    execution_generation: int = 0
     attempts: int = 0
     max_attempts: int = 1
     reserved_cost_usd: float = 0.0
@@ -234,6 +239,9 @@ class JobExecutionContext:
     lease_owner: str
     run_id: str
     clock: Clock
+    # Independent monotonic execution fence.  CONTENT requires a positive
+    # value copied from the lease claim; legacy job kinds keep the neutral 0.
+    fence_token: int = 0
     kind: JobKind = JobKind.RESEARCH
     workflow: WorkflowType = WorkflowType.RESEARCH
 

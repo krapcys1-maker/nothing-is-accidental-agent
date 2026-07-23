@@ -1258,9 +1258,23 @@ def test_migration_cli_0018_requires_confirmation_and_is_exact(tmp_path, capsys)
     assert migration_cli_0020.main([
         "--db-path", str(path), "--confirm-0019-to-0020",
     ]) == 0
-    SqliteStorage.open(path).close()
     assert migration_cli_0020.main([
         "--db-path", str(path), "--confirm-0019-to-0020",
+    ]) == 0
+    assert "idempotent=true" in capsys.readouterr().out
+    # 0021: durable content foundation is the exact runtime gate.  This test
+    # exercises only a temporary database and does not authorize production.
+    import scripts.migrate_schema_0021 as migration_cli_0021
+
+    with pytest.raises(SchemaVersionTooOld):
+        SqliteStorage.open(path)
+    assert migration_cli_0021.main(["--db-path", str(path)]) == 2
+    assert migration_cli_0021.main([
+        "--db-path", str(path), "--confirm-0020-to-0021",
+    ]) == 0
+    SqliteStorage.open(path).close()
+    assert migration_cli_0021.main([
+        "--db-path", str(path), "--confirm-0020-to-0021",
     ]) == 0
     assert "idempotent=true" in capsys.readouterr().out
 

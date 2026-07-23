@@ -655,3 +655,17 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Podstawa:** zmergowany `main` `a4e314ff1d9a9ac6bd24fdcdf159ca3e24356916`; jeden targetowany controlled-live job/request/run zakończony `SETTLED`/`DONE`/`SUCCESS`, jeden usage, koszt `0.013128 USD` poniżej capa `0.024303 USD`, approval consumed, flagi fail-closed, bez reconciliation.
 - **Przyjęte P2:** proceduralne sidecary WAL/SHM, minimalny JSON raportu i historyczny ledger legacy poza tym runem pozostają w backlogu i nie blokują zamknięcia.
 - **Granice decyzji:** L1 pozostaje `ACTIVE`; LEVEL_3 = `NOT CONFIRMED`; publikacja nie została zweryfikowana. Kolejne live lub publikacja i rozpoczęcie Etapu 3 wymagają osobnej decyzji właściciela.
+
+## 2026-07-23 — Właściciel autoryzował implementację wyłącznie WAVE C1 Etapu 3
+
+- **Decyzja człowieka:** zbudować minimalny durable content foundation: inwentaryzację starego `content_items`, migrację `0021`, frozen input/evidence lineage, content lifecycle, job/run integration, future call intent, evaluations storage i recovery.
+- **Twarde granice:** bez plannera, writera, generowania artykułu/Note/Brief, audit logic, rewrite, approval panelu, controlled-live, provider SDK/calla, browsera, publikacji, migracji produkcyjnej i cleanupu sidecarów. Produkcja tylko `mode=ro&immutable=1`; brak stage/commit/push/PR/merge.
+- **Granica statusu:** implementer może wydać wyłącznie `C1 CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`. Właściciel nie zatwierdził ani nie zamknął C1 lub Etapu 3 i nie udzielił zgody na jakiekolwiek realne działanie zewnętrzne.
+
+## 2026-07-23 — Właściciel zlecił dokładnie jedną falę naprawczą C1
+
+- **Podstawa decyzji człowieka:** niezależny review pierwszego C1 zakończył się `REJECT — MAJOR` i wskazał dokładnie trzy MAJOR oraz dwa MINOR: nieautorytatywne lineage, rozszczepialny lifecycle, luźne provider extension 1:1, brak pełnego workflow check i przedwczesne deklaracje dokumentacji.
+- **Decyzja człowieka:** naprawić wyłącznie te pięć findings w jednej fali, bez C2, plannera, writera, Article Brief generation, treści, audytów, rewrite, approvalu, realnego providera, controlled-live, publikacji i zmian historycznych niezwiązanych z C1.
+- **Twarde granice:** zero sieci/API/SDK/browsera/publikacji/kosztu; testy tylko na nowych temp SQLite i fake/local paths; produkcja wyłącznie `mode=ro&immutable=1`; bez migracji produkcji, cleanupu sidecarów i operacji Git.
+- **Wynik implementera:** kandydat naprawczy z 25/25 wymaganych kontrprób, 69/69 content+migration i pełną suitą 1923/1923. To nie jest decyzja o przyjęciu findings jako zamkniętych.
+- **Granica statusu:** jedyny dozwolony komunikat to `C1 REPAIR CANDIDATE COMPLETE — AWAITING INDEPENDENT RE-REVIEW`. C1 nie jest formalnie zatwierdzone; Etap 3 pozostaje otwarty; produkcyjna migracja 0021, controlled-live i operacje Git nie zostały autoryzowane ani wykonane.

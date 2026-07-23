@@ -780,3 +780,25 @@ Po zamknięciu SQLite pozostał pusty WAL i plik SHM. Nie sprzątaliśmy ich po 
 Niezależny post-live review odtworzył pełny checkpoint i wydał `APPROVE WITH MINOR/P2 — ETAP 2 MAY BE FORMALLY CLOSED`. Koordynator przyjął tę ocenę i zamknął Etap 2 osobną decyzją ADR-113. Nie powstał nowy request, job ani approval; kod, testy, runtime i produkcyjna baza pozostały poza zakresem.
 
 To zamknięcie nie zmienia L1 w autonomię. LEVEL_3 nadal nie jest potwierdzone, publikacja nie została sprawdzona, a pojedynczy sukces nie jest obietnicą wszystkich przyszłych scenariuszy. Etap 3 można zacząć dopiero osobną decyzją, tak samo jak każde kolejne live lub publikację.
+
+## 2026-07-23 — Pierwszy, później odrzucony kandydat C1: Etap 3 zaczyna się od zamrożenia dowodu
+
+Właściciel uruchomił osobną falę C1, ale celowo nie pozwolił jeszcze pisać artykułów ani Notes. Najpierw powstał kontrakt, który odpowiada na trudniejsze pytanie: skąd przyszły fakty, gdy proces się zatrzyma, baza zostanie ponownie otwarta albo Research Card zmieni się po przygotowaniu?
+
+Migracja 0021 wiąże jeden content z kontem, kartą PROCEED, typem ARTICLE/NOTE, jobem i runem. Osobny immutable snapshot przechowuje kanoniczny obraz karty oraz manifest claim→source→excerpt→retrieval z hashami. Przed rozpoczęciem i zmianą lifecycle system odtwarza bieżący obraz; różnica oznacza STOP, nie ciche użycie „nowszych” danych.
+
+Maszyna stanów rozróżnia przygotowanie, wykonanie, poprawkę, kontrolowany skip, failure, pending approval i wynik niejednoznaczny. Lease może zostać bezpiecznie przejęty tylko przed jakimkolwiek śladem external effect; później nie ma automatycznego retry. Zwykły worker nie wybiera content jobów, a future provider attempt jest zablokowany dwukrotnie.
+
+39 nowych przypadków oraz pełne 1893/1893 atakują rollback migracji, crash windows, reopen, concurrent idempotency, zmianę karty/evidence, stary owner i wszystkie niedozwolone przejścia. Produkcja pozostała na 0020, koszt wyniósł 0 USD. To nadal kandydat do niezależnego review — nie wygenerowana treść, nie approval i nie zamknięty Etap 3.
+
+### Korekta po niezależnym review C1: podobny tekst nie jest tym samym dowodem
+
+Review pierwszego kandydata zakończył się `REJECT — MAJOR`. Znalazł trzy luki: evidence wybierane przez zgodność tekstu i URL, cztery lifecycle rows możliwe do rozdzielenia oraz content provider extension, które nie było jeszcze ścisłym rozszerzeniem kanonicznego ledgeru. Dwa mniejsze findings dotyczyły ARTICLE/NOTE i zbyt optymistycznej dokumentacji.
+
+W jedynej autoryzowanej fali naprawczej każdy claim dostał trwałe ID, a manifest może wejść tylko przez jawny `evidence_source_lineage`; stary tekst i URL są walidowanymi właściwościami, nie kluczami relacji. Każdy claim CONTENT ma też monotoniczną generację wykonania. Stary worker — nawet z ponownie użytym tym samym napisem ownera — nie może przejść fence po takeover.
+
+Największa zmiana jest mało widowiskowa: terminalizacja stała się jednym append-only commandem. SQLite najpierw sprawdza job, run, content run, content item, konto, workflow, ownera, lease i generację. Dopiero potem aktualizuje komplet; raw skrót i generyczne helpery są odrzucane.
+
+Provider ledger nie został skopiowany. Kanoniczny `provider_attempts` nadal przechowuje status, usage, koszt i reconciliation, a content table jest wyłącznie ścisłym 1:1. Lokalnie można utrwalić atomową parę pre-network, ale nie istnieje content caller SDK ani publiczny dispatcher.
+
+25 nazwanych kontrprób i 69 testów C1 przeszło, podobnie jak pełne 1923/1923. Produkcja nadal ma 0020, nie wykonano controlled-live ani operacji Git, koszt 0 USD. To `C1 REPAIR CANDIDATE COMPLETE — AWAITING INDEPENDENT RE-REVIEW`, nie approval i nie zamknięcie Etapu 3.

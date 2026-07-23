@@ -6,7 +6,7 @@ Lokalny adapter: app/storage/repositories.py (SQLite). Później: Postgres.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Protocol, Sequence
+from typing import Any, Callable, Protocol, Sequence
 
 from app.core.clock import Clock
 from app.models import (
@@ -60,6 +60,18 @@ from app.models import (
     TopicStatus,
 )
 from app.ports.fetch import FetchedDocument
+from app.content.foundation import (
+    ContentCallIntent,
+    ContentEvaluation,
+    ContentInitialization,
+    ContentInitializationFaultPoint,
+    ContentItem,
+    ContentPreparationRequest,
+    ContentRun,
+    ContentStatus,
+    ContentTransitionResult,
+    FrozenContentInput,
+)
 
 
 class ResearchTopicIntegrityError(RuntimeError):
@@ -212,6 +224,18 @@ class TopicGenerationResultError(RuntimeError):
         super().__init__(f"{code}: {detail}")
 
 
+class ContentFoundationError(RuntimeError):
+    """Base typed refusal for the C1 durable content contract."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        self.code = code
+        super().__init__(f"{code}: {' '.join(detail.split())[:200]}")
+
+
+class ContentSnapshotError(ContentFoundationError):
+    """Current Research Card/evidence no longer equals the frozen snapshot."""
+
+
 class BudgetReservationError(RuntimeError):
     """Rezerwacja przekracza limit lub przeczy istniejącej rezerwacji joba."""
 
@@ -259,6 +283,69 @@ class StoragePort(Protocol):
     def list_topics(self, account_id: str) -> Sequence[Topic]: ...
 
     def list_topic_titles_for_dedup(self, account_id: str) -> list[tuple[int, str]]: ...
+
+    def prepare_content_job(
+        self,
+        request: ContentPreparationRequest,
+        *,
+        now: datetime | None = None,
+        clock: Clock | None = None,
+        fault_point: Callable[[ContentInitializationFaultPoint], None] | None = None,
+    ) -> ContentInitialization: ...
+
+    def get_content_item(
+        self, account_id: str, content_id: int,
+    ) -> ContentItem | None: ...
+
+    def get_frozen_content_input(
+        self, account_id: str, content_id: int,
+    ) -> FrozenContentInput | None: ...
+
+    def assert_content_snapshot(
+        self, account_id: str, content_id: int,
+    ) -> FrozenContentInput: ...
+
+    def initialize_content_run_for_job(
+        self,
+        job_id: str,
+        lease_owner: str,
+        fence_token: int,
+        run_id: str,
+        *,
+        now: datetime | None = None,
+        clock: Clock | None = None,
+        fault_point: Callable[[ContentInitializationFaultPoint], None] | None = None,
+    ) -> ContentInitialization: ...
+
+    def transition_content_execution(
+        self,
+        execution: JobExecutionContext,
+        target: ContentStatus,
+        *,
+        reason_code: str | None = None,
+        final_result: dict[str, Any] | None = None,
+        score: float | None = None,
+    ) -> ContentTransitionResult: ...
+
+    def record_content_article_brief(
+        self,
+        execution: JobExecutionContext,
+        *,
+        brief_schema_version: str,
+        brief: dict[str, Any],
+    ) -> str: ...
+
+    def record_content_call_intent(
+        self,
+        execution: JobExecutionContext,
+        intent: ContentCallIntent,
+    ) -> ContentCallIntent: ...
+
+    def record_content_evaluation(
+        self,
+        execution: JobExecutionContext,
+        evaluation: ContentEvaluation,
+    ) -> ContentEvaluation: ...
 
     def list_topics_by_status(self, account_id: str, status: TopicStatus) -> Sequence[Topic]: ...
 

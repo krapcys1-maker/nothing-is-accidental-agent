@@ -16,7 +16,14 @@ EVIDENCE_PIPELINE_SCHEMA_VERSION = "0017_evidence_pipeline_lineage"
 CONTROLLED_FETCH_SCHEMA_VERSION = "0018_controlled_fetch_lifecycle"
 EVIDENCE_RESEARCH_SCHEMA_VERSION = "0019_evidence_research_approvals"
 TOPIC_GENERATION_SCHEMA_VERSION = "0020_topic_generation_lifecycle"
-RUNTIME_SCHEMA_VERSION = TOPIC_GENERATION_SCHEMA_VERSION
+CONTENT_FOUNDATION_SCHEMA_VERSION = "0021_durable_content_foundation"
+RUNTIME_SCHEMA_VERSION = CONTENT_FOUNDATION_SCHEMA_VERSION
+_SELF_LEDGERED_MIGRATIONS = frozenset({
+    # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
+    # Unlike historical self-managed rebuilds, it also writes schema_migrations
+    # in that same transaction; the runner verifies rather than duplicates it.
+    CONTENT_FOUNDATION_SCHEMA_VERSION,
+})
 _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0007_candidate_attempts",
     "0008_staged_force_reresearch",
@@ -37,6 +44,8 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     # 0020 is ABSENT for the same reason: it rebuilds `jobs`, which carries
     # incoming foreign keys from provider_attempts, controlled_fetch_attempts
     # and controlled_fetch_approvals.
+    # 0021 is self-ledgered and intentionally handled by
+    # _SELF_LEDGERED_MIGRATIONS instead.
 })
 
 
@@ -314,8 +323,14 @@ def apply_migrations(
     applied = {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
     newly: list[str] = []
     failpoint_function = "_nia_transactional_migration_failpoint"
-    if transaction_failpoint is not None:
-        conn.create_function(failpoint_function, 1, transaction_failpoint)
+    # 0021 always calls this function inside its own transaction.  Production
+    # gets a deterministic no-op; tests may inject an exception immediately
+    # before the atomic ledger write.
+    conn.create_function(
+        failpoint_function,
+        1,
+        transaction_failpoint if transaction_failpoint is not None else (lambda _version: None),
+    )
     try:
         for sql_file in sorted(Path(migrations_dir).glob("*.sql")):
             version = sql_file.stem
@@ -324,7 +339,29 @@ def apply_migrations(
             if version in applied:
                 continue
             sql = sql_file.read_text(encoding="utf-8")
-            if version in _RUNNER_TRANSACTIONAL_MIGRATIONS:
+            if version in _SELF_LEDGERED_MIGRATIONS:
+                try:
+                    conn.executescript(sql)
+                except Exception:
+                    if conn.in_transaction:
+                        conn.rollback()
+                    raise
+                finally:
+                    # A fault before the migration's trailing PRAGMAs must not
+                    # leak its temporary rebuild settings into a reused
+                    # connection.
+                    if not conn.in_transaction:
+                        conn.execute("PRAGMA legacy_alter_table = OFF")
+                        conn.execute("PRAGMA foreign_keys = ON")
+                recorded = conn.execute(
+                    "SELECT COUNT(*) FROM schema_migrations WHERE version=?",
+                    (version,),
+                ).fetchone()[0]
+                if recorded != 1:
+                    raise ExplicitMigrationError(
+                        f"self-ledgered migration {version} did not record exactly one ledger row"
+                    )
+            elif version in _RUNNER_TRANSACTIONAL_MIGRATIONS:
                 quoted_version = conn.execute("SELECT quote(?)", (version,)).fetchone()[0]
                 failpoint_sql = (
                     f"SELECT {failpoint_function}({quoted_version});\n"
@@ -351,8 +388,7 @@ def apply_migrations(
                 conn.commit()
             newly.append(version)
     finally:
-        if transaction_failpoint is not None:
-            conn.create_function(failpoint_function, 1, None)
+        conn.create_function(failpoint_function, 1, None)
     return newly
 
 
@@ -543,5 +579,23 @@ def migrate_0019_to_0020(
         db_path,
         source_version=EVIDENCE_RESEARCH_SCHEMA_VERSION,
         target_version=TOPIC_GENERATION_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0020_to_0021(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the separately authorized durable-content foundation schema.
+
+    This generic step is exercised exclusively on temporary databases in C1.
+    It does not authorize or perform a production migration.
+    """
+    return _migrate_single_step(
+        db_path,
+        source_version=TOPIC_GENERATION_SCHEMA_VERSION,
+        target_version=CONTENT_FOUNDATION_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )

@@ -58,3 +58,5 @@ date,run_id,task,provider,model,input_tokens,output_tokens,cache_read_tokens,cac
 # 2026-07-22 - F1-BLOCK-01 TOPIC_GENERATION SETTLED recovery: 1821 testow fake/temp, zero API/SDK/sieci/browsera/publikacji i zero migracji produkcji - 0.000000 USD; historyczne actual rows bez zmian.
 # 2026-07-22 - publiczny controlled-live-topic-generation candidate: 1854 testy fake/temp, zero realnego requestu/API/SDK/sieci/browsera/publikacji/migracji - 0.000000 USD; historyczne actual rows bez zmian.
 2026-07-23,4cf8c448-5358-43c6-9d47-e5daf6d0f040,topics,anthropic,claude-sonnet-5,219,1269,0,0,0,0,0.013128,actual
+# 2026-07-23 - ETAP 3 / WAVE C1 durable content foundation: 39 testow C1, collect/full 1893/1893, wylacznie temp SQLite i fake/local paths - 0.000000 USD; zero API/SDK/sieci/browsera/publikacji i zero migracji produkcji; actual rows bez zmian.
+# 2026-07-23 - WAVE C1 jedyna fala naprawcza po REJECT-MAJOR: 25 kontrprob, 69 testow C1, full 1923/1923, tylko temp SQLite i fake/local paths - 0.000000 USD; zero API/SDK/sieci/browsera/publikacji/controlled-live i zero migracji produkcji; actual rows bez zmian.

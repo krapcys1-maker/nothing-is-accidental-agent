@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from app.storage.db import (
+    CONTENT_FOUNDATION_SCHEMA_VERSION,
     EVIDENCE_RESEARCH_SCHEMA_VERSION,
     RUNTIME_SCHEMA_VERSION,
     TOPIC_GENERATION_SCHEMA_VERSION,
@@ -62,14 +63,14 @@ def _at_0019(tmp_path, name="ladder.db"):
     return path
 
 
-def test_runtime_schema_is_exactly_0020():
-    assert RUNTIME_SCHEMA_VERSION == TOPIC_GENERATION_SCHEMA_VERSION
+def test_topic_generation_schema_is_0020_below_runtime_0021():
+    assert RUNTIME_SCHEMA_VERSION == CONTENT_FOUNDATION_SCHEMA_VERSION
     assert TOPIC_GENERATION_SCHEMA_VERSION == "0020_topic_generation_lifecycle"
 
 
 def test_fresh_initialization_reaches_0020_with_clean_integrity(tmp_path):
     path = tmp_path / "fresh.db"
-    applied = initialize_database(path)
+    applied = initialize_database(path, through=TOPIC_GENERATION_SCHEMA_VERSION)
     assert applied[-1] == TOPIC_GENERATION_SCHEMA_VERSION
 
     conn = connect(path)
@@ -133,7 +134,7 @@ def test_upgrade_0019_to_0020_loses_no_object_and_changes_only_jobs(tmp_path):
 
 def test_fresh_and_upgraded_schemas_are_identical(tmp_path):
     fresh = tmp_path / "fresh.db"
-    initialize_database(fresh)
+    initialize_database(fresh, through=TOPIC_GENERATION_SCHEMA_VERSION)
     upgraded = _at_0019(tmp_path, "upgraded.db")
     migrate_0019_to_0020(upgraded)
 
@@ -156,7 +157,9 @@ def test_rerunning_the_migrator_is_idempotent(tmp_path):
 
     conn = connect(path)
     try:
-        assert tuple(apply_migrations(conn)) == ()
+        assert tuple(
+            apply_migrations(conn, through=TOPIC_GENERATION_SCHEMA_VERSION)
+        ) == ()
         assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
         conn.close()
