@@ -454,3 +454,10 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co powinien pokazać:** zanonimizowane targetowanie jednego joba przez `claim_specific_job`, dwa joby na temp DB z drugim nadal `QUEUED/attempts=0`, replay z zerem drugich calli, restore pięciu flag po failpoincie, rozłączne exit codes oraz `1854/1854`, 0 skipped/xfail.
 - **Stan produkcji na kadrze:** wyłącznie skrócony SHA `8f987c…8730af`, schema 0020, `696320 B`, integrity `ok`, FK `0`, sidecary `0`, z adnotacją `mode=ro&immutable=1` i `CONTROLLED-LIVE NOT EXECUTED`.
 - **Czego nie może pokazać:** `.env`, kluczy, pełnych lokalnych ścieżek/SHA bindingu, promptu, intent preimage, approvalu, danych SQLite ani fake fixture. Nie może sugerować `APPROVE`, wykonanego requestu, zamknięcia Etapu 2 lub potwierdzonej LEVEL_3 readiness.
+
+## 2026-07-23 — Pierwszy successful controlled-live TOPIC_GENERATION
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ zakres jawnie zabraniał browsera, a terminal zawiera pełne lokalne bindingi.
+- **Co powinien pokazać:** zanonimizowany checkpoint `SUCCESS`, attempt count 1 / `SETTLED`, usage count 1, job `DONE`, run `SUCCESS`, approval consumed, generated topics 2, selected topic `21`, actual cost `0.013128 USD`, search `0`, reconciliation false i policy flags restored.
+- **Stan produkcji na kadrze:** skrócony SHA `91f593…56a1f`, schema 0020, integrity `ok`, FK `0`; osobno jawna obserwacja pustego WAL `0 B` i SHM `32768 B`, quiescence `PASS`.
+- **Czego nie może pokazać:** `.env`, klucza API, pełnego promptu/intentu, lokalnych ścieżek, pełnych fingerprintów, zawartości SQLite ani surowej odpowiedzi. Nie może sugerować kolejnej zgody, publikacji, zamknięcia Etapu 2 ani LEVEL_3.

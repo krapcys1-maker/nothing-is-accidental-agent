@@ -137,3 +137,7 @@ Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior u
 ### 2026-07-22 — Jeden zatwierdzony job, drugi nietknięty
 
 `SCREENSHOT REQUIRED`: zanonimizowany kadr powinien pokazać dwa joby w temp DB, jeden targetowany przez `claim_specific_job`, drugi nadal `QUEUED/attempts=0`, replay z zerem drugich requestów, restore pięciu flag oraz wynik `1854/1854`. Produkcja może być pokazana tylko jako skrócony hash, schema 0020, integrity/FK i brak sidecarów. Obrazu nie wykonano z powodu zakazu browsera i prywatnych bindingów; kadr nie może zawierać `.env`, promptu, approvalu, danych DB ani sugerować wykonanego live.
+
+### 2026-07-23 — Jeden prawdziwy request i pełny durable checkpoint
+
+`SCREENSHOT REQUIRED`: bezpieczny kadr powinien pokazać tylko zanonimizowane `SUCCESS`, HTTP 200, attempt 1 `SETTLED`, usage 1, cost `0.013128 USD`, generated 2, selected topic `21`, reconciliation false i identyczne fail-closed flags przed/po. Nie może zawierać `.env`, klucza, promptu, raw response, pełnych fingerprintów ani lokalnych ścieżek. Obrazu nie wykonano, ponieważ browser był zabroniony.

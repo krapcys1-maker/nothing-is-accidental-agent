@@ -766,3 +766,17 @@ Po merge durable generator był gotowy na targetowanie wewnętrzne, ale publiczn
 Nowy publiczny root nie tworzy niczego. Przyjmuje dokładny job, konto i pełne parametry zatwierdzonego intentu, sprawdza niezmienny stan bazy i repo, odrzuca konkurencyjne paid/active/reconciliation states, zapisuje snapshot pięciu flag, a potem wykonuje jedno `run_once` przez `claim_specific_job`. Browser pozostaje wyłączony, a research, Fetch, maintenance, reaper, scheduler i retry nie są wywoływane.
 
 Najważniejsza kontrpróba tworzy dwa joby, zatwierdza tylko jeden i uruchamia rzeczywisty publiczny subprocess z fake callerem. Drugi job pozostaje `QUEUED` z zerem prób, a replay nie wykonuje drugiego calla. Po sukcesie, błędach i przerwaniu flagi wracają do dokładnego snapshotu. 33 nowe przypadki podniosły suitę do 1854/1854. Realnego controlled-live nie wykonano.
+
+## 2026-07-23 — Jeden prawdziwy request, bez dopisków drobnym drukiem
+
+Po merge PR #18 właściciel podał kompletną zgodę: dokładny commit, konto, model, dwa tematy, 1500 tokenów, 60 sekund, zero retry i search oraz cap `0.024303 USD`. Najpierw przeszły quiescence, budżet, pricing, schema i 1854 testy. Potem powstał jeden pristine job oraz approval ważny niespełna 14 minut.
+
+Publiczny root wykonał jeden HTTP 200. Ledger zapisał 219 tokenów wejścia, 1269 wyjścia i koszt `0.013128 USD`; attempt został `SETTLED`, job `DONE`, run `SUCCESS`, a dwa tematy zapisano razem z wyborem tematu o gate’ach lotniskowych. Approval został zużyty, marker usunięty, flagi wróciły fail-closed. Nie było search, Fetch, browsera, publikacji, maintenance ani retry.
+
+Po zamknięciu SQLite pozostał pusty WAL i plik SHM. Nie sprzątaliśmy ich po cichu: quiescence potwierdziła brak locków, a obserwacja trafiła do logu. Sukces requestu nie jest pretekstem, by ukrywać stan operacyjny po nim.
+
+## 2026-07-23 — Etap 2 zamknięty formalnie, bez dotykania kodu
+
+Niezależny post-live review odtworzył pełny checkpoint i wydał `APPROVE WITH MINOR/P2 — ETAP 2 MAY BE FORMALLY CLOSED`. Koordynator przyjął tę ocenę i zamknął Etap 2 osobną decyzją ADR-113. Nie powstał nowy request, job ani approval; kod, testy, runtime i produkcyjna baza pozostały poza zakresem.
+
+To zamknięcie nie zmienia L1 w autonomię. LEVEL_3 nadal nie jest potwierdzone, publikacja nie została sprawdzona, a pojedynczy sukces nie jest obietnicą wszystkich przyszłych scenariuszy. Etap 3 można zacząć dopiero osobną decyzją, tak samo jak każde kolejne live lub publikację.
