@@ -141,3 +141,6 @@ Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior u
 ### 2026-07-23 — Jeden prawdziwy request i pełny durable checkpoint
 
 `SCREENSHOT REQUIRED`: bezpieczny kadr powinien pokazać tylko zanonimizowane `SUCCESS`, HTTP 200, attempt 1 `SETTLED`, usage 1, cost `0.013128 USD`, generated 2, selected topic `21`, reconciliation false i identyczne fail-closed flags przed/po. Nie może zawierać `.env`, klucza, promptu, raw response, pełnych fingerprintów ani lokalnych ścieżek. Obrazu nie wykonano, ponieważ browser był zabroniony.
+## 2026-07-23 — WAVE C2
+
+`SCREENSHOT REQUIRED`. Screenshotu nie wykonano z powodu zakazu browsera i ryzyka ujawnienia lokalnych ścieżek lub prywatnego źródła stylu. Dowód tekstowy: C2 `22/22`, full/collect/exact unique `1945/1945`, zero skipped/xfail, koszt zero, produkcja nadal 0020.

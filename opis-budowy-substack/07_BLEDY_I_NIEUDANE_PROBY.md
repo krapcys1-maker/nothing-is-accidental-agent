@@ -475,3 +475,10 @@ Poprzedni preflight zatrzymał live przed requestem, bo publiczny worker nie umi
 Pierwsza immutable sonda użyła błędnej nazwy tabeli `schema_version`; poprawna to `schema_migrations`. Zapytanie zakończyło się bez zapisu, a poprawiona sonda potwierdziła schema 0020. Później pierwszy fake subprocess odziedziczył projektową ścieżkę kosztów i dopisał trzy syntetyczne rows. Diff je wykrył; wiersze usunięto, fake runtime dostał własny temp `COSTS.csv`, a powtórka potwierdziła stabilny hash. Żadne zdarzenie nie było realnym requestem ani kosztem.
 
 Końcowe `python -c` powtórzyło znaną pułapkę Windows i utraciło cudzysłowy jeszcze przed `sqlite3.connect`. Wyniku nie policzono jako dowodu; audyt powtórzono przez stdin z jawnym URI `mode=ro&immutable=1`.
+## 2026-07-23 — C2: najpierw czerwone długości, potem trzy stare liczniki
+
+Pierwsze fake ARTICLE i NOTE oba poprosiły o rewrite. Evaluator działał poprawnie: artykuł był za długi, Note za krótka. Naprawiono fixtures, nie reguły. Pierwsza pełna suita później wykazała trzy historyczne oczekiwania kończące drabinę na 0021/21 migracjach. Dodano jawny krok 0022 i poprawiono liczniki. Czysty rerun: `1945/1945`.
+
+Końcowy collect za pierwszym razem zwrócił pustą listę, ponieważ jawne `-q` złożyło się z projektowym `addopts=-q`. Kod wyjścia 0 nie został pomylony z dowodem. Powtórka z wyzerowanym `addopts` wykazała `1945` unikalnych node IDs i zero duplikatów.
+
+Pozostające P2 są jawne: strukturalny minimalny reservation floor starego canonical ledgeru, brak dedykowanego content heartbeat dla przyszłego długiego callera, provisional Notes style i niepotwierdzone techniczne route IDs/pricing.

@@ -1,7 +1,8 @@
-"""Durable content foundation for Stage 3.
+"""Stage 3 content package.
 
-Wave C1 exposes data contracts only.  It deliberately contains no planner,
-writer, audit implementation, provider adapter, browser or publication code.
+Wave C1 remains the durable lifecycle foundation. Wave C2 adds a deterministic,
+fake-only planner/writer/evaluation pipeline ending at ``PENDING_APPROVAL``.
+No real provider, browser, approval UI or publication adapter is exposed.
 """
 
 from app.content.foundation import (

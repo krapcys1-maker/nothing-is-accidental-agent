@@ -541,3 +541,18 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - 25 kontrprób obejmuje powtórzony tekst, wspólny URL, obcy excerpt, stary owner po takeover, wygasły replay, ABA z tym samym owner string, obce LOCAL/RESEARCH/TOPIC attempts i równoległe terminalizacje na dwóch połączeniach.
 - Dowód kandydacki: 69/69 C1, full 1923/1923, produkcja nadal 0020 i 0 USD. Status pozostaje `AWAITING INDEPENDENT RE-REVIEW`; implementer nie zamyka własnych findings.
 - Cytowalna zasada: „Podobieństwo pomaga szukać. Tożsamość pozwala bezpiecznie działać.”
+
+## 2026-07-23 — Materiał: „Jedna poprawka jest polityką, nie pętlą”
+
+- C2 nie traktuje rewrite jako zwykłego retry. Pierwszy draft ma osobny trwały intent, canonical attempt, usage, fingerprint i dziewięć evaluations. Dopiero kompletna decyzja `REWRITE_ONCE` otwiera dokładnie drugi intent związany z fingerprintem pierwszego draftu i konkretnymi findings.
+- Próba druga nie zmienia route key i nie uruchamia fallbacku. Ponowny `REWRITE_ONCE` albo `BLOCK` kończy content jako `FAILED`; próba #3 jest niereprezentowalna przez kontrakt Pythona i podłogi SQLite.
+- Cztery wymuszone restarty pokazały różnicę między checkpointem a efektem zewnętrznym: brief, fake request start, settled draft i rewrite decision można bezpiecznie wznowić bez podwójnego canonical parenta; marker możliwego skutku zewnętrznego nadal wymusza `NEEDS_VERIFICATION`.
+- Koszt fake usage i actual cost wynosi `0.000000`; pozytywny reservation floor w starym ledgerze jest wyłącznie strukturalny i jawnie udokumentowany.
+- Cytowalna zasada: „Poprawka jest nową wersją tekstu, ale nie nową zgodą na nieskończoną próbę.”
+
+## 2026-07-23 — Materiał: „Profil stylu powinien być mapą, nie walizką”
+
+- Prywatny korpus pozostał lokalny i gitignored. Runtime nie czyta go, a writer otrzymuje tylko krótki, wersjonowany profil wysokiego poziomu i negative profile.
+- Lokalna analiza nie znalazła wiarygodnego zestawu odrębnych Notes. Zamiast fabrykować pochodzenie, profil Notes ma jawny status `PROVISIONAL`.
+- Profile opisują ruch od konkretu do systemu, rytm, evidence, kontrargument i zakończenie, ale zakazują imitowania konkretnego autora, kopiowania charakterystycznych fraz i tworzenia fałszywej autobiografii.
+- Cytowalna zasada: „Prywatne wzorce mają nauczyć system kierunku, nie podróżować z każdym promptem.”

@@ -72,6 +72,7 @@ from app.content.foundation import (
     ContentTransitionResult,
     FrozenContentInput,
 )
+from app.content.contracts import ContentPlan, DraftEvaluation, FakeDraft, WriterIntent
 
 
 class ResearchTopicIntegrityError(RuntimeError):
@@ -346,6 +347,37 @@ class StoragePort(Protocol):
         execution: JobExecutionContext,
         evaluation: ContentEvaluation,
     ) -> ContentEvaluation: ...
+
+    def get_content_pipeline_state(self, job_id: str) -> dict[str, object]: ...
+
+    def record_content_plan(
+        self, execution: JobExecutionContext, plan: ContentPlan,
+    ) -> str: ...
+
+    def record_content_writer_intent(
+        self, execution: JobExecutionContext, intent: WriterIntent,
+    ) -> str: ...
+
+    def begin_fake_content_writer_attempt(
+        self, execution: JobExecutionContext, attempt_no: int,
+    ) -> ProviderAttempt: ...
+
+    def mark_fake_content_writer_started(
+        self, execution: JobExecutionContext, request_id: str,
+    ) -> ProviderAttempt: ...
+
+    def record_content_draft(
+        self, execution: JobExecutionContext, intent: WriterIntent, draft: FakeDraft,
+    ) -> int: ...
+
+    def record_content_draft_evaluation(
+        self, execution: JobExecutionContext, *, draft_id: int, attempt_no: int,
+        evaluation: DraftEvaluation,
+    ) -> int: ...
+
+    def finalize_content_draft(
+        self, execution: JobExecutionContext, *, draft_fingerprint: str,
+    ) -> ContentTransitionResult: ...
 
     def list_topics_by_status(self, account_id: str, status: TopicStatus) -> Sequence[Topic]: ...
 

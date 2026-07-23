@@ -1,5 +1,7 @@
 # CURRENT_PROJECT_STATE — Nothing Is Accidental Agent
 
+> **BIEŻĄCY SNAPSHOT 2026-07-23 — Etap 3:** C1 = `CLOSED — MERGED AND POST-MERGE VERIFIED`; C2 = `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW` (ADR-116); C3–C5 = `NOT STARTED`. Kod na nowych/temp DB wymaga schema `0022_offline_content_pipeline`; produkcyjna `data/agent.db` pozostaje na `0020_topic_generation_lifecycle` i nie została migrowana. C2 jest wyłącznie offline/fake: logiczne route keys Fable 5/Sonnet 5, techniczne modele i pricing `UNVERIFIED`, brak realnego API/callera, brak prawdziwego artykułu, browsera, approvalu i publikacji; koszt `0.000000 USD`. QA kandydackie: C2 `22/22`, full/collect/exact unique `1945/1945`, duplikaty `0`, zero skipped/xfail.
+
 > **TECHNICZNY SNAPSHOT 2026-07-23 — ETAP 3 / WAVE C1 = `C1 CLOSED — MERGED AND POST-MERGE VERIFIED` (ADR-114/115); ETAP 3 = `IN PROGRESS`; C2 = `NOT STARTED`.**
 >
 > - **Assurance C1:** implementacja trwałego fundamentu została wykonana, a testy implementera zaliczone. Pierwszy niezależny review zakończył się `REJECT — MAJOR`; wykonano dokładnie jedną falę naprawczą, po której niezależny re-review wydał `APPROVE WITH MINOR/P2`.
@@ -281,11 +283,11 @@ Ten wpis zastępuje wcześniejsze statusy checkpointu WAVE 0B w tym dokumencie. 
 
 Ten wpis zastępuje niżej starsze wzmianki „końcowa akceptacja restartu = NOT_STARTED” oraz historyczne liczby 26/42/53 acceptance i 667/683/695 testów. ADR-044 atomizuje inicjalizację, ADR-045 zamyka old-owner research fencing, ADR-046 usuwa trzy P1 czasu/CSV/unexpected failure, ADR-047 przenosi sukces joba do transakcji workflow, a ADR-048 zamyka kontrakt wyniku dispatchu. `tests/test_stage1_restart_acceptance.py` ma 58 scenariuszy, w tym final heartbeat failpoint, brak generic `complete_job`/`fail_job`, atomic failure, malformed terminalization, success/failure transaction failpoints, crash po commicie, macierz expiry przed recovery, claim po write locku i błąd katalogu CSV. Pełny suite: 700 passed; realny koszt 0 USD. WAVE 0A została formalnie zamknięta jako `APPROVED WITH P2`; formalne zamknięcie Etapu 1 nie zostało ogłoszone.
 
-- **Aktywny stan roadmapy:** Etap 1 = `CLOSED`; Etap 2 = `CLOSED`; **Etap 3 = `IN PROGRESS`, C1 = `CLOSED — MERGED AND POST-MERGE VERIFIED`, C2 = `NOT STARTED`**. L1 pozostaje `ACTIVE`; LEVEL_3 = `NOT CONFIRMED`; publikacja = `NOT VERIFIED`.
-- **Ostatni ukończony krok:** merge PR #20 i zielony checkpoint post-merge C1 na `main` `8b5a2f7d835f0c04bec1f914e1cc255906991566`. C1 zamknięto bez migracji produkcji, controlled-live contentu, realnego artykułu i publikacji.
+- **Aktywny stan roadmapy:** Etap 1 = `CLOSED`; Etap 2 = `CLOSED`; **Etap 3 = `IN PROGRESS`, C1 = `CLOSED — MERGED AND POST-MERGE VERIFIED`, C2 = `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`**. C3–C5 = `NOT STARTED`. L1 pozostaje `ACTIVE`; LEVEL_3 = `NOT CONFIRMED`; publikacja = `NOT VERIFIED`.
+- **Ostatni ukończony krok techniczny:** kandydat C2 na niezmienionym fundamencie C1: trwałe plan/brief/intenty/drafty/evaluations, fake-only canonical attempts i usage, maksymalnie jedna poprawka, recovery/fencing oraz `PENDING_APPROVAL`.
 - **Następne trzy zadania:**
-  1. C2 — planner, writer i offline content pipeline — pozostaje `NOT STARTED` i wymaga osobnej autoryzacji implementacji.
-  2. C3 — assurance i integracja całego pipeline'u C2 — pozostaje `NOT STARTED`; nie wolno przedstawiać go jako skutku zamknięcia C1.
+  1. Niezależny review C2; implementer nie zatwierdza własnego kandydata.
+  2. C3 — assurance i szersza integracja po przyjęciu C2 — pozostaje `NOT STARTED`.
   3. C4 (osobno autoryzowana migracja produkcji) i C5 (jeden kontrolowany realny artykuł do oceny) pozostają `NOT STARTED`; każde realne API, controlled-live i publikacja wymaga osobnej zgody.
 
 ## Znane długi techniczne (poza blokerami; numeracja z audytu 12.07)

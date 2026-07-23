@@ -418,3 +418,8 @@ Wynik był terminalny i jednoznaczny: jeden HTTP 200, jedno usage, jeden `SETTLE
 Niezależny review zaakceptował post-live checkpoint z trzema P2: proceduralnymi sidecarami, minimalnym JSON raportu i historycznym ledgerem legacy poza tym runem. Żaden nie podważa faktu jednego requestu, jednego usage, poprawnego kosztu, zużytej zgody ani terminalnego lifecycle. Koordynator formalnie ustawił `ETAP 2 — CLOSED`.
 
 Granica pozostała jawna: L1 jest aktywne, LEVEL_3 niepotwierdzone, a publikacja niezweryfikowana. Zamknięcie nie udziela kolejnej zgody i nie rozpoczyna Etapu 3; obie rzeczy wymagają osobnej decyzji właściciela.
+## 2026-07-23 — ADR-116: offline C2, logiczne modele i dokładnie jedna poprawka
+
+Właściciel ustalił przyszły routing Fable 5 dla artykułów i Sonnet 5 dla Notes. Implementacja przechowuje te decyzje jako wersjonowane route keys, bez wymyślania technicznych API IDs i bez fallbacku. C2 dopuszcza wyłącznie fake writera z limitem kosztu zero.
+
+Rewrite jest osobnym, trwałym intentem #2 związanym z pierwszym draftem i findings. Nie jest pętlą ani automatycznym retry. Druga negatywna decyzja kończy lifecycle. Szczegóły i P2 są w `docs/DECISIONS.md`, ADR-116.

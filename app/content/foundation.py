@@ -73,9 +73,10 @@ class ContentStatus(str, Enum):
 
 
 class ContentExecutionMode(str, Enum):
-    """C1 jobs are held from the ordinary queue and must be claimed by id."""
+    """CONTENT jobs are held from the ordinary queue and claimed only by id."""
 
     FOUNDATION_ONLY = "FOUNDATION_ONLY"
+    OFFLINE_PIPELINE = "OFFLINE_PIPELINE"
 
 
 class ContentInitializationFaultPoint(str, Enum):
@@ -114,6 +115,7 @@ class ContentPreparationRequest(BaseModel):
     account_id: str = Field(min_length=1, max_length=200)
     research_card_id: int = Field(gt=0)
     content_type: ContentType
+    execution_mode: ContentExecutionMode = ContentExecutionMode.FOUNDATION_ONLY
     max_attempts: int = Field(default=3, ge=2, le=10)
     input_schema_version: str = Field(
         default=CONTENT_INPUT_SCHEMA_VERSION, min_length=1, max_length=100,
@@ -406,10 +408,11 @@ def content_job_payload(
     frozen_input_sha256: str,
     evidence_manifest_sha256: str,
     intent_key: str,
+    execution_mode: ContentExecutionMode = ContentExecutionMode.FOUNDATION_ONLY,
 ) -> dict[str, Any]:
     payload = {
         "execution": CONTENT_EXECUTION,
-        "execution_mode": ContentExecutionMode.FOUNDATION_ONLY.value,
+        "execution_mode": execution_mode.value,
         "account_id": account_id,
         "research_card_id": research_card_id,
         "content_id": content_id,
@@ -444,14 +447,16 @@ def canonicalize_content_job_payload(payload: dict[str, Any]) -> dict[str, Any]:
         raise ContentContractError(
             "CONTENT_EXECUTION_UNSUPPORTED", "unsupported content execution contract.",
         )
-    if payload.get("execution_mode") != ContentExecutionMode.FOUNDATION_ONLY.value:
+    try:
+        execution_mode = ContentExecutionMode(payload.get("execution_mode"))
+    except (TypeError, ValueError) as exc:
         raise ContentContractError(
             "CONTENT_EXECUTION_MODE_UNSUPPORTED",
-            "C1 admits only FOUNDATION_ONLY content jobs.",
-        )
+            "content execution mode is not supported.",
+        ) from exc
     if payload.get("provider_enabled") is not False:
         raise ContentContractError(
-            "CONTENT_PROVIDER_FORBIDDEN_C1", "C1 content jobs cannot enable a provider.",
+            "CONTENT_PROVIDER_FORBIDDEN", "CONTENT jobs cannot enable a real provider.",
         )
     try:
         ContentType(payload.get("content_type"))

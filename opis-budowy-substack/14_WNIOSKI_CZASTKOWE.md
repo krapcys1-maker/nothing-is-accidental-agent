@@ -260,3 +260,10 @@ Najważniejszy dowód sukcesu był negatywny: nie pojawił się retry, drugi att
 Etap 2 można było zamknąć, ponieważ dowód dla jego zakresu był kompletny i niezależnie zrecenzowany, nie dlatego, że agent umie już wszystko. L1 nadal ogranicza realne działania, LEVEL_3 nie jest potwierdzone, a publikacja nie została zweryfikowana.
 
 Jawne P2 są częścią uczciwego zamknięcia. Proceduralne sidecary, minimalny raport i historyczny ledger legacy pozostają widoczne, ale nie unieważniają jednego rozliczonego requestu i terminalnego lifecycle. Kolejny etap wymaga nowej decyzji, nie automatycznego rozpędu.
+## 2026-07-23 — Po WAVE C2
+
+- Trwały brief jest granicą między evidence a writerem; log nie wystarcza.
+- „Jedna poprawka” wymaga trwałego intentu i podłogi attempt #2, inaczej łatwo staje się nieograniczonym retry.
+- Logiczną decyzję o modelu można utrwalić bez wymyślania API ID; `UNVERIFIED` jest prawidłowym stanem.
+- Profil stylu powinien być pochodną wysokiego poziomu. Raw korpus nie powinien trafiać do runtime ani każdego promptu.
+- Brak przykładów Notes trzeba nazwać `PROVISIONAL`, nie ukrywać lepszym copy.

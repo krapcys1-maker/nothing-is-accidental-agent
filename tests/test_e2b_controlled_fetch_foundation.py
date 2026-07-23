@@ -1272,9 +1272,18 @@ def test_migration_cli_0018_requires_confirmation_and_is_exact(tmp_path, capsys)
     assert migration_cli_0021.main([
         "--db-path", str(path), "--confirm-0020-to-0021",
     ]) == 0
+    # 0022: the offline content pipeline is the current exact runtime gate.
+    import scripts.migrate_schema_0022 as migration_cli_0022
+
+    with pytest.raises(SchemaVersionTooOld):
+        SqliteStorage.open(path)
+    assert migration_cli_0022.main(["--db-path", str(path)]) == 2
+    assert migration_cli_0022.main([
+        "--db-path", str(path), "--confirm-0021-to-0022",
+    ]) == 0
     SqliteStorage.open(path).close()
-    assert migration_cli_0021.main([
-        "--db-path", str(path), "--confirm-0020-to-0021",
+    assert migration_cli_0022.main([
+        "--db-path", str(path), "--confirm-0021-to-0022",
     ]) == 0
     assert "idempotent=true" in capsys.readouterr().out
 
