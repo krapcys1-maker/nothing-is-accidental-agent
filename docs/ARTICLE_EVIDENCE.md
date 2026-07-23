@@ -516,3 +516,11 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Recovery snapshotu flag jest osobnym kontraktem od recovery płatnego attemptu. Restart może przywrócić flagi, ale nie może automatycznie uruchomić providera, maintenance ani retry.
 - Kontrpróba dwóch jobów i replay pokazała granicę: tylko zatwierdzony target zmienił stan, drugi pozostał nietknięty, a powtórzenie nie wykonało drugiego calla. Dowód: 33 nowe przypadki i `1854/1854`, zero realnej sieci i kosztu.
 - Cytowalna zasada: „Pozwolenie na jeden numer nie otwiera całej kolejki; publiczny przycisk musi wskazywać ten sam rekord, który podpisał człowiek.”
+
+## 2026-07-23 — Materiał: „Bezpieczny sukces jest nudny w najlepszy możliwy sposób”
+
+- Pierwszy targetowany controlled-live wykonał dokładnie to, co obiecywał kontrakt: jeden job, jeden approval, jeden request, jeden settlement i jeden usage. Nie uruchomił researchu, wyszukiwania, browsera, publikacji, maintenance ani retry.
+- Pesymistyczny cap wynosił `0.024303 USD`; rzeczywisty koszt `0.013128 USD` przy 219 tokenach wejścia i 1269 wyjścia. To pokazuje różnicę między bezpieczną rezerwacją a rozliczonym faktem.
+- Dwa tematy powstały atomowo z terminalizacją; selected topic `21` dotyczy ukrytej logistyki przydziału gate’ów lotniskowych. Approval został zużyty i nie może autoryzować replay.
+- Report zachował najważniejszy dowód negatywny: `provider_retry_performed=false`, `maintenance_performed=false`, browser flag false, a wszystkie flagi po wykonaniu są identyczne jak przed nim.
+- Cytowalna zasada: „Najlepszy controlled-live nie wygląda jak magia. Wygląda jak jeden podpis, jeden rachunek i zero niedopowiedzeń.”

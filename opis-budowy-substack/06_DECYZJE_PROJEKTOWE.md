@@ -406,3 +406,15 @@ Cała drabina nie jest przedstawiana jako jedna transakcja. Transakcyjna jest ka
 Wybrano osobny root `controlled-live-topic-generation`, a nie parametr ogólnego workera. CLI wiąże job i konto z fingerprintem oraz pełnym preimage approval, modelem, limitem tokenów, capem, liczbą kandydatów, schema/SHA bazy i Git branch/HEAD. Brak dowolnego elementu oznacza STOP przed otwarciem gates.
 
 Jedna iteracja `Worker(target_job_id=...)` może użyć tylko `claim_specific_job`. Snapshot i marker recovery chronią pięć flag; browser pozostaje wyłączony. Stan niejednoznaczny po requestcie nie uruchamia providera drugi raz ani maintenance. Status to kandydat do review, bez realnego requestu i bez zamknięcia Etapu 2.
+
+## ADR-112 — Jedna zgoda kończy się na jednym settlementcie
+
+Właściciel związał decyzję z commit SHA, kontem, modelem, liczbą kandydatów, tokenami, timeoutem, capem oraz zerem retry i search. Approval miał niespełna 14 minut ważności i został atomowo zużyty przy rezerwacji dokładnego attemptu.
+
+Wynik był terminalny i jednoznaczny: jeden HTTP 200, jedno usage, jeden `SETTLED`, dwa tematy i `SUCCESS`. Report dowiódł zarazem, czego nie wykonano: retry, maintenance, browsera, Fetch i publikacji. Ta decyzja nie przechodzi na kolejny request i nie zamyka Etapu 2.
+
+## ADR-113 — Zamknięcie Etapu 2 jest decyzją o dowodzie, nie o pełnej autonomii
+
+Niezależny review zaakceptował post-live checkpoint z trzema P2: proceduralnymi sidecarami, minimalnym JSON raportu i historycznym ledgerem legacy poza tym runem. Żaden nie podważa faktu jednego requestu, jednego usage, poprawnego kosztu, zużytej zgody ani terminalnego lifecycle. Koordynator formalnie ustawił `ETAP 2 — CLOSED`.
+
+Granica pozostała jawna: L1 jest aktywne, LEVEL_3 niepotwierdzone, a publikacja niezweryfikowana. Zamknięcie nie udziela kolejnej zgody i nie rozpoczyna Etapu 3; obie rzeczy wymagają osobnej decyzji właściciela.

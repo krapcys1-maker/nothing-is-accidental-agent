@@ -248,3 +248,15 @@ Drugi wniosek: „recovery" nie oznacza automatycznego retry ani ukrytego restor
 Approval może wiązać wszystkie parametry requestu, a mimo to być niewystarczająca, jeśli publiczny composition root wybiera dowolny rekord kolejki. Granica bezpieczeństwa musi sięgać aż do claimu: ten sam `job_id`, który zatwierdził człowiek, musi trafić do `claim_specific_job`.
 
 Drugi wniosek dotyczy dwóch rodzajów recovery. Przywrócenie policy flags po przerwaniu procesu nie daje prawa do ponowienia płatnego requestu. Marker może naprawić konfigurację, lecz decyzja o dalszym lifecycle pozostaje w trwałym attempt/reconciliation i wymaga jawnej operacji operatora.
+
+## 2026-07-23 — Pesymistyczny cap jest rezerwacją, nie prognozą rachunku
+
+Cap `0.024303 USD` był wyliczony tak, by bezpiecznie objąć graniczny output. Rzeczywisty rachunek `0.013128 USD` nie unieważnia marginesu — pokazuje, że rezerwacja i settlement pełnią różne role. Pierwsza chroni decyzję przed requestem, drugi zapisuje fakt po nim.
+
+Najważniejszy dowód sukcesu był negatywny: nie pojawił się retry, drugi attempt, search, maintenance, browser ani publikacja. Controlled-live jest wiarygodny nie dlatego, że „coś wygenerował”, lecz dlatego, że trwały ledger potrafi policzyć zarówno to, co się wydarzyło, jak i to, co pozostało niemożliwe.
+
+## 2026-07-23 — Zamknięty etap nie oznacza nieograniczonego systemu
+
+Etap 2 można było zamknąć, ponieważ dowód dla jego zakresu był kompletny i niezależnie zrecenzowany, nie dlatego, że agent umie już wszystko. L1 nadal ogranicza realne działania, LEVEL_3 nie jest potwierdzone, a publikacja nie została zweryfikowana.
+
+Jawne P2 są częścią uczciwego zamknięcia. Proceduralne sidecary, minimalny raport i historyczny ledger legacy pozostają widoczne, ale nie unieważniają jednego rozliczonego requestu i terminalnego lifecycle. Kolejny etap wymaga nowej decyzji, nie automatycznego rozpędu.

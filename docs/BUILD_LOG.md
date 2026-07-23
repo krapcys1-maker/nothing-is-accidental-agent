@@ -975,3 +975,25 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Incydent testowy:** pierwsze wywołanie fake subprocess odziedziczyło projektową ścieżkę `docs/COSTS.csv` i dopisało trzy fake rows. Diff ujawnił problem; dokładne wiersze usunięto, fake CLI skierowano do temp runtime, a hash pliku pozostał stabilny przy powtórzeniu. Nie był to koszt ani request zewnętrzny.
 - **Produkcja/skutki:** `data/agent.db` wyłącznie `mode=ro&immutable=1`; schema `0020_topic_generation_lifecycle`, SHA-256 `8f987c98649d7d9f7846ff3dd18f7866b805b2ceffcd9b8bebddd8c8658730af`, `696320 B`, integrity `ok`, FK `0`, bez WAL/SHM/journal. Zero API/SDK/sieci/browsera/publikacji/kosztu; controlled-live nie wykonano; brak stage/commit/push/PR/merge.
 - **Status:** `CANDIDATE COMPLETE — READY FOR INDEPENDENT REVIEW`; Etap 2 `IN PROGRESS`, LEVEL_3 readiness `NOT CONFIRMED`.
+
+### [2026-07-23 08:10 +03:00] Etap 2 — pierwszy targetowany controlled-live `TOPIC_GENERATION`
+
+- **Etap roadmapy:** Etap 2 pozostaje `IN PROGRESS`; wykonanie ADR-112 na zmergowanym entrypoincie ADR-111.
+- **Stan wejściowy:** `main`/`origin/main` `a4e314ff1d9a9ac6bd24fdcdf159ca3e24356916`, czyste drzewo, quiescence `PASS`, schema 0020, integrity `ok`, FK `0`, flags fail-closed, brak aktywnych jobów/attemptów/approvali/reconciliation. Targeted tests przeszły; pełna suita i exact collect `1854/1854`; compileall i diff check PASS.
+- **Kontrakt:** konto `nothing_is_accidental`, model `claude-sonnet-5`, 2 kandydatów, 1500 max tokens, timeout 60 s, zero retry/search, cap `0.024303 USD`. Job `topic-generation-037eb2d3db158a70791e30064ad95403`, approval `1`, fingerprint intentu `019b1022…c1d`.
+- **Wykonanie:** dokładnie jeden HTTP 200. Request `…:topics:1`, run `4cf8c448-5358-43c6-9d47-e5daf6d0f040`; attempt `SETTLED`, job `DONE`, run `SUCCESS`, approval consumed, reconciliation false.
+- **Usage/koszt:** 219 input, 1269 output, cache `0/0`, web search `0`; koszt `0.013128 USD`, poniżej capa. `docs/COSTS.csv` otrzymał dokładnie jeden automatyczny actual row.
+- **Wynik redakcyjny:** topic `20` — muzyka w supermarketach; selected topic `21` — ukryta logistyka przydziału gate’ów lotniskowych.
+- **Bezpieczeństwo:** `provider_retry_performed=false`, `maintenance_performed=false`; browser, Fetch i publikacja nieuruchomione; pięć flag przywrócone do exact fail-closed snapshotu; marker nie pozostał.
+- **Produkcja po:** DB `91f593…56a1f`, `700416 B`, schema 0020/20, integrity `ok`, FK `0`; counts 12/21/21/8/26/1/2. Pusty WAL `0 B` i SHM `32768 B` pozostały bez usuwania; quiescence `PASS`, locków brak.
+- **Status:** `CONTROLLED-LIVE TOPIC_GENERATION — SUCCESS`; nie zamyka Etapu 2 i nie potwierdza LEVEL_3.
+
+### [2026-07-23] Etap 2 — formalne zamknięcie po niezależnym post-live review — [CLOSED]
+
+- **Etap roadmapy:** formalne zamknięcie całego Etapu 2; ADR-113. Implementacja Etapu 3 nie została rozpoczęta.
+- **Decyzja koordynatora:** przyjęto `APPROVE WITH MINOR/P2 — ETAP 2 MAY BE FORMALLY CLOSED` i ustawiono `ETAP 2 — CLOSED`.
+- **Dowód:** `main` `a4e314ff1d9a9ac6bd24fdcdf159ca3e24356916`; job `topic-generation-037eb2d3db158a70791e30064ad95403`; request `…:topics:1`; run `4cf8c448-5358-43c6-9d47-e5daf6d0f040`; HTTP 200; jeden attempt i usage; `SETTLED`/`DONE`/`SUCCESS`; approval consumed; koszt `0.013128 USD` przy capie `0.024303 USD`; dwa generated topics, selected `21`; retry/browser/Fetch/research/publikacja `0`.
+- **Review i QA:** niezależny checkpoint: collect/unique/full `1854/1854`, integrity `ok`, FK `0`, policy gates fail-closed, marker usunięty, brak reconciliation. Operator formalnego zamknięcia ponownie uzyskał targeted fake-caller + cost/report `55/55`, collect `1854`, unique/exact-once `1854`, pełną suitę `1854/1854` (skip `0`, xfail `0`), `compileall` PASS i `git diff --check` PASS.
+- **Granice:** L1 = `ACTIVE`; LEVEL_3 = `NOT CONFIRMED`; publikacja = `NOT VERIFIED`; każdy kolejny live lub publikacja wymaga osobnej zgody. Jeden live nie potwierdza wszystkich przyszłych scenariuszy.
+- **P2:** proceduralne WAL `0 B` / SHM `32768 B`, minimalny JSON raportu oraz historyczny ledger legacy poza tym runem pozostają nieblokującym backlogiem.
+- **Zakres zmiany:** wyłącznie dokumentacja formalnego zamknięcia i istniejący post-live checkpoint; bez zmian kodu, testów, runtime, lifecycle, providera, pricingu, produkcyjnej bazy i raportu runtime.

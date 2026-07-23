@@ -264,3 +264,15 @@ Po zielonej walidacji autoryzował branch `dev/stage2-production-migration-orche
 Właściciel zlecił wyłącznie publiczny root dla jednego istniejącego `TOPIC_GENERATION`, z dokładnym job bindingiem i wykorzystaniem obecnego policy/recovery. Zabronił zmian generatora, scoringu, providera, pricingu, migracji 0020 i niezwiązanych lifecycle.
 
 Nie zezwolił na produkcyjny job/approval, realne API/SDK/sieć/browser/publikację, migrację produkcji ani stage/commit/push/PR/merge. Końcowy status może być wyłącznie `CANDIDATE COMPLETE — READY FOR INDEPENDENT REVIEW`; realny request wymaga nowej, osobnej decyzji.
+
+## 2026-07-23 — Człowiek dopuścił dokładnie jeden TOPIC_GENERATION live
+
+Właściciel wskazał `main` `a4e314…`, konto `nothing_is_accidental`, `claude-sonnet-5`, dwa tematy, 1500 tokenów, timeout 60 sekund, zero retry i search, cap `0.024303 USD` oraz approval nie dłuższy niż 15 minut. Jawnie wyłączył browser i publikację.
+
+Zgoda została zużyta przez jeden request `…:topics:1` o koszcie `0.013128 USD`. Nie obejmuje żadnego kolejnego requestu ani publikacji; Etap 2 i LEVEL_3 pozostają niezamknięte.
+
+## 2026-07-23 — Człowiek formalnie zamknął Etap 2
+
+Po niezależnym werdykcie `APPROVE WITH MINOR/P2 — ETAP 2 MAY BE FORMALLY CLOSED` koordynator ustanowił `ETAP 2 — CLOSED`. Przyjął trzy pozostające P2 jako nieblokujące: proceduralne WAL/SHM, minimalny JSON raportu i historyczny ledger legacy poza zakończonym runem.
+
+Nie podniósł poziomu autonomii i nie dopuścił następnej akcji. L1 pozostaje aktywne, LEVEL_3 niepotwierdzone, publikacja niezweryfikowana; rozpoczęcie Etapu 3, kolejne live i publikacja wymagają osobnych decyzji właściciela.

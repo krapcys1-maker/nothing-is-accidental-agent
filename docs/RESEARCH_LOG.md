@@ -288,3 +288,11 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Research/provider:** zero web search, DNS/HTTP, API, realnego SDK, provider requestów i produkcyjnych tematów; wyłącznie fake callery oraz nowe temp SQLite.
 - **Dowód:** 33 nowe przypadki, collect/full `1854/1854`, 0 skipped/xfail; istniejący research controlled-live i pozostałe composition roots pozostają zielone.
 - **Koszt:** `0.000000 USD`; controlled-live nie wykonano, historyczny ledger bez zmian.
+
+## 2026-07-23 — Pierwszy realny controlled-live TOPIC_GENERATION
+
+- **Tożsamość:** job `topic-generation-037eb2d3db158a70791e30064ad95403`, request `…:topics:1`, run `4cf8c448-5358-43c6-9d47-e5daf6d0f040`, intent `019b1022…c1d`.
+- **Request:** dokładnie jeden HTTP 200 do Anthropic, model `claude-sonnet-5`, 2 kandydatów, max 1500 tokenów, timeout 60 s, zero retry i zero web search.
+- **Usage/koszt:** 219 input, 1269 output, cache read/write `0/0`, search `0`; `0.013128 USD` przy capie `0.024303 USD`.
+- **Wynik:** job `DONE`, run `SUCCESS`, attempt #1 `SETTLED`, approval consumed, usage count 1, reconciliation false. Utworzono topics `20` i `21`; selected `21` — „Why Your Flight's Gate Number Isn't Random: The Hidden Logistics of Airport Gate Assignment”.
+- **Granice:** nie wykonano Fetch, browsera, publikacji, maintenance, retry ani attemptu #2; flagi wróciły fail-closed.

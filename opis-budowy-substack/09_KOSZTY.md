@@ -264,3 +264,7 @@ Pełna suita 1572, cztery partycje exact-once oraz harnessy E2-C `13/13` i E2-B 
 ## 2026-07-22 — Targetowany entrypoint topic-generation: 0 USD
 
 33 nowe testy i pełna suita 1854 użyły tylko fake callerów i nowych temp SQLite. Nowy koszt: `0.000000 USD`; nie wykonano controlled-live, API, SDK, sieci, browsera, publikacji ani migracji. Trzy syntetyczne rows utworzone chwilowo przez błędną ścieżkę fake fixture usunięto — nie były actual usage i nie zmieniają ledgeru.
+
+## 2026-07-23 — Pierwszy targetowany TOPIC_GENERATION live: 0,013128 USD
+
+Przed requestem estymata wynosiła `0.016202 USD`, pesymistyczny koszt i cap `0.024303 USD`. Rzeczywiste usage: 219 input, 1269 output, cache `0/0`, web search `0`; actual `0.013128 USD`. Dzienny ledger po operacji: `0.013128 USD`; miesięczny runtime ledger: `1.200044 USD`. Nie było retry ani drugiego attemptu.

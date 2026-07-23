@@ -642,3 +642,16 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Decyzja człowieka:** dodać bezpieczny publiczny controlled-live root dla dokładnie jednego istniejącego i wcześniej zatwierdzonego joba `TOPIC_GENERATION`; wykorzystać istniejące `target_job_id`/`claim_specific_job` oraz controlled-live policy/recovery, bez zmiany generatora, scoringu, providera, pricingu, migracji 0020 i durable lifecycle poza koniecznymi zależnościami.
 - **Twarde granice:** nie wykonywać controlled-live, nie tworzyć produkcyjnego joba/approvalu, nie wywoływać realnego API/SDK/sieci/browsera, nie publikować, nie migrować produkcji i nie wykonywać stage/commit/push/PR/merge. Produkcja wyłącznie `mode=ro&immutable=1`; testy wyłącznie na nowych temp DB i fake callerach.
 - **Wymagany status:** implementer może ogłosić tylko `CANDIDATE COMPLETE — READY FOR INDEPENDENT REVIEW`. Etap 2 pozostaje `IN PROGRESS`, a LEVEL_3 readiness nie jest potwierdzona. Każdy realny request nadal wymaga osobnej jawnej zgody właściciela.
+
+## 2026-07-23 — Właściciel autoryzował dokładnie jeden controlled-live TOPIC_GENERATION
+
+- **Jawna decyzja człowieka:** przygotować i wykonać dokładnie jeden request na `main` `a4e314ff1d9a9ac6bd24fdcdf159ca3e24356916` dla `nothing_is_accidental`, modelu `claude-sonnet-5`, dwóch kandydatów, 1500 max tokens, timeoutu 60 s, bez retry, web search, browsera i publikacji.
+- **Granica finansowa/czasowa:** cap `0.024303 USD`; jednorazowy approval ważny najwyżej 15 minut. Faktycznie zapisany approval `1` był ważny 13:59.723 i został zużyty po 56.898 s.
+- **Wynik:** decyzję skonsumował request `topic-generation-037eb2d3db158a70791e30064ad95403:topics:1`; koszt `0.013128 USD`; kolejny request nie jest autoryzowany.
+
+## 2026-07-23 — Koordynator formalnie zamknął Etap 2
+
+- **Decyzja człowieka:** przyjąć wynik niezależnego post-live review `APPROVE WITH MINOR/P2 — ETAP 2 MAY BE FORMALLY CLOSED` i ustanowić `ETAP 2 — CLOSED` (ADR-113).
+- **Podstawa:** zmergowany `main` `a4e314ff1d9a9ac6bd24fdcdf159ca3e24356916`; jeden targetowany controlled-live job/request/run zakończony `SETTLED`/`DONE`/`SUCCESS`, jeden usage, koszt `0.013128 USD` poniżej capa `0.024303 USD`, approval consumed, flagi fail-closed, bez reconciliation.
+- **Przyjęte P2:** proceduralne sidecary WAL/SHM, minimalny JSON raportu i historyczny ledger legacy poza tym runem pozostają w backlogu i nie blokują zamknięcia.
+- **Granice decyzji:** L1 pozostaje `ACTIVE`; LEVEL_3 = `NOT CONFIRMED`; publikacja nie została zweryfikowana. Kolejne live lub publikacja i rozpoczęcie Etapu 3 wymagają osobnej decyzji właściciela.
