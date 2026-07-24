@@ -431,3 +431,11 @@ Logical Fable 5/Sonnet 5 pozostaje decyzją produktu, a provider, techniczny mod
 SDK powstaje leniwie, nie retry'uje i ma timeout nie większy niż 30 sekund. To pozwoliło zachować brak dedykowanego heartbeat w C3: realny root nie istnieje, a operacja mieści się w 60-sekundowym lease. Decyzję trzeba powtórzyć przed C5 lub dłuższym callem.
 
 Kandydat ma status `C3 CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`. Nie jest zacommitowany ani zmergowany i nie autoryzuje API, produkcyjnej migracji, controlled-live ani artykułu.
+
+## 2026-07-24 — WAVE C3: kod zmergowany i zweryfikowany post-merge
+
+Kandydat C3 z 2026-07-23 nie jest już ostatnim słowem. Pełny niezależny review wydał `APPROVE WITH MINOR/P2`; jedna poprawka MINOR podniosła wspólny zestaw C2+C3 z `47/47` na `48/48`; wąski re-review wydał `APPROVE`. Dopiero wtedy commit implementacji `a3096355ab0a648805099f2bfd30ab5d87600fbc` został zmergowany jako PR #24 (merge commit `81936476ad4425e959730f4425c979f1671ef4f1`, rodzice `54c761d0d6c1b7b7402d89e9c24db169b694f00a` i `a3096355…`), a `main` zsynchronizowano wyłącznie fast-forward.
+
+Po merge na `main`: C3 `26/26`, C2+C3 `48/48`, regresja `463/463`, pełna suita `1971/1971`, collect i unikalne case-sensitive `1971`, zero duplikatów/skipped/xfail/errors, `compileall` i `git diff --check` czyste; koszt `0.000000 USD`. Produkcyjna baza pozostała nietknięta na `0020`, choć kod wymaga już `0023` — migracji świadomie nie wykonano.
+
+Granica jest wciąż wyraźna: to jest `C3 CODE MERGED — POST-MERGE VERIFIED — AWAITING DOCUMENTATION SYNC MERGE`, nie `C3 FULLY CLOSED`. Formalne zamknięcie C3 nastąpi dopiero po niezależnym review i merge dokumentacyjnego PR synchronizującego ten stan. Osiem P2 pozostaje otwartych, a P2-1/P2-2/P2-3 są wymaganymi gate'ami przed C5; C4 i C5 nadal nie ruszyły, a żaden realny request, artykuł ani publikacja nie są autoryzowane.

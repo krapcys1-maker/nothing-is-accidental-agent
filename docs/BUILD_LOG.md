@@ -1043,3 +1043,12 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Koszt:** `0.000000 USD`; tylko fake SDK/callery i nowe temp SQLite.
 - **Produkcja/prywatność:** `data/agent.db` wyłącznie `mode=ro&immutable=1`, nadal `0020`, SHA/size/sidecary bez zmian; prywatny raw style source zachował SHA/size, gitignore i brak track/stage. Zero sieci/API/browsera/publikacji/controlled-live.
 - **Następny krok:** wyłącznie niezależny review C3. Status implementera: `C3 CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; C4/C5 nie są rozpoczęte.
+
+### [2026-07-24] Etap 3 / WAVE C3 — post-merge documentation sync — [CODE MERGED — POST-MERGE VERIFIED]
+
+- **Zdarzenie:** kandydat C3 (wpis wyżej) przeszedł pełny niezależny review `APPROVE WITH MINOR/P2`, poprawkę MINOR podnoszącą wspólny zestaw C2+C3 z `47/47` na `48/48`, wąski re-review `APPROVE`, a następnie merge. Ten wpis dopisuje wynik post-merge i nie zmienia faktów wpisu kandydackiego.
+- **Git:** commit implementacji `a3096355ab0a648805099f2bfd30ab5d87600fbc` (`feat: add provider-ready content writer boundary`); PR #24; merge commit `81936476ad4425e959730f4425c979f1671ef4f1` (rodzice `54c761d0d6c1b7b7402d89e9c24db169b694f00a` i `a3096355ab0a648805099f2bfd30ab5d87600fbc`); `main` zsynchronizowany wyłącznie ff-only do `81936476…`.
+- **Post-merge na `main`:** C3 `26/26`; C2+C3 `48/48`; zatwierdzona regresja `463/463`; pełna suita `1971/1971`; collected/exact case-sensitive unique `1971`; duplikaty/skipped/xfail/errors `0`; `compileall` i `git diff --check` PASS. Koszt `0.000000 USD`.
+- **Produkcja/prywatność:** `data/agent.db` wyłącznie `mode=ro&immutable=1`, byte-identical na `0020` (SHA `91f593923f3ca36cd8d2c816219e551b0ff231bc3149d6d584b025465f656a1f`, `700416 B`, WAL `0 B`/SHM `32768 B`/journal brak); kod na `main` wymaga `0023`; migracji produkcji NIE wykonano. Prywatny raw style source zachował SHA/size, gitignore i brak track/stage. Zero sieci/API/SDK/browsera/publikacji/controlled-live.
+- **Status:** `C3 CODE MERGED — POST-MERGE VERIFIED — AWAITING DOCUMENTATION SYNC MERGE`. `C3 FULLY CLOSED` nastąpi dopiero po niezależnym review i merge dokumentacyjnego PR. Osiem P2 pozostaje otwartych; P2-1/P2-2/P2-3 są gate'ami przed C5; C4/C5 `NOT STARTED`.
+- **Następny krok:** wąski niezależny review dokumentacyjnego PR i jego merge.
