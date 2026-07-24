@@ -279,3 +279,9 @@ Nie podniósł poziomu autonomii i nie dopuścił następnej akcji. L1 pozostaje
 ## 2026-07-23 — Autoryzacja WAVE C2
 
 Właściciel zlecił wyłącznie offline pipeline do `PENDING_APPROVAL`, wskazał prywatne źródło stylu oraz logiczny routing Fable 5/Sonnet 5. Jednocześnie zabronił realnego API, sieci, browsera, publikacji, migracji produkcji, prawdziwego artykułu i rozpoczęcia C3–C5. Wynik implementera ma status kandydacki do niezależnego review.
+
+## 2026-07-23 — Autoryzacja WAVE C3
+
+Właściciel zezwolił wyłącznie na provider-ready granicę używaną offline z fake SDK i callerami. Wprost zachował Fable 5/Sonnet 5 jako logiczny routing, zakazał fallbacku i wymagał, by brak provider/model/pricing/secret blokował jeszcze przed klientem.
+
+Zabronione pozostały: realne API i sieć, browser, publikacja, controlled-live, pierwszy prawdziwy artykuł, approval UI, migracja produkcji, C4/C5 oraz wszystkie operacje Git. Implementer może zgłosić tylko kandydata oczekującego na niezależny review.

@@ -474,3 +474,11 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co powinien pokazać:** zanonimizowany flow Research Card `PROCEED` → frozen evidence → Content Plan → Article/Note Brief → fake writer intent → canonical attempt/zero-cost usage → draft → 9 evaluations → opcjonalnie jedna poprawka → `PENDING_APPROVAL`; route keys Fable 5/Sonnet 5 i jawne `UNVERIFIED` dla technicznych IDs/pricing.
 - **Dowód tekstowy zastępczy:** C2 `22/22`; full/collect/exact unique `1945/1945`; zero duplikatów, skipped i xfail; produkcja nadal `0020`; koszt `0.000000 USD`.
 - **Czego nie może pokazać:** raw style source, `.env`, sekrety, pełne lokalne ścieżki, produkcyjne rekordy, prawdziwy artykuł, dane API ani sugestię approvalu/merge/C3–C5.
+
+## 2026-07-23 — WAVE C3 provider-ready writer candidate
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ zakres jawnie zabrania browsera, a terminal zawiera lokalne ścieżki i pełne fingerprinty.
+- **Co powinien pokazać:** zanonimizowany flow logical ARTICLE/NOTE route → jawna konfiguracja provider/model/pricing → deterministic prompt fingerprint → jeden fake SDK/caller call → append-only provider result → jedno usage/settlement → draft/evaluations → `PENDING_APPROVAL`; obok fail-closed missing config przed SDK oraz call-returned/przed-result → `NEEDS_RECONCILIATION` bez drugiego calla.
+- **Dowód tekstowy zastępczy:** C3 `26/26`; regresja `463/463`; full/collect/exact unique `1971/1971`; exact duplicates/skipped/xfail/errors `0`; compile/diff PASS; koszt `0.000000 USD`.
+- **Stan produkcji na kadrze:** wyłącznie skrócony SHA `91f593…56a1f`, schema `0020`, `700416 B`, integrity `ok`, FK `0`, WAL `0 B`, SHM `32768 B`, journal absent; jawne `mode=ro&immutable=1`, `PRODUCTION MIGRATION NOT EXECUTED`.
+- **Czego nie może pokazać:** raw style source, `.env`, secret/provider key, prompt/body/draft, pełnych hashy/ścieżek, danych SQLite ani fake fixture. Nie może sugerować niezależnego approvalu, commita/merge, realnego API, controlled-live, prawdziwego artykułu, C4/C5 ani zamknięcia C3.

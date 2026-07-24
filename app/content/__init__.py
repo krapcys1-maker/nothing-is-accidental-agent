@@ -1,8 +1,10 @@
 """Stage 3 content package.
 
-Wave C1 remains the durable lifecycle foundation. Wave C2 adds a deterministic,
-fake-only planner/writer/evaluation pipeline ending at ``PENDING_APPROVAL``.
-No real provider, browser, approval UI or publication adapter is exposed.
+Wave C1 remains the durable lifecycle foundation. Wave C2 adds the deterministic
+planner/evaluation pipeline. Wave C3 adds a provider-ready writer boundary that
+is exercised only with fake callers and SDKs. Both end at ``PENDING_APPROVAL``.
+No real-provider composition root, browser, approval UI or publication adapter
+is exposed.
 """
 
 from app.content.foundation import (

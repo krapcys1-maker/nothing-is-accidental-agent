@@ -1,6 +1,7 @@
-"""Versioned, fail-closed logical routing for the offline C2 writer."""
+"""Versioned routing that never confuses a logical route with an API model."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,30 @@ class ContentRoutingError(RuntimeError):
 
 
 class RealContentWriterUnavailable(ContentRoutingError):
-    """C2 intentionally has no reachable real provider composition root."""
+    """The supported C3 composition roots do not authorize a real call."""
+
+
+class MissingContentWriterConfiguration(RealContentWriterUnavailable):
+    pass
+
+
+class MissingContentWriterPricing(RealContentWriterUnavailable):
+    pass
+
+
+class ContentWriterProviderUnavailable(RealContentWriterUnavailable):
+    pass
+
+
+@dataclass(frozen=True)
+class ResolvedWriterRoute:
+    content_type: ContentType
+    logical_route_key: str
+    provider: str
+    api_model_id: str
+    pricing_profile: str
+    configuration_status: str
+    fallback: str
 
 
 def default_content_routing_path(project_root: Path) -> Path:
@@ -29,8 +53,10 @@ def load_content_route(path: Path, content_type: ContentType) -> RouteContract:
         raise ContentRoutingError("Versioned content routing configuration is unavailable.") from exc
     if not isinstance(raw, dict) or set(raw) != {"version", "mode", "fallback", "routes"}:
         raise ContentRoutingError("Content routing document has an unsupported shape.")
-    if raw["mode"] != "FAKE_ONLY" or raw["fallback"] != "FORBIDDEN":
-        raise ContentRoutingError("C2 routing must be FAKE_ONLY with fallback FORBIDDEN.")
+    if raw["mode"] not in {"FAKE_ONLY", "PROVIDER_READY"}:
+        raise ContentRoutingError("Content routing mode is unsupported.")
+    if raw["fallback"] != "FORBIDDEN":
+        raise ContentRoutingError("Content routing fallback must be FORBIDDEN.")
     routes = raw["routes"]
     if not isinstance(routes, dict) or set(routes) != {"ARTICLE", "NOTE"}:
         raise ContentRoutingError("Content routing must define exactly ARTICLE and NOTE.")
@@ -58,8 +84,38 @@ def load_content_route(path: Path, content_type: ContentType) -> RouteContract:
     )
 
 
+def resolve_provider_route(route: RouteContract) -> ResolvedWriterRoute:
+    """Resolve a complete technical route or fail before any client exists."""
+    if route.provider == "UNVERIFIED" or route.api_model_id == "UNVERIFIED":
+        raise MissingContentWriterConfiguration(
+            "Provider and technical API model ID must be explicitly configured."
+        )
+    if route.pricing_profile == "UNVERIFIED":
+        raise MissingContentWriterPricing(
+            "Writer pricing profile must be explicitly configured."
+        )
+    if route.availability != "CONFIGURED":
+        raise ContentWriterProviderUnavailable(
+            "Writer provider is not configured as available for this runtime."
+        )
+    if route.configuration_status != "CONFIGURED":
+        raise MissingContentWriterConfiguration(
+            "Writer route configuration is incomplete."
+        )
+    return ResolvedWriterRoute(
+        content_type=route.content_type,
+        logical_route_key=route.route_key,
+        provider=route.provider,
+        api_model_id=route.api_model_id,
+        pricing_profile=route.pricing_profile,
+        configuration_status=route.configuration_status,
+        fallback=route.fallback,
+    )
+
+
 def resolve_real_content_writer(_route: RouteContract) -> Any:
+    resolve_provider_route(_route)
     raise RealContentWriterUnavailable(
-        "Real content writer is unreachable in C2: provider, API model ID, "
-        "availability and pricing are UNVERIFIED."
+        "C3 provides an adapter boundary but no supported real-provider "
+        "composition root. Controlled-live belongs to C5."
     )

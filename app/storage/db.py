@@ -18,12 +18,16 @@ EVIDENCE_RESEARCH_SCHEMA_VERSION = "0019_evidence_research_approvals"
 TOPIC_GENERATION_SCHEMA_VERSION = "0020_topic_generation_lifecycle"
 CONTENT_FOUNDATION_SCHEMA_VERSION = "0021_durable_content_foundation"
 CONTENT_PIPELINE_SCHEMA_VERSION = "0022_offline_content_pipeline"
-RUNTIME_SCHEMA_VERSION = CONTENT_PIPELINE_SCHEMA_VERSION
+CONTENT_WRITER_SCHEMA_VERSION = "0023_provider_ready_writer"
+RUNTIME_SCHEMA_VERSION = CONTENT_WRITER_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
     # in that same transaction; the runner verifies rather than duplicates it.
     CONTENT_FOUNDATION_SCHEMA_VERSION,
+    # 0023 rebuilds the C2 intent/attempt tables to preserve rows while
+    # widening their exact provider metadata contract.
+    CONTENT_WRITER_SCHEMA_VERSION,
 })
 _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0007_candidate_attempts",
@@ -617,5 +621,19 @@ def migrate_0021_to_0022(
         db_path,
         source_version=CONTENT_FOUNDATION_SCHEMA_VERSION,
         target_version=CONTENT_PIPELINE_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0022_to_0023(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the offline C3 provider-ready writer persistence schema."""
+    return _migrate_single_step(
+        db_path,
+        source_version=CONTENT_PIPELINE_SCHEMA_VERSION,
+        target_version=CONTENT_WRITER_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )

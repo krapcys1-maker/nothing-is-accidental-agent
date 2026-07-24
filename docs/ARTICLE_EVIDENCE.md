@@ -556,3 +556,12 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Lokalna analiza nie znalazła wiarygodnego zestawu odrębnych Notes. Zamiast fabrykować pochodzenie, profil Notes ma jawny status `PROVISIONAL`.
 - Profile opisują ruch od konkretu do systemu, rytm, evidence, kontrargument i zakończenie, ale zakazują imitowania konkretnego autora, kopiowania charakterystycznych fraz i tworzenia fałszywej autobiografii.
 - Cytowalna zasada: „Prywatne wzorce mają nauczyć system kierunku, nie podróżować z każdym promptem.”
+
+## 2026-07-23 — Materiał: „Odpowiedź modelu nie jest jeszcze szkicem”
+
+- C3 rozdziela trzy fakty, które łatwo zlać w jeden: logical route produktu, techniczna konfiguracja providera oraz trwały wynik próby. Nazwa „Fable 5” nie staje się przez to API model ID, a brak modelu lub pricingu zatrzymuje flow przed SDK.
+- Caller może zwrócić tekst i usage, lecz pipeline nie uznaje jeszcze sukcesu. Najpierw powstaje typowany append-only result: JSON musi przejść zamknięty schema contract, evidence IDs muszą należeć do zamrożonego manifestu, stop reason nie może oznaczać truncation, a route/model/provider muszą zgadzać się z intentem.
+- Najważniejsze okno awarii jest między powrotem callera a utrwaleniem rezultatu. System nie zgaduje, czy wolno powtórzyć kosztowny efekt; zostawia attempt do reconciliation i content w `NEEDS_VERIFICATION`. Gdy result zdążył się utrwalić, lecz settlement nie, restart kończy księgowanie bez drugiego calla.
+- Prywatny korpus stylu nie podróżuje w promptach. Runtime używa wyłącznie krótkich profili pochodnych, a kanoniczny prompt zakazuje fikcyjnej autobiografii i traktuje źródła internetowe jako dane, nigdy instrukcje.
+- Dowód kandydacki: 26/26 C3, 463/463 regresji i 1971/1971 pełnej suity; wszystko na fake SDK/caller i temp SQLite, za `0.000000 USD`. C3 czeka na niezależny review; pierwszy realny tekst pozostaje zadaniem C5.
+- Cytowalna zasada: „Model może zwrócić słowa. Dopiero walidacja, ledger i recovery czynią z nich bezpieczny szkic.”

@@ -66,6 +66,7 @@ from app.content.foundation import (
     canonicalize_content_job_payload,
 )
 from app.content.pipeline import ContentPipelineSummary, run_offline_content_pipeline
+from app.content.contracts import RouteContract
 from app.content.writer import FakeContentWriter, WriterPort
 
 
@@ -183,6 +184,7 @@ class ContentPipelineCallable(Protocol):
         lease_owner: str,
         project_root: object,
         writer: WriterPort | None = None,
+        route_override: RouteContract | None = None,
     ) -> ContentPipelineSummary: ...
 
 
@@ -286,6 +288,7 @@ class JobDispatcher:
         allow_real_topic_generation: bool = True,
         content_pipeline: ContentPipelineCallable = run_offline_content_pipeline,
         content_writer: WriterPort | None = None,
+        content_route_override: RouteContract | None = None,
     ) -> None:
         self._settings = settings
         self._storage = storage
@@ -303,6 +306,7 @@ class JobDispatcher:
         self._allow_real_topic_generation = allow_real_topic_generation
         self._content_pipeline = content_pipeline
         self._content_writer = content_writer or FakeContentWriter()
+        self._content_route_override = content_route_override
 
     def dispatch(
         self,
@@ -339,7 +343,7 @@ class JobDispatcher:
         raise UnsupportedJobError("Unsupported job kind for the offline worker.")
 
     def _dispatch_content(self, job: Job, lease_owner: str) -> DispatchResult:
-        """Run the held, targeted, fake-only C2 composition root."""
+        """Run the held C3 offline root; no real provider is authorized."""
         if job.workflow not in (WorkflowType.ARTICLE, WorkflowType.NOTE):
             raise UnsupportedJobError("CONTENT jobs support only ARTICLE or NOTE.")
         try:
@@ -348,12 +352,12 @@ class JobDispatcher:
             raise PayloadValidationError("CONTENT payload contract is invalid.") from exc
         if payload["execution_mode"] != ContentExecutionMode.OFFLINE_PIPELINE.value:
             raise UnsupportedJobError(
-                "Dispatcher accepts only the C2 OFFLINE_PIPELINE mode."
+                "Dispatcher accepts only the C3 OFFLINE_PIPELINE mode."
             )
         if payload["provider_enabled"] is not False:
             raise PolicyDeniedError(PolicyDecision.block(
                 "CONTENT_REAL_PROVIDER_FORBIDDEN",
-                "C2 does not expose a real content provider.",
+                "C3 exposes only fake callers/SDKs; controlled-live is unavailable.",
             ))
         summary = self._content_pipeline(
             job,
@@ -362,6 +366,7 @@ class JobDispatcher:
             lease_owner=lease_owner,
             project_root=self._settings.project_root,
             writer=self._content_writer,
+            route_override=self._content_route_override,
         )
         if summary.status is ContentStatus.PENDING_APPROVAL:
             return DispatchResult.workflow_succeeded(run_id=summary.run_id)

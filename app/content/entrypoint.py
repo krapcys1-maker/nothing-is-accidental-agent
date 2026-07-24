@@ -1,4 +1,4 @@
-"""Explicit local C2 entrypoint for one targeted fake-only content job."""
+"""Explicit local entrypoint for one targeted offline content job."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,6 +9,7 @@ from app.content.foundation import (
     ContentPreparationRequest,
     ContentType,
 )
+from app.content.contracts import RouteContract
 from app.content.writer import FakeContentWriter, WriterPort
 from app.core.clock import Clock, SystemClock
 from app.core.config import Settings
@@ -35,9 +36,10 @@ def run_content_offline(
     job_id: str | None = None,
     lease_owner: str | None = None,
     writer: WriterPort | None = None,
+    route_override: RouteContract | None = None,
     clock: Clock | None = None,
 ) -> OfflineContentEntrypointResult:
-    """Prepare and execute one named C2 job; never scans the CONTENT queue."""
+    """Prepare and execute one named offline job; never scans the CONTENT queue."""
     clock = clock or SystemClock()
     storage = SqliteStorage.open(settings.db_path)
     try:
@@ -68,6 +70,7 @@ def run_content_offline(
             allow_real_research=False,
             allow_real_topic_generation=False,
             content_writer=writer or FakeContentWriter(),
+            content_route_override=route_override,
         )
         worker = Worker(
             storage=storage,

@@ -38,7 +38,11 @@ from app.content.contracts import (
     ContentPlan,
     DraftEvaluation,
     FakeDraft,
+    WriterCallMode,
+    WriterFailure,
     WriterIntent,
+    WriterResult,
+    WriterSuccess,
 )
 from app.core.clock import Clock
 from app.core.money import decimal_from, quantize_usd, sum_usd
@@ -2085,20 +2089,20 @@ class SqliteStorage:
             raise
 
     def get_content_pipeline_state(self, job_id: str) -> dict[str, object]:
-        """Read the complete durable C2 checkpoint set for one content job."""
+        """Read the complete durable C2/C3 checkpoint set for one content job."""
         job = self.conn.execute(
             "SELECT * FROM jobs WHERE id=? AND kind='CONTENT'", (job_id,),
         ).fetchone()
         if job is None:
             raise ContentFoundationError(
-                "CONTENT_JOB_MISSING", "C2 pipeline job does not exist.",
+                "CONTENT_JOB_MISSING", "Content pipeline job does not exist.",
             )
         content = self.conn.execute(
             "SELECT * FROM content_items WHERE job_id=?", (job_id,),
         ).fetchone()
         if content is None:
             raise ContentFoundationError(
-                "CONTENT_RELATION_MISSING", "C2 pipeline content item is missing.",
+                "CONTENT_RELATION_MISSING", "Content pipeline item is missing.",
             )
         plan = self.conn.execute(
             "SELECT * FROM content_plans WHERE content_id=?", (content["id"],),
@@ -2114,6 +2118,17 @@ class SqliteStorage:
             "SELECT wa.*,pa.status,pa.actual_cost_usd,pa.request_started_at,"
             "pa.settled_at FROM content_writer_attempts wa "
             "JOIN provider_attempts pa ON pa.request_id=wa.request_id "
+            "WHERE wa.content_id=? ORDER BY wa.attempt_no",
+            (content["id"],),
+        ).fetchall()
+        results = self.conn.execute(
+            "SELECT * FROM content_writer_results WHERE content_id=? "
+            "ORDER BY attempt_no",
+            (content["id"],),
+        ).fetchall()
+        usages = self.conn.execute(
+            "SELECT mu.* FROM model_usage mu "
+            "JOIN content_writer_attempts wa ON wa.request_id=mu.request_id "
             "WHERE wa.content_id=? ORDER BY wa.attempt_no",
             (content["id"],),
         ).fetchall()
@@ -2137,6 +2152,8 @@ class SqliteStorage:
             "brief": mapping(brief),
             "intents": [mapping(row) for row in intents],
             "attempts": [mapping(row) for row in attempts],
+            "results": [mapping(row) for row in results],
+            "usages": [mapping(row) for row in usages],
             "drafts": [mapping(row) for row in drafts],
             "evaluations": [mapping(row) for row in evaluations],
         }
@@ -2208,7 +2225,7 @@ class SqliteStorage:
     def record_content_writer_intent(
         self, execution: JobExecutionContext, intent: WriterIntent,
     ) -> str:
-        """Persist one of the at most two immutable fake writer intents."""
+        """Persist one of the at most two immutable C3 writer intents."""
         intent_json = intent.canonical_preimage()
         fingerprint = intent.fingerprint()
         try:
@@ -2250,30 +2267,37 @@ class SqliteStorage:
                 )
             inserted = self.conn.execute(
                 "INSERT INTO content_writer_intents (intent_id,job_id,run_id,"
-                "content_id,account_id,content_type,attempt_no,call_mode,"
+                "intent_schema_version,content_id,account_id,content_type,"
+                "attempt_no,call_mode,"
                 "route_key,route_config_version,route_config_fingerprint,"
-                "provider_status,api_model_id_status,availability_status,"
-                "pricing_status,plan_fingerprint,brief_sha256,"
+                "provider,api_model_id,availability_status,pricing_profile,"
+                "plan_fingerprint,brief_sha256,"
                 "frozen_input_sha256,evidence_manifest_sha256,style_profile_id,"
-                "negative_style_profile_id,rewrite_of_draft_fingerprint,"
-                "rewrite_feedback_json,max_cost_usd,intent_json,"
-                "intent_fingerprint,created_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "negative_style_profile_id,prompt_fingerprint,max_input_tokens,"
+                "max_context_tokens,max_output_tokens,timeout_seconds,"
+                "rewrite_of_draft_fingerprint,rewrite_feedback_json,max_cost_usd,"
+                "intent_json,intent_fingerprint,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     intent.intent_id, intent.job_id, intent.run_id,
-                    intent.content_id, intent.account_id,
+                    intent.schema_version, intent.content_id, intent.account_id,
                     intent.content_type.value, intent.attempt_no,
-                    intent.call_mode, intent.route.route_key,
+                    intent.call_mode.value, intent.route.route_key,
                     intent.route.config_version,
                     intent.route.config_fingerprint, intent.route.provider,
                     intent.route.api_model_id, intent.route.availability,
                     intent.route.pricing_profile, intent.plan_fingerprint,
                     intent.brief_sha256, intent.frozen_input_sha256,
                     intent.evidence_manifest_sha256, intent.style_profile_id,
-                    intent.negative_style_profile_id,
+                    intent.negative_style_profile_id, intent.prompt_fingerprint,
+                    intent.limits.max_input_tokens,
+                    intent.limits.max_context_tokens,
+                    intent.limits.max_output_tokens,
+                    intent.limits.timeout_seconds,
                     intent.rewrite_of_draft_fingerprint,
                     canonical_json(intent.rewrite_feedback),
-                    intent.max_cost_usd, intent_json, fingerprint, current_ts,
+                    intent.limits.max_cost_usd, intent_json, fingerprint,
+                    current_ts,
                 ),
             )
             if inserted.rowcount != 1:
@@ -2288,12 +2312,12 @@ class SqliteStorage:
                 self._rollback_preserving_primary(primary, self.conn.rollback)
             raise
 
-    def begin_fake_content_writer_attempt(
+    def begin_content_writer_attempt(
         self, execution: JobExecutionContext, attempt_no: int,
     ) -> ProviderAttempt:
-        """Create the canonical fake attempt without authorizing any transport."""
+        """Create one canonical writer attempt before any caller is invoked."""
         if attempt_no not in (1, 2):
-            raise ValueError("C2 permits only writer attempt 1 or 2.")
+            raise ValueError("Content writer permits only attempt 1 or 2.")
         request_id = self._provider_request_id(
             execution.job_id, CONTENT_PROVIDER_STAGE, attempt_no,
         )
@@ -2306,21 +2330,42 @@ class SqliteStorage:
                 "WHERE job_id=? AND run_id=? AND attempt_no=?",
                 (execution.job_id, execution.run_id, attempt_no),
             ).fetchone()
+            if intent is None:
+                raise ContentFoundationError(
+                    "CONTENT_WRITER_INTENT_REQUIRED",
+                    "Canonical writer attempt requires its durable intent.",
+                )
+            mode = WriterCallMode(str(intent["call_mode"]))
+            if mode is WriterCallMode.CONTROLLED_PROVIDER:
+                raise ContentFoundationError(
+                    "CONTENT_CONTROLLED_PROVIDER_NOT_AUTHORIZED",
+                    "C3 does not authorize a controlled provider attempt.",
+                )
             if (
-                intent is None
-                or intent["call_mode"] != "FAKE"
-                or float(intent["max_cost_usd"]) != 0.0
-                or any(
-                    intent[field] != "UNVERIFIED"
-                    for field in (
-                        "provider_status", "api_model_id_status",
-                        "availability_status", "pricing_status",
+                float(intent["max_cost_usd"]) != 0.0
+                or (
+                    mode is WriterCallMode.FAKE
+                    and any(
+                        intent[field] != "UNVERIFIED"
+                        for field in (
+                            "provider", "api_model_id",
+                            "availability_status", "pricing_profile",
+                        )
+                    )
+                )
+                or (
+                    mode is WriterCallMode.PROVIDER_READY_OFFLINE
+                    and (
+                        intent["provider"] == "UNVERIFIED"
+                        or intent["api_model_id"] == "UNVERIFIED"
+                        or intent["availability_status"] != "CONFIGURED"
+                        or intent["pricing_profile"] == "UNVERIFIED"
                     )
                 )
             ):
                 raise ContentFoundationError(
-                    "CONTENT_FAKE_INTENT_REQUIRED",
-                    "Canonical fake attempt requires a zero-cost C2 writer intent.",
+                    "CONTENT_WRITER_INTENT_INVALID",
+                    "Writer attempt configuration is not fail-closed.",
                 )
             existing = self.conn.execute(
                 "SELECT p.* FROM provider_attempts p "
@@ -2335,8 +2380,8 @@ class SqliteStorage:
                     ProviderAttemptStatus.SETTLED.value,
                 ):
                     raise ContentFoundationError(
-                        "CONTENT_FAKE_ATTEMPT_UNSAFE",
-                        "Existing fake attempt is not safely resumable.",
+                        "CONTENT_WRITER_ATTEMPT_UNSAFE",
+                        "Existing writer attempt is not safely resumable.",
                     )
                 self.conn.commit()
                 return self._provider_attempt_from_row(existing)
@@ -2347,14 +2392,22 @@ class SqliteStorage:
                 (
                     request_id, intent["intent_id"], execution.job_id,
                     execution.run_id, intent["content_id"], intent["account_id"],
-                    CONTENT_PROVIDER_STAGE, attempt_no, "FAKE",
-                    "fake-content-writer", intent["route_key"], current_ts,
+                    CONTENT_PROVIDER_STAGE, attempt_no, mode.value,
+                    (
+                        "fake-content-writer"
+                        if mode is WriterCallMode.FAKE else intent["provider"]
+                    ),
+                    (
+                        intent["route_key"]
+                        if mode is WriterCallMode.FAKE else intent["api_model_id"]
+                    ),
+                    current_ts,
                 ),
             )
             if extension.rowcount != 1:
                 raise ContentFoundationError(
-                    "CONTENT_FAKE_EXTENSION_FAILED",
-                    "Fake writer attempt extension insert failed.",
+                    "CONTENT_WRITER_EXTENSION_FAILED",
+                    "Writer attempt extension insert failed.",
                 )
             # The historical canonical ledger has a positive reservation floor.
             # 0.000001 is a structural placeholder, never a cost or budget hold;
@@ -2381,10 +2434,16 @@ class SqliteStorage:
                 self._rollback_preserving_primary(primary, self.conn.rollback)
             raise
 
-    def mark_fake_content_writer_started(
+    def begin_fake_content_writer_attempt(
+        self, execution: JobExecutionContext, attempt_no: int,
+    ) -> ProviderAttempt:
+        """Compatibility wrapper retained for the closed C2 API."""
+        return self.begin_content_writer_attempt(execution, attempt_no)
+
+    def mark_content_writer_started(
         self, execution: JobExecutionContext, request_id: str,
     ) -> ProviderAttempt:
-        """Mark only the local fake boundary; never set external-effect state."""
+        """Persist the caller boundary for an offline writer attempt."""
         try:
             self.conn.execute("BEGIN IMMEDIATE")
             current_ts = self._job_execution_timestamp(execution)
@@ -2392,7 +2451,8 @@ class SqliteStorage:
             row = self.conn.execute(
                 "SELECT p.* FROM provider_attempts p "
                 "JOIN content_writer_attempts wa ON wa.request_id=p.request_id "
-                "WHERE p.request_id=? AND p.job_id=? AND wa.call_mode='FAKE'",
+                "WHERE p.request_id=? AND p.job_id=? "
+                "AND wa.call_mode IN ('FAKE','PROVIDER_READY_OFFLINE')",
                 (request_id, execution.job_id),
             ).fetchone()
             if row is None:
@@ -2410,8 +2470,8 @@ class SqliteStorage:
                 ProviderAttemptStatus.SETTLED.value,
             ):
                 raise ContentFoundationError(
-                    "CONTENT_FAKE_ATTEMPT_UNSAFE",
-                    "Fake writer attempt cannot cross the local boundary.",
+                    "CONTENT_WRITER_ATTEMPT_UNSAFE",
+                    "Writer attempt cannot cross the offline caller boundary.",
                 )
             persisted = self.conn.execute(
                 "SELECT * FROM provider_attempts WHERE request_id=?", (request_id,),
@@ -2419,6 +2479,92 @@ class SqliteStorage:
             assert persisted is not None
             self.conn.commit()
             return self._provider_attempt_from_row(persisted)
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def mark_fake_content_writer_started(
+        self, execution: JobExecutionContext, request_id: str,
+    ) -> ProviderAttempt:
+        """Compatibility wrapper retained for the closed C2 API."""
+        return self.mark_content_writer_started(execution, request_id)
+
+    def record_content_writer_result(
+        self,
+        execution: JobExecutionContext,
+        intent: WriterIntent,
+        result: WriterResult,
+    ) -> str:
+        """Persist the typed caller result before settlement or draft creation."""
+        result_json = result.canonical_preimage()
+        fingerprint = result.fingerprint()
+        request_id = self._provider_request_id(
+            execution.job_id, CONTENT_PROVIDER_STAGE, intent.attempt_no,
+        )
+        usage = result.usage
+        usage_json = (
+            None
+            if usage is None
+            else canonical_json(usage.model_dump(mode="json"))
+        )
+        outcome = result.status
+        failure_kind = (
+            result.kind.value if isinstance(result, WriterFailure) else None
+        )
+        draft_fingerprint = (
+            result.draft.fingerprint()
+            if isinstance(result, WriterSuccess) else None
+        )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            row = self._require_content_execution_fence(execution, current_ts)
+            if intent.content_id != int(row["id"]):
+                raise ContentFoundationError(
+                    "CONTENT_WRITER_RESULT_MISMATCH",
+                    "Writer result does not match the active content item.",
+                )
+            existing = self.conn.execute(
+                "SELECT * FROM content_writer_results WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    existing["intent_id"] == intent.intent_id
+                    and existing["result_json"] == result_json
+                    and existing["result_fingerprint"] == fingerprint
+                ):
+                    self.conn.commit()
+                    return fingerprint
+                raise ContentFoundationError(
+                    "CONTENT_WRITER_RESULT_CONFLICT",
+                    "A different immutable writer result already exists.",
+                )
+            inserted = self.conn.execute(
+                "INSERT INTO content_writer_results (request_id,intent_id,"
+                "job_id,run_id,content_id,attempt_no,outcome,failure_kind,"
+                "uncertain,provider,route_key,api_model_id,stop_reason,"
+                "provider_request_id,usage_json,draft_fingerprint,result_json,"
+                "result_fingerprint,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    request_id, intent.intent_id, execution.job_id,
+                    execution.run_id, intent.content_id, intent.attempt_no,
+                    outcome, failure_kind,
+                    int(result.uncertain) if isinstance(result, WriterFailure) else 0,
+                    result.provider, result.route_key, result.api_model_id,
+                    result.stop_reason, result.provider_request_id, usage_json,
+                    draft_fingerprint, result_json, fingerprint, current_ts,
+                ),
+            )
+            if inserted.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_WRITER_RESULT_INSERT_FAILED",
+                    "Writer result insert failed.",
+                )
+            self.conn.commit()
+            return fingerprint
         except BaseException as primary:
             if self.conn.in_transaction:
                 self._rollback_preserving_primary(primary, self.conn.rollback)
@@ -2567,7 +2713,10 @@ class SqliteStorage:
             current_ts = self._job_execution_timestamp(execution)
             row = self._require_content_execution_fence(execution, current_ts)
             draft = self.conn.execute(
-                "SELECT d.*,(SELECT count(*) FROM content_draft_evaluations e "
+                "SELECT d.*,"
+                "(SELECT wi.call_mode FROM content_writer_intents wi "
+                " WHERE wi.intent_id=d.intent_id) AS call_mode,"
+                "(SELECT count(*) FROM content_draft_evaluations e "
                 "WHERE e.draft_id=d.id) AS evaluation_count,"
                 "(SELECT count(*) FROM content_draft_evaluations e "
                 "WHERE e.draft_id=d.id AND e.result='PASS' AND e.decision='PASS') "
@@ -2602,7 +2751,7 @@ class SqliteStorage:
                 "attempt_no": int(draft["attempt_no"]),
                 "draft_fingerprint": draft_fingerprint,
                 "evaluation_count": 9,
-                "mode": "FAKE_OFFLINE_C2",
+                "mode": draft["call_mode"],
             })
             self._apply_content_transition_command(
                 mode="EXECUTION",
@@ -4110,17 +4259,17 @@ class SqliteStorage:
                 raise StaleJobExecutionError(
                     execution.job_id, "usage task does not match the fenced workflow.",
                 )
-            fake_content_attempt = False
+            offline_content_attempt = False
             if is_content and usage.request_id:
-                fake_content_attempt = self.conn.execute(
+                offline_content_attempt = self.conn.execute(
                     "SELECT 1 FROM content_writer_attempts "
                     "WHERE request_id=? AND job_id=? AND run_id=? "
-                    "AND call_mode='FAKE'",
+                    "AND call_mode IN ('FAKE','PROVIDER_READY_OFFLINE')",
                     (usage.request_id, execution.job_id, execution.run_id),
                 ).fetchone() is not None
             expected_dry_run = (
                 fence["run_status"] == RunStatus.DRY_RUN.value
-                or fake_content_attempt
+                or offline_content_attempt
             )
             if bool(usage.dry_run) != expected_dry_run:
                 raise StaleJobExecutionError(
@@ -4135,9 +4284,10 @@ class SqliteStorage:
                 usage.estimated_cost_usd, positive=False,
                 label="Provider actual usage cost",
             )
-            if fake_content_attempt and actual_amount != Decimal("0.000000"):
+            if offline_content_attempt and actual_amount != Decimal("0.000000"):
                 raise StaleJobExecutionError(
-                    execution.job_id, "fake content usage cost must be exactly zero.",
+                    execution.job_id,
+                    "offline content usage cost must be exactly zero.",
                 )
             if usage.request_id:
                 attempt = self.conn.execute(

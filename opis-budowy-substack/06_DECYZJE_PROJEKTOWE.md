@@ -423,3 +423,11 @@ Granica pozostała jawna: L1 jest aktywne, LEVEL_3 niepotwierdzone, a publikacja
 Właściciel ustalił przyszły routing Fable 5 dla artykułów i Sonnet 5 dla Notes. Implementacja przechowuje te decyzje jako wersjonowane route keys, bez wymyślania technicznych API IDs i bez fallbacku. C2 dopuszcza wyłącznie fake writera z limitem kosztu zero.
 
 Rewrite jest osobnym, trwałym intentem #2 związanym z pierwszym draftem i findings. Nie jest pętlą ani automatycznym retry. Druga negatywna decyzja kończy lifecycle. Szczegóły i P2 są w `docs/DECISIONS.md`, ADR-116.
+
+## 2026-07-23 — ADR-118: provider-ready nie znaczy provider-enabled
+
+Logical Fable 5/Sonnet 5 pozostaje decyzją produktu, a provider, techniczny model i pricing są osobną konfiguracją. Brak któregokolwiek z nich zatrzymuje flow przed SDK. Dzięki temu route key nie może przypadkiem zacząć udawać realnego modelu.
+
+SDK powstaje leniwie, nie retry'uje i ma timeout nie większy niż 30 sekund. To pozwoliło zachować brak dedykowanego heartbeat w C3: realny root nie istnieje, a operacja mieści się w 60-sekundowym lease. Decyzję trzeba powtórzyć przed C5 lub dłuższym callem.
+
+Kandydat ma status `C3 CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`. Nie jest zacommitowany ani zmergowany i nie autoryzuje API, produkcyjnej migracji, controlled-live ani artykułu.
