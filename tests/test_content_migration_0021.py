@@ -8,6 +8,7 @@ import pytest
 from app.storage.db import (
     CONTENT_FOUNDATION_SCHEMA_VERSION,
     CONTENT_PIPELINE_SCHEMA_VERSION,
+    CONTENT_WRITER_SCHEMA_VERSION,
     RUNTIME_SCHEMA_VERSION,
     TOPIC_GENERATION_SCHEMA_VERSION,
     apply_migrations,
@@ -35,7 +36,8 @@ def _objects(conn) -> dict[str, str]:
 
 
 def test_0021_remains_the_exact_content_foundation_floor():
-    assert RUNTIME_SCHEMA_VERSION == CONTENT_PIPELINE_SCHEMA_VERSION
+    assert RUNTIME_SCHEMA_VERSION == CONTENT_WRITER_SCHEMA_VERSION
+    assert CONTENT_PIPELINE_SCHEMA_VERSION == "0022_offline_content_pipeline"
     assert CONTENT_FOUNDATION_SCHEMA_VERSION == "0021_durable_content_foundation"
 
 

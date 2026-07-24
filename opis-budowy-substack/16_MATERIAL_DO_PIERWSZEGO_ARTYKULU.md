@@ -277,3 +277,11 @@ Odczyt bazy przyniósł jeszcze jedną lekcję: szczegółowy research był popr
 ## 2026-07-17 — Zgoda na efekt nie jest zgodą na każdy środek
 
 Najciekawszy moment tej próby wydarzył się przed siecią. Właściciel zezwolił na jeden płatny request, ale zabronił zmian kodu. System miał kodową bramkę ustawioną na `False`. Można ją było przełączyć na chwilę i po wszystkim ukryć ślad przez przywrócenie pliku — lecz to nadal byłaby dokładnie ta czynność, której zakazano. Request nie powstał. Koszt tej dyscypliny: zero dolarów; wartość: dowód, że operator odróżnia cel od zakresu uprawnień.
+
+## 2026-07-23 — Model zwraca słowa, system przyjmuje dopiero fakt
+
+Provider-ready writer nie zaczyna się od podania klucza. Zaczyna się od rozdzielenia tego, czego chce produkt, od tego, co rzeczywiście potrafi API. „Fable 5” może być nazwą logiczną przez wiele tygodni, podczas gdy model ID, cena i dostępność nadal uczciwie brzmią `UNVERIFIED`.
+
+Po powrocie odpowiedzi system nie zapisuje jej od razu jako szkicu. Najpierw sprawdza zamknięty JSON, lineage evidence, route/model/provider i stop reason, utrwala fingerprint wyniku oraz rozlicza usage. Jeśli proces umrze w najgorszym oknie, brak dowodu oznacza zatrzymanie — nie drugi rachunek.
+
+Zdanie do artykułu: „Model może zwrócić słowa. Dopiero walidacja, ledger i recovery czynią z nich bezpieczny szkic.”

@@ -267,3 +267,11 @@ Jawne P2 są częścią uczciwego zamknięcia. Proceduralne sidecary, minimalny 
 - Logiczną decyzję o modelu można utrwalić bez wymyślania API ID; `UNVERIFIED` jest prawidłowym stanem.
 - Profil stylu powinien być pochodną wysokiego poziomu. Raw korpus nie powinien trafiać do runtime ani każdego promptu.
 - Brak przykładów Notes trzeba nazwać `PROVISIONAL`, nie ukrywać lepszym copy.
+
+## 2026-07-23 — Po WAVE C3
+
+- Provider-ready to cecha kontraktu i recovery, nie dowód, że provider jest włączony.
+- Logical model name, API model ID i pricing są trzema różnymi faktami; połączenie ich w jeden string tworzy cichy fallback.
+- Usage po błędnym JSON-ie nadal jest faktem finansowym i musi zostać rozliczone.
+- Najtrudniejsze okno restartu leży po powrocie callera, ale przed trwałym wynikiem. Bez dowodu nie wolno retry'ować.
+- Heartbeat powinien wynikać z relacji timeout↔lease, nie z samego istnienia P2.

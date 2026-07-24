@@ -809,3 +809,11 @@ C2 dołożyło do zamkniętego fundamentu C1 pierwszy kompletny, lecz całkowici
 Najważniejszą własnością nie jest sam fake tekst, lecz możliwość bezpiecznego wznowienia. Wymuszone awarie po briefie, rozpoczęciu fake próby, zapisie draftu i decyzji rewrite nie stworzyły podwójnego requestu. Stary worker po takeover nie mógł zapisać, a dwa workery dały jeden wynik i jeden `IDLE`.
 
 Routing pozostaje logiczny: ARTICLE = Fable 5, NOTE = Sonnet 5. Techniczne identyfikatory API, provider, dostępność i pricing są `UNVERIFIED`, więc realny caller nie istnieje. Produkcja pozostała na schema 0020; kandydacka 0022 była używana tylko na nowych bazach tymczasowych.
+
+## 2026-07-23 — Etap 3 / WAVE C3: granica gotowa na providera, przewód nadal odłączony
+
+C3 nie uruchomiło prawdziwego modelu. Zbudowało natomiast wszystko, co musi istnieć przed bezpiecznym podłączeniem: deterministyczny prompt, jawny podział logical route/provider/model/pricing, leniwe SDK bez retry, typowany wynik oraz trwałe rozliczenie także wtedy, gdy provider zwróci usage, lecz tekst okaże się ucięty albo niepoprawny.
+
+Nowa migracja 0023 zapisuje nie tylko intencję i próbę, ale również append-only wynik providera. Dzięki temu restart rozróżnia dwa różne światy: utrwalony wynik czekający na settlement można bezpiecznie dokończyć bez drugiego calla; powrót callera bez trwałego wyniku jest niejednoznaczny i zatrzymuje się do reconciliation.
+
+Provider-ready adapter był wykonywany wyłącznie z fake SDK i fake callerami. Produkcyjny root nadal odmawia, C4/C5 nie ruszyły, a ARTICLE i NOTE nadal kończą jako techniczny handoff `PENDING_APPROVAL`. Dowód implementera: 26/26 C3, 463/463 regresji i 1971/1971 całej suity.

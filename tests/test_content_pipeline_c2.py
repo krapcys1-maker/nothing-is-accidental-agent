@@ -37,9 +37,11 @@ from app.ports.storage import StaleJobExecutionError
 from app.storage.db import (
     CONTENT_FOUNDATION_SCHEMA_VERSION,
     CONTENT_PIPELINE_SCHEMA_VERSION,
+    CONTENT_WRITER_SCHEMA_VERSION,
     database_schema_versions,
     initialize_database,
     migrate_0021_to_0022,
+    migrate_0022_to_0023,
 )
 from app.storage.repositories import SqliteStorage
 from tests.c2_fixtures import seed_c2_research
@@ -560,6 +562,8 @@ def test_explicit_0021_to_0022_migration_is_temp_only_and_idempotent(tmp_path):
     assert database_schema_versions(path)[-1] == CONTENT_PIPELINE_SCHEMA_VERSION
     repeated = migrate_0021_to_0022(path)
     assert repeated.idempotent is True
+    c3 = migrate_0022_to_0023(path)
+    assert c3.applied_migrations == (CONTENT_WRITER_SCHEMA_VERSION,)
     conn = SqliteStorage.open(path)
     try:
         assert conn.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"

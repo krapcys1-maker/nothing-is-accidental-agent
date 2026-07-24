@@ -144,3 +144,9 @@ Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior u
 ## 2026-07-23 — WAVE C2
 
 `SCREENSHOT REQUIRED`. Screenshotu nie wykonano z powodu zakazu browsera i ryzyka ujawnienia lokalnych ścieżek lub prywatnego źródła stylu. Dowód tekstowy: C2 `22/22`, full/collect/exact unique `1945/1945`, zero skipped/xfail, koszt zero, produkcja nadal 0020.
+
+## 2026-07-23 — WAVE C3
+
+`SCREENSHOT REQUIRED`. Browser był zabroniony, a terminal zawiera prywatne ścieżki i fingerprinty. Bezpieczny kadr powinien pokazać logical route → jawna konfiguracja → fake SDK/caller → append-only result → usage/settlement → `PENDING_APPROVAL` oraz osobno odmowę missing config przed SDK i recovery bez drugiego calla.
+
+Dowód tekstowy: C3 `26/26`, regresja `463/463`, full/collect/exact unique `1971/1971`, zero duplikatów/skipped/xfail/errors, koszt zero, produkcja nadal 0020. Kadr nie może zawierać raw style source, `.env`, secretu, draftu ani sugerować approvalu, merge, realnego API lub rozpoczęcia C4/C5.

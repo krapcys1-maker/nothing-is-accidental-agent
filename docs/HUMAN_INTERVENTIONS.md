@@ -677,3 +677,10 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Prywatny materiał:** właściciel wskazał lokalny gitignored `data/style-references/articles/article_style_samples_v1.txt`; dozwolona była tylko lokalna ekstrakcja profili pochodnych i kontrola istnienia/rozmiaru/SHA, bez ujawniania lub kopiowania raw source.
 - **Granice:** zero realnego API, SDK, sieci, browsera, publikacji, controlled-live, prawdziwego artykułu i produkcyjnej migracji; zapisy tylko do nowych temp DB; produkcja tylko read-only/immutable; bez stage/commit/push/PR/merge i bez C3–C5.
 - **Wynik implementera:** `C2 CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`, C2 `22/22`, full/collect/exact unique `1945/1945`, koszt `0.000000 USD`. Jest to raport kandydata, nie formalne przyjęcie przez właściciela.
+
+## 2026-07-23 — Właściciel autoryzował implementację wyłącznie WAVE C3
+
+- **Decyzja człowieka:** przygotować provider-ready writer boundary dla istniejącego C2, z trwałym intentem/resultem/usage, typowanymi błędami, restartem, fencingiem i concurrency; ARTICLE nadal używa logicznego `FABLE_5_ARTICLE`, NOTE `SONNET_5_NOTE`, fallback jest `FORBIDDEN`.
+- **Twarde granice:** wszystkie testy i demonstracje tylko offline z fake SDK/fake callerami i nowymi temp DB; zero realnego API, sieci/DNS/socketów, browsera, publikacji, controlled-live, prawdziwego artykułu, approval UI i kosztu. Produkcja wyłącznie read-only/immutable; prywatny raw style source bez kopiowania treści. Bez stage/commit/push/PR/merge, bez C4/C5.
+- **Decyzja o zakresie:** aktywne dokumenty definiowały C3 jako assurance i szerszą integrację zamkniętego C2, C4 jako produkcyjną migrację, a C5 jako jeden realny artykuł; właściciel doprecyzował C3 jako provider-ready offline boundary, zgodny z tym podziałem.
+- **Granica statusu:** implementer może ogłosić wyłącznie `C3 CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`. C3 nie jest formalnie zamknięte, a żaden realny request ani migracja nie są autoryzowane.

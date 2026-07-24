@@ -271,3 +271,7 @@ Przed requestem estymata wynosiła `0.016202 USD`, pesymistyczny koszt i cap `0.
 ## 2026-07-23 — WAVE C2
 
 Koszt implementacji i QA C2 w ledgerze modelowym: `0.000000 USD`. Wszystkie writer attempts były fake, usage miało `dry_run=1`, a canonical actual cost wynosił zero. Nie wykonano realnego requestu ani kontrolowanego live.
+
+## 2026-07-23 — WAVE C3
+
+Koszt implementacji i QA C3: `0.000000 USD`. Wszystkie provider-ready próby używały fake SDK i fake callerów; usage, actual cost i run cost były dokładnie zerowe. Nie użyto realnych cen, API, sieci ani controlled-live.

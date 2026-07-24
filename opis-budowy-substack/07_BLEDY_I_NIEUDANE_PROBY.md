@@ -482,3 +482,13 @@ Pierwsze fake ARTICLE i NOTE oba poprosiły o rewrite. Evaluator działał popra
 Końcowy collect za pierwszym razem zwrócił pustą listę, ponieważ jawne `-q` złożyło się z projektowym `addopts=-q`. Kod wyjścia 0 nie został pomylony z dowodem. Powtórka z wyzerowanym `addopts` wykazała `1945` unikalnych node IDs i zero duplikatów.
 
 Pozostające P2 są jawne: strukturalny minimalny reservation floor starego canonical ledgeru, brak dedykowanego content heartbeat dla przyszłego długiego callera, provisional Notes style i niepotwierdzone techniczne route IDs/pricing.
+
+## 2026-07-23 — C3: błędny FK po rename, ukryte podsumowanie i sprawdzony rollback
+
+Pierwsza migracja 0023 zbudowała nową tabelę intentów pod nazwą tymczasową i za wcześnie związała z nią FK attempts. SQLite zachował tę nazwę po rename. Naprawa robi backup attempts, kończy rename intentu i dopiero potem odtwarza FK do nazwy finalnej. Kontrolowany failpoint potwierdził, że awaria cofa schema i ledger razem oraz przywraca `foreign_keys` i `legacy_alter_table`.
+
+Pełna suita najpierw przekroczyła 120-sekundowy limit launchera, a później ujawniła wyłącznie stare liczniki 22 migracji. Po ich jawnej aktualizacji czysty przebieg doszedł do 100%. Dwa poziomy `-q` ukryły finalną linię wyniku, więc osobny collect policzył 1971 unikalnych node IDs i zero duplikatów.
+
+Nieproduktowe potknięcia narzędziowe — odrzucony wariant background command i nieobsługiwane `Get-Date -AsUTC` — zakończyły się przed jakimkolwiek otwarciem providera, sieci lub bazy do zapisu.
+
+Pierwsza końcowa sonda sidecarów użyła `if` w miejscu, w którym PowerShell potraktował je jak polecenie. Niepełnego wyniku nie przyjęto; powtórka z osobną zmienną potwierdziła oczekiwane `WAL 0 B`, `SHM 32768 B` i brak journalu, bez zapisu.

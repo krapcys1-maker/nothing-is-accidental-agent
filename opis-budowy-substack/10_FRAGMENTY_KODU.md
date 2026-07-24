@@ -267,3 +267,15 @@ connection = _open_verified_writable(source, expected=pre_open)
 ```
 
 Pierwszy wynik preflightu nie jest „przepustką na zawsze". Po snapshotcie źródło jest czytane ponownie, a po dwóch kontrolowanych oknach interposition jeszcze raz bezpośrednio przed `mode=rw`. Writable handle ponownie porównuje ledger i file identity przed migracją. Pełny kod: `app/operations/production_schema_migration.py`.
+
+## 2026-07-23 — C3: wynik callera jako trwały, typowany fakt
+
+```python
+result = writer.write(request)
+storage.record_content_writer_result(execution, intent, result)
+storage.record_content_writer_usage(execution, intent, result.usage)
+```
+
+Sama kolejność jest tu ważniejsza niż liczba linii. Intent i canonical attempt istnieją przed callerem. Po powrocie najpierw utrwala się typowany result z fingerprintem. Dopiero potem settlement może bezpiecznie zostać wznowiony po restarcie. Jeśli proces zginie przed pierwszą z tych dwóch operacji, pipeline nie wykonuje drugiego calla automatycznie — kieruje stan do reconciliation.
+
+Pełna implementacja znajduje się w `app/content/pipeline.py`, a walidacja zamkniętego result schema w `app/content/writer.py`.
