@@ -79,6 +79,7 @@ from app.content.contracts import (
     WriterIntent,
     WriterResult,
 )
+from app.content.decision import ContentDecisionPlan
 
 
 class ResearchTopicIntegrityError(RuntimeError):
@@ -243,6 +244,14 @@ class ContentSnapshotError(ContentFoundationError):
     """Current Research Card/evidence no longer equals the frozen snapshot."""
 
 
+class ContentDecisionConflictError(ContentFoundationError):
+    """A terminal decision exists, but its immutable fingerprint differs."""
+
+
+class ContentDecisionStaleError(ContentFoundationError):
+    """The decision input changed outside the fenced atomic boundary."""
+
+
 class BudgetReservationError(RuntimeError):
     """Rezerwacja przekracza limit lub przeczy istniejącej rezerwacji joba."""
 
@@ -396,6 +405,19 @@ class StoragePort(Protocol):
 
     def finalize_content_draft(
         self, execution: JobExecutionContext, *, draft_fingerprint: str,
+    ) -> ContentTransitionResult: ...
+
+    def get_content_decision_snapshot(
+        self, job_id: str, draft_fingerprint: str,
+    ) -> dict[str, Any]: ...
+
+    def finalize_content_decision(
+        self,
+        execution: JobExecutionContext,
+        decision: ContentDecisionPlan,
+        *,
+        revalidate: Callable[[dict[str, Any]], ContentDecisionPlan],
+        fault_point: Callable[[str], None] | None = None,
     ) -> ContentTransitionResult: ...
 
     def list_topics_by_status(self, account_id: str, status: TopicStatus) -> Sequence[Topic]: ...

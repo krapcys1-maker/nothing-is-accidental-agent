@@ -439,3 +439,11 @@ Kandydat C3 z 2026-07-23 nie jest już ostatnim słowem. Pełny niezależny revi
 Po merge na `main`: C3 `26/26`, C2+C3 `48/48`, regresja `463/463`, pełna suita `1971/1971`, collect i unikalne case-sensitive `1971`, zero duplikatów/skipped/xfail/errors, `compileall` i `git diff --check` czyste; koszt `0.000000 USD`. Produkcyjna baza pozostała nietknięta na `0020`, choć kod wymaga już `0023` — migracji świadomie nie wykonano.
 
 Granica jest wciąż wyraźna: to jest `C3 CODE MERGED — POST-MERGE VERIFIED — AWAITING DOCUMENTATION SYNC MERGE`, nie `C3 FULLY CLOSED`. Formalne zamknięcie C3 nastąpi dopiero po niezależnym review i merge dokumentacyjnego PR synchronizującego ten stan. Osiem P2 pozostaje otwartych, a P2-1/P2-2/P2-3 są wymaganymi gate'ami przed C5; C4 i C5 nadal nie ruszyły, a żaden realny request, artykuł ani publikacja nie są autoryzowane.
+
+## 2026-07-24 — ADR-119: wynik autonomii musi pamiętać swój świat
+
+Właściciel podał C3 jako już w pełni zamknięte i rozstrzygnął wcześniejszą etykietę roadmapy: C4 nie jest migracją produkcji, lecz offline warstwą decyzji gotowej treści. Produkcyjna migracja pozostaje osobną, nieautoryzowaną operacją.
+
+Decyzja C4 jest deterministyczna i należy do Policy Engine. Jej preimage zawiera draft, lineage, wszystkie evaluations, account policy, mode, autonomy i progi. LEVEL_1 wymaga człowieka; LEVEL_2 może samodzielnie zdecydować Note, lecz nie Article; LEVEL_3 może zdecydować oba typy po kompletnym PASS i progu. Twarde naruszenie nie może zostać przykryte wysokim score.
+
+`autonomous_decisions` przechowuje również human-required outcome, ponieważ nazwa istniejącego docelowego kontraktu nie może przesłonić audytu decyzji Policy Engine. Actor jawnie rozróżnia człowieka od autonomii. Ledger jest append-only, a `content_items` pozostaje jedynym kanonicznym lifecycle.

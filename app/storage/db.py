@@ -19,7 +19,8 @@ TOPIC_GENERATION_SCHEMA_VERSION = "0020_topic_generation_lifecycle"
 CONTENT_FOUNDATION_SCHEMA_VERSION = "0021_durable_content_foundation"
 CONTENT_PIPELINE_SCHEMA_VERSION = "0022_offline_content_pipeline"
 CONTENT_WRITER_SCHEMA_VERSION = "0023_provider_ready_writer"
-RUNTIME_SCHEMA_VERSION = CONTENT_WRITER_SCHEMA_VERSION
+CONTENT_DECISION_SCHEMA_VERSION = "0024_autonomous_content_decision"
+RUNTIME_SCHEMA_VERSION = CONTENT_DECISION_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
@@ -43,6 +44,7 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0017_evidence_pipeline_lineage",
     "0018_controlled_fetch_lifecycle",
     CONTENT_PIPELINE_SCHEMA_VERSION,
+    CONTENT_DECISION_SCHEMA_VERSION,
     # 0019 is intentionally ABSENT: rebuilding controlled_fetch_approvals with
     # incoming foreign keys requires PRAGMA foreign_keys=OFF, which is a no-op
     # inside the runner transaction — the migration manages its own explicit
@@ -635,5 +637,19 @@ def migrate_0022_to_0023(
         db_path,
         source_version=CONTENT_PIPELINE_SCHEMA_VERSION,
         target_version=CONTENT_WRITER_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0023_to_0024(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the offline C4 autonomous-content-decision schema."""
+    return _migrate_single_step(
+        db_path,
+        source_version=CONTENT_WRITER_SCHEMA_VERSION,
+        target_version=CONTENT_DECISION_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )

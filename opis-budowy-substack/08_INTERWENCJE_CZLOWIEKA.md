@@ -285,3 +285,9 @@ Właściciel zlecił wyłącznie offline pipeline do `PENDING_APPROVAL`, wskaza�
 Właściciel zezwolił wyłącznie na provider-ready granicę używaną offline z fake SDK i callerami. Wprost zachował Fable 5/Sonnet 5 jako logiczny routing, zakazał fallbacku i wymagał, by brak provider/model/pricing/secret blokował jeszcze przed klientem.
 
 Zabronione pozostały: realne API i sieć, browser, publikacja, controlled-live, pierwszy prawdziwy artykuł, approval UI, migracja produkcji, C4/C5 oraz wszystkie operacje Git. Implementer może zgłosić tylko kandydata oczekującego na niezależny review.
+
+## 2026-07-24 — Autoryzacja WAVE C4
+
+Właściciel zamknął zakres do trwałej offline decyzji gotowego draftu i podał stan C3 jako `FULLY CLOSED — DOCUMENTATION MERGED AND VERIFIED`. Jednocześnie zabronił zmiany produkcyjnego LEVEL_1, migracji produkcji, C5, PRE-C5 quality work, odczytu prywatnego korpusu, API, sieci, browsera, publikacji i operacji Git poza utworzeniem lokalnego brancha.
+
+Osiem P2 ma pozostać otwartych, a pierwsze trzy nadal blokują C5. Implementer nie może zatwierdzić własnego wyniku; jedyny dozwolony status to `C4 CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.

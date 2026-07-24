@@ -60,7 +60,7 @@ class ContentType(str, Enum):
 
 
 class ContentStatus(str, Enum):
-    """Closed Stage 3 lifecycle; publishing states are intentionally absent."""
+    """Closed Stage 3 lifecycle; C4 decisions still perform no publication."""
 
     DRAFT = "DRAFT"
     PREPARED = "PREPARED"
@@ -68,6 +68,8 @@ class ContentStatus(str, Enum):
     REVISE = "REVISE"
     SKIPPED = "SKIPPED"
     PENDING_APPROVAL = "PENDING_APPROVAL"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
     FAILED = "FAILED"
     NEEDS_VERIFICATION = "NEEDS_VERIFICATION"
 

@@ -275,3 +275,7 @@ Koszt implementacji i QA C2 w ledgerze modelowym: `0.000000 USD`. Wszystkie writ
 ## 2026-07-23 — WAVE C3
 
 Koszt implementacji i QA C3: `0.000000 USD`. Wszystkie provider-ready próby używały fake SDK i fake callerów; usage, actual cost i run cost były dokładnie zerowe. Nie użyto realnych cen, API, sieci ani controlled-live.
+
+## 2026-07-24 — WAVE C4
+
+Koszt implementacji i QA C4: `0.000000 USD`. Granica decyzji działa na już utrwalonych artefaktach C3 i nie przyjmuje writera, callera ani SDK. Liczniki provider attempts, usage, settlementu i kosztu były identyczne przed i po decyzji. Produkcyjna baza nie została zmigrowana.

@@ -1052,3 +1052,14 @@ Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym wię
 - **Produkcja/prywatność:** `data/agent.db` wyłącznie `mode=ro&immutable=1`, byte-identical na `0020` (SHA `91f593923f3ca36cd8d2c816219e551b0ff231bc3149d6d584b025465f656a1f`, `700416 B`, WAL `0 B`/SHM `32768 B`/journal brak); kod na `main` wymaga `0023`; migracji produkcji NIE wykonano. Prywatny raw style source zachował SHA/size, gitignore i brak track/stage. Zero sieci/API/SDK/browsera/publikacji/controlled-live.
 - **Status:** `C3 CODE MERGED — POST-MERGE VERIFIED — AWAITING DOCUMENTATION SYNC MERGE`. `C3 FULLY CLOSED` nastąpi dopiero po niezależnym review i merge dokumentacyjnego PR. Osiem P2 pozostaje otwartych; P2-1/P2-2/P2-3 są gate'ami przed C5; C4/C5 `NOT STARTED`.
 - **Następny krok:** wąski niezależny review dokumentacyjnego PR i jego merge.
+
+### [2026-07-24] Etap 3 / WAVE C4 — autonomous content decision — [CANDIDATE COMPLETE]
+
+- **Cel zadania:** dodać trwałą, offline i provider-independent decyzję dokładnego gotowego draftu po zamkniętym C3, bez generowania, poprawiania i publikowania treści.
+- **Zrobiono:** dodano kontrakt `ContentDecisionPlan`, macierz LEVEL_0–3 w `PolicyEngine`, wersjonowane progi ARTICLE/NOTE, current snapshot draft/evaluations/policy, input/decision fingerprint, append-only ledger `autonomous_decisions`, human-required approval, autonomous approve/reject, stale/technical outcomes, revalidation pod fence, atomowość, replay/recovery/concurrency oraz wspierany dispatcher flow.
+- **Migracja:** nowa forward-only `0024_autonomous_content_decision` oraz jawny migrator `0023→0024`; fresh, upgrade, idempotent rerun, raw SQLite/FK i rollback sprawdzone wyłącznie na temp DB. Produkcja pozostaje `0020`.
+- **QA:** C4 `23/23`; C2 `22/22`; C3 `26/26`; dokładny pakiet wcześniejszych regresji migracyjnych `10/10`; pełne `python -m pytest -q` exit 0 dla 1994 przypadków; collect/unique `1994/1994`, duplikaty `0`, delta `+23`; skipped/xfail/failures/errors `0`; `compileall` i `git diff --check` exit 0.
+- **Kontrpróby:** LEVEL_1 high score nie auto-approve; hard violation high score odrzuca; missing/duplicate/unknown/contradictory/wrong-draft/replaced/terminal/unsupported fail closed; autonomy/evaluation/policy/threshold drift jest wykrywany; stale fence, conflicting replay i raw SQLite mutacje są blokowane; błąd po apply rollbackuje audit/approval/lifecycle; dwa workery tworzą jeden audit.
+- **Koszt/skutki:** `0.000000 USD`; zero nowych provider attempts, usage, settlementu i kosztu na granicy C4; zero realnego API/SDK/sieci/browsera/publikacji/controlled-live; brak produkcyjnej migracji.
+- **Dokumentacja/status:** C3 skorygowano do autorytatywnego `FULLY CLOSED — DOCUMENTATION MERGED AND VERIFIED`; C4 pozostaje kandydatem; C5 i ośmiopunktowy PRE-C5 gate `NOT STARTED`; osiem P2 otwartych.
+- **Następny krok:** wyłącznie niezależny review C4. Nie wykonano stage, commita, pushu, PR ani merge.

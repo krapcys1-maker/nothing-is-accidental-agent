@@ -73,6 +73,12 @@ controlled_fetch_policy:
 worker_policy:
   default_max_attempts: 1
 
+# WAVE C4: lokalna decyzja jakościowa; brak uprawnienia do publikacji.
+content_decision_policy:
+  version: content_decision_policy_v1
+  article_auto_approve_min_score: 0.90
+  note_auto_approve_min_score: 0.85
+
 learning_policy:
   minimum_days_before_strategy_change: 7
   one_primary_variable_per_experiment: true

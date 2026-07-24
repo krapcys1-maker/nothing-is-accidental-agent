@@ -817,3 +817,11 @@ C3 nie uruchomiło prawdziwego modelu. Zbudowało natomiast wszystko, co musi is
 Nowa migracja 0023 zapisuje nie tylko intencję i próbę, ale również append-only wynik providera. Dzięki temu restart rozróżnia dwa różne światy: utrwalony wynik czekający na settlement można bezpiecznie dokończyć bez drugiego calla; powrót callera bez trwałego wyniku jest niejednoznaczny i zatrzymuje się do reconciliation.
 
 Provider-ready adapter był wykonywany wyłącznie z fake SDK i fake callerami. Produkcyjny root nadal odmawia, C4/C5 nie ruszyły, a ARTICLE i NOTE nadal kończą jako techniczny handoff `PENDING_APPROVAL`. Dowód implementera: 26/26 C3, 463/463 regresji i 1971/1971 całej suity.
+
+## 2026-07-24 — Etap 3 / WAVE C4: decyzja bez nowego model calla
+
+C4 zaczyna się tam, gdzie C3 kończy pisanie. Z bazy pobiera dokładny current draft, jego lineage, dziewięć evaluations, trwały tryb i poziom autonomii konta oraz wersjonowane progi. Z tych faktów tworzy fingerprint wejścia, więc nie może bezgłośnie użyć wyniku policzonego dla poprzedniego draftu albo poprzedniego LEVEL_3.
+
+Decyzja powstaje w Policy Engine i jest ponawiana pod `BEGIN IMMEDIATE` oraz execution fence. Human-required tworzy pending approval; autonomiczny wynik może zakończyć content jako APPROVED albo REJECTED. Drift prowadzi do NEEDS_VERIFICATION, a konfiguracja technicznie niepoprawna do FAILED. Audit, approval i lifecycle są jednym commitem.
+
+Nowa migracja 0024 została użyta tylko na bazach tymczasowych. C4 nie ma argumentu writer/caller/SDK i nie dopisało attemptu, usage, settlementu ani kosztu. Wynik: 23/23 przypadki C4 i 1994/1994 całej suity; status pozostaje kandydacki do niezależnego review.

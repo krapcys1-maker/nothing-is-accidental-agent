@@ -275,3 +275,12 @@ Jawne P2 są częścią uczciwego zamknięcia. Proceduralne sidecary, minimalny 
 - Usage po błędnym JSON-ie nadal jest faktem finansowym i musi zostać rozliczone.
 - Najtrudniejsze okno restartu leży po powrocie callera, ale przed trwałym wynikiem. Bez dowodu nie wolno retry'ować.
 - Heartbeat powinien wynikać z relacji timeout↔lease, nie z samego istnienia P2.
+
+## 2026-07-24 — Po WAVE C4
+
+- Autonomiczna decyzja bez fingerprintu wejścia jest tylko zapamiętanym wynikiem, nie audytem.
+- LEVEL_3 nie oznacza fail-open: komplet evaluations, hard policies i progi są ostrzejszym warunkiem niż sam poziom autonomii.
+- Rewalidacja musi nastąpić pod tym samym lockiem i fence, pod którym zapisuje się lifecycle.
+- Human-required również jest decyzją Policy Engine i zasługuje na trwały audit, choć nie jest autonomicznym approvalem.
+- `content_runs` może zachować wynik wykonania C3, podczas gdy `content_items` niesie końcową decyzję C4; trzeba nazwać tę granicę, aby nie pomylić jej z niespójnością.
+- Zero nowych calli jest łatwiejsze do udowodnienia, gdy C4 API w ogóle nie przyjmuje providera.

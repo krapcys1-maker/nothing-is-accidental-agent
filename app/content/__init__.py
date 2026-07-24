@@ -2,9 +2,11 @@
 
 Wave C1 remains the durable lifecycle foundation. Wave C2 adds the deterministic
 planner/evaluation pipeline. Wave C3 adds a provider-ready writer boundary that
-is exercised only with fake callers and SDKs. Both end at ``PENDING_APPROVAL``.
-No real-provider composition root, browser, approval UI or publication adapter
-is exposed.
+is exercised only with fake callers and SDKs. Wave C4 adds an offline,
+provider-independent decision boundary: human-required results remain
+``PENDING_APPROVAL`` and eligible autonomous results become ``APPROVED`` or
+``REJECTED``. No real-provider composition root, browser, approval UI or
+publication adapter is exposed.
 """
 
 from app.content.foundation import (

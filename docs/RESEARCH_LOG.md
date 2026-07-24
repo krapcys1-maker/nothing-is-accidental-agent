@@ -304,3 +304,9 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Wynik:** 226 linii, 108 akapitów, 9418 słów, 392 zdania; mediana długości zdania 21 słów, p90 43; brak wiarygodnych separatorów wielu próbek i brak wystarczającego, odrębnego korpusu Notes. Konserwatywna liczba rozpoznanych próbek = 1.
 - **Decyzja:** powstały wysokopoziomowe profile ARTICLE i negative; Notes = `PROVISIONAL`. Profile nie imitują konkretnego autora, nie zawierają długich cytatów i nie są wejściem do detektorów AI.
 - **Koszt i skutki:** `0.000000 USD`; raw source pozostał gitignored i poza runtime/repo.
+
+## 2026-07-24 — WAVE C4 bez researchu
+
+- **Zakres:** wyłącznie implementacja offline decyzji na już utrwalonych artefaktach C3; nie wykonano researchu treściowego, web search, Fetch ani odczytu prywatnego korpusu.
+- **Wynik:** brak nowych Research Cards, źródeł, retrievali, excerptów i kosztów. C4 nie zmienia research pipeline'u.
+- **Koszt:** `0.000000 USD`; wpis służy jawnej ewidencji braku researchu, nie przedstawia wyniku badawczego.
