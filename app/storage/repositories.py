@@ -44,6 +44,12 @@ from app.content.contracts import (
     WriterResult,
     WriterSuccess,
 )
+from app.content.decision import (
+    CONTENT_DECISION_SCHEMA_VERSION,
+    ContentDecisionActor,
+    ContentDecisionOutcome,
+    ContentDecisionPlan,
+)
 from app.core.clock import Clock
 from app.core.money import decimal_from, quantize_usd, sum_usd
 from app.core.security_flags import SECURITY_FLAG_DEFAULTS
@@ -121,6 +127,8 @@ from app.ports.storage import (
     AmountBelowMinimumPrecisionError,
     BudgetReservationError,
     ContentFoundationError,
+    ContentDecisionConflictError,
+    ContentDecisionStaleError,
     ContentSnapshotError,
     ControlledFetchAuthorizationError,
     ControlledFetchRetrievalNotOk,
@@ -2141,6 +2149,17 @@ class SqliteStorage:
             "ORDER BY attempt_no,evaluation_type",
             (content["id"],),
         ).fetchall()
+        decisions = self.conn.execute(
+            "SELECT * FROM autonomous_decisions WHERE content_id=? "
+            "ORDER BY created_at,id",
+            (content["id"],),
+        ).fetchall()
+        approval = self.conn.execute(
+            "SELECT p.* FROM approvals p JOIN autonomous_decisions ad "
+            "ON ad.approval_id=p.id WHERE ad.content_id=? "
+            "ORDER BY ad.id DESC LIMIT 1",
+            (content["id"],),
+        ).fetchone()
 
         def mapping(row: sqlite3.Row | None) -> dict[str, object] | None:
             return None if row is None else {key: row[key] for key in row.keys()}
@@ -2156,6 +2175,8 @@ class SqliteStorage:
             "usages": [mapping(row) for row in usages],
             "drafts": [mapping(row) for row in drafts],
             "evaluations": [mapping(row) for row in evaluations],
+            "decisions": [mapping(row) for row in decisions],
+            "approval": mapping(approval),
         }
 
     def record_content_plan(
@@ -2772,6 +2793,365 @@ class SqliteStorage:
                 score=score,
                 current_ts=current_ts,
             )
+            self.conn.commit()
+            content_row = self.conn.execute(
+                "SELECT * FROM content_items WHERE id=?", (row["id"],),
+            ).fetchone()
+            run_row = self.conn.execute(
+                "SELECT * FROM content_runs WHERE run_id=?", (execution.run_id,),
+            ).fetchone()
+            assert content_row is not None and run_row is not None
+            return ContentTransitionResult(
+                content=self._content_item_from_row(content_row),
+                run=self._content_run_from_row(run_row),
+                idempotent=False,
+            )
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def _content_decision_snapshot(
+        self,
+        job_id: str,
+        draft_fingerprint: str,
+    ) -> dict[str, object]:
+        """Read the exact C4 preimage on the caller's current connection."""
+        content = self.conn.execute(
+            "SELECT c.*,c.type AS workflow FROM content_items c "
+            "WHERE c.job_id=?",
+            (job_id,),
+        ).fetchone()
+        if content is None:
+            raise ContentFoundationError(
+                "CONTENT_DECISION_CONTENT_MISSING",
+                "C4 content item does not exist.",
+            )
+        account = self.conn.execute(
+            "SELECT * FROM accounts WHERE id=?", (content["account_id"],),
+        ).fetchone()
+        account_policy = self.conn.execute(
+            "SELECT * FROM account_policies WHERE account_id=?",
+            (content["account_id"],),
+        ).fetchone()
+        draft = self.conn.execute(
+            "SELECT d.*,wr.outcome AS writer_outcome,"
+            "pa.status AS provider_attempt_status,"
+            "(SELECT count(*) FROM model_usage mu "
+            " WHERE mu.request_id=d.request_id) AS usage_count,"
+            "CASE WHEN d.attempt_no=("
+            " SELECT max(x.attempt_no) FROM content_drafts x "
+            " WHERE x.content_id=d.content_id"
+            ") THEN 1 ELSE 0 END AS draft_is_current "
+            "FROM content_drafts d "
+            "JOIN content_writer_results wr ON wr.request_id=d.request_id "
+            "JOIN provider_attempts pa ON pa.request_id=d.request_id "
+            "WHERE d.content_id=? AND d.draft_fingerprint=?",
+            (content["id"], draft_fingerprint),
+        ).fetchone()
+        if account is None or account_policy is None or draft is None:
+            raise ContentFoundationError(
+                "CONTENT_DECISION_RELATION_MISSING",
+                "C4 account, policy or exact draft relation is missing.",
+            )
+        evaluations = self.conn.execute(
+            "SELECT * FROM content_draft_evaluations WHERE draft_id=? "
+            "ORDER BY evaluation_type,id",
+            (draft["id"],),
+        ).fetchall()
+
+        def mapping(row: sqlite3.Row) -> dict[str, object]:
+            return {key: row[key] for key in row.keys()}
+
+        return {
+            "content": mapping(content),
+            "account": mapping(account),
+            "account_policy": mapping(account_policy),
+            "draft": mapping(draft),
+            "lineage": {
+                "draft_is_current": bool(draft["draft_is_current"]),
+                "writer_outcome": draft["writer_outcome"],
+                "provider_attempt_status": draft["provider_attempt_status"],
+                "usage_count": int(draft["usage_count"]),
+            },
+            "evaluations": [mapping(row) for row in evaluations],
+        }
+
+    def get_content_decision_snapshot(
+        self,
+        job_id: str,
+        draft_fingerprint: str,
+    ) -> dict[str, object]:
+        """Public query-only C4 snapshot used exclusively by PolicyEngine."""
+        return self._content_decision_snapshot(job_id, draft_fingerprint)
+
+    def finalize_content_decision(
+        self,
+        execution: JobExecutionContext,
+        decision: ContentDecisionPlan,
+        *,
+        revalidate: Callable[[dict[str, object]], ContentDecisionPlan],
+        fault_point: Callable[[str], None] | None = None,
+    ) -> ContentTransitionResult:
+        """Atomically persist C4 audit, approval (if any), and lifecycle.
+
+        PolicyEngine is invoked again on a snapshot read under ``BEGIN
+        IMMEDIATE`` and once more after the controlled fault seam.  Therefore a
+        change between validation and write becomes ``STALE_INPUT`` or aborts;
+        it can never retain an earlier approval.
+        """
+        existing = self.conn.execute(
+            "SELECT * FROM autonomous_decisions "
+            "WHERE content_id=? AND outcome IN "
+            "('HUMAN_REQUIRED','APPROVED','REJECTED')",
+            (decision.content_id,),
+        ).fetchone()
+        if existing is not None:
+            if (
+                existing["decision_fingerprint"] == decision.decision_fingerprint
+                and int(existing["applied"]) == 1
+            ):
+                content_row = self.conn.execute(
+                    "SELECT * FROM content_items WHERE id=?", (decision.content_id,),
+                ).fetchone()
+                run_row = self.conn.execute(
+                    "SELECT * FROM content_runs WHERE run_id=?", (decision.run_id,),
+                ).fetchone()
+                if content_row is None or run_row is None:
+                    raise ContentDecisionConflictError(
+                        "CONTENT_DECISION_REPLAY_RELATION_MISSING",
+                        "Existing decision lost its content/run relation.",
+                    )
+                return ContentTransitionResult(
+                    content=self._content_item_from_row(content_row),
+                    run=self._content_run_from_row(run_row),
+                    idempotent=True,
+                )
+            raise ContentDecisionConflictError(
+                "CONTENT_DECISION_CONFLICT",
+                "A different terminal decision already exists for this content.",
+            )
+
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            concurrent_existing = self.conn.execute(
+                "SELECT * FROM autonomous_decisions "
+                "WHERE content_id=? AND outcome IN "
+                "('HUMAN_REQUIRED','APPROVED','REJECTED')",
+                (decision.content_id,),
+            ).fetchone()
+            if concurrent_existing is not None:
+                if (
+                    concurrent_existing["decision_fingerprint"]
+                    != decision.decision_fingerprint
+                    or int(concurrent_existing["applied"]) != 1
+                ):
+                    raise ContentDecisionConflictError(
+                        "CONTENT_DECISION_CONFLICT",
+                        "A concurrent different terminal decision already exists.",
+                    )
+                self.conn.commit()
+                content_row = self.conn.execute(
+                    "SELECT * FROM content_items WHERE id=?",
+                    (decision.content_id,),
+                ).fetchone()
+                run_row = self.conn.execute(
+                    "SELECT * FROM content_runs WHERE run_id=?",
+                    (decision.run_id,),
+                ).fetchone()
+                if content_row is None or run_row is None:
+                    raise ContentDecisionConflictError(
+                        "CONTENT_DECISION_REPLAY_RELATION_MISSING",
+                        "Concurrent decision lost its content/run relation.",
+                    )
+                return ContentTransitionResult(
+                    content=self._content_item_from_row(content_row),
+                    run=self._content_run_from_row(run_row),
+                    idempotent=True,
+                )
+            current_ts = self._job_execution_timestamp(execution)
+            row = self._require_content_execution_fence(execution, current_ts)
+            if (
+                decision.content_id != int(row["id"])
+                or decision.account_id != row["account_id"]
+                or decision.job_id != execution.job_id
+                or decision.run_id != execution.run_id
+                or decision.content_type.value != row["type"]
+            ):
+                raise ContentDecisionStaleError(
+                    "CONTENT_DECISION_IDENTITY_DRIFT",
+                    "Policy decision no longer matches the fenced content identity.",
+                )
+            self._assert_content_snapshot_in_transaction(
+                row["account_id"], int(row["id"]),
+            )
+
+            effective = revalidate(
+                self._content_decision_snapshot(
+                    execution.job_id, decision.draft_fingerprint,
+                )
+            )
+            if fault_point is not None:
+                fault_point("C4_DECISION_REVALIDATED")
+            effective = revalidate(
+                self._content_decision_snapshot(
+                    execution.job_id, decision.draft_fingerprint,
+                )
+            )
+            if (
+                effective.content_id != int(row["id"])
+                or effective.account_id != row["account_id"]
+                or effective.job_id != execution.job_id
+                or effective.run_id != execution.run_id
+                or effective.draft_id != decision.draft_id
+                or effective.draft_fingerprint != decision.draft_fingerprint
+            ):
+                raise ContentDecisionStaleError(
+                    "CONTENT_DECISION_REVALIDATION_DRIFT",
+                    "The exact draft identity changed before C4 write.",
+                )
+
+            decision_json = canonical_json(effective.decision_payload())
+            input_json = canonical_json(effective.input)
+            approval_id: int | None = None
+            if effective.actor is ContentDecisionActor.HUMAN_REQUIRED:
+                approval = self.conn.execute(
+                    "INSERT INTO approvals (account_id,object_type,object_id,"
+                    "decision,decided_at,notes,created_at) "
+                    "VALUES (?,?,?,'PENDING',NULL,?,?)",
+                    (
+                        effective.account_id, "CONTENT_ITEM",
+                        effective.content_id, decision_json, current_ts,
+                    ),
+                )
+                if approval.rowcount != 1 or approval.lastrowid is None:
+                    raise ContentFoundationError(
+                        "CONTENT_APPROVAL_INSERT_FAILED",
+                        "Human-required decision did not create its approval.",
+                    )
+                approval_id = int(approval.lastrowid)
+
+            if effective.outcome in {
+                ContentDecisionOutcome.HUMAN_REQUIRED,
+                ContentDecisionOutcome.APPROVED,
+                ContentDecisionOutcome.REJECTED,
+            }:
+                draft = self.conn.execute(
+                    "SELECT * FROM content_drafts WHERE id=? "
+                    "AND draft_fingerprint=?",
+                    (effective.draft_id, effective.draft_fingerprint),
+                ).fetchone()
+                if draft is None:
+                    raise ContentDecisionStaleError(
+                        "CONTENT_DECISION_DRAFT_MISSING",
+                        "The exact decision draft disappeared before finalization.",
+                    )
+                updated = self.conn.execute(
+                    "UPDATE content_items SET title=?,body=?,updated_at=? "
+                    "WHERE id=? AND job_id=? AND run_id=? "
+                    "AND status IN ('RUNNING','REVISE')",
+                    (
+                        draft["title"], draft["body"], current_ts,
+                        effective.content_id, effective.job_id, effective.run_id,
+                    ),
+                )
+                if updated.rowcount != 1:
+                    raise StaleJobExecutionError(execution.job_id)
+
+            inserted = self.conn.execute(
+                "INSERT INTO autonomous_decisions (decision_id,"
+                "decision_schema_version,content_id,account_id,job_id,run_id,"
+                "draft_id,draft_fingerprint,content_type,autonomy_level,"
+                "account_mode,actor_kind,outcome,reason_code,lifecycle_status,"
+                "policy_version,threshold,score,input_json,input_fingerprint,"
+                "decision_json,decision_fingerprint,approval_id,lease_owner,"
+                "execution_generation,lease_expires_at,created_at,applied) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)",
+                (
+                    effective.decision_id, CONTENT_DECISION_SCHEMA_VERSION,
+                    effective.content_id, effective.account_id,
+                    effective.job_id, effective.run_id, effective.draft_id,
+                    effective.draft_fingerprint, effective.content_type.value,
+                    effective.autonomy_level, effective.account_mode,
+                    effective.actor.value, effective.outcome.value,
+                    effective.reason_code, effective.lifecycle_status.value,
+                    effective.policy_version, effective.threshold,
+                    effective.score, input_json, effective.input_fingerprint,
+                    decision_json, effective.decision_fingerprint, approval_id,
+                    execution.lease_owner, execution.fence_token,
+                    row["lease_expires_at"], current_ts,
+                ),
+            )
+            if inserted.rowcount != 1 or inserted.lastrowid is None:
+                raise ContentFoundationError(
+                    "CONTENT_DECISION_INSERT_FAILED",
+                    "C4 decision audit insert failed.",
+                )
+
+            if effective.outcome in {
+                ContentDecisionOutcome.HUMAN_REQUIRED,
+                ContentDecisionOutcome.APPROVED,
+                ContentDecisionOutcome.REJECTED,
+            }:
+                transition_target = ContentStatus.PENDING_APPROVAL
+                run_target = RunStatus.SUCCESS
+                job_target = JobStatus.DONE
+                transition_reason = None
+                transition_result = canonical_json({
+                    "attempt_no": int(
+                        self.conn.execute(
+                            "SELECT attempt_no FROM content_drafts WHERE id=?",
+                            (effective.draft_id,),
+                        ).fetchone()[0]
+                    ),
+                    "decision_id": effective.decision_id,
+                    "draft_fingerprint": effective.draft_fingerprint,
+                    "evaluation_count": 9,
+                    "mode": "OFFLINE_C4",
+                })
+            elif effective.outcome is ContentDecisionOutcome.STALE_INPUT:
+                transition_target = ContentStatus.NEEDS_VERIFICATION
+                run_target = RunStatus.STOPPED
+                job_target = JobStatus.NEEDS_VERIFICATION
+                transition_reason = effective.reason_code
+                transition_result = decision_json
+            else:
+                transition_target = ContentStatus.FAILED
+                run_target = RunStatus.FAILED
+                job_target = JobStatus.FAILED
+                transition_reason = effective.reason_code
+                transition_result = decision_json
+
+            self._apply_content_transition_command(
+                mode="EXECUTION",
+                job_id=execution.job_id,
+                run_id=execution.run_id,
+                content_id=int(row["id"]),
+                account_id=row["account_id"],
+                workflow=execution.workflow.value,
+                source_status=row["status"],
+                target_status=transition_target.value,
+                target_run_status=run_target.value,
+                target_job_status=job_target.value,
+                lease_owner=execution.lease_owner,
+                execution_generation=execution.fence_token,
+                lease_expires_at=row["lease_expires_at"],
+                reason_code=transition_reason,
+                result_json=transition_result,
+                score=effective.score,
+                current_ts=current_ts,
+            )
+            applied = self.conn.execute(
+                "UPDATE autonomous_decisions SET applied=1 WHERE id=? AND applied=0",
+                (int(inserted.lastrowid),),
+            )
+            if applied.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_DECISION_APPLY_FAILED",
+                    "C4 decision audit was not applied exactly once.",
+                )
+            if fault_point is not None:
+                fault_point("C4_DECISION_APPLIED")
             self.conn.commit()
             content_row = self.conn.execute(
                 "SELECT * FROM content_items WHERE id=?", (row["id"],),

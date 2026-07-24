@@ -150,3 +150,9 @@ Logi testów pokazują 174/174 testy celowane (włącznie z cost ledger, prior u
 `SCREENSHOT REQUIRED`. Browser był zabroniony, a terminal zawiera prywatne ścieżki i fingerprinty. Bezpieczny kadr powinien pokazać logical route → jawna konfiguracja → fake SDK/caller → append-only result → usage/settlement → `PENDING_APPROVAL` oraz osobno odmowę missing config przed SDK i recovery bez drugiego calla.
 
 Dowód tekstowy: C3 `26/26`, regresja `463/463`, full/collect/exact unique `1971/1971`, zero duplikatów/skipped/xfail/errors, koszt zero, produkcja nadal 0020. Kadr nie może zawierać raw style source, `.env`, secretu, draftu ani sugerować approvalu, merge, realnego API lub rozpoczęcia C4/C5.
+
+## 2026-07-24 — WAVE C4
+
+`SCREENSHOT REQUIRED`. Screenshotu nie wykonano: browser był zabroniony, a terminal zawiera pełne ścieżki i fingerprinty. Bezpieczny kadr powinien pokazać zanonimizowany flow current draft/evaluations/policy → Policy Engine → revalidation/fence → append-only audit → human-required albo autonomous outcome.
+
+Dowód tekstowy: C4 `23/23`, full/collect/unique `1994/1994`, zero duplikatów/skipped/xfail/failures/errors, koszt zero, produkcja nadal 0020, kod 0024. Kadr nie może zawierać private style content, `.env`, promptu/draftu ani sugerować niezależnego approvalu lub zamknięcia C4.

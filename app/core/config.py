@@ -66,6 +66,11 @@ class Settings:
     topic_scoring_weights: dict[str, float] = field(default_factory=dict)
     topic_duplicate_threshold: float = 0.72
 
+    # WAVE C4 — offline, provider-independent decision thresholds.
+    content_decision_policy_version: str = "content_decision_policy_v1"
+    content_article_auto_approve_min_score: float = 0.90
+    content_note_auto_approve_min_score: float = 0.85
+
     # research (z growth_policy.research_policy)
     research_min_sources: int = 3
     research_min_confidence: float = 0.60
@@ -143,6 +148,15 @@ def _positive_int(value: Any, *, label: str) -> int:
     return value
 
 
+def _unit_interval(value: Any, *, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ConfigError(f"{label} musi być liczbą z przedziału [0, 1].")
+    result = float(value)
+    if not math.isfinite(result) or not 0.0 <= result <= 1.0:
+        raise ConfigError(f"{label} musi być skończoną liczbą z przedziału [0, 1].")
+    return result
+
+
 def _load_yaml(path: Path) -> dict:
     with path.open("r", encoding="utf-8") as fh:
         return yaml.safe_load(fh) or {}
@@ -204,6 +218,18 @@ def load_settings() -> Settings:
     editorial_schedule = growth.get("editorial_schedule", {}) or {}
     if not isinstance(editorial_schedule, dict):
         raise ConfigError("editorial_schedule musi być mapą konfiguracji.")
+    content_decision_policy = growth.get("content_decision_policy", {}) or {}
+    if not isinstance(content_decision_policy, dict):
+        raise ConfigError("content_decision_policy musi być mapą konfiguracji.")
+    content_decision_policy_version = content_decision_policy.get(
+        "version", "content_decision_policy_v1",
+    )
+    if (
+        not isinstance(content_decision_policy_version, str)
+        or not content_decision_policy_version.strip()
+        or len(content_decision_policy_version) > 100
+    ):
+        raise ConfigError("content_decision_policy.version musi być niepustym tekstem.")
 
     data_dir = PROJECT_ROOT / "data"
 
@@ -233,6 +259,15 @@ def load_settings() -> Settings:
         topic_scoring_weights={k: float(v) for k, v in weights.items()},
         topic_duplicate_threshold=float(
             topic_policy.get("duplicate_title_similarity_threshold", 0.72)),
+        content_decision_policy_version=content_decision_policy_version.strip(),
+        content_article_auto_approve_min_score=_unit_interval(
+            content_decision_policy.get("article_auto_approve_min_score", 0.90),
+            label="content_decision_policy.article_auto_approve_min_score",
+        ),
+        content_note_auto_approve_min_score=_unit_interval(
+            content_decision_policy.get("note_auto_approve_min_score", 0.85),
+            label="content_decision_policy.note_auto_approve_min_score",
+        ),
         research_min_sources=int(research_policy.get("minimum_sources", 3)),
         research_min_confidence=float(research_policy.get("min_confidence_score", 0.60)),
         research_min_source_quality=float(research_policy.get("min_source_quality_score", 0.50)),

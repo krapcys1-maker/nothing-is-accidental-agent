@@ -691,3 +691,11 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Wynik merge:** commit implementacji `a3096355ab0a648805099f2bfd30ab5d87600fbc`, PR #24, merge commit `81936476ad4425e959730f4425c979f1671ef4f1` (rodzice `54c761d0d6c1b7b7402d89e9c24db169b694f00a` i `a3096355ab0a648805099f2bfd30ab5d87600fbc`). Post-merge: C3 `26/26`, C2+C3 `48/48`, regresja `463/463`, pełna suita `1971/1971`, collect/unique `1971`, duplikaty/skipped/xfail/errors `0`, compile/diff PASS; koszt `0.000000 USD`.
 - **Twarde granice:** produkcja wyłącznie read-only/immutable, nadal `0020` (kod `0023`), bez migracji; zero realnego API/SDK/sieci/browsera/publikacji/controlled-live; bez zmian kodu/testów/migracji; bez C4/C5; dokumentacyjny PR NIE jest mergowany i czeka na wąski niezależny review.
 - **Granica statusu:** dozwolony status to `C3 CODE MERGED — POST-MERGE VERIFIED — AWAITING DOCUMENTATION SYNC MERGE`; `C3 FULLY CLOSED` dopiero po review i merge dokumentacyjnego PR. Osiem P2 pozostaje otwartych; P2-1/P2-2/P2-3 są gate'ami przed C5.
+
+## 2026-07-24 — Właściciel autoryzował wyłącznie WAVE C4
+
+- **Stan wejściowy nadany przez człowieka:** C1/C2 zamknięte; C3 `FULLY CLOSED — DOCUMENTATION MERGED AND VERIFIED`; C4/C5 `NOT STARTED`; Etap 3 `IN PROGRESS`; produkcja `0020`, kod `0023`, baseline `1971`.
+- **Decyzja zakresowa:** C4 ma być trwałą offline warstwą decyzji gotowej treści wewnątrz Policy Engine. Właściciel rozstrzygnął sprzeczność historycznej roadmapy: produkcyjna migracja nie jest C4 i nadal wymaga osobnej zgody.
+- **Twarde granice:** bez C5, PRE-C5 quality work, odczytu prywatnego korpusu, realnego providera/API/SDK/sieci/browsera/publikacji/controlled-live, produkcyjnej migracji oraz stage/commita/pushu/PR/merge.
+- **Wymagany status:** implementer może wydać tylko `C4 CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; formalne zamknięcie wymaga osobnego review, merge i post-merge verification.
+- **Zachowane decyzje:** produkcyjny LEVEL_1 nie jest zmieniany; LEVEL_3 ma być wyłącznie przetestowany offline. Osiem P2 pozostaje otwartych, pierwsze trzy są gate'ami C5; PRE-C5 gate pozostaje `NOT STARTED`.

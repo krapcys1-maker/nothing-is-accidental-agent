@@ -14,6 +14,7 @@ from app.storage.db import (
     CONTENT_FOUNDATION_SCHEMA_VERSION,
     CONTENT_PIPELINE_SCHEMA_VERSION,
     CONTENT_WRITER_SCHEMA_VERSION,
+    CONTENT_DECISION_SCHEMA_VERSION,
     EVIDENCE_RESEARCH_SCHEMA_VERSION,
     RUNTIME_SCHEMA_VERSION,
     TOPIC_GENERATION_SCHEMA_VERSION,
@@ -65,8 +66,9 @@ def _at_0019(tmp_path, name="ladder.db"):
     return path
 
 
-def test_topic_generation_schema_is_0020_below_runtime_0023():
-    assert RUNTIME_SCHEMA_VERSION == CONTENT_WRITER_SCHEMA_VERSION
+def test_topic_generation_schema_is_0020_below_runtime_0024():
+    assert RUNTIME_SCHEMA_VERSION == CONTENT_DECISION_SCHEMA_VERSION
+    assert CONTENT_WRITER_SCHEMA_VERSION == "0023_provider_ready_writer"
     assert CONTENT_PIPELINE_SCHEMA_VERSION == "0022_offline_content_pipeline"
     assert TOPIC_GENERATION_SCHEMA_VERSION == "0020_topic_generation_lifecycle"
 

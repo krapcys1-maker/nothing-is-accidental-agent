@@ -30,6 +30,7 @@ from app.storage.db import (
     CONTENT_FOUNDATION_SCHEMA_VERSION,
     CONTENT_PIPELINE_SCHEMA_VERSION,
     CONTENT_WRITER_SCHEMA_VERSION,
+    CONTENT_DECISION_SCHEMA_VERSION,
     EVIDENCE_PIPELINE_SCHEMA_VERSION,
     EVIDENCE_SCHEMA_VERSION,
     ExplicitMigrationError,
@@ -158,37 +159,38 @@ def evidence_db(tmp_path: Path) -> Path:
 
 # --- Drabina jawnych migracji i dokładny runtime gate ---
 
-def test_runtime_schema_version_is_the_provider_ready_writer_migration():
-    # Runtime gate wymaga dokładnie 0020; 0016-0019 pozostają w drabinie.
+def test_runtime_schema_version_is_the_content_decision_migration():
+    # Runtime gate wymaga dokładnie 0024; wcześniejsze kroki pozostają w drabinie.
     from app.storage.db import (
         CONTROLLED_FETCH_SCHEMA_VERSION,
         EVIDENCE_RESEARCH_SCHEMA_VERSION,
         TOPIC_GENERATION_SCHEMA_VERSION,
     )
 
-    assert RUNTIME_SCHEMA_VERSION == CONTENT_WRITER_SCHEMA_VERSION
+    assert RUNTIME_SCHEMA_VERSION == CONTENT_DECISION_SCHEMA_VERSION
     assert CONTENT_FOUNDATION_SCHEMA_VERSION == "0021_durable_content_foundation"
     assert TOPIC_GENERATION_SCHEMA_VERSION == "0020_topic_generation_lifecycle"
     assert EVIDENCE_RESEARCH_SCHEMA_VERSION == "0019_evidence_research_approvals"
     assert CONTROLLED_FETCH_SCHEMA_VERSION == "0018_controlled_fetch_lifecycle"
     assert EVIDENCE_SCHEMA_VERSION == "0016_evidence_foundation"
     canonical = canonical_migration_versions()
-    assert canonical[-1] == CONTENT_WRITER_SCHEMA_VERSION
-    assert canonical[-2] == CONTENT_PIPELINE_SCHEMA_VERSION
-    assert canonical[-3] == CONTENT_FOUNDATION_SCHEMA_VERSION
-    assert canonical[-4] == TOPIC_GENERATION_SCHEMA_VERSION
-    assert canonical[-5] == EVIDENCE_RESEARCH_SCHEMA_VERSION
-    assert canonical[-6] == CONTROLLED_FETCH_SCHEMA_VERSION
-    assert canonical[-7] == EVIDENCE_PIPELINE_SCHEMA_VERSION
-    assert canonical[-8] == EVIDENCE_SCHEMA_VERSION
-    assert len(canonical) == 23
+    assert canonical[-1] == CONTENT_DECISION_SCHEMA_VERSION
+    assert canonical[-2] == CONTENT_WRITER_SCHEMA_VERSION
+    assert canonical[-3] == CONTENT_PIPELINE_SCHEMA_VERSION
+    assert canonical[-4] == CONTENT_FOUNDATION_SCHEMA_VERSION
+    assert canonical[-5] == TOPIC_GENERATION_SCHEMA_VERSION
+    assert canonical[-6] == EVIDENCE_RESEARCH_SCHEMA_VERSION
+    assert canonical[-7] == CONTROLLED_FETCH_SCHEMA_VERSION
+    assert canonical[-8] == EVIDENCE_PIPELINE_SCHEMA_VERSION
+    assert canonical[-9] == EVIDENCE_SCHEMA_VERSION
+    assert len(canonical) == 24
 
 
 def test_fresh_initialization_reaches_runtime_and_creates_evidence_tables(tmp_path):
     path = tmp_path / "fresh.db"
     applied = initialize_database(path)
-    assert len(applied) == 23
-    assert applied[-1] == CONTENT_WRITER_SCHEMA_VERSION
+    assert len(applied) == 24
+    assert applied[-1] == CONTENT_DECISION_SCHEMA_VERSION
     storage = SqliteStorage.open(path)
     try:
         names = {

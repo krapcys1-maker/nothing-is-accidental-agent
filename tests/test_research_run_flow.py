@@ -144,6 +144,7 @@ def test_migration_0006_backfills_all_historical_flows(tmp_path: Path):
             "0014_provider_attempt_reconciliation", "0015_settled_execution_recovery", "0016_evidence_foundation", "0017_evidence_pipeline_lineage", "0018_controlled_fetch_lifecycle", "0019_evidence_research_approvals",
             "0020_topic_generation_lifecycle", "0021_durable_content_foundation",
             "0022_offline_content_pipeline", "0023_provider_ready_writer",
+            "0024_autonomous_content_decision",
     ]
 
     rows = {
@@ -224,6 +225,7 @@ def test_migration_0006_runs_on_clean_empty_database(tmp_path: Path):
             "0014_provider_attempt_reconciliation", "0015_settled_execution_recovery", "0016_evidence_foundation", "0017_evidence_pipeline_lineage", "0018_controlled_fetch_lifecycle", "0019_evidence_research_approvals",
             "0020_topic_generation_lifecycle", "0021_durable_content_foundation",
             "0022_offline_content_pipeline", "0023_provider_ready_writer",
+            "0024_autonomous_content_decision",
     ]
     assert conn.execute("SELECT count(*) FROM research_runs").fetchone()[0] == 0
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
@@ -249,6 +251,7 @@ def test_migration_0006_without_paid_single_uuid(tmp_path: Path):
             "0014_provider_attempt_reconciliation", "0015_settled_execution_recovery", "0016_evidence_foundation", "0017_evidence_pipeline_lineage", "0018_controlled_fetch_lifecycle", "0019_evidence_research_approvals",
             "0020_topic_generation_lifecycle", "0021_durable_content_foundation",
             "0022_offline_content_pipeline", "0023_provider_ready_writer",
+            "0024_autonomous_content_decision",
     ]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
@@ -272,6 +275,7 @@ def test_migration_0006_without_either_local_single_uuid(tmp_path: Path):
             "0014_provider_attempt_reconciliation", "0015_settled_execution_recovery", "0016_evidence_foundation", "0017_evidence_pipeline_lineage", "0018_controlled_fetch_lifecycle", "0019_evidence_research_approvals",
             "0020_topic_generation_lifecycle", "0021_durable_content_foundation",
             "0022_offline_content_pipeline", "0023_provider_ready_writer",
+            "0024_autonomous_content_decision",
     ]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
@@ -337,6 +341,7 @@ def test_database_rejects_invalid_or_missing_flow(tmp_path: Path):
             "0014_provider_attempt_reconciliation", "0015_settled_execution_recovery", "0016_evidence_foundation", "0017_evidence_pipeline_lineage", "0018_controlled_fetch_lifecycle", "0019_evidence_research_approvals",
             "0020_topic_generation_lifecycle", "0021_durable_content_foundation",
             "0022_offline_content_pipeline", "0023_provider_ready_writer",
+            "0024_autonomous_content_decision",
     ]
     conn.execute(
         "INSERT INTO accounts "
@@ -386,6 +391,7 @@ def test_migration_0007_backfills_conservative_historical_attempt_lower_bound(tm
             "0014_provider_attempt_reconciliation", "0015_settled_execution_recovery", "0016_evidence_foundation", "0017_evidence_pipeline_lineage", "0018_controlled_fetch_lifecycle", "0019_evidence_research_approvals",
             "0020_topic_generation_lifecycle", "0021_durable_content_foundation",
             "0022_offline_content_pipeline", "0023_provider_ready_writer",
+            "0024_autonomous_content_decision",
     ]
 
     attempts_column = next(
@@ -441,6 +447,7 @@ def test_migration_0007_rolls_back_schema_when_ledger_insert_fails(tmp_path: Pat
             "0014_provider_attempt_reconciliation", "0015_settled_execution_recovery", "0016_evidence_foundation", "0017_evidence_pipeline_lineage", "0018_controlled_fetch_lifecycle", "0019_evidence_research_approvals",
             "0020_topic_generation_lifecycle", "0021_durable_content_foundation",
             "0022_offline_content_pipeline", "0023_provider_ready_writer",
+            "0024_autonomous_content_decision",
     ]
     assert "attempts" in {
         row["name"] for row in conn.execute("PRAGMA table_info(research_source_candidates)")
@@ -480,6 +487,7 @@ def test_migration_0008_rolls_back_force_marker_when_ledger_insert_fails(tmp_pat
             "0015_settled_execution_recovery", "0016_evidence_foundation", "0017_evidence_pipeline_lineage", "0018_controlled_fetch_lifecycle", "0019_evidence_research_approvals",
             "0020_topic_generation_lifecycle", "0021_durable_content_foundation",
             "0022_offline_content_pipeline", "0023_provider_ready_writer",
+            "0024_autonomous_content_decision",
     ]
     force_column = next(
         row for row in conn.execute("PRAGMA table_info(research_runs)")

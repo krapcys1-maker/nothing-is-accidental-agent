@@ -183,6 +183,7 @@ class ContentPipelineCallable(Protocol):
         clock: Clock,
         lease_owner: str,
         project_root: object,
+        policy: PolicyEngine,
         writer: WriterPort | None = None,
         route_override: RouteContract | None = None,
     ) -> ContentPipelineSummary: ...
@@ -365,10 +366,15 @@ class JobDispatcher:
             clock=self._clock,
             lease_owner=lease_owner,
             project_root=self._settings.project_root,
+            policy=self._policy,
             writer=self._content_writer,
             route_override=self._content_route_override,
         )
-        if summary.status is ContentStatus.PENDING_APPROVAL:
+        if summary.status in {
+            ContentStatus.PENDING_APPROVAL,
+            ContentStatus.APPROVED,
+            ContentStatus.REJECTED,
+        }:
             return DispatchResult.workflow_succeeded(run_id=summary.run_id)
         return DispatchResult.workflow_failed(
             run_id=summary.run_id,

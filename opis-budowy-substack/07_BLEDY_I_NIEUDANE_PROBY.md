@@ -492,3 +492,11 @@ Pełna suita najpierw przekroczyła 120-sekundowy limit launchera, a później u
 Nieproduktowe potknięcia narzędziowe — odrzucony wariant background command i nieobsługiwane `Get-Date -AsUTC` — zakończyły się przed jakimkolwiek otwarciem providera, sieci lub bazy do zapisu.
 
 Pierwsza końcowa sonda sidecarów użyła `if` w miejscu, w którym PowerShell potraktował je jak polecenie. Niepełnego wyniku nie przyjęto; powtórka z osobną zmienną potwierdziła oczekiwane `WAL 0 B`, `SHM 32768 B` i brak journalu, bez zapisu.
+
+## 2026-07-24 — C4: czerwone liczniki po przesunięciu runtime floor
+
+Pierwsza sonda PRE miała błąd parsera PowerShell i została odrzucona jako dowód. Poprawiona komenda wykonała wyłącznie immutable/query-only odczyt produkcji oraz metadane prywatnego stylu.
+
+Pierwszy pełny suite przekroczył limit launchera. Kolejny przebieg ujawnił stare oczekiwania numeru migracji: najpierw osiem, potem dziesięć przypadków w historycznych drabinach i operational report. Nie były to defekty C4; testy jawnie zatrzymywały listę na 0023. Po dodaniu dokładnego kroku 0024 celowane reruny dały 8/8 i 10/10, a pełny przebieg 1994/1994.
+
+Podwójny quiet ponownie ukrył liczbową linię pełnego wyniku. Osobny collect policzył 1994 node IDs, wszystkie case-sensitive unique, zero duplikatów. Czerwonych prób nie wymazano: opisują, dlaczego „100% kropek” bez collectu nie jest jeszcze kompletnym dowodem.

@@ -482,3 +482,11 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Dowód tekstowy zastępczy:** C3 `26/26`; regresja `463/463`; full/collect/exact unique `1971/1971`; exact duplicates/skipped/xfail/errors `0`; compile/diff PASS; koszt `0.000000 USD`.
 - **Stan produkcji na kadrze:** wyłącznie skrócony SHA `91f593…56a1f`, schema `0020`, `700416 B`, integrity `ok`, FK `0`, WAL `0 B`, SHM `32768 B`, journal absent; jawne `mode=ro&immutable=1`, `PRODUCTION MIGRATION NOT EXECUTED`.
 - **Czego nie może pokazać:** raw style source, `.env`, secret/provider key, prompt/body/draft, pełnych hashy/ścieżek, danych SQLite ani fake fixture. Nie może sugerować niezależnego approvalu, commita/merge, realnego API, controlled-live, prawdziwego artykułu, C4/C5 ani zamknięcia C3.
+
+## 2026-07-24 — WAVE C4 autonomous content decision candidate
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ zakres zabrania browsera, a terminal zawiera pełne lokalne ścieżki, hashe i szczegóły temp SQLite.
+- **Co powinien pokazać:** zanonimizowany wspierany flow entrypoint → Worker → Dispatcher → C2/C3 → C4 PolicyEngine → snapshot/fingerprint → fenced transaction → append-only decision → `PENDING_APPROVAL|APPROVED|REJECTED|NEEDS_VERIFICATION|FAILED`; obok macierz LEVEL_1 human-required i LEVEL_3 offline autonomous.
+- **Dowód tekstowy zastępczy:** C4 `23/23`; full/collect/unique `1994/1994`; 0 duplicates/skipped/xfail/failures/errors; produkcja nadal `0020`; kod `0024`; koszt `0.000000 USD`.
+- **Stan produkcji na kadrze:** wyłącznie skrócony SHA `91f593…56a1f`, `700416 B`, 20 migracji/latest 0020, integrity `ok`, FK `0`, WAL `0 B`, SHM `32768 B`, journal absent; jawne `mode=ro&immutable=1`, `PRODUCTION MIGRATION NOT EXECUTED`.
+- **Czego nie może pokazać:** `.env`, sekrety, private style content, draft/body/prompt, produkcyjne rekordy, pełne hashe/ścieżki ani sugestię niezależnego approvalu, zamknięcia C4, C5, API, publikacji lub merge.

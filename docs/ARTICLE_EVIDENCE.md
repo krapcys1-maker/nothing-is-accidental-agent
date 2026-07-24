@@ -565,3 +565,13 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Prywatny korpus stylu nie podróżuje w promptach. Runtime używa wyłącznie krótkich profili pochodnych, a kanoniczny prompt zakazuje fikcyjnej autobiografii i traktuje źródła internetowe jako dane, nigdy instrukcje.
 - Dowód kandydacki: 26/26 C3, 463/463 regresji i 1971/1971 pełnej suity; wszystko na fake SDK/caller i temp SQLite, za `0.000000 USD`. C3 czeka na niezależny review; pierwszy realny tekst pozostaje zadaniem C5.
 - Cytowalna zasada: „Model może zwrócić słowa. Dopiero walidacja, ledger i recovery czynią z nich bezpieczny szkic.”
+
+## 2026-07-24 — Materiał: „Autonomia zaczyna się od odmowy starej decyzji”
+
+- C4 pokazuje, że autonomia nie jest booleanem „sam zatwierdzaj”. To funkcja trwałego poziomu, trybu konta, typu treści, jawnej policy, kompletnego zestawu ocen, twardych zakazów i wersjonowanego progu.
+- Najważniejszy artefakt to nie samo `APPROVED`, lecz preimage decyzji: dokładny draft, dziewięć evaluations, lineage, account/autonomy/mode i threshold version składają się na fingerprint. Zmiana któregokolwiek faktu unieważnia wcześniejsze rozstrzygnięcie.
+- System sprawdza ten snapshot ponownie pod write lockiem i execution fence. Dzięki temu decyzja „approve” policzona dla LEVEL_3 nie przechodzi po zmianie konta na LEVEL_1, a drugi worker nie dopisuje przeciwnego wyniku.
+- Append-only audit i lifecycle są jednym commitem. Kontrolowana awaria po apply cofa decision row, approval i status razem; nie istnieje stan „zatwierdzone bez audytu” ani „audit approve, ale lifecycle nieokreślony”.
+- C4 nie wywołuje modelu. Provider attempts, usage, settlement i koszt są identyczne przed i po decision boundary; to rozdziela wydanie słów przez C3 od politycznej decyzji, co z nimi zrobić.
+- Dowód kandydacki: 23/23 C4 i 1994/1994 całej suity; 1994 unikalne node IDs, zero duplikatów i +23 wobec baseline. Produkcja pozostała na 0020, a kandydat czeka na niezależny review.
+- Cytowalna zasada: „Bez fingerprintu autonomia pamięta wynik. Z fingerprintem pamięta, dla jakiego świata ten wynik był prawdziwy.”

@@ -1,4 +1,4 @@
-"""Resumable C2/C3 pipeline: frozen Research Card -> PENDING_APPROVAL."""
+"""Resumable C2/C3/C4 pipeline: frozen input -> durable content decision."""
 from __future__ import annotations
 
 import json
@@ -47,6 +47,7 @@ from app.models import (
     ModelUsage,
     ProviderAttemptStatus,
 )
+from app.policies.policy_engine import PolicyEngine
 from app.ports.storage import StoragePort
 
 
@@ -125,6 +126,7 @@ def run_offline_content_pipeline(
     clock: Clock,
     lease_owner: str,
     project_root: Path,
+    policy: PolicyEngine,
     writer: WriterPort | None = None,
     route_override: RouteContract | None = None,
     fault_point: Callable[[str], None] | None = None,
@@ -231,6 +233,8 @@ def run_offline_content_pipeline(
         assert isinstance(content_row, dict)
         if ContentStatus(str(content_row["status"])) in (
             ContentStatus.PENDING_APPROVAL,
+            ContentStatus.APPROVED,
+            ContentStatus.REJECTED,
             ContentStatus.FAILED,
             ContentStatus.NEEDS_VERIFICATION,
         ):
@@ -486,8 +490,20 @@ def run_offline_content_pipeline(
             assert isinstance(current_content, dict)
             if current_content["status"] == ContentStatus.REVISE.value:
                 storage.transition_content_execution(execution, ContentStatus.RUNNING)
-            storage.finalize_content_draft(
-                execution, draft_fingerprint=draft.fingerprint(),
+            decision_snapshot = storage.get_content_decision_snapshot(
+                job.id, draft.fingerprint(),
+            )
+            content_decision = policy.decide_content(decision_snapshot)
+            if fault_point is not None:
+                fault_point("C4_POLICY_VALIDATED")
+            storage.finalize_content_decision(
+                execution,
+                content_decision,
+                revalidate=lambda snapshot: policy.decide_content(
+                    snapshot,
+                    expected_input_fingerprint=content_decision.input_fingerprint,
+                ),
+                fault_point=fault_point,
             )
             return _summary(storage, job.id)
         if decision is PipelineDecision.BLOCK:

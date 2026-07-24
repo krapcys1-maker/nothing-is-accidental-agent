@@ -18,7 +18,7 @@ from app.content.foundation import (
     ContentStatus,
     ContentType,
 )
-from app.content.pipeline import run_offline_content_pipeline
+from app.content.pipeline import run_offline_content_pipeline as _run_offline_content_pipeline
 from app.content.planner import ContentPlanningBlocked, plan_content
 from app.content.routing import (
     RealContentWriterUnavailable,
@@ -28,6 +28,7 @@ from app.content.routing import (
 )
 from app.content.writer import FakeContentWriter, FakeWriterScenario
 from app.core.clock import FixedClock
+from app.core.config import Settings
 from app.models import JobStatus
 from app.policies.policy_engine import PolicyEngine
 from app.scheduler.dispatcher import JobDispatcher
@@ -38,10 +39,12 @@ from app.storage.db import (
     CONTENT_FOUNDATION_SCHEMA_VERSION,
     CONTENT_PIPELINE_SCHEMA_VERSION,
     CONTENT_WRITER_SCHEMA_VERSION,
+    CONTENT_DECISION_SCHEMA_VERSION,
     database_schema_versions,
     initialize_database,
     migrate_0021_to_0022,
     migrate_0022_to_0023,
+    migrate_0023_to_0024,
 )
 from app.storage.repositories import SqliteStorage
 from tests.c2_fixtures import seed_c2_research
@@ -49,6 +52,25 @@ from tests.c2_fixtures import seed_c2_research
 
 NOW = datetime(2026, 7, 23, 12, 0, 0, tzinfo=timezone.utc)
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def run_offline_content_pipeline(*args, **kwargs):
+    """C2 regression adapter supplies the now-mandatory C4 PolicyEngine."""
+    storage = kwargs["storage"]
+    kwargs.setdefault(
+        "policy",
+        PolicyEngine(
+            Settings(
+                project_root=ROOT,
+                data_dir=ROOT,
+                db_path=ROOT / "unused-test.db",
+                costs_csv_path=ROOT / "unused-test-costs.csv",
+            ),
+            storage,
+            kwargs["clock"],
+        ),
+    )
+    return _run_offline_content_pipeline(*args, **kwargs)
 
 
 def prepare_and_claim(
@@ -564,6 +586,8 @@ def test_explicit_0021_to_0022_migration_is_temp_only_and_idempotent(tmp_path):
     assert repeated.idempotent is True
     c3 = migrate_0022_to_0023(path)
     assert c3.applied_migrations == (CONTENT_WRITER_SCHEMA_VERSION,)
+    c4 = migrate_0023_to_0024(path)
+    assert c4.applied_migrations == (CONTENT_DECISION_SCHEMA_VERSION,)
     conn = SqliteStorage.open(path)
     try:
         assert conn.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
