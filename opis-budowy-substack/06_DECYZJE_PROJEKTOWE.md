@@ -447,3 +447,11 @@ Właściciel podał C3 jako już w pełni zamknięte i rozstrzygnął wcześniej
 Decyzja C4 jest deterministyczna i należy do Policy Engine. Jej preimage zawiera draft, lineage, wszystkie evaluations, account policy, mode, autonomy i progi. LEVEL_1 wymaga człowieka; LEVEL_2 może samodzielnie zdecydować Note, lecz nie Article; LEVEL_3 może zdecydować oba typy po kompletnym PASS i progu. Twarde naruszenie nie może zostać przykryte wysokim score.
 
 `autonomous_decisions` przechowuje również human-required outcome, ponieważ nazwa istniejącego docelowego kontraktu nie może przesłonić audytu decyzji Policy Engine. Actor jawnie rozróżnia człowieka od autonomii. Ledger jest append-only, a `content_items` pozostaje jedynym kanonicznym lifecycle.
+
+## 2026-07-24 — WAVE C4: kod zmergowany i zweryfikowany post-merge
+
+Kandydat C4 z tego samego dnia nie jest już ostatnim słowem. Pełny niezależny review wydał `APPROVE WITH P2` (0 MAJOR / 0 MINOR), a osobny review integralności PR również `APPROVE WITH P2`; C4 nie wymagał poprawki. Dopiero wtedy commit implementacji `6a97620048d1099b9c1f0da29ec343ae12a54559` (`feat: add autonomous content decision layer`) został zmergowany jako PR #26 (merge commit `7eb93ba93b131d0a9a3c33e7d8495500afaa721f`, rodzice `b6abd60583b371b4501551735f4d67dffd7f2944` i `6a97620048d1099b9c1f0da29ec343ae12a54559`), a `main` zsynchronizowano wyłącznie fast-forward.
+
+Po merge na `main`: C4 `23/23`, C2+C3 `48/48`, pełna suita `1994/1994`, collect i unikalne case-sensitive `1994`, delta wobec baseline 1971 `+23`, zero duplikatów/skipped/xfail/errors, `compileall` i `git diff --check` czyste; koszt `0.000000 USD`. Produkcyjna baza pozostała nietknięta na `0020`, choć kod wymaga już `0024` — migracji świadomie nie wykonano, a tabela `autonomous_decisions` jest w produkcji nieobecna.
+
+Granica jest wciąż wyraźna: to jest `C4 CODE MERGED — POST-MERGE VERIFIED — AWAITING DOCUMENTATION SYNC MERGE`, nie `C4 FULLY CLOSED`. Formalne zamknięcie C4 nastąpi dopiero po niezależnym review i merge dokumentacyjnego PR synchronizującego ten stan. Osiem P2 pozostaje otwartych, a P2-1/P2-2/P2-3 są wymaganymi gate'ami przed C5; sześć nieblokujących ustaleń review pozostaje zapisami review, nie blockerami. C5 i PRE-C5 QUALITY GATE nadal nie ruszyły, a żaden realny request, artykuł ani publikacja nie są autoryzowane.
