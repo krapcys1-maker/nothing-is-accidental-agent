@@ -575,3 +575,13 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - C4 nie wywołuje modelu. Provider attempts, usage, settlement i koszt są identyczne przed i po decision boundary; to rozdziela wydanie słów przez C3 od politycznej decyzji, co z nimi zrobić.
 - Dowód kandydacki: 23/23 C4 i 1994/1994 całej suity; 1994 unikalne node IDs, zero duplikatów i +23 wobec baseline. Produkcja pozostała na 0020, a kandydat czeka na niezależny review.
 - Cytowalna zasada: „Bez fingerprintu autonomia pamięta wynik. Z fingerprintem pamięta, dla jakiego świata ten wynik był prawdziwy.”
+
+## 2026-08-09 — Materiał: „Każde zdanie musi mieć adres”
+
+- Pierwsza naprawa PRE-C5 nadal przepuszczała fakty, których nie obejmował słownik „faktualnych” sygnałów. To ujawniło błąd modelu rozwiązania: detektor podejrzanych zdań próbuje opisać nieskończone dopełnienie języka.
+- Nowy kontrakt nie zgaduje, które zdanie warto sprawdzić. Najpierw deterministycznie numeruje wszystkie segmenty ARTICLE, a potem wymaga jednego i tylko jednego rekordu rozliczenia dla każdego z nich. Brak rekordu jest ustaleniem audytowym, nie ciszą.
+- Reviewer ma trzy możliwości: fakt z evidence, argument/inferencja bez nowego faktu albo naprawdę non-factual pytanie/przejście. Fakt bez evidence, inferencja przemycająca fakt i deklaratywne zdanie nazwane „prozą” są odmową.
+- PASS nie usuwa śladów kontroli. Ledger zapisuje identity/fingerprint segmentu, klasyfikację, reason, evidence, outcome, completeness i wersję reviewera — dzięki temu można później odtworzyć nie tylko wynik, ale pełne pokrycie tekstu.
+- Druga połowa tej samej lekcji dotyczy pieniędzy: koszt ponad rezerwację nie może zostać „do wyjaśnienia” tylko w attempt ledgerze, podczas gdy job wygląda na aktywny. Usage, koszt, reconciliation i terminalny stan CONTENT muszą stać się widoczne razem.
+- Kontrpróba zapisała dokładnie jedno syntetyczne usage `0.075000 USD`, zero settlementów i jeden reconciliation; content/job od razu trafiły do `NEEDS_VERIFICATION`, a późniejszy reaper niczego nie zmienił.
+- Cytowalna zasada: „Jeśli zdanie nie ma rekordu, nie zostało sprawdzone. Jeśli koszt nie ma terminalnego stanu, nie został rozliczony.”

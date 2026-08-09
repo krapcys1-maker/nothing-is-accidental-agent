@@ -815,6 +815,12 @@ class StoragePort(Protocol):
         *, now: datetime | None = None, clock: Clock | None = None,
     ) -> None: ...
 
+    def heartbeat_content_execution(
+        self, execution: JobExecutionContext, lease_seconds: int,
+    ) -> None:
+        """Typed CONTENT lease extension under the active generation fence."""
+        ...
+
     def cancel_job(
         self, job_id: str, *, now: datetime | None = None, clock: Clock | None = None,
     ) -> None: ...

@@ -290,6 +290,7 @@ class JobDispatcher:
         content_pipeline: ContentPipelineCallable = run_offline_content_pipeline,
         content_writer: WriterPort | None = None,
         content_route_override: RouteContract | None = None,
+        allow_paid_content: bool = False,
     ) -> None:
         self._settings = settings
         self._storage = storage
@@ -308,6 +309,7 @@ class JobDispatcher:
         self._content_pipeline = content_pipeline
         self._content_writer = content_writer or FakeContentWriter()
         self._content_route_override = content_route_override
+        self._allow_paid_content = allow_paid_content
 
     def dispatch(
         self,
@@ -318,7 +320,11 @@ class JobDispatcher:
     ) -> DispatchResult:
         """Runs one supported local operation after a fresh PolicyEngine check."""
         account = self._account_for(job)
-        dry_run = job.payload.get("dry_run") is True or job.kind is JobKind.CONTENT
+        dry_run = job.payload.get("dry_run") is True or (
+            job.kind is JobKind.CONTENT
+            and job.payload.get("execution_mode")
+            != ContentExecutionMode.CONTROLLED_PROVIDER_PIPELINE.value
+        )
         controlled_fetch = (
             job.payload.get("execution") == CONTROLLED_FETCH_EXECUTION
         )
@@ -340,10 +346,12 @@ class JobDispatcher:
                 job, account, lease_owner, heartbeat,
             )
         if job.kind is JobKind.CONTENT:
-            return self._dispatch_content(job, lease_owner)
+            return self._dispatch_content(job, lease_owner, heartbeat)
         raise UnsupportedJobError("Unsupported job kind for the offline worker.")
 
-    def _dispatch_content(self, job: Job, lease_owner: str) -> DispatchResult:
+    def _dispatch_content(
+        self, job: Job, lease_owner: str, heartbeat: Callable[[], None],
+    ) -> DispatchResult:
         """Run the held C3 offline root; no real provider is authorized."""
         if job.workflow not in (WorkflowType.ARTICLE, WorkflowType.NOTE):
             raise UnsupportedJobError("CONTENT jobs support only ARTICLE or NOTE.")
@@ -351,14 +359,27 @@ class JobDispatcher:
             payload = canonicalize_content_job_payload(job.payload)
         except Exception as exc:
             raise PayloadValidationError("CONTENT payload contract is invalid.") from exc
-        if payload["execution_mode"] != ContentExecutionMode.OFFLINE_PIPELINE.value:
+        paid = (
+            payload["execution_mode"]
+            == ContentExecutionMode.CONTROLLED_PROVIDER_PIPELINE.value
+        )
+        if not paid and (
+            payload["execution_mode"] != ContentExecutionMode.OFFLINE_PIPELINE.value
+        ):
             raise UnsupportedJobError(
-                "Dispatcher accepts only the C3 OFFLINE_PIPELINE mode."
+                "Dispatcher accepts only executable content pipeline modes."
             )
-        if payload["provider_enabled"] is not False:
+        if paid and not self._allow_paid_content:
+            # Declaring the mode is not authorization: this composition root
+            # was not built with paid content enabled.
+            raise PolicyDeniedError(PolicyDecision.block(
+                "CONTENT_PAID_PROVIDER_NOT_AUTHORIZED",
+                "This dispatcher is not composed with paid CONTENT enabled.",
+            ))
+        if not paid and payload["provider_enabled"] is not False:
             raise PolicyDeniedError(PolicyDecision.block(
                 "CONTENT_REAL_PROVIDER_FORBIDDEN",
-                "C3 exposes only fake callers/SDKs; controlled-live is unavailable.",
+                "Offline content exposes only fake callers/SDKs.",
             ))
         summary = self._content_pipeline(
             job,
@@ -369,6 +390,7 @@ class JobDispatcher:
             policy=self._policy,
             writer=self._content_writer,
             route_override=self._content_route_override,
+            heartbeat=heartbeat,
         )
         if summary.status in {
             ContentStatus.PENDING_APPROVAL,

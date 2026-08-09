@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
 from app.content.foundation import (
+    ContentExecutionMode,
     CONTENT_EXECUTION,
     CONTENT_PROVIDER_STAGE,
     ContentCallIntent,
@@ -178,6 +179,10 @@ from app.research.controlled_fetch_intent import (
     controlled_fetch_intent_fingerprint,
 )
 from app.ports.fetch import FetchedDocument
+from app.research.source_admission import (
+    descriptors_from_research_card,
+    evaluate_source_admission,
+)
 from app.research.evidence import (
     EvidenceRejectionReason,
     EvidenceVerdict,
@@ -1843,6 +1848,57 @@ class SqliteStorage:
             raise StaleJobExecutionError(execution.job_id)
         return row
 
+    def heartbeat_content_execution(
+        self, execution: JobExecutionContext, lease_seconds: int,
+    ) -> None:
+        """Extend a CONTENT lease through its own generation fence.
+
+        The generic ``heartbeat_job_lease`` deliberately refuses CONTENT, so
+        the offline pipeline previously ran a whole draft/evaluate/decide cycle
+        under one unextended lease.  This keeps that refusal intact and adds
+        the typed equivalent: only the current owner, at the current execution
+        generation, on a still-active content lifecycle, may extend it.  A lost
+        or stale lease raises instead of silently continuing to write.
+        """
+        if lease_seconds <= 0:
+            raise ValueError("lease_seconds must be positive.")
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            self._require_content_execution_fence(
+                execution,
+                current_ts,
+                allowed_content_statuses=(
+                    ContentStatus.PREPARED.value,
+                    ContentStatus.RUNNING.value,
+                    ContentStatus.REVISE.value,
+                ),
+            )
+            lease_until = _persisted_ts(
+                execution.now() + timedelta(seconds=lease_seconds)
+            )
+            cursor = self.conn.execute(
+                "UPDATE jobs SET lease_expires_at=CASE WHEN lease_expires_at >= ? "
+                "THEN lease_expires_at ELSE ? END, updated_at=? WHERE id=? "
+                "AND run_id=? AND lease_owner=? AND lease_expires_at>=? "
+                "AND execution_generation=? AND status IN ('LEASED','RUNNING')",
+                (
+                    lease_until, lease_until, current_ts, execution.job_id,
+                    execution.run_id, execution.lease_owner, current_ts,
+                    execution.fence_token,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise StaleJobExecutionError(
+                    execution.job_id,
+                    "content lease heartbeat lost its owner or generation.",
+                )
+            self.conn.commit()
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
     def record_content_article_brief(
         self,
         execution: JobExecutionContext,
@@ -2333,6 +2389,24 @@ class SqliteStorage:
                 self._rollback_preserving_primary(primary, self.conn.rollback)
             raise
 
+    def _content_job_authorizes_paid_provider(self, job_id: str) -> bool:
+        """Only an explicitly provider-enabled CONTENT job may spend money."""
+        row = self.conn.execute(
+            "SELECT payload_json FROM jobs WHERE id=? AND kind='CONTENT'",
+            (job_id,),
+        ).fetchone()
+        if row is None:
+            return False
+        try:
+            payload = json.loads(row["payload_json"] or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return False
+        return (
+            payload.get("execution_mode")
+            == ContentExecutionMode.CONTROLLED_PROVIDER_PIPELINE.value
+            and payload.get("provider_enabled") is True
+        )
+
     def begin_content_writer_attempt(
         self, execution: JobExecutionContext, attempt_no: int,
     ) -> ProviderAttempt:
@@ -2357,12 +2431,28 @@ class SqliteStorage:
                     "Canonical writer attempt requires its durable intent.",
                 )
             mode = WriterCallMode(str(intent["call_mode"]))
-            if mode is WriterCallMode.CONTROLLED_PROVIDER:
+            paid = mode is WriterCallMode.CONTROLLED_PROVIDER
+            if paid and not self._content_job_authorizes_paid_provider(
+                execution.job_id
+            ):
                 raise ContentFoundationError(
                     "CONTENT_CONTROLLED_PROVIDER_NOT_AUTHORIZED",
-                    "C3 does not authorize a controlled provider attempt.",
+                    "A controlled provider attempt requires an explicitly "
+                    "provider-enabled CONTENT execution mode.",
                 )
-            if (
+            if paid and (
+                float(intent["max_cost_usd"]) <= 0.0
+                or intent["provider"] == "UNVERIFIED"
+                or intent["api_model_id"] == "UNVERIFIED"
+                or intent["availability_status"] != "CONFIGURED"
+                or intent["pricing_profile"] == "UNVERIFIED"
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_WRITER_INTENT_INVALID",
+                    "A paid writer attempt requires a positive cap and a "
+                    "fully configured route.",
+                )
+            if not paid and (
                 float(intent["max_cost_usd"]) != 0.0
                 or (
                     mode is WriterCallMode.FAKE
@@ -2431,8 +2521,14 @@ class SqliteStorage:
                     "Writer attempt extension insert failed.",
                 )
             # The historical canonical ledger has a positive reservation floor.
-            # 0.000001 is a structural placeholder, never a cost or budget hold;
-            # the zero-cost usage settles it to actual_cost_usd=0.0.
+            # 0.000001 is a structural placeholder for offline modes, never a
+            # cost or budget hold; the zero-cost usage settles it to 0.0.  A
+            # paid attempt reserves its real declared cap instead, so an actual
+            # cost above it becomes NEEDS_RECONCILIATION rather than silent
+            # over-spend.
+            reserved = (
+                float(intent["max_cost_usd"]) if paid else 0.000001
+            )
             self.conn.execute(
                 "INSERT INTO provider_attempts (job_id,stage,attempt_no,"
                 "request_id,status,reserved_amount_usd,reserved_at,"
@@ -2440,7 +2536,7 @@ class SqliteStorage:
                 (
                     execution.job_id, CONTENT_PROVIDER_STAGE, attempt_no,
                     request_id, ProviderAttemptStatus.RESERVED.value,
-                    0.000001, current_ts, intent["intent_fingerprint"],
+                    reserved, current_ts, intent["intent_fingerprint"],
                 ),
             )
             row = self.conn.execute(
@@ -2464,20 +2560,35 @@ class SqliteStorage:
     def mark_content_writer_started(
         self, execution: JobExecutionContext, request_id: str,
     ) -> ProviderAttempt:
-        """Persist the caller boundary for an offline writer attempt."""
+        """Persist the caller boundary before a writer call is made.
+
+        For any mode that can reach a real provider this also raises the
+        durable in-flight barrier: ``jobs.external_effect_started_at`` is
+        stamped BEFORE the call, so lease-expiry recovery can no longer treat
+        the job as a safe zero-cost checkpoint and requeue it for a second
+        potentially paid call.  It resolves to an explicit fail-closed terminal
+        state instead.  FAKE stays requeueable because it cannot spend.
+        """
         try:
             self.conn.execute("BEGIN IMMEDIATE")
             current_ts = self._job_execution_timestamp(execution)
             self._require_content_execution_fence(execution, current_ts)
             row = self.conn.execute(
-                "SELECT p.* FROM provider_attempts p "
+                "SELECT p.*,wa.call_mode FROM provider_attempts p "
                 "JOIN content_writer_attempts wa ON wa.request_id=p.request_id "
-                "WHERE p.request_id=? AND p.job_id=? "
-                "AND wa.call_mode IN ('FAKE','PROVIDER_READY_OFFLINE')",
+                "WHERE p.request_id=? AND p.job_id=?",
                 (request_id, execution.job_id),
             ).fetchone()
             if row is None:
                 raise StaleJobExecutionError(execution.job_id)
+            mode = WriterCallMode(str(row["call_mode"]))
+            if mode is not WriterCallMode.FAKE:
+                self.conn.execute(
+                    "UPDATE jobs SET external_effect_started_at="
+                    "COALESCE(external_effect_started_at,?),updated_at=? "
+                    "WHERE id=?",
+                    (current_ts, current_ts, execution.job_id),
+                )
             if row["status"] == ProviderAttemptStatus.RESERVED.value:
                 cursor = self.conn.execute(
                     "UPDATE provider_attempts SET status='REQUEST_STARTED',"
@@ -4604,6 +4715,59 @@ class SqliteStorage:
                 run_id, "Content run cost cache could not be refreshed.",
             )
 
+    def _terminalize_content_over_cap_in_transaction(
+        self,
+        execution: JobExecutionContext,
+        *,
+        current_ts: str,
+        request_id: str,
+        reserved_amount: Decimal,
+        actual_amount: Decimal,
+    ) -> None:
+        """Atomically expose an over-cap paid CONTENT attempt for reconciliation."""
+        reason_code = ProviderAttemptOverReservationError.code
+        reason_code, result_json, score = self._validate_content_transition_payload(
+            ContentStatus.NEEDS_VERIFICATION,
+            reason_code,
+            {
+                "request_id": request_id,
+                "reserved_amount_usd": format(reserved_amount, ".6f"),
+                "actual_cost_usd": format(actual_amount, ".6f"),
+                "reconciliation_required": True,
+            },
+            None,
+        )
+        row = self._require_content_execution_fence(
+            execution,
+            current_ts,
+            allowed_content_statuses=(
+                ContentStatus.RUNNING.value,
+                ContentStatus.REVISE.value,
+            ),
+        )
+        self._assert_content_snapshot_in_transaction(
+            row["account_id"], int(row["id"]),
+        )
+        self._apply_content_transition_command(
+            mode="EXECUTION",
+            job_id=execution.job_id,
+            run_id=execution.run_id,
+            content_id=int(row["id"]),
+            account_id=row["account_id"],
+            workflow=execution.workflow.value,
+            source_status=row["status"],
+            target_status=ContentStatus.NEEDS_VERIFICATION.value,
+            target_run_status=RunStatus.STOPPED.value,
+            target_job_status=JobStatus.NEEDS_VERIFICATION.value,
+            lease_owner=execution.lease_owner,
+            execution_generation=execution.fence_token,
+            lease_expires_at=row["lease_expires_at"],
+            reason_code=reason_code,
+            result_json=result_json,
+            score=score,
+            current_ts=current_ts,
+        )
+
     def add_job_model_usage(
         self, execution: JobExecutionContext, usage: ModelUsage,
     ) -> ModelUsage:
@@ -4737,6 +4901,15 @@ class SqliteStorage:
                 self._set_run_cost_from_topic_generation_usage(execution.run_id)
             elif is_content:
                 self._set_run_cost_from_content_usage(execution.run_id)
+                if over_reservation:
+                    assert reserved_amount is not None
+                    self._terminalize_content_over_cap_in_transaction(
+                        execution,
+                        current_ts=current_ts,
+                        request_id=str(usage.request_id),
+                        reserved_amount=reserved_amount,
+                        actual_amount=actual_amount,
+                    )
             else:
                 self._set_run_cost_from_research_usage(execution.run_id)
             self.conn.commit()
@@ -6688,6 +6861,203 @@ class SqliteStorage:
             return False
         return True
 
+    def _approved_evidence_retrieval_ids(self, job_id: str) -> set[int] | None:
+        """Retrieval IDs of the frozen evidence intent, or ``None`` outside E3."""
+        row = self.conn.execute(
+            "SELECT payload_json FROM jobs WHERE id=?", (job_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            payload = json.loads(row["payload_json"] or "{}")
+            intent = payload.get("execution_intent")
+            evidence_input = (intent or {}).get("evidence_input")
+            retrievals = (evidence_input or {}).get("retrievals")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+        if not isinstance(retrievals, list) or not retrievals:
+            return None
+        approved: set[int] = set()
+        for entry in retrievals:
+            if not isinstance(entry, dict) or "retrieval_id" not in entry:
+                return None
+            approved.add(int(entry["retrieval_id"]))
+        return approved
+
+    def _persist_evidence_research_lineage(
+        self,
+        execution: JobExecutionContext,
+        card: ResearchCard,
+        *,
+        account_id: str,
+        current_ts: str,
+    ) -> None:
+        """Write the authoritative claim→excerpt→retrieval→source lineage for E3.
+
+        Real-compatible evidence research used to persist verified excerpts and
+        a Research Card without the ``evidence_source_lineage`` rows that
+        ``prepare_content_job`` later requires, so a correct PROCEED card could
+        not become content.  This closes that gap inside the one finalization
+        transaction, reusing the same lineage contract the offline E2-A flow
+        writes; it does not introduce a second evidence graph.
+
+        A PROCEED card whose confirmed claims cannot all be bound fails closed:
+        a card that CONTENT would reject must not be finalized as eligible.
+        """
+        approved = self._approved_evidence_retrieval_ids(execution.job_id)
+        if approved is None:
+            return  # Not evidence research; legacy single flow is unchanged.
+
+        retrieval_by_url: dict[str, int] = {}
+        canonical_by_url: dict[str, str] = {}
+        for retrieval_id in sorted(approved):
+            row = self.conn.execute(
+                "SELECT id,requested_url,final_url,canonical_sha256 "
+                "FROM evidence_retrievals WHERE id=? AND account_id=? AND status=?",
+                (retrieval_id, account_id, EvidenceRetrievalStatus.OK.value),
+            ).fetchone()
+            if row is None:
+                continue
+            for url in (row["requested_url"], row["final_url"]):
+                if isinstance(url, str) and url:
+                    retrieval_by_url[url] = int(row["id"])
+                    canonical_by_url[url] = str(row["canonical_sha256"])
+
+        # Authoritative admission floor. It is recomputed here, inside the one
+        # BEGIN IMMEDIATE transaction that also writes the card, the sources and
+        # the lineage, from exactly the persisted corpus those rows come from.
+        # A pre-check higher up cannot be relied on and cannot be bypassed by
+        # calling a lower function: no PROCEED card is ever finalized without a
+        # passing source_admission_policy_v1 verdict for this exact corpus.
+        if card.publication_recommendation is ResearchRecommendation.PROCEED:
+            outcome = evaluate_source_admission(
+                descriptors_from_research_card(
+                    [
+                        source for source in card.sources
+                        if source.verification_status is SourceVerification.VERIFIED
+                    ],
+                    retrieval_ids_by_url=retrieval_by_url,
+                    canonical_sha256_by_url=canonical_by_url,
+                ),
+                confirmed_claims=list(card.confirmed_claims),
+            )
+            if not outcome.admitted:
+                raise ResearchTopicIntegrityError(
+                    "PROCEED card fails source admission "
+                    f"({', '.join(outcome.reasons)}); it cannot be finalized."
+                )
+
+        bound_ordinals: set[int] = set()
+        linked_retrievals: set[int] = set()
+        for source in card.sources:
+            if source.verification_status is not SourceVerification.VERIFIED:
+                continue
+            retrieval_id = retrieval_by_url.get(source.url)
+            if retrieval_id is None:
+                raise ResearchTopicIntegrityError(
+                    f"Verified source {source.url} has no approved retrieval identity."
+                )
+            if retrieval_id in linked_retrievals:
+                # One retrieval is one evidence source.  Extra card rows citing
+                # the same retrieval add no independent lineage, matching the
+                # source-cardinality rule the evidence flow already enforces.
+                continue
+            linked_retrievals.add(retrieval_id)
+            claim = source.supports_claim
+            positions = [
+                index for index, confirmed in enumerate(card.confirmed_claims)
+                if confirmed == claim
+            ]
+            if len(positions) != 1:
+                raise ResearchTopicIntegrityError(
+                    "Verified source claim must identify exactly one confirmed claim."
+                )
+            claim_ordinal = positions[0]
+            excerpt = self.conn.execute(
+                "SELECT id FROM evidence_excerpts WHERE account_id=? AND retrieval_id=? "
+                "AND claim_sha256=? ORDER BY id DESC LIMIT 1",
+                (account_id, retrieval_id, sha256_hex(str(claim))),
+            ).fetchone()
+            if excerpt is None:
+                raise ResearchTopicIntegrityError(
+                    f"Verified source {source.url} has no persisted verified excerpt."
+                )
+            candidate = self.conn.execute(
+                "INSERT INTO research_source_candidates (research_run_id,url,title,"
+                "author_or_org,published_at,source_type,verification_status,status,"
+                "extracted_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                (
+                    execution.run_id, source.url, source.title,
+                    source.author_or_org, source.published_at,
+                    source.source_type.value, SourceVerification.VERIFIED.value,
+                    SourceCandidateStatus.EXTRACTED.value, current_ts,
+                ),
+            )
+            candidate_id = int(candidate.lastrowid)
+            # The same two link rows the offline spine writes; 0025 widened
+            # their integrity trigger to admit this execution as well.
+            self.conn.execute(
+                "INSERT INTO evidence_candidate_retrievals "
+                "(candidate_id,research_run_id,account_id,retrieval_id,created_at) "
+                "VALUES (?,?,?,?,?)",
+                (
+                    candidate_id, execution.run_id, account_id, retrieval_id,
+                    current_ts,
+                ),
+            )
+            self.conn.execute(
+                "INSERT INTO evidence_candidate_excerpts "
+                "(candidate_id,research_run_id,account_id,retrieval_id,excerpt_id,"
+                "created_at) VALUES (?,?,?,?,?,?)",
+                (
+                    candidate_id, execution.run_id, account_id, retrieval_id,
+                    int(excerpt["id"]), current_ts,
+                ),
+            )
+            claim_id = (
+                f"research-card:{int(card.id)}:confirmed-claim:{claim_ordinal}"
+            )
+            lineage_preimage = {
+                "account_id": account_id,
+                "candidate_id": candidate_id,
+                "confirmed_claim_id": claim_id,
+                "confirmed_claim_ordinal": claim_ordinal,
+                "excerpt_id": int(excerpt["id"]),
+                "research_card_id": int(card.id),
+                "research_job_id": execution.job_id,
+                "research_run_id": execution.run_id,
+                "retrieval_id": retrieval_id,
+                "source_id": int(source.id),
+                "topic_id": int(card.topic_id),
+            }
+            self.conn.execute(
+                "INSERT INTO evidence_source_lineage "
+                "(source_id,research_card_id,candidate_id,research_run_id,account_id,"
+                "retrieval_id,excerpt_id,created_at,confirmed_claim_ordinal,"
+                "confirmed_claim_id,confirmed_claim_sha256,research_job_id,"
+                "topic_id,lineage_fingerprint) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    int(source.id), int(card.id), candidate_id, execution.run_id,
+                    account_id, retrieval_id, int(excerpt["id"]), current_ts,
+                    claim_ordinal, claim_id,
+                    sha256_hex(card.confirmed_claims[claim_ordinal]),
+                    execution.job_id, int(card.topic_id),
+                    sha256_hex(canonical_json(lineage_preimage)),
+                ),
+            )
+            bound_ordinals.add(claim_ordinal)
+
+        if card.publication_recommendation is ResearchRecommendation.PROCEED:
+            missing = [
+                ordinal for ordinal in range(len(card.confirmed_claims))
+                if ordinal not in bound_ordinals
+            ]
+            if missing:
+                raise ResearchTopicIntegrityError(
+                    f"{len(missing)} confirmed claim(s) would leave a PROCEED card "
+                    "without the authoritative lineage CONTENT requires."
+                )
+
     def finalize_job_research_execution(
         self, execution: JobExecutionContext, card: ResearchCard, total_cost_usd: float,
         *, terminal_run_status: RunStatus,
@@ -6739,6 +7109,10 @@ class SqliteStorage:
             for source in card.sources:
                 source.research_card_id = card.id
                 self._insert_finalization_source(source)
+            self._persist_evidence_research_lineage(
+                execution, card, account_id=fence["research_account_id"],
+                current_ts=current_ts,
+            )
 
             research_cursor = self.conn.execute(
                 "UPDATE research_runs SET status='COMPLETE',research_card_id=?,"
@@ -7247,6 +7621,17 @@ class SqliteStorage:
                 "CONTENT_RECOVERY_RELATION_INVALID",
                 "Ambiguous recovery found an already terminal content_run.",
             )
+        # A writer call may still be in flight. Recovery never starts a second
+        # potentially paid call: it normalizes the unresolved attempt into an
+        # explicit reconciliation item so the job can terminalize as
+        # NEEDS_VERIFICATION instead of being handed back for a retry.
+        self.conn.execute(
+            "UPDATE provider_attempts SET status='NEEDS_RECONCILIATION',"
+            "actual_cost_usd=NULL,settled_at=NULL,"
+            "error_code=COALESCE(error_code,?) "
+            "WHERE job_id=? AND status IN ('RESERVED','REQUEST_STARTED')",
+            ("CONTENT_LEASE_EXPIRED_CALL_IN_FLIGHT", row["id"]),
+        )
         self._apply_content_transition_command(
             mode="RECOVERY",
             job_id=row["id"],

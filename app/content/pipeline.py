@@ -36,7 +36,16 @@ from app.content.foundation import (
 )
 from app.content.planner import ContentPlanningBlocked, plan_content
 from app.content.prompt import assemble_writer_prompt
+from app.content.quality_gate import (
+    ClaimAccountingReviewPort,
+)
 from app.content.routing import ContentRoutingError, default_content_routing_path, load_content_route
+from app.content.style_examples import (
+    StyleExampleError,
+    StyleExampleSet,
+    default_style_corpus_path,
+    load_article_style_examples,
+)
 from app.content.writer import FakeContentWriter, WriterPort
 from app.core.clock import Clock
 from app.models import (
@@ -48,7 +57,7 @@ from app.models import (
     ProviderAttemptStatus,
 )
 from app.policies.policy_engine import PolicyEngine
-from app.ports.storage import StoragePort
+from app.ports.storage import ProviderAttemptOverReservationError, StoragePort
 
 
 @dataclass(frozen=True)
@@ -130,13 +139,20 @@ def run_offline_content_pipeline(
     writer: WriterPort | None = None,
     route_override: RouteContract | None = None,
     fault_point: Callable[[str], None] | None = None,
+    heartbeat: Callable[[], None] | None = None,
+    lease_seconds: int = 60,
+    claim_reviewer: ClaimAccountingReviewPort | None = None,
+    reviewer_factory: Callable[[], ClaimAccountingReviewPort | None] | None = None,
 ) -> ContentPipelineSummary:
     """Resume from durable checkpoints and perform no network/API operation."""
     if job.kind is not JobKind.CONTENT:
         raise ValueError("Offline content pipeline requires a CONTENT job.")
     payload = canonicalize_content_job_payload(job.payload)
-    if payload["execution_mode"] != ContentExecutionMode.OFFLINE_PIPELINE.value:
-        raise ValueError("Dispatcher admits only OFFLINE_PIPELINE content jobs.")
+    if payload["execution_mode"] not in (
+        ContentExecutionMode.OFFLINE_PIPELINE.value,
+        ContentExecutionMode.CONTROLLED_PROVIDER_PIPELINE.value,
+    ):
+        raise ValueError("Dispatcher admits only executable content pipelines.")
     if job.status not in (JobStatus.LEASED, JobStatus.RUNNING):
         raise ValueError("Content job must be leased before pipeline execution.")
     run_id = job.run_id or f"content-run:{job.id}"
@@ -158,6 +174,49 @@ def run_offline_content_pipeline(
     )
     frozen = initialized.frozen_input
     writer = writer or FakeContentWriter()
+
+    def beat() -> None:
+        """Refresh ownership, then let the worker guard observe the same beat.
+
+        The typed storage call is the authoritative one: it raises when this
+        execution no longer owns the job at this generation, which stops the
+        pipeline before it can write anything under a lost lease.
+        """
+        if lease_seconds > 0:
+            storage.heartbeat_content_execution(execution, lease_seconds)
+        if heartbeat is not None:
+            heartbeat()
+
+    beat()
+
+    # ARTICLE is never evaluated without an independent reviewer. The writer
+    # cannot supply it, and an unavailable one is a fail-closed refusal rather
+    # than a silently unreviewed draft.
+    reviewer = claim_reviewer
+    if reviewer is None and reviewer_factory is not None:
+        reviewer = reviewer_factory()
+    if frozen.content_type is ContentType.ARTICLE and reviewer is None:
+        storage.transition_content_execution(
+            execution, ContentStatus.FAILED,
+            reason_code="CONTENT_INDEPENDENT_REVIEW_UNAVAILABLE",
+            final_result={"mode": writer.call_mode.value, "blocked": True},
+        )
+        return _summary(
+            storage, job.id, "CONTENT_INDEPENDENT_REVIEW_UNAVAILABLE",
+        )
+
+    style_examples: StyleExampleSet | None = None
+    if frozen.content_type is ContentType.ARTICLE:
+        try:
+            style_examples = load_article_style_examples(
+                default_style_corpus_path(project_root),
+            )
+        except StyleExampleError as exc:
+            storage.transition_content_execution(
+                execution, ContentStatus.FAILED, reason_code=str(exc.code),
+                final_result={"mode": writer.call_mode.value, "blocked": True},
+            )
+            return _summary(storage, job.id, str(exc.code))
 
     try:
         route = route_override or load_content_route(
@@ -297,6 +356,7 @@ def run_offline_content_pipeline(
             attempt_no=attempt_no,
             rewrite_of_draft_fingerprint=rewrite_fingerprint,
             rewrite_feedback=prior_feedback,
+            style_examples=style_examples,
         )
         intent = WriterIntent(
             intent_id=f"{job.id}:writer:{attempt_no}",
@@ -316,6 +376,18 @@ def run_offline_content_pipeline(
             prompt_fingerprint=prompt.fingerprint(),
             limits=context.limits,
             call_mode=writer.call_mode,
+            style_corpus_id=(
+                None if style_examples is None else style_examples.corpus_id
+            ),
+            style_corpus_sha256=(
+                None if style_examples is None else style_examples.corpus_sha256
+            ),
+            style_example_ids=(
+                () if style_examples is None else style_examples.example_ids
+            ),
+            style_example_set_fingerprint=(
+                None if style_examples is None else style_examples.fingerprint()
+            ),
             rewrite_of_draft_fingerprint=rewrite_fingerprint,
             rewrite_feedback=prior_feedback,
         )
@@ -383,6 +455,9 @@ def run_offline_content_pipeline(
                 )
                 if fault_point is not None:
                     fault_point("WRITER_ATTEMPT_STARTED")
+                # Refresh the lease immediately before the only slow step, so a
+                # long writer call cannot silently outlive its own ownership.
+                beat()
                 result = writer.write(request)
                 if fault_point is not None:
                     fault_point("WRITER_CALL_RETURNED")
@@ -407,29 +482,101 @@ def run_offline_content_pipeline(
                 str(persisted_attempt["status"])
             )
             if result.usage is not None and not usage_exists:
+                # Usage exists, so a provider operation already happened and may
+                # already have cost money.  Every exit from here has to leave the
+                # cost durable and the lifecycle explicit; nothing may escape and
+                # strand the job in RUNNING with an unsettled attempt.
                 if persisted_status is not ProviderAttemptStatus.REQUEST_STARTED:
-                    raise RuntimeError(
-                        "Writer usage lacks an active canonical attempt."
+                    storage.transition_content_execution(
+                        execution,
+                        ContentStatus.NEEDS_VERIFICATION,
+                        reason_code="CONTENT_WRITER_USAGE_UNSETTLED",
+                        final_result={
+                            "attempt_no": attempt_no,
+                            "request_id": request_id,
+                            "attempt_status": persisted_status.value,
+                            "usage": result.usage.model_dump(mode="json"),
+                            "mode": writer.call_mode.value,
+                        },
                     )
-                storage.add_job_model_usage(
-                    execution,
-                    ModelUsage(
-                        run_id=run_id,
-                        provider=result.provider,
-                        model=result.api_model_id or route.route_key,
-                        task=CONTENT_PROVIDER_STAGE,
-                        input_tokens=result.usage.input_tokens,
-                        output_tokens=result.usage.output_tokens,
-                        cache_read_tokens=result.usage.cache_read_tokens,
-                        cache_write_tokens=result.usage.cache_write_tokens,
-                        estimated_cost_usd=result.usage.estimated_cost_usd,
-                        dry_run=(
-                            writer.call_mode
-                            is not WriterCallMode.CONTROLLED_PROVIDER
+                    return _summary(
+                        storage, job.id, "CONTENT_WRITER_USAGE_UNSETTLED",
+                    )
+                try:
+                    storage.add_job_model_usage(
+                        execution,
+                        ModelUsage(
+                            run_id=run_id,
+                            provider=result.provider,
+                            model=result.api_model_id or route.route_key,
+                            task=CONTENT_PROVIDER_STAGE,
+                            input_tokens=result.usage.input_tokens,
+                            output_tokens=result.usage.output_tokens,
+                            cache_read_tokens=result.usage.cache_read_tokens,
+                            cache_write_tokens=result.usage.cache_write_tokens,
+                            estimated_cost_usd=result.usage.estimated_cost_usd,
+                            dry_run=(
+                                writer.call_mode
+                                is not WriterCallMode.CONTROLLED_PROVIDER
+                            ),
+                            request_id=request_id,
+                            created_at=clock.now(),
                         ),
-                        request_id=request_id,
-                        created_at=clock.now(),
-                    ),
+                    )
+                except ProviderAttemptOverReservationError as exc:
+                    # Storage committed usage, reconciliation and the terminal
+                    # CONTENT/job/run transition in one transaction.  Replaying
+                    # either transition here would be a stale second write.
+                    return _summary(storage, job.id, exc.code)
+                except Exception as exc:
+                    # The provider may already have charged for this attempt, so
+                    # the unbooked cost becomes an explicit reconciliation item
+                    # rather than an exception that leaves the job leased.
+                    storage.mark_provider_attempt_needs_reconciliation(
+                        execution,
+                        request_id,
+                        error_code="CONTENT_WRITER_USAGE_NOT_BOOKED",
+                    )
+                    storage.transition_content_execution(
+                        execution,
+                        ContentStatus.NEEDS_VERIFICATION,
+                        reason_code="CONTENT_WRITER_USAGE_NOT_BOOKED",
+                        final_result={
+                            "attempt_no": attempt_no,
+                            "request_id": request_id,
+                            "usage": result.usage.model_dump(mode="json"),
+                            "detail": str(exc).replace("\n", " ")[:240],
+                            "mode": writer.call_mode.value,
+                        },
+                    )
+                    return _summary(
+                        storage, job.id, "CONTENT_WRITER_USAGE_NOT_BOOKED",
+                    )
+            elif (
+                result.usage is not None
+                and usage_exists
+                and persisted_status is ProviderAttemptStatus.REQUEST_STARTED
+            ):
+                # Recovery observed the booked usage but an unsettled attempt:
+                # the cost is already durable, so re-booking it would double
+                # count.  Terminalize it explicitly for reconciliation instead.
+                storage.mark_provider_attempt_needs_reconciliation(
+                    execution,
+                    request_id,
+                    error_code="CONTENT_WRITER_ATTEMPT_UNSETTLED",
+                )
+                storage.transition_content_execution(
+                    execution,
+                    ContentStatus.NEEDS_VERIFICATION,
+                    reason_code="CONTENT_WRITER_ATTEMPT_UNSETTLED",
+                    final_result={
+                        "attempt_no": attempt_no,
+                        "request_id": request_id,
+                        "mode": writer.call_mode.value,
+                    },
+                )
+                return _summary(
+                    storage, job.id, "CONTENT_WRITER_ATTEMPT_UNSETTLED",
                 )
             elif (
                 result.usage is None
@@ -471,11 +618,18 @@ def run_offline_content_pipeline(
             draft = _draft_from_row(draft_row)
             draft_id = int(draft_row["id"])
 
+        beat()
         evaluation_rows = persisted_evaluations.get(attempt_no, [])
         if len(evaluation_rows) == 9:
             evaluations = tuple(_evaluation_from_row(row) for row in evaluation_rows)
         else:
-            evaluations = evaluate_draft(draft, brief)
+            evaluations = evaluate_draft(
+                draft,
+                brief,
+                evidence=frozen.evidence_items,
+                research_card=research_card,
+                claim_reviewer=reviewer,
+            )
             for evaluation in evaluations:
                 storage.record_content_draft_evaluation(
                     execution,

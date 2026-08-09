@@ -75,10 +75,17 @@ class ContentStatus(str, Enum):
 
 
 class ContentExecutionMode(str, Enum):
-    """CONTENT jobs are held from the ordinary queue and claimed only by id."""
+    """CONTENT jobs are held from the ordinary queue and claimed only by id.
+
+    ``CONTROLLED_PROVIDER_PIPELINE`` is the only mode allowed to reach a paid
+    writer, and it is the only mode whose payload may set ``provider_enabled``.
+    Declaring it does not by itself authorize a run: the dispatcher still has
+    to be composed with paid content explicitly enabled.
+    """
 
     FOUNDATION_ONLY = "FOUNDATION_ONLY"
     OFFLINE_PIPELINE = "OFFLINE_PIPELINE"
+    CONTROLLED_PROVIDER_PIPELINE = "CONTROLLED_PROVIDER_PIPELINE"
 
 
 class ContentInitializationFaultPoint(str, Enum):
@@ -422,7 +429,9 @@ def content_job_payload(
         "frozen_input_sha256": frozen_input_sha256,
         "evidence_manifest_sha256": evidence_manifest_sha256,
         "intent_key": intent_key,
-        "provider_enabled": False,
+        "provider_enabled": (
+            execution_mode is ContentExecutionMode.CONTROLLED_PROVIDER_PIPELINE
+        ),
     }
     return canonicalize_content_job_payload(payload)
 
@@ -456,7 +465,14 @@ def canonicalize_content_job_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "CONTENT_EXECUTION_MODE_UNSUPPORTED",
             "content execution mode is not supported.",
         ) from exc
-    if payload.get("provider_enabled") is not False:
+    provider_enabled = payload.get("provider_enabled")
+    if execution_mode is ContentExecutionMode.CONTROLLED_PROVIDER_PIPELINE:
+        if provider_enabled is not True:
+            raise ContentContractError(
+                "CONTENT_PROVIDER_FORBIDDEN",
+                "A controlled provider pipeline must declare provider_enabled.",
+            )
+    elif provider_enabled is not False:
         raise ContentContractError(
             "CONTENT_PROVIDER_FORBIDDEN", "CONTENT jobs cannot enable a real provider.",
         )
