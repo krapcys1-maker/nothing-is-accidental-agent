@@ -124,3 +124,7 @@ Wynik: `WORKFLOW_FAILED` nie wywołuje generic `fail_job`; malformed result koń
 ## [2026-07-14] Zamknięcie WAVE 0A nie jest eksperymentem
 
 Niezależne review potwierdziło P0=0 i P1=0 dla WAVE 0A, a kontrola bazy potwierdziła zachowanie realnych danych po logicznym odtworzeniu. To wciąż nie jest eksperyment z odbiorcami, wzrostem ani publikacją: nie użyto API, browsera, sieci ani kosztu. WAVE 0A została formalnie zamknięta jako **APPROVED WITH P2**; Etap 1 pozostaje BLOCKED przez inne P1, a E1–E10 nie zmieniają statusu.
+
+## 2026-08-09 — Kontrpróba pytań, nie eksperyment publikacyjny
+
+Lokalna macierz 50 factual, 25 non-factual oraz 55 dodatkowych question forms badała wyłącznie inwariant claim accounting. Wynik: zero prose shortcuts dla pytań, zachowana honest-inference route i jawna trust boundary. Nie było odbiorców, wariantu treści, publikacji, sieci ani kosztu; EXP-01–EXP-08 pozostają bez zmiany.

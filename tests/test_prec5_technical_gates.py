@@ -80,7 +80,10 @@ from app.research.source_admission import (
 )
 from app.storage.repositories import SqliteStorage
 from tests.c2_fixtures import seed_c2_research
-from tests.claim_accounting_fakes import FakeClaimAccountingReviewer
+from tests.claim_accounting_fakes import (
+    FakeClaimAccountingReviewer,
+    ground_every_segment_in_package,
+)
 
 
 NOW = datetime(2026, 7, 24, 9, 0, 0, tzinfo=timezone.utc)
@@ -122,7 +125,10 @@ def _prepare_content(storage, account, *, suffix, content_type=ContentType.ARTIC
 
 def _run_content(storage, settings, account, *, suffix, writer=None, **kwargs):
     request, lease, owner = _prepare_content(storage, account, suffix=suffix)
-    kwargs.setdefault("claim_reviewer", FakeClaimAccountingReviewer())
+    kwargs.setdefault(
+        "claim_reviewer",
+        FakeClaimAccountingReviewer(decide=ground_every_segment_in_package),
+    )
     summary = run_offline_content_pipeline(
         lease.job,
         storage=storage,
@@ -227,7 +233,9 @@ def test_clean_draft_still_passes_the_independent_assessment():
         _draft(GOOD_BODY),
         _article_brief(),
         evidence=(_evidence_item(CLAIM, EXCERPT),),
-        claim_reviewer=FakeClaimAccountingReviewer(),
+        claim_reviewer=FakeClaimAccountingReviewer(
+            decide=ground_every_segment_in_package
+        ),
     )
     assert all(verdict.checks.values())
     assert verdict.self_report_divergences == ()
@@ -241,7 +249,9 @@ def test_unsupported_statistic_is_rejected_despite_empty_self_report():
     draft = _draft(body, unsupported_claims=())
     verdict = assess_draft(
         draft, _article_brief(), evidence=(_evidence_item(CLAIM, EXCERPT),),
-        claim_reviewer=FakeClaimAccountingReviewer(),
+        claim_reviewer=FakeClaimAccountingReviewer(
+            decide=ground_every_segment_in_package
+        ),
     )
     assert verdict.passed(QualityCheck.FACTUAL_CLAIM_SUPPORT) is False
     codes = {item["code"] for item in verdict.findings}
@@ -251,7 +261,9 @@ def test_unsupported_statistic_is_rejected_despite_empty_self_report():
 
     evaluations = evaluate_draft(
         draft, _article_brief(), evidence=(_evidence_item(CLAIM, EXCERPT),),
-        claim_reviewer=FakeClaimAccountingReviewer(),
+        claim_reviewer=FakeClaimAccountingReviewer(
+            decide=ground_every_segment_in_package
+        ),
     )
     unsupported = next(
         item for item in evaluations
@@ -269,7 +281,9 @@ def test_invented_personal_story_is_rejected_despite_false_self_report():
     draft = _draft(body, personal_experience=False)
     verdict = assess_draft(
         draft, _article_brief(), evidence=(_evidence_item(CLAIM, EXCERPT),),
-        claim_reviewer=FakeClaimAccountingReviewer(),
+        claim_reviewer=FakeClaimAccountingReviewer(
+            decide=ground_every_segment_in_package
+        ),
     )
     assert verdict.passed(QualityCheck.NO_FABRICATED_EXPERIENCE) is False
     assert FABRICATED_PERSONAL_EXPERIENCE in {
@@ -279,7 +293,9 @@ def test_invented_personal_story_is_rejected_despite_false_self_report():
 
     evaluations = evaluate_draft(
         draft, _article_brief(), evidence=(_evidence_item(CLAIM, EXCERPT),),
-        claim_reviewer=FakeClaimAccountingReviewer(),
+        claim_reviewer=FakeClaimAccountingReviewer(
+            decide=ground_every_segment_in_package
+        ),
     )
     personal = next(
         item for item in evaluations
@@ -297,7 +313,9 @@ def test_first_person_reasoning_is_not_treated_as_lived_experience():
     verdict = assess_draft(
         _draft(body), _article_brief(),
         evidence=(_evidence_item(CLAIM, EXCERPT),),
-        claim_reviewer=FakeClaimAccountingReviewer(),
+        claim_reviewer=FakeClaimAccountingReviewer(
+            decide=ground_every_segment_in_package
+        ),
     )
     assert verdict.passed(QualityCheck.NO_FABRICATED_EXPERIENCE) is True
 
@@ -336,13 +354,17 @@ def test_declared_evidence_id_absent_from_the_draft_is_rejected():
     draft = _draft(GOOD_BODY, evidence_ids_used=(unrelated.confirmed_claim_id,))
     verdict = assess_draft(
         draft, brief, evidence=(unrelated,),
-        claim_reviewer=FakeClaimAccountingReviewer(),
+        claim_reviewer=FakeClaimAccountingReviewer(
+            decide=ground_every_segment_in_package
+        ),
     )
     assert verdict.passed(QualityCheck.EVIDENCE_ID_CORRESPONDENCE) is False
 
     evaluations = evaluate_draft(
         draft, brief, evidence=(unrelated,),
-        claim_reviewer=FakeClaimAccountingReviewer(),
+        claim_reviewer=FakeClaimAccountingReviewer(
+            decide=ground_every_segment_in_package
+        ),
     )
     coverage = next(
         item for item in evaluations

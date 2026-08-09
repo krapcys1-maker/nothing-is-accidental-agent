@@ -26,7 +26,10 @@ from app.content.quality_gate import (
 )
 from app.core.clock import FixedClock
 from app.models import JobStatus, ProviderAttemptStatus, RunStatus
-from tests.claim_accounting_fakes import FakeClaimAccountingReviewer
+from tests.claim_accounting_fakes import (
+    FakeClaimAccountingReviewer,
+    grounded_fact,
+)
 from tests.test_prec5_repair_regression import (
     NOW,
     PaidFakeWriter,
@@ -189,7 +192,10 @@ def test_rv1_j_reviewer_omits_one_substantive_sentence_blocks():
         _draft(body),
         _brief(),
         evidence=(_evidence(),),
-        claim_reviewer=FakeClaimAccountingReviewer(omit_texts=(omitted,)),
+        claim_reviewer=FakeClaimAccountingReviewer(
+            default=grounded_fact(EVIDENCE_ID),
+            omit_texts=(omitted,),
+        ),
     )
     assert not _claim_gate_passed(verdict)
     assert CLAIM_ACCOUNTING_COVERAGE_MISSING in {f["code"] for f in verdict.findings}
@@ -390,7 +396,7 @@ def test_self_challenge_unsupported_external_fact_classes_all_block(
     "label,sentence,classification",
     [
         ("opinion", "I think this trade-off is unacceptable.", ClaimClassification.ARGUMENT_OR_INFERENCE),
-        ("rhetorical_question", "What would a fair incentive look like?", ClaimClassification.NON_FACTUAL_PROSE),
+        ("rhetorical_question", "What would a fair incentive look like?", ClaimClassification.ARGUMENT_OR_INFERENCE),
         ("metaphor", "The policy is a maze with no centre.", ClaimClassification.ARGUMENT_OR_INFERENCE),
         ("style_transition", "Now, a step back.", ClaimClassification.NON_FACTUAL_PROSE),
         ("explicit_inference", "This suggests the incentive is misaligned.", ClaimClassification.ARGUMENT_OR_INFERENCE),

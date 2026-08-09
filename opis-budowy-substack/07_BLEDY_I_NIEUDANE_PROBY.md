@@ -500,3 +500,9 @@ Pierwsza sonda PRE miała błąd parsera PowerShell i została odrzucona jako do
 Pierwszy pełny suite przekroczył limit launchera. Kolejny przebieg ujawnił stare oczekiwania numeru migracji: najpierw osiem, potem dziesięć przypadków w historycznych drabinach i operational report. Nie były to defekty C4; testy jawnie zatrzymywały listę na 0023. Po dodaniu dokładnego kroku 0024 celowane reruny dały 8/8 i 10/10, a pełny przebieg 1994/1994.
 
 Podwójny quiet ponownie ukrył liczbową linię pełnego wyniku. Osobny collect policzył 1994 node IDs, wszystkie case-sensitive unique, zero duplikatów. Czerwonych prób nie wymazano: opisują, dlaczego „100% kropek” bez collectu nie jest jeszcze kompletnym dowodem.
+
+## 2026-08-09 — Dwie heurystyki, dwa `REJECT — MAJOR`
+
+`predicate + concrete referent` przepuszczało pytania poza własnym słownikiem konstrukcji. Naprawa `_CONTENTLESS_QUESTION_VOCABULARY` zmieniła nazwę problemu, ale nie jego naturę: membership w słowniku nie dowodzi braku proposition. Re-review znalazł 34/38 factual false-negatives i pięć supported flows z 9/9 PASS.
+
+W nowej fali pierwsza próba full suite została przerwana przez omyłkowy limit jednej sekundy, a pierwszy parser collectu policzył pozorne zero przez podwójny quiet. Obu wyników odmówiono jako dowodu. Poprawne przebiegi dały 2285/2285 oraz 2285 exact unique.

@@ -58,7 +58,10 @@ from app.research.source_admission import (
 )
 from app.scheduler.worker import WorkerIterationStatus
 from tests.c2_fixtures import seed_c2_research
-from tests.claim_accounting_fakes import FakeClaimAccountingReviewer
+from tests.claim_accounting_fakes import (
+    FakeClaimAccountingReviewer,
+    ground_every_segment_in_package,
+)
 from tests.test_e3_evidence_research import (
     NOW,
     _approve,
@@ -252,7 +255,9 @@ def test_rv1_fake_semantic_evaluator_blocker_reaches_the_lifecycle():
         reviewer_version = "fake-blocking-reviewer-v1"
 
         def review(self, *, draft, brief, evidence, segments):
-            base = FakeClaimAccountingReviewer().review(
+            base = FakeClaimAccountingReviewer(
+                decide=ground_every_segment_in_package
+            ).review(
                 draft=draft, brief=brief, evidence=evidence, segments=segments,
             )
             first = base[0]
@@ -277,7 +282,9 @@ def test_rv1_semantic_evaluator_cannot_clear_a_deterministic_blocker():
         reviewer_version = "fake-permissive-reviewer-v1"
 
         def review(self, *, draft, brief, evidence, segments):
-            return FakeClaimAccountingReviewer().review(
+            return FakeClaimAccountingReviewer(
+                decide=ground_every_segment_in_package
+            ).review(
                 draft=draft, brief=brief, evidence=evidence, segments=segments,
             )
 
@@ -662,7 +669,9 @@ def _run_paid(storage, settings, account, *, suffix, writer, lease_seconds=120,
         lease.job, storage=storage, clock=FixedClock(NOW), lease_owner=owner,
         project_root=ROOT, policy=PolicyEngine(settings, storage, FixedClock(NOW)),
         writer=writer, route_override=_paid_route(),
-        claim_reviewer=FakeClaimAccountingReviewer(),
+        claim_reviewer=FakeClaimAccountingReviewer(
+            decide=ground_every_segment_in_package
+        ),
         lease_seconds=pipeline_lease_seconds,
     )
     return request, lease, owner, summary
@@ -762,7 +771,9 @@ def test_offline_content_still_refuses_a_non_zero_cost(
             project_root=ROOT,
             policy=PolicyEngine(settings, storage, FixedClock(NOW)),
             writer=PaidFakeWriter(), route_override=_paid_route(),
-            claim_reviewer=FakeClaimAccountingReviewer(),
+            claim_reviewer=FakeClaimAccountingReviewer(
+                decide=ground_every_segment_in_package
+            ),
         )
     assert storage.conn.execute(
         "SELECT count(*) FROM model_usage WHERE dry_run=0"
@@ -783,7 +794,9 @@ def test_paid_content_requires_a_provider_enabled_execution_mode(
             project_root=ROOT,
             policy=PolicyEngine(settings, storage, FixedClock(NOW)),
             writer=PaidFakeWriter(), route_override=_paid_route(),
-            claim_reviewer=FakeClaimAccountingReviewer(),
+            claim_reviewer=FakeClaimAccountingReviewer(
+                decide=ground_every_segment_in_package
+            ),
         )
     assert "CONTENT_CONTROLLED_PROVIDER_NOT_AUTHORIZED" in str(excinfo.value)
 
@@ -837,7 +850,9 @@ def test_rv4_call_longer_than_lease_never_yields_a_second_writer_call(
             project_root=ROOT,
             policy=PolicyEngine(settings, storage, FixedClock(NOW)),
             writer=first, route_override=_paid_route(), lease_seconds=0,
-            claim_reviewer=FakeClaimAccountingReviewer(),
+            claim_reviewer=FakeClaimAccountingReviewer(
+                decide=ground_every_segment_in_package
+            ),
         )
     except (StaleJobExecutionError, ContentFoundationError):
         pass
@@ -867,7 +882,9 @@ def test_rv4_call_longer_than_lease_never_yields_a_second_writer_call(
                 lease_owner="second-worker", project_root=ROOT,
                 policy=PolicyEngine(settings, storage, FixedClock(NOW)),
                 writer=second, route_override=_paid_route(), lease_seconds=0,
-                claim_reviewer=FakeClaimAccountingReviewer(),
+                claim_reviewer=FakeClaimAccountingReviewer(
+                    decide=ground_every_segment_in_package
+                ),
             )
         except (StaleJobExecutionError, ContentFoundationError):
             pass
@@ -896,7 +913,9 @@ def test_rv4_in_flight_paid_attempt_blocks_automatic_recovery_requeue(
             project_root=ROOT,
             policy=PolicyEngine(settings, storage, FixedClock(NOW)),
             writer=writer, route_override=_paid_route(), lease_seconds=0,
-            claim_reviewer=FakeClaimAccountingReviewer(),
+            claim_reviewer=FakeClaimAccountingReviewer(
+                decide=ground_every_segment_in_package
+            ),
         )
     assert writer.calls == 1
     job = storage.get_job(request.job_id)
@@ -1007,7 +1026,9 @@ def test_full_chain_evidence_to_paid_content_decision(
         lease.job, storage=storage, clock=FixedClock(NOW), lease_owner=owner,
         project_root=ROOT, policy=PolicyEngine(settings, storage, FixedClock(NOW)),
         writer=writer, route_override=_paid_route(), lease_seconds=300,
-        claim_reviewer=FakeClaimAccountingReviewer(),
+        claim_reviewer=FakeClaimAccountingReviewer(
+            decide=ground_every_segment_in_package
+        ),
     )
 
     assert summary.status is ContentStatus.PENDING_APPROVAL

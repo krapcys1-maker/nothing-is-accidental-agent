@@ -1200,3 +1200,20 @@ Niezależny review PR #9 wydał `APPROVE WITH MINOR/P2`. Po merge i zielonym che
 - **Dwie komendy regresji:** robocza lista zawierała nieistniejące nazwy `test_prec5_e3_closure.py`/`test_prec5_repair_regressions.py`, a następnie stare nazwy modułów C2/C3/C4. Pytest zatrzymał się przed kolekcją. Po odczycie faktycznego katalogu poprawne runy dały PRE-C5 `108/108` i zakres `436/436`.
 - **Pierwszy pełny run:** limit procesu ustawiono omyłkowo na `1 s`; launcher przerwał pytest i zgłosił wtórny błąd stdout. Nie uznano tego za wynik testów. Identyczny run z właściwym limitem zakończył się `2102/2102` w `367.7 s`.
 - **Wpływ:** wszystkie zdarzenia były lokalne, offline i bezprodukcyjne. Nie wykonano sieci, API, publikacji, zapisu do produkcji ani operacji Git. Rzeczywisty koszt `0.000000 USD`.
+
+## 2026-08-09 — Question semantic boundary: dwa odrzucenia i błędy narzędziowe
+
+- **Dwa odrzucenia poprzedniej fali:** pierwsze rozwiązanie `predicate + concrete referent` zakończyło się `REJECT — MAJOR`; jedyna dozwolona naprawa z `_CONTENTLESS_QUESTION_VOCABULARY` również zakończyła się `REJECT — MAJOR`. Według przekazanego re-review `34/38` factual questions przechodziło jako `NON_FACTUAL_PROSE`, a pięć reprezentatywnych przypadków osiągnęło pełne `9/9 PASS`. Nie wykonano trzeciej poprawki; kandydat został usunięty w jawnie autoryzowanym zakresie.
+- **Root cause:** blacklist/whitelist/vocabulary, referent i predicate próbowały udowodnić brak znaczenia przez skończony opis języka. Membership nie dowodzi braku factual proposition; każda taka heurystyka ma fail-open dopełnienie.
+- **Fingerprint manifestu:** pierwsza sonda poprawnie policzyła główne SHA, lecz końcowy `SHA256.HashData` nie istnieje w lokalnej wersji .NET. Niepełnego wyniku manifestu nie przyjęto; powtórka użyła `SHA256.Create().ComputeHash` i dała `f5bf2971…55f66c`. Bez mutacji.
+- **Collect PRE:** pierwsze parsowanie zwróciło pozorne `0`, ponieważ projektowe `addopts=-q` plus jawne `-q` pokazały per-file counts zamiast node IDs. Powtórka z `-o addopts=` dała prawidłowe `2102` exact unique i `0` exact duplicates. Dodatkowa sonda opcjonalnych plików konfiguracji zakończyła `rg` kodem 1 dla nieistniejących paths; sam collect był poprawny, ale wynik tej złożonej komendy nie został użyty jako checkpoint.
+- **Full suite:** pierwsza próba miała omyłkowy limit procesu `1 s`, została przerwana przez launcher i zgłosiła wtórny `OSError` stdout. Nie uznano jej za failure produktu. Identyczny przebieg z poprawnym limitem zakończył się `2285/2285` w `358.89 s`.
+- **Wpływ:** wszystkie zdarzenia były lokalne, offline i bezprodukcyjne. Produkcja i style corpus zachowały dokładne SHA/size/mtime/sidecary; koszt `0.000000 USD`.
+
+## 2026-08-09 — Repair question-marker-anywhere: MAJOR i próby narzędziowe
+
+- **Finding produktu:** kandydat chronił tylko `text.endswith("?")`. Segmenty z `?!`, `?.`, `?;`, `?...` albo zamykającym znakiem po `?` mogły wejść w stary fallback transition/predicate/length i przejść jako `NON_FACTUAL_PROSE`. Wszystkie pięć przekazanych MAJOR examples odtworzono PRE jako claim-gate PASS. Naprawa sprawdza wyłącznie obecność `?` lub `？` w segmencie; POST wszystkie blokują.
+- **Wildcard PRE-C5:** PowerShell przekazał `tests\test_prec5_*.py` dosłownie do pytest, więc próba zakończyła się przed kolekcją komunikatem `file or directory not found`. Powtórka z listą rozwiniętą przez `Get-ChildItem` dała `328/328`.
+- **Pierwszy full run:** limit launchera ustawiono omyłkowo na `1 s`; proces został przerwany i zgłosił wtórny `OSError` stdout. Nie uznano tego za failure produktu. Powtórka z właściwym limitem dała `2322/2322` w `360.56 s`.
+- **Pierwszy exact-unique parser:** PowerShell `Group-Object` porównuje case-insensitive, więc błędnie raportował `2321` dla znanej pary `[hidden]/[HIDDEN]`. Komparator .NET `StringComparer.Ordinal` potwierdził `2322` exact unique i `0` exact duplicates; casefold `2321` pozostaje jawnym P2 poza zakresem.
+- **Wpływ:** zdarzenia były lokalne i bezprodukcyjne; żadna próba nie użyła sieci, API, browsera, publikacji ani produkcyjnego zapisu. Koszt `0.000000 USD`.

@@ -1,14 +1,20 @@
 # WEEK_32 — 2026-08-03 → 2026-08-09
 
-- **Co zbudowano:** kandydat technicznych bramek PRE-C5, jego jedna fala naprawcza oraz wąskie domknięcie PRE5-RR-01 przez claim accounting i atomowe cost-cap closure; szczegóły w `docs/BUILD_LOG.md`.
-- **Co działa:** kompletne fail-closed ARTICLE claim accounting z trwałym audytem oraz natychmiastowa terminalizacja paid CONTENT over-cap; pełna suita `2102/2102`.
-- **Co nie działa:** brak niezależnego review bieżącego kandydata; PRE-C5 QUALITY GATE i C5 są `NOT STARTED`; realny composition root/model/pricing pozostają niewdrożone. Malformed `syndication_of` P2 pozostaje poza tą falą.
-- **Największy błąd tygodnia:** pierwsza naprawa próbowała rozpoznawać fakty heurystykami, więc naturalne klasy faktów nadal mogły przejść bez evidence. Wniosek: rozliczać wszystkie segmenty, nie wykrywać tylko „podejrzane”.
-- **Najważniejsza decyzja:** ADR-122 — kompletność claim accounting oraz koszt/reconciliation/lifecycle muszą być dowodzone atomowo.
-- **Koszty:** `0.000000 USD`; brak nowego wiersza w `docs/COSTS.csv`, bo nie wykonano płatnej operacji. Koszt/artykuł i koszt/subskrybent: nie dotyczy.
+- **Co zbudowano:** kandydat technicznych bramek PRE-C5, jego naprawy, claim accounting/cost-cap closure oraz nowa fala question semantic boundary po dwóch odrzuceniach heurystyki; szczegóły w `docs/BUILD_LOG.md`.
+- **Co działa:** każde pytanie ARTICLE jest exactly-once rozliczane i nie może przejść jako `NON_FACTUAL_PROSE`; factual questions z evidence oraz non-factual honest inferences mają poprawne ścieżki. Pełna suita `2285/2285`.
+- **Co nie działa:** nie istnieje jeszcze realny independent semantic reviewer; jawna trust boundary pozostaje do następnej fali. PRE-C5 QUALITY GATE i C5 są `NOT STARTED`; provider/model/pricing pozostają niewdrożone.
+- **Największy błąd tygodnia:** dwie kolejne wersje próbowały dowodzić braku znaczenia pytania — najpierw predicate/referent, potem vocabulary. Re-review drugiej wydał `REJECT — MAJOR`. Wniosek: semantyka należy do reviewera, a deterministic layer egzekwuje kontrakt.
+- **Najważniejsza decyzja:** ADR-123 — pytanie ARTICLE nie ma deterministic prose shortcut; trust boundary reviewera jest jawna i nie będzie łatana regexami.
+- **Koszty:** `0.000000 USD`; jawny komentarz tej fali dopisano do `docs/COSTS.csv`. Koszt/artykuł i koszt/subskrybent: nie dotyczy.
 - **Czas człowieka:** nie mierzono; nie należy go estymować.
-- **Liczba interwencji człowieka:** 1 decyzja zakresowa/autoryzacja tej fali; zero publikacyjnych akceptacji, edycji i stopów.
+- **Liczba interwencji człowieka:** właściciel podjął nową decyzję zakresową po dwóch odrzuceniach, autoryzował wyłącznie usunięcie znanego kandydata i utworzenie brancha; zero publikacyjnych akceptacji, edycji i stopów.
 - **Wyniki publikacji:** nie mierzono; publikacji nie wykonano.
-- **Najlepsze screenshoty:** `SCREENSHOT REQUIRED` dla zanonimizowanego claim ledgeru i lifecycle over-cap; obrazu nie wykonano w tej sesji.
-- **Czego nauczył się agent:** brak findingu nie dowodzi pełnego pokrycia; każda jednostka wejścia musi mieć audytowalny rekord. Post-commit wyjątek nie może uruchamiać drugiej nieidempotentnej mutacji.
-- **Co zmienimy w kolejnym tygodniu:** wykonać dokładnie jeden niezależny review; nie rozpoczynać C5 ani realnego providera bez APPROVE i nowej zgody; zachować jawne P2 poza zakresem.
+- **Najlepsze screenshoty:** `SCREENSHOT REQUIRED` dla zanonimizowanej macierzy question × reviewer output; obrazu nie wykonano w tej sesji.
+- **Czego nauczył się agent:** kompletność segmentów nie wystarcza, jeśli klasyfikacja pytania ma fail-open shortcut. Deterministyczna warstwa ma weryfikować strukturę odpowiedzi reviewera, nie odtwarzać jego semantykę.
+- **Co zmienimy w kolejnym tygodniu:** wykonać dokładnie jeden niezależny review; dopiero po jego wyniku rozważyć osobną falę realnego reviewera. Nie rozpoczynać C5, API ani publikacji bez nowej zgody.
+
+## Checkpoint naprawczy 2026-08-09
+
+- Niezależny review znalazł MAJOR w końcówkowym `text.endswith("?")`. Jedyna naprawa egzekwuje `?`/`？` w dowolnej pozycji segmentu i pozostaje czysto syntaktyczna.
+- Dowód POST: question `220/220`, PRE-C5 `328/328`, affected `399/399`, full/collect `2322/2322`, sweep `216` z `0` leaks, produkcja/style bez zmian, koszt `0.000000 USD`.
+- Status tygodnia: `PRE-C5 QUESTION SEMANTIC BOUNDARY CONTRACT — REPAIR CANDIDATE COMPLETE — AWAITING RE-REVIEW`; C5 nadal `NOT STARTED`.

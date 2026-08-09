@@ -279,3 +279,7 @@ Koszt implementacji i QA C3: `0.000000 USD`. Wszystkie provider-ready próby uż
 ## 2026-07-24 — WAVE C4
 
 Koszt implementacji i QA C4: `0.000000 USD`. Granica decyzji działa na już utrwalonych artefaktach C3 i nie przyjmuje writera, callera ani SDK. Liczniki provider attempts, usage, settlementu i kosztu były identyczne przed i po decyzji. Produkcyjna baza nie została zmigrowana.
+
+## 2026-08-09 — Question semantic boundary
+
+Koszt implementacji i QA: `0.000000 USD`. 183 nowe przypadki kontraktu, 291 PRE-C5, 362 affected i 2285 pełnej suity wykonały się wyłącznie lokalnie z fake reviewerami i temp SQLite. Nie wykonano API, sieci, SDK, browsera, publikacji ani migracji produkcji.

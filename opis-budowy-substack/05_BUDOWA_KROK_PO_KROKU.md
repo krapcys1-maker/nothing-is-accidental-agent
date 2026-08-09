@@ -825,3 +825,13 @@ C4 zaczyna się tam, gdzie C3 kończy pisanie. Z bazy pobiera dokładny current 
 Decyzja powstaje w Policy Engine i jest ponawiana pod `BEGIN IMMEDIATE` oraz execution fence. Human-required tworzy pending approval; autonomiczny wynik może zakończyć content jako APPROVED albo REJECTED. Drift prowadzi do NEEDS_VERIFICATION, a konfiguracja technicznie niepoprawna do FAILED. Audit, approval i lifecycle są jednym commitem.
 
 Nowa migracja 0024 została użyta tylko na bazach tymczasowych. C4 nie ma argumentu writer/caller/SDK i nie dopisało attemptu, usage, settlementu ani kosztu. Wynik: 23/23 przypadki C4 i 1994/1994 całej suity; status pozostaje kandydacki do niezależnego review.
+
+## 2026-08-09 — PRE-C5: pytanie traci drogę na skróty
+
+Po dwóch odrzuceniach nie dopisano trzeciej heurystyki. Usunięto odrzucony working tree, potwierdzono czysty base i rozpoczęto nowy branch. Rdzeń zmiany jest mały: segment ARTICLE zakończony pytajnikiem nie może przejść jako `NON_FACTUAL_PROSE`. Jego znaczenie musi rozliczyć reviewer jako grounded fact albo inference.
+
+Fake reviewer przestał udawać, że zna semantykę. Test wybiera jawny profil; brak profilu daje `UNKNOWN/BLOCK`. Pięć supported ARTICLE flows zapisuje dokładny segment, klasyfikację, external-fact flag, evidence i outcome. 50 factual questions, 25 non-factual controls i 55 dodatkowych form potwierdziło kontrakt. Pełna suita: 2285/2285; produkcja i prywatny styl bez zmiany; koszt zero.
+
+### Naprawa po review: pytajnik nie musi być ostatni
+
+Review znalazł małą linię z dużą konsekwencją: `endswith("?")`. Pytanie zakończone `?!`, `?...` albo cudzysłowem mogło wrócić do starego shortcutu. Naprawa nie dodaje wiedzy o języku; sprawdza tylko, czy marker `?` lub `？` występuje gdziekolwiek w segmencie. Pięć realnych reprodukcji blokuje, 216 kombinacji ma zero przecieków, a uczciwe pytania retoryczne nadal przechodzą jako inferencja. Pełna suita: 2322/2322; produkcja i prywatny styl bez zmiany; koszt zero. Kandydat czeka na niezależny re-review, a C5 nie ruszyło.
