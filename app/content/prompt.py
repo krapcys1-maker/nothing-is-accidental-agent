@@ -74,7 +74,10 @@ def assemble_writer_prompt(
 
     payload = {
         "contract": {
-            "logical_route_key": route.route_key,
+            "logical_model_role": route.logical_role.value,
+            "model_family": route.model_family.value,
+            "logical_version": route.logical_version,
+            "legacy_route_key": route.route_key,
             "content_type": route.content_type.value,
             "fallback": route.fallback,
             "attempt_no": attempt_no,

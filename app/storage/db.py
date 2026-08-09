@@ -26,7 +26,8 @@ EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION = (
 CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION = (
     "0026_controlled_provider_content"
 )
-RUNTIME_SCHEMA_VERSION = CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION
+MODEL_FAMILY_ROUTING_SCHEMA_VERSION = "0027_model_family_routing"
+RUNTIME_SCHEMA_VERSION = MODEL_FAMILY_ROUTING_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
@@ -672,6 +673,20 @@ def migrate_0025_to_0026(
         db_path,
         source_version=EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION,
         target_version=CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0026_to_0027(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the offline model-family routing and qualification core."""
+    return _migrate_single_step(
+        db_path,
+        source_version=CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
+        target_version=MODEL_FAMILY_ROUTING_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )
 

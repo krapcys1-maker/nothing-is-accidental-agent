@@ -1217,3 +1217,10 @@ Niezależny review PR #9 wydał `APPROVE WITH MINOR/P2`. Po merge i zielonym che
 - **Pierwszy full run:** limit launchera ustawiono omyłkowo na `1 s`; proces został przerwany i zgłosił wtórny `OSError` stdout. Nie uznano tego za failure produktu. Powtórka z właściwym limitem dała `2322/2322` w `360.56 s`.
 - **Pierwszy exact-unique parser:** PowerShell `Group-Object` porównuje case-insensitive, więc błędnie raportował `2321` dla znanej pary `[hidden]/[HIDDEN]`. Komparator .NET `StringComparer.Ordinal` potwierdził `2322` exact unique i `0` exact duplicates; casefold `2321` pozostaje jawnym P2 poza zakresem.
 - **Wpływ:** zdarzenia były lokalne i bezprodukcyjne; żadna próba nie użyła sieci, API, browsera, publikacji ani produkcyjnego zapisu. Koszt `0.000000 USD`.
+
+## 2026-08-09 — Model-family core: drabina migracji musiała dojść do 0027
+
+- Pierwsze pełne przebiegi po dodaniu `0027` ujawniły wyłącznie jawne, historyczne oczekiwania zatrzymane na `0026`: listy migracji w research/durable-provider tests, canonical migration count, latest runtime schema oraz operational report. Nie zmieniono znaczenia starych migracji; dopisano dokładny krok `0027` i poprawiono tylko liczniki/latest expectations.
+- Pierwsza zbiorcza sonda inwentarza miała błędnie złożoną ścieżkę PowerShell i nie została przyjęta jako dowód. Powtórzono ją osobnymi read-only checks; nie otworzyła produkcji do zapisu i nie dotknęła sieci.
+- Ostatnie uszczelnienie migracji zastąpiło placeholdery fingerprintów seed policies rzeczywistymi fingerprintami kontraktów oraz użyło SQL `IS NOT` w triggerze stabilnej roli, aby brakujące pola JSON również blokowały. Po zmianie ponowiono nowe testy, affected i pełną suitę.
+- Wynik końcowy: new `31/31`, affected `748/748`, full `2353/2353`, collect/exact unique `2353/2353`, exact duplicates `0`, compile/diff PASS. Brak nierozwiązanego failure implementacji; realny discovery/provider/qualification pozostaje świadomie niewdrożony, nie zamaskowany jako sukces.

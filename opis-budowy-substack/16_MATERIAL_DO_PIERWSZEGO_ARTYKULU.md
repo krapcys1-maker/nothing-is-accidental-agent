@@ -291,3 +291,9 @@ Zdanie do artykułu: „Model może zwrócić słowa. Dopiero walidacja, ledger 
 Dwa odrzucone rozwiązania pokazały ten sam odruch: skoro nie umiemy rozstrzygnąć znaczenia, spróbujmy opisać pytania, które wyglądają bezpiecznie. Najpierw przez predykat i referent, potem przez słownik. Oba warianty przepuszczały naturalne fakty.
 
 Zdanie do artykułu: „Pytajnik może zmienić ton zdania. Nie może wymazać obowiązku rozliczenia tego, co zdanie twierdzi.”
+
+## 2026-08-09 — Najnowszy numer nie jest decyzją
+
+Łatwo zaprogramować wybór największej wersji. Trudniej uczciwie powiedzieć, kiedy większa wersja ma prawo zastąpić poprzednią. W tym systemie numer tylko ustala kolejność. Availability, cena, capability i osobny wynik kwalifikacji ustalają uprawnienie, a trwały audit zachowuje powód zmiany.
+
+Zdanie do artykułu: „Nowy numer jest kandydatem. Dopiero dowód jakości, ceny i zgodności czyni go wyborem.”

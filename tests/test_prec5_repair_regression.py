@@ -940,16 +940,20 @@ def test_migration_0026_is_forward_only_explicit_and_idempotent(tmp_path, capsys
     import scripts.migrate_schema_0026 as migration_cli_0026
     from app.storage.db import (
         CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
+        MODEL_FAMILY_ROUTING_SCHEMA_VERSION,
         EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION,
         SchemaVersionTooOld,
         database_schema_versions,
         initialize_database,
         migrate_0025_to_0026,
+        migrate_0026_to_0027,
     )
     from app.storage.repositories import SqliteStorage
 
     fresh = tmp_path / "fresh-0026.db"
-    applied = initialize_database(fresh)
+    applied = initialize_database(
+        fresh, through=CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
+    )
     assert applied[-1] == CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION
 
     upgrade = tmp_path / "upgrade-0026.db"
@@ -972,6 +976,9 @@ def test_migration_0026_is_forward_only_explicit_and_idempotent(tmp_path, capsys
         "--db-path", str(upgrade), "--confirm-0025-to-0026",
     ]) == 0
     assert "idempotent=true" in capsys.readouterr().out
+
+    routing = migrate_0026_to_0027(upgrade)
+    assert routing.applied_migrations == (MODEL_FAMILY_ROUTING_SCHEMA_VERSION,)
 
     opened = SqliteStorage.open(upgrade)
     try:

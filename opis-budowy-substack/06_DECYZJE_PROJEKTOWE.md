@@ -499,3 +499,7 @@ Kontrpróby obejmują czternaście rodzin faktów i pięć kontroli false-positi
 ## 2026-08-09 — ADR-123: nie pytaj regexu, co znaczy pytanie
 
 Deterministic layer rozlicza strukturę, nie znaczenie. Dlatego każde pytanie ARTICLE odrzuca `NON_FACTUAL_PROSE`, lecz nie próbuje samodzielnie rozstrzygać factual/rhetorical/hypothetical. Non-factual question ma uczciwą drogę inferencji bez external fact. Jeśli reviewer skłamie, jest to jawna granica zaufania do rozwiązania przez realnego independent reviewera, nie pretekst do następnego słownika.
+
+## 2026-08-09 — ADR-124: promocja przed wykonaniem nie jest fallbackiem po błędzie
+
+Zakaz automatycznej zmiany modelu pozostaje nienaruszony w runtime: błąd providera nie pozwala wybrać innego modelu, a retry odczytuje exact frozen binding. Osobno dozwolono prekwalifikowaną promocję dla przyszłych nowych intencji. Kandydat tej samej rodziny musi przejść availability, pięć wymiarów ceny, capabilities i qualification PASS; dopiero potem może atomowo zastąpić aktywną wersję. Realne discovery i kwalifikacja pozostają niewpięte.

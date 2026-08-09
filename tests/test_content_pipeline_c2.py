@@ -42,6 +42,7 @@ from app.storage.db import (
     CONTENT_DECISION_SCHEMA_VERSION,
     EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION,
     CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
+    MODEL_FAMILY_ROUTING_SCHEMA_VERSION,
     database_schema_versions,
     initialize_database,
     migrate_0021_to_0022,
@@ -49,6 +50,7 @@ from app.storage.db import (
     migrate_0023_to_0024,
     migrate_0024_to_0025,
     migrate_0025_to_0026,
+    migrate_0026_to_0027,
 )
 from app.storage.repositories import SqliteStorage
 from tests.c2_fixtures import seed_c2_research
@@ -608,6 +610,8 @@ def test_explicit_0021_to_0022_migration_is_temp_only_and_idempotent(tmp_path):
     assert paid.applied_migrations == (
         CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
     )
+    routing = migrate_0026_to_0027(path)
+    assert routing.applied_migrations == (MODEL_FAMILY_ROUTING_SCHEMA_VERSION,)
     conn = SqliteStorage.open(path)
     try:
         assert conn.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"

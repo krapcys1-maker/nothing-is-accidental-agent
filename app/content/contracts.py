@@ -13,6 +13,12 @@ from app.content.foundation import (
     canonical_json,
     sha256_text,
 )
+from app.model_routing.contracts import (
+    LogicalModelRole,
+    ModelFamily,
+    ModelVersion,
+    ROLE_FAMILY,
+)
 
 
 CONTENT_PLAN_VERSION = "content_plan_v1"
@@ -77,6 +83,12 @@ class RouteContract(BaseModel):
     content_type: ContentType
     route_key: str
     logical_model_name: str
+    logical_role: LogicalModelRole | None = None
+    model_family: ModelFamily | None = None
+    logical_version: str | None = None
+    model_registry_id: str | None = None
+    qualification_ref: str | None = None
+    capability_ref: str | None = None
     config_version: str
     config_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     provider: str = "UNVERIFIED"
@@ -84,6 +96,25 @@ class RouteContract(BaseModel):
     availability: str = "UNVERIFIED"
     pricing_profile: str = "UNVERIFIED"
     fallback: str = "FORBIDDEN"
+
+    @model_validator(mode="before")
+    @classmethod
+    def add_explicit_legacy_role_and_family(cls, raw: object) -> object:
+        """Map the two historical content types explicitly, never by parsing IDs."""
+        if not isinstance(raw, dict):
+            return raw
+        value = dict(raw)
+        content_type = value.get("content_type")
+        if isinstance(content_type, ContentType):
+            content_type = content_type.value
+        role = {
+            ContentType.ARTICLE.value: LogicalModelRole.ARTICLE_WRITER,
+            ContentType.NOTE.value: LogicalModelRole.NOTE_WRITER,
+        }.get(content_type)
+        if role is not None:
+            value.setdefault("logical_role", role)
+            value.setdefault("model_family", ROLE_FAMILY[role])
+        return value
 
     @model_validator(mode="after")
     def validate_closed_route(self) -> "RouteContract":
@@ -93,6 +124,16 @@ class RouteContract(BaseModel):
         }[self.content_type]
         if self.route_key != expected:
             raise ValueError(f"{self.content_type.value} requires route {expected}.")
+        expected_role = {
+            ContentType.ARTICLE: LogicalModelRole.ARTICLE_WRITER,
+            ContentType.NOTE: LogicalModelRole.NOTE_WRITER,
+        }[self.content_type]
+        if self.logical_role is not expected_role:
+            raise ValueError(
+                f"{self.content_type.value} requires logical role {expected_role.value}."
+            )
+        if self.model_family is not ROLE_FAMILY[expected_role]:
+            raise ValueError("Content route family disagrees with its stable logical role.")
         if self.fallback != "FORBIDDEN":
             raise ValueError("Content routing cannot define a fallback.")
         if self.availability not in {"UNVERIFIED", "CONFIGURED"}:
@@ -105,6 +146,20 @@ class RouteContract(BaseModel):
             self.pricing_profile,
         )):
             raise ValueError("Technical route fields cannot be blank.")
+        binding = (
+            self.logical_version,
+            self.model_registry_id,
+            self.qualification_ref,
+            self.capability_ref,
+        )
+        if any(value is not None for value in binding):
+            if any(value is None or not str(value).strip() for value in binding):
+                raise ValueError("Registry-backed content route requires complete provenance.")
+            assert self.logical_version is not None
+            if ModelVersion.parse(self.logical_version).canonical != self.logical_version:
+                raise ValueError("Content route logical version must be canonical.")
+            if not self.is_provider_configured:
+                raise ValueError("Registry-backed content route must be technically configured.")
         return self
 
     @property
@@ -125,6 +180,18 @@ class RouteContract(BaseModel):
     @property
     def is_provider_configured(self) -> bool:
         return self.configuration_status == "CONFIGURED"
+
+    @property
+    def is_registry_qualified(self) -> bool:
+        return self.is_provider_configured and all(
+            isinstance(value, str) and bool(value.strip())
+            for value in (
+                self.logical_version,
+                self.model_registry_id,
+                self.qualification_ref,
+                self.capability_ref,
+            )
+        )
 
 
 class ContentPlan(BaseModel):

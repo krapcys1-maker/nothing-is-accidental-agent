@@ -11,7 +11,7 @@ from dataclasses import dataclass, replace
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable, Iterable, Sequence
+from typing import Any, Callable, Iterable, Sequence
 
 from app.content.foundation import (
     ContentExecutionMode,
@@ -202,6 +202,32 @@ from app.storage.db import (
     prepare_writable_connection,
     require_connection_schema,
     require_database_schema,
+)
+from app.model_routing.contracts import (
+    AvailabilityState,
+    CapabilityDeclaration,
+    CapabilityVerificationState,
+    CatalogueCandidate,
+    FrozenModelBinding,
+    LifecycleState,
+    ModelFamily,
+    ModelPricingProfile,
+    ModelVersion,
+    PriceDimensions,
+    PricingVerificationState,
+    PromotionOutcome,
+    PromotionStatus,
+    QualificationReport,
+    QualificationState,
+    RegisteredModel,
+    RolePolicy,
+    RoutingAuditEvent,
+    RoutingAuditEventType,
+    RoutingError,
+    candidate_eligibility_reasons,
+    fingerprint as model_contract_fingerprint,
+    parse_family,
+    parse_role,
 )
 
 
@@ -524,6 +550,1024 @@ class SqliteStorage:
             ),
         )
         self.conn.commit()
+
+    # --- model-family routing / qualification core (schema 0027) ---
+    @staticmethod
+    def _registered_model_from_row(row: sqlite3.Row) -> RegisteredModel:
+        return RegisteredModel(
+            registry_id=str(row["registry_id"]),
+            provider=str(row["provider"]),
+            family=ModelFamily(str(row["family"])),
+            logical_version=str(row["logical_version"]),
+            technical_model_id=(
+                None if row["technical_model_id"] is None
+                else str(row["technical_model_id"])
+            ),
+            availability_state=AvailabilityState(str(row["availability_state"])),
+            pricing_ref=None if row["pricing_ref"] is None else str(row["pricing_ref"]),
+            capability_ref=(
+                None if row["current_capability_ref"] is None
+                else str(row["current_capability_ref"])
+            ),
+            qualification_state=QualificationState(
+                str(row["current_qualification_state"])
+            ),
+            qualification_ref=(
+                None if row["current_qualification_ref"] is None
+                else str(row["current_qualification_ref"])
+            ),
+            lifecycle_state=LifecycleState(str(row["lifecycle_state"])),
+            discovered_at=str(row["discovered_at"]),
+            created_at=str(row["created_at"]),
+            verified_at=None if row["verified_at"] is None else str(row["verified_at"]),
+            qualified_at=None if row["qualified_at"] is None else str(row["qualified_at"]),
+            catalogue_ref=str(row["catalogue_ref"]),
+        )
+
+    @staticmethod
+    def _model_pricing_from_row(row: sqlite3.Row | None) -> ModelPricingProfile | None:
+        if row is None:
+            return None
+        state = PricingVerificationState(str(row["verification_state"]))
+        prices = None
+        if state is PricingVerificationState.VERIFIED:
+            prices = PriceDimensions.from_mapping({
+                "input_per_mtok": row["input_per_mtok"],
+                "output_per_mtok": row["output_per_mtok"],
+                "cache_read_per_mtok": row["cache_read_per_mtok"],
+                "cache_write_per_mtok": row["cache_write_per_mtok"],
+                "web_search_per_1k": row["web_search_per_1k"],
+            })
+        return ModelPricingProfile(
+            pricing_ref=str(row["pricing_ref"]),
+            provider=str(row["provider"]),
+            technical_model_id=str(row["technical_model_id"]),
+            verification_state=state,
+            currency=str(row["currency"]),
+            unit=str(row["unit"]),
+            prices=prices,
+            verified_at=None if row["verified_at"] is None else str(row["verified_at"]),
+        )
+
+    @staticmethod
+    def _model_capability_from_row(
+        row: sqlite3.Row | None,
+    ) -> CapabilityDeclaration | None:
+        if row is None:
+            return None
+        state = CapabilityVerificationState(str(row["verification_state"]))
+        return CapabilityDeclaration(
+            capability_ref=str(row["capability_ref"]),
+            verification_state=state,
+            structured_response=(
+                None if row["structured_response"] is None
+                else bool(row["structured_response"])
+            ),
+            max_context_tokens=(
+                None if row["max_context_tokens"] is None
+                else int(row["max_context_tokens"])
+            ),
+            max_output_tokens=(
+                None if row["max_output_tokens"] is None
+                else int(row["max_output_tokens"])
+            ),
+            verified_at=None if row["verified_at"] is None else str(row["verified_at"]),
+        )
+
+    @staticmethod
+    def _role_policy_from_row(row: sqlite3.Row) -> RolePolicy:
+        pricing_state = PricingVerificationState(str(row["pricing_verification_state"]))
+        capability_state = CapabilityVerificationState(
+            str(row["capability_verification_state"])
+        )
+        ceiling = None
+        if pricing_state is PricingVerificationState.VERIFIED:
+            ceiling = PriceDimensions.from_mapping({
+                "input_per_mtok": row["max_input_per_mtok"],
+                "output_per_mtok": row["max_output_per_mtok"],
+                "cache_read_per_mtok": row["max_cache_read_per_mtok"],
+                "cache_write_per_mtok": row["max_cache_write_per_mtok"],
+                "web_search_per_1k": row["max_web_search_per_1k"],
+            })
+        return RolePolicy(
+            role=parse_role(row["role"]),
+            allowed_family=parse_family(row["allowed_family"]),
+            policy_version=str(row["policy_version"]),
+            capability_verification_state=capability_state,
+            require_structured_response=(
+                None if row["require_structured_response"] is None
+                else bool(row["require_structured_response"])
+            ),
+            min_context_tokens=(
+                None if row["min_context_tokens"] is None
+                else int(row["min_context_tokens"])
+            ),
+            min_output_tokens=(
+                None if row["min_output_tokens"] is None
+                else int(row["min_output_tokens"])
+            ),
+            pricing_verification_state=pricing_state,
+            price_ceiling=ceiling,
+            qualification_required=bool(row["qualification_required"]),
+            fallback_policy=str(row["fallback_policy"]),
+        )
+
+    @staticmethod
+    def _model_binding_from_row(row: sqlite3.Row) -> FrozenModelBinding:
+        return FrozenModelBinding(
+            intent_kind=str(row["intent_kind"]),
+            intent_id=str(row["intent_id"]),
+            role=parse_role(row["role"]),
+            model_registry_id=str(row["model_registry_id"]),
+            provider=str(row["provider"]),
+            family=parse_family(row["family"]),
+            logical_version=str(row["logical_version"]),
+            technical_model_id=str(row["technical_model_id"]),
+            pricing_ref=str(row["pricing_ref"]),
+            qualification_ref=str(row["qualification_ref"]),
+            capability_ref=str(row["capability_ref"]),
+            activation_decision_fingerprint=str(
+                row["activation_decision_fingerprint"]
+            ),
+            fallback_policy=str(row["fallback_policy"]),
+            bound_at=str(row["bound_at"]),
+        )
+
+    @staticmethod
+    def _routing_audit_from_row(row: sqlite3.Row) -> RoutingAuditEvent:
+        return RoutingAuditEvent(
+            event_id=str(row["event_id"]),
+            event_type=RoutingAuditEventType(str(row["event_type"])),
+            role=parse_role(row["role"]),
+            old_model_registry_id=(
+                None if row["old_model_registry_id"] is None
+                else str(row["old_model_registry_id"])
+            ),
+            new_model_registry_id=(
+                None if row["new_model_registry_id"] is None
+                else str(row["new_model_registry_id"])
+            ),
+            decision_fingerprint=str(row["decision_fingerprint"]),
+            reason=str(row["reason"]),
+            occurred_at=str(row["occurred_at"]),
+            policy_decision=json.loads(str(row["policy_decision_json"])),
+        )
+
+    def register_model_pricing_profile(
+        self,
+        profile: ModelPricingProfile,
+        *,
+        now: datetime | None = None,
+    ) -> ModelPricingProfile:
+        created_at = _ts_precise(now)
+        prices = None if profile.prices is None else profile.prices.as_storage_mapping()
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            row = self.conn.execute(
+                "SELECT * FROM model_pricing_profiles WHERE pricing_ref=?",
+                (profile.pricing_ref,),
+            ).fetchone()
+            if row is not None:
+                existing = self._model_pricing_from_row(row)
+                if existing != profile:
+                    raise RoutingError(
+                        "PRICING_REFERENCE_COLLISION",
+                        f"Pricing reference {profile.pricing_ref!r} already has other data.",
+                    )
+                self.conn.commit()
+                return existing
+            self.conn.execute(
+                "INSERT INTO model_pricing_profiles ("
+                "pricing_ref,provider,technical_model_id,verification_state,currency,unit,"
+                "input_per_mtok,output_per_mtok,cache_read_per_mtok,cache_write_per_mtok,"
+                "web_search_per_1k,profile_fingerprint,verified_at,created_at"
+                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    profile.pricing_ref,
+                    profile.provider,
+                    profile.technical_model_id,
+                    profile.verification_state.value,
+                    profile.currency,
+                    profile.unit,
+                    None if prices is None else prices["input_per_mtok"],
+                    None if prices is None else prices["output_per_mtok"],
+                    None if prices is None else prices["cache_read_per_mtok"],
+                    None if prices is None else prices["cache_write_per_mtok"],
+                    None if prices is None else prices["web_search_per_1k"],
+                    profile.contract_fingerprint(),
+                    profile.verified_at,
+                    created_at,
+                ),
+            )
+            self.conn.commit()
+            return profile
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def register_model_candidate(
+        self,
+        candidate: CatalogueCandidate,
+        *,
+        now: datetime | None = None,
+    ) -> RegisteredModel:
+        version = candidate.version
+        created_at = _ts_precise(now)
+        verified_at = (
+            created_at
+            if candidate.technical_model_id
+            and candidate.availability_state is not AvailabilityState.UNVERIFIED
+            else None
+        )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            row = self.conn.execute(
+                "SELECT * FROM model_registry WHERE registry_id=?",
+                (candidate.registry_id,),
+            ).fetchone()
+            if row is not None:
+                existing = self._registered_model_from_row(row)
+                if (
+                    existing.provider != candidate.provider
+                    or existing.family is not candidate.family
+                    or existing.logical_version != candidate.logical_version
+                    or existing.catalogue_ref != candidate.catalogue_ref
+                ):
+                    raise RoutingError(
+                        "MODEL_REGISTRY_ID_COLLISION",
+                        "Registry identity already names different catalogue data.",
+                    )
+                updates: dict[str, object] = {}
+                if existing.technical_model_id is None and candidate.technical_model_id:
+                    updates["technical_model_id"] = candidate.technical_model_id
+                elif (
+                    candidate.technical_model_id is not None
+                    and existing.technical_model_id != candidate.technical_model_id
+                ):
+                    raise RoutingError(
+                        "TECHNICAL_MODEL_ID_DRIFT",
+                        "A catalogue refresh cannot rewrite a known technical model ID.",
+                    )
+                if (
+                    existing.availability_state is AvailabilityState.UNVERIFIED
+                    and candidate.availability_state is not AvailabilityState.UNVERIFIED
+                ):
+                    updates["availability_state"] = candidate.availability_state.value
+                elif (
+                    candidate.availability_state is not AvailabilityState.UNVERIFIED
+                    and existing.availability_state is not candidate.availability_state
+                ):
+                    raise RoutingError(
+                        "MODEL_AVAILABILITY_DRIFT",
+                        "Availability changes require an explicit lifecycle decision.",
+                    )
+                if existing.pricing_ref is None and candidate.pricing_ref:
+                    updates["pricing_ref"] = candidate.pricing_ref
+                elif candidate.pricing_ref and existing.pricing_ref != candidate.pricing_ref:
+                    raise RoutingError(
+                        "MODEL_PRICING_REFERENCE_DRIFT",
+                        "A catalogue refresh cannot rewrite a pricing reference.",
+                    )
+                if updates:
+                    updates["verified_at"] = verified_at or existing.verified_at
+                    assignments = ",".join(f"{key}=?" for key in updates)
+                    self.conn.execute(
+                        f"UPDATE model_registry SET {assignments} WHERE registry_id=?",
+                        (*updates.values(), candidate.registry_id),
+                    )
+                    row = self.conn.execute(
+                        "SELECT * FROM model_registry WHERE registry_id=?",
+                        (candidate.registry_id,),
+                    ).fetchone()
+                    assert row is not None
+                    existing = self._registered_model_from_row(row)
+                self.conn.commit()
+                return existing
+            self.conn.execute(
+                "INSERT INTO model_registry ("
+                "registry_id,provider,family,logical_version,version_sort_key,"
+                "technical_model_id,availability_state,pricing_ref,"
+                "current_capability_ref,current_qualification_state,"
+                "current_qualification_ref,lifecycle_state,discovered_at,created_at,"
+                "verified_at,qualified_at,catalogue_ref"
+                ") VALUES (?,?,?,?,?,?,?,?,NULL,'UNQUALIFIED',NULL,'CANDIDATE',?,?,?,NULL,?)",
+                (
+                    candidate.registry_id,
+                    candidate.provider,
+                    candidate.family.value,
+                    version.canonical,
+                    version.storage_key,
+                    candidate.technical_model_id,
+                    candidate.availability_state.value,
+                    candidate.pricing_ref,
+                    candidate.discovered_at,
+                    created_at,
+                    verified_at,
+                    candidate.catalogue_ref,
+                ),
+            )
+            row = self.conn.execute(
+                "SELECT * FROM model_registry WHERE registry_id=?",
+                (candidate.registry_id,),
+            ).fetchone()
+            assert row is not None
+            self.conn.commit()
+            return self._registered_model_from_row(row)
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def get_registered_model(self, model_registry_id: str) -> RegisteredModel | None:
+        row = self.conn.execute(
+            "SELECT * FROM model_registry WHERE registry_id=?",
+            (model_registry_id,),
+        ).fetchone()
+        return None if row is None else self._registered_model_from_row(row)
+
+    def record_model_capabilities(
+        self,
+        model_registry_id: str,
+        declaration: CapabilityDeclaration,
+        *,
+        now: datetime | None = None,
+    ) -> RegisteredModel:
+        created_at = _ts_precise(now)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            model_row = self.conn.execute(
+                "SELECT * FROM model_registry WHERE registry_id=?",
+                (model_registry_id,),
+            ).fetchone()
+            if model_row is None:
+                raise RoutingError("UNKNOWN_MODEL", f"Unknown model: {model_registry_id!r}.")
+            existing_row = self.conn.execute(
+                "SELECT * FROM model_capability_declarations WHERE capability_ref=?",
+                (declaration.capability_ref,),
+            ).fetchone()
+            if existing_row is not None:
+                existing = self._model_capability_from_row(existing_row)
+                if (
+                    existing != declaration
+                    or str(existing_row["model_registry_id"]) != model_registry_id
+                ):
+                    raise RoutingError(
+                        "CAPABILITY_REFERENCE_COLLISION",
+                        "Capability reference already contains different evidence.",
+                    )
+            else:
+                self.conn.execute(
+                    "INSERT INTO model_capability_declarations ("
+                    "capability_ref,model_registry_id,verification_state,structured_response,"
+                    "max_context_tokens,max_output_tokens,declaration_fingerprint,"
+                    "verified_at,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                    (
+                        declaration.capability_ref,
+                        model_registry_id,
+                        declaration.verification_state.value,
+                        None if declaration.structured_response is None
+                        else int(declaration.structured_response),
+                        declaration.max_context_tokens,
+                        declaration.max_output_tokens,
+                        declaration.contract_fingerprint(),
+                        declaration.verified_at,
+                        created_at,
+                    ),
+                )
+            self.conn.execute(
+                "UPDATE model_registry SET current_capability_ref=?, verified_at="
+                "CASE WHEN ?='VERIFIED' THEN COALESCE(verified_at,?) ELSE verified_at END "
+                "WHERE registry_id=?",
+                (
+                    declaration.capability_ref,
+                    declaration.verification_state.value,
+                    declaration.verified_at,
+                    model_registry_id,
+                ),
+            )
+            row = self.conn.execute(
+                "SELECT * FROM model_registry WHERE registry_id=?",
+                (model_registry_id,),
+            ).fetchone()
+            assert row is not None
+            self.conn.commit()
+            return self._registered_model_from_row(row)
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def record_model_qualification(
+        self,
+        report: QualificationReport,
+        *,
+        now: datetime | None = None,
+    ) -> RegisteredModel:
+        created_at = _ts_precise(now)
+        result_json = canonical_json(report.payload())
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            model_row = self.conn.execute(
+                "SELECT * FROM model_registry WHERE registry_id=?",
+                (report.model_registry_id,),
+            ).fetchone()
+            if model_row is None:
+                raise RoutingError(
+                    "UNKNOWN_MODEL", f"Unknown model: {report.model_registry_id!r}."
+                )
+            existing = self.conn.execute(
+                "SELECT * FROM model_qualification_results WHERE qualification_ref=?",
+                (report.qualification_ref,),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    str(existing["model_registry_id"]) != report.model_registry_id
+                    or str(existing["state"]) != report.state.value
+                    or str(existing["result_fingerprint"]) != report.result_fingerprint()
+                ):
+                    raise RoutingError(
+                        "QUALIFICATION_REFERENCE_COLLISION",
+                        "Qualification reference already contains different evidence.",
+                    )
+            else:
+                self.conn.execute(
+                    "INSERT INTO model_qualification_results ("
+                    "qualification_ref,model_registry_id,state,suite_version,fixture_set_ref,"
+                    "source,result_json,result_fingerprint,evaluated_at,created_at"
+                    ") VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        report.qualification_ref,
+                        report.model_registry_id,
+                        report.state.value,
+                        report.suite_version,
+                        report.fixture_set_ref,
+                        report.source,
+                        result_json,
+                        report.result_fingerprint(),
+                        report.evaluated_at,
+                        created_at,
+                    ),
+                )
+            self.conn.execute(
+                "UPDATE model_registry SET current_qualification_state=?,"
+                "current_qualification_ref=?,qualified_at=? WHERE registry_id=?",
+                (
+                    report.state.value,
+                    report.qualification_ref,
+                    report.evaluated_at,
+                    report.model_registry_id,
+                ),
+            )
+            row = self.conn.execute(
+                "SELECT * FROM model_registry WHERE registry_id=?",
+                (report.model_registry_id,),
+            ).fetchone()
+            assert row is not None
+            self.conn.commit()
+            return self._registered_model_from_row(row)
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def upsert_model_role_policy(
+        self,
+        policy: RolePolicy,
+        *,
+        now: datetime | None = None,
+    ) -> RolePolicy:
+        timestamp = _ts_precise(now)
+        ceilings = (
+            None if policy.price_ceiling is None
+            else policy.price_ceiling.as_storage_mapping()
+        )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current = self.conn.execute(
+                "SELECT * FROM model_role_policies WHERE role=?",
+                (policy.role.value,),
+            ).fetchone()
+            if current is not None and str(current["policy_fingerprint"]) != policy.policy_fingerprint():
+                active = self.conn.execute(
+                    "SELECT 1 FROM model_role_activations WHERE role=?",
+                    (policy.role.value,),
+                ).fetchone()
+                if active is not None:
+                    raise RoutingError(
+                        "ACTIVE_ROLE_POLICY_IMMUTABLE",
+                        "Depromote the active model before changing its role policy.",
+                    )
+            created_at = timestamp if current is None else str(current["created_at"])
+            self.conn.execute(
+                "INSERT INTO model_role_policies ("
+                "role,allowed_family,policy_version,capability_verification_state,"
+                "require_structured_response,min_context_tokens,min_output_tokens,"
+                "pricing_verification_state,max_input_per_mtok,max_output_per_mtok,"
+                "max_cache_read_per_mtok,max_cache_write_per_mtok,max_web_search_per_1k,"
+                "qualification_required,fallback_policy,policy_fingerprint,created_at,updated_at"
+                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(role) DO UPDATE SET allowed_family=excluded.allowed_family,"
+                "policy_version=excluded.policy_version,"
+                "capability_verification_state=excluded.capability_verification_state,"
+                "require_structured_response=excluded.require_structured_response,"
+                "min_context_tokens=excluded.min_context_tokens,"
+                "min_output_tokens=excluded.min_output_tokens,"
+                "pricing_verification_state=excluded.pricing_verification_state,"
+                "max_input_per_mtok=excluded.max_input_per_mtok,"
+                "max_output_per_mtok=excluded.max_output_per_mtok,"
+                "max_cache_read_per_mtok=excluded.max_cache_read_per_mtok,"
+                "max_cache_write_per_mtok=excluded.max_cache_write_per_mtok,"
+                "max_web_search_per_1k=excluded.max_web_search_per_1k,"
+                "qualification_required=excluded.qualification_required,"
+                "fallback_policy=excluded.fallback_policy,"
+                "policy_fingerprint=excluded.policy_fingerprint,updated_at=excluded.updated_at",
+                (
+                    policy.role.value,
+                    policy.allowed_family.value,
+                    policy.policy_version,
+                    policy.capability_verification_state.value,
+                    None if policy.require_structured_response is None
+                    else int(policy.require_structured_response),
+                    policy.min_context_tokens,
+                    policy.min_output_tokens,
+                    policy.pricing_verification_state.value,
+                    None if ceilings is None else ceilings["input_per_mtok"],
+                    None if ceilings is None else ceilings["output_per_mtok"],
+                    None if ceilings is None else ceilings["cache_read_per_mtok"],
+                    None if ceilings is None else ceilings["cache_write_per_mtok"],
+                    None if ceilings is None else ceilings["web_search_per_1k"],
+                    int(policy.qualification_required),
+                    policy.fallback_policy,
+                    policy.policy_fingerprint(),
+                    created_at,
+                    timestamp,
+                ),
+            )
+            self.conn.commit()
+            return policy
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def get_model_role_policy(self, role: object) -> RolePolicy | None:
+        parsed = parse_role(role)
+        row = self.conn.execute(
+            "SELECT * FROM model_role_policies WHERE role=?", (parsed.value,)
+        ).fetchone()
+        return None if row is None else self._role_policy_from_row(row)
+
+    def list_role_policies_for_family(self, family: object) -> tuple[RolePolicy, ...]:
+        parsed = parse_family(family)
+        rows = self.conn.execute(
+            "SELECT * FROM model_role_policies WHERE allowed_family=? ORDER BY role",
+            (parsed.value,),
+        ).fetchall()
+        return tuple(self._role_policy_from_row(row) for row in rows)
+
+    def _model_pricing_for(self, model: RegisteredModel) -> ModelPricingProfile | None:
+        if model.pricing_ref is None:
+            return None
+        row = self.conn.execute(
+            "SELECT * FROM model_pricing_profiles WHERE pricing_ref=?",
+            (model.pricing_ref,),
+        ).fetchone()
+        return self._model_pricing_from_row(row)
+
+    def _model_capability_for(
+        self, model: RegisteredModel,
+    ) -> CapabilityDeclaration | None:
+        if model.capability_ref is None:
+            return None
+        row = self.conn.execute(
+            "SELECT * FROM model_capability_declarations WHERE capability_ref=?",
+            (model.capability_ref,),
+        ).fetchone()
+        return self._model_capability_from_row(row)
+
+    def promote_best_model(
+        self,
+        role: object,
+        *,
+        reason: str,
+        now: datetime | None = None,
+    ) -> PromotionOutcome:
+        parsed_role = parse_role(role)
+        if not isinstance(reason, str) or not reason.strip():
+            raise RoutingError("PROMOTION_REASON_MISSING", "Promotion requires a reason.")
+        timestamp = _ts_precise(now)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            policy_row = self.conn.execute(
+                "SELECT * FROM model_role_policies WHERE role=?",
+                (parsed_role.value,),
+            ).fetchone()
+            if policy_row is None:
+                raise RoutingError("UNKNOWN_ROLE", f"Unknown logical role: {parsed_role.value}.")
+            policy = self._role_policy_from_row(policy_row)
+            model_rows = self.conn.execute(
+                "SELECT * FROM model_registry ORDER BY registry_id"
+            ).fetchall()
+            models = [self._registered_model_from_row(row) for row in model_rows]
+            evaluated: list[dict[str, object]] = []
+            eligible: list[RegisteredModel] = []
+            for model in models:
+                reasons = candidate_eligibility_reasons(
+                    policy=policy,
+                    model=model,
+                    pricing=self._model_pricing_for(model),
+                    capability=self._model_capability_for(model),
+                )
+                evaluated.append({
+                    "model_registry_id": model.registry_id,
+                    "family": model.family.value,
+                    "logical_version": model.logical_version,
+                    "eligible": not reasons,
+                    "reasons": list(reasons),
+                })
+                if not reasons:
+                    eligible.append(model)
+            active_row = self.conn.execute(
+                "SELECT * FROM model_role_activations WHERE role=?",
+                (parsed_role.value,),
+            ).fetchone()
+            old_id = None if active_row is None else str(active_row["model_registry_id"])
+            if not eligible:
+                decision = {
+                    "role": parsed_role.value,
+                    "policy_fingerprint": policy.policy_fingerprint(),
+                    "old_model_registry_id": old_id,
+                    "selected_model_registry_id": None,
+                    "evaluated": evaluated,
+                    "outcome": PromotionStatus.BLOCKED.value,
+                    "fallback_policy": policy.fallback_policy,
+                }
+                decision_fp = model_contract_fingerprint(decision)
+                self.conn.commit()
+                return PromotionOutcome(
+                    role=parsed_role,
+                    status=PromotionStatus.BLOCKED,
+                    old_model_registry_id=old_id,
+                    new_model_registry_id=None,
+                    decision_fingerprint=decision_fp,
+                    reasons=("NO_ELIGIBLE_CANDIDATE",),
+                )
+            eligible.sort(key=lambda item: (item.version.components, item.registry_id))
+            selected = eligible[-1]
+            same_version = [
+                item for item in eligible if item.version == selected.version
+            ]
+            if len(same_version) > 1:
+                decision = {
+                    "role": parsed_role.value,
+                    "policy_fingerprint": policy.policy_fingerprint(),
+                    "old_model_registry_id": old_id,
+                    "selected_model_registry_id": None,
+                    "evaluated": evaluated,
+                    "outcome": PromotionStatus.BLOCKED.value,
+                    "reason": "AMBIGUOUS_HIGHEST_VERSION",
+                    "fallback_policy": policy.fallback_policy,
+                }
+                decision_fp = model_contract_fingerprint(decision)
+                self.conn.commit()
+                return PromotionOutcome(
+                    role=parsed_role,
+                    status=PromotionStatus.BLOCKED,
+                    old_model_registry_id=old_id,
+                    new_model_registry_id=None,
+                    decision_fingerprint=decision_fp,
+                    reasons=("AMBIGUOUS_HIGHEST_VERSION",),
+                )
+            decision = {
+                "role": parsed_role.value,
+                "policy_fingerprint": policy.policy_fingerprint(),
+                "old_model_registry_id": old_id,
+                "selected_model_registry_id": selected.registry_id,
+                "evaluated": evaluated,
+                "outcome": (
+                    PromotionStatus.NO_CHANGE.value
+                    if old_id == selected.registry_id else PromotionStatus.PROMOTED.value
+                ),
+                "reason": reason.strip(),
+                "fallback_policy": policy.fallback_policy,
+            }
+            decision_fp = model_contract_fingerprint(decision)
+            if old_id == selected.registry_id:
+                self.conn.commit()
+                return PromotionOutcome(
+                    role=parsed_role,
+                    status=PromotionStatus.NO_CHANGE,
+                    old_model_registry_id=old_id,
+                    new_model_registry_id=selected.registry_id,
+                    decision_fingerprint=decision_fp,
+                )
+            self.conn.execute(
+                "UPDATE model_registry SET lifecycle_state='ACTIVE' WHERE registry_id=?",
+                (selected.registry_id,),
+            )
+            self.conn.execute(
+                "INSERT INTO model_role_activations (role,model_registry_id,activated_at,"
+                "decision_fingerprint) VALUES (?,?,?,?) "
+                "ON CONFLICT(role) DO UPDATE SET model_registry_id=excluded.model_registry_id,"
+                "activated_at=excluded.activated_at,"
+                "decision_fingerprint=excluded.decision_fingerprint",
+                (parsed_role.value, selected.registry_id, timestamp, decision_fp),
+            )
+            if old_id is not None:
+                still_active = self.conn.execute(
+                    "SELECT 1 FROM model_role_activations WHERE model_registry_id=? LIMIT 1",
+                    (old_id,),
+                ).fetchone()
+                if still_active is None:
+                    self.conn.execute(
+                        "UPDATE model_registry SET lifecycle_state='CANDIDATE' "
+                        "WHERE registry_id=? AND lifecycle_state='ACTIVE'",
+                        (old_id,),
+                    )
+            old_model = None
+            if old_id is not None:
+                old_row = self.conn.execute(
+                    "SELECT * FROM model_registry WHERE registry_id=?", (old_id,)
+                ).fetchone()
+                old_model = None if old_row is None else self._registered_model_from_row(old_row)
+            event_id = f"routing-{decision_fp[:32]}"
+            self.conn.execute(
+                "INSERT INTO model_routing_audit ("
+                "event_id,event_type,role,old_model_registry_id,old_family,"
+                "old_logical_version,old_technical_model_id,old_pricing_ref,"
+                "new_model_registry_id,new_family,new_logical_version,new_technical_model_id,"
+                "new_pricing_ref,qualification_ref,capability_ref,occurred_at,reason,"
+                "policy_decision_json,decision_fingerprint,idempotency_key"
+                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    event_id,
+                    RoutingAuditEventType.PROMOTION.value,
+                    parsed_role.value,
+                    old_id,
+                    None if old_model is None else old_model.family.value,
+                    None if old_model is None else old_model.logical_version,
+                    None if old_model is None else old_model.technical_model_id,
+                    None if old_model is None else old_model.pricing_ref,
+                    selected.registry_id,
+                    selected.family.value,
+                    selected.logical_version,
+                    selected.technical_model_id,
+                    selected.pricing_ref,
+                    selected.qualification_ref,
+                    selected.capability_ref,
+                    timestamp,
+                    reason.strip(),
+                    canonical_json(decision),
+                    decision_fp,
+                    f"PROMOTION:{parsed_role.value}:{decision_fp}",
+                ),
+            )
+            self.conn.commit()
+            return PromotionOutcome(
+                role=parsed_role,
+                status=PromotionStatus.PROMOTED,
+                old_model_registry_id=old_id,
+                new_model_registry_id=selected.registry_id,
+                decision_fingerprint=decision_fp,
+            )
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def get_active_model_for_role(self, role: object) -> RegisteredModel | None:
+        parsed = parse_role(role)
+        row = self.conn.execute(
+            "SELECT m.* FROM model_role_activations a "
+            "JOIN model_registry m ON m.registry_id=a.model_registry_id WHERE a.role=?",
+            (parsed.value,),
+        ).fetchone()
+        return None if row is None else self._registered_model_from_row(row)
+
+    def freeze_model_for_intent(
+        self,
+        role: object,
+        *,
+        intent_kind: str,
+        intent_id: str,
+        now: datetime | None = None,
+    ) -> FrozenModelBinding:
+        parsed = parse_role(role)
+        if not isinstance(intent_kind, str) or not intent_kind.strip():
+            raise RoutingError("INTENT_KIND_INVALID", "Intent kind must be non-empty.")
+        if not isinstance(intent_id, str) or not intent_id.strip():
+            raise RoutingError("INTENT_ID_INVALID", "Intent ID must be non-empty.")
+        intent_kind = intent_kind.strip()
+        intent_id = intent_id.strip()
+        timestamp = _ts_precise(now)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            existing = self.conn.execute(
+                "SELECT * FROM model_intent_bindings WHERE intent_kind=? AND intent_id=?",
+                (intent_kind, intent_id),
+            ).fetchone()
+            if existing is not None:
+                binding = self._model_binding_from_row(existing)
+                if binding.role is not parsed:
+                    raise RoutingError(
+                        "FROZEN_INTENT_ROLE_MISMATCH",
+                        "An existing durable intent cannot change logical role.",
+                    )
+                self.conn.commit()
+                return binding
+            activation = self.conn.execute(
+                "SELECT * FROM model_role_activations WHERE role=?", (parsed.value,)
+            ).fetchone()
+            if activation is None:
+                raise RoutingError(
+                    "ACTIVE_MODEL_MISSING",
+                    f"No qualified active model exists for {parsed.value}.",
+                )
+            model_row = self.conn.execute(
+                "SELECT * FROM model_registry WHERE registry_id=?",
+                (activation["model_registry_id"],),
+            ).fetchone()
+            policy_row = self.conn.execute(
+                "SELECT * FROM model_role_policies WHERE role=?", (parsed.value,)
+            ).fetchone()
+            assert model_row is not None and policy_row is not None
+            model = self._registered_model_from_row(model_row)
+            policy = self._role_policy_from_row(policy_row)
+            reasons = candidate_eligibility_reasons(
+                policy=policy,
+                model=model,
+                pricing=self._model_pricing_for(model),
+                capability=self._model_capability_for(model),
+            )
+            if reasons:
+                raise RoutingError(
+                    "ACTIVE_MODEL_NO_LONGER_ELIGIBLE",
+                    ",".join(reasons),
+                )
+            assert model.technical_model_id is not None
+            assert model.pricing_ref is not None
+            assert model.qualification_ref is not None
+            assert model.capability_ref is not None
+            self.conn.execute(
+                "INSERT INTO model_intent_bindings ("
+                "intent_kind,intent_id,role,model_registry_id,provider,family,logical_version,"
+                "technical_model_id,pricing_ref,qualification_ref,capability_ref,"
+                "activation_decision_fingerprint,fallback_policy,bound_at"
+                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    intent_kind,
+                    intent_id,
+                    parsed.value,
+                    model.registry_id,
+                    model.provider,
+                    model.family.value,
+                    model.logical_version,
+                    model.technical_model_id,
+                    model.pricing_ref,
+                    model.qualification_ref,
+                    model.capability_ref,
+                    str(activation["decision_fingerprint"]),
+                    policy.fallback_policy,
+                    timestamp,
+                ),
+            )
+            row = self.conn.execute(
+                "SELECT * FROM model_intent_bindings WHERE intent_kind=? AND intent_id=?",
+                (intent_kind, intent_id),
+            ).fetchone()
+            assert row is not None
+            self.conn.commit()
+            return self._model_binding_from_row(row)
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def get_frozen_model_binding(
+        self,
+        *,
+        intent_kind: str,
+        intent_id: str,
+    ) -> FrozenModelBinding | None:
+        row = self.conn.execute(
+            "SELECT * FROM model_intent_bindings WHERE intent_kind=? AND intent_id=?",
+            (intent_kind, intent_id),
+        ).fetchone()
+        return None if row is None else self._model_binding_from_row(row)
+
+    def deprecate_registered_model(
+        self,
+        model_registry_id: str,
+        *,
+        reason: str,
+        now: datetime | None = None,
+    ) -> tuple[RoutingAuditEvent, ...]:
+        if not isinstance(reason, str) or not reason.strip():
+            raise RoutingError("DEMOTION_REASON_MISSING", "Demotion requires a reason.")
+        timestamp = _ts_precise(now)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            row = self.conn.execute(
+                "SELECT * FROM model_registry WHERE registry_id=?",
+                (model_registry_id,),
+            ).fetchone()
+            if row is None:
+                raise RoutingError("UNKNOWN_MODEL", f"Unknown model: {model_registry_id!r}.")
+            model = self._registered_model_from_row(row)
+            active_rows = self.conn.execute(
+                "SELECT * FROM model_role_activations WHERE model_registry_id=? ORDER BY role",
+                (model_registry_id,),
+            ).fetchall()
+            if model.lifecycle_state is LifecycleState.DEPRECATED:
+                existing_rows = self.conn.execute(
+                    "SELECT * FROM model_routing_audit WHERE event_type='DEMOTION' "
+                    "AND old_model_registry_id=? ORDER BY occurred_at,event_id",
+                    (model_registry_id,),
+                ).fetchall()
+                self.conn.commit()
+                return tuple(self._routing_audit_from_row(item) for item in existing_rows)
+            if not active_rows:
+                raise RoutingError(
+                    "MODEL_NOT_ACTIVE",
+                    "Only an active selection can be deprecated through the demotion boundary.",
+                )
+            self.conn.execute(
+                "UPDATE model_registry SET lifecycle_state='DEPRECATED',"
+                "availability_state='UNAVAILABLE' WHERE registry_id=?",
+                (model_registry_id,),
+            )
+            events: list[RoutingAuditEvent] = []
+            for active in active_rows:
+                role = parse_role(active["role"])
+                decision = {
+                    "role": role.value,
+                    "old_model_registry_id": model_registry_id,
+                    "selected_model_registry_id": None,
+                    "outcome": "DEMOTED_NO_RUNTIME_FALLBACK",
+                    "reason": reason.strip(),
+                    "fallback_policy": "FORBIDDEN",
+                }
+                decision_fp = model_contract_fingerprint(decision)
+                event_id = f"routing-{decision_fp[:32]}"
+                self.conn.execute(
+                    "DELETE FROM model_role_activations WHERE role=? AND model_registry_id=?",
+                    (role.value, model_registry_id),
+                )
+                self.conn.execute(
+                    "INSERT INTO model_routing_audit ("
+                    "event_id,event_type,role,old_model_registry_id,old_family,"
+                    "old_logical_version,old_technical_model_id,old_pricing_ref,"
+                    "new_model_registry_id,new_family,new_logical_version,new_technical_model_id,"
+                    "new_pricing_ref,qualification_ref,capability_ref,occurred_at,reason,"
+                    "policy_decision_json,decision_fingerprint,idempotency_key"
+                    ") VALUES (?,?,?,?,?,?,?,?,NULL,NULL,NULL,NULL,NULL,?,?, ?,?,?,?,?)",
+                    (
+                        event_id,
+                        RoutingAuditEventType.DEMOTION.value,
+                        role.value,
+                        model.registry_id,
+                        model.family.value,
+                        model.logical_version,
+                        model.technical_model_id,
+                        model.pricing_ref,
+                        model.qualification_ref,
+                        model.capability_ref,
+                        timestamp,
+                        reason.strip(),
+                        canonical_json(decision),
+                        decision_fp,
+                        f"DEMOTION:{role.value}:{decision_fp}",
+                    ),
+                )
+                audit_row = self.conn.execute(
+                    "SELECT * FROM model_routing_audit WHERE event_id=?", (event_id,)
+                ).fetchone()
+                assert audit_row is not None
+                events.append(self._routing_audit_from_row(audit_row))
+            self.conn.commit()
+            return tuple(events)
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def list_model_routing_audit(
+        self,
+        role: object | None = None,
+    ) -> tuple[RoutingAuditEvent, ...]:
+        if role is None:
+            rows = self.conn.execute(
+                "SELECT * FROM model_routing_audit ORDER BY occurred_at,event_id"
+            ).fetchall()
+        else:
+            parsed = parse_role(role)
+            rows = self.conn.execute(
+                "SELECT * FROM model_routing_audit WHERE role=? "
+                "ORDER BY occurred_at,event_id",
+                (parsed.value,),
+            ).fetchall()
+        return tuple(self._routing_audit_from_row(row) for row in rows)
 
     # --- tematy ---
     def _insert_topic(self, topic: Topic, account_id: str | None = None) -> Topic:

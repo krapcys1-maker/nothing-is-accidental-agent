@@ -291,3 +291,11 @@ Jawne P2 są częścią uczciwego zamknięcia. Proceduralne sidecary, minimalny 
 - Deterministic layer powinien egzekwować kompletność i spójność odpowiedzi reviewera, nie imitować jego osąd.
 - Konserwatywny kontrakt nie musi blokować retoryki: honest inference pozostaje poprawną drogą.
 - Trust boundary jest bezpieczniejsza, gdy jest nazwana i testowana, niż gdy ukrywa ją coraz większy regex.
+
+## 2026-08-09 — Po model-family routing core
+
+- Rola produktu, rodzina modelu, wersja i technical ID są różnymi faktami i powinny mieć różne pola.
+- „Najnowszy” jest tylko porządkiem; „kwalifikowany” jest decyzją polityki popartą trwałym evidence.
+- Cost envelope roli nie zastępuje runtime budget gate — odpowiada na inne pytanie.
+- Promotion może być autonomiczne bez bycia fallbackiem, jeśli dotyczy wyłącznie nowych intentów i następuje przed efektem zewnętrznym.
+- Fake qualification dowodzi mechanizmu, nie jakości prawdziwego modelu; brak realnego adaptera musi pozostać widoczny.

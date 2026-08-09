@@ -746,3 +746,10 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Wymagany kontrakt:** jawny marker pytania w dowolnym miejscu segmentu ARTICLE wyklucza `NON_FACTUAL_PROSE`; minimum ASCII `?`, a pełnoszerokie `？` ma ten sam prosty kontrakt, jeśli przechodzi segmenter.
 - **Zakres i zakazy:** testy lokalne/fake/temp DB, zero sieci/API/browsera/publikacji/kosztu/migracji produkcji; bez stage/commita/pushu/PR/merge i bez startu C5. P2 fingerprint, coverage C2/C3/C4/E3, trailing blank line, `[hidden]/[HIDDEN]`, `Closed.`, PSL, provider/model/pricing i Notes pozostają poza zakresem.
 - **Wymagany następny krok:** dokładnie jeden niezależny re-review; implementer nie zatwierdza własnej naprawy.
+
+## 2026-08-09 — Właściciel autoryzował PRE-C5 model-family routing core
+
+- **Decyzja człowieka:** zbudować offline stabilne role i rodziny SONNET/OPUS/FABLE, trwały registry/policy/pricing/capability/qualification, atomową automatyczną promocję najwyższej kwalifikowanej wersji oraz frozen binding istniejących intentów.
+- **Rozróżnienie zakresowe:** runtime fallback po błędzie pozostaje `FORBIDDEN`; dozwolona jest wyłącznie wcześniejsza, audytowalna promocja wersji dla przyszłych nowych intentów po pełnym `PASS`. Rola comments jest tylko deklaracją policy — bez Stage 6 runtime.
+- **Twarde granice:** zero internetu, realnego providera/API/SDK/browsera/publikacji/controlled-live/kosztu; wyłącznie fake catalogue/callery/qualification i nowe temp DB. Produkcja tylko immutable/read-only; bez odczytu `.env`, bez migracji produkcji i bez zmiany prywatnego korpusu.
+- **Git/status:** właściciel zabronił stage/commita/pushu/PR/merge i C5. Implementer może wydać wyłącznie `PRE-C5 MODEL FAMILY ROUTING & QUALIFICATION CORE — CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW` albo `BLOCKED`.

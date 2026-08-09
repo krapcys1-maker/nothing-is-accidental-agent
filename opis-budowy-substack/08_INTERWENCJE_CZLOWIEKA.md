@@ -295,3 +295,7 @@ Osiem P2 ma pozostać otwartych, a pierwsze trzy nadal blokują C5. Implementer 
 ## 2026-08-09 — Człowiek przerwał serię heurystycznych poprawek
 
 Właściciel po drugim `REJECT — MAJOR` zabronił trzeciej poprawki starego rozwiązania. Autoryzował wyłącznie usunięcie czterech znanych niecommitowanych ścieżek i utworzenie `prec5/question-semantic-boundary`. Nakazał, by wszystkie pytania ARTICLE przechodziły reviewer boundary, a realną semantykę i trust boundary pozostawił następnej fali. Stage, commit, push, PR, merge, API, browser, produkcja i C5 pozostały zabronione.
+
+## 2026-08-09 — Autoryzacja model-family routing core
+
+Właściciel dopuścił wyłącznie offline registry, polityki rodzin SONNET/OPUS/FABLE, fake qualification i automatyczną promocję wersji dla przyszłych intentów. Jednocześnie utrzymał zakaz runtime fallbacku, realnego discovery/API, internetu, aktualizacji cen, migracji produkcji, C5, comments runtime i wszystkich zapisów Git. Status implementera pozostaje kandydacki do niezależnego review.

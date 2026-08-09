@@ -18,3 +18,10 @@
 - Niezależny review znalazł MAJOR w końcówkowym `text.endswith("?")`. Jedyna naprawa egzekwuje `?`/`？` w dowolnej pozycji segmentu i pozostaje czysto syntaktyczna.
 - Dowód POST: question `220/220`, PRE-C5 `328/328`, affected `399/399`, full/collect `2322/2322`, sweep `216` z `0` leaks, produkcja/style bez zmian, koszt `0.000000 USD`.
 - Status tygodnia: `PRE-C5 QUESTION SEMANTIC BOUNDARY CONTRACT — REPAIR CANDIDATE COMPLETE — AWAITING RE-REVIEW`; C5 nadal `NOT STARTED`.
+
+## Checkpoint model-family routing 2026-08-09
+
+- Powstał offline registry/policy/qualification/promotion core dla siedmiu stabilnych ról i rodzin SONNET/OPUS/FABLE. Fake N→N+1 może awansować bez człowieka dopiero po pełnym PASS; runtime fallback nadal jest zabroniony, a stare intenty pozostają zamrożone.
+- Migracja `0027` działa wyłącznie na temp DB. Realne catalogue discovery, qualification benchmark, technical IDs, availability i ceny pozostają niewdrożone/`UNVERIFIED`; nie wykonano żadnego API ani publikacji.
+- Dowód tygodnia po tej fali: new `31/31`, affected `748/748`, full/collect `2353/2353`, exact duplicates `0`, compile/diff PASS; koszt `0.000000 USD`.
+- Status: `PRE-C5 MODEL FAMILY ROUTING & QUALIFICATION CORE — CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; Etap 3 pozostaje `IN PROGRESS`, C5 i formalny PRE-C5 QUALITY GATE `NOT STARTED`.

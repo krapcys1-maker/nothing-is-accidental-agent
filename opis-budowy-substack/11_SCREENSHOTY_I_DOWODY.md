@@ -160,3 +160,7 @@ Dowód tekstowy: C4 `23/23`, full/collect/unique `1994/1994`, zero duplikatów/s
 ## 2026-08-09 — Question semantic boundary
 
 `SCREENSHOT REQUIRED`. Bezpieczny kadr powinien pokazać zanonimizowaną macierz question × reviewer output i dokładny durable audit pięciu supported ARTICLE cases. Browser był zabroniony; dowód tekstowy to 183/183, PRE-C5 291/291, affected 362/362, full/collect 2285/2285, produkcja i styl byte-identical, koszt zero. Bez `.env`, raw corpus, draftu, evidence content i pełnych ścieżek/hashów.
+
+## 2026-08-09 — Model-family routing core
+
+`SCREENSHOT REQUIRED`. Bezpieczny kadr powinien pokazać role→family→wersje 5/5.1/5.2/6→gates→jedno ACTIVE, stary frozen intent na N i nowy na N+1 oraz współbieżne `PROMOTED + NO_CHANGE`. Dowód tekstowy: new 31/31, affected 748/748, full/collect 2353/2353, exact duplicates 0, koszt zero. Bez `.env`, realnych model IDs/cen, produkcyjnych danych i sugestii realnego discovery, C5 lub approvalu.

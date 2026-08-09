@@ -128,3 +128,7 @@ Niezależne review potwierdziło P0=0 i P1=0 dla WAVE 0A, a kontrola bazy potwie
 ## 2026-08-09 — Kontrpróba pytań, nie eksperyment publikacyjny
 
 Lokalna macierz 50 factual, 25 non-factual oraz 55 dodatkowych question forms badała wyłącznie inwariant claim accounting. Wynik: zero prose shortcuts dla pytań, zachowana honest-inference route i jawna trust boundary. Nie było odbiorców, wariantu treści, publikacji, sieci ani kosztu; EXP-01–EXP-08 pozostają bez zmiany.
+
+## 2026-08-09 — Fake N→N+1 to test techniczny, nie eksperyment publikacyjny
+
+Syntetyczne wersje 5/5.1/5.2/6 sprawdziły ordering, kwalifikację, pricing ceiling, promocję, restart i frozen intents. Nie porównywano jakości prawdziwych modeli, tekstów ani odbiorców; nie było API, publikacji, kosztu ani metryk wzrostu. EXP-01–EXP-08 pozostają bez zmiany.
