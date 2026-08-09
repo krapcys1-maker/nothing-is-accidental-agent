@@ -32,6 +32,18 @@ class ContentWriterProviderUnavailable(RealContentWriterUnavailable):
     pass
 
 
+class ControlledProviderRouteOverrideForbidden(ContentRoutingError):
+    """A paid execution may not be pointed at a hand-written route."""
+
+    code = "CONTENT_CONTROLLED_PROVIDER_ROUTE_OVERRIDE_FORBIDDEN"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "A controlled provider execution resolves its route from the "
+            "frozen registry binding only."
+        )
+
+
 @dataclass(frozen=True)
 class ResolvedWriterRoute:
     content_type: ContentType

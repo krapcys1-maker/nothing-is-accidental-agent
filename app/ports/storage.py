@@ -80,6 +80,10 @@ from app.content.contracts import (
     WriterResult,
 )
 from app.content.decision import ContentDecisionPlan
+from app.content.provenance import (
+    ControlledProviderProvenance,
+    ControlledProviderSettlement,
+)
 from app.model_routing.contracts import (
     CapabilityDeclaration,
     CatalogueCandidate,
@@ -346,6 +350,15 @@ class StoragePort(Protocol):
     def get_frozen_model_binding(
         self, *, intent_kind: str, intent_id: str,
     ) -> FrozenModelBinding | None: ...
+
+    def freeze_content_writer_model_binding(
+        self, *, job_id: str, content_type: ContentType,
+        now: datetime | None = None,
+    ) -> FrozenModelBinding: ...
+
+    def load_controlled_provider_provenance(
+        self, *, job_id: str,
+    ) -> ControlledProviderProvenance | None: ...
 
     def deprecate_registered_model(
         self, model_registry_id: str, *, reason: str,
@@ -711,9 +724,17 @@ class StoragePort(Protocol):
         ...
 
     def add_job_model_usage(
-        self, execution: JobExecutionContext, usage: ModelUsage,
+        self,
+        execution: JobExecutionContext,
+        usage: ModelUsage,
+        *,
+        settlement: ControlledProviderSettlement | None = None,
     ) -> ModelUsage:
-        """Atomowo zapisuje usage i koszt wyłącznie pod świeżym fence workera."""
+        """Atomowo zapisuje usage i koszt wyłącznie pod świeżym fence workera.
+
+        Paid CONTENT usage additionally carries the frozen pricing settlement
+        that produced the booked amount, written in the same transaction.
+        """
         ...
 
     def begin_provider_attempt(

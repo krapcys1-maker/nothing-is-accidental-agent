@@ -13,6 +13,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
+from pydantic import ValidationError
+
 from app.content.foundation import (
     ContentExecutionMode,
     CONTENT_EXECUTION,
@@ -50,6 +52,16 @@ from app.content.decision import (
     ContentDecisionActor,
     ContentDecisionOutcome,
     ContentDecisionPlan,
+)
+from app.content.provenance import (
+    CONTENT_TYPE_ROLE,
+    CONTENT_WRITER_INTENT_KIND,
+    ControlledProviderAuthority,
+    ControlledProviderProvenance,
+    ControlledProviderProvenanceError,
+    ControlledProviderSettlement,
+    assert_controlled_provider_binding_ready,
+    content_writer_binding_intent_id,
 )
 from app.core.clock import Clock
 from app.core.money import decimal_from, quantize_usd, sum_usd
@@ -1145,6 +1157,86 @@ class SqliteStorage:
             (model.capability_ref,),
         ).fetchone()
         return self._model_capability_from_row(row)
+
+    @staticmethod
+    def _qualification_report_from_row(
+        row: sqlite3.Row | None,
+    ) -> QualificationReport | None:
+        if row is None:
+            return None
+        return QualificationReport(
+            qualification_ref=str(row["qualification_ref"]),
+            model_registry_id=str(row["model_registry_id"]),
+            state=QualificationState(str(row["state"])),
+            suite_version=str(row["suite_version"]),
+            fixture_set_ref=str(row["fixture_set_ref"]),
+            result_payload=json.loads(str(row["result_json"])),
+            evaluated_at=str(row["evaluated_at"]),
+            source=str(row["source"]),
+        )
+
+    def freeze_content_writer_model_binding(
+        self,
+        *,
+        job_id: str,
+        content_type: ContentType,
+        now: datetime | None = None,
+    ) -> FrozenModelBinding:
+        """Resolve the active qualified model once for one content execution.
+
+        Both writer attempts of the same job share this binding, so promotion
+        between them cannot re-route the execution.
+        """
+        return self.freeze_model_for_intent(
+            CONTENT_TYPE_ROLE[content_type],
+            intent_kind=CONTENT_WRITER_INTENT_KIND,
+            intent_id=content_writer_binding_intent_id(job_id),
+            now=now,
+        )
+
+    def load_controlled_provider_provenance(
+        self, *, job_id: str,
+    ) -> ControlledProviderProvenance | None:
+        """Read back the frozen binding together with the evidence it named.
+
+        Every reference is resolved by the identity the binding froze, never by
+        whatever the registry currently considers current or active.
+        """
+        binding_row = self.conn.execute(
+            "SELECT * FROM model_intent_bindings WHERE intent_kind=? AND intent_id=?",
+            (
+                CONTENT_WRITER_INTENT_KIND,
+                content_writer_binding_intent_id(job_id),
+            ),
+        ).fetchone()
+        if binding_row is None:
+            return None
+        binding = self._model_binding_from_row(binding_row)
+        model_row = self.conn.execute(
+            "SELECT * FROM model_registry WHERE registry_id=?",
+            (binding.model_registry_id,),
+        ).fetchone()
+        if model_row is None:
+            return None
+        pricing_row = self.conn.execute(
+            "SELECT * FROM model_pricing_profiles WHERE pricing_ref=?",
+            (binding.pricing_ref,),
+        ).fetchone()
+        capability_row = self.conn.execute(
+            "SELECT * FROM model_capability_declarations WHERE capability_ref=?",
+            (binding.capability_ref,),
+        ).fetchone()
+        qualification_row = self.conn.execute(
+            "SELECT * FROM model_qualification_results WHERE qualification_ref=?",
+            (binding.qualification_ref,),
+        ).fetchone()
+        return ControlledProviderProvenance(
+            binding=binding,
+            model=self._registered_model_from_row(model_row),
+            pricing=self._model_pricing_from_row(pricing_row),
+            capability=self._model_capability_from_row(capability_row),
+            qualification=self._qualification_report_from_row(qualification_row),
+        )
 
     def promote_best_model(
         self,
@@ -3433,6 +3525,35 @@ class SqliteStorage:
                 self._rollback_preserving_primary(primary, self.conn.rollback)
             raise
 
+    def _assert_controlled_provider_provenance_in_transaction(
+        self, job_id: str, intent_row: sqlite3.Row,
+    ) -> ControlledProviderAuthority:
+        """Re-prove one persisted paid intent against its frozen binding.
+
+        The pipeline runs the same gate before it calls a writer; repeating it
+        here means a caller that reaches storage directly cannot skip it.
+        """
+        try:
+            intent = WriterIntent.model_validate(
+                json.loads(str(intent_row["intent_json"]))
+            )
+        except (TypeError, ValueError, json.JSONDecodeError, ValidationError) as exc:
+            raise ContentFoundationError(
+                "CONTENT_WRITER_INTENT_INVALID",
+                "Persisted paid writer intent is not a valid durable contract.",
+            ) from exc
+        if intent.job_id != job_id:
+            raise ContentFoundationError(
+                "CONTENT_WRITER_INTENT_MISMATCH",
+                "Persisted paid writer intent names a different job.",
+            )
+        try:
+            return assert_controlled_provider_binding_ready(
+                intent, self.load_controlled_provider_provenance(job_id=job_id),
+            )
+        except ControlledProviderProvenanceError as exc:
+            raise ContentFoundationError(exc.code, exc.detail) from exc
+
     def _content_job_authorizes_paid_provider(self, job_id: str) -> bool:
         """Only an explicitly provider-enabled CONTENT job may spend money."""
         row = self.conn.execute(
@@ -3495,6 +3616,14 @@ class SqliteStorage:
                     "CONTENT_WRITER_INTENT_INVALID",
                     "A paid writer attempt requires a positive cap and a "
                     "fully configured route.",
+                )
+            if paid:
+                # Configuration is not provenance.  The attempt row may not
+                # exist until the durable intent has been re-proved against the
+                # binding frozen for this execution, inside this same
+                # transaction, from the intent JSON that was actually persisted.
+                self._assert_controlled_provider_provenance_in_transaction(
+                    execution.job_id, intent,
                 )
             if not paid and (
                 float(intent["max_cost_usd"]) != 0.0
@@ -5812,10 +5941,82 @@ class SqliteStorage:
             current_ts=current_ts,
         )
 
+    def _record_controlled_provider_settlement_in_transaction(
+        self,
+        execution: JobExecutionContext,
+        settlement: ControlledProviderSettlement,
+        *,
+        current_ts: str,
+    ) -> None:
+        """Persist the frozen pricing proof in the usage transaction itself."""
+        attempt = self.conn.execute(
+            "SELECT wa.*, wi.content_id AS wi_content_id FROM content_writer_attempts wa "
+            "JOIN content_writer_intents wi ON wi.intent_id=wa.intent_id "
+            "WHERE wa.request_id=? AND wa.job_id=? AND wa.run_id=?",
+            (settlement.request_id, execution.job_id, execution.run_id),
+        ).fetchone()
+        if attempt is None:
+            raise ContentFoundationError(
+                "CONTENT_PROVIDER_SETTLEMENT_ATTEMPT_MISSING",
+                "A cost settlement requires its canonical writer attempt.",
+            )
+        existing = self.conn.execute(
+            "SELECT * FROM content_provider_cost_settlements WHERE request_id=?",
+            (settlement.request_id,),
+        ).fetchone()
+        if existing is not None:
+            if (
+                str(existing["pricing_ref"]) != settlement.pricing_ref
+                or str(existing["pricing_profile_fingerprint"])
+                != settlement.pricing_profile_fingerprint
+                or str(existing["cost_usd"]) != settlement.canonical_cost
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_PROVIDER_SETTLEMENT_CONFLICT",
+                    "A different cost settlement already exists for this attempt.",
+                )
+            return
+        inserted = self.conn.execute(
+            "INSERT INTO content_provider_cost_settlements (request_id,intent_id,"
+            "job_id,run_id,content_id,attempt_no,binding_intent_id,"
+            "model_registry_id,provider,technical_model_id,pricing_ref,"
+            "pricing_profile_fingerprint,qualification_ref,capability_ref,"
+            "currency,unit,input_tokens,output_tokens,cache_read_tokens,"
+            "cache_write_tokens,web_search_requests,cost_usd,settled_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                settlement.request_id, settlement.intent_id, execution.job_id,
+                execution.run_id, int(attempt["content_id"]),
+                settlement.attempt_no, settlement.binding_intent_id,
+                settlement.model_registry_id, settlement.provider,
+                settlement.technical_model_id, settlement.pricing_ref,
+                settlement.pricing_profile_fingerprint,
+                settlement.qualification_ref, settlement.capability_ref,
+                settlement.currency, settlement.unit, settlement.input_tokens,
+                settlement.output_tokens, settlement.cache_read_tokens,
+                settlement.cache_write_tokens, settlement.web_search_requests,
+                settlement.canonical_cost, current_ts,
+            ),
+        )
+        if inserted.rowcount != 1:
+            raise ContentFoundationError(
+                "CONTENT_PROVIDER_SETTLEMENT_INSERT_FAILED",
+                "Cost settlement insert failed.",
+            )
+
     def add_job_model_usage(
-        self, execution: JobExecutionContext, usage: ModelUsage,
+        self,
+        execution: JobExecutionContext,
+        usage: ModelUsage,
+        *,
+        settlement: ControlledProviderSettlement | None = None,
     ) -> ModelUsage:
-        """Worker-only usage write; insert and run-cost refresh share the fence lock."""
+        """Worker-only usage write; insert and run-cost refresh share the fence lock.
+
+        A controlled-provider CONTENT attempt additionally passes the frozen
+        pricing settlement that produced ``usage.estimated_cost_usd``; SQL then
+        refuses the usage row unless that proof is present and identical.
+        """
         if usage.run_id != execution.run_id:
             raise StaleJobExecutionError(
                 execution.job_id, "usage run_id does not match the fenced execution.",
@@ -5897,6 +6098,22 @@ class SqliteStorage:
             else:
                 reserved_amount = None
                 over_reservation = False
+            if settlement is not None:
+                if not is_content or usage.request_id != settlement.request_id:
+                    raise StaleJobExecutionError(
+                        execution.job_id,
+                        "a cost settlement must accompany its own content usage.",
+                    )
+                if actual_amount != quantize_usd(
+                    settlement.cost_usd, label="settlement cost",
+                ):
+                    raise StaleJobExecutionError(
+                        execution.job_id,
+                        "booked usage cost differs from the frozen pricing settlement.",
+                    )
+                self._record_controlled_provider_settlement_in_transaction(
+                    execution, settlement, current_ts=current_ts,
+                )
             cur = self.conn.execute(
                 "INSERT INTO model_usage (run_id, provider, model, task, input_tokens,"
                 " output_tokens, cache_read_tokens, cache_write_tokens, web_search_requests,"

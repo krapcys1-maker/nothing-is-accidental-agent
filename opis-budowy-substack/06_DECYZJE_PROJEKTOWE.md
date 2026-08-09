@@ -503,3 +503,11 @@ Deterministic layer rozlicza strukturę, nie znaczenie. Dlatego każde pytanie A
 ## 2026-08-09 — ADR-124: promocja przed wykonaniem nie jest fallbackiem po błędzie
 
 Zakaz automatycznej zmiany modelu pozostaje nienaruszony w runtime: błąd providera nie pozwala wybrać innego modelu, a retry odczytuje exact frozen binding. Osobno dozwolono prekwalifikowaną promocję dla przyszłych nowych intencji. Kandydat tej samej rodziny musi przejść availability, pięć wymiarów ceny, capabilities i qualification PASS; dopiero potem może atomowo zastąpić aktywną wersję. Realne discovery i kwalifikacja pozostają niewpięte.
+
+## 2026-08-09 — ADR-125: „skonfigurowany" nie znaczy „wiadomo, co się uruchomi"
+
+Do tej fali paid content wystarczyło, że cztery pola nie były napisem `UNVERIFIED`. To jest test na kompletność formularza, nie na to, czy ktokolwiek wie, jaki model zostanie wywołany i po jakiej cenie. Dlatego bramka nie pyta już „czy skonfigurowane", tylko „czy dokładnie ten wpis rejestru, dokładnie ta kwalifikacja, dokładnie ten cennik zostały zamrożone dla tej egzekucji".
+
+Druga rzecz jest mniej oczywista. Koszt paid content brał się z liczby, którą zwracał sam wywoływany komponent. Nawet przy uczciwym providerze to jest zła architektura: rachunek wystawia strona rozliczana. Teraz tokeny raportuje provider, a cenę ustala wyłącznie zatwierdzony profil wskazany przez zamrożony binding — i to nie „profil o takich samych liczbach", tylko dokładnie ten, po `profile_fingerprint`. Dwa cenniki o identycznych stawkach to nadal dwa autorytety.
+
+Trzecia rzecz to porządek w nazwach. Zgłoszona luka dotyczyła tabeli `content_writer_intents_v3`. Taka tabela nie istnieje w runtime — to przejściowa nazwa w środku migracji `0023`, która zaraz potem zostaje przemianowana. Inwariant trzeba było postawić tam, gdzie naprawdę leży trwały stan, a nie tam, gdzie wskazywała nazwa z raportu. Warto to zapisać, bo pokazuje różnicę między przyjęciem cudzego ustalenia a sprawdzeniem go w kodzie.

@@ -27,7 +27,10 @@ CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION = (
     "0026_controlled_provider_content"
 )
 MODEL_FAMILY_ROUTING_SCHEMA_VERSION = "0027_model_family_routing"
-RUNTIME_SCHEMA_VERSION = MODEL_FAMILY_ROUTING_SCHEMA_VERSION
+CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION = (
+    "0028_controlled_provider_provenance"
+)
+RUNTIME_SCHEMA_VERSION = CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
@@ -53,6 +56,9 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     CONTENT_PIPELINE_SCHEMA_VERSION,
     CONTENT_DECISION_SCHEMA_VERSION,
     EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION,
+    # 0028 only adds one table and triggers, so the runner transaction is the
+    # right atomicity boundary for it.
+    CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION,
     # 0019 is intentionally ABSENT: rebuilding controlled_fetch_approvals with
     # incoming foreign keys requires PRAGMA foreign_keys=OFF, which is a no-op
     # inside the runner transaction — the migration manages its own explicit
@@ -687,6 +693,24 @@ def migrate_0026_to_0027(
         db_path,
         source_version=CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
         target_version=MODEL_FAMILY_ROUTING_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0027_to_0028(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the controlled-provider provenance and pricing authority step.
+
+    Like every rung below it this is exercised on temporary databases only; it
+    neither authorizes nor performs a production migration.
+    """
+    return _migrate_single_step(
+        db_path,
+        source_version=MODEL_FAMILY_ROUTING_SCHEMA_VERSION,
+        target_version=CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )
 

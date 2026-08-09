@@ -36,10 +36,22 @@ from app.content.foundation import (
 )
 from app.content.planner import ContentPlanningBlocked, plan_content
 from app.content.prompt import assemble_writer_prompt
+from app.content.provenance import (
+    ControlledProviderAuthority,
+    ControlledProviderProvenanceError,
+    assert_controlled_provider_binding_ready,
+)
 from app.content.quality_gate import (
     ClaimAccountingReviewPort,
 )
-from app.content.routing import ContentRoutingError, default_content_routing_path, load_content_route
+from app.content.routing import (
+    ContentRoutingError,
+    ControlledProviderRouteOverrideForbidden,
+    default_content_routing_path,
+    load_content_route,
+    route_from_frozen_model_binding,
+)
+from app.model_routing.contracts import RoutingError
 from app.content.style_examples import (
     StyleExampleError,
     StyleExampleSet,
@@ -218,12 +230,29 @@ def run_offline_content_pipeline(
             )
             return _summary(storage, job.id, str(exc.code))
 
+    # A paid execution never reads a route from configuration.  Its provider,
+    # technical model ID and pricing profile all come from the registry binding
+    # frozen for this job, so the versioned legacy route key cannot become a
+    # second, competing source of a model.
+    paid_mode = writer.call_mode is WriterCallMode.CONTROLLED_PROVIDER
     try:
-        route = route_override or load_content_route(
-            default_content_routing_path(project_root), frozen.content_type,
-        )
+        if paid_mode:
+            if route_override is not None:
+                raise ControlledProviderRouteOverrideForbidden()
+            binding = storage.freeze_content_writer_model_binding(
+                job_id=job.id, content_type=frozen.content_type,
+            )
+            route = route_from_frozen_model_binding(
+                binding, content_type=frozen.content_type,
+            )
+        else:
+            route = route_override or load_content_route(
+                default_content_routing_path(project_root), frozen.content_type,
+            )
         planned = plan_content(frozen, route)
-    except (ContentPlanningBlocked, ContentRoutingError, OSError) as exc:
+    except (
+        ContentPlanningBlocked, ContentRoutingError, RoutingError, OSError,
+    ) as exc:
         code = getattr(exc, "code", "CONTENT_CONFIGURATION_BLOCKED")
         storage.transition_content_execution(
             execution, ContentStatus.FAILED, reason_code=str(code),
@@ -392,6 +421,30 @@ def run_offline_content_pipeline(
             rewrite_feedback=prior_feedback,
         )
         request = WriterRequest(intent=intent, context=context, prompt=prompt)
+        # The one explicit gate in front of the technical provider caller. It
+        # runs before preflight, before the durable intent, before the attempt
+        # and therefore before anything can call the writer: a paid attempt
+        # without complete frozen registry provenance is not merely rejected
+        # later, it never reaches a caller at all.
+        authority: ControlledProviderAuthority | None = None
+        if paid_mode:
+            try:
+                authority = assert_controlled_provider_binding_ready(
+                    intent,
+                    storage.load_controlled_provider_provenance(job_id=job.id),
+                )
+            except ControlledProviderProvenanceError as exc:
+                storage.transition_content_execution(
+                    execution,
+                    ContentStatus.FAILED,
+                    reason_code=exc.code,
+                    final_result={
+                        "attempt_no": attempt_no,
+                        "mode": writer.call_mode.value,
+                        "blocked": True,
+                    },
+                )
+                return _summary(storage, job.id, exc.code)
         preflight_failure = writer.preflight(request)
         if preflight_failure is not None:
             code = preflight_failure.kind.value
@@ -502,6 +555,42 @@ def run_offline_content_pipeline(
                     return _summary(
                         storage, job.id, "CONTENT_WRITER_USAGE_UNSETTLED",
                     )
+                # A paid attempt is never priced by whatever the caller claimed
+                # it cost.  The cost is recomputed in Decimal from the pricing
+                # profile the frozen binding named, and that profile's identity
+                # travels with the usage as a durable settlement.
+                settlement = None
+                booked_cost = result.usage.estimated_cost_usd
+                if paid_mode:
+                    assert authority is not None
+                    if result.usage.estimated_cost_usd != 0.0:
+                        storage.mark_provider_attempt_needs_reconciliation(
+                            execution,
+                            request_id,
+                            error_code="CONTENT_PROVIDER_SELF_REPORTED_COST_FORBIDDEN",
+                        )
+                        storage.transition_content_execution(
+                            execution,
+                            ContentStatus.NEEDS_VERIFICATION,
+                            reason_code="CONTENT_PROVIDER_SELF_REPORTED_COST_FORBIDDEN",
+                            final_result={
+                                "attempt_no": attempt_no,
+                                "request_id": request_id,
+                                "usage": result.usage.model_dump(mode="json"),
+                                "mode": writer.call_mode.value,
+                            },
+                        )
+                        return _summary(
+                            storage,
+                            job.id,
+                            "CONTENT_PROVIDER_SELF_REPORTED_COST_FORBIDDEN",
+                        )
+                    settlement = authority.settlement_for(
+                        request_id=request_id,
+                        attempt_no=attempt_no,
+                        usage=result.usage,
+                    )
+                    booked_cost = float(settlement.canonical_cost)
                 try:
                     storage.add_job_model_usage(
                         execution,
@@ -514,7 +603,7 @@ def run_offline_content_pipeline(
                             output_tokens=result.usage.output_tokens,
                             cache_read_tokens=result.usage.cache_read_tokens,
                             cache_write_tokens=result.usage.cache_write_tokens,
-                            estimated_cost_usd=result.usage.estimated_cost_usd,
+                            estimated_cost_usd=booked_cost,
                             dry_run=(
                                 writer.call_mode
                                 is not WriterCallMode.CONTROLLED_PROVIDER
@@ -522,6 +611,7 @@ def run_offline_content_pipeline(
                             request_id=request_id,
                             created_at=clock.now(),
                         ),
+                        settlement=settlement,
                     )
                 except ProviderAttemptOverReservationError as exc:
                     # Storage committed usage, reconciliation and the terminal
