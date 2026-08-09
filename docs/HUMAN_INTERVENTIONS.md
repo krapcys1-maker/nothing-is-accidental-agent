@@ -730,3 +730,19 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Wymagane dowody:** testy claim coverage dokładnie raz, jawne klasyfikacje i reason codes, trwały audit przy PASS/FAIL, brak heurystycznej ścieżki PASS, bezpośredni scenariusz over-cap z jednym usage/kosztem i późniejszym reaperem no-op, pełna regresja oraz PRE/POST integrity.
 - **Wyłączenia:** nie naprawiać malformed `syndication_of` P2, source admission, lineage, style selection, promptu, routingu, modeli, C5 ani innych P2; nie tworzyć nowej migracji bez wykazanej konieczności. Brak realnego providera, sieci, publikacji i operacji Git.
 - **Wymagany status:** implementer może wydać `PRE-C5 CLAIM ACCOUNTING & COST-CAP CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW` albo `PRE-C5 CLAIM ACCOUNTING & COST-CAP BLOCKED`; nie wykonuje niezależnego review we własnej sesji.
+
+## 2026-08-09 — Właściciel rozpoczął nową falę question semantic boundary
+
+- **Decyzja człowieka:** po dwóch `REJECT — MAJOR` nie wykonywać trzeciej poprawki starego claim gate. Utworzyć nową falę, w której deterministic layer nie rozpoznaje semantyki pytania, a każde pytanie ARTICLE musi przejść independent reviewer boundary.
+- **Nowy inwariant:** reviewer output `NON_FACTUAL_PROSE` dla każdego pytania ARTICLE zawsze blokuje. Pytanie non-factual ma przejść jako `ARGUMENT_OR_INFERENCE/contains_external_fact=false`; factual question wymaga grounded evidence albo blokuje.
+- **Jawna trust boundary:** jeśli przyszły reviewer skłamie i nazwie factual question honest inference, deterministic layer może tego nie wykryć. Właściciel zabronił naprawiania tej granicy regexami; realny reviewer/provider należy do następnej fali.
+- **Git authorization:** właściciel zezwolił wyłącznie na usunięcie czterech znanych niecommitowanych ścieżek dwukrotnie odrzuconego kandydata oraz utworzenie `prec5/question-semantic-boundary`. Stage, commit, push, PR i merge pozostały zabronione.
+- **Twarde wyłączenia:** source admission, E3 lineage, cost-cap, paid lifecycle, leases, storage, migracje 0025/0026, style examples, PSL, `[hidden]/[HIDDEN]`, Notes, provider/model/pricing/routing, C4, produkcja, browser i publikacja. Single-word P2 `Closed.` pozostaje poza zakresem.
+- **Wymagany status:** wyłącznie `PRE-C5 QUESTION SEMANTIC BOUNDARY CONTRACT — CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW` albo odpowiedni BLOCKED; C5 i formalny PRE-C5 QUALITY GATE nie mogą zostać ogłoszone.
+
+## 2026-08-09 — Właściciel autoryzował jedyną naprawę MAJOR-1
+
+- **Decyzja człowieka:** po niezależnym `REJECT — MAJOR` naprawić wyłącznie zależność question boundary od `text.endswith("?")`; nie przebudowywać zaakceptowanych obszarów i nie wracać do heurystyk semantycznych.
+- **Wymagany kontrakt:** jawny marker pytania w dowolnym miejscu segmentu ARTICLE wyklucza `NON_FACTUAL_PROSE`; minimum ASCII `?`, a pełnoszerokie `？` ma ten sam prosty kontrakt, jeśli przechodzi segmenter.
+- **Zakres i zakazy:** testy lokalne/fake/temp DB, zero sieci/API/browsera/publikacji/kosztu/migracji produkcji; bez stage/commita/pushu/PR/merge i bez startu C5. P2 fingerprint, coverage C2/C3/C4/E3, trailing blank line, `[hidden]/[HIDDEN]`, `Closed.`, PSL, provider/model/pricing i Notes pozostają poza zakresem.
+- **Wymagany następny krok:** dokładnie jeden niezależny re-review; implementer nie zatwierdza własnej naprawy.

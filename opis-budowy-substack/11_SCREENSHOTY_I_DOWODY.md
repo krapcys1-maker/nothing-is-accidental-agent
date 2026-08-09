@@ -156,3 +156,7 @@ Dowód tekstowy: C3 `26/26`, regresja `463/463`, full/collect/exact unique `1971
 `SCREENSHOT REQUIRED`. Screenshotu nie wykonano: browser był zabroniony, a terminal zawiera pełne ścieżki i fingerprinty. Bezpieczny kadr powinien pokazać zanonimizowany flow current draft/evaluations/policy → Policy Engine → revalidation/fence → append-only audit → human-required albo autonomous outcome.
 
 Dowód tekstowy: C4 `23/23`, full/collect/unique `1994/1994`, zero duplikatów/skipped/xfail/failures/errors, koszt zero, produkcja nadal 0020, kod 0024. Kadr nie może zawierać private style content, `.env`, promptu/draftu ani sugerować niezależnego approvalu lub zamknięcia C4.
+
+## 2026-08-09 — Question semantic boundary
+
+`SCREENSHOT REQUIRED`. Bezpieczny kadr powinien pokazać zanonimizowaną macierz question × reviewer output i dokładny durable audit pięciu supported ARTICLE cases. Browser był zabroniony; dowód tekstowy to 183/183, PRE-C5 291/291, affected 362/362, full/collect 2285/2285, produkcja i styl byte-identical, koszt zero. Bez `.env`, raw corpus, draftu, evidence content i pełnych ścieżek/hashów.

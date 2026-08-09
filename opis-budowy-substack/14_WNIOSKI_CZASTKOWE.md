@@ -284,3 +284,10 @@ Jawne P2 są częścią uczciwego zamknięcia. Proceduralne sidecary, minimalny 
 - Human-required również jest decyzją Policy Engine i zasługuje na trwały audit, choć nie jest autonomicznym approvalem.
 - `content_runs` może zachować wynik wykonania C3, podczas gdy `content_items` niesie końcową decyzję C4; trzeba nazwać tę granicę, aby nie pomylić jej z niespójnością.
 - Zero nowych calli jest łatwiejsze do udowodnienia, gdy C4 API w ogóle nie przyjmuje providera.
+
+## 2026-08-09 — Po question semantic boundary
+
+- Lexical membership nie dowodzi braku semantic content.
+- Deterministic layer powinien egzekwować kompletność i spójność odpowiedzi reviewera, nie imitować jego osąd.
+- Konserwatywny kontrakt nie musi blokować retoryki: honest inference pozostaje poprawną drogą.
+- Trust boundary jest bezpieczniejsza, gdy jest nazwana i testowana, niż gdy ukrywa ją coraz większy regex.

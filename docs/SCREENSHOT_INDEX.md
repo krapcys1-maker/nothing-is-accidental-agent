@@ -497,3 +497,17 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co powinien pokazać:** zanonimizowaną tabelę segmentów ARTICLE z ordinal/segment ID, trzema dozwolonymi klasyfikacjami, reason, evidence i kompletnym PASS/FAIL; obok fail-closed missing/duplicate/unknown/reviewer error. Drugi panel: reservation `0.050000` → jedno usage/actual `0.075000` → attempt `NEEDS_RECONCILIATION` → content/job `NEEDS_VERIFICATION` + run `STOPPED` → reaper no-op.
 - **Dowód tekstowy zastępczy:** nowy moduł `38/38`, PRE-C5 `108/108`, zakres `436/436`, full `2102/2102`; produkcja `0020` i koszt rzeczywisty `0.000000 USD`.
 - **Czego nie może pokazać:** `.env`, sekretów, raw style corpus, draftu/promptu, treści evidence, danych produkcyjnej SQLite, pełnych ścieżek/hashów ani sugestii niezależnego approvalu, C5/live readiness, publikacji lub operacji Git.
+
+## 2026-08-09 — PRE-C5 question semantic boundary candidate
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ zakres zabrania browsera, a terminal zawiera lokalne ścieżki i pełne fingerprinty. Dowód tekstowy i testy zastępują obraz w tej sesji.
+- **Co powinien pokazać:** zanonimizowaną macierz `question × reviewer output`: `NON_FACTUAL_PROSE → BLOCK`, `ARGUMENT_OR_INFERENCE/true → BLOCK`, grounded bez evidence → BLOCK, grounded z in-package evidence → PASS; obok non-factual `honest_inference → PASS` i jawny trust-boundary control.
+- **Dowód tekstowy zastępczy:** question module `183/183`, PRE-C5 `291/291`, affected `362/362`, full/collect/exact unique `2285/2285`, exact duplicates `0`, compile/diff PASS. Produkcja i style corpus PRE=POST byte-identical; koszt `0.000000 USD`.
+- **Czego nie może pokazać:** `.env`, sekretów, raw style corpus, draftu/promptu/evidence content, danych produkcyjnej SQLite, pełnych lokalnych hashy/ścieżek ani sugestii approvalu, realnego reviewera, C5/live readiness, publikacji lub operacji Git.
+
+## 2026-08-09 — PRE-C5 question marker repair
+
+- **Status:** `SCREENSHOT REQUIRED`; screenshotu nie wykonano, ponieważ naprawa zabrania browsera, a terminal zawiera pełne lokalne ścieżki i fingerprinty. Dowód tekstowy i testy są właściwym artefaktem tej sesji.
+- **Co powinien pokazać:** zanonimizowane PRE `endswith("?")` kontra POST `?/？ anywhere`, warianty `?!`, `?.`, `?;`, `?...`, quote/bracket oraz pięć MAJOR examples: wrong `NON_FACTUAL_PROSE → BLOCK`; obok sweep `216 → 0 leaks` i kontrole grounded/honest inference.
+- **Dowód tekstowy zastępczy:** module `220/220`, PRE-C5 `328/328`, affected `399/399`, full/collect/exact unique `2322/2322`, compile/diff PASS; produkcja i styl byte-identical; koszt `0.000000 USD`.
+- **Czego nie może pokazać:** sekretów, raw style content, danych produkcyjnej SQLite, pełnych ścieżek/hashów ani sugestii approvalu, C5/live readiness, publikacji lub operacji Git.

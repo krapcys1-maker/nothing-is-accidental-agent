@@ -285,3 +285,9 @@ Provider-ready writer nie zaczyna się od podania klucza. Zaczyna się od rozdzi
 Po powrocie odpowiedzi system nie zapisuje jej od razu jako szkicu. Najpierw sprawdza zamknięty JSON, lineage evidence, route/model/provider i stop reason, utrwala fingerprint wyniku oraz rozlicza usage. Jeśli proces umrze w najgorszym oknie, brak dowodu oznacza zatrzymanie — nie drugi rachunek.
 
 Zdanie do artykułu: „Model może zwrócić słowa. Dopiero walidacja, ledger i recovery czynią z nich bezpieczny szkic.”
+
+## 2026-08-09 — Pytajnik jako fałszywy immunitet
+
+Dwa odrzucone rozwiązania pokazały ten sam odruch: skoro nie umiemy rozstrzygnąć znaczenia, spróbujmy opisać pytania, które wyglądają bezpiecznie. Najpierw przez predykat i referent, potem przez słownik. Oba warianty przepuszczały naturalne fakty.
+
+Zdanie do artykułu: „Pytajnik może zmienić ton zdania. Nie może wymazać obowiązku rozliczenia tego, co zdanie twierdzi.”

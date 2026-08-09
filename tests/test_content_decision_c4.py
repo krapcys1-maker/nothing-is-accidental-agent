@@ -46,7 +46,10 @@ from app.storage.db import (
 )
 from app.storage.repositories import SqliteStorage
 from tests.c2_fixtures import seed_c2_research
-from tests.claim_accounting_fakes import FakeClaimAccountingReviewer
+from tests.claim_accounting_fakes import (
+    FakeClaimAccountingReviewer,
+    ground_every_segment_in_package,
+)
 
 
 NOW = datetime(2026, 7, 24, 9, 0, 0, tzinfo=timezone.utc)
@@ -125,7 +128,9 @@ def _prepare(
                 project_root=ROOT,
                 policy=policy,
                 writer=FakeContentWriter(),
-                claim_reviewer=FakeClaimAccountingReviewer(),
+                claim_reviewer=FakeClaimAccountingReviewer(
+                    decide=ground_every_segment_in_package
+                ),
                 fault_point=checkpoint,
             )
         summary = None
@@ -138,7 +143,9 @@ def _prepare(
             project_root=ROOT,
             policy=policy,
             writer=FakeContentWriter(),
-            claim_reviewer=FakeClaimAccountingReviewer(),
+            claim_reviewer=FakeClaimAccountingReviewer(
+                decide=ground_every_segment_in_package
+            ),
         )
     state = storage.get_content_pipeline_state(request.job_id)
     draft = state["drafts"][-1]
@@ -613,7 +620,9 @@ def test_restart_after_c4_validation_recovers_to_one_decision(
         project_root=ROOT,
         policy=policy,
         writer=FakeContentWriter(),
-        claim_reviewer=FakeClaimAccountingReviewer(),
+        claim_reviewer=FakeClaimAccountingReviewer(
+            decide=ground_every_segment_in_package
+        ),
     )
     assert summary.status is ContentStatus.APPROVED
     state = storage.get_content_pipeline_state(request.job_id)

@@ -585,3 +585,18 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Druga połowa tej samej lekcji dotyczy pieniędzy: koszt ponad rezerwację nie może zostać „do wyjaśnienia” tylko w attempt ledgerze, podczas gdy job wygląda na aktywny. Usage, koszt, reconciliation i terminalny stan CONTENT muszą stać się widoczne razem.
 - Kontrpróba zapisała dokładnie jedno syntetyczne usage `0.075000 USD`, zero settlementów i jeden reconciliation; content/job od razu trafiły do `NEEDS_VERIFICATION`, a późniejszy reaper niczego nie zmienił.
 - Cytowalna zasada: „Jeśli zdanie nie ma rekordu, nie zostało sprawdzone. Jeśli koszt nie ma terminalnego stanu, nie został rozliczony.”
+
+## 2026-08-09 — Materiał: „Pytajnik nie usuwa odpowiedzialności za znaczenie”
+
+- Dwa kolejne rozwiązania przegrały z tym samym błędem w różnych kostiumach. Pierwsze szukało predykatu i konkretnego referentu. Drugie dopuściło zamknięty słownik pytań uznanych za „bez treści”. Oba próbowały z języka wyciąć skończoną wyspę bezpieczeństwa.
+- Re-review pokazał, dlaczego to niemożliwe: krótkie `Who did it?`, `Where is it?` i `When was it done?` niosą factual proposition mimo braku słów, które wcześniejszy detektor uważał za konkret. Lexical membership nie jest dowodem braku znaczenia.
+- Nowa granica jest prostsza: pytanie ARTICLE nigdy nie dostaje prose shortcut. Reviewer musi wziąć odpowiedzialność za decyzję — fakt z evidence, external fact blokujący jako inference albo uczciwa inferencja bez nowego faktu.
+- Konserwatyzm nie zabija retoryki. Dwadzieścia pięć pytań non-factual i 25 dodatkowych controls zachowało drogę honest inference. Zakazana jest jedna wygodna etykieta, nie samo pytanie.
+- Najważniejszy negatywny dowód jest jawny: jeśli przyszły reviewer skłamie, deterministic layer nie odtworzy semantyki regexem. Bezpieczeństwo przesuwa się do realnej niezależności i jakości reviewera — dokładnie tam, gdzie leży znaczenie.
+- Cytowalna zasada: „Pytajnik może zmienić ton zdania. Nie może wymazać obowiązku rozliczenia tego, co zdanie twierdzi.”
+
+### Dopisek po niezależnym `REJECT — MAJOR`
+
+- Pierwszy prosty kontrakt nadal miał szczelinę mechaniczną: sprawdzał, czy pytajnik jest ostatnim znakiem. `?!`, `?...` albo pytajnik przed zamykającym cudzysłowem odzyskiwał więc stary shortcut, choć znaczenie zdania się nie zmieniało.
+- Naprawa nie potrzebowała lepszego rozumienia języka. Potrzebowała dokładniejszej granicy syntaktycznej: obecność markera w segmencie, nie jego pozycja. Sweep 216 kombinacji dał zero przecieków, a pytania retoryczne zachowały honest-inference route.
+- Cytowalna zasada: „Granica bezpieczeństwa nie może zależeć od tego, czy po pytajniku stoi wykrzyknik.”

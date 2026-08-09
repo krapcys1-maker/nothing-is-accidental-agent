@@ -495,3 +495,7 @@ Dlatego nowy kontrakt zaczyna od księgowości, nie od detekcji. Każde zdanie A
 Ta sama zasada odsłoniła małą, ale kosztowną szczelinę. Storage poprawnie zapisywał usage ponad rezerwację i oznaczał attempt do reconciliation, po czym pipeline próbował zrobić to drugi raz ze starym stanem. Drugi zapis przegrywał, zanim job został terminalizowany. Teraz koszt, reconciliation oraz `NEEDS_VERIFICATION`/`STOPPED` powstają w jednym commicie. Reaper nie jest już warunkiem poprawności i później pozostaje no-op.
 
 Kontrpróby obejmują czternaście rodzin faktów i pięć kontroli false-positive. Wszystkie 2102 testy repozytorium przechodzą offline; produkcja i prywatny korpus pozostały nietknięte, a rzeczywisty koszt wyniósł zero. Granica nadal jest twarda: to kandydat `AWAITING INDEPENDENT REVIEW`, nie approval, nie start C5 i nie zgoda na realny model lub publikację.
+
+## 2026-08-09 — ADR-123: nie pytaj regexu, co znaczy pytanie
+
+Deterministic layer rozlicza strukturę, nie znaczenie. Dlatego każde pytanie ARTICLE odrzuca `NON_FACTUAL_PROSE`, lecz nie próbuje samodzielnie rozstrzygać factual/rhetorical/hypothetical. Non-factual question ma uczciwą drogę inferencji bez external fact. Jeśli reviewer skłamie, jest to jawna granica zaufania do rozwiązania przez realnego independent reviewera, nie pretekst do następnego słownika.

@@ -310,3 +310,19 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Zakres:** wyłącznie implementacja offline decyzji na już utrwalonych artefaktach C3; nie wykonano researchu treściowego, web search, Fetch ani odczytu prywatnego korpusu.
 - **Wynik:** brak nowych Research Cards, źródeł, retrievali, excerptów i kosztów. C4 nie zmienia research pipeline'u.
 - **Koszt:** `0.000000 USD`; wpis służy jawnej ewidencji braku researchu, nie przedstawia wyniku badawczego.
+
+## 2026-08-09 — Offline counterresearch question semantic boundary
+
+- **Zakres:** bez web search, Fetch, API i zewnętrznego researchu. Badanie miało charakter wyłącznie lokalnej kontrpróby semantycznego kontraktu pytań na fake reviewerze i syntetycznych ARTICLE fixtures.
+- **Macierze:** 50 factual questions obejmujących who/what/where/when/why/which/how, quantity, yes/no, active/passive/perfect/modal/negative/tag/embedded, named/bare plural/possession/comparison/existential/identity/state/location/time oraz rhetorical tails; 25 pytań retorycznych, normatywnych, hipotetycznych, stylistycznych i wartościujących.
+- **Wynik:** każde factual question blokuje jako `NON_FACTUAL_PROSE`, jako inference z external fact oraz jako grounded fact bez evidence; każde może przejść z właściwym in-package evidence. Wszystkie 25 non-factual questions przechodzi jako honest inference. Pięć supported ARTICLE cases utrwala dokładny FAIL audit; grounded controls i rhetorical honest-inference control mogą osiągnąć `9/9 PASS`.
+- **Kontrpróba dodatkowa:** 55 nowych question forms, bez kopii głównych macierzy; `0` pytań przeszło jako `NON_FACTUAL_PROSE`, a wszystkie non-factual controls zachowały honest-inference route.
+- **Granica:** factual question błędnie nazwane honest inference może przejść; to celowo udokumentowany `SEMANTIC REVIEWER TRUST BOUNDARY`, nie finding deterministic layer.
+- **Koszt:** `0.000000 USD`; brak nowych Research Cards, źródeł, retrievali i excerptów.
+
+## 2026-08-09 — Lokalna kontrapróba marker-anywhere po MAJOR-1
+
+- **Zakres:** bez web search, Fetch, API i zewnętrznego researchu. Sprawdzono syntetycznie wyłącznie obecność interpunkcyjnego markera pytania w segmentach ARTICLE.
+- **Macierz:** 8 prefiksów (brak, Now, First, Next, Instead, Meanwhile, For now, A step back) × 3 question bodies × 9 terminatorów (`?`, `?!`, `??`, `?.`, `?;`, `?...`, quote, `)`, `]`) = `216` kombinacji.
+- **Wynik:** `0` kombinacji przeszło claim gate jako `NON_FACTUAL_PROSE`; pięć potwierdzonych MAJOR examples blokuje również w supported ARTICLE flow. Minimum 25 niezależnych non-factual controls nadal przechodzi jako honest inference.
+- **Granica:** badanie nie klasyfikuje znaczenia, nie dodaje vocabulary ani parsera i nie zmienia trust boundary reviewera. Koszt `0.000000 USD`; brak nowych artefaktów researchowych.

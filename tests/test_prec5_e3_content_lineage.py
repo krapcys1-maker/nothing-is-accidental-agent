@@ -45,7 +45,10 @@ from app.policies.policy_engine import PolicyEngine
 from app.ports.fetch import FetchedDocument
 from app.ports.storage import StaleJobExecutionError
 from app.scheduler.worker import WorkerIterationStatus
-from tests.claim_accounting_fakes import FakeClaimAccountingReviewer
+from tests.claim_accounting_fakes import (
+    FakeClaimAccountingReviewer,
+    ground_every_segment_in_package,
+)
 from tests.test_e3_evidence_research import (
     NOW as E3_NOW,
     _approve,
@@ -66,7 +69,10 @@ NOW = E3_NOW
 
 
 def run_offline_content_pipeline(*args, **kwargs):
-    kwargs.setdefault("claim_reviewer", FakeClaimAccountingReviewer())
+    kwargs.setdefault(
+        "claim_reviewer",
+        FakeClaimAccountingReviewer(decide=ground_every_segment_in_package),
+    )
     return _run_offline_content_pipeline(*args, **kwargs)
 
 CLAIM = "Gate assignment follows contractual priority."

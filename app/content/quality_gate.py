@@ -19,7 +19,7 @@ from app.content.contracts import ArticleBrief, ContentBrief, FakeDraft
 from app.content.foundation import FrozenEvidenceItem, canonical_json, sha256_text
 
 
-DRAFT_QUALITY_ASSESSOR_VERSION = "claim_accounting_draft_assessor_v2"
+DRAFT_QUALITY_ASSESSOR_VERSION = "question_semantic_boundary_assessor_v4"
 
 # Finding codes.
 UNSUPPORTED_FACTUAL_CLAIM = "UNSUPPORTED_FACTUAL_CLAIM"
@@ -286,11 +286,10 @@ def build_claim_segments(draft: FakeDraft) -> tuple[DraftClaimSegment, ...]:
     return tuple(segments)
 
 
-# This is deliberately a conservative exemption check, not a factual-claim
-# detector.  A reviewer may call prose NON_FACTUAL only when it is visibly a
-# question or lacks a declarative predicate.  Everything else must be reviewed
-# as fact or argument/inference; unknown declarative prose never defaults to a
-# PASS-producing style bucket.
+# NON_FACTUAL_PROSE remains a narrow structural exemption for segments without
+# explicit question punctuation.  A supported question marker anywhere in the
+# segment makes that shortcut unavailable.  This is a punctuation-presence
+# contract only; meaning remains owned by the independent semantic reviewer.
 _DECLARATIVE_PREDICATE = re.compile(
     r"(?i)\b(?:am|is|are|was|were|be|been|being|has|have|had|do|does|did|"
     r"can|could|will|would|shall|should|may|might|must|"
@@ -303,8 +302,8 @@ _NON_FACTUAL_TRANSITION = re.compile(
 
 def _clearly_non_factual(segment: DraftClaimSegment) -> bool:
     text = segment.text.strip()
-    if text.endswith("?"):
-        return True
+    if "?" in text or "？" in text:
+        return False
     words = re.findall(r"[A-Za-z][A-Za-z'\-]*", text)
     return len(words) <= 1 or (
         _NON_FACTUAL_TRANSITION.search(text) is not None

@@ -291,3 +291,7 @@ Zabronione pozostały: realne API i sieć, browser, publikacja, controlled-live,
 Właściciel zamknął zakres do trwałej offline decyzji gotowego draftu i podał stan C3 jako `FULLY CLOSED — DOCUMENTATION MERGED AND VERIFIED`. Jednocześnie zabronił zmiany produkcyjnego LEVEL_1, migracji produkcji, C5, PRE-C5 quality work, odczytu prywatnego korpusu, API, sieci, browsera, publikacji i operacji Git poza utworzeniem lokalnego brancha.
 
 Osiem P2 ma pozostać otwartych, a pierwsze trzy nadal blokują C5. Implementer nie może zatwierdzić własnego wyniku; jedyny dozwolony status to `C4 CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.
+
+## 2026-08-09 — Człowiek przerwał serię heurystycznych poprawek
+
+Właściciel po drugim `REJECT — MAJOR` zabronił trzeciej poprawki starego rozwiązania. Autoryzował wyłącznie usunięcie czterech znanych niecommitowanych ścieżek i utworzenie `prec5/question-semantic-boundary`. Nakazał, by wszystkie pytania ARTICLE przechodziły reviewer boundary, a realną semantykę i trust boundary pozostawił następnej fali. Stage, commit, push, PR, merge, API, browser, produkcja i C5 pozostały zabronione.

@@ -52,7 +52,10 @@ from app.storage.db import (
 )
 from app.storage.repositories import SqliteStorage
 from tests.c2_fixtures import seed_c2_research
-from tests.claim_accounting_fakes import FakeClaimAccountingReviewer
+from tests.claim_accounting_fakes import (
+    FakeClaimAccountingReviewer,
+    ground_every_segment_in_package,
+)
 
 
 NOW = datetime(2026, 7, 23, 12, 0, 0, tzinfo=timezone.utc)
@@ -75,7 +78,10 @@ def run_offline_content_pipeline(*args, **kwargs):
             kwargs["clock"],
         ),
     )
-    kwargs.setdefault("claim_reviewer", FakeClaimAccountingReviewer())
+    kwargs.setdefault(
+        "claim_reviewer",
+        FakeClaimAccountingReviewer(decide=ground_every_segment_in_package),
+    )
     return _run_offline_content_pipeline(*args, **kwargs)
 
 
