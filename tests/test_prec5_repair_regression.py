@@ -58,6 +58,7 @@ from app.research.source_admission import (
 )
 from app.scheduler.worker import WorkerIterationStatus
 from tests.c2_fixtures import seed_c2_research
+from tests.controlled_provider_fixtures import seed_active_article_writer
 from tests.claim_accounting_fakes import (
     FakeClaimAccountingReviewer,
     ground_every_segment_in_package,
@@ -598,6 +599,11 @@ def _prepare_content(
 
 
 def _paid_route() -> RouteContract:
+    """A technically complete route with no registry provenance at all.
+
+    Since the provenance wave this is exactly what a paid execution may not
+    use, so it survives only as the negative fixture for that refusal.
+    """
     return RouteContract(
         content_type=ContentType.ARTICLE, route_key="FABLE_5_ARTICLE",
         logical_model_name="Fable 5", config_version="prec5-repair-v1",
@@ -608,11 +614,15 @@ def _paid_route() -> RouteContract:
 
 
 class PaidFakeWriter:
-    """Fake CONTROLLED_PROVIDER writer: real usage shape, synthetic cost."""
+    """Fake CONTROLLED_PROVIDER writer: real usage shape, no self-priced cost.
+
+    A controlled provider reports tokens; the cost of those tokens is decided
+    by the frozen pricing authority, never by the caller.
+    """
 
     call_mode = WriterCallMode.CONTROLLED_PROVIDER
 
-    def __init__(self, *, cost_usd=0.004321, fail=False, uncertain=False,
+    def __init__(self, *, cost_usd=0.0, fail=False, uncertain=False,
                  before_call=None):
         self.cost_usd = cost_usd
         self.fail = fail
@@ -640,7 +650,7 @@ class PaidFakeWriter:
         if self.fail:
             return WriterFailure(
                 kind=WriterFailureKind.PROVIDER_5XX,
-                provider="fake-paid-provider",
+                provider=request.intent.route.provider,
                 route_key=request.intent.route.route_key,
                 api_model_id=request.intent.route.api_model_id,
                 usage=usage, stop_reason=None,
@@ -650,7 +660,7 @@ class PaidFakeWriter:
             )
         draft = FakeContentWriter().write(request).draft
         return WriterSuccess(
-            draft=draft, provider="fake-paid-provider",
+            draft=draft, provider=request.intent.route.provider,
             route_key=request.intent.route.route_key,
             api_model_id=request.intent.route.api_model_id,
             usage=usage, stop_reason="end_turn",
@@ -658,8 +668,22 @@ class PaidFakeWriter:
         )
 
 
+# 1200 input tokens at 2/Mtok plus 800 output tokens at 7/Mtok, priced from the
+# frozen fake registry profile rather than from anything the caller reported.
+EXPECTED_PAID_COST = 0.008
+# A deliberately expensive fake price list: the same 1200/800 tokens settle at
+# 0.060000, above the 0.05 cap the paid writer declares, so the over-cap path is
+# now driven by the authoritative pricing profile instead of a self-reported
+# number the provider is no longer allowed to send.
+OVER_CAP_PRICES = {"input_per_mtok": "20", "output_per_mtok": "45"}
+EXPECTED_OVER_CAP_COST = 0.06
+
+
 def _run_paid(storage, settings, account, *, suffix, writer, lease_seconds=120,
-              pipeline_lease_seconds=600):
+              pipeline_lease_seconds=600, seed_registry=True,
+              price_overrides=None):
+    if seed_registry:
+        seed_active_article_writer(storage, price_overrides=price_overrides)
     request, lease, owner = _prepare_content(
         storage, account, suffix=suffix,
         mode=ContentExecutionMode.CONTROLLED_PROVIDER_PIPELINE,
@@ -668,7 +692,7 @@ def _run_paid(storage, settings, account, *, suffix, writer, lease_seconds=120,
     summary = run_offline_content_pipeline(
         lease.job, storage=storage, clock=FixedClock(NOW), lease_owner=owner,
         project_root=ROOT, policy=PolicyEngine(settings, storage, FixedClock(NOW)),
-        writer=writer, route_override=_paid_route(),
+        writer=writer,
         claim_reviewer=FakeClaimAccountingReviewer(
             decide=ground_every_segment_in_package
         ),
@@ -696,14 +720,14 @@ def test_paid_content_success_books_the_cost_exactly_once(
     ).fetchall()
     assert len(usage) == 1
     assert usage[0]["dry_run"] == 0
-    assert usage[0]["estimated_cost_usd"] == pytest.approx(writer.cost_usd)
-    assert summary.cost_usd == pytest.approx(writer.cost_usd)
+    assert usage[0]["estimated_cost_usd"] == pytest.approx(EXPECTED_PAID_COST)
+    assert summary.cost_usd == pytest.approx(EXPECTED_PAID_COST)
     attempt = storage.conn.execute(
         "SELECT status,actual_cost_usd,reserved_amount_usd FROM provider_attempts "
         "WHERE job_id=?", (request.job_id,),
     ).fetchone()
     assert attempt["status"] == ProviderAttemptStatus.SETTLED.value
-    assert attempt["actual_cost_usd"] == pytest.approx(writer.cost_usd)
+    assert attempt["actual_cost_usd"] == pytest.approx(EXPECTED_PAID_COST)
     assert float(attempt["reserved_amount_usd"]) > 0.0
 
 
@@ -721,7 +745,7 @@ def test_paid_content_failure_after_usage_keeps_the_cost(
         "WHERE run_id=? AND dry_run=0", (summary.run_id,),
     ).fetchone()
     assert usage[0] == 1
-    assert usage[1] == pytest.approx(writer.cost_usd)
+    assert usage[1] == pytest.approx(EXPECTED_PAID_COST)
     assert storage.conn.execute(
         "SELECT status FROM provider_attempts WHERE job_id=?", (request.job_id,),
     ).fetchone()["status"] == ProviderAttemptStatus.SETTLED.value
@@ -748,7 +772,7 @@ def test_paid_content_recovery_does_not_settle_or_charge_twice(
         "WHERE run_id=?", (summary.run_id,),
     ).fetchone()
     assert usage[0] == 1
-    assert usage[1] == pytest.approx(writer.cost_usd)
+    assert usage[1] == pytest.approx(EXPECTED_PAID_COST)
     assert writer.calls == 1
     settled = storage.conn.execute(
         "SELECT count(*) FROM provider_attempts WHERE job_id=? AND status=?",
@@ -761,6 +785,7 @@ def test_offline_content_still_refuses_a_non_zero_cost(
     storage, settings, account,
 ):
     """The offline protection is intact: OFFLINE_PIPELINE cannot spend."""
+    seed_active_article_writer(storage)
     request, lease, owner = _prepare_content(
         storage, account, suffix="offline-nonzero",
         mode=ContentExecutionMode.OFFLINE_PIPELINE,
@@ -770,7 +795,7 @@ def test_offline_content_still_refuses_a_non_zero_cost(
             lease.job, storage=storage, clock=FixedClock(NOW), lease_owner=owner,
             project_root=ROOT,
             policy=PolicyEngine(settings, storage, FixedClock(NOW)),
-            writer=PaidFakeWriter(), route_override=_paid_route(),
+            writer=PaidFakeWriter(),
             claim_reviewer=FakeClaimAccountingReviewer(
                 decide=ground_every_segment_in_package
             ),
@@ -784,6 +809,7 @@ def test_paid_content_requires_a_provider_enabled_execution_mode(
     storage, settings, account,
 ):
     """Declaring the paid writer is not enough without the paid job contract."""
+    seed_active_article_writer(storage)
     request, lease, owner = _prepare_content(
         storage, account, suffix="paid-unauthorized",
         mode=ContentExecutionMode.OFFLINE_PIPELINE,
@@ -793,7 +819,7 @@ def test_paid_content_requires_a_provider_enabled_execution_mode(
             lease.job, storage=storage, clock=FixedClock(NOW), lease_owner=owner,
             project_root=ROOT,
             policy=PolicyEngine(settings, storage, FixedClock(NOW)),
-            writer=PaidFakeWriter(), route_override=_paid_route(),
+            writer=PaidFakeWriter(),
             claim_reviewer=FakeClaimAccountingReviewer(
                 decide=ground_every_segment_in_package
             ),
@@ -840,6 +866,7 @@ def test_rv4_call_longer_than_lease_never_yields_a_second_writer_call(
         recovery["result"] = storage.release_or_requeue_expired_leases(clock=later)
 
     first = PaidFakeWriter(before_call=expire_and_recover)
+    seed_active_article_writer(storage)
     request, lease, owner = _prepare_content(
         storage, account, suffix="rv4",
         mode=ContentExecutionMode.CONTROLLED_PROVIDER_PIPELINE, lease_seconds=1,
@@ -849,7 +876,7 @@ def test_rv4_call_longer_than_lease_never_yields_a_second_writer_call(
             lease.job, storage=storage, clock=FixedClock(NOW), lease_owner=owner,
             project_root=ROOT,
             policy=PolicyEngine(settings, storage, FixedClock(NOW)),
-            writer=first, route_override=_paid_route(), lease_seconds=0,
+            writer=first, lease_seconds=0,
             claim_reviewer=FakeClaimAccountingReviewer(
                 decide=ground_every_segment_in_package
             ),
@@ -881,7 +908,7 @@ def test_rv4_call_longer_than_lease_never_yields_a_second_writer_call(
                 clock=FixedClock(NOW + timedelta(hours=4)),
                 lease_owner="second-worker", project_root=ROOT,
                 policy=PolicyEngine(settings, storage, FixedClock(NOW)),
-                writer=second, route_override=_paid_route(), lease_seconds=0,
+                writer=second, lease_seconds=0,
                 claim_reviewer=FakeClaimAccountingReviewer(
                     decide=ground_every_segment_in_package
                 ),
@@ -896,6 +923,7 @@ def test_rv4_in_flight_paid_attempt_blocks_automatic_recovery_requeue(
     storage, settings, account,
 ):
     """A stamped external effect removes the safe zero-cost requeue path."""
+    seed_active_article_writer(storage)
     request, lease, owner = _prepare_content(
         storage, account, suffix="rv4-barrier",
         mode=ContentExecutionMode.CONTROLLED_PROVIDER_PIPELINE, lease_seconds=1,
@@ -912,7 +940,7 @@ def test_rv4_in_flight_paid_attempt_blocks_automatic_recovery_requeue(
             lease.job, storage=storage, clock=FixedClock(NOW), lease_owner=owner,
             project_root=ROOT,
             policy=PolicyEngine(settings, storage, FixedClock(NOW)),
-            writer=writer, route_override=_paid_route(), lease_seconds=0,
+            writer=writer, lease_seconds=0,
             claim_reviewer=FakeClaimAccountingReviewer(
                 decide=ground_every_segment_in_package
             ),
@@ -940,6 +968,7 @@ def test_migration_0026_is_forward_only_explicit_and_idempotent(tmp_path, capsys
     import scripts.migrate_schema_0026 as migration_cli_0026
     from app.storage.db import (
         CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
+        CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION,
         MODEL_FAMILY_ROUTING_SCHEMA_VERSION,
         EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION,
         SchemaVersionTooOld,
@@ -947,6 +976,7 @@ def test_migration_0026_is_forward_only_explicit_and_idempotent(tmp_path, capsys
         initialize_database,
         migrate_0025_to_0026,
         migrate_0026_to_0027,
+        migrate_0027_to_0028,
     )
     from app.storage.repositories import SqliteStorage
 
@@ -979,6 +1009,10 @@ def test_migration_0026_is_forward_only_explicit_and_idempotent(tmp_path, capsys
 
     routing = migrate_0026_to_0027(upgrade)
     assert routing.applied_migrations == (MODEL_FAMILY_ROUTING_SCHEMA_VERSION,)
+    provenance = migrate_0027_to_0028(upgrade)
+    assert provenance.applied_migrations == (
+        CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION,
+    )
 
     opened = SqliteStorage.open(upgrade)
     try:
@@ -1020,6 +1054,7 @@ def test_full_chain_evidence_to_paid_content_decision(
         prompt_version="offline_content_prompt_v1",
         style_guide_version="ARTICLE_STYLE_PROFILE_V1",
     )
+    seed_active_article_writer(storage)
     prepared = storage.prepare_content_job(request, clock=FixedClock(NOW))
     assert len(prepared.frozen_input.evidence_items) == 3
     owner = "prec5r-full-paid-owner"
@@ -1032,7 +1067,7 @@ def test_full_chain_evidence_to_paid_content_decision(
     summary = run_offline_content_pipeline(
         lease.job, storage=storage, clock=FixedClock(NOW), lease_owner=owner,
         project_root=ROOT, policy=PolicyEngine(settings, storage, FixedClock(NOW)),
-        writer=writer, route_override=_paid_route(), lease_seconds=300,
+        writer=writer, lease_seconds=300,
         claim_reviewer=FakeClaimAccountingReviewer(
             decide=ground_every_segment_in_package
         ),
@@ -1040,7 +1075,7 @@ def test_full_chain_evidence_to_paid_content_decision(
 
     assert summary.status is ContentStatus.PENDING_APPROVAL
     assert writer.calls == 1
-    assert summary.cost_usd == pytest.approx(writer.cost_usd)
+    assert summary.cost_usd == pytest.approx(EXPECTED_PAID_COST)
     state = storage.get_content_pipeline_state(request.job_id)
     assert state["job"]["status"] == JobStatus.DONE.value
     assert len(state["decisions"]) == 1
@@ -1056,4 +1091,4 @@ def test_full_chain_evidence_to_paid_content_decision(
         "WHERE run_id=? AND dry_run=0", (summary.run_id,),
     ).fetchone()
     assert usage[0] == 1
-    assert usage[1] == pytest.approx(writer.cost_usd)
+    assert usage[1] == pytest.approx(EXPECTED_PAID_COST)

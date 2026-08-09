@@ -33,7 +33,7 @@ from app.model_routing import (
 from app.storage.db import (
     CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
     MODEL_FAMILY_ROUTING_SCHEMA_VERSION,
-    RUNTIME_SCHEMA_VERSION,
+    canonical_migration_versions,
     database_schema_versions,
     initialize_database,
     migrate_0026_to_0027,
@@ -587,7 +587,7 @@ def test_stable_content_role_is_explicit_and_wrong_family_is_rejected():
 
 
 def test_0027_is_forward_only_explicit_idempotent_and_preserves_legacy_route_schema(tmp_path):
-    assert RUNTIME_SCHEMA_VERSION == MODEL_FAMILY_ROUTING_SCHEMA_VERSION
+    assert MODEL_FAMILY_ROUTING_SCHEMA_VERSION in canonical_migration_versions()
     path = tmp_path / "upgrade-0027.db"
     initialize_database(path, through=CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION)
     result = migrate_0026_to_0027(path)

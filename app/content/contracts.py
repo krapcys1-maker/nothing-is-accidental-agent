@@ -453,6 +453,17 @@ class WriterIntent(BaseModel):
             and not self.route.is_provider_configured
         ):
             raise ValueError("Controlled writer intent requires a configured route.")
+        # Being technically configured is not authorization.  A paid attempt
+        # must name the registry entry, qualification and capability evidence
+        # its frozen binding selected, so the four provenance fields stop being
+        # optional exactly here.
+        if (
+            self.call_mode is WriterCallMode.CONTROLLED_PROVIDER
+            and not self.route.is_registry_qualified
+        ):
+            raise ValueError(
+                "Controlled writer intent requires complete registry provenance."
+            )
         if (
             self.call_mode is WriterCallMode.FAKE
             and self.route.configuration_status != "UNVERIFIED"

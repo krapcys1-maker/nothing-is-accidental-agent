@@ -32,6 +32,8 @@ from tests.claim_accounting_fakes import (
 )
 from tests.test_prec5_repair_regression import (
     NOW,
+    EXPECTED_OVER_CAP_COST,
+    OVER_CAP_PRICES,
     PaidFakeWriter,
     _brief,
     _draft,
@@ -421,9 +423,10 @@ def test_self_challenge_non_factual_false_positive_controls_pass(
 def test_paid_content_over_cap_terminalizes_atomically_without_reaper(
     storage, settings, account,
 ):
-    writer = PaidFakeWriter(cost_usd=0.075)
+    writer = PaidFakeWriter()
     request, _, _, summary = _run_paid(
         storage, settings, account, suffix="paid-over-cap", writer=writer,
+        price_overrides=OVER_CAP_PRICES,
     )
     assert writer.calls == 1
     assert summary.status.value == "NEEDS_VERIFICATION"
@@ -434,7 +437,7 @@ def test_paid_content_over_cap_terminalizes_atomically_without_reaper(
         "FROM model_usage WHERE run_id=?", (summary.run_id,),
     ).fetchone()
     assert usage["n"] == 1
-    assert usage["cost"] == pytest.approx(0.075)
+    assert usage["cost"] == pytest.approx(EXPECTED_OVER_CAP_COST)
     attempt = storage.conn.execute(
         "SELECT status,actual_cost_usd,settled_at FROM provider_attempts WHERE job_id=?",
         (request.job_id,),
@@ -453,9 +456,10 @@ def test_paid_content_over_cap_terminalizes_atomically_without_reaper(
 def test_later_reaper_cannot_change_over_cap_cost_or_make_second_call(
     storage, settings, account,
 ):
-    writer = PaidFakeWriter(cost_usd=0.075)
+    writer = PaidFakeWriter()
     request, _, _, summary = _run_paid(
         storage, settings, account, suffix="paid-over-cap-reaper", writer=writer,
+        price_overrides=OVER_CAP_PRICES,
     )
     before = storage.conn.execute(
         "SELECT COUNT(*) AS n,COALESCE(SUM(estimated_cost_usd),0) AS cost "
