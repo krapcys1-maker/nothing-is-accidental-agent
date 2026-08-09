@@ -9,6 +9,7 @@ import yaml
 
 from app.content.contracts import RouteContract
 from app.content.foundation import ContentType, canonical_json, sha256_text
+from app.model_routing.contracts import FrozenModelBinding, LogicalModelRole
 
 
 class ContentRoutingError(RuntimeError):
@@ -118,4 +119,58 @@ def resolve_real_content_writer(_route: RouteContract) -> Any:
     raise RealContentWriterUnavailable(
         "C3 provides an adapter boundary but no supported real-provider "
         "composition root. Controlled-live belongs to C5."
+    )
+
+
+def route_from_frozen_model_binding(
+    binding: FrozenModelBinding,
+    *,
+    content_type: ContentType,
+) -> RouteContract:
+    """Build a technical content route from the authoritative frozen binding.
+
+    The versioned route key remains only the historical SQL compatibility key;
+    role, family, version and technical model all come from the registry binding.
+    """
+    expected_role = {
+        ContentType.ARTICLE: LogicalModelRole.ARTICLE_WRITER,
+        ContentType.NOTE: LogicalModelRole.NOTE_WRITER,
+    }[content_type]
+    if binding.role is not expected_role:
+        raise ContentRoutingError("Frozen model binding has the wrong content role.")
+    legacy_key = {
+        ContentType.ARTICLE: "FABLE_5_ARTICLE",
+        ContentType.NOTE: "SONNET_5_NOTE",
+    }[content_type]
+    snapshot = {
+        "intent_kind": binding.intent_kind,
+        "intent_id": binding.intent_id,
+        "role": binding.role.value,
+        "model_registry_id": binding.model_registry_id,
+        "family": binding.family.value,
+        "logical_version": binding.logical_version,
+        "technical_model_id": binding.technical_model_id,
+        "pricing_ref": binding.pricing_ref,
+        "qualification_ref": binding.qualification_ref,
+        "capability_ref": binding.capability_ref,
+        "activation_decision_fingerprint": binding.activation_decision_fingerprint,
+        "fallback": binding.fallback_policy,
+    }
+    return RouteContract(
+        content_type=content_type,
+        route_key=legacy_key,
+        logical_model_name=binding.family.value,
+        logical_role=binding.role,
+        model_family=binding.family,
+        logical_version=binding.logical_version,
+        model_registry_id=binding.model_registry_id,
+        qualification_ref=binding.qualification_ref,
+        capability_ref=binding.capability_ref,
+        config_version="model_registry_binding_v1",
+        config_fingerprint=sha256_text(canonical_json(snapshot)),
+        provider=binding.provider,
+        api_model_id=binding.technical_model_id,
+        availability="CONFIGURED",
+        pricing_profile=binding.pricing_ref,
+        fallback=binding.fallback_policy,
     )

@@ -283,3 +283,7 @@ Koszt implementacji i QA C4: `0.000000 USD`. Granica decyzji działa na już utr
 ## 2026-08-09 — Question semantic boundary
 
 Koszt implementacji i QA: `0.000000 USD`. 183 nowe przypadki kontraktu, 291 PRE-C5, 362 affected i 2285 pełnej suity wykonały się wyłącznie lokalnie z fake reviewerami i temp SQLite. Nie wykonano API, sieci, SDK, browsera, publikacji ani migracji produkcji.
+
+## 2026-08-09 — Model-family routing core
+
+Koszt implementacji i QA: `0.000000 USD`. Fake catalogue, fake qualification, fake caller i 2353 testy używały wyłącznie nowych temp SQLite. Nie pobrano realnych cen, nie wykonano catalogue discovery, API, sieci, SDK, browsera, publikacji ani migracji produkcji.

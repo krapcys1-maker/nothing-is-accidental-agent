@@ -835,3 +835,9 @@ Fake reviewer przestał udawać, że zna semantykę. Test wybiera jawny profil; 
 ### Naprawa po review: pytajnik nie musi być ostatni
 
 Review znalazł małą linię z dużą konsekwencją: `endswith("?")`. Pytanie zakończone `?!`, `?...` albo cudzysłowem mogło wrócić do starego shortcutu. Naprawa nie dodaje wiedzy o języku; sprawdza tylko, czy marker `?` lub `？` występuje gdziekolwiek w segmencie. Pięć realnych reprodukcji blokuje, 216 kombinacji ma zero przecieków, a uczciwe pytania retoryczne nadal przechodzą jako inferencja. Pełna suita: 2322/2322; produkcja i prywatny styl bez zmiany; koszt zero. Kandydat czeka na niezależny re-review, a C5 nie ruszyło.
+
+## 2026-08-09 — PRE-C5: rola przestaje nosić numer modelu
+
+Nowy rdzeń oddziela pytanie „po co potrzebujemy modelu?” od „jaki dokładnie model API jest dziś aktywny?”. Siedem stabilnych ról mapuje się na SONNET, OPUS albo FABLE, ale provider, wersja, technical ID, cena, capabilities i wynik kwalifikacji pozostają osobnymi faktami. Migracja 0027 przechowuje registry, polityki, jedną aktywację, historię promotion/demotion i dokładny binding każdego intentu.
+
+Fake catalogue z wersjami 5, 5.1, 5.2 i 6 pokazał pełną selekcję: 5.1 z PASS awansuje automatycznie; 5.2 z FAIL i 6 ponad ceiling nie. Dwa procesy tworzą jeden audit, restart zachowuje aktywną wersję, stary intent zostaje na starym modelu, a runtime failure nigdy nie uruchamia fallbacku. 31 nowych, 748 affected i 2353 pełnych testów przechodzi offline; realny catalogue, ceny i modele nadal nie istnieją w tej ścieżce.

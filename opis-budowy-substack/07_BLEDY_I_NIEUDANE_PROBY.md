@@ -506,3 +506,9 @@ Podwójny quiet ponownie ukrył liczbową linię pełnego wyniku. Osobny collect
 `predicate + concrete referent` przepuszczało pytania poza własnym słownikiem konstrukcji. Naprawa `_CONTENTLESS_QUESTION_VOCABULARY` zmieniła nazwę problemu, ale nie jego naturę: membership w słowniku nie dowodzi braku proposition. Re-review znalazł 34/38 factual false-negatives i pięć supported flows z 9/9 PASS.
 
 W nowej fali pierwsza próba full suite została przerwana przez omyłkowy limit jednej sekundy, a pierwszy parser collectu policzył pozorne zero przez podwójny quiet. Obu wyników odmówiono jako dowodu. Poprawne przebiegi dały 2285/2285 oraz 2285 exact unique.
+
+## 2026-08-09 — Migracja 0027 i stare liczniki
+
+Pierwsze pełne przebiegi model-family core zatrzymały się na historycznych testach kończących drabinę na 0026 albo oczekujących 26 migracji. Nie był to defekt registry; testy nie znały nowego forward-only kroku. Dodano dokładnie 0027 do jawnych drabin i poprawiono latest/count expectations. Końcowy rerun dał 2353/2353 oraz 2353 exact unique.
+
+Ostatnia kontrpróba znalazła dwie podłogi warte uszczelnienia: seed policies miały placeholder fingerprinty, a trigger porównujący JSON przez `!=` nie blokował NULL przy brakującym polu. Wpisano rzeczywiste fingerprinty i użyto `IS NOT`; nowe, affected i pełne testy powtórzono.

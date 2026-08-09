@@ -511,3 +511,10 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co powinien pokazać:** zanonimizowane PRE `endswith("?")` kontra POST `?/？ anywhere`, warianty `?!`, `?.`, `?;`, `?...`, quote/bracket oraz pięć MAJOR examples: wrong `NON_FACTUAL_PROSE → BLOCK`; obok sweep `216 → 0 leaks` i kontrole grounded/honest inference.
 - **Dowód tekstowy zastępczy:** module `220/220`, PRE-C5 `328/328`, affected `399/399`, full/collect/exact unique `2322/2322`, compile/diff PASS; produkcja i styl byte-identical; koszt `0.000000 USD`.
 - **Czego nie może pokazać:** sekretów, raw style content, danych produkcyjnej SQLite, pełnych ścieżek/hashów ani sugestii approvalu, C5/live readiness, publikacji lub operacji Git.
+
+## 2026-08-09 — PRE-C5 model-family routing & qualification core
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ zakres zabrania browsera, a właściwym dowodem są deterministyczne testy i trwałe rekordy na temp DB.
+- **Co powinien pokazać:** zanonimizowany flow role → allowed family → candidates 5/5.1/5.2/6 → availability/pricing/capability/qualification gates → pojedynczy ACTIVE; obok N+1 PASS promotion, FAIL/over-ceiling/innej family BLOCK, dwa procesy `PROMOTED + NO_CHANGE`, stary frozen intent na N i nowy na N+1.
+- **Dowód tekstowy zastępczy:** new `31/31`, affected `748/748`, full/collect/exact unique `2353/2353`, exact duplicates `0`, compile/diff PASS; produkcja nadal `0020`, koszt `0.000000 USD`.
+- **Czego nie może pokazać:** `.env`, sekretów, raw style corpus, danych produkcyjnej SQLite, pełnych ścieżek/fingerprintów ani sugerować realnego catalogue discovery, realnej kwalifikacji, aktywnego modelu, API, C5, publikacji, approvalu lub operacji Git.

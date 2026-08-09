@@ -600,3 +600,12 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Pierwszy prosty kontrakt nadal miał szczelinę mechaniczną: sprawdzał, czy pytajnik jest ostatnim znakiem. `?!`, `?...` albo pytajnik przed zamykającym cudzysłowem odzyskiwał więc stary shortcut, choć znaczenie zdania się nie zmieniało.
 - Naprawa nie potrzebowała lepszego rozumienia języka. Potrzebowała dokładniejszej granicy syntaktycznej: obecność markera w segmencie, nie jego pozycja. Sweep 216 kombinacji dał zero przecieków, a pytania retoryczne zachowały honest-inference route.
 - Cytowalna zasada: „Granica bezpieczeństwa nie może zależeć od tego, czy po pytajniku stoi wykrzyknik.”
+
+## 2026-08-09 — Materiał: „Najnowszy model nie jest jeszcze wybranym modelem”
+
+- Wersjonowany route key mieszał trzy różne decyzje: co system chce zrobić, jakiej rodziny potrzebuje i jaki dokładny model API jest dziś dostępny. Rozdzielenie stabilnej roli od rodziny, wersji i technicznego ID pozwala zmieniać ostatni element bez przepisywania znaczenia pierwszego.
+- Automatyczna promocja nie oznacza „bierz najnowszy”. Kandydat musi przejść availability, każdy wymiar ceny, capabilities i osobną kwalifikację. Nowsza wersja z `FAIL` albo choć jednym wymiarem ponad ceiling zostaje nieaktywna.
+- Najważniejsza granica czasowa biegnie przez intencję. Promocja dotyczy przyszłych decyzji; istniejący intent pamięta stary provider/model/pricing/qualification/capability snapshot i restart nie ma prawa rozwiązać go ponownie.
+- Dwa procesy mogą zobaczyć tego samego kandydata, ale write lock i pojedyncza aktywacja sprawiają, że tylko jeden zapisuje promotion audit. Drugi otrzymuje idempotentne `NO_CHANGE`.
+- Brak realnego catalogue adaptera jest jawny. Fake N→N+1 dowodzi mechanizmu orkiestracji, nie istnienia, ceny ani jakości przyszłego modelu.
+- Cytowalna zasada: „Nowy numer jest kandydatem. Dopiero dowód jakości, ceny i zgodności czyni go wyborem.”

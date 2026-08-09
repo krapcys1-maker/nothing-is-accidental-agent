@@ -80,6 +80,17 @@ from app.content.contracts import (
     WriterResult,
 )
 from app.content.decision import ContentDecisionPlan
+from app.model_routing.contracts import (
+    CapabilityDeclaration,
+    CatalogueCandidate,
+    FrozenModelBinding,
+    ModelPricingProfile,
+    PromotionOutcome,
+    QualificationReport,
+    RegisteredModel,
+    RolePolicy,
+    RoutingAuditEvent,
+)
 
 
 class ResearchTopicIntegrityError(RuntimeError):
@@ -293,6 +304,57 @@ class LifecycleTransitionError(ValueError):
 
 class StoragePort(Protocol):
     def ensure_account(self, account: Account) -> None: ...
+
+    def register_model_pricing_profile(
+        self, profile: ModelPricingProfile, *, now: datetime | None = None,
+    ) -> ModelPricingProfile: ...
+
+    def register_model_candidate(
+        self, candidate: CatalogueCandidate, *, now: datetime | None = None,
+    ) -> RegisteredModel: ...
+
+    def get_registered_model(self, model_registry_id: str) -> RegisteredModel | None: ...
+
+    def record_model_capabilities(
+        self, model_registry_id: str, declaration: CapabilityDeclaration,
+        *, now: datetime | None = None,
+    ) -> RegisteredModel: ...
+
+    def record_model_qualification(
+        self, report: QualificationReport, *, now: datetime | None = None,
+    ) -> RegisteredModel: ...
+
+    def upsert_model_role_policy(
+        self, policy: RolePolicy, *, now: datetime | None = None,
+    ) -> RolePolicy: ...
+
+    def get_model_role_policy(self, role: object) -> RolePolicy | None: ...
+
+    def list_role_policies_for_family(self, family: object) -> tuple[RolePolicy, ...]: ...
+
+    def promote_best_model(
+        self, role: object, *, reason: str, now: datetime | None = None,
+    ) -> PromotionOutcome: ...
+
+    def get_active_model_for_role(self, role: object) -> RegisteredModel | None: ...
+
+    def freeze_model_for_intent(
+        self, role: object, *, intent_kind: str, intent_id: str,
+        now: datetime | None = None,
+    ) -> FrozenModelBinding: ...
+
+    def get_frozen_model_binding(
+        self, *, intent_kind: str, intent_id: str,
+    ) -> FrozenModelBinding | None: ...
+
+    def deprecate_registered_model(
+        self, model_registry_id: str, *, reason: str,
+        now: datetime | None = None,
+    ) -> tuple[RoutingAuditEvent, ...]: ...
+
+    def list_model_routing_audit(
+        self, role: object | None = None,
+    ) -> tuple[RoutingAuditEvent, ...]: ...
 
     def add_topic(self, account_id: str, topic: Topic) -> Topic: ...
 

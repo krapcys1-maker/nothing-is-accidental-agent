@@ -326,3 +326,10 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Macierz:** 8 prefiksów (brak, Now, First, Next, Instead, Meanwhile, For now, A step back) × 3 question bodies × 9 terminatorów (`?`, `?!`, `??`, `?.`, `?;`, `?...`, quote, `)`, `]`) = `216` kombinacji.
 - **Wynik:** `0` kombinacji przeszło claim gate jako `NON_FACTUAL_PROSE`; pięć potwierdzonych MAJOR examples blokuje również w supported ARTICLE flow. Minimum 25 niezależnych non-factual controls nadal przechodzi jako honest inference.
 - **Granica:** badanie nie klasyfikuje znaczenia, nie dodaje vocabulary ani parsera i nie zmienia trust boundary reviewera. Koszt `0.000000 USD`; brak nowych artefaktów researchowych.
+
+## 2026-08-09 — Offline qualification fixtures model-family core
+
+- **Zakres:** nie wykonano researchu internetowego, provider catalogue discovery ani benchmarku realnego modelu. Użyto wyłącznie syntetycznych kandydatów, fake catalogue source, fake qualification runner i lokalnych wyników `UNQUALIFIED|PASS|FAIL`.
+- **Macierz:** wersje `5`, `5.1`, `5.2`, `6`; availability/pricing/capability/qualification PASS i wszystkie wymagane odmowy; N+1 PASS, N+1 FAIL, droższe N+1, obca rodzina, dwa procesy promotion, restart i frozen intent.
+- **Wynik:** fake N→N+1 promocja działa tylko po wszystkich politykach; model niekwalifikowany nie osiąga technical caller boundary; runtime provider failure nie przełącza bindingu. To dowód kontraktu orkiestracji, nie rzeczywistej jakości modelu.
+- **Granica:** realne technical IDs, availability, ceny, catalogue adapter i controlled qualification pozostają `UNVERIFIED`/niewdrożone. Koszt `0.000000 USD`; brak nowych Research Cards, sources, retrievals i excerpts.
