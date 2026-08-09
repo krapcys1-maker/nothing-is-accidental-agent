@@ -686,6 +686,8 @@ def test_migration_0011_preserves_valid_0010_history_and_is_idempotent(tmp_path:
             "0020_topic_generation_lifecycle", "0021_durable_content_foundation",
             "0022_offline_content_pipeline", "0023_provider_ready_writer",
             "0024_autonomous_content_decision",
+            "0025_evidence_research_content_lineage",
+            "0026_controlled_provider_content",
     ]
     attempt = conn.execute(
         "SELECT status,actual_cost_usd,released_at FROM provider_attempts"
@@ -2260,6 +2262,8 @@ def test_migration_0012_keeps_provable_usage_nonlegacy_and_reopens_cleanly(tmp_p
             "0020_topic_generation_lifecycle", "0021_durable_content_foundation",
             "0022_offline_content_pipeline", "0023_provider_ready_writer",
             "0024_autonomous_content_decision",
+            "0025_evidence_research_content_lineage",
+            "0026_controlled_provider_content",
     ]
     states = {
         row["model"]: row["is_legacy_usage"]

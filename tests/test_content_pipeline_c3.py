@@ -46,15 +46,20 @@ from app.storage.db import (
     CONTENT_PIPELINE_SCHEMA_VERSION,
     CONTENT_WRITER_SCHEMA_VERSION,
     CONTENT_DECISION_SCHEMA_VERSION,
+    EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION,
+    CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
     apply_migrations,
     connect,
     database_schema_versions,
     initialize_database,
     migrate_0022_to_0023,
     migrate_0023_to_0024,
+    migrate_0024_to_0025,
+    migrate_0025_to_0026,
 )
 from app.storage.repositories import SqliteStorage
 from tests.c2_fixtures import seed_c2_research
+from tests.claim_accounting_fakes import FakeClaimAccountingReviewer
 
 
 NOW = datetime(2026, 7, 23, 12, 0, 0, tzinfo=timezone.utc)
@@ -77,6 +82,7 @@ def run_offline_content_pipeline(*args, **kwargs):
             kwargs["clock"],
         ),
     )
+    kwargs.setdefault("claim_reviewer", FakeClaimAccountingReviewer())
     return _run_offline_content_pipeline(*args, **kwargs)
 
 
@@ -751,6 +757,14 @@ def test_explicit_0022_to_0023_migration_is_temp_only_and_idempotent(tmp_path):
     assert repeated.idempotent is True
     c4 = migrate_0023_to_0024(path)
     assert c4.applied_migrations == (CONTENT_DECISION_SCHEMA_VERSION,)
+    lineage = migrate_0024_to_0025(path)
+    assert lineage.applied_migrations == (
+        EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION,
+    )
+    paid = migrate_0025_to_0026(path)
+    assert paid.applied_migrations == (
+        CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
+    )
     opened = SqliteStorage.open(path)
     opened.close()
 

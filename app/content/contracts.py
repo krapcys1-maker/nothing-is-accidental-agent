@@ -20,7 +20,7 @@ ARTICLE_BRIEF_VERSION = "article_brief_v1"
 NOTE_BRIEF_VERSION = "note_brief_v1"
 WRITER_INTENT_VERSION = "provider_ready_writer_intent_v1"
 DRAFT_VERSION = "content_draft_v2"
-EVALUATOR_VERSION = "offline_content_evaluators_v1"
+EVALUATOR_VERSION = "claim_accounting_content_evaluators_v2"
 WRITER_PROMPT_VERSION = "content_writer_prompt_v1"
 WRITER_RESULT_VERSION = "content_writer_result_v1"
 ARTICLE_STYLE_PROFILE_ID = "ARTICLE_STYLE_PROFILE_V1"
@@ -337,8 +337,37 @@ class WriterIntent(BaseModel):
     negative_style_profile_id: str
     prompt_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     limits: WriterLimits
+    # Audit trail for the concrete style examples this attempt was shown. The
+    # intent JSON is persisted verbatim, so these keys answer "which examples
+    # did that draft actually see" long after the run.
+    style_corpus_id: str | None = None
+    style_corpus_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    style_example_ids: tuple[str, ...] = ()
+    style_example_set_fingerprint: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$",
+    )
     rewrite_of_draft_fingerprint: str | None = None
     rewrite_feedback: tuple[dict[str, Any], ...] = ()
+
+    @model_validator(mode="after")
+    def validate_style_examples(self) -> "WriterIntent":
+        declared = (
+            self.style_corpus_id,
+            self.style_corpus_sha256,
+            self.style_example_set_fingerprint,
+        )
+        if self.style_example_ids:
+            if self.content_type is not ContentType.ARTICLE:
+                raise ValueError("Only ARTICLE attempts may carry style examples.")
+            if not 3 <= len(self.style_example_ids) <= 5:
+                raise ValueError("ARTICLE requires between three and five examples.")
+            if len(set(self.style_example_ids)) != len(self.style_example_ids):
+                raise ValueError("Style example IDs must be distinct.")
+            if any(value is None for value in declared):
+                raise ValueError("Style examples require full corpus provenance.")
+        elif any(value is not None for value in declared):
+            raise ValueError("Style provenance requires the example IDs it describes.")
+        return self
 
     @model_validator(mode="after")
     def validate_attempt(self) -> "WriterIntent":
@@ -381,6 +410,13 @@ class WriterIntent(BaseModel):
 
 
 class FakeDraft(BaseModel):
+    """One durable draft.
+
+    The four quality fields carry no defaults on purpose.  A writer that omits
+    them produces an invalid draft rather than an implicitly clean one, and
+    what they assert is treated as telemetry by the independent assessor.
+    """
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: str = DRAFT_VERSION
@@ -389,10 +425,10 @@ class FakeDraft(BaseModel):
     title: str
     body: str
     evidence_ids_used: tuple[str, ...]
-    unsupported_claims: tuple[str, ...] = ()
-    personal_experience: bool = False
-    style_ok: bool = True
-    brief_compliant: bool = True
+    unsupported_claims: tuple[str, ...]
+    personal_experience: bool
+    style_ok: bool
+    brief_compliant: bool
     rewrite_of_draft_fingerprint: str | None = None
 
     def payload(self) -> dict[str, Any]:
@@ -406,17 +442,21 @@ class FakeDraft(BaseModel):
 
 
 class ProviderDraftPayload(BaseModel):
-    """Strict provider output before durable attempt/route fields are attached."""
+    """Strict provider output before durable attempt/route fields are attached.
+
+    Every quality field must be present in the response.  A missing field is a
+    schema violation, not a silent pass.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     title: str = Field(min_length=1, max_length=300)
     body: str = Field(min_length=1)
     evidence_ids_used: tuple[str, ...]
-    unsupported_claims: tuple[str, ...] = ()
-    personal_experience: bool = False
-    style_ok: bool = True
-    brief_compliant: bool = True
+    unsupported_claims: tuple[str, ...]
+    personal_experience: bool
+    style_ok: bool
+    brief_compliant: bool
 
 
 class WriterUsage(BaseModel):

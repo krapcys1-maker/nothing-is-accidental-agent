@@ -162,6 +162,9 @@ class Worker:
         # owns the complete terminal transaction inside the bounded lease.
         if job.kind is JobKind.CONTENT:
             try:
+                # The pipeline owns the typed lease refresh through its own
+                # generation fence; the worker no longer supplies a no-op that
+                # would let a long content run outlive its lease.
                 result = self._dispatcher.dispatch(
                     job, lease_owner=self._lease_owner, heartbeat=lambda: None,
                 )

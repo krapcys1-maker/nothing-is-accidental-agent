@@ -490,3 +490,10 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Dowód tekstowy zastępczy:** C4 `23/23`; full/collect/unique `1994/1994`; 0 duplicates/skipped/xfail/failures/errors; produkcja nadal `0020`; kod `0024`; koszt `0.000000 USD`.
 - **Stan produkcji na kadrze:** wyłącznie skrócony SHA `91f593…56a1f`, `700416 B`, 20 migracji/latest 0020, integrity `ok`, FK `0`, WAL `0 B`, SHM `32768 B`, journal absent; jawne `mode=ro&immutable=1`, `PRODUCTION MIGRATION NOT EXECUTED`.
 - **Czego nie może pokazać:** `.env`, sekrety, private style content, draft/body/prompt, produkcyjne rekordy, pełne hashe/ścieżki ani sugestię niezależnego approvalu, zamknięcia C4, C5, API, publikacji lub merge.
+
+## 2026-08-09 — PRE-C5 claim accounting & cost-cap candidate
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, ponieważ zakres zabrania browsera, a terminal zawiera lokalne ścieżki i pełne fingerprinty. Dowód tekstowy i testy zastępują obraz w tej sesji.
+- **Co powinien pokazać:** zanonimizowaną tabelę segmentów ARTICLE z ordinal/segment ID, trzema dozwolonymi klasyfikacjami, reason, evidence i kompletnym PASS/FAIL; obok fail-closed missing/duplicate/unknown/reviewer error. Drugi panel: reservation `0.050000` → jedno usage/actual `0.075000` → attempt `NEEDS_RECONCILIATION` → content/job `NEEDS_VERIFICATION` + run `STOPPED` → reaper no-op.
+- **Dowód tekstowy zastępczy:** nowy moduł `38/38`, PRE-C5 `108/108`, zakres `436/436`, full `2102/2102`; produkcja `0020` i koszt rzeczywisty `0.000000 USD`.
+- **Czego nie może pokazać:** `.env`, sekretów, raw style corpus, draftu/promptu, treści evidence, danych produkcyjnej SQLite, pełnych ścieżek/hashów ani sugestii niezależnego approvalu, C5/live readiness, publikacji lub operacji Git.

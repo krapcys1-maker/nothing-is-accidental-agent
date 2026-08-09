@@ -20,7 +20,13 @@ CONTENT_FOUNDATION_SCHEMA_VERSION = "0021_durable_content_foundation"
 CONTENT_PIPELINE_SCHEMA_VERSION = "0022_offline_content_pipeline"
 CONTENT_WRITER_SCHEMA_VERSION = "0023_provider_ready_writer"
 CONTENT_DECISION_SCHEMA_VERSION = "0024_autonomous_content_decision"
-RUNTIME_SCHEMA_VERSION = CONTENT_DECISION_SCHEMA_VERSION
+EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION = (
+    "0025_evidence_research_content_lineage"
+)
+CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION = (
+    "0026_controlled_provider_content"
+)
+RUNTIME_SCHEMA_VERSION = CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
@@ -45,6 +51,7 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0018_controlled_fetch_lifecycle",
     CONTENT_PIPELINE_SCHEMA_VERSION,
     CONTENT_DECISION_SCHEMA_VERSION,
+    EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION,
     # 0019 is intentionally ABSENT: rebuilding controlled_fetch_approvals with
     # incoming foreign keys requires PRAGMA foreign_keys=OFF, which is a no-op
     # inside the runner transaction — the migration manages its own explicit
@@ -651,5 +658,33 @@ def migrate_0023_to_0024(
         db_path,
         source_version=CONTENT_WRITER_SCHEMA_VERSION,
         target_version=CONTENT_DECISION_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0025_to_0026(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the controlled-provider CONTENT contract widening."""
+    return _migrate_single_step(
+        db_path,
+        source_version=EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION,
+        target_version=CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0024_to_0025(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the E3 evidence-research content lineage trigger widening."""
+    return _migrate_single_step(
+        db_path,
+        source_version=CONTENT_DECISION_SCHEMA_VERSION,
+        target_version=EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )

@@ -1276,6 +1276,8 @@ def test_migration_cli_0018_requires_confirmation_and_is_exact(tmp_path, capsys)
     import scripts.migrate_schema_0022 as migration_cli_0022
     import scripts.migrate_schema_0023 as migration_cli_0023
     import scripts.migrate_schema_0024 as migration_cli_0024
+    import scripts.migrate_schema_0025 as migration_cli_0025
+    import scripts.migrate_schema_0026 as migration_cli_0026
 
     with pytest.raises(SchemaVersionTooOld):
         SqliteStorage.open(path)
@@ -1299,9 +1301,21 @@ def test_migration_cli_0018_requires_confirmation_and_is_exact(tmp_path, capsys)
     assert migration_cli_0024.main([
         "--db-path", str(path), "--confirm-0023-to-0024",
     ]) == 0
+    with pytest.raises(SchemaVersionTooOld):
+        SqliteStorage.open(path)
+    assert migration_cli_0025.main(["--db-path", str(path)]) == 2
+    assert migration_cli_0025.main([
+        "--db-path", str(path), "--confirm-0024-to-0025",
+    ]) == 0
+    with pytest.raises(SchemaVersionTooOld):
+        SqliteStorage.open(path)
+    assert migration_cli_0026.main(["--db-path", str(path)]) == 2
+    assert migration_cli_0026.main([
+        "--db-path", str(path), "--confirm-0025-to-0026",
+    ]) == 0
     SqliteStorage.open(path).close()
-    assert migration_cli_0024.main([
-        "--db-path", str(path), "--confirm-0023-to-0024",
+    assert migration_cli_0026.main([
+        "--db-path", str(path), "--confirm-0025-to-0026",
     ]) == 0
     assert "idempotent=true" in capsys.readouterr().out
 

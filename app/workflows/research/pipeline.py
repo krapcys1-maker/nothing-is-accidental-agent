@@ -95,8 +95,13 @@ from app.research.cost_estimator import (
     estimate_worst_case_search_call_usd,
 )
 from app.research.diagnostics import ResponseDiagnostics, write_diagnostics
+from app.research.source_admission import (
+    descriptors_from_research_card,
+    evaluate_source_admission,
+)
 from app.research.validation import (
     TOO_FEW_SOURCES,
+    ValidationOutcome,
     count_distinct_verified_evidence_sources,
     validate_draft,
 )
@@ -1105,6 +1110,41 @@ def run_research_pipeline(
         min_source_quality=settings.research_min_source_quality,
         evidence_source_count=evidence_source_count,
     )
+    # 8b. E3 source admission. Holding three retrieval IDs is not evidence:
+    # a PROCEED recommendation additionally needs independent, deduplicated,
+    # correctly classified sources for this exact approved corpus. The same
+    # policy is re-evaluated as a non-bypassable floor inside the finalization
+    # transaction; running it here turns a failing corpus into an ordinary
+    # editorial REJECT with reason codes instead of a technical failure.
+    if (
+        evidence_intent is not None
+        and evidence_corpus is not None
+        and outcome.recommendation is ResearchRecommendation.PROCEED
+    ):
+        retrieval_ids_by_url = {}
+        canonical_by_url = {}
+        for retrieval in evidence_corpus.retrievals:
+            for url in (retrieval.requested_url, retrieval.final_url):
+                if isinstance(url, str) and url:
+                    retrieval_ids_by_url[url] = int(retrieval.id)
+                    canonical_by_url[url] = str(retrieval.canonical_sha256)
+        admission = evaluate_source_admission(
+            descriptors_from_research_card(
+                [
+                    source for source in draft.sources
+                    if source.verification is SourceVerification.VERIFIED
+                ],
+                retrieval_ids_by_url=retrieval_ids_by_url,
+                canonical_sha256_by_url=canonical_by_url,
+            ),
+            confirmed_claims=list(draft.confirmed_claims),
+        )
+        if not admission.admitted:
+            outcome = ValidationOutcome(
+                recommendation=ResearchRecommendation.REJECT,
+                reasons=list(outcome.reasons) + list(admission.reasons),
+            )
+
     summary.passed = outcome.passed
     summary.recommendation = outcome.recommendation.value
     summary.reasons = list(outcome.reasons)

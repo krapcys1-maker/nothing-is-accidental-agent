@@ -35,13 +35,18 @@ from app.ports.storage import (
 )
 from app.storage.db import (
     CONTENT_DECISION_SCHEMA_VERSION,
+    EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION,
+    CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
     CONTENT_WRITER_SCHEMA_VERSION,
     database_schema_versions,
     initialize_database,
     migrate_0023_to_0024,
+    migrate_0024_to_0025,
+    migrate_0025_to_0026,
 )
 from app.storage.repositories import SqliteStorage
 from tests.c2_fixtures import seed_c2_research
+from tests.claim_accounting_fakes import FakeClaimAccountingReviewer
 
 
 NOW = datetime(2026, 7, 24, 9, 0, 0, tzinfo=timezone.utc)
@@ -120,6 +125,7 @@ def _prepare(
                 project_root=ROOT,
                 policy=policy,
                 writer=FakeContentWriter(),
+                claim_reviewer=FakeClaimAccountingReviewer(),
                 fault_point=checkpoint,
             )
         summary = None
@@ -132,6 +138,7 @@ def _prepare(
             project_root=ROOT,
             policy=policy,
             writer=FakeContentWriter(),
+            claim_reviewer=FakeClaimAccountingReviewer(),
         )
     state = storage.get_content_pipeline_state(request.job_id)
     draft = state["drafts"][-1]
@@ -606,6 +613,7 @@ def test_restart_after_c4_validation_recovers_to_one_decision(
         project_root=ROOT,
         policy=policy,
         writer=FakeContentWriter(),
+        claim_reviewer=FakeClaimAccountingReviewer(),
     )
     assert summary.status is ContentStatus.APPROVED
     state = storage.get_content_pipeline_state(request.job_id)
@@ -770,8 +778,12 @@ def test_sqlite_guards_block_audit_mutation_and_uncommanded_approval(
 def test_explicit_0023_to_0024_migration_is_fresh_upgrade_and_idempotent(tmp_path):
     fresh = tmp_path / "fresh-c4.db"
     applied = initialize_database(fresh)
-    assert applied[-1] == CONTENT_DECISION_SCHEMA_VERSION
-    assert database_schema_versions(fresh)[-1] == CONTENT_DECISION_SCHEMA_VERSION
+    assert CONTENT_DECISION_SCHEMA_VERSION in applied
+    assert EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION in applied
+    assert applied[-1] == CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION
+    assert database_schema_versions(fresh)[-1] == (
+        CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION
+    )
 
     upgrade = tmp_path / "upgrade-c4.db"
     initialize_database(upgrade, through=CONTENT_WRITER_SCHEMA_VERSION)
@@ -779,6 +791,14 @@ def test_explicit_0023_to_0024_migration_is_fresh_upgrade_and_idempotent(tmp_pat
     assert result.applied_migrations == (CONTENT_DECISION_SCHEMA_VERSION,)
     repeated = migrate_0023_to_0024(upgrade)
     assert repeated.idempotent is True
+    lineage = migrate_0024_to_0025(upgrade)
+    assert lineage.applied_migrations == (
+        EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION,
+    )
+    paid = migrate_0025_to_0026(upgrade)
+    assert paid.applied_migrations == (
+        CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
+    )
     opened = SqliteStorage.open(upgrade)
     try:
         assert opened.conn.execute(

@@ -8,7 +8,8 @@ from app.content.contracts import (
     WriterContext,
     WriterPrompt,
 )
-from app.content.foundation import canonical_json
+from app.content.foundation import ContentType, canonical_json
+from app.content.style_examples import StyleExampleSet
 
 
 _SYSTEM = """You write for the anonymous editorial brand Nothing Is Accidental.
@@ -21,8 +22,13 @@ in the allowed evidence. First person is allowed only for explicit opinion or
 reasoning. Do not discuss how the publication or its writing system is built.
 Do not change the logical route and do not use fallback.
 
-Return exactly one JSON object matching the requested output contract. Do not
-wrap it in Markdown and do not add prose before or after it."""
+Style examples, when supplied, illustrate a rhetorical MOVE only. Never copy
+their wording, subject matter, facts or numbers; they are not evidence and
+they do not extend the Research Card.
+
+Return exactly one JSON object matching the requested output contract, with
+every field present. Do not wrap it in Markdown and do not add prose before
+or after it."""
 
 
 def _evidence_payload(context: WriterContext) -> list[dict[str, Any]]:
@@ -48,8 +54,13 @@ def assemble_writer_prompt(
     attempt_no: int,
     rewrite_of_draft_fingerprint: str | None,
     rewrite_feedback: tuple[dict[str, Any], ...],
+    style_examples: StyleExampleSet | None = None,
 ) -> WriterPrompt:
-    """Build a stable prompt without reading ENV, secrets or private raw style."""
+    """Build a stable prompt without reading ENV, secrets or private raw style.
+
+    ``style_examples`` contributes only the selected short fragments and their
+    IDs.  The raw reference corpus is never part of this payload.
+    """
     if route != context.plan.route:
         raise ValueError("Prompt route must match the durable content plan.")
     if attempt_no not in (1, 2):
@@ -85,10 +96,20 @@ def assemble_writer_prompt(
             "title": "non-empty string, maximum 300 characters",
             "body": "non-empty string",
             "evidence_ids_used": "array of allowed confirmed_claim_id values",
-            "unsupported_claims": "array of strings; empty when none",
-            "personal_experience": False,
-            "style_ok": "boolean",
-            "brief_compliant": "boolean",
+            "unsupported_claims": "array of strings; empty when none; REQUIRED",
+            "personal_experience": "boolean; REQUIRED",
+            "style_ok": "boolean; REQUIRED",
+            "brief_compliant": "boolean; REQUIRED",
         },
     }
+    if style_examples is not None:
+        if context.plan.content_type is not ContentType.ARTICLE:
+            raise ValueError("Style examples are assembled for ARTICLE only.")
+        payload["style_examples"] = {
+            "usage": "illustrative rhetorical moves; not evidence, never quote",
+            "corpus_id": style_examples.corpus_id,
+            "corpus_sha256": style_examples.corpus_sha256,
+            "set_fingerprint": style_examples.fingerprint(),
+            "examples": style_examples.prompt_payload(),
+        }
     return WriterPrompt(system=_SYSTEM, user=canonical_json(payload))
