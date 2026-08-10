@@ -1192,6 +1192,177 @@ def test_08b_an_expired_content_approval_blocks_the_writer(
 
 
 # ---------------------------------------------------------------------------
+# Content approval expiry boundary
+#
+# The owner writes the approval window as ISO-8601 with a "T"; the content
+# runtime writes its own clock through ``_persisted_ts`` with a space.  Compared
+# as text, every same-date owner timestamp sorts AFTER the runtime one, so an
+# approval that closed earlier today read as still open and a paid writer became
+# reachable.  ``test_08b`` above never caught it because its window closes on a
+# previous DAY, where the date digits decide the comparison.
+#
+# The clock here is the harness ``NOW`` (2026-07-19 12:00:00Z), so the runtime
+# side of every comparison below is exactly "2026-07-19 12:00:00".
+# ---------------------------------------------------------------------------
+
+CONTENT_APPROVED_AT = "2026-01-01T00:00:00.000000+00:00"
+CONTENT_EXPIRED_PREVIOUS_DAY = "2026-07-18T23:00:00.000000+00:00"
+CONTENT_EXPIRED_EARLIER_TODAY = "2026-07-19T09:00:00.000000+00:00"
+CONTENT_EXACT_EXPIRY = "2026-07-19T12:00:00.000000+00:00"
+CONTENT_EXPIRES_LATER_TODAY = "2026-07-19T23:00:00.000000+00:00"
+CONTENT_EXPIRES_NEXT_DAY = "2026-07-21T09:00:00.000000+00:00"
+CONTENT_UNREADABLE_WINDOW = "whenever-the-owner-feels-like-it"
+
+
+def _content_durable_state(storage, job_id: str) -> dict[str, int]:
+    """Everything a paid attempt may create only AFTER the approval gate."""
+    def count(sql: str, *params) -> int:
+        return storage.conn.execute(sql, params).fetchone()[0]
+
+    return {
+        "consumed": count(
+            "SELECT COUNT(*) FROM content_provider_approvals "
+            "WHERE job_id=? AND consumed_at IS NOT NULL", job_id,
+        ),
+        "writer_attempts": count(
+            "SELECT COUNT(*) FROM content_writer_attempts WHERE job_id=?", job_id,
+        ),
+        "provider_attempts": count(
+            "SELECT COUNT(*) FROM provider_attempts WHERE job_id=?", job_id,
+        ),
+        "settlements": count(
+            "SELECT COUNT(*) FROM content_provider_cost_settlements "
+            "WHERE job_id=?", job_id,
+        ),
+        "writer_results": count(
+            "SELECT COUNT(*) FROM content_writer_results WHERE job_id=?", job_id,
+        ),
+        "usage": count("SELECT COUNT(*) FROM model_usage"),
+    }
+
+
+# Every one of these is non-zero after a paid attempt actually runs (proved by
+# the two positive tests below), so all-zero is real evidence that nothing paid
+# happened — not merely that a table this flow never touches stayed empty.
+NO_CONTENT_DURABLE_STATE = {
+    "consumed": 0, "writer_attempts": 0, "provider_attempts": 0,
+    "settlements": 0, "writer_results": 0, "usage": 0,
+}
+PAID_CONTENT_DURABLE_STATE = {
+    "consumed": 1, "writer_attempts": 1, "provider_attempts": 1,
+    "settlements": 1, "writer_results": 1, "usage": 1,
+}
+
+
+def _approved_content_job(storage, account, *, suffix: str, expires_at: str):
+    """One seeded, approved paid ARTICLE job with an owner-written window."""
+    from tests.controlled_provider_fixtures import seed_active_article_writer
+
+    model = seed_active_article_writer(storage)
+    request, lease, owner = _prepare(storage, account, suffix=suffix)
+    approve_content_provider_execution(
+        storage, job_id=request.job_id, model=model, account_id=account.id,
+        approved_at=CONTENT_APPROVED_AT, expires_at=expires_at,
+    )
+    return request, lease, owner
+
+
+def _refuse_content(storage, settings, account, *, suffix: str, expires_at: str):
+    """Run the paid pipeline and return (code, writer, durable state)."""
+    request, lease, owner = _approved_content_job(
+        storage, account, suffix=suffix, expires_at=expires_at,
+    )
+    writer = ProvenanceFakeWriter()
+    with pytest.raises(ContentFoundationError) as excinfo:
+        _run(storage, settings, lease, owner, writer)
+    return (
+        str(excinfo.value), writer,
+        _content_durable_state(storage, request.job_id),
+    )
+
+
+def test_08b1_content_approval_expired_previous_day_blocks_the_writer(
+    storage, settings, account,
+):
+    message, writer, state = _refuse_content(
+        storage, settings, account, suffix="cexpprev",
+        expires_at=CONTENT_EXPIRED_PREVIOUS_DAY,
+    )
+    assert "CONTENT_APPROVAL_EXPIRED" in message
+    assert writer.calls == 0
+    assert state == NO_CONTENT_DURABLE_STATE
+
+
+def test_08b2_content_approval_expired_earlier_today_blocks_the_writer(
+    storage, settings, account,
+):
+    """The regression: 09:00 today is expired at 12:00 today, not fresh."""
+    message, writer, state = _refuse_content(
+        storage, settings, account, suffix="cexptoday",
+        expires_at=CONTENT_EXPIRED_EARLIER_TODAY,
+    )
+    assert "CONTENT_APPROVAL_EXPIRED" in message
+    assert writer.calls == 0
+    assert state == NO_CONTENT_DURABLE_STATE
+
+
+def test_08b3_content_approval_at_its_exact_expiry_instant_is_expired(
+    storage, settings, account,
+):
+    """The window is half-open: expiry is the first instant that is too late."""
+    message, writer, state = _refuse_content(
+        storage, settings, account, suffix="cexpexact",
+        expires_at=CONTENT_EXACT_EXPIRY,
+    )
+    assert "CONTENT_APPROVAL_EXPIRED" in message
+    assert writer.calls == 0
+    assert state == NO_CONTENT_DURABLE_STATE
+
+
+def test_08b4_an_unreadable_content_approval_window_is_never_an_open_one(
+    storage, settings, account,
+):
+    """A window that cannot be parsed refuses; it does not fall through."""
+    message, writer, state = _refuse_content(
+        storage, settings, account, suffix="cexpbad",
+        expires_at=CONTENT_UNREADABLE_WINDOW,
+    )
+    assert "CONTENT_APPROVAL_TIMESTAMP_INVALID" in message
+    assert writer.calls == 0
+    assert state == NO_CONTENT_DURABLE_STATE
+
+
+def test_08b5_content_approval_expiring_later_today_reaches_the_writer(
+    storage, settings, account,
+):
+    request, lease, owner = _approved_content_job(
+        storage, account, suffix="cexplater",
+        expires_at=CONTENT_EXPIRES_LATER_TODAY,
+    )
+    writer = ProvenanceFakeWriter()
+    _run(storage, settings, lease, owner, writer)
+    assert writer.calls == 1
+    assert _content_durable_state(storage, request.job_id) == (
+        PAID_CONTENT_DURABLE_STATE
+    )
+
+
+def test_08b6_content_approval_expiring_on_a_later_day_reaches_the_writer(
+    storage, settings, account,
+):
+    request, lease, owner = _approved_content_job(
+        storage, account, suffix="cexpnext",
+        expires_at=CONTENT_EXPIRES_NEXT_DAY,
+    )
+    writer = ProvenanceFakeWriter()
+    _run(storage, settings, lease, owner, writer)
+    assert writer.calls == 1
+    assert _content_durable_state(storage, request.job_id) == (
+        PAID_CONTENT_DURABLE_STATE
+    )
+
+
+# ---------------------------------------------------------------------------
 # Positive offline flow
 # ---------------------------------------------------------------------------
 
