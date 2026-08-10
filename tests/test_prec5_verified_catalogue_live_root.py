@@ -11,7 +11,7 @@ is frozen, approved and effective.
 """
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import sqlite3
 
@@ -98,6 +98,16 @@ AFTER_PROMO_END = "2026-09-15T00:00:00.000000+00:00"
 APPROVED_AT = "2026-08-10T00:00:00.000000+00:00"
 EXPIRES_AT = "2099-01-01T00:00:00.000000+00:00"
 
+# The approval-expiry boundary only misbehaves WITHIN a single date, so these
+# tests pin the clock instead of reading it: a drifting "now" would silently
+# turn a same-day case into a previous-day case and stop testing anything.
+EXPIRY_NOW = datetime(2026, 8, 10, 16, 55, 12, 345678, tzinfo=timezone.utc)
+EXPIRY_NOW_CANONICAL = "2026-08-10T16:55:12.345678+00:00"
+EXPIRED_EARLIER_TODAY = "2026-08-10T09:00:00.000000+00:00"
+EXPIRED_YESTERDAY = "2026-08-09T23:00:00.000000+00:00"
+EXPIRES_LATER_TODAY = "2026-08-10T23:00:00.000000+00:00"
+EXPIRES_NEXT_DAY = "2026-08-12T09:00:00.000000+00:00"
+
 
 # ---------------------------------------------------------------------------
 # Harness
@@ -139,6 +149,7 @@ def _approval(
     expires_at: str = EXPIRES_AT,
     registry_id: str | None = None,
     technical_model_id: str | None = None,
+    retention_expires_at: str | None = None,
 ) -> QualificationApproval:
     row = _entry_for(storage, family)
     envelope = ROLE_ENVELOPES[role]
@@ -157,7 +168,10 @@ def _approval(
                 provider_policy_ref="fake://anthropic/fable-5/retention",
                 accepted_by="fake-owner-fixture",
                 accepted_at=approved_at,
-                expires_at=expires_at,
+                # A retention window that outlives the approval is what isolates
+                # the approval's own expiry gate: without it, an expired-approval
+                # test can pass for the wrong reason.
+                expires_at=retention_expires_at or expires_at,
             ))
     return QualificationApproval(
         approval_ref=f"approval-{request_id}",
@@ -461,6 +475,195 @@ def test_08_expired_qualification_approval_blocks_the_caller(catalogue_storage):
         catalogue_storage.execute_controlled_qualification(approval, caller=caller)
     assert excinfo.value.code == "QUALIFICATION_APPROVAL_EXPIRED"
     assert caller.calls == 0
+
+
+# ---------------------------------------------------------------------------
+# Approval expiry boundary
+#
+# An owner writes the approval window as ISO-8601 with a "T"; the runtime writes
+# its own clock with a space.  Comparing those two spellings as text puts every
+# same-date owner timestamp AFTER the runtime one, so an approval that closed
+# earlier today read as still open, was consumed, and reached the caller.  These
+# tests hold the boundary at the instant, in both directions.
+# ---------------------------------------------------------------------------
+
+def _durable_qualification_state(storage, request_id: str) -> dict[str, int]:
+    """Everything a qualification may create only AFTER the caller boundary."""
+    def count(sql: str, *params) -> int:
+        return storage.conn.execute(sql, params).fetchone()[0]
+
+    return {
+        "consumed": count(
+            "SELECT COUNT(*) FROM model_qualification_approvals "
+            "WHERE request_id=? AND consumed_at IS NOT NULL", request_id,
+        ),
+        "runs": count(
+            "SELECT COUNT(*) FROM model_qualification_runs WHERE request_id=?",
+            request_id,
+        ),
+        "results": count("SELECT COUNT(*) FROM model_qualification_results"),
+        "capabilities": count(
+            "SELECT COUNT(*) FROM model_capability_declarations"
+        ),
+        "activations": count("SELECT COUNT(*) FROM model_role_activations"),
+    }
+
+
+NO_DURABLE_STATE = {
+    "consumed": 0, "runs": 0, "results": 0, "capabilities": 0, "activations": 0,
+}
+
+
+def _expiry_approval(
+    storage, *, request_id: str, expires_at: str,
+    retention_expires_at: str = EXPIRES_AT,
+    approved_at: str = "2026-08-01T00:00:00.000000+00:00",
+):
+    """One recorded FABLE approval whose retention window outlives it.
+
+    The long retention acceptance is deliberate: it removes the retention gate
+    as an explanation for any refusal, so only the approval's own expiry can
+    account for one.
+    """
+    _register(storage)
+    storage.upsert_model_role_policy(
+        owner_approved_role_policy(LogicalModelRole.ARTICLE_WRITER)
+    )
+    approval = _approval(
+        storage, role=LogicalModelRole.ARTICLE_WRITER, family=ModelFamily.FABLE,
+        request_id=request_id, approved_at=approved_at,
+        expires_at=expires_at, retention_expires_at=retention_expires_at,
+    )
+    storage.record_model_qualification_approval(approval)
+    return approval
+
+
+def _refuse_at(storage, approval, *, now=EXPIRY_NOW):
+    """Execute against a fake caller and return (code, caller, durable state)."""
+    caller = CountingQualificationCaller(
+        lambda item: _probe(item.technical_model_id)
+    )
+    with pytest.raises(ControlledQualificationError) as excinfo:
+        storage.execute_controlled_qualification(approval, caller=caller, now=now)
+    return (
+        excinfo.value.code,
+        caller,
+        _durable_qualification_state(storage, approval.request_id),
+    )
+
+
+def test_08a_approval_expired_on_a_previous_day_never_reaches_the_caller(
+    catalogue_storage,
+):
+    approval = _expiry_approval(
+        catalogue_storage, request_id="expiry-yesterday",
+        expires_at=EXPIRED_YESTERDAY,
+    )
+    code, caller, state = _refuse_at(catalogue_storage, approval)
+    assert code == "QUALIFICATION_APPROVAL_EXPIRED"
+    assert caller.calls == 0
+    assert state == NO_DURABLE_STATE
+
+
+def test_08b_approval_expired_earlier_the_same_day_never_reaches_the_caller(
+    catalogue_storage,
+):
+    """The regression: 09:00 today is expired at 16:55 today, not fresh."""
+    approval = _expiry_approval(
+        catalogue_storage, request_id="expiry-earlier-today",
+        expires_at=EXPIRED_EARLIER_TODAY,
+    )
+    code, caller, state = _refuse_at(catalogue_storage, approval)
+    assert code == "QUALIFICATION_APPROVAL_EXPIRED"
+    assert caller.calls == 0
+    assert state == NO_DURABLE_STATE
+
+
+def test_08c_approval_at_its_exact_expiry_instant_is_expired(catalogue_storage):
+    """The window is half-open: expiry is the first instant that is too late."""
+    approval = _expiry_approval(
+        catalogue_storage, request_id="expiry-exact",
+        expires_at=EXPIRY_NOW_CANONICAL,
+    )
+    code, caller, state = _refuse_at(catalogue_storage, approval)
+    assert code == "QUALIFICATION_APPROVAL_EXPIRED"
+    assert caller.calls == 0
+    assert state == NO_DURABLE_STATE
+
+
+def test_08d_approval_expiring_later_the_same_day_passes_the_expiry_gate(
+    catalogue_storage,
+):
+    approval = _expiry_approval(
+        catalogue_storage, request_id="expiry-later-today",
+        expires_at=EXPIRES_LATER_TODAY,
+    )
+    caller = CountingQualificationCaller(
+        lambda item: _probe(item.technical_model_id)
+    )
+    outcome = catalogue_storage.execute_controlled_qualification(
+        approval, caller=caller, now=EXPIRY_NOW,
+    )
+    assert caller.calls == 1
+    assert outcome.outcome == "PASS"
+
+
+def test_08e_approval_expiring_on_a_later_day_passes_the_expiry_gate(
+    catalogue_storage,
+):
+    approval = _expiry_approval(
+        catalogue_storage, request_id="expiry-next-day",
+        expires_at=EXPIRES_NEXT_DAY,
+    )
+    caller = CountingQualificationCaller(
+        lambda item: _probe(item.technical_model_id)
+    )
+    outcome = catalogue_storage.execute_controlled_qualification(
+        approval, caller=caller, now=EXPIRY_NOW,
+    )
+    assert caller.calls == 1
+    assert outcome.outcome == "PASS"
+
+
+def test_08f_an_unreadable_approval_window_is_never_an_open_one(catalogue_storage):
+    """A window that cannot be parsed refuses; it does not fall through."""
+    approval = _expiry_approval(
+        catalogue_storage, request_id="expiry-unreadable",
+        expires_at="whenever-the-owner-feels-like-it",
+    )
+    code, caller, state = _refuse_at(catalogue_storage, approval)
+    assert code == "QUALIFICATION_APPROVAL_TIMESTAMP_INVALID"
+    assert caller.calls == 0
+    assert state == NO_DURABLE_STATE
+
+
+def test_08g_retention_accepted_but_expired_earlier_today_blocks_the_caller(
+    catalogue_storage,
+):
+    """The same date boundary on the retention gate, which shares the parser."""
+    approval = _expiry_approval(
+        catalogue_storage, request_id="retention-earlier-today",
+        expires_at=EXPIRES_LATER_TODAY,
+        retention_expires_at=EXPIRED_EARLIER_TODAY,
+    )
+    code, caller, state = _refuse_at(catalogue_storage, approval)
+    assert code == "FABLE_RETENTION_ACCEPTANCE_EXPIRED"
+    assert caller.calls == 0
+    assert state == NO_DURABLE_STATE
+
+
+def test_08h_retention_accepted_later_today_is_not_yet_effective(catalogue_storage):
+    """The other side of the retention window, on the same shared parser."""
+    approval = _expiry_approval(
+        catalogue_storage, request_id="retention-later-today",
+        approved_at="2026-08-10T20:00:00.000000+00:00",
+        expires_at="2026-08-11T00:00:00.000000+00:00",
+        retention_expires_at="2026-08-11T00:00:00.000000+00:00",
+    )
+    code, caller, state = _refuse_at(catalogue_storage, approval)
+    assert code == "FABLE_RETENTION_ACCEPTANCE_NOT_YET_EFFECTIVE"
+    assert caller.calls == 0
+    assert state == NO_DURABLE_STATE
 
 
 def test_09_a_qualification_approval_cannot_be_replayed(catalogue_storage):
