@@ -1,5 +1,15 @@
 # BUILD_LOG
 
+## [2026-08-10 14:58] Etap 3 — MIGRATION TRANSACTIONALITY REPAIR 0026/0027
+
+- **Stan wejściowy:** czysty `main` na `4c00b161876c81a344ce2f6534f2cbf6b7620a8d`, ahead/behind `0/0`; produkcja immutable/query-only na `0020/20`, SHA `91f593923f3ca36cd8d2c816219e551b0ff231bc3149d6d584b025465f656a1f`; styl SHA `0b05cefa6701e6447c44810b686828a83c19ca7ffb29066778a13c24207acb1d`.
+- **Root cause:** `0026` i `0027` omijały oba wspierane zbiory klasyfikacji. Fallback oddzielał trwałość SQL od wpisu ledgeru. Pozostałe migracje aktywnej drabiny `0021–0030` korzystają z właściwego wzorca.
+- **Zmiana:** obie wersje dopisano do `_RUNNER_TRANSACTIONAL_MIGRATIONS`; dodano cztery deterministyczne testy happy/failpoint/reopen/retry. Nie zmieniono plików SQL ani semantyki schema.
+- **Weryfikacja:** nowe `4/4`; affected `74/74`; `compileall` PASS; `git diff --check` bez błędów whitespace. Full suite nie uruchomiono, ponieważ zmiana była lokalna, a affected nie ujawniły propagacji.
+- **Rehearsal:** nowa kopia produkcji przeszła repozytoryjną drabinę `0020→0030`; końcowo `0030/30`, integrity `ok`, FK `0`, `32/32` tabel PRE zachowanych, mismatch `0`, retention acceptance `0`, wszystkie authority counts `0`, idempotentny `0030` nie zmienił SHA. Temp artefakty zostały usunięte.
+- **Granice:** produkcja i styl nietknięte; zero aplikacyjnej sieci, API, kwalifikacji, C5, publikacji i kosztu; bez stage/commit/push/PR/merge. P2 oraz P2-DOC nietknięte.
+- **Status implementera:** `MIGRATION TRANSACTIONALITY REPAIR — CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.
+
 ## Cel
 
 Chronologiczny dziennik budowy agenta „Nothing Is Accidental". Po każdym większym zadaniu — obowiązkowy wpis, zanim uznamy zadanie za zakończone. Log ma pozwolić odtworzyć „co i kiedy powstało" i zasilić końcowy artykuł. Decyzje projektowe → `DECISIONS.md`, błędy → `ERRORS_AND_FAILURES.md`, ingerencje człowieka → `HUMAN_INTERVENTIONS.md`, research → `RESEARCH_LOG.md`.

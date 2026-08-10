@@ -1,5 +1,12 @@
 # SCREENSHOT_INDEX
 
+## 2026-08-10 — MIGRATION TRANSACTIONALITY REPAIR 0026/0027
+
+- **Status:** `SCREENSHOT REQUIRED`; browser był zabroniony i nie powstał nowy obraz.
+- **Co ma pokazywać:** bezpieczny diagram dwóch sekwencji: `0025 → SQL 0026 → failpoint → rollback do 0025 → reopen → retry → 0026` oraz analogicznie `0026 → 0027`; obok wynik świeżego rehearsal `0030/30`, integrity `ok`, FK `0`, preserve-state mismatch `0`, retention acceptance `0`.
+- **Dowód tekstowy:** nowe `4/4`, affected `74/74`, produkcja i styl niezmienione, koszt `0.000000 USD`.
+- **Warunki bezpieczeństwa:** bez `.env`, sekretów, surowych danych produkcyjnych, prywatnego stylu, pełnych ścieżek i sugestii niezależnego approvalu.
+
 ## 2026-07-16 — W1A-R4-01 / czwarty niezależny reject
 
 - **Status:** `SCREENSHOT REQUIRED` — w tej fali nie uruchamiano browsera ani interfejsu zewnętrznego.

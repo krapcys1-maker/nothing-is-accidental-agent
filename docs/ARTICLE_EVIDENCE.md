@@ -1,5 +1,12 @@
 # ARTICLE_EVIDENCE
 
+## Sekcja B — 2026-08-10: „Schema i ledger muszą mówić prawdę razem”
+
+- **Fakt:** migracja może przejść cały happy path, a mimo to mieć niebezpieczne okno awarii: schema jest już trwałe, lecz kanoniczny ledger nadal wskazuje poprzedni head.
+- **Decyzja:** `0026` i `0027` korzystają z jednej istniejącej transakcji runnera dla SQL i `schema_migrations`; po kontrolowanym błędzie oba elementy cofają się razem.
+- **Dowód:** failpoint, zamknięcie połączenia, reopen i retry dla obu migracji; 4/4 nowych, 74/74 affected oraz świeży rehearsal `0020→0030` z zachowaniem danych 32 tabel i zerem mismatchów.
+- **Zdanie robocze:** „System migracyjny nie jest spójny dlatego, że doszedł do końca. Jest spójny wtedy, gdy po przerwaniu potrafi jednoznacznie powiedzieć, czego jeszcze nie zrobił.”
+
 ## Sekcja B — 2026-07-16: „Błąd obsłużony może być groźniejszy niż crash”
 
 - **Fakt:** czwarty niezależny review pokazał, że proces nie musiał się zawiesić, aby zgubić drogę do rozliczenia. Lokalny błąd został „poprawnie” złapany przez Workera, lecz fallback zamknął job jako `FAILED` i pozostawił rozpoczętą próbę poza kolejką operatora.

@@ -1,5 +1,12 @@
 # 14 — WNIOSKI CZĄSTKOWE
 
+## 2026-08-10 — Po naprawie transakcyjności 0026/0027
+
+- Zielony happy path nie dowodzi zachowania po przerwaniu między schema a ledgerem.
+- Klasyfikacja migracji jest częścią kontraktu bezpieczeństwa, nie detalem organizacyjnym.
+- Najmniejsza naprawa bywa najlepsza, gdy istniejący runner już zapewnia właściwe begin/rollback/commit.
+- Reopen i retry są osobnymi dowodami: rollback bez sprawdzenia trwałego headu nie wystarcza.
+
 ## Cel pliku
 Po każdym etapie: co nas zaskoczyło, co działało, co nie, co agent robił lepiej, gdzie nadal był potrzebny człowiek, jakie założenie okazało się błędne, co zmienimy dalej. To „refleksja po etapie", surowiec do puenty artykułów.
 

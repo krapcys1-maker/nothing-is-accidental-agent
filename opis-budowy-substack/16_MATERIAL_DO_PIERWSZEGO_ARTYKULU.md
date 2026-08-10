@@ -1,5 +1,11 @@
 # 16 — MATERIAŁ DO PIERWSZEGO ARTYKUŁU
 
+## 2026-08-10 — Migracja, która dochodzi do końca, ale nie umie bezpiecznie przerwać
+
+Próba na kopii produkcji zakończyła się sukcesem i właśnie dlatego łatwo byłoby przeoczyć problem. Dwie migracje zapisywały schema i kanoniczny ledger w osobnych krokach trwałości. Dopiero kontrolowany błąd pomiędzy nimi odpowiedział na ważniejsze pytanie: co system powie po ponownym otwarciu? Po naprawie odpowiedź jest jednoznaczna — albo oba fakty istnieją, albo nie istnieje żaden.
+
+Zdanie do artykułu: „Najważniejszym testem migracji nie jest to, czy potrafi dojść do końca, lecz czy po przerwaniu nadal potrafi powiedzieć prawdę o własnym stanie.”
+
 > **Nowy materiał `W1A-R4-01` (2026-07-16):** czwarty niezależny review znalazł błąd nie w samym callu, lecz w kodzie, który miał go bezpiecznie obsłużyć. `Worker.run_once` po lokalnym błędzie zamykał job, ale pozostawiał rozpoczętą próbę poza kolejką reconciliation i z aktywną rezerwacją. Systemowa naprawa uczyniła durable attempt źródłem decyzji: albo zwykłe `FAILED` bez próby, albo widoczna eskalacja bez retry. To mocny rozdział o tym, że zielony suite i poprawny recovery nie wystarczą, jeśli fallback ma osobną ścieżkę. Dowód: **1036 testów offline**, race ×30, krytyczne ścieżki ×10, zero kosztu. WAVE nadal otwarta.
 
 ## Materiał: „Najgroźniejszy błąd był w obsłudze błędu”

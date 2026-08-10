@@ -1,5 +1,16 @@
 # DECISIONS (Architecture Decision Log)
 
+### ADR-129: 0026 i 0027 używają istniejącej transakcji migration runnera
+
+- **Data:** 2026-08-10
+- **Status:** PROPOSED / zaimplementowane i zweryfikowane przez implementera; `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.
+- **Kto podjął decyzję:** właściciel autoryzował wyłącznie falę `MIGRATION TRANSACTIONALITY REPAIR — 0026 / 0027`; implementer wybrał najmniejszy wariant techniczny po analizie aktualnego kodu i istniejących wzorców.
+- **Kontekst:** `0026_controlled_provider_content` i `0027_model_family_routing` nie były ani self-ledgered, ani sklasyfikowane jako runner-transactional. Fallback wykonywał `executescript`, a następnie osobny insert do `schema_migrations` i commit, więc błąd w tym oknie mógł zostawić nowe schema przy starym headzie.
+- **Decyzja:** dodać obie wersje do `_RUNNER_TRANSACTIONAL_MIGRATIONS`. Ich SQL nie zawiera własnego `BEGIN`/`COMMIT`, więc istniejący runner może objąć schema, seed policies i ledger jednym `BEGIN IMMEDIATE`/commit. Wyjątek przed commitem wycofuje całość.
+- **Odrzucone warianty:** nie przepisujemy migracji na self-ledgered, nie tworzymy nowego frameworka i nie refaktorujemy pozostałych migracji. Kontrola `0021–0030` nie wykazała drugiego przypadku tego samego błędu klasyfikacji.
+- **Dowód:** 4/4 testów happy/failpoint/reopen/retry, 74/74 affected, świeży rehearsal produkcyjnej kopii `0020→0030`, head/count `0030/30`, integrity `ok`, FK `0`, 32/32 tabel PRE bez mismatchów, retention acceptance `0`, idempotentny `0030` no-op.
+- **Granice:** bez migracji produkcji, realnego API, kwalifikacji, C5, publikacji i kosztu. P2-1…P2-6 oraz P2-DOC pozostają poza zakresem i nie są tą decyzją rozstrzygane.
+
 ### ADR-068: Formalne zamknięcie WAVE 1A po niezależnym finalnym re-review
 
 - **Data:** 2026-07-16
