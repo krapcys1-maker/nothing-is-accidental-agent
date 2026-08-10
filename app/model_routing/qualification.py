@@ -174,7 +174,12 @@ class QualificationProbeResponse:
 
 
 class QualificationCaller(Protocol):
-    """Future technical boundary; this wave supplies fake callers only."""
+    """Technical boundary injected only after durable consume+reservation.
+
+    The production Fable implementation and its supported composition root live
+    in ``app.model_routing.production_qualification``.  Tests may still inject
+    fakes, but transport construction is not authority and never owns lifecycle.
+    """
 
     def __call__(
         self, approval: QualificationApproval,
