@@ -53,7 +53,12 @@ from app.content.decision import (
     ContentDecisionOutcome,
     ContentDecisionPlan,
 )
+from app.content.provider_roles import (
+    CONTENT_ROLE_INTENT_KIND,
+    RoleProviderExecution,
+)
 from app.content.provenance import (
+    CONTENT_APPROVAL_PURPOSE,
     CONTENT_TYPE_ROLE,
     CONTENT_WRITER_INTENT_KIND,
     ControlledProviderAuthority,
@@ -222,6 +227,7 @@ from app.model_routing.contracts import (
     CatalogueCandidate,
     FrozenModelBinding,
     LifecycleState,
+    LogicalModelRole,
     ModelFamily,
     ModelPricingProfile,
     ModelVersion,
@@ -619,6 +625,14 @@ class SqliteStorage:
             unit=str(row["unit"]),
             prices=prices,
             verified_at=None if row["verified_at"] is None else str(row["verified_at"]),
+            effective_from=(
+                None if row["effective_from"] is None
+                else str(row["effective_from"])
+            ),
+            effective_until=(
+                None if row["effective_until"] is None
+                else str(row["effective_until"])
+            ),
         )
 
     @staticmethod
@@ -752,8 +766,9 @@ class SqliteStorage:
                 "INSERT INTO model_pricing_profiles ("
                 "pricing_ref,provider,technical_model_id,verification_state,currency,unit,"
                 "input_per_mtok,output_per_mtok,cache_read_per_mtok,cache_write_per_mtok,"
-                "web_search_per_1k,profile_fingerprint,verified_at,created_at"
-                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "web_search_per_1k,profile_fingerprint,verified_at,created_at,"
+                "effective_from,effective_until"
+                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     profile.pricing_ref,
                     profile.provider,
@@ -769,6 +784,8 @@ class SqliteStorage:
                     profile.contract_fingerprint(),
                     profile.verified_at,
                     created_at,
+                    profile.effective_from,
+                    profile.effective_until,
                 ),
             )
             self.conn.commit()
@@ -1547,6 +1564,712 @@ class SqliteStorage:
             (intent_kind, intent_id),
         ).fetchone()
         return None if row is None else self._model_binding_from_row(row)
+
+    # ------------------------------------------------------------------
+    # Owner-verified catalogue, controlled qualification and role bindings
+    # ------------------------------------------------------------------
+
+    def register_owner_verified_catalogue(
+        self,
+        entries: "Sequence[CatalogueEntry] | None" = None,
+        *,
+        verified_by: str,
+        now: datetime | None = None,
+    ) -> tuple[RegisteredModel, ...]:
+        """Persist the owner-verified provider snapshot as registry candidates.
+
+        Registration is a statement about the provider's catalogue, never about
+        qualification: every entry lands ``UNQUALIFIED``/``CANDIDATE`` and the
+        SQL floor added by 0029 keeps it there until a controlled qualification
+        approval has actually been consumed.
+        """
+        from app.model_routing.catalogue import (
+            CATALOGUE_SOURCE,
+            OWNER_VERIFIED_CATALOGUE,
+            VERIFIED_RUNTIME_SHAPE,
+        )
+
+        selected = tuple(entries if entries is not None else OWNER_VERIFIED_CATALOGUE)
+        created_at = _ts_precise(now)
+        registered: list[RegisteredModel] = []
+        for entry in selected:
+            model = self.register_model_candidate(entry.candidate(), now=now)
+            for profile in entry.pricing:
+                self.register_model_pricing_profile(profile, now=now)
+            payload = entry.evidence_payload(model.registry_id)
+            evidence_json = canonical_json(payload)
+            existing = self.conn.execute(
+                "SELECT 1 FROM model_catalogue_evidence WHERE evidence_ref=?",
+                (payload["evidence_ref"],),
+            ).fetchone()
+            if existing is None:
+                shape = VERIFIED_RUNTIME_SHAPE
+                self.conn.execute(
+                    "INSERT INTO model_catalogue_evidence (evidence_ref,"
+                    "model_registry_id,provider,technical_model_id,source,"
+                    "verified_by,verified_at,inference_geography,fast_mode,"
+                    "prompt_caching,server_web_tools,batch_api,"
+                    "provider_fallback_api,notes,evidence_json,"
+                    "evidence_fingerprint,created_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        payload["evidence_ref"], model.registry_id,
+                        entry.candidate().provider, entry.technical_model_id,
+                        CATALOGUE_SOURCE, verified_by, payload["verified_at"],
+                        str(shape["inference_geography"]),
+                        int(bool(shape["fast_mode"])),
+                        int(bool(shape["prompt_caching"])),
+                        int(bool(shape["server_web_tools"])),
+                        int(bool(shape["batch_api"])),
+                        int(bool(shape["provider_fallback_api"])),
+                        entry.notes, evidence_json,
+                        sha256_text(evidence_json), created_at,
+                    ),
+                )
+                self.conn.commit()
+            registered.append(
+                self.get_registered_model(model.registry_id) or model
+            )
+        return tuple(registered)
+
+    def record_model_qualification_approval(
+        self, approval: "QualificationApproval", *, now: datetime | None = None,
+    ) -> str:
+        """Persist one durable, single-use L1 qualification authorisation."""
+        payload_json = canonical_json(approval.payload())
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            self.conn.execute(
+                "INSERT INTO model_qualification_approvals (approval_ref,"
+                "request_id,logical_role,model_registry_id,provider,"
+                "technical_model_id,pricing_ref,purpose,max_output_tokens,"
+                "max_input_tokens,cap_usd,max_retries,fallback_policy,"
+                "approved_by,approved_at,expires_at,consumed_at,approval_json,"
+                "approval_fingerprint) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?)",
+                (
+                    approval.approval_ref, approval.request_id,
+                    approval.logical_role.value, approval.model_registry_id,
+                    approval.provider, approval.technical_model_id,
+                    approval.pricing_ref, approval.purpose,
+                    approval.max_output_tokens, approval.max_input_tokens,
+                    approval.canonical_cap, approval.max_retries,
+                    approval.fallback_policy, approval.approved_by,
+                    approval.approved_at, approval.expires_at, payload_json,
+                    sha256_text(payload_json),
+                ),
+            )
+            self.conn.commit()
+            return approval.approval_ref
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def _consume_model_qualification_approval(
+        self, approval: "QualificationApproval", *, current_ts: str,
+    ) -> None:
+        """Atomic one-shot consumption inside the caller's own transaction."""
+        from app.model_routing.qualification import ControlledQualificationError
+
+        row = self.conn.execute(
+            "SELECT * FROM model_qualification_approvals WHERE approval_ref=?",
+            (approval.approval_ref,),
+        ).fetchone()
+        if row is None:
+            raise ControlledQualificationError(
+                "QUALIFICATION_APPROVAL_MISSING",
+                "No L1 approval exists for this qualification request.",
+            )
+        if row["request_id"] != approval.request_id:
+            raise ControlledQualificationError(
+                "QUALIFICATION_APPROVAL_REQUEST_MISMATCH",
+                "The approval authorises a different request.",
+            )
+        if (
+            row["model_registry_id"] != approval.model_registry_id
+            or row["technical_model_id"] != approval.technical_model_id
+            or row["logical_role"] != approval.logical_role.value
+            or row["pricing_ref"] != approval.pricing_ref
+        ):
+            raise ControlledQualificationError(
+                "QUALIFICATION_APPROVAL_TARGET_MISMATCH",
+                "The approval authorises a different model, role or price.",
+            )
+        if row["consumed_at"] is not None:
+            raise ControlledQualificationError(
+                "QUALIFICATION_APPROVAL_ALREADY_CONSUMED",
+                "A one-shot qualification approval cannot be replayed.",
+            )
+        if str(row["expires_at"]) <= current_ts:
+            raise ControlledQualificationError(
+                "QUALIFICATION_APPROVAL_EXPIRED",
+                "The qualification approval expired before execution.",
+            )
+        if row["approval_fingerprint"] != sha256_text(
+            canonical_json(approval.payload())
+        ):
+            raise ControlledQualificationError(
+                "QUALIFICATION_APPROVAL_INTENT_MISMATCH",
+                "The request diverged from the approved frozen intent.",
+            )
+        consumed = self.conn.execute(
+            "UPDATE model_qualification_approvals SET consumed_at=? "
+            "WHERE approval_ref=? AND consumed_at IS NULL",
+            (current_ts, approval.approval_ref),
+        )
+        if consumed.rowcount != 1:
+            raise ControlledQualificationError(
+                "QUALIFICATION_APPROVAL_CONSUME_RACE",
+                "Approval consumption compare-and-swap failed.",
+            )
+
+    def execute_controlled_qualification(
+        self,
+        approval: "QualificationApproval",
+        *,
+        caller: "QualificationCaller",
+        now: datetime | None = None,
+    ) -> "QualificationOutcome":
+        """Reserve, call once, settle once.
+
+        The approval is consumed AND a durable IN_FLIGHT run is written in the
+        same transaction, before the caller can run.  That ordering is the whole
+        point: if the caller times out, raises something ambiguous, or the
+        process dies mid-request, the database still shows that a request for
+        this exact approval may already have reached the provider.
+
+        A run that never returned usage is settled as NEEDS_VERIFICATION with
+        usage and cost left NULL.  Writing zero there would assert that the
+        request was free, which nobody established.
+        """
+        from app.model_routing.qualification import (
+            ControlledQualificationError,
+            evaluate_qualification_probe,
+            qualification_result_payload,
+            reservation_payload,
+            unknown_result_outcome,
+        )
+
+        current_ts = _ts_precise(now)
+        model = self.get_registered_model(approval.model_registry_id)
+        if model is None:
+            raise ControlledQualificationError(
+                "QUALIFICATION_MODEL_UNKNOWN",
+                f"Unknown registry entry: {approval.model_registry_id!r}.",
+            )
+        pricing_row = self.conn.execute(
+            "SELECT * FROM model_pricing_profiles WHERE pricing_ref=?",
+            (approval.pricing_ref,),
+        ).fetchone()
+        pricing = self._model_pricing_from_row(pricing_row)
+        if pricing is None:
+            raise ControlledQualificationError(
+                "QUALIFICATION_PRICING_MISSING",
+                "The approved pricing profile does not exist.",
+            )
+        if not pricing.is_effective_at(current_ts):
+            raise ControlledQualificationError(
+                "QUALIFICATION_PRICING_EXPIRED",
+                "The approved pricing profile is not effective right now.",
+            )
+
+        # ---- reservation: consume + durable IN_FLIGHT run, atomically -------
+        reservation = reservation_payload(
+            approval, external_effect_started_at=current_ts,
+        )
+        reservation_json = canonical_json(reservation)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            existing = self.conn.execute(
+                "SELECT outcome FROM model_qualification_runs WHERE request_id=?",
+                (approval.request_id,),
+            ).fetchone()
+            if existing is not None:
+                # A previous execution already crossed this boundary. Whatever
+                # state it is in, it is never replayed automatically.
+                state_name = str(existing["outcome"])
+                raise ControlledQualificationError(
+                    "QUALIFICATION_RUN_ALREADY_EXISTS",
+                    f"request {approval.request_id!r} already has a durable run "
+                    f"in state {state_name!r}; a controlled qualification is "
+                    "never retried automatically.",
+                )
+            self._consume_model_qualification_approval(
+                approval, current_ts=current_ts,
+            )
+            self.conn.execute(
+                "INSERT INTO model_qualification_runs (request_id,approval_ref,"
+                "model_registry_id,logical_role,provider,technical_model_id,"
+                "pricing_ref,pricing_profile_fingerprint,outcome,result_json,"
+                "result_fingerprint,external_effect_started_at,reserved_at,"
+                "executed_at) VALUES (?,?,?,?,?,?,?,?,'IN_FLIGHT',?,?,?,?,?)",
+                (
+                    approval.request_id, approval.approval_ref,
+                    approval.model_registry_id, approval.logical_role.value,
+                    approval.provider, approval.technical_model_id,
+                    approval.pricing_ref, pricing.contract_fingerprint(),
+                    reservation_json, sha256_text(reservation_json),
+                    current_ts, current_ts, current_ts,
+                ),
+            )
+            self.conn.commit()
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+        # ---- exactly one caller boundary ------------------------------------
+        try:
+            response = caller(approval)
+        except BaseException as exc:
+            # The request may have been served. Settle the durable run as
+            # unknown, keep the approval consumed, and re-raise.
+            self._settle_controlled_qualification(
+                unknown_result_outcome(
+                    approval=approval,
+                    pricing=pricing,
+                    failure_kind="CALLER_RESULT_UNKNOWN",
+                ),
+                current_ts=_ts_precise(None),
+                detail=f"{type(exc).__name__}: {str(exc)[:200]}",
+            )
+            raise
+
+        outcome = evaluate_qualification_probe(
+            approval=approval, model=model, pricing=pricing, response=response,
+        )
+        self._settle_controlled_qualification(outcome, current_ts=current_ts)
+
+        state = outcome.state
+        if state is not None and outcome.qualification_ref is not None:
+            # Capability evidence is what the run demonstrated, not what any
+            # documentation claims: a lower bound the model actually honoured.
+            if (
+                state is QualificationState.PASS
+                and outcome.observed_max_output_tokens
+                and outcome.observed_max_context_tokens
+            ):
+                self.record_model_capabilities(
+                    outcome.model_registry_id,
+                    CapabilityDeclaration(
+                        capability_ref=f"controlled-caps-{outcome.request_id}",
+                        verification_state=CapabilityVerificationState.VERIFIED,
+                        structured_response=True,
+                        max_context_tokens=outcome.observed_max_context_tokens,
+                        max_output_tokens=outcome.observed_max_output_tokens,
+                        verified_at=current_ts,
+                    ),
+                    now=now,
+                )
+            self.record_model_qualification(
+                QualificationReport(
+                    qualification_ref=outcome.qualification_ref,
+                    model_registry_id=outcome.model_registry_id,
+                    state=state,
+                    suite_version="controlled_live_qualification_v1",
+                    fixture_set_ref=outcome.approval_ref,
+                    result_payload=qualification_result_payload(outcome),
+                    evaluated_at=current_ts,
+                    source="CONTROLLED_LIVE",
+                ),
+                now=now,
+            )
+        return outcome
+
+    def _settle_controlled_qualification(
+        self,
+        outcome: "QualificationOutcome",
+        *,
+        current_ts: str,
+        detail: str | None = None,
+    ) -> None:
+        """The one permitted transition of a run: IN_FLIGHT -> terminal."""
+        payload = dict(outcome.payload())
+        if detail is not None:
+            payload["detail"] = detail
+        result_json = canonical_json(payload)
+        usage = outcome.usage
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            settled = self.conn.execute(
+                "UPDATE model_qualification_runs SET outcome=?,failure_kind=?,"
+                "returned_model_id=?,input_tokens=?,output_tokens=?,"
+                "cache_read_tokens=?,cache_write_tokens=?,web_search_requests=?,"
+                "cost_usd=?,qualification_ref=?,result_json=?,"
+                "result_fingerprint=?,settled_at=?,executed_at=? "
+                "WHERE request_id=? AND outcome='IN_FLIGHT'",
+                (
+                    outcome.outcome, outcome.failure_kind,
+                    outcome.returned_model_id,
+                    None if usage is None else usage.input_tokens,
+                    None if usage is None else usage.output_tokens,
+                    None if usage is None else usage.cache_read_tokens,
+                    None if usage is None else usage.cache_write_tokens,
+                    None if usage is None else usage.web_search_requests,
+                    outcome.canonical_cost, outcome.qualification_ref,
+                    result_json, sha256_text(result_json), current_ts,
+                    current_ts, outcome.request_id,
+                ),
+            )
+            if settled.rowcount != 1:
+                raise ContentFoundationError(
+                    "QUALIFICATION_RUN_SETTLE_RACE",
+                    "The in-flight qualification run could not be settled once.",
+                )
+            self.conn.commit()
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def reconcile_in_flight_qualification(
+        self,
+        request_id: str,
+        *,
+        failure_kind: str = "RESTART_AFTER_EXTERNAL_EFFECT",
+        now: datetime | None = None,
+    ) -> "QualificationOutcome":
+        """Terminalise a run left IN_FLIGHT by a crash, without a second call.
+
+        Explicit rather than automatic: a run stranded past the external-effect
+        marker is a reconciliation item for an operator, not something a restart
+        may quietly retry.
+        """
+        from app.model_routing.qualification import (
+            ControlledQualificationError,
+            QualificationApproval,
+            unknown_result_outcome,
+        )
+
+        row = self.conn.execute(
+            "SELECT * FROM model_qualification_runs WHERE request_id=?",
+            (request_id,),
+        ).fetchone()
+        if row is None:
+            raise ControlledQualificationError(
+                "QUALIFICATION_RUN_MISSING",
+                f"No qualification run exists for {request_id!r}.",
+            )
+        current_state = str(row["outcome"])
+        if current_state != "IN_FLIGHT":
+            raise ControlledQualificationError(
+                "QUALIFICATION_RUN_ALREADY_SETTLED",
+                f"Run {request_id!r} is already {current_state!r}.",
+            )
+        approval_row = self.conn.execute(
+            "SELECT * FROM model_qualification_approvals WHERE approval_ref=?",
+            (row["approval_ref"],),
+        ).fetchone()
+        assert approval_row is not None
+        pricing = self._model_pricing_from_row(
+            self.conn.execute(
+                "SELECT * FROM model_pricing_profiles WHERE pricing_ref=?",
+                (row["pricing_ref"],),
+            ).fetchone()
+        )
+        assert pricing is not None
+        approval = QualificationApproval(
+            approval_ref=str(approval_row["approval_ref"]),
+            request_id=str(approval_row["request_id"]),
+            logical_role=parse_role(approval_row["logical_role"]),
+            model_registry_id=str(approval_row["model_registry_id"]),
+            provider=str(approval_row["provider"]),
+            technical_model_id=str(approval_row["technical_model_id"]),
+            pricing_ref=str(approval_row["pricing_ref"]),
+            max_input_tokens=int(approval_row["max_input_tokens"]),
+            max_output_tokens=int(approval_row["max_output_tokens"]),
+            cap_usd=decimal_from(approval_row["cap_usd"], label="approved cap"),
+            approved_by=str(approval_row["approved_by"]),
+            approved_at=str(approval_row["approved_at"]),
+            expires_at=str(approval_row["expires_at"]),
+        )
+        outcome = unknown_result_outcome(
+            approval=approval, pricing=pricing, failure_kind=failure_kind,
+        )
+        self._settle_controlled_qualification(
+            outcome, current_ts=_ts_precise(now),
+        )
+        return outcome
+
+    def load_content_role_provenance(
+        self, *, job_id: str, role: object,
+    ) -> dict[str, Any]:
+        """Read back one role binding together with the evidence it froze."""
+        parsed = parse_role(role)
+        binding = self.get_frozen_model_binding(
+            intent_kind=CONTENT_ROLE_INTENT_KIND,
+            intent_id=f"{job_id}:{parsed.value}",
+        )
+        if binding is None:
+            return {
+                "binding": None, "model": None, "pricing": None,
+                "capability": None, "qualification": None,
+            }
+        model_row = self.conn.execute(
+            "SELECT * FROM model_registry WHERE registry_id=?",
+            (binding.model_registry_id,),
+        ).fetchone()
+        pricing_row = self.conn.execute(
+            "SELECT * FROM model_pricing_profiles WHERE pricing_ref=?",
+            (binding.pricing_ref,),
+        ).fetchone()
+        capability_row = self.conn.execute(
+            "SELECT * FROM model_capability_declarations WHERE capability_ref=?",
+            (binding.capability_ref,),
+        ).fetchone()
+        qualification_row = self.conn.execute(
+            "SELECT * FROM model_qualification_results WHERE qualification_ref=?",
+            (binding.qualification_ref,),
+        ).fetchone()
+        return {
+            "binding": binding,
+            "model": (
+                None if model_row is None
+                else self._registered_model_from_row(model_row)
+            ),
+            "pricing": self._model_pricing_from_row(pricing_row),
+            "capability": self._model_capability_from_row(capability_row),
+            "qualification": self._qualification_report_from_row(
+                qualification_row
+            ),
+        }
+
+    def record_role_provider_execution(
+        self, execution: RoleProviderExecution,
+    ) -> str:
+        """Persist one append-only role execution with its own Decimal cost."""
+        result_json = canonical_json(execution.result_payload())
+        fingerprint_value = sha256_text(result_json)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            existing = self.conn.execute(
+                "SELECT * FROM role_provider_executions WHERE execution_ref=?",
+                (execution.execution_ref,),
+            ).fetchone()
+            if existing is not None:
+                if existing["result_fingerprint"] == fingerprint_value:
+                    self.conn.commit()
+                    return fingerprint_value
+                raise ContentFoundationError(
+                    "CONTENT_ROLE_EXECUTION_CONFLICT",
+                    "A different role execution already exists for this job.",
+                )
+            authority = execution.authority
+            self.conn.execute(
+                "INSERT INTO role_provider_executions (execution_ref,job_id,"
+                "run_id,content_id,logical_role,binding_intent_id,"
+                "model_registry_id,provider,technical_model_id,"
+                "returned_model_id,pricing_ref,pricing_profile_fingerprint,"
+                "qualification_ref,capability_ref,outcome,failure_kind,"
+                "input_tokens,output_tokens,cache_read_tokens,"
+                "cache_write_tokens,web_search_requests,cost_usd,result_json,"
+                "result_fingerprint,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    execution.execution_ref, execution.job_id,
+                    execution.run_id, execution.content_id,
+                    execution.role.value, authority.binding_intent_id,
+                    authority.model_registry_id, authority.provider,
+                    authority.technical_model_id, execution.returned_model_id,
+                    authority.pricing_ref,
+                    authority.pricing_profile_fingerprint,
+                    authority.qualification_ref, authority.capability_ref,
+                    execution.outcome, execution.failure_kind,
+                    execution.usage.input_tokens,
+                    execution.usage.output_tokens,
+                    execution.usage.cache_read_tokens,
+                    execution.usage.cache_write_tokens,
+                    execution.usage.web_search_requests,
+                    execution.canonical_cost, result_json, fingerprint_value,
+                    _ts_precise(None),
+                ),
+            )
+            self.conn.commit()
+            return fingerprint_value
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def record_content_provider_approval(
+        self,
+        *,
+        approval_ref: str,
+        job_id: str,
+        account_id: str,
+        role: object,
+        model_registry_id: str,
+        provider: str,
+        technical_model_id: str,
+        pricing_ref: str,
+        max_output_tokens: int,
+        cap_usd: Decimal | str,
+        approved_by: str,
+        approved_at: str,
+        expires_at: str,
+    ) -> str:
+        """Persist one durable, single-use L1 approval for a paid ARTICLE run."""
+        parsed = parse_role(role)
+        canonical_cap = format(
+            quantize_usd(cap_usd, label="content approval cap"), ".6f",
+        )
+        payload = {
+            "approval_ref": approval_ref,
+            "job_id": job_id,
+            "account_id": account_id,
+            "logical_role": parsed.value,
+            "model_registry_id": model_registry_id,
+            "provider": provider,
+            "technical_model_id": technical_model_id,
+            "pricing_ref": pricing_ref,
+            "purpose": CONTENT_APPROVAL_PURPOSE,
+            "max_output_tokens": int(max_output_tokens),
+            "cap_usd": canonical_cap,
+            "max_retries": 0,
+            "fallback_policy": "FORBIDDEN",
+            "approved_by": approved_by,
+            "approved_at": approved_at,
+            "expires_at": expires_at,
+        }
+        payload_json = canonical_json(payload)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            self.conn.execute(
+                "INSERT INTO content_provider_approvals (approval_ref,job_id,"
+                "account_id,logical_role,model_registry_id,provider,"
+                "technical_model_id,pricing_ref,purpose,max_output_tokens,"
+                "cap_usd,max_retries,fallback_policy,approved_by,approved_at,"
+                "expires_at,consumed_at,approval_json,approval_fingerprint) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,0,'FORBIDDEN',?,?,?,NULL,?,?)",
+                (
+                    approval_ref, job_id, account_id, parsed.value,
+                    model_registry_id, provider, technical_model_id,
+                    pricing_ref, CONTENT_APPROVAL_PURPOSE,
+                    int(max_output_tokens), canonical_cap, approved_by,
+                    approved_at, expires_at, payload_json,
+                    sha256_text(payload_json),
+                ),
+            )
+            self.conn.commit()
+            return approval_ref
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def _consume_content_provider_approval_in_transaction(
+        self,
+        job_id: str,
+        *,
+        binding: FrozenModelBinding,
+        max_output_tokens: int,
+        max_cost_usd: object,
+        current_ts: str,
+    ) -> None:
+        """Atomic one-shot consumption inside the attempt reservation.
+
+        Runs in the same transaction that creates the paid attempt, so a refusal
+        leaves neither a consumed approval nor a reachable caller.
+        """
+        row = self.conn.execute(
+            "SELECT * FROM content_provider_approvals WHERE job_id=?", (job_id,),
+        ).fetchone()
+        if row is None:
+            raise ContentFoundationError(
+                "CONTENT_APPROVAL_MISSING",
+                "A paid ARTICLE attempt requires a durable L1 approval.",
+            )
+        # One approval authorises exactly one CONTENT execution, and that
+        # execution is a two-attempt lifecycle by contract (draft plus the one
+        # permitted rewrite).  The second attempt of the SAME approved job is
+        # therefore not a replay — but it must still fit inside the one approved
+        # cap, counting what this job has already spent.
+        already_consumed = row["consumed_at"] is not None
+        if already_consumed:
+            spent = _money_sum(
+                [
+                    settled["cost_usd"]
+                    for settled in self.conn.execute(
+                        "SELECT cost_usd FROM content_provider_cost_settlements "
+                        "WHERE job_id=?", (job_id,),
+                    ).fetchall()
+                ],
+                label="Content job spend to date",
+            )
+            remaining = _money(
+                row["cap_usd"], positive=True, label="Approved content cap",
+            ) - spent
+            if remaining < _money(
+                max_cost_usd, positive=True, label="Frozen intent cap",
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_APPROVAL_CAP_EXCEEDED",
+                    "The remaining approved budget cannot cover this attempt.",
+                )
+        if str(row["expires_at"]) <= current_ts:
+            raise ContentFoundationError(
+                "CONTENT_APPROVAL_EXPIRED",
+                "The content approval expired before execution.",
+            )
+        if (
+            row["model_registry_id"] != binding.model_registry_id
+            or row["technical_model_id"] != binding.technical_model_id
+            or row["provider"] != binding.provider
+            or row["pricing_ref"] != binding.pricing_ref
+            or row["logical_role"] != binding.role.value
+        ):
+            raise ContentFoundationError(
+                "CONTENT_APPROVAL_TARGET_MISMATCH",
+                "The approval authorises a different model, role or price.",
+            )
+        if int(row["max_output_tokens"]) < int(max_output_tokens):
+            raise ContentFoundationError(
+                "CONTENT_APPROVAL_MAX_TOKENS_EXCEEDED",
+                "The attempt asks for more output than was approved.",
+            )
+        if _money(
+            row["cap_usd"], positive=True, label="Approved content cap",
+        ) < _money(max_cost_usd, positive=True, label="Frozen intent cap"):
+            raise ContentFoundationError(
+                "CONTENT_APPROVAL_CAP_EXCEEDED",
+                "The frozen intent cap exceeds the approved cap.",
+            )
+        if already_consumed:
+            return
+        consumed = self.conn.execute(
+            "UPDATE content_provider_approvals SET consumed_at=? "
+            "WHERE job_id=? AND consumed_at IS NULL",
+            (current_ts, job_id),
+        )
+        if consumed.rowcount != 1:
+            raise ContentFoundationError(
+                "CONTENT_APPROVAL_CONSUME_RACE",
+                "Approval consumption compare-and-swap failed.",
+            )
+
+    def freeze_content_role_model_binding(
+        self,
+        *,
+        job_id: str,
+        role: object,
+        now: datetime | None = None,
+    ) -> FrozenModelBinding:
+        """Freeze the active qualified model for one ARTICLE support role."""
+        parsed = parse_role(role)
+        if parsed not in (
+            LogicalModelRole.ARTICLE_PLAN, LogicalModelRole.ARTICLE_REVIEWER,
+        ):
+            raise RoutingError(
+                "CONTENT_ROLE_UNSUPPORTED",
+                "Only ARTICLE_PLAN and ARTICLE_REVIEWER bind through this seam.",
+            )
+        return self.freeze_model_for_intent(
+            parsed,
+            intent_kind=CONTENT_ROLE_INTENT_KIND,
+            intent_id=f"{job_id}:{parsed.value}",
+            now=now,
+        )
 
     def deprecate_registered_model(
         self,
@@ -3622,8 +4345,22 @@ class SqliteStorage:
                 # exist until the durable intent has been re-proved against the
                 # binding frozen for this execution, inside this same
                 # transaction, from the intent JSON that was actually persisted.
-                self._assert_controlled_provider_provenance_in_transaction(
+                authority = self._assert_controlled_provider_provenance_in_transaction(
                     execution.job_id, intent,
+                )
+                # And provenance is not authorisation. Exactly one human
+                # decision, bound to this job and this model, is consumed here.
+                binding = self.get_frozen_model_binding(
+                    intent_kind=CONTENT_WRITER_INTENT_KIND,
+                    intent_id=authority.binding_intent_id,
+                )
+                assert binding is not None
+                self._consume_content_provider_approval_in_transaction(
+                    execution.job_id,
+                    binding=binding,
+                    max_output_tokens=int(intent["max_output_tokens"]),
+                    max_cost_usd=intent["max_cost_usd"],
+                    current_ts=current_ts,
                 )
             if not paid and (
                 float(intent["max_cost_usd"]) != 0.0

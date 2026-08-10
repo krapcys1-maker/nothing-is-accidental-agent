@@ -58,7 +58,10 @@ from app.research.source_admission import (
 )
 from app.scheduler.worker import WorkerIterationStatus
 from tests.c2_fixtures import seed_c2_research
-from tests.controlled_provider_fixtures import seed_active_article_writer
+from tests.controlled_provider_fixtures import (
+    approve_content_provider_execution,
+    seed_active_article_writer,
+)
 from tests.claim_accounting_fakes import (
     FakeClaimAccountingReviewer,
     ground_every_segment_in_package,
@@ -682,13 +685,21 @@ EXPECTED_OVER_CAP_COST = 0.06
 def _run_paid(storage, settings, account, *, suffix, writer, lease_seconds=120,
               pipeline_lease_seconds=600, seed_registry=True,
               price_overrides=None):
+    model = None
     if seed_registry:
-        seed_active_article_writer(storage, price_overrides=price_overrides)
+        model = seed_active_article_writer(
+            storage, price_overrides=price_overrides,
+        )
     request, lease, owner = _prepare_content(
         storage, account, suffix=suffix,
         mode=ContentExecutionMode.CONTROLLED_PROVIDER_PIPELINE,
         lease_seconds=lease_seconds,
     )
+    if model is not None:
+        approve_content_provider_execution(
+            storage, job_id=request.job_id, model=model,
+            account_id=account.id,
+        )
     summary = run_offline_content_pipeline(
         lease.job, storage=storage, clock=FixedClock(NOW), lease_owner=owner,
         project_root=ROOT, policy=PolicyEngine(settings, storage, FixedClock(NOW)),
@@ -866,10 +877,13 @@ def test_rv4_call_longer_than_lease_never_yields_a_second_writer_call(
         recovery["result"] = storage.release_or_requeue_expired_leases(clock=later)
 
     first = PaidFakeWriter(before_call=expire_and_recover)
-    seed_active_article_writer(storage)
+    model = seed_active_article_writer(storage)
     request, lease, owner = _prepare_content(
         storage, account, suffix="rv4",
         mode=ContentExecutionMode.CONTROLLED_PROVIDER_PIPELINE, lease_seconds=1,
+    )
+    approve_content_provider_execution(
+        storage, job_id=request.job_id, model=model, account_id=account.id,
     )
     try:
         run_offline_content_pipeline(
@@ -923,10 +937,13 @@ def test_rv4_in_flight_paid_attempt_blocks_automatic_recovery_requeue(
     storage, settings, account,
 ):
     """A stamped external effect removes the safe zero-cost requeue path."""
-    seed_active_article_writer(storage)
+    model = seed_active_article_writer(storage)
     request, lease, owner = _prepare_content(
         storage, account, suffix="rv4-barrier",
         mode=ContentExecutionMode.CONTROLLED_PROVIDER_PIPELINE, lease_seconds=1,
+    )
+    approve_content_provider_execution(
+        storage, job_id=request.job_id, model=model, account_id=account.id,
     )
 
     class AbortingWriter(PaidFakeWriter):
@@ -977,6 +994,8 @@ def test_migration_0026_is_forward_only_explicit_and_idempotent(tmp_path, capsys
         migrate_0025_to_0026,
         migrate_0026_to_0027,
         migrate_0027_to_0028,
+        migrate_0028_to_0029,
+        VERIFIED_CATALOGUE_SCHEMA_VERSION,
     )
     from app.storage.repositories import SqliteStorage
 
@@ -1013,6 +1032,8 @@ def test_migration_0026_is_forward_only_explicit_and_idempotent(tmp_path, capsys
     assert provenance.applied_migrations == (
         CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION,
     )
+    catalogue = migrate_0028_to_0029(upgrade)
+    assert catalogue.applied_migrations == (VERIFIED_CATALOGUE_SCHEMA_VERSION,)
 
     opened = SqliteStorage.open(upgrade)
     try:
@@ -1054,8 +1075,11 @@ def test_full_chain_evidence_to_paid_content_decision(
         prompt_version="offline_content_prompt_v1",
         style_guide_version="ARTICLE_STYLE_PROFILE_V1",
     )
-    seed_active_article_writer(storage)
+    model = seed_active_article_writer(storage)
     prepared = storage.prepare_content_job(request, clock=FixedClock(NOW))
+    approve_content_provider_execution(
+        storage, job_id=request.job_id, model=model, account_id=account.id,
+    )
     assert len(prepared.frozen_input.evidence_items) == 3
     owner = "prec5r-full-paid-owner"
     lease = storage.claim_specific_job(

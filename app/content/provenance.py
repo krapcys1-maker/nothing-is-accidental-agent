@@ -38,6 +38,11 @@ from app.model_routing.contracts import (
 # a binding minted for another subsystem can never satisfy a content attempt.
 CONTENT_WRITER_INTENT_KIND = "content_writer"
 
+# The one purpose a durable L1 approval may carry for a paid ARTICLE run.
+# There is deliberately no global "live enabled" switch anywhere in this
+# contract: authorisation is per job, per model, per price, per cap, once.
+CONTENT_APPROVAL_PURPOSE = "CONTROLLED_ARTICLE_EXECUTION"
+
 CONTENT_TYPE_ROLE: dict[ContentType, LogicalModelRole] = {
     ContentType.ARTICLE: LogicalModelRole.ARTICLE_WRITER,
     ContentType.NOTE: LogicalModelRole.NOTE_WRITER,

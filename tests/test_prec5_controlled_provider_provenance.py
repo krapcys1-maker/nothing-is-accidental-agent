@@ -54,7 +54,7 @@ from app.policies.policy_engine import PolicyEngine
 from app.storage.db import (
     CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION,
     MODEL_FAMILY_ROUTING_SCHEMA_VERSION,
-    RUNTIME_SCHEMA_VERSION,
+    canonical_migration_versions,
     database_schema_versions,
     initialize_database,
     migrate_0027_to_0028,
@@ -66,6 +66,7 @@ from tests.claim_accounting_fakes import (
     ground_every_segment_in_package,
 )
 from tests.controlled_provider_fixtures import (
+    approve_content_provider_execution,
     seed_active_article_writer,
     seed_model,
     seed_role_policy,
@@ -163,12 +164,41 @@ def _run(storage, settings, lease, owner, writer, *, clock=None, **kwargs):
     )
 
 
-def _run_paid(storage, settings, account, *, suffix, writer, seed=True, **kwargs):
-    if seed:
-        seed_active_article_writer(storage)
+def _run_paid(storage, settings, account, *, suffix, writer, seed=True,
+              approve=True, **kwargs):
+    model = seed_active_article_writer(storage) if seed else None
     request, lease, owner = _prepare(storage, account, suffix=suffix)
+    if approve:
+        model = model or _active_article_model(storage)
+        if model is not None:
+            approve_content_provider_execution(
+                storage, job_id=request.job_id, model=model,
+                account_id=account.id,
+            )
     summary = _run(storage, settings, lease, owner, writer, **kwargs)
     return request, summary
+
+
+def _active_article_model(storage):
+    """The currently promoted ARTICLE_WRITER entry, as a fixture record."""
+    from tests.controlled_provider_fixtures import SeededModel
+
+    row = storage.conn.execute(
+        "SELECT m.* FROM model_role_activations a "
+        "JOIN model_registry m ON m.registry_id=a.model_registry_id "
+        "WHERE a.role='ARTICLE_WRITER'",
+    ).fetchone()
+    if row is None:
+        return None
+    return SeededModel(
+        registry_id=str(row["registry_id"]), provider=str(row["provider"]),
+        family=ModelFamily(str(row["family"])),
+        logical_version=str(row["logical_version"]),
+        technical_model_id=str(row["technical_model_id"]),
+        pricing_ref=str(row["pricing_ref"]),
+        capability_ref=str(row["current_capability_ref"]),
+        qualification_ref=str(row["current_qualification_ref"]),
+    )
 
 
 def _binding(storage, job_id):
@@ -648,6 +678,9 @@ def test_22_restart_and_rewrite_keep_the_same_model_and_pricing(
     """Both attempts of one execution read one binding, across a promotion."""
     old = seed_active_article_writer(storage, version="1")
     request, lease, owner = _prepare(storage, account, suffix="restart")
+    approve_content_provider_execution(
+        storage, job_id=request.job_id, model=old, account_id=account.id,
+    )
 
     class RewriteThenPassWriter(ProvenanceFakeWriter):
         def write(self, request):
@@ -791,8 +824,11 @@ def test_24b_a_frozen_binding_can_never_be_removed_or_rewritten(
     storage, settings, account,
 ):
     """The binding a paid attempt depends on is append-only in SQL."""
-    seed_active_article_writer(storage)
+    model = seed_active_article_writer(storage)
     request, lease, owner = _prepare(storage, account, suffix="nobinding")
+    approve_content_provider_execution(
+        storage, job_id=request.job_id, model=model, account_id=account.id,
+    )
     summary = _run(storage, settings, lease, owner, ProvenanceFakeWriter())
     assert summary.status is ContentStatus.PENDING_APPROVAL
     binding_id = content_writer_binding_intent_id(request.job_id)
@@ -896,8 +932,11 @@ def test_27b_paid_usage_without_a_settlement_is_refused_by_sql(
     """Booking a paid cost while skipping the settlement is a SQL failure."""
     from app.models import JobExecutionContext, JobKind, ModelUsage
 
-    seed_active_article_writer(storage)
+    model = seed_active_article_writer(storage)
     request, lease, owner = _prepare(storage, account, suffix="nosettle")
+    approve_content_provider_execution(
+        storage, job_id=request.job_id, model=model, account_id=account.id,
+    )
 
     def stop_after_start(name):
         if name == "WRITER_ATTEMPT_STARTED":
@@ -1057,7 +1096,7 @@ def test_28b_a_promotion_between_resolve_and_freeze_cannot_mix_identities(
 def test_migration_0028_is_forward_only_explicit_and_idempotent(tmp_path, capsys):
     import scripts.migrate_schema_0028 as cli
 
-    assert RUNTIME_SCHEMA_VERSION == CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION
+    assert CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION in canonical_migration_versions()
     path = tmp_path / "upgrade-0028.db"
     initialize_database(path, through=MODEL_FAMILY_ROUTING_SCHEMA_VERSION)
     assert database_schema_versions(path)[-1] == MODEL_FAMILY_ROUTING_SCHEMA_VERSION
@@ -1072,6 +1111,9 @@ def test_migration_0028_is_forward_only_explicit_and_idempotent(tmp_path, capsys
     assert migrate_0027_to_0028(path).idempotent is True
     assert cli.main(["--db-path", str(path), "--confirm-0027-to-0028"]) == 0
     assert "idempotent=true" in capsys.readouterr().out
+    from app.storage.db import migrate_0028_to_0029
+
+    migrate_0028_to_0029(path)
 
     opened = SqliteStorage.open(path)
     try:
