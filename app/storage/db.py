@@ -62,6 +62,14 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     CONTENT_PIPELINE_SCHEMA_VERSION,
     CONTENT_DECISION_SCHEMA_VERSION,
     EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION,
+    # 0026 replaces three enforcement triggers.  The new trigger contract and
+    # its ledger row must become durable together so a retry never observes
+    # the 0026 schema while the canonical head still says 0025.
+    CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
+    # 0027 creates the model-routing schema and its seven fail-closed role
+    # policies.  All objects, seed policies and the ledger row share the same
+    # runner-owned transaction.
+    MODEL_FAMILY_ROUTING_SCHEMA_VERSION,
     # 0028 only adds one table and triggers, so the runner transaction is the
     # right atomicity boundary for it.
     CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION,

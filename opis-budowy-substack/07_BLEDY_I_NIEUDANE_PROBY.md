@@ -1,5 +1,9 @@
 # 07 — BŁĘDY I NIEUDANE PRÓBY
 
+## 2026-08-10 — Zielony happy path ukrywał nieatomowy commit
+
+Rehearsal `0020→0030` potrafił zakończyć się poprawnie, choć `0026` i `0027` nie gwarantowały wspólnej trwałości schema i ledgeru. Kontrolowany błąd w nowym teście pokazał wymagany kontrakt dopiero po poprawnej klasyfikacji: pełny rollback, jednoznaczny reopen i bezpieczny retry. Pierwsza sonda PRE tej fali miała też błąd parsera PowerShell i została odrzucona przed wykonaniem; poprawiony odczyt read-only zastąpił ją jako dowód.
+
 > **Stan bieżący LA-02 (2026-07-17):** niezależny review zatwierdził naprawę jako `APPROVE WITH MINOR/P2`; root cause jest `CLOSED`. P2-2 false STOP pozostaje otwartą obserwacją proceduralną, nie blockerem checkpointu. Druga live próba nadal nie ma autoryzacji.
 
 > **LA-01-R1 (2026-07-17):** zielone 1127/1127 pierwszej LA-01 nie objęło kilku granic zaufania. Review wykazał obejście profilu cenowego, fałszywy sukces bez raportu, obcy job/result, surowy wyjątek w raporcie, fałszywe `provider_request_started=false`, placeholder CLI, brak fsync i brak fencing bare workera. Pierwsze testy naprawy ujawniły też konflikt `now`+`clock`; pierwsza pełna regresja zatrzymała się na 1149/1151 przez stare oczekiwania. Końcowa kontrpróba kompozycji znalazła jeszcze bezpieczną, lecz całkowitą odmowę: enqueue nie zapisywał sesji wymaganej przez realny wrapper. Wspólny deterministyczny helper oraz test pełnej ścieżki enqueue→wrapper bez tworzenia joba domknęły tę lukę. Po naprawie: **1151/1151**, partycje **275+282+291+303**, bez API/sieci/kosztu. Finalny review wydał `APPROVE WITH MINOR/P2`; pozostał wyłącznie nieblokujący fallback sanitizera. To nie jest live acceptance.

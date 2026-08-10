@@ -1,5 +1,13 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-10 — Nieatomowy fallback migracji 0026/0027
+
+- **Finding blokujący rehearsal:** happy path `0020→0030` działał, ale analiza runnera ujawniła, że `0026` i `0027` trafiają do fallbacku `executescript → osobny ledger insert → commit`. Awaria po zmianie schema mogła pozostawić head o jeden krok wstecz.
+- **Root cause:** brak obu wersji w `_RUNNER_TRANSACTIONAL_MIGRATIONS`; ich SQL nie miał własnej transakcji ani self-ledgeringu.
+- **Naprawa:** istniejący runner obejmuje teraz SQL i ledger jedną transakcją. Dwa failpointy potwierdziły pełny rollback, jednoznaczny reopen i skuteczny retry; świeży rehearsal zakończył się bez mismatchów.
+- **Nieudane próby diagnostyczne:** pierwsza komenda PRE miała błąd parsera PowerShell spowodowany pustym elementem pipeline; późniejsza pomocnicza sonda nazw migracji miała błędne cudzysłowy wokół wyrażenia `rg`. W obu przypadkach parser zatrzymał komendę przed wykonaniem, więc nie powstał zapis ani dowód. Poprawione odczyty zastąpiły je w weryfikacji.
+- **Pozostawione jawnie:** pełna suita nie została uruchomiona; P2-1…P2-6 i P2-DOC nie zostały naprawione w tej fali.
+
 ## Formalny wynik WAVE 1A po naprawach — 2026-07-16
 
 - **Stan implementera:** po `W1A-R4-01` zadeklarowano `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.

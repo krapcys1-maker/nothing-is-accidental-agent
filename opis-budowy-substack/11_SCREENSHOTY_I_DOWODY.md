@@ -1,5 +1,7 @@
 # 11 — SCREENSHOTY I DOWODY
 
+> **2026-08-10 — MIGRATION TRANSACTIONALITY REPAIR 0026/0027:** `SCREENSHOT REQUIRED`. Browser był zabroniony. Bezpieczny kadr powinien pokazać failpoint → wspólny rollback schema/ledger → reopen → retry dla obu migracji oraz końcowe `0030/30`, integrity `ok`, FK `0`, preserve-state mismatch `0` i retention acceptance `0`. Dowód tekstowy: 4/4 nowych i 74/74 affected, koszt zero, produkcja i styl nietknięte.
+
 ## Cel pliku
 Indeks screenshotów i dowodów. Każdy dowód: nazwa, data, opis, powiązany etap, informacja czy nadaje się do artykułu. Pliki graficzne trzymamy w `screenshots/` (obok tego pliku) oraz w `docs/screenshots/`. Tu jest indeks + lista **braków do zrobienia**.
 

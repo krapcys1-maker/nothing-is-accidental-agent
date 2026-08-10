@@ -1,5 +1,7 @@
 # 08 — INTERWENCJE CZŁOWIEKA
 
+> **2026-08-10 — wąska autoryzacja naprawy migracji:** właściciel zezwolił tylko na naprawę atomowości `0026`/`0027`, lokalne failpointy i świeży rehearsal kopii produkcji. Produkcja, durable retention acceptance, realne API/qualification, C5, publikacja, koszty, Git i wszystkie P2 pozostały poza zakresem. Implementer może przekazać wyłącznie kandydata do niezależnego review.
+
 > **2026-07-17 — checkpoint LA-02:** właściciel przekazał `APPROVE WITH MINOR/P2` i pozwolił wyłącznie na P2 cleanup, jeden selektywny commit oraz push bieżącej gałęzi. Jednocześnie utrzymał zakaz live/API/SDK/providera/browsera/publikacji/kosztu, zmiany gate/flags/DB, nowego enqueue, PR i merge. P2-2 pozostaje otwartą obserwacją; druga próba nie jest autoryzowana.
 
 > **2026-07-17 — decyzja LA-01-R1:** właściciel przekazał werdykt niezależnego review `REJECTED — MAJOR` i autoryzował jedną pełną falę napraw P1-01…P1-06/P2-01…P2-04. Jednocześnie zabronił realnego API/SDK, sieci, browsera, publikacji, kosztu, produkcyjnych zapisów, Windows Tasks i operacji Git. Wynik kandydacki: 1151/1151 offline; realny controlled acceptance pozostaje niewykonany.

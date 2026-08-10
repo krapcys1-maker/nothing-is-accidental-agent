@@ -1,5 +1,11 @@
 # HUMAN_INTERVENTIONS
 
+## [2026-08-10] Właściciel autoryzował wyłącznie naprawę transakcyjności 0026/0027
+
+- **Decyzja człowieka:** naprawić potwierdzony rozjazd schema/ledger dla `0026_controlled_provider_content` i `0027_model_family_routing`, wykonać lokalne failpoint/reopen/retry oraz świeży rehearsal kopii produkcji `0020→0030`.
+- **Granice:** bez migracji produkcji, durable retention acceptance, realnego API i kwalifikacji, C5, publikacji, kosztu oraz operacji Git. P2-1…P2-6 i P2-DOC mają pozostać nietknięte.
+- **Efekt implementera:** minimalna klasyfikacja w istniejącym runnerze; status wyłącznie kandydacki, bez samodzielnego `APPROVE` lub zamknięcia fali.
+
 ## [2026-07-16] Właściciel formalnie zamknął WAVE 1A po niezależnym `APPROVE WITH MINOR/P2`
 
 - **Stan wejściowy:** implementer po systemowej naprawie `W1A-R4-01` zadeklarował `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; nie miał uprawnienia do zamknięcia WAVE.

@@ -1,5 +1,7 @@
 # 09 — KOSZTY
 
+> **2026-08-10 — MIGRATION TRANSACTIONALITY REPAIR 0026/0027:** koszt `0.000000 USD`. Testy używały wyłącznie nowych lokalnych temp DB; nie wykonano realnego API, kwalifikacji, C5, publikacji ani produkcyjnej migracji.
+
 ## Cel pliku
 Pełny obraz kosztów: API, web search, grafiki, koszt jednego artykułu, koszt jednego Research Card, koszt jednego subskrybenta, czas człowieka, koszt tygodnia i całego eksperymentu. Źródło prawdy liczbowej: tabela `model_usage` w bazie + `docs/COSTS.csv`. Tu jest wersja narracyjna + agregaty.
 
