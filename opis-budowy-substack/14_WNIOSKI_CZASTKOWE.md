@@ -1,5 +1,13 @@
 # 14 — WNIOSKI CZĄSTKOWE
 
+## 2026-08-10 — Po produkcyjnej migracji 0020→0030
+
+- Merge kodu i zgoda na zapis produkcji są dwiema różnymi decyzjami.
+- Kopia PRE jest częścią kontraktu wykonania, nie dodatkiem „na wszelki wypadek”.
+- Dziesięć jawnych kroków pozwala zatrzymać się na pierwszym błędzie bez ukrytego retry.
+- Head `0030` nie wystarcza: trzeba osobno udowodnić integrity, FK i zachowanie wcześniejszych danych.
+- Utworzenie tabeli acceptance nie może tworzyć samej zgody; zero wierszy jest poprawnym stanem fail-closed.
+
 ## 2026-08-10 — Po naprawie transakcyjności 0026/0027
 
 - Zielony happy path nie dowodzi zachowania po przerwaniu między schema a ledgerem.

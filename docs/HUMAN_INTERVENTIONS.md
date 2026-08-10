@@ -1,5 +1,11 @@
 # HUMAN_INTERVENTIONS
 
+## [2026-08-10] Właściciel autoryzował produkcyjną migrację 0020→0030
+
+- **Decyzja człowieka:** po merge i post-merge verification naprawy transakcyjności właściciel jawnie zezwolił na zapisową migrację `data/agent.db` z `0020` do `0030`.
+- **Granica decyzji:** autoryzacja nie obejmuje durable Fable retention acceptance, realnego API, real qualification, C5, publikacji ani napraw P2/MINOR.
+- **Efekt:** drabina wykonana dokładnie raz, POST `0030/30`, preserve-state mismatch `0`, retention acceptance `0`, koszt `0.000000 USD`.
+
 ## [2026-08-10] Właściciel autoryzował wyłącznie naprawę transakcyjności 0026/0027
 
 - **Decyzja człowieka:** naprawić potwierdzony rozjazd schema/ledger dla `0026_controlled_provider_content` i `0027_model_family_routing`, wykonać lokalne failpoint/reopen/retry oraz świeży rehearsal kopii produkcji `0020→0030`.

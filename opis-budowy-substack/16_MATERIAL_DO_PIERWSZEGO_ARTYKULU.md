@@ -1,5 +1,11 @@
 # 16 — MATERIAŁ DO PIERWSZEGO ARTYKUŁU
 
+## 2026-08-10 — Dziesięć małych kroków do prawdziwej bazy
+
+Kod był zatwierdzony, zmergowany i sprawdzony po merge, ale produkcja nadal stała na `0020`. Dopiero osobna decyzja człowieka otworzyła granicę zapisu. Kopia PRE, dziesięć osobnych potwierdzeń, brak retry i porównanie 2390 komórek zmieniły „migracja przeszła” w dowód, że stary stan nie zniknął po drodze.
+
+Zdanie do artykułu: „Najbardziej dojrzałe słowo w automatyzacji nie brzmi »uruchom«. Brzmi »zatrzymaj się po pierwszym błędzie«.”
+
 ## 2026-08-10 — Migracja, która dochodzi do końca, ale nie umie bezpiecznie przerwać
 
 Próba na kopii produkcji zakończyła się sukcesem i właśnie dlatego łatwo byłoby przeoczyć problem. Dwie migracje zapisywały schema i kanoniczny ledger w osobnych krokach trwałości. Dopiero kontrolowany błąd pomiędzy nimi odpowiedział na ważniejsze pytanie: co system powie po ponownym otwarciu? Po naprawie odpowiedź jest jednoznaczna — albo oba fakty istnieją, albo nie istnieje żaden.

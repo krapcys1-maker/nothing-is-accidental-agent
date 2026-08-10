@@ -1,5 +1,15 @@
 # BUILD_LOG
 
+## [2026-08-10 16:21] Etap 3 — produkcyjna migracja schematu 0020→0030
+
+- **Autoryzacja:** właściciel jawnie zezwolił na migrację `data/agent.db`; nie zezwolił przez to na retention acceptance, API, qualification, C5 ani publikację.
+- **PRE:** clean `main=a2e3d548d521ab8eb086231989dc5828ab1cb24c`; produkcja `0020/20`, SHA `91f593923f3ca36cd8d2c816219e551b0ff231bc3149d6d584b025465f656a1f`, `700416 B`, integrity `ok`, FK `0`.
+- **Backup:** `data/backups/agent-pre-0030-20260810-161903.db`, byte-identical z PRE, Git-ignored.
+- **Wykonanie:** 10 osobnych modułów `python -m scripts.migrate_schema_0021`…`0030`, każdy z właściwą flagą confirm, każdy dokładnie raz, wszystkie exit `0`, bez retry.
+- **POST:** `0030_anthropic_provider_contract`, 30 migracji, SHA `33149e0cd03a3479a6faadcecd2b61d90bee52067bdbe9b105e624fad8539e89`, `1392640 B`, integrity `ok`, FK `0`, WAL/SHM/journal brak.
+- **Preserve-state:** 32/32 tabele PRE, 211 wierszy i 2390 komórek porównane, mismatch `0`. `fable_retention_acceptances=0`; pozostałe authority counts `0`; `model_role_policies=7`.
+- **Koszt i granice:** `0.000000 USD`; zero API, qualification, C5 i publikacji. Bez stage/commita/pushu/PR.
+
 ## [2026-08-10 14:58] Etap 3 — MIGRATION TRANSACTIONALITY REPAIR 0026/0027
 
 - **Stan wejściowy:** czysty `main` na `4c00b161876c81a344ce2f6534f2cbf6b7620a8d`, ahead/behind `0/0`; produkcja immutable/query-only na `0020/20`, SHA `91f593923f3ca36cd8d2c816219e551b0ff231bc3149d6d584b025465f656a1f`; styl SHA `0b05cefa6701e6447c44810b686828a83c19ca7ffb29066778a13c24207acb1d`.

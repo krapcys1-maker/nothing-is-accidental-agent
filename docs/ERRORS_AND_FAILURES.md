@@ -1,5 +1,12 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-10 — Nieobsługiwany `Copy-Item -NoClobber` przed produkcyjną migracją
+
+- **Co nie zadziałało:** pierwsza próba utworzenia kopii bezpieczeństwa użyła parametru PowerShell `Copy-Item -NoClobber`, którego lokalna wersja cmdletu nie obsługuje.
+- **Wpływ:** parser/binder zatrzymał polecenie przed utworzeniem pliku; produkcyjna baza nie została zmieniona, migracja nie rozpoczęła się.
+- **Bezpieczne rozwiązanie:** utworzono nowy, unikalny target przez `.NET File.Copy(source, destination, overwrite:false)`, a następnie potwierdzono identyczny SHA i size. Nie nadpisano żadnego pliku.
+- **Dalszy przebieg:** wszystkie 10 właściwych kroków migracji zakończyło się exit `0`; nie było retry ani częściowej awarii migracji.
+
 ## 2026-08-10 — Nieatomowy fallback migracji 0026/0027
 
 - **Finding blokujący rehearsal:** happy path `0020→0030` działał, ale analiza runnera ujawniła, że `0026` i `0027` trafiają do fallbacku `executescript → osobny ledger insert → commit`. Awaria po zmianie schema mogła pozostawić head o jeden krok wstecz.

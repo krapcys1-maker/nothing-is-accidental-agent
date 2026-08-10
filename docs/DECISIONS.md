@@ -1,5 +1,15 @@
 # DECISIONS (Architecture Decision Log)
 
+### ADR-130: Osobno autoryzowana produkcyjna migracja schematu 0020→0030
+
+- **Data:** 2026-08-10
+- **Status:** ACCEPTED / wykonane i zweryfikowane produkcyjnie.
+- **Kto podjął decyzję:** właściciel po formalnym zamknięciu, merge i post-merge verification PR #34 jawnie autoryzował migrację `data/agent.db` z `0020` do `0030`. Operator nie rozszerzył tej zgody na retention acceptance, API, qualification, C5 ani publikację.
+- **Pre-flight:** clean `main=a2e3d548d521ab8eb086231989dc5828ab1cb24c`, produkcja immutable/query-only `0020/20`, integrity `ok`, FK `0`, SHA `91f593923f3ca36cd8d2c816219e551b0ff231bc3149d6d584b025465f656a1f`, brak procesów Python tego workspace.
+- **Decyzja wykonawcza:** zachować byte-identical kopię PRE w ignorowanym `data/backups/`, następnie wykonać dokładnie raz kroki 0021…0030 przez zweryfikowaną formę modułową `python -m scripts.migrate_schema_00XX` i osobne flagi confirm. Zero automatycznego retry.
+- **Wynik:** wszystkie 10 kroków exit `0`; POST `0030/30`, integrity `ok`, FK `0`, 62 tabele. Wszystkie 32 tabele PRE, 211 wierszy i 2390 komórek zachowane; mismatch `0`. Retention acceptance i authority counts `0`; bootstrap role policies `7`.
+- **Granice:** sama obecność schematu `0030` nie jest durable owner acceptance, real qualification, C5 ani live readiness. P2-1…P2-6, P2-DOC i MINOR-1/2 pozostają otwarte.
+
 ### ADR-129: 0026 i 0027 używają istniejącej transakcji migration runnera
 
 - **Data:** 2026-08-10

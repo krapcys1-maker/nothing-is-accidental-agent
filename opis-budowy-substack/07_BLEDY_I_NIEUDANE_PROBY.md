@@ -1,5 +1,9 @@
 # 07 — BŁĘDY I NIEUDANE PRÓBY
 
+## 2026-08-10 — Kopia bezpieczeństwa zatrzymana przed zapisem
+
+Pierwsze polecenie backupu użyło nieobsługiwanego `Copy-Item -NoClobber`. PowerShell odmówił jeszcze przed utworzeniem pliku, więc produkcja pozostała nietknięta. Zamiast usuwać lub nadpisywać cokolwiek, wybrano nową nazwę i `.NET File.Copy(..., overwrite:false)`, po czym porównano SHA. To drobny błąd operatorski, ale ważna ilustracja: failure przed migracją powinien być tani, widoczny i odwracalny.
+
 ## 2026-08-10 — Zielony happy path ukrywał nieatomowy commit
 
 Rehearsal `0020→0030` potrafił zakończyć się poprawnie, choć `0026` i `0027` nie gwarantowały wspólnej trwałości schema i ledgeru. Kontrolowany błąd w nowym teście pokazał wymagany kontrakt dopiero po poprawnej klasyfikacji: pełny rollback, jednoznaczny reopen i bezpieczny retry. Pierwsza sonda PRE tej fali miała też błąd parsera PowerShell i została odrzucona przed wykonaniem; poprawiony odczyt read-only zastąpił ją jako dowód.
