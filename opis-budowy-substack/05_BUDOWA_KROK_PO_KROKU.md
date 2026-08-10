@@ -1,5 +1,7 @@
 # 05 — BUDOWA KROK PO KROKU
 
+> **Krok 2026-08-10 — produkcja 0020→0030:** dopiero po niezależnym review, freeze, merge, post-merge verification i osobnej zgodzie właściciela wykonaliśmy migrację prawdziwej bazy. Najpierw powstała byte-identical kopia PRE, potem dziesięć pojedynczych modułów z osobnymi flagami confirm. Każdy krok przeszedł raz; nie było retry. Reopen pokazał `0030/30`, integrity `ok`, FK `0`, zachowane 211 wcześniejszych wierszy i pustą tabelę retention acceptance. Sam schemat nie oznacza C5 ani live readiness.
+
 > **Krok 2026-08-10 — atomowość migracji 0026/0027:** poprzedni rehearsal doszedł do 0030, ale udowodnił, że sam zielony happy path nie wystarcza. Dwie migracje omijały transakcyjny runner, więc schema mogło przetrwać bez wpisu w ledgerze. Najmniejsza naprawa dopisała je do istniejącej klasyfikacji; failpointy wycofały schema i ledger razem, reopen pokazał poprzedni head, a retry zakończył migrację poprawnie. Nowa kopia produkcji przeszła pełną drabinę z zerem mismatchów. Status pozostaje kandydacki; produkcji nie migrowano.
 
 > **Stan bieżący LA-02 (2026-07-17):** niezależny review wydał `APPROVE WITH MINOR/P2`; root cause `PROCESSES_PRESENT` jest zamknięty, a checkpoint obejmuje 1174/1174 offline i exact-once `284+284+298+308`. P2-2 false STOP pozostaje udokumentowaną obserwacją. Provider request nie został wykonany, job nadal `QUEUED/attempts=0`, gate `False`, flagi fail-closed, a druga próba nie jest autoryzowana. Etap 1 pozostaje otwarty do nowej decyzji właściciela po standalone quiescence check z tego samego launchera.

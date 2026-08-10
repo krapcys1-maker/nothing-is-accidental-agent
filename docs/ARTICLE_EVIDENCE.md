@@ -1,5 +1,12 @@
 # ARTICLE_EVIDENCE
 
+## Sekcja B — 2026-08-10: „Migracja produkcji zaczyna się od możliwości odwrotu”
+
+- **Fakt:** zatwierdzony kod nie został od razu potraktowany jako pozwolenie na zapis. Osobna decyzja właściciela poprzedziła produkcyjną drabinę, a przed pierwszym krokiem powstała byte-identical kopia PRE.
+- **Wykonanie:** dziesięć małych, jawnie potwierdzonych modułów zamiast jednego ukrytego skoku; zero retry. Po reopen system udowodnił nie tylko head `0030`, ale też zachowanie 211 wcześniejszych wierszy i 2390 komórek.
+- **Granica:** migracja utworzyła miejsce na retention evidence, lecz nie sfałszowała zgody właściciela — tabela pozostała pusta.
+- **Zdanie robocze:** „Najbezpieczniejsza migracja nie zaczyna się od pierwszego ALTER TABLE. Zaczyna się od kopii, granic zgody i planu zatrzymania po pierwszym błędzie.”
+
 ## Sekcja B — 2026-08-10: „Schema i ledger muszą mówić prawdę razem”
 
 - **Fakt:** migracja może przejść cały happy path, a mimo to mieć niebezpieczne okno awarii: schema jest już trwałe, lecz kanoniczny ledger nadal wskazuje poprzedni head.

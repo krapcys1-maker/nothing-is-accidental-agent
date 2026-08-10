@@ -1,5 +1,12 @@
 # SCREENSHOT_INDEX
 
+## 2026-08-10 — Produkcyjna migracja 0020→0030
+
+- **Status:** `SCREENSHOT REQUIRED`; nie wykonano obrazu zawierającego prywatne ścieżki lub dane produkcyjne.
+- **Co ma pokazywać:** zanonimizowany PRE `0020/20` → dziesięć jawnie potwierdzonych kroków → POST `0030/30`, integrity `ok`, FK `0`, preserve-state `211 rows / 2390 cells / 0 mismatches`, retention acceptance `0`.
+- **Dowód tekstowy:** backup byte-identical, wszystkie kroki exit `0`, produkcja po reopen spójna, styl niezmieniony, koszt zero.
+- **Warunki bezpieczeństwa:** bez `.env`, danych biznesowych, pełnych ścieżek, raw DB, hashów prywatnych artefaktów i sugestii C5/live readiness.
+
 ## 2026-08-10 — MIGRATION TRANSACTIONALITY REPAIR 0026/0027
 
 - **Status:** `SCREENSHOT REQUIRED`; browser był zabroniony i nie powstał nowy obraz.

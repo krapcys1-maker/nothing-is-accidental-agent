@@ -1,5 +1,7 @@
 # 08 — INTERWENCJE CZŁOWIEKA
 
+> **2026-08-10 — osobna zgoda na zapis produkcyjny:** właściciel autoryzował dokładnie migrację `data/agent.db` z `0020` do `0030`. Nie była to zgoda na retention acceptance, API, qualification, C5 ani publikację. Operator wykonał drabinę bez retry; acceptance count pozostał zerowy.
+
 > **2026-08-10 — wąska autoryzacja naprawy migracji:** właściciel zezwolił tylko na naprawę atomowości `0026`/`0027`, lokalne failpointy i świeży rehearsal kopii produkcji. Produkcja, durable retention acceptance, realne API/qualification, C5, publikacja, koszty, Git i wszystkie P2 pozostały poza zakresem. Implementer może przekazać wyłącznie kandydata do niezależnego review.
 
 > **2026-07-17 — checkpoint LA-02:** właściciel przekazał `APPROVE WITH MINOR/P2` i pozwolił wyłącznie na P2 cleanup, jeden selektywny commit oraz push bieżącej gałęzi. Jednocześnie utrzymał zakaz live/API/SDK/providera/browsera/publikacji/kosztu, zmiany gate/flags/DB, nowego enqueue, PR i merge. P2-2 pozostaje otwartą obserwacją; druga próba nie jest autoryzowana.
