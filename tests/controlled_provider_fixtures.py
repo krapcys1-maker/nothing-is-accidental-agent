@@ -199,3 +199,34 @@ def seed_active_article_writer(
     )
     storage.promote_best_model(LogicalModelRole.ARTICLE_WRITER, reason=reason)
     return model
+
+
+def approve_content_provider_execution(
+    storage,
+    *,
+    job_id: str,
+    model: SeededModel,
+    account_id: str = "nothing_is_accidental",
+    role: str = "ARTICLE_WRITER",
+    max_output_tokens: int = 8192,
+    cap_usd: str = "1.000000",
+    approved_by: str = "test-owner",
+    approved_at: str = "2026-01-01T00:00:00.000000+00:00",
+    expires_at: str = "2099-01-01T00:00:00.000000+00:00",
+) -> str:
+    """One durable single-use L1 authorisation for one paid ARTICLE job."""
+    return storage.record_content_provider_approval(
+        approval_ref=f"approval-{job_id}",
+        job_id=job_id,
+        account_id=account_id,
+        role=role,
+        model_registry_id=model.registry_id,
+        provider=model.provider,
+        technical_model_id=model.technical_model_id,
+        pricing_ref=model.pricing_ref,
+        max_output_tokens=max_output_tokens,
+        cap_usd=cap_usd,
+        approved_by=approved_by,
+        approved_at=approved_at,
+        expires_at=expires_at,
+    )

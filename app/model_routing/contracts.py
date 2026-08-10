@@ -94,6 +94,12 @@ class RoutingError(RuntimeError):
         self.detail = detail
 
 
+# LOCAL_FIXTURE is offline regression evidence.  CONTROLLED_LIVE is the one
+# separately approved bootstrap request a real model must pass before it can be
+# activated; the two are never interchangeable and are never both implied by
+# the mere existence of a published model ID.
+QUALIFICATION_EVIDENCE_SOURCES = ("LOCAL_FIXTURE", "CONTROLLED_LIVE")
+
 _VERSION_RE = re.compile(r"^[0-9]+(?:\.[0-9]+){0,7}$")
 _MAX_VERSION_COMPONENT = 999_999_999
 _PRICE_QUANTUM = Decimal("0.000001")
@@ -230,6 +236,13 @@ class PriceDimensions:
 
 @dataclass(frozen=True)
 class ModelPricingProfile:
+    """One approved price list, optionally bounded by a validity window.
+
+    A promotional rate is a real price for a real period, not a permanent one.
+    ``effective_until`` makes that period part of the profile's own identity, so
+    an expired promotion cannot silently keep pricing new intents.
+    """
+
     pricing_ref: str
     provider: str
     technical_model_id: str
@@ -238,6 +251,8 @@ class ModelPricingProfile:
     unit: str
     prices: PriceDimensions | None
     verified_at: str | None = None
+    effective_from: str | None = None
+    effective_until: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "pricing_ref", _text(self.pricing_ref, field="pricing_ref"))
@@ -249,17 +264,53 @@ class ModelPricingProfile:
         )
         object.__setattr__(self, "currency", _text(self.currency, field="currency"))
         object.__setattr__(self, "unit", _text(self.unit, field="unit"))
+        object.__setattr__(
+            self,
+            "effective_from",
+            _text(self.effective_from, field="effective_from", allow_none=True),
+        )
+        object.__setattr__(
+            self,
+            "effective_until",
+            _text(self.effective_until, field="effective_until", allow_none=True),
+        )
         if self.verification_state is PricingVerificationState.VERIFIED:
             if self.prices is None or not self.verified_at:
                 raise RoutingError(
                     "MODEL_PRICING_INVALID",
                     "Verified pricing requires all dimensions and verified_at.",
                 )
-        elif self.prices is not None or self.verified_at is not None:
+        elif (
+            self.prices is not None
+            or self.verified_at is not None
+            or self.effective_from is not None
+            or self.effective_until is not None
+        ):
             raise RoutingError(
                 "MODEL_PRICING_INVALID",
-                "Unverified pricing cannot carry verified dimensions or timestamp.",
+                "Unverified pricing cannot carry verified dimensions, timestamp "
+                "or a validity window.",
             )
+        if (
+            self.effective_from is not None
+            and self.effective_until is not None
+            and self.effective_until <= self.effective_from
+        ):
+            raise RoutingError(
+                "MODEL_PRICING_VALIDITY_INVALID",
+                "Pricing validity must end strictly after it starts.",
+            )
+
+    def is_effective_at(self, moment: str) -> bool:
+        """Fail closed: an unparsable or out-of-window moment is never priced."""
+        if not isinstance(moment, str) or not moment.strip():
+            return False
+        instant = moment.strip()
+        if self.effective_from is not None and instant < self.effective_from:
+            return False
+        if self.effective_until is not None and instant > self.effective_until:
+            return False
+        return True
 
     def payload(self) -> dict[str, Any]:
         return {
@@ -271,6 +322,8 @@ class ModelPricingProfile:
             "unit": self.unit,
             "prices": None if self.prices is None else self.prices.as_storage_mapping(),
             "verified_at": self.verified_at,
+            "effective_from": self.effective_from,
+            "effective_until": self.effective_until,
         }
 
     def contract_fingerprint(self) -> str:
@@ -397,10 +450,10 @@ class QualificationReport:
             object.__setattr__(
                 self, field_name, _text(getattr(self, field_name), field=field_name)
             )
-        if self.source != "LOCAL_FIXTURE":
+        if self.source not in QUALIFICATION_EVIDENCE_SOURCES:
             raise RoutingError(
                 "QUALIFICATION_SOURCE_FORBIDDEN",
-                "This offline wave accepts only LOCAL_FIXTURE qualification evidence.",
+                "Qualification evidence must be LOCAL_FIXTURE or CONTROLLED_LIVE.",
             )
         if self.state is QualificationState.UNQUALIFIED:
             raise RoutingError(

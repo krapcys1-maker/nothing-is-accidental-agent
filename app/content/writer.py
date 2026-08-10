@@ -405,13 +405,33 @@ class ProviderReadyContentWriter:
                 "Provider caller returned an unsupported response contract.",
             )
         if raw.api_model_id != request.intent.route.api_model_id:
+            # A response naming another model is not a schema problem to be
+            # retried; it means the request that ran was not the request that
+            # was authorised, and a charge may already exist for it. Marking it
+            # uncertain routes the execution to NEEDS_VERIFICATION instead of a
+            # clean failure, and never to a second model.
             return self._failure(
                 request,
-                WriterFailureKind.SCHEMA_VALIDATION,
-                "Provider response model disagrees with the durable route.",
+                WriterFailureKind.UNCERTAIN_STATE,
+                "Provider response model disagrees with the durable route; "
+                "runtime fallback is forbidden.",
                 usage=raw.usage,
                 stop_reason=raw.stop_reason,
                 provider_request_id=raw.provider_request_id,
+                uncertain=True,
+            )
+        if raw.usage.cache_read_tokens or raw.usage.cache_write_tokens:
+            # Prompt caching is disabled for controlled execution. Cache usage
+            # therefore describes a request this project did not make, and its
+            # real cost cannot be derived from the frozen contract.
+            return self._failure(
+                request,
+                WriterFailureKind.UNCERTAIN_STATE,
+                "Provider reported cache usage while prompt caching is disabled.",
+                usage=raw.usage,
+                stop_reason=raw.stop_reason,
+                provider_request_id=raw.provider_request_id,
+                uncertain=True,
             )
         if raw.usage.estimated_cost_usd != 0.0:
             return self._failure(

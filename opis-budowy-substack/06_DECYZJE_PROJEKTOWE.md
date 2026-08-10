@@ -511,3 +511,27 @@ Do tej fali paid content wystarczyło, że cztery pola nie były napisem `UNVERI
 Druga rzecz jest mniej oczywista. Koszt paid content brał się z liczby, którą zwracał sam wywoływany komponent. Nawet przy uczciwym providerze to jest zła architektura: rachunek wystawia strona rozliczana. Teraz tokeny raportuje provider, a cenę ustala wyłącznie zatwierdzony profil wskazany przez zamrożony binding — i to nie „profil o takich samych liczbach", tylko dokładnie ten, po `profile_fingerprint`. Dwa cenniki o identycznych stawkach to nadal dwa autorytety.
 
 Trzecia rzecz to porządek w nazwach. Zgłoszona luka dotyczyła tabeli `content_writer_intents_v3`. Taka tabela nie istnieje w runtime — to przejściowa nazwa w środku migracji `0023`, która zaraz potem zostaje przemianowana. Inwariant trzeba było postawić tam, gdzie naprawdę leży trwały stan, a nie tam, gdzie wskazywała nazwa z raportu. Warto to zapisać, bo pokazuje różnicę między przyjęciem cudzego ustalenia a sprawdzeniem go w kodzie.
+
+## 2026-08-10 — ADR-126: znać cennik to nie to samo, co wiedzieć, że model umie to zrobić
+
+Właściciel sprawdził w oficjalnych materiałach identyfikatory i ceny trzech modeli. To realna wiedza i trafia do systemu jako dane. Kusiło, żeby uznać sprawę za zamkniętą: skoro model istnieje, ma ID i ma cenę, to przecież można go użyć.
+
+Nie można — i to jest sedno tej fali. Katalog odpowiada na pytanie „co dostawca publikuje". Kwalifikacja odpowiada na zupełnie inne: „czy ten model zwraca strukturę, której ten konkretny pipeline wymaga". Drugiego pytania nie rozstrzyga dokumentacja, cena ani dostępność. Rozstrzyga je jedno prawdziwe zapytanie — czyli dokładnie to, czego ta fala nie wolno było wykonać. Więc zbudowana została droga, a nie skrót: jednorazowa zgoda wiążąca konkretną rolę, konkretny wpis rejestru, konkretny cennik i konkretny limit, jeden call bez retry i bez fallbacku, własny trwały koszt, i dopiero potem `PASS`. Baza pilnuje tego niezależnie od kodu: modelowi z owner-verified evidence nie da się wpisać `PASS` bez skonsumowanej zgody.
+
+Drobiazg, który okazał się nie drobiazgiem: skąd wziąć deklarację możliwości modelu. Można było przepisać liczby z dokumentacji. Zamiast tego zapisujemy budżet, który model faktycznie zaakceptował w tej jednej próbie. Mniej imponujące, za to prawdziwe.
+
+Trzecia rzecz to data ważności. Sonnet 5 ma teraz cenę promocyjną z konkretnym końcem. Cennik bez daty wygaśnięcia po cichu stałby się wieczny i pewnego dnia rozliczalibyśmy nowe zlecenia po nieaktualnej stawce. Teraz profil ma okno, a baza odmawia zamrożenia zlecenia na cenniku, który już nie obowiązuje. Zlecenia zamrożone wcześniej zostają przy swojej cenie — bo one już zostały zatwierdzone przy tamtej.
+
+Na koniec liczba, o którą naprawdę chodzi właścicielowi: najgorszy przypadek jednego kontrolowanego artykułu to `0,938880 USD` przy pełnym wykorzystaniu wszystkich limitów, z czego samo wykonanie to `0,496000`, a reszta to jednorazowe kwalifikacje. To nie jest kwota wzięta z sufitu — wynika z limitów tokenów, które repozytorium faktycznie egzekwuje, i ze stawek, które właściciel sprawdził.
+
+## 2026-08-10 — ADR-127: trzy pytania, które łatwo pomylić
+
+Recenzent znalazł trzy dziury i wszystkie brały się z jednego zamieszania pojęciowego. Zgoda właściciela, fakt wykonania requestu i posiadanie wyniku to trzy różne rzeczy, a kod traktował je jak jedną.
+
+Najpoważniejsza była pierwsza. Zgoda była „zużywana", po czym program dzwonił do dostawcy — i dopiero odpowiedź powodowała zapisanie czegokolwiek. Jeśli połączenie się zawiesiło, w bazie zostawała zużyta zgoda i nic więcej. Dostawca mógł wykonać pracę i wystawić rachunek, a system nie wiedział nawet, że próbował. Teraz kolejność jest odwrócona: najpierw trwały zapis „ten request właśnie wychodzi", dopiero potem sam request. Po awarii widać, że coś mogło się wydarzyć — i to jest cała różnica między audytem a zgadywaniem.
+
+Przy okazji drobiazg, który uważam za ważniejszy niż wygląda: kiedy nie wiemy, ile kosztował request, wpisujemy „nie wiadomo", a nie „zero". Zero jest twierdzeniem. Puste pole jest przyznaniem się do niewiedzy. Kolumny musiały zacząć przyjmować pustkę, żeby dało się być uczciwym.
+
+Druga dziura: skoro zgoda została zużyta, baza uznawała, że model jest sprawdzony. Ale zużyta zgoda mówi tylko tyle, że wolno było zacząć. Teraz wynik musi wskazywać konkretne, zakończone i rozliczone wykonanie — z tym samym modelem, tym samym cennikiem i mieszczące się w zatwierdzonym limicie.
+
+Trzecia była najprostsza i najbardziej zawstydzająca: limit wejścia w ogóle nie był sprawdzany. Zatwierdzone 13952 tokeny, przysłane 13953, wynik — zaliczone. Teraz sprawdzane są oba limity, dokładna równość nadal przechodzi, a jeden token więcej już nie. Ponieważ zapytanie zdążyło się wykonać, nie udajemy, że go nie było: zużycie zostaje, koszt jest policzony, ale kwalifikacji nie ma i nikt niczego nie ponawia.

@@ -38,6 +38,7 @@ from app.storage.db import (
     EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION,
     CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
     CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION,
+    VERIFIED_CATALOGUE_SCHEMA_VERSION,
     MODEL_FAMILY_ROUTING_SCHEMA_VERSION,
     CONTENT_WRITER_SCHEMA_VERSION,
     database_schema_versions,
@@ -47,6 +48,7 @@ from app.storage.db import (
     migrate_0025_to_0026,
     migrate_0026_to_0027,
     migrate_0027_to_0028,
+    migrate_0028_to_0029,
 )
 from app.storage.repositories import SqliteStorage
 from tests.c2_fixtures import seed_c2_research
@@ -793,9 +795,9 @@ def test_explicit_0023_to_0024_migration_is_fresh_upgrade_and_idempotent(tmp_pat
     applied = initialize_database(fresh)
     assert CONTENT_DECISION_SCHEMA_VERSION in applied
     assert EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION in applied
-    assert applied[-1] == CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION
+    assert applied[-1] == VERIFIED_CATALOGUE_SCHEMA_VERSION
     assert database_schema_versions(fresh)[-1] == (
-        CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION
+        VERIFIED_CATALOGUE_SCHEMA_VERSION
     )
 
     upgrade = tmp_path / "upgrade-c4.db"
@@ -818,6 +820,8 @@ def test_explicit_0023_to_0024_migration_is_fresh_upgrade_and_idempotent(tmp_pat
     assert provenance.applied_migrations == (
         CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION,
     )
+    catalogue = migrate_0028_to_0029(upgrade)
+    assert catalogue.applied_migrations == (VERIFIED_CATALOGUE_SCHEMA_VERSION,)
     opened = SqliteStorage.open(upgrade)
     try:
         assert opened.conn.execute(
