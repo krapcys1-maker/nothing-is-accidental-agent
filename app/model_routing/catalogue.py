@@ -15,15 +15,22 @@ Two things this module deliberately does NOT do:
   concrete version inside a family, so a later model can replace it without
   touching a single role.
 
-C5 runtime shape assumed by this snapshot, and asserted by the persisted
-catalogue evidence: global/default inference, no fast mode, no prompt caching,
-no server-side web tools, no Batch API, no provider Fallback API.
+C5 runtime shape asserted by the persisted catalogue evidence: explicit global
+inference and Standard Tier, no fast mode, no prompt caching, no server-side web
+tools, no Batch API, no provider Fallback API.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping
+
+from app.llm.anthropic_provider_contract import (
+    CONTROLLED_INFERENCE_GEO,
+    CONTROLLED_SERVICE_TIER,
+    EXPECTED_RETURNED_INFERENCE_GEO,
+    EXPECTED_RETURNED_SERVICE_TIER,
+)
 
 from app.model_routing.contracts import (
     AvailabilityState,
@@ -39,6 +46,7 @@ PROVIDER = "ANTHROPIC"
 CATALOGUE_REF = "anthropic-owner-verified-2026-08-09"
 CATALOGUE_SOURCE = "OWNER_VERIFIED_PROVIDER_DOCUMENTATION"
 VERIFIED_AT = "2026-08-09T00:00:00.000000+00:00"
+PROVIDER_PREFLIGHT_AT = "2026-08-10T00:00:00.000000+00:00"
 PRICING_UNIT = "usd_per_mtok__web_search_per_1k"
 PRICING_CURRENCY = "USD"
 
@@ -46,7 +54,10 @@ PRICING_CURRENCY = "USD"
 # C5 runs with every optional provider feature off, so any of them appearing in
 # a real response contradicts this evidence instead of being priced silently.
 VERIFIED_RUNTIME_SHAPE: Mapping[str, object] = MappingProxyType({
-    "inference_geography": "GLOBAL_DEFAULT",
+    "inference_geography": CONTROLLED_INFERENCE_GEO,
+    "service_tier_request": CONTROLLED_SERVICE_TIER,
+    "expected_response_inference_geo": EXPECTED_RETURNED_INFERENCE_GEO,
+    "expected_response_service_tier": EXPECTED_RETURNED_SERVICE_TIER,
     "fast_mode": False,
     "prompt_caching": False,
     "server_web_tools": False,
@@ -54,10 +65,10 @@ VERIFIED_RUNTIME_SHAPE: Mapping[str, object] = MappingProxyType({
     "provider_fallback_api": False,
 })
 
-# Sonnet 5 currently runs on a promotional rate with a published end date. The
-# standard rate that follows is stored as its own profile so the promotion can
-# expire without leaving the role unpriced — and without a second source of
-# truth, because both are ordinary rows of the one pricing table.
+# Sonnet 5 uses the two published calendar-date price regimes. The profiles can
+# change at the local normalized boundary without leaving the role unpriced.
+# The exact UTC timestamp is deterministic LOCAL POLICY normalization. Anthropic
+# publishes only the dates: promo through 2026-08-31, standard from 2026-09-01.
 SONNET_PROMO_UNTIL = "2026-08-31T23:59:59.999999+00:00"
 SONNET_STANDARD_FROM = "2026-09-01T00:00:00.000000+00:00"
 
@@ -159,7 +170,11 @@ FABLE_5 = CatalogueEntry(
             cache_write_per_mtok="12.5",
         ),
     ),
-    notes="Standard global/default inference; caching disabled for C5.",
+    notes=(
+        "Explicit global inference and standard_only request tier; expected "
+        "returned tier standard; caching disabled for C5. Fable requires a "
+        "separate, approval-scoped 30-day-retention acceptance before a real call."
+    ),
 )
 
 OPUS_5 = CatalogueEntry(
@@ -176,7 +191,10 @@ OPUS_5 = CatalogueEntry(
             cache_write_per_mtok="6.25",
         ),
     ),
-    notes="Standard global/default inference; fast mode and caching disabled.",
+    notes=(
+        "Explicit global inference and standard_only request tier; expected "
+        "returned tier standard; fast mode and caching disabled."
+    ),
 )
 
 SONNET_5 = CatalogueEntry(
@@ -204,8 +222,9 @@ SONNET_5 = CatalogueEntry(
         ),
     ),
     notes=(
-        "Promotional rate ends 2026-08-31T23:59:59; the standard rate from "
-        "2026-09-01 is a separate approved profile."
+        "Provider confirms promotional pricing through 2026-08-31 and standard "
+        "pricing from 2026-09-01. The exact UTC boundary is local deterministic "
+        "policy normalization, not a provider-published timestamp."
     ),
 )
 

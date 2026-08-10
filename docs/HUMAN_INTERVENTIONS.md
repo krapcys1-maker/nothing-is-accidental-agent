@@ -753,3 +753,10 @@ Skróty typu: REJECT · EDIT_TEXT · FIX_FACT · STOP_PUBLISH · STRATEGY · EDI
 - **Rozróżnienie zakresowe:** runtime fallback po błędzie pozostaje `FORBIDDEN`; dozwolona jest wyłącznie wcześniejsza, audytowalna promocja wersji dla przyszłych nowych intentów po pełnym `PASS`. Rola comments jest tylko deklaracją policy — bez Stage 6 runtime.
 - **Twarde granice:** zero internetu, realnego providera/API/SDK/browsera/publikacji/controlled-live/kosztu; wyłącznie fake catalogue/callery/qualification i nowe temp DB. Produkcja tylko immutable/read-only; bez odczytu `.env`, bez migracji produkcji i bez zmiany prywatnego korpusu.
 - **Git/status:** właściciel zabronił stage/commita/pushu/PR/merge i C5. Implementer może wydać wyłącznie `PRE-C5 MODEL FAMILY ROUTING & QUALIFICATION CORE — CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW` albo `BLOCKED`.
+
+## 2026-08-10 — Właściciel autoryzował wyłącznie C5 provider-contract freeze
+
+- **Decyzja człowieka:** zamrozić offline controlled Anthropic request na `global` + `standard_only`, zweryfikować optional returned provenance, dodać fail-closed refusal handling oraz dokładny L1 gate retencji Fable.
+- **Jawny brak decyzji:** właściciel **nie zaakceptował** 30-dniowej retencji Fable. Wybór Fable i zlecenie budowy gate nie stanowią acceptance. Obowiązuje: **FABLE REAL QUALIFICATION BLOCKED UNTIL OWNER ACCEPTS 30-DAY RETENTION**.
+- **Granice:** zero sieci, realnego API/qualification, browsera, produkcyjnej migracji, C5 i publikacji; tylko fake SDK/callery/temp DB. Bez odczytu `.env` i realnego workspace configuration.
+- **Git:** właściciel zabronił stage/commita/pushu/PR/merge. Dopuszczalny status po testach: wyłącznie kandydat do niezależnego review, nie live readiness.

@@ -609,3 +609,12 @@ _(brak — pierwsze pozycje pojawią się przy pierwszym researchu/artykule)_
 - Dwa procesy mogą zobaczyć tego samego kandydata, ale write lock i pojedyncza aktywacja sprawiają, że tylko jeden zapisuje promotion audit. Drugi otrzymuje idempotentne `NO_CHANGE`.
 - Brak realnego catalogue adaptera jest jawny. Fake N→N+1 dowodzi mechanizmu orkiestracji, nie istnienia, ceny ani jakości przyszłego modelu.
 - Cytowalna zasada: „Nowy numer jest kandydatem. Dopiero dowód jakości, ceny i zgodności czyni go wyborem.”
+
+## 2026-08-10 — Materiał: „Domyślna wartość to cudza decyzja”
+
+- Provider default wygląda jak brak decyzji, ale faktycznie pozwala workspace ustalić geografię i tier. Jawne `global`/`standard_only` zamienia niewidoczny kontekst konta w wersjonowany kontrakt requestu.
+- Odpowiedź HTTP 200 również nie jest jeszcze sukcesem: provenance może ujawnić `us` albo `priority`, a `stop_reason=refusal` oznacza, że provider odmówił wykonania zadania. System zachowuje rachunek, lecz odmawia przypisania sukcesu.
+- Retencja pokazuje różnicę między wyborem narzędzia a akceptacją jego warunków. Fable może być preferowanym modelem, ale dopóki właściciel nie zaakceptuje dokładnego 30-dniowego warunku dla konkretnego approvalu/requestu, caller pozostaje nieosiągalny.
+- Daty marketingowe nie zawsze są timestampami technicznymi. Deterministyczna granica UTC może być potrzebna w kodzie, ale uczciwa proweniencja musi nazwać ją lokalną normalizacją, nie słowami providera.
+- Liczby do narracji: C5 global/standard `0.938880 USD`; niedozwolony US 1.1× `1.032768 USD`; różnica uzasadnia gate, ale nie tworzy alternatywnej ścieżki budżetowej.
+- Cytowalna zasada: „Jeżeli kontrakt nie nazywa geografii, tieru i warunków retencji, decyzja nadal istnieje — tylko podjął ją ktoś poza systemem.”

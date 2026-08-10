@@ -22,6 +22,11 @@ from app.model_routing import (
     QualificationState,
     RolePolicy,
 )
+from app.llm.anthropic_provider_contract import (
+    FABLE_5_MODEL_ID,
+    FableRetentionAcceptance,
+    RETENTION_SCOPE_CONTENT,
+)
 
 TS = "2026-08-09T09:00:00.000000+00:00"
 PRICE_KEYS = (
@@ -215,8 +220,29 @@ def approve_content_provider_execution(
     expires_at: str = "2099-01-01T00:00:00.000000+00:00",
 ) -> str:
     """One durable single-use L1 authorisation for one paid ARTICLE job."""
+    acceptance_ref = None
+    approval_ref = f"approval-{job_id}"
+    if model.technical_model_id == FABLE_5_MODEL_ID:
+        acceptance_ref = f"retention-{job_id}"
+        existing = storage.conn.execute(
+            "SELECT 1 FROM fable_retention_acceptances WHERE acceptance_ref=?",
+            (acceptance_ref,),
+        ).fetchone()
+        if existing is None:
+            storage.record_fable_retention_acceptance(FableRetentionAcceptance(
+                acceptance_ref=acceptance_ref,
+                scope=RETENTION_SCOPE_CONTENT,
+                approval_ref=approval_ref,
+                request_identity=job_id,
+                provider=model.provider,
+                technical_model_id=model.technical_model_id,
+                provider_policy_ref="fake://anthropic/fable-5/retention",
+                accepted_by="fake-owner-fixture",
+                accepted_at=approved_at,
+                expires_at=expires_at,
+            ))
     return storage.record_content_provider_approval(
-        approval_ref=f"approval-{job_id}",
+        approval_ref=approval_ref,
         job_id=job_id,
         account_id=account_id,
         role=role,
@@ -229,4 +255,5 @@ def approve_content_provider_execution(
         approved_by=approved_by,
         approved_at=approved_at,
         expires_at=expires_at,
+        retention_acceptance_ref=acceptance_ref,
     )

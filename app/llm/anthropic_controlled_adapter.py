@@ -14,7 +14,9 @@ Fixed properties, none of them configurable at call time:
   legacy route key, not from the caller's own suggestion;
 * ``max_retries=0`` on the SDK and no application-level retry;
 * no provider Fallback API, no Batch API, no fast mode, no prompt caching, no
-  server-side web search or fetch, global/default inference;
+  server-side web search or fetch;
+* explicit ``inference_geo="global"`` and
+  ``service_tier="standard_only"`` on every request;
 * the secret is read at the final execution boundary only, never at import;
 * the returned model identity is checked against the requested one.
 """
@@ -25,9 +27,17 @@ import importlib
 import math
 from typing import Any, Callable, Mapping, Protocol
 
+from app.llm.anthropic_provider_contract import (
+    CONTROLLED_INFERENCE_GEO,
+    CONTROLLED_SERVICE_TIER,
+    EXPECTED_RETURNED_INFERENCE_GEO,
+    EXPECTED_RETURNED_SERVICE_TIER,
+)
+
 SDK_MAX_RETRIES = 0
 APPLICATION_MAX_RETRIES = 0
-INFERENCE_GEOGRAPHY = "GLOBAL_DEFAULT"
+INFERENCE_GEOGRAPHY = CONTROLLED_INFERENCE_GEO
+SERVICE_TIER = CONTROLLED_SERVICE_TIER
 
 # Every provider feature C5 runs without. They are listed explicitly so that a
 # future change is a visible edit here rather than an implicit default.
@@ -95,6 +105,8 @@ class ControlledProviderRawResponse:
     web_search_requests: int
     stop_reason: str | None
     provider_request_id: str | None
+    inference_geo: str | None = None
+    service_tier: str | None = None
 
 
 class ControlledSdkFactory(Protocol):
@@ -126,6 +138,8 @@ def _default_caller(
         max_tokens=request.max_output_tokens,
         system=request.system_prompt,
         messages=[{"role": "user", "content": request.user_prompt}],
+        inference_geo=CONTROLLED_INFERENCE_GEO,
+        service_tier=CONTROLLED_SERVICE_TIER,
         timeout=request.timeout_seconds,
     )
     usage = getattr(message, "usage", None)
@@ -148,6 +162,8 @@ def _default_caller(
                 getattr(usage, "server_tool_use", None), "web_search_requests", 0,
             ) or 0
         ),
+        inference_geo=getattr(usage, "inference_geo", None),
+        service_tier=getattr(usage, "service_tier", None),
         stop_reason=getattr(message, "stop_reason", None),
         provider_request_id=getattr(message, "id", None),
     )
@@ -244,7 +260,10 @@ def describe_runtime_shape() -> dict[str, Any]:
     """The exact runtime shape the owner-verified catalogue was priced against."""
     return {
         "provider": ControlledAnthropicAdapter.provider,
-        "inference_geography": INFERENCE_GEOGRAPHY,
+        "inference_geo_request": INFERENCE_GEOGRAPHY,
+        "service_tier_request": SERVICE_TIER,
+        "expected_response_inference_geo": EXPECTED_RETURNED_INFERENCE_GEO,
+        "expected_response_service_tier": EXPECTED_RETURNED_SERVICE_TIER,
         "sdk_max_retries": SDK_MAX_RETRIES,
         "application_max_retries": APPLICATION_MAX_RETRIES,
         "fallback_policy": "FORBIDDEN",

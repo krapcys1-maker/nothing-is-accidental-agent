@@ -75,6 +75,7 @@ class WriterFailureKind(str, Enum):
     STALE_FENCE = "STALE_FENCE"
     UNCERTAIN_STATE = "UNCERTAIN_STATE"
     UNKNOWN_PROVIDER = "UNKNOWN_PROVIDER"
+    PROVIDER_REFUSAL = "PROVIDER_REFUSAL"
 
 
 class RouteContract(BaseModel):
@@ -544,6 +545,8 @@ class WriterUsage(BaseModel):
     output_tokens: int = Field(ge=0)
     cache_read_tokens: int = Field(default=0, ge=0)
     cache_write_tokens: int = Field(default=0, ge=0)
+    inference_geo: str | None = None
+    service_tier: str | None = None
     estimated_cost_usd: float = Field(default=0.0, ge=0.0)
 
     @model_validator(mode="after")

@@ -21,6 +21,7 @@ from typing import Any, Protocol
 
 from app.content.foundation import canonical_json, sha256_text
 from app.core.money import quantize_usd
+from app.llm.anthropic_provider_contract import returned_provenance_mismatch
 from app.model_routing.contracts import (
     CapabilityDeclaration,
     CapabilityVerificationState,
@@ -70,6 +71,8 @@ class RoleUsage:
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
     web_search_requests: int = 0
+    inference_geo: str | None = None
+    service_tier: str | None = None
 
 
 @dataclass(frozen=True)
@@ -174,6 +177,8 @@ class RoleProviderExecution:
                 "cache_read_tokens": self.usage.cache_read_tokens,
                 "cache_write_tokens": self.usage.cache_write_tokens,
                 "web_search_requests": self.usage.web_search_requests,
+                "inference_geo": self.usage.inference_geo,
+                "service_tier": self.usage.service_tier,
             },
             "cost_usd": self.canonical_cost,
             "payload": self.payload,
@@ -334,6 +339,13 @@ def evaluate_role_response(
         outcome, failure_kind = "NEEDS_VERIFICATION", "UNEXPECTED_CACHE_USAGE"
     elif usage.web_search_requests:
         outcome, failure_kind = "NEEDS_VERIFICATION", "UNEXPECTED_WEB_SEARCH_USAGE"
+    elif mismatch := returned_provenance_mismatch(
+        inference_geo=usage.inference_geo,
+        service_tier=usage.service_tier,
+    ):
+        outcome, failure_kind = "NEEDS_VERIFICATION", mismatch
+    elif response.stop_reason == "refusal":
+        outcome, failure_kind = "FAILURE", "PROVIDER_REFUSAL"
     elif not isinstance(response.payload, dict) or not response.payload:
         outcome, failure_kind = "FAILURE", "SCHEMA_VALIDATION"
     return RoleProviderExecution(

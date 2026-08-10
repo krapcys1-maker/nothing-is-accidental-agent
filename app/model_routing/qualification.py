@@ -26,6 +26,7 @@ from decimal import Decimal
 from typing import Any, Mapping, Protocol
 
 from app.core.money import quantize_usd
+from app.llm.anthropic_provider_contract import returned_provenance_mismatch
 from app.model_routing.contracts import (
     LogicalModelRole,
     ModelPricingProfile,
@@ -69,6 +70,7 @@ class QualificationApproval:
     approved_by: str
     approved_at: str
     expires_at: str
+    retention_acceptance_ref: str | None = None
     purpose: str = QUALIFICATION_PURPOSE
     max_retries: int = 0
     fallback_policy: str = "FORBIDDEN"
@@ -117,6 +119,7 @@ class QualificationApproval:
             "approved_by": self.approved_by,
             "approved_at": self.approved_at,
             "expires_at": self.expires_at,
+            "retention_acceptance_ref": self.retention_acceptance_ref,
         }
 
     def approval_fingerprint(self) -> str:
@@ -147,6 +150,8 @@ class QualificationProbeUsage:
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
     web_search_requests: int = 0
+    inference_geo: str | None = None
+    service_tier: str | None = None
 
     def __post_init__(self) -> None:
         for field in (
@@ -230,6 +235,8 @@ class QualificationOutcome:
                 "cache_read_tokens": self.usage.cache_read_tokens,
                 "cache_write_tokens": self.usage.cache_write_tokens,
                 "web_search_requests": self.usage.web_search_requests,
+                "inference_geo": self.usage.inference_geo,
+                "service_tier": self.usage.service_tier,
             },
             "cost_usd": self.canonical_cost,
             "qualification_ref": self.qualification_ref,
@@ -308,12 +315,19 @@ def evaluate_qualification_probe(
         outcome, failure_kind = "NEEDS_VERIFICATION", "UNEXPECTED_CACHE_USAGE"
     elif usage.web_search_requests:
         outcome, failure_kind = "NEEDS_VERIFICATION", "UNEXPECTED_WEB_SEARCH_USAGE"
+    elif mismatch := returned_provenance_mismatch(
+        inference_geo=usage.inference_geo,
+        service_tier=usage.service_tier,
+    ):
+        outcome, failure_kind = "NEEDS_VERIFICATION", mismatch
     elif usage.input_tokens > approval.max_input_tokens:
         outcome, failure_kind = "NEEDS_VERIFICATION", "INPUT_CEILING_EXCEEDED"
     elif usage.output_tokens > approval.max_output_tokens:
         outcome, failure_kind = "NEEDS_VERIFICATION", "OUTPUT_CEILING_EXCEEDED"
     elif cost > quantize_usd(approval.cap_usd, label="approved cap"):
         outcome, failure_kind = "NEEDS_VERIFICATION", "COST_CAP_EXCEEDED"
+    elif response.stop_reason == "refusal":
+        outcome, failure_kind = "FAIL", "PROVIDER_REFUSAL"
     elif not response.structured_response_ok:
         outcome, failure_kind = "FAIL", "STRUCTURED_RESPONSE_REJECTED"
 

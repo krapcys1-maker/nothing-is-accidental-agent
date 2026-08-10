@@ -25,6 +25,11 @@ from app.content.contracts import (
     WriterUsage,
 )
 from app.content.foundation import ContentType
+from app.llm.anthropic_provider_contract import (
+    CONTROLLED_INFERENCE_GEO,
+    CONTROLLED_SERVICE_TIER,
+    returned_provenance_mismatch,
+)
 
 
 _SDK_MAX_RETRIES = 0
@@ -322,6 +327,8 @@ class ProviderReadyContentWriter:
                 cache_write_tokens=int(
                     getattr(value, "cache_creation_input_tokens", 0) or 0
                 ),
+                inference_geo=getattr(value, "inference_geo", None),
+                service_tier=getattr(value, "service_tier", None),
                 estimated_cost_usd=float(
                     getattr(value, "estimated_cost_usd", 0.0) or 0.0
                 ),
@@ -433,6 +440,20 @@ class ProviderReadyContentWriter:
                 provider_request_id=raw.provider_request_id,
                 uncertain=True,
             )
+        provenance_mismatch = returned_provenance_mismatch(
+            inference_geo=raw.usage.inference_geo,
+            service_tier=raw.usage.service_tier,
+        )
+        if provenance_mismatch is not None:
+            return self._failure(
+                request,
+                WriterFailureKind.UNCERTAIN_STATE,
+                f"Provider response provenance mismatch: {provenance_mismatch}.",
+                usage=raw.usage,
+                stop_reason=raw.stop_reason,
+                provider_request_id=raw.provider_request_id,
+                uncertain=True,
+            )
         if raw.usage.estimated_cost_usd != 0.0:
             return self._failure(
                 request,
@@ -447,6 +468,15 @@ class ProviderReadyContentWriter:
                 request,
                 WriterFailureKind.TRUNCATION,
                 "Provider output was truncated.",
+                usage=raw.usage,
+                stop_reason=raw.stop_reason,
+                provider_request_id=raw.provider_request_id,
+            )
+        if raw.stop_reason == "refusal":
+            return self._failure(
+                request,
+                WriterFailureKind.PROVIDER_REFUSAL,
+                "Provider returned a refusal instead of application content.",
                 usage=raw.usage,
                 stop_reason=raw.stop_reason,
                 provider_request_id=raw.provider_request_id,
@@ -516,6 +546,8 @@ class ProviderReadyContentWriter:
             max_tokens=request.context.limits.max_output_tokens,
             system=prompt.system,
             messages=[{"role": "user", "content": prompt.user}],
+            inference_geo=CONTROLLED_INFERENCE_GEO,
+            service_tier=CONTROLLED_SERVICE_TIER,
             timeout=request.context.limits.timeout_seconds,
         )
         text = "".join(
@@ -535,6 +567,8 @@ class ProviderReadyContentWriter:
                 cache_write_tokens=int(
                     getattr(usage, "cache_creation_input_tokens", 0) or 0
                 ),
+                inference_geo=getattr(usage, "inference_geo", None),
+                service_tier=getattr(usage, "service_tier", None),
                 estimated_cost_usd=0.0,
             ),
             stop_reason=getattr(message, "stop_reason", None),

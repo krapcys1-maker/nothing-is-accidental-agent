@@ -42,6 +42,11 @@ from app.llm.anthropic_controlled_adapter import (
     assert_returned_model_identity,
     describe_runtime_shape,
 )
+from app.llm.anthropic_provider_contract import (
+    FABLE_5_MODEL_ID,
+    FableRetentionAcceptance,
+    RETENTION_SCOPE_QUALIFICATION,
+)
 from app.model_routing import (
     LogicalModelRole,
     ModelFamily,
@@ -65,12 +70,14 @@ from app.model_routing.role_bootstrap import owner_approved_role_policy
 from app.policies.policy_engine import PolicyEngine
 from app.ports.storage import ContentFoundationError
 from app.storage.db import (
+    ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION,
     CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION,
     RUNTIME_SCHEMA_VERSION,
     VERIFIED_CATALOGUE_SCHEMA_VERSION,
     database_schema_versions,
     initialize_database,
     migrate_0028_to_0029,
+    migrate_0029_to_0030,
 )
 from app.storage.repositories import SqliteStorage
 from tests.controlled_provider_fixtures import (
@@ -135,13 +142,30 @@ def _approval(
 ) -> QualificationApproval:
     row = _entry_for(storage, family)
     envelope = ROLE_ENVELOPES[role]
+    resolved_model_id = technical_model_id or str(row["technical_model_id"])
+    acceptance_ref = None
+    if resolved_model_id == FABLE_5_MODEL_ID:
+        acceptance_ref = f"retention-{request_id}"
+        if storage._get_fable_retention_acceptance(acceptance_ref) is None:
+            storage.record_fable_retention_acceptance(FableRetentionAcceptance(
+                acceptance_ref=acceptance_ref,
+                scope=RETENTION_SCOPE_QUALIFICATION,
+                approval_ref=f"approval-{request_id}",
+                request_identity=request_id,
+                provider="ANTHROPIC",
+                technical_model_id=FABLE_5_MODEL_ID,
+                provider_policy_ref="fake://anthropic/fable-5/retention",
+                accepted_by="fake-owner-fixture",
+                accepted_at=approved_at,
+                expires_at=expires_at,
+            ))
     return QualificationApproval(
         approval_ref=f"approval-{request_id}",
         request_id=request_id,
         logical_role=role,
         model_registry_id=registry_id or str(row["registry_id"]),
         provider="ANTHROPIC",
-        technical_model_id=technical_model_id or str(row["technical_model_id"]),
+        technical_model_id=resolved_model_id,
         pricing_ref=pricing_ref or str(row["pricing_ref"]),
         max_input_tokens=envelope.qualification_input_tokens,
         max_output_tokens=envelope.max_output_tokens,
@@ -149,6 +173,7 @@ def _approval(
         approved_by="owner-test",
         approved_at=approved_at,
         expires_at=expires_at,
+        retention_acceptance_ref=acceptance_ref,
     )
 
 
@@ -266,12 +291,17 @@ def test_catalogue_registration_never_implies_qualification(catalogue_storage):
     assert {m.lifecycle_state.value for m in models} == {"CANDIDATE"}
     evidence = catalogue_storage.conn.execute(
         "SELECT source,prompt_caching,fast_mode,server_web_tools,batch_api,"
-        "provider_fallback_api,inference_geography FROM model_catalogue_evidence"
+        "provider_fallback_api,inference_geography,service_tier_request,"
+        "expected_response_inference_geo,expected_response_service_tier "
+        "FROM model_catalogue_evidence"
     ).fetchall()
     assert len(evidence) == 3
     for row in evidence:
         assert row["source"] == "OWNER_VERIFIED_PROVIDER_DOCUMENTATION"
-        assert row["inference_geography"] == "GLOBAL_DEFAULT"
+        assert row["inference_geography"] == "global"
+        assert row["service_tier_request"] == "standard_only"
+        assert row["expected_response_inference_geo"] == "global"
+        assert row["expected_response_service_tier"] == "standard"
         assert (
             row["prompt_caching"], row["fast_mode"], row["server_web_tools"],
             row["batch_api"], row["provider_fallback_api"],
@@ -590,7 +620,10 @@ def test_16_adapter_disables_every_provider_fallback_and_extra_feature():
     assert shape["server_web_search"] is False
     assert shape["server_web_fetch"] is False
     assert shape["us_only_inference"] is False
-    assert shape["inference_geography"] == "GLOBAL_DEFAULT"
+    assert shape["inference_geo_request"] == "global"
+    assert shape["service_tier_request"] == "standard_only"
+    assert shape["expected_response_inference_geo"] == "global"
+    assert shape["expected_response_service_tier"] == "standard"
     assert shape["sdk_max_retries"] == 0
     assert shape["application_max_retries"] == 0
 
@@ -1112,7 +1145,7 @@ def test_sonnet_role_estimate_switches_profile_at_the_expiry_boundary():
 def test_migration_0029_is_forward_only_explicit_and_idempotent(tmp_path, capsys):
     import scripts.migrate_schema_0029 as cli
 
-    assert RUNTIME_SCHEMA_VERSION == VERIFIED_CATALOGUE_SCHEMA_VERSION
+    assert RUNTIME_SCHEMA_VERSION != VERIFIED_CATALOGUE_SCHEMA_VERSION
     path = tmp_path / "upgrade-0029.db"
     initialize_database(
         path, through=CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION,
@@ -1126,6 +1159,11 @@ def test_migration_0029_is_forward_only_explicit_and_idempotent(tmp_path, capsys
     assert migrate_0028_to_0029(path).idempotent is True
     assert cli.main(["--db-path", str(path), "--confirm-0028-to-0029"]) == 0
     assert "idempotent=true" in capsys.readouterr().out
+
+    provider_contract = migrate_0029_to_0030(path)
+    assert provider_contract.applied_migrations == (
+        ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION,
+    )
 
     opened = SqliteStorage.open(path)
     try:

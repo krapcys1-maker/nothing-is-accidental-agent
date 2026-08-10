@@ -71,6 +71,13 @@ from app.content.provenance import (
 from app.core.clock import Clock
 from app.core.money import decimal_from, quantize_usd, sum_usd
 from app.core.security_flags import SECURITY_FLAG_DEFAULTS
+from app.llm.anthropic_provider_contract import (
+    FABLE_5_MODEL_ID,
+    FableRetentionAcceptance,
+    RETENTION_SCOPE_CONTENT,
+    RETENTION_SCOPE_QUALIFICATION,
+    retention_acceptance_mismatch,
+)
 from app.models import (
     Account,
     CONTROLLED_FETCH_ACTION_TYPE,
@@ -1608,16 +1615,21 @@ class SqliteStorage:
                     "INSERT INTO model_catalogue_evidence (evidence_ref,"
                     "model_registry_id,provider,technical_model_id,source,"
                     "verified_by,verified_at,inference_geography,fast_mode,"
-                    "prompt_caching,server_web_tools,batch_api,"
+                    "service_tier_request,expected_response_inference_geo,"
+                    "expected_response_service_tier,prompt_caching,"
+                    "server_web_tools,batch_api,"
                     "provider_fallback_api,notes,evidence_json,"
                     "evidence_fingerprint,created_at) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         payload["evidence_ref"], model.registry_id,
                         entry.candidate().provider, entry.technical_model_id,
                         CATALOGUE_SOURCE, verified_by, payload["verified_at"],
                         str(shape["inference_geography"]),
                         int(bool(shape["fast_mode"])),
+                        str(shape["service_tier_request"]),
+                        str(shape["expected_response_inference_geo"]),
+                        str(shape["expected_response_service_tier"]),
                         int(bool(shape["prompt_caching"])),
                         int(bool(shape["server_web_tools"])),
                         int(bool(shape["batch_api"])),
@@ -1631,6 +1643,98 @@ class SqliteStorage:
                 self.get_registered_model(model.registry_id) or model
             )
         return tuple(registered)
+
+    def record_fable_retention_acceptance(
+        self,
+        acceptance: FableRetentionAcceptance,
+        *,
+        now: datetime | None = None,
+    ) -> str:
+        """Persist explicit owner acceptance for one Fable approval/request.
+
+        Calling this method is itself a human-decision recording operation. The
+        runtime never manufactures an acceptance and has no global enable flag.
+        """
+        payload_json = canonical_json(acceptance.payload())
+        created_at = _ts_precise(now)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            self.conn.execute(
+                "INSERT INTO fable_retention_acceptances (acceptance_ref,scope,"
+                "approval_ref,request_identity,provider,technical_model_id,"
+                "requirement,provider_policy_ref,accepted_by,accepted_at,"
+                "expires_at,evidence_json,evidence_fingerprint,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    acceptance.acceptance_ref, acceptance.scope,
+                    acceptance.approval_ref, acceptance.request_identity,
+                    acceptance.provider, acceptance.technical_model_id,
+                    acceptance.requirement, acceptance.provider_policy_ref,
+                    acceptance.accepted_by, acceptance.accepted_at,
+                    acceptance.expires_at, payload_json,
+                    sha256_text(payload_json), created_at,
+                ),
+            )
+            self.conn.commit()
+            return acceptance.acceptance_ref
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def _get_fable_retention_acceptance(
+        self, acceptance_ref: str | None,
+    ) -> FableRetentionAcceptance | None:
+        if not acceptance_ref:
+            return None
+        row = self.conn.execute(
+            "SELECT * FROM fable_retention_acceptances WHERE acceptance_ref=?",
+            (acceptance_ref,),
+        ).fetchone()
+        if row is None:
+            return None
+        return FableRetentionAcceptance(
+            acceptance_ref=str(row["acceptance_ref"]),
+            scope=str(row["scope"]),
+            approval_ref=str(row["approval_ref"]),
+            request_identity=str(row["request_identity"]),
+            provider=str(row["provider"]),
+            technical_model_id=str(row["technical_model_id"]),
+            requirement=str(row["requirement"]),
+            provider_policy_ref=str(row["provider_policy_ref"]),
+            accepted_by=str(row["accepted_by"]),
+            accepted_at=str(row["accepted_at"]),
+            expires_at=str(row["expires_at"]),
+        )
+
+    def _require_fable_retention_acceptance(
+        self,
+        *,
+        technical_model_id: str,
+        provider: str,
+        scope: str,
+        approval_ref: str,
+        request_identity: str,
+        acceptance_ref: str | None,
+        current_ts: str,
+    ) -> None:
+        if technical_model_id != FABLE_5_MODEL_ID:
+            return
+        mismatch = retention_acceptance_mismatch(
+            technical_model_id=technical_model_id,
+            provider=provider,
+            scope=scope,
+            approval_ref=approval_ref,
+            request_identity=request_identity,
+            current_ts=current_ts,
+            acceptance=self._get_fable_retention_acceptance(acceptance_ref),
+        )
+        if mismatch is not None:
+            raise ContentFoundationError(
+                mismatch,
+                "Fable 5 requires an unexpired owner acceptance of the exact "
+                "30-day retention condition for this approval and request.",
+            )
 
     def record_model_qualification_approval(
         self, approval: "QualificationApproval", *, now: datetime | None = None,
@@ -1713,6 +1817,22 @@ class SqliteStorage:
                 "QUALIFICATION_APPROVAL_INTENT_MISMATCH",
                 "The request diverged from the approved frozen intent.",
             )
+        try:
+            self._require_fable_retention_acceptance(
+                technical_model_id=approval.technical_model_id,
+                provider=approval.provider,
+                scope=RETENTION_SCOPE_QUALIFICATION,
+                approval_ref=approval.approval_ref,
+                request_identity=approval.request_id,
+                acceptance_ref=approval.retention_acceptance_ref,
+                current_ts=current_ts,
+            )
+        except ContentFoundationError as exc:
+            raise ControlledQualificationError(
+                exc.code,
+                "Fable 5 retention acceptance did not satisfy the exact "
+                "qualification approval contract.",
+            ) from exc
         consumed = self.conn.execute(
             "UPDATE model_qualification_approvals SET consumed_at=? "
             "WHERE approval_ref=? AND consumed_at IS NULL",
@@ -2108,6 +2228,7 @@ class SqliteStorage:
         approved_by: str,
         approved_at: str,
         expires_at: str,
+        retention_acceptance_ref: str | None = None,
     ) -> str:
         """Persist one durable, single-use L1 approval for a paid ARTICLE run."""
         parsed = parse_role(role)
@@ -2131,6 +2252,7 @@ class SqliteStorage:
             "approved_by": approved_by,
             "approved_at": approved_at,
             "expires_at": expires_at,
+            "retention_acceptance_ref": retention_acceptance_ref,
         }
         payload_json = canonical_json(payload)
         try:
@@ -2235,6 +2357,22 @@ class SqliteStorage:
                 "CONTENT_APPROVAL_CAP_EXCEEDED",
                 "The frozen intent cap exceeds the approved cap.",
             )
+        try:
+            approval_payload = json.loads(str(row["approval_json"]))
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ContentFoundationError(
+                "CONTENT_APPROVAL_INVALID",
+                "The durable content approval payload is invalid.",
+            ) from exc
+        self._require_fable_retention_acceptance(
+            technical_model_id=str(row["technical_model_id"]),
+            provider=str(row["provider"]),
+            scope=RETENTION_SCOPE_CONTENT,
+            approval_ref=str(row["approval_ref"]),
+            request_identity=job_id,
+            acceptance_ref=approval_payload.get("retention_acceptance_ref"),
+            current_ts=current_ts,
+        )
         if already_consumed:
             return
         consumed = self.conn.execute(

@@ -518,3 +518,10 @@ Nigdy nie zapisuj na screenshotach: kluczy API, haseł, zawartości `.env`, dany
 - **Co powinien pokazać:** zanonimizowany flow role → allowed family → candidates 5/5.1/5.2/6 → availability/pricing/capability/qualification gates → pojedynczy ACTIVE; obok N+1 PASS promotion, FAIL/over-ceiling/innej family BLOCK, dwa procesy `PROMOTED + NO_CHANGE`, stary frozen intent na N i nowy na N+1.
 - **Dowód tekstowy zastępczy:** new `31/31`, affected `748/748`, full/collect/exact unique `2353/2353`, exact duplicates `0`, compile/diff PASS; produkcja nadal `0020`, koszt `0.000000 USD`.
 - **Czego nie może pokazać:** `.env`, sekretów, raw style corpus, danych produkcyjnej SQLite, pełnych ścieżek/fingerprintów ani sugerować realnego catalogue discovery, realnej kwalifikacji, aktywnego modelu, API, C5, publikacji, approvalu lub operacji Git.
+
+## 2026-08-10 — C5 provider contract freeze
+
+- **Status:** `SCREENSHOT REQUIRED`; screenshotu nie wykonano, ponieważ fala zakazuje browsera/runtime sieci, a właściwym dowodem są deterministyczne fake SDK fixtures i temp DB ledgers.
+- **Co powinien pokazać:** request kwargs `inference_geo=global`, `service_tier=standard_only`; returned `global/standard → legal`, `us|priority → NEEDS_VERIFICATION`; brak retention evidence → caller `0`; refusal → caller `1`, usage/cost zachowane, PASS/capability/retry/fallback/caller2 `0`.
+- **Dowód tekstowy zastępczy:** new `22/22`, affected `330/330`, full/collect `2481/2481`, exact duplicates `0`, compile/diff PASS; production `0020`, actual cost `0.000000 USD`.
+- **Czego nie może pokazać:** `.env`, sekretów, workspace settings Anthropic, raw style corpus, danych produkcyjnej SQLite, realnego retention acceptance, realnego requestu/API, C5, publikacji ani operacji Git.
