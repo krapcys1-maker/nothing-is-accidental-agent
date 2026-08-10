@@ -151,6 +151,7 @@ def test_migration_0006_backfills_all_historical_flows(tmp_path: Path):
             "0028_controlled_provider_provenance",
             "0029_verified_catalogue_and_controlled_roles",
             "0030_anthropic_provider_contract",
+            "0031_article_writer_opus_policy",
     ]
 
     rows = {
@@ -238,6 +239,7 @@ def test_migration_0006_runs_on_clean_empty_database(tmp_path: Path):
             "0028_controlled_provider_provenance",
             "0029_verified_catalogue_and_controlled_roles",
             "0030_anthropic_provider_contract",
+            "0031_article_writer_opus_policy",
     ]
     assert conn.execute("SELECT count(*) FROM research_runs").fetchone()[0] == 0
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
@@ -270,6 +272,7 @@ def test_migration_0006_without_paid_single_uuid(tmp_path: Path):
             "0028_controlled_provider_provenance",
             "0029_verified_catalogue_and_controlled_roles",
             "0030_anthropic_provider_contract",
+            "0031_article_writer_opus_policy",
     ]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
@@ -300,6 +303,7 @@ def test_migration_0006_without_either_local_single_uuid(tmp_path: Path):
             "0028_controlled_provider_provenance",
             "0029_verified_catalogue_and_controlled_roles",
             "0030_anthropic_provider_contract",
+            "0031_article_writer_opus_policy",
     ]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
@@ -372,6 +376,7 @@ def test_database_rejects_invalid_or_missing_flow(tmp_path: Path):
             "0028_controlled_provider_provenance",
             "0029_verified_catalogue_and_controlled_roles",
             "0030_anthropic_provider_contract",
+            "0031_article_writer_opus_policy",
     ]
     conn.execute(
         "INSERT INTO accounts "
@@ -428,6 +433,7 @@ def test_migration_0007_backfills_conservative_historical_attempt_lower_bound(tm
             "0028_controlled_provider_provenance",
             "0029_verified_catalogue_and_controlled_roles",
             "0030_anthropic_provider_contract",
+            "0031_article_writer_opus_policy",
     ]
 
     attempts_column = next(
@@ -490,6 +496,7 @@ def test_migration_0007_rolls_back_schema_when_ledger_insert_fails(tmp_path: Pat
             "0028_controlled_provider_provenance",
             "0029_verified_catalogue_and_controlled_roles",
             "0030_anthropic_provider_contract",
+            "0031_article_writer_opus_policy",
     ]
     assert "attempts" in {
         row["name"] for row in conn.execute("PRAGMA table_info(research_source_candidates)")
@@ -536,6 +543,7 @@ def test_migration_0008_rolls_back_force_marker_when_ledger_insert_fails(tmp_pat
             "0028_controlled_provider_provenance",
             "0029_verified_catalogue_and_controlled_roles",
             "0030_anthropic_provider_contract",
+            "0031_article_writer_opus_policy",
     ]
     force_column = next(
         row for row in conn.execute("PRAGMA table_info(research_runs)")

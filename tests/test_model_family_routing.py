@@ -68,7 +68,7 @@ def _policy(
         LogicalModelRole.TOPIC_GENERATION: ModelFamily.SONNET,
         LogicalModelRole.ARTICLE_RESEARCH: ModelFamily.OPUS,
         LogicalModelRole.ARTICLE_PLAN: ModelFamily.OPUS,
-        LogicalModelRole.ARTICLE_WRITER: ModelFamily.FABLE,
+        LogicalModelRole.ARTICLE_WRITER: ModelFamily.OPUS,
         LogicalModelRole.ARTICLE_REVIEWER: ModelFamily.OPUS,
         LogicalModelRole.NOTE_WRITER: ModelFamily.SONNET,
         LogicalModelRole.COMMENT_WRITER: ModelFamily.SONNET,
@@ -92,7 +92,7 @@ def _candidate(
     storage: SqliteStorage,
     version: str,
     *,
-    family: ModelFamily = ModelFamily.FABLE,
+    family: ModelFamily = ModelFamily.OPUS,
     provider: str = "fake-provider",
     technical_model_id: str | None = "__AUTO__",
     availability: AvailabilityState = AvailabilityState.AVAILABLE,
@@ -184,7 +184,7 @@ def test_model_version_order_is_numeric_not_naive_string_order():
     (LogicalModelRole.TOPIC_GENERATION, ModelFamily.SONNET),
     (LogicalModelRole.ARTICLE_RESEARCH, ModelFamily.OPUS),
     (LogicalModelRole.ARTICLE_PLAN, ModelFamily.OPUS),
-    (LogicalModelRole.ARTICLE_WRITER, ModelFamily.FABLE),
+    (LogicalModelRole.ARTICLE_WRITER, ModelFamily.OPUS),
     (LogicalModelRole.ARTICLE_REVIEWER, ModelFamily.OPUS),
     (LogicalModelRole.NOTE_WRITER, ModelFamily.SONNET),
     (LogicalModelRole.COMMENT_WRITER, ModelFamily.SONNET),
@@ -313,7 +313,7 @@ def test_promotion_is_idempotent_and_audit_is_persistent(storage):
     assert audit[0].new_model_registry_id == model_id
     assert audit[0].event_type is RoutingAuditEventType.PROMOTION
     raw = storage.conn.execute("SELECT * FROM model_routing_audit").fetchone()
-    assert raw["new_technical_model_id"] == "fake-fable-5"
+    assert raw["new_technical_model_id"] == "fake-opus-5"
     assert raw["new_pricing_ref"]
     assert raw["qualification_ref"]
     assert raw["capability_ref"]
@@ -410,7 +410,7 @@ def test_historical_intent_stays_frozen_and_new_intent_gets_promoted_model(stora
         new_binding, content_type=ContentType.ARTICLE,
     )
     assert routed.logical_role is LogicalModelRole.ARTICLE_WRITER
-    assert routed.model_family is ModelFamily.FABLE
+    assert routed.model_family is ModelFamily.OPUS
     assert routed.logical_version == "5.1"
     assert routed.api_model_id == new_binding.technical_model_id
     assert routed.route_key == "FABLE_5_ARTICLE"  # compatibility only
@@ -527,10 +527,10 @@ class FakeQualificationRunner:
 
 def test_fake_discovery_only_registers_candidate_and_fake_qualification_auto_promotes(storage):
     _policy(storage)
-    api_id = "fake-fable-5"
+    api_id = "fake-opus-5"
     candidate = CatalogueCandidate(
         provider="fake-provider",
-        family=ModelFamily.FABLE,
+        family=ModelFamily.OPUS,
         logical_version="5",
         technical_model_id=api_id,
         availability_state=AvailabilityState.AVAILABLE,
@@ -573,7 +573,7 @@ def test_stable_content_role_is_explicit_and_wrong_family_is_rejected():
         config_fingerprint="a" * 64,
     )
     assert route.logical_role is LogicalModelRole.ARTICLE_WRITER
-    assert route.model_family is ModelFamily.FABLE
+    assert route.model_family is ModelFamily.OPUS
     with pytest.raises(ValueError, match="family"):
         RouteContract(
             content_type=ContentType.ARTICLE,

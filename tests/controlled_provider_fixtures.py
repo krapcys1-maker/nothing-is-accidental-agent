@@ -49,7 +49,7 @@ ROLE_FAMILY_FOR_TESTS = {
     LogicalModelRole.TOPIC_GENERATION: ModelFamily.SONNET,
     LogicalModelRole.ARTICLE_RESEARCH: ModelFamily.OPUS,
     LogicalModelRole.ARTICLE_PLAN: ModelFamily.OPUS,
-    LogicalModelRole.ARTICLE_WRITER: ModelFamily.FABLE,
+    LogicalModelRole.ARTICLE_WRITER: ModelFamily.OPUS,
     LogicalModelRole.ARTICLE_REVIEWER: ModelFamily.OPUS,
     LogicalModelRole.NOTE_WRITER: ModelFamily.SONNET,
     LogicalModelRole.COMMENT_WRITER: ModelFamily.SONNET,
@@ -105,7 +105,7 @@ def seed_model(
     storage,
     *,
     version: str = "1",
-    family: ModelFamily = ModelFamily.FABLE,
+    family: ModelFamily = ModelFamily.OPUS,
     provider: str = "fake-provider",
     price_overrides: dict[str, str] | None = None,
     pricing_ref: str | None = None,
@@ -198,7 +198,7 @@ def seed_active_article_writer(
     model = seed_model(
         storage,
         version=version,
-        family=ModelFamily.FABLE,
+        family=ModelFamily.OPUS,
         price_overrides=price_overrides,
         pricing_ref=pricing_ref,
     )

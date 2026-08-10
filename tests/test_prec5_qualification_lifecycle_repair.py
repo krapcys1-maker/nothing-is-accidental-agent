@@ -80,7 +80,7 @@ def _ready(storage, *, request_id="repair-1"):
     _register(storage)
     storage.upsert_model_role_policy(owner_approved_role_policy(WRITER))
     return _approval(
-        storage, role=WRITER, family=ModelFamily.FABLE, request_id=request_id,
+        storage, role=WRITER, family=ModelFamily.OPUS, request_id=request_id,
     )
 
 
@@ -92,7 +92,7 @@ def _run_row(storage, request_id):
 
 
 def _registry(storage):
-    return _entry_for(storage, ModelFamily.FABLE)
+    return _entry_for(storage, ModelFamily.OPUS)
 
 
 class Boom(RuntimeError):
@@ -125,7 +125,7 @@ def test_major1_timeout_leaves_a_durable_execution_and_no_pass(storage):
     assert row["model_registry_id"] == approval.model_registry_id
     assert row["logical_role"] == WRITER.value
     assert row["provider"] == "ANTHROPIC"
-    assert row["technical_model_id"] == "claude-fable-5"
+    assert row["technical_model_id"] == "claude-opus-5"
     assert row["pricing_ref"] == approval.pricing_ref
     # No usage came back, so no usage and no cost are asserted. Not zero.
     assert row["input_tokens"] is None
@@ -256,7 +256,7 @@ def test_major1_an_in_flight_run_is_reconciled_explicitly_never_retried(db_path)
             (
                 approval.request_id, approval.approval_ref,
                 approval.model_registry_id, WRITER.value, "ANTHROPIC",
-                "claude-fable-5", approval.pricing_ref,
+                "claude-opus-5", approval.pricing_ref,
                 pricing.contract_fingerprint(), payload, sha256_text(payload),
                 APPROVED_AT, APPROVED_AT, APPROVED_AT,
             ),
@@ -401,14 +401,14 @@ def test_major2_controlled_live_pass_without_a_matching_run_is_refused(storage):
 
 
 def test_major2_controlled_live_pass_naming_another_registry_run_is_refused(storage):
-    """A real PASS run for Fable cannot qualify the Opus entry."""
+    """A real PASS run for Opus cannot qualify the Fable entry."""
     approval = _ready(storage)
     storage.record_model_qualification_approval(approval)
     outcome = storage.execute_controlled_qualification(
         approval, caller=lambda a: _probe(a.technical_model_id),
     )
     assert outcome.outcome == "PASS"
-    opus = _entry_for(storage, ModelFamily.OPUS)
+    fable = _entry_for(storage, ModelFamily.FABLE)
 
     # The public storage path refuses to reuse one run's reference for another
     # registry entry...
@@ -418,7 +418,7 @@ def test_major2_controlled_live_pass_naming_another_registry_run_is_refused(stor
         storage.record_model_qualification(
             QualificationReport(
                 qualification_ref=outcome.qualification_ref,
-                model_registry_id=str(opus["registry_id"]),
+                model_registry_id=str(fable["registry_id"]),
                 state=QualificationState.PASS,
                 suite_version="controlled_live_qualification_v1",
                 fixture_set_ref=approval.approval_ref,
@@ -437,14 +437,14 @@ def test_major2_controlled_live_pass_naming_another_registry_run_is_refused(stor
             "result_json,result_fingerprint,evaluated_at,created_at) "
             "VALUES (?,?,?,?,?,?,?,?,?,?)",
             (
-                "borrowed-from-fable", str(opus["registry_id"]), "PASS",
+                "borrowed-from-opus", str(fable["registry_id"]), "PASS",
                 "controlled_live_qualification_v1", approval.approval_ref,
                 "CONTROLLED_LIVE", "{}", "c" * 64, APPROVED_AT, APPROVED_AT,
             ),
         )
     storage.conn.rollback()
     assert _entry_for(
-        storage, ModelFamily.OPUS,
+        storage, ModelFamily.FABLE,
     )["current_qualification_state"] == "UNQUALIFIED"
 
 
@@ -454,7 +454,7 @@ def test_major2_controlled_live_pass_from_a_needs_verification_run_is_refused(st
     outcome = storage.execute_controlled_qualification(
         approval,
         caller=lambda a: QualificationProbeResponse(
-            returned_model_id="claude-opus-5",  # mismatch -> NEEDS_VERIFICATION
+            returned_model_id="claude-fable-5",  # mismatch -> NEEDS_VERIFICATION
             structured_response_ok=True,
             usage=QualificationProbeUsage(input_tokens=10, output_tokens=5),
         ),
@@ -582,11 +582,11 @@ def test_major3_ceiling_violation_keeps_usage_cost_and_blocks_capability(storage
     assert caller.calls == 1, "the request already happened; it is not repeated"
     assert outcome.outcome == "NEEDS_VERIFICATION"
     assert outcome.failure_kind == "INPUT_CEILING_EXCEEDED"
-    # 13953 input at 10/MTok + 100 output at 50/MTok
-    assert outcome.cost_usd == Decimal("0.144530")
+    # 13953 input at 5/MTok + 100 output at 25/MTok
+    assert outcome.cost_usd == Decimal("0.072265")
     row = _run_row(storage, approval.request_id)
     assert row["input_tokens"] == over
-    assert row["cost_usd"] == "0.144530"
+    assert row["cost_usd"] == "0.072265"
     assert row["qualification_ref"] is None
     assert _registry(storage)["current_qualification_state"] == "UNQUALIFIED"
     assert storage.conn.execute(
@@ -653,4 +653,4 @@ def test_major3_a_matching_controlled_pass_still_qualifies_and_activates(storage
             "app.content.foundation", fromlist=["ContentType"],
         ).ContentType.ARTICLE,
     )
-    assert binding.technical_model_id == "claude-fable-5"
+    assert binding.technical_model_id == "claude-opus-5"

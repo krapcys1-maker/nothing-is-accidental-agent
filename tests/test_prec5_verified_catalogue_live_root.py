@@ -46,6 +46,7 @@ from app.llm.anthropic_provider_contract import (
     FABLE_5_MODEL_ID,
     FableRetentionAcceptance,
     RETENTION_SCOPE_QUALIFICATION,
+    retention_acceptance_mismatch,
 )
 from app.model_routing import (
     LogicalModelRole,
@@ -78,6 +79,7 @@ from app.storage.db import (
     initialize_database,
     migrate_0028_to_0029,
     migrate_0029_to_0030,
+    migrate_0030_to_0031,
 )
 from app.storage.repositories import SqliteStorage
 from tests.controlled_provider_fixtures import (
@@ -240,26 +242,23 @@ def _qualify(
 def _activate_article_roles(storage, *, now=None):
     """Full bootstrap: policies, qualification, promotion for the three roles."""
     _register(storage)
-    activated = {}
-    for index, role in enumerate((
+    roles = (
         LogicalModelRole.ARTICLE_PLAN,
-        LogicalModelRole.ARTICLE_WRITER,
         LogicalModelRole.ARTICLE_REVIEWER,
-    )):
+        LogicalModelRole.ARTICLE_WRITER,
+    )
+    for role in roles:
         storage.upsert_model_role_policy(owner_approved_role_policy(role))
-        family = {
-            LogicalModelRole.ARTICLE_PLAN: ModelFamily.OPUS,
-            LogicalModelRole.ARTICLE_WRITER: ModelFamily.FABLE,
-            LogicalModelRole.ARTICLE_REVIEWER: ModelFamily.OPUS,
-        }[role]
-        row = _entry_for(storage, family)
-        if str(row["current_qualification_state"]) != "PASS":
-            _qualify(
-                storage, role=role, family=family,
-                request_id=f"qual-{role.value.lower()}-{index}", now=now,
-            )
+    # One model-level probe, using the largest article envelope, is the shared
+    # evidence for the same frozen Opus registry entry across all three roles.
+    _qualify(
+        storage, role=LogicalModelRole.ARTICLE_WRITER, family=ModelFamily.OPUS,
+        request_id="qual-article-writer", now=now,
+    )
+    activated = {}
+    for role in roles:
         storage.promote_best_model(role, reason="controlled qualification pass")
-        activated[role] = _entry_for(storage, family)
+        activated[role] = _entry_for(storage, ModelFamily.OPUS)
     return activated
 
 
@@ -409,12 +408,12 @@ def test_13_controlled_qualification_pass_makes_a_model_eligible(catalogue_stora
     )
     approval, outcome, caller = _qualify(
         catalogue_storage, role=LogicalModelRole.ARTICLE_WRITER,
-        family=ModelFamily.FABLE, request_id="qual-pass",
+        family=ModelFamily.OPUS, request_id="qual-pass",
     )
     assert caller.calls == 1
     assert outcome.outcome == "PASS"
-    assert outcome.cost_usd == Decimal("0.015000")  # 900@10 + 120@50 per MTok
-    row = _entry_for(catalogue_storage, ModelFamily.FABLE)
+    assert outcome.cost_usd == Decimal("0.007500")  # 900@5 + 120@25 per MTok
+    row = _entry_for(catalogue_storage, ModelFamily.OPUS)
     assert row["current_qualification_state"] == "PASS"
     stored = catalogue_storage.conn.execute(
         "SELECT source FROM model_qualification_results WHERE qualification_ref=?",
@@ -434,7 +433,7 @@ def test_12b_qualification_fail_leaves_the_model_unusable(catalogue_storage):
     )
     _, outcome, _ = _qualify(
         catalogue_storage, role=LogicalModelRole.ARTICLE_WRITER,
-        family=ModelFamily.FABLE, request_id="qual-fail", ok=False,
+        family=ModelFamily.OPUS, request_id="qual-fail", ok=False,
     )
     assert outcome.outcome == "FAIL"
     assert catalogue_storage.promote_best_model(
@@ -446,7 +445,7 @@ def test_07_missing_qualification_approval_blocks_the_caller(catalogue_storage):
     _register(catalogue_storage)
     approval = _approval(
         catalogue_storage, role=LogicalModelRole.ARTICLE_WRITER,
-        family=ModelFamily.FABLE, request_id="never-approved",
+        family=ModelFamily.OPUS, request_id="never-approved",
     )
     caller = CountingQualificationCaller(
         lambda item: _probe(item.technical_model_id)
@@ -463,7 +462,7 @@ def test_08_expired_qualification_approval_blocks_the_caller(catalogue_storage):
     _register(catalogue_storage)
     approval = _approval(
         catalogue_storage, role=LogicalModelRole.ARTICLE_WRITER,
-        family=ModelFamily.FABLE, request_id="expired",
+        family=ModelFamily.OPUS, request_id="expired",
         approved_at="2026-01-01T00:00:00.000000+00:00",
         expires_at="2026-01-02T00:00:00.000000+00:00",
     )
@@ -519,7 +518,7 @@ def _expiry_approval(
     retention_expires_at: str = EXPIRES_AT,
     approved_at: str = "2026-08-01T00:00:00.000000+00:00",
 ):
-    """One recorded FABLE approval whose retention window outlives it.
+    """One recorded Opus approval used to isolate the approval expiry gate.
 
     The long retention acceptance is deliberate: it removes the retention gate
     as an explanation for any refusal, so only the approval's own expiry can
@@ -530,7 +529,7 @@ def _expiry_approval(
         owner_approved_role_policy(LogicalModelRole.ARTICLE_WRITER)
     )
     approval = _approval(
-        storage, role=LogicalModelRole.ARTICLE_WRITER, family=ModelFamily.FABLE,
+        storage, role=LogicalModelRole.ARTICLE_WRITER, family=ModelFamily.OPUS,
         request_id=request_id, approved_at=approved_at,
         expires_at=expires_at, retention_expires_at=retention_expires_at,
     )
@@ -641,29 +640,52 @@ def test_08g_retention_accepted_but_expired_earlier_today_blocks_the_caller(
     catalogue_storage,
 ):
     """The same date boundary on the retention gate, which shares the parser."""
-    approval = _expiry_approval(
-        catalogue_storage, request_id="retention-earlier-today",
-        expires_at=EXPIRES_LATER_TODAY,
-        retention_expires_at=EXPIRED_EARLIER_TODAY,
+    acceptance = FableRetentionAcceptance(
+        acceptance_ref="retention-earlier-today",
+        scope=RETENTION_SCOPE_QUALIFICATION,
+        approval_ref="approval-retention-earlier-today",
+        request_identity="retention-earlier-today",
+        provider="ANTHROPIC",
+        technical_model_id=FABLE_5_MODEL_ID,
+        provider_policy_ref="fake://anthropic/fable-5/retention",
+        accepted_by="test-owner",
+        accepted_at="2026-08-01T00:00:00.000000+00:00",
+        expires_at=EXPIRED_EARLIER_TODAY,
     )
-    code, caller, state = _refuse_at(catalogue_storage, approval)
-    assert code == "FABLE_RETENTION_ACCEPTANCE_EXPIRED"
-    assert caller.calls == 0
-    assert state == NO_DURABLE_STATE
+    assert retention_acceptance_mismatch(
+        technical_model_id=FABLE_5_MODEL_ID,
+        provider="ANTHROPIC",
+        scope=RETENTION_SCOPE_QUALIFICATION,
+        approval_ref=acceptance.approval_ref,
+        request_identity=acceptance.request_identity,
+        current_ts=EXPIRY_NOW_CANONICAL,
+        acceptance=acceptance,
+    ) == "FABLE_RETENTION_ACCEPTANCE_EXPIRED"
 
 
 def test_08h_retention_accepted_later_today_is_not_yet_effective(catalogue_storage):
     """The other side of the retention window, on the same shared parser."""
-    approval = _expiry_approval(
-        catalogue_storage, request_id="retention-later-today",
-        approved_at="2026-08-10T20:00:00.000000+00:00",
+    acceptance = FableRetentionAcceptance(
+        acceptance_ref="retention-later-today",
+        scope=RETENTION_SCOPE_QUALIFICATION,
+        approval_ref="approval-retention-later-today",
+        request_identity="retention-later-today",
+        provider="ANTHROPIC",
+        technical_model_id=FABLE_5_MODEL_ID,
+        provider_policy_ref="fake://anthropic/fable-5/retention",
+        accepted_by="test-owner",
+        accepted_at="2026-08-10T20:00:00.000000+00:00",
         expires_at="2026-08-11T00:00:00.000000+00:00",
-        retention_expires_at="2026-08-11T00:00:00.000000+00:00",
     )
-    code, caller, state = _refuse_at(catalogue_storage, approval)
-    assert code == "FABLE_RETENTION_ACCEPTANCE_NOT_YET_EFFECTIVE"
-    assert caller.calls == 0
-    assert state == NO_DURABLE_STATE
+    assert retention_acceptance_mismatch(
+        technical_model_id=FABLE_5_MODEL_ID,
+        provider="ANTHROPIC",
+        scope=RETENTION_SCOPE_QUALIFICATION,
+        approval_ref=acceptance.approval_ref,
+        request_identity=acceptance.request_identity,
+        current_ts=EXPIRY_NOW_CANONICAL,
+        acceptance=acceptance,
+    ) == "FABLE_RETENTION_ACCEPTANCE_NOT_YET_EFFECTIVE"
 
 
 def test_09_a_qualification_approval_cannot_be_replayed(catalogue_storage):
@@ -673,7 +695,7 @@ def test_09_a_qualification_approval_cannot_be_replayed(catalogue_storage):
     )
     approval, _, _ = _qualify(
         catalogue_storage, role=LogicalModelRole.ARTICLE_WRITER,
-        family=ModelFamily.FABLE, request_id="replay",
+        family=ModelFamily.OPUS, request_id="replay",
     )
     caller = CountingQualificationCaller(
         lambda item: _probe(item.technical_model_id)
@@ -696,7 +718,7 @@ def test_11_a_qualification_approval_for_another_registry_id_is_blocked(
     fable = _entry_for(catalogue_storage, ModelFamily.FABLE)
     approval = _approval(
         catalogue_storage, role=LogicalModelRole.ARTICLE_WRITER,
-        family=ModelFamily.FABLE, request_id="wrong-registry",
+        family=ModelFamily.OPUS, request_id="wrong-registry",
     )
     catalogue_storage.record_model_qualification_approval(approval)
     opus = _entry_for(catalogue_storage, ModelFamily.OPUS)
@@ -715,8 +737,8 @@ def test_11_a_qualification_approval_for_another_registry_id_is_blocked(
                 "approved_at": approval.approved_at,
                 "expires_at": approval.expires_at,
             },
-            "model_registry_id": str(opus["registry_id"]),
-            "technical_model_id": "claude-opus-5",
+            "model_registry_id": str(fable["registry_id"]),
+            "technical_model_id": "claude-fable-5",
         }
     )
     caller = CountingQualificationCaller(
@@ -739,16 +761,16 @@ def test_15_qualification_returned_model_mismatch_never_passes(catalogue_storage
     )
     approval = _approval(
         catalogue_storage, role=LogicalModelRole.ARTICLE_WRITER,
-        family=ModelFamily.FABLE, request_id="wrong-model",
+        family=ModelFamily.OPUS, request_id="wrong-model",
     )
     catalogue_storage.record_model_qualification_approval(approval)
     outcome = catalogue_storage.execute_controlled_qualification(
-        approval, caller=lambda item: _probe("claude-opus-5"),
+        approval, caller=lambda item: _probe("claude-fable-5"),
     )
     assert outcome.outcome == "NEEDS_VERIFICATION"
     assert outcome.failure_kind == "RETURNED_MODEL_MISMATCH"
     assert outcome.qualification_ref is None
-    row = _entry_for(catalogue_storage, ModelFamily.FABLE)
+    row = _entry_for(catalogue_storage, ModelFamily.OPUS)
     assert row["current_qualification_state"] == "UNQUALIFIED"
 
 
@@ -766,7 +788,7 @@ def test_19_20_disabled_feature_usage_is_never_free(
     )
     _, outcome, _ = _qualify(
         catalogue_storage, role=LogicalModelRole.ARTICLE_WRITER,
-        family=ModelFamily.FABLE, request_id=f"feat-{expected.lower()}",
+        family=ModelFamily.OPUS, request_id=f"feat-{expected.lower()}",
         **usage_kwargs,
     )
     assert outcome.outcome == "NEEDS_VERIFICATION"
@@ -887,7 +909,7 @@ def test_30_a_secret_less_adapter_never_reaches_its_caller():
 
 
 class CatalogueFakeWriter(ProvenanceFakeWriter):
-    """Fable-priced fake writer with a C5-shaped usage report."""
+    """Opus-priced fake writer with a C5-shaped usage report."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -902,8 +924,8 @@ class CatalogueFakeWriter(ProvenanceFakeWriter):
             max_input_tokens=envelope.max_input_tokens,
             max_context_tokens=envelope.max_context_tokens,
             max_output_tokens=envelope.max_output_tokens,
-            # The derived per-attempt worst case for Fable 5 at these ceilings.
-            max_cost_usd=0.1824,
+            # The derived per-attempt worst case for Opus 5 at these ceilings.
+            max_cost_usd=0.0912,
             timeout_seconds=5.0,
         )
 
@@ -1018,9 +1040,9 @@ def test_26_reviewer_authority_is_independent_of_the_writer(catalogue_storage):
         intent_id="job-independent:ARTICLE_REVIEWER",
     )
     assert writer is not None and reviewer is not None
-    assert writer.technical_model_id == "claude-fable-5"
+    assert writer.technical_model_id == "claude-opus-5"
     assert reviewer.technical_model_id == "claude-opus-5"
-    assert writer.model_registry_id != reviewer.model_registry_id
+    assert writer.intent_id != reviewer.intent_id
 
 
 def test_role_execution_settles_from_the_frozen_profile(catalogue_storage):
@@ -1371,7 +1393,7 @@ def test_20_positive_full_article_flow_offline(catalogue_storage, settings, acco
     storage = catalogue_storage
     activated = _activate_article_roles(storage)
     writer_model = _seeded(activated[LogicalModelRole.ARTICLE_WRITER])
-    assert writer_model.technical_model_id == "claude-fable-5"
+    assert writer_model.technical_model_id == "claude-opus-5"
 
     request, lease, owner = _prepare(storage, account, suffix="fullflow")
     approve_content_provider_execution(
@@ -1409,11 +1431,11 @@ def test_20_positive_full_article_flow_offline(catalogue_storage, settings, acco
     storage.record_role_provider_execution(plan_execution)
     assert plan_execution.outcome == "SUCCESS"
 
-    # ARTICLE_WRITER on Fable 5, through the existing durable pipeline.
+    # ARTICLE_WRITER on Opus 5, through the existing durable pipeline.
     fake_writer = CatalogueFakeWriter()
     summary = _run(storage, settings, lease, owner, fake_writer)
     assert summary.status is ContentStatus.PENDING_APPROVAL
-    assert fake_writer.seen_models == ["claude-fable-5"]
+    assert fake_writer.seen_models == ["claude-opus-5"]
 
     # ARTICLE_REVIEWER on Opus 5, independent of the writer.
     storage.freeze_content_role_model_binding(
@@ -1459,19 +1481,18 @@ def test_20_positive_full_article_flow_offline(catalogue_storage, settings, acco
     assert approval_row["consumed_at"] is not None
     assert approval_row["purpose"] == "CONTROLLED_ARTICLE_EXECUTION"
 
-    # Two controlled qualifications, not three: ARTICLE_PLAN and
-    # ARTICLE_REVIEWER share one Opus registry entry, and a model is qualified
-    # once rather than once per role that happens to use it.
+    # One controlled qualification: all three roles share one Opus registry
+    # entry, and a model is qualified once rather than once per role.
     runs = storage.conn.execute(
         "SELECT technical_model_id,outcome FROM model_qualification_runs "
         "ORDER BY technical_model_id"
     ).fetchall()
     assert [(r["technical_model_id"], r["outcome"]) for r in runs] == [
-        ("claude-fable-5", "PASS"), ("claude-opus-5", "PASS"),
+        ("claude-opus-5", "PASS"),
     ]
     assert storage.conn.execute(
         "SELECT count(*) FROM model_qualification_results WHERE source='CONTROLLED_LIVE'"
-    ).fetchone()[0] == 2
+    ).fetchone()[0] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -1480,22 +1501,21 @@ def test_20_positive_full_article_flow_offline(catalogue_storage, settings, acco
 
 def test_16b_worst_case_cost_is_derived_from_real_limits_and_rates():
     estimate = estimate_controlled_article_cost(at=BEFORE_PROMO_END)
-    # Fable 5: 8000 in @10 + 2048 out @50 = 0.08 + 0.1024 = 0.1824 per attempt
-    assert estimate.writer.total_usd == Decimal("0.182400")
+    # Opus 5: 8000 in @5 + 2048 out @25 = 0.04 + 0.0512 = 0.0912 per attempt
+    assert estimate.writer.total_usd == Decimal("0.091200")
     assert estimate.writer.attempts == 2
-    assert estimate.writer.worst_case_usd == Decimal("0.364800")
+    assert estimate.writer.worst_case_usd == Decimal("0.182400")
     # Opus 5: 8000 in @5 + 1024 out @25 = 0.04 + 0.0256 = 0.0656
     assert estimate.plan.total_usd == Decimal("0.065600")
     assert estimate.reviewer.total_usd == Decimal("0.065600")
-    # A probe may declare the whole window: Opus 14976 in + 1024 out twice,
-    # plus Fable 13952 in + 2048 out once.
+    # A probe may declare each role's whole Opus window.
     assert estimate.qualification[0].total_usd == Decimal("0.100480")
-    assert estimate.qualification[1].total_usd == Decimal("0.241920")
-    assert estimate.qualification_total_usd == Decimal("0.442880")
-    assert estimate.execution_total_usd == Decimal("0.496000")
-    assert estimate.total_usd == Decimal("0.938880")
+    assert estimate.qualification[1].total_usd == Decimal("0.120960")
+    assert estimate.qualification_total_usd == Decimal("0.321920")
+    assert estimate.execution_total_usd == Decimal("0.313600")
+    assert estimate.total_usd == Decimal("0.635520")
     assert all(
-        item.technical_model_id in {"claude-opus-5", "claude-fable-5"}
+        item.technical_model_id == "claude-opus-5"
         for item in estimate.qualification
     )
 
@@ -1504,7 +1524,7 @@ def test_sonnet_role_estimate_switches_profile_at_the_expiry_boundary():
     before = estimate_role_cost(
         LogicalModelRole.ARTICLE_WRITER, at=BEFORE_PROMO_END,
     )
-    assert before.pricing_ref.startswith("anthropic-fable-5")
+    assert before.pricing_ref.startswith("anthropic-opus-5")
     # Sonnet's own promotional window is the one that moves.
     promo = [p for p in SONNET_5.pricing if p.effective_until][0]
     standard = [p for p in SONNET_5.pricing if p.effective_from][0]
@@ -1538,6 +1558,7 @@ def test_migration_0029_is_forward_only_explicit_and_idempotent(tmp_path, capsys
     assert provider_contract.applied_migrations == (
         ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION,
     )
+    migrate_0030_to_0031(path)
 
     opened = SqliteStorage.open(path)
     try:

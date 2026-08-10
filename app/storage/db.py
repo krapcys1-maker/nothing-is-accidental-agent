@@ -36,7 +36,8 @@ VERIFIED_CATALOGUE_SCHEMA_VERSION = (
 ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION = (
     "0030_anthropic_provider_contract"
 )
-RUNTIME_SCHEMA_VERSION = ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION
+ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION = "0031_article_writer_opus_policy"
+RUNTIME_SCHEMA_VERSION = ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
@@ -45,6 +46,9 @@ _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0023 rebuilds the C2 intent/attempt tables to preserve rows while
     # widening their exact provider metadata contract.
     CONTENT_WRITER_SCHEMA_VERSION,
+    # 0031 rebuilds the parent model_role_policies table while preserving all
+    # dependent durable rows, so it owns foreign_keys=OFF and its ledger write.
+    ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION,
 })
 _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0007_candidate_attempts",
@@ -770,6 +774,21 @@ def migrate_0029_to_0030(
         db_path,
         source_version=VERIFIED_CATALOGUE_SCHEMA_VERSION,
         target_version=ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0030_to_0031(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the fail-closed ARTICLE_WRITER Fable-to-Opus policy step."""
+
+    return _migrate_single_step(
+        db_path,
+        source_version=ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION,
+        target_version=ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )
 

@@ -28,6 +28,7 @@ from app.model_routing.contracts import (
 )
 
 ROLE_POLICY_VERSION = "owner_approved_role_policy_v1"
+ARTICLE_WRITER_POLICY_VERSION = "owner_approved_article_writer_opus_policy_v1"
 
 
 def family_price_ceiling(role: LogicalModelRole) -> PriceDimensions:
@@ -59,7 +60,11 @@ def owner_approved_role_policy(role: LogicalModelRole) -> RolePolicy:
     return RolePolicy(
         role=role,
         allowed_family=ROLE_FAMILY[role],
-        policy_version=ROLE_POLICY_VERSION,
+        policy_version=(
+            ARTICLE_WRITER_POLICY_VERSION
+            if role is LogicalModelRole.ARTICLE_WRITER
+            else ROLE_POLICY_VERSION
+        ),
         capability_verification_state=CapabilityVerificationState.VERIFIED,
         require_structured_response=True,
         # The model must accept the whole window this role may occupy.
