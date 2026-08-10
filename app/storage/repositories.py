@@ -68,7 +68,7 @@ from app.content.provenance import (
     assert_controlled_provider_binding_ready,
     content_writer_binding_intent_id,
 )
-from app.core.clock import Clock
+from app.core.clock import Clock, parse_authority_instant
 from app.core.money import decimal_from, quantize_usd, sum_usd
 from app.core.security_flags import SECURITY_FLAG_DEFAULTS
 from app.llm.anthropic_provider_contract import (
@@ -1805,7 +1805,18 @@ class SqliteStorage:
                 "QUALIFICATION_APPROVAL_ALREADY_CONSUMED",
                 "A one-shot qualification approval cannot be replayed.",
             )
-        if str(row["expires_at"]) <= current_ts:
+        # Owner windows and the runtime clock are written in different canonical
+        # spellings of the same UTC timeline, so freshness is decided on parsed
+        # instants; comparing the two as text lets a window that closed earlier
+        # today read as still open.
+        approval_expires_at = parse_authority_instant(row["expires_at"])
+        current_at = parse_authority_instant(current_ts)
+        if approval_expires_at is None or current_at is None:
+            raise ControlledQualificationError(
+                "QUALIFICATION_APPROVAL_TIMESTAMP_INVALID",
+                "The approval window cannot be read as a UTC instant.",
+            )
+        if approval_expires_at <= current_at:
             raise ControlledQualificationError(
                 "QUALIFICATION_APPROVAL_EXPIRED",
                 "The qualification approval expired before execution.",

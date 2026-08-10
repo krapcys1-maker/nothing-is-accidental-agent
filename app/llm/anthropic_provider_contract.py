@@ -7,9 +7,9 @@ or workspace setting cannot widen the request to US inference or Priority Tier.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any
 
+from app.core.clock import parse_authority_instant
 from app.model_routing.contracts import fingerprint
 
 ANTHROPIC_PROVIDER = "ANTHROPIC"
@@ -133,15 +133,11 @@ def retention_acceptance_mismatch(
         return "FABLE_RETENTION_ACCEPTANCE_TARGET_MISMATCH"
     if acceptance.requirement != FABLE_RETENTION_REQUIREMENT:
         return "FABLE_RETENTION_ACCEPTANCE_REQUIREMENT_MISMATCH"
-    try:
-        accepted_at = datetime.fromisoformat(acceptance.accepted_at)
-        expires_at = datetime.fromisoformat(acceptance.expires_at)
-        current_at = datetime.fromisoformat(current_ts)
-    except ValueError:
+    accepted_at = parse_authority_instant(acceptance.accepted_at)
+    expires_at = parse_authority_instant(acceptance.expires_at)
+    current_at = parse_authority_instant(current_ts)
+    if accepted_at is None or expires_at is None or current_at is None:
         return "FABLE_RETENTION_ACCEPTANCE_TIMESTAMP_INVALID"
-    accepted_at = accepted_at.replace(tzinfo=accepted_at.tzinfo or timezone.utc)
-    expires_at = expires_at.replace(tzinfo=expires_at.tzinfo or timezone.utc)
-    current_at = current_at.replace(tzinfo=current_at.tzinfo or timezone.utc)
     if accepted_at > current_at:
         return "FABLE_RETENTION_ACCEPTANCE_NOT_YET_EFFECTIVE"
     if expires_at <= current_at:
