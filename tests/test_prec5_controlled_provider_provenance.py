@@ -1111,9 +1111,10 @@ def test_migration_0028_is_forward_only_explicit_and_idempotent(tmp_path, capsys
     assert migrate_0027_to_0028(path).idempotent is True
     assert cli.main(["--db-path", str(path), "--confirm-0027-to-0028"]) == 0
     assert "idempotent=true" in capsys.readouterr().out
-    from app.storage.db import migrate_0028_to_0029
+    from app.storage.db import migrate_0028_to_0029, migrate_0029_to_0030
 
     migrate_0028_to_0029(path)
+    migrate_0029_to_0030(path)
 
     opened = SqliteStorage.open(path)
     try:

@@ -33,7 +33,10 @@ CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION = (
 VERIFIED_CATALOGUE_SCHEMA_VERSION = (
     "0029_verified_catalogue_and_controlled_roles"
 )
-RUNTIME_SCHEMA_VERSION = VERIFIED_CATALOGUE_SCHEMA_VERSION
+ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION = (
+    "0030_anthropic_provider_contract"
+)
+RUNTIME_SCHEMA_VERSION = ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
@@ -65,6 +68,9 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     # 0029 is additive too: two ALTER TABLE ADD COLUMN plus new tables and
     # triggers, all safe inside the runner transaction.
     VERIFIED_CATALOGUE_SCHEMA_VERSION,
+    # 0030 narrowly rebuilds catalogue evidence and adds append-only retention
+    # evidence; the runner owns the one atomic temp-DB transaction.
+    ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION,
     # 0019 is intentionally ABSENT: rebuilding controlled_fetch_approvals with
     # incoming foreign keys requires PRAGMA foreign_keys=OFF, which is a no-op
     # inside the runner transaction — the migration manages its own explicit
@@ -347,6 +353,10 @@ def apply_migrations(
     przed wpisem do ledgeru i COMMIT. Wyjątek z haka wycofuje zarówno schemat,
     jak i ledger danego kroku. Domyślna ścieżka produkcyjna nie instaluje haka.
     """
+    # Migration 0030 canonically rewrites owner-verified evidence JSON and its
+    # fingerprint.  Callers may supply a raw sqlite3 connection, so the runner
+    # itself must provide the same deterministic hash authority as app storage.
+    register_evidence_hash_function(conn)
     _ensure_migrations_table(conn)
     applied = {row[0] for row in conn.execute("SELECT version FROM schema_migrations")}
     newly: list[str] = []
@@ -735,6 +745,23 @@ def migrate_0028_to_0029(
         db_path,
         source_version=CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION,
         target_version=VERIFIED_CATALOGUE_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0029_to_0030(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the frozen Anthropic provider-contract schema step.
+
+    Exercised on explicitly named temporary/non-production databases only.
+    """
+    return _migrate_single_step(
+        db_path,
+        source_version=VERIFIED_CATALOGUE_SCHEMA_VERSION,
+        target_version=ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )
 

@@ -333,3 +333,11 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Macierz:** wersje `5`, `5.1`, `5.2`, `6`; availability/pricing/capability/qualification PASS i wszystkie wymagane odmowy; N+1 PASS, N+1 FAIL, droższe N+1, obca rodzina, dwa procesy promotion, restart i frozen intent.
 - **Wynik:** fake N→N+1 promocja działa tylko po wszystkich politykach; model niekwalifikowany nie osiąga technical caller boundary; runtime provider failure nie przełącza bindingu. To dowód kontraktu orkiestracji, nie rzeczywistej jakości modelu.
 - **Granica:** realne technical IDs, availability, ceny, catalogue adapter i controlled qualification pozostają `UNVERIFIED`/niewdrożone. Koszt `0.000000 USD`; brak nowych Research Cards, sources, retrievals i excerpts.
+
+## 2026-08-10 — Lokalna weryfikacja kontraktu Anthropic dla C5
+
+- **Źródła i granica:** bez internetu, Fetch, browsera i API. Użyto przekazanego przez właściciela provider preflightu z oficjalnej dokumentacji Anthropic (data 2026-08-10) oraz read-only introspekcji lokalnie zainstalowanego `anthropic-sdk 0.116.0`; nie tworzono klienta i nie czytano `.env`.
+- **SDK shape:** `Messages.create` obsługuje `inference_geo` i `service_tier`; returned Usage ma opcjonalne pola o tych nazwach, a service-tier enum zwrotny to `standard|priority|batch`. Dlatego request żąda `global`/`standard_only`, a response — jeżeli dostarcza pola — potwierdza `global`/`standard`.
+- **Modele/ceny:** snapshot pozostaje zgodny z merged catalogue: Opus `claude-opus-5` `$5/$25`, Fable `claude-fable-5` `$10/$50`, Sonnet `claude-sonnet-5` promo `$2/$10` przez 2026-08-31 i `$3/$15` od 2026-09-01. Dokładny UTC timestamp granicy Sonnet nie jest provider claim.
+- **Kontrpróby:** syntetyczne workspace/env `us`, dostępność Priority, returned `us`/`priority`, brak/zły/wygasły retention acceptance, Fable refusal, returned-model mismatch i self-reported caller cost nie obchodzą bramek. Wszystkie dane i zapisy wyłącznie fake/temp.
+- **Wynik/koszt:** kontrakt potwierdzony offline; brak nowych Research Cards/sources/retrievals/excerpts; `0.000000 USD`.
