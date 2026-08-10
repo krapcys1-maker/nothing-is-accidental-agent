@@ -1,8 +1,9 @@
 """Anthropic composition adapter for controlled ARTICLE execution.
 
-This module can build a real client.  In this wave nothing calls it: every test
-injects a fake factory and a fake caller, and the supported composition roots
-still refuse a real ARTICLE execution.
+This module can build a real client.  Controlled ARTICLE composition roots still
+refuse a real execution.  The separately reviewed Fable qualification module
+now composes this transport only behind the durable approval/run lifecycle; its
+tests inject a fake factory and never make a real request.
 
 The adapter exists so that the C5 decision is a decision about *authorisation*,
 not about writing provider code under time pressure.
@@ -123,7 +124,7 @@ class ControlledTechnicalCaller(Protocol):
 
 def _default_sdk_factory(
     *, api_key: str, max_retries: int, timeout: float,
-) -> object:  # pragma: no cover - never constructed in this wave
+) -> object:  # pragma: no cover - requires separately authorised real execution
     anthropic = importlib.import_module("anthropic")
     return anthropic.Anthropic(
         api_key=api_key, max_retries=max_retries, timeout=timeout,
@@ -132,7 +133,7 @@ def _default_sdk_factory(
 
 def _default_caller(
     client: object, request: ControlledProviderRequest,
-) -> ControlledProviderRawResponse:  # pragma: no cover - no real call in C4/PRE-C5
+) -> ControlledProviderRawResponse:  # pragma: no cover - real boundary
     message = client.messages.create(
         model=request.technical_model_id,
         max_tokens=request.max_output_tokens,
