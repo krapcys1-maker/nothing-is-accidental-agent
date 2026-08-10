@@ -322,7 +322,7 @@ def test_02b_paid_intent_without_any_registry_provenance_is_blocked():
 def test_03_unknown_registry_entry_is_blocked(frozen, routing_storage):
     _, binding = frozen
     intent = _intent_from_binding(routing_storage, binding)
-    other = seed_model(routing_storage, version="9", family=ModelFamily.FABLE)
+    other = seed_model(routing_storage, version="9", family=ModelFamily.OPUS)
     loaded = _provenance(routing_storage, binding)
     stranger = routing_storage.conn.execute(
         "SELECT * FROM model_registry WHERE registry_id=?", (other.registry_id,),
@@ -1111,10 +1111,15 @@ def test_migration_0028_is_forward_only_explicit_and_idempotent(tmp_path, capsys
     assert migrate_0027_to_0028(path).idempotent is True
     assert cli.main(["--db-path", str(path), "--confirm-0027-to-0028"]) == 0
     assert "idempotent=true" in capsys.readouterr().out
-    from app.storage.db import migrate_0028_to_0029, migrate_0029_to_0030
+    from app.storage.db import (
+        migrate_0028_to_0029,
+        migrate_0029_to_0030,
+        migrate_0030_to_0031,
+    )
 
     migrate_0028_to_0029(path)
     migrate_0029_to_0030(path)
+    migrate_0030_to_0031(path)
 
     opened = SqliteStorage.open(path)
     try:

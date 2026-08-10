@@ -692,6 +692,7 @@ def test_migration_0011_preserves_valid_0010_history_and_is_idempotent(tmp_path:
             "0028_controlled_provider_provenance",
             "0029_verified_catalogue_and_controlled_roles",
             "0030_anthropic_provider_contract",
+            "0031_article_writer_opus_policy",
     ]
     attempt = conn.execute(
         "SELECT status,actual_cost_usd,released_at FROM provider_attempts"
@@ -2272,6 +2273,7 @@ def test_migration_0012_keeps_provable_usage_nonlegacy_and_reopens_cleanly(tmp_p
             "0028_controlled_provider_provenance",
             "0029_verified_catalogue_and_controlled_roles",
             "0030_anthropic_provider_contract",
+            "0031_article_writer_opus_policy",
     ]
     states = {
         row["model"]: row["is_legacy_usage"]

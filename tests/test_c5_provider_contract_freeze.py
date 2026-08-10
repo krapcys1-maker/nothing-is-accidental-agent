@@ -75,6 +75,18 @@ def contract_storage(tmp_path: Path):
         storage.close()
 
 
+@pytest.fixture
+def fable_contract_storage(tmp_path: Path):
+    """Historical 0030 floor used only to reproduce frozen Fable evidence."""
+    path = tmp_path / "historical-fable-contract.db"
+    initialize_database(path, through=ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION)
+    storage = SqliteStorage(connect(path))
+    try:
+        yield storage
+    finally:
+        storage.close()
+
+
 class CapturingMessages:
     def __init__(self, model_id: str):
         self.model_id = model_id
@@ -171,9 +183,6 @@ def test_content_anthropic_root_cannot_drop_frozen_request_parameters():
 
 def _ready_qualification(storage, request_id: str):
     _register(storage)
-    storage.upsert_model_role_policy(
-        owner_approved_role_policy(LogicalModelRole.ARTICLE_WRITER)
-    )
     return _approval(
         storage,
         role=LogicalModelRole.ARTICLE_WRITER,
@@ -192,8 +201,9 @@ def _ready_qualification(storage, request_id: str):
     ],
 )
 def test_returned_provenance_mismatch_is_durable_and_never_replayed(
-    contract_storage, usage_overrides, failure_kind,
+    fable_contract_storage, usage_overrides, failure_kind,
 ):
+    contract_storage = fable_contract_storage
     approval = _ready_qualification(contract_storage, f"prov-{failure_kind}")
     contract_storage.record_model_qualification_approval(approval)
     caller = CountingQualificationCaller(lambda item: QualificationProbeResponse(
@@ -220,7 +230,8 @@ def test_returned_provenance_mismatch_is_durable_and_never_replayed(
     assert replay.calls == 0
 
 
-def test_returned_optional_provenance_can_confirm_global_standard(contract_storage):
+def test_returned_optional_provenance_can_confirm_global_standard(fable_contract_storage):
+    contract_storage = fable_contract_storage
     approval = _ready_qualification(contract_storage, "prov-legal")
     contract_storage.record_model_qualification_approval(approval)
     outcome = contract_storage.execute_controlled_qualification(
@@ -240,7 +251,8 @@ def test_returned_optional_provenance_can_confirm_global_standard(contract_stora
     assert outcome.outcome == "PASS"
 
 
-def test_missing_fable_retention_acceptance_blocks_before_effect(contract_storage):
+def test_missing_fable_retention_acceptance_blocks_before_effect(fable_contract_storage):
+    contract_storage = fable_contract_storage
     approved = _ready_qualification(contract_storage, "retention-missing")
     approval = replace(approved, retention_acceptance_ref=None)
     contract_storage.record_model_qualification_approval(approval)
@@ -255,7 +267,8 @@ def test_missing_fable_retention_acceptance_blocks_before_effect(contract_storag
     ).fetchone()[0] == 0
 
 
-def test_matching_fake_retention_acceptance_reaches_next_gate(contract_storage):
+def test_matching_fake_retention_acceptance_reaches_next_gate(fable_contract_storage):
+    contract_storage = fable_contract_storage
     approval = _ready_qualification(contract_storage, "retention-match")
     contract_storage.record_model_qualification_approval(approval)
     caller = CountingQualificationCaller(lambda item: QualificationProbeResponse(
@@ -271,7 +284,8 @@ def test_matching_fake_retention_acceptance_reaches_next_gate(contract_storage):
     assert outcome.failure_kind == "STRUCTURED_RESPONSE_REJECTED"
 
 
-def test_retention_evidence_for_another_request_is_rejected(contract_storage):
+def test_retention_evidence_for_another_request_is_rejected(fable_contract_storage):
+    contract_storage = fable_contract_storage
     approved = _ready_qualification(contract_storage, "retention-target")
     wrong_ref = "retention-other-request"
     contract_storage.record_fable_retention_acceptance(FableRetentionAcceptance(
@@ -320,7 +334,8 @@ def test_retention_evidence_for_another_provider_or_model_is_invalid(change):
         FableRetentionAcceptance(**values)
 
 
-def test_expired_retention_evidence_blocks_before_effect(contract_storage):
+def test_expired_retention_evidence_blocks_before_effect(fable_contract_storage):
+    contract_storage = fable_contract_storage
     seeded = _ready_qualification(contract_storage, "retention-expired-seed")
     approved = replace(
         seeded,
@@ -353,8 +368,9 @@ def test_expired_retention_evidence_blocks_before_effect(contract_storage):
 
 
 def test_fable_refusal_is_terminal_preserves_decimal_cost_and_never_qualifies(
-    contract_storage,
+    fable_contract_storage,
 ):
+    contract_storage = fable_contract_storage
     approval = _ready_qualification(contract_storage, "fable-refusal")
     contract_storage.record_model_qualification_approval(approval)
     caller = CountingQualificationCaller(lambda item: QualificationProbeResponse(
@@ -495,14 +511,14 @@ def test_paid_content_refusal_preserves_frozen_cost_and_stops_after_one_call(
         (request.job_id,),
     ).fetchone()
     assert settlement is not None
-    assert settlement["cost_usd"] == "0.052000"
+    assert settlement["cost_usd"] == "0.026000"
     assert contract_storage.conn.execute(
         "SELECT count(*) FROM content_writer_attempts WHERE job_id=?",
         (request.job_id,),
     ).fetchone()[0] == 1
 
 
-def test_missing_content_retention_acceptance_has_zero_caller_and_zero_cost(
+def test_opus_content_does_not_require_fable_retention_acceptance(
     contract_storage, settings, account,
 ):
     activated = _activate_article_roles(contract_storage)
@@ -527,14 +543,13 @@ def test_missing_content_retention_acceptance_has_zero_caller_and_zero_cost(
         retention_acceptance_ref=None,
     )
     writer = CatalogueFakeWriter()
-    with pytest.raises(ContentFoundationError) as excinfo:
-        _run(contract_storage, settings, lease, owner, writer)
-    assert excinfo.value.code == "FABLE_RETENTION_ACCEPTANCE_MISSING"
-    assert writer.calls == 0
+    summary = _run(contract_storage, settings, lease, owner, writer)
+    assert writer.calls == 1
+    assert summary.status is ContentStatus.PENDING_APPROVAL
     assert contract_storage.conn.execute(
-        "SELECT count(*) FROM content_provider_cost_settlements WHERE job_id=?",
+        "SELECT cost_usd FROM content_provider_cost_settlements WHERE job_id=?",
         (request.job_id,),
-    ).fetchone()[0] == 0
+    ).fetchone()[0] == "0.026000"
 
 
 def test_role_response_provenance_and_refusal_are_not_success(contract_storage):

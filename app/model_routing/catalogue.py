@@ -30,6 +30,7 @@ from app.llm.anthropic_provider_contract import (
     CONTROLLED_SERVICE_TIER,
     EXPECTED_RETURNED_INFERENCE_GEO,
     EXPECTED_RETURNED_SERVICE_TIER,
+    OPUS_5_MODEL_ID,
 )
 
 from app.model_routing.contracts import (
@@ -180,11 +181,11 @@ FABLE_5 = CatalogueEntry(
 OPUS_5 = CatalogueEntry(
     family=ModelFamily.OPUS,
     logical_version="5",
-    technical_model_id="claude-opus-5",
+    technical_model_id=OPUS_5_MODEL_ID,
     pricing=(
         _profile(
             "anthropic-opus-5-standard-2026-08",
-            "claude-opus-5",
+            OPUS_5_MODEL_ID,
             input_per_mtok="5",
             output_per_mtok="25",
             cache_read_per_mtok="0.5",

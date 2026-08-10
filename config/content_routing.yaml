@@ -1,10 +1,10 @@
-version: content_routes_v1
+version: content_routes_v2
 mode: FAKE_ONLY
 fallback: FORBIDDEN
 routes:
   ARTICLE:
     route_key: FABLE_5_ARTICLE
-    logical_model_name: Fable 5
+    logical_model_name: Opus 5
     provider: UNVERIFIED
     api_model_id: UNVERIFIED
     availability: UNVERIFIED

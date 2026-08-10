@@ -39,7 +39,7 @@ ROLE_FAMILY: Mapping[LogicalModelRole, ModelFamily] = MappingProxyType({
     LogicalModelRole.TOPIC_GENERATION: ModelFamily.SONNET,
     LogicalModelRole.ARTICLE_RESEARCH: ModelFamily.OPUS,
     LogicalModelRole.ARTICLE_PLAN: ModelFamily.OPUS,
-    LogicalModelRole.ARTICLE_WRITER: ModelFamily.FABLE,
+    LogicalModelRole.ARTICLE_WRITER: ModelFamily.OPUS,
     LogicalModelRole.ARTICLE_REVIEWER: ModelFamily.OPUS,
     LogicalModelRole.NOTE_WRITER: ModelFamily.SONNET,
     LogicalModelRole.COMMENT_WRITER: ModelFamily.SONNET,
