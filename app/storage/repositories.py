@@ -2340,7 +2340,19 @@ class SqliteStorage:
                     "CONTENT_APPROVAL_CAP_EXCEEDED",
                     "The remaining approved budget cannot cover this attempt.",
                 )
-        if str(row["expires_at"]) <= current_ts:
+        # The owner writes this window; the runtime writes its own clock. The
+        # two use different canonical spellings of one UTC timeline, so
+        # freshness is decided on parsed instants — compared as text, a window
+        # that closed earlier today reads as still open and a paid writer
+        # becomes reachable.
+        approval_expires_at = parse_authority_instant(row["expires_at"])
+        current_at = parse_authority_instant(current_ts)
+        if approval_expires_at is None or current_at is None:
+            raise ContentFoundationError(
+                "CONTENT_APPROVAL_TIMESTAMP_INVALID",
+                "The content approval window cannot be read as a UTC instant.",
+            )
+        if approval_expires_at <= current_at:
             raise ContentFoundationError(
                 "CONTENT_APPROVAL_EXPIRED",
                 "The content approval expired before execution.",
