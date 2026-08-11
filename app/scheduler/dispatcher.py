@@ -68,6 +68,8 @@ from app.content.foundation import (
 from app.content.pipeline import ContentPipelineSummary, run_offline_content_pipeline
 from app.content.contracts import RouteContract
 from app.content.writer import FakeContentWriter, WriterPort
+from app.content.quality_gate import ClaimAccountingReviewPort
+from app.topics.novelty import EditorialMemoryRecord, find_editorial_duplicate
 
 
 class DispatchError(RuntimeError):
@@ -290,6 +292,7 @@ class JobDispatcher:
         content_pipeline: ContentPipelineCallable = run_offline_content_pipeline,
         content_writer: WriterPort | None = None,
         content_route_override: RouteContract | None = None,
+        content_claim_reviewer: ClaimAccountingReviewPort | None = None,
         allow_paid_content: bool = False,
     ) -> None:
         self._settings = settings
@@ -309,6 +312,7 @@ class JobDispatcher:
         self._content_pipeline = content_pipeline
         self._content_writer = content_writer or FakeContentWriter()
         self._content_route_override = content_route_override
+        self._content_claim_reviewer = content_claim_reviewer
         self._allow_paid_content = allow_paid_content
 
     def dispatch(
@@ -391,6 +395,11 @@ class JobDispatcher:
             writer=self._content_writer,
             route_override=self._content_route_override,
             heartbeat=heartbeat,
+            claim_reviewer=(
+                self._content_claim_reviewer
+                if paid and job.workflow is WorkflowType.ARTICLE
+                else None
+            ),
         )
         if summary.status in {
             ContentStatus.PENDING_APPROVAL,
@@ -431,6 +440,36 @@ class JobDispatcher:
                 "The system-scheduled worker cannot execute paid research.",
             ))
         topic, is_real = self._validate_research_payload(job, lease_owner=lease_owner)
+
+        # Re-check novelty at the last shared boundary before any paid research
+        # runner can reserve or start a provider attempt. The current topic row
+        # is excluded; all other USED topics and prior content remain eligible.
+        if is_real and job.payload.get("execution") == "durable_provider_v2":
+            memory = tuple(
+                row for row in self._storage.list_editorial_novelty_memory(job.account_id)
+                if not (row.source_kind == "TOPIC" and row.topic_id == topic.id)
+            )
+            duplicate = find_editorial_duplicate(
+                EditorialMemoryRecord(
+                    source_kind="RESEARCH_CANDIDATE",
+                    source_id=int(topic.id or 0),
+                    topic_id=int(topic.id or 0),
+                    research_card_id=None,
+                    content_id=None,
+                    title=topic.title,
+                    question=topic.question or "",
+                    central_thesis=topic.question or "",
+                    body="",
+                    status=topic.status.value,
+                    created_at="",
+                ),
+                memory,
+            )
+            if duplicate is not None:
+                raise PolicyDeniedError(PolicyDecision.block(
+                    "EDITORIAL_NOVELTY_DUPLICATE",
+                    f"Topic duplicates prior {duplicate.reason} memory before research.",
+                ))
 
         # A checkpoint before entering the existing pipeline keeps a long lease
         # alive without a second, competing heartbeat implementation.

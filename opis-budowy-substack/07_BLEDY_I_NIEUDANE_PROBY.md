@@ -1,5 +1,13 @@
 # 07 — BŁĘDY I NIEUDANE PRÓBY
 
+## 2026-08-11 — `dry_run=false` nie oznacza płatnego researchu
+
+Późniejsza samokontrola obaliła ważniejsze założenie: lexical overlap nie jest semantic reviewerem. Może przepuścić zdanie z trzema słowami evidence i nowym faktem. Implementację usunięto, choć testy były zielone. Surowe podłączenie frozen reviewer adaptera również odrzucono, bo istniejący seam zapisuje terminalny execution dopiero po callu i nie chroni okna crash→replay.
+
+Pierwszy full run miał 1 failure: novelty objęła `CONTROLLED_FETCH`, bo warunek patrzył tylko na real/non-dry. To złamało wcześniejszy E2-B, który jest realnym transportem, ale nie płatnym provider researchem. Gate zawężono do exact `execution=durable_provider_v2`; test controlled fetch i paid research przeszedł 2/2, potem affected 473/473 i full 2546/2546.
+
+Wcześniejsze harnessy ujawniły też dwa fałszywe założenia: pusty `content_item` nie jest wcześniejszym artykułem, a produkcyjny reviewer nie powinien zmieniać offline Note. Oba przypadki zawężono do rzeczywistych granic kontraktu. Żadna próba nie dotknęła sieci ani produkcyjnej bazy.
+
 ## 2026-08-10 — Kopia bezpieczeństwa zatrzymana przed zapisem
 
 Pierwsze polecenie backupu użyło nieobsługiwanego `Copy-Item -NoClobber`. PowerShell odmówił jeszcze przed utworzeniem pliku, więc produkcja pozostała nietknięta. Zamiast usuwać lub nadpisywać cokolwiek, wybrano nową nazwę i `.NET File.Copy(..., overwrite:false)`, po czym porównano SHA. To drobny błąd operatorski, ale ważna ilustracja: failure przed migracją powinien być tani, widoczny i odwracalny.

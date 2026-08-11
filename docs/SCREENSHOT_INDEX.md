@@ -1,5 +1,33 @@
 # SCREENSHOT_INDEX
 
+## 2026-08-11 — PRE-LIVE CONTENT UNBLOCK B1–B5
+
+- **Status:** `SCREENSHOT REQUIRED`; zadanie zabraniało browsera, realnego flow i eksponowania produkcyjnych danych, więc nie wykonano obrazu.
+- **Co ma pokazywać:** zanonimizowany flow `controlled root → reviewer unavailable → BLOCK przed writerem/kosztem`; obok kandydacki ProductionArticleWriter, ordinary worker `BLOCK`, sześć wyników novelty oraz ordering `duplicate → runner/writer calls=0`.
+- **Dowód tekstowy:** nowe 6/6, affected 473/473, full/collect 2546/2546; root bez semantic reviewera: SDK/transport/usage/attempt `0`, approval nieskonsumowany; novelty i bounded final topic prompt przechodzą. B3 pozostaje jawnie zablokowane.
+- **Warunki bezpieczeństwa:** bez `.env`, sekretów, surowej produkcyjnej DB, prywatnego korpusu, pełnych promptów i sugestii, że B3 albo live flow są gotowe.
+
+## 2026-08-10 — OPUS ARTICLE_WRITER SWITCH
+
+- **Status:** `SCREENSHOT REQUIRED`; browser i obrazy produkcji były zabronione.
+- **Co ma pokazywać:** historyczny Fable `FAIL/PROVIDER_REFUSAL` po lewej; policy switch `ARTICLE_WRITER→OPUS` pośrodku; po prawej fail-closed `UNVERIFIED / no activation / no new binding` oraz osobne przyszłe bramki migration→qualification→activation.
+- **Dowód tekstowy:** test migracji 0030→0031 zachowujący Fable run/result i frozen binding, test fake Opus composition root, mismatch/cost gates, produkcyjne PRE=POST SHA/integrity/FK/sidecars.
+- **Warunki bezpieczeństwa:** bez sekretów, raw DB, `.env`, prywatnego korpusu stylu i sugestii, że Opus jest qualified/ACTIVE/live-ready.
+
+## 2026-08-10 — Pierwsza realna kwalifikacja Fable
+
+- **Status:** `SCREENSHOT REQUIRED`; podczas realnego calla nie uruchamiano browsera ani przechwytywania ekranu, aby nie ryzykować ujawnienia sekretu lub danych produkcyjnych.
+- **Co ma pokazywać:** zanonimizowany przepływ exact approval + retention → atomic consume/IN_FLIGHT → jeden provider call → `FAIL / PROVIDER_REFUSAL` → terminal settlement; obok usage `151/3`, koszt `0.001660 USD`, capability `0`, activation `0`, policy `UNVERIFIED`.
+- **Dowód tekstowy:** trwały run i qualification result, POST integrity `ok`, FK `0`, brak sidecarów, zero retry/fallbacku/drugiego requestu.
+- **Warunki bezpieczeństwa:** bez `.env`, API key, pełnej odpowiedzi providera, surowej bazy, owner identity i prywatnego korpusu stylu.
+
+## 2026-08-10 — Fable qualification authority package
+
+- **Status:** `SCREENSHOT REQUIRED`; browser i obrazy produkcji były zabronione, więc nie utworzono screenshotu.
+- **Co ma pokazywać:** zanonimizowany authority graph catalogue → registry/pricing/evidence → approval + exact retention acceptance → atomic consume/IN_FLIGHT → caller once → terminal run → capability/result → activation; obok negative gates z caller `0` i production PRE=POST.
+- **Dowód tekstowy:** `docs/FABLE_QUALIFICATION_AUTHORITY_PACKAGE_2026-08-10.md`, temp rehearsal PASS, istniejące testy trzech modułów PASS, production SHA/schema/counts bez zmian, koszt `0.000000 USD`.
+- **Warunki bezpieczeństwa:** bez `.env`, danych produkcyjnych, prawdziwego policy ref, owner identity, sekretów, realnego acceptance/API/qualification i sugestii C5.
+
 ## 2026-08-10 — Produkcyjna migracja 0020→0030
 
 - **Status:** `SCREENSHOT REQUIRED`; nie wykonano obrazu zawierającego prywatne ścieżki lub dane produkcyjne.

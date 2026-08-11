@@ -71,6 +71,7 @@ from app.content.provenance import (
 from app.core.clock import Clock, parse_authority_instant
 from app.core.money import decimal_from, quantize_usd, sum_usd
 from app.core.security_flags import SECURITY_FLAG_DEFAULTS
+from app.topics.novelty import EditorialMemoryRecord
 from app.llm.anthropic_provider_contract import (
     FABLE_5_MODEL_ID,
     FableRetentionAcceptance,
@@ -2166,12 +2167,352 @@ class SqliteStorage:
             ),
         }
 
+    def get_content_row_for_job(self, *, job_id: str) -> dict[str, object]:
+        """The one durable content item this controlled job is executing."""
+        row = self.conn.execute(
+            "SELECT * FROM content_items WHERE job_id=? ORDER BY id LIMIT 1",
+            (job_id,),
+        ).fetchone()
+        if row is None:
+            raise ContentFoundationError(
+                "CONTENT_ITEM_MISSING",
+                f"No durable content item exists for job {job_id!r}.",
+            )
+        return dict(row)
+
+    def _remaining_article_budget_in_transaction(self, *, job_id: str) -> Decimal:
+        """One ARTICLE ceiling minus everything already durably accounted.
+
+        Writer attempts settle into ``content_provider_cost_settlements`` and
+        support roles settle into ``role_provider_executions``.  Both are read
+        here, so the writer and the reviewer draw down the same job-scoped
+        approval instead of each receiving a private full budget.
+        """
+        approval = self.conn.execute(
+            "SELECT cap_usd FROM content_provider_approvals WHERE job_id=?",
+            (job_id,),
+        ).fetchone()
+        if approval is None:
+            raise ContentFoundationError(
+                "CONTENT_APPROVAL_MISSING",
+                f"No durable ARTICLE approval exists for job {job_id!r}.",
+            )
+        remaining = _money(
+            approval["cap_usd"], positive=True, label="Approved ARTICLE cap",
+        )
+        unknown_role = self.conn.execute(
+            "SELECT 1 FROM role_provider_executions WHERE job_id=? AND "
+            "((outcome='NEEDS_VERIFICATION' AND cost_usd IS NULL) OR "
+            "(outcome='IN_FLIGHT' AND external_effect_started_at IS NOT NULL)) "
+            "LIMIT 1",
+            (job_id,),
+        ).fetchone()
+        unknown_writer = self.conn.execute(
+            "SELECT 1 FROM provider_attempts p WHERE p.job_id=? AND p.stage=? "
+            "AND p.status='REQUEST_STARTED' AND NOT EXISTS ("
+            "SELECT 1 FROM content_provider_cost_settlements s "
+            "WHERE s.request_id=p.request_id) LIMIT 1",
+            (job_id, CONTENT_PROVIDER_STAGE),
+        ).fetchone()
+        if unknown_role is not None or unknown_writer is not None:
+            raise ContentFoundationError(
+                "CONTENT_ARTICLE_COST_UNKNOWN",
+                "A paid ARTICLE effect has unknown cost and requires operator "
+                "reconciliation before another paid action may start.",
+            )
+        for row in self.conn.execute(
+            "SELECT cost_usd FROM content_provider_cost_settlements WHERE job_id=?",
+            (job_id,),
+        ).fetchall():
+            remaining -= _money(
+                row["cost_usd"], positive=False, label="Accounted ARTICLE cost",
+            )
+        for row in self.conn.execute(
+            "SELECT cost_usd FROM role_provider_executions "
+            "WHERE job_id=? AND outcome!='IN_FLIGHT' AND cost_usd IS NOT NULL",
+            (job_id,),
+        ).fetchall():
+            remaining -= _money(
+                row["cost_usd"], positive=False, label="Accounted ARTICLE cost",
+            )
+        # A reservation and its settlement are alternatives, never additive.
+        for row in self.conn.execute(
+            "SELECT reserved_amount_usd FROM provider_attempts p "
+            "WHERE p.job_id=? AND p.stage=? AND p.status='RESERVED' AND NOT EXISTS ("
+            "SELECT 1 FROM content_provider_cost_settlements s "
+            "WHERE s.request_id=p.request_id)",
+            (job_id, CONTENT_PROVIDER_STAGE),
+        ).fetchall():
+            remaining -= _money(
+                row["reserved_amount_usd"], positive=False,
+                label="Reserved ARTICLE cost",
+            )
+        for row in self.conn.execute(
+            "SELECT reserved_cost_usd FROM role_provider_executions "
+            "WHERE job_id=? AND outcome='IN_FLIGHT' "
+            "AND external_effect_started_at IS NULL",
+            (job_id,),
+        ).fetchall():
+            remaining -= _money(
+                row["reserved_cost_usd"], positive=False,
+                label="Reserved ARTICLE role cost",
+            )
+        return quantize_usd(remaining, label="remaining ARTICLE budget")
+
+    def remaining_article_budget(self, *, job_id: str) -> Decimal:
+        """Read the shared ARTICLE budget from durable reservations and costs."""
+        return self._remaining_article_budget_in_transaction(job_id=job_id)
+
+    def begin_role_provider_execution(
+        self,
+        *,
+        execution_ref: str,
+        job_id: str,
+        run_id: str,
+        content_id: int,
+        role: object,
+        attempt_no: int,
+        max_cost_usd: Decimal | str,
+        authority: "RoleProviderAuthority",
+        now: datetime | None = None,
+    ) -> dict[str, object]:
+        """Reserve one role execution as IN_FLIGHT before any external effect.
+
+        The row is the durable statement that a paid role call is about to
+        happen.  ``UNIQUE(content_id, logical_role, attempt_no)`` makes each
+        review attempt one-shot while still permitting the contract's one rewrite.
+        """
+        parsed = parse_role(role)
+        timestamp = _ts_precise(now)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            if attempt_no not in (1, 2):
+                raise ContentFoundationError(
+                    "CONTENT_ROLE_ATTEMPT_INVALID",
+                    "A controlled ARTICLE role permits attempts 1 and 2 only.",
+                )
+            existing = self.conn.execute(
+                "SELECT * FROM role_provider_executions "
+                "WHERE content_id=? AND logical_role=? AND attempt_no=?",
+                (content_id, parsed.value, attempt_no),
+            ).fetchone()
+            if existing is not None:
+                raise ContentFoundationError(
+                    "CONTENT_ROLE_EXECUTION_ALREADY_EXISTS",
+                    f"{parsed.value} already has a durable execution for this "
+                    f"content in state {str(existing['outcome'])!r}; a controlled "
+                    "role call is never reserved twice.",
+                )
+            reserved_cost = quantize_usd(
+                max_cost_usd, label="role provider reservation",
+            )
+            remaining = self._remaining_article_budget_in_transaction(job_id=job_id)
+            if reserved_cost > remaining:
+                raise ContentFoundationError(
+                    "CONTENT_ARTICLE_BUDGET_EXHAUSTED",
+                    "The remaining ARTICLE budget cannot cover this role attempt.",
+                )
+            self.conn.execute(
+                "INSERT INTO role_provider_executions (execution_ref,job_id,"
+                "run_id,content_id,logical_role,attempt_no,binding_intent_id,"
+                "model_registry_id,provider,technical_model_id,pricing_ref,"
+                "pricing_profile_fingerprint,qualification_ref,capability_ref,"
+                "reserved_cost_usd,outcome,reserved_at,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'IN_FLIGHT',?,?)",
+                (
+                    execution_ref, job_id, run_id, content_id, parsed.value, attempt_no,
+                    authority.binding_intent_id, authority.model_registry_id,
+                    authority.provider, authority.technical_model_id,
+                    authority.pricing_ref, authority.pricing_profile_fingerprint,
+                    authority.qualification_ref, authority.capability_ref,
+                    format(reserved_cost, ".6f"),
+                    timestamp, timestamp,
+                ),
+            )
+            row = self.conn.execute(
+                "SELECT * FROM role_provider_executions WHERE execution_ref=?",
+                (execution_ref,),
+            ).fetchone()
+            self.conn.commit()
+            return dict(row)
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def mark_role_provider_effect_started(
+        self, execution_ref: str, *, now: datetime | None = None,
+    ) -> dict[str, object]:
+        """Stamp the instant the external effect began; stays IN_FLIGHT."""
+        timestamp = _ts_precise(now)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            row = self.conn.execute(
+                "SELECT * FROM role_provider_executions WHERE execution_ref=?",
+                (execution_ref,),
+            ).fetchone()
+            if row is None:
+                raise ContentFoundationError(
+                    "CONTENT_ROLE_EXECUTION_MISSING",
+                    "No reserved role execution exists for this reference.",
+                )
+            if str(row["outcome"]) != "IN_FLIGHT":
+                raise ContentFoundationError(
+                    "CONTENT_ROLE_EXECUTION_NOT_IN_FLIGHT",
+                    "Only a reserved execution may start an external effect.",
+                )
+            if row["external_effect_started_at"] is not None:
+                raise ContentFoundationError(
+                    "CONTENT_ROLE_EXECUTION_EFFECT_ALREADY_STARTED",
+                    "This role execution already started its external effect.",
+                )
+            # The settle trigger is deliberately narrow, so this pre-effect stamp
+            # is applied with the same immutable identity and a still-IN_FLIGHT
+            # outcome; it can never be mistaken for a terminalization.
+            self.conn.execute(
+                "UPDATE role_provider_executions SET external_effect_started_at=? "
+                "WHERE execution_ref=? AND outcome='IN_FLIGHT' "
+                "AND external_effect_started_at IS NULL",
+                (timestamp, execution_ref),
+            )
+            updated = self.conn.execute(
+                "SELECT * FROM role_provider_executions WHERE execution_ref=?",
+                (execution_ref,),
+            ).fetchone()
+            self.conn.commit()
+            return dict(updated)
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def settle_role_provider_execution(
+        self, execution: RoleProviderExecution, *, now: datetime | None = None,
+    ) -> str:
+        """The one permitted transition: IN_FLIGHT -> terminal, exactly once."""
+        if execution.outcome not in ("SUCCESS", "FAILURE", "NEEDS_VERIFICATION"):
+            raise ContentFoundationError(
+                "CONTENT_ROLE_EXECUTION_OUTCOME_INVALID",
+                "A settlement must name a terminal role execution outcome.",
+            )
+        result_json = canonical_json(execution.result_payload())
+        fingerprint_value = sha256_text(result_json)
+        timestamp = _ts_precise(now)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            row = self.conn.execute(
+                "SELECT * FROM role_provider_executions WHERE execution_ref=?",
+                (execution.execution_ref,),
+            ).fetchone()
+            if row is None:
+                raise ContentFoundationError(
+                    "CONTENT_ROLE_EXECUTION_MISSING",
+                    "A settlement requires an existing reserved execution.",
+                )
+            if str(row["outcome"]) != "IN_FLIGHT":
+                raise ContentFoundationError(
+                    "CONTENT_ROLE_EXECUTION_ALREADY_SETTLED",
+                    f"This execution is already terminal ({row['outcome']!r}); "
+                    "a role execution is never settled twice.",
+                )
+            settled = self.conn.execute(
+                "UPDATE role_provider_executions SET outcome=?,failure_kind=?,"
+                "returned_model_id=?,input_tokens=?,output_tokens=?,"
+                "cache_read_tokens=?,cache_write_tokens=?,web_search_requests=?,"
+                "cost_usd=?,result_json=?,result_fingerprint=?,settled_at=? "
+                "WHERE execution_ref=? AND outcome='IN_FLIGHT'",
+                (
+                    execution.outcome, execution.failure_kind,
+                    execution.returned_model_id,
+                    None if execution.usage is None else execution.usage.input_tokens,
+                    None if execution.usage is None else execution.usage.output_tokens,
+                    None if execution.usage is None else execution.usage.cache_read_tokens,
+                    None if execution.usage is None else execution.usage.cache_write_tokens,
+                    None if execution.usage is None else execution.usage.web_search_requests,
+                    None if execution.cost_usd is None else execution.canonical_cost,
+                    result_json, fingerprint_value,
+                    timestamp, execution.execution_ref,
+                ),
+            )
+            if settled.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_ROLE_EXECUTION_SETTLE_RACE",
+                    "Role execution settlement compare-and-swap failed.",
+                )
+            self.conn.commit()
+            return fingerprint_value
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def get_role_provider_execution(
+        self, *, content_id: int, role: object, attempt_no: int = 1,
+    ) -> dict[str, object] | None:
+        """Read one role execution so recovery can observe its exact state."""
+        parsed = parse_role(role)
+        row = self.conn.execute(
+            "SELECT * FROM role_provider_executions "
+            "WHERE content_id=? AND logical_role=? AND attempt_no=?",
+            (content_id, parsed.value, attempt_no),
+        ).fetchone()
+        return None if row is None else dict(row)
+
+    def list_in_flight_role_provider_executions(
+        self, *, job_id: str | None = None,
+    ) -> tuple[dict[str, object], ...]:
+        """Every reserved execution whose provider outcome is still unknown.
+
+        This is the reconciliation surface: an entry here means a paid role call
+        may already have reached the provider.  Nothing in this repository turns
+        that into an automatic second call.
+        """
+        if job_id is None:
+            rows = self.conn.execute(
+                "SELECT * FROM role_provider_executions WHERE outcome='IN_FLIGHT' "
+                "ORDER BY reserved_at, execution_ref"
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM role_provider_executions "
+                "WHERE outcome='IN_FLIGHT' AND job_id=? "
+                "ORDER BY reserved_at, execution_ref",
+                (job_id,),
+            ).fetchall()
+        return tuple(dict(row) for row in rows)
+
     def record_role_provider_execution(
         self, execution: RoleProviderExecution,
     ) -> str:
         """Persist one append-only role execution with its own Decimal cost."""
         result_json = canonical_json(execution.result_payload())
         fingerprint_value = sha256_text(result_json)
+        settled_instant = _ts_precise(None)
+        # 0032 is intentionally not the runtime floor yet, so this legacy
+        # single-shot writer has to keep working on a 0031 database that still
+        # lacks the lifecycle columns.  The reviewer path never lands here.
+        has_lifecycle = any(
+            row[1] == "reserved_at"
+            for row in self.conn.execute(
+                "PRAGMA table_info(role_provider_executions)"
+            ).fetchall()
+        )
+        lifecycle_columns = (
+            "attempt_no,reserved_cost_usd,reserved_at,"
+            "external_effect_started_at,settled_at,"
+            if has_lifecycle else ""
+        )
+        lifecycle_placeholders = "?,?,?,?,?," if has_lifecycle else ""
+        lifecycle_values = (
+            (
+                execution.attempt_no,
+                execution.canonical_cost,
+                settled_instant,
+                settled_instant,
+                settled_instant,
+            )
+            if has_lifecycle else ()
+        )
         try:
             self.conn.execute("BEGIN IMMEDIATE")
             existing = self.conn.execute(
@@ -2195,8 +2536,9 @@ class SqliteStorage:
                 "qualification_ref,capability_ref,outcome,failure_kind,"
                 "input_tokens,output_tokens,cache_read_tokens,"
                 "cache_write_tokens,web_search_requests,cost_usd,result_json,"
-                "result_fingerprint,created_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "result_fingerprint," + lifecycle_columns + "created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
+                + lifecycle_placeholders + "?)",
                 (
                     execution.execution_ref, execution.job_id,
                     execution.run_id, execution.content_id,
@@ -2213,7 +2555,11 @@ class SqliteStorage:
                     execution.usage.cache_write_tokens,
                     execution.usage.web_search_requests,
                     execution.canonical_cost, result_json, fingerprint_value,
-                    _ts_precise(None),
+                    # An execution recorded here already returned, so its
+                    # reservation, effect and settlement collapse onto one
+                    # instant when the lifecycle columns exist at all.
+                    *lifecycle_values,
+                    settled_instant,
                 ),
             )
             self.conn.commit()
@@ -2319,27 +2665,15 @@ class SqliteStorage:
         # therefore not a replay — but it must still fit inside the one approved
         # cap, counting what this job has already spent.
         already_consumed = row["consumed_at"] is not None
-        if already_consumed:
-            spent = _money_sum(
-                [
-                    settled["cost_usd"]
-                    for settled in self.conn.execute(
-                        "SELECT cost_usd FROM content_provider_cost_settlements "
-                        "WHERE job_id=?", (job_id,),
-                    ).fetchall()
-                ],
-                label="Content job spend to date",
+        remaining = self._remaining_article_budget_in_transaction(job_id=job_id)
+        if remaining < _money(
+            max_cost_usd, positive=True, label="Writer attempt envelope",
+        ):
+            raise ContentFoundationError(
+                "CONTENT_APPROVAL_CAP_EXCEEDED",
+                "The remaining approved ARTICLE budget cannot cover this writer "
+                "attempt envelope.",
             )
-            remaining = _money(
-                row["cap_usd"], positive=True, label="Approved content cap",
-            ) - spent
-            if remaining < _money(
-                max_cost_usd, positive=True, label="Frozen intent cap",
-            ):
-                raise ContentFoundationError(
-                    "CONTENT_APPROVAL_CAP_EXCEEDED",
-                    "The remaining approved budget cannot cover this attempt.",
-                )
         # The owner writes this window; the runtime writes its own clock. The
         # two use different canonical spellings of one UTC timeline, so
         # freshness is decided on parsed instants — compared as text, a window
@@ -2593,6 +2927,68 @@ class SqliteStorage:
             (account_id,),
         ).fetchall()
         return [(r["id"], r["title"]) for r in rows]
+
+    def list_editorial_novelty_memory(
+        self, account_id: str,
+    ) -> tuple[EditorialMemoryRecord, ...]:
+        """Return all-age, per-account editorial memory from canonical tables.
+
+        Topic rows preserve every non-duplicate proposal, including old USED
+        topics. Content rows add the actual durable article plus the Research
+        Card thesis it was based on. Full bodies stay local to the post-generation
+        gate and are never exposed by the topic prompt builder.
+        """
+        topic_rows = self.conn.execute(
+            "SELECT t.id AS source_id,t.id AS topic_id,NULL AS research_card_id,"
+            "NULL AS content_id,t.title,COALESCE(t.question,'' ) AS question,"
+            "COALESCE((SELECT rc.working_thesis FROM research_cards rc "
+            "WHERE rc.topic_id=t.id ORDER BY rc.id DESC LIMIT 1),'') AS central_thesis,"
+            "'' AS body,t.status,t.created_at FROM topics t "
+            "WHERE t.account_id=? AND t.status!='DUPLICATE' ORDER BY t.id",
+            (account_id,),
+        ).fetchall()
+        content_rows = self.conn.execute(
+            "SELECT ci.id AS source_id,rc.topic_id,rc.id AS research_card_id,"
+            "ci.id AS content_id,COALESCE(NULLIF(ci.title,''),"
+            "(SELECT cd.title FROM content_drafts cd WHERE cd.content_id=ci.id "
+            " ORDER BY cd.attempt_no DESC LIMIT 1),t.title) AS title,"
+            "COALESCE(t.question,'') AS question,COALESCE(rc.working_thesis,rc.thesis,'') "
+            "AS central_thesis,COALESCE(NULLIF(ci.body,''),"
+            "(SELECT cd.body FROM content_drafts cd WHERE cd.content_id=ci.id "
+            " ORDER BY cd.attempt_no DESC LIMIT 1),'') AS body,ci.status,ci.created_at "
+            "FROM content_items ci JOIN research_cards rc ON rc.id=ci.research_card_id "
+            "JOIN topics t ON t.id=rc.topic_id WHERE ci.account_id=? AND ("
+            "NULLIF(ci.body,'') IS NOT NULL OR EXISTS(SELECT 1 FROM content_drafts cd "
+            "WHERE cd.content_id=ci.id)) "
+            "ORDER BY ci.id",
+            (account_id,),
+        ).fetchall()
+        records = [
+            EditorialMemoryRecord(
+                source_kind=source_kind,
+                source_id=int(row["source_id"]),
+                topic_id=int(row["topic_id"]),
+                research_card_id=(
+                    None if row["research_card_id"] is None
+                    else int(row["research_card_id"])
+                ),
+                content_id=(
+                    None if row["content_id"] is None else int(row["content_id"])
+                ),
+                title=str(row["title"] or ""),
+                question=str(row["question"] or ""),
+                central_thesis=str(row["central_thesis"] or ""),
+                body=str(row["body"] or ""),
+                status=str(row["status"]),
+                created_at=str(row["created_at"]),
+            )
+            for source_kind, rows in (("TOPIC", topic_rows), ("CONTENT", content_rows))
+            for row in rows
+        ]
+        return tuple(sorted(
+            records,
+            key=lambda row: (row.created_at, row.source_kind, row.source_id),
+        ))
 
     def list_topics_by_status(self, account_id: str, status: TopicStatus) -> Sequence[Topic]:
         return [t for t in self.list_topics(account_id) if t.status == status]

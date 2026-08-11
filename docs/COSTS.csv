@@ -1,7 +1,9 @@
 # CEL: Rejestr kosztow API (model jezykowy, web search, grafiki). Zrodlo prawdy = tabela model_usage w bazie; ten CSV to czytelny eksport.
 # Format kolumn wg specyfikacji wlasciciela. Kwoty w USD. Bez sekretow.
 # Jesli koszt jest tylko szacunkiem -> zaznacz w kolumnie notes (np. "szacunek").
+# 2026-08-11 - PRE-LIVE CONTENT UNBLOCK B1/B2/B4/B5 candidate; B3 BLOCKED: new 6/6, root bez reviewera zatrzymany przed SDK/usage/cost, tylko nowe temp SQLite - 0.000000 USD actual; zero API/sieci/browsera/publikacji i zero migracji produkcji.
 # Linie z '#' to komentarze (pomijane przy imporcie, np. pandas comment='#').
+# 2026-08-10 - FABLE QUALIFICATION AUTHORITY PACKAGE offline - koszt 0.000000 USD; repo-only trace, produkcja immutable, synthetic owner values/fake caller i nowe temp DB; zero sieci/API/qualification/C5/publikacji.
 # 2026-08-10 - production schema migration 0020->0030 - koszt 0.000000 USD; lokalne SQLite CLI, zero realnego API, qualification, C5 i publikacji.
 # 2026-08-10 - MIGRATION TRANSACTIONALITY REPAIR 0026/0027 - koszt 0.000000 USD; wylacznie lokalne testy i nowe temp DB; zero realnego API, kwalifikacji, C5 i publikacji.
 date,run_id,task,provider,model,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,web_search_requests,image_count,estimated_cost_usd,notes
@@ -69,3 +71,5 @@ date,run_id,task,provider,model,input_tokens,output_tokens,cache_read_tokens,cac
 # 2026-08-09 - PRE-C5 QUESTION SEMANTIC BOUNDARY REPAIR: module 220/220, PRE-C5 328/328, affected 399/399, full/collect 2322/2322, tylko fake reviewery i nowe temp SQLite - 0.000000 USD; zero API/SDK/sieci/browsera/publikacji i zero migracji produkcji; actual rows bez zmian.
 # 2026-08-09 - PRE-C5 MODEL FAMILY ROUTING & QUALIFICATION CORE: new 31/31, affected 748/748, full/collect 2353/2353, tylko fake catalogue/qualification/callery i nowe temp SQLite - 0.000000 USD; zero realnego API/SDK/sieci/browsera/publikacji/controlled-live i zero migracji produkcji; actual rows bez zmian.
 # 2026-08-10 - C5 PROVIDER CONTRACT FREEZE: new 22/22, affected 330/330, full/collect 2481/2481, tylko fake SDK/callery i nowe temp SQLite - 0.000000 USD actual; C5 GLOBAL+STANDARD estimate 0.938880 USD, US 1.1x counterfactual-only 1.032768 USD; zero realnego API/sieci/browsera/publikacji i zero migracji produkcji; actual rows bez zmian.
+2026-08-10,fable5-qualification-request-20260810-001,controlled-live-qualification,anthropic,claude-fable-5,151,3,0,0,0,0,0.001660,actual; one authorized request; PROVIDER_REFUSAL; no retry or fallback
+2026-08-10,article-writer-opus-switch,offline-policy-switch,none,none,0,0,0,0,0,0,0.000000,actual; fake SDK/callers and temporary DBs only; zero network/API/browser/publication

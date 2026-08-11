@@ -1,5 +1,7 @@
 # 09 — KOSZTY
 
+> **2026-08-11 — PRE-LIVE CONTENT UNBLOCK:** koszt rzeczywisty `0.000000 USD`. Końcowy controlled root blokuje brak semantic reviewera przed SDK, usage i kosztem; nie wykonano requestu API ani innej płatnej operacji.
+
 > **2026-08-10 — produkcyjna migracja 0020→0030:** koszt `0.000000 USD`. Operacja używała wyłącznie lokalnego SQLite i nie uruchomiła API, providera, qualification, C5 ani publikacji.
 
 > **2026-08-10 — MIGRATION TRANSACTIONALITY REPAIR 0026/0027:** koszt `0.000000 USD`. Testy używały wyłącznie nowych lokalnych temp DB; nie wykonano realnego API, kwalifikacji, C5, publikacji ani produkcyjnej migracji.

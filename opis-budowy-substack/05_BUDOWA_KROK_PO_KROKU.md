@@ -1,5 +1,7 @@
 # 05 — BUDOWA KROK PO KROKU
 
+> **Krok 2026-08-11 — PRE-LIVE CONTENT UNBLOCK = BLOCKED:** B1/B2/B4/B5 mają kandydata, lecz B3 pozostało otwarte. Samokontrola odrzuciła lexical reviewer jako sprzeczny z ADR-123. Existing ARTICLE_REVIEWER seam nie ma production callera ani durable stanu przed external effect, więc root zatrzymuje się przed writerem i kosztem. Trwała pamięć thesis/content i bounded topic history pozostają gotowe do review.
+
 > **Krok 2026-08-10 — produkcja 0020→0030:** dopiero po niezależnym review, freeze, merge, post-merge verification i osobnej zgodzie właściciela wykonaliśmy migrację prawdziwej bazy. Najpierw powstała byte-identical kopia PRE, potem dziesięć pojedynczych modułów z osobnymi flagami confirm. Każdy krok przeszedł raz; nie było retry. Reopen pokazał `0030/30`, integrity `ok`, FK `0`, zachowane 211 wcześniejszych wierszy i pustą tabelę retention acceptance. Sam schemat nie oznacza C5 ani live readiness.
 
 > **Krok 2026-08-10 — atomowość migracji 0026/0027:** poprzedni rehearsal doszedł do 0030, ale udowodnił, że sam zielony happy path nie wystarcza. Dwie migracje omijały transakcyjny runner, więc schema mogło przetrwać bez wpisu w ledgerze. Najmniejsza naprawa dopisała je do istniejącej klasyfikacji; failpointy wycofały schema i ledger razem, reopen pokazał poprzedni head, a retry zakończył migrację poprawnie. Nowa kopia produkcji przeszła pełną drabinę z zerem mismatchów. Status pozostaje kandydacki; produkcji nie migrowano.

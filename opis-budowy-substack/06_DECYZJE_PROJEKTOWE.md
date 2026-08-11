@@ -1,5 +1,12 @@
 # 06 — DECYZJE PROJEKTOWE
 
+### D-134: Pamięć novelty przed kosztem; semantic reviewer bez skrótu
+
+- **Wybór:** jawny, targetowany root z job-scoped approvalem/capem oraz lokalna per-account pamięć topics/questions/theses/real content. Próba deterministic reviewera została odrzucona: ADR-123 wymaga semantycznej granicy.
+- **Granica:** gate paid research dotyczy tylko `durable_provider_v2`, a gate writera tylko produkcyjnego writera. Controlled fetch, offline roots, Notes i legacy routes pozostają nietknięte.
+- **Blocker:** reviewer seam potrzebuje production callera i durable pre-effect lifecycle/recovery/cost-cap. Bez tego root odmawia przed writerem.
+- **Powiązanie:** ADR-134.
+
 > **Stan bieżący LA-02 (2026-07-17):** `APPROVED WITH MINOR/P2 — CHECKPOINTED`; root cause `PROCESSES_PRESENT = CLOSED`; P2-2 false STOP = `OPEN OBSERVATION / DOCUMENTED`. Dowód: **1174/1174**, exact-once **284+284+298+308**, schema 0014, job `QUEUED/attempts=0`, provider request niewykonany, gate `False`, flags fail-closed. Etap 1 jest otwarty i czeka na nową autoryzację dopiero po standalone quiescence check z tego samego launchera.
 
 > **Stan bieżący LA-01-R1 (2026-07-17):** pierwsza LA-01 = `REJECTED — MAJOR`; LA-01-R1 = `APPROVED WITH MINOR/P2 — CHECKPOINT AUTHORIZED`. Wybrano pełny frozen pricing contract (`Decimal`), trwałe session/job/request/attempt/token fencing, raport przed marker clear, recovery bez retry, prawdziwy reopen i wyłącznie pełny atomowy profil pięciu flag. Open P2 rekurencyjnej sanitizacji fallbacku jest jawny, nieblokujący i nie jest dokładany do reviewed diffu. Bieżący dowód to **1151/1151**, schema produkcji `0014`, 14 migracji. Live API i controlled acceptance niewykonane; Etap 1 otwarty.

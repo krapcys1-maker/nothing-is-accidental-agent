@@ -1,5 +1,30 @@
 # HUMAN_INTERVENTIONS
 
+## 2026-08-11 — właściciel ograniczył naprawę do B1–B5
+
+- **Decyzja człowieka:** usunąć wyłącznie brak produkcyjnego WriterPort, controlled paid content root, produkcyjnego ARTICLE_REVIEWER, semantic thesis dedup i bounded topic-generation history.
+- **Jawne zakazy:** bez realnego API, pełnego live flow, publikacji, browsera, migracji `data/agent.db`, nowych kosztów i operacji Git. Fake SDK dozwolony tylko na finalnej granicy transportu; wszystkie zapisy testowe wyłącznie do nowych temp DB.
+- **Authority zachowane:** frozen `ARTICLE_WRITER=OPUS/claude-opus-5`, qualification/capability/ACTIVE/binding i `fallback=FORBIDDEN` nie mogły zostać zmienione. Legacy Fable route, inne bindingi, P2, scheduler/service, Notes, interactions i legacy research pozostały poza zakresem.
+- **Wynik implementera:** `PRE-LIVE CONTENT UNBLOCK — BLOCKED`. B3 wymaga osobnej decyzji implementacyjnej o durable reviewer lifecycle; każda przyszła płatna operacja nadal wymaga osobnej jawnej zgody i cost ceiling właściciela.
+
+## [2026-08-10] Właściciel wycofał Fable jako primary ARTICLE_WRITER i wybrał Opus
+
+- **Decyzja człowieka:** po realnym `FAIL / PROVIDER_REFUSAL` zmienić canonical/default family `ARTICLE_WRITER` z `FABLE` na `OPUS` w istniejącej architekturze.
+- **Warunki:** zachować qualification required, fallback `FORBIDDEN`, L1, durable lifecycle, pricing/provenance i returned-model gate; nie zmieniać historii Fable i nie wykonywać realnego API.
+- **Granice:** decyzja implementacyjna nie jest zgodą na produkcyjną migrację 0031, realną kwalifikację Opusa, activation, topic generation, research ani publikację.
+
+## [2026-08-10] Właściciel autoryzował dokładnie jedną realną kwalifikację Fable
+
+- **Decyzja człowieka:** wykonać dokładnie jeden `execute_controlled_qualification` dla `claude-fable-5`, approvalu `fable5-qualification-approval-20260810-001` i requestu `fable5-qualification-request-20260810-001`, z limitami `13952/2048`, capem `0.241920 USD`, retry `0` i fallbackiem `FORBIDDEN`.
+- **Wyłączone:** policy update, activation, topic generation, research i publikacja; autoryzacja nie obejmowała ponowienia po refusal.
+- **Efekt:** jeden request, wynik `FAIL / PROVIDER_REFUSAL`, koszt `0.001660 USD`; approval skonsumowany, bez capability i activation. Kolejny request wymaga nowej, osobnej decyzji właściciela.
+
+## [2026-08-10] Właściciel zlecił wyłącznie offline Fable authority package
+
+- **Decyzja człowieka:** odtworzyć aktualny authority flow i przygotować niewymyślony owner authorization package dla Fable / `ARTICLE_WRITER` na `main=11d5dbb…`, wyłącznie z repo i produkcji immutable.
+- **Twarde granice:** zero produkcyjnych zapisów, durable retention acceptance, sieci, real API, real qualification, C5, Substacka, publikacji i kosztu; żadnych napraw P2/MINOR ani operacji Git.
+- **Efekt:** pakiet jest gotowy do uzupełnienia przez właściciela. Ta decyzja nie stanowi akceptacji 30-dniowej retencji, nie autoryzuje policy update, registration, qualification ani callera.
+
 ## [2026-08-10] Właściciel autoryzował produkcyjną migrację 0020→0030
 
 - **Decyzja człowieka:** po merge i post-merge verification naprawy transakcyjności właściciel jawnie zezwolił na zapisową migrację `data/agent.db` z `0020` do `0030`.

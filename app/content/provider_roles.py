@@ -140,16 +140,19 @@ class RoleProviderExecution:
     run_id: str
     content_id: int
     role: LogicalModelRole
+    attempt_no: int
     authority: RoleProviderAuthority
     returned_model_id: str | None
     outcome: str
     failure_kind: str | None
-    usage: RoleUsage
-    cost_usd: Decimal
+    usage: RoleUsage | None
+    cost_usd: Decimal | None
     payload: dict[str, Any]
 
     @property
     def canonical_cost(self) -> str:
+        if self.cost_usd is None:
+            raise ValueError("An unknown role execution cost has no canonical value.")
         return format(
             quantize_usd(self.cost_usd, label="role execution cost"), ".6f",
         )
@@ -161,6 +164,7 @@ class RoleProviderExecution:
             "run_id": self.run_id,
             "content_id": self.content_id,
             "logical_role": self.role.value,
+            "attempt_no": self.attempt_no,
             "binding_intent_id": self.authority.binding_intent_id,
             "model_registry_id": self.authority.model_registry_id,
             "provider": self.authority.provider,
@@ -171,16 +175,20 @@ class RoleProviderExecution:
             "capability_ref": self.authority.capability_ref,
             "outcome": self.outcome,
             "failure_kind": self.failure_kind,
-            "usage": {
-                "input_tokens": self.usage.input_tokens,
-                "output_tokens": self.usage.output_tokens,
-                "cache_read_tokens": self.usage.cache_read_tokens,
-                "cache_write_tokens": self.usage.cache_write_tokens,
-                "web_search_requests": self.usage.web_search_requests,
-                "inference_geo": self.usage.inference_geo,
-                "service_tier": self.usage.service_tier,
-            },
-            "cost_usd": self.canonical_cost,
+            "usage": (
+                None
+                if self.usage is None
+                else {
+                    "input_tokens": self.usage.input_tokens,
+                    "output_tokens": self.usage.output_tokens,
+                    "cache_read_tokens": self.usage.cache_read_tokens,
+                    "cache_write_tokens": self.usage.cache_write_tokens,
+                    "web_search_requests": self.usage.web_search_requests,
+                    "inference_geo": self.usage.inference_geo,
+                    "service_tier": self.usage.service_tier,
+                }
+            ),
+            "cost_usd": None if self.cost_usd is None else self.canonical_cost,
             "payload": self.payload,
         }
 
@@ -325,6 +333,7 @@ def evaluate_role_response(
     authority: RoleProviderAuthority,
     run_id: str,
     content_id: int,
+    attempt_no: int = 1,
     response: RoleProviderResponse,
 ) -> RoleProviderExecution:
     """Classify one role response without ever trusting the caller's claims."""
@@ -354,6 +363,7 @@ def evaluate_role_response(
         run_id=run_id,
         content_id=content_id,
         role=authority.role,
+        attempt_no=attempt_no,
         authority=authority,
         returned_model_id=response.returned_model_id,
         outcome=outcome,

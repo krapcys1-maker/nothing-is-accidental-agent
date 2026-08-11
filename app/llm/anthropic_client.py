@@ -40,11 +40,22 @@ _SYSTEM = (
 )
 
 
-def _build_prompt(account: Account, count: int) -> str:
+def _build_prompt(
+    account: Account,
+    count: int,
+    editorial_history: tuple[dict[str, str], ...] = (),
+) -> str:
     niche = ", ".join(account.niche) or "hidden everyday systems"
+    history_json = json.dumps(
+        list(editorial_history), ensure_ascii=False, separators=(",", ":"),
+    )
     return (
         f"Propose {count} article topic ideas in the niche: {niche}. "
         "For each, return an object with keys: title, question, and score_breakdown. "
+        "The question must state the proposed central causal angle clearly enough "
+        "to distinguish it from another thesis in the same broad area. "
+        "Do not repeat or paraphrase an editorial angle in this bounded history: "
+        f"{history_json}. "
         "score_breakdown must contain these keys, each 0.0-1.0: curiosity, source_quality, "
         "non_obvious, universality, discussion_potential, visual_potential, originality. "
         'Respond as JSON: {"topics": [ ... ]}.'
@@ -157,6 +168,18 @@ class AnthropicLLMClient(LLMClient):
         self._estimated_attempt_cost = 0.0
         self._durable_control_configured = False
         self._durable_boundary = DurableProviderBoundary(provider_label="Real Anthropic topic")
+        self._editorial_history: tuple[dict[str, str], ...] = ()
+
+    def set_editorial_history(
+        self, history: tuple[dict[str, str], ...],
+    ) -> None:
+        """Install the bounded durable snapshot used by the next topic call."""
+        if not isinstance(history, tuple) or len(history) > 40:
+            raise ValueError("Editorial history must be a bounded tuple.")
+        allowed = {"title", "question", "central_thesis", "status"}
+        if any(not isinstance(row, dict) or set(row) != allowed for row in history):
+            raise ValueError("Editorial history has an unsupported prompt shape.")
+        self._editorial_history = tuple(dict(row) for row in history)
 
     def configure_durable_attempt_control(
         self,
@@ -237,7 +260,10 @@ class AnthropicLLMClient(LLMClient):
                 model=self.model,
                 max_tokens=self._topic_max_tokens,
                 system=_SYSTEM,
-                messages=[{"role": "user", "content": _build_prompt(account, count)}],
+                messages=[{
+                    "role": "user",
+                    "content": _build_prompt(account, count, self._editorial_history),
+                }],
                 timeout=self._timeout_seconds,
                 extra_headers={"Idempotency-Key": request_id},
             )

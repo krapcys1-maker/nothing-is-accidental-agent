@@ -1,5 +1,32 @@
 # BUILD_LOG
 
+## [2026-08-11] Etap 3 — PRE-LIVE CONTENT UNBLOCK B1–B5 — BLOCKED
+
+- **Cel:** usunąć wyłącznie pięć blockerów wykrytych w PRE-LIVE CONTENT FLOW CHECK, bez realnego API, full live flow, publikacji i zmian produkcyjnej DB.
+- **B1/B2:** dodano `ProductionArticleWriter` oraz jeden jawny `run_controlled_article`. Exact frozen `ARTICLE_WRITER→OPUS/claude-opus-5`, forbidden fallback, retry `0`, returned identity, istniejący prompt/provenance/attempt/canonical usage-cost lifecycle; finalny fake SDK/transport osiągnięty. Ordinary dispatcher nadal odmawia paid CONTENT.
+- **B3 — blocker:** analiza ADR-122/123 obaliła deterministyczny reviewer oparty na lexical overlap. Existing frozen `ARTICLE_REVIEWER` seam nie ma production callera ani durable pre-effect lifecycle/recovery; bez tego modelowy review mógłby zostać powtórzony po crashu. Heurystykę usunięto, a root odmawia przed writerem i kosztem.
+- **B4/B5:** dodano trwałą per-account pamięć title/question/Research Card thesis/working_thesis oraz wcześniejszego content body/drafts. `USED` nie wygasa. Gate działa po topic generation i przed `durable_provider_v2` research/produkcyjnym writerem. Prompt topic generation dostaje maks. 40 minimalnych rekordów, bez pełnych artykułów.
+- **Testy:** nowe 6/6 po usunięciu heurystycznego reviewera; affected 473/473; finalny full 2546/2546 w 524.0 s; collect 2546; compileall i `git diff --check` PASS. Wcześniejszy full obalonego kandydata nie jest używany jako dowód.
+- **Bezpieczeństwo:** wszystkie nowe zapisy na temp DB; fake SDK tylko na finalnej granicy; zero realnego requestu, sieci, browsera, publikacji i kosztu. Nie wykonano stage/commit/push/PR/merge ani migracji.
+- **Status:** `PRE-LIVE CONTENT UNBLOCK — BLOCKED`; B1/B2/B4/B5 kandydackie, B3 otwarte.
+
+## [2026-08-10] Etap 3 — OPUS ARTICLE_WRITER SWITCH
+
+- **Zakres:** canonical/default `ARTICLE_WRITER` przełączony `FABLE→OPUS`; PLAN/REVIEWER i role Sonnet bez zmian. Zachowano mandatory qualification, `FORBIDDEN`, L1, frozen pricing/provenance i returned-model identity.
+- **Kod/schema:** dodano Opus model ID do frozen contractu, minimalnie uogólniono production qualification caller, dodano Opus root i forward-only migrację `0031`. Produkcyjna DB nie została migrowana.
+- **Fail-closed:** po samym switchu brak Opus capability, qualification PASS, activation i nowego frozen intentu. Historyczny Fable result/refusal, koszty, retention i bindingi są zachowane; test migracji dowodzi braku rebindingu.
+- **Weryfikacja:** fake Opus przechodzi pełny production composition root z fake SDK na końcowej granicy; mismatch identity i niespójne authority są odrzucane; settlement używa frozen Opus pricing. Affected `191/191`; full `2539/2539` (`596.4 s`); najnowsza kontrpróba guardu `6/6`; collect/unique `2540/2540`, duplicates i collection errors `0`; compile/diff PASS.
+- **Granice:** zero aplikacyjnej sieci, realnego API, browsera, publikacji i kosztu; bez stage/commit/push/PR/merge.
+
+## [2026-08-10 21:23] Etap 3 — dokładnie jedna realna kwalifikacja Fable
+
+- **Autoryzacja:** właściciel wskazał exact approval `fable5-qualification-approval-20260810-001`, request `fable5-qualification-request-20260810-001`, model `claude-fable-5`, envelope `13952/2048`, cap `0.241920 USD`, `max_retries=0`, fallback `FORBIDDEN`; poza zakresem: policy update, activation, topic generation, research i publikacja.
+- **Preflight:** `main=658438be50da1b0414b122a13a0a865e2b6c019c`; approval nieskonsumowany i aktualny; dokładnie jedno dopasowane acceptance `30_DAY_RETENTION_ACCEPTED`; brak wcześniejszego runu; prompt SHA zgodny; SDK `0.116.0`; sekret obecny bez ujawnienia; worst case w limitach `2.00 USD/dzień` i `40.00 USD/miesiąc`; produkcja PRE SHA `dbe7904b52cc559ba9ea260d749a469242c6023288af4cebdf990514d382a92f`, integrity `ok`, FK `0`, sidecary `0`.
+- **External effect:** wspierany `execute_fable_production_qualification` uruchomiono dokładnie raz. Provider zwrócił model `claude-fable-5`, provenance `global/standard`, `stop_reason=refusal`, usage `151 input / 3 output`, cache/web `0/0`.
+- **Settlement:** `FAIL / PROVIDER_REFUSAL`, koszt `0.001660 USD`, approval consumed raz, terminalny run `1`, qualification result `CONTROLLED_LIVE/FAIL` `1`, capability `0`, activation `0`, registry `FAIL/CANDIDATE`, policy ARTICLE_WRITER bez zmiany i nadal `UNVERIFIED`.
+- **POST:** schema `0030/30`, SHA `14a7bf1639417e5b06ac946c4a93a8ec576c3c282e1ef0626c4fb0d3a87cbe94`, integrity `ok`, FK `0`, brak WAL/SHM/journal; styl SHA bez zmian. Zero retry, fallbacku, drugiego requestu, policy update, activation, topic generation, research, browsera i publikacji.
+- **Testy:** nie uruchamiano; kandydat PR #38 miał wcześniej potwierdzone `137/137`, a operacja była wykonaniem zatwierdzonego, niezmienionego tree.
+
 ## [2026-08-10 20:25] Etap 3 — FABLE PRODUCTION QUALIFICATION CALLER
 
 - **Cel zadania:** zamknąć wyłącznie brakującą produkcyjną warstwę `QualificationCaller` pomiędzy istniejącym durable qualification lifecycle a zamrożonym transportem Anthropic, tak aby po niezależnym review i osobnej późniejszej autoryzacji istniał wspierany one-shot entrypoint. Fala całkowicie offline.

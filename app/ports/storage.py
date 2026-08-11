@@ -60,6 +60,7 @@ from app.models import (
     TopicStatus,
 )
 from app.ports.fetch import FetchedDocument
+from app.topics.novelty import EditorialMemoryRecord
 from app.content.foundation import (
     ContentCallIntent,
     ContentEvaluation,
@@ -374,6 +375,10 @@ class StoragePort(Protocol):
     def list_topics(self, account_id: str) -> Sequence[Topic]: ...
 
     def list_topic_titles_for_dedup(self, account_id: str) -> list[tuple[int, str]]: ...
+
+    def list_editorial_novelty_memory(
+        self, account_id: str,
+    ) -> tuple[EditorialMemoryRecord, ...]: ...
 
     def prepare_content_job(
         self,
