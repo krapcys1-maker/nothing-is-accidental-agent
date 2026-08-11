@@ -2,10 +2,10 @@
 
 ## 2026-08-11 — P2-1 TOPIC_GENERATION / ARTICLE_RESEARCH provider alignment
 
-- **Status:** `SCREENSHOT REQUIRED`; browser i obrazy produkcyjnych danych były zabronione.
+- **Status:** `SCREENSHOT REQUIRED`; browser i obrazy produkcyjnych danych były zabronione. Niezależny werdykt dla reviewed head: `APPROVE WITH MINOR/P2`, zero blockerów runtime.
 - **Co ma pokazywać:** dwa rooty `TOPIC_GENERATION job` i `ARTICLE_RESEARCH job` zbiegające do `frozen role binding → canonical Anthropic contract → one fake SDK call`; pola `ANTHROPIC/global/standard_only/FORBIDDEN/0/0`; obok fail-before-SDK dla contract drift i returned-model mismatch bez fallbacku.
-- **Dowód tekstowy:** new `11/11`, affected `223/223`, E3 `PROCEED + 3 lineage + prepare_content_job`; jeden full `2578 passed / 15 fixture failures`, po naprawie ujawnione moduły `165/165`, collect `2593`.
-- **Warunki bezpieczeństwa:** bez `.env`, API key, surowej DB, pełnych promptów/evidence, realnego SDK/API, publikacji i sugestii formalnego zamknięcia P2-1.
+- **Dowód tekstowy:** new `11/11`, affected `223/223`, E3 `PROCEED + 3 lineage + prepare_content_job`. Historyczne `2578 passed / 15 fixture failures` oraz `2593/2593` pochodzą z przedcommitowego working tree i nie są checkpointem commita PR. Autorytatywny niezależny checkpoint reviewed head `5b9969edd1177154e7474a3374edf16c41693140`: `2587 collected / 2587 passed / 0 failed / 0 skipped`.
+- **Warunki bezpieczeństwa:** bez `.env`, API key, surowej DB, pełnych promptów/evidence, realnego SDK/API i publikacji. Dwa dodatkowe testy authority oraz pozostałe P2 są nieblokującym backlogiem, nie warunkiem merge; `APPROVE WITH MINOR/P2` nie zamyka Etapu 3 ani nie daje live readiness.
 
 ## 2026-08-11 — PRE-LIVE CONTENT UNBLOCK B1–B5
 

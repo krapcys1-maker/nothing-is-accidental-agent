@@ -1,14 +1,15 @@
 # BUILD_LOG
 
-## [2026-08-11] Etap 3 / P2-1 — TOPIC_GENERATION i ARTICLE_RESEARCH na jednym provider contract — ACCEPTANCE BLOCKED
+## [2026-08-11] Etap 3 / P2-1 — TOPIC_GENERATION i ARTICLE_RESEARCH na jednym provider contract — APPROVE WITH MINOR/P2
 
 - **Finding:** oba produkcyjne rooty dochodziły do osobnych `anthropic.Anthropic(... max_retries=0)`, ale bez request-time `global`/`standard_only` i bez job-scoped role bindingu. ARTICLE_RESEARCH nadal korzystał z modelu durable intentu, TOPIC_GENERATION z intent/settings.
 - **Implementacja:** rozszerzono istniejący adapter o jawny immutable contract (`ANTHROPIC`, `global`, `standard_only`, `FORBIDDEN`, application/SDK retry `0`), opcjonalne tools/headers i thinking usage. Oba klienty używają adaptera, weryfikują returned identity/provenance i zachowują usage przed odmową.
 - **Composition:** dispatcher zamraża exact binding dla `TOPIC_GENERATION` lub `ARTICLE_RESEARCH` pod job ID. Legacy durable model pozostaje equality fence; actual client model pochodzi z bindingu. Brak/obcy/stale/mismatched authority blokuje przed callerem. Bez migracji.
 - **Offline smoke:** temp DB, fake SDK na finalnej granicy. Topic wykonał dokładnie jeden request. E3 evidence research wykonał dokładnie jedną syntezę bez tools, utrwalił PROCEED card + 3 authoritative lineage rows, a `prepare_content_job` zaakceptował trzy evidence items.
-- **Weryfikacja:** new `11/11`; affected production lifecycle `223/223`; focused clients `148/148`; collect `2593`. Jedyny full trwał `627.2 s` i dał `2578 passed, 15 failed` przez historyczne fixture’y niezasiewające nowego authority lub niepodające returned model. Po korekcie dokładnie sześć ujawnionych modułów przeszło `165/165`; full nie został powtórzony z powodu jawnego limitu exact-once.
-- **Stan:** implementacja i wszystkie reprodukcje błędów są zielone, lecz formalny full-suite acceptance nie jest dowiedziony. Status `IMPLEMENTED — ACCEPTANCE BLOCKED`; następny krok to osobno autoryzowany pełny checkpoint, nie realny provider call.
-- **Bezpieczeństwo:** produkcja immutable/query-only, schema `0032`, SHA `baea47…af2a3`; koszt `0.000000 USD`; zero realnego SDK/API/sieci/browsera/publikacji. Bez stage/commit/push/PR/merge.
+- **Chronologia dowodu implementera:** new `11/11`; affected production lifecycle `223/223`; focused clients `148/148`. Przebieg `2578 passed / 15 failed` przy zgłoszonym collect `2593` oraz późniejsze `2593/2593` pochodziły z przedcommitowego working tree. Pozostają użytecznym historycznym zapisem ujawnienia i korekty fixture’ów, ale nie są przypisywane do reviewed commita.
+- **Autorytatywny checkpoint reviewed head:** niezależny reviewer na czystym `5b9969edd1177154e7474a3374edf16c41693140` odtworzył `2587 collected / 2587 passed / 0 failed / 0 skipped`. Review zakończył się `APPROVE WITH MINOR/P2` i nie wykazał blockerów runtime. Dwa dodatkowe testy authority oraz pozostałe P2 są nieblokującym backlogiem, nie warunkiem merge.
+- **Stan:** P2-1 może zostać zmergowane po decyzji właściciela; nie oznacza to formalnego zamknięcia Etapu 3 ani gotowości live API.
+- **Bezpieczeństwo:** produkcja immutable/query-only, schema `0032`, SHA `baea47…af2a3`; koszt `0.000000 USD`; zero realnego SDK/API/sieci/browsera/publikacji.
 
 ## [2026-08-11] Etap 3 — PRE-LIVE CONTENT UNBLOCK B1–B5 — BLOCKED
 
