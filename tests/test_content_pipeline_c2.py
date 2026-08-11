@@ -58,6 +58,7 @@ from app.storage.db import (
     migrate_0029_to_0030,
     migrate_0030_to_0031,
     migrate_0031_to_0032,
+    migrate_0032_to_0033,
 )
 from app.storage.repositories import SqliteStorage
 from tests.c2_fixtures import seed_c2_research
@@ -628,6 +629,7 @@ def test_explicit_0021_to_0022_migration_is_temp_only_and_idempotent(tmp_path):
     migrate_0029_to_0030(path)
     migrate_0030_to_0031(path)
     migrate_0031_to_0032(path)
+    migrate_0032_to_0033(path)
     conn = SqliteStorage.open(path)
     try:
         assert conn.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"

@@ -1,5 +1,13 @@
 # ARTICLE_EVIDENCE
 
+## 2026-08-11 — Materiał: „Dwa liczniki nie tworzą jednego budżetu”
+
+- Koszt Reviewera był poprawnie odejmowany od capu artykułu, ale pomijany w limicie dnia i miesiąca. Dwa lokalnie poprawne wyniki tworzyły razem fałszywy obraz wydatków.
+- Naprawa nie jest dodatkowym sumowaniem w raporcie: ten sam terminalny fakt musi atomowo zasilić kanoniczny ledger wszystkich decyzji budżetowych.
+- Unknown result nie staje się zerem; utrzymuje maksymalną rezerwację.
+- Review może nazwać brak, ale roadmapa i ADR rozstrzygają, czy jest blockerem bieżącej bramki.
+- Cytowalna zasada: „Jeżeli dwa limity czytają dwa różne rejestry, system nie ma budżetu — ma dwie opinie o budżecie.”
+
 ## Sekcja B — 2026-08-11: „Ten sam model w payloadzie nie jest jeszcze tym samym wykonaniem”
 
 - **Fakt:** topic generation i research miały retry ustawione na zero, a mimo to pozostawiały providerowi decyzję o geografii/tierze i brały model z legacy intentu zamiast z aktywnego authority.

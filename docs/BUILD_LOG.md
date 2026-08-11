@@ -1,5 +1,14 @@
 # BUILD_LOG
 
+## 2026-08-11 — Etap 3 / Reviewer global ledger repair — CANDIDATE COMPLETE
+
+- **Zweryfikowany blocker:** `ARTICLE_REVIEWER` rozliczał wspólny cap artykułu w `role_provider_executions`, ale nie trafiał do `model_usage`. Globalne limity i `runs.cost_usd` pomijały więc realny koszt review.
+- **Naprawa:** `0033_role_execution_global_ledger` dopuszcza dokładnie jedno usage zgodne z terminalnym role execution i czyni je immutable. Settlement oraz insert usage są jedną transakcją; globalne limity obejmują aktywne role reservations.
+- **Operator path:** dodano jawny, fail-closed `scripts/migrate_schema_0033.py`; produkcyjnej bazy nie migrowano.
+- **Klasyfikacja review:** modelowy novelty jest sprzeczny z ADR-134, a Etap 3 wprost zabrania zmiany research pipeline’u, więc nowy durable A1/A2/B nie należy do tej naprawy.
+- **Dowód offline:** reviewer/lifecycle `31/31`; migration/content/provider affected `130/130`; explicit ladder `1/1`; po aktualizacji całej drabiny affected `354/354`; pełny suite i collect `2588/2588`, `0 failed`, `0 skipped`, `695.1 s`. Tylko fake callery i nowe temp SQLite; koszt `0.000000 USD`.
+- **Status:** `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`; bez realnego API, migracji produkcji, browsera, publikacji ani operacji Git.
+
 ## [2026-08-11] Etap 3 / P2-1 — TOPIC_GENERATION i ARTICLE_RESEARCH na jednym provider contract — APPROVE WITH MINOR/P2
 
 - **Finding:** oba produkcyjne rooty dochodziły do osobnych `anthropic.Anthropic(... max_retries=0)`, ale bez request-time `global`/`standard_only` i bez job-scoped role bindingu. ARTICLE_RESEARCH nadal korzystał z modelu durable intentu, TOPIC_GENERATION z intent/settings.

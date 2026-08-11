@@ -239,6 +239,8 @@ class ProductionArticleReviewer:
         sdk_factory: ControlledSdkFactory | None = None,
         caller: ControlledTechnicalCaller | None = None,
         timeout_seconds: float = REVIEWER_TIMEOUT_SECONDS,
+        daily_limit_usd: Decimal | float | str,
+        monthly_limit_usd: Decimal | float | str,
     ) -> None:
         self._storage = storage
         self._job_id = job_id
@@ -248,6 +250,8 @@ class ProductionArticleReviewer:
             caller=caller,
         )
         self._timeout_seconds = timeout_seconds
+        self._daily_limit_usd = daily_limit_usd
+        self._monthly_limit_usd = monthly_limit_usd
         self.provider_calls = 0
 
     @property
@@ -355,6 +359,8 @@ class ProductionArticleReviewer:
             execution_ref=execution_ref, job_id=self._job_id, run_id=run_id,
             content_id=content_id, role=LogicalModelRole.ARTICLE_REVIEWER,
             attempt_no=attempt_no, max_cost_usd=ceiling, authority=authority,
+            daily_limit_usd=self._daily_limit_usd,
+            monthly_limit_usd=self._monthly_limit_usd,
         )
         self._storage.mark_role_provider_effect_started(execution_ref)
 

@@ -1,5 +1,11 @@
 # SCREENSHOT_INDEX
 
+## 2026-08-11 — Reviewer global ledger repair
+
+- **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, bo zakres wyklucza browser, a właściwym dowodem są triggery i testy temp DB.
+- **Co powinien pokazać:** `role reservation → external effect → terminal role execution + model_usage (atomowo) → runs.cost_usd`, z daily/monthly gate przed callerem.
+- **Dowód tekstowy:** reviewer/lifecycle `31/31`, migration/content/provider `130/130`, explicit ladder `1/1`, affected po pełnej aktualizacji migracji `354/354`, full/collect `2588/2588` w `695.1 s`; koszt `0.000000 USD`; produkcja bez migracji.
+
 ## 2026-08-11 — P2-1 TOPIC_GENERATION / ARTICLE_RESEARCH provider alignment
 
 - **Status:** `SCREENSHOT REQUIRED`; browser i obrazy produkcyjnych danych były zabronione. Niezależny werdykt dla reviewed head: `APPROVE WITH MINOR/P2`, zero blockerów runtime.

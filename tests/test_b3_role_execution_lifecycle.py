@@ -26,14 +26,16 @@ from app.model_routing.contracts import (
 from app.model_routing.role_bootstrap import owner_approved_role_policy
 from app.storage.db import (
     ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION,
+    ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION,
     ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION,
     RUNTIME_SCHEMA_VERSION,
     canonical_migration_versions,
     connect,
     initialize_database,
     migrate_0031_to_0032,
+    migrate_0032_to_0033,
 )
-from app.ports.storage import ContentFoundationError
+from app.ports.storage import BudgetReservationError, ContentFoundationError
 from app.storage.repositories import SqliteStorage
 
 ROLE = LogicalModelRole.ARTICLE_REVIEWER
@@ -64,10 +66,11 @@ PRICING_FP = _fp("b3-pricing-profile")
 
 @pytest.fixture()
 def storage(tmp_path):
-    """A real 0032 database carrying the exact authority the trigger demands."""
+    """A real 0033 database carrying the exact authority the trigger demands."""
     path = tmp_path / "b3.db"
     initialize_database(path, through=ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION)
     migrate_0031_to_0032(path)
+    migrate_0032_to_0033(path)
     conn = connect(path)
     conn.execute("PRAGMA foreign_keys=OFF")
     now = "2026-08-11 00:00:00.000000"
@@ -178,6 +181,7 @@ def _begin(storage) -> dict:
         execution_ref=EXEC_REF, job_id=JOB_ID, run_id=RUN_ID,
         content_id=CONTENT_ID, role=ROLE, attempt_no=1,
         max_cost_usd="0.100000", authority=_authority(),
+        daily_limit_usd=2, monthly_limit_usd=40,
     )
 
 
@@ -204,6 +208,7 @@ def test_01_second_begin_for_same_content_and_role_is_refused(storage):
             execution_ref="b3-exec-other", job_id=JOB_ID, run_id=RUN_ID,
             content_id=CONTENT_ID, role=ROLE, attempt_no=1,
             max_cost_usd="0.100000", authority=_authority(),
+            daily_limit_usd=2, monthly_limit_usd=40,
         )
     assert exc.value.code == "CONTENT_ROLE_EXECUTION_ALREADY_EXISTS"
     assert storage.conn.execute(
@@ -306,6 +311,7 @@ def test_09_uncertain_in_flight_survives_restart_without_a_second_record(
             execution_ref="b3-exec-retry", job_id=JOB_ID, run_id=RUN_ID,
             content_id=CONTENT_ID, role=ROLE, attempt_no=1,
             max_cost_usd="0.100000", authority=_authority(),
+            daily_limit_usd=2, monthly_limit_usd=40,
         )
     assert exc.value.code == "CONTENT_ROLE_EXECUTION_ALREADY_EXISTS"
     assert recovered.conn.execute(
@@ -334,15 +340,27 @@ def test_11_settlement_records_usage_and_cost_exactly_once(storage):
     assert row["cost_usd"] == "0.001750"
     assert row["settled_at"] is not None
     assert storage.list_in_flight_role_provider_executions() == ()
+    usage = storage.conn.execute(
+        "SELECT * FROM model_usage WHERE request_id=?", (EXEC_REF,),
+    ).fetchone()
+    assert usage is not None
+    assert usage["task"] == "article_reviewer"
+    assert Decimal(str(usage["estimated_cost_usd"])) == Decimal("0.00175")
+    assert Decimal(str(storage.get_run(RUN_ID).cost_usd)) == Decimal("0.00175")
+    with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+        storage.conn.execute(
+            "UPDATE model_usage SET estimated_cost_usd=0 WHERE request_id=?",
+            (EXEC_REF,),
+        )
 
 
-def test_12_runtime_floor_is_the_role_execution_lifecycle():
-    """Part B moves the floor onto the state the reviewer needs."""
-    assert RUNTIME_SCHEMA_VERSION == ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION
+def test_12_runtime_floor_is_the_role_execution_global_ledger():
+    """The floor includes canonical accounting for the paid reviewer."""
+    assert RUNTIME_SCHEMA_VERSION == ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION
     assert RUNTIME_SCHEMA_VERSION != ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION
     canonical = canonical_migration_versions()
-    assert canonical[-1] == ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION
-    assert canonical[-2] == ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION
+    assert canonical[-1] == ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION
+    assert canonical[-2] == ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION
 
 
 def test_13_unknown_terminal_cost_is_represented_by_null_not_zero(storage):
@@ -368,12 +386,27 @@ def test_14_two_attempts_are_legal_but_reservations_never_exceed_cap(storage):
             execution_ref="b3-exec-reviewer-2", job_id=JOB_ID, run_id=RUN_ID,
             content_id=CONTENT_ID, role=ROLE, attempt_no=2,
             max_cost_usd="0.450000", authority=_authority(),
+            daily_limit_usd=2, monthly_limit_usd=40,
         )
     assert exc.value.code == "CONTENT_ARTICLE_BUDGET_EXHAUSTED"
     second = storage.begin_role_provider_execution(
         execution_ref="b3-exec-reviewer-2", job_id=JOB_ID, run_id=RUN_ID,
         content_id=CONTENT_ID, role=ROLE, attempt_no=2,
         max_cost_usd="0.400000", authority=_authority(),
+        daily_limit_usd=2, monthly_limit_usd=40,
     )
     assert second["attempt_no"] == 2
     assert storage.remaining_article_budget(job_id=JOB_ID) == Decimal("0.000000")
+
+
+def test_15_role_reservation_obeys_global_limits_before_external_effect(storage):
+    with pytest.raises(BudgetReservationError):
+        storage.begin_role_provider_execution(
+            execution_ref=EXEC_REF, job_id=JOB_ID, run_id=RUN_ID,
+            content_id=CONTENT_ID, role=ROLE, attempt_no=1,
+            max_cost_usd="0.100000", authority=_authority(),
+            daily_limit_usd="0.099999", monthly_limit_usd=40,
+        )
+    assert storage.get_role_provider_execution(
+        content_id=CONTENT_ID, role=ROLE,
+    ) is None
