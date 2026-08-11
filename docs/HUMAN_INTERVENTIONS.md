@@ -1,5 +1,12 @@
 # HUMAN_INTERVENTIONS
 
+## 2026-08-11 — właściciel autoryzował wyłącznie offline P2-1 provider alignment
+
+- **Decyzja:** sprawdzić i, jeśli finding istnieje, minimalnie podłączyć produkcyjne TOPIC_GENERATION i ARTICLE_RESEARCH do kanonicznego provider contractu oraz frozen role/model authority.
+- **Twarde parametry:** `ANTHROPIC`, `inference_geo=global`, `service_tier=standard_only`, fallback `FORBIDDEN`, application retry `0`, SDK retry `0`; fake SDK/caller wyłącznie na finalnej granicy.
+- **Zakazy:** zero realnego API/sieci/browsera/publikacji/kosztu, zero mutacji produkcyjnej DB, migracji 0032, zmian writer/reviewer i innych P2, zero stage/commit/push/PR/merge.
+- **Warunek walidacji:** focused, affected i dokładnie jeden full pytest, potem collect/compile/diff. Ponieważ ten jeden full ujawnił fixture gaps i nie mógł zostać powtórzony, wynik nie jest formalnym zamknięciem P2-1.
+
 ## 2026-08-11 — właściciel ograniczył naprawę do B1–B5
 
 - **Decyzja człowieka:** usunąć wyłącznie brak produkcyjnego WriterPort, controlled paid content root, produkcyjnego ARTICLE_REVIEWER, semantic thesis dedup i bounded topic-generation history.

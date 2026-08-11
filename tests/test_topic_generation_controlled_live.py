@@ -20,6 +20,7 @@ from app.core.pricing import (
 )
 from app.llm.anthropic_client import AnthropicLLMClient
 from app.llm.base import LLMProviderError, Usage
+from app.model_routing import LogicalModelRole, ModelFamily
 from app.models import (
     Job, JobExecutionContext, JobKind, JobStatus, WorkflowType,
 )
@@ -60,6 +61,7 @@ from tests.test_topic_generation_runtime import (
     _real_settings,
     _response,
 )
+from tests.controlled_provider_fixtures import seed_model, seed_role_policy
 
 ROOT = Path(__file__).resolve().parents[1]
 BRANCH = "controlled-live-test-branch"
@@ -777,6 +779,17 @@ def _seed_subprocess_job(tmp_path: Path):
     storage = SqliteStorage.open(settings.db_path)
     storage.ensure_account(account)
     job = storage.enqueue_job(_job(account, "public-subprocess", _payload(intent)))
+    seed_role_policy(storage, LogicalModelRole.TOPIC_GENERATION)
+    seed_model(
+        storage,
+        family=ModelFamily.SONNET,
+        provider="ANTHROPIC",
+        technical_model_id_override=intent.model,
+    )
+    storage.promote_best_model(
+        LogicalModelRole.TOPIC_GENERATION,
+        reason="offline subprocess provider-contract fixture",
+    )
     other = storage.enqueue_job(Job(
         id="subprocess-unapproved-local-job", account_id=account.id,
         kind=JobKind.LOCAL, workflow=WorkflowType.ANALYTICS,

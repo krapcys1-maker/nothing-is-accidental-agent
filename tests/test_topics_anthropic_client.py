@@ -202,12 +202,17 @@ def test_default_adapter_preserves_provider_usage_before_parse_error(
         pass
 
     message = SimpleNamespace(
+        model="topics-model",
+        id="fake-topic-response",
+        stop_reason="end_turn",
         content=[SimpleNamespace(type="text", text='{"topics": [')],
         usage=SimpleNamespace(
             input_tokens=91,
             output_tokens=17,
             cache_read_input_tokens=4,
             cache_creation_input_tokens=2,
+            inference_geo="global",
+            service_tier="standard",
         ),
     )
 

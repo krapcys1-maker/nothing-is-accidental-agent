@@ -76,6 +76,8 @@ from app.storage.repositories import SqliteStorage
 from tests.conftest import (
     STANDARD_WEIGHTS, make_account, write_approved_pricing_profile,
 )
+from tests.controlled_provider_fixtures import seed_active_provider_role
+from app.model_routing import LogicalModelRole
 import app.main as main_module
 
 NOW = datetime.now(timezone.utc)
@@ -210,6 +212,11 @@ job = storage.enqueue_job(Job(
         "execution_intent": intent.as_payload(),
     },
 ))
+seed_active_provider_role(
+    storage,
+    role=LogicalModelRole.ARTICLE_RESEARCH,
+    technical_model_id=intent.model,
+)
 storage.apply_security_flag_profile([
     ("worker_enabled", True),
     ("safe_mode", False),

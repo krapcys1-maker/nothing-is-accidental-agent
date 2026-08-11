@@ -1,5 +1,16 @@
 # DECISIONS (Architecture Decision Log)
 
+### ADR-135: Durable intent nie wybiera modelu; per-job role binding wybiera transport Anthropic
+
+- **Data/status/autor:** 2026-08-11; właściciel autoryzował wąskie P2-1 wyłącznie offline. Implementacja jest gotowa, lecz acceptance pozostaje `BLOCKED`, ponieważ jedyny dozwolony full był czerwony przed korektą historycznych fixture’ów i nie wolno go było powtórzyć.
+- **Finding:** produkcyjne TOPIC_GENERATION i ARTICLE_RESEARCH tworzyły własne klienty Anthropic z SDK retry `0`, ale omijały kanoniczny provider contract: request nie pinował `global`/`standard_only`, model pochodził bezpośrednio z legacy durable intent/settings, a job nie miał frozen role bindingu.
+- **Decyzja:** zachować legacy durable intent jako equality fence dla ceny, limitów i oczekiwanego modelu, lecz techniczną tożsamość wykonania rozwiązywać wyłącznie przez `freeze_model_for_intent`: `topic_generation_provider/<job_id>` dla roli TOPIC_GENERATION i `article_research_provider/<job_id>` dla ARTICLE_RESEARCH. Binding musi mieć exact `ANTHROPIC`, exact durable model i `FORBIDDEN`; brak ACTIVE/qualified authority lub rozjazd zatrzymuje przed klientem.
+- **Jeden transport:** TOPIC i RESEARCH używają istniejącego `ControlledAnthropicAdapter`. Kanoniczny request contract zamraża provider, geografię, tier, fallback oraz oba poziomy retry. Research może jawnie dołączyć web-search tool tylko w istniejących legacy/staged callach; E3 evidence synthesis i topic generation wysyłają zero tools. Nie utworzono drugiej abstrakcji ani migracji.
+- **Response gate:** po jednym response usage jest najpierw zachowywane, potem exact returned-model i optional `global/standard` są weryfikowane. Mismatch jest terminalną odmową bez drugiego requestu, alternatywnego modelu i fallbacku.
+- **Dowód:** kontrakt negatywny zatrzymuje brak/drift pól przed SDK i final callerem; production topic i E3 composition tests kończą się na fake SDK. E3 utrwala Research Card, trzy authoritative lineage rows i przygotowuje ARTICLE z trzema frozen evidence items. New `11/11`; affected `223/223`; po naprawie fixture gaps `165/165` ujawnionego zestawu.
+- **Niezamknięta bramka:** pojedynczy full: collect `2593`, wynik `2578 passed / 15 failed`; wszystkie 15 były brakami starych fake authority/response fixtures i zostały naprawione, ale full nie został ponowiony zgodnie z exact-once poleceniem. P2-1 nie może zostać nazwane formalnie CLOSED bez nowego, osobno dozwolonego pełnego checkpointu.
+- **Produkcja i zakres:** brak migracji i zapisu do `data/agent.db`; realne role TOPIC_GENERATION/ARTICLE_RESEARCH nieaktywne, więc obecny live pozostaje fail-closed. Zero API/sieci/browsera/publikacji/kosztu; writer/reviewer i pozostałe P2 nietknięte.
+
 ### ADR-134: Novelty jest trwałą bramką przed kosztem; semantic reviewer pozostaje blockerem
 
 - **Data/status/autor:** 2026-08-11; właściciel zlecił wyłącznie usunięcie blockerów B1–B5 bez realnego API, full live flow i publikacji. Status implementera: `PRE-LIVE CONTENT UNBLOCK — BLOCKED`.

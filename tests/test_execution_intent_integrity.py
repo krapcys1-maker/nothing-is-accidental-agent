@@ -16,6 +16,7 @@ import pytest
 from app.core.config import REAL_PROVIDER_PRICING_KEYS
 from app.core.pricing import load_pricing_profiles, resolve_real_pricing_profile
 from app.llm.base import Usage
+from app.model_routing import LogicalModelRole
 from app.models import (
     DurableProviderAttemptContext,
     Job,
@@ -38,6 +39,7 @@ from app.research.durable_intent import (
 from app.storage.repositories import SqliteStorage
 from app.workflows.research.pipeline import ResearchExecutionNeedsReconciliation
 from tests.conftest import write_approved_pricing_profile
+from tests.controlled_provider_fixtures import seed_active_provider_role
 
 
 NOW = datetime(2026, 7, 15, 12, 0, tzinfo=timezone.utc)
@@ -595,6 +597,11 @@ def test_mutable_prompt_source_change_after_attempt_is_refused_before_fake_calle
         topic_id=int(topic.id), payload=payload, schedule_reason="WITHIN_EDITORIAL_WINDOW",
         earliest_run_at=NOW, max_attempts=1,
     ))
+    seed_active_provider_role(
+        storage,
+        role=LogicalModelRole.ARTICLE_RESEARCH,
+        technical_model_id=real_settings.model_quality,
+    )
     lease = storage.claim_next_job(f"prompt-source-{source}", 120, now=NOW)
     assert lease is not None
     storage.mark_job_running(job.id, lease.lease_owner, now=NOW)

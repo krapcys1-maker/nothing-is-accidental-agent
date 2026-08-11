@@ -15,6 +15,7 @@ from app.core.config import (
     require_valid_real_provider_pricing,
 )
 from app.llm.anthropic_client import AnthropicLLMClient, TOPIC_MAX_OUTPUT_TOKENS
+from app.llm.anthropic_controlled_adapter import ControlledProviderRequest
 from app.llm.base import Usage
 from app.llm.fake_client import FakeLLMClient
 from app.llm.usage_tracker import UsageTracker
@@ -115,7 +116,15 @@ def test_every_real_sdk_client_disables_sdk_retry_and_sets_timeout(monkeypatch, 
     )
     with pytest.raises(Exception):
         topic_client.generate_and_score_topics(account, 1)
-    AnthropicResearchClient("key", "model")._new_anthropic_client(fake_sdk)
+    research_adapter = AnthropicResearchClient("key", "model")._new_anthropic_client(fake_sdk)
+    with pytest.raises(FakeAPIError):
+        research_adapter.execute(ControlledProviderRequest(
+            technical_model_id="model",
+            system_prompt="system",
+            user_prompt="prompt",
+            max_output_tokens=1,
+            timeout_seconds=60.0,
+        ))
 
     assert len(constructed) == 2
     assert all(item["max_retries"] == 0 for item in constructed)

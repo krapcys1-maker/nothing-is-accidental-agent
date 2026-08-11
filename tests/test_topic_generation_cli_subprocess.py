@@ -77,6 +77,8 @@ from app.storage.repositories import SqliteStorage
 from tests.conftest import (
     STANDARD_WEIGHTS, make_account, write_approved_pricing_profile,
 )
+from tests.controlled_provider_fixtures import seed_active_provider_role
+from app.model_routing import LogicalModelRole
 import app.main as main_module
 
 NOW = datetime.now(timezone.utc)
@@ -152,6 +154,11 @@ assert storage.conn.execute(
     "SELECT COUNT(*) c FROM provider_attempts"
 ).fetchone()["c"] == 0
 assert storage.conn.execute("SELECT COUNT(*) c FROM model_usage").fetchone()["c"] == 0
+seed_active_provider_role(
+    storage,
+    role=LogicalModelRole.TOPIC_GENERATION,
+    technical_model_id=MODEL,
+)
 
 # Idempotencja publicznego enqueue: ten sam operation_key = ten sam job.
 again = main_module.main([

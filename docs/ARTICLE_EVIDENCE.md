@@ -1,5 +1,13 @@
 # ARTICLE_EVIDENCE
 
+## Sekcja B — 2026-08-11: „Ten sam model w payloadzie nie jest jeszcze tym samym wykonaniem”
+
+- **Fakt:** topic generation i research miały retry ustawione na zero, a mimo to pozostawiały providerowi decyzję o geografii/tierze i brały model z legacy intentu zamiast z aktywnego authority.
+- **Naprawa:** trwały job dostaje osobny frozen binding roli, a finalny request nazywa wszystkie pola, które wcześniej mogły stać się defaultem. Payload jest equality fence, nie źródłem technicznej selekcji.
+- **Dowód:** fake SDK zobaczył exact `ANTHROPIC/global/standard_only/retry=0`, a E3 po jednym callu zapisał kartę, lineage i pakiet gotowy dla CONTENT. Brak lub drift kontraktu zatrzymał się przed SDK/callerem.
+- **Lekcja z walidacji:** mocniejsza bramka złamała 15 starych fixture’ów, nie produkcyjny kontrakt. Nie osłabiono bramki dla zielonego fullu; poprawiono testowe authority i jawnie pozostawiono acceptance zablokowane bez ponownego fulla.
+- **Zdanie robocze:** „Retry zero mówi, ile razy próbujesz. Frozen authority mówi, co właściwie wolno ci spróbować.”
+
 ## Sekcja B — 2026-08-11: „Pamięć nie musi być wektorem, żeby zatrzymać powtórkę”
 
 - **Fakt:** title-only dedup rozpoznawał literalny powrót tematu, ale przepuszczał inną nazwę tej samej tezy. Nowa pamięć łączy topic/question z Research Card thesis i treścią rzeczywiście istniejącego draftu lub artykułu, per account i bez wygaszania `USED`.

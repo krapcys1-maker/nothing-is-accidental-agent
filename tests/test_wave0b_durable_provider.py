@@ -20,6 +20,7 @@ from app.core.config import REAL_PROVIDER_PRICING_KEYS
 from app.core.pricing import load_pricing_profiles, resolve_real_pricing_profile
 from app.llm.base import Usage
 from app.llm.anthropic_client import AnthropicLLMClient
+from app.model_routing import LogicalModelRole
 from app.models import (
     Job,
     JobExecutionContext,
@@ -69,6 +70,7 @@ from app.models import ResearchJobExecution
 from app.scheduler.dispatcher import JobDispatcher
 from app.scheduler.worker import Worker, WorkerIterationStatus
 from tests.conftest import write_approved_pricing_profile
+from tests.controlled_provider_fixtures import seed_active_provider_role
 
 
 NOW = datetime(2026, 7, 14, 12, 0, tzinfo=timezone.utc)
@@ -1502,6 +1504,8 @@ def test_direct_sdk_request_uses_exact_derived_idempotency_key(monkeypatch):
         def create(self, **kwargs):
             captured.append(kwargs)
             return SimpleNamespace(
+                model="model",
+                id="fake-direct-research",
                 content=[SimpleNamespace(type="text", text=_valid_research_response())],
                 usage=SimpleNamespace(
                     input_tokens=1, output_tokens=1,
@@ -2025,6 +2029,11 @@ def test_worker_uses_persisted_intent_after_runtime_settings_change(
     job = storage.enqueue_job(_operation_job(
         account, topic, "worker-intent", "worker-intent", cap=0.7, payload=payload,
     ))
+    seed_active_provider_role(
+        storage,
+        role=LogicalModelRole.ARTICLE_RESEARCH,
+        technical_model_id=queued_settings.model_quality,
+    )
     lease = storage.claim_next_job("worker-intent", 120, now=NOW)
     assert lease is not None
     storage.mark_job_running(job.id, lease.lease_owner, now=NOW)
@@ -2175,6 +2184,11 @@ def test_durable_v2_worker_flow_calls_fake_provider_once_and_terminalizes(
     job = storage.enqueue_job(_operation_job(
         account, topic, "worker-v2-e2e", "worker-v2-e2e", cap=1.0, payload=payload,
     ))
+    seed_active_provider_role(
+        storage,
+        role=LogicalModelRole.ARTICLE_RESEARCH,
+        technical_model_id=real_settings.model_quality,
+    )
     storage.apply_security_flag_profile([
         ("worker_enabled", True),
         ("safe_mode", False),

@@ -15,6 +15,12 @@ from app.core.pricing import (
     resolve_real_pricing_profile,
 )
 from app.llm.usage_tracker import UsageTracker
+from app.llm.anthropic_provider_contract import ANTHROPIC_PROVIDER, FALLBACK_POLICY
+from app.model_routing.contracts import (
+    FrozenModelBinding,
+    LogicalModelRole,
+    RoutingError,
+)
 from app.models import Account, Job, JobKind, ResearchJobExecution, Topic, WorkflowType
 from app.orchestrator.runner import run_research_dry_run
 from app.policies.policy_engine import PolicyDecision, PolicyEngine
@@ -176,6 +182,10 @@ class TopicGenerationClientFactory(Protocol):
     ) -> object: ...
 
 
+TOPIC_GENERATION_PROVIDER_INTENT_KIND = "topic_generation_provider"
+ARTICLE_RESEARCH_PROVIDER_INTENT_KIND = "article_research_provider"
+
+
 class ContentPipelineCallable(Protocol):
     def __call__(
         self,
@@ -208,6 +218,40 @@ def _durable_job_intent(storage: StoragePort, job_id: str) -> DurableResearchExe
     if not intent.is_supported_by_current_worker():
         raise PayloadValidationError("Real research execution intent is not supported by this worker.")
     return intent
+
+
+def _freeze_anthropic_role_authority(
+    storage: StoragePort,
+    *,
+    role: LogicalModelRole,
+    intent_kind: str,
+    job_id: str,
+    durable_provider: str,
+    durable_model: str,
+) -> FrozenModelBinding:
+    """Resolve the technical model exclusively from the active frozen authority."""
+    if durable_provider != "anthropic":
+        raise PayloadValidationError("Durable provider must be anthropic.")
+    try:
+        binding = storage.freeze_model_for_intent(
+            role,
+            intent_kind=intent_kind,
+            intent_id=job_id,
+        )
+    except RoutingError as exc:
+        raise PayloadValidationError(
+            f"No eligible active model authority exists for {role.value}."
+        ) from exc
+    if (
+        binding.role is not role
+        or binding.provider != ANTHROPIC_PROVIDER
+        or binding.fallback_policy != FALLBACK_POLICY
+        or binding.technical_model_id != durable_model
+    ):
+        raise PayloadValidationError(
+            f"Frozen {role.value} authority disagrees with the durable request contract."
+        )
+    return binding
 
 
 def _run_durable_real_research(
@@ -245,16 +289,24 @@ def _run_durable_real_research(
         raise PayloadValidationError(
             "Durable real research pricing contract is not currently approved."
         ) from exc
+    binding = _freeze_anthropic_role_authority(
+        storage,
+        role=LogicalModelRole.ARTICLE_RESEARCH,
+        intent_kind=ARTICLE_RESEARCH_PROVIDER_INTENT_KIND,
+        job_id=job_execution.job_id,
+        durable_provider=intent.provider,
+        durable_model=intent.model,
+    )
     real_settings = replace(
         settings,
         dry_run=False,
-        model_quality=intent.model,
+        model_quality=binding.technical_model_id,
         research_timeout_seconds=intent.timeout_seconds,
         pricing=intent.runtime_pricing(),
     )
     require_valid_real_provider_pricing(real_settings)
     client = AnthropicResearchClient(
-        real_settings.anthropic_api_key, real_settings.model_quality,
+        real_settings.anthropic_api_key, binding.technical_model_id,
         max_retries=0, timeout_seconds=real_settings.research_timeout_seconds,
         max_web_searches=intent.max_web_searches,
         research_max_tokens=intent.max_tokens,
@@ -304,9 +356,7 @@ class JobDispatcher:
         self._research_offline_evidence = research_offline_evidence
         self._research_controlled_fetch = research_controlled_fetch
         self._topic_generation = topic_generation
-        self._topic_generation_client = (
-            topic_generation_client_factory or self._default_topic_generation_client
-        )
+        self._topic_generation_client_factory = topic_generation_client_factory
         self._allow_real_research = allow_real_research
         self._allow_real_topic_generation = allow_real_topic_generation
         self._content_pipeline = content_pipeline
@@ -586,10 +636,19 @@ class JobDispatcher:
                 "TOPIC_GENERATION pricing contract is not currently approved."
             ) from exc
 
+        binding = _freeze_anthropic_role_authority(
+            self._storage,
+            role=LogicalModelRole.TOPIC_GENERATION,
+            intent_kind=TOPIC_GENERATION_PROVIDER_INTENT_KIND,
+            job_id=job.id,
+            durable_provider=intent.provider,
+            durable_model=intent.model,
+        )
+
         real_settings = replace(
             self._settings,
             dry_run=False,
-            model_quality=intent.model,
+            model_quality=binding.technical_model_id,
             research_timeout_seconds=intent.timeout_seconds,
             pricing=intent.runtime_pricing(),
         )
@@ -599,7 +658,12 @@ class JobDispatcher:
         # without a second, competing heartbeat implementation.
         heartbeat()
 
-        client = self._topic_generation_client(real_settings, intent)
+        if self._topic_generation_client_factory is None:
+            client = self._default_topic_generation_client(
+                real_settings, intent, binding,
+            )
+        else:
+            client = self._topic_generation_client_factory(real_settings, intent)
         execution = ResearchJobExecution(job_id=job.id, lease_owner=lease_owner)
         try:
             summary = self._topic_generation(
@@ -631,11 +695,13 @@ class JobDispatcher:
 
     @staticmethod
     def _default_topic_generation_client(
-        settings: Settings, intent: DurableTopicGenerationIntent,
+        settings: Settings,
+        intent: DurableTopicGenerationIntent,
+        binding: FrozenModelBinding,
     ) -> AnthropicLLMClient:
         return AnthropicLLMClient(
             settings.anthropic_api_key,
-            intent.model,
+            binding.technical_model_id,
             timeout_seconds=float(intent.timeout_seconds),
             topic_max_tokens=intent.max_tokens,
         )

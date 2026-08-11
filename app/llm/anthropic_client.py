@@ -9,6 +9,13 @@ import json
 import math
 from typing import Callable
 
+from app.llm.anthropic_controlled_adapter import (
+    ControlledAdapterError,
+    ControlledAnthropicAdapter,
+    ControlledProviderRequest,
+    assert_returned_model_identity,
+)
+from app.llm.anthropic_provider_contract import returned_provenance_mismatch
 from app.llm.base import (
     LLMClient,
     LLMParseError,
@@ -245,31 +252,28 @@ class AnthropicLLMClient(LLMClient):
                 "pip install -e .[llm] (potrzebne tylko poza dry_run)."
             ) from exc
 
-        # The SDK retries by default. A logical attempt in this application is
-        # exactly one provider request, therefore retries are explicitly off.
-        client = anthropic.Anthropic(
-            api_key=self._api_key,
-            max_retries=SDK_MAX_RETRIES,
-            timeout=self._timeout_seconds,
+        adapter = ControlledAnthropicAdapter(
+            api_key_provider=lambda: self._api_key,
+            sdk_factory=lambda **kwargs: anthropic.Anthropic(**kwargs),
         )
         try:
-            # The durable assertion deliberately happens after SDK construction
-            # and immediately before the externally effective method call.
             request_id = self._assert_active_durable_provider_attempt()
-            message = client.messages.create(
-                model=self.model,
-                max_tokens=self._topic_max_tokens,
-                system=_SYSTEM,
-                messages=[{
-                    "role": "user",
-                    "content": _build_prompt(account, count, self._editorial_history),
-                }],
-                timeout=self._timeout_seconds,
+            raw = adapter.execute(ControlledProviderRequest(
+                technical_model_id=self.model,
+                system_prompt=_SYSTEM,
+                user_prompt=_build_prompt(account, count, self._editorial_history),
+                max_output_tokens=self._topic_max_tokens,
+                timeout_seconds=self._timeout_seconds,
                 extra_headers={"Idempotency-Key": request_id},
-            )
+            ))
         except anthropic.APIError as exc:
             raise LLMProviderError(
                 f"Błąd providera Anthropic przed otrzymaniem odpowiedzi: {exc}",
+                model=self.model,
+            ) from exc
+        except ControlledAdapterError as exc:
+            raise LLMProviderError(
+                f"Kontrolowany kontrakt Anthropic odrzucił request: {exc}",
                 model=self.model,
             ) from exc
 
@@ -277,10 +281,31 @@ class AnthropicLLMClient(LLMClient):
         # before inspecting/parsing its text, so a billed malformed response
         # cannot disappear from the workflow's ledger.
         usage = Usage(
-            input_tokens=getattr(message.usage, "input_tokens", 0),
-            output_tokens=getattr(message.usage, "output_tokens", 0),
-            cache_read_tokens=getattr(message.usage, "cache_read_input_tokens", 0) or 0,
-            cache_write_tokens=getattr(message.usage, "cache_creation_input_tokens", 0) or 0,
+            input_tokens=raw.input_tokens,
+            output_tokens=raw.output_tokens,
+            cache_read_tokens=raw.cache_read_tokens,
+            cache_write_tokens=raw.cache_write_tokens,
+            web_search_requests=raw.web_search_requests,
+            thinking_tokens=raw.thinking_tokens,
         )
-        text = "".join(block.text for block in message.content if block.type == "text")
-        return text, usage
+        try:
+            assert_returned_model_identity(
+                requested_model_id=self.model,
+                returned_model_id=raw.returned_model_id,
+            )
+            provenance_error = returned_provenance_mismatch(
+                inference_geo=raw.inference_geo,
+                service_tier=raw.service_tier,
+            )
+            if provenance_error:
+                raise ControlledAdapterError(
+                    provenance_error,
+                    "Provider-returned execution provenance violates the frozen contract.",
+                )
+        except ControlledAdapterError as exc:
+            raise LLMProviderError(
+                f"Kontrolowany kontrakt Anthropic odrzucił odpowiedź: {exc}",
+                usage=usage,
+                model=self.model,
+            ) from exc
+        return raw.text, usage

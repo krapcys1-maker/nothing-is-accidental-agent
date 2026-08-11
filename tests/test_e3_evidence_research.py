@@ -230,6 +230,22 @@ def _install_fake_client(monkeypatch, caller):
 
 
 def _worker(real_settings, storage, *, lease_owner="e3-worker", clock=None):
+    from app.model_routing import LogicalModelRole, ModelFamily
+    from tests.controlled_provider_fixtures import seed_model, seed_role_policy
+
+    if storage.get_active_model_for_role(LogicalModelRole.ARTICLE_RESEARCH) is None:
+        seed_role_policy(storage, LogicalModelRole.ARTICLE_RESEARCH)
+        seed_model(
+            storage,
+            version="0.0.1",
+            family=ModelFamily.OPUS,
+            provider="ANTHROPIC",
+            technical_model_id_override=real_settings.model_quality,
+        )
+        storage.promote_best_model(
+            LogicalModelRole.ARTICLE_RESEARCH,
+            reason="offline research provider-contract fixture",
+        )
     clock = clock or FixedClock(NOW)
     policy = PolicyEngine(real_settings, storage, clock)
     dispatcher = JobDispatcher(

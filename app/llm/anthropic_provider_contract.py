@@ -17,6 +17,9 @@ CONTROLLED_INFERENCE_GEO = "global"
 CONTROLLED_SERVICE_TIER = "standard_only"
 EXPECTED_RETURNED_INFERENCE_GEO = "global"
 EXPECTED_RETURNED_SERVICE_TIER = "standard"
+FALLBACK_POLICY = "FORBIDDEN"
+APPLICATION_MAX_RETRIES = 0
+SDK_MAX_RETRIES = 0
 
 FABLE_5_MODEL_ID = "claude-fable-5"
 OPUS_5_MODEL_ID = "claude-opus-5"
@@ -27,6 +30,28 @@ RETENTION_SCOPES = frozenset({
     RETENTION_SCOPE_QUALIFICATION,
     RETENTION_SCOPE_CONTENT,
 })
+
+
+@dataclass(frozen=True)
+class AnthropicRequestContract:
+    """Every request-time field that may not fall back to an SDK default."""
+
+    provider: str
+    inference_geo: str
+    service_tier: str
+    fallback_policy: str
+    application_retries: int
+    sdk_retries: int
+
+
+CANONICAL_ANTHROPIC_REQUEST_CONTRACT = AnthropicRequestContract(
+    provider=ANTHROPIC_PROVIDER,
+    inference_geo=CONTROLLED_INFERENCE_GEO,
+    service_tier=CONTROLLED_SERVICE_TIER,
+    fallback_policy=FALLBACK_POLICY,
+    application_retries=APPLICATION_MAX_RETRIES,
+    sdk_retries=SDK_MAX_RETRIES,
+)
 
 
 def returned_provenance_mismatch(

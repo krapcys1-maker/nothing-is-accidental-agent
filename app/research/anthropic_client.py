@@ -36,6 +36,13 @@ from decimal import Decimal, InvalidOperation
 from typing import Callable
 
 from app.core.money import decimal_from, usd_float
+from app.llm.anthropic_controlled_adapter import (
+    ControlledAdapterError,
+    ControlledAnthropicAdapter,
+    ControlledProviderRequest,
+    assert_returned_model_identity,
+)
+from app.llm.anthropic_provider_contract import returned_provenance_mismatch
 from app.llm.base import Usage
 from app.ports.storage import StaleJobExecutionError
 from app.models import (
@@ -1143,55 +1150,80 @@ class AnthropicResearchClient:
 
     def _new_anthropic_client(self, anthropic):  # pragma: no cover
         """Create an SDK client with no hidden paid retry path."""
-        return anthropic.Anthropic(
-            api_key=self._api_key,
-            max_retries=_SDK_MAX_RETRIES,
-            timeout=self._timeout_seconds,
+        return ControlledAnthropicAdapter(
+            api_key_provider=lambda: self._api_key,
+            sdk_factory=lambda **kwargs: anthropic.Anthropic(**kwargs),
         )
 
     def _call_anthropic(self, client, prompt: str, *, tools: list[dict] | None,
                          max_tokens: int) -> tuple[str, Usage, str | None]:  # pragma: no cover
-        kwargs = dict(model=self.model, max_tokens=max_tokens, system=_SYSTEM,
-                      messages=[{"role": "user", "content": prompt}],
-                      timeout=self._timeout_seconds)
-        if tools:
-            kwargs["tools"] = tools
+        adapter = client
+        if not isinstance(adapter, ControlledAnthropicAdapter):
+            adapter = ControlledAnthropicAdapter(
+                api_key_provider=lambda: self._api_key,
+                sdk_factory=lambda **_kwargs: client,
+            )
         try:
             # The SDK object already exists when we make this authoritative
             # SQLite-backed assertion.  No caller-provided timestamp can bridge
             # the gap between activation and ``messages.create``.
             if self.requires_durable_provider_context:
                 request_id = self._assert_active_durable_provider_attempt()
-                kwargs["extra_headers"] = {"Idempotency-Key": request_id}
-            message = client.messages.create(**kwargs)
+                extra_headers = {"Idempotency-Key": request_id}
+            else:
+                extra_headers = None
+            raw = adapter.execute(ControlledProviderRequest(
+                technical_model_id=self.model,
+                system_prompt=_SYSTEM,
+                user_prompt=prompt,
+                max_output_tokens=max_tokens,
+                timeout_seconds=self._timeout_seconds,
+                tools=tuple(tools) if tools else None,
+                extra_headers=extra_headers,
+            ))
         except (DurableProviderAttemptContextError, ProviderRequestIdentityMismatch,
                 StaleJobExecutionError):
             raise
         except Exception as exc:
+            if isinstance(exc, ControlledAdapterError):
+                raise ResearchUnknownProviderError(
+                    f"Controlled Anthropic contract rejected the request: {exc}",
+                    model=self.model,
+                ) from exc
             anthropic = self._import_anthropic()
             raise self._map_anthropic_error(exc, anthropic) from exc
-        text = "".join(getattr(b, "text", "") for b in message.content
-                       if getattr(b, "type", "") == "text")
-        web_search_usage = getattr(getattr(message, "usage", None), "server_tool_use", None)
-        ws_count = getattr(web_search_usage, "web_search_requests", 0) if web_search_usage else 0
-        # Niewidoczne tokeny wewnętrznego rozumowania (SDK: usage.output_tokens_details.
-        # thinking_tokens) wchodzą do output_tokens i do limitu segmentu, ale nie do
-        # `text` — bez ich zapisu przyczyna ucięcia była nie do zmierzenia
-        # (incydent 2026-07-17, run 08aa35eb: 3155 output przy 4038 znakach tekstu).
-        output_details = getattr(getattr(message, "usage", None), "output_tokens_details", None)
-        thinking = getattr(output_details, "thinking_tokens", 0) if output_details else 0
         usage = Usage(
-            input_tokens=getattr(message.usage, "input_tokens", 0),
-            output_tokens=getattr(message.usage, "output_tokens", 0),
-            cache_read_tokens=getattr(message.usage, "cache_read_input_tokens", 0) or 0,
-            cache_write_tokens=getattr(message.usage, "cache_creation_input_tokens", 0) or 0,
-            web_search_requests=ws_count or 0,
-            thinking_tokens=thinking or 0,
+            input_tokens=raw.input_tokens,
+            output_tokens=raw.output_tokens,
+            cache_read_tokens=raw.cache_read_tokens,
+            cache_write_tokens=raw.cache_write_tokens,
+            web_search_requests=raw.web_search_requests,
+            thinking_tokens=raw.thinking_tokens,
         )
-        # `stop_reason` (np. "end_turn"/"max_tokens"/"tool_use") — od 2026-07-12 zapisywany
-        # do diagnostyki, żeby ucięcie dało się potwierdzić WPROST, nie hipotezą.
-        stop_reason = getattr(message, "stop_reason", None)
-        return text, usage, stop_reason
+        try:
+            assert_returned_model_identity(
+                requested_model_id=self.model,
+                returned_model_id=raw.returned_model_id,
+            )
+            provenance_error = returned_provenance_mismatch(
+                inference_geo=raw.inference_geo,
+                service_tier=raw.service_tier,
+            )
+            if provenance_error:
+                raise ControlledAdapterError(
+                    provenance_error,
+                    "Provider-returned execution provenance violates the frozen contract.",
+                )
+        except ControlledAdapterError as exc:
+            raise ResearchUnknownProviderError(
+                f"Controlled Anthropic contract rejected the response: {exc}",
+                usage=usage,
+                model=self.model,
+                raw_text=raw.text,
+                stop_reason=raw.stop_reason,
+                request_id=raw.provider_request_id,
+            ) from exc
+        return raw.text, usage, raw.stop_reason
 
     def _default_caller(
         self, plan: ResearchPlan,
