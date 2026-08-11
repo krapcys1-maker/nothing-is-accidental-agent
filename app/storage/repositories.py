@@ -2273,6 +2273,8 @@ class SqliteStorage:
         role: object,
         attempt_no: int,
         max_cost_usd: Decimal | str,
+        daily_limit_usd: Decimal | float | str,
+        monthly_limit_usd: Decimal | float | str,
         authority: "RoleProviderAuthority",
         now: datetime | None = None,
     ) -> dict[str, object]:
@@ -2306,11 +2308,72 @@ class SqliteStorage:
             reserved_cost = quantize_usd(
                 max_cost_usd, label="role provider reservation",
             )
+            daily_limit = _money(
+                daily_limit_usd, positive=True, label="Global daily limit",
+            )
+            monthly_limit = _money(
+                monthly_limit_usd, positive=True, label="Global monthly limit",
+            )
             remaining = self._remaining_article_budget_in_transaction(job_id=job_id)
             if reserved_cost > remaining:
                 raise ContentFoundationError(
                     "CONTENT_ARTICLE_BUDGET_EXHAUSTED",
                     "The remaining ARTICLE budget cannot cover this role attempt.",
+                )
+            day_prefix = timestamp[:10]
+            month_prefix = timestamp[:7]
+            day_real = _sum_money_rows(
+                self.conn.execute(
+                    "SELECT estimated_cost_usd FROM model_usage "
+                    "WHERE dry_run=0 AND created_at LIKE ?",
+                    (f"{day_prefix}%",),
+                ).fetchall(),
+                "estimated_cost_usd", label="Persisted daily provider cost",
+            )
+            month_real = _sum_money_rows(
+                self.conn.execute(
+                    "SELECT estimated_cost_usd FROM model_usage "
+                    "WHERE dry_run=0 AND created_at LIKE ?",
+                    (f"{month_prefix}%",),
+                ).fetchall(),
+                "estimated_cost_usd", label="Persisted monthly provider cost",
+            )
+            attempt_reserved = _sum_money_rows(
+                self.conn.execute(
+                    "SELECT reserved_amount_usd FROM provider_attempts "
+                    "WHERE status IN "
+                    "('RESERVED','REQUEST_STARTED','NEEDS_RECONCILIATION')",
+                ).fetchall(),
+                "reserved_amount_usd", label="Persisted provider reservation",
+            )
+            role_reserved = _sum_money_rows(
+                self.conn.execute(
+                    "SELECT reserved_cost_usd FROM role_provider_executions "
+                    "WHERE outcome='IN_FLIGHT' OR "
+                    "(outcome='NEEDS_VERIFICATION' AND cost_usd IS NULL)",
+                ).fetchall(),
+                "reserved_cost_usd", label="Persisted role reservation",
+            )
+            job_reserved = _sum_money_rows(
+                self.conn.execute(
+                    "SELECT reserved_cost_usd FROM jobs "
+                    "WHERE status IN "
+                    "('QUEUED','LEASED','RUNNING','NEEDS_VERIFICATION') "
+                    "AND budget_reserved_at IS NOT NULL",
+                ).fetchall(),
+                "reserved_cost_usd", label="Persisted job reservation",
+            )
+            total_reserved = _money_sum(
+                (attempt_reserved, role_reserved, job_reserved, reserved_cost),
+                label="Total role provider reservation",
+            )
+            if month_real + total_reserved > monthly_limit:
+                raise BudgetReservationError(
+                    "Role provider reservation would exceed the global monthly limit."
+                )
+            if day_real + total_reserved > daily_limit:
+                raise BudgetReservationError(
+                    "Role provider reservation would exceed the global daily limit."
                 )
             self.conn.execute(
                 "INSERT INTO role_provider_executions (execution_ref,job_id,"
@@ -2439,6 +2502,25 @@ class SqliteStorage:
                     "CONTENT_ROLE_EXECUTION_SETTLE_RACE",
                     "Role execution settlement compare-and-swap failed.",
                 )
+            if execution.usage is not None and execution.cost_usd is not None:
+                usage = execution.usage
+                self.conn.execute(
+                    "INSERT INTO model_usage (run_id,provider,model,task,"
+                    "input_tokens,output_tokens,cache_read_tokens,"
+                    "cache_write_tokens,web_search_requests,estimated_cost_usd,"
+                    "dry_run,request_id,is_legacy_usage,created_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        execution.run_id, execution.authority.provider,
+                        execution.authority.technical_model_id,
+                        execution.role.value.lower(), usage.input_tokens,
+                        usage.output_tokens, usage.cache_read_tokens,
+                        usage.cache_write_tokens, usage.web_search_requests,
+                        float(execution.cost_usd), 0, execution.execution_ref, 0,
+                        timestamp,
+                    ),
+                )
+                self._set_run_cost_from_content_usage(execution.run_id)
             self.conn.commit()
             return fingerprint_value
         except BaseException:
@@ -7168,8 +7250,9 @@ class SqliteStorage:
     def _set_run_cost_from_content_usage(self, run_id: str) -> None:
         rows = self.conn.execute(
             "SELECT estimated_cost_usd FROM model_usage "
-            "WHERE run_id=? AND task=?",
-            (run_id, CONTENT_PROVIDER_STAGE),
+            "WHERE run_id=? AND (task=? OR request_id IN ("
+            "SELECT execution_ref FROM role_provider_executions WHERE run_id=?))",
+            (run_id, CONTENT_PROVIDER_STAGE, run_id),
         ).fetchall()
         total = _sum_money_rows(
             rows, "estimated_cost_usd", label="Canonical content usage total",
@@ -7607,6 +7690,18 @@ class SqliteStorage:
                 "SELECT reserved_amount_usd FROM provider_attempts "
                 "WHERE status IN ('RESERVED','REQUEST_STARTED','NEEDS_RECONCILIATION')",
             ).fetchall()
+            role_table_exists = self.conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' "
+                "AND name='role_provider_executions'",
+            ).fetchone() is not None
+            active_role_rows = (
+                self.conn.execute(
+                    "SELECT reserved_cost_usd FROM role_provider_executions "
+                    "WHERE outcome='IN_FLIGHT' OR "
+                    "(outcome='NEEDS_VERIFICATION' AND cost_usd IS NULL)",
+                ).fetchall()
+                if role_table_exists else ()
+            )
             active_job_rows = self.conn.execute(
                 "SELECT reserved_cost_usd FROM jobs "
                 "WHERE status IN ('QUEUED','LEASED','RUNNING','NEEDS_VERIFICATION') "
@@ -7623,11 +7718,19 @@ class SqliteStorage:
                 "reserved_amount_usd",
                 label="Persisted provider reservation",
             )
+            role_reserved_amount = _sum_money_rows(
+                active_role_rows,
+                "reserved_cost_usd",
+                label="Persisted role provider reservation",
+            )
             job_reserved_amount = _sum_money_rows(
                 active_job_rows, "reserved_cost_usd", label="Persisted job reservation",
             )
             total_reserved = _money_sum(
-                (attempt_reserved_amount, job_reserved_amount, max_cost),
+                (
+                    attempt_reserved_amount, role_reserved_amount,
+                    job_reserved_amount, max_cost,
+                ),
                 label="Total provider reservation",
             )
             if month_real_amount + total_reserved > monthly_limit:

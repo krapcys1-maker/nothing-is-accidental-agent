@@ -1,5 +1,11 @@
 # RESEARCH_LOG
 
+## 2026-08-11 — Repo-only blocker classification
+
+- Lokalnie prześledzono content root, Reviewera, budget gates, migracje i aktywne dokumenty Etapu 3.
+- Potwierdzono split-ledger Reviewera; odrzucono modelowy novelty jako sprzeczny z ADR-134 i nowe A1/A2/B jako zakres zabroniony dla Etapu 3.
+- Bez web search, Fetch, realnego SDK/API i nowych Research Cards. Koszt `0.000000 USD`.
+
 ## 2026-08-11 — P2-1 provider contract alignment (offline code tracing)
 
 - Prześledzono lokalnie production composition roots TOPIC_GENERATION i ARTICLE_RESEARCH od CLI/Worker/Dispatcher do finalnego callera. Finding potwierdzony: oba omijały canonical adapter/binding authority.

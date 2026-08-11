@@ -81,6 +81,7 @@ from app.storage.db import (
     migrate_0029_to_0030,
     migrate_0030_to_0031,
     migrate_0031_to_0032,
+    migrate_0032_to_0033,
 )
 from app.storage.repositories import SqliteStorage
 from tests.controlled_provider_fixtures import (
@@ -1561,6 +1562,7 @@ def test_migration_0029_is_forward_only_explicit_and_idempotent(tmp_path, capsys
     )
     migrate_0030_to_0031(path)
     migrate_0031_to_0032(path)
+    migrate_0032_to_0033(path)
 
     opened = SqliteStorage.open(path)
     try:

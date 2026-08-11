@@ -1,5 +1,11 @@
 # HUMAN_INTERVENTIONS
 
+## 2026-08-11 — Właściciel zlecił odróżnienie realnych blockerów od nadinterpretacji
+
+- **Decyzja:** sprawdzić, które zgłoszone blockery są faktyczne, i naprawić potwierdzone.
+- **Wykonanie:** naprawiono globalny ledger Reviewera. Nie przebudowano novelty (ADR-134) ani research A1/A2/B (zakaz zmiany research pipeline’u w Etapie 3).
+- **Nadal wymaga decyzji:** niezależny review, osobna migracja produkcji `0032→0033` i osobna autoryzacja realnego smoke/API.
+
 ## 2026-08-11 — właściciel autoryzował wyłącznie offline P2-1 provider alignment
 
 - **Decyzja:** sprawdzić i, jeśli finding istnieje, minimalnie podłączyć produkcyjne TOPIC_GENERATION i ARTICLE_RESEARCH do kanonicznego provider contractu oraz frozen role/model authority.

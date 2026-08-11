@@ -1,5 +1,15 @@
 # DECISIONS (Architecture Decision Log)
 
+### ADR-136: Każdy płatny reviewer jest częścią jednego globalnego ledgeru
+
+- **Data/status/autor:** 2026-08-11; właściciel zlecił zweryfikowanie realnych blockerów i ich naprawę. Status implementera: `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.
+- **Finding:** ARTICLE cap sumował Writer i Reviewer, lecz globalne limity oraz `runs.cost_usd` czytały `model_usage`; Reviewer utrwalał koszt wyłącznie w `role_provider_executions`.
+- **Decyzja:** `execution_ref` roli jest request identity jednego kanonicznego usage. Terminalizacja znanego wyniku i insert usage są atomowe. SQL wymaga exact job/run, provider/model, task, tokenów i kosztu; update/delete są zabronione. Unknown result nadal ma `NULL` usage/cost i zachowuje reservation.
+- **Budżet:** begin roli wymaga limitów daily/monthly i sumuje settled usage oraz aktywne provider/job/role reservations przed callerem. Provider attempt również widzi role reservations. Cache runu obejmuje Writer i role executions.
+- **Schema:** forward-only `0033`, jawny migrator `0032→0033`, runtime floor `0033`. Produkcja pozostaje na `0032` i wymaga osobnej zgody na migrację.
+- **Odrzucone findings:** modelowy novelty nie jest blockerem (ADR-134). Nowy durable real A1/A2/B nie jest blockerem Etapu 3 content, ponieważ roadmapa jawnie zabrania zmiany research pipeline’u.
+- **Granice:** zero realnego API, sieci, browsera, publikacji i kosztu. Nie ogłoszono APPROVED ani zamknięcia Etapu 3.
+
 ### ADR-135: Durable intent nie wybiera modelu; per-job role binding wybiera transport Anthropic
 
 - **Data/status/autor:** 2026-08-11; właściciel autoryzował wąskie P2-1 wyłącznie offline. Niezależny review dokładnego commita zakończył się `APPROVE WITH MINOR/P2`, bez blockerów runtime; P2-1 może zostać zmergowane decyzją właściciela. Dodatkowe testy authority i pozostałe P2 są nieblokującym backlogiem.

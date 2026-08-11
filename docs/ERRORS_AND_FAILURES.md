@@ -1,5 +1,14 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-11 — Reviewer pominięty przez globalny ledger
+
+- **Objaw:** flow z dwoma writerami i reviewerami rozliczał ARTICLE cap jako `0.081000 USD`, lecz `model_usage` i `runs.cost_usd` zawierały tylko writerów (`0.052000 USD`).
+- **Root cause:** `settle_role_provider_execution` kończył zapis na osobnej tabeli, podczas gdy globalne bramki korzystały z `model_usage`.
+- **Naprawa:** atomowy terminal + exact `model_usage`, globalne role reservations i migracja `0033` z integralnością/immutability.
+- **Nieudane próby:** pierwszy focused run ujawnił fixture kończący migracje na `0032`; po dodaniu kroku `0032→0033` wyszedł zbyt silny warunek `jobs.run_id` dla legacy LOCAL fixture. Relację oparto na już egzekwowanym role execution/content lineage. Kolejne runy są zielone.
+- **Walidacja pełna:** pierwsza próba full została przerwana przez techniczny timeout narzędzia `120 s` (`exit 124`), bez wyniku pytest. Powtórzony full z prawidłowym limitem ujawnił 21 mechanicznych oczekiwań starego headu/countu `0032/32`; po aktualizacji testów drabiny affected `354/354` i finalny full `2588/2588` są zielone.
+- **Koszt/skutki:** `0.000000 USD`, wyłącznie temp DB i fake caller; produkcja nietknięta.
+
 ## 2026-08-11 — P2-1: jedyny full ujawnił 15 braków fixture authority
 
 - Pierwszy affected run ujawnił dwa test-only problemy: subprocess nie zasiewał TOPIC_GENERATION authority, a syntetyczne referencje OPUS dla różnych providerów kolidowały. Referencje fake providerów rozdzielono, a subprocess dostał exact local authority.

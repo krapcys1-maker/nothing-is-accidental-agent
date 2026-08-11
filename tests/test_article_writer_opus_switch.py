@@ -30,6 +30,7 @@ from app.storage.db import (
     initialize_database,
     migrate_0030_to_0031,
     migrate_0031_to_0032,
+    migrate_0032_to_0033,
 )
 from app.storage.repositories import SqliteStorage
 from tests.test_prec5_verified_catalogue_live_root import _approval, _entry_for
@@ -176,8 +177,9 @@ def test_0031_preserves_fable_history_and_existing_frozen_binding(tmp_path):
     assert migrate_0030_to_0031(path).applied_migrations == (
         ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION,
     )
-    # The runtime floor is 0032, so reaching a runtime handle needs that step.
+    # The runtime floor is 0033, so reaching a runtime handle needs both steps.
     migrate_0031_to_0032(path)
+    migrate_0032_to_0033(path)
     storage = SqliteStorage.open(path)
     try:
         assert tuple(storage.conn.execute(

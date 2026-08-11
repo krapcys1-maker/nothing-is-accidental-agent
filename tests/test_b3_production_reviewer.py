@@ -250,6 +250,15 @@ def test_smoke_production_root_reaches_writer_then_reviewer(
         f"final={state['content']['status']}"
     )
     assert total <= Decimal("0.500000")
+    ledger = storage.conn.execute(
+        "SELECT task,estimated_cost_usd FROM model_usage WHERE run_id=? "
+        "ORDER BY id", (state["content"]["run_id"],),
+    ).fetchall()
+    assert [row["task"] for row in ledger] == [
+        "content_draft", "article_reviewer",
+    ]
+    assert Decimal(str(storage.get_run(state["content"]["run_id"]).cost_usd)) \
+        == total
     # Whatever the gate decides, it decided it AFTER a real semantic review.
     assert state["content"]["status"] in {
         "PENDING_APPROVAL", "APPROVED", "REJECTED", "REVISE",
@@ -336,6 +345,7 @@ def test_D_uncertain_in_flight_is_never_replayed_by_a_new_runtime(
     first = ProductionArticleReviewer(
         storage=storage, job_id="b3-D", api_key_provider=lambda: "k",
         sdk_factory=_sdk_factory, caller=ReviewerTransport(),
+        daily_limit_usd=2, monthly_limit_usd=40,
     )
     authority, _ = first._authority()
     content_row = storage.get_content_row_for_job(job_id="b3-D")
@@ -346,6 +356,7 @@ def test_D_uncertain_in_flight_is_never_replayed_by_a_new_runtime(
         # This probe fabricates only the crash marker; the production review()
         # path separately proves its full legal reservation envelope.
         max_cost_usd="0.010000", authority=authority,
+        daily_limit_usd=2, monthly_limit_usd=40,
     )
     storage.mark_role_provider_effect_started("b3-D:ARTICLE_REVIEWER")
 
@@ -356,6 +367,7 @@ def test_D_uncertain_in_flight_is_never_replayed_by_a_new_runtime(
         storage=fresh, job_id="b3-D",
         api_key_provider=lambda: "fake-key",
         sdk_factory=_sdk_factory, caller=replay,
+        daily_limit_usd=2, monthly_limit_usd=40,
     )
     content = fresh.get_content_row_for_job(job_id="b3-D")
     with pytest.raises(ProductionReviewerError) as exc:
@@ -491,6 +503,20 @@ def test_rewrite_production_path_reaches_terminal_with_one_shared_cap(
     assert state["content"]["status"] == "PENDING_APPROVAL"
     assert outcome.worker.status.value == "DONE"
     assert sum(writer_costs + reviewer_costs) == Decimal("0.081000")
+    ledger = storage.conn.execute(
+        "SELECT task,estimated_cost_usd FROM model_usage WHERE run_id=? "
+        "ORDER BY id", (state["content"]["run_id"],),
+    ).fetchall()
+    assert [row["task"] for row in ledger] == [
+        "content_draft", "article_reviewer",
+        "content_draft", "article_reviewer",
+    ]
+    assert sum(Decimal(str(row["estimated_cost_usd"])) for row in ledger) \
+        == Decimal("0.081000")
+    assert Decimal(str(storage.get_run(state["content"]["run_id"]).cost_usd)) \
+        == Decimal("0.081000")
+    assert Decimal(str(storage.sum_real_cost_usd("2026-08-11"))) \
+        == Decimal("0.081")
     cumulative = Decimal("0")
     remaining_after_each = []
     for cost in (
@@ -556,6 +582,7 @@ def test_unknown_reviewer_cost_is_null_and_blocks_next_paid_role_after_reopen(
         storage=fresh, job_id=outcome.job_id,
         api_key_provider=lambda: "fake-key", sdk_factory=_sdk_factory,
         caller=next_transport,
+        daily_limit_usd=2, monthly_limit_usd=40,
     )
     draft = _Draft()
     draft.attempt_no = 2

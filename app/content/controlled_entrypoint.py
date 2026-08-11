@@ -181,6 +181,8 @@ def run_controlled_article(
             sdk_factory=reviewer_sdk_factory,
             caller=reviewer_caller,
             timeout_seconds=timeout_seconds,
+            daily_limit_usd=settings.max_daily_cost_usd,
+            monthly_limit_usd=settings.max_monthly_cost_usd,
         )
         policy = PolicyEngine(settings, storage, clock)
         dispatcher = JobDispatcher(
