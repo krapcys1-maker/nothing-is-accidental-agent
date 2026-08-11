@@ -21,6 +21,7 @@ from app.core.clock import FixedClock
 from app.core.pricing import load_pricing_profiles, resolve_real_pricing_profile
 from app.llm.base import Usage
 from app.models import JobStatus, RunStatus, Topic, TopicStatus
+from app.model_routing import LogicalModelRole
 from app.policies.policy_engine import PolicyEngine
 from app.research import output_contract as oc
 from app.research.anthropic_client import AnthropicResearchClient
@@ -30,6 +31,7 @@ from app.scheduler.dispatcher import JobDispatcher
 from app.scheduler.worker import Worker, WorkerIterationStatus
 from app.storage.repositories import SqliteStorage
 from tests.conftest import write_approved_pricing_profile
+from tests.controlled_provider_fixtures import seed_active_provider_role
 from tests.test_research_card_size_contract import (
     _json,
     _max_payload,
@@ -83,6 +85,11 @@ def _enqueue_durable_job(real_settings, storage, account, topic, *, key, max_tok
     job = storage.enqueue_job(_operation_job(
         account, topic, key, key, cap=1.0, payload=payload,
     ))
+    seed_active_provider_role(
+        storage,
+        role=LogicalModelRole.ARTICLE_RESEARCH,
+        technical_model_id=intent.model,
+    )
     storage.apply_security_flag_profile([
         ("worker_enabled", True),
         ("safe_mode", False),

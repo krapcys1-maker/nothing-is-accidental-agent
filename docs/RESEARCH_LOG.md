@@ -1,5 +1,10 @@
 # RESEARCH_LOG
 
+## 2026-08-11 — P2-1 provider contract alignment (offline code tracing)
+
+- Prześledzono lokalnie production composition roots TOPIC_GENERATION i ARTICLE_RESEARCH od CLI/Worker/Dispatcher do finalnego callera. Finding potwierdzony: oba omijały canonical adapter/binding authority.
+- Nie wykonano researchu internetowego ani providerowego. Jedyny research smoke był deterministycznym E3 na temp SQLite z fake SDK i syntetycznym evidence corpusem; koszt `0.000000 USD`.
+
 ## 2026-08-11 — offline analiza blockerów PRE-LIVE CONTENT FLOW
 
 - **Zakres:** wyłącznie aktualny kod, testy i immutable odczyt stanu produkcyjnego; bez internetu, nowych źródeł, model calla i web search.

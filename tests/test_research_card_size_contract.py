@@ -503,6 +503,8 @@ class _StubSdkUsage:
 
 
 class _StubMessage:
+    model = "model"
+    id = "fake-research-response"
     content = ()
     usage = _StubSdkUsage()
     stop_reason = "max_tokens"

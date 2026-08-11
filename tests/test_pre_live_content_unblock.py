@@ -244,10 +244,14 @@ def test_topic_prompt_history_is_bounded_and_never_contains_article_body(
         def create(**kwargs):
             final_request.update(kwargs)
             return SimpleNamespace(
+                model="topic-model",
+                id="fake-topic-history",
+                stop_reason="end_turn",
                 content=[SimpleNamespace(type="text", text='{"topics": []}')],
                 usage=SimpleNamespace(
                     input_tokens=10, output_tokens=2,
                     cache_read_input_tokens=0, cache_creation_input_tokens=0,
+                    inference_geo="global", service_tier="standard",
                 ),
             )
 

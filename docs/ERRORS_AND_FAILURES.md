@@ -1,5 +1,12 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-11 — P2-1: jedyny full ujawnił 15 braków fixture authority
+
+- Pierwszy affected run ujawnił dwa test-only problemy: subprocess nie zasiewał TOPIC_GENERATION authority, a syntetyczne referencje OPUS dla różnych providerów kolidowały. Referencje fake providerów rozdzielono, a subprocess dostał exact local authority.
+- Jedyny pełny `pytest -q` (`627.2 s`) zakończył się `15 failed`. Trzynaście failure’ów pochodziło ze starych real-path fixture’ów, które po nowym fail-closed kontrakcie nie miały aktywnego ARTICLE_RESEARCH/TOPIC_GENERATION binding authority. Dwa pozostałe fake SDK response’y nie zwracały model ID/provenance lub używały starego założenia o lazy SDK construction.
+- Nie osłabiono produkcyjnej bramki. Każdy fixture otrzymał jawny lokalny `ANTHROPIC` model/policy/qualification/activation albo pełny fake response. Po poprawce sześć dokładnie ujawnionych modułów przeszło `165/165`.
+- Full nie został powtórzony, ponieważ właściciel wymagał dokładnie jednego pełnego przebiegu. Dlatego nie wolno przekształcić zielonych testów celowanych w twierdzenie o zielonym fullu; acceptance pozostaje jawnie zablokowane.
+
 ## 2026-08-11 — PRE-LIVE CONTENT UNBLOCK: próby, które nie były dowodem
 
 - Najważniejsza samokontrola obaliła własne rozwiązanie B3. Lexical overlap może uznać zdanie za grounded po kilku wspólnych konceptach, nawet gdy końcówka dodaje nowy zewnętrzny fakt. To dokładnie trust boundary z ADR-123. `DeterministicClaimAccountingReviewer` usunięto; nie wolno było zamienić zielonych testów w fałszywą deklarację semantyki.

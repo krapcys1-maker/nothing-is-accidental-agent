@@ -115,11 +115,13 @@ def seed_model(
     max_output_tokens: int = 8_000,
     qualification: QualificationState = QualificationState.PASS,
     availability: AvailabilityState = AvailabilityState.AVAILABLE,
+    technical_model_id_override: str | None = None,
 ) -> SeededModel:
     """Register one fully evidenced fake candidate and return its identities."""
     slug = f"{family.value.lower()}-{version.replace('.', '-')}"
-    technical_model_id = f"fake-{provider}-{slug}"
-    resolved_pricing_ref = pricing_ref or f"price-{slug}-v1"
+    reference_slug = slug if provider == "fake-provider" else f"{provider.lower()}-{slug}"
+    technical_model_id = technical_model_id_override or f"fake-{provider}-{slug}"
+    resolved_pricing_ref = pricing_ref or f"price-{reference_slug}-v1"
     model = storage.register_model_candidate(
         CatalogueCandidate(
             provider=provider,
@@ -148,7 +150,7 @@ def seed_model(
     verified_capability = (
         capability_state is CapabilityVerificationState.VERIFIED
     )
-    capability_ref = f"caps-{slug}-v1"
+    capability_ref = f"caps-{reference_slug}-v1"
     storage.record_model_capabilities(
         model.registry_id,
         CapabilityDeclaration(
@@ -160,7 +162,7 @@ def seed_model(
             verified_at=TS if verified_capability else None,
         ),
     )
-    qualification_ref = f"qual-{slug}-{qualification.value.lower()}"
+    qualification_ref = f"qual-{reference_slug}-{qualification.value.lower()}"
     if qualification is not QualificationState.UNQUALIFIED:
         storage.record_model_qualification(
             QualificationReport(
@@ -203,6 +205,40 @@ def seed_active_article_writer(
         pricing_ref=pricing_ref,
     )
     storage.promote_best_model(LogicalModelRole.ARTICLE_WRITER, reason=reason)
+    return model
+
+
+def seed_active_provider_role(
+    storage,
+    *,
+    role: LogicalModelRole,
+    technical_model_id: str,
+    provider: str = "ANTHROPIC",
+    version: str = "0.0.1",
+):
+    """Seed one exact active role authority for an offline production-path test."""
+    active = storage.get_active_model_for_role(role)
+    if active is not None:
+        if (
+            active.provider != provider
+            or active.technical_model_id != technical_model_id
+        ):
+            raise AssertionError(
+                f"Existing {role.value} fixture authority disagrees with the test intent."
+            )
+        return active
+    seed_role_policy(storage, role)
+    model = seed_model(
+        storage,
+        version=version,
+        family=ROLE_FAMILY_FOR_TESTS[role],
+        provider=provider,
+        technical_model_id_override=technical_model_id,
+    )
+    storage.promote_best_model(
+        role,
+        reason=f"offline {role.value} provider-contract fixture",
+    )
     return model
 
 

@@ -23,6 +23,7 @@ from app.core.clock import FixedClock
 from app.core.config import REAL_PROVIDER_PRICING_KEYS
 from app.core.pricing import load_pricing_profiles, resolve_real_pricing_profile
 from app.llm.base import LLMProviderError, TopicIdea, Usage
+from app.model_routing import LogicalModelRole, ModelFamily
 from app.models import (
     ExecutionResolution,
     FinancialResolution,
@@ -59,6 +60,7 @@ from app.topics.durable_intent import (
 )
 from app.workflows.topics.generate import validate_score_breakdown
 from tests.conftest import STANDARD_WEIGHTS, write_approved_pricing_profile
+from tests.controlled_provider_fixtures import seed_model, seed_role_policy
 
 NOW = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
 DIMENSIONS = sorted(STANDARD_WEIGHTS)
@@ -230,6 +232,18 @@ def _prepare(settings, storage, account, *, key="a", cap=1.0, count=3,
     intent = _intent(real, account, cap=cap, count=count, profile=profile)
     storage.ensure_account(account)
     job = storage.enqueue_job(_job(account, key, _payload(intent)))
+    if storage.get_active_model_for_role(LogicalModelRole.TOPIC_GENERATION) is None:
+        seed_role_policy(storage, LogicalModelRole.TOPIC_GENERATION)
+        seed_model(
+            storage,
+            family=ModelFamily.SONNET,
+            provider="ANTHROPIC",
+            technical_model_id_override=intent.model,
+        )
+        storage.promote_best_model(
+            LogicalModelRole.TOPIC_GENERATION,
+            reason="offline topic provider-contract fixture",
+        )
     _open_flags(storage)
     if approve:
         _approve(storage, job.id, account)

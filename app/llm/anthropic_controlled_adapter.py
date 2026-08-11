@@ -29,14 +29,20 @@ import math
 from typing import Any, Callable, Mapping, Protocol
 
 from app.llm.anthropic_provider_contract import (
+    ANTHROPIC_PROVIDER,
+    APPLICATION_MAX_RETRIES as CONTRACT_APPLICATION_MAX_RETRIES,
+    AnthropicRequestContract,
+    CANONICAL_ANTHROPIC_REQUEST_CONTRACT,
     CONTROLLED_INFERENCE_GEO,
     CONTROLLED_SERVICE_TIER,
     EXPECTED_RETURNED_INFERENCE_GEO,
     EXPECTED_RETURNED_SERVICE_TIER,
+    FALLBACK_POLICY,
+    SDK_MAX_RETRIES as CONTRACT_SDK_MAX_RETRIES,
 )
 
-SDK_MAX_RETRIES = 0
-APPLICATION_MAX_RETRIES = 0
+SDK_MAX_RETRIES = CONTRACT_SDK_MAX_RETRIES
+APPLICATION_MAX_RETRIES = CONTRACT_APPLICATION_MAX_RETRIES
 INFERENCE_GEOGRAPHY = CONTROLLED_INFERENCE_GEO
 SERVICE_TIER = CONTROLLED_SERVICE_TIER
 
@@ -71,6 +77,11 @@ class ControlledProviderRequest:
     user_prompt: str
     max_output_tokens: int
     timeout_seconds: float
+    provider_contract: AnthropicRequestContract | None = (
+        CANONICAL_ANTHROPIC_REQUEST_CONTRACT
+    )
+    tools: tuple[Mapping[str, Any], ...] | None = None
+    extra_headers: Mapping[str, str] | None = None
 
     def __post_init__(self) -> None:
         if not self.technical_model_id.strip():
@@ -91,6 +102,21 @@ class ControlledProviderRequest:
                 "ADAPTER_TIMEOUT_INVALID",
                 "A controlled request requires a finite positive timeout.",
             )
+        if self.tools is not None and any(
+            not isinstance(tool, Mapping) for tool in self.tools
+        ):
+            raise ControlledAdapterError(
+                "ADAPTER_TOOLS_INVALID",
+                "Controlled provider tools must be explicit mappings.",
+            )
+        if self.extra_headers is not None and any(
+            not isinstance(key, str) or not isinstance(value, str)
+            for key, value in self.extra_headers.items()
+        ):
+            raise ControlledAdapterError(
+                "ADAPTER_HEADERS_INVALID",
+                "Controlled provider headers must be string mappings.",
+            )
 
 
 @dataclass(frozen=True)
@@ -108,6 +134,7 @@ class ControlledProviderRawResponse:
     provider_request_id: str | None
     inference_geo: str | None = None
     service_tier: str | None = None
+    thinking_tokens: int = 0
 
 
 class ControlledSdkFactory(Protocol):
@@ -134,15 +161,26 @@ def _default_sdk_factory(
 def _default_caller(
     client: object, request: ControlledProviderRequest,
 ) -> ControlledProviderRawResponse:  # pragma: no cover - real boundary
-    message = client.messages.create(
+    contract = request.provider_contract
+    if contract is None:  # validated by execute; defensive for direct tests
+        raise ControlledAdapterError(
+            "ADAPTER_PROVIDER_CONTRACT_MISSING",
+            "The canonical Anthropic provider contract is required.",
+        )
+    kwargs: dict[str, Any] = dict(
         model=request.technical_model_id,
         max_tokens=request.max_output_tokens,
         system=request.system_prompt,
         messages=[{"role": "user", "content": request.user_prompt}],
-        inference_geo=CONTROLLED_INFERENCE_GEO,
-        service_tier=CONTROLLED_SERVICE_TIER,
+        inference_geo=contract.inference_geo,
+        service_tier=contract.service_tier,
         timeout=request.timeout_seconds,
     )
+    if request.tools:
+        kwargs["tools"] = [dict(tool) for tool in request.tools]
+    if request.extra_headers:
+        kwargs["extra_headers"] = dict(request.extra_headers)
+    message = client.messages.create(**kwargs)
     usage = getattr(message, "usage", None)
     text = "".join(
         getattr(block, "text", "")
@@ -167,7 +205,56 @@ def _default_caller(
         service_tier=getattr(usage, "service_tier", None),
         stop_reason=getattr(message, "stop_reason", None),
         provider_request_id=getattr(message, "id", None),
+        thinking_tokens=int(
+            getattr(
+                getattr(getattr(message, "usage", None), "output_tokens_details", None),
+                "thinking_tokens",
+                0,
+            ) or 0
+        ),
     )
+
+
+def assert_canonical_provider_contract(
+    contract: AnthropicRequestContract | None,
+) -> AnthropicRequestContract:
+    """Fail before SDK construction when any frozen request field is absent/drifts."""
+    if contract is None:
+        raise ControlledAdapterError(
+            "ADAPTER_PROVIDER_CONTRACT_MISSING",
+            "The canonical Anthropic provider contract is required.",
+        )
+    checks = (
+        (contract.provider, ANTHROPIC_PROVIDER, "ADAPTER_PROVIDER_MISMATCH"),
+        (
+            contract.inference_geo,
+            CONTROLLED_INFERENCE_GEO,
+            "ADAPTER_INFERENCE_GEO_UNSUPPORTED",
+        ),
+        (
+            contract.service_tier,
+            CONTROLLED_SERVICE_TIER,
+            "ADAPTER_SERVICE_TIER_UNSUPPORTED",
+        ),
+        (contract.fallback_policy, FALLBACK_POLICY, "ADAPTER_FALLBACK_FORBIDDEN"),
+        (
+            contract.application_retries,
+            APPLICATION_MAX_RETRIES,
+            "ADAPTER_APPLICATION_RETRIES_FORBIDDEN",
+        ),
+        (
+            contract.sdk_retries,
+            SDK_MAX_RETRIES,
+            "ADAPTER_SDK_RETRIES_FORBIDDEN",
+        ),
+    )
+    for actual, expected, code in checks:
+        if actual != expected:
+            raise ControlledAdapterError(
+                code,
+                f"Canonical Anthropic request field must equal {expected!r}.",
+            )
+    return contract
 
 
 class ControlledAnthropicAdapter:
@@ -195,6 +282,7 @@ class ControlledAnthropicAdapter:
         self, request: ControlledProviderRequest,
     ) -> ControlledProviderRawResponse:
         """Make at most one call and refuse a response from another model."""
+        contract = assert_canonical_provider_contract(request.provider_contract)
         try:
             secret = self._api_key_provider()
         except Exception as exc:  # a broken secret source is not a soft failure
@@ -209,7 +297,7 @@ class ControlledAnthropicAdapter:
             )
         client = self._sdk_factory(
             api_key=secret,
-            max_retries=SDK_MAX_RETRIES,
+            max_retries=contract.sdk_retries,
             timeout=request.timeout_seconds,
         )
         self.caller_calls += 1
