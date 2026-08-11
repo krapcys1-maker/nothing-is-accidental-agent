@@ -44,6 +44,14 @@ from app.research.controlled_fetch_intent import (
     ControlledFetchIntentError,
     canonicalize_controlled_fetch_payload,
 )
+from app.research.source_discovery_intent import (
+    SOURCE_DISCOVERY_EXECUTION,
+    SourceDiscoveryIntent,
+    SourceDiscoveryIntentError,
+    canonicalize_source_discovery_payload,
+)
+from app.ports.source_discovery import SourceDiscoveryPort
+from app.workflows.research.source_discovery import run_typed_source_discovery
 from app.workflows.research.controlled_fetch import (
     ControlledFetchNeedsVerification,
     run_controlled_fetch,
@@ -167,6 +175,14 @@ class ControlledFetchCallable(Protocol):
     ) -> ResearchRunSummary: ...
 
 
+class SourceDiscoveryCallable(Protocol):
+    def __call__(
+        self, account: Account, topic: Topic, *, settings: Settings,
+        storage: StoragePort, clock: Clock, job_execution: ResearchJobExecution,
+        intent: SourceDiscoveryIntent, port: SourceDiscoveryPort,
+    ) -> ResearchRunSummary: ...
+
+
 class TopicGenerationCallable(Protocol):
     def __call__(
         self, account: Account, *, settings: Settings, storage: StoragePort,
@@ -266,29 +282,6 @@ def _run_durable_real_research(
 ) -> ResearchRunSummary:
     """The paid execution root accepts only an already leased durable job."""
     intent = _durable_job_intent(storage, job_execution.job_id)
-    try:
-        profiles = load_pricing_profiles(
-            default_pricing_profiles_path(settings.project_root)
-        )
-        approved = resolve_real_pricing_profile(
-            profiles,
-            profile_id=intent.pricing_profile_id,
-            model=intent.model,
-        )
-        assert_frozen_pricing_contract(
-            profile=approved,
-            profile_id=intent.pricing_profile_id,
-            version=intent.pricing_profile_version,
-            model=intent.model,
-            currency=intent.pricing_currency,
-            unit=intent.pricing_unit,
-            prices=intent.pricing_profile,
-            fingerprint=intent.pricing_fingerprint,
-        )
-    except PricingConfigError as exc:
-        raise PayloadValidationError(
-            "Durable real research pricing contract is not currently approved."
-        ) from exc
     binding = _freeze_anthropic_role_authority(
         storage,
         role=LogicalModelRole.ARTICLE_RESEARCH,
@@ -297,6 +290,36 @@ def _run_durable_real_research(
         durable_provider=intent.provider,
         durable_model=intent.model,
     )
+    approved = storage.get_model_pricing_profile(binding.pricing_ref)
+    binding_pricing_matches = (
+        approved is None or approved.prices is None
+    ) is False and (
+        approved.technical_model_id == intent.model
+        and intent.pricing_profile_id == binding.pricing_ref
+        and intent.pricing_profile_version == approved.contract_fingerprint()
+        and intent.pricing_currency == approved.currency
+        and intent.pricing_unit == approved.unit
+        and intent.pricing_profile == approved.prices.as_storage_mapping()
+    )
+    file_pricing_matches = False
+    try:
+        file_profile = resolve_real_pricing_profile(
+            load_pricing_profiles(default_pricing_profiles_path(settings.project_root)),
+            profile_id=intent.pricing_profile_id, model=intent.model,
+        )
+        assert_frozen_pricing_contract(
+            profile=file_profile, profile_id=intent.pricing_profile_id,
+            version=intent.pricing_profile_version, model=intent.model,
+            currency=intent.pricing_currency, unit=intent.pricing_unit,
+            prices=intent.pricing_profile, fingerprint=intent.pricing_fingerprint,
+        )
+        file_pricing_matches = True
+    except PricingConfigError:
+        pass
+    if not (binding_pricing_matches or file_pricing_matches):
+        raise PayloadValidationError(
+            "Durable real research pricing disagrees with the frozen verified binding."
+        )
     real_settings = replace(
         settings,
         dry_run=False,
@@ -337,6 +360,8 @@ class JobDispatcher:
         research_real: ResearchDryRunCallable = _run_durable_real_research,
         research_offline_evidence: OfflineEvidenceCallable = run_offline_evidence_research,
         research_controlled_fetch: ControlledFetchCallable = run_controlled_fetch,
+        research_source_discovery: SourceDiscoveryCallable = run_typed_source_discovery,
+        source_discovery_port_factory: Callable[[Settings, SourceDiscoveryIntent], SourceDiscoveryPort] | None = None,
         topic_generation: TopicGenerationCallable = run_topic_generation,
         topic_generation_client_factory: TopicGenerationClientFactory | None = None,
         allow_real_research: bool = True,
@@ -355,6 +380,8 @@ class JobDispatcher:
         self._research_real = research_real
         self._research_offline_evidence = research_offline_evidence
         self._research_controlled_fetch = research_controlled_fetch
+        self._research_source_discovery = research_source_discovery
+        self._source_discovery_port_factory = source_discovery_port_factory
         self._topic_generation = topic_generation
         self._topic_generation_client_factory = topic_generation_client_factory
         self._allow_real_research = allow_real_research
@@ -543,6 +570,40 @@ class JobDispatcher:
                     policy=self._policy, clock=self._clock,
                     job_execution=execution, intent=fetch_intent,
                 )
+            elif job.payload.get("execution") == SOURCE_DISCOVERY_EXECUTION:
+                discovery_intent = SourceDiscoveryIntent.from_payload(
+                    job.payload["execution_intent"]
+                )
+                binding = _freeze_anthropic_role_authority(
+                    self._storage,
+                    role=LogicalModelRole.ARTICLE_RESEARCH,
+                    intent_kind=ARTICLE_RESEARCH_PROVIDER_INTENT_KIND,
+                    job_id=job.id,
+                    durable_provider=discovery_intent.provider,
+                    durable_model=discovery_intent.model,
+                )
+                discovery_pricing = self._storage.get_model_pricing_profile(
+                    binding.pricing_ref
+                )
+                if discovery_pricing is None or discovery_pricing.prices is None:
+                    raise PayloadValidationError(
+                        "A1 source discovery has no frozen verified pricing."
+                    )
+                real_settings = replace(
+                    self._settings, dry_run=False,
+                    model_quality=binding.technical_model_id,
+                    pricing=discovery_pricing.prices.as_storage_mapping(),
+                )
+                port = (
+                    self._source_discovery_port_factory(real_settings, discovery_intent)
+                    if self._source_discovery_port_factory is not None
+                    else self._default_source_discovery_port(real_settings, discovery_intent)
+                )
+                summary = self._research_source_discovery(
+                    account, topic, settings=real_settings, storage=self._storage,
+                    clock=self._clock, job_execution=execution,
+                    intent=discovery_intent, port=port,
+                )
             else:
                 runner = self._research_real if is_real else self._research_dry_run
                 summary = runner(
@@ -614,28 +675,6 @@ class JobDispatcher:
                 "TOPIC_GENERATION intent is not supported by this worker."
             )
 
-        try:
-            profiles = load_pricing_profiles(
-                default_pricing_profiles_path(self._settings.project_root)
-            )
-            approved = resolve_real_pricing_profile(
-                profiles, profile_id=intent.pricing_profile_id, model=intent.model,
-            )
-            assert_frozen_pricing_contract(
-                profile=approved,
-                profile_id=intent.pricing_profile_id,
-                version=intent.pricing_profile_version,
-                model=intent.model,
-                currency=intent.pricing_currency,
-                unit=intent.pricing_unit,
-                prices=intent.pricing_profile,
-                fingerprint=intent.pricing_fingerprint,
-            )
-        except PricingConfigError as exc:
-            raise PayloadValidationError(
-                "TOPIC_GENERATION pricing contract is not currently approved."
-            ) from exc
-
         binding = _freeze_anthropic_role_authority(
             self._storage,
             role=LogicalModelRole.TOPIC_GENERATION,
@@ -644,6 +683,36 @@ class JobDispatcher:
             durable_provider=intent.provider,
             durable_model=intent.model,
         )
+        approved = self._storage.get_model_pricing_profile(binding.pricing_ref)
+        binding_pricing_matches = (
+            approved is None or approved.prices is None
+        ) is False and (
+            approved.technical_model_id == intent.model
+            and intent.pricing_profile_id == binding.pricing_ref
+            and intent.pricing_profile_version == approved.contract_fingerprint()
+            and intent.pricing_currency == approved.currency
+            and intent.pricing_unit == approved.unit
+            and intent.pricing_profile == approved.prices.as_storage_mapping()
+        )
+        file_pricing_matches = False
+        try:
+            file_profile = resolve_real_pricing_profile(
+                load_pricing_profiles(default_pricing_profiles_path(self._settings.project_root)),
+                profile_id=intent.pricing_profile_id, model=intent.model,
+            )
+            assert_frozen_pricing_contract(
+                profile=file_profile, profile_id=intent.pricing_profile_id,
+                version=intent.pricing_profile_version, model=intent.model,
+                currency=intent.pricing_currency, unit=intent.pricing_unit,
+                prices=intent.pricing_profile, fingerprint=intent.pricing_fingerprint,
+            )
+            file_pricing_matches = True
+        except PricingConfigError:
+            pass
+        if not (binding_pricing_matches or file_pricing_matches):
+            raise PayloadValidationError(
+                "TOPIC_GENERATION pricing disagrees with the frozen verified binding."
+            )
 
         real_settings = replace(
             self._settings,
@@ -706,6 +775,26 @@ class JobDispatcher:
             topic_max_tokens=intent.max_tokens,
         )
 
+    @staticmethod
+    def _default_source_discovery_port(
+        settings: Settings, intent: SourceDiscoveryIntent,
+    ) -> SourceDiscoveryPort:
+        from app.research.anthropic_source_discovery import AnthropicSourceDiscoveryPort
+
+        def sdk_factory(api_key: str) -> object:
+            import anthropic  # type: ignore[import-not-found]
+            return anthropic.Anthropic(
+                api_key=api_key,
+                timeout=float(settings.research_timeout_seconds),
+                max_retries=0,
+            )
+
+        return AnthropicSourceDiscoveryPort(
+            api_key=settings.anthropic_api_key,
+            model=intent.model,
+            sdk_factory=sdk_factory,
+        )
+
     # Compatibility seam used by offline maintenance tests.  Dispatch itself
     # selects the payload-specific path above; this alias does not authorize a
     # real request and can be removed with the legacy dry-only test harness.
@@ -720,7 +809,10 @@ class JobDispatcher:
             raise PayloadValidationError("RESEARCH job requires topic_id.")
         is_offline_evidence = job.payload.get("execution") == OFFLINE_EVIDENCE_EXECUTION
         is_controlled_fetch = job.payload.get("execution") == CONTROLLED_FETCH_EXECUTION
-        if job.run_id is not None and not (is_offline_evidence or is_controlled_fetch):
+        is_source_discovery = job.payload.get("execution") == SOURCE_DISCOVERY_EXECUTION
+        if job.run_id is not None and not (
+            is_offline_evidence or is_controlled_fetch or is_source_discovery
+        ):
             raise PayloadValidationError("RESEARCH worker accepts only a job without a prior run_id.")
         dry_keys = {"account_id", "topic_id", "dry_run"}
         real_keys = {
@@ -732,9 +824,10 @@ class JobDispatcher:
             "account_id", "topic_id", "dry_run", "execution", "execution_intent",
         }
         controlled_fetch_keys = offline_evidence_keys
+        source_discovery_keys = offline_evidence_keys
         if set(job.payload) not in (
             dry_keys, real_keys, controlled_real_keys, offline_evidence_keys,
-            controlled_fetch_keys,
+            controlled_fetch_keys, source_discovery_keys,
         ):
             raise PayloadValidationError("RESEARCH payload contains unsupported fields.")
         if job.payload["account_id"] != job.account_id or job.payload["topic_id"] != job.topic_id:
@@ -755,6 +848,19 @@ class JobDispatcher:
                 raise PayloadValidationError(
                     "RESEARCH controlled fetch intent does not match job identity or mode."
                 )
+        if is_source_discovery:
+            try:
+                normalized_discovery = canonicalize_source_discovery_payload(job.payload)
+            except SourceDiscoveryIntentError as exc:
+                raise PayloadValidationError("RESEARCH source-discovery intent is invalid.") from exc
+            if (
+                normalized_discovery["account_id"] != job.account_id
+                or normalized_discovery["topic_id"] != job.topic_id
+                or not is_real
+            ):
+                raise PayloadValidationError(
+                    "RESEARCH source-discovery intent does not match job identity or mode."
+                )
         if is_offline_evidence:
             try:
                 normalized_offline = canonicalize_offline_evidence_payload(job.payload)
@@ -768,11 +874,11 @@ class JobDispatcher:
                 raise PayloadValidationError(
                     "RESEARCH offline evidence intent does not match job identity or mode."
                 )
-        if is_real and not is_controlled_fetch and (
+        if is_real and not is_controlled_fetch and not is_source_discovery and (
             job.payload.get("execution") != "durable_provider_v2"
         ):
             raise PayloadValidationError("RESEARCH real payload is not a durable single-attempt contract.")
-        if is_real and not is_controlled_fetch:
+        if is_real and not is_controlled_fetch and not is_source_discovery:
             try:
                 normalized = canonicalize_durable_research_payload(job.payload)
                 intent_raw = normalized["execution_intent"]

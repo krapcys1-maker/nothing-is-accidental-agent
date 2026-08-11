@@ -46,7 +46,7 @@ FAKE_PRICES = {
     "web_search_per_1k": "4",
 }
 ROLE_FAMILY_FOR_TESTS = {
-    LogicalModelRole.TOPIC_GENERATION: ModelFamily.SONNET,
+    LogicalModelRole.TOPIC_GENERATION: ModelFamily.OPUS,
     LogicalModelRole.ARTICLE_RESEARCH: ModelFamily.OPUS,
     LogicalModelRole.ARTICLE_PLAN: ModelFamily.OPUS,
     LogicalModelRole.ARTICLE_WRITER: ModelFamily.OPUS,

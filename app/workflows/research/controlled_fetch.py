@@ -185,6 +185,11 @@ def run_controlled_fetch(
             storage.finalize_controlled_fetch_success(execution, attempt.id, document)
         except ControlledFetchRetrievalNotOk as exc:
             return _fail(f"FETCH_FAILED:{exc}", document=document)
+        from app.research.corpus_enqueue import enqueue_evidence_research_if_ready
+        enqueue_evidence_research_if_ready(
+            storage=storage, settings=settings, account=account, topic=topic,
+            clock=clock,
+        )
         summary.passed = True
         summary.recommendation = "PROCEED"
         summary.sources_count = 1

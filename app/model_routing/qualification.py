@@ -74,6 +74,7 @@ class QualificationApproval:
     purpose: str = QUALIFICATION_PURPOSE
     max_retries: int = 0
     fallback_policy: str = "FORBIDDEN"
+    require_source_discovery: bool = False
 
     def __post_init__(self) -> None:
         if self.purpose != QUALIFICATION_PURPOSE:
@@ -95,6 +96,11 @@ class QualificationApproval:
             raise ControlledQualificationError(
                 "QUALIFICATION_CAP_INVALID",
                 "A qualification approval requires a positive cost cap.",
+            )
+        if not isinstance(self.require_source_discovery, bool):
+            raise ControlledQualificationError(
+                "QUALIFICATION_SOURCE_DISCOVERY_INVALID",
+                "Source-discovery qualification requirement must be boolean.",
             )
 
     @property
@@ -120,6 +126,7 @@ class QualificationApproval:
             "approved_at": self.approved_at,
             "expires_at": self.expires_at,
             "retention_acceptance_ref": self.retention_acceptance_ref,
+            "require_source_discovery": self.require_source_discovery,
         }
 
     def approval_fingerprint(self) -> str:
@@ -171,6 +178,7 @@ class QualificationProbeResponse:
     stop_reason: str | None = None
     provider_request_id: str | None = None
     detail: str = ""
+    source_discovery_ok: bool = False
 
 
 class QualificationCaller(Protocol):
@@ -205,6 +213,7 @@ class QualificationOutcome:
     observed_max_output_tokens: int | None
     observed_max_context_tokens: int | None
     structured_response_ok: bool
+    source_discovery_ok: bool
 
     @property
     def canonical_cost(self) -> str | None:
@@ -248,6 +257,7 @@ class QualificationOutcome:
             "observed_max_output_tokens": self.observed_max_output_tokens,
             "observed_max_context_tokens": self.observed_max_context_tokens,
             "structured_response_ok": self.structured_response_ok,
+            "source_discovery_ok": self.source_discovery_ok,
         }
 
     def result_fingerprint(self) -> str:
@@ -335,6 +345,8 @@ def evaluate_qualification_probe(
         outcome, failure_kind = "FAIL", "PROVIDER_REFUSAL"
     elif not response.structured_response_ok:
         outcome, failure_kind = "FAIL", "STRUCTURED_RESPONSE_REJECTED"
+    elif approval.require_source_discovery and not response.source_discovery_ok:
+        outcome, failure_kind = "FAIL", "SOURCE_DISCOVERY_CAPABILITY_REJECTED"
 
     qualification_ref = (
         None if outcome == "NEEDS_VERIFICATION"
@@ -369,6 +381,7 @@ def evaluate_qualification_probe(
         observed_max_output_tokens=observed_output,
         observed_max_context_tokens=observed_context,
         structured_response_ok=response.structured_response_ok,
+        source_discovery_ok=response.source_discovery_ok,
     )
 
 
@@ -383,6 +396,7 @@ def qualification_result_payload(outcome: QualificationOutcome) -> Mapping[str, 
         "returned_model_id": outcome.returned_model_id,
         "cost_usd": outcome.canonical_cost,
         "structured_response_ok": outcome.structured_response_ok,
+        "source_discovery_ok": outcome.source_discovery_ok,
     }
 
 
@@ -437,4 +451,5 @@ def unknown_result_outcome(
         observed_max_output_tokens=None,
         observed_max_context_tokens=None,
         structured_response_ok=False,
+        source_discovery_ok=False,
     )

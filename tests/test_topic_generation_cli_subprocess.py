@@ -299,38 +299,20 @@ approval = verify.get_topic_generation_approval_for_job(job_id)
 assert approval.consumed_at is not None
 print("TOPICGEN-SUBPROCESS-LINEAGE-OK")
 
-# --- 7. istniejacy publiczny downstream przyjmuje wygenerowany temat ---------
-# Sam Fetch NIE jest wykonywany: to jest tylko durable enqueue kontraktu E2-B.
-verify.close()
-fetch_expiry = (NOW + timedelta(hours=2)).isoformat()
-downstream = main_module.main([
-    "enqueue-controlled-fetch",
-    "--account-id", account.id,
-    "--topic-id", str(selected_topic_id),
-    "--source-identity", "example-source",
-    "--url", "https://example.org/article",
-    "--timeout-seconds", "30",
-    "--max-bytes", "500000",
-    "--max-redirects", "2",
-    "--expires-at", fetch_expiry,
-])
-assert downstream == 0, f"downstream enqueue exit={downstream}"
-final = SqliteStorage.open(settings.db_path)
-fetch_job = final.conn.execute(
-    "SELECT * FROM jobs WHERE json_extract(payload_json,'$.execution')"
-    "='controlled_fetch_v1'"
-).fetchone()
-assert fetch_job is not None, "downstream did not accept the generated topic"
-assert fetch_job["topic_id"] == selected_topic_id
-assert fetch_job["status"] == "QUEUED"
-# Downstream nie wykonal zadnego pobrania ani requestu.
-assert final.conn.execute(
+# --- 7. SELECTED atomowo tworzy wspierany downstream ARTICLE_RESEARCH A1 ----
+source_job = verify.get_job(f"source-discovery-{selected_topic_id}")
+assert source_job is not None, "selected topic did not create source discovery"
+assert source_job.topic_id == selected_topic_id
+assert source_job.status is JobStatus.QUEUED
+assert source_job.payload["execution"] == "article_research_source_discovery_v1"
+# Bez osobnego L1 A1 ani FetchPort nie zostały wykonane.
+assert verify.conn.execute(
     "SELECT COUNT(*) c FROM controlled_fetch_attempts"
 ).fetchone()["c"] == 0
-assert final.conn.execute(
-    "SELECT COUNT(*) c FROM provider_attempts"
-).fetchone()["c"] == 1
-final.close()
+assert verify.conn.execute(
+    "SELECT COUNT(*) c FROM provider_attempts WHERE job_id!=?", (job_id,)
+).fetchone()["c"] == 0
+verify.close()
 print("TOPICGEN-SUBPROCESS-DOWNSTREAM-OK")
 '''
 

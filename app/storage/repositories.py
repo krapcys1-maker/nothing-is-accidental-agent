@@ -666,6 +666,11 @@ class SqliteStorage:
                 else int(row["max_output_tokens"])
             ),
             verified_at=None if row["verified_at"] is None else str(row["verified_at"]),
+            source_discovery=(
+                None if "source_discovery" not in row.keys()
+                or row["source_discovery"] is None
+                else bool(row["source_discovery"])
+            ),
         )
 
     @staticmethod
@@ -704,6 +709,18 @@ class SqliteStorage:
             price_ceiling=ceiling,
             qualification_required=bool(row["qualification_required"]),
             fallback_policy=str(row["fallback_policy"]),
+            allowed_provider=(
+                None if row["allowed_provider"] is None
+                else str(row["allowed_provider"])
+            ),
+            allowed_technical_model_id=(
+                None if row["allowed_technical_model_id"] is None
+                else str(row["allowed_technical_model_id"])
+            ),
+            require_source_discovery=(
+                None if row["require_source_discovery"] is None
+                else bool(row["require_source_discovery"])
+            ),
         )
 
     @staticmethod
@@ -954,24 +971,43 @@ class SqliteStorage:
                         "Capability reference already contains different evidence.",
                     )
             else:
-                self.conn.execute(
-                    "INSERT INTO model_capability_declarations ("
-                    "capability_ref,model_registry_id,verification_state,structured_response,"
-                    "max_context_tokens,max_output_tokens,declaration_fingerprint,"
-                    "verified_at,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-                    (
-                        declaration.capability_ref,
-                        model_registry_id,
-                        declaration.verification_state.value,
-                        None if declaration.structured_response is None
-                        else int(declaration.structured_response),
-                        declaration.max_context_tokens,
-                        declaration.max_output_tokens,
-                        declaration.contract_fingerprint(),
-                        declaration.verified_at,
-                        created_at,
-                    ),
+                common = (
+                    declaration.capability_ref,
+                    model_registry_id,
+                    declaration.verification_state.value,
+                    None if declaration.structured_response is None
+                    else int(declaration.structured_response),
+                    declaration.max_context_tokens,
+                    declaration.max_output_tokens,
+                    declaration.contract_fingerprint(),
+                    declaration.verified_at,
+                    created_at,
                 )
+                has_source_discovery = any(
+                    row["name"] == "source_discovery"
+                    for row in self.conn.execute(
+                        "PRAGMA table_info(model_capability_declarations)"
+                    )
+                )
+                if has_source_discovery:
+                    self.conn.execute(
+                        "INSERT INTO model_capability_declarations ("
+                        "capability_ref,model_registry_id,verification_state,structured_response,"
+                        "max_context_tokens,max_output_tokens,declaration_fingerprint,"
+                        "verified_at,created_at,source_discovery) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                        common + (
+                            None if declaration.source_discovery is None
+                            else int(declaration.source_discovery),
+                        ),
+                    )
+                else:
+                    self.conn.execute(
+                        "INSERT INTO model_capability_declarations ("
+                        "capability_ref,model_registry_id,verification_state,structured_response,"
+                        "max_context_tokens,max_output_tokens,declaration_fingerprint,"
+                        "verified_at,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                        common,
+                    )
             self.conn.execute(
                 "UPDATE model_registry SET current_capability_ref=?, verified_at="
                 "CASE WHEN ?='VERIFIED' THEN COALESCE(verified_at,?) ELSE verified_at END "
@@ -1102,8 +1138,9 @@ class SqliteStorage:
                 "require_structured_response,min_context_tokens,min_output_tokens,"
                 "pricing_verification_state,max_input_per_mtok,max_output_per_mtok,"
                 "max_cache_read_per_mtok,max_cache_write_per_mtok,max_web_search_per_1k,"
-                "qualification_required,fallback_policy,policy_fingerprint,created_at,updated_at"
-                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                "qualification_required,fallback_policy,policy_fingerprint,created_at,updated_at,"
+                "allowed_provider,allowed_technical_model_id,require_source_discovery"
+                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
                 "ON CONFLICT(role) DO UPDATE SET allowed_family=excluded.allowed_family,"
                 "policy_version=excluded.policy_version,"
                 "capability_verification_state=excluded.capability_verification_state,"
@@ -1118,6 +1155,9 @@ class SqliteStorage:
                 "max_web_search_per_1k=excluded.max_web_search_per_1k,"
                 "qualification_required=excluded.qualification_required,"
                 "fallback_policy=excluded.fallback_policy,"
+                "allowed_provider=excluded.allowed_provider,"
+                "allowed_technical_model_id=excluded.allowed_technical_model_id,"
+                "require_source_discovery=excluded.require_source_discovery,"
                 "policy_fingerprint=excluded.policy_fingerprint,updated_at=excluded.updated_at",
                 (
                     policy.role.value,
@@ -1139,6 +1179,10 @@ class SqliteStorage:
                     policy.policy_fingerprint(),
                     created_at,
                     timestamp,
+                    policy.allowed_provider,
+                    policy.allowed_technical_model_id,
+                    None if policy.require_source_discovery is None
+                    else int(policy.require_source_discovery),
                 ),
             )
             self.conn.commit()
@@ -1169,6 +1213,12 @@ class SqliteStorage:
         row = self.conn.execute(
             "SELECT * FROM model_pricing_profiles WHERE pricing_ref=?",
             (model.pricing_ref,),
+        ).fetchone()
+        return self._model_pricing_from_row(row)
+
+    def get_model_pricing_profile(self, pricing_ref: str) -> ModelPricingProfile | None:
+        row = self.conn.execute(
+            "SELECT * FROM model_pricing_profiles WHERE pricing_ref=?", (pricing_ref,),
         ).fetchone()
         return self._model_pricing_from_row(row)
 
@@ -1991,6 +2041,10 @@ class SqliteStorage:
                         max_context_tokens=outcome.observed_max_context_tokens,
                         max_output_tokens=outcome.observed_max_output_tokens,
                         verified_at=current_ts,
+                        source_discovery=(
+                            outcome.source_discovery_ok
+                            if approval.require_source_discovery else None
+                        ),
                     ),
                     now=now,
                 )
@@ -2115,6 +2169,11 @@ class SqliteStorage:
             approved_by=str(approval_row["approved_by"]),
             approved_at=str(approval_row["approved_at"]),
             expires_at=str(approval_row["expires_at"]),
+            require_source_discovery=bool(
+                json.loads(str(approval_row["approval_json"])).get(
+                    "require_source_discovery", False,
+                )
+            ),
         )
         outcome = unknown_result_outcome(
             approval=approval, pricing=pricing, failure_kind=failure_kind,
@@ -6203,6 +6262,15 @@ class SqliteStorage:
             return self._require_topic_generation_fence(execution, current_ts)
         if kind_row is not None and kind_row["kind"] == JobKind.CONTENT.value:
             return self._require_content_execution_fence(execution, current_ts)
+        execution_row = self.conn.execute(
+            "SELECT json_extract(payload_json,'$.execution') AS execution "
+            "FROM jobs WHERE id=?", (execution.job_id,),
+        ).fetchone()
+        if (
+            execution_row is not None
+            and execution_row["execution"] == "article_research_source_discovery_v1"
+        ):
+            flow = ResearchFlow.STAGED
         row = self.conn.execute(
             "SELECT j.status AS job_status,j.kind,j.workflow,j.run_id,j.lease_owner,"
             "j.lease_expires_at,r.status AS run_status,r.account_id AS run_account_id,"
@@ -6273,6 +6341,11 @@ class SqliteStorage:
                 normalized = canonicalize_topic_generation_payload(payload)
             elif payload.get("execution") == CONTENT_EXECUTION:
                 normalized = canonicalize_content_job_payload(payload)
+            elif payload.get("execution") == "article_research_source_discovery_v1":
+                from app.research.source_discovery_intent import (
+                    canonicalize_source_discovery_payload,
+                )
+                normalized = canonicalize_source_discovery_payload(payload)
             return json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         except (
             ContentContractError,
@@ -6804,6 +6877,85 @@ class SqliteStorage:
             )
             self.conn.commit()
             return initialized
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def initialize_source_discovery_run_for_job(
+        self, job_id: str, lease_owner: str, run_id: str, *, clock: Clock,
+    ) -> ResearchRunInitialization:
+        """Atomically attach one STAGED/DISCOVERY_PENDING run to an A1 job."""
+        from app.research.source_discovery_intent import (
+            canonicalize_source_discovery_payload,
+        )
+
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = _persisted_ts(self._job_now(clock=clock))
+            row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                raise JobRunRelationError("JOB_MISSING", job_id, "A1 job is missing.")
+            job = self._job_from_row(row)
+            payload = canonicalize_source_discovery_payload(job.payload)
+            if (
+                job.kind is not JobKind.RESEARCH
+                or job.workflow is not WorkflowType.RESEARCH
+                or job.topic_id != payload["topic_id"]
+                or job.account_id != payload["account_id"]
+                or job.status not in (JobStatus.LEASED, JobStatus.RUNNING)
+                or job.lease_owner != lease_owner
+                or job.lease_expires_at is None
+                or _persisted_ts(job.lease_expires_at) < current_ts
+            ):
+                raise StaleJobExecutionError(job_id, "A1 job fence is not executable.")
+            if job.run_id is None:
+                self.conn.execute(
+                    "INSERT INTO runs (id,account_id,workflow,status,current_state,started_at,cost_usd) "
+                    "VALUES (?,?,?,?,?,?,0)",
+                    (run_id, job.account_id, WorkflowType.RESEARCH.value,
+                     RunStatus.RUNNING.value, "source_discovery", current_ts),
+                )
+                self.conn.execute(
+                    "INSERT INTO research_runs (id,account_id,topic_id,flow,status,"
+                    "is_force_reresearch,total_cost_usd,created_at,updated_at) "
+                    "VALUES (?,?,?,?,?,0,0,?,?)",
+                    (run_id, job.account_id, job.topic_id, ResearchFlow.STAGED.value,
+                     ResearchRunStatus.DISCOVERY_PENDING.value, current_ts, current_ts),
+                )
+                updated = self.conn.execute(
+                    "UPDATE jobs SET run_id=?,updated_at=? WHERE id=? AND run_id IS NULL "
+                    "AND lease_owner=? AND lease_expires_at>=? AND status IN ('LEASED','RUNNING')",
+                    (run_id, current_ts, job_id, lease_owner, current_ts),
+                )
+                if updated.rowcount != 1:
+                    raise StaleJobExecutionError(job_id)
+                attached = run_id
+                created = True
+            else:
+                attached = job.run_id
+                created = False
+            run_row = self.conn.execute("SELECT * FROM runs WHERE id=?", (attached,)).fetchone()
+            rr_row = self.conn.execute(
+                "SELECT * FROM research_runs WHERE id=?", (attached,),
+            ).fetchone()
+            if (
+                run_row is None or rr_row is None
+                or run_row["status"] != RunStatus.RUNNING.value
+                or rr_row["flow"] != ResearchFlow.STAGED.value
+                or rr_row["status"] != ResearchRunStatus.DISCOVERY_PENDING.value
+            ):
+                raise JobRunRelationError(
+                    "SOURCE_DISCOVERY_RUN_INVALID", job_id,
+                    "A1 run must remain RUNNING/STAGED/DISCOVERY_PENDING.",
+                )
+            refreshed = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            assert refreshed is not None
+            self.conn.commit()
+            return ResearchRunInitialization(
+                job=self._job_from_row(refreshed), run=self._run_from_row(run_row),
+                research_run=self._research_run_from_row(rr_row), created=created,
+            )
         except BaseException as primary:
             if self.conn.in_transaction:
                 self._rollback_preserving_primary(primary, self.conn.rollback)
@@ -7627,6 +7779,7 @@ class SqliteStorage:
                     topic_generation = False
                     topic_intent = None
                     intent = None
+                    source_discovery_intent = None
                 else:
                     topic_generation = (
                     payload.get("execution") == TOPIC_GENERATION_EXECUTION
@@ -7636,13 +7789,35 @@ class SqliteStorage:
                         frozen_topic_generation_contract(payload)
                     )
                     intent = None
+                    source_discovery_intent = None
                 elif not content_attempt:
-                    canonical_payload = canonicalize_durable_research_payload(payload)
-                    intent_raw = canonical_payload["execution_intent"]
-                    assert isinstance(intent_raw, dict)
-                    intent = DurableResearchExecutionIntent.from_payload(intent_raw)
-                    topic_intent = None
-                    intent_json, intent_fingerprint = frozen_execution_intent_json(payload)
+                    from app.research.source_discovery_intent import (
+                        SOURCE_DISCOVERY_EXECUTION,
+                        SourceDiscoveryIntent,
+                        canonicalize_source_discovery_payload,
+                    )
+                    if payload.get("execution") == SOURCE_DISCOVERY_EXECUTION:
+                        canonical_payload = canonicalize_source_discovery_payload(payload)
+                        source_discovery_intent = SourceDiscoveryIntent.from_payload(
+                            canonical_payload["execution_intent"]
+                        )
+                        if stage != "research_discover" or attempt_no != 1:
+                            raise JobRunRelationError(
+                                "SOURCE_DISCOVERY_ATTEMPT_INVALID", execution.job_id,
+                                "A1 permits exactly research_discover attempt 1.",
+                            )
+                        intent = None
+                        topic_intent = None
+                        intent_json = canonical_json(source_discovery_intent.as_payload())
+                        intent_fingerprint = source_discovery_intent.fingerprint
+                    else:
+                        canonical_payload = canonicalize_durable_research_payload(payload)
+                        intent_raw = canonical_payload["execution_intent"]
+                        assert isinstance(intent_raw, dict)
+                        intent = DurableResearchExecutionIntent.from_payload(intent_raw)
+                        topic_intent = None
+                        source_discovery_intent = None
+                        intent_json, intent_fingerprint = frozen_execution_intent_json(payload)
             except (TypeError, json.JSONDecodeError) as exc:
                 raise JobRunRelationError(
                     "MALFORMED_DURABLE_V2_PAYLOAD",
@@ -7746,6 +7921,12 @@ class SqliteStorage:
                     execution,
                     topic_intent,
                     canonical_intent_json=intent_json,
+                    intent_fingerprint=intent_fingerprint,
+                    current_ts=current_ts,
+                )
+            elif source_discovery_intent is not None:
+                self._consume_source_discovery_approval(
+                    execution,
                     intent_fingerprint=intent_fingerprint,
                     current_ts=current_ts,
                 )
@@ -12540,6 +12721,114 @@ class SqliteStorage:
             raise
         return candidates
 
+    def finalize_source_discovery_success(
+        self, execution: JobExecutionContext, *, candidates: Sequence[object],
+        port_name: str,
+    ) -> list[SourceCandidateRecord]:
+        """Persist only typed port candidates and close A1 in one transaction."""
+        from app.ports.controlled_fetch import validate_url_syntax
+        from app.ports.source_discovery import SourceDiscoveryCandidate
+        from app.research.source_discovery_intent import (
+            canonicalize_source_discovery_payload,
+        )
+
+        if not candidates or any(not isinstance(c, SourceDiscoveryCandidate) for c in candidates):
+            raise ValueError("A1 requires typed structured source-discovery candidates.")
+        ordered = sorted(
+            candidates,
+            key=lambda c: (c.canonical_source_identity, c.canonical_url, c.result_identity),
+        )
+        identities = [c.canonical_source_identity for c in ordered]
+        if len(set(identities)) != len(identities):
+            raise ValueError("A1 source identities must be unique within one result.")
+        for item in ordered:
+            if not all((item.canonical_source_identity, item.title,
+                        item.result_identity, item.observed_at, port_name)):
+                raise ValueError("A1 candidate provenance is incomplete.")
+            boundary = validate_url_syntax(item.canonical_url)
+            if not boundary.allowed:
+                raise ValueError(f"A1 candidate URL rejected: {boundary.code}.")
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            self._require_job_execution_fence(execution, current_ts)
+            job_payload_row = self.conn.execute(
+                "SELECT payload_json FROM jobs WHERE id=?", (execution.job_id,),
+            ).fetchone()
+            assert job_payload_row is not None
+            payload = canonicalize_source_discovery_payload(
+                json.loads(str(job_payload_row["payload_json"]))
+            )
+            run = self.conn.execute(
+                "SELECT r.*,rr.status AS research_status,rr.flow AS research_flow "
+                "FROM runs r JOIN research_runs rr ON rr.id=r.id WHERE r.id=?",
+                (execution.run_id,),
+            ).fetchone()
+            if (
+                run is None or run["status"] != RunStatus.RUNNING.value
+                or run["research_flow"] != ResearchFlow.STAGED.value
+                or run["research_status"] != ResearchRunStatus.DISCOVERY_PENDING.value
+            ):
+                raise StaleJobExecutionError(execution.job_id, "A1 lifecycle is not finalizable.")
+            attempt = self.conn.execute(
+                "SELECT 1 FROM provider_attempts WHERE job_id=? AND stage='research_discover' "
+                "AND attempt_no=1 AND status='SETTLED'",
+                (execution.job_id,),
+            ).fetchone()
+            if attempt is None:
+                raise StaleJobExecutionError(execution.job_id, "A1 requires its settled attempt.")
+            stored: list[SourceCandidateRecord] = []
+            for item in ordered:
+                cursor = self.conn.execute(
+                    "INSERT INTO research_source_candidates (research_run_id,url,title,status,"
+                    "canonical_source_identity,discovery_result_identity,discovery_port,"
+                    "discovery_job_id) VALUES (?,?,?,?,?,?,?,?)",
+                    (
+                        execution.run_id, item.canonical_url, item.title,
+                        SourceCandidateStatus.PENDING_EXTRACTION.value,
+                        item.canonical_source_identity, item.result_identity,
+                        port_name, execution.job_id,
+                    ),
+                )
+                stored.append(SourceCandidateRecord(
+                    id=int(cursor.lastrowid), research_run_id=execution.run_id,
+                    url=item.canonical_url, title=item.title,
+                    canonical_source_identity=item.canonical_source_identity,
+                    discovery_result_identity=item.result_identity,
+                    discovery_port=port_name, discovery_job_id=execution.job_id,
+                ))
+            self._set_run_cost_from_research_usage(execution.run_id)
+            cost = self.conn.execute(
+                "SELECT cost_usd FROM runs WHERE id=?", (execution.run_id,),
+            ).fetchone()[0]
+            rr = self.conn.execute(
+                "UPDATE research_runs SET status='DISCOVERY_COMPLETE',"
+                "total_cost_usd=?,updated_at=? WHERE id=? AND flow='staged' "
+                "AND status='DISCOVERY_PENDING'",
+                (cost, current_ts, execution.run_id),
+            )
+            run_done = self.conn.execute(
+                "UPDATE runs SET status='SUCCESS',current_state='source_discovery_complete',"
+                "finished_at=? WHERE id=? AND status='RUNNING'",
+                (current_ts, execution.run_id),
+            )
+            job_done = self.conn.execute(
+                "UPDATE jobs SET status='DONE',lease_owner=NULL,lease_expires_at=NULL,"
+                "reserved_cost_usd=0,budget_reserved_at=NULL,finished_at=?,updated_at=? "
+                "WHERE id=? AND run_id=? AND lease_owner=? AND lease_expires_at>=? "
+                "AND status IN ('LEASED','RUNNING')",
+                (current_ts, current_ts, execution.job_id, execution.run_id,
+                 execution.lease_owner, current_ts),
+            )
+            if rr.rowcount != 1 or run_done.rowcount != 1 or job_done.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            self.conn.commit()
+            return stored
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
     def list_source_candidates(
         self, research_run_id: str, status: SourceCandidateStatus | None = None,
     ) -> list[SourceCandidateRecord]:
@@ -12569,6 +12858,10 @@ class SqliteStorage:
             extraction_error=r["extraction_error"],
             attempts=r["attempts"],
             discovered_at=r["discovered_at"], extracted_at=r["extracted_at"],
+            canonical_source_identity=r["canonical_source_identity"],
+            discovery_result_identity=r["discovery_result_identity"],
+            discovery_port=r["discovery_port"],
+            discovery_job_id=r["discovery_job_id"],
         )
 
     def mark_extraction_in_progress(self, research_run_id: str) -> None:
@@ -13527,6 +13820,214 @@ class SqliteStorage:
             if self.conn.in_transaction:
                 self._rollback_preserving_primary(primary, self.conn.rollback)
             raise
+
+    def record_source_discovery_approval(
+        self, *, job_id: str, account_id: str, approved_by: str,
+        expires_at: datetime, clock: Clock,
+    ) -> str:
+        """Record one L1 approval derived only from the frozen A1 job."""
+        from app.research.source_discovery_intent import (
+            SourceDiscoveryIntent,
+            canonicalize_source_discovery_payload,
+        )
+
+        if not approved_by.strip():
+            raise ControlledFetchAuthorizationError(
+                "APPROVER_MISSING", "A1 approval requires an identified owner.",
+            )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            moment = self._job_now(clock=clock)
+            expiry = self._job_now(expires_at)
+            if expiry <= moment:
+                raise ControlledFetchAuthorizationError(
+                    "APPROVAL_EXPIRY_INVALID", "A1 approval must expire in the future.",
+                )
+            row = self.conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                raise ControlledFetchAuthorizationError("JOB_MISSING", "A1 job is missing.")
+            job = self._job_from_row(row)
+            payload = canonicalize_source_discovery_payload(job.payload)
+            intent = SourceDiscoveryIntent.from_payload(payload["execution_intent"])
+            if job.account_id != account_id or job.status is not JobStatus.QUEUED:
+                raise ControlledFetchAuthorizationError(
+                    "JOB_NOT_APPROVABLE", "A1 approval must precede execution for its account.",
+                )
+            approval_ref = f"source-discovery-approval:{job_id}"
+            request_id = self._provider_request_id(job_id, "research_discover", 1)
+            self.conn.execute(
+                "INSERT INTO source_discovery_approvals (approval_ref,job_id,request_id,"
+                "account_id,topic_id,action_type,model_registry_id,provider,"
+                "technical_model_id,intent_fingerprint,cap_usd,max_retries,"
+                "fallback_policy,approved_by,approved_at,expires_at,consumed_at) "
+                "SELECT ?,?,?,?,?, 'ARTICLE_RESEARCH_SOURCE_DISCOVERY',m.registry_id,"
+                "'ANTHROPIC','claude-opus-5',?,?,0,'FORBIDDEN',?,?,?,NULL "
+                "FROM model_role_activations a JOIN model_registry m "
+                "ON m.registry_id=a.model_registry_id "
+                "WHERE a.role='ARTICLE_RESEARCH' AND m.provider='ANTHROPIC' "
+                "AND m.technical_model_id='claude-opus-5'",
+                (
+                    approval_ref, job_id, request_id, account_id, int(job.topic_id),
+                    intent.fingerprint, intent.cap_usd, approved_by.strip(),
+                    _persisted_ts(moment), _persisted_ts(expiry),
+                ),
+            )
+            if self.conn.execute("SELECT changes()").fetchone()[0] != 1:
+                raise ControlledFetchAuthorizationError(
+                    "ACTIVE_BINDING_MISSING",
+                    "A1 approval requires active exact ARTICLE_RESEARCH authority.",
+                )
+            self.conn.commit()
+            return approval_ref
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def approve_source_candidate_fetch(
+        self, *, candidate_id: int, approved_by: str,
+        expires_at: datetime, clock: Clock,
+        timeout_seconds: int = 30, max_bytes: int = 2_000_000,
+        max_redirects: int = 3,
+    ) -> str:
+        """L1 candidate approval + controlled-fetch job + fetch approval atomically."""
+        from app.research.controlled_fetch_intent import (
+            CONTROLLED_FETCH_EXECUTION,
+            SUPPORTED_FETCH_CONTENT_TYPES,
+            ControlledFetchIntent,
+        )
+
+        if not approved_by.strip():
+            raise ControlledFetchAuthorizationError(
+                "APPROVER_MISSING", "fetch approval requires an identified owner.",
+            )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            moment = self._job_now(clock=clock)
+            expiry = self._job_now(expires_at)
+            if expiry <= moment:
+                raise ControlledFetchAuthorizationError(
+                    "APPROVAL_EXPIRY_INVALID", "fetch approval must expire in the future.",
+                )
+            candidate = self.conn.execute(
+                "SELECT c.*,rr.account_id,rr.topic_id FROM research_source_candidates c "
+                "JOIN research_runs rr ON rr.id=c.research_run_id WHERE c.id=?",
+                (candidate_id,),
+            ).fetchone()
+            if candidate is None or not candidate["canonical_source_identity"] or not (
+                candidate["discovery_result_identity"] and candidate["discovery_port"]
+                and candidate["discovery_job_id"]
+            ):
+                raise ControlledFetchAuthorizationError(
+                    "SOURCE_CANDIDATE_PROVENANCE_INVALID",
+                    "fetch approval requires a typed persisted A1 candidate.",
+                )
+            job_id = f"controlled-fetch-candidate-{candidate_id}"
+            intent = ControlledFetchIntent.build(
+                account_id=str(candidate["account_id"]),
+                topic_id=int(candidate["topic_id"]),
+                source_identity=str(candidate["canonical_source_identity"]),
+                requested_url=str(candidate["url"]),
+                timeout_seconds=timeout_seconds,
+                max_bytes=max_bytes,
+                max_redirects=max_redirects,
+                allowed_content_types=list(SUPPORTED_FETCH_CONTENT_TYPES),
+                requested_at=moment,
+                expires_at=expiry,
+            )
+            payload_json = canonical_json({
+                "account_id": str(candidate["account_id"]),
+                "topic_id": int(candidate["topic_id"]),
+                "dry_run": False,
+                "execution": CONTROLLED_FETCH_EXECUTION,
+                "execution_intent": intent.as_payload(),
+            })
+            current_ts = _persisted_ts(moment)
+            self.conn.execute(
+                "INSERT INTO jobs (id,account_id,kind,workflow,status,priority,idempotency_key,"
+                "topic_id,run_id,payload_json,schedule_reason,earliest_run_at,deadline_at,"
+                "lease_owner,lease_expires_at,attempts,max_attempts,reserved_cost_usd,"
+                "budget_reserved_at,external_effect_started_at,last_error,created_at,started_at,"
+                "finished_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    job_id, candidate["account_id"], JobKind.RESEARCH.value,
+                    WorkflowType.RESEARCH.value, JobStatus.QUEUED.value, 0,
+                    f"controlled-fetch-candidate:{candidate_id}", candidate["topic_id"],
+                    None, payload_json, "SAFETY_OPERATION_IMMEDIATE", current_ts,
+                    None, None, None, 0, 1, 0.0, None, None, None,
+                    current_ts, None, None, current_ts,
+                ),
+            )
+            approval_cursor = self.conn.execute(
+                "INSERT INTO controlled_fetch_approvals (job_id,account_id,action_type,"
+                "requested_url,intent_fingerprint,timeout_seconds,max_bytes,max_redirects,"
+                "approved_by,approved_at,expires_at,consumed_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL)",
+                (
+                    job_id, candidate["account_id"], CONTROLLED_FETCH_ACTION_TYPE,
+                    candidate["url"], intent.fingerprint, timeout_seconds, max_bytes,
+                    max_redirects, approved_by.strip(), current_ts,
+                    _persisted_ts(expiry),
+                ),
+            )
+            approval_ref = f"source-candidate-fetch-approval:{candidate_id}"
+            self.conn.execute(
+                "INSERT INTO source_candidate_fetch_approvals (approval_ref,candidate_id,"
+                "account_id,topic_id,source_identity,requested_url,request_id,action_type,"
+                "approved_by,approved_at,expires_at,fetch_job_id,created_at) "
+                "VALUES (?,?,?,?,?,?,?,'CONTROLLED_FETCH_SOURCE_CANDIDATE',?,?,?,?,?)",
+                (
+                    approval_ref, candidate_id, candidate["account_id"],
+                    candidate["topic_id"], candidate["canonical_source_identity"],
+                    candidate["url"], f"{job_id}:controlled_fetch:1",
+                    approved_by.strip(), current_ts, _persisted_ts(expiry), job_id,
+                    current_ts,
+                ),
+            )
+            if approval_cursor.rowcount != 1:
+                raise ControlledFetchAuthorizationError(
+                    "FETCH_APPROVAL_INSERT_FAILED", "controlled fetch approval was not created.",
+                )
+            self.conn.commit()
+            return job_id
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def _consume_source_discovery_approval(
+        self, execution: JobExecutionContext, *, intent_fingerprint: str,
+        current_ts: str,
+    ) -> None:
+        row = self.conn.execute(
+            "SELECT * FROM source_discovery_approvals WHERE job_id=?",
+            (execution.job_id,),
+        ).fetchone()
+        expected_request = self._provider_request_id(
+            execution.job_id, "research_discover", 1,
+        )
+        if (
+            row is None or row["request_id"] != expected_request
+            or row["intent_fingerprint"] != intent_fingerprint
+            or row["consumed_at"] is not None
+            or row["expires_at"] <= current_ts
+            or int(row["max_retries"]) != 0
+            or row["fallback_policy"] != "FORBIDDEN"
+        ):
+            raise ControlledFetchAuthorizationError(
+                "SOURCE_DISCOVERY_APPROVAL_INVALID",
+                "A1 requires one fresh approval for its exact frozen job.",
+            )
+        changed = self.conn.execute(
+            "UPDATE source_discovery_approvals SET consumed_at=? "
+            "WHERE job_id=? AND consumed_at IS NULL",
+            (current_ts, execution.job_id),
+        )
+        if changed.rowcount != 1:
+            raise ControlledFetchAuthorizationError(
+                "SOURCE_DISCOVERY_APPROVAL_CONSUME_RACE",
+                "A1 approval could not be consumed exactly once.",
+            )
 
     def initialize_controlled_fetch_run_for_job(
         self, job_id: str, lease_owner: str, run_id: str, *, clock: Clock,
@@ -14891,6 +15392,46 @@ class SqliteStorage:
                 assert row is not None
                 lineage.append(self._generated_topic_from_row(row))
 
+            # The selected topic and its A1 ARTICLE_RESEARCH job are one commit.
+            # A crash can therefore expose neither a false "research started"
+            # state nor a selected topic that requires manual job creation.
+            selected_lineage = next((item for item in lineage if item.is_selected), None)
+            if selected_lineage is not None:
+                from app.research.source_discovery_intent import (
+                    SOURCE_DISCOVERY_EXECUTION,
+                    SourceDiscoveryIntent,
+                )
+
+                topic_id = selected_lineage.topic_id
+                discovery_intent = SourceDiscoveryIntent.build(
+                    account_id=account_id, topic_id=topic_id,
+                )
+                discovery_payload = canonical_json({
+                    "account_id": account_id,
+                    "topic_id": topic_id,
+                    "dry_run": False,
+                    "execution": SOURCE_DISCOVERY_EXECUTION,
+                    "execution_intent": discovery_intent.as_payload(),
+                })
+                self.conn.execute(
+                    "INSERT INTO jobs (id,account_id,kind,workflow,status,priority,"
+                    "idempotency_key,topic_id,run_id,payload_json,schedule_reason,"
+                    "earliest_run_at,deadline_at,lease_owner,lease_expires_at,attempts,"
+                    "max_attempts,reserved_cost_usd,budget_reserved_at,"
+                    "external_effect_started_at,last_error,created_at,started_at,"
+                    "finished_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                    "ON CONFLICT(idempotency_key) DO NOTHING",
+                    (
+                        f"source-discovery-{topic_id}", account_id,
+                        JobKind.RESEARCH.value, WorkflowType.RESEARCH.value,
+                        JobStatus.QUEUED.value, 0,
+                        f"article-research-source-discovery:{account_id}:{topic_id}",
+                        topic_id, None, discovery_payload, "WITHIN_EDITORIAL_WINDOW", current_ts,
+                        None, None, None, 0, 1, 0.0, None, None, None,
+                        current_ts, None, None, current_ts,
+                    ),
+                )
+
             run_cursor = self.conn.execute(
                 "UPDATE runs SET status='SUCCESS',cost_usd=?,error=NULL,finished_at=? "
                 "WHERE id=? AND status='RUNNING' AND finished_at IS NULL AND EXISTS ("
@@ -15218,6 +15759,28 @@ class SqliteStorage:
             rows = self._validate_evidence_rows(
                 intent.account_id, intent.evidence_input,
             )
+            from app.content.cost_estimate import (
+                ARTICLE_RESEARCH_MAX_CONTEXT_TOKENS,
+                ARTICLE_RESEARCH_MAX_INPUT_TOKENS,
+                ARTICLE_RESEARCH_MAX_OUTPUT_TOKENS,
+            )
+            from app.research.durable_intent import evidence_forwarded_context_tokens
+
+            estimated_input = evidence_forwarded_context_tokens(intent.evidence_input)
+            if (
+                estimated_input > ARTICLE_RESEARCH_MAX_INPUT_TOKENS
+                or intent.max_tokens > ARTICLE_RESEARCH_MAX_OUTPUT_TOKENS
+                or estimated_input + intent.max_tokens > ARTICLE_RESEARCH_MAX_CONTEXT_TOKENS
+            ):
+                raise EvidenceResearchAuthorizationError(
+                    "RESEARCH_ENVELOPE_EXCEEDED",
+                    "evidence provider input/output exceeds 23,808/8,192/32,000",
+                )
+            if execution.job_id.startswith("article-research-evidence-") and len(rows) < 3:
+                raise EvidenceResearchAuthorizationError(
+                    "RESEARCH_CORPUS_INCOMPLETE",
+                    "automatic ARTICLE_RESEARCH requires at least three canonical sources",
+                )
             run_row = self.conn.execute(
                 "SELECT research_card_id FROM research_runs WHERE id=?",
                 (execution.run_id,),

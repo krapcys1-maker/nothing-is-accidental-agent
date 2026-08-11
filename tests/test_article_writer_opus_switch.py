@@ -31,9 +31,11 @@ from app.storage.db import (
     migrate_0030_to_0031,
     migrate_0031_to_0032,
     migrate_0032_to_0033,
+    migrate_0033_to_0034,
 )
 from app.storage.repositories import SqliteStorage
 from tests.test_prec5_verified_catalogue_live_root import _approval, _entry_for
+from tests.test_fable_production_qualification_caller import NOW as QUALIFICATION_NOW
 
 
 WRITER = LogicalModelRole.ARTICLE_WRITER
@@ -180,6 +182,7 @@ def test_0031_preserves_fable_history_and_existing_frozen_binding(tmp_path):
     # The runtime floor is 0033, so reaching a runtime handle needs both steps.
     migrate_0031_to_0032(path)
     migrate_0032_to_0033(path)
+    migrate_0033_to_0034(path)
     storage = SqliteStorage.open(path)
     try:
         assert tuple(storage.conn.execute(
@@ -296,6 +299,7 @@ def test_fake_opus_production_root_records_returned_identity_and_frozen_price(tm
             approval,
             api_key_provider=lambda: "fake-secret",
             sdk_factory=factory,
+            now=QUALIFICATION_NOW,
         )
         assert outcome.outcome == "PASS"
         assert outcome.returned_model_id == "claude-opus-5"

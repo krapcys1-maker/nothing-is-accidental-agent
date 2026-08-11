@@ -27,6 +27,7 @@ from app.model_routing.role_bootstrap import owner_approved_role_policy
 from app.storage.db import (
     ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION,
     ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION,
+    END_TO_END_CONNECTION_SCHEMA_VERSION,
     ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION,
     RUNTIME_SCHEMA_VERSION,
     canonical_migration_versions,
@@ -34,6 +35,7 @@ from app.storage.db import (
     initialize_database,
     migrate_0031_to_0032,
     migrate_0032_to_0033,
+    migrate_0033_to_0034,
 )
 from app.ports.storage import BudgetReservationError, ContentFoundationError
 from app.storage.repositories import SqliteStorage
@@ -71,6 +73,7 @@ def storage(tmp_path):
     initialize_database(path, through=ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION)
     migrate_0031_to_0032(path)
     migrate_0032_to_0033(path)
+    migrate_0033_to_0034(path)
     conn = connect(path)
     conn.execute("PRAGMA foreign_keys=OFF")
     now = "2026-08-11 00:00:00.000000"
@@ -356,11 +359,12 @@ def test_11_settlement_records_usage_and_cost_exactly_once(storage):
 
 def test_12_runtime_floor_is_the_role_execution_global_ledger():
     """The floor includes canonical accounting for the paid reviewer."""
-    assert RUNTIME_SCHEMA_VERSION == ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION
+    assert RUNTIME_SCHEMA_VERSION == END_TO_END_CONNECTION_SCHEMA_VERSION
     assert RUNTIME_SCHEMA_VERSION != ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION
     canonical = canonical_migration_versions()
-    assert canonical[-1] == ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION
-    assert canonical[-2] == ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION
+    assert canonical[-1] == END_TO_END_CONNECTION_SCHEMA_VERSION
+    assert canonical[-2] == ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION
+    assert canonical[-3] == ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION
 
 
 def test_13_unknown_terminal_cost_is_represented_by_null_not_zero(storage):

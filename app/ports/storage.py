@@ -669,6 +669,34 @@ class StoragePort(Protocol):
         """Read-only lineage jednego generation runu, uporządkowany po randze."""
         ...
 
+    def record_source_discovery_approval(
+        self, *, job_id: str, account_id: str, approved_by: str,
+        expires_at: datetime, clock: Clock,
+    ) -> str:
+        """Persist one job-scoped, single-use L1 for ARTICLE_RESEARCH A1."""
+        ...
+
+    def initialize_source_discovery_run_for_job(
+        self, job_id: str, lease_owner: str, run_id: str, *, clock: Clock,
+    ) -> ResearchRunInitialization:
+        """Atomically attach one STAGED/DISCOVERY_PENDING run to its A1 job."""
+        ...
+
+    def finalize_source_discovery_success(
+        self, execution: JobExecutionContext, *, candidates: Sequence[object],
+        port_name: str,
+    ) -> list[SourceCandidateRecord]:
+        """Persist only typed structured candidates and terminalize A1 atomically."""
+        ...
+
+    def approve_source_candidate_fetch(
+        self, *, candidate_id: int, approved_by: str, expires_at: datetime,
+        clock: Clock, timeout_seconds: int = 30, max_bytes: int = 2_000_000,
+        max_redirects: int = 3,
+    ) -> str:
+        """Atomically bind one source L1 to one controlled-fetch job."""
+        ...
+
     def load_evidence_research_corpus(
         self, execution: JobExecutionContext,
     ) -> "EvidenceResearchCorpus":

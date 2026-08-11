@@ -663,7 +663,9 @@ def test_dispatcher_rejects_changed_approved_pricing_before_client(
     monkeypatch, storage, settings, account,
 ):
     from app.scheduler import dispatcher
+    from tests.test_c5_end_to_end_connection import _official_research_authority
 
+    _official_research_authority(storage)
     storage.ensure_account(account)
     topic = storage.add_topic(account.id, Topic(
         account_id=account.id,
@@ -676,6 +678,7 @@ def test_dispatcher_rejects_changed_approved_pricing_before_client(
         settings,
         dry_run=False,
         anthropic_api_key="offline-only",
+        model_quality="claude-opus-5",
         pricing={key: 1.0 for key in REAL_PROVIDER_PRICING_KEYS},
     )
     profile_id, pricing_path = write_approved_pricing_profile(
@@ -717,7 +720,7 @@ def test_dispatcher_rejects_changed_approved_pricing_before_client(
             "provider client must not be constructed"
         ),
     )
-    with pytest.raises(dispatcher.PayloadValidationError, match="not currently approved"):
+    with pytest.raises(dispatcher.PayloadValidationError, match="pricing disagrees"):
         dispatcher._run_durable_real_research(
             account,
             topic,
@@ -736,7 +739,9 @@ def test_direct_storage_enqueue_with_unapproved_contract_cannot_reach_provider(
     monkeypatch, storage, settings, account,
 ):
     from app.scheduler import dispatcher
+    from tests.test_c5_end_to_end_connection import _official_research_authority
 
+    _official_research_authority(storage)
     storage.ensure_account(account)
     topic = storage.add_topic(account.id, Topic(
         account_id=account.id,
@@ -749,6 +754,7 @@ def test_direct_storage_enqueue_with_unapproved_contract_cannot_reach_provider(
         settings,
         dry_run=False,
         anthropic_api_key="offline-only",
+        model_quality="claude-opus-5",
         pricing={key: 1.0 for key in REAL_PROVIDER_PRICING_KEYS},
     )
     write_approved_pricing_profile(
@@ -779,7 +785,7 @@ def test_direct_storage_enqueue_with_unapproved_contract_cannot_reach_provider(
             "provider client must not be constructed"
         ),
     )
-    with pytest.raises(dispatcher.PayloadValidationError, match="not currently approved"):
+    with pytest.raises(dispatcher.PayloadValidationError, match="pricing disagrees"):
         dispatcher._run_durable_real_research(
             account,
             topic,

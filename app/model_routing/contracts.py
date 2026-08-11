@@ -36,7 +36,7 @@ class ModelFamily(str, Enum):
 
 
 ROLE_FAMILY: Mapping[LogicalModelRole, ModelFamily] = MappingProxyType({
-    LogicalModelRole.TOPIC_GENERATION: ModelFamily.SONNET,
+    LogicalModelRole.TOPIC_GENERATION: ModelFamily.OPUS,
     LogicalModelRole.ARTICLE_RESEARCH: ModelFamily.OPUS,
     LogicalModelRole.ARTICLE_PLAN: ModelFamily.OPUS,
     LogicalModelRole.ARTICLE_WRITER: ModelFamily.OPUS,
@@ -338,11 +338,17 @@ class CapabilityDeclaration:
     max_context_tokens: int | None
     max_output_tokens: int | None
     verified_at: str | None = None
+    source_discovery: bool | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
             self, "capability_ref", _text(self.capability_ref, field="capability_ref")
         )
+        if self.source_discovery is not None and not isinstance(self.source_discovery, bool):
+            raise RoutingError(
+                "MODEL_CAPABILITY_INVALID",
+                "source_discovery capability must be boolean when declared.",
+            )
         if self.verification_state is CapabilityVerificationState.VERIFIED:
             if (
                 not isinstance(self.structured_response, bool)
@@ -363,6 +369,7 @@ class CapabilityDeclaration:
             self.max_context_tokens,
             self.max_output_tokens,
             self.verified_at,
+            self.source_discovery,
         )):
             raise RoutingError(
                 "MODEL_CAPABILITY_INVALID",
@@ -370,7 +377,7 @@ class CapabilityDeclaration:
             )
 
     def payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "capability_ref": self.capability_ref,
             "verification_state": self.verification_state.value,
             "structured_response": self.structured_response,
@@ -378,6 +385,9 @@ class CapabilityDeclaration:
             "max_output_tokens": self.max_output_tokens,
             "verified_at": self.verified_at,
         }
+        if self.source_discovery is not None:
+            payload["source_discovery"] = self.source_discovery
+        return payload
 
     def contract_fingerprint(self) -> str:
         return fingerprint(self.payload())
@@ -462,7 +472,7 @@ class QualificationReport:
             )
 
     def payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "qualification_ref": self.qualification_ref,
             "model_registry_id": self.model_registry_id,
             "state": self.state.value,
@@ -472,6 +482,7 @@ class QualificationReport:
             "evaluated_at": self.evaluated_at,
             "source": self.source,
         }
+        return payload
 
     def result_fingerprint(self) -> str:
         return fingerprint(self.payload())
@@ -490,6 +501,9 @@ class RolePolicy:
     price_ceiling: PriceDimensions | None
     qualification_required: bool = True
     fallback_policy: str = "FORBIDDEN"
+    allowed_provider: str | None = None
+    allowed_technical_model_id: str | None = None
+    require_source_discovery: bool | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -505,6 +519,27 @@ class RolePolicy:
             raise RoutingError(
                 "ROLE_SAFETY_POLICY_INVALID",
                 "Qualification is mandatory and fallback must be FORBIDDEN.",
+            )
+        if (self.allowed_provider is None) != (self.allowed_technical_model_id is None):
+            raise RoutingError(
+                "ROLE_EXACT_MODEL_POLICY_INVALID",
+                "Exact-model policy requires both provider and technical model ID.",
+            )
+        if self.allowed_provider is not None:
+            object.__setattr__(
+                self, "allowed_provider", _text(self.allowed_provider, field="allowed_provider")
+            )
+            object.__setattr__(
+                self, "allowed_technical_model_id",
+                _text(self.allowed_technical_model_id, field="allowed_technical_model_id"),
+            )
+        if (
+            self.require_source_discovery is not None
+            and not isinstance(self.require_source_discovery, bool)
+        ):
+            raise RoutingError(
+                "ROLE_CAPABILITY_POLICY_INVALID",
+                "require_source_discovery must be boolean when declared.",
             )
         if self.capability_verification_state is CapabilityVerificationState.VERIFIED:
             if (
@@ -524,6 +559,7 @@ class RolePolicy:
             self.require_structured_response,
             self.min_context_tokens,
             self.min_output_tokens,
+            self.require_source_discovery,
         )):
             raise RoutingError(
                 "ROLE_CAPABILITY_POLICY_INVALID",
@@ -542,7 +578,7 @@ class RolePolicy:
             )
 
     def payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "role": self.role.value,
             "allowed_family": self.allowed_family.value,
             "policy_version": self.policy_version,
@@ -558,6 +594,12 @@ class RolePolicy:
             "qualification_required": self.qualification_required,
             "fallback_policy": self.fallback_policy,
         }
+        if self.allowed_provider is not None:
+            payload["allowed_provider"] = self.allowed_provider
+            payload["allowed_technical_model_id"] = self.allowed_technical_model_id
+        if self.require_source_discovery is not None:
+            payload["require_source_discovery"] = self.require_source_discovery
+        return payload
 
     def policy_fingerprint(self) -> str:
         return fingerprint(self.payload())
@@ -655,6 +697,13 @@ def candidate_eligibility_reasons(
         reasons.append("FALLBACK_POLICY_NOT_FORBIDDEN")
     if model.family is not policy.allowed_family:
         reasons.append("FAMILY_NOT_ALLOWED")
+    if policy.allowed_provider is not None and model.provider != policy.allowed_provider:
+        reasons.append("PROVIDER_NOT_ALLOWED")
+    if (
+        policy.allowed_technical_model_id is not None
+        and model.technical_model_id != policy.allowed_technical_model_id
+    ):
+        reasons.append("TECHNICAL_MODEL_NOT_ALLOWED")
     if model.lifecycle_state is LifecycleState.DEPRECATED:
         reasons.append("MODEL_DEPRECATED")
     if not model.technical_model_id:
@@ -702,6 +751,8 @@ def candidate_eligibility_reasons(
             or capability.max_output_tokens < policy.min_output_tokens
         ):
             reasons.append("REQUIRED_OUTPUT_ENVELOPE_MISSING")
+        if policy.require_source_discovery and not capability.source_discovery:
+            reasons.append("REQUIRED_SOURCE_DISCOVERY_MISSING")
     if model.qualification_state is QualificationState.UNQUALIFIED:
         reasons.append("QUALIFICATION_UNQUALIFIED")
     elif model.qualification_state is QualificationState.FAIL:

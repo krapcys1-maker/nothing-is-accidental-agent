@@ -39,12 +39,13 @@ ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION = (
 ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION = "0031_article_writer_opus_policy"
 ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION = "0032_role_execution_lifecycle"
 ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION = "0033_role_execution_global_ledger"
+END_TO_END_CONNECTION_SCHEMA_VERSION = "0034_c5_end_to_end_connection"
 # The production reviewer reserves a durable IN_FLIGHT role execution before it
 # may reach the transport, and that state only exists from 0032 onwards, so the
 # runtime floor moves with it.  A database still standing on 0031 now fails the
 # schema gate closed, which is the intended signal that it must be migrated by
 # an explicitly authorised operator step.
-RUNTIME_SCHEMA_VERSION = ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION
+RUNTIME_SCHEMA_VERSION = END_TO_END_CONNECTION_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
@@ -56,6 +57,9 @@ _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0031 rebuilds the parent model_role_policies table while preserving all
     # dependent durable rows, so it owns foreign_keys=OFF and its ledger write.
     ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION,
+    # 0034 changes the TOPIC_GENERATION family constraint on the parent role
+    # policy table and therefore owns foreign_keys=OFF plus its ledger row.
+    END_TO_END_CONNECTION_SCHEMA_VERSION,
 })
 _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0007_candidate_attempts",
@@ -833,6 +837,21 @@ def migrate_0032_to_0033(
         db_path,
         source_version=ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION,
         target_version=ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0033_to_0034(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the C5 end-to-end connection substrate."""
+
+    return _migrate_single_step(
+        db_path,
+        source_version=ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION,
+        target_version=END_TO_END_CONNECTION_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )
 

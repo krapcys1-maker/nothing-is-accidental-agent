@@ -29,6 +29,10 @@ from app.model_routing.contracts import (
 
 ROLE_POLICY_VERSION = "owner_approved_role_policy_v1"
 ARTICLE_WRITER_POLICY_VERSION = "owner_approved_article_writer_opus_policy_v1"
+TOPIC_GENERATION_POLICY_VERSION = "owner_approved_topic_generation_opus5_policy_v1"
+ARTICLE_RESEARCH_POLICY_VERSION = "owner_approved_article_research_opus5_policy_v1"
+ANTHROPIC_PROVIDER = "ANTHROPIC"
+OPUS_5_MODEL_ID = "claude-opus-5"
 
 
 def family_price_ceiling(role: LogicalModelRole) -> PriceDimensions:
@@ -63,6 +67,10 @@ def owner_approved_role_policy(role: LogicalModelRole) -> RolePolicy:
         policy_version=(
             ARTICLE_WRITER_POLICY_VERSION
             if role is LogicalModelRole.ARTICLE_WRITER
+            else TOPIC_GENERATION_POLICY_VERSION
+            if role is LogicalModelRole.TOPIC_GENERATION
+            else ARTICLE_RESEARCH_POLICY_VERSION
+            if role is LogicalModelRole.ARTICLE_RESEARCH
             else ROLE_POLICY_VERSION
         ),
         capability_verification_state=CapabilityVerificationState.VERIFIED,
@@ -72,4 +80,25 @@ def owner_approved_role_policy(role: LogicalModelRole) -> RolePolicy:
         min_output_tokens=envelope.max_output_tokens,
         pricing_verification_state=PricingVerificationState.VERIFIED,
         price_ceiling=family_price_ceiling(role),
+        allowed_provider=(
+            ANTHROPIC_PROVIDER
+            if role in {
+                LogicalModelRole.TOPIC_GENERATION,
+                LogicalModelRole.ARTICLE_RESEARCH,
+            }
+            else None
+        ),
+        allowed_technical_model_id=(
+            OPUS_5_MODEL_ID
+            if role in {
+                LogicalModelRole.TOPIC_GENERATION,
+                LogicalModelRole.ARTICLE_RESEARCH,
+            }
+            else None
+        ),
+        require_source_discovery=(
+            True if role is LogicalModelRole.ARTICLE_RESEARCH
+            else False if role is LogicalModelRole.TOPIC_GENERATION
+            else None
+        ),
     )
