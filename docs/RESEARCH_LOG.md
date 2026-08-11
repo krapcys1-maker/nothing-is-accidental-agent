@@ -1,5 +1,19 @@
 # RESEARCH_LOG
 
+## 2026-08-11 — offline analiza blockerów PRE-LIVE CONTENT FLOW
+
+- **Zakres:** wyłącznie aktualny kod, testy i immutable odczyt stanu produkcyjnego; bez internetu, nowych źródeł, model calla i web search.
+- **Ustalenie o reviewerze:** `ClaimAccountingReviewPort` wymaga semantycznego independent reviewera. Deterministic layer potrafi sprawdzić completeness, identity, evidence IDs i sprzeczności klas, ale lexical overlap nie dowodzi, że zdanie nie dodało faktu. ADR-122/123 jest nadrzędny.
+- **Ustalenie o novelty:** istniejące `topics`, `question`, `research_cards.working_thesis/thesis`, `content_items` i `content_drafts` wystarczają do trwałej pamięci bez migracji i zewnętrznej infrastruktury. Pusty content item nie jest wcześniejszym artykułem.
+- **Ustalenie o ordering:** wspólna granica przed paid research istnieje w dispatcherze, a przed provider writerem w content pipeline. Controlled fetch musi pozostać poza tą płatną bramką.
+- **Wpływ:** ADR-134, implementacja kandydacka B1/B2/B4/B5 i jawny blocker B3. To analiza techniczna, nie research do publikacji i nie authority do realnego uruchomienia.
+
+## 2026-08-10 — offline authority check dla Opus ARTICLE_WRITER
+
+- **Zakres:** wyłącznie current repo i produkcyjna DB otwarta immutable/read-only; bez internetu i bez nowego researchu źródłowego.
+- **Ustalenie:** repo zawiera wystarczający owner-verified frozen catalogue contract dla `OPUS/5/claude-opus-5`, pricing ref `anthropic-opus-5-standard-2026-08`, pełne ceny i runtime provenance `global/standard_only→global/standard`.
+- **Wniosek:** routing core już obsługuje rodzinę Opus; wymagane były tylko policy switch, minimalna generalizacja Fable-specific qualification caller oraz nowy forward-only SQL floor. Dokumentacja nie jest qualification authority, dlatego Opus pozostaje fail-closed.
+
 ## 2026-07-15 — WAVE 1A offline evidence: reconciliation is not research
 
 - **Zakres:** bez nowych źródeł, kart, calli modeli, sieci lub kosztu. To dowód operacyjny przed przyszłym durable-real wykonaniem, nie wynik researchu.
@@ -341,3 +355,11 @@ Za osobną zgodą właściciela wykonano lokalną operację maintenance dla tego
 - **Modele/ceny:** snapshot pozostaje zgodny z merged catalogue: Opus `claude-opus-5` `$5/$25`, Fable `claude-fable-5` `$10/$50`, Sonnet `claude-sonnet-5` promo `$2/$10` przez 2026-08-31 i `$3/$15` od 2026-09-01. Dokładny UTC timestamp granicy Sonnet nie jest provider claim.
 - **Kontrpróby:** syntetyczne workspace/env `us`, dostępność Priority, returned `us`/`priority`, brak/zły/wygasły retention acceptance, Fable refusal, returned-model mismatch i self-reported caller cost nie obchodzą bramek. Wszystkie dane i zapisy wyłącznie fake/temp.
 - **Wynik/koszt:** kontrakt potwierdzony offline; brak nowych Research Cards/sources/retrievals/excerpts; `0.000000 USD`.
+
+## 2026-08-10 — Repo-only Fable qualification authority trace
+
+- **Zakres:** zero browsera, sieci, Fetch i provider API. Przeszukano wyłącznie aktywne repo, kod, schema `0030`, dokumentację oraz produkcję immutable.
+- **Wynik danych:** deterministic registry ID `model-cda2f1745d0f0d6061f9552705edf78e`, exact pricing fingerprint `ee36e134…d80f0`, catalogue evidence fingerprint `70b212b7…b2f`, qualification envelope `13952/2048` i worst-case Fable cap candidate `0.241920`.
+- **Źródła:** nie znaleziono prawdziwego external `provider_policy_ref`; wewnętrzne `anthropic-owner-verified-2026-08-09` nie jest external locatorem. Wymagany jest owner-supplied verified reference.
+- **Kontrpróby:** synthetic positive/negative authority flows na nowych temp DB; caller max once, frozen price settlement, one-shot, exact target/expiry/retention gates i brak pre-effect partial state potwierdzone. Istniejące regression modules przeszły.
+- **Koszt:** `0.000000 USD`; brak nowych Research Cards, sources, retrievals i excerpts.

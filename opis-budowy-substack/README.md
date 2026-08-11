@@ -50,6 +50,10 @@ Po każdym większym zadaniu, ZANIM uznasz je za ukończone:
 | `17_CONTROLLED_FETCH_ZGODA_L1.md` | E2-B: jednorazowa zgoda i lifecycle kontrolowanego pobrania |
 | `18_ADRES_SPRAWDZONY_I_ADRES_UZYTY.md` | E2-C: capability, aktywacja YAML i przypięcie adresu do transportu |
 | `19_BACKUP_NIE_ZAMYKA_WYSCIGU.md` | Orchestrator migracji 0014→0018: snapshot, rewalidacja, sidecary i recovery |
+| `20_C5_PROVIDER_CONTRACT_FREEZE.md` | Zamrożenie kontraktu Global/Standard, retencji i refusal przed C5 |
+| `21_FABLE_REAL_QUALIFICATION_REFUSAL.md` | Pierwsza realna kwalifikacja Fable: jeden request, refusal, zero retry |
+| `22_OPUS_ARTICLE_WRITER_SWITCH.md` | Zmiana primary writer family po odmowie Fable, bez przepisywania historii |
+| `23_PRE_LIVE_CONTENT_UNBLOCK.md` | Kandydat writera/rootu/novelty oraz jawny blocker durable semantic ARTICLE_REVIEWER |
 
 Podfoldery: `timeline/`, `screenshots/`, `diagrams/`, `code-snippets/`, `weekly-summaries/`, `article-series/`.
 

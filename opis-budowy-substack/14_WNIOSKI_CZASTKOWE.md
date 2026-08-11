@@ -1,5 +1,14 @@
 # 14 — WNIOSKI CZĄSTKOWE
 
+## 2026-08-11 — Po PRE-LIVE CONTENT UNBLOCK
+
+- Frozen binding nie jest jeszcze osiągalnym production flow; potrzebuje jawnego composition rootu.
+- Controlled paid root powinien otwierać jeden job, nie zmieniać globalnej zdolności workera.
+- Claim-accounting reviewer nie może udawać semantyki przez lexical overlap; deterministic layer sprawdza strukturę, a znaczenie pozostaje osobną trust boundary.
+- Semantic novelty zaczyna się od tezy i wcześniejszej treści, nie od lepszego progu tytułu.
+- `dry_run=false` nie jest wystarczającą klasyfikacją kosztu; rodzaj wykonania musi być jawny.
+- Historia w promptcie pomaga generacji, ale nie zastępuje post-generation gate.
+
 ## 2026-08-10 — Po produkcyjnej migracji 0020→0030
 
 - Merge kodu i zgoda na zapis produkcji są dwiema różnymi decyzjami.

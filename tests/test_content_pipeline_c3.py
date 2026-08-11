@@ -64,6 +64,7 @@ from app.storage.db import (
     migrate_0028_to_0029,
     migrate_0029_to_0030,
     migrate_0030_to_0031,
+    migrate_0031_to_0032,
 )
 from app.storage.repositories import SqliteStorage
 from tests.c2_fixtures import seed_c2_research
@@ -789,6 +790,7 @@ def test_explicit_0022_to_0023_migration_is_temp_only_and_idempotent(tmp_path):
     assert catalogue.applied_migrations == (VERIFIED_CATALOGUE_SCHEMA_VERSION,)
     migrate_0029_to_0030(path)
     migrate_0030_to_0031(path)
+    migrate_0031_to_0032(path)
     opened = SqliteStorage.open(path)
     opened.close()
 

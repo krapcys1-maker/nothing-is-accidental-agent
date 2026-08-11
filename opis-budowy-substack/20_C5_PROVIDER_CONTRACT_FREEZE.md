@@ -61,3 +61,11 @@ Konserwatywny koszt C5 dla GLOBAL + STANDARD pozostał bez zmian: qualification 
 Produkcja pozostała na schemacie `0020_topic_generation_lifecycle`; migracja produkcyjna, rehearsal, real qualification, real API, C5 i publikacja nie rozpoczęły się. F5 i F6 świadomie pozostały poza zakresem. Nie wykonano stage, commita, pushu, PR ani merge.
 
 Najkrótsza lekcja tej fali brzmi: domyślna wartość nie usuwa decyzji — tylko przenosi ją poza audytowalny kontrakt systemu.
+
+## Dopisek 2026-08-10 — przygotowanie authority package bez wykonania
+
+Po produkcyjnej migracji do `0030` odtworzyliśmy cały przyszły łańcuch Fable wyłącznie offline. Repo potrafi deterministycznie wskazać model, cenę, fingerprinty i token envelope, a temp rehearsal dowiódł caller-once, frozen pricing, one-shot approvalu i braku częściowego stanu przy odmowach przed efektem.
+
+Trace ujawnił dwie decyzje, których kod nie ma prawa podjąć za właściciela. Po pierwsze, repo nie zawiera prawdziwego external reference do polityki 30-dniowej retencji; samo pole jest opaque stringiem, więc fingerprint chroni niezmienność wskazania, nie jego prawdziwość. Po drugie, produkcyjny `ARTICLE_WRITER` nadal ma bootstrapową policy `UNVERIFIED`, mimo że rodzina `FABLE` jest już ustalona.
+
+Nie zapisano katalogu, ceny, evidence, approvalu ani acceptance do produkcji. Nie uruchomiono API, qualification, C5 ani publikacji. Pakiet kończy się statusem `READY FOR OWNER INPUT`, a nie zgodą na następny krok.

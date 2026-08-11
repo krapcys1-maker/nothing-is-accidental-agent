@@ -1,5 +1,40 @@
 # ARTICLE_EVIDENCE
 
+## Sekcja B — 2026-08-11: „Pamięć nie musi być wektorem, żeby zatrzymać powtórkę”
+
+- **Fakt:** title-only dedup rozpoznawał literalny powrót tematu, ale przepuszczał inną nazwę tej samej tezy. Nowa pamięć łączy topic/question z Research Card thesis i treścią rzeczywiście istniejącego draftu lub artykułu, per account i bez wygaszania `USED`.
+- **Dowód:** sześć kontrprób: identyczny temat, silna parafraza, nowy tytuł tej samej tezy, historyczny USED i wcześniejszy content zostały odrzucone; ten sam obszar z nową tezą przeszedł. Paid research i production writer miały zero calli po wykryciu duplikatu.
+- **Znaczenie:** najważniejszą zmianą nie był „lepszy próg”, lecz zmiana obiektu porównania z napisu na editorial angle. Bounded history pomaga modelowi, ale nie przejmuje odpowiedzialności za gate.
+- **Zdanie robocze:** „Tytuł jest etykietą. Powtórka zaczyna się wtedy, gdy pod nową etykietą wraca ta sama odpowiedź.”
+
+## Sekcja B — 2026-08-11: „Zielony reviewer może być bardziej niebezpieczny niż jego brak”
+
+- **Fakt:** pierwsza implementacja nazwała lexical overlap produkcyjnym semantic reviewerem. Samokontrola z ADR-123 pokazała kontrprzykład: zdanie może powtórzyć kilka słów evidence i dopisać nowy fakt.
+- **Dowód:** heurystyczny reviewer został usunięty mimo zielonej pełnej suity. Controlled root wrócił do `CONTENT_INDEPENDENT_REVIEW_UNAVAILABLE` przed SDK, usage i konsumpcją approvalu. Existing reviewer seam nie ma durable `IN_FLIGHT` przed call, więc surowe podłączenie adaptera także byłoby niebezpieczne.
+- **Znaczenie:** fail-closed brak funkcji jest uczciwszy niż funkcja, która przechodzi testy, ale przypisuje sobie zdolność rozumienia, której nie ma.
+- **Zdanie robocze:** „Najgroźniejszy reviewer nie mówi «nie wiem». Mówi «PASS», bo rozpoznał trzy znajome słowa.”
+
+## Sekcja B — 2026-08-10: „Odmowa może zmienić wybór, ale nie historię”
+
+- **Fakt:** po jednorazowym Fable refusal właściciel zmienił przyszłą politykę `ARTICLE_WRITER` na Opus, nie poprawiając wstecz wyniku Fable.
+- **Dowód:** migracja zachowuje dokładny run `FAIL/PROVIDER_REFUSAL`, usage `151/3`, koszt `0.001660 USD` i zwraca istniejący frozen Fable intent bez rebindingu; nowe intenty są blokowane do osobnej kwalifikacji i aktywacji Opusa.
+- **Znaczenie:** system rozdziela decyzję o przyszłości od przepisywania przeszłości. Zmiana primary modelu nie jest retry, fallbackiem ani retroaktywnym PASS.
+- **Zdanie robocze:** „Dobra automatyzacja potrafi zmienić zdanie bez zmieniania pamięci.”
+
+## Sekcja B — 2026-08-10: „Jednorazowość ma znaczenie dopiero wtedy, gdy odpowiedź jest odmową”
+
+- **Fakt:** pierwszy realny request kwalifikacyjny Fable nie zakończył się ani crashem, ani sukcesem. Provider zwrócił poprawną tożsamość i metadane użycia, ale `stop_reason=refusal`.
+- **Dowód:** dokładnie jeden call, `151 input / 3 output`, koszt `0.001660 USD`; durable lifecycle zapisał `FAIL / PROVIDER_REFUSAL`, skonsumował approval i nie utworzył capability ani activation.
+- **Znaczenie:** zero retry i fallbacku przestaje być deklaracją z dokumentu w chwili, gdy ponowienie mogłoby wyglądać kusząco. System zachował odmowę jako wynik, zamiast próbować „dobić” do PASS drugim requestem.
+- **Zdanie robocze:** „Najtrudniejszym testem zasady one-shot nie jest sukces. Jest nim odpowiedź, po której bardzo chciałoby się spróbować jeszcze raz.”
+
+## Sekcja B — 2026-08-10: „Zgoda potrzebuje adresu, nie tylko checkboxa”
+
+- **Fakt:** schema potrafi zamrozić `provider_policy_ref` razem z dokładnym approvalem, requestem, osobą i expiry, ale nie potrafi sprawdzić, czy opaque string prowadzi do prawdziwej polityki providera. Spójność rekordu i prawdziwość źródła to dwie różne własności.
+- **Dowód:** temp rehearsal odrzucił rozjazd policy ref między kolumną i JSON, lecz spójny synthetic opaque ref przeszedł. Repo nie zawiera prawdziwego external locatora, więc owner input pozostaje jawnie wymagany.
+- **Druga granica:** produkcyjna role policy może znać rodzinę `FABLE`, a nadal pozostawać `UNVERIFIED`. Katalog, kwalifikacja i aktywacja są osobnymi authority decisions; żadna nie wynika automatycznie z poprzedniej.
+- **Zdanie robocze:** „Fingerprint dowodzi, że nie zmieniliśmy wskazanego dokumentu. Nie dowodzi, że wskazaliśmy właściwy dokument.”
+
 ## Sekcja B — 2026-08-10: „Migracja produkcji zaczyna się od możliwości odwrotu”
 
 - **Fakt:** zatwierdzony kod nie został od razu potraktowany jako pozwolenie na zapis. Osobna decyzja właściciela poprzedziła produkcyjną drabinę, a przed pierwszym krokiem powstała byte-identical kopia PRE.

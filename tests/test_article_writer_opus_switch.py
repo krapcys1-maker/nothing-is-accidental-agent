@@ -29,6 +29,7 @@ from app.storage.db import (
     database_schema_versions,
     initialize_database,
     migrate_0030_to_0031,
+    migrate_0031_to_0032,
 )
 from app.storage.repositories import SqliteStorage
 from tests.test_prec5_verified_catalogue_live_root import _approval, _entry_for
@@ -175,6 +176,8 @@ def test_0031_preserves_fable_history_and_existing_frozen_binding(tmp_path):
     assert migrate_0030_to_0031(path).applied_migrations == (
         ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION,
     )
+    # The runtime floor is 0032, so reaching a runtime handle needs that step.
+    migrate_0031_to_0032(path)
     storage = SqliteStorage.open(path)
     try:
         assert tuple(storage.conn.execute(
@@ -233,6 +236,7 @@ def test_0031_rejects_policy_drift_without_partial_schema_or_ledger(tmp_path):
 
     with pytest.raises(ExplicitMigrationError, match="CHECK constraint failed"):
         migrate_0030_to_0031(path)
+        migrate_0031_to_0032(path)
     assert database_schema_versions(path)[-1] == ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION
     verify = connect_existing_writable(path)
     try:

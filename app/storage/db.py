@@ -37,7 +37,13 @@ ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION = (
     "0030_anthropic_provider_contract"
 )
 ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION = "0031_article_writer_opus_policy"
-RUNTIME_SCHEMA_VERSION = ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION
+ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION = "0032_role_execution_lifecycle"
+# The production reviewer reserves a durable IN_FLIGHT role execution before it
+# may reach the transport, and that state only exists from 0032 onwards, so the
+# runtime floor moves with it.  A database still standing on 0031 now fails the
+# schema gate closed, which is the intended signal that it must be migrated by
+# an explicitly authorised operator step.
+RUNTIME_SCHEMA_VERSION = ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
@@ -83,6 +89,10 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     # 0030 narrowly rebuilds catalogue evidence and adds append-only retention
     # evidence; the runner owns the one atomic temp-DB transaction.
     ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION,
+    # 0032 rebuilds role_provider_executions, which has no incoming foreign
+    # keys, so it needs no foreign_keys=OFF and the runner transaction is the
+    # correct atomicity boundary for the table, its triggers and the ledger row.
+    ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION,
     # 0019 is intentionally ABSENT: rebuilding controlled_fetch_approvals with
     # incoming foreign keys requires PRAGMA foreign_keys=OFF, which is a no-op
     # inside the runner transaction — the migration manages its own explicit
@@ -789,6 +799,21 @@ def migrate_0030_to_0031(
         db_path,
         source_version=ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION,
         target_version=ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0031_to_0032(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the role_provider_executions pre-effect lifecycle step."""
+
+    return _migrate_single_step(
+        db_path,
+        source_version=ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION,
+        target_version=ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )
 

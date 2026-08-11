@@ -28,7 +28,15 @@ from app.content.foundation import ContentType
 from app.llm.anthropic_provider_contract import (
     CONTROLLED_INFERENCE_GEO,
     CONTROLLED_SERVICE_TIER,
+    OPUS_5_MODEL_ID,
     returned_provenance_mismatch,
+)
+from app.llm.anthropic_controlled_adapter import (
+    ControlledAnthropicAdapter,
+    ControlledProviderRequest,
+    ControlledSdkFactory,
+    ControlledTechnicalCaller,
+    assert_no_disabled_feature_usage,
 )
 
 
@@ -199,7 +207,7 @@ class FakeContentWriter:
 
 
 class ProviderReadyContentWriter:
-    """Anthropic-shaped adapter with no reachable production composition root.
+    """Anthropic-shaped single-shot adapter used by offline and controlled roots.
 
     SDK creation is lazy.  Configuration and secret checks happen before the
     factory is called.  One ``write`` invocation makes at most one caller call,
@@ -216,11 +224,17 @@ class ProviderReadyContentWriter:
         sdk_factory: ContentWriterSdkFactory | None = None,
         caller: ContentWriterCaller | None = None,
         expected_provider: str = "anthropic",
+        call_mode: WriterCallMode = WriterCallMode.PROVIDER_READY_OFFLINE,
+        required_api_model_id: str | None = None,
+        required_logical_model_name: str | None = None,
     ) -> None:
         if set(limits_by_type) != {ContentType.ARTICLE, ContentType.NOTE}:
             raise ValueError("Provider writer requires ARTICLE and NOTE limits.")
         for limits in limits_by_type.values():
-            if limits.max_cost_usd != 0.0:
+            if (
+                call_mode is WriterCallMode.PROVIDER_READY_OFFLINE
+                and limits.max_cost_usd != 0.0
+            ):
                 raise ValueError(
                     "C3 provider-ready offline limits must cost exactly zero."
                 )
@@ -233,6 +247,9 @@ class ProviderReadyContentWriter:
         self._sdk_factory = sdk_factory or self._default_sdk_factory
         self._caller = caller or self._default_caller
         self._expected_provider = expected_provider
+        self.call_mode = call_mode
+        self._required_api_model_id = required_api_model_id
+        self._required_logical_model_name = required_logical_model_name
         self._validated_api_key: str | None = None
         self.caller_calls = 0
 
@@ -272,6 +289,24 @@ class ProviderReadyContentWriter:
                 request,
                 WriterFailureKind.UNSUPPORTED_ROUTE,
                 "Logical writer route is unsupported.",
+            )
+        if (
+            self._required_api_model_id is not None
+            and route.api_model_id != self._required_api_model_id
+        ):
+            return self._failure(
+                request,
+                WriterFailureKind.UNSUPPORTED_ROUTE,
+                "Frozen writer binding is not the required production model.",
+            )
+        if (
+            self._required_logical_model_name is not None
+            and route.logical_model_name != self._required_logical_model_name
+        ):
+            return self._failure(
+                request,
+                WriterFailureKind.UNSUPPORTED_ROUTE,
+                "Frozen writer binding is not the required production family.",
             )
         if route.provider == "UNVERIFIED" or route.api_model_id == "UNVERIFIED":
             return self._failure(
@@ -458,7 +493,7 @@ class ProviderReadyContentWriter:
             return self._failure(
                 request,
                 WriterFailureKind.SCHEMA_VALIDATION,
-                "C3 fake provider usage must cost exactly zero.",
+                "Provider self-reported cost is forbidden; canonical settlement owns cost.",
                 usage=raw.usage,
                 stop_reason=raw.stop_reason,
                 provider_request_id=raw.provider_request_id,
@@ -577,3 +612,87 @@ class ProviderReadyContentWriter:
                 getattr(message, "model", request.intent.route.api_model_id)
             ),
         )
+
+
+class ProductionArticleWriter(ProviderReadyContentWriter):
+    """The minimal production WriterPort for frozen Opus 5 ARTICLE execution."""
+
+    requires_editorial_novelty = True
+
+    def __init__(
+        self,
+        *,
+        api_key_provider: Callable[[], str | None],
+        article_limits: WriterLimits,
+        sdk_factory: ControlledSdkFactory | None = None,
+        caller: ControlledTechnicalCaller | None = None,
+    ) -> None:
+        if article_limits.max_cost_usd <= 0.0:
+            raise ValueError("Controlled ARTICLE writer requires an explicit positive cap.")
+        self._controlled_adapter = ControlledAnthropicAdapter(
+            api_key_provider=api_key_provider,
+            sdk_factory=sdk_factory,
+            caller=caller,
+        )
+
+        def canonical_adapter_factory(**_kwargs: object) -> object:
+            return self._controlled_adapter
+
+        def canonical_adapter_caller(
+            adapter: object, prompt: WriterPrompt, request: WriterRequest,
+        ) -> ProviderRawResponse:
+            if adapter is not self._controlled_adapter:
+                raise RuntimeError("Production writer lost its canonical adapter.")
+            raw = self._controlled_adapter.execute(ControlledProviderRequest(
+                technical_model_id=request.intent.route.api_model_id,
+                system_prompt=prompt.system,
+                user_prompt=prompt.user,
+                max_output_tokens=request.context.limits.max_output_tokens,
+                timeout_seconds=request.context.limits.timeout_seconds,
+            ))
+            assert_no_disabled_feature_usage(
+                cache_read_tokens=raw.cache_read_tokens,
+                cache_write_tokens=raw.cache_write_tokens,
+                web_search_requests=raw.web_search_requests,
+            )
+            return ProviderRawResponse(
+                text=raw.text,
+                usage=WriterUsage(
+                    input_tokens=raw.input_tokens,
+                    output_tokens=raw.output_tokens,
+                    cache_read_tokens=raw.cache_read_tokens,
+                    cache_write_tokens=raw.cache_write_tokens,
+                    inference_geo=raw.inference_geo,
+                    service_tier=raw.service_tier,
+                    estimated_cost_usd=0.0,
+                ),
+                stop_reason=raw.stop_reason,
+                provider_request_id=raw.provider_request_id,
+                api_model_id=raw.returned_model_id,
+            )
+
+        super().__init__(
+            # The real secret is resolved only inside ControlledAnthropicAdapter.
+            api_key_provider=lambda: "canonical-adapter-managed-secret",
+            limits_by_type={
+                ContentType.ARTICLE: article_limits,
+                ContentType.NOTE: WriterLimits(
+                    max_input_tokens=1,
+                    max_context_tokens=1,
+                    max_output_tokens=1,
+                    max_cost_usd=0.0,
+                    timeout_seconds=article_limits.timeout_seconds,
+                ),
+            },
+            sdk_factory=canonical_adapter_factory,
+            caller=canonical_adapter_caller,
+            expected_provider="ANTHROPIC",
+            call_mode=WriterCallMode.CONTROLLED_PROVIDER,
+            required_api_model_id=OPUS_5_MODEL_ID,
+            required_logical_model_name="OPUS",
+        )
+
+    def limits_for(self, content_type: ContentType) -> WriterLimits:
+        if content_type is not ContentType.ARTICLE:
+            raise ValueError("ProductionArticleWriter accepts ARTICLE only.")
+        return super().limits_for(content_type)

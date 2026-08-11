@@ -1,5 +1,38 @@
 # 10 — FRAGMENTY KODU
 
+### Novelty przed płatnym research (`app/scheduler/dispatcher.py`)
+
+```python
+if is_real and job.payload.get("execution") == "durable_provider_v2":
+    memory = tuple(
+        row for row in self._storage.list_editorial_novelty_memory(job.account_id)
+        if not (row.source_kind == "TOPIC" and row.topic_id == topic.id)
+    )
+    duplicate = find_editorial_duplicate(
+        EditorialMemoryRecord(
+            source_kind="RESEARCH_CANDIDATE",
+            source_id=int(topic.id or 0),
+            topic_id=int(topic.id or 0),
+            research_card_id=None,
+            content_id=None,
+            title=topic.title,
+            question=topic.question or "",
+            central_thesis=topic.question or "",
+            body="",
+            status=topic.status.value,
+            created_at="",
+        ),
+        memory,
+    )
+    if duplicate is not None:
+        raise PolicyDeniedError(PolicyDecision.block(
+            "EDITORIAL_NOVELTY_DUPLICATE",
+            f"Topic duplicates prior {duplicate.reason} memory before research.",
+        ))
+```
+
+Znaczenie fragmentu leży w pierwszym warunku: gate działa na kanonicznym paid research, nie na każdym transporcie z `dry_run=false`. Runner pozostaje nieosiągalny po wykryciu duplikatu.
+
 ## Cel pliku
 Krótkie, reprezentatywne wycinki kodu (20–40 linii) pokazujące kluczowe mechanizmy. **Nie kopiujemy całych plików.** Każdy fragment: nazwa pliku źródłowego, wyjaśnienie, dlaczego ważny. Bez sekretów. Fragmenty muszą być zgodne z rzeczywistą implementacją — aktualizować, gdy kod się zmienia.
 

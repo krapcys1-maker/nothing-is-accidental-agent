@@ -6,7 +6,7 @@ Przepływ (jeden Worker, jeden Dispatcher, jeden Policy Engine, jedna tabela
     zamrożony intent -> [POLICY] runtime+budżet -> run TOPIC_GENERATION
     -> provider_attempt RESERVED (atomowo konsumuje zgodę L1)
     -> REQUEST_STARTED -> DOKŁADNIE jeden request -> istniejący parser
-    -> walidacja wymiarów -> istniejący scoring -> istniejący TopicDeduplicator
+    -> walidacja wymiarów -> istniejący scoring -> trwały semantic thesis dedup
     -> najwyżej jeden SELECTED tego runu -> usage dokładnie raz -> settlement
     -> run SUCCESS -> job DONE.
 
@@ -48,7 +48,11 @@ from app.ports.storage import (
 )
 from app.research.base import DurableProviderAttemptContext
 from app.topics.durable_intent import DurableTopicGenerationIntent
-from app.workflows.topics.dedup import TopicDeduplicator
+from app.topics.novelty import (
+    EditorialMemoryRecord,
+    bounded_history_snapshot,
+    find_editorial_duplicate,
+)
 from app.workflows.topics.discover import compute_weighted_score
 
 TOPIC_GENERATION_USAGE_TASK = "topics"
@@ -274,6 +278,11 @@ def run_topic_generation(
         estimated_attempt_cost=estimated_attempt_cost, state=state,
     )
 
+    editorial_memory = storage.list_editorial_novelty_memory(intent.account_id)
+    history_setter = getattr(llm, "set_editorial_history", None)
+    if callable(history_setter):
+        history_setter(bounded_history_snapshot(editorial_memory))
+
     try:
         result = llm.generate_and_score_topics(
             intent.prompt_account(), intent.candidate_count,
@@ -436,7 +445,7 @@ def _score_and_select(
     intent: DurableTopicGenerationIntent,
     summary: TopicGenerationSummary,
 ) -> list[TopicGenerationCandidate]:
-    """Existing scoring + existing dedup + deterministic single-winner choice."""
+    """Existing scoring + durable semantic dedup + deterministic winner choice."""
     if not ideas:
         raise TopicGenerationResultError(
             "NO_CANDIDATES", "the response carried no topic candidates.",
@@ -448,11 +457,9 @@ def _score_and_select(
             f"more than the frozen {intent.candidate_count}.",
         )
 
-    dedup = TopicDeduplicator(settings.topic_duplicate_threshold)
-    # Existing account topics AND candidates accepted earlier in this very batch.
-    existing: list[tuple[int, str]] = list(
-        storage.list_topic_titles_for_dedup(intent.account_id)
-    )
+    # Durable account history AND candidates accepted earlier in this batch.
+    # This includes all-age USED topics and prior content, not only titles.
+    existing = list(storage.list_editorial_novelty_memory(intent.account_id))
     # In-batch duplicates get negative synthetic ids: they are not persisted yet,
     # and a real topic id is never negative, so the two can never collide.
     next_batch_id = -1
@@ -464,18 +471,33 @@ def _score_and_select(
         )
         score = compute_weighted_score(breakdown, settings.topic_scoring_weights)
         summary.total += 1
-        match = dedup.find_duplicate(idea.title, existing)
+        candidate = EditorialMemoryRecord(
+            source_kind="TOPIC_CANDIDATE",
+            source_id=next_batch_id,
+            topic_id=next_batch_id,
+            research_card_id=None,
+            content_id=None,
+            title=idea.title,
+            question=idea.question,
+            central_thesis=idea.question,
+            body="",
+            status="CANDIDATE",
+            created_at="",
+        )
+        match = find_editorial_duplicate(candidate, existing)
         if match is not None:
             summary.duplicates += 1
             scored.append((index, score, Topic(
                 account_id=intent.account_id, title=idea.title,
                 question=idea.question, score=score, score_breakdown=breakdown,
                 status=TopicStatus.DUPLICATE, source="anthropic",
-                duplicate_of=match.existing_id if match.existing_id > 0 else None,
+                duplicate_of=(
+                    match.existing.topic_id if match.existing.topic_id > 0 else None
+                ),
                 rejection_reason=(
-                    f"duplicate of topic #{match.existing_id} "
-                    f"('{match.existing_title}') — {match.reason} "
-                    f"(score={match.score})"
+                    f"duplicate of topic #{match.existing.topic_id} "
+                    f"('{match.existing.title}') — {match.reason} "
+                    f"(score={match.score:.6f})"
                 ),
             )))
             continue
@@ -484,7 +506,7 @@ def _score_and_select(
             score=score, score_breakdown=breakdown,
             status=TopicStatus.DISCOVERED, source="anthropic",
         )))
-        existing.append((next_batch_id, idea.title))
+        existing.append(candidate)
         next_batch_id -= 1
 
     # Exactly one winner of THIS execution: highest weighted score among

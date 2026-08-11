@@ -52,6 +52,7 @@ from app.content.routing import (
     route_from_frozen_model_binding,
 )
 from app.model_routing.contracts import RoutingError
+from app.topics.novelty import EditorialMemoryRecord, find_editorial_duplicate
 from app.content.style_examples import (
     StyleExampleError,
     StyleExampleSet,
@@ -69,7 +70,11 @@ from app.models import (
     ProviderAttemptStatus,
 )
 from app.policies.policy_engine import PolicyEngine
-from app.ports.storage import ProviderAttemptOverReservationError, StoragePort
+from app.ports.storage import (
+    ContentFoundationError,
+    ProviderAttemptOverReservationError,
+    StoragePort,
+)
 
 
 @dataclass(frozen=True)
@@ -291,6 +296,54 @@ def run_offline_content_pipeline(
         research_card = json.loads(frozen.research_card_snapshot_json)
         if not isinstance(research_card, dict):
             raise ValueError("Research Card snapshot must be an object.")
+        if (
+            frozen.content_type is ContentType.ARTICLE
+            and paid_mode
+            and getattr(writer, "requires_editorial_novelty", False) is True
+        ):
+            topic_id = int(research_card["topic_id"])
+            topic = next(
+                item for item in storage.list_topics(frozen.account_id)
+                if item.id == topic_id
+            )
+            memory = tuple(
+                row for row in storage.list_editorial_novelty_memory(frozen.account_id)
+                if not (
+                    (row.source_kind == "TOPIC" and row.topic_id == topic_id)
+                    or row.research_card_id == frozen.research_card_id
+                    or row.content_id == frozen.content_id
+                )
+            )
+            duplicate = find_editorial_duplicate(
+                EditorialMemoryRecord(
+                    source_kind="ARTICLE_CANDIDATE",
+                    source_id=frozen.content_id,
+                    topic_id=topic_id,
+                    research_card_id=frozen.research_card_id,
+                    content_id=frozen.content_id,
+                    title=topic.title,
+                    question=topic.question or "",
+                    central_thesis=str(research_card.get("working_thesis") or ""),
+                    body="",
+                    status="ARTICLE_CANDIDATE",
+                    created_at="",
+                ),
+                memory,
+            )
+            if duplicate is not None:
+                storage.transition_content_execution(
+                    execution,
+                    ContentStatus.FAILED,
+                    reason_code="EDITORIAL_NOVELTY_DUPLICATE",
+                    final_result={
+                        "duplicate_reason": duplicate.reason,
+                        "duplicate_topic_id": duplicate.existing.topic_id,
+                        "duplicate_content_id": duplicate.existing.content_id,
+                        "duplicate_score": duplicate.score,
+                        "blocked_before_writer": True,
+                    },
+                )
+                return _summary(storage, job.id, "EDITORIAL_NOVELTY_DUPLICATE")
         context = WriterContext(
             plan=persisted_plan,
             brief=brief,
@@ -460,7 +513,32 @@ def run_offline_content_pipeline(
             )
             return _summary(storage, job.id, code)
         storage.record_content_writer_intent(execution, intent)
-        attempt = storage.begin_content_writer_attempt(execution, attempt_no)
+        try:
+            attempt = storage.begin_content_writer_attempt(execution, attempt_no)
+        except ContentFoundationError as exc:
+            if exc.code not in {
+                "CONTENT_APPROVAL_CAP_EXCEEDED",
+                "CONTENT_ARTICLE_BUDGET_EXHAUSTED",
+                "CONTENT_ARTICLE_COST_UNKNOWN",
+            }:
+                raise
+            target = (
+                ContentStatus.NEEDS_VERIFICATION
+                if exc.code == "CONTENT_ARTICLE_COST_UNKNOWN"
+                else ContentStatus.FAILED
+            )
+            storage.transition_content_execution(
+                execution,
+                target,
+                reason_code=exc.code,
+                final_result={
+                    "attempt_no": attempt_no,
+                    "mode": writer.call_mode.value,
+                    "provider_calls": 0,
+                    "budget_denied": True,
+                },
+            )
+            return _summary(storage, job.id, exc.code)
         request_id = attempt.request_id
 
         draft_row = persisted_drafts.get(attempt_no)

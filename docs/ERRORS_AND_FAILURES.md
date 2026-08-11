@@ -1,5 +1,32 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-11 — PRE-LIVE CONTENT UNBLOCK: próby, które nie były dowodem
+
+- Najważniejsza samokontrola obaliła własne rozwiązanie B3. Lexical overlap może uznać zdanie za grounded po kilku wspólnych konceptach, nawet gdy końcówka dodaje nowy zewnętrzny fakt. To dokładnie trust boundary z ADR-123. `DeterministicClaimAccountingReviewer` usunięto; nie wolno było zamienić zielonych testów w fałszywą deklarację semantyki.
+- Próba bezpośredniego użycia istniejącego `ARTICLE_REVIEWER` seamu także nie jest gotowym rozwiązaniem: `role_provider_executions` zapisuje terminalny rekord po callerze, ale nie ma durable `IN_FLIGHT` przed external effect. Crash w tym oknie pozwoliłby na replay i utratę kosztu. Zgłoszono to jako konkretny blocker zamiast dodawać surowy transport.
+
+- Pierwszy integracyjny harness użył `Settings.model_copy`, choć fixture nie udostępniała takiego API; zastąpiono go `dataclasses.replace`. Inna wersja fixture zostawiła otwartą transakcję po ręcznym UPDATE i zderzyła się z kolejnym `BEGIN`; zapis testowy jawnie zatwierdzono przed startem pipeline.
+- Pierwszy deterministyczny reviewer blokował trzy standardowe zdania fake draftu. Nie poluzowano quality gate globalnie: doprecyzowano jawne markery inferencji bez liczby/source appeal/proof assertion i dopisano instrukcję promptu, aby fakt pozostawał blisko nazwanego frozen evidence.
+- Pierwszy test kolejności researchu użył nielegalnego `schedule_reason=PRE_LIVE_CONTENT_FLOW_CHECK`; storage poprawnie odmówił. Test powtórzono z istniejącym kontrolowanym kodem `WITHIN_EDITORIAL_WINDOW`.
+- Pierwszy szeroki run ujawnił, że pamięć liczy pusty, niedokończony `content_item` jako wcześniejszy artykuł i że reviewer trafił również do offline Note. Pamięć contentu ograniczono do realnego body/draft, a produkcyjny reviewer do paid ARTICLE; stare kontrakty wróciły do zieleni.
+- Pierwszy launcher większej suity miał limit 1 s, więc został przerwany i wygenerował wtórny `OSError` stdout. Wyniku nie przyjęto; powtórka z właściwym limitem przeszła.
+- Pierwszy pełny suite zakończył się 1 failure po 649 s: novelty potraktowała bezpłatny `CONTROLLED_FETCH` jako real research tylko dlatego, że `dry_run=false`. Root cause naprawiono przez exact warunek `execution=durable_provider_v2`; test regresyjny + właściwy paid research przeszły 2/2, affected 473/473, a finalny full 2546/2546.
+- Żadna nieudana próba nie wykonała sieci, API, browsera, publikacji, zapisu produkcyjnej DB ani operacji Git. Koszt wszystkich prób: `0.000000 USD`.
+
+## 2026-08-10 — regresja po podniesieniu runtime schema do 0031
+
+- **Pierwszy pełny przebieg:** 25 testów nie przeszło. Przyczyny były testowe: historyczne fixture Fable próbowały działać pod nową policy Opus, a stare asercje kończyły drabinę na 0030/30.
+- **Naprawa:** historyczne kontrpróby Fable uruchamiają wyłącznie temp schema 0030; bieżące Opus flow używa 0031. Oczekiwania drabiny rozszerzono o jawny krok 0031. Nie poluzowano żadnego production gate.
+- **Dodatkowa korekta:** wspólny Opus registry jest kwalifikowany raz z największą kopertą ARTICLE_WRITER, a następnie używany przez trzy role; zapobiega to zastąpieniu capability mniejszą kopertą reviewer’a.
+- **Wpływ:** zero zapisów do produkcji, zero calli i kosztu. Historyczny Fable refusal pozostał nietknięty.
+
+## 2026-08-10 — Fable odrzucił jednorazowy prompt kwalifikacyjny
+
+- **Co się stało:** jedyny owner-authorized request `claude-fable-5` wrócił z `stop_reason=refusal`; returned model i provenance były zgodne, ale deterministyczny kontrakt słusznie nie uznał odpowiedzi za PASS.
+- **Trwały wynik:** `FAIL / PROVIDER_REFUSAL`, usage `151 input / 3 output`, koszt `0.001660 USD`; approval skonsumowany, run i qualification result zapisane.
+- **Bezpieczne zachowanie:** zero retry i fallbacku, zero drugiego requestu, capability i activation nie powstały, registry pozostał `CANDIDATE`, policy pozostała `UNVERIFIED`.
+- **Wniosek:** transport i durable lifecycle zadziałały, ale model nie przeszedł kwalifikacji. To wynik operacyjny, nie awaria do automatycznego naprawiania ani podstawa do ponowienia bez nowej decyzji właściciela.
+
 ## 2026-08-10 — Nieobsługiwany `Copy-Item -NoClobber` przed produkcyjną migracją
 
 - **Co nie zadziałało:** pierwsza próba utworzenia kopii bezpieczeństwa użyła parametru PowerShell `Copy-Item -NoClobber`, którego lokalna wersja cmdletu nie obsługuje.
@@ -1247,3 +1274,11 @@ Niezależny review PR #9 wydał `APPROVE WITH MINOR/P2`. Po merge i zielonym che
 - **Collect — pozorny duplikat:** pierwsza sonda użyła domyślnie case-insensitive `Sort-Object`/`Group-Object` i błędnie złączyła istniejące case-distinct node IDs `[hidden]` i `[HIDDEN]`, raportując `2480` unique/1 group. Powtórka z `StringComparer.Ordinal` i `Group-Object -CaseSensitive` potwierdziła `2481` exact unique i `0` exact duplicate groups.
 - **Nieszkodliwe próby narzędziowe:** kilka wczesnych sond PowerShell/`rg` miało błąd składni albo niepasujący wildcard, a próby punktowego patchowania katalogu nie trafiały przez encoding/context. Wyników nie przyjęto jako dowodu; polecenia powtórzono poprawnie. Nie doszło do sieci, API, zapisu produkcji ani operacji Git.
 - **Wynik:** brak nierozwiązanego failure implementacji. Otwarte są decyzja właściciela o retencji oraz niezależny review — to nie są zamaskowane sukcesy ani defekty kodu.
+
+## 2026-08-10 — Fable authority package: brak external policy reference i granica walidacji
+
+- **Finding:** aktywne repo ma wewnętrzne markery owner-verified catalogue, ale nie ma prawdziwego external `provider_policy_ref` dla 30-dniowej retencji Fable. Fixtures zawierają tylko zabronione jako authority `fake://...`.
+- **Granica kodu:** SQL poprawnie zamraża exact `provider_policy_ref` w kolumnie/JSON/fingerprint i odrzuca ich rozjazd, lecz pole jest tylko opaque stringiem długości `1..500`, bez URL/domain/FK/source-fingerprint validation. Spójny zmyślony ref byłby technicznie legalny, dlatego nie został użyty jako production candidate.
+- **Dodatkowy brak authority:** production `ARTICLE_WRITER` policy nadal jest bootstrapowo `UNVERIFIED`; bez osobnej autoryzacji deterministycznego update nie przejdzie późniejsza activation.
+- **Nieszkodliwa próba narzędziowa:** pierwsza read-only sonda FK miała błąd nawiasów w inline Python i zakończyła się przed otwarciem połączenia. Powtórka poprawnie odczytała production przez `mode=ro&immutable=1`; żadnego zapisu ani skutku ubocznego.
+- **Status:** pakiet offline jest gotowy do owner input; real qualification pozostaje zablokowana. Nie naprawiano kodu ani schema.

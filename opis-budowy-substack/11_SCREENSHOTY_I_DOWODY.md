@@ -1,5 +1,7 @@
 # 11 — SCREENSHOTY I DOWODY
 
+> **2026-08-11 — PRE-LIVE CONTENT UNBLOCK:** `SCREENSHOT REQUIRED`. Bezpieczny diagram powinien pokazać targetowany approval/cap → dispatcher → `CONTENT_INDEPENDENT_REVIEW_UNAVAILABLE` przed writerem, obok brakującego durable ARTICLE_REVIEWER lifecycle, ordinary worker BLOCK i sześciu kontrprób novelty. Dowód tekstowy: 6/6 nowych, 473/473 affected, 2546/2546 full/collect, zero SDK/usage/kosztu w końcowym root, production DB PRE=POST.
+
 > **2026-08-10 — produkcyjna migracja 0020→0030:** `SCREENSHOT REQUIRED`. Bezpieczny kadr powinien pokazać wyłącznie zanonimizowane liczniki: PRE `0020/20`, POST `0030/30`, integrity `ok`, FK `0`, preserve-state `211/2390/0`, retention acceptance `0`. Dowód tekstowy obejmuje byte-identical backup, 10 kroków exit `0`, brak sidecarów po close i zero kosztu.
 
 > **2026-08-10 — MIGRATION TRANSACTIONALITY REPAIR 0026/0027:** `SCREENSHOT REQUIRED`. Browser był zabroniony. Bezpieczny kadr powinien pokazać failpoint → wspólny rollback schema/ledger → reopen → retry dla obu migracji oraz końcowe `0030/30`, integrity `ok`, FK `0`, preserve-state mismatch `0` i retention acceptance `0`. Dowód tekstowy: 4/4 nowych i 74/74 affected, koszt zero, produkcja i styl nietknięte.
