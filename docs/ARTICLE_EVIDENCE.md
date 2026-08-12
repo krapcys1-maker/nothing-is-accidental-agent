@@ -1,5 +1,12 @@
 # ARTICLE_EVIDENCE
 
+## 2026-08-12 — Materiał: „Gotowy migrator nie jest zgodą na migrację”
+
+- Cienki skrypt operatorski nie zawiera SQL migracji: wskazuje jedną bazę, sprawdza dokładny punkt startowy i deleguje do istniejącego transakcyjnego runnera.
+- Najważniejsza kontrpróba nie sprawdzała sukcesu, lecz odmowę: baza na `0032` zwróciła kod `2`, zachowała identyczny SHA-256 i tę samą wersję schematu.
+- Osobny kontrolowany konflikt w połowie `0034` pozostawił ledger, policy i kolumny dokładnie w stanie `0033`, co pokazało, że „nieudana migracja” nie oznacza „częściowo nowy schemat”.
+- Cytowalna zasada: **„Narzędzie gotowe do operacji nie jest jeszcze autoryzacją operacji.”**
+
 ## 2026-08-12 — Materiał: „Zgoda na jedno źródło nie jest zgodą na wszystkie”
 
 > **Zastrzeżenie dowodowe:** WAVE C5 **nie wyprodukowała żadnego dowodu redakcyjnego dla artykułu** — nie powstał realny research, cytat, źródło ani `evidence_source_lineage` w produkcji. Poniżej są obserwacje o **budowie systemu**, nadające się do serii o budowie agenta; nie są materiałem źródłowym do artykułu tematycznego.
