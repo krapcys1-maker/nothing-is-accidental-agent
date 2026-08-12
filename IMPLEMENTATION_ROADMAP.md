@@ -1,6 +1,6 @@
 # IMPLEMENTATION_ROADMAP — Nothing Is Accidental Agent
 
-> **AKTUALNY WPIS — 2026-08-12 / WAVE C5-END-TO-END-CONNECTION = `FORMALLY CLOSED — APPROVED WITH MINOR/P2` (ADR-140); PR #44 = `MERGED`; OPERATOR PATH 0034 = `LOCAL CANDIDATE`.** `main` = `origin/main` = `984e90f5a93f3ce86ed694d8ae45082b12f57639`. Baseline z niezależnego review pozostaje **2 594/2 594 PASS**; lokalny operator path ma osobny skupiony dowód `49/49` i nie został zacommitowany ani użyty na produkcji. **Etap 3 pozostaje `IN PROGRESS`** — zamknięta jest WAVE C5, a nie Etap; formalne zamknięcie Etapu wymaga osobnej decyzji właściciela i osobnego dowodu, których nie ma.
+> **AKTUALNY WPIS — 2026-08-12 / WAVE C5-END-TO-END-CONNECTION = `FORMALLY CLOSED — APPROVED WITH MINOR/P2` (ADR-140); PR #44 = `MERGED`; OPERATOR PATH 0034 = `CANDIDATE IN DRAFT PR #45 — AWAITING RE-REVIEW`.** `main` = `origin/main` = `984e90f5a93f3ce86ed694d8ae45082b12f57639`. Baseline z niezależnego review pozostaje **2 594/2 594 PASS**; lokalny operator path ma osobny skupiony dowód `49/49` i nie został zacommitowany ani użyty na produkcji. **Etap 3 pozostaje `IN PROGRESS`** — zamknięta jest WAVE C5, a nie Etap; formalne zamknięcie Etapu wymaga osobnej decyzji właściciela i osobnego dowodu, których nie ma.
 >
 > **A. WYKONANE I ZMERGOWANE (kod na `main`)**
 > 1. Exact-model policy, activation i trwały binding dla `TOPIC_GENERATION` — `ANTHROPIC`/`OPUS`/`claude-opus-5`, envelope 14 500 / 1 500 / 16 000.
@@ -14,8 +14,8 @@
 > 9. Migracja `0034_c5_end_to_end_connection` (forward-only) i przesunięcie `RUNTIME_SCHEMA_VERSION` na `0034`.
 >
 > **B. WYMAGANE PRZED LIVE (w tej kolejności; krok 2 ma lokalnego kandydata, bez merge i bez użycia na produkcji)**
-> 1. Zamknięcie dokumentacyjnego PR #44 (ten PR).
-> 2. Dostarczenie **minimalnej operatorskiej drogi migracji `0033 → 0034`**. **Kandydat lokalny 2026-08-12:** `scripts/migrate_schema_0034.py` wymaga `--db-path` i `--confirm-0033-to-0034`, deleguje do `app.storage.db.migrate_0033_to_0034` i ma dowód offline `49/49`; pozostaje niezacommitowany, niestage’owany i nie został użyty na produkcji. Kontrola sidecarów i osobna autoryzacja rzeczywistej operacji nadal należą do późniejszego runbooku/operatorskiego preflightu.
+> 1. ~~Zamknięcie dokumentacyjnego PR #44~~ — **WYKONANE**: PR #44 `MERGED` (merge commit `984e90f5…`).
+> 2. Dostarczenie **minimalnej operatorskiej drogi migracji `0033 → 0034`**. **Kandydat lokalny 2026-08-12:** `scripts/migrate_schema_0034.py` wymaga `--db-path` i `--confirm-0033-to-0034`, deleguje do `app.storage.db.migrate_0033_to_0034` i ma dowód offline `49/49`; jest zacommitowany na branchu `ops/schema-0034-migrator` i zgłoszony w **draft PR #45** (oczekuje na ponowny review; niezmergowany, jeszcze nie na `main`) i nie został użyty na produkcji. Kontrola sidecarów i osobna autoryzacja rzeczywistej operacji nadal należą do późniejszego runbooku/operatorskiego preflightu.
 > 3. Uporządkowanie odziedziczonych sidecarów `data/agent.db-wal` / `-shm` zgodnie z runbookiem migracyjnym.
 > 4. **Osobno autoryzowana** migracja produkcji `0033 → 0034`.
 > 5. **Realna** qualification `ARTICLE_RESEARCH`: 32 000 context / 8 192 output oraz capability source discovery.
