@@ -65,7 +65,7 @@ def _policy(
     output: int = 2_000,
 ) -> RolePolicy:
     family = {
-        LogicalModelRole.TOPIC_GENERATION: ModelFamily.SONNET,
+        LogicalModelRole.TOPIC_GENERATION: ModelFamily.OPUS,
         LogicalModelRole.ARTICLE_RESEARCH: ModelFamily.OPUS,
         LogicalModelRole.ARTICLE_PLAN: ModelFamily.OPUS,
         LogicalModelRole.ARTICLE_WRITER: ModelFamily.OPUS,
@@ -181,7 +181,7 @@ def test_model_version_order_is_numeric_not_naive_string_order():
 
 
 @pytest.mark.parametrize("role,family", [
-    (LogicalModelRole.TOPIC_GENERATION, ModelFamily.SONNET),
+    (LogicalModelRole.TOPIC_GENERATION, ModelFamily.OPUS),
     (LogicalModelRole.ARTICLE_RESEARCH, ModelFamily.OPUS),
     (LogicalModelRole.ARTICLE_PLAN, ModelFamily.OPUS),
     (LogicalModelRole.ARTICLE_WRITER, ModelFamily.OPUS),

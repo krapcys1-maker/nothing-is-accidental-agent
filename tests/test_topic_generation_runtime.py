@@ -236,7 +236,7 @@ def _prepare(settings, storage, account, *, key="a", cap=1.0, count=3,
         seed_role_policy(storage, LogicalModelRole.TOPIC_GENERATION)
         seed_model(
             storage,
-            family=ModelFamily.SONNET,
+            family=ModelFamily.OPUS,
             provider="ANTHROPIC",
             technical_model_id_override=intent.model,
         )

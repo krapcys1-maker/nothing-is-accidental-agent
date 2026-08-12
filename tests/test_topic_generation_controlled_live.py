@@ -782,7 +782,7 @@ def _seed_subprocess_job(tmp_path: Path):
     seed_role_policy(storage, LogicalModelRole.TOPIC_GENERATION)
     seed_model(
         storage,
-        family=ModelFamily.SONNET,
+        family=ModelFamily.OPUS,
         provider="ANTHROPIC",
         technical_model_id_override=intent.model,
     )

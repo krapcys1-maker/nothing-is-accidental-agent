@@ -167,6 +167,7 @@ def test_runtime_schema_version_is_the_content_decision_migration():
         ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION,
         ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION,
         ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION,
+        END_TO_END_CONNECTION_SCHEMA_VERSION,
         CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION,
         CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION,
         VERIFIED_CATALOGUE_SCHEMA_VERSION,
@@ -176,7 +177,7 @@ def test_runtime_schema_version_is_the_content_decision_migration():
         TOPIC_GENERATION_SCHEMA_VERSION,
     )
 
-    assert RUNTIME_SCHEMA_VERSION == ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION
+    assert RUNTIME_SCHEMA_VERSION == END_TO_END_CONNECTION_SCHEMA_VERSION
     assert ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION == (
         "0031_article_writer_opus_policy"
     )
@@ -203,31 +204,32 @@ def test_runtime_schema_version_is_the_content_decision_migration():
     assert CONTROLLED_FETCH_SCHEMA_VERSION == "0018_controlled_fetch_lifecycle"
     assert EVIDENCE_SCHEMA_VERSION == "0016_evidence_foundation"
     canonical = canonical_migration_versions()
-    assert canonical[-1] == ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION
-    assert canonical[-2] == ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION
-    assert canonical[-3] == ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION
-    assert canonical[-4] == ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION
-    assert canonical[-5] == VERIFIED_CATALOGUE_SCHEMA_VERSION
-    assert canonical[-6] == CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION
-    assert canonical[-7] == MODEL_FAMILY_ROUTING_SCHEMA_VERSION
-    assert canonical[-8] == CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION
-    assert canonical[-9] == EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION
-    assert canonical[-10] == CONTENT_DECISION_SCHEMA_VERSION
-    assert canonical[-11] == CONTENT_WRITER_SCHEMA_VERSION
-    assert canonical[-12] == CONTENT_PIPELINE_SCHEMA_VERSION
-    assert canonical[-13] == CONTENT_FOUNDATION_SCHEMA_VERSION
-    assert canonical[-14] == TOPIC_GENERATION_SCHEMA_VERSION
-    assert canonical[-15] == EVIDENCE_RESEARCH_SCHEMA_VERSION
-    assert canonical[-16] == CONTROLLED_FETCH_SCHEMA_VERSION
-    assert canonical[-17] == EVIDENCE_PIPELINE_SCHEMA_VERSION
-    assert canonical[-18] == EVIDENCE_SCHEMA_VERSION
-    assert len(canonical) == 33
+    assert canonical[-1] == END_TO_END_CONNECTION_SCHEMA_VERSION
+    assert canonical[-2] == ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION
+    assert canonical[-3] == ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION
+    assert canonical[-4] == ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION
+    assert canonical[-5] == ANTHROPIC_PROVIDER_CONTRACT_SCHEMA_VERSION
+    assert canonical[-6] == VERIFIED_CATALOGUE_SCHEMA_VERSION
+    assert canonical[-7] == CONTROLLED_PROVIDER_PROVENANCE_SCHEMA_VERSION
+    assert canonical[-8] == MODEL_FAMILY_ROUTING_SCHEMA_VERSION
+    assert canonical[-9] == CONTROLLED_PROVIDER_CONTENT_SCHEMA_VERSION
+    assert canonical[-10] == EVIDENCE_RESEARCH_LINEAGE_SCHEMA_VERSION
+    assert canonical[-11] == CONTENT_DECISION_SCHEMA_VERSION
+    assert canonical[-12] == CONTENT_WRITER_SCHEMA_VERSION
+    assert canonical[-13] == CONTENT_PIPELINE_SCHEMA_VERSION
+    assert canonical[-14] == CONTENT_FOUNDATION_SCHEMA_VERSION
+    assert canonical[-15] == TOPIC_GENERATION_SCHEMA_VERSION
+    assert canonical[-16] == EVIDENCE_RESEARCH_SCHEMA_VERSION
+    assert canonical[-17] == CONTROLLED_FETCH_SCHEMA_VERSION
+    assert canonical[-18] == EVIDENCE_PIPELINE_SCHEMA_VERSION
+    assert canonical[-19] == EVIDENCE_SCHEMA_VERSION
+    assert len(canonical) == 34
 
 
 def test_fresh_initialization_reaches_runtime_and_creates_evidence_tables(tmp_path):
     path = tmp_path / "fresh.db"
     applied = initialize_database(path)
-    assert len(applied) == 33
+    assert len(applied) == 34
     assert applied[-1] == RUNTIME_SCHEMA_VERSION
     storage = SqliteStorage.open(path)
     try:

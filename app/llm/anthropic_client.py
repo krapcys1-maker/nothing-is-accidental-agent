@@ -27,6 +27,10 @@ from app.llm.base import (
     Usage,
 )
 from app.models import Account
+from app.content.cost_estimate import (
+    TOPIC_GENERATION_MAX_INPUT_TOKENS,
+    TOPIC_GENERATION_MAX_OUTPUT_TOKENS,
+)
 from app.research.base import (
     DurableAttemptActivationCallback,
     DurableAttemptAssertionCallback,
@@ -225,6 +229,19 @@ class AnthropicLLMClient(LLMClient):
         return self._durable_boundary.assert_immediately_before_provider_call()
 
     def generate_and_score_topics(self, account: Account, count: int) -> TopicGenerationResult:
+        prompt = _build_prompt(account, count, self._editorial_history)
+        # No project tokenizer is available at this boundary.  3.5 chars/token
+        # is the repository's established conservative estimator; include both
+        # system and user prompt before any durable provider attempt exists.
+        estimated_input_tokens = math.ceil((len(_SYSTEM) + len(prompt)) / 3.5)
+        if (
+            estimated_input_tokens > TOPIC_GENERATION_MAX_INPUT_TOKENS
+            or self._topic_max_tokens > TOPIC_GENERATION_MAX_OUTPUT_TOKENS
+        ):
+            raise LLMProviderError(
+                "TOPIC_GENERATION_ENVELOPE_EXCEEDED before provider attempt.",
+                model=self.model,
+            )
         durable = self._requires_durable_provider_context()
         if durable:
             self._activate_durable_attempt()

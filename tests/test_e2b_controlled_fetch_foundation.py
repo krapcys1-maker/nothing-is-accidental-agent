@@ -1218,6 +1218,7 @@ def test_migration_cli_0018_requires_confirmation_and_is_exact(tmp_path, capsys)
         SchemaVersionTooOld,
         database_schema_versions,
         initialize_database,
+        migrate_0033_to_0034,
     )
 
     path = tmp_path / "ladder-0018.db"
@@ -1374,11 +1375,9 @@ def test_migration_cli_0018_requires_confirmation_and_is_exact(tmp_path, capsys)
     assert migration_cli_0033.main([
         "--db-path", str(path), "--confirm-0032-to-0033",
     ]) == 0
+    migrate_0033_to_0034(path)
     SqliteStorage.open(path).close()
-    assert migration_cli_0033.main([
-        "--db-path", str(path), "--confirm-0032-to-0033",
-    ]) == 0
-    assert "idempotent=true" in capsys.readouterr().out
+    assert database_schema_versions(path)[-1] == "0034_c5_end_to_end_connection"
 
     too_old = tmp_path / "too-old-0016.db"
     initialize_database(too_old, through=EVIDENCE_SCHEMA_VERSION)

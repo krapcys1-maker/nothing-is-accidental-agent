@@ -817,6 +817,10 @@ class SourceCandidateRecord(BaseModel):
     attempts: int = 0
     discovered_at: datetime = Field(default_factory=_utcnow)
     extracted_at: datetime | None = None
+    canonical_source_identity: str | None = None
+    discovery_result_identity: str | None = None
+    discovery_port: str | None = None
+    discovery_job_id: str | None = None
 
 
 class SourceCandidateRetryResult(BaseModel):

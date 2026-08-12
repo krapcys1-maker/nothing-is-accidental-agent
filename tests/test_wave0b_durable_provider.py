@@ -697,6 +697,7 @@ def test_migration_0011_preserves_valid_0010_history_and_is_idempotent(tmp_path:
             "0031_article_writer_opus_policy",
             "0032_role_execution_lifecycle",
             "0033_role_execution_global_ledger",
+            "0034_c5_end_to_end_connection",
     ]
     attempt = conn.execute(
         "SELECT status,actual_cost_usd,released_at FROM provider_attempts"
@@ -2292,6 +2293,7 @@ def test_migration_0012_keeps_provable_usage_nonlegacy_and_reopens_cleanly(tmp_p
             "0031_article_writer_opus_policy",
             "0032_role_execution_lifecycle",
             "0033_role_execution_global_ledger",
+            "0034_c5_end_to_end_connection",
     ]
     states = {
         row["model"]: row["is_legacy_usage"]
