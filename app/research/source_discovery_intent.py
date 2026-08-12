@@ -40,8 +40,8 @@ class SourceDiscoveryIntent:
     fingerprint: str
 
     @classmethod
-    def build(cls, *, account_id: str, topic_id: int, max_results: int = 6,
-              max_output_tokens: int = 8192, cap_usd: str = "1.000000") -> "SourceDiscoveryIntent":
+    def build(cls, *, account_id: str, topic_id: int, max_results: int = 4,
+              max_output_tokens: int = 8192, cap_usd: str = "0.600000") -> "SourceDiscoveryIntent":
         raw: dict[str, Any] = {
             "version": SOURCE_DISCOVERY_INTENT_VERSION,
             "account_id": account_id,
@@ -73,8 +73,13 @@ class SourceDiscoveryIntent:
             raise SourceDiscoveryIntentError("max_results is outside [1, 6]")
         if raw["max_output_tokens"] != 8192:
             raise SourceDiscoveryIntentError("A1 output envelope must be 8192")
-        if raw["cap_usd"] != "1.000000":
-            raise SourceDiscoveryIntentError("A1 cap must be exactly 1.000000 USD")
+        if raw["cap_usd"] not in {
+            "0.300000", "0.500000", "0.600000", "1.000000",
+        }:
+            raise SourceDiscoveryIntentError(
+                "A1 cap must use the current 0.600000 USD envelope or a supported "
+                "historical 0.300000/0.500000/1.000000 USD envelope"
+            )
         if raw["fingerprint"] != _fingerprint(raw):
             raise SourceDiscoveryIntentError("source-discovery fingerprint mismatch")
         return cls(**raw)

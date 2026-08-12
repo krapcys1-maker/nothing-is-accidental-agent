@@ -30,6 +30,7 @@ from app.content.quality_gate import (
     ClaimReviewOutcome,
     DraftClaimSegment,
 )
+from app.core.clock import Clock, SystemClock
 from app.llm.anthropic_controlled_adapter import (
     ControlledAdapterError,
     ControlledAnthropicAdapter,
@@ -42,10 +43,10 @@ from app.llm.anthropic_controlled_adapter import (
 from app.llm.anthropic_provider_contract import OPUS_5_MODEL_ID
 from app.model_routing.contracts import LogicalModelRole, ModelFamily
 
-REVIEWER_VERSION = "production_article_reviewer_opus_v1"
-REVIEWER_TIMEOUT_SECONDS = 30.0
-REVIEWER_MAX_OUTPUT_TOKENS = 1024
-REVIEWER_MAX_INPUT_TOKENS = 13_952
+REVIEWER_VERSION = "production_article_reviewer_opus_v2"
+REVIEWER_TIMEOUT_SECONDS = 300.0
+REVIEWER_MAX_OUTPUT_TOKENS = 8_192
+REVIEWER_MAX_INPUT_TOKENS = 23_808
 
 _SYSTEM = """You are the independent claim reviewer for the anonymous editorial
 brand Nothing Is Accidental. You did not write this draft and you never rewrite
@@ -71,7 +72,8 @@ NON_FACTUAL_PROSE, and to true only when a segment smuggles in an outside fact.
 
 Return exactly one JSON object and nothing else. No Markdown, no code fence, no
 prose before or after it. Return exactly one entry per supplied segment_id,
-copying each segment_id and segment_fingerprint verbatim."""
+copying each segment_id and segment_fingerprint verbatim. Keep each reason to
+at most 12 words."""
 
 
 class ProductionReviewerError(RuntimeError):
@@ -121,7 +123,7 @@ def assemble_reviewer_prompt(
                 "(EVIDENCE_GROUNDED_FACT | ARGUMENT_OR_INFERENCE | "
                 "NON_FACTUAL_PROSE), evidence_ids (array of allowed "
                 "confirmed_claim_id values; empty unless grounded), reason "
-                "(non-empty string), outcome (PASS | BLOCK), "
+                "(non-empty string of at most 12 words), outcome (PASS | BLOCK), "
                 "contains_external_fact (boolean)"
             ),
         },
@@ -200,8 +202,11 @@ def parse_reviewer_response(
                 type(raw["reason"]) is not str
                 or not raw["reason"].strip()
                 or raw["reason"] != raw["reason"].strip()
+                or len(raw["reason"].split()) > 12
             ):
-                raise TypeError("reason must be a non-empty canonical string")
+                raise TypeError(
+                    "reason must be a non-empty canonical string of at most 12 words"
+                )
             if type(raw["contains_external_fact"]) is not bool:
                 raise TypeError("contains_external_fact must be a JSON boolean")
             entry = ClaimAccountingEntry(
@@ -241,6 +246,7 @@ class ProductionArticleReviewer:
         timeout_seconds: float = REVIEWER_TIMEOUT_SECONDS,
         daily_limit_usd: Decimal | float | str,
         monthly_limit_usd: Decimal | float | str,
+        clock: Clock | None = None,
     ) -> None:
         self._storage = storage
         self._job_id = job_id
@@ -252,6 +258,7 @@ class ProductionArticleReviewer:
         self._timeout_seconds = timeout_seconds
         self._daily_limit_usd = daily_limit_usd
         self._monthly_limit_usd = monthly_limit_usd
+        self._clock = clock or SystemClock()
         self.provider_calls = 0
 
     @property
@@ -361,8 +368,11 @@ class ProductionArticleReviewer:
             attempt_no=attempt_no, max_cost_usd=ceiling, authority=authority,
             daily_limit_usd=self._daily_limit_usd,
             monthly_limit_usd=self._monthly_limit_usd,
+            now=self._clock.now(),
         )
-        self._storage.mark_role_provider_effect_started(execution_ref)
+        self._storage.mark_role_provider_effect_started(
+            execution_ref, now=self._clock.now(),
+        )
 
         prompt = assemble_reviewer_prompt(
             draft_fingerprint=draft.fingerprint(),
@@ -470,7 +480,7 @@ class ProductionArticleReviewer:
             usage=usage,
             cost_usd=cost,
             payload=payload,
-        ))
+        ), now=self._clock.now())
 
 
 __all__ = [

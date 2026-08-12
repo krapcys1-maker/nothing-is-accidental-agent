@@ -81,6 +81,25 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_COST = Decimal("0.008450")
 
 
+def test_writer_limits_accept_five_minute_timeout_and_reject_longer():
+    limits = WriterLimits(
+        max_input_tokens=8_000,
+        max_context_tokens=16_000,
+        max_output_tokens=2_048,
+        max_cost_usd=0.05,
+        timeout_seconds=300.0,
+    )
+    assert limits.timeout_seconds == 300.0
+    with pytest.raises(ValueError):
+        WriterLimits(
+            max_input_tokens=8_000,
+            max_context_tokens=16_000,
+            max_output_tokens=2_048,
+            max_cost_usd=0.05,
+            timeout_seconds=300.001,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Shared paid-execution harness
 # ---------------------------------------------------------------------------
@@ -1118,6 +1137,10 @@ def test_migration_0028_is_forward_only_explicit_and_idempotent(tmp_path, capsys
         migrate_0031_to_0032,
         migrate_0032_to_0033,
         migrate_0033_to_0034,
+        migrate_0034_to_0035,
+        migrate_0035_to_0036,
+        migrate_0036_to_0037,
+        migrate_0037_to_0038,
     )
 
     migrate_0028_to_0029(path)
@@ -1126,6 +1149,10 @@ def test_migration_0028_is_forward_only_explicit_and_idempotent(tmp_path, capsys
     migrate_0031_to_0032(path)
     migrate_0032_to_0033(path)
     migrate_0033_to_0034(path)
+    migrate_0034_to_0035(path)
+    migrate_0035_to_0036(path)
+    migrate_0036_to_0037(path)
+    migrate_0037_to_0038(path)
 
     opened = SqliteStorage.open(path)
     try:

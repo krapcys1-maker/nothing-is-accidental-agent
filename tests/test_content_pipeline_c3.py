@@ -67,6 +67,10 @@ from app.storage.db import (
     migrate_0031_to_0032,
     migrate_0032_to_0033,
     migrate_0033_to_0034,
+    migrate_0034_to_0035,
+    migrate_0035_to_0036,
+    migrate_0036_to_0037,
+    migrate_0037_to_0038,
 )
 from app.storage.repositories import SqliteStorage
 from tests.c2_fixtures import seed_c2_research
@@ -795,6 +799,10 @@ def test_explicit_0022_to_0023_migration_is_temp_only_and_idempotent(tmp_path):
     migrate_0031_to_0032(path)
     migrate_0032_to_0033(path)
     migrate_0033_to_0034(path)
+    migrate_0034_to_0035(path)
+    migrate_0035_to_0036(path)
+    migrate_0036_to_0037(path)
+    migrate_0037_to_0038(path)
     opened = SqliteStorage.open(path)
     opened.close()
 

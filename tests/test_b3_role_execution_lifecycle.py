@@ -26,6 +26,7 @@ from app.model_routing.contracts import (
 from app.model_routing.role_bootstrap import owner_approved_role_policy
 from app.storage.db import (
     ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION,
+    CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION,
     ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION,
     END_TO_END_CONNECTION_SCHEMA_VERSION,
     ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION,
@@ -135,8 +136,8 @@ def storage(tmp_path):
         capability_ref="b3-cap",
         verification_state=CapabilityVerificationState.VERIFIED,
         structured_response=True,
-        max_context_tokens=16000,
-        max_output_tokens=2048,
+        max_context_tokens=32000,
+        max_output_tokens=8192,
         verified_at=now,
     ))
     store.promote_best_model(ROLE, reason="b3 part A lifecycle fixture")
@@ -153,7 +154,7 @@ def storage(tmp_path):
         approval_ref="b3-approval", job_id=JOB_ID, account_id="acct", role=ROLE,
         model_registry_id=REGISTRY_ID, provider="ANTHROPIC",
         technical_model_id=MODEL_ID, pricing_ref=PRICING_REF,
-        max_output_tokens=2048, cap_usd="0.500000", approved_by="owner",
+        max_output_tokens=8192, cap_usd="0.500000", approved_by="owner",
         approved_at=now, expires_at="2026-08-12 00:00:00.000000",
     )
     conn.execute(approval_trigger)
@@ -359,12 +360,15 @@ def test_11_settlement_records_usage_and_cost_exactly_once(storage):
 
 def test_12_runtime_floor_is_the_role_execution_global_ledger():
     """The floor includes canonical accounting for the paid reviewer."""
-    assert RUNTIME_SCHEMA_VERSION == END_TO_END_CONNECTION_SCHEMA_VERSION
+    assert RUNTIME_SCHEMA_VERSION == CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION
     assert RUNTIME_SCHEMA_VERSION != ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION
     canonical = canonical_migration_versions()
-    assert canonical[-1] == END_TO_END_CONNECTION_SCHEMA_VERSION
-    assert canonical[-2] == ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION
-    assert canonical[-3] == ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION
+    assert canonical[-1] == CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION
+    assert canonical.index(ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION) < canonical.index(
+        ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION
+    ) < canonical.index(END_TO_END_CONNECTION_SCHEMA_VERSION) < canonical.index(
+        CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION
+    )
 
 
 def test_13_unknown_terminal_cost_is_represented_by_null_not_zero(storage):

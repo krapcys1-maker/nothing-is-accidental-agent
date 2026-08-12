@@ -17,7 +17,6 @@ import hashlib
 import json
 from typing import Callable, Protocol
 
-from app.content.cost_estimate import ROLE_ENVELOPES
 from app.llm.anthropic_controlled_adapter import (
     ControlledAnthropicAdapter,
     ControlledProviderRequest,
@@ -53,6 +52,9 @@ class ProductionQualificationContract:
     prompt_version: str
     challenge: str
     mismatch_code: str
+    max_input_tokens: int
+    max_output_tokens: int
+    require_source_discovery: bool = False
 
     @property
     def expected_response(self) -> dict[str, object]:
@@ -73,8 +75,14 @@ class ProductionQualificationContract:
 
     @property
     def prompt(self) -> str:
+        source_discovery_instruction = (
+            "Use the web_search tool exactly once before answering. Find one "
+            "authoritative source about hidden dependencies in fragile systems.\n"
+            if self.require_source_discovery else ""
+        )
         return (
             f"Qualification contract: {self.prompt_version}\n"
+            f"{source_discovery_instruction}"
             "Return exactly one JSON object and no other text.\n"
             "Do not use Markdown or code fences. Do not add, remove, or rename fields.\n"
             "Copy every value exactly, including case.\n"
@@ -88,6 +96,8 @@ FABLE_PRODUCTION_QUALIFICATION_CONTRACT = ProductionQualificationContract(
     prompt_version=QUALIFICATION_PROMPT_VERSION,
     challenge=QUALIFICATION_CHALLENGE,
     mismatch_code="FABLE_PRODUCTION_QUALIFICATION_CONTRACT_MISMATCH",
+    max_input_tokens=13_952,
+    max_output_tokens=2_048,
 )
 OPUS_PRODUCTION_QUALIFICATION_CONTRACT = ProductionQualificationContract(
     logical_role=LogicalModelRole.ARTICLE_WRITER,
@@ -95,6 +105,18 @@ OPUS_PRODUCTION_QUALIFICATION_CONTRACT = ProductionQualificationContract(
     prompt_version="opus_production_qualification_prompt_v1",
     challenge="NIA-OPUS-QUALIFICATION-CHALLENGE-V1",
     mismatch_code="OPUS_PRODUCTION_QUALIFICATION_CONTRACT_MISMATCH",
+    max_input_tokens=13_952,
+    max_output_tokens=2_048,
+)
+OPUS_ARTICLE_RESEARCH_QUALIFICATION_CONTRACT = ProductionQualificationContract(
+    logical_role=LogicalModelRole.ARTICLE_RESEARCH,
+    catalogue_entry=OPUS_5,
+    prompt_version="opus_article_research_qualification_prompt_v1",
+    challenge="NIA-OPUS-ARTICLE-RESEARCH-QUALIFICATION-V1",
+    mismatch_code="OPUS_ARTICLE_RESEARCH_QUALIFICATION_CONTRACT_MISMATCH",
+    max_input_tokens=23_808,
+    max_output_tokens=8_192,
+    require_source_discovery=True,
 )
 
 # Historical public names remain byte-identical aliases for the Fable probe
@@ -190,16 +212,16 @@ def _assert_production_qualification_contract(
     approval: QualificationApproval,
     contract: ProductionQualificationContract,
 ) -> None:
-    envelope = ROLE_ENVELOPES[contract.logical_role]
     expected = {
         "logical_role": contract.logical_role,
         "provider": ANTHROPIC_PROVIDER,
         "technical_model_id": contract.catalogue_entry.technical_model_id,
         "pricing_ref": contract.catalogue_entry.default_pricing_ref,
-        "max_input_tokens": envelope.qualification_input_tokens,
-        "max_output_tokens": envelope.max_output_tokens,
+        "max_input_tokens": contract.max_input_tokens,
+        "max_output_tokens": contract.max_output_tokens,
         "max_retries": 0,
         "fallback_policy": "FORBIDDEN",
+        "require_source_discovery": contract.require_source_discovery,
     }
     actual = {
         "logical_role": approval.logical_role,
@@ -210,6 +232,7 @@ def _assert_production_qualification_contract(
         "max_output_tokens": approval.max_output_tokens,
         "max_retries": approval.max_retries,
         "fallback_policy": approval.fallback_policy,
+        "require_source_discovery": approval.require_source_discovery,
     }
     mismatches = [key for key in expected if actual[key] != expected[key]]
     if mismatches:
@@ -245,6 +268,14 @@ class ProductionQualificationCaller:
             # smaller operational limit must be a separately reviewed change.
             max_output_tokens=approval.max_output_tokens,
             timeout_seconds=QUALIFICATION_TIMEOUT_SECONDS,
+            tools=(
+                ({
+                    "type": "web_search_20250305",
+                    "name": "web_search",
+                    "max_uses": 1,
+                },)
+                if self._contract.require_source_discovery else None
+            ),
         ))
         return QualificationProbeResponse(
             # Identity and provenance come from provider metadata carried by
@@ -266,6 +297,10 @@ class ProductionQualificationCaller:
             ),
             stop_reason=raw.stop_reason,
             provider_request_id=raw.provider_request_id,
+            source_discovery_ok=(
+                raw.web_search_requests >= 1
+                and raw.structured_web_search_results >= 1
+            ) if self._contract.require_source_discovery else False,
         )
 
 
@@ -281,6 +316,13 @@ class ProductionOpusQualificationCaller(ProductionQualificationCaller):
 
     def __init__(self, adapter: ControlledAnthropicAdapter) -> None:
         super().__init__(adapter, OPUS_PRODUCTION_QUALIFICATION_CONTRACT)
+
+
+class ProductionOpusArticleResearchQualificationCaller(ProductionQualificationCaller):
+    """Qualification caller for the 32k ARTICLE_RESEARCH web-search boundary."""
+
+    def __init__(self, adapter: ControlledAnthropicAdapter) -> None:
+        super().__init__(adapter, OPUS_ARTICLE_RESEARCH_QUALIFICATION_CONTRACT)
 
 
 def _execute_production_qualification(
@@ -356,9 +398,32 @@ def execute_opus_production_qualification(
     )
 
 
+def execute_opus_article_research_production_qualification(
+    storage: ControlledQualificationStorage,
+    approval: QualificationApproval,
+    *,
+    api_key_provider: Callable[[], str | None],
+    sdk_factory: ControlledSdkFactory | None = None,
+    technical_caller: ControlledTechnicalCaller | None = None,
+    now: datetime | None = None,
+) -> QualificationOutcome:
+    """Qualify exact Opus 5 for ARTICLE_RESEARCH and structured web search."""
+
+    return _execute_production_qualification(
+        storage,
+        approval,
+        contract=OPUS_ARTICLE_RESEARCH_QUALIFICATION_CONTRACT,
+        api_key_provider=api_key_provider,
+        sdk_factory=sdk_factory,
+        technical_caller=technical_caller,
+        now=now,
+    )
+
+
 __all__ = [
     "FABLE_PRODUCTION_QUALIFICATION_CONTRACT",
     "OPUS_PRODUCTION_QUALIFICATION_CONTRACT",
+    "OPUS_ARTICLE_RESEARCH_QUALIFICATION_CONTRACT",
     "OPUS_QUALIFICATION_CHALLENGE",
     "OPUS_QUALIFICATION_EXPECTED_RESPONSE_JSON",
     "OPUS_QUALIFICATION_PROMPT",
@@ -371,11 +436,13 @@ __all__ = [
     "QUALIFICATION_PROMPT_VERSION",
     "QUALIFICATION_TIMEOUT_SECONDS",
     "ProductionOpusQualificationCaller",
+    "ProductionOpusArticleResearchQualificationCaller",
     "ProductionQualificationCaller",
     "ProductionQualificationContract",
     "ProductionFableQualificationCaller",
     "execute_fable_production_qualification",
     "execute_opus_production_qualification",
+    "execute_opus_article_research_production_qualification",
     "qualification_prompt_bytes",
     "qualification_prompt_fingerprint",
     "validate_qualification_response",

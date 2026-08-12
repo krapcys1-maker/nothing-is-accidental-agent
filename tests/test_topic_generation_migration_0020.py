@@ -68,7 +68,7 @@ def _at_0019(tmp_path, name="ladder.db"):
 
 def test_topic_generation_schema_is_0020_below_runtime_0024():
     assert RUNTIME_SCHEMA_VERSION != CONTENT_DECISION_SCHEMA_VERSION
-    assert RUNTIME_SCHEMA_VERSION == "0034_c5_end_to_end_connection"
+    assert RUNTIME_SCHEMA_VERSION == "0038_content_provider_timeout"
     assert CONTENT_WRITER_SCHEMA_VERSION == "0023_provider_ready_writer"
     assert CONTENT_PIPELINE_SCHEMA_VERSION == "0022_offline_content_pipeline"
     assert TOPIC_GENERATION_SCHEMA_VERSION == "0020_topic_generation_lifecycle"

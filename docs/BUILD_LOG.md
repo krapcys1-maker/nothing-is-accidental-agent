@@ -1,5 +1,13 @@
 # BUILD_LOG
 
+## 2026-08-12 — Etap 3 / controlled ARTICLE_RESEARCH → ARTICLE online E2E
+
+- Dodano migracje `0035–0038`, jawne CLI migracyjne i controlled entrypointy dla researchu oraz artykułu; produkcję migrowano dopiero po backupie i udanym rehearsal, do `0038_content_provider_timeout`.
+- Naprawiono trwałą rekonsyliację source discovery, lineage re-researchu, strukturalny snapshot Research Card, kolizję brief fingerprintu oraz operacyjny timeout content providera `30 → 300 s`.
+- Online: kwalifikacja `ARTICLE_RESEARCH` PASS; temat #27; 3 kompletne źródła; Research Card #7 `PROCEED`; writer tworzy pełne drafty. Reviewer v3: zły JSON; reviewer v4/v5: dwa kolejne zewnętrzne `APIConnectionError`, zapisane bezpiecznie bez retry/fallbacku.
+- Koszt contentu znany `0.590535 USD`; dwa nieznane reviewery zachowują rezerwę `0.647680 USD`. Brak publikacji, Substacka, commita i pushu.
+- Dowód: krytyczny zestaw `164/164 PASS`; rerun wszystkich poprzednich failures `10/10 PASS`; pełny suite `2615/2615 PASS` (`806.7 s`); `compileall` i `git diff --check` PASS.
+
 ## 2026-08-12 — Etap 3 / minimalna operatorska droga migracji `0033 → 0034` — CANDIDATE COMPLETE
 
 - **Cel:** przygotować, bez uruchamiania produkcji, najwęższy bezpieczny entrypoint dla istniejącej migracji `0034_c5_end_to_end_connection`.

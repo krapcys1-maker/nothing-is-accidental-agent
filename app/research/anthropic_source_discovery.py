@@ -18,6 +18,13 @@ from app.ports.source_discovery import (
 )
 
 
+_UNFETCHABLE_HOST_SUFFIXES = (
+    "academia.edu",
+    "sciencedirect.com",
+    "tandfonline.com",
+)
+
+
 def _value(item: object, name: str, default: object = None) -> object:
     return item.get(name, default) if isinstance(item, dict) else getattr(item, name, default)
 
@@ -34,6 +41,15 @@ def canonical_source_identity(url: str) -> tuple[str, str]:
     return canonical, f"url-sha256:{identity}"
 
 
+def is_controlled_fetch_candidate(url: str) -> bool:
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    path = parts.path.lower()
+    if any(host == suffix or host.endswith(f".{suffix}") for suffix in _UNFETCHABLE_HOST_SUFFIXES):
+        return False
+    return not (path.endswith(".pdf") or "/pdf/" in path)
+
+
 class AnthropicSourceDiscoveryPort:
     def __init__(self, *, api_key: str, model: str, sdk_factory: Callable[[str], object],
                  now: Callable[[], datetime] | None = None) -> None:
@@ -47,13 +63,20 @@ class AnthropicSourceDiscoveryPort:
         response = client.messages.create(
             model=self._model,
             max_tokens=8192,
+            inference_geo="global",
+            service_tier="standard_only",
             tools=[{
                 "type": "web_search_20250305", "name": "web_search",
                 "max_uses": request.max_results,
             }],
             messages=[{"role": "user", "content": (
-                "Find authoritative sources for this research question. "
-                "Source selection only; do not synthesize claims.\n" + request.query
+                f"Find exactly {request.max_results} authoritative sources for this "
+                "research question. Every source must be publicly fetchable without "
+                "login or subscription and must be an HTML or plain-text page, never a "
+                "PDF. Prefer government, transit-agency, university, standards-body, "
+                "and other primary public pages. Never return sciencedirect.com, "
+                "tandfonline.com, or academia.edu. Use no more than the available search "
+                "calls. Source selection only; do not synthesize claims.\n" + request.query
             )}],
         )
         provider_request_id = str(_value(response, "id", ""))
@@ -72,6 +95,8 @@ class AnthropicSourceDiscoveryPort:
                 if not isinstance(raw_url, str) or not isinstance(raw_title, str):
                     continue
                 canonical_url, source_identity = canonical_source_identity(raw_url)
+                if not is_controlled_fetch_candidate(canonical_url):
+                    continue
                 result_identity = hashlib.sha256(
                     f"{provider_request_id}:{len(candidates)}:{canonical_url}".encode("utf-8")
                 ).hexdigest()
@@ -83,7 +108,7 @@ class AnthropicSourceDiscoveryPort:
                     observed_at=observed_at,
                 ))
         if not candidates:
-            raise ValueError("source discovery returned no structured search results")
+            raise ValueError("source discovery returned no controlled-fetch-compatible results")
         raw_usage = _value(response, "usage")
         server = _value(raw_usage, "server_tool_use")
         usage = Usage(

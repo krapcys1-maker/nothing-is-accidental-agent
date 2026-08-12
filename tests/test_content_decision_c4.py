@@ -55,6 +55,10 @@ from app.storage.db import (
     migrate_0031_to_0032,
     migrate_0032_to_0033,
     migrate_0033_to_0034,
+    migrate_0034_to_0035,
+    migrate_0035_to_0036,
+    migrate_0036_to_0037,
+    migrate_0037_to_0038,
 )
 from app.storage.repositories import SqliteStorage
 from tests.c2_fixtures import seed_c2_research
@@ -833,6 +837,10 @@ def test_explicit_0023_to_0024_migration_is_fresh_upgrade_and_idempotent(tmp_pat
     migrate_0031_to_0032(upgrade)
     migrate_0032_to_0033(upgrade)
     migrate_0033_to_0034(upgrade)
+    migrate_0034_to_0035(upgrade)
+    migrate_0035_to_0036(upgrade)
+    migrate_0036_to_0037(upgrade)
+    migrate_0037_to_0038(upgrade)
     opened = SqliteStorage.open(upgrade)
     try:
         assert opened.conn.execute(

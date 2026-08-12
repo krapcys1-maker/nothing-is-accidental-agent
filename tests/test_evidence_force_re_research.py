@@ -529,6 +529,7 @@ def test_used_topic_force_re_research_adds_a_second_card_via_one_provider_reques
     assert storage.get_run(job_row.run_id).status is RunStatus.SUCCESS
     research_run = storage.get_research_run(job_row.run_id)
     assert research_run.status.value == "COMPLETE"
+    assert research_run.is_force_reresearch is True
 
     # Nowa karta jest ODRĘBNYM rekordem; stara pozostała bajt-w-bajt taka sama.
     cards = _card_ids(storage, topic.id)
@@ -560,6 +561,35 @@ def test_used_topic_force_re_research_adds_a_second_card_via_one_provider_reques
     assert storage.conn.execute(
         "SELECT count(*) FROM controlled_fetch_attempts"
     ).fetchone()[0] == 0
+
+
+def test_same_frozen_evidence_can_be_reused_by_a_second_reresearch_run(
+        monkeypatch, settings, storage, account):
+    real_settings = _worker_real_settings(settings)
+    topic, old_card_id, retrievals = _used_topic_with_card(settings, storage, account)
+    _install_fake_client(monkeypatch, _caller_for(retrievals))
+
+    first, _ = _durable_evidence_job(
+        storage, real_settings, account, topic, retrievals,
+        force_re_research=True, key="same-corpus-first",
+    )
+    _approve(storage, first.id, account)
+    assert _worker(real_settings, storage).run_once().status is WorkerIterationStatus.DONE
+
+    second, _ = _durable_evidence_job(
+        storage, real_settings, account, topic, retrievals,
+        force_re_research=True, key="same-corpus-second",
+    )
+    _approve(storage, second.id, account)
+    assert _worker(real_settings, storage).run_once().status is WorkerIterationStatus.DONE
+
+    assert len(_card_ids(storage, topic.id)) == 3
+    assert old_card_id in _card_ids(storage, topic.id)
+    assert storage.conn.execute(
+        "SELECT count(*) FROM evidence_candidate_retrievals "
+        "WHERE retrieval_id=?",
+        (int(retrievals[0].id),),
+    ).fetchone()[0] == 2
 
 
 def test_public_cli_force_re_research_reaches_a_new_card_through_the_worker(

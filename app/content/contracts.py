@@ -22,8 +22,8 @@ from app.model_routing.contracts import (
 
 
 CONTENT_PLAN_VERSION = "content_plan_v1"
-ARTICLE_BRIEF_VERSION = "article_brief_v1"
-NOTE_BRIEF_VERSION = "note_brief_v1"
+ARTICLE_BRIEF_VERSION = "article_brief_v2"
+NOTE_BRIEF_VERSION = "note_brief_v2"
 WRITER_INTENT_VERSION = "provider_ready_writer_intent_v1"
 DRAFT_VERSION = "content_draft_v2"
 EVALUATOR_VERSION = "claim_accounting_content_evaluators_v2"
@@ -228,6 +228,7 @@ class ArticleBrief(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: str = ARTICLE_BRIEF_VERSION
+    content_id: int | None = Field(default=None, gt=0)
     content_type: ContentType = ContentType.ARTICLE
     working_title: str
     central_thesis: str
@@ -258,6 +259,7 @@ class NoteBrief(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: str = NOTE_BRIEF_VERSION
+    content_id: int | None = Field(default=None, gt=0)
     content_type: ContentType = ContentType.NOTE
     main_point: str
     format: str
@@ -291,7 +293,7 @@ class WriterLimits(BaseModel):
     max_context_tokens: int = Field(gt=0)
     max_output_tokens: int = Field(gt=0)
     max_cost_usd: float = Field(ge=0.0)
-    timeout_seconds: float = Field(gt=0.0, le=30.0)
+    timeout_seconds: float = Field(gt=0.0, le=300.0)
 
     @model_validator(mode="after")
     def validate_limits(self) -> "WriterLimits":

@@ -1,5 +1,11 @@
 # HUMAN_INTERVENTIONS
 
+## 2026-08-12 — właściciel rozszerzył zakres do pełnego online E2E i skorygował timeout
+
+- Właściciel ustalił ostateczny podział: cztery role artykułowe na `claude-opus-5`, Notes/comments na `claude-sonnet-5`; zakazał ponownej analizy doboru modeli.
+- Właściciel rozszerzył zgodę z samego researchu do pełnego ciągu aż do finalnego draftu `PENDING_APPROVAL`, z limitem wszystkich realnych prób `10.00 USD`, retry `0`, bez fallbacku i publikacji.
+- Właściciel wskazał błąd operacyjny limitu 30 s i polecił ustawić maksymalnie 5 minut. Zmiana została wprowadzona jako jawny kontrakt runtime + migracja `0038`, nie obejście.
+
 ## 2026-08-12 — właściciel rozdzielił przygotowanie migratora od migracji produkcyjnej
 
 - **Decyzja:** wolno było zbudować i lokalnie zweryfikować wyłącznie operator path `0033→0034`; nie wolno było migrować produkcji, kopii produkcji ani dotykać sidecarów.

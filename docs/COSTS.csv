@@ -79,3 +79,21 @@ date,run_id,task,provider,model,input_tokens,output_tokens,cache_read_tokens,cac
 2026-08-11,p2-1-provider-contract-alignment,offline-contract-test,none,none,0,0,0,0,0,0,0.000000,actual; fake SDK/callers and temporary DBs only; zero network/API/browser/publication
 2026-08-11,reviewer-global-ledger-repair,offline-contract-test,none,none,0,0,0,0,0,0,0.000000,actual; fake callers and temporary DBs only; zero network/API/browser/publication; production schema unchanged
 2026-08-12,wave-c5-end-to-end-connection,offline-implementation-review-merge,none,none,0,0,0,0,0,0,0.000000,actual; WAVE C5 implementation + independent review + merge PR #43; fake SDK/callers and temporary DBs only; zero network/API/browser/publication; production DB unchanged and NOT migrated; synthetic E2E 0.064100 USD is fake-provider only and is NOT a real cost
+2026-08-12,2527d621-ba51-4f6e-8284-eaf656ee9873,topics,anthropic,claude-opus-5,1513,1044,0,0,0,0,0.033665,actual
+2026-08-12,f2505dac-39f8-48d6-981c-c219a0e3fb9c,topics,anthropic,claude-opus-5,1905,834,0,0,0,0,0.030375,actual
+2026-08-12,source-discovery-run-6134507e-a529-4b3b-977a-3f0aac04f5a7,research_discover,anthropic,claude-opus-5,19557,1958,0,0,2,0,0.166735,actual
+2026-08-12,f8d76c43-2ddf-43a0-8693-17a1f9a952c8,topics,anthropic,claude-opus-5,2284,1500,0,0,0,0,0.048920,actual
+2026-08-12,source-discovery-run-a0b966a5-cafa-40bd-a038-ecb0f294ec78,research_discover,anthropic,claude-opus-5,45799,2442,0,0,3,0,0.320045,actual
+2026-08-12,source-discovery-run-84666e51-8caa-412b-8fd2-4315e6619079,research_discover,anthropic,claude-opus-5,53083,2921,0,0,4,0,0.378440,actual
+2026-08-12,ab22e4bf-60f6-4483-85b0-f8a6e4688436,research,anthropic,claude-opus-5,10436,2970,0,0,0,0,0.126430,actual
+2026-08-12,b74cdef7-034a-482c-8524-a8ca8621d2b0,research,anthropic,claude-opus-5,10555,3164,0,0,0,0,0.131875,actual
+2026-08-12,d887d181-2053-468c-a0da-b0211837a96b,research,anthropic,claude-opus-5,10650,3444,0,0,0,0,0.139350,actual
+2026-08-12,eb8e30da-a44f-4152-814a-e6da376832f3,research,anthropic,claude-opus-5,10650,3376,0,0,0,0,0.137650,actual
+2026-08-12,article-research-qualification-request-20260812T162039Z-a57274d2,article-research-qualification,anthropic,claude-opus-5,14108,163,0,0,1,0,0.084615,actual; PASS; exactly one request; no retry or fallback
+2026-08-12,online-e2e-article-card-7-v2:content_draft:1,content_draft,anthropic,claude-opus-5,11029,2048,0,0,0,0,0.106345,actual; max_tokens; no retry or fallback
+2026-08-12,online-e2e-article-card-7-v3:content_draft:1,content_draft,anthropic,claude-opus-5,11041,2599,0,0,0,0,0.120180,actual; writer success; no retry or fallback
+2026-08-12,online-e2e-article-card-7-v3:ARTICLE_REVIEWER:1,article_reviewer,anthropic,claude-opus-5,6416,4096,0,0,0,0,0.134480,actual; invalid reviewer JSON; no retry or fallback
+2026-08-12,online-e2e-article-card-7-v4:content_draft:1,content_draft,anthropic,claude-opus-5,11032,2108,0,0,0,0,0.107860,actual; writer success; no retry or fallback
+2026-08-12,online-e2e-article-card-7-v5:content_draft:1,content_draft,anthropic,claude-opus-5,11039,2659,0,0,0,0,0.121670,actual; writer success; no retry or fallback
+2026-08-12,online-e2e-reviewer-unknown-v4-v5,article_reviewer,anthropic,claude-opus-5,0,0,0,0,0,0,0.647680,maximum reserved exposure; two APIConnectionError results with unknown usage/cost; NOT booked as actual; reconciliation required
+2026-08-12,online-e2e-writer-unknown-v1,content_draft,anthropic,claude-opus-5,0,0,0,0,0,0,0.091200,maximum reserved exposure; timeout with unknown usage/cost; NOT booked as actual; reconciliation required

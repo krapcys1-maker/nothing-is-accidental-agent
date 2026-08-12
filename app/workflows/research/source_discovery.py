@@ -9,7 +9,10 @@ from app.llm.usage_tracker import UsageTracker
 from app.models import JobExecutionContext, ResearchJobExecution, Topic
 from app.ports.source_discovery import SourceDiscoveryPort, SourceDiscoveryRequest
 from app.research.source_discovery_intent import SourceDiscoveryIntent
-from app.workflows.research.pipeline import ResearchRunSummary
+from app.workflows.research.pipeline import (
+    ResearchExecutionNeedsReconciliation,
+    ResearchRunSummary,
+)
 
 
 def run_typed_source_discovery(
@@ -42,13 +45,26 @@ def run_typed_source_discovery(
         monthly_limit_usd=settings.max_monthly_cost_usd,
     )
     storage.mark_provider_attempt_request_started(execution, attempt.request_id)
-    response = port.discover(SourceDiscoveryRequest(
-        account_id=intent.account_id,
-        topic_id=intent.topic_id,
-        research_run_id=initialized.run.id,
-        query=topic.question or topic.title,
-        max_results=intent.max_results,
-    ))
+    try:
+        response = port.discover(SourceDiscoveryRequest(
+            account_id=intent.account_id,
+            topic_id=intent.topic_id,
+            research_run_id=initialized.run.id,
+            query=topic.question or topic.title,
+            max_results=intent.max_results,
+        ))
+    except BaseException as exc:
+        # REQUEST_STARTED was committed before entering the provider port.  A
+        # timeout or transport failure therefore has an unknown financial and
+        # execution outcome: retain the reservation and forbid every retry.
+        storage.mark_provider_attempt_needs_reconciliation(
+            execution,
+            attempt.request_id,
+            error_code="SOURCE_DISCOVERY_PROVIDER_OUTCOME_UNKNOWN",
+        )
+        raise ResearchExecutionNeedsReconciliation(
+            "Source-discovery provider outcome requires reconciliation."
+        ) from exc
     if response.returned_model_id != intent.model:
         storage.mark_provider_attempt_needs_reconciliation(
             execution, attempt.request_id, error_code="SOURCE_DISCOVERY_MODEL_MISMATCH",

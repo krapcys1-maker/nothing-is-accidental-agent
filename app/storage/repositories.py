@@ -1980,21 +1980,55 @@ class SqliteStorage:
             self._consume_model_qualification_approval(
                 approval, current_ts=current_ts,
             )
-            self.conn.execute(
-                "INSERT INTO model_qualification_runs (request_id,approval_ref,"
-                "model_registry_id,logical_role,provider,technical_model_id,"
-                "pricing_ref,pricing_profile_fingerprint,outcome,result_json,"
-                "result_fingerprint,external_effect_started_at,reserved_at,"
-                "executed_at) VALUES (?,?,?,?,?,?,?,?,'IN_FLIGHT',?,?,?,?,?)",
-                (
-                    approval.request_id, approval.approval_ref,
-                    approval.model_registry_id, approval.logical_role.value,
-                    approval.provider, approval.technical_model_id,
-                    approval.pricing_ref, pricing.contract_fingerprint(),
-                    reservation_json, sha256_text(reservation_json),
-                    current_ts, current_ts, current_ts,
-                ),
-            )
+            qualification_columns = {
+                str(row["name"])
+                for row in self.conn.execute(
+                    "PRAGMA table_info(model_qualification_runs)"
+                ).fetchall()
+            }
+            if "require_source_discovery" in qualification_columns:
+                self.conn.execute(
+                    "INSERT INTO model_qualification_runs (request_id,approval_ref,"
+                    "model_registry_id,logical_role,provider,technical_model_id,"
+                    "pricing_ref,pricing_profile_fingerprint,require_source_discovery,"
+                    "outcome,result_json,result_fingerprint,"
+                    "external_effect_started_at,reserved_at,executed_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,'IN_FLIGHT',?,?,?,?,?)",
+                    (
+                        approval.request_id, approval.approval_ref,
+                        approval.model_registry_id, approval.logical_role.value,
+                        approval.provider, approval.technical_model_id,
+                        approval.pricing_ref, pricing.contract_fingerprint(),
+                        int(approval.require_source_discovery),
+                        reservation_json, sha256_text(reservation_json),
+                        current_ts, current_ts, current_ts,
+                    ),
+                )
+            else:
+                # Migration-history tests deliberately execute the original
+                # non-discovery qualification root on pre-0035 schemas.
+                # Preserve that frozen legacy path without pretending that a
+                # discovery-required approval can run before 0035 exists.
+                if approval.require_source_discovery:
+                    raise ControlledQualificationError(
+                        "QUALIFICATION_SOURCE_DISCOVERY_SCHEMA_MISSING",
+                        "Source-discovery qualification requires schema 0035.",
+                    )
+                self.conn.execute(
+                    "INSERT INTO model_qualification_runs (request_id,approval_ref,"
+                    "model_registry_id,logical_role,provider,technical_model_id,"
+                    "pricing_ref,pricing_profile_fingerprint,outcome,result_json,"
+                    "result_fingerprint,external_effect_started_at,reserved_at,"
+                    "executed_at) VALUES (?,?,?,?,?,?,?,?,'IN_FLIGHT',?,?,?,?,?)",
+                    (
+                        approval.request_id, approval.approval_ref,
+                        approval.model_registry_id, approval.logical_role.value,
+                        approval.provider, approval.technical_model_id,
+                        approval.pricing_ref, pricing.contract_fingerprint(),
+                        reservation_json, sha256_text(reservation_json),
+                        current_ts, current_ts, current_ts,
+                    ),
+                )
             self.conn.commit()
         except BaseException:
             if self.conn.in_transaction:
@@ -2755,6 +2789,24 @@ class SqliteStorage:
         payload_json = canonical_json(payload)
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+            existing = self.conn.execute(
+                "SELECT approval_ref,approval_json,approval_fingerprint "
+                "FROM content_provider_approvals WHERE job_id=?",
+                (job_id,),
+            ).fetchone()
+            if existing is not None:
+                fingerprint = sha256_text(payload_json)
+                if (
+                    existing["approval_ref"] == approval_ref
+                    and existing["approval_json"] == payload_json
+                    and existing["approval_fingerprint"] == fingerprint
+                ):
+                    self.conn.commit()
+                    return approval_ref
+                raise ContentFoundationError(
+                    "CONTENT_APPROVAL_CONFLICT",
+                    "The job already carries a different immutable ARTICLE approval.",
+                )
             self.conn.execute(
                 "INSERT INTO content_provider_approvals (approval_ref,job_id,"
                 "account_id,logical_role,model_registry_id,provider,"
@@ -3383,6 +3435,24 @@ class SqliteStorage:
             "rejection_reason",
         )
         card_snapshot = {column: card[column] for column in card_columns}
+        for column in (
+            "facts_json",
+            "citable_numbers",
+            "confirmed_claims",
+            "uncertain_claims",
+            "contradictions",
+        ):
+            raw_value = card_snapshot[column]
+            if raw_value in (None, ""):
+                card_snapshot[column] = {} if column == "facts_json" else []
+                continue
+            try:
+                card_snapshot[column] = json.loads(str(raw_value))
+            except (TypeError, json.JSONDecodeError) as exc:
+                raise ContentSnapshotError(
+                    "CONTENT_CARD_JSON_INVALID",
+                    f"Research Card field {column} is not valid JSON.",
+                ) from exc
         card_snapshot["topic_title"] = card["topic_title"]
         card_snapshot["topic_question"] = card["topic_question"]
         card_json = canonical_json(card_snapshot)
@@ -6739,6 +6809,7 @@ class SqliteStorage:
                 "topic_id": int(job.topic_id),
                 "dry_run": True,
             }
+            is_force_reresearch = False
             if job.payload == dry_payload:
                 expected_run_status = RunStatus.DRY_RUN
             else:
@@ -6765,6 +6836,11 @@ class SqliteStorage:
                         job_id,
                         "durable_provider_v2 payload identity must match the job.",
                     )
+                normalized_intent = normalized["execution_intent"]
+                assert isinstance(normalized_intent, dict)
+                is_force_reresearch = bool(
+                    normalized_intent["flags"]["force_re_research"]
+                )
                 expected_run_status = RunStatus.RUNNING
             topic = self.conn.execute(
                 "SELECT 1 FROM topics WHERE id=? AND account_id=?",
@@ -6796,6 +6872,7 @@ class SqliteStorage:
                     or research_run.account_id != job.account_id
                     or research_run.topic_id != job.topic_id
                     or research_run.flow is not ResearchFlow.SINGLE
+                    or research_run.is_force_reresearch != is_force_reresearch
                 ):
                     raise JobRunRelationError(
                         "ATTACHED_RESEARCH_RUN_INVALID", job_id,
@@ -6842,7 +6919,8 @@ class SqliteStorage:
                 "VALUES (?,?,?,?,?,?,?,?,?)",
                 (
                     run_id, job.account_id, job.topic_id, ResearchFlow.SINGLE.value,
-                    ResearchRunStatus.PENDING.value, 0, 0.0, current_ts, current_ts,
+                    ResearchRunStatus.PENDING.value, int(is_force_reresearch),
+                    0.0, current_ts, current_ts,
                 ),
             )
             cursor = self.conn.execute(
@@ -7373,6 +7451,7 @@ class SqliteStorage:
                 )
                 or row["rr_error"] is not None
                 or bool(row["rr_is_force_reresearch"])
+                != bool(intent.force_re_research)
             ):
                 reject(
                     "FINAL_LIFECYCLE_RESEARCH_RUN_INVALID",
@@ -8367,7 +8446,7 @@ class SqliteStorage:
 
     def _reconciliation_require_consistent_lineage(
         self, row: sqlite3.Row, account_id: str,
-    ) -> DurableResearchExecutionIntent | DurableTopicGenerationIntent:
+    ) -> object:
         """Fail-closed unless the whole durable lineage is present and consistent.
 
         Verifies attempt -> job -> run -> research_run -> account -> workflow ->
@@ -8402,13 +8481,42 @@ class SqliteStorage:
             problems.append("run.account_id!=job.account_id")
         if row["run_workflow"] != WorkflowType.RESEARCH.value:
             problems.append("run.workflow")
-        # research_run shares the run id (JOIN) and must share account/topic and be single.
+        # research_run shares the run id (JOIN) and must share account/topic.
+        # The supported real lifecycles are legacy/evidence SINGLE and the typed
+        # A1 source-discovery STAGED checkpoint.
         if row["research_account_id"] != job_account:
             problems.append("research_run.account_id!=job.account_id")
         if job_topic is None or int(row["research_topic_id"]) != job_topic:
             problems.append("research_run.topic_id!=job.topic_id")
-        if row["research_flow"] != ResearchFlow.SINGLE.value:
+        source_discovery = row["research_flow"] == ResearchFlow.STAGED.value
+        expected_flow = (
+            ResearchFlow.STAGED.value
+            if source_discovery else ResearchFlow.SINGLE.value
+        )
+        if row["research_flow"] != expected_flow:
             problems.append("research_run.flow")
+        if source_discovery:
+            from app.research.source_discovery_intent import SourceDiscoveryIntent
+
+            if not isinstance(intent, SourceDiscoveryIntent):
+                problems.append("intent.kind")
+            if row["stage"] != "research_discover" or int(row["attempt_no"]) != 1:
+                problems.append("attempt.stage/no")
+            if row["request_id"] != f"{row['job_id']}:research_discover:1":
+                problems.append("attempt.request_id")
+            approval = self.conn.execute(
+                "SELECT * FROM source_discovery_approvals WHERE job_id=?",
+                (row["job_id"],),
+            ).fetchone()
+            if (
+                approval is None
+                or approval["account_id"] != job_account
+                or approval["topic_id"] != job_topic
+                or approval["request_id"] != row["request_id"]
+                or approval["intent_fingerprint"] != row["execution_intent_fingerprint"]
+                or approval["consumed_at"] is None
+            ):
+                problems.append("source_discovery_approval")
         # Durable intent identity (already fingerprint-verified) must match the lineage.
         if intent.account_id != job_account:
             problems.append("intent.account_id")
@@ -8528,19 +8636,35 @@ class SqliteStorage:
 
     def _reconciliation_intent(
         self, row: sqlite3.Row,
-    ) -> DurableResearchExecutionIntent | DurableTopicGenerationIntent:
+    ) -> object:
         """Reconstruct and fingerprint-verify the durable provider/model identity."""
         if row["job_kind"] == JobKind.TOPIC_GENERATION.value:
             return self._reconciliation_topic_intent(row)
         try:
             payload = json.loads(row["payload_json"])
-            canonical_payload = canonicalize_durable_research_payload(payload)
-            intent = DurableResearchExecutionIntent.from_payload(canonical_payload["execution_intent"])
+            from app.research.source_discovery_intent import (
+                SOURCE_DISCOVERY_EXECUTION,
+                SourceDiscoveryIntent,
+                canonicalize_source_discovery_payload,
+            )
+
+            if payload.get("execution") == SOURCE_DISCOVERY_EXECUTION:
+                canonical_payload = canonicalize_source_discovery_payload(payload)
+                intent = SourceDiscoveryIntent.from_payload(
+                    canonical_payload["execution_intent"]
+                )
+                expected_fingerprint = intent.fingerprint
+            else:
+                canonical_payload = canonicalize_durable_research_payload(payload)
+                intent = DurableResearchExecutionIntent.from_payload(
+                    canonical_payload["execution_intent"]
+                )
+                expected_fingerprint = durable_execution_intent_fingerprint(payload)
         except (TypeError, ValueError, KeyError, json.JSONDecodeError, DurableExecutionIntentError) as exc:
             raise ProviderAttemptReconciliationError(
                 "Durable provider/model identity cannot be reconstructed."
             ) from exc
-        if durable_execution_intent_fingerprint(payload) != row["execution_intent_fingerprint"]:
+        if expected_fingerprint != row["execution_intent_fingerprint"]:
             raise ProviderAttemptReconciliationError(
                 "Stored durable execution intent fingerprint does not match the attempt."
             )
@@ -9217,11 +9341,19 @@ class SqliteStorage:
                     raise ProviderAttemptReconciliationError(
                         "EXECUTION_FAILED cannot coexist with a Research Card."
                     )
-                research_lifecycle_valid = (
-                    row["research_status"] is None
-                    if is_topic_generation
-                    else row["research_status"] in ("PENDING", "FAILED")
-                )
+                research_lifecycle_valid = row["research_status"] is None
+                if not is_topic_generation:
+                    research_lifecycle_valid = (
+                        row["research_flow"], row["research_status"],
+                    ) in {
+                        (ResearchFlow.SINGLE.value, ResearchRunStatus.PENDING.value),
+                        (ResearchFlow.SINGLE.value, ResearchRunStatus.FAILED.value),
+                        (
+                            ResearchFlow.STAGED.value,
+                            ResearchRunStatus.DISCOVERY_PENDING.value,
+                        ),
+                        (ResearchFlow.STAGED.value, ResearchRunStatus.FAILED.value),
+                    }
                 if row["run_status"] not in _EXECUTION_FAILED_RUN_STATUSES \
                         or not research_lifecycle_valid:
                     raise ProviderAttemptReconciliationError(
@@ -9246,10 +9378,19 @@ class SqliteStorage:
                 if is_topic_generation:
                     research_rowcount = 1
                 else:
+                    source_status = (
+                        ResearchRunStatus.DISCOVERY_PENDING.value
+                        if row["research_flow"] == ResearchFlow.STAGED.value
+                        else ResearchRunStatus.PENDING.value
+                    )
                     research_cursor = self.conn.execute(
                         "UPDATE research_runs SET status='FAILED',error=?,updated_at=? "
-                        "WHERE id=? AND flow='single' AND status IN ('PENDING','FAILED') AND research_card_id IS NULL",
-                        ("OPERATOR_RECONCILIATION_EXECUTION_FAILED", now, row["run_id"]),
+                        "WHERE id=? AND flow=? AND status IN (?, 'FAILED') "
+                        "AND research_card_id IS NULL",
+                        (
+                            "OPERATOR_RECONCILIATION_EXECUTION_FAILED", now,
+                            row["run_id"], row["research_flow"], source_status,
+                        ),
                     )
                     research_rowcount = research_cursor.rowcount
                 if run_cursor.rowcount != 1 or research_rowcount != 1:
@@ -9311,8 +9452,8 @@ class SqliteStorage:
             elif execution_resolution is ExecutionResolution.EXECUTION_FAILED:
                 research_cache_cursor = self.conn.execute(
                     "UPDATE research_runs SET total_cost_usd=?,updated_at=? "
-                    "WHERE id=? AND flow='single' AND status='FAILED' AND research_card_id IS NULL",
-                    (float(total), now, row["run_id"]),
+                    "WHERE id=? AND flow=? AND status='FAILED' AND research_card_id IS NULL",
+                    (float(total), now, row["run_id"], row["research_flow"]),
                 )
                 research_cache_rowcount = research_cache_cursor.rowcount
             else:
@@ -9391,7 +9532,8 @@ class SqliteStorage:
             current_ts = self._job_execution_timestamp(execution)
             lifecycle = self.conn.execute(
                 "SELECT j.status AS job_status,j.run_id,j.lease_owner,j.lease_expires_at,"
-                "r.status AS run_status,rr.status AS research_status,rr.research_card_id "
+                "r.status AS run_status,rr.flow AS research_flow,"
+                "rr.status AS research_status,rr.research_card_id "
                 "FROM jobs j JOIN runs r ON r.id=j.run_id "
                 "JOIN research_runs rr ON rr.id=j.run_id "
                 "WHERE j.id=? AND j.run_id=?",
@@ -9441,8 +9583,17 @@ class SqliteStorage:
                     structural_problems.append("research_run.account_id")
                 if state["topic_id"] is None or state["research_topic_id"] != state["topic_id"]:
                     structural_problems.append("research_run.topic_id")
-                if state["research_flow"] != ResearchFlow.SINGLE.value:
-                    structural_problems.append("research_run.flow")
+                active_research_lifecycle = (
+                    state["research_flow"], state["research_status"],
+                ) in {
+                    (ResearchFlow.SINGLE.value, ResearchRunStatus.PENDING.value),
+                    (
+                        ResearchFlow.STAGED.value,
+                        ResearchRunStatus.DISCOVERY_PENDING.value,
+                    ),
+                }
+                if not active_research_lifecycle:
+                    structural_problems.append("research_run.flow/status")
                 if structural_problems:
                     raise ProviderAttemptReconciliationError(
                         "Attempt lineage is inconsistent: " + ",".join(structural_problems)
@@ -9453,7 +9604,7 @@ class SqliteStorage:
                     if state["job_status"] == JobStatus.NEEDS_VERIFICATION.value:
                         if state["run_status"] not in (
                             RunStatus.RUNNING.value, RunStatus.STOPPED.value,
-                        ) or state["research_status"] != ResearchRunStatus.PENDING.value:
+                        ) or not active_research_lifecycle:
                             raise ProviderAttemptReconciliationError(
                                 "Escalated provider attempt has an inconsistent lifecycle."
                             )
@@ -9493,7 +9644,7 @@ class SqliteStorage:
                     research_status = fence["research_status"]
                 if run_status not in (
                     RunStatus.RUNNING.value, RunStatus.DRY_RUN.value,
-                ) or research_status != ResearchRunStatus.PENDING.value:
+                ) or not active_research_lifecycle:
                     raise StaleJobExecutionError(
                         execution.job_id,
                         "research lifecycle is no longer mutable by this execution.",
@@ -9569,9 +9720,18 @@ class SqliteStorage:
 
             fence = self._require_job_execution_fence(execution, current_ts)
             if preserve_for_verification:
+                active_research_lifecycle = (
+                    lifecycle["research_flow"], fence["research_status"],
+                ) in {
+                    (ResearchFlow.SINGLE.value, ResearchRunStatus.PENDING.value),
+                    (
+                        ResearchFlow.STAGED.value,
+                        ResearchRunStatus.DISCOVERY_PENDING.value,
+                    ),
+                }
                 if fence["run_status"] not in (
                     RunStatus.RUNNING.value, RunStatus.DRY_RUN.value,
-                ) or fence["research_status"] != ResearchRunStatus.PENDING.value:
+                ) or not active_research_lifecycle:
                     raise StaleJobExecutionError(
                         execution.job_id,
                         "research lifecycle cannot be preserved for verification.",
@@ -9596,8 +9756,17 @@ class SqliteStorage:
                 raise ResearchTopicIntegrityError(
                     "Worker research failure cost must equal canonical model usage."
                 )
+            active_research_lifecycle = (
+                lifecycle["research_flow"], fence["research_status"],
+            ) in {
+                (ResearchFlow.SINGLE.value, ResearchRunStatus.PENDING.value),
+                (
+                    ResearchFlow.STAGED.value,
+                    ResearchRunStatus.DISCOVERY_PENDING.value,
+                ),
+            }
             if fence["run_status"] not in (RunStatus.RUNNING.value, RunStatus.DRY_RUN.value) or \
-                    fence["research_status"] != ResearchRunStatus.PENDING.value:
+                    not active_research_lifecycle:
                 raise StaleJobExecutionError(
                     execution.job_id, "research lifecycle is no longer mutable by this execution.",
                 )
@@ -9614,12 +9783,13 @@ class SqliteStorage:
             )
             research_cursor = self.conn.execute(
                 "UPDATE research_runs SET status='FAILED',error=?,total_cost_usd=?,updated_at=? "
-                "WHERE id=? AND flow='single' AND status='PENDING' "
+                "WHERE id=? AND flow=? AND status=? "
                 "AND research_card_id IS NULL AND EXISTS (SELECT 1 FROM jobs "
                 "WHERE id=? AND run_id=research_runs.id AND lease_owner=? "
                 "AND lease_expires_at>=? AND status IN ('LEASED','RUNNING'))",
                 (
-                    error, float(canonical), current_ts, execution.run_id, execution.job_id,
+                    error, float(canonical), current_ts, execution.run_id,
+                    lifecycle["research_flow"], fence["research_status"], execution.job_id,
                     execution.lease_owner, current_ts,
                 ),
             )
@@ -15899,9 +16069,32 @@ class SqliteStorage:
                 )
             except sqlite3.IntegrityError as exc:
                 if "UNIQUE" in str(exc).upper():
+                    existing = self.conn.execute(
+                        "SELECT * FROM evidence_excerpts WHERE account_id=? "
+                        "AND retrieval_id=? AND claim_text=? AND claim_sha256=? "
+                        "AND excerpt_text=? AND start_offset=? AND end_offset=?",
+                        (
+                            account_id, retrieval_id, claim_text,
+                            sha256_hex(claim_text), excerpt_text,
+                            start_offset, end_offset,
+                        ),
+                    ).fetchone()
+                    if existing is not None:
+                        self.conn.commit()
+                        return EvidenceExcerpt(
+                            id=existing["id"],
+                            account_id=existing["account_id"],
+                            retrieval_id=existing["retrieval_id"],
+                            claim_text=existing["claim_text"],
+                            claim_sha256=existing["claim_sha256"],
+                            excerpt_text=existing["excerpt_text"],
+                            start_offset=existing["start_offset"],
+                            end_offset=existing["end_offset"],
+                            created_at=existing["created_at"],
+                        )
                     raise EvidenceVerificationError(EvidenceVerdict.rejected(
                         EvidenceRejectionReason.DUPLICATE_EXCERPT,
-                        "identical excerpt already recorded for this claim and range",
+                        "a conflicting excerpt identity already exists",
                     )) from exc
                 raise
             excerpt_id = int(cursor.lastrowid)

@@ -36,7 +36,19 @@ from app.model_routing.role_activation import (
     activate_and_bind_exact_role,
 )
 from app.model_routing.role_bootstrap import owner_approved_role_policy
-from app.models import Job, JobKind, Topic, TopicStatus, WorkflowType
+from app.models import (
+    Job,
+    JobKind,
+    JobStatus,
+    ExecutionResolution,
+    FinancialResolution,
+    ProviderAttemptStatus,
+    ResearchRunStatus,
+    RunStatus,
+    Topic,
+    TopicStatus,
+    WorkflowType,
+)
 from app.policies.policy_engine import PolicyEngine
 from app.ports.controlled_fetch import UrlPolicyDecision
 from app.ports.fetch import FetchedDocument
@@ -46,7 +58,10 @@ from app.ports.source_discovery import (
     SourceDiscoveryResponse,
 )
 from app.research.corpus_packer import CorpusDocument, CorpusPackingError, pack_research_corpus
-from app.research.anthropic_source_discovery import AnthropicSourceDiscoveryPort
+from app.research.anthropic_source_discovery import (
+    AnthropicSourceDiscoveryPort,
+    is_controlled_fetch_candidate,
+)
 from app.research.source_discovery_intent import (
     SOURCE_DISCOVERY_EXECUTION,
     SourceDiscoveryIntent,
@@ -110,7 +125,9 @@ def _official_research_authority(storage):
             returned_model_id="claude-opus-5",
             structured_response_ok=True,
             source_discovery_ok=True,
-            usage=QualificationProbeUsage(input_tokens=100, output_tokens=100),
+            usage=QualificationProbeUsage(
+                input_tokens=100, output_tokens=100, web_search_requests=1,
+            ),
         ),
         now=NOW,
     )
@@ -215,7 +232,9 @@ def test_source_discovery_requires_32k_search_capability(storage):
         caller=lambda _approval: QualificationProbeResponse(
             returned_model_id="claude-opus-5", structured_response_ok=True,
             source_discovery_ok=False,
-            usage=QualificationProbeUsage(input_tokens=100, output_tokens=100),
+            usage=QualificationProbeUsage(
+                input_tokens=100, output_tokens=100, web_search_requests=1,
+            ),
         ), now=NOW,
     )
     assert outcome.outcome == "FAIL"
@@ -274,7 +293,9 @@ def test_article_research_rejects_sonnet_other_opus_and_16k_capability(storage):
             returned_model_id="claude-opus-5",
             structured_response_ok=True,
             source_discovery_ok=True,
-            usage=QualificationProbeUsage(input_tokens=100, output_tokens=100),
+            usage=QualificationProbeUsage(
+                input_tokens=100, output_tokens=100, web_search_requests=1,
+            ),
         ),
         now=NOW,
     )
@@ -313,7 +334,7 @@ def test_production_discovery_ignores_free_text_urls_and_accepts_structured_resu
         content=[{"type": "text", "text": "Use https://untrusted.example/from-text"}],
         usage=SimpleNamespace(input_tokens=1, output_tokens=1),
     )
-    with pytest.raises(ValueError, match="no structured search results"):
+    with pytest.raises(ValueError, match="no controlled-fetch-compatible results"):
         port.discover(request)
 
     messages.response = SimpleNamespace(
@@ -335,6 +356,128 @@ def test_production_discovery_ignores_free_text_urls_and_accepts_structured_resu
     assert len(response.candidates) == 1
     assert response.candidates[0].canonical_url == "https://authoritative.example/report"
     assert response.candidates[0].canonical_source_identity.startswith("url-sha256:")
+    assert not is_controlled_fetch_candidate("https://www.sciencedirect.com/article/123")
+    assert not is_controlled_fetch_candidate("https://arxiv.org/pdf/1234.5678")
+    assert is_controlled_fetch_candidate("https://www.transit.dot.gov/research/bus-service")
+
+
+def test_typed_a1_timeout_is_fenced_for_reconciliation(
+    settings, storage, account,
+):
+    storage.ensure_account(account)
+    _official_research_authority(storage)
+    topic = storage.add_topic(account.id, Topic(
+        account_id=account.id,
+        title="A1 timeout boundary",
+        question="Which dependencies fail first?",
+        status=TopicStatus.SELECTED,
+        source="TEST",
+        created_at=NOW,
+    ))
+    assert topic.id is not None
+    intent = SourceDiscoveryIntent.build(account_id=account.id, topic_id=topic.id)
+    job = storage.enqueue_job(Job(
+        id=f"source-discovery-timeout-{topic.id}",
+        account_id=account.id,
+        kind=JobKind.RESEARCH,
+        workflow=WorkflowType.RESEARCH,
+        idempotency_key=f"source-discovery-timeout:{topic.id}",
+        topic_id=topic.id,
+        payload={
+            "account_id": account.id,
+            "topic_id": topic.id,
+            "dry_run": False,
+            "execution": SOURCE_DISCOVERY_EXECUTION,
+            "execution_intent": intent.as_payload(),
+        },
+        schedule_reason="SAFETY_OPERATION_IMMEDIATE",
+        earliest_run_at=NOW,
+        max_attempts=1,
+        created_at=NOW,
+    ))
+    storage.record_source_discovery_approval(
+        job_id=job.id,
+        account_id=account.id,
+        approved_by="owner:test",
+        expires_at=NOW + timedelta(hours=1),
+        clock=FixedClock(NOW),
+    )
+    _open_flags(storage)
+
+    class TimeoutPort:
+        def discover(self, _request):
+            raise TimeoutError("provider response exceeded the client timeout")
+
+    real = replace(
+        settings,
+        dry_run=False,
+        anthropic_api_key="test-only",
+        model_quality="claude-opus-5",
+    )
+    policy = PolicyEngine(real, storage, FixedClock(NOW))
+    dispatcher = JobDispatcher(
+        settings=real,
+        storage=storage,
+        policy=policy,
+        clock=FixedClock(NOW),
+        source_discovery_port_factory=lambda _settings, _intent: TimeoutPort(),
+    )
+    worker = Worker(
+        storage=storage,
+        policy=policy,
+        dispatcher=dispatcher,
+        lease_owner="a1-timeout-worker",
+        target_job_id=job.id,
+        lease_seconds=120,
+        heartbeat_interval_seconds=5,
+        heartbeat_startup_timeout_seconds=2,
+        heartbeat_shutdown_timeout_seconds=2,
+        heartbeat_storage_factory=lambda: SqliteStorage.open(real.db_path),
+        clock=FixedClock(NOW),
+    )
+
+    outcome = worker.run_once()
+
+    assert outcome.status is WorkerIterationStatus.NEEDS_VERIFICATION
+    durable = storage.get_job(job.id)
+    assert durable is not None
+    assert durable.status is JobStatus.NEEDS_VERIFICATION
+    assert durable.lease_owner is None
+    assert storage.get_run(durable.run_id).status is RunStatus.RUNNING
+    assert (
+        storage.get_research_run(durable.run_id).status
+        is ResearchRunStatus.DISCOVERY_PENDING
+    )
+    attempt = storage.conn.execute(
+        "SELECT status,error_code FROM provider_attempts WHERE job_id=?",
+        (job.id,),
+    ).fetchone()
+    assert tuple(attempt) == (
+        ProviderAttemptStatus.NEEDS_RECONCILIATION.value,
+        "SOURCE_DISCOVERY_PROVIDER_OUTCOME_UNKNOWN",
+    )
+    assert storage.conn.execute(
+        "SELECT count(*) FROM model_usage WHERE run_id=?", (durable.run_id,),
+    ).fetchone()[0] == 0
+
+    preview = storage.preview_provider_attempt_reconciliation(
+        request_id=f"{job.id}:research_discover:1",
+        account_id=account.id,
+    )
+    resolution = storage.resolve_provider_attempt_reconciliation(
+        request_id=preview.request_id,
+        account_id=account.id,
+        financial_resolution=FinancialResolution.NOT_CHARGED,
+        execution_resolution=ExecutionResolution.EXECUTION_FAILED,
+        actual_cost_usd=None,
+        reconciled_by="owner:test",
+        note="Test provider evidence confirms that the timed-out request was not charged.",
+        expected_version_token=preview.version_token,
+    )
+    assert resolution.attempt.status is ProviderAttemptStatus.RECONCILED_RELEASED
+    assert storage.get_job(job.id).status is JobStatus.FAILED
+    assert storage.get_run(durable.run_id).status is RunStatus.FAILED
+    assert storage.get_research_run(durable.run_id).status is ResearchRunStatus.FAILED
 
 
 def test_typed_a1_worker_persists_only_structured_candidates(
@@ -537,7 +680,7 @@ def test_typed_a1_worker_persists_only_structured_candidates(
     assert evidence_job is not None
     assert evidence_job.payload["execution"] == "durable_provider_v2"
     frozen = evidence_job.payload["execution_intent"]
-    assert frozen["max_tokens"] == 8192
+    assert frozen["max_tokens"] == 4096
     assert frozen["max_web_searches"] == 0
     assert len(frozen["evidence_input"]["retrievals"]) == 3
 

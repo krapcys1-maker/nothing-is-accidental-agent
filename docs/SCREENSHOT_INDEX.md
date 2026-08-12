@@ -1,5 +1,10 @@
 # SCREENSHOT_INDEX
 
+## 2026-08-12 — online E2E: SCREENSHOT REQUIRED, ale brak bezpiecznej zalogowanej sesji
+
+- In-app browser otworzył wyłącznie ekran logowania Anthropic; nie istniała zalogowana sesja ani admin billing credential. Nie wykonano i nie zapisano screenshotu, aby nie utrwalać ekranu uwierzytelniania ani sekretów.
+- Dowód operacyjny pozostaje w trwałym ledgerze SQLite: schema `0038`, Research Card #7, role executions v1–v5, usage i statusy `NEEDS_VERIFICATION`. Rekonsyliacja nieznanych opłat v1/v4/v5 wymaga bezpiecznego dostępu człowieka do billing console.
+
 ## 2026-08-12 — WAVE C5 merge: BRAK screenshotów (żaden nie został wykonany)
 
 - **Status:** `NO SCREENSHOT TAKEN`. **Do indeksu nie dodano żadnego pliku obrazu** — browser był przez całą falę zabroniony i nie został uruchomiony, więc nie istnieje nic do zaindeksowania. Ten wpis odnotowuje brak, nie zapowiada pliku.

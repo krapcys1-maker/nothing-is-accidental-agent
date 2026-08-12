@@ -54,11 +54,11 @@ def enqueue_evidence_research_if_ready(
         settings=exact_settings,
         account_id=account.id,
         topic_id=int(topic.id),
-        cap_usd="1.000000",
+        cap_usd="0.250000",
         max_web_searches=0,
         question=topic.question or topic.title,
         niche=account.niche,
-        max_tokens=8192,
+        max_tokens=4096,
         evidence_input=evidence_input_payload([
             (doc.retrieval_id, doc.canonical_sha256, doc.canonical_chars)
             for doc in packed.documents

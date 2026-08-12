@@ -1,5 +1,12 @@
 # DECISIONS (Architecture Decision Log)
 
+### ADR-141: Właścicielski podział modeli, timeout 300 s i fail-closed stop po zewnętrznej awarii reviewera
+
+- **Data/status/autor:** 2026-08-12; decyzja właściciela. `TOPIC_GENERATION`, `ARTICLE_RESEARCH`, `ARTICLE_WRITER`, `ARTICLE_REVIEWER` używają dokładnie `ANTHROPIC/claude-opus-5`; `NOTE_WRITER` i `COMMENT_WRITER` używają `ANTHROPIC/claude-sonnet-5`. Nie wolno reinterpretować `ARTICLE_RESEARCH → Opus` jako konfliktu.
+- **Zakres live:** pełny online E2E do finalnego draftu `PENDING_APPROVAL`, bez publikacji/Substacka, retry requestów `0`, fallback zabroniony, łączny limit `10.00 USD`.
+- **Timeout:** właściciel skorygował limit 30 s do maksymalnie 5 minut. Runtime i schema `0038` egzekwują `timeout_seconds <= 300`; adapter przekazuje `300` do klienta i requestu.
+- **Stop:** dwa kolejne `APIConnectionError` reviewera przy poprawnym lokalnym timeoutcie są zewnętrzną niedostępnością. Nie wolno generować kolejnych potencjalnie płatnych, niejednoznacznych requestów. Dzierżawy zamyka canonical recovery jako `NEEDS_VERIFICATION`; brakujące usage/cost pozostają `NULL`, a rezerwa nie jest zmyślana jako zero.
+
 ### ADR-140: Zamknięcie WAVE C5 — exact-model authority, envelope 23 808/8 192/32 000, L1 per źródło i dopuszczalne źródła authority pricingowej
 
 - **Data/status/autor:** 2026-08-12; właściciel autoryzował merge po niezależnym review `APPROVE WITH MINOR/P2` (0 blockerów, 7 P2). Wynik: **WAVE C5-END-TO-END-CONNECTION = `FORMALLY CLOSED — APPROVED WITH MINOR/P2`**. Merge commit `f04b7d4a6bf759028de9beec3e1262ee056e0ad0`, zatwierdzony head `0487047460c6cf7186004010226cc5a710006204`, 42 pliki `+2520/−149` wyłącznie w `app/` i `tests/`.

@@ -83,6 +83,10 @@ from app.storage.db import (
     migrate_0031_to_0032,
     migrate_0032_to_0033,
     migrate_0033_to_0034,
+    migrate_0034_to_0035,
+    migrate_0035_to_0036,
+    migrate_0036_to_0037,
+    migrate_0037_to_0038,
 )
 from app.storage.repositories import SqliteStorage
 from tests.controlled_provider_fixtures import (
@@ -1504,19 +1508,22 @@ def test_20_positive_full_article_flow_offline(catalogue_storage, settings, acco
 
 def test_16b_worst_case_cost_is_derived_from_real_limits_and_rates():
     estimate = estimate_controlled_article_cost(at=BEFORE_PROMO_END)
-    # Opus 5: 8000 in @5 + 2048 out @25 = 0.04 + 0.0512 = 0.0912 per attempt
-    assert estimate.writer.total_usd == Decimal("0.091200")
+    # Opus 5: 23808 in @5 + 8192 out @25 = 0.11904 + 0.2048
+    assert estimate.writer.total_usd == Decimal("0.323840")
     assert estimate.writer.attempts == 2
-    assert estimate.writer.worst_case_usd == Decimal("0.182400")
-    # Opus 5: 8000 in @5 + 1024 out @25 = 0.04 + 0.0256 = 0.0656
+    assert estimate.writer.worst_case_usd == Decimal("0.647680")
+    # Plan remains 8000/1024. Reviewer uses 23808/8192.
     assert estimate.plan.total_usd == Decimal("0.065600")
-    assert estimate.reviewer.total_usd == Decimal("0.065600")
+    assert estimate.reviewer.total_usd == Decimal("0.323840")
+    assert estimate.reviewer.attempts == 2
+    assert estimate.reviewer.worst_case_usd == Decimal("0.647680")
     # A probe may declare each role's whole Opus window.
     assert estimate.qualification[0].total_usd == Decimal("0.100480")
-    assert estimate.qualification[1].total_usd == Decimal("0.120960")
-    assert estimate.qualification_total_usd == Decimal("0.321920")
-    assert estimate.execution_total_usd == Decimal("0.313600")
-    assert estimate.total_usd == Decimal("0.635520")
+    assert estimate.qualification[1].total_usd == Decimal("0.323840")
+    assert estimate.qualification[2].total_usd == Decimal("0.323840")
+    assert estimate.qualification_total_usd == Decimal("0.748160")
+    assert estimate.execution_total_usd == Decimal("1.360960")
+    assert estimate.total_usd == Decimal("2.109120")
     assert all(
         item.technical_model_id == "claude-opus-5"
         for item in estimate.qualification
@@ -1565,6 +1572,10 @@ def test_migration_0029_is_forward_only_explicit_and_idempotent(tmp_path, capsys
     migrate_0031_to_0032(path)
     migrate_0032_to_0033(path)
     migrate_0033_to_0034(path)
+    migrate_0034_to_0035(path)
+    migrate_0035_to_0036(path)
+    migrate_0036_to_0037(path)
+    migrate_0037_to_0038(path)
 
     opened = SqliteStorage.open(path)
     try:

@@ -1,5 +1,12 @@
 # ARTICLE_EVIDENCE
 
+## 2026-08-12 — Materiał: „System może zawieść poprawnie”
+
+- Research i writer działały, lecz sukces E2E zatrzymał się na ostatniej granicy: reviewer najpierw odpowiedział w złym formacie, a następnie dwukrotnie stracił połączenie.
+- Najważniejszy dowód bezpieczeństwa: nieznany wynik nie został nazwany kosztem zero ani automatycznie powtórzony. Dzierżawa wygasła do `NEEDS_VERIFICATION`, a rezerwa pozostała widoczna.
+- Limit 30 sekund okazał się za mały dla długiego promptu; podniesienie do 300 sekund wymagało zarówno zmiany walidacji Pythona, jak i forward-only migracji constraintu SQLite.
+- Cytowalna zasada: **„Gotowy draft nie jest gotowym artykułem, dopóki ostatnia bramka nie ma jednoznacznego wyniku.”**
+
 ## 2026-08-12 — Materiał: „Gotowy migrator nie jest zgodą na migrację”
 
 - Cienki skrypt operatorski nie zawiera SQL migracji: wskazuje jedną bazę, sprawdza dokładny punkt startowy i deleguje do istniejącego transakcyjnego runnera.
