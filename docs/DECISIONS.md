@@ -1,5 +1,39 @@
 # DECISIONS (Architecture Decision Log)
 
+### ADR-140: Zamknięcie WAVE C5 — exact-model authority, envelope 23 808/8 192/32 000, L1 per źródło i dopuszczalne źródła authority pricingowej
+
+- **Data/status/autor:** 2026-08-12; właściciel autoryzował merge po niezależnym review `APPROVE WITH MINOR/P2` (0 blockerów, 7 P2). Wynik: **WAVE C5-END-TO-END-CONNECTION = `FORMALLY CLOSED — APPROVED WITH MINOR/P2`**. Merge commit `f04b7d4a6bf759028de9beec3e1262ee056e0ad0`, zatwierdzony head `0487047460c6cf7186004010226cc5a710006204`, 42 pliki `+2520/−149` wyłącznie w `app/` i `tests/`.
+- **Decyzja 1 — exact-model authority zamiast samej rodziny.** Rola nie wystarcza już jako mapowanie na rodzinę: `RolePolicy` niesie `allowed_provider` i `allowed_technical_model_id`. `TOPIC_GENERATION` i `ARTICLE_RESEARCH` są związane z `ANTHROPIC`/`OPUS`/`claude-opus-5`. Sonnet, inny model OPUS i model bez wymaganej capability są odrzucane odpowiednio przez `FAMILY_NOT_ALLOWED`, `TECHNICAL_MODEL_NOT_ALLOWED` i `REQUIRED_SOURCE_DISCOVERY_MISSING`. **Uzasadnienie:** ADR-139 pokazał, że wybór modelu bez exact policy jest nieegzekwowalny w lifecycle.
+- **Decyzja 2 — envelope ARTICLE_RESEARCH = 23 808 input / 8 192 output / 32 000 context.** Envelope jest egzekwowany **przed** provider attemptem przez deterministyczny corpus packer; przekroczenie nie tworzy intentu, joba, attemptu ani `model_usage`. `TOPIC_GENERATION` ma 14 500 / 1 500 / 16 000, sprawdzane przed aktywacją durable attemptu.
+- **Decyzja 3 — osobne L1 dla każdego źródła.** Zgoda operatora dotyczy jednego kandydata; `approve_source_candidate_fetch` wyprowadza URL i `source_identity` z wiersza kandydata, więc approver nie podaje URL-a i zgoda dla jednego źródła nie może autoryzować innego. L1 jest konsumowane w tej samej transakcji co rezerwacja attemptu. **URL pochodzący wyłącznie z wolnego tekstu modelu nigdy nie jest zatwierdzonym source candidate** — kandydatem może być tylko strukturalny wynik wyszukiwania.
+- **Decyzja 4 — source discovery pozostaje etapem A1 roli ARTICLE_RESEARCH**, a nie osobną płatną rolą; nie powstał nowy `LogicalModelRole`.
+- **Decyzja 5 (pricing authority).** Właściciel akceptuje, że **zweryfikowany trwały binding LUB zatwierdzony plik `config/pricing_profiles.yaml`** jest dopuszczalnym źródłem authority pricingowej. Gałąź bindingu porównuje wprost model, `pricing_profile_id`, wersję (fingerprint kontraktu), walutę, jednostkę i komplet cen z zamrożonym zweryfikowanym profilem. **To nie jest blocker** i nie jest traktowane jako osłabienie kontroli.
+- **Konsekwencja operacyjna:** `RUNTIME_SCHEMA_VERSION` przesuwa się na `0034_c5_end_to_end_connection`, a produkcja pozostaje na `0033` — runtime jest wobec niej fail-closed do czasu osobno autoryzowanej migracji. Zamknięta jest WAVE, **nie Etap 3**.
+
+### ADR-139: Wybór modelu nie uchyla niezmiennego mapowania roli do rodziny
+
+- **Data/status/autor:** 2026-08-11; właściciel wybrał `claude-sonnet-5` dla ARTICLE_RESEARCH i dopuścił jeden canary, ale zabronił zmian kodu oraz polityk. Wynik: `STOPPED — ARTICLE_RESEARCH_REQUIRES_OPUS_POLICY`.
+- **Konflikt:** bieżący `ROLE_FAMILY` i `model_role_policies` wymagają `ARTICLE_RESEARCH→OPUS`. `RolePolicy.__post_init__` odrzuca Sonnet kodem `ROLE_FAMILY_POLICY_INVALID`; promotion dodatkowo traktowałaby model Sonnet jako `FAMILY_NOT_ALLOWED`.
+- **Lifecycle:** Sonnet jest danym katalogowym/configowym, lecz nie ma produkcyjnego registry, qualification approval/run/result, capability ani activation. Istniejące production qualification roots obsługują wyłącznie Fable i Opus dla ARTICLE_WRITER.
+- **Decyzja wykonawcza:** nie wykonywać płatnego canary, którego PASS nie może legalnie doprowadzić do ACTIVE dla żądanej roli; nie podstawiać Opusa i nie modyfikować policy po cichu.
+- **Następna wymagana decyzja właściciela:** osobno autoryzować zmianę mapowania i trwałej policy ARTICLE_RESEARCH z OPUS na SONNET oraz implementację/review production Sonnet qualification root. To jest nowa fala kodowa, nie element bieżącego live.
+
+### ADR-138: Zgoda na research nie zastępuje aktywnego authority roli researchowej
+
+- **Data/status/autor:** 2026-08-11; właściciel autoryzował dokładnie jeden nowy authoritative research i warunkowo jeden C5, bez zmian kodu, schematu lub konfiguracji. Wynik: `STOPPED — ARTICLE_RESEARCH ACTIVE_MODEL_MISSING`.
+- **Fakt:** obecny production dispatcher zawsze wywołuje `freeze_model_for_intent` dla `ARTICLE_RESEARCH` przed utworzeniem klienta. Rola ma policy `qualification_required=1` i `fallback=FORBIDDEN`, lecz nie ma `model_role_activations`; capability i pricing policy pozostają `UNVERIFIED`.
+- **Decyzja wykonawcza:** nie wolno użyć aktywacji ARTICLE_WRITER/ARTICLE_REVIEWER jako substytutu, ręcznie aktywować roli ani polegać na legacy durable modelu. Brak authority zatrzymuje operację przed enqueue/L1, ponieważ job byłby z góry niewykonalny w zatwierdzonym kontrakcie.
+- **Temat #1:** historia może zostać zachowana przez `force_re_research`, ale durable path dopuszcza to wyłącznie dla evidence re-research z istniejącym retrieval. Topic #1 nie ma właściwego evidence corpus; uruchomienie nowego A1/A2/B z force jest obecnie `INVALID_CONFIGURATION`.
+- **Skutek:** żadnego researchu i C5, zero requestów i kosztu, brak publikacji; stan ADR-137 zachowany.
+
+### ADR-137: Brak autorytatywnego lineage zatrzymuje C5 przed utworzeniem approvalu
+
+- **Data/status/autor:** 2026-08-11; właściciel autoryzował merge PR #42, migrację `0032→0033` i dokładnie jeden C5 do `PENDING_APPROVAL`, z obowiązkiem STOP bez retry przy blockerze. Wynik operacyjny: `C5 STOPPED — CONTENT_EVIDENCE_INCOMPLETE`.
+- **Wykonane:** PR #42 zmergowany jako `0646b67be3a251edf7cedbe08d472523ebb0e61c`; produkcja poprawnie zmigrowana do `0033/33` z jednym snapshotem PRE.
+- **Decyzja wykonawcza:** sama wartość `publication_recommendation=PROCEED` nie wystarcza. Aktualny content snapshot wymaga kompletnego, fingerprintowanego `evidence_source_lineage` dla każdego confirmed claim. Produkcja ma dwie karty PROCEED (#1 i #5), ale 0 wierszy lineage; runtime zwraca `CONTENT_EVIDENCE_INCOMPLETE`.
+- **Konsekwencja:** nie wolno tworzyć approvalu ani próbować transportu z legacy sources, dopisywać lineage ręcznie, uruchamiać nowego A1/A2/B ani obchodzić gate. Bindingi Writer/Reviewer są poprawne, lecz nie usuwają braku authority danych wejściowych.
+- **Skutek:** 0 jobów/approvali/requestów/attemptów/draftów/usage, koszt `0.000000 USD`, brak publikacji. Etap 3 pozostaje `IN PROGRESS`.
+
 ### ADR-136: Każdy płatny reviewer jest częścią jednego globalnego ledgeru
 
 - **Data/status/autor:** 2026-08-11; właściciel zlecił zweryfikowanie realnych blockerów i ich naprawę. Status implementera: `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.

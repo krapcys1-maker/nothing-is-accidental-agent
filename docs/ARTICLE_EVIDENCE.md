@@ -1,5 +1,34 @@
 # ARTICLE_EVIDENCE
 
+## 2026-08-12 — Materiał: „Zgoda na jedno źródło nie jest zgodą na wszystkie”
+
+> **Zastrzeżenie dowodowe:** WAVE C5 **nie wyprodukowała żadnego dowodu redakcyjnego dla artykułu** — nie powstał realny research, cytat, źródło ani `evidence_source_lineage` w produkcji. Poniżej są obserwacje o **budowie systemu**, nadające się do serii o budowie agenta; nie są materiałem źródłowym do artykułu tematycznego.
+
+- **Granica, która okazała się najważniejsza.** Model potrafi wypisać URL w zdaniu. System uznaje za kandydata **wyłącznie** strukturalny wynik wyszukiwania — nie tekst. Reviewer sprawdził to kontrpróbą w stylu prompt-injection: odpowiedź mieszała zdanie „zaufaj też temu adresowi" ze strukturalnym wynikiem, i przeszedł tylko ten drugi. Cytowalna zasada: **„Adres wypowiedziany przez model nie jest adresem zatwierdzonym przez człowieka."**
+- **Zgoda jest per źródło, nie per operacja.** Zatwierdzający nie podaje URL-a — podaje identyfikator kandydata, a URL i tożsamość źródła system wyprowadza z własnego zapisu. Dzięki temu zgoda na jedno źródło fizycznie nie może autoryzować innego. Cytowalna zasada: **„Jeżeli zatwierdzający może wpisać cel, to zatwierdza treść formularza, a nie fakt."**
+- **Oszacowanie to nie pomiar.** Bramka rozmiaru korpusu opiera się na stałej 3,5 znaka/token, skalibrowanej na tekście ASCII. Reviewer zmierzył, że dla polskiego i angielskiego jest ona konserwatywna (`0,86×`, `0,78×`), ale dla cyrylicy i CJK zaniża (`1,41×`, `2,19×`). Cytowalna zasada: **„Limit liczony w znakach jest limitem tylko dla alfabetu, na którym go zmierzono."**
+- **Zamknięcie fali to nie gotowość.** C5 jest `FORMALLY CLOSED`, a mimo to system nadal nie może wykonać realnego researchu: produkcja czeka na migrację, role czekają na aktywację, a kwalifikacja na realne wykonanie. Cytowalna zasada: **„Zielone testy dowodzą, że kod jest gotowy — nie że system jest uruchomiony."**
+
+## 2026-08-11 — Materiał: „Canary bez drogi do aktywacji jest tylko rachunkiem”
+
+- System nie wydał nawet 0.25 USD na kwalifikację, której pozytywny wynik nie mógł przejść następnej bramki rodzinnej.
+- Exact model był znany, ale rola, policy, registry i production caller nie tworzyły jednego kontraktu.
+- Cytowalna zasada: „Nie testuj płatnie modelu, jeśli sukces testu nadal jest nielegalnym stanem.”
+
+## 2026-08-11 — Materiał: „Jedna rodzina modeli, trzy różne uprawnienia”
+
+- Opus był aktywny jako Writer i Reviewer, ale nie jako Researcher. Wspólna rodzina i ten sam technical model nie dają prawa do przenoszenia authority między rolami.
+- Zgoda właściciela na jeden koszt nie tworzy qualification evidence ani activation rekordu.
+- Cytowalna zasada: „To, że model może napisać i ocenić tekst, nie znaczy jeszcze, że wolno mu zebrać materiał.”
+- System zatrzymał operację przed jobem i rachunkiem: koszt `0.000000 USD`, publikacja `0`.
+
+## 2026-08-11 — Materiał: „PROCEED nie jest dowodem pochodzenia”
+
+- Dwie Research Cards były oznaczone `PROCEED`, ale żadna nie miała nowego, fingerprintowanego lineage. Flaga redakcyjna nie zastąpiła dowodu technicznego.
+- Najważniejszym wynikiem finalnej operacji nie był call modelu, lecz poprawne zatrzymanie przed utworzeniem zgody i rachunku.
+- Cytowalna zasada: „Decyzja, że materiał jest wart artykułu, nie dowodzi jeszcze, skąd pochodzi każde zdanie.”
+- Dowód liczbowy: karty #1/#5, brak lineage dla 2/5 claims, provider calls `0`, koszt `0.000000 USD`, publikacja `0`.
+
 ## 2026-08-11 — Materiał: „Dwa liczniki nie tworzą jednego budżetu”
 
 - Koszt Reviewera był poprawnie odejmowany od capu artykułu, ale pomijany w limicie dnia i miesiąca. Dwa lokalnie poprawne wyniki tworzyły razem fałszywy obraz wydatków.
