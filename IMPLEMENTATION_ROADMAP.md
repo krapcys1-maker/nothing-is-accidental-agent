@@ -1,6 +1,6 @@
 # IMPLEMENTATION_ROADMAP — Nothing Is Accidental Agent
 
-> **AKTUALNY WPIS — 2026-08-12 / WAVE C5-END-TO-END-CONNECTION = `FORMALLY CLOSED — APPROVED WITH MINOR/P2` (ADR-140); PR #44 = `MERGED`; OPERATOR PATH 0034 = `CANDIDATE IN DRAFT PR #45 — AWAITING RE-REVIEW`.** `main` = `origin/main` = `984e90f5a93f3ce86ed694d8ae45082b12f57639`. Baseline z niezależnego review pozostaje **2 594/2 594 PASS**; lokalny operator path ma osobny skupiony dowód `49/49` i nie został zacommitowany ani użyty na produkcji. **Etap 3 pozostaje `IN PROGRESS`** — zamknięta jest WAVE C5, a nie Etap; formalne zamknięcie Etapu wymaga osobnej decyzji właściciela i osobnego dowodu, których nie ma.
+> **AKTUALNY WPIS — 2026-08-12 / WAVE C5-END-TO-END-CONNECTION = `FORMALLY CLOSED — APPROVED WITH MINOR/P2` (ADR-140); PR #44 = `MERGED`; OPERATOR PATH 0034 = `CANDIDATE IN DRAFT PR #45 — AWAITING RE-REVIEW`.** `main` = `origin/main` = `984e90f5a93f3ce86ed694d8ae45082b12f57639`. Baseline z niezależnego review pozostaje **2 594/2 594 PASS**; lokalny operator path ma osobny skupiony dowód `49/49`, znajduje się w draft PR #45, oczekuje na review, nie został zmergowany do `main` ani użyty na produkcji. **Etap 3 pozostaje `IN PROGRESS`** — zamknięta jest WAVE C5, a nie Etap; formalne zamknięcie Etapu wymaga osobnej decyzji właściciela i osobnego dowodu, których nie ma.
 >
 > **A. WYKONANE I ZMERGOWANE (kod na `main`)**
 > 1. Exact-model policy, activation i trwały binding dla `TOPIC_GENERATION` — `ANTHROPIC`/`OPUS`/`claude-opus-5`, envelope 14 500 / 1 500 / 16 000.
