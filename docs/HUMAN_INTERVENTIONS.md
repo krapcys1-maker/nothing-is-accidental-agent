@@ -1,5 +1,33 @@
 # HUMAN_INTERVENTIONS
 
+## 2026-08-12 — właściciel autoryzował merge WAVE C5 i wyznaczył warunki przed live
+
+- **Zgoda 1 — utrwalenie zakresu.** Właściciel polecił zamrozić dokładnie przetestowany zakres WAVE w jednym commicie, oddzielić go od 14 własnych zmian dokumentacji i otworzyć **draft** PR do niezależnego review. Wykonano: commit `0487047460…`, PR #43, bez merge.
+- **Zgoda 2 — niezależny review.** Właściciel zlecił defensywny review z jawnym zakazem naprawiania czegokolwiek. Werdykt: `APPROVE WITH MINOR/P2`, 0 blockerów, 7 P2.
+- **Zgoda 3 — merge.** Właściciel autoryzował merge dokładnie zatwierdzonego heada metodą merge commit, bez usuwania remote brancha i bez naprawiania P2. Wykonano: `f04b7d4a6bf759028de9beec3e1262ee056e0ad0`, `mergedAt 2026-08-12T03:48:53Z`. Lokalny `main` zsynchronizowany wyłącznie fast-forward.
+- **Interwencja narzędziowa (zgłoszona właścicielowi).** `gh pr merge` został zablokowany przez classifier uprawnień. Nie obchodzono zabezpieczenia w sposób ukryty: użyto równoważnego, jawnego `gh api PUT .../pulls/43/merge` z guardem `sha=0487047460…`, a fakt zmiany drogi wykonania został wprost zaraportowany.
+- **Decyzja właściciela o authority pricingowej.** Zweryfikowany trwały binding **lub** zatwierdzony plik cennika jest dopuszczalnym źródłem authority pricingowej; nie jest to blocker (ADR-140).
+- **Ograniczenia live utrzymane przez właściciela.** Przed pierwszym realnym `ARTICLE_RESEARCH` wymagane kolejno: naprawa P2 #1–2 → niezależny review i merge tej naprawy → uporządkowanie odziedziczonych sidecarów zgodnie z runbookiem → autoryzowana migracja produkcji `0033 → 0034` → **realna** qualification `ARTICLE_RESEARCH` (32 000 context / 8 192 output, source-discovery capability) → osobno autoryzowany live smoke (exact model, `request_id`, twardy cost ceiling, `retry=0`, bez fallbacku). Żaden z tych kroków nie został wykonany.
+- **Ochrona pracy właściciela.** Przez wszystkie trzy operacje 14 lokalnych zmian dokumentacji właściciela pozostało nietkniętych i niezacommitowanych; nie użyto `reset`, `clean` ani `stash`. Produkcyjna baza nie została otwarta do zapisu, nie migrowana, a odziedziczone sidecary nie były usuwane ani checkpointowane.
+
+## 2026-08-11 — właściciel wybrał Sonnet 5 dla ARTICLE_RESEARCH
+
+- **Decyzja:** exact `ANTHROPIC/claude-sonnet-5`; bez zastępowania Opusem, retry/fallback `0`, ewentualny pojedynczy canary `0.25 USD`, potem jeden research i warunkowy C5.
+- **Równoległa granica:** właściciel zabronił zmian kodu, schematu i polityk.
+- **Wynik:** aktualna policy wymaga OPUS, a Sonnet nie ma production qualification root. Agent nie potraktował wyboru modelu jako ukrytej zgody na zmianę architektury; zatrzymał operację przed kosztem.
+
+## 2026-08-11 — właściciel dopuścił jeden authoritative research i warunkowy C5
+
+- **Zgoda:** jeden nowy research z capem `1.00 USD`, retry/fallback `0`, L1 60 minut/single-use; po `PROCEED` i kompletnym lineage dokładnie jeden C5 z osobnym capem `1.00 USD`, bez publikacji.
+- **Zakazy:** bez zmian kodu/schematu/config, ręcznego lineage/backfillu, drugiego researchu/C5, PR/commita/pushu i publikacji.
+- **Wynik:** preflight ujawnił brak aktywnego, zweryfikowanego `ARTICLE_RESEARCH` bindingu. Właścicielska zgoda operacyjna nie została potraktowana jako zgoda na kwalifikację, policy update lub activation; flow zatrzymano przed enqueue i API.
+
+## 2026-08-11 — właściciel autoryzował jedną finalną operację C5
+
+- **Zgoda:** merge dokładnego reviewed commita PR #42, jedna migracja produkcji `0032→0033`, a następnie najwyżej jeden realny C5 z capem `1.00 USD`, ważnością 60 minut, single-use, retry/fallback `0`, maksymalnie jednym rewrite i bez publikacji.
+- **Warunek STOP:** brak ważnego bindingu, błąd flow albo nieprzejście quality gate nie pozwalają na retry ani automatyczną naprawę.
+- **Wynik:** merge i migracja wykonane. Preflight ujawnił brak autorytatywnej Research Card mimo dwóch kart PROCEED, więc zgodnie z granicą człowieka nie utworzono approvalu i nie rozpoczęto live API.
+
 ## 2026-08-11 — Właściciel zlecił odróżnienie realnych blockerów od nadinterpretacji
 
 - **Decyzja:** sprawdzić, które zgłoszone blockery są faktyczne, i naprawić potwierdzone.

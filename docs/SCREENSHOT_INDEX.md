@@ -1,5 +1,29 @@
 # SCREENSHOT_INDEX
 
+## 2026-08-12 — WAVE C5 merge: BRAK screenshotów (żaden nie został wykonany)
+
+- **Status:** `NO SCREENSHOT TAKEN`. **Do indeksu nie dodano żadnego pliku obrazu** — browser był przez całą falę zabroniony i nie został uruchomiony, więc nie istnieje nic do zaindeksowania. Ten wpis odnotowuje brak, nie zapowiada pliku.
+- **Dlaczego brak jest poprawny:** implementacja, review i merge odbyły się wyłącznie w Git i lokalnych testach offline; nie było interfejsu, sesji przeglądarkowej ani publikacji, które można by udokumentować obrazem.
+- **Jeżeli właściciel zechce dowód wizualny w przyszłości** (opcjonalnie, poza tą falą): mógłby to być zrzut PR #43 ze statusem `MERGED` i merge commitem `f04b7d4a…`. **Bez sekretów:** nigdy nie pokazywać `.env`, kluczy API ani zawartości produkcyjnej bazy.
+
+## 2026-08-11 — ARTICLE_RESEARCH Sonnet STOPPED pre-canary
+
+- **Status:** `SCREENSHOT REQUIRED`; browser był zabroniony.
+- **Co ma pokazywać:** catalogue `claude-sonnet-5`, production registry bez Sonneta, `ARTICLE_RESEARCH allowed_family=OPUS`, brak activation oraz brak Sonnet qualification root; flow kończy się `ROLE_FAMILY_POLICY_INVALID` przed approvalem/API.
+- **Bez sekretów:** nie pokazywać `.env`, kluczy ani pełnej bazy.
+
+## 2026-08-11 — Authoritative research/C5 STOPPED pre-enqueue
+
+- **Status:** `SCREENSHOT REQUIRED`; browser i publikacja były zabronione.
+- **Co ma pokazywać:** role table z ARTICLE_WRITER/ARTICLE_REVIEWER ACTIVE/PASS oraz ARTICLE_RESEARCH activation `NULL`, policy `UNVERIFIED`, następnie flow `durable research → freeze ARTICLE_RESEARCH → ACTIVE_MODEL_MISSING → job/L1/API=0`.
+- **Bez sekretów:** nie pokazywać `.env`, klucza, pełnej bazy ani pełnych evidence corpora.
+
+## 2026-08-11 — merge PR #42, migracja 0033 i C5 STOPPED
+
+- **Status:** `SCREENSHOT REQUIRED`; browser był jawnie zabroniony, a screenshot surowej produkcyjnej bazy mógłby ujawnić dane.
+- **Co ma pokazywać:** PR #42 jako MERGED (`0646b67…`), lokalny `main` zgodny z origin, migrację `0033/33` z integrity `ok`/FK `0`, oraz fail-before-provider `PROCEED card → CONTENT_EVIDENCE_INCOMPLETE → approval/request/usage=0`.
+- **Bez sekretów:** nie pokazywać `.env`, kluczy, pełnej bazy, promptów ani prywatnych treści.
+
 ## 2026-08-11 — Reviewer global ledger repair
 
 - **Status:** `SCREENSHOT REQUIRED`; obrazu nie wykonano, bo zakres wyklucza browser, a właściwym dowodem są triggery i testy temp DB.

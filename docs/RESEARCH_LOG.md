@@ -1,5 +1,31 @@
 # RESEARCH_LOG
 
+## 2026-08-12 — WAVE C5 zmergowana: ścieżka researchu istnieje, ale ŻADEN realny research nie został wykonany
+
+- **Żadnego realnego zdarzenia researchowego nie odnotowano.** WAVE C5 była wyłącznie pracą kodową i weryfikacyjną: nie powstał realny topic, job A1, source candidate, controlled fetch, retrieval, Research Card ani lineage w produkcji. Sieć aplikacyjna, API i SDK providerów nie zostały użyte; koszt `0.000000 USD`.
+- **Co od teraz istnieje w kodzie** (`main` = `f04b7d4a…`): `SELECTED` topic automatycznie tworzy job A1 `ARTICLE_RESEARCH`; A1 używa typowanego `SourceDiscoveryPort` i zapisuje wyłącznie strukturalne kandydaty; każde źródło wymaga osobnego L1 przed controlled fetchem; canonical evidence i `evidence_source_lineage` powstają wspieranym producer flow; deterministyczny corpus packer wymaga minimum trzech kompletnych źródeł i egzekwuje envelope 23 808 / 8 192 / 32 000 przed provider attemptem.
+- **Dowód pochodzi z testów, nie z produkcji.** Pełny łańcuch topic → `PENDING_APPROVAL` przeszedł end-to-end wyłącznie na tymczasowych bazach z fake providerami (E2E `6/6`, pełny suite `2 594/2 594`). Syntetyczne `0.064100 USD` w tym teście **nie jest** kosztem rzeczywistym.
+- **Dlaczego nadal nie ma realnego researchu.** Produkcja stoi na `0033`, a runtime wymaga `0034`; `TOPIC_GENERATION` i `ARTICLE_RESEARCH` nie mają w produkcji activation ani bindingu; realna qualification `ARTICLE_RESEARCH` (32 000 / 8 192 + source discovery) nie została wykonana. Pierwszy realny research wymaga wcześniej naprawy P2 #1–2, ich review i merge, uporządkowania sidecarów, autoryzowanej migracji i osobnej zgody na live smoke.
+
+## 2026-08-11 — Research nie rozpoczął się: Sonnet/policy conflict
+
+- Docelowy model `claude-sonnet-5` istnieje w katalogu/configu, ale nie w produkcyjnym registry.
+- ARTICLE_RESEARCH wymaga rodziny OPUS; brak legalnej kwalifikacji/aktywacji Sonneta bez zakazanej zmiany policy i kodu.
+- Topic nie został wybrany, job/run/request/card/lineage nie powstały, sieć i API nie zostały użyte.
+
+## 2026-08-11 — Authoritative research nie rozpoczął się
+
+- Preferowany topic #1: „Why airline ticket prices change every few hours” / „What pricing system makes fares move so often?”. Historia nie została nadpisana.
+- Wymagany `ARTICLE_RESEARCH` binding: brak activation; policy capability/pricing `UNVERIFIED`, qualification required, fallback `FORBIDDEN`.
+- Fresh `--force-re-research` dla kompletnej historycznej karty wymaga evidence input; topic #1 nie ma właściwego retrieval/corpusu. Nie wybrano innego tematu i nie rozpoczęto drugiej ścieżki.
+- Nowy research job/run/card/lineage/model call/koszt: `0`.
+
+## 2026-08-11 — C5 preflight, bez nowego researchu
+
+- Nie uruchomiono A1, A2 ani B. Odczytano wyłącznie trwały stan produkcyjny.
+- Research Cards z `PROCEED`: #1 i #5. Obie są niekwalifikowalne dla aktualnego C5, ponieważ `evidence_source_lineage=0`; dokładne odmowy: `CONTENT_EVIDENCE_INCOMPLETE` dla 2 i 5 confirmed claims.
+- Nie pobierano internetu i nie wykonano żadnego modelowego requestu.
+
 ## 2026-08-11 — Repo-only blocker classification
 
 - Lokalnie prześledzono content root, Reviewera, budget gates, migracje i aktywne dokumenty Etapu 3.

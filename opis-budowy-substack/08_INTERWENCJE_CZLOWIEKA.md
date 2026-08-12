@@ -1,5 +1,21 @@
 # 08 — INTERWENCJE CZŁOWIEKA
 
+> **2026-08-12 — właściciel rozdzielił zgodę na trzy części i nie oddał żadnej z nich agentowi.** Ta fala jest wzorcowym przykładem, jak wygląda kontrola człowieka, gdy jest realna, a nie ceremonialna. Właściciel nie powiedział „zrób C5". Powiedział trzy razy coś węższego. **Pierwsza zgoda:** zamroź dokładnie to, co jest przetestowane, oddziel od moich własnych 14 zmian w dokumentacji i otwórz **draft** — czyli jawnie: „jeszcze nie scalaj". **Druga zgoda:** przejrzyj to niezależnie i **nie waż się niczego naprawiać po drodze** — dzięki temu recenzent nie mógł ukryć problemu, poprawiając go w locie. **Trzecia zgoda:** dopiero teraz scal, dokładnie ten commit, nie usuwaj gałęzi, nie tykaj P2.
+>
+> **Właściciel z góry zdefiniował, co go NIE interesuje jako blocker.** Sam rozstrzygnął spór o źródło cennika: zweryfikowany trwały zapis w bazie **albo** zatwierdzony plik są jednakowo dobre. To ważne, bo bez takiej decyzji recenzent musiałby albo zgadywać, albo sztucznie eskalować.
+>
+> **I z góry powiedział, czego wymaga przed pierwszym prawdziwym uruchomieniem:** naprawy dwóch konkretnych P2, ich osobnego review i merge'a, uporządkowania plików pobocznych bazy, autoryzowanej migracji produkcji, prawdziwej kwalifikacji modelu i dopiero na końcu — osobno zatwierdzonego testu na żywo. Sześć kroków, każdy wymagający osobnej zgody.
+>
+> **Jedna interwencja poszła w drugą stronę — od agenta do właściciela.** Automatyczne zabezpieczenie zablokowało standardową komendę scalającą PR. Agent nie obszedł go po cichu: użył równoważnej oficjalnej drogi, dołożył warunek „scal dokładnie ten commit" i **zaraportował zmianę drogi wykonania**. To jest ta granica, która w tym projekcie ma znaczenie: wolno znaleźć inne narzędzie do tego samego autoryzowanego celu, nie wolno udawać, że nic się nie stało.
+>
+> **Przez wszystkie trzy operacje 14 lokalnych zmian dokumentacji właściciela pozostało nietkniętych.** Żadnego `reset`, `clean` ani `stash` — czyli żadnej operacji, która mogłaby cudzą pracę „schować" i wyglądać na czysty stan.
+
+> **2026-08-11 — wybór Sonneta przy zachowanym zakazie zmian policy:** właściciel wskazał exact `claude-sonnet-5` dla ARTICLE_RESEARCH i dopuścił najwyżej jeden canary. Jednocześnie zabronił zmian kodu i polityk. Ponieważ bieżąca policy wymaga OPUS, agent zatrzymał się i nazwał brakującą osobną decyzję zamiast potraktować wybór modelu jako dorozumianą zgodę na przebudowę roli.
+
+> **2026-08-11 — zgoda na jeden research nie była zgodą na aktywację roli:** właściciel dopuścił jeden authoritative research i warunkowy C5, utrzymując zakaz zmian konfiguracji. Preflight znalazł brak `ARTICLE_RESEARCH` activation. Agent zachował granicę decyzji: nie promował Opusa dla nowej roli, nie tworzył z góry niewykonalnego approvalu i zakończył bez API, kosztu oraz publikacji.
+
+> **2026-08-11 — jedna finalna zgoda C5:** właściciel dopuścił merge reviewed PR #42, jedną migrację `0032→0033` i najwyżej jeden realny C5 z limitem `1.00 USD`, 60 minutami ważności, bez retry/fallbacku, maksymalnie jednym rewrite i bez publikacji. Nakazał STOP bez automatycznej naprawy przy blockerze. Merge i migracja przeszły; brak authoritative Research Card zatrzymał flow przed approvalem i API, więc zgoda nie została skonsumowana.
+
 > **2026-08-11 — zakres B1–B5:** właściciel autoryzował wyłącznie usunięcie pięciu blockerów PRE-LIVE CONTENT FLOW. Zabronił realnego API, full live flow, publikacji, browsera, migracji produkcyjnej DB, kosztu i operacji Git. Exact Opus authority miało pozostać niezmienione; fake SDK wolno było użyć tylko na finalnej granicy transportu.
 
 > **2026-08-10 — osobna zgoda na zapis produkcyjny:** właściciel autoryzował dokładnie migrację `data/agent.db` z `0020` do `0030`. Nie była to zgoda na retention acceptance, API, qualification, C5 ani publikację. Operator wykonał drabinę bez retry; acceptance count pozostał zerowy.

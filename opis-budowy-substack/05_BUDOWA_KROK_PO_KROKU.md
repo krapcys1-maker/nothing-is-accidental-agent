@@ -1,5 +1,23 @@
 # 05 — BUDOWA KROK PO KROKU
 
+## 2026-08-12 — WAVE C5: trzy osobne kroki, trzy osobne role
+
+Ta fala jest dobrym materiałem, bo po raz pierwszy widać wyraźnie rozdzielenie trzech ról, które w typowym projekcie zlewają się w jedną osobę klikającą „merge".
+
+**Krok 1 — implementacja.** Powstał brakujący środek rurociągu. Wcześniej system umiał wygenerować temat i umiał ocenić gotowy artykuł, ale między tymi końcami była dziura: wybrany temat nie tworzył żadnej pracy badawczej. Doszło dziewięć modułów i jedna migracja: automatyczne przejście od wybranego tematu do zadania A1, typowany port wyszukiwania źródeł, trwałe kandydatury źródeł, osobna zgoda dla każdego źródła, kontrolowane pobranie, kanoniczny dowód i deterministyczny „packer" pilnujący budżetu 23 808 / 8 192 / 32 000 tokenów. Efekt: 42 pliki, `+2520/−149`, wyłącznie kod i testy.
+
+**Krok 2 — niezależny review.** Ten sam zakres został przejrzany od nowa, z jawnym zakazem poprawiania czegokolwiek. Recenzent nie uwierzył raportowi implementera: odtworzył wszystkie liczby sam (2 594 testy, celowane 689, E2E 6/6), przećwiczył migrację na **kopii** produkcyjnej bazy i sprawdził, czy odcisk palca zapisany na sztywno w migracji rzeczywiście przelicza się z zapisanego wiersza. Potem próbował system złamać: podał odpowiedź modelu, w której adres URL występował tylko w zdaniu, i drugą, w której zdanie z adresem było zmieszane z prawdziwym wynikiem wyszukiwania. Żaden z tych adresów nie stał się kandydatem. Werdykt: `APPROVE WITH MINOR/P2`, zero blockerów, siedem P2.
+
+**Krok 3 — merge.** Dopiero teraz, po jawnej zgodzie właściciela, PR #43 przestał być draftem i został scalony jako `f04b7d4a…`. Ciekawostka warta zapamiętania: automatyczne zabezpieczenie zablokowało standardową komendę scalającą. Zamiast obchodzić je po cichu, użyto równoważnej drogi oficjalnym API — ale z dodatkowym warunkiem: „scal dokładnie ten commit, nie cokolwiek, co akurat jest na gałęzi". I fakt zmiany drogi został zaraportowany właścicielowi, zamiast przemilczany.
+
+**Czego ta fala NIE zrobiła.** Nie uruchomiła niczego naprawdę. Produkcyjna baza jest bit w bit ta sama, migracja czeka niezastosowana, żaden artykuł nie powstał, żaden grosz nie został wydany. To jest różnica między „kod jest gotowy" a „system działa".
+
+> **Krok 2026-08-11 — canary, którego nie wolno było wysłać:** Sonnet 5 był dokładnie nazwany w katalogu, ale ARTICLE_RESEARCH nadal należało do rodziny OPUS. Produkcyjny caller kwalifikacyjny istniał tylko dla wcześniejszych Writerów. Zamiast zapłacić za PASS bez legalnej drogi do ACTIVE, operacja zatrzymała się przed approvalem i API.
+
+> **Krok 2026-08-11 — drugi preflight zatrzymał się jeszcze wcześniej:** właściciel dopuścił nowy authoritative research, ale aktualny dispatcher wymaga osobnego frozen authority `ARTICLE_RESEARCH`. Baza miała aktywnego Opusa tylko dla Writer/Reviewer. Nie wykorzystaliśmy podobieństwa modelu jako skrótu: bez activation research nie powstał nawet job ani approval. Temat #1 także nie miał evidence corpus wymaganego przez legalny force re-research.
+
+> **Krok 2026-08-11 — finalna operacja C5 zatrzymana przed modelem:** po merge PR #42 i migracji produkcji do `0033/33` wszystkie modelowe bramki Writer/Reviewer były zielone. Ostatnia bramka danych wejściowych nie była: dwie karty `PROCEED` miały zwykłe źródła, ale zero nowego `evidence_source_lineage`. System odmówił `CONTENT_EVIDENCE_INCOMPLETE` zanim powstały job, approval, request albo koszt. Nie było publikacji i Etap 3 pozostaje otwarty.
+
 > **Krok 2026-08-11 — PRE-LIVE CONTENT UNBLOCK = BLOCKED:** B1/B2/B4/B5 mają kandydata, lecz B3 pozostało otwarte. Samokontrola odrzuciła lexical reviewer jako sprzeczny z ADR-123. Existing ARTICLE_REVIEWER seam nie ma production callera ani durable stanu przed external effect, więc root zatrzymuje się przed writerem i kosztem. Trwała pamięć thesis/content i bounded topic history pozostają gotowe do review.
 
 > **Krok 2026-08-10 — produkcja 0020→0030:** dopiero po niezależnym review, freeze, merge, post-merge verification i osobnej zgodzie właściciela wykonaliśmy migrację prawdziwej bazy. Najpierw powstała byte-identical kopia PRE, potem dziesięć pojedynczych modułów z osobnymi flagami confirm. Każdy krok przeszedł raz; nie było retry. Reopen pokazał `0030/30`, integrity `ok`, FK `0`, zachowane 211 wcześniejszych wierszy i pustą tabelę retention acceptance. Sam schemat nie oznacza C5 ani live readiness.

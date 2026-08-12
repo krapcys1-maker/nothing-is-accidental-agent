@@ -1,5 +1,35 @@
 # 07 — BŁĘDY I NIEUDANE PRÓBY
 
+## 2026-08-12 — Limit, który działa tylko po angielsku
+
+WAVE C5 przeszła review bez ani jednego blockera, więc najciekawsza rzecz w tej fali to nie awaria, tylko **wada, która nie zdążyła zaszkodzić** — i sposób, w jaki została znaleziona.
+
+System pilnuje, żeby materiał wysyłany do modelu nie przekroczył budżetu 23 808 tokenów wejścia. Problem: nie da się policzyć tokenów Claude'a lokalnie, więc kod używa przybliżenia — „3,5 znaku na token". Ta liczba została kiedyś zmierzona na zwartym JSON-ie po angielsku i wtedy była bezpieczna z zapasem.
+
+Recenzent nie przyjął tego założenia na wiarę. Sprawdził, co **naprawdę** trafia do korpusu: pobrane strony internetowe, po normalizacji zachowującej każdy znak — łącznie z cyrylicą, chińskim i emoji. Potem zmierzył, ile bajtów UTF-8 zajmuje realny tekst przy rozmiarze, który „packer" **akceptuje**. Wynik: dla angielskiego przybliżenie jest konserwatywne (0,78×), dla polskiego z pełnią diakrytyków też (0,86×) — ale dla rosyjskiego robi się 1,41×, a dla chińskiego 2,19×. Innymi słowy: przy chińskim źródle deklarowany limit 32 000 tokenów kontekstu odpowiadałby realnym ~60 000.
+
+Dlaczego to **nie** był blocker: żeby chińskie źródło w ogóle trafiło do korpusu, człowiek musi je wcześniej zatwierdzić osobną zgodą — widzi adres przed pobraniem. A nawet najgorszy przypadek mieści się pod twardym limitem kosztu jednego zadania. Wada jest realna, ale ma dwie niezależne bariery i banalną naprawę: liczyć bajty, nie znaki.
+
+Druga rzecz warta zapisania: w jednym miejscu kod jawnie oznacza „ten płatny strzał wymaga ręcznego rozliczenia", a w sąsiednim, bardzo podobnym przypadku — nie. Nie prowadzi to do utraty pieniędzy (stan jest widoczny i blokuje dalszą pracę), ale jest niespójne. Obie te pozycje właściciel wyznaczył jako warunek przed pierwszym prawdziwym uruchomieniem.
+
+**Morał dla serii:** najgroźniejsze błędy w takich systemach nie wyglądają jak awarie. Wyglądają jak stała, którą ktoś kiedyś zmierzył — na innych danych niż te, które system dostanie naprawdę.
+
+## 2026-08-11 — Model istniał, ścieżka aktywacji nie
+
+`claude-sonnet-5` był obecny w owner-verified katalogu i cenniku, więc prosty check „czy ID istnieje?” byłby zielony. Pełny preflight pokazał konflikt: ARTICLE_RESEARCH wymaga OPUS, production registry nie zawiera Sonneta, a production qualification module nie ma Sonnet root. Canary nie został uruchomiony, ponieważ nie mógł doprowadzić do dozwolonego ACTIVE.
+
+## 2026-08-11 — Ten sam Opus nie oznacza tego samego authority
+
+Preflight mógł łatwo pomylić trzy fakty: Writer jest ACTIVE, Reviewer jest ACTIVE, ARTICLE_RESEARCH mapuje się do rodziny OPUS. SQL i dispatcher zachowały ważniejsze rozróżnienie: aktywacja jest per rola. ARTICLE_RESEARCH nie miało żadnego rekordu activation, więc kontrolowany research został zatrzymany przed jobem, L1 i klientem.
+
+Drugi niezależny blocker dotyczył historii topic #1. Jawne `--force-re-research` nie otwiera dowolnego nowego A1/A2/B; durable kontrakt wspiera je tylko z istniejącym evidence retrieval. Takiego corpusu dla tematu #1 nie było. Nie obchodzono tej granicy innym tematem ani ręcznymi zapisami.
+
+## 2026-08-11 — Zielone modele, nieautorytatywne wejście
+
+Writer i Reviewer były ACTIVE/PASS na tym samym `claude-opus-5`, ale to nie wystarczyło. Produkcja przechowywała dwie karty `PROCEED` ze zweryfikowanymi legacy sources i ani jednego wiersza nowego lineage. C5 zatrzymał się kodem `CONTENT_EVIDENCE_INCOMPLETE` przed zgodą i transportem. Nie „naprawiono” danych ręcznym SQL-em i nie uruchomiono zakazanego nowego researchu.
+
+W toku diagnostyki dwie małe sondy miały błędne założenia o nazwie kolumny i atrybucie wyjątku. Obie upadły bez zapisu i zostały zastąpione poprawnym immutable odczytem. Pusty WAL/SHM pozostawiony przez wcześniejszy odczyt usunięto dopiero po kanonicznym potwierdzeniu braku uchwytów.
+
 ## 2026-08-11 — `dry_run=false` nie oznacza płatnego researchu
 
 Późniejsza samokontrola obaliła ważniejsze założenie: lexical overlap nie jest semantic reviewerem. Może przepuścić zdanie z trzema słowami evidence i nowym faktem. Implementację usunięto, choć testy były zielone. Surowe podłączenie frozen reviewer adaptera również odrzucono, bo istniejący seam zapisuje terminalny execution dopiero po callu i nie chroni okna crash→replay.

@@ -1,5 +1,43 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-12 — WAVE C5: siedem P2 z niezależnego review (ŻADNE nie jest blockerem C5)
+
+> **Klasyfikacja.** Review WAVE C5 zakończył się `APPROVE WITH MINOR/P2` z **zerem blockerów**. Poniższe pozycje są findingami P2 — nie były i nie są blockerami C5. Dwie z nich właściciel wyznaczył jako warunek **przed pierwszym realnym `ARTICLE_RESEARCH`**; pozostałe pięć to zwykły backlog.
+
+**Wymagane przed pierwszym realnym ARTICLE_RESEARCH:**
+
+1. **Estymator 3,5 znaka/token może zaniżać liczbę tokenów dla cyrylicy/CJK.** Stała `CONSERVATIVE_CHARS_PER_TOKEN = 3.5` jest skalibrowana na kompaktowym JSON-ie ASCII (repo dokumentuje pomiar 4,49 znaka/token) i jest jedyną bramką envelope'u w `app/research/corpus_packer.py`. `canonicalize_text` zachowuje każdy znak niekontrolny, więc do korpusu może wejść dowolny Unicode. Pomiar reviewera na dokumentach, które packer **akceptuje** (3 × 25 109 znaków), przy zachowaniu własnej stałej repo 4,49 bajta/token: ASCII `0,78×`, polski z diakrytykami `0,86×` (oba konserwatywne — języki tego konta są bezpieczne), rosyjski `1,41×` (context ~41 731 vs 32 000), chiński `2,19×` (context ~60 304 vs 32 000). **Bariery ograniczające skutek:** osobne L1 dla każdego źródła (człowiek widzi URL przed pobraniem) oraz twardy `cap_usd=1.000000` sprawdzany przed callem — realny worst case CJK (~`0,46 USD`) mieści się pod capem. Prawdziwy tokenizer Claude nie mógł zostać uruchomiony offline (zakaz sieci), więc kwantyfikacja opiera się na ekspansji UTF-8. **Kierunek naprawy:** ograniczać bajty UTF-8, nie znaki.
+2. **Wyjątek portu A1 może pozostawić attempt w `REQUEST_STARTED`.** W `app/workflows/research/source_discovery.py` ścieżka model-mismatch jawnie woła `mark_provider_attempt_needs_reconciliation`, ale wyjątek rzucony przez sam `port.discover()` (np. gdy model odpowie bez użycia web search) nie ma odpowiednika — attempt zostaje w `REQUEST_STARTED` i wymaga ręcznej rekoncyliacji. Kierunek jest fail-closed (stan nie jest ukrywany i blokuje dalsze operacje), lecz zachowanie jest niespójne z sąsiednią ścieżką.
+
+**Zwykły backlog (nieblokujący):**
+
+3. **Zakres obsługi wyjątku w corpus enqueue** — w `app/research/corpus_enqueue.py` brak authority/pricingu `ARTICLE_RESEARCH` rzuca `CorpusPackingError` **poza** własnym `try`, już po zacommitowaniu fetchu.
+4. **Normalizacja URL-i z domyślnymi portami** — `canonical_source_identity` traktuje `https://x/a` i `https://x:443/a` jako różne tożsamości, więc ten sam zasób mógłby liczyć się jako dwa źródła wobec minimum trzech.
+5. **Pozostała część findingu authority pricingowej** — bramka przyjmuje `binding OR plik`. Właściciel zaakceptował to jako prawidłowe (ADR-140); pozostaje wyłącznie uporządkowanie zapisu, nie zmiana zachowania.
+6. **Sniffing schematu** — `PRAGMA table_info` decyduje o kształcie insertu capability, a `_role_policy_from_row` czyta nowe kolumny bez guardu. Nieosiągalne przy floor `0034`; ewentualna degradacja byłaby fail-closed.
+7. **Float/Decimal oraz brakująca asercja topic reconciliation** — `summary.cost_usd = float(row[0])` używa `float` na pieniądzach wbrew dyscyplinie `Decimal`, a nowy E2E nie asercjonuje `runs.cost_usd == Σ model_usage` dla runu topic generation (reconciliation jest preexistująca i pokryta osobno).
+
+## 2026-08-11 — Sonnet nie może zostać aktywowany dla roli przypisanej do Opusa
+
+- **Objaw:** exact `claude-sonnet-5` jest w katalogu/configu, ale nie istnieje legalna sekwencja prowadząca do ACTIVE dla ARTICLE_RESEARCH bez zmiany polityki.
+- **Root cause:** rola jest statycznie mapowana do OPUS, a trwała policy ma `allowed_family=OPUS`. Sonnet daje `ROLE_FAMILY_POLICY_INVALID` / `FAMILY_NOT_ALLOWED`.
+- **Drugi brak:** brak production qualification caller/root dla Sonneta i brak jego trwałego registry/approval history.
+- **Reakcja:** canary nie został wykonany, bo nawet PASS nie spełniłby następnego gate. Nie zmieniono kodu/policy i nie podstawiono Opusa. Koszt oraz external effects `0`.
+
+## 2026-08-11 — Authoritative research zatrzymany przez brak ARTICLE_RESEARCH authority
+
+- **Objaw:** Writer i Reviewer są ACTIVE/PASS, ale faktycznie wymagany research root ma osobną rolę `ARTICLE_RESEARCH` bez activation. Policy tej roli pozostaje `UNVERIFIED` i wymaga kwalifikacji.
+- **Dokładna granica:** `freeze_model_for_intent` zwraca `ACTIVE_MODEL_MISSING`; dispatcher mapuje to na brak eligible active model authority przed konstrukcją klienta i API.
+- **Druga odmowa:** temat #1 ma status `USED`; aktualny fresh durable force re-research jest legalny tylko z evidence input. Bez `--evidence-retrieval-id` skrypt zwraca `INVALID_CONFIGURATION`, a topic #1 nie ma właściwego retrieval/corpusu.
+- **Reakcja:** nie tworzono joba ani approvalu „na próbę”, nie aktywowano roli ręcznie i nie uruchomiono innego tematu. Koszt i skutki zewnętrzne `0`.
+
+## 2026-08-11 — C5 zatrzymany: żadna karta PROCEED nie ma authoritative lineage
+
+- **Objaw:** karty #1 i #5 mają `publication_recommendation=PROCEED`, lecz content snapshot odmawia `CONTENT_EVIDENCE_INCOMPLETE` dla odpowiednio 2 i 5 confirmed claims; `evidence_source_lineage` ma 0 wierszy.
+- **Znaczenie:** istniejące legacy `sources` nie są równoważne z fingerprintowanym lineage wymaganym przez aktualny C5. Nie wolno było ręcznie dopisać braków ani uruchomić nowego researchu.
+- **Skutek:** operacja zatrzymana przed approvalem i providerem. Zero API, retry, fallbacku, kosztu i publikacji.
+- **Próby operatorskie:** pierwszy immutable audit użył historycznej, nieistniejącej kolumny `schema_migrations.name` i został powtórzony poprawnie bez zapisu. Odczyt SQLite pozostawił pusty WAL i SHM; po kanonicznym potwierdzeniu braku uchwytów usunięto wyłącznie te sidecary, a ponowny quiescence PASS potwierdził brak WAL/SHM/journal. Pierwszy formatter diagnostyki błędnie odwołał się do `ContentSnapshotError.detail`; poprawiony odczyt użył `str(exc)` i nie mutował bazy.
+
 ## 2026-08-11 — Reviewer pominięty przez globalny ledger
 
 - **Objaw:** flow z dwoma writerami i reviewerami rozliczał ARTICLE cap jako `0.081000 USD`, lecz `model_usage` i `runs.cost_usd` zawierały tylko writerów (`0.052000 USD`).
