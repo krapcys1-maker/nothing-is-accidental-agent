@@ -1,5 +1,11 @@
 # HUMAN_INTERVENTIONS
 
+## 2026-08-12 — właściciel rozdzielił przygotowanie migratora od migracji produkcyjnej
+
+- **Decyzja:** wolno było zbudować i lokalnie zweryfikować wyłącznie operator path `0033→0034`; nie wolno było migrować produkcji, kopii produkcji ani dotykać sidecarów.
+- **Granice:** wszystkie mutacje tylko na nowych temp DB; zero sieci/API/publikacji/kosztu i zero operacji Git zmieniających historię lub staging.
+- **Efekt:** powstał kandydat CLI i dowód sukcesu/odmowy/rollbacku. Zgoda na implementację nie została potraktowana jako zgoda na rzeczywistą migrację; produkcja nadal wymaga osobnej jawnej autoryzacji.
+
 ## 2026-08-12 — właściciel autoryzował merge WAVE C5 i wyznaczył warunki przed live
 
 - **Zgoda 1 — utrwalenie zakresu.** Właściciel polecił zamrozić dokładnie przetestowany zakres WAVE w jednym commicie, oddzielić go od 14 własnych zmian dokumentacji i otworzyć **draft** PR do niezależnego review. Wykonano: commit `0487047460…`, PR #43, bez merge.

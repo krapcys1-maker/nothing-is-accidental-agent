@@ -1,5 +1,14 @@
 # BUILD_LOG
 
+## 2026-08-12 — Etap 3 / minimalna operatorska droga migracji `0033 → 0034` — CANDIDATE COMPLETE
+
+- **Cel:** przygotować, bez uruchamiania produkcji, najwęższy bezpieczny entrypoint dla istniejącej migracji `0034_c5_end_to_end_connection`.
+- **Implementacja:** nowy `scripts/migrate_schema_0034.py` jest cienką nakładką na istniejące `migrate_0033_to_0034`; wymaga jawnego `--db-path` i flagi `--confirm-0033-to-0034`, nie ma domyślnej ścieżki, nie importuje runtime/providerów i zwraca `2` z komunikatem fail-closed dla odmowy lub awarii.
+- **Kontrakt wersji:** zapis jest możliwy wyłącznie przy exact canonical `0033`; exact `0034` daje sukces idempotentny bez zapisu; starsza, brakująca lub niekanoniczna baza jest odrzucana przed writable open. Runner stosuje wyłącznie istniejący self-ledgered krok `0034`, bez kopiowania SQL.
+- **Dowód:** nowe testy `7/7`; istniejące C5/runtime/role-lifecycle/migration-ladder `42/42`; łącznie unikalny zakres `49/49`. Potwierdzono ledger `0034`, zmianę policy `TOPIC_GENERATION: SONNET→OPUS`, fingerprint, nowe tabele/kolumny, `integrity_check=ok`, `foreign_key_check=0`, idempotency i pełny rollback po kontrolowanym konflikcie SQL.
+- **Kontrpróba:** temp DB na `0032` została odrzucona kodem `2`; SHA-256 przed/po identyczny (`d9427c327c2c0e98117c2e7bffaedacf239975b71ce75c734e2ab70201f67d8c`), końcowa wersja nadal `0032_role_execution_lifecycle`.
+- **Granice:** wyłącznie nowe temp DB; brak migracji/kopii produkcji, sidecarów, sieci, API/SDK, runtime, workera, providera, browsera, publikacji i kosztu. Na etapie implementacji nie było stage/commita/pushu/PR/merge; **transport wykonano osobno**: commit `2389cc03…` na branchu `ops/schema-0034-migrator` i **draft PR #45** do `main` — niezmergowany, oczekuje na ponowny review. Pełnej suity nie uruchamiano, bo skupione testy nie ujawniły szerszego problemu.
+
 ## 2026-08-12 — WAVE C5-END-TO-END-CONNECTION: implementacja → niezależny review → merge
 
 - **Implementacja (branch `wave/c5-end-to-end-connection`, commit `0487047460c6cf7186004010226cc5a710006204`).** 42 pliki `+2520/−149`, wyłącznie `app/` i `tests/`. Dziewięć nowych modułów: `app/model_routing/role_activation.py`, `app/ports/source_discovery.py`, `app/research/{anthropic_source_discovery,corpus_enqueue,corpus_packer,source_discovery_intent}.py`, `app/workflows/research/source_discovery.py`, `app/storage/migrations/0034_c5_end_to_end_connection.sql`, `tests/test_c5_end_to_end_connection.py`. Zamknięte cztery pierwotne blockery: brak exact-model authority `TOPIC_GENERATION`; brak automatycznego joba po `SELECTED`; brak połączenia production source-discovery port → candidates → L1 → FetchPort → canonical evidence; brak legalnego envelope/qualification/activation/bindingu `ARTICLE_RESEARCH`.
