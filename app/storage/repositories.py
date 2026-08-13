@@ -47,6 +47,18 @@ from app.content.contracts import (
     WriterResult,
     WriterSuccess,
 )
+from app.content.conservative_reconciliation import (
+    CONSERVATIVE_APPROVAL_SCHEMA,
+    CONSERVATIVE_AUDIT_SCHEMA,
+    CONSERVATIVE_EVIDENCE_KIND,
+    ConservativeCostSummary,
+    ConservativeReconciliationError,
+    ConservativeReconciliationPlan,
+    ConservativeReconciliationRecord,
+    ConservativeResolution,
+    ConservativeSourceType,
+    canonical_approval_instant,
+)
 from app.content.decision import (
     CONTENT_DECISION_SCHEMA_VERSION,
     ContentDecisionActor,
@@ -2293,16 +2305,32 @@ class SqliteStorage:
         remaining = _money(
             approval["cap_usd"], positive=True, label="Approved ARTICLE cap",
         )
+        has_conservative_schema = self._has_conservative_reconciliation_schema()
+        role_reconciled_clause = (
+            "AND NOT EXISTS (SELECT 1 FROM conservative_content_reconciliations c "
+            "WHERE c.source_type='ROLE_EXECUTION' "
+            "AND c.source_identity=role_provider_executions.execution_ref) "
+            if has_conservative_schema else ""
+        )
         unknown_role = self.conn.execute(
             "SELECT 1 FROM role_provider_executions WHERE job_id=? AND "
             "((outcome='NEEDS_VERIFICATION' AND cost_usd IS NULL) OR "
             "(outcome='IN_FLIGHT' AND external_effect_started_at IS NOT NULL)) "
+            + role_reconciled_clause +
             "LIMIT 1",
             (job_id,),
         ).fetchone()
+        provider_reconciled_clause = (
+            "AND NOT EXISTS (SELECT 1 FROM conservative_content_reconciliations c "
+            "WHERE c.source_type='PROVIDER_ATTEMPT' "
+            "AND c.source_identity=p.request_id) "
+            if has_conservative_schema else ""
+        )
         unknown_writer = self.conn.execute(
             "SELECT 1 FROM provider_attempts p WHERE p.job_id=? AND p.stage=? "
-            "AND p.status='REQUEST_STARTED' AND NOT EXISTS ("
+            "AND p.status IN ('REQUEST_STARTED','NEEDS_RECONCILIATION') "
+            + provider_reconciled_clause +
+            "AND NOT EXISTS ("
             "SELECT 1 FROM content_provider_cost_settlements s "
             "WHERE s.request_id=p.request_id) LIMIT 1",
             (job_id, CONTENT_PROVIDER_STAGE),
@@ -2328,6 +2356,15 @@ class SqliteStorage:
             remaining -= _money(
                 row["cost_usd"], positive=False, label="Accounted ARTICLE cost",
             )
+        if has_conservative_schema:
+            for row in self.conn.execute(
+                "SELECT conservative_cost_usd "
+                "FROM conservative_content_reconciliations WHERE job_id=?", (job_id,),
+            ).fetchall():
+                remaining -= _money(
+                    row["conservative_cost_usd"], positive=False,
+                    label="Conservative ARTICLE cost",
+                )
         # A reservation and its settlement are alternatives, never additive.
         for row in self.conn.execute(
             "SELECT reserved_amount_usd FROM provider_attempts p "
@@ -2431,19 +2468,39 @@ class SqliteStorage:
                 ).fetchall(),
                 "estimated_cost_usd", label="Persisted monthly provider cost",
             )
+            day_conservative = self.conservative_adjudicated_cost_usd(
+                prefix=day_prefix,
+            )
+            month_conservative = self.conservative_adjudicated_cost_usd(
+                prefix=month_prefix,
+            )
+            provider_reconciled_clause = (
+                "AND NOT EXISTS (SELECT 1 FROM conservative_content_reconciliations c "
+                "WHERE c.source_type='PROVIDER_ATTEMPT' "
+                "AND c.source_identity=provider_attempts.request_id)"
+                if self._has_conservative_reconciliation_schema() else ""
+            )
             attempt_reserved = _sum_money_rows(
                 self.conn.execute(
                     "SELECT reserved_amount_usd FROM provider_attempts "
                     "WHERE status IN "
-                    "('RESERVED','REQUEST_STARTED','NEEDS_RECONCILIATION')",
+                    "('RESERVED','REQUEST_STARTED','NEEDS_RECONCILIATION') "
+                    + provider_reconciled_clause,
                 ).fetchall(),
                 "reserved_amount_usd", label="Persisted provider reservation",
+            )
+            role_reconciled_clause = (
+                "AND NOT EXISTS (SELECT 1 FROM conservative_content_reconciliations c "
+                "WHERE c.source_type='ROLE_EXECUTION' "
+                "AND c.source_identity=role_provider_executions.execution_ref)"
+                if self._has_conservative_reconciliation_schema() else ""
             )
             role_reserved = _sum_money_rows(
                 self.conn.execute(
                     "SELECT reserved_cost_usd FROM role_provider_executions "
-                    "WHERE outcome='IN_FLIGHT' OR "
-                    "(outcome='NEEDS_VERIFICATION' AND cost_usd IS NULL)",
+                    "WHERE (outcome='IN_FLIGHT' OR "
+                    "(outcome='NEEDS_VERIFICATION' AND cost_usd IS NULL)) "
+                    + role_reconciled_clause,
                 ).fetchall(),
                 "reserved_cost_usd", label="Persisted role reservation",
             )
@@ -2460,11 +2517,11 @@ class SqliteStorage:
                 (attempt_reserved, role_reserved, job_reserved, reserved_cost),
                 label="Total role provider reservation",
             )
-            if month_real + total_reserved > monthly_limit:
+            if month_real + month_conservative + total_reserved > monthly_limit:
                 raise BudgetReservationError(
                     "Role provider reservation would exceed the global monthly limit."
                 )
-            if day_real + total_reserved > daily_limit:
+            if day_real + day_conservative + total_reserved > daily_limit:
                 raise BudgetReservationError(
                     "Role provider reservation would exceed the global daily limit."
                 )
@@ -2656,23 +2713,370 @@ class SqliteStorage:
             ).fetchall()
         return tuple(dict(row) for row in rows)
 
+    def _has_conservative_reconciliation_schema(self) -> bool:
+        return self.conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='conservative_content_reconciliations'"
+        ).fetchone() is not None
+
+    @staticmethod
+    def _conservative_record_from_row(
+        row: sqlite3.Row,
+    ) -> ConservativeReconciliationRecord:
+        return ConservativeReconciliationRecord(
+            reconciliation_id=str(row["reconciliation_id"]),
+            source_type=ConservativeSourceType(str(row["source_type"])),
+            source_identity=str(row["source_identity"]),
+            job_id=str(row["job_id"]),
+            content_id=None if row["content_id"] is None else int(row["content_id"]),
+            run_id=None if row["run_id"] is None else str(row["run_id"]),
+            provider=str(row["provider"]), model=str(row["model"]),
+            previous_status=str(row["previous_status"]),
+            resolution=ConservativeResolution(str(row["resolution"])),
+            reserved_amount_usd=Decimal(str(row["reserved_amount_usd"])),
+            conservative_cost_usd=Decimal(str(row["conservative_cost_usd"])),
+            actual_cost_usd=None, evidence_kind=str(row["evidence_kind"]),
+            reason=str(row["reason"]), approved_by=str(row["approved_by"]),
+            approved_at=str(row["approved_at"]),
+            approval_fingerprint=str(row["approval_fingerprint"]),
+            created_at=str(row["created_at"]),
+            audit_fingerprint=str(row["audit_fingerprint"]),
+        )
+
+    def _conservative_source_row(
+        self, source_type: ConservativeSourceType, source_identity: str,
+    ) -> sqlite3.Row:
+        if source_type is ConservativeSourceType.PROVIDER_ATTEMPT:
+            row = self.conn.execute(
+                "SELECT p.request_id AS source_identity,p.job_id,wr.content_id,j.run_id,"
+                "wr.provider,wr.api_model_id AS model,p.status AS previous_status,"
+                "p.reserved_amount_usd AS reserved_amount_usd "
+                "FROM provider_attempts p JOIN jobs j ON j.id=p.job_id "
+                "JOIN runs r ON r.id=j.run_id "
+                "JOIN content_writer_results wr ON wr.request_id=p.request_id "
+                "JOIN content_writer_intents wi ON wi.intent_id=wr.intent_id "
+                "JOIN content_items c ON c.id=wr.content_id "
+                "WHERE p.request_id=? AND p.status='NEEDS_RECONCILIATION' "
+                "AND p.request_started_at IS NOT NULL AND p.actual_cost_usd IS NULL "
+                "AND j.kind='CONTENT' AND j.workflow='ARTICLE' "
+                "AND wr.job_id=j.id AND wr.run_id=j.run_id "
+                "AND c.job_id=j.id AND c.run_id=j.run_id "
+                "AND wi.job_id=j.id AND wi.run_id=j.run_id AND wi.content_id=c.id "
+                "AND wi.attempt_no=p.attempt_no "
+                "AND wi.intent_fingerprint=p.execution_intent_fingerprint "
+                "AND NOT EXISTS (SELECT 1 FROM model_usage u "
+                "WHERE u.request_id=p.request_id)",
+                (source_identity,),
+            ).fetchone()
+        else:
+            row = self.conn.execute(
+                "SELECT e.execution_ref AS source_identity,e.job_id,e.content_id,e.run_id,"
+                "e.provider,e.technical_model_id AS model,e.outcome AS previous_status,"
+                "e.reserved_cost_usd AS reserved_amount_usd "
+                "FROM role_provider_executions e JOIN jobs j ON j.id=e.job_id "
+                "JOIN runs r ON r.id=e.run_id JOIN content_items c ON c.id=e.content_id "
+                "WHERE e.execution_ref=? AND e.outcome='NEEDS_VERIFICATION' "
+                "AND e.external_effect_started_at IS NOT NULL AND e.cost_usd IS NULL "
+                "AND e.input_tokens IS NULL AND e.output_tokens IS NULL "
+                "AND e.cache_read_tokens IS NULL AND e.cache_write_tokens IS NULL "
+                "AND e.web_search_requests IS NULL "
+                "AND j.kind='CONTENT' AND j.workflow='ARTICLE' "
+                "AND c.job_id=j.id AND c.run_id=e.run_id "
+                "AND NOT EXISTS (SELECT 1 FROM model_usage u "
+                "WHERE u.request_id=e.execution_ref)",
+                (source_identity,),
+            ).fetchone()
+        if row is None:
+            raise ConservativeReconciliationError(
+                "Source is missing, unsupported, has known usage/cost, or did not "
+                "cross the external-effect boundary."
+            )
+        return row
+
+    def _build_conservative_reconciliation_plan(
+        self, *, source_type: object, source_identity: str,
+        expected_reserved_amount_usd: float | str,
+        approved_by: str, approved_at: str | datetime, reason: str,
+        created_at: str,
+    ) -> ConservativeReconciliationPlan:
+        if not self._has_conservative_reconciliation_schema():
+            raise ConservativeReconciliationError(
+                "Schema 0040_content_role_reconciliation is required."
+            )
+        try:
+            source_kind = (
+                source_type if isinstance(source_type, ConservativeSourceType)
+                else ConservativeSourceType(str(source_type).upper().replace("-", "_"))
+            )
+        except ValueError as exc:
+            raise ConservativeReconciliationError(
+                "source_type must be PROVIDER_ATTEMPT or ROLE_EXECUTION."
+            ) from exc
+        identity = str(source_identity).strip()
+        if not identity:
+            raise ConservativeReconciliationError("source_identity is required.")
+        try:
+            expected = _money(
+                expected_reserved_amount_usd, positive=True,
+                label="Expected conservative reservation",
+            )
+        except BudgetReservationError as exc:
+            raise ConservativeReconciliationError(str(exc)) from exc
+        operator = self._reconciliation_text(
+            approved_by, label="approved_by", limit=128,
+        )
+        reason_text = self._reconciliation_text(
+            reason, label="conservative reason", limit=1000,
+        )
+        approval_instant = canonical_approval_instant(approved_at)
+        source = self._conservative_source_row(source_kind, identity)
+        reserved = quantize_usd(
+            source["reserved_amount_usd"], label="Persisted source reservation",
+        )
+        if expected != reserved:
+            raise ConservativeReconciliationError(
+                "expected_reserved_amount_usd must equal the full persisted reservation."
+            )
+        money = format(reserved, ".6f")
+        approval_payload = {
+            "schema_version": CONSERVATIVE_APPROVAL_SCHEMA,
+            "source_type": source_kind.value,
+            "source_identity": identity,
+            "job_id": str(source["job_id"]),
+            "content_id": None if source["content_id"] is None else int(source["content_id"]),
+            "run_id": None if source["run_id"] is None else str(source["run_id"]),
+            "provider": str(source["provider"]), "model": str(source["model"]),
+            "resolution": ConservativeResolution.CONSERVATIVE_MAX_CHARGED.value,
+            "expected_reserved_amount_usd": money,
+            "evidence_kind": CONSERVATIVE_EVIDENCE_KIND,
+            "reason": reason_text, "approved_by": operator,
+            "approved_at": approval_instant,
+        }
+        approval_json = canonical_json(approval_payload)
+        approval_fingerprint = sha256_text(approval_json)
+        reconciliation_id = "ccr-" + approval_fingerprint[:32]
+        audit_payload = {
+            "schema_version": CONSERVATIVE_AUDIT_SCHEMA,
+            "reconciliation_id": reconciliation_id,
+            "source_type": source_kind.value, "source_identity": identity,
+            "job_id": str(source["job_id"]),
+            "content_id": None if source["content_id"] is None else int(source["content_id"]),
+            "run_id": None if source["run_id"] is None else str(source["run_id"]),
+            "provider": str(source["provider"]), "model": str(source["model"]),
+            "previous_status": str(source["previous_status"]),
+            "resolution": ConservativeResolution.CONSERVATIVE_MAX_CHARGED.value,
+            "reserved_amount_usd": money, "conservative_cost_usd": money,
+            "actual_cost_usd": None, "evidence_kind": CONSERVATIVE_EVIDENCE_KIND,
+            "reason": reason_text, "approved_by": operator,
+            "approved_at": approval_instant,
+            "approval_fingerprint": approval_fingerprint,
+            "created_at": created_at,
+        }
+        audit_json = canonical_json(audit_payload)
+        record = ConservativeReconciliationRecord(
+            reconciliation_id=reconciliation_id, source_type=source_kind,
+            source_identity=identity, job_id=str(source["job_id"]),
+            content_id=approval_payload["content_id"], run_id=approval_payload["run_id"],
+            provider=str(source["provider"]), model=str(source["model"]),
+            previous_status=str(source["previous_status"]),
+            resolution=ConservativeResolution.CONSERVATIVE_MAX_CHARGED,
+            reserved_amount_usd=reserved, conservative_cost_usd=reserved,
+            actual_cost_usd=None, evidence_kind=CONSERVATIVE_EVIDENCE_KIND,
+            reason=reason_text, approved_by=operator, approved_at=approval_instant,
+            approval_fingerprint=approval_fingerprint, created_at=created_at,
+            audit_fingerprint=sha256_text(audit_json),
+        )
+        existing = self.conn.execute(
+            "SELECT * FROM conservative_content_reconciliations "
+            "WHERE source_type=? AND source_identity=?",
+            (source_kind.value, identity),
+        ).fetchone()
+        if existing is not None:
+            if str(existing["approval_fingerprint"]) != approval_fingerprint:
+                raise ConservativeReconciliationError(
+                    "Source was already reconciled with a conflicting owner payload."
+                )
+            existing_record = self._conservative_record_from_row(existing)
+            return ConservativeReconciliationPlan(
+                record=existing_record, approval_json=str(existing["approval_json"]),
+                audit_json=str(existing["audit_json"]), existing=True, idempotent=True,
+            )
+        return ConservativeReconciliationPlan(
+            record=record, approval_json=approval_json, audit_json=audit_json,
+        )
+
+    def preview_conservative_content_reconciliation(
+        self, *, source_type: object, source_identity: str,
+        expected_reserved_amount_usd: float | str,
+        approved_by: str, approved_at: str | datetime, reason: str,
+    ) -> ConservativeReconciliationPlan:
+        """Build the exact owner approval and source plan without mutation."""
+        return self._build_conservative_reconciliation_plan(
+            source_type=source_type, source_identity=source_identity,
+            expected_reserved_amount_usd=expected_reserved_amount_usd,
+            approved_by=approved_by, approved_at=approved_at, reason=reason,
+            created_at=_ts_precise(None),
+        )
+
+    def resolve_conservative_content_reconciliation(
+        self, *, source_type: object, source_identity: str,
+        expected_reserved_amount_usd: float | str,
+        approved_by: str, approved_at: str | datetime, reason: str,
+        now: datetime | None = None,
+    ) -> ConservativeReconciliationPlan:
+        """Persist one full-reservation adjudication without changing source facts."""
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            plan = self._build_conservative_reconciliation_plan(
+                source_type=source_type, source_identity=source_identity,
+                expected_reserved_amount_usd=expected_reserved_amount_usd,
+                approved_by=approved_by, approved_at=approved_at, reason=reason,
+                created_at=_ts_precise(now),
+            )
+            if plan.existing:
+                self.conn.commit()
+                return plan
+            record = plan.record
+            self.conn.execute(
+                "INSERT INTO conservative_content_reconciliations ("
+                "reconciliation_id,source_type,source_identity,job_id,content_id,run_id,"
+                "provider,model,previous_status,resolution,reserved_amount_usd,"
+                "conservative_cost_usd,actual_cost_usd,evidence_kind,reason,approved_by,"
+                "approved_at,approval_json,approval_fingerprint,created_at,audit_json,"
+                "audit_fingerprint) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    record.reconciliation_id, record.source_type.value,
+                    record.source_identity, record.job_id, record.content_id, record.run_id,
+                    record.provider, record.model, record.previous_status,
+                    record.resolution.value, format(record.reserved_amount_usd, ".6f"),
+                    format(record.conservative_cost_usd, ".6f"), None,
+                    record.evidence_kind, record.reason, record.approved_by,
+                    record.approved_at, plan.approval_json,
+                    record.approval_fingerprint, record.created_at, plan.audit_json,
+                    record.audit_fingerprint,
+                ),
+            )
+            persisted = self.conn.execute(
+                "SELECT * FROM conservative_content_reconciliations "
+                "WHERE reconciliation_id=?", (record.reconciliation_id,),
+            ).fetchone()
+            assert persisted is not None
+            self.conn.commit()
+            return ConservativeReconciliationPlan(
+                record=self._conservative_record_from_row(persisted),
+                approval_json=str(persisted["approval_json"]),
+                audit_json=str(persisted["audit_json"]),
+            )
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            if isinstance(primary, sqlite3.IntegrityError):
+                raise ConservativeReconciliationError(str(primary)) from primary
+            raise
+
+    def list_conservative_content_reconciliations(
+        self,
+    ) -> tuple[ConservativeReconciliationRecord, ...]:
+        if not self._has_conservative_reconciliation_schema():
+            return ()
+        return tuple(
+            self._conservative_record_from_row(row) for row in self.conn.execute(
+                "SELECT * FROM conservative_content_reconciliations "
+                "ORDER BY created_at,reconciliation_id"
+            ).fetchall()
+        )
+
+    def actual_known_cost_usd(self, *, prefix: str | None = None) -> Decimal:
+        # ``model_usage`` is the canonical local usage ledger.  Its historical
+        # ``dry_run`` flag describes the workflow mode, not whether a real
+        # provider response supplied usage; likewise legacy rows remain known
+        # costs.  The controlled ARTICLE_RESEARCH qualification predates the
+        # shared role-execution ledger and therefore has its own immutable,
+        # request-level cost row which must be included exactly once.
+        sql = "SELECT estimated_cost_usd AS cost_usd FROM model_usage"
+        params: tuple[object, ...] = ()
+        if prefix is not None:
+            sql += " WHERE created_at LIKE ?"
+            params = (prefix + "%",)
+        usage = _sum_money_rows(
+            self.conn.execute(sql, params).fetchall(), "cost_usd",
+            label="Known model usage cost",
+        )
+        qualification_sql = (
+            "SELECT cost_usd FROM model_qualification_runs "
+            "WHERE logical_role='ARTICLE_RESEARCH' AND cost_usd IS NOT NULL "
+            "AND outcome IN ('PASS','FAIL','NEEDS_VERIFICATION')"
+        )
+        qualification_params: tuple[object, ...] = ()
+        if prefix is not None:
+            qualification_sql += " AND settled_at LIKE ?"
+            qualification_params = (prefix + "%",)
+        qualification = _sum_money_rows(
+            self.conn.execute(qualification_sql, qualification_params).fetchall(),
+            "cost_usd", label="Known ARTICLE_RESEARCH qualification cost",
+        )
+        return quantize_usd(usage + qualification, label="Actual known provider cost")
+
+    def conservative_adjudicated_cost_usd(
+        self, *, prefix: str | None = None,
+    ) -> Decimal:
+        if not self._has_conservative_reconciliation_schema():
+            return Decimal("0.000000")
+        sql = "SELECT conservative_cost_usd FROM conservative_content_reconciliations"
+        params: tuple[object, ...] = ()
+        if prefix is not None:
+            sql += " WHERE created_at LIKE ?"
+            params = (prefix + "%",)
+        return _sum_money_rows(
+            self.conn.execute(sql, params).fetchall(), "conservative_cost_usd",
+            label="Conservative adjudicated provider cost",
+        )
+
+    def conservative_cost_summary(self) -> ConservativeCostSummary:
+        actual = self.actual_known_cost_usd()
+        conservative = self.conservative_adjudicated_cost_usd()
+        unresolved = self.unresolved_provider_exposure()
+        return ConservativeCostSummary(
+            actual_known_cost_usd=actual,
+            conservative_adjudicated_cost_usd=conservative,
+            unresolved_provider_exposure_usd=unresolved,
+            effective_budget_spend_usd=quantize_usd(
+                actual + conservative, label="Effective budget spend",
+            ),
+        )
+
     def unresolved_provider_exposure(self) -> Decimal:
         """Conservative full-envelope exposure for every ambiguous paid effect."""
+        provider_resolved = ""
+        role_resolved = ""
+        if self._has_conservative_reconciliation_schema():
+            provider_resolved = (
+                "AND NOT EXISTS (SELECT 1 FROM conservative_content_reconciliations c "
+                "WHERE c.source_type='PROVIDER_ATTEMPT' "
+                "AND c.source_identity=provider_attempts.request_id) "
+            )
+            role_resolved = (
+                "AND NOT EXISTS (SELECT 1 FROM conservative_content_reconciliations c "
+                "WHERE c.source_type='ROLE_EXECUTION' "
+                "AND c.source_identity=role_provider_executions.execution_ref) "
+            )
         attempt = _sum_money_rows(
             self.conn.execute(
                 "SELECT reserved_amount_usd FROM provider_attempts "
                 "WHERE status IN ('REQUEST_STARTED','NEEDS_RECONCILIATION') "
                 "AND NOT EXISTS (SELECT 1 FROM model_usage u "
                 "WHERE u.request_id=provider_attempts.request_id "
-                "AND u.dry_run=0 AND u.is_legacy_usage=0)"
+                "AND u.dry_run=0 AND u.is_legacy_usage=0) "
+                + provider_resolved
             ).fetchall(),
             "reserved_amount_usd", label="Unresolved provider attempt exposure",
         )
         roles = _sum_money_rows(
             self.conn.execute(
                 "SELECT reserved_cost_usd FROM role_provider_executions "
-                "WHERE outcome='IN_FLIGHT' OR "
-                "(outcome='NEEDS_VERIFICATION' AND cost_usd IS NULL)"
+                "WHERE (outcome='IN_FLIGHT' OR "
+                "(outcome='NEEDS_VERIFICATION' AND cost_usd IS NULL)) "
+                + role_resolved
             ).fetchall(),
             "reserved_cost_usd", label="Unresolved role exposure",
         )
@@ -2907,13 +3311,15 @@ class SqliteStorage:
             "WHERE dry_run=0 AND created_at LIKE ?", (f"{timestamp[:7]}%",),
         ).fetchall(), "estimated_cost_usd", label="Review-chain monthly cost")
         exposure = self.unresolved_provider_exposure()
-        if day_real + exposure + reservation > _money(
+        day_conservative = self.conservative_adjudicated_cost_usd(prefix=timestamp[:10])
+        month_conservative = self.conservative_adjudicated_cost_usd(prefix=timestamp[:7])
+        if day_real + day_conservative + exposure + reservation > _money(
             approval["daily_limit_usd"], positive=True, label="Daily limit",
         ):
             raise BudgetReservationError(
                 "Review-chain reservation plus unresolved exposure exceeds daily limit."
             )
-        if month_real + exposure + reservation > _money(
+        if month_real + month_conservative + exposure + reservation > _money(
             approval["monthly_limit_usd"], positive=True, label="Monthly limit",
         ):
             raise BudgetReservationError(
@@ -8802,9 +9208,17 @@ class SqliteStorage:
                 "SELECT estimated_cost_usd FROM model_usage "
                 "WHERE dry_run=0 AND created_at LIKE ?", (f"{month_prefix}%",),
             ).fetchall()
+            has_conservative_schema = self._has_conservative_reconciliation_schema()
+            provider_reconciled_clause = (
+                "AND NOT EXISTS (SELECT 1 FROM conservative_content_reconciliations c "
+                "WHERE c.source_type='PROVIDER_ATTEMPT' "
+                "AND c.source_identity=provider_attempts.request_id)"
+                if has_conservative_schema else ""
+            )
             active_attempt_rows = self.conn.execute(
                 "SELECT reserved_amount_usd FROM provider_attempts "
-                "WHERE status IN ('RESERVED','REQUEST_STARTED','NEEDS_RECONCILIATION')",
+                "WHERE status IN ('RESERVED','REQUEST_STARTED','NEEDS_RECONCILIATION') "
+                + provider_reconciled_clause,
             ).fetchall()
             role_table_exists = self.conn.execute(
                 "SELECT 1 FROM sqlite_master WHERE type='table' "
@@ -8813,8 +9227,14 @@ class SqliteStorage:
             active_role_rows = (
                 self.conn.execute(
                     "SELECT reserved_cost_usd FROM role_provider_executions "
-                    "WHERE outcome='IN_FLIGHT' OR "
-                    "(outcome='NEEDS_VERIFICATION' AND cost_usd IS NULL)",
+                    "WHERE (outcome='IN_FLIGHT' OR "
+                    "(outcome='NEEDS_VERIFICATION' AND cost_usd IS NULL)) "
+                    + (
+                        "AND NOT EXISTS (SELECT 1 FROM conservative_content_reconciliations c "
+                        "WHERE c.source_type='ROLE_EXECUTION' "
+                        "AND c.source_identity=role_provider_executions.execution_ref)"
+                        if has_conservative_schema else ""
+                    ),
                 ).fetchall()
                 if role_table_exists else ()
             )
@@ -8828,6 +9248,12 @@ class SqliteStorage:
             )
             month_real_amount = _sum_money_rows(
                 month_real_rows, "estimated_cost_usd", label="Persisted monthly provider cost",
+            )
+            day_conservative_amount = self.conservative_adjudicated_cost_usd(
+                prefix=day_prefix,
+            )
+            month_conservative_amount = self.conservative_adjudicated_cost_usd(
+                prefix=month_prefix,
             )
             attempt_reserved_amount = _sum_money_rows(
                 active_attempt_rows,
@@ -8849,9 +9275,9 @@ class SqliteStorage:
                 ),
                 label="Total provider reservation",
             )
-            if month_real_amount + total_reserved > monthly_limit:
+            if month_real_amount + month_conservative_amount + total_reserved > monthly_limit:
                 raise BudgetReservationError("Provider reservation would exceed the global monthly limit.")
-            if day_real_amount + total_reserved > daily_limit:
+            if day_real_amount + day_conservative_amount + total_reserved > daily_limit:
                 raise BudgetReservationError("Provider reservation would exceed the global daily limit.")
             if topic_generation:
                 # Konsumpcja jednorazowej zgody L1 i rezerwacja attemptu są
@@ -12523,6 +12949,42 @@ class SqliteStorage:
         )
         unknown_reasons.append("last maintenance-cycle timestamp is not persisted")
 
+        if "conservative_content_reconciliations" in tables:
+            cost_summary = self.conservative_cost_summary()
+            actual_known_cost = OperationalScalar(
+                status=OperationalFieldStatus.OK,
+                value=f"{cost_summary.actual_known_cost_usd:.6f}",
+            )
+            conservative_cost = OperationalScalar(
+                status=OperationalFieldStatus.OK,
+                value=f"{cost_summary.conservative_adjudicated_cost_usd:.6f}",
+            )
+            unresolved_cost = OperationalScalar(
+                status=OperationalFieldStatus.OK,
+                value=f"{cost_summary.unresolved_provider_exposure_usd:.6f}",
+            )
+            effective_cost = OperationalScalar(
+                status=OperationalFieldStatus.OK,
+                value=f"{cost_summary.effective_budget_spend_usd:.6f}",
+            )
+        else:
+            missing_cost_detail = (
+                "Schema 0040 conservative reconciliation ledger is unavailable."
+            )
+            actual_known_cost = OperationalScalar(
+                status=OperationalFieldStatus.UNKNOWN, detail=missing_cost_detail,
+            )
+            conservative_cost = OperationalScalar(
+                status=OperationalFieldStatus.UNKNOWN, detail=missing_cost_detail,
+            )
+            unresolved_cost = OperationalScalar(
+                status=OperationalFieldStatus.UNKNOWN, detail=missing_cost_detail,
+            )
+            effective_cost = OperationalScalar(
+                status=OperationalFieldStatus.UNKNOWN, detail=missing_cost_detail,
+            )
+            unknown_reasons.append("conservative cost ledger is unavailable")
+
         return OperationalReport(
             schema_migrations=schema_migrations,
             job_counts=job_counts,
@@ -12532,6 +12994,10 @@ class SqliteStorage:
             needs_reconciliation_attempts=needs_reconciliation,
             active_reservations=active_reservations,
             active_reserved_cost_usd=active_reserved_cost,
+            actual_known_cost_usd=actual_known_cost,
+            conservative_adjudicated_cost_usd=conservative_cost,
+            unresolved_provider_exposure_usd=unresolved_cost,
+            effective_budget_spend_usd=effective_cost,
             system_flags=flag_states,
             last_maintenance_at=last_maintenance,
             unknown_reasons=unknown_reasons,

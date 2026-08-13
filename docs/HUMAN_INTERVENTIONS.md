@@ -1,5 +1,11 @@
 # HUMAN_INTERVENTIONS
 
+## 2026-08-13 — właściciel zdefiniował `CONSERVATIVE_MAX_CHARGED`
+
+- Właściciel zdecydował, że brak request-level evidence wolno rozstrzygnąć budżetowo wyłącznie przez zaliczenie pełnej zachowanej rezerwy, bez przedstawiania jej jako potwierdzonego rachunku providera.
+- Autoryzacja obejmuje implementację migracji 0040, resolvera, raportowania i testów offline. Nie obejmuje faktycznej rekonsyliacji v1/v4/v5, migracji produkcji, REVIEW-ONLY live, API, publikacji ani operacji Git zapisujących historię.
+- Wymagany stan po implementacji to kandydat do niezależnego review. Produkcja ma pozostać byte-identical na `0039/39` i system nadal `NOT LIVE-READY`.
+
 ## 2026-08-13 — właściciel zatwierdził merge PR #46 i migrację produkcji 0038→0039
 
 - Właściciel przekazał niezależny wynik `APPROVE WITH MINOR/P2` dla dokładnego heada `a7caa5e…`, zezwolił na ready, standardowy merge commit, fast-forward lokalnego `main` i jeden zatwierdzony krok migracji przez `scripts/migrate_schema_0039.py`.

@@ -1,5 +1,13 @@
 # DECISIONS (Architecture Decision Log)
 
+### ADR-146: Właścicielska konserwatywna rekonsyliacja pełnej rezerwy nie jest actual charge
+
+- **Data/status/autor:** 2026-08-13; decyzja właściciela, implementacja `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.
+- **Decyzja:** gdy nie ma jednoznacznego request-level evidence, właściciel może przypisać dokładnie pełną zachowaną rezerwę jako `CONSERVATIVE_MAX_CHARGED`. `actual_cost_usd` pozostaje `NULL`; nie deklaruje się `CHARGED_KNOWN` ani `NOT_CHARGED`.
+- **Trwałość:** osobny immutable ledger wiąże source identity, job/content/run, model/provider, wcześniejszy stan, kwotę, uzasadnienie, autora, czas oraz fingerprints approval/auditu. Historyczny source pozostaje w pierwotnym stanie i nie staje się retryable.
+- **Budżet:** `actual_known_cost_usd` i `conservative_adjudicated_cost_usd` są rozłączne; `effective_budget_spend_usd` jest ich sumą, a zrekonsyliowana rezerwa znika z `unresolved_provider_exposure` i nie jest liczona drugi raz.
+- **Granice:** panel Anthropic jest wyłącznie agregatem, nie dowodem request-level. Migracja 0040 i resolver nie zostały użyte na produkcji; brak API, live, publikacji i zmiany globalnego limitu 40 USD/miesiąc.
+
 ### ADR-145: Merge PR #46 i kontrolowana migracja produkcji do 0039
 
 - **Data/status/autor:** 2026-08-13; właściciel przyjął niezależny werdykt `APPROVE WITH MINOR/P2` dla dokładnego SHA `a7caa5e…` i autoryzował merge oraz jeden krok migracyjny `0038→0039`.

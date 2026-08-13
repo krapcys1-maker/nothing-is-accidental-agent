@@ -702,6 +702,7 @@ def test_migration_0011_preserves_valid_0010_history_and_is_idempotent(tmp_path:
             "0036_source_discovery_reconciliation",
             "0037_evidence_reresearch_lineage",
             "0038_content_provider_timeout", "0039_article_review_resume",
+            "0040_content_role_reconciliation",
     ]
     attempt = conn.execute(
         "SELECT status,actual_cost_usd,released_at FROM provider_attempts"
@@ -2302,6 +2303,7 @@ def test_migration_0012_keeps_provable_usage_nonlegacy_and_reopens_cleanly(tmp_p
             "0036_source_discovery_reconciliation",
             "0037_evidence_reresearch_lineage",
             "0038_content_provider_timeout", "0039_article_review_resume",
+            "0040_content_role_reconciliation",
     ]
     states = {
         row["model"]: row["is_legacy_usage"]

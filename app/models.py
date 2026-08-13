@@ -494,6 +494,30 @@ class OperationalReport(BaseModel):
     needs_reconciliation_attempts: OperationalScalar
     active_reservations: OperationalScalar
     active_reserved_cost_usd: OperationalScalar
+    actual_known_cost_usd: OperationalScalar = Field(
+        default_factory=lambda: OperationalScalar(
+            status=OperationalFieldStatus.UNKNOWN,
+            detail="Conservative cost schema is unavailable.",
+        )
+    )
+    conservative_adjudicated_cost_usd: OperationalScalar = Field(
+        default_factory=lambda: OperationalScalar(
+            status=OperationalFieldStatus.UNKNOWN,
+            detail="Conservative cost schema is unavailable.",
+        )
+    )
+    unresolved_provider_exposure_usd: OperationalScalar = Field(
+        default_factory=lambda: OperationalScalar(
+            status=OperationalFieldStatus.UNKNOWN,
+            detail="Conservative cost schema is unavailable.",
+        )
+    )
+    effective_budget_spend_usd: OperationalScalar = Field(
+        default_factory=lambda: OperationalScalar(
+            status=OperationalFieldStatus.UNKNOWN,
+            detail="Conservative cost schema is unavailable.",
+        )
+    )
     system_flags: dict[str, OperationalFlagState] = Field(default_factory=dict)
     last_maintenance_at: OperationalScalar
     unknown_reasons: list[str] = Field(default_factory=list)

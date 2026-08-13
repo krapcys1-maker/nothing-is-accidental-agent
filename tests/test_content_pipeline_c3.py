@@ -805,6 +805,8 @@ def test_explicit_0022_to_0023_migration_is_temp_only_and_idempotent(tmp_path):
     migrate_0037_to_0038(path)
     from app.storage.db import migrate_0038_to_0039
     migrate_0038_to_0039(path)
+    from app.storage.db import migrate_0039_to_0040
+    migrate_0039_to_0040(path)
     opened = SqliteStorage.open(path)
     opened.close()
 

@@ -1386,8 +1386,10 @@ def test_migration_cli_0018_requires_confirmation_and_is_exact(tmp_path, capsys)
     migrate_0036_to_0037(path)
     migrate_0037_to_0038(path)
     migrate_0038_to_0039(path)
+    from app.storage.db import migrate_0039_to_0040
+    migrate_0039_to_0040(path)
     SqliteStorage.open(path).close()
-    assert database_schema_versions(path)[-1] == "0039_article_review_resume"
+    assert database_schema_versions(path)[-1] == "0040_content_role_reconciliation"
 
     too_old = tmp_path / "too-old-0016.db"
     initialize_database(too_old, through=EVIDENCE_SCHEMA_VERSION)

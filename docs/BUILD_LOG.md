@@ -1,5 +1,13 @@
 # BUILD_LOG
 
+## 2026-08-13 — Etap 3 / konserwatywna rekonsyliacja CONTENT i role execution
+
+- Dodano jedną addytywną migrację `0040_content_role_reconciliation` z immutable ledgerem, approval/audit fingerprints i triggerami sprawdzającymi dokładne źródło po external effect.
+- Storage i raport operatorski rozdzielają `actual_known`, `conservative_adjudicated`, `unresolved` i `effective`; REVIEW-ONLY oraz bezpośrednie budget gates odejmują zrekonsyliowaną ekspozycję dokładnie raz.
+- `scripts/reconcile_conservative_content.py` obsługuje jeden record, najpierw pokazuje plan, a zapis wymaga exact identity/amount/owner/time/reason oraz `--confirm-conservative-max-charged`. Nie importuje ani nie uruchamia providera, workera lub REVIEW-ONLY.
+- Testy celowane i zależne: `117/117 PASS`; końcowa pełna suita: `2652/2652 PASS` w `814.9 s`; `compileall app scripts` i `git diff --check` PASS. Rehearsal na usuwanej tymczasowej kopii produkcji zachował liczności/integrity/FK i odtworzył `5.172339 + 0.738880 = 5.911219 USD`, unresolved `0`.
+- Zero sieci, provider API, realnej rekonsyliacji, live, publikacji i kosztu. Produkcja nadal `0039/39`; 0040 nie została zastosowana.
+
 ## 2026-08-13 — Etap 3 / merge PR #46 i produkcyjna migracja 0038→0039
 
 - Zatwierdzony head `a7caa5eebcb28bedc240d460bdc922d112e00d4c` zmergowano standardowym merge commitem `b8eb2095f67f5db54eadfbb36ebeeb8384def194`; lokalny `main` zsynchronizowano fast-forward z `origin/main`.
