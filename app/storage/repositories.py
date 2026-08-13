@@ -302,6 +302,20 @@ _RESEARCH_USAGE_PLACEHOLDERS = ", ".join("?" for _ in _RESEARCH_USAGE_TASKS)
 # in the one shared `model_usage` ledger; reconciliation selects the exact task
 # set from the durable job kind.
 TOPIC_GENERATION_USAGE_TASK = "topics"
+
+
+@dataclass(frozen=True)
+class ContentWriterIdentity:
+    """The frozen CONTENT writer provider/model, read from the durable result.
+
+    CONTENT has no durable research execution intent, so this stands in for one
+    wherever the reconciliation code verifies a usage row against the identity
+    that was actually authorised.  It exposes exactly the two attributes the
+    shared identity check reads.
+    """
+
+    provider: str
+    model: str
 # Formal, closed contract for the task of a canonical usage the resolver may bind
 # to a reconciled attempt.  Never widened by a ``startswith('research')`` prefix.
 _RECONCILIATION_RESEARCH_USAGE_TASKS = frozenset(_RESEARCH_USAGE_TASKS)
@@ -9888,6 +9902,8 @@ class SqliteStorage:
             return self._reconciliation_require_topic_generation_lineage(
                 row, account_id,
             )
+        if row["job_kind"] == JobKind.CONTENT.value:
+            return self._reconciliation_require_content_lineage(row, account_id)
         if row["run_id"] is None or row["run_status"] is None or row["research_status"] is None:
             raise ProviderAttemptReconciliationError(
                 "Attempt lacks the required durable job->run->research_run relation."
@@ -9954,6 +9970,92 @@ class SqliteStorage:
                 "Attempt lineage is inconsistent: " + ",".join(problems)
             )
         return intent
+
+    def _reconciliation_require_content_lineage(
+        self, row: sqlite3.Row, account_id: str,
+    ) -> "ContentWriterIdentity":
+        """Validate the CONTENT/ARTICLE writer lineage for a known-cost decision.
+
+        CONTENT has no research_run and no durable research intent.  Its frozen
+        provider/model identity lives in ``content_writer_results``, bound to the
+        writer intent whose fingerprint the attempt already carries, so that is
+        what the usage row is verified against.  Reviewer executions settle in
+        ``role_provider_executions`` and are never reconcilable here.
+        """
+        if row["run_id"] is None or row["run_status"] is None:
+            raise ProviderAttemptReconciliationError(
+                "Attempt lacks the required durable job->run relation."
+            )
+        if row["research_status"] is not None:
+            raise ProviderAttemptReconciliationError(
+                "A CONTENT attempt must not carry a research_run lineage."
+            )
+        job_account = row["job_account_id"]
+        problems: list[str] = []
+        if job_account != account_id:
+            problems.append("job.account_id!=operator")
+        if row["job_workflow"] != WorkflowType.ARTICLE.value:
+            problems.append("job.workflow")
+        if row["run_account_id"] != job_account:
+            problems.append("run.account_id!=job.account_id")
+        if row["run_workflow"] != WorkflowType.ARTICLE.value:
+            problems.append("run.workflow")
+        # Only the writer stage can hold a reconcilable CONTENT provider charge.
+        if row["stage"] != CONTENT_PROVIDER_STAGE:
+            problems.append("attempt.stage")
+        if row["request_id"] != (
+            f"{row['job_id']}:{CONTENT_PROVIDER_STAGE}:{int(row['attempt_no'])}"
+        ):
+            problems.append("attempt.request_id")
+        if row["request_started_at"] is None:
+            problems.append("attempt.request_started_at")
+        content_run = self.conn.execute(
+            "SELECT content_id,job_id,account_id,workflow,status FROM content_runs "
+            "WHERE run_id=?", (row["run_id"],),
+        ).fetchone()
+        if (
+            content_run is None
+            or content_run["job_id"] != row["job_id"]
+            or content_run["account_id"] != job_account
+            or content_run["workflow"] != WorkflowType.ARTICLE.value
+        ):
+            problems.append("content_run")
+        else:
+            content_item = self.conn.execute(
+                "SELECT id,status,job_id,run_id,account_id FROM content_items WHERE id=?",
+                (content_run["content_id"],),
+            ).fetchone()
+            if (
+                content_item is None
+                or content_item["job_id"] != row["job_id"]
+                or content_item["run_id"] != row["run_id"]
+                or content_item["account_id"] != job_account
+            ):
+                problems.append("content_item")
+        writer = self.conn.execute(
+            "SELECT wr.provider,wr.api_model_id,wr.content_id,wr.run_id,wr.job_id,"
+            "wi.attempt_no,wi.intent_fingerprint "
+            "FROM content_writer_results wr "
+            "JOIN content_writer_intents wi ON wi.intent_id=wr.intent_id "
+            "WHERE wr.request_id=?", (row["request_id"],),
+        ).fetchone()
+        if writer is None:
+            problems.append("content_writer_result")
+        else:
+            if writer["job_id"] != row["job_id"] or writer["run_id"] != row["run_id"]:
+                problems.append("writer.job/run")
+            if int(writer["attempt_no"]) != int(row["attempt_no"]):
+                problems.append("writer.attempt_no")
+            if writer["intent_fingerprint"] != row["execution_intent_fingerprint"]:
+                problems.append("writer.intent_fingerprint")
+        if problems:
+            raise ProviderAttemptReconciliationError(
+                "Attempt lineage is inconsistent: " + ",".join(problems)
+            )
+        assert writer is not None
+        return ContentWriterIdentity(
+            provider=str(writer["provider"]), model=str(writer["api_model_id"]),
+        )
 
     def _reconciliation_require_topic_generation_lineage(
         self, row: sqlite3.Row, account_id: str,
@@ -10059,7 +10161,27 @@ class SqliteStorage:
     def _reconciliation_usage_total(self, row: sqlite3.Row) -> Decimal:
         if row["job_kind"] == JobKind.TOPIC_GENERATION.value:
             return self._topic_generation_usage_total(row["run_id"])
+        if row["job_kind"] == JobKind.CONTENT.value:
+            return self._content_reconciliation_usage_total(row["run_id"])
         return self._research_usage_total(row["run_id"])
+
+    def _content_reconciliation_usage_total(self, run_id: str) -> Decimal:
+        """The canonical CONTENT run total, identical to the writer/reviewer cache.
+
+        Deliberately the same relation as ``_set_run_cost_from_content_usage``:
+        writer usage on the content stage plus every settled role execution of
+        the run.  A reconciliation must never change this number - it only
+        proves the cache already equals the ledger.
+        """
+        rows = self.conn.execute(
+            "SELECT estimated_cost_usd FROM model_usage "
+            "WHERE run_id=? AND (task=? OR request_id IN ("
+            "SELECT execution_ref FROM role_provider_executions WHERE run_id=?))",
+            (run_id, CONTENT_PROVIDER_STAGE, run_id),
+        ).fetchall()
+        return _sum_money_rows(
+            rows, "estimated_cost_usd", label="Canonical content usage total",
+        )
 
     def _reconciliation_intent(
         self, row: sqlite3.Row,
@@ -10067,6 +10189,12 @@ class SqliteStorage:
         """Reconstruct and fingerprint-verify the durable provider/model identity."""
         if row["job_kind"] == JobKind.TOPIC_GENERATION.value:
             return self._reconciliation_topic_intent(row)
+        if row["job_kind"] == JobKind.CONTENT.value:
+            # CONTENT identity is the frozen writer result, validated together
+            # with the whole lineage rather than rebuilt from a research payload.
+            return self._reconciliation_require_content_lineage(
+                row, str(row["job_account_id"]),
+            )
         try:
             payload = json.loads(row["payload_json"])
             from app.research.source_discovery_intent import (
@@ -10117,11 +10245,12 @@ class SqliteStorage:
             problems.append("provider")
         if usage["model"] != intent.model:
             problems.append("model")
-        acceptable_tasks = (
-            frozenset((TOPIC_GENERATION_USAGE_TASK,))
-            if row["job_kind"] == JobKind.TOPIC_GENERATION.value
-            else _RECONCILIATION_RESEARCH_USAGE_TASKS
-        )
+        if row["job_kind"] == JobKind.TOPIC_GENERATION.value:
+            acceptable_tasks = frozenset((TOPIC_GENERATION_USAGE_TASK,))
+        elif row["job_kind"] == JobKind.CONTENT.value:
+            acceptable_tasks = frozenset((CONTENT_PROVIDER_STAGE,))
+        else:
+            acceptable_tasks = _RECONCILIATION_RESEARCH_USAGE_TASKS
         if usage["task"] not in acceptable_tasks:
             problems.append("task")
         if actual_amount is not None and not _money_equal(
@@ -10176,7 +10305,9 @@ class SqliteStorage:
             raise ProviderAttemptReconciliationError(
                 "Ledger and cost cache diverged after reconciliation."
             )
-        if row["job_kind"] != JobKind.TOPIC_GENERATION.value:
+        if row["job_kind"] not in (
+            JobKind.TOPIC_GENERATION.value, JobKind.CONTENT.value,
+        ):
             rr_row = self.conn.execute(
                 "SELECT total_cost_usd FROM research_runs WHERE id=?", (run_id,),
             ).fetchone()
@@ -10702,7 +10833,9 @@ class SqliteStorage:
                 ProviderAttemptStatus.RECONCILED_SETTLED.value,
                 ProviderAttemptStatus.RECONCILED_RELEASED.value,
             ):
-                if row["job_kind"] == JobKind.TOPIC_GENERATION.value:
+                if row["job_kind"] in (
+                    JobKind.TOPIC_GENERATION.value, JobKind.CONTENT.value,
+                ):
                     self._reconciliation_require_consistent_lineage(row, account_id)
                 existing_resolution = str(row["reconciliation_resolution"] or "")
                 if status != terminal_status or existing_resolution != combined or \
@@ -10738,10 +10871,31 @@ class SqliteStorage:
                 raise ProviderAttemptReconciliationError("Only NEEDS_RECONCILIATION may be resolved.")
             intent = self._reconciliation_require_consistent_lineage(row, account_id)
             is_topic_generation = row["job_kind"] == JobKind.TOPIC_GENERATION.value
+            is_content = row["job_kind"] == JobKind.CONTENT.value
             if is_topic_generation and execution_resolution is not ExecutionResolution.EXECUTION_FAILED:
                 raise ProviderAttemptReconciliationError(
                     "TOPIC_GENERATION reconciliation supports EXECUTION_FAILED only."
                 )
+            if is_content:
+                # A CONTENT charge is reconcilable only when the exact cost is
+                # already durable, so the decision is always CHARGED_KNOWN over an
+                # execution that failed.  NOT_CHARGED would contradict the usage
+                # row, and RESULT_ALREADY_FINALIZED would claim a finished article
+                # that this path must never manufacture.
+                if financial_resolution is not FinancialResolution.CHARGED_KNOWN:
+                    raise ProviderAttemptReconciliationError(
+                        "CONTENT reconciliation supports CHARGED_KNOWN only; the "
+                        "canonical usage proves the provider was charged."
+                    )
+                if execution_resolution is not ExecutionResolution.EXECUTION_FAILED:
+                    raise ProviderAttemptReconciliationError(
+                        "CONTENT reconciliation supports EXECUTION_FAILED only."
+                    )
+                if len(usage_rows) != 1:
+                    raise ProviderAttemptReconciliationError(
+                        "CONTENT known-cost reconciliation requires exactly one "
+                        "canonical non-legacy usage row."
+                    )
             # W1A-AUD-04: an escalated RESERVED attempt provably never crossed the
             # request boundary, so the only truthful financial outcome is NOT_CHARGED.
             if row["request_started_at"] is None and financial_resolution is not FinancialResolution.NOT_CHARGED:
@@ -10769,7 +10923,7 @@ class SqliteStorage:
                         "EXECUTION_FAILED cannot coexist with a Research Card."
                     )
                 research_lifecycle_valid = row["research_status"] is None
-                if not is_topic_generation:
+                if not is_topic_generation and not is_content:
                     research_lifecycle_valid = (
                         row["research_flow"], row["research_status"],
                     ) in {
@@ -10794,15 +10948,37 @@ class SqliteStorage:
                 # reaper-STOPPED run is driven to FAILED under one compare-and-swap.
                 # error/finished_at use COALESCE to preserve any reaper/maintenance
                 # history; both cost caches are refreshed in Step 2.
-                run_status_placeholders = ",".join("?" for _ in _EXECUTION_FAILED_RUN_STATUSES)
-                run_cursor = self.conn.execute(
-                    "UPDATE runs SET status='FAILED',error=COALESCE(error,?),"
-                    "finished_at=COALESCE(finished_at,?) "
-                    f"WHERE id=? AND status IN ({run_status_placeholders})",
-                    ("OPERATOR_RECONCILIATION_EXECUTION_FAILED", now, row["run_id"],
-                     *_EXECUTION_FAILED_RUN_STATUSES),
-                )
-                if is_topic_generation:
+                if is_content:
+                    # A content run's status/current_state/finished_at/error are
+                    # owned by the content transition contract (0039).  The
+                    # overrun already drove this run to its terminal failed
+                    # STOPPED state, so the reconciliation asserts that state
+                    # instead of manufacturing a transition command - which is
+                    # the machinery that also produces PENDING_APPROVAL.
+                    if row["run_status"] not in (
+                        RunStatus.STOPPED.value, RunStatus.FAILED.value,
+                    ):
+                        raise ProviderAttemptReconciliationError(
+                            "CONTENT reconciliation requires an already failed run; "
+                            f"observed {row['run_status']!r}."
+                        )
+                    run_rowcount = 1
+                    cache_run_status = row["run_status"]
+                else:
+                    run_status_placeholders = ",".join(
+                        "?" for _ in _EXECUTION_FAILED_RUN_STATUSES)
+                    run_rowcount = self.conn.execute(
+                        "UPDATE runs SET status='FAILED',error=COALESCE(error,?),"
+                        "finished_at=COALESCE(finished_at,?) "
+                        f"WHERE id=? AND status IN ({run_status_placeholders})",
+                        ("OPERATOR_RECONCILIATION_EXECUTION_FAILED", now, row["run_id"],
+                         *_EXECUTION_FAILED_RUN_STATUSES),
+                    ).rowcount
+                if is_topic_generation or is_content:
+                    # Neither lifecycle owns a research_run.  CONTENT keeps its
+                    # content_run and content_item exactly as the failure left
+                    # them: only jobs/runs are terminalized, so reconciliation
+                    # can never produce APPROVE or PENDING_APPROVAL.
                     research_rowcount = 1
                 else:
                     source_status = (
@@ -10820,10 +10996,11 @@ class SqliteStorage:
                         ),
                     )
                     research_rowcount = research_cursor.rowcount
-                if run_cursor.rowcount != 1 or research_rowcount != 1:
+                if run_rowcount != 1 or research_rowcount != 1:
                     raise ProviderAttemptReconciliationError("Execution failure lifecycle update is inconsistent.")
                 job_target = "FAILED"
-                cache_run_status = "FAILED"
+                if not is_content:
+                    cache_run_status = "FAILED"
             else:  # RESULT_ALREADY_FINALIZED
                 self._reconciliation_require_exclusive_card(row)
                 job_target = "DONE"
@@ -10836,15 +11013,32 @@ class SqliteStorage:
             external_effect_clear = (
                 "external_effect_started_at=NULL," if is_topic_generation else ""
             )
-            job_cursor = self.conn.execute(
-                "UPDATE jobs SET status=?,last_error=?,lease_owner=NULL,lease_expires_at=NULL,"
-                "reserved_cost_usd=0.0,budget_reserved_at=NULL," + external_effect_clear +
-                "updated_at=?,finished_at=COALESCE(finished_at,?) "
-                "WHERE id=? AND status='NEEDS_VERIFICATION'",
-                (job_target, "OPERATOR_RECONCILIATION:" + combined, now, now, row["job_id"]),
-            )
-            if job_cursor.rowcount != 1:
-                raise ProviderAttemptReconciliationError("Job resolution lost its compare-and-swap.")
+            if is_content:
+                # A CONTENT job's status is owned by the content transition
+                # command contract, exactly like its run.  The failure already
+                # parked it in NEEDS_VERIFICATION with no lease and no
+                # reservation, which is a stopped, non-runnable, non-success
+                # state.  The reconciliation asserts that state and leaves the
+                # workflow verdict exactly as the failure wrote it.
+                if (
+                    row["lease_owner"] is not None
+                    or row["lease_expires_at"] is not None
+                    or float(row["reserved_cost_usd"] or 0.0) != 0.0
+                    or row["budget_reserved_at"] is not None
+                ):
+                    raise ProviderAttemptReconciliationError(
+                        "CONTENT reconciliation requires a released, unleased job."
+                    )
+            else:
+                job_cursor = self.conn.execute(
+                    "UPDATE jobs SET status=?,last_error=?,lease_owner=NULL,lease_expires_at=NULL,"
+                    "reserved_cost_usd=0.0,budget_reserved_at=NULL," + external_effect_clear +
+                    "updated_at=?,finished_at=COALESCE(finished_at,?) "
+                    "WHERE id=? AND status='NEEDS_VERIFICATION'",
+                    (job_target, "OPERATOR_RECONCILIATION:" + combined, now, now, row["job_id"]),
+                )
+                if job_cursor.rowcount != 1:
+                    raise ProviderAttemptReconciliationError("Job resolution lost its compare-and-swap.")
             self._reconciliation_fault_point(ReconciliationFaultPoint.AFTER_JOB_UPDATE)
 
             # ---- Step 2: canonical usage and both cost caches. ----
@@ -10853,6 +11047,12 @@ class SqliteStorage:
                 assert actual_amount is not None
                 if usage_rows:
                     usage_id = int(usage_rows[0]["id"])
+                elif is_content:
+                    # Unreachable by contract (checked above); kept explicit so a
+                    # future edit can never make CONTENT mint a second charge.
+                    raise ProviderAttemptReconciliationError(
+                        "CONTENT reconciliation never creates canonical usage."
+                    )
                 else:
                     usage_task = (
                         TOPIC_GENERATION_USAGE_TASK
@@ -10874,7 +11074,7 @@ class SqliteStorage:
                 "UPDATE runs SET cost_usd=? WHERE id=? AND status=?",
                 (float(total), row["run_id"], cache_run_status),
             )
-            if is_topic_generation:
+            if is_topic_generation or is_content:
                 research_cache_rowcount = 1
             elif execution_resolution is ExecutionResolution.EXECUTION_FAILED:
                 research_cache_cursor = self.conn.execute(

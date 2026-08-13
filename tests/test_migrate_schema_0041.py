@@ -136,11 +136,14 @@ def test_0041_failure_rolls_back_triggers_and_ledger_to_0040(tmp_path):
 
 
 def test_fresh_database_reaches_the_document_gate_runtime_floor(tmp_path):
+    """0041 stays on a fresh install; the runtime floor itself moved on to 0042."""
     path = tmp_path / "fresh.db"
     applied = initialize_database(path)
-    assert applied[-1] == REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION
-    assert RUNTIME_SCHEMA_VERSION == REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION
-    assert len(applied) == 41
+    assert REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION in applied
+    assert applied.index(REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION) == 40
+    assert RUNTIME_SCHEMA_VERSION >= REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION
+    assert applied[-1] == RUNTIME_SCHEMA_VERSION
+    assert len(applied) == 42
 
 
 def test_durable_floor_rejects_an_approve_without_a_passing_document_review(tmp_path):

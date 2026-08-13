@@ -28,6 +28,7 @@ from app.llm.anthropic_provider_contract import ARTICLE_REVIEWER_INFERENCE_CONFI
 from app.storage.db import (
     ARTICLE_REVIEW_RESUME_SCHEMA_VERSION,
     CONTENT_ROLE_RECONCILIATION_SCHEMA_VERSION,
+    CONTENT_KNOWN_COST_RECONCILIATION_SCHEMA_VERSION,
     REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION,
     ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION,
     CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION,
@@ -365,10 +366,11 @@ def test_11_settlement_records_usage_and_cost_exactly_once(storage):
 
 def test_12_runtime_floor_is_the_role_execution_global_ledger():
     """The floor includes canonical accounting for paid role executions."""
-    assert RUNTIME_SCHEMA_VERSION == REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION
+    assert RUNTIME_SCHEMA_VERSION == CONTENT_KNOWN_COST_RECONCILIATION_SCHEMA_VERSION
     assert RUNTIME_SCHEMA_VERSION != ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION
     canonical = canonical_migration_versions()
-    assert canonical[-1] == REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION
+    assert canonical[-1] == CONTENT_KNOWN_COST_RECONCILIATION_SCHEMA_VERSION
+    assert canonical[-2] == REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION
     assert canonical.index(ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION) < canonical.index(
         ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION
     ) < canonical.index(END_TO_END_CONNECTION_SCHEMA_VERSION) < canonical.index(

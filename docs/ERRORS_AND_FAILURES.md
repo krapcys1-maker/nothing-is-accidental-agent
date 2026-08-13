@@ -1,5 +1,14 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-13 — nierozliczalny CONTENT attempt o znanym koszcie
+
+- **Objaw:** `online-e2e-article-card-7-v2:content_draft:1` stał w `NEEDS_RECONCILIATION` z `error_code=PROVIDER_ATTEMPT_COST_EXCEEDS_RESERVATION`, mimo że jego dokładny koszt `0.106345 USD` był trwale zapisany w `model_usage` id=40 (11029/2048). Adiudykacja PR #48 objęła trzy inne pozycje (razem `0.738880 USD`), a tę pominęła — bo jest innej klasy: koszt jest ZNANY i przekracza rezerwę `0.091200 USD`, zamiast być nieustalalny.
+- **Przyczyna:** żaden wspierany resolver nie obsługiwał tego przypadku. WAVE 1 `resolve_provider_attempt_reconciliation`/`CHARGED_KNOWN` odmawiał dla obu dozwolonych execution resolutions komunikatem `Attempt lacks the required durable job->run->research_run relation` — trzy triggery (0020/0036) dopuszczały wyłącznie `RESEARCH` i `TOPIC_GENERATION`, a job CONTENT nie ma `research_runs`. Ledger `0040` obsługuje CONTENT, ale tylko `CONSERVATIVE_MAX_CHARGED` z `actual_cost_usd IS NULL` — zaksięgowałby `0.091200`, **zaniżając** wydatek o `0.015145 USD`.
+- **Wniosek ogólny:** dodanie nowego rodzaju joba do pipeline'u nie rozszerza automatycznie kontraktów rekonsyliacji. Bramki finansowe wyliczają `job.kind` jawnie i milcząco wykluczają wszystko, czego nie wymieniono.
+- **Dwie pułapki ujawnione dopiero w implementacji (nie z lektury):** `jobs.status` i `runs.status` joba CONTENT są własnością kontraktu content transition commands (`runs_content_require_transition_command`, 0039). Terminalizacja przez `UPDATE` kończy się `content run may change only through a transition command or review resume` oraz `CONTENT job may transition only through a content command`. Dlatego rekonsyliacja finansowa **asertuje** istniejący stan nieudany zamiast go przepisywać — wymuszanie `FAILED` wymagałoby fabrykowania content command, czyli tej samej maszynerii, która produkuje `PENDING_APPROVAL`.
+- **Zamknięcie:** schema `0042` + gałąź CONTENT w istniejącym resolverze + operatorskie preview/confirm. Szczegóły w ADR-149. Produkcyjny request pozostaje nierozliczony do osobnej autoryzacji.
+
+
 ## 2026-08-13 — niezależny review `REJECT`: dwa obejścia reviewera
 
 - **P1-1.** Wspólna quality gate odrzucała sprzeczność „to nie jest fakt, ale zawiera fakt", lecz **początkowa ścieżka REVIEW-ONLY jej nie uruchamia** — decyzję wyprowadzała z samych `outcome`. Kontrpróba: `ARGUMENT_OR_INFERENCE`/`NON_FACTUAL_PROSE` + `contains_external_fact=true` + `evidence_ids=[]` + `PASS` → `APPROVE` i `PENDING_APPROVAL`. Wniosek ogólny: inwariant zapisany w jednym konsumencie nie jest inwariantem systemu.

@@ -1386,11 +1386,14 @@ def test_migration_cli_0018_requires_confirmation_and_is_exact(tmp_path, capsys)
     migrate_0036_to_0037(path)
     migrate_0037_to_0038(path)
     migrate_0038_to_0039(path)
-    from app.storage.db import migrate_0039_to_0040, migrate_0040_to_0041
+    from app.storage.db import (
+        migrate_0039_to_0040, migrate_0040_to_0041, migrate_0041_to_0042,
+    )
     migrate_0039_to_0040(path)
     migrate_0040_to_0041(path)
+    migrate_0041_to_0042(path)
     SqliteStorage.open(path).close()
-    assert database_schema_versions(path)[-1] == "0041_reviewer_document_quality_gate"
+    assert database_schema_versions(path)[-1] == "0042_content_known_cost_reconciliation"
 
     too_old = tmp_path / "too-old-0016.db"
     initialize_database(too_old, through=EVIDENCE_SCHEMA_VERSION)
