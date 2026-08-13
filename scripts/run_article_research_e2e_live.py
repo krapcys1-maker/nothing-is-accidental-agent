@@ -11,7 +11,7 @@ from pathlib import Path
 
 from app.core.clock import SystemClock
 from app.core.config import load_settings
-from app.models import JobKind, JobStatus, TopicStatus
+from app.models import Job, JobKind, JobStatus, TopicStatus
 from app.model_routing.contracts import LogicalModelRole
 from app.operations.controlled_fetch_live import (
     ControlledFetchLiveRequest,
@@ -415,11 +415,14 @@ def main(argv: list[str] | None = None) -> int:
                 card = storage.get_research_card(research_run.research_card_id)
         print(json.dumps({
             "status": "PASS" if evidence_status == "DONE" and card is not None else "FAIL",
-            "operation": operation,
+            "operation": "ARTICLE_RESEARCH_E2E",
             "provider": PROVIDER,
             "model_id": MODEL_ID,
             "topic_id": topic.id,
-            "topic": TOPIC_TEXT,
+            "topic": {
+                "title": topic.title,
+                "question": topic.question,
+            },
             "source_discovery": {
                 "job_id": discovery_job.id,
                 "approval_id": discovery_approval,
