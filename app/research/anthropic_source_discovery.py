@@ -11,6 +11,7 @@ from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
 
 from app.llm.base import Usage
+from app.llm.anthropic_provider_contract import ARTICLE_RESEARCH_INFERENCE_CONFIG
 from app.ports.source_discovery import (
     SourceDiscoveryCandidate,
     SourceDiscoveryRequest,
@@ -65,6 +66,8 @@ class AnthropicSourceDiscoveryPort:
             max_tokens=8192,
             inference_geo="global",
             service_tier="standard_only",
+            thinking={"type": ARTICLE_RESEARCH_INFERENCE_CONFIG.thinking_type},
+            output_config={"effort": ARTICLE_RESEARCH_INFERENCE_CONFIG.effort},
             tools=[{
                 "type": "web_search_20250305", "name": "web_search",
                 "max_uses": request.max_results,

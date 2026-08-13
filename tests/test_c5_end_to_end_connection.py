@@ -316,8 +316,10 @@ def test_article_research_rejects_sonnet_other_opus_and_16k_capability(storage):
 def test_production_discovery_ignores_free_text_urls_and_accepts_structured_results():
     class Messages:
         response: object
+        calls: list[dict[str, object]] = []
 
-        def create(self, **_kwargs):
+        def create(self, **kwargs):
+            self.calls.append(kwargs)
             return self.response
 
     messages = Messages()
@@ -354,6 +356,8 @@ def test_production_discovery_ignores_free_text_urls_and_accepts_structured_resu
         ),
     )
     response = port.discover(request)
+    assert messages.calls[-1]["thinking"] == {"type": "adaptive"}
+    assert messages.calls[-1]["output_config"] == {"effort": "high"}
     assert len(response.candidates) == 1
     assert response.candidates[0].canonical_url == "https://authoritative.example/report"
     assert response.candidates[0].canonical_source_identity.startswith("url-sha256:")
