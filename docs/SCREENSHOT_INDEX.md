@@ -1,5 +1,10 @@
 # SCREENSHOT_INDEX
 
+## 2026-08-13 — konserwatywna rekonsyliacja: NO SCREENSHOT STORED
+
+- Prywatnego obrazu panelu Anthropic nie zapisano w repo. Widoczne agregaty `4.10 USD` total, `3.84 USD` token i `0.26 USD` web search nie są request-level evidence dla v1/v4/v5.
+- Dowodem kandydata są migracja, immutable audit contract, testy fake-caller/temp-DB i rehearsal na usuniętej kopii. Nie uruchomiono browsera, providera, live ani publikacji.
+
 ## 2026-08-13 — pięć MAJOR PR #46: NO SCREENSHOT TAKEN
 
 - Praca była wyłącznie offline; browser, provider i publikacja były zabronione. Dowodem są diff, fake-SDK tests i migracyjne rehearsale na bazach tymczasowych.

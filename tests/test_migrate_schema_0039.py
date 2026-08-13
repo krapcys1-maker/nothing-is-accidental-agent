@@ -81,7 +81,7 @@ def test_0039_schema_closes_third_review_and_third_writer(tmp_path):
 
 def test_0039_is_idempotent(tmp_path):
     path = tmp_path / "review-resume-current.db"
-    initialize_database(path)
+    initialize_database(path, through=ARTICLE_REVIEW_RESUME_SCHEMA_VERSION)
     result = migrate_0038_to_0039(path)
     assert result.idempotent is True
     assert result.applied_migrations == ()

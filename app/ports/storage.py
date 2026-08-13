@@ -825,6 +825,27 @@ class StoragePort(Protocol):
         """Read-only, ordered append-only reconciliation history for one attempt."""
         ...
 
+    def preview_conservative_content_reconciliation(
+        self, *, source_type: object, source_identity: str,
+        expected_reserved_amount_usd: float | str,
+        approved_by: str, approved_at: str | datetime, reason: str,
+    ) -> object:
+        """Build the exact owner-adjudication payload without mutation."""
+        ...
+
+    def resolve_conservative_content_reconciliation(
+        self, *, source_type: object, source_identity: str,
+        expected_reserved_amount_usd: float | str,
+        approved_by: str, approved_at: str | datetime, reason: str,
+        now: datetime | None = None,
+    ) -> object:
+        """Atomically persist one full-reservation conservative adjudication."""
+        ...
+
+    def conservative_cost_summary(self) -> object:
+        """Return actual, conservative, unresolved and effective spend."""
+        ...
+
     def resolve_provider_attempt_reconciliation(
         self,
         *,

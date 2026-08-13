@@ -843,6 +843,8 @@ def test_explicit_0023_to_0024_migration_is_fresh_upgrade_and_idempotent(tmp_pat
     migrate_0036_to_0037(upgrade)
     migrate_0037_to_0038(upgrade)
     migrate_0038_to_0039(upgrade)
+    from app.storage.db import migrate_0039_to_0040
+    migrate_0039_to_0040(upgrade)
     opened = SqliteStorage.open(upgrade)
     try:
         assert opened.conn.execute(

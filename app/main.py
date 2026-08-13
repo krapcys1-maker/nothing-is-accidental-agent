@@ -1031,6 +1031,19 @@ def _cmd_operational_report(args: argparse.Namespace) -> int:
         "active_reserved_cost_usd="
         f"{_operational_value(report.active_reserved_cost_usd)}"
     )
+    print(f"actual_known_cost_usd={_operational_value(report.actual_known_cost_usd)}")
+    print(
+        "conservative_adjudicated_cost_usd="
+        f"{_operational_value(report.conservative_adjudicated_cost_usd)}"
+    )
+    print(
+        "unresolved_provider_exposure_usd="
+        f"{_operational_value(report.unresolved_provider_exposure_usd)}"
+    )
+    print(
+        "effective_budget_spend_usd="
+        f"{_operational_value(report.effective_budget_spend_usd)}"
+    )
     for key, flag in report.system_flags.items():
         if flag.status is OperationalFieldStatus.OK:
             rendered = str(flag.value).lower()

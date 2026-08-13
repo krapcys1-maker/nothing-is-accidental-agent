@@ -1,5 +1,12 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-13 — realne timeouty ujawniły brak resolvera dla dwóch ledgerów CONTENT
+
+- Writer v1 trafił do `provider_attempts.NEEDS_RECONCILIATION`, a reviewerzy v4/v5 do terminalnego `role_provider_executions.NEEDS_VERIFICATION`; dotychczasowy resolver WAVE 1 obejmował inny kontrakt i nie potrafił audytowalnie rozstrzygnąć obu tych źródeł bez fikcyjnego actual cost.
+- Zagregowany panel kosztów nie mapuje kosztu na v1/v4/v5. Nie wolno z niego wyprowadzać `CHARGED_KNOWN`, `NOT_CHARGED`, usage ani provider request ID.
+- Naprawa jest konserwatywna: oddzielny immutable audit zalicza pełną rezerwę do budżetu, pozostawia faktyczny koszt nieznany i nigdy nie ponawia historycznego requestu. Produkcyjnych rekordów nie zmieniono.
+- Pierwszy pełny suite po przesunięciu runtime floor na 0040 zakończył się 20 failures: stare testy drabiny kończyły jawne migracje na 0039 albo oczekiwały 39 elementów. Nie był to błąd resolvera. Bez osłabiania asercji doprowadzono te dokładne temp DB do 0040 i zaktualizowano kanoniczne listy; affected rerun przeszedł, a końcowa pełna suita zakończyła się `2652/2652 PASS`.
+
 ## 2026-08-13 — pięć MAJOR z niezależnego re-review PR #46
 
 - Opus 5/Sonnet 5 odrzucają legacy `thinking.type=enabled` z `budget_tokens`; aktywny adapter wysyła teraz exact adaptive i osobny effort.
