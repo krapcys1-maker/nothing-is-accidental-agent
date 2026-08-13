@@ -24,7 +24,7 @@ from app.content.cost_estimate import (
     ARTICLE_WRITER_MAX_OUTPUT_TOKENS,
     TOPIC_GENERATION_MAX_OUTPUT_TOKENS,
 )
-from app.content.quality_gate import DraftClaimSegment
+from app.content.quality_gate import DocumentCheck, DraftClaimSegment
 from app.content.review_only import (
     ReviewOnlyAuthority,
     ReviewOnlyError,
@@ -67,6 +67,14 @@ from tests.test_b3_production_reviewer import (
 )
 
 
+def _clean_document_review() -> dict:
+    """A passing whole-article verdict for fakes that exercise other invariants."""
+    return {
+        "checks": {check.value: True for check in DocumentCheck},
+        "findings": [],
+    }
+
+
 def _response_for_prompt(prompt: str):
     supplied = json.loads(prompt)["draft_segments"]
     reason = (
@@ -87,6 +95,7 @@ def _response_for_prompt(prompt: str):
             }
             for segment in supplied
         ],
+        "document_review": _clean_document_review(),
     })
     usage = SimpleNamespace(
         input_tokens=900,
@@ -432,10 +441,12 @@ def test_27_segment_maximal_contract_and_long_reason_are_accepted():
             }
             for segment in segments
         ],
+        "document_review": _clean_document_review(),
     }
-    parsed = parse_reviewer_response(json.dumps(payload), segments=segments)
+    parsed, document_review = parse_reviewer_response(json.dumps(payload), segments=segments)
     assert len(parsed) == 27
     assert all(len(entry.reason.split()) > 12 for entry in parsed)
+    assert document_review.approved is True
 
 
 def test_safe_diagnostic_artifact_redacts_credentials_and_is_bounded():
@@ -511,7 +522,13 @@ class _BlockingReviewerTransport:
             entries.append({
                 "segment_id": segment["segment_id"],
                 "segment_fingerprint": segment["fingerprint"],
-                "classification": "ARGUMENT_OR_INFERENCE",
+                # An unsupported factual claim is reported honestly: the class
+                # says it asserts a fact, the empty citation says nothing
+                # supports it, and the outcome blocks it.
+                "classification": (
+                    "EVIDENCE_GROUNDED_FACT" if index == 0
+                    else "ARGUMENT_OR_INFERENCE"
+                ),
                 "evidence_ids": [],
                 "reason": "rewrite this exact segment before approval",
                 "outcome": "BLOCK" if index == 0 else "PASS",
@@ -519,7 +536,11 @@ class _BlockingReviewerTransport:
             })
         return ControlledProviderRawResponse(
             returned_model_id="claude-opus-5",
-            text=json.dumps({"reviewer_version": REVIEWER_VERSION, "entries": entries}),
+            text=json.dumps({
+                "reviewer_version": REVIEWER_VERSION,
+                "entries": entries,
+                "document_review": _clean_document_review(),
+            }),
             input_tokens=900,
             output_tokens=400,
             cache_read_tokens=0,

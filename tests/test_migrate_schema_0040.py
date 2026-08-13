@@ -45,7 +45,7 @@ def test_0039_to_0040_is_additive_and_preserves_existing_data(tmp_path):
 
 def test_fresh_database_reaches_0040_and_has_immutable_ledger(tmp_path):
     path = tmp_path / "fresh-0040.db"
-    initialize_database(path)
+    initialize_database(path, through=CONTENT_ROLE_RECONCILIATION_SCHEMA_VERSION)
     assert database_schema_versions(path)[-1] == CONTENT_ROLE_RECONCILIATION_SCHEMA_VERSION
     connection = sqlite3.connect(path)
     try:
@@ -71,7 +71,7 @@ def test_0040_is_idempotent_and_cli_requires_exact_confirmation(tmp_path):
     from scripts.migrate_schema_0040 import main
 
     current = tmp_path / "current.db"
-    initialize_database(current)
+    initialize_database(current, through=CONTENT_ROLE_RECONCILIATION_SCHEMA_VERSION)
     result = migrate_0039_to_0040(current)
     assert result.idempotent is True and result.applied_migrations == ()
 

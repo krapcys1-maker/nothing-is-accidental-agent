@@ -31,7 +31,10 @@ from app.content.quality_gate import (
     ClaimAccountingEntry,
     ClaimClassification,
     ClaimReviewOutcome,
+    DocumentCheck,
+    DocumentReview,
     DraftClaimSegment,
+    classification_contract_error,
 )
 from app.core.clock import Clock, SystemClock
 from app.llm.anthropic_controlled_adapter import (
@@ -49,7 +52,11 @@ from app.llm.anthropic_provider_contract import (
 )
 from app.model_routing.contracts import LogicalModelRole, ModelFamily
 
-REVIEWER_VERSION = "production_article_reviewer_opus_v2"
+# v3 adds the whole-article gate and the strict inference boundary.  The bump is
+# load-bearing: a v2 accounting was produced against a body-only segment surface
+# and a decision rule that read "every segment PASS", so it must never satisfy
+# the v3 contract by replay.
+REVIEWER_VERSION = "production_article_reviewer_opus_v3"
 REVIEWER_TIMEOUT_SECONDS = 300.0
 REVIEWER_MAX_OUTPUT_TOKENS = 8_192
 REVIEWER_MAX_INPUT_TOKENS = 23_808
@@ -139,28 +146,65 @@ _SYSTEM = """You are the independent claim reviewer for the anonymous editorial
 brand Nothing Is Accidental. You did not write this draft and you never rewrite
 it. You only account for what it claims.
 
+Segments include the title and every other visible element, not only body
+sentences. Each carries a "kind". A title is judged as a claim about what the
+article delivers.
+
 For every supplied draft segment decide exactly one classification:
 
-EVIDENCE_GROUNDED_FACT - the segment asserts a fact about the world whose full
-scope is supported by the supplied frozen evidence. List every confirmed_claim_id
-that supports it. Only these ids exist; never invent one.
-ARGUMENT_OR_INFERENCE - reasoning, interpretation or a conclusion drawn from the
-allowed material. It must contain no external fact of its own.
+EVIDENCE_GROUNDED_FACT - the segment asserts a fact about the world. List every
+confirmed_claim_id that supports its full scope. Only these ids exist; never
+invent one. To PASS it must cite at least one. If the segment asserts a fact
+that nothing in the evidence supports, still classify it EVIDENCE_GROUNDED_FACT,
+leave evidence_ids [] and set outcome to BLOCK - that is how an unsupported
+factual claim is reported.
+ARGUMENT_OR_INFERENCE - reasoning, interpretation or a conclusion that follows
+from the frozen material already supplied. It may only connect, weigh or draw
+out what the evidence and brief already establish. evidence_ids must be exactly
+[].
 NON_FACTUAL_PROSE - framing, transition or rhetoric that asserts nothing factual
-and needs no evidence.
+and needs no evidence. evidence_ids must be exactly [].
+
+ARGUMENT_OR_INFERENCE is NOT a place to put new claims. A segment that
+introduces any empirical, technical, operational, historical, legal,
+institutional, behavioural, statistical or causal claim that the frozen evidence
+does not exactly support is NOT an inference. If such a claim has exact evidence,
+classify it EVIDENCE_GROUNDED_FACT and cite that evidence. If it does not, set
+outcome to BLOCK. Statements about what people generally do, what a system or
+metric can or cannot do, what incentives or rules produce, what causes what, or
+what would happen operationally are claims about the world, not reasoning, unless
+the evidence states them.
 
 Judge meaning, not word overlap. A sentence that reuses the evidence wording but
 widens its scope is not grounded. A sentence that shares no words with the
 evidence may still be grounded by it.
 
 Set outcome to PASS when the segment is acceptable as classified, and BLOCK when
-it is not. Set contains_external_fact to false for ARGUMENT_OR_INFERENCE and
-NON_FACTUAL_PROSE, and to true only when a segment smuggles in an outside fact.
+it is not. contains_external_fact must be false for ARGUMENT_OR_INFERENCE and
+NON_FACTUAL_PROSE, and true for EVIDENCE_GROUNDED_FACT. The flag and the class
+say the same thing: a segment that asserts an outside fact is a grounded fact,
+and one that does not is not. Never combine ARGUMENT_OR_INFERENCE or
+NON_FACTUAL_PROSE with contains_external_fact true, and never mark an
+EVIDENCE_GROUNDED_FACT false; both are rejected contradictions, not ways to
+flag a problem.
+
+Then judge the article as a whole in document_review. Answer each check true only
+if it clearly holds:
+TITLE_REFLECTS_BODY - the title describes what the article actually discusses.
+TITLE_PROMISE_FULFILLED - what the title promises the reader is delivered.
+TITLE_MECHANISM_EXPLAINED - any mechanism, cause or arithmetic named in the title
+is actually explained in the body. A vivid title for a different, unexplained
+mechanism is false.
+BRIEF_QUESTION_ANSWERED - the article answers the brief's question.
+THESIS_CONSISTENT - one main thesis, held consistently.
+CONCLUSIONS_WITHIN_EVIDENCE - conclusions do not reach past the evidence.
+For every false check add a specific, actionable rewrite instruction to findings.
+If every check is true, findings must be [].
 
 Return exactly one JSON object and nothing else. No Markdown, no code fence, no
 prose before or after it. Return exactly one entry per supplied segment_id,
 copying each segment_id and segment_fingerprint verbatim. Keep each reason to
-at most 12 words."""
+at most 12 words and each finding to at most 30 words."""
 
 
 class ProductionReviewerError(RuntimeError):
@@ -209,13 +253,73 @@ def assemble_reviewer_prompt(
                 "with: segment_id, segment_fingerprint, classification "
                 "(EVIDENCE_GROUNDED_FACT | ARGUMENT_OR_INFERENCE | "
                 "NON_FACTUAL_PROSE), evidence_ids (array of allowed "
-                "confirmed_claim_id values; empty unless grounded), reason "
-                "(non-empty string of at most 12 words), outcome (PASS | BLOCK), "
-                "contains_external_fact (boolean)"
+                "confirmed_claim_id values; non-empty for a PASSing "
+                "EVIDENCE_GROUNDED_FACT, [] for a BLOCKed unsupported one, and "
+                "always exactly [] for ARGUMENT_OR_INFERENCE and "
+                "NON_FACTUAL_PROSE), reason (non-empty string of at most 12 "
+                "words), outcome (PASS | BLOCK), contains_external_fact "
+                "(boolean; false for ARGUMENT_OR_INFERENCE and NON_FACTUAL_PROSE)"
+            ),
+            "document_review": (
+                "object with: checks (object whose keys are exactly "
+                + " | ".join(check.value for check in DocumentCheck)
+                + ", each a boolean) and findings (array of specific rewrite "
+                "instructions, one per false check, each at most 30 words; "
+                "exactly [] when every check is true)"
             ),
         },
     }
     return canonical_json(payload)
+
+
+def _parse_document_review(raw: object) -> DocumentReview:
+    """Parse the whole-article verdict; an unusable verdict is never a PASS."""
+    if type(raw) is not dict or set(raw) != {"checks", "findings"}:
+        raise ProductionReviewerError(
+            "REVIEWER_DOCUMENT_REVIEW_MALFORMED",
+            "document_review must contain exactly checks and findings.",
+        )
+    checks_raw = raw["checks"]
+    if type(checks_raw) is not dict or set(checks_raw) != {
+        check.value for check in DocumentCheck
+    }:
+        raise ProductionReviewerError(
+            "REVIEWER_DOCUMENT_REVIEW_MALFORMED",
+            "document_review.checks must name exactly the required checks.",
+        )
+    checks: dict[DocumentCheck, bool] = {}
+    for check in DocumentCheck:
+        value = checks_raw[check.value]
+        if type(value) is not bool:
+            raise ProductionReviewerError(
+                "REVIEWER_DOCUMENT_REVIEW_MALFORMED",
+                "Every document_review check must be a JSON boolean.",
+            )
+        checks[check] = value
+    findings_raw = raw["findings"]
+    if type(findings_raw) is not list or not all(
+        type(item) is str and item.strip() and item == item.strip()
+        for item in findings_raw
+    ):
+        raise ProductionReviewerError(
+            "REVIEWER_DOCUMENT_REVIEW_MALFORMED",
+            "document_review.findings must be canonical non-empty strings.",
+        )
+    review = DocumentReview(checks=checks, findings=tuple(findings_raw))
+    # A failed check without an instruction cannot drive a rewrite, and a clean
+    # verdict carrying instructions contradicts itself.  Both are contract errors
+    # rather than a quiet APPROVE.
+    if review.failed_checks and not review.findings:
+        raise ProductionReviewerError(
+            "REVIEWER_DOCUMENT_REVIEW_MALFORMED",
+            "A failed document check requires at least one rewrite instruction.",
+        )
+    if not review.failed_checks and review.findings:
+        raise ProductionReviewerError(
+            "REVIEWER_DOCUMENT_REVIEW_MALFORMED",
+            "A fully passing document review must carry no findings.",
+        )
+    return review
 
 
 def parse_reviewer_response(
@@ -223,11 +327,12 @@ def parse_reviewer_response(
     *,
     segments: tuple[DraftClaimSegment, ...],
     allowed_evidence_ids: frozenset[str] | None = None,
-) -> tuple[ClaimAccountingEntry, ...]:
-    """Map the transport response onto the existing claim-accounting contract.
+) -> tuple[tuple[ClaimAccountingEntry, ...], DocumentReview]:
+    """Map the transport response onto the claim-accounting and document contract.
 
-    This validates structure only.  Coverage, identity and evidence-scope
-    invariants stay where they already live, in the quality gate.
+    Structure, per-class evidence cardinality and the document verdict are
+    validated here.  Coverage, identity and evidence-scope invariants stay
+    where they already live, in the quality gate.
     """
     if not isinstance(text, str) or not text.strip():
         raise ProductionReviewerError(
@@ -240,10 +345,13 @@ def parse_reviewer_response(
             "REVIEWER_RESPONSE_NOT_JSON",
             "The reviewer response is not one JSON object.",
         ) from exc
-    if type(payload) is not dict or set(payload) != {"reviewer_version", "entries"}:
+    if type(payload) is not dict or set(payload) != {
+        "reviewer_version", "entries", "document_review",
+    }:
         raise ProductionReviewerError(
             "REVIEWER_RESPONSE_CONTRACT_INVALID",
-            "The reviewer response must contain exactly reviewer_version and entries.",
+            "The reviewer response must contain exactly reviewer_version, "
+            "entries and document_review.",
         )
     if type(payload["reviewer_version"]) is not str or (
         payload["reviewer_version"] != REVIEWER_VERSION
@@ -334,6 +442,19 @@ def parse_reviewer_response(
                 "REVIEWER_ENTRY_UNKNOWN_EVIDENCE",
                 "The reviewer cited evidence outside the frozen package.",
             )
+        # The single canonical entry contract: evidence cardinality *and*
+        # external-fact consistency.  Refusing it here means no consumer of a
+        # reviewer result can ever observe a self-contradictory PASS entry.
+        violation = classification_contract_error(
+            classification=entry.classification,
+            evidence_ids=entry.evidence_ids,
+            contains_external_fact=entry.contains_external_fact,
+            outcome=entry.outcome,
+        )
+        if violation is not None:
+            raise ProductionReviewerError(
+                "REVIEWER_ENTRY_EVIDENCE_CONTRACT", violation,
+            )
         seen.add(entry.segment_id)
         entries.append(entry)
     if seen != set(known):
@@ -341,7 +462,7 @@ def parse_reviewer_response(
             "REVIEWER_RESPONSE_INCOMPLETE",
             "The reviewer did not account for every supplied segment exactly once.",
         )
-    return tuple(entries)
+    return tuple(entries), _parse_document_review(payload["document_review"])
 
 
 _SECRET_PATTERNS = (
@@ -403,6 +524,9 @@ class ProductionArticleReviewer:
         self._resume_intent = resume_intent
         self._clock = clock or SystemClock()
         self.provider_calls = 0
+        # The port returns segment entries; the whole-article verdict is read
+        # from here by the caller that owns the APPROVE/REWRITE_ONCE decision.
+        self.last_document_review: DocumentReview | None = None
 
     @property
     def reviewer_version(self) -> str:
@@ -600,13 +724,14 @@ class ProductionArticleReviewer:
                 cache_write_tokens=raw.cache_write_tokens,
                 web_search_requests=raw.web_search_requests,
             )
-            entries = parse_reviewer_response(
+            entries, document_review = parse_reviewer_response(
                 raw.text,
                 segments=segments,
                 allowed_evidence_ids=frozenset(
                     item.confirmed_claim_id for item in evidence
                 ),
             )
+            self.last_document_review = document_review
         except (ControlledAdapterError, ProductionReviewerError) as exc:
             self._settle(
                 execution_ref, authority, run_id, content_id, attempt_no,
@@ -624,7 +749,7 @@ class ProductionArticleReviewer:
             outcome="SUCCESS", failure_kind=None, usage=usage,
             returned_model_id=raw.returned_model_id,
             detail=None, entry_count=len(entries),
-            entries=entries,
+            entries=entries, document_review=document_review,
             stop_reason=raw.stop_reason,
             provider_request_id=raw.provider_request_id,
         )
@@ -645,6 +770,7 @@ class ProductionArticleReviewer:
         detail: str | None,
         entry_count: int | None = None,
         entries: tuple[ClaimAccountingEntry, ...] | None = None,
+        document_review: DocumentReview | None = None,
         stop_reason: str | None = None,
         provider_request_id: str | None = None,
         diagnostic_artifact: dict[str, object] | None = None,
@@ -678,9 +804,28 @@ class ProductionArticleReviewer:
                 }
                 for entry in entries
             ]
+            # APPROVE now means the whole article passed, not only that every
+            # segment was individually accounted for.  A missing document
+            # verdict is treated as a failed one; it is never an implicit pass.
+            payload["document_review"] = (
+                document_review.payload() if document_review is not None
+                else {"approved": False, "checks": {}, "failed_checks": [],
+                      "findings": ["document review is missing"]}
+            )
+            claims_clean = all(
+                entry.outcome is ClaimReviewOutcome.PASS
+                and classification_contract_error(
+                    classification=entry.classification,
+                    evidence_ids=entry.evidence_ids,
+                    contains_external_fact=entry.contains_external_fact,
+                    outcome=entry.outcome,
+                ) is None
+                for entry in entries
+            )
+            document_clean = document_review is not None and document_review.approved
             payload["decision"] = (
                 "APPROVE"
-                if all(entry.outcome is ClaimReviewOutcome.PASS for entry in entries)
+                if claims_clean and document_clean
                 else "REWRITE_ONCE"
                 if attempt_no == 1
                 else "HUMAN_REQUIRED"
@@ -722,6 +867,8 @@ class ProductionArticleReviewer:
 
 
 __all__ = [
+    "DocumentCheck",
+    "DocumentReview",
     "ProductionArticleReviewer",
     "ProductionReviewerError",
     "REVIEWER_MAX_INPUT_TOKENS",
