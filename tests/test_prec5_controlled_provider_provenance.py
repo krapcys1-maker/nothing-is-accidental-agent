@@ -81,6 +81,25 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_COST = Decimal("0.008450")
 
 
+def test_writer_limits_accept_five_minute_timeout_and_reject_longer():
+    limits = WriterLimits(
+        max_input_tokens=8_000,
+        max_context_tokens=16_000,
+        max_output_tokens=2_048,
+        max_cost_usd=0.05,
+        timeout_seconds=300.0,
+    )
+    assert limits.timeout_seconds == 300.0
+    with pytest.raises(ValueError):
+        WriterLimits(
+            max_input_tokens=8_000,
+            max_context_tokens=16_000,
+            max_output_tokens=2_048,
+            max_cost_usd=0.05,
+            timeout_seconds=300.001,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Shared paid-execution harness
 # ---------------------------------------------------------------------------
@@ -211,6 +230,7 @@ def _binding(storage, job_id):
 def _intent_from_binding(storage, binding, *, job_id="prov-unit", attempt_no=1):
     """Build a durable-shaped paid intent from one frozen binding."""
     from app.content.contracts import WriterIntent
+    from app.llm.anthropic_provider_contract import ARTICLE_WRITER_INFERENCE_CONFIG
 
     route = route_from_frozen_model_binding(
         binding, content_type=ContentType.ARTICLE,
@@ -226,6 +246,7 @@ def _intent_from_binding(storage, binding, *, job_id="prov-unit", attempt_no=1):
         style_profile_id="ARTICLE_STYLE_PROFILE_V1",
         negative_style_profile_id="ARTICLE_NEGATIVE_STYLE_PROFILE_V1",
         prompt_fingerprint="5" * 64,
+        inference_config=ARTICLE_WRITER_INFERENCE_CONFIG,
         limits=WriterLimits(
             max_input_tokens=8_000, max_context_tokens=16_000,
             max_output_tokens=2_048, max_cost_usd=0.05, timeout_seconds=5.0,
@@ -293,6 +314,7 @@ def test_02_route_without_registry_id_cannot_even_be_constructed(frozen, routing
 def test_02b_paid_intent_without_any_registry_provenance_is_blocked():
     """A merely 'configured' paid route no longer validates at all."""
     from app.content.contracts import WriterIntent
+    from app.llm.anthropic_provider_contract import ARTICLE_WRITER_INFERENCE_CONFIG
 
     route = RouteContract(
         content_type=ContentType.ARTICLE, route_key="FABLE_5_ARTICLE",
@@ -312,6 +334,7 @@ def test_02b_paid_intent_without_any_registry_provenance_is_blocked():
             frozen_input_sha256="3" * 64, evidence_manifest_sha256="4" * 64,
             style_profile_id="s", negative_style_profile_id="n",
             prompt_fingerprint="5" * 64,
+            inference_config=ARTICLE_WRITER_INFERENCE_CONFIG,
             limits=WriterLimits(
                 max_input_tokens=10, max_context_tokens=10,
                 max_output_tokens=10, max_cost_usd=0.01, timeout_seconds=1.0,
@@ -1118,6 +1141,11 @@ def test_migration_0028_is_forward_only_explicit_and_idempotent(tmp_path, capsys
         migrate_0031_to_0032,
         migrate_0032_to_0033,
         migrate_0033_to_0034,
+        migrate_0034_to_0035,
+        migrate_0035_to_0036,
+        migrate_0036_to_0037,
+            migrate_0037_to_0038,
+            migrate_0038_to_0039,
     )
 
     migrate_0028_to_0029(path)
@@ -1126,6 +1154,11 @@ def test_migration_0028_is_forward_only_explicit_and_idempotent(tmp_path, capsys
     migrate_0031_to_0032(path)
     migrate_0032_to_0033(path)
     migrate_0033_to_0034(path)
+    migrate_0034_to_0035(path)
+    migrate_0035_to_0036(path)
+    migrate_0036_to_0037(path)
+    migrate_0037_to_0038(path)
+    migrate_0038_to_0039(path)
 
     opened = SqliteStorage.open(path)
     try:

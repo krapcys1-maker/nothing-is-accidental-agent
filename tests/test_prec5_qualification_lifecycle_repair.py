@@ -250,14 +250,15 @@ def test_major1_an_in_flight_run_is_reconciled_explicitly_never_retried(db_path)
         opened.conn.execute(
             "INSERT INTO model_qualification_runs (request_id,approval_ref,"
             "model_registry_id,logical_role,provider,technical_model_id,"
-            "pricing_ref,pricing_profile_fingerprint,outcome,result_json,"
+            "pricing_ref,pricing_profile_fingerprint,require_source_discovery,"
+            "outcome,result_json,"
             "result_fingerprint,external_effect_started_at,reserved_at,"
-            "executed_at) VALUES (?,?,?,?,?,?,?,?,'IN_FLIGHT',?,?,?,?,?)",
+            "executed_at) VALUES (?,?,?,?,?,?,?,?,?,'IN_FLIGHT',?,?,?,?,?)",
             (
                 approval.request_id, approval.approval_ref,
                 approval.model_registry_id, WRITER.value, "ANTHROPIC",
                 "claude-opus-5", approval.pricing_ref,
-                pricing.contract_fingerprint(), payload, sha256_text(payload),
+                pricing.contract_fingerprint(), 0, payload, sha256_text(payload),
                 APPROVED_AT, APPROVED_AT, APPROVED_AT,
             ),
         )
@@ -582,11 +583,11 @@ def test_major3_ceiling_violation_keeps_usage_cost_and_blocks_capability(storage
     assert caller.calls == 1, "the request already happened; it is not repeated"
     assert outcome.outcome == "NEEDS_VERIFICATION"
     assert outcome.failure_kind == "INPUT_CEILING_EXCEEDED"
-    # 13953 input at 5/MTok + 100 output at 25/MTok
-    assert outcome.cost_usd == Decimal("0.072265")
+    # 23809 input at 5/MTok + 100 output at 25/MTok
+    assert outcome.cost_usd == Decimal("0.121545")
     row = _run_row(storage, approval.request_id)
     assert row["input_tokens"] == over
-    assert row["cost_usd"] == "0.072265"
+    assert row["cost_usd"] == "0.121545"
     assert row["qualification_ref"] is None
     assert _registry(storage)["current_qualification_state"] == "UNQUALIFIED"
     assert storage.conn.execute(

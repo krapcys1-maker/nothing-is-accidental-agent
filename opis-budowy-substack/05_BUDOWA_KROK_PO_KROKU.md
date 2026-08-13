@@ -1,5 +1,9 @@
 # 05 — BUDOWA KROK PO KROKU
 
+## 2026-08-12 — Od prawdziwych źródeł do draftu, ale nie przez ostatnią bramkę
+
+System najpierw zakwalifikował Opusa do researchu, potem przez kontrolowane discovery, approval, fetch i extraction zebrał trzy kompletne źródła o bus bunching. Corpus packer utworzył wejście do Research Card #7 z rekomendacją `PROCEED`. Writer kilkukrotnie stworzył pełny artykuł. Po drodze usunięto realne wady ujawnione przez live: nieustrukturyzowane pola karty, globalną kolizję briefu, zbyt mały output envelope i limit 30 sekund zapisany także w SQLite. Ostatnia bramka nie przeszła: jeden review był niepoprawnym JSON-em, dwa kolejne skończyły się zewnętrznym błędem połączenia. System zatrzymał się bez publikacji i bez automatycznych ponowień.
+
 ## 2026-08-12 — Operatorska droga `0033→0034`, bez dotykania produkcji
 
 W kodzie istniała już właściwa funkcja pojedynczego kroku i transakcyjna, self-ledgered migracja. Brakowało tylko bezpiecznej klamki dla operatora. Dodany CLI wymaga jawnej ścieżki oraz osobnego potwierdzenia, przyjmuje wyłącznie exact `0033`, zachowuje idempotency na `0034` i zwraca czytelny błąd z kodem `2` dla innych stanów. Testy na nowych temp DB potwierdziły sukces, bezpośrednie inwarianty `0034`, odmowę bez zmiany SHA oraz pełny rollback po błędzie w środku migracji. Produkcyjna baza i sidecary nie były otwierane do zapisu; sieć, API, provider, worker, publikacja i koszt pozostały zerowe. Najważniejsza lekcja: przygotowanie bezpiecznego narzędzia i zgoda na jego użycie są dwiema różnymi decyzjami.

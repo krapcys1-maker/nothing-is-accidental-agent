@@ -13,8 +13,11 @@ the quality gate already consumes.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
+import hashlib
 import json
+import re
 from typing import Any, Callable
 
 from app.content.contracts import ContentBrief, FrozenEvidenceItem
@@ -30,6 +33,7 @@ from app.content.quality_gate import (
     ClaimReviewOutcome,
     DraftClaimSegment,
 )
+from app.core.clock import Clock, SystemClock
 from app.llm.anthropic_controlled_adapter import (
     ControlledAdapterError,
     ControlledAnthropicAdapter,
@@ -39,13 +43,97 @@ from app.llm.anthropic_controlled_adapter import (
     assert_no_disabled_feature_usage,
     assert_returned_model_identity,
 )
-from app.llm.anthropic_provider_contract import OPUS_5_MODEL_ID
+from app.llm.anthropic_provider_contract import (
+    ARTICLE_REVIEWER_INFERENCE_CONFIG,
+    OPUS_5_MODEL_ID,
+)
 from app.model_routing.contracts import LogicalModelRole, ModelFamily
 
-REVIEWER_VERSION = "production_article_reviewer_opus_v1"
-REVIEWER_TIMEOUT_SECONDS = 30.0
-REVIEWER_MAX_OUTPUT_TOKENS = 1024
-REVIEWER_MAX_INPUT_TOKENS = 13_952
+REVIEWER_VERSION = "production_article_reviewer_opus_v2"
+REVIEWER_TIMEOUT_SECONDS = 300.0
+REVIEWER_MAX_OUTPUT_TOKENS = 8_192
+REVIEWER_MAX_INPUT_TOKENS = 23_808
+
+
+@dataclass(frozen=True)
+class ReviewerRequestIntent:
+    """Exact immutable identity of one review-only provider request."""
+
+    execution_ref: str
+    job_id: str
+    run_id: str
+    content_id: int
+    draft_fingerprint: str
+    writer_attempt_no: int
+    review_no: int
+    prompt_fingerprint: str
+    provider: str = "ANTHROPIC"
+    technical_model_id: str = OPUS_5_MODEL_ID
+    reviewer_version: str = REVIEWER_VERSION
+    max_input_tokens: int = REVIEWER_MAX_INPUT_TOKENS
+    max_output_tokens: int = REVIEWER_MAX_OUTPUT_TOKENS
+    timeout_seconds: float = REVIEWER_TIMEOUT_SECONDS
+    streaming: bool = True
+    max_retries: int = 0
+    fallback_policy: str = "FORBIDDEN"
+
+    def __post_init__(self) -> None:
+        if not all(
+            isinstance(value, str) and bool(value.strip())
+            for value in (
+                self.execution_ref, self.job_id, self.run_id,
+                self.draft_fingerprint, self.prompt_fingerprint,
+            )
+        ):
+            raise ValueError("Reviewer request intent requires complete identity.")
+        if len(self.draft_fingerprint) != 64 or len(self.prompt_fingerprint) != 64:
+            raise ValueError("Reviewer request fingerprints must be SHA-256 values.")
+        if self.writer_attempt_no not in (1, 2) or self.review_no not in (1, 2):
+            raise ValueError("Review-only permits at most two writer/reviewer rounds.")
+        if (
+            self.provider != "ANTHROPIC"
+            or self.technical_model_id != OPUS_5_MODEL_ID
+            or self.reviewer_version != REVIEWER_VERSION
+            or self.max_input_tokens != REVIEWER_MAX_INPUT_TOKENS
+            or self.max_output_tokens != REVIEWER_MAX_OUTPUT_TOKENS
+            or self.timeout_seconds != REVIEWER_TIMEOUT_SECONDS
+            or self.streaming is not True
+            or self.max_retries != 0
+            or self.fallback_policy != "FORBIDDEN"
+        ):
+            raise ValueError("Reviewer request intent changed a frozen runtime field.")
+
+    def payload(self) -> dict[str, object]:
+        return {
+            "schema": "article_review_request_intent_v1",
+            "execution_ref": self.execution_ref,
+            "job_id": self.job_id,
+            "run_id": self.run_id,
+            "content_id": self.content_id,
+            "draft_fingerprint": self.draft_fingerprint,
+            "writer_attempt_no": self.writer_attempt_no,
+            "review_no": self.review_no,
+            "prompt_fingerprint": self.prompt_fingerprint,
+            "provider": self.provider,
+            "technical_model_id": self.technical_model_id,
+            "reviewer_version": self.reviewer_version,
+            "max_input_tokens": self.max_input_tokens,
+            "max_output_tokens": self.max_output_tokens,
+            "timeout_seconds": self.timeout_seconds,
+            "streaming": self.streaming,
+            "max_retries": self.max_retries,
+            "fallback_policy": self.fallback_policy,
+            "inference_config": ARTICLE_REVIEWER_INFERENCE_CONFIG.payload(),
+            "inference_config_fingerprint": (
+                ARTICLE_REVIEWER_INFERENCE_CONFIG.evidence_fingerprint()
+            ),
+        }
+
+    def canonical_preimage(self) -> str:
+        return canonical_json(self.payload())
+
+    def fingerprint(self) -> str:
+        return hashlib.sha256(self.canonical_preimage().encode("utf-8")).hexdigest()
 
 _SYSTEM = """You are the independent claim reviewer for the anonymous editorial
 brand Nothing Is Accidental. You did not write this draft and you never rewrite
@@ -71,7 +159,8 @@ NON_FACTUAL_PROSE, and to true only when a segment smuggles in an outside fact.
 
 Return exactly one JSON object and nothing else. No Markdown, no code fence, no
 prose before or after it. Return exactly one entry per supplied segment_id,
-copying each segment_id and segment_fingerprint verbatim."""
+copying each segment_id and segment_fingerprint verbatim. Keep each reason to
+at most 12 words."""
 
 
 class ProductionReviewerError(RuntimeError):
@@ -121,7 +210,7 @@ def assemble_reviewer_prompt(
                 "(EVIDENCE_GROUNDED_FACT | ARGUMENT_OR_INFERENCE | "
                 "NON_FACTUAL_PROSE), evidence_ids (array of allowed "
                 "confirmed_claim_id values; empty unless grounded), reason "
-                "(non-empty string), outcome (PASS | BLOCK), "
+                "(non-empty string of at most 12 words), outcome (PASS | BLOCK), "
                 "contains_external_fact (boolean)"
             ),
         },
@@ -130,7 +219,10 @@ def assemble_reviewer_prompt(
 
 
 def parse_reviewer_response(
-    text: object, *, segments: tuple[DraftClaimSegment, ...],
+    text: object,
+    *,
+    segments: tuple[DraftClaimSegment, ...],
+    allowed_evidence_ids: frozenset[str] | None = None,
 ) -> tuple[ClaimAccountingEntry, ...]:
     """Map the transport response onto the existing claim-accounting contract.
 
@@ -165,12 +257,13 @@ def parse_reviewer_response(
             "REVIEWER_RESPONSE_CONTRACT_INVALID",
             "The reviewer response does not carry a literal entries array.",
         )
-    known = {segment.segment_id for segment in segments}
+    known = {segment.segment_id: segment.fingerprint for segment in segments}
     required_fields = {
         "segment_id", "segment_fingerprint", "classification", "evidence_ids",
         "reason", "outcome", "contains_external_fact",
     }
     entries: list[ClaimAccountingEntry] = []
+    seen: set[str] = set()
     for raw in payload["entries"]:
         if type(raw) is not dict or set(raw) != required_fields:
             raise ProductionReviewerError(
@@ -223,8 +316,57 @@ def parse_reviewer_response(
                 "REVIEWER_ENTRY_UNKNOWN_SEGMENT",
                 "The reviewer accounted for a segment that was not supplied.",
             )
+        if entry.segment_id in seen:
+            raise ProductionReviewerError(
+                "REVIEWER_ENTRY_DUPLICATE_SEGMENT",
+                "The reviewer accounted for one segment more than once.",
+            )
+        if entry.segment_fingerprint != known[entry.segment_id]:
+            raise ProductionReviewerError(
+                "REVIEWER_ENTRY_FINGERPRINT_MISMATCH",
+                "The reviewer changed the supplied segment fingerprint.",
+            )
+        if allowed_evidence_ids is not None and any(
+            evidence_id not in allowed_evidence_ids
+            for evidence_id in entry.evidence_ids
+        ):
+            raise ProductionReviewerError(
+                "REVIEWER_ENTRY_UNKNOWN_EVIDENCE",
+                "The reviewer cited evidence outside the frozen package.",
+            )
+        seen.add(entry.segment_id)
         entries.append(entry)
+    if seen != set(known):
+        raise ProductionReviewerError(
+            "REVIEWER_RESPONSE_INCOMPLETE",
+            "The reviewer did not account for every supplied segment exactly once.",
+        )
     return tuple(entries)
+
+
+_SECRET_PATTERNS = (
+    re.compile(r"sk-ant-[A-Za-z0-9_-]{8,}"),
+    re.compile(
+        r'(?i)("?(?:api[_-]?key|authorization|password|secret)"?\s*[:=]\s*)'
+        r'("[^"\r\n]*"|[^,\s}\r\n]+)'
+    ),
+    re.compile(r"(?i)Bearer\s+[A-Za-z0-9._~+/-]{8,}"),
+)
+
+
+def safe_reviewer_response_artifact(text: object) -> dict[str, object]:
+    """Preserve a bounded diagnostic response without retaining credentials."""
+    raw = text if isinstance(text, str) else repr(text)
+    redacted = _SECRET_PATTERNS[0].sub("[REDACTED_ANTHROPIC_KEY]", raw)
+    redacted = _SECRET_PATTERNS[1].sub(r"\1[REDACTED]", redacted)
+    redacted = _SECRET_PATTERNS[2].sub("Bearer [REDACTED]", redacted)
+    encoded = raw.encode("utf-8", errors="replace")
+    return {
+        "response_sha256": hashlib.sha256(encoded).hexdigest(),
+        "response_bytes": len(encoded),
+        "redacted_text": redacted[:262_144],
+        "truncated": len(redacted) > 262_144,
+    }
 
 
 class ProductionArticleReviewer:
@@ -241,6 +383,9 @@ class ProductionArticleReviewer:
         timeout_seconds: float = REVIEWER_TIMEOUT_SECONDS,
         daily_limit_usd: Decimal | float | str,
         monthly_limit_usd: Decimal | float | str,
+        resume_approval_ref: str | None = None,
+        resume_intent: ReviewerRequestIntent | None = None,
+        clock: Clock | None = None,
     ) -> None:
         self._storage = storage
         self._job_id = job_id
@@ -252,6 +397,11 @@ class ProductionArticleReviewer:
         self._timeout_seconds = timeout_seconds
         self._daily_limit_usd = daily_limit_usd
         self._monthly_limit_usd = monthly_limit_usd
+        if (resume_approval_ref is None) != (resume_intent is None):
+            raise ValueError("Review resume approval and intent must appear together.")
+        self._resume_approval_ref = resume_approval_ref
+        self._resume_intent = resume_intent
+        self._clock = clock or SystemClock()
         self.provider_calls = 0
 
     @property
@@ -326,44 +476,6 @@ class ProductionArticleReviewer:
         run_id = str(content["run_id"])
         attempt_no = int(draft.attempt_no)
         authority, _ = self._authority()
-        execution_ref = (
-            f"{self._job_id}:{LogicalModelRole.ARTICLE_REVIEWER.value}:"
-            f"{attempt_no}"
-        )
-
-        # 1. Uncertain reservations are reconciliation items, never retries.
-        existing = self._storage.get_role_provider_execution(
-            content_id=content_id, role=LogicalModelRole.ARTICLE_REVIEWER,
-            attempt_no=attempt_no,
-        )
-        if existing is not None:
-            if str(existing["outcome"]) == "IN_FLIGHT":
-                started = existing["external_effect_started_at"] is not None
-                raise ProductionReviewerError(
-                    "CONTENT_REVIEWER_RESULT_UNCERTAIN" if started
-                    else "CONTENT_REVIEWER_RESERVATION_OPEN",
-                    "A reviewer execution is already reserved for this content; "
-                    "its provider outcome is unknown and is never replayed.",
-                )
-            raise ProductionReviewerError(
-                "CONTENT_REVIEWER_ALREADY_SETTLED",
-                "This content already has a terminal reviewer execution.",
-            )
-
-        # 2. One ARTICLE budget, shared with the writer.
-        ceiling = self.max_legal_cost(authority)
-
-        # 3. Durable IN_FLIGHT, then the durable external-effect stamp, both
-        #    committed before the transport can be reached at all.
-        self._storage.begin_role_provider_execution(
-            execution_ref=execution_ref, job_id=self._job_id, run_id=run_id,
-            content_id=content_id, role=LogicalModelRole.ARTICLE_REVIEWER,
-            attempt_no=attempt_no, max_cost_usd=ceiling, authority=authority,
-            daily_limit_usd=self._daily_limit_usd,
-            monthly_limit_usd=self._monthly_limit_usd,
-        )
-        self._storage.mark_role_provider_effect_started(execution_ref)
-
         prompt = assemble_reviewer_prompt(
             draft_fingerprint=draft.fingerprint(),
             brief=brief,
@@ -372,6 +484,77 @@ class ProductionArticleReviewer:
             lineage={"job_id": self._job_id, "run_id": run_id,
                      "content_id": content_id},
         )
+        prompt_fingerprint = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+        resume = self._resume_intent
+        execution_ref = (
+            resume.execution_ref if resume is not None else
+            f"{self._job_id}:{LogicalModelRole.ARTICLE_REVIEWER.value}:{attempt_no}"
+        )
+
+        if resume is not None:
+            if (
+                resume.job_id != self._job_id
+                or resume.run_id != run_id
+                or resume.content_id != content_id
+                or resume.writer_attempt_no != attempt_no
+                or resume.draft_fingerprint != draft.fingerprint()
+                or resume.prompt_fingerprint != prompt_fingerprint
+                or resume.provider != authority.provider
+                or resume.technical_model_id != authority.technical_model_id
+            ):
+                raise ProductionReviewerError(
+                    "REVIEW_RESUME_INTENT_MISMATCH",
+                    "The approved REVIEW-ONLY request differs from the exact draft prompt.",
+                )
+            assert self._resume_approval_ref is not None
+            ceiling = self.max_legal_cost(authority)
+            self._storage.begin_content_review_resume_execution(
+                approval_ref=self._resume_approval_ref,
+                intent=resume,
+                reserved_cost_usd=ceiling,
+                daily_limit_usd=self._daily_limit_usd,
+                monthly_limit_usd=self._monthly_limit_usd,
+                now=self._clock.now(),
+            )
+            self._storage.mark_content_review_resume_effect_started(
+                execution_ref, now=self._clock.now(),
+            )
+        else:
+
+            # 1. Uncertain reservations are reconciliation items, never retries.
+            existing = self._storage.get_role_provider_execution(
+                content_id=content_id, role=LogicalModelRole.ARTICLE_REVIEWER,
+                attempt_no=attempt_no,
+            )
+            if existing is not None:
+                if str(existing["outcome"]) == "IN_FLIGHT":
+                    started = existing["external_effect_started_at"] is not None
+                    raise ProductionReviewerError(
+                        "CONTENT_REVIEWER_RESULT_UNCERTAIN" if started
+                        else "CONTENT_REVIEWER_RESERVATION_OPEN",
+                        "A reviewer execution is already reserved for this content; "
+                        "its provider outcome is unknown and is never replayed.",
+                    )
+                raise ProductionReviewerError(
+                    "CONTENT_REVIEWER_ALREADY_SETTLED",
+                    "This content already has a terminal reviewer execution.",
+                )
+
+            # 2. One ARTICLE budget, shared with the writer.
+            ceiling = self.max_legal_cost(authority)
+
+            # 3. Durable IN_FLIGHT, then the durable external-effect stamp.
+            self._storage.begin_role_provider_execution(
+                execution_ref=execution_ref, job_id=self._job_id, run_id=run_id,
+                content_id=content_id, role=LogicalModelRole.ARTICLE_REVIEWER,
+                attempt_no=attempt_no, max_cost_usd=ceiling, authority=authority,
+                daily_limit_usd=self._daily_limit_usd,
+                monthly_limit_usd=self._monthly_limit_usd,
+                now=self._clock.now(),
+            )
+            self._storage.mark_role_provider_effect_started(
+                execution_ref, now=self._clock.now(),
+            )
 
         # 4. Exactly one provider call.
         try:
@@ -382,6 +565,8 @@ class ProductionArticleReviewer:
                 user_prompt=prompt,
                 max_output_tokens=REVIEWER_MAX_OUTPUT_TOKENS,
                 timeout_seconds=self._timeout_seconds,
+                inference_config=ARTICLE_REVIEWER_INFERENCE_CONFIG,
+                stream_response=True,
             ))
         except BaseException as exc:
             self._settle(
@@ -389,7 +574,8 @@ class ProductionArticleReviewer:
                 outcome="NEEDS_VERIFICATION",
                 failure_kind="REVIEWER_RESULT_UNKNOWN",
                 usage=None, returned_model_id=None,
-                detail=f"{type(exc).__name__}",
+                detail=f"{type(exc).__name__}", stop_reason=None,
+                provider_request_id=None,
             )
             raise
 
@@ -414,13 +600,22 @@ class ProductionArticleReviewer:
                 cache_write_tokens=raw.cache_write_tokens,
                 web_search_requests=raw.web_search_requests,
             )
-            entries = parse_reviewer_response(raw.text, segments=segments)
+            entries = parse_reviewer_response(
+                raw.text,
+                segments=segments,
+                allowed_evidence_ids=frozenset(
+                    item.confirmed_claim_id for item in evidence
+                ),
+            )
         except (ControlledAdapterError, ProductionReviewerError) as exc:
             self._settle(
                 execution_ref, authority, run_id, content_id, attempt_no,
                 outcome="FAILURE", failure_kind=getattr(exc, "code", "REVIEWER_FAILED"),
                 usage=usage, returned_model_id=raw.returned_model_id,
                 detail=str(exc)[:200],
+                stop_reason=raw.stop_reason,
+                provider_request_id=raw.provider_request_id,
+                diagnostic_artifact=safe_reviewer_response_artifact(raw.text),
             )
             raise
 
@@ -429,6 +624,9 @@ class ProductionArticleReviewer:
             outcome="SUCCESS", failure_kind=None, usage=usage,
             returned_model_id=raw.returned_model_id,
             detail=None, entry_count=len(entries),
+            entries=entries,
+            stop_reason=raw.stop_reason,
+            provider_request_id=raw.provider_request_id,
         )
         return entries
 
@@ -446,16 +644,66 @@ class ProductionArticleReviewer:
         returned_model_id: str | None,
         detail: str | None,
         entry_count: int | None = None,
+        entries: tuple[ClaimAccountingEntry, ...] | None = None,
+        stop_reason: str | None = None,
+        provider_request_id: str | None = None,
+        diagnostic_artifact: dict[str, object] | None = None,
     ) -> None:
         """Settle the reserved row once, pricing usage from the frozen profile."""
         cost = authority.settle(usage) if usage is not None else None
-        payload: dict[str, Any] = {"reviewer_version": REVIEWER_VERSION}
+        payload: dict[str, Any] = {
+            "reviewer_version": REVIEWER_VERSION,
+            "inference_config": ARTICLE_REVIEWER_INFERENCE_CONFIG.payload(),
+            "inference_config_fingerprint": (
+                ARTICLE_REVIEWER_INFERENCE_CONFIG.evidence_fingerprint()
+            ),
+            "streaming": True,
+            "stop_reason": stop_reason,
+            "provider_request_id": provider_request_id,
+        }
         if detail is not None:
             payload["detail"] = detail
         if entry_count is not None:
             payload["entry_count"] = entry_count
+        if entries is not None:
+            payload["entries"] = [
+                {
+                    "segment_id": entry.segment_id,
+                    "segment_fingerprint": entry.segment_fingerprint,
+                    "classification": entry.classification.value,
+                    "evidence_ids": list(entry.evidence_ids),
+                    "reason": entry.reason,
+                    "outcome": entry.outcome.value,
+                    "contains_external_fact": entry.contains_external_fact,
+                }
+                for entry in entries
+            ]
+            payload["decision"] = (
+                "APPROVE"
+                if all(entry.outcome is ClaimReviewOutcome.PASS for entry in entries)
+                else "REWRITE_ONCE"
+                if attempt_no == 1
+                else "HUMAN_REQUIRED"
+            )
         if usage is None:
             payload["usage_known"] = False
+        if diagnostic_artifact is not None:
+            payload["response_artifact"] = diagnostic_artifact
+        if self._resume_intent is not None:
+            payload["request_intent_fingerprint"] = self._resume_intent.fingerprint()
+            payload["draft_fingerprint"] = self._resume_intent.draft_fingerprint
+            payload["review_no"] = self._resume_intent.review_no
+            self._storage.settle_content_review_resume_execution(
+                execution_ref=execution_ref,
+                outcome=outcome,
+                failure_kind=failure_kind,
+                returned_model_id=returned_model_id,
+                usage=usage,
+                cost_usd=cost,
+                result_payload=payload,
+                now=self._clock.now(),
+            )
+            return
         self._storage.settle_role_provider_execution(RoleProviderExecution(
             execution_ref=execution_ref,
             job_id=self._job_id,
@@ -470,7 +718,7 @@ class ProductionArticleReviewer:
             usage=usage,
             cost_usd=cost,
             payload=payload,
-        ))
+        ), now=self._clock.now())
 
 
 __all__ = [
@@ -479,6 +727,8 @@ __all__ = [
     "REVIEWER_MAX_INPUT_TOKENS",
     "REVIEWER_MAX_OUTPUT_TOKENS",
     "REVIEWER_VERSION",
+    "ReviewerRequestIntent",
     "assemble_reviewer_prompt",
     "parse_reviewer_response",
+    "safe_reviewer_response_artifact",
 ]

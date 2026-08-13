@@ -60,6 +60,11 @@ from app.storage.db import (
     migrate_0031_to_0032,
     migrate_0032_to_0033,
     migrate_0033_to_0034,
+    migrate_0034_to_0035,
+    migrate_0035_to_0036,
+    migrate_0036_to_0037,
+    migrate_0037_to_0038,
+    migrate_0038_to_0039,
 )
 from app.storage.repositories import SqliteStorage
 from tests.c2_fixtures import seed_c2_research
@@ -172,7 +177,7 @@ def test_happy_paths_are_zero_cost_pending_approval(
     assert state["content"]["body"]
     assert state["plan"]["plan_schema_version"] == "content_plan_v1"
     assert state["brief"]["brief_schema_version"] in {
-        "article_brief_v1", "note_brief_v1",
+        "article_brief_v2", "note_brief_v2",
     }
     assert state["intents"][0]["route_key"] == route_key
     assert state["attempts"][0]["status"] == "SETTLED"
@@ -358,6 +363,47 @@ def test_planner_requires_proceed_and_frozen_evidence(storage, account):
     without_evidence = frozen.model_copy(update={"evidence_items": ()})
     with pytest.raises(ContentPlanningBlocked, match="CONTENT_EVIDENCE_MISSING"):
         plan_content(without_evidence, route)
+
+
+def test_frozen_research_card_keeps_json_fields_structured(storage, account):
+    seed = seed_c2_research(storage, account)
+    prepared = storage.prepare_content_job(
+        ContentPreparationRequest(
+            job_id="planner-structured-card-job",
+            idempotency_key="planner-structured-card-intent",
+            account_id=account.id,
+            research_card_id=int(seed["card_id"]),
+            content_type=ContentType.ARTICLE,
+            execution_mode=ContentExecutionMode.OFFLINE_PIPELINE,
+        ),
+        clock=FixedClock(NOW),
+    )
+    snapshot = json.loads(prepared.frozen_input.research_card_snapshot_json)
+    assert isinstance(snapshot["facts_json"], (dict, list))
+    for field in (
+        "citable_numbers",
+        "confirmed_claims",
+        "uncertain_claims",
+        "contradictions",
+    ):
+        assert isinstance(snapshot[field], list)
+
+    route = load_content_route(
+        default_content_routing_path(ROOT), ContentType.ARTICLE,
+    )
+    planned = plan_content(prepared.frozen_input, route)
+    repeated = plan_content(
+        prepared.frozen_input.model_copy(
+            update={"content_id": prepared.frozen_input.content_id + 1},
+        ),
+        route,
+    )
+    assert "[" not in planned.plan.forbidden_claims
+    assert "\"" not in planned.plan.forbidden_claims
+    assert planned.brief.schema_version == "article_brief_v2"
+    assert planned.brief.content_id == prepared.frozen_input.content_id
+    assert repeated.brief.content_id == prepared.frozen_input.content_id + 1
+    assert repeated.brief.model_dump(mode="json") != planned.brief.model_dump(mode="json")
 
 
 def test_full_entrypoint_claims_named_job_and_dispatches(
@@ -632,6 +678,11 @@ def test_explicit_0021_to_0022_migration_is_temp_only_and_idempotent(tmp_path):
     migrate_0031_to_0032(path)
     migrate_0032_to_0033(path)
     migrate_0033_to_0034(path)
+    migrate_0034_to_0035(path)
+    migrate_0035_to_0036(path)
+    migrate_0036_to_0037(path)
+    migrate_0037_to_0038(path)
+    migrate_0038_to_0039(path)
     conn = SqliteStorage.open(path)
     try:
         assert conn.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"

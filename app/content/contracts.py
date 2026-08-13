@@ -7,6 +7,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.llm.anthropic_provider_contract import (
+    AnthropicInferenceConfig,
+    inference_config_for_role,
+)
+
 from app.content.foundation import (
     ContentType,
     FrozenEvidenceItem,
@@ -22,8 +27,8 @@ from app.model_routing.contracts import (
 
 
 CONTENT_PLAN_VERSION = "content_plan_v1"
-ARTICLE_BRIEF_VERSION = "article_brief_v1"
-NOTE_BRIEF_VERSION = "note_brief_v1"
+ARTICLE_BRIEF_VERSION = "article_brief_v2"
+NOTE_BRIEF_VERSION = "note_brief_v2"
 WRITER_INTENT_VERSION = "provider_ready_writer_intent_v1"
 DRAFT_VERSION = "content_draft_v2"
 EVALUATOR_VERSION = "claim_accounting_content_evaluators_v2"
@@ -228,6 +233,7 @@ class ArticleBrief(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: str = ARTICLE_BRIEF_VERSION
+    content_id: int | None = Field(default=None, gt=0)
     content_type: ContentType = ContentType.ARTICLE
     working_title: str
     central_thesis: str
@@ -258,6 +264,7 @@ class NoteBrief(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: str = NOTE_BRIEF_VERSION
+    content_id: int | None = Field(default=None, gt=0)
     content_type: ContentType = ContentType.NOTE
     main_point: str
     format: str
@@ -291,7 +298,7 @@ class WriterLimits(BaseModel):
     max_context_tokens: int = Field(gt=0)
     max_output_tokens: int = Field(gt=0)
     max_cost_usd: float = Field(ge=0.0)
-    timeout_seconds: float = Field(gt=0.0, le=30.0)
+    timeout_seconds: float = Field(gt=0.0, le=300.0)
 
     @model_validator(mode="after")
     def validate_limits(self) -> "WriterLimits":
@@ -405,6 +412,7 @@ class WriterIntent(BaseModel):
     negative_style_profile_id: str
     prompt_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     limits: WriterLimits
+    inference_config: AnthropicInferenceConfig
     # Audit trail for the concrete style examples this attempt was shown. The
     # intent JSON is persisted verbatim, so these keys answer "which examples
     # did that draft actually see" long after the run.
@@ -439,6 +447,10 @@ class WriterIntent(BaseModel):
 
     @model_validator(mode="after")
     def validate_attempt(self) -> "WriterIntent":
+        if self.inference_config != inference_config_for_role(
+            self.route.logical_role
+        ):
+            raise ValueError("Writer inference config does not match its frozen role.")
         if self.call_mode in {
             WriterCallMode.FAKE,
             WriterCallMode.PROVIDER_READY_OFFLINE,

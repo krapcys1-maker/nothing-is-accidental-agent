@@ -33,7 +33,10 @@ from app.llm.anthropic_controlled_adapter import (
     ControlledSdkFactory,
     ControlledTechnicalCaller,
 )
-from app.llm.anthropic_provider_contract import OPUS_5_MODEL_ID
+from app.llm.anthropic_provider_contract import (
+    ARTICLE_WRITER_INFERENCE_CONFIG,
+    OPUS_5_MODEL_ID,
+)
 from app.model_routing.contracts import LogicalModelRole, ModelFamily
 from app.policies.policy_engine import PolicyEngine
 from app.scheduler.dispatcher import JobDispatcher
@@ -72,7 +75,7 @@ def run_controlled_article(
     reviewer_caller: ControlledTechnicalCaller | None = None,
     clock: Clock | None = None,
     lease_owner: str | None = None,
-    timeout_seconds: float = 30.0,
+    timeout_seconds: float = 300.0,
 ) -> ControlledArticleEntrypointResult:
     """Execute one targeted controlled ARTICLE; never scan/unlock the queue."""
     clock = clock or SystemClock()
@@ -91,7 +94,10 @@ def run_controlled_article(
                 research_card_id=research_card_id,
                 content_type=ContentType.ARTICLE,
                 execution_mode=ContentExecutionMode.CONTROLLED_PROVIDER_PIPELINE,
-                prompt_version="controlled_article_prompt_v1",
+                # v3 freezes the structured Research Card fields together with
+                # the qualified 32k/8k Opus writer and reviewer envelopes. A
+                # terminal older attempt cannot collide with this corrected input.
+                prompt_version="controlled_article_prompt_v4",
                 style_guide_version="ARTICLE_STYLE_PROFILE_V1",
             ),
             clock=clock,
@@ -126,6 +132,7 @@ def run_controlled_article(
             approved_at=authority.approved_at,
             expires_at=authority.expires_at,
             retention_acceptance_ref=None,
+            inference_config=ARTICLE_WRITER_INFERENCE_CONFIG,
         )
         provenance = storage.load_controlled_provider_provenance(
             job_id=authority.job_id,
@@ -183,6 +190,7 @@ def run_controlled_article(
             timeout_seconds=timeout_seconds,
             daily_limit_usd=settings.max_daily_cost_usd,
             monthly_limit_usd=settings.max_monthly_cost_usd,
+            clock=clock,
         )
         policy = PolicyEngine(settings, storage, clock)
         dispatcher = JobDispatcher(

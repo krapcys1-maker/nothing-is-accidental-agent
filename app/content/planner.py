@@ -114,6 +114,7 @@ def plan_content(frozen: FrozenContentInput, route: RouteContract) -> PlannedCon
     )
     if frozen.content_type is ContentType.ARTICLE:
         brief: ContentBrief = ArticleBrief(
+            content_id=frozen.content_id,
             working_title=title,
             central_thesis=thesis,
             answer_question=question,
@@ -137,6 +138,7 @@ def plan_content(frozen: FrozenContentInput, route: RouteContract) -> PlannedCon
         )
     elif frozen.content_type is ContentType.NOTE:
         brief = NoteBrief(
+            content_id=frozen.content_id,
             main_point=thesis,
             format="CONCRETE_OBSERVATION_TO_ONE_SYSTEM_POINT",
             hook=f"{title}: the visible outcome is only the last step.",

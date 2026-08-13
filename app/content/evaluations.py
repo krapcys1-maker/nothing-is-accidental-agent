@@ -62,6 +62,7 @@ def evaluate_draft(
     claim_reviewer: ClaimAccountingReviewPort | None = None,
     assessment: DraftQualityAssessment | None = None,
     require_independent_review: bool | None = None,
+    propagate_reviewer_errors: bool = False,
 ) -> tuple[DraftEvaluation, ...]:
     """Evaluate one draft; quality verdicts come from the text, not the writer."""
     mandatory = (
@@ -76,6 +77,7 @@ def evaluate_draft(
         research_card=research_card,
         claim_reviewer=claim_reviewer,
         require_independent_review=mandatory,
+        propagate_reviewer_errors=propagate_reviewer_errors,
     )
     words = len(draft.body.split())
     required = set(brief.evidence_ids)

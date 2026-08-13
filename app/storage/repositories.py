@@ -1980,21 +1980,55 @@ class SqliteStorage:
             self._consume_model_qualification_approval(
                 approval, current_ts=current_ts,
             )
-            self.conn.execute(
-                "INSERT INTO model_qualification_runs (request_id,approval_ref,"
-                "model_registry_id,logical_role,provider,technical_model_id,"
-                "pricing_ref,pricing_profile_fingerprint,outcome,result_json,"
-                "result_fingerprint,external_effect_started_at,reserved_at,"
-                "executed_at) VALUES (?,?,?,?,?,?,?,?,'IN_FLIGHT',?,?,?,?,?)",
-                (
-                    approval.request_id, approval.approval_ref,
-                    approval.model_registry_id, approval.logical_role.value,
-                    approval.provider, approval.technical_model_id,
-                    approval.pricing_ref, pricing.contract_fingerprint(),
-                    reservation_json, sha256_text(reservation_json),
-                    current_ts, current_ts, current_ts,
-                ),
-            )
+            qualification_columns = {
+                str(row["name"])
+                for row in self.conn.execute(
+                    "PRAGMA table_info(model_qualification_runs)"
+                ).fetchall()
+            }
+            if "require_source_discovery" in qualification_columns:
+                self.conn.execute(
+                    "INSERT INTO model_qualification_runs (request_id,approval_ref,"
+                    "model_registry_id,logical_role,provider,technical_model_id,"
+                    "pricing_ref,pricing_profile_fingerprint,require_source_discovery,"
+                    "outcome,result_json,result_fingerprint,"
+                    "external_effect_started_at,reserved_at,executed_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,'IN_FLIGHT',?,?,?,?,?)",
+                    (
+                        approval.request_id, approval.approval_ref,
+                        approval.model_registry_id, approval.logical_role.value,
+                        approval.provider, approval.technical_model_id,
+                        approval.pricing_ref, pricing.contract_fingerprint(),
+                        int(approval.require_source_discovery),
+                        reservation_json, sha256_text(reservation_json),
+                        current_ts, current_ts, current_ts,
+                    ),
+                )
+            else:
+                # Migration-history tests deliberately execute the original
+                # non-discovery qualification root on pre-0035 schemas.
+                # Preserve that frozen legacy path without pretending that a
+                # discovery-required approval can run before 0035 exists.
+                if approval.require_source_discovery:
+                    raise ControlledQualificationError(
+                        "QUALIFICATION_SOURCE_DISCOVERY_SCHEMA_MISSING",
+                        "Source-discovery qualification requires schema 0035.",
+                    )
+                self.conn.execute(
+                    "INSERT INTO model_qualification_runs (request_id,approval_ref,"
+                    "model_registry_id,logical_role,provider,technical_model_id,"
+                    "pricing_ref,pricing_profile_fingerprint,outcome,result_json,"
+                    "result_fingerprint,external_effect_started_at,reserved_at,"
+                    "executed_at) VALUES (?,?,?,?,?,?,?,?,'IN_FLIGHT',?,?,?,?,?)",
+                    (
+                        approval.request_id, approval.approval_ref,
+                        approval.model_registry_id, approval.logical_role.value,
+                        approval.provider, approval.technical_model_id,
+                        approval.pricing_ref, pricing.contract_fingerprint(),
+                        reservation_json, sha256_text(reservation_json),
+                        current_ts, current_ts, current_ts,
+                    ),
+                )
             self.conn.commit()
         except BaseException:
             if self.conn.in_transaction:
@@ -2622,6 +2656,768 @@ class SqliteStorage:
             ).fetchall()
         return tuple(dict(row) for row in rows)
 
+    def unresolved_provider_exposure(self) -> Decimal:
+        """Conservative full-envelope exposure for every ambiguous paid effect."""
+        attempt = _sum_money_rows(
+            self.conn.execute(
+                "SELECT reserved_amount_usd FROM provider_attempts "
+                "WHERE status IN ('REQUEST_STARTED','NEEDS_RECONCILIATION') "
+                "AND NOT EXISTS (SELECT 1 FROM model_usage u "
+                "WHERE u.request_id=provider_attempts.request_id "
+                "AND u.dry_run=0 AND u.is_legacy_usage=0)"
+            ).fetchall(),
+            "reserved_amount_usd", label="Unresolved provider attempt exposure",
+        )
+        roles = _sum_money_rows(
+            self.conn.execute(
+                "SELECT reserved_cost_usd FROM role_provider_executions "
+                "WHERE outcome='IN_FLIGHT' OR "
+                "(outcome='NEEDS_VERIFICATION' AND cost_usd IS NULL)"
+            ).fetchall(),
+            "reserved_cost_usd", label="Unresolved role exposure",
+        )
+        review = Decimal("0")
+        if self.conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='content_review_resume_executions'"
+        ).fetchone() is not None:
+            review = _sum_money_rows(
+                self.conn.execute(
+                    "SELECT reserved_cost_usd FROM content_review_resume_executions "
+                    "WHERE outcome='IN_FLIGHT' OR "
+                    "(outcome='NEEDS_VERIFICATION' AND cost_usd IS NULL)"
+                ).fetchall(),
+                "reserved_cost_usd", label="Unresolved review-resume exposure",
+            )
+        return quantize_usd(
+            attempt + roles + review, label="Unresolved provider exposure",
+        )
+
+    def record_content_review_resume_approval(
+        self,
+        *,
+        approval_ref: str,
+        job_id: str,
+        run_id: str,
+        content_id: int,
+        source_draft_fingerprint: str,
+        initial_review_execution_ref: str,
+        writer_execution_ref: str,
+        post_review_execution_ref: str,
+        reviewer_provider: str,
+        reviewer_model_id: str,
+        writer_provider: str,
+        writer_model_id: str,
+        reviewer_max_output_tokens: int,
+        writer_max_output_tokens: int,
+        reviewer_max_cost_usd: Decimal | str,
+        writer_max_cost_usd: Decimal | str,
+        chain_cap_usd: Decimal | str,
+        daily_limit_usd: Decimal | float | str,
+        monthly_limit_usd: Decimal | float | str,
+        approved_by: str,
+        approved_at: str,
+        expires_at: str,
+    ) -> str:
+        """Persist the one L1 approval for the complete conditional chain."""
+        from app.llm.anthropic_provider_contract import (
+            ARTICLE_REVIEWER_INFERENCE_CONFIG,
+            ARTICLE_WRITER_INFERENCE_CONFIG,
+        )
+        reviewer_cap = format(quantize_usd(
+            reviewer_max_cost_usd, label="review resume reviewer cap",
+        ), ".6f")
+        writer_cap = format(quantize_usd(
+            writer_max_cost_usd, label="review resume writer cap",
+        ), ".6f")
+        chain_cap = format(quantize_usd(
+            chain_cap_usd, label="review resume chain cap",
+        ), ".6f")
+        daily_limit = format(quantize_usd(
+            daily_limit_usd, label="review resume daily limit",
+        ), ".6f")
+        monthly_limit = format(quantize_usd(
+            monthly_limit_usd, label="review resume monthly limit",
+        ), ".6f")
+        if _money(chain_cap, positive=True, label="Review chain cap") < (
+            _money(reviewer_cap, positive=True, label="Reviewer cap") * 2
+            + _money(writer_cap, positive=True, label="Writer cap")
+        ):
+            raise ContentFoundationError(
+                "CONTENT_REVIEW_CHAIN_CAP_INSUFFICIENT",
+                "The L1 cap must cover two reviewers and one conditional rewrite.",
+            )
+        approval_payload = {
+            "schema": "article_review_chain_approval_v1",
+            "approval_ref": approval_ref,
+            "job_id": job_id,
+            "run_id": run_id,
+            "content_id": content_id,
+            "source_draft_fingerprint": source_draft_fingerprint,
+            "initial_review_execution_ref": initial_review_execution_ref,
+            "writer_execution_ref": writer_execution_ref,
+            "post_review_execution_ref": post_review_execution_ref,
+            "reviewer": {
+                "provider": reviewer_provider,
+                "technical_model_id": reviewer_model_id,
+                "max_output_tokens": reviewer_max_output_tokens,
+                "max_cost_usd": reviewer_cap,
+                "inference_config": ARTICLE_REVIEWER_INFERENCE_CONFIG.payload(),
+            },
+            "writer": {
+                "provider": writer_provider,
+                "technical_model_id": writer_model_id,
+                "max_output_tokens": writer_max_output_tokens,
+                "max_cost_usd": writer_cap,
+                "inference_config": ARTICLE_WRITER_INFERENCE_CONFIG.payload(),
+            },
+            "chain_cap_usd": chain_cap,
+            "daily_limit_usd": daily_limit,
+            "monthly_limit_usd": monthly_limit,
+            "max_retries": 0,
+            "fallback_policy": "FORBIDDEN",
+            "publication": "FORBIDDEN",
+            "approved_by": approved_by,
+            "approved_at": approved_at,
+            "expires_at": expires_at,
+        }
+        approval_json = canonical_json(approval_payload)
+        timestamp = _ts_precise(None)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            existing = self.conn.execute(
+                "SELECT * FROM content_review_resume_approvals WHERE approval_ref=?",
+                (approval_ref,),
+            ).fetchone()
+            approval_fingerprint = sha256_text(approval_json)
+            if existing is not None:
+                if (
+                    existing["approval_json"] == approval_json
+                    and existing["approval_fingerprint"] == approval_fingerprint
+                ):
+                    self.conn.commit()
+                    return approval_ref
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_APPROVAL_CONFLICT",
+                    "A different immutable review approval already uses this reference.",
+                )
+            self.conn.execute(
+                "INSERT INTO content_review_resume_approvals (approval_ref,job_id,"
+                "run_id,content_id,source_draft_fingerprint,"
+                "initial_review_execution_ref,writer_execution_ref,"
+                "post_review_execution_ref,reviewer_provider,reviewer_model_id,"
+                "writer_provider,writer_model_id,reviewer_max_output_tokens,"
+                "writer_max_output_tokens,reviewer_max_cost_usd,writer_max_cost_usd,"
+                "chain_cap_usd,daily_limit_usd,monthly_limit_usd,approved_by,"
+                "approved_at,expires_at,consumed_at,approval_json,"
+                "approval_fingerprint,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?)",
+                (
+                    approval_ref, job_id, run_id, content_id,
+                    source_draft_fingerprint, initial_review_execution_ref,
+                    writer_execution_ref, post_review_execution_ref,
+                    reviewer_provider, reviewer_model_id, writer_provider,
+                    writer_model_id, reviewer_max_output_tokens,
+                    writer_max_output_tokens, reviewer_cap, writer_cap, chain_cap,
+                    daily_limit, monthly_limit, approved_by, approved_at, expires_at,
+                    approval_json, approval_fingerprint, timestamp,
+                ),
+            )
+            self.conn.commit()
+            return approval_ref
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def get_content_review_resume_session(
+        self, *, approval_ref: str,
+    ) -> dict[str, object] | None:
+        row = self.conn.execute(
+            "SELECT * FROM content_review_resume_sessions WHERE approval_ref=?",
+            (approval_ref,),
+        ).fetchone()
+        return None if row is None else dict(row)
+
+    def get_content_review_resume_approval(
+        self, *, approval_ref: str,
+    ) -> dict[str, object] | None:
+        """Load the immutable SQLite authority used by operator resume."""
+        row = self.conn.execute(
+            "SELECT * FROM content_review_resume_approvals WHERE approval_ref=?",
+            (approval_ref,),
+        ).fetchone()
+        return None if row is None else dict(row)
+
+    def get_content_review_resume_execution(
+        self, *, execution_ref: str,
+    ) -> dict[str, object] | None:
+        row = self.conn.execute(
+            "SELECT * FROM content_review_resume_executions WHERE execution_ref=?",
+            (execution_ref,),
+        ).fetchone()
+        return None if row is None else dict(row)
+
+    def _remaining_review_chain_budget_in_transaction(
+        self, *, approval_ref: str,
+    ) -> Decimal:
+        approval = self.conn.execute(
+            "SELECT * FROM content_review_resume_approvals WHERE approval_ref=?",
+            (approval_ref,),
+        ).fetchone()
+        if approval is None:
+            raise ContentFoundationError(
+                "CONTENT_REVIEW_APPROVAL_MISSING", "Review-chain approval is missing.",
+            )
+        remaining = _money(
+            approval["chain_cap_usd"], positive=True, label="Review chain cap",
+        )
+        for row in self.conn.execute(
+            "SELECT outcome,reserved_cost_usd,cost_usd "
+            "FROM content_review_resume_executions WHERE approval_ref=?",
+            (approval_ref,),
+        ).fetchall():
+            value = row["cost_usd"] if row["cost_usd"] is not None else row["reserved_cost_usd"]
+            remaining -= _money(value, positive=False, label="Review chain usage")
+        writer = self.conn.execute(
+            "SELECT p.status,p.reserved_amount_usd,p.actual_cost_usd "
+            "FROM content_review_resume_approvals a "
+            "JOIN provider_attempts p ON p.request_id=a.writer_execution_ref "
+            "WHERE a.approval_ref=?",
+            (approval_ref,),
+        ).fetchone()
+        if writer is not None:
+            value = (
+                writer["actual_cost_usd"]
+                if writer["actual_cost_usd"] is not None
+                else writer["reserved_amount_usd"]
+            )
+            remaining -= _money(value, positive=False, label="Review chain writer usage")
+        return quantize_usd(remaining, label="Remaining review chain budget")
+
+    def _assert_review_chain_global_budget_in_transaction(
+        self, *, approval: sqlite3.Row, reservation: Decimal, timestamp: str,
+    ) -> None:
+        day_real = _sum_money_rows(self.conn.execute(
+            "SELECT estimated_cost_usd FROM model_usage "
+            "WHERE dry_run=0 AND created_at LIKE ?", (f"{timestamp[:10]}%",),
+        ).fetchall(), "estimated_cost_usd", label="Review-chain daily cost")
+        month_real = _sum_money_rows(self.conn.execute(
+            "SELECT estimated_cost_usd FROM model_usage "
+            "WHERE dry_run=0 AND created_at LIKE ?", (f"{timestamp[:7]}%",),
+        ).fetchall(), "estimated_cost_usd", label="Review-chain monthly cost")
+        exposure = self.unresolved_provider_exposure()
+        if day_real + exposure + reservation > _money(
+            approval["daily_limit_usd"], positive=True, label="Daily limit",
+        ):
+            raise BudgetReservationError(
+                "Review-chain reservation plus unresolved exposure exceeds daily limit."
+            )
+        if month_real + exposure + reservation > _money(
+            approval["monthly_limit_usd"], positive=True, label="Monthly limit",
+        ):
+            raise BudgetReservationError(
+                "Review-chain reservation plus unresolved exposure exceeds monthly limit."
+            )
+
+    def begin_content_review_resume_session(
+        self,
+        *,
+        approval_ref: str,
+        lease_owner: str,
+        lease_seconds: int,
+        now: datetime | None = None,
+    ) -> dict[str, object]:
+        """Reopen one terminal CONTENT lifecycle under the consumed chain authority."""
+        if lease_seconds < 600:
+            raise ValueError("Review-chain lease must cover both 300-second calls.")
+        timestamp = _ts_precise(now)
+        current = parse_authority_instant(timestamp)
+        assert current is not None
+        lease_expires = _persisted_ts(current + timedelta(seconds=lease_seconds))
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            existing = self.conn.execute(
+                "SELECT * FROM content_review_resume_sessions WHERE approval_ref=?",
+                (approval_ref,),
+            ).fetchone()
+            if existing is not None:
+                self.conn.commit()
+                return dict(existing)
+            approval = self.conn.execute(
+                "SELECT * FROM content_review_resume_approvals WHERE approval_ref=?",
+                (approval_ref,),
+            ).fetchone()
+            if approval is None or approval["consumed_at"] is None:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_APPROVAL_NOT_CONSUMED",
+                    "Initial review must consume the chain before resume starts.",
+                )
+            expires = parse_authority_instant(approval["expires_at"])
+            if expires is None or expires <= current:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_APPROVAL_EXPIRED", "Review-chain approval expired.",
+                )
+            initial = self.conn.execute(
+                "SELECT outcome FROM content_review_resume_executions "
+                "WHERE execution_ref=? AND approval_ref=? AND review_no=1",
+                (approval["initial_review_execution_ref"], approval_ref),
+            ).fetchone()
+            if initial is None or initial["outcome"] != "SUCCESS":
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_INITIAL_NOT_SETTLED",
+                    "Resume requires one successful durable initial review.",
+                )
+            row = self.conn.execute(
+                "SELECT j.execution_generation,j.status AS job_status,c.status AS content_status,"
+                "r.status AS run_status,cr.status AS content_run_status "
+                "FROM content_review_resume_approvals a "
+                "JOIN jobs j ON j.id=a.job_id JOIN runs r ON r.id=a.run_id "
+                "JOIN content_items c ON c.id=a.content_id "
+                "JOIN content_runs cr ON cr.run_id=a.run_id AND cr.content_id=a.content_id "
+                "WHERE a.approval_ref=?",
+                (approval_ref,),
+            ).fetchone()
+            if row is None or row["content_status"] not in ("FAILED", "NEEDS_VERIFICATION"):
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_SESSION_SOURCE_INVALID",
+                    "Only the exact terminal content state can be resumed.",
+                )
+            if self.conn.execute(
+                "SELECT 1 FROM content_writer_attempts WHERE content_id=? AND attempt_no=2",
+                (approval["content_id"],),
+            ).fetchone() is not None:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_WRITER_ATTEMPT_TWO_EXISTS",
+                    "A second writer attempt already exists before session start.",
+                )
+            generation = int(row["execution_generation"]) + 1
+            self.conn.execute(
+                "INSERT INTO content_review_resume_sessions (approval_ref,job_id,run_id,"
+                "content_id,lease_owner,execution_generation,lease_expires_at,"
+                "source_content_status,status,started_at,finished_at) "
+                "VALUES (?,?,?,?,?,?,?,?,'ACTIVE',?,NULL)",
+                (
+                    approval_ref, approval["job_id"], approval["run_id"],
+                    approval["content_id"], lease_owner, generation, lease_expires,
+                    row["content_status"], timestamp,
+                ),
+            )
+            changed = self.conn.execute(
+                "UPDATE jobs SET status='RUNNING',last_error=NULL,lease_owner=?,"
+                "lease_expires_at=?,execution_generation=?,finished_at=NULL,updated_at=?,"
+                "external_effect_started_at=NULL WHERE id=? AND status IN "
+                "('FAILED','NEEDS_VERIFICATION') AND execution_generation=?",
+                (
+                    lease_owner, lease_expires, generation, timestamp,
+                    approval["job_id"], generation - 1,
+                ),
+            )
+            if changed.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_SESSION_JOB_RACE", "Terminal job could not be resumed.",
+                )
+            changed = self.conn.execute(
+                "UPDATE runs SET status='RUNNING',current_state='RUNNING',finished_at=NULL,"
+                "error=NULL WHERE id=? AND status IN ('FAILED','STOPPED')",
+                (approval["run_id"],),
+            )
+            if changed.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_SESSION_RUN_RACE", "Terminal run could not be resumed.",
+                )
+            changed = self.conn.execute(
+                "UPDATE content_runs SET status='RUNNING',reason_code=NULL,"
+                "final_result_json=NULL,score=NULL,updated_at=?,finished_at=NULL "
+                "WHERE run_id=? AND content_id=? AND status=?",
+                (
+                    timestamp, approval["run_id"], approval["content_id"],
+                    row["content_status"],
+                ),
+            )
+            if changed.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_SESSION_CONTENT_RACE",
+                    "Terminal content could not be resumed.",
+                )
+            saved = self.conn.execute(
+                "SELECT * FROM content_review_resume_sessions WHERE approval_ref=?",
+                (approval_ref,),
+            ).fetchone()
+            self.conn.commit()
+            assert saved is not None
+            return dict(saved)
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def settle_content_review_resume_session(
+        self, *, approval_ref: str, now: datetime | None = None,
+    ) -> dict[str, object]:
+        timestamp = _ts_precise(now)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            session = self.conn.execute(
+                "SELECT * FROM content_review_resume_sessions WHERE approval_ref=?",
+                (approval_ref,),
+            ).fetchone()
+            if session is None:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_SESSION_MISSING", "Review session is missing.",
+                )
+            if session["status"] != "ACTIVE":
+                self.conn.commit()
+                return dict(session)
+            content = self.conn.execute(
+                "SELECT status FROM content_items WHERE id=?",
+                (session["content_id"],),
+            ).fetchone()
+            if content is None or content["status"] not in (
+                "PENDING_APPROVAL", "FAILED", "NEEDS_VERIFICATION",
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_SESSION_NOT_TERMINAL",
+                    "Session cannot settle before the canonical content lifecycle.",
+                )
+            self.conn.execute(
+                "UPDATE content_review_resume_sessions SET status=?,finished_at=? "
+                "WHERE approval_ref=? AND status='ACTIVE'",
+                (content["status"], timestamp, approval_ref),
+            )
+            saved = self.conn.execute(
+                "SELECT * FROM content_review_resume_sessions WHERE approval_ref=?",
+                (approval_ref,),
+            ).fetchone()
+            self.conn.commit()
+            assert saved is not None
+            return dict(saved)
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def finalize_content_review_resume_approval(
+        self,
+        execution: JobExecutionContext,
+        *,
+        approval_ref: str,
+        draft_fingerprint: str,
+    ) -> ContentTransitionResult:
+        """Move the exact initially approved draft to PENDING_APPROVAL."""
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            current_ts = self._job_execution_timestamp(execution)
+            row = self._require_content_execution_fence(execution, current_ts)
+            review = self.conn.execute(
+                "SELECT e.execution_ref,e.result_json "
+                "FROM content_review_resume_executions e "
+                "JOIN content_review_resume_sessions s ON s.approval_ref=e.approval_ref "
+                "WHERE e.approval_ref=? AND e.review_no=1 AND e.outcome='SUCCESS' "
+                "AND e.draft_fingerprint=? AND e.content_id=? AND s.status='ACTIVE'",
+                (approval_ref, draft_fingerprint, row["id"]),
+            ).fetchone()
+            if review is None:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_INITIAL_APPROVAL_MISSING",
+                    "Initial reviewer approval is not durably bound to this draft.",
+                )
+            payload = json.loads(str(review["result_json"]))
+            entries = payload.get("entries")
+            if (
+                payload.get("decision") != "APPROVE"
+                or not isinstance(entries, list) or not entries
+                or any(item.get("outcome") != "PASS" for item in entries)
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_INITIAL_NOT_APPROVED",
+                    "Only the exact all-PASS reviewer result can be finalised.",
+                )
+            draft = self.conn.execute(
+                "SELECT * FROM content_drafts WHERE content_id=? AND attempt_no=1 "
+                "AND draft_fingerprint=?",
+                (row["id"], draft_fingerprint),
+            ).fetchone()
+            if draft is None:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_DRAFT_MISSING", "Approved source draft is missing.",
+                )
+            updated = self.conn.execute(
+                "UPDATE content_items SET title=?,body=?,updated_at=? "
+                "WHERE id=? AND status='RUNNING'",
+                (draft["title"], draft["body"], current_ts, row["id"]),
+            )
+            if updated.rowcount != 1:
+                raise StaleJobExecutionError(execution.job_id)
+            result_json = canonical_json({
+                "mode": "REVIEW_ONLY",
+                "attempt_no": 1,
+                "draft_fingerprint": draft_fingerprint,
+                "initial_review_execution_ref": review["execution_ref"],
+            })
+            self._apply_content_transition_command(
+                mode="EXECUTION", job_id=execution.job_id,
+                run_id=execution.run_id, content_id=int(row["id"]),
+                account_id=row["account_id"], workflow=execution.workflow.value,
+                source_status=row["status"],
+                target_status=ContentStatus.PENDING_APPROVAL.value,
+                target_run_status=RunStatus.SUCCESS.value,
+                target_job_status=JobStatus.DONE.value,
+                lease_owner=execution.lease_owner,
+                execution_generation=execution.fence_token,
+                lease_expires_at=row["lease_expires_at"], reason_code=None,
+                result_json=result_json, score=1.0, current_ts=current_ts,
+            )
+            content_row = self.conn.execute(
+                "SELECT * FROM content_items WHERE id=?", (row["id"],),
+            ).fetchone()
+            run_row = self.conn.execute(
+                "SELECT * FROM content_runs WHERE run_id=?", (execution.run_id,),
+            ).fetchone()
+            self.conn.commit()
+            assert content_row is not None and run_row is not None
+            return ContentTransitionResult(
+                content=self._content_item_from_row(content_row),
+                run=self._content_run_from_row(run_row), idempotent=False,
+            )
+        except BaseException as primary:
+            if self.conn.in_transaction:
+                self._rollback_preserving_primary(primary, self.conn.rollback)
+            raise
+
+    def begin_content_review_resume_execution(
+        self,
+        *,
+        approval_ref: str,
+        intent: object,
+        reserved_cost_usd: Decimal | str,
+        daily_limit_usd: Decimal | float | str,
+        monthly_limit_usd: Decimal | float | str,
+        now: datetime | None = None,
+    ) -> dict[str, object]:
+        """Consume the chain once and reserve one exact reviewer stage."""
+        timestamp = _ts_precise(now)
+        intent_json = canonical_json(intent.payload())
+        intent_fingerprint = sha256_text(intent_json)
+        reserved = quantize_usd(
+            reserved_cost_usd, label="review resume reservation",
+        )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            row = self.conn.execute(
+                "SELECT * FROM content_review_resume_approvals WHERE approval_ref=?",
+                (approval_ref,),
+            ).fetchone()
+            if row is None:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_APPROVAL_MISSING",
+                    "REVIEW-ONLY requires its exact one-shot approval.",
+                )
+            expires = parse_authority_instant(row["expires_at"])
+            current = parse_authority_instant(timestamp)
+            if expires is None or current is None or expires <= current:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_APPROVAL_EXPIRED",
+                    "The review approval is expired or has an invalid timestamp.",
+                )
+            expected_ref = (
+                row["initial_review_execution_ref"]
+                if intent.review_no == 1 else row["post_review_execution_ref"]
+            )
+            exact = (
+                expected_ref == intent.execution_ref
+                and row["job_id"] == intent.job_id
+                and row["run_id"] == intent.run_id
+                and int(row["content_id"]) == intent.content_id
+                and row["reviewer_provider"] == intent.provider
+                and row["reviewer_model_id"] == intent.technical_model_id
+                and int(row["reviewer_max_output_tokens"]) == intent.max_output_tokens
+            )
+            if not exact:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_APPROVAL_INTENT_MISMATCH",
+                    "The approved review request changed before execution.",
+                )
+            if reserved > _money(
+                row["reviewer_max_cost_usd"], positive=True,
+                label="Review-stage approval cap",
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_APPROVAL_CAP_EXCEEDED",
+                    "The complete reviewer envelope exceeds its approval cap.",
+                )
+            if (
+                quantize_usd(daily_limit_usd, label="Runtime daily limit")
+                != _money(row["daily_limit_usd"], positive=True, label="Approved daily limit")
+                or quantize_usd(monthly_limit_usd, label="Runtime monthly limit")
+                != _money(
+                    row["monthly_limit_usd"], positive=True,
+                    label="Approved monthly limit",
+                )
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_APPROVAL_BUDGET_MISMATCH",
+                    "Runtime budget limits differ from the immutable chain approval.",
+                )
+            if intent.review_no == 2 and self.conn.execute(
+                "SELECT 1 FROM content_review_resume_sessions "
+                "WHERE approval_ref=? AND status='ACTIVE'", (approval_ref,),
+            ).fetchone() is None:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_SESSION_NOT_ACTIVE",
+                    "Post-rewrite review requires the active canonical rewrite session.",
+                )
+            existing = self.conn.execute(
+                "SELECT outcome FROM content_review_resume_executions "
+                "WHERE execution_ref=? OR (content_id=? AND review_no=?)",
+                (intent.execution_ref, intent.content_id, intent.review_no),
+            ).fetchone()
+            if existing is not None:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_EXECUTION_ALREADY_EXISTS",
+                    "A reviewer stage already has durable state and cannot be replayed.",
+                )
+            remaining = self._remaining_review_chain_budget_in_transaction(
+                approval_ref=approval_ref,
+            )
+            if remaining < reserved:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_CHAIN_CAP_EXCEEDED",
+                    "Remaining chain cap cannot cover the reviewer reservation.",
+                )
+            self._assert_review_chain_global_budget_in_transaction(
+                approval=row, reservation=reserved, timestamp=timestamp,
+            )
+            if row["consumed_at"] is None:
+                if intent.review_no != 1:
+                    raise ContentFoundationError(
+                        "CONTENT_REVIEW_APPROVAL_NOT_CONSUMED",
+                        "Only initial review may consume the chain approval.",
+                    )
+                consumed = self.conn.execute(
+                    "UPDATE content_review_resume_approvals SET consumed_at=? "
+                    "WHERE approval_ref=? AND consumed_at IS NULL",
+                    (timestamp, approval_ref),
+                )
+                if consumed.rowcount != 1:
+                    raise ContentFoundationError(
+                        "CONTENT_REVIEW_APPROVAL_CONSUME_RACE",
+                        "Review approval consumption compare-and-swap failed.",
+                    )
+            self.conn.execute(
+                "INSERT INTO content_review_resume_executions (execution_ref,"
+                "approval_ref,job_id,run_id,content_id,draft_fingerprint,"
+                "writer_attempt_no,review_no,request_intent_json,"
+                "request_intent_fingerprint,provider,"
+                "technical_model_id,reserved_cost_usd,outcome,reserved_at,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'IN_FLIGHT',?,?)",
+                (
+                    intent.execution_ref, approval_ref, intent.job_id, intent.run_id,
+                    intent.content_id, intent.draft_fingerprint,
+                    intent.writer_attempt_no, intent.review_no, intent_json,
+                    intent_fingerprint,
+                    intent.provider, intent.technical_model_id,
+                    format(reserved, ".6f"), timestamp, timestamp,
+                ),
+            )
+            saved = self.conn.execute(
+                "SELECT * FROM content_review_resume_executions WHERE execution_ref=?",
+                (intent.execution_ref,),
+            ).fetchone()
+            self.conn.commit()
+            return dict(saved)
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def mark_content_review_resume_effect_started(
+        self, execution_ref: str, *, now: datetime | None = None,
+    ) -> None:
+        timestamp = _ts_precise(now)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            changed = self.conn.execute(
+                "UPDATE content_review_resume_executions "
+                "SET external_effect_started_at=? WHERE execution_ref=? "
+                "AND outcome='IN_FLIGHT' AND external_effect_started_at IS NULL",
+                (timestamp, execution_ref),
+            )
+            if changed.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_EFFECT_ALREADY_STARTED",
+                    "Review effect can be stamped exactly once.",
+                )
+            self.conn.commit()
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def settle_content_review_resume_execution(
+        self,
+        *,
+        execution_ref: str,
+        outcome: str,
+        failure_kind: str | None,
+        returned_model_id: str | None,
+        usage: object | None,
+        cost_usd: Decimal | None,
+        result_payload: dict[str, object],
+        now: datetime | None = None,
+    ) -> str:
+        timestamp = _ts_precise(now)
+        result_json = canonical_json(result_payload)
+        fingerprint_value = sha256_text(result_json)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            row = self.conn.execute(
+                "SELECT * FROM content_review_resume_executions WHERE execution_ref=?",
+                (execution_ref,),
+            ).fetchone()
+            if row is None or row["outcome"] != "IN_FLIGHT":
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_EXECUTION_NOT_IN_FLIGHT",
+                    "Review settlement requires one open reservation.",
+                )
+            self.conn.execute(
+                "UPDATE content_review_resume_executions SET outcome=?,failure_kind=?,"
+                "returned_model_id=?,input_tokens=?,output_tokens=?,cache_read_tokens=?,"
+                "cache_write_tokens=?,web_search_requests=?,cost_usd=?,result_json=?,"
+                "result_fingerprint=?,settled_at=? WHERE execution_ref=?",
+                (
+                    outcome, failure_kind, returned_model_id,
+                    None if usage is None else usage.input_tokens,
+                    None if usage is None else usage.output_tokens,
+                    None if usage is None else usage.cache_read_tokens,
+                    None if usage is None else usage.cache_write_tokens,
+                    None if usage is None else usage.web_search_requests,
+                    None if cost_usd is None else format(cost_usd, ".6f"),
+                    result_json, fingerprint_value, timestamp, execution_ref,
+                ),
+            )
+            if usage is not None and cost_usd is not None:
+                self.conn.execute(
+                    "INSERT INTO model_usage (run_id,provider,model,task,input_tokens,"
+                    "output_tokens,cache_read_tokens,cache_write_tokens,"
+                    "web_search_requests,estimated_cost_usd,dry_run,request_id,"
+                    "is_legacy_usage,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        row["run_id"], row["provider"], row["technical_model_id"],
+                        "article_reviewer_resume", usage.input_tokens,
+                        usage.output_tokens, usage.cache_read_tokens,
+                        usage.cache_write_tokens, usage.web_search_requests,
+                        float(cost_usd), 0, execution_ref, 0, timestamp,
+                    ),
+                )
+                self._set_run_cost_from_content_usage(str(row["run_id"]))
+            self.conn.commit()
+            return fingerprint_value
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
     def record_role_provider_execution(
         self, execution: RoleProviderExecution,
     ) -> str:
@@ -2727,6 +3523,7 @@ class SqliteStorage:
         approved_at: str,
         expires_at: str,
         retention_acceptance_ref: str | None = None,
+        inference_config: object,
     ) -> str:
         """Persist one durable, single-use L1 approval for a paid ARTICLE run."""
         parsed = parse_role(role)
@@ -2751,10 +3548,29 @@ class SqliteStorage:
             "approved_at": approved_at,
             "expires_at": expires_at,
             "retention_acceptance_ref": retention_acceptance_ref,
+            "inference_config": inference_config.payload(),
         }
         payload_json = canonical_json(payload)
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+            existing = self.conn.execute(
+                "SELECT approval_ref,approval_json,approval_fingerprint "
+                "FROM content_provider_approvals WHERE job_id=?",
+                (job_id,),
+            ).fetchone()
+            if existing is not None:
+                fingerprint = sha256_text(payload_json)
+                if (
+                    existing["approval_ref"] == approval_ref
+                    and existing["approval_json"] == payload_json
+                    and existing["approval_fingerprint"] == fingerprint
+                ):
+                    self.conn.commit()
+                    return approval_ref
+                raise ContentFoundationError(
+                    "CONTENT_APPROVAL_CONFLICT",
+                    "The job already carries a different immutable ARTICLE approval.",
+                )
             self.conn.execute(
                 "INSERT INTO content_provider_approvals (approval_ref,job_id,"
                 "account_id,logical_role,model_registry_id,provider,"
@@ -2783,6 +3599,7 @@ class SqliteStorage:
         job_id: str,
         *,
         binding: FrozenModelBinding,
+        attempt_no: int,
         max_output_tokens: int,
         max_cost_usd: object,
         current_ts: str,
@@ -2792,6 +3609,82 @@ class SqliteStorage:
         Runs in the same transaction that creates the paid attempt, so a refusal
         leaves neither a consumed approval nor a reachable caller.
         """
+        resume = self.conn.execute(
+            "SELECT a.*,s.status AS session_status FROM content_review_resume_approvals a "
+            "JOIN content_review_resume_sessions s ON s.approval_ref=a.approval_ref "
+            "WHERE a.job_id=? AND s.status='ACTIVE'",
+            (job_id,),
+        ).fetchone() if self.conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='content_review_resume_sessions'"
+        ).fetchone() is not None else None
+        if resume is not None:
+            if attempt_no != 2:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_WRITER_ATTEMPT_INVALID",
+                    "Review resume can authorise only canonical writer attempt 2.",
+                )
+            request_id = self._provider_request_id(
+                job_id, CONTENT_PROVIDER_STAGE, attempt_no,
+            )
+            if resume["writer_execution_ref"] != request_id:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_WRITER_IDENTITY_MISMATCH",
+                    "Canonical writer request identity differs from the L1 chain.",
+                )
+            if (
+                binding.role is not LogicalModelRole.ARTICLE_WRITER
+                or resume["writer_provider"] != binding.provider
+                or resume["writer_model_id"] != binding.technical_model_id
+                or int(resume["writer_max_output_tokens"]) < int(max_output_tokens)
+                or _money(
+                    resume["writer_max_cost_usd"], positive=True,
+                    label="Review-chain writer cap",
+                ) < _money(max_cost_usd, positive=True, label="Writer intent cap")
+            ):
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_WRITER_AUTHORITY_MISMATCH",
+                    "Writer attempt 2 differs from its exact chain authority.",
+                )
+            expires = parse_authority_instant(resume["expires_at"])
+            current = parse_authority_instant(current_ts)
+            if expires is None or current is None or expires <= current:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_APPROVAL_EXPIRED",
+                    "Review-chain approval expired before writer attempt 2.",
+                )
+            initial_review = self.conn.execute(
+                "SELECT result_json FROM content_review_resume_executions "
+                "WHERE approval_ref=? AND review_no=1 AND outcome='SUCCESS'",
+                (resume["approval_ref"],),
+            ).fetchone()
+            if initial_review is None or json.loads(
+                str(initial_review["result_json"])
+            ).get("decision") != "REWRITE_ONCE":
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_REWRITE_DECISION_REQUIRED",
+                    "Writer attempt 2 requires the durable initial REWRITE_ONCE decision.",
+                )
+            existing = self.conn.execute(
+                "SELECT status FROM provider_attempts WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            if existing is None:
+                reservation = _money(
+                    max_cost_usd, positive=True, label="Writer attempt envelope",
+                )
+                if self._remaining_review_chain_budget_in_transaction(
+                    approval_ref=str(resume["approval_ref"]),
+                ) < reservation:
+                    raise ContentFoundationError(
+                        "CONTENT_REVIEW_CHAIN_CAP_EXCEEDED",
+                        "Remaining chain cap cannot cover writer attempt 2.",
+                    )
+                self._assert_review_chain_global_budget_in_transaction(
+                    approval=resume, reservation=reservation, timestamp=current_ts,
+                )
+            return
+
         row = self.conn.execute(
             "SELECT * FROM content_provider_approvals WHERE job_id=?", (job_id,),
         ).fetchone()
@@ -2862,6 +3755,25 @@ class SqliteStorage:
                 "CONTENT_APPROVAL_INVALID",
                 "The durable content approval payload is invalid.",
             ) from exc
+        from app.llm.anthropic_provider_contract import (
+            inference_config_for_role,
+            inference_config_from_payload,
+        )
+        try:
+            persisted_inference = inference_config_from_payload(
+                approval_payload.get("inference_config"),
+                expected_role=binding.role,
+            )
+        except ValueError as exc:
+            raise ContentFoundationError(
+                "CONTENT_APPROVAL_INFERENCE_CONFIG_MISMATCH",
+                "The approval does not preserve the role's exact thinking/effort.",
+            ) from exc
+        if persisted_inference != inference_config_for_role(binding.role):
+            raise ContentFoundationError(
+                "CONTENT_APPROVAL_INFERENCE_CONFIG_MISMATCH",
+                "The approval's thinking/effort changed after authorization.",
+            )
         self._require_fable_retention_acceptance(
             technical_model_id=str(row["technical_model_id"]),
             provider=str(row["provider"]),
@@ -3383,6 +4295,24 @@ class SqliteStorage:
             "rejection_reason",
         )
         card_snapshot = {column: card[column] for column in card_columns}
+        for column in (
+            "facts_json",
+            "citable_numbers",
+            "confirmed_claims",
+            "uncertain_claims",
+            "contradictions",
+        ):
+            raw_value = card_snapshot[column]
+            if raw_value in (None, ""):
+                card_snapshot[column] = {} if column == "facts_json" else []
+                continue
+            try:
+                card_snapshot[column] = json.loads(str(raw_value))
+            except (TypeError, json.JSONDecodeError) as exc:
+                raise ContentSnapshotError(
+                    "CONTENT_CARD_JSON_INVALID",
+                    f"Research Card field {column} is not valid JSON.",
+                ) from exc
         card_snapshot["topic_title"] = card["topic_title"]
         card_snapshot["topic_question"] = card["topic_question"]
         card_json = canonical_json(card_snapshot)
@@ -3889,6 +4819,7 @@ class SqliteStorage:
                     or run_row["status"] not in (
                         ContentStatus.PREPARED.value,
                         ContentStatus.RUNNING.value,
+                        ContentStatus.REVISE.value,
                     )
                 ):
                     raise ContentFoundationError(
@@ -5056,6 +5987,7 @@ class SqliteStorage:
                 self._consume_content_provider_approval_in_transaction(
                     execution.job_id,
                     binding=binding,
+                    attempt_no=attempt_no,
                     max_output_tokens=int(intent["max_output_tokens"]),
                     max_cost_usd=intent["max_cost_usd"],
                     current_ts=current_ts,
@@ -6739,6 +7671,7 @@ class SqliteStorage:
                 "topic_id": int(job.topic_id),
                 "dry_run": True,
             }
+            is_force_reresearch = False
             if job.payload == dry_payload:
                 expected_run_status = RunStatus.DRY_RUN
             else:
@@ -6765,6 +7698,11 @@ class SqliteStorage:
                         job_id,
                         "durable_provider_v2 payload identity must match the job.",
                     )
+                normalized_intent = normalized["execution_intent"]
+                assert isinstance(normalized_intent, dict)
+                is_force_reresearch = bool(
+                    normalized_intent["flags"]["force_re_research"]
+                )
                 expected_run_status = RunStatus.RUNNING
             topic = self.conn.execute(
                 "SELECT 1 FROM topics WHERE id=? AND account_id=?",
@@ -6796,6 +7734,7 @@ class SqliteStorage:
                     or research_run.account_id != job.account_id
                     or research_run.topic_id != job.topic_id
                     or research_run.flow is not ResearchFlow.SINGLE
+                    or research_run.is_force_reresearch != is_force_reresearch
                 ):
                     raise JobRunRelationError(
                         "ATTACHED_RESEARCH_RUN_INVALID", job_id,
@@ -6842,7 +7781,8 @@ class SqliteStorage:
                 "VALUES (?,?,?,?,?,?,?,?,?)",
                 (
                     run_id, job.account_id, job.topic_id, ResearchFlow.SINGLE.value,
-                    ResearchRunStatus.PENDING.value, 0, 0.0, current_ts, current_ts,
+                    ResearchRunStatus.PENDING.value, int(is_force_reresearch),
+                    0.0, current_ts, current_ts,
                 ),
             )
             cursor = self.conn.execute(
@@ -7373,6 +8313,7 @@ class SqliteStorage:
                 )
                 or row["rr_error"] is not None
                 or bool(row["rr_is_force_reresearch"])
+                != bool(intent.force_re_research)
             ):
                 reject(
                     "FINAL_LIFECYCLE_RESEARCH_RUN_INVALID",
@@ -8367,7 +9308,7 @@ class SqliteStorage:
 
     def _reconciliation_require_consistent_lineage(
         self, row: sqlite3.Row, account_id: str,
-    ) -> DurableResearchExecutionIntent | DurableTopicGenerationIntent:
+    ) -> object:
         """Fail-closed unless the whole durable lineage is present and consistent.
 
         Verifies attempt -> job -> run -> research_run -> account -> workflow ->
@@ -8402,13 +9343,42 @@ class SqliteStorage:
             problems.append("run.account_id!=job.account_id")
         if row["run_workflow"] != WorkflowType.RESEARCH.value:
             problems.append("run.workflow")
-        # research_run shares the run id (JOIN) and must share account/topic and be single.
+        # research_run shares the run id (JOIN) and must share account/topic.
+        # The supported real lifecycles are legacy/evidence SINGLE and the typed
+        # A1 source-discovery STAGED checkpoint.
         if row["research_account_id"] != job_account:
             problems.append("research_run.account_id!=job.account_id")
         if job_topic is None or int(row["research_topic_id"]) != job_topic:
             problems.append("research_run.topic_id!=job.topic_id")
-        if row["research_flow"] != ResearchFlow.SINGLE.value:
+        source_discovery = row["research_flow"] == ResearchFlow.STAGED.value
+        expected_flow = (
+            ResearchFlow.STAGED.value
+            if source_discovery else ResearchFlow.SINGLE.value
+        )
+        if row["research_flow"] != expected_flow:
             problems.append("research_run.flow")
+        if source_discovery:
+            from app.research.source_discovery_intent import SourceDiscoveryIntent
+
+            if not isinstance(intent, SourceDiscoveryIntent):
+                problems.append("intent.kind")
+            if row["stage"] != "research_discover" or int(row["attempt_no"]) != 1:
+                problems.append("attempt.stage/no")
+            if row["request_id"] != f"{row['job_id']}:research_discover:1":
+                problems.append("attempt.request_id")
+            approval = self.conn.execute(
+                "SELECT * FROM source_discovery_approvals WHERE job_id=?",
+                (row["job_id"],),
+            ).fetchone()
+            if (
+                approval is None
+                or approval["account_id"] != job_account
+                or approval["topic_id"] != job_topic
+                or approval["request_id"] != row["request_id"]
+                or approval["intent_fingerprint"] != row["execution_intent_fingerprint"]
+                or approval["consumed_at"] is None
+            ):
+                problems.append("source_discovery_approval")
         # Durable intent identity (already fingerprint-verified) must match the lineage.
         if intent.account_id != job_account:
             problems.append("intent.account_id")
@@ -8528,19 +9498,35 @@ class SqliteStorage:
 
     def _reconciliation_intent(
         self, row: sqlite3.Row,
-    ) -> DurableResearchExecutionIntent | DurableTopicGenerationIntent:
+    ) -> object:
         """Reconstruct and fingerprint-verify the durable provider/model identity."""
         if row["job_kind"] == JobKind.TOPIC_GENERATION.value:
             return self._reconciliation_topic_intent(row)
         try:
             payload = json.loads(row["payload_json"])
-            canonical_payload = canonicalize_durable_research_payload(payload)
-            intent = DurableResearchExecutionIntent.from_payload(canonical_payload["execution_intent"])
+            from app.research.source_discovery_intent import (
+                SOURCE_DISCOVERY_EXECUTION,
+                SourceDiscoveryIntent,
+                canonicalize_source_discovery_payload,
+            )
+
+            if payload.get("execution") == SOURCE_DISCOVERY_EXECUTION:
+                canonical_payload = canonicalize_source_discovery_payload(payload)
+                intent = SourceDiscoveryIntent.from_payload(
+                    canonical_payload["execution_intent"]
+                )
+                expected_fingerprint = intent.fingerprint
+            else:
+                canonical_payload = canonicalize_durable_research_payload(payload)
+                intent = DurableResearchExecutionIntent.from_payload(
+                    canonical_payload["execution_intent"]
+                )
+                expected_fingerprint = durable_execution_intent_fingerprint(payload)
         except (TypeError, ValueError, KeyError, json.JSONDecodeError, DurableExecutionIntentError) as exc:
             raise ProviderAttemptReconciliationError(
                 "Durable provider/model identity cannot be reconstructed."
             ) from exc
-        if durable_execution_intent_fingerprint(payload) != row["execution_intent_fingerprint"]:
+        if expected_fingerprint != row["execution_intent_fingerprint"]:
             raise ProviderAttemptReconciliationError(
                 "Stored durable execution intent fingerprint does not match the attempt."
             )
@@ -9217,11 +10203,19 @@ class SqliteStorage:
                     raise ProviderAttemptReconciliationError(
                         "EXECUTION_FAILED cannot coexist with a Research Card."
                     )
-                research_lifecycle_valid = (
-                    row["research_status"] is None
-                    if is_topic_generation
-                    else row["research_status"] in ("PENDING", "FAILED")
-                )
+                research_lifecycle_valid = row["research_status"] is None
+                if not is_topic_generation:
+                    research_lifecycle_valid = (
+                        row["research_flow"], row["research_status"],
+                    ) in {
+                        (ResearchFlow.SINGLE.value, ResearchRunStatus.PENDING.value),
+                        (ResearchFlow.SINGLE.value, ResearchRunStatus.FAILED.value),
+                        (
+                            ResearchFlow.STAGED.value,
+                            ResearchRunStatus.DISCOVERY_PENDING.value,
+                        ),
+                        (ResearchFlow.STAGED.value, ResearchRunStatus.FAILED.value),
+                    }
                 if row["run_status"] not in _EXECUTION_FAILED_RUN_STATUSES \
                         or not research_lifecycle_valid:
                     raise ProviderAttemptReconciliationError(
@@ -9246,10 +10240,19 @@ class SqliteStorage:
                 if is_topic_generation:
                     research_rowcount = 1
                 else:
+                    source_status = (
+                        ResearchRunStatus.DISCOVERY_PENDING.value
+                        if row["research_flow"] == ResearchFlow.STAGED.value
+                        else ResearchRunStatus.PENDING.value
+                    )
                     research_cursor = self.conn.execute(
                         "UPDATE research_runs SET status='FAILED',error=?,updated_at=? "
-                        "WHERE id=? AND flow='single' AND status IN ('PENDING','FAILED') AND research_card_id IS NULL",
-                        ("OPERATOR_RECONCILIATION_EXECUTION_FAILED", now, row["run_id"]),
+                        "WHERE id=? AND flow=? AND status IN (?, 'FAILED') "
+                        "AND research_card_id IS NULL",
+                        (
+                            "OPERATOR_RECONCILIATION_EXECUTION_FAILED", now,
+                            row["run_id"], row["research_flow"], source_status,
+                        ),
                     )
                     research_rowcount = research_cursor.rowcount
                 if run_cursor.rowcount != 1 or research_rowcount != 1:
@@ -9311,8 +10314,8 @@ class SqliteStorage:
             elif execution_resolution is ExecutionResolution.EXECUTION_FAILED:
                 research_cache_cursor = self.conn.execute(
                     "UPDATE research_runs SET total_cost_usd=?,updated_at=? "
-                    "WHERE id=? AND flow='single' AND status='FAILED' AND research_card_id IS NULL",
-                    (float(total), now, row["run_id"]),
+                    "WHERE id=? AND flow=? AND status='FAILED' AND research_card_id IS NULL",
+                    (float(total), now, row["run_id"], row["research_flow"]),
                 )
                 research_cache_rowcount = research_cache_cursor.rowcount
             else:
@@ -9391,7 +10394,8 @@ class SqliteStorage:
             current_ts = self._job_execution_timestamp(execution)
             lifecycle = self.conn.execute(
                 "SELECT j.status AS job_status,j.run_id,j.lease_owner,j.lease_expires_at,"
-                "r.status AS run_status,rr.status AS research_status,rr.research_card_id "
+                "r.status AS run_status,rr.flow AS research_flow,"
+                "rr.status AS research_status,rr.research_card_id "
                 "FROM jobs j JOIN runs r ON r.id=j.run_id "
                 "JOIN research_runs rr ON rr.id=j.run_id "
                 "WHERE j.id=? AND j.run_id=?",
@@ -9441,8 +10445,17 @@ class SqliteStorage:
                     structural_problems.append("research_run.account_id")
                 if state["topic_id"] is None or state["research_topic_id"] != state["topic_id"]:
                     structural_problems.append("research_run.topic_id")
-                if state["research_flow"] != ResearchFlow.SINGLE.value:
-                    structural_problems.append("research_run.flow")
+                active_research_lifecycle = (
+                    state["research_flow"], state["research_status"],
+                ) in {
+                    (ResearchFlow.SINGLE.value, ResearchRunStatus.PENDING.value),
+                    (
+                        ResearchFlow.STAGED.value,
+                        ResearchRunStatus.DISCOVERY_PENDING.value,
+                    ),
+                }
+                if not active_research_lifecycle:
+                    structural_problems.append("research_run.flow/status")
                 if structural_problems:
                     raise ProviderAttemptReconciliationError(
                         "Attempt lineage is inconsistent: " + ",".join(structural_problems)
@@ -9453,7 +10466,7 @@ class SqliteStorage:
                     if state["job_status"] == JobStatus.NEEDS_VERIFICATION.value:
                         if state["run_status"] not in (
                             RunStatus.RUNNING.value, RunStatus.STOPPED.value,
-                        ) or state["research_status"] != ResearchRunStatus.PENDING.value:
+                        ) or not active_research_lifecycle:
                             raise ProviderAttemptReconciliationError(
                                 "Escalated provider attempt has an inconsistent lifecycle."
                             )
@@ -9493,7 +10506,7 @@ class SqliteStorage:
                     research_status = fence["research_status"]
                 if run_status not in (
                     RunStatus.RUNNING.value, RunStatus.DRY_RUN.value,
-                ) or research_status != ResearchRunStatus.PENDING.value:
+                ) or not active_research_lifecycle:
                     raise StaleJobExecutionError(
                         execution.job_id,
                         "research lifecycle is no longer mutable by this execution.",
@@ -9569,9 +10582,18 @@ class SqliteStorage:
 
             fence = self._require_job_execution_fence(execution, current_ts)
             if preserve_for_verification:
+                active_research_lifecycle = (
+                    lifecycle["research_flow"], fence["research_status"],
+                ) in {
+                    (ResearchFlow.SINGLE.value, ResearchRunStatus.PENDING.value),
+                    (
+                        ResearchFlow.STAGED.value,
+                        ResearchRunStatus.DISCOVERY_PENDING.value,
+                    ),
+                }
                 if fence["run_status"] not in (
                     RunStatus.RUNNING.value, RunStatus.DRY_RUN.value,
-                ) or fence["research_status"] != ResearchRunStatus.PENDING.value:
+                ) or not active_research_lifecycle:
                     raise StaleJobExecutionError(
                         execution.job_id,
                         "research lifecycle cannot be preserved for verification.",
@@ -9596,8 +10618,17 @@ class SqliteStorage:
                 raise ResearchTopicIntegrityError(
                     "Worker research failure cost must equal canonical model usage."
                 )
+            active_research_lifecycle = (
+                lifecycle["research_flow"], fence["research_status"],
+            ) in {
+                (ResearchFlow.SINGLE.value, ResearchRunStatus.PENDING.value),
+                (
+                    ResearchFlow.STAGED.value,
+                    ResearchRunStatus.DISCOVERY_PENDING.value,
+                ),
+            }
             if fence["run_status"] not in (RunStatus.RUNNING.value, RunStatus.DRY_RUN.value) or \
-                    fence["research_status"] != ResearchRunStatus.PENDING.value:
+                    not active_research_lifecycle:
                 raise StaleJobExecutionError(
                     execution.job_id, "research lifecycle is no longer mutable by this execution.",
                 )
@@ -9614,12 +10645,13 @@ class SqliteStorage:
             )
             research_cursor = self.conn.execute(
                 "UPDATE research_runs SET status='FAILED',error=?,total_cost_usd=?,updated_at=? "
-                "WHERE id=? AND flow='single' AND status='PENDING' "
+                "WHERE id=? AND flow=? AND status=? "
                 "AND research_card_id IS NULL AND EXISTS (SELECT 1 FROM jobs "
                 "WHERE id=? AND run_id=research_runs.id AND lease_owner=? "
                 "AND lease_expires_at>=? AND status IN ('LEASED','RUNNING'))",
                 (
-                    error, float(canonical), current_ts, execution.run_id, execution.job_id,
+                    error, float(canonical), current_ts, execution.run_id,
+                    lifecycle["research_flow"], fence["research_status"], execution.job_id,
                     execution.lease_owner, current_ts,
                 ),
             )
@@ -15899,9 +16931,32 @@ class SqliteStorage:
                 )
             except sqlite3.IntegrityError as exc:
                 if "UNIQUE" in str(exc).upper():
+                    existing = self.conn.execute(
+                        "SELECT * FROM evidence_excerpts WHERE account_id=? "
+                        "AND retrieval_id=? AND claim_text=? AND claim_sha256=? "
+                        "AND excerpt_text=? AND start_offset=? AND end_offset=?",
+                        (
+                            account_id, retrieval_id, claim_text,
+                            sha256_hex(claim_text), excerpt_text,
+                            start_offset, end_offset,
+                        ),
+                    ).fetchone()
+                    if existing is not None:
+                        self.conn.commit()
+                        return EvidenceExcerpt(
+                            id=existing["id"],
+                            account_id=existing["account_id"],
+                            retrieval_id=existing["retrieval_id"],
+                            claim_text=existing["claim_text"],
+                            claim_sha256=existing["claim_sha256"],
+                            excerpt_text=existing["excerpt_text"],
+                            start_offset=existing["start_offset"],
+                            end_offset=existing["end_offset"],
+                            created_at=existing["created_at"],
+                        )
                     raise EvidenceVerificationError(EvidenceVerdict.rejected(
                         EvidenceRejectionReason.DUPLICATE_EXCERPT,
-                        "identical excerpt already recorded for this claim and range",
+                        "a conflicting excerpt identity already exists",
                     )) from exc
                 raise
             excerpt_id = int(cursor.lastrowid)

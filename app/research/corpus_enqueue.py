@@ -5,9 +5,14 @@ from dataclasses import replace
 
 from app.core.clock import Clock
 from app.core.config import Settings
+from app.content.cost_estimate import ARTICLE_RESEARCH_MAX_OUTPUT_TOKENS
 from app.models import Account, Job, JobKind, Topic, WorkflowType
 from app.research.corpus_packer import CorpusDocument, CorpusPackingError, pack_research_corpus
-from app.research.durable_intent import DurableResearchExecutionIntent, evidence_input_payload
+from app.research.durable_intent import (
+    DurableResearchExecutionIntent,
+    evidence_full_envelope_cost_usd,
+    evidence_input_payload,
+)
 
 
 def enqueue_evidence_research_if_ready(
@@ -50,15 +55,19 @@ def enqueue_evidence_research_if_ready(
     profile = storage.get_model_pricing_profile(active.pricing_ref)
     if profile is None or profile.prices is None:
         raise CorpusPackingError("verified ARTICLE_RESEARCH pricing is missing")
+    full_envelope_cap = evidence_full_envelope_cost_usd(
+        pricing_profile=profile.prices.as_storage_mapping(),
+        max_output_tokens=ARTICLE_RESEARCH_MAX_OUTPUT_TOKENS,
+    )
     intent = DurableResearchExecutionIntent.from_settings(
         settings=exact_settings,
         account_id=account.id,
         topic_id=int(topic.id),
-        cap_usd="1.000000",
+        cap_usd=full_envelope_cap,
         max_web_searches=0,
         question=topic.question or topic.title,
         niche=account.niche,
-        max_tokens=8192,
+        max_tokens=ARTICLE_RESEARCH_MAX_OUTPUT_TOKENS,
         evidence_input=evidence_input_payload([
             (doc.retrieval_id, doc.canonical_sha256, doc.canonical_chars)
             for doc in packed.documents

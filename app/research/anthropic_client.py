@@ -42,7 +42,10 @@ from app.llm.anthropic_controlled_adapter import (
     ControlledProviderRequest,
     assert_returned_model_identity,
 )
-from app.llm.anthropic_provider_contract import returned_provenance_mismatch
+from app.llm.anthropic_provider_contract import (
+    ARTICLE_RESEARCH_INFERENCE_CONFIG,
+    returned_provenance_mismatch,
+)
 from app.llm.base import Usage
 from app.ports.storage import StaleJobExecutionError
 from app.models import (
@@ -245,7 +248,8 @@ def build_evidence_research_prompt(
         "question: string, at most 30 words. "
         "working_thesis: string, at most 60 words. "
         "main_mechanism: string or null, at most 100 words. "
-        "confirmed_claims: array of 4-6 strings, each at most 30 words. "
+        f"confirmed_claims: array of exactly {len(contract.documents)} strings, "
+        "one load-bearing claim per evidence document, each at most 30 words. "
         "uncertain_claims: array of at most 3 strings, each at most 30 words. "
         "contradictions: array of at most 3 strings, each at most 35 words. "
         "strongest_counterargument: string or null, at most 60 words. "
@@ -258,6 +262,11 @@ def build_evidence_research_prompt(
         "title (string, at most 15 words), author_or_org (string of at most 10 "
         "words, or null), published_at (short date string, or null), source_type "
         "(PRIMARY, SECONDARY, DATA, or OTHER), supports_claim, supporting_excerpt. "
+        "Classify an originating official record or first-party statement as "
+        "PRIMARY; an originating dataset or first-party measurement as DATA; "
+        "independent reporting or analysis as SECONDARY; and only an unknown or "
+        "unclassifiable source as OTHER. Do not promote a source beyond what the "
+        "document itself supports. "
         f"url must be one of the evidence document urls ({allowed_urls}); never "
         "any other url. "
         "supports_claim must be a JSON string equal to the exact text of the one "
@@ -266,6 +275,11 @@ def build_evidence_research_prompt(
         "characters copied EXACTLY (character for character) from that source's "
         "evidence document text below, supporting the claim, or JSON null; never "
         "paraphrase, never merge separate passages. "
+        "Every confirmed claim must be referenced by exactly one source object; "
+        "do not create any confirmed claim without source lineage. If the original "
+        "question contains an unsupported premise, narrow question and thesis to "
+        "the strongest supported angle and put the unsupported premise only in "
+        "uncertain_claims. Score confidence for that narrowed supported thesis. "
         "Source entries are short metadata only, never article summaries. Stay "
         "within every limit above and always finish the complete JSON object: "
         "completing valid JSON has priority over adding more detail.\n\n"
@@ -746,7 +760,7 @@ class AnthropicResearchClient:
                  evidence_caller: "EvidenceCaller | None" = None,
                  max_retries: int = 0, timeout_seconds: float = 60,
                  max_web_searches: int | None = None,
-                 research_max_tokens: int = 3000,
+                 research_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
                  gather_max_tokens: int = 1200,
                  synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
                  discover_max_tokens: int = 600,
@@ -1178,6 +1192,7 @@ class AnthropicResearchClient:
                 user_prompt=prompt,
                 max_output_tokens=max_tokens,
                 timeout_seconds=self._timeout_seconds,
+                inference_config=ARTICLE_RESEARCH_INFERENCE_CONFIG,
                 tools=tuple(tools) if tools else None,
                 extra_headers=extra_headers,
             ))

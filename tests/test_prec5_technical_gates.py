@@ -682,6 +682,8 @@ def test_note_attempts_carry_no_style_examples(storage, settings, account):
 
 
 def test_note_intent_cannot_declare_article_style_examples():
+    from app.llm.anthropic_provider_contract import NOTE_WRITER_INFERENCE_CONFIG
+
     with pytest.raises(ValueError, match="ARTICLE"):
         WriterIntent(
             intent_id="x", job_id="j", run_id="r", content_id=1,
@@ -692,6 +694,7 @@ def test_note_intent_cannot_declare_article_style_examples():
             style_profile_id="NOTES_STYLE_PROFILE_V1_PROVISIONAL",
             negative_style_profile_id="ARTICLE_NEGATIVE_STYLE_PROFILE_V1",
             prompt_fingerprint="e" * 64,
+            inference_config=NOTE_WRITER_INFERENCE_CONFIG,
             limits=_zero_limits(),
             style_corpus_id="article_style_samples_v1",
             style_corpus_sha256="f" * 64,

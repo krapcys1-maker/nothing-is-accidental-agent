@@ -60,6 +60,7 @@ from app.content.style_examples import (
     load_article_style_examples,
 )
 from app.content.writer import FakeContentWriter, WriterPort
+from app.llm.anthropic_provider_contract import inference_config_for_role
 from app.core.clock import Clock
 from app.models import (
     Job,
@@ -160,6 +161,10 @@ def run_offline_content_pipeline(
     lease_seconds: int = 60,
     claim_reviewer: ClaimAccountingReviewPort | None = None,
     reviewer_factory: Callable[[], ClaimAccountingReviewPort | None] | None = None,
+    resume_writer_attempt_two_only: bool = False,
+    resume_rewrite_of_draft_fingerprint: str | None = None,
+    resume_rewrite_feedback: tuple[dict[str, object], ...] = (),
+    propagate_claim_reviewer_errors: bool = False,
 ) -> ContentPipelineSummary:
     """Resume from durable checkpoints and perform no network/API operation."""
     if job.kind is not JobKind.CONTENT:
@@ -368,7 +373,8 @@ def run_offline_content_pipeline(
 
     prior_draft: FakeDraft | None = None
     prior_feedback: tuple[dict[str, object], ...] = ()
-    for attempt_no in (1, 2):
+    attempt_numbers = (2,) if resume_writer_attempt_two_only else (1, 2)
+    for attempt_no in attempt_numbers:
         state = storage.get_content_pipeline_state(job.id)
         content_row = state["content"]
         assert isinstance(content_row, dict)
@@ -405,18 +411,28 @@ def run_offline_content_pipeline(
             if first is None:
                 raise RuntimeError("Second writer attempt lacks durable first draft.")
             prior_draft = _draft_from_row(first)
-            first_evals = tuple(
-                _evaluation_from_row(row)
-                for row in persisted_evaluations.get(1, [])
-            )
-            if len(first_evals) != 9 or aggregate_decision(first_evals) is not PipelineDecision.REWRITE_ONCE:
-                raise RuntimeError("Second writer attempt lacks a durable rewrite decision.")
-            prior_feedback = tuple(
-                finding
-                for evaluation in first_evals
-                if evaluation.decision is PipelineDecision.REWRITE_ONCE
-                for finding in evaluation.findings
-            )
+            if resume_writer_attempt_two_only:
+                if (
+                    prior_draft.fingerprint() != resume_rewrite_of_draft_fingerprint
+                    or not resume_rewrite_feedback
+                ):
+                    raise RuntimeError(
+                        "Review-only writer attempt 2 lacks exact durable feedback."
+                    )
+                prior_feedback = resume_rewrite_feedback
+            else:
+                first_evals = tuple(
+                    _evaluation_from_row(row)
+                    for row in persisted_evaluations.get(1, [])
+                )
+                if len(first_evals) != 9 or aggregate_decision(first_evals) is not PipelineDecision.REWRITE_ONCE:
+                    raise RuntimeError("Second writer attempt lacks a durable rewrite decision.")
+                prior_feedback = tuple(
+                    finding
+                    for evaluation in first_evals
+                    if evaluation.decision is PipelineDecision.REWRITE_ONCE
+                    for finding in evaluation.findings
+                )
 
         rewrite_fingerprint = (
             None if prior_draft is None else prior_draft.fingerprint()
@@ -457,6 +473,7 @@ def run_offline_content_pipeline(
             negative_style_profile_id=brief.negative_style_profile_id,
             prompt_fingerprint=prompt.fingerprint(),
             limits=context.limits,
+            inference_config=inference_config_for_role(route.logical_role),
             call_mode=writer.call_mode,
             style_corpus_id=(
                 None if style_examples is None else style_examples.corpus_id
@@ -797,6 +814,7 @@ def run_offline_content_pipeline(
                 evidence=frozen.evidence_items,
                 research_card=research_card,
                 claim_reviewer=reviewer,
+                propagate_reviewer_errors=propagate_claim_reviewer_errors,
             )
             for evaluation in evaluations:
                 storage.record_content_draft_evaluation(

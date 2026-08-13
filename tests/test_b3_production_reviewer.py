@@ -30,6 +30,8 @@ from app.content.contracts import FakeDraft
 from app.content.quality_gate import (
     CLAIM_ACCOUNTING_IDENTITY_MISMATCH,
     ClaimAccountingEntry,
+    ClaimClassification,
+    ClaimReviewOutcome,
     DraftClaimSegment,
     assess_draft,
 )
@@ -228,8 +230,12 @@ def test_smoke_production_root_reaches_writer_then_reviewer(
     )
     state = storage.get_content_pipeline_state(outcome.job_id)
     execution = _execution(storage, outcome.job_id)
-
+    frozen = storage.get_frozen_content_input(
+        account.id, int(state["content"]["id"]),
+    )
     assert writer.calls == 1, "writer final transport reached exactly once"
+    assert frozen is not None
+    assert frozen.prompt_version == "controlled_article_prompt_v4"
     assert reviewer.calls == 1, "reviewer final transport reached exactly once"
     assert execution is not None and execution["outcome"] == "SUCCESS"
     assert execution["returned_model_id"] == OPUS
@@ -544,7 +550,7 @@ def test_rewrite_budget_denial_stops_before_second_writer_call(
     reviewer = ReviewerTransport()
     _, outcome = _run(
         storage, settings, account, job="repair-rewrite-denied",
-        writer=writer, reviewer=reviewer, cap="0.125000",
+        writer=writer, reviewer=reviewer, cap="0.350000",
     )
     state = storage.get_content_pipeline_state(outcome.job_id)
     assert writer.calls == 1
@@ -552,11 +558,11 @@ def test_rewrite_budget_denial_stops_before_second_writer_call(
     assert state["content"]["status"] == "FAILED"
     assert state["content"]["reason_code"] == "CONTENT_APPROVAL_CAP_EXCEEDED"
     assert storage.remaining_article_budget(job_id=outcome.job_id) == Decimal(
-        "0.084500"
+        "0.309500"
     )
     reopened = SqliteStorage.open(settings.db_path)
     assert reopened.remaining_article_budget(job_id=outcome.job_id) == Decimal(
-        "0.084500"
+        "0.309500"
     )
     reopened.close()
 
@@ -631,10 +637,11 @@ def test_strict_reviewer_parser_matrix():
     ):
         with pytest.raises(ProductionReviewerError):
             parse_reviewer_response(malformed, segments=(segment,))
-    wrong = parse_reviewer_response(
-        encoded(segment_fingerprint="b" * 64), segments=(segment,),
-    )
-    assert wrong[0].segment_fingerprint != segment.fingerprint
+    with pytest.raises(ProductionReviewerError) as mismatch:
+        parse_reviewer_response(
+            encoded(segment_fingerprint="b" * 64), segments=(segment,),
+        )
+    assert mismatch.value.code == "REVIEWER_ENTRY_FINGERPRINT_MISMATCH"
 
     class WrongFingerprintReviewer:
         reviewer_version = REVIEWER_VERSION
@@ -643,9 +650,9 @@ def test_strict_reviewer_parser_matrix():
             return tuple(ClaimAccountingEntry(
                 segment_id=item.segment_id,
                 segment_fingerprint="b" * 64,
-                classification=wrong[0].classification,
+                classification=ClaimClassification.ARGUMENT_OR_INFERENCE,
                 evidence_ids=(), reason="canonical reason",
-                outcome=wrong[0].outcome, contains_external_fact=False,
+                outcome=ClaimReviewOutcome.PASS, contains_external_fact=False,
             ) for item in segments)
 
     assessment = assess_draft(

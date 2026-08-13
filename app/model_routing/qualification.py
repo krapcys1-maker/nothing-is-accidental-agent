@@ -214,6 +214,8 @@ class QualificationOutcome:
     observed_max_context_tokens: int | None
     structured_response_ok: bool
     source_discovery_ok: bool
+    provider_request_id: str | None = None
+    stop_reason: str | None = None
 
     @property
     def canonical_cost(self) -> str | None:
@@ -258,6 +260,8 @@ class QualificationOutcome:
             "observed_max_context_tokens": self.observed_max_context_tokens,
             "structured_response_ok": self.structured_response_ok,
             "source_discovery_ok": self.source_discovery_ok,
+            "provider_request_id": self.provider_request_id,
+            "stop_reason": self.stop_reason,
         }
 
     def result_fingerprint(self) -> str:
@@ -328,7 +332,7 @@ def evaluate_qualification_probe(
         # C5 never enables prompt caching. Cache usage means the request that
         # actually ran was not the request that was approved.
         outcome, failure_kind = "NEEDS_VERIFICATION", "UNEXPECTED_CACHE_USAGE"
-    elif usage.web_search_requests:
+    elif usage.web_search_requests and not approval.require_source_discovery:
         outcome, failure_kind = "NEEDS_VERIFICATION", "UNEXPECTED_WEB_SEARCH_USAGE"
     elif mismatch := returned_provenance_mismatch(
         inference_geo=usage.inference_geo,
@@ -345,7 +349,9 @@ def evaluate_qualification_probe(
         outcome, failure_kind = "FAIL", "PROVIDER_REFUSAL"
     elif not response.structured_response_ok:
         outcome, failure_kind = "FAIL", "STRUCTURED_RESPONSE_REJECTED"
-    elif approval.require_source_discovery and not response.source_discovery_ok:
+    elif approval.require_source_discovery and (
+        not response.source_discovery_ok or usage.web_search_requests < 1
+    ):
         outcome, failure_kind = "FAIL", "SOURCE_DISCOVERY_CAPABILITY_REJECTED"
 
     qualification_ref = (
@@ -382,6 +388,8 @@ def evaluate_qualification_probe(
         observed_max_context_tokens=observed_context,
         structured_response_ok=response.structured_response_ok,
         source_discovery_ok=response.source_discovery_ok,
+        provider_request_id=response.provider_request_id,
+        stop_reason=response.stop_reason,
     )
 
 
@@ -452,4 +460,6 @@ def unknown_result_outcome(
         observed_max_context_tokens=None,
         structured_response_ok=False,
         source_discovery_ok=False,
+        provider_request_id=None,
+        stop_reason=None,
     )

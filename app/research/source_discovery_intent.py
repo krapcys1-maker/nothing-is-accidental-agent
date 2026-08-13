@@ -6,11 +6,18 @@ import hashlib
 import json
 from typing import Any
 
+from app.llm.anthropic_provider_contract import (
+    ARTICLE_RESEARCH_INFERENCE_CONFIG,
+    AnthropicInferenceConfig,
+    inference_config_from_payload,
+)
+
 SOURCE_DISCOVERY_EXECUTION = "article_research_source_discovery_v1"
 SOURCE_DISCOVERY_INTENT_VERSION = "source_discovery_intent_v1"
 _KEYS = {
     "version", "account_id", "topic_id", "provider", "model", "max_results",
     "max_output_tokens", "cap_usd", "max_retries", "fallback_policy", "fingerprint",
+    "inference_config",
 }
 _PAYLOAD_KEYS = {"account_id", "topic_id", "dry_run", "execution", "execution_intent"}
 
@@ -37,11 +44,12 @@ class SourceDiscoveryIntent:
     cap_usd: str
     max_retries: int
     fallback_policy: str
+    inference_config: AnthropicInferenceConfig
     fingerprint: str
 
     @classmethod
     def build(cls, *, account_id: str, topic_id: int, max_results: int = 6,
-              max_output_tokens: int = 8192, cap_usd: str = "1.000000") -> "SourceDiscoveryIntent":
+              max_output_tokens: int = 8192, cap_usd: str = "0.600000") -> "SourceDiscoveryIntent":
         raw: dict[str, Any] = {
             "version": SOURCE_DISCOVERY_INTENT_VERSION,
             "account_id": account_id,
@@ -53,6 +61,7 @@ class SourceDiscoveryIntent:
             "cap_usd": cap_usd,
             "max_retries": 0,
             "fallback_policy": "FORBIDDEN",
+            "inference_config": ARTICLE_RESEARCH_INFERENCE_CONFIG.payload(),
         }
         raw["fingerprint"] = _fingerprint(raw)
         return cls.from_payload(raw)
@@ -67,20 +76,33 @@ class SourceDiscoveryIntent:
             raise SourceDiscoveryIntentError("source discovery requires exact Anthropic Opus 5")
         if raw["max_retries"] != 0 or raw["fallback_policy"] != "FORBIDDEN":
             raise SourceDiscoveryIntentError("source discovery forbids retry and fallback")
+        try:
+            inference_config = inference_config_from_payload(
+                raw["inference_config"], expected_role="ARTICLE_RESEARCH",
+            )
+        except ValueError as exc:
+            raise SourceDiscoveryIntentError(
+                "source-discovery inference config mismatch"
+            ) from exc
         if not isinstance(raw["topic_id"], int) or isinstance(raw["topic_id"], bool) or raw["topic_id"] < 1:
             raise SourceDiscoveryIntentError("topic_id is invalid")
         if not isinstance(raw["max_results"], int) or not 1 <= raw["max_results"] <= 6:
             raise SourceDiscoveryIntentError("max_results is outside [1, 6]")
         if raw["max_output_tokens"] != 8192:
             raise SourceDiscoveryIntentError("A1 output envelope must be 8192")
-        if raw["cap_usd"] != "1.000000":
-            raise SourceDiscoveryIntentError("A1 cap must be exactly 1.000000 USD")
+        if raw["cap_usd"] not in {
+            "0.300000", "0.500000", "0.600000", "1.000000",
+        }:
+            raise SourceDiscoveryIntentError(
+                "A1 cap must use the current 0.600000 USD envelope or a supported "
+                "historical 0.300000/0.500000/1.000000 USD envelope"
+            )
         if raw["fingerprint"] != _fingerprint(raw):
             raise SourceDiscoveryIntentError("source-discovery fingerprint mismatch")
-        return cls(**raw)
+        return cls(**{**raw, "inference_config": inference_config})
 
     def as_payload(self) -> dict[str, Any]:
-        return dict(self.__dict__)
+        return {**self.__dict__, "inference_config": self.inference_config.payload()}
 
 
 def canonicalize_source_discovery_payload(payload: Any) -> dict[str, Any]:

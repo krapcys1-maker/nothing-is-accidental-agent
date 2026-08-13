@@ -16,6 +16,7 @@ from app.core.config import (
 )
 from app.llm.anthropic_client import AnthropicLLMClient, TOPIC_MAX_OUTPUT_TOKENS
 from app.llm.anthropic_controlled_adapter import ControlledProviderRequest
+from app.llm.anthropic_provider_contract import ARTICLE_RESEARCH_INFERENCE_CONFIG
 from app.llm.base import Usage
 from app.llm.fake_client import FakeLLMClient
 from app.llm.usage_tracker import UsageTracker
@@ -124,6 +125,7 @@ def test_every_real_sdk_client_disables_sdk_retry_and_sets_timeout(monkeypatch, 
             user_prompt="prompt",
             max_output_tokens=1,
             timeout_seconds=60.0,
+            inference_config=ARTICLE_RESEARCH_INFERENCE_CONFIG,
         ))
 
     assert len(constructed) == 2
@@ -254,4 +256,4 @@ def test_topic_estimate_uses_the_same_max_output_limit_as_the_request(
         policy=PolicyEngine(settings, storage), notifier=LogNotification(),
     )
 
-    assert captured[0].output_tokens == TOPIC_MAX_OUTPUT_TOKENS == 1500
+    assert captured[0].output_tokens == TOPIC_MAX_OUTPUT_TOKENS == 4096

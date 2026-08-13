@@ -1,5 +1,25 @@
 # ARTICLE_EVIDENCE
 
+## 2026-08-13 — Materiał: „Resume nie może odnawiać zgody”
+
+- Czas ważności jest częścią decyzji człowieka, nie wygodnym parametrem procesu. Restart operatora nie może stworzyć nowych timestampów ani wydłużyć okna.
+- Oddzielenie projekcji bieżącego corpusu od rezerwacji pełnej zatwierdzonej koperty pokazuje różnicę między przewidywanym użyciem a maksymalną ekspozycją.
+- Cytowalna zasada: **„Wznowienie odtwarza zgodę; nie wystawia jej ponownie.”**
+
+## 2026-08-13 — Materiał: „Ponowienie bez wiedzy nie jest retry”
+
+- Przerwany stream nie dowodzi, że provider niczego nie wykonał; dlatego częściowy tekst, brak usage i brak request ID nie mogą stać się sukcesem ani kosztem zero.
+- Osobny REVIEW-ONLY potrzebuje nowej tożsamości, exact hasha draftu i nowej zgody. Nie może reużywać v4/v5 ani otwierać pierwszego writera.
+- Pełna nierozstrzygnięta rezerwa jest praktyczną blokadą przed SDK. Dopiero zewnętrzna rekonsyliacja może bezpiecznie zmienić ten stan.
+- Cytowalna zasada: **„Niepewny skutek nie jest wolnym miejscem na następny skutek.”**
+
+## 2026-08-12 — Materiał: „System może zawieść poprawnie”
+
+- Research i writer działały, lecz sukces E2E zatrzymał się na ostatniej granicy: reviewer najpierw odpowiedział w złym formacie, a następnie dwukrotnie stracił połączenie.
+- Najważniejszy dowód bezpieczeństwa: nieznany wynik nie został nazwany kosztem zero ani automatycznie powtórzony. Dzierżawa wygasła do `NEEDS_VERIFICATION`, a rezerwa pozostała widoczna.
+- Limit 30 sekund okazał się za mały dla długiego promptu; podniesienie do 300 sekund wymagało zarówno zmiany walidacji Pythona, jak i forward-only migracji constraintu SQLite.
+- Cytowalna zasada: **„Gotowy draft nie jest gotowym artykułem, dopóki ostatnia bramka nie ma jednoznacznego wyniku.”**
+
 ## 2026-08-12 — Materiał: „Gotowy migrator nie jest zgodą na migrację”
 
 - Cienki skrypt operatorski nie zawiera SQL migracji: wskazuje jedną bazę, sprawdza dokładny punkt startowy i deleguje do istniejącego transakcyjnego runnera.

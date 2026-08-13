@@ -1,5 +1,30 @@
 # HUMAN_INTERVENTIONS
 
+## 2026-08-13 — właściciel ograniczył naprawę PR #46 do pięciu MAJOR
+
+- Właściciel zlecił wyłącznie korektę adaptive thinking, raportowania CLI, immutable approval resume, koperty ARTICLE_RESEARCH i bieżących oznaczeń dokumentacji.
+- M8 oraz wszystkie P2/MINOR pozostały poza zakresem. Zakazane były live API, rekonsyliacja v1/v4/v5, produkcyjna migracja, publikacja i stage/commit/push/merge.
+- Wymagany wynik implementera to kandydat do skupionego re-review, nie `APPROVE`; produkcja ma pozostać byte-identical na `0038/38`.
+
+## 2026-08-13 — właściciel zlecił domknięcie REVIEW-ONLY do kandydata offline
+
+- Właściciel wymagał initial reviewer → opcjonalnie dokładnie jeden canonical writer attempt 2 → dokładnie jeden post-reviewer, bez writera/reviewera nr 3 i bez publikacji.
+- Jedno L1 ma obejmować warunkowy łańcuch ze wspólnym capem, przy osobnych identity/rezerwacjach i fail-closed recovery po każdym trwałym checkpointcie.
+- Granice właściciela zachowano: fake SDK/callery, temp DB, zero sieci/kosztu/live, produkcja immutable, brak stage/commita/pushu/zmiany PR/merge. Wynik implementera może być tylko `CANDIDATE COMPLETE`, nie approval.
+
+## 2026-08-13 — właściciel zatrzymał live i zlecił przygotowanie PR #46 do re-review
+
+- Właściciel zakazał kolejnego requestu online i polecił naprawić wyłącznie findings niezależnego review na istniejącym branchu, offline.
+- Wymagane zostały jawne thinking/effort, streaming Reviewera, bezpieczny REVIEW-ONLY, potwierdzone limity, migracyjne M2/M3, obowiązkowy istniejący `topic_id` i korekta najwyższych sekcji dokumentacji.
+- Granice: fake SDK/callery i temp DB; produkcja tylko immutable read-only; zero providerów, browsera, publikacji, kosztu i operacji Git zapisujących historię.
+- REVIEW-ONLY nie otrzymał zgody na ominięcie v1/v4/v5. Właściciel musi osobno dostarczyć zewnętrzną rekonsyliację ich rzeczywistego wyniku/kosztu oraz osobno autoryzować migrację `0038→0039` przed przyszłym użyciem.
+
+## 2026-08-12 — właściciel rozszerzył zakres do pełnego online E2E i skorygował timeout
+
+- Właściciel ustalił ostateczny podział: cztery role artykułowe na `claude-opus-5`, Notes/comments na `claude-sonnet-5`; zakazał ponownej analizy doboru modeli.
+- Właściciel rozszerzył zgodę z samego researchu do pełnego ciągu aż do finalnego draftu `PENDING_APPROVAL`, z limitem wszystkich realnych prób `10.00 USD`, retry `0`, bez fallbacku i publikacji.
+- Właściciel wskazał błąd operacyjny limitu 30 s i polecił ustawić maksymalnie 5 minut. Zmiana została wprowadzona jako jawny kontrakt runtime + migracja `0038`, nie obejście.
+
 ## 2026-08-12 — właściciel rozdzielił przygotowanie migratora od migracji produkcyjnej
 
 - **Decyzja:** wolno było zbudować i lokalnie zweryfikować wyłącznie operator path `0033→0034`; nie wolno było migrować produkcji, kopii produkcji ani dotykać sidecarów.

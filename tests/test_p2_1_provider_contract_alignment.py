@@ -22,6 +22,7 @@ from app.llm.anthropic_controlled_adapter import (
     ControlledProviderRequest,
 )
 from app.llm.anthropic_provider_contract import (
+    ARTICLE_RESEARCH_INFERENCE_CONFIG,
     CANONICAL_ANTHROPIC_REQUEST_CONTRACT,
 )
 from app.llm.anthropic_client import AnthropicLLMClient
@@ -135,6 +136,7 @@ def test_incomplete_or_drifted_contract_stops_before_sdk_and_final_caller(contra
             user_prompt="prompt",
             max_output_tokens=10,
             timeout_seconds=1,
+            inference_config=ARTICLE_RESEARCH_INFERENCE_CONFIG,
             provider_contract=contract,
         ))
     assert sdk_calls == 0

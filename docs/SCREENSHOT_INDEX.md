@@ -1,5 +1,19 @@
 # SCREENSHOT_INDEX
 
+## 2026-08-13 — pięć MAJOR PR #46: NO SCREENSHOT TAKEN
+
+- Praca była wyłącznie offline; browser, provider i publikacja były zabronione. Dowodem są diff, fake-SDK tests i migracyjne rehearsale na bazach tymczasowych.
+
+## 2026-08-13 — PR #46 offline repair: NO SCREENSHOT TAKEN
+
+- Browser i wszystkie działania online były zabronione; nie wykonano screenshotu. Dowód stanowią diff i testy fake-SDK/temp-DB.
+- `SCREENSHOT REQUIRED` dopiero dla osobno autoryzowanego przyszłego REVIEW-ONLY: ma pokazywać PR po niezależnym review oraz terminalny ledger bez sekretów i bez treści credentials.
+
+## 2026-08-12 — online E2E: SCREENSHOT REQUIRED, ale brak bezpiecznej zalogowanej sesji
+
+- In-app browser otworzył wyłącznie ekran logowania Anthropic; nie istniała zalogowana sesja ani admin billing credential. Nie wykonano i nie zapisano screenshotu, aby nie utrwalać ekranu uwierzytelniania ani sekretów.
+- Dowód operacyjny pozostaje w trwałym ledgerze SQLite: schema `0038`, Research Card #7, role executions v1–v5, usage i statusy `NEEDS_VERIFICATION`. Rekonsyliacja nieznanych opłat v1/v4/v5 wymaga bezpiecznego dostępu człowieka do billing console.
+
 ## 2026-08-12 — WAVE C5 merge: BRAK screenshotów (żaden nie został wykonany)
 
 - **Status:** `NO SCREENSHOT TAKEN`. **Do indeksu nie dodano żadnego pliku obrazu** — browser był przez całą falę zabroniony i nie został uruchomiony, więc nie istnieje nic do zaindeksowania. Ten wpis odnotowuje brak, nie zapowiada pliku.

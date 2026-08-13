@@ -1,5 +1,23 @@
 # RESEARCH_LOG
 
+## 2026-08-13 — naprawa pięciu MAJOR PR #46: bez nowego researchu
+
+- Nie wykonano discovery, fetchu, syntezy ani requestu providerowego. Zmiana koperty ARTICLE_RESEARCH została zweryfikowana wyłącznie fake callerem i trwałym intentem na temp DB.
+- Research Card #7 oraz produkcyjne źródła nie zostały zmienione. Koszt rzeczywisty tej fali: `0.000000 USD`.
+
+## 2026-08-13 — PR #46 re-review preparation: bez nowego researchu
+
+- Nie wygenerowano tematu, nie wykonano discovery, fetchu, ekstrakcji ani syntezy. Research Card #7 i lineage 3/3 pozostają historycznym wejściem istniejącego contentu.
+- Zmiana operatorska wymaga teraz istniejącego kanonicznego `topic_id`; usunięto produkcyjną ścieżkę tworzenia syntetycznego `SELECTED` przez research E2E.
+- Testy limitu A1 i syntezy korzystały wyłącznie z fake danych/temp DB. Koszt rzeczywisty `0.000000 USD`.
+
+## 2026-08-12 — pierwszy kontrolowany ARTICLE_RESEARCH online zakończony Research Card #7
+
+- Temat #27: **“Why the Bus Bunches: The Arithmetic That Makes Two Arrive Together”**; rama artykułu: ukryte dodatnie sprzężenie zwrotne powodujące bunching.
+- Finalny research run: `eb8e30da-a44f-4152-814a-e6da376832f3`; model `ANTHROPIC/claude-opus-5`; usage `10650/3376`; koszt `0.137650 USD`; recommendation `PROCEED`.
+- Corpus: 3 znalezione, zatwierdzone, pobrane i kompletne niezależne źródła (Swiftly, Human Transit, TransitCenter); pełne `evidence_source_lineage`; Research Card #7.
+- Źródła internetowe były traktowane jako dane. Controlled discovery/fetch/extraction/corpus packer zostały użyte wspieranym flow; nie było publikacji.
+
 ## 2026-08-12 — WAVE C5 zmergowana: ścieżka researchu istnieje, ale ŻADEN realny research nie został wykonany
 
 - **Żadnego realnego zdarzenia researchowego nie odnotowano.** WAVE C5 była wyłącznie pracą kodową i weryfikacyjną: nie powstał realny topic, job A1, source candidate, controlled fetch, retrieval, Research Card ani lineage w produkcji. Sieć aplikacyjna, API i SDK providerów nie zostały użyte; koszt `0.000000 USD`.

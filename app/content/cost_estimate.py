@@ -32,9 +32,9 @@ _PER_MILLION = Decimal("1000000")
 # how much prompt is actually sent, how wide the context window must be, and how
 # much output may come back.  Input and context are different numbers, and the
 # gate compares against context — so both are recorded here rather than derived.
-ARTICLE_WRITER_MAX_INPUT_TOKENS = 8_000
-ARTICLE_WRITER_MAX_CONTEXT_TOKENS = 16_000
-ARTICLE_WRITER_MAX_OUTPUT_TOKENS = 2_048
+ARTICLE_WRITER_MAX_INPUT_TOKENS = 23_808
+ARTICLE_WRITER_MAX_CONTEXT_TOKENS = 32_000
+ARTICLE_WRITER_MAX_OUTPUT_TOKENS = 8_192
 
 # The plan and review roles read the same frozen Research Package and emit a
 # compact structured document, so they share the writer's window with a smaller
@@ -42,13 +42,13 @@ ARTICLE_WRITER_MAX_OUTPUT_TOKENS = 2_048
 ARTICLE_PLAN_MAX_INPUT_TOKENS = 8_000
 ARTICLE_PLAN_MAX_CONTEXT_TOKENS = 16_000
 ARTICLE_PLAN_MAX_OUTPUT_TOKENS = 1_024
-ARTICLE_REVIEWER_MAX_INPUT_TOKENS = 8_000
-ARTICLE_REVIEWER_MAX_CONTEXT_TOKENS = 16_000
-ARTICLE_REVIEWER_MAX_OUTPUT_TOKENS = 1_024
+ARTICLE_REVIEWER_MAX_INPUT_TOKENS = 23_808
+ARTICLE_REVIEWER_MAX_CONTEXT_TOKENS = 32_000
+ARTICLE_REVIEWER_MAX_OUTPUT_TOKENS = 8_192
 
 TOPIC_GENERATION_MAX_INPUT_TOKENS = 14_500
-TOPIC_GENERATION_MAX_CONTEXT_TOKENS = 16_000
-TOPIC_GENERATION_MAX_OUTPUT_TOKENS = 1_500
+TOPIC_GENERATION_MAX_CONTEXT_TOKENS = 32_000
+TOPIC_GENERATION_MAX_OUTPUT_TOKENS = 4_096
 
 ARTICLE_RESEARCH_MAX_INPUT_TOKENS = 23_808
 ARTICLE_RESEARCH_MAX_CONTEXT_TOKENS = 32_000
@@ -238,5 +238,9 @@ def estimate_controlled_article_cost(
         writer=estimate_role_cost(
             LogicalModelRole.ARTICLE_WRITER, at=at, attempts=writer_attempts,
         ),
-        reviewer=estimate_role_cost(LogicalModelRole.ARTICLE_REVIEWER, at=at),
+        reviewer=estimate_role_cost(
+            LogicalModelRole.ARTICLE_REVIEWER,
+            at=at,
+            attempts=writer_attempts,
+        ),
     )

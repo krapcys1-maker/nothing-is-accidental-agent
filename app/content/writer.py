@@ -26,6 +26,7 @@ from app.content.contracts import (
 )
 from app.content.foundation import ContentType
 from app.llm.anthropic_provider_contract import (
+    ARTICLE_WRITER_INFERENCE_CONFIG,
     CONTROLLED_INFERENCE_GEO,
     CONTROLLED_SERVICE_TIER,
     OPUS_5_MODEL_ID,
@@ -649,6 +650,7 @@ class ProductionArticleWriter(ProviderReadyContentWriter):
                 user_prompt=prompt.user,
                 max_output_tokens=request.context.limits.max_output_tokens,
                 timeout_seconds=request.context.limits.timeout_seconds,
+                inference_config=ARTICLE_WRITER_INFERENCE_CONFIG,
             ))
             assert_no_disabled_feature_usage(
                 cache_read_tokens=raw.cache_read_tokens,

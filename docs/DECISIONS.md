@@ -1,5 +1,37 @@
 # DECISIONS (Architecture Decision Log)
 
+### ADR-144: Pięć MAJOR PR #46 — adaptive thinking, immutable CLI resume i pełna koperta researchu
+
+- **Data/status/autor:** 2026-08-13; decyzja właściciela implementowana offline, `CANDIDATE COMPLETE — FIVE MAJORS FIXED, AWAITING FOCUSED RE-REVIEW`; brak niezależnego zatwierdzenia tej fali.
+- **Thinking/effort:** wszystkie aktualnie przypięte Opus 5/Sonnet 5 używają dokładnie `thinking={"type":"adaptive"}` bez `budget_tokens`; effort pozostaje jawny per rola: Reviewer `low`, Writer/Research `high`, Topic/Note/Comment `medium`. Payload pozostaje częścią immutable intentu, approvala i fingerprintu.
+- **REVIEW-ONLY CLI:** pierwszy invocation tworzy jeden immutable approval; resume identyfikuje go przez `approval_ref`, ładuje dokładne timestampy i kontrakt z SQLite oraz odrzuca podmianę joba/contentu/draftu/modelu/capu/execution refs. Raport sukcesu pochodzi wyłącznie z trwałych draftów i review executions.
+- **ARTICLE_RESEARCH:** automatyczny corpus enqueue używa kanonicznego outputu `8192`. Projekcja pozostaje związana z dokładnym corpusem, natomiast cap i rezerwacja pokrywają pełną kopertę 23 808 input / 8 192 output ze zweryfikowanego cennika i bezpiecznym zaokrągleniem w górę; zbyt niski approval zatrzymuje się przed SDK.
+- **Schema i granice:** predykaty niezastosowanej migracji `0039` akceptują exact adaptive i odrzucają legacy enabled/budget. Produkcja pozostaje `0038/38`; zero sieci, realnego SDK, kosztu, publikacji, migracji produkcji i operacji Git.
+
+### ADR-143: Jedno L1 obejmuje zamknięty warunkowy łańcuch REVIEW-ONLY
+
+- **Data/status/autor:** 2026-08-13; decyzja implementacyjna w zakresie właściciela, `CANDIDATE COMPLETE — AWAITING INDEPENDENT RE-REVIEW`.
+- **Łańcuch:** initial reviewer może wyłącznie zakończyć na `PENDING_APPROVAL` albo trwale zapisać `REWRITE_ONCE`, które dopuszcza kanoniczny ARTICLE_WRITER attempt 2. Po draft 2 działa dokładnie jeden nowy reviewer; jego ponowny rewrite staje się terminalnym stanem człowieka, nigdy attemptem 3.
+- **Authority i koszt:** jedno immutable L1 zamraża trzy execution refs, bindingi Opus, 300 s, retry 0, brak fallbacku, expiry i wspólny cap. Każdy etap nadal tworzy własną durable identity oraz rezerwację i ponownie sprawdza pozostały cap/globalny budżet.
+- **Recovery:** trwały checkpoint jest jedynym źródłem następnego kroku. `IN_FLIGHT` po external-effect albo `NEEDS_VERIFICATION` nie jest replayowane. Produkcyjna ekspozycja `0.738880 USD` nadal blokuje przed SDK.
+- **Granice:** wyłącznie fake SDK/callery i temp DB; `2639/2639 PASS`; produkcja nadal `0038`, migracja `0039` niewykonana; zero sieci, kosztu, publikacji i operacji Git.
+
+### ADR-142: REVIEW-ONLY jest nową exact authority i nie może omijać nierozstrzygniętej ekspozycji
+
+- **Data/status/autor:** 2026-08-13; decyzja implementacyjna w zakresie zleconym przez właściciela, kandydat do niezależnego review.
+- **Thinking/effort (SUPERSEDED przez ADR-144):** historyczny kandydat używał `enabled/budget_tokens`; bieżący kontrakt dla Opus 5/Sonnet 5 to exact `adaptive` + per-role effort, bez `budget_tokens`.
+- **Streaming:** Reviewer używa jednego `messages.stream` i `get_final_message`; tylko kompletny final message może być sukcesem. Zerwanie pozostawia `NEEDS_VERIFICATION`, `cost_usd=NULL`, retry `0`.
+- **Resume:** REVIEW-ONLY dostaje osobny approval i execution ref związany z job/content/draft fingerprint/model/cap/expiry. Nie ma zależności do wcześniejszych etapów ani publikacji. Maksymalnie dwie rundy oznaczają initial review i jedną re-review po jedynym dozwolonym rewrite.
+- **Schema:** exact authority wymaga addytywnej `0039_article_review_resume`. Produkcja pozostaje na `0038/38`; `0039` wolno zastosować dopiero w osobno autoryzowanej operacji.
+- **Nierozstrzygnięte koszty:** istniejące v1/v4/v5 nie są zmieniane ani zamykane. Ich pełna ekspozycja `0.738880 USD` blokuje REVIEW-ONLY przed SDK i wymaga prawdziwej zewnętrznej rekonsyliacji przez człowieka.
+
+### ADR-141: Właścicielski podział modeli, timeout 300 s i fail-closed stop po zewnętrznej awarii reviewera
+
+- **Data/status/autor:** 2026-08-12; decyzja właściciela. `TOPIC_GENERATION`, `ARTICLE_RESEARCH`, `ARTICLE_WRITER`, `ARTICLE_REVIEWER` używają dokładnie `ANTHROPIC/claude-opus-5`; `NOTE_WRITER` i `COMMENT_WRITER` używają `ANTHROPIC/claude-sonnet-5`. Nie wolno reinterpretować `ARTICLE_RESEARCH → Opus` jako konfliktu.
+- **Zakres live:** pełny online E2E do finalnego draftu `PENDING_APPROVAL`, bez publikacji/Substacka, retry requestów `0`, fallback zabroniony, łączny limit `10.00 USD`.
+- **Timeout:** właściciel skorygował limit 30 s do maksymalnie 5 minut. Runtime i schema `0038` egzekwują `timeout_seconds <= 300`; adapter przekazuje `300` do klienta i requestu.
+- **Stop:** dwa kolejne `APIConnectionError` reviewera przy poprawnym lokalnym timeoutcie są zewnętrzną niedostępnością. Nie wolno generować kolejnych potencjalnie płatnych, niejednoznacznych requestów. Dzierżawy zamyka canonical recovery jako `NEEDS_VERIFICATION`; brakujące usage/cost pozostają `NULL`, a rezerwa nie jest zmyślana jako zero.
+
 ### ADR-140: Zamknięcie WAVE C5 — exact-model authority, envelope 23 808/8 192/32 000, L1 per źródło i dopuszczalne źródła authority pricingowej
 
 - **Data/status/autor:** 2026-08-12; właściciel autoryzował merge po niezależnym review `APPROVE WITH MINOR/P2` (0 blockerów, 7 P2). Wynik: **WAVE C5-END-TO-END-CONNECTION = `FORMALLY CLOSED — APPROVED WITH MINOR/P2`**. Merge commit `f04b7d4a6bf759028de9beec3e1262ee056e0ad0`, zatwierdzony head `0487047460c6cf7186004010226cc5a710006204`, 42 pliki `+2520/−149` wyłącznie w `app/` i `tests/`.

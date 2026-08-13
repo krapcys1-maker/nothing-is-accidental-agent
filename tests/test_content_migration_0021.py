@@ -37,9 +37,9 @@ def _objects(conn) -> dict[str, str]:
 
 
 def test_0021_remains_the_exact_content_foundation_floor():
-    from app.storage.db import END_TO_END_CONNECTION_SCHEMA_VERSION
+    from app.storage.db import ARTICLE_REVIEW_RESUME_SCHEMA_VERSION
 
-    assert RUNTIME_SCHEMA_VERSION == END_TO_END_CONNECTION_SCHEMA_VERSION
+    assert RUNTIME_SCHEMA_VERSION == ARTICLE_REVIEW_RESUME_SCHEMA_VERSION
     assert CONTENT_DECISION_SCHEMA_VERSION == "0024_autonomous_content_decision"
     assert CONTENT_WRITER_SCHEMA_VERSION == "0023_provider_ready_writer"
     assert CONTENT_PIPELINE_SCHEMA_VERSION == "0022_offline_content_pipeline"

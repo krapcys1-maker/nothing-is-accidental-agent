@@ -15,7 +15,10 @@ from app.llm.anthropic_controlled_adapter import (
     ControlledProviderRequest,
     assert_returned_model_identity,
 )
-from app.llm.anthropic_provider_contract import returned_provenance_mismatch
+from app.llm.anthropic_provider_contract import (
+    TOPIC_GENERATION_INFERENCE_CONFIG,
+    returned_provenance_mismatch,
+)
 from app.llm.base import (
     LLMClient,
     LLMParseError,
@@ -40,7 +43,7 @@ from app.research.base import (
 
 TopicCaller = Callable[[Account, int], tuple[str, Usage]]
 
-TOPIC_MAX_OUTPUT_TOKENS = 1500
+TOPIC_MAX_OUTPUT_TOKENS = 4096
 DEFAULT_PROVIDER_TIMEOUT_SECONDS = 60.0
 SDK_MAX_RETRIES = 0
 
@@ -281,6 +284,7 @@ class AnthropicLLMClient(LLMClient):
                 user_prompt=_build_prompt(account, count, self._editorial_history),
                 max_output_tokens=self._topic_max_tokens,
                 timeout_seconds=self._timeout_seconds,
+                inference_config=TOPIC_GENERATION_INFERENCE_CONFIG,
                 extra_headers={"Idempotency-Key": request_id},
             ))
         except anthropic.APIError as exc:

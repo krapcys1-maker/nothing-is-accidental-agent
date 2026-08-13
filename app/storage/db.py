@@ -40,12 +40,19 @@ ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION = "0031_article_writer_opus_policy"
 ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION = "0032_role_execution_lifecycle"
 ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION = "0033_role_execution_global_ledger"
 END_TO_END_CONNECTION_SCHEMA_VERSION = "0034_c5_end_to_end_connection"
+RESEARCH_QUALIFICATION_SCHEMA_VERSION = "0035_article_research_qualification"
+SOURCE_DISCOVERY_RECONCILIATION_SCHEMA_VERSION = (
+    "0036_source_discovery_reconciliation"
+)
+EVIDENCE_RERESEARCH_LINEAGE_SCHEMA_VERSION = "0037_evidence_reresearch_lineage"
+CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION = "0038_content_provider_timeout"
+ARTICLE_REVIEW_RESUME_SCHEMA_VERSION = "0039_article_review_resume"
 # The production reviewer reserves a durable IN_FLIGHT role execution before it
 # may reach the transport, and that state only exists from 0032 onwards, so the
 # runtime floor moves with it.  A database still standing on 0031 now fails the
 # schema gate closed, which is the intended signal that it must be migrated by
 # an explicitly authorised operator step.
-RUNTIME_SCHEMA_VERSION = END_TO_END_CONNECTION_SCHEMA_VERSION
+RUNTIME_SCHEMA_VERSION = ARTICLE_REVIEW_RESUME_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
@@ -60,6 +67,15 @@ _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0034 changes the TOPIC_GENERATION family constraint on the parent role
     # policy table and therefore owns foreign_keys=OFF plus its ledger row.
     END_TO_END_CONNECTION_SCHEMA_VERSION,
+    # 0035 rebuilds the qualification-run table to make approved web-search
+    # usage an explicit immutable part of the durable PASS contract.
+    RESEARCH_QUALIFICATION_SCHEMA_VERSION,
+    # 0037 rebuilds the evidence-lineage parent table referenced by CONTENT.
+    # It therefore owns foreign_keys=OFF and its schema-ledger write.
+    EVIDENCE_RERESEARCH_LINEAGE_SCHEMA_VERSION,
+    # 0038 rebuilds the immutable writer-intent parent table while preserving
+    # all dependent attempts/results/drafts and owns its foreign-key boundary.
+    CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION,
 })
 _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0007_candidate_attempts",
@@ -101,6 +117,12 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     # 0033 replaces two relation triggers and adds role-ledger guards.  The
     # trigger set and its schema ledger row must become visible atomically.
     ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION,
+    # 0036 replaces one defense-in-depth trigger so terminal operator
+    # reconciliation recognizes the typed STAGED A1 lineage.
+    SOURCE_DISCOVERY_RECONCILIATION_SCHEMA_VERSION,
+    # 0039 is additive: exact one-shot review-resume approvals and their
+    # isolated execution ledger become visible with one schema ledger row.
+    ARTICLE_REVIEW_RESUME_SCHEMA_VERSION,
     # 0019 is intentionally ABSENT: rebuilding controlled_fetch_approvals with
     # incoming foreign keys requires PRAGMA foreign_keys=OFF, which is a no-op
     # inside the runner transaction — the migration manages its own explicit
@@ -852,6 +874,81 @@ def migrate_0033_to_0034(
         db_path,
         source_version=ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION,
         target_version=END_TO_END_CONNECTION_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0034_to_0035(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the ARTICLE_RESEARCH qualification ledger widening."""
+
+    return _migrate_single_step(
+        db_path,
+        source_version=END_TO_END_CONNECTION_SCHEMA_VERSION,
+        target_version=RESEARCH_QUALIFICATION_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0035_to_0036(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Apply only the typed A1 reconciliation trigger widening."""
+
+    return _migrate_single_step(
+        db_path,
+        source_version=RESEARCH_QUALIFICATION_SCHEMA_VERSION,
+        target_version=SOURCE_DISCOVERY_RECONCILIATION_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0036_to_0037(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Allow immutable evidence identities to be linked by separate runs."""
+
+    return _migrate_single_step(
+        db_path,
+        source_version=SOURCE_DISCOVERY_RECONCILIATION_SCHEMA_VERSION,
+        target_version=EVIDENCE_RERESEARCH_LINEAGE_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0037_to_0038(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Widen the bounded content-provider timeout from 30 to 300 seconds."""
+
+    return _migrate_single_step(
+        db_path,
+        source_version=EVIDENCE_RERESEARCH_LINEAGE_SCHEMA_VERSION,
+        target_version=CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0038_to_0039(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Add exact one-shot authority for an isolated reviewer resume."""
+
+    return _migrate_single_step(
+        db_path,
+        source_version=CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION,
+        target_version=ARTICLE_REVIEW_RESUME_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )
 

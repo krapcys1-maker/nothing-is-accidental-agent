@@ -31,6 +31,7 @@ from typing import Any, Callable, Mapping, Protocol
 from app.llm.anthropic_provider_contract import (
     ANTHROPIC_PROVIDER,
     APPLICATION_MAX_RETRIES as CONTRACT_APPLICATION_MAX_RETRIES,
+    AnthropicInferenceConfig,
     AnthropicRequestContract,
     CANONICAL_ANTHROPIC_REQUEST_CONTRACT,
     CONTROLLED_INFERENCE_GEO,
@@ -77,6 +78,8 @@ class ControlledProviderRequest:
     user_prompt: str
     max_output_tokens: int
     timeout_seconds: float
+    inference_config: AnthropicInferenceConfig
+    stream_response: bool = False
     provider_contract: AnthropicRequestContract | None = (
         CANONICAL_ANTHROPIC_REQUEST_CONTRACT
     )
@@ -93,6 +96,15 @@ class ControlledProviderRequest:
             raise ControlledAdapterError(
                 "ADAPTER_OUTPUT_LIMIT_INVALID",
                 "A controlled request requires a positive output ceiling.",
+            )
+        if not isinstance(self.inference_config, AnthropicInferenceConfig):
+            raise ControlledAdapterError(
+                "ADAPTER_INFERENCE_CONFIG_MISSING",
+                "A controlled request requires explicit thinking and effort.",
+            )
+        if type(self.stream_response) is not bool:
+            raise ControlledAdapterError(
+                "ADAPTER_STREAM_MODE_INVALID", "Stream mode must be an explicit boolean.",
             )
         if (
             not math.isfinite(self.timeout_seconds)
@@ -135,6 +147,7 @@ class ControlledProviderRawResponse:
     inference_geo: str | None = None
     service_tier: str | None = None
     thinking_tokens: int = 0
+    structured_web_search_results: int = 0
 
 
 class ControlledSdkFactory(Protocol):
@@ -174,19 +187,37 @@ def _default_caller(
         messages=[{"role": "user", "content": request.user_prompt}],
         inference_geo=contract.inference_geo,
         service_tier=contract.service_tier,
+        thinking={"type": request.inference_config.thinking_type},
+        output_config={"effort": request.inference_config.effort},
         timeout=request.timeout_seconds,
     )
     if request.tools:
         kwargs["tools"] = [dict(tool) for tool in request.tools]
     if request.extra_headers:
         kwargs["extra_headers"] = dict(request.extra_headers)
-    message = client.messages.create(**kwargs)
+    if request.stream_response:
+        # The official manager only returns from get_final_message after the
+        # complete stream has yielded message_stop.  A disconnect/iterator
+        # failure escapes this function; callers must terminalize it as an
+        # unknown paid effect and must never use partial text.
+        with client.messages.stream(**kwargs) as stream:
+            message = stream.get_final_message()
+    else:
+        message = client.messages.create(**kwargs)
     usage = getattr(message, "usage", None)
+    content = tuple(getattr(message, "content", ()) or ())
     text = "".join(
         getattr(block, "text", "")
-        for block in getattr(message, "content", ())
+        for block in content
         if getattr(block, "type", "") == "text"
     )
+    structured_web_search_results = 0
+    for block in content:
+        if getattr(block, "type", "") != "web_search_tool_result":
+            continue
+        for result in tuple(getattr(block, "content", ()) or ()):
+            if getattr(result, "type", "") == "web_search_result":
+                structured_web_search_results += 1
     return ControlledProviderRawResponse(
         returned_model_id=str(getattr(message, "model", "")),
         text=text,
@@ -212,6 +243,7 @@ def _default_caller(
                 0,
             ) or 0
         ),
+        structured_web_search_results=structured_web_search_results,
     )
 
 

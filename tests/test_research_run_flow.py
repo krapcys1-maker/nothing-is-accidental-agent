@@ -155,6 +155,10 @@ def test_migration_0006_backfills_all_historical_flows(tmp_path: Path):
             "0032_role_execution_lifecycle",
             "0033_role_execution_global_ledger",
             "0034_c5_end_to_end_connection",
+            "0035_article_research_qualification",
+            "0036_source_discovery_reconciliation",
+            "0037_evidence_reresearch_lineage",
+            "0038_content_provider_timeout", "0039_article_review_resume",
     ]
 
     rows = {
@@ -246,6 +250,10 @@ def test_migration_0006_runs_on_clean_empty_database(tmp_path: Path):
             "0032_role_execution_lifecycle",
             "0033_role_execution_global_ledger",
             "0034_c5_end_to_end_connection",
+            "0035_article_research_qualification",
+            "0036_source_discovery_reconciliation",
+            "0037_evidence_reresearch_lineage",
+            "0038_content_provider_timeout", "0039_article_review_resume",
     ]
     assert conn.execute("SELECT count(*) FROM research_runs").fetchone()[0] == 0
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
@@ -282,6 +290,10 @@ def test_migration_0006_without_paid_single_uuid(tmp_path: Path):
             "0032_role_execution_lifecycle",
             "0033_role_execution_global_ledger",
             "0034_c5_end_to_end_connection",
+            "0035_article_research_qualification",
+            "0036_source_discovery_reconciliation",
+            "0037_evidence_reresearch_lineage",
+            "0038_content_provider_timeout", "0039_article_review_resume",
     ]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
@@ -316,6 +328,10 @@ def test_migration_0006_without_either_local_single_uuid(tmp_path: Path):
             "0032_role_execution_lifecycle",
             "0033_role_execution_global_ledger",
             "0034_c5_end_to_end_connection",
+            "0035_article_research_qualification",
+            "0036_source_discovery_reconciliation",
+            "0037_evidence_reresearch_lineage",
+            "0038_content_provider_timeout", "0039_article_review_resume",
     ]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
@@ -392,6 +408,10 @@ def test_database_rejects_invalid_or_missing_flow(tmp_path: Path):
             "0032_role_execution_lifecycle",
             "0033_role_execution_global_ledger",
             "0034_c5_end_to_end_connection",
+            "0035_article_research_qualification",
+            "0036_source_discovery_reconciliation",
+            "0037_evidence_reresearch_lineage",
+            "0038_content_provider_timeout", "0039_article_review_resume",
     ]
     conn.execute(
         "INSERT INTO accounts "
@@ -452,6 +472,10 @@ def test_migration_0007_backfills_conservative_historical_attempt_lower_bound(tm
             "0032_role_execution_lifecycle",
             "0033_role_execution_global_ledger",
             "0034_c5_end_to_end_connection",
+            "0035_article_research_qualification",
+            "0036_source_discovery_reconciliation",
+            "0037_evidence_reresearch_lineage",
+            "0038_content_provider_timeout", "0039_article_review_resume",
     ]
 
     attempts_column = next(
@@ -518,6 +542,10 @@ def test_migration_0007_rolls_back_schema_when_ledger_insert_fails(tmp_path: Pat
             "0032_role_execution_lifecycle",
             "0033_role_execution_global_ledger",
             "0034_c5_end_to_end_connection",
+            "0035_article_research_qualification",
+            "0036_source_discovery_reconciliation",
+            "0037_evidence_reresearch_lineage",
+            "0038_content_provider_timeout", "0039_article_review_resume",
     ]
     assert "attempts" in {
         row["name"] for row in conn.execute("PRAGMA table_info(research_source_candidates)")
@@ -568,6 +596,10 @@ def test_migration_0008_rolls_back_force_marker_when_ledger_insert_fails(tmp_pat
             "0032_role_execution_lifecycle",
             "0033_role_execution_global_ledger",
             "0034_c5_end_to_end_connection",
+            "0035_article_research_qualification",
+            "0036_source_discovery_reconciliation",
+            "0037_evidence_reresearch_lineage",
+            "0038_content_provider_timeout", "0039_article_review_resume",
     ]
     force_column = next(
         row for row in conn.execute("PRAGMA table_info(research_runs)")

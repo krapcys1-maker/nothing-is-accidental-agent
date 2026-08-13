@@ -1,5 +1,37 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-13 — pięć MAJOR z niezależnego re-review PR #46
+
+- Opus 5/Sonnet 5 odrzucają legacy `thinking.type=enabled` z `budget_tokens`; aktywny adapter wysyła teraz exact adaptive i osobny effort.
+- CLI maskował trwały sukces przez `AttributeError` na trzech nieistniejących polach wyniku; pola są obecnie typowane i wyprowadzane z trwałych draftów/review executions.
+- CLI regenerował czas approvala przy każdym invocation, więc resume konfliktował z immutable `approval_json`; autorytetem resume jest teraz istniejący wiersz SQLite.
+- Automatyczny research enqueue nadal używał `4096` i arbitralnego `0.250000`; obecnie używa `8192` oraz pełnego capu/rezerwacji 23 808/8 192.
+- Najwyższe sekcje dokumentacji konkurowały jako „bieżące” i wskazywały wcześniejszy head/schema. Starsze bloki oznaczono `HISTORYCZNY / SUPERSEDED`, bez przepisywania archiwum.
+
+## 2026-08-13 — regresje ujawnione podczas domykania REVIEW-ONLY
+
+- Pierwszy happy path ujawnił, że ogólny ledger traktował kanoniczny writer attempt 2 jako niedozwolony retry. Wyjątek zawężono do exact attempt 2 z aktywną sesją i trwałym initial `REWRITE_ONCE`.
+- Pierwszy pełny suite ujawnił dwie regresje tekstu/kolejności triggerów SQLite. Trigger retry sprawdza teraz najpierw istnienie canonical writer extension, a ogólny komunikat nadal zawiera historyczne `transition command`; rerun zakończył się `2639/2639 PASS`.
+- Niejednoznaczny writer i post-reviewer zostały odtworzone offline: oba kończą fail-closed, bez replayu, retry, kolejnego etapu i kosztu udawanego jako zero.
+
+## 2026-08-13 — findings PR #46 naprawione offline przed re-review
+
+- Root cause złego JSON v3 nie był możliwy do ustalenia, ponieważ failure nie zachowywał bezpiecznego response artifact; dodano SHA/rozmiar i bounded redacted text bez sekretów.
+- Arbitralne `reason <= 12 słów` mogło unieważnić poprawną, płatną klasyfikację; limit pozostał instrukcją promptu, ale przestał być warunkiem strukturalnym.
+- Reviewer używał non-streaming create mimo dwóch zewnętrznych connection failures; nowy stream czeka na final message i nie używa częściowej treści.
+- Pierwsza regresja lokalna ujawniła brak thinking/effort dla istniejącego NOTE_WRITER oraz testy zakładające runtime `0038`; kontrakty uzupełniono, a historyczne testy kierują dokładne migracje przez właściwy floor.
+- REVIEW-ONLY początkowo polegał na późniejszym quality gate dla fingerprintów/kompletności segmentów; parser graniczny wymusza teraz pełną bijekcję, exact fingerprint i dozwolone evidence IDs również w izolowanym resume.
+- Nie wykonano żadnej próby online. Historyczne v1/v4/v5 nadal wymagają zewnętrznej rekonsyliacji i nie zostały zmienione.
+
+## 2026-08-12 — controlled online E2E: bezpieczne failures przed finalnym draftem
+
+- v1: writer przekroczył dawny timeout 30 s; wynik niejednoznaczny, `NEEDS_VERIFICATION`, brak retry.
+- v2: output writera zatrzymany na 2048 tokenach i przekroczył starą rezerwę kosztową; usage `11029/2048`, `0.106345 USD`, brak dalszego calla.
+- v3: writer zakończony (`11041/2599`, `0.120180 USD`), reviewer zużył `6416/4096`, `0.134480 USD`, lecz odpowiedź nie była wymaganym JSON-em; pipeline `FAILED`.
+- v4: writer sukces (`0.107860 USD`), reviewer `APIConnectionError` bez usage/request ID; canonical recovery → `NEEDS_VERIFICATION`.
+- v5: writer sukces (`0.121670 USD`), reviewer ponownie `APIConnectionError` mimo timeoutu 300 s; canonical recovery → `NEEDS_VERIFICATION`.
+- W żadnej próbie nie było request retry, fallbacku, drugiego reviewera w tym samym jobie ani publikacji. Pierwszy pełny suite ujawnił stare asercje runtime 0034; poprawiono drabiny testowe, po czym rerun failures przeszedł `10/10`.
+
 ## 2026-08-12 — WAVE C5: siedem P2 z niezależnego review (ŻADNE nie jest blockerem C5)
 
 > **Klasyfikacja.** Review WAVE C5 zakończył się `APPROVE WITH MINOR/P2` z **zerem blockerów**. Poniższe pozycje są findingami P2 — nie były i nie są blockerami C5. Dwie z nich właściciel wyznaczył jako warunek **przed pierwszym realnym `ARTICLE_RESEARCH`**; pozostałe pięć to zwykły backlog.

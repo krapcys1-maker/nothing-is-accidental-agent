@@ -677,14 +677,14 @@ def _capture_synthesis_call_kwargs(monkeypatch, client: AnthropicResearchClient)
     return captured
 
 
-def test_synthesis_default_max_tokens_is_3000_and_override_works(monkeypatch):
+def test_synthesis_default_max_tokens_is_8192_and_override_works(monkeypatch):
     default = _capture_synthesis_call_kwargs(
         monkeypatch, AnthropicResearchClient("key", "m"),
     )
     override = _capture_synthesis_call_kwargs(
         monkeypatch, AnthropicResearchClient("key", "m", synthesize_max_tokens=2600),
     )
-    assert default.get("max_tokens") == 3000
+    assert default.get("max_tokens") == 8192
     assert override.get("max_tokens") == 2600
 
 
@@ -712,7 +712,7 @@ def test_capped_research_cli_preserves_extraction_token_default_and_override(
 
 @pytest.mark.parametrize(
     ("extra_args", "expected"),
-    [([], 3000), (["--synthesize-max-tokens", "2600"], 2600)],
+    [([], 8192), (["--synthesize-max-tokens", "2600"], 2600)],
 )
 def test_capped_research_cli_preserves_synthesis_token_default_and_override(
         monkeypatch, extra_args, expected):

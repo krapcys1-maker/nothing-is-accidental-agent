@@ -1219,6 +1219,11 @@ def test_migration_cli_0018_requires_confirmation_and_is_exact(tmp_path, capsys)
         database_schema_versions,
         initialize_database,
         migrate_0033_to_0034,
+        migrate_0034_to_0035,
+        migrate_0035_to_0036,
+        migrate_0036_to_0037,
+        migrate_0037_to_0038,
+        migrate_0038_to_0039,
     )
 
     path = tmp_path / "ladder-0018.db"
@@ -1376,8 +1381,13 @@ def test_migration_cli_0018_requires_confirmation_and_is_exact(tmp_path, capsys)
         "--db-path", str(path), "--confirm-0032-to-0033",
     ]) == 0
     migrate_0033_to_0034(path)
+    migrate_0034_to_0035(path)
+    migrate_0035_to_0036(path)
+    migrate_0036_to_0037(path)
+    migrate_0037_to_0038(path)
+    migrate_0038_to_0039(path)
     SqliteStorage.open(path).close()
-    assert database_schema_versions(path)[-1] == "0034_c5_end_to_end_connection"
+    assert database_schema_versions(path)[-1] == "0039_article_review_resume"
 
     too_old = tmp_path / "too-old-0016.db"
     initialize_database(too_old, through=EVIDENCE_SCHEMA_VERSION)

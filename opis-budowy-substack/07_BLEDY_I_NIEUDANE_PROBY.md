@@ -1,5 +1,9 @@
 # 07 — BŁĘDY I NIEUDANE PRÓBY
 
+## 2026-08-12 — Pięć prób, które odsłoniły pięć różnych warstw
+
+Pierwsza próba odsłoniła 30-sekundowy timeout. Druga — zbyt mały limit outputu i niedoszacowaną rezerwę. Trzecia — że reviewer może zużyć cały budżet, a mimo to nie oddać kontraktowego JSON-u. Czwarta i piąta — że nawet po poprawieniu lokalnego timeoutu granica sieciowa providera może pozostać niedostępna. Najważniejsze: żadnej z tych sytuacji system nie „naprawił” ukrytym retry. Nieznane wyniki zostały nieznane, koszty nie zostały wyzerowane, a publikacja pozostała niemożliwa.
+
 ## 2026-08-12 — Limit, który działa tylko po angielsku
 
 WAVE C5 przeszła review bez ani jednego blockera, więc najciekawsza rzecz w tej fali to nie awaria, tylko **wada, która nie zdążyła zaszkodzić** — i sposób, w jaki została znaleziona.

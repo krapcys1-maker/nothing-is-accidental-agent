@@ -16,6 +16,11 @@ from typing import Mapping
 
 from app.core.config import Settings
 from app.core.pricing import REQUIRED_CURRENCY, REQUIRED_UNIT
+from app.llm.anthropic_provider_contract import (
+    TOPIC_GENERATION_INFERENCE_CONFIG,
+    AnthropicInferenceConfig,
+    inference_config_from_payload,
+)
 from app.research.cost_estimator import estimate_no_search_call_usd
 from app.research.durable_intent import (
     DurableExecutionIntentError,
@@ -163,6 +168,7 @@ class DurableTopicGenerationIntent:
     pipeline_version: str
     prompt_contract_version: str
     max_retries: int
+    inference_config: AnthropicInferenceConfig
 
     @classmethod
     def from_settings(
@@ -224,6 +230,7 @@ class DurableTopicGenerationIntent:
             pipeline_version=_PIPELINE_VERSION,
             prompt_contract_version=_PROMPT_CONTRACT_VERSION,
             max_retries=0,
+            inference_config=TOPIC_GENERATION_INFERENCE_CONFIG,
         )
 
     @classmethod
@@ -237,7 +244,7 @@ class DurableTopicGenerationIntent:
             "pricing_profile_version", "pricing_currency", "pricing_unit",
             "projected_cost_usd", "pessimistic_cost_usd", "pipeline_version",
             "prompt_contract_version", "max_retries", "stage", "prompt_input",
-            "candidate_count", "score_dimensions",
+            "candidate_count", "score_dimensions", "inference_config",
         }
         # Obecność topic_id jest jawnie nazwanym błędem kontraktu, a nie tylko
         # "nieznanym polem": temat nie istnieje przed odpowiedzią modelu.  Ta
@@ -320,6 +327,15 @@ class DurableTopicGenerationIntent:
                 "topic generation requires max_retries=0.",
                 code="TOPIC_GENERATION_REQUIRES_ZERO_RETRIES",
             )
+        try:
+            inference_config = inference_config_from_payload(
+                payload["inference_config"], expected_role="TOPIC_GENERATION",
+            )
+        except ValueError as exc:
+            raise DurableExecutionIntentError(
+                "durable topic-generation inference config is invalid.",
+                code="INFERENCE_CONFIG_MISMATCH",
+            ) from exc
         expected_projected, expected_pessimistic = _cost_projection(
             profile=profile, max_tokens=max_tokens, prompt_input=prompt_input,
         )
@@ -363,6 +379,7 @@ class DurableTopicGenerationIntent:
                 payload["prompt_contract_version"], field="prompt_contract_version",
             ),
             max_retries=retries,
+            inference_config=inference_config,
         )
 
     def as_payload(self) -> dict[str, object]:
@@ -392,6 +409,7 @@ class DurableTopicGenerationIntent:
             "pipeline_version": self.pipeline_version,
             "prompt_contract_version": self.prompt_contract_version,
             "max_retries": self.max_retries,
+            "inference_config": self.inference_config.payload(),
         }
 
     def prompt_account(self):

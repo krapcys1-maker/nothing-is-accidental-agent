@@ -65,6 +65,7 @@ from app.ports.storage import (
 )
 from app.research import injection_guard
 from app.research.durable_intent import (
+    DEFAULT_REQUEST_MAX_TOKENS,
     DurableExecutionIntentError,
     DurableResearchExecutionIntent,
     canonicalize_durable_research_payload,
@@ -762,7 +763,7 @@ def run_research_pipeline(
             raise ResearchExecutionRequiresDurableJob(
                 "Durable real research requires its persisted request_max_tokens."
             )
-        request_max_tokens = 3000
+        request_max_tokens = DEFAULT_REQUEST_MAX_TOKENS
     if isinstance(request_max_tokens, bool) or not isinstance(request_max_tokens, int) or request_max_tokens < 1:
         raise ValueError("request_max_tokens must be a positive integer.")
     clock = clock or SystemClock()
@@ -824,7 +825,12 @@ def run_research_pipeline(
     # Uwaga: ta ścieżka (jednoetapowa) jest zachowana, ale NIEZALECANA dla realnych
     # runów — patrz run_two_stage_research_pipeline() niżej.
     if evidence_intent is not None:
-        attempt_cost_ceiling = float(evidence_intent.pessimistic_cost_usd)
+        from app.research.durable_intent import evidence_full_envelope_cost_usd
+
+        attempt_cost_ceiling = float(evidence_full_envelope_cost_usd(
+            pricing_profile=evidence_intent.pricing_profile,
+            max_output_tokens=evidence_intent.max_tokens,
+        ))
     else:
         worst_case = estimate_worst_case_search_call_usd(
             settings, max_web_searches=max_web_searches, max_output_tokens=request_max_tokens)
