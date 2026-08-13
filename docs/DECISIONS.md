@@ -1,5 +1,12 @@
 # DECISIONS (Architecture Decision Log)
 
+### ADR-145: Merge PR #46 i kontrolowana migracja produkcji do 0039
+
+- **Data/status/autor:** 2026-08-13; właściciel przyjął niezależny werdykt `APPROVE WITH MINOR/P2` dla dokładnego SHA `a7caa5e…` i autoryzował merge oraz jeden krok migracyjny `0038→0039`.
+- **Merge:** PR #46 został zmergowany metodą merge commit jako `b8eb2095f67f5db54eadfbb36ebeeb8384def194`; nie użyto squasha, rebase, force-pusha ani obejścia checks/protection.
+- **Migracja:** po quiescence i pełnym backupie file-set zastosowano wyłącznie `scripts/migrate_schema_0039.py`. Produkcja ma exact `0039/39`, integrity `ok`, FK `0`, zachowane wcześniejsze dane, puste tabele REVIEW-ONLY i zaakceptowany runtime gate.
+- **Granice:** znany koszt pozostaje `5.172339 USD`, nierozstrzygnięta ekspozycja `0.738880 USD` nie została zrekonsyliowana. REVIEW-ONLY nadal odmawia przed SDK; live, publikacja i zamknięcie Etapu 3 nie zostały autoryzowane ani wykonane.
+
 ### ADR-144: Pięć MAJOR PR #46 — adaptive thinking, immutable CLI resume i pełna koperta researchu
 
 - **Data/status/autor:** 2026-08-13; decyzja właściciela implementowana offline, `CANDIDATE COMPLETE — FIVE MAJORS FIXED, AWAITING FOCUSED RE-REVIEW`; brak niezależnego zatwierdzenia tej fali.

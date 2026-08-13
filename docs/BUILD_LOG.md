@@ -1,5 +1,12 @@
 # BUILD_LOG
 
+## 2026-08-13 — Etap 3 / merge PR #46 i produkcyjna migracja 0038→0039
+
+- Zatwierdzony head `a7caa5eebcb28bedc240d460bdc922d112e00d4c` zmergowano standardowym merge commitem `b8eb2095f67f5db54eadfbb36ebeeb8384def194`; lokalny `main` zsynchronizowano fast-forward z `origin/main`.
+- Po kanonicznym quiescence utworzono i zweryfikowano pełny backup DB/WAL/SHM w `data/backups/pre-0039-20260813T092251Z/`; główny plik backupu ma SHA-256 `f3f96532b195ae13bcd0db0b7eda6cd0344c19d6f020811e488b921c1daf3e82`.
+- `scripts/migrate_schema_0039.py` zastosował dokładnie `0039_article_review_resume`; produkcja ma 39 migracji, integrity `ok`, FK `0`, zachowane dane i puste trzy nowe tabele. Idempotentny drugi przebieg zastosował `[]` i nie zmienił SHA.
+- Nie wykonano provider API, live, publikacji ani rekonsyliacji. Guard REVIEW-ONLY zatrzymał się przed sekretem/SDK/callerem przy niezmienionej ekspozycji `0.738880 USD`.
+
 ## 2026-08-13 — Etap 3 / PR #46 — naprawa dokładnie pięciu MAJOR
 
 - Zastąpiono nieobsługiwane `enabled/budget_tokens` jednym kanonicznym adaptive-thinking contractem dla sześciu ról; effort pozostał jawny, trwały i fingerprintowany.

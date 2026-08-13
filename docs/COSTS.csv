@@ -1,4 +1,5 @@
 # CEL: Rejestr kosztow API (model jezykowy, web search, grafiki). Zrodlo prawdy = tabela model_usage w bazie; ten CSV to czytelny eksport.
+# 2026-08-13 - merge PR #46, backup i produkcyjna migracja 0038→0039 - 0.000000 USD actual; zero provider API/live/publikacji/rekonsyliacji, znany koszt pozostaje 5.172339 USD, nierozstrzygnięta ekspozycja pozostaje 0.738880 USD.
 # 2026-08-13 - PR #46 review-only repair candidate offline - 0.000000 USD actual; fake SDK/callery i nowe temp DB, zero sieci/provider requestow/publikacji oraz zero zapisu produkcyjnego.
 # 2026-08-13 - PR #46 five-major focused repair offline - 0.000000 USD actual; fake SDK/callery, temp DB, zero provider API/browsera/publikacji i zero zapisu produkcyjnego.
 # Format kolumn wg specyfikacji wlasciciela. Kwoty w USD. Bez sekretow.

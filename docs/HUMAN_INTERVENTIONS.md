@@ -1,5 +1,11 @@
 # HUMAN_INTERVENTIONS
 
+## 2026-08-13 — właściciel zatwierdził merge PR #46 i migrację produkcji 0038→0039
+
+- Właściciel przekazał niezależny wynik `APPROVE WITH MINOR/P2` dla dokładnego heada `a7caa5e…`, zezwolił na ready, standardowy merge commit, fast-forward lokalnego `main` i jeden zatwierdzony krok migracji przez `scripts/migrate_schema_0039.py`.
+- Wymagane backup, quiescence, integralność, FK, zachowanie danych, idempotencję i runtime gate zweryfikowano przed zakończeniem operacji.
+- Właściciel jawnie pozostawił poza zakresem trzy P2, M8, rekonsyliację v1/v4/v5 oraz każdy request live i publikację. System pozostaje `NOT LIVE-READY` do czasu osobnej decyzji.
+
 ## 2026-08-13 — właściciel ograniczył naprawę PR #46 do pięciu MAJOR
 
 - Właściciel zlecił wyłącznie korektę adaptive thinking, raportowania CLI, immutable approval resume, koperty ARTICLE_RESEARCH i bieżących oznaczeń dokumentacji.
