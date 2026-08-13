@@ -43,6 +43,7 @@ from app.llm.anthropic_controlled_adapter import (
     describe_runtime_shape,
 )
 from app.llm.anthropic_provider_contract import (
+    ARTICLE_WRITER_INFERENCE_CONFIG,
     FABLE_5_MODEL_ID,
     FableRetentionAcceptance,
     RETENTION_SCOPE_QUALIFICATION,
@@ -87,6 +88,7 @@ from app.storage.db import (
     migrate_0035_to_0036,
     migrate_0036_to_0037,
     migrate_0037_to_0038,
+    migrate_0038_to_0039,
 )
 from app.storage.repositories import SqliteStorage
 from tests.controlled_provider_fixtures import (
@@ -836,6 +838,7 @@ def test_adapter_never_reads_a_secret_before_the_execution_boundary():
     request = ControlledProviderRequest(
         technical_model_id="claude-fable-5", system_prompt="s",
         user_prompt="u", max_output_tokens=64, timeout_seconds=5.0,
+        inference_config=ARTICLE_WRITER_INFERENCE_CONFIG,
     )
     raw = adapter.execute(request)
     assert calls == {"secret": 1, "sdk": 1, "caller": 1}
@@ -904,6 +907,7 @@ def test_30_a_secret_less_adapter_never_reaches_its_caller():
         adapter.execute(ControlledProviderRequest(
             technical_model_id="claude-fable-5", system_prompt="s",
             user_prompt="u", max_output_tokens=16, timeout_seconds=1.0,
+            inference_config=ARTICLE_WRITER_INFERENCE_CONFIG,
         ))
     assert excinfo.value.code == "ADAPTER_SECRET_UNAVAILABLE"
     assert caller_calls["n"] == 0
@@ -1576,6 +1580,7 @@ def test_migration_0029_is_forward_only_explicit_and_idempotent(tmp_path, capsys
     migrate_0035_to_0036(path)
     migrate_0036_to_0037(path)
     migrate_0037_to_0038(path)
+    migrate_0038_to_0039(path)
 
     opened = SqliteStorage.open(path)
     try:

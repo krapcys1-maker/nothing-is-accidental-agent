@@ -90,7 +90,7 @@ def test_timeout_usage_is_persisted_without_automatic_retry(settings, storage, a
         raise ResearchTimeout("provider timeout", usage=billed_timeout, model="m")
 
     client = AnthropicResearchClient("offline", "m", caller=caller, max_retries=1)
-    summary = _run(settings, storage, account, client, cap=1.0)
+    summary = _run(settings, storage, account, client, cap=2.0)
 
     assert len(calls) == 1
     assert client.call_count == 1
@@ -259,7 +259,7 @@ def test_legacy_single_applies_retry_multiplier_once(settings, storage, account)
         usage_tracker=UsageTracker(settings, storage, costs_csv_path=settings.costs_csv_path),
         policy=policy, notifier=LogNotification(), max_retries=2, run_cap_usd=2.0)
     base = estimate_worst_case_search_call_usd(
-        settings, max_web_searches=6, max_output_tokens=3000).total_usd
+        settings, max_web_searches=6, max_output_tokens=8192).total_usd
     assert policy.calls == [(estimate_with_retries(base, 2), 2.0, 0.0)]
     assert summary.blocked and summary.run_id is None
 

@@ -33,7 +33,10 @@ from app.llm.anthropic_controlled_adapter import (
     ControlledSdkFactory,
     ControlledTechnicalCaller,
 )
-from app.llm.anthropic_provider_contract import OPUS_5_MODEL_ID
+from app.llm.anthropic_provider_contract import (
+    ARTICLE_WRITER_INFERENCE_CONFIG,
+    OPUS_5_MODEL_ID,
+)
 from app.model_routing.contracts import LogicalModelRole, ModelFamily
 from app.policies.policy_engine import PolicyEngine
 from app.scheduler.dispatcher import JobDispatcher
@@ -129,6 +132,7 @@ def run_controlled_article(
             approved_at=authority.approved_at,
             expires_at=authority.expires_at,
             retention_acceptance_ref=None,
+            inference_config=ARTICLE_WRITER_INFERENCE_CONFIG,
         )
         provenance = storage.load_controlled_provider_provenance(
             job_id=authority.job_id,

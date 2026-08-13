@@ -1,5 +1,10 @@
 # SCREENSHOT_INDEX
 
+## 2026-08-13 — PR #46 offline repair: NO SCREENSHOT TAKEN
+
+- Browser i wszystkie działania online były zabronione; nie wykonano screenshotu. Dowód stanowią diff i testy fake-SDK/temp-DB.
+- `SCREENSHOT REQUIRED` dopiero dla osobno autoryzowanego przyszłego REVIEW-ONLY: ma pokazywać PR po niezależnym review oraz terminalny ledger bez sekretów i bez treści credentials.
+
 ## 2026-08-12 — online E2E: SCREENSHOT REQUIRED, ale brak bezpiecznej zalogowanej sesji
 
 - In-app browser otworzył wyłącznie ekran logowania Anthropic; nie istniała zalogowana sesja ani admin billing credential. Nie wykonano i nie zapisano screenshotu, aby nie utrwalać ekranu uwierzytelniania ani sekretów.

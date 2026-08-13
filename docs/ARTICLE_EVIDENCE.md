@@ -1,5 +1,12 @@
 # ARTICLE_EVIDENCE
 
+## 2026-08-13 — Materiał: „Ponowienie bez wiedzy nie jest retry”
+
+- Przerwany stream nie dowodzi, że provider niczego nie wykonał; dlatego częściowy tekst, brak usage i brak request ID nie mogą stać się sukcesem ani kosztem zero.
+- Osobny REVIEW-ONLY potrzebuje nowej tożsamości, exact hasha draftu i nowej zgody. Nie może reużywać v4/v5 ani otwierać pierwszego writera.
+- Pełna nierozstrzygnięta rezerwa jest praktyczną blokadą przed SDK. Dopiero zewnętrzna rekonsyliacja może bezpiecznie zmienić ten stan.
+- Cytowalna zasada: **„Niepewny skutek nie jest wolnym miejscem na następny skutek.”**
+
 ## 2026-08-12 — Materiał: „System może zawieść poprawnie”
 
 - Research i writer działały, lecz sukces E2E zatrzymał się na ostatniej granicy: reviewer najpierw odpowiedział w złym formacie, a następnie dwukrotnie stracił połączenie.

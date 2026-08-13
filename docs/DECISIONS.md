@@ -1,5 +1,22 @@
 # DECISIONS (Architecture Decision Log)
 
+### ADR-143: Jedno L1 obejmuje zamknięty warunkowy łańcuch REVIEW-ONLY
+
+- **Data/status/autor:** 2026-08-13; decyzja implementacyjna w zakresie właściciela, `CANDIDATE COMPLETE — AWAITING INDEPENDENT RE-REVIEW`.
+- **Łańcuch:** initial reviewer może wyłącznie zakończyć na `PENDING_APPROVAL` albo trwale zapisać `REWRITE_ONCE`, które dopuszcza kanoniczny ARTICLE_WRITER attempt 2. Po draft 2 działa dokładnie jeden nowy reviewer; jego ponowny rewrite staje się terminalnym stanem człowieka, nigdy attemptem 3.
+- **Authority i koszt:** jedno immutable L1 zamraża trzy execution refs, bindingi Opus, 300 s, retry 0, brak fallbacku, expiry i wspólny cap. Każdy etap nadal tworzy własną durable identity oraz rezerwację i ponownie sprawdza pozostały cap/globalny budżet.
+- **Recovery:** trwały checkpoint jest jedynym źródłem następnego kroku. `IN_FLIGHT` po external-effect albo `NEEDS_VERIFICATION` nie jest replayowane. Produkcyjna ekspozycja `0.738880 USD` nadal blokuje przed SDK.
+- **Granice:** wyłącznie fake SDK/callery i temp DB; `2639/2639 PASS`; produkcja nadal `0038`, migracja `0039` niewykonana; zero sieci, kosztu, publikacji i operacji Git.
+
+### ADR-142: REVIEW-ONLY jest nową exact authority i nie może omijać nierozstrzygniętej ekspozycji
+
+- **Data/status/autor:** 2026-08-13; decyzja implementacyjna w zakresie zleconym przez właściciela, kandydat do niezależnego review.
+- **Thinking/effort:** każdy kontrolowany request Anthropic ma jawny, trwały i fingerprintowany kontrakt. Reviewer `enabled/2048/low`; Writer i Research `enabled/4096/high`; Topic Generation `enabled/1024/medium`. Zmiana po approvalu jest odmową, nie nowym domyślnym zachowaniem.
+- **Streaming:** Reviewer używa jednego `messages.stream` i `get_final_message`; tylko kompletny final message może być sukcesem. Zerwanie pozostawia `NEEDS_VERIFICATION`, `cost_usd=NULL`, retry `0`.
+- **Resume:** REVIEW-ONLY dostaje osobny approval i execution ref związany z job/content/draft fingerprint/model/cap/expiry. Nie ma zależności do wcześniejszych etapów ani publikacji. Maksymalnie dwie rundy oznaczają initial review i jedną re-review po jedynym dozwolonym rewrite.
+- **Schema:** exact authority wymaga addytywnej `0039_article_review_resume`. Produkcja pozostaje na `0038/38`; `0039` wolno zastosować dopiero w osobno autoryzowanej operacji.
+- **Nierozstrzygnięte koszty:** istniejące v1/v4/v5 nie są zmieniane ani zamykane. Ich pełna ekspozycja `0.738880 USD` blokuje REVIEW-ONLY przed SDK i wymaga prawdziwej zewnętrznej rekonsyliacji przez człowieka.
+
 ### ADR-141: Właścicielski podział modeli, timeout 300 s i fail-closed stop po zewnętrznej awarii reviewera
 
 - **Data/status/autor:** 2026-08-12; decyzja właściciela. `TOPIC_GENERATION`, `ARTICLE_RESEARCH`, `ARTICLE_WRITER`, `ARTICLE_REVIEWER` używają dokładnie `ANTHROPIC/claude-opus-5`; `NOTE_WRITER` i `COMMENT_WRITER` używają `ANTHROPIC/claude-sonnet-5`. Nie wolno reinterpretować `ARTICLE_RESEARCH → Opus` jako konfliktu.

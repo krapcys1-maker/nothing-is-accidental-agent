@@ -8,11 +8,10 @@ from decimal import Decimal
 import hashlib
 import json
 from pathlib import Path
-from uuid import uuid4
 
 from app.core.clock import SystemClock
 from app.core.config import load_settings
-from app.models import Job, JobKind, JobStatus, Topic, TopicStatus, WorkflowType
+from app.models import JobKind, JobStatus, TopicStatus
 from app.model_routing.contracts import LogicalModelRole
 from app.operations.controlled_fetch_live import (
     ControlledFetchLiveRequest,
@@ -33,7 +32,6 @@ from app.storage.repositories import SqliteStorage
 
 MODEL_ID = "claude-opus-5"
 PROVIDER = "ANTHROPIC"
-TOPIC_TEXT = "How fragile systems hide their dependencies until ordinary routines fail"
 
 
 def _git_identity(root: Path) -> tuple[str, str]:
@@ -148,6 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-cost-usd", type=Decimal, default=Decimal("1.500000"))
     parser.add_argument(
         "--topic-id",
+        required=True,
         type=int,
         help="Use the exact SELECTED topic and queued A1 job produced by TOPIC_GENERATION.",
     )
@@ -174,7 +173,6 @@ def main(argv: list[str] | None = None) -> int:
     branch, head = _git_identity(settings.project_root)
     job_ids: list[str] = []
     fetch_results: list[dict[str, object]] = []
-    operation = f"{now.strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
     try:
         active = storage.get_active_model_for_role(LogicalModelRole.ARTICLE_RESEARCH)
         capability = None if active is None else storage._model_capability_for(active)
@@ -193,78 +191,36 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         account = settings.get_account("nothing_is_accidental")
         storage.ensure_account(account)
-        if args.topic_id is None:
-            if storage.conn.execute(
-                "SELECT count(*) FROM jobs WHERE status IN ('QUEUED','LEASED','RUNNING')"
-            ).fetchone()[0]:
-                print("BLOCKED: another active job exists")
-                return 2
-            topic = storage.add_topic(account.id, Topic(
-                account_id=account.id,
-                title=TOPIC_TEXT,
-                question=TOPIC_TEXT,
-                status=TopicStatus.SELECTED,
-                source=f"ARTICLE_RESEARCH_E2E:{operation}",
-                created_at=now,
-            ))
-            assert topic.id is not None
-            discovery_intent = SourceDiscoveryIntent.build(
-                account_id=account.id,
-                topic_id=int(topic.id),
-            )
-            discovery_job_id = f"source-discovery-{int(topic.id)}"
-            discovery_job = storage.enqueue_job(Job(
-                id=discovery_job_id,
-                account_id=account.id,
-                kind=JobKind.RESEARCH,
-                workflow=WorkflowType.RESEARCH,
-                idempotency_key=f"source-discovery:{account.id}:{int(topic.id)}",
-                topic_id=int(topic.id),
-                payload={
-                    "account_id": account.id,
-                    "topic_id": int(topic.id),
-                    "dry_run": False,
-                    "execution": SOURCE_DISCOVERY_EXECUTION,
-                    "execution_intent": discovery_intent.as_payload(),
-                },
-                schedule_reason="SAFETY_OPERATION_IMMEDIATE",
-                earliest_run_at=now,
-                max_attempts=1,
-                created_at=now,
-            ))
-        else:
-            topic = next(
-                (
-                    item
-                    for status in (TopicStatus.SELECTED, TopicStatus.USED)
-                    for item in storage.list_topics_by_status(account.id, status)
-                    if item.id == args.topic_id
-                ),
-                None,
-            )
-            discovery_job_id = (
-                args.discovery_job_id or f"source-discovery-{args.topic_id}"
-            )
-            discovery_job = storage.get_job(discovery_job_id)
-            if (
-                topic is None
-                or topic.account_id != account.id
-                or topic.status not in (TopicStatus.SELECTED, TopicStatus.USED)
-                or discovery_job is None
-                or discovery_job.status not in (JobStatus.QUEUED, JobStatus.DONE)
-                or discovery_job.topic_id != args.topic_id
-                or discovery_job.payload.get("execution") != SOURCE_DISCOVERY_EXECUTION
-            ):
-                print("BLOCKED: selected topic/A1 job lineage is invalid")
-                return 2
-            foreign_active = storage.conn.execute(
-                "SELECT count(*) FROM jobs WHERE status IN ('LEASED','RUNNING') "
-                "AND id!=?",
-                (discovery_job_id,),
-            ).fetchone()[0]
-            if foreign_active:
-                print("BLOCKED: another active job exists")
-                return 2
+        topic = next(
+            (
+                item
+                for status in (TopicStatus.SELECTED, TopicStatus.USED)
+                for item in storage.list_topics_by_status(account.id, status)
+                if item.id == args.topic_id
+            ),
+            None,
+        )
+        discovery_job_id = args.discovery_job_id or f"source-discovery-{args.topic_id}"
+        discovery_job = storage.get_job(discovery_job_id)
+        if (
+            topic is None
+            or topic.account_id != account.id
+            or topic.status not in (TopicStatus.SELECTED, TopicStatus.USED)
+            or discovery_job is None
+            or discovery_job.status not in (JobStatus.QUEUED, JobStatus.DONE)
+            or discovery_job.topic_id != args.topic_id
+            or discovery_job.payload.get("execution") != SOURCE_DISCOVERY_EXECUTION
+        ):
+            print("BLOCKED: selected topic/A1 job lineage is invalid")
+            return 2
+        foreign_active = storage.conn.execute(
+            "SELECT count(*) FROM jobs WHERE status IN ('LEASED','RUNNING') "
+            "AND id!=?",
+            (discovery_job_id,),
+        ).fetchone()[0]
+        if foreign_active:
+            print("BLOCKED: another active job exists")
+            return 2
         job_ids.append(discovery_job.id)
         if discovery_job.status is JobStatus.QUEUED:
             discovery_approval = storage.record_source_discovery_approval(
@@ -308,8 +264,11 @@ def main(argv: list[str] | None = None) -> int:
             "WHERE fa.account_id=? AND fa.topic_id=? AND a.status='SUCCEEDED'",
             (account.id, int(topic.id)),
         ).fetchone()[0])
+        discovery_contract = SourceDiscoveryIntent.from_payload(
+            discovery_job.payload["execution_intent"]
+        )
         for candidate in candidates:
-            if successes >= 3:
+            if successes >= discovery_contract.max_results:
                 break
             existing_fetch = storage.conn.execute(
                 "SELECT fetch_job_id FROM source_candidate_fetch_approvals "

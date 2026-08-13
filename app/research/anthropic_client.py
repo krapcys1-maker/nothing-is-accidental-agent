@@ -42,7 +42,10 @@ from app.llm.anthropic_controlled_adapter import (
     ControlledProviderRequest,
     assert_returned_model_identity,
 )
-from app.llm.anthropic_provider_contract import returned_provenance_mismatch
+from app.llm.anthropic_provider_contract import (
+    ARTICLE_RESEARCH_INFERENCE_CONFIG,
+    returned_provenance_mismatch,
+)
 from app.llm.base import Usage
 from app.ports.storage import StaleJobExecutionError
 from app.models import (
@@ -757,7 +760,7 @@ class AnthropicResearchClient:
                  evidence_caller: "EvidenceCaller | None" = None,
                  max_retries: int = 0, timeout_seconds: float = 60,
                  max_web_searches: int | None = None,
-                 research_max_tokens: int = 3000,
+                 research_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
                  gather_max_tokens: int = 1200,
                  synthesize_max_tokens: int = DEFAULT_SYNTHESIS_MAX_TOKENS,
                  discover_max_tokens: int = 600,
@@ -1189,6 +1192,7 @@ class AnthropicResearchClient:
                 user_prompt=prompt,
                 max_output_tokens=max_tokens,
                 timeout_seconds=self._timeout_seconds,
+                inference_config=ARTICLE_RESEARCH_INFERENCE_CONFIG,
                 tools=tuple(tools) if tools else None,
                 extra_headers=extra_headers,
             ))

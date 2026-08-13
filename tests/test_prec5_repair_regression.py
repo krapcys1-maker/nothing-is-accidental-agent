@@ -1004,6 +1004,7 @@ def test_migration_0026_is_forward_only_explicit_and_idempotent(tmp_path, capsys
         migrate_0035_to_0036,
         migrate_0036_to_0037,
         migrate_0037_to_0038,
+        migrate_0038_to_0039,
         VERIFIED_CATALOGUE_SCHEMA_VERSION,
     )
     from app.storage.repositories import SqliteStorage
@@ -1052,6 +1053,7 @@ def test_migration_0026_is_forward_only_explicit_and_idempotent(tmp_path, capsys
     migrate_0035_to_0036(upgrade)
     migrate_0036_to_0037(upgrade)
     migrate_0037_to_0038(upgrade)
+    migrate_0038_to_0039(upgrade)
 
     opened = SqliteStorage.open(upgrade)
     try:

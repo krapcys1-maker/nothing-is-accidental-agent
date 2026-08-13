@@ -241,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="[two-stage] max_tokens dla etapu gather_sources.")
     parser.add_argument(
         "--synthesize-max-tokens", type=int, default=DEFAULT_SYNTHESIS_MAX_TOKENS,
-        help=("max_tokens dla etapu syntezy B (domyślnie 3000 po realnym "
+        help=("max_tokens dla etapu syntezy B (domyślnie 8192 po realnym "
               "stop_reason=max_tokens przy 2200; uwzględniane w estymacie)."),
     )
     parser.add_argument("--forwarded-context-tokens", type=int, default=2500,

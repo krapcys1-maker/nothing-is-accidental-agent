@@ -26,6 +26,7 @@ from app.llm.anthropic_provider_contract import (
     FABLE_5_MODEL_ID,
     FableRetentionAcceptance,
     RETENTION_SCOPE_CONTENT,
+    inference_config_for_role,
 )
 
 TS = "2026-08-09T09:00:00.000000+00:00"
@@ -292,4 +293,5 @@ def approve_content_provider_execution(
         approved_at=approved_at,
         expires_at=expires_at,
         retention_acceptance_ref=acceptance_ref,
+        inference_config=inference_config_for_role(role),
     )

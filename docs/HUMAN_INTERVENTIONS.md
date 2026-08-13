@@ -1,5 +1,18 @@
 # HUMAN_INTERVENTIONS
 
+## 2026-08-13 — właściciel zlecił domknięcie REVIEW-ONLY do kandydata offline
+
+- Właściciel wymagał initial reviewer → opcjonalnie dokładnie jeden canonical writer attempt 2 → dokładnie jeden post-reviewer, bez writera/reviewera nr 3 i bez publikacji.
+- Jedno L1 ma obejmować warunkowy łańcuch ze wspólnym capem, przy osobnych identity/rezerwacjach i fail-closed recovery po każdym trwałym checkpointcie.
+- Granice właściciela zachowano: fake SDK/callery, temp DB, zero sieci/kosztu/live, produkcja immutable, brak stage/commita/pushu/zmiany PR/merge. Wynik implementera może być tylko `CANDIDATE COMPLETE`, nie approval.
+
+## 2026-08-13 — właściciel zatrzymał live i zlecił przygotowanie PR #46 do re-review
+
+- Właściciel zakazał kolejnego requestu online i polecił naprawić wyłącznie findings niezależnego review na istniejącym branchu, offline.
+- Wymagane zostały jawne thinking/effort, streaming Reviewera, bezpieczny REVIEW-ONLY, potwierdzone limity, migracyjne M2/M3, obowiązkowy istniejący `topic_id` i korekta najwyższych sekcji dokumentacji.
+- Granice: fake SDK/callery i temp DB; produkcja tylko immutable read-only; zero providerów, browsera, publikacji, kosztu i operacji Git zapisujących historię.
+- REVIEW-ONLY nie otrzymał zgody na ominięcie v1/v4/v5. Właściciel musi osobno dostarczyć zewnętrzną rekonsyliację ich rzeczywistego wyniku/kosztu oraz osobno autoryzować migrację `0038→0039` przed przyszłym użyciem.
+
 ## 2026-08-12 — właściciel rozszerzył zakres do pełnego online E2E i skorygował timeout
 
 - Właściciel ustalił ostateczny podział: cztery role artykułowe na `claude-opus-5`, Notes/comments na `claude-sonnet-5`; zakazał ponownej analizy doboru modeli.

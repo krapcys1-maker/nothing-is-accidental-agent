@@ -25,6 +25,7 @@ from app.llm.anthropic_controlled_adapter import (
 )
 from app.llm.anthropic_provider_contract import (
     ANTHROPIC_PROVIDER,
+    inference_config_for_role,
 )
 from app.model_routing.catalogue import FABLE_5, OPUS_5, CatalogueEntry
 from app.model_routing.contracts import LogicalModelRole
@@ -268,6 +269,7 @@ class ProductionQualificationCaller:
             # smaller operational limit must be a separately reviewed change.
             max_output_tokens=approval.max_output_tokens,
             timeout_seconds=QUALIFICATION_TIMEOUT_SECONDS,
+            inference_config=inference_config_for_role(approval.logical_role),
             tools=(
                 ({
                     "type": "web_search_20250305",

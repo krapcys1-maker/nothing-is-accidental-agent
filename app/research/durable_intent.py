@@ -16,6 +16,11 @@ from app.core.pricing import (
     PricingConfigError,
     pricing_contract_fingerprint,
 )
+from app.llm.anthropic_provider_contract import (
+    ARTICLE_RESEARCH_INFERENCE_CONFIG,
+    AnthropicInferenceConfig,
+    inference_config_from_payload,
+)
 from app.research.cost_estimator import (
     estimate_no_search_call_usd,
     estimate_worst_case_search_call_usd,
@@ -68,7 +73,7 @@ SENTINEL_PRICING_PROFILE_VERSION = "0"
 # controlled acceptance may freeze a lower value explicitly.
 MIN_REQUEST_MAX_TOKENS = 256
 MAX_REQUEST_MAX_TOKENS = 8192
-DEFAULT_REQUEST_MAX_TOKENS = 3000
+DEFAULT_REQUEST_MAX_TOKENS = 8192
 
 
 class DurableExecutionIntentError(ValueError):
@@ -422,6 +427,7 @@ class DurableResearchExecutionIntent:
     pipeline_version: str
     prompt_contract_version: str
     max_retries: int
+    inference_config: AnthropicInferenceConfig
     evidence_input: dict[str, object] | None = None
     force_re_research: bool = False
 
@@ -429,7 +435,8 @@ class DurableResearchExecutionIntent:
     def from_settings(
         cls, *, settings: Settings, account_id: str, topic_id: int,
         cap_usd: object, max_web_searches: object, question: object,
-        niche: object, max_tokens: object = 3000, required_depth: object = "standard",
+        niche: object, max_tokens: object = DEFAULT_REQUEST_MAX_TOKENS,
+        required_depth: object = "standard",
         pricing_prices: Mapping[str, object] | None = None,
         pricing_profile_id: object = SENTINEL_PRICING_PROFILE_ID,
         pricing_profile_version: object = SENTINEL_PRICING_PROFILE_VERSION,
@@ -521,6 +528,7 @@ class DurableResearchExecutionIntent:
                 else _PROMPT_CONTRACT_VERSION
             ),
             max_retries=0,
+            inference_config=ARTICLE_RESEARCH_INFERENCE_CONFIG,
             evidence_input=evidence,
             force_re_research=force_re_research,
         )
@@ -534,7 +542,7 @@ class DurableResearchExecutionIntent:
             "pricing_currency", "pricing_unit", "projected_cost_usd",
             "pessimistic_cost_usd",
             "pipeline_version", "prompt_contract_version", "max_retries",
-            "flags", "stage", "prompt_input",
+            "flags", "stage", "prompt_input", "inference_config",
         }
         if set(payload) not in (expected, expected | {"evidence_input"}):
             raise DurableExecutionIntentError("durable execution intent has unsupported or missing fields.")
@@ -638,6 +646,15 @@ class DurableResearchExecutionIntent:
                 code="EVIDENCE_PROMPT_CONTRACT_MISMATCH",
             )
         retries = _integer(payload["max_retries"], field="max_retries", minimum=0)
+        try:
+            inference_config = inference_config_from_payload(
+                payload["inference_config"], expected_role="ARTICLE_RESEARCH",
+            )
+        except ValueError as exc:
+            raise DurableExecutionIntentError(
+                "durable research inference config is invalid.",
+                code="INFERENCE_CONFIG_MISMATCH",
+            ) from exc
         return cls(
             account_id=_text(payload["account_id"], field="account_id"),
             topic_id=_integer(payload["topic_id"], field="topic_id", minimum=1),
@@ -660,6 +677,7 @@ class DurableResearchExecutionIntent:
             pipeline_version=pipeline_version,
             prompt_contract_version=prompt_contract_version,
             max_retries=retries,
+            inference_config=inference_config,
             evidence_input=evidence,
             force_re_research=force_re_research,
         )
@@ -695,6 +713,7 @@ class DurableResearchExecutionIntent:
             "pipeline_version": self.pipeline_version,
             "prompt_contract_version": self.prompt_contract_version,
             "max_retries": self.max_retries,
+            "inference_config": self.inference_config.payload(),
             "flags": {"force_re_research": self.force_re_research},
         }
         if self.evidence_input is not None:

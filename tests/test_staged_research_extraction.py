@@ -1456,19 +1456,19 @@ def test_extraction_and_client_defaults_use_1500_tokens():
         "extraction_max_tokens"].default == 1500
 
 
-def test_synthesis_defaults_use_measured_3000_token_limit():
+def test_synthesis_defaults_use_safe_8192_token_limit():
     import inspect
 
     from app.research.anthropic_client import AnthropicResearchClient
 
     assert inspect.signature(AnthropicResearchClient.__init__).parameters[
-        "synthesize_max_tokens"].default == 3000
+        "synthesize_max_tokens"].default == 8192
     assert inspect.signature(run_synthesis_from_cards).parameters[
-        "synthesize_max_tokens"].default == 3000
+        "synthesize_max_tokens"].default == 8192
     assert inspect.signature(run_staged_research_pipeline).parameters[
-        "synthesize_max_tokens"].default == 3000
+        "synthesize_max_tokens"].default == 8192
     assert inspect.signature(resume_staged_research).parameters[
-        "synthesize_max_tokens"].default == 3000
+        "synthesize_max_tokens"].default == 8192
 
 
 @pytest.mark.parametrize("stage", ["A2", "B"])

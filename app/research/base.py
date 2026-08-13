@@ -17,7 +17,7 @@ from app.models import (
 # Realny staged B z 2026-07-13 wyczerpał 2200 tokenów i urwał JSON. 3000 daje
 # 36% zapasu, a przy aktualnym estymatorze nadal mieści fresh run w 0.55 USD oraz
 # resume B (prior=0.170050 USD) w absolutnym capie 0.20 USD.
-DEFAULT_SYNTHESIS_MAX_TOKENS = 3000
+DEFAULT_SYNTHESIS_MAX_TOKENS = 8192
 
 
 class ResearchError(RuntimeError):

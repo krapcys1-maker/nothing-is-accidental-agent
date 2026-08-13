@@ -46,12 +46,13 @@ SOURCE_DISCOVERY_RECONCILIATION_SCHEMA_VERSION = (
 )
 EVIDENCE_RERESEARCH_LINEAGE_SCHEMA_VERSION = "0037_evidence_reresearch_lineage"
 CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION = "0038_content_provider_timeout"
+ARTICLE_REVIEW_RESUME_SCHEMA_VERSION = "0039_article_review_resume"
 # The production reviewer reserves a durable IN_FLIGHT role execution before it
 # may reach the transport, and that state only exists from 0032 onwards, so the
 # runtime floor moves with it.  A database still standing on 0031 now fails the
 # schema gate closed, which is the intended signal that it must be migrated by
 # an explicitly authorised operator step.
-RUNTIME_SCHEMA_VERSION = CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION
+RUNTIME_SCHEMA_VERSION = ARTICLE_REVIEW_RESUME_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
@@ -119,6 +120,9 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     # 0036 replaces one defense-in-depth trigger so terminal operator
     # reconciliation recognizes the typed STAGED A1 lineage.
     SOURCE_DISCOVERY_RECONCILIATION_SCHEMA_VERSION,
+    # 0039 is additive: exact one-shot review-resume approvals and their
+    # isolated execution ledger become visible with one schema ledger row.
+    ARTICLE_REVIEW_RESUME_SCHEMA_VERSION,
     # 0019 is intentionally ABSENT: rebuilding controlled_fetch_approvals with
     # incoming foreign keys requires PRAGMA foreign_keys=OFF, which is a no-op
     # inside the runner transaction — the migration manages its own explicit
@@ -930,6 +934,21 @@ def migrate_0037_to_0038(
         db_path,
         source_version=EVIDENCE_RERESEARCH_LINEAGE_SCHEMA_VERSION,
         target_version=CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0038_to_0039(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Add exact one-shot authority for an isolated reviewer resume."""
+
+    return _migrate_single_step(
+        db_path,
+        source_version=CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION,
+        target_version=ARTICLE_REVIEW_RESUME_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )
 

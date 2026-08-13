@@ -24,6 +24,7 @@ from app.llm.anthropic_controlled_adapter import (
     ControlledProviderRequest,
 )
 from app.llm.anthropic_provider_contract import (
+    ARTICLE_WRITER_INFERENCE_CONFIG,
     FABLE_5_MODEL_ID,
     FableRetentionAcceptance,
     RETENTION_SCOPE_QUALIFICATION,
@@ -126,6 +127,7 @@ def test_controlled_adapter_sends_explicit_global_and_standard_only(model_id):
         user_prompt="user",
         max_output_tokens=128,
         timeout_seconds=5.0,
+        inference_config=ARTICLE_WRITER_INFERENCE_CONFIG,
     ))
     assert adapter.caller_calls == len(messages.calls) == 1
     assert messages.calls[0]["inference_geo"] == "global"
@@ -156,6 +158,7 @@ def test_workspace_and_environment_defaults_cannot_override_frozen_request(
         user_prompt="user",
         max_output_tokens=128,
         timeout_seconds=5.0,
+        inference_config=ARTICLE_WRITER_INFERENCE_CONFIG,
     ))
 
     assert len(messages.calls) == 1
@@ -541,6 +544,7 @@ def test_opus_content_does_not_require_fable_retention_acceptance(
         approved_at="2026-01-01T00:00:00.000000+00:00",
         expires_at=EXPIRES_AT,
         retention_acceptance_ref=None,
+        inference_config=ARTICLE_WRITER_INFERENCE_CONFIG,
     )
     writer = CatalogueFakeWriter()
     summary = _run(contract_storage, settings, lease, owner, writer)

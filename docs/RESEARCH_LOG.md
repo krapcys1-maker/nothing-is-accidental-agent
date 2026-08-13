@@ -1,5 +1,11 @@
 # RESEARCH_LOG
 
+## 2026-08-13 — PR #46 re-review preparation: bez nowego researchu
+
+- Nie wygenerowano tematu, nie wykonano discovery, fetchu, ekstrakcji ani syntezy. Research Card #7 i lineage 3/3 pozostają historycznym wejściem istniejącego contentu.
+- Zmiana operatorska wymaga teraz istniejącego kanonicznego `topic_id`; usunięto produkcyjną ścieżkę tworzenia syntetycznego `SELECTED` przez research E2E.
+- Testy limitu A1 i syntezy korzystały wyłącznie z fake danych/temp DB. Koszt rzeczywisty `0.000000 USD`.
+
 ## 2026-08-12 — pierwszy kontrolowany ARTICLE_RESEARCH online zakończony Research Card #7
 
 - Temat #27: **“Why the Bus Bunches: The Arithmetic That Makes Two Arrive Together”**; rama artykułu: ukryte dodatnie sprzężenie zwrotne powodujące bunching.

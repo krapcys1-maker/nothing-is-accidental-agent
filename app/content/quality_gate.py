@@ -356,6 +356,7 @@ def _account_article_claims(
     brief: ContentBrief,
     evidence: tuple[FrozenEvidenceItem, ...],
     reviewer: ClaimAccountingReviewPort | None,
+    propagate_reviewer_errors: bool = False,
 ) -> tuple[tuple[dict[str, Any], ...], tuple[dict[str, Any], ...], bool, str | None]:
     """Validate complete independent accounting; every ambiguity is BLOCK."""
     segments = build_claim_segments(draft)
@@ -398,6 +399,8 @@ def _account_article_claims(
                         " ".join(str(exc).split())[:240],
                     ))
         except Exception as exc:
+            if propagate_reviewer_errors:
+                raise
             findings.append(_claim_finding(
                 CLAIM_ACCOUNTING_REVIEW_FAILED,
                 None,
@@ -546,6 +549,7 @@ def assess_draft(
     claim_reviewer: ClaimAccountingReviewPort | None = None,
     min_evidence_overlap: int = 2,
     require_independent_review: bool | None = None,
+    propagate_reviewer_errors: bool = False,
 ) -> DraftQualityAssessment:
     """Assess the actual text against the frozen package; ignore self-praise."""
     body = draft.body or ""
@@ -573,6 +577,7 @@ def assess_draft(
             brief=brief,
             evidence=evidence,
             reviewer=claim_reviewer,
+            propagate_reviewer_errors=propagate_reviewer_errors,
         )
 
     # Deterministic floors below may only add blockers. Complete independent

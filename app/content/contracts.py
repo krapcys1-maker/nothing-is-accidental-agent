@@ -7,6 +7,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.llm.anthropic_provider_contract import (
+    AnthropicInferenceConfig,
+    inference_config_for_role,
+)
+
 from app.content.foundation import (
     ContentType,
     FrozenEvidenceItem,
@@ -407,6 +412,7 @@ class WriterIntent(BaseModel):
     negative_style_profile_id: str
     prompt_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     limits: WriterLimits
+    inference_config: AnthropicInferenceConfig
     # Audit trail for the concrete style examples this attempt was shown. The
     # intent JSON is persisted verbatim, so these keys answer "which examples
     # did that draft actually see" long after the run.
@@ -441,6 +447,10 @@ class WriterIntent(BaseModel):
 
     @model_validator(mode="after")
     def validate_attempt(self) -> "WriterIntent":
+        if self.inference_config != inference_config_for_role(
+            self.route.logical_role
+        ):
+            raise ValueError("Writer inference config does not match its frozen role.")
         if self.call_mode in {
             WriterCallMode.FAKE,
             WriterCallMode.PROVIDER_READY_OFFLINE,

@@ -1,5 +1,20 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-13 — regresje ujawnione podczas domykania REVIEW-ONLY
+
+- Pierwszy happy path ujawnił, że ogólny ledger traktował kanoniczny writer attempt 2 jako niedozwolony retry. Wyjątek zawężono do exact attempt 2 z aktywną sesją i trwałym initial `REWRITE_ONCE`.
+- Pierwszy pełny suite ujawnił dwie regresje tekstu/kolejności triggerów SQLite. Trigger retry sprawdza teraz najpierw istnienie canonical writer extension, a ogólny komunikat nadal zawiera historyczne `transition command`; rerun zakończył się `2639/2639 PASS`.
+- Niejednoznaczny writer i post-reviewer zostały odtworzone offline: oba kończą fail-closed, bez replayu, retry, kolejnego etapu i kosztu udawanego jako zero.
+
+## 2026-08-13 — findings PR #46 naprawione offline przed re-review
+
+- Root cause złego JSON v3 nie był możliwy do ustalenia, ponieważ failure nie zachowywał bezpiecznego response artifact; dodano SHA/rozmiar i bounded redacted text bez sekretów.
+- Arbitralne `reason <= 12 słów` mogło unieważnić poprawną, płatną klasyfikację; limit pozostał instrukcją promptu, ale przestał być warunkiem strukturalnym.
+- Reviewer używał non-streaming create mimo dwóch zewnętrznych connection failures; nowy stream czeka na final message i nie używa częściowej treści.
+- Pierwsza regresja lokalna ujawniła brak thinking/effort dla istniejącego NOTE_WRITER oraz testy zakładające runtime `0038`; kontrakty uzupełniono, a historyczne testy kierują dokładne migracje przez właściwy floor.
+- REVIEW-ONLY początkowo polegał na późniejszym quality gate dla fingerprintów/kompletności segmentów; parser graniczny wymusza teraz pełną bijekcję, exact fingerprint i dozwolone evidence IDs również w izolowanym resume.
+- Nie wykonano żadnej próby online. Historyczne v1/v4/v5 nadal wymagają zewnętrznej rekonsyliacji i nie zostały zmienione.
+
 ## 2026-08-12 — controlled online E2E: bezpieczne failures przed finalnym draftem
 
 - v1: writer przekroczył dawny timeout 30 s; wynik niejednoznaczny, `NEEDS_VERIFICATION`, brak retry.

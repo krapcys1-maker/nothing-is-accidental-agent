@@ -1,5 +1,21 @@
 # BUILD_LOG
 
+## 2026-08-13 — domknięcie warunkowego łańcucha REVIEW-ONLY
+
+- REVIEW-ONLY uruchamia wyłącznie initial reviewer, opcjonalny kanoniczny ARTICLE_WRITER attempt 2 oraz jeden post-rewrite reviewer; attempt/review nr 3 są niemożliwe.
+- Jedno immutable L1 obejmuje maksymalny warunkowy łańcuch, exact modele, trzy execution refs, ważność i wspólny cap. Każdy etap zachowuje osobną rezerwację oraz ponowną kontrolę capu i budżetu.
+- Recovery po trwałym initial review, writer draft 2, post-review i terminalnym wyniku nie powtarza zakończonych efektów. Unknown writer/reviewer kończy fail-closed bez retry i bez publikacji.
+- Dowód: REVIEW-ONLY + migracja + regresje `130/130`, pełna suita `2639/2639 PASS`, collect `2639`; produkcja nietknięta na `0038`, koszt `0.000000 USD`.
+
+## 2026-08-13 — Etap 3 / PR #46 — kandydat REVIEW-ONLY do niezależnego re-review
+
+- Jawny kontrakt Anthropic zamraża thinking/effort w durable intentach, approvalach i fingerprintach; role artykułowe zachowują dokładnie `ANTHROPIC/claude-opus-5`, retry `0` i fallback `FORBIDDEN`.
+- ARTICLE_REVIEWER używa oficjalnego streamu SDK i zapisuje sukces dopiero po kompletnym final message. Przerwany stream kończy nową egzekucję jako `NEEDS_VERIFICATION` z nieznanym usage/kosztem i bez retry; parse failure zachowuje ograniczony, zredagowany artefakt diagnostyczny.
+- Dodano izolowany REVIEW-ONLY dla jednego dokładnego terminalnego draftu, exact L1 i nowego execution ref. Root nie importuje ani nie uruchamia topic generation, researchu, fetchu, writera attempt 1 ani publikacji. Pełna nierozstrzygnięta ekspozycja blokuje go przed SDK.
+- Zwiększono wyłącznie limity potwierdzone produkcyjnym usage: Reviewer/Writer/Research `8192`, Topic `4096`, A1 `max_results=6`; minimum trzech źródeł pozostaje bramką, ale fetch może zebrać do sześciu.
+- Migracja 0035 otrzymała transakcyjny guard zachowania tożsamości; testy 0035/0037/0038 migrują niepuste zależne dane. Standardowy research E2E wymaga istniejącego `topic_id`. Proponowana `0039` jest niezastosowaną, osobno autoryzowaną migracją REVIEW-ONLY; produkcja pozostaje `0038/38`.
+- Wszystkie testy są offline na nowych temp DB z fake SDK/callerami. Zero requestów providerowych, sieci, publikacji, kosztu i zapisu do produkcji; bez stage/commita/pushu/ready/merge.
+
 ## 2026-08-12 — Etap 3 / controlled ARTICLE_RESEARCH → ARTICLE online E2E
 
 - Dodano migracje `0035–0038`, jawne CLI migracyjne i controlled entrypointy dla researchu oraz artykułu; produkcję migrowano dopiero po backupie i udanym rehearsal, do `0038_content_provider_timeout`.

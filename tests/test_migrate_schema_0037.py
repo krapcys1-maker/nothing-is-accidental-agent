@@ -8,7 +8,10 @@ from app.storage.db import (
     SOURCE_DISCOVERY_RECONCILIATION_SCHEMA_VERSION,
     initialize_database,
     migrate_0036_to_0037,
+    connect_existing_writable,
 )
+from app.storage.repositories import SqliteStorage
+from tests.c2_fixtures import seed_c2_research
 
 
 def _unique_columns(connection: sqlite3.Connection, table: str) -> set[tuple[str, ...]]:
@@ -21,9 +24,25 @@ def _unique_columns(connection: sqlite3.Connection, table: str) -> set[tuple[str
     return result
 
 
-def test_0037_scopes_immutable_evidence_links_to_each_research_run(tmp_path: Path):
+def test_0037_scopes_immutable_evidence_links_to_each_research_run(tmp_path: Path, account):
     path = tmp_path / "0036.db"
     initialize_database(path, through=SOURCE_DISCOVERY_RECONCILIATION_SCHEMA_VERSION)
+    storage = SqliteStorage(connect_existing_writable(path))
+    seed_c2_research(storage, account)
+    storage.close()
+    before = sqlite3.connect(path)
+    try:
+        historical = {
+            table: before.execute(f"SELECT * FROM {table} ORDER BY 1").fetchall()
+            for table in (
+                "evidence_candidate_retrievals",
+                "evidence_candidate_excerpts",
+                "evidence_source_lineage",
+            )
+        }
+        assert all(historical.values())
+    finally:
+        before.close()
 
     result = migrate_0036_to_0037(path)
 
@@ -39,6 +58,10 @@ def test_0037_scopes_immutable_evidence_links_to_each_research_run(tmp_path: Pat
         assert ("research_run_id", "excerpt_id") in _unique_columns(
             connection, "evidence_source_lineage"
         )
+        for table, rows in historical.items():
+            assert connection.execute(
+                f"SELECT * FROM {table} ORDER BY 1"
+            ).fetchall() == rows
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     finally:

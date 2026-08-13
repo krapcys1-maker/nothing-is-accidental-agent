@@ -112,6 +112,29 @@ SELECT r.request_id,r.approval_ref,r.model_registry_id,r.logical_role,r.provider
 FROM model_qualification_runs_0034_old r
 JOIN model_qualification_approvals a ON a.approval_ref=r.approval_ref;
 
+-- Fail the same transaction before the old table can be dropped if the JOIN
+-- omitted even one historical run.  SQLite's RAISE() is legal only inside a
+-- trigger, so this portable CHECK table turns any non-zero discrepancy into a
+-- constraint failure.  Count plus both identity directions protect against a
+-- coincidental equal count with different request IDs.
+CREATE TEMP TABLE migration_0035_row_guard (
+    discrepancy INTEGER NOT NULL CHECK (discrepancy=0)
+);
+INSERT INTO migration_0035_row_guard(discrepancy)
+SELECT (SELECT count(*) FROM model_qualification_runs_0034_old)
+     - (SELECT count(*) FROM model_qualification_runs);
+DELETE FROM migration_0035_row_guard;
+INSERT INTO migration_0035_row_guard(discrepancy)
+SELECT count(*) FROM model_qualification_runs_0034_old old
+LEFT JOIN model_qualification_runs new ON new.request_id=old.request_id
+WHERE new.request_id IS NULL;
+DELETE FROM migration_0035_row_guard;
+INSERT INTO migration_0035_row_guard(discrepancy)
+SELECT count(*) FROM model_qualification_runs new
+LEFT JOIN model_qualification_runs_0034_old old ON old.request_id=new.request_id
+WHERE old.request_id IS NULL;
+DROP TABLE migration_0035_row_guard;
+
 DROP TABLE model_qualification_runs_0034_old;
 
 CREATE TRIGGER model_qualification_runs_reserve_contract

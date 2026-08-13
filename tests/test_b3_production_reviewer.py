@@ -30,6 +30,8 @@ from app.content.contracts import FakeDraft
 from app.content.quality_gate import (
     CLAIM_ACCOUNTING_IDENTITY_MISMATCH,
     ClaimAccountingEntry,
+    ClaimClassification,
+    ClaimReviewOutcome,
     DraftClaimSegment,
     assess_draft,
 )
@@ -635,10 +637,11 @@ def test_strict_reviewer_parser_matrix():
     ):
         with pytest.raises(ProductionReviewerError):
             parse_reviewer_response(malformed, segments=(segment,))
-    wrong = parse_reviewer_response(
-        encoded(segment_fingerprint="b" * 64), segments=(segment,),
-    )
-    assert wrong[0].segment_fingerprint != segment.fingerprint
+    with pytest.raises(ProductionReviewerError) as mismatch:
+        parse_reviewer_response(
+            encoded(segment_fingerprint="b" * 64), segments=(segment,),
+        )
+    assert mismatch.value.code == "REVIEWER_ENTRY_FINGERPRINT_MISMATCH"
 
     class WrongFingerprintReviewer:
         reviewer_version = REVIEWER_VERSION
@@ -647,9 +650,9 @@ def test_strict_reviewer_parser_matrix():
             return tuple(ClaimAccountingEntry(
                 segment_id=item.segment_id,
                 segment_fingerprint="b" * 64,
-                classification=wrong[0].classification,
+                classification=ClaimClassification.ARGUMENT_OR_INFERENCE,
                 evidence_ids=(), reason="canonical reason",
-                outcome=wrong[0].outcome, contains_external_fact=False,
+                outcome=ClaimReviewOutcome.PASS, contains_external_fact=False,
             ) for item in segments)
 
     assessment = assess_draft(

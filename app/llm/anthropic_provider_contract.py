@@ -7,7 +7,7 @@ or workspace setting cannot widen the request to US inference or Priority Tier.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from app.core.clock import parse_authority_instant
 from app.model_routing.contracts import fingerprint
@@ -20,6 +20,113 @@ EXPECTED_RETURNED_SERVICE_TIER = "standard"
 FALLBACK_POLICY = "FORBIDDEN"
 APPLICATION_MAX_RETRIES = 0
 SDK_MAX_RETRIES = 0
+
+THINKING_TYPE = "enabled"
+SUPPORTED_EFFORTS = frozenset({"low", "medium", "high", "xhigh", "max"})
+
+
+@dataclass(frozen=True)
+class AnthropicInferenceConfig:
+    """Explicit SDK-supported thinking/effort request identity.
+
+    ``anthropic==0.116.0`` exposes ``thinking`` with an enabled
+    ``budget_tokens`` and ``output_config.effort``.  Keeping the two values in
+    one frozen value object lets every durable intent and approval carry the
+    exact same canonical payload instead of relying on provider defaults.
+    """
+
+    thinking_type: Literal["enabled"]
+    thinking_budget_tokens: int
+    effort: Literal["low", "medium", "high", "xhigh", "max"]
+
+    def __post_init__(self) -> None:
+        if self.thinking_type != THINKING_TYPE:
+            raise ValueError("Anthropic thinking must be explicitly enabled.")
+        if (
+            isinstance(self.thinking_budget_tokens, bool)
+            or not isinstance(self.thinking_budget_tokens, int)
+            or self.thinking_budget_tokens < 1
+        ):
+            raise ValueError("Anthropic thinking budget must be a positive integer.")
+        if self.effort not in SUPPORTED_EFFORTS:
+            raise ValueError("Anthropic output effort is unsupported by the SDK contract.")
+
+    def payload(self) -> dict[str, Any]:
+        return {
+            "thinking": {
+                "type": self.thinking_type,
+                "budget_tokens": self.thinking_budget_tokens,
+            },
+            "output_config": {"effort": self.effort},
+        }
+
+    def evidence_fingerprint(self) -> str:
+        return fingerprint(self.payload())
+
+
+# These are request identity, not tunable defaults.  Changing any value changes
+# the durable intent and approval fingerprints and therefore fails closed.
+ARTICLE_REVIEWER_INFERENCE_CONFIG = AnthropicInferenceConfig(
+    thinking_type="enabled", thinking_budget_tokens=2_048, effort="low",
+)
+ARTICLE_WRITER_INFERENCE_CONFIG = AnthropicInferenceConfig(
+    thinking_type="enabled", thinking_budget_tokens=4_096, effort="high",
+)
+ARTICLE_RESEARCH_INFERENCE_CONFIG = AnthropicInferenceConfig(
+    thinking_type="enabled", thinking_budget_tokens=4_096, effort="high",
+)
+TOPIC_GENERATION_INFERENCE_CONFIG = AnthropicInferenceConfig(
+    thinking_type="enabled", thinking_budget_tokens=1_024, effort="medium",
+)
+NOTE_WRITER_INFERENCE_CONFIG = AnthropicInferenceConfig(
+    thinking_type="enabled", thinking_budget_tokens=2_048, effort="medium",
+)
+COMMENT_WRITER_INFERENCE_CONFIG = AnthropicInferenceConfig(
+    thinking_type="enabled", thinking_budget_tokens=2_048, effort="medium",
+)
+
+_ROLE_INFERENCE_CONFIGS = {
+    "ARTICLE_REVIEWER": ARTICLE_REVIEWER_INFERENCE_CONFIG,
+    "ARTICLE_WRITER": ARTICLE_WRITER_INFERENCE_CONFIG,
+    "ARTICLE_RESEARCH": ARTICLE_RESEARCH_INFERENCE_CONFIG,
+    "TOPIC_GENERATION": TOPIC_GENERATION_INFERENCE_CONFIG,
+    "NOTE_WRITER": NOTE_WRITER_INFERENCE_CONFIG,
+    "COMMENT_WRITER": COMMENT_WRITER_INFERENCE_CONFIG,
+}
+
+
+def inference_config_for_role(role: object) -> AnthropicInferenceConfig:
+    """Return the one canonical config for a logical role, or refuse it."""
+    value = getattr(role, "value", role)
+    try:
+        return _ROLE_INFERENCE_CONFIGS[str(value)]
+    except KeyError as exc:
+        raise ValueError(f"No controlled Anthropic inference config for {value!r}.") from exc
+
+
+def inference_config_from_payload(
+    value: object, *, expected_role: object,
+) -> AnthropicInferenceConfig:
+    """Parse an exact canonical payload and enforce its role assignment."""
+    if not isinstance(value, dict) or set(value) != {"thinking", "output_config"}:
+        raise ValueError("Anthropic inference config has unsupported fields.")
+    thinking = value["thinking"]
+    output = value["output_config"]
+    if (
+        not isinstance(thinking, dict)
+        or set(thinking) != {"type", "budget_tokens"}
+        or not isinstance(output, dict)
+        or set(output) != {"effort"}
+    ):
+        raise ValueError("Anthropic thinking/output_config payload is malformed.")
+    parsed = AnthropicInferenceConfig(
+        thinking_type=thinking["type"],
+        thinking_budget_tokens=thinking["budget_tokens"],
+        effort=output["effort"],
+    )
+    if parsed != inference_config_for_role(expected_role):
+        raise ValueError("Anthropic inference config does not match the frozen role.")
+    return parsed
 
 FABLE_5_MODEL_ID = "claude-fable-5"
 OPUS_5_MODEL_ID = "claude-opus-5"
