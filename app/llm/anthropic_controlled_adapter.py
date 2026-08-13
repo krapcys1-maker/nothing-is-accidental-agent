@@ -187,10 +187,7 @@ def _default_caller(
         messages=[{"role": "user", "content": request.user_prompt}],
         inference_geo=contract.inference_geo,
         service_tier=contract.service_tier,
-        thinking={
-            "type": request.inference_config.thinking_type,
-            "budget_tokens": request.inference_config.thinking_budget_tokens,
-        },
+        thinking={"type": request.inference_config.thinking_type},
         output_config={"effort": request.inference_config.effort},
         timeout=request.timeout_seconds,
     )

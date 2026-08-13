@@ -16,6 +16,7 @@ from app.content.controlled_entrypoint import (
     run_controlled_article,
 )
 from app.content.foundation import ContentStatus
+from app.content.cost_estimate import ARTICLE_RESEARCH_MAX_OUTPUT_TOKENS
 from app.llm.base import Usage
 from app.llm.base import TOPIC_CRITERIA
 from app.llm.anthropic_client import AnthropicLLMClient
@@ -680,7 +681,11 @@ def test_typed_a1_worker_persists_only_structured_candidates(
     assert evidence_job is not None
     assert evidence_job.payload["execution"] == "durable_provider_v2"
     frozen = evidence_job.payload["execution_intent"]
-    assert frozen["max_tokens"] == 4096
+    assert frozen["max_tokens"] == ARTICLE_RESEARCH_MAX_OUTPUT_TOKENS == 8192
+    assert frozen["inference_config"]["thinking"] == {"type": "adaptive"}
+    assert "budget_tokens" not in frozen["inference_config"]["thinking"]
+    assert frozen["cap_usd"] == "0.485760"
+    assert Decimal(frozen["cap_usd"]) >= Decimal(frozen["pessimistic_cost_usd"])
     assert frozen["max_web_searches"] == 0
     assert len(frozen["evidence_input"]["retrievals"]) == 3
 

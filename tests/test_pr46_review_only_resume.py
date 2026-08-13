@@ -12,6 +12,7 @@ from decimal import Decimal
 import hashlib
 import inspect
 import json
+import sqlite3
 from types import SimpleNamespace
 
 import pytest
@@ -42,8 +43,11 @@ from app.llm.anthropic_controlled_adapter import (
 )
 from app.llm.anthropic_provider_contract import ARTICLE_REVIEWER_INFERENCE_CONFIG
 from app.llm.anthropic_provider_contract import (
+    AnthropicInferenceConfig,
+    COMMENT_WRITER_INFERENCE_CONFIG,
     ARTICLE_RESEARCH_INFERENCE_CONFIG,
     ARTICLE_WRITER_INFERENCE_CONFIG,
+    NOTE_WRITER_INFERENCE_CONFIG,
     TOPIC_GENERATION_INFERENCE_CONFIG,
 )
 from app.research.source_discovery_intent import (
@@ -178,7 +182,8 @@ def test_official_fake_stream_returns_only_the_complete_final_message():
     sent = factory.messages.stream_calls[0]
     assert sent["model"] == raw.returned_model_id == "claude-opus-5"
     assert sent["max_tokens"] == 8192 and sent["timeout"] == 300.0
-    assert sent["thinking"] == {"type": "enabled", "budget_tokens": 2048}
+    assert sent["thinking"] == {"type": "adaptive"}
+    assert "budget_tokens" not in sent["thinking"]
     assert sent["output_config"] == {"effort": "low"}
     assert factory.messages.managers[0].final_calls == 1
     assert raw.provider_request_id == "fake-stream-request-1"
@@ -188,18 +193,32 @@ def test_official_fake_stream_returns_only_the_complete_final_message():
 
 def test_role_thinking_effort_is_explicit_fingerprinted_and_fail_closed():
     assert ARTICLE_REVIEWER_INFERENCE_CONFIG.payload() == {
-        "thinking": {"type": "enabled", "budget_tokens": 2048},
+        "thinking": {"type": "adaptive"},
         "output_config": {"effort": "low"},
     }
     assert ARTICLE_WRITER_INFERENCE_CONFIG.payload()["output_config"] == {
         "effort": "high",
     }
     assert ARTICLE_RESEARCH_INFERENCE_CONFIG.payload()["thinking"] == {
-        "type": "enabled", "budget_tokens": 4096,
+        "type": "adaptive",
     }
     assert TOPIC_GENERATION_INFERENCE_CONFIG.payload()["output_config"] == {
         "effort": "medium",
     }
+    role_configs = {
+        "ARTICLE_REVIEWER": (ARTICLE_REVIEWER_INFERENCE_CONFIG, "low"),
+        "ARTICLE_WRITER": (ARTICLE_WRITER_INFERENCE_CONFIG, "high"),
+        "ARTICLE_RESEARCH": (ARTICLE_RESEARCH_INFERENCE_CONFIG, "high"),
+        "TOPIC_GENERATION": (TOPIC_GENERATION_INFERENCE_CONFIG, "medium"),
+        "NOTE_WRITER": (NOTE_WRITER_INFERENCE_CONFIG, "medium"),
+        "COMMENT_WRITER": (COMMENT_WRITER_INFERENCE_CONFIG, "medium"),
+    }
+    for config, effort in role_configs.values():
+        assert config.payload() == {
+            "thinking": {"type": "adaptive"},
+            "output_config": {"effort": effort},
+        }
+        assert "budget_tokens" not in json.dumps(config.payload())
     intent = SourceDiscoveryIntent.build(account_id="account", topic_id=7)
     original = intent.as_payload()
     assert original["inference_config"] == ARTICLE_RESEARCH_INFERENCE_CONFIG.payload()
@@ -209,6 +228,64 @@ def test_role_thinking_effort_is_explicit_fingerprinted_and_fail_closed():
     assert mutated["fingerprint"] != original["fingerprint"]
     with pytest.raises(SourceDiscoveryIntentError, match="inference config mismatch"):
         SourceDiscoveryIntent.from_payload(mutated)
+    legacy = json.loads(json.dumps(original))
+    legacy["inference_config"]["thinking"] = {
+        "type": "enabled", "budget_tokens": 4096,
+    }
+    legacy["fingerprint"] = source_discovery_fingerprint(legacy)
+    with pytest.raises(SourceDiscoveryIntentError, match="inference config mismatch"):
+        SourceDiscoveryIntent.from_payload(legacy)
+
+
+class _AdaptiveOnlyMessages:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def create(self, **kwargs):
+        if kwargs["model"] in {"claude-opus-5", "claude-sonnet-5"} and kwargs.get(
+            "thinking"
+        ) != {"type": "adaptive"}:
+            raise ValueError("fake SDK rejects legacy thinking for Claude 5")
+        if "budget_tokens" in kwargs.get("thinking", {}):
+            raise ValueError("fake SDK rejects budget_tokens for Claude 5")
+        self.calls.append(dict(kwargs))
+        response = _response_for_prompt(json.dumps({"draft_segments": []}))
+        response.model = kwargs["model"]
+        return response
+
+
+@pytest.mark.parametrize(
+    ("model_id", "config", "effort"),
+    [
+        ("claude-opus-5", ARTICLE_WRITER_INFERENCE_CONFIG, "high"),
+        ("claude-sonnet-5", NOTE_WRITER_INFERENCE_CONFIG, "medium"),
+    ],
+)
+def test_fake_sdk_accepts_only_adaptive_without_budget_for_assigned_models(
+    model_id, config, effort,
+):
+    messages = _AdaptiveOnlyMessages()
+    client = SimpleNamespace(messages=messages)
+    adapter = ControlledAnthropicAdapter(
+        api_key_provider=lambda: "fake-never-sent",
+        sdk_factory=lambda **_kwargs: client,
+    )
+    adapter.execute(ControlledProviderRequest(
+        technical_model_id=model_id,
+        system_prompt="system",
+        user_prompt="prompt",
+        max_output_tokens=128,
+        timeout_seconds=300.0,
+        inference_config=config,
+    ))
+    sent = messages.calls[0]
+    assert sent["thinking"] == {"type": "adaptive"}
+    assert sent["output_config"] == {"effort": effort}
+    with pytest.raises(ValueError, match="legacy thinking"):
+        messages.create(
+            model=model_id,
+            thinking={"type": "enabled", "budget_tokens": 1024},
+        )
 
 
 def test_production_evidence_limits_and_topic_identity_are_not_narrowed():
@@ -229,6 +306,103 @@ def test_production_evidence_limits_and_topic_identity_are_not_narrowed():
     assert "storage.add_topic" not in source
     assert "successes >= discovery_contract.max_results" in source
     assert "if successes < 3" in source
+
+
+def test_0039_accepts_adaptive_approval_and_rejects_legacy_thinking(
+    storage, settings, account, tmp_path,
+):
+    first_state = _failed_article(storage, settings, account, job="pr46-sql-adaptive")
+    first = _authority(first_state, suffix="sql-adaptive")
+    storage.record_content_review_resume_approval(
+        approval_ref=first.approval_ref,
+        job_id=first.job_id,
+        run_id=str(first_state["content"]["run_id"]),
+        content_id=first.content_id,
+        source_draft_fingerprint=first.draft_fingerprint,
+        initial_review_execution_ref=first.initial_review_execution_ref,
+        writer_execution_ref=first.writer_execution_ref,
+        post_review_execution_ref=first.post_review_execution_ref,
+        reviewer_provider="ANTHROPIC",
+        reviewer_model_id="claude-opus-5",
+        writer_provider="ANTHROPIC",
+        writer_model_id="claude-opus-5",
+        reviewer_max_output_tokens=8192,
+        writer_max_output_tokens=8192,
+        reviewer_max_cost_usd="0.300000",
+        writer_max_cost_usd="0.300000",
+        chain_cap_usd="1.000000",
+        daily_limit_usd="2.000000",
+        monthly_limit_usd="40.000000",
+        approved_by=first.approved_by,
+        approved_at=first.approved_at,
+        expires_at=first.expires_at,
+    )
+    adaptive_row = storage.get_content_review_resume_approval(
+        approval_ref=first.approval_ref,
+    )
+    assert adaptive_row is not None
+    assert json.loads(str(adaptive_row["approval_json"]))["reviewer"][
+        "inference_config"
+    ]["thinking"] == {"type": "adaptive"}
+
+    from app.storage.db import initialize_database
+    from app.storage.repositories import SqliteStorage
+
+    second_settings = replace(settings, db_path=tmp_path / "legacy-thinking.db")
+    initialize_database(second_settings.db_path)
+    second_storage = SqliteStorage.open(second_settings.db_path)
+    second_storage.ensure_account(account)
+    second_state = _failed_article(
+        second_storage, second_settings, account, job="pr46-sql-legacy",
+    )
+    second = _authority(second_state, suffix="sql-legacy")
+    legacy = json.loads(str(adaptive_row["approval_json"]))
+    legacy.update({
+        "approval_ref": second.approval_ref,
+        "job_id": second.job_id,
+        "run_id": str(second_state["content"]["run_id"]),
+        "content_id": second.content_id,
+        "source_draft_fingerprint": second.draft_fingerprint,
+        "initial_review_execution_ref": second.initial_review_execution_ref,
+        "writer_execution_ref": second.writer_execution_ref,
+        "post_review_execution_ref": second.post_review_execution_ref,
+    })
+    legacy["reviewer"]["inference_config"]["thinking"] = {
+        "type": "enabled", "budget_tokens": 2048,
+    }
+    legacy["writer"]["inference_config"]["thinking"] = {
+        "type": "enabled", "budget_tokens": 4096,
+    }
+    legacy_json = json.dumps(
+        legacy, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    )
+    with pytest.raises(sqlite3.IntegrityError, match="exact terminal chain"):
+        second_storage.conn.execute(
+            "INSERT INTO content_review_resume_approvals (approval_ref,job_id,"
+            "run_id,content_id,source_draft_fingerprint,"
+            "initial_review_execution_ref,writer_execution_ref,"
+            "post_review_execution_ref,reviewer_provider,reviewer_model_id,"
+            "writer_provider,writer_model_id,reviewer_max_output_tokens,"
+            "writer_max_output_tokens,reviewer_max_cost_usd,writer_max_cost_usd,"
+            "chain_cap_usd,daily_limit_usd,monthly_limit_usd,approved_by,"
+            "approved_at,expires_at,consumed_at,approval_json,"
+            "approval_fingerprint,created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?)",
+            (
+                second.approval_ref, second.job_id,
+                str(second_state["content"]["run_id"]), second.content_id,
+                second.draft_fingerprint, second.initial_review_execution_ref,
+                second.writer_execution_ref, second.post_review_execution_ref,
+                "ANTHROPIC", "claude-opus-5", "ANTHROPIC", "claude-opus-5",
+                8192, 8192, "0.300000", "0.300000", "1.000000",
+                "2.000000", "40.000000", second.approved_by,
+                second.approved_at, second.expires_at, legacy_json,
+                hashlib.sha256(legacy_json.encode("utf-8")).hexdigest(),
+                second.approved_at,
+            ),
+        )
+    second_storage.conn.rollback()
+    second_storage.close()
 
 
 def test_27_segment_maximal_contract_and_long_reason_are_accepted():
@@ -305,6 +479,21 @@ def _authority(state, *, suffix: str) -> ReviewOnlyAuthority:
         expires_at=(NOW + timedelta(minutes=30)).isoformat(),
         cost_ceiling_usd="2.000000",
     )
+
+
+def _cli_args(authority: ReviewOnlyAuthority) -> list[str]:
+    return [
+        "--job-id", authority.job_id,
+        "--content-id", str(authority.content_id),
+        "--draft-fingerprint", authority.draft_fingerprint,
+        "--initial-review-execution-ref", authority.initial_review_execution_ref,
+        "--writer-execution-ref", authority.writer_execution_ref,
+        "--post-review-execution-ref", authority.post_review_execution_ref,
+        "--approval-ref", authority.approval_ref,
+        "--approved-by", authority.approved_by,
+        "--cost-ceiling-usd", str(authority.cost_ceiling_usd),
+        "--confirm-review-only",
+    ]
 
 
 class _BlockingReviewerTransport:
@@ -389,6 +578,8 @@ def test_review_only_resumes_exact_draft_without_research_or_writer_attempt_one(
     assert before == after
     assert result.decision is PipelineDecision.PASS
     assert result.final_status.value == "PENDING_APPROVAL"
+    assert result.writer_attempt_no == result.review_no == 1
+    assert result.draft_fingerprint == str(state["drafts"][0]["draft_fingerprint"])
     assert result.writer_attempts == 1 and result.reviews == 1
     assert len(factory.messages.stream_calls) == 1
     row = storage.conn.execute(
@@ -447,6 +638,43 @@ def test_interrupted_review_only_stream_is_unknown_once_and_never_retried(
             clock=FixedClock(NOW),
         )
     assert len(factory.messages.stream_calls) == 1
+
+
+def test_changed_inference_config_after_approval_conflicts_before_sdk(
+    storage, settings, account, monkeypatch,
+):
+    import app.content.review_only as review_module
+    import app.llm.anthropic_provider_contract as provider_contract
+
+    state = _failed_article(storage, settings, account, job="pr46-inference-conflict")
+    authority = _authority(state, suffix="inference-conflict")
+    original_review = review_module._review_once_or_resume
+
+    def crash_before_sdk(**_kwargs):
+        raise RuntimeError("stop after immutable approval")
+
+    monkeypatch.setattr(review_module, "_review_once_or_resume", crash_before_sdk)
+    with pytest.raises(RuntimeError, match="immutable approval"):
+        run_controlled_article_review_only(
+            settings=settings, authority=authority, clock=FixedClock(NOW),
+        )
+    monkeypatch.setattr(review_module, "_review_once_or_resume", original_review)
+    monkeypatch.setattr(
+        provider_contract,
+        "ARTICLE_REVIEWER_INFERENCE_CONFIG",
+        AnthropicInferenceConfig(thinking_type="adaptive", effort="medium"),
+    )
+    caller = ReviewerTransport()
+    with pytest.raises(Exception, match="CONTENT_REVIEW_APPROVAL_CONFLICT"):
+        run_controlled_article_review_only(
+            settings=settings,
+            authority=authority,
+            api_key_provider=lambda: "fake-never-sent",
+            initial_reviewer_sdk_factory=_sdk_factory,
+            initial_reviewer_caller=caller,
+            clock=FixedClock(NOW),
+        )
+    assert caller.calls == 0
 
 
 def test_review_only_honours_unresolved_full_reservation_before_sdk(
@@ -522,6 +750,8 @@ def test_rewrite_once_runs_exactly_canonical_writer_two_then_post_review(
 
     assert result.final_status.value == "PENDING_APPROVAL"
     assert result.writer_attempts == result.reviews == 2
+    assert result.writer_attempt_no == result.review_no == 2
+    assert result.draft_fingerprint != authority.draft_fingerprint
     assert (initial.calls, writer.calls, post.calls) == (1, 1, 1)
     state_after = storage.get_content_pipeline_state(authority.job_id)
     assert [int(row["attempt_no"]) for row in state_after["attempts"]] == [1, 2]
@@ -552,6 +782,166 @@ def test_rewrite_once_runs_exactly_canonical_writer_two_then_post_review(
         "SELECT count(*) FROM content_review_resume_executions WHERE content_id=?",
         (authority.content_id,),
     ).fetchone()[0] == 2
+
+
+@pytest.mark.parametrize("rewrite", [False, True])
+def test_operator_cli_main_reports_approve_and_rewrite_success_without_traceback(
+    storage, settings, account, monkeypatch, capsys, rewrite,
+):
+    import scripts.run_article_review_only_live as cli
+    import app.content.review_only as review_module
+
+    state = _failed_article(
+        storage, settings, account, job=f"pr46-cli-{'rewrite' if rewrite else 'approve'}",
+    )
+    authority = _authority(state, suffix=f"cli-{'rewrite' if rewrite else 'approve'}")
+    initial = _BlockingReviewerTransport() if rewrite else ReviewerTransport()
+    writer = WriterTransport()
+    post = ReviewerTransport()
+    monkeypatch.setattr(cli, "load_settings", lambda: replace(settings, project_root=ROOT))
+    monkeypatch.setattr(cli, "SystemClock", lambda: FixedClock(NOW))
+
+    def controlled_runner(**kwargs):
+        return review_module.run_controlled_article_review_only(
+            **kwargs,
+            api_key_provider=lambda: "fake-never-sent",
+            initial_reviewer_sdk_factory=_sdk_factory,
+            initial_reviewer_caller=initial,
+            writer_sdk_factory=_sdk_factory,
+            writer_caller=writer,
+            post_reviewer_sdk_factory=_sdk_factory,
+            post_reviewer_caller=post,
+        )
+
+    monkeypatch.setattr(cli, "run_controlled_article_review_only", controlled_runner)
+    assert cli.main(_cli_args(authority)) == 0
+    report = json.loads(capsys.readouterr().out)
+    expected_stage = 2 if rewrite else 1
+    assert report["status"] == "REVIEW_ONLY_COMPLETE"
+    assert report["writer_attempt_no"] == expected_stage
+    assert report["review_no"] == expected_stage
+    assert len(report["draft_fingerprint"]) == 64
+    assert report["final_status"] == "PENDING_APPROVAL"
+    assert report["publication_reachable"] is False
+    assert initial.calls == 1
+    assert writer.calls == (1 if rewrite else 0)
+    assert post.calls == (1 if rewrite else 0)
+
+
+def test_operator_cli_resume_reuses_immutable_approval_after_clock_shift(
+    storage, settings, account, monkeypatch, capsys,
+):
+    import scripts.run_article_review_only_live as cli
+    import app.content.review_only as review_module
+
+    state = _failed_article(storage, settings, account, job="pr46-cli-resume")
+    authority = _authority(state, suffix="cli-resume")
+    initial = _BlockingReviewerTransport()
+    writer = WriterTransport()
+    post = ReviewerTransport()
+    clocks = [FixedClock(NOW)]
+    monkeypatch.setattr(cli, "load_settings", lambda: replace(settings, project_root=ROOT))
+    monkeypatch.setattr(cli, "SystemClock", lambda: clocks[0])
+
+    def controlled_runner(**kwargs):
+        return review_module.run_controlled_article_review_only(
+            **kwargs,
+            api_key_provider=lambda: "fake-never-sent",
+            initial_reviewer_sdk_factory=_sdk_factory,
+            initial_reviewer_caller=initial,
+            writer_sdk_factory=_sdk_factory,
+            writer_caller=writer,
+            post_reviewer_sdk_factory=_sdk_factory,
+            post_reviewer_caller=post,
+        )
+
+    monkeypatch.setattr(cli, "run_controlled_article_review_only", controlled_runner)
+    original_begin = review_module.SqliteStorage.begin_content_review_resume_session
+    crashed = {"done": False}
+
+    def crash_once(*args, **kwargs):
+        if not crashed["done"]:
+            crashed["done"] = True
+            raise RuntimeError("simulated CLI crash after initial review")
+        return original_begin(*args, **kwargs)
+
+    monkeypatch.setattr(
+        review_module.SqliteStorage, "begin_content_review_resume_session", crash_once,
+    )
+    with pytest.raises(RuntimeError, match="simulated CLI crash"):
+        cli.main(_cli_args(authority))
+    approval_before = storage.conn.execute(
+        "SELECT approval_json,approval_fingerprint,approved_at,expires_at "
+        "FROM content_review_resume_approvals WHERE approval_ref=?",
+        (authority.approval_ref,),
+    ).fetchone()
+    assert approval_before is not None
+    capsys.readouterr()
+
+    clocks[0] = FixedClock(NOW + timedelta(minutes=5))
+    assert cli.main(_cli_args(authority)) == 0
+    report = json.loads(capsys.readouterr().out)
+    approval_after = storage.conn.execute(
+        "SELECT approval_json,approval_fingerprint,approved_at,expires_at "
+        "FROM content_review_resume_approvals WHERE approval_ref=?",
+        (authority.approval_ref,),
+    ).fetchone()
+    assert tuple(approval_after) == tuple(approval_before)
+    assert report["writer_attempt_no"] == report["review_no"] == 2
+    assert (initial.calls, writer.calls, post.calls) == (1, 1, 1)
+
+
+def test_operator_cli_changed_or_expired_resume_stops_before_sdk(
+    storage, settings, account, monkeypatch, capsys,
+):
+    import scripts.run_article_review_only_live as cli
+    import app.content.review_only as review_module
+
+    state = _failed_article(storage, settings, account, job="pr46-cli-expiry")
+    authority = _authority(state, suffix="cli-expiry")
+    initial = _BlockingReviewerTransport()
+    clocks = [FixedClock(NOW)]
+    original_begin = review_module.SqliteStorage.begin_content_review_resume_session
+    monkeypatch.setattr(cli, "load_settings", lambda: replace(settings, project_root=ROOT))
+    monkeypatch.setattr(cli, "SystemClock", lambda: clocks[0])
+
+    def controlled_runner(**kwargs):
+        return review_module.run_controlled_article_review_only(
+            **kwargs,
+            api_key_provider=lambda: "fake-never-sent",
+            initial_reviewer_sdk_factory=_sdk_factory,
+            initial_reviewer_caller=initial,
+        )
+
+    monkeypatch.setattr(cli, "run_controlled_article_review_only", controlled_runner)
+    monkeypatch.setattr(
+        review_module.SqliteStorage,
+        "begin_content_review_resume_session",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("simulated CLI crash after initial review")
+        ),
+    )
+    with pytest.raises(RuntimeError):
+        cli.main(_cli_args(authority))
+    capsys.readouterr()
+
+    changed = _cli_args(authority)
+    changed[changed.index("--draft-fingerprint") + 1] = "0" * 64
+    assert cli.main(changed) == 2
+    changed_report = json.loads(capsys.readouterr().out)
+    assert changed_report["code"] == "REVIEW_ONLY_APPROVAL_CONTRACT_MISMATCH"
+    assert initial.calls == 1
+
+    monkeypatch.setattr(
+        review_module.SqliteStorage,
+        "begin_content_review_resume_session",
+        original_begin,
+    )
+    clocks[0] = FixedClock(NOW + timedelta(minutes=31))
+    assert cli.main(_cli_args(authority)) == 2
+    expired_report = json.loads(capsys.readouterr().out)
+    assert expired_report["code"] == "CONTENT_REVIEW_APPROVAL_EXPIRED"
+    assert initial.calls == 1
 
 
 def test_post_rewrite_second_rewrite_is_terminal_and_never_creates_attempt_three(

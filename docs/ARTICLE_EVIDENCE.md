@@ -1,5 +1,11 @@
 # ARTICLE_EVIDENCE
 
+## 2026-08-13 — Materiał: „Resume nie może odnawiać zgody”
+
+- Czas ważności jest częścią decyzji człowieka, nie wygodnym parametrem procesu. Restart operatora nie może stworzyć nowych timestampów ani wydłużyć okna.
+- Oddzielenie projekcji bieżącego corpusu od rezerwacji pełnej zatwierdzonej koperty pokazuje różnicę między przewidywanym użyciem a maksymalną ekspozycją.
+- Cytowalna zasada: **„Wznowienie odtwarza zgodę; nie wystawia jej ponownie.”**
+
 ## 2026-08-13 — Materiał: „Ponowienie bez wiedzy nie jest retry”
 
 - Przerwany stream nie dowodzi, że provider niczego nie wykonał; dlatego częściowy tekst, brak usage i brak request ID nie mogą stać się sukcesem ani kosztem zero.

@@ -1,5 +1,13 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-13 — pięć MAJOR z niezależnego re-review PR #46
+
+- Opus 5/Sonnet 5 odrzucają legacy `thinking.type=enabled` z `budget_tokens`; aktywny adapter wysyła teraz exact adaptive i osobny effort.
+- CLI maskował trwały sukces przez `AttributeError` na trzech nieistniejących polach wyniku; pola są obecnie typowane i wyprowadzane z trwałych draftów/review executions.
+- CLI regenerował czas approvala przy każdym invocation, więc resume konfliktował z immutable `approval_json`; autorytetem resume jest teraz istniejący wiersz SQLite.
+- Automatyczny research enqueue nadal używał `4096` i arbitralnego `0.250000`; obecnie używa `8192` oraz pełnego capu/rezerwacji 23 808/8 192.
+- Najwyższe sekcje dokumentacji konkurowały jako „bieżące” i wskazywały wcześniejszy head/schema. Starsze bloki oznaczono `HISTORYCZNY / SUPERSEDED`, bez przepisywania archiwum.
+
 ## 2026-08-13 — regresje ujawnione podczas domykania REVIEW-ONLY
 
 - Pierwszy happy path ujawnił, że ogólny ledger traktował kanoniczny writer attempt 2 jako niedozwolony retry. Wyjątek zawężono do exact attempt 2 z aktywną sesją i trwałym initial `REWRITE_ONCE`.

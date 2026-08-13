@@ -1,5 +1,11 @@
 # HUMAN_INTERVENTIONS
 
+## 2026-08-13 — właściciel ograniczył naprawę PR #46 do pięciu MAJOR
+
+- Właściciel zlecił wyłącznie korektę adaptive thinking, raportowania CLI, immutable approval resume, koperty ARTICLE_RESEARCH i bieżących oznaczeń dokumentacji.
+- M8 oraz wszystkie P2/MINOR pozostały poza zakresem. Zakazane były live API, rekonsyliacja v1/v4/v5, produkcyjna migracja, publikacja i stage/commit/push/merge.
+- Wymagany wynik implementera to kandydat do skupionego re-review, nie `APPROVE`; produkcja ma pozostać byte-identical na `0038/38`.
+
 ## 2026-08-13 — właściciel zlecił domknięcie REVIEW-ONLY do kandydata offline
 
 - Właściciel wymagał initial reviewer → opcjonalnie dokładnie jeden canonical writer attempt 2 → dokładnie jeden post-reviewer, bez writera/reviewera nr 3 i bez publikacji.

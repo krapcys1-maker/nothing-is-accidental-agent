@@ -9,10 +9,12 @@ import json
 from app.content.review_only import (
     ReviewOnlyAuthority,
     ReviewOnlyError,
+    load_review_only_authority,
     run_controlled_article_review_only,
 )
 from app.core.clock import SystemClock
 from app.core.config import load_settings
+from app.ports.storage import ContentFoundationError
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -31,7 +33,11 @@ def main(argv: list[str] | None = None) -> int:
     if not args.confirm_review_only:
         print("BLOCKED: --confirm-review-only is required")
         return 2
+    settings = load_settings()
     clock = SystemClock()
+    persisted = load_review_only_authority(
+        settings=settings, approval_ref=args.approval_ref,
+    )
     now = clock.now()
     authority = ReviewOnlyAuthority(
         job_id=args.job_id,
@@ -42,17 +48,22 @@ def main(argv: list[str] | None = None) -> int:
         writer_execution_ref=args.writer_execution_ref,
         post_review_execution_ref=args.post_review_execution_ref,
         approved_by=args.approved_by,
-        approved_at=now.isoformat(),
-        expires_at=(now + timedelta(minutes=30)).isoformat(),
+        approved_at=(persisted.approved_at if persisted else now.isoformat()),
+        expires_at=(persisted.expires_at if persisted else (
+            now + timedelta(minutes=30)
+        ).isoformat()),
         cost_ceiling_usd=args.cost_ceiling_usd,
     )
     try:
         result = run_controlled_article_review_only(
-            settings=load_settings(), authority=authority, clock=clock,
+            settings=settings, authority=authority, clock=clock,
         )
-    except ReviewOnlyError as exc:
-        print(json.dumps({"status": "BLOCKED", "code": exc.code,
-                          "detail": exc.detail}, sort_keys=True))
+    except (ReviewOnlyError, ContentFoundationError) as exc:
+        print(json.dumps({
+            "status": "BLOCKED",
+            "code": exc.code,
+            "detail": getattr(exc, "detail", str(exc)),
+        }, sort_keys=True))
         return 2
     print(json.dumps({
         "status": "REVIEW_ONLY_COMPLETE",

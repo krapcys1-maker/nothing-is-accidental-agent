@@ -1,5 +1,13 @@
 # DECISIONS (Architecture Decision Log)
 
+### ADR-144: Pięć MAJOR PR #46 — adaptive thinking, immutable CLI resume i pełna koperta researchu
+
+- **Data/status/autor:** 2026-08-13; decyzja właściciela implementowana offline, `CANDIDATE COMPLETE — FIVE MAJORS FIXED, AWAITING FOCUSED RE-REVIEW`; brak niezależnego zatwierdzenia tej fali.
+- **Thinking/effort:** wszystkie aktualnie przypięte Opus 5/Sonnet 5 używają dokładnie `thinking={"type":"adaptive"}` bez `budget_tokens`; effort pozostaje jawny per rola: Reviewer `low`, Writer/Research `high`, Topic/Note/Comment `medium`. Payload pozostaje częścią immutable intentu, approvala i fingerprintu.
+- **REVIEW-ONLY CLI:** pierwszy invocation tworzy jeden immutable approval; resume identyfikuje go przez `approval_ref`, ładuje dokładne timestampy i kontrakt z SQLite oraz odrzuca podmianę joba/contentu/draftu/modelu/capu/execution refs. Raport sukcesu pochodzi wyłącznie z trwałych draftów i review executions.
+- **ARTICLE_RESEARCH:** automatyczny corpus enqueue używa kanonicznego outputu `8192`. Projekcja pozostaje związana z dokładnym corpusem, natomiast cap i rezerwacja pokrywają pełną kopertę 23 808 input / 8 192 output ze zweryfikowanego cennika i bezpiecznym zaokrągleniem w górę; zbyt niski approval zatrzymuje się przed SDK.
+- **Schema i granice:** predykaty niezastosowanej migracji `0039` akceptują exact adaptive i odrzucają legacy enabled/budget. Produkcja pozostaje `0038/38`; zero sieci, realnego SDK, kosztu, publikacji, migracji produkcji i operacji Git.
+
 ### ADR-143: Jedno L1 obejmuje zamknięty warunkowy łańcuch REVIEW-ONLY
 
 - **Data/status/autor:** 2026-08-13; decyzja implementacyjna w zakresie właściciela, `CANDIDATE COMPLETE — AWAITING INDEPENDENT RE-REVIEW`.
@@ -11,7 +19,7 @@
 ### ADR-142: REVIEW-ONLY jest nową exact authority i nie może omijać nierozstrzygniętej ekspozycji
 
 - **Data/status/autor:** 2026-08-13; decyzja implementacyjna w zakresie zleconym przez właściciela, kandydat do niezależnego review.
-- **Thinking/effort:** każdy kontrolowany request Anthropic ma jawny, trwały i fingerprintowany kontrakt. Reviewer `enabled/2048/low`; Writer i Research `enabled/4096/high`; Topic Generation `enabled/1024/medium`. Zmiana po approvalu jest odmową, nie nowym domyślnym zachowaniem.
+- **Thinking/effort (SUPERSEDED przez ADR-144):** historyczny kandydat używał `enabled/budget_tokens`; bieżący kontrakt dla Opus 5/Sonnet 5 to exact `adaptive` + per-role effort, bez `budget_tokens`.
 - **Streaming:** Reviewer używa jednego `messages.stream` i `get_final_message`; tylko kompletny final message może być sukcesem. Zerwanie pozostawia `NEEDS_VERIFICATION`, `cost_usd=NULL`, retry `0`.
 - **Resume:** REVIEW-ONLY dostaje osobny approval i execution ref związany z job/content/draft fingerprint/model/cap/expiry. Nie ma zależności do wcześniejszych etapów ani publikacji. Maksymalnie dwie rundy oznaczają initial review i jedną re-review po jedynym dozwolonym rewrite.
 - **Schema:** exact authority wymaga addytywnej `0039_article_review_resume`. Produkcja pozostaje na `0038/38`; `0039` wolno zastosować dopiero w osobno autoryzowanej operacji.

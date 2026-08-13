@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal, ROUND_CEILING
 import hashlib
 import json
 import math
@@ -10,6 +11,7 @@ from typing import Mapping
 
 from app.core.config import REAL_PROVIDER_PRICING_KEYS, Settings
 from app.core.money import decimal_from, quantize_usd
+from app.content.cost_estimate import ARTICLE_RESEARCH_MAX_INPUT_TOKENS
 from app.core.pricing import (
     REQUIRED_CURRENCY,
     REQUIRED_UNIT,
@@ -385,8 +387,8 @@ def _cost_projection(
     evidence_input: Mapping[str, object] | None = None,
 ) -> tuple[str, str]:
     if evidence_input is not None:
-        # E3: pełny input evidence wchodzi do projekcji przez ISTNIEJĄCY
-        # kontrakt no-search (jawny człon input_per_mtok + margines >= 50%).
+        # Projection remains tied to the exact frozen corpus. Approval and
+        # reservation use the separate full-envelope authority below.
         estimate = estimate_no_search_call_usd(
             SimpleNamespace(pricing=dict(profile)),
             max_output_tokens=max_tokens,
@@ -402,6 +404,25 @@ def _cost_projection(
         _money(estimate.subtotal_usd, field="projected_cost_usd", allow_zero=True),
         _money(estimate.total_usd, field="pessimistic_cost_usd", allow_zero=True),
     )
+
+
+def evidence_full_envelope_cost_usd(
+    *, pricing_profile: Mapping[str, object], max_output_tokens: int,
+) -> str:
+    """Six-decimal ceiling for maximum ARTICLE_RESEARCH input and output."""
+    profile = _pricing_profile(pricing_profile)
+    bounded_output = _bounded_max_tokens(
+        max_output_tokens, field="max_output_tokens",
+    )
+    estimate = estimate_no_search_call_usd(
+        SimpleNamespace(pricing=dict(profile)),
+        max_output_tokens=bounded_output,
+        forwarded_context_tokens=ARTICLE_RESEARCH_MAX_INPUT_TOKENS,
+    )
+    ceiling = Decimal(str(estimate.total_usd)).quantize(
+        Decimal("0.000001"), rounding=ROUND_CEILING,
+    )
+    return format(ceiling, ".6f")
 
 
 @dataclass(frozen=True)

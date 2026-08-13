@@ -1,5 +1,10 @@
 # RESEARCH_LOG
 
+## 2026-08-13 — naprawa pięciu MAJOR PR #46: bez nowego researchu
+
+- Nie wykonano discovery, fetchu, syntezy ani requestu providerowego. Zmiana koperty ARTICLE_RESEARCH została zweryfikowana wyłącznie fake callerem i trwałym intentem na temp DB.
+- Research Card #7 oraz produkcyjne źródła nie zostały zmienione. Koszt rzeczywisty tej fali: `0.000000 USD`.
+
 ## 2026-08-13 — PR #46 re-review preparation: bez nowego researchu
 
 - Nie wygenerowano tematu, nie wykonano discovery, fetchu, ekstrakcji ani syntezy. Research Card #7 i lineage 3/3 pozostają historycznym wejściem istniejącego contentu.

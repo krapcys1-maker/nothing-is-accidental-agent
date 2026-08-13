@@ -86,8 +86,65 @@ class ReviewOnlyResult:
     initial_review_execution_ref: str
     writer_execution_ref: str
     post_review_execution_ref: str
+    writer_attempt_no: int
+    review_no: int
+    draft_fingerprint: str
     writer_attempts: int
     reviews: int
+
+
+def _authority_from_approval_row(row: dict[str, object]) -> ReviewOnlyAuthority:
+    """Reconstruct the exact operator authority from its immutable SQLite row."""
+    return ReviewOnlyAuthority(
+        job_id=str(row["job_id"]),
+        content_id=int(row["content_id"]),
+        draft_fingerprint=str(row["source_draft_fingerprint"]),
+        approval_ref=str(row["approval_ref"]),
+        initial_review_execution_ref=str(row["initial_review_execution_ref"]),
+        writer_execution_ref=str(row["writer_execution_ref"]),
+        post_review_execution_ref=str(row["post_review_execution_ref"]),
+        approved_by=str(row["approved_by"]),
+        approved_at=str(row["approved_at"]),
+        expires_at=str(row["expires_at"]),
+        cost_ceiling_usd=str(row["chain_cap_usd"]),
+    )
+
+
+def load_review_only_authority(
+    *, settings: Settings, approval_ref: str,
+) -> ReviewOnlyAuthority | None:
+    """Load one existing approval without deriving new timestamps or fields."""
+    storage = SqliteStorage.open(settings.db_path)
+    try:
+        row = storage.get_content_review_resume_approval(approval_ref=approval_ref)
+        return None if row is None else _authority_from_approval_row(row)
+    finally:
+        storage.close()
+
+
+def _assert_authority_matches_persisted(
+    supplied: ReviewOnlyAuthority, persisted: ReviewOnlyAuthority,
+) -> None:
+    """Refuse any attempt to retarget or extend an existing approval."""
+    supplied_payload = {
+        **supplied.__dict__,
+        "cost_ceiling_usd": format(
+            decimal_from(supplied.cost_ceiling_usd, label="REVIEW-ONLY chain ceiling"),
+            ".6f",
+        ),
+    }
+    persisted_payload = {
+        **persisted.__dict__,
+        "cost_ceiling_usd": format(
+            decimal_from(persisted.cost_ceiling_usd, label="REVIEW-ONLY chain ceiling"),
+            ".6f",
+        ),
+    }
+    if supplied_payload != persisted_payload:
+        raise ReviewOnlyError(
+            "REVIEW_ONLY_APPROVAL_CONTRACT_MISMATCH",
+            "Resume arguments differ from the immutable SQLite approval.",
+        )
 
 
 def _review_intent(
@@ -258,6 +315,19 @@ def _result_from_state(
     job = state["job"]
     assert isinstance(content, dict) and isinstance(job, dict)
     status = ContentStatus(str(content["status"]))
+    drafts = [row for row in state["drafts"] if isinstance(row, dict)]
+    if not drafts:
+        raise ReviewOnlyError(
+            "REVIEW_ONLY_RESULT_DRAFT_MISSING",
+            "The durable result has no writer draft.",
+        )
+    latest_draft = max(drafts, key=lambda row: int(row["attempt_no"]))
+    review_summary = storage.conn.execute(
+        "SELECT count(*) AS review_count,MAX(review_no) AS latest_review "
+        "FROM content_review_resume_executions WHERE content_id=?",
+        (authority.content_id,),
+    ).fetchone()
+    assert review_summary is not None and review_summary["latest_review"] is not None
     return ReviewOnlyResult(
         job_id=authority.job_id,
         run_id=str(job["run_id"]),
@@ -269,11 +339,11 @@ def _result_from_state(
         initial_review_execution_ref=authority.initial_review_execution_ref,
         writer_execution_ref=authority.writer_execution_ref,
         post_review_execution_ref=authority.post_review_execution_ref,
+        writer_attempt_no=int(latest_draft["attempt_no"]),
+        review_no=int(review_summary["latest_review"]),
+        draft_fingerprint=str(latest_draft["draft_fingerprint"]),
         writer_attempts=len(state["attempts"]),
-        reviews=storage.conn.execute(
-            "SELECT count(*) FROM content_review_resume_executions WHERE content_id=?",
-            (authority.content_id,),
-        ).fetchone()[0],
+        reviews=int(review_summary["review_count"]),
     )
 
 
@@ -306,6 +376,13 @@ def run_controlled_article_review_only(
         session = storage.get_content_review_resume_session(
             approval_ref=authority.approval_ref,
         )
+        persisted_approval = storage.get_content_review_resume_approval(
+            approval_ref=authority.approval_ref,
+        )
+        if persisted_approval is not None:
+            _assert_authority_matches_persisted(
+                authority, _authority_from_approval_row(persisted_approval),
+            )
         if session is not None and session["status"] != "ACTIVE":
             return _result_from_state(storage, authority)
         exposure = storage.unresolved_provider_exposure()
@@ -554,5 +631,5 @@ def run_controlled_article_review_only(
 
 __all__ = [
     "ReviewOnlyAuthority", "ReviewOnlyError", "ReviewOnlyResult",
-    "run_controlled_article_review_only",
+    "load_review_only_authority", "run_controlled_article_review_only",
 ]

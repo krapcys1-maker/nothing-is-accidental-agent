@@ -734,8 +734,9 @@ def test_worker_e2e_single_retrieval_yields_reject_card_and_done(
     assert research_run.status.value == "COMPLETE"
     assert research_run.research_card_id is not None
 
-    # Dokładnie jedno usage i jedno settlement; rezerwacja == zamrożona
-    # pesymistyczna projekcja intentu (intent == Policy Engine == reservation).
+    # Dokładnie jedno usage i settlement; rezerwacja pokrywa pełną zatwierdzoną
+    # kopertę ARTICLE_RESEARCH, niezależnie od mniejszego bieżącego corpusu.
+    from app.research.durable_intent import evidence_full_envelope_cost_usd
     attempt = storage.conn.execute(
         "SELECT * FROM provider_attempts WHERE job_id=?", (job.id,),
     ).fetchone()
@@ -745,7 +746,10 @@ def test_worker_e2e_single_retrieval_yields_reject_card_and_done(
         durable_execution_intent_fingerprint(job_row.payload)
     )
     assert attempt["reserved_amount_usd"] == pytest.approx(
-        float(intent.pessimistic_cost_usd)
+        float(evidence_full_envelope_cost_usd(
+            pricing_profile=intent.pricing_profile,
+            max_output_tokens=intent.max_tokens,
+        ))
     )
     assert attempt["actual_cost_usd"] <= attempt["reserved_amount_usd"]
     assert storage.conn.execute(

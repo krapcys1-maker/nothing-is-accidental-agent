@@ -1,5 +1,6 @@
 # CEL: Rejestr kosztow API (model jezykowy, web search, grafiki). Zrodlo prawdy = tabela model_usage w bazie; ten CSV to czytelny eksport.
 # 2026-08-13 - PR #46 review-only repair candidate offline - 0.000000 USD actual; fake SDK/callery i nowe temp DB, zero sieci/provider requestow/publikacji oraz zero zapisu produkcyjnego.
+# 2026-08-13 - PR #46 five-major focused repair offline - 0.000000 USD actual; fake SDK/callery, temp DB, zero provider API/browsera/publikacji i zero zapisu produkcyjnego.
 # Format kolumn wg specyfikacji wlasciciela. Kwoty w USD. Bez sekretow.
 # Jesli koszt jest tylko szacunkiem -> zaznacz w kolumnie notes (np. "szacunek").
 # 2026-08-11 - PRE-LIVE CONTENT UNBLOCK B1/B2/B4/B5 candidate; B3 BLOCKED: new 6/6, root bez reviewera zatrzymany przed SDK/usage/cost, tylko nowe temp SQLite - 0.000000 USD actual; zero API/sieci/browsera/publikacji i zero migracji produkcji.

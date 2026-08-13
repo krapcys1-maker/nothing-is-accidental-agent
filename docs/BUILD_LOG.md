@@ -1,5 +1,13 @@
 # BUILD_LOG
 
+## 2026-08-13 — Etap 3 / PR #46 — naprawa dokładnie pięciu MAJOR
+
+- Zastąpiono nieobsługiwane `enabled/budget_tokens` jednym kanonicznym adaptive-thinking contractem dla sześciu ról; effort pozostał jawny, trwały i fingerprintowany.
+- REVIEW-ONLY CLI raportuje trwałe `writer_attempt_no`, `review_no` i `draft_fingerprint`; resume ładuje ten sam approval z SQLite bez regenerowania `approved_at`/`expires_at`, odrzuca drift argumentów i expiry przed SDK.
+- `corpus_enqueue` używa `ARTICLE_RESEARCH_MAX_OUTPUT_TOKENS=8192`; pełny cap i provider reservation wynikają z koperty 23 808/8 192 i zweryfikowanego cennika, zamiast literalnych `4096` i `0.250000`.
+- Migrację `0039` poprawiono in place, ponieważ nie została zastosowana produkcyjnie. Dokumentacja rozróżnia repo/runtime `0039` od produkcji `0038/38` i nie deklaruje live readiness ani niezależnego approvala.
+- Weryfikacja jest wyłącznie offline na fake SDK/callerach i nowych temp DB; zero provider API, browsera, publikacji, kosztu i zapisu produkcyjnego. Fala pozostaje niecommitowana.
+
 ## 2026-08-13 — domknięcie warunkowego łańcucha REVIEW-ONLY
 
 - REVIEW-ONLY uruchamia wyłącznie initial reviewer, opcjonalny kanoniczny ARTICLE_WRITER attempt 2 oraz jeden post-rewrite reviewer; attempt/review nr 3 są niemożliwe.

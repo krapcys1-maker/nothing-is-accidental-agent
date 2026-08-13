@@ -825,7 +825,12 @@ def run_research_pipeline(
     # Uwaga: ta ścieżka (jednoetapowa) jest zachowana, ale NIEZALECANA dla realnych
     # runów — patrz run_two_stage_research_pipeline() niżej.
     if evidence_intent is not None:
-        attempt_cost_ceiling = float(evidence_intent.pessimistic_cost_usd)
+        from app.research.durable_intent import evidence_full_envelope_cost_usd
+
+        attempt_cost_ceiling = float(evidence_full_envelope_cost_usd(
+            pricing_profile=evidence_intent.pricing_profile,
+            max_output_tokens=evidence_intent.max_tokens,
+        ))
     else:
         worst_case = estimate_worst_case_search_call_usd(
             settings, max_web_searches=max_web_searches, max_output_tokens=request_max_tokens)

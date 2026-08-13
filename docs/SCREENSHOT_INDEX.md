@@ -1,5 +1,9 @@
 # SCREENSHOT_INDEX
 
+## 2026-08-13 — pięć MAJOR PR #46: NO SCREENSHOT TAKEN
+
+- Praca była wyłącznie offline; browser, provider i publikacja były zabronione. Dowodem są diff, fake-SDK tests i migracyjne rehearsale na bazach tymczasowych.
+
 ## 2026-08-13 — PR #46 offline repair: NO SCREENSHOT TAKEN
 
 - Browser i wszystkie działania online były zabronione; nie wykonano screenshotu. Dowód stanowią diff i testy fake-SDK/temp-DB.

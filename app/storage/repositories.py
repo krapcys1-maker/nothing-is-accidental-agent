@@ -2839,6 +2839,16 @@ class SqliteStorage:
         ).fetchone()
         return None if row is None else dict(row)
 
+    def get_content_review_resume_approval(
+        self, *, approval_ref: str,
+    ) -> dict[str, object] | None:
+        """Load the immutable SQLite authority used by operator resume."""
+        row = self.conn.execute(
+            "SELECT * FROM content_review_resume_approvals WHERE approval_ref=?",
+            (approval_ref,),
+        ).fetchone()
+        return None if row is None else dict(row)
+
     def get_content_review_resume_execution(
         self, *, execution_ref: str,
     ) -> dict[str, object] | None:

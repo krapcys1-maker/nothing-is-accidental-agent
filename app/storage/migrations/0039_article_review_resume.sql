@@ -79,9 +79,9 @@ WHEN NEW.consumed_at IS NOT NULL
  OR json_extract(NEW.approval_json,'$.reviewer.max_cost_usd')
       IS NOT NEW.reviewer_max_cost_usd
  OR json_extract(NEW.approval_json,'$.reviewer.inference_config.thinking.type')
-      IS NOT 'enabled'
- OR json_extract(NEW.approval_json,'$.reviewer.inference_config.thinking.budget_tokens')
-      IS NOT 2048
+      IS NOT 'adaptive'
+ OR (SELECT count(*) FROM json_each(
+      json_extract(NEW.approval_json,'$.reviewer.inference_config.thinking')))!=1
  OR json_extract(NEW.approval_json,'$.reviewer.inference_config.output_config.effort')
       IS NOT 'low'
  OR json_extract(NEW.approval_json,'$.writer.provider') IS NOT NEW.writer_provider
@@ -92,9 +92,9 @@ WHEN NEW.consumed_at IS NOT NULL
  OR json_extract(NEW.approval_json,'$.writer.max_cost_usd')
       IS NOT NEW.writer_max_cost_usd
  OR json_extract(NEW.approval_json,'$.writer.inference_config.thinking.type')
-      IS NOT 'enabled'
- OR json_extract(NEW.approval_json,'$.writer.inference_config.thinking.budget_tokens')
-      IS NOT 4096
+      IS NOT 'adaptive'
+ OR (SELECT count(*) FROM json_each(
+      json_extract(NEW.approval_json,'$.writer.inference_config.thinking')))!=1
  OR json_extract(NEW.approval_json,'$.writer.inference_config.output_config.effort')
       IS NOT 'high'
  OR json_extract(NEW.approval_json,'$.chain_cap_usd') IS NOT NEW.chain_cap_usd
@@ -431,8 +431,9 @@ WHEN NEW.outcome!='IN_FLIGHT'
  OR json_extract(NEW.request_intent_json,'$.streaming') IS NOT 1
  OR json_extract(NEW.request_intent_json,'$.max_retries') IS NOT 0
  OR json_extract(NEW.request_intent_json,'$.fallback_policy') IS NOT 'FORBIDDEN'
- OR json_extract(NEW.request_intent_json,'$.inference_config.thinking.type') IS NOT 'enabled'
- OR json_extract(NEW.request_intent_json,'$.inference_config.thinking.budget_tokens') IS NOT 2048
+ OR json_extract(NEW.request_intent_json,'$.inference_config.thinking.type') IS NOT 'adaptive'
+ OR (SELECT count(*) FROM json_each(
+      json_extract(NEW.request_intent_json,'$.inference_config.thinking')))!=1
  OR json_extract(NEW.request_intent_json,'$.inference_config.output_config.effort') IS NOT 'low'
  OR NOT EXISTS (
     SELECT 1 FROM content_review_resume_approvals a
