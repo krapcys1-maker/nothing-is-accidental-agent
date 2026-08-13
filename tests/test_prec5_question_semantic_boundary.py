@@ -166,6 +166,16 @@ FACTUAL_QUESTIONS = (
 )
 
 
+def _body_accounting(verdict):
+    """Accounting entries for body sentences only.
+
+    Headings became reviewable segments after the first REVIEW-ONLY live, so
+    the title now occupies index 0 of the full audit.  These assertions are
+    about body-sentence semantics.
+    """
+    return [item for item in verdict.claim_accounting if item.get("kind") == "body"]
+
+
 @pytest.mark.parametrize("sentence", FACTUAL_QUESTIONS)
 def test_each_factual_question_has_all_four_required_routes(sentence):
     wrong_prose = _assess(sentence, real_prose())
@@ -182,8 +192,10 @@ def test_each_factual_question_has_all_four_required_routes(sentence):
 
     grounded = _assess(sentence, grounded_fact(EVIDENCE_ID))
     assert _claim_gate_passed(grounded)
-    assert len(grounded.claim_accounting) == 1
-    assert grounded.claim_accounting[0]["reviewer_outcome"] == "PASS"
+    # One body sentence under test, plus the title segment.
+    assert len(grounded.claim_accounting) == 2
+    assert len(_body_accounting(grounded)) == 1
+    assert _body_accounting(grounded)[0]["reviewer_outcome"] == "PASS"
 
 
 NON_FACTUAL_QUESTIONS = (
@@ -219,10 +231,10 @@ NON_FACTUAL_QUESTIONS = (
 def test_non_factual_questions_keep_the_honest_inference_route(sentence):
     verdict = _assess(sentence, honest_inference())
     assert _claim_gate_passed(verdict)
-    assert verdict.claim_accounting[0]["classification"] == (
+    assert _body_accounting(verdict)[0]["classification"] == (
         ClaimClassification.ARGUMENT_OR_INFERENCE.value
     )
-    assert verdict.claim_accounting[0]["contains_external_fact"] is False
+    assert _body_accounting(verdict)[0]["contains_external_fact"] is False
 
 
 @pytest.mark.parametrize(
@@ -237,7 +249,10 @@ def test_wrong_non_factual_prose_output_blocks_every_question(sentence):
     verdict = _assess(sentence, real_prose())
     assert not _claim_gate_passed(verdict)
     assert NON_FACTUAL_CLASSIFICATION_INCONSISTENT in _codes(verdict)
-    assert verdict.claim_accounting[0]["reviewer_outcome"] == "BLOCK"
+    body = next(
+        item for item in verdict.claim_accounting if item["text"] == sentence
+    )
+    assert body["reviewer_outcome"] == "BLOCK"
 
 
 @pytest.mark.parametrize(
@@ -249,7 +264,7 @@ def test_question_marker_anywhere_disables_non_factual_prose(_shape, sentence):
     verdict = _assess(sentence, real_prose())
     assert not _claim_gate_passed(verdict)
     assert NON_FACTUAL_CLASSIFICATION_INCONSISTENT in _codes(verdict)
-    assert verdict.claim_accounting[0]["reviewer_outcome"] == "BLOCK"
+    assert _body_accounting(verdict)[0]["reviewer_outcome"] == "BLOCK"
 
 
 @pytest.mark.parametrize("sentence", MAJOR_QUESTION_MARKER_CASES)
@@ -257,8 +272,11 @@ def test_each_confirmed_major_example_blocks_wrong_non_factual_prose(sentence):
     verdict = _assess(sentence, real_prose())
     assert not _claim_gate_passed(verdict)
     assert NON_FACTUAL_CLASSIFICATION_INCONSISTENT in _codes(verdict)
-    claim = verdict.claim_accounting[0]
-    assert claim["text"] == sentence
+    # The title is segment 0 since headings became reviewable; select the
+    # body sentence under test by its text rather than by position.
+    claim = next(
+        item for item in verdict.claim_accounting if item["text"] == sentence
+    )
     assert claim["classification"] == "NON_FACTUAL_PROSE"
     assert claim["reviewer_outcome"] == "BLOCK"
 
@@ -285,10 +303,10 @@ def test_semantic_reviewer_trust_boundary_is_explicit_and_not_patched_with_regex
     """A lying reviewer remains the documented SEMANTIC REVIEWER TRUST BOUNDARY."""
     verdict = _assess("Who owns the depot?", honest_inference())
     assert _claim_gate_passed(verdict)
-    assert verdict.claim_accounting[0]["classification"] == (
+    assert _body_accounting(verdict)[0]["classification"] == (
         ClaimClassification.ARGUMENT_OR_INFERENCE.value
     )
-    assert verdict.claim_accounting[0]["contains_external_fact"] is False
+    assert _body_accounting(verdict)[0]["contains_external_fact"] is False
 
 
 def test_real_non_question_prose_retains_its_narrow_structural_route():
@@ -305,9 +323,13 @@ def test_default_fake_is_unknown_and_fail_closed_without_a_semantic_profile():
     )
     assert not _claim_gate_passed(verdict)
     assert CLAIM_CLASSIFICATION_UNKNOWN in _codes(verdict)
-    assert verdict.claim_accounting[0]["classification"] == "UNKNOWN"
-    assert verdict.claim_accounting[0]["evidence_ids"] == []
-    assert verdict.claim_accounting[0]["reviewer_outcome"] == "BLOCK"
+    # Every segment fails closed, headings included, when the fake has no
+    # profile and no default at all.
+    assert len(verdict.claim_accounting) >= 2
+    for item in verdict.claim_accounting:
+        assert item["classification"] == "UNKNOWN"
+        assert item["evidence_ids"] == []
+        assert item["reviewer_outcome"] == "BLOCK"
 
 
 SUPPORTED_FLOW_QUESTIONS = (
@@ -483,7 +505,8 @@ def test_supported_article_persists_exact_ungrounded_question_audit(
     )
     claim = next(item for item in audit["claims"] if item["text"] == question)
     assert claim == {
-        **{key: claim[key] for key in ("ordinal", "segment_id", "fingerprint", "text")},
+        **{key: claim[key] for key in
+           ("ordinal", "segment_id", "fingerprint", "text", "kind")},
         "classification": "EVIDENCE_GROUNDED_FACT",
         "evidence_ids": [],
         "reviewer_reason": (
@@ -566,8 +589,9 @@ def test_exactly_one_accounting_entry_exists_per_substantive_segment():
         ),
     )
     assert _claim_gate_passed(verdict)
-    assert len(verdict.claim_accounting) == 2
-    assert len({item["segment_id"] for item in verdict.claim_accounting}) == 2
+    # Two body sentences plus the title, each accounted for exactly once.
+    assert len(verdict.claim_accounting) == 3
+    assert len({item["segment_id"] for item in verdict.claim_accounting}) == 3
 
 
 def test_missing_extra_duplicate_and_identity_mismatch_all_block():
@@ -647,7 +671,7 @@ def test_reviewer_cannot_clear_the_numeric_and_year_deterministic_floor():
     verdict = _assess(sentence, grounded_fact(EVIDENCE_ID))
     assert not verdict.passed(QualityCheck.FACTUAL_CLAIM_SUPPORT)
     assert UNSUPPORTED_FACTUAL_CLAIM in _codes(verdict)
-    assert verdict.claim_accounting[0]["reviewer_outcome"] == "PASS"
+    assert _body_accounting(verdict)[0]["reviewer_outcome"] == "PASS"
 
 
 COUNTERPROBE_FACTUAL = (

@@ -15,6 +15,7 @@ from app.content.quality_gate import (
     ClaimClassification,
     ClaimReviewOutcome,
     DraftClaimSegment,
+    SegmentKind,
 )
 
 
@@ -47,6 +48,17 @@ def grounded_fact(*evidence_ids: str) -> SegmentDecision:
         reason="reviewer bound this fact to the frozen evidence package",
         outcome=ClaimReviewOutcome.PASS,
         contains_external_fact=True,
+    )
+
+
+def title_framing() -> SegmentDecision:
+    """A heading that names the article's subject without asserting a new fact."""
+    return SegmentDecision(
+        classification=ClaimClassification.ARGUMENT_OR_INFERENCE,
+        evidence_ids=(),
+        reason="heading names the article's subject",
+        outcome=ClaimReviewOutcome.PASS,
+        contains_external_fact=False,
     )
 
 
@@ -136,10 +148,23 @@ class FakeClaimAccountingReviewer:
         for segment in segments:
             if segment.text in self._omit_texts:
                 continue
+            explicit = self._profile.get(segment.text)
+            if explicit is not None:
+                entries.append(explicit.bind(segment))
+                continue
+            # Title and subtitle became reviewable segments after the first
+            # REVIEW-ONLY live.  A test that drives body-sentence semantics
+            # (via decide or a text profile) gets a neutral passing heading so
+            # its assertions stay about the body.  A fake with neither still
+            # fails closed on every segment, headings included.
+            if segment.kind is not SegmentKind.BODY and (
+                self._decide is not None or self._profile
+            ):
+                entries.append(title_framing().bind(segment))
+                continue
             if self._decide is not None:
                 entries.append(self._decide(segment, evidence_ids))
                 continue
-            decision = self._profile.get(segment.text, self._default)
-            entries.append((decision or _unknown_blocked()).bind(segment))
+            entries.append((self._default or _unknown_blocked()).bind(segment))
         return tuple(entries)
 

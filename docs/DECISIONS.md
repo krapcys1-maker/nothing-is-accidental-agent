@@ -1,5 +1,29 @@
 # DECISIONS (Architecture Decision Log)
 
+### ADR-148: Jeden kanoniczny inwariant wpisu i dokładny kanoniczny dokument v3 (zamknięcie dwóch P1)
+
+- **Data/status/autor:** 2026-08-13; naprawa po niezależnym review z wynikiem `REJECT`, `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`. Brak live-ready.
+- **P1-1 — przyczyna:** kontrakt spójności wpisu istniał wyłącznie we wspólnej quality gate, a początkowa ścieżka REVIEW-ONLY czyta `outcome` bezpośrednio i tej bramki nie uruchamia. `ARGUMENT_OR_INFERENCE`/`NON_FACTUAL_PROSE` z `contains_external_fact=true`, `evidence_ids=[]` i `PASS` osiągało `APPROVE` oraz `PENDING_APPROVAL`.
+- **P1-1 — zamknięcie:** jeden predykat `classification_contract_error()` w `app/content/quality_gate.py`, egzekwowany w parserze (`REVIEWER_ENTRY_EVIDENCE_CONTRACT`) oraz u **wszystkich** bezpośrednich konsumentów: derywacji `decision` w `_settle`, decyzji `initial_approved` REVIEW-ONLY i wspólnej quality gate (`CLASSIFICATION_CONTRACT_VIOLATION`). Oba publiczne settlementy dodatkowo rekonstruują trwały draft, frozen evidence i ponownie wywołują parser, więc nie zakładają, że caller zrobił to wcześniej.
+- **Korekta wykryta przy zamykaniu P1-1:** poprzedni wymóg „`EVIDENCE_GROUNDED_FACT` zawsze ≥ 1 evidence" odbierał reviewerowi możliwość zgłoszenia **niepopartego** twierdzenia faktycznego. Kanoniczna reguła brzmi teraz: uncited `EVIDENCE_GROUNDED_FACT` jest legalny **wyłącznie** jako `BLOCK` i nielegalny jako `PASS`. Prompt v3 opisuje to wprost.
+- **P1-2 — przyczyna:** trigger 0041 liczył sześć kluczy i testował `value!=1`; sześć dowolnych nazw spełniało licznik, a SQLite raportuje JSON `true` jako liczbę `1`, więc literalne `1` (i każda wartość truthy) przechodziło.
+- **P1-2 — zamknięcie:** przypięte **nazwy** (`c.key IN (…sześć kanonicznych…)`) i **typy JSON** (`c.type='true'`, `json_type(...approved)='true'`, `failed_checks`/`findings` jako `array` o długości 0). Durable floor obejmuje settlement REVIEW-ONLY, ordinary ARTICLE_REVIEWER i `PENDING_APPROVAL`; sprawdza też dokładny shape wpisów/dokumentu i zgodność decyzji z numerem próby. Migracja pozostaje forward-only, transakcyjna i idempotentna; wymuszony błąd rolluje wszystkie trzy triggery oraz ledger do nietkniętego `0040`.
+- **Content 5:** pozostaje `PENDING_APPROVAL` **pod nieważnym kontraktem v2** i nie może przejść dalej bez osobno autoryzowanego wycofania oraz ponownej oceny v3. Status nietknięty, review nie powtórzony, produkcja niemigrowana.
+- **Granice:** zero API, sieci, kosztu, live, publikacji i zapisu produkcyjnego; produkcja czytana wyłącznie read-only.
+- **Dowód implementera:** focused `249/249` przed ostatnią kontrpróbą identity; finalny full/collect/exact unique `2771/2771`, exact duplicates `0`; `compileall` i `git diff --check` PASS. Jest to kandydat do niezależnego review, nie niezależne zatwierdzenie.
+
+### ADR-147: `APPROVE` reviewera oznacza cały artykuł, nie samo claim accounting
+
+- **Data/status/autor:** 2026-08-13; naprawa jakości po pierwszym realnym REVIEW-ONLY live, `CANDIDATE COMPLETE — REVIEWER QUALITY GATE FIXED, AWAITING INDEPENDENT REVIEW`. Brak niezależnego zatwierdzenia i brak live-ready.
+- **Dowód wejściowy:** live (`online-e2e-article-card-7-v5`, content 5, draft `b6654bc2…`, request `msg_011CdzjaaVLrFXzgNXijd79K`) zwrócił `APPROVE` przy 29 segmentach body, wszystkie `PASS` (18 `ARGUMENT_OR_INFERENCE`, 4 `EVIDENCE_GROUNDED_FACT`, 7 `NON_FACTUAL_PROSE`), 6670/4358 tokenów, koszt `0.142300 USD`.
+- **Pokrycie:** segmentem jest teraz każdy widoczny element, w tym tytuł; `kind` wchodzi do fingerprintu segmentu, więc accounting z powierzchni body-only nie da się odtworzyć.
+- **Klasyfikacja:** `ARGUMENT_OR_INFERENCE` to wyłącznie rozumowanie nad zamrożonym materiałem. Nowe twierdzenie empiryczne, techniczne, operacyjne, historyczne, prawne, instytucjonalne, behawioralne, statystyczne lub przyczynowe bez dokładnego evidence musi dostać `BLOCK`, a z evidence — `EVIDENCE_GROUNDED_FACT`.
+- **Kardynalność evidence:** `EVIDENCE_GROUNDED_FACT` ≥ 1 id, pozostałe klasy dokładnie `[]`. Niezgodność jest błędem kontraktu w parserze i `BLOCK` w quality gate — nigdy cichą akceptacją.
+- **Document gate:** sześć bramek (`TITLE_REFLECTS_BODY`, `TITLE_PROMISE_FULFILLED`, `TITLE_MECHANISM_EXPLAINED`, `BRIEF_QUESTION_ANSWERED`, `THESIS_CONSISTENT`, `CONCLUSIONS_WITHIN_EVIDENCE`). Każda porażka wymaga konkretnej instrukcji rewrite; czysty werdykt musi mieć `findings=[]`.
+- **Decyzja:** `APPROVE` wymaga łącznie claim gate, document gate i poprawnego kontraktu. Inaczej dokładnie jeden `REWRITE_ONCE`, a instrukcje dokumentowe jadą do writera jako feedback `scope=DOCUMENT`.
+- **Schema:** forward-only `0041_reviewer_document_quality_gate` przenosi tę definicję do durable floor; `0040` pozostaje nietknięta. Produkcja jest na `0040/40` i pozostaje fail-closed do osobno autoryzowanej migracji.
+- **Granice:** zero API, inference, live, publikacji i zapisu produkcyjnego; content 5 nie został zatwierdzony.
+
 ### ADR-146: Właścicielska konserwatywna rekonsyliacja pełnej rezerwy nie jest actual charge
 
 - **Data/status/autor:** 2026-08-13; decyzja właściciela, implementacja `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`.

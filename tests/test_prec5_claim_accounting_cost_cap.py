@@ -98,6 +98,16 @@ def _claim_gate_passed(verdict):
     )
 
 
+def _body_accounting(verdict):
+    """Accounting entries for body sentences only.
+
+    Headings became reviewable segments after the first REVIEW-ONLY live, so
+    the title now occupies index 0 of the full audit.  These assertions are
+    about body-sentence semantics.
+    """
+    return [item for item in verdict.claim_accounting if item.get("kind") == "body"]
+
+
 def test_rv1_a_single_depot_without_evidence_blocks():
     verdict = _unsupported_fact(
         "The system routes all freight through a single depot."
@@ -166,7 +176,7 @@ def test_rv1_g_h_explicit_opinion_and_inference_can_pass(sentence):
         ),
     )
     assert _claim_gate_passed(verdict)
-    assert verdict.claim_accounting[0]["classification"] == (
+    assert _body_accounting(verdict)[0]["classification"] == (
         ClaimClassification.ARGUMENT_OR_INFERENCE.value
     )
 
@@ -264,8 +274,13 @@ def test_claim_accounting_is_carried_by_the_existing_evaluation_audit_shape():
         if item.get("code") == "ARTICLE_CLAIM_ACCOUNTING_AUDIT"
     )
     assert audit["coverage_complete"] is True
-    assert audit["claims"][0]["segment_id"].startswith("sentence:0:")
-    assert audit["claims"][0]["reviewer_outcome"] == "PASS"
+    # The title leads the audit now that headings are reviewable; the first
+    # body sentence keeps its own stable identity right behind it.
+    assert audit["claims"][0]["segment_id"].startswith("title:0:")
+    assert audit["claims"][0]["kind"] == "title"
+    body = [item for item in audit["claims"] if item["kind"] == "body"]
+    assert body[0]["segment_id"].startswith("sentence:0:")
+    assert body[0]["reviewer_outcome"] == "PASS"
 
 
 def test_claim_accounting_audit_is_persisted_with_the_draft_evaluation(

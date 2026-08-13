@@ -26,8 +26,10 @@ from app.content.quality_gate import (
     ClaimAccountingEntry,
     ClaimAccountingReviewPort,
     ClaimReviewOutcome,
+    DocumentReview,
     DraftClaimSegment,
     build_claim_segments,
+    classification_contract_error,
 )
 from app.content.reviewer import (
     ProductionArticleReviewer,
@@ -181,7 +183,7 @@ def _review_intent(
 def _entries_from_execution(
     row: dict[str, object], *, segments: tuple[DraftClaimSegment, ...],
     evidence_ids: frozenset[str], expected_intent: ReviewerRequestIntent,
-) -> tuple[ClaimAccountingEntry, ...]:
+) -> tuple[tuple[ClaimAccountingEntry, ...], DocumentReview]:
     if row["request_intent_fingerprint"] != expected_intent.fingerprint():
         raise ReviewOnlyError(
             "REVIEW_ONLY_DURABLE_INTENT_MISMATCH",
@@ -195,9 +197,24 @@ def _entries_from_execution(
         )
         raise ReviewOnlyError(code, f"Reviewer stage is {row['outcome']} and is not replayable.")
     payload = json.loads(str(row["result_json"]))
-    entries = payload.get("entries")
+    stored = payload.get("document_review")
+    if not isinstance(stored, dict) or "checks" not in stored:
+        # A settled v2 row carries no whole-article verdict.  Resuming it would
+        # silently reinstate the body-only definition of APPROVE, so the stage
+        # is refused rather than re-parsed under the v3 contract.
+        raise ReviewOnlyError(
+            "REVIEW_ONLY_REVIEW_CONTRACT_SUPERSEDED",
+            "Persisted reviewer result predates the document quality gate.",
+        )
     return parse_reviewer_response(
-        json.dumps({"reviewer_version": REVIEWER_VERSION, "entries": entries}),
+        json.dumps({
+            "reviewer_version": REVIEWER_VERSION,
+            "entries": payload.get("entries"),
+            "document_review": {
+                "checks": stored.get("checks"),
+                "findings": stored.get("findings"),
+            },
+        }),
         segments=segments,
         allowed_evidence_ids=evidence_ids,
     )
@@ -217,7 +234,7 @@ def _review_once_or_resume(
     sdk_factory: ControlledSdkFactory | None,
     caller: ControlledTechnicalCaller | None,
     clock: Clock,
-) -> tuple[ClaimAccountingEntry, ...]:
+) -> tuple[tuple[ClaimAccountingEntry, ...], DocumentReview]:
     existing = storage.get_content_review_resume_execution(
         execution_ref=intent.execution_ref,
     )
@@ -241,9 +258,16 @@ def _review_once_or_resume(
         resume_intent=intent,
         clock=clock,
     )
-    return reviewer.review(
+    entries = reviewer.review(
         draft=draft, brief=brief, evidence=evidence, segments=segments,
     )
+    document_review = reviewer.last_document_review
+    if document_review is None:
+        raise ReviewOnlyError(
+            "REVIEW_ONLY_DOCUMENT_REVIEW_MISSING",
+            "The reviewer returned no whole-article verdict.",
+        )
+    return entries, document_review
 
 
 class _PostRewriteReview(ClaimAccountingReviewPort):
@@ -272,7 +296,7 @@ class _PostRewriteReview(ClaimAccountingReviewPort):
             evidence=evidence,
             segments=segments,
         )
-        return _review_once_or_resume(
+        entries, document_review = _review_once_or_resume(
             storage=self._kwargs["storage"],
             settings=self._kwargs["settings"],
             approval_ref=str(self._kwargs["approval_ref"]),
@@ -286,6 +310,11 @@ class _PostRewriteReview(ClaimAccountingReviewPort):
             caller=self._kwargs["caller"],
             clock=self._kwargs["clock"],
         )
+        # The port returns segment entries only; the quality gate reads the
+        # whole-article verdict from here, so a post-rewrite article whose
+        # title still misses cannot reach PENDING_APPROVAL.
+        self.last_document_review = document_review
+        return entries
 
 
 def _execution_context(
@@ -516,7 +545,7 @@ def run_controlled_article_review_only(
             evidence=frozen.evidence_items,
             segments=segments1,
         )
-        initial_entries = _review_once_or_resume(
+        initial_entries, initial_document = _review_once_or_resume(
             storage=storage, settings=settings, approval_ref=authority.approval_ref,
             intent=initial_intent, draft=draft1, brief=brief,
             evidence=frozen.evidence_items, segments=segments1,
@@ -532,8 +561,24 @@ def run_controlled_article_review_only(
         )
         execution = _execution_context(storage, approval_ref=authority.approval_ref, clock=clock)
         policy = PolicyEngine(settings, storage, clock)
-        initial_approved = all(
-            entry.outcome is ClaimReviewOutcome.PASS for entry in initial_entries
+        # APPROVE requires the claim gate and the whole-article gate together.
+        # Either one failing routes to the single allowed rewrite.
+        #
+        # The entry contract is re-checked here rather than trusted from the
+        # outcome field alone: this path never runs the shared quality gate, so
+        # a self-contradictory PASS entry would otherwise become an approval.
+        initial_approved = (
+            all(entry.outcome is ClaimReviewOutcome.PASS for entry in initial_entries)
+            and all(
+                classification_contract_error(
+                    classification=entry.classification,
+                    evidence_ids=entry.evidence_ids,
+                    contains_external_fact=entry.contains_external_fact,
+                    outcome=entry.outcome,
+                ) is None
+                for entry in initial_entries
+            )
+            and initial_document.approved
         )
         if initial_approved:
             storage.finalize_content_review_resume_approval(
@@ -550,6 +595,30 @@ def run_controlled_article_review_only(
             reason_code="CONTENT_REWRITE_REQUIRED",
             final_result={"attempt_no": 1, "draft_fingerprint": draft1.fingerprint()},
         )
+        rewrite_feedback: list[dict[str, object]] = [
+            {
+                "scope": "SEGMENT",
+                "segment_id": entry.segment_id,
+                "segment_fingerprint": entry.segment_fingerprint,
+                "classification": entry.classification.value,
+                "evidence_ids": list(entry.evidence_ids),
+                "reason": entry.reason,
+                "outcome": entry.outcome.value,
+                "contains_external_fact": entry.contains_external_fact,
+            }
+            for entry in initial_entries
+        ]
+        if not initial_document.approved:
+            # Whole-article instructions travel with the segment feedback, so a
+            # rewrite can repair a title that promises a mechanism the body
+            # never explains — something no per-segment note can express.
+            rewrite_feedback.append({
+                "scope": "DOCUMENT",
+                "failed_checks": [
+                    check.value for check in initial_document.failed_checks
+                ],
+                "instructions": list(initial_document.findings),
+            })
         post_reviewer = _PostRewriteReview(
             storage=storage, settings=settings, approval_ref=authority.approval_ref,
             execution_ref=authority.post_review_execution_ref,
@@ -573,15 +642,7 @@ def run_controlled_article_review_only(
                 lease_seconds=1800,
                 resume_writer_attempt_two_only=True,
                 resume_rewrite_of_draft_fingerprint=draft1.fingerprint(),
-                resume_rewrite_feedback=tuple({
-                    "segment_id": entry.segment_id,
-                    "segment_fingerprint": entry.segment_fingerprint,
-                    "classification": entry.classification.value,
-                    "evidence_ids": list(entry.evidence_ids),
-                    "reason": entry.reason,
-                    "outcome": entry.outcome.value,
-                    "contains_external_fact": entry.contains_external_fact,
-                } for entry in initial_entries),
+                resume_rewrite_feedback=tuple(rewrite_feedback),
                 propagate_claim_reviewer_errors=True,
             )
         except BaseException as exc:

@@ -2628,6 +2628,39 @@ class SqliteStorage:
                     f"This execution is already terminal ({row['outcome']!r}); "
                     "a role execution is never settled twice.",
                 )
+            # Select the stricter contract from the immutable reservation, not
+            # from caller-supplied data.  Otherwise a caller could label a
+            # reviewer settlement ARTICLE_PLAN merely to skip this validator.
+            if row["logical_role"] == "ARTICLE_REVIEWER":
+                exact_identity = (
+                    execution.job_id == row["job_id"]
+                    and execution.run_id == row["run_id"]
+                    and execution.content_id == int(row["content_id"])
+                    and execution.attempt_no == int(row["attempt_no"])
+                    and execution.role.value == row["logical_role"]
+                    and execution.authority.job_id == row["job_id"]
+                    and execution.authority.role.value == row["logical_role"]
+                    and execution.authority.binding_intent_id == row["binding_intent_id"]
+                    and execution.authority.model_registry_id == row["model_registry_id"]
+                    and execution.authority.provider == row["provider"]
+                    and execution.authority.technical_model_id == row["technical_model_id"]
+                    and execution.authority.pricing_ref == row["pricing_ref"]
+                    and execution.authority.pricing_profile_fingerprint
+                    == row["pricing_profile_fingerprint"]
+                    and execution.authority.qualification_ref == row["qualification_ref"]
+                    and execution.authority.capability_ref == row["capability_ref"]
+                )
+                if not exact_identity:
+                    raise ContentFoundationError(
+                        "CONTENT_REVIEW_RESULT_IDENTITY_MISMATCH",
+                        "Reviewer settlement differs from its reserved durable identity.",
+                    )
+                if execution.outcome == "SUCCESS":
+                    self._validate_article_reviewer_success_payload_in_transaction(
+                        content_id=int(row["content_id"]),
+                        attempt_no=int(row["attempt_no"]),
+                        payload=execution.payload,
+                    )
             settled = self.conn.execute(
                 "UPDATE role_provider_executions SET outcome=?,failure_kind=?,"
                 "returned_model_id=?,input_tokens=?,output_tokens=?,"
@@ -2677,6 +2710,95 @@ class SqliteStorage:
             if self.conn.in_transaction:
                 self.conn.rollback()
             raise
+
+    def _validate_article_reviewer_success_payload_in_transaction(
+        self,
+        *,
+        content_id: int,
+        attempt_no: int,
+        payload: dict[str, object],
+    ) -> None:
+        """Re-derive a successful reviewer result from durable inputs.
+
+        The provider parser is the canonical semantic boundary.  Settlement is
+        another public boundary, however, so it must not trust that its caller
+        previously used that parser.  Rebuilding the exact segment surface from
+        the stored draft also binds coverage, fingerprints and evidence ids to
+        the immutable content snapshot before a SUCCESS can become durable.
+        """
+        from app.content.quality_gate import build_claim_segments
+        from app.content.reviewer import (
+            ProductionReviewerError,
+            parse_reviewer_response,
+        )
+
+        draft_row = self.conn.execute(
+            "SELECT d.draft_json,c.account_id FROM content_drafts d "
+            "JOIN content_items c ON c.id=d.content_id "
+            "WHERE d.content_id=? AND d.attempt_no=?",
+            (content_id, attempt_no),
+        ).fetchone()
+        if draft_row is None:
+            raise ContentFoundationError(
+                "CONTENT_REVIEW_RESULT_DRAFT_MISSING",
+                "Reviewer settlement has no matching durable draft attempt.",
+            )
+        try:
+            draft = FakeDraft.model_validate_json(str(draft_row["draft_json"]))
+            frozen = self._assert_content_snapshot_in_transaction(
+                str(draft_row["account_id"]), content_id,
+            )
+            stored_document = payload.get("document_review")
+            if type(stored_document) is not dict or set(stored_document) != {
+                "approved", "checks", "failed_checks", "findings",
+            }:
+                raise ProductionReviewerError(
+                    "REVIEWER_DOCUMENT_REVIEW_MALFORMED",
+                    "Stored document_review must be the exact durable v3 object.",
+                )
+            entries, document = parse_reviewer_response(
+                canonical_json({
+                    "reviewer_version": payload.get("reviewer_version"),
+                    "entries": payload.get("entries"),
+                    "document_review": {
+                        "checks": stored_document.get("checks"),
+                        "findings": stored_document.get("findings"),
+                    },
+                }),
+                segments=build_claim_segments(draft),
+                allowed_evidence_ids=frozenset(
+                    item.confirmed_claim_id for item in frozen.evidence_items
+                ),
+            )
+            if stored_document != document.payload():
+                raise ProductionReviewerError(
+                    "REVIEWER_DOCUMENT_REVIEW_MALFORMED",
+                    "Stored document_review derived fields contradict its checks.",
+                )
+            claims_clean = all(
+                entry.outcome.value == "PASS" for entry in entries
+            )
+            expected_decision = (
+                "APPROVE"
+                if claims_clean and document.approved
+                else "REWRITE_ONCE"
+                if attempt_no == 1
+                else "HUMAN_REQUIRED"
+            )
+            if payload.get("decision") != expected_decision:
+                raise ProductionReviewerError(
+                    "REVIEWER_DECISION_CONTRADICTION",
+                    "Stored decision is not derived from entries, document, and attempt.",
+                )
+        except ProductionReviewerError as exc:
+            raise ContentFoundationError(
+                "CONTENT_REVIEW_RESULT_CONTRACT_INVALID", str(exc),
+            ) from exc
+        except (TypeError, ValueError, ValidationError, json.JSONDecodeError) as exc:
+            raise ContentFoundationError(
+                "CONTENT_REVIEW_RESULT_CONTRACT_INVALID",
+                f"Reviewer settlement cannot reconstruct its durable contract: {exc}",
+            ) from exc
 
     def get_role_provider_execution(
         self, *, content_id: int, role: object, attempt_no: int = 1,
@@ -3785,6 +3907,23 @@ class SqliteStorage:
                 raise ContentFoundationError(
                     "CONTENT_REVIEW_EXECUTION_NOT_IN_FLIGHT",
                     "Review settlement requires one open reservation.",
+                )
+            if outcome == "SUCCESS":
+                if (
+                    result_payload.get("request_intent_fingerprint")
+                    != row["request_intent_fingerprint"]
+                    or result_payload.get("draft_fingerprint")
+                    != row["draft_fingerprint"]
+                    or result_payload.get("review_no") != int(row["review_no"])
+                ):
+                    raise ContentFoundationError(
+                        "CONTENT_REVIEW_RESULT_IDENTITY_MISMATCH",
+                        "Reviewer result differs from its reserved durable intent.",
+                    )
+                self._validate_article_reviewer_success_payload_in_transaction(
+                    content_id=int(row["content_id"]),
+                    attempt_no=int(row["writer_attempt_no"]),
+                    payload=result_payload,
                 )
             self.conn.execute(
                 "UPDATE content_review_resume_executions SET outcome=?,failure_kind=?,"

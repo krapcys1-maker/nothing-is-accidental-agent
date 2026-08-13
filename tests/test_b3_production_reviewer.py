@@ -32,6 +32,7 @@ from app.content.quality_gate import (
     ClaimAccountingEntry,
     ClaimClassification,
     ClaimReviewOutcome,
+    DocumentCheck,
     DraftClaimSegment,
     assess_draft,
 )
@@ -141,11 +142,26 @@ class ReviewerTransport:
         model_id: str = OPUS,
         raise_error: BaseException | None = None,
         text: str | None = None,
+        document_checks: dict[str, bool] | None = None,
+        document_findings: tuple[str, ...] | None = None,
     ) -> None:
         self.calls = 0
         self.model_id = model_id
         self.raise_error = raise_error
         self.text = text
+        self.document_checks = document_checks
+        self.document_findings = document_findings
+
+    def document_review(self) -> dict[str, object]:
+        """A clean whole-article verdict unless a test asks for a failing one."""
+        checks = {check.value: True for check in DocumentCheck}
+        if self.document_checks:
+            checks.update(self.document_checks)
+        findings = (
+            list(self.document_findings) if self.document_findings is not None
+            else ([] if all(checks.values()) else ["rewrite the article"])
+        )
+        return {"checks": checks, "findings": findings}
 
     def __call__(self, _client, request):
         self.calls += 1
@@ -164,9 +180,11 @@ class ReviewerTransport:
             }
             for segment in payload["draft_segments"]
         ]
-        body = self.text or json.dumps(
-            {"reviewer_version": REVIEWER_VERSION, "entries": entries},
-        )
+        body = self.text or json.dumps({
+            "reviewer_version": REVIEWER_VERSION,
+            "entries": entries,
+            "document_review": self.document_review(),
+        })
         return ControlledProviderRawResponse(
             returned_model_id=self.model_id,
             text=body,
@@ -619,16 +637,24 @@ def test_strict_reviewer_parser_matrix():
     }
 
     def encoded(**changes):
-        payload = {"reviewer_version": REVIEWER_VERSION, "entries": [dict(entry)]}
+        payload = {
+            "reviewer_version": REVIEWER_VERSION,
+            "entries": [dict(entry)],
+            "document_review": {
+                "checks": {check.value: True for check in DocumentCheck},
+                "findings": [],
+            },
+        }
         for key, value in changes.items():
-            if key == "reviewer_version":
+            if key in {"reviewer_version", "document_review"}:
                 payload[key] = value
             else:
                 payload["entries"][0][key] = value
         return json.dumps(payload)
 
-    parsed = parse_reviewer_response(encoded(), segments=(segment,))
+    parsed, document_review = parse_reviewer_response(encoded(), segments=(segment,))
     assert len(parsed) == 1 and parsed[0].contains_external_fact is False
+    assert document_review.approved is True
     for malformed in (
         encoded(reviewer_version="wrong"),
         encoded(reason=None),

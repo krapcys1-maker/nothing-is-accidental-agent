@@ -28,6 +28,7 @@ from app.llm.anthropic_provider_contract import ARTICLE_REVIEWER_INFERENCE_CONFI
 from app.storage.db import (
     ARTICLE_REVIEW_RESUME_SCHEMA_VERSION,
     CONTENT_ROLE_RECONCILIATION_SCHEMA_VERSION,
+    REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION,
     ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION,
     CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION,
     ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION,
@@ -44,13 +45,13 @@ from app.storage.db import (
 from app.ports.storage import BudgetReservationError, ContentFoundationError
 from app.storage.repositories import SqliteStorage
 
-ROLE = LogicalModelRole.ARTICLE_REVIEWER
+ROLE = LogicalModelRole.ARTICLE_PLAN
 REGISTRY_ID = "model-b3-opus"
 PRICING_REF = "b3-opus-pricing"
 JOB_ID = "b3-job"
 RUN_ID = "b3-run"
 CONTENT_ID = 1
-EXEC_REF = "b3-exec-reviewer"
+EXEC_REF = "b3-exec-plan"
 MODEL_ID = "claude-opus-5"
 PRICES = PriceDimensions.from_mapping({
     "input_per_mtok": "5",
@@ -205,7 +206,7 @@ def _execution(outcome: str, *, returned: str | None = MODEL_ID,
         content_id=CONTENT_ID, role=ROLE, attempt_no=1, authority=_authority(),
         returned_model_id=returned, outcome=outcome, failure_kind=failure,
         usage=usage, cost_usd=Decimal("0.001750"),
-        payload={"reviewer_version": "b3-test"},
+        payload={"fixture": "generic-role-lifecycle"},
     )
 
 
@@ -352,7 +353,7 @@ def test_11_settlement_records_usage_and_cost_exactly_once(storage):
         "SELECT * FROM model_usage WHERE request_id=?", (EXEC_REF,),
     ).fetchone()
     assert usage is not None
-    assert usage["task"] == "article_reviewer"
+    assert usage["task"] == "article_plan"
     assert Decimal(str(usage["estimated_cost_usd"])) == Decimal("0.00175")
     assert Decimal(str(storage.get_run(RUN_ID).cost_usd)) == Decimal("0.00175")
     with pytest.raises(sqlite3.IntegrityError, match="immutable"):
@@ -363,11 +364,11 @@ def test_11_settlement_records_usage_and_cost_exactly_once(storage):
 
 
 def test_12_runtime_floor_is_the_role_execution_global_ledger():
-    """The floor includes canonical accounting for the paid reviewer."""
-    assert RUNTIME_SCHEMA_VERSION == CONTENT_ROLE_RECONCILIATION_SCHEMA_VERSION
+    """The floor includes canonical accounting for paid role executions."""
+    assert RUNTIME_SCHEMA_VERSION == REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION
     assert RUNTIME_SCHEMA_VERSION != ARTICLE_WRITER_OPUS_POLICY_SCHEMA_VERSION
     canonical = canonical_migration_versions()
-    assert canonical[-1] == CONTENT_ROLE_RECONCILIATION_SCHEMA_VERSION
+    assert canonical[-1] == REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION
     assert canonical.index(ROLE_EXECUTION_LIFECYCLE_SCHEMA_VERSION) < canonical.index(
         ROLE_EXECUTION_GLOBAL_LEDGER_SCHEMA_VERSION
     ) < canonical.index(END_TO_END_CONNECTION_SCHEMA_VERSION) < canonical.index(
@@ -383,7 +384,7 @@ def test_13_unknown_terminal_cost_is_represented_by_null_not_zero(storage):
         content_id=CONTENT_ID, role=ROLE, attempt_no=1, authority=_authority(),
         returned_model_id=None, outcome="NEEDS_VERIFICATION",
         failure_kind="REVIEWER_RESULT_UNKNOWN", usage=None, cost_usd=None,
-        payload={"reviewer_version": "b3-test", "usage_known": False},
+        payload={"fixture": "generic-role-lifecycle", "usage_known": False},
     ))
     row = storage.get_role_provider_execution(content_id=CONTENT_ID, role=ROLE)
     assert row["outcome"] == "NEEDS_VERIFICATION"

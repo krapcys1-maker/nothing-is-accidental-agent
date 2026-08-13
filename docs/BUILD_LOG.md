@@ -1,5 +1,23 @@
 # BUILD_LOG
 
+## 2026-08-13 — Etap 3 / zamknięcie dwóch P1 z niezależnego review reviewera
+
+- **P1-1:** jeden predykat `classification_contract_error()` (quality_gate) egzekwowany w parserze i u wszystkich bezpośrednich konsumentów wyniku reviewera — `_settle`, `initial_approved` REVIEW-ONLY, wspólna quality gate. Sprzeczna klasyfikacja nie uzyskuje `APPROVE` żadną wspieraną ścieżką.
+- **Korekta kontraktu:** uncited `EVIDENCE_GROUNDED_FACT` legalny wyłącznie jako `BLOCK` — inaczej reviewer nie mógłby w ogóle zgłosić niepopartego twierdzenia faktycznego. Prompt v3 i opis wyjścia zaktualizowane.
+- **P1-2:** trigger 0041 przypina sześć kanonicznych **nazw** oraz **typy JSON** (`c.type='true'`, `json_type(approved)='true'`, `failed_checks`/`findings` jako puste `array`). Forward-only, transakcyjność i idempotencja zachowane; rollback pozostawia nietknięte `0040`.
+- **Domknięcie persistent boundary:** `settle_content_review_resume_execution` i `settle_role_provider_execution` nie ufają już callerowi — wiążą tożsamość rezerwacji, odtwarzają segmenty z trwałego draftu, biorą dozwolone evidence z frozen snapshotu i ponownie uruchamiają kanoniczny parser. SQL 0041 odtwarza trzy triggery: settlement REVIEW-ONLY, ordinary role settlement i `PENDING_APPROVAL`; bezpośrednie raw-UPDATE kontrpróby są odrzucane atomowo.
+- Regresje obejmują parser, REVIEW-ONLY initial, review po rewrite, zwykły content flow, oba publiczne settlementy, próbę maskowania immutable reserved reviewer role, raw SQLite, resume v3, trwały `PENDING_APPROVAL`, C2 oraz rollback po wymuszonym błędzie. Focused `249/249` przed ostatnią kontrpróbą identity; finalny full/collect/exact unique `2771/2771`, exact duplicates `0`; `compileall app scripts tests` i `git diff --check` PASS.
+- Weryfikacja offline: zero provider API, sieci, kosztu, live, publikacji i zapisu produkcyjnego; produkcja czytana przez `mode=ro&immutable=1`, hash przed/po identyczny. Content 5 nietknięty.
+
+## 2026-08-13 — Etap 3 / naprawa quality gate ARTICLE_REVIEWER po pierwszym live
+
+- Powierzchnia review objęła tytuł: `build_claim_segments` emituje segment na każdy widoczny element, a `kind` wchodzi do fingerprintu, więc stary accounting body-only nie jest odtwarzalny.
+- `ARGUMENT_OR_INFERENCE` zawężone do rozumowania nad zamrożonym materiałem; nowe twierdzenie empiryczne/przyczynowe/operacyjne/prawne/behawioralne bez evidence to `BLOCK`.
+- Kardynalność evidence egzekwowana dwuwarstwowo: `REVIEWER_ENTRY_EVIDENCE_CONTRACT` w parserze i `INFERENCE_EVIDENCE_NOT_EMPTY` w quality gate.
+- Dodany document gate (6 bramek) z obowiązkowymi instrukcjami rewrite; `APPROVE` wymaga claim gate + document gate + poprawnego kontraktu, inaczej dokładnie jeden `REWRITE_ONCE`.
+- `REVIEWER_VERSION` = `production_article_reviewer_opus_v3`; forward-only `0041` przenosi nową definicję `APPROVE` do triggera `content_c2_pending_approval_contract`. `0040` nietknięta.
+- Weryfikacja wyłącznie offline (fake transport, temp DB): zero provider API, browsera, publikacji, kosztu i zapisu produkcyjnego. Content 5 nie został zatwierdzony, live nie wykonany.
+
 ## 2026-08-13 — Etap 3 / konserwatywna rekonsyliacja CONTENT i role execution
 
 - Dodano jedną addytywną migrację `0040_content_role_reconciliation` z immutable ledgerem, approval/audit fingerprints i triggerami sprawdzającymi dokładne źródło po external effect.

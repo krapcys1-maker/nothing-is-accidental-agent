@@ -45,6 +45,13 @@ FACTUAL_CLAIM_EVIDENCE_OUTSIDE_PACKAGE = "FACTUAL_CLAIM_EVIDENCE_OUTSIDE_PACKAGE
 FACTUAL_CLAIM_SCOPE_NOT_CONFIRMED = "FACTUAL_CLAIM_SCOPE_NOT_CONFIRMED"
 INFERENCE_CONTAINS_EXTERNAL_FACT = "INFERENCE_CONTAINS_EXTERNAL_FACT"
 NON_FACTUAL_CLASSIFICATION_INCONSISTENT = "NON_FACTUAL_CLASSIFICATION_INCONSISTENT"
+# An inference is reasoning *over* the frozen material, so it never carries its
+# own citation.  A cited inference is either a grounded fact that was filed
+# under the wrong class, or a new claim wearing an inference label; the first
+# live review showed both, so the cardinality is now an explicit invariant.
+INFERENCE_EVIDENCE_NOT_EMPTY = "INFERENCE_EVIDENCE_NOT_EMPTY"
+DOCUMENT_REVIEW_MISSING = "DOCUMENT_REVIEW_MISSING"
+DOCUMENT_REVIEW_FAILED = "DOCUMENT_REVIEW_FAILED"
 
 _STOPWORDS = frozenset("""
 a an and are as at be been but by for from had has have how in into is it its
@@ -156,6 +163,19 @@ class ClaimReviewOutcome(str, Enum):
     BLOCK = "BLOCK"
 
 
+class SegmentKind(str, Enum):
+    """Which visible part of the article a coverage unit comes from.
+
+    The first live review accounted only for body sentences, so a title could
+    promise a mechanism the article never explained and still reach APPROVE.
+    Every visible element is now its own reviewable segment.
+    """
+
+    TITLE = "title"
+    SUBTITLE = "subtitle"
+    BODY = "body"
+
+
 @dataclass(frozen=True)
 class DraftClaimSegment:
     """One deterministic sentence-sized coverage unit from the actual draft."""
@@ -164,6 +184,7 @@ class DraftClaimSegment:
     segment_id: str
     fingerprint: str
     text: str
+    kind: SegmentKind = SegmentKind.BODY
 
     def payload(self) -> dict[str, Any]:
         return {
@@ -171,6 +192,7 @@ class DraftClaimSegment:
             "segment_id": self.segment_id,
             "fingerprint": self.fingerprint,
             "text": self.text,
+            "kind": self.kind.value,
         }
 
 
@@ -185,6 +207,106 @@ class ClaimAccountingEntry:
     reason: str
     outcome: ClaimReviewOutcome
     contains_external_fact: bool | None = None
+
+
+#: The one canonical consistency rule for a claim-accounting entry.
+#:
+#: ``contains_external_fact`` says the segment asserts a fact about the world.
+#: That is only legal for EVIDENCE_GROUNDED_FACT, which must then cite the
+#: evidence carrying it.  Reasoning and framing assert no outside fact and cite
+#: nothing.  The rule lived only in the shared quality gate, so the REVIEW-ONLY
+#: initial path — which reads entry outcomes directly — accepted a PASS entry
+#: classified ARGUMENT_OR_INFERENCE or NON_FACTUAL_PROSE while also declaring
+#: contains_external_fact=true.  It is now one predicate with one definition,
+#: enforced at the parser boundary and by every consumer of a reviewer result.
+CLASSIFICATION_CONTRACT_VIOLATION = "CLASSIFICATION_CONTRACT_VIOLATION"
+
+
+def classification_contract_error(
+    *,
+    classification: "ClaimClassification",
+    evidence_ids: tuple[str, ...],
+    contains_external_fact: bool | None,
+    outcome: "ClaimReviewOutcome | None" = None,
+) -> str | None:
+    """Return the exact violation of the canonical entry contract, or ``None``.
+
+    ``outcome`` matters for one case only: an uncited EVIDENCE_GROUNDED_FACT is
+    how the reviewer reports a factual claim the evidence does not support.
+    That must remain expressible, so it is legal while the outcome is BLOCK and
+    illegal as a PASS.
+    """
+    if classification is ClaimClassification.EVIDENCE_GROUNDED_FACT:
+        if not evidence_ids and outcome is not ClaimReviewOutcome.BLOCK:
+            return (
+                "EVIDENCE_GROUNDED_FACT cannot PASS without at least one evidence "
+                "id; report an unsupported factual claim as BLOCK instead."
+            )
+        # The class is defined as "asserts a fact about the world", so denying
+        # the external fact contradicts the classification exactly as much as
+        # claiming one on an inference does.  The flag is therefore equivalent
+        # to the class, in both directions.
+        if contains_external_fact is not True:
+            return (
+                "EVIDENCE_GROUNDED_FACT requires contains_external_fact=true; "
+                "a segment asserting no outside fact is not a grounded fact."
+            )
+        return None
+    if classification in (
+        ClaimClassification.ARGUMENT_OR_INFERENCE,
+        ClaimClassification.NON_FACTUAL_PROSE,
+    ):
+        if evidence_ids:
+            return f"{classification.value} requires evidence_ids to be exactly []."
+        if contains_external_fact is not False:
+            return (
+                f"{classification.value} requires contains_external_fact=false; "
+                "a segment asserting an outside fact is not reasoning or framing."
+            )
+        return None
+    return "classification is not one of the three supported classes."
+
+
+class DocumentCheck(str, Enum):
+    """Whole-article questions that per-segment accounting cannot answer.
+
+    Segment accounting is local: every sentence can be individually defensible
+    while the finished article still promises one mechanism and explains a
+    different one.  The first live review produced exactly that, so these are
+    now first-class gates rather than editorial advice.
+    """
+
+    TITLE_REFLECTS_BODY = "TITLE_REFLECTS_BODY"
+    TITLE_PROMISE_FULFILLED = "TITLE_PROMISE_FULFILLED"
+    TITLE_MECHANISM_EXPLAINED = "TITLE_MECHANISM_EXPLAINED"
+    BRIEF_QUESTION_ANSWERED = "BRIEF_QUESTION_ANSWERED"
+    THESIS_CONSISTENT = "THESIS_CONSISTENT"
+    CONCLUSIONS_WITHIN_EVIDENCE = "CONCLUSIONS_WITHIN_EVIDENCE"
+
+
+@dataclass(frozen=True)
+class DocumentReview:
+    """The reviewer's whole-article verdict plus concrete rewrite instructions."""
+
+    checks: dict[DocumentCheck, bool]
+    findings: tuple[str, ...]
+
+    @property
+    def failed_checks(self) -> tuple[DocumentCheck, ...]:
+        return tuple(check for check in DocumentCheck if not self.checks.get(check, False))
+
+    @property
+    def approved(self) -> bool:
+        return not self.failed_checks
+
+    def payload(self) -> dict[str, Any]:
+        return {
+            "approved": self.approved,
+            "checks": {check.value: bool(self.checks.get(check, False))
+                       for check in DocumentCheck},
+            "failed_checks": [check.value for check in self.failed_checks],
+            "findings": list(self.findings),
+        }
 
 
 class ClaimAccountingReviewPort(Protocol):
@@ -267,21 +389,60 @@ def _sentences(body: str) -> list[str]:
     return parts
 
 
+_SEGMENT_ID_PREFIX = {
+    SegmentKind.TITLE: "title",
+    SegmentKind.SUBTITLE: "subtitle",
+    SegmentKind.BODY: "sentence",
+}
+
+
+def _visible_elements(draft: FakeDraft) -> list[tuple[SegmentKind, str]]:
+    """Every reader-visible element of the draft, in reading order.
+
+    Title and subtitle are single units; the body is split into sentences.
+    ``subtitle`` is read defensively because the current draft contract does
+    not define one — when that field is added, it is covered without a second
+    change here.
+    """
+    elements: list[tuple[SegmentKind, str]] = []
+    title = (draft.title or "").strip()
+    if title:
+        elements.append((SegmentKind.TITLE, title))
+    subtitle = (getattr(draft, "subtitle", None) or "").strip()
+    if subtitle:
+        elements.append((SegmentKind.SUBTITLE, subtitle))
+    elements.extend(
+        (SegmentKind.BODY, sentence) for sentence in _sentences(draft.body or "")
+    )
+    return elements
+
+
 def build_claim_segments(draft: FakeDraft) -> tuple[DraftClaimSegment, ...]:
-    """Build the complete deterministic ARTICLE coverage surface."""
+    """Build the complete deterministic ARTICLE coverage surface.
+
+    ``kind`` is part of the fingerprint preimage, so a title can never be
+    silently replayed as a body sentence and an accounting produced against
+    the older body-only surface cannot be reused.
+    """
     segments: list[DraftClaimSegment] = []
-    for ordinal, sentence in enumerate(_sentences(draft.body or "")):
-        normalized = " ".join(sentence.split())
+    per_kind: dict[SegmentKind, int] = {}
+    draft_fingerprint = draft.fingerprint()
+    for ordinal, (kind, raw) in enumerate(_visible_elements(draft)):
+        normalized = " ".join(raw.split())
+        local = per_kind.get(kind, 0)
+        per_kind[kind] = local + 1
         fingerprint = sha256_text(canonical_json({
-            "draft_fingerprint": draft.fingerprint(),
+            "draft_fingerprint": draft_fingerprint,
+            "kind": kind.value,
             "ordinal": ordinal,
             "text": normalized,
         }))
         segments.append(DraftClaimSegment(
             ordinal=ordinal,
-            segment_id=f"sentence:{ordinal}:{fingerprint[:16]}",
+            segment_id=f"{_SEGMENT_ID_PREFIX[kind]}:{local}:{fingerprint[:16]}",
             fingerprint=fingerprint,
             text=normalized,
+            kind=kind,
         ))
     return tuple(segments)
 
@@ -406,6 +567,31 @@ def _account_article_claims(
                 None,
                 " ".join(str(exc).split())[:240] or "reviewer failed",
             ))
+        else:
+            # Segment accounting cannot see the article.  A reviewer that also
+            # returns a whole-article verdict makes it binding here, so a draft
+            # whose title promises an unexplained mechanism fails the gate even
+            # when every individual sentence is defensible.
+            document_review = getattr(reviewer, "last_document_review", None)
+            if isinstance(document_review, DocumentReview):
+                if not document_review.approved:
+                    findings.append(_claim_finding(
+                        DOCUMENT_REVIEW_FAILED,
+                        None,
+                        "; ".join([
+                            ",".join(
+                                check.value
+                                for check in document_review.failed_checks
+                            ),
+                            *document_review.findings,
+                        ])[:240],
+                    ))
+            elif document_review is not None:
+                findings.append(_claim_finding(
+                    DOCUMENT_REVIEW_MISSING,
+                    None,
+                    "reviewer returned an unusable whole-article verdict",
+                ))
 
     grouped: dict[str, list[ClaimAccountingEntry]] = {}
     for entry in parsed:
@@ -453,6 +639,14 @@ def _account_article_claims(
             local_codes.append(CLAIM_REVIEW_REASON_MISSING)
         outside = sorted(set(entry.evidence_ids) - allowed_evidence)
 
+        # One canonical contract, shared with the parser boundary.  The
+        # per-class codes below stay the operator-facing vocabulary.
+        contract_error = classification_contract_error(
+            classification=entry.classification,
+            evidence_ids=entry.evidence_ids,
+            contains_external_fact=entry.contains_external_fact,
+            outcome=entry.outcome,
+        )
         if entry.classification is ClaimClassification.EVIDENCE_GROUNDED_FACT:
             if not entry.evidence_ids:
                 local_codes.append(FACTUAL_CLAIM_EVIDENCE_MISSING)
@@ -463,6 +657,12 @@ def _account_article_claims(
         elif entry.classification is ClaimClassification.ARGUMENT_OR_INFERENCE:
             if entry.contains_external_fact is not False:
                 local_codes.append(INFERENCE_CONTAINS_EXTERNAL_FACT)
+            # An inference reasons over the frozen material and therefore cites
+            # nothing of its own.  Citing anything means it actually asserted a
+            # fact, which belongs in EVIDENCE_GROUNDED_FACT and must be judged
+            # against scope there rather than passing as "reasoning".
+            if entry.evidence_ids:
+                local_codes.append(INFERENCE_EVIDENCE_NOT_EMPTY)
             if outside:
                 local_codes.append(FACTUAL_CLAIM_EVIDENCE_OUTSIDE_PACKAGE)
         elif entry.classification is ClaimClassification.NON_FACTUAL_PROSE:
@@ -472,6 +672,8 @@ def _account_article_claims(
                 local_codes.append(NON_FACTUAL_CLASSIFICATION_INCONSISTENT)
         else:
             local_codes.append(CLAIM_CLASSIFICATION_UNKNOWN)
+        if contract_error is not None and not local_codes:
+            local_codes.append(CLASSIFICATION_CONTRACT_VIOLATION)
 
         if entry.outcome is ClaimReviewOutcome.BLOCK and not local_codes:
             local_codes.append(CLAIM_REVIEW_BLOCKED)

@@ -160,6 +160,7 @@ def test_migration_0006_backfills_all_historical_flows(tmp_path: Path):
             "0037_evidence_reresearch_lineage",
             "0038_content_provider_timeout", "0039_article_review_resume",
             "0040_content_role_reconciliation",
+        "0041_reviewer_document_quality_gate",
     ]
 
     rows = {
@@ -256,6 +257,7 @@ def test_migration_0006_runs_on_clean_empty_database(tmp_path: Path):
             "0037_evidence_reresearch_lineage",
             "0038_content_provider_timeout", "0039_article_review_resume",
             "0040_content_role_reconciliation",
+        "0041_reviewer_document_quality_gate",
     ]
     assert conn.execute("SELECT count(*) FROM research_runs").fetchone()[0] == 0
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
@@ -297,6 +299,7 @@ def test_migration_0006_without_paid_single_uuid(tmp_path: Path):
             "0037_evidence_reresearch_lineage",
             "0038_content_provider_timeout", "0039_article_review_resume",
             "0040_content_role_reconciliation",
+        "0041_reviewer_document_quality_gate",
     ]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
@@ -336,6 +339,7 @@ def test_migration_0006_without_either_local_single_uuid(tmp_path: Path):
             "0037_evidence_reresearch_lineage",
             "0038_content_provider_timeout", "0039_article_review_resume",
             "0040_content_role_reconciliation",
+        "0041_reviewer_document_quality_gate",
     ]
     flows = {row["id"]: row["flow"] for row in conn.execute(
         "SELECT id,flow FROM research_runs")}
@@ -417,6 +421,7 @@ def test_database_rejects_invalid_or_missing_flow(tmp_path: Path):
             "0037_evidence_reresearch_lineage",
             "0038_content_provider_timeout", "0039_article_review_resume",
             "0040_content_role_reconciliation",
+        "0041_reviewer_document_quality_gate",
     ]
     conn.execute(
         "INSERT INTO accounts "
@@ -482,6 +487,7 @@ def test_migration_0007_backfills_conservative_historical_attempt_lower_bound(tm
             "0037_evidence_reresearch_lineage",
             "0038_content_provider_timeout", "0039_article_review_resume",
             "0040_content_role_reconciliation",
+        "0041_reviewer_document_quality_gate",
     ]
 
     attempts_column = next(
@@ -553,6 +559,7 @@ def test_migration_0007_rolls_back_schema_when_ledger_insert_fails(tmp_path: Pat
             "0037_evidence_reresearch_lineage",
             "0038_content_provider_timeout", "0039_article_review_resume",
             "0040_content_role_reconciliation",
+        "0041_reviewer_document_quality_gate",
     ]
     assert "attempts" in {
         row["name"] for row in conn.execute("PRAGMA table_info(research_source_candidates)")
@@ -608,6 +615,7 @@ def test_migration_0008_rolls_back_force_marker_when_ledger_insert_fails(tmp_pat
             "0037_evidence_reresearch_lineage",
             "0038_content_provider_timeout", "0039_article_review_resume",
             "0040_content_role_reconciliation",
+        "0041_reviewer_document_quality_gate",
     ]
     force_column = next(
         row for row in conn.execute("PRAGMA table_info(research_runs)")

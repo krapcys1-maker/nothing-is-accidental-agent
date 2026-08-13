@@ -1,5 +1,24 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-13 — niezależny review `REJECT`: dwa obejścia reviewera
+
+- **P1-1.** Wspólna quality gate odrzucała sprzeczność „to nie jest fakt, ale zawiera fakt", lecz **początkowa ścieżka REVIEW-ONLY jej nie uruchamia** — decyzję wyprowadzała z samych `outcome`. Kontrpróba: `ARGUMENT_OR_INFERENCE`/`NON_FACTUAL_PROSE` + `contains_external_fact=true` + `evidence_ids=[]` + `PASS` → `APPROVE` i `PENDING_APPROVAL`. Wniosek ogólny: inwariant zapisany w jednym konsumencie nie jest inwariantem systemu.
+- **P1-2.** Trigger 0041 sprawdzał *liczbę* checków i `value!=1`. Sześć dowolnych nazw przechodziło, a ponieważ SQLite zwraca JSON `true` jako `1`, literalna liczba `1` też. Wniosek ogólny: w SQLite `json_each.value` nie odróżnia typów — do tego służy `json_each.type`.
+- **Przy zamykaniu P1-1 ujawniła się własna regresja poprzedniej fali:** wymóg „grounded fact zawsze cytuje" uniemożliwiał zgłoszenie niepopartego twierdzenia faktycznego. Naprawione: uncited `EVIDENCE_GROUNDED_FACT` jest legalny wyłącznie jako `BLOCK`.
+- **Content 5** trafił do `PENDING_APPROVAL` pod kontraktem v2 i **nie może przejść dalej** bez osobno autoryzowanego wycofania i ponownej oceny v3.
+- **Dodatkowe kontrpróby persistent boundary przed naprawą:** publiczny ordinary settlement przyjął sprzeczny `APPROVE`; publiczny REVIEW-ONLY settlement przepuścił brak `decision`, null identity/fingerprint, pusty reason, nietekstowe evidence, duplikat/obcy segment i dodatkowe pole dokumentu. Po naprawie oba API odmawiają przed zapisem, a niezależne raw-UPDATE próby zatrzymują triggery.
+- **Pierwszy pełny rerun po domknięciu settlementów:** 4 stare testy lifecycle tworzyły syntetyczny `ARTICLE_REVIEWER SUCCESS` bez draftu i z payloadem `b3-test`, więc nowy kontrakt poprawnie odrzucił fixture zanim test dotarł do ogólnej mechaniki lifecycle. Fixture przeniesiono na dozwoloną neutralną rolę `ARTICLE_PLAN`; jego 15/15 oraz finalny full `2771/2771` przechodzą. Walidacji reviewera nie osłabiono.
+- **Ostatnia kontrpróba identity:** publiczny ordinary settlement wybierał ścisłą walidację na podstawie roli dostarczonej przez caller, nie z immutable reservation. SQL nadal blokował sprzeczny zapis, ale Python boundary można było ominąć do triggera przez etykietę `ARTICLE_PLAN`. Selekcja używa teraz `row.logical_role`, a exact identity wymaga także zgodności `execution.role`; maskowanie kończy się atomowo `CONTENT_REVIEW_RESULT_IDENTITY_MISMATCH`.
+- **Przerwanie narzędziowe:** pierwszy zbiorczy focused run miał limit 60 s i został zakończony przez launcher bez wyniku produktu; identyczny rerun z poprawnym limitem dał 249/249.
+
+## 2026-08-13 — pierwszy realny REVIEW-ONLY: `APPROVE` bez jakości artykułu
+
+- Reviewer zwrócił `APPROVE` przy 29 segmentach `PASS`, mimo że tytuł obiecywał arytmetykę bunchingu, a tekst opisywał wadę metryki. Przyczyna: powierzchnia review obejmowała wyłącznie zdania `body`, więc tytuł nigdy nie był oceniany.
+- 18 twierdzeń empirycznych/przyczynowych przeszło jako `ARGUMENT_OR_INFERENCE` (m.in. „almost nobody consults the timetable”, „metryka nie wykrywa bunchingu”, scoring zachęcający do pośpiechu, legal mandates i union rules, utrata przesiadki, headway control zatrzymujący punktualnego operatora). Klasa „inference” nie miała granicy wobec nowych faktów.
+- Jeden `ARGUMENT_OR_INFERENCE` niósł `evidence_ids` mimo kontraktu „empty unless grounded”; parser sprawdzał tylko zakres, nie kardynalność — quality gate też nie, choć analogiczny warunek istniał dla `NON_FACTUAL_PROSE`.
+- `APPROVE` sprawdzał wyłącznie claim accounting; nie istniała żadna bramka całodokumentowa, więc zgodność tytułu z treścią, realizacja obietnicy i spójność tezy nie były w ogóle pytaniem.
+- Naprawa jest kontraktowa, nie punktowa: żaden z tych błędów nie może przejść w kolejnych artykułach. Szczegóły w ADR-147.
+
 ## 2026-08-13 — realne timeouty ujawniły brak resolvera dla dwóch ledgerów CONTENT
 
 - Writer v1 trafił do `provider_attempts.NEEDS_RECONCILIATION`, a reviewerzy v4/v5 do terminalnego `role_provider_executions.NEEDS_VERIFICATION`; dotychczasowy resolver WAVE 1 obejmował inny kontrakt i nie potrafił audytowalnie rozstrzygnąć obu tych źródeł bez fikcyjnego actual cost.
