@@ -211,7 +211,14 @@ def run_controlled_article(
             dispatcher=dispatcher,
             lease_owner=owner,
             target_job_id=authority.job_id,
-            lease_seconds=60,
+            # One run_once may make up to four provider calls - writer and
+            # reviewer, twice, at up to 300s each - so a 60s lease is shorter
+            # than the work it guards. A live article lost its lease after the
+            # writer and reviewer had both succeeded and been paid, leaving the
+            # job RUNNING with the draft and the review stranded and nothing
+            # terminalised. The heartbeat should renew this and did not; until
+            # that is understood the lease itself has to outlast the work.
+            lease_seconds=1800,
             heartbeat_interval_seconds=20.0,
             heartbeat_startup_timeout_seconds=5.0,
             heartbeat_shutdown_timeout_seconds=5.0,
