@@ -61,6 +61,41 @@ REVIEWER_TIMEOUT_SECONDS = 300.0
 REVIEWER_MAX_OUTPUT_TOKENS = 8_192
 REVIEWER_MAX_INPUT_TOKENS = 23_808
 
+# How many segments one reviewer call may be asked to account for.
+#
+# The ceiling above is not raisable: the qualified capability declaration is
+# 32000/8192, so a wider output ceiling costs a new paid qualification.  What
+# scales the answer is the number of segments, not the length of the article --
+# one entry per segment, plus adaptive thinking proportional to how many
+# judgements are being made.  Two live observations bound the real capacity:
+#
+#   * 48 segments came back as one complete JSON object;
+#   * 64 segments of an article the same length ran out of output tokens
+#     mid-object and the whole paid review was discarded.
+#
+# So the true limit lies somewhere in (48, 64], and 48 is the largest count
+# actually observed to complete.  It is also the safer of the two ends for a
+# second reason: those observations were made while every entry still carried
+# seven fields, and the entry contract has since been trimmed to four required
+# fields, which bought roughly 35 percent of headroom.  A 48-segment chunk
+# therefore runs today with about a third of its budget spare against the only
+# configuration ever seen to succeed.
+#
+# Below the line one call is made, exactly as before -- picking a smaller number
+# would double the cost of ordinary articles that are known to fit, and a review
+# that cannot be afforded destroys the research card just as thoroughly as one
+# that truncates.  Above the line the segments are split into equal chunks, so
+# crossing the line by one segment yields two chunks of 25 rather than one of 48
+# plus one of 1.
+REVIEWER_MAX_SEGMENTS_PER_CALL = 48
+
+# Each chunk re-sends the whole article and the whole evidence package, so the
+# job pays a full input pass per chunk.  Beyond four chunks the draft is long
+# enough that a human should look at it before roughly 1.30 USD of review is
+# authorised, and the refusal below happens before any call is made, so it costs
+# nothing.
+REVIEWER_MAX_CHUNKS = 4
+
 
 @dataclass(frozen=True)
 class ReviewerRequestIntent:
@@ -255,9 +290,22 @@ CONCLUSIONS_WITHIN_EVIDENCE - conclusions do not reach past the evidence.
 For every false check add a specific, actionable rewrite instruction to findings.
 If every check is true, findings must be [].
 
+A long article's accounting does not fit one answer, so it may be split across
+several requests. Every request carries the WHOLE article and the WHOLE evidence
+package; only the list of segments you must account for changes. If the request
+carries account_for_segment_ids, return exactly one entry for each id in that
+list and no entry for any other segment - the other segments are context you
+read but do not account for here. If it carries no such list, account for every
+supplied segment. Judge each segment in the context of the whole article either
+way; the split changes what you report, never what you read.
+
+Return document_review only when required_output asks for it. When it does not,
+the whole-article verdict was already given in another request and repeating it
+would contradict it.
+
 Return exactly one JSON object and nothing else. No Markdown, no code fence, no
-prose before or after it. Return exactly one entry per supplied segment_id,
-copying each segment_id verbatim.
+prose before or after it. Return exactly one entry per segment_id you were asked
+to account for, copying each segment_id verbatim.
 
 Each entry carries FOUR fields and no others: segment_id, classification,
 reason, outcome. Add evidence_ids ONLY for EVIDENCE_GROUNDED_FACT, where it is
@@ -282,6 +330,47 @@ class ProductionReviewerError(RuntimeError):
         self.detail = detail
 
 
+def plan_review_chunks(
+    segments: tuple[DraftClaimSegment, ...],
+) -> tuple[tuple[DraftClaimSegment, ...], ...]:
+    """Split the coverage surface into calls that fit the output ceiling.
+
+    The chunks partition ``segments`` in reading order: every segment appears in
+    exactly one chunk, and their concatenation is the original tuple.  Sizes are
+    balanced rather than greedy, so a draft that crosses the line by one segment
+    produces two comfortable calls instead of one at the edge plus a stub.
+    """
+    ordered = tuple(segments)
+    total = len(ordered)
+    if total <= REVIEWER_MAX_SEGMENTS_PER_CALL:
+        return (ordered,)
+    chunk_count = -(-total // REVIEWER_MAX_SEGMENTS_PER_CALL)
+    if chunk_count > REVIEWER_MAX_CHUNKS:
+        raise ProductionReviewerError(
+            "REVIEWER_SEGMENT_COUNT_UNSUPPORTED",
+            f"A draft of {total} segments would need {chunk_count} paid reviewer "
+            f"calls; at most {REVIEWER_MAX_CHUNKS} are permitted without a human "
+            "decision. No provider call was made.",
+        )
+    base, extra = divmod(total, chunk_count)
+    chunks: list[tuple[DraftClaimSegment, ...]] = []
+    start = 0
+    for index in range(chunk_count):
+        size = base + (1 if index < extra else 0)
+        chunks.append(ordered[start:start + size])
+        start += size
+    return tuple(chunks)
+
+
+def accounted_segments_fingerprint(
+    segments: tuple[DraftClaimSegment, ...],
+) -> str:
+    """Identity of the exact slice one chunk was asked to account for."""
+    return hashlib.sha256(
+        canonical_json([segment.segment_id for segment in segments]).encode("utf-8")
+    ).hexdigest()
+
+
 def assemble_reviewer_prompt(
     *,
     draft_fingerprint: str,
@@ -289,8 +378,28 @@ def assemble_reviewer_prompt(
     evidence: tuple[FrozenEvidenceItem, ...],
     segments: tuple[DraftClaimSegment, ...],
     lineage: dict[str, Any],
+    account_for: tuple[DraftClaimSegment, ...] | None = None,
+    chunk_no: int = 1,
+    chunk_count: int = 1,
 ) -> str:
-    """Build the exact reviewer user prompt; no secret and no raw style corpus."""
+    """Build the exact reviewer user prompt; no secret and no raw style corpus.
+
+    ``account_for`` is the slice of ``segments`` this call must account for. It
+    is omitted for an unsplit review, and the payload is then byte-identical to
+    the one this function has always produced -- which matters, because a stored
+    REVIEW-ONLY approval is bound to that prompt's fingerprint.
+    """
+    chunked = account_for is not None
+    if chunked and chunk_count < 2:
+        raise ProductionReviewerError(
+            "REVIEWER_CHUNK_PLAN_INVALID",
+            "A per-chunk accounting list requires at least two chunks.",
+        )
+    if not chunked and chunk_count != 1:
+        raise ProductionReviewerError(
+            "REVIEWER_CHUNK_PLAN_INVALID",
+            "A multi-chunk review must name the segments each call accounts for.",
+        )
     payload = {
         "contract": {
             "logical_model_role": LogicalModelRole.ARTICLE_REVIEWER.value,
@@ -315,9 +424,13 @@ def assemble_reviewer_prompt(
         "required_output": {
             "reviewer_version": "string equal to the contract reviewer_version",
             "entries": (
-                "array with exactly one object per supplied segment_id, each "
-                "with: segment_id, segment_fingerprint (FIRST 16 CHARACTERS "
-                "ONLY), classification "
+                "array with exactly one object per "
+                + (
+                    "segment_id listed in account_for_segment_ids"
+                    if chunked else "supplied segment_id"
+                )
+                + ", each with: segment_id, segment_fingerprint (FIRST 16 "
+                "CHARACTERS ONLY), classification "
                 "(EVIDENCE_GROUNDED_FACT | ARGUMENT_OR_INFERENCE | "
                 "NON_FACTUAL_PROSE), evidence_ids (array of allowed "
                 "confirmed_claim_id values; non-empty for a PASSing "
@@ -327,15 +440,37 @@ def assemble_reviewer_prompt(
                 "words), outcome (PASS | BLOCK), contains_external_fact "
                 "(boolean; false for ARGUMENT_OR_INFERENCE and NON_FACTUAL_PROSE)"
             ),
-            "document_review": (
-                "object with: checks (object whose keys are exactly "
-                + " | ".join(check.value for check in DocumentCheck)
-                + ", each a boolean) and findings (array of specific rewrite "
-                "instructions, one per false check, each at most 30 words; "
-                "exactly [] when every check is true)"
-            ),
         },
     }
+    if chunked:
+        # The whole article and the whole evidence package stay above; only the
+        # accounting list narrows.  The verdict on the article as a whole is
+        # asked for once, in the first chunk, so it can be neither duplicated
+        # nor contradicted.
+        payload["contract"]["review_chunk"] = {
+            "chunk_no": chunk_no,
+            "chunk_count": chunk_count,
+            "reason": (
+                "The per-segment accounting for this draft does not fit one "
+                "answer within the reviewer output ceiling."
+            ),
+        }
+        payload["account_for_segment_ids"] = [
+            segment.segment_id for segment in account_for
+        ]
+    if chunk_no == 1:
+        payload["required_output"]["document_review"] = (
+            "object with: checks (object whose keys are exactly "
+            + " | ".join(check.value for check in DocumentCheck)
+            + ", each a boolean) and findings (array of specific rewrite "
+            "instructions, one per false check, each at most 30 words; "
+            "exactly [] when every check is true)"
+        )
+    else:
+        payload["required_output"]["document_review"] = (
+            "OMIT this key entirely; the whole-article verdict belongs to "
+            "chunk 1 of this review"
+        )
     return canonical_json(payload)
 
 
@@ -394,12 +529,19 @@ def parse_reviewer_response(
     *,
     segments: tuple[DraftClaimSegment, ...],
     allowed_evidence_ids: frozenset[str] | None = None,
-) -> tuple[tuple[ClaimAccountingEntry, ...], DocumentReview]:
+    expect_document_review: bool = True,
+) -> tuple[tuple[ClaimAccountingEntry, ...], DocumentReview | None]:
     """Map the transport response onto the claim-accounting and document contract.
 
     Structure, per-class evidence cardinality and the document verdict are
     validated here.  Coverage, identity and evidence-scope invariants stay
     where they already live, in the quality gate.
+
+    ``segments`` is what THIS response must account for: the whole draft for an
+    unsplit review, one chunk of it otherwise.  ``expect_document_review`` is
+    false for every chunk after the first, where the whole-article verdict was
+    already given and must not be restated; the response must then omit the key
+    entirely rather than repeat, contradict or invent a second verdict.
     """
     if not isinstance(text, str) or not text.strip():
         raise ProductionReviewerError(
@@ -412,13 +554,18 @@ def parse_reviewer_response(
             "REVIEWER_RESPONSE_NOT_JSON",
             "The reviewer response is not one JSON object.",
         ) from exc
-    if type(payload) is not dict or set(payload) != {
-        "reviewer_version", "entries", "document_review",
-    }:
+    required_keys = (
+        {"reviewer_version", "entries", "document_review"}
+        if expect_document_review else {"reviewer_version", "entries"}
+    )
+    if type(payload) is not dict or set(payload) != required_keys:
         raise ProductionReviewerError(
             "REVIEWER_RESPONSE_CONTRACT_INVALID",
             "The reviewer response must contain exactly reviewer_version, "
-            "entries and document_review.",
+            "entries and document_review."
+            if expect_document_review else
+            "A continuation chunk must contain exactly reviewer_version and "
+            "entries; the whole-article verdict belongs to the first chunk.",
         )
     if type(payload["reviewer_version"]) is not str or (
         payload["reviewer_version"] != REVIEWER_VERSION
@@ -582,6 +729,8 @@ def parse_reviewer_response(
             "REVIEWER_RESPONSE_INCOMPLETE",
             "The reviewer did not account for every supplied segment exactly once.",
         )
+    if not expect_document_review:
+        return tuple(entries), None
     return tuple(entries), _parse_document_review(payload["document_review"])
 
 
@@ -608,6 +757,28 @@ def safe_reviewer_response_artifact(text: object) -> dict[str, object]:
         "redacted_text": redacted[:262_144],
         "truncated": len(redacted) > 262_144,
     }
+
+
+def _sum_usage(usages: list[RoleUsage], raw: Any) -> RoleUsage:
+    """Total token usage of every chunk that actually returned.
+
+    The umbrella settles this once, so a chunked review is priced from the same
+    frozen profile and lands in ``model_usage`` exactly once.  For a single call
+    the result is that call's own usage, unchanged.  ``inference_geo`` and
+    ``service_tier`` describe the last response, which is what an unsplit review
+    reported too.  An empty list is a known zero -- no call was made at all --
+    and never an unknown; unknown is expressed by passing ``usage=None`` to the
+    settlement instead.
+    """
+    return RoleUsage(
+        input_tokens=sum(usage.input_tokens for usage in usages),
+        output_tokens=sum(usage.output_tokens for usage in usages),
+        cache_read_tokens=sum(usage.cache_read_tokens for usage in usages),
+        cache_write_tokens=sum(usage.cache_write_tokens for usage in usages),
+        web_search_requests=sum(usage.web_search_requests for usage in usages),
+        inference_geo=None if raw is None else raw.inference_geo,
+        service_tier=None if raw is None else raw.service_tier,
+    )
 
 
 class ProductionArticleReviewer:
@@ -720,20 +891,58 @@ class ProductionArticleReviewer:
         run_id = str(content["run_id"])
         attempt_no = int(draft.attempt_no)
         authority, _ = self._authority()
+        lineage = {"job_id": self._job_id, "run_id": run_id,
+                   "content_id": content_id}
+        resume = self._resume_intent
+
+        # 1. Uncertain reservations are reconciliation items, never retries.
+        #    This is asked first so a restart after a crash is told what its
+        #    open reservation is, rather than something about this draft.
+        if resume is None:
+            existing = self._storage.get_role_provider_execution(
+                content_id=content_id, role=LogicalModelRole.ARTICLE_REVIEWER,
+                attempt_no=attempt_no,
+            )
+            if existing is not None:
+                if str(existing["outcome"]) == "IN_FLIGHT":
+                    started = existing["external_effect_started_at"] is not None
+                    raise ProductionReviewerError(
+                        "CONTENT_REVIEWER_RESULT_UNCERTAIN" if started
+                        else "CONTENT_REVIEWER_RESERVATION_OPEN",
+                        "A reviewer execution is already reserved for this content; "
+                        "its provider outcome is unknown and is never replayed.",
+                    )
+                raise ProductionReviewerError(
+                    "CONTENT_REVIEWER_ALREADY_SETTLED",
+                    "This content already has a terminal reviewer execution.",
+                )
+
+        # The plan is made before anything is reserved and before any transport
+        # is touched, so an unsupported draft costs nothing at all.
+        chunks = plan_review_chunks(segments)
+        chunk_count = len(chunks)
         prompt = assemble_reviewer_prompt(
             draft_fingerprint=draft.fingerprint(),
             brief=brief,
             evidence=evidence,
             segments=segments,
-            lineage={"job_id": self._job_id, "run_id": run_id,
-                     "content_id": content_id},
+            lineage=lineage,
         )
         prompt_fingerprint = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
-        resume = self._resume_intent
         execution_ref = (
             resume.execution_ref if resume is not None else
             f"{self._job_id}:{LogicalModelRole.ARTICLE_REVIEWER.value}:{attempt_no}"
         )
+        if resume is not None and chunk_count > 1:
+            # A REVIEW-ONLY approval is one immutable row that authorises one
+            # reviewer call per stage at one declared cost.  Splitting the stage
+            # would spend the chain cap on calls the owner never approved, so the
+            # stage refuses before it reserves or spends anything.
+            raise ProductionReviewerError(
+                "REVIEW_RESUME_CHUNKING_UNAPPROVED",
+                f"This draft needs {chunk_count} reviewer calls; the REVIEW-ONLY "
+                "approval authorises one per stage. No provider call was made.",
+            )
 
         if resume is not None:
             if (
@@ -764,28 +973,11 @@ class ProductionArticleReviewer:
                 execution_ref, now=self._clock.now(),
             )
         else:
-
-            # 1. Uncertain reservations are reconciliation items, never retries.
-            existing = self._storage.get_role_provider_execution(
-                content_id=content_id, role=LogicalModelRole.ARTICLE_REVIEWER,
-                attempt_no=attempt_no,
-            )
-            if existing is not None:
-                if str(existing["outcome"]) == "IN_FLIGHT":
-                    started = existing["external_effect_started_at"] is not None
-                    raise ProductionReviewerError(
-                        "CONTENT_REVIEWER_RESULT_UNCERTAIN" if started
-                        else "CONTENT_REVIEWER_RESERVATION_OPEN",
-                        "A reviewer execution is already reserved for this content; "
-                        "its provider outcome is unknown and is never replayed.",
-                    )
-                raise ProductionReviewerError(
-                    "CONTENT_REVIEWER_ALREADY_SETTLED",
-                    "This content already has a terminal reviewer execution.",
-                )
-
-            # 2. One ARTICLE budget, shared with the writer.
-            ceiling = self.max_legal_cost(authority)
+            # 2. One ARTICLE budget, shared with the writer.  A split review
+            #    reserves the full legal cost of EVERY planned call up front, so
+            #    a job that cannot afford the whole plan is refused before the
+            #    first chunk is paid for rather than halfway through it.
+            ceiling = self.max_legal_cost(authority) * chunk_count
 
             # 3. Durable IN_FLIGHT, then the durable external-effect stamp.
             self._storage.begin_role_provider_execution(
@@ -800,80 +992,361 @@ class ProductionArticleReviewer:
                 execution_ref, now=self._clock.now(),
             )
 
-        # 4. Exactly one provider call.
-        try:
-            self.provider_calls += 1
-            raw = self._adapter.execute(ControlledProviderRequest(
-                technical_model_id=authority.technical_model_id,
-                system_prompt=_SYSTEM,
-                user_prompt=prompt,
-                max_output_tokens=REVIEWER_MAX_OUTPUT_TOKENS,
-                timeout_seconds=self._timeout_seconds,
-                inference_config=ARTICLE_REVIEWER_INFERENCE_CONFIG,
-                stream_response=True,
-            ))
-        except BaseException as exc:
-            self._settle(
-                execution_ref, authority, run_id, content_id, attempt_no,
-                outcome="NEEDS_VERIFICATION",
-                failure_kind="REVIEWER_RESULT_UNKNOWN",
-                usage=None, returned_model_id=None,
-                detail=f"{type(exc).__name__}", stop_reason=None,
-                provider_request_id=None,
-            )
-            raise
-
-        usage = RoleUsage(
-            input_tokens=raw.input_tokens,
-            output_tokens=raw.output_tokens,
-            cache_read_tokens=raw.cache_read_tokens,
-            cache_write_tokens=raw.cache_write_tokens,
-            web_search_requests=raw.web_search_requests,
-            inference_geo=raw.inference_geo,
-            service_tier=raw.service_tier,
+        # 4. One provider call per chunk.  A single-chunk review makes exactly
+        #    the one call it always made, against the byte-identical prompt.
+        allowed_evidence_ids = frozenset(
+            item.confirmed_claim_id for item in evidence
         )
+        per_call_ceiling = self.max_legal_cost(authority)
+        collected: list[ClaimAccountingEntry] = []
+        settled_usage: list[RoleUsage] = []
+        chunk_records: list[dict[str, Any]] = []
+        document_review: DocumentReview | None = None
+        raw = None
 
-        # 5. Identity and disabled-feature gates, then the structured contract.
-        try:
-            assert_returned_model_identity(
-                requested_model_id=authority.technical_model_id,
-                returned_model_id=raw.returned_model_id,
+        for chunk_no, chunk in enumerate(chunks, start=1):
+            chunk_prompt = prompt if chunk_count == 1 else assemble_reviewer_prompt(
+                draft_fingerprint=draft.fingerprint(),
+                brief=brief,
+                evidence=evidence,
+                segments=segments,
+                lineage=lineage,
+                account_for=chunk,
+                chunk_no=chunk_no,
+                chunk_count=chunk_count,
             )
-            assert_no_disabled_feature_usage(
+            chunk_ref: str | None = None
+            if chunk_count > 1:
+                # Every chunk is its own paid external effect: its own durable
+                # reference, its own reservation carved out of the umbrella, and
+                # its own effect stamp, all before the transport is touched.
+                chunk_ref = f"{execution_ref}:chunk:{chunk_no}/{chunk_count}"
+                try:
+                    self._storage.begin_content_review_chunk_execution(
+                        chunk_execution_ref=chunk_ref,
+                        parent_execution_ref=execution_ref,
+                        job_id=self._job_id,
+                        run_id=run_id,
+                        content_id=content_id,
+                        attempt_no=attempt_no,
+                        chunk_no=chunk_no,
+                        chunk_count=chunk_count,
+                        segment_count=len(chunk),
+                        accounted_segments_fingerprint=(
+                            accounted_segments_fingerprint(chunk)
+                        ),
+                        prompt_fingerprint=hashlib.sha256(
+                            chunk_prompt.encode("utf-8"),
+                        ).hexdigest(),
+                        requests_document_review=chunk_no == 1,
+                        reserved_cost_usd=per_call_ceiling,
+                        provider=authority.provider,
+                        technical_model_id=authority.technical_model_id,
+                        now=self._clock.now(),
+                    )
+                    self._storage.mark_content_review_chunk_effect_started(
+                        chunk_ref, now=self._clock.now(),
+                    )
+                except BaseException as exc:
+                    # This chunk never reached the transport, so the review is
+                    # over and it cost exactly what the earlier chunks cost --
+                    # zero if this was the first.  The umbrella is settled with
+                    # that known amount rather than left reserved, because an
+                    # open reservation whose effect has started blocks every
+                    # further paid action on the job until a human reconciles it.
+                    self._settle(
+                        execution_ref, authority, run_id, content_id, attempt_no,
+                        outcome="FAILURE",
+                        failure_kind=getattr(
+                            exc, "code", "REVIEWER_CHUNK_NOT_RESERVED",
+                        ),
+                        usage=_sum_usage(settled_usage, raw),
+                        returned_model_id=(
+                            None if raw is None else raw.returned_model_id
+                        ),
+                        detail=str(exc)[:200], stop_reason=None,
+                        provider_request_id=None,
+                        chunk_summary=self._chunk_summary(
+                            chunk_count, chunk_records, failed_chunk_no=chunk_no,
+                            settled_usage=settled_usage, authority=authority,
+                        ),
+                    )
+                    raise
+
+            try:
+                self.provider_calls += 1
+                raw = self._adapter.execute(ControlledProviderRequest(
+                    technical_model_id=authority.technical_model_id,
+                    system_prompt=_SYSTEM,
+                    user_prompt=chunk_prompt,
+                    max_output_tokens=REVIEWER_MAX_OUTPUT_TOKENS,
+                    timeout_seconds=self._timeout_seconds,
+                    inference_config=ARTICLE_REVIEWER_INFERENCE_CONFIG,
+                    stream_response=True,
+                ))
+            except BaseException as exc:
+                # This call's outcome is unknown, so the review's total cost is
+                # unknown even though earlier chunks settled a known cost.  The
+                # umbrella therefore settles literally unknown and the operator
+                # reconciliation path owns it; the per-chunk ledger still shows
+                # exactly which calls did return and what they cost.
+                self._settle_chunk(
+                    chunk_ref, chunk_no, chunk_count, chunk,
+                    outcome="NEEDS_VERIFICATION",
+                    failure_kind="REVIEWER_RESULT_UNKNOWN",
+                    usage=None, cost_usd=None, returned_model_id=None,
+                    detail=f"{type(exc).__name__}", stop_reason=None,
+                    provider_request_id=None, authority=authority,
+                )
+                self._settle(
+                    execution_ref, authority, run_id, content_id, attempt_no,
+                    outcome="NEEDS_VERIFICATION",
+                    failure_kind="REVIEWER_RESULT_UNKNOWN",
+                    usage=None, returned_model_id=None,
+                    detail=f"{type(exc).__name__}", stop_reason=None,
+                    provider_request_id=None,
+                    chunk_summary=self._chunk_summary(
+                        chunk_count, chunk_records, failed_chunk_no=chunk_no,
+                        settled_usage=settled_usage, authority=authority,
+                    ),
+                )
+                raise
+
+            usage = RoleUsage(
+                input_tokens=raw.input_tokens,
+                output_tokens=raw.output_tokens,
                 cache_read_tokens=raw.cache_read_tokens,
                 cache_write_tokens=raw.cache_write_tokens,
                 web_search_requests=raw.web_search_requests,
+                inference_geo=raw.inference_geo,
+                service_tier=raw.service_tier,
             )
-            entries, document_review = parse_reviewer_response(
-                raw.text,
-                segments=segments,
-                allowed_evidence_ids=frozenset(
-                    item.confirmed_claim_id for item in evidence
+
+            # 5. Identity and disabled-feature gates, then the structured
+            #    contract for exactly the segments this call was asked about.
+            try:
+                assert_returned_model_identity(
+                    requested_model_id=authority.technical_model_id,
+                    returned_model_id=raw.returned_model_id,
+                )
+                assert_no_disabled_feature_usage(
+                    cache_read_tokens=raw.cache_read_tokens,
+                    cache_write_tokens=raw.cache_write_tokens,
+                    web_search_requests=raw.web_search_requests,
+                )
+                entries, chunk_document = parse_reviewer_response(
+                    raw.text,
+                    segments=chunk,
+                    allowed_evidence_ids=allowed_evidence_ids,
+                    expect_document_review=chunk_no == 1,
+                )
+            except (ControlledAdapterError, ProductionReviewerError) as exc:
+                # One bad chunk fails the whole review.  Nothing partial is ever
+                # returned to the quality gate: the entries already paid for are
+                # preserved in the durable per-chunk record for the operator,
+                # and the caller sees the same terminal failure it would have
+                # seen from an unsplit review.
+                self._settle_chunk(
+                    chunk_ref, chunk_no, chunk_count, chunk,
+                    outcome="FAILURE",
+                    failure_kind=getattr(exc, "code", "REVIEWER_FAILED"),
+                    usage=usage, cost_usd=authority.settle(usage),
+                    returned_model_id=raw.returned_model_id,
+                    detail=str(exc)[:200], stop_reason=raw.stop_reason,
+                    provider_request_id=raw.provider_request_id,
+                    authority=authority,
+                    diagnostic_artifact=safe_reviewer_response_artifact(raw.text),
+                )
+                settled_usage.append(usage)
+                self._settle(
+                    execution_ref, authority, run_id, content_id, attempt_no,
+                    outcome="FAILURE",
+                    failure_kind=getattr(exc, "code", "REVIEWER_FAILED"),
+                    usage=_sum_usage(settled_usage, raw),
+                    returned_model_id=raw.returned_model_id,
+                    detail=str(exc)[:200],
+                    stop_reason=raw.stop_reason,
+                    provider_request_id=raw.provider_request_id,
+                    diagnostic_artifact=safe_reviewer_response_artifact(raw.text),
+                    chunk_summary=self._chunk_summary(
+                        chunk_count, chunk_records, failed_chunk_no=chunk_no,
+                        settled_usage=settled_usage, authority=authority,
+                    ),
+                )
+                raise
+
+            self._settle_chunk(
+                chunk_ref, chunk_no, chunk_count, chunk,
+                outcome="SUCCESS", failure_kind=None, usage=usage,
+                cost_usd=authority.settle(usage),
+                returned_model_id=raw.returned_model_id,
+                detail=None, stop_reason=raw.stop_reason,
+                provider_request_id=raw.provider_request_id,
+                authority=authority, entry_count=len(entries),
+            )
+            settled_usage.append(usage)
+            collected.extend(entries)
+            chunk_records.append({
+                "chunk_no": chunk_no,
+                "chunk_execution_ref": chunk_ref,
+                "segment_count": len(chunk),
+                "entry_count": len(entries),
+                "accounted_segments_fingerprint": (
+                    accounted_segments_fingerprint(chunk)
                 ),
-            )
-            self.last_document_review = document_review
-        except (ControlledAdapterError, ProductionReviewerError) as exc:
+                "stop_reason": raw.stop_reason,
+                "provider_request_id": raw.provider_request_id,
+                "cost_usd": format(authority.settle(usage), ".6f"),
+            })
+            if chunk_no == 1:
+                document_review = chunk_document
+
+        assert raw is not None
+        entries = tuple(collected)
+        total_usage = _sum_usage(settled_usage, raw)
+
+        # 6. Coverage of the whole draft, across every chunk combined.  The
+        #    parser already enforced it per call, and the settlement validator
+        #    rebuilds the segment surface from the durable draft and enforces it
+        #    again; this is the cheap check that names the defect precisely
+        #    before a paid SUCCESS is attempted.
+        aggregate_failure = self._aggregate_contract_error(
+            segments=segments, entries=entries, document_review=document_review,
+        )
+        if aggregate_failure is not None:
+            code, detail = aggregate_failure
             self._settle(
                 execution_ref, authority, run_id, content_id, attempt_no,
-                outcome="FAILURE", failure_kind=getattr(exc, "code", "REVIEWER_FAILED"),
-                usage=usage, returned_model_id=raw.returned_model_id,
-                detail=str(exc)[:200],
+                outcome="FAILURE", failure_kind=code, usage=total_usage,
+                returned_model_id=raw.returned_model_id, detail=detail,
                 stop_reason=raw.stop_reason,
                 provider_request_id=raw.provider_request_id,
-                diagnostic_artifact=safe_reviewer_response_artifact(raw.text),
+                chunk_summary=self._chunk_summary(
+                    chunk_count, chunk_records, failed_chunk_no=None,
+                    settled_usage=settled_usage, authority=authority,
+                ),
             )
-            raise
+            raise ProductionReviewerError(code, detail)
 
+        self.last_document_review = document_review
         self._settle(
             execution_ref, authority, run_id, content_id, attempt_no,
-            outcome="SUCCESS", failure_kind=None, usage=usage,
+            outcome="SUCCESS", failure_kind=None, usage=total_usage,
             returned_model_id=raw.returned_model_id,
             detail=None, entry_count=len(entries),
             entries=entries, document_review=document_review,
             stop_reason=raw.stop_reason,
             provider_request_id=raw.provider_request_id,
+            chunk_summary=self._chunk_summary(
+                chunk_count, chunk_records, failed_chunk_no=None,
+                settled_usage=settled_usage, authority=authority,
+            ),
         )
         return entries
+
+    @staticmethod
+    def _aggregate_contract_error(
+        *,
+        segments: tuple[DraftClaimSegment, ...],
+        entries: tuple[ClaimAccountingEntry, ...],
+        document_review: DocumentReview | None,
+    ) -> tuple[str, str] | None:
+        """Refuse anything the chunks together do not add up to."""
+        if document_review is None:
+            return (
+                "REVIEWER_DOCUMENT_REVIEW_MISSING",
+                "The first chunk returned no whole-article verdict.",
+            )
+        accounted = [entry.segment_id for entry in entries]
+        if len(set(accounted)) != len(accounted):
+            return (
+                "REVIEWER_CHUNK_COVERAGE_DUPLICATE",
+                "Two chunks accounted for the same segment.",
+            )
+        if set(accounted) != {segment.segment_id for segment in segments}:
+            return (
+                "REVIEWER_CHUNK_COVERAGE_INCOMPLETE",
+                "The chunks together did not account for every draft segment "
+                "exactly once.",
+            )
+        return None
+
+    @staticmethod
+    def _chunk_summary(
+        chunk_count: int,
+        chunk_records: list[dict[str, Any]],
+        *,
+        failed_chunk_no: int | None,
+        settled_usage: list[RoleUsage],
+        authority: RoleProviderAuthority,
+    ) -> dict[str, Any] | None:
+        """The durable account of a split review; ``None`` when it was not split."""
+        if chunk_count == 1:
+            return None
+        known = sum(
+            (authority.settle(usage) for usage in settled_usage), Decimal("0"),
+        )
+        return {
+            "chunk_count": chunk_count,
+            "completed_chunks": len(chunk_records),
+            "failed_chunk_no": failed_chunk_no,
+            "known_chunk_cost_usd": format(known, ".6f"),
+            "chunks": [dict(record) for record in chunk_records],
+        }
+
+    def _settle_chunk(
+        self,
+        chunk_ref: str | None,
+        chunk_no: int,
+        chunk_count: int,
+        chunk: tuple[DraftClaimSegment, ...],
+        *,
+        outcome: str,
+        failure_kind: str | None,
+        usage: RoleUsage | None,
+        cost_usd: Decimal | None,
+        returned_model_id: str | None,
+        detail: str | None,
+        stop_reason: str | None,
+        provider_request_id: str | None,
+        authority: RoleProviderAuthority,
+        entry_count: int | None = None,
+        diagnostic_artifact: dict[str, object] | None = None,
+    ) -> None:
+        """Settle one chunk's own durable row; a no-op for an unsplit review."""
+        if chunk_ref is None:
+            return
+        payload: dict[str, Any] = {
+            "schema": "article_review_chunk_result_v1",
+            "reviewer_version": REVIEWER_VERSION,
+            "chunk_no": chunk_no,
+            "chunk_count": chunk_count,
+            "segment_count": len(chunk),
+            "accounted_segments_fingerprint": accounted_segments_fingerprint(chunk),
+            "inference_config_fingerprint": (
+                ARTICLE_REVIEWER_INFERENCE_CONFIG.evidence_fingerprint()
+            ),
+            "stop_reason": stop_reason,
+            "provider_request_id": provider_request_id,
+        }
+        if detail is not None:
+            payload["detail"] = detail
+        if entry_count is not None:
+            payload["entry_count"] = entry_count
+        if usage is None:
+            payload["usage_known"] = False
+        if diagnostic_artifact is not None:
+            payload["response_artifact"] = diagnostic_artifact
+        self._storage.settle_content_review_chunk_execution(
+            chunk_execution_ref=chunk_ref,
+            outcome=outcome,
+            failure_kind=failure_kind,
+            returned_model_id=returned_model_id,
+            usage=usage,
+            cost_usd=cost_usd,
+            result_payload=payload,
+            now=self._clock.now(),
+        )
 
     def _settle(
         self,
@@ -894,6 +1367,7 @@ class ProductionArticleReviewer:
         stop_reason: str | None = None,
         provider_request_id: str | None = None,
         diagnostic_artifact: dict[str, object] | None = None,
+        chunk_summary: dict[str, Any] | None = None,
     ) -> None:
         """Settle the reserved row once, pricing usage from the frozen profile."""
         cost = authority.settle(usage) if usage is not None else None
@@ -954,6 +1428,10 @@ class ProductionArticleReviewer:
             payload["usage_known"] = False
         if diagnostic_artifact is not None:
             payload["response_artifact"] = diagnostic_artifact
+        if chunk_summary is not None:
+            # Present only when the review was actually split, so an unsplit
+            # review settles the exact payload shape it always did.
+            payload["chunked_review"] = chunk_summary
         if self._resume_intent is not None:
             payload["request_intent_fingerprint"] = self._resume_intent.fingerprint()
             payload["draft_fingerprint"] = self._resume_intent.draft_fingerprint
@@ -991,11 +1469,15 @@ __all__ = [
     "DocumentReview",
     "ProductionArticleReviewer",
     "ProductionReviewerError",
+    "REVIEWER_MAX_CHUNKS",
     "REVIEWER_MAX_INPUT_TOKENS",
     "REVIEWER_MAX_OUTPUT_TOKENS",
+    "REVIEWER_MAX_SEGMENTS_PER_CALL",
     "REVIEWER_VERSION",
     "ReviewerRequestIntent",
+    "accounted_segments_fingerprint",
     "assemble_reviewer_prompt",
     "parse_reviewer_response",
+    "plan_review_chunks",
     "safe_reviewer_response_artifact",
 ]

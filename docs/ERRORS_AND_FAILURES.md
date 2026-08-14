@@ -1,5 +1,17 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-14 — sufit, którego nie wolno podnieść: przegląd urwany w środku zdania kasuje kartę
+
+- **Objaw:** `content 18` skończył na `REVIEWER_RESPONSE_NOT_JSON`. Reviewer nie odmówił i nie pomylił się merytorycznie — jego odpowiedź po prostu się skończyła w środku obiektu JSON, bo przekroczyła `8192` tokenów wyjścia. Cały opłacony przegląd poszedł do kosza, a wraz z nim karta badawcza za ~0.89 USD, bo `content_frozen_inputs.input_sha256` jest globalnie `UNIQUE` i nie zawiera `job_id`.
+- **Dlaczego to nie jest „podnieś limit":** `8192` nie jest ustawieniem. Kwalifikowana deklaracja zdolności brzmi `32000/8192`; zmiana wymaga nowej **płatnej** kwalifikacji roli. Sufit jest twardy z tej samej strony, z której chroni budżet.
+- **Prawdziwa zmienna:** wyjście reviewera rośnie z liczbą **segmentów**, a nie ze słowami. Artykuł 48-zdaniowy wrócił cały; artykuł tej samej długości pocięty na 64 zdania — nie. Przez to „krótszy tekst" nie jest zabezpieczeniem: styl krótkich zdań, który ta publikacja lubi, jest dokładnie tym, co przepełnia odpowiedź.
+- **Pierwsza naprawa była zapasem, nie lekarstwem.** Przycięcie wymaganych pól wpisu z siedmiu do czterech (segment_id, classification, reason, outcome) dołożyło ~35% zapasu. To przesunęło ścianę, nie usunęło jej — i tak było opisane w handoverze.
+- **Zamknięcie (ADR-155):** rozliczenie segmentów dzieli się na kilka płatnych wywołań, po ≤48 segmentów każde. Cały artykuł i cały pakiet dowodów idą w każdym wywołaniu, więc żaden kawałek nie ocenia zdania w oderwaniu od tekstu; werdykt całościowy zamawiany jest tylko raz.
+- **Czego to nie naprawia — wprost:** sama utrata karty przy awarii terminalnej. Hasz zamrożonego wejścia nadal nie zawiera `job_id`, więc **każda** inna przyczyna awarii nadal kasuje kartę bezpowrotnie. Ta fala usuwa jedną z przyczyn, a nie skutek.
+- **Wniosek ogólny:** limit, który zależy od kształtu treści, a nie od jej rozmiaru, nie da się obejść pisząc „mniej". Trzeba zmienić jednostkę pracy, a nie ilość pracy.
+- **Drugi wniosek — cena zabezpieczenia:** dzielenie kosztuje pełne wejście w każdym kawałku. Job, którego cap nie pokrywa całego planu, jest teraz odrzucany **przed** pierwszym wywołaniem. To lepsze niż zapłacić za kawałek 1 i odbić się od budżetu na kawałku 2, ale nadal kończy się utratą karty. Cap dla ARTICLE trzeba dobierać do liczby zdań, nie tylko do liczby prób.
+- **Koszt tej naprawy:** `0.00 USD`. Cała weryfikacja offline, na fałszywym transporcie.
+
 ## 2026-08-14 — dwa tematy bez karty researchu: cicha arytmetyka, nie awaria
 
 - **Objaw:** tematy 58 i 68 mają opłacone discovery i udane pobrania, ale nie mają ani joba syntezy, ani karty. Nic nie zgłosiło błędu.

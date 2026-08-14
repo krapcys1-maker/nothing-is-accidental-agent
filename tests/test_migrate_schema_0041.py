@@ -137,12 +137,14 @@ def test_0041_failure_rolls_back_triggers_and_ledger_to_0040(tmp_path):
         conn.close()
 
 
-def test_fresh_database_reaches_the_document_gate_runtime_floor(tmp_path):
+def test_fresh_database_carries_the_document_gate_below_the_runtime_floor(tmp_path):
     path = tmp_path / "fresh.db"
     applied = initialize_database(path)
-    assert applied[-1] == RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION
-    assert RUNTIME_SCHEMA_VERSION == RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION
-    assert len(applied) == 42
+    # 0041 is no longer the head; it must still be applied on the way there.
+    assert REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION in applied
+    assert RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION in applied
+    assert applied[-1] == RUNTIME_SCHEMA_VERSION
+    assert len(applied) == 43
 
 
 def test_durable_floor_rejects_an_approve_without_a_passing_document_review(tmp_path):

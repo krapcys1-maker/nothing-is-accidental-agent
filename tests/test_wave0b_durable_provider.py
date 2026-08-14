@@ -705,6 +705,7 @@ def test_migration_0011_preserves_valid_0010_history_and_is_idempotent(tmp_path:
             "0040_content_role_reconciliation",
             "0041_reviewer_document_quality_gate",
             "0042_research_conservative_adjudication",
+            "0043_reviewer_segment_chunking",
     ]
     attempt = conn.execute(
         "SELECT status,actual_cost_usd,released_at FROM provider_attempts"
@@ -2308,6 +2309,7 @@ def test_migration_0012_keeps_provable_usage_nonlegacy_and_reopens_cleanly(tmp_p
             "0040_content_role_reconciliation",
             "0041_reviewer_document_quality_gate",
             "0042_research_conservative_adjudication",
+            "0043_reviewer_segment_chunking",
     ]
     states = {
         row["model"]: row["is_legacy_usage"]

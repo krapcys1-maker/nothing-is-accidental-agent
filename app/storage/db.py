@@ -52,6 +52,7 @@ REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION = "0041_reviewer_document_quality_gate"
 RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION = (
     "0042_research_conservative_adjudication"
 )
+REVIEWER_SEGMENT_CHUNKING_SCHEMA_VERSION = "0043_reviewer_segment_chunking"
 # The storage floor has to agree with the reviewer contract about what APPROVE
 # means.  Until 0041 is applied, PENDING_APPROVAL would still accept the older
 # "every segment passed" definition that the first REVIEW-ONLY live showed is
@@ -60,7 +61,12 @@ RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION = (
 # 0042 widens owner conservative adjudication to ambiguous RESEARCH attempts.
 # Without it a single unknown-outcome synthesis holds the controlled-live gate
 # closed for the whole account until a human reads the provider console.
-RUNTIME_SCHEMA_VERSION = RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION
+# 0043 adds the per-chunk reviewer execution ledger.  The reviewer's 8192-token
+# output ceiling cannot be raised without a new paid qualification, so a long
+# article's claim accounting is split across several paid calls; each of those
+# calls needs its own durable reservation and settlement, and 0032's role ledger
+# holds exactly one reviewer row per writer attempt by construction.
+RUNTIME_SCHEMA_VERSION = REVIEWER_SEGMENT_CHUNKING_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
@@ -137,6 +143,9 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION,
     # 0042 replaces one adjudication trigger in place; no table is rebuilt.
     RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION,
+    # 0043 is additive: one chunk-execution ledger, one index and three
+    # guards become visible with a single schema ledger row.
+    REVIEWER_SEGMENT_CHUNKING_SCHEMA_VERSION,
     # 0019 is intentionally ABSENT: rebuilding controlled_fetch_approvals with
     # incoming foreign keys requires PRAGMA foreign_keys=OFF, which is a no-op
     # inside the runner transaction — the migration manages its own explicit
@@ -1008,6 +1017,21 @@ def migrate_0041_to_0042(
         db_path,
         source_version=REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION,
         target_version=RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0042_to_0043(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Add the per-chunk reviewer execution ledger for long articles."""
+
+    return _migrate_single_step(
+        db_path,
+        source_version=RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION,
+        target_version=REVIEWER_SEGMENT_CHUNKING_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )
 

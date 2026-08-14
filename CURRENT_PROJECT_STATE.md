@@ -1,6 +1,46 @@
 # CURRENT_PROJECT_STATE — Nothing Is Accidental Agent
 
-> **BIEŻĄCY STAN 2026-08-14 (wieczór) — POTOK ETAPU 3 PRZESZEDŁ OD KOŃCA DO KOŃCA. ETAP 3 NADAL FORMALNIE OTWARTY.**
+> **BIEŻĄCY STAN 2026-08-14 (noc) — SUFIT WYJŚCIA REVIEWERA PRZESTAŁ BYĆ ŚCIANĄ. RUNTIME WYMAGA `0043`, PRODUKCJA STOI NA `0042` → FAIL-CLOSED.**
+>
+> **Najważniejsze ostrzeżenie operacyjne.** `RUNTIME_SCHEMA_VERSION` to teraz
+> `0043_reviewer_segment_chunking`. Produkcja `data/agent.db` ma `0042`/42 migracji i **nie została
+> tknięta**. Do czasu osobno autoryzowanej migracji `0042 → 0043` każde otwarcie produkcyjnej bazy
+> przez runtime kończy się fail-closed (`SchemaVersionTooOld`) — czyli **nic płatnego nie ruszy**.
+> Migracja jest wyłącznie addytywna (jedna tabela, jeden indeks, trzy triggery, zero przebudów),
+> ale wykonuje ją człowiek, nie ten commit.
+>
+> **Co zostało zamknięte:** znany, policzony punkt (2) z poprzedniego bloku — sufit wyjścia reviewera
+> `8192` jest kwalifikowany (`32000/8192`) i nie da się go podnieść bez nowej płatnej kwalifikacji,
+> a wyjście rośnie z liczbą **segmentów**, nie ze słowami. Claim accounting dłuższego artykułu jest
+> teraz dzielone na kilka płatnych wywołań reviewera: cały artykuł i cały pakiet dowodów idą w
+> **każdym** wywołaniu, dzieli się wyłącznie lista segmentów do rozliczenia, a werdykt całościowy
+> (`document_review`) zamawiany jest **tylko w pierwszym** kawałku.
+>
+> **Próg `48` wybrany z dowodu:** 48 segmentów wróciło całe, 64 nie — a te obserwacje pochodzą sprzed
+> przycięcia wpisu do czterech pól, które dołożyło ~35% zapasu. Poniżej progu **nic się nie zmienia**:
+> jedno wywołanie, ten sam prompt co do bajtu, ten sam kształt rozliczenia. Powyżej progu kawałki są
+> równe (49 → 25+24), maksymalnie 4 na przegląd; więcej odmawia się **przed** jakimkolwiek wydatkiem.
+>
+> **Pieniądze:** umbrella `role_provider_executions` rezerwuje z góry pełny legalny koszt **wszystkich**
+> zaplanowanych kawałków, więc job, którego nie stać na cały plan, jest odrzucany zanim zapłaci za
+> pierwszy kawałek. Każdy kawałek ma własny ref, własną rezerwację przed wywołaniem i własne
+> rozliczenie po nim, ale wszystkie mieszczą się w kopercie umbrelli — pilnuje tego trigger.
+> `model_usage` dostaje **jeden** wiersz z sumą, więc żaden token nie liczy się dwa razy.
+>
+> **Uczciwie o kosztach:** artykuł powyżej progu kosztuje teraz dwa wejścia zamiast jednego (ceiling
+> `0.323840 USD` na wywołanie). To świadomy wybór: przegląd, który się urwie, kasuje kartę badawczą
+> za ~0.89 USD bezpowrotnie, a przegląd, który zapłaci dwa razy, kończy się artykułem.
+>
+> **Ograniczenie, nie ukryte:** ścieżka REVIEW-ONLY (`resume`) **odmawia** dzielenia — jedna
+> niezmienna zgoda łańcuchowa autoryzuje jedno wywołanie na etap. Draft powyżej progu dostaje tam
+> `REVIEW_RESUME_CHUNKING_UNAPPROVED` przed jakimkolwiek wywołaniem.
+>
+> **Dowód:** pełna suita `2825/2825 PASS`; nowe `tests/test_reviewer_segment_chunking.py` (21) i
+> `tests/test_migrate_schema_0043.py` (6). Koszt tej fali `0.000000 USD`; zero API, sieci, publikacji
+> i zapisu produkcyjnego. Punkt (1) — bezpowrotna utrata karty przy `input_sha256` bez `job_id` —
+> **pozostaje otwarty**; ta fala usuwa jedną z przyczyn awarii, nie skutek awarii.
+
+> **HISTORYCZNY / SUPERSEDED STAN 2026-08-14 (wieczór) — POTOK ETAPU 3 PRZESZEDŁ OD KOŃCA DO KOŃCA. ETAP 3 NADAL FORMALNIE OTWARTY.**
 >
 > Rozróżnienie jest istotne i celowe. Potok dowiózł artykuł: `content 20` (karta badawcza `35`) osiągnął
 > `PENDING_APPROVAL`, score `1.0`, 9/9 ewaluacji `PASS` na próbie 2, `writer_attempts: 2`, koszt

@@ -2800,6 +2800,253 @@ class SqliteStorage:
                 f"Reviewer settlement cannot reconstruct its durable contract: {exc}",
             ) from exc
 
+    # -- chunked reviewer calls (0043) ---------------------------------------
+    #
+    # A long article's claim accounting does not fit one 8192-token reviewer
+    # answer, so it is split across several paid calls under one umbrella role
+    # execution.  Each call is an external effect of its own and therefore gets
+    # its own reservation here BEFORE the transport is touched and exactly one
+    # settlement afterwards.  The job and global ceilings were already enforced
+    # once, when the umbrella reserved the full legal cost of every planned
+    # chunk; these rows may only ever divide that envelope, never widen it,
+    # which the 0043 contract trigger enforces durably.
+
+    def begin_content_review_chunk_execution(
+        self,
+        *,
+        chunk_execution_ref: str,
+        parent_execution_ref: str,
+        job_id: str,
+        run_id: str,
+        content_id: int,
+        attempt_no: int,
+        chunk_no: int,
+        chunk_count: int,
+        segment_count: int,
+        accounted_segments_fingerprint: str,
+        prompt_fingerprint: str,
+        requests_document_review: bool,
+        reserved_cost_usd: Decimal | str,
+        provider: str,
+        technical_model_id: str,
+        now: datetime | None = None,
+    ) -> dict[str, object]:
+        """Reserve one chunk of a chunked review before its provider call."""
+        timestamp = _ts_precise(now)
+        reserved = quantize_usd(
+            reserved_cost_usd, label="review chunk reservation",
+        )
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            parent = self.conn.execute(
+                "SELECT * FROM role_provider_executions WHERE execution_ref=?",
+                (parent_execution_ref,),
+            ).fetchone()
+            if parent is None:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_CHUNK_PARENT_MISSING",
+                    "A review chunk requires its reserved umbrella execution.",
+                )
+            if str(parent["outcome"]) != "IN_FLIGHT":
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_CHUNK_PARENT_NOT_IN_FLIGHT",
+                    "A review chunk may only run under a live umbrella reservation.",
+                )
+            existing = self.conn.execute(
+                "SELECT * FROM content_review_chunk_executions "
+                "WHERE content_id=? AND attempt_no=? AND chunk_no=?",
+                (content_id, attempt_no, chunk_no),
+            ).fetchone()
+            if existing is not None:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_CHUNK_ALREADY_EXISTS",
+                    f"Review chunk {chunk_no} already has durable state in "
+                    f"{str(existing['outcome'])!r}; a paid call is never reserved twice.",
+                )
+            open_sibling = self.conn.execute(
+                "SELECT chunk_no FROM content_review_chunk_executions "
+                "WHERE parent_execution_ref=? AND outcome='IN_FLIGHT'",
+                (parent_execution_ref,),
+            ).fetchone()
+            if open_sibling is not None:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_CHUNK_RESULT_UNCERTAIN",
+                    f"Review chunk {int(open_sibling['chunk_no'])} is still reserved; "
+                    "its provider outcome is unknown and is never replayed.",
+                )
+            spent = _money_sum(
+                tuple(
+                    _money(
+                        row["cost_usd"] if row["cost_usd"] is not None
+                        else row["reserved_cost_usd"],
+                        positive=False, label="Accounted review chunk cost",
+                    )
+                    for row in self.conn.execute(
+                        "SELECT cost_usd,reserved_cost_usd "
+                        "FROM content_review_chunk_executions "
+                        "WHERE parent_execution_ref=?",
+                        (parent_execution_ref,),
+                    ).fetchall()
+                ),
+                label="Accounted review chunk cost",
+            )
+            envelope = _money(
+                parent["reserved_cost_usd"], positive=True,
+                label="Umbrella review reservation",
+            )
+            if spent + reserved > envelope:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_CHUNK_ENVELOPE_EXCEEDED",
+                    "The chunked review cannot cost more than the reviewer "
+                    "reservation the ARTICLE approval already covered.",
+                )
+            self.conn.execute(
+                "INSERT INTO content_review_chunk_executions ("
+                "chunk_execution_ref,parent_execution_ref,job_id,run_id,"
+                "content_id,attempt_no,chunk_no,chunk_count,segment_count,"
+                "accounted_segments_fingerprint,prompt_fingerprint,"
+                "requests_document_review,provider,technical_model_id,"
+                "reserved_cost_usd,outcome,reserved_at,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'IN_FLIGHT',?,?)",
+                (
+                    chunk_execution_ref, parent_execution_ref, job_id, run_id,
+                    content_id, attempt_no, chunk_no, chunk_count, segment_count,
+                    accounted_segments_fingerprint, prompt_fingerprint,
+                    1 if requests_document_review else 0, provider,
+                    technical_model_id, format(reserved, ".6f"),
+                    timestamp, timestamp,
+                ),
+            )
+            row = self.conn.execute(
+                "SELECT * FROM content_review_chunk_executions "
+                "WHERE chunk_execution_ref=?",
+                (chunk_execution_ref,),
+            ).fetchone()
+            self.conn.commit()
+            return dict(row)
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def mark_content_review_chunk_effect_started(
+        self, chunk_execution_ref: str, *, now: datetime | None = None,
+    ) -> dict[str, object]:
+        """Stamp the instant this chunk's provider call began; stays IN_FLIGHT."""
+        timestamp = _ts_precise(now)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            changed = self.conn.execute(
+                "UPDATE content_review_chunk_executions "
+                "SET external_effect_started_at=? WHERE chunk_execution_ref=? "
+                "AND outcome='IN_FLIGHT' AND external_effect_started_at IS NULL",
+                (timestamp, chunk_execution_ref),
+            )
+            if changed.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_CHUNK_EFFECT_ALREADY_STARTED",
+                    "A review chunk effect can be stamped exactly once.",
+                )
+            row = self.conn.execute(
+                "SELECT * FROM content_review_chunk_executions "
+                "WHERE chunk_execution_ref=?",
+                (chunk_execution_ref,),
+            ).fetchone()
+            self.conn.commit()
+            return dict(row)
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def settle_content_review_chunk_execution(
+        self,
+        *,
+        chunk_execution_ref: str,
+        outcome: str,
+        failure_kind: str | None,
+        returned_model_id: str | None,
+        usage: object | None,
+        cost_usd: Decimal | None,
+        result_payload: dict[str, object],
+        now: datetime | None = None,
+    ) -> str:
+        """The one permitted transition for a chunk: IN_FLIGHT -> terminal.
+
+        No ``model_usage`` row is written here on purpose.  The umbrella role
+        execution settles the summed usage of every chunk exactly once, so the
+        run, daily and monthly ledgers see each token exactly once.
+        """
+        if outcome not in ("SUCCESS", "FAILURE", "NEEDS_VERIFICATION"):
+            raise ContentFoundationError(
+                "CONTENT_REVIEW_CHUNK_OUTCOME_INVALID",
+                "A settlement must name a terminal chunk outcome.",
+            )
+        result_json = canonical_json(result_payload)
+        fingerprint_value = sha256_text(result_json)
+        timestamp = _ts_precise(now)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            row = self.conn.execute(
+                "SELECT * FROM content_review_chunk_executions "
+                "WHERE chunk_execution_ref=?",
+                (chunk_execution_ref,),
+            ).fetchone()
+            if row is None:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_CHUNK_MISSING",
+                    "A settlement requires an existing reserved chunk.",
+                )
+            if str(row["outcome"]) != "IN_FLIGHT":
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_CHUNK_ALREADY_SETTLED",
+                    f"This chunk is already terminal ({row['outcome']!r}); "
+                    "a paid call is never settled twice.",
+                )
+            settled = self.conn.execute(
+                "UPDATE content_review_chunk_executions SET outcome=?,"
+                "failure_kind=?,returned_model_id=?,input_tokens=?,"
+                "output_tokens=?,cache_read_tokens=?,cache_write_tokens=?,"
+                "web_search_requests=?,cost_usd=?,result_json=?,"
+                "result_fingerprint=?,settled_at=? "
+                "WHERE chunk_execution_ref=? AND outcome='IN_FLIGHT'",
+                (
+                    outcome, failure_kind, returned_model_id,
+                    None if usage is None else usage.input_tokens,
+                    None if usage is None else usage.output_tokens,
+                    None if usage is None else usage.cache_read_tokens,
+                    None if usage is None else usage.cache_write_tokens,
+                    None if usage is None else usage.web_search_requests,
+                    None if cost_usd is None else format(
+                        quantize_usd(cost_usd, label="review chunk cost"), ".6f",
+                    ),
+                    result_json, fingerprint_value, timestamp,
+                    chunk_execution_ref,
+                ),
+            )
+            if settled.rowcount != 1:
+                raise ContentFoundationError(
+                    "CONTENT_REVIEW_CHUNK_SETTLE_RACE",
+                    "Review chunk settlement compare-and-swap failed.",
+                )
+            self.conn.commit()
+            return fingerprint_value
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
+
+    def list_content_review_chunk_executions(
+        self, *, content_id: int, attempt_no: int = 1,
+    ) -> tuple[dict[str, object], ...]:
+        """Every chunk of one review attempt, in the order it was reserved."""
+        rows = self.conn.execute(
+            "SELECT * FROM content_review_chunk_executions "
+            "WHERE content_id=? AND attempt_no=? ORDER BY chunk_no",
+            (content_id, attempt_no),
+        ).fetchall()
+        return tuple(dict(row) for row in rows)
+
     def get_role_provider_execution(
         self, *, content_id: int, role: object, attempt_no: int = 1,
     ) -> dict[str, object] | None:
