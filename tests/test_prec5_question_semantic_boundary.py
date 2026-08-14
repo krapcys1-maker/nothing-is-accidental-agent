@@ -488,7 +488,10 @@ def test_supported_article_persists_exact_ungrounded_question_audit(
         writer=_QuestionWriter(question),
         claim_reviewer=reviewer,
     )
-    assert summary.evaluation_count == 9
+    # An unevidenced claim now spends the single rewrite reviewer v3 grants
+    # before it blocks, so both attempts persist a complete evaluation set.
+    assert summary.attempts == 2
+    assert summary.evaluation_count == 18
     row = storage.conn.execute(
         "SELECT result,findings_json FROM content_draft_evaluations "
         "WHERE content_id=(SELECT id FROM content_items WHERE job_id=?) "
@@ -547,7 +550,10 @@ def test_full_offline_article_persists_exact_major_marker_block(
         writer=_QuestionWriter(question),
         claim_reviewer=reviewer,
     )
-    assert summary.evaluation_count == 9
+    # An unevidenced claim now spends the single rewrite reviewer v3 grants
+    # before it blocks, so both attempts persist a complete evaluation set.
+    assert summary.attempts == 2
+    assert summary.evaluation_count == 18
     row = storage.conn.execute(
         "SELECT result,findings_json FROM content_draft_evaluations "
         "WHERE content_id=(SELECT id FROM content_items WHERE job_id=?) "

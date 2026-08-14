@@ -815,6 +815,7 @@ def run_offline_content_pipeline(
                 research_card=research_card,
                 claim_reviewer=reviewer,
                 propagate_reviewer_errors=propagate_claim_reviewer_errors,
+                rewrite_available=attempt_no == 1,
             )
             for evaluation in evaluations:
                 storage.record_content_draft_evaluation(

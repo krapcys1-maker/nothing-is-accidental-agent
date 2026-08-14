@@ -1,5 +1,9 @@
 # 09 — KOSZTY
 
+> **2026-08-14 — poszerzenie A1 (ADR-150):** koszt zmiany `0.000000 USD`. Skutek kosztowy na przyszłość jest jednak realny i zamierzony: discovery pyta o 10 kandydatów zamiast 6, a rezerwacja rośnie z `1.000000` do domyślnych `2.000000` (sufit `3.000000`). Powód: enum czterech capów zabijał wywołania w połowie, marnując całą próbę razem z pieniędzmi — droższa rezerwacja jest tańsza niż spalona próba. Domyślne `2.000000` to ekstrapolacja z pomiaru przy sześciu kandydatach; pierwszy realny przebieg ma ją zastąpić pomiarem. Uwaga: realny `config/growth_policy.yaml` ma limity `50.00/200.00 USD`, nie `10.00/80.00` jak twierdziła dokumentacja.
+
+> **2026-08-14 — naprawa bramki rewrite'u (ADR-149):** koszt `0.000000 USD`. Diagnoza i naprawa wyłącznie na kodzie i testach offline; zero wywołań providera, zero sieci, produkcyjnej bazy nie otwierano. Zmiana ma skutek kosztowy na przyszłość: zablokowany artykuł może teraz zużyć drugie wywołanie writera (~0.28 USD za parę writer+reviewer w zmierzonym przebiegu), zamiast ginąć po pierwszym.
+
 > **2026-08-11 — PRE-LIVE CONTENT UNBLOCK:** koszt rzeczywisty `0.000000 USD`. Końcowy controlled root blokuje brak semantic reviewera przed SDK, usage i kosztem; nie wykonano requestu API ani innej płatnej operacji.
 
 > **2026-08-10 — produkcyjna migracja 0020→0030:** koszt `0.000000 USD`. Operacja używała wyłącznie lokalnego SQLite i nie uruchomiła API, providera, qualification, C5 ani publikacji.

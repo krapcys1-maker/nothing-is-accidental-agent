@@ -1,5 +1,26 @@
 # 06 — DECYZJE PROJEKTOWE
 
+### D-150: A1 prosi o więcej źródeł, niż potrzebuje
+
+- **Opcje:** (a) zostawić 6 kandydatów i walczyć z 403 po stronie promptu, (b) prosić o 10–12 i założyć attrycję, (c) pozwolić packerowi dzielić dokumenty.
+- **Wybór:** (b). Discovery pyta o 10 kandydatów, sufit kontraktu to 12.
+- **Powody:** ~połowa poważnych źródeł odmawia automatowi, a dodatkowo pojedyncza duża strona potrafi sama przekroczyć limit wejścia i jest wtedy bezużyteczna, choć zajęła slot i pobranie. Sześciu kandydatów dawało zero zapasu; dwa tematy (58 i 68) zatrzymały się w ten sposób bez żadnego błędu.
+- **Odrzucone:** (c) — dzielenie dokumentów psuje całodokumentowy kontrakt evidence i otwiera drogę do cytowania urwanych fragmentów.
+- **Przy okazji:** sztywny enum czterech dozwolonych rezerwacji zastąpiony zakresem `(0, 3.000000]`. Rezerwacja ma nieść margines, bo prognoza kosztu bywa dwukrotnie zaniżona, a przestrzelenie zabijało całą próbę.
+- **Ryzyko przyjęte:** wyższy koszt jednego discovery i większa rezerwacja względem budżetu dziennego.
+- **Uczciwie:** domyślny cap `2.000000` to ekstrapolacja z pomiaru przy sześciu kandydatach, nie pomiar przy dziesięciu.
+- **Powiązanie:** ADR-150.
+
+### D-149: Jedna władza orzeka o prawie do rewrite'u
+
+- **Opcje:** (a) uzgodnić agregat C2 z werdyktem reviewera v3, (b) rozbić `NO_OUT_OF_CORPUS_CLAIMS` na osobne bramki wedle rodzaju porażki, (c) zostawić stan bez zmian.
+- **Wybór właściciela:** (a). Przy próbie 1 niepokryty claim daje `REWRITE_ONCE`, od próby 2 pozostaje `BLOCK`.
+- **Powody:** reviewer i agregat odpowiadały inaczej na to samo pytanie, a ścieżka REVIEW-ONLY bramkowała się na odpowiedzi reviewera — więc ręczne wznowienie robiło to, czego automat odmawiał. Przy ~połowie autorytatywnych źródeł zwracających 403 porażka claim-level jest normą, nie wyjątkiem; wersja (c) oznaczałaby ręczną interwencję przy każdym artykule.
+- **Granice:** poprzeczka reviewera bez zmian — draft nadal nie przechodzi. `FAKE_PERSONAL_EXPERIENCE` i `BRAND_TOPIC_POLICY` pozostają terminalne; pierwsze to nieuczciwość, drugie jest własnością briefu i rewrite go nie naprawi.
+- **Ryzyko przyjęte:** każdy zablokowany artykuł może teraz kosztować drugie wywołanie writera. Sufit dwóch prób pozostaje twardy.
+- **Odłożone:** opcja (b) trafia do backlogu, nie została odrzucona.
+- **Powiązanie:** ADR-149.
+
 ### D-134: Pamięć novelty przed kosztem; semantic reviewer bez skrótu
 
 - **Wybór:** jawny, targetowany root z job-scoped approvalem/capem oraz lokalna per-account pamięć topics/questions/theses/real content. Próba deterministic reviewera została odrzucona: ADR-123 wymaga semantycznej granicy.

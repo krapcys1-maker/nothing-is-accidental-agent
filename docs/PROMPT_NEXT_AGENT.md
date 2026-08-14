@@ -62,9 +62,11 @@ On 2026-08-14 a full day cost **8.32 USD** and produced one draft. Roughly 3.5 U
 was burned on calls that returned nothing, because cost reservations were too tight and
 every overrun killed a whole topic. Lessons that cost real money:
 
-- One article ≈ 1.10 USD. Discovery alone ranges 0.47-1.17 USD and is the dominant cost.
-- `cap 1.0 + max_results 6` is the only discovery combination that both passes envelope
-  validation and completes. Changing one without recalculating the other kills jobs.
+- One article ≈ 1.10 USD at six candidates. Discovery alone ranged 0.47-1.17 USD and is
+  the dominant cost; expect more now that A1 asks for ten.
+- The `{0.3, 0.5, 0.6, 1.0}` cap enum is gone (ADR-150). The A1 cap is a bounded range in
+  `(0, 3.000000]`, default `2.000000`, and `max_results` runs to 12. The default cap is
+  extrapolated, not measured — replace it with a real number after the first live A1.
 - Do not re-roll topics hoping a problem goes away. Four topics were burned that way. Find
   the mechanism first.
 - Before any paid run, state the expected cost. If a run fails, diagnose before repeating.
@@ -95,10 +97,13 @@ correctly under abuse and are the reason no money or data was lost.
 
 ## Suggested order of work
 
-**A. Close the last article-pipeline defect (cheap, no new design).**
-`REWRITE_ONCE` does not trigger writer attempt 2 — `pipeline.py:376` already iterates
-`(1, 2)` and the cost ceiling was not the cause, so something short-circuits after attempt 1.
-Until this is fixed a rewrite must be driven manually.
+**A. ~~Close the last article-pipeline defect.~~ Done on 2026-08-14 (ADR-149).**
+`REWRITE_ONCE` did not trigger writer attempt 2. The loop was never at fault: the job was
+terminalised inside attempt 1 because `UNSUPPORTED_CLAIMS` was pinned to `BLOCK` and `BLOCK`
+outranks `REWRITE_ONCE` in the C2 aggregate, so the reviewer's own verdict was overruled.
+A claim-level failure on attempt 1 now yields `REWRITE_ONCE`; from attempt 2 it stays
+`BLOCK`. Worth carrying forward as a pattern: two authorities answering the same question
+will eventually answer it differently.
 
 **B. Judge and improve output quality.**
 `ARTYKUL_DRAFT.md` holds the draft, nine evaluations and the reviewer verdict. The reviewer

@@ -1,5 +1,14 @@
 # BUILD_LOG
 
+## 2026-08-14 — Etap 3 / bramka rewrite uzgodniona z reviewerem + poszerzenie A1
+
+- **ADR-149 — rewrite.** `REWRITE_ONCE` nie odpalał próby 2 nie z powodu pętli w `app/content/pipeline.py` (ta iterowała `(1, 2)` poprawnie), tylko dlatego, że job kończył się w środku pierwszej iteracji: `UNSUPPORTED_CLAIMS` miało `failure_decision=BLOCK` na sztywno, a `BLOCK` bije `REWRITE_ONCE` w `aggregate_decision`. Werdykt reviewera był nadpisywany, zanim ktokolwiek go przeczytał. Diagnoza z obu dokumentów przekazania wskazywała niewinny plik i została sprostowana.
+- **ADR-149 — regres własny, złapany przed commitem.** Pierwsza wersja przyznawała rewrite każdej porażce claim-level. Niekompletne claim accounting to jednak dokładnie to, jak wygląda reviewer, który odmówił, zwrócił nie-JSON albo inny model — zmiana zamieniała awarię providera w automatyczne drugie płatne wywołanie. Wykryły to `test_b3_production_reviewer.py::test_C_*` (`reviewer.calls` 1→2) i `::test_E_*`. Warunek brzmi teraz `rewrite_available and verdict.claim_coverage_complete`; nieczytelna odpowiedź nie kupuje drugiej próby. Wąski przebieg na dotkniętych plikach był zielony i tego nie pokazał.
+- **ADR-150 — A1.** `max_results` 6→10 (sufit kontraktu 12), bo ~połowa autorytatywnych hostów odmawia automatowi. Sztywny enum capów `{0.3, 0.5, 0.6, 1.0}` zastąpiony zakresem kanonicznych kwot w `(0, 3.000000]`, domyślnie `2.000000`; wszystkie historyczne wartości nadal walidują, więc trwałe intenty sprzed zmiany pozostają weryfikowalne. Kumulatywny stop w `scripts/run_article_research_e2e_live.py` podniesiony na `(0, 4.00]`, domyślnie `3.000000`.
+- **Znalezisko produkcyjne (bez zmiany kodu).** Tematy 58 i 68 mają opłacone discovery i udane pobrania, ale nie mają karty researchu: packer nie dzieli dokumentów, a strona o `48 743` znakach (`24 388` tokenów) nie mieści się w limicie `23 808` nawet sama. Zostają 2 źródła przy progu 3 → `CorpusPackingError` → `enqueue_evidence_research_if_ready` cicho zwraca `None`. Temat 68 identycznie (`61 747` znaków). Liczenie „użytecznych" zamiast „pobranych" źródeł zostaje w backlogu.
+- **Weryfikacja:** pełna suita `2791/2791 PASS`, exit `0`; zebranych `2791`. Celowane przebiegi po drodze: 360/360, 285/285, 52/52. `compileall app scripts tests` i `git diff --check` PASS. Zero prowadzenia w błąd: pierwsza wersja naprawy była błędna i jest to udokumentowane wyżej.
+- **Granice:** zero wywołań płatnych, zero sieci, zero publikacji, zero zapisu produkcyjnego, brak migracji. Produkcja czytana wyłącznie `mode=ro`. Koszt tej fali `0.000000 USD`.
+
 ## 2026-08-13 — Etap 3 / zamknięcie dwóch P1 z niezależnego review reviewera
 
 - **P1-1:** jeden predykat `classification_contract_error()` (quality_gate) egzekwowany w parserze i u wszystkich bezpośrednich konsumentów wyniku reviewera — `_settle`, `initial_approved` REVIEW-ONLY, wspólna quality gate. Sprzeczna klasyfikacja nie uzyskuje `APPROVE` żadną wspieraną ścieżką.

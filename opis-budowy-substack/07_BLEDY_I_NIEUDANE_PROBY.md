@@ -1,5 +1,23 @@
 # 07 — BŁĘDY I NIEUDANE PRÓBY
 
+## 2026-08-14 — Dwa tematy zatrzymały się bez żadnego błędu
+
+Tematy 58 i 68 mają opłacone wyszukiwanie źródeł i udane pobrania, a nie mają karty researchu. Nic nie zawiodło głośno. Packer nie dzieli dokumentów, a pojedyncza strona o 48 743 znakach sama przekracza limit wejścia 23 808 tokenów — zostają dwa źródła przy progu trzech, więc korpus jest niekompletny i funkcja nadrzędna po cichu zwraca „jeszcze nie".
+
+Liczyliśmy udane pobrania, a warunkiem są źródła, które zmieszczą się w kopercie. Te dwie liczby rozjeżdżają się cicho. Pełny opis w `29_UDANE_POBRANIE_TO_NIE_UZYTECZNE_ZRODLO.md`.
+
+## 2026-08-14 — Diagnoza wskazywała niewinny plik
+
+Dokument przekazania mówił jasno: writer nie wykonuje drugiej próby, a winna jest pętla iterująca po numerach prób. Podawał nawet numer linii. Pętla była poprawna od początku.
+
+Zadanie kończyło się w środku pierwszego obiegu, więc pętla nigdy nie dostawała drugiego. Dziewięć deterministycznych ewaluacji ma własny agregat, w którym `BLOCK` bije `REWRITE_ONCE`, a ewaluacja od twierdzeń niepokrytych dowodami miała `BLOCK` wpisany na sztywno. Werdykt reviewera „przepisz to raz" był nadpisywany, zanim ktokolwiek go przeczytał.
+
+Lekcja nie dotyczy tej jednej linii. Dwie władze orzekały w tej samej sprawie: reviewer v3 i agregat C2. Dopóki mówiły to samo, nikt nie zauważył, że są dwie. Co gorsza, ręczna ścieżka wznowienia bramkowała się na odpowiedzi reviewera — więc operator wolno robił dokładnie to, czego automat odmawiał.
+
+Osobna sprawa, świadomie niezamknięta: bramka, która to zablokowała, mierzy równocześnie cztery różne rzeczy — werdykt o zdaniu, werdykt o dokumencie, heurystykę pokrycia słów i niezgodność writera z własnym raportem. Kiedy mówi „nie", nie mówi, na co.
+
+Koszt naprawy: `0.00 USD`, weryfikacja w całości offline.
+
 ## 2026-08-12 — Pięć prób, które odsłoniły pięć różnych warstw
 
 Pierwsza próba odsłoniła 30-sekundowy timeout. Druga — zbyt mały limit outputu i niedoszacowaną rezerwę. Trzecia — że reviewer może zużyć cały budżet, a mimo to nie oddać kontraktowego JSON-u. Czwarta i piąta — że nawet po poprawieniu lokalnego timeoutu granica sieciowa providera może pozostać niedostępna. Najważniejsze: żadnej z tych sytuacji system nie „naprawił” ukrytym retry. Nieznane wyniki zostały nieznane, koszty nie zostały wyzerowane, a publikacja pozostała niemożliwa.

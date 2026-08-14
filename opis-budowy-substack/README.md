@@ -54,6 +54,12 @@ Po każdym większym zadaniu, ZANIM uznasz je za ukończone:
 | `21_FABLE_REAL_QUALIFICATION_REFUSAL.md` | Pierwsza realna kwalifikacja Fable: jeden request, refusal, zero retry |
 | `22_OPUS_ARTICLE_WRITER_SWITCH.md` | Zmiana primary writer family po odmowie Fable, bez przepisywania historii |
 | `23_PRE_LIVE_CONTENT_UNBLOCK.md` | Kandydat writera/rootu/novelty oraz jawny blocker durable semantic ARTICLE_REVIEWER |
+| `24_P2_1_PROVIDER_CONTRACT_ALIGNMENT.md` | Kiedy dwa przewody naprawdę stają się jednym kontraktem |
+| `25_REVIEWER_GLOBAL_LEDGER_REPAIR.md` | Reviewer miał koszt, ale globalny budżet go nie widział |
+| `26_REVIEW_ONLY_NIE_JEST_RETRY.md` | Dlaczego wznowienie review nie jest ponowieniem próby |
+| `27_KONSERWATYWNA_REKONSYLIACJA_TO_NIE_RACHUNEK.md` | `CONSERVATIVE_MAX_CHARGED` chroni budżet, nie udaje rachunku providera |
+| `28_DWIE_WLADZE_JEDNO_PYTANIE.md` | Reviewer mówił „przepisz", agregat mówił „koniec" — dwie władze w jednej sprawie |
+| `29_UDANE_POBRANIE_TO_NIE_UZYTECZNE_ZRODLO.md` | Dwa tematy bez artykułu, bo jedna strona nie mieściła się w kopercie |
 
 Podfoldery: `timeline/`, `screenshots/`, `diagrams/`, `code-snippets/`, `weekly-summaries/`, `article-series/`.
 

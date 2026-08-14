@@ -143,7 +143,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--approved-by", required=True)
     parser.add_argument("--confirm-live", action="store_true")
-    parser.add_argument("--max-cost-usd", type=Decimal, default=Decimal("1.500000"))
+    # Cumulative A1 + synthesis stop. A1 alone may now reserve up to 3.00, so a
+    # 1.50 cumulative stop would abort a healthy run between its two paid calls.
+    parser.add_argument("--max-cost-usd", type=Decimal, default=Decimal("3.000000"))
     parser.add_argument(
         "--topic-id",
         required=True,
@@ -162,8 +164,8 @@ def main(argv: list[str] | None = None) -> int:
     if not args.confirm_live:
         print("BLOCKED: --confirm-live is required")
         return 2
-    if args.max_cost_usd <= 0 or args.max_cost_usd > Decimal("2.000000"):
-        print("BLOCKED: live cap must be in (0, 2.00]")
+    if args.max_cost_usd <= 0 or args.max_cost_usd > Decimal("4.000000"):
+        print("BLOCKED: live cap must be in (0, 4.00]")
         return 2
 
     settings = load_settings()

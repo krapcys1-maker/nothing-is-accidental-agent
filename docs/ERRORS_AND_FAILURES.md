@@ -1,5 +1,25 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-14 — dwa tematy bez karty researchu: cicha arytmetyka, nie awaria
+
+- **Objaw:** tematy 58 i 68 mają opłacone discovery i udane pobrania, ale nie mają ani joba syntezy, ani karty. Nic nie zgłosiło błędu.
+- **Przyczyna:** packer nie dzieli dokumentów, a pojedyncza duża strona potrafi sama przekroczyć limit wejścia `23 808` tokenów. Temat 58: trzy udane pobrania, ale trzecie to `48 743` znaki, czyli `24 388` tokenów — nie zmieści się **nigdy**, nawet samo. Zostają dwa źródła, poniżej progu trzech, więc `pack_research_corpus` rzuca `CorpusPackingError`, a `enqueue_evidence_research_if_ready` po cichu zwraca `None`. Temat 68 tak samo (`61 747` znaków, zostaje jedno źródło).
+- **Dlaczego to bolało podwójnie:** taka strona nie tylko jest bezużyteczna, ale wcześniej zajęła jeden z sześciu slotów kandydata. Attrycja jest więc większa, niż sugeruje sam odsetek 403.
+- **Wniosek ogólny:** próg „trzy źródła" mierzony po pobraniu, a nie po zmieszczeniu się w kopercie, daje fałszywe poczucie zapasu. Sukces pobrania nie jest tym samym co użyteczność.
+- **Zamknięcie częściowe (ADR-150):** A1 prosi teraz o 10 kandydatów zamiast 6. To nie usuwa problemu dużych stron, tylko daje mu zapas. Liczenie „użytecznych" zamiast „pobranych" źródeł w pętli fetch zostaje w backlogu.
+
+## 2026-08-14 — handover wskazał niewinną pętlę; usterka była w agregacie
+
+- **Objaw:** reviewer v3 zwrócił `REWRITE_ONCE`, a writer nigdy nie wykonał próby 2. Job skończył `FAILED` / `CONTENT_EVALUATION_BLOCKED` przy `writer_attempts: 1`, przy wykorzystanym budżecie `0.28` z sufitu `2.00` — czyli koszt nie był przyczyną.
+- **Błędna diagnoza w handoverze:** oba dokumenty przekazania wskazywały `app/content/pipeline.py` i pętlę `attempt_numbers = (1, 2)` jako miejsce usterki („coś zwiera po próbie 1"). Pętla była poprawna. Nigdy nie dostawała drugiej iteracji, bo job był terminalizowany w środku pierwszej — gałąź `BLOCK` robi `return` przed gałęzią rewrite'u.
+- **Rzeczywista przyczyna:** 2 z 26 segmentów i nieudany document review trafiały do jednego wspólnego kubła `NO_OUT_OF_CORPUS_CLAIMS`, ten ustawiał `unsupported_ok=False`, a ewaluacja `UNSUPPORTED_CLAIMS` miała `failure_decision` przypięte na sztywno do `BLOCK`. W `aggregate_decision` `BLOCK` bije `REWRITE_ONCE`, więc werdykt reviewera był nadpisywany.
+- **Wniosek ogólny:** dwie władze odpowiadające na to samo pytanie prędzej czy później odpowiedzą inaczej. Reviewer mówił „przepisz", agregat mówił „koniec", a ścieżka REVIEW-ONLY bramkowała się na tej pierwszej odpowiedzi — więc ręczny resume wolno robił to, czego automat odmawiał.
+- **Drugi wniosek:** `NO_OUT_OF_CORPUS_CLAIMS` nadal niesie cztery różne rzeczy naraz (realny fail claim review, fail document review, deterministyczną heurystykę pokrycia leksykalnego i rozjazd self-reportu writera). Rozdzielenie ich na osobne bramki zostaje w backlogu — bramka mierząca cztery rzeczy nie potrafi powiedzieć, którą z nich zablokowała.
+- **Własna regresja tej naprawy, złapana przed commitem — najważniejsza rzecz w tej fali.** Pierwsza wersja przyznawała rewrite każdej porażce claim-level przy próbie 1. Ale niekompletne claim accounting to dokładnie to, jak wygląda reviewer, który **odmówił, zwrócił nie-JSON albo inny model**. Zmiana zamieniała więc awarię providera w automatyczne drugie płatne wywołanie writera i reviewera — czyli w auto-retry płatnej operacji, czego `AGENTS.md` zabrania wprost, a kontrakt roli wymusza przez `max_retries=0`.
+- **Jak to wyszło:** wąski przebieg na sześciu plikach był zielony (360/360) i to wystarczyło, żeby uwierzyć w naprawę. Dopiero pełna suita pokazała `F.F` na 2%: `test_b3_production_reviewer.py::test_C_provider_failure_is_terminal_without_retry` (`reviewer.calls` 1→2) i `::test_E_returned_model_mismatch_is_fail_closed`. Wniosek ogólny: przy zmianie decyzji bramki „testy dotkniętych plików" to zła definicja zakresu — dotknięte jest wszystko, co tę decyzję konsumuje.
+- **Zamknięcie:** rewrite wymaga teraz `rewrite_available and verdict.claim_coverage_complete`. Nieczytelna odpowiedź reviewera nie jest opinią redakcyjną i nie kupuje drugiej próby.
+- **Koszt tej naprawy:** `0.00 USD`. Zero wywołań płatnych, cała weryfikacja offline. Gdyby regresja przeszła, kosztowałaby realne pieniądze przy każdej awarii providera.
+
 ## 2026-08-13 — niezależny review `REJECT`: dwa obejścia reviewera
 
 - **P1-1.** Wspólna quality gate odrzucała sprzeczność „to nie jest fakt, ale zawiera fakt", lecz **początkowa ścieżka REVIEW-ONLY jej nie uruchamia** — decyzję wyprowadzała z samych `outcome`. Kontrpróba: `ARGUMENT_OR_INFERENCE`/`NON_FACTUAL_PROSE` + `contains_external_fact=true` + `evidence_ids=[]` + `PASS` → `APPROVE` i `PENDING_APPROVAL`. Wniosek ogólny: inwariant zapisany w jednym konsumencie nie jest inwariantem systemu.

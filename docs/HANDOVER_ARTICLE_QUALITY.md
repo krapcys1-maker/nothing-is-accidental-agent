@@ -23,16 +23,28 @@ writer+reviewer 0.2824). Budget the same for any further run.
 
 The draft and the full verdict are in `ARTYKUL_DRAFT.md` (untracked, local).
 
-## The one open functional defect
+## The rewrite defect — diagnosed and closed on 2026-08-14
 
 Reviewer v3 returned `REWRITE_ONCE`, but the writer never made attempt 2
 (`writer_attempts: 1`, content status `FAILED`, `worker_detail=CONTENT_EVALUATION_BLOCKED`).
 
-`app/content/pipeline.py:376` already iterates `attempt_numbers = (1, 2)`, and the cost
-ceiling was not exhausted (0.28 spent of a 2.00 ceiling), so the loop is exiting after
-attempt 1 for another reason - most likely `CONTENT_EVALUATION_BLOCKED` short-circuits
-before the second attempt is reached. **Start here.** Until it is fixed, a rewrite has to
-be driven manually through the REVIEW-ONLY path.
+**The loop was never the problem.** `app/content/pipeline.py` iterates
+`attempt_numbers = (1, 2)` correctly; it simply never got a second iteration, because the
+job was terminalised inside the first one. `UNSUPPORTED_CLAIMS` was pinned to `BLOCK`,
+`BLOCK` outranks `REWRITE_ONCE` in `aggregate_decision`, and the `BLOCK` branch returns
+before the rewrite branch is reached. Reviewer v3 and the C2 aggregate were answering the
+same question differently on identical evidence — and the REVIEW-ONLY path gated on the
+reviewer's answer, which is why driving the rewrite by hand worked when the automatic path
+refused.
+
+Fixed per ADR-149: a claim-level failure on attempt 1 now yields `REWRITE_ONCE` and
+attempt 2 runs; from attempt 2 it stays `BLOCK`. The reviewer's bar is unchanged — the
+draft still fails, it just takes the rewrite the reviewer itself granted. `FAKE_PERSONAL_EXPERIENCE`
+and `BRAND_TOPIC_POLICY` stay terminal.
+
+Still open, deliberately parked: `NO_OUT_OF_CORPUS_CLAIMS` carries four distinct failures
+at once (claim review, document review, a lexical-overlap heuristic, writer self-report
+divergence). A gate measuring four things cannot say which one it blocked on.
 
 ## What was repaired to get this far (PR #52)
 
@@ -56,12 +68,18 @@ Do not re-litigate these; they are merged and covered by a green full suite.
 
 ## Known constraints you will hit
 
-- **Roughly half of authoritative sources 403 the fetcher.** Six candidates typically
-  yield three usable sources - exactly the minimum. There is no slack. Raising
-  `max_results` above 6 was tried and pushed discovery cost past every cap the envelope
-  validation accepts (`{0.3, 0.5, 0.6, 1.0}`); `cap 1.0 + max_results 6` is the only
-  combination that both passes validation and completes. Do not raise one without
-  recalculating the other.
+- **Roughly half of authoritative sources 403 the fetcher**, and a single oversized page
+  can be permanently unusable on top of that. Addressed on 2026-08-14 by ADR-150: A1 now
+  asks for 10 candidates (contract ceiling 12) and the cap is a bounded range in
+  `(0, 3.000000]` — default `2.000000` — instead of the `{0.3, 0.5, 0.6, 1.0}` enum that
+  killed jobs mid-call. Every historical cap still validates. The `2.000000` default is
+  extrapolated from the 0.47-1.17 measured at six candidates, not measured at ten; the
+  first live A1 on the new contract should replace it with a real number.
+- **A fetch that succeeds is not a source that fits.** The packer never splits a document,
+  so a page above roughly 83,000 characters cannot enter the corpus at all, and one below
+  that can still crowd the envelope. Topics 58 and 68 have paid, successful fetches and no
+  research card for exactly this reason: 48,743 and 61,747-character pages left them under
+  the three-source floor, silently. Count usable sources, not successful fetches.
 - **`config/growth_policy.yaml` is gitignored.** The working values are documented in
   `config/growth_policy.example.yaml`: daily 10.00, monthly 80.00,
   `min_confidence_score: 0.50`. A fresh checkout starts at 2.00/40.00/0.60 and will block
@@ -89,7 +107,7 @@ The historical request `online-e2e-article-card-7-v2:content_draft:1` stays in
 
 ## Where quality work should start
 
-1. Fix the rewrite loop (above), so `REWRITE_ONCE` actually produces attempt 2.
+1. ~~Fix the rewrite loop, so `REWRITE_ONCE` actually produces attempt 2.~~ Done, ADR-149.
 2. Judge the draft in `ARTYKUL_DRAFT.md`. Reviewer v3 blocked 2 of 26 segments because the
    opening asserts an operational practice - potholes inspected, marked, left - that the
    statute-based evidence does not cover. That judgement looks correct; the fix is
