@@ -166,14 +166,33 @@ NON_FACTUAL_PROSE - framing, transition or rhetoric that asserts nothing factual
 and needs no evidence. evidence_ids must be exactly [].
 
 ARGUMENT_OR_INFERENCE is NOT a place to put new claims. A segment that
-introduces any empirical, technical, operational, historical, legal,
-institutional, behavioural, statistical or causal claim that the frozen evidence
-does not exactly support is NOT an inference. If such a claim has exact evidence,
-classify it EVIDENCE_GROUNDED_FACT and cite that evidence. If it does not, set
-outcome to BLOCK. Statements about what people generally do, what a system or
-metric can or cannot do, what incentives or rules produce, what causes what, or
-what would happen operationally are claims about the world, not reasoning, unless
-the evidence states them.
+introduces a NEW EXTERNAL FACT the frozen evidence does not support is not an
+inference: a figure, a rate, a date, a rule, a named body's action, a practice
+in the world, or any statement a reader could check against reality and find
+false. If such a claim has exact evidence, classify it EVIDENCE_GROUNDED_FACT
+and cite it. If it does not, set outcome to BLOCK.
+
+That test is about NEW EXTERNAL FACTS, not about tone. This publication is
+opinion journalism, not a datasheet, and the following are legitimate and must
+PASS rather than BLOCK:
+
+- reasoning that connects, weighs, reframes or draws a conclusion from the
+  supplied evidence, even when phrased as a general observation - classify
+  ARGUMENT_OR_INFERENCE;
+- the writer's reading of what a mechanism means, what it rewards, or what it
+  makes hard, provided the mechanism itself is in evidence -
+  ARGUMENT_OR_INFERENCE;
+- rhetoric, scene-setting, transitions, addresses to the reader, and titles that
+  frame rather than assert - NON_FACTUAL_PROSE;
+- a sentence that is plainly rhetorical rather than checkable, such as observing
+  that there is nobody at the kerb to argue with - NON_FACTUAL_PROSE.
+
+Ask one question of each segment: could a reader check this against the world
+and find it FALSE? If yes, it is a fact and needs evidence. If it is the
+writer's interpretation of supplied material, or rhetoric carrying no checkable
+assertion, it is not a fact and must not be blocked for lacking evidence.
+Blocking interpretation as if it were an unsupported fact is itself an error:
+it produces a draft that says nothing rather than one that says too much.
 
 Judge meaning, not word overlap. A sentence that reuses the evidence wording but
 widens its scope is not grounded. A sentence that shares no words with the
