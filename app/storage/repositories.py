@@ -11407,6 +11407,60 @@ class SqliteStorage:
                     f"({', '.join(outcome.reasons)}); it cannot be finalized."
                 )
 
+        # A PROCEED card needs lineage for every confirmed claim, because the
+        # writer cites confirmed_claim_ids. That invariant stays. What changed is
+        # when it is enforced: raising after the fact discarded an entire paid
+        # card - five well-sourced claims and a ten-source corpus - because a
+        # sixth claim had no quotable excerpt, three times in one evening. The
+        # unbindable claims are now dropped BEFORE any lineage row is written and
+        # the card row is rewritten to match, so ordinals stay consistent and
+        # every claim that survives still has its lineage.
+        if card.publication_recommendation is ResearchRecommendation.PROCEED:
+            bindable: set[int] = set()
+            probed: set[int] = set()
+            for source in card.sources:
+                if source.verification_status is not SourceVerification.VERIFIED:
+                    continue
+                probe_retrieval = retrieval_by_url.get(source.url)
+                if probe_retrieval is None or probe_retrieval in probed:
+                    continue
+                probed.add(probe_retrieval)
+                matches = [
+                    index for index, confirmed in enumerate(card.confirmed_claims)
+                    if confirmed == source.supports_claim
+                ]
+                if len(matches) != 1:
+                    continue
+                if self.conn.execute(
+                    "SELECT 1 FROM evidence_excerpts WHERE account_id=? AND "
+                    "retrieval_id=? AND claim_sha256=? LIMIT 1",
+                    (account_id, probe_retrieval, sha256_hex(str(source.supports_claim))),
+                ).fetchone() is None:
+                    continue
+                bindable.add(matches[0])
+            if len(bindable) < len(card.confirmed_claims):
+                kept = [
+                    card.confirmed_claims[index] for index in sorted(bindable)
+                ]
+                if len(kept) < 3:
+                    raise ResearchTopicIntegrityError(
+                        f"Only {len(kept)} confirmed claim(s) can be bound to "
+                        "authoritative lineage; a PROCEED card needs at least three."
+                    )
+                card.confirmed_claims = kept
+                self.conn.execute(
+                    "UPDATE research_cards SET confirmed_claims=?, facts_json=? "
+                    "WHERE id=?",
+                    (
+                        json.dumps(kept),
+                        json.dumps({
+                            "confirmed": kept,
+                            "uncertain": list(card.uncertain_claims),
+                        }),
+                        int(card.id),
+                    ),
+                )
+
         bound_ordinals: set[int] = set()
         linked_retrievals: set[int] = set()
         for source in card.sources:
@@ -11428,6 +11482,10 @@ class SqliteStorage:
                 index for index, confirmed in enumerate(card.confirmed_claims)
                 if confirmed == claim
             ]
+            if not positions:
+                # Its claim was dropped above as unbindable; the source simply
+                # carries no lineage rather than condemning the card.
+                continue
             if len(positions) != 1:
                 raise ResearchTopicIntegrityError(
                     "Verified source claim must identify exactly one confirmed claim."
