@@ -466,11 +466,17 @@ def build_claim_segments(draft: FakeDraft) -> tuple[DraftClaimSegment, ...]:
 # explicit question punctuation.  A supported question marker anywhere in the
 # segment makes that shortcut unavailable.  This is a punctuation-presence
 # contract only; meaning remains owned by the independent semantic reviewer.
-# A quantity, a date, a money or percentage figure, a quoted span or a named
-# body is a claim a reader can go and check.  These are the marks of a fact
-# smuggled past the reviewer under a prose label, and they are decidable from
-# the text alone.
-_CHECKABLE_FIGURE = re.compile(r"[0-9°£€¥$%]")
+# A quotation or a named body is a claim a reader can go and check, and is one
+# of the marks of a fact smuggled past the reviewer under a prose label.
+#
+# Figures are deliberately NOT tested.  The deterministic floor further down
+# already walks every sentence and flags any number absent from the corpus,
+# which is the precise question.  A bare "contains a digit" test cannot tell a
+# number being cited from one being invented, and it failed live twice: on
+# "The 9 percent is the part that gets quoted" and on a limits paragraph
+# naming the year its own evidence stops at.  Both numbers came from the
+# corpus.  A second, blunter copy of a check that already exists is how a
+# sound draft gets blocked.
 _CHECKABLE_QUOTE = re.compile(r"[\"“”«»‘’]")
 _PROPER_NOUN_RUN = re.compile(r"(?<![.!?]\s)(?<!^)\b[A-Z][a-z'\-]+\s+[A-Z][a-z'\-]+")
 
@@ -488,7 +494,9 @@ def _is_title_case(text: str) -> bool:
     return capitalised * 10 >= len(words) * 7
 
 
-def _clearly_non_factual(segment: DraftClaimSegment) -> bool:
+def _clearly_non_factual(
+    segment: DraftClaimSegment, corpus_tokens: frozenset[str] | set[str] = frozenset(),
+) -> bool:
     """Is this text free of any checkable assertion, judged from the text alone?
 
     This is a coherence gate, not a second reviewer.  It used to demand that
@@ -498,23 +506,33 @@ def _clearly_non_factual(segment: DraftClaimSegment) -> bool:
     sound draft failed that way in one live run: a heading, two transitions, a
     signposted limit and an explicit "I state it as my reading".
 
-    So the question asked here is narrowed to the one a regular expression can
-    actually answer: does the sentence carry a figure, a quotation or a named
-    body - something a reader could look up?  If it does, calling it prose is
-    incoherent whatever the reviewer says.  If it does not, whether the
-    sentence smuggles a subtler claim is a judgement about meaning, and that
-    belongs to the reviewer, which reads the evidence package and blocks an
-    unsupported fact as EVIDENCE_GROUNDED_FACT with no evidence.
+    So the question asked here is narrowed to what a regular expression can
+    actually answer, and asked against the corpus wherever the corpus can
+    answer it: does the sentence quote a source, or name a body the evidence
+    never mentions?  If it does, calling it prose is incoherent whatever the
+    reviewer says.  If it does not, whether the sentence smuggles a subtler
+    claim is a judgement about meaning, and that belongs to the reviewer, which
+    reads the evidence package and blocks an unsupported fact as
+    EVIDENCE_GROUNDED_FACT with no evidence.
     """
     text = segment.text.strip()
     # A question can put a factual proposition into the reader's head without
     # asserting it.  That route stays closed to the prose label entirely.
     if "?" in text or "？" in text:
         return False
-    if _CHECKABLE_FIGURE.search(text) or _CHECKABLE_QUOTE.search(text):
+    if _CHECKABLE_QUOTE.search(text):
         return False
-    if not _is_title_case(text) and _PROPER_NOUN_RUN.search(text):
-        return False
+    if _is_title_case(text):
+        return True
+    for match in _PROPER_NOUN_RUN.finditer(text):
+        named = _content_tokens(match.group(0))
+        # A body the evidence already names is being referred to, not asserted:
+        # a paragraph listing what the material covers will name the documents
+        # it covers.  "the Highway Capacity Manual" failed a live draft that
+        # way while sitting in the corpus the whole time.  A body the evidence
+        # never mentions is the case this check exists for.
+        if named and not named <= corpus_tokens:
+            return False
     return True
 
 
@@ -563,6 +581,7 @@ def _account_article_claims(
     brief: ContentBrief,
     evidence: tuple[FrozenEvidenceItem, ...],
     reviewer: ClaimAccountingReviewPort | None,
+    corpus_tokens: frozenset[str] | set[str] = frozenset(),
     propagate_reviewer_errors: bool = False,
 ) -> tuple[tuple[dict[str, Any], ...], tuple[dict[str, Any], ...], bool, str | None]:
     """Validate complete independent accounting; every ambiguity is BLOCK."""
@@ -724,7 +743,9 @@ def _account_article_claims(
             if outside:
                 local_codes.append(FACTUAL_CLAIM_EVIDENCE_OUTSIDE_PACKAGE)
         elif entry.classification is ClaimClassification.NON_FACTUAL_PROSE:
-            if entry.contains_external_fact is not False or not _clearly_non_factual(segment):
+            if entry.contains_external_fact is not False or not _clearly_non_factual(
+                segment, corpus_tokens,
+            ):
                 local_codes.append(NON_FACTUAL_CLASSIFICATION_INCONSISTENT)
             if entry.evidence_ids:
                 local_codes.append(NON_FACTUAL_CLASSIFICATION_INCONSISTENT)
@@ -837,6 +858,7 @@ def assess_draft(
             brief=brief,
             evidence=evidence,
             reviewer=claim_reviewer,
+            corpus_tokens=corpus_tokens,
             propagate_reviewer_errors=propagate_reviewer_errors,
         )
 

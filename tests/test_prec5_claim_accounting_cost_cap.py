@@ -216,8 +216,6 @@ def test_rv1_j_reviewer_omits_one_substantive_sentence_blocks():
 @pytest.mark.parametrize(
     "sentence",
     (
-        "The machine uses 2 backup batteries.",          # a figure
-        "The machine uses a backup battery of 40%.",     # a percentage
         'The manual calls it "a single backup battery".',  # a quotation
         "The Federal Railroad Administration requires a backup battery.",  # a body
     ),
@@ -246,6 +244,11 @@ def test_rv1_k_factual_declaration_misclassified_non_factual_blocks(sentence):
         "The limits of this evidence should be said plainly once.",
         "Those two columns are the part of the record that changes the reading.",
         "I state it as my reading rather than as something the documents assert.",
+        # Both of these were blocked live for citing a number the corpus
+        # already contains.  A figure in prose is the number floor's question,
+        # and it asks it against the corpus rather than against the digit.
+        "The 9 percent is the part that gets quoted.",
+        "It does not say what happened after 1998 or whether it was adopted.",
     ),
 )
 def test_rv1_k2_discourse_prose_is_left_to_the_reviewer(sentence):
