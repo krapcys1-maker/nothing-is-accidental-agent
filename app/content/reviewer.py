@@ -194,6 +194,32 @@ assertion, it is not a fact and must not be blocked for lacking evidence.
 Blocking interpretation as if it were an unsupported fact is itself an error:
 it produces a draft that says nothing rather than one that says too much.
 
+Worked examples, assuming the evidence establishes that signal timing shares
+green time between movements and that 9 percent of one city's buttons work:
+
+"Only about 9 percent of the city's crosswalk buttons work."
+  -> EVIDENCE_GROUNDED_FACT, cite the id, PASS.
+"Only about 4 percent of the city's crosswalk buttons work."
+  -> EVIDENCE_GROUNDED_FACT, evidence_ids [], BLOCK. The figure is wrong.
+"Most councils quietly removed the wiring years ago."
+  -> EVIDENCE_GROUNDED_FACT, evidence_ids [], BLOCK. A new practice in the
+     world that nothing here supports.
+"An inert button is not a device that stopped listening; it is attached to a
+ machine that was never asking."
+  -> NON_FACTUAL_PROSE, PASS. A metaphor restating the established mechanism.
+"Distribution requires units."
+  -> ARGUMENT_OR_INFERENCE, PASS. Drawn from the supplied guidance.
+"Read as a budget rather than as a place, the crossing becomes arithmetic."
+  -> ARGUMENT_OR_INFERENCE, PASS. The writer's reading, not a new fact.
+"There is nobody standing there to argue with."
+  -> NON_FACTUAL_PROSE, PASS. Rhetoric addressed to the reader.
+"Nine Percent: The Button Is Not Where the Decision Gets Made"
+  -> NON_FACTUAL_PROSE, PASS. A framing title; the figure inside it is carried
+     by the body segment that states it.
+
+Short aphoristic sentences and fragments are style, not evidence claims. Judge
+what the sentence asserts, not how confident it sounds.
+
 Judge meaning, not word overlap. A sentence that reuses the evidence wording but
 widens its scope is not grounded. A sentence that shares no words with the
 evidence may still be grounded by it.
