@@ -669,6 +669,26 @@ def test_strict_reviewer_parser_matrix():
         )
     assert mismatch.value.code == "REVIEWER_ENTRY_FINGERPRINT_MISMATCH"
 
+    # An abbreviated echo of the true fingerprint is the model being lazy about
+    # a value we supplied, not tampering: on a live 22-entry review exactly one
+    # entry came back as "a5e0caf75d91f563b..." and the whole paid review was
+    # discarded. segment_id already pins the first 16 hex characters, so the
+    # segment is identified either way.
+    for abbreviated in ("a" * 17 + "...", "a" * 20, "a" * 16, "a" * 40 + "…"):
+        parsed_short, _ = parse_reviewer_response(
+            encoded(segment_fingerprint=abbreviated), segments=(segment,),
+        )
+        assert len(parsed_short) == 1
+    # Too short to identify, or a different value, still fails.
+    for rejected in ("a" * 15, "b" * 20, "", "   ", "..."):
+        with pytest.raises(ProductionReviewerError) as short:
+            parse_reviewer_response(
+                encoded(segment_fingerprint=rejected), segments=(segment,),
+            )
+        assert short.value.code in {
+            "REVIEWER_ENTRY_FINGERPRINT_MISMATCH", "REVIEWER_ENTRY_MALFORMED",
+        }
+
     class WrongFingerprintReviewer:
         reviewer_version = REVIEWER_VERSION
 

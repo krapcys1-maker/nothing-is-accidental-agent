@@ -429,7 +429,18 @@ def parse_reviewer_response(
                 "REVIEWER_ENTRY_DUPLICATE_SEGMENT",
                 "The reviewer accounted for one segment more than once.",
             )
-        if entry.segment_fingerprint != known[entry.segment_id]:
+        # The reviewer echoes a value we supplied, so the risk here is that it
+        # answers about a segment other than the one it names - not that it
+        # forges a hash.  segment_id already pins the first 16 hex characters of
+        # this fingerprint, so a wrong segment cannot survive the checks above.
+        # Demanding a verbatim 64-character echo for every entry added nothing
+        # and was brittle: on a live 22-entry review the model abbreviated
+        # exactly one fingerprint to "a5e0caf75d91f563b..." and the whole paid
+        # review was discarded. An abbreviation of the true value is accepted; a
+        # different value, or one too short to identify the segment, is not.
+        canonical = known[entry.segment_id]
+        echoed = entry.segment_fingerprint.strip().rstrip(".…").strip()
+        if not echoed or len(echoed) < 16 or not canonical.startswith(echoed):
             raise ProductionReviewerError(
                 "REVIEWER_ENTRY_FINGERPRINT_MISMATCH",
                 "The reviewer changed the supplied segment fingerprint.",
