@@ -466,25 +466,56 @@ def build_claim_segments(draft: FakeDraft) -> tuple[DraftClaimSegment, ...]:
 # explicit question punctuation.  A supported question marker anywhere in the
 # segment makes that shortcut unavailable.  This is a punctuation-presence
 # contract only; meaning remains owned by the independent semantic reviewer.
-_DECLARATIVE_PREDICATE = re.compile(
-    r"(?i)\b(?:am|is|are|was|were|be|been|being|has|have|had|do|does|did|"
-    r"can|could|will|would|shall|should|may|might|must|"
-    r"[a-z][a-z'\-]{2,}(?:s|ed|ing))\b"
-)
-_NON_FACTUAL_TRANSITION = re.compile(
-    r"(?i)^(?:now|first|next|instead|meanwhile|for now|a step back)\b"
-)
+# A quantity, a date, a money or percentage figure, a quoted span or a named
+# body is a claim a reader can go and check.  These are the marks of a fact
+# smuggled past the reviewer under a prose label, and they are decidable from
+# the text alone.
+_CHECKABLE_FIGURE = re.compile(r"[0-9°£€¥$%]")
+_CHECKABLE_QUOTE = re.compile(r"[\"“”«»‘’]")
+_PROPER_NOUN_RUN = re.compile(r"(?<![.!?]\s)(?<!^)\b[A-Z][a-z'\-]+\s+[A-Z][a-z'\-]+")
+
+
+def _is_title_case(text: str) -> bool:
+    """Headings capitalise nearly every word; a sentence naming a body does not."""
+    words = re.findall(r"[A-Za-z][A-Za-z'\-]*", text)
+    if len(words) < 3:
+        return True
+    capitalised = sum(1 for word in words if word[0].isupper())
+    # A heading capitalises nearly every word ("The Crosswalk Button Is Not the
+    # Control" is 10 of 11).  A sentence naming a body reaches about half, so
+    # the line sits well above that: too low and every institution reads as a
+    # heading and its name stops counting as checkable.
+    return capitalised * 10 >= len(words) * 7
 
 
 def _clearly_non_factual(segment: DraftClaimSegment) -> bool:
+    """Is this text free of any checkable assertion, judged from the text alone?
+
+    This is a coherence gate, not a second reviewer.  It used to demand that
+    prose *look* like a transition - open with one of seven adverbs and carry
+    no verb at all - which almost no real sentence does, so the reviewer's own
+    coherent verdict was overruled by a keyword list.  Eight segments of a
+    sound draft failed that way in one live run: a heading, two transitions, a
+    signposted limit and an explicit "I state it as my reading".
+
+    So the question asked here is narrowed to the one a regular expression can
+    actually answer: does the sentence carry a figure, a quotation or a named
+    body - something a reader could look up?  If it does, calling it prose is
+    incoherent whatever the reviewer says.  If it does not, whether the
+    sentence smuggles a subtler claim is a judgement about meaning, and that
+    belongs to the reviewer, which reads the evidence package and blocks an
+    unsupported fact as EVIDENCE_GROUNDED_FACT with no evidence.
+    """
     text = segment.text.strip()
+    # A question can put a factual proposition into the reader's head without
+    # asserting it.  That route stays closed to the prose label entirely.
     if "?" in text or "？" in text:
         return False
-    words = re.findall(r"[A-Za-z][A-Za-z'\-]*", text)
-    return len(words) <= 1 or (
-        _NON_FACTUAL_TRANSITION.search(text) is not None
-        and _DECLARATIVE_PREDICATE.search(text) is None
-    )
+    if _CHECKABLE_FIGURE.search(text) or _CHECKABLE_QUOTE.search(text):
+        return False
+    if not _is_title_case(text) and _PROPER_NOUN_RUN.search(text):
+        return False
+    return True
 
 
 def _claim_finding(code: str, segment: DraftClaimSegment | None, detail: str) -> dict[str, Any]:

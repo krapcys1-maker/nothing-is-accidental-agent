@@ -70,7 +70,14 @@ def test_three_ambiguous_effects_resolve_to_exact_conservative_checkpoint(
     # only; production code and provider configuration remain untouched.
     import app.content.controlled_entrypoint as controlled_entrypoint
 
+    # The reservation is built from the CONTEXT ceiling, not the input ceiling:
+    # a rewrite carries the previous draft and the findings on top of the
+    # evidence, so what can be sent is bounded by the context window.  Patching
+    # the input ceiling alone left this pinned to a figure the code no longer
+    # computes.  Both are held at the small deterministic value the checkpoint
+    # below was written against.
     monkeypatch.setattr(controlled_entrypoint, "ARTICLE_WRITER_MAX_INPUT_TOKENS", 8_000)
+    monkeypatch.setattr(controlled_entrypoint, "ARTICLE_WRITER_MAX_CONTEXT_TOKENS", 8_000)
     monkeypatch.setattr(controlled_entrypoint, "ARTICLE_WRITER_MAX_OUTPUT_TOKENS", 2_048)
     writer = UnknownWriterTransport()
     _, writer_outcome = _run(

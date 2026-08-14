@@ -213,9 +213,18 @@ def test_rv1_j_reviewer_omits_one_substantive_sentence_blocks():
     assert CLAIM_ACCOUNTING_COVERAGE_MISSING in {f["code"] for f in verdict.findings}
 
 
-def test_rv1_k_factual_declaration_misclassified_non_factual_blocks():
+@pytest.mark.parametrize(
+    "sentence",
+    (
+        "The machine uses 2 backup batteries.",          # a figure
+        "The machine uses a backup battery of 40%.",     # a percentage
+        'The manual calls it "a single backup battery".',  # a quotation
+        "The Federal Railroad Administration requires a backup battery.",  # a body
+    ),
+)
+def test_rv1_k_factual_declaration_misclassified_non_factual_blocks(sentence):
     verdict = _assess(
-        "The machine uses a single backup battery.",
+        sentence,
         lambda segment, ids: _entry(
             segment,
             ids,
@@ -226,6 +235,40 @@ def test_rv1_k_factual_declaration_misclassified_non_factual_blocks():
     )
     assert not _claim_gate_passed(verdict)
     assert NON_FACTUAL_CLASSIFICATION_INCONSISTENT in {
+        f["code"] for f in verdict.findings
+    }
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    (
+        "The strongest objection runs the other way and deserves its weight.",
+        "The limits of this evidence should be said plainly once.",
+        "Those two columns are the part of the record that changes the reading.",
+        "I state it as my reading rather than as something the documents assert.",
+    ),
+)
+def test_rv1_k2_discourse_prose_is_left_to_the_reviewer(sentence):
+    """The boundary of the gate above, stated so it cannot move by accident.
+
+    None of these carries a figure, a quotation or a named body, so the gate
+    has nothing decidable to object to and accepts the reviewer's label.  Every
+    one of them was blocked by the previous heuristic on a live draft, which is
+    what the narrowing was for.  A sentence that asserts a checkable fact
+    without any of those marks is the reviewer's to catch, and it catches it as
+    EVIDENCE_GROUNDED_FACT with no evidence - not as prose.
+    """
+    verdict = _assess(
+        sentence,
+        lambda segment, ids: _entry(
+            segment,
+            ids,
+            classification=ClaimClassification.NON_FACTUAL_PROSE,
+            outcome=ClaimReviewOutcome.PASS,
+            external_fact=False,
+        ),
+    )
+    assert NON_FACTUAL_CLASSIFICATION_INCONSISTENT not in {
         f["code"] for f in verdict.findings
     }
 
