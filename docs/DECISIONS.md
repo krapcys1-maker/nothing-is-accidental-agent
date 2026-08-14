@@ -1,5 +1,36 @@
 # DECISIONS (Architecture Decision Log)
 
+### ADR-153: Wyszukiwanie ma szukać mechanizmu, writer ma dostać rzemiosło, research ma 300 s
+
+- **Data/status/autor:** 2026-08-14; pełnomocnictwo właściciela na domknięcie Etapu 3 z kryterium jakości, w tym jawna zgoda na zmianę promptów. Zmiany offline.
+- **Dowód wejściowy — jakość źródeł:** karta 15 (temat 92) miała `source_quality_score 0.82` i `confidence 0.44`, czyli REJECT. Wszystkie trzy pozycje „uncertain" dotyczyły **centralnej tezy tematu**. Źródła były znakomite i odpowiadały na inne pytanie: podawały stawki i przepisy, a temat twierdził coś o motywacji. **Tekst przepisu nie może udowodnić, dlaczego ktoś się tak zachowuje.**
+- **Decyzja (discovery):** prompt A1 wymaga teraz ≥2 źródeł mówiących „dlaczego" — ocena skutków, konsultacja lub odpowiedź na nią, decyzja/przegląd regulatora, ewaluacja powdrożeniowa, dochodzenie, analiza ekonomiczna branży — oraz ≥1 źródła z danymi liczbowymi. Ma też zwracać źródła **przeczące** tezie zamiast podmieniać je na sąsiednie tematycznie.
+- **Decyzja (writer):** prompt systemowy był w całości zakazami i nie mówił nic o tym, co czyni tekst dobrym; drafty wychodziły poprawne i płaskie. Doszła warstwa rzemiosła: nazwij mechanizm wcześnie, wybieraj konkret nad ogólnik, i dwie porażki nazwane wprost — otwieranie pewnym opisem praktyki, gdy dowody ustalają regułę (dokładnie to zablokowało 2 z 26 segmentów draftu o dziurach), oraz zamykanie streszczeniem. Limity mają być powiedziane raz, własnym głosem, zamiast hedgingu w każdym zdaniu.
+- **Decyzja (timeout):** research dostaje 300 s zamiast 120 s. Sześcioźródłowy korpus (57 739 znaków) przekroczył stary deadline i stracił całą próbę na nieznanym wyniku providera. Ścieżka ARTICLE miała 300 s od dawna.
+- **Uwaga o kosztach promptów:** rozszerzone prompty zwiększają wejście każdego wywołania; przy A1 to kilkaset tokenów, czyli rząd 0.002 USD — pomijalne wobec 0.78 USD za discovery.
+- **Nie zweryfikowane na żywo:** żadna z tych trzech zmian nie przeszła jeszcze realnego przebiegu. Blokuje je ADR-152/blocker opisany w `CURRENT_PROJECT_STATE.md`.
+
+### ADR-152: Korpus czeka na wszystkich kandydatów i nigdy nie przekracza kontraktu evidence
+
+- **Data/status/autor:** 2026-08-14; pełnomocnictwo właściciela. Zmiany offline, zweryfikowane testami; brak migracji.
+- **Dowód wejściowy:** temat 92 odkrył 10 kandydatów, pobrał 3 (100% skuteczności), spakował 3 i dostał `confidence 0.44`. Siedem kandydatów — w tym konsultacja `gov.uk` i zapis Hansardu — nie zostało pobranych **ani razu**.
+- **Przyczyna:** packer czekał wyłącznie na pobrania **zatwierdzone**. Pętla operatorska zatwierdza je pojedynczo, bo `ux_jobs_active_research_topic` dopuszcza jeden aktywny job RESEARCH na temat, więc „brak oczekujących" było prawdą już po pierwszym pobraniu. Job syntezy powstawał natychmiast i sam stawał się tym jedynym aktywnym jobem, przez co pętla się kończyła.
+- **Decyzja 1:** korpus pozostaje otwarty, dopóki każdy odkryty kandydat nie ma terminalnego wyniku. O liczbie źródeł decyduje koperta 23 808 tokenów, a nie próg trzech.
+- **Decyzja 2 (regres tej zmiany, złapany na produkcji):** packer był wołany wyłącznie ze ścieżki sukcesu pobrania. Gdy korpus zaczął czekać na wszystkich, końcowe 403 zostawiło kompletny, gotowy korpus **bez żadnego joba syntezy** — temat 96 pobrał 9 z 10 źródeł i nie zsyntetyzował niczego. Nieudane pobranie też jest terminalnym wynikiem swojego kandydata i też dostaje tę szansę.
+- **Decyzja 3:** `pack_research_corpus` przycina wybór do `MAX_EVIDENCE_RETRIEVALS`. Trwały kontrakt `evidence_input` wymaga, by payload był **równy** zamkniętym limitom, więc podniesienie stałej unieważniłoby każdy intent sprzed zmiany. Temat 96 zmieścił 7 źródeł w kopercie tokenowej i został odrzucony za przekroczenie maksimum 6. Packer nie produkuje już korpusu, którego kontrakt nie przyjmie.
+- **Zmierzony efekt:** korpus 6 źródeł / 57 739 znaków wobec dotychczasowych 3.
+- **Świadomie nie zmienione:** próg `MIN_RESEARCH_SOURCES=3`, zakaz dzielenia dokumentów, kolejność smallest-first, stała `MAX_EVIDENCE_RETRIEVALS`.
+
+### ADR-151: Rezerwacja to zadeklarowany cap, a limit dzienny pochodzi z polityki
+
+- **Data/status/autor:** 2026-08-14; pełnomocnictwo właściciela. Zmiany offline, zweryfikowane testami.
+- **Dowód wejściowy:** TOPIC_GENERATION z jawnym `--max-cost-usd 0.300000` zarezerwowało `0.060758`, czyli „pesymistyczną" projekcję, i kosztowało `0.064260`. Przekroczenie o trzy grosze dało `PROVIDER_ATTEMPT_COST_EXCEEDS_RESERVATION` **po** zapłaceniu providerowi: nierozliczona należność, zero tematów, zmarnowana próba.
+- **Przyczyna:** `begin_provider_attempt` dostawał `budget.estimated_attempt_cost`, a zadeklarowany cap służył wyłącznie do sprawdzenia polityki. „Pesymistyczna" projekcja **szacuje** wejście, a nie ogranicza je od góry — prompt przyszedł o ~700 tokenów większy, niż zgadła.
+- **Decyzja:** rezerwowany jest zadeklarowany cap. Jest jawny, sprawdzany wobec budżetu runu przed wywołaniem i ponownie wobec limitów dziennego i miesięcznego w samej rezerwacji, więc rezerwowanie go idzie wyłącznie w stronę konserwatywną. Rozliczenie nadal zapisuje koszt faktyczny.
+- **Zweryfikowany efekt:** kolejna próba przy identycznym przekroczeniu estymaty zakończyła się `SETTLED` zamiast `NEEDS_RECONCILIATION`; trzy kolejne przebiegi TOPIC_GENERATION rozliczyły się czysto.
+- **Decyzja 2:** oba skrypty live nadpisywały `max_daily_cost_usd` na `10.0`, ignorując `config/growth_policy.yaml`, gdzie właściciel ustawił `50.00/200.00`. Przy 8.32 USD wydanych tego dnia bramka odrzucała zdrową rezerwację z powodem niewidocznym w outpucie. Limit dzienny pochodzi teraz z polityki; per-przebiegowe capy (`--cost-ceiling-usd`, `--max-cost-usd`, cap intentu) pozostają nietknięte.
+- **Uczciwie:** to jedyna zmiana tej sesji, która **luzuje** limit, a nie zacieśnia. Podnosi dzienną ekspozycję z 10 do 50 USD i została zgłoszona właścicielowi przed użyciem.
+
 ### ADR-150: A1 prosi o więcej źródeł, niż potrzebuje, a rezerwacja niesie realny margines
 
 - **Data/status/autor:** 2026-08-14; decyzja w ramach pełnomocnictwa właściciela na domknięcie Etapu 3 z kryterium jakości. Zmiana offline, zweryfikowana testami; brak migracji.
@@ -8,7 +39,8 @@
 - **Decyzja:** A1 prosi o `10` kandydatów zamiast `6` (sufit kontraktu `12`) i zakłada attrycję, zamiast celować w minimum.
 - **Cap:** sztywny enum `{0.3, 0.5, 0.6, 1.0}` zastąpiony ograniczonym zakresem kanonicznych kwot sześciodecymalnych w `(0, 3.000000]`, domyślnie `2.000000`. Enum był najdroższym defektem 2026-08-14: discovery kosztujące `1.17` przy capie `0.600000` ginęło w połowie wywołania i marnowało całą próbę. Rezerwacja nie jest prognozą i ma nieść margines. **Wszystkie historyczne wartości nadal się walidują**, więc trwałe intenty sprzed zmiany pozostają odczytywalne i weryfikowalne.
 - **Konsekwencja budżetowa:** kumulatywny stop w `scripts/run_article_research_e2e_live.py` podniesiony z `(0, 2.00]` na `(0, 4.00]`, domyślnie `3.000000` — przy A1 mogącym zarezerwować `3.00` stary stop przerywałby zdrowy przebieg między dwoma płatnymi wywołaniami.
-- **Uczciwie o niepewności:** `2.000000` to ekstrapolacja liniowa zmierzonego `0.47–1.17` przy sześciu kandydatach, nie pomiar przy dziesięciu. Pierwszy realny przebieg A1 na nowym kontrakcie ma ten domyślny cap zweryfikować liczbą, a nie szacunkiem.
+- **Uczciwie o niepewności:** `2.000000` było ekstrapolacją liniową zmierzonego `0.47–1.17` przy sześciu kandydatach.
+- **ZMIERZONE (2026-08-14, uzupełnienie):** dwa realne przebiegi A1 na dziesięciu kandydatach dały `0.763560` (temat 92, łącznie z syntezą) i `0.782915` (temat 96, samo discovery). Domyślny cap `2.000000` ma więc realny margines rzędu **2,5×**, a nie zgadywany. Ekstrapolacja okazała się konserwatywna: koszt nie rósł liniowo z liczbą kandydatów, bo dominuje wyszukiwanie, nie liczba wyników. Cap pozostaje bez zmian.
 - **Nie zmieniono:** progu trzech źródeł, zakazu dzielenia dokumentów, kolejności smallest-first w packerze ani koperty `23 808/8 192/32 000`.
 - **Granice:** zero publikacji; zmiana nie autoryzuje sama z siebie żadnego płatnego przebiegu.
 

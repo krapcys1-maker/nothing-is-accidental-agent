@@ -1,6 +1,18 @@
 # CURRENT_PROJECT_STATE — Nothing Is Accidental Agent
 
-> **BIEŻĄCY STAN 2026-08-14 — BRAMKA REWRITE UZGODNIONA Z REVIEWEREM I POSZERZONE A1; ETAP 3 NADAL `IN PROGRESS`.** Produkcja stoi na `0041_reviewer_document_quality_gate` / **41 migracji**, zgodnie z runtime — brak driftu i brak potrzeby migracji. Zmiany w tej fali są wyłącznie w `app/content/evaluations.py`, `app/content/pipeline.py`, `app/research/source_discovery_intent.py`, `scripts/run_article_research_e2e_live.py` i testach.
+> **BIEŻĄCY STAN 2026-08-14 (po falach płatnych) — ETAP 3 OTWARTY, PIPELINE ZABLOKOWANY PRZEZ JEDNĄ NIEROZLICZONĄ EKSPOZYCJĘ.**
+>
+> **BLOCKER WYMAGAJĄCY DECYZJI WŁAŚCICIELA.** Job `article-research-evidence-96` stoi w `NEEDS_VERIFICATION`, a jego próba `article-research-evidence-96:research:1` w `NEEDS_RECONCILIATION` z zachowaną rezerwacją **`0.485760 USD`**. Synteza przekroczyła ówczesny deadline 120 s; **nie ma wiersza `model_usage`**, więc ani obciążenie, ani wynik nie są ustalone. Preflight `NEEDS_VERIFICATION_PRESENT` blokuje przez to **każdy** controlled-live, nie tylko temat 96. Ledger konserwatywny ADR-146 odmawia (`--source-type PROVIDER_ATTEMPT` przyjmuje wyłącznie efekty CONTENT/ARTICLE). Odblokowanie: dokładny koszt requestu z konsoli Anthropic (~2026-08-14 09:50–09:55 UTC, `claude-opus-5`, ~20k wejścia) → `reconcile-attempt --financial-resolution CHARGED_KNOWN --actual-cost-usd <kwota> --execution-resolution EXECUTION_FAILED`, albo potwierdzenie braku obciążenia → `NOT_CHARGED`. **Zgadywanie kwoty jest zabronione i architektura na to nie pozwala.**
+>
+> **Zweryfikowane na żywo w tej sesji:** TOPIC_GENERATION → temat + job A1; discovery A1 na 10 kandydatach; pobrania 9/10; korpus 6 źródeł / 57 739 znaków; rezerwacja rozliczająca się do `SETTLED`.
+>
+> **NIE zweryfikowane na żywo:** synteza na bogatym korpusie (padła na timeoucie, naprawione na 300 s, nieprzetestowane), **writer i reviewer nie uruchomiły się ani razu** — więc bramka rewrite z ADR-149 jest potwierdzona **wyłącznie testami**, nie produkcją. Żaden artykuł nie osiągnął `PENDING_APPROVAL`.
+>
+> **Koszt sesji `1.85 USD`; dzień `10.17 USD`.** Spalone bezpowrotnie: `0.1423` na zgadywanie `max_tokens` przy istniejącym dowodzie w bazie oraz `~0.78` na korpus tematu 96, który jest zablokowany razem z jobem.
+>
+> **Produkcja `0041`/41 migracji, integrity ok.** `published_at` i `external_url` nadal `NULL` wszędzie; Etapy 5–7 nie istnieją.
+
+> **HISTORYCZNY / SUPERSEDED STAN 2026-08-14 — BRAMKA REWRITE UZGODNIONA Z REVIEWEREM I POSZERZONE A1; ETAP 3 NADAL `IN PROGRESS`.** Produkcja stoi na `0041_reviewer_document_quality_gate` / **41 migracji**, zgodnie z runtime — brak driftu i brak potrzeby migracji. Zmiany w tej fali są wyłącznie w `app/content/evaluations.py`, `app/content/pipeline.py`, `app/research/source_discovery_intent.py`, `scripts/run_article_research_e2e_live.py` i testach.
 >
 > **ADR-149:** porażka claim-level przy próbie 1 daje `REWRITE_ONCE` i writer wykonuje próbę 2; od próby 2 pozostaje `BLOCK`. Poprzeczka reviewera v3 nietknięta — draft nadal nie przechodzi, dostaje wyłącznie tę jedną próbę, którą reviewer sam przyznał. `FAKE_PERSONAL_EXPERIENCE` i `BRAND_TOPIC_POLICY` pozostają terminalne. Rewrite wymaga `claim_coverage_complete`, więc reviewer, który odmówił albo zwrócił nie-JSON, **nie** kupuje drugiego płatnego wywołania.
 >

@@ -1,5 +1,18 @@
 # BUILD_LOG
 
+## 2026-08-14 — Etap 3 / pierwsze realne przebiegi live: cztery usterki granicy providera
+
+Fala płatna. Wydano **1.85 USD**; wszystko rozliczone poza jedną pozycją opisaną niżej. Żaden artykuł nie osiągnął `PENDING_APPROVAL` — **Etap 3 pozostaje otwarty**.
+
+- **Zweryfikowane na żywo:** TOPIC_GENERATION → temat `SELECTED` + job A1 (tematy 92 i 96); discovery A1 na **10 kandydatach**; kontrolowane pobrania **9 na 10 udanych** (jedno 403 — założenie „połowa odmawia" nie utrzymuje się przy dobrze dobranym temacie); pakowanie korpusu do **6 źródeł / 57 739 znaków** wobec dotychczasowych 3.
+- **ADR-151 — rezerwacja.** Jawny cap `0.300000` był ignorowany: rezerwowano projekcję `0.060758`, koszt wyszedł `0.064260`, a przekroczenie o trzy grosze zabiło próbę **po** zapłacie. Rezerwowany jest teraz zadeklarowany cap. Efekt potwierdzony: następna próba przy identycznym przekroczeniu estymaty dała `SETTLED`.
+- **ADR-151 — limit dzienny.** Skrypty live nadpisywały `max_daily_cost_usd` na `10.0`, ignorując politykę właściciela `50.00/200.00`. Jedyna zmiana tej sesji luzująca limit; zgłoszona przed użyciem.
+- **ADR-152 — korpus.** Packer zamykał korpus przy trzech źródłach i sam blokował pętlę pobrań. Teraz czeka na terminalny wynik **każdego** kandydata. Regres tej zmiany złapany na produkcji: packer był wołany tylko po sukcesie pobrania, więc końcowe 403 zostawiło kompletny korpus bez joba syntezy (temat 96: 9 pobranych źródeł, zero syntezy). Nieudane pobranie też pakuje. Trzecia warstwa: packer przycina wybór do `MAX_EVIDENCE_RETRIEVALS`, bo trwały kontrakt evidence wymaga równości limitów i podniesienie stałej unieważniłoby historyczne intenty.
+- **ADR-153 — jakość.** Karta 15: `source_quality 0.82`, `confidence 0.44`, REJECT — źródła znakomite, ale odpowiadały na inne pytanie niż stawiał temat. Discovery wymaga teraz ≥2 źródeł wyjaśniających „dlaczego" i ≥1 z danymi liczbowymi. Prompt writera dostał warstwę rzemiosła zamiast samych zakazów. Research dostał 300 s zamiast 120 s.
+- **Błąd własny, odnotowany:** dwie pierwsze próby TOPIC_GENERATION (`0.1423 USD`) spalono na zgadywaniu `max_tokens` — `1500` wzięte z `min_output_tokens` polityki (to podłoga, nie cel) i `2048` z wiersza capability należącego do innej roli. W bazie było jedenaście udanych przebiegów na `4096/6`. Historię sprawdzono dopiero po drugiej porażce.
+- **BLOCKER, nierozwiązany:** synteza tematu 96 przekroczyła stary deadline 120 s; brak wiersza usage, więc ani koszt, ani wynik nie są ustalone. Job `article-research-evidence-96` stoi w `NEEDS_VERIFICATION` z rezerwacją `0.485760` i **blokuje każdy controlled-live** przez `NEEDS_VERIFICATION_PRESENT`. Ledger konserwatywny (ADR-146) odmawia, bo obejmuje wyłącznie efekty CONTENT/ARTICLE. Odblokowanie wymaga dokładnego kosztu z konsoli Anthropic albo potwierdzenia braku obciążenia — czyli decyzji właściciela.
+- **Weryfikacja:** suita `2791/2791` przed falą płatną; kolejne przebiegi celowane 236/236, 156/156, 115/115 zielone; suita końcowa w toku.
+
 ## 2026-08-14 — Etap 3 / bramka rewrite uzgodniona z reviewerem + poszerzenie A1
 
 - **ADR-149 — rewrite.** `REWRITE_ONCE` nie odpalał próby 2 nie z powodu pętli w `app/content/pipeline.py` (ta iterowała `(1, 2)` poprawnie), tylko dlatego, że job kończył się w środku pierwszej iteracji: `UNSUPPORTED_CLAIMS` miało `failure_decision=BLOCK` na sztywno, a `BLOCK` bije `REWRITE_ONCE` w `aggregate_decision`. Werdykt reviewera był nadpisywany, zanim ktokolwiek go przeczytał. Diagnoza z obu dokumentów przekazania wskazywała niewinny plik i została sprostowana.

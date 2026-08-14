@@ -1,5 +1,22 @@
 # Handover: the ARTICLE pipeline runs; the work left is quality
 
+> **BLOCKER as of 2026-08-14 — read this first.** Every controlled-live run is
+> refused with `NEEDS_VERIFICATION_PRESENT`. Job `article-research-evidence-96`
+> sits in `NEEDS_VERIFICATION` and its attempt
+> `article-research-evidence-96:research:1` in `NEEDS_RECONCILIATION`, holding a
+> `0.485760 USD` reservation. The synthesis exceeded the then-120s client
+> deadline and **no `model_usage` row was returned**, so neither the charge nor
+> the result is established. The conservative ledger (ADR-146) refuses it: its
+> `PROVIDER_ATTEMPT` path only accepts CONTENT/ARTICLE effects, not research.
+>
+> To unblock, the owner needs to read the exact cost of the Anthropic request
+> from roughly 2026-08-14 09:50-09:55 UTC (`claude-opus-5`, ~20k input) and then:
+> `reconcile-attempt --request-id article-research-evidence-96:research:1
+> --financial-resolution CHARGED_KNOWN --actual-cost-usd <amount>
+> --execution-resolution EXECUTION_FAILED`, or `NOT_CHARGED` if the console shows
+> no charge. Do not invent the number: `CHARGE_UNKNOWN` cannot be paired with
+> `EXECUTION_FAILED`, and that refusal is deliberate.
+
 State on 2026-08-14. `main` = `1c203753d310a4dd768b675f003a28fca6d83b86`, production schema
 `0041_reviewer_document_quality_gate`, `integrity_check=ok`, `foreign_key_check=0`.
 Nothing has ever been published: `published_at` and `external_url` are `NULL` everywhere.
