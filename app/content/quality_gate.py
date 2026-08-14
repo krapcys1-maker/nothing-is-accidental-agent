@@ -633,7 +633,19 @@ def _account_article_claims(
 
         entry = entries[0]
         local_codes: list[str] = []
-        if entry.segment_fingerprint != segment.fingerprint:
+        # The same tolerance the parser applies, for the same reason: the
+        # reviewer echoes a value we supplied and is asked for its first 16
+        # characters, because a full 64-character hash per segment does not fit
+        # the output budget of an article-length review. segment_id already
+        # pins that prefix. Keeping this comparison exact while the parser
+        # accepted an abbreviation flagged every segment of a good draft as an
+        # identity mismatch - one rule living in two places, disagreeing.
+        echoed = entry.segment_fingerprint.strip().rstrip(".…").strip()
+        if (
+            not echoed
+            or len(echoed) < 16
+            or not segment.fingerprint.startswith(echoed)
+        ):
             local_codes.append(CLAIM_ACCOUNTING_IDENTITY_MISMATCH)
         if not entry.reason.strip():
             local_codes.append(CLAIM_REVIEW_REASON_MISSING)
