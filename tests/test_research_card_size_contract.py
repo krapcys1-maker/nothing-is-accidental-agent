@@ -338,10 +338,6 @@ def _oversize_cases():
                    _ascii_text(oc.MAX_COUNTERARGUMENT_CHARS + 1)),
         "strongest_counterargument", id="counterargument-over")
     yield pytest.param(
-        with_field("citable_numbers",
-                   [f"{i} percent" for i in range(oc.MAX_CITABLE_NUMBERS + 1)]),
-        "citable_numbers", id="citable-count-over")
-    yield pytest.param(
         with_field("citable_numbers", [_ascii_text(oc.MAX_CITABLE_NUMBER_CHARS + 1)]),
         "citable_numbers[0]", id="citable-elem-over")
     yield pytest.param(
@@ -543,3 +539,31 @@ def test_diagnostics_header_records_thinking_tokens(tmp_path):
     content = path.read_text(encoding="utf-8")
     assert "thinking_tokens: 1900" in content
     assert "output_tokens: 3155" in content
+
+
+def test_surplus_citable_numbers_are_trimmed_not_fatal():
+    """The one list whose length carries no meaning is trimmed, not refused.
+
+    citable_numbers holds optional figures a writer may quote; the writer cites
+    evidence ids, never this list. A live card carrying a seventh number was
+    discarded whole, taking a complete corpus with it. Every other list still
+    fails closed, because truncating uncertain_claims or contradictions would
+    silently delete the caveats that become the writer's forbidden list.
+    """
+    payload = _realistic_payload()
+    payload["citable_numbers"] = [
+        f"{i} percent" for i in range(oc.MAX_CITABLE_NUMBERS + 3)
+    ]
+    draft = _parse(_json(payload))
+    assert len(draft.citable_numbers) == oc.MAX_CITABLE_NUMBERS
+    assert draft.citable_numbers[0] == "0 percent"
+
+    for field, limit in (
+        ("uncertain_claims", oc.MAX_UNCERTAIN_CLAIMS),
+        ("contradictions", oc.MAX_CONTRADICTIONS),
+    ):
+        over = _realistic_payload()
+        over[field] = ["a short claim"] * (limit + 1)
+        with pytest.raises(ResearchCardSizeContractError) as excinfo:
+            _parse(_json(over))
+        assert f"field={field};" in str(excinfo.value)

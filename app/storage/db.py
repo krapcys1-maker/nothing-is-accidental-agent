@@ -49,12 +49,18 @@ CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION = "0038_content_provider_timeout"
 ARTICLE_REVIEW_RESUME_SCHEMA_VERSION = "0039_article_review_resume"
 CONTENT_ROLE_RECONCILIATION_SCHEMA_VERSION = "0040_content_role_reconciliation"
 REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION = "0041_reviewer_document_quality_gate"
+RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION = (
+    "0042_research_conservative_adjudication"
+)
 # The storage floor has to agree with the reviewer contract about what APPROVE
 # means.  Until 0041 is applied, PENDING_APPROVAL would still accept the older
 # "every segment passed" definition that the first REVIEW-ONLY live showed is
 # not the same as a publishable article.  Production remains fail-closed on
 # 0040 until a separately authorised operator applies the forward-only step.
-RUNTIME_SCHEMA_VERSION = REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION
+# 0042 widens owner conservative adjudication to ambiguous RESEARCH attempts.
+# Without it a single unknown-outcome synthesis holds the controlled-live gate
+# closed for the whole account until a human reads the provider console.
+RUNTIME_SCHEMA_VERSION = RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
@@ -129,6 +135,8 @@ _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     CONTENT_ROLE_RECONCILIATION_SCHEMA_VERSION,
     # 0041 replaces three reviewer-related triggers in place; no table is rebuilt.
     REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION,
+    # 0042 replaces one adjudication trigger in place; no table is rebuilt.
+    RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION,
     # 0019 is intentionally ABSENT: rebuilding controlled_fetch_approvals with
     # incoming foreign keys requires PRAGMA foreign_keys=OFF, which is a no-op
     # inside the runner transaction — the migration manages its own explicit
@@ -985,6 +993,21 @@ def migrate_0040_to_0041(
         db_path,
         source_version=CONTENT_ROLE_RECONCILIATION_SCHEMA_VERSION,
         target_version=REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0041_to_0042(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Let owner conservative adjudication reach ambiguous RESEARCH attempts."""
+
+    return _migrate_single_step(
+        db_path,
+        source_version=REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION,
+        target_version=RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )
 

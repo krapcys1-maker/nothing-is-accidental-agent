@@ -2908,6 +2908,30 @@ class SqliteStorage:
                 "WHERE u.request_id=e.execution_ref)",
                 (source_identity,),
             ).fetchone()
+        if row is None and source_type is ConservativeSourceType.PROVIDER_ATTEMPT:
+            # A RESEARCH attempt has no content rows to bind, so its identity is
+            # the job, its run and the frozen execution intent.  Without this
+            # branch an ambiguous ARTICLE_RESEARCH synthesis could never be
+            # adjudicated at all, and one of them holds the controlled-live gate
+            # shut for every topic in the account.
+            row = self.conn.execute(
+                "SELECT p.request_id AS source_identity,p.job_id,"
+                "NULL AS content_id,j.run_id,"
+                "json_extract(j.payload_json,'$.execution_intent.provider') AS provider,"
+                "json_extract(j.payload_json,'$.execution_intent.model') AS model,"
+                "p.status AS previous_status,"
+                "p.reserved_amount_usd AS reserved_amount_usd "
+                "FROM provider_attempts p JOIN jobs j ON j.id=p.job_id "
+                "JOIN runs r ON r.id=j.run_id "
+                "WHERE p.request_id=? AND p.status='NEEDS_RECONCILIATION' "
+                "AND p.request_started_at IS NOT NULL AND p.actual_cost_usd IS NULL "
+                "AND j.kind='RESEARCH' AND j.workflow='RESEARCH' "
+                "AND json_extract(j.payload_json,'$.execution_intent.provider') IS NOT NULL "
+                "AND json_extract(j.payload_json,'$.execution_intent.model') IS NOT NULL "
+                "AND NOT EXISTS (SELECT 1 FROM model_usage u "
+                "WHERE u.request_id=p.request_id)",
+                (source_identity,),
+            ).fetchone()
         if row is None:
             raise ConservativeReconciliationError(
                 "Source is missing, unsupported, has known usage/cost, or did not "
@@ -11383,6 +11407,60 @@ class SqliteStorage:
                     f"({', '.join(outcome.reasons)}); it cannot be finalized."
                 )
 
+        # A PROCEED card needs lineage for every confirmed claim, because the
+        # writer cites confirmed_claim_ids. That invariant stays. What changed is
+        # when it is enforced: raising after the fact discarded an entire paid
+        # card - five well-sourced claims and a ten-source corpus - because a
+        # sixth claim had no quotable excerpt, three times in one evening. The
+        # unbindable claims are now dropped BEFORE any lineage row is written and
+        # the card row is rewritten to match, so ordinals stay consistent and
+        # every claim that survives still has its lineage.
+        if card.publication_recommendation is ResearchRecommendation.PROCEED:
+            bindable: set[int] = set()
+            probed: set[int] = set()
+            for source in card.sources:
+                if source.verification_status is not SourceVerification.VERIFIED:
+                    continue
+                probe_retrieval = retrieval_by_url.get(source.url)
+                if probe_retrieval is None or probe_retrieval in probed:
+                    continue
+                probed.add(probe_retrieval)
+                matches = [
+                    index for index, confirmed in enumerate(card.confirmed_claims)
+                    if confirmed == source.supports_claim
+                ]
+                if len(matches) != 1:
+                    continue
+                if self.conn.execute(
+                    "SELECT 1 FROM evidence_excerpts WHERE account_id=? AND "
+                    "retrieval_id=? AND claim_sha256=? LIMIT 1",
+                    (account_id, probe_retrieval, sha256_hex(str(source.supports_claim))),
+                ).fetchone() is None:
+                    continue
+                bindable.add(matches[0])
+            if len(bindable) < len(card.confirmed_claims):
+                kept = [
+                    card.confirmed_claims[index] for index in sorted(bindable)
+                ]
+                if len(kept) < 3:
+                    raise ResearchTopicIntegrityError(
+                        f"Only {len(kept)} confirmed claim(s) can be bound to "
+                        "authoritative lineage; a PROCEED card needs at least three."
+                    )
+                card.confirmed_claims = kept
+                self.conn.execute(
+                    "UPDATE research_cards SET confirmed_claims=?, facts_json=? "
+                    "WHERE id=?",
+                    (
+                        json.dumps(kept),
+                        json.dumps({
+                            "confirmed": kept,
+                            "uncertain": list(card.uncertain_claims),
+                        }),
+                        int(card.id),
+                    ),
+                )
+
         bound_ordinals: set[int] = set()
         linked_retrievals: set[int] = set()
         for source in card.sources:
@@ -11404,6 +11482,10 @@ class SqliteStorage:
                 index for index, confirmed in enumerate(card.confirmed_claims)
                 if confirmed == claim
             ]
+            if not positions:
+                # Its claim was dropped above as unbindable; the source simply
+                # carries no lineage rather than condemning the card.
+                continue
             if len(positions) != 1:
                 raise ResearchTopicIntegrityError(
                     "Verified source claim must identify exactly one confirmed claim."
@@ -14419,12 +14501,15 @@ class SqliteStorage:
                 cursor = self.conn.execute(
                     "INSERT INTO research_source_candidates (research_run_id,url,title,status,"
                     "canonical_source_identity,discovery_result_identity,discovery_port,"
-                    "discovery_job_id) VALUES (?,?,?,?,?,?,?,?)",
+                    "discovery_job_id,published_at) VALUES (?,?,?,?,?,?,?,?,?)",
                     (
                         execution.run_id, item.canonical_url, item.title,
                         SourceCandidateStatus.PENDING_EXTRACTION.value,
                         item.canonical_source_identity, item.result_identity,
                         port_name, execution.job_id,
+                        # Best-effort provider metadata; None stays None so the
+                        # admission policy can tell "undated" from "old".
+                        getattr(item, "published_at", None),
                     ),
                 )
                 stored.append(SourceCandidateRecord(

@@ -31,6 +31,9 @@ NO_PRIMARY_SOURCE = "NO_PRIMARY_SOURCE"
 ORIENTATION_ONLY_CORPUS = "ORIENTATION_ONLY_CORPUS"
 SOURCE_CLASSIFICATION_UNKNOWN = "SOURCE_CLASSIFICATION_UNKNOWN"
 STALE_TIME_SENSITIVE_CORPUS = "STALE_TIME_SENSITIVE_CORPUS"
+# Recorded, never a rejection reason: it says the corpus could not be aged, not
+# that it is old.
+FRESHNESS_UNVERIFIABLE = "FRESHNESS_UNVERIFIABLE"
 CLAIM_WITHOUT_ADMITTED_EVIDENCE = "CLAIM_WITHOUT_ADMITTED_EVIDENCE"
 SYNDICATION_METADATA_INVALID = "SYNDICATION_METADATA_INVALID"
 
@@ -334,22 +337,35 @@ def evaluate_source_admission(
             policy_fingerprint=active.fingerprint(),
         )
 
-    # 1. Classification. An unknown class is never guessed.
+    # 1. Classification. An unknown class is never guessed - but it also never
+    #    condemns the rest of the corpus.  Refusing the whole card because one
+    #    source could not be classified conflated "this source does not count"
+    #    with "this corpus is unusable": a live card carried three PRIMARY
+    #    sources, including the EU regulation itself and a GAO report, and was
+    #    rejected because a sixth source came back labelled OTHER.  An
+    #    unclassified source is simply not admitted, so it supports no claim,
+    #    and the floors below - enough sources, a primary among them, every
+    #    claim reachable from admitted evidence - decide on what remains.
     classified: list[tuple[SourceDescriptor, SourceClass]] = []
     for descriptor in descriptors:
         effective = classify_source(descriptor)
         if effective is None:
-            reasons.append(SOURCE_CLASSIFICATION_UNKNOWN)
             findings.append({
                 "code": SOURCE_CLASSIFICATION_UNKNOWN,
                 "url": descriptor.url,
                 "retrieval_id": descriptor.retrieval_id,
+                "detail": "not admitted; the remaining sources are judged alone",
             })
             continue
         classified.append((descriptor, effective))
 
     # 2. Deduplicate qualitatively equivalent material.  Identical canonical
     #    text, or a declared syndication parent, collapses to one source.
+    #    Collapsing is the whole point, so a duplicate is dropped and recorded,
+    #    never treated as a defect of the corpus: a live card carried five
+    #    admitted sources and was refused because a sixth entry pointed at a
+    #    retrieval already counted. If too little survives deduplication the
+    #    source floor below says so, which is the honest reason.
     admitted: list[AdmittedSource] = []
     seen_content: dict[str, str] = {}
     seen_retrievals: set[int] = set()
@@ -358,9 +374,8 @@ def evaluate_source_admission(
             findings.append({
                 "code": SYNDICATED_DUPLICATE_SOURCES,
                 "url": descriptor.url,
-                "detail": "repeated retrieval identity",
+                "detail": "repeated retrieval identity; collapsed",
             })
-            reasons.append(SYNDICATED_DUPLICATE_SOURCES)
             continue
         digest = descriptor.content_sha256
         if digest and digest in seen_content:
@@ -368,9 +383,8 @@ def evaluate_source_admission(
                 "code": SYNDICATED_DUPLICATE_SOURCES,
                 "url": descriptor.url,
                 "duplicate_of": seen_content[digest],
-                "detail": "identical canonical text",
+                "detail": "identical canonical text; collapsed",
             })
-            reasons.append(SYNDICATED_DUPLICATE_SOURCES)
             continue
         if digest:
             seen_content[digest] = descriptor.url
@@ -439,20 +453,35 @@ def evaluate_source_admission(
     if sensitive:
         reference = now or datetime.now(timezone.utc)
         fresh = 0
+        dated = 0
         for descriptor, _ in classified:
             published = descriptor.published_at
             if published is None:
                 continue
+            dated += 1
             if published.tzinfo is None:
                 published = published.replace(tzinfo=timezone.utc)
             age_days = (reference - published).days
             if 0 <= age_days <= active.freshness_max_age_days:
                 fresh += 1
-        if fresh < 1:
+        # "No source carries a date" is not the same finding as "every dated
+        # source is too old", and conflating them made this gate unpassable:
+        # discovery never recorded publication dates at all, so every
+        # time-sensitive topic was scored stale on missing metadata rather than
+        # on age.  An undated corpus is recorded as unverifiable and left to the
+        # reviewer; a genuinely old one still blocks.
+        if dated == 0:
+            findings.append({
+                "code": FRESHNESS_UNVERIFIABLE,
+                "max_age_days": active.freshness_max_age_days,
+                "detail": "no admitted source reports a publication date",
+            })
+        elif fresh < 1:
             reasons.append(STALE_TIME_SENSITIVE_CORPUS)
             findings.append({
                 "code": STALE_TIME_SENSITIVE_CORPUS,
                 "max_age_days": active.freshness_max_age_days,
+                "dated_sources": dated,
                 "detail": "time-sensitive claims need at least one fresh source",
             })
 

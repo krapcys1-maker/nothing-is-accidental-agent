@@ -15,6 +15,9 @@ from app.research.durable_intent import (
 )
 
 
+EVIDENCE_SYNTHESIS_TIMEOUT_SECONDS = 300
+
+
 def enqueue_evidence_research_if_ready(
     *, storage: object, settings: Settings, account: Account, topic: Topic, clock: Clock,
 ) -> str | None:
@@ -36,6 +39,24 @@ def enqueue_evidence_research_if_ready(
         (account.id, int(topic.id)),
     ).fetchone()[0])
     if pending:
+        return None
+    # Waiting for approved fetches to finish is not enough.  The operator loop
+    # approves candidates one at a time, because ux_jobs_active_research_topic
+    # permits a single active RESEARCH job per topic, so "no pending approvals"
+    # is also true after the very first fetch.  The corpus therefore closed at
+    # the bare three-source minimum while seven discovered candidates were never
+    # fetched at all, and thin corpora are what drives confidence below the
+    # PROCEED threshold: topic 92 packed 3 of 10 and scored 0.44.  Hold the
+    # corpus open until every discovered candidate has a terminal outcome; the
+    # input envelope, not the floor, then decides how many actually fit.
+    unfetched = int(storage.conn.execute(
+        "SELECT count(*) FROM research_source_candidates c "
+        "JOIN jobs j ON j.id=c.discovery_job_id "
+        "WHERE j.account_id=? AND j.topic_id=? AND c.id NOT IN ("
+        "SELECT candidate_id FROM source_candidate_fetch_approvals)",
+        (account.id, int(topic.id)),
+    ).fetchone()[0])
+    if unfetched:
         return None
     rows = storage.conn.execute(
         "SELECT c.canonical_source_identity,a.retrieval_id,r.canonical_sha256,"
@@ -62,7 +83,21 @@ def enqueue_evidence_research_if_ready(
     except CorpusPackingError:
         return None
 
-    exact_settings = replace(settings, model_quality="claude-opus-5", dry_run=False)
+    # The deadline is FROZEN INTO THE INTENT here and used at execution time, so
+    # a runtime override in an operator script can never reach it.  It used to
+    # inherit the 60s config default meant for small calls, which was survivable
+    # only while the corpus held three sources: topic 92 (3 sources) finished
+    # inside it, topics 96 and 82 (6 sources each) did not, and both lost the
+    # whole attempt to an unknown provider outcome after the provider had
+    # already been billed.  Evidence synthesis is the heaviest call in the
+    # system - full 23,808-token input against an 8,192-token output - so it
+    # carries its own deadline instead of a global default.
+    exact_settings = replace(
+        settings, model_quality="claude-opus-5", dry_run=False,
+        research_timeout_seconds=max(
+            settings.research_timeout_seconds, EVIDENCE_SYNTHESIS_TIMEOUT_SECONDS,
+        ),
+    )
     active = storage.get_active_model_for_role("ARTICLE_RESEARCH")
     if active is None or active.technical_model_id != "claude-opus-5" or not active.pricing_ref:
         raise CorpusPackingError("exact active ARTICLE_RESEARCH pricing authority is missing")

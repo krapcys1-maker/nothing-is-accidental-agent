@@ -35,6 +35,7 @@ from app.content.pipeline import run_offline_content_pipeline
 from app.content.prompt import assemble_writer_prompt
 from app.content.quality_gate import (
     FABRICATED_PERSONAL_EXPERIENCE,
+    DraftQualityAssessment,
     QualityCheck,
     UNATTRIBUTED_SOURCE_APPEAL,
     UNSUPPORTED_FACTUAL_CLAIM,
@@ -273,6 +274,86 @@ def test_unsupported_statistic_is_rejected_despite_empty_self_report():
     assert aggregate_decision(evaluations).value == "BLOCK"
 
 
+def test_unsupported_claim_earns_one_rewrite_before_it_blocks():
+    """One draft, two answers, decided only by whether a rewrite is left.
+
+    Reviewer v3 answers this question with REWRITE_ONCE on attempt 1 while the
+    C2 aggregate used to answer BLOCK on identical evidence.  That disagreement
+    ended articles the reviewer had explicitly asked to rewrite, and forced the
+    rewrite through the manual review-only path instead.
+    """
+    body = GOOD_BODY + (
+        "\n\nGate reassignment raises missed connections by 37 percent across "
+        "the industry, according to a recent study of boarding data."
+    )
+    draft = _draft(body, unsupported_claims=())
+
+    def _evaluate(*, rewrite_available: bool):
+        return evaluate_draft(
+            draft, _article_brief(), evidence=(_evidence_item(CLAIM, EXCERPT),),
+            claim_reviewer=FakeClaimAccountingReviewer(
+                decide=ground_every_segment_in_package
+            ),
+            rewrite_available=rewrite_available,
+        )
+
+    first_attempt = _evaluate(rewrite_available=True)
+    later_attempt = _evaluate(rewrite_available=False)
+
+    decisions = {}
+    for label, evaluations in (
+        ("first", first_attempt), ("later", later_attempt),
+    ):
+        unsupported = next(
+            item for item in evaluations
+            if item.evaluation_type is EvaluationType.UNSUPPORTED_CLAIMS
+        )
+        # The bar never moves: the draft fails the check either way.
+        assert unsupported.result == "FAIL"
+        decisions[label] = unsupported.decision.value
+
+    assert decisions == {"first": "REWRITE_ONCE", "later": "BLOCK"}
+    assert aggregate_decision(first_attempt).value == "REWRITE_ONCE"
+    assert aggregate_decision(later_attempt).value == "BLOCK"
+
+
+@pytest.mark.parametrize("coverage_complete", [True, False])
+def test_rewrite_is_never_granted_on_an_unreadable_review(coverage_complete):
+    """A reviewer that did not answer must not buy the draft a second call.
+
+    An incomplete claim accounting is what a refused, malformed or failed
+    review looks like from here.  Treating it as an editorial "rewrite this"
+    would turn a provider failure into an automatic retry of a paid call, on
+    attempt 1, with no human in the loop.
+    """
+    draft = _draft(GOOD_BODY, unsupported_claims=())
+    assessment = DraftQualityAssessment(
+        assessor_version="test_assessor",
+        draft_fingerprint=draft.fingerprint(),
+        checks={check: True for check in QualityCheck}
+        | {QualityCheck.NO_OUT_OF_CORPUS_CLAIMS: False},
+        findings=(),
+        self_report={},
+        self_report_divergences=(),
+        claim_coverage_complete=coverage_complete,
+    )
+    evaluations = evaluate_draft(
+        draft, _article_brief(), evidence=(_evidence_item(CLAIM, EXCERPT),),
+        assessment=assessment,
+        rewrite_available=True,
+    )
+    unsupported = next(
+        item for item in evaluations
+        if item.evaluation_type is EvaluationType.UNSUPPORTED_CLAIMS
+    )
+    assert unsupported.result == "FAIL"
+    # Same failing check, same attempt number; only the reviewer's ability to
+    # answer differs, and only a real answer earns the rewrite.
+    assert unsupported.decision.value == (
+        "REWRITE_ONCE" if coverage_complete else "BLOCK"
+    )
+
+
 def test_invented_personal_story_is_rejected_despite_false_self_report():
     body = GOOD_BODY + (
         "\n\nI remember waiting at that pier with my family last summer, and "
@@ -454,9 +535,16 @@ def test_syndicated_and_duplicate_material_cannot_inflate_the_evidence_count():
         ],
         confirmed_claims=[CLAIM],
     )
+    # A duplicate is collapsed and recorded, not held against the corpus: what
+    # must not happen is it counting towards the evidence, and it does not.
     assert outcome.admitted is False
-    assert SYNDICATED_DUPLICATE_SOURCES in outcome.reasons
     assert TOO_FEW_ADMITTED_SOURCES in outcome.reasons
+    assert SYNDICATED_DUPLICATE_SOURCES not in outcome.reasons
+    assert any(
+        item.get("code") == SYNDICATED_DUPLICATE_SOURCES
+        and item.get("url") == "https://reprint.example/story"
+        for item in outcome.findings
+    )
     # The reprint collapsed into the origin; the partner kept the origin's key.
     assert outcome.independent_owner_count == 1
     assert len(outcome.admitted_sources) == 2
@@ -533,9 +621,32 @@ def test_unknown_source_classification_fails_closed():
         ],
         confirmed_claims=[CLAIM],
     )
+    # An unclassified source is dropped rather than counted, so this corpus
+    # still fails - on the source floor, which is the honest reason. It does not
+    # condemn a corpus that has enough admitted sources without it.
     assert outcome.admitted is False
-    assert SOURCE_CLASSIFICATION_UNKNOWN in outcome.reasons
     assert TOO_FEW_ADMITTED_SOURCES in outcome.reasons
+    assert SOURCE_CLASSIFICATION_UNKNOWN not in outcome.reasons
+    assert any(
+        item.get("code") == SOURCE_CLASSIFICATION_UNKNOWN
+        and item.get("url") == "https://mystery.example/page"
+        for item in outcome.findings
+    )
+
+    # The same unclassified source alongside a sufficient corpus is admitted.
+    survives = evaluate_source_admission(
+        [
+            _source("https://regulator.example/filing", klass=SourceClass.PRIMARY,
+                    retrieval_id=1, digest="a" * 64),
+            _source("https://press.example/report", retrieval_id=2, digest="b" * 64),
+            _source("https://journal.example/paper", retrieval_id=3, digest="c" * 64),
+            _source("https://mystery.example/page", klass=None, retrieval_id=4,
+                    digest="d" * 64),
+        ],
+        confirmed_claims=[CLAIM],
+    )
+    assert survives.admitted is True
+    assert all(item.url != "https://mystery.example/page" for item in survives.admitted_sources)
 
 
 def test_every_confirmed_claim_needs_admitted_evidence():

@@ -1,5 +1,12 @@
 # HUMAN_INTERVENTIONS
 
+## 2026-08-14 — właściciel rozstrzygnął konflikt reviewer v3 kontra agregat C2
+
+- Przedstawiono właścicielowi trzy opcje: uzgodnić agregat z reviewerem, rozbić taksonomię `NO_OUT_OF_CORPUS_CLAIMS` na osobne bramki, albo zostawić stan bez zmian.
+- **Właściciel wybrał uzgodnienie z reviewerem.** Przy próbie 1 niepokryty claim daje `REWRITE_ONCE`, od próby 2 pozostaje `BLOCK`. Jawnie utrzymane: poprzeczka reviewera v3 się nie obniża, a `FAKE_PERSONAL_EXPERIENCE` i `BRAND_TOPIC_POLICY` pozostają terminalne.
+- Autoryzacja obejmuje zmianę offline w `app/content/evaluations.py`, `app/content/pipeline.py` i testach. Nie obejmuje migracji, live, publikacji, żadnego płatnego wywołania ani operacji na produkcyjnej bazie.
+- Rozbicie taksonomii na osobne bramki zostało świadomie odłożone do backlogu, nie odrzucone.
+
 ## 2026-08-13 — właściciel zdefiniował `CONSERVATIVE_MAX_CHARGED`
 
 - Właściciel zdecydował, że brak request-level evidence wolno rozstrzygnąć budżetowo wyłącznie przez zaliczenie pełnej zachowanej rezerwy, bez przedstawiania jej jako potwierdzonego rachunku providera.

@@ -263,6 +263,21 @@ def classification_contract_error(
                 f"{classification.value} requires contains_external_fact=false; "
                 "a segment asserting an outside fact is not reasoning or framing."
             )
+        # BLOCK is how an UNSUPPORTED FACT is reported. It is not a way of
+        # saying "this is not a fact", and the reviewer was using it that way:
+        # on a finished draft it correctly classified transitions, framing
+        # titles and authorial signposting as NON_FACTUAL_PROSE and then
+        # blocked them anyway, with reasons like "Transition". Ten such
+        # segments failed an otherwise sound article. Reasoning that does not
+        # follow, or framing that smuggles a claim, is not this class at all -
+        # it is an EVIDENCE_GROUNDED_FACT without evidence, which is exactly
+        # what BLOCK exists for.
+        if outcome is ClaimReviewOutcome.BLOCK:
+            return (
+                f"{classification.value} cannot be BLOCK; BLOCK reports a "
+                "factual claim the evidence does not support. If the segment "
+                "does assert such a claim, classify it EVIDENCE_GROUNDED_FACT."
+            )
         return None
     return "classification is not one of the three supported classes."
 
@@ -451,25 +466,74 @@ def build_claim_segments(draft: FakeDraft) -> tuple[DraftClaimSegment, ...]:
 # explicit question punctuation.  A supported question marker anywhere in the
 # segment makes that shortcut unavailable.  This is a punctuation-presence
 # contract only; meaning remains owned by the independent semantic reviewer.
-_DECLARATIVE_PREDICATE = re.compile(
-    r"(?i)\b(?:am|is|are|was|were|be|been|being|has|have|had|do|does|did|"
-    r"can|could|will|would|shall|should|may|might|must|"
-    r"[a-z][a-z'\-]{2,}(?:s|ed|ing))\b"
-)
-_NON_FACTUAL_TRANSITION = re.compile(
-    r"(?i)^(?:now|first|next|instead|meanwhile|for now|a step back)\b"
-)
+# A quotation or a named body is a claim a reader can go and check, and is one
+# of the marks of a fact smuggled past the reviewer under a prose label.
+#
+# Figures are deliberately NOT tested.  The deterministic floor further down
+# already walks every sentence and flags any number absent from the corpus,
+# which is the precise question.  A bare "contains a digit" test cannot tell a
+# number being cited from one being invented, and it failed live twice: on
+# "The 9 percent is the part that gets quoted" and on a limits paragraph
+# naming the year its own evidence stops at.  Both numbers came from the
+# corpus.  A second, blunter copy of a check that already exists is how a
+# sound draft gets blocked.
+_CHECKABLE_QUOTE = re.compile(r"[\"“”«»‘’]")
+_PROPER_NOUN_RUN = re.compile(r"(?<![.!?]\s)(?<!^)\b[A-Z][a-z'\-]+\s+[A-Z][a-z'\-]+")
 
 
-def _clearly_non_factual(segment: DraftClaimSegment) -> bool:
+def _is_title_case(text: str) -> bool:
+    """Headings capitalise nearly every word; a sentence naming a body does not."""
+    words = re.findall(r"[A-Za-z][A-Za-z'\-]*", text)
+    if len(words) < 3:
+        return True
+    capitalised = sum(1 for word in words if word[0].isupper())
+    # A heading capitalises nearly every word ("The Crosswalk Button Is Not the
+    # Control" is 10 of 11).  A sentence naming a body reaches about half, so
+    # the line sits well above that: too low and every institution reads as a
+    # heading and its name stops counting as checkable.
+    return capitalised * 10 >= len(words) * 7
+
+
+def _clearly_non_factual(
+    segment: DraftClaimSegment, corpus_tokens: frozenset[str] | set[str] = frozenset(),
+) -> bool:
+    """Is this text free of any checkable assertion, judged from the text alone?
+
+    This is a coherence gate, not a second reviewer.  It used to demand that
+    prose *look* like a transition - open with one of seven adverbs and carry
+    no verb at all - which almost no real sentence does, so the reviewer's own
+    coherent verdict was overruled by a keyword list.  Eight segments of a
+    sound draft failed that way in one live run: a heading, two transitions, a
+    signposted limit and an explicit "I state it as my reading".
+
+    So the question asked here is narrowed to what a regular expression can
+    actually answer, and asked against the corpus wherever the corpus can
+    answer it: does the sentence quote a source, or name a body the evidence
+    never mentions?  If it does, calling it prose is incoherent whatever the
+    reviewer says.  If it does not, whether the sentence smuggles a subtler
+    claim is a judgement about meaning, and that belongs to the reviewer, which
+    reads the evidence package and blocks an unsupported fact as
+    EVIDENCE_GROUNDED_FACT with no evidence.
+    """
     text = segment.text.strip()
+    # A question can put a factual proposition into the reader's head without
+    # asserting it.  That route stays closed to the prose label entirely.
     if "?" in text or "？" in text:
         return False
-    words = re.findall(r"[A-Za-z][A-Za-z'\-]*", text)
-    return len(words) <= 1 or (
-        _NON_FACTUAL_TRANSITION.search(text) is not None
-        and _DECLARATIVE_PREDICATE.search(text) is None
-    )
+    if _CHECKABLE_QUOTE.search(text):
+        return False
+    if _is_title_case(text):
+        return True
+    for match in _PROPER_NOUN_RUN.finditer(text):
+        named = _content_tokens(match.group(0))
+        # A body the evidence already names is being referred to, not asserted:
+        # a paragraph listing what the material covers will name the documents
+        # it covers.  "the Highway Capacity Manual" failed a live draft that
+        # way while sitting in the corpus the whole time.  A body the evidence
+        # never mentions is the case this check exists for.
+        if named and not named <= corpus_tokens:
+            return False
+    return True
 
 
 def _claim_finding(code: str, segment: DraftClaimSegment | None, detail: str) -> dict[str, Any]:
@@ -517,6 +581,7 @@ def _account_article_claims(
     brief: ContentBrief,
     evidence: tuple[FrozenEvidenceItem, ...],
     reviewer: ClaimAccountingReviewPort | None,
+    corpus_tokens: frozenset[str] | set[str] = frozenset(),
     propagate_reviewer_errors: bool = False,
 ) -> tuple[tuple[dict[str, Any], ...], tuple[dict[str, Any], ...], bool, str | None]:
     """Validate complete independent accounting; every ambiguity is BLOCK."""
@@ -633,7 +698,19 @@ def _account_article_claims(
 
         entry = entries[0]
         local_codes: list[str] = []
-        if entry.segment_fingerprint != segment.fingerprint:
+        # The same tolerance the parser applies, for the same reason: the
+        # reviewer echoes a value we supplied and is asked for its first 16
+        # characters, because a full 64-character hash per segment does not fit
+        # the output budget of an article-length review. segment_id already
+        # pins that prefix. Keeping this comparison exact while the parser
+        # accepted an abbreviation flagged every segment of a good draft as an
+        # identity mismatch - one rule living in two places, disagreeing.
+        echoed = entry.segment_fingerprint.strip().rstrip(".…").strip()
+        if (
+            not echoed
+            or len(echoed) < 16
+            or not segment.fingerprint.startswith(echoed)
+        ):
             local_codes.append(CLAIM_ACCOUNTING_IDENTITY_MISMATCH)
         if not entry.reason.strip():
             local_codes.append(CLAIM_REVIEW_REASON_MISSING)
@@ -666,7 +743,9 @@ def _account_article_claims(
             if outside:
                 local_codes.append(FACTUAL_CLAIM_EVIDENCE_OUTSIDE_PACKAGE)
         elif entry.classification is ClaimClassification.NON_FACTUAL_PROSE:
-            if entry.contains_external_fact is not False or not _clearly_non_factual(segment):
+            if entry.contains_external_fact is not False or not _clearly_non_factual(
+                segment, corpus_tokens,
+            ):
                 local_codes.append(NON_FACTUAL_CLASSIFICATION_INCONSISTENT)
             if entry.evidence_ids:
                 local_codes.append(NON_FACTUAL_CLASSIFICATION_INCONSISTENT)
@@ -779,6 +858,7 @@ def assess_draft(
             brief=brief,
             evidence=evidence,
             reviewer=claim_reviewer,
+            corpus_tokens=corpus_tokens,
             propagate_reviewer_errors=propagate_reviewer_errors,
         )
 

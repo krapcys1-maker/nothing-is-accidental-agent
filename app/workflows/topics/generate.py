@@ -168,7 +168,16 @@ def _configure_durable_topic_attempt_control(
                 execution,
                 stage=budget.stage,
                 attempt_no=budget.attempt_number,
-                max_cost_usd=budget.estimated_attempt_cost,
+                # Reserve the operator's declared cap, not the estimate.  The
+                # "pessimistic" projection is an estimate of the input, not a
+                # bound on it: a real run projected 0.060758 and cost 0.064260
+                # because the input came in ~700 tokens above the guess, and the
+                # 3-cent overshoot terminalised the whole attempt after the
+                # provider had already been paid.  The cap is explicit, already
+                # checked against the run budget above, and re-checked against
+                # the daily and monthly limits here, so reserving it is strictly
+                # the conservative direction; settlement still records actual.
+                max_cost_usd=float(intent.cap_usd),
                 daily_limit_usd=policy.daily_limit_usd,
                 monthly_limit_usd=policy.monthly_limit_usd,
             )

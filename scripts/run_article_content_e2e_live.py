@@ -40,10 +40,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     settings = load_settings()
+    # Budget policy lives in config/growth_policy.yaml, not in this script.  The
+    # former hardcoded 10.0 overrode a deliberately configured higher limit and
+    # rejected runs for a reason no operator could see.  --cost-ceiling-usd is
+    # still the fence that bounds this one article.
     real = replace(
         settings,
         dry_run=False,
-        max_daily_cost_usd=10.0,
     )
     clock = SystemClock()
     storage = SqliteStorage.open(settings.db_path)
@@ -51,15 +54,26 @@ def main(argv: list[str] | None = None) -> int:
         if connection_schema_versions(storage.conn)[-1] != RUNTIME_SCHEMA_VERSION:
             print("BLOCKED: runtime schema mismatch")
             return 2
+        # What this must prevent is concurrent paid work, not the mere presence
+        # of a queued row.  Blocking on every QUEUED job made the operator flow
+        # deadlock with itself: TOPIC_GENERATION always leaves a queued A1 job
+        # behind, so after generating a topic no article could ever be written
+        # without first paying for a discovery nobody wanted yet.  A queued job
+        # is inert - no worker holds it - so the real invariants are that
+        # nothing is executing and that no other CONTENT work is in flight.
         active_jobs = storage.conn.execute(
-            "SELECT id,status FROM jobs WHERE status IN ('QUEUED','LEASED','RUNNING')"
+            "SELECT id,kind,status FROM jobs WHERE status IN ('LEASED','RUNNING') "
+            "OR (status='QUEUED' AND kind='CONTENT')"
         ).fetchall()
-        if active_jobs and not (
-            len(active_jobs) == 1
-            and active_jobs[0]["id"] == args.job_id
-            and active_jobs[0]["status"] == "QUEUED"
-        ):
-            print("BLOCKED: another active job exists")
+        blocking = [
+            row for row in active_jobs
+            if not (row["id"] == args.job_id and row["status"] == "QUEUED")
+        ]
+        if blocking:
+            print(
+                "BLOCKED: another active job exists: "
+                + ",".join(f"{row['id']}({row['status']})" for row in blocking)
+            )
             return 2
         card = storage.get_research_card(args.research_card_id)
         if card is None or card.publication_recommendation.value != "PROCEED":

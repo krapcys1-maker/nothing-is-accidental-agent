@@ -2168,16 +2168,16 @@ def test_unexpected_pipeline_error_after_run_initialization_fails_job_and_resear
     )
     result = _worker(settings, storage, clock, owner="unexpected-after-init").run_once()
     assert result.status is WorkerIterationStatus.FAILED
-    assert result.detail == "UNEXPECTED_RESEARCH_PIPELINE_EXCEPTION"
+    assert result.detail.startswith("UNEXPECTED_RESEARCH_PIPELINE_EXCEPTION")
     job = storage.get_job(job_id)
     assert job is not None and job.status is JobStatus.FAILED and job.run_id is not None
     run = storage.get_run(job.run_id)
     research_run = storage.get_research_run(job.run_id)
     expected_error = "UNEXPECTED_RESEARCH_PIPELINE_EXCEPTION"
-    assert run is not None and run.status is RunStatus.FAILED and run.error == expected_error
+    assert run is not None and run.status is RunStatus.FAILED and run.error.startswith(expected_error)
     assert research_run is not None and research_run.status.value == "FAILED"
-    assert research_run.error == expected_error
-    assert job.last_error == expected_error
+    assert research_run.error.startswith(expected_error)
+    assert job.last_error.startswith(expected_error)
     assert storage.conn.execute("SELECT count(*) FROM research_cards").fetchone()[0] == 0
     assert storage.conn.execute("SELECT count(*) FROM sources").fetchone()[0] == 0
     assert storage.conn.execute("SELECT count(*) FROM model_usage").fetchone()[0] == 0
@@ -2188,8 +2188,8 @@ def test_unexpected_pipeline_error_after_run_initialization_fails_job_and_resear
     try:
         persisted = reopened.get_job(job_id)
         assert persisted is not None and persisted.status is JobStatus.FAILED
-        assert reopened.get_run(persisted.run_id).error == expected_error
-        assert reopened.get_research_run(persisted.run_id).error == expected_error
+        assert reopened.get_run(persisted.run_id).error.startswith(expected_error)
+        assert reopened.get_research_run(persisted.run_id).error.startswith(expected_error)
         assert reopened.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     finally:
         reopened.close()

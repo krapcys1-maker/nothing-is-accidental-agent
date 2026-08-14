@@ -66,6 +66,7 @@ from app.research.anthropic_source_discovery import (
 from app.research.source_discovery_intent import (
     SOURCE_DISCOVERY_EXECUTION,
     SourceDiscoveryIntent,
+    SourceDiscoveryIntentError,
 )
 from app.scheduler.dispatcher import JobDispatcher
 from app.scheduler.enqueue import ScheduledJobEnqueuer, ScheduledJobRequest
@@ -485,6 +486,54 @@ def test_typed_a1_timeout_is_fenced_for_reconciliation(
     assert storage.get_research_run(durable.run_id).status is ResearchRunStatus.FAILED
 
 
+@pytest.mark.parametrize(
+    ("cap", "accepted"),
+    [
+        # Every historical enum value must still validate, or durable intents
+        # recorded before the cap became a range stop re-verifying.
+        ("0.300000", True),
+        ("0.500000", True),
+        ("0.600000", True),
+        ("1.000000", True),
+        ("2.000000", True),
+        ("3.000000", True),
+        ("3.000001", False),
+        ("0.000000", False),
+        ("-1.000000", False),
+        ("1.0", False),
+        ("one", False),
+    ],
+)
+def test_a1_cap_is_a_bounded_range_and_keeps_every_historical_value(cap, accepted):
+    def build():
+        return SourceDiscoveryIntent.build(
+            account_id="account", topic_id=3, cap_usd=cap,
+        )
+
+    if accepted:
+        assert build().cap_usd == cap
+    else:
+        with pytest.raises(SourceDiscoveryIntentError):
+            build()
+
+
+@pytest.mark.parametrize(
+    ("count", "accepted"),
+    [(1, True), (6, True), (10, True), (12, True), (13, False), (0, False)],
+)
+def test_a1_asks_for_more_candidates_than_the_three_source_floor_needs(count, accepted):
+    def build():
+        return SourceDiscoveryIntent.build(
+            account_id="account", topic_id=3, max_results=count,
+        )
+
+    if accepted:
+        assert build().max_results == count
+    else:
+        with pytest.raises(SourceDiscoveryIntentError):
+            build()
+
+
 def test_typed_a1_worker_persists_only_structured_candidates(
     settings, storage, account, monkeypatch,
 ):
@@ -512,6 +561,11 @@ def test_typed_a1_worker_persists_only_structured_candidates(
     real = replace(
         settings, dry_run=False, anthropic_api_key="test-only",
         model_quality="claude-opus-5",
+        # This scenario reserves TOPIC_GENERATION (1.00) and then A1, which now
+        # asks for ten candidates and reserves accordingly.  The 2.00 fixture
+        # default is a fresh-checkout floor, not a working budget; production
+        # runs far above it.  Budget enforcement itself is covered elsewhere.
+        max_daily_cost_usd=10.0,
     )
     pricing = storage.get_model_pricing_profile(topic_binding.pricing_ref)
     assert pricing is not None and pricing.prices is not None

@@ -332,7 +332,20 @@ class Worker:
             return self._fail_unexpected_research_pipeline(
                 job, self._safe_dispatch_error(error),
             )
-        return self._fail_unexpected_research_pipeline(job)
+        # Anything else used to terminalize with the bare code and discard the
+        # exception entirely, so a paid discovery that failed after the provider
+        # had already been billed left no way to learn why without paying again.
+        # The stable prefix is preserved for anything matching on it; the type
+        # and a bounded message are appended.
+        return self._fail_unexpected_research_pipeline(
+            job, self._safe_unexpected_error(error),
+        )
+
+    @staticmethod
+    def _safe_unexpected_error(error: BaseException) -> str:
+        detail = " ".join(str(error).split())[:160]
+        suffix = f":{type(error).__name__}" + (f":{detail}" if detail else "")
+        return f"UNEXPECTED_RESEARCH_PIPELINE_EXCEPTION{suffix}"
 
     def _fail_unexpected_research_pipeline(
         self, job: Job, error: str = "UNEXPECTED_RESEARCH_PIPELINE_EXCEPTION",

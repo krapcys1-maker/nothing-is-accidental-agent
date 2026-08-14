@@ -132,8 +132,18 @@ def plan_content(frozen: FrozenContentInput, route: RouteContract) -> PlannedCon
             evidence_ids=evidence_ids,
             counterargument_or_limitation=counterargument,
             ending="End on the practical implication of seeing the hidden mechanism.",
-            min_words=240,
-            max_words=420,
+            # Substack essays sit in a 1,000-2,000 word workhorse range, with
+            # 1,200-1,800 the safe middle. The old 240-420 window produced a
+            # 470-word piece that read as a fragment: the mechanism landed but
+            # there was no room to walk through who benefits, who pays and what
+            # the counterargument costs. The ceiling stays below the range's top
+            # because the writer's 8,192-token output budget is shared with its
+            # own reasoning, and an overrun discards the draft entirely. The
+            # reviewer accounts for every segment separately, so its output
+            # grows with article length too: a 1,244-word draft truncated its
+            # review at 8,192 tokens and lost the whole card.
+            min_words=900,
+            max_words=1200,
             forbidden_claims=forbidden,
         )
     elif frozen.content_type is ContentType.NOTE:

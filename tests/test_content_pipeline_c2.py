@@ -262,13 +262,27 @@ def test_second_rewrite_is_terminal_failure_without_third_attempt(storage, accou
 
 
 @pytest.mark.parametrize(
-    ("scenario", "evaluation_type"),
+    ("scenario", "evaluation_type", "decisions"),
     [
-        (FakeWriterScenario.UNSUPPORTED_CLAIM, "UNSUPPORTED_CLAIMS"),
-        (FakeWriterScenario.PERSONAL_EXPERIENCE, "FAKE_PERSONAL_EXPERIENCE"),
+        # An unsupported claim is recoverable in principle, so it spends the one
+        # rewrite reviewer v3 grants on attempt 1 and blocks only when the
+        # second draft repeats it.  Fabricated experience is not recoverable and
+        # still ends the article on the spot.
+        (
+            FakeWriterScenario.UNSUPPORTED_CLAIM,
+            "UNSUPPORTED_CLAIMS",
+            ["REWRITE_ONCE", "BLOCK"],
+        ),
+        (
+            FakeWriterScenario.PERSONAL_EXPERIENCE,
+            "FAKE_PERSONAL_EXPERIENCE",
+            ["BLOCK"],
+        ),
     ],
 )
-def test_hard_evaluation_failures_block(storage, account, scenario, evaluation_type):
+def test_hard_evaluation_failures_block(
+    storage, account, scenario, evaluation_type, decisions,
+):
     seed = seed_c2_research(storage, account)
     request, _, summary, _ = run_direct(
         storage, seed, ContentType.NOTE, suffix=evaluation_type.lower(),
@@ -277,8 +291,7 @@ def test_hard_evaluation_failures_block(storage, account, scenario, evaluation_t
     assert summary.status is ContentStatus.FAILED
     rows = storage.get_content_pipeline_state(request.job_id)["evaluations"]
     matching = [row for row in rows if row["evaluation_type"] == evaluation_type]
-    assert len(matching) == 1
-    assert matching[0]["decision"] == "BLOCK"
+    assert [row["decision"] for row in matching] == decisions
 
 
 def test_brand_policy_blocks_ai_topic_before_writer_attempt(storage, account):
@@ -683,9 +696,12 @@ def test_explicit_0021_to_0022_migration_is_temp_only_and_idempotent(tmp_path):
     migrate_0036_to_0037(path)
     migrate_0037_to_0038(path)
     migrate_0038_to_0039(path)
-    from app.storage.db import migrate_0039_to_0040, migrate_0040_to_0041
+    from app.storage.db import (
+        migrate_0039_to_0040, migrate_0040_to_0041, migrate_0041_to_0042,
+    )
     migrate_0039_to_0040(path)
     migrate_0040_to_0041(path)
+    migrate_0041_to_0042(path)
     conn = SqliteStorage.open(path)
     try:
         assert conn.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"

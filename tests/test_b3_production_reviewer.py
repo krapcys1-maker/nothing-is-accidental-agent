@@ -88,13 +88,17 @@ class WriterTransport:
             f"A small visible outcome raises a larger question: {brief['answer_question']}",
             f"The durable research card points to this thesis: {brief['central_thesis']}",
         ]
-        for index in range(6):
+        # Enough paragraphs to sit inside the ARTICLE word window, which now
+        # matches a real Substack essay; a short draft would trip the length
+        # gate and buy an unwanted second reviewer call.
+        for index in range(18):
             fact = evidence[index % len(evidence)]["claim_text"].rstrip(".")
             paragraphs.append(
                 f"Frozen evidence {index + 1} supports a bounded part of the "
                 f"mechanism: {fact}. The point is not that one fact explains "
                 "everything, but that the same decision path keeps shaping the "
-                "ordinary result."
+                "ordinary result, and that the people who benefit from it are "
+                "rarely the people who ever notice it happening at all."
             )
         paragraphs.extend([
             f"A serious limit remains: {brief['counterargument_or_limitation']}",
@@ -568,19 +572,24 @@ def test_rewrite_budget_denial_stops_before_second_writer_call(
     reviewer = ReviewerTransport()
     _, outcome = _run(
         storage, settings, account, job="repair-rewrite-denied",
-        writer=writer, reviewer=reviewer, cap="0.350000",
+        writer=writer, reviewer=reviewer, cap="0.400000",
     )
     state = storage.get_content_pipeline_state(outcome.job_id)
     assert writer.calls == 1
     assert reviewer.calls == 1
     assert state["content"]["status"] == "FAILED"
     assert state["content"]["reason_code"] == "CONTENT_APPROVAL_CAP_EXCEEDED"
+    # The cap sits deliberately between one writer attempt and two: the first
+    # draft and its review are affordable, the rewrite is not, and the denial
+    # lands before the second paid call. The figures moved with the writer
+    # envelope, which now reserves against the context ceiling because a rewrite
+    # carries the prior draft and the reviewer's findings.
     assert storage.remaining_article_budget(job_id=outcome.job_id) == Decimal(
-        "0.309500"
+        "0.359500"
     )
     reopened = SqliteStorage.open(settings.db_path)
     assert reopened.remaining_article_budget(job_id=outcome.job_id) == Decimal(
-        "0.309500"
+        "0.359500"
     )
     reopened.close()
 
@@ -668,6 +677,26 @@ def test_strict_reviewer_parser_matrix():
             encoded(segment_fingerprint="b" * 64), segments=(segment,),
         )
     assert mismatch.value.code == "REVIEWER_ENTRY_FINGERPRINT_MISMATCH"
+
+    # An abbreviated echo of the true fingerprint is the model being lazy about
+    # a value we supplied, not tampering: on a live 22-entry review exactly one
+    # entry came back as "a5e0caf75d91f563b..." and the whole paid review was
+    # discarded. segment_id already pins the first 16 hex characters, so the
+    # segment is identified either way.
+    for abbreviated in ("a" * 17 + "...", "a" * 20, "a" * 16, "a" * 40 + "…"):
+        parsed_short, _ = parse_reviewer_response(
+            encoded(segment_fingerprint=abbreviated), segments=(segment,),
+        )
+        assert len(parsed_short) == 1
+    # Too short to identify, or a different value, still fails.
+    for rejected in ("a" * 15, "b" * 20, "", "   ", "..."):
+        with pytest.raises(ProductionReviewerError) as short:
+            parse_reviewer_response(
+                encoded(segment_fingerprint=rejected), segments=(segment,),
+            )
+        assert short.value.code in {
+            "REVIEWER_ENTRY_FINGERPRINT_MISMATCH", "REVIEWER_ENTRY_MALFORMED",
+        }
 
     class WrongFingerprintReviewer:
         reviewer_version = REVIEWER_VERSION

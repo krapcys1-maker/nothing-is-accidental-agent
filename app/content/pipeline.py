@@ -311,13 +311,18 @@ def run_offline_content_pipeline(
                 item for item in storage.list_topics(frozen.account_id)
                 if item.id == topic_id
             )
+            # Everything this topic has already produced is excluded, whatever
+            # card or content it came from.  Excluding only the topic row and
+            # this exact card left earlier drafts of the same topic blocking a
+            # new one, so a topic that lost a card to a technical failure could
+            # never be written again: card 25 was refused against the drafts of
+            # cards 23 and 24, all three being the same topic. Novelty means
+            # different from other topics and other articles, not different from
+            # this topic's own abandoned attempts. The research dispatcher
+            # applies the same rule at its own boundary.
             memory = tuple(
                 row for row in storage.list_editorial_novelty_memory(frozen.account_id)
-                if not (
-                    (row.source_kind == "TOPIC" and row.topic_id == topic_id)
-                    or row.research_card_id == frozen.research_card_id
-                    or row.content_id == frozen.content_id
-                )
+                if row.topic_id != topic_id
             )
             duplicate = find_editorial_duplicate(
                 EditorialMemoryRecord(
@@ -815,6 +820,7 @@ def run_offline_content_pipeline(
                 research_card=research_card,
                 claim_reviewer=reviewer,
                 propagate_reviewer_errors=propagate_claim_reviewer_errors,
+                rewrite_available=attempt_no == 1,
             )
             for evaluation in evaluations:
                 storage.record_content_draft_evaluation(

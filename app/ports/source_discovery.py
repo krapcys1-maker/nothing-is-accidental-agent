@@ -23,6 +23,10 @@ class SourceDiscoveryCandidate:
     title: str
     result_identity: str
     observed_at: str
+    # Publication date as the search tool reported it, when it reported one.
+    # Without this the freshness gate had nothing to read and treated every
+    # corpus as undated, which it then scored as stale.
+    published_at: str | None = None
 
 
 @dataclass(frozen=True)

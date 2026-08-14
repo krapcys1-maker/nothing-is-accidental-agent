@@ -63,8 +63,18 @@ def evaluate_draft(
     assessment: DraftQualityAssessment | None = None,
     require_independent_review: bool | None = None,
     propagate_reviewer_errors: bool = False,
+    rewrite_available: bool = False,
 ) -> tuple[DraftEvaluation, ...]:
-    """Evaluate one draft; quality verdicts come from the text, not the writer."""
+    """Evaluate one draft; quality verdicts come from the text, not the writer.
+
+    ``rewrite_available`` says whether this draft can still be rewritten, which
+    is true only of attempt 1.  It never changes whether a check fails, only
+    whether an unsupported claim ends the article outright or earns the single
+    rewrite reviewer v3 itself asks for in that situation, and only when the
+    reviewer returned a complete accounting to ask it with.  It defaults to
+    ``False`` so a caller that does not reason about attempts keeps the strict
+    terminal behaviour.
+    """
     mandatory = (
         isinstance(brief, ArticleBrief)
         if require_independent_review is None
@@ -143,9 +153,25 @@ def evaluate_draft(
             findings=verdict.findings_for(QualityCheck.EVIDENCE_ID_CORRESPONDENCE)
             or ({"code": "FROZEN_EVIDENCE_NOT_COVERED"},),
         ),
+        # Reviewer v3 answers this same question with REWRITE_ONCE on attempt 1
+        # and only hardens later.  Answering it with BLOCK here made the two
+        # disagree on identical evidence, so a draft the reviewer wanted
+        # rewritten died instead, and the rewrite had to be driven by hand
+        # through the review-only path.  The bar is unchanged: the draft still
+        # fails, it just gets the attempt the reviewer already granted it.
+        #
+        # The rewrite is offered only when the reviewer actually delivered a
+        # verdict.  An incomplete accounting means it failed, refused or never
+        # answered — an unreadable answer is not an editorial opinion, and a
+        # second attempt on one would be an auto-retry of a paid call after a
+        # provider failure, which this project forbids outright.
         _evaluation(
             EvaluationType.UNSUPPORTED_CLAIMS, unsupported_ok, draft,
-            failure_decision=PipelineDecision.BLOCK,
+            failure_decision=(
+                PipelineDecision.REWRITE_ONCE
+                if rewrite_available and verdict.claim_coverage_complete
+                else PipelineDecision.BLOCK
+            ),
             code="UNSUPPORTED_CLAIM",
             findings=(
                 verdict.findings_for(QualityCheck.FACTUAL_CLAIM_SUPPORT)

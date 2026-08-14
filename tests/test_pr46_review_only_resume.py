@@ -304,7 +304,12 @@ def test_production_evidence_limits_and_topic_identity_are_not_narrowed():
     assert DEFAULT_SYNTHESIS_MAX_TOKENS == DEFAULT_REQUEST_MAX_TOKENS == 8192
     assert TOPIC_GENERATION_MAX_OUTPUT_TOKENS == 4096
     discovery = SourceDiscoveryIntent.build(account_id="account", topic_id=17)
-    assert (discovery.max_results, discovery.max_output_tokens) == (6, 8192)
+    # Widened from 6 on 2026-08-14.  Half of the authoritative hosts worth
+    # citing refuse an automated client, so asking for exactly the three-source
+    # floor plus three left no slack at all.  This guard is against narrowing
+    # the envelope, never against asking for more sources than are needed.
+    assert discovery.max_results >= 6
+    assert (discovery.max_results, discovery.max_output_tokens) == (10, 8192)
 
     import scripts.run_article_research_e2e_live as live_root
 

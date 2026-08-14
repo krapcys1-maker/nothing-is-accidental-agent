@@ -51,6 +51,30 @@ def is_controlled_fetch_candidate(url: str) -> bool:
     return not (path.endswith(".pdf") or "/pdf/" in path)
 
 
+MAX_DISCOVERY_SEARCH_ROUNDS = 6
+
+_PAGE_AGE_FORMATS = ("%B %d, %Y", "%d %B %Y", "%Y-%m-%d", "%b %d, %Y")
+
+
+def _page_age_to_iso(raw: object) -> str | None:
+    """Normalise the search tool's page_age into an ISO date, or None.
+
+    The field is best-effort provider metadata in a human format, so anything
+    unparseable stays None rather than becoming a fabricated date.  None means
+    "unknown", which the admission policy must not read as "stale".
+    """
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    text = raw.strip()
+    for fmt in _PAGE_AGE_FORMATS:
+        try:
+            parsed = datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+        return parsed.replace(tzinfo=timezone.utc).isoformat()
+    return None
+
+
 class AnthropicSourceDiscoveryPort:
     def __init__(self, *, api_key: str, model: str, sdk_factory: Callable[[str], object],
                  now: Callable[[], datetime] | None = None) -> None:
@@ -70,7 +94,13 @@ class AnthropicSourceDiscoveryPort:
             output_config={"effort": ARTICLE_RESEARCH_INFERENCE_CONFIG.effort},
             tools=[{
                 "type": "web_search_20250305", "name": "web_search",
-                "max_uses": request.max_results,
+                # Search rounds, not results.  Every round resends the whole
+                # accumulated context, so cost grows superlinearly in rounds:
+                # one observed discovery billed 3,385 then 32,584 then 61,289
+                # input tokens for a single job.  Tying this to max_results made
+                # asking for more candidates quietly buy more round trips.  A
+                # bounded number of searches still returns ten sources.
+                "max_uses": min(request.max_results, MAX_DISCOVERY_SEARCH_ROUNDS),
             }],
             messages=[{"role": "user", "content": (
                 f"Find exactly {request.max_results} authoritative sources for this "
@@ -81,7 +111,41 @@ class AnthropicSourceDiscoveryPort:
                 "PRIMARY: the originating record itself - the study, report, dataset, "
                 "official statistic, regulator page or first-party company statement - "
                 "not press coverage of it. If an article cites a study, return the "
-                "study's own page. Never return federalregister.gov, "
+                "study's own page.\n"
+                "PRIMARY records are often published as PDFs, which this fetcher "
+                "cannot read, and answering with commentary instead fails: a "
+                "corpus of blogs, association posts and forum threads is rejected "
+                "outright for having no originating record. When the record itself "
+                "is a PDF, return the issuing body's own HTML page for it - the "
+                "landing, summary, abstract, chapter, table or data page that "
+                "carries the substance in HTML - rather than a third party writing "
+                "about it. Prefer bodies that publish in HTML: national and "
+                "regional agencies, regulators, statistical offices, legislatures, "
+                "standards bodies and university research centres. Never return a "
+                "forum thread, a Q&A site or a vendor blog as one of the required "
+                "sources.\n"
+                "The question asserts a MECHANISM - that something happens because of "
+                "a specific incentive, rule or constraint. Rule text alone cannot "
+                "evidence why anyone behaves a certain way, and a corpus of pure rule "
+                "statements produces a confident-sounding article with nothing behind "
+                "it. So at least two sources must speak to the WHY, and both must be "
+                "INSTITUTIONAL: a government or agency impact assessment, a "
+                "consultation or its published response, a regulator's decision or "
+                "review, a national audit or public-accounts report, a "
+                "post-implementation evaluation, an official inquiry, a standards "
+                "body, or peer-reviewed academic work. A vendor, supplier, "
+                "consultancy or service-provider page does NOT count toward these two, "
+                "however well it describes the incentive - a seller explaining why its "
+                "own product gets bought is marketing, and a corpus leaning on it "
+                "scores as weak sourcing even when the reasoning sounds right. Return "
+                "such pages only as extra context beyond the required two. At least "
+                "one source must carry quantified data - figures, rates, volumes or "
+                "shares - not only description.\n"
+                "If the evidence for the asserted mechanism does not appear to exist, "
+                "return the sources that bear on it anyway, including any that "
+                "contradict the premise. Do not substitute topically adjacent pages "
+                "that merely restate the rule.\n"
+                "Never return federalregister.gov, "
                 "regulations.gov, congress.gov, fsis.usda.gov, ec.europa.eu, "
                 "sciencedirect.com, tandfonline.com, or academia.edu. Use no more than "
                 "the available search calls. Source selection only; do not synthesize "
@@ -109,12 +173,14 @@ class AnthropicSourceDiscoveryPort:
                 result_identity = hashlib.sha256(
                     f"{provider_request_id}:{len(candidates)}:{canonical_url}".encode("utf-8")
                 ).hexdigest()
+                raw_age = _value(result, "page_age")
                 candidates.append(SourceDiscoveryCandidate(
                     canonical_url=canonical_url,
                     canonical_source_identity=source_identity,
                     title=raw_title.strip(),
                     result_identity=f"anthropic-search:{result_identity}",
                     observed_at=observed_at,
+                    published_at=_page_age_to_iso(raw_age),
                 ))
         if not candidates:
             raise ValueError("source discovery returned no controlled-fetch-compatible results")

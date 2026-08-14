@@ -69,12 +69,22 @@ def _run_model_job(
     updated_by: str,
 ) -> str:
     clock = SystemClock()
+    # The daily limit comes from config/growth_policy.yaml, which is where the
+    # owner sets budget policy.  This used to hardcode 10.0, which silently
+    # overrode a deliberately configured higher limit and blocked healthy runs
+    # for a reason no operator could see.  The per-run fences that actually
+    # bound one execution -- --max-cost-usd here and the intent cap -- are
+    # unchanged.
     real = replace(
         settings,
         dry_run=False,
         model_quality=MODEL_ID,
-        max_daily_cost_usd=10.0,
-        research_timeout_seconds=max(settings.research_timeout_seconds, 120),
+        # A six-source corpus takes materially longer to synthesise than the
+        # three-source one this used to see: topic 96 packed 57,739 characters
+        # and blew the 120s client deadline, losing the whole attempt to an
+        # unknown provider outcome.  The controlled ARTICLE path already allows
+        # 300s; research gets the same deadline rather than a tighter one.
+        research_timeout_seconds=max(settings.research_timeout_seconds, 300),
     )
     policy = PolicyEngine(real, storage, clock)
     def diagnostic_research_real(*args, **kwargs):
@@ -143,7 +153,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--approved-by", required=True)
     parser.add_argument("--confirm-live", action="store_true")
-    parser.add_argument("--max-cost-usd", type=Decimal, default=Decimal("1.500000"))
+    # Cumulative A1 + synthesis stop. A1 alone may now reserve up to 3.00, so a
+    # 1.50 cumulative stop would abort a healthy run between its two paid calls.
+    parser.add_argument("--max-cost-usd", type=Decimal, default=Decimal("3.000000"))
     parser.add_argument(
         "--topic-id",
         required=True,
@@ -162,8 +174,8 @@ def main(argv: list[str] | None = None) -> int:
     if not args.confirm_live:
         print("BLOCKED: --confirm-live is required")
         return 2
-    if args.max_cost_usd <= 0 or args.max_cost_usd > Decimal("2.000000"):
-        print("BLOCKED: live cap must be in (0, 2.00]")
+    if args.max_cost_usd <= 0 or args.max_cost_usd > Decimal("4.000000"):
+        print("BLOCKED: live cap must be in (0, 4.00]")
         return 2
 
     settings = load_settings()
