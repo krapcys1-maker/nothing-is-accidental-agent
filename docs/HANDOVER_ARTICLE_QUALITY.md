@@ -1,5 +1,11 @@
 # Handover: the ARTICLE pipeline runs; the work left is quality
 
+> **Read `docs/AUDYT_ETAP3_2026-08-14.md` first.** One day of live work fixed 22
+> defects that fall into four patterns, and names the two changes that would
+> make the pipeline survive a hiccup instead of losing a paid research card to
+> it. No article has reached `PENDING_APPROVAL` and the rewrite loop is still
+> verified by tests only.
+
 > **BLOCKER as of 2026-08-14 — read this first.** Every controlled-live run is
 > refused with `NEEDS_VERIFICATION_PRESENT`. Job `article-research-evidence-96`
 > sits in `NEEDS_VERIFICATION` and its attempt

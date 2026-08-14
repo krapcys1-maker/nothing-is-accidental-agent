@@ -23,7 +23,15 @@ A fully autonomous Substack account that:
 It must eventually run on a server, but it has to stay runnable on this Windows machine for
 testing.
 
-## Before anything else: the pipeline is blocked
+## Before anything else: read the audit
+
+`docs/AUDYT_ETAP3_2026-08-14.md` is the shortest path into this codebase. It
+records 22 live-fixed defects as four patterns and gives two concrete designs -
+allowing a second approval after a technical failure, and filtering unbound
+claims before the lineage write - that together stop a single hiccup destroying
+a paid research card. Start there, not with the code.
+
+## Historical: the pipeline was blocked
 
 Every controlled-live run is refused with `NEEDS_VERIFICATION_PRESENT`. One
 research attempt (`article-research-evidence-96:research:1`) holds a `0.485760`
