@@ -257,13 +257,20 @@ If every check is true, findings must be [].
 
 Return exactly one JSON object and nothing else. No Markdown, no code fence, no
 prose before or after it. Return exactly one entry per supplied segment_id,
-copying each segment_id verbatim. For segment_fingerprint copy only its FIRST
-16 CHARACTERS, not the whole value: the segment_id already carries that prefix
-and the full 64-character hash wastes the output budget an article-length
-review needs. Keep each reason to at most 12 words and each finding to at most
-30 words. Budget discipline matters here: a review that runs out of output
-tokens is discarded whole, so be terse everywhere rather than thorough in the
-first entries and truncated in the last."""
+copying each segment_id verbatim.
+
+Each entry carries FOUR fields and no others: segment_id, classification,
+reason, outcome. Add evidence_ids ONLY for EVIDENCE_GROUNDED_FACT, where it is
+required. Do NOT emit segment_fingerprint - the segment_id already ends in it.
+Do NOT emit contains_external_fact - the classification already states it. Do
+NOT emit an empty evidence_ids for inference or prose. Those three fields
+repeat what you were given, and repeating them has run reviews out of output
+tokens before.
+
+Keep each reason to at most 12 words and each finding to at most 30 words.
+Budget discipline matters here: a review that runs out of output tokens is
+discarded whole, so be terse everywhere rather than thorough in the first
+entries and truncated in the last."""
 
 
 class ProductionReviewerError(RuntimeError):
@@ -426,14 +433,23 @@ def parse_reviewer_response(
             "The reviewer response does not carry a literal entries array.",
         )
     known = {segment.segment_id: segment.fingerprint for segment in segments}
-    required_fields = {
-        "segment_id", "segment_fingerprint", "classification", "evidence_ids",
-        "reason", "outcome", "contains_external_fact",
-    }
+    # Three of the seven fields carry no information the reviewer was not
+    # already given, and the output budget is the binding constraint on an
+    # article-length review: segment_id already ends in the first 16 hex
+    # characters of the fingerprint, contains_external_fact is forced by the
+    # classification, and evidence_ids must be empty for the two non-factual
+    # classes.  A review that overruns max_tokens is discarded whole, so what
+    # is redundant is made optional rather than mandatory.  Both shapes parse.
+    required_fields = {"segment_id", "classification", "reason", "outcome"}
+    optional_fields = {"segment_fingerprint", "contains_external_fact", "evidence_ids"}
     entries: list[ClaimAccountingEntry] = []
     seen: set[str] = set()
     for raw in payload["entries"]:
-        if type(raw) is not dict or set(raw) != required_fields:
+        if (
+            type(raw) is not dict
+            or not required_fields <= set(raw)
+            or not set(raw) <= required_fields | optional_fields
+        ):
             raise ProductionReviewerError(
                 "REVIEWER_ENTRY_MALFORMED",
                 "A reviewer entry must be an exact canonical object.",
@@ -441,10 +457,13 @@ def parse_reviewer_response(
         try:
             if type(raw["segment_id"]) is not str or not raw["segment_id"]:
                 raise TypeError("segment_id must be a non-empty string")
-            if (
-                type(raw["segment_fingerprint"]) is not str
-                or not raw["segment_fingerprint"]
-            ):
+            # Omitted means "the one segment_id already names"; the identity
+            # check below is unchanged, because it compares against exactly the
+            # value derived here.  A supplied value is still checked as before.
+            fingerprint = raw.get(
+                "segment_fingerprint", known.get(raw["segment_id"], ""),
+            )
+            if type(fingerprint) is not str or not fingerprint:
                 raise TypeError("segment_fingerprint must be a non-empty string")
             if type(raw["classification"]) is not str:
                 raise TypeError("classification must be a string enum literal")
@@ -471,27 +490,38 @@ def parse_reviewer_response(
                 )
             ):
                 outcome = ClaimReviewOutcome.PASS
-            if type(raw["evidence_ids"]) is not list or not all(
-                type(value) is str and bool(value) for value in raw["evidence_ids"]
+            # Omitted means the empty list, which is the only value the
+            # contract permits for the two non-factual classes anyway.  A
+            # grounded fact that omits it still fails as evidence missing.
+            raw_evidence = raw.get("evidence_ids", [])
+            if type(raw_evidence) is not list or not all(
+                type(value) is str and bool(value) for value in raw_evidence
             ):
                 raise TypeError("evidence_ids must be an array of non-empty strings")
-            evidence_ids = tuple(raw["evidence_ids"])
+            evidence_ids = tuple(raw_evidence)
             if (
                 type(raw["reason"]) is not str
                 or not raw["reason"].strip()
                 or raw["reason"] != raw["reason"].strip()
             ):
                 raise TypeError("reason must be a non-empty canonical string")
-            if type(raw["contains_external_fact"]) is not bool:
+            # Omitted means what the classification already forces: an outside
+            # fact for a grounded fact, none for inference or prose.  The gate
+            # still rejects a supplied value that contradicts the class.
+            external = raw.get(
+                "contains_external_fact",
+                classification is ClaimClassification.EVIDENCE_GROUNDED_FACT,
+            )
+            if type(external) is not bool:
                 raise TypeError("contains_external_fact must be a JSON boolean")
             entry = ClaimAccountingEntry(
                 segment_id=raw["segment_id"],
-                segment_fingerprint=raw["segment_fingerprint"],
+                segment_fingerprint=fingerprint,
                 classification=classification,
                 evidence_ids=evidence_ids,
                 reason=raw["reason"],
                 outcome=outcome,
-                contains_external_fact=raw["contains_external_fact"],
+                contains_external_fact=external,
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise ProductionReviewerError(
