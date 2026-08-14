@@ -23,6 +23,20 @@ def enqueue_evidence_research_if_ready(
     existing = storage.get_job(job_id)
     if existing is not None:
         return job_id
+    # Wait until every approved fetch for this topic is terminal.  Enqueuing at
+    # the first viable corpus closed it at the bare minimum of three sources and
+    # left the remaining candidates unfetched, because an active evidence job
+    # holds the single active-RESEARCH-per-topic slot.  Thin corpora are exactly
+    # what drove research confidence below the PROCEED threshold.
+    pending = int(storage.conn.execute(
+        "SELECT count(*) FROM source_candidate_fetch_approvals fa "
+        "JOIN jobs j ON j.id=fa.fetch_job_id "
+        "WHERE fa.account_id=? AND fa.topic_id=? "
+        "AND j.status NOT IN ('DONE','FAILED')",
+        (account.id, int(topic.id)),
+    ).fetchone()[0])
+    if pending:
+        return None
     rows = storage.conn.execute(
         "SELECT c.canonical_source_identity,a.retrieval_id,r.canonical_sha256,"
         "r.canonical_chars,r.canonical_text "

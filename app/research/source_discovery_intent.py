@@ -49,7 +49,7 @@ class SourceDiscoveryIntent:
 
     @classmethod
     def build(cls, *, account_id: str, topic_id: int, max_results: int = 6,
-              max_output_tokens: int = 8192, cap_usd: str = "0.600000") -> "SourceDiscoveryIntent":
+              max_output_tokens: int = 8192, cap_usd: str = "1.000000") -> "SourceDiscoveryIntent":
         raw: dict[str, Any] = {
             "version": SOURCE_DISCOVERY_INTENT_VERSION,
             "account_id": account_id,

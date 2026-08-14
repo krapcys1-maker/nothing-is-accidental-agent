@@ -270,6 +270,18 @@ def main(argv: list[str] | None = None) -> int:
         for candidate in candidates:
             if successes >= discovery_contract.max_results:
                 break
+            # The corpus packer enqueues the evidence-research job as soon as the
+            # corpus is complete, and ux_jobs_active_research_topic permits only
+            # ONE active RESEARCH job per (account, topic).  Approving a further
+            # fetch after that point raises UNIQUE constraint failed, so stop:
+            # the corpus already holds every source the synthesis will use.
+            if int(storage.conn.execute(
+                "SELECT count(*) FROM jobs WHERE account_id=? AND topic_id=? "
+                "AND kind='RESEARCH' AND id<>? "
+                "AND status IN ('QUEUED','LEASED','RUNNING','NEEDS_VERIFICATION')",
+                (account.id, int(topic.id), discovery_job.id),
+            ).fetchone()[0]):
+                break
             existing_fetch = storage.conn.execute(
                 "SELECT fetch_job_id FROM source_candidate_fetch_approvals "
                 "WHERE candidate_id=?",
