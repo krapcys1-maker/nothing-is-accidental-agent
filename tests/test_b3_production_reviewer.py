@@ -88,13 +88,17 @@ class WriterTransport:
             f"A small visible outcome raises a larger question: {brief['answer_question']}",
             f"The durable research card points to this thesis: {brief['central_thesis']}",
         ]
-        for index in range(6):
+        # Enough paragraphs to sit inside the ARTICLE word window, which now
+        # matches a real Substack essay; a short draft would trip the length
+        # gate and buy an unwanted second reviewer call.
+        for index in range(18):
             fact = evidence[index % len(evidence)]["claim_text"].rstrip(".")
             paragraphs.append(
                 f"Frozen evidence {index + 1} supports a bounded part of the "
                 f"mechanism: {fact}. The point is not that one fact explains "
                 "everything, but that the same decision path keeps shaping the "
-                "ordinary result."
+                "ordinary result, and that the people who benefit from it are "
+                "rarely the people who ever notice it happening at all."
             )
         paragraphs.extend([
             f"A serious limit remains: {brief['counterargument_or_limitation']}",

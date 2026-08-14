@@ -203,8 +203,13 @@ If every check is true, findings must be [].
 
 Return exactly one JSON object and nothing else. No Markdown, no code fence, no
 prose before or after it. Return exactly one entry per supplied segment_id,
-copying each segment_id and segment_fingerprint verbatim. Keep each reason to
-at most 12 words and each finding to at most 30 words."""
+copying each segment_id verbatim. For segment_fingerprint copy only its FIRST
+16 CHARACTERS, not the whole value: the segment_id already carries that prefix
+and the full 64-character hash wastes the output budget an article-length
+review needs. Keep each reason to at most 12 words and each finding to at most
+30 words. Budget discipline matters here: a review that runs out of output
+tokens is discarded whole, so be terse everywhere rather than thorough in the
+first entries and truncated in the last."""
 
 
 class ProductionReviewerError(RuntimeError):
@@ -250,7 +255,8 @@ def assemble_reviewer_prompt(
             "reviewer_version": "string equal to the contract reviewer_version",
             "entries": (
                 "array with exactly one object per supplied segment_id, each "
-                "with: segment_id, segment_fingerprint, classification "
+                "with: segment_id, segment_fingerprint (FIRST 16 CHARACTERS "
+                "ONLY), classification "
                 "(EVIDENCE_GROUNDED_FACT | ARGUMENT_OR_INFERENCE | "
                 "NON_FACTUAL_PROSE), evidence_ids (array of allowed "
                 "confirmed_claim_id values; non-empty for a PASSing "

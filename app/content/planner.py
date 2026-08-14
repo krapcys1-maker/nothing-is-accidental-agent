@@ -138,9 +138,12 @@ def plan_content(frozen: FrozenContentInput, route: RouteContract) -> PlannedCon
             # there was no room to walk through who benefits, who pays and what
             # the counterargument costs. The ceiling stays below the range's top
             # because the writer's 8,192-token output budget is shared with its
-            # own reasoning, and an overrun discards the draft entirely.
+            # own reasoning, and an overrun discards the draft entirely. The
+            # reviewer accounts for every segment separately, so its output
+            # grows with article length too: a 1,244-word draft truncated its
+            # review at 8,192 tokens and lost the whole card.
             min_words=900,
-            max_words=1500,
+            max_words=1200,
             forbidden_claims=forbidden,
         )
     elif frozen.content_type is ContentType.NOTE:
