@@ -31,18 +31,12 @@ allowing a second approval after a technical failure, and filtering unbound
 claims before the lineage write - that together stop a single hiccup destroying
 a paid research card. Start there, not with the code.
 
-## Historical: the pipeline was blocked
+## Historical: a blocker that is now closed
 
-Every controlled-live run is refused with `NEEDS_VERIFICATION_PRESENT`. One
-research attempt (`article-research-evidence-96:research:1`) holds a `0.485760`
-reservation whose charge was never established, because the synthesis exceeded
-the then-120s client deadline and returned no usage row. That single unresolved
-exposure closes the gate for topic generation, research and content alike.
-
-Only the owner can clear it, by reading the exact cost from the Anthropic console
-and reconciling as `CHARGED_KNOWN`, or confirming `NOT_CHARGED`. The system will
-not let you guess, and that refusal is correct: `CHARGE_UNKNOWN` cannot be paired
-with `EXECUTION_FAILED`. Details in `docs/HANDOVER_ARTICLE_QUALITY.md`.
+One unknown research charge used to shut the controlled-live gate for the
+whole account. It was reconciled from the provider console and ADR-154
+(schema 0042) extended owner conservative adjudication to research
+attempts, so the class of failure no longer blocks everything.
 
 ## Where the project actually is
 
