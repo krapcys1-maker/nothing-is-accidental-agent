@@ -37,6 +37,24 @@ def enqueue_evidence_research_if_ready(
     ).fetchone()[0])
     if pending:
         return None
+    # Waiting for approved fetches to finish is not enough.  The operator loop
+    # approves candidates one at a time, because ux_jobs_active_research_topic
+    # permits a single active RESEARCH job per topic, so "no pending approvals"
+    # is also true after the very first fetch.  The corpus therefore closed at
+    # the bare three-source minimum while seven discovered candidates were never
+    # fetched at all, and thin corpora are what drives confidence below the
+    # PROCEED threshold: topic 92 packed 3 of 10 and scored 0.44.  Hold the
+    # corpus open until every discovered candidate has a terminal outcome; the
+    # input envelope, not the floor, then decides how many actually fit.
+    unfetched = int(storage.conn.execute(
+        "SELECT count(*) FROM research_source_candidates c "
+        "JOIN jobs j ON j.id=c.discovery_job_id "
+        "WHERE j.account_id=? AND j.topic_id=? AND c.id NOT IN ("
+        "SELECT candidate_id FROM source_candidate_fetch_approvals)",
+        (account.id, int(topic.id)),
+    ).fetchone()[0])
+    if unfetched:
+        return None
     rows = storage.conn.execute(
         "SELECT c.canonical_source_identity,a.retrieval_id,r.canonical_sha256,"
         "r.canonical_chars,r.canonical_text "
