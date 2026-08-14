@@ -148,12 +148,16 @@ class FakeContentWriter:
                 f"A small visible outcome raises a larger question: {brief.answer_question}",
                 f"The durable research card points to this thesis: {brief.central_thesis}",
             ]
-            for index in range(6):
+            # Enough paragraphs to sit inside the ARTICLE word window, which now
+            # matches a real Substack essay rather than a 420-word fragment.
+            for index in range(18):
                 fact = facts[index % len(facts)]
                 paragraphs.append(
                     f"Frozen evidence {index + 1} supports a bounded part of the mechanism: "
                     f"{fact}. The point is not that one fact explains everything, but that "
-                    "the same decision path keeps shaping the ordinary result."
+                    "the same decision path keeps shaping the ordinary result, and that "
+                    "the people who benefit from it are rarely the people who notice it. "
+                    "Naming the constraint is what separates an explanation from a story."
                 )
             paragraphs.extend([
                 f"A serious limit remains: {brief.counterargument_or_limitation}",
