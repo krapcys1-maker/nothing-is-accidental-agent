@@ -69,6 +69,30 @@ every overrun killed a whole topic. Lessons that cost real money:
   the mechanism first.
 - Before any paid run, state the expected cost. If a run fails, diagnose before repeating.
 
+## Simplification is an explicit goal, not a side effect
+
+The owner's read after 2026-08-14 is that **complexity is what broke this**, and he is right
+about where. A single article currently needs six serial paid stages, each with its own job,
+approval, reservation and preflight. Any one of them failing kills the whole chain and costs
+money — and on that day four separate mechanisms did exactly that: cost calibration, a
+UNIQUE collision between packer and fetch loop, source 403s, and corpus packing.
+
+Simplify the **orchestration**, keep the **durable core**. Concretely worth collapsing:
+
+- **Discovery and synthesis as one paid call** instead of two jobs with two reservations.
+  Half the failures were coordination between stages, not the work itself.
+- **Reservations with a real margin** (measured cost x3), not a fixed enum
+  `{0.3, 0.5, 0.6, 1.0}`. The enum was the single most expensive defect of the day.
+- **Fetch with tolerance**: request 10-12 candidates, expect half to 403, require three from
+  what survives. Six candidates at a ~50% failure rate leaves exactly the minimum and zero
+  slack.
+- **Fewer preflight guards, better aimed.** Three of the seven were measuring the wrong
+  thing and blocked every run permanently.
+
+What must **not** be simplified away: reservation-before-call and settle-after, the
+append-only ledgers, immutable provenance, and reviewer v3. Those are the parts that behaved
+correctly under abuse and are the reason no money or data was lost.
+
 ## Suggested order of work
 
 **A. Close the last article-pipeline defect (cheap, no new design).**
