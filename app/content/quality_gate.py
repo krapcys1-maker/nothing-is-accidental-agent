@@ -263,6 +263,21 @@ def classification_contract_error(
                 f"{classification.value} requires contains_external_fact=false; "
                 "a segment asserting an outside fact is not reasoning or framing."
             )
+        # BLOCK is how an UNSUPPORTED FACT is reported. It is not a way of
+        # saying "this is not a fact", and the reviewer was using it that way:
+        # on a finished draft it correctly classified transitions, framing
+        # titles and authorial signposting as NON_FACTUAL_PROSE and then
+        # blocked them anyway, with reasons like "Transition". Ten such
+        # segments failed an otherwise sound article. Reasoning that does not
+        # follow, or framing that smuggles a claim, is not this class at all -
+        # it is an EVIDENCE_GROUNDED_FACT without evidence, which is exactly
+        # what BLOCK exists for.
+        if outcome is ClaimReviewOutcome.BLOCK:
+            return (
+                f"{classification.value} cannot be BLOCK; BLOCK reports a "
+                "factual claim the evidence does not support. If the segment "
+                "does assert such a claim, classify it EVIDENCE_GROUNDED_FACT."
+            )
         return None
     return "classification is not one of the three supported classes."
 

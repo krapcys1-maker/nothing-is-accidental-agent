@@ -220,6 +220,15 @@ green time between movements and that 9 percent of one city's buttons work:
 Short aphoristic sentences and fragments are style, not evidence claims. Judge
 what the sentence asserts, not how confident it sounds.
 
+OUTCOME IS NOT A CLASSIFICATION. BLOCK means one thing only: this segment
+asserts a fact the evidence does not support. ARGUMENT_OR_INFERENCE and
+NON_FACTUAL_PROSE are ALWAYS outcome PASS - never BLOCK a transition, a
+framing title, authorial signposting or a rhetorical setup on the grounds
+that it carries no evidence, because carrying no evidence is what those
+classes mean. If a segment really does smuggle an unsupported claim, it is
+not prose or inference at all: classify it EVIDENCE_GROUNDED_FACT with
+evidence_ids [] and BLOCK that.
+
 Judge meaning, not word overlap. A sentence that reuses the evidence wording but
 widens its scope is not grounded. A sentence that shares no words with the
 evidence may still be grounded by it.
