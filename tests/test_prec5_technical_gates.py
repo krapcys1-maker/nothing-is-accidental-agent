@@ -535,9 +535,16 @@ def test_syndicated_and_duplicate_material_cannot_inflate_the_evidence_count():
         ],
         confirmed_claims=[CLAIM],
     )
+    # A duplicate is collapsed and recorded, not held against the corpus: what
+    # must not happen is it counting towards the evidence, and it does not.
     assert outcome.admitted is False
-    assert SYNDICATED_DUPLICATE_SOURCES in outcome.reasons
     assert TOO_FEW_ADMITTED_SOURCES in outcome.reasons
+    assert SYNDICATED_DUPLICATE_SOURCES not in outcome.reasons
+    assert any(
+        item.get("code") == SYNDICATED_DUPLICATE_SOURCES
+        and item.get("url") == "https://reprint.example/story"
+        for item in outcome.findings
+    )
     # The reprint collapsed into the origin; the partner kept the origin's key.
     assert outcome.independent_owner_count == 1
     assert len(outcome.admitted_sources) == 2

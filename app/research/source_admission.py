@@ -361,6 +361,11 @@ def evaluate_source_admission(
 
     # 2. Deduplicate qualitatively equivalent material.  Identical canonical
     #    text, or a declared syndication parent, collapses to one source.
+    #    Collapsing is the whole point, so a duplicate is dropped and recorded,
+    #    never treated as a defect of the corpus: a live card carried five
+    #    admitted sources and was refused because a sixth entry pointed at a
+    #    retrieval already counted. If too little survives deduplication the
+    #    source floor below says so, which is the honest reason.
     admitted: list[AdmittedSource] = []
     seen_content: dict[str, str] = {}
     seen_retrievals: set[int] = set()
@@ -369,9 +374,8 @@ def evaluate_source_admission(
             findings.append({
                 "code": SYNDICATED_DUPLICATE_SOURCES,
                 "url": descriptor.url,
-                "detail": "repeated retrieval identity",
+                "detail": "repeated retrieval identity; collapsed",
             })
-            reasons.append(SYNDICATED_DUPLICATE_SOURCES)
             continue
         digest = descriptor.content_sha256
         if digest and digest in seen_content:
@@ -379,9 +383,8 @@ def evaluate_source_admission(
                 "code": SYNDICATED_DUPLICATE_SOURCES,
                 "url": descriptor.url,
                 "duplicate_of": seen_content[digest],
-                "detail": "identical canonical text",
+                "detail": "identical canonical text; collapsed",
             })
-            reasons.append(SYNDICATED_DUPLICATE_SOURCES)
             continue
         if digest:
             seen_content[digest] = descriptor.url
