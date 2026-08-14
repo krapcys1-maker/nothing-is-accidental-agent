@@ -31,6 +31,9 @@ NO_PRIMARY_SOURCE = "NO_PRIMARY_SOURCE"
 ORIENTATION_ONLY_CORPUS = "ORIENTATION_ONLY_CORPUS"
 SOURCE_CLASSIFICATION_UNKNOWN = "SOURCE_CLASSIFICATION_UNKNOWN"
 STALE_TIME_SENSITIVE_CORPUS = "STALE_TIME_SENSITIVE_CORPUS"
+# Recorded, never a rejection reason: it says the corpus could not be aged, not
+# that it is old.
+FRESHNESS_UNVERIFIABLE = "FRESHNESS_UNVERIFIABLE"
 CLAIM_WITHOUT_ADMITTED_EVIDENCE = "CLAIM_WITHOUT_ADMITTED_EVIDENCE"
 SYNDICATION_METADATA_INVALID = "SYNDICATION_METADATA_INVALID"
 
@@ -439,20 +442,35 @@ def evaluate_source_admission(
     if sensitive:
         reference = now or datetime.now(timezone.utc)
         fresh = 0
+        dated = 0
         for descriptor, _ in classified:
             published = descriptor.published_at
             if published is None:
                 continue
+            dated += 1
             if published.tzinfo is None:
                 published = published.replace(tzinfo=timezone.utc)
             age_days = (reference - published).days
             if 0 <= age_days <= active.freshness_max_age_days:
                 fresh += 1
-        if fresh < 1:
+        # "No source carries a date" is not the same finding as "every dated
+        # source is too old", and conflating them made this gate unpassable:
+        # discovery never recorded publication dates at all, so every
+        # time-sensitive topic was scored stale on missing metadata rather than
+        # on age.  An undated corpus is recorded as unverifiable and left to the
+        # reviewer; a genuinely old one still blocks.
+        if dated == 0:
+            findings.append({
+                "code": FRESHNESS_UNVERIFIABLE,
+                "max_age_days": active.freshness_max_age_days,
+                "detail": "no admitted source reports a publication date",
+            })
+        elif fresh < 1:
             reasons.append(STALE_TIME_SENSITIVE_CORPUS)
             findings.append({
                 "code": STALE_TIME_SENSITIVE_CORPUS,
                 "max_age_days": active.freshness_max_age_days,
+                "dated_sources": dated,
                 "detail": "time-sensitive claims need at least one fresh source",
             })
 

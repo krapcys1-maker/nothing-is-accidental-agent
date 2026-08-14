@@ -53,6 +53,27 @@ def is_controlled_fetch_candidate(url: str) -> bool:
 
 MAX_DISCOVERY_SEARCH_ROUNDS = 6
 
+_PAGE_AGE_FORMATS = ("%B %d, %Y", "%d %B %Y", "%Y-%m-%d", "%b %d, %Y")
+
+
+def _page_age_to_iso(raw: object) -> str | None:
+    """Normalise the search tool's page_age into an ISO date, or None.
+
+    The field is best-effort provider metadata in a human format, so anything
+    unparseable stays None rather than becoming a fabricated date.  None means
+    "unknown", which the admission policy must not read as "stale".
+    """
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    text = raw.strip()
+    for fmt in _PAGE_AGE_FORMATS:
+        try:
+            parsed = datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+        return parsed.replace(tzinfo=timezone.utc).isoformat()
+    return None
+
 
 class AnthropicSourceDiscoveryPort:
     def __init__(self, *, api_key: str, model: str, sdk_factory: Callable[[str], object],
@@ -140,12 +161,14 @@ class AnthropicSourceDiscoveryPort:
                 result_identity = hashlib.sha256(
                     f"{provider_request_id}:{len(candidates)}:{canonical_url}".encode("utf-8")
                 ).hexdigest()
+                raw_age = _value(result, "page_age")
                 candidates.append(SourceDiscoveryCandidate(
                     canonical_url=canonical_url,
                     canonical_source_identity=source_identity,
                     title=raw_title.strip(),
                     result_identity=f"anthropic-search:{result_identity}",
                     observed_at=observed_at,
+                    published_at=_page_age_to_iso(raw_age),
                 ))
         if not candidates:
             raise ValueError("source discovery returned no controlled-fetch-compatible results")

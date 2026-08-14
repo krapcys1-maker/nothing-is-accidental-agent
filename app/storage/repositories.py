@@ -14419,12 +14419,15 @@ class SqliteStorage:
                 cursor = self.conn.execute(
                     "INSERT INTO research_source_candidates (research_run_id,url,title,status,"
                     "canonical_source_identity,discovery_result_identity,discovery_port,"
-                    "discovery_job_id) VALUES (?,?,?,?,?,?,?,?)",
+                    "discovery_job_id,published_at) VALUES (?,?,?,?,?,?,?,?,?)",
                     (
                         execution.run_id, item.canonical_url, item.title,
                         SourceCandidateStatus.PENDING_EXTRACTION.value,
                         item.canonical_source_identity, item.result_identity,
                         port_name, execution.job_id,
+                        # Best-effort provider metadata; None stays None so the
+                        # admission policy can tell "undated" from "old".
+                        getattr(item, "published_at", None),
                     ),
                 )
                 stored.append(SourceCandidateRecord(
