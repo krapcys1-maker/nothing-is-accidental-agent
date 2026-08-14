@@ -8,6 +8,7 @@ import pytest
 from app.storage.db import (
     CONTENT_ROLE_RECONCILIATION_SCHEMA_VERSION,
     REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION,
+    RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION,
     RUNTIME_SCHEMA_VERSION,
     apply_migrations,
     connect,
@@ -91,6 +92,7 @@ def test_0041_is_idempotent_and_forward_only(tmp_path):
     initialize_database(too_old, through="0039_article_review_resume")
     with pytest.raises(Exception) as exc:
         migrate_0040_to_0041(too_old)
+        migrate_0041_to_0042(too_old)
     assert "0040" in str(exc.value)
     assert database_schema_versions(too_old)[-1] == "0039_article_review_resume"
 
@@ -138,9 +140,9 @@ def test_0041_failure_rolls_back_triggers_and_ledger_to_0040(tmp_path):
 def test_fresh_database_reaches_the_document_gate_runtime_floor(tmp_path):
     path = tmp_path / "fresh.db"
     applied = initialize_database(path)
-    assert applied[-1] == REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION
-    assert RUNTIME_SCHEMA_VERSION == REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION
-    assert len(applied) == 41
+    assert applied[-1] == RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION
+    assert RUNTIME_SCHEMA_VERSION == RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION
+    assert len(applied) == 42
 
 
 def test_durable_floor_rejects_an_approve_without_a_passing_document_review(tmp_path):

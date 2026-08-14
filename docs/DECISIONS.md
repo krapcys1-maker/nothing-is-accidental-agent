@@ -1,5 +1,15 @@
 # DECISIONS (Architecture Decision Log)
 
+### ADR-154: Osąd konserwatywny sięga prób researchowych (schema 0042)
+
+- **Data/status/autor:** 2026-08-14; właściciel przekazał pełne pełnomocnictwo, w tym na migrację produkcji i merge do `main`, oraz jawnie potwierdził, że research **nie ma** wymagać ludzkiego odczytu z konsoli.
+- **Problem:** ledger osądu z 0040 powstał podczas incydentu CONTENT, więc jego trigger wymaga istnienia `content_writer_results`, `content_writer_intents` i `content_items`. Próba researchowa nie ma żadnego z tych wierszy, więc synteza ARTICLE_RESEARCH o nieznanym wyniku **nie mogła zostać osądzona w ogóle**. Tego dnia zdarzyło się to dwa razy (tematy 96 i 82); każda taka próba zatrzymuje żywą rezerwację bez wiersza usage, a `NEEDS_VERIFICATION_PRESENT` liczy nierozstrzygniętą ekspozycję — więc **jedna z nich zamykała bramkę controlled-live dla całego konta**.
+- **Decyzja:** forward-only `0042_research_conservative_adjudication` podmienia jeden trigger w miejscu. Gałąź CONTENT zachowana **dosłownie bez zmian**; dochodzi druga, dla prób RESEARCH, gdzie tożsamością jest job, jego run i zamrożony execution intent. `content_id` musi być `NULL`, żeby osąd researchowy nigdy nie mógł twierdzić efektu contentowego. Trigger odrzuca dopiero, gdy nie pasuje żaden z dwóch kształtów.
+- **Polityka bez zmian:** właściciel zalicza dokładnie pełną zachowaną rezerwę, `actual_cost_usd` pozostaje `NULL`, historyczne statusy nietknięte, żaden request nie staje się retryable. Rozszerza się wyłącznie zasięg, nie uprawnienie.
+- **Uczciwie o kompromisie:** to jedyna zmiana tej sesji, która **luzuje kontrolę finansową** — wcześniej taka pozycja wymagała odczytu z konsoli providera. Właściciel został o tym poinformowany przed zastosowaniem i potwierdził decyzję.
+- **Kolizja numeracji:** zaparkowany `PR #50` również zajmuje `0042`. Numer został użyty tutaj; ożywienie PR #50 wymaga przenumerowania go na kolejny wolny.
+- **Dowód:** próba generalna na kopii produkcji — migracja zastosowana, osąd tematu 82 zapisany, liczba blokujących jobów `NEEDS_VERIFICATION` spadła z 1 do **0**; koszty rozkładają się na `actual_known 19.479792` + `conservative 1.224640` = `effective 20.704432`, `unresolved 0.000000`.
+
 ### ADR-153: Wyszukiwanie ma szukać mechanizmu, writer ma dostać rzemiosło, research ma 300 s
 
 - **Data/status/autor:** 2026-08-14; pełnomocnictwo właściciela na domknięcie Etapu 3 z kryterium jakości, w tym jawna zgoda na zmianę promptów. Zmiany offline.
