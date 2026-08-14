@@ -195,10 +195,12 @@ def test_0031_preserves_fable_history_and_existing_frozen_binding(tmp_path):
     migrate_0038_to_0039(path)
     from app.storage.db import (
         migrate_0039_to_0040, migrate_0040_to_0041, migrate_0041_to_0042,
+        migrate_0042_to_0043,
     )
     migrate_0039_to_0040(path)
     migrate_0040_to_0041(path)
     migrate_0041_to_0042(path)
+    migrate_0042_to_0043(path)
     storage = SqliteStorage.open(path)
     try:
         assert tuple(storage.conn.execute(

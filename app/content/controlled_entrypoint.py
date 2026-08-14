@@ -95,8 +95,18 @@ def run_controlled_article(
                 content_type=ContentType.ARTICLE,
                 execution_mode=ContentExecutionMode.CONTROLLED_PROVIDER_PIPELINE,
                 # v3 freezes the structured Research Card fields together with
-                # the qualified 32k/8k Opus writer and reviewer envelopes. A
-                # terminal older attempt cannot collide with this corrected input.
+                # the qualified 32k/8k Opus writer and reviewer envelopes.
+                #
+                # Historical note, kept because the value must not move: every
+                # bump of this string v1..v5 also bought a retry, by making the
+                # frozen input hash different from the corpse of the attempt
+                # that had just died.  That was a workaround for the global
+                # UNIQUE on content_frozen_inputs.input_sha256 and it made the
+                # ledger lie about which prompt produced which article.  Schema
+                # 0043 supersedes a frozen input when its attempt terminalises,
+                # so a retry no longer needs a fake prompt version.  Do NOT bump
+                # this value to obtain one - a change here silently alters every
+                # future input_sha256.
                 prompt_version="controlled_article_prompt_v4",
                 style_guide_version="ARTICLE_STYLE_PROFILE_V1",
             ),

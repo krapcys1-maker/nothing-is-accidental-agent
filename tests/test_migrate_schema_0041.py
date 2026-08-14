@@ -9,6 +9,7 @@ from app.storage.db import (
     CONTENT_ROLE_RECONCILIATION_SCHEMA_VERSION,
     REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION,
     RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION,
+    RETRYABLE_FROZEN_INPUTS_SCHEMA_VERSION,
     RUNTIME_SCHEMA_VERSION,
     apply_migrations,
     connect,
@@ -140,9 +141,9 @@ def test_0041_failure_rolls_back_triggers_and_ledger_to_0040(tmp_path):
 def test_fresh_database_reaches_the_document_gate_runtime_floor(tmp_path):
     path = tmp_path / "fresh.db"
     applied = initialize_database(path)
-    assert applied[-1] == RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION
-    assert RUNTIME_SCHEMA_VERSION == RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION
-    assert len(applied) == 42
+    assert applied[-1] == RETRYABLE_FROZEN_INPUTS_SCHEMA_VERSION
+    assert RUNTIME_SCHEMA_VERSION == RETRYABLE_FROZEN_INPUTS_SCHEMA_VERSION
+    assert len(applied) == 43
 
 
 def test_durable_floor_rejects_an_approve_without_a_passing_document_review(tmp_path):

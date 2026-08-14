@@ -1,5 +1,17 @@
 # ERRORS_AND_FAILURES
 
+## 2026-08-14 — cztery z pięciu przebiegów treści skasowały opłaconą kartę i żaden nie zginął za jakość
+
+- **Objaw:** pięć przebiegów CONTENT, cztery martwe. `content 16`, `content 17` i `content 19` padły na **naszych własnych** usterkach bramki jakości (od tamtej pory naprawionych). `content 18` padł, bo odpowiedź JSON reviewera uderzyła w sufit `8192` tokenów wyjścia i przyszła urwana. **Żaden z nich nie padł dlatego, że artykuł był zły.**
+- **Prawdziwy koszt:** każda taka śmierć kasowała opłaconą kartę badawczą — ~0.89 USD — **bezpowrotnie**. Nie „trzeba było powtórzyć": nie dało się powtórzyć w ogóle.
+- **Przyczyna:** `content_frozen_inputs.input_sha256` było globalnie `UNIQUE`, a jego preimage — całkiem słusznie — zawiera dokładne wejście modelu i nic poza nim: żadnego `job_id`, `content_id` ani numeru próby. Hasz ma opisywać to, co wysłano do modelu, więc druga próba na tej samej karcie liczyła **ten sam** hasz i zderzała się ze zwłokami próby, która właśnie zginęła.
+- **Druga blokada, niewidoczna z pierwszej:** `content_items.intent_key` był liczony z tych samych pięciu faktów. Nawet gdyby zdjąć tylko pierwszą blokadę, ponowienie umierało zdanie dalej na tym samym `sqlite3.IntegrityError` i tym samym `CONTENT_DURABLE_CONFLICT`. Naprawa jednej z dwóch identycznych blokad wygląda jak naprawa i nią nie jest.
+- **Obejście, którego używaliśmy zamiast naprawy:** `prompt_version` w `controlled_entrypoint.py` był podbijany v1→v5. Każdy podbicie **kupowało ponowienie** przez zmianę haszu zamrożonego wejścia. Elementy 1–5 w produkcji to pięć prób na karcie 7 z pięcioma różnymi `input_sha256` — czyli ledger twierdzi, że pięć różnych promptów wyprodukowało pięć różnych artykułów, choć prompt był ten sam. Obejście kupowało ponowienie ceną kłamstwa w rejestrze.
+- **Wniosek ogólny:** to nie był błąd w kodzie, tylko **za szeroko postawiony niezmiennik**. „Jedno zamrożone wejście na hasz na zawsze" wygląda jak ochrona przed podwójną zapłatą, a jest ochroną przed drugą próbą. Chroniona miała być jednoczesność, nie historia. Prawdziwe zdanie brzmi: żadne dwa **żywe** elementy treści nie mogą dzielić jednego zamrożonego wejścia.
+- **Drugi wniosek:** ograniczenie, którego jedynym obejściem jest fałszowanie danych wejściowych, nie jest ograniczeniem — jest podatkiem od uczciwości ledgera.
+- **Zamknięcie (ADR-155, schema 0043):** inline `UNIQUE` zdjęte, niezmiennik wyrażony częściowym indeksem po żywych wierszach, znacznik `superseded_at` stemplowany triggerem w momencie terminalizacji `FAILED`. `NEEDS_VERIFICATION` i `SKIPPED` **nie są** zwalniane — tam provider mógł już policzyć artykuł, więc to decyzja o pieniądzach, nie o schemacie. Migracja produkcji nie została wykonana; czeka na review i osobną zgodę.
+- **Nienaprawione i policzone:** `content_drafts.draft_fingerprint` ma dokładnie tę samą wadę preimage (brak `content_id`/`job_id`) przy content-scoped kontroli istnienia. Ponowienie, którego provider zwróci bajt w bajt identyczny draft, dostanie `IntegrityError` **po** zapłacie. Prawdopodobieństwo niskie, koszt wysoki.
+
 ## 2026-08-14 — dwa tematy bez karty researchu: cicha arytmetyka, nie awaria
 
 - **Objaw:** tematy 58 i 68 mają opłacone discovery i udane pobrania, ale nie mają ani joba syntezy, ani karty. Nic nie zgłosiło błędu.

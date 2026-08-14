@@ -24,7 +24,8 @@
 >
 > **Znane, otwarte i policzone:** (1) nieudana próba treści bezpowrotnie kasuje opłaconą kartę badawczą
 > (`content_frozen_inputs.input_sha256` globalnie `UNIQUE`, hasz bez `job_id`) — koszt iteracji rośnie
-> z ~0.9 do ~2.1 USD; (2) sufit wyjścia reviewera `8192` jest kwalifikowany, a wyjście rośnie z liczbą
+> z ~0.9 do ~2.1 USD; **kandydat naprawy istnieje (ADR-155 / schema `0043`), migracja produkcji NIE
+> wykonana** — patrz blok „KANDYDAT" poniżej; (2) sufit wyjścia reviewera `8192` jest kwalifikowany, a wyjście rośnie z liczbą
 > **zdań** (48 przechodzi, 64 nie) — dotychczasowa naprawa to zapas, nie lekarstwo; (3) skaut tematów
 > formułował pytania, na które żadna instytucja nie odpowiedziała publicznie, przez co ~50% płatnego
 > researchu kończyło się `NO_PRIMARY_SOURCE`/`WEAK_SOURCES`; prompt poprawiony, **niezweryfikowany na żywo**.
@@ -32,6 +33,26 @@
 > **Koszt sesji `1.85 USD`; dzień `10.17 USD`.** Spalone bezpowrotnie: `0.1423` na zgadywanie `max_tokens` przy istniejącym dowodzie w bazie oraz `~0.78` na korpus tematu 96, który jest zablokowany razem z jobem.
 >
 > **Produkcja `0041`/41 migracji, integrity ok.** `published_at` i `external_url` nadal `NULL` wszędzie; Etapy 5–7 nie istnieją.
+
+> **KANDYDAT 2026-08-14 — `0043_retryable_frozen_inputs`: `CANDIDATE COMPLETE — AWAITING INDEPENDENT REVIEW`. PRODUKCJA NIETKNIĘTA NA `0042`.**
+>
+> Zamyka znany problem numer jeden: jedna techniczna czkawka kasowała opłaconą kartę badawczą (~0.89 USD) bezpowrotnie. Cztery z pięciu przebiegów CONTENT 14 sierpnia zginęły w ten sposób i **żaden nie zginął za jakość artykułu** (16/17/19 — nasze usterki bramki jakości; 18 — urwany JSON reviewera na suficie 8192 tokenów).
+>
+> **Zakres zmiany:** nowa migracja `app/storage/migrations/0043_retryable_frozen_inputs.sql` (self-ledgered rebuild `content_frozen_inputs`: zdjęty inline `UNIQUE` z `input_sha256`, dodana nullowalna kolumna `superseded_at`, częściowy indeks `ux_content_frozen_inputs_live`, 4 tabele-strażniki przed `DROP TABLE`, odtworzone/zastąpione 4 triggery tabeli + 2 nowe); wiring w `app/storage/db.py` (`RETRYABLE_FROZEN_INPUTS_SCHEMA_VERSION`, `RUNTIME_SCHEMA_VERSION` → `0043`, `_SELF_LEDGERED_MIGRATIONS`, `migrate_0042_to_0043`); `scripts/migrate_schema_0043.py` (`--confirm-0042-to-0043`, exit `2` fail-closed); `job_id` w preimage `content_items.intent_key` (druga, identyczna blokada — bez tego migracja nic by nie zmieniła); `superseded_at` wystawione na `FrozenContentInput` (nigdy w żadnym haszu ani w porównaniu driftu).
+>
+> **`transition_content_execution` NIE zmieniono.** Stempel jest triggerem `content_frozen_inputs_supersede_on_terminal` na `content_transition_commands`; reviewer nie powinien szukać go w Pythonie.
+>
+> **Świadome granice:** zwalniany wyłącznie `FAILED`. `NEEDS_VERIFICATION` i `SKIPPED` (karty 7/23/27, elementy 1, 2, 4, 8, 12) pozostają zablokowane — tam provider mógł artykuł policzyć, więc to decyzja o pieniądzach z własnym ledgerem zgód. `PENDING_APPROVAL` nie jest zwalniane nigdy.
+>
+> **Wymaga świadomej akceptacji człowieka:** backfill przepisuje 13 trwałych wierszy w ledgerze append-only (wyprowadzenie `content_items.updated_at` dla `FAILED`, strzeżone asercją równości).
+>
+> **Nienaprawione, zgłoszone:** `content_drafts.draft_fingerprint` ma tę samą wadę preimage (brak `content_id`/`job_id`) przy content-scoped kontroli istnienia — ponowienie z identycznym draftem dostanie `IntegrityError` po zapłacie.
+>
+> **Dowód:** pełna suita `2815/2815 PASS`, exit `0` (baseline `2798`, netto **+17**, zero usuniętych testów); `compileall app tests scripts` i `git diff --check` PASS. Na świeżej bazie: rebuild `~45 ms`, `integrity_check ok`, `foreign_key_check` puste, triggery `236 → 238`, `EXPLAIN QUERY PLAN` używa `ux_content_frozen_inputs_live`.
+>
+> **Próba generalna na kopii produkcji NIE została wykonana w tej fali.** Liczby `13 superseded / 7 live` pochodzą z projektu zmiany, nie z mojego pomiaru — operator musi je potwierdzić przed migracją.
+>
+> **Granice tej fali:** zero API, zero sieci, zero publikacji, koszt `0.000000 USD`, `data/agent.db` nietknięta (nawet nie otwierana), `scripts/run_*_live.py` nieuruchamiane. Produkcja pozostaje na `0042`, więc runtime `0043` jest wobec niej celowo fail-closed do osobno autoryzowanej migracji.
 
 > **HISTORYCZNY / SUPERSEDED STAN 2026-08-14 — BRAMKA REWRITE UZGODNIONA Z REVIEWEREM I POSZERZONE A1; ETAP 3 NADAL `IN PROGRESS`.** Produkcja stoi na `0041_reviewer_document_quality_gate` / **41 migracji**, zgodnie z runtime — brak driftu i brak potrzeby migracji. Zmiany w tej fali są wyłącznie w `app/content/evaluations.py`, `app/content/pipeline.py`, `app/research/source_discovery_intent.py`, `scripts/run_article_research_e2e_live.py` i testach.
 >

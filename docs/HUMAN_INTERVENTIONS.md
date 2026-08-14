@@ -1,5 +1,13 @@
 # HUMAN_INTERVENTIONS
 
+## 2026-08-14 — właściciel nazwał stratę karty badawczej problemem numer jeden
+
+- Właściciel wskazał wprost, że pojedyncza techniczna czkawka kasująca opłaconą kartę badawczą (~0.89 USD) jest problemem do rozwiązania w pierwszej kolejności, i podał dowód: cztery z pięciu przebiegów treści tego dnia zginęły w ten sposób, a żaden nie zginął za jakość artykułu.
+- **Autoryzacja obejmuje wyłącznie zmianę offline:** migrację `0043_retryable_frozen_inputs`, wiring w `app/storage/db.py`, skrypt operatorski, zmianę preimage `intent_key` i testy. **Nie obejmuje** wykonania migracji na `data/agent.db`, żadnego wywołania płatnego, live, publikacji ani merge do `main`.
+- Wymagany stan po implementacji: kandydat do niezależnego review. Produkcja pozostaje na `0042`, byte-identical; `scripts/run_*_live.py` nie zostały uruchomione.
+- **Do świadomej akceptacji przez człowieka przy review:** backfill przepisuje 13 trwałych wierszy w ledgerze append-only. Jest to wyprowadzenie `content_items.updated_at` dla statusu `FAILED`, nie wymyślenie faktu, i jest strzeżone asercją równości — ale alternatywa (brak backfillu) zostawia wszystkie już opłacone martwe karty martwymi, więc decyzja jest realna, nie formalna.
+- **Świadomie odłożone, nie odrzucone:** zwolnienie kubła `NEEDS_VERIFICATION`/`SKIPPED` (karty 7/23/27, elementy 1, 2, 4, 8, 12). Tam provider mógł artykuł wyprodukować i policzyć, więc zwolnienie wymaga własnego ledgera zgód właściciela.
+
 ## 2026-08-14 — właściciel rozstrzygnął konflikt reviewer v3 kontra agregat C2
 
 - Przedstawiono właścicielowi trzy opcje: uzgodnić agregat z reviewerem, rozbić taksonomię `NO_OUT_OF_CORPUS_CLAIMS` na osobne bramki, albo zostawić stan bez zmian.

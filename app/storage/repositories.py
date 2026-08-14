@@ -4966,6 +4966,18 @@ class SqliteStorage:
             input_sha256=row["input_sha256"],
             evidence_items=items,
             created_at=row["created_at"],
+            # Liveness only.  It is never part of any hash or of the drift
+            # comparison in _assert_content_snapshot_in_transaction, because it
+            # says nothing about what was frozen - only whether this row still
+            # holds the live slot for its input_sha256.  A row read from a
+            # pre-0043 database has no such column at all, and "no marker" is
+            # exactly what live means, so the absence maps to NULL rather than
+            # to an error: migration tooling opens those databases on purpose.
+            superseded_at=(
+                row["superseded_at"]
+                if "superseded_at" in row.keys()
+                else None
+            ),
         )
 
     def get_content_item(
@@ -5143,12 +5155,23 @@ class SqliteStorage:
                 style_guide_version=request.style_guide_version,
                 article_brief_placeholder=request.article_brief_placeholder,
             )
+            # content_items.intent_key is the second global lock on a paid
+            # Research Card.  Before 0043 its preimage was derived from exactly
+            # the same five facts as input_sha256, so a retry that got past the
+            # frozen-input UNIQUE died here instead, with the identical
+            # IntegrityError and the identical lost card.  job_id makes the key
+            # commit to the attempt as well: it stays globally UNIQUE as
+            # defence in depth, but it is now strictly tighter and no longer
+            # forbids a second attempt on a released card.  Nothing recomputes
+            # historical intent_keys, so values are not comparable across the
+            # 0043 boundary; see the ADR.
             intent_key = sha256_text(canonical_json({
                 "account_id": request.account_id,
                 "research_card_id": request.research_card_id,
                 "content_type": request.content_type.value,
                 "input_sha256": snapshot["input_sha256"],
                 "input_schema_version": request.input_schema_version,
+                "job_id": request.job_id,
             }))
             cursor = self.conn.execute(
                 "INSERT INTO content_items (account_id,type,status,research_card_id,"

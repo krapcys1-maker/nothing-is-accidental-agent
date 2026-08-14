@@ -1,5 +1,16 @@
 # ARTICLE_EVIDENCE
 
+## 2026-08-14 — Materiał: „Numer wersji, który był kwitem na ponowienie”
+
+- Centralny obraz: pole `prompt_version` w kodzie produkcyjnym, podbijane v1 → v5, gdzie **żadne z podbić nie oznaczało zmiany promptu**. Każde kupowało prawo do drugiej próby, bo zmieniało hasz zamrożonego wejścia i pozwalało ominąć globalne `UNIQUE`. W bazie leży dowód: pięć prób na jednej karcie badawczej, pięć różnych haszy, jeden prompt.
+- Mechanizm w jednym zdaniu: reguła miała chronić przed zapłaceniem dwa razy za ten sam artykuł, a chroniła przed **spróbowaniem** drugi raz — bo pomyliła jednoczesność z historią.
+- Cena tej pomyłki jest policzalna: ~0.89 USD za każdą kartę, cztery martwe karty jednego dnia, i ani jedna z nich nie zginęła dlatego, że artykuł był zły.
+- Drugi obraz, mocniejszy niż pierwszy: **ta sama blokada istniała dwa razy**, w dwóch różnych kolumnach, policzona z tych samych pięciu faktów. Naprawa jednej z nich wyglądałaby jak naprawa i pozwoliłaby ponowieniu zajść jedno zdanie dalej, żeby umrzeć na identycznym błędzie — już po przebudowie tabeli na produkcji.
+- Trzeci obraz — granica świadomie **nie** przekroczona: zwolniono wyłącznie próby jawnie nieudane. Tam, gdzie nie wiadomo, czy dostawca zdążył policzyć artykuł (`NEEDS_VERIFICATION`), karta zostaje zablokowana, bo odblokowanie jej jest decyzją o pieniądzach, a nie o schemacie bazy. Trzy karty zostają martwe i jest to zapisane jako koszt, nie przemilczane.
+- Odrzucona pokusa, warta opisania: „dodajmy whitelistę technicznych powodów awarii". To dokładnie ta sama klasa błędu jeden poziom wyżej — pierwszy nieprzewidziany kod powodu znów zabiłby kartę na zawsze.
+- Cytowalna zasada: **„Ograniczenie, którego jedynym obejściem jest fałszowanie danych wejściowych, nie jest ograniczeniem — jest podatkiem od uczciwości rejestru.”**
+- Druga cytowalna zasada: **„Chroniona miała być jednoczesność, nie historia.”**
+
 ## 2026-08-13 — Materiał: „Resume nie może odnawiać zgody”
 
 - Czas ważności jest częścią decyzji człowieka, nie wygodnym parametrem procesu. Restart operatora nie może stworzyć nowych timestampów ani wydłużyć okna.

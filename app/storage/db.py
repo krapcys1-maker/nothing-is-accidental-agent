@@ -52,6 +52,7 @@ REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION = "0041_reviewer_document_quality_gate"
 RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION = (
     "0042_research_conservative_adjudication"
 )
+RETRYABLE_FROZEN_INPUTS_SCHEMA_VERSION = "0043_retryable_frozen_inputs"
 # The storage floor has to agree with the reviewer contract about what APPROVE
 # means.  Until 0041 is applied, PENDING_APPROVAL would still accept the older
 # "every segment passed" definition that the first REVIEW-ONLY live showed is
@@ -60,7 +61,10 @@ RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION = (
 # 0042 widens owner conservative adjudication to ambiguous RESEARCH attempts.
 # Without it a single unknown-outcome synthesis holds the controlled-live gate
 # closed for the whole account until a human reads the provider console.
-RUNTIME_SCHEMA_VERSION = RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION
+# 0043 replaces the global UNIQUE on content_frozen_inputs.input_sha256 with the
+# invariant that was actually meant - one LIVE content item per frozen input -
+# so a terminal technical failure no longer destroys a paid Research Card.
+RUNTIME_SCHEMA_VERSION = RETRYABLE_FROZEN_INPUTS_SCHEMA_VERSION
 _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0021 rebuilds jobs under foreign_keys=OFF and therefore must own BEGIN.
     # Unlike historical self-managed rebuilds, it also writes schema_migrations
@@ -84,6 +88,11 @@ _SELF_LEDGERED_MIGRATIONS = frozenset({
     # 0038 rebuilds the immutable writer-intent parent table while preserving
     # all dependent attempts/results/drafts and owns its foreign-key boundary.
     CONTENT_PROVIDER_TIMEOUT_SCHEMA_VERSION,
+    # 0043 rebuilds content_frozen_inputs, a parent table referenced by
+    # content_evidence_items, to drop the inline UNIQUE on input_sha256.  It
+    # therefore owns foreign_keys=OFF, legacy_alter_table=ON and its ledger
+    # write; inside the runner transaction those pragmas would be silent no-ops.
+    RETRYABLE_FROZEN_INPUTS_SCHEMA_VERSION,
 })
 _RUNNER_TRANSACTIONAL_MIGRATIONS = frozenset({
     "0007_candidate_attempts",
@@ -1008,6 +1017,21 @@ def migrate_0041_to_0042(
         db_path,
         source_version=REVIEWER_DOCUMENT_GATE_SCHEMA_VERSION,
         target_version=RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION,
+        migrations_dir=migrations_dir,
+    )
+
+
+def migrate_0042_to_0043(
+    db_path: Path | str,
+    *,
+    migrations_dir: Path = MIGRATIONS_DIR,
+) -> ExplicitMigrationResult:
+    """Make a terminal content attempt release its paid frozen input."""
+
+    return _migrate_single_step(
+        db_path,
+        source_version=RESEARCH_CONSERVATIVE_ADJUDICATION_SCHEMA_VERSION,
+        target_version=RETRYABLE_FROZEN_INPUTS_SCHEMA_VERSION,
         migrations_dir=migrations_dir,
     )
 

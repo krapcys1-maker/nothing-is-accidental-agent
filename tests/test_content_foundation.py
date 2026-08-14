@@ -63,13 +63,26 @@ def _lineage_fingerprint(data: dict[str, object]) -> str:
     ))
 
 
-@pytest.fixture
-def content_seed(storage: SqliteStorage, account):
+def build_content_seed(storage: SqliteStorage, account, *, suffix="content-seed"):
+    """Create one complete PROCEED card with full evidence lineage.
+
+    Exposed as a plain function (not only as the fixture) so the schema-0043
+    migration test can build the same durable shape on a database that is still
+    at 0042 and therefore cannot be opened through the runtime schema gate.
+    ``suffix`` varies the topic and the card question, so two calls produce two
+    genuinely different frozen inputs.
+    """
+    label = "The hidden fee" if suffix == "content-seed" else f"The hidden fee ({suffix})"
+    question = (
+        "Why does the price change?"
+        if suffix == "content-seed"
+        else f"Why does the price change ({suffix})?"
+    )
     storage.ensure_account(account)
     topic = storage.add_topic(account.id, Topic(
         account_id=account.id,
-        title="The hidden fee",
-        question="Why does the price change?",
+        title=label,
+        question=question,
         status=TopicStatus.SELECTED,
     ))
     assert topic.id is not None
@@ -80,7 +93,7 @@ def content_seed(storage: SqliteStorage, account):
         "publication_recommendation,rejection_reason,created_at) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
-            topic.id, "Why does the price change?", "Fees hide the mechanism.",
+            topic.id, question, "Fees hide the mechanism.",
             "Mandatory charges are excluded.", "[]", "The fee is disclosed.",
             "[]", "A split receipt", 0.9, "Fees hide the mechanism.",
             json.dumps([_CLAIM]), "[]", "[]", 0.95, "PROCEED", None,
@@ -119,8 +132,8 @@ def content_seed(storage: SqliteStorage, account):
         ),
     )
     excerpt_id = int(excerpt.lastrowid)
-    research_run_id = "research-run-content-seed"
-    research_job_id = "research-job-content-seed"
+    research_run_id = f"research-run-{suffix}"
+    research_job_id = f"research-job-{suffix}"
     storage.conn.execute(
         "INSERT INTO runs (id,account_id,workflow,status,current_state,started_at,"
         "finished_at,cost_usd,human_intervention_count) "
@@ -210,6 +223,11 @@ def content_seed(storage: SqliteStorage, account):
         "research_run_id": research_run_id,
         "research_job_id": research_job_id,
     }
+
+
+@pytest.fixture
+def content_seed(storage: SqliteStorage, account):
+    return build_content_seed(storage, account)
 
 
 def _request(seed, suffix="one", content_type=ContentType.ARTICLE):

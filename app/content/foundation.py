@@ -221,6 +221,11 @@ class FrozenContentInput(BaseModel):
     input_sha256: str = Field(pattern=_SHA256_PATTERN)
     evidence_items: tuple[FrozenEvidenceItem, ...]
     created_at: datetime
+    # Liveness marker (schema 0043), not part of the frozen contract: it is
+    # stamped when the attempt terminalises as FAILED and cleared again by an
+    # owner-approved review resume.  It must never enter a hash preimage or the
+    # snapshot drift comparison - what was frozen did not change.
+    superseded_at: datetime | None = None
 
     @model_validator(mode="after")
     def validate_preimages(self) -> "FrozenContentInput":

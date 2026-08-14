@@ -61,6 +61,7 @@ Po każdym większym zadaniu, ZANIM uznasz je za ukończone:
 | `28_DWIE_WLADZE_JEDNO_PYTANIE.md` | Reviewer mówił „przepisz", agregat mówił „koniec" — dwie władze w jednej sprawie |
 | `29_UDANE_POBRANIE_TO_NIE_UZYTECZNE_ZRODLO.md` | Dwa tematy bez artykułu, bo jedna strona nie mieściła się w kopercie |
 | `30_CZTERY_USTERKI_KTORYCH_TESTY_NIE_ZLAPIA.md` | 2791 zielonych testów i zero artykułów: błędy mieszkają na granicy z dostawcą |
+| `31_JEDNA_ZYWA_PROBA_NA_KARTE.md` | Numer wersji promptu jako kwit na ponowienie: reguła chroniła historię zamiast jednoczesności |
 
 Podfoldery: `timeline/`, `screenshots/`, `diagrams/`, `code-snippets/`, `weekly-summaries/`, `article-series/`.
 
