@@ -171,6 +171,15 @@ def enforce_single_research_draft_budget(draft: ResearchDraft) -> None:
         draft.strongest_counterargument, field="strongest_counterargument",
         max_chars=MAX_COUNTERARGUMENT_CHARS,
     )
+    # citable_numbers is the one list here that carries no meaning by its
+    # length: the entries are optional figures the writer may quote, and the
+    # writer cites evidence ids, never this list.  Discarding a whole card for a
+    # seventh number threw away a complete corpus over an off-by-one in a
+    # convenience field, so the surplus is trimmed instead.  Every other list
+    # still fails closed - truncating uncertain_claims or contradictions would
+    # silently delete the caveats that become the writer's forbidden list.
+    if len(draft.citable_numbers) > MAX_CITABLE_NUMBERS:
+        del draft.citable_numbers[MAX_CITABLE_NUMBERS:]
     _check_string_list(
         draft.citable_numbers, field="citable_numbers",
         max_items=MAX_CITABLE_NUMBERS, max_chars=MAX_CITABLE_NUMBER_CHARS,
