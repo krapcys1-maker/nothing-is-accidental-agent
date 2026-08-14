@@ -66,8 +66,38 @@ def _build_prompt(
     return (
         f"Propose {count} article topic ideas in the niche: {niche}. "
         "For each, return an object with keys: title, question, and score_breakdown. "
-        "The question must state the proposed central causal angle clearly enough "
-        "to distinguish it from another thesis in the same broad area. "
+        # The question is not the article's thesis.  It is the string a web
+        # search actually runs, so it decides which sources exist to be found.
+        # This was measured, twice, on our own failed topics: asking "why did
+        # cities switch to cold white LEDs within a few years" returned lighting
+        # vendors and local news, while asking about the Department of Energy's
+        # street lighting consortium reports on the same subject returned four
+        # energy.gov documents plus osti.gov - enough to clear our own floors.
+        # Asking "why is the supermarket car park empty six days a week"
+        # returned Quora, Goodreads and a fiction newsletter; asking about the
+        # ITE Parking Generation manual returned the manual itself and the
+        # academic critique of it.  Neither topic was bad.  Both were phrased so
+        # that no institution could answer them, and the research stage was then
+        # rejected as NO_PRIMARY_SOURCE or WEAK_SOURCES at a cost of about
+        # 0.89 USD per attempt.
+        "Write each question so that it points at a body that had to write its "
+        "reasoning down. Name that body, or name the document family, inside the "
+        "question itself: an agency manual, a standard, a rulemaking preamble, a "
+        "regulator's filing, an official statistic, a first-party technical "
+        "guide. A question no institution has answered in public cannot be "
+        "researched, however good it sounds. "
+        "Do NOT assert the answer. No naming of the motive, no 'not because X "
+        "but because Y', and no quantity, percentage, timeframe or proportion - "
+        "you have read no sources yet, so any number you write is invented, and "
+        "the research stage will spend real money failing to confirm it. "
+        "This does not make topics dull. The documented figures are routinely "
+        "stranger than invented ones, and the article's hook is harvested later, "
+        "by the writer, out of the record. Your job is to predict WHERE a "
+        "surprising number lives, not to guess what it says. "
+        "The phenomenon itself must still be concrete, ordinary and immediately "
+        "recognisable - something a reader has stood in front of. "
+        "The title is an internal handle, not the published headline, so let it "
+        "describe the phenomenon rather than announce a conclusion. "
         "Do not repeat or paraphrase an editorial angle in this bounded history: "
         f"{history_json}. "
         "score_breakdown must contain these keys, each 0.0-1.0: curiosity, source_quality, "

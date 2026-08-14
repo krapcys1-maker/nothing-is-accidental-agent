@@ -1,12 +1,33 @@
 # CURRENT_PROJECT_STATE — Nothing Is Accidental Agent
 
-> **BIEŻĄCY STAN 2026-08-14 (po falach płatnych) — ETAP 3 OTWARTY, PIPELINE ZABLOKOWANY PRZEZ JEDNĄ NIEROZLICZONĄ EKSPOZYCJĘ.**
+> **BIEŻĄCY STAN 2026-08-14 (wieczór) — POTOK ETAPU 3 PRZESZEDŁ OD KOŃCA DO KOŃCA. ETAP 3 NADAL FORMALNIE OTWARTY.**
 >
-> **BLOCKER WYMAGAJĄCY DECYZJI WŁAŚCICIELA.** Job `article-research-evidence-96` stoi w `NEEDS_VERIFICATION`, a jego próba `article-research-evidence-96:research:1` w `NEEDS_RECONCILIATION` z zachowaną rezerwacją **`0.485760 USD`**. Synteza przekroczyła ówczesny deadline 120 s; **nie ma wiersza `model_usage`**, więc ani obciążenie, ani wynik nie są ustalone. Preflight `NEEDS_VERIFICATION_PRESENT` blokuje przez to **każdy** controlled-live, nie tylko temat 96. Ledger konserwatywny ADR-146 odmawia (`--source-type PROVIDER_ATTEMPT` przyjmuje wyłącznie efekty CONTENT/ARTICLE). Odblokowanie: dokładny koszt requestu z konsoli Anthropic (~2026-08-14 09:50–09:55 UTC, `claude-opus-5`, ~20k wejścia) → `reconcile-attempt --financial-resolution CHARGED_KNOWN --actual-cost-usd <kwota> --execution-resolution EXECUTION_FAILED`, albo potwierdzenie braku obciążenia → `NOT_CHARGED`. **Zgadywanie kwoty jest zabronione i architektura na to nie pozwala.**
+> Rozróżnienie jest istotne i celowe. Potok dowiózł artykuł: `content 20` (karta badawcza `35`) osiągnął
+> `PENDING_APPROVAL`, score `1.0`, 9/9 ewaluacji `PASS` na próbie 2, `writer_attempts: 2`, koszt
+> `0.907595 USD`. Kryterium wyjścia z etapu 3 (`IMPLEMENTATION_ROADMAP.md:270`) brzmi jednak: artykuł
+> **oceniony przez człowieka jako publikowalny**. Tabela `approvals` ma jeden wiersz dla obiektu 20:
+> `decision='PENDING'`, `decided_at=NULL`. Etap zamyka decyzja właściciela, nie maszyna.
 >
-> **Zweryfikowane na żywo w tej sesji:** TOPIC_GENERATION → temat + job A1; discovery A1 na 10 kandydatach; pobrania 9/10; korpus 6 źródeł / 57 739 znaków; rezerwacja rozliczająca się do `SETTLED`.
+> **Nic nigdy nie zostało opublikowane.** `published_at` i `external_url` są `NULL` we wszystkich wierszach.
+> Autonomia `LEVEL_1` czyni autonomiczne zatwierdzenie nieosiągalnym z konstrukcji.
 >
-> **NIE zweryfikowane na żywo:** synteza na bogatym korpusie (padła na timeoucie, naprawione na 300 s, nieprzetestowane), **writer i reviewer nie uruchomiły się ani razu** — więc bramka rewrite z ADR-149 jest potwierdzona **wyłącznie testami**, nie produkcją. Żaden artykuł nie osiągnął `PENDING_APPROVAL`.
+> **Blocker zamknięty.** Próba `article-research-evidence-96:research:1` jest `RECONCILED_SETTLED`
+> (`CHARGED_KNOWN:EXECUTION_FAILED`, rozliczona przez właściciela 10:19:22). Bliźniacza ekspozycja
+> `article-research-evidence-82` zamknięta wpisem `ccr-b63f0a69e906c551d19e29052e8a16d1`
+> (`CONSERVATIVE_MAX_CHARGED`, ADR-154). Bramka preflight liczy dziś `NEEDS_VERIFICATION_PRESENT = 0`
+> i `NEEDS_RECONCILIATION_PRESENT = 0` — nic nie blokuje controlled-live.
+>
+> **Zweryfikowane na żywo:** cały łańcuch temat → discovery → pobranie → karta `PROCEED` → writer →
+> reviewer → **przepisanie** → decyzja polityki → `PENDING_APPROVAL`. Bramka rewrite z ADR-149 jest
+> potwierdzona **produkcyjnie**, nie tylko testami. Suita: 2798/2798. Produkcja: schema `0042`,
+> `integrity_check: ok`, 0 naruszeń FK.
+>
+> **Znane, otwarte i policzone:** (1) nieudana próba treści bezpowrotnie kasuje opłaconą kartę badawczą
+> (`content_frozen_inputs.input_sha256` globalnie `UNIQUE`, hasz bez `job_id`) — koszt iteracji rośnie
+> z ~0.9 do ~2.1 USD; (2) sufit wyjścia reviewera `8192` jest kwalifikowany, a wyjście rośnie z liczbą
+> **zdań** (48 przechodzi, 64 nie) — dotychczasowa naprawa to zapas, nie lekarstwo; (3) skaut tematów
+> formułował pytania, na które żadna instytucja nie odpowiedziała publicznie, przez co ~50% płatnego
+> researchu kończyło się `NO_PRIMARY_SOURCE`/`WEAK_SOURCES`; prompt poprawiony, **niezweryfikowany na żywo**.
 >
 > **Koszt sesji `1.85 USD`; dzień `10.17 USD`.** Spalone bezpowrotnie: `0.1423` na zgadywanie `max_tokens` przy istniejącym dowodzie w bazie oraz `~0.78` na korpus tematu 96, który jest zablokowany razem z jobem.
 >
