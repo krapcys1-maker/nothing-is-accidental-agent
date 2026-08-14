@@ -15,6 +15,9 @@ from app.research.durable_intent import (
 )
 
 
+EVIDENCE_SYNTHESIS_TIMEOUT_SECONDS = 300
+
+
 def enqueue_evidence_research_if_ready(
     *, storage: object, settings: Settings, account: Account, topic: Topic, clock: Clock,
 ) -> str | None:
@@ -80,7 +83,21 @@ def enqueue_evidence_research_if_ready(
     except CorpusPackingError:
         return None
 
-    exact_settings = replace(settings, model_quality="claude-opus-5", dry_run=False)
+    # The deadline is FROZEN INTO THE INTENT here and used at execution time, so
+    # a runtime override in an operator script can never reach it.  It used to
+    # inherit the 60s config default meant for small calls, which was survivable
+    # only while the corpus held three sources: topic 92 (3 sources) finished
+    # inside it, topics 96 and 82 (6 sources each) did not, and both lost the
+    # whole attempt to an unknown provider outcome after the provider had
+    # already been billed.  Evidence synthesis is the heaviest call in the
+    # system - full 23,808-token input against an 8,192-token output - so it
+    # carries its own deadline instead of a global default.
+    exact_settings = replace(
+        settings, model_quality="claude-opus-5", dry_run=False,
+        research_timeout_seconds=max(
+            settings.research_timeout_seconds, EVIDENCE_SYNTHESIS_TIMEOUT_SECONDS,
+        ),
+    )
     active = storage.get_active_model_for_role("ARTICLE_RESEARCH")
     if active is None or active.technical_model_id != "claude-opus-5" or not active.pricing_ref:
         raise CorpusPackingError("exact active ARTICLE_RESEARCH pricing authority is missing")

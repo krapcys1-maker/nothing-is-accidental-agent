@@ -51,6 +51,9 @@ def is_controlled_fetch_candidate(url: str) -> bool:
     return not (path.endswith(".pdf") or "/pdf/" in path)
 
 
+MAX_DISCOVERY_SEARCH_ROUNDS = 6
+
+
 class AnthropicSourceDiscoveryPort:
     def __init__(self, *, api_key: str, model: str, sdk_factory: Callable[[str], object],
                  now: Callable[[], datetime] | None = None) -> None:
@@ -70,7 +73,13 @@ class AnthropicSourceDiscoveryPort:
             output_config={"effort": ARTICLE_RESEARCH_INFERENCE_CONFIG.effort},
             tools=[{
                 "type": "web_search_20250305", "name": "web_search",
-                "max_uses": request.max_results,
+                # Search rounds, not results.  Every round resends the whole
+                # accumulated context, so cost grows superlinearly in rounds:
+                # one observed discovery billed 3,385 then 32,584 then 61,289
+                # input tokens for a single job.  Tying this to max_results made
+                # asking for more candidates quietly buy more round trips.  A
+                # bounded number of searches still returns ten sources.
+                "max_uses": min(request.max_results, MAX_DISCOVERY_SEARCH_ROUNDS),
             }],
             messages=[{"role": "user", "content": (
                 f"Find exactly {request.max_results} authoritative sources for this "
