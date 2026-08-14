@@ -69,11 +69,16 @@ def _run_model_job(
     updated_by: str,
 ) -> str:
     clock = SystemClock()
+    # The daily limit comes from config/growth_policy.yaml, which is where the
+    # owner sets budget policy.  This used to hardcode 10.0, which silently
+    # overrode a deliberately configured higher limit and blocked healthy runs
+    # for a reason no operator could see.  The per-run fences that actually
+    # bound one execution -- --max-cost-usd here and the intent cap -- are
+    # unchanged.
     real = replace(
         settings,
         dry_run=False,
         model_quality=MODEL_ID,
-        max_daily_cost_usd=10.0,
         research_timeout_seconds=max(settings.research_timeout_seconds, 120),
     )
     policy = PolicyEngine(real, storage, clock)

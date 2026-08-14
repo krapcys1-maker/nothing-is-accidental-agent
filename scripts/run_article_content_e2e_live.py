@@ -40,10 +40,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     settings = load_settings()
+    # Budget policy lives in config/growth_policy.yaml, not in this script.  The
+    # former hardcoded 10.0 overrode a deliberately configured higher limit and
+    # rejected runs for a reason no operator could see.  --cost-ceiling-usd is
+    # still the fence that bounds this one article.
     real = replace(
         settings,
         dry_run=False,
-        max_daily_cost_usd=10.0,
     )
     clock = SystemClock()
     storage = SqliteStorage.open(settings.db_path)
