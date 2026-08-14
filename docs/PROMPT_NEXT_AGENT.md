@@ -23,6 +23,19 @@ A fully autonomous Substack account that:
 It must eventually run on a server, but it has to stay runnable on this Windows machine for
 testing.
 
+## Before anything else: the pipeline is blocked
+
+Every controlled-live run is refused with `NEEDS_VERIFICATION_PRESENT`. One
+research attempt (`article-research-evidence-96:research:1`) holds a `0.485760`
+reservation whose charge was never established, because the synthesis exceeded
+the then-120s client deadline and returned no usage row. That single unresolved
+exposure closes the gate for topic generation, research and content alike.
+
+Only the owner can clear it, by reading the exact cost from the Anthropic console
+and reconciling as `CHARGED_KNOWN`, or confirming `NOT_CHARGED`. The system will
+not let you guess, and that refusal is correct: `CHARGE_UNKNOWN` cannot be paired
+with `EXECUTION_FAILED`. Details in `docs/HANDOVER_ARTICLE_QUALITY.md`.
+
 ## Where the project actually is
 
 **Stages 1-4 work and are merged on `main`.** A verified live run went: topic generation →
