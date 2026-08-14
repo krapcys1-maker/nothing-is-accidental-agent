@@ -139,6 +139,16 @@ def run_controlled_fetch(
         )
         if outcome is ControlledFetchFailureOutcome.ESCALATED_NEEDS_VERIFICATION:
             raise ControlledFetchNeedsVerification(error)
+        # A failed fetch is still a terminal outcome for its candidate, and the
+        # corpus now waits for every candidate before it closes.  Enqueuing only
+        # from the success path meant a trailing 403 left a complete, packable
+        # corpus with no evidence job at all: topic 96 fetched 9 of 10 sources,
+        # 7 of them fit the envelope, and nothing was ever synthesised.
+        from app.research.corpus_enqueue import enqueue_evidence_research_if_ready
+        enqueue_evidence_research_if_ready(
+            storage=storage, settings=settings, account=account, topic=topic,
+            clock=clock,
+        )
         summary.error = error[:240]
         return summary
 

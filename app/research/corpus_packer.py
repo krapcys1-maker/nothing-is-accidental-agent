@@ -10,7 +10,10 @@ from app.content.cost_estimate import (
     ARTICLE_RESEARCH_MAX_INPUT_TOKENS,
     ARTICLE_RESEARCH_MAX_OUTPUT_TOKENS,
 )
-from app.research.durable_intent import EVIDENCE_PROMPT_OVERHEAD_CHARS
+from app.research.durable_intent import (
+    EVIDENCE_PROMPT_OVERHEAD_CHARS,
+    MAX_EVIDENCE_RETRIEVALS,
+)
 from app.research.output_contract import CONSERVATIVE_CHARS_PER_TOKEN
 
 MIN_RESEARCH_SOURCES = 3
@@ -63,6 +66,14 @@ def pack_research_corpus(documents: Sequence[CorpusDocument]) -> PackedCorpus:
     for item in ordered:
         if item.canonical_chars != len(item.canonical_text) or item.canonical_chars < 1:
             raise CorpusPackingError("retrieval canonical length is inconsistent")
+        # The durable evidence_input contract closes at MAX_EVIDENCE_RETRIEVALS
+        # and requires the payload to carry exactly those limits, so raising it
+        # would invalidate every intent recorded before the change.  The packer
+        # respects it instead: a corpus this function returns is always one the
+        # intent will accept.  Topic 96 fitted 7 sources in the envelope and was
+        # rejected outright for exceeding the closed maximum of 6.
+        if len(selected) >= MAX_EVIDENCE_RETRIEVALS:
+            break
         projected = math.ceil(
             (EVIDENCE_PROMPT_OVERHEAD_CHARS + selected_chars + item.canonical_chars)
             / CONSERVATIVE_CHARS_PER_TOKEN
