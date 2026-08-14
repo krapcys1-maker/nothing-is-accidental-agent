@@ -79,7 +79,12 @@ def _run_model_job(
         settings,
         dry_run=False,
         model_quality=MODEL_ID,
-        research_timeout_seconds=max(settings.research_timeout_seconds, 120),
+        # A six-source corpus takes materially longer to synthesise than the
+        # three-source one this used to see: topic 96 packed 57,739 characters
+        # and blew the 120s client deadline, losing the whole attempt to an
+        # unknown provider outcome.  The controlled ARTICLE path already allows
+        # 300s; research gets the same deadline rather than a tighter one.
+        research_timeout_seconds=max(settings.research_timeout_seconds, 300),
     )
     policy = PolicyEngine(real, storage, clock)
     def diagnostic_research_real(*args, **kwargs):
