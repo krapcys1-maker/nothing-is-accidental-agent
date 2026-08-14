@@ -9,8 +9,11 @@ objective:
     recommendations: 0.05
 
 global_limits:
-  max_daily_cost_usd: 2.00
-  max_monthly_cost_usd: 40.00
+  # One full ARTICLE run costs roughly 1.10 USD (topic ~0.10, research ~0.68,
+  # writer+reviewer ~0.28), and a failed discovery can strand up to its 1.00 USD
+  # cap. 2.00/day therefore could not complete a single article with any retry.
+  max_daily_cost_usd: 10.00
+  max_monthly_cost_usd: 80.00
   stop_on_budget_limit: true
   monthly_limit_has_priority: true   # limit miesięczny nadrzędny: po 40 USD/mies. stop wszystkich płatnych działań (ADR-012)
   max_consecutive_browser_errors: 3
@@ -57,7 +60,12 @@ topic_scoring_weights:
 # Progi jakości researchu (bramka Policy Engine dla Research Card).
 research_policy:
   minimum_sources: 3
-  min_confidence_score: 0.60
+  # Owner decision 2026-08-14 after the first full ARTICLE live run. A corpus of
+  # 3-6 specialist sources settles honestly at ~0.55 confidence, so 0.60 rejected
+  # every card and no article could ever be planned (the planner accepts PROCEED
+  # only). The card still records its own confidence truthfully; this is only the
+  # acceptance bar, and reviewer v3 remains the binding gate on the finished draft.
+  min_confidence_score: 0.50
   min_source_quality_score: 0.50
   max_retries: 2              # limit ponawiania kosztownych wywołań (bez nieskończonego retry)
   timeout_seconds: 60
