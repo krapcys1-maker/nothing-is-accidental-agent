@@ -337,16 +337,24 @@ def evaluate_source_admission(
             policy_fingerprint=active.fingerprint(),
         )
 
-    # 1. Classification. An unknown class is never guessed.
+    # 1. Classification. An unknown class is never guessed - but it also never
+    #    condemns the rest of the corpus.  Refusing the whole card because one
+    #    source could not be classified conflated "this source does not count"
+    #    with "this corpus is unusable": a live card carried three PRIMARY
+    #    sources, including the EU regulation itself and a GAO report, and was
+    #    rejected because a sixth source came back labelled OTHER.  An
+    #    unclassified source is simply not admitted, so it supports no claim,
+    #    and the floors below - enough sources, a primary among them, every
+    #    claim reachable from admitted evidence - decide on what remains.
     classified: list[tuple[SourceDescriptor, SourceClass]] = []
     for descriptor in descriptors:
         effective = classify_source(descriptor)
         if effective is None:
-            reasons.append(SOURCE_CLASSIFICATION_UNKNOWN)
             findings.append({
                 "code": SOURCE_CLASSIFICATION_UNKNOWN,
                 "url": descriptor.url,
                 "retrieval_id": descriptor.retrieval_id,
+                "detail": "not admitted; the remaining sources are judged alone",
             })
             continue
         classified.append((descriptor, effective))

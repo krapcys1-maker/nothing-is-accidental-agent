@@ -614,9 +614,32 @@ def test_unknown_source_classification_fails_closed():
         ],
         confirmed_claims=[CLAIM],
     )
+    # An unclassified source is dropped rather than counted, so this corpus
+    # still fails - on the source floor, which is the honest reason. It does not
+    # condemn a corpus that has enough admitted sources without it.
     assert outcome.admitted is False
-    assert SOURCE_CLASSIFICATION_UNKNOWN in outcome.reasons
     assert TOO_FEW_ADMITTED_SOURCES in outcome.reasons
+    assert SOURCE_CLASSIFICATION_UNKNOWN not in outcome.reasons
+    assert any(
+        item.get("code") == SOURCE_CLASSIFICATION_UNKNOWN
+        and item.get("url") == "https://mystery.example/page"
+        for item in outcome.findings
+    )
+
+    # The same unclassified source alongside a sufficient corpus is admitted.
+    survives = evaluate_source_admission(
+        [
+            _source("https://regulator.example/filing", klass=SourceClass.PRIMARY,
+                    retrieval_id=1, digest="a" * 64),
+            _source("https://press.example/report", retrieval_id=2, digest="b" * 64),
+            _source("https://journal.example/paper", retrieval_id=3, digest="c" * 64),
+            _source("https://mystery.example/page", klass=None, retrieval_id=4,
+                    digest="d" * 64),
+        ],
+        confirmed_claims=[CLAIM],
+    )
+    assert survives.admitted is True
+    assert all(item.url != "https://mystery.example/page" for item in survives.admitted_sources)
 
 
 def test_every_confirmed_claim_needs_admitted_evidence():

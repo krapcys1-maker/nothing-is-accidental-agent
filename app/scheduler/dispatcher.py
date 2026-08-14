@@ -522,9 +522,16 @@ class JobDispatcher:
         # runner can reserve or start a provider attempt. The current topic row
         # is excluded; all other USED topics and prior content remain eligible.
         if is_real and job.payload.get("execution") == "durable_provider_v2":
+            # Everything this topic has already produced is excluded, not just
+            # its TOPIC row.  Excluding only that row left a topic duplicating
+            # its own earlier draft: topic 24 was refused re-research because
+            # the article written from its own first card was still in memory,
+            # which permanently burned the topic after a downstream technical
+            # failure. The content pipeline already excludes by card and content
+            # id for the same reason; this is the same rule at this boundary.
             memory = tuple(
                 row for row in self._storage.list_editorial_novelty_memory(job.account_id)
-                if not (row.source_kind == "TOPIC" and row.topic_id == topic.id)
+                if row.topic_id != topic.id
             )
             duplicate = find_editorial_duplicate(
                 EditorialMemoryRecord(
