@@ -455,16 +455,23 @@ def test_declared_evidence_id_absent_from_the_draft_is_rejected():
 
 
 def test_writer_scenarios_are_blocked_end_to_end(storage, settings, account):
-    for suffix, scenario in (
-        ("unsupported", FakeWriterScenario.UNSUPPORTED_CLAIM),
-        ("personal", FakeWriterScenario.PERSONAL_EXPERIENCE),
+    # Both end the article, and the reason code says which kind of failure it
+    # was. An unsupported claim is fixable in principle, so the pipeline buys
+    # rewrites until the reviewer's list stops getting shorter - this writer
+    # repeats itself, so it stalls and exhausts. Fabricated experience is not
+    # fixable by rewriting and is blocked outright on the first look.
+    for suffix, scenario, block_code in (
+        ("unsupported", FakeWriterScenario.UNSUPPORTED_CLAIM,
+         "CONTENT_REWRITE_LIMIT_EXHAUSTED"),
+        ("personal", FakeWriterScenario.PERSONAL_EXPERIENCE,
+         "CONTENT_EVALUATION_BLOCKED"),
     ):
         _, _, _, summary = _run_content(
             storage, settings, account, suffix=suffix,
             writer=FakeContentWriter(scenario),
         )
         assert summary.status is ContentStatus.FAILED
-        assert summary.block_code == "CONTENT_EVALUATION_BLOCKED"
+        assert summary.block_code == block_code
 
 
 # ---------------------------------------------------------------------------

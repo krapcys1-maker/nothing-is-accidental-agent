@@ -90,6 +90,33 @@ class ContentPipelineSummary:
     block_code: str | None = None
 
 
+# A paid research card is expensive and single-use, so a draft that the reviewer
+# can describe how to fix should be fixed rather than thrown away with the card.
+# The old cap was the literal 2, unrelated to what the job could afford: content
+# 20 finished at 0.907595 USD against a 2.000000 ceiling, so two further
+# attempts were already paid for and simply never offered.
+#
+# The real bound is progress, enforced below: an attempt is only bought when the
+# previous one actually reduced the number of blocking findings. An article stuck
+# at the same twelve problems is not going to be fixed by a fourth try, and buying
+# one would be the auto-retry mistake in a different costume.
+#
+# The loop terminalises on the last entry of attempt_numbers rather than on this
+# constant, because the review-only resume path runs a single attempt 2 and must
+# still stop there. That is a bounded recovery operation with its own authority,
+# not the main loop, and it keeps its own limit.
+MAX_WRITER_ATTEMPTS = 4
+
+
+def _blocking_finding_count(evaluations: tuple[DraftEvaluation, ...]) -> int:
+    """How many findings actually stand between this draft and a PASS."""
+    return sum(
+        len(evaluation.findings)
+        for evaluation in evaluations
+        if evaluation.decision is not PipelineDecision.PASS
+    )
+
+
 def _profile_text(project_root: Path, name: str) -> str:
     path = project_root / "instrukcja dla pisania artykulow" / name
     text = path.read_text(encoding="utf-8")
@@ -378,7 +405,11 @@ def run_offline_content_pipeline(
 
     prior_draft: FakeDraft | None = None
     prior_feedback: tuple[dict[str, object], ...] = ()
-    attempt_numbers = (2,) if resume_writer_attempt_two_only else (1, 2)
+    prior_blocking_findings: int | None = None
+    attempt_numbers = (
+        (2,) if resume_writer_attempt_two_only
+        else tuple(range(1, MAX_WRITER_ATTEMPTS + 1))
+    )
     for attempt_no in attempt_numbers:
         state = storage.get_content_pipeline_state(job.id)
         content_row = state["content"]
@@ -820,7 +851,7 @@ def run_offline_content_pipeline(
                 research_card=research_card,
                 claim_reviewer=reviewer,
                 propagate_reviewer_errors=propagate_claim_reviewer_errors,
-                rewrite_available=attempt_no == 1,
+                rewrite_available=attempt_no != attempt_numbers[-1],
             )
             for evaluation in evaluations:
                 storage.record_content_draft_evaluation(
@@ -864,15 +895,26 @@ def run_offline_content_pipeline(
                 },
             )
             return _summary(storage, job.id, "CONTENT_EVALUATION_BLOCKED")
-        if attempt_no == 2:
+        # Stop for a reason, not on a number. Another attempt is worth buying
+        # only while the reviewer's list is getting shorter; a draft that fixed
+        # nothing last time will not fix itself given one more turn.
+        blocking_now = _blocking_finding_count(evaluations)
+        stalled = (
+            prior_blocking_findings is not None
+            and blocking_now >= prior_blocking_findings
+        )
+        prior_blocking_findings = blocking_now
+        if attempt_no == attempt_numbers[-1] or stalled:
             storage.transition_content_execution(
                 execution,
                 ContentStatus.FAILED,
                 reason_code="CONTENT_REWRITE_LIMIT_EXHAUSTED",
                 final_result={
-                    "attempt_no": 2,
+                    "attempt_no": attempt_no,
                     "draft_fingerprint": draft.fingerprint(),
                     "mode": writer.call_mode.value,
+                    "blocking_findings": blocking_now,
+                    "stalled": stalled,
                 },
             )
             return _summary(storage, job.id, "CONTENT_REWRITE_LIMIT_EXHAUSTED")

@@ -102,6 +102,17 @@ def _build_prompt(
         f"{history_json}. "
         "score_breakdown must contain these keys, each 0.0-1.0: curiosity, source_quality, "
         "non_obvious, universality, discussion_potential, visual_potential, originality. "
+        # source_quality is the one score with a downstream consequence: a topic
+        # the research stage cannot source costs about 0.89 USD to discover that.
+        # Left undefined the model scores it as a vibe, so it is pinned to the
+        # only question that predicts the cost.
+        "Score source_quality as your honest confidence that a specific, named, "
+        "publicly reachable institutional document answering this question "
+        "already exists - 0.9 only if you could name the issuing body and the "
+        "document, 0.3 or below if you are guessing that something must be out "
+        "there. Do not inflate it; a low score here is useful information, and a "
+        "topic scored honestly low costs us nothing while a topic scored "
+        "dishonestly high costs a paid research run. "
         'Respond as JSON: {"topics": [ ... ]}.'
     )
 
