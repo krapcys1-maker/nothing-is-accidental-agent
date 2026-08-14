@@ -51,6 +51,22 @@ _UPDATED_BY = _OPERATION
 _LEASE_SECONDS = 60
 _ATTEMPT_STAGE = "topics"
 _ATTEMPT_NO = 1
+# An ambiguous provider effect stops blocking NEW paid work once its cost is
+# settled: either the owner adjudicated it in the conservative ledger, or the
+# exact charge is durably recorded as canonical (non-dry-run, non-legacy) usage.
+# Anything still ambiguous, leased or holding a reservation keeps blocking.
+_UNRESOLVED_ATTEMPT_SQL = (
+    " AND NOT EXISTS (SELECT 1 FROM conservative_content_reconciliations cr"
+    "   WHERE cr.source_type='PROVIDER_ATTEMPT' AND cr.source_identity=p.request_id)"
+    " AND NOT EXISTS (SELECT 1 FROM model_usage u WHERE u.request_id=p.request_id"
+    "   AND u.dry_run=0 AND u.is_legacy_usage=0)"
+)
+_UNRESOLVED_ROLE_EXECUTION_SQL = (
+    " AND NOT EXISTS (SELECT 1 FROM conservative_content_reconciliations cr"
+    "   WHERE cr.source_type='ROLE_EXECUTION' AND cr.source_identity=e.execution_ref)"
+    " AND NOT EXISTS (SELECT 1 FROM model_usage u WHERE u.request_id=e.execution_ref"
+    "   AND u.dry_run=0 AND u.is_legacy_usage=0)"
+)
 
 
 @dataclass(frozen=True)
@@ -354,23 +370,45 @@ def _preflight_snapshot(
             "SELECT count(*) FROM provider_attempts WHERE status IN ('RESERVED','REQUEST_STARTED')",
             (),
         ),
+        # These two guards exist to stop new paid work while earlier provider
+        # spend is still UNACCOUNTED FOR.  They counted rows instead of exposure,
+        # so a historical effect whose cost the owner had already settled kept
+        # blocking every future live run permanently - and no supported path can
+        # move a CONTENT job out of NEEDS_VERIFICATION (the 0040 ledger settles
+        # cost without touching historical statuses, by design).  Ambiguity is
+        # resolved when the effect is owner-adjudicated in the conservative
+        # ledger OR its exact charge is durably in the canonical model_usage.
+        # Anything still ambiguous, leased or holding a reservation blocks.
         (
             "NEEDS_VERIFICATION_PRESENT",
-            "SELECT count(*) FROM jobs WHERE status='NEEDS_VERIFICATION'",
+            "SELECT count(*) FROM jobs j WHERE j.status='NEEDS_VERIFICATION' AND ("
+            " j.lease_owner IS NOT NULL OR j.budget_reserved_at IS NOT NULL"
+            " OR j.reserved_cost_usd<>0.0"
+            " OR EXISTS (SELECT 1 FROM provider_attempts p WHERE p.job_id=j.id"
+            "   AND p.status='NEEDS_RECONCILIATION'" + _UNRESOLVED_ATTEMPT_SQL + ")"
+            " OR EXISTS (SELECT 1 FROM role_provider_executions e WHERE e.job_id=j.id"
+            "   AND (e.outcome='IN_FLIGHT' OR (e.outcome='NEEDS_VERIFICATION'"
+            + _UNRESOLVED_ROLE_EXECUTION_SQL + ")))"
+            ")",
             (),
         ),
         (
             "NEEDS_RECONCILIATION_PRESENT",
-            "SELECT count(*) FROM provider_attempts WHERE status='NEEDS_RECONCILIATION'",
+            "SELECT count(*) FROM provider_attempts p "
+            "WHERE p.status='NEEDS_RECONCILIATION'" + _UNRESOLVED_ATTEMPT_SQL,
             (),
         ),
+        # An unused paid approval is only real exposure while it can still be
+        # consumed.  An expired one is already refused by every consumption
+        # path, so counting it blocked live work forever on nothing.
         (
             "OTHER_UNUSED_PAID_APPROVAL",
             "SELECT (SELECT count(*) FROM topic_generation_approvals "
-            "WHERE job_id<>? AND consumed_at IS NULL) + "
+            "WHERE job_id<>? AND consumed_at IS NULL AND expires_at>?) + "
             "(SELECT count(*) FROM controlled_fetch_approvals "
-            "WHERE action_type='EVIDENCE_RESEARCH' AND consumed_at IS NULL)",
-            (request.job_id,),
+            "WHERE action_type='EVIDENCE_RESEARCH' AND consumed_at IS NULL "
+            "AND expires_at>?)",
+            (request.job_id, current_ts, current_ts),
         ),
         (
             "OTHER_ACTIVE_JOB",

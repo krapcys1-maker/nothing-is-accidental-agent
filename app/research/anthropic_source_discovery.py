@@ -76,10 +76,16 @@ class AnthropicSourceDiscoveryPort:
                 f"Find exactly {request.max_results} authoritative sources for this "
                 "research question. Every source must be publicly fetchable without "
                 "login or subscription and must be an HTML or plain-text page, never a "
-                "PDF. Prefer government, transit-agency, university, standards-body, "
-                "and other primary public pages. Never return sciencedirect.com, "
-                "tandfonline.com, or academia.edu. Use no more than the available search "
-                "calls. Source selection only; do not synthesize claims.\n" + request.query
+                "PDF, and must be readable by a plain HTTP client (no bot protection). "
+                "Use at least three different organisations. At least two must be "
+                "PRIMARY: the originating record itself - the study, report, dataset, "
+                "official statistic, regulator page or first-party company statement - "
+                "not press coverage of it. If an article cites a study, return the "
+                "study's own page. Never return federalregister.gov, "
+                "regulations.gov, congress.gov, fsis.usda.gov, ec.europa.eu, "
+                "sciencedirect.com, tandfonline.com, or academia.edu. Use no more than "
+                "the available search calls. Source selection only; do not synthesize "
+                "claims.\n" + request.query
             )}],
         )
         provider_request_id = str(_value(response, "id", ""))

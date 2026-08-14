@@ -46,9 +46,17 @@ def pack_research_corpus(documents: Sequence[CorpusDocument]) -> PackedCorpus:
     No document is split.  The conservative repository-wide 3.5 chars/token
     estimator includes the pinned evidence prompt overhead.
     """
+    # Select smallest-first so one very long page cannot crowd out two shorter
+    # ones and drop the corpus below the three-source floor.  A live run packed
+    # only 2 of 3 usable sources because a 48,743-char document was considered
+    # first.  Selection order is size then identity, so it stays deterministic;
+    # the emitted order is normalised back to source identity below.
     ordered = sorted(
         documents,
-        key=lambda item: (item.source_identity, item.canonical_sha256, item.retrieval_id),
+        key=lambda item: (
+            item.canonical_chars, item.source_identity,
+            item.canonical_sha256, item.retrieval_id,
+        ),
     )
     selected: list[CorpusDocument] = []
     selected_chars = 0
@@ -76,4 +84,8 @@ def pack_research_corpus(documents: Sequence[CorpusDocument]) -> PackedCorpus:
         or estimated + ARTICLE_RESEARCH_MAX_OUTPUT_TOKENS > ARTICLE_RESEARCH_MAX_CONTEXT_TOKENS
     ):
         raise CorpusPackingError("packed corpus exceeds the 23,808/8,192/32,000 envelope")
-    return PackedCorpus(tuple(selected), estimated)
+    stable = sorted(
+        selected,
+        key=lambda item: (item.source_identity, item.canonical_sha256, item.retrieval_id),
+    )
+    return PackedCorpus(tuple(stable), estimated)

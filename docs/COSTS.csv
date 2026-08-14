@@ -101,3 +101,26 @@ date,run_id,task,provider,model,input_tokens,output_tokens,cache_read_tokens,cac
 2026-08-12,online-e2e-article-card-7-v5:content_draft:1,content_draft,anthropic,claude-opus-5,11039,2659,0,0,0,0,0.121670,actual; writer success; no retry or fallback
 2026-08-12,online-e2e-reviewer-unknown-v4-v5,article_reviewer,anthropic,claude-opus-5,0,0,0,0,0,0,0.647680,maximum reserved exposure; two APIConnectionError results with unknown usage/cost; NOT booked as actual; reconciliation required
 2026-08-12,online-e2e-writer-unknown-v1,content_draft,anthropic,claude-opus-5,0,0,0,0,0,0,0.091200,maximum reserved exposure; timeout with unknown usage/cost; NOT booked as actual; reconciliation required
+2026-08-14,79e55913-06c9-4e63-a8d4-31b25a971220,topics,anthropic,claude-opus-5,2364,1497,0,0,0,0,0.049245,actual
+2026-08-14,source-discovery-run-43b9920d-2605-4b69-96f7-61e3eb58c848,research_discover,anthropic,claude-opus-5,48831,3334,0,0,4,0,0.367505,actual
+2026-08-14,aa3eac94-562a-4cda-8212-be313390f906,research,anthropic,claude-opus-5,7950,2683,0,0,0,0,0.106825,actual
+2026-08-14,91234505-88f0-4699-903f-cbc4841aa307,research,anthropic,claude-opus-5,7950,2541,0,0,0,0,0.103275,actual
+2026-08-14,872c3db0-8a27-48c8-8015-8e7dfa37e0ec,topics,anthropic,claude-opus-5,3189,2251,0,0,0,0,0.072220,actual
+2026-08-14,source-discovery-run-2eb2d0a0-78ca-4f8e-aa3e-5e2b21c8575c,research_discover,anthropic,claude-opus-5,85481,4437,0,0,6,0,0.598330,actual
+2026-08-14,6c40a72c-3c66-4f99-8a0e-60981c7dda15,research,anthropic,claude-opus-5,7387,3244,0,0,0,0,0.118035,actual
+2026-08-14,71a09a20-9966-4210-ad5d-9d881f33a522,topics,anthropic,claude-opus-5,4004,2099,0,0,0,0,0.072495,actual
+2026-08-14,b76d7880-773d-49b1-b1cd-b9bae5cf0bc4,topics,anthropic,claude-opus-5,4719,2097,0,0,0,0,0.076020,actual
+2026-08-14,source-discovery-run-e3f77335-5cb2-49c5-a758-48710a253d65,research_discover,anthropic,claude-opus-5,57019,3785,0,0,4,0,0.419720,actual
+2026-08-14,6b1d5dfd-5ac6-48a1-a755-494d94f8b960,research,anthropic,claude-opus-5,8204,3018,0,0,0,0,0.116470,actual
+2026-08-14,24c18fa9-52a1-47d8-b2f1-665a5270dff0,research,anthropic,claude-opus-5,8204,3350,0,0,0,0,0.124770,actual
+2026-08-14,e6a33b5b-301e-4e86-982a-98c0d2915b8c,research,anthropic,claude-opus-5,8204,3295,0,0,0,0,0.123395,actual
+2026-08-14,1a997f89-2bf2-4a67-b684-70d0bea1264b,topics,anthropic,claude-opus-5,5065,2473,0,0,0,0,0.087150,actual
+2026-08-14,source-discovery-run-91445e9c-8cb3-49ce-a310-141b5ff7474c,research_discover,anthropic,claude-opus-5,40555,3107,0,0,4,0,0.320450,actual
+2026-08-14,b3484674-9997-4e53-8e9e-6b424b63b897,topics,anthropic,claude-opus-5,5402,2917,0,0,0,0,0.099935,actual
+2026-08-14,28287f6c-6381-4b9a-baa8-902a496c6d47,topics,anthropic,claude-opus-5,5490,2759,0,0,0,0,0.096425,actual
+2026-08-14,source-discovery-run-fa58ff74-55c0-4b2c-b431-3a611e48941b,research_discover,anthropic,claude-opus-5,80301,4864,0,0,6,0,0.583105,actual
+2026-08-14,305b62c5-86dd-4893-b714-8c7300ea6710,topics,anthropic,claude-opus-5,5351,2894,0,0,0,0,0.099105,actual
+2026-08-14,c68279a9-23ef-4d75-adb8-c85f1ca61f79,topics,anthropic,claude-opus-5,5359,2824,0,0,0,0,0.097395,actual
+2026-08-14,c648329f-fb20-4027-8e8b-0d1f919af1ab,topics,anthropic,claude-opus-5,5292,2566,0,0,0,0,0.090610,actual
+2026-08-14,source-discovery-run-a1d8ad81-890d-474f-abfa-14c038179c37,research_discover,anthropic,claude-opus-5,68099,4426,0,0,5,0,0.501145,actual
+2026-08-14,06e73277-fa02-4aa5-a783-aeee3a3e70cf,research,anthropic,claude-opus-5,15065,4293,0,0,0,0,0.182650,actual
