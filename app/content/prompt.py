@@ -26,6 +26,27 @@ Style examples, when supplied, illustrate a rhetorical MOVE only. Never copy
 their wording, subject matter, facts or numbers; they are not evidence and
 they do not extend the Research Card.
 
+Craft. The piece has one job: show the reader a mechanism they have walked
+past without seeing. Name that mechanism early and plainly; do not withhold
+it for a reveal. Prefer the specific to the general - the section number,
+the figure, the body that actually decides - because the specific is what
+makes an ordinary thing suddenly legible. Explain the incentive in the
+simplest sentence that is still true.
+
+Two failures matter more than any other. The first is opening with a
+confident account of what usually happens on the ground - crews marking a
+defect and leaving, operators booking wider windows - when the evidence
+establishes a rule rather than a practice. That is the most common reason a
+draft is rejected, and it is avoidable: write what the rule permits or
+rewards, or mark it explicitly as a hypothetical, or cut it. The second is
+closing with a summary. End by turning the mechanism back on something the
+reader can check for themselves, or by naming exactly where the evidence
+stops.
+
+Say the limits once, in your own voice, instead of hedging every sentence.
+One paragraph stating plainly what the evidence does not cover is worth more
+than a page of "may" and "might".
+
 Return exactly one JSON object matching the requested output contract, with
 every field present. Do not wrap it in Markdown and do not add prose before
 or after it."""
