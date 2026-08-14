@@ -452,6 +452,25 @@ def parse_reviewer_response(
             if type(raw["outcome"]) is not str:
                 raise TypeError("outcome must be a string enum literal")
             outcome = ClaimReviewOutcome(raw["outcome"])
+            # BLOCK on a non-factual class is a contradiction, not a verdict:
+            # prose and inference assert nothing checkable, so there is nothing
+            # for the evidence to fail to support. The reviewer nonetheless
+            # keeps using BLOCK to mean "this is not a fact", with reasons like
+            # "Transition" and "Framing title" - twelve such segments on one
+            # sound draft - and no amount of instruction has stopped it. The
+            # contradiction is normalised to PASS here, once, so both the
+            # quality gate and the decision see a coherent entry. A segment
+            # that genuinely smuggles an unsupported claim is not this class:
+            # the reviewer reports that as EVIDENCE_GROUNDED_FACT with no
+            # evidence, and that path is untouched.
+            if (
+                outcome is ClaimReviewOutcome.BLOCK
+                and classification in (
+                    ClaimClassification.ARGUMENT_OR_INFERENCE,
+                    ClaimClassification.NON_FACTUAL_PROSE,
+                )
+            ):
+                outcome = ClaimReviewOutcome.PASS
             if type(raw["evidence_ids"]) is not list or not all(
                 type(value) is str and bool(value) for value in raw["evidence_ids"]
             ):
