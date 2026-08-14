@@ -141,9 +141,17 @@ def run_controlled_article(
         if pricing is None or pricing.prices is None:
             raise ValueError("Controlled ARTICLE writer has no verified pricing.")
         dimensions = pricing.prices.as_decimal_mapping()
+        # Reserve against the CONTEXT ceiling, not the input ceiling. A rewrite
+        # carries the previous draft and the reviewer's findings on top of the
+        # evidence, so attempt 2 sent 31,804 input tokens where attempt 1 sent
+        # 12,011 - past the 23,808 input figure this reservation was built from.
+        # The attempt cost 0.340545 against a 0.323840 reservation and was
+        # terminalised as an overrun after the provider had already been paid,
+        # losing the rewrite the reviewer had asked for. The context ceiling is
+        # the true upper bound on what can be sent, so it is what gets reserved.
         writer_attempt_envelope = quantize_usd(
             (
-                Decimal(ARTICLE_WRITER_MAX_INPUT_TOKENS)
+                Decimal(ARTICLE_WRITER_MAX_CONTEXT_TOKENS)
                 / Decimal("1000000")
                 * dimensions["input_per_mtok"]
                 + Decimal(ARTICLE_WRITER_MAX_OUTPUT_TOKENS)

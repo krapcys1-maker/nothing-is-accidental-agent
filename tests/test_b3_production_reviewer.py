@@ -572,19 +572,24 @@ def test_rewrite_budget_denial_stops_before_second_writer_call(
     reviewer = ReviewerTransport()
     _, outcome = _run(
         storage, settings, account, job="repair-rewrite-denied",
-        writer=writer, reviewer=reviewer, cap="0.350000",
+        writer=writer, reviewer=reviewer, cap="0.400000",
     )
     state = storage.get_content_pipeline_state(outcome.job_id)
     assert writer.calls == 1
     assert reviewer.calls == 1
     assert state["content"]["status"] == "FAILED"
     assert state["content"]["reason_code"] == "CONTENT_APPROVAL_CAP_EXCEEDED"
+    # The cap sits deliberately between one writer attempt and two: the first
+    # draft and its review are affordable, the rewrite is not, and the denial
+    # lands before the second paid call. The figures moved with the writer
+    # envelope, which now reserves against the context ceiling because a rewrite
+    # carries the prior draft and the reviewer's findings.
     assert storage.remaining_article_budget(job_id=outcome.job_id) == Decimal(
-        "0.309500"
+        "0.359500"
     )
     reopened = SqliteStorage.open(settings.db_path)
     assert reopened.remaining_article_budget(job_id=outcome.job_id) == Decimal(
-        "0.309500"
+        "0.359500"
     )
     reopened.close()
 
