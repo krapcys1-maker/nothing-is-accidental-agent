@@ -121,8 +121,8 @@ def _call_claude(
         "system": system,
         "messages": [{"role": "user", "content": user}],
     }
-    # `effort` istnieje na Opusie 5 i Sonnecie 5.
-    if purpose in config.EFFORT and model in (config.CLAUDE, config.SONNET):
+    # `effort` istnieje na Opusie 5, Sonnecie 5 i Fable 5.
+    if purpose in config.EFFORT and model in (config.CLAUDE, config.SONNET, config.FABLE):
         kwargs["output_config"] = {"effort": config.EFFORT[purpose]}
     if web_search:
         # max_uses JEST OBOWIĄZKOWE. Bez niego model robił 17, potem 31 rund
@@ -354,7 +354,7 @@ def call(
     """
     _preflight(purpose, conn, run_id)
     model = config.MODEL_FOR[purpose]
-    provider = "anthropic" if model in (config.CLAUDE, config.SONNET) else "deepseek"
+    provider = "deepseek" if model.startswith("deepseek") else "anthropic"
 
     if config.DRY_RUN:
         print(f"  [{purpose}] DRY_RUN — wywołanie pominięte", flush=True)

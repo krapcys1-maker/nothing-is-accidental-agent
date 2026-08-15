@@ -201,8 +201,15 @@ def main() -> int:
         try:
             draft = cached(stage, lambda: stages.write(conn, run_id, card), args.use_cache)
         except Exception as exc:
-            # Jedno powtórzenie, bo tu ginie cały opłacony research.
-            print(f"  [awaria] pisarz padł ({exc}) — jedno powtórzenie", flush=True)
+            # Jedno powtórzenie na Opusie, bo tu ginie cały opłacony research.
+            # Opus jest sprawdzonym pisarzem tego potoku; jeśli skonfigurowany
+            # model odmówił albo padł, powtórka na nim ma największą szansę.
+            print(
+                f"  [awaria] pisarz ({config.MODEL_FOR['write']}) padł: {exc}"
+                f" — powtarzam na {config.CLAUDE}",
+                flush=True,
+            )
+            config.MODEL_FOR["write"] = config.CLAUDE
             draft = stages.write(conn, run_id, card)
         words = len(draft["body"].split())
         print(f"\n   tytuł: {draft.get('title')}", flush=True)

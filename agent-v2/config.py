@@ -64,6 +64,7 @@ NO_LIMIT = _env("AGENT_V2_NO_LIMIT", "0").lower() in {"1", "true", "yes"}
 
 CLAUDE = "claude-opus-5"
 SONNET = "claude-sonnet-5"
+FABLE = "claude-fable-5"  # najmocniejszy, dwa razy droższy od Opusa
 DEEPSEEK = "deepseek-v4-flash"
 DEEPSEEK_PRO = "deepseek-v4-pro"  # ma server-side web_search przez /responses
 
@@ -117,6 +118,12 @@ CHEAP_MODE = _env("AGENT_V2_CHEAP", "0").lower() in {"1", "true", "yes"}
 if CHEAP_MODE:
     MODEL_FOR = {k: (CLAUDE if k == "discovery" else DEEPSEEK) for k in MODEL_FOR}
 
+# Podmiana samego pisarza, do porównań A/B na tej samej karcie dowodowej:
+#   AGENT_V2_WRITER=claude-fable-5 python agent-v2/run.py --use-cache
+_writer = _env("AGENT_V2_WRITER")
+if _writer:
+    MODEL_FOR["write"] = _writer
+
 # --- cennik ------------------------------------------------------------------
 # USD za milion tokenów. `verified` mówi, czy stawka została potwierdzona realnym
 # rozliczeniem. Niepotwierdzonej ceny nie wolno podawać jako faktu — koszt liczony
@@ -125,6 +132,7 @@ if CHEAP_MODE:
 PRICING = {
     CLAUDE: {"in": 5.00, "out": 25.00, "verified": True},
     SONNET: {"in": 3.00, "out": 15.00, "verified": True},
+    FABLE: {"in": 10.00, "out": 50.00, "verified": True},
     DEEPSEEK: {"in": 0.28, "out": 0.42, "verified": False},
     DEEPSEEK_PRO: {"in": 0.28, "out": 0.42, "verified": False},
 }

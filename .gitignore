@@ -1,4 +1,15 @@
 # === Sekrety i konfiguracja lokalna (NIGDY nie commitować) ===
+# Pliki z poświadczeniami trzymanymi po polsku i po angielsku. Dodane po tym,
+# jak "haslo i login do konta na substack.txt" wylądował w katalogu repo jako
+# plik nieśledzony, ale NIE ignorowany — czyli jeden `git add -A` od wypchnięcia
+# hasła do Substacka na GitHuba.
+*haslo*
+*hasło*
+*login*
+*password*
+*.credentials
+konto*.txt
+
 .env
 .env.*
 !.env.example
