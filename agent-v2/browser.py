@@ -531,6 +531,98 @@ def wypelnij_artykul(page, artykul: dict[str, Any], obraz: Path | None) -> None:
         print(f"  grafika: {'wgrana' if wgrany else 'NIE WESZŁA'}", flush=True)
 
 
+def tresc_oswiadczenia() -> str:
+    """Oświadczenie „Jak to robię" — z pliku, nie z drugiej kopii w kodzie.
+
+    Tekst jest publiczny i wiążący, więc ma jedno źródło: cytat blokowy
+    w `prompts/OSWIADCZENIE_AI.md`, gdzie leży razem z uzasadnieniem.
+    """
+    plik = config.PROMPTS_DIR / "OSWIADCZENIE_AI.md"
+    linie = [l[2:].strip() for l in plik.read_text(encoding="utf-8").splitlines()
+             if l.startswith("> ")]
+    tekst = " ".join(linie).strip()
+    if not tekst:
+        raise RuntimeError("nie znalazłem treści oświadczenia w OSWIADCZENIE_AI.md")
+    return tekst
+
+
+def ustaw_oswiadczenie_ai(wyslij: bool = False) -> dict[str, Any]:
+    """Ustawia stałe oświadczenie pokazywane każdemu, kto skanuje nas pod kątem AI.
+
+    Ustawienie konta, nie posta — robi się raz i wisi przy wszystkim: przy
+    artykułach, notkach i odpowiedziach.
+    """
+    wymagaj_sesji()
+    tekst = tresc_oswiadczenia()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    wynik: dict[str, Any] = {"tekst": tekst, "zapisane": False, "blad": None}
+    try:
+        page.goto(f"https://{config.SUBSTACK_HANDLE}.substack.com/publish/post"
+                  "?type=newsletter",
+                  timeout=READ_TIMEOUT_MS * 2, wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 5000)
+        # Okno oświadczenia wisi pod skanowaniem AI, a to pod stroną ustawień.
+        page.locator("textarea.page-title").first.fill("(ustawienie oświadczenia)")
+        page.wait_for_timeout(600)
+        for nazwa in ("Kontynuuj", "Continue"):
+            k = page.get_by_role("button", name=nazwa).first
+            if k.count() > 0 and k.is_visible():
+                k.click()
+                break
+        page.wait_for_timeout(8000)
+        for nazwa in ("Skanuj w poszukiwaniu tekstu AI", "Scan for AI text"):
+            k = page.get_by_role("button", name=nazwa).first
+            if k.count() > 0 and k.is_visible():
+                k.click()
+                break
+        page.wait_for_timeout(9000)
+        for nazwa in ("Utwórz oświadczenie", "Create", "How I"):
+            k = page.get_by_role("button", name=nazwa).first
+            if k.count() > 0 and k.is_visible():
+                k.click()
+                break
+        page.wait_for_timeout(4000)
+
+        # Pole oświadczenia to jedyna widoczna textarea BEZ atrybutu placeholder:
+        # nazwy klas są zahaszowane, więc szukanie po nich zepsułoby się przy
+        # najbliższej zmianie po stronie Substacka.
+        pole = None
+        for i in range(page.locator("textarea").count()):
+            el = page.locator("textarea").nth(i)
+            if el.is_visible() and not el.get_attribute("placeholder"):
+                pole = el
+                break
+        if pole is None:
+            raise RuntimeError("nie znalazłem pola oświadczenia")
+        pole.fill(tekst)
+        page.wait_for_timeout(1200)
+        print(f"  wpisane oświadczenie: {len(tekst.split())} słów", flush=True)
+
+        zapisz = None
+        for nazwa in ("Zapisz oświadczenie", "Save statement", "Save"):
+            k = page.get_by_role("button", name=nazwa).first
+            if k.count() > 0 and k.is_visible():
+                zapisz = k
+                break
+        wynik["przycisk_widoczny"] = zapisz is not None
+        if wyslij and zapisz is not None:
+            zapisz.click()
+            page.wait_for_timeout(5000)
+            wynik["zapisane"] = True
+            print("  OŚWIADCZENIE ZAPISANE", flush=True)
+        elif not wyslij:
+            print("  (nie zapisuję — tryb sprawdzenia)", flush=True)
+    except Exception as exc:
+        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        print(f"  BŁĄD: {wynik['blad']}", flush=True)
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+    return wynik
+
+
 def potwierdz_artykul(page, tytul: str) -> bool:
     """Pyta Substacka, czy artykuł naprawdę jest opublikowany.
 
