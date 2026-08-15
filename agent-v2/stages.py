@@ -264,14 +264,67 @@ COMMENT_SYSTEM = (
 )
 
 
-def comment_on(
+FACTCHECK_SYSTEM = (
+    "You search the web and return only facts you actually found, each with the "
+    "URL it came from. You never fill gaps from memory. Return only valid JSON."
+)
+
+
+def sprawdz_fakty(
     conn: sqlite3.Connection, run_id: int, post: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Szuka faktów do komentarza, zamiast pozwolić modelowi pisać z pamięci.
+
+    Bez tego komentarze były erudycją z pamięci. Sprawdzone na żywym przykładzie:
+    model twierdził, że Osborne Executive nie był kompatybilny z IBM, a zapis
+    mówi coś innego i ostrzejszego — firma REKLAMOWAŁA kompatybilność, której
+    nigdy nie dostarczyła. Publicznego komentarza z błędnym faktem nie da się
+    cofnąć, więc te ~4 centy to najtańsze ubezpieczenie w całym potoku.
+    """
+    prompt = (
+        "Search the web for verifiable facts about the subject of the post below.\n\n"
+        "Return at most 8 facts. Each must be something you found in a search "
+        "result, with the URL. Prefer dates, figures, filings, official records "
+        "and named decisions over commentary. If a widely repeated claim about "
+        "this subject turns out to be disputed, say so — that is the most "
+        "valuable kind of fact here.\n\n"
+        "Do NOT fill gaps from memory. A short honest list beats a long one.\n\n"
+        'Return only: {"facts": [{"fact": "...", "url": "..."}]}\n\n'
+        f"--- POST ---\nTitle: {post.get('title', '')}\n\n{post.get('text', '')[:6000]}"
+    )
+    try:
+        raw = llm.call(
+            "factcheck", FACTCHECK_SYSTEM, prompt,
+            conn=conn, run_id=run_id, web_search=True,
+        )
+        fakty = llm.parse_json(raw).get("facts") or []
+    except Exception as exc:
+        print(f"  [fakty] nie udało się sprawdzić ({exc}) — komentarz bez pokrycia",
+              flush=True)
+        return []
+    print(f"  [fakty] zweryfikowanych: {len(fakty)}", flush=True)
+    return fakty
+
+
+def comment_on(
+    conn: sqlite3.Connection, run_id: int, post: dict[str, Any],
+    fakty: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Komentarz do cudzego posta — do szuflady, nigdy nie publikowany.
+    """Komentarz do cudzego posta — do szuflady.
 
     Generuje kilku kandydatów i oddaje wszystkich; wybór należy do właściciela.
     Milczenie jest pełnoprawną odpowiedzią i nie jest porażką.
     """
+    if fakty is None:
+        fakty = sprawdz_fakty(conn, run_id, post)
+    if fakty:
+        post = dict(post)
+        post["text"] = (
+            post.get("text", "")[:9000]
+            + "\n\n--- VERIFIED FACTS (checked against sources; use only these "
+            "for anything factual, and cite nothing that is not here) ---\n"
+            + "\n".join(f"- {f.get('fact')}  [{f.get('url')}]" for f in fakty)
+        )
     prompt = _prompt(
         "komentarz.md",
         language=config.ARTICLE_LANGUAGE,
