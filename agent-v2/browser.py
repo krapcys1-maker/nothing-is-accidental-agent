@@ -11,6 +11,8 @@ istnieją w tym pliku i nie powstaną bez osobnej decyzji właściciela.
 
 from __future__ import annotations
 
+import time
+from pathlib import Path
 from typing import Any
 
 import config
@@ -87,6 +89,57 @@ def wymagaj_sesji() -> None:
         )
 
 
+CHROME_PROFILE = Path.home() / "substack-agent-chrome"
+CHROME_SCIEZKI = (
+    Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+    Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
+    Path("/usr/bin/google-chrome"),
+    Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+)
+
+
+def _chrome_odpowiada() -> bool:
+    import httpx
+
+    try:
+        httpx.get(f"http://localhost:{CDP_PORT}/json/version", timeout=3)
+        return True
+    except Exception:
+        return False
+
+
+def uruchom_chrome() -> bool:
+    """Otwiera Chrome na trwałym profilu agenta, jeśli jeszcze nie działa.
+
+    Trwały profil znaczy, że logowanie przeżywa restarty — po pierwszym razie
+    właściciel nie zobaczy już formularza logowania ani CAPTCHY.
+
+    Chrome jest uruchamiany zwykłym poleceniem, BEZ flag automatyzacji. To jest
+    istotne: gdy przeglądarkę startował Playwright, reCAPTCHA zapętlała się
+    nawet dla człowieka.
+    """
+    import subprocess
+
+    if _chrome_odpowiada():
+        return True
+    exe = next((s for s in CHROME_SCIEZKI if s.exists()), None)
+    if exe is None:
+        print("  Nie znalazłem Chrome. Uruchom go sam z portem "
+              f"--remote-debugging-port={CDP_PORT}", flush=True)
+        return False
+    CHROME_PROFILE.mkdir(parents=True, exist_ok=True)
+    subprocess.Popen(
+        [str(exe), f"--remote-debugging-port={CDP_PORT}",
+         f"--user-data-dir={CHROME_PROFILE}", "https://substack.com/home"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    for _ in range(20):
+        time.sleep(1)
+        if _chrome_odpowiada():
+            return True
+    return False
+
+
 def podlacz_sie():
     """Podłącza się do Chrome'a, którego uruchomił i zalogował WŁAŚCICIEL.
 
@@ -101,18 +154,18 @@ def podlacz_sie():
     """
     from playwright.sync_api import sync_playwright
 
+    if not _chrome_odpowiada():
+        print("  Chrome nie działa — otwieram go na profilu agenta.", flush=True)
+        if not uruchom_chrome():
+            raise SystemExit("Nie udało się otworzyć Chrome'a.")
+
     p = sync_playwright().start()
     try:
         browser = p.chromium.connect_over_cdp(f"http://localhost:{CDP_PORT}")
     except Exception as exc:
         p.stop()
         raise SystemExit(
-            f"Nie widzę otwartego Chrome'a na porcie {CDP_PORT} ({type(exc).__name__}).\n\n"
-            "Uruchom go sam, tym poleceniem, przy ZAMKNIĘTYCH pozostałych oknach Chrome:\n\n"
-            '  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" '
-            f"--remote-debugging-port={CDP_PORT} "
-            '--user-data-dir="%LOCALAPPDATA%\\substack-agent-chrome"\n\n'
-            "Potem zaloguj się w nim na Substacka normalnie i uruchom to ponownie."
+            f"Chrome działa, ale nie mogę się podłączyć ({type(exc).__name__})."
         ) from exc
     context = browser.contexts[0] if browser.contexts else browser.new_context()
     return p, browser, context
