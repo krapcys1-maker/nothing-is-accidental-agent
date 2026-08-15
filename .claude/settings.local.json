@@ -1,5 +1,12 @@
 {
   "permissions": {
-    "allow": ["Bash(python -m app.main:*)", "Bash(python scripts/:*)", "Bash(python -m pytest:*)"]
+    "allow": [
+      "Bash(python -m app.main:*)",
+      "Bash(python scripts/:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(cd:*)",
+      "Bash(PYTHONIOENCODING=utf-8 ../.venv/Scripts/python.exe:*)",
+      "Bash(../.venv/Scripts/python.exe:*)"
+    ]
   }
 }

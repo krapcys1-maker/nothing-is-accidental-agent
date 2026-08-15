@@ -456,6 +456,177 @@ def rozbierz_artykul(sciezka: Path) -> dict[str, Any]:
     return {"tytul": tytul, "podtytul": podtytul, "html": "".join(html)}
 
 
+_JS_WKLEJ_HTML = """
+([html]) => {
+    const el = document.querySelector('.tiptap');
+    if (!el) return false;
+    el.focus();
+    const dt = new DataTransfer();
+    dt.setData('text/html', html);
+    dt.setData('text/plain', '');
+    el.dispatchEvent(new ClipboardEvent('paste',
+        {clipboardData: dt, bubbles: true, cancelable: true}));
+    return true;
+}
+"""
+
+_JS_WKLEJ_OBRAZ = """
+([b64]) => {
+    const el = document.querySelector('.tiptap');
+    if (!el) return false;
+    el.focus();
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const plik = new File([arr], 'naglowek.png', {type: 'image/png'});
+    const dt = new DataTransfer();
+    dt.items.add(plik);
+    el.dispatchEvent(new ClipboardEvent('paste',
+        {clipboardData: dt, bubbles: true, cancelable: true}));
+    return true;
+}
+"""
+
+
+def wypelnij_artykul(page, artykul: dict[str, Any], obraz: Path | None) -> None:
+    """Wkłada tytuł, podtytuł, grafikę i treść do otwartego edytora.
+
+    Grafika idzie W TREŚĆ, na samą górę — tak, jak robi to właściciel ręcznie.
+    Szukałem osobnego slotu okładki i była to droga naokoło: obraz wklejony do
+    treści edytor sam wysyła na swój serwer i sam robi z niego podgląd.
+    """
+    import base64
+
+    page.locator("textarea.page-title").first.fill(artykul["tytul"])
+    page.wait_for_timeout(400)
+    if artykul.get("podtytul"):
+        page.locator("textarea.subtitle").first.fill(artykul["podtytul"])
+        page.wait_for_timeout(400)
+
+    edytor = page.locator(".tiptap").first
+    edytor.click()
+    page.wait_for_timeout(400)
+    page.keyboard.press("Control+a")
+    page.keyboard.press("Delete")
+    page.wait_for_timeout(400)
+
+    # Treść wklejamy jako HTML, nie wpisujemy: ProseMirror gubi przy wpisywaniu
+    # linki w źródłach, a nazwane źródła to obietnica z oświadczenia o AI.
+    page.evaluate(_JS_WKLEJ_HTML, [artykul["html"]])
+    page.wait_for_timeout(3000)
+    print(f"  wklejona treść: {len(edytor.inner_text().split())} słów, "
+          f"{page.locator('.tiptap a').count()} węzłów linkowych", flush=True)
+
+    if obraz and obraz.exists():
+        edytor.click()
+        page.keyboard.press("Control+Home")
+        page.wait_for_timeout(500)
+        page.evaluate(_JS_WKLEJ_OBRAZ,
+                      [base64.b64encode(obraz.read_bytes()).decode()])
+        for _ in range(20):   # wysyłka na serwer Substacka trwa
+            page.wait_for_timeout(1500)
+            if page.locator(".tiptap img").count():
+                break
+        wgrany = page.locator(".tiptap img").count() > 0
+        print(f"  grafika: {'wgrana' if wgrany else 'NIE WESZŁA'}", flush=True)
+
+
+def potwierdz_artykul(page, tytul: str) -> bool:
+    """Pyta Substacka, czy artykuł naprawdę jest opublikowany.
+
+    Kliknięcie przycisku nie jest dowodem — ta lekcja kosztowała nas fałszywy
+    alarm przy pierwszym komentarzu.
+    """
+    probka = " ".join(tytul.split())[:50]
+    try:
+        return bool(page.evaluate(
+            """async ([probka]) => {
+                const r = await fetch('/api/v1/posts?limit=5',
+                                      {credentials: 'include'});
+                const j = await r.json();
+                const lista = j.posts || j || [];
+                return lista.some(p => (p.title || '').includes(probka)
+                                       && !!p.post_date);
+            }""",
+            [probka],
+        ))
+    except Exception as exc:
+        print(f"  (nie udało się potwierdzić artykułu: {exc})"[:160], flush=True)
+        return False
+
+
+def wystaw_artykul(
+    sciezka_md: Path, sciezka_png: Path | None = None, wyslij: bool = False,
+) -> dict[str, Any]:
+    """Wystawia artykuł na Substacku. Domyślnie WYPEŁNIA i NIE WYSYŁA."""
+    wymagaj_sesji()
+    artykul = rozbierz_artykul(sciezka_md)
+    if sciezka_png is None:
+        kandydat = sciezka_md.with_suffix(".png")
+        sciezka_png = kandydat if kandydat.exists() else None
+
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    wynik: dict[str, Any] = {"wypelnione": False, "wyslane": False, "blad": None,
+                             "tytul": artykul["tytul"]}
+    try:
+        page.goto(f"https://{config.SUBSTACK_HANDLE}.substack.com/publish/post"
+                  "?type=newsletter",
+                  timeout=READ_TIMEOUT_MS * 2, wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 5000)
+        wynik["szkic"] = page.url
+
+        wypelnij_artykul(page, artykul, sciezka_png)
+        wynik["wypelnione"] = True
+
+        dalej = None
+        for nazwa in ("Kontynuuj", "Continue", "Weiter"):
+            k = page.get_by_role("button", name=nazwa).first
+            if k.count() > 0 and k.is_visible():
+                dalej = k
+                break
+        if dalej is None:
+            raise RuntimeError("nie znalazłem przycisku przejścia do ustawień")
+        dalej.click()
+        page.wait_for_timeout(8000)
+
+        if config.WYLACZ_WYKRYWANIE_AI:
+            for nazwa in ("Wyłącz wykrywanie AI", "Turn off AI detection"):
+                k = page.get_by_role("button", name=nazwa).first
+                if k.count() > 0 and k.is_visible():
+                    k.click()
+                    page.wait_for_timeout(2500)
+                    print("  wykrywanie AI wyłączone dla tego posta", flush=True)
+                    break
+
+        publikuj = None
+        for nazwa in ("Wyślij teraz do wszystkich", "Send to everyone now",
+                      "Send now", "Publish now"):
+            k = page.get_by_role("button", name=nazwa).first
+            if k.count() > 0 and k.is_visible():
+                publikuj = k
+                print(f"  przycisk publikacji: {nazwa!r}", flush=True)
+                break
+        wynik["przycisk_widoczny"] = publikuj is not None
+
+        if wyslij and publikuj is not None:
+            publikuj.click()
+            page.wait_for_timeout(15000)
+            wynik["wyslane"] = potwierdz_artykul(page, artykul["tytul"])
+            print("  ARTYKUŁ POTWIERDZONY U SUBSTACKA" if wynik["wyslane"]
+                  else "  KLIKNIĘTE, ALE SUBSTACK GO NIE POKAZUJE", flush=True)
+        elif not wyslij:
+            print("  (nie wysyłam — tryb sprawdzenia; szkic zapisany)", flush=True)
+    except Exception as exc:
+        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        print(f"  BŁĄD: {wynik['blad']}", flush=True)
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+    return wynik
+
+
 def potwierdz_odpowiedz(page, note_id: int, tekst: str) -> bool:
     """Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku."""
     probka = " ".join(tekst.split())[:60]

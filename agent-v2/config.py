@@ -68,6 +68,17 @@ IMAGE_QUALITY = "high"
 IMAGE_PRICE_USD = 0.04   # cennik sierpien 2026, NIEPOTWIERDZONY na fakturze
 IMAGE_TIMEOUT_S = 300
 
+# Konto na Substacku.
+SUBSTACK_HANDLE = "nothingisaccidental"
+
+# Czy agent ma klikac "Wylacz wykrywanie AI" przy kazdej publikacji.
+# ZOSTAWIONE NA NIE i to jest decyzja wlasciciela, nie kodu: to jest wybor
+# publiczny, widoczny dla czytelnikow, a nie ustawienie techniczne. Oswiadczenie
+# "Jak to robie" (prompts/OSWIADCZENIE_AI.md) pokazuje sie NIEZALEZNIE od tego
+# przelacznika, wiec wylaczenie wykrywania niczego nie zaslania — zmienia tylko
+# to, czy skan zwraca wynik, czy "nie kwalifikuje sie".
+WYLACZ_WYKRYWANIE_AI = False
+
 # --- tryby -------------------------------------------------------------------
 
 DRY_RUN = _env("DRY_RUN", "false").lower() in {"1", "true", "yes"}
