@@ -21,9 +21,61 @@ Agent prowadzący Substacka „Nothing Is Accidental" — teksty wyjaśniające 
 systemy, bodźce i decyzje za zwyczajnymi rzeczami. Łańcuch: temat → źródła →
 pobranie → synteza → artykuł → recenzja → zapis. Jeden proces, po kolei.
 
-Ma być **w pełni autonomiczny** — bez zgód wewnętrznych. Ale **nic nie wychodzi
-na zewnątrz**: publikacja, komentarz i polubienie nie istnieją w kodzie
-i nie powstaną bez osobnej decyzji właściciela.
+## Autonomia — to jest zmiana wobec poprzedniej wersji
+
+**Agent ma być w pełni autonomiczny.** Uruchamiasz jedno polecenie i on sam
+wybiera temat, szuka źródeł, pobiera, syntetyzuje, pisze, ocenia i zapisuje.
+**Zero pytań do człowieka po drodze.**
+
+Poprzedni agent był budowany odwrotnie — pod model „człowiek zatwierdza każdą
+akcję". Zgoda jednorazowa na generowanie tematów, osobna na dyskoverię, osobna
+na każde pobranie, osobna na treść, każda z terminem ważności i odciskiem
+intencji. To jest połowa złożoności, która go zabiła, i **właściciel tego nie
+chce**.
+
+**Jedyna granica: nic nie wychodzi na zewnątrz.** Publikacja, komentarz
+i polubienie nie istnieją w kodzie i nie powstaną bez osobnej decyzji
+właściciela. Póki ich nie ma, „w pełni autonomiczny" znaczy: sam robi artykuł
+do szuflady.
+
+## Gdzie to ma działać
+
+**Docelowo: serwer.** Agent ma chodzić sam, uruchamiany z harmonogramu
+(cron/systemd), bez nikogo przy klawiaturze.
+
+**Do testów: ten komputer.** Windows 11, Python w `.venv`. **Musi dać się
+uruchomić lokalnie przez cały czas budowy** — inaczej nie zrobisz testów live
+po każdym etapie, a to jest wymóg numer jeden.
+
+Praktycznie znaczy to:
+
+- **żadnych ścieżek absolutnych** w kodzie — wszystko względem katalogu projektu
+- **żadnych założeń o Windows** — bez `powershell`, bez `C:\`, bez backslashy
+  w ścieżkach; używaj `pathlib`
+- **jedno polecenie uruchamiające**, to samo lokalnie i na serwerze
+- konfiguracja **wyłącznie ze zmiennych środowiskowych** (`.env` lokalnie,
+  zmienne systemowe na serwerze) — nigdy z pliku, który istnieje tylko na
+  jednym z tych komputerów
+- **bez interaktywnych promptów** — agent na serwerze nie ma komu odpowiedzieć
+- logi na `stdout`, żeby harmonogram serwera je przechwycił
+
+## Który model za co odpowiada
+
+Klucze do obu dostawców są w `agent-v2/.env`.
+
+| etap | model | dlaczego tak |
+|---|---|---|
+| skaut tematów | **Claude Opus** | zły temat psuje cały łańcuch i kosztuje ~0,90 USD, zanim się o tym dowiesz |
+| ocena wykonalności tematu | **DeepSeek** | tani odsiew **przed** drogim krokiem; błąd kosztuje grosze |
+| dyskoveria źródeł | **Claude Opus** | wymaga wyszukiwania po stronie dostawcy, DeepSeek tego nie ma |
+| pobranie stron | — | zwykły HTTP, żadnego modelu |
+| klasyfikacja źródeł | **DeepSeek** | mechaniczne, dużo wywołań, prosta decyzja |
+| synteza dowodów | **Claude Opus** | ocena, co dowody naprawdę potwierdzają |
+| pisanie | **Claude Opus** | to jest produkt |
+| recenzja | **Claude Opus** | to jest bramka jakości |
+
+Zasada: **DeepSeek tam, gdzie błąd kosztuje jedno tanie wywołanie. Claude tam,
+gdzie błąd kosztuje cały łańcuch albo jakość tekstu.**
 
 ## Budżet złożoności — twarde liczby
 
@@ -75,9 +127,7 @@ Ale „bez limitu" nie znaczy „bez głowy". Zasady, każda z realnej straty:
 2. **Przed każdym płatnym wywołaniem sprawdź warunki, które decydują, czy może
    się udać.** Jedno zaniedbanie tej zasady kosztowało 0,85 USD na
    eksperymencie, który był niemożliwy od pierwszej sekundy.
-3. **DeepSeek do pracy mechanicznej** — ocena wykonalności tematu i klasyfikacja
-   źródeł. Claude tam, gdzie błąd kosztuje cały łańcuch: skaut, dyskoveria,
-   synteza, pisanie, recenzja. Klucze do obu są w `agent-v2/.env`.
+3. **DeepSeek do pracy mechanicznej** — tabela podziału wyżej.
 4. **Najtańszy krok, który różnicuje hipotezy, robisz pierwszy.** Generowanie
    tematów kosztuje 0,10 USD, dyskoveria 0,70. Jeśli podejrzewasz problem
    z tematami, nie diagnozuj go pełnym przebiegiem za 1,40.
