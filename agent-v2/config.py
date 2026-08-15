@@ -447,6 +447,14 @@ MAX_DZIALAN_NA_GODZINE = 12
 # czlowiekiem to nachodzenie, niezaleznie od tego, jak trafne sa kazdy z osobna.
 MAX_KOMENTARZY_NA_PUBLIKACJE = 2
 
+# Odpowiedzi POD WLASNYMI tresciami sa poza limitami dziennymi. Decyzja
+# wlasciciela i jest sluszna: limit chroni przed wygladaniem na spamera u obcych,
+# a u siebie jest sie gospodarzem. Pytanie bez odpowiedzi pod wlasnym artykulem
+# szkodzi bardziej niz dziesiec komentarzy za duzo — czytelnik, ktory poswiecil
+# czas i nie dostal odpowiedzi, nie wraca.
+ODPOWIEDZI_POZA_LIMITEM = True
+
+
 # Zapas na myślenie dostają WSZYSTKIE etapy, nie tylko Claude'owe: modele
 # DeepSeek v4 też rozumują, a tokeny rozumowania liczą się do sufitu wyjścia.
 # Odsiew ucięło na 2057 tokenach dokładnie z tego powodu.

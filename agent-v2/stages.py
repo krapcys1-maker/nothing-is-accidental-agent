@@ -194,7 +194,12 @@ def reply_to(
     candidates: list[dict[str, Any]] = []
     for i in range(config.COMMENT_CANDIDATES):
         try:
-            raw = llm.call("reply", REPLY_SYSTEM, prompt, conn=conn, run_id=run_id)
+            # Wyszukiwanie WŁĄCZONE: gdy ktoś obstaje przy swoim, jeden konkretny
+            # cytat ze źródłem kończy spór, którego trzy akapity rozumowania nie
+            # zakończą. Model sam decyduje, czy sięgnąć — przy zwykłym pytaniu
+            # nie szuka i nic nie kosztuje.
+            raw = llm.call("reply", REPLY_SYSTEM, prompt, conn=conn, run_id=run_id,
+                           web_search=True)
             data = llm.parse_json(raw)
         except Exception as exc:
             print(f"  [odpowiedź {i + 1}] nie wyszła: {exc}", flush=True)
