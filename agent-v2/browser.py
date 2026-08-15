@@ -305,6 +305,32 @@ def rozpoznanie() -> None:
         browser.close()
 
 
+PROFIL_HANDLE = "nothingisaccidental"
+
+
+def potwierdz_notke(page, tekst: str) -> bool:
+    """Pyta Substacka, czy notka naprawdę wisi na naszym profilu."""
+    probka = " ".join(tekst.split())[:60]
+    try:
+        return bool(page.evaluate(
+            """async ([handle, probka]) => {
+                const pr = await (await fetch('/api/v1/user/' + handle + '/public_profile',
+                                              {credentials: 'include'})).json();
+                if (!pr || !pr.id) return false;
+                const f = await (await fetch('/api/v1/reader/feed/profile/' + pr.id +
+                                             '?types%5B%5D=note',
+                                             {credentials: 'include'})).json();
+                const norm = s => (s || '').replace(/\\s+/g, ' ');
+                return (f.items || []).some(
+                    x => norm(JSON.stringify(x)).includes(probka));
+            }""",
+            [PROFIL_HANDLE, probka],
+        ))
+    except Exception as exc:
+        print(f"  (nie udało się potwierdzić notki: {exc})"[:160], flush=True)
+        return False
+
+
 def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
     """Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA.
 
@@ -321,10 +347,29 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
                   wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS)
 
-        # "What's on your mind?" nie jest ani polem, ani przyciskiem w sensie
-        # roli ARIA — trafia w nie dopiero klikniecie po tekscie. Dopiero po nim
-        # pojawia sie edytor (contenteditable) i przyciski Drafts / Cancel / Post.
-        page.get_by_text("What's on your mind?", exact=False).first.click(timeout=15_000)
+        # Kompozytor nie jest ani polem, ani przyciskiem w sensie roli ARIA —
+        # trafia w niego dopiero kliknięcie. Szukamy go po STRUKTURZE, nie po
+        # napisie: Substack podaje interfejs w języku przeglądarki, więc zaszyte
+        # "What's on your mind?" przestało działać, gdy ten sam profil otworzył
+        # się po polsku. Na serwerze locale będzie jeszcze inne.
+        otwarty = False
+        for sel in ("[class*=Composer]", "[class*=composer]"):
+            kand = page.locator(sel).first
+            if kand.count() > 0:
+                kand.click(timeout=15_000)
+                otwarty = True
+                break
+        if not otwarty:
+            # Ostatnia deska: napisy, które znamy. Gdy i to padnie, lepiej rzucić
+            # wyjątkiem niż wpisać notkę w przypadkowe pole.
+            for napis in ("What's on your mind?", "O czym", "Was beschäftigt"):
+                kand = page.get_by_text(napis, exact=False).first
+                if kand.count() > 0:
+                    kand.click(timeout=15_000)
+                    otwarty = True
+                    break
+        if not otwarty:
+            raise RuntimeError("nie znalazłem kompozytora notek")
         page.wait_for_timeout(2500)
         pole = page.locator("[contenteditable=true]").first
         pole.click(timeout=10_000)
@@ -334,15 +379,23 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
         wynik["wpisane"] = True
         print(f"  wpisane w pole notki: {len(tekst.split())} słów", flush=True)
 
-        przycisk = page.get_by_role("button", name="Post").first
-        wynik["przycisk_widoczny"] = przycisk.is_visible(timeout=8000)
+        # Tu też nie zakładamy angielskiego interfejsu.
+        przycisk = None
+        for nazwa in ("Post", "Opublikuj", "Wyślij", "Publish", "Veröffentlichen"):
+            kandydat = page.get_by_role("button", name=nazwa).first
+            if kandydat.count() > 0 and kandydat.is_visible():
+                przycisk = kandydat
+                print(f"  przycisk wysyłki: {nazwa!r}", flush=True)
+                break
+        wynik["przycisk_widoczny"] = przycisk is not None
         print(f"  przycisk wysyłki widoczny: {wynik['przycisk_widoczny']}", flush=True)
 
         if wyslij and wynik["przycisk_widoczny"]:
             przycisk.click()
-            page.wait_for_timeout(5000)
-            wynik["wyslane"] = True
-            print("  NOTKA WYSTAWIONA", flush=True)
+            page.wait_for_timeout(6000)
+            wynik["wyslane"] = potwierdz_notke(page, tekst)
+            print("  NOTKA POTWIERDZONA NA PROFILU" if wynik["wyslane"]
+                  else "  KLIKNIĘTE, ALE NOTKI NIE MA NA PROFILU", flush=True)
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
     except Exception as exc:
@@ -353,6 +406,30 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
         browser.close()
         p.stop()
     return wynik
+
+
+def potwierdz_komentarz(page, url: str, tekst: str) -> bool:
+    """Pyta Substacka, czy komentarz naprawdę wisi — zamiast wierzyć kliknięciu."""
+    slug = url.rstrip("/").rsplit("/", 1)[-1]
+    probka = " ".join(tekst.split())[:60]
+    try:
+        return bool(page.evaluate(
+            """async ([slug, probka]) => {
+                const p = await (await fetch('/api/v1/posts/' + slug,
+                                             {credentials: 'include'})).json();
+                if (!p || !p.id) return false;
+                const c = await (await fetch('/api/v1/post/' + p.id +
+                                             '/comments?all_comments=true',
+                                             {credentials: 'include'})).json();
+                const lista = c.comments || c || [];
+                const norm = s => (s || '').replace(/\\s+/g, ' ');
+                return lista.some(k => norm(k.body).includes(probka));
+            }""",
+            [slug, probka],
+        ))
+    except Exception as exc:
+        print(f"  (nie udało się potwierdzić u Substacka: {exc})"[:160], flush=True)
+        return False
 
 
 def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False) -> dict[str, Any]:
@@ -392,9 +469,15 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False) -> dict[str, An
 
         if wyslij and wynik["przycisk_widoczny"]:
             przycisk.click()
-            page.wait_for_timeout(5000)
-            wynik["wyslane"] = True
-            print("  KOMENTARZ WYSTAWIONY", flush=True)
+            page.wait_for_timeout(6000)
+            # Kliknięcie przycisku nie jest dowodem, że komentarz został przyjęty,
+            # a agent bez człowieka nie ma komu tego sprawdzić. Pytamy więc Substacka.
+            # Strony nie da się do tego użyć: komentarze doklejają się po stronie
+            # klienta i inner_text ich nie widzi — sprawdzenie po tekscie strony dało
+            # fałszywy alarm przy pierwszym realnym komentarzu, który naprawdę wisiał.
+            wynik["wyslane"] = potwierdz_komentarz(page, url, tekst)
+            print("  KOMENTARZ POTWIERDZONY U SUBSTACKA" if wynik["wyslane"]
+                  else "  KLIKNIĘTE, ALE SUBSTACK GO NIE POKAZUJE", flush=True)
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
     except Exception as exc:

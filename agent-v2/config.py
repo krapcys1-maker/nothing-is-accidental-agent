@@ -112,6 +112,7 @@ MODEL_FOR = {
     "comment": DEEPSEEK_PRO,
     "reply": DEEPSEEK_PRO,
     "factcheck": DEEPSEEK_PRO,
+    "curiosity": DEEPSEEK_PRO,
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -301,6 +302,7 @@ MAX_TOKENS = {
     "comment": _tokens_for(600) + 8000,
     "reply": _tokens_for(600) + 8000,
     "factcheck": 24000,
+    "curiosity": 24000,
 }
 
 # --- notki i komentarze ------------------------------------------------------
@@ -313,6 +315,9 @@ NOTE_MAX_WORDS = 64
 # Ilu kandydatów generujemy, żeby wybrać jednego. Sensowne tylko dlatego, że
 # DeepSeek kosztuje grosze — u Fable'a byłoby to nie do obronienia.
 NOTE_CANDIDATES = 5
+# Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich,
+# a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas na kilka dni.
+CURIOSITY_BATCH = 8
 COMMENT_CANDIDATES = 3
 
 # Sufit dzienny. Research mówi, że trzy przemyślane komentarze tygodniowo biją

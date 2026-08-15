@@ -217,6 +217,37 @@ NOTE_SYSTEM = (
 )
 
 
+CURIOSITY_SYSTEM = (
+    "You find documented facts about ordinary things for an anonymous editorial "
+    "brand. You search before you answer and you never state a fact you cannot "
+    "put a source against. Return only valid JSON."
+)
+
+
+def znajdz_ciekawostki(
+    conn: sqlite3.Connection, run_id: int, ile: int = config.CURIOSITY_BATCH
+) -> list[dict[str, Any]]:
+    """Materiał na notki w dni bez artykułu.
+
+    Notka typu CIEKAWOSTKA nie ma artykułu, z którego mogłaby wziąć dowody, a
+    cztery z pięciu notek dziennie są właśnie takie. Bez tego etapu jedyne
+    źródło to pamięć modelu — czyli dokładnie to, co wycięliśmy z komentarzy.
+    """
+    prompt = _prompt("ciekawostki.md", ile=ile)
+    try:
+        raw = llm.call("curiosity", CURIOSITY_SYSTEM, prompt,
+                       conn=conn, run_id=run_id, web_search=True)
+        fakty = llm.parse_json(raw).get("facts") or []
+    except Exception as exc:
+        print(f"  [ciekawostki] nie wyszły ({exc})", flush=True)
+        return []
+    fakty = [f for f in fakty if f.get("fact") and f.get("url")]
+    print(f"  [ciekawostki] z pokryciem: {len(fakty)}", flush=True)
+    for f in fakty:
+        print(f"    · [{f.get('domain', '')[:18]}] {f.get('fact', '')[:88]}", flush=True)
+    return fakty
+
+
 def note(
     conn: sqlite3.Connection, run_id: int, note_type: str, evidence: dict[str, Any]
 ) -> dict[str, Any]:
@@ -253,6 +284,14 @@ def note(
             f"  {text[:78]}",
             flush=True,
         )
+        if text:
+            # Notka mówi fakt publicznie tak samo jak komentarz, więc idzie tym
+            # samym pasem: blokuje wyłącznie fakt obalony przez źródło.
+            audyt = zweryfikuj(conn, run_id, text, f"Substack note, type {note_type}")
+            data["weryfikacja"] = audyt
+            data["safe_to_post"] = bool(audyt.get("safe_to_post"))
+            if not data["safe_to_post"]:
+                print(f"    ODPADA: {str(audyt.get('verdict', ''))[:76]}", flush=True)
         candidates.append(data)
     return {"type": note_type, "candidates": candidates}
 
@@ -306,8 +345,8 @@ def sprawdz_fakty(
     return fakty
 
 
-def zweryfikuj_komentarz(
-    conn: sqlite3.Connection, run_id: int, tekst: str, tytul: str = "",
+def zweryfikuj(
+    conn: sqlite3.Connection, run_id: int, tekst: str, kontekst: str = "",
 ) -> dict[str, Any]:
     """Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem.
 
@@ -317,7 +356,7 @@ def zweryfikuj_komentarz(
     zweryfikowanych faktów. Tym razem pamięć modelu trafiła. Nie ma powodu zakładać,
     że trafi zawsze.
     """
-    prompt = _prompt("weryfikacja_komentarza.md", title=tytul, comment=tekst)
+    prompt = _prompt("weryfikacja.md", context=kontekst, text=tekst)
     try:
         raw = llm.call("factcheck", FACTCHECK_SYSTEM, prompt,
                        conn=conn, run_id=run_id, web_search=True)
@@ -394,7 +433,7 @@ def comment_on(
             flush=True,
         )
         if text:
-            audyt = zweryfikuj_komentarz(conn, run_id, text, post.get("title", ""))
+            audyt = zweryfikuj(conn, run_id, text, post.get("title", ""))
             data["weryfikacja"] = audyt
             data["safe_to_post"] = bool(audyt.get("safe_to_post"))
             print(f"    -> {'PRZECHODZI' if data['safe_to_post'] else 'ODPADA'}: "
