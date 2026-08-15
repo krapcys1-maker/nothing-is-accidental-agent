@@ -37,7 +37,16 @@ def zaloguj() -> None:
     print("Otwieram okno przeglądarki. Zaloguj się na Substacku.")
     print("Gdy zobaczysz swoje konto, wróć tutaj i naciśnij Enter.\n")
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        # Prawdziwy Chrome, nie okrojone Chromium Playwrighta. Wbudowana kopia
+        # nie ma części komponentów i reCAPTCHA potrafi się w niej zapętlić
+        # nawet dla człowieka — to nie blokada, tylko niekompletna przeglądarka.
+        # Logowanie i tak wykonuje właściciel własnoręcznie.
+        try:
+            browser = p.chromium.launch(headless=False, channel="chrome")
+            print("   (używam Twojego Chrome)\n")
+        except Exception:
+            browser = p.chromium.launch(headless=False)
+            print("   (nie znalazłem Chrome, używam wbudowanej przeglądarki)\n")
         context = browser.new_context(viewport={"width": 1400, "height": 950})
         page = context.new_page()
         page.goto("https://substack.com/sign-in", timeout=READ_TIMEOUT_MS)
