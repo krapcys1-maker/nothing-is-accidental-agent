@@ -9,7 +9,7 @@ User=ubuntu
 WorkingDirectory=/home/ubuntu/nothing-is-accidental-agent
 Environment=AGENT_V2_SERVER=1
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/ubuntu/nothing-is-accidental-agent/.venv/bin/python agent-v2/run.py
+ExecStart=/home/ubuntu/nothing-is-accidental-agent/.venv/bin/python agent-v2/run.py --dzien --wyslij
 
 # Przebieg potrafi trwac kilkanascie minut (research plus pisanie). Sufit jest
 # dwukrotnoscia najdluzszego zmierzonego, zeby zawieszony proces nie blokowal
