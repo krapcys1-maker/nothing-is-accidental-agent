@@ -172,7 +172,11 @@ TOPIC_COUNT = 6
 DIVERSITY_LOOKBACK = 5
 
 # --- dyskoveria --------------------------------------------------------------
-DISCOVERY_MAX_RESULTS = 6
+# 10, nie 6. Odsiew przy pobieraniu jest brutalny: martwe adresy (404), blokady
+# botów i strony bez treści potrafią zjeść pięć z sześciu źródeł. Przy sześciu
+# znalezionych został raz jeden użyteczny dokument i artykuł stanął na nim
+# samym. DeepSeek jest tani, więc szukamy szerzej.
+DISCOVERY_MAX_RESULTS = 10
 # Zmierzone na jednym trudnym temacie (szpara pod drzwiami kabiny):
 #   31 rund -> 7 organizacji, 6 pierwotnych, $1,33  (bez limitu, przeciek)
 #    6 rund -> 1 organizacja,  0 pierwotnych, $0,53  (za mało, temat nie wyszedł)
@@ -277,9 +281,11 @@ MAX_TOKENS = {
     ),
     # artykuł plus zapas na myślenie
     "write": _tokens_for(MAX_WORDS * 7) + 6000,
-    # recenzja rozlicza KAŻDE zdanie: ~118 tokenów na segment (zmierzone),
-    # 49-65 segmentów przy 1000-1250 słowach
-    "review": int(70 * 118 * 1.4) + JSON_OVERHEAD_TOKENS,
+    # Recenzja rozlicza KAŻDE zdanie i jest najdroższa w tokenach wyjścia:
+    # DeepSeek dawał tu 19-22 tys. tokenów, a przy 28 764 ucięło go na żywo
+    # i straciliśmy główny sygnał jakości. Sufit nic nie kosztuje, dopóki nie
+    # zostanie zużyty.
+    "review": 48000,
 }
 
 # Zapas na myślenie dostają WSZYSTKIE etapy, nie tylko Claude'owe: modele
