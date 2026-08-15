@@ -11,6 +11,7 @@ stdout, żeby harmonogram je przechwycił.
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import sys
 import traceback
@@ -57,8 +58,49 @@ def cached(stage: str, produce: Callable[[], Any], use_cache: bool) -> Any:
     return value
 
 
+class JuzDziala(RuntimeError):
+    pass
+
+
+def zajmij_zamek():
+    """Nie pozwala dwóm przebiegom działać naraz.
+
+    Na serwerze harmonogram odpali agenta o stałej godzinie niezależnie od tego,
+    czy poprzedni przebieg się skończył. Dwa procesy naraz to dwa razy ten sam
+    artykuł i dwa razy ta sama notka — a tego nie da się cofnąć. To nie jest
+    kwestia „czy", tylko „kiedy", więc zamek jest przed pierwszym uruchomieniem
+    z harmonogramu, nie po pierwszej wpadce.
+
+    Zamek trzyma system plików, nie my: przy zabiciu procesu blokada znika sama,
+    więc nie zostawia po sobie zakleszczenia, które trzeba by odblokowywać ręcznie.
+    """
+    sciezka = config.DATA_DIR / "agent.lock"
+    sciezka.parent.mkdir(parents=True, exist_ok=True)
+    uchwyt = open(sciezka, "w", encoding="utf-8")
+    try:
+        try:                      # Linux, czyli serwer
+            import fcntl
+            fcntl.flock(uchwyt, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except ImportError:       # Windows, czyli komputer właściciela
+            import msvcrt
+            msvcrt.locking(uchwyt.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError:
+        uchwyt.close()
+        raise JuzDziala(
+            f"Inny przebieg już działa (zamek: {sciezka}). Kończę bez zmian."
+        ) from None
+    uchwyt.write(f"{os.getpid()}\n")
+    uchwyt.flush()
+    return uchwyt
+
+
 def main() -> int:
     _utf8_stdout()
+    try:
+        _zamek = zajmij_zamek()   # trzymany do końca procesu
+    except JuzDziala as exc:
+        print(f"  {exc}", flush=True)
+        return 0
     parser = argparse.ArgumentParser(description="agent-v2 — jeden artykuł do szuflady")
     parser.add_argument("--stop-after", choices=STAGES, help="zatrzymaj się po tym etapie")
     parser.add_argument("--use-cache", action="store_true", help="użyj zapisanych wyników etapów")

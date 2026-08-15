@@ -534,6 +534,95 @@ def potwierdz_notke(page, tekst: str) -> bool:
     return probka in " ".join(_json.dumps((feed or {}).get("items", []),
                                           ensure_ascii=False).split())
 
+def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
+    """Polubienia w kanale czytelnika.
+
+    Polubienie jest najtańszym uczciwym sygnałem, jaki konto może wysłać, i
+    jedynym, który nic nie twierdzi — dlatego wolno je robić bez pytania.
+    Odstępy między kliknięciami są losowe: piętnaście polubień w półtorej minuty
+    to nie jest czytanie i każdy system to widzi.
+    """
+    import random
+
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    wynik: dict[str, Any] = {"znalezione": 0, "polubione": 0, "blad": None}
+    try:
+        page.goto("https://substack.com/", timeout=READ_TIMEOUT_MS * 2,
+                  wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 6000)
+
+        przyciski = page.get_by_role("button", name="Like")
+        wynik["znalezione"] = przyciski.count()
+        print(f"  do polubienia w kanale: {wynik['znalezione']}", flush=True)
+
+        for i in range(min(ile, przyciski.count())):
+            kandydat = przyciski.nth(i)
+            try:
+                if not kandydat.is_visible():
+                    continue
+                if not wyslij:
+                    wynik["polubione"] += 1
+                    continue
+                kandydat.scroll_into_view_if_needed(timeout=8000)
+                kandydat.click(timeout=8000)
+                wynik["polubione"] += 1
+                print(f"  polubione {wynik['polubione']}/{ile}", flush=True)
+                page.wait_for_timeout(
+                    int(random.uniform(*config.ODSTEP_MIEDZY_DZIALANIAMI) * 1000))
+            except Exception as exc:
+                print(f"    (pominiete: {type(exc).__name__})", flush=True)
+        if not wyslij:
+            print(f"  (nie klikam — tryb sprawdzenia; kliknalbym"
+                  f" {wynik['polubione']})", flush=True)
+    except Exception as exc:
+        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        print(f"  BŁĄD: {wynik['blad']}", flush=True)
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+    return wynik
+
+
+def zasubskrybuj(handle: str, wyslij: bool = False) -> dict[str, Any]:
+    """Subskrybuje cudzy profil. Ląduje w skrzynce właściciela, więc wąsko."""
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    wynik: dict[str, Any] = {"handle": handle, "zrobione": False, "blad": None}
+    try:
+        page.goto(f"https://substack.com/@{handle}", timeout=READ_TIMEOUT_MS * 2,
+                  wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 4000)
+        for nazwa in ("Subscribe", "Subskrybuj", "Follow", "Obserwuj"):
+            k = page.get_by_role("button", name=nazwa, exact=True).first
+            if k.count() > 0 and k.is_visible():
+                print(f"  przycisk: {nazwa!r}", flush=True)
+                if wyslij:
+                    k.click(timeout=10_000)
+                    page.wait_for_timeout(5000)
+                    # Po kliknieciu napis zmienia sie na stan przeciwny.
+                    wynik["zrobione"] = k.count() == 0 or not k.is_visible()
+                    print("  ZROBIONE" if wynik["zrobione"]
+                          else "  KLIKNIETE, ALE STAN SIE NIE ZMIENIL", flush=True)
+                else:
+                    print("  (nie klikam — tryb sprawdzenia)", flush=True)
+                break
+        else:
+            wynik["blad"] = "nie znalazłem przycisku subskrypcji"
+            print(f"  {wynik['blad']}", flush=True)
+    except Exception as exc:
+        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        print(f"  BŁĄD: {wynik['blad']}", flush=True)
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+    return wynik
+
+
 def _esc(t: str) -> str:
     return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
