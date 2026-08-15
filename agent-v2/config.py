@@ -316,6 +316,52 @@ COMMENT_CANDIDATES = 3
 NOTES_PER_DAY = 5
 COMMENTS_PER_DAY = 4
 
+# Typy notek. W dniu publikacji artykułu lecą notki typu ARTYKUL z linkiem;
+# w pozostałe dni — pozostałe typy, oparte na fragmentach, których artykuły
+# nie zużyły. Zmierzone: konwertują notki konkretne i taktyczne, a nie
+# motywacyjne; komentarze i restacki niosą dalej niż polubienia, więc notka
+# dająca się z czymś nie zgodzić bije notkę, pod którą wszyscy kiwają głową.
+NOTE_TYPES = {
+    "ARTYKUL": (
+        "A fact from an article published today. State the fact so it stands on "
+        "its own, then let the link do the rest. Do not summarise the article "
+        "and do not tease it — the note has to be worth reading by someone who "
+        "never clicks."
+    ),
+    "CIEKAWOSTKA": (
+        "A single documented fact, surprising on its own, with no link and "
+        "nothing to sell. The test: a reader who knows nothing about this "
+        "publication stops scrolling and wants to know who found that out."
+    ),
+    "DYSKUSJA": (
+        "A statement someone could reasonably disagree with, backed by a "
+        "specific from the evidence. Not a question, and never a request for "
+        "opinions — take a position and leave the obvious objection visible so "
+        "a reader can pick it up. Comments carry more reach than likes."
+    ),
+    "SPROSTOWANIE": (
+        "Name a thing widely believed, then the record that contradicts it. "
+        "This is the house speciality: the gap between what people assume and "
+        "what the document says. Do not mock the belief — explain why it is "
+        "reasonable and where it goes wrong."
+    ),
+}
+
+# Strefa czasowa publikacji. Liczy się strefa CZYTELNIKÓW, nie właściciela:
+# konto jest anglojęzyczne, więc publiczność jest głównie amerykańska, a dane
+# o godzinach pochodzą z czasu wschodnioamerykańskiego. Właściciel mieszka
+# w Rumunii (EET/EEST), czyli najlepsze okno — niedziela 6:00 ET — wypada
+# u niego w niedzielę o 13:00. Agent i tak chodzi z harmonogramu.
+PUBLISH_TIMEZONE = "America/New_York"
+BEST_NOTE_HOURS = (6, 7, 8)  # ET
+WORST_NOTE_HOURS = (12, 13)  # ET, zwłaszcza w piątek
+BEST_NOTE_DAYS = ("sunday", "saturday")
+WORST_NOTE_DAYS = ("monday", "friday")
+
+# Rozkład na tydzień: pięć notek dziennie, dzień publikacji artykułu ma własny.
+NOTE_MIX_ARTICLE_DAY = ("ARTYKUL", "ARTYKUL", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE")
+NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", "CIEKAWOSTKA")
+
 # Zapas na myślenie dostają WSZYSTKIE etapy, nie tylko Claude'owe: modele
 # DeepSeek v4 też rozumują, a tokeny rozumowania liczą się do sufitu wyjścia.
 # Odsiew ucięło na 2057 tokenach dokładnie z tego powodu.

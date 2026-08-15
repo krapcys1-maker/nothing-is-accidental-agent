@@ -93,6 +93,20 @@ Fable'a; wcześniej ciążyła ku 1220.
 - **`tool_choice={"type":"web_search"}` na DeepSeeku**: zapętla model, szuka
   bez końca i nigdy nie tworzy bloku `message`. Musi być `"auto"`.
 
+## Zamówione przez właściciela, jeszcze niezbudowane
+
+- **Grafiki do artykułów.** Artykuły na Substacku mają obrazy, więc potrzebne
+  będzie generowanie i dołączanie grafiki. Do zrobienia na końcu, po notkach
+  i komentarzach.
+- **Samodzielne wyszukiwanie postów do komentowania.** Agent ma sam znajdować
+  posty — także pod dużymi kontami i pod postami z wieloma komentarzami, żeby
+  wchodzić w dyskusje, z których ktoś może trafić na nasz profil. Dziś czyta
+  tylko podane adresy.
+- **Bramka dowodowa dla komentarzy.** Artykuły mają pokrycie w pobranych
+  dokumentach, komentarze piszą z pamięci modelu. Przed jakąkolwiek publikacją
+  automatyczną trzeba to domknąć — publiczny komentarz z błędnym faktem jest
+  nieodwracalny.
+
 ## Otwarte
 
 - **Skuteczność pobrań waha się od 1/6 do 6/6.** Martwe adresy (404) i blokady

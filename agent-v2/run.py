@@ -265,6 +265,14 @@ def main() -> int:
         notes = [*findings,
                  {"gate": "DLUGOSC", "detail": f"{len(draft['body'].split())} słów"},
                  {"gate": "RECENZJA", "detail": report.get("summary", "")}]
+        # Fragmenty, których artykuł nie zużył, zostają zapisane razem z kartą.
+        # Każdy przebieg zbiera ich kilkadziesiąt, a tekst bierze kilka — reszta
+        # to gotowe, ocytowane fakty na notki w dni bez artykułu.
+        card["unused_evidence"] = [
+            {"url": s["url"], "publisher": s.get("publisher"), "excerpts": s["excerpts"],
+             "numbers": s["numbers"]}
+            for s in evidence
+        ]
         path = stages.save(conn, run_id, topic, card, draft, status, blocked_by, notes)
 
         print(f"\n>> {status}" + (f" ({blocked_by})" if blocked_by else ""), flush=True)

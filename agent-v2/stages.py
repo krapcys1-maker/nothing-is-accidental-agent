@@ -139,6 +139,53 @@ def write(
     return draft
 
 
+NOTE_SYSTEM = (
+    "You write very short Substack Notes for an anonymous editorial brand. "
+    "Every fact comes from the supplied evidence, never from your own memory. "
+    "Return only valid JSON."
+)
+
+
+def note(
+    conn: sqlite3.Connection, run_id: int, note_type: str, evidence: dict[str, Any]
+) -> dict[str, Any]:
+    """Jedna notka danego typu — do szuflady.
+
+    `evidence` to karta artykułu albo fragmenty, których artykuł nie zużył.
+    W obu wypadkach notka stoi na materiale ocytowanym, więc nie ma skąd
+    zmyślać liczby. Generujemy kilku kandydatów; wybór należy do właściciela.
+    """
+    prompt = _prompt(
+        "notka.md",
+        language=config.ARTICLE_LANGUAGE,
+        min_words=config.NOTE_MIN_WORDS,
+        max_words=config.NOTE_MAX_WORDS,
+        note_type=note_type,
+        type_brief=config.NOTE_TYPES[note_type],
+        evidence=json.dumps(evidence, ensure_ascii=False, indent=2)[:9000],
+    )
+    candidates: list[dict[str, Any]] = []
+    for i in range(config.NOTE_CANDIDATES):
+        try:
+            raw = llm.call("note", NOTE_SYSTEM, prompt, conn=conn, run_id=run_id)
+            data = llm.parse_json(raw)
+        except Exception as exc:
+            print(f"  [notka {i + 1}] nie wyszła: {exc}", flush=True)
+            continue
+        text = (data.get("note") or "").strip()
+        words = len(text.split())
+        data["words_actual"] = words
+        in_range = config.NOTE_MIN_WORDS <= words <= config.NOTE_MAX_WORDS
+        data["length_ok"] = in_range
+        print(
+            f"  [notka {i + 1}] {words:>3} słów {'OK ' if in_range else 'POZA'}"
+            f"  {text[:78]}",
+            flush=True,
+        )
+        candidates.append(data)
+    return {"type": note_type, "candidates": candidates}
+
+
 COMMENT_SYSTEM = (
     "You write comments under other people's Substack posts as an anonymous "
     "editorial brand. Silence is the default: you comment only when you have "
