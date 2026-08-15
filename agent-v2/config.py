@@ -105,6 +105,11 @@ MODEL_FOR = {
     # $2,12 zamiast $0,61.
     "write": FABLE,
     "review": DEEPSEEK_PRO,
+    # Notki i komentarze na DeepSeeku — decyzja właściciela. Przy ~$0,002 za
+    # sztukę można wygenerować kilkanaście kandydatów i wybrać najlepszego,
+    # co dla czterdziestu słów działa lepiej niż jedno drogie podejście.
+    "note": DEEPSEEK_PRO,
+    "comment": DEEPSEEK_PRO,
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -290,7 +295,26 @@ MAX_TOKENS = {
     # i straciliśmy główny sygnał jakości. Sufit nic nie kosztuje, dopóki nie
     # zostanie zużyty.
     "review": 48000,
+    "note": _tokens_for(400) + 8000,
+    "comment": _tokens_for(600) + 8000,
 }
+
+# --- notki i komentarze ------------------------------------------------------
+# Zmierzone na publicznych analizach Substacka: 33-64 słowa dają najwyższe
+# zaangażowanie (449 średnich reakcji), 65-256 słów wyraźnie spada. Środek jest
+# najgorszy, a to właśnie tam ląduje instynkt "napiszę akapit".
+NOTE_MIN_WORDS = 33
+NOTE_MAX_WORDS = 64
+
+# Ilu kandydatów generujemy, żeby wybrać jednego. Sensowne tylko dlatego, że
+# DeepSeek kosztuje grosze — u Fable'a byłoby to nie do obronienia.
+NOTE_CANDIDATES = 5
+COMMENT_CANDIDATES = 3
+
+# Sufit dzienny. Research mówi, że trzy przemyślane komentarze tygodniowo biją
+# piętnaście uprzejmych; pierwotne 15-20 dziennie było z planu sprzed danych.
+NOTES_PER_DAY = 5
+COMMENTS_PER_DAY = 4
 
 # Zapas na myślenie dostają WSZYSTKIE etapy, nie tylko Claude'owe: modele
 # DeepSeek v4 też rozumują, a tokeny rozumowania liczą się do sufitu wyjścia.

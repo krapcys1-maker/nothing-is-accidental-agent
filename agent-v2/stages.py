@@ -139,6 +139,48 @@ def write(
     return draft
 
 
+COMMENT_SYSTEM = (
+    "You write comments under other people's Substack posts as an anonymous "
+    "editorial brand. Silence is the default: you comment only when you have "
+    "something of your own to add. Return only valid JSON."
+)
+
+
+def comment_on(
+    conn: sqlite3.Connection, run_id: int, post: dict[str, Any]
+) -> dict[str, Any]:
+    """Komentarz do cudzego posta — do szuflady, nigdy nie publikowany.
+
+    Generuje kilku kandydatów i oddaje wszystkich; wybór należy do właściciela.
+    Milczenie jest pełnoprawną odpowiedzią i nie jest porażką.
+    """
+    prompt = _prompt(
+        "komentarz.md",
+        language=config.ARTICLE_LANGUAGE,
+        author=post.get("author", ""),
+        title=post.get("title", ""),
+        body=post.get("text", "")[:12000],
+    )
+    candidates: list[dict[str, Any]] = []
+    for i in range(config.COMMENT_CANDIDATES):
+        try:
+            raw = llm.call("comment", COMMENT_SYSTEM, prompt, conn=conn, run_id=run_id)
+            data = llm.parse_json(raw)
+        except Exception as exc:
+            print(f"  [komentarz {i + 1}] nie wyszedł: {exc}", flush=True)
+            continue
+        text = data.get("comment")
+        words = len(text.split()) if text else 0
+        print(
+            f"  [komentarz {i + 1}] "
+            + (f"{words} słów — {data.get('what_it_adds', '')[:70]}"
+               if text else f"MILCZY — {data.get('reason_if_silent', '')[:70]}"),
+            flush=True,
+        )
+        candidates.append(data)
+    return {"post": post.get("url"), "title": post.get("title"), "candidates": candidates}
+
+
 def fallback_card(question: str, evidence: list[dict[str, Any]]) -> dict[str, Any]:
     """Karta złożona z dowodów bez modelu — gdy synteza padnie.
 
