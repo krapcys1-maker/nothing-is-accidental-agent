@@ -41,6 +41,20 @@ SESSION_COOKIE = "substack.sid"
 OSTRZEGAJ_PONIZEJ_DNI = 14
 
 
+def naprawde_wyslac(wyslij: bool, co: str) -> bool:
+    """Ostatnie sito przed KAZDYM dzialaniem widocznym publicznie.
+
+    DRY_RUN blokowal wywolania modeli, ale NIE blokowal przegladarki — wiec
+    przebieg "na sucho" na serwerze nie napisal ani slowa, a mimo to polubil
+    dwa cudze posty. Tryb, ktory nazywa sie suchym, musi byc suchy takze wobec
+    swiata zewnetrznego, inaczej jest pulapka.
+    """
+    if wyslij and config.DRY_RUN:
+        print(f"  [{co}] DRY_RUN — NIE wysylam, mimo ze proszono", flush=True)
+        return False
+    return wyslij
+
+
 def zalogowany(context) -> bool:
     """Twarde sprawdzenie: albo jest ciasteczko sesji, albo go nie ma."""
     return any(c.get("name") == SESSION_COOKIE for c in context.cookies())
@@ -577,6 +591,7 @@ def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
     """
     import random
 
+    wyslij = naprawde_wyslac(wyslij, "polubienia")
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
@@ -621,6 +636,7 @@ def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
 
 def zasubskrybuj(handle: str, wyslij: bool = False) -> dict[str, Any]:
     """Subskrybuje cudzy profil. Ląduje w skrzynce właściciela, więc wąsko."""
+    wyslij = naprawde_wyslac(wyslij, "subskrypcja")
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
@@ -845,6 +861,7 @@ def ustaw_oswiadczenie_ai(wyslij: bool = False) -> dict[str, Any]:
     Ustawienie konta, nie posta — robi się raz i wisi przy wszystkim: przy
     artykułach, notkach i odpowiedziach.
     """
+    wyslij = naprawde_wyslac(wyslij, "oswiadczenie")
     wymagaj_sesji()
     tekst = tresc_oswiadczenia()
     p, browser, context = podlacz_sie()
@@ -930,6 +947,7 @@ def wystaw_artykul(
     sciezka_md: Path, sciezka_png: Path | None = None, wyslij: bool = False,
 ) -> dict[str, Any]:
     """Wystawia artykuł na Substacku. Domyślnie WYPEŁNIA i NIE WYSYŁA."""
+    wyslij = naprawde_wyslac(wyslij, "artykul")
     wymagaj_sesji()
     artykul = rozbierz_artykul(sciezka_md)
     if sciezka_png is None:
@@ -1017,6 +1035,7 @@ def potwierdz_odpowiedz(page, note_id: int, tekst: str) -> bool:
 
 def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False) -> dict[str, Any]:
     """Odpowiada w wątku pod naszą własną notką."""
+    wyslij = naprawde_wyslac(wyslij, "odpowiedz")
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
@@ -1090,6 +1109,7 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
     cofnąć w oczach tych, którzy ją zobaczyli. Najpierw sprawdzamy, czy kod
     trafia we właściwe pole, dopiero potem wysyłamy.
     """
+    wyslij = naprawde_wyslac(wyslij, "notka")
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
@@ -1189,6 +1209,7 @@ def potwierdz_komentarz(page, url: str, tekst: str) -> bool:
 
 def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False) -> dict[str, Any]:
     """Wystawia komentarz pod cudzym postem. Domyślnie WYPEŁNIA i NIE WYSYŁA."""
+    wyslij = naprawde_wyslac(wyslij, "komentarz")
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
