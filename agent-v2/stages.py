@@ -323,14 +323,20 @@ def fetch(
             try:
                 response = client.get(url)
                 body = response.text
-                lowered = body.lower()
                 if response.status_code >= 400:
                     reason = f"HTTP {response.status_code}"
-                elif any(phrase in lowered for phrase in config.REFUSAL_PHRASES):
-                    reason = "host odmówił automatowi"
                 else:
                     text = trafilatura.extract(body, include_comments=False) or ""
-                    if len(text) < config.FETCH_MIN_CHARS:
+                    # Frazy odmowy sprawdzamy w WYDOBYTYM TEKŚCIE, nie w surowym
+                    # HTML-u. Surowy HTML zawiera skrypty i konfigurację: każda
+                    # strona Substacka niesie klucz "captcha_site_key" formularza
+                    # logowania, więc kontrola na HTML-u uznawała za zablokowane
+                    # strony, które nikogo nie blokują. To ta sama lekcja co przy
+                    # podłogach artykułu — porównuj z treścią, nie z alfabetem.
+                    lowered = text.lower()
+                    if any(phrase in lowered for phrase in config.REFUSAL_PHRASES):
+                        reason = "host odmówił automatowi"
+                    elif len(text) < config.FETCH_MIN_CHARS:
                         reason = f"za mało treści ({len(text)} znaków)"
             except Exception as exc:
                 reason = f"{type(exc).__name__}"
