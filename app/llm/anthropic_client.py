@@ -135,6 +135,23 @@ def _build_prompt(
         "Prefer questions whose answer lives in a document that is free and in "
         "HTML. If the only authority is paywalled, ask a question that a freely "
         "published body has also answered. "
+        # Free and in HTML turned out not to be enough. A run aimed squarely at
+        # eCFR fetched ten pages and five of them were the same block notice:
+        # "Due to aggressive automated scraping of FederalRegister.gov and
+        # eCFR.gov, programmatic access to these sites is limited to access to
+        # our extensive developer APIs." The corpus reported ten successes and
+        # held one usable source. The block is respected, not worked around, so
+        # the scout has to steer around it instead.
+        "There is a third requirement and it is not obvious: the site must "
+        "permit ordinary automated reading. eCFR.gov and FederalRegister.gov "
+        "serve a CAPTCHA to programmatic requests and offer an API instead, so "
+        "a question whose only answer is a CFR part will come back empty however "
+        "authoritative it is - score those 0.3 and prefer the agency that WROTE "
+        "the rule, which usually explains it in plain web pages: the "
+        "commission, department or administration's own guidance, FAQ, "
+        "enforcement policy or press material. Legislation and guidance "
+        "published directly by a government or regulator on its own site are "
+        "the reliable 0.9 cases. "
         'Respond as JSON: {"topics": [ ... ]}.'
     )
 

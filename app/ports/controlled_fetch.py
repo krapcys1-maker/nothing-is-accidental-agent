@@ -552,6 +552,43 @@ def _media_type(content_type: str | None) -> str | None:
     return media or None
 
 
+# Phrases a site uses to say it is refusing automated access. Taken from the
+# page eCFR actually served us, which said so in as many words: "programmatic
+# access to these sites is limited to access to our extensive developer APIs",
+# "Your request has been flagged as potentially automated", "complete the
+# CAPTCHA (bot test)".
+#
+# Matching the words rather than guessing from size and redirects, because the
+# guess had a false positive on an ordinary cross-host redirect and this does
+# not. It reports the refusal so the source is not counted; it never works
+# around one. A host that offers an API for programmatic access is telling us
+# the supported route, and scraping past the check is not it.
+_REFUSAL_PHRASES = (
+    "you have been blocked",
+    "access denied",
+    "are you a robot",
+    "verify you are human",
+    "enable javascript and cookies",
+    "unusual traffic",
+    "captcha",
+    "request has been flagged",
+    "programmatic access to these sites is limited",
+)
+
+
+def _blocked_page_reason(
+    *, requested_url: str, final_url: str, body: bytes | str | None,
+) -> str | None:
+    """Name the refusal when a 200 response is a challenge, not a document."""
+    del requested_url, final_url
+    if body is None:
+        return None
+    text = body.decode("utf-8", "replace") if isinstance(body, bytes) else body
+    if any(phrase in text.lower() for phrase in _REFUSAL_PHRASES):
+        return "FETCH_REFUSED_BY_HOST"
+    return None
+
+
 class ControlledHttpFetch:
     """Realny adapter `FetchPort` dla dokładnie jednego zatwierdzonego URL.
 
@@ -650,6 +687,25 @@ class ControlledHttpFetch:
                     current_target.url,
                     f"CONTENT_TYPE_REJECTED:{media or 'missing'}",
                 )
+            # A site that blocks automated access answers 200 with a challenge
+            # page, so HTTP status alone reports success for a document we were
+            # refused. Five eCFR requests in one run redirected to
+            # unblock.federalregister.gov and each stored 1,096 characters of
+            # "you have been blocked"; the run reported ten successful fetches
+            # and the corpus held one usable source.
+            #
+            # A refusal we cannot read is a failed fetch and is recorded as one.
+            # It is NOT worked around: we do not retry with another identity, we
+            # do not evade the check, and a host that declines automated access
+            # is simply a host this corpus cannot use.
+            if 200 <= response.status < 300:
+                block = _blocked_page_reason(
+                    requested_url=contract.requested_url,
+                    final_url=current_target.url,
+                    body=response.body,
+                )
+                if block is not None:
+                    return self._error_document(current_target.url, block)
             return FetchedDocument(
                 requested_url=contract.requested_url,
                 final_url=current_target.url,
