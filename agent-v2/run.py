@@ -94,6 +94,103 @@ def zajmij_zamek():
     return uchwyt
 
 
+def dzien(conn, run_id: int, wyslij: bool) -> int:
+    """Jeden dzień pracy konta: notki, komentarze, odpowiedzi, polubienia.
+
+    Rutyna, której do tej pory nie było — każda zdolność działała osobno, a nic
+    ich nie spinało. Trzy zasady, wszystkie z rzeczy, które nas już kosztowały:
+
+    1. KAŻDY BLOK OSOBNO. Padnięte komentarze nie zabierają ze sobą notek.
+       Dzień częściowo udany jest znacznie lepszy od dnia przerwanego w połowie.
+    2. ODPOWIEDZI POZA LIMITEM. U siebie jesteśmy gospodarzem; pytanie bez
+       odpowiedzi pod własnym tekstem szkodzi bardziej niż komentarz za dużo.
+    3. NIC NIE WYCHODZI BEZ `--wyslij`. Domyślnie agent pokazuje, co by zrobił.
+    """
+    import alarm
+    import browser
+    import kanal
+
+    budzet = stages.budzet_dnia(conn)
+    sesje = stages.sesje_dnia()
+    print(f"   posiedzenia dnia: "
+          + "  ".join(f"{s['godzina_utc']:02d}:{s['minuta']:02d}" for s in sesje),
+          flush=True)
+    zrobione = {"notki": 0, "komentarze": 0, "odpowiedzi": 0, "polubienia": 0}
+
+    def blok(nazwa: str, robota) -> None:
+        try:
+            robota()
+        except Exception as exc:
+            print(f"  [{nazwa}] blok padł: {type(exc).__name__}: {exc}"[:160],
+                  flush=True)
+            traceback.print_exc()
+
+    # --- 1. odpowiedzi pod własnymi treściami: pierwsze i bez limitu ----------
+    def odpowiedzi() -> None:
+        czekaja = browser.nieodpowiedziane()
+        for c in czekaja:
+            out = stages.reply_to(
+                conn, run_id,
+                {"under": "our own note", "author": c["autor"], "text": c["tekst"]},
+                {"our_note": c["pod_czym"]})
+            kandydaci = [k for k in out["candidates"] if k.get("reply")]
+            if not kandydaci:
+                continue
+            tekst = kandydaci[0]["reply"]
+            if wyslij:
+                browser.wystaw_odpowiedz(c["pod_id"], tekst, wyslij=True)
+                stages.odczekaj()
+            zrobione["odpowiedzi"] += 1
+
+    # --- 2. notki: pięć dziennie, każda z innego faktu ------------------------
+    def notki() -> None:
+        for n in stages.notki_dnia(conn, run_id):
+            gotowe = [k for k in n["candidates"]
+                      if k.get("safe_to_post") and k.get("length_ok")]
+            if not gotowe:
+                continue
+            if wyslij:
+                browser.wystaw_notke(gotowe[0]["note"].strip(), wyslij=True)
+                stages.odczekaj()
+            zrobione["notki"] += 1
+
+    # --- 3. komentarze u innych ----------------------------------------------
+    def komentarze() -> None:
+        cele = stages.wybierz_cele(conn, run_id, kanal.posty_z_kanalu())
+        for cel in cele[: budzet["komentarze"]]:
+            strony = browser.read_pages([cel["url"]])
+            if not strony or not strony[0].get("text"):
+                continue
+            out = stages.comment_on(conn, run_id, strony[0])
+            dobre = [k for k in out["candidates"]
+                     if k.get("comment") and k.get("safe_to_post")]
+            if not dobre:
+                continue
+            if wyslij:
+                browser.wystaw_komentarz(cel["url"], dobre[0]["comment"],
+                                         wyslij=True)
+                stages.odczekaj()
+            zrobione["komentarze"] += 1
+
+    # --- 4. polubienia: najtańszy uczciwy sygnał ------------------------------
+    def polubienia() -> None:
+        w = browser.polub_w_kanale(budzet["lajki"], wyslij=wyslij)
+        zrobione["polubienia"] = w.get("polubione", 0)
+
+    for nazwa, robota in (("odpowiedzi", odpowiedzi), ("notki", notki),
+                          ("komentarze", komentarze), ("polubienia", polubienia)):
+        print(f"\n-- {nazwa} --", flush=True)
+        blok(nazwa, robota)
+
+    print("\n== dzień zamknięty ==", flush=True)
+    for k, v in zrobione.items():
+        print(f"   {k}: {v}", flush=True)
+    if not wyslij:
+        print("   (tryb sprawdzenia — nic nie poszło w świat)", flush=True)
+    alarm.sprawdz_sesje_i_ostrzez()
+    return 0
+
+
 def main() -> int:
     _utf8_stdout()
     try:
@@ -105,6 +202,10 @@ def main() -> int:
     parser.add_argument("--stop-after", choices=STAGES, help="zatrzymaj się po tym etapie")
     parser.add_argument("--use-cache", action="store_true", help="użyj zapisanych wyników etapów")
     parser.add_argument("--topics", type=int, default=6, help="ile tematów ma zwrócić skaut")
+    parser.add_argument("--dzien", action="store_true",
+                        help="rutyna dnia: notki, komentarze, odpowiedzi, polubienia")
+    parser.add_argument("--wyslij", action="store_true",
+                        help="NAPRAWDĘ wystaw treści (domyślnie tylko pokazuje)")
     args = parser.parse_args()
 
     conn = db.connect()
@@ -112,6 +213,12 @@ def main() -> int:
     stage = "start"
 
     print(f"== przebieg {run_id} ==", flush=True)
+    if args.dzien:
+        try:
+            return dzien(conn, run_id, args.wyslij)
+        finally:
+            db.finish_run(conn, run_id, "DONE", "dzien", "")
+            _summary(conn, run_id)
     print(
         f"   baza: {config.DB_PATH}   "
         f"sufit przebiegu: {config.RUN_LIMIT_USD} USD"
