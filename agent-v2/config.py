@@ -72,12 +72,13 @@ IMAGE_TIMEOUT_S = 300
 SUBSTACK_HANDLE = "nothingisaccidental"
 
 # Czy agent ma klikac "Wylacz wykrywanie AI" przy kazdej publikacji.
-# ZOSTAWIONE NA NIE i to jest decyzja wlasciciela, nie kodu: to jest wybor
-# publiczny, widoczny dla czytelnikow, a nie ustawienie techniczne. Oswiadczenie
-# "Jak to robie" (prompts/OSWIADCZENIE_AI.md) pokazuje sie NIEZALEZNIE od tego
-# przelacznika, wiec wylaczenie wykrywania niczego nie zaslania — zmienia tylko
-# to, czy skan zwraca wynik, czy "nie kwalifikuje sie".
-WYLACZ_WYKRYWANIE_AI = False
+# WLACZONE decyzja wlasciciela z 2026-08-15. To wybor publiczny, nie ustawienie
+# techniczne, wiec nalezal do niego, a nie do kodu.
+# Co to ZMIENIA: skan zwraca "nie kwalifikuje sie do wykrywania" zamiast oceny.
+# Czego NIE zmienia: oswiadczenie "Jak to robie" (prompts/OSWIADCZENIE_AI.md)
+# pokazuje sie tak samo, wiec pytajacy dalej dostaje nasza odpowiedz — a ta
+# odpowiedz nadal nie twierdzi, ze pisal to czlowiek. Granica z ADR-018 stoi.
+WYLACZ_WYKRYWANIE_AI = True
 
 # --- tryby -------------------------------------------------------------------
 
