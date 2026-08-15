@@ -150,3 +150,31 @@ Uczciwie, żeby nie było niespodzianek:
    instytucji, inaczej konto będzie gazetą o brytyjskich przepisach.
 3. **Utrata kosztu przy zabiciu procesu.** Świadomy kompromis, opisany wyżej.
 4. **Brak etapów 5–7.** Publikacja, notki, komentarze, statystyki nie istnieją.
+
+---
+
+## Kolejność budowy — najpierw artykuł, potem reszta
+
+Limity redakcyjne obejmują trzy rodzaje treści, ale **buduj je po kolei, nie
+naraz**:
+
+| kolejność | co | stan |
+|---|---|---|
+| **1** | **artykuły** — 4/miesiąc | to budujesz teraz, cały ten dokument o tym |
+| 2 | notki — 5/dzień | dopiero po trzech udanych artykułach |
+| 3 | komentarze — 15–20/dzień | ostatnie, i najostrożniej |
+
+**Dlaczego w tej kolejności.** Artykuł jest najdroższy i najtrudniejszy, więc
+jeśli zadziała, notka jest jego uproszczeniem — ten sam styl, ten sam reviewer,
+krótszy tekst, jedno źródło zamiast siedmiu. Odwrotnie się nie da: notki nie
+nauczą Cię niczego o pokryciu dowodowym.
+
+**Komentarze na końcu i z osobną ostrożnością.** Artykuł, który wyjdzie słabo,
+leży w szufladzie. Komentarz jest odpowiedzią konkretnej osobie na jej tekst
+i **nie da się go cofnąć w oczach tej osoby**. Zanim je zbudujesz, poproś
+właściciela o osobną decyzję i pokaż mu kilkanaście wygenerowanych przykładów
+do oceny, zanim którykolwiek gdziekolwiek trafi.
+
+Notki i komentarze **nie mają jeszcze własnego stylu potwierdzonego produkcją**
+— jest `NOTES_STYLE_PROFILE_V1.md`, ale żadna notka nigdy nie powstała. Traktuj
+ten profil jako punkt wyjścia, nie jako sprawdzony wzorzec.
