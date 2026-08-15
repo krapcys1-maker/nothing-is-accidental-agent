@@ -282,7 +282,10 @@ def _deepseek_pick_from_urls(
         f"{config.DEEPSEEK_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"},
         json={
-            "model": config.DEEPSEEK,
+            # MODEL Z ROUTINGU, nie zaszyta stala. Bylo tu config.DEEPSEEK, wiec
+            # kazdy etap bez wyszukiwania jechal na flashu niezaleznie od tego,
+            # co mowil MODEL_FOR — a koszt ksiegowalismy po stawce pro.
+            "model": config.MODEL_FOR[purpose],
             "max_tokens": config.MAX_TOKENS[purpose],
             "messages": [
                 {"role": "system", "content": system},
@@ -314,7 +317,10 @@ def _call_deepseek(purpose: str, system: str, user: str) -> tuple[str, int, int,
         f"{config.DEEPSEEK_BASE_URL}/chat/completions",
         headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"},
         json={
-            "model": config.DEEPSEEK,
+            # MODEL Z ROUTINGU, nie zaszyta stala. Bylo tu config.DEEPSEEK, wiec
+            # kazdy etap bez wyszukiwania jechal na flashu niezaleznie od tego,
+            # co mowil MODEL_FOR — a koszt ksiegowalismy po stawce pro.
+            "model": config.MODEL_FOR[purpose],
             "max_tokens": config.MAX_TOKENS[purpose],
             "messages": [
                 {"role": "system", "content": system},
