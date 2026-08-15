@@ -173,3 +173,4 @@ date,run_id,task,provider,model,input_tokens,output_tokens,cache_read_tokens,cac
 2026-08-15,source-discovery-run-9ccf4ffe-2278-469b-bc8a-4c11e18e2c0b,research_discover,anthropic,claude-opus-5,69968,8361,0,0,6,0,0.618865,actual
 2026-08-15,source-discovery-run-d7ca0dd3-97c5-476c-9061-9fdddad466e1,research_discover,anthropic,claude-opus-5,109204,5322,0,0,6,0,0.739070,actual
 2026-08-15,6763a67c-f57c-4b77-8948-5349a6c5d297,research,anthropic,claude-opus-5,4659,4672,0,0,0,0,0.140095,actual
+2026-08-15,e2fa822a-a72f-4858-8733-9168fe6d8d34,topics,anthropic,claude-opus-5,6476,3262,0,0,0,0,0.113930,actual
