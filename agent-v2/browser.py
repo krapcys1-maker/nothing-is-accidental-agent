@@ -26,6 +26,17 @@ SESSION_FILE = config.DATA_DIR / "storage-state.json"
 
 CDP_PORT = 9222
 
+# Ciasteczko realnej sesji Substacka. `substack.lli` to tylko podpowiedź
+# "kiedyś tu byłeś" i ustawia się także anonimowo — pierwsza wersja kontroli
+# opierała się na tekście strony, publiczna strona główna ją przechodziła
+# i skrypt zapisał pustą sesję jako zalogowaną.
+SESSION_COOKIE = "substack.sid"
+
+
+def zalogowany(context) -> bool:
+    """Twarde sprawdzenie: albo jest ciasteczko sesji, albo go nie ma."""
+    return any(c.get("name") == SESSION_COOKIE for c in context.cookies())
+
 
 def podlacz_sie():
     """Podłącza się do Chrome'a, którego uruchomił i zalogował WŁAŚCICIEL.
@@ -112,13 +123,18 @@ def zaloguj() -> None:
         page.goto("https://substack.com/home", timeout=READ_TIMEOUT_MS,
                   wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS)
-        widok = page.inner_text("body")
-        if "sign in" not in widok.lower()[:300] and len(widok) > 1200:
+        if zalogowany(context):
             print("   Jesteś już zalogowany — logowanie niepotrzebne.\n")
         else:
-            print("   Nie jesteś zalogowany, otwieram formularz.\n")
+            print("   Nie jesteś zalogowany. Zaloguj się w otwartym oknie.\n")
             page.goto("https://substack.com/sign-in", timeout=READ_TIMEOUT_MS)
-            input("   [naciśnij Enter, gdy będziesz zalogowany] ")
+            while True:
+                input("   [naciśnij Enter, gdy będziesz zalogowany] ")
+                if zalogowany(context):
+                    print("   Widzę sesję. Zapisuję.\n")
+                    break
+                print("   Nadal nie widzę sesji (brak ciasteczka substack.sid).")
+                print("   Dokończ logowanie w oknie i naciśnij Enter jeszcze raz.")
         SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
         context.storage_state(path=str(SESSION_FILE))
         context.close()
