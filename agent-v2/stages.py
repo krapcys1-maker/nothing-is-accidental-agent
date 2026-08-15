@@ -139,6 +139,77 @@ def write(
     return draft
 
 
+REPLY_SYSTEM = (
+    "You reply to comments under your own publication's articles, notes and "
+    "comments. You are the host: you answer, you accept corrections, you never "
+    "invent facts. Return only valid JSON."
+)
+
+
+def reply_to(
+    conn: sqlite3.Connection, run_id: int, comment: dict[str, Any],
+    evidence: dict[str, Any],
+) -> dict[str, Any]:
+    """Odpowiedź na komentarz pod własną treścią — do szuflady."""
+    prompt = _prompt(
+        "odpowiedz.md",
+        language=config.ARTICLE_LANGUAGE,
+        under_what=comment.get("under", ""),
+        commenter=comment.get("author", ""),
+        comment=comment.get("text", "")[:3000],
+        evidence=json.dumps(evidence, ensure_ascii=False, indent=2)[:7000],
+    )
+    candidates: list[dict[str, Any]] = []
+    for i in range(config.COMMENT_CANDIDATES):
+        try:
+            raw = llm.call("reply", REPLY_SYSTEM, prompt, conn=conn, run_id=run_id)
+            data = llm.parse_json(raw)
+        except Exception as exc:
+            print(f"  [odpowiedź {i + 1}] nie wyszła: {exc}", flush=True)
+            continue
+        text = data.get("reply")
+        print(
+            f"  [odpowiedź {i + 1}] "
+            + (f"{len(text.split())} słów [{data.get('kind')}] {text[:70]}"
+               if text else f"MILCZY — {data.get('reason_if_silent', '')[:60]}"),
+            flush=True,
+        )
+        candidates.append(data)
+    return {"comment": comment.get("text", "")[:200], "candidates": candidates}
+
+
+def plan_tygodnia(dzien_artykulu: int = 6) -> list[dict[str, Any]]:
+    """Harmonogram tygodnia: co i kiedy wychodzi.
+
+    Godziny w czasie wschodnioamerykańskim, bo tam jest publiczność. Niedziela
+    (6) to dzień artykułu — pokrywa się z najlepszym oknem dla notek, więc
+    artykuł i notki o nim wzmacniają się nawzajem.
+    """
+    dni = ["poniedziałek", "wtorek", "środa", "czwartek", "piątek",
+           "sobota", "niedziela"]
+    plan: list[dict[str, Any]] = []
+    for numer, nazwa in enumerate(dni):
+        dzien_art = numer == dzien_artykulu
+        if dzien_art:
+            typy = config.NOTE_MIX_ARTICLE_DAY
+        else:
+            # Obrót zestawu wg numeru dnia: bez tego poniedziałek i sobota
+            # dostawały identyczny plan i tydzień wyglądał jak jeden dzień
+            # powtórzony sześć razy.
+            mix = config.NOTE_MIX_OTHER_DAY
+            typy = tuple(mix[(numer + i) % len(mix)] for i in range(len(mix)))
+        # Najlepsze okna najpierw, resztę rozkładamy przez dzień; piątkowego
+        # południa unikamy, bo tam zmierzono czterokrotnie gorszy wynik.
+        godziny = [6, 8, 10, 15, 19] if nazwa != "piątek" else [6, 8, 10, 16, 20]
+        plan.append({
+            "dzien": nazwa,
+            "artykul": dzien_art,
+            "notki": [{"godzina_et": g, "typ": t} for g, t in zip(godziny, typy)],
+            "komentarze": config.COMMENTS_PER_DAY,
+        })
+    return plan
+
+
 NOTE_SYSTEM = (
     "You write very short Substack Notes for an anonymous editorial brand. "
     "Every fact comes from the supplied evidence, never from your own memory. "

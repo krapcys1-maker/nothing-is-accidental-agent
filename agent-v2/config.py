@@ -110,6 +110,7 @@ MODEL_FOR = {
     # co dla czterdziestu słów działa lepiej niż jedno drogie podejście.
     "note": DEEPSEEK_PRO,
     "comment": DEEPSEEK_PRO,
+    "reply": DEEPSEEK_PRO,
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -297,6 +298,7 @@ MAX_TOKENS = {
     "review": 48000,
     "note": _tokens_for(400) + 8000,
     "comment": _tokens_for(600) + 8000,
+    "reply": _tokens_for(600) + 8000,
 }
 
 # --- notki i komentarze ------------------------------------------------------
