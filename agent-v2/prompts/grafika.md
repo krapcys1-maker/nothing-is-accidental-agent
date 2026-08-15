@@ -1,0 +1,54 @@
+Write the image brief for the header illustration of this article.
+
+You are not drawing. You are writing the sentence a generator will draw from.
+
+## The one rule that matters
+
+The reader has to recognise this publication from a thumbnail, before reading
+the title. That only happens if every header looks like it came from the same
+place. So the style block below is **fixed and copied verbatim** — you choose
+the subject, never the treatment.
+
+## Choosing the subject
+
+Pick **one ordinary physical object** at the centre of what the article is
+about. Not a scene, not a metaphor, not a person.
+
+- The object should be the thing the reader already meets — the packaging, the
+  fitting, the sign, the coin, the valve, the badge on the machine.
+- If the article is about a rule, find the object the rule acts on.
+- If the article is about an incentive, find the object the money passes
+  through.
+- Prefer the specific over the general: not "a car", but "the speedometer face
+  of an ordinary compact car".
+
+**Never** put text, numbers, letters, logos or brand marks in the image.
+Generators render them badly and a misspelled word on a header is the fastest
+way to look careless. If the object's meaning depends on text, choose a
+different object.
+
+Never depict a real, identifiable person, a real logo, or a real company's
+product in a way that identifies the company.
+
+## Output
+
+Return only valid JSON:
+
+{{"subject": "<the object, in a few words>", "why_this_object": "<one sentence tying it to the article's mechanism>", "prompt": "<the full image prompt: your subject sentence first, then the style block below copied word for word>"}}
+
+## The style block — copy verbatim into `prompt`, after your subject sentence
+
+Photographed as a single isolated specimen on a plain warm off-white paper
+background. Flat, even, diffuse studio light with one soft shadow falling short
+and to the right. Slightly elevated three-quarter angle. Muted restrained
+palette — paper, graphite, faded ochre — with at most one quiet accent colour
+drawn from the object itself. Sharp focus edge to edge, fine surface texture
+visible, no gloss, no dramatic highlights. Generous empty space around the
+object. Calm, forensic, editorial. Absolutely no text, no lettering, no
+numbers, no logos, no watermarks, no people, no hands.
+
+## The article
+
+Title: {title}
+
+{body}

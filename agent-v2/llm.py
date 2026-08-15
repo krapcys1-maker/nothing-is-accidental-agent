@@ -51,8 +51,10 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
         raise PreflightFailed("brak ANTHROPIC_API_KEY w .env")
     if model == config.DEEPSEEK and not config.DEEPSEEK_API_KEY:
         raise PreflightFailed("brak DEEPSEEK_API_KEY w .env")
+    if model == config.IMAGE_MODEL and not config.OPENAI_API_KEY:
+        raise PreflightFailed("brak OPENAI_API_KEY w .env")
 
-    if purpose not in config.MAX_TOKENS:
+    if purpose not in config.MAX_TOKENS and purpose not in config.BEZ_TOKENOW:
         raise PreflightFailed(f"brak sufitu tokenów dla etapu {purpose!r}")
 
     # Sufit na jeden przebieg obowiązuje ZAWSZE, także w trybie bez limitu.
@@ -391,6 +393,61 @@ def call(
     )
     _log(purpose, model, tin, tout, searches, usd, verified)
     return text
+
+
+def obraz(
+    opis: str, *, conn: sqlite3.Connection, run_id: int | None = None
+) -> bytes:
+    """Generuje grafikę do artykułu i zapisuje jej koszt tam, gdzie resztę.
+
+    Obraz idzie przez tę samą warstwę co tekst nie dla elegancji, tylko dlatego,
+    że inaczej wypadłby z licznika: wyłącznik, limit na przebieg i dzienny sufit
+    wydatków siedzą w `_preflight`, a nie w każdym wywołaniu z osobna.
+    """
+    _preflight("obraz", conn, run_id)
+    if config.DRY_RUN:
+        print("  [obraz] DRY_RUN — wywołanie pominięte", flush=True)
+        return b""
+    if not config.OPENAI_API_KEY:
+        raise RuntimeError("brak OPENAI_API_KEY")
+
+    import base64
+    import urllib.request
+
+    zadanie = json.dumps({
+        "model": config.IMAGE_MODEL,
+        "prompt": opis,
+        "size": config.IMAGE_SIZE,
+        "quality": config.IMAGE_QUALITY,
+        "n": 1,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/images/generations",
+        data=zadanie,
+        headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}",
+                 "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=config.IMAGE_TIMEOUT_S) as odp:
+            dane = json.loads(odp.read().decode("utf-8"))
+        surowy = dane["data"][0]["b64_json"]
+    except Exception as exc:
+        db.record_call(
+            conn=conn, run_id=run_id, provider="openai", model=config.IMAGE_MODEL,
+            purpose="obraz", tokens_in=0, tokens_out=0, web_searches=0,
+            cost_usd=0.0, price_verified=0, ok=0,
+            note=f"{type(exc).__name__}: {exc}"[:500],
+        )
+        raise
+
+    usd = config.IMAGE_PRICE_USD
+    db.record_call(
+        conn=conn, run_id=run_id, provider="openai", model=config.IMAGE_MODEL,
+        purpose="obraz", tokens_in=0, tokens_out=0, web_searches=0,
+        cost_usd=usd, price_verified=0, ok=1, note=config.IMAGE_SIZE,
+    )
+    print(f"  [obraz] {config.IMAGE_MODEL}  {config.IMAGE_SIZE}  ~${usd:.4f}", flush=True)
+    return base64.b64decode(surowy)
 
 
 def parse_json(text: str) -> Any:

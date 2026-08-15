@@ -41,6 +41,11 @@ STYLE_CORPUS_SHA256 = "0b05cefa6701e6447c44810b686828a83c19ca7ffb29066778a13c242
 STYLE_PROFILES_DIR = REPO_ROOT / "instrukcja dla pisania artykulow"
 
 load_dotenv(ENV_PATH)
+# Zapasowo .env z katalogu głównego repozytorium: właściciel dopisał klucz
+# OpenAI tam, a agent szukał go tylko u siebie i widział "BRAK". Sekret ma leżeć
+# w jednym miejscu, więc zamiast kopiować go w dwa pliki, czytamy oba. Bez
+# `override` — plik agenta zawsze wygrywa.
+load_dotenv(REPO_ROOT / ".env", override=False)
 
 
 def _env(name: str, default: str = "") -> str:
@@ -51,6 +56,17 @@ def _env(name: str, default: str = "") -> str:
 
 ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
 DEEPSEEK_API_KEY = _env("DEEPSEEK_API_KEY")
+OPENAI_API_KEY = _env("OPENAI_API_KEY")   # wylacznie do grafik
+
+# Grafika do artykulu. Wybor NIE jest podyktowany cena: przy jednym obrazie na
+# artykul nawet najdrozsza opcja to grosze miesiecznie, a taniej znaczy tu
+# gorzej i mniej powtarzalnie. Rozmiar 1536x1024 mniej-wiecej odpowiada
+# proporcjom naglowka na Substacku.
+IMAGE_MODEL = "gpt-image-1.5"
+IMAGE_SIZE = "1536x1024"
+IMAGE_QUALITY = "high"
+IMAGE_PRICE_USD = 0.04   # cennik sierpien 2026, NIEPOTWIERDZONY na fakturze
+IMAGE_TIMEOUT_S = 300
 
 # --- tryby -------------------------------------------------------------------
 
@@ -113,6 +129,7 @@ MODEL_FOR = {
     "reply": DEEPSEEK_PRO,
     "factcheck": DEEPSEEK_PRO,
     "curiosity": DEEPSEEK_PRO,
+    "grafika": DEEPSEEK_PRO,
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -137,6 +154,13 @@ if CHEAP_MODE:
 _writer = _env("AGENT_V2_WRITER")
 if _writer:
     MODEL_FOR["write"] = _writer
+
+# Rysowanie nie ma nic wspolnego z trybem taniego tekstu, wiec dopisujemy je PO
+# podmianach powyzej — inaczej CHEAP_MODE przestawilby generator obrazow na
+# model jezykowy. Etapy bez tokenow nie maja sufitu tokenow: wpisanie tam liczby
+# byloby zmyslona wartoscia w pliku, ktory ma byc jedynym zrodlem prawdy.
+MODEL_FOR["obraz"] = IMAGE_MODEL
+BEZ_TOKENOW = {"obraz"}
 
 # --- cennik ------------------------------------------------------------------
 # USD za milion tokenów. `verified` mówi, czy stawka została potwierdzona realnym
@@ -303,6 +327,7 @@ MAX_TOKENS = {
     "reply": _tokens_for(600) + 8000,
     "factcheck": 24000,
     "curiosity": 24000,
+    "grafika": 4000,
 }
 
 # --- notki i komentarze ------------------------------------------------------

@@ -217,6 +217,49 @@ NOTE_SYSTEM = (
 )
 
 
+IMAGE_SYSTEM = (
+    "You write image briefs for the header illustrations of an anonymous "
+    "editorial publication. The visual style is fixed and not yours to change. "
+    "Return only valid JSON."
+)
+
+
+def grafika(
+    conn: sqlite3.Connection, run_id: int, draft: dict[str, Any],
+    sciezka_artykulu: Path | None = None,
+) -> dict[str, Any]:
+    """Nagłówek graficzny artykułu.
+
+    Rozpoznawalność bierze się z powtarzalności, nie z pomysłowości: model
+    wybiera PRZEDMIOT, a sposób pokazania go jest przepisywany dosłownie z
+    `prompts/grafika.md`. Dzięki temu tożsamość wizualna zmienia się w jednym
+    miejscu, a nie osobno przy każdym artykule.
+    """
+    prompt = _prompt(
+        "grafika.md",
+        title=draft.get("title", ""),
+        body=draft.get("body", "")[:6000],
+    )
+    brief = llm.parse_json(
+        llm.call("grafika", IMAGE_SYSTEM, prompt, conn=conn, run_id=run_id)
+    )
+    opis = brief.get("prompt") or ""
+    if not opis:
+        raise ValueError("brief graficzny bez promptu")
+    print(f"  [grafika] przedmiot: {brief.get('subject', '')}", flush=True)
+
+    dane = llm.obraz(opis, conn=conn, run_id=run_id)
+    if not dane:
+        return brief   # DRY_RUN
+    cel = (sciezka_artykulu.with_suffix(".png") if sciezka_artykulu
+           else config.ARTICLES_DIR / f"{run_id:04d}-naglowek.png")
+    cel.parent.mkdir(parents=True, exist_ok=True)
+    cel.write_bytes(dane)
+    brief["plik"] = str(cel)
+    print(f"  [grafika] zapisana: {cel.name}  {len(dane) // 1024} KB", flush=True)
+    return brief
+
+
 ZUZYTE_FAKTY = config.DATA_DIR / "zuzyte_fakty.json"
 
 
