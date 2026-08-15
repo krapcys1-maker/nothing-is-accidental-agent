@@ -117,3 +117,6 @@ Decyzja właściciela: przepisujemy warstwę orkiestracji, zachowujemy prompty,
 bramki i log kosztów. Powód: sześć kolejnych poprawek w starym systemie
 stworzyło sześć nowych problemów, bo każdy limit jest tam przypięty w kilku
 miejscach naraz.
+
+### Test zapisu na main
+Sprawdzenie, czy ochrona gałęzi nie blokuje zwykłych commitów agenta.
