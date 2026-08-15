@@ -1,5 +1,68 @@
 # START TUTAJ — instrukcja dla agenta budującego agent-v2
 
+# ⛔ PRZECZYTAJ TO ZANIM NAPISZESZ PIERWSZĄ LINIJKĘ
+
+Właściciel ma trzy konkretne obawy, wszystkie uzasadnione, wszystkie oparte na
+tym, co naprawdę się stało. Poniższe reguły są **nienegocjowalne**.
+
+## 1. BUDŻET ZŁOŻONOŚCI — liczby, nie intencje
+
+| | limit |
+|---|---|
+| pliki `.py` w `agent-v2/` | **maksimum 10** |
+| tabele w bazie | **maksimum 4** |
+| warstwy abstrakcji między `run.py` a wywołaniem modelu | **maksimum 1** |
+
+**Zabronione bez osobnej zgody właściciela** — każda z tych rzeczy wywaliła
+produkcję poprzedniego agenta:
+
+migracje schematu · triggery · zgody · dzierżawy zadań · kolejka zadań ·
+trwałe intencje · odciski intencji · deklaracje zdolności · kwalifikacje
+modeli · rezerwacje przed wywołaniem · ścieżka rekoncyliacji · bramka spokoju
+procesów · indeksy unikalne na aktywnych zadaniach · limity w `CHECK`-ach
+
+Jeśli uważasz, że potrzebujesz piątej tabeli albo którejkolwiek z powyższych —
+**zapytaj właściciela i podaj, jakiej konkretnej straty to zapobiega.**
+Poprzedni agent zbudował to wszystko i nie zapobiegło niczemu poza własnymi
+awariami.
+
+Poprzedni agent: **~40 000 linii, 2 817 testów, 236 triggerów, 42 migracje.**
+Wynik: dwa artykuły. Ty masz zrobić to samo w dziesięciu plikach.
+
+## 2. JEDEN LIMIT — JEDNO MIEJSCE
+
+Nigdy nie zapisuj tej samej liczby w dwóch miejscach. Jeśli musisz — napisz
+test, który je porówna, **zanim** je zapiszesz.
+
+To zabiło poprzedniego agenta dosłownie: limit prób w kodzie kontra `CHECK`
+w ośmiu tabelach, liczba w prompcie kontra walidator, termin kontra sufit
+tokenów. Sześć kolejnych poprawek 15 sierpnia stworzyło sześć nowych
+problemów **wyłącznie z tego powodu**.
+
+## 3. NIE PISZ TYLKO O WIELKIEJ BRYTANII
+
+Poprzedni skaut dostał trzy rozsądne kryteria źródła i zbiegł do jednego
+serwisu — `gov.uk`. Dwanaście kolejnych tematów o brytyjskich przepisach.
+
+**Wymuś to w kodzie, nie w prompcie.** Przed wysłaniem promptu podaj skautowi
+listę domen i krajów z ostatnich pięciu tematów z zakazem powtórzenia.
+Prompt już raz dostał polecenie „różnicuj" i i tak zbiegł. Szczegóły
+w sekcji 7.
+
+## 4. STYL PISANIA TO JEST PRODUKT
+
+`instrukcja dla pisania artykulow/` + korpus próbek. Bez tego napiszesz teksty
+poprawne i nijakie, a wtedy całe przedsięwzięcie nie ma sensu. Nie leży
+w kodzie, więc łatwo przeoczyć — patrz sekcja 6 i `prompts/SKAD_BRAC.md`.
+
+## 5. TEST LIVE PO KAŻDYM ETAPIE, NIE NA KOŃCU
+
+Napisz etap → puść na żywo → zobacz, co **naprawdę** wraca → popraw → dopiero
+następny. Poprzedni agent miał 2 817 zielonych testów na atrapach w chwili,
+gdy produkcja się wywracała.
+
+---
+
 Czytasz to, bo masz zbudować **nowego agenta Substacka od zera**, w katalogu
 `agent-v2/`. Ten dokument zawiera wszystko, co ustalono. Przeczytaj go w całości
 zanim napiszesz pierwszą linijkę.
@@ -23,7 +86,7 @@ przejściu dla pieszych nic nie robi; dlaczego na jogurcie jest „use by" albo
 
 ## 2. Dlaczego piszemy to od nowa
 
-W tym samym repozytorium stoi poprzedni agent (`app/`, `tests/`, `scripts/`).
+W tym samym repozytorium stoi poprzedni agent (`archiwum/app/`, `archiwum/tests/`, `archiwum/scripts/`).
 **Nie jest zepsuty w sensie jakości** — dowiózł dwa dobre artykuły, a jego
 prompty i bramki są wartościowe i masz je przenieść.
 
@@ -145,7 +208,25 @@ Patrz `prompts/SKAD_BRAC.md` — jest tam lista plików i linii. Kopiuj stamtąd
 **nie odtwarzaj z pamięci**: prompt skauta powstawał przez pięć iteracji
 i trzy płatne pomiary, prompt reviewera przez kilkanaście.
 
-Najkrócej, co jest cenne:
+### NAJPIERW STYL PISANIA
+
+`instrukcja dla pisania artykulow/` (5 plików, 55 KB) plus korpus próbek
+`data/style-references/articles/article_style_samples_v1.txt` (57 KB) plus
+mechanika doboru fragmentów w `archiwum/app/content/style_examples.py`.
+
+**To jest jedyna rzecz, która odróżnia to konto od tysiąca innych.** Bez niej
+dostaniesz teksty poprawne merytorycznie i całkowicie nijakie. Nie leży w
+kodzie, więc łatwo ją przeoczyć — właściciel zauważył jej brak w pierwszej
+wersji tego dokumentu.
+
+Szczegóły w `prompts/SKAD_BRAC.md`, sekcja na samej górze.
+
+**Test odbioru:** wygeneruj pierwszy artykuł i połóż go obok
+`ARTYKUL_DRAFT.md` i `ARTYKUL_DRAFT_2.md` w korzeniu repo. To są dwa teksty,
+które przeszły wszystkie bramki i właściciel uznał je za dobre. Jeśli Twój
+brzmi płasko obok nich, styl nie dotarł do promptu.
+
+Najkrócej, co jeszcze jest cenne:
 - prompty: skaut, dyskoveria, synteza, pisarz, reviewer
 - dziewięć reguł ewaluacji + rozliczanie twierdzeń per zdanie
 - polityka dopuszczania źródeł (podłoga pierwotności, dedup, świeżość)

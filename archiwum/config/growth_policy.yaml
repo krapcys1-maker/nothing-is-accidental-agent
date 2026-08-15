@@ -1,0 +1,93 @@
+objective:
+  primary_metric: engaged_subscribers
+  weights:
+    engaged_subscribers: 0.45
+    returning_readers: 0.20
+    comments_received: 0.15
+    restacks: 0.10
+    likes_received: 0.05
+    recommendations: 0.05
+
+global_limits:
+  max_daily_cost_usd: 50.00
+  max_monthly_cost_usd: 200.00
+  stop_on_budget_limit: true
+  monthly_limit_has_priority: true   # limit miesięczny nadrzędny: po 40 USD/mies. stop wszystkich płatnych działań (ADR-012)
+  max_consecutive_browser_errors: 3
+  max_consecutive_hidden_comments: 1
+  kill_switch: false
+  dry_run: true
+
+# Harmonogram redakcyjny jest opcjonalny, ale jego brak blokuje bezpiecznie
+# `enqueue-research`. Czasy są lokalne dla jawnej strefy IANA; wybierz tylko
+# okna tego samego dnia (start < end) i nie nakładaj ich na siebie.
+# Wiążąca decyzja właściciela: dotyczy WYŁĄCZNIE eligibility wewnętrznych jobów
+# researchowych i Controlled Fetch (nie godzin publikacji na Substacku).
+editorial_schedule:
+  timezone: Europe/Bucharest
+  windows:
+    - weekdays: [0, 1, 2, 3, 4, 5, 6]
+      start: "00:00"
+      end: "23:59"
+
+comment_policy:
+  min_target_score: 70
+  max_per_account_per_day: 5
+  max_per_author_per_day: 1
+  max_link_ratio: 0.10
+  semantic_duplicate_threshold: 0.80
+  allow_generic_praise: false
+  allow_direct_profile_invitation: false
+  allow_private_messages: false
+
+topic_policy:
+  article_min_score: 75
+  note_min_score: 65
+  minimum_sources_for_article: 3
+  duplicate_title_similarity_threshold: 0.72   # >= tej wartości = duplikat (dedup lokalny, bez płatnego modelu)
+
+# Wagi scoringu tematu (suma = 100). Źródło prawdy wg ADR-001 (ARCHITECTURE §7).
+topic_scoring_weights:
+  curiosity: 25
+  source_quality: 20
+  non_obvious: 15
+  universality: 15
+  discussion_potential: 10
+  visual_potential: 10
+  originality: 5
+
+# Progi jakości researchu (bramka Policy Engine dla Research Card).
+research_policy:
+  minimum_sources: 3
+  # Owner decision 2026-08-14: lowered from 0.60. Live runs on a 3-6 source
+  # corpus of specialist trade press settle honestly at ~0.55, so 0.60 blocked
+  # every article. The card's own confidence value is unchanged and still
+  # recorded truthfully; this is the acceptance bar, and reviewer v3 remains the
+  # binding quality gate on the finished draft.
+  min_confidence_score: 0.50
+  min_source_quality_score: 0.50
+  max_retries: 3              # limit ponawiania kosztownych wywołań (bez nieskończonego retry)
+  timeout_seconds: 60
+
+# Globalna dostępność prawdziwego transportu controlled fetch. `false` jest
+# domyślne i fail-closed. Ustawienie `true` NIE autoryzuje requestu: nadal
+# wymagany jest trwały, jednorazowy approval L1 dokładnego joba/intentu.
+controlled_fetch_policy:
+  real_transport_enabled: false
+
+# Domyślny cap claimów dla bezpiecznych jobów tworzonych przez composition root
+# aplikacji. Paid durable research zachowuje osobny, niekonfigurowalny cap 1.
+worker_policy:
+  default_max_attempts: 1
+
+# WAVE C4: progi wyłącznie dla lokalnej, deterministycznej decyzji o gotowym
+# drafcie. Nie otwierają providera, przeglądarki ani publikacji.
+content_decision_policy:
+  version: content_decision_policy_v1
+  article_auto_approve_min_score: 0.90
+  note_auto_approve_min_score: 0.85
+
+learning_policy:
+  minimum_days_before_strategy_change: 7
+  one_primary_variable_per_experiment: true
+  never_optimize_only_for_views: true

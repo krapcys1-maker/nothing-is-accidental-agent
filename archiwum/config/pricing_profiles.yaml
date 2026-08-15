@@ -1,0 +1,28 @@
+version: 1
+profiles:
+- profile_id: anthropic-opus-5-standard-2026-08
+  version: 21472f54ca20c149725e7465a02635934f4cea7af490b1c2fc7a10f15b2e72c6
+  model: claude-opus-5
+  currency: USD
+  unit: usd_per_mtok__web_search_per_1k
+  status: approved
+  approved_by: owner:krapcys1-maker
+  prices:
+    input_per_mtok: 5.00
+    output_per_mtok: 25.00
+    cache_read_per_mtok: 0.50
+    cache_write_per_mtok: 6.25
+    web_search_per_1k: 10.00
+- profile_id: anthropic-sonnet-5-intro-2026-07
+  version: sonnet-5-intro-pricing-valid-through-2026-08-31
+  model: claude-sonnet-5
+  currency: USD
+  unit: usd_per_mtok__web_search_per_1k
+  status: approved
+  approved_by: owner:krapcys1-maker
+  prices:
+    input_per_mtok: 2.00
+    output_per_mtok: 10.00
+    cache_read_per_mtok: 0.20
+    cache_write_per_mtok: 2.50
+    web_search_per_1k: 10.00

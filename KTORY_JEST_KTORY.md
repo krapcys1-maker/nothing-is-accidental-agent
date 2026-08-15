@@ -16,7 +16,7 @@ Stan prac: [`agent-v2/PROGRESS.md`](agent-v2/PROGRESS.md) — czytaj to najpierw
 
 ---
 
-## `app/`, `tests/`, `scripts/` — STARY AGENT. ZAMROŻONY.
+## `archiwum/app/`, `archiwum/tests/`, `archiwum/scripts/` — STARY AGENT. ZAMROŻONY.
 
 Nie zmieniaj tu niczego. Nie naprawiaj. Nie ulepszaj.
 
@@ -43,8 +43,8 @@ Objaw: 15 sierpnia sześć kolejnych poprawek stworzyło sześć nowych problem�
 Nie z niestaranności — z tego, że zmiana jednej stałej ma tam kilka ukrytych
 zależnych, a nikt nie zrobi przeglądu konsekwentnie przez miesiące.
 
-Pełny zapis: `docs/BUILD_LOG.md`, `docs/ERRORS_AND_FAILURES.md`,
-`docs/AUDYT_ETAP3_2026-08-14.md`.
+Pełny zapis: `archiwum/docs/BUILD_LOG.md`, `archiwum/docs/ERRORS_AND_FAILURES.md`,
+`archiwum/docs/AUDYT_ETAP3_2026-08-14.md`.
 
 ---
 

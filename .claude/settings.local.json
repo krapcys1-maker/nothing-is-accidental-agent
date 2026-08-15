@@ -1,0 +1,5 @@
+{
+  "permissions": {
+    "allow": ["Bash(python -m app.main:*)", "Bash(python scripts/:*)", "Bash(python -m pytest:*)"]
+  }
+}

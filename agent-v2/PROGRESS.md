@@ -63,7 +63,31 @@ gdzie od jakości zależy, czy artykuł ma sens.
 
 ---
 
+## Budżet złożoności — pilnuj tego sam
+
+| | limit | ile masz teraz |
+|---|---|---|
+| pliki .py w agent-v2/ | **10** | 0 |
+| tabele w bazie | **4** | 0 |
+
+Poprzedni agent: ~40 000 linii, 2 817 testów, 236 triggerów, 42 migracje,
+dwa artykuły. Jeśli przekraczasz budżet — zatrzymaj się i zapytaj właściciela,
+jakiej konkretnej straty ta rzecz zapobiega.
+
 ## Co przenosimy ze starego (to jest wartość, nie kod)
+
+- [ ] **STYL PISANIA — NAJWAŻNIEJSZE, ZACZNIJ OD TEGO**
+      - katalog `instrukcja dla pisania artykulow/` — 5 plików, 55 KB,
+        w tym `CLAUDE_INSTRUKCJA_NATURALNEGO_PISANIA.md` (45 KB)
+      - korpus próbek `data/style-references/articles/article_style_samples_v1.txt` (57 KB)
+      - mechanika doboru fragmentów: `archiwum/app/content/style_examples.py`
+        (3–5 fragmentów po 150–900 znaków, dobierane wg funkcji retorycznej,
+        korpus przypięty hashem SHA-256)
+
+      **To jest produkt.** Bez tego teksty będą poprawne merytorycznie
+      i całkowicie nijakie, a wtedy konto nie różni się od tysiąca innych.
+      Test odbioru: porównaj pierwszy wygenerowany artykuł z `ARTYKUL_DRAFT.md`
+      i `ARTYKUL_DRAFT_2.md` w korzeniu repo.
 
 - [ ] prompt skauta — po pięciu iteracjach i trzech płatnych pomiarach
 - [ ] prompt dyskoverii — instytucje, nie sprzedawcy; katalog to nie dokument
