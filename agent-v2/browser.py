@@ -305,6 +305,108 @@ def rozpoznanie() -> None:
         browser.close()
 
 
+def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
+    """Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA.
+
+    `wyslij=False` to nie ostrożność dla samej ostrożności: notki nie da się
+    cofnąć w oczach tych, którzy ją zobaczyli. Najpierw sprawdzamy, czy kod
+    trafia we właściwe pole, dopiero potem wysyłamy.
+    """
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
+    try:
+        page.goto("https://substack.com/home", timeout=READ_TIMEOUT_MS,
+                  wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS)
+
+        # "What's on your mind?" nie jest ani polem, ani przyciskiem w sensie
+        # roli ARIA — trafia w nie dopiero klikniecie po tekscie. Dopiero po nim
+        # pojawia sie edytor (contenteditable) i przyciski Drafts / Cancel / Post.
+        page.get_by_text("What's on your mind?", exact=False).first.click(timeout=15_000)
+        page.wait_for_timeout(2500)
+        pole = page.locator("[contenteditable=true]").first
+        pole.click(timeout=10_000)
+        page.wait_for_timeout(800)
+        page.keyboard.type(tekst, delay=12)
+        page.wait_for_timeout(1500)
+        wynik["wpisane"] = True
+        print(f"  wpisane w pole notki: {len(tekst.split())} słów", flush=True)
+
+        przycisk = page.get_by_role("button", name="Post").first
+        wynik["przycisk_widoczny"] = przycisk.is_visible(timeout=8000)
+        print(f"  przycisk wysyłki widoczny: {wynik['przycisk_widoczny']}", flush=True)
+
+        if wyslij and wynik["przycisk_widoczny"]:
+            przycisk.click()
+            page.wait_for_timeout(5000)
+            wynik["wyslane"] = True
+            print("  NOTKA WYSTAWIONA", flush=True)
+        elif not wyslij:
+            print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
+    except Exception as exc:
+        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        print(f"  BŁĄD: {wynik['blad']}", flush=True)
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+    return wynik
+
+
+def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False) -> dict[str, Any]:
+    """Wystawia komentarz pod cudzym postem. Domyślnie WYPEŁNIA i NIE WYSYŁA."""
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
+    try:
+        page.goto(url, timeout=READ_TIMEOUT_MS, wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 2000)
+
+        # Sekcja komentarzy doczytuje się dopiero po przewinięciu w dół.
+        page.mouse.wheel(0, 20_000)
+        page.wait_for_timeout(3500)
+
+        # Pod postem pole komentarza to TEXTAREA, nie contenteditable jak przy
+        # notkach — to dwa różne edytory i jeden selektor nie obsłuży obu.
+        pole = page.locator("textarea").first
+        pole.click(timeout=15_000)
+        page.wait_for_timeout(800)
+        page.keyboard.type(tekst, delay=12)
+        page.wait_for_timeout(1500)
+        wynik["wpisane"] = True
+        print(f"  wpisane w pole komentarza: {len(tekst.split())} słów", flush=True)
+
+        # Interfejs bywa po polsku, więc szukamy obu wariantów nazwy.
+        przycisk = None
+        for nazwa in ("Post", "Opublikuj", "Wyślij", "Comment", "Skomentuj"):
+            kandydat = page.get_by_role("button", name=nazwa).first
+            if kandydat.count() > 0 and kandydat.is_visible():
+                przycisk = kandydat
+                print(f"  przycisk wysyłki: {nazwa!r}", flush=True)
+                break
+        wynik["przycisk_widoczny"] = przycisk is not None
+        print(f"  przycisk wysyłki widoczny: {wynik['przycisk_widoczny']}", flush=True)
+
+        if wyslij and wynik["przycisk_widoczny"]:
+            przycisk.click()
+            page.wait_for_timeout(5000)
+            wynik["wyslane"] = True
+            print("  KOMENTARZ WYSTAWIONY", flush=True)
+        elif not wyslij:
+            print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
+    except Exception as exc:
+        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        print(f"  BŁĄD: {wynik['blad']}", flush=True)
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+    return wynik
+
+
 if __name__ == "__main__":
     import sys
 
