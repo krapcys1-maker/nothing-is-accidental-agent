@@ -141,6 +141,60 @@ def uruchom_chrome() -> bool:
     return False
 
 
+def rozgrzej(context) -> bool:
+    """Pozwala Cloudflare wydać zgodę dla adresu, z którego akurat działamy.
+
+    Z centrum danych pierwsze wejście dostaje stronę "Just a moment…", bo
+    `cf_clearance` z sesji właściciela było wydane na jego domowy adres. To NIE
+    jest obchodzenie zabezpieczenia — przeciwnie, wchodzimy wprost na chroniony
+    adres i pozwalamy wyzwaniu zrobić swoje. Prawdziwa przeglądarka rozwiązuje
+    je w kilka sekund i dostaje własną zgodę.
+
+    Bez tego kroku z serwera nie działa nic; z nim działa kompozytor i wejścia
+    na adresy API.
+    """
+    page = context.new_page()
+    try:
+        page.goto(f"https://substack.com/api/v1/user/{config.SUBSTACK_HANDLE}"
+                  "/public_profile",
+                  timeout=READ_TIMEOUT_MS * 2, wait_until="domcontentloaded")
+        for _ in range(8):
+            page.wait_for_timeout(3000)
+            if "Just a moment" not in page.inner_text("body")[:60]:
+                return True
+        print("  [rozgrzewka] Cloudflare nie ustąpił", flush=True)
+        return False
+    except Exception as exc:
+        print(f"  [rozgrzewka] {type(exc).__name__}: {exc}"[:120], flush=True)
+        return False
+    finally:
+        page.close()
+
+
+def api_json(page, sciezka: str) -> Any:
+    """Czyta API WCHODZĄC na adres, zamiast wołać `fetch` ze strony.
+
+    Sprawdzone na serwerze: z centrum danych `fetch` z wnętrza strony wraca 403
+    ze stroną wyzwania, a zwykłe wejście na ten sam adres oddaje JSON. Różnica
+    jest w tym, jak Cloudflare ocenia zapytanie w tle wobec nawigacji.
+
+    Działa tak samo na komputerze właściciela, więc mamy jedną drogę, nie dwie.
+    """
+    import json as _json
+
+    page.goto(f"https://substack.com{sciezka}", timeout=READ_TIMEOUT_MS * 2,
+              wait_until="domcontentloaded")
+    page.wait_for_timeout(1200)
+    tekst = page.inner_text("body").strip()
+    if tekst.startswith("Just a moment"):
+        page.wait_for_timeout(6000)
+        tekst = page.inner_text("body").strip()
+    try:
+        return _json.loads(tekst)
+    except ValueError:
+        return None
+
+
 def podlacz_sie():
     """Podłącza się do Chrome'a, którego uruchomił i zalogował WŁAŚCICIEL.
 
@@ -166,13 +220,17 @@ def podlacz_sie():
                 f"Skopiuj na serwer: {SESSION_FILE}"
             )
         p = sync_playwright().start()
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage"],
+        )
         context = browser.new_context(
             storage_state=str(SESSION_FILE),
             user_agent=config.FETCH_USER_AGENT,
             viewport={"width": 1440, "height": 900},
             locale="en-US",   # interfejs po angielsku, niezależnie od serwera
         )
+        rozgrzej(context)
         return p, browser, context
 
     if not _chrome_odpowiada():
@@ -244,22 +302,17 @@ def sprawdz_serwer() -> None:
         print(f"  ciasteczko sesji: {'JEST' if ciastko else 'BRAK'}", flush=True)
 
         # Twardszy dowód niż ciasteczko: czy zalogowane API nas rozpoznaje.
-        kto = page.evaluate(
-            """async () => {
-                try {
-                    const r = await fetch('/api/v1/user/%s/public_profile',
-                                          {credentials: 'include'});
-                    const j = await r.json();
-                    return {status: r.status, nazwa: j.name || null, id: j.id || null};
-                } catch (e) { return {blad: String(e).slice(0, 60)}; }
-            }""" % config.SUBSTACK_HANDLE
-        )
-        print(f"  odpowiedz API: {kto}", flush=True)
+        kto = api_json(page, f"/api/v1/user/{config.SUBSTACK_HANDLE}/public_profile")
+        print(f"  odpowiedz API: {kto if not isinstance(kto, dict) else {k: kto.get(k) for k in ('id', 'name')}}",
+              flush=True)
+        page.goto("https://substack.com/", timeout=READ_TIMEOUT_MS * 2,
+                  wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 3000)
 
         widzi_kompozytor = "on your mind" in page.inner_text("body").lower()
         print(f"  kompozytor notek widoczny: {widzi_kompozytor}", flush=True)
 
-        if ciastko and kto.get("id") and widzi_kompozytor:
+        if ciastko and isinstance(kto, dict) and kto.get("id") and widzi_kompozytor:
             print("\n  WYNIK: sesja dziala z tego adresu. Mozna isc dalej.", flush=True)
         else:
             print("\n  WYNIK: sesja NIE dziala stad. NIE budujemy dalej na tej"
@@ -386,83 +439,82 @@ PROFIL_HANDLE = "nothingisaccidental"
 # Agent czytający stronę odpisałby po polsku komuś, kto pisał po angielsku —
 # więc treści bierzemy WYŁĄCZNIE z API, gdzie `body` jest oryginałem, a pole
 # `language` mówi, w jakim języku naprawdę napisano.
-_JS_NIEODPOWIEDZIANE = """
-async ([handle, ile]) => {
-    const pr = await (await fetch('/api/v1/user/' + handle + '/public_profile',
-                                  {credentials: 'include'})).json();
-    if (!pr || !pr.id) return {blad: 'brak profilu'};
-    const feed = await (await fetch('/api/v1/reader/feed/profile/' + pr.id +
-                                    '?types%5B%5D=note',
-                                    {credentials: 'include'})).json();
-    const nasze = (feed.items || [])
-        .map(x => x.comment).filter(c => c && c.children_count > 0)
-        .slice(0, ile);
-    const czekaja = [];
-    for (const n of nasze) {
-        const t = await (await fetch('/api/v1/reader/comment/' + n.id +
-                                     '/replies?comment_id=' + n.id,
-                                     {credentials: 'include'})).json();
-        // Nasz najnowszy glos w CALYM watku, nie w pojedynczej galezi.
-        // Odpowiedz wpisana pod notka jest RODZENSTWEM cudzego komentarza, a nie
-        // jego dzieckiem, wiec liczenie tylko wewnatrz galezi kazalo agentowi
-        // odpisywac w kolko komus, komu juz odpowiedzial.
-        let naszNajnowszy = 0;
-        (t.commentBranches || []).forEach(function skan(w) {
-            if (!w) return;
-            const c = w.comment || w;
-            if (c && c.user_id === pr.id && c.date) {
-                naszNajnowszy = Math.max(naszNajnowszy, new Date(c.date).getTime());
-            }
-            (w.descendantComments || w.children || []).forEach(skan);
-        });
-        for (const galaz of (t.commentBranches || [])) {
-            const plaskie = [];
-            (function chodz(w) {
-                if (!w) return;
-                const c = w.comment || w;
-                if (c && c.body) plaskie.push(c);
-                (w.descendantComments || w.children || []).forEach(chodz);
-            })(galaz);
-            if (!plaskie.length) continue;
-            // Ostatni głos wybieramy PO DACIE, nie po kolejności w tablicy:
-            // Substack oddaje gałąź od najnowszego, więc branie ostatniego
-            // elementu wskazywało cudzy komentarz nawet po naszej odpowiedzi —
-            // agent bez nadzoru odpisywałby w kółko pod tym samym wątkiem.
-            const ostatni = plaskie.reduce(
-                (a, b) => (new Date(b.date) > new Date(a.date) ? b : a));
-            if (ostatni.user_id === pr.id) continue;
-            // Odpowiedzieliśmy już później niż padł ten głos — rozmowa nie czeka.
-            if (naszNajnowszy && new Date(ostatni.date).getTime() < naszNajnowszy) continue;
-            czekaja.push({
-                pod_czym: (n.body || '').slice(0, 400),
-                pod_id: n.id,
-                autor: ostatni.name,
-                jezyk: ostatni.language,
-                tekst: ostatni.body || '',
-                id: ostatni.id,
-                data: ostatni.date,
-            });
-        }
-    }
-    return {czekaja};
-}
-"""
+def _plaskie(galaz: dict) -> list[dict]:
+    """Rozwija gałąź wątku do płaskiej listy komentarzy."""
+    out: list[dict] = []
+    stos = [galaz]
+    while stos:
+        w = stos.pop()
+        if not isinstance(w, dict):
+            continue
+        c = w.get("comment") or w
+        if isinstance(c, dict) and c.get("body"):
+            out.append(c)
+        stos.extend(w.get("descendantComments") or w.get("children") or [])
+    return out
+
+
+def _kiedy(c: dict) -> float:
+    from datetime import datetime
+    try:
+        return datetime.fromisoformat(
+            str(c.get("date", "")).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0.0
 
 
 def nieodpowiedziane(ile: int = 10) -> list[dict[str, Any]]:
-    """Cudze odpowiedzi pod naszymi notkami, na które jeszcze nie odpisaliśmy."""
+    """Cudze odpowiedzi pod naszymi notkami, na które jeszcze nie odpisaliśmy.
+
+    Treści bierzemy z API, nie ze strony: Substack tłumaczy cudze wpisy na język
+    interfejsu, a odpowiedź po polsku komuś, kto pisał po angielsku, byłaby
+    kompromitacją. W API `body` jest oryginałem, a `language` mówi, jak napisano.
+    """
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
     try:
-        page.goto(f"https://substack.com/@{PROFIL_HANDLE}",
-                  timeout=READ_TIMEOUT_MS, wait_until="domcontentloaded")
-        page.wait_for_timeout(SETTLE_MS)
-        wynik = page.evaluate(_JS_NIEODPOWIEDZIANE, [PROFIL_HANDLE, ile])
-        czekaja = wynik.get("czekaja", []) if isinstance(wynik, dict) else []
+        profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
+        if not isinstance(profil, dict) or not profil.get("id"):
+            print("  nie udało się odczytać profilu", flush=True)
+            return []
+        moje_id = profil["id"]
+        feed = api_json(page, f"/api/v1/reader/feed/profile/{moje_id}"
+                              "?types%5B%5D=note") or {}
+        nasze = [x["comment"] for x in feed.get("items", [])
+                 if isinstance(x, dict) and isinstance(x.get("comment"), dict)
+                 and (x["comment"].get("children_count") or 0) > 0][:ile]
+
+        czekaja: list[dict[str, Any]] = []
+        for n in nasze:
+            watek = api_json(page, f"/api/v1/reader/comment/{n['id']}/replies"
+                                   f"?comment_id={n['id']}") or {}
+            galezie = watek.get("commentBranches") or []
+            wszystkie = [c for g in galezie for c in _plaskie(g)]
+            # Nasz najnowszy głos w CAŁYM wątku, nie w pojedynczej gałęzi:
+            # odpowiedź wpisana pod notką jest RODZEŃSTWEM cudzego komentarza,
+            # więc liczenie wewnątrz gałęzi kazało odpisywać w kółko.
+            nasz_ostatni = max((_kiedy(c) for c in wszystkie
+                                if c.get("user_id") == moje_id), default=0.0)
+            for g in galezie:
+                plaskie = _plaskie(g)
+                if not plaskie:
+                    continue
+                ostatni = max(plaskie, key=_kiedy)
+                if ostatni.get("user_id") == moje_id:
+                    continue
+                if nasz_ostatni and _kiedy(ostatni) < nasz_ostatni:
+                    continue
+                czekaja.append({
+                    "pod_czym": (n.get("body") or "")[:400], "pod_id": n["id"],
+                    "autor": ostatni.get("name"), "jezyk": ostatni.get("language"),
+                    "tekst": ostatni.get("body") or "", "id": ostatni.get("id"),
+                    "data": ostatni.get("date"),
+                })
         print(f"  czeka na odpowiedź: {len(czekaja)}", flush=True)
         for c in czekaja:
-            print(f"    · {c['autor']} [{c.get('jezyk')}] {c['tekst'][:70]}", flush=True)
+            print(f"    · {c['autor']} [{c.get('jezyk')}] {c['tekst'][:70]}",
+                  flush=True)
         return czekaja
     finally:
         page.close()
@@ -473,25 +525,14 @@ def nieodpowiedziane(ile: int = 10) -> list[dict[str, Any]]:
 def potwierdz_notke(page, tekst: str) -> bool:
     """Pyta Substacka, czy notka naprawdę wisi na naszym profilu."""
     probka = " ".join(tekst.split())[:60]
-    try:
-        return bool(page.evaluate(
-            """async ([handle, probka]) => {
-                const pr = await (await fetch('/api/v1/user/' + handle + '/public_profile',
-                                              {credentials: 'include'})).json();
-                if (!pr || !pr.id) return false;
-                const f = await (await fetch('/api/v1/reader/feed/profile/' + pr.id +
-                                             '?types%5B%5D=note',
-                                             {credentials: 'include'})).json();
-                const norm = s => (s || '').replace(/\\s+/g, ' ');
-                return (f.items || []).some(
-                    x => norm(JSON.stringify(x)).includes(probka));
-            }""",
-            [PROFIL_HANDLE, probka],
-        ))
-    except Exception as exc:
-        print(f"  (nie udało się potwierdzić notki: {exc})"[:160], flush=True)
+    profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
+    if not isinstance(profil, dict) or not profil.get("id"):
         return False
-
+    feed = api_json(page, f"/api/v1/reader/feed/profile/{profil['id']}"
+                          "?types%5B%5D=note")
+    import json as _json
+    return probka in " ".join(_json.dumps((feed or {}).get("items", []),
+                                          ensure_ascii=False).split())
 
 def _esc(t: str) -> str:
     return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -754,28 +795,12 @@ def ustaw_oswiadczenie_ai(wyslij: bool = False) -> dict[str, Any]:
 
 
 def potwierdz_artykul(page, tytul: str) -> bool:
-    """Pyta Substacka, czy artykuł naprawdę jest opublikowany.
-
-    Kliknięcie przycisku nie jest dowodem — ta lekcja kosztowała nas fałszywy
-    alarm przy pierwszym komentarzu.
-    """
+    """Pyta Substacka, czy artykuł naprawdę jest opublikowany."""
     probka = " ".join(tytul.split())[:50]
-    try:
-        return bool(page.evaluate(
-            """async ([probka]) => {
-                const r = await fetch('/api/v1/posts?limit=5',
-                                      {credentials: 'include'});
-                const j = await r.json();
-                const lista = j.posts || j || [];
-                return lista.some(p => (p.title || '').includes(probka)
-                                       && !!p.post_date);
-            }""",
-            [probka],
-        ))
-    except Exception as exc:
-        print(f"  (nie udało się potwierdzić artykułu: {exc})"[:160], flush=True)
-        return False
-
+    dane = api_json(page, "/api/v1/posts?limit=5")
+    lista = (dane or {}).get("posts", dane) or []
+    return any(probka in (x.get("title") or "") and x.get("post_date")
+               for x in lista if isinstance(x, dict))
 
 def wystaw_artykul(
     sciezka_md: Path, sciezka_png: Path | None = None, wyslij: bool = False,
@@ -851,22 +876,13 @@ def wystaw_artykul(
 
 def potwierdz_odpowiedz(page, note_id: int, tekst: str) -> bool:
     """Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku."""
-    probka = " ".join(tekst.split())[:60]
-    try:
-        return bool(page.evaluate(
-            """async ([id, probka]) => {
-                const t = await (await fetch('/api/v1/reader/comment/' + id +
-                                             '/replies?comment_id=' + id,
-                                             {credentials: 'include'})).json();
-                const norm = s => (s || '').replace(/\\s+/g, ' ');
-                return norm(JSON.stringify(t.commentBranches || [])).includes(probka);
-            }""",
-            [note_id, probka],
-        ))
-    except Exception as exc:
-        print(f"  (nie udało się potwierdzić odpowiedzi: {exc})"[:160], flush=True)
-        return False
+    import json as _json
 
+    probka = " ".join(tekst.split())[:60]
+    watek = api_json(page, f"/api/v1/reader/comment/{note_id}/replies"
+                           f"?comment_id={note_id}")
+    return probka in " ".join(_json.dumps((watek or {}).get("commentBranches", []),
+                                          ensure_ascii=False).split())
 
 def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False) -> dict[str, Any]:
     """Odpowiada w wątku pod naszą własną notką."""
@@ -1010,25 +1026,13 @@ def potwierdz_komentarz(page, url: str, tekst: str) -> bool:
     """Pyta Substacka, czy komentarz naprawdę wisi — zamiast wierzyć kliknięciu."""
     slug = url.rstrip("/").rsplit("/", 1)[-1]
     probka = " ".join(tekst.split())[:60]
-    try:
-        return bool(page.evaluate(
-            """async ([slug, probka]) => {
-                const p = await (await fetch('/api/v1/posts/' + slug,
-                                             {credentials: 'include'})).json();
-                if (!p || !p.id) return false;
-                const c = await (await fetch('/api/v1/post/' + p.id +
-                                             '/comments?all_comments=true',
-                                             {credentials: 'include'})).json();
-                const lista = c.comments || c || [];
-                const norm = s => (s || '').replace(/\\s+/g, ' ');
-                return lista.some(k => norm(k.body).includes(probka));
-            }""",
-            [slug, probka],
-        ))
-    except Exception as exc:
-        print(f"  (nie udało się potwierdzić u Substacka: {exc})"[:160], flush=True)
+    post = api_json(page, f"/api/v1/posts/{slug}")
+    if not isinstance(post, dict) or not post.get("id"):
         return False
-
+    dane = api_json(page, f"/api/v1/post/{post['id']}/comments?all_comments=true")
+    lista = (dane or {}).get("comments", dane) or []
+    return any(probka in " ".join((k.get("body") or "").split())
+               for k in lista if isinstance(k, dict))
 
 def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False) -> dict[str, Any]:
     """Wystawia komentarz pod cudzym postem. Domyślnie WYPEŁNIA i NIE WYSYŁA."""
