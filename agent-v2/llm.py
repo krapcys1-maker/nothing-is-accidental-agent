@@ -88,7 +88,15 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
 
 
 def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int) -> tuple[float, bool]:
-    price = config.PRICING[model]
+    # DeepSeek liczy od 2026-08-16 wg pory doby, wiec stawke bierzemy na moment
+    # wywolania, a nie ze stalej. Roznica miedzy szczytem a reszta doby to
+    # dwukrotnosc — na tyle duzo, ze usrednianie zafalszowaloby zapis.
+    if model.startswith("deepseek"):
+        stawka = config.stawka_deepseek(model)
+        price = {"in": stawka["in"], "out": stawka["out"],
+                 "verified": config.PRICING[model]["verified"]}
+    else:
+        price = config.PRICING[model]
     usd = tokens_in / 1_000_000 * price["in"] + tokens_out / 1_000_000 * price["out"]
     # Osobna opłata za wyszukiwanie jest cennikiem Anthropic. U DeepSeeka
     # wyszukiwanie mieści się w tokenach — doliczanie tu $10/1000 zawyżałoby

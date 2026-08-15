@@ -141,13 +141,18 @@ MODEL_FOR = {
     # Notki i komentarze na DeepSeeku — decyzja właściciela. Przy ~$0,002 za
     # sztukę można wygenerować kilkanaście kandydatów i wybrać najlepszego,
     # co dla czterdziestu słów działa lepiej niż jedno drogie podejście.
+    # PODZIAL PO TESCIE A/B NA TYM SAMYM POSCIE. Pro przynioslo konkretny
+    # precedens (protokol z Amsterdamu 1997 o czuciu zwierzat) i nazwalo
+    # asymetrie kosztu bledu; flash dal trafna, ale ogolniejsza uwage. Roznica
+    # kosztu to ~12 USD miesiecznie i placimy ja TAM, GDZIE TEKST JEST PUBLICZNY
+    # I TRWALY — a nie tam, gdzie model tylko wybiera z listy albo opisuje obrazek.
     "note": DEEPSEEK_PRO,
     "comment": DEEPSEEK_PRO,
     "reply": DEEPSEEK_PRO,
     "factcheck": DEEPSEEK_PRO,
     "curiosity": DEEPSEEK_PRO,
-    "grafika": DEEPSEEK_PRO,
-    "cele": DEEPSEEK_PRO,
+    "grafika": DEEPSEEK,
+    "cele": DEEPSEEK,
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -189,13 +194,56 @@ PRICING = {
     CLAUDE: {"in": 5.00, "out": 25.00, "verified": True},
     SONNET: {"in": 3.00, "out": 15.00, "verified": True},
     FABLE: {"in": 10.00, "out": 50.00, "verified": True},
-    # Skalibrowane fakturą DeepSeeka z 2026-08-15: 138 wywołań, 3 968 825
-    # tokenów, $0,49. Mój wcześniejszy szacunek ($0,28/$0,42) dawał $0,8366 —
-    # przeszacowanie o 70%, bo duża część wejścia idzie z cache'a taniej.
-    # Te stawki odtwarzają fakturę z dokładnością do centa.
-    DEEPSEEK: {"in": 0.10, "out": 0.25, "verified": True},
-    DEEPSEEK_PRO: {"in": 0.10, "out": 0.25, "verified": True},
+    # STAWKI Z CENNIKA DOSTAWCY, nie z dopasowania do faktury. Poprzednie
+    # $0,10/$0,25 dla OBU modeli odtwarzaly fakture co do centa — ale tylko
+    # dlatego, ze przez blad routingu wszystko jechalo na flashu z trafieniami
+    # w cache. Kalibracja dopasowala sie do zlego modelu i zanizala koszt pro
+    # trzy-czterokrotnie.
+    #
+    # Bierzemy stawke cache MISS, bo trafien w cache nie umiemy przewidziec,
+    # a zawyzony szacunek jest bezpieczniejszy od zanizonego.
+    DEEPSEEK: {"in": 0.14, "out": 0.28, "verified": False},
+    DEEPSEEK_PRO: {"in": 0.435, "out": 0.87, "verified": False},
 }
+
+# --- taryfa szczytowa DeepSeeka -----------------------------------------------
+# Od 2026-08-16 16:00 UTC DeepSeek wprowadza ceny szczytowe i pozaszczytowe:
+# poza szczytem polowa ceny szczytowej. Rozniica jest ogromna — pro w szczycie
+# to $3,96 za milion tokenow wyjscia wobec $1,98 poza nim.
+#
+# WNIOSEK DLA HARMONOGRAMU: agent ma pracowac POZA SZCZYTEM. To nie jest
+# oszczedzanie na sile, tylko darmowa polowa rachunku za przesuniecie godziny.
+TARYFA_SZCZYTOWA_OD = "2026-08-16T16:00:00+00:00"
+GODZINY_SZCZYTU_UTC = frozenset(range(1, 4)) | frozenset(range(6, 10))
+
+# Mnozniki wzgledem stawek wyzej, po wejsciu nowej taryfy.
+MNOZNIK_SZCZYT = 4.55      # 1,32/0,29 dla flasha; 3,96/0,87 dla pro
+MNOZNIK_POZA_SZCZYTEM = 2.28
+
+
+def stawka_deepseek(model: str, kiedy=None) -> dict[str, float]:
+    """Stawka DeepSeeka z uwzglednieniem pory doby po wejsciu nowej taryfy."""
+    from datetime import datetime, timezone
+
+    baza = PRICING[model]
+    kiedy = kiedy or datetime.now(timezone.utc)
+    if kiedy < datetime.fromisoformat(TARYFA_SZCZYTOWA_OD):
+        return {"in": baza["in"], "out": baza["out"], "szczyt": None}
+    m = (MNOZNIK_SZCZYT if kiedy.hour in GODZINY_SZCZYTU_UTC
+         else MNOZNIK_POZA_SZCZYTEM)
+    return {"in": round(baza["in"] * m, 4), "out": round(baza["out"] * m, 4),
+            "szczyt": kiedy.hour in GODZINY_SZCZYTU_UTC}
+
+
+def w_szczycie(kiedy=None) -> bool:
+    """Czy teraz obowiazuje droga taryfa."""
+    from datetime import datetime, timezone
+
+    kiedy = kiedy or datetime.now(timezone.utc)
+    if kiedy < datetime.fromisoformat(TARYFA_SZCZYTOWA_OD):
+        return False
+    return kiedy.hour in GODZINY_SZCZYTU_UTC
+
 
 # Filtrowanie dynamiczne (`_20260209`) jest na Opusie i Sonnecie 5.
 WEB_SEARCH_TOOL = {

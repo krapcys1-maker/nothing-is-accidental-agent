@@ -355,6 +355,32 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
     return budzet
 
 
+def sesje_dnia() -> list[dict[str, Any]]:
+    """Rozkłada dzień na kilka posiedzeń zamiast jednego ciągu.
+
+    Research o awariach takich agentów wskazał ciasną kadencję jako główny
+    sygnał, po którym platformy rozpoznają automat — a karą nie jest błąd, tylko
+    cichy spadek zasięgu, którego agent nigdy nie zauważy. Człowiek nie robi
+    całej dobowej aktywności w jednym ciągu o równej godzinie: zagląda kilka
+    razy, nierówno, czasem wcale.
+
+    Zwraca posiedzenia z godziną (UTC) i udziałem dziennego budżetu. Sam podział
+    jest losowany, więc dwa dni nigdy nie wyglądają tak samo.
+    """
+    import random
+
+    ile = random.choice((2, 3, 3, 4))          # najczęściej trzy zaglądnięcia
+    # Godziny z dala od szczytu taryfowego DeepSeeka (01-04 i 06-10 UTC) i
+    # rozrzucone po dobie, żeby aktywność nie tworzyła jednego słupka.
+    pula = [11, 13, 15, 17, 19, 21, 23]
+    godziny = sorted(random.sample(pula, ile))
+    wagi = [random.uniform(0.6, 1.4) for _ in godziny]
+    suma = sum(wagi)
+    return [{"godzina_utc": g, "udzial": w / suma,
+             "minuta": random.randint(0, 59)}
+            for g, w in zip(godziny, wagi)]
+
+
 def odczekaj() -> None:
     """Przerwa między działaniami. Piętnaście polubień w minutę to nie czytanie."""
     import random
