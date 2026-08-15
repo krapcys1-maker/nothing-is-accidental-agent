@@ -1314,10 +1314,18 @@ class AnthropicResearchClient:
             "confidence_score, source_quality_score, source_claims "
             '(list of {"url": "...", "supports_claim": "..."} mapping each source url '
             "to the claim it supports — do NOT repeat title/author/date, just url). "
+            # These counts are not style guidance, they are the size contract in
+            # app/research/output_contract.py, and exceeding one destroys the
+            # whole paid card rather than trimming a field. This prompt used to
+            # invite 4-8 confirmed_claims against a ceiling of 6, and 4
+            # uncertain_claims and 4 contradictions against ceilings of 3 - so a
+            # model obeying the instruction exactly killed the card. The
+            # ceilings are derived from a frozen token profile, so the prompt is
+            # the side that has to move.
             "Keep the JSON concise: working_thesis <= 80 words; main_mechanism <= 150 "
-            "words; 4-8 confirmed_claims of <= 35 words each; at most 4 "
-            "uncertain_claims and 4 contradictions; strongest_counterargument <= 80 "
-            "words; at most 8 citable_numbers; visual_idea <= 60 words; source_claims "
+            "words; 4-6 confirmed_claims of <= 30 words each; at most 3 "
+            "uncertain_claims and 3 contradictions; strongest_counterargument <= 60 "
+            "words; at most 6 citable_numbers; visual_idea <= 50 words; source_claims "
             "must contain exactly one short mapping per supplied source. "
             "Return ONLY the JSON object, no prose before or after it."
         )

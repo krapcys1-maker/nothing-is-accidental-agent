@@ -14457,9 +14457,21 @@ class SqliteStorage:
             candidates,
             key=lambda c: (c.canonical_source_identity, c.canonical_url, c.result_identity),
         )
-        identities = [c.canonical_source_identity for c in ordered]
-        if len(set(identities)) != len(identities):
-            raise ValueError("A1 source identities must be unique within one result.")
+        # A repeated identity is one candidate too many, not a corrupt result.
+        # Discovery is asked for sources on a named institution's own domain, so
+        # naming the same regulation twice is an ordinary thing for it to do -
+        # and condemning the whole answer for it discarded a settled 0.618865 USD
+        # call that had otherwise found exactly what was asked for. The first
+        # occurrence in the deterministic order above is kept, which is stable
+        # across runs, and the rest are dropped.
+        deduplicated: list[object] = []
+        seen_identities: set[str] = set()
+        for candidate in ordered:
+            if candidate.canonical_source_identity in seen_identities:
+                continue
+            seen_identities.add(candidate.canonical_source_identity)
+            deduplicated.append(candidate)
+        ordered = deduplicated
         for item in ordered:
             if not all((item.canonical_source_identity, item.title,
                         item.result_identity, item.observed_at, port_name)):

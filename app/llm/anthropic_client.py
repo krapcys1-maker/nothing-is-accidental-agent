@@ -53,7 +53,7 @@ TOPIC_MAX_OUTPUT_TOKENS = 4096
 #
 # A timeout is a guard against hanging forever, not a performance budget, so it
 # belongs far above the observed distribution instead of inside it.
-DEFAULT_PROVIDER_TIMEOUT_SECONDS = 300.0
+DEFAULT_PROVIDER_TIMEOUT_SECONDS = 420.0
 SDK_MAX_RETRIES = 0
 
 _SYSTEM = (
