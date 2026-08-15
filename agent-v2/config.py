@@ -139,8 +139,12 @@ PRICING = {
     CLAUDE: {"in": 5.00, "out": 25.00, "verified": True},
     SONNET: {"in": 3.00, "out": 15.00, "verified": True},
     FABLE: {"in": 10.00, "out": 50.00, "verified": True},
-    DEEPSEEK: {"in": 0.28, "out": 0.42, "verified": False},
-    DEEPSEEK_PRO: {"in": 0.28, "out": 0.42, "verified": False},
+    # Skalibrowane fakturą DeepSeeka z 2026-08-15: 138 wywołań, 3 968 825
+    # tokenów, $0,49. Mój wcześniejszy szacunek ($0,28/$0,42) dawał $0,8366 —
+    # przeszacowanie o 70%, bo duża część wejścia idzie z cache'a taniej.
+    # Te stawki odtwarzają fakturę z dokładnością do centa.
+    DEEPSEEK: {"in": 0.10, "out": 0.25, "verified": True},
+    DEEPSEEK_PRO: {"in": 0.10, "out": 0.25, "verified": True},
 }
 
 # Filtrowanie dynamiczne (`_20260209`) jest na Opusie i Sonnecie 5.
