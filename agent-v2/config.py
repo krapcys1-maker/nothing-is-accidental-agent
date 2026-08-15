@@ -532,9 +532,23 @@ MS_PER_OUTPUT_TOKEN = 16.08
 TIMEOUT_MARGIN = 1.5
 
 
+# Twardy sufit na JEDNO wywolanie. Bez niego wyliczenie z sufitu tokenow dawalo
+# 965 sekund, a przy wyszukiwaniu razy trzy — 48 MINUT. Jedno zawieszone
+# wywolanie blokowaloby caly dzien, a systemd ubilby przebieg po godzinie
+# w polowie roboty, zostawiajac dzien zrobiony do polowy.
+MAX_TIMEOUT_S = 300
+
+
 def timeout_for(max_tokens: int) -> float:
-    """Termin w sekundach, który realnie pokrywa podany sufit tokenów."""
-    return round(max_tokens * MS_PER_OUTPUT_TOKEN / 1000 * TIMEOUT_MARGIN, 1)
+    """Termin w sekundach, który realnie pokrywa podany sufit tokenów.
+
+    Ograniczony twardo: wyliczenie z sufitu dawało 965 sekund, a przy
+    wyszukiwaniu razy trzy — 48 minut na JEDNO wywołanie. Jedno zawieszenie
+    blokowałoby cały dzień, a `systemd` ubiłby przebieg po godzinie w połowie
+    roboty. Lepiej stracić jedną notkę niż resztę dnia.
+    """
+    return min(round(max_tokens * MS_PER_OUTPUT_TOKEN / 1000 * TIMEOUT_MARGIN, 1),
+               MAX_TIMEOUT_S)
 
 
 # --- pobieranie --------------------------------------------------------------
