@@ -195,9 +195,12 @@ CARD_MAX_CLAIM_CHARS = 240
 # Cel idzie do promptu pisarza. Długość NIE blokuje artykułu — jest notatką,
 # bo na starym agencie nie złapała nic, a blokowała.
 
+# Zmierzone na dziewięciu artykułach: przy „cel 1075, zakres 950-1250" model
+# kotwiczył się przy górnej granicy (średnia 1212). Sufit obniżony, a prompt
+# mówi teraz wprost, że 1075 to cel, nie podłoga.
 TARGET_WORDS = 1075
 MIN_WORDS = 950
-MAX_WORDS = 1250
+MAX_WORDS = 1200
 
 # Artykuł powstaje po angielsku — konto jest anglojęzyczne.
 ARTICLE_LANGUAGE = "English"

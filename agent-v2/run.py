@@ -164,13 +164,19 @@ def main() -> int:
         if args.stop_after == stage:
             return _done(conn, run_id, stage)
 
+        # Od tego miejsca artykuł MUSI powstać. Temat jest wybrany, research
+        # zrobiony i opłacony — żaden dalszy etap nie ma prawa zabić przebiegu.
         stage = "synthesis"
         print("\n-- synteza --", flush=True)
-        card = cached(
-            stage,
-            lambda: stages.synthesis(conn, run_id, topic["question"], evidence),
-            args.use_cache,
-        )
+        try:
+            card = cached(
+                stage,
+                lambda: stages.synthesis(conn, run_id, topic["question"], evidence),
+                args.use_cache,
+            )
+        except Exception as exc:
+            print(f"  [awaria] synteza padła ({exc}) — składam kartę z dowodów", flush=True)
+            card = stages.fallback_card(topic["question"], evidence)
         print(f"\n   teza: {card.get('working_thesis', '')}", flush=True)
         print(f"\n   mechanizm: {card.get('main_mechanism', '')[:400]}", flush=True)
         print(f"\n   potwierdzone twierdzenia ({len(card.get('confirmed_claims', []))}):", flush=True)
@@ -192,7 +198,12 @@ def main() -> int:
 
         stage = "write"
         print("\n-- pisanie --", flush=True)
-        draft = cached(stage, lambda: stages.write(conn, run_id, card), args.use_cache)
+        try:
+            draft = cached(stage, lambda: stages.write(conn, run_id, card), args.use_cache)
+        except Exception as exc:
+            # Jedno powtórzenie, bo tu ginie cały opłacony research.
+            print(f"  [awaria] pisarz padł ({exc}) — jedno powtórzenie", flush=True)
+            draft = stages.write(conn, run_id, card)
         words = len(draft["body"].split())
         print(f"\n   tytuł: {draft.get('title')}", flush=True)
         print(f"   podtytuł: {draft.get('subtitle', '')}", flush=True)
@@ -211,9 +222,17 @@ def main() -> int:
 
         stage = "review"
         print("\n-- recenzja --", flush=True)
-        report = cached(
-            stage, lambda: stages.review(conn, run_id, card, draft), args.use_cache
-        )
+        try:
+            report = cached(
+                stage, lambda: stages.review(conn, run_id, card, draft), args.use_cache
+            )
+        except Exception as exc:
+            # Recenzja nic nie blokuje, więc jej brak też nie może. Artykuł
+            # trafia do szuflady z adnotacją, że nie został rozliczony zdanie
+            # po zdaniu — właściciel wie, na co patrzy.
+            print(f"  [awaria] recenzja padła ({exc}) — zapisuję bez niej", flush=True)
+            report = {"sentences": [], "unsupported_facts": [],
+                      "summary": f"recenzja niedostępna: {type(exc).__name__}"}
         sentences = report.get("sentences", [])
         counts = {k: sum(1 for s in sentences if s.get("class") == k)
                   for k in ("FACT", "INFERENCE", "PROSE")}

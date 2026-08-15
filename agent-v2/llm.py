@@ -231,11 +231,31 @@ def _call_deepseek_responses(
 
     walk(payload.get("output", []))
     text = payload.get("output_text") or "".join(text_parts)
+    usage = payload.get("usage", {})
+
+    # DeepSeek bywa, że przeszukuje i przeszukuje, a bloku `message` nie tworzy
+    # — 14 i 24 wyszukiwania kończyły się odpowiedzią, 36 już nie. Ale adresy
+    # z tych wyszukiwań SĄ w odpowiedzi i są opłacone. Zamiast wyrzucać je do
+    # kosza i płacić drugi raz, prosimy o sam wybór, bez narzędzi.
+    if not text.strip() and urls:
+        print(
+            f"  [{purpose}] {searches} wyszukiwań bez odpowiedzi — wybieram "
+            f"z {len(set(urls))} znalezionych adresów drugim wywołaniem",
+            flush=True,
+        )
+        text, tin2, tout2 = _deepseek_pick_from_urls(purpose, system, user, urls)
+        return (
+            text,
+            int(usage.get("input_tokens", 0)) + tin2,
+            int(usage.get("output_tokens", 0)) + tout2,
+            searches,
+            urls,
+        )
+
     if not text.strip():
         raise Truncated(
-            f"DeepSeek wykonał {searches} wyszukiwań i nie zwrócił tekstu "
-            f"(status={payload.get('status')!r}, bloki="
-            f"{sorted({b.get('type') for b in payload.get('output', []) if isinstance(b, dict)})})"
+            f"DeepSeek wykonał {searches} wyszukiwań i nie zwrócił ani tekstu, "
+            f"ani adresów (status={payload.get('status')!r})"
         )
     usage = payload.get("usage", {})
     return (
@@ -244,6 +264,45 @@ def _call_deepseek_responses(
         int(usage.get("output_tokens", 0)),
         searches,
         urls,
+    )
+
+
+def _deepseek_pick_from_urls(
+    purpose: str, system: str, user: str, urls: list[str]
+) -> tuple[str, int, int]:
+    """Drugie, tanie wywołanie: wybierz z adresów, które wyszukiwanie już zwróciło.
+
+    Bez narzędzi, więc nie ma jak zapętlić się w szukaniu.
+    """
+    unique = list(dict.fromkeys(urls))
+    response = httpx.post(
+        f"{config.DEEPSEEK_BASE_URL}/chat/completions",
+        headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"},
+        json={
+            "model": config.DEEPSEEK,
+            "max_tokens": config.MAX_TOKENS[purpose],
+            "messages": [
+                {"role": "system", "content": system},
+                {
+                    "role": "user",
+                    "content": (
+                        f"{user}\n\n---\n\nA search has already been run and returned "
+                        f"the addresses below. Do not search again and do not invent "
+                        f"any address — choose only from this list, and return the "
+                        f"JSON described above.\n\n" + "\n".join(unique)
+                    ),
+                },
+            ],
+        },
+        timeout=config.timeout_for(config.MAX_TOKENS[purpose]),
+    )
+    response.raise_for_status()
+    payload = response.json()
+    usage = payload.get("usage", {})
+    return (
+        payload["choices"][0]["message"]["content"],
+        int(usage.get("prompt_tokens", 0)),
+        int(usage.get("completion_tokens", 0)),
     )
 
 

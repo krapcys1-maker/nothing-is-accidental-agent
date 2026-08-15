@@ -139,6 +139,38 @@ def write(
     return draft
 
 
+def fallback_card(question: str, evidence: list[dict[str, Any]]) -> dict[str, Any]:
+    """Karta złożona z dowodów bez modelu — gdy synteza padnie.
+
+    Zasada właściciela: skoro temat jest wybrany, a research zrobiony i opłacony,
+    artykuł MUSI powstać. Ta karta jest gorsza od syntezy — nie waży dowodów, nie
+    znajduje sprzeczności — ale pozwala pisarzowi ruszyć, zamiast wyrzucać
+    opłacony research do kosza.
+    """
+    claims = [
+        {"claim": e["excerpts"][0][: config.CARD_MAX_CLAIM_CHARS],
+         "evidence": e["excerpts"][0], "url": e["url"]}
+        for e in evidence if e.get("excerpts")
+    ][: config.CARD_MAX_CONFIRMED]
+    numbers = [
+        {"value": n, "means": e.get("title", ""), "url": e["url"]}
+        for e in evidence for n in e.get("numbers", [])
+    ][: config.CARD_MAX_NUMBERS]
+    return {
+        "working_thesis": question,
+        "main_mechanism": "",
+        "confirmed_claims": claims,
+        "citable_numbers": numbers,
+        "uncertain_claims": [],
+        "contradictions": [],
+        "not_established": [
+            "This card was assembled mechanically because the synthesis step "
+            "failed; nothing here has been weighed against anything else."
+        ],
+        "_fallback": True,
+    }
+
+
 SYNTHESIS_SYSTEM = (
     "You build an evidence card from source excerpts. You assert only what the "
     "excerpts establish, never what you already know. Return only valid JSON."
