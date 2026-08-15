@@ -1,0 +1,14 @@
+# Zaleznosci agenta. Wersje przypiete, bo serwer ma zachowywac sie tak samo jak
+# ten komputer — a nie tak, jak akurat wypadnie w dniu instalacji.
+#
+# Po instalacji potrzebna jest jeszcze przegladarka Playwrighta:
+#   python -m playwright install chromium
+#   python -m playwright install-deps chromium     # tylko Linux
+#
+# OpenAI (grafiki) NIE wymaga pakietu — idzie przez urllib ze standardowej
+# biblioteki, wiec jest o jedna zaleznosc mniej do pilnowania.
+
+anthropic==0.116.0
+httpx==0.28.1
+python-dotenv==1.2.2
+playwright==1.62.0
