@@ -33,9 +33,58 @@ CDP_PORT = 9222
 SESSION_COOKIE = "substack.sid"
 
 
+# Ile dni przed wygaśnięciem sesji zaczynamy ostrzegać. Ciasteczko żyje ~90 dni,
+# więc dwa tygodnie to spokojny zapas na to, żeby właściciel zdążył zareagować.
+OSTRZEGAJ_PONIZEJ_DNI = 14
+
+
 def zalogowany(context) -> bool:
     """Twarde sprawdzenie: albo jest ciasteczko sesji, albo go nie ma."""
     return any(c.get("name") == SESSION_COOKIE for c in context.cookies())
+
+
+def dni_do_wygasniecia() -> int | None:
+    """Ile dni zostało sesji. None, gdy sesji nie ma wcale."""
+    import datetime
+    import json
+
+    if not SESSION_FILE.exists():
+        return None
+    dane = json.loads(SESSION_FILE.read_text(encoding="utf-8"))
+    for ciastko in dane.get("cookies", []):
+        if ciastko.get("name") != SESSION_COOKIE:
+            continue
+        koniec = ciastko.get("expires", -1)
+        if not koniec or koniec < 0:
+            return 0
+        wygasa = datetime.datetime.fromtimestamp(koniec, datetime.timezone.utc)
+        return (wygasa - datetime.datetime.now(datetime.timezone.utc)).days
+    return None
+
+
+def wymagaj_sesji() -> None:
+    """Sprawdza sesję przed pracą i mówi wprost, gdy trzeba się zalogować.
+
+    Agent chodzi bez nadzoru, więc cicha awaria na wygasłej sesji byłaby
+    najgorszym wariantem: przez tydzień nic by nie wychodziło, a log milczał.
+    """
+    dni = dni_do_wygasniecia()
+    if dni is None:
+        raise SystemExit(
+            "Brak sesji Substacka.\n"
+            "Uruchom Chrome z portem debugowania, zaloguj się i wykonaj:\n"
+            "  python agent-v2/browser.py sesja"
+        )
+    if dni <= 0:
+        raise SystemExit(
+            f"Sesja Substacka wygasła. Zaloguj się ponownie i wykonaj:\n"
+            "  python agent-v2/browser.py sesja"
+        )
+    if dni <= OSTRZEGAJ_PONIZEJ_DNI:
+        print(
+            f"  [uwaga] sesja Substacka wygasa za {dni} dni — warto odnowić",
+            flush=True,
+        )
 
 
 def podlacz_sie():
@@ -84,7 +133,10 @@ def sprawdz_sesje() -> None:
         if zalogowany:
             SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
             context.storage_state(path=str(SESSION_FILE))
+            dni = dni_do_wygasniecia()
             print(f"  stan sesji zapisany: {SESSION_FILE}")
+            if dni is not None:
+                print(f"  wazna jeszcze {dni} dni")
     finally:
         page.close()
         browser.close()
@@ -193,6 +245,9 @@ def rozpoznanie() -> None:
                     print(f"     pola do pisania: {' | '.join(pola[:6])[:150]}", flush=True)
             except Exception as exc:
                 print(f"  {name:26} BŁĄD {type(exc).__name__}: {exc}"[:160], flush=True)
+        # Zapisujemy stan po każdej pracy: Substack odświeża ciasteczko przy
+        # aktywności, więc regularne używanie konta samo przesuwa datę ważności.
+        context.storage_state(path=str(SESSION_FILE))
         context.close()
         browser.close()
 
