@@ -105,8 +105,20 @@ def zaloguj() -> None:
             print("   (nie znalazłem Chrome, używam wbudowanej przeglądarki)\n")
         context = browser.new_context(viewport={"width": 1400, "height": 950})
         page = context.new_page()
-        page.goto("https://substack.com/sign-in", timeout=READ_TIMEOUT_MS)
-        input("   [naciśnij Enter, gdy będziesz zalogowany] ")
+
+        # NAJPIERW strona główna, nie formularz logowania. Pokazywanie formularza
+        # komuś, kto jest już zalogowany, potrafi zapętlić CAPTCHĘ — nie ma czego
+        # potwierdzać. Jeśli sesja istnieje, nie ma się w ogóle po co logować.
+        page.goto("https://substack.com/home", timeout=READ_TIMEOUT_MS,
+                  wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS)
+        widok = page.inner_text("body")
+        if "sign in" not in widok.lower()[:300] and len(widok) > 1200:
+            print("   Jesteś już zalogowany — logowanie niepotrzebne.\n")
+        else:
+            print("   Nie jesteś zalogowany, otwieram formularz.\n")
+            page.goto("https://substack.com/sign-in", timeout=READ_TIMEOUT_MS)
+            input("   [naciśnij Enter, gdy będziesz zalogowany] ")
         SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
         context.storage_state(path=str(SESSION_FILE))
         context.close()
