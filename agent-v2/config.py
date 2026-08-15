@@ -427,10 +427,10 @@ NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", 
 # To NIE sa zmierzone progi, tylko tempo aktywnego czlowieka. Sa celowo niskie,
 # bo kosztem przesady nie jest ostrzezenie, tylko utrata konta, na ktorym stoi
 # caly projekt. Podniesiemy je dopiero, gdy zobaczymy wlasne dane.
-LAJKI_DZIENNIE = (5, 15)
-KOMENTARZE_DZIENNIE = (2, 5)      # 0 jest dozwolone: milczenie bije slaby komentarz
-FOLLOW_MIESIECZNIE = (10, 20)     # obserwowanie to czytanie, nie zbieranie
-SUBSKRYPCJE_MIESIECZNIE = (2, 5)  # laduje w skrzynce wlasciciela, wiec waskie
+LAJKI_DZIENNIE = (12, 20)
+KOMENTARZE_DZIENNIE = (15, 20)    # 0 jest dozwolone: milczenie bije slaby komentarz
+FOLLOW_MIESIECZNIE = (30, 44)     # obserwowanie to czytanie, nie zbieranie
+SUBSKRYPCJE_MIESIECZNIE = (6, 12)  # laduje w skrzynce wlasciciela, wiec waskie
 RESTACK_DZIENNIE = (0, 0)         # ZABLOKOWANE do osobnej decyzji wlasciciela
 
 # Pierwszy miesiac na dolnej polowie widelek. Nowe konto z jednym artykulem,
@@ -441,6 +441,11 @@ ROZBIEG_DNI = 30
 # sekund to nie jest czytanie i kazdy system to widzi.
 ODSTEP_MIEDZY_DZIALANIAMI = (45, 180)
 MAX_DZIALAN_NA_GODZINE = 12
+
+# Ile razy dziennie wolno zagadac TE SAMA publikacje. Siedemnascie komentarzy
+# u siedemnastu roznych autorow to aktywny czytelnik; siedemnascie pod jednym
+# czlowiekiem to nachodzenie, niezaleznie od tego, jak trafne sa kazdy z osobna.
+MAX_KOMENTARZY_NA_PUBLIKACJE = 2
 
 # Zapas na myślenie dostają WSZYSTKIE etapy, nie tylko Claude'owe: modele
 # DeepSeek v4 też rozumują, a tokeny rozumowania liczą się do sufitu wyjścia.
