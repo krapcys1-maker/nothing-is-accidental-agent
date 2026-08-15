@@ -272,20 +272,29 @@ def grafika(
     `prompts/grafika.md`. Dzięki temu tożsamość wizualna zmienia się w jednym
     miejscu, a nie osobno przy każdym artykule.
     """
-    prompt = _prompt(
-        "grafika.md",
-        title=draft.get("title", ""),
-        body=draft.get("body", "")[:6000],
-    )
-    brief = llm.parse_json(
-        llm.call("grafika", IMAGE_SYSTEM, prompt, conn=conn, run_id=run_id)
-    )
-    opis = brief.get("prompt") or ""
-    if not opis:
-        raise ValueError("brief graficzny bez promptu")
-    print(f"  [grafika] przedmiot: {brief.get('subject', '')}", flush=True)
+    # GRAFIKA NIGDY NIE ZABIJA ARTYKUŁU. Zasada właściciela mówi wprost: gdy
+    # temat jest wybrany, a research zrobiony i opłacony, artykuł MUSI powstać.
+    # Nagłówek jest ozdobą, artykuł produktem — więc gdy zabraknie budżetu na
+    # obraz albo padnie OpenAI, wychodzi artykuł bez grafiki, a nie nic.
+    try:
+        prompt = _prompt(
+            "grafika.md",
+            title=draft.get("title", ""),
+            body=draft.get("body", "")[:6000],
+        )
+        brief = llm.parse_json(
+            llm.call("grafika", IMAGE_SYSTEM, prompt, conn=conn, run_id=run_id)
+        )
+        opis = brief.get("prompt") or ""
+        if not opis:
+            raise ValueError("brief graficzny bez promptu")
+        print(f"  [grafika] przedmiot: {brief.get('subject', '')}", flush=True)
 
-    dane = llm.obraz(opis, conn=conn, run_id=run_id)
+        dane = llm.obraz(opis, conn=conn, run_id=run_id)
+    except Exception as exc:
+        print(f"  [grafika] NIE POWSTAŁA ({type(exc).__name__}) — "
+              f"artykuł wychodzi bez nagłówka", flush=True)
+        return {"blad": f"{type(exc).__name__}: {exc}"[:200]}
     if not dane:
         return brief   # DRY_RUN
     cel = (sciezka_artykulu.with_suffix(".png") if sciezka_artykulu

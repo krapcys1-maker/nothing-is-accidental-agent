@@ -125,6 +125,33 @@ def sprawdz_sesje_i_ostrzez() -> None:
                "  python agent-v2/browser.py sesja")
 
 
+def sprawdz_przebiegi_i_ostrzez(ile: int = 3) -> None:
+    """Alarmuje, gdy agent pada raz za razem.
+
+    Jeden nieudany przebieg to zdarzenie — sieć, dostawca, zły dzień. Trzy pod
+    rząd to awaria, która sama nie minie, a bez tego alarmu wyszłaby na jaw
+    dopiero wtedy, gdy właściciel zajrzy na konto i zobaczy tydzień ciszy.
+    """
+    import db
+
+    conn = db.connect()
+    ostatnie = conn.execute(
+        "SELECT status, stage, note FROM runs WHERE status != 'RUNNING'"
+        " ORDER BY id DESC LIMIT ?", (ile,),
+    ).fetchall()
+    if len(ostatnie) < ile:
+        return
+    if all(r["status"] not in ("DONE", "SAVED") for r in ostatnie):
+        szczegoly = "\n".join(
+            f"  - {r['status']} na etapie {r['stage']}: {(r['note'] or '')[:120]}"
+            for r in ostatnie)
+        wyslij("przebiegi-pada",
+               f"Agent padl {ile} razy pod rzad",
+               f"Ostatnie {ile} przebiegow zakonczylo sie bledem:\n\n{szczegoly}\n\n"
+               "Zajrzyj na serwer:\n"
+               "  journalctl -u nia-agent.service -n 60 --no-pager")
+
+
 if __name__ == "__main__":
     import sys
 
@@ -134,3 +161,4 @@ if __name__ == "__main__":
                "Jesli to czytasz, alarmy dochodza.")
     else:
         sprawdz_sesje_i_ostrzez()
+        sprawdz_przebiegi_i_ostrzez()

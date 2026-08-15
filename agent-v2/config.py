@@ -215,6 +215,12 @@ MONTHLY_LIMIT_USD = 40.00
 # „Bez limitu na budowę" miało znaczyć „nie blokuj eksperymentów", a nie
 # „pozwól jednemu przebiegowi kosztować 2 USD". Przebieg 16 kosztował $1,92,
 # z czego $1,33 poszło na 31 niepotrzebnych rund wyszukiwania.
+# Ponowienia TYLKO bledow przejsciowych (zerwana siec, przekroczony czas, 429,
+# 5xx). Bledy trwale — odmowa, zly klucz, przekroczony budzet, uciecie na suficie
+# — nie sa ponawiane, bo powtorza sie identycznie i tylko koszruja.
+PONOWIENIA = 2
+PONOWIENIE_ODSTEP_S = 8
+
 RUN_LIMIT_USD = 1.60
 
 # =============================================================================

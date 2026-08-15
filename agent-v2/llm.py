@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -339,6 +340,33 @@ def _call_deepseek(purpose: str, system: str, user: str) -> tuple[str, int, int,
     )
 
 
+def przejsciowy(exc: BaseException) -> bool:
+    """Czy ten błąd ma szansę minąć sam.
+
+    Rozróżnienie, które decyduje o tym, czy ponowienie jest dokończeniem, czy
+    paleniem pieniędzy:
+
+    PRZEJŚCIOWE — wywołanie się NIE ODBYŁO albo dostawca chwilowo nie dał rady:
+    zerwana sieć, przekroczony czas, 429, 5xx. Ponowienie takiego wywołania nie
+    jest decyzją, tylko dokończeniem tego, co miało się zdarzyć.
+
+    TRWAŁE — wywołanie się odbyło i skończyło źle: odmowa dostawcy, zły klucz,
+    przekroczony budżet, odpowiedź ucięta na suficie. Powtórzy się identycznie,
+    więc ponawianie kosztuje i nie zmienia nic.
+    """
+    if isinstance(exc, (BudgetExceeded, PreflightFailed, Truncated)):
+        return False
+    if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
+        return True
+    kod = getattr(exc, "status_code", None) or getattr(
+        getattr(exc, "response", None), "status_code", None)
+    if isinstance(kod, int):
+        return kod == 429 or 500 <= kod < 600
+    # Nierozpoznany błąd traktujemy jak trwały: lepiej nie zapłacić drugi raz
+    # za coś, czego nie rozumiemy.
+    return False
+
+
 def call(
     purpose: str,
     system: str,
@@ -362,28 +390,38 @@ def call(
         print(f"  [{purpose}] DRY_RUN — wywołanie pominięte", flush=True)
         return ""
 
-    try:
-        if provider == "anthropic":
-            text, tin, tout, searches, urls = _call_claude(purpose, system, user, web_search)
-        elif web_search:
-            text, tin, tout, searches, urls = _call_deepseek_responses(
-                purpose, system, user
+    for proba in range(1, config.PONOWIENIA + 2):
+        try:
+            if provider == "anthropic":
+                text, tin, tout, searches, urls = _call_claude(
+                    purpose, system, user, web_search)
+            elif web_search:
+                text, tin, tout, searches, urls = _call_deepseek_responses(
+                    purpose, system, user)
+            else:
+                text, tin, tout, searches = _call_deepseek(purpose, system, user)
+                urls = []
+            if collect_urls is not None:
+                collect_urls.extend(urls)
+            break
+        except Exception as exc:
+            if przejsciowy(exc) and proba <= config.PONOWIENIA:
+                czekaj = config.PONOWIENIE_ODSTEP_S * 2 ** (proba - 1)
+                print(f"  [{purpose}] {type(exc).__name__} — przejściowy, "
+                      f"ponawiam za {czekaj}s ({proba}/{config.PONOWIENIA})",
+                      flush=True)
+                time.sleep(czekaj)
+                continue
+            # Koszt nieudanego wywołania bywa nieznany. Zapisujemy "nie wiadomo"
+            # zamiast zgadywać kwotę — zgadnięta kwota w zapisie finansowym jest
+            # gorsza niż jej brak.
+            db.record_call(
+                conn=conn, run_id=run_id, provider=provider, model=model,
+                purpose=purpose, tokens_in=0, tokens_out=0, web_searches=0,
+                cost_usd=0.0, price_verified=0, ok=0,
+                note=f"{type(exc).__name__}: {exc}"[:500],
             )
-        else:
-            text, tin, tout, searches = _call_deepseek(purpose, system, user)
-            urls = []
-        if collect_urls is not None:
-            collect_urls.extend(urls)
-    except Exception as exc:
-        # Koszt nieudanego wywołania bywa nieznany. Zapisujemy "nie wiadomo"
-        # zamiast zgadywać kwotę — zgadnięta kwota w zapisie finansowym jest
-        # gorsza niż jej brak.
-        db.record_call(
-            conn=conn, run_id=run_id, provider=provider, model=model, purpose=purpose,
-            tokens_in=0, tokens_out=0, web_searches=0, cost_usd=0.0,
-            price_verified=0, ok=0, note=f"{type(exc).__name__}: {exc}"[:500],
-        )
-        raise
+            raise
 
     usd, verified = _cost(model, tin, tout, searches)
     db.record_call(
