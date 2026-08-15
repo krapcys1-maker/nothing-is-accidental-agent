@@ -220,10 +220,28 @@ def enforce_evidence_research_response_size(text: str) -> None:
 def enforce_evidence_supporting_excerpts_budget(
     excerpts_by_url: dict[str, str],
 ) -> None:
-    """Górna granica każdego dosłownego cytatu źródła (fail-closed)."""
-    for url, excerpt in excerpts_by_url.items():
+    """Trim each verbatim excerpt to its ceiling; never discard the card for one.
+
+    A single over-long excerpt used to raise and destroy the whole research
+    card. One did: a 600-character ceiling against an Ofgem page, on a corpus of
+    seven sources where six came straight from the regulator, and the settled
+    0.21 USD synthesis went in the bin with it.
+
+    Trimming is the safe direction here, and that is not true of every list in
+    this module. An excerpt is quoted material the writer may lean on, so a
+    shorter one supports LESS and can only make the article more cautious. That
+    is the opposite of uncertain_claims and contradictions, which still fail
+    closed above, because dropping a caveat makes an article more assertive than
+    its evidence.
+
+    The excerpt keeps its head rather than its tail: the quotation was selected
+    to support a specific claim and the supporting sentence leads.
+    """
+    for url, excerpt in list(excerpts_by_url.items()):
+        if isinstance(excerpt, str) and len(excerpt) > MAX_SOURCE_EXCERPT_CHARS:
+            excerpts_by_url[url] = excerpt[:MAX_SOURCE_EXCERPT_CHARS]
         _check_string(
-            excerpt,
+            excerpts_by_url[url],
             field=f"sources[url={url}].supporting_excerpt",
             max_chars=MAX_SOURCE_EXCERPT_CHARS,
         )

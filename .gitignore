@@ -82,3 +82,7 @@ Thumbs.db
 .idea/
 .vscode/
 .fleet/
+
+# === agent-v2: nowy agent ma wlasny .env ===
+agent-v2/.env
+agent-v2/data/
