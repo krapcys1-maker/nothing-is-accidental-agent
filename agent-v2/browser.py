@@ -255,6 +255,17 @@ def sprawdz_sesje() -> None:
     p, browser, context = podlacz_sie()
     page = context.new_page()
     try:
+        # Czy tej notki juz nie wystawilismy? Pytamy RZECZYWISTOSCI, a nie
+        # wlasnej ksiegowosci: proces przerwany po klknieciu, a przed zapisem,
+        # zostawilby ksiegowosc niezgodna ze stanem faktycznym. Substack wie
+        # lepiej niz my, co u nas wisi.
+        if wyslij and potwierdz_notke(page, tekst):
+            print("  ta notka juz jest na profilu — nie wystawiam drugi raz",
+                  flush=True)
+            wynik["wyslane"] = True
+            wynik["pominiete"] = True
+            return wynik
+
         page.goto("https://substack.com/home", timeout=READ_TIMEOUT_MS,
                   wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS)
@@ -352,6 +363,17 @@ def zaloguj() -> None:
         # NAJPIERW strona główna, nie formularz logowania. Pokazywanie formularza
         # komuś, kto jest już zalogowany, potrafi zapętlić CAPTCHĘ — nie ma czego
         # potwierdzać. Jeśli sesja istnieje, nie ma się w ogóle po co logować.
+        # Czy tej notki juz nie wystawilismy? Pytamy RZECZYWISTOSCI, a nie
+        # wlasnej ksiegowosci: proces przerwany po klknieciu, a przed zapisem,
+        # zostawilby ksiegowosc niezgodna ze stanem faktycznym. Substack wie
+        # lepiej niz my, co u nas wisi.
+        if wyslij and potwierdz_notke(page, tekst):
+            print("  ta notka juz jest na profilu — nie wystawiam drugi raz",
+                  flush=True)
+            wynik["wyslane"] = True
+            wynik["pominiete"] = True
+            return wynik
+
         page.goto("https://substack.com/home", timeout=READ_TIMEOUT_MS,
                   wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS)
@@ -906,6 +928,13 @@ def wystaw_artykul(
     wynik: dict[str, Any] = {"wypelnione": False, "wyslane": False, "blad": None,
                              "tytul": artykul["tytul"]}
     try:
+        if wyslij and potwierdz_artykul(page, artykul["tytul"]):
+            print("  artykul o tym tytule juz jest opublikowany — przerywam",
+                  flush=True)
+            wynik["wyslane"] = True
+            wynik["pominiete"] = True
+            return wynik
+
         page.goto(f"https://{config.SUBSTACK_HANDLE}.substack.com/publish/post"
                   "?type=newsletter",
                   timeout=READ_TIMEOUT_MS * 2, wait_until="domcontentloaded")
@@ -980,6 +1009,13 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False) -> dict[str
     page = context.new_page()
     wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
     try:
+        if wyslij and potwierdz_odpowiedz(page, note_id, tekst):
+            print("  ta odpowiedz juz jest w watku — nie wystawiam drugi raz",
+                  flush=True)
+            wynik["wyslane"] = True
+            wynik["pominiete"] = True
+            return wynik
+
         page.goto(f"https://substack.com/@{PROFIL_HANDLE}/note/c-{note_id}",
                   timeout=READ_TIMEOUT_MS, wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS + 3000)
@@ -1046,6 +1082,17 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
     page = context.new_page()
     wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
     try:
+        # Czy tej notki juz nie wystawilismy? Pytamy RZECZYWISTOSCI, a nie
+        # wlasnej ksiegowosci: proces przerwany po klknieciu, a przed zapisem,
+        # zostawilby ksiegowosc niezgodna ze stanem faktycznym. Substack wie
+        # lepiej niz my, co u nas wisi.
+        if wyslij and potwierdz_notke(page, tekst):
+            print("  ta notka juz jest na profilu — nie wystawiam drugi raz",
+                  flush=True)
+            wynik["wyslane"] = True
+            wynik["pominiete"] = True
+            return wynik
+
         page.goto("https://substack.com/home", timeout=READ_TIMEOUT_MS,
                   wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS)
@@ -1130,6 +1177,13 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False) -> dict[str, An
     page = context.new_page()
     wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
     try:
+        if wyslij and potwierdz_komentarz(page, url, tekst):
+            print("  ten komentarz juz tam wisi — nie wystawiam drugi raz",
+                  flush=True)
+            wynik["wyslane"] = True
+            wynik["pominiete"] = True
+            return wynik
+
         page.goto(url, timeout=READ_TIMEOUT_MS, wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS + 2000)
 
