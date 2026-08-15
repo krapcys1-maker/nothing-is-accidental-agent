@@ -605,20 +605,21 @@ def comment_on(
     Generuje kilku kandydatów i oddaje wszystkich; wybór należy do właściciela.
     Milczenie jest pełnoprawną odpowiedzią i nie jest porażką.
     """
-    if fakty is None:
-        fakty = sprawdz_fakty(conn, run_id, post)
-    if not fakty:
-        # Przy artykule brak dowodów oznacza gorszy artykuł, ale artykuł musi powstać.
-        # Przy komentarzu jest odwrotnie: milczenie jest pełnoprawną odpowiedzią, a
-        # publicznego komentarza z wymyślonym faktem nie da się cofnąć. Więc bez
-        # pokrycia nie komentujemy.
-        print("  [komentarz] brak zweryfikowanych faktów — nie komentuję", flush=True)
-        return {
-            "post": post.get("url"), "title": post.get("title"),
-            "candidates": [{"comment": None,
-                            "reason_if_silent": "Nie udało się zweryfikować żadnego faktu."}],
-            "fakty": [],
-        }
+    # Domyślnie model pisze z WŁASNEJ WIEDZY, bez szukania na zapas.
+    #
+    # Zdjęte po uwadze właściciela i miał rację: były tu dwa zabezpieczenia, a
+    # potrzebne jest jedno. Szukanie przed pisaniem kazało milczeć, gdy nic nie
+    # znalazło, i nie chroniło przed niczym, czego nie łapie sprawdzenie PO
+    # napisaniu. Kosztowało za to kilkanaście wyszukiwań na komentarz i zabijało
+    # trafne uwagi tylko dlatego, że wyszukiwarka nie trafiła w temat.
+    #
+    # Zostaje jedno: `zweryfikuj()` na gotowym tekście, blokujące wyłącznie fakt
+    # OBALONY przez źródło. Powód, dla którego nie zdejmujemy i tego: model
+    # z pamięci twierdził, że Osborne Executive nie był kompatybilny z IBM (zapis
+    # mówi, że firma REKLAMOWAŁA kompatybilność, której nie dostarczyła) — i ten
+    # sam model z pamięci trafnie stwierdził, że Butlin wykluczył IIT. Wiedza jest
+    # ogromna i najczęściej trafna, ale OD ŚRODKA nie da się odróżnić tych dwóch
+    # przypadków. Sprawdzenie po fakcie rozstrzyga to za grosze.
     if fakty:
         post = dict(post)
         post["text"] = (
