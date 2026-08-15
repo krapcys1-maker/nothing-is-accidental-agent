@@ -217,6 +217,59 @@ def sprawdz_sesje() -> None:
         p.stop()
 
 
+def sprawdz_serwer() -> None:
+    """Odpowiada na JEDNO pytanie: czy zapisana sesja żyje z adresu tego serwera.
+
+    Niczego nie publikuje, nie polubia i nie zmienia. Sam odczyt, bo to pytanie
+    trzeba rozstrzygnąć ZANIM zbudujemy na nim resztę: jeśli Substack odrzuca
+    sesję z innego adresu, cała droga przez przeglądarkę wymaga przemyślenia od
+    nowa i lepiej wiedzieć to teraz niż po tygodniu pracy.
+    """
+    import os
+
+    os.environ["AGENT_V2_SERVER"] = "1"
+    config.TRYB_SERWERA = True
+
+    dni = dni_do_wygasniecia()
+    print(f"  plik sesji: {'jest' if SESSION_FILE.exists() else 'BRAK'}"
+          f"{f', wazna {dni} dni' if dni is not None else ''}", flush=True)
+
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    try:
+        page.goto("https://substack.com/", timeout=READ_TIMEOUT_MS * 2,
+                  wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 3000)
+        ciastko = zalogowany(context)
+        print(f"  ciasteczko sesji: {'JEST' if ciastko else 'BRAK'}", flush=True)
+
+        # Twardszy dowód niż ciasteczko: czy zalogowane API nas rozpoznaje.
+        kto = page.evaluate(
+            """async () => {
+                try {
+                    const r = await fetch('/api/v1/user/%s/public_profile',
+                                          {credentials: 'include'});
+                    const j = await r.json();
+                    return {status: r.status, nazwa: j.name || null, id: j.id || null};
+                } catch (e) { return {blad: String(e).slice(0, 60)}; }
+            }""" % config.SUBSTACK_HANDLE
+        )
+        print(f"  odpowiedz API: {kto}", flush=True)
+
+        widzi_kompozytor = "on your mind" in page.inner_text("body").lower()
+        print(f"  kompozytor notek widoczny: {widzi_kompozytor}", flush=True)
+
+        if ciastko and kto.get("id") and widzi_kompozytor:
+            print("\n  WYNIK: sesja dziala z tego adresu. Mozna isc dalej.", flush=True)
+        else:
+            print("\n  WYNIK: sesja NIE dziala stad. NIE budujemy dalej na tej"
+                  " drodze — trzeba przemyslec logowanie na serwerze.", flush=True)
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+
+
 def zaloguj() -> None:
     """Otwiera prawdziwe okno przeglądarki i czeka, aż właściciel się zaloguje.
 
@@ -1043,6 +1096,7 @@ if __name__ == "__main__":
         "sesja": sprawdz_sesje,      # podłącz się do Chrome'a właściciela
         "zaloguj": zaloguj,          # stara droga, zapętla CAPTCHĘ — nie używać
         "rozpoznanie": rozpoznanie,
+        "serwer": sprawdz_serwer,    # jedyne pytanie: czy sesja żyje z tego adresu
     }[polecenie]()
 
 
