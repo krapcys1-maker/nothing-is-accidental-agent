@@ -39,15 +39,28 @@ w ośmiu tabelach, liczba w prompcie kontra walidator, termin kontra sufit
 tokenów. Sześć kolejnych poprawek 15 sierpnia stworzyło sześć nowych
 problemów **wyłącznie z tego powodu**.
 
-## 3. NIE PISZ TYLKO O WIELKIEJ BRYTANII
+## 3. SZUKAJ W CAŁYM INTERNECIE
 
-Poprzedni skaut dostał trzy rozsądne kryteria źródła i zbiegł do jednego
-serwisu — `gov.uk`. Dwanaście kolejnych tematów o brytyjskich przepisach.
+Dyskoveria przeszukuje sieć bez ograniczeń. **Nie ma listy dozwolonych
+serwisów i nie wolno jej tworzyć.**
 
-**Wymuś to w kodzie, nie w prompcie.** Przed wysłaniem promptu podaj skautowi
-listę domen i krajów z ostatnich pięciu tematów z zakazem powtórzenia.
-Prompt już raz dostał polecenie „różnicuj" i i tak zbiegł. Szczegóły
-w sekcji 7.
+Poprzedni skaut dostał ode mnie polecenie nazywania instytucji i dokumentu
+w samym pytaniu. To zawęziło wyszukiwanie do tego, co potrafił wymienić
+z pamięci, i dało dwanaście tematów pod rząd o brytyjskich przepisach
+z `gov.uk`. Błąd był mój, nie systemu.
+
+Jedyny prawdziwy wymóg dotyczy **wyniku, nie pytania**: w gotowym korpusie
+przynajmniej dwa źródła mają być dokumentem pierwotnym — czymś, co samo jest
+zapisem, a nie omówieniem cudzego. Rejestr, sprawozdanie, norma, orzeczenie,
+dane, oświadczenie firmy o sobie, praca naukowa. Skądkolwiek i w jakimkolwiek
+kraju.
+
+Powód jest praktyczny: reviewer blokuje zdanie twierdzące fakt bez pokrycia,
+więc korpus z samych blogów daje artykuł niezdolny powiedzieć cokolwiek
+konkretnego.
+
+Plus jedna reguła w kodzie: **żaden nowy temat nie celuje w tę samą domenę, co
+któryś z pięciu poprzednich.** Tyle wystarczy.
 
 ## 4. STYL PISANIA TO JEST PRODUKT
 

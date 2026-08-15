@@ -153,10 +153,29 @@ Dla orientacji: cały łańcuch artykułu kosztował **~1,41 USD**.
 
 **Bierz, ale napraw przed użyciem:**
 
-- **prompt skauta** — działa, ale zbiega do `gov.uk` i produkuje dwanaście
-  tematów pod rząd o brytyjskich przepisach. **Wymuś różnorodność w kodzie**:
-  przed wysłaniem promptu podaj listę domen i krajów z ostatnich pięciu tematów
-  z zakazem powtórzenia. Prompt już raz dostał polecenie „różnicuj" i zbiegł.
+- **prompt skauta** — działa, ale jest **przedokręcony i to jest mój błąd**.
+
+  Kazałem skautowi nazywać instytucję i dokument w samym pytaniu. Skutek:
+  wyszukiwanie ograniczyło się do tego, co skaut potrafił wymienić z pamięci,
+  i zbiegło do `gov.uk` — dwanaście tematów pod rząd o brytyjskich przepisach.
+
+  **Dyskoveria przeszukuje cały internet i tak ma zostać.** Nie ma i nie ma
+  być listy dozwolonych serwisów.
+
+  Prawdziwy wymóg jest znacznie słabszy i tylko taki wpisz: **w gotowym
+  korpusie przynajmniej dwa źródła mają być dokumentem pierwotnym** — czymś,
+  co samo jest zapisem, a nie omówieniem cudzego zapisu. Rejestr, sprawozdanie,
+  norma, orzeczenie, dane, oświadczenie firmy o sobie, praca naukowa. Może to
+  być cokolwiek i skądkolwiek.
+
+  Powód jest jeden i praktyczny: reviewer blokuje zdanie twierdzące fakt bez
+  pokrycia, więc korpus z samych blogów daje artykuł, który nie może powiedzieć
+  nic konkretnego. To jest wymóg **na wynik dyskoverii**, nie na sposób
+  formułowania pytania.
+
+  Dodatkowo trzymaj w kodzie prostą regułę różnorodności: **żaden nowy temat
+  nie może celować w tę samą domenę, co któryś z pięciu poprzednich.** Tyle
+  wystarczy; nie potrzeba list krajów ani rodzin instytucji.
 - **kontrakt rozmiaru karty** — pomysł dobry, liczby wyprowadź od nowa
   i trzymaj **w jednym miejscu**, razem z promptem, który ich pilnuje.
 
