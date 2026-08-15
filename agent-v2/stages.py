@@ -292,6 +292,63 @@ def grafika(
     return brief
 
 
+def _wiek_konta_w_dniach(conn: sqlite3.Connection) -> int:
+    """Ile dni działa to konto — liczone od pierwszego przebiegu w bazie."""
+    row = conn.execute("SELECT MIN(started_at) AS s FROM runs").fetchone()
+    if not row or not row["s"]:
+        return 0
+    from datetime import datetime, timezone
+    try:
+        start = datetime.fromisoformat(str(row["s"]).replace("Z", "+00:00"))
+    except ValueError:
+        return 0
+    return max(0, (datetime.now(timezone.utc) - start).days)
+
+
+def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
+    """Ile czego agent może dziś zrobić — losowane z widełek, nie stałe.
+
+    Stała liczba dziennie wygląda jak robot, bo człowiek nie ma normy: raz
+    przeczyta pół kanału, raz nic. Losujemy osobno na każdy dzień, a przez
+    pierwszy miesiąc trzymamy się dolnej połowy — nowe konto z jednym artykułem,
+    które nagle obserwuje dwadzieścia osób, wygląda dokładnie jak farma.
+    """
+    import random
+
+    rozbieg = _wiek_konta_w_dniach(conn) < config.ROZBIEG_DNI
+
+    def losuj(widelki: tuple[int, int]) -> int:
+        dol, gora = widelki
+        if rozbieg:
+            gora = dol + (gora - dol) // 2
+        return random.randint(dol, gora)
+
+    # Miesięczne przeliczamy na dzień, żeby wszystko było jedną walutą; ułamek
+    # rozstrzyga losowanie, więc w skali miesiąca wychodzi zadana liczba.
+    def z_miesiaca(widelki: tuple[int, int]) -> int:
+        dziennie = losuj(widelki) / 30.0
+        return int(dziennie) + (1 if random.random() < dziennie % 1 else 0)
+
+    budzet = {
+        "lajki": losuj(config.LAJKI_DZIENNIE),
+        "komentarze": losuj(config.KOMENTARZE_DZIENNIE),
+        "follow": z_miesiaca(config.FOLLOW_MIESIECZNIE),
+        "subskrypcje": z_miesiaca(config.SUBSKRYPCJE_MIESIECZNIE),
+        "restacki": losuj(config.RESTACK_DZIENNIE),
+    }
+    print(f"  [budżet dnia{' — rozbieg' if rozbieg else ''}] "
+          + "  ".join(f"{k}={v}" for k, v in budzet.items()), flush=True)
+    return budzet
+
+
+def odczekaj() -> None:
+    """Przerwa między działaniami. Piętnaście polubień w minutę to nie czytanie."""
+    import random
+    import time
+
+    time.sleep(random.uniform(*config.ODSTEP_MIEDZY_DZIALANIAMI))
+
+
 ZUZYTE_FAKTY = config.DATA_DIR / "zuzyte_fakty.json"
 
 

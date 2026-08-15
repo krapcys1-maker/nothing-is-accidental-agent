@@ -419,6 +419,29 @@ WORST_NOTE_DAYS = ("monday", "friday")
 NOTE_MIX_ARTICLE_DAY = ("ARTYKUL", "ARTYKUL", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE")
 NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", "CIEKAWOSTKA")
 
+# --- zachowanie spoleczne: widelki, nie stale liczby -------------------------
+# Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma normy. Losujemy
+# w tych granicach, osobno na kazdy dzien.
+#
+# UCZCIWIE O POCHODZENIU TYCH LICZB: Substack nie publikuje swoich limitow.
+# To NIE sa zmierzone progi, tylko tempo aktywnego czlowieka. Sa celowo niskie,
+# bo kosztem przesady nie jest ostrzezenie, tylko utrata konta, na ktorym stoi
+# caly projekt. Podniesiemy je dopiero, gdy zobaczymy wlasne dane.
+LAJKI_DZIENNIE = (5, 15)
+KOMENTARZE_DZIENNIE = (2, 5)      # 0 jest dozwolone: milczenie bije slaby komentarz
+FOLLOW_MIESIECZNIE = (10, 20)     # obserwowanie to czytanie, nie zbieranie
+SUBSKRYPCJE_MIESIECZNIE = (2, 5)  # laduje w skrzynce wlasciciela, wiec waskie
+RESTACK_DZIENNIE = (0, 0)         # ZABLOKOWANE do osobnej decyzji wlasciciela
+
+# Pierwszy miesiac na dolnej polowie widelek. Nowe konto z jednym artykulem,
+# ktore nagle obserwuje dwadziescia osob, wyglada dokladnie jak farma.
+ROZBIEG_DNI = 30
+
+# Odstepy miedzy dzialaniami, w sekundach. Pietnascie polubien w dziewiecdziesiat
+# sekund to nie jest czytanie i kazdy system to widzi.
+ODSTEP_MIEDZY_DZIALANIAMI = (45, 180)
+MAX_DZIALAN_NA_GODZINE = 12
+
 # Zapas na myślenie dostają WSZYSTKIE etapy, nie tylko Claude'owe: modele
 # DeepSeek v4 też rozumują, a tokeny rozumowania liczą się do sufitu wyjścia.
 # Odsiew ucięło na 2057 tokenach dokładnie z tego powodu.
