@@ -264,17 +264,14 @@ def test_second_rewrite_is_terminal_failure_without_third_attempt(storage, accou
 @pytest.mark.parametrize(
     ("scenario", "evaluation_type", "decisions"),
     [
-        # An unsupported claim is recoverable in principle, so the pipeline keeps
-        # buying rewrites while the reviewer's list is getting shorter rather
-        # than stopping at a fixed count.  This writer repeats the identical
-        # draft, so attempt 2 makes no progress at all and the run terminalises
-        # there - the stall is what stops it, not the number 2.  A real writer
-        # that fixes some of the findings earns attempt 3.
-        # Fabricated experience is not recoverable and still ends it on the spot.
+        # An unsupported claim is recoverable in principle, so it spends the one
+        # rewrite reviewer v3 grants on attempt 1 and blocks only when the
+        # second draft repeats it.  Fabricated experience is not recoverable and
+        # still ends the article on the spot.
         (
             FakeWriterScenario.UNSUPPORTED_CLAIM,
             "UNSUPPORTED_CLAIMS",
-            ["REWRITE_ONCE", "REWRITE_ONCE"],
+            ["REWRITE_ONCE", "BLOCK"],
         ),
         (
             FakeWriterScenario.PERSONAL_EXPERIENCE,

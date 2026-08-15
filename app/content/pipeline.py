@@ -90,22 +90,22 @@ class ContentPipelineSummary:
     block_code: str | None = None
 
 
-# A paid research card is expensive and single-use, so a draft that the reviewer
-# can describe how to fix should be fixed rather than thrown away with the card.
-# The old cap was the literal 2, unrelated to what the job could afford: content
-# 20 finished at 0.907595 USD against a 2.000000 ceiling, so two further
-# attempts were already paid for and simply never offered.
+# Two, and it is not a free choice: attempt_no IN (1,2) is a CHECK constraint on
+# eight tables (content_drafts, content_draft_evaluations, content_writer_attempts,
+# content_writer_results, content_provider_cost_settlements, role_provider_executions,
+# content_writer_intents, content_review_resume_executions) and is validated
+# again in four places in code.
 #
-# The real bound is progress, enforced below: an attempt is only bought when the
-# previous one actually reduced the number of blocking findings. An article stuck
-# at the same twelve problems is not going to be fixed by a fourth try, and buying
-# one would be the auto-retry mistake in a different costume.
+# I raised this to 4 earlier today to stop a fixable draft dying with its paid
+# research card, changed the loop, and did not change the rest. Attempt 3 then
+# died on "Writer prompt permits only attempt one or two" and left a live run
+# stuck in REVISE - the same one-rule-in-two-places mistake this codebase keeps
+# making, committed by the person who had just finished cataloguing it.
 #
-# The loop terminalises on the last entry of attempt_numbers rather than on this
-# constant, because the review-only resume path runs a single attempt 2 and must
-# still stop there. That is a bounded recovery operation with its own authority,
-# not the main loop, and it keeps its own limit.
-MAX_WRITER_ATTEMPTS = 4
+# Raising it properly means a migration over eight tables. The progress guard
+# below is kept because it is right on its own terms: an attempt that fixes
+# nothing should not buy another one even within the two that are allowed.
+MAX_WRITER_ATTEMPTS = 2
 
 
 def _blocking_finding_count(evaluations: tuple[DraftEvaluation, ...]) -> int:
