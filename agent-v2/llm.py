@@ -28,6 +28,15 @@ class PreflightFailed(RuntimeError):
     pass
 
 
+class Truncated(RuntimeError):
+    """Odpowiedź ucięta na suficie tokenów — czytelnie, zamiast błędu JSON-a.
+
+    Pierwszy test seryjny padł na `JSONDecodeError: Expecting ',' delimiter`
+    w połowie odpowiedzi DeepSeeka. Przyczyna była o piętro wyżej: prompt prosił
+    o więcej, niż mieścił sufit.
+    """
+
+
 def _preflight(purpose: str, conn: sqlite3.Connection) -> None:
     """Warunki, które decydują, czy wywołanie może się w ogóle udać.
 
@@ -45,6 +54,18 @@ def _preflight(purpose: str, conn: sqlite3.Connection) -> None:
 
     if purpose not in config.MAX_TOKENS:
         raise PreflightFailed(f"brak sufitu tokenów dla etapu {purpose!r}")
+
+    # Sufit na jeden przebieg obowiązuje ZAWSZE, także w trybie bez limitu.
+    if run_id is not None:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(cost_usd), 0) AS s FROM calls WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+        if float(row["s"]) >= config.RUN_LIMIT_USD:
+            raise BudgetExceeded(
+                f"przebieg wydał już ${float(row['s']):.4f} przy suficie "
+                f"${config.RUN_LIMIT_USD} — zatrzymuję przed etapem {purpose!r}"
+            )
 
     if config.NO_LIMIT:
         return
@@ -101,7 +122,15 @@ def _call_claude(
     if purpose in config.EFFORT:
         kwargs["output_config"] = {"effort": config.EFFORT[purpose]}
     if web_search:
-        kwargs["tools"] = [{"type": "web_search_20260209", "name": "web_search"}]
+        # max_uses JEST OBOWIĄZKOWE. Bez niego model robił 17, potem 31 rund
+        # wyszukiwania, a każda runda przesyła całą rozmowę od nowa jako wejście
+        # — 164 411 tokenów wejścia i $1,33 za jeden etap. Ograniczona liczba
+        # wyszukiwań i tak zwraca dziesięć źródeł.
+        kwargs["tools"] = [{
+            "type": "web_search_20260209",
+            "name": "web_search",
+            "max_uses": config.DISCOVERY_MAX_SEARCHES,
+        }]
 
     # Strumień zawsze: sufity są duże, a myślenie na Opusie 5 jest domyślnie
     # włączone i liczy się jak wyjście, więc bez strumienia grozi timeout HTTP.
@@ -110,6 +139,12 @@ def _call_claude(
 
     if message.stop_reason == "refusal":
         raise PreflightFailed(f"dostawca odmówił: {message.stop_details}")
+    if message.stop_reason == "max_tokens":
+        raise Truncated(
+            f"odpowiedź ucięta na suficie {config.MAX_TOKENS[purpose]} tokenów "
+            f"dla etapu {purpose!r} — sufit liczy się z kontraktu w config.py, "
+            "więc kontrakt prosi o więcej, niż sufit mieści"
+        )
 
     text = "".join(b.text for b in message.content if b.type == "text")
     searches = 0
@@ -151,6 +186,12 @@ def _call_deepseek(purpose: str, system: str, user: str) -> tuple[str, int, int,
     )
     response.raise_for_status()
     payload = response.json()
+    choice = payload["choices"][0]
+    if choice.get("finish_reason") == "length":
+        raise Truncated(
+            f"odpowiedź ucięta na suficie {config.MAX_TOKENS[purpose]} tokenów "
+            f"dla etapu {purpose!r} — bez tego wychodzi z tego niedomknięty JSON"
+        )
     usage = payload.get("usage", {})
     return (
         payload["choices"][0]["message"]["content"],
