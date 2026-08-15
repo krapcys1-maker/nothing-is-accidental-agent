@@ -155,6 +155,26 @@ def podlacz_sie():
     """
     from playwright.sync_api import sync_playwright
 
+    # Na serwerze nie ma ani ekranu, ani człowieka do zalogowania. Jest za to
+    # zapisana sesja, więc otwieramy własną przeglądarkę bez ekranu i wkładamy
+    # jej ciasteczka. CAPTCHA tu nie wraca: to nie jest logowanie, tylko użycie
+    # sesji, którą właściciel założył wcześniej własnoręcznie.
+    if config.TRYB_SERWERA or not _chrome_odpowiada():
+        if not SESSION_FILE.exists():
+            raise SystemExit(
+                "Tryb serwerowy wymaga pliku sesji.\n"
+                f"Skopiuj na serwer: {SESSION_FILE}"
+            )
+        p = sync_playwright().start()
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            storage_state=str(SESSION_FILE),
+            user_agent=config.FETCH_USER_AGENT,
+            viewport={"width": 1440, "height": 900},
+            locale="en-US",   # interfejs po angielsku, niezależnie od serwera
+        )
+        return p, browser, context
+
     if not _chrome_odpowiada():
         print("  Chrome nie działa — otwieram go na profilu agenta.", flush=True)
         if not uruchom_chrome():
@@ -329,6 +349,19 @@ async ([handle, ile]) => {
         const t = await (await fetch('/api/v1/reader/comment/' + n.id +
                                      '/replies?comment_id=' + n.id,
                                      {credentials: 'include'})).json();
+        // Nasz najnowszy glos w CALYM watku, nie w pojedynczej galezi.
+        // Odpowiedz wpisana pod notka jest RODZENSTWEM cudzego komentarza, a nie
+        // jego dzieckiem, wiec liczenie tylko wewnatrz galezi kazalo agentowi
+        // odpisywac w kolko komus, komu juz odpowiedzial.
+        let naszNajnowszy = 0;
+        (t.commentBranches || []).forEach(function skan(w) {
+            if (!w) return;
+            const c = w.comment || w;
+            if (c && c.user_id === pr.id && c.date) {
+                naszNajnowszy = Math.max(naszNajnowszy, new Date(c.date).getTime());
+            }
+            (w.descendantComments || w.children || []).forEach(skan);
+        });
         for (const galaz of (t.commentBranches || [])) {
             const plaskie = [];
             (function chodz(w) {
@@ -338,9 +371,15 @@ async ([handle, ile]) => {
                 (w.descendantComments || w.children || []).forEach(chodz);
             })(galaz);
             if (!plaskie.length) continue;
-            const ostatni = plaskie[plaskie.length - 1];
-            // Jeśli ostatni głos w gałęzi jest nasz, rozmowa nie czeka na nas.
+            // Ostatni głos wybieramy PO DACIE, nie po kolejności w tablicy:
+            // Substack oddaje gałąź od najnowszego, więc branie ostatniego
+            // elementu wskazywało cudzy komentarz nawet po naszej odpowiedzi —
+            // agent bez nadzoru odpisywałby w kółko pod tym samym wątkiem.
+            const ostatni = plaskie.reduce(
+                (a, b) => (new Date(b.date) > new Date(a.date) ? b : a));
             if (ostatni.user_id === pr.id) continue;
+            // Odpowiedzieliśmy już później niż padł ten głos — rozmowa nie czeka.
+            if (naszNajnowszy && new Date(ostatni.date).getTime() < naszNajnowszy) continue;
             czekaja.push({
                 pod_czym: (n.body || '').slice(0, 400),
                 pod_id: n.id,

@@ -86,6 +86,11 @@ DRY_RUN = _env("DRY_RUN", "false").lower() in {"1", "true", "yes"}
 KILL_SWITCH = _env("KILL_SWITCH", "false").lower() in {"1", "true", "yes"}
 NO_LIMIT = _env("AGENT_V2_NO_LIMIT", "0").lower() in {"1", "true", "yes"}
 
+# Serwer bez ekranu: zamiast podlaczac sie do Chrome'a uruchomionego przez
+# czlowieka, agent otwiera wlasna przegladarke bez ekranu i wklada jej zapisana
+# sesje. Wlaczane zmienna, zeby ten sam kod chodzil tu i tam bez rozgalezien.
+TRYB_SERWERA = _env("AGENT_V2_SERVER", "0").lower() in {"1", "true", "yes"}
+
 # --- modele ------------------------------------------------------------------
 # Podział z briefu: DeepSeek tam, gdzie błąd kosztuje jedno tanie wywołanie;
 # Claude tam, gdzie błąd kosztuje cały łańcuch albo jakość tekstu.
