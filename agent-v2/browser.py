@@ -1041,10 +1041,15 @@ def potwierdz_odpowiedz(page, note_id: int, tekst: str) -> bool:
     import json as _json
 
     probka = " ".join(tekst.split())[:60]
-    watek = api_json(page, f"/api/v1/reader/comment/{note_id}/replies"
-                           f"?comment_id={note_id}")
-    return probka in " ".join(_json.dumps((watek or {}).get("commentBranches", []),
-                                          ensure_ascii=False).split())
+    for nr in range(4):
+        watek = api_json(page, f"/api/v1/reader/comment/{note_id}/replies"
+                               f"?comment_id={note_id}")
+        if probka in " ".join(_json.dumps((watek or {}).get("commentBranches", []),
+                                          ensure_ascii=False).split()):
+            return True
+        if nr < 3:
+            page.wait_for_timeout(8000)
+    return False
 
 def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False) -> dict[str, Any]:
     """Odpowiada w wątku pod naszą własną notką."""
@@ -1214,11 +1219,18 @@ def potwierdz_komentarz(page, url: str, tekst: str) -> bool:
     post = api_json(page, f"/api/v1/posts/{slug}", baza=czyja)
     if not isinstance(post, dict) or not post.get("id"):
         return False
-    dane = api_json(page, f"/api/v1/post/{post['id']}/comments?all_comments=true",
-                    baza=czyja)
-    lista = dane if isinstance(dane, list) else (dane or {}).get("comments") or []
-    return any(probka in " ".join((k.get("body") or "").split())
-               for k in lista if isinstance(k, dict))
+    # Kilka prob, bo lista komentarzy — jak kanal profilu — aktualizuje sie
+    # z opoznieniem, a falszywe "nie ma" rozbraja ochrone przed dublowaniem.
+    for nr in range(4):
+        dane = api_json(page, f"/api/v1/post/{post['id']}/comments?all_comments=true",
+                        baza=czyja)
+        lista = dane if isinstance(dane, list) else (dane or {}).get("comments") or []
+        if any(probka in " ".join((k.get("body") or "").split())
+               for k in lista if isinstance(k, dict)):
+            return True
+        if nr < 3:
+            page.wait_for_timeout(8000)
+    return False
 
 def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False) -> dict[str, Any]:
     """Wystawia komentarz pod cudzym postem. Domyślnie WYPEŁNIA i NIE WYSYŁA."""
