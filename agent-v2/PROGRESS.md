@@ -102,10 +102,8 @@ Fable'a; wcześniej ciążyła ku 1220.
   posty — także pod dużymi kontami i pod postami z wieloma komentarzami, żeby
   wchodzić w dyskusje, z których ktoś może trafić na nasz profil. Dziś czyta
   tylko podane adresy.
-- **Bramka dowodowa dla komentarzy.** Artykuły mają pokrycie w pobranych
-  dokumentach, komentarze piszą z pamięci modelu. Przed jakąkolwiek publikacją
-  automatyczną trzeba to domknąć — publiczny komentarz z błędnym faktem jest
-  nieodwracalny.
+- ~~**Bramka dowodowa dla komentarzy.**~~ ZAMKNIĘTE. Komentarze, notki
+  i odpowiedzi zbierają fakty przed pisaniem i weryfikują to, co napisały.
 
 ## Otwarte
 
@@ -115,11 +113,48 @@ Fable'a; wcześniej ciążyła ku 1220.
   `price_verified = 0`. Do sprawdzenia na fakturze.
 - **19 testów kontradowodowych z archiwum** — nieprzeniesione. Podłogi
   sprawdzone doraźnie na spreparowanym tekście i łapią.
-- **Powtarzalność tematów przy długim działaniu** — reguła „żadnej domeny
-  z ostatnich pięciu" istnieje, ale nie była testowana na dłuższej serii.
-- **Notki i komentarze nie istnieją** i nie powstaną bez osobnej decyzji.
+- **Powtarzalność TEMATÓW ARTYKUŁÓW przy długim działaniu** — reguła „żadnej
+  domeny z ostatnich pięciu" istnieje, ale nie była testowana na dłuższej serii.
+  Dla notek problem jest zamknięty (`data/zuzyte_fakty.json`), dla artykułów nie.
+- **Publikacja artykułu na Substacku** — jedyna zdolność z listy właściciela,
+  która nie została zbudowana. Wstrzymana świadomie: przed pierwszym artykułem
+  jest jeszcze ustawienie wyłączające czytelnikom sprawdzanie AI oraz grafiki.
+- **Odpowiedzi pod ARTYKUŁAMI i pod naszymi komentarzami u innych** — dziś
+  `nieodpowiedziane()` chodzi tylko po naszych notkach.
 
 ## Dziennik
+
+### 2026-08-15 — pierwszy komentarz, pierwsza notka, pierwsza odpowiedź NA ŻYWO
+Trzy zdolności potwierdzone u Substacka, nie z kliknięcia: komentarz pod
+„A Witness That Cannot Testify" (`comment_count` 1), notka o datach przydatności
+na profilu, odpowiedź w wątku pod naszą notką sprzed miesiąca.
+
+Cztery błędy, które to odsłoniło, wszystkie naprawione:
+
+1. **Kliknięcie to nie dowód.** `wyslane=True` znaczyło „kliknąłem przycisk".
+   Sprawdzenie po tekście strony dało fałszywy alarm w drugą stronę — komentarz
+   naprawdę wisiał, a `inner_text` go nie widział. Teraz każda publikacja jest
+   potwierdzana przez API. Agent bez człowieka nie ma komu zgłosić, że nie
+   wyszło.
+2. **Zaszyty angielski interfejs.** Selektor szukał „What's on your mind?",
+   a ten sam profil otworzył się po polsku. Teraz szukamy po strukturze.
+3. **Substack tłumaczy cudze treści.** Odpowiedź Anglika wyświetlała się po
+   polsku; agent czytający stronę odpisałby po polsku komuś, kto pisał po
+   angielsku. Treści bierzemy wyłącznie z API.
+4. **Notki nie miały skąd brać dowodów.** `note()` istniało, ale nikt go nie
+   wołał i wymagało materiału, którego nikt nie dostarczał. Doszło
+   `znajdz_ciekawostki()`.
+
+Dzień notek: pięć sztuk, 15/15 zweryfikowanych, **$0,0497** — czyli $1,49
+miesięcznie za pięć notek dziennie.
+
+**Zmiana progu po uwadze właściciela.** Pierwsza wersja weryfikacji wymagała,
+by KAŻDE twierdzenie było potwierdzone, i zabiła dwie z trzech kandydatur nie
+za fałsz, tylko za tezę o motywach. Właściciel: „nie ograniczaj go za bardzo…
+ludzie też nieraz piszą głupoty, to nie jest zabronione". Próg blokuje teraz
+wyłącznie fakt OBALONY przez źródło. Sprawdzone na kontrdowodach: zmyślone
+badanie ze Stanfordu ginie, fałszywa przyczyna upadku Osborne'a ginie, czysta
+teza o motywach przechodzi.
 
 ### 2026-08-15 — trzy przebiegi z Fable'em, ratunek dyskoverii zadziałał
 Przebieg 45: dyskoveria zapętliła się (22 wyszukiwania bez odpowiedzi),
