@@ -12,6 +12,7 @@ Bez zadań, bez lease, bez zgód, bez trwałych intencji, bez deklaracji zdolno�
 Wszystko, co dotyczy nowego agenta, leży **wyłącznie** w `agent-v2/`.
 Jeśli plik nie jest w `agent-v2/`, nie należy do nowego agenta.
 
+Prompt do wklejenia w nowej sesji: [`agent-v2/PROMPT_DLA_AGENTA.md`](agent-v2/PROMPT_DLA_AGENTA.md)
 Stan prac: [`agent-v2/PROGRESS.md`](agent-v2/PROGRESS.md) — czytaj to najpierw.
 
 ---
