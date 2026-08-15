@@ -44,7 +44,16 @@ from app.research.base import (
 TopicCaller = Callable[[Account, int], tuple[str, Usage]]
 
 TOPIC_MAX_OUTPUT_TOKENS = 4096
-DEFAULT_PROVIDER_TIMEOUT_SECONDS = 60.0
+# Measured against the durable ledger rather than guessed: the four topic
+# generations that succeeded took 26, 42, 44 and 53 seconds. A 60 second
+# timeout left seven seconds of margin on the worst of them, and a slightly
+# longer prompt then crossed it - the client gave up at 61 seconds on a request
+# the provider may well have completed and charged for, which is the worst
+# possible outcome. It reserves, it pays, and it keeps nothing.
+#
+# A timeout is a guard against hanging forever, not a performance budget, so it
+# belongs far above the observed distribution instead of inside it.
+DEFAULT_PROVIDER_TIMEOUT_SECONDS = 300.0
 SDK_MAX_RETRIES = 0
 
 _SYSTEM = (
@@ -106,13 +115,26 @@ def _build_prompt(
         # the research stage cannot source costs about 0.89 USD to discover that.
         # Left undefined the model scores it as a vibe, so it is pinned to the
         # only question that predicts the cost.
-        "Score source_quality as your honest confidence that a specific, named, "
-        "publicly reachable institutional document answering this question "
-        "already exists - 0.9 only if you could name the issuing body and the "
-        "document, 0.3 or below if you are guessing that something must be out "
-        "there. Do not inflate it; a low score here is useful information, and a "
-        "topic scored honestly low costs us nothing while a topic scored "
-        "dishonestly high costs a paid research run. "
+        "Score source_quality as your honest confidence that a specific, named "
+        "institutional document answering this question exists AND can be read "
+        "for free as HTML by a plain HTTP client. Both halves matter: the "
+        "fetcher cannot read PDFs, cannot log in and cannot pay. A paywalled "
+        "standard - BSI, ISO, IEC, ASTM, DIN and the like - scores 0.3 however "
+        "authoritative it is, because we will never see inside it. A record "
+        "published only as a PDF scores no higher than 0.5 unless the issuing "
+        "body also publishes the substance on an HTML page. Statute and "
+        "regulations published in full HTML by a national legislation service, "
+        "and agency guidance published as web pages, are the 0.9 cases. Do not "
+        "inflate it; a topic scored honestly low costs us nothing, while a topic "
+        "scored dishonestly high costs a paid research run. "
+        # A live run proved this half was missing: a question that named the
+        # Department for Transport guidance and the British Standards exactly
+        # scored 0.9, and returned zero primary sources - the guidance is a PDF
+        # and the standards are behind a paywall. Naming the document is not the
+        # same as being able to read it.
+        "Prefer questions whose answer lives in a document that is free and in "
+        "HTML. If the only authority is paywalled, ask a question that a freely "
+        "published body has also answered. "
         'Respond as JSON: {"topics": [ ... ]}.'
     )
 

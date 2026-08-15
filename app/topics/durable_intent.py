@@ -46,6 +46,25 @@ _PROMPT_CONTRACT_VERSION = "anthropic_topics_v1"
 # boundary.  Zmiana tej stałej zmienia tożsamość requestu — nowa decyzja.
 PROVIDER_STAGE = "topics"
 TOPIC_GENERATION_EXECUTION = "durable_topic_generation_v1"
+
+# Measured, not chosen. Nineteen settled topic generations streamed at 14-18 ms
+# per output token (median 16.08, R^2 0.98 against output length and a 0.4 s
+# intercept, so the interval is streaming and not local work). The role's
+# qualified output ceiling is 4096 tokens, which at that rate needs 65.9 s.
+#
+# The deadline this used to inherit was settings.research_timeout_seconds = 60.
+# So the deadline and the ceiling it was paired with were never satisfiable
+# together: a full-length answer could not arrive in time by arithmetic. It
+# duly failed twice, at 61.62 s and 60.94 s, and the second one is 0.124795 USD
+# the provider billed for 3,746 tokens the client had already walked away from.
+#
+# It is a separate constant rather than a bigger shared setting because that
+# setting also feeds search-based research and the source-discovery SDK, whose
+# durations differ by more than 2x. Evidence synthesis reached the same
+# conclusion first - see EVIDENCE_SYNTHESIS_TIMEOUT_SECONDS in
+# app/research/corpus_enqueue.py - and one global default for stages this
+# unalike is what produced the problem in the first place.
+TOPIC_GENERATION_TIMEOUT_SECONDS = 300
 TOPIC_GENERATION_WORKFLOW = "TOPIC_GENERATION"
 
 # Zamknięty kontrakt liczności kandydatów: dolna granica trzyma sensowny batch,
@@ -214,7 +233,7 @@ class DurableTopicGenerationIntent:
             max_tokens=bounded_tokens,
             max_web_searches=0,
             timeout_seconds=_integer(
-                settings.research_timeout_seconds, field="timeout_seconds", minimum=1,
+                TOPIC_GENERATION_TIMEOUT_SECONDS, field="timeout_seconds", minimum=1,
             ),
             pricing_profile=profile,
             pricing_fingerprint=_pricing_fingerprint(

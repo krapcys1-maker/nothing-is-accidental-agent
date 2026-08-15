@@ -124,6 +124,22 @@ class AnthropicSourceDiscoveryPort:
                 "standards bodies and university research centres. Never return a "
                 "forum thread, a Q&A site or a vendor blog as one of the required "
                 "sources.\n"
+                # A live run on a question that named its document exactly still
+                # came back with zero PRIMARY sources: five of ten results were
+                # bibliographic catalogue entries for the document (thenbs.com,
+                # cis.ihs.com) and the rest were paving suppliers. A catalogue
+                # entry passes every earlier rule - it is not a forum, not a Q&A
+                # site, not a vendor blog - and carries none of the substance.
+                "At least one required source must sit on the ISSUING BODY'S OWN "
+                "domain: the agency, regulator, standards body or department that "
+                "wrote the document, at its own address. A catalogue, index, "
+                "library record, bibliographic service or standards reseller that "
+                "merely LISTS the document is not the document and does not count "
+                "as PRIMARY, however official the listing looks - it carries a "
+                "title, a reference number and a price, not the substance. If you "
+                "can only find the record through such a service, find the issuing "
+                "body's own page for it instead, or say the record is unavailable "
+                "and return what genuinely bears on the question.\n"
                 "The question asserts a MECHANISM - that something happens because of "
                 "a specific incentive, rule or constraint. Rule text alone cannot "
                 "evidence why anyone behaves a certain way, and a corpus of pure rule "

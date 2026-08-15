@@ -120,6 +120,26 @@ OPUS_ARTICLE_RESEARCH_QUALIFICATION_CONTRACT = ProductionQualificationContract(
     require_source_discovery=True,
 )
 
+# The reviewer emits one accounting entry per sentence, so its output scales
+# with the article while its ceiling does not. A real 64-segment review used
+# 7,540 of the 8,192 tokens the ARTICLE_RESEARCH envelope allows - 92 per cent -
+# and a 65-segment one was truncated and discarded after the provider had
+# already been paid for it. That envelope was qualified for research, which
+# answers in a short card, and it was never sized for an article-length review.
+#
+# So ARTICLE_REVIEWER gets its own envelope with room to grow into rather than
+# room to fail out of: double the output, and an input allowance far above the
+# ~14,000 a full package actually costs, so neither half is the binding one.
+OPUS_ARTICLE_REVIEWER_QUALIFICATION_CONTRACT = ProductionQualificationContract(
+    logical_role=LogicalModelRole.ARTICLE_REVIEWER,
+    catalogue_entry=OPUS_5,
+    prompt_version="opus_article_reviewer_qualification_prompt_v1",
+    challenge="NIA-OPUS-ARTICLE-REVIEWER-QUALIFICATION-V1",
+    mismatch_code="OPUS_ARTICLE_REVIEWER_QUALIFICATION_CONTRACT_MISMATCH",
+    max_input_tokens=47_616,
+    max_output_tokens=16_384,
+)
+
 # Historical public names remain byte-identical aliases for the Fable probe
 # that was actually executed.  They must never be rebound to the Opus switch.
 QUALIFICATION_EXPECTED_RESPONSE_JSON = (
@@ -422,10 +442,34 @@ def execute_opus_article_research_production_qualification(
     )
 
 
+def execute_opus_article_reviewer_production_qualification(
+    storage: ControlledQualificationStorage,
+    approval: QualificationApproval,
+    *,
+    api_key_provider: Callable[[], str | None],
+    sdk_factory: ControlledSdkFactory | None = None,
+    technical_caller: ControlledTechnicalCaller | None = None,
+    now: datetime | None = None,
+) -> QualificationOutcome:
+    """Qualify exact Opus 5 for ARTICLE_REVIEWER at an article-length envelope."""
+
+    return _execute_production_qualification(
+        storage,
+        approval,
+        contract=OPUS_ARTICLE_REVIEWER_QUALIFICATION_CONTRACT,
+        api_key_provider=api_key_provider,
+        sdk_factory=sdk_factory,
+        technical_caller=technical_caller,
+        now=now,
+    )
+
+
 __all__ = [
     "FABLE_PRODUCTION_QUALIFICATION_CONTRACT",
     "OPUS_PRODUCTION_QUALIFICATION_CONTRACT",
     "OPUS_ARTICLE_RESEARCH_QUALIFICATION_CONTRACT",
+    "OPUS_ARTICLE_REVIEWER_QUALIFICATION_CONTRACT",
+    "execute_opus_article_reviewer_production_qualification",
     "OPUS_QUALIFICATION_CHALLENGE",
     "OPUS_QUALIFICATION_EXPECTED_RESPONSE_JSON",
     "OPUS_QUALIFICATION_PROMPT",
