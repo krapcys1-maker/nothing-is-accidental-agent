@@ -24,6 +24,62 @@ SETTLE_MS = 2_500
 SESSION_FILE = config.DATA_DIR / "storage-state.json"
 
 
+CDP_PORT = 9222
+
+
+def podlacz_sie():
+    """Podłącza się do Chrome'a, którego uruchomił i zalogował WŁAŚCICIEL.
+
+    Dlaczego tak, a nie przez uruchomienie przeglądarki przez Playwrighta:
+    Playwright startuje Chrome z flagami automatyzacji, a reCAPTCHA ocenia całą
+    sesję, nie samo kliknięcie — więc odrzuca ją niezależnie od tego, kto klika.
+    Właściciel nie mógł przejść CAPTCHY, mimo że jest człowiekiem.
+
+    Tutaj przeglądarkę uruchamia człowiek i człowiek się loguje. W momencie
+    przechodzenia CAPTCHY to jest zwykły Chrome — nic nie jest ukrywane ani
+    podszywane. Agent podłącza się do gotowej, zalogowanej sesji.
+    """
+    from playwright.sync_api import sync_playwright
+
+    p = sync_playwright().start()
+    try:
+        browser = p.chromium.connect_over_cdp(f"http://localhost:{CDP_PORT}")
+    except Exception as exc:
+        p.stop()
+        raise SystemExit(
+            f"Nie widzę otwartego Chrome'a na porcie {CDP_PORT} ({type(exc).__name__}).\n\n"
+            "Uruchom go sam, tym poleceniem, przy ZAMKNIĘTYCH pozostałych oknach Chrome:\n\n"
+            '  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" '
+            f"--remote-debugging-port={CDP_PORT} "
+            '--user-data-dir="%LOCALAPPDATA%\\substack-agent-chrome"\n\n'
+            "Potem zaloguj się w nim na Substacka normalnie i uruchom to ponownie."
+        ) from exc
+    context = browser.contexts[0] if browser.contexts else browser.new_context()
+    return p, browser, context
+
+
+def sprawdz_sesje() -> None:
+    """Czy Chrome właściciela jest zalogowany i co agent w nim widzi."""
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    try:
+        page.goto("https://substack.com/home", timeout=READ_TIMEOUT_MS,
+                  wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS)
+        text = page.inner_text("body")
+        zalogowany = "sign in" not in text.lower()[:300] and len(text) > 1200
+        print(f"  sesja: {'ZALOGOWANA' if zalogowany else 'NIEZALOGOWANA'}"
+              f"   tekst={len(text)} znaków")
+        if zalogowany:
+            SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+            context.storage_state(path=str(SESSION_FILE))
+            print(f"  stan sesji zapisany: {SESSION_FILE}")
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+
+
 def zaloguj() -> None:
     """Otwiera prawdziwe okno przeglądarki i czeka, aż właściciel się zaloguje.
 
@@ -113,8 +169,12 @@ def rozpoznanie() -> None:
 if __name__ == "__main__":
     import sys
 
-    polecenie = sys.argv[1] if len(sys.argv) > 1 else "rozpoznanie"
-    {"zaloguj": zaloguj, "rozpoznanie": rozpoznanie}[polecenie]()
+    polecenie = sys.argv[1] if len(sys.argv) > 1 else "sesja"
+    {
+        "sesja": sprawdz_sesje,      # podłącz się do Chrome'a właściciela
+        "zaloguj": zaloguj,          # stara droga, zapętla CAPTCHĘ — nie używać
+        "rozpoznanie": rozpoznanie,
+    }[polecenie]()
 
 
 def read_pages(urls: list[str]) -> list[dict[str, Any]]:
