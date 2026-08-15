@@ -37,7 +37,7 @@ class Truncated(RuntimeError):
     """
 
 
-def _preflight(purpose: str, conn: sqlite3.Connection) -> None:
+def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> None:
     """Warunki, które decydują, czy wywołanie może się w ogóle udać.
 
     Sprawdzane ZANIM pójdą pieniądze. Jedno zaniedbanie tej zasady kosztowało
@@ -86,11 +86,12 @@ def _preflight(purpose: str, conn: sqlite3.Connection) -> None:
 
 def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int) -> tuple[float, bool]:
     price = config.PRICING[model]
-    usd = (
-        tokens_in / 1_000_000 * price["in"]
-        + tokens_out / 1_000_000 * price["out"]
-        + web_searches / 1_000 * config.WEB_SEARCH_USD_PER_1K
-    )
+    usd = tokens_in / 1_000_000 * price["in"] + tokens_out / 1_000_000 * price["out"]
+    # Osobna opłata za wyszukiwanie jest cennikiem Anthropic. U DeepSeeka
+    # wyszukiwanie mieści się w tokenach — doliczanie tu $10/1000 zawyżałoby
+    # zapis finansowy, a zmyślonej kwoty w księgach być nie może.
+    if model in (config.CLAUDE, config.SONNET):
+        usd += web_searches / 1_000 * config.WEB_SEARCH_USD_PER_1K
     return round(usd, 6), bool(price["verified"])
 
 
@@ -108,18 +109,20 @@ def _log(purpose: str, model: str, tin: int, tout: int, searches: int, usd: floa
 def _call_claude(
     purpose: str, system: str, user: str, web_search: bool
 ) -> tuple[str, int, int, int, list[str]]:
+    model = config.MODEL_FOR[purpose]
     client = anthropic.Anthropic(
         api_key=config.ANTHROPIC_API_KEY,
         timeout=config.timeout_for(config.MAX_TOKENS[purpose]),
         max_retries=0,  # ponowienie płatnego wywołania to decyzja, nie domyślka
     )
     kwargs: dict[str, Any] = {
-        "model": config.CLAUDE,
+        "model": model,
         "max_tokens": config.MAX_TOKENS[purpose],
         "system": system,
         "messages": [{"role": "user", "content": user}],
     }
-    if purpose in config.EFFORT:
+    # `effort` istnieje na Opusie 5 i Sonnecie 5.
+    if purpose in config.EFFORT and model in (config.CLAUDE, config.SONNET):
         kwargs["output_config"] = {"effort": config.EFFORT[purpose]}
     if web_search:
         # max_uses JEST OBOWIĄZKOWE. Bez niego model robił 17, potem 31 rund
@@ -127,7 +130,7 @@ def _call_claude(
         # — 164 411 tokenów wejścia i $1,33 za jeden etap. Ograniczona liczba
         # wyszukiwań i tak zwraca dziesięć źródeł.
         kwargs["tools"] = [{
-            "type": "web_search_20260209",
+            "type": config.WEB_SEARCH_TOOL[model],
             "name": "web_search",
             "max_uses": config.DISCOVERY_MAX_SEARCHES,
         }]
@@ -168,6 +171,80 @@ def _call_claude(
                 urls.append(url)
 
     return text, message.usage.input_tokens, message.usage.output_tokens, searches, urls
+
+
+def _call_deepseek_responses(
+    purpose: str, system: str, user: str
+) -> tuple[str, int, int, int, list[str]]:
+    """DeepSeek przez /responses z server-side `web_search`.
+
+    Jedyny tani sposób na dyskoverię. Sprawdzone na żywo: realnie wykonuje
+    wyszukiwania i zwraca prawdziwe adresy, w przeciwieństwie do Haiku i Sonneta,
+    które wypisywały je z pamięci.
+    """
+    response = httpx.post(
+        f"{config.DEEPSEEK_BASE_URL}/responses",
+        headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"},
+        json={
+            "model": config.MODEL_FOR[purpose],
+            "instructions": system,
+            "input": user,
+            "tools": [{"type": "web_search"}],
+            # `auto`, nie wymuszenie. Wymuszone `{"type": "web_search"}` kazało
+            # modelowi wołać narzędzie w kółko — 15 wyszukiwań i ani jednego
+            # zdania odpowiedzi. Nakaz szukania siedzi w prompcie.
+            "tool_choice": "auto",
+            # BEZ tego model przepala cały budżet wyjścia na rozumowanie
+            # i wyszukiwanie, a bloku `message` nigdy nie tworzy: 11 wyszukiwań,
+            # status "completed", zero tekstu. Tokeny rozumowania liczą się do
+            # `max_output_tokens`, więc musi zostać miejsce na odpowiedź.
+            "reasoning": {"effort": config.DEEPSEEK_EFFORT},
+            "max_output_tokens": config.MAX_TOKENS[purpose],
+        },
+        timeout=config.timeout_for(config.MAX_TOKENS[purpose]) * 3,
+    )
+    response.raise_for_status()
+    payload = response.json()
+
+    text_parts: list[str] = []
+    urls: list[str] = []
+    searches = 0
+
+    def walk(node: Any) -> None:
+        nonlocal searches
+        if isinstance(node, dict):
+            if node.get("type") == "web_search_call":
+                searches += 1
+            if node.get("type") in {"output_text", "text"} and isinstance(
+                node.get("text"), str
+            ):
+                text_parts.append(node["text"])
+            for key, value in node.items():
+                if key == "url" and isinstance(value, str):
+                    # adresy niosą doklejony fragment #ws_call_id=...
+                    urls.append(value.split("#ws_call_id=")[0])
+                else:
+                    walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(payload.get("output", []))
+    text = payload.get("output_text") or "".join(text_parts)
+    if not text.strip():
+        raise Truncated(
+            f"DeepSeek wykonał {searches} wyszukiwań i nie zwrócił tekstu "
+            f"(status={payload.get('status')!r}, bloki="
+            f"{sorted({b.get('type') for b in payload.get('output', []) if isinstance(b, dict)})})"
+        )
+    usage = payload.get("usage", {})
+    return (
+        text,
+        int(usage.get("input_tokens", 0)),
+        int(usage.get("output_tokens", 0)),
+        searches,
+        urls,
+    )
 
 
 def _call_deepseek(purpose: str, system: str, user: str) -> tuple[str, int, int, int]:
@@ -216,9 +293,9 @@ def call(
     `collect_urls`, jeśli podane, zostanie wypełnione adresami, które realnie
     zwróciła wyszukiwarka — do sprawdzenia, czy model nie zmyślił URL-a.
     """
-    _preflight(purpose, conn)
+    _preflight(purpose, conn, run_id)
     model = config.MODEL_FOR[purpose]
-    provider = "anthropic" if model == config.CLAUDE else "deepseek"
+    provider = "anthropic" if model in (config.CLAUDE, config.SONNET) else "deepseek"
 
     if config.DRY_RUN:
         print(f"  [{purpose}] DRY_RUN — wywołanie pominięte", flush=True)
@@ -227,6 +304,10 @@ def call(
     try:
         if provider == "anthropic":
             text, tin, tout, searches, urls = _call_claude(purpose, system, user, web_search)
+        elif web_search:
+            text, tin, tout, searches, urls = _call_deepseek_responses(
+                purpose, system, user
+            )
         else:
             text, tin, tout, searches = _call_deepseek(purpose, system, user)
             urls = []

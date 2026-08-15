@@ -256,10 +256,13 @@ def classify(
 
     primary = sum(1 for s in kept if s["class"] == "PRIMARY")
     if primary < config.MIN_PRIMARY_SOURCES:
-        raise ValueError(
-            f"po klasyfikacji zostało {primary} źródeł pierwotnych, wymagane "
-            f"{config.MIN_PRIMARY_SOURCES}"
+        print(
+            f"  [uwaga] po klasyfikacji {primary} źródeł pierwotnych zamiast "
+            f"{config.MIN_PRIMARY_SOURCES}",
+            flush=True,
         )
+    if not kept:
+        raise ValueError("klasyfikacja odrzuciła wszystko — nie ma materiału")
     return kept
 
 
@@ -320,10 +323,14 @@ def fetch(
 
     primary = sum(1 for s in fetched if s.get("class") == "PRIMARY")
     if primary < config.MIN_PRIMARY_SOURCES:
-        raise ValueError(
-            f"po pobraniu zostało {primary} źródeł pierwotnych, wymagane "
-            f"{config.MIN_PRIMARY_SOURCES} — bez nich artykuł nie może nic stwierdzić"
+        # Ostrzeżenie, nie bramka. Nic nie blokuje artykułu — decyzja właściciela.
+        print(
+            f"  [uwaga] po pobraniu {primary} źródeł pierwotnych zamiast "
+            f"{config.MIN_PRIMARY_SOURCES} — artykuł będzie ostrożniejszy",
+            flush=True,
         )
+    if not fetched:
+        raise ValueError("nie pobrano ani jednej strony — nie ma z czego pisać")
     return fetched
 
 
@@ -345,10 +352,10 @@ def discovery(
         "dyskoveria.md",
         question=question,
         max_results=config.DISCOVERY_MAX_RESULTS,
+        max_searches=config.DISCOVERY_MAX_SEARCHES,
         min_primary=config.MIN_PRIMARY_SOURCES,
         min_why=config.MIN_WHY_SOURCES,
         blocked_hosts=", ".join(config.BLOCKED_HOSTS),
-        recent_domains=", ".join(recent_domains) if recent_domains else "(brak — pierwszy artykuł)",
     )
     real_urls: list[str] = []
     text = llm.call(
@@ -360,6 +367,16 @@ def discovery(
     if not isinstance(sources, list) or not sources:
         raise ValueError(f"dyskoveria nie zwróciła źródeł: {text[:300]!r}")
 
+    # Brak wyników wyszukiwania znaczy, że model NIE SZUKAŁ i podaje adresy
+    # z pamięci. Zamykamy się, a nie otwieramy: pierwsza wersja tego filtru
+    # miała warunek „jeśli są wyniki, sprawdzaj", więc przy zerze wyników
+    # przepuściła dziesięć zmyślonych adresów, z których pobrały się trzy,
+    # a klasyfikacja odrzuciła wszystkie.
+    if not real_urls:
+        raise ValueError(
+            "dyskoveria nie wykonała ani jednego wyszukiwania — zwrócone adresy "
+            "pochodzą z pamięci modelu, nie z sieci"
+        )
     real_hosts = {_host(u) for u in real_urls}
     kept: list[dict[str, Any]] = []
     for source in sources:
@@ -377,6 +394,11 @@ def discovery(
         source["host"] = host
         kept.append(source)
 
+    print(
+        f"  [dyskoveria] {len(real_urls)} wyników wyszukiwania -> "
+        f"{len(sources)} zaproponowanych -> {len(kept)} po filtrze",
+        flush=True,
+    )
     if not kept:
         raise ValueError("dyskoveria nie zwróciła ani jednego wiarygodnego adresu")
     return kept

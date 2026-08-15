@@ -1,83 +1,37 @@
-Find exactly {max_results} authoritative sources for this research question.
-
-Search the whole web. No country, sector or language is preferred — go wherever
-the record actually is.
-
-## Every source must be readable
-
-Publicly fetchable without login or subscription, served as HTML or plain text,
-and readable by a plain HTTP client with no bot protection.
-
-Primary records are often published as PDFs, which this fetcher cannot read.
-When the record itself is a PDF, return the issuing body's own HTML page for it —
-the landing, summary, abstract, chapter, table or data page carrying the
-substance — rather than a third party writing about it.
-
-Never return these hosts; they serve a CAPTCHA to automated requests or sit
-behind a paywall, so they come back empty however authoritative they are:
-{blocked_hosts}
-
-## At least {min_primary} must be PRIMARY
-
-A primary source is the originating record itself — the study, report, dataset,
-official statistic, patent, standard, regulator decision or first-party company
-statement about its own products — not press coverage of it. If an article cites
-a study, return the study's own page.
-
-**A catalogue is not the document.** At least one primary source must sit on the
-issuing body's own domain. A library record, bibliographic service, index or
-standards reseller that merely LISTS the document is not the document, however
-official the listing looks — it carries a title, a reference number and a price,
-not the substance. If the record is only reachable through such a service, find
-the issuing body's own page, or say the record is unavailable and return what
-genuinely bears on the question.
-
-A corpus of blogs, association posts and forum threads has no originating record
-and is rejected outright. Never return a forum thread, a Q&A site or a vendor
-blog as one of the required sources.
-
-## At least {min_why} must explain WHY
-
-The question asks about a mechanism — something happening because of a specific
-incentive, rule or constraint. Rule text alone cannot evidence why anyone behaves
-a certain way; a corpus of pure rule statements produces a confident-sounding
-article with nothing behind it.
-
-So at least {min_why} sources must speak to the why, and both must be
-institutional: an impact assessment, a consultation or its published response, a
-regulator's decision or review, a national audit report, a post-implementation
-evaluation, an official inquiry, a standards body, or peer-reviewed academic work.
-
-A vendor, supplier, consultancy or service-provider page does NOT count toward
-these, however well it describes the incentive — a seller explaining why its own
-product gets bought is marketing. Return such pages only as extra context.
-
-At least one source must carry quantified data — figures, rates, volumes or
-shares — not only description.
-
-## Spread the sources
-
-Use at least three different organisations.
-
-These domains were used by recent articles. Prefer sources outside them, so the
-publication does not become a newsletter about one institution:
-{recent_domains}
-
-## If the evidence is not there
-
-Return the sources that bear on the question anyway, including any that
-contradict its premise. Do not substitute topically adjacent pages that merely
-restate a rule. An honest empty answer costs one search; a fabricated one costs
-the whole article.
-
-## Output
-
-Source selection only — do not synthesise claims or answer the question.
-
-Return only valid JSON, shaped exactly as:
-
-{{"sources": [{{"url": "<exact url as returned by search>", "title": "<page title>", "publisher": "<organisation that published it>", "class": "PRIMARY"|"SUPPORTING", "answers_why": true|false, "has_numbers": true|false, "note": "<one sentence on what this source contains>"}}]}}
-
-## The research question
+Search the web, then return {max_results} sources for this question:
 
 {question}
+
+Search first — you do not know which URLs exist, and any address from memory
+will be discarded.
+
+**Run at most {max_searches} searches, then stop and write the JSON.** Searching
+without ever answering is a failed run: the answer is the only thing that counts,
+and partial sources are worth more than none. If you have not found everything
+after {max_searches} searches, return what you have.
+
+Requirements:
+
+1. At least {min_primary} sources must be PRIMARY — the record itself (a
+   regulation, standard, filed report, dataset, study, patent, official
+   statistic, or a company statement about its own products), not an article
+   about the record. A catalogue or reseller listing the document is not the
+   document.
+2. At least {min_why} sources must explain WHY the rule or practice exists — an
+   impact assessment, consultation, regulator decision, audit, evaluation or
+   peer-reviewed paper. Vendor and consultancy pages do not count.
+3. At least one source must carry figures.
+4. Use at least three different organisations. Any country, any language.
+5. Free, no login, readable as HTML or text. Skip these hosts, they block
+   automated reading: {blocked_hosts}
+6. No forums, Q&A sites or vendor blogs.
+
+If the evidence is not there, return what genuinely bears on the question,
+including anything that contradicts it. Do not substitute pages that merely
+restate a rule.
+
+Select sources only. Do not answer the question.
+
+Return only this JSON:
+
+{{"sources": [{{"url": "...", "title": "...", "publisher": "...", "class": "PRIMARY"|"SUPPORTING", "answers_why": true, "has_numbers": true, "note": "..."}}]}}

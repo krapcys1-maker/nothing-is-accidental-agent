@@ -72,7 +72,8 @@ def main() -> int:
     print(f"== przebieg {run_id} ==", flush=True)
     print(
         f"   baza: {config.DB_PATH}   "
-        f"tryb: {'BEZ LIMITU' if config.NO_LIMIT else f'{config.DAILY_LIMIT_USD} USD/dzień'}"
+        f"sufit przebiegu: {config.RUN_LIMIT_USD} USD"
+        f"{'   TANIO (DeepSeek)' if config.CHEAP_MODE else ''}"
         f"{'   DRY_RUN' if config.DRY_RUN else ''}",
         flush=True,
     )

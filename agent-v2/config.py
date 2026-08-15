@@ -63,19 +63,59 @@ NO_LIMIT = _env("AGENT_V2_NO_LIMIT", "0").lower() in {"1", "true", "yes"}
 # Claude tam, gdzie błąd kosztuje cały łańcuch albo jakość tekstu.
 
 CLAUDE = "claude-opus-5"
-DEEPSEEK = "deepseek-chat"
+SONNET = "claude-sonnet-5"
+DEEPSEEK = "deepseek-v4-flash"
+DEEPSEEK_PRO = "deepseek-v4-pro"  # ma server-side web_search przez /responses
 
+# Decyzja właściciela 2026-08-15: DeepSeek do wszystkiego poza pisaniem.
+# Pisanie zostaje u Opusa 5, bo to jest produkt.
 MODEL_FOR = {
-    "scout": CLAUDE,  # zły temat psuje cały łańcuch
+    "scout": DEEPSEEK_PRO,
     "feasibility": DEEPSEEK,  # tani odsiew przed drogim krokiem
-    "discovery": CLAUDE,  # wymaga wyszukiwania po stronie dostawcy
+    # Dyskoveria MUSI być u Anthropic (DeepSeek nie ma wyszukiwania), ale nie
+    # musi być u Opusa: wybór adresów to praca mechaniczna, nie ocena. Każda
+    # runda przesyła całą rozmowę od nowa, więc wejście rośnie do ~146 tys.
+    # tokenów — na Opusie $0,73 za samo wejście, na Sonnecie $0,29.
+    # Dyskoveria u Opusa, bo TYLKO ona działa od początku do końca.
+    #
+    # Sprawdzone na żywo, żeby nie powtarzać:
+    #  - Haiku 4.5, Sonnet 5: NIE wywołują wyszukiwania w ogóle, wypisują adresy
+    #    z pamięci (977 i 1073 tokeny wejścia, zero wyników). Także po jawnym
+    #    nakazie szukania w prompcie.
+    #  - DeepSeek v4-pro przez /responses: szuka NAPRAWDĘ i tanio ($0,05 wobec
+    #    $0,46 u Opusa, dziewięć razy taniej), zwraca prawdziwe adresy (OSHA,
+    #    Cornell Law, NFPA). ALE przy tym prompcie nie kończy: robi 11-22
+    #    wyszukiwań, zużywa cały budżet wyjścia na rozumowanie i nigdy nie tworzy
+    #    bloku `message`. Przy krótkim prompcie kończy poprawnie, więc droga
+    #    prowadzi przez uproszczenie promptu dyskoverii, nie przez model.
+    #    Po skróceniu promptu do ~250 słów kończy poprawnie — i tak zostaje.
+    #  - Opus jest NIEPRZEWIDYWALNY kosztowo: te same 8 wyszukiwań dały raz
+    #    52 767 tokenów wejścia ($0,46), a raz 285 759 ($1,65), bo wielkość
+    #    wyników zależy od tematu. To dyskwalifikuje go z etapu, który biegnie
+    #    codziennie bez nadzoru.
+    "discovery": DEEPSEEK_PRO,
     "classify": DEEPSEEK,  # mechaniczne, wysokowolumenowe
-    "synthesis": CLAUDE,  # ocena, co dowody potwierdzają
-    "write": CLAUDE,  # to jest produkt
-    "review": CLAUDE,  # to jest bramka jakości
+    "synthesis": DEEPSEEK_PRO,
+    "write": CLAUDE,  # TO JEST PRODUKT — zostaje u Opusa 5
+    "review": DEEPSEEK_PRO,
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+
+# Głębokość rozumowania DeepSeeka na /responses. Tokeny rozumowania liczą się
+# do sufitu wyjścia, więc przy `high` model kończy budżet na szukaniu i nie
+# zdąża napisać odpowiedzi.
+DEEPSEEK_EFFORT = "low"
+
+# Tryb tani: wszystko na DeepSeeku. Do testowania HYDRAULIKI — czy łańcuch
+# przechodzi, czy JSON się parsuje, czy zapis działa. Przebieg kosztuje wtedy
+# grosze zamiast ~1 USD. NIE służy do oceny jakości tekstu, bo produktem jest
+# to, co napisze Opus. Dyskoveria zostaje u Claude'a nawet tutaj: DeepSeek nie
+# ma wyszukiwania po stronie dostawcy, więc bez niej nie ma czego pobierać.
+CHEAP_MODE = _env("AGENT_V2_CHEAP", "0").lower() in {"1", "true", "yes"}
+
+if CHEAP_MODE:
+    MODEL_FOR = {k: (CLAUDE if k == "discovery" else DEEPSEEK) for k in MODEL_FOR}
 
 # --- cennik ------------------------------------------------------------------
 # USD za milion tokenów. `verified` mówi, czy stawka została potwierdzona realnym
@@ -84,7 +124,15 @@ DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
 PRICING = {
     CLAUDE: {"in": 5.00, "out": 25.00, "verified": True},
+    SONNET: {"in": 3.00, "out": 15.00, "verified": True},
     DEEPSEEK: {"in": 0.28, "out": 0.42, "verified": False},
+    DEEPSEEK_PRO: {"in": 0.28, "out": 0.42, "verified": False},
+}
+
+# Filtrowanie dynamiczne (`_20260209`) jest na Opusie i Sonnecie 5.
+WEB_SEARCH_TOOL = {
+    CLAUDE: "web_search_20260209",
+    SONNET: "web_search_20260209",
 }
 
 # Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań.
@@ -110,8 +158,13 @@ TOPIC_COUNT = 6
 DIVERSITY_LOOKBACK = 5
 
 # --- dyskoveria --------------------------------------------------------------
-DISCOVERY_MAX_RESULTS = 10
-DISCOVERY_MAX_SEARCHES = 6
+DISCOVERY_MAX_RESULTS = 6
+# Zmierzone na jednym trudnym temacie (szpara pod drzwiami kabiny):
+#   31 rund -> 7 organizacji, 6 pierwotnych, $1,33  (bez limitu, przeciek)
+#    6 rund -> 1 organizacja,  0 pierwotnych, $0,53  (za mało, temat nie wyszedł)
+# Koszt krańcowy ~$0,09 za rundę, bo każda przesyła całą rozmowę od nowa.
+# Przy suficie $1,60 na przebieg dyskoveria może wziąć ~$0,8.
+DISCOVERY_MAX_SEARCHES = 8
 MIN_PRIMARY_SOURCES = 2  # wymóg właściciela: w korpusie ≥2 dokumenty pierwotne
 MIN_WHY_SOURCES = 2  # ≥2 źródła mówiące DLACZEGO, nie tylko treść reguły
 
@@ -165,7 +218,10 @@ JSON_OVERHEAD_TOKENS = 1200
 # Myślenie na Opusie 5 jest domyślnie włączone, liczy się jak tokeny wyjściowe
 # i NIE jest częścią kontraktu — więc sufit wyliczony z samego kontraktu potrafi
 # uciąć odpowiedź w połowie mimo poprawnej arytmetyki.
-THINKING_HEADROOM_TOKENS = 6000
+# 16 tys., bo modele DeepSeek v4 rozumują znacznie obficiej niż Claude i przy
+# 6 tys. ucinało syntezę. Sufit nic nie kosztuje, dopóki nie zostanie zużyty —
+# płacimy za tokeny, nie za limit.
+THINKING_HEADROOM_TOKENS = 16000
 
 # Głębokość myślenia. Jawnie, bo domyślne `high` na Opusie 5 potrafi podwoić
 # rachunek za wyjście bez pytania.
@@ -187,8 +243,11 @@ MAX_TOKENS = {
     "scout": _tokens_for(TOPIC_COUNT * 900),
     # jedna ocena na temat, każda z uzasadnieniem
     "feasibility": _tokens_for(TOPIC_COUNT * 500),
-    # 10 źródeł z opisem, plus przestrzeń na tury wyszukiwania
-    "discovery": _tokens_for(DISCOVERY_MAX_RESULTS * 500) + 6000,
+    # Dyskoveria dostaje budżet z zapasem, bo DeepSeek liczy do niego tokeny
+    # rozumowania KAŻDEJ rundy wyszukiwania. Przy ciasnym budżecie kończył
+    # szukanie i nigdy nie tworzył bloku `message`: 26 wyszukiwań, status
+    # "completed", zero tekstu.
+    "discovery": 32000,
     # DOKŁADNIE tyle, ile prosi prompt: 12 fragmentów po 700 znaków plus liczby
     "classify": _tokens_for(
         CLASSIFY_MAX_EXCERPTS * CLASSIFY_MAX_EXCERPT_CHARS + 2000
@@ -206,9 +265,11 @@ MAX_TOKENS = {
     "review": int(70 * 118 * 1.4) + JSON_OVERHEAD_TOKENS,
 }
 
-# Etapy, które myślą, dostają zapas ponad kontrakt.
+# Zapas na myślenie dostają WSZYSTKIE etapy, nie tylko Claude'owe: modele
+# DeepSeek v4 też rozumują, a tokeny rozumowania liczą się do sufitu wyjścia.
+# Odsiew ucięło na 2057 tokenach dokładnie z tego powodu.
 MAX_TOKENS = {
-    purpose: ceiling + (THINKING_HEADROOM_TOKENS if purpose in EFFORT else 0)
+    purpose: ceiling + THINKING_HEADROOM_TOKENS
     for purpose, ceiling in MAX_TOKENS.items()
 }
 
