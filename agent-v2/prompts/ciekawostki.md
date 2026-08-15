@@ -37,6 +37,14 @@ wanting to know who found that out. In practice that means:
 Aim wide: {ile} facts from {ile} different domains, not {ile} angles on one
 subject.
 
+## Already used — do not return these, or anything close to them
+
+These have been published already. A near-miss counts as a repeat: the same
+regulation from another angle, the same object with a different number, the same
+mechanism in a neighbouring industry. Go somewhere else entirely.
+
+{uzyte}
+
 ## Output
 
 Return only valid JSON:

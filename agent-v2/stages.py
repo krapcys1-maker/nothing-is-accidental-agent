@@ -217,6 +217,35 @@ NOTE_SYSTEM = (
 )
 
 
+ZUZYTE_FAKTY = config.DATA_DIR / "zuzyte_fakty.json"
+
+
+def _klucz_faktu(tekst: str) -> str:
+    """Odcisk faktu odporny na przestawienie słów i inną liczbę w tym samym zdaniu."""
+    slowa = re.findall(r"[a-z]{4,}", tekst.lower())
+    return " ".join(sorted(set(slowa))[:12])
+
+
+def wczytaj_zuzyte() -> list[str]:
+    if not ZUZYTE_FAKTY.exists():
+        return []
+    try:
+        return json.loads(ZUZYTE_FAKTY.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def zapisz_zuzyte(nowe: list[str]) -> None:
+    """Pamięć zużytych ciekawostek — poza bazą, bo budżet to cztery tabele."""
+    wszystkie = wczytaj_zuzyte() + [t for t in nowe if t]
+    ZUZYTE_FAKTY.parent.mkdir(parents=True, exist_ok=True)
+    ZUZYTE_FAKTY.write_text(
+        json.dumps(wszystkie[-config.CURIOSITY_MEMORY * 3:], ensure_ascii=False,
+                   indent=1),
+        encoding="utf-8",
+    )
+
+
 CURIOSITY_SYSTEM = (
     "You find documented facts about ordinary things for an anonymous editorial "
     "brand. You search before you answer and you never state a fact you cannot "
@@ -233,7 +262,12 @@ def znajdz_ciekawostki(
     cztery z pięciu notek dziennie są właśnie takie. Bez tego etapu jedyne
     źródło to pamięć modelu — czyli dokładnie to, co wycięliśmy z komentarzy.
     """
-    prompt = _prompt("ciekawostki.md", ile=ile)
+    zuzyte = wczytaj_zuzyte()
+    prompt = _prompt(
+        "ciekawostki.md", ile=ile,
+        uzyte=("\n".join(f"- {t}" for t in zuzyte[-config.CURIOSITY_MEMORY:])
+               or "(nothing yet — this is the first batch)"),
+    )
     try:
         raw = llm.call("curiosity", CURIOSITY_SYSTEM, prompt,
                        conn=conn, run_id=run_id, web_search=True)
@@ -242,6 +276,15 @@ def znajdz_ciekawostki(
         print(f"  [ciekawostki] nie wyszły ({exc})", flush=True)
         return []
     fakty = [f for f in fakty if f.get("fact") and f.get("url")]
+    # Druga siatka na powtórki: model bywa głuchy na własną listę zakazów, a to
+    # samo szukanie codziennie oddaje te same słynne fakty. Odsiewamy w kodzie.
+    znane = {_klucz_faktu(t) for t in zuzyte}
+    swieze = [f for f in fakty if _klucz_faktu(f["fact"]) not in znane]
+    if len(swieze) < len(fakty):
+        print(f"  [ciekawostki] odrzucone jako już użyte: {len(fakty) - len(swieze)}",
+              flush=True)
+    fakty = swieze
+    zapisz_zuzyte([f["fact"] for f in fakty])
     print(f"  [ciekawostki] z pokryciem: {len(fakty)}", flush=True)
     for f in fakty:
         print(f"    · [{f.get('domain', '')[:18]}] {f.get('fact', '')[:88]}", flush=True)
@@ -294,6 +337,39 @@ def note(
                 print(f"    ODPADA: {str(audyt.get('verdict', ''))[:76]}", flush=True)
         candidates.append(data)
     return {"type": note_type, "candidates": candidates}
+
+
+def notki_dnia(
+    conn: sqlite3.Connection, run_id: int, dzien_artykulu: bool = False,
+    karta: dict[str, Any] | None = None,
+    ciekawostki: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Pięć notek na jeden dzień, każda z innego materiału.
+
+    Podawanie modelowi całej puli faktów naraz nie daje różnorodności, tylko
+    pięć wariantów tego samego: przy pierwszym realnym przebiegu cztery z pięciu
+    kandydatur chwyciły ten sam fakt o windzie. Jedna notka dostaje więc jeden
+    fakt i zestaw dnia różni się z konstrukcji, a nie z nadziei.
+    """
+    typy = (config.NOTE_MIX_ARTICLE_DAY if dzien_artykulu
+            else config.NOTE_MIX_OTHER_DAY)
+    if ciekawostki is None:
+        ciekawostki = znajdz_ciekawostki(conn, run_id)
+    zapas = list(ciekawostki)
+    dzien: list[dict[str, Any]] = []
+    for typ in typy:
+        if typ == "ARTYKUL" and karta:
+            material = karta
+        else:
+            if not zapas:
+                zapas = znajdz_ciekawostki(conn, run_id)
+                if not zapas:
+                    print("  [notki] brak materiału — kończę dzień krócej", flush=True)
+                    break
+            material = {"fact": zapas.pop(0)}
+        print(f"  [{typ}]", flush=True)
+        dzien.append(note(conn, run_id, typ, material))
+    return dzien
 
 
 COMMENT_SYSTEM = (

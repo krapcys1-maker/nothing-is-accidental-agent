@@ -38,6 +38,16 @@ delivering a second article.
   difference. Do not restate your article louder.
 - **An addition gets built on.** If someone brings a fact or a case you did not
   have, that is a gift — use it, and say where it came from.
+- **Agreement gets taken further.** This is the most common case and the easiest
+  one to waste. Someone says you are right; restating your own point back at
+  them ends the conversation politely and adds nothing. Instead give them the
+  next thing: the mechanism underneath, the condition the claim depends on, or
+  the case where it stops being true. Naming the limit of your own argument is
+  not a retreat — it is the most credible thing you can do in public, and it
+  gives the other person something to answer.
+
+Never open with "Exactly", "Absolutely", "Well said", "Great point" or any other
+agreement marker. Start with the substance.
 
 ## Hard rules
 

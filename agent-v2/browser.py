@@ -307,6 +307,75 @@ def rozpoznanie() -> None:
 
 PROFIL_HANDLE = "nothingisaccidental"
 
+# Substack tłumaczy cudze treści na język interfejsu i podmienia je w HTML-u.
+# Nasza notka po angielsku wyświetlała się po polsku, a odpowiedź Anglika też.
+# Agent czytający stronę odpisałby po polsku komuś, kto pisał po angielsku —
+# więc treści bierzemy WYŁĄCZNIE z API, gdzie `body` jest oryginałem, a pole
+# `language` mówi, w jakim języku naprawdę napisano.
+_JS_NIEODPOWIEDZIANE = """
+async ([handle, ile]) => {
+    const pr = await (await fetch('/api/v1/user/' + handle + '/public_profile',
+                                  {credentials: 'include'})).json();
+    if (!pr || !pr.id) return {blad: 'brak profilu'};
+    const feed = await (await fetch('/api/v1/reader/feed/profile/' + pr.id +
+                                    '?types%5B%5D=note',
+                                    {credentials: 'include'})).json();
+    const nasze = (feed.items || [])
+        .map(x => x.comment).filter(c => c && c.children_count > 0)
+        .slice(0, ile);
+    const czekaja = [];
+    for (const n of nasze) {
+        const t = await (await fetch('/api/v1/reader/comment/' + n.id +
+                                     '/replies?comment_id=' + n.id,
+                                     {credentials: 'include'})).json();
+        for (const galaz of (t.commentBranches || [])) {
+            const plaskie = [];
+            (function chodz(w) {
+                if (!w) return;
+                const c = w.comment || w;
+                if (c && c.body) plaskie.push(c);
+                (w.descendantComments || w.children || []).forEach(chodz);
+            })(galaz);
+            if (!plaskie.length) continue;
+            const ostatni = plaskie[plaskie.length - 1];
+            // Jeśli ostatni głos w gałęzi jest nasz, rozmowa nie czeka na nas.
+            if (ostatni.user_id === pr.id) continue;
+            czekaja.push({
+                pod_czym: (n.body || '').slice(0, 400),
+                pod_id: n.id,
+                autor: ostatni.name,
+                jezyk: ostatni.language,
+                tekst: ostatni.body || '',
+                id: ostatni.id,
+                data: ostatni.date,
+            });
+        }
+    }
+    return {czekaja};
+}
+"""
+
+
+def nieodpowiedziane(ile: int = 10) -> list[dict[str, Any]]:
+    """Cudze odpowiedzi pod naszymi notkami, na które jeszcze nie odpisaliśmy."""
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    try:
+        page.goto(f"https://substack.com/@{PROFIL_HANDLE}",
+                  timeout=READ_TIMEOUT_MS, wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS)
+        wynik = page.evaluate(_JS_NIEODPOWIEDZIANE, [PROFIL_HANDLE, ile])
+        czekaja = wynik.get("czekaja", []) if isinstance(wynik, dict) else []
+        print(f"  czeka na odpowiedź: {len(czekaja)}", flush=True)
+        for c in czekaja:
+            print(f"    · {c['autor']} [{c.get('jezyk')}] {c['tekst'][:70]}", flush=True)
+        return czekaja
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+
 
 def potwierdz_notke(page, tekst: str) -> bool:
     """Pyta Substacka, czy notka naprawdę wisi na naszym profilu."""
@@ -329,6 +398,86 @@ def potwierdz_notke(page, tekst: str) -> bool:
     except Exception as exc:
         print(f"  (nie udało się potwierdzić notki: {exc})"[:160], flush=True)
         return False
+
+
+def potwierdz_odpowiedz(page, note_id: int, tekst: str) -> bool:
+    """Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku."""
+    probka = " ".join(tekst.split())[:60]
+    try:
+        return bool(page.evaluate(
+            """async ([id, probka]) => {
+                const t = await (await fetch('/api/v1/reader/comment/' + id +
+                                             '/replies?comment_id=' + id,
+                                             {credentials: 'include'})).json();
+                const norm = s => (s || '').replace(/\\s+/g, ' ');
+                return norm(JSON.stringify(t.commentBranches || [])).includes(probka);
+            }""",
+            [note_id, probka],
+        ))
+    except Exception as exc:
+        print(f"  (nie udało się potwierdzić odpowiedzi: {exc})"[:160], flush=True)
+        return False
+
+
+def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False) -> dict[str, Any]:
+    """Odpowiada w wątku pod naszą własną notką."""
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
+    try:
+        page.goto(f"https://substack.com/@{PROFIL_HANDLE}/note/c-{note_id}",
+                  timeout=READ_TIMEOUT_MS, wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 3000)
+
+        # Pole odpowiedzi otwiera dopiero kliknięcie KONTENERA — kliknięcie w sam
+        # napis nic nie robi. Napisy trzymamy w kilku językach, bo interfejs idzie
+        # za językiem przeglądarki, a na serwerze będzie inny niż tutaj.
+        otwarte = False
+        for napis in ("Zostaw odpowiedź", "Leave a reply", "Reply", "Antwort"):
+            kand = page.get_by_text(napis, exact=False).first
+            if kand.count() == 0:
+                continue
+            kand.locator("xpath=..").click(timeout=15_000)
+            page.wait_for_timeout(3000)
+            if page.locator("[contenteditable=true]").count() > 0:
+                otwarte = True
+                break
+        if not otwarte:
+            raise RuntimeError("nie otworzyłem pola odpowiedzi")
+
+        page.locator("[contenteditable=true]").first.click(timeout=10_000)
+        page.wait_for_timeout(700)
+        page.keyboard.type(tekst, delay=12)
+        page.wait_for_timeout(1500)
+        wynik["wpisane"] = True
+        print(f"  wpisane w pole odpowiedzi: {len(tekst.split())} słów", flush=True)
+
+        przycisk = None
+        for nazwa in ("Reply", "Odpowiedz", "Post", "Opublikuj", "Wyślij"):
+            kandydat = page.get_by_role("button", name=nazwa).first
+            if kandydat.count() > 0 and kandydat.is_visible():
+                przycisk = kandydat
+                print(f"  przycisk wysyłki: {nazwa!r}", flush=True)
+                break
+        wynik["przycisk_widoczny"] = przycisk is not None
+
+        if wyslij and przycisk is not None:
+            przycisk.click()
+            page.wait_for_timeout(6000)
+            wynik["wyslane"] = potwierdz_odpowiedz(page, note_id, tekst)
+            print("  ODPOWIEDŹ POTWIERDZONA W WĄTKU" if wynik["wyslane"]
+                  else "  KLIKNIĘTE, ALE ODPOWIEDZI NIE MA W WĄTKU", flush=True)
+        elif not wyslij:
+            print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
+    except Exception as exc:
+        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        print(f"  BŁĄD: {wynik['blad']}", flush=True)
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+    return wynik
 
 
 def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:

@@ -314,10 +314,16 @@ NOTE_MAX_WORDS = 64
 
 # Ilu kandydatów generujemy, żeby wybrać jednego. Sensowne tylko dlatego, że
 # DeepSeek kosztuje grosze — u Fable'a byłoby to nie do obronienia.
-NOTE_CANDIDATES = 5
+# Trzech kandydatow, nie pieciu: odkad kazda notka dostaje WLASNY fakt,
+# piaty wariant tego samego zdania niczego nie dokladal, a placilismy za
+# niego i za jego weryfikacje.
+NOTE_CANDIDATES = 3
 # Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich,
 # a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas na kilka dni.
 CURIOSITY_BATCH = 8
+# Ile ostatnio zuzytych faktow pokazujemy szukajacemu jako zakaz powtorki.
+# Bez tego to samo szukanie codziennie oddaje te same slynne osiem.
+CURIOSITY_MEMORY = 60
 COMMENT_CANDIDATES = 3
 
 # Sufit dzienny. Research mówi, że trzy przemyślane komentarze tygodniowo biją
