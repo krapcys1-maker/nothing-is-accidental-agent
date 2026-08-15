@@ -97,3 +97,6 @@ Thumbs.db
 # === agent-v2: nowy agent ma wlasny .env ===
 agent-v2/.env
 agent-v2/data/
+
+# Osobista konfiguracja uprawnien Claude Code — nie czesc projektu
+.claude/settings.local.json
