@@ -86,6 +86,17 @@ Prompty to pliki `.md`, nie kod. Zero migracji, zero triggerów, zero zgód.
 
 ## Dziennik
 
+### 2026-08-15 — pełny przebieg autonomiczny, zimny start
+`python agent-v2/run.py` — bez pamięci podręcznej, bez pytań, 15 wywołań, $1,0609.
+Skaut wybrał sześć nowych tematów, żaden nie powtórzył ani poprzedniej szóstki,
+ani czternastu kątów ze starej bazy. Artykuł: „The Red Label Is Not a Warning.
+It Is a Test Result." — 1327 słów, 62 zdania (27 faktów, 31 wnioskowań, 4 prozy).
+
+Widać skutek rozszerzonej swobody: wnioskowań więcej niż faktów, przy zerowej
+liczbie zmyślonych liczb. Jedna uwaga (`FAKT_BEZ_POKRYCIA` na zdaniu „Almost
+every product safety standard tests the thing as it leaves the factory")
+zgłoszona i **nie zablokowała** — tak jak ustalono.
+
 ### 2026-08-15 — pierwszy artykuł
 Temat: „The Bag Of Salad That Puffs Up" → artykuł „The Additive With No Number".
 10 źródeł znalezionych, 6 pobranych, 6 pierwotnych, 57 fragmentów, 18 liczb.
