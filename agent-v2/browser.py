@@ -158,12 +158,13 @@ def rozpoznanie() -> None:
             "Uruchom najpierw:  python agent-v2/browser.py zaloguj"
         )
 
+    # Ekrany edytora rysują się długo, więc czekamy dłużej niż przy czytaniu.
     checks = [
-        ("kim jestem", "https://substack.com/home"),
-        ("feed notek", "https://substack.com/notes"),
-        ("moja publikacja", "https://substack.com/@nothingisaccidental"),
-        ("edytor artykułu", "https://substack.com/publish/post"),
-        ("kogo obserwuję", "https://substack.com/inbox"),
+        ("feed — skąd brać posty", "https://substack.com/home", 6000),
+        ("notki — feed", "https://substack.com/notes", 6000),
+        ("panel publikacji", "https://nothingisaccidental.substack.com/publish/home", 9000),
+        ("edytor artykułu", "https://nothingisaccidental.substack.com/publish/post", 12000),
+        ("skrzynka", "https://substack.com/inbox", 6000),
     ]
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -171,25 +172,27 @@ def rozpoznanie() -> None:
             storage_state=str(SESSION_FILE), viewport={"width": 1400, "height": 1200}
         )
         page = context.new_page()
-        for name, url in checks:
+        for name, url, wait in checks:
             try:
                 page.goto(url, timeout=READ_TIMEOUT_MS, wait_until="domcontentloaded")
-                page.wait_for_timeout(SETTLE_MS)
+                page.wait_for_timeout(wait)
                 text = page.inner_text("body")
-                logged_out = "sign in" in text.lower()[:300]
                 posts = len({u for u in page.eval_on_selector_all(
                     'a[href*="/p/"]', "e=>e.map(x=>x.href)")})
                 buttons = [b.strip() for b in page.eval_on_selector_all(
-                    "button", "e=>e.map(x=>x.innerText)") if b.strip()][:8]
-                print(
-                    f"  {name:20} {'WYLOGOWANY' if logged_out else 'zalogowany':11} "
-                    f"tekst={len(text):>6} postów={posts:>3}",
-                    flush=True,
+                    "button, a[role=button]", "e=>e.map(x=>x.innerText)") if b.strip()]
+                pola = page.eval_on_selector_all(
+                    "[contenteditable=true], textarea, input[type=text]",
+                    "e=>e.map(x=>x.getAttribute('placeholder')||x.getAttribute('aria-label')||'(bez etykiety)')",
                 )
+                print(f"  {name:26} tekst={len(text):>6}  postów={posts:>3}", flush=True)
                 if buttons:
-                    print(f"     przyciski: {', '.join(buttons)[:110]}", flush=True)
+                    uniq = list(dict.fromkeys(buttons))[:10]
+                    print(f"     przyciski: {' | '.join(uniq)[:150]}", flush=True)
+                if pola:
+                    print(f"     pola do pisania: {' | '.join(pola[:6])[:150]}", flush=True)
             except Exception as exc:
-                print(f"  {name:20} BŁĄD {type(exc).__name__}", flush=True)
+                print(f"  {name:26} BŁĄD {type(exc).__name__}: {exc}"[:160], flush=True)
         context.close()
         browser.close()
 
