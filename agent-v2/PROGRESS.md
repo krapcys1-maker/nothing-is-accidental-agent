@@ -2,109 +2,135 @@
 
 Jedna strona, aktualizowana po każdym skończonym etapie. Czytaj od góry.
 
-**Zasada nadrzędna: każdy etap dostaje test live natychmiast po napisaniu.**
-
 ---
 
-## Stan: ŁAŃCUCH DZIAŁA OD KOŃCA DO KOŃCA
+## Stan: DZIAŁA. Osiem przebiegów pod rząd zakończonych artykułem.
 
-Pierwszy artykuł powstał 2026-08-15: `data/articles/0012-the-additive-with-no-number.md`
+```bash
+python agent-v2/run.py
+```
 
-| etap | stan | test live | koszt |
-|---|---|---|---|
-| 0. środowisko, budżet, log kosztów | **działa** | tak | 0 |
-| 1. skaut tematów (Claude) | **działa** | tak | $0,0503 |
-| 2. ocena wykonalności (DeepSeek) | **działa** | tak | $0,0005 |
-| 3. dyskoveria źródeł (Claude + web search) | **działa** | tak | $0,6007 |
-| 4. pobranie (HTTP) | **działa** | tak | 0 |
-| 5. klasyfikacja + wyciąg (DeepSeek) | **działa** | tak | $0,0186 |
-| 6. synteza — karta dowodowa (Claude) | **działa** | tak | $0,1756 |
-| 7. pisanie (Claude + styl) | **działa** | tak | $0,1779 |
-| 8. recenzja — rozliczanie zdań (Claude) | **działa** | tak | $0,2476 |
-| 9. zapis (baza + .md) | **działa** | tak | 0 |
+Jedno polecenie, zero pytań do człowieka, artykuł w `data/articles/`.
 
-**Czysty przebieg: $1,27.** Cała budowa z testami i jednym przepisaniem: $1,4872.
+| etap | model | typowy koszt |
+|---|---|---|
+| skaut tematów | DeepSeek v4-pro | $0,004 |
+| ocena wykonalności | DeepSeek v4-flash | $0,003 |
+| dyskoveria źródeł | DeepSeek v4-pro (`/responses` + `web_search`) | $0,04 |
+| pobranie | HTTP | 0 |
+| klasyfikacja i wyciąg | DeepSeek v4-flash | $0,01 |
+| synteza — karta dowodowa | DeepSeek v4-pro | $0,007 |
+| **pisanie** | **Claude Fable 5** | **$0,53** |
+| recenzja — rozliczanie zdań | DeepSeek v4-pro | $0,01 |
+| zapis | SQLite + `.md` | 0 |
+
+**Przebieg: $0,44–0,76** (z Fable'em). Na Opusie było $0,21–0,25, przed
+przejściem na DeepSeeka $1,10–1,92.
 
 ## Budżet złożoności
 
 | | limit | jest |
 |---|---|---|
-| pliki `.py` w `agent-v2/` | 10 | **7** |
-| tabele w bazie | 4 | **4** |
-| warstwy między `run.py` a modelem | 1 | **1** (`llm.py`) |
+| pliki `.py` | 10 | **7** |
+| tabele | 4 | **4** |
+| warstwy do modelu | 1 | **1** (`llm.py`) |
 
-`config.py` · `db.py` · `llm.py` · `stages.py` · `gates.py` · `style.py` · `run.py`.
-Prompty to pliki `.md`, nie kod. Zero migracji, zero triggerów, zero zgód.
+Prompty to pliki `.md`. Zero migracji, triggerów, zgód, kolejek.
 
-## Decyzje właściciela z 2026-08-15
+## Decyzje właściciela
 
-1. **Nic nie blokuje artykułu.** Skoro temat przeszedł odsiew i research jest
-   opłacony, nie ma stanu „zablokowany i koniec". Cztery bramki
-   (fakt bez pokrycia, liczba spoza korpusu, zmyślone przeżycie, nieistniejące
-   badanie) zgłaszają uwagi; artykuł zawsze trafia do szuflady.
-2. **Pisarz ma swobodę interpretacji.** Fakt wymaga pokrycia; analogia,
-   interpretacja i argument nie są faktami — mają być tylko widoczne jako myśl
-   autora. To stąd bierze się ciekawość tekstu.
-3. **Skaut nie nazywa instytucji w pytaniu.** To był powód dwunastu tematów
-   pod rząd o `gov.uk`. Dostępność źródeł sprawdza dopiero DeepSeek, po
-   zróżnicowaniu.
-4. **Zero przepisywania.** Jedno podejście.
-5. **Korpus stylu wchodzi do repo** (`prompts/styl/`), przypięty SHA-256.
+1. **Nic nie blokuje artykułu.** Cztery bramki zgłaszają uwagi; tekst zawsze
+   trafia do szuflady.
+2. **Po zrobionym researchu artykuł musi powstać.** Synteza pada → karta
+   składana z dowodów bez modelu. Pisarz pada → powtórka na Opusie. Recenzja
+   pada → zapis bez niej. Wszystkie trzy sprawdzone.
+3. **Pisarz ma swobodę interpretacji.** Fakt wymaga pokrycia; analogia
+   i argument nie są faktem, mają być tylko widoczne jako myśl autora.
+4. **Skaut nie nazywa instytucji w pytaniu** — to był powód dwunastu tematów
+   pod rząd o `gov.uk`.
+5. **Fable 5 pisze**, DeepSeek robi całą resztę.
+6. **Nic nie wychodzi na zewnątrz.** Publikacja i komentarze nie istnieją.
+   Hasła do Substacka wpisuje właściciel; plik z nimi jest w `.gitignore`.
 
-## Co zadziałało lepiej, niż zakładano
+## Osiem ostatnich przebiegów
 
-- **Skaut po naprawie**: 6 tematów, 6 dziedzin, zero Wielkiej Brytanii.
-- **Opus 5 nie zmyślił ani jednej liczby.** Zmierzone, nie założone. Obawa
-  o halucynacje liczb okazała się przeniesieniem doświadczeń ze słabszego modelu.
-- **DeepSeek do przemiału korpusu**: 321 tys. znaków za $0,0186. W Opusie samo
-  wejście kosztowałoby ok. $0,40.
-- **Karta dowodowa sama obaliła założenie tematu** i powiedziała, czego nie wie.
+| przebieg | koszt | słów | źródła | uwagi | tytuł |
+|---|---|---|---|---|---|
+| 37 | $0,2358 | 1221 | 6/6 | 0 | The Bumps at the Corner Are a Curb in Disguise |
+| 38 | $0,2214 | 1220 | 3/6 | 2 | The Square on the Toothpaste Tube… |
+| 40 | $0,2082 | 1205 | 3/5 | 2 | The Tag Is Not Talking to You |
+| 41 | $0,2503 | 1166 | 3/5 | 0 | The Cap That Won't Let Go… (Opus) |
+| 42 | $0,5399 | 1091 | — | 0 | The Cap That Won't Let Go (Fable, A/B) |
+| 43 | $0,7633 | 1067 | 1/6 | 0 | The Number on Your Orange… |
+| 44 | $0,7511 | 1105 | 6/10 | 1 | The Egg Aisle Is a Legal Document |
+| 45 | $0,4436 | 1093 | 6/10 | 3 | The Arrow on Your Fuel Gauge… |
 
-## Co złapały testy live (i czego nie złapałby test na atrapie)
+Długość ustabilizowała się w celu (1067–1105) po zmianie promptu i przejściu na
+Fable'a; wcześniej ciążyła ku 1220.
 
-- **Konsola Windows cp1252** wywalała agenta na polskich znakach. Na serwerze
-  z UTF-8 by przeszło — czyli błąd wychodzący tylko na jednym komputerze.
-- **Blokady botów są realne**: PMC dwa razy odmówił automatowi, USDA dał 403,
-  MDPI pustą stronę. 6 pobrań z 10. Odmowy zapisane, nie obchodzone.
-- **Mój własny próg trafności wyrzucił najlepsze źródło liczbowe** (praca
-  o atmosferze modyfikowanej na szpinaku, 12 liczb, ocena 0,20). Po usunięciu
-  progu: 57 fragmentów zamiast 23, 18 liczb zamiast 9.
-- **Dwa miejsca liczyły to samo i dały różne odpowiedzi** — doraźna kontrola
-  liczb w `run.py` uznała `E 938` za zmyślone, a `gates.py` nie. Duplikat
-  skasowany; jedno pytanie ma jedną implementację.
+## Co złapały testy live
+
+- **Konsola Windows cp1252** wywalała agenta na polskich znakach.
+- **Wyszukiwarka bez `max_uses`**: 31 rund zamiast 8, koszt kwadratowy — każda
+  runda przesyła całą rozmowę od nowa. Najdroższy błąd tego dnia.
+- **Filtr adresów otwierał się przy braku danych** zamiast zamykać i przepuścił
+  dziesięć zmyślonych URL-i.
+- **Sufity tokenów wpisane obok kontraktu** zamiast liczone z niego: prompt
+  klasyfikacji prosił o 8400 znaków przy suficie na 5250.
+- **Recenzja ucięta na 28 764 tokenach** — DeepSeek rozumuje obficie.
+- **Mój własny próg trafności** wyrzucił najlepsze źródło liczbowe.
+- **Dwa miejsca liczyły to samo** (czy liczba jest w korpusie) i dały różne
+  odpowiedzi. Duplikat skasowany.
+- **Plik z hasłem do Substacka** leżał w repo nieignorowany — jeden `git add -A`
+  od wypchnięcia na GitHuba. Historia czysta, nigdy nie trafił do commita.
+
+## Sprawdzone i odrzucone
+
+- **Haiku 4.5 i Sonnet 5 do dyskoverii**: nie wywołują wyszukiwania w ogóle,
+  wypisują adresy z pamięci. Także po jawnym nakazie w prompcie.
+- **Opus 5 do dyskoverii**: działa, ale nieprzewidywalny kosztowo — te same
+  8 wyszukiwań dały raz 52 767, a raz 285 759 tokenów wejścia ($0,46 i $1,65).
+- **`tool_choice={"type":"web_search"}` na DeepSeeku**: zapętla model, szuka
+  bez końca i nigdy nie tworzy bloku `message`. Musi być `"auto"`.
 
 ## Otwarte
 
-- **Stawki DeepSeeka niepotwierdzone.** Koszt liczony szacunkiem; każde takie
-  wywołanie ma w bazie `price_verified = 0`. Do sprawdzenia na fakturze.
-- **`instrukcja dla pisania artykulow/` leży poza `agent-v2/`.** Działa, ale
-  łamie zasadę „wszystko nowego agenta w `agent-v2/`".
-- **Brak testów kontradowodowych** — 19 gotowych do przeniesienia z archiwum.
-- **Reguła różnorodności domen** działa dopiero od drugiego artykułu (pierwszy
-  nie ma historii w nowej bazie; kąty startowe wzięte ze starej).
+- **Skuteczność pobrań waha się od 1/6 do 6/6.** Martwe adresy (404) i blokady
+  botów. Częściowo zaadresowane szukaniem dziesięciu źródeł zamiast sześciu.
+- **Stawki DeepSeeka niepotwierdzone** — każde takie wywołanie ma w bazie
+  `price_verified = 0`. Do sprawdzenia na fakturze.
+- **19 testów kontradowodowych z archiwum** — nieprzeniesione. Podłogi
+  sprawdzone doraźnie na spreparowanym tekście i łapią.
+- **Powtarzalność tematów przy długim działaniu** — reguła „żadnej domeny
+  z ostatnich pięciu" istnieje, ale nie była testowana na dłuższej serii.
 - **Notki i komentarze nie istnieją** i nie powstaną bez osobnej decyzji.
 
 ## Dziennik
 
-### 2026-08-15 — pełny przebieg autonomiczny, zimny start
-`python agent-v2/run.py` — bez pamięci podręcznej, bez pytań, 15 wywołań, $1,0609.
-Skaut wybrał sześć nowych tematów, żaden nie powtórzył ani poprzedniej szóstki,
-ani czternastu kątów ze starej bazy. Artykuł: „The Red Label Is Not a Warning.
-It Is a Test Result." — 1327 słów, 62 zdania (27 faktów, 31 wnioskowań, 4 prozy).
+### 2026-08-15 — trzy przebiegi z Fable'em, ratunek dyskoverii zadziałał
+Przebieg 45: dyskoveria zapętliła się (22 wyszukiwania bez odpowiedzi),
+ratunek wybrał z 10 już znalezionych adresów drugim wywołaniem, przebieg
+dojechał do artykułu z 7 źródłami pierwotnymi. To była ostatnia ścieżka
+awaryjna testowana wyłącznie offline.
 
-Widać skutek rozszerzonej swobody: wnioskowań więcej niż faktów, przy zerowej
-liczbie zmyślonych liczb. Jedna uwaga (`FAKT_BEZ_POKRYCIA` na zdaniu „Almost
-every product safety standard tests the thing as it leaves the factory")
-zgłoszona i **nie zablokowała** — tak jak ustalono.
+Przebieg 43: recenzja padła na suficie tokenów, artykuł został zapisany
+z adnotacją — reguła „artykuł musi powstać" potwierdzona na żywo.
 
-### 2026-08-15 — pierwszy artykuł
-Temat: „The Bag Of Salad That Puffs Up" → artykuł „The Additive With No Number".
-10 źródeł znalezionych, 6 pobranych, 6 pierwotnych, 57 fragmentów, 18 liczb.
-Recenzja: 65 zdań — 34 fakty (wszystkie z pokryciem), 13 wnioskowań, 18 prozy.
-Zero uwag z bramek. 1253 słowa.
+### 2026-08-15 — Fable 5 wygrał A/B z Opusem
+Na identycznej karcie dowodowej (przywiązana nakrętka): Opus 1204 słowa
+i więcej głosu, Fable 1127 słów i **wyłapanie, że przepis jest węższy niż jego
+popularne streszczenie** — dotyczy tylko Załącznika C, a nakrętki metalowe
+z plastikową uszczelką są jawnie wyłączone. Opus tego nie zauważył.
+
+### 2026-08-15 — DeepSeek v4 przejmuje wszystko poza pisaniem
+Przebieg z $1,10 na $0,24. DeepSeek ma server-side `web_search` przez
+`/responses`, co zdejmuje z Opusa najdroższy i najbardziej nieprzewidywalny etap.
+
+### 2026-08-15 — pierwszy artykuł, cały łańcuch
+Temat „The Bag Of Salad That Puffs Up" → „The Additive With No Number".
+Karta dowodowa sama obaliła założenie tematu.
 
 ### 2026-08-15 — audyt planu przed budową
-Warstwa jakości do przeniesienia „w całości" miała 4 220 linii w 8 plikach,
-22 pary zdublowanych liczb (stała kontra zdanie w prompcie) i udokumentowany
-w kodzie przypadek dwóch bramek zaprzeczających sobie. Zamiast przenoszenia:
-napisana od nowa, cztery bramki, żadna nie blokuje.
+Warstwa jakości do przeniesienia „w całości" miała 4 220 linii, 22 pary
+zdublowanych liczb i udokumentowany w kodzie przypadek dwóch bramek
+zaprzeczających sobie. Napisana od nowa: cztery bramki, żadna nie blokuje.
