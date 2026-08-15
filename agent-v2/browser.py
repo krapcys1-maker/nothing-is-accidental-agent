@@ -171,7 +171,7 @@ def rozgrzej(context) -> bool:
         page.close()
 
 
-def api_json(page, sciezka: str) -> Any:
+def api_json(page, sciezka: str, baza: str | None = None) -> Any:
     """Czyta API WCHODZĄC na adres, zamiast wołać `fetch` ze strony.
 
     Sprawdzone na serwerze: z centrum danych `fetch` z wnętrza strony wraca 403
@@ -182,7 +182,18 @@ def api_json(page, sciezka: str) -> Any:
     """
     import json as _json
 
-    page.goto(f"https://substack.com{sciezka}", timeout=READ_TIMEOUT_MS * 2,
+    # Adresy dziela sie na dwa swiaty i pomylenie ich daje bledy trudne do
+    # zdiagnozowania: /api/v1/posts nalezy do PUBLIKACJI
+    # (nothingisaccidental.substack.com), a /api/v1/reader/* i /api/v1/user/*
+    # do serwisu (substack.com). Potwierdzanie artykulu pytalo pod zlym adresem
+    # i zawsze odpowiadalo "nie ma", wiec udana publikacja raportowalaby porazke.
+    #   - substack.com          : /api/v1/reader/*, /api/v1/user/*
+    #   - NASZA publikacja       : /api/v1/posts (lista naszych artykulow)
+    #   - CUDZA publikacja       : /api/v1/posts/<slug>, /api/v1/post/<id>/comments
+    # Dlatego adres bazowy jest jawnym argumentem, a nie domyslem. Poprzednia
+    # wersja zawsze pytala substack.com i cicho zwracala "nie znalazlem".
+    baza = baza or "https://substack.com"
+    page.goto(f"{baza}{sciezka}", timeout=READ_TIMEOUT_MS * 2,
               wait_until="domcontentloaded")
     page.wait_for_timeout(1200)
     tekst = page.inner_text("body").strip()
@@ -908,8 +919,10 @@ def ustaw_oswiadczenie_ai(wyslij: bool = False) -> dict[str, Any]:
 def potwierdz_artykul(page, tytul: str) -> bool:
     """Pyta Substacka, czy artykuł naprawdę jest opublikowany."""
     probka = " ".join(tytul.split())[:50]
-    dane = api_json(page, "/api/v1/posts?limit=5")
-    lista = (dane or {}).get("posts", dane) or []
+    dane = api_json(page, "/api/v1/posts?limit=5",
+                    baza=f"https://{config.SUBSTACK_HANDLE}.substack.com")
+    # Ten adres oddaje LISTE, nie obiekt z kluczem "posts" — sprawdzone na zywo.
+    lista = dane if isinstance(dane, list) else (dane or {}).get("posts") or []
     return any(probka in (x.get("title") or "") and x.get("post_date")
                for x in lista if isinstance(x, dict))
 
@@ -1160,13 +1173,17 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
 
 def potwierdz_komentarz(page, url: str, tekst: str) -> bool:
     """Pyta Substacka, czy komentarz naprawdę wisi — zamiast wierzyć kliknięciu."""
+    from urllib.parse import urlparse
+
     slug = url.rstrip("/").rsplit("/", 1)[-1]
     probka = " ".join(tekst.split())[:60]
-    post = api_json(page, f"/api/v1/posts/{slug}")
+    czyja = f"https://{urlparse(url).netloc}"        # publikacja AUTORA posta
+    post = api_json(page, f"/api/v1/posts/{slug}", baza=czyja)
     if not isinstance(post, dict) or not post.get("id"):
         return False
-    dane = api_json(page, f"/api/v1/post/{post['id']}/comments?all_comments=true")
-    lista = (dane or {}).get("comments", dane) or []
+    dane = api_json(page, f"/api/v1/post/{post['id']}/comments?all_comments=true",
+                    baza=czyja)
+    lista = dane if isinstance(dane, list) else (dane or {}).get("comments") or []
     return any(probka in " ".join((k.get("body") or "").split())
                for k in lista if isinstance(k, dict))
 
