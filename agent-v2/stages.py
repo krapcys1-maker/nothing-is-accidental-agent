@@ -367,7 +367,8 @@ def znajdz_ciekawostki(
 
 
 def note(
-    conn: sqlite3.Connection, run_id: int, note_type: str, evidence: dict[str, Any]
+    conn: sqlite3.Connection, run_id: int, note_type: str, evidence: dict[str, Any],
+    link: str | None = None,
 ) -> dict[str, Any]:
     """Jedna notka danego typu — do szuflady.
 
@@ -402,6 +403,11 @@ def note(
             f"  {text[:78]}",
             flush=True,
         )
+        if text and link:
+            # Adres dokłada KOD, nie model. Model potrafi przekręcić URL, a zły
+            # link pod notką promującą artykuł to notka wyrzucona do kosza.
+            # Doklejamy po pomiarze długości, żeby adres nie liczył się jako słowa.
+            data["note"] = text = f"{text}\n\n{link}"
         if text:
             # Notka mówi fakt publicznie tak samo jak komentarz, więc idzie tym
             # samym pasem: blokuje wyłącznie fakt obalony przez źródło.
@@ -418,6 +424,7 @@ def notki_dnia(
     conn: sqlite3.Connection, run_id: int, dzien_artykulu: bool = False,
     karta: dict[str, Any] | None = None,
     ciekawostki: list[dict[str, Any]] | None = None,
+    link_artykulu: str | None = None,
 ) -> list[dict[str, Any]]:
     """Pięć notek na jeden dzień, każda z innego materiału.
 
@@ -443,7 +450,10 @@ def notki_dnia(
                     break
             material = {"fact": zapas.pop(0)}
         print(f"  [{typ}]", flush=True)
-        dzien.append(note(conn, run_id, typ, material))
+        # Adres artykułu leci TYLKO pod notką, która ten artykuł promuje.
+        # Pod ciekawostką byłby reklamą doklejoną do faktu i psułby ją.
+        dzien.append(note(conn, run_id, typ, material,
+                          link=link_artykulu if typ == "ARTYKUL" else None))
     return dzien
 
 
