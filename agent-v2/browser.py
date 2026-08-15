@@ -11,6 +11,7 @@ istnieją w tym pliku i nie powstaną bez osobnej decyzji właściciela.
 
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -398,6 +399,61 @@ def potwierdz_notke(page, tekst: str) -> bool:
     except Exception as exc:
         print(f"  (nie udało się potwierdzić notki: {exc})"[:160], flush=True)
         return False
+
+
+def _esc(t: str) -> str:
+    return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def rozbierz_artykul(sciezka: Path) -> dict[str, Any]:
+    """Rozkłada plik artykułu na tytuł, podtytuł i treść jako HTML.
+
+    Treść idzie do edytora WKLEJENIEM HTML-a, nie wpisywaniem znak po znaku:
+    Substack używa ProseMirror, który przy wpisywaniu gubi linki w źródłach —
+    a nazwane źródła to obietnica z oświadczenia o AI, nie ozdoba.
+    """
+    linie = sciezka.read_text(encoding="utf-8").splitlines()
+    tytul = linie[0].lstrip("# ").strip() if linie else ""
+    podtytul = ""
+    reszta: list[str] = []
+    for i, l in enumerate(linie[1:], 1):
+        s = l.strip()
+        if not podtytul and s.startswith("*") and s.endswith("*") and len(s) > 2:
+            podtytul = s.strip("*").strip()
+            continue
+        reszta.append(l)
+
+    html: list[str] = []
+    lista_otwarta = False
+    for blok in "\n".join(reszta).split("\n\n"):
+        b = blok.strip()
+        if not b or b == "---":
+            continue
+        if b.startswith("## "):
+            if lista_otwarta:
+                html.append("</ul>")
+                lista_otwarta = False
+            html.append(f"<h2>{_esc(b[3:].strip())}</h2>")
+            continue
+        if b.startswith("- "):
+            if not lista_otwarta:
+                html.append("<ul>")
+                lista_otwarta = True
+            for poz in b.splitlines():
+                poz = poz.strip()[2:].strip()
+                m = re.match(r"\[(.+?)\]\((\S+?)\)$", poz)
+                html.append(
+                    f'<li><a href="{_esc(m.group(2))}">{_esc(m.group(1))}</a></li>'
+                    if m else f"<li>{_esc(poz)}</li>"
+                )
+            continue
+        if lista_otwarta:
+            html.append("</ul>")
+            lista_otwarta = False
+        html.append(f"<p>{_esc(' '.join(b.split()))}</p>")
+    if lista_otwarta:
+        html.append("</ul>")
+    return {"tytul": tytul, "podtytul": podtytul, "html": "".join(html)}
 
 
 def potwierdz_odpowiedz(page, note_id: int, tekst: str) -> bool:
