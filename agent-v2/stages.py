@@ -306,6 +306,39 @@ def sprawdz_fakty(
     return fakty
 
 
+def zweryfikuj_komentarz(
+    conn: sqlite3.Connection, run_id: int, tekst: str, tytul: str = "",
+) -> dict[str, Any]:
+    """Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem.
+
+    Sprawdzanie faktów przed pisaniem nie przewidzi, jakiego faktu model użyje.
+    Dowód z życia: wszystkie trzy kandydatury oparły się na tym, że Butlin i wsp.
+    wykluczyli IIT — twierdzeniu prawdziwym, ale nieobecnym na liście wcześniej
+    zweryfikowanych faktów. Tym razem pamięć modelu trafiła. Nie ma powodu zakładać,
+    że trafi zawsze.
+    """
+    prompt = _prompt("weryfikacja_komentarza.md", title=tytul, comment=tekst)
+    try:
+        raw = llm.call("factcheck", FACTCHECK_SYSTEM, prompt,
+                       conn=conn, run_id=run_id, web_search=True)
+        out = llm.parse_json(raw)
+    except Exception as exc:
+        # Awaria weryfikacji to nie jest dowód fałszu. Komentarz i tak stoi na faktach
+        # zebranych przed pisaniem — druga siatka pękła, pierwsza trzyma.
+        return {"claims": [], "safe_to_post": True,
+                "verdict": f"weryfikacja nie doszła do skutku ({exc}) — puszczam na pierwszej siatce"}
+    # Próg mieszka tutaj, nie w ocenie modelu: blokuje wyłącznie fakt OBALONY.
+    # Nieznalezione to nie nieprawdziwe. Teza o mechanizmach, motywach czy skutkach
+    # jest stanowiskiem, a stanowisko ma prawo być głośne i sporne — po to jest to pismo.
+    obalone = [c for c in out.get("claims", []) if c.get("status") == "refuted"]
+    for c in out.get("claims", []):
+        if c.get("status") != "confirmed":
+            print(f"    {'! OBALONE' if c.get('status') == 'refuted' else '· nieznalezione'}: "
+                  f"{str(c.get('claim'))[:80]}", flush=True)
+    out["safe_to_post"] = not obalone
+    return out
+
+
 def comment_on(
     conn: sqlite3.Connection, run_id: int, post: dict[str, Any],
     fakty: list[dict[str, Any]] | None = None,
@@ -317,6 +350,18 @@ def comment_on(
     """
     if fakty is None:
         fakty = sprawdz_fakty(conn, run_id, post)
+    if not fakty:
+        # Przy artykule brak dowodów oznacza gorszy artykuł, ale artykuł musi powstać.
+        # Przy komentarzu jest odwrotnie: milczenie jest pełnoprawną odpowiedzią, a
+        # publicznego komentarza z wymyślonym faktem nie da się cofnąć. Więc bez
+        # pokrycia nie komentujemy.
+        print("  [komentarz] brak zweryfikowanych faktów — nie komentuję", flush=True)
+        return {
+            "post": post.get("url"), "title": post.get("title"),
+            "candidates": [{"comment": None,
+                            "reason_if_silent": "Nie udało się zweryfikować żadnego faktu."}],
+            "fakty": [],
+        }
     if fakty:
         post = dict(post)
         post["text"] = (
@@ -348,8 +393,19 @@ def comment_on(
                if text else f"MILCZY — {data.get('reason_if_silent', '')[:70]}"),
             flush=True,
         )
+        if text:
+            audyt = zweryfikuj_komentarz(conn, run_id, text, post.get("title", ""))
+            data["weryfikacja"] = audyt
+            data["safe_to_post"] = bool(audyt.get("safe_to_post"))
+            print(f"    -> {'PRZECHODZI' if data['safe_to_post'] else 'ODPADA'}: "
+                  f"{str(audyt.get('verdict', ''))[:78]}", flush=True)
         candidates.append(data)
-    return {"post": post.get("url"), "title": post.get("title"), "candidates": candidates}
+    return {
+        "post": post.get("url"),
+        "title": post.get("title"),
+        "candidates": candidates,
+        "fakty": fakty,   # zostaje w zapisie: po wystawieniu da się sprawdzić, na czym stał
+    }
 
 
 def fallback_card(question: str, evidence: list[dict[str, Any]]) -> dict[str, Any]:
