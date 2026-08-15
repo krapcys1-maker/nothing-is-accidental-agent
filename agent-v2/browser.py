@@ -530,6 +530,44 @@ def wypelnij_artykul(page, artykul: dict[str, Any], obraz: Path | None) -> None:
         wgrany = page.locator(".tiptap img").count() > 0
         print(f"  grafika: {'wgrana' if wgrany else 'NIE WESZŁA'}", flush=True)
 
+    wstaw_przycisk_subskrypcji(page)
+
+
+def wstaw_przycisk_subskrypcji(page) -> bool:
+    """Jeden przycisk subskrypcji, po ostatnim akapicie a przed źródłami.
+
+    Tam ląduje argument, więc tam czytelnik decyduje — a ostatnią rzeczą na
+    stronie zostaje lista źródeł, czyli podpis tego pisma i dokładnie to, co
+    obiecuje oświadczenie o AI. Dwa przyciski byłyby nachalne przy piśmie,
+    którego walutą jest powściągliwość.
+    """
+    naglowek = page.locator(".tiptap h1, .tiptap h2").filter(has_text="Sources").first
+    if naglowek.count() == 0:
+        print("  przycisk subskrypcji: brak nagłówka źródeł, pomijam", flush=True)
+        return False
+    akapit = naglowek.locator("xpath=preceding-sibling::p[1]")
+    if akapit.count() == 0:
+        return False
+    akapit.click()
+    page.keyboard.press("End")
+    page.wait_for_timeout(600)
+
+    for nazwa in ("Przycisk", "Button"):
+        k = page.get_by_role("button", name=nazwa).first
+        if k.count() > 0 and k.is_visible():
+            k.click()
+            break
+    page.wait_for_timeout(2500)
+    for nazwa in ("Subskrybuj", "Subscribe"):
+        opcja = page.get_by_text(nazwa, exact=True).first
+        if opcja.count() > 0 and opcja.is_visible():
+            opcja.click()
+            page.wait_for_timeout(3000)
+            print("  przycisk subskrypcji wstawiony", flush=True)
+            return True
+    print("  przycisk subskrypcji: nie znalazłem opcji", flush=True)
+    return False
+
 
 def tresc_oswiadczenia() -> str:
     """Oświadczenie „Jak to robię" — z pliku, nie z drugiej kopii w kodzie.
