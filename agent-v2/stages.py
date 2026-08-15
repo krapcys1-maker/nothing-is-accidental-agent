@@ -69,6 +69,28 @@ def review(
     return llm.parse_json(text)
 
 
+def _nazwa_zrodla(conn: sqlite3.Connection, url: str) -> str:
+    """Nazwa źródła zamiast gołego adresu.
+
+    Lista surowych URL-i pod tekstem wygląda jak zrzut z narzędzia, a nie jak
+    przypisy — a oświadczenie o AI obiecuje czytelnikowi, że źródła są do
+    sprawdzenia. Sprawdza je ten, kto widzi, CO otwiera.
+    """
+    row = conn.execute(
+        "SELECT title FROM sources WHERE url = ? AND title IS NOT NULL AND title != ''"
+        " ORDER BY id DESC LIMIT 1",
+        (url,),
+    ).fetchone()
+    tytul = (row["title"] if row else "") or ""
+    tytul = " ".join(tytul.split())
+    if not tytul:
+        # Bez tytułu lepszy jest sam host niż stumetrowy adres z parametrami.
+        return urlparse(url).netloc.replace("www.", "")
+    if len(tytul) > 90:
+        tytul = tytul[:87].rstrip(" ,.–—-") + "…"
+    return f"{tytul} — {urlparse(url).netloc.replace('www.', '')}"
+
+
 def save(
     conn: sqlite3.Connection, run_id: int, topic: dict[str, Any],
     card: dict[str, Any], draft: dict[str, Any], status: str,
@@ -78,20 +100,30 @@ def save(
     config.ARTICLES_DIR.mkdir(parents=True, exist_ok=True)
     slug = re.sub(r"[^a-z0-9]+", "-", (draft.get("title") or "artykul").lower()).strip("-")
     path = config.ARTICLES_DIR / f"{run_id:04d}-{slug[:60]}.md"
+    # Plik ma być GOTOWY DO WKLEJENIA, a nie mieszanką tekstu i naszych notatek.
+    # Wcześniej trafiał tu nagłówek "Źródła" po polsku — w artykule pisanym po
+    # angielsku — oraz sekcja "Status: SAVED", czyli zapis wewnętrzny, który
+    # czytelnikowi nic nie mówi. Status i tak siedzi w tabeli `articles`, więc
+    # w pliku był duplikatem.
+    urls = list(dict.fromkeys(
+        c.get("url") for c in card.get("confirmed_claims", []) if c.get("url")
+    ))
     path.write_text(
         f"# {draft.get('title', '')}\n\n*{draft.get('subtitle', '')}*\n\n"
-        f"{draft['body']}\n\n---\n\n## Źródła\n\n"
-        + "\n".join(
-            f"- {url}"
-            for url in dict.fromkeys(
-                c.get("url") for c in card.get("confirmed_claims", []) if c.get("url")
-            )
-        )
-        + f"\n\n## Status\n\n{status}"
-        + (f" — {blocked_by}" if blocked_by else "")
+        f"{draft['body']}\n\n---\n\n## Sources\n\n"
+        + "\n".join(f"- [{_nazwa_zrodla(conn, url)}]({url})" for url in urls)
         + "\n",
         encoding="utf-8",
     )
+    # Wszystko, co jest naszą notatką, a nie tekstem dla czytelnika, ląduje obok
+    # — i tylko wtedy, gdy jest co zapisać.
+    if status != "SAVED" or blocked_by or notes:
+        path.with_suffix(".uwagi.md").write_text(
+            f"# Uwagi wewnętrzne — {draft.get('title', '')}\n\n"
+            f"Status: {status}" + (f" — {blocked_by}" if blocked_by else "") + "\n\n"
+            + "\n".join(f"- {n}" for n in notes) + "\n",
+            encoding="utf-8",
+        )
     conn.execute(
         "INSERT INTO articles (run_id, created_at, topic, title, body, evidence,"
         " status, blocked_by, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
