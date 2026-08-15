@@ -147,6 +147,7 @@ MODEL_FOR = {
     "factcheck": DEEPSEEK_PRO,
     "curiosity": DEEPSEEK_PRO,
     "grafika": DEEPSEEK_PRO,
+    "cele": DEEPSEEK_PRO,
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -345,6 +346,7 @@ MAX_TOKENS = {
     "factcheck": 24000,
     "curiosity": 24000,
     "grafika": 4000,
+    "cele": 6000,
 }
 
 # --- notki i komentarze ------------------------------------------------------

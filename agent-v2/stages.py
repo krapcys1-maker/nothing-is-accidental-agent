@@ -383,6 +383,53 @@ def zapisz_zuzyte(nowe: list[str]) -> None:
     )
 
 
+TARGETS_SYSTEM = (
+    "You decide which posts an anonymous editorial publication should comment "
+    "on. Silence is the normal answer. Return only valid JSON."
+)
+
+
+def wybierz_cele(
+    conn: sqlite3.Connection, run_id: int, posty: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Które posty z kanału zasługują na komentarz.
+
+    Kanał czytelnika to w większości szum — przy pierwszym podglądzie na dwanaście
+    postów przypadały kasyna online, numerologia i blog podróżniczy. Bez tego sita
+    agent komentowałby wszystko, czyli zachowywałby się jak farma komentarzy,
+    a nie jak ktoś, kto czyta.
+    """
+    opis = "\n\n".join(
+        f"[{i}] {p.get('tytul', '')}\n"
+        f"    publikacja: {p.get('pub', '')}\n"
+        f"    komentarzy: {p.get('komentarze', 0)}, reakcji: {p.get('reakcje', 0)}\n"
+        f"    {(p.get('opis') or '')[:300]}"
+        for i, p in enumerate(posty)
+    )
+    try:
+        raw = llm.call("cele", TARGETS_SYSTEM, _prompt("cele.md", posts=opis),
+                       conn=conn, run_id=run_id)
+        oceny = llm.parse_json(raw).get("targets") or []
+    except Exception as exc:
+        print(f"  [cele] nie wyszły ({exc})", flush=True)
+        return []
+
+    wybrane: list[dict[str, Any]] = []
+    for o in oceny:
+        i = o.get("index")
+        if not isinstance(i, int) or not 0 <= i < len(posty):
+            continue
+        if o.get("worth_it"):
+            wybrane.append({**posty[i], "co_dodamy": o.get("what_i_would_add", "")})
+            print(f"  TAK  [{i}] {posty[i].get('tytul', '')[:52]}", flush=True)
+            print(f"       {o.get('what_i_would_add', '')[:90]}", flush=True)
+        else:
+            print(f"  nie  [{i}] {posty[i].get('tytul', '')[:52]}"
+                  f"  — {o.get('why_not', '')[:50]}", flush=True)
+    print(f"  [cele] warte komentarza: {len(wybrane)}/{len(posty)}", flush=True)
+    return wybrane
+
+
 CURIOSITY_SYSTEM = (
     "You find documented facts about ordinary things for an anonymous editorial "
     "brand. You search before you answer and you never state a fact you cannot "
