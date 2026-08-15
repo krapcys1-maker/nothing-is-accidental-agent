@@ -31,7 +31,10 @@ def _ustawienia() -> dict[str, str]:
         "host": os.environ.get("SMTP_HOST", "smtp.gmail.com").strip(),
         "port": os.environ.get("SMTP_PORT", "587").strip(),
         "user": os.environ.get("SMTP_USER", "").strip(),
-        "haslo": os.environ.get("SMTP_PASSWORD", "").strip(),
+        # Google pokazuje haslo aplikacji w czterech grupach po cztery znaki
+        # i ludzie wklejaja je ze spacjami. Dziala, ale przez przypadek —
+        # wycinamy je, zeby nie bylo zagadka za trzy miesiace.
+        "haslo": os.environ.get("SMTP_PASSWORD", "").replace(" ", "").strip(),
     }
 
 
