@@ -1,0 +1,24 @@
+[Unit]
+Description=Nothing Is Accidental — agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/nothing-is-accidental-agent
+Environment=AGENT_V2_SERVER=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/ubuntu/nothing-is-accidental-agent/.venv/bin/python agent-v2/run.py
+
+# Przebieg potrafi trwac kilkanascie minut (research plus pisanie). Sufit jest
+# dwukrotnoscia najdluzszego zmierzonego, zeby zawieszony proces nie blokowal
+# zamka w nieskonczonosc.
+TimeoutStartSec=3600
+
+# BEZ Restart=. To jest zadanie jednorazowe uruchamiane z zegara, nie usluga.
+# Automatyczny restart po bledzie oznaczalby ponawianie platnych wywolan bez
+# nadzoru — a to najprostsza droga do rachunku, ktorego nikt nie zamawial.
+
+[Install]
+WantedBy=multi-user.target

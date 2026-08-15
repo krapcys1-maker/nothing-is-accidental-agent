@@ -1,0 +1,17 @@
+[Unit]
+Description=Zegar agenta NIA
+
+[Timer]
+# Godziny w UTC, bo serwer chodzi na UTC i nie chcemy, zeby zmiana czasu
+# gdziekolwiek na swiecie przesuwala publikacje. Najlepsze okno dla notek to
+# 6:00-8:00 czasu wschodnioamerykanskiego, czyli 10:00-12:00 UTC latem.
+OnCalendar=*-*-* 10:30:00
+Persistent=true
+
+# Losowe opoznienie do 20 minut: agent odpalajacy sie co do sekundy o rownej
+# godzinie kazdego dnia jest rozpoznawalny jako maszyna nawet bez patrzenia
+# w tresc.
+RandomizedDelaySec=1200
+
+[Install]
+WantedBy=timers.target
