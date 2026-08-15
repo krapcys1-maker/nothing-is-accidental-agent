@@ -552,15 +552,22 @@ def note(
             # link pod notką promującą artykuł to notka wyrzucona do kosza.
             # Doklejamy po pomiarze długości, żeby adres nie liczył się jako słowa.
             data["note"] = text = f"{text}\n\n{link}"
-        if text:
-            # Notka mówi fakt publicznie tak samo jak komentarz, więc idzie tym
-            # samym pasem: blokuje wyłącznie fakt obalony przez źródło.
-            audyt = zweryfikuj(conn, run_id, text, f"Substack note, type {note_type}")
-            data["weryfikacja"] = audyt
-            data["safe_to_post"] = bool(audyt.get("safe_to_post"))
-            if not data["safe_to_post"]:
-                print(f"    ODPADA: {str(audyt.get('verdict', ''))[:76]}", flush=True)
         candidates.append(data)
+
+    # WERYFIKACJA LENIWA. Sprawdzamy po kolei i konczymy na pierwszym, ktory
+    # przechodzi — bo wystawiamy JEDNEGO kandydata, a sprawdzenie kosztuje tyle
+    # co jego napisanie. Przy pieciu notkach dziennie po trzech kandydatow to
+    # roznica miedzy pietnastoma sprawdzeniami a szescioma.
+    for data in candidates:
+        text = (data.get("note") or "").strip()
+        if not text or not data.get("length_ok"):
+            continue
+        audyt = zweryfikuj(conn, run_id, text, f"Substack note, type {note_type}")
+        data["weryfikacja"] = audyt
+        data["safe_to_post"] = bool(audyt.get("safe_to_post"))
+        if data["safe_to_post"]:
+            break
+        print(f"    ODPADA: {str(audyt.get('verdict', ''))[:76]}", flush=True)
     return {"type": note_type, "candidates": candidates}
 
 
@@ -738,13 +745,22 @@ def comment_on(
                if text else f"MILCZY — {data.get('reason_if_silent', '')[:70]}"),
             flush=True,
         )
-        if text:
-            audyt = zweryfikuj(conn, run_id, text, post.get("title", ""))
-            data["weryfikacja"] = audyt
-            data["safe_to_post"] = bool(audyt.get("safe_to_post"))
-            print(f"    -> {'PRZECHODZI' if data['safe_to_post'] else 'ODPADA'}: "
-                  f"{str(audyt.get('verdict', ''))[:78]}", flush=True)
         candidates.append(data)
+
+    # Ta sama zasada co przy notkach: wystawiamy jeden komentarz, wiec
+    # sprawdzamy po kolei do pierwszego, ktory przechodzi. Przy siedemnastu
+    # komentarzach dziennie to roznica miedzy 51 sprawdzeniami a osiemnastoma.
+    for data in candidates:
+        text = data.get("comment")
+        if not text:
+            continue
+        audyt = zweryfikuj(conn, run_id, text, post.get("title", ""))
+        data["weryfikacja"] = audyt
+        data["safe_to_post"] = bool(audyt.get("safe_to_post"))
+        print(f"    -> {'PRZECHODZI' if data['safe_to_post'] else 'ODPADA'}: "
+              f"{str(audyt.get('verdict', ''))[:78]}", flush=True)
+        if data["safe_to_post"]:
+            break
     return {
         "post": post.get("url"),
         "title": post.get("title"),

@@ -87,7 +87,8 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
         )
 
 
-def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int) -> tuple[float, bool]:
+def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
+          cache_hit: int = 0) -> tuple[float, bool]:
     # DeepSeek liczy od 2026-08-16 wg pory doby, wiec stawke bierzemy na moment
     # wywolania, a nie ze stalej. Roznica miedzy szczytem a reszta doby to
     # dwukrotnosc — na tyle duzo, ze usrednianie zafalszowaloby zapis.
@@ -97,7 +98,11 @@ def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int) -> tup
                  "verified": config.PRICING[model]["verified"]}
     else:
         price = config.PRICING[model]
-    usd = tokens_in / 1_000_000 * price["in"] + tokens_out / 1_000_000 * price["out"]
+    # Trafienia w cache platne osobno i ~120x taniej. `tokens_in` liczymy jako
+    # miss, bo tak podaje je dostawca po odjeciu trafien.
+    usd = (tokens_in / 1_000_000 * price["in"]
+           + tokens_out / 1_000_000 * price["out"]
+           + cache_hit / 1_000_000 * price.get("cache", price["in"]))
     # Osobna opłata za wyszukiwanie jest cennikiem Anthropic. U DeepSeeka
     # wyszukiwanie mieści się w tokenach — doliczanie tu $10/1000 zawyżałoby
     # zapis finansowy, a zmyślonej kwoty w księgach być nie może.
@@ -346,11 +351,15 @@ def _call_deepseek(purpose: str, system: str, user: str) -> tuple[str, int, int,
             f"dla etapu {purpose!r} — bez tego wychodzi z tego niedomknięty JSON"
         )
     usage = payload.get("usage", {})
+    trafienia = int(usage.get("prompt_cache_hit_tokens", 0))
+    pudla = int(usage.get("prompt_cache_miss_tokens",
+                          usage.get("prompt_tokens", 0) - trafienia))
     return (
         payload["choices"][0]["message"]["content"],
-        int(usage.get("prompt_tokens", 0)),
+        pudla,
         int(usage.get("completion_tokens", 0)),
         0,
+        trafienia,
     )
 
 
@@ -409,11 +418,14 @@ def call(
             if provider == "anthropic":
                 text, tin, tout, searches, urls = _call_claude(
                     purpose, system, user, web_search)
+                cache_hit = 0
             elif web_search:
                 text, tin, tout, searches, urls = _call_deepseek_responses(
                     purpose, system, user)
+                cache_hit = 0
             else:
-                text, tin, tout, searches = _call_deepseek(purpose, system, user)
+                text, tin, tout, searches, cache_hit = _call_deepseek(
+                    purpose, system, user)
                 urls = []
             if collect_urls is not None:
                 collect_urls.extend(urls)
@@ -437,7 +449,7 @@ def call(
             )
             raise
 
-    usd, verified = _cost(model, tin, tout, searches)
+    usd, verified = _cost(model, tin, tout, searches, locals().get("cache_hit", 0))
     db.record_call(
         conn=conn, run_id=run_id, provider=provider, model=model, purpose=purpose,
         tokens_in=tin, tokens_out=tout, web_searches=searches, cost_usd=usd,

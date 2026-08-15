@@ -149,8 +149,8 @@ MODEL_FOR = {
     "note": DEEPSEEK_PRO,
     "comment": DEEPSEEK_PRO,
     "reply": DEEPSEEK_PRO,
-    "factcheck": DEEPSEEK_PRO,
-    "curiosity": DEEPSEEK_PRO,
+    "factcheck": DEEPSEEK,
+    "curiosity": DEEPSEEK,
     "grafika": DEEPSEEK,
     "cele": DEEPSEEK,
 }
@@ -202,8 +202,12 @@ PRICING = {
     #
     # Bierzemy stawke cache MISS, bo trafien w cache nie umiemy przewidziec,
     # a zawyzony szacunek jest bezpieczniejszy od zanizonego.
-    DEEPSEEK: {"in": 0.14, "out": 0.28, "verified": False},
-    DEEPSEEK_PRO: {"in": 0.435, "out": 0.87, "verified": False},
+    # "in" to stawka cache MISS. Trafienia w cache sa ~120x tansze i licza sie
+    # osobno — dostawca podaje ich liczbe w kazdej odpowiedzi, wiec nie zgadujemy.
+    # Bez tego zawyzalismy dzienny koszt o 60%: 4,9 z 5,9 mln tokenow wejscia
+    # pro to byly trafienia.
+    DEEPSEEK: {"in": 0.14, "out": 0.28, "cache": 0.0028, "verified": True},
+    DEEPSEEK_PRO: {"in": 0.435, "out": 0.87, "cache": 0.003625, "verified": True},
 }
 
 # --- taryfa szczytowa DeepSeeka -----------------------------------------------
