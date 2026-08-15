@@ -3,120 +3,97 @@
 Jedna strona, aktualizowana po każdym skończonym etapie. Czytaj od góry.
 
 **Zasada nadrzędna: każdy etap dostaje test live natychmiast po napisaniu.**
-Stary agent zbudował 2800 testów na atrapach i wszystkie były zielone, kiedy
-produkcja się wywracała — bo atrapa reviewera zawsze zwraca poprawny JSON,
-atrapa dostawcy nigdy nie ma timeoutu, a atrapa internetu nigdy nie zwraca
-strony blokady. Tu odwrotnie: mało testów, ale każdy dotyka rzeczywistości.
 
 ---
 
-## Co ma robić
+## Stan: ŁAŃCUCH DZIAŁA OD KOŃCA DO KOŃCA
 
-Substack „Nothing Is Accidental" — wyjaśnia ukryte systemy, bodźce i decyzje
-za zwyczajnymi rzeczami.
+Pierwszy artykuł powstał 2026-08-15: `data/articles/0012-the-additive-with-no-number.md`
 
-| limit | wartość |
-|---|---|
-| koszt dzienny (agent w pracy) | 5 USD |
-| koszt miesięczny | 40 USD |
-| artykuły | 4 / miesiąc |
-| notki | 5 / dzień |
-| komentarze | 15–20 / dzień |
-| **testy budowy** | **bez limitu** — nie ograniczamy się przy stawianiu |
+| etap | stan | test live | koszt |
+|---|---|---|---|
+| 0. środowisko, budżet, log kosztów | **działa** | tak | 0 |
+| 1. skaut tematów (Claude) | **działa** | tak | $0,0503 |
+| 2. ocena wykonalności (DeepSeek) | **działa** | tak | $0,0005 |
+| 3. dyskoveria źródeł (Claude + web search) | **działa** | tak | $0,6007 |
+| 4. pobranie (HTTP) | **działa** | tak | 0 |
+| 5. klasyfikacja + wyciąg (DeepSeek) | **działa** | tak | $0,0186 |
+| 6. synteza — karta dowodowa (Claude) | **działa** | tak | $0,1756 |
+| 7. pisanie (Claude + styl) | **działa** | tak | $0,1779 |
+| 8. recenzja — rozliczanie zdań (Claude) | **działa** | tak | $0,2476 |
+| 9. zapis (baza + .md) | **działa** | tak | 0 |
 
-Agent ma być **w pełni autonomiczny**. Bez zgód wewnętrznych. Jedyna granica:
-nic nie wychodzi na zewnątrz (publikacja, komentarz, polubienie), dopóki
-właściciel nie powie inaczej — bo etapu publikacji jeszcze nie ma.
+**Czysty przebieg: $1,27.** Cała budowa z testami i jednym przepisaniem: $1,4872.
 
----
+## Budżet złożoności
 
-## Podział pracy między modele
-
-| etap | model | dlaczego |
+| | limit | jest |
 |---|---|---|
-| skaut tematów | Claude Opus | jakość tematu decyduje o koszcie całej reszty |
-| ocena wykonalności tematu | **DeepSeek** | mechaniczne, przed drogim krokiem |
-| dyskoveria źródeł | Claude Opus | wymaga wyszukiwania po stronie dostawcy |
-| klasyfikacja źródeł | **DeepSeek** | mechaniczne, wysokowolumenowe |
-| synteza dowodów | Claude Opus | wymaga oceny |
-| pisanie | Claude Opus | to jest produkt |
-| recenzja | Claude Opus | to jest bramka jakości |
+| pliki `.py` w `agent-v2/` | 10 | **7** |
+| tabele w bazie | 4 | **4** |
+| warstwy między `run.py` a modelem | 1 | **1** (`llm.py`) |
 
-DeepSeek tam, gdzie praca jest masowa i bez oceny wartościującej. Nie tam,
-gdzie od jakości zależy, czy artykuł ma sens.
+`config.py` · `db.py` · `llm.py` · `stages.py` · `gates.py` · `style.py` · `run.py`.
+Prompty to pliki `.md`, nie kod. Zero migracji, zero triggerów, zero zgód.
 
----
+## Decyzje właściciela z 2026-08-15
 
-## Stan
+1. **Nic nie blokuje artykułu.** Skoro temat przeszedł odsiew i research jest
+   opłacony, nie ma stanu „zablokowany i koniec". Cztery bramki
+   (fakt bez pokrycia, liczba spoza korpusu, zmyślone przeżycie, nieistniejące
+   badanie) zgłaszają uwagi; artykuł zawsze trafia do szuflady.
+2. **Pisarz ma swobodę interpretacji.** Fakt wymaga pokrycia; analogia,
+   interpretacja i argument nie są faktami — mają być tylko widoczne jako myśl
+   autora. To stąd bierze się ciekawość tekstu.
+3. **Skaut nie nazywa instytucji w pytaniu.** To był powód dwunastu tematów
+   pod rząd o `gov.uk`. Dostępność źródeł sprawdza dopiero DeepSeek, po
+   zróżnicowaniu.
+4. **Zero przepisywania.** Jedno podejście.
+5. **Korpus stylu wchodzi do repo** (`prompts/styl/`), przypięty SHA-256.
 
-| etap | stan | test live |
-|---|---|---|
-| 0. środowisko, budżet, log kosztów | **w toku** | — |
-| 1. skaut tematów | — | — |
-| 2. ocena wykonalności (DeepSeek) | — | — |
-| 3. dyskoveria + pobranie | — | — |
-| 4. klasyfikacja źródeł (DeepSeek) | — | — |
-| 5. synteza | — | — |
-| 6. pisanie | — | — |
-| 7. recenzja + bramki | — | — |
-| 8. zapis artykułu | — | — |
+## Co zadziałało lepiej, niż zakładano
 
----
+- **Skaut po naprawie**: 6 tematów, 6 dziedzin, zero Wielkiej Brytanii.
+- **Opus 5 nie zmyślił ani jednej liczby.** Zmierzone, nie założone. Obawa
+  o halucynacje liczb okazała się przeniesieniem doświadczeń ze słabszego modelu.
+- **DeepSeek do przemiału korpusu**: 321 tys. znaków za $0,0186. W Opusie samo
+  wejście kosztowałoby ok. $0,40.
+- **Karta dowodowa sama obaliła założenie tematu** i powiedziała, czego nie wie.
 
-## Budżet złożoności — pilnuj tego sam
+## Co złapały testy live (i czego nie złapałby test na atrapie)
 
-| | limit | ile masz teraz |
-|---|---|---|
-| pliki .py w agent-v2/ | **10** | 0 |
-| tabele w bazie | **4** | 0 |
+- **Konsola Windows cp1252** wywalała agenta na polskich znakach. Na serwerze
+  z UTF-8 by przeszło — czyli błąd wychodzący tylko na jednym komputerze.
+- **Blokady botów są realne**: PMC dwa razy odmówił automatowi, USDA dał 403,
+  MDPI pustą stronę. 6 pobrań z 10. Odmowy zapisane, nie obchodzone.
+- **Mój własny próg trafności wyrzucił najlepsze źródło liczbowe** (praca
+  o atmosferze modyfikowanej na szpinaku, 12 liczb, ocena 0,20). Po usunięciu
+  progu: 57 fragmentów zamiast 23, 18 liczb zamiast 9.
+- **Dwa miejsca liczyły to samo i dały różne odpowiedzi** — doraźna kontrola
+  liczb w `run.py` uznała `E 938` za zmyślone, a `gates.py` nie. Duplikat
+  skasowany; jedno pytanie ma jedną implementację.
 
-Poprzedni agent: ~40 000 linii, 2 817 testów, 236 triggerów, 42 migracje,
-dwa artykuły. Jeśli przekraczasz budżet — zatrzymaj się i zapytaj właściciela,
-jakiej konkretnej straty ta rzecz zapobiega.
+## Otwarte
 
-## Co przenosimy ze starego (to jest wartość, nie kod)
-
-- [ ] **STYL PISANIA — NAJWAŻNIEJSZE, ZACZNIJ OD TEGO**
-      - katalog `instrukcja dla pisania artykulow/` — 5 plików, 55 KB,
-        w tym `CLAUDE_INSTRUKCJA_NATURALNEGO_PISANIA.md` (45 KB)
-      - korpus próbek `data/style-references/articles/article_style_samples_v1.txt` (57 KB)
-      - mechanika doboru fragmentów: `archiwum/app/content/style_examples.py`
-        (3–5 fragmentów po 150–900 znaków, dobierane wg funkcji retorycznej,
-        korpus przypięty hashem SHA-256)
-
-      **To jest produkt.** Bez tego teksty będą poprawne merytorycznie
-      i całkowicie nijakie, a wtedy konto nie różni się od tysiąca innych.
-      Test odbioru: porównaj pierwszy wygenerowany artykuł z `ARTYKUL_DRAFT.md`
-      i `ARTYKUL_DRAFT_2.md` w korzeniu repo.
-
-- [ ] prompt skauta — po pięciu iteracjach i trzech płatnych pomiarach
-- [ ] prompt dyskoverii — instytucje, nie sprzedawcy; katalog to nie dokument
-- [ ] prompt syntezy + kontrakt rozmiaru
-- [ ] prompt pisarza z warstwą rzemiosła
-- [ ] prompt reviewera v3 + rozliczanie twierdzeń per zdanie
-- [ ] dziewięć reguł ewaluacji
-- [ ] 19 testów kontradowodowych (artykuły, które MUSZĄ zostać odrzucone)
-- [ ] polityka dopuszczania źródeł (podłoga pierwotności, dedup, świeżość)
-- [ ] wykrywanie blokad hostów po frazach odmowy
-- [ ] podłogi porównujące tekst z korpusem, nie z alfabetem
-
-## Czego NIE przenosimy
-
-Trwałych intencji z odciskami, zgód jednorazowych, deklaracji zdolności,
-kwalifikacji, lease, kolejki zadań z indeksami unikalnymi, bramki spokoju,
-`UNIQUE` na zamrożonym wejściu, limitów w `CHECK`-ach schematu, 236 triggerów.
-
-To jest lista rzeczy, które wywalały produkcję 15 sierpnia.
-
----
+- **Stawki DeepSeeka niepotwierdzone.** Koszt liczony szacunkiem; każde takie
+  wywołanie ma w bazie `price_verified = 0`. Do sprawdzenia na fakturze.
+- **`instrukcja dla pisania artykulow/` leży poza `agent-v2/`.** Działa, ale
+  łamie zasadę „wszystko nowego agenta w `agent-v2/`".
+- **Brak testów kontradowodowych** — 19 gotowych do przeniesienia z archiwum.
+- **Reguła różnorodności domen** działa dopiero od drugiego artykułu (pierwszy
+  nie ma historii w nowej bazie; kąty startowe wzięte ze starej).
+- **Notki i komentarze nie istnieją** i nie powstaną bez osobnej decyzji.
 
 ## Dziennik
 
-### 2026-08-15 — start
-Decyzja właściciela: przepisujemy warstwę orkiestracji, zachowujemy prompty,
-bramki i log kosztów. Powód: sześć kolejnych poprawek w starym systemie
-stworzyło sześć nowych problemów, bo każdy limit jest tam przypięty w kilku
-miejscach naraz.
+### 2026-08-15 — pierwszy artykuł
+Temat: „The Bag Of Salad That Puffs Up" → artykuł „The Additive With No Number".
+10 źródeł znalezionych, 6 pobranych, 6 pierwotnych, 57 fragmentów, 18 liczb.
+Recenzja: 65 zdań — 34 fakty (wszystkie z pokryciem), 13 wnioskowań, 18 prozy.
+Zero uwag z bramek. 1253 słowa.
 
-### Test zapisu na main
-Sprawdzenie, czy ochrona gałęzi nie blokuje zwykłych commitów agenta.
+### 2026-08-15 — audyt planu przed budową
+Warstwa jakości do przeniesienia „w całości" miała 4 220 linii w 8 plikach,
+22 pary zdublowanych liczb (stała kontra zdanie w prompcie) i udokumentowany
+w kodzie przypadek dwóch bramek zaprzeczających sobie. Zamiast przenoszenia:
+napisana od nowa, cztery bramki, żadna nie blokuje.
