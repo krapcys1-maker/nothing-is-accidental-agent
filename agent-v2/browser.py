@@ -569,17 +569,30 @@ def nieodpowiedziane(ile: int = 10) -> list[dict[str, Any]]:
         p.stop()
 
 
-def potwierdz_notke(page, tekst: str) -> bool:
-    """Pyta Substacka, czy notka naprawdę wisi na naszym profilu."""
+def potwierdz_notke(page, tekst: str, prob: int = 4) -> bool:
+    """Pyta Substacka, czy notka naprawdę wisi na naszym profilu.
+
+    Pyta KILKA RAZY, bo kanał profilu aktualizuje się z opóźnieniem. Pojedyncze
+    sprawdzenie po sześciu sekundach zwracało "nie ma" dla notki, która wyszła
+    poprawnie — a fałszywy alarm w tę stronę jest grozniejszy niz brak
+    potwierdzenia: rozbraja zabezpieczenie przed wystawieniem tego samego
+    drugi raz.
+    """
+    import json as _json
+
     probka = " ".join(tekst.split())[:60]
     profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
     if not isinstance(profil, dict) or not profil.get("id"):
         return False
-    feed = api_json(page, f"/api/v1/reader/feed/profile/{profil['id']}"
-                          "?types%5B%5D=note")
-    import json as _json
-    return probka in " ".join(_json.dumps((feed or {}).get("items", []),
-                                          ensure_ascii=False).split())
+    for nr in range(prob):
+        feed = api_json(page, f"/api/v1/reader/feed/profile/{profil['id']}"
+                              "?types%5B%5D=note")
+        if probka in " ".join(_json.dumps((feed or {}).get("items", []),
+                                          ensure_ascii=False).split()):
+            return True
+        if nr < prob - 1:
+            page.wait_for_timeout(8000)
+    return False
 
 def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
     """Polubienia w kanale czytelnika.
