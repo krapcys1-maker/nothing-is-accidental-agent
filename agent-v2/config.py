@@ -239,6 +239,23 @@ def stawka_deepseek(model: str, kiedy=None) -> dict[str, float]:
             "szczyt": kiedy.hour in GODZINY_SZCZYTU_UTC}
 
 
+def pora_na_publikacje(kiedy=None) -> tuple[bool, str]:
+    """Czy teraz wolno publikowac — wg zegara CZYTELNIKOW, nie serwera."""
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    kiedy = kiedy or datetime.now(timezone.utc)
+    lokalnie = kiedy.astimezone(ZoneInfo(PUBLISH_TIMEZONE))
+    g = lokalnie.hour
+    dol, gora = OKNO_PUBLIKACJI_ET
+    if not dol <= g < gora:
+        return False, (f"{g:02d}:{lokalnie.minute:02d} u czytelnikow — poza oknem "
+                       f"{dol}:00-{gora}:00, publicznosc spi")
+    if g in WORST_NOTE_HOURS:
+        return False, (f"{g:02d}:00 u czytelnikow — najgorsze okno wg researchu")
+    return True, f"{g:02d}:{lokalnie.minute:02d} u czytelnikow"
+
+
 def w_szczycie(kiedy=None) -> bool:
     """Czy teraz obowiazuje droga taryfa."""
     from datetime import datetime, timezone
@@ -473,6 +490,15 @@ PUBLISH_TIMEZONE = "America/New_York"
 BEST_NOTE_HOURS = (6, 7, 8)  # ET
 WORST_NOTE_HOURS = (12, 13)  # ET, zwłaszcza w piątek
 BEST_NOTE_DAYS = ("sunday", "saturday")
+
+# TWARDE OKNO PUBLIKACJI, w czasie CZYTELNIKOW. Agent wystawil notki o 03:57
+# i 04:00 UTC — czyli 23:57 i polnoc w Nowym Jorku. Tekst wrzucony, gdy
+# publicznosc spi, nie znika, ale traci pierwsze godziny widocznosci, a wlasnie
+# one decyduja o zasiegu w kanale.
+#
+# Zegar mozna przestawic i reczne uruchomienie i tak by go ominelo, wiec zasada
+# siedzi w KODZIE, nie w harmonogramie.
+OKNO_PUBLIKACJI_ET = (6, 22)        # wolno od 6:00 do 21:59 czasu nowojorskiego
 WORST_NOTE_DAYS = ("monday", "friday")
 
 # Rozkład na tydzień: pięć notek dziennie, dzień publikacji artykułu ma własny.

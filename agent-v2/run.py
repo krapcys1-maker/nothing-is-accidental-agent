@@ -132,6 +132,16 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
           flush=True)
     zrobione = {"notki": 0, "komentarze": 0, "odpowiedzi": 0, "polubienia": 0}
 
+    # OKNO PUBLIKACJI liczone w strefie CZYTELNIKOW. Poza nim agent nie milczy
+    # calkiem — polubienia i odpowiedzi zostaja, bo czytanie o polnocy jest
+    # ludzkie, a odpowiedz gospodarza nie moze czekac do rana. Nie wychodza za to
+    # NOWE tresci, ktore konkuruja o miejsce w kanale.
+    wolno, powod = config.pora_na_publikacje()
+    print(f"   okno publikacji: {'TAK' if wolno else 'NIE'} — {powod}", flush=True)
+    if not wolno:
+        na_teraz["notki"] = 0
+        na_teraz["komentarze"] = 0
+
     def blok(nazwa: str, robota) -> None:
         try:
             robota()
