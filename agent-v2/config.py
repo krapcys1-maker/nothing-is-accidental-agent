@@ -604,8 +604,19 @@ ODPOWIEDZI_POZA_LIMITEM = True
 # Przy dwustu odpowiedz pod kazdym wyglada jak maszyna — nawet gdy kazda jest
 # dobra — wiec powyzej tego progu agent wybiera najwazniejsze, z pierwszenstwem
 # dla niezgody: nieodpowiedziany zarzut zostaje ostatnim slowem.
-ODPOWIADAJ_BEZ_WYBORU = 4
-MAX_ODPOWIEDZI = 6
+# POLITYKA ZALEZNA OD SKALI, decyzja wlasciciela.
+#
+# Swieze konto zyje z rozmowy: ktos komentuje, my odpowiadamy, watek rosnie
+# i algorytm to lubi. Przy pieciu komentarzach odpowiada sie WSZYSTKIM i to jest
+# najtansza rzecz, jaka male konto moze zrobic dla swojego zasiegu.
+#
+# Przy pieciudziesieciu odpowiedz pod kazdym wyglada jak maszyna i przestaje byc
+# rozmowa. Wtedy bierzemy te NAJBARDZIEJ ZYWE: najwiecej polubien i najwiecej
+# odpowiedzi pod soba, bo tam siedzi dyskusja, ktora warto ciagnac.
+ODPOWIADAJ_WSZYSTKIM_DO = 5      # male konto: kazdemu, bez wyjatku
+WYBIERAJ_POWYZEJ = 20            # powyzej tego liczy sie juz popularnosc watku
+MAX_ODPOWIEDZI_MALE = 6
+MAX_ODPOWIEDZI_DUZE = 8
 
 
 # Zapas na myślenie dostają WSZYSTKIE etapy, nie tylko Claude'owe: modele

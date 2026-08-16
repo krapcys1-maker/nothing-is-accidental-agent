@@ -222,13 +222,47 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 stages.odczekaj("komentarz")
             zrobione["komentarze"] += 1
 
+    # --- 3b. dyskusje pod cudzymi notkami -------------------------------------
+    def dyskusje() -> None:
+        """Wejscie w rozmowe pod cudza notka.
+
+        Dla swiezego konta to najwazniejsze miejsce: pod notkami toczy sie
+        rozmowa, a kanal promuje watki, ktore zyja. Komentarz pod artykulem
+        czyta kilka osob; sensowna uwaga pod zywa notka trafia do calego watku.
+        """
+        if not na_teraz["komentarze"]:
+            return
+        notki = kanal.notki_z_kanalu()
+        if not notki:
+            return
+        cele = stages.wybierz_cele(
+            conn, run_id,
+            [{"tytul": n["tekst"][:120], "opis": n["tekst"], "pub": n["autor"],
+              "komentarze": n["odpowiedzi"], "reakcje": n["reakcje"],
+              "url": n["url"], "id": n["id"]} for n in notki])
+        for cel in cele[: max(1, na_teraz["komentarze"] // 2)]:
+            out = stages.comment_on(
+                conn, run_id,
+                {"title": cel.get("tytul", ""), "text": cel.get("opis", ""),
+                 "author": cel.get("pub", ""), "url": cel.get("url", "")})
+            dobre = [k for k in out["candidates"]
+                     if k.get("comment") and k.get("safe_to_post")]
+            if not dobre:
+                continue
+            if wyslij:
+                browser.wystaw_odpowiedz(cel["id"], dobre[0]["comment"],
+                                         wyslij=True)
+                stages.odczekaj("komentarz")
+            zrobione["komentarze"] += 1
+
     # --- 4. polubienia: najtańszy uczciwy sygnał ------------------------------
     def polubienia() -> None:
         w = browser.polub_w_kanale(na_teraz["lajki"], wyslij=wyslij)
         zrobione["polubienia"] = w.get("polubione", 0)
 
     for nazwa, robota in (("odpowiedzi", odpowiedzi), ("notki", notki),
-                          ("komentarze", komentarze), ("polubienia", polubienia)):
+                          ("komentarze", komentarze), ("dyskusje", dyskusje),
+                          ("polubienia", polubienia)):
         print(f"\n-- {nazwa} --", flush=True)
         blok(nazwa, robota)
 

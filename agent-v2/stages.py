@@ -194,8 +194,28 @@ def wybierz_do_odpowiedzi(
     Pierwszenstwo maja NIEZGODY: nieodpowiedziany zarzut zostaje ostatnim slowem
     i tak go czytaja pozostali.
     """
-    if len(komentarze) <= config.ODPOWIADAJ_BEZ_WYBORU:
+    # SWIEZE KONTO: odpowiadamy wszystkim. To jest najtansza rzecz, jaka male
+    # konto moze zrobic dla zasiegu — watek z odpowiedzia autora zyje dalej,
+    # a kanal to promuje.
+    if len(komentarze) <= config.ODPOWIADAJ_WSZYSTKIM_DO:
+        print(f"  [odpowiedzi] {len(komentarze)} komentarzy — odpowiadam"
+              " KAZDEMU (male konto zyje z rozmowy)", flush=True)
         return komentarze
+
+    # DUZO KOMENTARZY: pierwszenstwo maja watki NAJBARDZIEJ ZYWE. Nie dlatego,
+    # ze popularne jest lepsze, tylko dlatego, ze tam siedzi dyskusja, ktora
+    # warto ciagnac, i tam nasza odpowiedz zobaczy najwiecej ludzi.
+    if len(komentarze) > config.WYBIERAJ_POWYZEJ:
+        komentarze = sorted(
+            komentarze,
+            key=lambda k: ((k.get("reakcje") or 0) * 2
+                           + (k.get("odpowiedzi") or 0) * 3),
+            reverse=True,
+        )[: config.MAX_ODPOWIEDZI_DUZE * 3]
+        print(f"  [odpowiedzi] duzo komentarzy — najpierw najzywsze watki",
+              flush=True)
+    ile_max = (config.MAX_ODPOWIEDZI_DUZE if len(komentarze) > config.WYBIERAJ_POWYZEJ
+               else config.MAX_ODPOWIEDZI_MALE)
 
     opis = "\n\n".join(
         f"[{i}] {k.get('autor', '')} (reakcji: {k.get('reakcje', 0)})\n"
@@ -204,13 +224,13 @@ def wybierz_do_odpowiedzi(
     )
     try:
         raw = llm.call("wybor", WYBOR_SYSTEM,
-                       _prompt("kogo_odpowiedziec.md", ile=config.MAX_ODPOWIEDZI,
+                       _prompt("kogo_odpowiedziec.md", ile=ile_max,
                                komentarze=opis),
                        conn=conn, run_id=run_id)
         dane = llm.parse_json(raw)
     except Exception as exc:
         print(f"  [wybor] nie wyszedl ({exc}) — biore najstarsze", flush=True)
-        return komentarze[: config.MAX_ODPOWIEDZI]
+        return komentarze[: ile_max]
 
     wybrane: list[dict[str, Any]] = []
     for o in sorted(dane.get("choices") or [], key=lambda x: x.get("rank", 99)):
@@ -223,7 +243,7 @@ def wybierz_do_odpowiedzi(
                   flush=True)
     print(f"  [wybor] odpowiadamy {len(wybrane)} z {len(komentarze)}"
           f" — {str(dane.get('skipped_because', ''))[:70]}", flush=True)
-    return wybrane[: config.MAX_ODPOWIEDZI]
+    return wybrane[: ile_max]
 
 
 def reply_to(

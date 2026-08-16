@@ -1299,7 +1299,10 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False) -> dict[str
             wynik["pominiete"] = True
             return wynik
 
-        page.goto(f"https://substack.com/@{PROFIL_HANDLE}/note/c-{note_id}",
+        # Krotki adres dziala dla KAZDEJ notki, takze cudzej — sprawdzone.
+        # Dzieki temu ta sama funkcja obsluguje odpowiedz u siebie i wejscie
+        # w dyskusje u kogos obcego.
+        page.goto(f"https://substack.com/note/c-{note_id}",
                   timeout=READ_TIMEOUT_MS, wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS + 3000)
 

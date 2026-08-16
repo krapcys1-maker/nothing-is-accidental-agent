@@ -127,3 +127,48 @@ def posty_z_kanalu(ile: int = 25) -> list[dict[str, Any]]:
         page.close()
         br.close()
         p.stop()
+
+
+def notki_z_kanalu(ile: int = 25) -> list[dict]:
+    """Cudze notki, pod ktorymi mozna wejsc w dyskusje.
+
+    Dla swiezego konta to najwazniejsze miejsce: pod notkami toczy sie rozmowa,
+    a kanal Substacka promuje watki, ktore zyja. Komentarz pod artykulem czyta
+    kilka osob; sensowna uwaga pod zywa notka trafia do calego jej watku.
+    """
+    browser.wymagaj_sesji()
+    p, br, ctx = browser.podlacz_sie()
+    page = ctx.new_page()
+    try:
+        dane = browser.api_json(page, "/api/v1/reader/feed?tab=for-you&type=base") or {}
+        notki = []
+        odrzucone = 0
+        for x in (dane.get("items") or [])[:ile * 2]:
+            c = (x or {}).get("comment") or {}
+            if not c.get("body") or c.get("post_id"):
+                continue                     # to nie notka, tylko komentarz
+            if c.get("handle") == config.SUBSTACK_HANDLE:
+                continue                     # nasza wlasna
+            kandydat = {
+                "id": c.get("id"), "autor": c.get("name") or "",
+                "handle": c.get("handle") or "",
+                "tekst": (c.get("body") or "")[:1200],
+                "reakcje": c.get("reaction_count") or 0,
+                "odpowiedzi": c.get("children_count") or 0,
+                "data": c.get("date") or "",
+                "url": f"https://substack.com/note/c-{c.get('id')}",
+            }
+            if _za_swiezy(kandydat):
+                odrzucone += 1
+                continue
+            notki.append(kandydat)
+        # Najzywsze najpierw: tam nasza uwaga zostanie przeczytana.
+        notki.sort(key=lambda n: n["reakcje"] * 2 + n["odpowiedzi"] * 3,
+                   reverse=True)
+        print(f"  [notki innych] {len(notki)} do rozwazenia"
+              f"   ({odrzucone} odrzuconych jako za swieze)", flush=True)
+        return notki[:ile]
+    finally:
+        page.close()
+        br.close()
+        p.stop()
