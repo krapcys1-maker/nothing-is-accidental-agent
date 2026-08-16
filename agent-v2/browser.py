@@ -1454,6 +1454,44 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
     return wynik
 
 
+def juz_sie_odezwalismy(page, url: str) -> bool:
+    """Czy JUZ napisalismy cokolwiek pod tym postem albo pod ta notka.
+
+    Najostrzejszy sygnal automatu, jaki mozna dac: dwa wlasne komentarze pod
+    jednym tekstem, w odstepie godzin, a miedzy nimi nikt sie nie odezwal.
+    Czlowiek nie wraca dopisywac drugiego eseju pod cudzym postem, na ktory nikt
+    nie odpowiedzial.
+
+    Pytamy o to RZECZYWISTOSCI, a nie wlasnej ksiegowosci: zapis moze sie
+    rozjechac, Substack wie na pewno.
+    """
+    from urllib.parse import urlparse
+
+    profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
+    moje_id = (profil or {}).get("id")
+    if not moje_id:
+        return True          # nie wiem, czyli nie ryzykuje
+
+    if "/note/c-" in url:                    # notka
+        nid = url.rstrip("/").rsplit("c-", 1)[-1]
+        watek = api_json(page, f"/api/v1/reader/comment/{nid}/replies"
+                               f"?comment_id={nid}") or {}
+        wszystkie = [c for g in (watek.get("commentBranches") or [])
+                     for c in _plaskie(g)]
+    else:                                    # artykul cudzy
+        czyja = f"https://{urlparse(url).netloc}"
+        slug = url.rstrip("/").rsplit("/", 1)[-1]
+        post = api_json(page, f"/api/v1/posts/{slug}", baza=czyja)
+        if not isinstance(post, dict) or not post.get("id"):
+            return False
+        dane = api_json(page, f"/api/v1/post/{post['id']}/comments"
+                              "?all_comments=true", baza=czyja)
+        wszystkie = dane if isinstance(dane, list) else (dane or {}).get("comments") or []
+
+    return any(isinstance(c, dict) and c.get("user_id") == moje_id
+               for c in wszystkie)
+
+
 def potwierdz_komentarz(page, url: str, tekst: str) -> bool:
     """Pyta Substacka, czy komentarz naprawdę wisi — zamiast wierzyć kliknięciu."""
     from urllib.parse import urlparse
@@ -1485,6 +1523,13 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False) -> dict[str, An
     page = context.new_page()
     wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
     try:
+        if wyslij and juz_sie_odezwalismy(page, url):
+            print("  JUZ SIE TAM ODEZWALISMY — drugi komentarz pod tym samym"
+                  " tekstem to podpis bota, odpuszczam", flush=True)
+            wynik["wyslane"] = True
+            wynik["pominiete"] = True
+            return wynik
+
         if wyslij and potwierdz_komentarz(page, url, tekst):
             print("  ten komentarz juz tam wisi — nie wystawiam drugi raz",
                   flush=True)
