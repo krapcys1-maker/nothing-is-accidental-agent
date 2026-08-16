@@ -69,8 +69,15 @@ tylko na `localhost`, więc ci nie przeszkadzają — ale ich nie zajmuj.
 sprawdź najpierw, czy agent akurat nie pracuje:
 
 ```bash
-pgrep -f "run.py --dzien" && echo "AGENT PRACUJE — poczekaj" || echo "wolne"
+pgrep -af "[r]un\.py --dzien" && echo "AGENT PRACUJE — poczekaj" || echo "wolne"
 ```
+
+Nawiasy kwadratowe w `[r]un` są **konieczne**. Bez nich `pgrep` potrafi dopasować
+własne polecenie — jeśli wzorzec wystąpi w wierszu procesu, który go uruchamia —
+i zawsze odpowie „pracuje". Sprawdzone, nabraliśmy się na to.
+
+Nie próbuj sprawdzać pliku zamka agenta: leży w `/home/ubuntu` i celowo go nie
+widzisz. Listę procesów widzisz i to wystarczy.
 
 Jego przebieg trwa około godziny.
 

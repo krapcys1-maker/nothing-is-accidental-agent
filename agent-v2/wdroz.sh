@@ -13,8 +13,17 @@ cd "$(dirname "$0")/.."
 POPRZEDNIA=$(git rev-parse --short HEAD)
 echo "  wersja przed wdrozeniem: $POPRZEDNIA"
 
-# Nie wdrazamy w srodku przebiegu — zamek jest wtedy zajety.
-if pgrep -f "run.py --dzien" >/dev/null; then
+# Nie wdrazamy w srodku przebiegu. Pytamy o to sam zamek, ktory przebieg trzyma
+# — a nie o liste procesow, bo `pgrep -f` potrafi dopasowac WLASNE polecenie,
+# jesli wzorzec wystapi w jego wierszu (stad nawiasy: "[r]un" nie pasuje do
+# samego siebie). Zamek jest zrodlem prawdy, pgrep tylko zapasem, gdy zamka
+# jeszcze nie ma.
+ZAMEK="agent-v2/data/agent.lock"
+if [ -e "$ZAMEK" ] && ! flock -n "$ZAMEK" -c true 2>/dev/null; then
+    echo "  PRZEBIEG TRWA (zamek zajety) — nie wdrazam, sprobuj po jego zakonczeniu"
+    exit 1
+fi
+if pgrep -f "[r]un\.py --dzien" >/dev/null; then
     echo "  PRZEBIEG TRWA — nie wdrazam, sprobuj po jego zakonczeniu"
     exit 1
 fi

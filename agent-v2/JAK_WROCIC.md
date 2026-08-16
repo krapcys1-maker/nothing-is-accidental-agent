@@ -87,6 +87,23 @@ port 22, inaczej odcina wszystkich, łącznie z sobą.
 bash agent-v2/wdroz.sh
 ```
 
+### Czy agent akurat pracuje
+
+Pytaj **zamka**, bo to on faktycznie pilnuje, żeby nie było dwóch przebiegów:
+
+```bash
+flock -n agent-v2/data/agent.lock -c true && echo wolne || echo PRACUJE
+```
+
+Przez listę procesów też się da, ale **tylko z nawiasami**:
+
+```bash
+pgrep -af "[r]un\.py --dzien"
+```
+
+Bez nawiasów `pgrep -f` potrafi dopasować własne polecenie i zawsze odpowie, że
+agent pracuje. Nabraliśmy się na to raz — stąd ta uwaga.
+
 ## Harmonogram
 
 ```
