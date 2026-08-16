@@ -233,6 +233,7 @@ def reply_to(
     """Odpowiedź na komentarz pod własną treścią — do szuflady."""
     prompt = _prompt(
         "odpowiedz.md",
+        cel_slow=config.losowa_dlugosc(),
         language=config.ARTICLE_LANGUAGE,
         under_what=comment.get("under", ""),
         commenter=comment.get("author", ""),
@@ -855,6 +856,7 @@ def comment_on(
         )
     prompt = _prompt(
         "komentarz.md",
+        cel_slow=config.losowa_dlugosc(),
         language=config.ARTICLE_LANGUAGE,
         author=post.get("author", ""),
         title=post.get("title", ""),

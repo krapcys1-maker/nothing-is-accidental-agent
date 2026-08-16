@@ -474,6 +474,18 @@ def main() -> int:
 
         print(f"\n>> {status}" + (f" ({blocked_by})" if blocked_by else ""), flush=True)
         print(f">> zapisano: {path}", flush=True)
+
+        if args.wyslij:
+            import browser
+
+            # Grafika NIGDY nie zatrzymuje artykułu: brak czterech centów na
+            # obrazek nie może wyrzucić do kosza researchu za czterdzieści.
+            stages.grafika(conn, run_id, draft, sciezka_artykulu=path)
+            print("\n-- publikacja --", flush=True)
+            wynik = browser.wystaw_artykul(path, wyslij=True)
+            print(f">> {'OPUBLIKOWANY' if wynik.get('wyslane') else 'NIE POSZEDŁ'}"
+                  f"{'  ' + str(wynik.get('blad')) if wynik.get('blad') else ''}",
+                  flush=True)
         return _done(conn, run_id, stage)
 
     except Exception as exc:

@@ -447,6 +447,29 @@ CURIOSITY_BATCH = 8
 CURIOSITY_MEMORY = 60
 COMMENT_CANDIDATES = 3
 
+# DLUGOSC KOMENTARZA I ODPOWIEDZI losowana osobno za kazdym razem.
+# Sam prompt tego nie zalatwi: proszony o roznorodnosc model i tak osiada
+# w waskim pasie (zmierzone: 40-65 slow przy prosbie o zmiennosc). Rozklad
+# przechyla sie w strone KROTKICH, bo research o rozpoznawaniu botow wskazal
+# jednolita dlugosc jako jeden z najmocniejszych tropow, a ludzie czesto
+# odpowiadaja jednym zdaniem.
+#
+# (docelowa liczba slow, waga)
+DLUGOSCI_WYPOWIEDZI = (
+    (12, 3),    # jedno zdanie, najczestsze u ludzi
+    (25, 3),
+    (45, 2),
+    (70, 1),    # dluzsze tylko wtedy, gdy mysl tego wymaga
+)
+
+
+def losowa_dlugosc() -> int:
+    """Ile slow ma miec ta konkretna wypowiedz."""
+    import random
+
+    dlugosci, wagi = zip(*DLUGOSCI_WYPOWIEDZI)
+    return random.choices(dlugosci, weights=wagi, k=1)[0]
+
 # Sufit dzienny. Research mówi, że trzy przemyślane komentarze tygodniowo biją
 # piętnaście uprzejmych; pierwotne 15-20 dziennie było z planu sprzed danych.
 NOTES_PER_DAY = 5
