@@ -300,10 +300,82 @@ def sprawdz_wszystko() -> list[str]:
 
 
 
+def przeglad(dni: int = 3) -> None:
+    """Co agent NAPRAWDE zrobil przez ostatnie dni i gdzie sie pomylil.
+
+    Do tej pory dalo sie sprawdzic, ile kosztowalo myslenie, ale nie CO z tego
+    poszlo w swiat. A po dwoch dniach to jedyne pytanie, ktore ma znaczenie.
+    Ten przeglad czyta dziennik dzialan i baze, i pokazuje jedno obok drugiego.
+    """
+    import collections
+    import json as _json
+
+    import browser
+
+    granica = datetime.now(timezone.utc) - timedelta(days=dni)
+    wpisy = []
+    if browser.DZIENNIK.exists():
+        for linia in browser.DZIENNIK.read_text(encoding="utf-8").splitlines():
+            try:
+                w = _json.loads(linia)
+                if datetime.fromisoformat(w["kiedy"]) >= granica:
+                    wpisy.append(w)
+            except (ValueError, KeyError):
+                continue
+
+    print(f"\n=== CO AGENT ZROBIL PRZEZ {dni} DNI ===")
+    if not wpisy:
+        print("  dziennik pusty — albo agent nic nie robil, albo nie dziala")
+    licznik = collections.Counter(w["rodzaj"] for w in wpisy)
+    nieudane = [w for w in wpisy if not w.get("udane")]
+    for rodzaj, ile in licznik.most_common():
+        zle = sum(1 for w in nieudane if w["rodzaj"] == rodzaj)
+        print(f"  {rodzaj:<24} {ile:>3}" + (f"   NIEUDANYCH: {zle}" if zle else ""))
+
+    if nieudane:
+        print(f"\n=== CO SIE NIE UDALO ({len(nieudane)}) ===")
+        for w in nieudane[:10]:
+            print(f"  {w['kiedy'][5:16]}  {w['rodzaj']:<20} {str(w.get('gdzie') or w.get('komu') or '')[:44]}")
+
+    # dlugosci: czy nie robimy wszystkiego w jednym rozmiarze
+    dlugosci = [w["slow"] for w in wpisy if isinstance(w.get("slow"), int)]
+    if len(dlugosci) >= 3:
+        import statistics
+        print("\n=== DLUGOSCI WYPOWIEDZI ===")
+        print(f"  od {min(dlugosci)} do {max(dlugosci)} slow, "
+              f"srednia {statistics.mean(dlugosci):.0f}, "
+              f"odchylenie {statistics.pstdev(dlugosci):.0f}")
+        if statistics.pstdev(dlugosci) < 8:
+            print("  ! ZA ROWNO — jednolita dlugosc to jeden z tropow bota")
+
+    # gdzie komentowalismy: czy nie u tych samych
+    gdzie = [w.get("gdzie", "") for w in wpisy if w["rodzaj"] == "komentarz"]
+    if gdzie:
+        from urllib.parse import urlparse
+        hosty = collections.Counter(urlparse(g).netloc for g in gdzie if g)
+        print(f"\n=== GDZIE KOMENTOWALISMY ===")
+        for h, n in hosty.most_common(8):
+            print(f"  {n}x  {h}" + ("   ! WIECEJ NIZ RAZ" if n > 1 else ""))
+
+    conn = _polaczenie()
+    od = granica.strftime("%Y-%m-%d")
+    koszt = conn.execute(
+        "SELECT COALESCE(SUM(cost_usd),0) k, COUNT(*) n FROM calls WHERE date(at) >= ?",
+        (od,)).fetchone()
+    padly = conn.execute(
+        "SELECT COUNT(*) n FROM runs WHERE status NOT IN ('DONE','SAVED')"
+        " AND started_at >= ?", (granica.isoformat(),)).fetchone()["n"]
+    print(f"\n=== KOSZT I PRZEBIEGI ===")
+    print(f"  wywolan modeli: {koszt['n']}   koszt: ${koszt['k']:.4f}")
+    print(f"  przebiegow zakonczonych bledem: {padly}")
+
+
 if __name__ == "__main__":
     import sys
 
-    if len(sys.argv) > 1 and sys.argv[1] == "test":
+    if len(sys.argv) > 1 and sys.argv[1] == "przeglad":
+        przeglad(int(sys.argv[2]) if len(sys.argv) > 2 else 3)
+    elif len(sys.argv) > 1 and sys.argv[1] == "test":
         print("skonfigurowany:", skonfigurowany())
         wyslij("test", "Test kanalu alarmowego",
                "Jesli to czytasz, alarmy dochodza.")

@@ -56,6 +56,33 @@ def wlasciwe_konto(page) -> bool:
     return ok
 
 
+DZIENNIK = config.DATA_DIR / "dziennik.jsonl"
+
+
+def zapisz_w_dzienniku(rodzaj: str, **szczegoly) -> None:
+    """Dziennik DZIALAN, nie wywolan modelu.
+
+    Baza zapisuje, ile kosztowalo mysleenie. Nie zapisuje, CO z tego poszlo
+    w swiat, do kogo i czy sie udalo — a po dwoch dniach to jest jedyne pytanie,
+    ktore ma znaczenie: gdzie agent sie pomylil i co poprawic.
+
+    Jeden wiersz na dzialanie, w pliku, ktory da sie czytac oczami i skryptem.
+    Nigdy nie przerywa dzialania: dziennik, ktory wywala agenta, byl by gorszy
+    od jego braku.
+    """
+    import json as _json
+    from datetime import datetime, timezone
+
+    try:
+        wpis = {"kiedy": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "rodzaj": rodzaj, **szczegoly}
+        DZIENNIK.parent.mkdir(parents=True, exist_ok=True)
+        with open(DZIENNIK, "a", encoding="utf-8") as f:
+            f.write(_json.dumps(wpis, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
 def naprawde_wyslac(wyslij: bool, co: str) -> bool:
     """Ostatnie sito przed KAZDYM dzialaniem widocznym publicznie.
 
@@ -767,6 +794,7 @@ def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
                 kandydat.click(timeout=8000)
                 wynik["polubione"] += 1
                 print(f"  polubione {wynik['polubione']}/{ile}", flush=True)
+                zapisz_w_dzienniku("polubienie", udane=True)
                 page.wait_for_timeout(
                     int(random.uniform(*config.ODSTEPY["lajk"]) * 1000))
             except Exception as exc:
@@ -804,6 +832,8 @@ def zasubskrybuj(handle: str, wyslij: bool = False) -> dict[str, Any]:
                     page.wait_for_timeout(5000)
                     # Po kliknieciu napis zmienia sie na stan przeciwny.
                     wynik["zrobione"] = k.count() == 0 or not k.is_visible()
+                    zapisz_w_dzienniku("subskrypcja", udane=wynik["zrobione"],
+                                       komu=handle)
                     print("  ZROBIONE" if wynik["zrobione"]
                           else "  KLIKNIETE, ALE STAN SIE NIE ZMIENIL", flush=True)
                 else:
@@ -1155,6 +1185,9 @@ def wystaw_odpowiedz_pod_artykulem(
             wyslac.click()
             page.wait_for_timeout(8000)
             wynik["wyslane"] = potwierdz_komentarz(page, url_artykulu, tekst)
+            zapisz_w_dzienniku("odpowiedz_pod_artykulem", udane=wynik["wyslane"],
+                               gdzie=url_artykulu, komu=autor,
+                               slow=len(tekst.split()), tekst=tekst[:300])
             print("  ODPOWIEDŹ POD ARTYKUŁEM POTWIERDZONA" if wynik["wyslane"]
                   else "  KLIKNIĘTE, ALE ODPOWIEDZI NIE WIDAĆ", flush=True)
         elif not wyslij:
@@ -1245,6 +1278,8 @@ def wystaw_artykul(
             publikuj.click()
             page.wait_for_timeout(15000)
             wynik["wyslane"] = potwierdz_artykul(page, artykul["tytul"])
+            zapisz_w_dzienniku("artykul", udane=wynik["wyslane"],
+                               tytul=artykul["tytul"])
             print("  ARTYKUŁ POTWIERDZONY U SUBSTACKA" if wynik["wyslane"]
                   else "  KLIKNIĘTE, ALE SUBSTACK GO NIE POKAZUJE", flush=True)
             if wynik["wyslane"]:
@@ -1342,6 +1377,9 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False) -> dict[str
             przycisk.click()
             page.wait_for_timeout(6000)
             wynik["wyslane"] = potwierdz_odpowiedz(page, note_id, tekst)
+            zapisz_w_dzienniku("odpowiedz", udane=wynik["wyslane"],
+                               gdzie=f"note/c-{note_id}",
+                               slow=len(tekst.split()), tekst=tekst[:300])
             print("  ODPOWIEDŹ POTWIERDZONA W WĄTKU" if wynik["wyslane"]
                   else "  KLIKNIĘTE, ALE ODPOWIEDZI NIE MA W WĄTKU", flush=True)
         elif not wyslij:
@@ -1442,6 +1480,8 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
                 print("  NOTKA POTWIERDZONA NA PROFILU" if wynik["wyslane"]
                       else f"  NIE WYSZLA (odpowiedzi: {kody or 'brak'})",
                       flush=True)
+            zapisz_w_dzienniku("notka", udane=wynik["wyslane"],
+                               slow=len(tekst.split()), tekst=tekst[:300])
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
     except Exception as exc:
@@ -1574,6 +1614,8 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False) -> dict[str, An
             # klienta i inner_text ich nie widzi — sprawdzenie po tekscie strony dało
             # fałszywy alarm przy pierwszym realnym komentarzu, który naprawdę wisiał.
             wynik["wyslane"] = potwierdz_komentarz(page, url, tekst)
+            zapisz_w_dzienniku("komentarz", udane=wynik["wyslane"], gdzie=url,
+                               slow=len(tekst.split()), tekst=tekst[:300])
             print("  KOMENTARZ POTWIERDZONY U SUBSTACKA" if wynik["wyslane"]
                   else "  KLIKNIĘTE, ALE SUBSTACK GO NIE POKAZUJE", flush=True)
         elif not wyslij:
