@@ -558,6 +558,63 @@ def ile_dzis_wystawione() -> dict[str, int]:
         p.stop()
 
 
+def komentarze_pod_artykulami(ile: int = 5) -> list[dict[str, Any]]:
+    """Cudze komentarze pod NASZYMI artykulami, na ktore nie odpisalismy.
+
+    Kanal profilu pokazuje tylko notki, wiec artykuly wymagaja osobnego pytania.
+    Bez tego czytelnik moglby zadac pytanie pod tekstem i nie doczekac sie
+    odpowiedzi — a to szkodzi bardziej niz brak nowych komentarzy u obcych.
+    """
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    czekaja: list[dict[str, Any]] = []
+    try:
+        moj = f"https://{config.SUBSTACK_HANDLE}.substack.com"
+        profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
+        moje_id = (profil or {}).get("id")
+        posty = api_json(page, "/api/v1/posts?limit=10", baza=moj)
+        lista = posty if isinstance(posty, list) else (posty or {}).get("posts") or []
+        for post in lista[:ile]:
+            if not isinstance(post, dict) or not post.get("id"):
+                continue
+            if not (post.get("comment_count") or 0):
+                continue
+            dane = api_json(page, f"/api/v1/post/{post['id']}/comments"
+                                  "?all_comments=true", baza=moj)
+            kom = dane if isinstance(dane, list) else (dane or {}).get("comments") or []
+            nasze_daty = [_kiedy(k) for k in kom
+                          if isinstance(k, dict) and k.get("user_id") == moje_id]
+            nasz_ostatni = max(nasze_daty, default=0.0)
+            for k in kom:
+                if not isinstance(k, dict) or k.get("user_id") == moje_id:
+                    continue
+                if nasz_ostatni and _kiedy(k) < nasz_ostatni:
+                    continue
+                czekaja.append({
+                    "pod_czym": (post.get("title") or "")[:200],
+                    "pod_id": post["id"], "gdzie": "artykul",
+                    "url": post.get("canonical_url") or "",
+                    "autor": k.get("name"), "jezyk": k.get("language"),
+                    "tekst": k.get("body") or "", "id": k.get("id"),
+                    "data": k.get("date"),
+                    "reakcje": k.get("reaction_count") or 0,
+                })
+        print(f"  pod artykulami czeka: {len(czekaja)}", flush=True)
+        for c in czekaja[:5]:
+            print(f"    · {c['autor']} pod {c['pod_czym'][:34]!r}: "
+                  f"{c['tekst'][:52]}", flush=True)
+        return czekaja
+    except Exception as exc:
+        print(f"  (nie sprawdzilem artykulow: {type(exc).__name__}: {exc})"[:150],
+              flush=True)
+        return czekaja
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+
+
 def nieodpowiedziane(ile: int = 10) -> list[dict[str, Any]]:
     """Cudze odpowiedzi pod naszymi notkami, na które jeszcze nie odpisaliśmy.
 

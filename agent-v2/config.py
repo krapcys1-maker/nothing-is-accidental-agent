@@ -153,6 +153,7 @@ MODEL_FOR = {
     "curiosity": DEEPSEEK,
     "grafika": DEEPSEEK,
     "cele": DEEPSEEK,
+    "wybor": DEEPSEEK_PRO,
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -422,6 +423,7 @@ MAX_TOKENS = {
     "curiosity": 24000,
     "grafika": 4000,
     "cele": 6000,
+    "wybor": 6000,
 }
 
 # --- notki i komentarze ------------------------------------------------------
@@ -561,6 +563,13 @@ MAX_KOMENTARZY_NA_PUBLIKACJE = 2
 # szkodzi bardziej niz dziesiec komentarzy za duzo — czytelnik, ktory poswiecil
 # czas i nie dostal odpowiedzi, nie wraca.
 ODPOWIEDZI_POZA_LIMITEM = True
+
+# Do ilu komentarzy odpowiadamy BEZ wybierania. Przy dwoch odpowiada sie obu.
+# Przy dwustu odpowiedz pod kazdym wyglada jak maszyna — nawet gdy kazda jest
+# dobra — wiec powyzej tego progu agent wybiera najwazniejsze, z pierwszenstwem
+# dla niezgody: nieodpowiedziany zarzut zostaje ostatnim slowem.
+ODPOWIADAJ_BEZ_WYBORU = 4
+MAX_ODPOWIEDZI = 6
 
 
 # Zapas na myślenie dostają WSZYSTKIE etapy, nie tylko Claude'owe: modele

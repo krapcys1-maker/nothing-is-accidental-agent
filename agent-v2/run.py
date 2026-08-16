@@ -118,7 +118,6 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     # Teraz zegar odpala agenta KILKA RAZY DZIENNIE, a kazdy przebieg dobiera
     # tylko brakujaca czesc — dzieki temu notki rozkladaja sie na godziny,
     # a nie na minuty.
-    import browser
     juz = browser.ile_dzis_wystawione()
     zostalo = {k: max(0, budzet[k] - juz.get(k, 0))
                for k in ("notki", "komentarze", "lajki")}
@@ -152,7 +151,16 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
 
     # --- 1. odpowiedzi pod własnymi treściami: pierwsze i bez limitu ----------
     def odpowiedzi() -> None:
-        czekaja = browser.nieodpowiedziane()
+        # Pod notkami I pod artykułami. Kanał profilu pokazuje tylko notki, więc
+        # bez drugiego pytania czytelnik mógłby zadać pytanie pod tekstem
+        # i nie doczekać się odpowiedzi.
+        czekaja = browser.nieodpowiedziane() + browser.komentarze_pod_artykulami()
+        if not czekaja:
+            return
+        # Przy dwóch odpowiada się obu. Przy dwustu odpowiedź pod każdym wygląda
+        # jak maszyna, więc powyżej progu agent wybiera — z pierwszeństwem dla
+        # niezgody, bo nieodpowiedziany zarzut zostaje ostatnim słowem.
+        czekaja = stages.wybierz_do_odpowiedzi(conn, run_id, czekaja)
         for c in czekaja:
             out = stages.reply_to(
                 conn, run_id,
@@ -163,7 +171,14 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 continue
             tekst = kandydaci[0]["reply"]
             if wyslij:
-                browser.wystaw_odpowiedz(c["pod_id"], tekst, wyslij=True)
+                # Pod artykulem odpowiada sie inaczej niz pod notka — inny
+                # edytor i inny adres. Na razie obslugujemy notki; komentarze
+                # pod artykulami trafiaja do logu, zeby nie ginely.
+                if c.get("gdzie") == "artykul":
+                    print(f"  [czeka pod artykułem, odpowiedź gotowa] "
+                          f"{c.get('autor')}: {tekst[:70]}", flush=True)
+                else:
+                    browser.wystaw_odpowiedz(c["pod_id"], tekst, wyslij=True)
                 stages.odczekaj("odpowiedz")
             zrobione["odpowiedzi"] += 1
 

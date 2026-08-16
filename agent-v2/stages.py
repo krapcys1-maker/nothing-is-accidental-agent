@@ -178,6 +178,54 @@ REPLY_SYSTEM = (
 )
 
 
+WYBOR_SYSTEM = (
+    "You choose which comments under a publication's own posts deserve a reply. "
+    "Answering everyone is what a bot does. Return only valid JSON."
+)
+
+
+def wybierz_do_odpowiedzi(
+    conn: sqlite3.Connection, run_id: int, komentarze: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Komu odpisac, gdy komentarzy jest wiecej niz kilka.
+
+    Przy dwoch komentarzach odpowiada sie obu i nie trzeba nikogo pytac. Przy
+    dwustu odpowiedz pod kazdym wyglada jak maszyna — nawet gdy kazda jest dobra.
+    Pierwszenstwo maja NIEZGODY: nieodpowiedziany zarzut zostaje ostatnim slowem
+    i tak go czytaja pozostali.
+    """
+    if len(komentarze) <= config.ODPOWIADAJ_BEZ_WYBORU:
+        return komentarze
+
+    opis = "\n\n".join(
+        f"[{i}] {k.get('autor', '')} (reakcji: {k.get('reakcje', 0)})\n"
+        f"    {(k.get('tekst') or '')[:400]}"
+        for i, k in enumerate(komentarze)
+    )
+    try:
+        raw = llm.call("wybor", WYBOR_SYSTEM,
+                       _prompt("kogo_odpowiedziec.md", ile=config.MAX_ODPOWIEDZI,
+                               komentarze=opis),
+                       conn=conn, run_id=run_id)
+        dane = llm.parse_json(raw)
+    except Exception as exc:
+        print(f"  [wybor] nie wyszedl ({exc}) — biore najstarsze", flush=True)
+        return komentarze[: config.MAX_ODPOWIEDZI]
+
+    wybrane: list[dict[str, Any]] = []
+    for o in sorted(dane.get("choices") or [], key=lambda x: x.get("rank", 99)):
+        i = o.get("index")
+        if isinstance(i, int) and 0 <= i < len(komentarze):
+            wybrane.append({**komentarze[i], "dlaczego": o.get("why", ""),
+                            "rodzaj": o.get("kind", "")})
+            print(f"  ODPOWIADAM [{o.get('kind', '')}] "
+                  f"{komentarze[i].get('autor', '')}: {o.get('why', '')[:60]}",
+                  flush=True)
+    print(f"  [wybor] odpowiadamy {len(wybrane)} z {len(komentarze)}"
+          f" — {str(dane.get('skipped_because', ''))[:70]}", flush=True)
+    return wybrane[: config.MAX_ODPOWIEDZI]
+
+
 def reply_to(
     conn: sqlite3.Connection, run_id: int, comment: dict[str, Any],
     evidence: dict[str, Any],
