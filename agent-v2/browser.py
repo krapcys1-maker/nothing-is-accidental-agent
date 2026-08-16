@@ -234,10 +234,20 @@ def podlacz_sie():
     """
     from playwright.sync_api import sync_playwright
 
-    # Na serwerze nie ma ani ekranu, ani człowieka do zalogowania. Jest za to
-    # zapisana sesja, więc otwieramy własną przeglądarkę bez ekranu i wkładamy
-    # jej ciasteczka. CAPTCHA tu nie wraca: to nie jest logowanie, tylko użycie
-    # sesji, którą właściciel założył wcześniej własnoręcznie.
+    # NA SERWERZE PODŁĄCZAMY SIĘ DO PRAWDZIWEGO CHROME'A, tak samo jak na
+    # komputerze właściciela. Chrome chodzi tam na wirtualnym ekranie jako usługa
+    # `nia-chrome`, a właściciel zalogował się w nim własnoręcznie.
+    #
+    # Dlaczego nie przeglądarka bezgłowa: sprawdzone na żywo tego samego wieczoru.
+    # Ta sama sesja, ten sam adres, ten sam serwer — publikacja przez prawdziwego
+    # Chrome'a kończy się kodem 200, a przez bezgłowego Chromium notka po prostu
+    # nie powstaje. Cloudflare rozpoznaje tryb bezgłowy po odcisku przeglądarki.
+    if config.TRYB_SERWERA and _chrome_odpowiada():
+        p = sync_playwright().start()
+        browser = p.chromium.connect_over_cdp(f"http://localhost:{CDP_PORT}")
+        context = browser.contexts[0] if browser.contexts else browser.new_context()
+        return p, browser, context
+
     if config.TRYB_SERWERA or not _chrome_odpowiada():
         if not SESSION_FILE.exists():
             raise SystemExit(
