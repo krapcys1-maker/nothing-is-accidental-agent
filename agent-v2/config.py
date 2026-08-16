@@ -504,7 +504,18 @@ ROZBIEG_DNI = 30
 
 # Odstepy miedzy dzialaniami, w sekundach. Pietnascie polubien w dziewiecdziesiat
 # sekund to nie jest czytanie i kazdy system to widzi.
-ODSTEP_MIEDZY_DZIALANIAMI = (45, 180)
+# Odstepy ROZNE dla roznych czynnosci, bo czlowiekowi roznie dlugo zajmuja.
+# Jeden wspolny odstep 45-180 s dawal notke po notce w trzy minuty — a nikt tak
+# nie publikuje. Polubienie co minute jest za to zupelnie naturalne.
+#
+# W sekundach, losowane w tych granicach osobno przy kazdym dzialaniu.
+ODSTEPY = {
+    "notka":      (600, 1500),   # 10-25 min: napisanie notki to kawal roboty
+    "komentarz":  (180, 480),    #  3-8 min: przeczytac cudzy tekst i odpowiedziec
+    "odpowiedz":  (120, 420),    #  2-7 min
+    "lajk":       (30, 90),      # 0,5-1,5 min: przewijanie kanalu
+}
+ODSTEP_MIEDZY_DZIALANIAMI = (45, 180)   # zapas dla czynnosci bez wlasnego wpisu
 MAX_DZIALAN_NA_GODZINE = 12
 
 # Ile razy dziennie wolno zagadac TE SAMA publikacje. Siedemnascie komentarzy

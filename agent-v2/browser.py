@@ -696,7 +696,7 @@ def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
                 wynik["polubione"] += 1
                 print(f"  polubione {wynik['polubione']}/{ile}", flush=True)
                 page.wait_for_timeout(
-                    int(random.uniform(*config.ODSTEP_MIEDZY_DZIALANIAMI) * 1000))
+                    int(random.uniform(*config.ODSTEPY["lajk"]) * 1000))
             except Exception as exc:
                 print(f"    (pominiete: {type(exc).__name__})", flush=True)
         if not wyslij:

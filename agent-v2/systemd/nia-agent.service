@@ -11,10 +11,11 @@ Environment=AGENT_V2_SERVER=1
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/home/ubuntu/nothing-is-accidental-agent/.venv/bin/python agent-v2/run.py --dzien --wyslij
 
-# Przebieg potrafi trwac kilkanascie minut (research plus pisanie). Sufit jest
-# dwukrotnoscia najdluzszego zmierzonego, zeby zawieszony proces nie blokowal
-# zamka w nieskonczonosc.
-TimeoutStartSec=3600
+# Przebieg trwa okolo godziny: same przerwy miedzy dzialaniami to ~42 minuty,
+# bo agent czeka po ludzku (10-25 min po notce). Sufit 2,5 godziny, zeby
+# zawieszony proces nie blokowal zamka w nieskonczonosc, ale zeby normalny
+# przebieg nigdy nie zostal uciety w polowie.
+TimeoutStartSec=9000
 
 # BEZ Restart=. To jest zadanie jednorazowe uruchamiane z zegara, nie usluga.
 # Automatyczny restart po bledzie oznaczalby ponawianie platnych wywolan bez

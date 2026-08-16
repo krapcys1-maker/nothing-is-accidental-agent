@@ -154,7 +154,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             tekst = kandydaci[0]["reply"]
             if wyslij:
                 browser.wystaw_odpowiedz(c["pod_id"], tekst, wyslij=True)
-                stages.odczekaj()
+                stages.odczekaj("odpowiedz")
             zrobione["odpowiedzi"] += 1
 
     # --- 2. notki: pięć dziennie, każda z innego faktu ------------------------
@@ -169,7 +169,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 continue
             if wyslij:
                 browser.wystaw_notke(gotowe[0]["note"].strip(), wyslij=True)
-                stages.odczekaj()
+                stages.odczekaj("notka")
             zrobione["notki"] += 1
 
     # --- 3. komentarze u innych ----------------------------------------------
@@ -187,7 +187,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             if wyslij:
                 browser.wystaw_komentarz(cel["url"], dobre[0]["comment"],
                                          wyslij=True)
-                stages.odczekaj()
+                stages.odczekaj("komentarz")
             zrobione["komentarze"] += 1
 
     # --- 4. polubienia: najtańszy uczciwy sygnał ------------------------------

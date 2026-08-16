@@ -385,12 +385,20 @@ def sesje_dnia() -> list[dict[str, Any]]:
             for g, w in zip(godziny, wagi)]
 
 
-def odczekaj() -> None:
-    """Przerwa między działaniami. Piętnaście polubień w minutę to nie czytanie."""
+def odczekaj(co: str = "") -> None:
+    """Przerwa po działaniu, dobrana do tego, ile ono zajmuje CZLOWIEKOWI.
+
+    Jeden wspólny odstęp dawał notkę po notce w trzy minuty — a nikt tak nie
+    publikuje. Polubienie co minutę jest za to zupełnie naturalne. Kara za zły
+    rytm nie jest błędem, tylko cichym spadkiem zasięgu, więc lepiej czekać.
+    """
     import random
     import time
 
-    time.sleep(random.uniform(*config.ODSTEP_MIEDZY_DZIALANIAMI))
+    dol, gora = config.ODSTEPY.get(co, config.ODSTEP_MIEDZY_DZIALANIAMI)
+    ile = random.uniform(dol, gora)
+    print(f"  (przerwa {ile / 60:.1f} min przed kolejnym działaniem)", flush=True)
+    time.sleep(ile)
 
 
 ZUZYTE_FAKTY = config.DATA_DIR / "zuzyte_fakty.json"
