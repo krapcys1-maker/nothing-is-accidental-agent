@@ -217,6 +217,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             if wyslij:
                 browser.wystaw_komentarz(cel["url"], dobre[0]["comment"],
                                          wyslij=True)
+                # Zapamietujemy U KOGO, zeby nie wracac tam za kilka dni.
+                kanal.zapamietaj_komentarz(cel)
                 stages.odczekaj("komentarz")
             zrobione["komentarze"] += 1
 

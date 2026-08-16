@@ -580,6 +580,19 @@ MAX_DZIALAN_NA_GODZINE = 12
 # czlowiekiem to nachodzenie, niezaleznie od tego, jak trafne sa kazdy z osobna.
 MAX_KOMENTARZY_NA_PUBLIKACJE = 2
 
+# NIE KOMENTUJEMY SWIEZYCH POSTOW. Wlasciciel opisal to najlepiej: napisal notke
+# i piec sekund pozniej ktos odpisal ogolnikowa zgoda — i to zdradza bota
+# natychmiast, zanim ktokolwiek przeczyta tresc odpowiedzi. Czlowiek najpierw
+# musi tekst ZOBACZYC i PRZECZYTAC.
+#
+# Losujemy prog dla kazdego posta osobno, w minutach.
+MIN_WIEK_POSTA_MIN = (90, 900)      # od poltorej godziny do pietnastu
+
+# Ile dni odstepu przed kolejnym komentarzem pod TA SAMA publikacja. Komentarz
+# pod kazdym kolejnym tekstem tej samej osoby to drugi najczytelniejszy sygnal
+# automatu — czlowiek nie czyta wszystkiego, co ktos wypuszcza.
+ODSTEP_DNI_NA_PUBLIKACJE = 4
+
 # Odpowiedzi POD WLASNYMI tresciami sa poza limitami dziennymi. Decyzja
 # wlasciciela i jest sluszna: limit chroni przed wygladaniem na spamera u obcych,
 # a u siebie jest sie gospodarzem. Pytanie bez odpowiedzi pod wlasnym artykulem

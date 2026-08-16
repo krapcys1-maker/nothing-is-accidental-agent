@@ -12,6 +12,71 @@ from typing import Any
 import browser
 import config
 
+HISTORIA_KOMENTARZY = config.DATA_DIR / "gdzie_komentowalismy.json"
+
+
+def _historia() -> dict:
+    import json
+
+    if not HISTORIA_KOMENTARZY.exists():
+        return {}
+    try:
+        return json.loads(HISTORIA_KOMENTARZY.read_text(encoding="utf-8"))
+    except ValueError:
+        return {}
+
+
+def zapamietaj_komentarz(post: dict) -> None:
+    """Odnotowuje, u kogo dzis komentowalismy."""
+    import json
+    from datetime import datetime, timezone
+
+    h = _historia()
+    h[klucz_publikacji(post)] = datetime.now(timezone.utc).isoformat()
+    HISTORIA_KOMENTARZY.parent.mkdir(parents=True, exist_ok=True)
+    HISTORIA_KOMENTARZY.write_text(json.dumps(h, ensure_ascii=False, indent=1),
+                                   encoding="utf-8")
+
+
+def klucz_publikacji(post: dict) -> str:
+    """Kim jest autor posta. Z ADRESU, bo nazwa publikacji bywa pusta w kanale."""
+    from urllib.parse import urlparse
+
+    return urlparse(post.get("url") or "").netloc or (post.get("pub") or "?")
+
+
+def _wiek_minut(data: str) -> float:
+    from datetime import datetime, timezone
+
+    try:
+        kiedy = datetime.fromisoformat(str(data).replace("Z", "+00:00"))
+    except ValueError:
+        return 1e9        # nieznana data = traktujemy jak stary, nie blokujemy
+    return (datetime.now(timezone.utc) - kiedy).total_seconds() / 60
+
+
+def _za_swiezy(post: dict) -> bool:
+    """Czy post jest na tyle swiezy, ze komentarz wygladalby jak czujka bota."""
+    import random
+
+    prog = random.uniform(*config.MIN_WIEK_POSTA_MIN)
+    return _wiek_minut(post.get("data", "")) < prog
+
+
+def _za_niedawno_u_nich(post: dict) -> bool:
+    """Czy komentowalismy u tej publikacji w ostatnich dniach."""
+    from datetime import datetime, timedelta, timezone
+
+    ostatnio = _historia().get(klucz_publikacji(post))
+    if not ostatnio:
+        return False
+    try:
+        kiedy = datetime.fromisoformat(ostatnio)
+    except ValueError:
+        return False
+    return (datetime.now(timezone.utc) - kiedy) < timedelta(
+        days=config.ODSTEP_DNI_NA_PUBLIKACJE)
+
 JS_KANAL = """
 () => null
 """
@@ -25,6 +90,7 @@ def posty_z_kanalu(ile: int = 25) -> list[dict[str, Any]]:
     try:
         dane = browser.api_json(page, "/api/v1/reader/posts") or {}
         posty = []
+        odrzucone = {"swieze": 0, "za_czesto": 0}
         for x in (dane.get("posts") or [])[:ile]:
             if not isinstance(x, dict):
                 continue
@@ -35,16 +101,27 @@ def posty_z_kanalu(ile: int = 25) -> list[dict[str, Any]]:
             adres = x.get("canonical_url") or ""
             if config.SUBSTACK_HANDLE in adres:
                 continue
-            posty.append({
+            kandydat = {
                 "tytul": (x.get("title") or "")[:120],
                 "opis": (x.get("subtitle") or x.get("description") or "")[:300],
                 "pub": ((x.get("publication") or {}).get("name") or ""),
                 "komentarze": x.get("comment_count") or 0,
                 "reakcje": x.get("reaction_count") or 0,
                 "url": x.get("canonical_url") or "",
-                "data": (x.get("post_date") or "")[:10],
-            })
-        print(f"  [kanał] postów: {len(posty)}", flush=True)
+                "data": x.get("post_date") or "",   # pelna, do liczenia wieku
+            }
+            # DWA SITA, oba o ZACHOWANIU, nie o tresci.
+            if _za_swiezy(kandydat):
+                odrzucone["swieze"] += 1
+                continue
+            if _za_niedawno_u_nich(kandydat):
+                odrzucone["za_czesto"] += 1
+                continue
+            posty.append(kandydat)
+        print(f"  [kanał] postów: {len(posty)}"
+              f"   odrzucone: {odrzucone['swieze']} za świeżych,"
+              f" {odrzucone['za_czesto']} bo niedawno tam komentowaliśmy",
+              flush=True)
         return posty
     finally:
         page.close()
