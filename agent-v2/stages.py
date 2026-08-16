@@ -344,6 +344,10 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
         return int(dziennie) + (1 if random.random() < dziennie % 1 else 0)
 
     budzet = {
+        # Notki nie sa losowane: rozklad tygodnia ma ich piec na dzien i to jest
+        # kontrakt, a nie widelki. Sa w budzecie, zeby liczyc je tak samo jak
+        # reszte przy dzieleniu dnia na przebiegi.
+        "notki": len(config.NOTE_MIX_OTHER_DAY),
         "lajki": losuj(config.LAJKI_DZIENNIE),
         "komentarze": losuj(config.KOMENTARZE_DZIENNIE),
         "follow": z_miesiaca(config.FOLLOW_MIESIECZNIE),
