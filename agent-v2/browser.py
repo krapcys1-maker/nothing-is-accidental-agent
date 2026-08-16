@@ -617,6 +617,23 @@ def nieodpowiedziane(ile: int = 10) -> list[dict[str, Any]]:
         p.stop()
 
 
+def sluchaj_publikacji(page) -> list[int]:
+    """Zbiera kody odpowiedzi na zapytania PUBLIKUJACE.
+
+    Najpewniejsze zrodlo prawdy o tym, czy tresc poszla: wlasna odpowiedz
+    Substacka na nasz zapis. Kanal profilu aktualizuje sie z opoznieniem —
+    czasem ponad pol minuty — wiec sprawdzanie go zaraz po klknieciu dawalo
+    falszywe "nie wyszlo" dla notek, ktore wyszly. To jest tez to, co research
+    o awariach takich agentow zalecal wprost: patrzec na odpowiedz API zapisu,
+    a nie na wlasny log sukcesu.
+    """
+    kody: list[int] = []
+    page.on("response", lambda r: kody.append(r.status)
+            if "/api/v1/comment/feed" in r.url and r.request.method == "POST"
+            else None)
+    return kody
+
+
 def potwierdz_notke(page, tekst: str, prob: int = 4) -> bool:
     """Pyta Substacka, czy notka naprawdę wisi na naszym profilu.
 
@@ -1240,11 +1257,20 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
         print(f"  przycisk wysyłki widoczny: {wynik['przycisk_widoczny']}", flush=True)
 
         if wyslij and wynik["przycisk_widoczny"]:
+            kody = sluchaj_publikacji(page)
             przycisk.click()
             page.wait_for_timeout(6000)
-            wynik["wyslane"] = potwierdz_notke(page, tekst)
-            print("  NOTKA POTWIERDZONA NA PROFILU" if wynik["wyslane"]
-                  else "  KLIKNIĘTE, ALE NOTKI NIE MA NA PROFILU", flush=True)
+            # Najpierw pytamy o odpowiedz Substacka na sam zapis — jest
+            # natychmiastowa. Kanal profilu sprawdzamy tylko wtedy, gdy
+            # odpowiedzi nie zlapalismy.
+            if any(k == 200 for k in kody):
+                wynik["wyslane"] = True
+                print("  NOTKA PRZYJETA (odpowiedz Substacka: 200)", flush=True)
+            else:
+                wynik["wyslane"] = potwierdz_notke(page, tekst)
+                print("  NOTKA POTWIERDZONA NA PROFILU" if wynik["wyslane"]
+                      else f"  NIE WYSZLA (odpowiedzi: {kody or 'brak'})",
+                      flush=True)
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
     except Exception as exc:
