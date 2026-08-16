@@ -502,6 +502,12 @@ OKNO_PUBLIKACJI_ET = (6, 22)        # wolno od 6:00 do 21:59 czasu nowojorskiego
 WORST_NOTE_DAYS = ("monday", "friday")
 
 # Rozkład na tydzień: pięć notek dziennie, dzień publikacji artykułu ma własny.
+# Ile notek promuje jeden artykul i przez ile dni. Decyzja wlasciciela: piec,
+# ale DZIEN PO DNIU, nie wszystkie tego samego dnia. Piec linkow w jeden dzien
+# to nie promocja, tylko natret; piec przez piec dni to piec osobnych szans na
+# trafienie kogos, kto akurat patrzy w kanal.
+NOTEK_PROMUJACYCH = 5
+
 NOTE_MIX_ARTICLE_DAY = ("ARTYKUL", "ARTYKUL", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE")
 NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", "CIEKAWOSTKA")
 

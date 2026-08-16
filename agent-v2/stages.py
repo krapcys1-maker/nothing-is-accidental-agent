@@ -583,6 +583,62 @@ def note(
     return {"type": note_type, "candidates": candidates}
 
 
+PROMOCJA = config.DATA_DIR / "promocja.json"
+
+
+def zapisz_do_promocji(url: str, tytul: str, tekst: str) -> None:
+    """Zapisuje opublikowany artykul do promowania przez kolejne dni."""
+    dane = wczytaj_promocje()
+    dane.append({"url": url, "tytul": tytul, "tekst": tekst[:9000],
+                 "wystawione": 0, "ostatnia": None})
+    PROMOCJA.parent.mkdir(parents=True, exist_ok=True)
+    PROMOCJA.write_text(json.dumps(dane, ensure_ascii=False, indent=1),
+                        encoding="utf-8")
+    print(f"  [promocja] artykul dodany do promowania: {tytul[:50]}", flush=True)
+
+
+def wczytaj_promocje() -> list[dict[str, Any]]:
+    if not PROMOCJA.exists():
+        return []
+    try:
+        return json.loads(PROMOCJA.read_text(encoding="utf-8"))
+    except ValueError:
+        return []
+
+
+def artykul_do_promocji() -> dict[str, Any] | None:
+    """Artykul, ktory dzis czeka na notke promujaca — najwyzej JEDNA na dobe.
+
+    Wlasciciel: piec notek promujacych na artykul, ale dzien po dniu, nie
+    wszystkie tego samego dnia. Piec linkow w jeden dzien to nie promocja, tylko
+    natret; piec przez piec dni to piec osobnych szans na trafienie kogos, kto
+    akurat patrzy.
+    """
+    from datetime import datetime, timezone
+
+    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    for a in wczytaj_promocje():
+        if a.get("wystawione", 0) >= config.NOTEK_PROMUJACYCH:
+            continue
+        if a.get("ostatnia") == dzis:
+            continue            # dzis juz promowany
+        return a
+    return None
+
+
+def odhacz_promocje(url: str) -> None:
+    """Odnotowuje, ze artykul dostal dzis swoja notke promujaca."""
+    from datetime import datetime, timezone
+
+    dane = wczytaj_promocje()
+    for a in dane:
+        if a.get("url") == url:
+            a["wystawione"] = a.get("wystawione", 0) + 1
+            a["ostatnia"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    PROMOCJA.write_text(json.dumps(dane, ensure_ascii=False, indent=1),
+                        encoding="utf-8")
+
+
 def notki_dnia(
     conn: sqlite3.Connection, run_id: int, dzien_artykulu: bool = False,
     karta: dict[str, Any] | None = None,
@@ -596,8 +652,18 @@ def notki_dnia(
     kandydatur chwyciły ten sam fakt o windzie. Jedna notka dostaje więc jeden
     fakt i zestaw dnia różni się z konstrukcji, a nie z nadziei.
     """
-    typy = (config.NOTE_MIX_ARTICLE_DAY if dzien_artykulu
-            else config.NOTE_MIX_OTHER_DAY)
+    typy = list(config.NOTE_MIX_ARTICLE_DAY if dzien_artykulu
+                else config.NOTE_MIX_OTHER_DAY)
+
+    # JEDNA notka promujaca dziennie, przez kolejne dni po publikacji artykulu.
+    promowany = artykul_do_promocji()
+    if promowany and "ARTYKUL" not in typy:
+        typy[0] = "ARTYKUL"       # pierwsza notka dnia promuje artykul
+        karta = {"article_title": promowany["tytul"],
+                 "article_text": promowany["tekst"]}
+        link_artykulu = promowany["url"]
+        print(f"  [promocja] dzien {promowany['wystawione'] + 1}"
+              f"/{config.NOTEK_PROMUJACYCH}: {promowany['tytul'][:44]}", flush=True)
     if ciekawostki is None:
         ciekawostki = znajdz_ciekawostki(conn, run_id)
     zapas = list(ciekawostki)
@@ -615,8 +681,13 @@ def notki_dnia(
         print(f"  [{typ}]", flush=True)
         # Adres artykułu leci TYLKO pod notką, która ten artykuł promuje.
         # Pod ciekawostką byłby reklamą doklejoną do faktu i psułby ją.
-        dzien.append(note(conn, run_id, typ, material,
-                          link=link_artykulu if typ == "ARTYKUL" else None))
+        wynik = note(conn, run_id, typ, material,
+                     link=link_artykulu if typ == "ARTYKUL" else None)
+        if typ == "ARTYKUL" and promowany and any(
+                k.get("safe_to_post") for k in wynik["candidates"]):
+            odhacz_promocje(promowany["url"])
+            promowany = None
+        dzien.append(wynik)
     return dzien
 
 

@@ -1089,6 +1089,16 @@ def wystaw_artykul(
             wynik["wyslane"] = potwierdz_artykul(page, artykul["tytul"])
             print("  ARTYKUŁ POTWIERDZONY U SUBSTACKA" if wynik["wyslane"]
                   else "  KLIKNIĘTE, ALE SUBSTACK GO NIE POKAZUJE", flush=True)
+            if wynik["wyslane"]:
+                # Artykuł idzie do promowania: jedna notka z linkiem dziennie
+                # przez kolejne dni. Zapisujemy TU, bo tylko tutaj wiemy na pewno,
+                # że tekst naprawdę jest publiczny.
+                import stages
+                adres = (f"https://{config.SUBSTACK_HANDLE}.substack.com/p/"
+                         + re.sub(r"[^a-z0-9]+", "-",
+                                  artykul["tytul"].lower()).strip("-"))
+                stages.zapisz_do_promocji(adres, artykul["tytul"],
+                                          artykul.get("html", "")[:9000])
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia; szkic zapisany)", flush=True)
     except Exception as exc:
