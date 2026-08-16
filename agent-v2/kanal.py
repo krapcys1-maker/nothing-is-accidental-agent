@@ -180,3 +180,85 @@ def notki_z_kanalu(ile: int = 25) -> list[dict]:
         page.close()
         br.close()
         p.stop()
+
+
+def szukaj_nowych(ile: int = 20) -> list[dict]:
+    """Szuka NOWYCH kont wyszukiwarka Substacka, poza naszym kregiem.
+
+    Wlasciciel postawil sprawe jasno: agent ma szukac nowych kont, a nie
+    komentowac wciaz u tych samych. Kanal czytelnika pokazuje wylacznie to,
+    co juz znamy — jedenascie publikacji, ktore same z siebie nikogo nowego nie
+    przyprowadza.
+
+    Wyszukiwarka oddaje posty i notki spoza kregu. Filtrujemy je tak samo jak
+    kanal: nie swieze, nie u tych, u ktorych niedawno bylismy, nie u nas.
+    """
+    import random
+
+    browser.wymagaj_sesji()
+    hasla = random.sample(list(config.HASLA_SZUKANIA),
+                          k=min(config.ILE_HASEL_NA_PRZEBIEG,
+                                len(config.HASLA_SZUKANIA)))
+    p, br, ctx = browser.podlacz_sie()
+    page = ctx.new_page()
+    znalezione: dict[str, dict] = {}
+    odrzucone = {"swieze": 0, "za_czesto": 0, "nasze": 0}
+    try:
+        for haslo in hasla:
+            dane = browser.api_json(
+                page, "/api/v1/top/search?query="
+                      + haslo.replace(" ", "+") + "&fromSuggestedSearch=false") or {}
+            for x in (dane.get("items") or []):
+                post = (x or {}).get("post") or {}
+                kom = (x or {}).get("comment") or {}
+                pub = (x or {}).get("publication") or {}
+                if post.get("title") and post.get("canonical_url"):
+                    kandydat = {
+                        "tytul": post.get("title", "")[:120],
+                        "opis": (post.get("subtitle") or post.get("description") or "")[:300],
+                        "pub": pub.get("name") or pub.get("subdomain") or "",
+                        "komentarze": post.get("comment_count") or 0,
+                        "reakcje": post.get("reaction_count") or 0,
+                        "url": post.get("canonical_url"),
+                        "data": post.get("post_date") or "",
+                        "skad": f"szukanie: {haslo}",
+                    }
+                elif kom.get("body") and not kom.get("post_id"):
+                    kandydat = {
+                        "tytul": (kom.get("body") or "")[:120],
+                        "opis": (kom.get("body") or "")[:600],
+                        "pub": kom.get("name") or kom.get("handle") or "",
+                        "komentarze": kom.get("children_count") or 0,
+                        "reakcje": kom.get("reaction_count") or 0,
+                        "url": f"https://substack.com/note/c-{kom.get('id')}",
+                        "id": kom.get("id"),
+                        "data": kom.get("date") or "",
+                        "skad": f"szukanie: {haslo}",
+                    }
+                else:
+                    continue
+
+                if config.SUBSTACK_HANDLE in (kandydat["url"] or ""):
+                    odrzucone["nasze"] += 1
+                    continue
+                if _za_swiezy(kandydat):
+                    odrzucone["swieze"] += 1
+                    continue
+                if _za_niedawno_u_nich(kandydat):
+                    odrzucone["za_czesto"] += 1
+                    continue
+                znalezione[kandydat["url"]] = kandydat
+
+        wynik = sorted(znalezione.values(),
+                       key=lambda n: n["reakcje"] * 2 + n["komentarze"] * 3,
+                       reverse=True)[:ile]
+        print(f"  [szukanie] hasla: {', '.join(hasla)}", flush=True)
+        print(f"  [szukanie] nowych celow: {len(wynik)}"
+              f"   (odrzucone: {odrzucone['swieze']} świeżych,"
+              f" {odrzucone['za_czesto']} znanych, {odrzucone['nasze']} naszych)",
+              flush=True)
+        return wynik
+    finally:
+        page.close()
+        br.close()
+        p.stop()

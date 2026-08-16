@@ -615,6 +615,23 @@ MIN_WIEK_POSTA_MIN = (90, 900)      # od poltorej godziny do pietnastu
 # automatu — czlowiek nie czyta wszystkiego, co ktos wypuszcza.
 ODSTEP_DNI_NA_PUBLIKACJE = 4
 
+# HASLA, KTORYMI AGENT SZUKA NOWYCH KONT. Kanal czytelnika pokazuje tylko to,
+# co juz znamy, wiec sam z siebie nie przyprowadzi nikogo nowego — a wlasnie
+# o nowych ludzi chodzi. Wyszukiwarka Substacka oddaje konta spoza naszego kregu.
+#
+# Hasla opisuja NASZ rewir: ukryte systemy, przepisy, bodzce i decyzje za
+# rzeczami codziennymi. Losujemy kilka przy kazdym przebiegu, zeby nie wracac
+# ciagle do tej samej niszy.
+HASLA_SZUKANIA = (
+    "building codes regulation", "food labeling rules", "safety standards history",
+    "why prices are set", "infrastructure decisions", "product recall",
+    "packaging regulation", "transport standards", "consumer protection rule",
+    "why this design exists", "hidden fees", "zoning", "supply chain incentives",
+    "medical device rules", "aviation regulation", "energy efficiency standard",
+    "why companies do this", "unintended consequences policy",
+)
+ILE_HASEL_NA_PRZEBIEG = 3
+
 # Odpowiedzi POD WLASNYMI tresciami sa poza limitami dziennymi. Decyzja
 # wlasciciela i jest sluszna: limit chroni przed wygladaniem na spamera u obcych,
 # a u siebie jest sie gospodarzem. Pytanie bez odpowiedzi pod wlasnym artykulem

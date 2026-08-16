@@ -204,7 +204,18 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
 
     # --- 3. komentarze u innych ----------------------------------------------
     def komentarze() -> None:
-        cele = stages.wybierz_cele(conn, run_id, kanal.posty_z_kanalu())
+        # NOWE KONTA NAJPIERW. Kanal czytelnika pokazuje wylacznie to, co juz
+        # znamy — jedenascie publikacji, ktore same z siebie nikogo nowego nie
+        # przyprowadza. Wyszukiwarka Substacka oddaje ludzi spoza kregu, i to
+        # z zywymi dyskusjami. Kanal zostaje jako uzupelnienie, bo tam sa nasi
+        # dotychczasowi rozmowcy.
+        pula = kanal.szukaj_nowych() + kanal.posty_z_kanalu()
+        widziane, unikalne = set(), []
+        for x in pula:
+            if x.get("url") and x["url"] not in widziane:
+                widziane.add(x["url"])
+                unikalne.append(x)
+        cele = stages.wybierz_cele(conn, run_id, unikalne)
         for cel in cele[: na_teraz["komentarze"]]:
             strony = browser.read_pages([cel["url"]])
             if not strony or not strony[0].get("text"):
