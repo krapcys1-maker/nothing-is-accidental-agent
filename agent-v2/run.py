@@ -371,11 +371,21 @@ def main() -> int:
 
     print(f"== przebieg {run_id} ==", flush=True)
     if args.dzien:
+        # `finally` zamykalo przebieg jako DONE takze wtedy, gdy sie wywalil —
+        # i tak wlasnie zapisal sie przebieg, ktory padl na `KeyError: notki`.
+        # Dwie szkody: statystyka bledow milczala, a rozdzielnik dziennej normy
+        # liczyl ten przebieg jako odbyty i chcial wcisnac cala reszte w jeden
+        # nastepny. Przerwany przebieg ma byc widoczny jako przerwany.
         try:
-            return dzien(conn, run_id, args.wyslij)
-        finally:
-            db.finish_run(conn, run_id, "DONE", "dzien", "")
+            wynik = dzien(conn, run_id, args.wyslij)
+        except BaseException as exc:
+            db.finish_run(conn, run_id, "FAILED", "dzien",
+                          f"{type(exc).__name__}: {exc}"[:500])
             _summary(conn, run_id)
+            raise
+        db.finish_run(conn, run_id, "DONE", "dzien", "")
+        _summary(conn, run_id)
+        return wynik
     print(
         f"   baza: {config.DB_PATH}   "
         f"sufit przebiegu: {config.RUN_LIMIT_USD} USD"
