@@ -94,6 +94,32 @@ def zajmij_zamek():
     return uchwyt
 
 
+def ile_przebiegow_zostalo(conn) -> int:
+    """Ile przebiegow dnia jeszcze bedzie, wliczajac biezacy.
+
+    Sluzy do dzielenia dziennej normy. Liczymy przebiegi ZAKONCZONE dzis, wiec
+    ten, ktory wlasnie trwa, jeszcze sie nie liczy — i dobrze, bo ma cos wziac.
+
+    Przebieg PRZERWANY tez sie nie liczy, i to jest cala pointa: gdy jeden padnie,
+    kolejne widza, ze zostalo ich mniej, i dobieraja wiecej, zamiast zostawic
+    dzien niedomkniety. Ostatni dzieli przez jeden, czyli bierze cala reszte.
+
+    Nie pytamy systemd o harmonogram, choc to on odpala agenta. Godziny sa w pliku
+    `.timer` i powtorzenie ich tutaj zlamaloby zasade jednej liczby w jednym
+    miejscu — a rozjazd miedzy nimi wychodzilby dopiero po zmianie harmonogramu.
+    """
+    from datetime import datetime, timezone
+
+    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        (zamkniete,) = conn.execute(
+            "SELECT COUNT(*) FROM runs WHERE stage = 'dzien' AND status = 'DONE'"
+            " AND finished_at LIKE ?", (f"{dzis}%",)).fetchone()
+    except Exception:
+        zamkniete = 0             # licznik nie moze zatrzymac przebiegu
+    return max(1, config.PRZEBIEGOW_DZIENNIE - int(zamkniete))
+
+
 def dzien(conn, run_id: int, wyslij: bool) -> int:
     """Jeden dzień pracy konta: notki, komentarze, odpowiedzi, polubienia.
 
@@ -121,11 +147,17 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     juz = browser.ile_dzis_wystawione()
     zostalo = {k: max(0, budzet[k] - juz.get(k, 0))
                for k in ("notki", "komentarze", "lajki")}
-    # Na jeden przebieg bierzemy tylko czesc reszty, zeby zostalo na pozniej.
-    na_teraz = {k: max(1, round(v / max(1, config.PRZEBIEGOW_DZIENNIE)))
-                if v else 0 for k, v in zostalo.items()}
+    # Reszte dzielimy przez przebiegi, ktore JESZCZE dzis beda — nie przez
+    # wszystkie. Dzielenie przez wszystkie systematycznie zaniza: przy budzecie
+    # 16 komentarzy trzy przebiegi braly 5, 4 i 2, czyli 11 zamiast 16. Przez
+    # pozostale wychodzi 5, 6 i 5. Ostatni przebieg dnia dzieli przez jeden,
+    # wiec dobiera cala reszte i norma sie domyka.
+    zostalo_przebiegow = ile_przebiegow_zostalo(conn)
+    na_teraz = {k: max(1, round(v / zostalo_przebiegow)) if v else 0
+                for k, v in zostalo.items()}
     print(f"   dzis juz: notki={juz.get('notki', 0)} "
-          f"komentarze={juz.get('komentarze', 0)}   "
+          f"komentarze={juz.get('komentarze', 0)} lajki={juz.get('lajki', 0)}   "
+          f"przebiegow zostalo: {zostalo_przebiegow}   "
           f"w tym przebiegu: notki={na_teraz['notki']} "
           f"komentarze={na_teraz['komentarze']} lajki={na_teraz['lajki']}",
           flush=True)
