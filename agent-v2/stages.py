@@ -254,6 +254,7 @@ def reply_to(
     prompt = _prompt(
         "odpowiedz.md",
         cel_slow=config.losowa_dlugosc(),
+        otwarcie=config.losowe_otwarcie(),
         language=config.ARTICLE_LANGUAGE,
         under_what=comment.get("under", ""),
         commenter=comment.get("author", ""),
@@ -877,6 +878,7 @@ def comment_on(
     prompt = _prompt(
         "komentarz.md",
         cel_slow=config.losowa_dlugosc(),
+        otwarcie=config.losowe_otwarcie(),
         language=config.ARTICLE_LANGUAGE,
         author=post.get("author", ""),
         title=post.get("title", ""),

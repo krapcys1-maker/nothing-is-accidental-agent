@@ -119,8 +119,14 @@ they have to say.
 
 ## Openers and closers
 
-Start mid-thought, with the substance. Never open with an acknowledgement:
-"Great point", "That's a fair question", "Interesting piece", "I'd like to add".
+Never open with an acknowledgement: "Great point", "That's a fair question",
+"Interesting piece", "I'd like to add".
+
+**For this one: {otwarcie}**
+
+That instruction changes every time on purpose. Left to itself this publication
+opens seven comments out of nine with the word "The", and a fixed opening shape
+is as readable a tell as a fixed length.
 
 End on the point. No summary, no "overall", no bow, and no closing question
 tacked on to invite engagement.

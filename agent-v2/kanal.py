@@ -118,7 +118,15 @@ def posty_z_kanalu(ile: int = 25) -> list[dict[str, Any]]:
                 odrzucone["za_czesto"] += 1
                 continue
             posty.append(kandydat)
-        print(f"  [kanał] postów: {len(posty)}"
+        # NOWI LUDZIE NAJPIERW. Cztery dni odstepu chronia przed nachodzeniem
+        # tej samej osoby, ale nie robia z nas kogos, kto poznaje nowych.
+        # Konto, ktore krazy miedzy pieciona znajomymi nazwiskami, nie rosnie —
+        # a wlasnie o nowych ludzi nam chodzi.
+        znani = set(_historia())
+        posty.sort(key=lambda x: klucz_publikacji(x) in znani)
+        nowi = sum(1 for x in posty if klucz_publikacji(x) not in znani)
+
+        print(f"  [kanał] postów: {len(posty)}   nowych autorów: {nowi}"
               f"   odrzucone: {odrzucone['swieze']} za świeżych,"
               f" {odrzucone['za_czesto']} bo niedawno tam komentowaliśmy",
               flush=True)

@@ -463,6 +463,28 @@ DLUGOSCI_WYPOWIEDZI = (
 )
 
 
+# SPOSOB OTWARCIA, losowany tak samo jak dlugosc i z tego samego powodu.
+# Zmierzone na naszych wlasnych komentarzach: SIEDEM Z DZIEWIECIU zaczynalo sie
+# od "The". Model proszony o roznorodnosc i tak wpada w jeden szkielet, wiec
+# wybor musi zapasc poza nim.
+OTWARCIA = (
+    "Start with the mechanism itself, no preamble.",
+    "Start with a question you actually want answered.",
+    "Start by naming what the piece got right, then the part it skipped.",
+    "Start with a concrete example or case, and let it carry the point.",
+    "Start with the objection: say plainly where you part company.",
+    "Start with a number or a date that changes how the thing reads.",
+    "Start mid-sentence, as if continuing a thought already in progress.",
+    "Start with what surprised you, in the plainest words available.",
+)
+
+
+def losowe_otwarcie() -> str:
+    import random
+
+    return random.choice(OTWARCIA)
+
+
 def losowa_dlugosc() -> int:
     """Ile slow ma miec ta konkretna wypowiedz."""
     import random

@@ -255,6 +255,36 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 stages.odczekaj("komentarz")
             zrobione["komentarze"] += 1
 
+    # --- 3c. obserwowanie nowych: to, co poszerza krąg ------------------------
+    def obserwuj() -> None:
+        """Obserwuje autorów, których teksty faktycznie czytaliśmy.
+
+        Bez tego agent kręciłby się w kółko po tych samych jedenastu
+        publikacjach: kanał czytelnika pokazuje to, co obserwujemy, a my nie
+        obserwowaliśmy nikogo. Każda nowa obserwacja poszerza pulę ludzi, do
+        których w ogóle możemy się odezwać.
+
+        Obserwujemy TYLKO tych, u których naprawdę byliśmy — nie z listy
+        podpowiedzi. Obserwowanie kogoś, kogo się nie czytało, to zbieranie
+        nazwisk, a nie budowanie kręgu.
+        """
+        if not budzet.get("follow"):
+            return
+        znani = set(kanal._historia())
+        if not znani:
+            return
+        import random
+
+        kandydaci = [h for h in znani if h and h != f"{config.SUBSTACK_HANDLE}.substack.com"]
+        random.shuffle(kandydaci)
+        for host in kandydaci[: budzet["follow"]]:
+            uchwyt = host.split(".")[0]
+            if wyslij:
+                browser.zasubskrybuj(uchwyt, wyslij=True)
+                stages.odczekaj("komentarz")
+            else:
+                print(f"  (obserwowałbym: {uchwyt})", flush=True)
+
     # --- 4. polubienia: najtańszy uczciwy sygnał ------------------------------
     def polubienia() -> None:
         w = browser.polub_w_kanale(na_teraz["lajki"], wyslij=wyslij)
@@ -262,7 +292,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
 
     for nazwa, robota in (("odpowiedzi", odpowiedzi), ("notki", notki),
                           ("komentarze", komentarze), ("dyskusje", dyskusje),
-                          ("polubienia", polubienia)):
+                          ("obserwowanie", obserwuj), ("polubienia", polubienia)):
         print(f"\n-- {nazwa} --", flush=True)
         blok(nazwa, robota)
 
