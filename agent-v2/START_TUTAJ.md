@@ -1,5 +1,10 @@
 # START TUTAJ — instrukcja dla agenta budującego agent-v2
 
+> **Agent jest już zbudowany i działa na serwerze.** Ten dokument to reguły
+> budowy i nadal obowiązują. Ale jeśli wracasz do gotowego agenta — jak się
+> zalogować, co sprawdzić, co zmienialiśmy w systemie — zacznij od
+> **[JAK_WROCIC.md](JAK_WROCIC.md)**.
+
 # ⛔ PRZECZYTAJ TO ZANIM NAPISZESZ PIERWSZĄ LINIJKĘ
 
 Właściciel ma trzy konkretne obawy, wszystkie uzasadnione, wszystkie oparte na

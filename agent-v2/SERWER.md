@@ -1,5 +1,11 @@
 # Serwer — instalacja krok po kroku
 
+> **Ten dokument opisuje pierwszą instalację i jest już historią.** Serwer stoi
+> i działa. Jeśli wracasz do agenta po przerwie, chcesz
+> **[JAK_WROCIC.md](JAK_WROCIC.md)** — tam jest aktualny sposób logowania
+> (użytkownik `ubuntu`, nie `root`), codzienne polecenia i lista rzeczy, które
+> zmienialiśmy w systemie.
+
 Maszyna: **OVH VPS-3, Ubuntu 26.04, Frankfurt, `57.131.139.221`**.
 
 Robimy to w **dwóch etapach**, celowo. Etap 1 odpowiada na jedno pytanie i nic
