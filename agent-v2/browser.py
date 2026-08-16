@@ -83,6 +83,54 @@ def zapisz_w_dzienniku(rodzaj: str, **szczegoly) -> None:
         pass
 
 
+def z_dziennika_dzis() -> dict[str, int]:
+    """Ile komentarzy i polubien poszlo dzis — wedlug naszego zapisu.
+
+    Notki potrafimy policzyc u zrodla, komentarzy i polubien NIE. Kanal profilu
+    zwraca wylacznie notki — sprawdzone na zywo: jedenascie pozycji, ani jednej
+    z `post_id` — a szesc innych endpointow naszych komentarzy nie oddaje wcale.
+
+    To swiadomy wyjatek od zasady „rzeczywistosc jest zrodlem prawdy", zrobiony
+    tam, gdzie rzeczywistosci nie da sie zapytac. Bez niego kazdy przebieg widzial
+    zero i bral pelny dzienny budzet od nowa, wiec ochrona przed wystawieniem
+    normy drugi raz dzialala TYLKO dla notek. Dziennik przezywa restart, wiec
+    daje te sama gwarancje tam, gdzie Substack milczy.
+
+    Liczymy wylacznie dzialania UDANE i wylacznie dzisiejsze, w UTC — tak samo
+    jak liczy je `ile_dzis_wystawione`, zeby obie polowy licznika mierzyly ten
+    sam dzien.
+    """
+    import json as _json
+    from datetime import datetime, timezone
+
+    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    ile = {"komentarze": 0, "lajki": 0}
+    nazwa = {"komentarz": "komentarze", "polubienie": "lajki"}
+    try:
+        if not DZIENNIK.exists():
+            return ile
+        for linia in DZIENNIK.read_text(encoding="utf-8").splitlines():
+            linia = linia.strip()
+            if not linia:
+                continue
+            try:
+                wpis = _json.loads(linia)
+            except ValueError:
+                continue          # jedna uszkodzona linia nie psuje calej reszty
+            if not isinstance(wpis, dict):
+                continue
+            if not str(wpis.get("kiedy", "")).startswith(dzis):
+                continue
+            if not wpis.get("udane"):
+                continue
+            klucz = nazwa.get(wpis.get("rodzaj"))
+            if klucz:
+                ile[klucz] += 1
+    except Exception:
+        pass                      # licznik nie moze zatrzymac przebiegu
+    return ile
+
+
 def naprawde_wyslac(wyslij: bool, co: str) -> bool:
     """Ostatnie sito przed KAZDYM dzialaniem widocznym publicznie.
 
@@ -563,19 +611,24 @@ def _kiedy(c: dict) -> float:
 
 
 def ile_dzis_wystawione() -> dict[str, int]:
-    """Ile notek i komentarzy poszlo dzisiaj — wg SUBSTACKA, nie naszej ksiegowosci.
+    """Ile notek, komentarzy i polubien poszlo dzisiaj.
 
-    Rzeczywistosc jest zrodlem prawdy takze tutaj: gdyby liczyc z bazy, restart
-    albo przerwany przebieg rozjechalby licznik i agent wystawilby dzienna norme
-    drugi raz.
+    NOTKI liczymy u Substacka, bo rzeczywistosc jest lepszym zrodlem niz wlasna
+    ksiegowosc: po restarcie albo przerwanym przebiegu ksiegowosc sie rozjezdza
+    i agent wystawia dzienna norme drugi raz.
+
+    KOMENTARZE I POLUBIENIA licza sie z dziennika, bo Substack ich nie oddaje —
+    kanal profilu zwraca same notki. Powod i sprawdzenie: `z_dziennika_dzis`.
+    Gdyby Substack kiedys zaczal pokazywac wlasne komentarze, to jest jedyne
+    miejsce do zmiany.
     """
     from datetime import datetime, timezone
 
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    wynik = {"notki": 0, **z_dziennika_dzis()}
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
-    wynik = {"notki": 0, "komentarze": 0, "lajki": 0}
     try:
         profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
         if not isinstance(profil, dict) or not profil.get("id"):
@@ -585,10 +638,9 @@ def ile_dzis_wystawione() -> dict[str, int]:
             c = (x or {}).get("comment") or {}
             if not str(c.get("date", "")).startswith(dzis):
                 continue
-            # Notka nie ma posta pod soba; komentarz owszem.
-            if c.get("post_id"):
-                wynik["komentarze"] += 1
-            else:
+            # Notka nie ma posta pod soba; komentarz owszem — a komentarzy stad
+            # nie bierzemy, bo ten kanal ich nie zwraca.
+            if not c.get("post_id"):
                 wynik["notki"] += 1
         return wynik
     except Exception as exc:
