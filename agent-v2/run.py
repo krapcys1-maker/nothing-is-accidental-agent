@@ -174,9 +174,14 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 # Pod artykulem odpowiada sie inaczej niz pod notka — inny
                 # edytor i inny adres. Na razie obslugujemy notki; komentarze
                 # pod artykulami trafiaja do logu, zeby nie ginely.
+                # Dwa różne mechanizmy, bo Substack ma je różne: pod notką wątek
+                # jest płaski i odpowiada się w polu pod całą notką, pod
+                # artykułem każdy komentarz ma własny przycisk odpowiedzi —
+                # i tylko wtedy rozmówca dostaje powiadomienie.
                 if c.get("gdzie") == "artykul":
-                    print(f"  [czeka pod artykułem, odpowiedź gotowa] "
-                          f"{c.get('autor')}: {tekst[:70]}", flush=True)
+                    browser.wystaw_odpowiedz_pod_artykulem(
+                        c.get("url") or "", c.get("autor") or "", tekst,
+                        wyslij=True)
                 else:
                     browser.wystaw_odpowiedz(c["pod_id"], tekst, wyslij=True)
                 stages.odczekaj("odpowiedz")

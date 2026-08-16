@@ -1068,6 +1068,92 @@ def ustaw_oswiadczenie_ai(wyslij: bool = False) -> dict[str, Any]:
     return wynik
 
 
+def wystaw_odpowiedz_pod_artykulem(
+    url_artykulu: str, autor: str, tekst: str, wyslij: bool = False,
+) -> dict[str, Any]:
+    """Odpowiada pod KONKRETNYM komentarzem pod naszym artykułem.
+
+    Inny mechanizm niż pod notką: tam wątek jest płaski i odpowiada się w polu
+    pod całą notką, tu każdy komentarz ma własny przycisk odpowiedzi. Dzięki temu
+    rozmówca dostaje powiadomienie, a wątek czyta się jak rozmowa.
+    """
+    wyslij = naprawde_wyslac(wyslij, "odpowiedz pod artykułem")
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
+    try:
+        page.goto(url_artykulu.rstrip("/") + "/comments",
+                  timeout=READ_TIMEOUT_MS * 2, wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 6000)
+        page.mouse.wheel(0, 12_000)
+        page.wait_for_timeout(2500)
+
+        # Szukamy komentarza po autorze, a przycisk odpowiedzi w jego okolicy —
+        # inaczej trafilibyśmy w cudzy wątek.
+        # Przycisk odpowiedzi znajdujemy po ODLEGLOSCI OD KOMENTARZA, a nie po
+        # drzewie DOM: uklad zmienia sie miedzy widokami, a przy wielu
+        # komentarzach trafienie w cudzy watek byloby wpadka nie do cofniecia.
+        wybrany = page.evaluate("""(autor) => {
+            const kandydaci = [...document.querySelectorAll('*')].filter(
+                n => !n.children.length &&
+                     /^(reply|odpowiedz)$/i.test((n.innerText || '').trim()));
+            const kotwice = [...document.querySelectorAll('*')].filter(
+                n => !n.children.length &&
+                     (n.innerText || '').trim() === autor);
+            if (!kandydaci.length || !kotwice.length) return -1;
+            const k = kotwice[0].getBoundingClientRect();
+            let najlepszy = -1, naj = 1e9;
+            kandydaci.forEach((c, i) => {
+                const r = c.getBoundingClientRect();
+                const d = Math.hypot(r.top - k.top, r.left - k.left);
+                if (d < naj) { naj = d; najlepszy = i; }
+            });
+            kandydaci.forEach((c, i) => c.setAttribute('data-nia',
+                                                       i === najlepszy ? '1' : '0'));
+            return najlepszy;
+        }""", autor)
+        if wybrany < 0:
+            raise RuntimeError("nie znalazłem przycisku odpowiedzi")
+        przycisk = page.locator('[data-nia="1"]').first
+        print(f"  przycisk odpowiedzi znaleziony przy komentarzu {autor!r}",
+              flush=True)
+        przycisk.click(timeout=15_000)
+        page.wait_for_timeout(3000)
+
+        pole = page.locator("textarea").first
+        pole.click(timeout=10_000)
+        page.keyboard.type(tekst, delay=12)
+        page.wait_for_timeout(1500)
+        wynik["wpisane"] = True
+        print(f"  wpisane w pole odpowiedzi: {len(tekst.split())} słów", flush=True)
+
+        wyslac = None
+        for nazwa in ("Reply", "Post", "Odpowiedz", "Opublikuj"):
+            k = page.get_by_role("button", name=nazwa).first
+            if k.count() > 0 and k.is_visible():
+                wyslac = k
+                break
+        wynik["przycisk_widoczny"] = wyslac is not None
+
+        if wyslij and wyslac is not None:
+            wyslac.click()
+            page.wait_for_timeout(8000)
+            wynik["wyslane"] = potwierdz_komentarz(page, url_artykulu, tekst)
+            print("  ODPOWIEDŹ POD ARTYKUŁEM POTWIERDZONA" if wynik["wyslane"]
+                  else "  KLIKNIĘTE, ALE ODPOWIEDZI NIE WIDAĆ", flush=True)
+        elif not wyslij:
+            print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
+    except Exception as exc:
+        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        print(f"  BŁĄD: {wynik['blad']}", flush=True)
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+    return wynik
+
+
 def potwierdz_artykul(page, tytul: str) -> bool:
     """Pyta Substacka, czy artykuł naprawdę jest opublikowany."""
     probka = " ".join(tytul.split())[:50]
