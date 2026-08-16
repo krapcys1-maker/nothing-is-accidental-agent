@@ -495,6 +495,11 @@ RESTACK_DZIENNIE = (0, 0)         # ZABLOKOWANE do osobnej decyzji wlasciciela
 
 # Pierwszy miesiac na dolnej polowie widelek. Nowe konto z jednym artykulem,
 # ktore nagle obserwuje dwadziescia osob, wyglada dokladnie jak farma.
+# Ile razy dziennie odpala sie agent. Dzienny przydzial dzieli sie na tyle
+# przebiegow, zeby notki rozkladaly sie na GODZINY, a nie wychodzily jedna po
+# drugiej w odstepie trzech minut — to wlasciciel zauwazyl na profilu.
+PRZEBIEGOW_DZIENNIE = 3
+
 ROZBIEG_DNI = 30
 
 # Odstepy miedzy dzialaniami, w sekundach. Pietnascie polubien w dziewiecdziesiat

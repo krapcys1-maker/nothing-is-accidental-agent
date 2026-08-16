@@ -111,9 +111,24 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     import kanal
 
     budzet = stages.budzet_dnia(conn)
-    sesje = stages.sesje_dnia()
-    print(f"   posiedzenia dnia: "
-          + "  ".join(f"{s['godzina_utc']:02d}:{s['minuta']:02d}" for s in sesje),
+
+    # ILE JUZ DZIS POSZLO — pytamy Substacka, nie wlasnej ksiegowosci.
+    # Wlasciciel zauwazyl, ze dwie notki wyszly trzy minuty po sobie: caly
+    # dzienny przydzial szedl w jednym ciagu, bo przebieg robil wszystko naraz.
+    # Teraz zegar odpala agenta KILKA RAZY DZIENNIE, a kazdy przebieg dobiera
+    # tylko brakujaca czesc — dzieki temu notki rozkladaja sie na godziny,
+    # a nie na minuty.
+    import browser
+    juz = browser.ile_dzis_wystawione()
+    zostalo = {k: max(0, budzet[k] - juz.get(k, 0))
+               for k in ("notki", "komentarze", "lajki")}
+    # Na jeden przebieg bierzemy tylko czesc reszty, zeby zostalo na pozniej.
+    na_teraz = {k: max(1, round(v / max(1, config.PRZEBIEGOW_DZIENNIE)))
+                if v else 0 for k, v in zostalo.items()}
+    print(f"   dzis juz: notki={juz.get('notki', 0)} "
+          f"komentarze={juz.get('komentarze', 0)}   "
+          f"w tym przebiegu: notki={na_teraz['notki']} "
+          f"komentarze={na_teraz['komentarze']} lajki={na_teraz['lajki']}",
           flush=True)
     zrobione = {"notki": 0, "komentarze": 0, "odpowiedzi": 0, "polubienia": 0}
 
@@ -144,7 +159,10 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
 
     # --- 2. notki: pięć dziennie, każda z innego faktu ------------------------
     def notki() -> None:
-        for n in stages.notki_dnia(conn, run_id):
+        if not na_teraz["notki"]:
+            print("  dzienny przydzial notek juz wyczerpany", flush=True)
+            return
+        for n in stages.notki_dnia(conn, run_id)[: na_teraz["notki"]]:
             gotowe = [k for k in n["candidates"]
                       if k.get("safe_to_post") and k.get("length_ok")]
             if not gotowe:
@@ -157,7 +175,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     # --- 3. komentarze u innych ----------------------------------------------
     def komentarze() -> None:
         cele = stages.wybierz_cele(conn, run_id, kanal.posty_z_kanalu())
-        for cel in cele[: budzet["komentarze"]]:
+        for cel in cele[: na_teraz["komentarze"]]:
             strony = browser.read_pages([cel["url"]])
             if not strony or not strony[0].get("text"):
                 continue
@@ -174,7 +192,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
 
     # --- 4. polubienia: najtańszy uczciwy sygnał ------------------------------
     def polubienia() -> None:
-        w = browser.polub_w_kanale(budzet["lajki"], wyslij=wyslij)
+        w = browser.polub_w_kanale(na_teraz["lajki"], wyslij=wyslij)
         zrobione["polubienia"] = w.get("polubione", 0)
 
     for nazwa, robota in (("odpowiedzi", odpowiedzi), ("notki", notki),

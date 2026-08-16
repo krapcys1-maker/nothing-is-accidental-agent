@@ -520,6 +520,44 @@ def _kiedy(c: dict) -> float:
         return 0.0
 
 
+def ile_dzis_wystawione() -> dict[str, int]:
+    """Ile notek i komentarzy poszlo dzisiaj — wg SUBSTACKA, nie naszej ksiegowosci.
+
+    Rzeczywistosc jest zrodlem prawdy takze tutaj: gdyby liczyc z bazy, restart
+    albo przerwany przebieg rozjechalby licznik i agent wystawilby dzienna norme
+    drugi raz.
+    """
+    from datetime import datetime, timezone
+
+    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    wynik = {"notki": 0, "komentarze": 0, "lajki": 0}
+    try:
+        profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
+        if not isinstance(profil, dict) or not profil.get("id"):
+            return wynik
+        feed = api_json(page, f"/api/v1/reader/feed/profile/{profil['id']}") or {}
+        for x in feed.get("items", []):
+            c = (x or {}).get("comment") or {}
+            if not str(c.get("date", "")).startswith(dzis):
+                continue
+            # Notka nie ma posta pod soba; komentarz owszem.
+            if c.get("post_id"):
+                wynik["komentarze"] += 1
+            else:
+                wynik["notki"] += 1
+        return wynik
+    except Exception as exc:
+        print(f"  (nie policzylem dzisiejszych: {type(exc).__name__})", flush=True)
+        return wynik
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+
+
 def nieodpowiedziane(ile: int = 10) -> list[dict[str, Any]]:
     """Cudze odpowiedzi pod naszymi notkami, na które jeszcze nie odpisaliśmy.
 

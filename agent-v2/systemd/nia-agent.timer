@@ -2,16 +2,22 @@
 Description=Zegar agenta NIA
 
 [Timer]
-# Godziny w UTC, bo serwer chodzi na UTC i nie chcemy, zeby zmiana czasu
-# gdziekolwiek na swiecie przesuwala publikacje. Najlepsze okno dla notek to
-# 6:00-8:00 czasu wschodnioamerykanskiego, czyli 10:00-12:00 UTC latem.
-OnCalendar=*-*-* 10:30:00
+# TRZY uruchomienia dziennie, nie jedno. Wlasciciel zauwazyl, ze dwie notki
+# wyszly trzy minuty po sobie: caly dzienny przydzial szedl w jednym ciagu.
+# Kazdy przebieg dobiera tylko brakujaca czesc, wiec notki rozkladaja sie na
+# godziny.
+#
+# Godziny w UTC i wszystkie POZA szczytem taryfowym DeepSeeka (01-04 i 06-10),
+# wiec jedna decyzja zalatwia dwie rzeczy: wyglada po ludzku i kosztuje polowe.
+OnCalendar=*-*-* 11:20:00
+OnCalendar=*-*-* 16:40:00
+OnCalendar=*-*-* 20:10:00
 Persistent=true
 
-# Losowe opoznienie do 20 minut: agent odpalajacy sie co do sekundy o rownej
+# Losowe opoznienie do 25 minut: agent odpalajacy sie co do sekundy o rownej
 # godzinie kazdego dnia jest rozpoznawalny jako maszyna nawet bez patrzenia
 # w tresc.
-RandomizedDelaySec=1200
+RandomizedDelaySec=1500
 
 [Install]
 WantedBy=timers.target
