@@ -41,6 +41,21 @@ SESSION_COOKIE = "substack.sid"
 OSTRZEGAJ_PONIZEJ_DNI = 14
 
 
+def wlasciwe_konto(page) -> bool:
+    """Czy jestesmy na WLASCIWYM koncie tuz przed publikacja.
+
+    Automatyzacja przegladarki potrafi trafic w cudze okno albo w sesje sprzed
+    przelogowania. Tresc opublikowana z niewlasciwego konta jest bledem, ktorego
+    nie da sie cofnac w oczach tych, ktorzy ja zobaczyli — wiec pytamy o
+    tozsamosc, zamiast zakladac.
+    """
+    kto = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
+    ok = isinstance(kto, dict) and kto.get("handle") == PROFIL_HANDLE
+    if not ok:
+        print(f"  ! NIE TO KONTO albo brak sesji: {str(kto)[:80]}", flush=True)
+    return ok
+
+
 def naprawde_wyslac(wyslij: bool, co: str) -> bool:
     """Ostatnie sito przed KAZDYM dzialaniem widocznym publicznie.
 

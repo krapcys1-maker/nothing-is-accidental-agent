@@ -1,8 +1,13 @@
-"""Alarm do właściciela — jedyny kanał, którym agent mówi „stało się źle".
+"""Alarm do właściciela i kontrola zdrowia agenta.
 
 Agent chodzi bez nadzoru, więc cicha awaria jest gorsza od głośnej: gdy sesja
 Substacka wygaśnie, a nikt się nie dowie, konto milczy przez tydzień i dopiero
 wtedy ktoś zauważa. Ostrzeżenie wypisane na stdout serwera nie dociera do nikogo.
+
+Druga połowa pliku sprawdza rzeczy, których monitoring infrastruktury nie
+wykryje. Najgroźniejsza awaria nie polega na tym, że coś padnie — polega na tym,
+że WSZYSTKO ŚWIECI NA ZIELONO, a agent milczy od trzech dni albo publikuje
+bzdury. Serwer działa, API odpowiada, baza zapisuje, i nikt nie wie.
 
 Alarm jest RZADKI z założenia. Ten sam problem nie zgłasza się częściej niż raz
 na dobę, bo kanał, który dzwoni co godzinę, przestaje być czytany po dwóch dniach
@@ -13,6 +18,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import sqlite3
 import smtplib
 import ssl
 from datetime import datetime, timedelta, timezone
@@ -20,6 +27,7 @@ from email.message import EmailMessage
 from pathlib import Path
 
 import config
+import db
 
 HISTORIA = config.DATA_DIR / "alarmy.json"
 CISZA_GODZIN = 24
@@ -132,8 +140,6 @@ def sprawdz_przebiegi_i_ostrzez(ile: int = 3) -> None:
     rząd to awaria, która sama nie minie, a bez tego alarmu wyszłaby na jaw
     dopiero wtedy, gdy właściciel zajrzy na konto i zobaczy tydzień ciszy.
     """
-    import db
-
     conn = db.connect()
     ostatnie = conn.execute(
         "SELECT status, stage, note FROM runs WHERE status != 'RUNNING'"
@@ -152,6 +158,148 @@ def sprawdz_przebiegi_i_ostrzez(ile: int = 3) -> None:
                "  journalctl -u nia-agent.service -n 60 --no-pager")
 
 
+# Ile godzin ciszy uznajemy za awarie. Agent chodzi trzy razy dziennie, wiec
+# doba bez sladu znaczy, ze trzy przebiegi z rzedu sie nie odbyly.
+CISZA_ALARMOWA_H = 26
+
+# Progi zajetosci dysku. Pelny dysk to najbardziej podstepna awaria VPS-a: baza
+# przestaje zapisywac, logi znikaja, a proces dalej "dziala".
+DYSK_OSTRZEZENIE = 80
+DYSK_ALARM = 92
+
+# Ile najwyzej dzialan dziennie uznajemy za normalne. Powyzej tego cos sie
+# zapetlilo — a konto zbanowane za spam jest nie do odzyskania.
+MAX_DZIALAN_DZIENNIE = 60
+
+
+def _polaczenie() -> sqlite3.Connection:
+    conn = db.connect()
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def cisza() -> str | None:
+    """Czy agent w ogole cos ostatnio zrobil.
+
+    Awaria, ktorej nie widac: proces umiera, serwer dziala dalej, a nikt sie nie
+    dowiaduje przez trzy dni. Sprawdzenie ostatnich przebiegow nic nie da, bo
+    przy martwym agencie NOWYCH przebiegow po prostu nie ma.
+    """
+    conn = _polaczenie()
+    row = conn.execute("SELECT MAX(started_at) AS ostatni FROM runs").fetchone()
+    if not row or not row["ostatni"]:
+        return "Agent nie ma w bazie ANI JEDNEGO przebiegu."
+    try:
+        kiedy = datetime.fromisoformat(str(row["ostatni"]).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    godzin = (datetime.now(timezone.utc) - kiedy).total_seconds() / 3600
+    if godzin > CISZA_ALARMOWA_H:
+        return (f"Ostatni przebieg byl {godzin:.0f} godzin temu "
+                f"({kiedy:%Y-%m-%d %H:%M} UTC). Agent milczy.")
+    return None
+
+
+def zawieszone() -> str | None:
+    """Przebiegi, ktore zostaly w stanie RUNNING na zawsze."""
+    conn = _polaczenie()
+    granica = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
+    wiszace = conn.execute(
+        "SELECT id, started_at FROM runs WHERE status = 'RUNNING' AND started_at < ?",
+        (granica,),
+    ).fetchall()
+    if not wiszace:
+        return None
+    # Zamykamy je, zeby nie zasmiecaly obrazu — proces i tak juz nie zyje.
+    for r in wiszace:
+        db.finish_run(conn, r["id"], "STALE",
+                      "kontrola", "przebieg wisial ponad trzy godziny")
+    return (f"{len(wiszace)} przebiegow wisialo w stanie RUNNING ponad trzy "
+            f"godziny — zamkniete jako STALE (id: "
+            f"{', '.join(str(r['id']) for r in wiszace[:5])}).")
+
+
+def dysk() -> str | None:
+    uzyte, wolne = 0, 0
+    total, used, free = shutil.disk_usage(str(config.DATA_DIR))
+    procent = used / total * 100
+    if procent >= DYSK_ALARM:
+        return (f"Dysk zajety w {procent:.0f}% (wolne {free / 2**30:.1f} GB). "
+                "Przy pelnym dysku baza przestanie zapisywac.")
+    if procent >= DYSK_OSTRZEZENIE:
+        return f"Dysk zajety w {procent:.0f}% — warto posprzatac."
+    return None
+
+
+def nadaktywnosc() -> str | None:
+    """Czy agent nie zapetlil sie i nie zasypuje Substacka."""
+    conn = _polaczenie()
+    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    n = conn.execute(
+        "SELECT COUNT(*) AS n FROM calls WHERE date(at) = ? AND purpose IN "
+        "('note', 'comment', 'reply')", (dzis,),
+    ).fetchone()["n"]
+    if n > MAX_DZIALAN_DZIENNIE:
+        return (f"Dzis {n} wywolan tworzacych tresc przy suficie "
+                f"{MAX_DZIALAN_DZIENNIE}. Cos sie zapetlilo.")
+    return None
+
+
+def koszt() -> str | None:
+    conn = _polaczenie()
+    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    wydane = db.spent_usd(conn, dzis)
+    if wydane > config.DAILY_LIMIT_USD * 0.9:
+        return (f"Dzis wydane ${wydane:.2f} przy dziennym suficie "
+                f"${config.DAILY_LIMIT_USD}.")
+    return None
+
+
+def powtorki() -> str | None:
+    """Czy agent nie zaczal pisac wciaz tego samego.
+
+    Powtarzanie sie jest objawem, ktorego zaden monitoring infrastruktury nie
+    zobaczy: wszystko dziala, a konto zaczyna wygladac na zepsutego bota.
+    """
+    import stages
+
+    zuzyte = stages.wczytaj_zuzyte()[-30:]
+    if len(zuzyte) < 10:
+        return None
+    klucze = [stages._klucz_faktu(t) for t in zuzyte]
+    powtorzone = len(klucze) - len(set(klucze))
+    if powtorzone > len(klucze) * 0.2:
+        return (f"{powtorzone} z ostatnich {len(klucze)} faktow to powtorki. "
+                "Agent zaczyna sie zapetlac tematycznie.")
+    return None
+
+
+def sprawdz_wszystko() -> list[str]:
+    """Uruchamia komplet kontroli i alarmuje o tym, co znalazl."""
+    kontrole = (
+        ("cisza", "Agent milczy", cisza),
+        ("zawieszone", "Przebiegi wisialy w RUNNING", zawieszone),
+        ("dysk", "Dysk sie konczy", dysk),
+        ("nadaktywnosc", "Agent robi za duzo", nadaktywnosc),
+        ("koszt", "Koszt blisko sufitu", koszt),
+        ("powtorki", "Agent sie powtarza", powtorki),
+    )
+    znalezione: list[str] = []
+    for klucz, temat, funkcja in kontrole:
+        try:
+            wynik = funkcja()
+        except Exception as exc:
+            wynik = f"kontrola sama padla: {type(exc).__name__}: {exc}"
+        if wynik:
+            znalezione.append(f"[{klucz}] {wynik}")
+            wyslij(f"kontrola-{klucz}", temat, wynik)
+            print(f"  ! {klucz}: {wynik}", flush=True)
+        else:
+            print(f"  ok {klucz}", flush=True)
+    return znalezione
+
+
+
 if __name__ == "__main__":
     import sys
 
@@ -162,3 +310,5 @@ if __name__ == "__main__":
     else:
         sprawdz_sesje_i_ostrzez()
         sprawdz_przebiegi_i_ostrzez()
+        print("--- kontrola zdrowia ---", flush=True)
+        sprawdz_wszystko()

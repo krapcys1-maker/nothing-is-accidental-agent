@@ -9,6 +9,11 @@ User=ubuntu
 WorkingDirectory=/home/ubuntu/nothing-is-accidental-agent
 Environment=AGENT_V2_SERVER=1
 Environment=PYTHONUNBUFFERED=1
+
+# Sufit pamieci: Chromium potrafi rosnac przy dlugich przebiegach, a OOM zabija
+# agenta bez sladu w logu. Przy 12 GB na maszynie 3 GB starcza z zapasem,
+# a przekroczenie konczy sie czytelnym bledem zamiast cichej smierci.
+MemoryMax=3G
 ExecStart=/home/ubuntu/nothing-is-accidental-agent/.venv/bin/python agent-v2/run.py --dzien --wyslij
 
 # Przebieg trwa okolo godziny: same przerwy miedzy dzialaniami to ~42 minuty,
