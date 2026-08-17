@@ -1,0 +1,278 @@
+Starting nia-agent.service - Nothing Is Accidental — agent...
+== przebieg 5 ==
+  [budżet dnia — rozbieg] notki=5  lajki=13  komentarze=16  follow=1  subskrypcje=0  restacki=0
+   dzis juz: notki=2 komentarze=0 lajki=0   przebiegow zostalo: 2   w tym przebiegu: notki=2 komentarze=8 lajki=6
+   okno publikacji: TAK — 07:35 u czytelnikow
+-- odpowiedzi --
+  czeka na odpowiedź: 0
+  pod artykulami czeka: 0
+-- notki --
+  [curiosity] deepseek-v4-flash  wej=139397 wyj=16930 szukania=14  $0.0243
+  [ciekawostki] z pokryciem: 8
+    · [money / payments] Every US paper bill in your wallet is the same size — 6.14 x 2.61 inches — a uniform sma
+    · [radio / broadcasti] Many US AM radio stations are required by FCC rules to reduce power or go off the air at
+    · [office paper / sta] A4 paper is not an arbitrary rectangle — it comes from a 1922 German standard (DIN 476)
+    · [roads / highways] US interstate exit numbers are not sequential — they are mile markers, so an exit labele
+    · [fire / urban infra] Fire hydrant caps aren't randomly colored — the NFPA 291 standard color-codes them by fl
+    · [gas stations / ret] The colors of gas pump nozzle handles — yellow for E85, green for diesel, black for regu
+    · [supermarkets / ret] Many supermarket shopping carts automatically lock a wheel when rolled past the edge of
+    · [home electrical] On most US two-prong plugs the two blades are different widths — the wider one is neutra
+  [CIEKAWOSTKA]
+  [note] deepseek-v4-pro  wej=182 wyj=506  $0.0010
+  [notka 1]  41 słów OK   Every US paper bill is the same size, 6.14 by 2.61 inches. That uniformity dat
+  [note] deepseek-v4-pro  wej=54 wyj=1351  $0.0017
+  [notka 2]  44 słów OK   Every U.S. bill is 6.14 by 2.61 inches because in 1929 the Treasury shrank all
+  [note] deepseek-v4-pro  wej=54 wyj=1172  $0.0015
+  [notka 3]  36 słów OK   Every US paper bill is 6.14 by 2.61 inches because the Treasury standardized a
+  [factcheck] deepseek-v4-flash  wej=11211 wyj=1073 szukania=3  $0.0019
+  [CIEKAWOSTKA]
+  [note] deepseek-v4-pro  wej=175 wyj=423  $0.0009
+  [notka 1]  43 słów OK   An AM station can legally run 50,000 watts in daylight and still have to cut p
+  [note] deepseek-v4-pro  wej=47 wyj=1407  $0.0017
+  [notka 2]  52 słów OK   Many US AM stations must reduce power or go off air at night. The FCC requires
+  [note] deepseek-v4-pro  wej=47 wyj=1847  $0.0021
+  [notka 3]  42 słów OK   A 50,000-watt AM station is legal by day. After sunset it must cut power or go
+  [factcheck] deepseek-v4-flash  wej=15207 wyj=1284 szukania=6  $0.0025
+  [DYSKUSJA]
+  [note] deepseek-v4-pro  wej=233 wyj=1313  $0.0017
+  [notka 1]  39 słów OK   A4 did not come from ergonomics. It came from a 1922 German standard built on
+  [note] deepseek-v4-pro  wej=105 wyj=1727  $0.0020
+  [notka 2]  48 słów OK   Paper sizes are not natural. A4 is a 1922 German standard, DIN 476, built on a
+  [note] deepseek-v4-pro  wej=105 wyj=3373  $0.0035
+  [notka 3]  43 słów OK   The A4 size is a decision, not an accident. Walter Porstmann's 1922 standard m
+  [factcheck] deepseek-v4-flash  wej=7357 wyj=791 szukania=2  $0.0013
+  [SPROSTOWANIE]
+  [note] deepseek-v4-pro  wej=192 wyj=1510  $0.0018
+  [notka 1]  40 słów OK   People read exit numbers as a count. The record says otherwise. The federal Ma
+  [note] deepseek-v4-pro  wej=64 wyj=1387  $0.0017
+  [notka 2]  43 słów OK   Interstate exits seem numbered in order, but Exit 63 is not the 63rd exit. It
+  [note] deepseek-v4-pro  wej=64 wyj=1543  $0.0019
+  [notka 3]  55 słów OK   Exit numbers look like a count. That is reasonable. The next exit is usually o
+  [factcheck] deepseek-v4-flash  wej=57551 wyj=2109 szukania=10  $0.0086
+  [CIEKAWOSTKA]
+  [note] deepseek-v4-pro  wej=192 wyj=1851  $0.0021
+  [notka 1]  41 słów OK   A fire hydrant's painted cap is a flow rating. NFPA 291 spells it out. Light b
+  [note] deepseek-v4-pro  wej=64 wyj=1487  $0.0018
+  [notka 2]  34 słów OK   The colors on a fire hydrant are not decorative. NFPA 291 codes caps by flow c
+  [note] deepseek-v4-pro  wej=64 wyj=1067  $0.0015
+  [notka 3]  39 słów OK   Fire hydrant caps are a code, not decoration. NFPA 291 colors them by flow cap
+  [factcheck] deepseek-v4-flash  wej=13423 wyj=1877 szukania=5  $0.0024
+  wpisane w pole notki: 41 słów
+  przycisk wysyłki: 'Post'
+  przycisk wysyłki widoczny: True
+  NOTKA PRZYJETA (odpowiedz Substacka: 200)
+  (przerwa 17.1 min przed kolejnym działaniem)
+  wpisane w pole notki: 43 słów
+  przycisk wysyłki: 'Post'
+  przycisk wysyłki widoczny: True
+  NOTKA PRZYJETA (odpowiedz Substacka: 200)
+  (przerwa 13.0 min przed kolejnym działaniem)
+-- komentarze --
+  [szukanie] hasla: hidden fees, zoning, building codes regulation
+  [szukanie] nowych celow: 20   (odrzucone: 1 świeżych, 0 znanych, 0 naszych)
+  [kanał] postów: 11   nowych autorów: 11   odrzucone: 0 za świeżych, 0 bo niedawno tam komentowaliśmy
+  [cele] deepseek-v4-flash  wej=2022 wyj=14030  $0.0043
+  nie  [0] you're too cool to not be financially literate  — The post is an identity-branded finance listicle;
+  TAK  [1] Dear architects, what is preventing you from buildin
+       The binding constraint is usually not architects' taste but zoning: setbacks and floor-are
+  nie  [2] 10 Micro Income Streams That Quietly Build Financial  — Promotional/affiliate income-stream content; no sy
+  TAK  [3] Inclusionary zoning is a tax on new construction
+       The tax is paid in units, not cash, so its incidence is invisible; a flat fee per unit wou
+  TAK  [4] It is hard to understate just how brutally building
+       The effective mechanism is licensed-trade and stamped-plan requirements: they turn complia
+  TAK  [5] ICYMI:
+The reign of Visa and Mastercard is coming
+       This is happening only in Europe because PSD2 forced banks to open payment APIs; 'Pay by B
+  nie  [6] A Room Full of People Who Aren’t on the Keyboard  — Executives who code is a culture signal, not a mec
+  nie  [7] 7 Money Rules You Should Know by 30  — Generic personal-finance rules; no system undernea
+  nie  [8] How Being Cheap Is Keeping You Broke  — A personal-finance platitude; no hidden system to
+  TAK  [9] American zoning codes are afraid of beauty.
+       Zoning codes avoid 'beauty' because aesthetics are too vague for due-process review, so th
+  TAK  [10] claude code is not making your product better
+       Goodhart's law applies: when engineering is measured in completed tasks, coding agents inf
+  nie  [11] Spending Money For Maximum Return: Stop Buying Thing  — Self-help money advice; no mechanism to add.
+  TAK  [12] Ending Junk Fees, the Most Annoying Thing in America
+       Junk fees work by decoupling the anchor price from the total price; the FTC rule is a fram
+  nie  [13] The 21st Century ROAD to Housing Act finally passed   — The post already names the build-to-rent removal;
+  nie  [14] Hey ... can you pay me back now?   — The Airbnb split is a social-awkwardness story, no
+  TAK  [15] Submission Fees Are Wrong
+       Submission fees create a perverse incentive: publishers profit from rejection, so the reje
+  nie  [16] It was brought to my attention recently that there a  — The post is a local alert about a specific zoning
+  TAK  [17] Can We Lower Construction Costs with Cheaper Labor o
+       The cost problem is not cheaper inputs but the one-off prototyping of buildings; standardi
+  TAK  [18] The Zoning Rule That Broke the American City Block
+       Setback rules force a minimum distance from every lot line and thus outlaw the shared part
+  nie  [19] Local jurisdictions basically rob Americans of their  — The post is an opinion rant; the legal mechanism o
+  nie  [20] Design Study #4: The Arts & Crafts Movement  — An art-history overview; the craft/industry contra
+  nie  [21] De ce plecăm pe Via Transilvanica cu un copil de 15   — A personal travel/family journal; there is no syst
+  nie  [22] 7 Surprising Bonuses You Might Be Missing at Online   — Online casino bonuses are gambling content; refuse
+  nie  [23] Quote of The Day #051  — Quote of the day; no system or concrete addition.
+  nie  [24] W&A Summer Sale Is On!  — A promotional sale announcement; refuse outright.
+  nie  [25] The psychology of angel numbers   — Angel numbers are a numerology/manifestation genre
+  nie  [26] A New Short Story by Emma Cline  — A short story; it isn't an ordinary thing with a h
+  nie  [27] “At some point in the future, something that is curr  — A newsletter digest; the hook is a generic predict
+  nie  [28] Study of The Week: how you speak to yourself will re  — Self-affirmation pop psychology is unfalsifiable a
+  TAK  [29] Nobody Quantized Your Chatbot. They Just Told It to
+       Quantization changes the precision of arithmetic while 'stop thinking' changes inference-t
+  nie  [30] You're Already Winning. At The Wrong Thing.  — A personal essay about goals; no hidden system to
+  [cele] warte komentarza: 11/31
+  [przeglądarka] OK      6322 znaków  https://substack.com/note/c-198299444
+  [comment] deepseek-v4-pro  wej=1938 wyj=3161  $0.0040
+  [komentarz 1] 16 słów — Names the low-bid procurement mechanism as the point where ornament is
+  [comment] deepseek-v4-pro  wej=18 wyj=2417  $0.0034
+  [komentarz 2] 14 słów — Reframes the loss as a change in commissioning intent, not in architec
+  [comment] deepseek-v4-pro  wej=18 wyj=1594  $0.0027
+  [komentarz 3] 14 słów — It identifies the developer's incentive to maximise rentable floor are
+  [factcheck] deepseek-v4-flash  wej=21954 wyj=1169 szukania=5  $0.0034
+    · nieznalezione: The constraint is procurement, not taste.
+    · nieznalezione: Ornament is the first line item cut in low-bid awards.
+    -> PRZECHODZI: No source contradicts either assertion; the claim about ornament being the fir
+  BŁĄD: Error: Page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at https://substack.com/api/v1/posts/c-198299444
+Call log:
+  - navigating to "https://substack.com/api/v1/posts/c-198299444", waiting until "domco
+  (przerwa 4.5 min przed kolejnym działaniem)
+  [przeglądarka] OK     15026 znaków  https://www.slowboring.com/p/inclusionary-zoning-is-a-tax-
+  [comment] deepseek-v4-pro  wej=2871 wyj=767  $0.0024
+  [komentarz 1] 45 słów — Names the fiscal-illusion mechanism that makes inclusionary zoning pol
+  [comment] deepseek-v4-pro  wej=55 wyj=790  $0.0024
+  [komentarz 2] 53 słów — Names the political incentive that makes IZ persist despite its econom
+  [comment] deepseek-v4-pro  wej=55 wyj=1478  $0.0030
+  [komentarz 3] 44 słów — Explains the political incentive that keeps inclusionary zoning in pla
+  [factcheck] deepseek-v4-flash  wej=9912 wyj=1799 szukania=3  $0.0019
+    -> PRZECHODZI: The text's claims about inclusionary zoning's cost structure (off-budget, diff
+  wpisane w pole komentarza: 45 słów
+  przycisk wysyłki: 'Comment'
+  przycisk wysyłki widoczny: True
+  KLIKNIĘTE, ALE SUBSTACK GO NIE POKAZUJE
+  (przerwa 4.2 min przed kolejnym działaniem)
+  [przeglądarka] OK     10866 znaków  https://substack.com/note/c-227416186
+  [comment] deepseek-v4-pro  wej=2985 wyj=1961  $0.0034
+  [komentarz 1] 43 słów — Names financing and FHA minimum property standards as the mechanism th
+  [comment] deepseek-v4-pro  wej=41 wyj=2695  $0.0041
+  [komentarz 2] 31 słów — Names the homevoter incentive behind building restrictions, turning th
+  [comment] deepseek-v4-pro  wej=41 wyj=1200  $0.0028
+  [komentarz 3] 30 słów — It names the mortgage insurance mechanism that converts code complianc
+  [factcheck] deepseek-v4-flash  wej=29194 wyj=4531 szukania=4  $0.0054
+    · nieznalezione: That, not the safety rationale alone, is what dragged owner-builders into the sa
+    -> PRZECHODZI: The factual claims about FHA minimum property standards and mortgage underwrit
+  BŁĄD: Error: Page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at https://substack.com/api/v1/posts/c-227416186
+Call log:
+  - navigating to "https://substack.com/api/v1/posts/c-227416186", waiting until "domco
+  (przerwa 3.2 min przed kolejnym działaniem)
+  [przeglądarka] OK      4909 znaków  https://substack.com/note/c-242852360
+  [comment] deepseek-v4-pro  wej=1764 wyj=1858  $0.0028
+  [komentarz 1] 33 słów — Names the hidden trade-off of cutting card fees while shifting dispute
+  [comment] deepseek-v4-pro  wej=100 wyj=2137  $0.0031
+  [komentarz 2] 16 słów — Corrects the post's framing by identifying iDEAL as the long-standing
+  [comment] deepseek-v4-pro  wej=100 wyj=2319  $0.0032
+  [komentarz 3] 14 słów — Names the chargeback liability gap that the post omits.
+  [factcheck] deepseek-v4-flash  wej=35659 wyj=3269 szukania=5  $0.0059
+    -> PRZECHODZI: Both factual claims are confirmed by multiple payments-industry sources descri
+  BŁĄD: Error: Page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at https://substack.com/api/v1/posts/c-242852360
+Call log:
+  - navigating to "https://substack.com/api/v1/posts/c-242852360", waiting until "domco
+  (przerwa 3.5 min przed kolejnym działaniem)
+  [przeglądarka] OK      4162 znaków  https://substack.com/note/c-303028041
+  [comment] deepseek-v4-pro  wej=1099 wyj=4558  $0.0051
+  [komentarz 1] 34 słów — Names the numeric standards that exclude the traditional form before a
+  [comment] deepseek-v4-pro  wej=75 wyj=1003  $0.0020
+  [komentarz 2] 47 słów — Names the specific operational fears embedded in zoning that cause bea
+  [comment] deepseek-v4-pro  wej=75 wyj=3257  $0.0039
+  [komentarz 3] 47 słów — Names the legal defensibility incentive that pushes zoning toward meas
+  [factcheck] deepseek-v4-flash  wej=5249 wyj=968 szukania=1  $0.0010
+    · nieznalezione: The top image fails those tests (parking, fire access, setback) before any aesth
+    · nieznalezione: The bottom image is what those numeric standards produce.
+    -> PRZECHODZI: The general factual assertion about zoning codes containing parking minimums,
+  BŁĄD: Error: Page.goto: net::ERR_HTTP_RESPONSE_CODE_FAILURE at https://substack.com/api/v1/posts/c-303028041
+Call log:
+  - navigating to "https://substack.com/api/v1/posts/c-303028041", waiting until "domco
+  (przerwa 7.1 min przed kolejnym działaniem)
+  [przeglądarka] OK     14096 znaków  https://ethanding.substack.com/p/claude-code-is-not-making
+  [comment] deepseek-v4-pro  wej=2709 wyj=1359  $0.0030
+  [komentarz 1] 22 słów — Names the buyer incentive for features over maintainability that the p
+  [comment] deepseek-v4-pro  wej=21 wyj=850  $0.0025
+  [komentarz 2] 18 słów — It names the incentive mechanism behind the bloat the post describes.
+  [comment] deepseek-v4-pro  wej=21 wyj=2266  $0.0038
+  [komentarz 3] 25 słów — It adds the pricing incentive that makes code generation misaligned wi
+  [factcheck] deepseek-v4-flash  wej=14492 wyj=3283 szukania=4  $0.0029
+    · nieznalezione: Buyers pay for shipped features, not deletion
+    · nieznalezione: Agents optimize what gets paid for
+    -> PRZECHODZI: Both statements are economic/incentive arguments with no source directly confi
+  wpisane w pole komentarza: 22 słów
+  przycisk wysyłki: 'Post'
+  przycisk wysyłki widoczny: True
+  KOMENTARZ POTWIERDZONY U SUBSTACKA
+  (przerwa 7.2 min przed kolejnym działaniem)
+  [przeglądarka] OK     14407 znaków  https://www.thebignewsletter.com/p/ending-junk-fees-the-mo
+  [comment] deepseek-v4-pro  wej=2602 wyj=3322  $0.0046
+  [komentarz 1] 43 słów — It names the major questions doctrine as the likely legal vulnerabilit
+  [comment] deepseek-v4-pro  wej=42 wyj=945  $0.0026
+  [komentarz 2] 49 słów — Names the intermediary incentive that could preserve deceptive sorting
+  [comment] deepseek-v4-pro  wej=42 wyj=2206  $0.0037
+  [komentarz 3] 51 słów — Names attention as the underlying asset that junk fees monetize, and w
+  [factcheck] deepseek-v4-flash  wej=58065 wyj=3773 szukania=8  $0.0092
+    -> PRZECHODZI: Both factual assertions are supported by sources: the Chamber invoked the majo
+  wpisane w pole komentarza: 43 słów
+  przycisk wysyłki: 'Comment'
+  przycisk wysyłki widoczny: True
+  KLIKNIĘTE, ALE SUBSTACK GO NIE POKAZUJE
+  (przerwa 4.9 min przed kolejnym działaniem)
+  [przeglądarka] OK      1032 znaków  https://litmagnews.substack.com/p/submission-fees-are-wron
+  [comment] deepseek-v4-pro  wej=273 wyj=2560  $0.0030
+  [komentarz 1] 17 słów — It names the specific failure (fee without reading) rather than condem
+  [comment] deepseek-v4-pro  wej=17 wyj=689  $0.0013
+  [komentarz 2] MILCZY — The post is paywalled and no specific claim is available to engage wit
+  [comment] deepseek-v4-pro  wej=17 wyj=2692  $0.0031
+  [komentarz 3] 16 słów — It names the fee-as-filter mechanism and shifts the argument from whet
+  [factcheck] deepseek-v4-flash  wej=4594 wyj=969 szukania=1  $0.0009
+    · nieznalezione: The submission fee itself is not the real problem
+    · nieznalezione: Some magazines collect submission fees without genuinely reading the submissions
+    -> PRZECHODZI: The text is a position statement about incentives rather than a set of checkab
+  BŁĄD: TimeoutError: Locator.click: Timeout 15000ms exceeded.
+Call log:
+  - waiting for locator("textarea").first
+  (przerwa 3.3 min przed kolejnym działaniem)
+-- dyskusje --
+  [notki innych] 2 do rozwazenia   (2 odrzuconych jako za swieze)
+  [cele] deepseek-v4-flash  wej=331 wyj=4044  $0.0013
+  TAK  [0] The EU just gave AI companies up to 16 more months t
+       The delay is the Commission buying time because high-risk obligations are tied to harmonis
+  nie  [1]
+Sometimes I wish we could go back to a life before  — It's a nostalgic reflection rather than a claim ab
+  [cele] warte komentarza: 1/2
+  [comment] deepseek-v4-pro  wej=514 wyj=1190  $0.0017
+  [komentarz 1] 26 słów — It names the sequencing as a political trade: delay on cost, speed on
+  [comment] deepseek-v4-pro  wej=2 wyj=3355  $0.0036
+  [komentarz 2] 27 słów — It attributes the delay to the standards-setting timetable, which the
+  [comment] deepseek-v4-pro  wej=2 wyj=524  $0.0011
+  [komentarz 3] 28 słów — Names the sequencing mechanism: delay where costs are high, ban where
+  [factcheck] deepseek-v4-flash  wej=14842 wyj=2179 szukania=3  $0.0027
+    · nieznalezione: The delay buys industry goodwill on costly compliance
+    · nieznalezione: The content rules give regulators an immediate visible win
+    · nieznalezione: The extension and the bans are one move
+    -> PRZECHODZI: The text is an interpretive argument about regulators' motives and consequence
+  wpisane w pole odpowiedzi: 26 słów
+  przycisk wysyłki: 'Post'
+  ODPOWIEDŹ POTWIERDZONA W WĄTKU
+  (przerwa 4.5 min przed kolejnym działaniem)
+-- obserwowanie --
+  przycisk: 'Subscribe'
+  KLIKNIETE, ALE STAN SIE NIE ZMIENIL
+  (przerwa 3.9 min przed kolejnym działaniem)
+-- polubienia --
+  do polubienia w kanale: 6
+  polubione 1/6
+  polubione 2/6
+  polubione 3/6
+  polubione 4/6
+  polubione 5/6
+  polubione 6/6
+== dzień zamknięty ==
+   notki: 2
+   komentarze: 9
+   odpowiedzi: 0
+   polubienia: 6
+== koszt przebiegu: $0.1890 w 59 wywołaniach ==
+nia-agent.service: Deactivated successfully.
+Finished nia-agent.service - Nothing Is Accidental — agent.
+nia-agent.service: Consumed 1min 25.747s CPU time over 2h 38.106s wall clock time, 523.1M memory peak.

@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" width="1000" height="620" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <style>
+    .tlo   { fill: #ffffff; }
+    .box   { fill: #f6f6f4; stroke: #d8d5cf; stroke-width: 1.5; rx: 8; }
+    .akcent{ fill: #fdf2e9; stroke: #e8a04a; stroke-width: 1.5; rx: 8; }
+    .zewn  { fill: #eef2f7; stroke: #9db4cd; stroke-width: 1.5; rx: 8; }
+    .tyt   { font-size: 15px; font-weight: 650; fill: #1b1b1a; }
+    .txt   { font-size: 12.5px; fill: #4a4a46; }
+    .mini  { font-size: 11px; fill: #78766f; }
+    .strz  { stroke: #9c9990; stroke-width: 1.6; fill: none; marker-end: url(#grot); }
+    .strz2 { stroke: #e8a04a; stroke-width: 1.8; fill: none; marker-end: url(#grotp); }
+    .naglowek { font-size: 19px; font-weight: 700; fill: #1b1b1a; }
+  </style>
+  <defs>
+    <marker id="grot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#9c9990"/>
+    </marker>
+    <marker id="grotp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#e8a04a"/>
+    </marker>
+  </defs>
+
+  <rect class="tlo" x="0" y="0" width="1000" height="620"/>
+  <text class="naglowek" x="40" y="42">Nothing Is Accidental — jak przebiega jeden dzień agenta</text>
+
+  <!-- harmonogram -->
+  <rect class="box" x="40" y="72" width="196" height="72"/>
+  <text class="tyt" x="56" y="98">systemd — zegar</text>
+  <text class="txt" x="56" y="118">3× dziennie: 11, 15, 20 UTC</text>
+  <text class="mini" x="56" y="135">losowy poślizg do 25 minut</text>
+
+  <!-- zamek -->
+  <rect class="box" x="40" y="168" width="196" height="66"/>
+  <text class="tyt" x="56" y="193">zamek na pliku</text>
+  <text class="mini" x="56" y="212">dwa przebiegi naraz =</text>
+  <text class="mini" x="56" y="227">dwa razy ta sama treść</text>
+
+  <!-- budzet -->
+  <rect class="box" x="40" y="258" width="196" height="86"/>
+  <text class="tyt" x="56" y="283">budżet dnia</text>
+  <text class="txt" x="56" y="303">notki 5 · komentarze 15–20</text>
+  <text class="txt" x="56" y="320">polubienia 12–20</text>
+  <text class="mini" x="56" y="336">widełki losowane, nie stałe</text>
+
+  <!-- ile juz -->
+  <rect class="akcent" x="40" y="368" width="196" height="92"/>
+  <text class="tyt" x="56" y="393">ile już dziś poszło</text>
+  <text class="txt" x="56" y="413">notki — pytamy Substacka</text>
+  <text class="txt" x="56" y="430">reszta — z dziennika</text>
+  <text class="mini" x="56" y="450">rzeczywistość, nie księgowość</text>
+
+  <line class="strz" x1="138" y1="144" x2="138" y2="166"/>
+  <line class="strz" x1="138" y1="234" x2="138" y2="256"/>
+  <line class="strz" x1="138" y1="344" x2="138" y2="366"/>
+  <line class="strz" x1="236" y1="414" x2="288" y2="414"/>
+  <path class="strz" d="M 236 108 L 262 108 L 262 300 L 288 300"/>
+
+  <!-- bloki dnia -->
+  <rect class="box" x="292" y="72" width="330" height="388"/>
+  <text class="tyt" x="310" y="98">przebieg dnia — sześć bloków</text>
+  <text class="mini" x="310" y="116">każdy osobno: padnięty nie zabiera reszty</text>
+
+  <g class="txt">
+    <rect class="akcent" x="310" y="130" width="294" height="46"/>
+    <text class="tyt" x="326" y="150">1 · odpowiedzi</text>
+    <text class="mini" x="326" y="167">poza limitem — u siebie jesteśmy gospodarzem</text>
+
+    <rect class="box" x="310" y="184" width="294" height="44"/>
+    <text class="tyt" x="326" y="204">2 · notki</text>
+    <text class="mini" x="326" y="220">fakt ze źródłem, 3 warianty, wychodzi jeden</text>
+
+    <rect class="box" x="310" y="236" width="294" height="44"/>
+    <text class="tyt" x="326" y="256">3 · komentarze u obcych</text>
+    <text class="mini" x="326" y="272">wcześnie przed głośno; milczenie domyślne</text>
+
+    <rect class="box" x="310" y="288" width="294" height="44"/>
+    <text class="tyt" x="326" y="308">4 · dyskusje pod cudzymi notkami</text>
+    <text class="mini" x="326" y="324">krótszy próg świeżości — notka gaśnie w godziny</text>
+
+    <rect class="box" x="310" y="340" width="294" height="44"/>
+    <text class="tyt" x="326" y="360">5 · obserwowanie</text>
+    <text class="mini" x="326" y="376">tylko tych, u których naprawdę byliśmy</text>
+
+    <rect class="box" x="310" y="392" width="294" height="44"/>
+    <text class="tyt" x="326" y="412">6 · polubienia</text>
+    <text class="mini" x="326" y="428">odstępy 30–90 s</text>
+  </g>
+
+  <!-- przegladarka -->
+  <rect class="zewn" x="676" y="130" width="284" height="104"/>
+  <text class="tyt" x="694" y="156">prawdziwy Chrome</text>
+  <text class="txt" x="694" y="176">na wirtualnym ekranie, sterowany</text>
+  <text class="txt" x="694" y="193">przez protokół debugowania</text>
+  <text class="mini" x="694" y="213">tryb bezgłowy jest odrzucany przy publikacji</text>
+
+  <!-- substack -->
+  <rect class="zewn" x="676" y="258" width="284" height="98"/>
+  <text class="tyt" x="694" y="284">Substack</text>
+  <text class="txt" x="694" y="304">publikacja i odczyt endpointów,</text>
+  <text class="txt" x="694" y="321">których używa sam interfejs</text>
+  <text class="mini" x="694" y="341">odczyt nawigacją, nie fetch — inaczej 403</text>
+
+  <!-- potwierdzenie -->
+  <rect class="akcent" x="676" y="380" width="284" height="80"/>
+  <text class="tyt" x="694" y="406">potwierdzenie u źródła</text>
+  <text class="txt" x="694" y="426">kliknięcie nie jest dowodem —</text>
+  <text class="txt" x="694" y="443">pytamy, czy treść naprawdę wisi</text>
+
+  <line class="strz" x1="622" y1="182" x2="674" y2="182"/>
+  <line class="strz" x1="818" y1="234" x2="818" y2="256"/>
+  <line class="strz" x1="818" y1="356" x2="818" y2="378"/>
+
+  <!-- dziennik -->
+  <rect class="akcent" x="292" y="486" width="668" height="96"/>
+  <text class="tyt" x="310" y="512">dziennik działań i skutków</text>
+  <text class="txt" x="310" y="533">co zrobił · ilu komentarzy było przed nami · skąd przyszedł cel · jak duża publiczność</text>
+  <text class="txt" x="310" y="551">kto polubił · kto odpowiedział · kto zaczął obserwować</text>
+  <text class="mini" x="310" y="570">bez tych liczb nie da się odpowiedzieć na jedyne pytanie, które coś zmienia: czy warto było</text>
+
+  <path class="strz2" d="M 456 460 L 456 484"/>
+  <path class="strz2" d="M 818 460 L 818 470 L 700 470 L 700 484"/>
+
+  <!-- kontrola -->
+  <rect class="box" x="40" y="486" width="196" height="96"/>
+  <text class="tyt" x="56" y="512">kontrola zdrowia</text>
+  <text class="mini" x="56" y="532">cisza · zawieszone · dysk</text>
+  <text class="mini" x="56" y="548">nadaktywność · koszt · powtórki</text>
+  <text class="mini" x="56" y="570">alarm mailem do właściciela</text>
+</svg>
