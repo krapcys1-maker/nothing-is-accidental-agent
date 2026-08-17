@@ -1869,6 +1869,11 @@ def potwierdz_komentarz(page, url: str, tekst: str) -> int | None:
     ze cos napisalismy, a nie czy ktokolwiek to zauwazyl.
 
     Numer jest prawdziwy, wiec nadal dziala jak „tak"; brak to None.
+
+    Gdy komentarz JEST, ale odpowiedz nie podaje numeru, oddajemy -1, nie None.
+    Ta funkcja pilnuje takze, zeby nie napisac drugi raz pod tym samym tekstem,
+    a None znaczyloby „nie ma" i agent dopisalby kolejny komentarz — czyli
+    dokladnie ten podpis bota, ktorego unikamy.
     """
     from urllib.parse import urlparse
 
@@ -1888,7 +1893,7 @@ def potwierdz_komentarz(page, url: str, tekst: str) -> int | None:
                          for c in _plaskie(g)]
             for c in wszystkie:
                 if probka in " ".join((c.get("body") or "").split()):
-                    return c.get("id")
+                    return c.get("id") or -1
             if nr < 3:
                 page.wait_for_timeout(8000)
         return None
@@ -1907,7 +1912,7 @@ def potwierdz_komentarz(page, url: str, tekst: str) -> int | None:
         for k in lista:
             if isinstance(k, dict) and probka in " ".join(
                     (k.get("body") or "").split()):
-                return k.get("id")
+                return k.get("id") or -1
         if nr < 3:
             page.wait_for_timeout(8000)
     return None
