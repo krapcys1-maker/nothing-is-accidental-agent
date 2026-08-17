@@ -243,6 +243,11 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 # notka nie poszla albo gdy przebieg byl tylko sprawdzeniem.
                 if wynik.get("wyslane") and n.get("fakt"):
                     stages.zapisz_zuzyte([n["fakt"]])
+                # Dzien promocji artykulu tez odhaczamy dopiero po publikacji —
+                # inaczej artykul dostawal mniej niz piec notek promujacych,
+                # a nikt by tego nie zauwazyl.
+                if wynik.get("wyslane") and n.get("promocja_url"):
+                    stages.odhacz_promocje(n["promocja_url"])
                 stages.odczekaj("notka")
             zrobione["notki"] += 1
 

@@ -771,9 +771,14 @@ def notki_dnia(
         # Fakt jedzie razem z notka, zeby `run.py` mial co odhaczyc dopiero
         # wtedy, gdy notka naprawde pojdzie w swiat.
         wynik["fakt"] = material.get("fact") if isinstance(material, dict) else None
+        # Ta sama zasada co przy faktach: dzien promocji odhacza ten, kto notke
+        # NAPRAWDE wystawil. Wystarczylo, ze kandydat przeszedl bramke — wiec
+        # nieudana publikacja albo zwykle sprawdzenie zjadaly po cichu jeden
+        # z pieciu dni promocji artykulu. Zlapane przez test, ktory pilnuje,
+        # czy przebieg bez publikowania rusza pliki produkcji.
         if typ == "ARTYKUL" and promowany and any(
                 k.get("safe_to_post") for k in wynik["candidates"]):
-            odhacz_promocje(promowany["url"])
+            wynik["promocja_url"] = promowany["url"]
             promowany = None
         dzien.append(wynik)
     return dzien
