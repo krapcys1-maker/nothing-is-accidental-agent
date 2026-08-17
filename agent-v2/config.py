@@ -579,6 +579,18 @@ RESTACK_DZIENNIE = (0, 0)         # ZABLOKOWANE do osobnej decyzji wlasciciela
 # drugiej w odstepie trzech minut — to wlasciciel zauwazyl na profilu.
 PRZEBIEGOW_DZIENNIE = 3
 
+# ILE CZASU MA PRZEBIEG. Musi zgadzac sie z `TimeoutStartSec` w pliku uslugi —
+# to jedyne miejsce, gdzie ta sama liczba stoi dwa razy, i pilnuje tego test,
+# bo rozjazd wychodzilby dopiero przy realnym przebiegu.
+#
+# 16 sierpnia systemd ubil przebieg po 2,5 h, bo mial do wystawienia szesnascie
+# komentarzy przy odstepach 3-8 minut. Zabity SIGTERM-em proces nic nie zapisal,
+# wiec wiersz wisial w bazie jako RUNNING do najblizszej kontroli zdrowia.
+# Agent ma teraz konczyc SAM, zanim zegar go zetnie w polowie zdania.
+LIMIT_CZASU_PRZEBIEGU_S = 9000
+# Zapas na domkniecie: ostatnia publikacja, zamkniecie przebiegu, alarm.
+ZAPAS_CZASU_S = 900
+
 ROZBIEG_DNI = 30
 
 # Odstepy miedzy dzialaniami, w sekundach. Pietnascie polubien w dziewiecdziesiat

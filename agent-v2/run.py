@@ -94,6 +94,30 @@ def zajmij_zamek():
     return uchwyt
 
 
+_KONIEC_CZASU: float | None = None
+
+
+def zostal_czas(na_co: str = "") -> bool:
+    """Czy zdazymy jeszcze cokolwiek zrobic przed koncem czasu przebiegu.
+
+    Systemd tnie przebieg po `TimeoutStartSec` i robi to SIGTERM-em w dowolnym
+    momencie — takze w polowie wpisywania komentarza. Zdarzylo sie naprawde:
+    przebieg z szesnastoma komentarzami do wystawienia zostal ubity po 2,5 h.
+    Lepiej skonczyc dzien krocej niz zostac przerwanym w srodku dzialania,
+    ktorego nie da sie cofnac.
+    """
+    import time
+
+    if _KONIEC_CZASU is None:
+        return True
+    zostalo = _KONIEC_CZASU - time.time()
+    if zostalo > 0:
+        return True
+    print(f"  czas przebiegu wyczerpany — odpuszczam {na_co or 'reszte'}"
+          f" (dokoncze w nastepnym przebiegu)", flush=True)
+    return False
+
+
 def ile_przebiegow_zostalo(conn) -> int:
     """Ile przebiegow dnia jeszcze bedzie, wliczajac biezacy.
 
@@ -132,9 +156,15 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
        odpowiedzi pod własnym tekstem szkodzi bardziej niż komentarz za dużo.
     3. NIC NIE WYCHODZI BEZ `--wyslij`. Domyślnie agent pokazuje, co by zrobił.
     """
+    import time
+
     import alarm
     import browser
     import kanal
+
+    global _KONIEC_CZASU
+    _KONIEC_CZASU = time.time() + max(
+        60, config.LIMIT_CZASU_PRZEBIEGU_S - config.ZAPAS_CZASU_S)
 
     budzet = stages.budzet_dnia(conn)
 
@@ -199,6 +229,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         # niezgody, bo nieodpowiedziany zarzut zostaje ostatnim słowem.
         czekaja = stages.wybierz_do_odpowiedzi(conn, run_id, czekaja)
         for c in czekaja:
+            if not zostal_czas("odpowiedzi"):
+                return
             out = stages.reply_to(
                 conn, run_id,
                 {"under": c.get("kontekst") or "our own note",
@@ -232,6 +264,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             return
         for n in stages.notki_dnia(conn, run_id, ile=na_teraz["notki"],
                                    od=juz.get("notki", 0)):
+            if not zostal_czas("notki"):
+                return
             gotowe = [k for k in n["candidates"]
                       if k.get("safe_to_post") and k.get("length_ok")]
             if not gotowe:
@@ -266,6 +300,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 unikalne.append(x)
         cele = stages.wybierz_cele(conn, run_id, unikalne)
         for cel in cele[: na_teraz["komentarze"]]:
+            if not zostal_czas("komentarze"):
+                return
             # Pytamy o prawo do komentowania PRZED pisaniem. Inaczej caly koszt
             # — strona, trzy warianty, sprawdzenie faktow — szedl na tekst,
             # ktorego i tak nie da sie wystawic, a miejsce z dziennego limitu
@@ -307,6 +343,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
               "komentarze": n["odpowiedzi"], "reakcje": n["reakcje"],
               "url": n["url"], "id": n["id"]} for n in notki])
         for cel in cele[: max(1, na_teraz["komentarze"] // 2)]:
+            if not zostal_czas("dyskusje"):
+                return
             out = stages.comment_on(
                 conn, run_id,
                 {"title": cel.get("tytul", ""), "text": cel.get("opis", ""),
@@ -344,6 +382,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         kandydaci = [h for h in znani if h and h != f"{config.SUBSTACK_HANDLE}.substack.com"]
         random.shuffle(kandydaci)
         for host in kandydaci[: budzet["follow"]]:
+            if not zostal_czas("obserwowanie"):
+                return
             # Nie `host.split(".")[0]`: przy wlasnej domenie dawalo to "www"
             # i agent probowal obserwowac konto o tej nazwie.
             uchwyt = browser.uchwyt_publikacji(host)
@@ -376,8 +416,35 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     return 0
 
 
+def _sygnal_ma_zostawic_slad() -> None:
+    """Zamienia SIGTERM na wyjatek, zeby przebieg zdazyl sie zapisac.
+
+    Systemd konczy przebieg SIGTERM-em po `TimeoutStartSec`. Python nie widzi
+    sygnalu jako wyjatku, wiec proces po prostu znikal: `finish_run` sie nie
+    wykonywalo i wiersz wisial w bazie jako RUNNING az do kontroli zdrowia,
+    nawet trzy godziny. Przez ten czas rozdzielnik dziennej normy nie wiedzial,
+    czy przebieg trwa, czy zginal.
+
+    Teraz sygnal podnosi wyjatek, wiec dziala ta sama sciezka co przy kazdej
+    innej awarii: status FAILED i powod w notatce. Systemd daje jeszcze
+    `TimeoutStopSec` (domyslnie 90 s) przed SIGKILL — na zapisanie jednego
+    wiersza to bardzo duzo.
+    """
+    import signal
+
+    def podnies(numer, _ramka):
+        raise KeyboardInterrupt(f"przerwany sygnalem {signal.Signals(numer).name}")
+
+    for s in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(s, podnies)
+        except (ValueError, OSError, AttributeError):
+            pass          # nie glowny watek albo system bez tego sygnalu
+
+
 def main() -> int:
     _utf8_stdout()
+    _sygnal_ma_zostawic_slad()
     try:
         _zamek = zajmij_zamek()   # trzymany do końca procesu
     except JuzDziala as exc:
