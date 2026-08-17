@@ -727,20 +727,42 @@ def odhacz_promocje(url: str) -> None:
                         encoding="utf-8")
 
 
+# Slowa, ktore w TEJ publikacji nic nie znacza, bo wystepuja wszedzie: pol
+# korpusu to amerykanskie przepisy i normy. Bez ich odsiania „federal rules
+# require" laczyloby ze soba dowolne dwa fakty.
+_PUSTE_SLOWA = frozenset("""
+america american rules rule that this from with have they their when what which
+would could also than then into over under about after before other more most
+some such only even just been were will does each both must because make made
+require required requires federal government national states united standard
+standards regulation regulations legal
+""".split())
+
+
 def _slowa(tekst: str) -> set[str]:
-    return set(re.findall(r"[a-z]{5,}", (tekst or "").lower()))
+    """Znaczace slowa tekstu, obciete do rdzenia.
+
+    Obcinamy do szesciu znakow, bo inaczej „refrigeration" i „refrigerated" to dla
+    kodu dwa rozne slowa — a mowia o tym samym. Bierzemy od czterech liter, bo
+    inaczej wypada „eggs", czyli akurat to slowo, o ktore w tej wpadce chodzilo.
+    """
+    return {s[:6] for s in re.findall(r"[a-z]{4,}", (tekst or "").lower())
+            if s not in _PUSTE_SLOWA}
 
 
 def _o_tym_samym(a: str, b: str) -> bool:
     """Czy dwa teksty mowia o tej samej rzeczy.
 
-    Nie chodzi o identyczne zdania, tylko o TEMAT. Miara jest prosta: ile
-    dluzszych slow maja wspolnych w stosunku do krotszego z nich.
+    Nie chodzi o identyczne zdania, tylko o TEMAT. Wymagamy DWOCH warunkow naraz:
+    co najmniej dwoch wspolnych slow znaczacych i zauwazalnego ich udzialu.
+    Pojedyncze wspolne slowo to zbieg okolicznosci; dwa przy krotkim tekscie to
+    juz ten sam temat.
     """
     x, y = _slowa(a), _slowa(b)
     if len(x) < 4 or len(y) < 4:
         return False
-    return len(x & y) / min(len(x), len(y)) >= 0.30
+    wspolne = x & y
+    return len(wspolne) >= 2 and len(wspolne) / min(len(x), len(y)) >= 0.15
 
 
 def wybierz_material(zapas: list[dict[str, Any]],
