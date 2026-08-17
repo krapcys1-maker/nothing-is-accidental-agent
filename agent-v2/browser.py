@@ -704,9 +704,18 @@ def dopisz_skutki() -> int:
             if not klucz or klucz in juz_zapisane:
                 continue
             typ = z.get("type")
-            if typ not in ("comment_like", "comment_reply", "note_like",
-                           "note_reply", "follow", "restack"):
+            if not typ:
                 continue
+            # ZAPISUJEMY KAZDY RODZAJ, nie liste znanych. Lista miala w sobie
+            # doslowne „restack", a Substack nazywa zdarzenia `note_like`,
+            # `note_reply`, `comment_like` — wiec podanie naszej notki dalej
+            # przyszloby zapewne jako `note_restack` i wypadloby bez sladu.
+            # Akurat restack jest najcenniejszym sygnalem, jaki mozemy dostac:
+            # w badaniu 9 641 notek konwertowal dwunastokrotnie lepiej niz
+            # polubienie. Sygnal, ktorego nie widzimy, nie istnieje.
+            #
+            # Kanal aktywnosci dotyczy WYLACZNIE naszych tresci, wiec nie ma tu
+            # czego odsiewac — nieznany rodzaj to nowa wiadomosc, nie smiec.
             kto = [(ludzie.get(i) or {}).get("name")
                    for i in (z.get("recent_sender_ids") or [])]
             zapisz_w_dzienniku(
