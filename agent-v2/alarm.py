@@ -357,6 +357,18 @@ def przeglad(dni: int = 3) -> None:
         for h, n in hosty.most_common(8):
             print(f"  {n}x  {h}" + ("   ! WIECEJ NIZ RAZ" if n > 1 else ""))
 
+    conn = _polaczenie()
+    od = granica.strftime("%Y-%m-%d")
+    koszt = conn.execute(
+        "SELECT COALESCE(SUM(cost_usd),0) k, COUNT(*) n FROM calls WHERE date(at) >= ?",
+        (od,)).fetchone()
+    padly = conn.execute(
+        "SELECT COUNT(*) n FROM runs WHERE status NOT IN ('DONE','SAVED')"
+        " AND started_at >= ?", (granica.isoformat(),)).fetchone()["n"]
+    print(f"\n=== KOSZT I PRZEBIEGI ===")
+    print(f"  wywolan modeli: {koszt['n']}   koszt: ${koszt['k']:.4f}")
+    print(f"  przebiegow zakonczonych bledem: {padly}")
+
     _co_z_tego_wyszlo(wpisy)
 
 
@@ -438,18 +450,6 @@ def _co_z_tego_wyszlo(wpisy: list[dict]) -> None:
         for skad, wyniki in sorted(wg_hasla.items(),
                                    key=lambda kv: -sum(kv[1])):
             print(f"    {skad[:44]:<44} {sum(wyniki)}/{len(wyniki)}")
-
-    conn = _polaczenie()
-    od = granica.strftime("%Y-%m-%d")
-    koszt = conn.execute(
-        "SELECT COALESCE(SUM(cost_usd),0) k, COUNT(*) n FROM calls WHERE date(at) >= ?",
-        (od,)).fetchone()
-    padly = conn.execute(
-        "SELECT COUNT(*) n FROM runs WHERE status NOT IN ('DONE','SAVED')"
-        " AND started_at >= ?", (granica.isoformat(),)).fetchone()["n"]
-    print(f"\n=== KOSZT I PRZEBIEGI ===")
-    print(f"  wywolan modeli: {koszt['n']}   koszt: ${koszt['k']:.4f}")
-    print(f"  przebiegow zakonczonych bledem: {padly}")
 
 
 if __name__ == "__main__":
