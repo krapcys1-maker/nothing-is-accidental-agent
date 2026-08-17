@@ -585,7 +585,11 @@ def znajdz_ciekawostki(
         print(f"  [ciekawostki] odrzucone jako już użyte: {len(fakty) - len(swieze)}",
               flush=True)
     fakty = swieze
-    zapisz_zuzyte([f["fact"] for f in fakty])
+    # ZNALEZIONY TO NIE ZUZYTY. Tutaj stalo `zapisz_zuzyte(wszystkie)`, wiec
+    # kazdy przebieg spalal cala znaleziona pule — osiem faktow — z ktorej
+    # publikowal dwa. Szesc gineło bezpowrotnie przy kazdym uruchomieniu, takze
+    # w trybie sprawdzenia, gdzie nic nie szlo w swiat. Fakt odhacza teraz ten,
+    # kto go NAPRAWDE wystawil: `run.py`, po potwierdzonej publikacji notki.
     print(f"  [ciekawostki] z pokryciem: {len(fakty)}", flush=True)
     for f in fakty:
         print(f"    · [{f.get('domain', '')[:18]}] {f.get('fact', '')[:88]}", flush=True)
@@ -714,6 +718,8 @@ def notki_dnia(
     karta: dict[str, Any] | None = None,
     ciekawostki: list[dict[str, Any]] | None = None,
     link_artykulu: str | None = None,
+    ile: int | None = None,
+    od: int = 0,
 ) -> list[dict[str, Any]]:
     """Pięć notek na jeden dzień, każda z innego materiału.
 
@@ -724,10 +730,19 @@ def notki_dnia(
     """
     typy = list(config.NOTE_MIX_ARTICLE_DAY if dzien_artykulu
                 else config.NOTE_MIX_OTHER_DAY)
+    # Przebieg bierze tylko czesc dziennej normy, a robilismy pelne piec notek
+    # i wyrzucali reszte — z kosztem modelu i faktem spalonym za kazda z nich.
+    #
+    # Wycinek liczymy OD tego, ile notek juz dzis poszlo, a nie od poczatku.
+    # Inaczej kazdy przebieg bralby pierwsze dwa rodzaje z pieciu i agent do
+    # konca zycia pisalby same CIEKAWOSTKI, nigdy DYSKUSJI ani SPROSTOWANIA —
+    # a jednakowy ksztalt kazdej notki to podpis maszyny.
+    if ile is not None:
+        typy = typy[max(0, od): max(0, od) + max(0, ile)]
 
     # JEDNA notka promujaca dziennie, przez kolejne dni po publikacji artykulu.
     promowany = artykul_do_promocji()
-    if promowany and "ARTYKUL" not in typy:
+    if promowany and typy and "ARTYKUL" not in typy:
         typy[0] = "ARTYKUL"       # pierwsza notka dnia promuje artykul
         karta = {"article_title": promowany["tytul"],
                  "article_text": promowany["tekst"]}
@@ -753,6 +768,9 @@ def notki_dnia(
         # Pod ciekawostką byłby reklamą doklejoną do faktu i psułby ją.
         wynik = note(conn, run_id, typ, material,
                      link=link_artykulu if typ == "ARTYKUL" else None)
+        # Fakt jedzie razem z notka, zeby `run.py` mial co odhaczyc dopiero
+        # wtedy, gdy notka naprawde pojdzie w swiat.
+        wynik["fakt"] = material.get("fact") if isinstance(material, dict) else None
         if typ == "ARTYKUL" and promowany and any(
                 k.get("safe_to_post") for k in wynik["candidates"]):
             odhacz_promocje(promowany["url"])

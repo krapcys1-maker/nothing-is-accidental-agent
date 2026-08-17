@@ -186,7 +186,12 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         # Pod notkami I pod artykułami. Kanał profilu pokazuje tylko notki, więc
         # bez drugiego pytania czytelnik mógłby zadać pytanie pod tekstem
         # i nie doczekać się odpowiedzi.
-        czekaja = browser.nieodpowiedziane() + browser.komentarze_pod_artykulami()
+        # Trzy zrodla, bo rozmowa toczy sie w trzech miejscach. Trzeciego —
+        # odpowiedzi na NASZE komentarze u obcych — agent nie widzial wcale
+        # i takiej odpowiedzi nie podjalby nigdy, nie „pozniej".
+        czekaja = (browser.nieodpowiedziane()
+                   + browser.komentarze_pod_artykulami()
+                   + browser.odpowiedzi_na_nasze_komentarze())
         if not czekaja:
             return
         # Przy dwóch odpowiada się obu. Przy dwustu odpowiedź pod każdym wygląda
@@ -196,7 +201,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         for c in czekaja:
             out = stages.reply_to(
                 conn, run_id,
-                {"under": "our own note", "author": c["autor"], "text": c["tekst"]},
+                {"under": c.get("kontekst") or "our own note",
+                 "author": c["autor"], "text": c["tekst"]},
                 {"our_note": c["pod_czym"]})
             kandydaci = [k for k in out["candidates"] if k.get("reply")]
             if not kandydaci:
@@ -224,13 +230,19 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         if not na_teraz["notki"]:
             print("  dzienny przydzial notek juz wyczerpany", flush=True)
             return
-        for n in stages.notki_dnia(conn, run_id)[: na_teraz["notki"]]:
+        for n in stages.notki_dnia(conn, run_id, ile=na_teraz["notki"],
+                                   od=juz.get("notki", 0)):
             gotowe = [k for k in n["candidates"]
                       if k.get("safe_to_post") and k.get("length_ok")]
             if not gotowe:
                 continue
             if wyslij:
-                browser.wystaw_notke(gotowe[0]["note"].strip(), wyslij=True)
+                wynik = browser.wystaw_notke(gotowe[0]["note"].strip(), wyslij=True)
+                # Fakt odhaczamy DOPIERO po potwierdzonej publikacji. Wczesniej
+                # znikal juz przy znalezieniu, wiec przepadal takze wtedy, gdy
+                # notka nie poszla albo gdy przebieg byl tylko sprawdzeniem.
+                if wynik.get("wyslane") and n.get("fakt"):
+                    stages.zapisz_zuzyte([n["fakt"]])
                 stages.odczekaj("notka")
             zrobione["notki"] += 1
 
@@ -249,6 +261,12 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 unikalne.append(x)
         cele = stages.wybierz_cele(conn, run_id, unikalne)
         for cel in cele[: na_teraz["komentarze"]]:
+            # Pytamy o prawo do komentowania PRZED pisaniem. Inaczej caly koszt
+            # — strona, trzy warianty, sprawdzenie faktow — szedl na tekst,
+            # ktorego i tak nie da sie wystawic, a miejsce z dziennego limitu
+            # i tak przepadalo.
+            if not browser.mozna_komentowac(cel["url"]):
+                continue
             strony = browser.read_pages([cel["url"]])
             if not strony or not strony[0].get("text"):
                 continue
@@ -321,7 +339,12 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         kandydaci = [h for h in znani if h and h != f"{config.SUBSTACK_HANDLE}.substack.com"]
         random.shuffle(kandydaci)
         for host in kandydaci[: budzet["follow"]]:
-            uchwyt = host.split(".")[0]
+            # Nie `host.split(".")[0]`: przy wlasnej domenie dawalo to "www"
+            # i agent probowal obserwowac konto o tej nazwie.
+            uchwyt = browser.uchwyt_publikacji(host)
+            if not uchwyt:
+                print(f"  (nie ustalilem konta dla {host} — pomijam)", flush=True)
+                continue
             if wyslij:
                 browser.zasubskrybuj(uchwyt, wyslij=True)
                 stages.odczekaj("komentarz")

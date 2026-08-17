@@ -652,6 +652,115 @@ def ile_dzis_wystawione() -> dict[str, int]:
         p.stop()
 
 
+def odpowiedzi_na_nasze_komentarze(ile: int = 10) -> list[dict[str, Any]]:
+    """Odpowiedzi na NASZE komentarze zostawione pod CUDZYMI tekstami.
+
+    Trzecie miejsce, w ktorym toczy sie rozmowa, i jedyne, ktorego agent nie
+    widzial wcale. Sprawdzal odpowiedzi pod wlasnymi notkami i pod wlasnymi
+    artykulami — a komentarz zostawiony u kogos obcego zyje gdzie indziej i nie
+    pojawia sie w zadnym z tych dwoch zrodel. Nie chodzilo o opoznienie: takiej
+    odpowiedzi agent nie zobaczylby nigdy.
+
+    Dla mlodego konta to najgorsze mozliwe miejsce na milczenie, bo wlasnie tam
+    zaczyna sie rozmowa z ludzmi, ktorzy nas jeszcze nie znaja.
+
+    Zrodlem jest `activity-feed-web` — to samo, czego uzywa zakladka „Activity".
+    Zdarzenie `comment_reply` niesie numer NASZEGO komentarza i numer ICH
+    odpowiedzi, a w tej samej odpowiedzi przychodza tresci, autorzy i posty,
+    wiec nie trzeba o nic dopytywac.
+
+    Nie mylic z `note_reply`: to odpowiedzi pod naszymi notkami, ktore obsluguje
+    `nieodpowiedziane`. Braloby sie je tu drugi raz.
+    """
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    try:
+        profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
+        moje_id = (profil or {}).get("id")
+        if not moje_id:
+            return []
+
+        kanal = api_json(page, "/api/v1/activity-feed-web?filter=all") or {}
+        if not isinstance(kanal, dict):
+            return []
+
+        # Tresci lezą obok zdarzen, w kilku workach naraz — sklejamy w jeden.
+        wpisy: dict[Any, dict] = {}
+        for worek in ("comments", "feedItemComments", "communityComments"):
+            for c in kanal.get(worek) or []:
+                if isinstance(c, dict) and c.get("id") is not None:
+                    wpisy.setdefault(c["id"], c)
+        ludzie = {u["id"]: u for u in (kanal.get("users") or [])
+                  if isinstance(u, dict) and u.get("id") is not None}
+        posty = {x["id"]: x for x in (kanal.get("posts") or [])
+                 if isinstance(x, dict) and x.get("id") is not None}
+
+        czekaja: list[dict[str, Any]] = []
+        for zdarzenie in kanal.get("activityItems") or []:
+            if not isinstance(zdarzenie, dict):
+                continue
+            if zdarzenie.get("type") != "comment_reply":
+                continue
+            ich_id = zdarzenie.get("comment_id")
+            nasz_id = zdarzenie.get("target_comment_id")
+            if not ich_id or not nasz_id:
+                continue
+
+            ich = wpisy.get(ich_id) or {}
+            nasz = wpisy.get(nasz_id) or {}
+            tekst = ich.get("body") or ""
+            if not tekst.strip():
+                continue
+
+            # Czy juz odpisalismy PO ich odpowiedzi. Pytamy watku, nie wlasnego
+            # zapisu: po restarcie zapis klamie, Substack wie na pewno.
+            watek = api_json(page, f"/api/v1/reader/comment/{ich_id}/replies"
+                                   f"?comment_id={ich_id}") or {}
+            plaskie = [c for g in (watek.get("commentBranches") or [])
+                       for c in _plaskie(g)]
+            kiedy_ich = str(zdarzenie.get("created_at") or "")
+            if any(c.get("user_id") == moje_id
+                   and str(c.get("date") or "") > kiedy_ich for c in plaskie):
+                continue
+
+            autor = (ich.get("name")
+                     or (ludzie.get((zdarzenie.get("recent_sender_ids") or [None])[0])
+                         or {}).get("name") or "")
+            post = posty.get(zdarzenie.get("target_post_id")) or {}
+            czekaja.append({
+                "pod_czym": (nasz.get("body") or "")[:400],
+                # Odpowiadamy ICH komentarzowi, nie swojemu — inaczej wpis
+                # wyladowalby obok rozmowy zamiast w niej.
+                "pod_id": ich_id,
+                "autor": autor,
+                "jezyk": ich.get("language"),
+                "tekst": tekst,
+                "id": ich_id,
+                "gdzie": "komentarz_obcy",
+                "kontekst": f"our own comment under \"{post.get('title') or 'someone else’s post'}\"",
+                "url": post.get("canonical_url") or "",
+            })
+            if len(czekaja) >= ile:
+                break
+
+        if czekaja:
+            print(f"  odpowiedzi na nasze komentarze u innych: {len(czekaja)}",
+                  flush=True)
+            for c in czekaja:
+                print(f"    · {c['autor']} [{c.get('jezyk') or '?'}] {c['tekst'][:78]}",
+                      flush=True)
+        return czekaja
+    except Exception as exc:
+        print(f"  (nie sprawdzilem odpowiedzi u innych: {type(exc).__name__})",
+              flush=True)
+        return []
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+
+
 def komentarze_pod_artykulami(ile: int = 5) -> list[dict[str, Any]]:
     """Cudze komentarze pod NASZYMI artykulami, na ktore nie odpisalismy.
 
@@ -1546,6 +1655,87 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
     return wynik
 
 
+def mozna_komentowac(url: str) -> bool:
+    """Czy pod tym tekstem wolno nam w ogóle napisać.
+
+    Trzy komentarze dziennie przepadały u publikacji, które CZYTAC pozwalaja
+    wszystkim, a KOMENTOWAC tylko placacym. Klikniecie nic nie robilo, a caly
+    koszt byl juz poniesiony: pobranie strony, trzy warianty komentarza
+    i sprawdzenie faktow. Gorzej — kazde takie podejscie zjadalo miejsce
+    z dziennego limitu, wiec realnie wychodzily trzy komentarze mniej.
+
+    Substack mowi o tym w polu `write_comment_permissions`, dostepnym ZANIM
+    cokolwiek napiszemy. Wystarczylo zapytac.
+
+    Przy watpliwosci odpowiadamy TAK. Blad w te strone kosztuje jedno nieudane
+    klikniecie; blad w druga zamyka agentowi usta wszedzie tam, gdzie pole ma
+    wartosc, ktorej nie znamy.
+    """
+    if "/note/c-" in url:
+        return True                   # pod notkami komentuje kazdy
+    from urllib.parse import urlparse
+
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    try:
+        slug = url.rstrip("/").rsplit("/", 1)[-1]
+        post = api_json(page, f"/api/v1/posts/{slug}",
+                        baza=f"https://{urlparse(url).netloc}")
+        if not isinstance(post, dict):
+            return True
+        prawo = str(post.get("write_comment_permissions") or "").lower()
+        if prawo in {"only_paid", "only_founding", "none", "no_one"}:
+            print(f"  komentarze tylko dla placacych ({prawo}) — odpuszczam"
+                  f" przed pisaniem", flush=True)
+            return False
+        return True
+    except Exception:
+        return True                   # nie wiem, wiec probuje
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+
+
+def uchwyt_publikacji(host: str) -> str | None:
+    """Nazwa konta do obserwowania — z hosta albo, gdy trzeba, z API.
+
+    `host.split(".")[0]` dziala wylacznie dla adresow w domenie Substacka. Przy
+    wlasnej domenie (`www.slowboring.com`) dawalo **"www"** i agent probowal
+    obserwowac konto o takiej nazwie: trzy z czterech subskrypcji dziennie szly
+    w prozne, a dziennik pokazywal `komu='www'` trzy razy pod rzad.
+
+    Publikacja na wlasnej domenie i tak ma konto w Substacku, a jego nazwa stoi
+    w `publishedBylines` dowolnego jej posta. Gdy nie da sie ustalic, zwracamy
+    None — lepiej nie obserwowac nikogo niz obserwowac nieistniejace konto.
+    """
+    host = (host or "").strip().lower().rstrip("/")
+    if not host:
+        return None
+    if host.endswith(".substack.com"):
+        return host.split(".")[0]
+
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    try:
+        posty = api_json(page, "/api/v1/posts?limit=1", baza=f"https://{host}")
+        lista = posty if isinstance(posty, list) else (posty or {}).get("posts") or []
+        for post in lista:
+            for bylina in (post or {}).get("publishedBylines") or []:
+                uchwyt = (bylina or {}).get("handle")
+                if uchwyt:
+                    return str(uchwyt)
+        return None
+    except Exception:
+        return None
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+
+
 def juz_sie_odezwalismy(page, url: str) -> bool:
     """Czy JUZ napisalismy cokolwiek pod tym postem albo pod ta notka.
 
@@ -1588,8 +1778,28 @@ def potwierdz_komentarz(page, url: str, tekst: str) -> bool:
     """Pyta Substacka, czy komentarz naprawdę wisi — zamiast wierzyć kliknięciu."""
     from urllib.parse import urlparse
 
-    slug = url.rstrip("/").rsplit("/", 1)[-1]
     probka = " ".join(tekst.split())[:60]
+
+    # NOTKA TO NIE ARTYKUL i nie ma jej pod adresem artykulow. Ostatni czlon
+    # adresu notki wyglada jak slug (`c-315876268`), wiec pytanie szlo do
+    # /api/v1/posts/c-315876268 i wracalo bledem HTTP. Skutek: komentarz pod
+    # notka NIGDY nie zostawal potwierdzony, nawet gdy poszedl. `juz_sie_odezwalismy`
+    # rozroznialo te dwa przypadki od poczatku — tutaj tego zabraklo.
+    if "/note/c-" in url:
+        nid = url.rstrip("/").rsplit("c-", 1)[-1]
+        for nr in range(4):
+            watek = api_json(page, f"/api/v1/reader/comment/{nid}/replies"
+                                   f"?comment_id={nid}") or {}
+            wszystkie = [c for g in (watek.get("commentBranches") or [])
+                         for c in _plaskie(g)]
+            if any(probka in " ".join((c.get("body") or "").split())
+                   for c in wszystkie):
+                return True
+            if nr < 3:
+                page.wait_for_timeout(8000)
+        return False
+
+    slug = url.rstrip("/").rsplit("/", 1)[-1]
     czyja = f"https://{urlparse(url).netloc}"        # publikacja AUTORA posta
     post = api_json(page, f"/api/v1/posts/{slug}", baza=czyja)
     if not isinstance(post, dict) or not post.get("id"):
