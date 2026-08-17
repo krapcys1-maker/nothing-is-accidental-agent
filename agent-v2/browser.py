@@ -719,9 +719,12 @@ def odpowiedzi_na_nasze_komentarze(ile: int = 10) -> list[dict[str, Any]]:
                                    f"?comment_id={ich_id}") or {}
             plaskie = [c for g in (watek.get("commentBranches") or [])
                        for c in _plaskie(g)]
-            kiedy_ich = str(zdarzenie.get("created_at") or "")
-            if any(c.get("user_id") == moje_id
-                   and str(c.get("date") or "") > kiedy_ich for c in plaskie):
+            # Porownujemy CZAS, nie napisy: `created_at` zdarzenia i `date`
+            # komentarza bywaja zapisane inaczej (raz z milisekundami, raz bez),
+            # a porownanie tekstowe daloby wtedy cichy falsz.
+            kiedy_ich = _kiedy({"date": zdarzenie.get("created_at")})
+            if any(c.get("user_id") == moje_id and _kiedy(c) > kiedy_ich
+                   for c in plaskie):
                 continue
 
             autor = (ich.get("name")
