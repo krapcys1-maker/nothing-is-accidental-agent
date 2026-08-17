@@ -368,6 +368,7 @@ def _co_z_tego_wyszlo(wpisy: list[dict]) -> None:
     co wraca czesciej, notka czy komentarz; czy oplaca sie byc wczesnie; i ktore
     hasla wyszukiwania przynosza rozmowy zamiast ciszy.
     """
+    import collections
     import statistics
 
     skutki = [w for w in wpisy if w.get("rodzaj") == "skutek"]
