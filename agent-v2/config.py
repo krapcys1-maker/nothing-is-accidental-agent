@@ -502,6 +502,56 @@ COMMENTS_PER_DAY = 4
 # nie zużyły. Zmierzone: konwertują notki konkretne i taktyczne, a nie
 # motywacyjne; komentarze i restacki niosą dalej niż polubienia, więc notka
 # dająca się z czymś nie zgodzić bije notkę, pod którą wszyscy kiwają głową.
+# FORMA NOTKI — osobny wymiar od TYPU. Typ mowi, CO powiedziec; forma mowi, JAK
+# to ma wygladac na ekranie.
+#
+# Zmierzone na wlasnych dwunastu notkach: dlugosc mamy idealna (12/12 w oknie
+# 31-60 slow, zero pytajnikow), ale DZIESIEC z dwunastu to jeden zbity akapit,
+# a cztery zaczynaja sie od slowa „The". Kazda notka ma ten sam ksztalt:
+# rzecz, potem zaskakujacy fakt, potem przepis. Rozne tematy, jedna sylwetka —
+# i wlasnie to widac w kanale jako monotonie.
+#
+# Zewnetrzne analizy (2,7 mln i 9,6 tys. notek) zgadzaja sie co do dwoch rzeczy:
+# tekst ma byc SKANOWALNY, z lamaniem linii i zmienna dlugoscia zdan, a trzy
+# kolejne linie zaczynajace sie tak samo (anafora) daja ponad trzykrotnie lepsza
+# konwersje. Zadnej z tych rzeczy nie robilismy.
+NOTE_FORMS = {
+    "PROSTA": (
+        "One tight paragraph. No line breaks. This is the default shape and it "
+        "works — but it cannot be every note, so use it plainly and well."
+    ),
+    "KONTRAST": (
+        "Two facts set against each other, on separate lines, with a blank line "
+        "between them. Same object, opposite rules. Then one short line that "
+        "names what the difference actually is. Three blocks, no more."
+    ),
+    "LISTA": (
+        "Three consecutive short lines that begin with the same word, then one "
+        "closing line that lands the point. The repetition is the point: it "
+        "builds a visual pattern that stops a thumb. Keep each line under ten "
+        "words."
+    ),
+    "LICZBA": (
+        "Open with the number itself, alone on the first line — a figure, a "
+        "date, a measurement. Blank line. Then what it is and who decided it. "
+        "The number does the stopping; the rest does the explaining."
+    ),
+    "SCENA": (
+        "Start with the object in front of the reader, in the second person: "
+        "the thing they are holding, walking past, standing in. One line. Blank "
+        "line. Then the rule hiding inside it. Never a question, and no "
+        "invented experience of your own."
+    ),
+    "ODWROCENIE": (
+        "First line: the thing everyone believes, stated fairly and without "
+        "mockery. Blank line. Then the record that contradicts it, and why the "
+        "belief was reasonable in the first place."
+    ),
+}
+
+# Rozklad form na dzien. PROSTA zostaje, ale przestaje byc jedyna.
+NOTE_FORM_MIX = ("SCENA", "KONTRAST", "PROSTA", "LISTA", "ODWROCENIE", "LICZBA")
+
 NOTE_TYPES = {
     "ARTYKUL": (
         "A fact from an article published today. State the fact so it stands on "

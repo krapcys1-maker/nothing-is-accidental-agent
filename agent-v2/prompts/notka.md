@@ -17,6 +17,29 @@ it is not a note.
 
 {type_brief}
 
+## The shape it has to take: {note_form}
+
+{form_brief}
+
+The type decides what you say. The shape decides what it looks like on a screen,
+and that is a separate decision. Follow both.
+
+## Shape is not decoration
+
+A note is read on a phone, in a feed, by a thumb that is already moving. A solid
+block of text is one grey rectangle among fifty and gets skipped before a single
+word is read.
+
+- **Break the lines.** Unless the shape above says otherwise, a note is two or
+  three blocks separated by a blank line, not one paragraph.
+- **Vary the sentence length inside them.** A long sentence, then a short one.
+  Every sentence the same length is the flattest rhythm there is.
+- **The first line has to survive alone.** In the feed it may be all anyone sees
+  before deciding.
+- **Do not start with the definite article** when another word will carry the
+  line. Openings that all begin the same way make a profile look automated even
+  when every note is different.
+
 ## What every note must do
 
 One fact that rearranges something the reader thought they understood.

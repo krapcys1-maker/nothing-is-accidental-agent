@@ -610,11 +610,42 @@ def znajdz_ciekawostki(
     return fakty
 
 
+def ostatnie_otwarcia(ile: int = 8) -> list[str]:
+    """Pierwsze slowa ostatnich notek — zeby kolejna nie zaczela sie tak samo.
+
+    Cztery z dwunastu naszych notek zaczynaly sie od „The". Prompt moze o to
+    prosic, ale prosba nie jest gwarancja: model chwyta ten sam rytm, bo material
+    jest podobny. Kandydatow mamy trzech, wiec da sie wybrac tego, ktory nie
+    powtarza otwarcia — i to jest sprawdzenie w kodzie, nie zyczenie w prompcie.
+    """
+    plik = config.DATA_DIR / "dziennik.jsonl"
+    if not plik.exists():
+        return []
+    otwarcia: list[str] = []
+    try:
+        for linia in plik.read_text(encoding="utf-8").splitlines():
+            linia = linia.strip()
+            if not linia:
+                continue
+            try:
+                w = json.loads(linia)
+            except ValueError:
+                continue
+            if not isinstance(w, dict) or w.get("rodzaj") != "notka":
+                continue
+            slowa = (w.get("tekst") or "").split()
+            if slowa:
+                otwarcia.append(slowa[0].strip("\"'.,").lower())
+    except OSError:
+        return []
+    return otwarcia[-ile:]
+
+
 def note(
     conn: sqlite3.Connection, run_id: int, note_type: str, evidence: dict[str, Any],
-    link: str | None = None,
+    link: str | None = None, note_form: str = "PROSTA",
 ) -> dict[str, Any]:
-    """Jedna notka danego typu — do szuflady.
+    """Jedna notka danego typu i danej FORMY — do szuflady.
 
     `evidence` to karta artykułu albo fragmenty, których artykuł nie zużył.
     W obu wypadkach notka stoi na materiale ocytowanym, więc nie ma skąd
@@ -627,8 +658,11 @@ def note(
         max_words=config.NOTE_MAX_WORDS,
         note_type=note_type,
         type_brief=config.NOTE_TYPES[note_type],
+        note_form=note_form,
+        form_brief=config.NOTE_FORMS.get(note_form, config.NOTE_FORMS["PROSTA"]),
         evidence=json.dumps(evidence, ensure_ascii=False, indent=2)[:9000],
     )
+    zajete_otwarcia = set(ostatnie_otwarcia())
     candidates: list[dict[str, Any]] = []
     for i in range(config.NOTE_CANDIDATES):
         try:
@@ -658,6 +692,17 @@ def note(
     # przechodzi — bo wystawiamy JEDNEGO kandydata, a sprawdzenie kosztuje tyle
     # co jego napisanie. Przy pieciu notkach dziennie po trzech kandydatow to
     # roznica miedzy pietnastoma sprawdzeniami a szescioma.
+    # NAJPIERW ci, ktorzy nie zaczynaja sie jak ostatnie notki. Nie odrzucamy
+    # nikogo — tylko przesuwamy na koniec kolejki, bo notka z powtorzonym
+    # otwarciem jest nadal lepsza niz brak notki.
+    def powtarza_otwarcie(d: dict[str, Any]) -> bool:
+        slowa = (d.get("note") or "").split()
+        return bool(slowa) and slowa[0].strip("\"'.,").lower() in zajete_otwarcia
+
+    candidates.sort(key=powtarza_otwarcie)
+    if candidates and powtarza_otwarcie(candidates[0]):
+        print("    (wszyscy kandydaci zaczynaja jak poprzednie notki)", flush=True)
+
     for data in candidates:
         text = (data.get("note") or "").strip()
         if not text or not data.get("length_ok"):
@@ -815,6 +860,12 @@ def notki_dnia(
     if ile is not None:
         typy = typy[max(0, od): max(0, od) + max(0, ile)]
 
+    # FORMY ida wlasnym rytmem, przesunietym wzgledem typow. Gdyby chodzily w tej
+    # samej kolejnosci, kazda CIEKAWOSTKA bylaby zawsze tej samej formy i
+    # zamienilibysmy jedna monotonie na druga.
+    formy = [config.NOTE_FORM_MIX[(od + i) % len(config.NOTE_FORM_MIX)]
+             for i in range(len(typy))]
+
     # JEDNA notka promujaca dziennie, przez kolejne dni po publikacji artykulu.
     promowany = artykul_do_promocji()
     if promowany and typy and "ARTYKUL" not in typy:
@@ -834,7 +885,8 @@ def notki_dnia(
     if karta:
         juz_o_tym.append("%s %s" % (karta.get("article_title") or "",
                                     (karta.get("article_text") or "")[:400]))
-    for typ in typy:
+    for nr, typ in enumerate(typy):
+        forma = formy[nr] if nr < len(formy) else "PROSTA"
         if typ == "ARTYKUL" and karta:
             material = karta
         else:
@@ -851,11 +903,12 @@ def notki_dnia(
             juz_o_tym.append("%s %s" % (fakt.get("domain") or "",
                                         fakt.get("fact") or ""))
             material = {"fact": fakt}
-        print(f"  [{typ}]", flush=True)
+        print(f"  [{typ} / {forma}]", flush=True)
         # Adres artykułu leci TYLKO pod notką, która ten artykuł promuje.
         # Pod ciekawostką byłby reklamą doklejoną do faktu i psułby ją.
         wynik = note(conn, run_id, typ, material,
-                     link=link_artykulu if typ == "ARTYKUL" else None)
+                     link=link_artykulu if typ == "ARTYKUL" else None,
+                     note_form=forma)
         # Fakt jedzie razem z notka, zeby `run.py` mial co odhaczyc dopiero
         # wtedy, gdy notka naprawde pojdzie w swiat.
         wynik["fakt"] = tekst_faktu(material.get("fact")) or None
