@@ -430,10 +430,43 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 print(f"  (nie ustalilem konta dla {host} — pomijam)", flush=True)
                 continue
             if wyslij:
-                browser.zasubskrybuj(uchwyt, wyslij=True)
+                # OBSERWUJEMY, nie subskrybujemy. To dwie rozne rzeczy i maja
+                # osobne widelki: obserwacja nie przysyla nic mailem.
+                browser.obserwuj_profil(uchwyt, wyslij=True)
                 stages.odczekaj("komentarz")
             else:
                 print(f"  (obserwowałbym: {uchwyt})", flush=True)
+
+    # --- 3d. subskrypcje: rzadko, bo lądują w skrzynce właściciela ------------
+    def subskrybuj() -> None:
+        """Subskrybuje NIELICZNE publikacje, ktore naprawde czytamy.
+
+        Budzet `subskrypcje` byl liczony i nigdy nieuzywany — blokiem sterowal
+        budzet `follow`, a funkcja i tak klikala „Subscribe". Agent subskrybowal
+        wiec w tempie obserwacji: do 44 miesiecznie zamiast 6-12, i kazda z nich
+        przysylala poczte do skrzynki wlasciciela.
+        """
+        if not budzet.get("subskrypcje"):
+            return
+        znani = set(kanal._historia())
+        if not znani:
+            return
+        import random
+
+        kandydaci = [h for h in znani
+                     if h and h != f"{config.SUBSTACK_HANDLE}.substack.com"]
+        random.shuffle(kandydaci)
+        for host in kandydaci[: budzet["subskrypcje"]]:
+            if not zostal_czas("subskrypcje"):
+                return
+            uchwyt = browser.uchwyt_publikacji(host)
+            if not uchwyt:
+                continue
+            if wyslij:
+                browser.zasubskrybuj(uchwyt, wyslij=True)
+                stages.odczekaj("komentarz")
+            else:
+                print(f"  (zasubskrybowałbym: {uchwyt})", flush=True)
 
     # --- 4. polubienia: najtańszy uczciwy sygnał ------------------------------
     def polubienia() -> None:
@@ -442,7 +475,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
 
     for nazwa, robota in (("odpowiedzi", odpowiedzi), ("notki", notki),
                           ("komentarze", komentarze), ("dyskusje", dyskusje),
-                          ("obserwowanie", obserwuj), ("polubienia", polubienia)):
+                          ("obserwowanie", obserwuj), ("subskrypcje", subskrybuj),
+                          ("polubienia", polubienia)):
         print(f"\n-- {nazwa} --", flush=True)
         blok(nazwa, robota)
 

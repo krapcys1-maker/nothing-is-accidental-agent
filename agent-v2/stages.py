@@ -480,18 +480,32 @@ def _klucz_faktu(tekst: str) -> str:
     return " ".join(sorted(set(slowa))[:12])
 
 
+def tekst_faktu(x: Any) -> str:
+    """Fakt bywa slownikiem (`{"fact": ..., "url": ...}`), a bywa samym zdaniem.
+
+    Do pamieci zuzytych idzie WYLACZNIE zdanie. Slownik, ktory tam wpadl, wywala
+    `_klucz_faktu` przy nastepnym szukaniu — bo slownik nie ma `.lower()` — i cichcem
+    zabiera caly blok notek. Zdarzylo sie naprawde 17 sierpnia.
+    """
+    if isinstance(x, dict):
+        return str(x.get("fact") or "")
+    return str(x or "")
+
+
 def wczytaj_zuzyte() -> list[str]:
     if not ZUZYTE_FAKTY.exists():
         return []
     try:
-        return json.loads(ZUZYTE_FAKTY.read_text(encoding="utf-8"))
+        dane = json.loads(ZUZYTE_FAKTY.read_text(encoding="utf-8"))
     except Exception:
         return []
+    # Sprzatamy przy odczycie, bo w pliku moga lezec stare wpisy w zlym ksztalcie.
+    return [t for t in (tekst_faktu(x) for x in dane or []) if t]
 
 
-def zapisz_zuzyte(nowe: list[str]) -> None:
+def zapisz_zuzyte(nowe: list[Any]) -> None:
     """Pamięć zużytych ciekawostek — poza bazą, bo budżet to cztery tabele."""
-    wszystkie = wczytaj_zuzyte() + [t for t in nowe if t]
+    wszystkie = wczytaj_zuzyte() + [t for t in map(tekst_faktu, nowe) if t]
     ZUZYTE_FAKTY.parent.mkdir(parents=True, exist_ok=True)
     ZUZYTE_FAKTY.write_text(
         json.dumps(wszystkie[-config.CURIOSITY_MEMORY * 3:], ensure_ascii=False,
@@ -713,6 +727,45 @@ def odhacz_promocje(url: str) -> None:
                         encoding="utf-8")
 
 
+def _slowa(tekst: str) -> set[str]:
+    return set(re.findall(r"[a-z]{5,}", (tekst or "").lower()))
+
+
+def _o_tym_samym(a: str, b: str) -> bool:
+    """Czy dwa teksty mowia o tej samej rzeczy.
+
+    Nie chodzi o identyczne zdania, tylko o TEMAT. Miara jest prosta: ile
+    dluzszych slow maja wspolnych w stosunku do krotszego z nich.
+    """
+    x, y = _slowa(a), _slowa(b)
+    if len(x) < 4 or len(y) < 4:
+        return False
+    return len(x & y) / min(len(x), len(y)) >= 0.30
+
+
+def wybierz_material(zapas: list[dict[str, Any]],
+                     unikaj: list[str]) -> dict[str, Any] | None:
+    """Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy.
+
+    Poprzednio bylo `zapas.pop(0)` — pierwszy z brzegu. W przebiegu z 17 sierpnia
+    wyszukiwanie oddalo osiem faktow: okna w samolotach, napiwki, symbol
+    zasilania, kabiny w toaletach, sygnalizacja dla pieszych, etykiety
+    energetyczne, rekawy lotniskowe — i jajka. Pierwszy z listy byl o jajkach,
+    a notka promujaca artykul tego dnia tez byla o jajkach. Poszly dwie notki
+    o tym samym w odstepie trzynastu minut.
+
+    Roznorodnosc byla w puli. Zabraklo jej dopiero w wyborze.
+    """
+    for i, f in enumerate(zapas):
+        temat = "%s %s" % (f.get("domain") or "", f.get("fact") or "")
+        if any(_o_tym_samym(temat, u) for u in unikaj if u):
+            continue
+        return zapas.pop(i)
+    # Wszystko zderza sie z tym, co juz mamy — lepiej wystawic mniej niz
+    # powtorzyc temat.
+    return None
+
+
 def notki_dnia(
     conn: sqlite3.Connection, run_id: int, dzien_artykulu: bool = False,
     karta: dict[str, Any] | None = None,
@@ -753,6 +806,12 @@ def notki_dnia(
         ciekawostki = znajdz_ciekawostki(conn, run_id)
     zapas = list(ciekawostki)
     dzien: list[dict[str, Any]] = []
+    # O czym juz dzis mowimy. Promowany artykul liczy sie od razu — to od niego
+    # zaczela sie wpadka z dwiema notkami o jajkach w odstepie trzynastu minut.
+    juz_o_tym: list[str] = []
+    if karta:
+        juz_o_tym.append("%s %s" % (karta.get("article_title") or "",
+                                    (karta.get("article_text") or "")[:400]))
     for typ in typy:
         if typ == "ARTYKUL" and karta:
             material = karta
@@ -762,7 +821,14 @@ def notki_dnia(
                 if not zapas:
                     print("  [notki] brak materiału — kończę dzień krócej", flush=True)
                     break
-            material = {"fact": zapas.pop(0)}
+            fakt = wybierz_material(zapas, juz_o_tym)
+            if fakt is None:
+                print("  [notki] został tylko materiał o tym samym, co już dziś"
+                      " wystawiamy — kończę dzień krócej", flush=True)
+                break
+            juz_o_tym.append("%s %s" % (fakt.get("domain") or "",
+                                        fakt.get("fact") or ""))
+            material = {"fact": fakt}
         print(f"  [{typ}]", flush=True)
         # Adres artykułu leci TYLKO pod notką, która ten artykuł promuje.
         # Pod ciekawostką byłby reklamą doklejoną do faktu i psułby ją.
@@ -770,7 +836,7 @@ def notki_dnia(
                      link=link_artykulu if typ == "ARTYKUL" else None)
         # Fakt jedzie razem z notka, zeby `run.py` mial co odhaczyc dopiero
         # wtedy, gdy notka naprawde pojdzie w swiat.
-        wynik["fakt"] = material.get("fact") if isinstance(material, dict) else None
+        wynik["fakt"] = tekst_faktu(material.get("fact")) or None
         # Ta sama zasada co przy faktach: dzien promocji odhacza ten, kto notke
         # NAPRAWDE wystawil. Wystarczylo, ze kandydat przeszedl bramke — wiec
         # nieudana publikacja albo zwykle sprawdzenie zjadaly po cichu jeden

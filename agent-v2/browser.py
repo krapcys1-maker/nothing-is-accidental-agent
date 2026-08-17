@@ -1054,9 +1054,24 @@ def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
     return wynik
 
 
-def zasubskrybuj(handle: str, wyslij: bool = False) -> dict[str, Any]:
-    """Subskrybuje cudzy profil. Ląduje w skrzynce właściciela, więc wąsko."""
-    wyslij = naprawde_wyslac(wyslij, "subskrypcja")
+def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
+                     wyslij: bool) -> dict[str, Any]:
+    """Klika JEDEN konkretny przycisk na cudzym profilu — i tylko jego.
+
+    OBSERWOWANIE I SUBSKRYPCJA TO DWIE ROZNE RZECZY. Obserwowanie sprawia, ze
+    czyjes notki pojawiaja sie w naszym kanale; subskrypcja przysyla jego teksty
+    MAILEM do skrzynki wlasciciela. Dlatego widelki sa inne: 30-44 obserwacje
+    miesiecznie, ale tylko 6-12 subskrypcji.
+
+    Jedna funkcja probowala kolejno „Subscribe", „Subskrybuj", „Follow",
+    „Obserwuj" i brala pierwszy znaleziony. Na profilu Substacka „Subscribe" jest
+    zawsze, wiec do „Follow" nie dochodzilo NIGDY — kazda z czterech prob
+    w logach kliknela subskrypcje. Agent subskrybowal w tempie obserwacji.
+
+    Gdy wlasciwego przycisku nie ma, nie robimy NIC. Klikniecie „w zastepstwie"
+    to dokladnie ten blad, ktory to spowodowal.
+    """
+    wyslij = naprawde_wyslac(wyslij, rodzaj)
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
@@ -1065,25 +1080,24 @@ def zasubskrybuj(handle: str, wyslij: bool = False) -> dict[str, Any]:
         page.goto(f"https://substack.com/@{handle}", timeout=READ_TIMEOUT_MS * 2,
                   wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS + 4000)
-        for nazwa in ("Subscribe", "Subskrybuj", "Follow", "Obserwuj"):
+        for nazwa in napisy:
             k = page.get_by_role("button", name=nazwa, exact=True).first
-            if k.count() > 0 and k.is_visible():
-                print(f"  przycisk: {nazwa!r}", flush=True)
-                if wyslij:
-                    k.click(timeout=10_000)
-                    page.wait_for_timeout(5000)
-                    # Po kliknieciu napis zmienia sie na stan przeciwny.
-                    wynik["zrobione"] = k.count() == 0 or not k.is_visible()
-                    zapisz_w_dzienniku("subskrypcja", udane=wynik["zrobione"],
-                                       komu=handle)
-                    print("  ZROBIONE" if wynik["zrobione"]
-                          else "  KLIKNIETE, ALE STAN SIE NIE ZMIENIL", flush=True)
-                else:
-                    print("  (nie klikam — tryb sprawdzenia)", flush=True)
-                break
-        else:
-            wynik["blad"] = "nie znalazłem przycisku subskrypcji"
-            print(f"  {wynik['blad']}", flush=True)
+            if k.count() == 0 or not k.is_visible():
+                continue
+            print(f"  przycisk: {nazwa!r}  ({rodzaj})", flush=True)
+            if not wyslij:
+                print("  (nie klikam — tryb sprawdzenia)", flush=True)
+                return wynik
+            k.click(timeout=10_000)
+            page.wait_for_timeout(5000)
+            # Po kliknieciu napis zmienia sie na stan przeciwny.
+            wynik["zrobione"] = k.count() == 0 or not k.is_visible()
+            zapisz_w_dzienniku(rodzaj, udane=wynik["zrobione"], komu=handle)
+            print("  ZROBIONE" if wynik["zrobione"]
+                  else "  KLIKNIETE, ALE STAN SIE NIE ZMIENIL", flush=True)
+            return wynik
+        wynik["blad"] = f"nie ma przycisku {rodzaj} u {handle}"
+        print(f"  {wynik['blad']} — nie klikam nic innego", flush=True)
     except Exception as exc:
         wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
@@ -1092,6 +1106,20 @@ def zasubskrybuj(handle: str, wyslij: bool = False) -> dict[str, Any]:
         browser.close()
         p.stop()
     return wynik
+
+
+def obserwuj_profil(handle: str, wyslij: bool = False) -> dict[str, Any]:
+    """Obserwuje cudzy profil — jego notki trafiaja do naszego kanalu.
+
+    Nie przysyla nic mailem, wiec limit jest szerszy niz przy subskrypcji.
+    """
+    return _klik_na_profilu(handle, ("Follow", "Obserwuj"), "obserwacja", wyslij)
+
+
+def zasubskrybuj(handle: str, wyslij: bool = False) -> dict[str, Any]:
+    """Subskrybuje cudzy profil. Ląduje w skrzynce właściciela, więc wąsko."""
+    return _klik_na_profilu(handle, ("Subscribe", "Subskrybuj"), "subskrypcja",
+                            wyslij)
 
 
 def _esc(t: str) -> str:
