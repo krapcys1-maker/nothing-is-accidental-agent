@@ -622,6 +622,19 @@ MAX_KOMENTARZY_NA_PUBLIKACJE = 2
 # Losujemy prog dla kazdego posta osobno, w minutach.
 MIN_WIEK_POSTA_MIN = (90, 900)      # od poltorej godziny do pietnastu
 
+# NOTKA TO NIE ARTYKUL i zyje godziny, nie dni. Ten sam prog co dla artykulow
+# oznaczal, ze pod notki wchodzilismy zawsze PO koncu rozmowy: przeglad pokazal
+# dwa cele na przebieg, oba z zerem odpowiedzi, i trzy odrzucone jako za swieze.
+# Nadal czekamy — bo odpowiedz piec sekund po notce zdradza automat, i to
+# wlasciciel zauwazyl pierwszy — ale tyle, ile trwa przeczytanie, nie pol dnia.
+MIN_WIEK_NOTKI_MIN = (20, 90)       # od dwudziestu minut do poltorej godziny
+
+# ILU KOMENTARZY POD CELEM JESZCZE NIE UWAZAMY ZA TLOK. Wyszukiwarka oddawala
+# posty ze srednio 45 komentarzami, jeden ze 126 — a komentarz sto dwudziesty
+# siodmy jest niewidoczny. Swieze konto nie wygrywa glosnoscia, tylko byciem
+# wczesnie tam, gdzie rozmowa dopiero sie zaczyna.
+KOMFORTOWO_KOMENTARZY = 25
+
 # Ile dni odstepu przed kolejnym komentarzem pod TA SAMA publikacja. Komentarz
 # pod kazdym kolejnym tekstem tej samej osoby to drugi najczytelniejszy sygnal
 # automatu — czlowiek nie czyta wszystkiego, co ktos wypuszcza.

@@ -357,6 +357,87 @@ def przeglad(dni: int = 3) -> None:
         for h, n in hosty.most_common(8):
             print(f"  {n}x  {h}" + ("   ! WIECEJ NIZ RAZ" if n > 1 else ""))
 
+    _co_z_tego_wyszlo(wpisy)
+
+
+def _co_z_tego_wyszlo(wpisy: list[dict]) -> None:
+    """Czy nasze dzialania w ogole wracaja — i ktore z nich.
+
+    Sam licznik wystawionych tresci nie mowi nic o tym, czy warto bylo. Te
+    zestawienia odpowiadaja na trzy pytania, ktorych dotad nikt nie mogl zadac:
+    co wraca czesciej, notka czy komentarz; czy oplaca sie byc wczesnie; i ktore
+    hasla wyszukiwania przynosza rozmowy zamiast ciszy.
+    """
+    import statistics
+
+    skutki = [w for w in wpisy if w.get("rodzaj") == "skutek"]
+    wystawione = [w for w in wpisy
+                  if w.get("rodzaj") in ("komentarz", "notka", "odpowiedz")
+                  and w.get("udane")]
+    if not skutki and not wystawione:
+        return
+
+    print("\n=== CO Z TEGO WYSZLO ===")
+    if not skutki:
+        print("  brak zapisanych reakcji — albo ich nie bylo, albo dziennik"
+              " jeszcze ich nie zbieral")
+    else:
+        ile_osob = sum(int(w.get("ilu") or 0) for w in skutki)
+        print(f"  reakcji: {len(skutki)} zdarzen, {ile_osob} osob")
+        for typ, n in collections.Counter(w.get("typ") for w in skutki).most_common():
+            print(f"    {typ:<16} {n}")
+
+    # Ile reakcji przypada na JEDNO dzialanie danego rodzaju. To jest liczba,
+    # ktora mowi, gdzie warto klasc wysilek.
+    na_komentarze = sum(int(w.get("ilu") or 0) for w in skutki
+                        if str(w.get("typ", "")).startswith("comment"))
+    na_notki = sum(int(w.get("ilu") or 0) for w in skutki
+                   if str(w.get("typ", "")).startswith("note"))
+    ile_kom = sum(1 for w in wystawione if w["rodzaj"] == "komentarz")
+    ile_not = sum(1 for w in wystawione if w["rodzaj"] == "notka")
+    if ile_kom or ile_not:
+        print("\n  zwrot z jednego dzialania:")
+        if ile_kom:
+            print(f"    komentarz u obcych  {na_komentarze / ile_kom:>5.2f}"
+                  f"  ({na_komentarze} reakcji / {ile_kom} komentarzy)")
+        if ile_not:
+            print(f"    notka na profilu    {na_notki / ile_not:>5.2f}"
+                  f"  ({na_notki} reakcji / {ile_not} notek)")
+
+    # CZY OPLACA SIE BYC WCZESNIE. Pod tekstem ze 126 komentarzami nasza uwaga
+    # jest niewidoczna — ale to trzeba pokazac liczbami, a nie twierdzic.
+    odpowiedzialy = {w.get("czego") for w in skutki if w.get("czego")}
+    z_pozycja = [w for w in wpisy if w.get("rodzaj") == "komentarz"
+                 and w.get("udane") and isinstance(w.get("komentarzy_przed"), int)]
+    if z_pozycja:
+        wczesnie = [w for w in z_pozycja
+                    if w["komentarzy_przed"] <= config.KOMFORTOWO_KOMENTARZY]
+        pozno = [w for w in z_pozycja
+                 if w["komentarzy_przed"] > config.KOMFORTOWO_KOMENTARZY]
+        print("\n  czy oplaca sie byc wczesnie:")
+        for nazwa, grupa in (("wczesnie (<=%s)" % config.KOMFORTOWO_KOMENTARZY, wczesnie),
+                             ("w tloku", pozno)):
+            if not grupa:
+                continue
+            wrocilo = sum(1 for w in grupa if w.get("nasz_id") in odpowiedzialy)
+            print(f"    {nazwa:<18} {len(grupa):>3} komentarzy, wrocilo {wrocilo}"
+                  f"  ({100 * wrocilo / len(grupa):.0f}%)")
+        sr = statistics.mean(w["komentarzy_przed"] for w in z_pozycja)
+        print(f"    srednio bylo przed nami {sr:.0f} komentarzy")
+
+    # KTORE HASLA PRZYNOSZA ROZMOWY. Osiemnascie hasel, a nie wiemy, ktore dzialaja.
+    wg_hasla: dict[str, list[int]] = collections.defaultdict(list)
+    for w in wpisy:
+        if w.get("rodzaj") != "komentarz" or not w.get("udane"):
+            continue
+        wg_hasla[str(w.get("skad") or "?")].append(
+            1 if w.get("nasz_id") in odpowiedzialy else 0)
+    if len(wg_hasla) > 1:
+        print("\n  skad przyszedl cel, ktory odpowiedzial:")
+        for skad, wyniki in sorted(wg_hasla.items(),
+                                   key=lambda kv: -sum(kv[1])):
+            print(f"    {skad[:44]:<44} {sum(wyniki)}/{len(wyniki)}")
+
     conn = _polaczenie()
     od = granica.strftime("%Y-%m-%d")
     koszt = conn.execute(

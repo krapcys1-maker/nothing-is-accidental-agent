@@ -652,6 +652,84 @@ def ile_dzis_wystawione() -> dict[str, int]:
         p.stop()
 
 
+def dopisz_skutki() -> int:
+    """Dopisuje do dziennika, CO Z NASZYCH DZIALAN WYNIKLO.
+
+    Dziennik wiedzial, co wystawilismy, i nic o tym, czy ktokolwiek to zauwazyl.
+    A to jest jedyne pytanie, na ktore trzeba umiec odpowiedziec, zeby cokolwiek
+    poprawic: osiemnascie komentarzy przynioslo trzy reakcje, siedem notek —
+    osiem. Musialem to policzyc recznie, bo agent tego nie zapisywal.
+
+    Kanal aktywnosci mowi o polubieniach i odpowiedziach numerami komentarzy,
+    a `wystaw_komentarz` zapisuje teraz numer naszego. Da sie wiec zestawic
+    jedno z drugim i pytac: czy komentarz jako piaty wraca czesciej niz jako
+    piecdziesiaty, i ktore z osiemnastu hasel przynosza rozmowy.
+
+    Kazde zdarzenie zapisujemy RAZ — po jego wlasnym numerze, ktory Substack
+    nadaje. Inaczej kazdy przebieg dopisywalby te same polubienia od nowa
+    i statystyka rosla by sama z siebie.
+    """
+    import json as _json
+
+    juz_zapisane = set()
+    try:
+        if DZIENNIK.exists():
+            for linia in DZIENNIK.read_text(encoding="utf-8").splitlines():
+                linia = linia.strip()
+                if not linia:
+                    continue
+                try:
+                    wpis = _json.loads(linia)
+                except ValueError:
+                    continue
+                if isinstance(wpis, dict) and wpis.get("rodzaj") == "skutek":
+                    juz_zapisane.add(wpis.get("zdarzenie"))
+    except OSError:
+        pass
+
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    nowych = 0
+    try:
+        kanal = api_json(page, "/api/v1/activity-feed-web?filter=all") or {}
+        if not isinstance(kanal, dict):
+            return 0
+        ludzie = {u["id"]: u for u in (kanal.get("users") or [])
+                  if isinstance(u, dict) and u.get("id") is not None}
+        for z in kanal.get("activityItems") or []:
+            if not isinstance(z, dict):
+                continue
+            klucz = z.get("id") or z.get("item_key")
+            if not klucz or klucz in juz_zapisane:
+                continue
+            typ = z.get("type")
+            if typ not in ("comment_like", "comment_reply", "note_like",
+                           "note_reply", "follow", "restack"):
+                continue
+            kto = [(ludzie.get(i) or {}).get("name")
+                   for i in (z.get("recent_sender_ids") or [])]
+            zapisz_w_dzienniku(
+                "skutek", udane=True, zdarzenie=klucz, typ=typ,
+                # `czego` to numer NASZEJ tresci, ktora wywolala reakcje —
+                # po nim laczymy skutek z wpisem o jej wystawieniu.
+                czego=z.get("target_comment_id"),
+                ilu=int(z.get("sender_count") or 0),
+                kto=[k for k in kto if k][:5],
+                kiedy_zdarzenia=str(z.get("created_at") or "")[:19])
+            nowych += 1
+        if nowych:
+            print(f"  [skutki] nowych reakcji na nasze tresci: {nowych}", flush=True)
+        return nowych
+    except Exception as exc:
+        print(f"  (nie dopisalem skutkow: {type(exc).__name__})", flush=True)
+        return 0
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+
+
 def odpowiedzi_na_nasze_komentarze(ile: int = 10) -> list[dict[str, Any]]:
     """Odpowiedzi na NASZE komentarze zostawione pod CUDZYMI tekstami.
 
@@ -1483,8 +1561,12 @@ def potwierdz_odpowiedz(page, note_id: int, tekst: str) -> bool:
             page.wait_for_timeout(8000)
     return False
 
-def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False) -> dict[str, Any]:
-    """Odpowiada w wątku pod naszą własną notką."""
+def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
+                     kontekst: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Odpowiada w watku — pod nasza notka albo w cudzej dyskusji.
+
+    `kontekst` jak przy komentarzu: co wiedzielismy o celu, gdy pisalismy.
+    """
     wyslij = naprawde_wyslac(wyslij, "odpowiedz")
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
@@ -1543,7 +1625,8 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False) -> dict[str
             wynik["wyslane"] = potwierdz_odpowiedz(page, note_id, tekst)
             zapisz_w_dzienniku("odpowiedz", udane=wynik["wyslane"],
                                gdzie=f"note/c-{note_id}",
-                               slow=len(tekst.split()), tekst=tekst[:300])
+                               slow=len(tekst.split()), tekst=tekst[:300],
+                               **(kontekst or {}))
             print("  ODPOWIEDŹ POTWIERDZONA W WĄTKU" if wynik["wyslane"]
                   else "  KLIKNIĘTE, ALE ODPOWIEDZI NIE MA W WĄTKU", flush=True)
         elif not wyslij:
@@ -1777,8 +1860,16 @@ def juz_sie_odezwalismy(page, url: str) -> bool:
                for c in wszystkie)
 
 
-def potwierdz_komentarz(page, url: str, tekst: str) -> bool:
-    """Pyta Substacka, czy komentarz naprawdę wisi — zamiast wierzyć kliknięciu."""
+def potwierdz_komentarz(page, url: str, tekst: str) -> int | None:
+    """Pyta Substacka, czy komentarz naprawdę wisi — zamiast wierzyć kliknięciu.
+
+    Oddaje NUMER naszego komentarza, nie samo „tak". Numer jest potrzebny, zeby
+    pozniej dopisac do dziennika, co z tego komentarza wyszlo: kanal aktywnosci
+    mowi o polubieniach i odpowiedziach wlasnie numerami. Bez tego wiemy tylko,
+    ze cos napisalismy, a nie czy ktokolwiek to zauwazyl.
+
+    Numer jest prawdziwy, wiec nadal dziala jak „tak"; brak to None.
+    """
     from urllib.parse import urlparse
 
     probka = " ".join(tekst.split())[:60]
@@ -1795,33 +1886,42 @@ def potwierdz_komentarz(page, url: str, tekst: str) -> bool:
                                    f"?comment_id={nid}") or {}
             wszystkie = [c for g in (watek.get("commentBranches") or [])
                          for c in _plaskie(g)]
-            if any(probka in " ".join((c.get("body") or "").split())
-                   for c in wszystkie):
-                return True
+            for c in wszystkie:
+                if probka in " ".join((c.get("body") or "").split()):
+                    return c.get("id")
             if nr < 3:
                 page.wait_for_timeout(8000)
-        return False
+        return None
 
     slug = url.rstrip("/").rsplit("/", 1)[-1]
     czyja = f"https://{urlparse(url).netloc}"        # publikacja AUTORA posta
     post = api_json(page, f"/api/v1/posts/{slug}", baza=czyja)
     if not isinstance(post, dict) or not post.get("id"):
-        return False
+        return None
     # Kilka prob, bo lista komentarzy — jak kanal profilu — aktualizuje sie
     # z opoznieniem, a falszywe "nie ma" rozbraja ochrone przed dublowaniem.
     for nr in range(4):
         dane = api_json(page, f"/api/v1/post/{post['id']}/comments?all_comments=true",
                         baza=czyja)
         lista = dane if isinstance(dane, list) else (dane or {}).get("comments") or []
-        if any(probka in " ".join((k.get("body") or "").split())
-               for k in lista if isinstance(k, dict)):
-            return True
+        for k in lista:
+            if isinstance(k, dict) and probka in " ".join(
+                    (k.get("body") or "").split()):
+                return k.get("id")
         if nr < 3:
             page.wait_for_timeout(8000)
-    return False
+    return None
 
-def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False) -> dict[str, Any]:
-    """Wystawia komentarz pod cudzym postem. Domyślnie WYPEŁNIA i NIE WYSYŁA."""
+def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
+                     kontekst: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Wystawia komentarz pod cudzym postem. Domyślnie WYPEŁNIA i NIE WYSYŁA.
+
+    `kontekst` to wszystko, co WIEMY O CELU w chwili pisania: skad go mamy, ile
+    komentarzy juz tam bylo, jaka publicznosc, jak stary tekst. Dziennik zapisywal
+    tylko, ze cos napisalismy — a po dwoch dniach jedyne pytanie, ktore ma
+    znaczenie, brzmi: czy warto bylo. Bez tych liczb nie da sie na nie odpowiedziec,
+    a kosztuja zero, bo mamy je juz w reku i dotad je wyrzucalismy.
+    """
     wyslij = naprawde_wyslac(wyslij, "komentarz")
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
@@ -1878,9 +1978,12 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False) -> dict[str, An
             # Strony nie da się do tego użyć: komentarze doklejają się po stronie
             # klienta i inner_text ich nie widzi — sprawdzenie po tekscie strony dało
             # fałszywy alarm przy pierwszym realnym komentarzu, który naprawdę wisiał.
-            wynik["wyslane"] = potwierdz_komentarz(page, url, tekst)
+            nasz_numer = potwierdz_komentarz(page, url, tekst)
+            wynik["wyslane"] = nasz_numer is not None
+            wynik["id"] = nasz_numer
             zapisz_w_dzienniku("komentarz", udane=wynik["wyslane"], gdzie=url,
-                               slow=len(tekst.split()), tekst=tekst[:300])
+                               slow=len(tekst.split()), tekst=tekst[:300],
+                               nasz_id=nasz_numer, **(kontekst or {}))
             print("  KOMENTARZ POTWIERDZONY U SUBSTACKA" if wynik["wyslane"]
                   else "  KLIKNIĘTE, ALE SUBSTACK GO NIE POKAZUJE", flush=True)
         elif not wyslij:

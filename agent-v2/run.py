@@ -94,6 +94,26 @@ def zajmij_zamek():
     return uchwyt
 
 
+def opis_celu(cel: dict) -> dict:
+    """Co wiedzielismy o celu w chwili pisania — do dziennika.
+
+    Te liczby juz mamy w reku przy wyborze celu i dotad je wyrzucalismy. Bez nich
+    przeglad po kilku dniach mowi tylko „napisano osiemnascie komentarzy", a nie
+    umie odpowiedziec na jedyne pytanie, ktore cos zmienia: czy komentarz jako
+    piaty wraca czesciej niz jako piecdziesiaty i ktore hasla przynosza rozmowy.
+    """
+    import kanal
+
+    return {
+        "publikacja": (cel.get("pub") or "")[:80],
+        "skad": (cel.get("skad") or "")[:60],
+        # Ilu bylo przed nami. To jest ta liczba, o ktora chodzi najbardziej.
+        "komentarzy_przed": int(cel.get("komentarze") or 0),
+        "reakcje_celu": int(cel.get("reakcje") or 0),
+        "wiek_celu_min": round(kanal._wiek_minut(cel.get("data", "")), 1),
+    }
+
+
 _KONIEC_CZASU: float | None = None
 
 
@@ -219,6 +239,9 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         # Trzy zrodla, bo rozmowa toczy sie w trzech miejscach. Trzeciego —
         # odpowiedzi na NASZE komentarze u obcych — agent nie widzial wcale
         # i takiej odpowiedzi nie podjalby nigdy, nie „pozniej".
+        # Najpierw dopisujemy, co wynikło z tego, co juz zrobilismy — bez tego
+        # dziennik mowi tylko, co wystawilismy, a nie czy ktokolwiek zauwazyl.
+        browser.dopisz_skutki()
         czekaja = (browser.nieodpowiedziane()
                    + browser.komentarze_pod_artykulami()
                    + browser.odpowiedzi_na_nasze_komentarze())
@@ -292,7 +315,11 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         # przyprowadza. Wyszukiwarka Substacka oddaje ludzi spoza kregu, i to
         # z zywymi dyskusjami. Kanal zostaje jako uzupelnienie, bo tam sa nasi
         # dotychczasowi rozmowcy.
-        pula = kanal.szukaj_nowych() + kanal.posty_z_kanalu()
+        # Tylko ARTYKULY. Notki trafialy tu razem z postami i szly sciezka
+        # artykulow — a notka nie istnieje pod adresem artykulow, wiec
+        # potwierdzenie zawsze padalo. Notki maja wlasny blok nizej.
+        pula = [x for x in kanal.szukaj_nowych() + kanal.posty_z_kanalu()
+                if x.get("rodzaj") != "notka"]
         widziane, unikalne = set(), []
         for x in pula:
             if x.get("url") and x["url"] not in widziane:
@@ -318,7 +345,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 continue
             if wyslij:
                 browser.wystaw_komentarz(cel["url"], dobre[0]["comment"],
-                                         wyslij=True)
+                                         wyslij=True,
+                                         kontekst=opis_celu(cel))
                 # Zapamietujemy U KOGO, zeby nie wracac tam za kilka dni.
                 kanal.zapamietaj_komentarz(cel)
                 stages.odczekaj("komentarz")
@@ -334,14 +362,24 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         """
         if not na_teraz["komentarze"]:
             return
-        notki = kanal.notki_z_kanalu()
+        # Dwa zrodla, bo jedno bylo glodowe: przeglad pokazal DWA cele na
+        # przebieg, oba z zerem odpowiedzi. Wyszukiwarka oddaje notki spoza
+        # naszego kregu, czyli dokladnie tych ludzi, o ktorych nam chodzi.
+        notki = kanal.notki_z_kanalu() + [
+            {"id": x.get("id"), "tekst": x.get("opis") or x.get("tytul") or "",
+             "autor": x.get("pub") or "", "reakcje": x.get("reakcje") or 0,
+             "odpowiedzi": x.get("komentarze") or 0, "url": x.get("url") or "",
+             "data": x.get("data") or "", "skad": x.get("skad") or ""}
+            for x in kanal.szukaj_nowych() if x.get("rodzaj") == "notka"]
+        notki = [n for n in notki if n.get("id")]
         if not notki:
             return
         cele = stages.wybierz_cele(
             conn, run_id,
             [{"tytul": n["tekst"][:120], "opis": n["tekst"], "pub": n["autor"],
               "komentarze": n["odpowiedzi"], "reakcje": n["reakcje"],
-              "url": n["url"], "id": n["id"]} for n in notki])
+              "url": n["url"], "id": n["id"], "data": n.get("data", ""),
+              "skad": n.get("skad", "kanal")} for n in notki])
         for cel in cele[: max(1, na_teraz["komentarze"] // 2)]:
             if not zostal_czas("dyskusje"):
                 return
@@ -355,7 +393,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 continue
             if wyslij:
                 browser.wystaw_odpowiedz(cel["id"], dobre[0]["comment"],
-                                         wyslij=True)
+                                         wyslij=True,
+                                         kontekst=opis_celu(cel))
                 stages.odczekaj("komentarz")
             zrobione["komentarze"] += 1
 

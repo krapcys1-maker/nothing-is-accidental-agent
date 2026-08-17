@@ -55,12 +55,36 @@ def _wiek_minut(data: str) -> float:
     return (datetime.now(timezone.utc) - kiedy).total_seconds() / 60
 
 
-def _za_swiezy(post: dict) -> bool:
-    """Czy post jest na tyle swiezy, ze komentarz wygladalby jak czujka bota."""
+def _za_swiezy(post: dict, widelki: tuple[int, int] | None = None) -> bool:
+    """Czy post jest na tyle swiezy, ze komentarz wygladalby jak czujka bota.
+
+    Widelki sa ROZNE dla artykulu i dla notki, bo te dwie rzeczy zyja w innym
+    tempie. Artykul czyta sie tygodniami, notka gasnie tego samego dnia.
+    """
     import random
 
-    prog = random.uniform(*config.MIN_WIEK_POSTA_MIN)
+    prog = random.uniform(*(widelki or config.MIN_WIEK_POSTA_MIN))
     return _wiek_minut(post.get("data", "")) < prog
+
+
+def wartosc_celu(x: dict) -> tuple:
+    """Klucz sortowania celow: WCZESNIE przed GLOSNO.
+
+    Sortowalismy malejaco po `reakcje * 2 + komentarze * 3`, czyli im wiekszy
+    tlok, tym wyzej. Dla konta z kilkoma czytelnikami to jest odwrotnie, niz
+    trzeba: pod tekstem ze 126 komentarzami nasza uwaga nie zostanie przeczytana
+    przez nikogo, a caly koszt jej napisania i tak ponosimy.
+
+    Wiec najpierw teksty, ktore maja ZYWA PUBLICZNOSC, ale jeszcze malo
+    komentarzy — tam da sie byc jednym z pierwszych glosow. Zatloczone zostaja
+    na koncu, jako uzupelnienie, a nie jako pierwszy wybor.
+    """
+    kom = int(x.get("komentarze") or 0)
+    rea = int(x.get("reakcje") or 0)
+    jest_tlok = kom > config.KOMFORTOWO_KOMENTARZY
+    # W grupie „jeszcze jest miejsce" wygrywa najzywsza publicznosc.
+    # W grupie „tlok" wygrywa ten, gdzie tloku najmniej.
+    return (1 if jest_tlok else 0, kom if jest_tlok else -rea)
 
 
 def _za_niedawno_u_nich(post: dict) -> bool:
@@ -109,6 +133,8 @@ def posty_z_kanalu(ile: int = 25) -> list[dict[str, Any]]:
                 "reakcje": x.get("reaction_count") or 0,
                 "url": x.get("canonical_url") or "",
                 "data": x.get("post_date") or "",   # pelna, do liczenia wieku
+                "skad": "kanal czytelnika",
+                "rodzaj": "post",
             }
             # DWA SITA, oba o ZACHOWANIU, nie o tresci.
             if _za_swiezy(kandydat):
@@ -165,14 +191,17 @@ def notki_z_kanalu(ile: int = 25) -> list[dict]:
                 "odpowiedzi": c.get("children_count") or 0,
                 "data": c.get("date") or "",
                 "url": f"https://substack.com/note/c-{c.get('id')}",
+                "rodzaj": "notka",
             }
-            if _za_swiezy(kandydat):
+            if _za_swiezy(kandydat, config.MIN_WIEK_NOTKI_MIN):
                 odrzucone += 1
                 continue
             notki.append(kandydat)
         # Najzywsze najpierw: tam nasza uwaga zostanie przeczytana.
-        notki.sort(key=lambda n: n["reakcje"] * 2 + n["odpowiedzi"] * 3,
-                   reverse=True)
+        # Pod notkami liczy sie to samo co pod artykulami: zywa publicznosc,
+        # ale jeszcze miejsce, zeby nasza uwaga zostala przeczytana.
+        notki.sort(key=lambda n: wartosc_celu(
+            {"komentarze": n["odpowiedzi"], "reakcje": n["reakcje"]}))
         print(f"  [notki innych] {len(notki)} do rozwazenia"
               f"   ({odrzucone} odrzuconych jako za swieze)", flush=True)
         return notki[:ile]
@@ -222,6 +251,7 @@ def szukaj_nowych(ile: int = 20) -> list[dict]:
                         "url": post.get("canonical_url"),
                         "data": post.get("post_date") or "",
                         "skad": f"szukanie: {haslo}",
+                        "rodzaj": "post",
                     }
                 elif kom.get("body") and not kom.get("post_id"):
                     kandydat = {
@@ -234,6 +264,7 @@ def szukaj_nowych(ile: int = 20) -> list[dict]:
                         "id": kom.get("id"),
                         "data": kom.get("date") or "",
                         "skad": f"szukanie: {haslo}",
+                        "rodzaj": "notka",
                     }
                 else:
                     continue
@@ -241,7 +272,9 @@ def szukaj_nowych(ile: int = 20) -> list[dict]:
                 if config.SUBSTACK_HANDLE in (kandydat["url"] or ""):
                     odrzucone["nasze"] += 1
                     continue
-                if _za_swiezy(kandydat):
+                if _za_swiezy(kandydat,
+                              config.MIN_WIEK_NOTKI_MIN
+                              if kandydat["rodzaj"] == "notka" else None):
                     odrzucone["swieze"] += 1
                     continue
                 if _za_niedawno_u_nich(kandydat):
@@ -249,9 +282,7 @@ def szukaj_nowych(ile: int = 20) -> list[dict]:
                     continue
                 znalezione[kandydat["url"]] = kandydat
 
-        wynik = sorted(znalezione.values(),
-                       key=lambda n: n["reakcje"] * 2 + n["komentarze"] * 3,
-                       reverse=True)[:ile]
+        wynik = sorted(znalezione.values(), key=wartosc_celu)[:ile]
         print(f"  [szukanie] hasla: {', '.join(hasla)}", flush=True)
         print(f"  [szukanie] nowych celow: {len(wynik)}"
               f"   (odrzucone: {odrzucone['swieze']} świeżych,"
