@@ -36,8 +36,14 @@ ARTICLES_DIR = DATA_DIR / "articles"
 # Korpus stylu. Przypięty hashem, bo to jedyna rzecz odróżniająca to konto od
 # tysiąca innych — loader ma odmówić, jeśli ktoś po cichu podmieni głos, na
 # który właściciel się zgodził.
+#
+# HASH BYL BLEDNY OD POCZATKU i zablokowal pierwsze prawdziwe napisanie
+# artykulu. Plik nie byl ruszany ani razu — jeden commit w calej historii,
+# ten sam bajt w bajt w gicie i na serwerze, bez znakow CR. Czyli przypieta
+# wartosc nigdy nie odpowiadala zatwierdzonemu korpusowi. Ta ponizej jest
+# policzona z pliku, ktory od poczatku lezy w repozytorium.
 STYLE_CORPUS = PROMPTS_DIR / "styl" / "article_style_samples_v1.txt"
-STYLE_CORPUS_SHA256 = "0b05cefa6701e6447c44810b686828a83c19ca7ffb29066778a13c24207acb1d"
+STYLE_CORPUS_SHA256 = "d4e4e6bf928421d6a0eed6a6cafc796807ea289b275ff1a7aced49329de6638e"
 STYLE_PROFILES_DIR = REPO_ROOT / "instrukcja dla pisania artykulow"
 
 load_dotenv(ENV_PATH)
