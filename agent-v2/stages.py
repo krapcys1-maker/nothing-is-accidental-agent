@@ -1371,6 +1371,62 @@ def classify(
     return kept
 
 
+def _dobierz_przegladarka(conn, run_id: int, brakujace: list[dict[str, Any]],
+                          juz_mamy: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drugie podejscie do stron, ktore zwyklemu pobieraniu daly pusty szkielet.
+
+    Polowa zrodel przepadala i to bylo waskie gardlo jakosci: artykul o blokadzie
+    na karcie stanal na DWOCH dokumentach z szesciu znalezionych, bo `visa.no`
+    i `mtf.mastercard.com.au` oddaly zero znakow. To nie sa blokady — to strony
+    rysowane JavaScriptem, ktorych klient HTTP nie widzi. Przegladarke mamy
+    i uzywamy jej do komentarzy; tutaj jej nie bylo.
+
+    NIE dotyczy odmow ani bledow 404. Host, ktory mowi automatowi „nie", dostaje
+    „nie" — to zasada projektu i nie omijamy jej narzedziem. Adres, ktory nie
+    istnieje, nie zacznie istniec w przegladarce.
+    """
+    if not brakujace:
+        return []
+    import browser
+
+    print(f"  [pobranie] drugie podejscie w przegladarce: {len(brakujace)} stron",
+          flush=True)
+    odzyskane: list[dict[str, Any]] = []
+    try:
+        strony = {s["url"]: s for s in browser.read_pages([x["url"] for x in brakujace])}
+    except Exception as exc:
+        print(f"  [pobranie] przegladarka zawiodla: {type(exc).__name__}", flush=True)
+        return []
+
+    for source in brakujace:
+        strona = strony.get(source["url"]) or {}
+        tekst = (strona.get("text") or "").strip()
+        host = source.get("host") or _host(source["url"])
+        niski = tekst.lower()
+        if any(fraza in niski for fraza in config.REFUSAL_PHRASES):
+            powod = "host odmówił automatowi"
+        elif len(tekst) < config.FETCH_MIN_CHARS:
+            powod = f"też pusto w przeglądarce ({len(tekst)} znaków)"
+        else:
+            powod = None
+        print(f"  [pobranie2] {'OK  ' if powod is None else 'NIE '} {host:28.28} "
+              f"{len(tekst):>6} znaków  {powod or ''}", flush=True)
+        conn.execute(
+            "UPDATE sources SET fetched_ok = ?, fail_reason = ? "
+            "WHERE run_id = ? AND url = ?",
+            (int(powod is None), powod or "odzyskane w przeglądarce",
+             run_id, source["url"]),
+        )
+        if powod is None:
+            wpis = dict(source)
+            wpis["text"] = tekst
+            odzyskane.append(wpis)
+    if odzyskane:
+        print(f"  [pobranie] przegladarka odzyskala {len(odzyskane)} z {len(brakujace)}",
+              flush=True)
+    return odzyskane
+
+
 def fetch(
     conn: sqlite3.Connection, run_id: int, sources: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -1383,6 +1439,7 @@ def fetch(
     import trafilatura
 
     fetched: list[dict[str, Any]] = []
+    do_przegladarki: list[dict[str, Any]] = []
     with httpx.Client(
         timeout=config.FETCH_TIMEOUT_S,
         follow_redirects=True,
@@ -1430,6 +1487,13 @@ def fetch(
                 entry = dict(source)
                 entry["text"] = text
                 fetched.append(entry)
+            elif reason and reason.startswith("za mało treści"):
+                # NIE spisujemy na straty: strona moze byc rysowana JavaScriptem,
+                # a zwykly klient HTTP widzi wtedy pusty szkielet. Do drugiego
+                # podejscia w przegladarce.
+                do_przegladarki.append(source)
+
+    fetched.extend(_dobierz_przegladarka(conn, run_id, do_przegladarki, fetched))
     conn.commit()
 
     primary = sum(1 for s in fetched if s.get("class") == "PRIMARY")
