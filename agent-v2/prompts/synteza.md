@@ -46,11 +46,40 @@ that ignores the contradiction is a false one.
 answer, that the evidence does not answer. The writer will state these limits
 once, in the text.
 
+## Where else this same shape appears
+
+This is the field that decides whether the article is interesting or merely
+correct, so give it real thought.
+
+Name **two to four other domains where the same mechanism shows up**. Not
+loose comparisons — the same logic doing the same work somewhere the reader
+would not expect.
+
+A worked example from a piece that succeeded. The subject was the vent hole in
+an aircraft window: pierce the inner pane so it carries no pressure, and the
+outer pane takes the whole load. The shape is *build a deliberate weakness so
+you can choose where the strength goes*. The same shape is the electrical fuse,
+the sacrificial anode on a ship's hull, and the crumple zone in a car. Three
+domains, one idea, and the article became about something larger than a window.
+
+A piece that failed had none of this. The open-jar symbol on cosmetics is a
+countdown that starts when you break the seal — true, sourced, and finished in
+two sentences. With nothing to open outward into, it was padded to eleven
+hundred words and nobody was any richer for reading it.
+
+These are the writer's READING, not claims from the record, so they do not need
+sources — but they must be accurate. A parallel that does not survive a moment's
+thought is worse than none, because it invites the reader to stop trusting the
+parts that are sourced.
+
+If the mechanism genuinely appears nowhere else, return an empty list. Saying so
+honestly lets the article be written short instead of stretched.
+
 ## Output
 
 Return only valid JSON, shaped exactly as:
 
-{{"working_thesis": "...", "main_mechanism": "...", "confirmed_claims": [{{"claim": "...", "evidence": "<verbatim excerpt>", "url": "..."}}], "citable_numbers": [{{"value": "...", "means": "...", "url": "..."}}], "uncertain_claims": ["..."], "contradictions": ["..."], "not_established": ["..."]}}
+{{"working_thesis": "...", "main_mechanism": "...", "confirmed_claims": [{{"claim": "...", "evidence": "<verbatim excerpt>", "url": "..."}}], "citable_numbers": [{{"value": "...", "means": "...", "url": "..."}}], "parallel_mechanisms": [{{"domain": "...", "how_it_matches": "<one sentence: the same logic doing the same work>"}}], "uncertain_claims": ["..."], "contradictions": ["..."], "not_established": ["..."]}}
 
 ## The evidence
 

@@ -352,6 +352,29 @@ CARD_MAX_CLAIM_CHARS = 240
 # Zmierzone na dziewięciu artykułach: przy „cel 1075, zakres 950-1250" model
 # kotwiczył się przy górnej granicy (średnia 1212). Sufit obniżony, a prompt
 # mówi teraz wprost, że 1075 to cel, nie podłoga.
+# DLUGOSC SKALOWANA DO MATERIALU, nie stala.
+#
+# Bylo `TARGET_WORDS = 1075` przy `MIN_WORDS = 950`, wiec pisarz MUSIAL napisac
+# tysiac slow z czegokolwiek dostal. Artykul o symbolu otwartego sloiczka dostal
+# material na trzysta i wypelnil reszte: ten sam mechanizm trzy razy, trzy
+# akapity o tym, czego dowody nie mowia, i opowiesc o wlasnym researchu.
+#
+# Teraz odsiew ocenia, czy temat ma DRUGI AKT, a dlugosc idzie za ta ocena.
+# Waski temat nie jest odrzucany — dostaje krotsza forme, i to jest w porzadku.
+DLUGOSC_WG_GLEBOKOSCI = {
+    # drugi mechanizm albo ta sama rzecz w kilku dziedzinach
+    "RICH":   {"cel": 1075, "min": 900, "max": 1250},
+    # jeden mechanizm, dobrze udokumentowany
+    "SINGLE": {"cel": 650,  "min": 480, "max": 820},
+}
+
+
+def dlugosc_dla(glebokosc: str) -> dict[str, int]:
+    """Ile slow ma miec artykul o tej glebokosci."""
+    return DLUGOSC_WG_GLEBOKOSCI.get(
+        (glebokosc or "").upper(), DLUGOSC_WG_GLEBOKOSCI["RICH"])
+
+
 TARGET_WORDS = 1075
 MIN_WORDS = 950
 MAX_WORDS = 1200

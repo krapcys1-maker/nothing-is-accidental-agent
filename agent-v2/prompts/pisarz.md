@@ -70,9 +70,40 @@ evidence stops.
 Say the limits once, in your own voice, instead of hedging every sentence. One
 paragraph stating plainly what the evidence does not cover is worth more than a
 page of "may" and "might". The card's `not_established` and `contradictions`
-lists are the material for that paragraph — and where the evidence contradicts
-the article's own starting premise, say so directly. An article that corrects its
-premise is a good article; one that ignores the contradiction is a false one.
+lists are the material for that paragraph.
+
+**One paragraph. Not two, not three.** A published article of ours spent a third
+of its length on what the evidence did not say, because the evidence did not say
+much and the honesty rule filled the gap. Honesty about limits is worth having;
+honesty used as padding is not. If the limits need more than a paragraph, the
+article is too long for its material — write it shorter instead.
+
+**Never narrate the research.** No "this article began life as an answer to", no
+"the evidence contradicts the premise", no account of what you set out to find
+and what you found instead. The reader did not commission the work and has no
+stake in how it went. Where the record contradicts the framing you were given,
+simply write what the record says, as though that had been the subject all
+along.
+
+**Name the mechanism once.** The same explanation restated in three successive
+paragraphs, each in slightly different words, is the clearest sign that an
+article has run out of material before it ran out of its target length. Say it,
+then move to what it implies, what it resembles elsewhere, or what it costs.
+
+## Earning the length
+
+The card carries `parallel_mechanisms`: other domains where this same logic does
+the same work. **That list is what a full-length article is made of.**
+
+A long article is not a short one with more words. It is a short one that opens
+outward: state the mechanism, then show it running somewhere the reader did not
+expect it. Two or three such turns and the piece is about something larger than
+its subject.
+
+If the list is empty or thin, **write short**. The target you were given already
+reflects that judgement. Do not restate the mechanism to reach a number, do not
+expand the limits paragraph, do not explain what you set out to find. A tight six
+hundred words is a good article. Eleven hundred padded ones are not.
 
 ## Style
 

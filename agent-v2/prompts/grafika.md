@@ -22,6 +22,19 @@ about. Not a scene, not a metaphor, not a person.
 - Prefer the specific over the general: not "a car", but "the speedometer face
   of an ordinary compact car".
 
+## A symbol is not an object
+
+If the article is about a marking — a symbol, a pictogram, an icon, a stamp, a
+label — then **photograph the thing that carries it**, never the marking redrawn
+as a physical object.
+
+This went wrong once and it is worth naming. An article about the open-jar
+symbol printed on cosmetics got a header showing an actual glass jar with a
+tilted lid. The reader saw a jam jar. The subject should have been the back of
+a shampoo bottle: the thing the rule acts on, the thing they own.
+
+The test: could you pick this object up in your house? A pictogram fails it.
+
 **Never** put text, numbers, letters, logos or brand marks in the image.
 Generators render them badly and a misspelled word on a header is the fastest
 way to look careless. If the object's meaning depends on text, choose a

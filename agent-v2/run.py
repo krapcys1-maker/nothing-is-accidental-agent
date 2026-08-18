@@ -694,7 +694,10 @@ def main() -> int:
         stage = "write"
         print("\n-- pisanie --", flush=True)
         try:
-            draft = cached(stage, lambda: stages.write(conn, run_id, card), args.use_cache)
+            glebokosc = str(verdict.get("depth") or "RICH").upper()
+            draft = cached(stage,
+                           lambda: stages.write(conn, run_id, card, glebokosc),
+                           args.use_cache)
         except Exception as exc:
             # Jedno powtórzenie na Opusie, bo tu ginie cały opłacony research.
             # Opus jest sprawdzonym pisarzem tego potoku; jeśli skonfigurowany
@@ -705,7 +708,7 @@ def main() -> int:
                 flush=True,
             )
             config.MODEL_FOR["write"] = config.CLAUDE
-            draft = stages.write(conn, run_id, card)
+            draft = stages.write(conn, run_id, card, glebokosc)
         words = len(draft["body"].split())
         print(f"\n   tytuł: {draft.get('title')}", flush=True)
         print(f"   podtytuł: {draft.get('subtitle', '')}", flush=True)

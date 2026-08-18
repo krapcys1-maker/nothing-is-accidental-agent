@@ -155,9 +155,20 @@ WRITER_SYSTEM = (
 
 
 def write(
-    conn: sqlite3.Connection, run_id: int, card: dict[str, Any]
+    conn: sqlite3.Connection, run_id: int, card: dict[str, Any],
+    glebokosc: str = "RICH",
 ) -> dict[str, Any]:
-    """Etap 7 — artykuł (Claude). To jest produkt."""
+    """Etap 7 — artykuł (Claude). To jest produkt.
+
+    `glebokosc` pochodzi z odsiewu i decyduje o DLUGOSCI. Temat bez drugiego
+    aktu dostaje krotsza forme zamiast rozciagania: artykul o symbolu
+    otwartego sloiczka mial material na trzysta slow i przy sztywnym celu
+    tysiaca wypelnil reszte powtorzeniami.
+    """
+
+    dl = config.dlugosc_dla(glebokosc)
+    print("  [pisanie] glebokosc %s -> cel %s slow (%s-%s)"
+          % (glebokosc, dl["cel"], dl["min"], dl["max"]), flush=True)
     import style
 
     examples = style.load_examples()
@@ -168,9 +179,9 @@ def write(
     prompt = _prompt(
         "pisarz.md",
         language=config.ARTICLE_LANGUAGE,
-        target_words=config.TARGET_WORDS,
-        min_words=config.MIN_WORDS,
-        max_words=config.MAX_WORDS,
+        target_words=dl["cel"],
+        min_words=dl["min"],
+        max_words=dl["max"],
         style_examples=rendered,
         style_positive=positive,
         style_negative=negative,
@@ -1537,10 +1548,20 @@ def feasibility(
 def pick_topic(
     topics: list[dict[str, Any]], assessments: list[dict[str, Any]]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Wybiera temat: wykonalny, o najwyższej pewności, najwięcej źródeł."""
+    """Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel.
+
+    Glebokosc idzie przed pewnoscia, bo dobrze udokumentowany temat bez drugiego
+    aktu daje artykul poprawny i nudny — a to jest gorsze niz temat nieco slabiej
+    udokumentowany, ktory ma o czym opowiadac. THIN nie jest odrzucany z miejsca,
+    tylko laduje na koncu kolejki: siegamy po niego dopiero, gdy nie ma nic
+    lepszego, i wtedy dostaje najkrotsza forme.
+    """
+    waga = {"RICH": 2, "SINGLE": 1, "THIN": 0}
     ranked = sorted(
         (a for a in assessments if a.get("feasible")),
-        key=lambda a: (a.get("confidence", 0), a.get("expected_primary_sources", 0)),
+        key=lambda a: (waga.get(str(a.get("depth", "RICH")).upper(), 1),
+                       a.get("confidence", 0),
+                       a.get("expected_primary_sources", 0)),
         reverse=True,
     )
     if not ranked:
