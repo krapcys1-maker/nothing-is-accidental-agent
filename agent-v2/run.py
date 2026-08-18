@@ -138,6 +138,41 @@ def zostal_czas(na_co: str = "") -> bool:
     return False
 
 
+def zmiesci_sie(rodzaj: str, ile: int, udzial: float = 1.0) -> int:
+    """Ile z zaplanowanych dzialan NAPRAWDE zmiesci sie w czasie przebiegu.
+
+    Rozdzielnik dzielil dzienna norme, nie patrzac na zegar. Po wydluzeniu
+    odstepow miedzy notkami do 45-90 minut wieczorna rutyna dostala cztery notki
+    — od trzech do szesciu godzin samego czekania przy budzecie 2h15. Zdazyla
+    jedna i do komentarzy nie doszla w ogole.
+
+    Obietnica, ktorej nie da sie dotrzymac, jest gorsza od mniejszej: blokuje
+    reszte przebiegu. Lepiej wystawic dwie notki i czternascie komentarzy niz
+    obiecac cztery notki i nie zrobic nic poza jedna.
+    """
+    import time
+
+    if _KONIEC_CZASU is None or ile <= 0:
+        return ile
+    dol, gora = config.ODSTEPY.get(rodzaj, config.ODSTEP_MIEDZY_DZIALANIAMI)
+    odstep = (dol + gora) / 2
+    zostalo = max(0.0, _KONIEC_CZASU - time.time()) * udzial
+
+    # PRZERW JEST O JEDNA MNIEJ NIZ DZIALAN. Przy dwoch notkach czekamy raz, nie
+    # dwa — pierwsza wersja liczyla przerwe po kazdej i wychodzilo o polowe za malo.
+    def potrzeba(n: int) -> float:
+        return n * config.CZAS_DZIALANIA_S + max(0, n - 1) * odstep
+
+    mozliwe = ile
+    while mozliwe > 0 and potrzeba(mozliwe) > zostalo:
+        mozliwe -= 1
+    if mozliwe < ile:
+        print(f"  [czas] {rodzaj}: {ile} sie nie zmiesci, biore {mozliwe}"
+              f" (odstep ~{odstep / 60:.0f} min, zostalo {zostalo / 60:.0f} min)",
+              flush=True)
+    return mozliwe
+
+
 def ile_przebiegow_zostalo(conn) -> int:
     """Ile przebiegow dnia jeszcze bedzie, wliczajac biezacy.
 
@@ -205,6 +240,10 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     zostalo_przebiegow = ile_przebiegow_zostalo(conn)
     na_teraz = {k: max(1, round(v / zostalo_przebiegow)) if v else 0
                 for k, v in zostalo.items()}
+    # Obietnica przyciete do zegara. Notki maja pierwszenstwo, ale nie caly przebieg.
+    na_teraz["notki"] = zmiesci_sie("notka", na_teraz["notki"],
+                                    config.UDZIAL_CZASU_NA_NOTKI)
+    na_teraz["komentarze"] = zmiesci_sie("komentarz", na_teraz["komentarze"])
     print(f"   dzis juz: notki={juz.get('notki', 0)} "
           f"komentarze={juz.get('komentarze', 0)} lajki={juz.get('lajki', 0)}   "
           f"przebiegow zostalo: {zostalo_przebiegow}   "

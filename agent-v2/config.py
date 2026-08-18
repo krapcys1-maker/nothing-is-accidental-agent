@@ -879,6 +879,21 @@ ODSTEP_MIEDZY_DZIALANIAMI = (45, 180)   # zapas dla czynnosci bez wlasnego wpisu
 # porze co do kwadransa. Losowa zwloka rozmywa sam moment startu — godziny
 # zostaja te, ktore wybralismy, ale minuty przestaja byc przewidywalne.
 ZWLOKA_PRZED_NOTKAMI = (0, 2400)        # 0-40 min
+
+# ILE CZASU PRZEBIEGU WOLNO ZJESC SAMYM NOTKOM.
+#
+# Rozdzielnik dzienny nie wiedzial nic o czasie: dzielil norme tak, jakby
+# dzialania byly natychmiastowe. Po wydluzeniu odstepow do 45-90 minut wieczorna
+# rutyna dostala CZTERY notki, czyli od trzech do szesciu godzin samego czekania
+# przy budzecie dwoch godzin pietnastu minut. Po 2h17 miala jedna notke i spala,
+# a do czternastu zaplanowanych komentarzy nie doszla wcale.
+#
+# Notki maja pierwszenstwo, bo sa rzadsze i wazniejsze — ale nie caly przebieg.
+UDZIAL_CZASU_NA_NOTKI = 0.60
+
+# Ile trwa samo dzialanie poza przerwa: napisanie, sprawdzenie faktow,
+# wystawienie i potwierdzenie u zrodla. Z realnych przebiegow.
+CZAS_DZIALANIA_S = 240
 MAX_DZIALAN_NA_GODZINE = 12
 
 # Ile razy dziennie wolno zagadac TE SAMA publikacje. Siedemnascie komentarzy
