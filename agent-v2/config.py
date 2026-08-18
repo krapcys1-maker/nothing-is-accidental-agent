@@ -527,9 +527,12 @@ NOTE_FORMS = {
     ),
     "LISTA": (
         "Three consecutive short lines that begin with the same word, then one "
-        "closing line that lands the point. The repetition is the point: it "
-        "builds a visual pattern that stops a thumb. Keep each line under ten "
-        "words."
+        "closing line that lands the point. The repetition builds a visual "
+        "pattern that stops a thumb. Keep each line under ten words. "
+        "EVERY line must carry a fact the previous line did not. Three lines "
+        "that restate one idea to satisfy the pattern are worse than no pattern "
+        "at all: the reader gets the shape of an argument with nothing inside "
+        "it. If you only have one fact, this is not the form for it."
     ),
     "LICZBA": (
         "Open with the number itself, alone on the first line — a figure, a "
@@ -545,7 +548,9 @@ NOTE_FORMS = {
     "ODWROCENIE": (
         "First line: the thing everyone believes, stated fairly and without "
         "mockery. Blank line. Then the record that contradicts it, and why the "
-        "belief was reasonable in the first place."
+        "belief was reasonable in the first place. Break that second half too — "
+        "four sentences crammed into one block undoes the whole point of the "
+        "shape."
     ),
 }
 
