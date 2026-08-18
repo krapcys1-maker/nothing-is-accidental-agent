@@ -471,6 +471,8 @@ def odczekaj(co: str = "") -> None:
     time.sleep(ile)
 
 
+NOWA_LINIA = chr(10)
+
 ZUZYTE_FAKTY = config.DATA_DIR / "zuzyte_fakty.json"
 
 
@@ -578,8 +580,18 @@ def znajdz_ciekawostki(
     źródło to pamięć modelu — czyli dokładnie to, co wycięliśmy z komentarzy.
     """
     zuzyte = wczytaj_zuzyte()
+    import random
+
+    # DZIEDZINY LOSOWANE NA KAZDY PRZEBIEG. Bez tego model dostawal te same
+    # piec obszarow zawsze i wracal w te same okolice — dwanascie pierwszych
+    # notek to niemal wylacznie amerykanska infrastruktura i przepisy.
+    dziedziny = random.sample(list(config.DZIEDZINY_CIEKAWOSTEK),
+                              k=min(config.ILE_DZIEDZIN_NA_PRZEBIEG,
+                                    len(config.DZIEDZINY_CIEKAWOSTEK)))
+    print(f"  [ciekawostki] dziedziny: {chr(44).join(dziedziny)}", flush=True)
     prompt = _prompt(
         "ciekawostki.md", ile=ile,
+        dziedziny=NOWA_LINIA.join(f"- {d}" for d in dziedziny),
         uzyte=("\n".join(f"- {t}" for t in zuzyte[-config.CURIOSITY_MEMORY:])
                or "(nothing yet — this is the first batch)"),
     )

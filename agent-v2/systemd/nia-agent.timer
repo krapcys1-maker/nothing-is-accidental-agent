@@ -2,25 +2,22 @@
 Description=Zegar agenta NIA
 
 [Timer]
-# TRZY uruchomienia dziennie, nie jedno. Wlasciciel zauwazyl, ze dwie notki
-# wyszly trzy minuty po sobie: caly dzienny przydzial szedl w jednym ciagu.
-# Kazdy przebieg dobiera tylko brakujaca czesc, wiec notki rozkladaja sie na
-# godziny.
+# GODZINY DOBRANE POD STREFE CZYTELNIKOW, nie pod nasza wygode. Zapisane w UTC,
+# bo serwer stoi na UTC i tak ma zostac; w nawiasie czas wschodniego wybrzeza
+# w okresie letnim (UTC-4).
 #
-# Godziny sluza CZYTELNIKOM, nie serwerowi: 11:20, 15:00 i 20:10 UTC to 7:20,
-# 11:00 i 16:10 rano i po poludniu w Nowym Jorku. Poprzednie 16:40 UTC wypadalo
-# 12:40 u czytelnikow, czyli w NAJGORSZYM oknie wg researchu.
+# Badanie na 9 641 notkach: najgorsze okno tygodnia to 8:00-12:00 ET, bo wtedy
+# publikuja wszyscy i konkurencja jest najwieksza. Najlepsze to 15:00-22:00 ET
+# w dni robocze i wieczor weekendu. Nasz przebieg o 15:00 UTC to bylo dokladnie
+# 11:00 ET, czyli srodek najgorszego okna.
 #
-# Wszystkie sa tez POZA szczytem taryfowym DeepSeeka (01-04 i 06-10 UTC),
-# wiec jedna decyzja zalatwia dwie rzeczy: wyglada po ludzku i kosztuje polowe.
+# Nasze wlasne dane wskazuja ten sam kierunek, ale sa za slabe, zeby na nich
+# polegac: dwie najmocniejsze notki wyszly 23:57 i 08:02 ET, obie w weekend,
+# przy jednej notce na godzine w probce.
 OnCalendar=*-*-* 11:20:00
-OnCalendar=*-*-* 15:00:00
-OnCalendar=*-*-* 20:10:00
+OnCalendar=*-*-* 19:20:00
+OnCalendar=*-*-* 23:40:00
 Persistent=true
-
-# Losowe opoznienie do 25 minut: agent odpalajacy sie co do sekundy o rownej
-# godzinie kazdego dnia jest rozpoznawalny jako maszyna nawet bez patrzenia
-# w tresc.
 RandomizedDelaySec=1500
 
 [Install]

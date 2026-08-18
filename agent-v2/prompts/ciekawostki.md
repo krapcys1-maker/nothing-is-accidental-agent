@@ -6,9 +6,26 @@ against is not a fact you can use here.
 ## What this publication is
 
 Nothing Is Accidental explains the hidden systems, incentives and decisions
-behind ordinary things: airports, supermarkets, subscriptions, cities, everyday
-technology. The recurring move is the gap between what everyone assumes and what
-the record says.
+behind ordinary things. The recurring move is the gap between what everyone
+assumes and what the record says.
+
+## Where to look this time
+
+Take your facts from these areas and no others:
+
+{dziedziny}
+
+These rotate every run. Going back to the areas you find easiest is how a feed
+turns monotonous, and the reader notices the sameness long before they notice
+the repetition.
+
+## Do not make everything American
+
+The first twelve notes on this account were almost all US federal regulation.
+That is one country and one kind of document, and it reads as a narrow beat.
+A rule from the EU, Japan, Brazil or India is not a lesser fact — and a rule
+that differs BETWEEN two countries is the strongest kind this publication has,
+because the difference itself proves somebody decided.
 
 ## What makes a fact usable
 
@@ -34,8 +51,8 @@ wanting to know who found that out. In practice that means:
   round the record actually runs before you use it.
 - Pure numbers with no human decision behind them.
 
-Aim wide: {ile} facts from {ile} different domains, not {ile} angles on one
-subject.
+Aim wide: {ile} facts spread across the areas listed above, not {ile} angles on
+one subject. If two of your facts share a mechanism, drop one and go elsewhere.
 
 ## Already used — do not return these, or anything close to them
 

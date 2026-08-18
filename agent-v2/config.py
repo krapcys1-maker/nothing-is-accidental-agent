@@ -441,6 +441,87 @@ NOTE_MAX_WORDS = 64
 NOTE_CANDIDATES = 3
 # Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich,
 # a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas na kilka dni.
+# DZIEDZINY, Z KTORYCH BIORA SIE TEMATY NOTEK.
+#
+# Prompt mial na sztywno piec obszarow: lotniska, supermarkety, subskrypcje,
+# miasta, codzienna technika. Lista zuzytych faktow blokowala powtorzenie
+# konkretu, ale nie blokowala krazenia po tym samym terytorium — i widac to
+# w dwunastu pierwszych notkach: jajka, mleko, bankomat, banknoty, winda, znak
+# stop, dlugopis, hydrant. Amerykanska infrastruktura i przepisy konsumenckie
+# w kolko.
+#
+# Komentarze rotowaly osiemnascie hasel od poczatku. Notki nie rotowaly nic.
+DZIEDZINY_CIEKAWOSTEK = (
+    # --- codzienna infrastruktura i przepisy (byla to CALA lista) ------------
+    "airports, borders and air travel",
+    "supermarkets, food retail and what may be claimed on a label",
+    "subscriptions, pricing, billing and fees",
+    "streets, traffic and city infrastructure",
+    "housing, construction and building codes",
+    "post, parcels, ports and shipping containers",
+    "water, sewage, electricity and heating",
+    "waste, recycling and packaging",
+    "lifts, escalators, locks, keys and doors",
+    "weights, measures, calendars and timekeeping",
+
+    # --- pieniadze i firmy ---------------------------------------------------
+    "how large companies actually make their money",
+    "banking, cash, payments and what a currency really is",
+    "insurance and how risk gets priced",
+    "supply chains and who bears the cost when they break",
+    "advertising, brands and what an image is allowed to promise",
+    "Substack and the economics of online publishing itself",
+    "monopolies, cartels and the rules written to stop them",
+
+    # --- prawo, w tym prawo dziwne ------------------------------------------
+    "laws that sound invented but are real, and why they were passed",
+    "laws that stayed on the books long after they stopped making sense",
+    "courts, evidence and how a fact gets proved officially",
+    "rights that had to be fought for in ordinary places",
+
+    # --- historia -----------------------------------------------------------
+    "how an everyday thing worked before the modern version",
+    "the medieval world: guilds, tolls, markets, punishment, measurement",
+    "ancient and pre-modern engineering that still constrains us",
+    "wars, treaties and borders that explain a present-day rule",
+    "how something was standardised, and who lost the argument",
+
+    # --- swiat poza Ameryka --------------------------------------------------
+    "Europe: a rule or system that differs sharply from the American one",
+    "Africa: infrastructure, money or law that works on its own logic",
+    "Asia: standards, cities and industry",
+    "South America: resources, cities and regulation",
+    "Australia, New Zealand and the Pacific",
+    "the same ordinary thing governed oppositely in two countries",
+
+    # --- ludzie i spoleczenstwo ---------------------------------------------
+    "schools, exams, qualifications and who gets let in",
+    "work: hours, wages, safety and what a job legally is",
+    "health, medicine, pharmacies and medical devices",
+    "funerals, births, names and the paperwork of a life",
+    "language, writing systems and why spelling is what it is",
+    "sport: rules, equipment, officiating and money",
+    "museums, libraries, archives and who owns the past",
+
+    # --- przyroda i nauka ----------------------------------------------------
+    "animals: behaviour, law protecting them, and what we got wrong",
+    "plants, farming, livestock and where food actually comes from",
+    "weather, climate and the instruments that measure them",
+    "geology, oceans, rivers and what the ground decides",
+    "astronomy, space agencies and the rules of orbit",
+    "physics and chemistry hiding inside an ordinary object",
+    "medicine and biology: a mechanism most people have backwards",
+    "measurement and instruments: how we know a number is true",
+
+    # --- technika ------------------------------------------------------------
+    "everyday consumer technology and its defaults",
+    "telephones, spectrum, cables and telecoms",
+    "cars, trains, buses and how they are made safe",
+    "computing, software and the standards nobody voted on",
+    "paper, printing, typography and the shape of a page",
+)
+ILE_DZIEDZIN_NA_PRZEBIEG = 5
+
 CURIOSITY_BATCH = 8
 # Ile ostatnio zuzytych faktow pokazujemy szukajacemu jako zakaz powtorki.
 # Bez tego to samo szukanie codziennie oddaje te same slynne osiem.
@@ -545,6 +626,17 @@ NOTE_FORMS = {
         "line. Then the rule hiding inside it. Never a question, and no "
         "invented experience of your own."
     ),
+    "PYTANIE": (
+        "Deliver the whole fact first, in two or three lines. Then, on its own "
+        "line, one short question the reader can answer from their own life "
+        "without looking anything up. "
+        "This form is an experiment and it has a cost. Notes containing a "
+        "question mark convert 35 percent fewer subscribers — but direct, "
+        "easy questions are what actually pulls comments, and a young account "
+        "needs conversation more than it needs a clean conversion rate. So: "
+        "never a question INSTEAD of the fact, only after it. Never a question "
+        "whose answer is in the note. Never a request for engagement."
+    ),
     "ODWROCENIE": (
         "First line: the thing everyone believes, stated fairly and without "
         "mockery. Blank line. Then the record that contradicts it, and why the "
@@ -555,7 +647,8 @@ NOTE_FORMS = {
 }
 
 # Rozklad form na dzien. PROSTA zostaje, ale przestaje byc jedyna.
-NOTE_FORM_MIX = ("SCENA", "KONTRAST", "PROSTA", "LISTA", "ODWROCENIE", "LICZBA")
+NOTE_FORM_MIX = ("SCENA", "KONTRAST", "PROSTA", "LISTA", "PYTANIE",
+                 "ODWROCENIE", "LICZBA")
 
 NOTE_TYPES = {
     "ARTYKUL": (
