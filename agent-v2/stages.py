@@ -622,7 +622,7 @@ def znajdz_ciekawostki(
     return fakty
 
 
-def ostatnie_otwarcia(ile: int = 8) -> list[str]:
+def ostatnie_otwarcia(rodzaj: str = "notka", ile: int = 8) -> list[str]:
     """Pierwsze slowa ostatnich notek — zeby kolejna nie zaczela sie tak samo.
 
     Cztery z dwunastu naszych notek zaczynaly sie od „The". Prompt moze o to
@@ -643,7 +643,7 @@ def ostatnie_otwarcia(ile: int = 8) -> list[str]:
                 w = json.loads(linia)
             except ValueError:
                 continue
-            if not isinstance(w, dict) or w.get("rodzaj") != "notka":
+            if not isinstance(w, dict) or w.get("rodzaj") != rodzaj:
                 continue
             slowa = (w.get("tekst") or "").split()
             if slowa:
@@ -1051,10 +1051,12 @@ def comment_on(
             "for anything factual, and cite nothing that is not here) ---\n"
             + "\n".join(f"- {f.get('fact')}  [{f.get('url')}]" for f in fakty)
         )
+    otwarcie = config.losowe_otwarcie()
+    zajete_otwarcia = set(ostatnie_otwarcia("komentarz"))
     prompt = _prompt(
         "komentarz.md",
         cel_slow=config.losowa_dlugosc(),
-        otwarcie=config.losowe_otwarcie(),
+        otwarcie=otwarcie,
         language=config.ARTICLE_LANGUAGE,
         author=post.get("author", ""),
         title=post.get("title", ""),
@@ -1078,6 +1080,16 @@ def comment_on(
         )
         candidates.append(data)
 
+    # PIERWSZE SLOWO tez ma sie roznic. Osiem roznych polecen otwarcia istnieje
+    # od poczatku i jest losowanych — a mimo to jedenascie z szesnastu komentarzy
+    # zaczynalo sie od "The", bo kazde z tych osmiu da sie wykonac, zaczynajac
+    # zdanie od rodzajnika. Prosba w prompcie nie wystarcza; sprawdza kod.
+    def powtarza_otwarcie(d: dict[str, Any]) -> bool:
+        slowa = (d.get("comment") or "").split()
+        return bool(slowa) and slowa[0].strip("\"'.,").lower() in zajete_otwarcia
+
+    candidates.sort(key=powtarza_otwarcie)
+
     # Ta sama zasada co przy notkach: wystawiamy jeden komentarz, wiec
     # sprawdzamy po kolei do pierwszego, ktory przechodzi. Przy siedemnastu
     # komentarzach dziennie to roznica miedzy 51 sprawdzeniami a osiemnastoma.
@@ -1097,6 +1109,10 @@ def comment_on(
         "title": post.get("title"),
         "candidates": candidates,
         "fakty": fakty,   # zostaje w zapisie: po wystawieniu da się sprawdzić, na czym stał
+        # Przydzielone otwarcie idzie do dziennika. Osiem polecen jest losowanych
+        # od poczatku i nikt nigdy nie sprawdzil, czy model ich slucha — bo nie
+        # bylo zapisane, ktore dostal. Teraz da sie to policzyc.
+        "otwarcie": otwarcie,
     }
 
 
