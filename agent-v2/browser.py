@@ -1566,11 +1566,16 @@ def wystaw_artykul(
                 # przez kolejne dni. Zapisujemy TU, bo tylko tutaj wiemy na pewno,
                 # że tekst naprawdę jest publiczny.
                 import stages
-                adres = (f"https://{config.SUBSTACK_HANDLE}.substack.com/p/"
-                         + re.sub(r"[^a-z0-9]+", "-",
-                                  artykul["tytul"].lower()).strip("-"))
+                # ADRES BIERZEMY OD SUBSTACKA, nie zgadujemy z tytulu. Slug bywa
+                # skracany: „the-hole-in-your-airplane-window-is-doing-exactly-
+                # what-it-should" stalo sie „the-hole-in-your-airplane-window".
+                # Zgadniety adres odpowiadal 302, wiec link zyl na przekierowaniu,
+                # ktorego nikt nam nie obiecal.
+                adres = potwierdz_adres_artykulu(page, artykul["tytul"])
+                # I CZYSTY TEKST, nie HTML. Do promptu notki szlo 9000 znakow
+                # znacznikow, z ktorych model musial wylowic tresc.
                 stages.zapisz_do_promocji(adres, artykul["tytul"],
-                                          artykul.get("html", "")[:9000])
+                                          bez_znacznikow(artykul.get("html", ""))[:2000])
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia; szkic zapisany)", flush=True)
     except Exception as exc:
@@ -1895,6 +1900,49 @@ def juz_sie_odezwalismy(page, url: str) -> bool:
 
     return any(isinstance(c, dict) and c.get("user_id") == moje_id
                for c in wszystkie)
+
+
+def bez_znacznikow(html: str) -> str:
+    """Sam tekst, bez HTML-a. Do promptu notki promujacej szlo 9000 znakow
+    znacznikow, z ktorych model musial wylowic tresc."""
+    import re as _re
+
+    tekst = _re.sub(r"<[^>]+>", " ", html or "")
+    tekst = tekst.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+    return _re.sub(r"\s+", " ", tekst).strip()
+
+
+def potwierdz_adres_artykulu(page, tytul: str) -> str:
+    """Prawdziwy adres opublikowanego artykulu — od Substacka, nie z tytulu.
+
+    Adres byl skladany przez zamiane tytulu na slug, a Substack slugi SKRACA:
+    „The Hole in Your Airplane Window Is Doing Exactly What It Should" dostalo
+    adres `/p/the-hole-in-your-airplane-window`. Zgadniety adres odpowiadal 302,
+    wiec notka promujaca dzialala tylko dzieki przekierowaniu, ktorego Substack
+    nam nie obiecal. Notka promujaca z martwym linkiem jest gorsza niz jej brak.
+
+    Gdyby odczyt zawiodl, wracamy do zgadywania — lepszy link na przekierowaniu
+    niz zaden.
+    """
+    import re as _re
+
+    baza = f"https://{config.SUBSTACK_HANDLE}.substack.com"
+    zapasowy = (f"{baza}/p/"
+                + _re.sub(r"[^a-z0-9]+", "-", (tytul or "").lower()).strip("-"))
+    try:
+        dane = api_json(page, "/api/v1/posts?limit=5", baza=baza)
+        lista = dane if isinstance(dane, list) else (dane or {}).get("posts") or []
+        for post in lista:
+            if (post or {}).get("title") == tytul:
+                adres = post.get("canonical_url") or (
+                    f"{baza}/p/{post.get('slug')}" if post.get("slug") else "")
+                if adres:
+                    print(f"  adres artykulu wg Substacka: {adres}", flush=True)
+                    return adres
+    except Exception as exc:
+        print(f"  (nie odczytalem adresu: {type(exc).__name__})", flush=True)
+    print(f"  adres zlozony z tytulu (zapasowo): {zapasowy}", flush=True)
+    return zapasowy
 
 
 def potwierdz_komentarz(page, url: str, tekst: str) -> int | None:
