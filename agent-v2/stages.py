@@ -715,6 +715,16 @@ def note(
             f"  {text[:78]}",
             flush=True,
         )
+        # ZAPORA NA TEKSCIE MODELU, zanim kod doklei nasz wlasny adres.
+        # Inaczej notka promujaca artykul odpada ZAWSZE: kod dokleja do niej
+        # link do wlasnego tekstu, a zapora widzi adres www i odrzuca wszystkie
+        # trzy warianty. Zdarzylo sie w pierwszym przebiegu po wprowadzeniu
+        # zapory — wlasnym zabezpieczeniem zabilem promocje artykulu.
+        if text:
+            czysty, powod = bez_wstrzykniecia(text)
+            data["czysty"] = czysty
+            if not czysty:
+                data["odrzucony"] = powod
         if text and link:
             # Adres dokłada KOD, nie model. Model potrafi przekręcić URL, a zły
             # link pod notką promującą artykuł to notka wyrzucona do kosza.
@@ -741,11 +751,10 @@ def note(
         text = (data.get("note") or "").strip()
         if not text or not data.get("length_ok"):
             continue
-        czysty, powod = bez_wstrzykniecia(text)
-        if not czysty:
+        if not data.get("czysty", True):
             data["safe_to_post"] = False
-            data["odrzucony"] = powod
-            print(f"    ODRZUCONA PRZED SPRAWDZENIEM: {powod}", flush=True)
+            print("    ODRZUCONA PRZED SPRAWDZENIEM: %s" % data.get("odrzucony"),
+                  flush=True)
             continue
         audyt = zweryfikuj(conn, run_id, text, f"Substack note, type {note_type}")
         data["weryfikacja"] = audyt
