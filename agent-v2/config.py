@@ -548,6 +548,85 @@ DLUGOSCI_WYPOWIEDZI = (
 # Zmierzone na naszych wlasnych komentarzach: SIEDEM Z DZIEWIECIU zaczynalo sie
 # od "The". Model proszony o roznorodnosc i tak wpada w jeden szkielet, wiec
 # wybor musi zapasc poza nim.
+# PROFIL OSOBOWOSCI KOMENTUJACEGO — z wagami, bo czlowiek ma ROZKLAD reakcji,
+# nie jedna.
+#
+# Zmierzone na dwudziestu siedmiu komentarzach: prompt oferowal cztery rozne
+# ruchy i mowil „wybierz jeden", a model niemal zawsze wybieral ten sam
+# i wyrazal go ta sama formula — „przyznaje ci racje, ale pominales X". Trzy
+# komentarze slowo w slowo tym schematem. Pojedynczo trafne, w serii brzmi jak
+# jedna osoba z jednym odruchem: wieczny korygujacy.
+#
+# Wlasciciel ustawil to celnie: WIECZNY KORYGUJACY i POTAKIWACZ to ta sama wada
+# z dwoch stron. Obaj maja gotowa reakcje, zanim przeczytali tekst. Oba maja byc
+# RZADKIE.
+#
+# Wagi, nie rownomierna rotacja — inaczej „rzadkie" nie byloby rzadkie.
+#
+# Jedyny komentarz, ktory dostal odpowiedz (1 z 27), zaczynal sie od „What
+# surprised me is" — ciekawosc, nie korekta. Stad ona jest najciezsza.
+POSTAWY_KOMENTARZA = {
+    "CIEKAWOSC": (7, (
+        "Say what genuinely caught you in the piece and what it opens up. You "
+        "are not correcting anything and not claiming to know better — you "
+        "noticed a thread the author left loose and you are pulling it. This is "
+        "the house register: interested, specific, no verdict."
+    )),
+    "MECHANIZM": (6, (
+        "Name the incentive, constraint or decision the post describes but does "
+        "not state. The post says what happens; you say what makes it happen. "
+        "This is the publication's speciality and it stands on its own — it is "
+        "not a correction and must not be phrased as one."
+    )),
+    "KONKRET": (5, (
+        "Bring one specific the author would actually want: a figure, a date, a "
+        "document, a case, a precedent. Give it and stop. No framing, no lesson "
+        "drawn, no telling them what it means for their argument."
+    )),
+    "ROZSZERZENIE": (4, (
+        "Take the same mechanism somewhere the author did not go — another "
+        "industry, another country, another era. The pleasure here is the "
+        "unexpected match, so make the connection precise or do not make it."
+    )),
+    "PYTANIE": (3, (
+        "Ask one question you actually want answered, about something the piece "
+        "genuinely leaves open. Not rhetorical, not a test, not a question whose "
+        "answer you are about to supply. If you would not read the reply with "
+        "interest, this is not your move."
+    )),
+    "SPRZECIW": (2, (
+        "Disagree with ONE named claim and say exactly why, carrying something "
+        "concrete: a figure, a case, a counterexample. Aim at the claim, never "
+        "at the author, and state it once without hedging it into mush. Rare on "
+        "purpose: an account that objects to everything is as tiresome as one "
+        "that agrees with everything."
+    )),
+    "KOREKTA": (1, (
+        "The 'you got X right, but you skipped Y' move. It was the default and "
+        "it became a tic — three comments word for word in this shape. It is "
+        "allowed here, once in a while, when the omission genuinely changes the "
+        "conclusion. Not when it merely lets you look thorough."
+    )),
+    "ZGODA_Z_DOPOWIEDZENIEM": (1, (
+        "Agree — and earn it by adding exactly one thing the author did not "
+        "say. Bare agreement is banned: 'good point', 'exactly this', 'I "
+        "completely agree' add nothing to a conversation and mark an account as "
+        "empty. If you have nothing to add, the correct move is silence, not "
+        "applause."
+    )),
+}
+
+
+def losowa_postawa() -> tuple[str, str]:
+    """Ktora postawa dla TEGO komentarza. Wagi, nie rownomiernie."""
+    import random
+
+    nazwy = list(POSTAWY_KOMENTARZA)
+    wagi = [POSTAWY_KOMENTARZA[n][0] for n in nazwy]
+    wybrana = random.choices(nazwy, weights=wagi, k=1)[0]
+    return wybrana, POSTAWY_KOMENTARZA[wybrana][1]
+
+
 OTWARCIA = (
     "Start with the mechanism itself, no preamble.",
     "Start with a question you actually want answered.",

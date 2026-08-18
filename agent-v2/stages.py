@@ -1052,11 +1052,17 @@ def comment_on(
             + "\n".join(f"- {f.get('fact')}  [{f.get('url')}]" for f in fakty)
         )
     otwarcie = config.losowe_otwarcie()
+    # POSTAWA PRZYDZIELONA, nie wybrana przez model. Prompt oferowal cztery ruchy
+    # i mowil „wybierz jeden"; model niemal zawsze bral ten sam. Wagi sprawiaja,
+    # ze korekta i zgoda sa naprawde rzadkie, a nie tylko nazwane rzadkimi.
+    postawa, postawa_opis = config.losowa_postawa()
     zajete_otwarcia = set(ostatnie_otwarcia("komentarz"))
     prompt = _prompt(
         "komentarz.md",
         cel_slow=config.losowa_dlugosc(),
         otwarcie=otwarcie,
+        postawa=postawa,
+        postawa_opis=postawa_opis,
         language=config.ARTICLE_LANGUAGE,
         author=post.get("author", ""),
         title=post.get("title", ""),
@@ -1073,7 +1079,7 @@ def comment_on(
         text = data.get("comment")
         words = len(text.split()) if text else 0
         print(
-            f"  [komentarz {i + 1}] "
+            f"  [komentarz {i + 1}/{postawa}] "
             + (f"{words} słów — {data.get('what_it_adds', '')[:70]}"
                if text else f"MILCZY — {data.get('reason_if_silent', '')[:70]}"),
             flush=True,
@@ -1113,6 +1119,7 @@ def comment_on(
         # od poczatku i nikt nigdy nie sprawdzil, czy model ich slucha — bo nie
         # bylo zapisane, ktore dostal. Teraz da sie to policzyc.
         "otwarcie": otwarcie,
+        "postawa": postawa,
     }
 
 

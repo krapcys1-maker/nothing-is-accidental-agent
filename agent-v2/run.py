@@ -347,7 +347,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 browser.wystaw_komentarz(
                     cel["url"], dobre[0]["comment"], wyslij=True,
                     kontekst={**opis_celu(cel),
-                              "otwarcie": (out.get("otwarcie") or "")[:60]})
+                              "otwarcie": (out.get("otwarcie") or "")[:60],
+                              "postawa": out.get("postawa") or ""})
                 # Zapamietujemy U KOGO, zeby nie wracac tam za kilka dni.
                 kanal.zapamietaj_komentarz(cel)
                 stages.odczekaj("komentarz")
