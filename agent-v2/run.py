@@ -285,6 +285,15 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         if not na_teraz["notki"]:
             print("  dzienny przydzial notek juz wyczerpany", flush=True)
             return
+        # Losowa zwloka PRZED pierwsza notka. Bez niej pierwsza notka
+        # wychodzila zawsze kilka minut po starcie zegara, wiec trzy razy
+        # dziennie o tej samej porze co do kwadransa. Godziny zostaja te,
+        # ktore wybralismy; przewidywalne przestaja byc minuty.
+        if wyslij:
+            import random as _r
+            ile = _r.uniform(*config.ZWLOKA_PRZED_NOTKAMI)
+            print(f"  (zwloka {ile / 60:.0f} min przed pierwsza notka)", flush=True)
+            time.sleep(ile)
         for n in stages.notki_dnia(conn, run_id, ile=na_teraz["notki"],
                                    od=juz.get("notki", 0)):
             if not zostal_czas("notki"):

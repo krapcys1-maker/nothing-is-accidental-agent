@@ -828,12 +828,28 @@ ROZBIEG_DNI = 30
 #
 # W sekundach, losowane w tych granicach osobno przy kazdym dzialaniu.
 ODSTEPY = {
-    "notka":      (600, 1500),   # 10-25 min: napisanie notki to kawal roboty
+    # 45-90 MIN, nie 10-25. Zmierzone na profilu: notki wychodzily PARAMI
+    # kilkanascie minut po sobie, potem cisza na trzy i pol godziny, i tak trzy
+    # razy dziennie. To nie byl rytm czlowieka, tylko ksztalt PRZEBIEGU widoczny
+    # na osi czasu: zegar budzil agenta, ten robil swoje dwie notki jedna po
+    # drugiej i zasypial. Nikt nie musial analizowac stylu — wystarczylo
+    # spojrzec na profil.
+    #
+    # Gorna granica jest przycieta do przebiegu: dwie notki po 90 minut mieszcza
+    # sie w limicie czasu, trzy juz nie — i wtedy `zostal_czas` uczciwie konczy
+    # dzien krocej, zamiast dac sie przeciac w polowie.
+    "notka":      (2700, 5400),  # 45-90 min
     "komentarz":  (180, 480),    #  3-8 min: przeczytac cudzy tekst i odpowiedziec
     "odpowiedz":  (120, 420),    #  2-7 min
     "lajk":       (30, 90),      # 0,5-1,5 min: przewijanie kanalu
 }
 ODSTEP_MIEDZY_DZIALANIAMI = (45, 180)   # zapas dla czynnosci bez wlasnego wpisu
+
+# ZWLOKA PRZED PIERWSZA NOTKA PRZEBIEGU. Bez niej pierwsza notka wychodzila
+# zawsze kilka minut po starcie zegara, wiec trzy razy dziennie o tej samej
+# porze co do kwadransa. Losowa zwloka rozmywa sam moment startu — godziny
+# zostaja te, ktore wybralismy, ale minuty przestaja byc przewidywalne.
+ZWLOKA_PRZED_NOTKAMI = (0, 2400)        # 0-40 min
 MAX_DZIALAN_NA_GODZINE = 12
 
 # Ile razy dziennie wolno zagadac TE SAMA publikacje. Siedemnascie komentarzy
