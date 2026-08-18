@@ -12,3 +12,10 @@ anthropic==0.116.0
 httpx==0.28.1
 python-dotenv==1.2.2
 playwright==1.62.0
+
+# Wyciaganie tresci ze stron zrodlowych w etapie `fetch`. BRAKOWALO GO na
+# serwerze i wyszlo dopiero przy pierwszym prawdziwym uruchomieniu sciezki
+# artykulu: potok przeszedl wybor tematu, odsiew i szukanie zrodel, zaplacil
+# 0,59 USD i przewrocil sie na `import trafilatura`. Zaden test tego nie zlapal,
+# bo wszystkie sprawdzaly moduly agenta, a nie ten jeden import w srodku funkcji.
+trafilatura==2.2.0

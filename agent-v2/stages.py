@@ -43,6 +43,18 @@ def recent_angles(conn: sqlite3.Connection, limit: int = config.DIVERSITY_LOOKBA
         (limit,),
     ).fetchall()
     angles = [r["topic"] for r in rows]
+
+    # CO NAPRAWDE WYSZLO, nie tylko co jest w bazie. Pierwsze uruchomienie
+    # sciezki artykulu wybralo temat „The Egg That Is Chilled in Some Countries
+    # and Not Others" — czyli dokladnie ten sam, co opublikowany juz „The Egg
+    # Aisle Is a Legal Document". Baza artykulow byla pusta, bo tamten powstal
+    # zanim ta baza istniala, wiec zasada roznorodnosci nie miala o czym wiedziec.
+    # Lista promocji jest zapisem tego, co FAKTYCZNIE poszlo w swiat.
+    for opublikowany in wczytaj_promocje():
+        tytul = (opublikowany or {}).get("tytul")
+        if tytul and tytul not in angles:
+            angles.append(tytul)
+
     if len(angles) < limit and SEED_HISTORY.exists():
         seed = json.loads(SEED_HISTORY.read_text(encoding="utf-8"))
         angles.extend(seed[: limit - len(angles)])
