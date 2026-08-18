@@ -63,14 +63,28 @@ ground, when the evidence establishes a rule rather than a practice. This is the
 most common reason a draft is rejected, and it is avoidable: write what the rule
 permits or rewards, mark it explicitly as a hypothetical, or cut it.
 
-The second is closing with a summary. End by turning the mechanism back on
-something the reader can check for themselves, or by naming exactly where the
-evidence stops.
+The second is closing with a summary. Never do that.
+
+Your closing move for this piece is assigned, and it is deliberately not the
+one you would reach for by default:
+
+**{ruch_koncowy_nazwa}** — {ruch_koncowy}
+
+Land it in the final paragraph and stop. Do not add a second ending after it,
+and do not introduce it with a transition sentence announcing that you are
+wrapping up.
 
 Say the limits once, in your own voice, instead of hedging every sentence. One
 paragraph stating plainly what the evidence does not cover is worth more than a
 page of "may" and "might". The card's `not_established` and `contradictions`
 lists are the material for that paragraph.
+
+Do not announce that paragraph. Phrases like "a few things this evidence does
+not settle, and I will say them once rather than hedge throughout" or "what
+the record here does not establish deserves saying once, plainly" are you
+explaining your own editorial policy to the reader, who did not ask. State the
+limits directly and let them be a paragraph like any other. It does not have to
+sit second from the end.
 
 **One paragraph. Not two, not three.** A published article of ours spent a third
 of its length on what the evidence did not say, because the evidence did not say
@@ -85,6 +99,11 @@ stake in how it went. Where the record contradicts the framing you were given,
 simply write what the record says, as though that had been the subject all
 along.
 
+This includes how you name your material. "The excerpts", "the sources I can
+cite", "the evidence card" and "the material here" describe a pile of text
+somebody handed you. Write "the published guidance", "the regulation", "the
+filing" — the thing itself, as a writer who went and read it would name it.
+
 **Name the mechanism once.** The same explanation restated in three successive
 paragraphs, each in slightly different words, is the clearest sign that an
 article has run out of material before it ran out of its target length. Say it,
@@ -97,8 +116,15 @@ the same work. **That list is what a full-length article is made of.**
 
 A long article is not a short one with more words. It is a short one that opens
 outward: state the mechanism, then show it running somewhere the reader did not
-expect it. Two or three such turns and the piece is about something larger than
-its subject.
+expect it, and the piece becomes about something larger than its subject.
+
+**For this piece: {ile_paraleli}**
+
+Walk into that turn without a signpost. "Once you see this shape, it turns up
+everywhere", "once you can see the pattern, you start finding it", and every
+variant of them are throat-clearing that tells the reader a device is coming.
+Just start the next mechanism. The reader will make the connection; that is the
+pleasure you are handing them, so do not take it first.
 
 If the list is empty or thin, **write short**. The target you were given already
 reflects that judgement. Do not restate the mechanism to reach a number, do not

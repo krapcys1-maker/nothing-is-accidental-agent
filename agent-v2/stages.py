@@ -167,8 +167,16 @@ def write(
     """
 
     dl = config.dlugosc_dla(glebokosc)
+    # Ruch koncowy i szerokosc drugiego aktu losujemy per artykul. Dwa teksty
+    # napisane po naprawie szamponu mialy identyczny szkielet, bo prompt
+    # zamawial go doslownie: ten sam drogowskaz, trzy paralele, to samo
+    # zamkniecie. Powtarzalna forma zdradza maszyne tak samo jak powtarzana tresc.
+    ruch_nazwa, ruch_opis = config.losowy_ruch_koncowy()
+    ile_paraleli, opis_paraleli = config.losowa_liczba_paraleli(glebokosc)
     print("  [pisanie] glebokosc %s -> cel %s slow (%s-%s)"
           % (glebokosc, dl["cel"], dl["min"], dl["max"]), flush=True)
+    print("  [pisanie] zakonczenie %s, paraleli: %d"
+          % (ruch_nazwa, ile_paraleli), flush=True)
     import style
 
     examples = style.load_examples()
@@ -185,6 +193,9 @@ def write(
         style_examples=rendered,
         style_positive=positive,
         style_negative=negative,
+        ruch_koncowy_nazwa=ruch_nazwa,
+        ruch_koncowy=ruch_opis,
+        ile_paraleli=opis_paraleli,
         card_json=json.dumps(card, ensure_ascii=False, indent=2),
     )
     text = llm.call("write", WRITER_SYSTEM, prompt, conn=conn, run_id=run_id)

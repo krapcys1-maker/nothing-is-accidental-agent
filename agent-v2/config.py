@@ -1041,3 +1041,83 @@ FLAGGED_GATES = (
 # Jedno podejście. Bez przepisywania — to tam paliły się pieniądze i tam dwie
 # bramki starego agenta odpowiedziały różnie na to samo pytanie.
 ATTEMPTS = 1
+
+
+# --- ruch koncowy i szerokosc drugiego aktu --------------------------------
+# Dwa artykuly napisane PO naprawie szamponu (0017 "The Gas You Didn't Buy",
+# 0019 "The Yellow Light...") wyszly z identycznym szkieletem: ten sam
+# drogowskaz przed paralelami ("once you see this shape, it turns up
+# everywhere"), dokladnie trzy paralele, akapit o granicach zapowiedziany
+# meta-zdaniem, zamkniecie "sprawdz to u siebie". Zaden z tych ruchow nie jest
+# bledem osobno; bledem jest to, ze wypadaja za kazdym razem tak samo, bo
+# pisarz.md je zamowil. Powtarzalna forma jest sygnalem maszyny dokladnie tak
+# samo jak powtarzany mechanizm w szamponie. Wiec losujemy — tak jak przy
+# notkach z NOTE_FORM.
+RUCHY_KONCOWE = {
+    "DO_SPRAWDZENIA": (
+        "Close by handing the reader something observable in their own life — "
+        "a thing to look at, count or compare, where the mechanism will show "
+        "through. Do not promise what they will find."
+    ),
+    "GDZIE_KONCZY_SIE_ZAPIS": (
+        "Close on the boundary of what is documented: name the one question "
+        "the record does not answer and say plainly why nobody answering it "
+        "publicly is a fact about the arrangement, not an accident."
+    ),
+    "KTO_NA_TYM_STOI": (
+        "Close on the party the arrangement serves. Not an accusation — just "
+        "the plain sentence naming who carries the cost and who is spared it, "
+        "left standing without commentary."
+    ),
+    "GDYBY_INACZEJ": (
+        "Close by describing the version of this that could have been built "
+        "instead, and what it would have cost whom. Make the current design "
+        "visible as a choice by putting one alternative next to it."
+    ),
+    "POWROT_DO_ZACZEPU": (
+        "Close by returning to the exact image or belief you opened with and "
+        "showing it changed — same object, different thing to look at now. No "
+        "summary of the argument in between."
+    ),
+    "CENA_MECHANIZMU": (
+        "Close on what this costs when it fails or when it is applied to "
+        "someone it was not designed for. One case, concrete, then stop."
+    ),
+}
+
+RUCH_KONCOWY_MIX = ("DO_SPRAWDZENIA", "KTO_NA_TYM_STOI", "POWROT_DO_ZACZEPU",
+                    "GDZIE_KONCZY_SIE_ZAPIS", "CENA_MECHANIZMU", "GDYBY_INACZEJ")
+
+# Ile paraleli w drugim akcie. Trzy wyliczone po kolei czytaja sie jak lista;
+# jedna rozwinieta na dwa akapity czyta sie jak mysl. Chcemy obu, na zmiane.
+ILE_PARALELI_WAGI = {1: 4, 2: 4, 3: 3}
+
+OPIS_LICZBY_PARALELI = {
+    1: ("ONE parallel, developed properly — two paragraphs on a single other "
+        "domain where this logic runs, close enough to follow all the way "
+        "down. One thought, not a catalogue."),
+    2: ("TWO parallels, a paragraph each. Pick two that fail differently, so "
+        "the pair says something a single example could not."),
+    3: ("THREE parallels, briskly — but they must escalate. If the third is "
+        "interchangeable with the first, you have written a list; cut it to "
+        "two."),
+}
+
+
+def losowy_ruch_koncowy() -> tuple[str, str]:
+    """Czym konczy sie TEN artykul. Rowne szanse, bez powtarzania formuly."""
+    import random
+
+    nazwa = random.choice(RUCH_KONCOWY_MIX)
+    return nazwa, RUCHY_KONCOWE[nazwa]
+
+
+def losowa_liczba_paraleli(glebokosc: str = "RICH") -> tuple[int, str]:
+    """Ile paraleli w drugim akcie. Krotki artykul nigdy nie bierze trzech."""
+    import random
+
+    wagi = dict(ILE_PARALELI_WAGI)
+    if (glebokosc or "").upper() != "RICH":
+        wagi = {1: 5, 2: 3}
+    ile = random.choices(list(wagi), weights=list(wagi.values()), k=1)[0]
+    return ile, OPIS_LICZBY_PARALELI[ile]
