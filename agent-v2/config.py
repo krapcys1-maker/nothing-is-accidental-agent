@@ -152,7 +152,44 @@ MODEL_FOR = {
     # asymetrie kosztu bledu; flash dal trafna, ale ogolniejsza uwage. Roznica
     # kosztu to ~12 USD miesiecznie i placimy ja TAM, GDZIE TEKST JEST PUBLICZNY
     # I TRWALY — a nie tam, gdzie model tylko wybiera z listy albo opisuje obrazek.
-    "note": DEEPSEEK_PRO,
+    # NOTKA IDZIE DO FABLE — zmiana na galezi v2-test, po A/B na tym samym
+    # materiale z banku. Trzy powody, w tej kolejnosci:
+    #
+    # 1. Fable pisze wyraznie lepiej i to widac golym okiem. Na tym samym
+    #    patencie DeepSeek dal „a structural panel in a pressurized cabin"
+    #    (nieprzezroczyste dla obcego), Fable „an aircraft cabin window that
+    #    seals itself" — i zamknal linia „Failure is the mechanism, not the
+    #    emergency". Fable sformatowal tez numer jako 2,989,787 zamiast
+    #    US2989787, wiec czyta sie jak wielkosc, a nie jak kod.
+    # 2. Badania nad Substackiem mowia zgodnie, ze NOTKI daja ponad 60%
+    #    przyrostu subskrybentow i sa jedynym narzedziem pokazujacym nas
+    #    ludziom, ktorzy nas nie obserwuja. Artykul czyta ten, kto juz
+    #    przyszedl.
+    # 3. Do tej pory bylo odwrotnie niz powinno: najdrozszy model pisal to,
+    #    co NIE napedza wzrostu (piec artykulow = $2,13), a najtanszy to,
+    #    co napedza.
+    #
+    # 2026-08-19, PO DWOCH SLEPYCH TESTACH: notka idzie do OPUSA, nie Fable.
+    #
+    # Powyzsze uzasadnienie bylo oparte na porownaniu, w ktorym znalismy
+    # etykiety. Dwie proby na slepo daly co innego:
+    #   Fable kontra DeepSeek-pro   3 : 2
+    #   Fable kontra Opus 5         2 : 2
+    # Na dziewiec par Fable wygral piec. To jest rzut moneta, a nie przewaga.
+    # Wlasciciel wybieral w ciemno i w zadnej probie nie rozpoznal drozszego
+    # modelu.
+    #
+    # Opus jest dokladnie dwa razy tanszy od Fable ($5/$25 wobec $10/$50)
+    # i nadal jest modelem najwyzszej polki, wiec ryzyko, ze czterdziesci piec
+    # slow zabrzmi „przetlumaczone", zostaje znikome. Tego akurat zaden slepy
+    # test nie zlapie pewnie i dlatego nie schodzimy nizej dla ostatnich
+    # $4,59 miesiecznie.
+    #
+    # Razem z zejsciem na jeden wariant: $42,05 -> $6,07 miesiecznie za notki.
+    # ARTYKUL zostaje na Fable — tam A/B z Opusem dotyczyl calego tekstu,
+    # a nie czterdziestu pieciu slow, i przy czterech artykulach miesiecznie
+    # roznica ceny to $1,85.
+    "note": CLAUDE,
     "comment": DEEPSEEK_PRO,
     "reply": DEEPSEEK_PRO,
     "factcheck": DEEPSEEK,
@@ -160,6 +197,27 @@ MODEL_FOR = {
     "grafika": DEEPSEEK,
     "cele": DEEPSEEK,
     "wybor": DEEPSEEK_PRO,
+    # Bibliotekarz czyta caly bank naraz i szuka MECHANIZMU wspolnego
+    # dla roznych dziedzin. Pro, bo to jedyne zadanie w systemie, gdzie
+    # trzeba trzymac w glowie sto kilkadziesiat fragmentow jednoczesnie
+    # i widziec miedzy nimi zwiazek — a przy 10 tys. tokenow wejscia
+    # roznica ceny to ulamek centa.
+    "bibliotekarz": DEEPSEEK_PRO,
+    # Bramka ciekawosci przed pisarzem. Pro, bo musi rozpoznac, jakie
+    # przekonanie czytelnik przynosi ze soba — to sad o ludziach,
+    # nie odczyt z tekstu.
+    "warto_pisac": DEEPSEEK_PRO,
+    # Restack: jedno zdanie, ktore ma stanac obok cudzego tekstu pod naszym
+    # nazwiskiem. Pro z tego samego powodu co komentarze — najczesciej trzeba
+    # przypomniec sobie, GDZIE INDZIEJ ten sam mechanizm dziala, a to pamiec
+    # faktow, jedyna trwala przewaga pro nad flashem.
+    "restack": DEEPSEEK_PRO,
+    # Wyciaganie kandydatow z preambuly przepisu. Flash, bo to praca
+    # WYDOBYWCZA na podanym tekscie, a nie siegniecie do pamieci o swiecie —
+    # czyli dokladnie ta kategoria, w ktorej flash dorownuje pro i jest
+    # trzykrotnie tanszy. Preambuly bywaja polmilionowe, wiec objetosc
+    # wejscia decyduje o rachunku.
+    "fedreg": DEEPSEEK,
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -201,20 +259,20 @@ PRICING = {
     CLAUDE: {"in": 5.00, "out": 25.00, "verified": True},
     SONNET: {"in": 3.00, "out": 15.00, "verified": True},
     FABLE: {"in": 10.00, "out": 50.00, "verified": True},
-    # STAWKI Z CENNIKA DOSTAWCY, nie z dopasowania do faktury. Poprzednie
-    # $0,10/$0,25 dla OBU modeli odtwarzaly fakture co do centa — ale tylko
-    # dlatego, ze przez blad routingu wszystko jechalo na flashu z trafieniami
-    # w cache. Kalibracja dopasowala sie do zlego modelu i zanizala koszt pro
-    # trzy-czterokrotnie.
+    # STAWKI POTWIERDZONE FAKTURA (15-19 sierpnia 2026). Dziesiec wierszy
+    # rozliczenia odtworzonych co do centa, wiec `verified` znaczy tu wreszcie
+    # to, co powinno: rozliczone z rachunkiem, nie przepisane z cennika.
     #
-    # Bierzemy stawke cache MISS, bo trafien w cache nie umiemy przewidziec,
-    # a zawyzony szacunek jest bezpieczniejszy od zanizonego.
-    # "in" to stawka cache MISS. Trafienia w cache sa ~120x tansze i licza sie
-    # osobno — dostawca podaje ich liczbe w kazdej odpowiedzi, wiec nie zgadujemy.
-    # Bez tego zawyzalismy dzienny koszt o 60%: 4,9 z 5,9 mln tokenow wejscia
-    # pro to byly trafienia.
-    DEEPSEEK: {"in": 0.14, "out": 0.28, "cache": 0.0028, "verified": True},
-    DEEPSEEK_PRO: {"in": 0.435, "out": 0.87, "cache": 0.003625, "verified": True},
+    # Co bylo zle wczesniej i czemu trudno bylo to zobaczyc: mnozniki taryfy
+    # wykalibrowano na WYJSCIU (0,87 x 2,28 = 1,98 — trafione co do grosza)
+    # i ten sam mnoznik zastosowano do wejscia i cache. A rodzaje tokenow
+    # podrozaly ROZNIE: wejscie 1,52x, wyjscie 2,28x, cache 6,07x. Skutek:
+    # wejscie zawyzone o polowe, cache zanizone prawie trzykrotnie.
+    #
+    # "in" to stawka cache MISS; trafienia w cache licza sie osobno po "cache"
+    # — dostawca podaje ich liczbe w kazdej odpowiedzi, wiec nie zgadujemy.
+    DEEPSEEK: {"in": 0.22, "out": 0.66, "cache": 0.007, "verified": True},
+    DEEPSEEK_PRO: {"in": 0.66, "out": 1.98, "cache": 0.022, "verified": True},
 }
 
 # --- taryfa szczytowa DeepSeeka -----------------------------------------------
@@ -224,12 +282,21 @@ PRICING = {
 #
 # WNIOSEK DLA HARMONOGRAMU: agent ma pracowac POZA SZCZYTEM. To nie jest
 # oszczedzanie na sile, tylko darmowa polowa rachunku za przesuniecie godziny.
+# Stawki sprzed podwyzki z 16 sierpnia — trzymane, zeby dalo sie przeliczyc
+# historie i zeby bylo widac, o ile podrozalo.
+STAWKI_PRZED_PODWYZKA = {
+    DEEPSEEK: {"in": 0.14, "out": 0.28, "cache": 0.0028},
+    DEEPSEEK_PRO: {"in": 0.435, "out": 0.87, "cache": 0.003625},
+}
+
 TARYFA_SZCZYTOWA_OD = "2026-08-16T16:00:00+00:00"
 GODZINY_SZCZYTU_UTC = frozenset(range(1, 4)) | frozenset(range(6, 10))
 
 # Mnozniki wzgledem stawek wyzej, po wejsciu nowej taryfy.
-MNOZNIK_SZCZYT = 4.55      # 1,32/0,29 dla flasha; 3,96/0,87 dla pro
-MNOZNIK_POZA_SZCZYTEM = 2.28
+# Szczyt to DOKLADNIE dwukrotnosc bazy, jednakowo dla wejscia, wyjscia
+# i cache. Sprawdzone na fakturze: 1,32/0,66, 3,96/1,98, 0,044/0,022.
+MNOZNIK_SZCZYT = 2.0
+MNOZNIK_POZA_SZCZYTEM = 1.0   # baza to juz stawka po podwyzce
 
 
 def stawka_deepseek(model: str, kiedy=None) -> dict[str, float]:
@@ -239,10 +306,18 @@ def stawka_deepseek(model: str, kiedy=None) -> dict[str, float]:
     baza = PRICING[model]
     kiedy = kiedy or datetime.now(timezone.utc)
     if kiedy < datetime.fromisoformat(TARYFA_SZCZYTOWA_OD):
-        return {"in": baza["in"], "out": baza["out"], "szczyt": None}
+        # Przed podwyzka. Zostawiamy do liczenia historii, nie do biezacych
+        # wywolan — te i tak dzieja sie po tej dacie.
+        stare = STAWKI_PRZED_PODWYZKA[model]
+        return {"in": stare["in"], "out": stare["out"], "cache": stare["cache"],
+                "szczyt": None}
     m = (MNOZNIK_SZCZYT if kiedy.hour in GODZINY_SZCZYTU_UTC
          else MNOZNIK_POZA_SZCZYTEM)
-    return {"in": round(baza["in"] * m, 4), "out": round(baza["out"] * m, 4),
+    # CACHE TEZ. Brak tego klucza sprawial, ze `_cost` siegalo po stawke
+    # wejsciowa i liczylo trafienia w cache 45 razy drozej, niz sa — a to
+    # najliczniejszy rodzaj tokenow, jaki mamy.
+    return {"in": round(baza["in"] * m, 6), "out": round(baza["out"] * m, 6),
+            "cache": round(baza["cache"] * m, 6),
             "szczyt": kiedy.hour in GODZINY_SZCZYTU_UTC}
 
 
@@ -319,6 +394,17 @@ DISCOVERY_MAX_RESULTS = 10
 # Koszt krańcowy ~$0,09 za rundę, bo każda przesyła całą rozmowę od nowa.
 # Przy suficie $1,60 na przebieg dyskoveria może wziąć ~$0,8.
 DISCOVERY_MAX_SEARCHES = 8
+# Ponizej tylu POBRANYCH zrodel uruchamiamy druga runde dyskoverii, zanim tekst
+# pojdzie do pisarza. Prog z danych, nie z przeczucia: artykuly, ktore wyszly
+# dobrze, mialy 6-7 pobranych zrodel; ten, ktory wyszedl najcienszy i z jedynym
+# faktem bez pokrycia, mial trzy. Czworka lapie tamten przypadek, a nie rusza
+# artykulu o autobusie (cztery zrodla, zero uwag z bramek).
+# Ile znakow preambuly czytamy. Najgestszy dokument z pomiaru mial 519 tys.
+# znakow, a uzasadnienie siedzi na poczatku — dalej ida zalaczniki i tabele.
+FEDREG_MAX_ZNAKOW = 60_000
+
+MIN_ZRODEL_DO_PISANIA = 4
+
 MIN_PRIMARY_SOURCES = 2  # wymóg właściciela: w korpusie ≥2 dokumenty pierwotne
 MIN_WHY_SOURCES = 2  # ≥2 źródła mówiące DLACZEGO, nie tylko treść reguły
 
@@ -401,7 +487,14 @@ JSON_OVERHEAD_TOKENS = 1200
 # 16 tys., bo modele DeepSeek v4 rozumują znacznie obficiej niż Claude i przy
 # 6 tys. ucinało syntezę. Sufit nic nie kosztuje, dopóki nie zostanie zużyty —
 # płacimy za tokeny, nie za limit.
-THINKING_HEADROOM_TOKENS = 16000
+# 28 tys., nie 16. Zmierzone na realnych przebiegach: DeepSeek-pro rozumuje
+# 16-19 tys. tokenow przy zadaniach WIELOELEMENTOWYCH (szesc tematow, szesc
+# ocen, szesc celow) niezaleznie od objetosci samej tresci. Przy zapasie
+# rownym 16 tys. margines wynosil 1,15-1,21x, czyli zaden — i trzy etapy
+# stalyby sie bomba z opoznionym zaplonem. Odsiew ucialo dwa razy pod rzad.
+# Sufit nic nie kosztuje, dopoki nie zostanie zuzyty: placimy za tokeny,
+# nie za limit.
+THINKING_HEADROOM_TOKENS = 28000
 
 # Głębokość myślenia. Jawnie, bo domyślne `high` na Opusie 5 potrafi podwoić
 # rachunek za wyjście bez pytania.
@@ -419,15 +512,29 @@ def _tokens_for(chars: int) -> int:
 
 
 MAX_TOKENS = {
-    # 6 tematów: tytuł, pytanie, siedem ocen liczbowych
-    "scout": _tokens_for(TOPIC_COUNT * 900),
-    # jedna ocena na temat, każda z uzasadnieniem
-    "feasibility": _tokens_for(TOPIC_COUNT * 500),
+    # 6 tematow: tytul, pytanie, ZLAMANE PRZEKONANIE, skad sie bierze, oceny
+    "scout": _tokens_for(TOPIC_COUNT * 1400),
+    # Jedna ocena na temat, kazda z uzasadnieniem. PODNIESIONE z 500 na 1100
+    # znakow po realnym przebiegu: odkad temat niesie `broken_belief`
+    # i `why_they_believe_it`, odsiew ma wiecej do przeczytania i wiecej do
+    # powiedzenia, i ucielo mu odpowiedz w polowie JSON-a. Sufit nic nie
+    # kosztuje, dopoki nie zostanie zuzyty — placimy za tokeny, nie za limit.
+    "feasibility": _tokens_for(TOPIC_COUNT * 1100),
     # Dyskoveria dostaje budżet z zapasem, bo DeepSeek liczy do niego tokeny
     # rozumowania KAŻDEJ rundy wyszukiwania. Przy ciasnym budżecie kończył
     # szukanie i nigdy nie tworzył bloku `message`: 26 wyszukiwań, status
     # "completed", zero tekstu.
     "discovery": 32000,
+    # Bibliotekarz oddaje grupy, nie eseje: mechanizm, czlonkowie,
+    # czego brakuje. Sufit z zapasem, bo DeepSeek rozumuje obficie.
+    "bibliotekarz": 12000,
+    # Cztery obserwacje z cytatami plus dwa zdania. Nie esej.
+    "warto_pisac": 6000,
+    # Jedno zdanie do 40 slow plus uzasadnienie decyzji. Malo tekstu,
+    # ale DeepSeek i tak rozumuje obficie — zapas zalatwia THINKING_HEADROOM.
+    "restack": 3000,
+    # Kilku kandydatow po cztery krotkie pola. Nie esej.
+    "fedreg": 8000,
     # DOKŁADNIE tyle, ile prosi prompt: 12 fragmentów po 700 znaków plus liczby
     "classify": _tokens_for(
         CLASSIFY_MAX_EXCERPTS * CLASSIFY_MAX_EXCERPT_CHARS + 2000
@@ -467,7 +574,18 @@ NOTE_MAX_WORDS = 64
 # Trzech kandydatow, nie pieciu: odkad kazda notka dostaje WLASNY fakt,
 # piaty wariant tego samego zdania niczego nie dokladal, a placilismy za
 # niego i za jego weryfikacje.
-NOTE_CANDIDATES = 3
+# JEDEN WARIANT, NIE TRZY. Trzy istnialy tylko po to, zeby po napisaniu wybrac
+# ten, ktory nie powtarza pierwszego slowa poprzednich notek — czyli placilismy
+# za dwa wyrzucone teksty, zeby zalatwic cos, o czym wystarczylo modelowi
+# POWIEDZIEC. Od kiedy dostaje liste ostatnich otwarc w prompcie, konkurencja
+# jest zbedna.
+#
+# To jest najwieksza pojedyncza oszczednosc w calym systemie: przy pieciu
+# notkach dziennie roznica wynosi 28 dolarow miesiecznie — wiecej niz kosztuje
+# cala reszta agenta razem wzieta.
+#
+# Zostawiamy pokretlo: gdyby jakosc spadla, wystarczy wrocic do 2 albo 3.
+NOTE_CANDIDATES = 1
 # Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich,
 # a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas na kilka dni.
 # DZIEDZINY, Z KTORYCH BIORA SIE TEMATY NOTEK.
@@ -724,9 +842,21 @@ NOTE_FORMS = {
         "it. If you only have one fact, this is not the form for it."
     ),
     "LICZBA": (
-        "Open with the number itself, alone on the first line — a figure, a "
-        "date, a measurement. Blank line. Then what it is and who decided it. "
-        "The number does the stopping; the rest does the explaining."
+        "Open with the number itself, alone on the first line — a quantity, a "
+        "duration, a price, a count. Blank line. Then what it is and who "
+        "decided it. "
+        "The number does the stopping; the rest does the explaining. "
+        "It has to be a number a STRANGER CAN FEEL: a quantity, a duration, a "
+        "price, a count of things. A catalogue number, a patent number, a "
+        "section number or a docket reference is not a number in this sense — "
+        "it is a label that happens to be made of digits, and it stops nobody. "
+        "A BARE YEAR is not a magnitude either — it is a label for a point in "
+        "time. '2009.' alone on a line stops nobody; 'six weeks' or '$175' or "
+        "'one drop' does. A year may appear later in the note, never as the hook. "
+        "This went wrong live twice: notes opened with 'US2989787' and with "
+        "'2009.', where the good version of the same form opened with '1 drop'. "
+        "If the only figures in the material are identifiers or dates, this is "
+        "the wrong form for that material."
     ),
     "SCENA": (
         "Start with the object in front of the reader, in the second person: "
@@ -752,11 +882,29 @@ NOTE_FORMS = {
         "four sentences crammed into one block undoes the whole point of the "
         "shape."
     ),
+    # Struktura wskazywana zgodnie przez dwie niezalezne analizy duzych prob
+    # notek (setki tysiecy sztuk): zaczep w pierwszej linii, dwie-cztery linie
+    # tresci, konkret na koncu. Wersja dla NAS: zamiast osobistego wyniku,
+    # ktorego anonimowa marka nie ma, konczymy rzecza do sprawdzenia u siebie.
+    "ZACZEP_I_KONKRET": (
+        "Three moves, in order. One: a hook line that works on somebody who "
+        "has never heard of us and is scrolling — specific and surprising, "
+        "never a category label. Two: two to four lines saying what the "
+        "arrangement actually is and who decided it. Three: one closing line "
+        "handing the reader something they can look at, count or compare "
+        "themselves, today, without our help. Do not promise what they will "
+        "find. No personal anecdote — we do not have one and must not invent it. "
+        "THE THING MUST ALREADY BE IN THEIR LIFE: a bottle in their bathroom, "
+        "the pending charges in their banking app, the light at their own "
+        "junction. Sending them to read a regulation, open a standards document "
+        "or look up an agency circular is homework, and nobody does homework "
+        "from a feed. This went wrong live: a note ended with 'pull up any FAA "
+        "advisory circular and count how many open with that phrase'."
+    ),
 }
 
-# Rozklad form na dzien. PROSTA zostaje, ale przestaje byc jedyna.
-NOTE_FORM_MIX = ("SCENA", "KONTRAST", "PROSTA", "LISTA", "PYTANIE",
-                 "ODWROCENIE", "LICZBA")
+NOTE_FORM_MIX = ("SCENA", "KONTRAST", "ZACZEP_I_KONKRET", "PROSTA", "LISTA",
+                 "PYTANIE", "ODWROCENIE", "LICZBA")
 
 NOTE_TYPES = {
     "ARTYKUL": (
@@ -826,7 +974,60 @@ LAJKI_DZIENNIE = (12, 20)
 KOMENTARZE_DZIENNIE = (15, 20)    # 0 jest dozwolone: milczenie bije slaby komentarz
 FOLLOW_MIESIECZNIE = (30, 44)     # obserwowanie to czytanie, nie zbieranie
 SUBSKRYPCJE_MIESIECZNIE = (6, 12)  # laduje w skrzynce wlasciciela, wiec waskie
-RESTACK_DZIENNIE = (0, 0)         # ZABLOKOWANE do osobnej decyzji wlasciciela
+# ODBLOKOWANE decyzja wlasciciela 2026-08-19. Restack cudzej notki z wlasnym
+# zdaniem trafia do kanalu NASZYCH obserwujacych, powiadamia autora oryginalu
+# i stawia nasze zdanie obok jego — za cene jednego zdania, nie calej notki.
+#
+# Wask0 celowo. Restack jest publicznym aktem na cudzej tresci: przy dziesieciu
+# dziennie konto wyglada jak wzmacniacz, a nie jak ktos, kto czyta. Dwa-cztery
+# to tyle, ile czlowiek naprawde uzna za warte podania dalej.
+# --- ciche dni ---------------------------------------------------------------
+# Publikacja nadajaca identycznie codziennie czyta sie jak kanal, a nie jak
+# ktos, kto mysli. To byl ostatni wyrazny podpis automatu na tym profilu:
+# siedem dni z rzedu, ten sam rytm, zadnej przerwy.
+#
+# Ale cichy dzien wycisza NADAWANIE, nigdy ODPOWIADANIE. Nieodpisanie komus,
+# kto sie do nas odezwal, nie jest cisza tylko lekcewazeniem — i akurat to
+# widac natychmiast.
+#
+# Decyzja musi byc TA SAMA dla wszystkich przebiegow tego samego dnia. Losowanie
+# per przebieg dalo by dzien, w ktorym rano jest cicho, a wieczorem nie — czyli
+# gorzej niz brak ciszy. Dlatego liczymy ja z daty, deterministycznie.
+CICHY_DZIEN_NA_ILE = 8          # srednio jeden na osiem dni
+CICHE_DNI_WLACZONE = True
+
+
+def _cisza_z_hasza(dzien: str) -> bool:
+    import hashlib
+
+    liczba = int(hashlib.sha256(("%s|cisza" % dzien).encode("utf-8")).hexdigest()[:8], 16)
+    return liczba % CICHY_DZIEN_NA_ILE == 0
+
+
+def cichy_dzien(kiedy=None) -> bool:
+    """Czy dzis nie nadajemy. Ta sama odpowiedz przez caly dzien.
+
+    Sam hasz daje SKUPISKA: na dwoch latach wypadly cztery ciche dni z rzedu,
+    a to juz nie jest przerwa na myslenie, tylko porzucone konto. Wiec dzien
+    jest cichy tylko wtedy, gdy poprzedni nie byl — deterministycznie, bez
+    zadnego stanu do zapamietania, i nadal identycznie dla wszystkich
+    przebiegow tej samej doby.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    if not CICHE_DNI_WLACZONE or CICHY_DZIEN_NA_ILE < 2:
+        return False
+    kiedy = kiedy or datetime.now(timezone.utc)
+    dzis = kiedy.strftime("%Y-%m-%d")
+    wczoraj = (kiedy - timedelta(days=1)).strftime("%Y-%m-%d")
+    return _cisza_z_hasza(dzis) and not _cisza_z_hasza(wczoraj)
+
+
+RESTACK_DZIENNIE = (2, 4)
+
+# Dopisek do cudzej notki. Powyzej tego to juz nie dopisek, tylko wlasna notka
+# doczepiona do czyjegos tekstu — a wtedy lepiej napisac wlasna notke.
+RESTACK_MAX_SLOW = 40
 
 # Pierwszy miesiac na dolnej polowie widelek. Nowe konto z jednym artykulem,
 # ktore nagle obserwuje dwadziescia osob, wyglada dokladnie jak farma.
@@ -871,6 +1072,10 @@ ODSTEPY = {
     "komentarz":  (180, 480),    #  3-8 min: przeczytac cudzy tekst i odpowiedziec
     "odpowiedz":  (120, 420),    #  2-7 min
     "lajk":       (30, 90),      # 0,5-1,5 min: przewijanie kanalu
+    # Restack wymaga PRZECZYTANIA cudzej notki i napisania wlasnego zdania.
+    # Kilkanascie sekund miedzy jednym a drugim znaczyloby, ze nie czytalismy
+    # zadnej — a to widac na profilu tak samo, jak widac bylo notki parami.
+    "restack":    (600, 1800),   # 10-30 min
 }
 ODSTEP_MIEDZY_DZIALANIAMI = (45, 180)   # zapas dla czynnosci bez wlasnego wpisu
 
@@ -1121,3 +1326,94 @@ def losowa_liczba_paraleli(glebokosc: str = "RICH") -> tuple[int, str]:
         wagi = {1: 5, 2: 3}
     ile = random.choices(list(wagi), weights=list(wagi.values()), k=1)[0]
     return ile, OPIS_LICZBY_PARALELI[ile]
+
+
+# --- generatory tematow ------------------------------------------------------
+# Mielismy 52 DZIEDZINY, czyli odpowiedz na pytanie GDZIE szukac, i zero
+# wzorcow, czyli zadnej odpowiedzi na pytanie CZEGO. Model dostawal „przyroda,
+# finanse, prawo" i sam musial zgadnac, co w tych obszarach jest ciekawe.
+#
+# Sprawdzone na wlasnych tekstach: szesc naszych artykulow trafia w PIEC
+# roznych wzorcow ponizej, wiec siatka pokrywa to, co juz umiemy, i nazywa
+# kilka, ktorych nie tknelismy. Generator x dziedzina to kilkaset komorek,
+# a kazda produkuje kandydatow.
+GENERATORY = {
+    "MEASUREMENT": "A number that looks like a measurement but is a ratio, a band "
+                   "or marketing. Probe: what number does this domain print on "
+                   "things, and what is it actually the ratio of?",
+    "MIRROR": "Two jurisdictions, opposite rules, each internally correct. Probe: "
+              "where does another country do the exact opposite, and why is each "
+              "one right at home?",
+    "FAILURE": "An incident where the system behaved exactly as designed, and that "
+               "is why it broke. Probe: what is the famous outage or accident here, "
+               "and what did it reveal that was always true?",
+    "DECIDER": "Someone chose this. They have a name and a date. Nobody knows "
+               "either. Probe: who signed this off, in what year, and what were "
+               "they optimising for?",
+    "FOSSIL": "The constraint disappeared, the shape stayed. Probe: what is here "
+              "only because of a machine or a law that no longer exists?",
+    "MARGIN": "A limit that reads as stinginess is exactly what the calculation "
+              "requires. Probe: what looks under-provisioned, and what calculation "
+              "makes it precisely enough?",
+    "FRAUD": "The feature is a fossil of one specific crime. Probe: what does this "
+             "defend against, and who was the criminal that caused it to exist?",
+    "QUEUE": "An order you did not know was designed. Probe: what is the invisible "
+             "ordering here, and what is it optimising that is not your convenience?",
+    "CONFESSION": "The standard admits its own imprecision, in writing. Probe: "
+                  "where does the rulebook say 'this is approximate', and why did "
+                  "it have to?",
+    "SUBSIDY": "One price hides a transfer between groups. Probe: who is overpaying "
+               "so that someone else can be served at all?",
+    "ROUND_NUMBER": "The threshold is round because a committee rounded it. Probe: "
+                    "is this a natural break or a negotiated one, and who was in "
+                    "the room?",
+    "BOUNDARY": "The system must rule on a moment that does not exist. Probe: what "
+                "happens exactly at the edge — midnight, the date line, the instant "
+                "of payment?",
+}
+
+ILE_GENERATOROW_NA_PRZEBIEG = 4
+
+# Ile kandydatow-jednolinijkowcow zamawiamy, zanim cokolwiek napiszemy.
+# Nadprodukcja jest obowiazkowa: piec notek z piatki pomyslow to mediana,
+# piec z dwudziestu piatki to wybor.
+KANDYDATOW_NA_PRZEBIEG = 25
+
+
+def losowe_generatory(ile: int = 0) -> list[str]:
+    """Ktore wzorce w tym przebiegu. Ten sam generator dwa dni z rzedu daje
+    jednolity ksztalt, a jednolity ksztalt to podpis maszyny."""
+    import random
+
+    return random.sample(list(GENERATORY), k=min(ile or ILE_GENERATOROW_NA_PRZEBIEG,
+                                                 len(GENERATORY)))
+
+
+# --- co czytelnik trzyma w reku W TYM MIESIACU -------------------------------
+# Najtansza dzwignia, jaka mamy, i nie mielismy jej wcale. Zwykla rzecz,
+# ktorej ktos WLASNIE dotyka, bije zwykla rzecz w ogole: artykul o SPF
+# w sierpniu to nie przypadek.
+#
+# Miesiace wg polkuli polnocnej, bo tam jest wiekszosc czytelnikow anglojezycznych.
+W_TYM_MIESIACU = {
+    1: "new year deadlines, gym memberships, winter tyres, heating bills, sales",
+    2: "tax paperwork, insurance renewals, road salt and potholes, flu season",
+    3: "clock change, spring cleaning, allergy season, tax filing",
+    4: "tax deadlines, garden chemicals, travel booking, allergy medication",
+    5: "sunscreen going on shelves, barbecues, bicycles, exam season",
+    6: "air conditioning, travel documents, festivals, water restrictions",
+    7: "air conditioning, sunscreen, flight delays, ice cream and cold chain",
+    8: "sunscreen, school supplies, holiday flights, wildfire and air quality",
+    9: "back to school, heating switched on, harvest and food labelling",
+    10: "heating, clock change, energy tariffs, Halloween packaging",
+    11: "winter tyres, dark evenings and lighting, holiday shopping, deliveries",
+    12: "deliveries and parcels, holiday lighting, alcohol limits, returns policy",
+}
+
+
+def co_teraz_w_reku(kiedy=None) -> str:
+    """Rzeczy, ktorych czytelnik dotyka wlasnie teraz."""
+    from datetime import datetime, timezone
+
+    kiedy = kiedy or datetime.now(timezone.utc)
+    return W_TYM_MIESIACU.get(kiedy.month, "")

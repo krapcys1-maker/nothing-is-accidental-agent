@@ -325,6 +325,27 @@ def reply_to(
                if text else f"MILCZY — {data.get('reason_if_silent', '')[:60]}"),
             flush=True,
         )
+        # DETERMINISTYCZNE PODLOGI NA ODPOWIEDZI. Odpowiedz jest pisana
+        # Z PAMIECI MODELU — nie ma karty dowodowej, wiec `zweryfikuj` nie ma
+        # czego sprawdzac. Ale dwie podlogi z `gates` NIE potrzebuja korpusu:
+        # zmyslone przezycie („widzialem", „stalem") i powolanie na nieistniejace
+        # badanie („according to a recent study"). Obie sa czystym kodem, koszt
+        # zero, i lapia dokladnie te awarie, ktore w tekscie z pamieci sa
+        # najbardziej prawdopodobne.
+        #
+        # Tu, w odroznieniu od artykulu, BLOKUJA. Uzasadnienie „po oplaconym
+        # researchu artykul musi powstac" nie przenosi sie na wyjscie, za
+        # ktorego research nikt nie zaplacil, a milczenie jest pelnoprawna
+        # odpowiedzia i tak.
+        if text:
+            import gates as _gates
+            for wzor, nazwa in ((_gates.FABRICATED_EXPERIENCE, "zmyslone przezycie"),
+                                (_gates.VAGUE_STUDY, "nieistniejace badanie")):
+                if wzor.search(text):
+                    data["odrzucony"] = nazwa
+                    data["reply"] = None
+                    print(f"    ODRZUCONA PRZED WYSLANIEM: {nazwa}", flush=True)
+                    break
         candidates.append(data)
     return {"comment": comment.get("text", "")[:200], "candidates": candidates}
 
@@ -632,10 +653,23 @@ def znajdz_ciekawostki(
     dziedziny = random.sample(list(config.DZIEDZINY_CIEKAWOSTEK),
                               k=min(config.ILE_DZIEDZIN_NA_PRZEBIEG,
                                     len(config.DZIEDZINY_CIEKAWOSTEK)))
+    # WZORCE TEZ LOSOWANE. Dziedzina mowi GDZIE szukac, generator mowi CZEGO —
+    # i tej drugiej osi nie bylo wcale. Model dostawal „przyroda, finanse,
+    # prawo" i sam musial zgadnac, co tam jest ciekawe, wiec wracal do tego,
+    # co mu wychodzi najlatwiej. Dwanascie wzorcow razy piecdziesiat dwie
+    # dziedziny to szescset dwadziescia cztery komorki siatki.
+    generatory = config.losowe_generatory()
+    from datetime import datetime, timezone
+    teraz = datetime.now(timezone.utc)
     print(f"  [ciekawostki] dziedziny: {chr(44).join(dziedziny)}", flush=True)
+    print(f"  [ciekawostki] wzorce: {chr(44).join(generatory)}", flush=True)
     prompt = _prompt(
         "ciekawostki.md", ile=ile,
         dziedziny=NOWA_LINIA.join(f"- {d}" for d in dziedziny),
+        generatory=NOWA_LINIA.join(
+            f"**{g}** — {config.GENERATORY[g]}" for g in generatory),
+        miesiac=teraz.strftime("%B"),
+        w_reku=config.co_teraz_w_reku(teraz) or "(nothing seasonal listed)",
         uzyte=("\n".join(f"- {t}" for t in zuzyte[-config.CURIOSITY_MEMORY:])
                or "(nothing yet — this is the first batch)"),
     )
@@ -663,6 +697,17 @@ def znajdz_ciekawostki(
     print(f"  [ciekawostki] z pokryciem: {len(fakty)}", flush=True)
     for f in fakty:
         print(f"    · [{f.get('domain', '')[:18]}] {f.get('fact', '')[:88]}", flush=True)
+
+    # WSZYSTKO IDZIE DO INDEKSU, nie tylko to, co zuzyjemy dzis. Dotad kazde
+    # wyszukiwanie zylo jeden przebieg: $0,05 i 6-20 zapytan produkowalo osiem
+    # faktow, z ktorych dwa szly na notki, a szesc przepadalo — i nastepnego
+    # dnia szukalismy tego samego od nowa. Teraz jedno wyszukiwanie zasila
+    # indeks na tygodnie, a odrzuceni zostaja odrzuceni NA STALE, zamiast
+    # wracac przy kazdym przebiegu.
+    try:
+        dopisz_kandydatow(fakty)
+    except Exception as exc:
+        print(f"  [indeks] nie zapisalem ({type(exc).__name__})", flush=True)
     return fakty
 
 
@@ -717,6 +762,18 @@ def note(
         note_form=note_form,
         form_brief=config.NOTE_FORMS.get(note_form, config.NOTE_FORMS["PROSTA"]),
         evidence=json.dumps(evidence, ensure_ascii=False, indent=2)[:9000],
+        # OSTATNIE OTWARCIA IDA DO MODELU, nie tylko do sortownika. Dotad
+        # `ostatnie_otwarcia` sluzylo wylacznie temu, zeby PO napisaniu wybrac
+        # ten z trzech wariantow, ktory nie powtarza pierwszego slowa — czyli
+        # pisalismy na slepo trzy i placilismy za dwa wyrzucone.
+        #
+        # Model, ktory wie, jak zaczynaly poprzednie notki, nie potrzebuje
+        # konkurencji. To ta sama zasada, co przy formulce restackow: zamiast
+        # prosic model, zeby byl dobry, daj mu informacje, ktorej mu brakuje.
+        # Wartosc zmiany: dwie trzecie rachunku za notki.
+        ostatnie_otwarcia_json=json.dumps(
+            sorted(ostatnie_otwarcia()) or ["(zadnych jeszcze nie ma)"],
+            ensure_ascii=False),
     )
     zajete_otwarcia = set(ostatnie_otwarcia())
     candidates: list[dict[str, Any]] = []
@@ -996,6 +1053,113 @@ def notki_dnia(
     return dzien
 
 
+RESTACK_SYSTEM = (
+    "You decide whether to pass somebody else's note on to your own readers "
+    "with one sentence of your own attached. Refusing is the normal outcome. "
+    "Return only valid JSON."
+)
+
+
+def ocen_restack(
+    conn: sqlite3.Connection, run_id: int, notka: dict[str, Any],
+) -> dict[str, Any]:
+    """Czy podac te notke dalej i z jakim zdaniem.
+
+    Restack jest tansza od notki (jedno zdanie zamiast czterdziestu slow),
+    ale DROZSZA reputacyjnie: nasze nazwisko staje obok cudzego tekstu w kanale
+    naszych obserwujacych, a autor dostaje powiadomienie. Puste „swietny punkt"
+    wydaje czyjas wiarygodnosc, zeby nie powiedziec nic.
+
+    Milczenie jest pelnoprawnym wynikiem i nie jest porazka — dlatego decyzja
+    modelu ma dwa stany, a kod nie probuje jej naginac w strone dzialania.
+    """
+    tekst = (notka.get("tekst") or notka.get("body") or "").strip()
+    if not tekst:
+        return {"restack": False, "reason": "pusta notka"}
+    # Cudzy tekst to DANE, nie polecenia. Ta sama zapora co przy komentarzach.
+    czysty, powod = bez_wstrzykniecia(tekst)
+    if not czysty:
+        return {"restack": False,
+                "reason": "material odrzucony przez zapore: %s" % powod}
+    surowy = llm.call(
+        "restack", RESTACK_SYSTEM,
+        _prompt("restack.md", autor=notka.get("autor", "")[:80], tekst=tekst[:2500]),
+        conn=conn, run_id=run_id,
+    )
+    o = llm.parse_json(surowy)
+    zdanie = str(o.get("sentence") or "").strip()
+
+    # Deklaracja bez zdania to nie decyzja. I odwrotnie: zdanie za dlugie
+    # przestaje byc dopiskiem, a staje sie notka doczepiona do cudzej.
+    if o.get("restack") and not zdanie:
+        o["restack"] = False
+        o["reason"] = "zaznaczono restack, ale nie napisano zdania"
+    elif zdanie and len(zdanie.split()) > config.RESTACK_MAX_SLOW:
+        o["restack"] = False
+        o["reason"] = ("zdanie ma %d slow przy limicie %d — to juz nie dopisek"
+                       % (len(zdanie.split()), config.RESTACK_MAX_SLOW))
+    elif zdanie:
+        # Nasze wlasne zdanie tez przechodzi przez zapore: model mogl
+        # przepisac do niego adres albo wzmiankę z cudzego tekstu.
+        ok, czemu = bez_wstrzykniecia(zdanie)
+        if not ok:
+            o["restack"] = False
+            o["reason"] = "nasze zdanie odrzucone przez zapore: %s" % czemu
+        elif _podloga_z_pamieci(zdanie):
+            # Restack tez powstaje Z PAMIECI, wiec dostaje te same dwie
+            # podlogi co odpowiedz. Nasze zdanie staje obok cudzego tekstu
+            # pod naszym nazwiskiem — to najgorsze miejsce na zmyslone
+            # przezycie albo powolanie na badanie, ktorego nie ma.
+            o["restack"] = False
+            o["reason"] = "podloga: %s" % _podloga_z_pamieci(zdanie)
+        elif _otwarcie_formulka(zdanie):
+            # Pierwszy zywy test dal dwa restacki i OBA zaczynaly sie tak samo:
+            # „This is the same mechanism as…". Dwa to zbieg okolicznosci,
+            # dwadziescia to podpis. Prompt tego zakazuje, ale zakaz w prompcie
+            # juz raz przegral z modelem przy szkielecie artykulu — wiec tu
+            # sprawdza to takze kod.
+            o["restack"] = False
+            o["reason"] = ("zdanie otwiera sie formulka %r — powiedz ten drugi "
+                           "przypadek, zamiast zapowiadac, ze go powiesz"
+                           % zdanie[:46])
+    o["sentence"] = zdanie
+    return o
+
+
+_FORMULKI_RESTACKA = (
+    "this is the same mechanism",
+    "the same mechanism as",
+    "this is the same logic",
+    "the same logic as",
+    "this is the same shape",
+    "same pattern as",
+)
+
+
+def _podloga_z_pamieci(tekst: str) -> str:
+    """Dwie podlogi, ktore dzialaja BEZ karty dowodowej.
+
+    Teksty pisane z pamieci modelu — komentarz, odpowiedz, restack — nie maja
+    korpusu, wiec `LICZBA_SPOZA_KORPUSU` sie do nich nie stosuje: zabilaby
+    dokladnie te funkcje, dla ktorej te etapy istnieja. Ale zmyslone przezycie
+    i powolanie na nieistniejace badanie nie potrzebuja korpusu do wykrycia
+    i sa w tekscie z pamieci najbardziej prawdopodobne.
+    """
+    import gates as _gates
+
+    if _gates.FABRICATED_EXPERIENCE.search(tekst or ""):
+        return "zmyslone przezycie"
+    if _gates.VAGUE_STUDY.search(tekst or ""):
+        return "nieistniejace badanie"
+    return ""
+
+
+def _otwarcie_formulka(zdanie: str) -> bool:
+    """Czy zdanie zaczyna sie od zapowiedzi ruchu zamiast od samego ruchu."""
+    poczatek = " ".join((zdanie or "").lower().split()[:7])
+    return any(f in poczatek for f in _FORMULKI_RESTACKA)
+
+
 COMMENT_SYSTEM = (
     "You write comments under other people's Substack posts as an anonymous "
     "editorial brand. Silence is the default: you comment only when you have "
@@ -1075,7 +1239,14 @@ def bez_wstrzykniecia(tekst: str) -> tuple[bool, str]:
     )
     niski = (tekst or "").lower()
     for f in podejrzane:
-        if f in niski:
+        # GRANICA SLOWA, nie podciag. Zwykle `f in niski` blokowalo poprawne
+        # zdania: "as an ai" pasuje do "as an aid", "as an aim", "as an air"
+        # i "as an aide" — a "as an aid" jest w naszej tematyce wyjatkowo
+        # prawdopodobne, bo piszemy o etykietach i urzadzeniach, ktore czemus
+        # POMAGAJA. Zapora po cichu odrzucala takie zdania jako wstrzykniecie.
+        # Zlapane na zywym restacku, gdzie wlasne, poprawne zdanie agenta
+        # zostalo odrzucone przez ten wzorzec.
+        if _re.search(r"(?<![a-z])%s(?![a-z])" % _re.escape(f), niski):
             return False, f"slad cudzego polecenia: {f!r}"
     return True, ""
 
@@ -1466,6 +1637,13 @@ def fetch(
                 body = response.text
                 if response.status_code >= 400:
                     reason = f"HTTP {response.status_code}"
+                elif _to_pdf(response, url):
+                    # PDF czytamy inaczej niz HTML. Bez tego `response.text`
+                    # jest binarnym smieciem, `trafilatura` oddaje pustke,
+                    # a strona ladowala jako „za malo tresci (0 znakow)".
+                    text = _tekst_z_pdf(response.content)
+                    if not text:
+                        reason = "PDF bez warstwy tekstowej (skan?)"
                 else:
                     text = trafilatura.extract(body, include_comments=False) or ""
                     # Frazy odmowy sprawdzamy w WYDOBYTYM TEKŚCIE, nie w surowym
@@ -1530,10 +1708,55 @@ def _host(url: str) -> str:
     return urlparse(url).netloc.lower().removeprefix("www.")
 
 
+def hosty_ktore_nigdy_nie_dzialaly(
+    conn: sqlite3.Connection, min_prob: int = 2,
+) -> list[str]:
+    """Hosty, ktore probowalismy >=2 razy i ANI RAZU sie nie udalo.
+
+    Historia porazek byla zapisywana w `sources` od poczatku i nigdy nie
+    wracala do dyskoverii — wiec model proponowal te same martwe adresy
+    w kolko. `fda.gov` przepadl 3 razy na 3, `easa.europa.eu` 2 na 2,
+    a artykul o SPF dotyczyl wlasnie przepisow FDA: najwazniejsze zrodlo
+    bylo systemowo nieosiagalne, a slot w limicie dziesieciu adresow i tak
+    zostal na nie wydany.
+
+    Prog dwoch prob, nie jednej: jedno 503 to awaria po drugiej stronie,
+    dwa z rzedu to juz wlasciwosc hosta. Lista jest miekka — trafia do
+    promptu jako podpowiedz, a nie do twardego filtru, bo host moze
+    kiedys przestac blokowac i nie chcemy go skreslic na zawsze.
+    """
+    # PORAZKI NA PUSTEJ TRESCI SIE NIE LICZA. Byly to niemal wylacznie PDF-y,
+    # ktorych wtedy nie umielismy czytac — a nie hosty, ktore nas odrzucaja.
+    # `easa.europa.eu` wypadl 2 na 2 wlasnie tak i trafil na te liste; po
+    # dodaniu obslugi PDF-ow oddal 94 tys. znakow specyfikacji certyfikacyjnych,
+    # czyli zrodlo pierwotne najwyzszej proby. Lista ma pamietac, kto nas nie
+    # wpuszcza, a nie czego kiedys nie umielismy przeczytac.
+    try:
+        wiersze = conn.execute(
+            "SELECT domain,"
+            "       SUM(CASE WHEN fetched_ok = 0 AND fail_reason NOT LIKE '%pusto%'"
+            "                 AND fail_reason NOT LIKE '%za mało%'"
+            "                 AND fail_reason NOT LIKE '%za malo%'"
+            "                 AND fail_reason NOT LIKE '%PDF%' THEN 1 ELSE 0 END) AS realne,"
+            "       COALESCE(SUM(fetched_ok), 0) AS udane"
+            " FROM sources GROUP BY domain"
+            " HAVING realne >= ? AND udane = 0"
+            " ORDER BY realne DESC",
+            (min_prob,),
+        ).fetchall()
+    except sqlite3.Error:
+        return []
+    return [str(d) for d, _, _ in wiersze if d]
+
+
 def discovery(
     conn: sqlite3.Connection, run_id: int, question: str, recent_domains: list[str]
 ) -> list[dict[str, Any]]:
     """Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy)."""
+    martwe = hosty_ktore_nigdy_nie_dzialaly(conn)
+    if martwe:
+        print("  [dyskoveria] pomijam hosty bez ani jednego udanego pobrania: %s"
+              % ", ".join(martwe[:8]), flush=True)
     prompt = _prompt(
         "dyskoveria.md",
         question=question,
@@ -1541,7 +1764,7 @@ def discovery(
         max_searches=config.DISCOVERY_MAX_SEARCHES,
         min_primary=config.MIN_PRIMARY_SOURCES,
         min_why=config.MIN_WHY_SOURCES,
-        blocked_hosts=", ".join(config.BLOCKED_HOSTS),
+        blocked_hosts=", ".join(list(config.BLOCKED_HOSTS) + martwe),
     )
     real_urls: list[str] = []
     text = llm.call(
@@ -1632,9 +1855,22 @@ def pick_topic(
     lepszego, i wtedy dostaje najkrotsza forme.
     """
     waga = {"RICH": 2, "SINGLE": 1, "THIN": 0}
+
+    def ma_przekonanie(a: dict[str, Any]) -> int:
+        """Czy temat pod tym numerem niesie NAZWANE zlamane przekonanie.
+
+        Idzie PRZED glebokoscia, bo glebokosc mowi, ile da sie napisac,
+        a przekonanie mowi, czy ktokolwiek zechce to przeczytac. Temat
+        bogaty w material, ale bez luki, daje artykul poprawny i martwy —
+        i dokladnie taki powstal o symbolu na kosmetykach.
+        """
+        i = int(a.get("index", -1))
+        return int(bool(0 <= i < len(topics) and topics[i].get("ma_przekonanie")))
+
     ranked = sorted(
         (a for a in assessments if a.get("feasible")),
-        key=lambda a: (waga.get(str(a.get("depth", "RICH")).upper(), 1),
+        key=lambda a: (ma_przekonanie(a),
+                       waga.get(str(a.get("depth", "RICH")).upper(), 1),
                        a.get("confidence", 0),
                        a.get("expected_primary_sources", 0)),
         reverse=True,
@@ -1651,14 +1887,686 @@ def pick_topic(
 def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[str, Any]]:
     """Etap 1 — skaut tematów (Claude)."""
     history = recent_angles(conn)
+    # Pytania czytelnikow sa jedynym POZYTYWNYM sygnalem, jaki skaut dostaje.
+    # Dotad mial wylacznie liste tematow, ktorych ma NIE powtarzac — czyli
+    # wiedzial, czego unikac, i nic o tym, czego ludzie faktycznie chca.
+    pytania = pytania_dla_skauta()
+    if pytania:
+        print("  [skaut] mam %d pytan od czytelnikow" % len(pytania), flush=True)
     prompt = _prompt(
         "skaut.md",
         count=count,
         history_json=json.dumps(history, ensure_ascii=False, indent=2),
+        pytania_czytelnikow=(
+            "\n".join("- " + p for p in pytania) if pytania
+            else "(zadne jeszcze nie wplynelo)"),
     )
     text = llm.call("scout", SCOUT_SYSTEM, prompt, conn=conn, run_id=run_id)
     data = llm.parse_json(text)
     topics = data.get("topics")
     if not isinstance(topics, list) or not topics:
         raise ValueError(f"skaut nie zwrócił tematów: {text[:300]!r}")
+
+    # Temat bez zlamanego przekonania idzie na KONIEC kolejki, nie do kosza.
+    # Do kosza nie, bo przebieg musi skonczyc sie artykulem — to decyzja
+    # wlasciciela i nie wolno jej podwazac cichym filtrem. Ale na koniec tak,
+    # bo `pick_topic` bierze z gory, a temat bez przekonania to temat bez luki:
+    # czytelnik nie ma czego zamknac. Tak wlasnie powstal artykul o symbolu
+    # na kosmetykach, ktory wlasciciel pozniej usunal jako za slaby.
+    for t in topics:
+        wiara = str(t.get("broken_belief") or "").strip()
+        # Samo pole nie wystarczy — musi niesc zdanie, nie ozdobnik.
+        t["ma_przekonanie"] = len(wiara.split()) >= 5
+        if not t["ma_przekonanie"] and wiara:
+            t["uwaga_skauta"] = "pole jest, ale przekonanie nienazwane: %r" % wiara[:60]
+    bez = sum(1 for t in topics if not t["ma_przekonanie"])
+    if bez:
+        print("  [skaut] %d z %d tematow bez nazwanego przekonania — na koniec kolejki"
+              % (bez, len(topics)), flush=True)
+    topics.sort(key=lambda t: not t["ma_przekonanie"])
     return topics
+
+
+LIBRARIAN_SYSTEM = (
+    "You are an archivist. You group already-verified research excerpts by the "
+    "MECHANISM they demonstrate, never by subject. Return only valid JSON."
+)
+
+
+def bank_fragmentow(conn: sqlite3.Connection, dni: int = 0) -> list[dict[str, Any]]:
+    """Nieuzyte fragmenty ze wszystkich artykulow — zaplacone i nieprzeczytane.
+
+    `unused_evidence` bylo zapisywane od poczatku i NIGDY nie czytane: jedno
+    wystapienie w calym kodzie, sam zapis. Przez piec artykulow uzbieralo sie
+    134 ocytowanych fragmentow, ktore kosztowaly tyle samo co te uzyte.
+
+    `dni` > 0 zawezza do okna czasowego. Dysk wytrzyma wszystko (tysiac
+    artykulow to 7 MB), ale KONTEKST nie — trzy tysiace fragmentow to juz
+    tyle tokenow, co cala dyskoveria.
+    """
+    warunek = ""
+    if dni > 0:
+        warunek = " AND created_at >= datetime('now', '-%d days')" % int(dni)
+    wiersze = conn.execute(
+        "SELECT title, evidence, created_at FROM articles"
+        " WHERE evidence IS NOT NULL" + warunek + " ORDER BY id"
+    ).fetchall()
+    bank: list[dict[str, Any]] = []
+    for tytul, evidence, kiedy in wiersze:
+        try:
+            karta = json.loads(evidence)
+        except (ValueError, TypeError):
+            continue
+        for zrodlo in karta.get("unused_evidence") or []:
+            for fragment in zrodlo.get("excerpts") or []:
+                tekst = fragment if isinstance(fragment, str) else str(fragment)
+                if len(tekst.strip()) < 60:
+                    continue          # ogryzki nie niosą mechanizmu
+                bank.append({
+                    "id": len(bank),
+                    "text": tekst.strip(),
+                    "url": zrodlo.get("url", ""),
+                    "publisher": zrodlo.get("publisher") or _host(zrodlo.get("url", "")),
+                    "z_artykulu": tytul,
+                    "kiedy": (kiedy or "")[:10],
+                })
+    return bank
+
+
+def bibliotekarz(
+    conn: sqlite3.Connection, run_id: int, bank: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Grupuje bank po MECHANIZMIE. Model proponuje, KOD weryfikuje.
+
+    Roznica wobec dzisiejszego odsiewu: `RICH` przestaje byc deklaracja modelu
+    („ten temat ma drugi akt, uwierz mi") i staje sie faktem sprawdzalnym —
+    grupa przechodzi tylko wtedy, gdy naprawde laczy co najmniej dwie ROZNE
+    dziedziny. Stary agent nauczyl nas, ze o oceny liczbowe nie ma sensu pytac:
+    kazdy score wracal 1.0. O przynaleznosc do grupy mozna zapytac, bo odpowiedz
+    da sie sprawdzic bez pytania modelu drugi raz.
+    """
+    if not bank:
+        return {"groups": [], "loners": [], "note": "bank pusty"}
+    opis = "\n\n".join(
+        "[%d] %s — %s\n%s" % (f["id"], f["publisher"], f["kiedy"], f["text"])
+        for f in bank
+    )
+    text = llm.call(
+        "bibliotekarz", LIBRARIAN_SYSTEM,
+        _prompt("bibliotekarz.md", bank=opis),
+        conn=conn, run_id=run_id,
+    )
+    wynik = llm.parse_json(text)
+    po_id = {f["id"]: f for f in bank}
+
+    przyjete, odrzucone = [], []
+    for grupa in wynik.get("groups") or []:
+        czlonkowie = [
+            m for m in (grupa.get("members") or [])
+            if isinstance(m.get("id"), int) and m["id"] in po_id
+        ]
+        dziedziny = {str(m.get("domain", "")).strip().lower() for m in czlonkowie}
+        dziedziny.discard("")
+        grupa["members"] = czlonkowie
+        grupa["dziedziny"] = sorted(dziedziny)
+        # TO jest sprawdzenie, dla ktorego caly etap istnieje.
+        if len(czlonkowie) >= 2 and len(dziedziny) >= 2:
+            przyjete.append(grupa)
+        else:
+            grupa["powod_odrzucenia"] = (
+                "jedna dziedzina (%s)" % (", ".join(dziedziny) or "brak")
+                if len(czlonkowie) >= 2 else "mniej niz dwa istniejace fragmenty"
+            )
+            odrzucone.append(grupa)
+    wynik["groups"] = przyjete
+    wynik["odrzucone_grupy"] = odrzucone
+    return wynik
+
+
+BANK_NOTEK = config.DATA_DIR / "bank_notek.json"
+
+
+def wczytaj_bank_notek() -> list[dict[str, Any]]:
+    """Gotowe notki czekajace na swoj moment. Plik, nie tabela — limit czterech
+    tabel stoi, a wzorzec jest ten sam co `zuzyte_fakty.json` i `promocja.json`."""
+    try:
+        dane = json.loads(BANK_NOTEK.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [n for n in dane if isinstance(n, dict) and n.get("tekst")] \
+        if isinstance(dane, list) else []
+
+
+def dopisz_do_banku_notek(notki: list[dict[str, Any]]) -> int:
+    """Dokłada notki do banku, pomijajac te, ktore juz tam sa.
+
+    Po co bank: dobra notka nie musi powstac w tej samej minucie, w ktorej ma
+    pojsc w swiat. Research o Substacku mowi, ze notka zyje 7-10 dni i ze
+    licza sie godziny szczytu — a nasz agent budzi sie trzy razy dziennie
+    i musi wtedy COS napisac. Bank rozdziela pisanie od publikowania: piszemy,
+    gdy mamy dobry material, wystawiamy, gdy jest dobra pora.
+    """
+    obecne = wczytaj_bank_notek()
+    maja = {(n.get("tekst") or "").strip()[:120] for n in obecne}
+    dodane = 0
+    for n in notki:
+        tekst = (n.get("tekst") or "").strip()
+        if not tekst or tekst[:120] in maja:
+            continue
+        obecne.append(n)
+        maja.add(tekst[:120])
+        dodane += 1
+    if dodane:
+        BANK_NOTEK.parent.mkdir(parents=True, exist_ok=True)
+        BANK_NOTEK.write_text(
+            json.dumps(obecne, ensure_ascii=False, indent=2), encoding="utf-8")
+    return dodane
+
+
+def wez_z_banku_notek(ile: int = 1) -> list[dict[str, Any]]:
+    """Wyjmuje najstarsze niewykorzystane notki i ZNACZY je jako wyjete.
+
+    Znaczymy przy wyjmowaniu, nie po publikacji: jesli przebieg padnie miedzy
+    jednym a drugim, wolimy stracic notke niz wystawic ja dwa razy. Duplikat
+    pod naszym profilem widzi kazdy, utrata jednej notki z banku — nikt.
+    """
+    bank = wczytaj_bank_notek()
+    wolne = [n for n in bank if not n.get("wyjeta")]
+    wziete = wolne[:max(0, ile)]
+    if wziete:
+        znaczniki = {id(n) for n in wziete}
+        for n in bank:
+            if id(n) in znaczniki:
+                n["wyjeta"] = db.now()
+        BANK_NOTEK.write_text(
+            json.dumps(bank, ensure_ascii=False, indent=2), encoding="utf-8")
+    return wziete
+
+
+def stan_banku_notek() -> dict[str, int]:
+    """Ile mamy zapasu — do wypisania przy starcie przebiegu."""
+    bank = wczytaj_bank_notek()
+    wolne = sum(1 for n in bank if not n.get("wyjeta"))
+    return {"razem": len(bank), "wolne": wolne, "wyjete": len(bank) - wolne}
+
+
+WORTH_SYSTEM = (
+    "You judge whether an evidence card contains a gap a stranger would feel. "
+    "Curiosity is a recognised gap in the reader's own knowledge, not a novel "
+    "fact. Return only valid JSON."
+)
+
+# Prog wynika z teorii, nie z gustu. Zlamane przekonanie jest WARUNKIEM
+# KONIECZNYM: bez niego nie ma luki, wiec nie ma ciekawosci — choćby fakty
+# byly najlepsze. Tak wlasnie padl artykul o symbolu na kosmetykach.
+WYMAGANE_ZLAMANE_PRZEKONANIE = True
+MIN_FILAROW_POZA_PRZEKONANIEM = 2      # z trzech: decydent, liczba, druga dziedzina
+
+
+def warto_pisac(
+    conn: sqlite3.Connection, run_id: int, card: dict[str, Any],
+) -> dict[str, Any]:
+    """Etap przed pisarzem: czy jest tu luka, ktora obcy poczuje.
+
+    Model OBSERWUJE cztery rzeczy i cytuje dowod z karty; werdykt sklada KOD.
+    O oceny liczbowe nie pytamy — stary agent nauczyl nas, ze kazdy score
+    wraca 1.0, wiec prog byl dekoracja. Tu kazde pytanie jest tak-nie
+    i wymaga cytatu, a to da sie sprawdzic.
+
+    Werdykty:
+      PISZ   — jest zlamane przekonanie i co najmniej dwa z trzech filarow
+      DOLOZ  — jest zlamane przekonanie, ale materialu za malo: szukamy pary
+      ODLOZ  — nie ma zlamanego przekonania, czyli nie ma luki
+    """
+    surowy = llm.call(
+        "warto_pisac", WORTH_SYSTEM,
+        _prompt("warto_pisac.md",
+                card_json=json.dumps(card, ensure_ascii=False, indent=2)[:14000]),
+        conn=conn, run_id=run_id,
+    )
+    o = llm.parse_json(surowy)
+
+    def jest(klucz: str) -> bool:
+        blok = o.get(klucz)
+        return bool(isinstance(blok, dict) and blok.get("present"))
+
+    przekonanie = jest("contradicted_belief")
+    # Deklaracja bez tresci to nie deklaracja. Model musi UMIEC nazwac przekonanie.
+    tresc = str((o.get("contradicted_belief") or {}).get("the_belief", "")).strip()
+    if przekonanie and len(tresc.split()) < 4:
+        przekonanie = False
+        o.setdefault("uwagi_kodu", []).append(
+            "zaznaczono zlamane przekonanie, ale nie umiano go nazwac — nie liczy sie")
+
+    filary = {"named_decider": jest("named_decider"),
+              "felt_number": jest("felt_number"),
+              "second_domain": jest("second_domain")}
+    ile_filarow = sum(filary.values())
+
+    if WYMAGANE_ZLAMANE_PRZEKONANIE and not przekonanie:
+        werdykt, powod = "ODLOZ", (
+            "brak przekonania, ktore material lamie — bez tego czytelnik nie ma "
+            "luki do zamkniecia, a fakty same jej nie tworza")
+    elif ile_filarow >= MIN_FILAROW_POZA_PRZEKONANIEM:
+        werdykt, powod = "PISZ", "zlamane przekonanie + %d z 3 filarow" % ile_filarow
+    else:
+        werdykt, powod = "DOLOZ", (
+            "zlamane przekonanie jest, ale tylko %d z 3 filarow — szukamy pary "
+            "w banku zanim to pojdzie do pisarza" % ile_filarow)
+
+    o["przekonanie"] = przekonanie
+    o["filary"] = filary
+    o["ile_filarow"] = ile_filarow
+    o["werdykt"] = werdykt
+    o["powod"] = powod
+    return o
+
+
+PYTANIA_CZYTELNIKOW = config.DATA_DIR / "pytania_czytelnikow.json"
+
+# Pytanie retoryczne i uprzejmosc to nie sa tematy. Odsiewamy je w kodzie,
+# zanim cokolwiek pojdzie do modelu — inaczej pula zapelni sie "how are you?".
+_NIE_TEMAT = (
+    "how are you", "what do you think", "thanks", "thank you", "great post",
+    "love this", "anyone else", "am i the only", "right?", "isn't it",
+)
+
+
+def zbierz_pytania(wpisy: list[dict[str, Any]]) -> int:
+    """Wyławia z odpowiedzi czytelnikow te, ktore sa PYTANIAMI, i zapisuje je.
+
+    Najbogatszym zrodlem tematow dla kazdej publikacji jest pytanie, ktore ktos
+    zadal, a autor na nie nie odpowiedzial. Te odpowiedzi juz do nas plyna —
+    agent czyta je codziennie, zeby na nie odpisac — i dotad NIC z nich nie
+    trafialo do puli tematow. Sygnal darmowy, wysokiej jakosci i wyrzucany.
+
+    Zbieramy przy okazji rutyny dnia, gdy i tak jestesmy w przegladarce, a nie
+    w przebiegu artykulu: tam kazde dodatkowe otwarcie sesji to koszt i ryzyko.
+    """
+    zebrane = wczytaj_pytania()
+    znane = {(p.get("tekst") or "")[:110] for p in zebrane}
+    dodane = 0
+    for w in wpisy or []:
+        tekst = str(w.get("tekst") or "").strip()
+        if "?" not in tekst or len(tekst.split()) < 5:
+            continue
+        niski = tekst.lower()
+        if any(f in niski for f in _NIE_TEMAT):
+            continue
+        # Cudzy tekst to dane, nie polecenia — ta sama zapora co wszedzie.
+        czysty, _ = bez_wstrzykniecia(tekst)
+        if not czysty or tekst[:110] in znane:
+            continue
+        zebrane.append({
+            "tekst": tekst[:400],
+            "autor": str(w.get("autor") or "")[:60],
+            "skad": str(w.get("kontekst") or w.get("pod_czym") or "")[:120],
+            "kiedy": db.now(),
+        })
+        znane.add(tekst[:110])
+        dodane += 1
+    if dodane:
+        PYTANIA_CZYTELNIKOW.parent.mkdir(parents=True, exist_ok=True)
+        PYTANIA_CZYTELNIKOW.write_text(
+            json.dumps(zebrane[-200:], ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        print(f"  [pytania] zebrano {dodane} nowych — pula ma {len(zebrane[-200:])}",
+              flush=True)
+    return dodane
+
+
+def wczytaj_pytania() -> list[dict[str, Any]]:
+    """Pula pytan czytelnikow. Uszkodzony plik to pusta pula, nie awaria."""
+    try:
+        dane = json.loads(PYTANIA_CZYTELNIKOW.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [p for p in dane if isinstance(p, dict) and p.get("tekst")] \
+        if isinstance(dane, list) else []
+
+
+def pytania_dla_skauta(ile: int = 6) -> list[str]:
+    """Najswiezsze pytania czytelnikow, gotowe do wklejenia w prompt skauta."""
+    return [p["tekst"] for p in reversed(wczytaj_pytania()[-ile * 3:])][:ile]
+
+
+def _to_pdf(odpowiedz, url: str) -> bool:
+    """Czy to PDF. Naglowek jest wiarygodniejszy od koncowki adresu.
+
+    Adresy urzedowe czesto nie koncza sie na `.pdf` (`/downloads/136694/en`),
+    a mimo to zwracaja PDF — dlatego pytamy najpierw serwer, a koncowka jest
+    tylko zapasem. Na koniec podglad pierwszych bajtow, bo naglowek tez bywa
+    ustawiony byle jak.
+    """
+    typ = (odpowiedz.headers.get("content-type") or "").lower()
+    if "pdf" in typ:
+        return True
+    if (url or "").lower().split("?")[0].endswith(".pdf"):
+        return True
+    try:
+        return odpowiedz.content[:5] == b"%PDF-"
+    except Exception:
+        return False
+
+
+def _tekst_z_pdf(dane: bytes, max_stron: int = 40) -> str:
+    """Warstwa tekstowa PDF-a.
+
+    Powod istnienia policzony, nie przeczuty: na 84 probach pobrania szesnascie
+    adresow bylo PDF-ami i udaly sie DWA. Czternascie porazek z dwudziestu
+    dziewieciu — prawie polowa wszystkiego, co przepadalo. Urzedy publikuja
+    wlasnie w PDF, wiec tracilismy systematycznie zrodla PIERWOTNE.
+
+    Limit stron jest po to, zeby jeden dwustustronicowy zalacznik nie zjadl
+    calego wejscia klasyfikacji. Skan bez warstwy tekstowej oddaje pustke
+    i to jest poprawny wynik — OCR-u nie robimy.
+    """
+    try:
+        import io as _io
+
+        from pypdf import PdfReader
+    except ImportError:
+        return ""
+    try:
+        czytnik = PdfReader(_io.BytesIO(dane))
+        kawalki = []
+        for strona in czytnik.pages[:max_stron]:
+            try:
+                kawalki.append(strona.extract_text() or "")
+            except Exception:
+                continue          # jedna zla strona nie psuje calego dokumentu
+    except Exception:
+        return ""
+    tekst = "\n".join(k.strip() for k in kawalki if k and k.strip())
+    # PDF-y lamia wiersze co kilkadziesiat znakow. Bez sklejenia klasyfikacja
+    # dostaje sieczke i nie rozpoznaje zdan.
+    return re.sub(r"\n{3,}", "\n\n", tekst).strip()
+
+
+INDEKS_KANDYDATOW = config.DATA_DIR / "indeks_kandydatow.json"
+
+# Ile slow musi miec kazda polowa, zeby liczyla sie za wypelniona. Jedno slowo
+# to nie przekonanie, tylko wypelniacz pola.
+MIN_SLOW_POLOWY = 4
+
+
+def bramka_kandydata(k: dict[str, Any]) -> tuple[bool, str]:
+    """Czy z tego da sie zrobic notke. Sprawdza KOD, nie model.
+
+    Regula jest jedna i ta sama, co przy artykulach: da sie zapisac zlamane
+    przekonanie w formie „wiekszosc sadzi X, naprawde Y"? Jesli nie — to jest
+    ciekawostka, a ciekawostka jest zamknieta: mozna ja polubic i nie da sie
+    na nia odpowiedziec, wiec nie rosnie.
+
+    Do tego para decyzja-skutek. Decyzja bez skutku, ktory czytelnik trzyma
+    w reku, to historia administracji. Skutek bez decyzji to ciekawostka.
+    Notka istnieje dopiero tam, gdzie udokumentowana decyzja wyprodukowala
+    rzecz, ktora ktos ma przy sobie.
+    """
+    wiara = str(k.get("wrong_belief") or "").strip()
+    naprawde = str(k.get("actually") or "").strip()
+
+    # BRAMKA 1 — NAZWANY DECYDENT Z DATA. To jest cala premisa pisma: „jaka
+    # decyzja, przepis albo interes za tym stoi". Zabija „dlaczego niebo jest
+    # niebieskie" jednym ruchem, bo nikt tego nie zdecydowal.
+    decyzja = str(k.get("decision") or "").strip()
+    if len(decyzja.split()) < 2:
+        return False, "nikt tego nie zdecydowal — to zjawisko, nie mechanizm"
+    if not re.search(r"(1[5-9]|20)\d{2}", decyzja):
+        return False, "decydent bez daty: %r" % decyzja[:60]
+
+    # BRAMKA 2 — ZLAMANE PRZEKONANIE. Najostrzejsza regula w calym potoku:
+    # „wiekszosc nie wie" to NIE JEST przekonanie, tylko niewiedza, a niewiedza
+    # produkuje ciekawostki. X musi byc twierdzeniem, ktorego czytelnik BRONILBY,
+    # gdyby mu zaprzeczyc. Ten sam werdykt trzy razy niezaleznie: ta bramka,
+    # bramka warto_pisac i wlasciciel, ktory usunal artykul o symbolu
+    # na kosmetykach — bo nikt nie ma o tym symbolu zadnego zdania.
+    if len(wiara.split()) < MIN_SLOW_POLOWY:
+        return False, "brak przekonania do zlamania — to ciekawostka, nie notka"
+    if re.search(r"\b(don'?t know|do not know|never heard|are unaware|not aware|"
+                 r"nikt nie wie|malo kto wie)\b", wiara, re.IGNORECASE):
+        return False, ("niewiedza to nie przekonanie — czytelnik musi czegos "
+                       "BRONIC, a nie tego nie znac: %r" % wiara[:60])
+    if len(naprawde.split()) < MIN_SLOW_POLOWY:
+        return False, "jest przekonanie, ale nie ma co mu przeciwstawic"
+
+    # BRAMKA 3 — KONTAKT. Czytelnik ma tego dotykac, nie podziwiac z daleka.
+    skutek = str(k.get("consequence") or "").strip()
+    if not skutek:
+        return False, "decyzja bez skutku, ktory czytelnik trzyma w reku"
+
+    # I MUSI TO BYC ZWYKLY CZLOWIEK, NIE FACHOWIEC. Pierwszy przebieg na
+    # Federal Register wypuscil szesc kandydatow na szesc: kwoty polowowe dla
+    # posiadaczy zezwolen na takle pelagiczne, oplaty karne dla przetworcow
+    # orzechow wloskich, dodatek za wypalanie kontrolowane dla strazakow
+    # lesnych i formatowanie naglowka w samym Federal Register. Kazdy z nich
+    # ma decydenta, date, zlamane przekonanie i skutek — i zaden nie nadaje
+    # sie do publikacji, bo przekonanie trzyma BRANZA, a nie czytelnik.
+    #
+    # Zero odrzucen na prawdziwych danych bylo zreszta samo w sobie ostrzezeniem:
+    # bramka, ktora nigdy nie zagryzla, nie jest bramka.
+    # Sprawdzenie jest STRUKTURALNE, nie slownikowe, bo lista slow branzowych
+    # jest z natury dziurawa — przepuscila strazakow lesnych i formatowanie
+    # naglowka w samym Federal Register.
+    #
+    # Roznica miedzy dobrym a zlym skutkiem jest inna: dobry nazywa RZECZ,
+    # ktora czytelnik ma, zly nazywa OSOBE, ktorej dotyczy przepis.
+    #   dobrze: „the bottle of sunscreen in your bathroom", „the clock on
+    #           your oven", „the pending charge in your banking app"
+    #   zle:    „an Atlantic-region pelagic longline permit holder",
+    #           „GS and FWS wildland firefighters assigned to prescribed burns"
+    #
+    # Wymog „your" wymusza odpowiedz na pytanie CO MA CZYTELNIK zamiast KOGO
+    # TO DOTYCZY. Prompt zamawia dokladnie taka forme, wiec to nie jest
+    # zgadywanka — to sprawdzenie, czy model wykonal polecenie.
+    if not re.search(r"\byour\b", skutek, re.IGNORECASE):
+        return False, ("skutek nazywa kogos, nie rzecz czytelnika (brak slowa "
+                       "'your'): %r" % skutek[:70])
+
+    # BRAMKA 4 — SPRAWDZALNOSC. Jesli nie umiemy nazwac, GDZIE mieszka
+    # odpowiedz, to weryfikacja padnie pozniej — a wtedy research bedzie juz
+    # oplacony. Adres wystarcza za wskazanie rodzaju dokumentu.
+    if not str(k.get("url") or "").startswith("http"):
+        return False, "brak zrodla"
+
+    czysty, powod = bez_wstrzykniecia("%s %s %s" % (wiara, naprawde, k.get("fact", "")))
+    if not czysty:
+        return False, "zapora: %s" % powod
+    return True, ""
+
+
+def wczytaj_indeks() -> list[dict[str, Any]]:
+    """Indeks kandydatow. Uszkodzony plik to pusty indeks, nie awaria."""
+    try:
+        dane = json.loads(INDEKS_KANDYDATOW.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [k for k in dane if isinstance(k, dict) and k.get("fact")] \
+        if isinstance(dane, list) else []
+
+
+def _zapisz_indeks(indeks: list[dict[str, Any]]) -> None:
+    INDEKS_KANDYDATOW.parent.mkdir(parents=True, exist_ok=True)
+    INDEKS_KANDYDATOW.write_text(
+        json.dumps(indeks[-600:], ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def dopisz_kandydatow(kandydaci: list[dict[str, Any]]) -> dict[str, int]:
+    """Przepuszcza kandydatow przez bramke i dokłada do indeksu.
+
+    ODRZUCENI TEZ SA ZAPISYWANI, z powodem. Bez tego ten sam martwy pomysl
+    wracalby przy kazdym przebiegu i za kazdym razem kosztowal wyszukiwanie —
+    a tak odrzucenie jest ostateczne i darmowe.
+    """
+    indeks = wczytaj_indeks()
+    znane = {_klucz_faktu(k.get("fact", "")) for k in indeks}
+    licznik = {"przyjete": 0, "odrzucone": 0, "znane": 0}
+    for k in kandydaci or []:
+        klucz = _klucz_faktu(str(k.get("fact") or ""))
+        if not klucz or klucz in znane:
+            licznik["znane"] += 1
+            continue
+        ok, powod = bramka_kandydata(k)
+        indeks.append({
+            "fact": str(k.get("fact") or "")[:500],
+            "wrong_belief": str(k.get("wrong_belief") or "")[:300],
+            "actually": str(k.get("actually") or "")[:300],
+            "decision": str(k.get("decision") or "")[:200],
+            "consequence": str(k.get("consequence") or "")[:200],
+            "url": str(k.get("url") or "")[:400],
+            "domain": str(k.get("domain") or "")[:80],
+            "status": "nowy" if ok else "odrzucony",
+            "powod": powod,
+            "kiedy": db.now(),
+        })
+        znane.add(klucz)
+        licznik["przyjete" if ok else "odrzucone"] += 1
+    if licznik["przyjete"] or licznik["odrzucone"]:
+        _zapisz_indeks(indeks)
+    print("  [indeks] przyjete %d, odrzucone %d, juz znane %d — w indeksie %d"
+          % (licznik["przyjete"], licznik["odrzucone"], licznik["znane"],
+             sum(1 for k in indeks if k.get("status") == "nowy")), flush=True)
+    return licznik
+
+
+def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
+    """Wyjmuje kandydatow gotowych do pisania i ZNACZY ich jako uzytych.
+
+    Znaczymy przy wyjmowaniu, nie po publikacji — ta sama zasada co w banku
+    notek: przy awarii miedzy jednym a drugim wolimy stracic kandydata niz
+    wystawic to samo dwa razy.
+    """
+    indeks = wczytaj_indeks()
+    wolni = [k for k in indeks if k.get("status") == "nowy"]
+    wziete = wolni[:max(0, ile)]
+    if wziete:
+        znaczniki = {id(k) for k in wziete}
+        for k in indeks:
+            if id(k) in znaczniki:
+                k["status"] = "uzyty"
+                k["uzyty_kiedy"] = db.now()
+        _zapisz_indeks(indeks)
+    return wziete
+
+
+def stan_indeksu() -> dict[str, int]:
+    """Ile mamy zapasu i ile odsialismy — do wypisania przy starcie."""
+    indeks = wczytaj_indeks()
+    stan = {"nowe": 0, "uzyte": 0, "odrzucone": 0}
+    for k in indeks:
+        stan[{"nowy": "nowe", "uzyty": "uzyte"}.get(k.get("status"), "odrzucone")] += 1
+    return stan
+
+
+FEDREG_API = "https://www.federalregister.gov/api/v1/documents.json"
+FEDREG_POLA = ["title", "abstract", "agencies", "publication_date", "html_url",
+               "raw_text_url", "type", "action"]
+
+# Slady tego, ze regulator odpowiada komus, kto sie nie zgadzal. To jest
+# dokladnie ksztalt „wiekszosc sadzi X, naprawde Y", tylko napisany przez
+# strone, ktora ma OBOWIAZEK sie wytlumaczyc.
+FEDREG_SPOR = (
+    r"commenters?\b", r"\bwe disagree\b", r"\bwe decline\b",
+    r"\bwe do not agree\b", r"\bin response to (the |these )?comments?\b",
+    r"\bone commenter\b", r"\bseveral commenters\b", r"\bwe considered\b",
+)
+FEDREG_MIN_SPOR = 5
+
+
+def korpus_fedreg(ile_dokumentow: int = 50, ile_gestych: int = 6) -> list[dict[str, Any]]:
+    """Preambuly przepisow, w ktorych regulator ODPOWIADA na zastrzezenia.
+
+    Po co akurat to zrodlo: agencja wydajaca przepis musi opisac rozumowanie
+    i odniesc sie do zarzutow, wiec preambula jest gotowym „wiekszosc sadzi X,
+    naprawde Y" napisanym przez strone, ktora ma obowiazek sie tlumaczyc.
+
+    Zmierzone na stu najnowszych przepisach: 20 procent niesie gesty spor,
+    12 slaby, 68 zaden — dwie trzecie to rutyna w rodzaju procedur podejscia
+    lotniczego. Gesty dokument ma srednio 91 tys. znakow wobec 37 tys.
+    przecietnego, bo tam, gdzie ktos sie klocil, trzeba bylo tlumaczyc dluzej.
+
+    Filtr jest DARMOWY — regex na pobranym tekscie — wiec model dostaje
+    wylacznie to, co ma szanse przejsc bramki. Przy 20 procentach trafien
+    piecdziesiat pobranych daje mniej wiecej dziesiec uzytecznych.
+
+    Dostep jest czysty: HTTP 200, JSON, bez klucza i bez blokad. To odwrotnosc
+    naszego zwyklego problemu, gdzie skutecznosc pobran wynosi 65 procent.
+    """
+    import httpx
+
+    gestych: list[dict[str, Any]] = []
+    try:
+        with httpx.Client(timeout=config.FETCH_TIMEOUT_S * 2,
+                          follow_redirects=True,
+                          headers={"User-Agent": config.FETCH_USER_AGENT}) as c:
+            odp = c.get(FEDREG_API, params={
+                "per_page": min(ile_dokumentow, 100), "order": "newest",
+                "conditions[type][]": "RULE", "fields[]": FEDREG_POLA})
+            if odp.status_code != 200:
+                print("  [fedreg] API odmowilo: HTTP %s" % odp.status_code, flush=True)
+                return []
+            dokumenty = odp.json().get("results") or []
+            for d in dokumenty:
+                if len(gestych) >= ile_gestych:
+                    break
+                url = d.get("raw_text_url")
+                if not url:
+                    continue
+                try:
+                    tekst = c.get(url).text
+                except Exception:
+                    continue
+                spor = sum(len(re.findall(w, tekst, re.I)) for w in FEDREG_SPOR)
+                if spor < FEDREG_MIN_SPOR:
+                    continue
+                gestych.append({
+                    "tytul": (d.get("title") or "")[:200],
+                    "urzad": ((d.get("agencies") or [{}])[0].get("name") or "")[:80],
+                    "data": d.get("publication_date", ""),
+                    "url": d.get("html_url", ""),
+                    "spor": spor,
+                    # Przycinamy: preambula bywa polmilionowa, a klasyfikacja
+                    # i tak czyta poczatek, gdzie siedzi uzasadnienie.
+                    "tekst": tekst[:config.FEDREG_MAX_ZNAKOW],
+                })
+    except Exception as exc:
+        print("  [fedreg] nie poszlo: %s" % type(exc).__name__, flush=True)
+        return []
+    print("  [fedreg] %d gestych preambul (prog sporu: %d)"
+          % (len(gestych), FEDREG_MIN_SPOR), flush=True)
+    for g in gestych:
+        print("    · %3d sladow  [%s] %s" % (g["spor"], g["urzad"][:26],
+                                             g["tytul"][:58]), flush=True)
+    return gestych
+
+
+FEDREG_SYSTEM = (
+    "You read the preamble of a published regulation and extract candidates for "
+    "an editorial brand that explains the decisions behind ordinary things. "
+    "A candidate exists only where a documented decision produced something a "
+    "reader can touch. Return only valid JSON."
+)
+
+
+def kandydaci_z_fedreg(
+    conn: sqlite3.Connection, run_id: int, dokument: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Wyciaga kandydatow z jednej preambuly i oddaje w ksztalcie indeksu."""
+    surowy = llm.call(
+        "fedreg", FEDREG_SYSTEM,
+        _prompt("fedreg.md", tytul=dokument.get("tytul", ""),
+                urzad=dokument.get("urzad", ""), data=dokument.get("data", ""),
+                url=dokument.get("url", ""), tekst=dokument.get("tekst", "")),
+        conn=conn, run_id=run_id,
+    )
+    kandydaci = llm.parse_json(surowy).get("candidates") or []
+    for k in kandydaci:
+        # Adres i decydent pochodza z DOKUMENTU, nie z modelu — model potrafi
+        # przekrecic jedno i drugie, a to sa jedyne dwie rzeczy, ktorych nie
+        # musi zgadywac.
+        k["url"] = dokument.get("url", "")
+        k["zrodlo"] = "Federal Register"
+        if not str(k.get("decision") or "").strip():
+            k["decision"] = "%s, %s" % (dokument.get("urzad", ""),
+                                        dokument.get("data", "")[:4])
+    return kandydaci

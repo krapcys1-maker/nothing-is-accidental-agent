@@ -77,6 +77,12 @@ def deterministic_floors(body: str, card: dict[str, Any]) -> list[dict[str, str]
             "gate": "FRAZA_Z_INSTRUKCJI",
             "detail": f"{fraza!r} — zdanie z promptu, nie z myślenia",
         })
+    zapowiedz = zapowiedziany_akapit_granic(body)
+    if zapowiedz:
+        findings.append({
+            "gate": "ZAPOWIEDZ_GRANIC",
+            "detail": "akapit o granicach zapowiada sam siebie: %r" % zapowiedz,
+        })
     ile, hosty = szerokosc_podstawy(card)
     if ile < 2:
         findings.append({
@@ -162,3 +168,45 @@ def verdict(findings: list[dict[str, str]]) -> tuple[str, str | None]:
     strata 1,30 USD researchu i zero informacji w zamian.
     """
     return "SAVED", None
+
+
+# Slowa, po ktorych poznac, ze zdanie mowi O AKAPICIE, a nie o temacie.
+_META_GRANIC = (
+    "record", "evidence", "documents", "sources", "the text", "worth stating",
+    "leaves open", "leave open", "does not settle", "do not settle",
+    "say once", "saying once", "hedge throughout", "plainly", "deserves saying",
+)
+
+
+def zapowiedziany_akapit_granic(body: str) -> str:
+    """Czy akapit o granicach zaczyna sie od zdania o samym sobie.
+
+    Zakazywanie konkretnych fraz nie dziala: przy kazdym zakazie nastepny
+    artykul znajdowal nowy sposob na to samo. Trzy zaobserwowane warianty
+    tej samej wady, kolejno: „a few things this evidence does not settle",
+    „what the record here does not establish deserves saying once",
+    „what the regulation and the proposed rule leave open is worth stating
+    plainly".
+
+    Wiec sprawdzamy STRUKTURE: zdanie otwierajace akapit, ktory wylicza
+    granice, ma zaczynac sie od granicy, nie od zapowiedzi. Szukamy akapitow
+    mowiacych o tym, czego zapis NIE ustala, i patrzymy na ich pierwsze zdanie.
+    """
+    for akapit in re.split(r"\n\s*\n", body):
+        a = akapit.strip()
+        if len(a.split()) < 25:
+            continue
+        # Czy to w ogole akapit o granicach.
+        niski = a.lower()
+        if not any(z in niski for z in ("does not", "do not", "not establish",
+                                        "leaves open", "not settled", "nothing here")):
+            continue
+        pierwsze = re.split(r"(?<=[.!?])\s+", a)[0]
+        # Tylko POCZATEK zdania. Zdanie moze legalnie wspomniec o zapisie
+        # w drugiej polowie — "converting it into minutes is the reader's
+        # invention, not the record's" jest poprawne i konkretne. Wada polega
+        # na tym, ze zdanie ZACZYNA sie od mowienia o akapicie.
+        poczatek = " ".join(pierwsze.lower().split()[:10])
+        if any(w in poczatek for w in _META_GRANIC):
+            return pierwsze[:150]
+    return ""

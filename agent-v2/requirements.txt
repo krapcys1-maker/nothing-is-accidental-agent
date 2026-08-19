@@ -19,3 +19,12 @@ playwright==1.62.0
 # 0,59 USD i przewrocil sie na `import trafilatura`. Zaden test tego nie zlapal,
 # bo wszystkie sprawdzaly moduly agenta, a nie ten jeden import w srodku funkcji.
 trafilatura==2.2.0
+
+# PDF-y w etapie `fetch`. Nie z ostroznosci, tylko z policzonej straty:
+# na 84 probach pobrania 16 adresow bylo PDF-ami i udaly sie DWA. Czternascie
+# porazek z dwudziestu dziewieciu — prawie polowa wszystkiego, co nam
+# przepadalo — to byly PDF-y, bo `trafilatura` czyta HTML, a `response.text`
+# dla PDF-a jest binarnym smieciem. Ministerstwa i urzedy publikuja wlasnie
+# w PDF, wiec traciliśmy systematycznie zrodla PIERWOTNE, czyli te
+# najcenniejsze.
+pypdf==6.1.1

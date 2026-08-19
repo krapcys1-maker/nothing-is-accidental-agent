@@ -400,22 +400,45 @@ def _co_z_tego_wyszlo(wpisy: list[dict]) -> None:
         for typ, n in collections.Counter(w.get("typ") for w in skutki).most_common():
             print(f"    {typ:<16} {n}")
 
-    # Ile reakcji przypada na JEDNO dzialanie danego rodzaju. To jest liczba,
-    # ktora mowi, gdzie warto klasc wysilek.
-    na_komentarze = sum(int(w.get("ilu") or 0) for w in skutki
-                        if str(w.get("typ", "")).startswith("comment"))
-    na_notki = sum(int(w.get("ilu") or 0) for w in skutki
-                   if str(w.get("typ", "")).startswith("note"))
+    # ODPOWIEDZI OSOBNO OD POLUBIEN, i to odpowiedzi sa naglowkiem.
+    #
+    # Powod nie jest estetyczny. Jesli jedyna miara sukcesu jest suma reakcji,
+    # a polubien jest zawsze wielokrotnie wiecej niz odpowiedzi, to kazda
+    # decyzja opierana na tej liczbie przesuwa pismo w strone tego, co zbiera
+    # polubienia — czyli w strone szoku. Publikacja o tym, dlaczego zwykle
+    # rzeczy sa takie, jakie sa, przegralaby sama ze soba w kilka miesiecy.
+    #
+    # Odpowiedz znaczy, ze ktos poswiecil czas. Polubienie znaczy, ze ktos
+    # przewinal i kliknal. To sa rozne zdarzenia i nie wolno ich sumowac.
+    def _ilu(warunek) -> int:
+        return sum(int(w.get("ilu") or 0) for w in skutki if warunek(str(w.get("typ", ""))))
+
+    odp_kom = _ilu(lambda t: t == "comment_reply")
+    odp_not = _ilu(lambda t: t == "note_reply")
+    lajk_kom = _ilu(lambda t: t == "comment_like")
+    lajk_not = _ilu(lambda t: t in ("note_like", "note_restack"))
     ile_kom = sum(1 for w in wystawione if w["rodzaj"] == "komentarz")
     ile_not = sum(1 for w in wystawione if w["rodzaj"] == "notka")
     if ile_kom or ile_not:
-        print("\n  zwrot z jednego dzialania:")
+        print("\n  ODPOWIEDZI na jedno dzialanie — to jest miara, ktora sie liczy:")
         if ile_kom:
-            print(f"    komentarz u obcych  {na_komentarze / ile_kom:>5.2f}"
-                  f"  ({na_komentarze} reakcji / {ile_kom} komentarzy)")
+            print(f"    komentarz u obcych  {odp_kom / ile_kom:>5.2f}"
+                  f"  ({odp_kom} odpowiedzi / {ile_kom} komentarzy)")
         if ile_not:
-            print(f"    notka na profilu    {na_notki / ile_not:>5.2f}"
-                  f"  ({na_notki} reakcji / {ile_not} notek)")
+            print(f"    notka na profilu    {odp_not / ile_not:>5.2f}"
+                  f"  ({odp_not} odpowiedzi / {ile_not} notek)")
+        print("\n  polubienia (osobno — NIE laczyc z powyzszym):")
+        if ile_kom:
+            print(f"    komentarz u obcych  {lajk_kom / ile_kom:>5.2f}")
+        if ile_not:
+            print(f"    notka na profilu    {lajk_not / ile_not:>5.2f}")
+        laczna_odp, laczne_lajki = odp_kom + odp_not, lajk_kom + lajk_not
+        if laczne_lajki and laczna_odp:
+            print(f"\n    na jedna odpowiedz przypada {laczne_lajki / laczna_odp:.1f}"
+                  " polubien — dlatego suma reakcji to miara polubien, nie rozmowy")
+        elif laczne_lajki and not laczna_odp:
+            print(f"\n    ! {laczne_lajki} polubien i ZERO odpowiedzi — tresci sa"
+                  " przyjmowane, ale nie zaczepiaja nikogo do rozmowy")
 
     # CZY OPLACA SIE BYC WCZESNIE. Pod tekstem ze 126 komentarzami nasza uwaga
     # jest niewidoczna — ale to trzeba pokazac liczbami, a nie twierdzic.

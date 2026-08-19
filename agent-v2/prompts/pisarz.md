@@ -85,12 +85,25 @@ paragraph stating plainly what the evidence does not cover is worth more than a
 page of "may" and "might". The card's `not_established` and `contradictions`
 lists are the material for that paragraph.
 
-Do not announce that paragraph. Phrases like "a few things this evidence does
-not settle, and I will say them once rather than hedge throughout" or "what
-the record here does not establish deserves saying once, plainly" are you
-explaining your own editorial policy to the reader, who did not ask. State the
-limits directly and let them be a paragraph like any other. It does not have to
-sit second from the end.
+**Do not announce that paragraph — and the rule is structural, not a list of
+banned phrases.** Every time this was forbidden by example, the next article
+found a fresh way to do the same thing: "a few things this evidence does not
+settle", "what the record here does not establish deserves saying once", "what
+the regulation and the proposed rule leave open is worth stating plainly".
+
+So the rule is about the FIRST SENTENCE of that paragraph. It must begin with
+the limit itself — a concrete noun from the subject — never with a sentence
+about the paragraph you are writing.
+
+- Wrong: *What the record leaves open is worth stating plainly.* Then the limits.
+- Right: *Nothing here says how long a given SPF lets anyone stay in the sun.*
+  Then the next limit, and the next.
+
+If your first sentence contains "record", "evidence", "documents", "sources",
+"the text", "worth stating", "leaves open", "does not settle" or "say once", you
+are introducing the paragraph instead of writing it. Delete that sentence and
+start with the second one. The reader did not ask for your editorial policy.
+It does not have to sit second from the end.
 
 **One paragraph. Not two, not three.** A published article of ours spent a third
 of its length on what the evidence did not say, because the evidence did not say

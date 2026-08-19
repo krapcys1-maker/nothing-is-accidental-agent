@@ -104,8 +104,9 @@ def z_dziennika_dzis() -> dict[str, int]:
     from datetime import datetime, timezone
 
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    ile = {"komentarze": 0, "lajki": 0}
-    nazwa = {"komentarz": "komentarze", "polubienie": "lajki"}
+    ile = {"komentarze": 0, "lajki": 0, "restacki": 0}
+    nazwa = {"komentarz": "komentarze", "polubienie": "lajki",
+             "restack": "restacki"}
     try:
         if not DZIENNIK.exists():
             return ile
@@ -2135,3 +2136,138 @@ def read_pages(urls: list[str]) -> list[dict[str, Any]]:
         context.close()
         browser.close()
     return out
+
+
+def restackuj_w_kanale(
+    ile: int, decyzja, wyslij: bool = False,
+) -> dict[str, Any]:
+    """Podaje dalej cudze notki z wlasnym zdaniem.
+
+    `decyzja` to funkcja (notka: dict) -> dict, ktora oddaje
+    {"restack": bool, "sentence": str, "reason": str}. Decyzja siedzi POZA ta
+    funkcja, bo tu jest tylko klikanie — a o tym, czy warto, decyduje etap
+    `stages.ocen_restack`, ktory da sie przetestowac bez przegladarki.
+
+    Sciezka ustalona na zywym Substacku, nie zgadnieta:
+      przycisk `Restack` ma aria-haspopup="menu", wiec NIE restackuje od razu,
+      tylko rozwija menu z pozycjami `Restack`, `Restack with a note`
+      i `View restacks`. Bierzemy druga — samo podanie dalej bez zdania nic
+      nie wnosi, a to zdanie jest calym sensem tej akcji.
+
+    Odstepy sa dluzsze niz przy polubieniach (10-30 min), bo restack wymaga
+    PRZECZYTANIA cudzej notki. Cztery restacki w dwie minuty to nie jest
+    czytanie i widac to na profilu tak samo, jak widac bylo notki parami.
+    """
+    import random
+
+    wyslij = naprawde_wyslac(wyslij, "restacki")
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    wynik: dict[str, Any] = {"znalezione": 0, "rozwazone": 0, "restackowane": 0,
+                             "odmowy": [], "blad": None}
+    try:
+        page.goto("https://substack.com/", timeout=READ_TIMEOUT_MS * 2,
+                  wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 6000)
+
+        przyciski = page.get_by_role("button", name="Restack")
+        wynik["znalezione"] = przyciski.count()
+        print(f"  notek w kanale do rozwazenia: {wynik['znalezione']}", flush=True)
+
+        for i in range(min(ile * 4, przyciski.count())):
+            if wynik["restackowane"] >= ile:
+                break
+            kandydat = przyciski.nth(i)
+            try:
+                if not kandydat.is_visible():
+                    continue
+                # Tresc notki bierzemy z KONTENERA wokol przycisku. Bez niej
+                # decyzja bylaby losowaniem, a nie ocena.
+                notka = _notka_przy_przycisku(kandydat)
+                if not notka.get("tekst"):
+                    continue
+                wynik["rozwazone"] += 1
+                ocena = decyzja(notka)
+                if not ocena.get("restack"):
+                    powod = str(ocena.get("reason", ""))[:90]
+                    wynik["odmowy"].append(powod)
+                    print(f"    pomijam: {powod}", flush=True)
+                    continue
+
+                zdanie = ocena["sentence"]
+                print(f"    RESTACK u {notka.get('autor', '?')[:24]}: {zdanie[:90]}",
+                      flush=True)
+                if not wyslij:
+                    wynik["restackowane"] += 1
+                    continue
+
+                kandydat.scroll_into_view_if_needed(timeout=8000)
+                kandydat.click(timeout=8000)
+                page.wait_for_timeout(1500)
+                page.get_by_role("menuitem", name="Restack with a note").click(
+                    timeout=8000)
+                page.wait_for_timeout(SETTLE_MS)
+                pole = page.get_by_role("textbox").last
+                pole.click(timeout=8000)
+                pole.type(zdanie, delay=random.randint(18, 45))
+                page.wait_for_timeout(1200)
+                # Substack nazywa przycisk wyslania "Post" — szukamy go
+                # WEWNATRZ okna, nie w calym kanale, zeby nie trafic w cudzy.
+                page.get_by_role("button", name="Post").last.click(timeout=8000)
+                page.wait_for_timeout(SETTLE_MS + 2000)
+                wynik["restackowane"] += 1
+                zapisz_w_dzienniku("restack", udane=True,
+                                   komu=notka.get("autor", ""), slow=len(zdanie.split()))
+                print(f"    podane dalej {wynik['restackowane']}/{ile}", flush=True)
+                page.wait_for_timeout(
+                    int(random.uniform(*config.ODSTEPY["restack"]) * 1000))
+            except Exception as exc:
+                print(f"    (pominiete: {type(exc).__name__}: {exc}"[:150] + ")",
+                      flush=True)
+                try:
+                    page.keyboard.press("Escape")
+                    page.wait_for_timeout(600)
+                except Exception:
+                    pass
+        if not wyslij:
+            print(f"  (nie klikam — tryb sprawdzenia; podalbym dalej"
+                  f" {wynik['restackowane']})", flush=True)
+    except Exception as exc:
+        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        print(f"  BŁĄD: {wynik['blad']}", flush=True)
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+    return wynik
+
+
+def _notka_przy_przycisku(przycisk) -> dict[str, str]:
+    """Tresc i autor notki, przy ktorej stoi ten przycisk.
+
+    Wchodzimy w gore drzewa, dopoki kontener nie zrobi sie na tyle duzy, zeby
+    obejmowac cala notke. Szukanie po klasach odpada: Substack generuje je
+    losowo (`container-_91AK1`), wiec selektor po klasie padnie przy pierwszym
+    wdrozeniu po ich stronie.
+    """
+    try:
+        dane = przycisk.evaluate(
+            """e => {
+                let n = e;
+                for (let i = 0; i < 8 && n.parentElement; i++) {
+                    n = n.parentElement;
+                    if (n.innerText && n.innerText.length > 120) break;
+                }
+                const t = (n.innerText || '').trim();
+                const a = n.querySelector('a[href*="/@"], a[href*="substack.com/profile"]');
+                return {tekst: t, autor: a ? (a.innerText || '').trim() : ''};
+            }"""
+        )
+    except Exception:
+        return {}
+    tekst = str(dane.get("tekst") or "")
+    # Obcinamy ogon interfejsu: nazwy przyciskow trafiaja do innerText.
+    for smiec in ("\nLike\n", "\nComment\n", "\nRestack\n", "\nShare\n"):
+        tekst = tekst.replace(smiec, "\n")
+    return {"tekst": tekst.strip()[:1800], "autor": str(dane.get("autor") or "")[:80]}

@@ -38,6 +38,13 @@ CREATE TABLE IF NOT EXISTS calls (
     purpose        TEXT NOT NULL,       -- scout / discovery / write / ...
     tokens_in      INTEGER NOT NULL DEFAULT 0,
     tokens_out     INTEGER NOT NULL DEFAULT 0,
+    -- Trafienia w cache byly LICZONE do kosztu i nigdzie nie zapisywane, wiec
+    -- nie dalo sie sprawdzic, czy w ogole trafiamy. To ma znaczenie, bo cache
+    -- jest 30x tanszy od zwyklego wejscia ($0,022 wobec $0,66 u pro), a nasza
+    -- najdrozsza pozycja — dyskoveria — przesyla cala rozmowe w kazdej rundzie.
+    -- Bez tej kolumny nie da sie odroznic „prefiks peka" od „prefiks trafia,
+    -- a cena bierze sie skadinad".
+    cache_hit      INTEGER NOT NULL DEFAULT 0,
     web_searches   INTEGER NOT NULL DEFAULT 0,
     cost_usd       REAL NOT NULL DEFAULT 0,
     price_verified INTEGER NOT NULL DEFAULT 1,  -- 0 = stawka niepotwierdzona
@@ -83,8 +90,39 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    _dopisz_brakujace_kolumny(conn)
     conn.commit()
     return conn
+
+
+# Kolumny dopisane do `calls` PO tym, jak baza produkcyjna juz istniala.
+# `CREATE TABLE IF NOT EXISTS` istniejacej tabeli NIE rusza, wiec bez tego
+# pierwszy zapis do starej bazy konczy sie bledem „no such column".
+#
+# To nie jest system migracji i ma nim nie byc — projekt stoi na zasadzie
+# „zmiana schematu to nowa kolumna z wartoscia domyslna, nigdy przepisywanie
+# danych". Ta funkcja robi dokladnie tyle i ani kroku wiecej.
+NOWE_KOLUMNY = {
+    "calls": {"cache_hit": "INTEGER NOT NULL DEFAULT 0"},
+}
+
+
+def _dopisz_brakujace_kolumny(conn: sqlite3.Connection) -> None:
+    for tabela, kolumny in NOWE_KOLUMNY.items():
+        try:
+            maja = {w[1] for w in conn.execute("PRAGMA table_info(%s)" % tabela)}
+        except sqlite3.Error:
+            continue
+        for nazwa, typ in kolumny.items():
+            if nazwa not in maja:
+                try:
+                    conn.execute("ALTER TABLE %s ADD COLUMN %s %s"
+                                 % (tabela, nazwa, typ))
+                    print("  [baza] dopisano kolumne %s.%s" % (tabela, nazwa),
+                          flush=True)
+                except sqlite3.Error as exc:
+                    print("  [baza] nie dopisalem %s.%s: %s" % (tabela, nazwa, exc),
+                          flush=True)
 
 
 def start_run(conn: sqlite3.Connection, stage: str = "start") -> int:
@@ -111,7 +149,7 @@ def finish_run(
 def record_call(conn: sqlite3.Connection, **fields: Any) -> None:
     keys = (
         "run_id", "provider", "model", "purpose", "tokens_in", "tokens_out",
-        "web_searches", "cost_usd", "price_verified", "ok", "note",
+        "cache_hit", "web_searches", "cost_usd", "price_verified", "ok", "note",
     )
     values = [fields.get(k) for k in keys]
     conn.execute(

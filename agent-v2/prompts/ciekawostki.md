@@ -19,6 +19,30 @@ These rotate every run. Going back to the areas you find easiest is how a feed
 turns monotonous, and the reader notices the sameness long before they notice
 the repetition.
 
+## WHAT SHAPE to look for — apply each pattern to each area
+
+The areas tell you where to look. They do not tell you what you are looking
+for, and that is why searching "interesting facts about electricity" returns
+trivia. A candidate is produced by applying a **named pattern** to a **named
+area**, not by hunting for something that feels interesting.
+
+{generatory}
+
+Work the grid: take each pattern, ask its probe question of each area above,
+and write down what comes back. Most cells will be empty. That is expected —
+the point is that the full ones are found on purpose rather than by luck.
+
+## What the reader is holding right now
+
+It is {miesiac}, and the things in front of people this month are:
+
+{w_reku}
+
+An ordinary object somebody is **handling this week** beats an ordinary object
+in general, and it costs nothing to prefer one. Sunscreen in August is not a
+coincidence. Do not force it — if the grid gives you something better out of
+season, take that instead.
+
 ## Do not make everything American
 
 The first twelve notes on this account were almost all US federal regulation.
@@ -66,4 +90,30 @@ mechanism in a neighbouring industry. Go somewhere else entirely.
 
 Return only valid JSON:
 
-{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "mechanism": "<one sentence: the decision, incentive or constraint that explains it>", "why_surprising": "<one sentence: what people assume instead>", "url": "<source that states it>", "domain": "<the everyday area it belongs to>"}}]}}
+{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<who decided it and when — a body, a committee, a statute, a year. Empty string if the record names nobody>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "domain": "<the everyday area it belongs to>"}}]}}
+
+## The two halves, and why a fact without both is worthless to us
+
+`wrong_belief` and `actually` are not decoration. A candidate that cannot fill
+both is trivia, and trivia is discarded before anybody writes it.
+
+"The world's longest tunnel is 57 km" is a fact, it is checkable, and it is
+dead: nobody holds a belief about tunnel lengths, so there is nothing to break
+and nothing to reply to. "Mains clocks count grid cycles rather than measuring
+seconds" is alive, because everyone believes their oven clock keeps time.
+
+**Phrase the consequence as a thing the reader has, using the word "your".**
+Not "a permit holder receives the allocation" but "the price on your ticket".
+Not "firefighters get the differential" but "the bill for your call-out".
+This is checked in code: a consequence without "your" is rejected before
+anything is written, because it means you named a category of people rather
+than an object the reader is holding.
+
+`decision` and `consequence` are the other pair. A decision with no consequence
+the reader meets is administrative history. A consequence with no decision
+behind it is a curiosity. **The note exists only where a documented decision
+produced something the reader is holding.**
+
+Test each candidate before returning it: can you say *"most people think X,
+actually Y, because someone decided Z"* in one breath? If not, leave it out and
+find another. Ten candidates that pass are worth more than thirty that do not.

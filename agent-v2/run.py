@@ -24,7 +24,7 @@ import stages
 
 STAGES = (
     "scout", "feasibility", "discovery", "fetch",
-    "classify", "synthesis", "write", "review",
+    "classify", "synthesis", "warto_pisac", "write", "review",
 )
 
 CACHE_DIR = config.DATA_DIR / "cache"
@@ -60,6 +60,27 @@ def cached(stage: str, produce: Callable[[], Any], use_cache: bool) -> Any:
 
 class JuzDziala(RuntimeError):
     pass
+
+
+ZNACZNIK_KOPII_TESTOWEJ = config.AGENT_DIR / "TO_JEST_KOPIA_TESTOWA"
+
+
+def odmow_publikacji_z_kopii(wyslij: bool) -> None:
+    """Kopia testowa nie ma prawa nic opublikowac. Nigdy.
+
+    Wlasciciel: „nie odpalaj go na produkcji, wersja v2 ma byc jako test".
+    Sama dyscyplina nie wystarczy — wystarczy raz dopisac `--wyslij` z pamieci
+    miesnowej i eksperyment wyjdzie na zywe konto, czego nie da sie cofnac.
+    Wiec kopia testowa nosi plik-znacznik obok `config.py`, a ten plik odbiera
+    jej prawo publikowania. Produkcja znacznika nie ma i dziala normalnie.
+    """
+    if wyslij and ZNACZNIK_KOPII_TESTOWEJ.exists():
+        raise SystemExit(
+            "ODMOWA: to jest kopia testowa (%s), a --wyslij publikuje NA ZYWO. "
+            "Produkcja stoi w ~/nothing-is-accidental-agent na galezi main. "
+            "Jesli naprawde chcesz publikowac stad, usun ten plik swiadomie."
+            % ZNACZNIK_KOPII_TESTOWEJ
+        )
 
 
 def zajmij_zamek():
@@ -231,7 +252,18 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     # a nie na minuty.
     juz = browser.ile_dzis_wystawione()
     zostalo = {k: max(0, budzet[k] - juz.get(k, 0))
-               for k in ("notki", "komentarze", "lajki")}
+               for k in ("notki", "komentarze", "lajki", "restacki")}
+
+    # CICHY DZIEN. Wyciszamy to, co NADAJEMY — notki i restacki. Komentarze,
+    # polubienia i obserwacje zostaja, bo to jest czytanie cudzych rzeczy,
+    # a nie nadawanie wlasnych. Odpowiedzi zostaja tym bardziej: nieodpisanie
+    # komus, kto sie do nas odezwal, nie jest cisza tylko lekcewazeniem.
+    if config.cichy_dzien():
+        print("   >> CICHY DZIEN — nie nadajemy wlasnych tresci. Rozmowa idzie"
+              " normalnie: odpowiedzi, komentarze i czytanie bez zmian.",
+              flush=True)
+        zostalo["notki"] = 0
+        zostalo["restacki"] = 0
     # Reszte dzielimy przez przebiegi, ktore JESZCZE dzis beda — nie przez
     # wszystkie. Dzielenie przez wszystkie systematycznie zaniza: przy budzecie
     # 16 komentarzy trzy przebiegi braly 5, 4 i 2, czyli 11 zamiast 16. Przez
@@ -250,7 +282,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
           f"w tym przebiegu: notki={na_teraz['notki']} "
           f"komentarze={na_teraz['komentarze']} lajki={na_teraz['lajki']}",
           flush=True)
-    zrobione = {"notki": 0, "komentarze": 0, "odpowiedzi": 0, "polubienia": 0}
+    zrobione = {"notki": 0, "komentarze": 0, "odpowiedzi": 0, "polubienia": 0,
+                "restacki": 0}
 
     # OKNO PUBLIKACJI liczone w strefie CZYTELNIKOW. Poza nim agent nie milczy
     # calkiem — polubienia i odpowiedzi zostaja, bo czytanie o polnocy jest
@@ -286,6 +319,15 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                    + browser.odpowiedzi_na_nasze_komentarze())
         if not czekaja:
             return
+        # PYTANIA CZYTELNIKOW DO PULI TEMATOW. Zbieramy tutaj, bo tutaj i tak
+        # trzymamy w reku wszystko, co do nas przyszlo — a w przebiegu artykulu
+        # kazde dodatkowe otwarcie sesji to koszt i ryzyko. Pytanie, ktore ktos
+        # zadal, a na ktore nikt nie odpowiedzial, jest najlepszym zrodlem
+        # tematow, jakie ma kazda publikacja; dotad wyrzucalismy je co dzien.
+        try:
+            stages.zbierz_pytania(czekaja)
+        except Exception as exc:
+            print(f"  (nie zebralem pytan: {type(exc).__name__})", flush=True)
         # Przy dwóch odpowiada się obu. Przy dwustu odpowiedź pod każdym wygląda
         # jak maszyna, więc powyżej progu agent wybiera — z pierwszeństwem dla
         # niezgody, bo nieodpowiedziany zarzut zostaje ostatnim słowem.
@@ -523,10 +565,30 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         w = browser.polub_w_kanale(na_teraz["lajki"], wyslij=wyslij)
         zrobione["polubienia"] = w.get("polubione", 0)
 
+    # --- 5. restacki: cudza notka plus nasze zdanie ---------------------------
+    def restacki() -> None:
+        """Podanie dalej trafia do kanału NASZYCH obserwujących i powiadamia
+        autora oryginału — za cenę jednego zdania zamiast całej notki.
+
+        Stoi po polubieniach świadomie: polubienie nic nie twierdzi, restack
+        stawia nasze nazwisko obok cudzego tekstu. Jeśli dzień się kończy
+        i coś ma wypaść, ma wypaść to, co niesie więcej ryzyka.
+        """
+        ile = na_teraz.get("restacki", 0)
+        if not ile:
+            print("  budżet na dziś: 0 — pomijam", flush=True)
+            return
+        w = browser.restackuj_w_kanale(
+            ile, lambda n: stages.ocen_restack(conn, run_id, n), wyslij=wyslij)
+        zrobione["restacki"] = w.get("restackowane", 0)
+        if w.get("odmowy"):
+            print(f"  odmów: {len(w['odmowy'])} — milczenie jest pełnym wynikiem",
+                  flush=True)
+
     for nazwa, robota in (("odpowiedzi", odpowiedzi), ("notki", notki),
                           ("komentarze", komentarze), ("dyskusje", dyskusje),
                           ("obserwowanie", obserwuj), ("subskrypcje", subskrybuj),
-                          ("polubienia", polubienia)):
+                          ("polubienia", polubienia), ("restacki", restacki)):
         print(f"\n-- {nazwa} --", flush=True)
         blok(nazwa, robota)
 
@@ -582,6 +644,10 @@ def main() -> int:
     parser.add_argument("--wyslij", action="store_true",
                         help="NAPRAWDĘ wystaw treści (domyślnie tylko pokazuje)")
     args = parser.parse_args()
+    # Musi stac PO parse_args (inaczej `args` jeszcze nie istnieje) i PRZED
+    # pierwszym dotknieciem bazy — zeby kopia testowa odpadala, zanim
+    # cokolwiek zapisze.
+    odmow_publikacji_z_kopii(args.wyslij)
 
     conn = db.connect()
     run_id = db.start_run(conn)
@@ -677,6 +743,38 @@ def main() -> int:
             f"{sum(1 for s in corpus if s.get('class') == 'PRIMARY')}",
             flush=True,
         )
+        # --- druga runda, gdy korpus wyszedl chudy ---------------------------
+        # Artykul o SPF poszedl do pisarza z TRZEMA zrodlami z dziesieciu
+        # proponowanych. To nie jest wada stylu, tylko wada materialu: cienka
+        # karta dowodowa znaczy mniej liczb, slabsze paralele i wiecej miejsc,
+        # gdzie pisarz musi dolozyc cos z pamieci — i wlasnie tam wyszedl
+        # jedyny fakt bez pokrycia w tym tekscie.
+        #
+        # Druga dyskoveria kosztuje ~$0,28. Artykul napisany z trzech zrodel
+        # kosztuje caly przebieg i wychodzi cienki, wiec to sie oplaca.
+        if len(corpus) < config.MIN_ZRODEL_DO_PISANIA:
+            print(f"\n-- za chudo ({len(corpus)} < {config.MIN_ZRODEL_DO_PISANIA})"
+                  " — druga runda --", flush=True)
+            try:
+                juz_mamy = {s.get("host") or s.get("url", "") for s in corpus}
+                dodatkowe = [
+                    s for s in stages.discovery(conn, run_id, topic["question"],
+                                                recent)
+                    if (s.get("host") or s.get("url", "")) not in juz_mamy
+                ]
+                if dodatkowe:
+                    dobrane = stages.fetch(conn, run_id, dodatkowe)
+                    corpus = corpus + dobrane
+                    print(f"   dobrano {len(dobrane)} z {len(dodatkowe)} nowych"
+                          f" — korpus ma teraz {len(corpus)} zrodel", flush=True)
+                else:
+                    print("   druga runda nie znalazla nowych adresow", flush=True)
+            except Exception as exc:
+                # Dobieranie jest premia, nie warunkiem. Jego awaria nie moze
+                # zabic przebiegu, za ktorego research juz zaplacilismy.
+                print(f"  [awaria] druga runda padla ({exc}) — pisze z tego, co jest",
+                      flush=True)
+
         if args.stop_after == stage:
             return _done(conn, run_id, stage)
 
@@ -727,6 +825,58 @@ def main() -> int:
                 print(f"\n   {label} ({len(items)}):", flush=True)
                 for item in items:
                     print(f"     • {str(item)[:150]}", flush=True)
+        if args.stop_after == stage:
+            return _done(conn, run_id, stage)
+
+        # --- czy jest tu luka, ktora obcy poczuje ----------------------------
+        # Bramka stoi PRZED pisarzem, bo po nim byloby za pozno: research
+        # oplacony, a artykul i tak martwy. Nic nie blokuje — werdykt DOLOZ
+        # wysyla nas do banku po pare, zamiast zatrzymywac przebieg.
+        stage = "warto_pisac"
+        print("\n-- czy jest tu luka --", flush=True)
+        try:
+            ocena = stages.warto_pisac(conn, run_id, card)
+            wiara = (ocena.get("contradicted_belief") or {}).get("the_belief", "")
+            print("   zlamane przekonanie: %s"
+                  % ("TAK" if ocena["przekonanie"] else "NIE"), flush=True)
+            if wiara:
+                print('   czytelnik wierzy: "%s"' % str(wiara)[:120], flush=True)
+            print("   filary: %d z 3  (%s)" % (
+                ocena["ile_filarow"],
+                ", ".join(k for k, v in ocena["filary"].items() if v) or "zaden"),
+                flush=True)
+            print("   >> %s — %s" % (ocena["werdykt"], ocena["powod"]), flush=True)
+
+            if ocena["werdykt"] == "DOLOZ":
+                # TO JEST MOMENT, DLA KTOREGO BANK ISTNIEJE. Temat ma luke, ale
+                # za malo materialu, zeby ja rozwinac. Bibliotekarz szuka
+                # w zaplaconych resztkach mechanizmu z INNEJ dziedziny —
+                # tak wlasnie powstal najlepszy tekst serii.
+                print("   szukam pary w banku...", flush=True)
+                bank = stages.bank_fragmentow(conn)
+                if not bank:
+                    print("   bank pusty — pisarz dostaje karte jak jest", flush=True)
+                else:
+                    grupy = stages.bibliotekarz(conn, run_id, bank).get("groups") or []
+                    dolozone = [{"domain": ", ".join(g.get("dziedziny", [])),
+                                 "mechanism": g.get("mechanism", ""), "z_banku": True}
+                                for g in grupy[:2]]
+                    if dolozone:
+                        card.setdefault("parallel_mechanisms", []).extend(dolozone)
+                        print("   dolozono %d mechanizmow z banku:" % len(dolozone),
+                              flush=True)
+                        for d in dolozone:
+                            print("     • [%s] %s"
+                                  % (d["domain"], d["mechanism"][:110]), flush=True)
+                    else:
+                        print("   bank nie ma pary — pisarz dostaje karte jak jest",
+                              flush=True)
+            card["ocena_ciekawosci"] = ocena
+        except Exception as exc:
+            # Bramka jest doradcza. Jej awaria nie moze kosztowac oplaconego
+            # researchu — artykul powstaje tak czy owak.
+            print("  [awaria] bramka ciekawosci padla (%s) — pisze bez niej" % exc,
+                  flush=True)
         if args.stop_after == stage:
             return _done(conn, run_id, stage)
 

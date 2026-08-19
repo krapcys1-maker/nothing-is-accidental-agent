@@ -9,6 +9,13 @@ the title. That only happens if every header looks like it came from the same
 place. So the style block below is **fixed and copied verbatim** — you choose
 the subject, never the treatment.
 
+The block changed once, after looking at what it actually produced. The first
+two headers were a pale object on a pale ground: tasteful at full size,
+invisible as a thumbnail in a crowded feed. The ground is now clearly darker
+than the object, the object fills more of the frame, and its surface carries
+wear — because a specimen that looks factory-fresh reads as a render, and a
+render reads as decoration rather than evidence.
+
 ## Choosing the subject
 
 Pick **one ordinary physical object** at the centre of what the article is
@@ -51,14 +58,18 @@ Return only valid JSON:
 
 ## The style block — copy verbatim into `prompt`, after your subject sentence
 
-Photographed as a single isolated specimen on a plain warm off-white paper
-background. Flat, even, diffuse studio light with one soft shadow falling short
-and to the right. Slightly elevated three-quarter angle. Muted restrained
-palette — paper, graphite, faded ochre — with at most one quiet accent colour
-drawn from the object itself. Sharp focus edge to edge, fine surface texture
-visible, no gloss, no dramatic highlights. Generous empty space around the
-object. Calm, forensic, editorial. Absolutely no text, no lettering, no
-numbers, no logos, no watermarks, no people, no hands.
+Photographed as a single isolated specimen resting on a deep putty-grey paper
+background, clearly darker than the object so the silhouette separates cleanly
+even at thumbnail size. The object fills roughly two thirds of the frame. Its
+surface shows honest wear consistent with age and use — fine scratches, slight
+chipping at the edges, uneven patina — so it reads as a real artefact that has
+been in service, never as a fresh render. Flat, even, diffuse studio light with
+one soft shadow falling short and to the right. Slightly elevated three-quarter
+angle. Restrained palette — grey ground, graphite, and the object's own colour
+allowed to stay saturated. Sharp focus edge to edge, fine surface texture
+visible, no gloss, no dramatic highlights, no vignette. Calm, forensic,
+editorial. Absolutely no text, no lettering, no numbers, no logos, no
+watermarks, no people, no hands.
 
 ## The article
 
