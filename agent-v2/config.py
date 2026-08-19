@@ -194,6 +194,12 @@ MODEL_FOR = {
     # przypomniec sobie, GDZIE INDZIEJ ten sam mechanizm dziala, a to pamiec
     # faktow, jedyna trwala przewaga pro nad flashem.
     "restack": DEEPSEEK_PRO,
+    # Wyciaganie kandydatow z preambuly przepisu. Flash, bo to praca
+    # WYDOBYWCZA na podanym tekscie, a nie siegniecie do pamieci o swiecie —
+    # czyli dokladnie ta kategoria, w ktorej flash dorownuje pro i jest
+    # trzykrotnie tanszy. Preambuly bywaja polmilionowe, wiec objetosc
+    # wejscia decyduje o rachunku.
+    "fedreg": DEEPSEEK,
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -375,6 +381,10 @@ DISCOVERY_MAX_SEARCHES = 8
 # dobrze, mialy 6-7 pobranych zrodel; ten, ktory wyszedl najcienszy i z jedynym
 # faktem bez pokrycia, mial trzy. Czworka lapie tamten przypadek, a nie rusza
 # artykulu o autobusie (cztery zrodla, zero uwag z bramek).
+# Ile znakow preambuly czytamy. Najgestszy dokument z pomiaru mial 519 tys.
+# znakow, a uzasadnienie siedzi na poczatku — dalej ida zalaczniki i tabele.
+FEDREG_MAX_ZNAKOW = 60_000
+
 MIN_ZRODEL_DO_PISANIA = 4
 
 MIN_PRIMARY_SOURCES = 2  # wymóg właściciela: w korpusie ≥2 dokumenty pierwotne
@@ -505,6 +515,8 @@ MAX_TOKENS = {
     # Jedno zdanie do 40 slow plus uzasadnienie decyzji. Malo tekstu,
     # ale DeepSeek i tak rozumuje obficie — zapas zalatwia THINKING_HEADROOM.
     "restack": 3000,
+    # Kilku kandydatow po cztery krotkie pola. Nie esej.
+    "fedreg": 8000,
     # DOKŁADNIE tyle, ile prosi prompt: 12 fragmentów po 700 znaków plus liczby
     "classify": _tokens_for(
         CLASSIFY_MAX_EXCERPTS * CLASSIFY_MAX_EXCERPT_CHARS + 2000

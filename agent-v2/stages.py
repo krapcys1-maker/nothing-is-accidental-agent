@@ -2369,3 +2369,117 @@ def stan_indeksu() -> dict[str, int]:
     for k in indeks:
         stan[{"nowy": "nowe", "uzyty": "uzyte"}.get(k.get("status"), "odrzucone")] += 1
     return stan
+
+
+FEDREG_API = "https://www.federalregister.gov/api/v1/documents.json"
+FEDREG_POLA = ["title", "abstract", "agencies", "publication_date", "html_url",
+               "raw_text_url", "type", "action"]
+
+# Slady tego, ze regulator odpowiada komus, kto sie nie zgadzal. To jest
+# dokladnie ksztalt „wiekszosc sadzi X, naprawde Y", tylko napisany przez
+# strone, ktora ma OBOWIAZEK sie wytlumaczyc.
+FEDREG_SPOR = (
+    r"commenters?\b", r"\bwe disagree\b", r"\bwe decline\b",
+    r"\bwe do not agree\b", r"\bin response to (the |these )?comments?\b",
+    r"\bone commenter\b", r"\bseveral commenters\b", r"\bwe considered\b",
+)
+FEDREG_MIN_SPOR = 5
+
+
+def korpus_fedreg(ile_dokumentow: int = 50, ile_gestych: int = 6) -> list[dict[str, Any]]:
+    """Preambuly przepisow, w ktorych regulator ODPOWIADA na zastrzezenia.
+
+    Po co akurat to zrodlo: agencja wydajaca przepis musi opisac rozumowanie
+    i odniesc sie do zarzutow, wiec preambula jest gotowym „wiekszosc sadzi X,
+    naprawde Y" napisanym przez strone, ktora ma obowiazek sie tlumaczyc.
+
+    Zmierzone na stu najnowszych przepisach: 20 procent niesie gesty spor,
+    12 slaby, 68 zaden — dwie trzecie to rutyna w rodzaju procedur podejscia
+    lotniczego. Gesty dokument ma srednio 91 tys. znakow wobec 37 tys.
+    przecietnego, bo tam, gdzie ktos sie klocil, trzeba bylo tlumaczyc dluzej.
+
+    Filtr jest DARMOWY — regex na pobranym tekscie — wiec model dostaje
+    wylacznie to, co ma szanse przejsc bramki. Przy 20 procentach trafien
+    piecdziesiat pobranych daje mniej wiecej dziesiec uzytecznych.
+
+    Dostep jest czysty: HTTP 200, JSON, bez klucza i bez blokad. To odwrotnosc
+    naszego zwyklego problemu, gdzie skutecznosc pobran wynosi 65 procent.
+    """
+    import httpx
+
+    gestych: list[dict[str, Any]] = []
+    try:
+        with httpx.Client(timeout=config.FETCH_TIMEOUT_S * 2,
+                          follow_redirects=True,
+                          headers={"User-Agent": config.FETCH_USER_AGENT}) as c:
+            odp = c.get(FEDREG_API, params={
+                "per_page": min(ile_dokumentow, 100), "order": "newest",
+                "conditions[type][]": "RULE", "fields[]": FEDREG_POLA})
+            if odp.status_code != 200:
+                print("  [fedreg] API odmowilo: HTTP %s" % odp.status_code, flush=True)
+                return []
+            dokumenty = odp.json().get("results") or []
+            for d in dokumenty:
+                if len(gestych) >= ile_gestych:
+                    break
+                url = d.get("raw_text_url")
+                if not url:
+                    continue
+                try:
+                    tekst = c.get(url).text
+                except Exception:
+                    continue
+                spor = sum(len(re.findall(w, tekst, re.I)) for w in FEDREG_SPOR)
+                if spor < FEDREG_MIN_SPOR:
+                    continue
+                gestych.append({
+                    "tytul": (d.get("title") or "")[:200],
+                    "urzad": ((d.get("agencies") or [{}])[0].get("name") or "")[:80],
+                    "data": d.get("publication_date", ""),
+                    "url": d.get("html_url", ""),
+                    "spor": spor,
+                    # Przycinamy: preambula bywa polmilionowa, a klasyfikacja
+                    # i tak czyta poczatek, gdzie siedzi uzasadnienie.
+                    "tekst": tekst[:config.FEDREG_MAX_ZNAKOW],
+                })
+    except Exception as exc:
+        print("  [fedreg] nie poszlo: %s" % type(exc).__name__, flush=True)
+        return []
+    print("  [fedreg] %d gestych preambul (prog sporu: %d)"
+          % (len(gestych), FEDREG_MIN_SPOR), flush=True)
+    for g in gestych:
+        print("    · %3d sladow  [%s] %s" % (g["spor"], g["urzad"][:26],
+                                             g["tytul"][:58]), flush=True)
+    return gestych
+
+
+FEDREG_SYSTEM = (
+    "You read the preamble of a published regulation and extract candidates for "
+    "an editorial brand that explains the decisions behind ordinary things. "
+    "A candidate exists only where a documented decision produced something a "
+    "reader can touch. Return only valid JSON."
+)
+
+
+def kandydaci_z_fedreg(
+    conn: sqlite3.Connection, run_id: int, dokument: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Wyciaga kandydatow z jednej preambuly i oddaje w ksztalcie indeksu."""
+    surowy = llm.call(
+        "fedreg", FEDREG_SYSTEM,
+        _prompt("fedreg.md", tytul=dokument.get("tytul", ""),
+                urzad=dokument.get("urzad", ""), data=dokument.get("data", ""),
+                url=dokument.get("url", ""), tekst=dokument.get("tekst", "")),
+        conn=conn, run_id=run_id,
+    )
+    kandydaci = llm.parse_json(surowy).get("candidates") or []
+    for k in kandydaci:
+        # Adres i decydent pochodza z DOKUMENTU, nie z modelu — model potrafi
+        # przekrecic jedno i drugie, a to sa jedyne dwie rzeczy, ktorych nie
+        # musi zgadywac.
+        k["url"] = dokument.get("url", "")
+        k["zrodlo"] = "Federal Register"
+        if not str(k.get("decision") or "").strip():
+            k["decision"] = "%s, %s" % (dokument.get("urzad", ""),
+                                        dokument.get("data", "")[:4])
+    return kandydaci
