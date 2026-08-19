@@ -1048,8 +1048,34 @@ def ocen_restack(
         if not ok:
             o["restack"] = False
             o["reason"] = "nasze zdanie odrzucone przez zapore: %s" % czemu
+        elif _otwarcie_formulka(zdanie):
+            # Pierwszy zywy test dal dwa restacki i OBA zaczynaly sie tak samo:
+            # „This is the same mechanism as…". Dwa to zbieg okolicznosci,
+            # dwadziescia to podpis. Prompt tego zakazuje, ale zakaz w prompcie
+            # juz raz przegral z modelem przy szkielecie artykulu — wiec tu
+            # sprawdza to takze kod.
+            o["restack"] = False
+            o["reason"] = ("zdanie otwiera sie formulka %r — powiedz ten drugi "
+                           "przypadek, zamiast zapowiadac, ze go powiesz"
+                           % zdanie[:46])
     o["sentence"] = zdanie
     return o
+
+
+_FORMULKI_RESTACKA = (
+    "this is the same mechanism",
+    "the same mechanism as",
+    "this is the same logic",
+    "the same logic as",
+    "this is the same shape",
+    "same pattern as",
+)
+
+
+def _otwarcie_formulka(zdanie: str) -> bool:
+    """Czy zdanie zaczyna sie od zapowiedzi ruchu zamiast od samego ruchu."""
+    poczatek = " ".join((zdanie or "").lower().split()[:7])
+    return any(f in poczatek for f in _FORMULKI_RESTACKA)
 
 
 COMMENT_SYSTEM = (
@@ -1131,7 +1157,14 @@ def bez_wstrzykniecia(tekst: str) -> tuple[bool, str]:
     )
     niski = (tekst or "").lower()
     for f in podejrzane:
-        if f in niski:
+        # GRANICA SLOWA, nie podciag. Zwykle `f in niski` blokowalo poprawne
+        # zdania: "as an ai" pasuje do "as an aid", "as an aim", "as an air"
+        # i "as an aide" — a "as an aid" jest w naszej tematyce wyjatkowo
+        # prawdopodobne, bo piszemy o etykietach i urzadzeniach, ktore czemus
+        # POMAGAJA. Zapora po cichu odrzucala takie zdania jako wstrzykniecie.
+        # Zlapane na zywym restacku, gdzie wlasne, poprawne zdanie agenta
+        # zostalo odrzucone przez ten wzorzec.
+        if _re.search(r"(?<![a-z])%s(?![a-z])" % _re.escape(f), niski):
             return False, f"slad cudzego polecenia: {f!r}"
     return True, ""
 
