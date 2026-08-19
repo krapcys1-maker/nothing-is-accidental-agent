@@ -193,5 +193,42 @@ przypada osiem polubień; gdyby miarą sukcesu była suma reakcji, gradient
 przesunąłby pismo od wyjaśniania do prowokacji w kilka miesięcy, a każdy
 pojedynczy krok wyglądałby na poprawę.
 
-**615 asercji w 23 zestawach.** Testy darmowe w `tests/`, płatne w
-`tests/platne/`, pomiary bez asercji w `pomiary/`.
+**657 asercji w 26 zestawach**, zmierzone na serwerze — 26/26 zdanych. Testy
+darmowe w `tests/`, płatne w `tests/platne/`, pomiary bez asercji w `pomiary/`.
+Na Windowsie dwa zestawy oblewają się na środowisku, nie na kodzie: brak
+`trafilatura`/`playwright` i SIGTERM, którego Windows nie ma.
+
+## 7. Czego nauczył pierwszy dzień na produkcji (19 sierpnia 2026)
+
+Wdrożenie poszło, ale dwa błędy wyszły dopiero na żywo — oba w miejscach, w
+które nie celował żaden test, bo oba były **niewidoczne offline**.
+
+**Wartość domyślna, która nie wchodzi.** Kolumna `calls.cache_hit` ma w
+schemacie `NOT NULL DEFAULT 0`, a mimo to wysadzała zapis. Funkcja zapisu
+wymieniała zawsze komplet kolumn, więc brakujące szły jako **jawny NULL** — a
+`DEFAULT` wchodzi wyłącznie wtedy, gdy kolumny w `INSERT` nie ma wcale.
+Podawało ją jedno miejsce z czterech. Grafika nie mogła się przez to zapisać
+nigdy (artykuł 0025 wyszedł bez okładki), a ścieżka zapisu **nieudanego**
+wywołania wywracała się na tym samym — czyli awaria dostawcy modelu
+przychodziła do logu jako awaria bazy. Naprawione w jednym miejscu: `INSERT`
+bierze tylko podane kolumny, więc następna dopisana kolumna nie powtórzy tego.
+
+**Odstęp, który ciągnął się po ostatnim.** Przerwa 10–30 minut między
+restackami stała na końcu ciała pętli, a warunek wyjścia sprawdza się dopiero
+na górze następnego obrotu. Przy budżecie 2–4 restacki rozłożonym na 3–4
+przebiegi `ile` wynosi zwykle 1, więc agent po wykonaniu normy spał jeszcze
+pół godziny z otwartą przeglądarką — w przebiegu, który wcześniej odpuścił
+obserwowanie **z braku czasu**. Pierwsza poprawka („przerwij po wykonaniu
+normy") nie wystarczała i złapał to dopiero test: gdy w kanale jest mniej
+notek niż budżet, norma nie jest wykonana i pętla i tak zasypia. Odstęp stoi
+teraz **przed** kolejnym restackiem, nie po poprzednim.
+
+Wspólny mianownik obu: szkodę zrobiła rzecz **dołożona** — licznik kosztów i
+odstęp chroniący przed tempem farmy. Obie przyszły poprawić system i obie go
+po cichu popsuły, bo dodatki tego rodzaju nie mają własnego testu.
+
+Co zadziałało bez poprawek: bramka ciekawości (PISZ, 3/3 filary), publikacja z
+potwierdzeniem u źródła, factcheck **obalił dwa własne komentarze agenta** na
+cudzych postach zanim wyszły, jeden wariant sam **zamilkł**, bo post prosił o
+osobiste doświadczenie, którego to konto nie ma, a subskrypcja przy braku
+przycisku „Subscribe" **nie kliknęła nic innego**.
