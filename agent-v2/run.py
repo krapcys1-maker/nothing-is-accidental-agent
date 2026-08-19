@@ -62,6 +62,27 @@ class JuzDziala(RuntimeError):
     pass
 
 
+ZNACZNIK_KOPII_TESTOWEJ = config.AGENT_DIR / "TO_JEST_KOPIA_TESTOWA"
+
+
+def odmow_publikacji_z_kopii(wyslij: bool) -> None:
+    """Kopia testowa nie ma prawa nic opublikowac. Nigdy.
+
+    Wlasciciel: „nie odpalaj go na produkcji, wersja v2 ma byc jako test".
+    Sama dyscyplina nie wystarczy — wystarczy raz dopisac `--wyslij` z pamieci
+    miesnowej i eksperyment wyjdzie na zywe konto, czego nie da sie cofnac.
+    Wiec kopia testowa nosi plik-znacznik obok `config.py`, a ten plik odbiera
+    jej prawo publikowania. Produkcja znacznika nie ma i dziala normalnie.
+    """
+    if wyslij and ZNACZNIK_KOPII_TESTOWEJ.exists():
+        raise SystemExit(
+            "ODMOWA: to jest kopia testowa (%s), a --wyslij publikuje NA ZYWO. "
+            "Produkcja stoi w ~/nothing-is-accidental-agent na galezi main. "
+            "Jesli naprawde chcesz publikowac stad, usun ten plik swiadomie."
+            % ZNACZNIK_KOPII_TESTOWEJ
+        )
+
+
 def zajmij_zamek():
     """Nie pozwala dwóm przebiegom działać naraz.
 
@@ -569,6 +590,7 @@ def main() -> int:
     _utf8_stdout()
     _sygnal_ma_zostawic_slad()
     try:
+        odmow_publikacji_z_kopii(args.wyslij)
         _zamek = zajmij_zamek()   # trzymany do końca procesu
     except JuzDziala as exc:
         print(f"  {exc}", flush=True)
