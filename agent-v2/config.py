@@ -1285,3 +1285,94 @@ def losowa_liczba_paraleli(glebokosc: str = "RICH") -> tuple[int, str]:
         wagi = {1: 5, 2: 3}
     ile = random.choices(list(wagi), weights=list(wagi.values()), k=1)[0]
     return ile, OPIS_LICZBY_PARALELI[ile]
+
+
+# --- generatory tematow ------------------------------------------------------
+# Mielismy 52 DZIEDZINY, czyli odpowiedz na pytanie GDZIE szukac, i zero
+# wzorcow, czyli zadnej odpowiedzi na pytanie CZEGO. Model dostawal „przyroda,
+# finanse, prawo" i sam musial zgadnac, co w tych obszarach jest ciekawe.
+#
+# Sprawdzone na wlasnych tekstach: szesc naszych artykulow trafia w PIEC
+# roznych wzorcow ponizej, wiec siatka pokrywa to, co juz umiemy, i nazywa
+# kilka, ktorych nie tknelismy. Generator x dziedzina to kilkaset komorek,
+# a kazda produkuje kandydatow.
+GENERATORY = {
+    "MEASUREMENT": "A number that looks like a measurement but is a ratio, a band "
+                   "or marketing. Probe: what number does this domain print on "
+                   "things, and what is it actually the ratio of?",
+    "MIRROR": "Two jurisdictions, opposite rules, each internally correct. Probe: "
+              "where does another country do the exact opposite, and why is each "
+              "one right at home?",
+    "FAILURE": "An incident where the system behaved exactly as designed, and that "
+               "is why it broke. Probe: what is the famous outage or accident here, "
+               "and what did it reveal that was always true?",
+    "DECIDER": "Someone chose this. They have a name and a date. Nobody knows "
+               "either. Probe: who signed this off, in what year, and what were "
+               "they optimising for?",
+    "FOSSIL": "The constraint disappeared, the shape stayed. Probe: what is here "
+              "only because of a machine or a law that no longer exists?",
+    "MARGIN": "A limit that reads as stinginess is exactly what the calculation "
+              "requires. Probe: what looks under-provisioned, and what calculation "
+              "makes it precisely enough?",
+    "FRAUD": "The feature is a fossil of one specific crime. Probe: what does this "
+             "defend against, and who was the criminal that caused it to exist?",
+    "QUEUE": "An order you did not know was designed. Probe: what is the invisible "
+             "ordering here, and what is it optimising that is not your convenience?",
+    "CONFESSION": "The standard admits its own imprecision, in writing. Probe: "
+                  "where does the rulebook say 'this is approximate', and why did "
+                  "it have to?",
+    "SUBSIDY": "One price hides a transfer between groups. Probe: who is overpaying "
+               "so that someone else can be served at all?",
+    "ROUND_NUMBER": "The threshold is round because a committee rounded it. Probe: "
+                    "is this a natural break or a negotiated one, and who was in "
+                    "the room?",
+    "BOUNDARY": "The system must rule on a moment that does not exist. Probe: what "
+                "happens exactly at the edge — midnight, the date line, the instant "
+                "of payment?",
+}
+
+ILE_GENERATOROW_NA_PRZEBIEG = 4
+
+# Ile kandydatow-jednolinijkowcow zamawiamy, zanim cokolwiek napiszemy.
+# Nadprodukcja jest obowiazkowa: piec notek z piatki pomyslow to mediana,
+# piec z dwudziestu piatki to wybor.
+KANDYDATOW_NA_PRZEBIEG = 25
+
+
+def losowe_generatory(ile: int = 0) -> list[str]:
+    """Ktore wzorce w tym przebiegu. Ten sam generator dwa dni z rzedu daje
+    jednolity ksztalt, a jednolity ksztalt to podpis maszyny."""
+    import random
+
+    return random.sample(list(GENERATORY), k=min(ile or ILE_GENERATOROW_NA_PRZEBIEG,
+                                                 len(GENERATORY)))
+
+
+# --- co czytelnik trzyma w reku W TYM MIESIACU -------------------------------
+# Najtansza dzwignia, jaka mamy, i nie mielismy jej wcale. Zwykla rzecz,
+# ktorej ktos WLASNIE dotyka, bije zwykla rzecz w ogole: artykul o SPF
+# w sierpniu to nie przypadek.
+#
+# Miesiace wg polkuli polnocnej, bo tam jest wiekszosc czytelnikow anglojezycznych.
+W_TYM_MIESIACU = {
+    1: "new year deadlines, gym memberships, winter tyres, heating bills, sales",
+    2: "tax paperwork, insurance renewals, road salt and potholes, flu season",
+    3: "clock change, spring cleaning, allergy season, tax filing",
+    4: "tax deadlines, garden chemicals, travel booking, allergy medication",
+    5: "sunscreen going on shelves, barbecues, bicycles, exam season",
+    6: "air conditioning, travel documents, festivals, water restrictions",
+    7: "air conditioning, sunscreen, flight delays, ice cream and cold chain",
+    8: "sunscreen, school supplies, holiday flights, wildfire and air quality",
+    9: "back to school, heating switched on, harvest and food labelling",
+    10: "heating, clock change, energy tariffs, Halloween packaging",
+    11: "winter tyres, dark evenings and lighting, holiday shopping, deliveries",
+    12: "deliveries and parcels, holiday lighting, alcohol limits, returns policy",
+}
+
+
+def co_teraz_w_reku(kiedy=None) -> str:
+    """Rzeczy, ktorych czytelnik dotyka wlasnie teraz."""
+    from datetime import datetime, timezone
+
+    kiedy = kiedy or datetime.now(timezone.utc)
+    return W_TYM_MIESIACU.get(kiedy.month, "")

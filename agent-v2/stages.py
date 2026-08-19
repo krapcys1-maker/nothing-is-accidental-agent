@@ -632,10 +632,23 @@ def znajdz_ciekawostki(
     dziedziny = random.sample(list(config.DZIEDZINY_CIEKAWOSTEK),
                               k=min(config.ILE_DZIEDZIN_NA_PRZEBIEG,
                                     len(config.DZIEDZINY_CIEKAWOSTEK)))
+    # WZORCE TEZ LOSOWANE. Dziedzina mowi GDZIE szukac, generator mowi CZEGO —
+    # i tej drugiej osi nie bylo wcale. Model dostawal „przyroda, finanse,
+    # prawo" i sam musial zgadnac, co tam jest ciekawe, wiec wracal do tego,
+    # co mu wychodzi najlatwiej. Dwanascie wzorcow razy piecdziesiat dwie
+    # dziedziny to szescset dwadziescia cztery komorki siatki.
+    generatory = config.losowe_generatory()
+    from datetime import datetime, timezone
+    teraz = datetime.now(timezone.utc)
     print(f"  [ciekawostki] dziedziny: {chr(44).join(dziedziny)}", flush=True)
+    print(f"  [ciekawostki] wzorce: {chr(44).join(generatory)}", flush=True)
     prompt = _prompt(
         "ciekawostki.md", ile=ile,
         dziedziny=NOWA_LINIA.join(f"- {d}" for d in dziedziny),
+        generatory=NOWA_LINIA.join(
+            f"**{g}** — {config.GENERATORY[g]}" for g in generatory),
+        miesiac=teraz.strftime("%B"),
+        w_reku=config.co_teraz_w_reku(teraz) or "(nothing seasonal listed)",
         uzyte=("\n".join(f"- {t}" for t in zuzyte[-config.CURIOSITY_MEMORY:])
                or "(nothing yet — this is the first batch)"),
     )
@@ -2234,14 +2247,41 @@ def bramka_kandydata(k: dict[str, Any]) -> tuple[bool, str]:
     """
     wiara = str(k.get("wrong_belief") or "").strip()
     naprawde = str(k.get("actually") or "").strip()
+
+    # BRAMKA 1 — NAZWANY DECYDENT Z DATA. To jest cala premisa pisma: „jaka
+    # decyzja, przepis albo interes za tym stoi". Zabija „dlaczego niebo jest
+    # niebieskie" jednym ruchem, bo nikt tego nie zdecydowal.
+    decyzja = str(k.get("decision") or "").strip()
+    if len(decyzja.split()) < 2:
+        return False, "nikt tego nie zdecydowal — to zjawisko, nie mechanizm"
+    if not re.search(r"(1[5-9]|20)\d{2}", decyzja):
+        return False, "decydent bez daty: %r" % decyzja[:60]
+
+    # BRAMKA 2 — ZLAMANE PRZEKONANIE. Najostrzejsza regula w calym potoku:
+    # „wiekszosc nie wie" to NIE JEST przekonanie, tylko niewiedza, a niewiedza
+    # produkuje ciekawostki. X musi byc twierdzeniem, ktorego czytelnik BRONILBY,
+    # gdyby mu zaprzeczyc. Ten sam werdykt trzy razy niezaleznie: ta bramka,
+    # bramka warto_pisac i wlasciciel, ktory usunal artykul o symbolu
+    # na kosmetykach — bo nikt nie ma o tym symbolu zadnego zdania.
     if len(wiara.split()) < MIN_SLOW_POLOWY:
         return False, "brak przekonania do zlamania — to ciekawostka, nie notka"
+    if re.search(r"\b(don'?t know|do not know|never heard|are unaware|not aware|"
+                 r"nikt nie wie|malo kto wie)\b", wiara, re.IGNORECASE):
+        return False, ("niewiedza to nie przekonanie — czytelnik musi czegos "
+                       "BRONIC, a nie tego nie znac: %r" % wiara[:60])
     if len(naprawde.split()) < MIN_SLOW_POLOWY:
         return False, "jest przekonanie, ale nie ma co mu przeciwstawic"
-    if not str(k.get("url") or "").startswith("http"):
-        return False, "brak zrodla"
+
+    # BRAMKA 3 — KONTAKT. Czytelnik ma tego dotykac, nie podziwiac z daleka.
     if not str(k.get("consequence") or "").strip():
         return False, "decyzja bez skutku, ktory czytelnik trzyma w reku"
+
+    # BRAMKA 4 — SPRAWDZALNOSC. Jesli nie umiemy nazwac, GDZIE mieszka
+    # odpowiedz, to weryfikacja padnie pozniej — a wtedy research bedzie juz
+    # oplacony. Adres wystarcza za wskazanie rodzaju dokumentu.
+    if not str(k.get("url") or "").startswith("http"):
+        return False, "brak zrodla"
+
     czysty, powod = bez_wstrzykniecia("%s %s %s" % (wiara, naprawde, k.get("fact", "")))
     if not czysty:
         return False, "zapora: %s" % powod

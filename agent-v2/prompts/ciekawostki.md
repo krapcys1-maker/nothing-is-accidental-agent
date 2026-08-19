@@ -19,6 +19,30 @@ These rotate every run. Going back to the areas you find easiest is how a feed
 turns monotonous, and the reader notices the sameness long before they notice
 the repetition.
 
+## WHAT SHAPE to look for — apply each pattern to each area
+
+The areas tell you where to look. They do not tell you what you are looking
+for, and that is why searching "interesting facts about electricity" returns
+trivia. A candidate is produced by applying a **named pattern** to a **named
+area**, not by hunting for something that feels interesting.
+
+{generatory}
+
+Work the grid: take each pattern, ask its probe question of each area above,
+and write down what comes back. Most cells will be empty. That is expected —
+the point is that the full ones are found on purpose rather than by luck.
+
+## What the reader is holding right now
+
+It is {miesiac}, and the things in front of people this month are:
+
+{w_reku}
+
+An ordinary object somebody is **handling this week** beats an ordinary object
+in general, and it costs nothing to prefer one. Sunscreen in August is not a
+coincidence. Do not force it — if the grid gives you something better out of
+season, take that instead.
+
 ## Do not make everything American
 
 The first twelve notes on this account were almost all US federal regulation.
