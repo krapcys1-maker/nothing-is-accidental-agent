@@ -1632,9 +1632,22 @@ def pick_topic(
     lepszego, i wtedy dostaje najkrotsza forme.
     """
     waga = {"RICH": 2, "SINGLE": 1, "THIN": 0}
+
+    def ma_przekonanie(a: dict[str, Any]) -> int:
+        """Czy temat pod tym numerem niesie NAZWANE zlamane przekonanie.
+
+        Idzie PRZED glebokoscia, bo glebokosc mowi, ile da sie napisac,
+        a przekonanie mowi, czy ktokolwiek zechce to przeczytac. Temat
+        bogaty w material, ale bez luki, daje artykul poprawny i martwy —
+        i dokladnie taki powstal o symbolu na kosmetykach.
+        """
+        i = int(a.get("index", -1))
+        return int(bool(0 <= i < len(topics) and topics[i].get("ma_przekonanie")))
+
     ranked = sorted(
         (a for a in assessments if a.get("feasible")),
-        key=lambda a: (waga.get(str(a.get("depth", "RICH")).upper(), 1),
+        key=lambda a: (ma_przekonanie(a),
+                       waga.get(str(a.get("depth", "RICH")).upper(), 1),
                        a.get("confidence", 0),
                        a.get("expected_primary_sources", 0)),
         reverse=True,
@@ -1661,6 +1674,24 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
     topics = data.get("topics")
     if not isinstance(topics, list) or not topics:
         raise ValueError(f"skaut nie zwrócił tematów: {text[:300]!r}")
+
+    # Temat bez zlamanego przekonania idzie na KONIEC kolejki, nie do kosza.
+    # Do kosza nie, bo przebieg musi skonczyc sie artykulem — to decyzja
+    # wlasciciela i nie wolno jej podwazac cichym filtrem. Ale na koniec tak,
+    # bo `pick_topic` bierze z gory, a temat bez przekonania to temat bez luki:
+    # czytelnik nie ma czego zamknac. Tak wlasnie powstal artykul o symbolu
+    # na kosmetykach, ktory wlasciciel pozniej usunal jako za slaby.
+    for t in topics:
+        wiara = str(t.get("broken_belief") or "").strip()
+        # Samo pole nie wystarczy — musi niesc zdanie, nie ozdobnik.
+        t["ma_przekonanie"] = len(wiara.split()) >= 5
+        if not t["ma_przekonanie"] and wiara:
+            t["uwaga_skauta"] = "pole jest, ale przekonanie nienazwane: %r" % wiara[:60]
+    bez = sum(1 for t in topics if not t["ma_przekonanie"])
+    if bez:
+        print("  [skaut] %d z %d tematow bez nazwanego przekonania — na koniec kolejki"
+              % (bez, len(topics)), flush=True)
+    topics.sort(key=lambda t: not t["ma_przekonanie"])
     return topics
 
 

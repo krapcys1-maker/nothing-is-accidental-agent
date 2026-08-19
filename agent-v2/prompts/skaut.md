@@ -7,9 +7,50 @@ Propose {count} article topic ideas.
 
 Each topic must be concrete, ordinary and immediately recognisable — something a
 reader has physically stood in front of, waited for, paid for or thrown away.
-Good examples of the register: why the button at a pedestrian crossing often does
-nothing; why a yoghurt pot says "use by" rather than "best before", and who
-decides which.
+
+## The one thing that decides whether a topic is worth anything
+
+**Every topic must name a belief that is wrong.**
+
+Not a fact readers don't know — nearly everything is that, and it is not enough.
+A belief they actively hold, would state out loud if asked, and which the record
+contradicts.
+
+This is not a stylistic preference. Curiosity is a response to a **gap the reader
+recognises in their own knowledge**, and a gap only exists where there was a
+belief. Someone who has no opinion about a thing has no gap, feels no pull, and
+will not read. Someone who is confidently wrong feels the pull the instant you
+say so.
+
+It is also why our worst article failed and had to be deleted. It was about a
+symbol printed on cosmetics packaging. The facts were fine, the sources were
+good — and most readers had never consciously noticed that symbol, so they held
+no belief about it, so there was nothing to break. We spent a full paid research
+run discovering that.
+
+The test, applied before you propose anything:
+
+> Can I write the reader's wrong belief as one plain sentence, in their words,
+> starting with "everyone assumes…"?
+
+If you cannot, the topic is dead however interesting the object is.
+
+**Strong, because the belief is real and wrong:**
+- *Everyone assumes the yellow traffic light lasts the same everywhere.* It is
+  computed per intersection, and a downhill approach lengthens it.
+- *Everyone assumes the petrol station is holding their money.* The bank holds
+  it and controls when it comes back.
+- *Everyone assumes school-bus yellow was chosen because it is the most visible
+  colour.* It was chosen as the best background for black lettering.
+
+**Dead, because there is no belief to break:**
+- The open-jar symbol on cosmetics — most readers have never registered it.
+- The length of an annex to a tuna-labelling regulation — nobody has a prior.
+- "Here is an interesting fact about lighthouses" — interesting is not a belief.
+
+Aim at the belief that is **widely held and confidently wrong**, and prefer the
+ones where being wrong costs the reader something — money, time, safety, or the
+feeling of having understood their own life.
 
 ## Do not answer your own question
 
@@ -49,7 +90,15 @@ and do not stay in the same subject area:
 ## Output
 
 Return only valid JSON, shaped as {{"topics": [ ... ]}}, where each topic is an
-object with keys: title, question, score_breakdown.
+object with keys: title, question, **broken_belief**, **why_they_believe_it**,
+score_breakdown.
+
+`broken_belief` is the reader's wrong belief, in their words, one plain sentence
+beginning "Everyone assumes". If you cannot write it, do not propose the topic.
+
+`why_they_believe_it` is one sentence on where that belief comes from — what
+about the ordinary experience of the object makes the wrong idea reasonable.
+A belief nobody has a reason to hold is one you invented to satisfy this field.
 
 score_breakdown must contain these keys, each 0.0-1.0: curiosity, source_quality,
 non_obvious, universality, discussion_potential, visual_potential, originality.
