@@ -43,6 +43,7 @@ shutil.copy2(config.DB_PATH, kopia_bazy)
 oryg_connect = db.connect
 oryg_dziennik = browser.DZIENNIK
 oryg_okno = config.OKNO_PUBLIKACJI_ET
+oryg_odstepy = dict(config.ODSTEPY)
 browser.DZIENNIK = katalog / "dziennik-testowy.jsonl"
 db.connect = lambda path=None: oryg_connect(kopia_bazy)
 sys.argv = ["run.py", "--dzien"]        # BEZ --wyslij
@@ -51,9 +52,28 @@ sys.argv = ["run.py", "--dzien"]        # BEZ --wyslij
 # sciezke notek i komentarzy — czyli dokladnie to, co sprawdzamy. Otwieramy
 # okno na czas testu, zeby przebieg poszedl ta sama droga co o 11:26 UTC.
 config.OKNO_PUBLIKACJI_ET = (0, 24)
+
+# ODSTEPY SKROCONE DO SEKUND. Bez tego test byl NIEUZYWALNY: notki maja
+# rozstep 45-90 minut, wiec pelny dzien chodzil godzinami i palil pieniadze
+# na API, a ja musialem go ubijac. Przez to pelny przebieg dnia — jedyna
+# rzecz, ktorej testy jednostkowe nie dotykaja — nie byl pokryty NICZYM.
+#
+# CZEGO TEN TEST PRZEZ TO NIE SPRAWDZA, i trzeba to powiedziec wprost:
+# `zmiesci_sie` liczy budzet czasu wlasnie z ODSTEPY, wiec przy dwoch
+# sekundach wszystko sie miesci i przycinanie nigdy nie zagryzie. Nie da sie
+# tego uratowac skalowaniem, bo wywolania modeli trwaja tyle, ile trwaja,
+# i nie skrocza sie razem z przerwami.
+#
+# To jest swiadomy podzial pracy: przycinanie do zegara ma wlasny test
+# (`test_czas`, 17 asercji na samej funkcji), a TEN test odpowiada na inne
+# pytanie — czy caly dzien przechodzi od poczatku do konca, czy rozdzielnik
+# wola wlasciwe etapy i czy produkcja zostaje nietknieta.
+config.ODSTEPY = {k: (1, 3) for k in oryg_odstepy}
 print()
 print("  okno publikacji na czas testu: %s (normalnie %s)"
       % (config.OKNO_PUBLIKACJI_ET, oryg_okno))
+print("  odstepy skrocone do 1-3 s (normalnie notka %s s)"
+      % (oryg_odstepy.get("notka"),))
 
 print()
 print("=== PRAWDZIWY PRZEBIEG DNIA, BEZ PUBLIKOWANIA ===")
@@ -67,6 +87,7 @@ finally:
     db.connect = oryg_connect
     browser.DZIENNIK = oryg_dziennik
     config.OKNO_PUBLIKACJI_ET = oryg_okno
+    config.ODSTEPY = oryg_odstepy
 
 print()
 print("=== WYNIK PRZEBIEGU ===")
