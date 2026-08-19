@@ -66,4 +66,23 @@ mechanism in a neighbouring industry. Go somewhere else entirely.
 
 Return only valid JSON:
 
-{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "mechanism": "<one sentence: the decision, incentive or constraint that explains it>", "why_surprising": "<one sentence: what people assume instead>", "url": "<source that states it>", "domain": "<the everyday area it belongs to>"}}]}}
+{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<who decided it and when — a body, a committee, a statute, a year. Empty string if the record names nobody>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "domain": "<the everyday area it belongs to>"}}]}}
+
+## The two halves, and why a fact without both is worthless to us
+
+`wrong_belief` and `actually` are not decoration. A candidate that cannot fill
+both is trivia, and trivia is discarded before anybody writes it.
+
+"The world's longest tunnel is 57 km" is a fact, it is checkable, and it is
+dead: nobody holds a belief about tunnel lengths, so there is nothing to break
+and nothing to reply to. "Mains clocks count grid cycles rather than measuring
+seconds" is alive, because everyone believes their oven clock keeps time.
+
+`decision` and `consequence` are the other pair. A decision with no consequence
+the reader meets is administrative history. A consequence with no decision
+behind it is a curiosity. **The note exists only where a documented decision
+produced something the reader is holding.**
+
+Test each candidate before returning it: can you say *"most people think X,
+actually Y, because someone decided Z"* in one breath? If not, leave it out and
+find another. Ten candidates that pass are worth more than thirty that do not.

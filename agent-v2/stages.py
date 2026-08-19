@@ -663,6 +663,17 @@ def znajdz_ciekawostki(
     print(f"  [ciekawostki] z pokryciem: {len(fakty)}", flush=True)
     for f in fakty:
         print(f"    · [{f.get('domain', '')[:18]}] {f.get('fact', '')[:88]}", flush=True)
+
+    # WSZYSTKO IDZIE DO INDEKSU, nie tylko to, co zuzyjemy dzis. Dotad kazde
+    # wyszukiwanie zylo jeden przebieg: $0,05 i 6-20 zapytan produkowalo osiem
+    # faktow, z ktorych dwa szly na notki, a szesc przepadalo — i nastepnego
+    # dnia szukalismy tego samego od nowa. Teraz jedno wyszukiwanie zasila
+    # indeks na tygodnie, a odrzuceni zostaja odrzuceni NA STALE, zamiast
+    # wracac przy kazdym przebiegu.
+    try:
+        dopisz_kandydatow(fakty)
+    except Exception as exc:
+        print(f"  [indeks] nie zapisalem ({type(exc).__name__})", flush=True)
     return fakty
 
 
@@ -2199,3 +2210,122 @@ def _tekst_z_pdf(dane: bytes, max_stron: int = 40) -> str:
     # PDF-y lamia wiersze co kilkadziesiat znakow. Bez sklejenia klasyfikacja
     # dostaje sieczke i nie rozpoznaje zdan.
     return re.sub(r"\n{3,}", "\n\n", tekst).strip()
+
+
+INDEKS_KANDYDATOW = config.DATA_DIR / "indeks_kandydatow.json"
+
+# Ile slow musi miec kazda polowa, zeby liczyla sie za wypelniona. Jedno slowo
+# to nie przekonanie, tylko wypelniacz pola.
+MIN_SLOW_POLOWY = 4
+
+
+def bramka_kandydata(k: dict[str, Any]) -> tuple[bool, str]:
+    """Czy z tego da sie zrobic notke. Sprawdza KOD, nie model.
+
+    Regula jest jedna i ta sama, co przy artykulach: da sie zapisac zlamane
+    przekonanie w formie „wiekszosc sadzi X, naprawde Y"? Jesli nie — to jest
+    ciekawostka, a ciekawostka jest zamknieta: mozna ja polubic i nie da sie
+    na nia odpowiedziec, wiec nie rosnie.
+
+    Do tego para decyzja-skutek. Decyzja bez skutku, ktory czytelnik trzyma
+    w reku, to historia administracji. Skutek bez decyzji to ciekawostka.
+    Notka istnieje dopiero tam, gdzie udokumentowana decyzja wyprodukowala
+    rzecz, ktora ktos ma przy sobie.
+    """
+    wiara = str(k.get("wrong_belief") or "").strip()
+    naprawde = str(k.get("actually") or "").strip()
+    if len(wiara.split()) < MIN_SLOW_POLOWY:
+        return False, "brak przekonania do zlamania — to ciekawostka, nie notka"
+    if len(naprawde.split()) < MIN_SLOW_POLOWY:
+        return False, "jest przekonanie, ale nie ma co mu przeciwstawic"
+    if not str(k.get("url") or "").startswith("http"):
+        return False, "brak zrodla"
+    if not str(k.get("consequence") or "").strip():
+        return False, "decyzja bez skutku, ktory czytelnik trzyma w reku"
+    czysty, powod = bez_wstrzykniecia("%s %s %s" % (wiara, naprawde, k.get("fact", "")))
+    if not czysty:
+        return False, "zapora: %s" % powod
+    return True, ""
+
+
+def wczytaj_indeks() -> list[dict[str, Any]]:
+    """Indeks kandydatow. Uszkodzony plik to pusty indeks, nie awaria."""
+    try:
+        dane = json.loads(INDEKS_KANDYDATOW.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [k for k in dane if isinstance(k, dict) and k.get("fact")] \
+        if isinstance(dane, list) else []
+
+
+def _zapisz_indeks(indeks: list[dict[str, Any]]) -> None:
+    INDEKS_KANDYDATOW.parent.mkdir(parents=True, exist_ok=True)
+    INDEKS_KANDYDATOW.write_text(
+        json.dumps(indeks[-600:], ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def dopisz_kandydatow(kandydaci: list[dict[str, Any]]) -> dict[str, int]:
+    """Przepuszcza kandydatow przez bramke i dokłada do indeksu.
+
+    ODRZUCENI TEZ SA ZAPISYWANI, z powodem. Bez tego ten sam martwy pomysl
+    wracalby przy kazdym przebiegu i za kazdym razem kosztowal wyszukiwanie —
+    a tak odrzucenie jest ostateczne i darmowe.
+    """
+    indeks = wczytaj_indeks()
+    znane = {_klucz_faktu(k.get("fact", "")) for k in indeks}
+    licznik = {"przyjete": 0, "odrzucone": 0, "znane": 0}
+    for k in kandydaci or []:
+        klucz = _klucz_faktu(str(k.get("fact") or ""))
+        if not klucz or klucz in znane:
+            licznik["znane"] += 1
+            continue
+        ok, powod = bramka_kandydata(k)
+        indeks.append({
+            "fact": str(k.get("fact") or "")[:500],
+            "wrong_belief": str(k.get("wrong_belief") or "")[:300],
+            "actually": str(k.get("actually") or "")[:300],
+            "decision": str(k.get("decision") or "")[:200],
+            "consequence": str(k.get("consequence") or "")[:200],
+            "url": str(k.get("url") or "")[:400],
+            "domain": str(k.get("domain") or "")[:80],
+            "status": "nowy" if ok else "odrzucony",
+            "powod": powod,
+            "kiedy": db.now(),
+        })
+        znane.add(klucz)
+        licznik["przyjete" if ok else "odrzucone"] += 1
+    if licznik["przyjete"] or licznik["odrzucone"]:
+        _zapisz_indeks(indeks)
+    print("  [indeks] przyjete %d, odrzucone %d, juz znane %d — w indeksie %d"
+          % (licznik["przyjete"], licznik["odrzucone"], licznik["znane"],
+             sum(1 for k in indeks if k.get("status") == "nowy")), flush=True)
+    return licznik
+
+
+def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
+    """Wyjmuje kandydatow gotowych do pisania i ZNACZY ich jako uzytych.
+
+    Znaczymy przy wyjmowaniu, nie po publikacji — ta sama zasada co w banku
+    notek: przy awarii miedzy jednym a drugim wolimy stracic kandydata niz
+    wystawic to samo dwa razy.
+    """
+    indeks = wczytaj_indeks()
+    wolni = [k for k in indeks if k.get("status") == "nowy"]
+    wziete = wolni[:max(0, ile)]
+    if wziete:
+        znaczniki = {id(k) for k in wziete}
+        for k in indeks:
+            if id(k) in znaczniki:
+                k["status"] = "uzyty"
+                k["uzyty_kiedy"] = db.now()
+        _zapisz_indeks(indeks)
+    return wziete
+
+
+def stan_indeksu() -> dict[str, int]:
+    """Ile mamy zapasu i ile odsialismy — do wypisania przy starcie."""
+    indeks = wczytaj_indeks()
+    stan = {"nowe": 0, "uzyte": 0, "odrzucone": 0}
+    for k in indeks:
+        stan[{"nowy": "nowe", "uzyty": "uzyte"}.get(k.get("status"), "odrzucone")] += 1
+    return stan
