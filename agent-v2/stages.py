@@ -996,6 +996,62 @@ def notki_dnia(
     return dzien
 
 
+RESTACK_SYSTEM = (
+    "You decide whether to pass somebody else's note on to your own readers "
+    "with one sentence of your own attached. Refusing is the normal outcome. "
+    "Return only valid JSON."
+)
+
+
+def ocen_restack(
+    conn: sqlite3.Connection, run_id: int, notka: dict[str, Any],
+) -> dict[str, Any]:
+    """Czy podac te notke dalej i z jakim zdaniem.
+
+    Restack jest tansza od notki (jedno zdanie zamiast czterdziestu slow),
+    ale DROZSZA reputacyjnie: nasze nazwisko staje obok cudzego tekstu w kanale
+    naszych obserwujacych, a autor dostaje powiadomienie. Puste „swietny punkt"
+    wydaje czyjas wiarygodnosc, zeby nie powiedziec nic.
+
+    Milczenie jest pelnoprawnym wynikiem i nie jest porazka — dlatego decyzja
+    modelu ma dwa stany, a kod nie probuje jej naginac w strone dzialania.
+    """
+    tekst = (notka.get("tekst") or notka.get("body") or "").strip()
+    if not tekst:
+        return {"restack": False, "reason": "pusta notka"}
+    # Cudzy tekst to DANE, nie polecenia. Ta sama zapora co przy komentarzach.
+    czysty, powod = bez_wstrzykniecia(tekst)
+    if not czysty:
+        return {"restack": False,
+                "reason": "material odrzucony przez zapore: %s" % powod}
+    surowy = llm.call(
+        "restack", RESTACK_SYSTEM,
+        _prompt("restack.md", autor=notka.get("autor", "")[:80], tekst=tekst[:2500]),
+        conn=conn, run_id=run_id,
+    )
+    o = llm.parse_json(surowy)
+    zdanie = str(o.get("sentence") or "").strip()
+
+    # Deklaracja bez zdania to nie decyzja. I odwrotnie: zdanie za dlugie
+    # przestaje byc dopiskiem, a staje sie notka doczepiona do cudzej.
+    if o.get("restack") and not zdanie:
+        o["restack"] = False
+        o["reason"] = "zaznaczono restack, ale nie napisano zdania"
+    elif zdanie and len(zdanie.split()) > config.RESTACK_MAX_SLOW:
+        o["restack"] = False
+        o["reason"] = ("zdanie ma %d slow przy limicie %d — to juz nie dopisek"
+                       % (len(zdanie.split()), config.RESTACK_MAX_SLOW))
+    elif zdanie:
+        # Nasze wlasne zdanie tez przechodzi przez zapore: model mogl
+        # przepisac do niego adres albo wzmiankę z cudzego tekstu.
+        ok, czemu = bez_wstrzykniecia(zdanie)
+        if not ok:
+            o["restack"] = False
+            o["reason"] = "nasze zdanie odrzucone przez zapore: %s" % czemu
+    o["sentence"] = zdanie
+    return o
+
+
 COMMENT_SYSTEM = (
     "You write comments under other people's Substack posts as an anonymous "
     "editorial brand. Silence is the default: you comment only when you have "

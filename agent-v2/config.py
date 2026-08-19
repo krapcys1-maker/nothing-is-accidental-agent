@@ -189,6 +189,11 @@ MODEL_FOR = {
     # przekonanie czytelnik przynosi ze soba — to sad o ludziach,
     # nie odczyt z tekstu.
     "warto_pisac": DEEPSEEK_PRO,
+    # Restack: jedno zdanie, ktore ma stanac obok cudzego tekstu pod naszym
+    # nazwiskiem. Pro z tego samego powodu co komentarze — najczesciej trzeba
+    # przypomniec sobie, GDZIE INDZIEJ ten sam mechanizm dziala, a to pamiec
+    # faktow, jedyna trwala przewaga pro nad flashem.
+    "restack": DEEPSEEK_PRO,
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -497,6 +502,9 @@ MAX_TOKENS = {
     "bibliotekarz": 12000,
     # Cztery obserwacje z cytatami plus dwa zdania. Nie esej.
     "warto_pisac": 6000,
+    # Jedno zdanie do 40 slow plus uzasadnienie decyzji. Malo tekstu,
+    # ale DeepSeek i tak rozumuje obficie — zapas zalatwia THINKING_HEADROOM.
+    "restack": 3000,
     # DOKŁADNIE tyle, ile prosi prompt: 12 fragmentów po 700 znaków plus liczby
     "classify": _tokens_for(
         CLASSIFY_MAX_EXCERPTS * CLASSIFY_MAX_EXCERPT_CHARS + 2000
@@ -925,7 +933,18 @@ LAJKI_DZIENNIE = (12, 20)
 KOMENTARZE_DZIENNIE = (15, 20)    # 0 jest dozwolone: milczenie bije slaby komentarz
 FOLLOW_MIESIECZNIE = (30, 44)     # obserwowanie to czytanie, nie zbieranie
 SUBSKRYPCJE_MIESIECZNIE = (6, 12)  # laduje w skrzynce wlasciciela, wiec waskie
-RESTACK_DZIENNIE = (0, 0)         # ZABLOKOWANE do osobnej decyzji wlasciciela
+# ODBLOKOWANE decyzja wlasciciela 2026-08-19. Restack cudzej notki z wlasnym
+# zdaniem trafia do kanalu NASZYCH obserwujacych, powiadamia autora oryginalu
+# i stawia nasze zdanie obok jego — za cene jednego zdania, nie calej notki.
+#
+# Wask0 celowo. Restack jest publicznym aktem na cudzej tresci: przy dziesieciu
+# dziennie konto wyglada jak wzmacniacz, a nie jak ktos, kto czyta. Dwa-cztery
+# to tyle, ile czlowiek naprawde uzna za warte podania dalej.
+RESTACK_DZIENNIE = (2, 4)
+
+# Dopisek do cudzej notki. Powyzej tego to juz nie dopisek, tylko wlasna notka
+# doczepiona do czyjegos tekstu — a wtedy lepiej napisac wlasna notke.
+RESTACK_MAX_SLOW = 40
 
 # Pierwszy miesiac na dolnej polowie widelek. Nowe konto z jednym artykulem,
 # ktore nagle obserwuje dwadziescia osob, wyglada dokladnie jak farma.
@@ -970,6 +989,10 @@ ODSTEPY = {
     "komentarz":  (180, 480),    #  3-8 min: przeczytac cudzy tekst i odpowiedziec
     "odpowiedz":  (120, 420),    #  2-7 min
     "lajk":       (30, 90),      # 0,5-1,5 min: przewijanie kanalu
+    # Restack wymaga PRZECZYTANIA cudzej notki i napisania wlasnego zdania.
+    # Kilkanascie sekund miedzy jednym a drugim znaczyloby, ze nie czytalismy
+    # zadnej — a to widac na profilu tak samo, jak widac bylo notki parami.
+    "restack":    (600, 1800),   # 10-30 min
 }
 ODSTEP_MIEDZY_DZIALANIAMI = (45, 180)   # zapas dla czynnosci bez wlasnego wpisu
 
