@@ -14,6 +14,10 @@ do ścieżki i wczytują moduły po nazwie:
 for t in agent-v2/tests/test_*.py; do echo "$t"; python "$t"; done
 ```
 
+Ta pętla jest **darmowa**. Testy, które kosztują pieniądze, leżą osobno
+w `platne/` i nie łapie ich `test_*.py` z tego katalogu — patrz
+`platne/PRZECZYTAJ.md`.
+
 Na Windowsie ustaw najpierw `PYTHONIOENCODING=utf-8`, bo konsola domyślnie
 nie radzi sobie z polskimi znakami w wyniku.
 
@@ -21,18 +25,17 @@ nie radzi sobie z polskimi znakami w wyniku.
 
 | test | wymaga |
 |---|---|
-| `test_artykul`, `test_integracja` | `playwright` i `trafilatura` — padają na komputerze bez nich |
+| `test_artykul` | `playwright` i `trafilatura` — pada na komputerze bez nich |
 | `test_czas` | prawdziwego `SIGTERM`, więc tylko Linux |
 | `test_pobieranie` | sieci |
 | reszta | niczego, chodzą wszędzie |
 
-## Czego NIE uruchamiać bezmyślnie
+## Testy płatne
 
-**`test_integracja` odpala PŁATNY pełny przebieg dnia** z prawdziwymi
-przerwami 45–90 minut między notkami. Przy starych odstępach był wykonalny,
-teraz chodzi godzinami i pali pieniądze na API. Trzeba mu podmienić
-`config.ODSTEPY`, tak jak podmienia `OKNO_PUBLIKACJI_ET`. **Do tego czasu
-pełny przebieg dnia nie jest pokryty testem.**
+Siedem plików robi prawdziwe wywołania API i leży w `platne/`. Uruchamia się
+je pojedynczo i świadomie. Powód wydzielenia jest konkretny: raz puściłem
+wszystko jedną pętlą na serwerze i zawiesiła się na `test_bibliotekarz`,
+który czekał na model.
 
 ## Zasada, która się tu sprawdziła
 
