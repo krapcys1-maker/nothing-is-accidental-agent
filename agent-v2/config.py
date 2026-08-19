@@ -160,6 +160,12 @@ MODEL_FOR = {
     "grafika": DEEPSEEK,
     "cele": DEEPSEEK,
     "wybor": DEEPSEEK_PRO,
+    # Bibliotekarz czyta caly bank naraz i szuka MECHANIZMU wspolnego
+    # dla roznych dziedzin. Pro, bo to jedyne zadanie w systemie, gdzie
+    # trzeba trzymac w glowie sto kilkadziesiat fragmentow jednoczesnie
+    # i widziec miedzy nimi zwiazek — a przy 10 tys. tokenow wejscia
+    # roznica ceny to ulamek centa.
+    "bibliotekarz": DEEPSEEK_PRO,
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -428,6 +434,9 @@ MAX_TOKENS = {
     # szukanie i nigdy nie tworzył bloku `message`: 26 wyszukiwań, status
     # "completed", zero tekstu.
     "discovery": 32000,
+    # Bibliotekarz oddaje grupy, nie eseje: mechanizm, czlonkowie,
+    # czego brakuje. Sufit z zapasem, bo DeepSeek rozumuje obficie.
+    "bibliotekarz": 12000,
     # DOKŁADNIE tyle, ile prosi prompt: 12 fragmentów po 700 znaków plus liczby
     "classify": _tokens_for(
         CLASSIFY_MAX_EXCERPTS * CLASSIFY_MAX_EXCERPT_CHARS + 2000

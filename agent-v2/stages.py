@@ -1662,3 +1662,99 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
     if not isinstance(topics, list) or not topics:
         raise ValueError(f"skaut nie zwrócił tematów: {text[:300]!r}")
     return topics
+
+
+LIBRARIAN_SYSTEM = (
+    "You are an archivist. You group already-verified research excerpts by the "
+    "MECHANISM they demonstrate, never by subject. Return only valid JSON."
+)
+
+
+def bank_fragmentow(conn: sqlite3.Connection, dni: int = 0) -> list[dict[str, Any]]:
+    """Nieuzyte fragmenty ze wszystkich artykulow — zaplacone i nieprzeczytane.
+
+    `unused_evidence` bylo zapisywane od poczatku i NIGDY nie czytane: jedno
+    wystapienie w calym kodzie, sam zapis. Przez piec artykulow uzbieralo sie
+    134 ocytowanych fragmentow, ktore kosztowaly tyle samo co te uzyte.
+
+    `dni` > 0 zawezza do okna czasowego. Dysk wytrzyma wszystko (tysiac
+    artykulow to 7 MB), ale KONTEKST nie — trzy tysiace fragmentow to juz
+    tyle tokenow, co cala dyskoveria.
+    """
+    warunek = ""
+    if dni > 0:
+        warunek = " AND created_at >= datetime('now', '-%d days')" % int(dni)
+    wiersze = conn.execute(
+        "SELECT title, evidence, created_at FROM articles"
+        " WHERE evidence IS NOT NULL" + warunek + " ORDER BY id"
+    ).fetchall()
+    bank: list[dict[str, Any]] = []
+    for tytul, evidence, kiedy in wiersze:
+        try:
+            karta = json.loads(evidence)
+        except (ValueError, TypeError):
+            continue
+        for zrodlo in karta.get("unused_evidence") or []:
+            for fragment in zrodlo.get("excerpts") or []:
+                tekst = fragment if isinstance(fragment, str) else str(fragment)
+                if len(tekst.strip()) < 60:
+                    continue          # ogryzki nie niosą mechanizmu
+                bank.append({
+                    "id": len(bank),
+                    "text": tekst.strip(),
+                    "url": zrodlo.get("url", ""),
+                    "publisher": zrodlo.get("publisher") or _host(zrodlo.get("url", "")),
+                    "z_artykulu": tytul,
+                    "kiedy": (kiedy or "")[:10],
+                })
+    return bank
+
+
+def bibliotekarz(
+    conn: sqlite3.Connection, run_id: int, bank: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Grupuje bank po MECHANIZMIE. Model proponuje, KOD weryfikuje.
+
+    Roznica wobec dzisiejszego odsiewu: `RICH` przestaje byc deklaracja modelu
+    („ten temat ma drugi akt, uwierz mi") i staje sie faktem sprawdzalnym —
+    grupa przechodzi tylko wtedy, gdy naprawde laczy co najmniej dwie ROZNE
+    dziedziny. Stary agent nauczyl nas, ze o oceny liczbowe nie ma sensu pytac:
+    kazdy score wracal 1.0. O przynaleznosc do grupy mozna zapytac, bo odpowiedz
+    da sie sprawdzic bez pytania modelu drugi raz.
+    """
+    if not bank:
+        return {"groups": [], "loners": [], "note": "bank pusty"}
+    opis = "\n\n".join(
+        "[%d] %s — %s\n%s" % (f["id"], f["publisher"], f["kiedy"], f["text"])
+        for f in bank
+    )
+    text = llm.call(
+        "bibliotekarz", LIBRARIAN_SYSTEM,
+        _prompt("bibliotekarz.md", bank=opis),
+        conn=conn, run_id=run_id,
+    )
+    wynik = llm.parse_json(text)
+    po_id = {f["id"]: f for f in bank}
+
+    przyjete, odrzucone = [], []
+    for grupa in wynik.get("groups") or []:
+        czlonkowie = [
+            m for m in (grupa.get("members") or [])
+            if isinstance(m.get("id"), int) and m["id"] in po_id
+        ]
+        dziedziny = {str(m.get("domain", "")).strip().lower() for m in czlonkowie}
+        dziedziny.discard("")
+        grupa["members"] = czlonkowie
+        grupa["dziedziny"] = sorted(dziedziny)
+        # TO jest sprawdzenie, dla ktorego caly etap istnieje.
+        if len(czlonkowie) >= 2 and len(dziedziny) >= 2:
+            przyjete.append(grupa)
+        else:
+            grupa["powod_odrzucenia"] = (
+                "jedna dziedzina (%s)" % (", ".join(dziedziny) or "brak")
+                if len(czlonkowie) >= 2 else "mniej niz dwa istniejace fragmenty"
+            )
+            odrzucone.append(grupa)
+    wynik["groups"] = przyjete
+    wynik["odrzucone_grupy"] = odrzucone
+    return wynik
