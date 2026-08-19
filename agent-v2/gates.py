@@ -72,7 +72,85 @@ def deterministic_floors(body: str, card: dict[str, Any]) -> list[dict[str, str]
             "gate": "LICZBA_SPOZA_KORPUSU",
             "detail": f"liczba {token!r} nie występuje w materiale dowodowym",
         })
+    for fraza in frazy_z_instrukcji(body):
+        findings.append({
+            "gate": "FRAZA_Z_INSTRUKCJI",
+            "detail": f"{fraza!r} — zdanie z promptu, nie z myślenia",
+        })
+    ile, hosty = szerokosc_podstawy(card)
+    if ile < 2:
+        findings.append({
+            "gate": "WASKA_PODSTAWA",
+            "detail": (f"artykuł stoi na {ile} źródle ({', '.join(hosty) or 'brak'})"
+                       " — czytelnik zobaczy jeden odnośnik pod tekstem"),
+        })
     return findings
+
+
+def szerokosc_podstawy(card: dict[str, Any]) -> tuple[int, list[str]]:
+    """Na ilu ODREBNYCH serwisach stoja potwierdzone twierdzenia.
+
+    Artykul 0020 („The Fossil of a Vote") byl najlepszy z serii i mial pod
+    soba JEDEN odnosnik — nekrolog z Columbii. Tekst byl skrupulatny wobec
+    tego, co zapis mowi, ale post z jednym zrodlem wyglada cienko niezaleznie
+    od tego, jak dobrze jest napisany. To uwaga, nie blokada: czasem jedno
+    zrodlo to cala dokumentacja, jaka w ogole istnieje.
+    """
+    from urllib.parse import urlparse
+
+    hosty: list[str] = []
+    for c in card.get("confirmed_claims", []) or []:
+        url = c.get("url")
+        if not url:
+            continue
+        host = (urlparse(url).netloc or "").lower()
+        if host.startswith("www."):
+            host = host[4:]
+        if host and host not in hosty:
+            hosty.append(host)
+    return len(hosty), hosty
+
+
+def frazy_z_instrukcji(body: str, dlugosc: int = 6) -> list[str]:
+    """Czy pisarz wklein do tekstu wlasne polecenie.
+
+    W 0020 wyszlo „in the simplest sentence that is still true" — dokladnie
+    tak, jak stoi w `pisarz.md`. Czytelnik tego nie rozpozna, ale to nie jest
+    zdanie z myslenia, tylko echo instrukcji, i wracajac w kolejnych tekstach
+    staje sie podpisem maszyny.
+
+    Porownujemy ciagi szesciu slow. Prompt to sam metatekst, wiec kazde takie
+    pokrycie jest przeciekiem, nie zbiegiem okolicznosci — a sprawdzenie samo
+    sie utrzymuje, gdy prompt sie zmieni.
+    """
+    def slowa_z(tekst: str) -> list[str]:
+        return re.findall(r"[a-z]+", tekst.lower())
+
+    def ciagi(slowa: list[str]) -> list[tuple[str, ...]]:
+        return [tuple(slowa[i:i + dlugosc])
+                for i in range(len(slowa) - dlugosc + 1)]
+
+    try:
+        instrukcja = (config.PROMPTS_DIR / "pisarz.md").read_text(encoding="utf-8")
+    except OSError:
+        return []
+    z_promptu = set(ciagi(slowa_z(instrukcja)))
+    slowa = slowa_z(body)
+    trafione = [i for i, c in enumerate(ciagi(slowa)) if c in z_promptu]
+
+    # Jedna wklejka daje kilka zachodzacych na siebie ciagow. Skladamy je
+    # z powrotem w jedna, najdluzsza fraze — inaczej jeden blad wyglada jak piec.
+    trafienia: list[str] = []
+    i = 0
+    while i < len(trafione):
+        koniec = i
+        while koniec + 1 < len(trafione) and trafione[koniec + 1] == trafione[koniec] + 1:
+            koniec += 1
+        fraza = " ".join(slowa[trafione[i]:trafione[koniec] + dlugosc])
+        if fraza not in trafienia:
+            trafienia.append(fraza)
+        i = koniec + 1
+    return trafienia
 
 
 def verdict(findings: list[dict[str, str]]) -> tuple[str, str | None]:

@@ -46,6 +46,12 @@ worse writing and passes equally.
 
 ## Craft
 
+This brief is scaffolding, not vocabulary. Its wording must not appear in the
+article. A sentence lifted from these instructions reads as fluent and means
+nothing — it is the shape of a thought without the thought. A check compares
+your text against this document word for word, so if a phrase here sounds like
+a good line, that is the strongest reason to write your own instead.
+
 The piece has one job: show the reader a mechanism they have walked past without
 seeing.
 
@@ -53,8 +59,8 @@ Name that mechanism early and plainly. Do not withhold it for a reveal.
 
 Prefer the specific to the general — the section number, the figure, the body
 that actually decides — because the specific is what makes an ordinary thing
-suddenly legible. Explain the incentive in the simplest sentence that is still
-true.
+suddenly legible. State the incentive plainly: who wanted what, and what the
+arrangement handed them.
 
 **Two failures matter more than any other.**
 
