@@ -105,6 +105,16 @@ Fable'a; wcześniej ciążyła ku 1220.
 - ~~**Bramka dowodowa dla komentarzy.**~~ ZAMKNIĘTE. Komentarze, notki
   i odpowiedzi zbierają fakty przed pisaniem i weryfikują to, co napisały.
 
+- **`test_integracja` odpala PŁATNY pełny przebieg dnia.** Po podniesieniu
+  odstępów między notkami do 45–90 minut chodzi godzinami i pali pieniądze na
+  API. Trzeba mu podmienić `config.ODSTEPY` na czas testu, tak jak podmienia
+  `OKNO_PUBLIKACJI_ET`. Do tego czasu jest pomijany, więc pełny przebieg dnia
+  NIE jest pokryty testem.
+- **0020 stoi na jednym źródle.** Bramka `WASKA_PODSTAWA` to teraz zgłasza, ale
+  nie naprawia. Klasyfikacja odrzuca materiał nie na temat (w tym przebiegu
+  39 480 znaków z `law.cornell.edu`) i słusznie — brakuje kroku, który po
+  takim odsiewie DOSZUKA źródeł zamiast pisać z jednego.
+
 ## Otwarte
 
 - **Skuteczność pobrań waha się od 1/6 do 6/6.** Martwe adresy (404) i blokady
@@ -123,6 +133,51 @@ Fable'a; wcześniej ciążyła ku 1220.
   `nieodpowiedziane()` chodzi tylko po naszych notkach.
 
 ## Dziennik
+
+### 2026-08-19 — trzy przebiegi testowe: naprawa wad zamieniła się w formułę
+Właściciel dał zielone światło na maksymalnie trzy pełne przebiegi, po jednym,
+z oceną każdego przed następnym. Wykorzystane wszystkie trzy.
+
+Wady artykułu o szamponie (0016) zniknęły: akapit o granicach zszedł z ⅓ tekstu
+do jednego, zniknęła narracja z researchu i powtarzanie mechanizmu. Ale 0017
+i 0019 czytane obok siebie mają **identyczny szkielet** — ten sam drogowskaz
+przed paralelami, dokładnie trzy paralele, akapit o granicach zapowiedziany
+meta-zdaniem, zamknięcie „sprawdź to u siebie".
+
+To nie był przypadek. Tak stało w `pisarz.md`: „End by turning the mechanism
+back on something the reader can check for themselves" i „Two or three such
+turns". Model wykonywał polecenie za każdym razem tak samo. **Wady treści
+zostały wymienione na wadę formy**, a powtarzalna forma zdradza maszynę
+dokładnie tak samo jak powtarzana treść.
+
+Naprawa tym samym mechanizmem, co przy notkach (`NOTE_FORM`): ruch końcowy
+losowany z sześciu wariantów, szerokość drugiego aktu z 1–3 paraleli. Do tego
+zakaz drogowskazu przed paralelami i zakaz zapowiadania akapitu o granicach.
+
+Trzeci przebieg (0020 „The Fossil of a Vote", `POWROT_DO_ZACZEPU`, 2 paralele,
+$0,7796) wyszedł najlepszy z serii i pierwszy z **zerem uwag z bramek**. Dwie
+paralele nie są katalogiem, tylko podziałem: kontener morski to standard
+fizyczny, psuje się przez zamrożenie; sygnalizator to konwencja, psuje się
+przez rozpad. Ten podział tłumaczy fakt z materiału — 43 z 44 standardów
+z 1939 się zmieniły, kolor nie. „A recognition convention improves by refusing
+to."
+
+### 2026-08-19 — pisarz zacytował własną instrukcję
+W 0020 wyszło „in the simplest sentence that is still true" — dokładnie tak,
+jak stało w `pisarz.md`. Czytelnik tego nie rozpozna, ale to echo polecenia,
+nie zdanie z myślenia, a wracając w kolejnych tekstach staje się podpisem
+maszyny.
+
+Bramka `FRAZA_Z_INSTRUKCJI` porównuje ciągi sześciu słów z całym promptem.
+Utrzymuje się sama, gdy prompt się zmieni, i ma efekt uboczny, którego nie
+planowałem: **zakazany przykład wpisany do promptu staje się wzorcem
+wykrywania**. Puszczona wstecz złapała w 0016 frazę „this article began life as
+an answer to" — czyli dokładnie to, czego prompt zabraniał, zacytowane z zakazu.
+
+Druga bramka, `WASKA_PODSTAWA`, liczy odrębne serwisy pod potwierdzonymi
+twierdzeniami. 0020 miał **jeden**, mimo że pobranie udało się 4 razy na 6.
+Obie są uwagami, nie blokadami — `verdict` nadal zawsze zwraca `SAVED`.
+
 
 ### 2026-08-15 — pierwszy komentarz, pierwsza notka, pierwsza odpowiedź NA ŻYWO
 Trzy zdolności potwierdzone u Substacka, nie z kliknięcia: komentarz pod
