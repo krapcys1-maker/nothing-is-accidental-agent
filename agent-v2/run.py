@@ -24,7 +24,7 @@ import stages
 
 STAGES = (
     "scout", "feasibility", "discovery", "fetch",
-    "classify", "synthesis", "write", "review",
+    "classify", "synthesis", "warto_pisac", "write", "review",
 )
 
 CACHE_DIR = config.DATA_DIR / "cache"
@@ -752,6 +752,58 @@ def main() -> int:
                 print(f"\n   {label} ({len(items)}):", flush=True)
                 for item in items:
                     print(f"     • {str(item)[:150]}", flush=True)
+        if args.stop_after == stage:
+            return _done(conn, run_id, stage)
+
+        # --- czy jest tu luka, ktora obcy poczuje ----------------------------
+        # Bramka stoi PRZED pisarzem, bo po nim byloby za pozno: research
+        # oplacony, a artykul i tak martwy. Nic nie blokuje — werdykt DOLOZ
+        # wysyla nas do banku po pare, zamiast zatrzymywac przebieg.
+        stage = "warto_pisac"
+        print("\n-- czy jest tu luka --", flush=True)
+        try:
+            ocena = stages.warto_pisac(conn, run_id, card)
+            wiara = (ocena.get("contradicted_belief") or {}).get("the_belief", "")
+            print("   zlamane przekonanie: %s"
+                  % ("TAK" if ocena["przekonanie"] else "NIE"), flush=True)
+            if wiara:
+                print('   czytelnik wierzy: "%s"' % str(wiara)[:120], flush=True)
+            print("   filary: %d z 3  (%s)" % (
+                ocena["ile_filarow"],
+                ", ".join(k for k, v in ocena["filary"].items() if v) or "zaden"),
+                flush=True)
+            print("   >> %s — %s" % (ocena["werdykt"], ocena["powod"]), flush=True)
+
+            if ocena["werdykt"] == "DOLOZ":
+                # TO JEST MOMENT, DLA KTOREGO BANK ISTNIEJE. Temat ma luke, ale
+                # za malo materialu, zeby ja rozwinac. Bibliotekarz szuka
+                # w zaplaconych resztkach mechanizmu z INNEJ dziedziny —
+                # tak wlasnie powstal najlepszy tekst serii.
+                print("   szukam pary w banku...", flush=True)
+                bank = stages.bank_fragmentow(conn)
+                if not bank:
+                    print("   bank pusty — pisarz dostaje karte jak jest", flush=True)
+                else:
+                    grupy = stages.bibliotekarz(conn, run_id, bank).get("groups") or []
+                    dolozone = [{"domain": ", ".join(g.get("dziedziny", [])),
+                                 "mechanism": g.get("mechanism", ""), "z_banku": True}
+                                for g in grupy[:2]]
+                    if dolozone:
+                        card.setdefault("parallel_mechanisms", []).extend(dolozone)
+                        print("   dolozono %d mechanizmow z banku:" % len(dolozone),
+                              flush=True)
+                        for d in dolozone:
+                            print("     • [%s] %s"
+                                  % (d["domain"], d["mechanism"][:110]), flush=True)
+                    else:
+                        print("   bank nie ma pary — pisarz dostaje karte jak jest",
+                              flush=True)
+            card["ocena_ciekawosci"] = ocena
+        except Exception as exc:
+            # Bramka jest doradcza. Jej awaria nie moze kosztowac oplaconego
+            # researchu — artykul powstaje tak czy owak.
+            print("  [awaria] bramka ciekawosci padla (%s) — pisze bez niej" % exc,
+                  flush=True)
         if args.stop_after == stage:
             return _done(conn, run_id, stage)
 
