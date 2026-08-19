@@ -134,6 +134,50 @@ Fable'a; wcześniej ciążyła ku 1220.
 
 ## Dziennik
 
+### 2026-08-19 — galaz v2-test: bank, bibliotekarz, Fable do notek
+Eksperyment odciety od produkcji: klon `~/nia-v2-test`, wlasna baza (DATA_DIR
+wywodzi sie z polozenia config.py, wiec dzieli sie sam), plik-znacznik
+`TO_JEST_KOPIA_TESTOWA` odbiera prawo do `--wyslij`. Produkcja stoi na `main`
+w `~/nothing-is-accidental-agent`. Punkt powrotu: tag `v1` = `57c9496`.
+
+**Bibliotekarz dziala.** Za $0,0597 wyciagnal z 134 zaplaconych, nigdy
+nieczytanych fragmentow trzy mechanizmy laczace cztery dziedziny. Najlepszy:
+zegar bezpieczenstwa startuje przy przekroczeniu granicy (otwarcie, autoryzacja,
+zmiana pierwszenstwa), nie przy powstaniu rzeczy — laczy szampon, dystrybutor
+paliwa i zolte swiatlo. Model PROPONUJE, kod WERYFIKUJE: grupa przechodzi tylko
+przy >=2 roznych dziedzinach. Bramka udowodniona kontrdowodem 8/8.
+
+**Dyskoveria zostaje na pro.** Trzy ramiona po trzy pytania. Flash w ZERO na
+szesc prob nie wystawil koncowego JSON-a — raz padl calkiem, reszte uratowala
+sciezka awaryjna. Podniesienie effort na `high` pogorszylo sprawe (27 i 34
+wyszukiwania zamiast 22 i 26). To nie jest kwestia jakosci, tylko niezawodnosci
+etapu chodzacego codziennie bez nadzoru.
+
+**Notki przechodza do Fable.** A/B na tym samym materiale: Fable pisze wyraznie
+lepiej, +$12,16 miesiecznie przy pieciu dziennie. Dotad bylo odwrotnie niz
+powinno — najdrozszy model pisal artykuly, ktore NIE napedzaja wzrostu.
+
+**Bank notek** rozdziela pisanie od publikowania. Wyjecie znaczy notke OD RAZU:
+przy awarii wolimy stracic notke niz wystawic dwa razy.
+
+**Styl okladek zmieniony.** Pierwsze dwa naglowki byly jasnym przedmiotem na
+jasnym tle — gustowne w pelnym rozmiarze, niewidoczne jako miniatura. Teraz
+ciemniejsze tlo, przedmiot na dwie trzecie kadru, slady zuzycia (bez rys panel
+czyta sie jak render, a render jak dekoracja).
+
+### 2026-08-19 — dwa bledy warte zapamietania
+Test bibliotekarza NADPISAL baze testowa kopia produkcji w trakcie, gdy pisalo
+do niej inne ramie pomiaru. Logi ocalaly, zapisy kosztow nie.
+
+Porownanie KOSZTOW w A/B dyskoverii jest skazone: trzy ramiona dostaly te same
+pytania po kolei, wiec pozniejsze trafialy w cache DeepSeeka. Porownanie
+JAKOSCI tym nie jest dotkniete.
+
+Trzeci: raportowalem, ze notki z banku daja zero wynikow. To byl blad w moim
+tescie — `note()` oddaje `{"type","candidates"}`, a test czytal nieistniejacy
+klucz `note`. Sciezka dzialala.
+
+
 ### 2026-08-19 — trzy przebiegi testowe: naprawa wad zamieniła się w formułę
 Właściciel dał zielone światło na maksymalnie trzy pełne przebiegi, po jednym,
 z oceną każdego przed następnym. Wykorzystane wszystkie trzy.
