@@ -38,7 +38,8 @@ DOBRY = {
             "and a 2018 frequency shortfall left European clocks six minutes slow.",
     "wrong_belief": "My oven clock keeps time the same way a wristwatch does",
     "actually": "It counts cycles of the electricity grid, so grid drift moves it",
-    "decision": "50 Hz fixed as the synchronous norm for continental Europe",
+    # Data jest WYMAGANA przez bramke 1 — decydent bez roku to nie decydent.
+    "decision": "50 Hz fixed as the synchronous norm, UCTE 1951",
     "consequence": "the clock on your oven",
     "url": "https://www.entsoe.eu/news/2018/03/06/press-release/",
     "domain": "elektrycznosc",
@@ -46,7 +47,11 @@ DOBRY = {
 TRIVIA = {
     "fact": "The world's longest railway tunnel is 57 kilometres long.",
     "wrong_belief": "", "actually": "",
-    "decision": "", "consequence": "a tunnel",
+    # Decydent JEST (przetarg rozstrzygniety w 1998), zeby test sprawdzal
+    # bramke 2, a nie odpadal juz na bramce 1. To wlasnie przypadek artykulu
+    # o symbolu na kosmetykach: decydent byl, przekonania nie bylo.
+    "decision": "Swiss federal decision on the NRLA, 1998",
+    "consequence": "a tunnel",
     "url": "https://przyklad.example/tunel", "domain": "infrastruktura",
 }
 
