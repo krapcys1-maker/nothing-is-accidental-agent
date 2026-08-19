@@ -31,9 +31,33 @@ use. Not "commenters argued" — what would a reader in a supermarket assume?
 agency and carries a date, so you always have at least that — but if the text
 names a specific committee, statute, negotiation or year, use the specific one.
 
-**4. The consequence the reader touches.** The object, the price, the wait, the
-label, the form. A rule with no consequence anybody meets is administrative
-history, not our subject.
+**4. The consequence an ORDINARY READER touches.** The object, the price, the
+wait, the label, the form.
+
+This is where this corpus will mislead you, and it is worth spelling out
+because the first live run got it wrong six times out of six. A regulation is
+written for the industry it regulates, so the belief on the record usually
+belongs to a **permit holder, a licensee, a registrant, a handler, an employer**
+— somebody paid to know the rule. Those are real broken beliefs and they are
+useless to us: our reader does not hold a longline permit, does not process
+walnuts, and does not care how the ACTION line of a Federal Register notice is
+captioned.
+
+Ask before returning each candidate: **would somebody with no connection to
+this industry hold this belief?** A shopper, a driver, a passenger, a patient,
+a tenant, somebody paying a bill. If the belief only makes sense to a
+professional inside the regulated trade, drop it.
+
+**Phrase the consequence as a thing the reader has, using the word "your".**
+Not "a permit holder receives the allocation" but "the price on your ticket".
+Not "firefighters get the differential" but "the bill for your call-out".
+This is checked in code: a consequence without "your" is rejected before
+anything is written, because it means you named a category of people rather
+than an object the reader is holding.
+
+Rules that pass this test do exist here — labelling, pricing, safety limits,
+deadlines, what a form must contain, what a warning has to say — but they are
+the minority. Finding one is the job; padding the list is not.
 
 ## Reject rather than stretch
 

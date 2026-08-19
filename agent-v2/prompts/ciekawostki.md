@@ -102,6 +102,13 @@ dead: nobody holds a belief about tunnel lengths, so there is nothing to break
 and nothing to reply to. "Mains clocks count grid cycles rather than measuring
 seconds" is alive, because everyone believes their oven clock keeps time.
 
+**Phrase the consequence as a thing the reader has, using the word "your".**
+Not "a permit holder receives the allocation" but "the price on your ticket".
+Not "firefighters get the differential" but "the bill for your call-out".
+This is checked in code: a consequence without "your" is rejected before
+anything is written, because it means you named a category of people rather
+than an object the reader is holding.
+
 `decision` and `consequence` are the other pair. A decision with no consequence
 the reader meets is administrative history. A consequence with no decision
 behind it is a curiosity. **The note exists only where a documented decision

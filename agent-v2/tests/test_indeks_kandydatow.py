@@ -55,6 +55,14 @@ TRIVIA = {
     "url": "https://przyklad.example/tunel", "domain": "infrastruktura",
 }
 
+
+def wariant_skutku(skutek):
+    """Kandydat rozniacy sie WYLACZNIE skutkiem — reszta zawsze poprawna."""
+    k = dict(DOBRY)
+    k["consequence"] = skutek
+    return k
+
+
 print("=== 1. BRAMKA ODDZIELA NOTKE OD CIEKAWOSTKI ===")
 ok, powod = stages.bramka_kandydata(DOBRY)
 sprawdz("kandydat ze zlamanym przekonaniem przechodzi", ok, powod)
@@ -157,6 +165,39 @@ sprawdz("prompt zamawia decyzje i skutek",
         '"decision"' in prompt and '"consequence"' in prompt)
 sprawdz("prompt tlumaczy, czemu sama ciekawostka jest martwa",
         "trivia is discarded" in prompt)
+
+print()
+print("=== 10. SKUTEK MA NAZYWAC RZECZ CZYTELNIKA, NIE OSOBE ===")
+# Prawdziwi kandydaci z pierwszego przebiegu na Federal Register. Wszyscy
+# czterej przeszli wtedy komplet bramek i ANI JEDEN nie nadawal sie do
+# publikacji: przekonanie trzymala branza, nie czytelnik. Zero odrzucen na
+# prawdziwych danych bylo samo w sobie ostrzezeniem — bramka, ktora nigdy
+# nie zagryzla, nie jest bramka.
+Z_FEDREG = [
+    ("kwoty polowowe", "An Atlantic-region pelagic longline permit holder"),
+    ("naglowek ACTION", "Anyone reading this rule sees the ACTION heading"),
+    ("orzechy wloskie", "A small walnut handler who pays an assessment late"),
+    ("strazacy lesni", "GS and FWS wildland firefighters on prescribed burns"),
+]
+for nazwa, skutek in Z_FEDREG:
+    ok, powod = stages.bramka_kandydata(wariant_skutku(skutek))
+    sprawdz("odrzuca: %s" % nazwa, not ok, powod)
+
+DOBRE_SKUTKI = [
+    ("krem z filtrem", "the bottle of sunscreen in your bathroom"),
+    ("zegar w sieci", "the clock on your oven"),
+    ("blokada karty", "the pending charge in your banking app"),
+    ("zolte swiatlo", "the traffic light at your junction"),
+]
+for nazwa, skutek in DOBRE_SKUTKI:
+    ok, powod = stages.bramka_kandydata(wariant_skutku(skutek))
+    sprawdz("przepuszcza: %s" % nazwa, ok, powod)
+
+prompt_fr = (config.PROMPTS_DIR / "fedreg.md").read_text(encoding="utf-8")
+sprawdz("prompt fedreg ostrzega przed branza",
+        "would somebody with no connection to" in prompt_fr)
+sprawdz("prompt fedreg zamawia forme z 'your'",
+        'using the word "your"' in prompt_fr)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

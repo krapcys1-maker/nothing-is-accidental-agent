@@ -2273,8 +2273,37 @@ def bramka_kandydata(k: dict[str, Any]) -> tuple[bool, str]:
         return False, "jest przekonanie, ale nie ma co mu przeciwstawic"
 
     # BRAMKA 3 — KONTAKT. Czytelnik ma tego dotykac, nie podziwiac z daleka.
-    if not str(k.get("consequence") or "").strip():
+    skutek = str(k.get("consequence") or "").strip()
+    if not skutek:
         return False, "decyzja bez skutku, ktory czytelnik trzyma w reku"
+
+    # I MUSI TO BYC ZWYKLY CZLOWIEK, NIE FACHOWIEC. Pierwszy przebieg na
+    # Federal Register wypuscil szesc kandydatow na szesc: kwoty polowowe dla
+    # posiadaczy zezwolen na takle pelagiczne, oplaty karne dla przetworcow
+    # orzechow wloskich, dodatek za wypalanie kontrolowane dla strazakow
+    # lesnych i formatowanie naglowka w samym Federal Register. Kazdy z nich
+    # ma decydenta, date, zlamane przekonanie i skutek — i zaden nie nadaje
+    # sie do publikacji, bo przekonanie trzyma BRANZA, a nie czytelnik.
+    #
+    # Zero odrzucen na prawdziwych danych bylo zreszta samo w sobie ostrzezeniem:
+    # bramka, ktora nigdy nie zagryzla, nie jest bramka.
+    # Sprawdzenie jest STRUKTURALNE, nie slownikowe, bo lista slow branzowych
+    # jest z natury dziurawa — przepuscila strazakow lesnych i formatowanie
+    # naglowka w samym Federal Register.
+    #
+    # Roznica miedzy dobrym a zlym skutkiem jest inna: dobry nazywa RZECZ,
+    # ktora czytelnik ma, zly nazywa OSOBE, ktorej dotyczy przepis.
+    #   dobrze: „the bottle of sunscreen in your bathroom", „the clock on
+    #           your oven", „the pending charge in your banking app"
+    #   zle:    „an Atlantic-region pelagic longline permit holder",
+    #           „GS and FWS wildland firefighters assigned to prescribed burns"
+    #
+    # Wymog „your" wymusza odpowiedz na pytanie CO MA CZYTELNIK zamiast KOGO
+    # TO DOTYCZY. Prompt zamawia dokladnie taka forme, wiec to nie jest
+    # zgadywanka — to sprawdzenie, czy model wykonal polecenie.
+    if not re.search(r"\byour\b", skutek, re.IGNORECASE):
+        return False, ("skutek nazywa kogos, nie rzecz czytelnika (brak slowa "
+                       "'your'): %r" % skutek[:70])
 
     # BRAMKA 4 — SPRAWDZALNOSC. Jesli nie umiemy nazwac, GDZIE mieszka
     # odpowiedz, to weryfikacja padnie pozniej — a wtedy research bedzie juz
