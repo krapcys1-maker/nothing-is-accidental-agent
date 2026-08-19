@@ -772,7 +772,7 @@ NOTE_FORMS = {
     # notek (setki tysiecy sztuk): zaczep w pierwszej linii, dwie-cztery linie
     # tresci, konkret na koncu. Wersja dla NAS: zamiast osobistego wyniku,
     # ktorego anonimowa marka nie ma, konczymy rzecza do sprawdzenia u siebie.
-    "DO_SPRAWDZENIA": (
+    "ZACZEP_I_KONKRET": (
         "Three moves, in order. One: a hook line that works on somebody who "
         "has never heard of us and is scrolling — specific and surprising, "
         "never a category label. Two: two to four lines saying what the "
@@ -783,7 +783,7 @@ NOTE_FORMS = {
     ),
 }
 
-NOTE_FORM_MIX = ("SCENA", "KONTRAST", "DO_SPRAWDZENIA", "PROSTA", "LISTA",
+NOTE_FORM_MIX = ("SCENA", "KONTRAST", "ZACZEP_I_KONKRET", "PROSTA", "LISTA",
                  "PYTANIE", "ODWROCENIE", "LICZBA")
 
 NOTE_TYPES = {
