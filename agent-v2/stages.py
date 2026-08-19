@@ -1555,6 +1555,13 @@ def fetch(
                 body = response.text
                 if response.status_code >= 400:
                     reason = f"HTTP {response.status_code}"
+                elif _to_pdf(response, url):
+                    # PDF czytamy inaczej niz HTML. Bez tego `response.text`
+                    # jest binarnym smieciem, `trafilatura` oddaje pustke,
+                    # a strona ladowala jako „za malo tresci (0 znakow)".
+                    text = _tekst_z_pdf(response.content)
+                    if not text:
+                        reason = "PDF bez warstwy tekstowej (skan?)"
                 else:
                     text = trafilatura.extract(body, include_comments=False) or ""
                     # Frazy odmowy sprawdzamy w WYDOBYTYM TEKŚCIE, nie w surowym
@@ -2127,3 +2134,56 @@ def wczytaj_pytania() -> list[dict[str, Any]]:
 def pytania_dla_skauta(ile: int = 6) -> list[str]:
     """Najswiezsze pytania czytelnikow, gotowe do wklejenia w prompt skauta."""
     return [p["tekst"] for p in reversed(wczytaj_pytania()[-ile * 3:])][:ile]
+
+
+def _to_pdf(odpowiedz, url: str) -> bool:
+    """Czy to PDF. Naglowek jest wiarygodniejszy od koncowki adresu.
+
+    Adresy urzedowe czesto nie koncza sie na `.pdf` (`/downloads/136694/en`),
+    a mimo to zwracaja PDF — dlatego pytamy najpierw serwer, a koncowka jest
+    tylko zapasem. Na koniec podglad pierwszych bajtow, bo naglowek tez bywa
+    ustawiony byle jak.
+    """
+    typ = (odpowiedz.headers.get("content-type") or "").lower()
+    if "pdf" in typ:
+        return True
+    if (url or "").lower().split("?")[0].endswith(".pdf"):
+        return True
+    try:
+        return odpowiedz.content[:5] == b"%PDF-"
+    except Exception:
+        return False
+
+
+def _tekst_z_pdf(dane: bytes, max_stron: int = 40) -> str:
+    """Warstwa tekstowa PDF-a.
+
+    Powod istnienia policzony, nie przeczuty: na 84 probach pobrania szesnascie
+    adresow bylo PDF-ami i udaly sie DWA. Czternascie porazek z dwudziestu
+    dziewieciu — prawie polowa wszystkiego, co przepadalo. Urzedy publikuja
+    wlasnie w PDF, wiec tracilismy systematycznie zrodla PIERWOTNE.
+
+    Limit stron jest po to, zeby jeden dwustustronicowy zalacznik nie zjadl
+    calego wejscia klasyfikacji. Skan bez warstwy tekstowej oddaje pustke
+    i to jest poprawny wynik — OCR-u nie robimy.
+    """
+    try:
+        import io as _io
+
+        from pypdf import PdfReader
+    except ImportError:
+        return ""
+    try:
+        czytnik = PdfReader(_io.BytesIO(dane))
+        kawalki = []
+        for strona in czytnik.pages[:max_stron]:
+            try:
+                kawalki.append(strona.extract_text() or "")
+            except Exception:
+                continue          # jedna zla strona nie psuje calego dokumentu
+    except Exception:
+        return ""
+    tekst = "\n".join(k.strip() for k in kawalki if k and k.strip())
+    # PDF-y lamia wiersze co kilkadziesiat znakow. Bez sklejenia klasyfikacja
+    # dostaje sieczke i nie rozpoznaje zdan.
+    return re.sub(r"\n{3,}", "\n\n", tekst).strip()
