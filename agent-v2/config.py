@@ -735,7 +735,14 @@ NOTE_FORMS = {
     "LICZBA": (
         "Open with the number itself, alone on the first line — a figure, a "
         "date, a measurement. Blank line. Then what it is and who decided it. "
-        "The number does the stopping; the rest does the explaining."
+        "The number does the stopping; the rest does the explaining. "
+        "It has to be a number a STRANGER CAN FEEL: a quantity, a duration, a "
+        "price, a count of things. A catalogue number, a patent number, a "
+        "section number or a docket reference is not a number in this sense — "
+        "it is a label that happens to be made of digits, and it stops nobody. "
+        "This went wrong live: a note opened with 'US2989787' where the good "
+        "version of the same form opened with '1 drop'. If the only figures in "
+        "the material are identifiers, this is the wrong form for it."
     ),
     "SCENA": (
         "Start with the object in front of the reader, in the second person: "
@@ -761,11 +768,23 @@ NOTE_FORMS = {
         "four sentences crammed into one block undoes the whole point of the "
         "shape."
     ),
+    # Struktura wskazywana zgodnie przez dwie niezalezne analizy duzych prob
+    # notek (setki tysiecy sztuk): zaczep w pierwszej linii, dwie-cztery linie
+    # tresci, konkret na koncu. Wersja dla NAS: zamiast osobistego wyniku,
+    # ktorego anonimowa marka nie ma, konczymy rzecza do sprawdzenia u siebie.
+    "DO_SPRAWDZENIA": (
+        "Three moves, in order. One: a hook line that works on somebody who "
+        "has never heard of us and is scrolling — specific and surprising, "
+        "never a category label. Two: two to four lines saying what the "
+        "arrangement actually is and who decided it. Three: one closing line "
+        "handing the reader something they can look at, count or compare "
+        "themselves, today, without our help. Do not promise what they will "
+        "find. No personal anecdote — we do not have one and must not invent it."
+    ),
 }
 
-# Rozklad form na dzien. PROSTA zostaje, ale przestaje byc jedyna.
-NOTE_FORM_MIX = ("SCENA", "KONTRAST", "PROSTA", "LISTA", "PYTANIE",
-                 "ODWROCENIE", "LICZBA")
+NOTE_FORM_MIX = ("SCENA", "KONTRAST", "DO_SPRAWDZENIA", "PROSTA", "LISTA",
+                 "PYTANIE", "ODWROCENIE", "LICZBA")
 
 NOTE_TYPES = {
     "ARTYKUL": (

@@ -1758,3 +1758,70 @@ def bibliotekarz(
     wynik["groups"] = przyjete
     wynik["odrzucone_grupy"] = odrzucone
     return wynik
+
+
+BANK_NOTEK = config.DATA_DIR / "bank_notek.json"
+
+
+def wczytaj_bank_notek() -> list[dict[str, Any]]:
+    """Gotowe notki czekajace na swoj moment. Plik, nie tabela — limit czterech
+    tabel stoi, a wzorzec jest ten sam co `zuzyte_fakty.json` i `promocja.json`."""
+    try:
+        dane = json.loads(BANK_NOTEK.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [n for n in dane if isinstance(n, dict) and n.get("tekst")] \
+        if isinstance(dane, list) else []
+
+
+def dopisz_do_banku_notek(notki: list[dict[str, Any]]) -> int:
+    """Dokłada notki do banku, pomijajac te, ktore juz tam sa.
+
+    Po co bank: dobra notka nie musi powstac w tej samej minucie, w ktorej ma
+    pojsc w swiat. Research o Substacku mowi, ze notka zyje 7-10 dni i ze
+    licza sie godziny szczytu — a nasz agent budzi sie trzy razy dziennie
+    i musi wtedy COS napisac. Bank rozdziela pisanie od publikowania: piszemy,
+    gdy mamy dobry material, wystawiamy, gdy jest dobra pora.
+    """
+    obecne = wczytaj_bank_notek()
+    maja = {(n.get("tekst") or "").strip()[:120] for n in obecne}
+    dodane = 0
+    for n in notki:
+        tekst = (n.get("tekst") or "").strip()
+        if not tekst or tekst[:120] in maja:
+            continue
+        obecne.append(n)
+        maja.add(tekst[:120])
+        dodane += 1
+    if dodane:
+        BANK_NOTEK.parent.mkdir(parents=True, exist_ok=True)
+        BANK_NOTEK.write_text(
+            json.dumps(obecne, ensure_ascii=False, indent=2), encoding="utf-8")
+    return dodane
+
+
+def wez_z_banku_notek(ile: int = 1) -> list[dict[str, Any]]:
+    """Wyjmuje najstarsze niewykorzystane notki i ZNACZY je jako wyjete.
+
+    Znaczymy przy wyjmowaniu, nie po publikacji: jesli przebieg padnie miedzy
+    jednym a drugim, wolimy stracic notke niz wystawic ja dwa razy. Duplikat
+    pod naszym profilem widzi kazdy, utrata jednej notki z banku — nikt.
+    """
+    bank = wczytaj_bank_notek()
+    wolne = [n for n in bank if not n.get("wyjeta")]
+    wziete = wolne[:max(0, ile)]
+    if wziete:
+        znaczniki = {id(n) for n in wziete}
+        for n in bank:
+            if id(n) in znaczniki:
+                n["wyjeta"] = db.now()
+        BANK_NOTEK.write_text(
+            json.dumps(bank, ensure_ascii=False, indent=2), encoding="utf-8")
+    return wziete
+
+
+def stan_banku_notek() -> dict[str, int]:
+    """Ile mamy zapasu — do wypisania przy starcie przebiegu."""
+    bank = wczytaj_bank_notek()
+    wolne = sum(1 for n in bank if not n.get("wyjeta"))
+    return {"razem": len(bank), "wolne": wolne, "wyjete": len(bank) - wolne}
