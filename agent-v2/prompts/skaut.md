@@ -80,7 +80,21 @@ whatever the scout can already recall, which is a small and repetitive set.
 Searching is somebody else's job and it covers the whole web. Ask the question
 well and let it find the answer.
 
-## Avoid repeating recent ground
+## What our readers actually asked
+
+These are questions real people left under our notes, our articles and our
+comments, and nobody answered them:
+
+{pytania_czytelnikow}
+
+A question somebody took the trouble to type is worth more than one you invent,
+for a reason that is not sentimental: it is **proof that the belief exists**.
+You have to guess whether readers hold a wrong assumption; a question is the
+assumption showing itself.
+
+Use them when one fits — as the seed of a topic, not as the topic's wording.
+Ignore them when none does. A forced answer to a weak question is worse than a
+good invented one, and these are not orders.
 
 These angles have been covered recently. Do not repeat or paraphrase any of them,
 and do not stay in the same subject area:

@@ -1786,10 +1786,19 @@ def pick_topic(
 def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[str, Any]]:
     """Etap 1 — skaut tematów (Claude)."""
     history = recent_angles(conn)
+    # Pytania czytelnikow sa jedynym POZYTYWNYM sygnalem, jaki skaut dostaje.
+    # Dotad mial wylacznie liste tematow, ktorych ma NIE powtarzac — czyli
+    # wiedzial, czego unikac, i nic o tym, czego ludzie faktycznie chca.
+    pytania = pytania_dla_skauta()
+    if pytania:
+        print("  [skaut] mam %d pytan od czytelnikow" % len(pytania), flush=True)
     prompt = _prompt(
         "skaut.md",
         count=count,
         history_json=json.dumps(history, ensure_ascii=False, indent=2),
+        pytania_czytelnikow=(
+            "\n".join("- " + p for p in pytania) if pytania
+            else "(zadne jeszcze nie wplynelo)"),
     )
     text = llm.call("scout", SCOUT_SYSTEM, prompt, conn=conn, run_id=run_id)
     data = llm.parse_json(text)
@@ -2050,3 +2059,71 @@ def warto_pisac(
     o["werdykt"] = werdykt
     o["powod"] = powod
     return o
+
+
+PYTANIA_CZYTELNIKOW = config.DATA_DIR / "pytania_czytelnikow.json"
+
+# Pytanie retoryczne i uprzejmosc to nie sa tematy. Odsiewamy je w kodzie,
+# zanim cokolwiek pojdzie do modelu — inaczej pula zapelni sie "how are you?".
+_NIE_TEMAT = (
+    "how are you", "what do you think", "thanks", "thank you", "great post",
+    "love this", "anyone else", "am i the only", "right?", "isn't it",
+)
+
+
+def zbierz_pytania(wpisy: list[dict[str, Any]]) -> int:
+    """Wyławia z odpowiedzi czytelnikow te, ktore sa PYTANIAMI, i zapisuje je.
+
+    Najbogatszym zrodlem tematow dla kazdej publikacji jest pytanie, ktore ktos
+    zadal, a autor na nie nie odpowiedzial. Te odpowiedzi juz do nas plyna —
+    agent czyta je codziennie, zeby na nie odpisac — i dotad NIC z nich nie
+    trafialo do puli tematow. Sygnal darmowy, wysokiej jakosci i wyrzucany.
+
+    Zbieramy przy okazji rutyny dnia, gdy i tak jestesmy w przegladarce, a nie
+    w przebiegu artykulu: tam kazde dodatkowe otwarcie sesji to koszt i ryzyko.
+    """
+    zebrane = wczytaj_pytania()
+    znane = {(p.get("tekst") or "")[:110] for p in zebrane}
+    dodane = 0
+    for w in wpisy or []:
+        tekst = str(w.get("tekst") or "").strip()
+        if "?" not in tekst or len(tekst.split()) < 5:
+            continue
+        niski = tekst.lower()
+        if any(f in niski for f in _NIE_TEMAT):
+            continue
+        # Cudzy tekst to dane, nie polecenia — ta sama zapora co wszedzie.
+        czysty, _ = bez_wstrzykniecia(tekst)
+        if not czysty or tekst[:110] in znane:
+            continue
+        zebrane.append({
+            "tekst": tekst[:400],
+            "autor": str(w.get("autor") or "")[:60],
+            "skad": str(w.get("kontekst") or w.get("pod_czym") or "")[:120],
+            "kiedy": db.now(),
+        })
+        znane.add(tekst[:110])
+        dodane += 1
+    if dodane:
+        PYTANIA_CZYTELNIKOW.parent.mkdir(parents=True, exist_ok=True)
+        PYTANIA_CZYTELNIKOW.write_text(
+            json.dumps(zebrane[-200:], ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        print(f"  [pytania] zebrano {dodane} nowych — pula ma {len(zebrane[-200:])}",
+              flush=True)
+    return dodane
+
+
+def wczytaj_pytania() -> list[dict[str, Any]]:
+    """Pula pytan czytelnikow. Uszkodzony plik to pusta pula, nie awaria."""
+    try:
+        dane = json.loads(PYTANIA_CZYTELNIKOW.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [p for p in dane if isinstance(p, dict) and p.get("tekst")] \
+        if isinstance(dane, list) else []
+
+
+def pytania_dla_skauta(ile: int = 6) -> list[str]:
+    """Najswiezsze pytania czytelnikow, gotowe do wklejenia w prompt skauta."""
+    return [p["tekst"] for p in reversed(wczytaj_pytania()[-ile * 3:])][:ile]

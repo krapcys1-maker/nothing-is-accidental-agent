@@ -104,8 +104,9 @@ def z_dziennika_dzis() -> dict[str, int]:
     from datetime import datetime, timezone
 
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    ile = {"komentarze": 0, "lajki": 0}
-    nazwa = {"komentarz": "komentarze", "polubienie": "lajki"}
+    ile = {"komentarze": 0, "lajki": 0, "restacki": 0}
+    nazwa = {"komentarz": "komentarze", "polubienie": "lajki",
+             "restack": "restacki"}
     try:
         if not DZIENNIK.exists():
             return ile

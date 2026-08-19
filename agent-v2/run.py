@@ -252,7 +252,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     # a nie na minuty.
     juz = browser.ile_dzis_wystawione()
     zostalo = {k: max(0, budzet[k] - juz.get(k, 0))
-               for k in ("notki", "komentarze", "lajki")}
+               for k in ("notki", "komentarze", "lajki", "restacki")}
     # Reszte dzielimy przez przebiegi, ktore JESZCZE dzis beda — nie przez
     # wszystkie. Dzielenie przez wszystkie systematycznie zaniza: przy budzecie
     # 16 komentarzy trzy przebiegi braly 5, 4 i 2, czyli 11 zamiast 16. Przez
@@ -271,7 +271,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
           f"w tym przebiegu: notki={na_teraz['notki']} "
           f"komentarze={na_teraz['komentarze']} lajki={na_teraz['lajki']}",
           flush=True)
-    zrobione = {"notki": 0, "komentarze": 0, "odpowiedzi": 0, "polubienia": 0}
+    zrobione = {"notki": 0, "komentarze": 0, "odpowiedzi": 0, "polubienia": 0,
+                "restacki": 0}
 
     # OKNO PUBLIKACJI liczone w strefie CZYTELNIKOW. Poza nim agent nie milczy
     # calkiem — polubienia i odpowiedzi zostaja, bo czytanie o polnocy jest
@@ -307,6 +308,15 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                    + browser.odpowiedzi_na_nasze_komentarze())
         if not czekaja:
             return
+        # PYTANIA CZYTELNIKOW DO PULI TEMATOW. Zbieramy tutaj, bo tutaj i tak
+        # trzymamy w reku wszystko, co do nas przyszlo — a w przebiegu artykulu
+        # kazde dodatkowe otwarcie sesji to koszt i ryzyko. Pytanie, ktore ktos
+        # zadal, a na ktore nikt nie odpowiedzial, jest najlepszym zrodlem
+        # tematow, jakie ma kazda publikacja; dotad wyrzucalismy je co dzien.
+        try:
+            stages.zbierz_pytania(czekaja)
+        except Exception as exc:
+            print(f"  (nie zebralem pytan: {type(exc).__name__})", flush=True)
         # Przy dwóch odpowiada się obu. Przy dwustu odpowiedź pod każdym wygląda
         # jak maszyna, więc powyżej progu agent wybiera — z pierwszeństwem dla
         # niezgody, bo nieodpowiedziany zarzut zostaje ostatnim słowem.
@@ -544,10 +554,30 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         w = browser.polub_w_kanale(na_teraz["lajki"], wyslij=wyslij)
         zrobione["polubienia"] = w.get("polubione", 0)
 
+    # --- 5. restacki: cudza notka plus nasze zdanie ---------------------------
+    def restacki() -> None:
+        """Podanie dalej trafia do kanału NASZYCH obserwujących i powiadamia
+        autora oryginału — za cenę jednego zdania zamiast całej notki.
+
+        Stoi po polubieniach świadomie: polubienie nic nie twierdzi, restack
+        stawia nasze nazwisko obok cudzego tekstu. Jeśli dzień się kończy
+        i coś ma wypaść, ma wypaść to, co niesie więcej ryzyka.
+        """
+        ile = na_teraz.get("restacki", 0)
+        if not ile:
+            print("  budżet na dziś: 0 — pomijam", flush=True)
+            return
+        w = browser.restackuj_w_kanale(
+            ile, lambda n: stages.ocen_restack(conn, run_id, n), wyslij=wyslij)
+        zrobione["restacki"] = w.get("restackowane", 0)
+        if w.get("odmowy"):
+            print(f"  odmów: {len(w['odmowy'])} — milczenie jest pełnym wynikiem",
+                  flush=True)
+
     for nazwa, robota in (("odpowiedzi", odpowiedzi), ("notki", notki),
                           ("komentarze", komentarze), ("dyskusje", dyskusje),
                           ("obserwowanie", obserwuj), ("subskrypcje", subskrybuj),
-                          ("polubienia", polubienia)):
+                          ("polubienia", polubienia), ("restacki", restacki)):
         print(f"\n-- {nazwa} --", flush=True)
         blok(nazwa, robota)
 
