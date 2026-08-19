@@ -16,7 +16,7 @@ Stan na 2026-08-19. Gałąź `v2-test`, produkcja nietknięta na `main` (tag `v1
 | subskrypcje | **działa** | 6–12 miesięcznie, wąsko |
 | artykuł od tematu do publikacji | **działa** | pięć opublikowanych |
 | grafika do artykułu | **działa** | jeden styl domowy |
-| **restack cudzej notki** | **NIE ISTNIEJE** | budżet `(0,0)`, nikt nie wykonuje |
+| **restack cudzej notki** | **ZBUDOWANY** | 2–4 dziennie, sprawdzony na żywym kanale bez wysyłania |
 
 ## Co zbudowane na v2 i przetestowane
 
@@ -35,9 +35,15 @@ Stan na 2026-08-19. Gałąź `v2-test`, produkcja nietknięta na `main` (tag `v1
 
 ## Co NIE działa albo jest otwarte
 
-**Restack — jedyna brakująca zdolność wzrostowa.** Trafia do kanału naszych
-obserwujących, powiadamia autora oryginału i stawia nasze zdanie obok jego.
-Kosztuje jedno zdanie zamiast całej notki. **Budowane teraz.**
+**Restack — zbudowany, czeka na pierwsze wysłanie.** Ścieżka ustalona na żywym
+Substacku: przycisk `Restack` rozwija menu z pozycją `Restack with a note`.
+Próba bez wysyłania: 5 rozważonych, 3 przyjęte, 2 odmowy. Pozostaje wpiąć go
+w rutynę dnia w `run.py` i wykonać pierwszy prawdziwy.
+
+Pierwszy test znalazł przy okazji **błąd zapory, który blokował poprawne
+teksty**: `bez_wstrzykniecia` porównywała podciągi, więc wzorzec `"as an ai"`
+łapał `"as an aid"`, `"as an aim"` i `"as an air"`. Ile razy odrzucił coś
+dobrego wcześniej — nie wiadomo.
 
 **Pobranie źródeł: 65% (55 z 84).** Dwie dominujące przyczyny wśród 29 porażek:
 puste wydobycie treści (10, prawdopodobnie PDF-y — `trafilatura` ich nie czyta)
