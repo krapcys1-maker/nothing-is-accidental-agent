@@ -50,6 +50,17 @@ word is read.
   line. Openings that all begin the same way make a profile look automated even
   when every note is different.
 
+- **These are the words our last notes opened with. Do not open with any of
+  them:**
+
+  {ostatnie_otwarcia_json}
+
+  This matters more than it looks. Four of our first twelve notes began with
+  "The" — every note was different and the profile still read as automated,
+  because a reader scanning a column of posts sees the left edge before they
+  see anything else. You are the only one who can fix that, because you are the
+  one choosing the first word.
+
 ## What every note must do
 
 **Break a belief the reader is carrying.** Not "tell them something they did

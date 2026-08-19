@@ -741,6 +741,18 @@ def note(
         note_form=note_form,
         form_brief=config.NOTE_FORMS.get(note_form, config.NOTE_FORMS["PROSTA"]),
         evidence=json.dumps(evidence, ensure_ascii=False, indent=2)[:9000],
+        # OSTATNIE OTWARCIA IDA DO MODELU, nie tylko do sortownika. Dotad
+        # `ostatnie_otwarcia` sluzylo wylacznie temu, zeby PO napisaniu wybrac
+        # ten z trzech wariantow, ktory nie powtarza pierwszego slowa — czyli
+        # pisalismy na slepo trzy i placilismy za dwa wyrzucone.
+        #
+        # Model, ktory wie, jak zaczynaly poprzednie notki, nie potrzebuje
+        # konkurencji. To ta sama zasada, co przy formulce restackow: zamiast
+        # prosic model, zeby byl dobry, daj mu informacje, ktorej mu brakuje.
+        # Wartosc zmiany: dwie trzecie rachunku za notki.
+        ostatnie_otwarcia_json=json.dumps(
+            sorted(ostatnie_otwarcia()) or ["(zadnych jeszcze nie ma)"],
+            ensure_ascii=False),
     )
     zajete_otwarcia = set(ostatnie_otwarcia())
     candidates: list[dict[str, Any]] = []

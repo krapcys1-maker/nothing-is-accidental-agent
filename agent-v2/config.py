@@ -556,7 +556,18 @@ NOTE_MAX_WORDS = 64
 # Trzech kandydatow, nie pieciu: odkad kazda notka dostaje WLASNY fakt,
 # piaty wariant tego samego zdania niczego nie dokladal, a placilismy za
 # niego i za jego weryfikacje.
-NOTE_CANDIDATES = 3
+# JEDEN WARIANT, NIE TRZY. Trzy istnialy tylko po to, zeby po napisaniu wybrac
+# ten, ktory nie powtarza pierwszego slowa poprzednich notek — czyli placilismy
+# za dwa wyrzucone teksty, zeby zalatwic cos, o czym wystarczylo modelowi
+# POWIEDZIEC. Od kiedy dostaje liste ostatnich otwarc w prompcie, konkurencja
+# jest zbedna.
+#
+# To jest najwieksza pojedyncza oszczednosc w calym systemie: przy pieciu
+# notkach dziennie roznica wynosi 28 dolarow miesiecznie — wiecej niz kosztuje
+# cala reszta agenta razem wzieta.
+#
+# Zostawiamy pokretlo: gdyby jakosc spadla, wystarczy wrocic do 2 albo 3.
+NOTE_CANDIDATES = 1
 # Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich,
 # a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas na kilka dni.
 # DZIEDZINY, Z KTORYCH BIORA SIE TEMATY NOTEK.
