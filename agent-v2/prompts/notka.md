@@ -34,15 +34,43 @@ word is read.
   three blocks separated by a blank line, not one paragraph.
 - **Vary the sentence length inside them.** A long sentence, then a short one.
   Every sentence the same length is the flattest rhythm there is.
-- **The first line has to survive alone.** In the feed it may be all anyone sees
-  before deciding.
+- **The first line has to survive alone, and it must carry the revelation
+  itself — not the run-up to it.** In the feed the note is cut after a line or
+  two with a "more" link, so roughly the first ten words are the whole pitch.
+  A note built the natural way — context first, surprise second — puts the one
+  interesting thing below the fold, where nobody meets it.
+
+  Wrong: *Traffic engineers use a formula to set signal timing.* (setup)
+  Right: *A downhill approach makes the yellow light longer.* (the thing itself)
+
+  Test before you write the second line: if a stranger read only your first
+  sentence and nothing else, would they have learned the surprising thing? If
+  they would only have learned that a surprising thing is coming, rewrite it.
 - **Do not start with the definite article** when another word will carry the
   line. Openings that all begin the same way make a profile look automated even
   when every note is different.
 
 ## What every note must do
 
-One fact that rearranges something the reader thought they understood.
+**Break a belief the reader is carrying.** Not "tell them something they did
+not know" — nearly everything qualifies for that and it is why so many notes
+land as trivia and get scrolled past.
+
+Before writing, say to yourself in one plain sentence what the reader wrongly
+believes: *most people assume the yellow light is the same length everywhere*,
+*most people assume the petrol station is holding their money*. If you cannot
+write that sentence, this material is trivia and the note will not travel,
+however unusual the fact is.
+
+The reason is not taste. Curiosity is a response to a gap somebody recognises
+in their own knowledge, and a gap only exists where there was a belief. A reader
+with no opinion about a thing feels no pull. A reader who is confidently wrong
+feels it the instant you say so. The publication learned this the expensive way:
+an article about a symbol most people had never consciously noticed was dull
+despite good sources, and was deleted.
+
+The belief does not have to appear in the note as a sentence. It has to be the
+thing the note breaks.
 
 **State the thing.** Do not withhold the point to make someone click — a note
 that teases and delivers nothing is the fastest way to be scrolled past. The

@@ -702,6 +702,38 @@ def main() -> int:
             f"{sum(1 for s in corpus if s.get('class') == 'PRIMARY')}",
             flush=True,
         )
+        # --- druga runda, gdy korpus wyszedl chudy ---------------------------
+        # Artykul o SPF poszedl do pisarza z TRZEMA zrodlami z dziesieciu
+        # proponowanych. To nie jest wada stylu, tylko wada materialu: cienka
+        # karta dowodowa znaczy mniej liczb, slabsze paralele i wiecej miejsc,
+        # gdzie pisarz musi dolozyc cos z pamieci — i wlasnie tam wyszedl
+        # jedyny fakt bez pokrycia w tym tekscie.
+        #
+        # Druga dyskoveria kosztuje ~$0,28. Artykul napisany z trzech zrodel
+        # kosztuje caly przebieg i wychodzi cienki, wiec to sie oplaca.
+        if len(corpus) < config.MIN_ZRODEL_DO_PISANIA:
+            print(f"\n-- za chudo ({len(corpus)} < {config.MIN_ZRODEL_DO_PISANIA})"
+                  " — druga runda --", flush=True)
+            try:
+                juz_mamy = {s.get("host") or s.get("url", "") for s in corpus}
+                dodatkowe = [
+                    s for s in stages.discovery(conn, run_id, topic["question"],
+                                                recent)
+                    if (s.get("host") or s.get("url", "")) not in juz_mamy
+                ]
+                if dodatkowe:
+                    dobrane = stages.fetch(conn, run_id, dodatkowe)
+                    corpus = corpus + dobrane
+                    print(f"   dobrano {len(dobrane)} z {len(dodatkowe)} nowych"
+                          f" — korpus ma teraz {len(corpus)} zrodel", flush=True)
+                else:
+                    print("   druga runda nie znalazla nowych adresow", flush=True)
+            except Exception as exc:
+                # Dobieranie jest premia, nie warunkiem. Jego awaria nie moze
+                # zabic przebiegu, za ktorego research juz zaplacilismy.
+                print(f"  [awaria] druga runda padla ({exc}) — pisze z tego, co jest",
+                      flush=True)
+
         if args.stop_after == stage:
             return _done(conn, run_id, stage)
 

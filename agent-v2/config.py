@@ -365,6 +365,13 @@ DISCOVERY_MAX_RESULTS = 10
 # Koszt krańcowy ~$0,09 za rundę, bo każda przesyła całą rozmowę od nowa.
 # Przy suficie $1,60 na przebieg dyskoveria może wziąć ~$0,8.
 DISCOVERY_MAX_SEARCHES = 8
+# Ponizej tylu POBRANYCH zrodel uruchamiamy druga runde dyskoverii, zanim tekst
+# pojdzie do pisarza. Prog z danych, nie z przeczucia: artykuly, ktore wyszly
+# dobrze, mialy 6-7 pobranych zrodel; ten, ktory wyszedl najcienszy i z jedynym
+# faktem bez pokrycia, mial trzy. Czworka lapie tamten przypadek, a nie rusza
+# artykulu o autobusie (cztery zrodla, zero uwag z bramek).
+MIN_ZRODEL_DO_PISANIA = 4
+
 MIN_PRIMARY_SOURCES = 2  # wymóg właściciela: w korpusie ≥2 dokumenty pierwotne
 MIN_WHY_SOURCES = 2  # ≥2 źródła mówiące DLACZEGO, nie tylko treść reguły
 

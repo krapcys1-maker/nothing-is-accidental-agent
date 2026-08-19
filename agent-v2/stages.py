@@ -1530,10 +1530,43 @@ def _host(url: str) -> str:
     return urlparse(url).netloc.lower().removeprefix("www.")
 
 
+def hosty_ktore_nigdy_nie_dzialaly(
+    conn: sqlite3.Connection, min_prob: int = 2,
+) -> list[str]:
+    """Hosty, ktore probowalismy >=2 razy i ANI RAZU sie nie udalo.
+
+    Historia porazek byla zapisywana w `sources` od poczatku i nigdy nie
+    wracala do dyskoverii — wiec model proponowal te same martwe adresy
+    w kolko. `fda.gov` przepadl 3 razy na 3, `easa.europa.eu` 2 na 2,
+    a artykul o SPF dotyczyl wlasnie przepisow FDA: najwazniejsze zrodlo
+    bylo systemowo nieosiagalne, a slot w limicie dziesieciu adresow i tak
+    zostal na nie wydany.
+
+    Prog dwoch prob, nie jednej: jedno 503 to awaria po drugiej stronie,
+    dwa z rzedu to juz wlasciwosc hosta. Lista jest miekka — trafia do
+    promptu jako podpowiedz, a nie do twardego filtru, bo host moze
+    kiedys przestac blokowac i nie chcemy go skreslic na zawsze.
+    """
+    try:
+        wiersze = conn.execute(
+            "SELECT domain, COUNT(*), SUM(fetched_ok) FROM sources"
+            " GROUP BY domain HAVING COUNT(*) >= ? AND COALESCE(SUM(fetched_ok), 0) = 0"
+            " ORDER BY COUNT(*) DESC",
+            (min_prob,),
+        ).fetchall()
+    except sqlite3.Error:
+        return []
+    return [str(d) for d, _, _ in wiersze if d]
+
+
 def discovery(
     conn: sqlite3.Connection, run_id: int, question: str, recent_domains: list[str]
 ) -> list[dict[str, Any]]:
     """Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy)."""
+    martwe = hosty_ktore_nigdy_nie_dzialaly(conn)
+    if martwe:
+        print("  [dyskoveria] pomijam hosty bez ani jednego udanego pobrania: %s"
+              % ", ".join(martwe[:8]), flush=True)
     prompt = _prompt(
         "dyskoveria.md",
         question=question,
@@ -1541,7 +1574,7 @@ def discovery(
         max_searches=config.DISCOVERY_MAX_SEARCHES,
         min_primary=config.MIN_PRIMARY_SOURCES,
         min_why=config.MIN_WHY_SOURCES,
-        blocked_hosts=", ".join(config.BLOCKED_HOSTS),
+        blocked_hosts=", ".join(list(config.BLOCKED_HOSTS) + martwe),
     )
     real_urls: list[str] = []
     text = llm.call(
