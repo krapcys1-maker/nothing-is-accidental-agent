@@ -1,3 +1,19 @@
+"""TEN SKRYPT PUBLIKUJE NA ZYWYM KONCIE. NIE JEST TESTEM.
+
+Wpisuje "Server publish check." i klika Post. Powstal jednorazowo, zeby
+rozstrzygnac, czy sesja zalozona NA SERWERZE przepuszcza publikacje — i wtedy
+byl potrzebny, bo Substack odrzucal sesje z innego adresu IP.
+
+2026-08-19: skopiowalem go razem z reszta do katalogu testow i puscilem petla.
+Opublikowal dwie notki "Server publish check." na profilu, o 17:19:51
+i 17:20:34. Rozszerzenie zmienione na .txt i nazwa zaczyna sie od ostrzezenia
+wlasnie po to, zeby zadna petla po test_*.py nigdy wiecej go nie zlapala.
+
+Jesli kiedys bedzie znowu potrzebny: zmien rozszerzenie recznie, uruchom
+swiadomie, i skasuj po sobie notke.
+
+"""
+
 """Rozstrzygajacy test: czy sesja zalozona NA SERWERZE przepuszcza publikacje."""
 from playwright.sync_api import sync_playwright
 
