@@ -786,16 +786,21 @@ NOTE_FORMS = {
         "it. If you only have one fact, this is not the form for it."
     ),
     "LICZBA": (
-        "Open with the number itself, alone on the first line — a figure, a "
-        "date, a measurement. Blank line. Then what it is and who decided it. "
+        "Open with the number itself, alone on the first line — a quantity, a "
+        "duration, a price, a count. Blank line. Then what it is and who "
+        "decided it. "
         "The number does the stopping; the rest does the explaining. "
         "It has to be a number a STRANGER CAN FEEL: a quantity, a duration, a "
         "price, a count of things. A catalogue number, a patent number, a "
         "section number or a docket reference is not a number in this sense — "
         "it is a label that happens to be made of digits, and it stops nobody. "
-        "This went wrong live: a note opened with 'US2989787' where the good "
-        "version of the same form opened with '1 drop'. If the only figures in "
-        "the material are identifiers, this is the wrong form for it."
+        "A BARE YEAR is not a magnitude either — it is a label for a point in "
+        "time. '2009.' alone on a line stops nobody; 'six weeks' or '$175' or "
+        "'one drop' does. A year may appear later in the note, never as the hook. "
+        "This went wrong live twice: notes opened with 'US2989787' and with "
+        "'2009.', where the good version of the same form opened with '1 drop'. "
+        "If the only figures in the material are identifiers or dates, this is "
+        "the wrong form for that material."
     ),
     "SCENA": (
         "Start with the object in front of the reader, in the second person: "
@@ -832,7 +837,13 @@ NOTE_FORMS = {
         "arrangement actually is and who decided it. Three: one closing line "
         "handing the reader something they can look at, count or compare "
         "themselves, today, without our help. Do not promise what they will "
-        "find. No personal anecdote — we do not have one and must not invent it."
+        "find. No personal anecdote — we do not have one and must not invent it. "
+        "THE THING MUST ALREADY BE IN THEIR LIFE: a bottle in their bathroom, "
+        "the pending charges in their banking app, the light at their own "
+        "junction. Sending them to read a regulation, open a standards document "
+        "or look up an agency circular is homework, and nobody does homework "
+        "from a feed. This went wrong live: a note ended with 'pull up any FAA "
+        "advisory circular and count how many open with that phrase'."
     ),
 }
 
