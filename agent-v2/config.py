@@ -169,9 +169,27 @@ MODEL_FOR = {
     #    co NIE napedza wzrostu (piec artykulow = $2,13), a najtanszy to,
     #    co napedza.
     #
-    # Cena: $0,0167 -> $0,0977 za notke, czyli +$12,16 miesiecznie przy
-    # pieciu dziennie. Zmierzone, nie oszacowane.
-    "note": FABLE,
+    # 2026-08-19, PO DWOCH SLEPYCH TESTACH: notka idzie do OPUSA, nie Fable.
+    #
+    # Powyzsze uzasadnienie bylo oparte na porownaniu, w ktorym znalismy
+    # etykiety. Dwie proby na slepo daly co innego:
+    #   Fable kontra DeepSeek-pro   3 : 2
+    #   Fable kontra Opus 5         2 : 2
+    # Na dziewiec par Fable wygral piec. To jest rzut moneta, a nie przewaga.
+    # Wlasciciel wybieral w ciemno i w zadnej probie nie rozpoznal drozszego
+    # modelu.
+    #
+    # Opus jest dokladnie dwa razy tanszy od Fable ($5/$25 wobec $10/$50)
+    # i nadal jest modelem najwyzszej polki, wiec ryzyko, ze czterdziesci piec
+    # slow zabrzmi „przetlumaczone", zostaje znikome. Tego akurat zaden slepy
+    # test nie zlapie pewnie i dlatego nie schodzimy nizej dla ostatnich
+    # $4,59 miesiecznie.
+    #
+    # Razem z zejsciem na jeden wariant: $42,05 -> $6,07 miesiecznie za notki.
+    # ARTYKUL zostaje na Fable — tam A/B z Opusem dotyczyl calego tekstu,
+    # a nie czterdziestu pieciu slow, i przy czterech artykulach miesiecznie
+    # roznica ceny to $1,85.
+    "note": CLAUDE,
     "comment": DEEPSEEK_PRO,
     "reply": DEEPSEEK_PRO,
     "factcheck": DEEPSEEK,

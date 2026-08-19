@@ -449,10 +449,12 @@ def call(
             )
             raise
 
-    usd, verified = _cost(model, tin, tout, searches, locals().get("cache_hit", 0))
+    trafienia = locals().get("cache_hit", 0) or 0
+    usd, verified = _cost(model, tin, tout, searches, trafienia)
     db.record_call(
         conn=conn, run_id=run_id, provider=provider, model=model, purpose=purpose,
-        tokens_in=tin, tokens_out=tout, web_searches=searches, cost_usd=usd,
+        tokens_in=tin, tokens_out=tout, cache_hit=trafienia,
+        web_searches=searches, cost_usd=usd,
         price_verified=int(verified), ok=1, note=None,
     )
     _log(purpose, model, tin, tout, searches, usd, verified)

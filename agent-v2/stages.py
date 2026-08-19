@@ -325,6 +325,27 @@ def reply_to(
                if text else f"MILCZY — {data.get('reason_if_silent', '')[:60]}"),
             flush=True,
         )
+        # DETERMINISTYCZNE PODLOGI NA ODPOWIEDZI. Odpowiedz jest pisana
+        # Z PAMIECI MODELU — nie ma karty dowodowej, wiec `zweryfikuj` nie ma
+        # czego sprawdzac. Ale dwie podlogi z `gates` NIE potrzebuja korpusu:
+        # zmyslone przezycie („widzialem", „stalem") i powolanie na nieistniejace
+        # badanie („according to a recent study"). Obie sa czystym kodem, koszt
+        # zero, i lapia dokladnie te awarie, ktore w tekscie z pamieci sa
+        # najbardziej prawdopodobne.
+        #
+        # Tu, w odroznieniu od artykulu, BLOKUJA. Uzasadnienie „po oplaconym
+        # researchu artykul musi powstac" nie przenosi sie na wyjscie, za
+        # ktorego research nikt nie zaplacil, a milczenie jest pelnoprawna
+        # odpowiedzia i tak.
+        if text:
+            import gates as _gates
+            for wzor, nazwa in ((_gates.FABRICATED_EXPERIENCE, "zmyslone przezycie"),
+                                (_gates.VAGUE_STUDY, "nieistniejace badanie")):
+                if wzor.search(text):
+                    data["odrzucony"] = nazwa
+                    data["reply"] = None
+                    print(f"    ODRZUCONA PRZED WYSLANIEM: {nazwa}", flush=True)
+                    break
         candidates.append(data)
     return {"comment": comment.get("text", "")[:200], "candidates": candidates}
 
@@ -1084,6 +1105,13 @@ def ocen_restack(
         if not ok:
             o["restack"] = False
             o["reason"] = "nasze zdanie odrzucone przez zapore: %s" % czemu
+        elif _podloga_z_pamieci(zdanie):
+            # Restack tez powstaje Z PAMIECI, wiec dostaje te same dwie
+            # podlogi co odpowiedz. Nasze zdanie staje obok cudzego tekstu
+            # pod naszym nazwiskiem — to najgorsze miejsce na zmyslone
+            # przezycie albo powolanie na badanie, ktorego nie ma.
+            o["restack"] = False
+            o["reason"] = "podloga: %s" % _podloga_z_pamieci(zdanie)
         elif _otwarcie_formulka(zdanie):
             # Pierwszy zywy test dal dwa restacki i OBA zaczynaly sie tak samo:
             # „This is the same mechanism as…". Dwa to zbieg okolicznosci,
@@ -1106,6 +1134,24 @@ _FORMULKI_RESTACKA = (
     "this is the same shape",
     "same pattern as",
 )
+
+
+def _podloga_z_pamieci(tekst: str) -> str:
+    """Dwie podlogi, ktore dzialaja BEZ karty dowodowej.
+
+    Teksty pisane z pamieci modelu — komentarz, odpowiedz, restack — nie maja
+    korpusu, wiec `LICZBA_SPOZA_KORPUSU` sie do nich nie stosuje: zabilaby
+    dokladnie te funkcje, dla ktorej te etapy istnieja. Ale zmyslone przezycie
+    i powolanie na nieistniejace badanie nie potrzebuja korpusu do wykrycia
+    i sa w tekscie z pamieci najbardziej prawdopodobne.
+    """
+    import gates as _gates
+
+    if _gates.FABRICATED_EXPERIENCE.search(tekst or ""):
+        return "zmyslone przezycie"
+    if _gates.VAGUE_STUDY.search(tekst or ""):
+        return "nieistniejace badanie"
+    return ""
 
 
 def _otwarcie_formulka(zdanie: str) -> bool:
