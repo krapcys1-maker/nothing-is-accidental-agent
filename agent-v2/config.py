@@ -230,20 +230,20 @@ PRICING = {
     CLAUDE: {"in": 5.00, "out": 25.00, "verified": True},
     SONNET: {"in": 3.00, "out": 15.00, "verified": True},
     FABLE: {"in": 10.00, "out": 50.00, "verified": True},
-    # STAWKI Z CENNIKA DOSTAWCY, nie z dopasowania do faktury. Poprzednie
-    # $0,10/$0,25 dla OBU modeli odtwarzaly fakture co do centa — ale tylko
-    # dlatego, ze przez blad routingu wszystko jechalo na flashu z trafieniami
-    # w cache. Kalibracja dopasowala sie do zlego modelu i zanizala koszt pro
-    # trzy-czterokrotnie.
+    # STAWKI POTWIERDZONE FAKTURA (15-19 sierpnia 2026). Dziesiec wierszy
+    # rozliczenia odtworzonych co do centa, wiec `verified` znaczy tu wreszcie
+    # to, co powinno: rozliczone z rachunkiem, nie przepisane z cennika.
     #
-    # Bierzemy stawke cache MISS, bo trafien w cache nie umiemy przewidziec,
-    # a zawyzony szacunek jest bezpieczniejszy od zanizonego.
-    # "in" to stawka cache MISS. Trafienia w cache sa ~120x tansze i licza sie
-    # osobno — dostawca podaje ich liczbe w kazdej odpowiedzi, wiec nie zgadujemy.
-    # Bez tego zawyzalismy dzienny koszt o 60%: 4,9 z 5,9 mln tokenow wejscia
-    # pro to byly trafienia.
-    DEEPSEEK: {"in": 0.14, "out": 0.28, "cache": 0.0028, "verified": True},
-    DEEPSEEK_PRO: {"in": 0.435, "out": 0.87, "cache": 0.003625, "verified": True},
+    # Co bylo zle wczesniej i czemu trudno bylo to zobaczyc: mnozniki taryfy
+    # wykalibrowano na WYJSCIU (0,87 x 2,28 = 1,98 — trafione co do grosza)
+    # i ten sam mnoznik zastosowano do wejscia i cache. A rodzaje tokenow
+    # podrozaly ROZNIE: wejscie 1,52x, wyjscie 2,28x, cache 6,07x. Skutek:
+    # wejscie zawyzone o polowe, cache zanizone prawie trzykrotnie.
+    #
+    # "in" to stawka cache MISS; trafienia w cache licza sie osobno po "cache"
+    # — dostawca podaje ich liczbe w kazdej odpowiedzi, wiec nie zgadujemy.
+    DEEPSEEK: {"in": 0.22, "out": 0.66, "cache": 0.007, "verified": True},
+    DEEPSEEK_PRO: {"in": 0.66, "out": 1.98, "cache": 0.022, "verified": True},
 }
 
 # --- taryfa szczytowa DeepSeeka -----------------------------------------------
@@ -253,12 +253,21 @@ PRICING = {
 #
 # WNIOSEK DLA HARMONOGRAMU: agent ma pracowac POZA SZCZYTEM. To nie jest
 # oszczedzanie na sile, tylko darmowa polowa rachunku za przesuniecie godziny.
+# Stawki sprzed podwyzki z 16 sierpnia — trzymane, zeby dalo sie przeliczyc
+# historie i zeby bylo widac, o ile podrozalo.
+STAWKI_PRZED_PODWYZKA = {
+    DEEPSEEK: {"in": 0.14, "out": 0.28, "cache": 0.0028},
+    DEEPSEEK_PRO: {"in": 0.435, "out": 0.87, "cache": 0.003625},
+}
+
 TARYFA_SZCZYTOWA_OD = "2026-08-16T16:00:00+00:00"
 GODZINY_SZCZYTU_UTC = frozenset(range(1, 4)) | frozenset(range(6, 10))
 
 # Mnozniki wzgledem stawek wyzej, po wejsciu nowej taryfy.
-MNOZNIK_SZCZYT = 4.55      # 1,32/0,29 dla flasha; 3,96/0,87 dla pro
-MNOZNIK_POZA_SZCZYTEM = 2.28
+# Szczyt to DOKLADNIE dwukrotnosc bazy, jednakowo dla wejscia, wyjscia
+# i cache. Sprawdzone na fakturze: 1,32/0,66, 3,96/1,98, 0,044/0,022.
+MNOZNIK_SZCZYT = 2.0
+MNOZNIK_POZA_SZCZYTEM = 1.0   # baza to juz stawka po podwyzce
 
 
 def stawka_deepseek(model: str, kiedy=None) -> dict[str, float]:
@@ -268,10 +277,18 @@ def stawka_deepseek(model: str, kiedy=None) -> dict[str, float]:
     baza = PRICING[model]
     kiedy = kiedy or datetime.now(timezone.utc)
     if kiedy < datetime.fromisoformat(TARYFA_SZCZYTOWA_OD):
-        return {"in": baza["in"], "out": baza["out"], "szczyt": None}
+        # Przed podwyzka. Zostawiamy do liczenia historii, nie do biezacych
+        # wywolan — te i tak dzieja sie po tej dacie.
+        stare = STAWKI_PRZED_PODWYZKA[model]
+        return {"in": stare["in"], "out": stare["out"], "cache": stare["cache"],
+                "szczyt": None}
     m = (MNOZNIK_SZCZYT if kiedy.hour in GODZINY_SZCZYTU_UTC
          else MNOZNIK_POZA_SZCZYTEM)
-    return {"in": round(baza["in"] * m, 4), "out": round(baza["out"] * m, 4),
+    # CACHE TEZ. Brak tego klucza sprawial, ze `_cost` siegalo po stawke
+    # wejsciowa i liczylo trafienia w cache 45 razy drozej, niz sa — a to
+    # najliczniejszy rodzaj tokenow, jaki mamy.
+    return {"in": round(baza["in"] * m, 6), "out": round(baza["out"] * m, 6),
+            "cache": round(baza["cache"] * m, 6),
             "szczyt": kiedy.hour in GODZINY_SZCZYTU_UTC}
 
 
