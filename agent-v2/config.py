@@ -940,6 +940,48 @@ SUBSKRYPCJE_MIESIECZNIE = (6, 12)  # laduje w skrzynce wlasciciela, wiec waskie
 # Wask0 celowo. Restack jest publicznym aktem na cudzej tresci: przy dziesieciu
 # dziennie konto wyglada jak wzmacniacz, a nie jak ktos, kto czyta. Dwa-cztery
 # to tyle, ile czlowiek naprawde uzna za warte podania dalej.
+# --- ciche dni ---------------------------------------------------------------
+# Publikacja nadajaca identycznie codziennie czyta sie jak kanal, a nie jak
+# ktos, kto mysli. To byl ostatni wyrazny podpis automatu na tym profilu:
+# siedem dni z rzedu, ten sam rytm, zadnej przerwy.
+#
+# Ale cichy dzien wycisza NADAWANIE, nigdy ODPOWIADANIE. Nieodpisanie komus,
+# kto sie do nas odezwal, nie jest cisza tylko lekcewazeniem — i akurat to
+# widac natychmiast.
+#
+# Decyzja musi byc TA SAMA dla wszystkich przebiegow tego samego dnia. Losowanie
+# per przebieg dalo by dzien, w ktorym rano jest cicho, a wieczorem nie — czyli
+# gorzej niz brak ciszy. Dlatego liczymy ja z daty, deterministycznie.
+CICHY_DZIEN_NA_ILE = 8          # srednio jeden na osiem dni
+CICHE_DNI_WLACZONE = True
+
+
+def _cisza_z_hasza(dzien: str) -> bool:
+    import hashlib
+
+    liczba = int(hashlib.sha256(("%s|cisza" % dzien).encode("utf-8")).hexdigest()[:8], 16)
+    return liczba % CICHY_DZIEN_NA_ILE == 0
+
+
+def cichy_dzien(kiedy=None) -> bool:
+    """Czy dzis nie nadajemy. Ta sama odpowiedz przez caly dzien.
+
+    Sam hasz daje SKUPISKA: na dwoch latach wypadly cztery ciche dni z rzedu,
+    a to juz nie jest przerwa na myslenie, tylko porzucone konto. Wiec dzien
+    jest cichy tylko wtedy, gdy poprzedni nie byl — deterministycznie, bez
+    zadnego stanu do zapamietania, i nadal identycznie dla wszystkich
+    przebiegow tej samej doby.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    if not CICHE_DNI_WLACZONE or CICHY_DZIEN_NA_ILE < 2:
+        return False
+    kiedy = kiedy or datetime.now(timezone.utc)
+    dzis = kiedy.strftime("%Y-%m-%d")
+    wczoraj = (kiedy - timedelta(days=1)).strftime("%Y-%m-%d")
+    return _cisza_z_hasza(dzis) and not _cisza_z_hasza(wczoraj)
+
+
 RESTACK_DZIENNIE = (2, 4)
 
 # Dopisek do cudzej notki. Powyzej tego to juz nie dopisek, tylko wlasna notka

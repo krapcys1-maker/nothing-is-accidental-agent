@@ -253,6 +253,17 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     juz = browser.ile_dzis_wystawione()
     zostalo = {k: max(0, budzet[k] - juz.get(k, 0))
                for k in ("notki", "komentarze", "lajki", "restacki")}
+
+    # CICHY DZIEN. Wyciszamy to, co NADAJEMY — notki i restacki. Komentarze,
+    # polubienia i obserwacje zostaja, bo to jest czytanie cudzych rzeczy,
+    # a nie nadawanie wlasnych. Odpowiedzi zostaja tym bardziej: nieodpisanie
+    # komus, kto sie do nas odezwal, nie jest cisza tylko lekcewazeniem.
+    if config.cichy_dzien():
+        print("   >> CICHY DZIEN — nie nadajemy wlasnych tresci. Rozmowa idzie"
+              " normalnie: odpowiedzi, komentarze i czytanie bez zmian.",
+              flush=True)
+        zostalo["notki"] = 0
+        zostalo["restacki"] = 0
     # Reszte dzielimy przez przebiegi, ktore JESZCZE dzis beda — nie przez
     # wszystkie. Dzielenie przez wszystkie systematycznie zaniza: przy budzecie
     # 16 komentarzy trzy przebiegi braly 5, 4 i 2, czyli 11 zamiast 16. Przez
