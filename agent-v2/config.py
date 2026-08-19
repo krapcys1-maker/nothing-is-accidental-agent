@@ -152,7 +152,26 @@ MODEL_FOR = {
     # asymetrie kosztu bledu; flash dal trafna, ale ogolniejsza uwage. Roznica
     # kosztu to ~12 USD miesiecznie i placimy ja TAM, GDZIE TEKST JEST PUBLICZNY
     # I TRWALY — a nie tam, gdzie model tylko wybiera z listy albo opisuje obrazek.
-    "note": DEEPSEEK_PRO,
+    # NOTKA IDZIE DO FABLE — zmiana na galezi v2-test, po A/B na tym samym
+    # materiale z banku. Trzy powody, w tej kolejnosci:
+    #
+    # 1. Fable pisze wyraznie lepiej i to widac golym okiem. Na tym samym
+    #    patencie DeepSeek dal „a structural panel in a pressurized cabin"
+    #    (nieprzezroczyste dla obcego), Fable „an aircraft cabin window that
+    #    seals itself" — i zamknal linia „Failure is the mechanism, not the
+    #    emergency". Fable sformatowal tez numer jako 2,989,787 zamiast
+    #    US2989787, wiec czyta sie jak wielkosc, a nie jak kod.
+    # 2. Badania nad Substackiem mowia zgodnie, ze NOTKI daja ponad 60%
+    #    przyrostu subskrybentow i sa jedynym narzedziem pokazujacym nas
+    #    ludziom, ktorzy nas nie obserwuja. Artykul czyta ten, kto juz
+    #    przyszedl.
+    # 3. Do tej pory bylo odwrotnie niz powinno: najdrozszy model pisal to,
+    #    co NIE napedza wzrostu (piec artykulow = $2,13), a najtanszy to,
+    #    co napedza.
+    #
+    # Cena: $0,0167 -> $0,0977 za notke, czyli +$12,16 miesiecznie przy
+    # pieciu dziennie. Zmierzone, nie oszacowane.
+    "note": FABLE,
     "comment": DEEPSEEK_PRO,
     "reply": DEEPSEEK_PRO,
     "factcheck": DEEPSEEK,
