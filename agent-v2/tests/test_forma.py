@@ -80,7 +80,11 @@ try:
         "notka.md", language="English", min_words=config.NOTE_MIN_WORDS,
         max_words=config.NOTE_MAX_WORDS, note_type="CIEKAWOSTKA",
         type_brief=config.NOTE_TYPES["CIEKAWOSTKA"], note_form="LISTA",
-        form_brief=config.NOTE_FORMS["LISTA"], evidence="{}")
+        form_brief=config.NOTE_FORMS["LISTA"], evidence="{}",
+        # Pole WYMAGANE od kiedy piszemy jeden wariant zamiast trzech: model
+        # musi znac ostatnie otwarcia, bo nie ma juz konkurencji, z ktorej
+        # kod moglby wybrac to nietrafione. Patrz test_jeden_wariant.
+        ostatnie_otwarcia_json='["six", "washing"]')
     sprawdz("prompt sklada sie bez bledu", "LISTA" in gotowy)
     sprawdz("i niesie opis wybranej formy",
             "same word" in gotowy, gotowy[:0])
