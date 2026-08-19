@@ -1643,11 +1643,23 @@ def hosty_ktore_nigdy_nie_dzialaly(
     promptu jako podpowiedz, a nie do twardego filtru, bo host moze
     kiedys przestac blokowac i nie chcemy go skreslic na zawsze.
     """
+    # PORAZKI NA PUSTEJ TRESCI SIE NIE LICZA. Byly to niemal wylacznie PDF-y,
+    # ktorych wtedy nie umielismy czytac — a nie hosty, ktore nas odrzucaja.
+    # `easa.europa.eu` wypadl 2 na 2 wlasnie tak i trafil na te liste; po
+    # dodaniu obslugi PDF-ow oddal 94 tys. znakow specyfikacji certyfikacyjnych,
+    # czyli zrodlo pierwotne najwyzszej proby. Lista ma pamietac, kto nas nie
+    # wpuszcza, a nie czego kiedys nie umielismy przeczytac.
     try:
         wiersze = conn.execute(
-            "SELECT domain, COUNT(*), SUM(fetched_ok) FROM sources"
-            " GROUP BY domain HAVING COUNT(*) >= ? AND COALESCE(SUM(fetched_ok), 0) = 0"
-            " ORDER BY COUNT(*) DESC",
+            "SELECT domain,"
+            "       SUM(CASE WHEN fetched_ok = 0 AND fail_reason NOT LIKE '%pusto%'"
+            "                 AND fail_reason NOT LIKE '%za mało%'"
+            "                 AND fail_reason NOT LIKE '%za malo%'"
+            "                 AND fail_reason NOT LIKE '%PDF%' THEN 1 ELSE 0 END) AS realne,"
+            "       COALESCE(SUM(fetched_ok), 0) AS udane"
+            " FROM sources GROUP BY domain"
+            " HAVING realne >= ? AND udane = 0"
+            " ORDER BY realne DESC",
             (min_prob,),
         ).fetchall()
     except sqlite3.Error:
