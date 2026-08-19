@@ -590,7 +590,6 @@ def main() -> int:
     _utf8_stdout()
     _sygnal_ma_zostawic_slad()
     try:
-        odmow_publikacji_z_kopii(args.wyslij)
         _zamek = zajmij_zamek()   # trzymany do końca procesu
     except JuzDziala as exc:
         print(f"  {exc}", flush=True)
@@ -604,6 +603,10 @@ def main() -> int:
     parser.add_argument("--wyslij", action="store_true",
                         help="NAPRAWDĘ wystaw treści (domyślnie tylko pokazuje)")
     args = parser.parse_args()
+    # Musi stac PO parse_args (inaczej `args` jeszcze nie istnieje) i PRZED
+    # pierwszym dotknieciem bazy — zeby kopia testowa odpadala, zanim
+    # cokolwiek zapisze.
+    odmow_publikacji_z_kopii(args.wyslij)
 
     conn = db.connect()
     run_id = db.start_run(conn)
