@@ -2202,6 +2202,24 @@ def restackuj_w_kanale(
                     wynik["restackowane"] += 1
                     continue
 
+                # ODSTEP STOI PRZED KOLEJNYM RESTACKIEM, NIE PO POPRZEDNIM.
+                # Wczesniej czekalo sie na koncu ciala petli, a warunek wyjscia
+                # sprawdza sie dopiero na gorze nastepnego obrotu — wiec agent
+                # po wykonaniu normy spal jeszcze 10-30 minut z otwarta
+                # przegladarka i dopiero wtedy wychodzil. Przy limicie jednego
+                # restacka na przebieg, czyli w typowym przypadku, kazda taka
+                # przerwa byla pusta w calosci.
+                #
+                # Samo „przerwij po wykonaniu normy" NIE WYSTARCZALO i zlapal to
+                # dopiero test: gdy w kanale bylo mniej notek niz wynosil budzet,
+                # norma nie byla wykonana, wiec petla i tak zasypiala, a zaraz
+                # potem konczyla sie z braku kandydatow. Odstep postawiony PRZED
+                # dziala w obu przypadkach, bo czeka tylko ten, kto naprawde ma
+                # zaraz kliknac.
+                if wynik["restackowane"]:
+                    page.wait_for_timeout(
+                        int(random.uniform(*config.ODSTEPY["restack"]) * 1000))
+
                 kandydat.scroll_into_view_if_needed(timeout=8000)
                 kandydat.click(timeout=8000)
                 page.wait_for_timeout(1500)
@@ -2220,8 +2238,6 @@ def restackuj_w_kanale(
                 zapisz_w_dzienniku("restack", udane=True,
                                    komu=notka.get("autor", ""), slow=len(zdanie.split()))
                 print(f"    podane dalej {wynik['restackowane']}/{ile}", flush=True)
-                page.wait_for_timeout(
-                    int(random.uniform(*config.ODSTEPY["restack"]) * 1000))
             except Exception as exc:
                 print(f"    (pominiete: {type(exc).__name__}: {exc}"[:150] + ")",
                       flush=True)
