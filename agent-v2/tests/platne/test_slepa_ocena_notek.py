@@ -23,7 +23,15 @@ config.DB_PATH = pathlib.Path("/tmp/slepa-ocena.db")
 import db       # noqa: E402
 import stages   # noqa: E402
 
-KLUCZ = pathlib.Path("/tmp/slepa-ocena-klucz.json")
+# Pare modeli podaje sie w wywolaniu, zeby ten sam skrypt sluzyl kazdemu
+# porownaniu i zeby wynik jednego nie zaciemnial drugiego:
+#   python <plik> claude-fable-5 deepseek-v4-pro
+#   python <plik> claude-fable-5 claude-opus-5
+MODELE = (sys.argv[1] if len(sys.argv) > 1 else "claude-fable-5",
+          sys.argv[2] if len(sys.argv) > 2 else "deepseek-v4-pro")
+ETYKIETA = "-".join(m.replace("claude-", "").replace("deepseek-", "")
+                    for m in MODELE)
+KLUCZ = pathlib.Path("/tmp/slepa-klucz-%s.json" % ETYKIETA)
 
 # Ten sam material dla obu modeli. Fakty z szerokiej wiedzy, kazdy z decydentem
 # i skutkiem, ktory czytelnik trzyma — czyli takie, jakie przechodza bramki.
@@ -63,20 +71,20 @@ MATERIAL = [
 def main() -> int:
     random.seed()
     conn = db.connect()
-    run_id = db.start_run(conn, stage="slepa-ocena-notek")
+    run_id = db.start_run(conn, stage="slepa-%s" % ETYKIETA)
     przed = conn.execute(
         "SELECT COALESCE(SUM(cost_usd),0) FROM calls WHERE run_id=?", (run_id,)
     ).fetchone()[0]
 
     pary = []
-    koszty = {"claude-fable-5": 0.0, "deepseek-v4-pro": 0.0}
+    koszty = {m: 0.0 for m in MODELE}
     try:
         for m in MATERIAL:
             dowod = {"confirmed_claims": [{"text": m["fakt"], "url": m["url"],
                                            "publisher": m["zrodlo"]}],
                      "citable_numbers": []}
             warianty = {}
-            for model in ("claude-fable-5", "deepseek-v4-pro"):
+            for model in MODELE:
                 config.MODEL_FOR["note"] = model
                 p = conn.execute(
                     "SELECT COALESCE(SUM(cost_usd),0) FROM calls WHERE run_id=?",
@@ -96,7 +104,7 @@ def main() -> int:
             if all(warianty.values()):
                 pary.append({"forma": m["forma"], "warianty": warianty})
     finally:
-        db.finish_run(conn, run_id, "DONE", "slepa-ocena-notek", "")
+        db.finish_run(conn, run_id, "DONE", "slepa-%s" % ETYKIETA, "")
         config.MODEL_FOR["note"] = config.FABLE
 
     # MIESZAMY. Etykieta A/B jest losowana per para, wiec ocena nie moze
