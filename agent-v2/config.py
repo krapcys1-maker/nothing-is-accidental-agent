@@ -448,10 +448,14 @@ def _tokens_for(chars: int) -> int:
 
 
 MAX_TOKENS = {
-    # 6 tematów: tytuł, pytanie, siedem ocen liczbowych
-    "scout": _tokens_for(TOPIC_COUNT * 900),
-    # jedna ocena na temat, każda z uzasadnieniem
-    "feasibility": _tokens_for(TOPIC_COUNT * 500),
+    # 6 tematow: tytul, pytanie, ZLAMANE PRZEKONANIE, skad sie bierze, oceny
+    "scout": _tokens_for(TOPIC_COUNT * 1400),
+    # Jedna ocena na temat, kazda z uzasadnieniem. PODNIESIONE z 500 na 1100
+    # znakow po realnym przebiegu: odkad temat niesie `broken_belief`
+    # i `why_they_believe_it`, odsiew ma wiecej do przeczytania i wiecej do
+    # powiedzenia, i ucielo mu odpowiedz w polowie JSON-a. Sufit nic nie
+    # kosztuje, dopoki nie zostanie zuzyty — placimy za tokeny, nie za limit.
+    "feasibility": _tokens_for(TOPIC_COUNT * 1100),
     # Dyskoveria dostaje budżet z zapasem, bo DeepSeek liczy do niego tokeny
     # rozumowania KAŻDEJ rundy wyszukiwania. Przy ciasnym budżecie kończył
     # szukanie i nigdy nie tworzył bloku `message`: 26 wyszukiwań, status
