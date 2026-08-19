@@ -430,7 +430,14 @@ JSON_OVERHEAD_TOKENS = 1200
 # 16 tys., bo modele DeepSeek v4 rozumują znacznie obficiej niż Claude i przy
 # 6 tys. ucinało syntezę. Sufit nic nie kosztuje, dopóki nie zostanie zużyty —
 # płacimy za tokeny, nie za limit.
-THINKING_HEADROOM_TOKENS = 16000
+# 28 tys., nie 16. Zmierzone na realnych przebiegach: DeepSeek-pro rozumuje
+# 16-19 tys. tokenow przy zadaniach WIELOELEMENTOWYCH (szesc tematow, szesc
+# ocen, szesc celow) niezaleznie od objetosci samej tresci. Przy zapasie
+# rownym 16 tys. margines wynosil 1,15-1,21x, czyli zaden — i trzy etapy
+# stalyby sie bomba z opoznionym zaplonem. Odsiew ucialo dwa razy pod rzad.
+# Sufit nic nie kosztuje, dopoki nie zostanie zuzyty: placimy za tokeny,
+# nie za limit.
+THINKING_HEADROOM_TOKENS = 28000
 
 # Głębokość myślenia. Jawnie, bo domyślne `high` na Opusie 5 potrafi podwoić
 # rachunek za wyjście bez pytania.
