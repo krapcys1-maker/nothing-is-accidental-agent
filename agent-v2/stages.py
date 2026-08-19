@@ -1825,3 +1825,75 @@ def stan_banku_notek() -> dict[str, int]:
     bank = wczytaj_bank_notek()
     wolne = sum(1 for n in bank if not n.get("wyjeta"))
     return {"razem": len(bank), "wolne": wolne, "wyjete": len(bank) - wolne}
+
+
+WORTH_SYSTEM = (
+    "You judge whether an evidence card contains a gap a stranger would feel. "
+    "Curiosity is a recognised gap in the reader's own knowledge, not a novel "
+    "fact. Return only valid JSON."
+)
+
+# Prog wynika z teorii, nie z gustu. Zlamane przekonanie jest WARUNKIEM
+# KONIECZNYM: bez niego nie ma luki, wiec nie ma ciekawosci — choćby fakty
+# byly najlepsze. Tak wlasnie padl artykul o symbolu na kosmetykach.
+WYMAGANE_ZLAMANE_PRZEKONANIE = True
+MIN_FILAROW_POZA_PRZEKONANIEM = 2      # z trzech: decydent, liczba, druga dziedzina
+
+
+def warto_pisac(
+    conn: sqlite3.Connection, run_id: int, card: dict[str, Any],
+) -> dict[str, Any]:
+    """Etap przed pisarzem: czy jest tu luka, ktora obcy poczuje.
+
+    Model OBSERWUJE cztery rzeczy i cytuje dowod z karty; werdykt sklada KOD.
+    O oceny liczbowe nie pytamy — stary agent nauczyl nas, ze kazdy score
+    wraca 1.0, wiec prog byl dekoracja. Tu kazde pytanie jest tak-nie
+    i wymaga cytatu, a to da sie sprawdzic.
+
+    Werdykty:
+      PISZ   — jest zlamane przekonanie i co najmniej dwa z trzech filarow
+      DOLOZ  — jest zlamane przekonanie, ale materialu za malo: szukamy pary
+      ODLOZ  — nie ma zlamanego przekonania, czyli nie ma luki
+    """
+    surowy = llm.call(
+        "warto_pisac", WORTH_SYSTEM,
+        _prompt("warto_pisac.md",
+                card_json=json.dumps(card, ensure_ascii=False, indent=2)[:14000]),
+        conn=conn, run_id=run_id,
+    )
+    o = llm.parse_json(surowy)
+
+    def jest(klucz: str) -> bool:
+        blok = o.get(klucz)
+        return bool(isinstance(blok, dict) and blok.get("present"))
+
+    przekonanie = jest("contradicted_belief")
+    # Deklaracja bez tresci to nie deklaracja. Model musi UMIEC nazwac przekonanie.
+    tresc = str((o.get("contradicted_belief") or {}).get("the_belief", "")).strip()
+    if przekonanie and len(tresc.split()) < 4:
+        przekonanie = False
+        o.setdefault("uwagi_kodu", []).append(
+            "zaznaczono zlamane przekonanie, ale nie umiano go nazwac — nie liczy sie")
+
+    filary = {"named_decider": jest("named_decider"),
+              "felt_number": jest("felt_number"),
+              "second_domain": jest("second_domain")}
+    ile_filarow = sum(filary.values())
+
+    if WYMAGANE_ZLAMANE_PRZEKONANIE and not przekonanie:
+        werdykt, powod = "ODLOZ", (
+            "brak przekonania, ktore material lamie — bez tego czytelnik nie ma "
+            "luki do zamkniecia, a fakty same jej nie tworza")
+    elif ile_filarow >= MIN_FILAROW_POZA_PRZEKONANIEM:
+        werdykt, powod = "PISZ", "zlamane przekonanie + %d z 3 filarow" % ile_filarow
+    else:
+        werdykt, powod = "DOLOZ", (
+            "zlamane przekonanie jest, ale tylko %d z 3 filarow — szukamy pary "
+            "w banku zanim to pojdzie do pisarza" % ile_filarow)
+
+    o["przekonanie"] = przekonanie
+    o["filary"] = filary
+    o["ile_filarow"] = ile_filarow
+    o["werdykt"] = werdykt
+    o["powod"] = powod
+    return o

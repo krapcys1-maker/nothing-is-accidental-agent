@@ -185,6 +185,10 @@ MODEL_FOR = {
     # i widziec miedzy nimi zwiazek — a przy 10 tys. tokenow wejscia
     # roznica ceny to ulamek centa.
     "bibliotekarz": DEEPSEEK_PRO,
+    # Bramka ciekawosci przed pisarzem. Pro, bo musi rozpoznac, jakie
+    # przekonanie czytelnik przynosi ze soba — to sad o ludziach,
+    # nie odczyt z tekstu.
+    "warto_pisac": DEEPSEEK_PRO,
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -456,6 +460,8 @@ MAX_TOKENS = {
     # Bibliotekarz oddaje grupy, nie eseje: mechanizm, czlonkowie,
     # czego brakuje. Sufit z zapasem, bo DeepSeek rozumuje obficie.
     "bibliotekarz": 12000,
+    # Cztery obserwacje z cytatami plus dwa zdania. Nie esej.
+    "warto_pisac": 6000,
     # DOKŁADNIE tyle, ile prosi prompt: 12 fragmentów po 700 znaków plus liczby
     "classify": _tokens_for(
         CLASSIFY_MAX_EXCERPTS * CLASSIFY_MAX_EXCERPT_CHARS + 2000
