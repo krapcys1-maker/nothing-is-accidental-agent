@@ -147,15 +147,31 @@ def finish_run(
 
 
 def record_call(conn: sqlite3.Connection, **fields: Any) -> None:
-    keys = (
+    """Zapisuje wywołanie, wstawiając TYLKO te kolumny, które ktoś podał.
+
+    Wcześniej lista kolumn była stała, a brakujące pola szły jako `fields.get(k)`
+    — czyli jawny NULL. SQL-owe `DEFAULT 0` wtedy NIE dziala: default wchodzi
+    tylko wtedy, gdy kolumny w INSERT nie ma wcale, a nie gdy jest z NULL-em.
+    Skutkiem był `IntegrityError: NOT NULL constraint failed` u każdego, kto nie
+    podał kompletu.
+
+    Kosztowało to okładkę artykułu 0025 i — groźniej — przykrywało prawdziwe
+    błędy API: gdy wywołanie tekstowe padało, ścieżka błędu próbowała je zapisać,
+    wywalała się na tej samej kolumnie i to `IntegrityError` szedł w górę zamiast
+    prawdziwej przyczyny.
+
+    Dlatego poprawka siedzi TUTAJ, a nie w czterech miejscach wołających:
+    następna kolumna dopisana do `calls` z wartością domyślną ma zadziałać sama,
+    bez obchodzenia wszystkich wywołań.
+    """
+    keys = [k for k in (
         "run_id", "provider", "model", "purpose", "tokens_in", "tokens_out",
         "cache_hit", "web_searches", "cost_usd", "price_verified", "ok", "note",
-    )
-    values = [fields.get(k) for k in keys]
+    ) if k in fields]
     conn.execute(
         f"INSERT INTO calls (at, {', '.join(keys)})"
         f" VALUES (?, {', '.join('?' * len(keys))})",
-        [now(), *values],
+        [now(), *(fields[k] for k in keys)],
     )
     conn.commit()
 

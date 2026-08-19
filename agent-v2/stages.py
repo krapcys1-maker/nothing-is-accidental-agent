@@ -427,7 +427,12 @@ def grafika(
 
         dane = llm.obraz(opis, conn=conn, run_id=run_id)
     except Exception as exc:
-        print(f"  [grafika] NIE POWSTAŁA ({type(exc).__name__}) — "
+        # TREŚĆ wyjątku, nie sama nazwa klasy. Gdy grafika artykułu 0025 padła
+        # na `IntegrityError`, log powiedział tylko tyle — a przyczyna („NOT NULL
+        # constraint failed: calls.cache_hit") siedziała w zjedzonym komunikacie
+        # i trzeba jej było szukać po kodzie. Awaria, która nie mówi na co padła,
+        # kosztuje drugi raz.
+        print(f"  [grafika] NIE POWSTAŁA ({type(exc).__name__}: {exc}) — "
               f"artykuł wychodzi bez nagłówka", flush=True)
         return {"blad": f"{type(exc).__name__}: {exc}"[:200]}
     if not dane:
