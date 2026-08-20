@@ -2174,12 +2174,20 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
     if stawki:
         print("  [skaut] %d z %d tematow to systemy pod proba (bez zlamanego "
               "przekonania, ze stawka)" % (stawki, len(topics)), flush=True)
-    if nasycone:
+    if nasycone and len(nasycone) < len(topics):
         print("  [skaut] %d z %d juz opisanych gdzie indziej — na koniec kolejki:"
               % (len(nasycone), len(topics)), flush=True)
         for t in nasycone[:4]:
             print("     %s (%d znanych tekstow)"
                   % (str(t.get("title"))[:52], t["ile_juz_napisano"]), flush=True)
+    elif nasycone:
+        # WSZYSTKIE nasycone to nie to samo, co wszystkie oklepane. Kara
+        # nalozona na 100% kandydatow nie przesuwa nikogo — a poprzedni
+        # komunikat mowil „na koniec kolejki", czyli obiecywal odsiew, ktorego
+        # nie bylo. Tu ratuje nas wymuszony ranking, ktorego wyrownac sie nie da.
+        print("  [skaut] wszystkie %d tematow ma po %d znanych tekstow — "
+              "nasycenie nic nie rozroznilo, kolejnosc bierze sie z rankingu"
+              % (len(topics), topics[0]["ile_juz_napisano"]), flush=True)
     if bez:
         print("  [skaut] %d z %d tematow bez przekonania I bez stawki — na koniec "
               "kolejki" % (len(bez), len(topics)), flush=True)
@@ -2211,6 +2219,16 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
         print("  [skaut] UWAGA: zaden temat nie jest artykulowy — biore "
               "najlepszy dostepny, ale to sygnal, ze skaut oddal same "
               "ciekawostki", flush=True)
+    # Pola, z ktorych realnie budujemy kolejnosc w `pick_topic`. Jesli
+    # ktores jest stale, to miejsce w kolejce ustala sie BEZ NIEGO.
+    martwe_pola = _stale_sygnaly(topics, ("nosny", "na_artykul", "nasycony",
+                                          "ile_watkow", "ile_precedensow",
+                                          "zasieg", "depth", "confidence",
+                                          "expected_primary_sources"))
+    if martwe_pola:
+        print("  [skaut] MARTWE W TYM PRZEBIEGU (ta sama wartosc u wszystkich "
+              "%d, wiec nic nie rozroznily): %s"
+              % (len(topics), ", ".join(martwe_pola)), flush=True)
     print("  [skaut] watki na temat: %s"
           % sorted((t["ile_watkow"] for t in topics), reverse=True), flush=True)
     if any(t.get("swiezy_wg_modelu") for t in topics):
@@ -2759,6 +2777,31 @@ def _zapisz_indeks(indeks: list[dict[str, Any]]) -> None:
     INDEKS_KANDYDATOW.parent.mkdir(parents=True, exist_ok=True)
     INDEKS_KANDYDATOW.write_text(
         json.dumps(indeks[-600:], ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _stale_sygnaly(topics: list[dict], pola: tuple[str, ...]) -> list[str]:
+    """Ktore z pol mialy TE SAMA wartosc u WSZYSTKICH kandydatow.
+
+    Trzeci raz ta sama wada, wiec tym razem wykrywacz zostaje w kodzie zamiast
+    w komentarzu. Samooceny wracaly zawsze 1.0. Watki — zawsze szesc. Znane
+    teksty — zawsze trzy. Za kazdym razem pole bylo czytane, sortowanie z niego
+    korzystalo, testy przechodzily, a sygnal nie rozrozinial NICZEGO, bo mial
+    u wszystkich te sama wartosc. Martwy sygnal tego rodzaju jest gorszy niz
+    brak pola: log wyglada na bogaty, kolejnosc na przemyslana.
+
+    Pole stale u wszystkich kandydatow to zero informacji — niezaleznie od
+    tego, czy stala jest wysoka czy niska. Nie zgaduje przyczyny (moze model
+    wyrownuje, moze prompt zle pyta) i niczego nie blokuje; wypisuje fakt,
+    zeby nastepnym razem nie trzeba bylo tego wypatrzec golym okiem w logu.
+    """
+    if len(topics) < 2:
+        return []
+    martwe = []
+    for pole in pola:
+        wartosci = {repr(t.get(pole)) for t in topics}
+        if len(wartosci) == 1:
+            martwe.append("%s=%s" % (pole, wartosci.pop()))
+    return martwe
 
 
 def _precedens_ok(p: Any) -> bool:

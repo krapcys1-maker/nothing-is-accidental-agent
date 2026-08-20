@@ -203,5 +203,66 @@ sprawdz("i dopisujemy pominiete do listy",
 sprawdz("i mowimy o tym w logu", "nie powtórzył w liście zbiorczej" in run_src)
 
 print()
+print("=== 7. STALA U WSZYSTKICH KANDYDATOW = ZERO INFORMACJI ===")
+# Drugi wariant tej samej wady, i to ten, ktory przezyl dwie poprzednie
+# naprawy. Pole JEST czytane, sortowanie z niego korzysta, test statyczny
+# przechodzi — a sygnal ma u wszystkich kandydatow te sama wartosc, wiec
+# nie ustawia nikogo przed nikim. Zlapane golym okiem w logu 2026-08-20:
+# `watki na temat: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3]`.
+sys.path.insert(0, str(pathlib.Path("agent-v2").resolve()))
+from stages import _stale_sygnaly
+
+DZIESIEC_JAK_NA_ZYWO = [
+    {"ile_watkow": 3, "ile_precedensow": i % 3, "nasycony": True,
+     "zasieg": "AN_INDUSTRY" if i < 6 else "A_PLACE"}
+    for i in range(10)
+]
+martwe = _stale_sygnaly(DZIESIEC_JAK_NA_ZYWO,
+                        ("ile_watkow", "ile_precedensow", "nasycony", "zasieg"))
+sprawdz("stale pole jest zglaszane", any(m.startswith("ile_watkow=") for m in martwe), martwe)
+sprawdz("i stala prawda tez (nie tylko liczby)",
+        any(m.startswith("nasycony=") for m in martwe), martwe)
+# KONTRDOWOD: pola, ktore realnie roznicuja, NIE moga trafic na te liste,
+# inaczej wykrywacz jest tylko halasem i przestaniemy go czytac.
+sprawdz("pole rozroznajace NIE jest zglaszane",
+        not any(m.startswith("ile_precedensow=") for m in martwe), martwe)
+sprawdz("nawet gdy ma tylko dwie wartosci",
+        not any(m.startswith("zasieg=") for m in martwe), martwe)
+
+# HISTORYCZNE REGRESJE — dokladnie te trzy stale, ktore juz nas kosztowaly.
+sprawdz("lapie samooceny zawsze 1.0",
+        _stale_sygnaly([{"score": 1.0} for _ in range(8)], ("score",)) != [])
+sprawdz("lapie watki zawsze szesc",
+        _stale_sygnaly([{"ile_watkow": 6} for _ in range(10)], ("ile_watkow",)) != [])
+sprawdz("lapie znane teksty zawsze trzy",
+        _stale_sygnaly([{"ile_juz_napisano": 3} for _ in range(10)],
+                       ("ile_juz_napisano",)) != [])
+
+# Przy jednym kandydacie stalej nie da sie odroznic od wartosci — milczymy,
+# zamiast oskarzac model o wyrownywanie na probce rozmiaru jeden.
+sprawdz("jeden kandydat to nie dowod na nic",
+        _stale_sygnaly([{"ile_watkow": 3}], ("ile_watkow",)) == [])
+sprawdz("pusta lista tez nie", _stale_sygnaly([], ("ile_watkow",)) == [])
+# Brak pola u wszystkich to tez stala (None) i tez ma byc widoczny: to znaczy,
+# ze model w ogole go nie oddal, a kod dalej sie nim sortuje.
+sprawdz("brak pola u wszystkich = stala None",
+        _stale_sygnaly([{}, {}, {}], ("confidence",)) != [])
+
+st_src = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+sprawdz("wykrywacz jest realnie wolany w skaucie", "_stale_sygnaly(topics" in st_src)
+sprawdz("i obejmuje watki", '"ile_watkow"' in st_src.split("_stale_sygnaly(topics")[1][:400])
+sprawdz("i nasycenie", '"nasycony"' in st_src.split("_stale_sygnaly(topics")[1][:400])
+
+print()
+print("=== 8. KOMUNIKAT NIE MOZE OBIECYWAC ODSIEWU, KTOREGO NIE MA ===")
+# Kara nalozona na 100% kandydatow nie przesuwa nikogo. Log mowil
+# „10 z 10 juz opisanych gdzie indziej — na koniec kolejki", czyli brzmial
+# jak odsiew, a byl brakiem odsiewu.
+sprawdz("odsiew ogloszony tylko gdy kogos faktycznie przesuwa",
+        "if nasycone and len(nasycone) < len(topics):" in st_src)
+sprawdz("a przy komplecie mowimy wprost, ze nic nie rozroznilo",
+        "nasycenie nic nie rozroznilo" in st_src)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
