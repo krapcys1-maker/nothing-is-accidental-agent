@@ -102,13 +102,45 @@ But a closed question ends when the reader reaches the last paragraph. They are
 satisfied, and they leave. A publication made only of closed questions has to
 win its reader back from nothing every single week.
 
-So there is a second kind, and you may propose either. This one asks:
+So there is a second kind, and you may propose either. **Start here, not with
+objects.** This one asks:
 
 > **What happens when this system is tested, and who decided that?**
 
-The shape is: a machine everyone half-knows exists, a moment when it has to
-work, and a written procedure that decides the result — which almost nobody has
-read.
+### Where these live, and how to find them
+
+Do not start from an object and ask whether it has a system. Start from the
+**rulebook** and ask what wrote it.
+
+Almost every serious procedure in the world is **scar tissue**. Somebody died,
+or an institution nearly stopped working, and the clause exists because of that
+day. That is not a rare property — it is how rulebooks are made. Once you look
+for it, the supply is very large:
+
+- **aviation** — crew rest, duty hours, runway incursions, diversion, grounded
+  fleets, what a captain may overrule
+- **elections and succession** — deadlocked votes, a candidate dying mid-ballot,
+  a head of state incapacitated, who signs while nobody is in charge
+- **markets and banks** — halted trading, a bank failing on a Friday, a clearing
+  house short, deposits above the guarantee
+- **medicine and hospitals** — a full emergency room turning ambulances away,
+  power failing mid-operation, a drug recalled while people are on it
+- **nuclear, chemical, industrial** — evacuation orders, exclusion zones,
+  who may refuse to restart a plant
+- **food and water** — a boil-water order, a recall the maker refuses,
+  a contaminated batch already in shops
+- **buildings and fire** — alarms disabled during works, evacuation of a tower,
+  who condemns a structure
+- **transport and shipping** — a stuck vessel, a stranded train, a port closed
+- **courts, prisons, borders** — a trial collapsing, a mistaken release,
+  someone stateless in transit
+
+Each of those has documented disasters with dates, names and the rule that
+followed. **That is the seam. Mine it.** You are not being asked to invent
+anything — you are being asked to recall what already happened and what it
+changed.
+
+Examples of the shape:
 
 - What happens to trading when a market falls far enough, fast enough — who
   stops it, at what point, and for how long.
@@ -117,6 +149,18 @@ read.
 - What happens to a flight when the airport it is heading for closes.
 - What happens to the money in an account when the institution holding it fails
   on a Friday afternoon.
+- What happens to a country in the hours after its head of state is killed.
+
+### The two failure modes, named
+
+**Too small.** A hotel overbooking your room, a shop's card minimum, a missing
+will — these have procedures, but the procedure binds one person and nothing was
+rewritten because of them. That is a note. Good, publishable, but a note.
+
+**Too vague.** "What happens in a war" has no rulebook you can name. Skip it.
+
+Aim between: **a moment that stops an institution, governed by a document, with
+dead people or a near-catastrophe behind the clause.**
 
 **Four conditions. The third keeps us honest; the fourth decides the length.**
 
@@ -240,9 +284,19 @@ Do not inflate this. A refund dispute is `ONE_PERSON` however annoying it was.
 An empty `precedents` list is an honest answer and marks the subject as a note.
 A fabricated entry is the worst thing you can put in this file.
 
-`kind` is either `"BROKEN_BELIEF"` or `"SYSTEM_UNDER_TEST"`. Propose a mix; do
-not make every topic the same kind, and do not label a topic
+`kind` is either `"BROKEN_BELIEF"` or `"SYSTEM_UNDER_TEST"`. Do not label a topic
 `SYSTEM_UNDER_TEST` merely because you could not write its broken belief.
+
+**At least half your list must be `SYSTEM_UNDER_TEST`, and at least three of
+them must carry two or more precedents each. Keep at least two
+`BROKEN_BELIEF` as well — do not make every topic the same kind.** The first
+kind has produced good pieces and we are not abandoning it; it is simply not
+where the long ones come from. This is a hard requirement, not a preference. A list where every entry is an ordinary object with an empty
+`precedents` array is a failed list — it means you searched your memory for
+things rather than for rulebooks, and we will have nothing to publish at
+article length. If your first pass comes out that way, do the second pass
+properly: pick a field from the list above, recall its famous disaster, and work
+backwards to the moment a reader would recognise.
 
 **For `BROKEN_BELIEF`, also give `broken_belief` and `why_they_believe_it`.**
 
@@ -310,13 +364,36 @@ For each: roughly when, what actually happened — with the people or the place 
 it, not the administrative summary — and what rule or change came out of it
 afterwards.
 
-**Fewer than two, and the subject is a note.** Say so honestly by giving a short
-list or an empty one. Do not invent incidents to fill this field; a fabricated
-precedent is far worse than an empty list, because the research stage will spend
-real money failing to find it and we will publish nothing.
+**A worked example of a filled-in entry**, so there is no doubt about the level
+of detail wanted:
 
-If a topic has a good open question and no history of being tested, it is not a
-failure — it is a note, and notes are most of what we publish. Mark it honestly.
+```
+when:          2009
+what_happened: a regional airliner went down on approach with everyone aboard
+               killed, and the inquiry centred on two exhausted pilots who had
+               commuted overnight to reach the aircraft
+what_changed:  prescriptive limits on duty hours and minimum rest, replacing
+               rules the industry had set for itself
+```
+
+That is one entry. Two like it and the subject carries an article.
+
+**You already know dozens of these.** Do not tell yourself you cannot recall
+them — every field in the list above has famous ones, and you are not being
+asked for citations, only for what happened and what changed. Approximate dates
+are fine; "the late 1980s" is an acceptable `when`.
+
+**Fewer than two, and the subject is a note.** Say so honestly with a short list
+or an empty one. But before you write an empty list, go back and ask whether you
+chose a subject too small to have a history — that is almost always what an
+empty list means. A hotel overbooking has no disasters behind it because nothing
+about it was ever bad enough to rewrite a law. **Change the subject, not the
+answer.**
+
+Do not invent incidents to fill this field. A fabricated precedent is worse than
+an empty list, because the research stage will spend real money failing to find
+it. If you are unsure whether something happened, say what you believe and let
+the research check it — but do not manufacture a date.
 
 **`threads`** — the separate questions this one subject would answer.
 

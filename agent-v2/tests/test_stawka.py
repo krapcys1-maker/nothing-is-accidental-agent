@@ -241,6 +241,22 @@ sprawdz("i nadal zabrania nazywania instytucji",
         "narrows the search to what you happen to recall" in plaski_s)
 sprawdz("nadal wymaga mieszanki, nie samych systemów",
         "do not make every topic the same kind" in plaski_s)
+# Skaut oddal 0 tematow artykulowych z 10, wiec prompt musi teraz ZADAC
+# systemow, a nie tylko ich dopuszczac. Przyczyna zera nie byla w modelu:
+# caly prompt kazal mu szukac zwyklych przedmiotow, a systemy z historia
+# byly doklejone na koncu — szukal w zlym miejscu.
+sprawdz("prompt ZADA polowy systemow, nie tylko ich dopuszcza",
+        "At least half your list must be" in plaski_s)
+sprawdz("i trzech z dwoma precedensami",
+        "must carry two or more precedents each" in plaski_s)
+sprawdz("ale zostawia miejsce na zlamane przekonania",
+        "Keep at least two" in plaski_s)
+sprawdz("pokazuje, GDZIE takich tematow szukac",
+        "scar tissue" in plaski_s and "Mine it" in plaski_s)
+sprawdz("daje wypelniony przyklad precedensu",
+        "what_changed:  prescriptive limits on duty hours" in s)
+sprawdz("nazywa oba tryby porazki",
+        "**Too small.**" in plaski_s and "**Too vague.**" in plaski_s)
 
 print()
 print("=== 8. KOD SKAUTA STAWIA OBA RODZAJE NA CZELE KOLEJKI ===")
