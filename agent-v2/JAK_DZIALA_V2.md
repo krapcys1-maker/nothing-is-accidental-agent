@@ -88,8 +88,31 @@ jakości, tylko niezawodności etapu chodzącego codziennie bez nadzoru.
 4. **Sprawdzalność.** Bez adresu źródła kandydat nie wchodzi.
 
 **Bramka ciekawości** (`warto_pisac`, $0,015) — przed pisarzem. Model obserwuje
-cztery rzeczy i **cytuje dowód z karty**, werdykt składa **kod**:
+i **cytuje dowód z karty**, werdykt składa **kod**:
 `PISZ` / `DOLOZ` (idź po parę do banku) / `ODLOZ`.
+
+**Dwie drogi do PISZ** (od 2026-08-20):
+
+| droga | warunek |
+|---|---|
+| **A — złamane przekonanie** | przekonanie + 2 z 3 filarów (decydent, odczuwalna liczba, druga dziedzina) |
+| **B — nierozstrzygnięty wynik** | otwarty wynik + **spisana reguła, która go rozstrzyga** + nazwany decydent |
+
+Droga B istnieje, bo **luka informacyjna z definicji się nasyca**. Loewenstein
+pisze wprost: konsumpcja informacji jest nagradzająca, ale po zdobyciu
+wystarczającej ilości ciekawość spada. Pismo złożone z samych pytań zamkniętych
+produkuje czytelników zaspokojonych i odchodzących — musi zdobywać każdego od
+nowa co tydzień.
+
+**Warunek oddzielający to od wróżenia jest jeden i twardy:** karta musi nieść
+spisaną regułę rozstrzygającą wynik. Bez niej temat nie przechodzi, choćby
+pytanie brzmiało najdramatyczniej. Kod odrzuca też odpowiedź, która **zaprzecza
+sama sobie w pierwszych słowach** („nic tego nie rozstrzyga, po prostu nikt tego
+nie zapisał") — to opis luki w naszej wiedzy, nie stawki. Siatka kotwiczy na
+początku zdania, więc poprawna reguła ze słowem „nothing" w środku przechodzi.
+
+Skaut proponuje oba rodzaje (`kind`), a kod sortujący stawia oba na czele
+kolejki. Zmierzone na żywym przebiegu: **3 z 8 tematów** to systemy pod próbą.
 
 ### Po napisaniu — dwanaście bramek deterministycznych, żadna nie blokuje
 
