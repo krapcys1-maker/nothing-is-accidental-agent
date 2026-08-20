@@ -108,17 +108,34 @@ def ocen_forme(
     return llm.parse_json(text)
 
 
-def poprzednie_teksty(ile: int | None = None) -> list[str]:
-    """Treści kilku ostatnich artykułów — materiał dla bramki ODCISK_FORMY."""
+def poprzednie_teksty(ile: int | None = None,
+                      pomin_tresc: str | None = None) -> list[str]:
+    """Treści kilku ostatnich artykułów — materiał dla bramki ODCISK_FORMY.
+
+    `pomin_tresc` to treść artykułu OCENIANEGO TERAZ. Bez niej porównanie
+    potrafi zestawić tekst sam ze sobą i oddać pięć albo sześć wspólnych cech,
+    co wygląda jak alarm, a jest tautologią.
+
+    W przebiegu bramka woła się przed zapisem, więc bieżący plik jeszcze nie
+    istnieje — ale ta poprawność trzymała się kolejności dwóch linijek w innym
+    module i już dwa razy mnie zmyliła. Za drugim razem subtelniej: treść
+    z bazy nie jest identyczna z plikiem `.md`, bo plik ma jeszcze tytuł,
+    podtytuł i sekcję źródeł, więc porównanie „bajt w bajt" ich nie zrównało.
+    Dlatego dopasowujemy po FRAGMENCIE treści, nie po całości.
+    """
     ile = ile or config.ILE_TEKSTOW_DO_POROWNANIA_FORMY
+    trzon = " ".join((pomin_tresc or "").split())[:300]
     pliki = sorted(p for p in config.ARTICLES_DIR.glob("*.md")
                    if not p.name.endswith(".uwagi.md"))
     teksty: list[str] = []
-    for p in reversed(pliki[-(ile + 1):]):
+    for p in reversed(pliki[-(ile + 2):]):
         try:
-            teksty.append(p.read_text(encoding="utf-8"))
+            t = p.read_text(encoding="utf-8")
         except OSError:
             continue
+        if trzon and trzon in " ".join(t.split()):
+            continue            # to jest ten sam artykuł, tylko z opakowaniem
+        teksty.append(t)
     return teksty[:ile]
 
 

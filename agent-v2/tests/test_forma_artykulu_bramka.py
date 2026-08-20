@@ -205,7 +205,11 @@ zrodlo = open("agent-v2/run.py", encoding="utf-8").read()
 sprawdz("run woła obserwację formy", "stages.ocen_forme" in zrodlo)
 sprawdz("run składa z niej uwagi", "gates.uwagi_z_formy" in zrodlo)
 sprawdz("run podaje poprzednie teksty do ODCISK_FORMY",
-        "poprzednie=stages.poprzednie_teksty()" in zrodlo)
+        "poprzednie=stages.poprzednie_teksty(" in zrodlo)
+# Bez tego porownanie zestawia tekst SAM ZE SOBA i oddaje 5-6 wspolnych cech,
+# co wyglada jak alarm, a jest tautologia. Ugryzlo mnie dwa razy.
+sprawdz("i wyklucza z porównania bieżący artykuł",
+        'pomin_tresc=draft["body"]' in zrodlo)
 sprawdz("awaria formy nie zatrzymuje artykułu",
         "obserwacja formy padła" in zrodlo)
 sprawdz("etap da się zatrzymać flagą", '"forma",' in zrodlo)

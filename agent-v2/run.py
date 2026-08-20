@@ -963,7 +963,7 @@ def main() -> int:
             forma = {}
 
         findings = gates.deterministic_floors(
-            draft["body"], card, poprzednie=stages.poprzednie_teksty())
+            draft["body"], card, poprzednie=stages.poprzednie_teksty(pomin_tresc=draft["body"]))
         findings.extend(gates.uwagi_z_formy(forma, draft["body"]))
         for item in unsupported:
             findings.append({"gate": "FAKT_BEZ_POKRYCIA", "detail": item.get("text", "")})
