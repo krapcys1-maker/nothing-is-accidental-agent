@@ -302,7 +302,15 @@ def powtorzona_forma(body: str, poprzednie: list[str],
         return ""
     moj = odcisk_formy(body)
     najlepsze, ktory = 0, -1
+    trzon = " ".join(body.split())
     for i, inny in enumerate(poprzednie):
+        # TEN SAM TEKST TO NIE POWTORZONA FORMA, tylko ten sam plik. W
+        # przebiegu bramka woła się przed zapisem, więc do porównania nie
+        # trafia — ale opieranie poprawności na kolejności dwóch linijek
+        # w innym module jest za cienkie. Przy pierwszym uruchomieniu na
+        # zapisanym już artykule wychodzi 6 z 6 cech i wygląda jak alarm.
+        if " ".join(inny.split()) == trzon:
+            continue
         wspolne = sum(1 for k, v in moj.items() if odcisk_formy(inny).get(k) == v)
         if wspolne > najlepsze:
             najlepsze, ktory = wspolne, i

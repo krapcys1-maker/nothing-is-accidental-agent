@@ -151,8 +151,18 @@ sprawdz("odcisk ma sześć cech", len(odc) == 6, len(odc))
 sprawdz("widzi, że otwarcie nie ma liczby", odc["liczba_w_otwarciu"] is False)
 sprawdz("widzi granice na końcu", odc["granice_na_koncu"] is True)
 
-sprawdz("ten sam tekst wobec siebie = powtórzona forma",
-        bool(gates.powtorzona_forma(ARTYKUL, [ARTYKUL])))
+# TEN SAM TEKST TO NIE POWTORZONA FORMA, tylko ten sam plik. W przebiegu
+# bramka wola sie PRZED zapisem, wiec artykul nie trafia do porownania — ale
+# opieranie poprawnosci na kolejnosci dwoch linijek w innym module jest za
+# cienkie, wiec porownanie odrzuca identyczna tresc samo z siebie.
+sprawdz("ten sam tekst NIE jest zgłaszany jako powtórzona forma",
+        gates.powtorzona_forma(ARTYKUL, [ARTYKUL]) == "",
+        gates.powtorzona_forma(ARTYKUL, [ARTYKUL])[:70])
+# Ale blizniak o tym samym ksztalcie i innej tresci — juz tak.
+BLIZNIAK = ARTYKUL.replace("plastic", "polymer").replace("triangle", "mark")
+sprawdz("bliźniak o tym samym kształcie zgłoszony",
+        bool(gates.powtorzona_forma(ARTYKUL, [BLIZNIAK])),
+        gates.odcisk_formy(BLIZNIAK))
 sprawdz("brak poprzednich = brak zarzutu",
         gates.powtorzona_forma(ARTYKUL, []) == "")
 # KONTRDOWOD: tekst o INNYM ksztalcie nie moze byc zgloszony, inaczej bramka
@@ -165,7 +175,11 @@ sprawdz("inny kształt nie jest zgłaszany",
 
 print()
 print("=== 7. WSZYSTKO RAZEM NA 0025 ===")
-uwagi = gates.deterministic_floors(ARTYKUL, KARTA, poprzednie=[ARTYKUL])
+# Do porownania formy podajemy BLIZNIAKA, nie ten sam tekst — inaczej
+# bramka slusznie milczy i sekcja niczego by nie sprawdzila.
+uwagi = gates.deterministic_floors(
+    ARTYKUL, KARTA,
+    poprzednie=[ARTYKUL.replace("plastic", "polymer").replace("triangle", "mark")])
 nazwy = {u["gate"] for u in uwagi}
 print("    zapalone bramki: %s" % sorted(nazwy))
 for g in ("BUDZET_ZASTRZEZEN", "OBWIESZCZONA_POWSCIAGLIWOSC", "ZAKAZANE_OTWARCIE",
