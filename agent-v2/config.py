@@ -848,7 +848,9 @@ def losowa_dlugosc() -> int:
 
 # Sufit dzienny. Research mówi, że trzy przemyślane komentarze tygodniowo biją
 # piętnaście uprzejmych; pierwotne 15-20 dziennie było z planu sprzed danych.
-NOTES_PER_DAY = 5
+# USUNIETE 2026-08-20: NOTES_PER_DAY = 5 bylo martwym duplikatem. Liczbe notek
+# na dzien wyznacza dlugosc NOTE_MIX_OTHER_DAY i tylko ona. Stala kusila do
+# zmiany, ktora nie zrobilaby nic.
 COMMENTS_PER_DAY = 4
 
 # Typy notek. W dniu publikacji artykułu lecą notki typu ARTYKUL z linkiem;
@@ -985,7 +987,18 @@ NOTE_TYPES = {
 # w Rumunii (EET/EEST), czyli najlepsze okno — niedziela 6:00 ET — wypada
 # u niego w niedzielę o 13:00. Agent i tak chodzi z harmonogramu.
 PUBLISH_TIMEZONE = "America/New_York"
-BEST_NOTE_HOURS = (6, 7, 8)  # ET
+
+# UWAGA: CZTERY PONIZSZE STALE NIE SA UZYWANE PRZEZ ZADNA LINIE KODU.
+# Agent wystawia notki rownomiernie w calym oknie OKNO_PUBLIKACJI_ET (6-22 ET),
+# z losowymi odstepami, i nie waży ich wcale wedlug tych godzin.
+#
+# To nie jest usterka do cichego naprawienia, bo NASZE WLASNE ZRODLA SIE NIE
+# ZGADZAJA: ponizsze dane mowia, ze najlepsze jest 6-8 rano czasu nowojorskiego,
+# a research z 18 sierpnia wskazywal 19:00-22:00 UTC, czyli 15:00-18:00 ET.
+# Zanim cokolwiek zacznie wazyc godziny, trzeba rozstrzygnac ktore z tych
+# dwoch. Do tego czasu stale zostaja jako ZAPIS USTALEN, wyraznie oznaczony
+# jako nieuzywany — patrz `test_martwe_sygnaly.py`.
+BEST_NOTE_HOURS = (6, 7, 8)  # ET — NIEUZYWANE
 WORST_NOTE_HOURS = (12, 13)  # ET, zwłaszcza w piątek
 BEST_NOTE_DAYS = ("sunday", "saturday")
 
@@ -1176,12 +1189,20 @@ UDZIAL_CZASU_NA_NOTKI = 0.60
 # Ile trwa samo dzialanie poza przerwa: napisanie, sprawdzenie faktow,
 # wystawienie i potwierdzenie u zrodla. Z realnych przebiegow.
 CZAS_DZIALANIA_S = 240
-MAX_DZIALAN_NA_GODZINE = 12
+# USUNIETE 2026-08-20: MAX_DZIALAN_NA_GODZINE = 12 nie bylo egzekwowane nigdzie.
+# Tempo wyznaczaja ODSTEPY miedzy dzialaniami i nic poza nimi. Nie dopisuje
+# limitu godzinowego przy okazji audytu — nowy, nieprzetestowany ogranicznik
+# w srodku przegladu to gorszy pomysl niz uczciwe przyznanie, ze go nie ma.
 
-# Ile razy dziennie wolno zagadac TE SAMA publikacje. Siedemnascie komentarzy
-# u siedemnastu roznych autorow to aktywny czytelnik; siedemnascie pod jednym
-# czlowiekiem to nachodzenie, niezaleznie od tego, jak trafne sa kazdy z osobna.
-MAX_KOMENTARZY_NA_PUBLIKACJE = 2
+# USUNIETE 2026-08-20: MAX_KOMENTARZY_NA_PUBLIKACJE = 2 nie bylo egzekwowane
+# przez ZADNA linie kodu. Sam powolalem sie na nie tego samego dnia jako na
+# istniejace zabezpieczenie — i to jest cala szkoda, jaka robi martwa stala:
+# czyta sie ja jak gwarancje, ktorej nie ma.
+#
+# Zabezpieczenie istnieje i jest OSTRZEJSZE: `_za_niedawno_u_nich` w kanal.py
+# odsiewa publikacje, u ktorych komentowalismy w ostatnich
+# ODSTEP_DNI_NA_PUBLIKACJE dniach — czyli raz na cztery dni, nie dwa razy
+# dziennie.
 
 # NIE KOMENTUJEMY SWIEZYCH POSTOW. Wlasciciel opisal to najlepiej: napisal notke
 # i piec sekund pozniej ktos odpisal ogolnikowa zgoda — i to zdradza bota
@@ -1313,16 +1334,16 @@ FETCH_USER_AGENT = "Mozilla/5.0 (compatible; NothingIsAccidental/1.0; +editorial
 # NIC NIE BLOKUJE. Te cztery są zgłaszane właścicielowi jako uwagi do
 # przeczytania; artykuł powstaje zawsze i trafia do szuflady.
 
-FLAGGED_GATES = (
-    "FAKT_BEZ_POKRYCIA",  # rdzeń ochrony
-    "LICZBA_SPOZA_KORPUSU",  # 5 zmyślonych statystyk na starym agencie
-    "ZMYSLONE_PRZEZYCIE",  # 4 przypadki
-    "NIEISTNIEJACE_BADANIE",  # 3 przypadki
-)
+# USUNIETA 2026-08-20 lista FLAGGED_GATES. Wymieniala CZTERY bramki, nie byla
+# przez nic czytana, a bramek jest dzis dwanascie deterministycznych i cztery
+# obserwacyjne. Nieaktualna lista, ktorej nikt nie uzywa, jest gorsza niz jej
+# brak: opisuje system, ktory przestal istniec. Zrodlem prawdy jest
+# `gates.deterministic_floors`.
 
 # Jedno podejście. Bez przepisywania — to tam paliły się pieniądze i tam dwie
-# bramki starego agenta odpowiedziały różnie na to samo pytanie.
-ATTEMPTS = 1
+# bramki starego agenta odpowiedziały różnie na to samo pytanie. Zasada zostaje,
+# stala ATTEMPTS = 1 usunieta 2026-08-20: nic nie petlilo, wiec nie bylo czego
+# ograniczac, a liczba sugerowala mechanizm, ktorego nie ma.
 
 
 # --- ruch koncowy i szerokosc drugiego aktu --------------------------------

@@ -945,7 +945,32 @@ def main() -> int:
         sentences = report.get("sentences", [])
         counts = {k: sum(1 for s in sentences if s.get("class") == k)
                   for k in ("FACT", "INFERENCE", "PROSE")}
-        unsupported = report.get("unsupported_facts", []) or []
+        # SKLADAMY Z DWOCH ZRODEL, NIE Z JEDNEGO. Recenzent klasyfikuje KAZDE
+        # zdanie (`supported`) i osobno powtarza te nieoparte w zbiorczej
+        # liscie. Czytalismy wylacznie liste — czyli ufali, ze model poprawnie
+        # przepisze wlasny wynik w drugie miejsce. Zdanie oznaczone jako
+        # nieoparte, ale niepowtorzone, przepadalo bez sladu, i to jest glowny
+        # sygnal jakosci faktograficznej calego potoku.
+        #
+        # Na przebiegu 25 model sie nie pomylil (1 oznaczone, 1 w liscie). To
+        # dowod, ze raz nie zawiodl, a nie ze nie zawiedzie — a redundancja
+        # miedzy dwoma polami tej samej odpowiedzi jest dokladnie tym, czego
+        # kod nie powinien zakladac.
+        unsupported = list(report.get("unsupported_facts", []) or [])
+        znane = {str(x.get("text", ""))[:60] for x in unsupported}
+        dopisane = 0
+        for s in sentences:
+            if s.get("class") != "FACT" or s.get("supported") is not False:
+                continue
+            if str(s.get("text", ""))[:60] in znane:
+                continue
+            unsupported.append({"text": s.get("text", ""),
+                                "why": s.get("why", "")})
+            dopisane += 1
+        if dopisane:
+            print(f"   [recenzja] {dopisane} zdań oznaczonych jako nieoparte, "
+                  f"których model nie powtórzył w liście zbiorczej — dopisuję",
+                  flush=True)
         print(
             f"   zdań: {len(sentences)}   fakty: {counts['FACT']}   "
             f"wnioskowanie: {counts['INFERENCE']}   proza: {counts['PROSE']}",
