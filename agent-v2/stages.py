@@ -875,19 +875,39 @@ def wczytaj_promocje() -> list[dict[str, Any]]:
 def artykul_do_promocji() -> dict[str, Any] | None:
     """Artykul, ktory dzis czeka na notke promujaca — najwyzej JEDNA na dobe.
 
-    Wlasciciel: piec notek promujacych na artykul, ale dzien po dniu, nie
-    wszystkie tego samego dnia. Piec linkow w jeden dzien to nie promocja, tylko
-    natret; piec przez piec dni to piec osobnych szans na trafienie kogos, kto
-    akurat patrzy.
+    Wlasciciel: trzy notki na artykul, po jednej dziennie, trzy dni z rzedu
+    ZARAZ po publikacji.
+
+    NAJSWIEZSZY IDZIE PIERWSZY. Wczesniej pytalismy kolejke w kolejnosci
+    wstawiania, wiec swiezo opublikowany artykul czekal za kazdym starszym,
+    ktory nie wybral jeszcze swoich dni. Realnie: tekst opublikowany 19 sierpnia
+    dostalby pierwsza notke promujaca okolo 29 sierpnia — z linkiem juz zimnym i
+    artykulem dawno zepchnietym w dol kanalu. Slowo „po artykule" znaczy zaraz
+    po nim, wiec kolejnosc idzie od konca listy, a `zapisz_do_promocji` dopisuje
+    na koniec.
+
+    Trzy dni z rzedu wychodza z tego same: dopoki artykul ma niewybrane dni,
+    jest najswiezszy i wraca nastepnego dnia. Gdy dzien wypadnie — cichy dzien,
+    wyczerpany przydzial notek — artykul nie przepada, tylko dobiera swoj dzien
+    pozniej. Lepsze to niz zgubiona notka.
+
+    JEDNA NA DOBE ZNACZY JEDNA, NIE JEDNA NA ARTYKUL. Wczesniej warunek
+    „promowany dzis" tylko POMIJAL ten artykul i szedl dalej po liscie. Ta
+    funkcja jest wolana raz na przebieg, a przebiegow jest trzy dziennie —
+    wiec drugi przebieg dostawal nastepny artykul z kolejki i tego samego dnia
+    wychodzila druga notka promujaca, a trzeciego dnia trzecia. Kolejka nigdy
+    nie byla na tyle pelna, zeby to wyszlo na jaw, ale regula brzmi „jedna
+    notka po artykule dziennie" i to jest caly dzien, nie jeden wiersz pliku.
     """
     from datetime import datetime, timezone
 
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    for a in wczytaj_promocje():
+    kolejka = wczytaj_promocje()
+    if any(a.get("ostatnia") == dzis for a in kolejka):
+        return None             # dzisiejsza notka promujaca juz poszla
+    for a in reversed(kolejka):
         if a.get("wystawione", 0) >= config.NOTEK_PROMUJACYCH:
             continue
-        if a.get("ostatnia") == dzis:
-            continue            # dzis juz promowany
         return a
     return None
 
