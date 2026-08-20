@@ -585,9 +585,24 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             print(f"  odmów: {len(w['odmowy'])} — milczenie jest pełnym wynikiem",
                   flush=True)
 
+    # KOLEJNOSC DECYDUJE O TYM, CO SIE W OGOLE WYDARZY. Zegar przebiegu
+    # sprawdzaja bloki od odpowiedzi po subskrypcje; polubienia i restacki nie
+    # patrza na niego wcale. Wiec gdy czas sie konczy, wypadaja dokladnie te
+    # bloki, ktore sa uczciwe wobec zegara.
+    #
+    # Obserwowanie stalo za komentarzami — czyli za jedynym blokiem, ktory
+    # potrafi zjesc caly budzet czasu (kazdy komentarz to pobranie strony, trzy
+    # warianty i sprawdzenie faktow). Skutek zmierzony na dzienniku: przez piec
+    # dni ZERO obserwacji przy budzecie 30-44 miesiecznie. Blok nie chodzil
+    # w ogole, a nikt tego nie zauwazyl, bo brak wpisu wyglada jak brak okazji.
+    #
+    # Obserwowanie i subskrypcje ida teraz PRZED komentarze. Sa tanie (jedno
+    # wejscie na profil, zero wywolan modelu), maja twardy limit miesieczny,
+    # ktorego nie da sie nadrobic pozniej, i to one poszerzaja krag ludzi,
+    # do ktorych w ogole mozemy sie potem odezwac.
     for nazwa, robota in (("odpowiedzi", odpowiedzi), ("notki", notki),
-                          ("komentarze", komentarze), ("dyskusje", dyskusje),
                           ("obserwowanie", obserwuj), ("subskrypcje", subskrybuj),
+                          ("komentarze", komentarze), ("dyskusje", dyskusje),
                           ("polubienia", polubienia), ("restacki", restacki)):
         print(f"\n-- {nazwa} --", flush=True)
         blok(nazwa, robota)

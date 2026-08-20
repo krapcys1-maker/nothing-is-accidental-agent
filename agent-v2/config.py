@@ -1007,9 +1007,30 @@ NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", 
 # To NIE sa zmierzone progi, tylko tempo aktywnego czlowieka. Sa celowo niskie,
 # bo kosztem przesady nie jest ostrzezenie, tylko utrata konta, na ktorym stoi
 # caly projekt. Podniesiemy je dopiero, gdy zobaczymy wlasne dane.
-LAJKI_DZIENNIE = (12, 20)
-KOMENTARZE_DZIENNIE = (15, 20)    # 0 jest dozwolone: milczenie bije slaby komentarz
-FOLLOW_MIESIECZNIE = (30, 44)     # obserwowanie to czytanie, nie zbieranie
+# PRZEJRZANE NA WLASNYCH DANYCH 2026-08-20 (piec dni dziennika). Do tej pory
+# byly to liczby wziete z wyobrazenia o tempie czlowieka. Teraz wiemy, ile
+# agent NAPRAWDE robi, i widelki maja to opisywac, a nie zyczyc sobie tego.
+#
+# Budzet, ktorego nigdy nie da sie wydac, nie jest budzetem: klamie w logu,
+# psuje dzielenie normy na przebiegi i ukrywa, ze jakis blok w ogole nie chodzi.
+#
+#   zmierzone (srednia z 5 dni)   bylo w konfiguracji   ustawiam
+#   lajki        9,6              12-20                 10-16
+#   komentarze   7,0              15-20                 8-12
+#   obserwacje   0,0 (!)          30-44/mies            20-30/mies
+#   subskrypcje  ~0,8/dzien       6-12/mies             6-12/mies (bez zmian)
+#   restacki     0,4              2-4/dzien             1-2/dzien
+LAJKI_DZIENNIE = (10, 16)
+# Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo
+# czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo kazdy to
+# trzy warianty plus sprawdzenie faktow, okolo trzech centow. Przy dwunastu
+# dziennie wychodzi ~11 USD miesiecznie samych komentarzy.
+KOMENTARZE_DZIENNIE = (8, 12)     # 0 jest dozwolone: milczenie bije slaby komentarz
+# Obserwacje wykonywaly sie ZERO razy przez piec dni przy budzecie 30-44
+# miesiecznie. Przyczyna nie byla w liczbie, tylko w kolejnosci blokow —
+# patrz `run.py`. Liczbe i tak scinam, bo trzydziesci cztery obserwacje
+# miesiecznie z konta, ktore ma dwa tygodnie, wygladaja jak zbieranie nazwisk.
+FOLLOW_MIESIECZNIE = (20, 30)     # obserwowanie to czytanie, nie zbieranie
 SUBSKRYPCJE_MIESIECZNIE = (6, 12)  # laduje w skrzynce wlasciciela, wiec waskie
 # ODBLOKOWANE decyzja wlasciciela 2026-08-19. Restack cudzej notki z wlasnym
 # zdaniem trafia do kanalu NASZYCH obserwujacych, powiadamia autora oryginalu
@@ -1060,7 +1081,11 @@ def cichy_dzien(kiedy=None) -> bool:
     return _cisza_z_hasza(dzis) and not _cisza_z_hasza(wczoraj)
 
 
-RESTACK_DZIENNIE = (2, 4)
+# Zjechane z 2-4 na 1-2 (2026-08-20). Restack stawia NASZE nazwisko obok
+# cudzego tekstu — to najmocniejszy gest w calym repertuarze i jedyny, ktory
+# firmuje czyjes zdanie. Cztery dziennie to nie czytanie, tylko rozdawanie
+# poparcia. Zmierzone wykonanie i tak wynosilo 0,4 dziennie.
+RESTACK_DZIENNIE = (1, 2)
 
 # Dopisek do cudzej notki. Powyzej tego to juz nie dopisek, tylko wlasna notka
 # doczepiona do czyjegos tekstu — a wtedy lepiej napisac wlasna notke.
