@@ -2042,8 +2042,33 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
 
         # Pod postem pole komentarza to TEXTAREA, nie contenteditable jak przy
         # notkach — to dwa różne edytory i jeden selektor nie obsłuży obu.
-        pole = page.locator("textarea").first
-        pole.click(timeout=15_000)
+        #
+        # PIERWSZA W DOM TO NIE ZAWSZE TA WŁAŚCIWA. `locator("textarea").first`
+        # brał pierwszą textarea w drzewie niezależnie od tego, czy jest
+        # widoczna. Gdy pola komentarza nie było wcale — a zdarza się to na
+        # postach, których API nie oddaje `write_comment_permissions`, więc
+        # zapora przepuszcza je zgodnie z zasadą „przy wątpliwości próbuję" —
+        # Playwright czekał pełne 15 sekund na aktywność elementu, którego nie
+        # ma, i kończył wyjątkiem. Zdarzyło się to dwa razy pierwszego dnia na
+        # produkcji: scalesignals i glowwithella.
+        #
+        # Bierzemy pierwszą WIDOCZNĄ, a brak pola mówimy wprost zamiast
+        # wywracać się na czasie. Wyjątek i tak nie niósł żadnej informacji
+        # poza nazwą lokatora.
+        pole = None
+        for i in range(page.locator("textarea").count()):
+            kandydat = page.locator("textarea").nth(i)
+            try:
+                if kandydat.is_visible():
+                    pole = kandydat
+                    break
+            except Exception:
+                continue
+        if pole is None:
+            wynik["blad"] = "nie ma pola komentarza pod tym postem"
+            print(f"  {wynik['blad']} — odpuszczam", flush=True)
+            return wynik
+        pole.click(timeout=8_000)
         page.wait_for_timeout(800)
         page.keyboard.type(tekst, delay=12)
         page.wait_for_timeout(1500)
