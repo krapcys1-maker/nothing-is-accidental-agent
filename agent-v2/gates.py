@@ -332,17 +332,18 @@ def uwagi_z_formy(obserwacja: dict[str, Any], body: str) -> list[dict[str, str]]
     korpus = body.split("## Sources")[0]
     slow = max(1, len(korpus.split()))
 
-    beaty = obserwacja.get("beats") or []
-    nowe = [b for b in beaty if b.get("new")]
-    if beaty:
-        na_beat = slow / max(1, len(nowe))
+    przekonania = obserwacja.get("beliefs") or []
+    wsparcie = obserwacja.get("support_only") or []
+    if przekonania:
+        na_beat = slow / max(1, len(przekonania))
         if na_beat > config.SLOW_NA_BEAT:
-            powtorki = [b.get("quote", "")[:70] for b in beaty if not b.get("new")]
+            powtorki = [str(w.get("quote", ""))[:70] for w in wsparcie]
             uwagi.append({
                 "gate": "GESTOSC_BEATOW",
-                "detail": ("%d nowych twierdzeń na %d słów — jedno co %.0f słów "
-                           "przy progu %d; powtórzenia: %s"
-                           % (len(nowe), slow, na_beat, config.SLOW_NA_BEAT,
+                "detail": ("%d przekonań na %d słów — jedno co %.0f słów "
+                           "przy progu %d; samo wsparcie: %s"
+                           % (len(przekonania), slow, na_beat,
+                              config.SLOW_NA_BEAT,
                               " | ".join(powtorki[:3]) or "brak")),
             })
 

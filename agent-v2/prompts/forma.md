@@ -8,22 +8,39 @@ Every answer must be anchored to a **verbatim quote** from the article. If you
 cannot quote it, the answer is "no" or `null`. Never paraphrase into a quote
 field.
 
-## 1. Beats
+## 1. What the reader now believes
 
-A **beat** is a claim that changes the reader's model of the world.
+Do **not** walk the article sentence by sentence. That produces a list of
+sentences, which is not what is being asked for and is useless here.
 
-Restating a claim already made, with different evidence, is **not** a new beat.
-This is the whole point of the exercise, so be strict about it. If paragraph 3
-says a mark looked like a certification because of its shape, and paragraph 4
-says the mark was mandated by state law and so appeared everywhere, both are
-evidence for the same claim — that the mark spread beyond what it certified. The
-second is not a new beat.
+Instead: a reader has just finished this article and is telling a friend about
+it, out loud, in under a minute. What do they say? Each distinct thing they now
+believe, and did not believe beforehand, is one entry.
 
-Ask of each candidate: after reading this, does the reader believe something
-they did not believe one sentence earlier? Or do they merely believe the same
-thing more firmly?
+Write that list first, in your own words, before you look for any quotes.
 
-Walk the article in order. For each beat, give the sentence that carries it.
+Then apply the merge test to your own list, twice. Two entries are the **same**
+entry if a reader recounting the article would say them in one breath, or if one
+is only a reason to accept the other. Merge them. Evidence for a belief is not a
+separate belief. A restatement in a new register is not a separate belief. A
+consequence that follows immediately from a belief already listed is not a
+separate belief.
+
+Worked example of the error to avoid. Suppose an article says: a symbol looked
+like a certification because of its shape; state laws then required it on
+everything; so it appeared on products nobody would ever process. That is **one**
+belief — the symbol spread far beyond what it certified — supported three ways.
+Listing it as three is the specific failure this section exists to catch.
+
+Only once the merged list is settled, find for each entry the sentence in the
+article where that belief first arrives, and quote it verbatim.
+
+## 1b. Sentences that only add support
+
+Quote the sentences that supply further evidence, illustration or restatement
+for a belief already in your list, without adding a belief of their own. These
+are not failures — an article needs them. They are counted separately, so they
+must not appear in the list above.
 
 ## 2. The hardest fact
 
@@ -59,11 +76,11 @@ that opening claim, not about the article as a whole.
 
 Return only valid JSON, shaped exactly as:
 
-{{"beats": [{{"quote": "<verbatim sentence>", "claim": "<what changes in the reader's model>", "new": true|false, "restates": <index of the earlier beat, or null>}}], "hardest_fact": {{"quote": "<verbatim>", "why": "<one clause>"}}, "procedural_nearby": {{"quote": "<verbatim>"}}, "same_register": true|false, "reader_moment": {{"quote": "<verbatim>", "object": "<the thing the reader holds>"}}, "opening_claim": {{"quote": "<verbatim>", "already_familiar": true|false}}, "summary": "<one sentence>"}}
+{{"beliefs": [{{"belief": "<in your own words, one sentence>", "first_stated": "<verbatim sentence from the article>"}}], "support_only": [{{"quote": "<verbatim sentence>", "supports": <index into beliefs>}}], "hardest_fact": {{"quote": "<verbatim>", "why": "<one clause>"}}, "procedural_nearby": {{"quote": "<verbatim>"}}, "same_register": true|false, "reader_moment": {{"quote": "<verbatim>", "object": "<the thing the reader holds>"}}, "opening_claim": {{"quote": "<verbatim>", "already_familiar": true|false}}, "summary": "<one sentence>"}}
 
-`reader_moment` is `null` when there is none. Include every beat, in order,
-including restatements — mark them `"new": false` and point `restates` at the
-beat they repeat.
+`reader_moment` is `null` when there is none. `beliefs` holds only merged,
+distinct beliefs — never one entry per sentence. Every `supports` index must
+point at an entry in `beliefs`.
 
 ## The article
 

@@ -945,11 +945,12 @@ def main() -> int:
         try:
             forma = cached(stage, lambda: stages.ocen_forme(conn, run_id, draft),
                            args.use_cache)
-            beaty = forma.get("beats") or []
-            nowe = [b for b in beaty if b.get("new")]
+            przekonania = forma.get("beliefs") or []
             slow = len(draft["body"].split("## Sources")[0].split())
-            print(f"   beaty: {len(nowe)} nowych z {len(beaty)}"
-                  f"   jeden co {slow / max(1, len(nowe)):.0f} słów", flush=True)
+            print(f"   przekonania czytelnika: {len(przekonania)}"
+                  f"   (samo wsparcie: {len(forma.get('support_only') or [])})"
+                  f"   jedno co {slow / max(1, len(przekonania)):.0f} słów",
+                  flush=True)
             moment = (forma.get("reader_moment") or {}).get("quote", "")
             gdzie = gates.pozycja_w_tekscie(moment, draft["body"])
             print("   przyłapanie czytelnika: %s"

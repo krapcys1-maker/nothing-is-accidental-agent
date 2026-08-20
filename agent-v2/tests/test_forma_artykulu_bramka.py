@@ -56,19 +56,19 @@ TEKST = (
 # Obserwacja taka, jaka model MUSI oddac dla 0025 — recznie sprawdzilem,
 # ze te wlasnie cechy w nim sa.
 JAK_0025 = {
-    "beats": [
-        {"quote": "The mark was designed for someone else entirely.",
-         "claim": "kod nie znaczy przetwarzalne", "new": True, "restates": None},
-        {"quote": "It is a resin identification code.",
-         "claim": "czym jest naprawde", "new": True, "restates": None},
-        {"quote": "The number originally sat inside the chasing arrows.",
-         "claim": "to samo, inny dowod", "new": False, "restates": 1},
-        {"quote": "State laws required the codes on plastic packaging.",
-         "claim": "to samo, inny dowod", "new": False, "restates": 1},
-        {"quote": "Nine percent of all plastic ever made has been recycled.",
-         "claim": "skala rozjazdu", "new": True, "restates": None},
-        {"quote": "The date printed on a carton of milk does the same work.",
-         "claim": "ten sam mechanizm gdzie indziej", "new": True, "restates": None},
+    "beliefs": [
+        {"belief": "kod nie znaczy przetwarzalne",
+         "first_stated": "The mark was designed for someone else entirely."},
+        {"belief": "czym jest naprawde",
+         "first_stated": "It is a resin identification code."},
+        {"belief": "skala rozjazdu",
+         "first_stated": "Nine percent of all plastic ever made has been recycled."},
+        {"belief": "ten sam mechanizm gdzie indziej",
+         "first_stated": "The date printed on a carton of milk does the same work."},
+    ],
+    "support_only": [
+        {"quote": "The number originally sat inside the chasing arrows.", "supports": 0},
+        {"quote": "State laws required the codes on plastic packaging.", "supports": 0},
     ],
     "hardest_fact": {
         "quote": "Nine percent of all plastic ever made has been recycled.",
@@ -92,24 +92,27 @@ print("=== 1. GESTOSC BEATOW ===")
 u = gates.uwagi_z_formy(JAK_0025, TEKST)
 nazwy = {x["gate"] for x in u}
 slow = len(TEKST.split())
-print("    tekst: %d słów, 4 nowe beaty -> jeden co %.0f słów (próg %d)"
+print("    tekst: %d słów, 4 przekonania -> jedno co %.0f słów (próg %d)"
       % (slow, slow / 4, config.SLOW_NA_BEAT))
 sprawdz("próg to 150 słów na beat", config.SLOW_NA_BEAT == 150, config.SLOW_NA_BEAT)
 sprawdz("rozdmuchany tekst zgłoszony", "GESTOSC_BEATOW" in nazwy, nazwy)
 szczegol = next(x["detail"] for x in u if x["gate"] == "GESTOSC_BEATOW")
-sprawdz("uwaga cytuje powtórzenia", "chasing arrows" in szczegol, szczegol[:90])
+sprawdz("uwaga cytuje to, co było samym wsparciem",
+        "chasing arrows" in szczegol, szczegol[:90])
 
 # KONTRDOWOD: powtorzenie NIE moze liczyc sie jako beat. Gdyby liczylo,
 # ten sam tekst mialby szesc beatow i przeszedlby — czyli bramka mierzylaby
 # gadatliwosc, a nie gestosc.
-wszystkie_nowe = bez("beats", [dict(b, new=True) for b in JAK_0025["beats"]])
-sprawdz("gdyby powtórzenia liczyły się jako beaty, przeszłoby (test rozróżnia)",
+wszystkie_nowe = bez("beliefs", JAK_0025["beliefs"] + [
+    {"belief": "wsparcie policzone jako przekonanie", "first_stated": w["quote"]}
+    for w in JAK_0025["support_only"]])
+sprawdz("gdyby wsparcie liczyło się jako przekonanie, przeszłoby (test rozróżnia)",
         "GESTOSC_BEATOW" not in {x["gate"] for x in
                                  gates.uwagi_z_formy(wszystkie_nowe, TEKST)})
 
 # Gesty tekst ma przechodzic, inaczej bramka mowi tylko „pisz krocej".
-gesty = bez("beats", [{"quote": "Q%d." % i, "claim": "c", "new": True,
-                       "restates": None} for i in range(12)])
+gesty = bez("beliefs", [{"belief": "b%d" % i, "first_stated": "Q%d." % i}
+                        for i in range(12)])
 sprawdz("gęsty tekst przechodzi",
         "GESTOSC_BEATOW" not in {x["gate"] for x in gates.uwagi_z_formy(gesty, TEKST)})
 sprawdz("brak obserwacji nie zgłasza nic",
@@ -182,10 +185,14 @@ p = (config.PROMPTS_DIR / "forma.md").read_text(encoding="utf-8")
 sprawdz("prompt istnieje", len(p) > 500)
 sprawdz("wymaga cytatu dosłownego", "verbatim" in p)
 sprawdz("mówi wprost, że nie ocenia", "not scoring it" in p)
-sprawdz("definiuje beat przez zmianę modelu czytelnika",
-        "changes the reader's model" in p)
-sprawdz("mówi, że powtórzenie to NIE beat",
-        "is **not** a new beat" in p)
+sprawdz("pyta o to, w co czytelnik teraz wierzy",
+        "What the reader now believes" in p)
+sprawdz("zabrania chodzenia po zdaniach",
+        "Do **not** walk the article sentence by sentence" in p)
+sprawdz("ma test scalania",
+        "merge test" in p)
+sprawdz("ma przyklad bledu do uniknięcia",
+        "Worked example of the error" in p)
 sprawdz("odrzuca statystykę jako przyłapanie",
         "is not this" in p and "68%" in p)
 sprawdz("NIE prosi modelu o procenty ani pozycje",
