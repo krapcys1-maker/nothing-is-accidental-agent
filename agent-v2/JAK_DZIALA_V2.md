@@ -91,7 +91,7 @@ jakości, tylko niezawodności etapu chodzącego codziennie bez nadzoru.
 cztery rzeczy i **cytuje dowód z karty**, werdykt składa **kod**:
 `PISZ` / `DOLOZ` (idź po parę do banku) / `ODLOZ`.
 
-### Po napisaniu — sześć bramek deterministycznych, żadna nie blokuje
+### Po napisaniu — dwanaście bramek deterministycznych, żadna nie blokuje
 
 | bramka | co łapie |
 |---|---|
@@ -101,6 +101,38 @@ cztery rzeczy i **cytuje dowód z karty**, werdykt składa **kod**:
 | `FRAZA_Z_INSTRUKCJI` | pisarz zacytował własny prompt |
 | `ZAPOWIEDZ_GRANIC` | akapit o granicach zapowiada sam siebie |
 | `WASKA_PODSTAWA` | artykuł stoi na jednym źródle |
+| `BUDZET_ZASTRZEZEN` | więcej niż jedno „moim zdaniem" |
+| `OBWIESZCZONA_POWSCIAGLIWOSC` | „nie zmyślę tego" — luki nazywa się wprost |
+| `ZAKAZANE_OTWARCIE` | „Turn over…", „Next time you…" — errand zamiast zaczepu |
+| `STATYSTYKA_BEZ_ZRODLA` | liczba i niby-źródło w jednym zdaniu |
+| `NIEWIADOME_NA_KONCU` | zbiorcza lista granic w ostatniej trzeciej |
+| `ODCISK_FORMY` | ten sam szkielet co któryś z czterech poprzednich |
+
+### Cztery bramki „model obserwuje" ($0,025–0,05, `prompts/forma.md`)
+
+Osobne wywołanie od recenzji — **celowo**. Recenzent ma wprost chronić
+wnioskowanie przed zgłoszeniem (śmiała interpretacja nie jest wadą), a te
+bramki liczą m.in. zastrzeżenia. Złączone w jedno pytanie tępiłyby się nawzajem.
+
+| bramka | co łapie |
+|---|---|
+| `GESTOSC_BEATOW` | mniej niż jedno nowe przekonanie na 150 słów |
+| `BRAK_ESKALACJI` | najmocniejszy fakt w tonie przypisu |
+| `CZYTELNIK_NIEPRZYLAPANY` | nigdzie zwrotu do TEGO czytelnika z konkretem |
+| `OTWARCIE_ZNANE` | pierwszy akapit stoi na tym, co czytelnik już wie |
+
+Model oddaje **wyłącznie cytaty i tak/nie**. Liczenie, dzielenie i szukanie
+pozycji robi kod — arytmetyki modelu nie da się sprawdzić, cytat da się znaleźć
+w tekście.
+
+**Czego świadomie NIE wzięliśmy z playbooka.** Reguł nakazujących pozycję: lede
+z liczbą, przyłapanie czytelnika na 25–40% głębokości, najmocniejszy fakt
+w osobnym akapicie, „zawsze nazwij beneficjenta i koszt". Reguła zakazująca
+usuwa wadę i zostawia przestrzeń otwartą; reguła nakazująca pozycję wypełnia ją
+jedną odpowiedzią i po dziesięciu tekstach **sama staje się podpisem maszyny**.
+Raz już na tym polegliśmy. „Zawsze beneficjent" ścinałby sześć losowanych ruchów
+końcowych do jednego. Pozycje **liczymy** i pokazujemy w logu — jako informację,
+nie jako wadę.
 
 `gates.verdict` **zawsze** zwraca `SAVED`. Decyzja właściciela: po opłaconym
 researchu artykuł musi powstać, bramki tylko zgłaszają uwagi.
