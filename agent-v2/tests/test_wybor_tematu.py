@@ -206,6 +206,40 @@ sprawdz("nośne cliché przed nienośną nowością", t[0]["title"].startswith("
         [x["title"][:20] for x in t])
 
 print()
+print("=== 4b. ODSIEW ZGLASZA, NIE ZABIJA PRZEBIEGU ===")
+# Gdy odsiew odrzucil WSZYSTKIE tematy, leciał wyjatek i przebieg umieral —
+# wbrew zasadzie obowiazujacej wszedzie indziej w tym potoku (bramki oddaja
+# uwagi, nie werdykty). Podejrzenie: dlatego wlasnie `feasible` bylo prawdziwe
+# w 6 ocenach na 6 — model nie mial jak powiedziec „nie" tak, zeby system to
+# przezyl. Odsiew, ktory nie moze odrzucic, nie jest odsiewem; odsiew, ktory
+# zabija przebieg, jest gorszy.
+ODRZUCONE = [{"index": i, "feasible": False, "confidence": 0.3 + 0.1 * i,
+              "expected_primary_sources": 1, "depth": "THIN"}
+             for i in range(len(TEMATY))]
+try:
+    w, ocena = stages.pick_topic(TEMATY, ODRZUCONE)
+    sprawdz("wszystko odrzucone -> nadal jest temat", True)
+    sprawdz("i jest oznaczony jako wziety mimo odrzucenia",
+            ocena.get("mimo_odrzucenia") is True, ocena)
+    sprawdz("wybrano najlepszy z odrzuconych, nie pierwszy z brzegu",
+            w["title"].startswith("The Broken"), w["title"])
+except Exception as e:
+    sprawdz("wszystko odrzucone -> nadal jest temat", False, repr(e))
+# Ale PUSTA lista ocen to co innego: nie ma z czego wybierac.
+try:
+    stages.pick_topic(TEMATY, [])
+    sprawdz("pusta lista ocen nadal jest bledem", False, "przeszlo")
+except ValueError:
+    sprawdz("pusta lista ocen nadal jest bledem", True)
+# I gdy cokolwiek przeszlo, odrzucone NIE moga sie wcisnac.
+MIESZANE = [dict(ODRZUCONE[0]), dict(ODRZUCONE[1]),
+            {"index": 2, "feasible": True, "confidence": 0.5,
+             "expected_primary_sources": 1, "depth": "SINGLE"}]
+w2, o2 = stages.pick_topic(TEMATY, MIESZANE)
+sprawdz("gdy cokolwiek przeszlo, bierzemy TO",
+        o2.get("mimo_odrzucenia") is None and o2["index"] == 2, o2)
+
+print()
 print("=== 5. SIEDEM MARTWYCH OCEN USUNIETYCH ===")
 p = (config.PROMPTS_DIR / "skaut.md").read_text(encoding="utf-8")
 plaski = " ".join(p.split())

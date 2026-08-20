@@ -1979,19 +1979,34 @@ def pick_topic(
         """Ile osobnych pytan niesie temat. Jeden watek to notka, nie artykul."""
         return int(temat(a).get("ile_watkow", 0))
 
-    ranked = sorted(
-        (a for a in assessments if a.get("feasible")),
-        key=lambda a: (nosny(a),
-                       wlasny_ranking(a),
-                       swiezy(a),
-                       watki(a),
-                       waga.get(str(a.get("depth", "RICH")).upper(), 1),
-                       a.get("confidence", 0),
-                       a.get("expected_primary_sources", 0)),
-        reverse=True,
-    )
+    def kolejnosc(a: dict[str, Any]):
+        return (nosny(a),
+                wlasny_ranking(a),
+                swiezy(a),
+                watki(a),
+                waga.get(str(a.get("depth", "RICH")).upper(), 1),
+                a.get("confidence", 0),
+                a.get("expected_primary_sources", 0))
+
+    ranked = sorted((a for a in assessments if a.get("feasible")),
+                    key=kolejnosc, reverse=True)
     if not ranked:
-        raise ValueError("żaden temat nie przeszedł odsiewu wykonalności")
+        # ODSIEW ZGLASZA, NIE BLOKUJE — tak jak wszystko inne w tym potoku.
+        # Wczesniej leciał tu wyjatek i przebieg umieral. Zasada wlasciciela
+        # mowi co innego: skoro temat zostal wybrany, a research oplacony,
+        # artykul MA powstac; bramki oddaja uwagi, nie werdykty.
+        #
+        # Podejrzewam zreszta, ze to wlasnie dlatego `feasible` bylo prawdziwe
+        # w 6 ocenach na 6: model nie mial jak powiedziec „nie" tak, zeby
+        # system to przezyl, wiec nie mowil. Odsiew, ktory nie moze odrzucic,
+        # nie jest odsiewem — a odsiew, ktory zabija przebieg, jest gorszy.
+        wszystkie = sorted(assessments, key=kolejnosc, reverse=True)
+        if not wszystkie:
+            raise ValueError("odsiew nie oddal zadnej oceny")
+        ranked = wszystkie[:1]
+        print("  [odsiew] ZADEN temat nie przeszedl wykonalnosci — biore "
+              "najlepszy z odrzuconych i zapisuje to w uwagach", flush=True)
+        ranked[0]["mimo_odrzucenia"] = True
     best = ranked[0]
     index = int(best.get("index", 0))
     if not 0 <= index < len(topics):
