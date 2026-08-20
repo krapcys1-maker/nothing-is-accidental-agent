@@ -2002,11 +2002,38 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
         t["ma_przekonanie"] = len(wiara.split()) >= 5
         if not t["ma_przekonanie"] and wiara:
             t["uwaga_skauta"] = "pole jest, ale przekonanie nienazwane: %r" % wiara[:60]
-    bez = sum(1 for t in topics if not t["ma_przekonanie"])
+
+        # DRUGI RODZAJ TEMATU: system wystawiony na probe. Nie ma zlamanego
+        # przekonania i miec go nie musi — niesie za to wynik, ktorego nikt nie
+        # moze sprawdzic, bo jeszcze nie zapadl. Warunek, ktory oddziela to od
+        # wrozenia, jest jeden: musi istniec SPISANA PROCEDURA rozstrzygajaca.
+        moment = str(t.get("the_moment") or "").strip()
+        wynik = str(t.get("open_outcome") or "").strip()
+        zapis = str(t.get("governing_record") or "").strip()
+        t["ma_stawke"] = (len(moment.split()) >= 4 and len(wynik.split()) >= 4
+                          and len(zapis.split()) >= 3)
+        if str(t.get("kind") or "").upper() == "SYSTEM_UNDER_TEST" and not t["ma_stawke"]:
+            t["uwaga_skauta"] = ("zadeklarowano system pod proba, ale bez kompletu: "
+                                 "moment=%d slow, wynik=%d, zapis=%d"
+                                 % (len(moment.split()), len(wynik.split()),
+                                    len(zapis.split())))
+        # Temat nadaje sie na czolo kolejki, jesli niesie KTORAKOLWIEK z dwoch
+        # rzeczy. Wczesniej liczylo sie wylacznie przekonanie i temat drugiego
+        # rodzaju ladowal na koncu, czyli nie powstalby nigdy.
+        t["nosny"] = bool(t["ma_przekonanie"] or t["ma_stawke"])
+
+    bez = [t for t in topics if not t["nosny"]]
+    stawki = sum(1 for t in topics if t["ma_stawke"] and not t["ma_przekonanie"])
+    if stawki:
+        print("  [skaut] %d z %d tematow to systemy pod proba (bez zlamanego "
+              "przekonania, ze stawka)" % (stawki, len(topics)), flush=True)
     if bez:
-        print("  [skaut] %d z %d tematow bez nazwanego przekonania — na koniec kolejki"
-              % (bez, len(topics)), flush=True)
-    topics.sort(key=lambda t: not t["ma_przekonanie"])
+        print("  [skaut] %d z %d tematow bez przekonania I bez stawki — na koniec "
+              "kolejki" % (len(bez), len(topics)), flush=True)
+    # Do kosza nie idzie nic: przebieg musi skonczyc sie artykulem, to decyzja
+    # wlasciciela i nie wolno jej podwazac cichym filtrem. Ale kolejnosc mowi,
+    # co bierzemy najpierw.
+    topics.sort(key=lambda t: not t["nosny"])
     return topics
 
 
@@ -2179,6 +2206,17 @@ WORTH_SYSTEM = (
     "fact. Return only valid JSON."
 )
 
+# Pole „co to rozstrzyga", ktore zaczyna sie od zaprzeczenia, opisuje brak
+# reguly, a nie regule. Kotwiczymy na POCZATKU zdania: „the rules say nothing
+# happens until the third round" to poprawna regula i nie moze wpasc w te siec.
+_ZAPRZECZENIE = re.compile(
+    r"^\W*(nothing|nobody|none|no\s+(written|rule|record|document|procedure|law|"
+    r"statute|one\b)|not\s+(recorded|written|governed|decided|established)|"
+    r"there\s+is\s+no|there\s+are\s+no|neither|the\s+card\s+does\s+not|"
+    r"nic\b|brak\b)",
+    re.IGNORECASE,
+)
+
 # Prog wynika z teorii, nie z gustu. Zlamane przekonanie jest WARUNKIEM
 # KONIECZNYM: bez niego nie ma luki, wiec nie ma ciekawosci — choćby fakty
 # byly najlepsze. Tak wlasnie padl artykul o symbolu na kosmetykach.
@@ -2226,18 +2264,72 @@ def warto_pisac(
               "second_domain": jest("second_domain")}
     ile_filarow = sum(filary.values())
 
-    if WYMAGANE_ZLAMANE_PRZEKONANIE and not przekonanie:
-        werdykt, powod = "ODLOZ", (
-            "brak przekonania, ktore material lamie — bez tego czytelnik nie ma "
-            "luki do zamkniecia, a fakty same jej nie tworza")
-    elif ile_filarow >= MIN_FILAROW_POZA_PRZEKONANIEM:
+    # --- DRUGA DROGA: NIEROZSTRZYGNIETY WYNIK ------------------------------
+    # Cztery pytania powyzej opisuja rzecz JUZ ROZSTRZYGNIETA: przekonanie, ktore
+    # jest bledne, decyzje, ktora zapadla, liczbe, ktora zmierzono. To sa pytania
+    # zamkniete — a luka informacyjna z definicji sie nasyca. Loewenstein pisze
+    # to wprost: konsumpcja informacji jest nagradzajaca, ale po zdobyciu
+    # wystarczajacej ilosci ciekawosc SPADA. Pismo zbudowane wylacznie na
+    # pytaniach zamknietych produkuje czytelnikow zaspokojonych i odchodzacych.
+    #
+    # Dlatego jest druga droga. Warunek, ktory oddziela ja od wrozenia, jest
+    # jeden i twardy: karta musi niesc SPISANA REGULE rozstrzygajaca ten wynik.
+    # Bez niej to spekulacja i nie przechodzi.
+    stawka_blok = o.get("unsettled_outcome") or {}
+    stawka = bool(isinstance(stawka_blok, dict) and stawka_blok.get("present"))
+    pytanie = str(stawka_blok.get("the_question", "")).strip()
+    regula = str(stawka_blok.get("governed_by", "")).strip()
+
+    if stawka and len(pytanie.split()) < 4:
+        stawka = False
+        o.setdefault("uwagi_kodu", []).append(
+            "zaznaczono nierozstrzygniety wynik, ale nie umiano nazwac pytania")
+    if stawka and len(regula.split()) < 3:
+        stawka = False
+        o.setdefault("uwagi_kodu", []).append(
+            "wynik bez spisanej reguly, ktora go rozstrzyga — to wrozenie, nie tekst")
+    elif stawka and _ZAPRZECZENIE.match(regula):
+        # Model, ktory uczciwie odpowiada „nic tego nie rozstrzyga, po prostu
+        # nikt tego nie zapisal", opisuje LUKE W NASZEJ WIEDZY, a nie stawke.
+        # Sam licznik slow tego nie zlapie, bo takie zdanie jest dluzsze niz
+        # nazwa prawdziwej procedury. Rozroznienie nalezy do modelu i prompt
+        # mowi je wprost, ale kod nie moze przepuszczac odpowiedzi, ktora
+        # ZAPRZECZA sama sobie w pierwszych slowach.
+        stawka = False
+        o.setdefault("uwagi_kodu", []).append(
+            "pole reguly zaprzecza istnieniu reguly (%r) — to luka w wiedzy, "
+            "nie nierozstrzygniety wynik" % regula[:70])
+
+    droga_przekonania = przekonanie and ile_filarow >= MIN_FILAROW_POZA_PRZEKONANIEM
+    # Stawka potrzebuje nazwanego decydenta. Regula, ktorej nikt nie ustanowil,
+    # to zjawisko, a nie procedura — i wtedy nie ma czego wystawiac na probe.
+    droga_stawki = stawka and filary["named_decider"]
+
+    if droga_przekonania and droga_stawki:
+        werdykt, powod = "PISZ", (
+            "obie drogi: zlamane przekonanie + %d z 3 filarow ORAZ "
+            "nierozstrzygniety wynik ze spisana regula" % ile_filarow)
+    elif droga_przekonania:
         werdykt, powod = "PISZ", "zlamane przekonanie + %d z 3 filarow" % ile_filarow
-    else:
+    elif droga_stawki:
+        werdykt, powod = "PISZ", (
+            "nierozstrzygniety wynik + spisana regula, ktora go rozstrzyga "
+            "(droga stawki, bez zlamanego przekonania)")
+    elif przekonanie:
         werdykt, powod = "DOLOZ", (
             "zlamane przekonanie jest, ale tylko %d z 3 filarow — szukamy pary "
             "w banku zanim to pojdzie do pisarza" % ile_filarow)
+    elif stawka:
+        werdykt, powod = "DOLOZ", (
+            "jest nierozstrzygniety wynik, ale nikt nie ustanowil reguly — "
+            "szukamy w banku, kto to rozstrzyga")
+    else:
+        werdykt, powod = "ODLOZ", (
+            "ani przekonania do zlamania, ani nierozstrzygnietego wyniku — "
+            "czytelnik nie ma ani luki do zamkniecia, ani stawki do sledzenia")
 
     o["przekonanie"] = przekonanie
+    o["stawka"] = stawka
     o["filary"] = filary
     o["ile_filarow"] = ile_filarow
     o["werdykt"] = werdykt

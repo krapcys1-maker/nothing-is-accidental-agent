@@ -74,6 +74,42 @@ made of digits does not count: it is a label, not a magnitude.
 different from the subject's own? Aviation and cosmetics counts. Two payment
 systems does not.
 
+**5. THE UNSETTLED OUTCOME.** This one is different in kind from the four above,
+and it is the only one that can carry a piece on its own, so read it slowly.
+
+The four questions above all ask about something **already settled**: a belief
+that is wrong, a decision already taken, a figure already measured. That is a
+closed question. A reader who learns the answer is finished — satisfied, and
+gone. A publication built only on closed questions has to win its reader back
+from scratch every week.
+
+So: does this card describe a situation whose outcome is **not yet decided**,
+and carry the written rules that would decide it?
+
+Three things must all hold, and the third is what separates this from guesswork:
+
+- **The situation is one the reader can picture.** A market falling hard. A
+  post that nobody can be found to fill. A queue that stops moving. Not an
+  abstraction — something they have watched happen, or can see happening.
+- **The outcome genuinely is open.** Nobody can look it up, because it has not
+  happened yet, or has happened so rarely that nothing settled it.
+- **Written rules govern it, and the card carries them.** The statute, the
+  procedure, the constitution, the contract clause that decides what happens
+  next.
+
+That third condition is the whole guard. Without it this is fortune-telling and
+we do not do fortune-telling. With it, it is the same thing we always do — a
+rulebook nobody has read — applied to a moment everybody can imagine.
+
+**A gap in our own knowledge is NOT an unsettled outcome.** "What happens to any
+particular container after it leaves your hand is not tracked" is an admission of
+ignorance: the answer exists, nobody recorded it. That is not a stake. A stake is
+a question the world has not answered yet, where a document says who decides it
+and how.
+
+If the card carries no such situation, say so plainly. Most cards will not, and
+that is fine — the other four questions are a complete road on their own.
+
 ## What is missing
 
 Then, in one sentence: if this card is thin, what exact shape of company would
@@ -85,7 +121,7 @@ not.
 
 Return only valid JSON, shaped exactly as:
 
-{{"contradicted_belief": {{"present": true|false, "the_belief": "<the reader's wrong belief in their own words, or empty string>", "evidence": "<what in the card breaks it, or why nothing does>"}}, "named_decider": {{"present": true|false, "evidence": "<who, from the card, or why nobody is named>"}}, "felt_number": {{"present": true|false, "evidence": "<the figure and what it measures, or why the only figures are labels>"}}, "second_domain": {{"present": true|false, "evidence": "<the other field, or why the parallels stay inside one industry>"}}, "what_would_rescue_it": "<one sentence naming the shape of the missing piece>", "one_line_verdict": "<one sentence on what this card actually has>"}}
+{{"contradicted_belief": {{"present": true|false, "the_belief": "<the reader's wrong belief in their own words, or empty string>", "evidence": "<what in the card breaks it, or why nothing does>"}}, "named_decider": {{"present": true|false, "evidence": "<who, from the card, or why nobody is named>"}}, "felt_number": {{"present": true|false, "evidence": "<the figure and what it measures, or why the only figures are labels>"}}, "second_domain": {{"present": true|false, "evidence": "<the other field, or why the parallels stay inside one industry>"}}, "unsettled_outcome": {{"present": true|false, "the_question": "<the open question in the reader's own words, or empty string>", "the_situation": "<what the reader pictures, or empty string>", "governed_by": "<the written rule from the card that decides it, quoted or named — or why nothing in the card governs it>"}}, "what_would_rescue_it": "<one sentence naming the shape of the missing piece>", "one_line_verdict": "<one sentence on what this card actually has>"}}
 
 ## The evidence card
 

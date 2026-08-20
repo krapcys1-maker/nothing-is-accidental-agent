@@ -52,6 +52,56 @@ Aim at the belief that is **widely held and confidently wrong**, and prefer the
 ones where being wrong costs the reader something — money, time, safety, or the
 feeling of having understood their own life.
 
+## The second kind of topic: a system about to be tested
+
+Everything above describes a **closed** question. Something is already settled;
+the reader believed otherwise; we show the record. It works, and most of what we
+publish should be that.
+
+But a closed question ends when the reader reaches the last paragraph. They are
+satisfied, and they leave. A publication made only of closed questions has to
+win its reader back from nothing every single week.
+
+So there is a second kind, and you may propose either. This one asks:
+
+> **What happens when this system is tested, and who decided that?**
+
+The shape is: a machine everyone half-knows exists, a moment when it has to
+work, and a written procedure that decides the result — which almost nobody has
+read.
+
+- What happens to trading when a market falls far enough, fast enough — who
+  stops it, at what point, and for how long.
+- What happens if the people whose job is to choose a successor cannot agree,
+  and how long that has been allowed to run before.
+- What happens to a flight when the airport it is heading for closes.
+- What happens to the money in an account when the institution holding it fails
+  on a Friday afternoon.
+
+**Three conditions, and the third is the one that matters.**
+
+1. **The reader can picture the moment.** They have seen it, or seen it nearly
+   happen. Not an abstraction.
+2. **The outcome is genuinely open** — it has not happened, or has happened so
+   rarely that nothing settled it.
+3. **A written procedure decides it, and it exists in the record.** Statutes,
+   constitutions, exchange rules, operating manuals, contracts.
+
+Condition three is the whole guard, and it is not negotiable. Without a document
+that decides the outcome, this is fortune-telling, and we do not publish
+fortune-telling however dramatic the question sounds. With it, this is exactly
+what we always do — a rulebook nobody has read — attached to a moment everybody
+can imagine.
+
+**What this is not.** It is not a gap in our own knowledge. "Nobody tracks where
+each container ends up" is an admission that the answer exists and went
+unrecorded. That is not a stake. A stake is a question the world has not
+answered yet, with a document naming who answers it and how.
+
+It is also not a prediction. We never say what will happen. We say what the
+procedure says happens, where the procedure contradicts itself, and what
+occurred the last time it was tried.
+
 ## Do not answer your own question
 
 You have read no sources yet.
@@ -104,15 +154,36 @@ and do not stay in the same subject area:
 ## Output
 
 Return only valid JSON, shaped as {{"topics": [ ... ]}}, where each topic is an
-object with keys: title, question, **broken_belief**, **why_they_believe_it**,
-score_breakdown.
+object with keys: title, question, **kind**, score_breakdown, plus the fields
+its kind requires.
+
+`kind` is either `"BROKEN_BELIEF"` or `"SYSTEM_UNDER_TEST"`. Propose a mix; do
+not make every topic the same kind, and do not label a topic
+`SYSTEM_UNDER_TEST` merely because you could not write its broken belief.
+
+**For `BROKEN_BELIEF`, also give `broken_belief` and `why_they_believe_it`.**
 
 `broken_belief` is the reader's wrong belief, in their words, one plain sentence
-beginning "Everyone assumes". If you cannot write it, do not propose the topic.
+beginning "Everyone assumes". If you cannot write it, this is not that kind.
 
 `why_they_believe_it` is one sentence on where that belief comes from — what
 about the ordinary experience of the object makes the wrong idea reasonable.
 A belief nobody has a reason to hold is one you invented to satisfy this field.
+
+**For `SYSTEM_UNDER_TEST`, instead give `the_moment`, `open_outcome` and
+`governing_record`.**
+
+`the_moment` is the situation the reader can picture, one sentence, no numbers.
+
+`open_outcome` is the question nobody can currently look up, phrased as the
+reader would ask it out loud.
+
+`governing_record` is what kind of written procedure you expect decides it —
+described by its nature, not named. "The exchange's own halt rules" is right.
+"NYSE Rule 80B" is wrong, for the same reason you do not name institutions
+anywhere else in this brief: naming it narrows the search to what you happen to
+recall. If you cannot say that any written procedure decides this, drop the
+topic — that is the difference between our work and fortune-telling.
 
 score_breakdown must contain these keys, each 0.0-1.0: curiosity, source_quality,
 non_obvious, universality, discussion_potential, visual_potential, originality.
