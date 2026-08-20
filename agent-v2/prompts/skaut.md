@@ -43,9 +43,13 @@ two. A reader recognises "the time the machine at the polling place stopped
 working" as surely as they recognise a bottle, and almost nobody has written it
 out.
 
-## The one thing that decides whether a topic is worth anything
+## The first kind of topic: a belief that is wrong
 
-**Every topic must name a belief that is wrong.**
+There are two kinds and they are described in turn. This is the first; the
+second begins below, under "a system about to be tested". Every topic you
+propose must be one or the other, and you should propose a mix.
+
+**A topic of this kind must name a belief that is wrong.**
 
 Not a fact readers don't know — nearly everything is that, and it is not enough.
 A belief they actively hold, would state out loud if asked, and which the record
@@ -68,7 +72,8 @@ The test, applied before you propose anything:
 > Can I write the reader's wrong belief as one plain sentence, in their words,
 > starting with "everyone assumes…"?
 
-If you cannot, the topic is dead however interesting the object is.
+If you cannot, this topic is not of the first kind. It may still be of the
+second — but do not label it so merely because the belief would not come.
 
 **Strong, because the belief is real and wrong:**
 - *Everyone assumes the yellow traffic light lasts the same everywhere.* It is
@@ -113,7 +118,7 @@ read.
 - What happens to the money in an account when the institution holding it fails
   on a Friday afternoon.
 
-**Three conditions, and the third is the one that matters.**
+**Four conditions. The third keeps us honest; the fourth decides the length.**
 
 1. **The reader can picture the moment.** They have seen it, or seen it nearly
    happen. Not an abstraction.
@@ -121,6 +126,17 @@ read.
    rarely that nothing settled it.
 3. **A written procedure decides it, and it exists in the record.** Statutes,
    constitutions, exchange rules, operating manuals, contracts.
+4. **The procedure has a history.** It was written, or rewritten, because
+   something went wrong — and you can name at least two of those occasions.
+
+A subject that meets the first three and not the fourth is a **note**: there is
+a rule, here it is, done in forty words. A subject that meets all four is an
+article, because each occasion the system failed is a scene with people in it,
+and the clause that followed is the consequence. That is the difference between
+"what happens when a voting machine fails" — a form and a provisional ballot —
+and "what happens when the people who must choose a successor cannot agree",
+where the answer runs through a three-year deadlock, a roof removed by an
+impatient town, and a rule written afterwards to make sure it never repeated.
 
 Condition three is the whole guard, and it is not negotiable. Without a document
 that decides the outcome, this is fortune-telling, and we do not publish
@@ -193,10 +209,36 @@ Return only valid JSON, shaped as:
 {{"topics": [ ... ], "ranking": {{"most_written_about": [<3 indices>], "least_written_about": [<3 indices>], "richest": [<3 indices>], "thinnest": [<3 indices>]}}}}
 
 Each topic is an object with keys: title, question, **kind**,
-**already_written**, **threads**, plus the fields its kind requires.
+**already_written**, **scale**, **precedents**, **threads**, plus the fields
+its kind requires.
 
 `already_written` is a list of strings, possibly empty. `threads` is a list of
 question strings. `ranking` holds zero-based indices into `topics`.
+
+**`scale`** — who the outcome binds. One of exactly these words:
+
+- `ONE_PERSON` — the reader, or one customer, one tenant, one passenger.
+- `A_PLACE` — one shop, one precinct, one building, one flight.
+- `AN_INDUSTRY` — everyone who trades, flies, insures, ships.
+- `A_COUNTRY` — the state itself has to keep functioning through it.
+
+This is the second thing that separates an article from a note, and it is easy
+to miss because both feel dramatic while you are writing them down. A voting
+machine failing is `A_PLACE`: five hundred votes, one precinct, a form to fill
+in. A head of state being shot is `A_COUNTRY`: there is a succession written
+down, a chain of command, a moment where nobody is certain who is in charge, and
+every one of those clauses exists because it went wrong before.
+
+Both are picturable. Both have a rulebook. Only one of them stops a country.
+
+Do not inflate this. A refund dispute is `ONE_PERSON` however annoying it was.
+
+`precedents` is a list of objects, possibly empty, each shaped:
+
+{{"when": "<roughly when>", "what_happened": "<what people saw, in one sentence>", "what_changed": "<the rule or practice that came out of it, or 'nothing'>"}}
+
+An empty `precedents` list is an honest answer and marks the subject as a note.
+A fabricated entry is the worst thing you can put in this file.
 
 `kind` is either `"BROKEN_BELIEF"` or `"SYSTEM_UNDER_TEST"`. Propose a mix; do
 not make every topic the same kind, and do not label a topic
@@ -240,24 +282,48 @@ strongest thing a topic can have here, and it is also the easiest thing to fake,
 so do not fake it. A topic where you can name three pieces is a topic where the
 reader has already read three pieces.
 
+**`precedents`** — the times this actually went wrong, and what came out of it.
+
+**This is the field that decides whether a subject is an article or a note, and
+it is the one that has been missing.** Read it twice.
+
+A procedure on its own is a note. "When a voting machine fails, poll workers
+issue provisional ballots and file a form" is a complete answer in a sentence,
+and no list of sub-questions changes that. Who signs the form, how many hours
+they may extend, what the form is called — those are clauses of one procedure,
+not separate stories. Splitting a procedure into its own paragraphs and calling
+them threads produces a padded note, which is exactly what we keep publishing.
+
+What carries an article is a procedure **that exists because something went
+wrong**, more than once, in ways somebody could recount over dinner.
+
+The papal conclave is the clean example. After one pope died the cardinals
+argued for the better part of three years, until the townspeople took the roof
+off the building they were sitting in and cut their food down to bread and
+water. The rule that locks a conclave in a sealed room came *out of that*. Read
+that rulebook and you are reading scar tissue: each clause is a disaster
+somebody had to survive first. Trading halts exist because of a specific day in
+1987. That is what a thousand words is made of.
+
+So list, for each topic, the occasions when this system was genuinely tested.
+For each: roughly when, what actually happened — with the people or the place in
+it, not the administrative summary — and what rule or change came out of it
+afterwards.
+
+**Fewer than two, and the subject is a note.** Say so honestly by giving a short
+list or an empty one. Do not invent incidents to fill this field; a fabricated
+precedent is far worse than an empty list, because the research stage will spend
+real money failing to find it and we will publish nothing.
+
+If a topic has a good open question and no history of being tested, it is not a
+failure — it is a note, and notes are most of what we publish. Mark it honestly.
+
 **`threads`** — the separate questions this one subject would answer.
 
-List them. Each thread must be a question that could be answered on its own,
-with its own documents, and would still leave the others unanswered. Not
-subheadings — questions.
-
-A subject with one thread is a note, not an article, however good the fact is.
-A subject with five is worth a paid research run on its own, and might be worth
-several articles. This is the difference between "the triangle on a bottle is a
-resin code" — one thread, done in a sentence — and "what happens when the people
-whose job is to choose a successor cannot agree", which carries who may vote, what
-happens when nobody wins, how long that has been allowed to run, who takes the
-decisions meanwhile, and what breaks the deadlock. Five threads, five sets of
-documents, one subject.
-
-Do not pad this list. A padded thread is one that cannot be answered without
-first answering another, and we will notice: threads that collapse into each
-other are one thread.
+Each thread must be answerable on its own, from its own documents, and leave the
+others still open. A thread that cannot be answered without first answering
+another is the same thread. Clauses of a single procedure are one thread between
+them, however many paragraphs they would fill.
 
 **Do not include scores.** Earlier versions of this brief asked for seven numbers
 between zero and one. Nothing ever read them, and self-assigned scores drift to

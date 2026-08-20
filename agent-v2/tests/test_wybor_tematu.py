@@ -57,6 +57,13 @@ def przetworz(topics, ranking=None):
         w = t.get("threads")
         t["ile_watkow"] = len(w) if isinstance(w, list) else 0
         t["pozycja"] = 0
+        prec = t.get("precedents") if isinstance(t.get("precedents"), list) else []
+        t["precedensy"] = [q for q in prec if stages._precedens_ok(q)]
+        t["ile_precedensow"] = len(t["precedensy"])
+        t["zasieg"] = str(t.get("scale") or "").strip().upper()
+        t["duzy_zasieg"] = t["zasieg"] in config.ZASIEGI_ARTYKULOWE
+        t["na_artykul"] = (t["ile_precedensow"] >= config.PRECEDENSOW_NA_ARTYKUL
+                           and t["duzy_zasieg"])
     r = ranking or {}
     for i in r.get("least_written_about", []):
         topics[i]["pozycja"] += 2; topics[i]["swiezy_wg_modelu"] = True
@@ -66,8 +73,8 @@ def przetworz(topics, ranking=None):
         topics[i]["pozycja"] += 1
     for i in r.get("thinnest", []):
         topics[i]["pozycja"] -= 1
-    topics.sort(key=lambda t: (not t["nosny"], -t["pozycja"], t["nasycony"],
-                               -t["ile_watkow"]))
+    topics.sort(key=lambda t: (not t["nosny"], not t["na_artykul"],
+                               -t["pozycja"], t["nasycony"], -t["ile_watkow"]))
     return topics
 
 
@@ -161,6 +168,72 @@ PUSTY = przetworz([{"title": "Nic", "kind": "BROKEN_BELIEF", "broken_belief": "x
 razem = przetworz([dict(CLICHE), PUSTY])
 sprawdz("nienośny ląduje na końcu mimo zerowego nasycenia",
         razem[-1]["title"] == "Nic", [x["title"][:20] for x in razem])
+
+print()
+print("=== 2b. PRECEDENSY I ZASIEG — TU SIE DZIELI ARTYKUL OD NOTKI ===")
+# Kryterium, ktorego nie bylo w ogole, i przez ktorego brak wychodzily tematy
+# wielkosci notki. Sama procedura to notka: „gdy maszyna do glosowania padnie,
+# komisja wydaje karty tymczasowe" jest kompletna odpowiedzia w jednym zdaniu.
+# Artykul niesie procedura, ktora POWSTALA, BO COS POSZLO NIE TAK — wielokrotnie.
+KONKLAWE = {
+    "title": "Kiedy nie moga wybrac nastepcy", "kind": "SYSTEM_UNDER_TEST",
+    "the_moment": "the chimney everyone watches and no smoke of either colour",
+    "open_outcome": "what happens if they cannot agree for months on end",
+    "governing_record": "the constitution setting out the ballot procedure",
+    "already_written": [], "threads": ["a", "b", "c", "d", "e"],
+    "scale": "A_COUNTRY",
+    "precedents": [
+        {"when": "1268-1271", "what_happened": "the townspeople took the roof off "
+         "the building and cut the cardinals down to bread and water",
+         "what_changed": "the rule that seals a conclave in one room"},
+        {"when": "1996", "what_happened": "a pope rewrote the majority needed "
+         "after a fixed number of inconclusive rounds",
+         "what_changed": "simple majority allowed, later reversed"},
+    ],
+}
+MASZYNA = {
+    "title": "Zepsuta maszyna do glosowania", "kind": "SYSTEM_UNDER_TEST",
+    "the_moment": "a machine at the polling place stops working mid-vote",
+    "open_outcome": "what happens to the votes already inside the machine",
+    "governing_record": "state election administration rules",
+    "already_written": [], "threads": ["a", "b", "c", "d", "e"],
+    "scale": "A_PLACE",
+    "precedents": [],
+}
+t2 = przetworz([dict(MASZYNA), dict(KONKLAWE)])
+k = next(x for x in t2 if x["title"].startswith("Kiedy"))
+m = next(x for x in t2 if x["title"].startswith("Zepsuta"))
+print("    konklawe: awarie=%d zasieg=%s -> artykul=%s"
+      % (k["ile_precedensow"], k["zasieg"], k["na_artykul"]))
+print("    maszyna : awarie=%d zasieg=%s -> artykul=%s"
+      % (m["ile_precedensow"], m["zasieg"], m["na_artykul"]))
+sprawdz("konklawe jest artykulowe", k["na_artykul"] is True)
+sprawdz("zepsuta maszyna NIE jest artykulowa", m["na_artykul"] is False)
+sprawdz("i idzie za konklawe", t2[0]["title"].startswith("Kiedy"),
+        [x["title"][:24] for x in t2])
+sprawdz("prog to dwie udokumentowane awarie",
+        config.PRECEDENSOW_NA_ARTYKUL == 2, config.PRECEDENSOW_NA_ARTYKUL)
+
+# KONTRDOWOD 1: sama historia bez zasiegu to za malo.
+maly = przetworz([dict(KONKLAWE, scale="ONE_PERSON")])[0]
+sprawdz("historia bez zasiegu -> nie artykul", maly["na_artykul"] is False)
+# KONTRDOWOD 2: sam zasieg bez historii to za malo.
+bez_hist = przetworz([dict(KONKLAWE, precedents=[])])[0]
+sprawdz("zasieg bez historii -> nie artykul", bez_hist["na_artykul"] is False)
+
+print("    --- co NIE liczy sie jako precedens ---")
+for opis, zly in (
+    ("bez daty", {"when": "dawno temu", "what_happened": "the town took the roof off the hall",
+                  "what_changed": "a rule was written down"}),
+    ("bez skutku", {"when": "1271", "what_happened": "the town took the roof off the hall",
+                    "what_changed": "nothing came of it"}),
+    ("pusty skutek", {"when": "1271", "what_happened": "the town took the roof off the hall",
+                      "what_changed": ""}),
+    ("sama data", {"when": "1271", "what_happened": "it failed", "what_changed": "a rule"}),
+):
+    x = przetworz([dict(KONKLAWE, precedents=[zly, zly])])[0]
+    sprawdz("  %-14s nie liczy sie" % opis, x["ile_precedensow"] == 0,
+            x["ile_precedensow"])
 
 print()
 print("=== 3b. WYMUSZONY WYBOR RATUJE ZDEGENEROWANE POLA ===")

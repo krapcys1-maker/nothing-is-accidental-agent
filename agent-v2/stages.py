@@ -1965,6 +1965,13 @@ def pick_topic(
         """
         return int(not temat(a).get("nasycony", False))
 
+    def artykulowy(a: dict[str, Any]) -> int:
+        """Czy temat ma udokumentowana historie awarii I zasieg poza jedno
+        miejsce. Sama procedura to notka — kompletna odpowiedz w jednym zdaniu,
+        ktorej rozbicie na podpunkty daje rozdmuchana notke, a nie artykul.
+        """
+        return int(bool(temat(a).get("na_artykul")))
+
     def wlasny_ranking(a: dict[str, Any]) -> int:
         """Gdzie model postawil ten temat wsrod SWOICH wlasnych propozycji.
 
@@ -1979,8 +1986,20 @@ def pick_topic(
         """Ile osobnych pytan niesie temat. Jeden watek to notka, nie artykul."""
         return int(temat(a).get("ile_watkow", 0))
 
+    def artykulowy(a: dict[str, Any]) -> int:
+        """Czy temat ma udokumentowana historie awarii I zasieg poza jedno
+        miejsce. Sama procedura to notka: kompletna odpowiedz w jednym zdaniu,
+        ktorej rozbicie na podpunkty daje rozdmuchana notke, a nie artykul.
+
+        Idzie zaraz po nosnosci i PRZED wlasnym rankingiem modelu, bo tu nie
+        chodzi o to, ktory temat jest ciekawszy, tylko ktory w ogole nadaje sie
+        na te dlugosc.
+        """
+        return int(bool(temat(a).get("na_artykul")))
+
     def kolejnosc(a: dict[str, Any]):
         return (nosny(a),
+                artykulowy(a),
                 wlasny_ranking(a),
                 swiezy(a),
                 watki(a),
@@ -2087,6 +2106,45 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
         w = t.get("threads")
         t["ile_watkow"] = len(w) if isinstance(w, list) else 0
 
+        # PRECEDENSY — to one dziela artykul od notki, i tego kryterium nie
+        # bylo w ogole. Sama procedura to notka: „gdy maszyna do glosowania
+        # padnie, komisja wydaje karty tymczasowe i wypelnia formularz" jest
+        # kompletna odpowiedzia w jednym zdaniu. Rozbicie jej na podpunkty daje
+        # rozdmuchana notke — a ja liczylem te podpunkty jako watki i myslalem,
+        # ze mierze glebokosc.
+        #
+        # Artykul niesie procedura, ktora POWSTALA, BO COS POSZLO NIE TAK.
+        # Regula zamykania konklawe wziela sie z trzyletniego wakatu, ktory
+        # skonczyl sie dopiero, gdy mieszkancy zdjeli dach i obcieli kardynalom
+        # jedzenie. Bezpieczniki wstrzymujace notowania istnieja z powodu
+        # jednego dnia 1987 roku. Taki regulamin to blizny, a kazda blizna to
+        # scena z ludzmi.
+        prec = t.get("precedents")
+        prec = prec if isinstance(prec, list) else []
+        # Wpis musi niesc ZDARZENIE, DATE i SKUTEK. Sprawdzamy wszystkie trzy,
+        # bo kazde z osobna da sie wypelnic pustym slowem — tak jak model
+        # wypelnil watki szescioma sztukami na kazdy temat.
+        #
+        # `what_changed` jest tu najwazniejsze i o nim latwo zapomniec: caly
+        # sens precedensu polega na tym, ze regulamin jest BLIZNA. Zdarzenie,
+        # po ktorym nic sie nie zmienilo, to anegdota — ciekawa, ale nie ona
+        # niesie tysiac slow. (Tego pola omal nie przeoczylem: wykrywacz
+        # martwych sygnalow zlapal je godzine po tym, jak go napisalem.)
+        t["precedensy"] = [p for p in prec if _precedens_ok(p)]
+        t["ile_precedensow"] = len(t["precedensy"])
+
+        # ZASIEG. Drugie brakujace kryterium. Zepsuta maszyna to 500 glosow
+        # w jednym lokalu; zastrzelony prezydent zatrzymuje caly kraj w tej
+        # samej sekundzie. Oba maja spisana procedure i oba da sie sobie
+        # wyobrazic — rozni je to, KOGO wynik wiaze.
+        t["zasieg"] = str(t.get("scale") or "").strip().upper()
+        t["duzy_zasieg"] = t["zasieg"] in config.ZASIEGI_ARTYKULOWE
+
+        # Na artykul trzeba OBU rzeczy naraz. Sama historia bez stawki to
+        # ciekawostka historyczna, sama stawka bez historii to procedura.
+        t["na_artykul"] = (t["ile_precedensow"] >= config.PRECEDENSOW_NA_ARTYKUL
+                           and t["duzy_zasieg"])
+
     # WYMUSZONY WYBOR. Listy bezwzgledne DA SIE wyrownac i model to zrobil:
     # zapytany, ile juz o czyms napisano, kazdemu tematowi przypisal dokladnie
     # trzy teksty; zapytany o watki — dokladnie szesc. Oba sygnaly spadly do
@@ -2132,6 +2190,34 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
     if bez:
         print("  [skaut] %d z %d tematow bez przekonania I bez stawki — na koniec "
               "kolejki" % (len(bez), len(topics)), flush=True)
+    # ARTYKUL CZY NOTKA. Wlasciciel: „artykuly musza byc o czyms mocnym i o
+    # czyms, z czym sie masa watkow wiaze, a notki zostawmy do ciekawostek, bo
+    # one tez sa fajne, ale niekoniecznie na artykuly".
+    #
+    # Ciekawostki NIE ida do kosza — sa dobrym materialem, tylko nie tym.
+    # Nie przepycham ich jednak do puli notek automatycznie: temat skauta nie ma
+    # jeszcze zrodla ani skutku w reku, wiec `bramka_kandydata` odrzucilaby
+    # kazdy. Przejsciowka, ktora gubi 100% wejscia, jest gorsza niz jej brak.
+    artykulowe = [t for t in topics if t["na_artykul"]]
+    notkowe = [t for t in topics if t["nosny"] and not t["na_artykul"]]
+    print("  [skaut] NA ARTYKUL: %d z %d (>=%d udokumentowanych awarii + zasieg %s)"
+          % (len(artykulowe), len(topics), config.PRECEDENSOW_NA_ARTYKUL,
+             "/".join(config.ZASIEGI_ARTYKULOWE)), flush=True)
+    for t in artykulowe[:5]:
+        print("     %-46s awarie=%d zasieg=%s"
+              % (str(t.get("title"))[:46], t["ile_precedensow"], t["zasieg"]),
+              flush=True)
+    if notkowe:
+        print("  [skaut] NA NOTKE: %d — dobre, ale procedura bez historii albo "
+              "zbyt waski skutek:" % len(notkowe), flush=True)
+        for t in notkowe[:5]:
+            print("     %-46s awarie=%d zasieg=%s"
+                  % (str(t.get("title"))[:46], t["ile_precedensow"],
+                     t["zasieg"] or "?"), flush=True)
+    if not artykulowe:
+        print("  [skaut] UWAGA: zaden temat nie jest artykulowy — biore "
+              "najlepszy dostepny, ale to sygnal, ze skaut oddal same "
+              "ciekawostki", flush=True)
     print("  [skaut] watki na temat: %s"
           % sorted((t["ile_watkow"] for t in topics), reverse=True), flush=True)
     if any(t.get("swiezy_wg_modelu") for t in topics):
@@ -2148,8 +2234,8 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
     # co bierzemy najpierw — a kolejnosc byla dotad zbudowana tak, ze CLICHE
     # wygrywalo z definicji: temat oklepany zawsze ma najostrzejsze „wszyscy
     # zakladaja", bo przez to wlasnie zostal oklepany.
-    topics.sort(key=lambda t: (not t["nosny"], -t["pozycja"], t["nasycony"],
-                               -t["ile_watkow"]))
+    topics.sort(key=lambda t: (not t["nosny"], not t["na_artykul"],
+                               -t["pozycja"], t["nasycony"], -t["ile_watkow"]))
     return topics
 
 
@@ -2680,6 +2766,29 @@ def _zapisz_indeks(indeks: list[dict[str, Any]]) -> None:
     INDEKS_KANDYDATOW.parent.mkdir(parents=True, exist_ok=True)
     INDEKS_KANDYDATOW.write_text(
         json.dumps(indeks[-600:], ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _precedens_ok(p: Any) -> bool:
+    """Czy ten wpis to naprawde precedens, a nie wypelniacz.
+
+    Musi niesc TRZY rzeczy naraz: zdarzenie, date i skutek. Kazda z osobna da
+    sie wypelnic pustym slowem — tak jak model wypelnil watki szescioma
+    sztukami na kazdy temat, a znane teksty trzema.
+
+    `what_changed` jest najwazniejsze i o nim najlatwiej zapomniec: caly sens
+    precedensu polega na tym, ze regulamin jest BLIZNA. Zdarzenie, po ktorym
+    nic sie nie zmienilo, to anegdota — ciekawa, ale nie ona niesie tysiac slow.
+    """
+    if not isinstance(p, dict):
+        return False
+    if len(str(p.get("what_happened") or "").split()) < 5:
+        return False
+    if not re.search(r"\d{3,4}", str(p.get("when") or "")):
+        return False              # „dawno temu" to nie jest data
+    zmiana = str(p.get("what_changed") or "").strip()
+    if len(zmiana.split()) < 3:
+        return False
+    return not re.match(r"^\W*(nothing|none|no\s|nic|brak)", zmiana, re.I)
 
 
 def dopisz_kandydatow(kandydaci: list[dict[str, Any]]) -> dict[str, int]:

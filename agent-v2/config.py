@@ -497,6 +497,34 @@ BUDZET_ZASTRZEZEN = 1
 # ktory w ogole istnieje. Dwa znaczy, ze czytelnik juz to czytal.
 NASYCENIE_OD_ILU = 2
 
+# ILE UDOKUMENTOWANYCH AWARII ROBI Z TEMATU ARTYKUL.
+#
+# To jest kryterium, ktorego nie mielismy w ogole, i to przez jego brak
+# wychodzily tematy wielkosci notki. Sama procedura to notka: „gdy maszyna do
+# glosowania padnie, komisja wydaje karty tymczasowe" jest kompletna odpowiedzia
+# w jednym zdaniu, a rozbicie jej na podpunkty daje rozdmuchana notke.
+#
+# Artykul niesie procedura, ktora POWSTALA, BO COS POSZLO NIE TAK — i to
+# wielokrotnie. Regula zamykania konklawe wziela sie z trzyletniego wakatu
+# zakonczonego dopiero wtedy, gdy mieszkancy zdjeli dach i obcieli kardynalom
+# jedzenie. Bezpieczniki wstrzymujace notowania istnieja z powodu jednego dnia
+# 1987 roku. Lancuch sukcesji glowy panstwa ma za soba zamach z 1963 i poprawke
+# z 1967. Taki regulamin czyta sie jak blizny, a kazda blizna to scena z ludzmi.
+#
+# Dwa, nie jeden: jedna awaria to anegdota, dwie to juz wzorzec, ktory da sie
+# pokazac.
+PRECEDENSOW_NA_ARTYKUL = 2
+
+# KOGO WIAZE WYNIK. Drugie brakujace kryterium i drugi powod, dla ktorego
+# tematy wychodzily mialkie. Zepsuta maszyna do glosowania to piecset glosow
+# w jednym lokalu; zastrzelony prezydent zatrzymuje caly kraj w tej samej
+# sekundzie. Oba maja spisana procedure, oba da sie sobie wyobrazic — rozni je
+# wylacznie zasieg skutku.
+#
+# Na artykul potrzeba OBU rzeczy naraz: historii awarii i zasiegu. Sama
+# historia bez stawki to ciekawostka, sama stawka bez historii to procedura.
+ZASIEGI_ARTYKULOWE = ("AN_INDUSTRY", "A_COUNTRY")
+
 # Ile ostatnich artykulow porownuje bramka ODCISK_FORMY.
 ILE_TEKSTOW_DO_POROWNANIA_FORMY = 4
 
