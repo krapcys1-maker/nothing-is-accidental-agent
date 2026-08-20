@@ -40,7 +40,7 @@ def sprawdz(nazwa, warunek, szczegol=""):
         print("  BLAD  %s   %s" % (nazwa, szczegol))
 
 
-def przetworz(topics):
+def przetworz(topics, ranking=None):
     """Odtwarza petle ze `scout` — te sama, ktora liczy nosnosc i nasycenie."""
     for t in topics:
         wiara = str(t.get("broken_belief") or "").strip()
@@ -56,7 +56,18 @@ def przetworz(topics):
         t["nasycony"] = t["ile_juz_napisano"] >= config.NASYCENIE_OD_ILU
         w = t.get("threads")
         t["ile_watkow"] = len(w) if isinstance(w, list) else 0
-    topics.sort(key=lambda t: (not t["nosny"], t["nasycony"], -t["ile_watkow"]))
+        t["pozycja"] = 0
+    r = ranking or {}
+    for i in r.get("least_written_about", []):
+        topics[i]["pozycja"] += 2; topics[i]["swiezy_wg_modelu"] = True
+    for i in r.get("most_written_about", []):
+        topics[i]["pozycja"] -= 2; topics[i]["oklepany_wg_modelu"] = True
+    for i in r.get("richest", []):
+        topics[i]["pozycja"] += 1
+    for i in r.get("thinnest", []):
+        topics[i]["pozycja"] -= 1
+    topics.sort(key=lambda t: (not t["nosny"], -t["pozycja"], t["nasycony"],
+                               -t["ile_watkow"]))
     return topics
 
 
@@ -152,6 +163,41 @@ sprawdz("nienośny ląduje na końcu mimo zerowego nasycenia",
         razem[-1]["title"] == "Nic", [x["title"][:20] for x in razem])
 
 print()
+print("=== 3b. WYMUSZONY WYBOR RATUJE ZDEGENEROWANE POLA ===")
+# TO JEST NAJWAZNIEJSZA SEKCJA. Na zywym przebiegu model wyrownal OBIE listy
+# bezwzgledne: kazdemu tematowi przypisal dokladnie trzy znane teksty i
+# dokladnie szesc watkow. Nasycenie i watki przestaly cokolwiek rozrozniac —
+# ta sama wada co samooceny wracajace zawsze 1.0, tylko w innym przebraniu.
+# Rankingu wyrownac sie nie da, wiec to on musi rozstrzygac.
+ROWNE = [dict(CLICHE, title="A", already_written=["x", "y", "z"],
+              threads=["1", "2", "3", "4", "5", "6"]),
+         dict(CLICHE, title="B", already_written=["x", "y", "z"],
+              threads=["1", "2", "3", "4", "5", "6"]),
+         dict(CLICHE, title="C", already_written=["x", "y", "z"],
+              threads=["1", "2", "3", "4", "5", "6"])]
+bez_rankingu = przetworz([dict(x) for x in ROWNE])
+sprawdz("przy identycznych polach kolejnosc jest przypadkowa",
+        [x["title"] for x in bez_rankingu] == ["A", "B", "C"],
+        [x["title"] for x in bez_rankingu])
+z_rankingiem = przetworz([dict(x) for x in ROWNE],
+                         {"least_written_about": [2], "most_written_about": [0],
+                          "richest": [2], "thinnest": [0]})
+print("    z wymuszonym wyborem: %s" % [x["title"] for x in z_rankingiem])
+sprawdz("wymuszony wybor USTAWIA kolejnosc mimo identycznych pol",
+        [x["title"] for x in z_rankingiem] == ["C", "B", "A"],
+        [x["title"] for x in z_rankingiem])
+sprawdz("najswiezszy wg modelu na czele", z_rankingiem[0]["title"] == "C")
+sprawdz("najbardziej oklepany na koncu", z_rankingiem[-1]["title"] == "A")
+sprawdz("oznaczenia trafiaja do tematu",
+        z_rankingiem[0].get("swiezy_wg_modelu") is True
+        and z_rankingiem[-1].get("oklepany_wg_modelu") is True)
+# I to samo w pick_topic, bo tam zapada decyzja.
+OC = [{"index": i, "feasible": True, "confidence": 0.8,
+       "expected_primary_sources": 3, "depth": "RICH"} for i in range(3)]
+wyb, _ = stages.pick_topic(z_rankingiem, OC)
+sprawdz("pick_topic tez slucha wymuszonego wyboru", wyb["title"] == "C", wyb["title"])
+
+print()
 print("=== 4. NOSNOSC NADAL BIJE SWIEZOSC ===")
 # Swiezy, ale nienosny temat nie moze wyprzedzic nosnego i oklepanego —
 # lepiej napisac znany temat dobrze niz nieznany bez luki i bez stawki.
@@ -186,6 +232,14 @@ sprawdz("wymaga pola already_written", "already_written" in plaski)
 sprawdz("wymaga pola threads", "`threads`" in plaski)
 sprawdz("zakazuje fałszowania w OBIE strony",
         "Do not fake this in either direction" in plaski)
+sprawdz("prompt zamawia wymuszony wybor",
+        "rank your own list against itself" in plaski)
+sprawdz("i nazywa wprost obserwowana degeneracje",
+        "every answer came back with exactly three items" in plaski)
+sprawdz("mowi, ze porownania nie da sie wyrownac",
+        "A forced comparison cannot" in plaski)
+for k in ("most_written_about", "least_written_about", "richest", "thinnest"):
+    sprawdz("ranking ma %s" % k, k in plaski)
 
 print()
 print("=== 7. KOTWICA TO JUZ NIE TYLKO PRZEDMIOT ===")

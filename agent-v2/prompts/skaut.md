@@ -188,12 +188,15 @@ and do not stay in the same subject area:
 
 ## Output
 
-Return only valid JSON, shaped as {{"topics": [ ... ]}}, where each topic is an
-object with keys: title, question, **kind**, **already_written**, **threads**,
-plus the fields its kind requires.
+Return only valid JSON, shaped as:
+
+{{"topics": [ ... ], "ranking": {{"most_written_about": [<3 indices>], "least_written_about": [<3 indices>], "richest": [<3 indices>], "thinnest": [<3 indices>]}}}}
+
+Each topic is an object with keys: title, question, **kind**,
+**already_written**, **threads**, plus the fields its kind requires.
 
 `already_written` is a list of strings, possibly empty. `threads` is a list of
-question strings.
+question strings. `ranking` holds zero-based indices into `topics`.
 
 `kind` is either `"BROKEN_BELIEF"` or `"SYSTEM_UNDER_TEST"`. Propose a mix; do
 not make every topic the same kind, and do not label a topic
@@ -260,3 +263,31 @@ other are one thread.
 between zero and one. Nothing ever read them, and self-assigned scores drift to
 the top of their range regardless of the thing being scored. Facts and lists are
 checkable; a number you assign to your own idea is not.
+
+## Last: rank your own list against itself
+
+The two lists above have a failure mode, and it has already happened. Asked how
+much exists about a topic, every answer came back with exactly three items.
+Asked how many threads a topic carries, every answer came back with exactly six.
+Both lists were padded to a comfortable length and told us nothing — the same
+way the scores did, in different clothes.
+
+An absolute judgement can be equalised. A forced comparison cannot. So finish by
+sorting your own proposals against each other:
+
+- **`most_written_about`** — the three topics from your list that a reader is
+  most likely to have already read about somewhere. Somebody has to be in this
+  list. If you believe all your topics are equally fresh, you are wrong about at
+  least one of them, and this is where you say which.
+- **`least_written_about`** — the three that you would be most surprised to find
+  already covered.
+- **`richest`** — the three whose threads are most genuinely separate, in the
+  sense that answering one leaves the others still open.
+- **`thinnest`** — the three that would be exhausted quickest, whatever the
+  thread list says.
+
+Each list holds exactly three indices into your `topics` array, zero-based. The
+same index may not appear in both halves of a pair.
+
+These four lists decide which topic gets a paid research run, so put real work
+into them. The rest of the fields are the evidence; this is the judgement.

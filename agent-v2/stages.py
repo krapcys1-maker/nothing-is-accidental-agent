@@ -1965,6 +1965,16 @@ def pick_topic(
         """
         return int(not temat(a).get("nasycony", False))
 
+    def wlasny_ranking(a: dict[str, Any]) -> int:
+        """Gdzie model postawil ten temat wsrod SWOICH wlasnych propozycji.
+
+        Listy bezwzgledne model wyrownuje — kazdemu tematowi przypisal po trzy
+        znane teksty i po szesc watkow, wiec ani nasycenie, ani watki niczego
+        nie rozrozinialy. Wymuszonego wyboru wyrownac sie nie da, wiec to on
+        idzie pierwszy.
+        """
+        return int(temat(a).get("pozycja", 0))
+
     def watki(a: dict[str, Any]) -> int:
         """Ile osobnych pytan niesie temat. Jeden watek to notka, nie artykul."""
         return int(temat(a).get("ile_watkow", 0))
@@ -1972,6 +1982,7 @@ def pick_topic(
     ranked = sorted(
         (a for a in assessments if a.get("feasible")),
         key=lambda a: (nosny(a),
+                       wlasny_ranking(a),
                        swiezy(a),
                        watki(a),
                        waga.get(str(a.get("depth", "RICH")).upper(), 1),
@@ -2053,12 +2064,43 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
         juz = t.get("already_written")
         t["ile_juz_napisano"] = len(juz) if isinstance(juz, list) else 0
         t["nasycony"] = t["ile_juz_napisano"] >= config.NASYCENIE_OD_ILU
+        t["pozycja"] = 0
 
         # WATKI. Kryterium wlasciciela: jeden temat, o ktorym da sie napisac
         # piec artykulow, bije piec tematow na jeden artykul kazdy. Temat
         # o jednym watku to notka, chocby fakt byl najlepszy.
         w = t.get("threads")
         t["ile_watkow"] = len(w) if isinstance(w, list) else 0
+
+    # WYMUSZONY WYBOR. Listy bezwzgledne DA SIE wyrownac i model to zrobil:
+    # zapytany, ile juz o czyms napisano, kazdemu tematowi przypisal dokladnie
+    # trzy teksty; zapytany o watki — dokladnie szesc. Oba sygnaly spadly do
+    # stalej i przestaly cokolwiek rozrozniac, dokladnie tak jak wczesniej
+    # samooceny wracajace zawsze 1.0.
+    #
+    # Rankingu wyrownac sie nie da. Model musi wskazac, KTORE ze swoich wlasnych
+    # propozycji sa najbardziej oklepane, a ktore najswiezsze — i wtedy nawet
+    # przy identycznych listach dostajemy uzyteczna kolejnosc.
+    r = data.get("ranking") or {}
+
+    def indeksy(klucz: str) -> list[int]:
+        v = r.get(klucz)
+        return [int(i) for i in v if isinstance(i, (int, float))
+                and 0 <= int(i) < len(topics)] if isinstance(v, list) else []
+
+    for i in indeksy("least_written_about"):
+        topics[i]["pozycja"] += 2
+        topics[i]["swiezy_wg_modelu"] = True
+    for i in indeksy("most_written_about"):
+        topics[i]["pozycja"] -= 2
+        topics[i]["oklepany_wg_modelu"] = True
+    for i in indeksy("richest"):
+        topics[i]["pozycja"] += 1
+    for i in indeksy("thinnest"):
+        topics[i]["pozycja"] -= 1
+    if not any(indeksy(k) for k in ("least_written_about", "most_written_about")):
+        print("  [skaut] BRAK rankingu wlasnego — kolejnosc tylko z pol bezwzglednych",
+              flush=True)
 
     bez = [t for t in topics if not t["nosny"]]
     stawki = sum(1 for t in topics if t["ma_stawke"] and not t["ma_przekonanie"])
@@ -2077,13 +2119,22 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
               "kolejki" % (len(bez), len(topics)), flush=True)
     print("  [skaut] watki na temat: %s"
           % sorted((t["ile_watkow"] for t in topics), reverse=True), flush=True)
+    if any(t.get("swiezy_wg_modelu") for t in topics):
+        print("  [skaut] model uznal za najswiezsze: %s"
+              % [str(t.get("title"))[:34] for t in topics
+                 if t.get("swiezy_wg_modelu")], flush=True)
+    if any(t.get("oklepany_wg_modelu") for t in topics):
+        print("  [skaut] model uznal za najbardziej oklepane: %s"
+              % [str(t.get("title"))[:34] for t in topics
+                 if t.get("oklepany_wg_modelu")], flush=True)
 
     # Do kosza nie idzie nic: przebieg musi skonczyc sie artykulem, to decyzja
     # wlasciciela i nie wolno jej podwazac cichym filtrem. Ale kolejnosc mowi,
     # co bierzemy najpierw — a kolejnosc byla dotad zbudowana tak, ze CLICHE
     # wygrywalo z definicji: temat oklepany zawsze ma najostrzejsze „wszyscy
     # zakladaja", bo przez to wlasnie zostal oklepany.
-    topics.sort(key=lambda t: (not t["nosny"], t["nasycony"], -t["ile_watkow"]))
+    topics.sort(key=lambda t: (not t["nosny"], -t["pozycja"], t["nasycony"],
+                               -t["ile_watkow"]))
     return topics
 
 
