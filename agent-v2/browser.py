@@ -381,17 +381,15 @@ def sprawdz_sesje() -> None:
     p, browser, context = podlacz_sie()
     page = context.new_page()
     try:
-        # Czy tej notki juz nie wystawilismy? Pytamy RZECZYWISTOSCI, a nie
-        # wlasnej ksiegowosci: proces przerwany po klknieciu, a przed zapisem,
-        # zostawilby ksiegowosc niezgodna ze stanem faktycznym. Substack wie
-        # lepiej niz my, co u nas wisi.
-        if wyslij and potwierdz_notke(page, tekst):
-            print("  ta notka juz jest na profilu — nie wystawiam drugi raz",
-                  flush=True)
-            wynik["wyslane"] = True
-            wynik["pominiete"] = True
-            return wynik
-
+        # USUNIETO 2026-08-20 blok wklejony tu omylkowo z `wystaw_notke`.
+        # Odwolywal sie do `wyslij`, `tekst` i `wynik`, ktore w tej funkcji nie
+        # istnieja, wiec `python agent-v2/browser.py sesja` konczylo sie
+        # NameError przy pierwszej linii `try`.
+        #
+        # To nie byla usterka kosmetyczna: TA WLASNIE KOMENDA jest cytowana
+        # w alarmie wysylanym do wlasciciela, gdy sesja wygasa. Procedura
+        # ratunkowa nie dzialala, a dowiedzielibysmy sie o tym dopiero
+        # w chwili, gdy naprawde bylaby potrzebna.
         page.goto("https://substack.com/home", timeout=READ_TIMEOUT_MS,
                   wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS)
@@ -489,17 +487,10 @@ def zaloguj() -> None:
         # NAJPIERW strona główna, nie formularz logowania. Pokazywanie formularza
         # komuś, kto jest już zalogowany, potrafi zapętlić CAPTCHĘ — nie ma czego
         # potwierdzać. Jeśli sesja istnieje, nie ma się w ogóle po co logować.
-        # Czy tej notki juz nie wystawilismy? Pytamy RZECZYWISTOSCI, a nie
-        # wlasnej ksiegowosci: proces przerwany po klknieciu, a przed zapisem,
-        # zostawilby ksiegowosc niezgodna ze stanem faktycznym. Substack wie
-        # lepiej niz my, co u nas wisi.
-        if wyslij and potwierdz_notke(page, tekst):
-            print("  ta notka juz jest na profilu — nie wystawiam drugi raz",
-                  flush=True)
-            wynik["wyslane"] = True
-            wynik["pominiete"] = True
-            return wynik
-
+        #
+        # USUNIETO 2026-08-20 ten sam blok wklejony omylkowo z `wystaw_notke`,
+        # co w `sprawdz_sesje` — odwolywal sie do nieistniejacych tu nazw
+        # `wyslij`, `tekst` i `wynik`. Obie funkcje ratunkowe byly martwe.
         page.goto("https://substack.com/home", timeout=READ_TIMEOUT_MS,
                   wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS)

@@ -251,8 +251,15 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     # tylko brakujaca czesc — dzieki temu notki rozkladaja sie na godziny,
     # a nie na minuty.
     juz = browser.ile_dzis_wystawione()
+    # OBSERWACJE I SUBSKRYPCJE TEZ, i to jest naprawa z 20 sierpnia. Bloki 3c
+    # i 3d braly `budzet["follow"]` oraz `budzet["subskrypcje"]` — czyli PELNY
+    # dzienny przydzial — w KAZDYM z trzech przebiegow. Realny wolumen wychodzil
+    # okolo trzykrotnosci konfiguracji: ~60-70 obserwacji miesiecznie zamiast
+    # 20-30 i ~27 subskrypcji zamiast 6-12. Kazda subskrypcja to poczta do
+    # skrzynki wlasciciela, wiec to nie byla pomylka kosmetyczna.
     zostalo = {k: max(0, budzet[k] - juz.get(k, 0))
-               for k in ("notki", "komentarze", "lajki", "restacki")}
+               for k in ("notki", "komentarze", "lajki", "restacki",
+                         "follow", "subskrypcje")}
 
     # CICHY DZIEN. Wyciszamy to, co NADAJEMY — notki i restacki. Komentarze,
     # polubienia i obserwacje zostaja, bo to jest czytanie cudzych rzeczy,
@@ -503,7 +510,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         podpowiedzi. Obserwowanie kogoś, kogo się nie czytało, to zbieranie
         nazwisk, a nie budowanie kręgu.
         """
-        if not budzet.get("follow"):
+        if not na_teraz.get("follow"):
             return
         znani = set(kanal._historia())
         if not znani:
@@ -512,7 +519,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
 
         kandydaci = [h for h in znani if h and h != f"{config.SUBSTACK_HANDLE}.substack.com"]
         random.shuffle(kandydaci)
-        for host in kandydaci[: budzet["follow"]]:
+        for host in kandydaci[: na_teraz["follow"]]:
             if not zostal_czas("obserwowanie"):
                 return
             # Nie `host.split(".")[0]`: przy wlasnej domenie dawalo to "www"
@@ -538,7 +545,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         wiec w tempie obserwacji: do 44 miesiecznie zamiast 6-12, i kazda z nich
         przysylala poczte do skrzynki wlasciciela.
         """
-        if not budzet.get("subskrypcje"):
+        if not na_teraz.get("subskrypcje"):
             return
         znani = set(kanal._historia())
         if not znani:
@@ -548,7 +555,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         kandydaci = [h for h in znani
                      if h and h != f"{config.SUBSTACK_HANDLE}.substack.com"]
         random.shuffle(kandydaci)
-        for host in kandydaci[: budzet["subskrypcje"]]:
+        for host in kandydaci[: na_teraz["subskrypcje"]]:
             if not zostal_czas("subskrypcje"):
                 return
             uchwyt = browser.uchwyt_publikacji(host)
@@ -1019,6 +1026,20 @@ def main() -> int:
         notes = [*findings,
                  {"gate": "DLUGOSC", "detail": f"{len(draft['body'].split())} słów"},
                  {"gate": "RECENZJA", "detail": report.get("summary", "")}]
+        # Temat wzięty MIMO odrzucenia przez odsiew ma o tym powiedzieć.
+        # `pick_topic` ustawiał flagę i pisał w komentarzu, że „zapisuje to
+        # w uwagach" — a nie zapisywał: `verdict` żyje dalej tylko po to, by
+        # oddać `depth`. Właściciel czytający `.uwagi.md` nie dowiadywał się,
+        # że tekst powstał z tematu, którego wykonalność odrzuciła.
+        if verdict.get("mimo_odrzucenia"):
+            notes.append({
+                "gate": "TEMAT_MIMO_ODRZUCENIA",
+                "detail": ("żaden temat nie przeszedł odsiewu wykonalności — "
+                           "wzięty najlepszy z odrzuconych (pewność %.2f, "
+                           "spodziewane źródła %s)"
+                           % (float(verdict.get("confidence") or 0),
+                              verdict.get("expected_primary_sources"))),
+            })
         # Fragmenty, których artykuł nie zużył, zostają zapisane razem z kartą.
         # Każdy przebieg zbiera ich kilkadziesiąt, a tekst bierze kilka — reszta
         # to gotowe, ocytowane fakty na notki w dni bez artykułu.

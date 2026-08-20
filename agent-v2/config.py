@@ -515,6 +515,14 @@ NASYCENIE_OD_ILU = 2
 # pokazac.
 PRECEDENSOW_NA_ARTYKUL = 2
 
+# Co ile dni ma powstawac kopia listy subskrybentow, zanim alarm zacznie o niej
+# przypominac. Eksportu NIE DA SIE zautomatyzowac — endpoint nie istnieje,
+# a sondowanie nieudokumentowanych adresow to scraping wedlug regulaminu
+# Substacka. Skoro krok jest reczny, ktos musi o nim przypominac, inaczej nie
+# zdarzy sie nigdy. I nie zdarzyl sie: katalog `kopie/` nie istnial na produkcji
+# ani jednego dnia, mimo ze skrypt do tego byl napisany.
+KOPIA_SUBSKRYBENTOW_CO_ILE_DNI = 14
+
 # KOGO WIAZE WYNIK. Drugie brakujace kryterium i drugi powod, dla ktorego
 # tematy wychodzily mialkie. Zepsuta maszyna do glosowania to piecset glosow
 # w jednym lokalu; zastrzelony prezydent zatrzymuje caly kraj w tej samej

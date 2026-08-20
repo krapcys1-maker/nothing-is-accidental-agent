@@ -94,7 +94,17 @@ def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
     # dwukrotnosc — na tyle duzo, ze usrednianie zafalszowaloby zapis.
     if model.startswith("deepseek"):
         stawka = config.stawka_deepseek(model)
+        # KLUCZ `cache` TEZ, i to nie jest kosmetyka. Bez niego linijka nizej
+        # robi `price.get("cache", price["in"])` i wycenia trafienia w cache
+        # stawka WEJSCIOWA — czyli trzydziestokrotnie za drogo u pro ($0,66
+        # zamiast $0,022).
+        #
+        # `stawka_deepseek` zwraca ten klucz swiadomie i ma przy nim komentarz
+        # o tej samej pomylce. Poprawka zatrzymala sie jednak w polowie drogi:
+        # funkcja zaczela go oddawac, a `_cost` nadal go nie przepisywal, wiec
+        # nic sie nie zmienilo. Blad zglosilem jako naprawiony, a nie byl.
         price = {"in": stawka["in"], "out": stawka["out"],
+                 "cache": stawka["cache"],
                  "verified": config.PRICING[model]["verified"]}
     else:
         price = config.PRICING[model]

@@ -1965,13 +1965,6 @@ def pick_topic(
         """
         return int(not temat(a).get("nasycony", False))
 
-    def artykulowy(a: dict[str, Any]) -> int:
-        """Czy temat ma udokumentowana historie awarii I zasieg poza jedno
-        miejsce. Sama procedura to notka — kompletna odpowiedz w jednym zdaniu,
-        ktorej rozbicie na podpunkty daje rozdmuchana notke, a nie artykul.
-        """
-        return int(bool(temat(a).get("na_artykul")))
-
     def wlasny_ranking(a: dict[str, Any]) -> int:
         """Gdzie model postawil ten temat wsrod SWOICH wlasnych propozycji.
 

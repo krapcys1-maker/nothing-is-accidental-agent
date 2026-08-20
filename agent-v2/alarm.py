@@ -274,6 +274,49 @@ def powtorki() -> str | None:
     return None
 
 
+def kopia_subskrybentow() -> str | None:
+    """Czy istnieje AKTUALNA kopia listy subskrybentow.
+
+    NAJWAZNIEJSZA z tych kontroli i dodana ostatnia, bo brakowalo jej najdluzej.
+
+    Wszystko inne w tym projekcie da sie odtworzyc: teksty, karty dowodowe,
+    okladki i cala historia kosztow leza w repozytorium albo powstaja na nowo za
+    kilka centow. Lista subskrybentow zyje WYLACZNIE u Substacka, a regulamin
+    pozwala zamknac konto natychmiast i w wylacznej ocenie serwisu. Przy tempie
+    6-12 subskrypcji miesiecznie sto osob to okolo jedenastu miesiecy pracy.
+
+    Eksportu nie da sie zautomatyzowac — endpoint nie istnieje, a sondowanie
+    nieudokumentowanych adresow to dokladnie to, co regulamin nazywa
+    scrapingiem. Skoro wiec krok jest RECZNY, musi o nim ktos przypominac,
+    inaczej nie zdarzy sie nigdy. I nie zdarzyl sie: katalog `kopie/` nie
+    istnial na produkcji przez caly czas dzialania agenta.
+
+    Kontrola ciszy zauwaza milczacego agenta po 26 godzinach. Brak kopii
+    subskrybentow nie byl zauwazany przez nic — az do dnia, w ktorym bylaby
+    potrzebna.
+    """
+    katalog = config.DATA_DIR / "kopie"
+    if not katalog.exists():
+        return ("nie ma ANI JEDNEJ kopii listy subskrybentow (brak katalogu %s). "
+                "To jedyne aktywo, ktorego nie da sie odtworzyc. Zrob eksport: "
+                "Dashboard -> Subscribers -> Export, plik do %s, potem "
+                "`python agent-v2/kopia_subskrybentow.py`" % (katalog, katalog / "przychodzace"))
+    kopie = sorted(katalog.glob("subskrybenci-*.csv"))
+    if not kopie:
+        return ("katalog kopii istnieje, ale jest pusty — zadnej kopii listy "
+                "subskrybentow. Patrz `python agent-v2/kopia_subskrybentow.py`")
+    from datetime import datetime, timezone
+
+    najnowsza = max(kopie, key=lambda p: p.stat().st_mtime)
+    wiek = (datetime.now(timezone.utc)
+            - datetime.fromtimestamp(najnowsza.stat().st_mtime, timezone.utc))
+    if wiek.days > config.KOPIA_SUBSKRYBENTOW_CO_ILE_DNI:
+        return ("ostatnia kopia listy subskrybentow ma %d dni (%s), a prog to %d. "
+                "Zrob nowy eksport."
+                % (wiek.days, najnowsza.name, config.KOPIA_SUBSKRYBENTOW_CO_ILE_DNI))
+    return None
+
+
 def sprawdz_wszystko() -> list[str]:
     """Uruchamia komplet kontroli i alarmuje o tym, co znalazl."""
     kontrole = (
@@ -283,6 +326,8 @@ def sprawdz_wszystko() -> list[str]:
         ("nadaktywnosc", "Agent robi za duzo", nadaktywnosc),
         ("koszt", "Koszt blisko sufitu", koszt),
         ("powtorki", "Agent sie powtarza", powtorki),
+        ("kopia-subskrybentow", "BRAK KOPII LISTY SUBSKRYBENTOW",
+         kopia_subskrybentow),
     )
     znalezione: list[str] = []
     for klucz, temat, funkcja in kontrole:
