@@ -1939,20 +1939,41 @@ def pick_topic(
     """
     waga = {"RICH": 2, "SINGLE": 1, "THIN": 0}
 
-    def ma_przekonanie(a: dict[str, Any]) -> int:
-        """Czy temat pod tym numerem niesie NAZWANE zlamane przekonanie.
-
-        Idzie PRZED glebokoscia, bo glebokosc mowi, ile da sie napisac,
-        a przekonanie mowi, czy ktokolwiek zechce to przeczytac. Temat
-        bogaty w material, ale bez luki, daje artykul poprawny i martwy —
-        i dokladnie taki powstal o symbolu na kosmetykach.
-        """
+    def temat(a: dict[str, Any]) -> dict[str, Any]:
         i = int(a.get("index", -1))
-        return int(bool(0 <= i < len(topics) and topics[i].get("ma_przekonanie")))
+        return topics[i] if 0 <= i < len(topics) else {}
+
+    def nosny(a: dict[str, Any]) -> int:
+        """Czy temat niesie KTORAKOLWIEK z dwoch rzeczy: przekonanie albo stawke.
+
+        Bylo tu `ma_przekonanie` i tylko ono — wiec temat drugiego rodzaju,
+        ktory skaut swiadomie stawia na czele, wracal tutaj na sam dol. Piec
+        dobrych tematow z przebiegu 20 sierpnia nie zostaloby wybranych nigdy.
+        """
+        t = temat(a)
+        return int(bool(t.get("nosny", t.get("ma_przekonanie"))))
+
+    def swiezy(a: dict[str, Any]) -> int:
+        """Czy tego jeszcze nie opisano gdzie indziej.
+
+        TO JEST NAJWAZNIEJSZY KLUCZ PO NOSNOSCI i powod, dla ktorego ranking
+        w ogole przepisano. Temat oklepany ma z definicji NAJOSTRZEJSZE
+        „wszyscy zakladaja" — bo dokladnie dlatego zostal oklepany. Ranking
+        oparty na sile zlamanego przekonania wybieral wiec kanon internetowego
+        mythbustingu: zraszacze, chusteczki, mydlo antybakteryjne, data na
+        lekach. Kazdy z nich to tysiace istniejacych tekstow.
+        """
+        return int(not temat(a).get("nasycony", False))
+
+    def watki(a: dict[str, Any]) -> int:
+        """Ile osobnych pytan niesie temat. Jeden watek to notka, nie artykul."""
+        return int(temat(a).get("ile_watkow", 0))
 
     ranked = sorted(
         (a for a in assessments if a.get("feasible")),
-        key=lambda a: (ma_przekonanie(a),
+        key=lambda a: (nosny(a),
+                       swiezy(a),
+                       watki(a),
                        waga.get(str(a.get("depth", "RICH")).upper(), 1),
                        a.get("confidence", 0),
                        a.get("expected_primary_sources", 0)),
@@ -2022,18 +2043,47 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
         # rodzaju ladowal na koncu, czyli nie powstalby nigdy.
         t["nosny"] = bool(t["ma_przekonanie"] or t["ma_stawke"])
 
+        # NASYCENIE. Model wymienia, co jego zdaniem juz o tym napisano —
+        # i uzywamy jego pamieci PRZECIW niemu. „Wszyscy wierza X o zwyklym
+        # przedmiocie, a X jest nieprawda" to nie jest rzadki wglad, tylko
+        # GATUNEK z kanonem: zraszacze, chusteczki flushable, karta hotelowa,
+        # mydlo antybakteryjne, data na lekach, maszyna z pluszakami. Model
+        # podaje je pierwsze, bo sa najczesciej opisane, czyli najlatwiej
+        # dostepne — a dostepnosc jest odwrotnoscia sygnalu, ktorego szukamy.
+        juz = t.get("already_written")
+        t["ile_juz_napisano"] = len(juz) if isinstance(juz, list) else 0
+        t["nasycony"] = t["ile_juz_napisano"] >= config.NASYCENIE_OD_ILU
+
+        # WATKI. Kryterium wlasciciela: jeden temat, o ktorym da sie napisac
+        # piec artykulow, bije piec tematow na jeden artykul kazdy. Temat
+        # o jednym watku to notka, chocby fakt byl najlepszy.
+        w = t.get("threads")
+        t["ile_watkow"] = len(w) if isinstance(w, list) else 0
+
     bez = [t for t in topics if not t["nosny"]]
     stawki = sum(1 for t in topics if t["ma_stawke"] and not t["ma_przekonanie"])
+    nasycone = [t for t in topics if t["nasycony"]]
     if stawki:
         print("  [skaut] %d z %d tematow to systemy pod proba (bez zlamanego "
               "przekonania, ze stawka)" % (stawki, len(topics)), flush=True)
+    if nasycone:
+        print("  [skaut] %d z %d juz opisanych gdzie indziej — na koniec kolejki:"
+              % (len(nasycone), len(topics)), flush=True)
+        for t in nasycone[:4]:
+            print("     %s (%d znanych tekstow)"
+                  % (str(t.get("title"))[:52], t["ile_juz_napisano"]), flush=True)
     if bez:
         print("  [skaut] %d z %d tematow bez przekonania I bez stawki — na koniec "
               "kolejki" % (len(bez), len(topics)), flush=True)
+    print("  [skaut] watki na temat: %s"
+          % sorted((t["ile_watkow"] for t in topics), reverse=True), flush=True)
+
     # Do kosza nie idzie nic: przebieg musi skonczyc sie artykulem, to decyzja
     # wlasciciela i nie wolno jej podwazac cichym filtrem. Ale kolejnosc mowi,
-    # co bierzemy najpierw.
-    topics.sort(key=lambda t: not t["nosny"])
+    # co bierzemy najpierw — a kolejnosc byla dotad zbudowana tak, ze CLICHE
+    # wygrywalo z definicji: temat oklepany zawsze ma najostrzejsze „wszyscy
+    # zakladaja", bo przez to wlasnie zostal oklepany.
+    topics.sort(key=lambda t: (not t["nosny"], t["nasycony"], -t["ile_watkow"]))
     return topics
 
 

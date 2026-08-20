@@ -482,6 +482,21 @@ MAX_WORDS = 1200
 # sprawa"), a nie doklejona formulka.
 BUDZET_ZASTRZEZEN = 1
 
+# Od ilu ZNANYCH ISTNIEJACYCH TEKSTOW temat uznajemy za nasycony.
+#
+# Skaut wymienia, co jego zdaniem juz o danym temacie napisano — i uzywamy jego
+# pamieci PRZECIW niemu. „Wszyscy wierza X o zwyklym przedmiocie, a X jest
+# nieprawda" to nie jest rzadki wglad, tylko GATUNEK z kanonem, ktory model ma
+# wyuczony: zraszacze, chusteczki flushable, karta hotelowa przy telefonie,
+# mydlo antybakteryjne, data na lekach, maszyna z pluszakami, wodoodpornosc
+# telefonu. Model podaje je pierwsze, bo sa najczesciej opisane, czyli
+# najlatwiej dostepne — a DOSTEPNOSC JEST ODWROTNOSCIA sygnalu, ktorego
+# szukamy.
+#
+# Prog dwa, nie jeden: jeden przypomniany tekst zdarza sie przy kazdym temacie,
+# ktory w ogole istnieje. Dwa znaczy, ze czytelnik juz to czytal.
+NASYCENIE_OD_ILU = 2
+
 # Ile ostatnich artykulow porownuje bramka ODCISK_FORMY.
 ILE_TEKSTOW_DO_POROWNANIA_FORMY = 4
 

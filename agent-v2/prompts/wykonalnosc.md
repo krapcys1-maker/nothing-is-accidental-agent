@@ -54,17 +54,29 @@ domains, one idea.
 
 So judge `depth` for each topic:
 
-- **RICH** — there is a second act. Either a second independent mechanism, or the
-  same mechanism visible in at least two other domains, or a real disagreement in
-  the record worth laying out. This can carry a full-length article.
+- **RICH** — there is a second act. Any one of these is enough: a second
+  independent mechanism; the same mechanism visible in at least two other
+  domains; a real disagreement in the record worth laying out; **or the topic's
+  own `threads` list carries three or more separate questions, each answerable
+  from its own documents and each leaving the others open.**
+
+  That last route matters and is easy to miss. Depth was judged here only
+  sideways — by whether the same idea shows up somewhere else — so a subject
+  that goes deep in ONE place scored THIN however much was in it. "What happens
+  when the people whose job is to choose a successor cannot agree" has no
+  parallel in another industry and would have been thrown to the note pool,
+  while carrying who may vote, what happens when nobody wins, how long deadlock
+  has been allowed to run, who decides meanwhile, and what has broken it before.
+  Five questions, five sets of documents, one subject. That is RICH.
 - **SINGLE** — one mechanism, well documented, and nothing else in sight. Worth
   publishing SHORT. Not a failure and not a rejection: a tight six hundred words
   beats a padded eleven hundred.
 - **THIN** — the finding is a sentence. No article at any length. It belongs in
   the note pool.
 
-Judging RICH is a claim you should be able to back: name the parallels in
-`parallels`. If you cannot name two, it is not RICH.
+Judging RICH is a claim you should be able to back. Either name the parallels in
+`parallels` — two of them, or it is not RICH by that route — or point at the
+three-plus threads the topic already carries. One of the two must hold.
 
 Be honest rather than generous. Marking everything RICH puts us straight back to
 padding, and marking everything SINGLE wastes good subjects.
