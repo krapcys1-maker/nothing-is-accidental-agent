@@ -81,6 +81,47 @@ def review(
     return llm.parse_json(text)
 
 
+FORMA_SYSTEM = (
+    "You report what is physically in an article and quote it verbatim. "
+    "You do not score, judge or suggest. Return only valid JSON."
+)
+
+
+def ocen_forme(
+    conn: sqlite3.Connection, run_id: int, draft: dict[str, Any]
+) -> dict[str, Any]:
+    """Obserwacja formy: beaty, eskalacja, moment przyłapania, znajomość otwarcia.
+
+    MODEL OBSERWUJE, KOD ROZSTRZYGA. Prompt prosi wyłącznie o cytaty i
+    odpowiedzi tak/nie; liczenie beatów, dzielenie przez długość i szukanie
+    pozycji w tekście robi `gates.uwagi_z_formy`. Powód jest ten sam, co przy
+    ocenie tematów: oceny liczbowe modelu degenerują się do jednej wartości,
+    a cytat da się sprawdzić.
+
+    Osobne wywołanie od `review` CELOWO. Recenzent ma wprost chronić
+    wnioskowanie przed zgłoszeniem — bo śmiała interpretacja nie jest wadą.
+    Ta bramka liczy między innymi zastrzeżenia. Złączone w jedno pytanie
+    tępiłyby się nawzajem.
+    """
+    prompt = _prompt("forma.md", body=draft["body"])
+    text = llm.call("forma", FORMA_SYSTEM, prompt, conn=conn, run_id=run_id)
+    return llm.parse_json(text)
+
+
+def poprzednie_teksty(ile: int | None = None) -> list[str]:
+    """Treści kilku ostatnich artykułów — materiał dla bramki ODCISK_FORMY."""
+    ile = ile or config.ILE_TEKSTOW_DO_POROWNANIA_FORMY
+    pliki = sorted(p for p in config.ARTICLES_DIR.glob("*.md")
+                   if not p.name.endswith(".uwagi.md"))
+    teksty: list[str] = []
+    for p in reversed(pliki[-(ile + 1):]):
+        try:
+            teksty.append(p.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+    return teksty[:ile]
+
+
 def _nazwa_zrodla(conn: sqlite3.Connection, url: str) -> str:
     """Nazwa źródła zamiast gołego adresu.
 

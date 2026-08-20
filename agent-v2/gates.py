@@ -40,6 +40,68 @@ VAGUE_STUDY = re.compile(
     re.IGNORECASE,
 )
 
+# --- podlogi z playbooka (2026-08-20) ------------------------------------
+# Wszystkie ZAKAZUJA, zadna nie nakazuje pozycji. To rozroznienie jest tu
+# najwazniejsze: regula zakazujaca usuwa wade i zostawia przestrzen otwarta,
+# regula nakazujaca pozycje wypelnia ja jedna odpowiedzia i po dziesieciu
+# tekstach sama staje sie podpisem maszyny. Juz raz na tym poleglismy —
+# naprawa wad tresci zamienila sie w wade formy, bo prompt zamawial szkielet.
+
+# Zastrzezenia w pierwszej osobie. Znakowanie wnioskowania jest DOBRE i
+# recenzent wprost go chce — ale szesc raz w jednym tekscie to juz tik, nie
+# uczciwosc. W artykule 0025 bylo szesc.
+ZASTRZEZENIE = re.compile(
+    r"\bmy\s+(reading|suspicion|guess|sense|hunch)\b"
+    r"|\bI\s+(think|suspect|would\s+guess|imagine)\b"
+    r"|\bin\s+my\s+view\b"
+    r"|\bit\s+seems\s+to\s+me\b"
+    r"|\bis\s+a\s+separate\s+question\b",
+    re.IGNORECASE,
+)
+
+# Obwieszczona powsciagliwosc. „Nie zmyslę tego" czyta sie jak poklepanie
+# samego siebie po ramieniu; luke nazywa sie wprost, bez zapowiedzi cnoty.
+POWSCIAGLIWOSC = re.compile(
+    r"\bI\s+(will\s+not|won'?t|refuse\s+to|am\s+not\s+going\s+to)\s+"
+    r"(invent|speculate|guess|make\s+up|assume)\b"
+    r"|\bI\s+will\s+not\s+invent\s+it\b",
+    re.IGNORECASE,
+)
+
+# Otwarcia, ktore kaza czytelnikowi isc cos obejrzec zamiast go zatrzymac.
+# Lista jest z obserwacji, nie z gustu: 0025 zaczyna sie od „Turn over almost
+# any plastic container" — i to samo zdanie zglosila niezaleznie bramka
+# FAKT_BEZ_POKRYCIA, bo „almost any" bylo przesada nie do obrony.
+ZAKAZANE_OTWARCIA = re.compile(
+    r"^\s*(turn\s+over|look\s+at|take\s+a\s+look|next\s+time\s+you|"
+    r"ask\s+most\s+people|most\s+people\s+(think|believe|assume)|"
+    r"we\s+all\s+know|pick\s+up|imagine\s+you|consider\s+the|"
+    r"have\s+you\s+ever|if\s+you\s+(look|turn|check))\b",
+    re.IGNORECASE,
+)
+
+# Zrodlo, ktore nie jest zrodlem. Lapiemy je TYLKO w zdaniu z liczba —
+# „in one survey" bez zadnej statystyki jest nieszkodliwe, z liczba jest
+# przypisem donikad. 0025: „In one survey, 68% of Americans thought…".
+NIBY_ZRODLO = re.compile(
+    r"\bin\s+one\s+(survey|study|poll|report)\b"
+    r"|\bsome\s+estimates?\b"
+    r"|\breportedly\b"
+    r"|\bby\s+some\s+(counts?|estimates?)\b"
+    r"|\bit\s+is\s+(said|estimated|reported)\b"
+    r"|\bsurveys?\s+(suggest|show|find)\b",
+    re.IGNORECASE,
+)
+
+# Akapit wyliczajacy niewiadome. Rozny od ZAPOWIEDZ_GRANIC, ktora pyta, czy
+# zdanie mowi o sobie samym — ta pyta o POZYCJE. Zbiorcza lista granic pod
+# koniec obniza temperature dokladnie tam, gdzie ma rosnac; pojedyncza
+# niewiadoma postawiona tam, gdzie powstaje, nie przeszkadza nikomu.
+_SYGNAL_NIEWIADOMEJ = ("is unknown", "cannot say", "does not establish",
+                       "do not establish", "only partly", "in outline",
+                       "is not clear", "leaves open", "leave open",
+                       "not settled", "cannot answer", "is a separate question")
+
 DIGITS = re.compile(r"\d[\d.,]*")
 
 
@@ -53,8 +115,15 @@ def numbers_outside_corpus(body: str, card: dict[str, Any]) -> list[str]:
     return sorted(t for t in _digit_tokens(body) if t not in corpus)
 
 
-def deterministic_floors(body: str, card: dict[str, Any]) -> list[dict[str, str]]:
-    """Trzy podłogi bez modelu: 0 USD, milisekundy, zero wywołań."""
+def deterministic_floors(body: str, card: dict[str, Any],
+                         poprzednie: list[str] | None = None
+                         ) -> list[dict[str, str]]:
+    """Podłogi bez modelu: 0 USD, milisekundy, zero wywołań.
+
+    `poprzednie` to treści kilku ostatnich artykułów — potrzebne wyłącznie
+    bramce `ODCISK_FORMY`. Bez nich reszta działa jak dotąd, więc stary
+    sposób wywołania nadal jest poprawny.
+    """
     findings: list[dict[str, str]] = []
 
     for match in FABRICATED_EXPERIENCE.finditer(body):
@@ -90,7 +159,231 @@ def deterministic_floors(body: str, card: dict[str, Any]) -> list[dict[str, str]
             "detail": (f"artykuł stoi na {ile} źródle ({', '.join(hosty) or 'brak'})"
                        " — czytelnik zobaczy jeden odnośnik pod tekstem"),
         })
+
+    # --- podlogi z playbooka (2026-08-20) --------------------------------
+    zastrz = zastrzezenia(body)
+    if len(zastrz) > config.BUDZET_ZASTRZEZEN:
+        findings.append({
+            "gate": "BUDZET_ZASTRZEZEN",
+            "detail": "%d zastrzeżeń przy budżecie %d: %s"
+                      % (len(zastrz), config.BUDZET_ZASTRZEZEN,
+                         ", ".join(repr(z) for z in zastrz[:6])),
+        })
+    for m in POWSCIAGLIWOSC.finditer(body):
+        findings.append({
+            "gate": "OBWIESZCZONA_POWSCIAGLIWOSC",
+            "detail": "%r — lukę nazywa się wprost, bez zapowiadania cnoty"
+                      % body[max(0, m.start() - 40):m.end() + 20].strip(),
+        })
+    otwarcie = zakazane_otwarcie(body)
+    if otwarcie:
+        findings.append({
+            "gate": "ZAKAZANE_OTWARCIE",
+            "detail": "każe czytelnikowi iść coś obejrzeć: %r" % otwarcie,
+        })
+    for zdanie in statystyki_bez_zrodla(body):
+        findings.append({
+            "gate": "STATYSTYKA_BEZ_ZRODLA",
+            "detail": "liczba bez przypisu: %r" % zdanie,
+        })
+    granice = niewiadome_na_koncu(body)
+    if granice:
+        findings.append({
+            "gate": "NIEWIADOME_NA_KONCU",
+            "detail": "zbiorcza lista granic w ostatniej trzeciej — %s" % granice,
+        })
+    ksztalt = powtorzona_forma(body, poprzednie or [])
+    if ksztalt:
+        findings.append({"gate": "ODCISK_FORMY", "detail": ksztalt})
     return findings
+
+
+def _akapity(body: str) -> list[str]:
+    return [a.strip() for a in re.split(r"\n\s*\n", body.split("## Sources")[0])
+            if a.strip() and not a.strip().startswith(("#", "*", "-"))]
+
+
+def zastrzezenia(body: str) -> list[str]:
+    """Zastrzezenia w pierwszej osobie. Budzet: jedno na tekst."""
+    return [m.group(0) for m in ZASTRZEZENIE.finditer(body)]
+
+
+def zakazane_otwarcie(body: str) -> str:
+    """Pierwsze zdanie, jesli kaze czytelnikowi isc cos obejrzec."""
+    akapity = _akapity(body)
+    if not akapity:
+        return ""
+    pierwsze = re.split(r"(?<=[.!?])\s+", akapity[0])[0]
+    return pierwsze[:160] if ZAKAZANE_OTWARCIA.match(pierwsze) else ""
+
+
+def statystyki_bez_zrodla(body: str) -> list[str]:
+    """Zdania, ktore niosa liczbe i udaja, ze maja na nia zrodlo."""
+    znalezione: list[str] = []
+    for zdanie in re.split(r"(?<=[.!?])\s+", body.split("## Sources")[0]):
+        if NIBY_ZRODLO.search(zdanie) and DIGITS.search(zdanie):
+            znalezione.append(" ".join(zdanie.split())[:150])
+    return znalezione
+
+
+def niewiadome_na_koncu(body: str) -> str:
+    """Zbiorczy akapit o niewiadomych w ostatniej trzeciej tekstu.
+
+    To NIE to samo co `zapowiedziany_akapit_granic`, ktora pyta, czy zdanie
+    mowi o samym sobie. Ta pyta wylacznie o POZYCJE. Powod jest prosty:
+    lista granic pod koniec obniza temperature dokladnie tam, gdzie ma
+    rosnac. Pojedyncza niewiadoma postawiona tam, gdzie powstaje, nikomu nie
+    przeszkadza — dlatego wymagamy DWOCH sygnalow w jednym akapicie, czyli
+    passusu, a nie jednego uczciwego przyznania sie.
+
+    Artykul 0025 mial taki akapit na 82% glebokosci, z czterema sygnalami.
+    """
+    korpus = body.split("## Sources")[0]
+    akapity = _akapity(body)
+    for a in akapity:
+        niski = a.lower()
+        if sum(1 for s in _SYGNAL_NIEWIADOMEJ if s in niski) < 2:
+            continue
+        poczatek = korpus.find(a[:60])
+        if poczatek < 0:
+            continue
+        glebokosc = poczatek / max(1, len(korpus))
+        if glebokosc >= 2 / 3:
+            return "%.0f%% głębokości: %s" % (100 * glebokosc,
+                                              " ".join(a.split())[:120])
+    return ""
+
+
+def odcisk_formy(body: str) -> dict[str, Any]:
+    """Zgrubny szkielet tekstu — do porownania z poprzednimi, nie do oceny.
+
+    Cechy sa CELOWO zgrubne. Nie chodzi o to, zeby dwa teksty roznily sie
+    w szczegolach, tylko zeby nie mialy tego samego ksztaltu: tego samego
+    otwarcia, tego samego miejsca na zwrot do czytelnika, tej samej dlugosci
+    i tego samego rozkladu akapitow.
+
+    Powod istnienia tej funkcji: dokladamy kilkadziesiat regul dotyczacych
+    formy. Kazda z osobna poprawia tekst, wszystkie razem moga wyprodukowac
+    szablon — a to jest ta sama wada, ktora juz raz zrobilismy, naprawiajac
+    tresc i zamawiajac przy okazji szkielet.
+    """
+    korpus = body.split("## Sources")[0]
+    akapity = _akapity(body)
+    slowa = korpus.split()
+
+    def kubelek(u: float | None) -> str:
+        if u is None:
+            return "brak"
+        return ("0-25", "25-50", "50-75", "75-100")[min(3, int(u * 4))]
+
+    ty = re.search(r"\byou(r)?\b", korpus, re.I)
+    granice = niewiadome_na_koncu(body)
+
+    return {
+        "otwarcie": (akapity[0].split()[0].lower().strip('"“,.')
+                     if akapity else ""),
+        "liczba_w_otwarciu": bool(DIGITS.search(" ".join(slowa[:50]))),
+        "pozycja_ty": kubelek(ty.start() / max(1, len(korpus)) if ty else None),
+        "granice_na_koncu": bool(granice),
+        "akapitow": len(akapity) // 3,
+        "dlugosc": len(slowa) // 200,
+    }
+
+
+def powtorzona_forma(body: str, poprzednie: list[str],
+                     prog: int = 5) -> str:
+    """Czy ten tekst ma ksztalt ktoregos z poprzednich.
+
+    `prog` to ile z szesciu cech musi sie zgodzic, zeby uznac ksztalt za
+    powtorzony. Piec z szesciu, bo cztery zdarzaja sie przypadkiem przy
+    tak zgrubnych kubelkach, a szesc zlapaloby dopiero blizniaka.
+    """
+    if not poprzednie:
+        return ""
+    moj = odcisk_formy(body)
+    najlepsze, ktory = 0, -1
+    for i, inny in enumerate(poprzednie):
+        wspolne = sum(1 for k, v in moj.items() if odcisk_formy(inny).get(k) == v)
+        if wspolne > najlepsze:
+            najlepsze, ktory = wspolne, i
+    if najlepsze < prog:
+        return ""
+    return ("ten sam szkielet co %d. z ostatnich tekstów — %d z %d cech "
+            "wspólnych (%s)" % (ktory + 1, najlepsze, len(moj),
+                                ", ".join("%s=%s" % (k, v) for k, v in moj.items())))
+
+
+def uwagi_z_formy(obserwacja: dict[str, Any], body: str) -> list[dict[str, str]]:
+    """Zamienia obserwacje modelu w uwagi. MODEL OBSERWUJE, KOD ROZSTRZYGA.
+
+    Model oddaje cytaty i odpowiedzi tak/nie. Liczenie beatów, dzielenie przez
+    długość i szukanie pozycji w tekście robimy tutaj, bo to arytmetyka, a
+    arytmetyka modelu jest niesprawdzalna.
+
+    JEDNA SWIADOMA ROZNICA WOBEC PLAYBOOKA. Playbook chce, zeby moment
+    przylapania czytelnika stal miedzy 25 a 40 procentem glebokosci. Nie
+    zglaszamy pozycji — zglaszamy wylacznie BRAK. Powod: regula nakazujaca
+    pozycje wypelnia ja jedna odpowiedzia i po dziesieciu tekstach sama staje
+    sie podpisem maszyny, a to jest dokladnie ta wada, ktora juz raz zrobilismy,
+    naprawiajac tresc i zamawiajac przy okazji szkielet. Pozycje LICZYMY i
+    zapisujemy jako informacje dla wlasciciela, ale nie jest wada.
+    """
+    uwagi: list[dict[str, str]] = []
+    korpus = body.split("## Sources")[0]
+    slow = max(1, len(korpus.split()))
+
+    beaty = obserwacja.get("beats") or []
+    nowe = [b for b in beaty if b.get("new")]
+    if beaty:
+        na_beat = slow / max(1, len(nowe))
+        if na_beat > config.SLOW_NA_BEAT:
+            powtorki = [b.get("quote", "")[:70] for b in beaty if not b.get("new")]
+            uwagi.append({
+                "gate": "GESTOSC_BEATOW",
+                "detail": ("%d nowych twierdzeń na %d słów — jedno co %.0f słów "
+                           "przy progu %d; powtórzenia: %s"
+                           % (len(nowe), slow, na_beat, config.SLOW_NA_BEAT,
+                              " | ".join(powtorki[:3]) or "brak")),
+            })
+
+    if obserwacja.get("same_register") is True:
+        twardy = (obserwacja.get("hardest_fact") or {}).get("quote", "")
+        proceduralne = (obserwacja.get("procedural_nearby") or {}).get("quote", "")
+        uwagi.append({
+            "gate": "BRAK_ESKALACJI",
+            "detail": ("najmocniejszy fakt idzie tym samym tonem co szczegół "
+                       "proceduralny — %r obok %r"
+                       % (twardy[:80], proceduralne[:70])),
+        })
+
+    moment = obserwacja.get("reader_moment")
+    if not moment or not (moment or {}).get("quote"):
+        uwagi.append({
+            "gate": "CZYTELNIK_NIEPRZYLAPANY",
+            "detail": ("nigdzie nie ma zwrotu do TEGO czytelnika z jednym "
+                       "konkretnym przedmiotem — statystyka o innych to nie to"),
+        })
+
+    otwarcie = obserwacja.get("opening_claim") or {}
+    if otwarcie.get("already_familiar"):
+        uwagi.append({
+            "gate": "OTWARCIE_ZNANE",
+            "detail": ("pierwszy akapit stoi na twierdzeniu, które czytelnik "
+                       "zna: %r" % str(otwarcie.get("quote", ""))[:90]),
+        })
+    return uwagi
+
+
+def pozycja_w_tekscie(cytat: str, body: str) -> float | None:
+    """Gdzie w tekście stoi ten cytat, jako ułamek długości. Informacja, nie ocena."""
+    if not cytat:
+        return None
+    korpus = body.split("## Sources")[0]
+    i = korpus.find(cytat[:60].strip())
+    if i < 0:
+        zwarty = " ".join(cytat.split()[:8])
+        i = korpus.find(zwarty)
+    return None if i < 0 else i / max(1, len(korpus))
 
 
 def szerokosc_podstawy(card: dict[str, Any]) -> tuple[int, list[str]]:

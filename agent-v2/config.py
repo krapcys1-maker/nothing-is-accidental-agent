@@ -144,6 +144,11 @@ MODEL_FOR = {
     # $2,12 zamiast $0,61.
     "write": FABLE,
     "review": DEEPSEEK_PRO,
+    # Obserwacja formy: beaty, eskalacja, moment przylapania, znajomosc
+    # otwarcia. Osobne wywolanie od recenzji CELOWO — recenzent ma wprost
+    # chronic wnioskowanie przed zgloszeniem, a ta bramka liczy m.in.
+    # zastrzezenia. Zlaczone w jedno pytanie tepilyby sie nawzajem.
+    "forma": DEEPSEEK_PRO,
     # Notki i komentarze na DeepSeeku — decyzja właściciela. Przy ~$0,002 za
     # sztukę można wygenerować kilkanaście kandydatów i wybrać najlepszego,
     # co dla czterdziestu słów działa lepiej niż jedno drogie podejście.
@@ -465,6 +470,31 @@ TARGET_WORDS = 1075
 MIN_WORDS = 950
 MAX_WORDS = 1200
 
+# Ile razy w jednym tekscie wolno powiedziec „moim zdaniem" i pochodne.
+# Znakowanie wnioskowania jest DOBRE — recenzent wprost go chce, bo dzieki
+# niemu smiala interpretacja nie liczy sie jako fakt bez pokrycia. Ale szesc
+# takich zwrotow w jednym tekscie (artykul 0025) to juz tik, nie uczciwosc.
+#
+# UWAGA NA PULAPKE: sciecie tego licznika NIE MOZE oznaczac, ze pisarz zacznie
+# podawac wnioski jako fakty, bo wtedy zamiast tiku dostaniemy zdania bez
+# pokrycia — czyli wade powazniejsza. `pisarz.md` mowi wprost, ze wnioskowanie
+# znaczy sie STRUKTURA zdania („zapis mowi X; czym to jest, to juz inna
+# sprawa"), a nie doklejona formulka.
+BUDZET_ZASTRZEZEN = 1
+
+# Ile ostatnich artykulow porownuje bramka ODCISK_FORMY.
+ILE_TEKSTOW_DO_POROWNANIA_FORMY = 4
+
+# Ile slow moze przypadac na jedno NOWE twierdzenie. Beat to zdanie, po ktorym
+# czytelnik wierzy w cos innego niz zdanie wczesniej; powtorzenie tej samej
+# tezy z nowym dowodem beatem NIE JEST.
+#
+# Artykul 0025 mial szesc beatow na 1097 slow, czyli jeden co 183 — i cztery
+# pierwsze akapity byly jednym beatem rozpisanym na cztery. To jest wlasciwa
+# miara rozdmuchania, znacznie lepsza niz sama liczba slow: mierzy wade
+# bezposrednio, zamiast zgadywac ja z dlugosci.
+SLOW_NA_BEAT = 150
+
 # Artykuł powstaje po angielsku — konto jest anglojęzyczne.
 ARTICLE_LANGUAGE = "English"
 
@@ -504,6 +534,7 @@ EFFORT = {
     "synthesis": "high",
     "write": "high",
     "review": "high",
+    "forma": "high",
 }
 
 
@@ -552,6 +583,7 @@ MAX_TOKENS = {
     # i straciliśmy główny sygnał jakości. Sufit nic nie kosztuje, dopóki nie
     # zostanie zużyty.
     "review": 48000,
+    "forma": 24000,
     "note": _tokens_for(400) + 8000,
     "comment": _tokens_for(600) + 8000,
     "reply": _tokens_for(600) + 8000,

@@ -24,7 +24,7 @@ import stages
 
 STAGES = (
     "scout", "feasibility", "discovery", "fetch",
-    "classify", "synthesis", "warto_pisac", "write", "review",
+    "classify", "synthesis", "warto_pisac", "write", "review", "forma",
 )
 
 CACHE_DIR = config.DATA_DIR / "cache"
@@ -937,7 +937,33 @@ def main() -> int:
             flush=True,
         )
 
-        findings = gates.deterministic_floors(draft["body"], card)
+        # Obserwacja formy — osobne wywołanie od recenzji. Recenzent chroni
+        # wnioskowanie przed zgłoszeniem (śmiała interpretacja nie jest wadą),
+        # a ta bramka liczy m.in. zastrzeżenia; złączone tępiłyby się nawzajem.
+        # Jak recenzja: nic nie blokuje, więc jej awaria też nie może.
+        stage = "forma"
+        try:
+            forma = cached(stage, lambda: stages.ocen_forme(conn, run_id, draft),
+                           args.use_cache)
+            beaty = forma.get("beats") or []
+            nowe = [b for b in beaty if b.get("new")]
+            slow = len(draft["body"].split("## Sources")[0].split())
+            print(f"   beaty: {len(nowe)} nowych z {len(beaty)}"
+                  f"   jeden co {slow / max(1, len(nowe)):.0f} słów", flush=True)
+            moment = (forma.get("reader_moment") or {}).get("quote", "")
+            gdzie = gates.pozycja_w_tekscie(moment, draft["body"])
+            print("   przyłapanie czytelnika: %s"
+                  % (f"{100 * gdzie:.0f}% głębokości" if gdzie is not None
+                     else ("jest, ale nie znalazłem w tekście" if moment else "brak")),
+                  flush=True)
+        except Exception as exc:
+            print(f"  [awaria] obserwacja formy padła ({exc}) — idę dalej",
+                  flush=True)
+            forma = {}
+
+        findings = gates.deterministic_floors(
+            draft["body"], card, poprzednie=stages.poprzednie_teksty())
+        findings.extend(gates.uwagi_z_formy(forma, draft["body"]))
         for item in unsupported:
             findings.append({"gate": "FAKT_BEZ_POKRYCIA", "detail": item.get("text", "")})
 

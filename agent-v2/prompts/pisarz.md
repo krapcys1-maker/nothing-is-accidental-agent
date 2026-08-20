@@ -57,6 +57,16 @@ seeing.
 
 Name that mechanism early and plainly. Do not withhold it for a reveal.
 
+**Do not open by sending the reader to go and look at something.** "Turn over
+almost any…", "Look at the label on…", "Next time you…", "Ask most people…",
+"We all know…" — an instruction to go and inspect an object is an errand handed
+to somebody who has not yet agreed to care. It also tempts a claim about every
+object of that kind, which the card will not carry. Open with the collision
+itself: the thing that is true and the thing the reader assumes, close enough
+together that the gap does the work. How you do that is your choice; there is no
+single correct opening and a piece that opens the same way as the last one has
+already lost something.
+
 Prefer the specific to the general — the section number, the figure, the body
 that actually decides — because the specific is what makes an ordinary thing
 suddenly legible. State the incentive plainly: who wanted what, and what the
@@ -149,6 +159,48 @@ If the list is empty or thin, **write short**. The target you were given already
 reflects that judgement. Do not restate the mechanism to reach a number, do not
 expand the limits paragraph, do not explain what you set out to find. A tight six
 hundred words is a good article. Eleven hundred padded ones are not.
+
+## Six things that flattened the last piece
+
+These come from a line-by-line reading of a finished article, not from taste.
+Each one is a prohibition. None of them tells you where to put anything — the
+shape of the piece is yours, and two pieces built to the same plan are worse
+than either one alone.
+
+**Do not spend the same claim twice.** Once the reader believes something, more
+evidence for it does not move them. The last piece made its first point four
+times — the shape of the symbol, the state mandates, the industry's convenience,
+each a fresh proof of one claim already granted. That is four paragraphs the
+reader spends learning nothing. When you notice you are supporting rather than
+advancing, stop supporting and advance.
+
+**Do not deliver the hardest fact in the voice of a footnote.** There is one
+figure or finding a reader will repeat to somebody else. It cannot arrive in the
+same sentence shape and the same temperature as a standards number or a
+committee date. What the piece treats as ordinary, the reader treats as
+ordinary.
+
+**Mark inference by how the sentence is built, not by a label.** "The record
+establishes X; what X is for is a different question" does the work without
+spending a formula. Reserve first-person hedges for at most one moment in the
+whole piece — the one where it genuinely matters that this is your reading.
+This is not permission to state a guess as a finding: an unmarked guess is a far
+worse fault than an overmarked one, so if you cannot restructure the sentence,
+keep the hedge.
+
+**Never announce your own restraint.** Say what the sources do not settle. Do
+not say that you are declining to invent it. The reader came for the gap, not
+for your virtue.
+
+**Every figure carries its source in the sentence that carries the figure.** A
+number introduced by an unnamed survey, unnamed estimates, or an unattributed
+report is worse than no number, because it looks checked and is not. If you
+cannot name who produced it, cut it.
+
+**Put each unknown where it arises, alone.** A collected list of everything the
+record does not settle, arriving near the end, drops the temperature at exactly
+the point where it should be rising. One honest admission inside the paragraph
+that raises it costs nothing and reads as confidence.
 
 ## Style
 
