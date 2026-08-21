@@ -58,3 +58,12 @@ Następny wpis powstaje przed rozpoczęciem pierwszej naprawy funkcjonalnej. Mus
 **Kod funkcjonalny:** bez zmian w tej fazie.  
 **Koszt modeli:** 0 USD.  
 **V2:** istniejące zmiany wykryte, lecz nie dotknięte i niewłączone do zakresu.
+
+## 2026-08-21 — punkt bazowy Git
+
+**Gałąź:** `codex/agent-v3-gpt`  
+**Commit migawki:** `00ab0c4` (`chore(agent-v3): snapshot autonomous prototype and audit baseline`)  
+**Zakres:** 132 pliki, 38 359 dodanych linii; `.gitignore` oraz `agent-v3`.  
+**Wykluczenia potwierdzone:** zero staged ścieżek `agent-v2`, zero plików sesji/sekretów, zero `agent-v3/data/zasiew-produkcji.db`.  
+**GitHub:** gałąź wysłana do `origin`; bez PR, release'u i wdrożenia.  
+**Znaczenie:** jest to stabilny punkt odniesienia audytu, a nie deklaracja gotowości produkcyjnej ani zamknięcia ustaleń.

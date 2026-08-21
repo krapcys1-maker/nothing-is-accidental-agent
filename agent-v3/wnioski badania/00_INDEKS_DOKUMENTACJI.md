@@ -3,6 +3,7 @@
 **Stan:** prototyp badawczy; audyt i projektowanie napraw, bez wdrożenia  
 **Data konsolidacji:** 2026-08-21  
 **Gałąź robocza:** `codex/agent-v3-gpt`  
+**Commit bazowej migawki:** `00ab0c4`  
 **Zakres zapisu:** wyłącznie `agent-v3` oraz związany z nim wpis w głównym `.gitignore`  
 **Materiał porównawczy:** `agent-v2` wyłącznie do odczytu
 
@@ -88,6 +89,8 @@ Są skatalogowane w aneksie audytu i pozostają częścią badanego korpusu.
 ## Stan Git i publikacji
 
 Gałąź `codex/agent-v3-gpt` jest gałęzią prototypową. Samo zapisanie kodu i dokumentacji na GitHubie nie jest wdrożeniem produkcyjnym. Nie wolno jednak tworzyć automatyzacji, release'u, obrazu produkcyjnego ani uruchamiać skryptów wdrożeniowych w ramach tej gałęzi.
+
+Commit `00ab0c4` jest punktem bazowym badanego prototypu. Nie oznacza, że 73 ustalenia zostały naprawione; oznacza, że ich przedmiot ma stabilny identyfikator w historii.
 
 Do commitu wolno włączać tylko potwierdzone ścieżki V3 oraz związane z V3 reguły ignorowania danych. Istniejące zmiany w `agent-v2` są poza zakresem.
 
