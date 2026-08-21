@@ -1,0 +1,196 @@
+Tak. Przeszukałem publiczne repozytoria na GitHubie pod kątem substack bot, substack agent, agentów do publikowania, analityki i automatyzacji. Nie znalazłem jednego publicznego projektu, który byłby bezdyskusyjnie bardziej zaawansowany end-to-end od Twojego obecnego bota. Znalazłem natomiast kilka projektów, które mają pojedyncze elementy lepsze albo bardziej dopracowane niż u Ciebie.
+
+Najciekawsze są te:
+
+Projekt	Co robi	Względem Twojego
+santhosh-patel/substack-agent	API + MCP + dashboard + publikacja newsletters/Notes/comments + scheduling	lepszy jako produkt/platforma, słabszy jako autonomiczna redakcja
+tomsiclucia-blip/substack-growth-engine-template	5 agentów analizujących, 35 Notes/tydzień, analiza konkurencji i własnych wyników, learning loop	najciekawszy konkurent koncepcyjny
+aboyalejandro/substack-author-agent	analiza artykułów, Notes, komentarzy, performance, brand voice, content ideas	lepsza gotowa warstwa analityczna, ale nie prowadzi autonomicznie konta
+kyarminrox/substack-agent	Playwright, draft/publish/schedule, Medium, SAFE_MODE, dashboard	bardziej framework/tooling; repo samo określa się jako v0.1 scaffolding
+drona23/substack-ai-bot	Google News → Claude → grafika → draft na Substack codziennie	dużo prostszy od Twojego
+1. Najbliżej czegoś „większego”: Substack Growth Engine
+
+Ten projekt jest naprawdę ciekawy. Czyta najnowszy artykuł, uruchamia 5 agentów analitycznych równolegle, analizuje konkurentów, własne Notes, historyczne wyniki, godziny publikacji i starsze artykuły, a potem generuje 35 Notes na cały tydzień.
+
+Najbardziej interesujący jest jego learning loop:
+
+dopasowuje opublikowane Notes do faktycznych lajków,
+ocenia, jakie źródła pomysłów działały najlepiej,
+porównuje draft z tym, co właściciel ręcznie poprawił,
+z powtarzających się poprawek tworzy nowe reguły stylu na kolejny tydzień.
+
+To jest bardzo dobre i ten konkretny fragment jest obecnie dojrzalszy niż analogiczna część Twojego v2.
+
+Ale jednocześnie ten system jest znacznie węższy. Koncentruje się głównie na produkcji Notes, wymaga review/approval i sam engine nawet nie publikuje — przekazuje CSV do osobnego schedulera.
+
+Czyli:
+
+Growth Engine:
+analiza → 35 Notes → człowiek zatwierdza → scheduler
+
+Twój:
+wybór tematu → research → źródła → synteza → artykuł → review → grafika → publikacja + codzienne prowadzenie konta
+
+Twój jest szerszym agentem autonomicznym.
+
+2. santhosh-patel/substack-agent
+
+Technicznie to bardzo ładny projekt. Ma trzy interfejsy:
+
+dashboard + HTTP Tools API + MCP server.
+
+Udostępnia m.in. publish_newsletter, publish_note, post_comment, automate_comments, listowanie treści i scheduling.
+
+Dokumentacja pokazuje też, że jest pomyślany jako uniwersalna warstwa nad Substackiem dla Claude, ChatGPT, Cursor czy n8n.
+
+Tutaj powiedziałbym:
+
+on jest lepszy od Twojego jako narzędzie dla innych ludzi.
+
+Ma ładniejszy interfejs programistyczny:
+
+Claude
+ChatGPT
+Cursor
+n8n
+   ↓
+MCP / API
+   ↓
+Substack
+
+Natomiast nie widzę w nim odpowiednika Twojego:
+
+wieloetapowego researchu,
+wyboru tematu,
+klasyfikacji źródeł,
+synthesis/evidence card,
+deterministycznych bramek faktograficznych,
+pamięci wykorzystanych faktów,
+wyboru celów do komentowania,
+kompletnej strategii prowadzenia konta.
+
+U Ciebie sama warstwa myślowa jest oddzielona od przeglądarki i testowalna niezależnie, a dokumentacja mówi o 35 zestawach testów i 950 asercjach.
+
+Więc tu powiedziałbym:
+
+lepszy produkt developerski / gorsza autonomiczna redakcja.
+
+3. Substack Author Agent — bardzo ciekawy dla Twojego V3
+
+Tutaj aż mi się zapaliła lampka, bo to jest blisko tego, o czym właśnie rozmawialiśmy.
+
+Agent ma osobne skills:
+
+analyze-articles
+analyze-notes
+analyze-comments
+content-ideas
+brand-voice
+
+i korzysta z danych o performance artykułów, Notes i komentarzy.
+
+Inna wersja tego projektu ma nawet trzy implementacje agenta — Agno, Anthropic SDK i OpenAI Agents SDK — oraz Opik do śledzenia tool calli, kosztów i przebiegów.
+
+To jest dokładnie obszar, który proponowaliśmy dla Twojego V3:
+
+wyniki → komentarze → style → pomysły → następna decyzja.
+
+Ale ten projekt jest zasadniczo doradcą autora.
+
+Ty pytasz:
+
+„Jak sobie radzą moje artykuły?”
+
+on analizuje.
+
+Nie znalazłem tutaj pełnego autonomicznego:
+
+„sam znajdę temat → zrobię research → napiszę → opublikuję → będę prowadził konto”.
+
+Więc znowu: lepszy moduł analityczny, ale znacznie mniej autonomii.
+
+4. conorbronsdon/substack-mcp
+
+Ten też jest bardzo profesjonalny, ale ma zupełnie inną filozofię.
+
+Potrafi m.in.:
+
+pobrać liczbę subskrybentów,
+czytać artykuły,
+pobierać komentarze,
+pobierać analytics artykułów: views, opens, signups, subscribes, reactions,
+tworzyć i aktualizować drafty,
+publikować Notes.
+
+Co ciekawe, celowo odmawia publikowania długich artykułów przez agenta — wymagane jest zatwierdzenie człowieka.
+
+Tu jest jedna rzecz, którą bez wahania podebrałbym do Twojego V3:
+
+get_post_analytics.
+
+Bo to właśnie daje dane potrzebne do tego systemu pamięci wyników, o którym przed chwilą rozmawialiśmy.
+
+5. Większość „Substack AI bots” jest dużo prostsza
+
+Dobry przykład to drona23/substack-ai-bot.
+
+Pipeline:
+
+Google News RSS → Claude → Pexels → Playwright → draft → raz dziennie.
+
+To fajny projekt automatyzacji, ale w zestawieniu z Twoim to praktycznie jeden pipeline cronowy.
+
+Nie ma tam systemu researchowego porównywalnego z Twoim, autonomicznego prowadzenia konta, rozbudowanych bramek, pamięci czy ewaluacji własnej aktywności.
+
+A część repozytoriów znalezionych pod hasłem „substack bot” nie jest nawet botami redakcyjnymi — np. jashjasani/substack_bot okazuje się botem Telegram/Stripe do sprzedawania dostępu, a nie systemem publikującym na Substacku.
+
+Gdybym miał je ocenić jako systemy redakcyjne
+
+To moja ocena architektury na podstawie publicznego kodu/dokumentacji, nie benchmark:
+
+System	Autonomia	Research	Publikowanie	Interakcje	Analytics	Uczenie się	Production hardening
+Twój V2	9	9	9	9	5	4	9
+Growth Engine	6	5	5	2	8	8	7
+santhosh Substack Agent	6	2	9	7	4	2	8
+Author Agent	4	3	1	1	9	6	7
+conorbronsdon MCP	2	1	5	4	8	1	9
+Daily AI Bot	6	3	7	0	0	0	4
+
+I tutaj robi się ciekawie.
+
+Twój obecny V2 prawdopodobnie jest już jednym z bardziej rozbudowanych publicznie porównywalnych projektów, jakie znalazłem, jeśli kryterium brzmi: „autonomicznie prowadź publikację”, a nie „daj mi API do Substacka”.
+
+Twoja dokumentacja opisuje 10-etapową ścieżkę artykułu plus końcowe bramki, grafikę i publikację, z osobnymi modelami do poszczególnych funkcji.
+
+Ale znalazłem 3 rzeczy, które zdecydowanie warto ukraść
+
+Z Growth Engine:
+learning loop oparty na realnym wyniku + poprawkach właściciela.
+
+Z Author Agent:
+osobnego Audience/Performance Analysta.
+
+Z Substack MCP:
+porządną warstwę pobierania:
+
+views / opens / signups / subscribes / reactions
+
+i wystawienie części Twojego systemu przez MCP/API.
+
+Połączenie tego z tym, co już masz, byłoby naprawdę mocne:
+
+                    EDITOR
+                      │
+        ┌─────────────┼─────────────┐
+        ↓             ↓             ↓
+   RESEARCHER       MEMORY       ANALYST
+        ↓                           ↑
+    EVIDENCE                     results
+        ↓                           ↑
+     WRITER → REVIEWER → PUBLISHER → SUBSTACK
+        ↑                           │
+        └──── editorial memory ─────┘
+
+I wtedy V3 byłby moim zdaniem wyraźnie bardziej zaawansowany jako autonomiczny system redakcyjny niż którykolwiek pojedynczy publiczny projekt, który znalazłem w tym przeglądzie.
+
+Jedno zastrzeżenie: GitHub nie daje gwarancji kompletności — mogą istnieć prywatne projekty, mało indeksowane repo albo systemy komercyjne bez źródeł. Ale spośród publicznych repozytoriów, które znalazłem, nie widzę obecnie czegoś w rodzaju „twój bot, tylko dwa razy bardziej zaawansowany”. Najciekawsze elementy są rozproszone pomiędzy kilkoma projektami.

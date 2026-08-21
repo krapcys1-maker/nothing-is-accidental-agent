@@ -1,0 +1,466 @@
+Tak. Po przejrzeniu dokumentacji powiedziałbym, że następny poziom tego bota nie polega na dodawaniu kolejnych modeli czy kolejnych promptów. Fundament jest już rozbudowany. Najwięcej zyskałby na dopracowaniu niezawodności, pamięci i pętli uczenia się.
+
+Gdybym miał ustawić priorytety, zrobiłbym to tak:
+
+Naprawić miejsca, gdzie bot myśli, że coś zrobił, choć nie ma na to dowodu. To jest obecnie najpoważniejsza klasa problemów. Restack i polubienie są zapisywane jako udane po samym kliknięciu, zrobione[...] liczy próby zamiast faktycznie opublikowanych działań, a funkcja sprawdzająca, czy agent jest na właściwym koncie, istnieje, ale w ogóle nie jest wywoływana.
+Docelowo zasada powinna być wszędzie taka sama:
+intencja → wykonanie → potwierdzenie z Substacka → dopiero wtedy zapis sukcesu.
+To byłaby ogromna poprawa jakości operacyjnej.
+Zrobić z bramek jakości prawdziwy feedback loop. Teraz artykuł może mieć 0 albo 15 uwag i dla przebiegu praktycznie nie ma różnicy — wszystkie artykuły dostają SAVED, a uwagi trafiają do pliku/bazy. Nie ma nawet alarmu mówiącego „ten artykuł dostał wyjątkowo dużo zastrzeżeń”.
+Ja nie zmieniałbym zasady „research już opłacony → nie wyrzucamy artykułu”. Zamiast tego:
+0–2 uwagi → publikacja,
+3–5 → automatyczna poprawka,
+poważny problem faktograficzny → poprawka + ponowna kontrola,
+dużo uwag → alarm.
+Czyli bramka nie zabija tekstu, ale faktycznie wpływa na jego finalną wersję.
+
+Dać mu prawdziwą pamięć artykułów i ich skutków. To dla mnie największa przyszła poprawa jakości. Obecnie bot już zapisuje pytania czytelników i część efektów własnej aktywności, więc fundament istnieje. Co ważne, dokumentacja świadomie oddziela odpowiedzi od lajków, bo optymalizacja pod sam engagement prowadziłaby konto w stronę szoku i clickbaitu.
+Do tego dołożyłbym system, o którym wcześniej rozmawialiśmy:
+artykuł → temat → tezy → argumenty → reakcje → ciekawość → niezgoda → sukces względny → pytania bez odpowiedzi → powiązania z innymi artykułami.
+
+Wtedy przed nowym artykułem bot mógłby sobie przywołać:
+
+„O tym pisałem już dwa razy. Ten argument powtarzałem. Tutaj ludzie mocno się nie zgadzali. To pytanie zostało bez odpowiedzi. Ten tekst był w top 10% swojego okresu.”
+
+To moim zdaniem mogłoby dać większy skok jakości niż wymiana Fable na jeszcze mocniejszy model.
+
+Naprawić logikę ODLOZ. To bardzo konkretna dziura. Agent ma trzy decyzje PISZ / DOLOZ / ODLOZ, ale ODLOZ... niczego nie odkłada. Tekst i tak idzie do pisarza.
+ODLOZ powinno naprawdę oznaczać:
+zapisz temat → czego mu brakuje → spróbuj ponownie później, gdy pojawią się nowe źródła / komentarze / powiązany materiał.
+
+I wtedy pamięć zaczyna pracować także przyszłościowo.
+
+Uszczelnić księgowanie kosztów. To jest ważniejsze, niż wygląda. record_call() obecnie ignoruje nieznane pola, więc literówka może sprawić, że faktyczny koszt np. $0.53 zostanie zapisany jako 0, bez błędu. Dokumentacja sama nazywa to potencjalnym fałszowaniem ksiąg.
+Przy twardym limicie budżetu zrobiłbym kontrakt:
+nieznane pole = wyjątek,
+koszt brakujący = wyjątek,
+model bez zweryfikowanej ceny = ostrzeżenie/alarm.
+Tu nie powinno być „best effort”.
+Posprzątać routing modeli i konfigurację. Aktualnie konfiguracja sugeruje, że review, scout, discovery, synthesis itd. używają określonego effort, ale w praktyce pięć z sześciu tych ustawień nie robi nic, bo dotyczą DeepSeeka, a kod przekazuje effort tylko Anthropicowi. Do tego preflight nie sprawdza kluczy wszystkich faktycznie używanych wariantów modeli, a timeouty w praktyce spadają do tej samej wartości.
+To warto uporządkować, bo konfiguracja powinna mówić prawdę o zachowaniu systemu.
+Poprawić pamięć źródeł. Aktualnie 104 znalezione źródła obejmują 33 nieudane próby, a reguła różnorodności domen traktuje także domeny, których agent faktycznie nigdy nie przeczytał. W efekcie może sobie później blokować dobre źródło dlatego, że wcześniej dostał z niego 403.
+Ja rozróżniłbym:
+discovered → fetched → used_in_evidence → cited_in_article.
+Do różnorodności powinny liczyć się głównie dwa ostatnie.
+
+Naprawić cache. Obecny cache jest nazwany etapem, a nie konkretnym przebiegiem/tematem. Dokumentacja wprost wskazuje, że --use-cache może po tygodniu podać stare tematy i doprowadzić do ponownego stworzenia tego samego artykułu.
+Cache powinien mieć klucz typu:
+stage + hash(input) + prompt_version + model.
+
+Wtedy faktycznie jest bezpieczną pamięcią obliczeń.
+
+Jedna rzecz, której bym NIE robił
+
+Nie rozbijałbym tego teraz na 20 mikroserwisów, Redis, Kafka, pięć baz i „enterprise architecture”.
+
+Obecny podział:
+
+myślenie / modele / deterministyczne bramki / przeglądarka / baza / monitoring
+
+jest sensowny, a dodatkowo dzięki temu masz 35 zestawów testów i 950 asercji działających bez Chrome i bez płatnych modeli.
+
+Czyli architektury bazowej bym nie rozwalał.
+
+Największy krok ewolucyjny widzę jako:
+
+obecny bot:
+obserwuje → myśli → pisze → publikuje → zapisuje
+
+kolejna wersja:
+obserwuje → przypomina sobie → myśli → działa → mierzy skutek → uczy się → aktualizuje pamięć → wykorzystuje to przy kolejnej decyzji
+
+I wtedy po roku działania nie miałbyś po prostu tego samego bota z tysiącem opublikowanych rzeczy. Miałbyś agenta z rokiem własnej historii i doświadczenia redakcyjnego.
+
+To właśnie zrobiłbym jako największy „v3”.
+
+A system który monitoruje konto zbiera np ile notki miły komentarzy lików restakow wejść jak to się odnosiło do średniej ile komentarze maiły tego ile artykuły miały i zrobienie z tego bazy wiedzy ?
+
+Tak — to jest dokładnie system, który dołożyłbym jako następny duży moduł. I nie jako zwykły dashboard ze statystykami, tylko jako warstwę doświadczenia bota.
+
+Co ważne, twój obecny bot już ma kawałek fundamentu: dopisz_skutki() dopisuje do dziennika, co wynikło z jego działań, a dziennik.jsonl przechowuje działania i ich skutki. Czyli nie budowałbyś wszystkiego od zera.
+
+Jak ja bym to zrobił
+
+Każda rzecz opublikowana przez konto dostaje własny rekord:
+
+CONTENT #1842
+
+
+type: NOTE
+published: 2026-08-21 06:03 ET
+
+
+topic: aviation
+mechanism: safety regulation after failure
+form: CONTRAST
+hook: number
+length: 51 words
+
+
+account_at_publication:
+followers: ...
+subscribers: ...
+
+
+after_1h:
+views: ...
+likes: 3
+comments: 1
+restacks: 0
+
+
+after_24h:
+views: ...
+likes: 8
+comments: 5
+restacks: 2
+
+
+after_7d:
+...
+
+Nie musisz mieć każdej metryki dla każdego rodzaju treści. System zbiera to, co Substack faktycznie pokazuje dla artykułu, Note'a, komentarza itd.
+
+I bardzo ważne: nie nadpisujesz starego wyniku. Robisz snapshoty. Dzięki temu bot wie nie tylko, że Note dostał 20 lajków, ale też:
+
+2 lajki po godzinie → 11 po dobie → 20 po tygodniu.
+
+To również jest informacja.
+
+Ale surowe liczby są dopiero początkiem
+
+Dokładnie tak jak mówiłeś wcześniej: dzisiejsze:
+
+5 lajków + 3 komentarze
+
+może być świetnym wynikiem, a za rok katastrofą.
+
+Dlatego zapisujesz jednocześnie wynik absolutny i względny.
+
+Przykładowo:
+
+likes: 5
+comments: 3
+restacks: 1
+
+
+vs_last_30_notes:
+likes_percentile: 78
+comments_percentile: 93
+restacks_percentile: 81
+
+
+vs_account_baseline:
+reach: +41%
+engagement: +83%
+discussion: +176%
+
+I wtedy za dwa lata bot nadal wie:
+
+„Ta Note dostała tylko 5 lajków, ale w momencie publikacji była w TOP 22% pod względem lajków i TOP 7% pod względem komentarzy.”
+
+To jest prawdziwa pamięć historyczna.
+
+I nie robiłbym jednego success_score
+
+To bardzo ważne.
+
+Bo wtedy bot nauczy się:
+
+więcej reakcji = lepiej
+
+i po jakimś czasie zacznie produkować ragebait.
+
+Zresztą w obecnym kodzie już masz bardzo dobrą zasadę: odpowiedzi są mierzone osobno od polubień, właśnie dlatego, że połączenie wszystkiego w engagement przesuwałoby publikację w stronę szoku.
+
+Zostawiłbym więc osobno:
+
+REACH — ile osób zobaczyło
+ENGAGEMENT — ile zareagowało
+DISCUSSION — ile powstało komentarzy/odpowiedzi
+CURIOSITY — ile pojawiło się pytań
+DISAGREEMENT — ile było polemik
+RESTACKABILITY — jak często ludzie chcieli przekazać to dalej
+CONVERSION — ilu nowych czytelników/subskrybentów przyszło, jeśli da się to przypisać
+LONGEVITY — czy treść żyła 2 godziny czy tydzień
+
+I wtedy dochodzi najciekawsza część: LLM analizuje komentarze
+
+Nie tylko:
+
+17 komentarzy.
+
+Ale:
+
+17 comments
+
+
+7 = disagreement
+4 = questions
+3 = personal examples
+2 = agreement
+1 = factual correction
+
+A jeszcze niżej:
+
+MAIN DISAGREEMENT:
+Readers challenge the claim that...
+
+
+MAIN CURIOSITY:
+Why does this regulation differ between Europe and the US?
+
+
+UNANSWERED QUESTION:
+What happened before the 2009 rule change?
+
+I te rzeczy lądują w pamięci.
+
+Twój bot już zbiera pytania czytelników i podaje je skautowi, bo traktuje pytanie napisane przez prawdziwego czytelnika jako mocniejszy sygnał niż pytanie wymyślone przez model.
+
+Tutaj tylko rozszerzyłbyś tę ideę o wszystkie reakcje.
+
+Wtedy powstaje baza wiedzy, a nie tabela statystyk
+
+Przykładowo po roku:
+
+TOPIC:
+hidden safety systems
+
+
+ARTICLES:
+14
+
+
+Performance:
+reach: +18% vs baseline
+discussion: +54%
+restacks: +31%
+
+
+Observed pattern:
+Stories beginning with a concrete failure outperform
+abstract regulatory explanations.
+
+
+Reader curiosity:
+- who pays for the system?
+- what failure created the rule?
+- does Europe do this differently?
+
+
+Reader disagreement:
+Readers often reject explanations based purely on
+regulation unless the original accident is shown.
+
+
+Strongest article:
+"The Flight Crew That Ran Out of Hours"
+
+
+Why interesting:
+high disagreement + high curiosity + high restack rate
+
+I teraz zobacz, co może zrobić agent przed kolejnym artykułem.
+
+Zamiast:
+
+„Napisz artykuł o bezpieczeństwie lotniczym.”
+
+Memory Manager pyta bazę:
+
+„Co wiemy z własnej historii o tekstach dotyczących lotnictwa, regulacji i systemów bezpieczeństwa?”
+
+I dostaje:
+
+MEMORY BRIEF
+
+
+Previous related articles: 4
+
+
+Best-performing mechanism:
+rule created after visible failure
+
+
+Avoid:
+generic regulation explanation
+
+
+Readers strongly reacted to:
+the gap between what passengers assume
+and what the regulation actually guarantees
+
+
+Unresolved question:
+why crew duty limits differ between jurisdictions
+
+
+Past overused argument:
+"systems are written in blood"
+
+
+Historical success:
+Article #72 — top 6% discussion,
+top 14% restacks at publication time
+
+I dopiero to dostaje pisarz.
+
+Nie 500 poprzednich tekstów.
+
+Jeszcze lepsze byłyby skojarzenia
+
+To, o czym wcześniej mówiłeś.
+
+Artykuł może być połączony z innym nie dlatego, że zawiera te same słowa, ale dlatego, że:
+
+ARTICLE 72
+      │
+      ├── HIGH_DISAGREEMENT ──> idea X
+      │
+      ├── HIGH_CURIOSITY ─────> question Y
+      │
+      ├── SAME_MECHANISM ─────> ARTICLE 103
+      │
+      ├── CONTRADICTS ────────> ARTICLE 41
+      │
+      └── INSPIRED ───────────> ARTICLE 118
+
+I robi się z tego graf doświadczeń redakcyjnych.
+
+Monitoring konta jako osobna warstwa
+
+Dołożyłbym też dzienny snapshot całego konta:
+
+2026-08-21
+
+
+followers: ...
+subscribers: ...
+articles_total: ...
+notes_total: ...
+
+
+7d:
+new_followers: ...
+new_subscribers: ...
+article_views: ...
+note_reactions: ...
+comments_received: ...
+restacks_received: ...
+
+Dzięki temu możesz później odróżnić:
+
+„ten artykuł dostał więcej lajków”
+
+od:
+
+„ten artykuł dostał więcej lajków tylko dlatego, że konto było wtedy 5× większe.”
+
+To jest ogromna różnica.
+
+Ile danych zanim zacznie się uczyć?
+
+Zbierałbym od pierwszego dnia.
+
+Ale poziom pewności zmieniałbym wraz z liczbą obserwacji:
+
+<10 podobnych treści → VERY LOW
+10–30 → LOW
+30–100 → MEDIUM
+100+ → HIGH
+
+Czyli przy 8 Notes bot może powiedzieć:
+
+„Na razie wygląda na to, że kontrast działa lepiej, ale mam za mało danych.”
+
+A nie:
+
+„OD TERAZ PISZEMY KONTRASTEM.”
+
+To chroni przed nauczeniem się przypadkowych korelacji.
+
+I najważniejsze: nie pozwalałbym temu modułowi samodzielnie zmieniać zasad bota.
+
+Nie:
+
+„statystyki mówią, że kontrowersja działa → zwiększam kontrowersyjność.”
+
+Tylko:
+
+„Zaobserwowałem X. Pewność 0.72. Dowody: 38 Notes. Proponuję przetestować Y.”
+
+A potem można zrobić kontrolowany eksperyment.
+
+Wtedy masz naprawdę fajną ewolucję:
+
+dzisiejszy agent:
+research → pisanie → publikacja
+
+po dołożeniu tego systemu:
+research → pamięć → pisanie → publikacja → obserwacja skutków → analiza → wiedza → pamięć → następna decyzja
+
+I wtedy po roku działania wartość projektu będzie tkwiła już nie tylko w 10 tys. linii kodu, ale też w czymś dużo trudniejszym do skopiowania: roku własnych danych o tym, co działało, co nie działało, na co reagowali ludzie i jak konto zmieniało się w czasie.
+
+Czy wersja v3 była by już redakcyjna ?
+
+Tak — v3 byłaby już czymś, co spokojnie można nazwać systemem redakcyjnym, a nie po prostu botem do Substacka.
+
+Obecne v2 to przede wszystkim autonomiczny agent wykonawczy: wybiera temat, robi research, pisze, sprawdza, publikuje i prowadzi konto.
+
+V3, jeśli dodasz ten moduł monitoringu + pamięć wyników + analizę reakcji, zaczyna robić coś charakterystycznego dla prawdziwej redakcji:
+
+pamięta, co już publikowała,
+zna wyniki poprzednich materiałów,
+rozumie, jakie tematy i mechanizmy budziły ciekawość albo dyskusję,
+zna pytania i zastrzeżenia czytelników,
+porównuje wyniki do własnej historycznej średniej, a nie tylko do surowych liczb,
+wykorzystuje tę wiedzę przy planowaniu kolejnych tekstów,
+potrafi powiedzieć „tego już robiliśmy”, „to było mocne”, „ten wątek został niedokończony”,
+może proponować kierunek kolejnych publikacji na podstawie danych.
+
+Czyli różnica byłaby mniej więcej taka:
+
+V2:
+Co mam dziś zrobić? → zrobię to dobrze.
+
+V3:
+Co powinniśmy dziś zrobić, biorąc pod uwagę wszystko, czego nauczyła się ta publikacja przez ostatnie miesiące?
+
+I to jest już ogromna różnica.
+
+Ja wręcz rozdzieliłbym w V3 role:
+
+Scout/Researcher — szuka tematów i materiałów.
+Writer — pisze.
+Reviewer — sprawdza.
+Publisher — publikuje.
+Audience Analyst — analizuje reakcje i statystyki.
+Memory/Librarian — utrzymuje bazę wiedzy.
+Editor — na podstawie wszystkiego powyżej decyduje, co warto robić dalej.
+
+Ten ostatni element jest kluczowy.
+
+Bo wtedy „Editor” może dostać np.:
+
+Ostatnie 30 Notes: teksty o regulacjach mają przeciętny reach, ale 2,1× więcej komentarzy.
+Trzy teksty zaczynające się od konkretnej awarii są w top 15% pod względem restacków.
+Czytelnicy cztery razy pytali o różnice USA–Europa.
+Ostatnie dwa artykuły użyły podobnej konstrukcji.
+Temat X jest niedomknięty.
+
+I powiedzieć:
+
+Następny artykuł powinien pójść w X, ale z perspektywy Y. Nie powtarzaj konstrukcji ostatnich tekstów. Wykorzystaj pytanie czytelników jako punkt wyjścia.
+
+To już nie jest „bot piszący posty”.
+
+To jest właściwie mała autonomiczna redakcja jednoosobowej publikacji, tylko role redakcyjne wykonują różne komponenty systemu.
+
+Ja bym nawet nazwał architekturę:
+
+V1 — automation
+V2 — autonomous publishing agent
+V3 — autonomous editorial system
+
+A potencjalne V4 byłoby jeszcze ciekawsze: system nie tylko uczy się z historii, ale prowadzi kontrolowane eksperymenty redakcyjne i sprawdza własne hipotezy. Wtedy zaczyna się już coś w rodzaju autonomicznego zarządzania publikacją.
