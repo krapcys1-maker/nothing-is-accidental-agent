@@ -583,18 +583,35 @@ def sesje_dnia() -> list[dict[str, Any]]:
             for g, w in zip(godziny, wagi)]
 
 
-def odczekaj(co: str = "") -> None:
+def losuj_odstep(co: str = "") -> float:
+    """Losuje przerwę, ale jej NIE odsypia.
+
+    Rozdzielone, bo wywołujący musi znać długość przerwy ZANIM w nią wejdzie.
+    Przebieg 28 zginął dokładnie na tym: `odczekaj` losowało 86 minut i od razu
+    zasypiało, a na zegarze przebiegu zostało dwadzieścia. Systemd ubił proces
+    w środku snu, w drugim z ośmiu bloków — sześć pozostałych nie wykonało się
+    w ogóle. Kto ma zdecydować, czy przerwa się zmieści, musi najpierw
+    zobaczyć liczbę.
+    """
+    import random
+
+    dol, gora = config.ODSTEPY.get(co, config.ODSTEP_MIEDZY_DZIALANIAMI)
+    return random.uniform(dol, gora)
+
+
+def odczekaj(co: str = "", ile: float | None = None) -> None:
     """Przerwa po działaniu, dobrana do tego, ile ono zajmuje CZLOWIEKOWI.
 
     Jeden wspólny odstęp dawał notkę po notce w trzy minuty — a nikt tak nie
     publikuje. Polubienie co minutę jest za to zupełnie naturalne. Kara za zły
     rytm nie jest błędem, tylko cichym spadkiem zasięgu, więc lepiej czekać.
+
+    `ile` podaje się wtedy, gdy przerwa została już wylosowana i sprawdzona
+    wobec zegara przebiegu.
     """
-    import random
     import time
 
-    dol, gora = config.ODSTEPY.get(co, config.ODSTEP_MIEDZY_DZIALANIAMI)
-    ile = random.uniform(dol, gora)
+    ile = losuj_odstep(co) if ile is None else float(ile)
     print(f"  (przerwa {ile / 60:.1f} min przed kolejnym działaniem)", flush=True)
     time.sleep(ile)
 

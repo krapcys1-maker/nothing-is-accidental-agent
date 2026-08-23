@@ -138,7 +138,7 @@ def opis_celu(cel: dict) -> dict:
 _KONIEC_CZASU: float | None = None
 
 
-def zostal_czas(na_co: str = "") -> bool:
+def zostal_czas(na_co: str = "", potrzeba_s: float = 0.0) -> bool:
     """Czy zdazymy jeszcze cokolwiek zrobic przed koncem czasu przebiegu.
 
     Systemd tnie przebieg po `TimeoutStartSec` i robi to SIGTERM-em w dowolnym
@@ -152,11 +152,46 @@ def zostal_czas(na_co: str = "") -> bool:
     if _KONIEC_CZASU is None:
         return True
     zostalo = _KONIEC_CZASU - time.time()
-    if zostalo > 0:
+    if zostalo > potrzeba_s:
         return True
-    print(f"  czas przebiegu wyczerpany — odpuszczam {na_co or 'reszte'}"
-          f" (dokoncze w nastepnym przebiegu)", flush=True)
+    if potrzeba_s:
+        print(f"  czas przebiegu wyczerpany — odpuszczam {na_co or 'reszte'}"
+              f" (przerwa {potrzeba_s / 60:.0f} min nie zmiesci sie"
+              f" w {max(0.0, zostalo) / 60:.0f} min; dokoncze w nastepnym"
+              f" przebiegu)", flush=True)
+    else:
+        print(f"  czas przebiegu wyczerpany — odpuszczam {na_co or 'reszte'}"
+              f" (dokoncze w nastepnym przebiegu)", flush=True)
     return False
+
+
+def rytm(co: str, na_co: str, stan: dict) -> bool:
+    """Przerwa MIEDZY dwoma dzialaniami tego samego rodzaju.
+
+    Trzeci raz ta sama wada, tym razem zamknieta w jednym miejscu dla wszystkich
+    blokow. Przerwa byla odsypiana PO dzialaniu, wiec:
+
+      1. po OSTATNIEJ notce w bloku agent spal jeszcze 45-90 minut, choc nie
+         mial juz czego robic — to jest dokladnie ta sama usterka, ktora
+         naprawilem wczesniej dla restackow i ktorej wtedy nie poszukalem
+         nigdzie indziej;
+      2. sen zaczynal sie BEZ pytania, czy sie zmiesci. `zostal_czas` mowilo
+         tylko „czy zostala jakakolwiek sekunda", wiec przepuszczalo
+         dziewiecdziesieciominutowa przerwe przy dwudziestu minutach na zegarze.
+
+    Teraz przerwa jest najpierw losowana, potem sprawdzana wobec konca
+    przebiegu, i dopiero wtedy odsypiana — a pierwsze dzialanie w przebiegu nie
+    czeka na nic, bo nie ma na co.
+    """
+    import stages as _s
+
+    if not stan.get(co):
+        return zostal_czas(na_co)
+    przerwa = _s.losuj_odstep(co)
+    if not zostal_czas(na_co, przerwa):
+        return False
+    _s.odczekaj(co, przerwa)
+    return True
 
 
 def zmiesci_sie(rodzaj: str, ile: int, udzial: float = 1.0) -> int:
@@ -291,6 +326,10 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
           flush=True)
     zrobione = {"notki": 0, "komentarze": 0, "odpowiedzi": 0, "polubienia": 0,
                 "restacki": 0}
+    # Czy dany rodzaj dzialania juz w tym przebiegu wyszedl. Wspolne dla
+    # wszystkich blokow, bo profil widzi jeden ciag zdarzen, nie nasze bloki:
+    # komentarz tuz po obserwacji to dla Substacka dwa dzialania pod rzad.
+    rytm_stanu: dict[str, bool] = {}
 
     # OKNO PUBLIKACJI liczone w strefie CZYTELNIKOW. Poza nim agent nie milczy
     # calkiem — polubienia i odpowiedzi zostaja, bo czytanie o polnocy jest
@@ -359,13 +398,15 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 # jest płaski i odpowiada się w polu pod całą notką, pod
                 # artykułem każdy komentarz ma własny przycisk odpowiedzi —
                 # i tylko wtedy rozmówca dostaje powiadomienie.
+                if not rytm("odpowiedz", "odpowiedzi", rytm_stanu):
+                    return
                 if c.get("gdzie") == "artykul":
                     browser.wystaw_odpowiedz_pod_artykulem(
                         c.get("url") or "", c.get("autor") or "", tekst,
                         wyslij=True)
                 else:
                     browser.wystaw_odpowiedz(c["pod_id"], tekst, wyslij=True)
-                stages.odczekaj("odpowiedz")
+                rytm_stanu["odpowiedz"] = True
             zrobione["odpowiedzi"] += 1
 
     # --- 2. notki: pięć dziennie, każda z innego faktu ------------------------
@@ -391,6 +432,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             if not gotowe:
                 continue
             if wyslij:
+                if not rytm("notka", "notki", rytm_stanu):
+                    return
                 wynik = browser.wystaw_notke(gotowe[0]["note"].strip(), wyslij=True)
                 # Fakt odhaczamy DOPIERO po potwierdzonej publikacji. Wczesniej
                 # znikal juz przy znalezieniu, wiec przepadal takze wtedy, gdy
@@ -402,7 +445,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 # a nikt by tego nie zauwazyl.
                 if wynik.get("wyslane") and n.get("promocja_url"):
                     stages.odhacz_promocje(n["promocja_url"])
-                stages.odczekaj("notka")
+                rytm_stanu["notka"] = True
             zrobione["notki"] += 1
 
     # --- 3. komentarze u innych ----------------------------------------------
@@ -441,6 +484,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             if not dobre:
                 continue
             if wyslij:
+                if not rytm("komentarz", "komentarze", rytm_stanu):
+                    return
                 browser.wystaw_komentarz(
                     cel["url"], dobre[0]["comment"], wyslij=True,
                     kontekst={**opis_celu(cel),
@@ -448,7 +493,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                               "postawa": out.get("postawa") or ""})
                 # Zapamietujemy U KOGO, zeby nie wracac tam za kilka dni.
                 kanal.zapamietaj_komentarz(cel)
-                stages.odczekaj("komentarz")
+                rytm_stanu["komentarz"] = True
             zrobione["komentarze"] += 1
 
     # --- 3b. dyskusje pod cudzymi notkami -------------------------------------
@@ -491,10 +536,12 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             if not dobre:
                 continue
             if wyslij:
+                if not rytm("komentarz", "dyskusje", rytm_stanu):
+                    return
                 browser.wystaw_odpowiedz(cel["id"], dobre[0]["comment"],
                                          wyslij=True,
                                          kontekst=opis_celu(cel))
-                stages.odczekaj("komentarz")
+                rytm_stanu["komentarz"] = True
             zrobione["komentarze"] += 1
 
     # --- 3c. obserwowanie nowych: to, co poszerza krąg ------------------------
@@ -529,10 +576,12 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 print(f"  (nie ustalilem konta dla {host} — pomijam)", flush=True)
                 continue
             if wyslij:
+                if not rytm("komentarz", "obserwowanie", rytm_stanu):
+                    return
                 # OBSERWUJEMY, nie subskrybujemy. To dwie rozne rzeczy i maja
                 # osobne widelki: obserwacja nie przysyla nic mailem.
                 browser.obserwuj_profil(uchwyt, wyslij=True)
-                stages.odczekaj("komentarz")
+                rytm_stanu["komentarz"] = True
             else:
                 print(f"  (obserwowałbym: {uchwyt})", flush=True)
 
@@ -562,8 +611,10 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             if not uchwyt:
                 continue
             if wyslij:
+                if not rytm("komentarz", "subskrypcje", rytm_stanu):
+                    return
                 browser.zasubskrybuj(uchwyt, wyslij=True)
-                stages.odczekaj("komentarz")
+                rytm_stanu["komentarz"] = True
             else:
                 print(f"  (zasubskrybowałbym: {uchwyt})", flush=True)
 
