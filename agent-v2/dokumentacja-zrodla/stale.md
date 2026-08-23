@@ -69,6 +69,7 @@
 | `CARD_MAX_NUMBERS` | `8` | — |
 | `CARD_MAX_CLAIM_CHARS` | `240` | — |
 | `DLUGOSC_WG_GLEBOKOSCI` | `{ # drugi mechanizm albo ta sama rzecz w kil` | Zmierzone na dziewięciu artykułach: przy „cel 1075, zakres 950-1250" model kotwiczył się przy górnej granicy (średnia 1212). Sufit obniżony, |
+| `KOTWICE_DLUGOSCI` | `{ # ZDANIE, KTORE PISARZ DOSTAJE TUZ PO CELU` | — |
 | `TARGET_WORDS` | `1075` | — |
 | `MIN_WORDS` | `950` | — |
 | `MAX_WORDS` | `1200` | — |

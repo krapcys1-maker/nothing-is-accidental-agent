@@ -499,6 +499,29 @@ DLUGOSC_WG_GLEBOKOSCI = {
 }
 
 
+KOTWICE_DLUGOSCI = {
+    # ZDANIE, KTORE PISARZ DOSTAJE TUZ PO CELU DLUGOSCI. Bylo jedno, wspolne
+    # dla wszystkich poziomow: „the two articles this publication has approved
+    # run 1048 and 1101 words, and neither felt short". Przy celu 420 slow
+    # mowilo wiec pisarzowi, ze teksty przyjete przez to konto sa dwuipolkrotnie
+    # dluzsze od tego, co ma napisac — czyli pracowalo PRZECIW jedynemu
+    # mechanizmowi skalowania dlugosci, jaki tu zbudowano.
+    "RICH": ("the two articles this publication has approved run 1048 and 1101 "
+             "words, and neither felt short"),
+    "SINGLE": ("this subject carries one mechanism, well documented. Our longer "
+               "pieces run past a thousand words because they carry two. Shorter "
+               "here is the right size, not a shortfall"),
+    "THIN": ("this is the shortest form we publish, and it is the honest one for "
+             "a finding this size. A longer text would be the same finding said "
+             "again"),
+}
+
+
+def kotwica_dlugosci(glebokosc: str) -> str:
+    """Zdanie kalibrujace dlugosc, dobrane do ilosci materialu."""
+    return KOTWICE_DLUGOSCI.get((glebokosc or "").upper(), KOTWICE_DLUGOSCI["SINGLE"])
+
+
 def dlugosc_dla(glebokosc: str) -> dict[str, int]:
     """Ile slow ma miec artykul o tej glebokosci.
 

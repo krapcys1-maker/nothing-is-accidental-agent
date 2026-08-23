@@ -344,6 +344,66 @@ for plik in sorted(pathlib.Path("agent-v2/prompts").glob("*.md")):
             braki.append("%s -> %s" % (plik.name, pole))
 sprawdz("zaden prompt nie ma placeholdera bez argumentu", not braki, braki)
 
+# DRUGI KIERUNEK, KTOREGO TU BRAKOWALO. Sprawdzalem tylko placeholdery bez
+# argumentu — czyli KeyError, ktory wybucha glosno. Odwrotnosc jest cichsza
+# i wlasnie dlatego przezyla: argument PRZEKAZYWANY do promptu, ktory go
+# nie uzywa, po prostu znika. Znalezione tak: `min_words` szlo do `pisarz.md`
+# przy kazdym artykule i nie bylo w tym prompcie ani razu, wiec pisarz nigdy
+# nie dostawal dolnej granicy dlugosci.
+#
+# Parsujemy WYWOLANIA `_prompt(...)`, zeby wiedziec, ktory argument idzie do
+# ktorego pliku — sama obecnosc `min_words=` w stages.py nic nie znaczy, bo
+# `notka.md` uzywa go poprawnie.
+import ast as _ast   # noqa: E402
+
+martwe_kwargi = []
+for _w in _ast.walk(_ast.parse(st)):
+    if not (isinstance(_w, _ast.Call) and getattr(_w.func, "id", "") == "_prompt"):
+        continue
+    if not (_w.args and isinstance(_w.args[0], _ast.Constant)
+            and str(_w.args[0].value).endswith(".md")):
+        continue
+    nazwa = _w.args[0].value
+    plik = pathlib.Path("agent-v2/prompts") / nazwa
+    if not plik.exists():
+        martwe_kwargi.append("%s -> pliku nie ma" % nazwa)
+        continue
+    tresc = plik.read_text(encoding="utf-8")
+    for kw in _w.keywords:
+        if kw.arg and ("{%s}" % kw.arg) not in tresc:
+            martwe_kwargi.append("%s <- %s" % (nazwa, kw.arg))
+sprawdz("zaden argument nie jest przekazywany do promptu, ktory go nie uzywa",
+        not martwe_kwargi, martwe_kwargi)
+# KONTRDOWOD: wykrywacz musi w ogole widziec wywolania i argumenty, inaczej
+# przechodzi na pustym zbiorze i nie chroni przed niczym.
+_ile_wywolan = sum(1 for _w in _ast.walk(_ast.parse(st))
+                   if isinstance(_w, _ast.Call) and getattr(_w.func, "id", "") == "_prompt")
+sprawdz("i widzi realne wywolania _prompt", _ile_wywolan >= 10, _ile_wywolan)
+
+print()
+print("=== 11. PISARZ NIE DOSTAJE DWOCH SPRZECZNYCH POLECEN ===")
+# Oba zdania napisano, zeby naprawic TE SAMA awarie — artykul, ktory spedzil
+# trzecia czesc dlugosci na tym, czego dowody nie mowia — tylko z przeciwnych
+# stron: „zmiesc granice w jeden akapit" kontra „nigdy ich nie zbieraj".
+# Model dostawal oba naraz.
+pisarz = pathlib.Path("agent-v2/prompts/pisarz.md").read_text(encoding="utf-8")
+sprawdz("nie ma juz nakazu zbierania granic w jeden akapit",
+        "One paragraph. Not two, not three." not in pisarz)
+sprawdz("zostal zakaz zbierania", "Never collect them." in pisarz)
+sprawdz("i regula o niewiadomych, z ktora sie zgadza",
+        "Put each unknown where it arises, alone." in pisarz)
+# Kotwica dlugosci ma sie skalowac — inaczej pracuje przeciw DLUGOSC_WG_GLEBOKOSCI.
+sprawdz("kotwica dlugosci jest polem, nie wpisana na sztywno",
+        "{kotwica_dlugosci}" in pisarz and "1048 and 1101" not in pisarz)
+sprawdz("i pisarz dostaje dolna granice", "{min_words}" in pisarz)
+import config as _c2   # noqa: E402
+sprawdz("kazdy poziom glebokosci ma wlasna kotwice",
+        len({_c2.kotwica_dlugosci(g) for g in ("RICH", "SINGLE", "THIN")}) == 3)
+sprawdz("kotwica RICH nadal powoluje sie na dwa przyjete teksty",
+        "1048" in _c2.kotwica_dlugosci("RICH"))
+sprawdz("a kotwica THIN mowi, ze krotko jest wlasciwie",
+        "shortest form" in _c2.kotwica_dlugosci("THIN"))
+
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

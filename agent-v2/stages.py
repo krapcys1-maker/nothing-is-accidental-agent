@@ -248,6 +248,7 @@ def write(
         target_words=dl["cel"],
         min_words=dl["min"],
         max_words=dl["max"],
+        kotwica_dlugosci=config.kotwica_dlugosci(glebokosc),
         style_examples=rendered,
         style_positive=positive,
         style_negative=negative,
