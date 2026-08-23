@@ -71,6 +71,9 @@ KOD_DOSLOWNIE = [
     # przekazywany i nieczytany. Wycinek pokazuje, ze petla jest juz zamknieta.
     "stages.discovery",
     "stages.pick_topic", "stages.warto_pisac", "stages._precedens_ok",
+    # Dziennik przegranych tematow: cala tresc siedzi w uzasadnieniu,
+    # dlaczego to NIE jest bramka i dlaczego powod liczy kod, nie model.
+    "stages.zapisz_przegranych", "stages._powod_przegranej",
     "stages._stale_sygnaly", "stages.losuj_odstep", "stages.bramka_kandydata",
     "stages.budzet_dnia", "stages.artykul_do_promocji", "stages.grafika",
     "gates.deterministic_floors", "gates.uwagi_z_formy", "gates.odcisk_formy",

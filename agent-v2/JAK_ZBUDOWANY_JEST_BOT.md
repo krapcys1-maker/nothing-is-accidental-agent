@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **11 plików**, 10 623 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **11 plików**, 10 713 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 41 zestawów
-testów, 1029 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 42 zestawów
+testów, 1051 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-3073 wierszy, 73 funkcji na poziomie modułu, 0 klas
+3163 wierszy, 75 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -217,7 +217,9 @@ wiec nie da sie go rozjechac z kodem.
 | `hosty_ktore_nigdy_nie_dzialaly(conn, min_prob)` | Hosty, ktore probowalismy >=2 razy i ANI RAZU sie nie udalo. |
 | `discovery(conn, run_id, question, recent_domains)` | Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy). |
 | `feasibility(conn, run_id, topics)` | Etap 2 — tani odsiew przed drogą dyskoverią (DeepSeek). |
-| `pick_topic(topics, assessments)` | Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel. |
+| `_powod_przegranej(klucz_zwyciezcy, klucz_tematu)` *(wewn.)* | Ktory skladnik klucza sortowania ROZSTRZYGNAL, i jakimi wartosciami. |
+| `zapisz_przegranych(przegrani, run_id)` | Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej. |
+| `pick_topic(topics, assessments, run_id)` | Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel. |
 | `scout(conn, run_id, count)` | Etap 1 — skaut tematów (Claude). |
 | `bank_fragmentow(conn, dni)` | Nieuzyte fragmenty ze wszystkich artykulow — zaplacone i nieprzeczytane. |
 | `bibliotekarz(conn, run_id, bank)` | Grupuje bank po MECHANIZMIE. Model proponuje, KOD weryfikuje. |
@@ -6333,7 +6335,8 @@ def discovery(
 <!--KOD:stages.pick_topic-->
 ```python
 def pick_topic(
-    topics: list[dict[str, Any]], assessments: list[dict[str, Any]]
+    topics: list[dict[str, Any]], assessments: list[dict[str, Any]],
+    run_id: int | None = None
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel.
 
@@ -6426,6 +6429,25 @@ def pick_topic(
               "najlepszy z odrzuconych i zapisuje to w uwagach", flush=True)
         ranked[0]["mimo_odrzucenia"] = True
     best = ranked[0]
+
+    # DZIEWIEC TEMATOW NA DZIESIEC ZNIKALO BEZ SLADU. Do bazy trafia tylko
+    # zwyciezca, wiec przy nastepnej diagnozie nie bylo czego czytac.
+    klucz_zwyciezcy = kolejnosc(best)
+    przegrani = []
+    for a in ranked[1:]:
+        i = int(a.get("index", -1))
+        przegrani.append({
+            "tytul": str(temat(a).get("title") or "")[:200],
+            "powod": _powod_przegranej(klucz_zwyciezcy, kolejnosc(a)),
+            "wygral": str(temat(best).get("title") or "")[:200],
+            "na_artykul": bool(temat(a).get("na_artykul")),
+            "index": i,
+        })
+    ile = zapisz_przegranych(przegrani, run_id)
+    if ile:
+        print("  [tematy] %d przegranych zapisanych z powodem; "
+              "najblizszy: %s" % (ile, przegrani[0]["powod"]), flush=True)
+
     index = int(best.get("index", 0))
     if not 0 <= index < len(topics):
         raise ValueError(f"odsiew wskazał nieistniejący temat: {index}")
@@ -6570,6 +6592,66 @@ def _precedens_ok(p: Any) -> bool:
     if len(zmiana.split()) < 3:
         return False
     return not re.match(r"^\W*(nothing|none|no\s|nic|brak)", zmiana, re.I)
+```
+
+<!--KOD:stages.zapisz_przegranych-->
+```python
+def zapisz_przegranych(przegrani: list[dict[str, Any]],
+                       run_id: int | None = None) -> int:
+    """Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej.
+
+    DIAGNOSTYKA, NIE BRAMKA. Nic tego pliku nie czyta przy wyborze tematu
+    i tak ma zostac. Powod jest konkretny: temat odrzucony dzis, bo brakowalo
+    mu drugiego precedensu, moze go miec za pol roku, gdy pojawi sie nowy
+    dokument. Indeks kandydatow na NOTKI dziala inaczej — tam odrzucenie jest
+    ostateczne, bo martwy fakt zostaje martwy — i ta roznica jest celowa.
+
+    Po co to w ogole. Skaut oddaje dziesiec tematow, wygrywa jeden, dziewiec
+    znikalo bez sladu: do bazy trafia tylko zwyciezca, a log mowil najwyzej
+    „NA ARTYKUL: 6 z 10". Gdy skaut oddal ZERO tematow artykulowych, moja
+    pierwsza diagnoza byla bledna — twierdzilem, ze model nie umie podac
+    precedensow przed researchem, a on podal wzorcowy w tym samym przebiegu,
+    tylko jeden przy progu dwa. Z tym dziennikiem widac to od razu.
+    """
+    if not przegrani:
+        return 0
+    try:
+        stare = json.loads(PRZEGRANE_TEMATY.read_text(encoding="utf-8"))
+        stare = [w for w in stare if isinstance(w, dict)] if isinstance(stare, list) else []
+    except (OSError, ValueError):
+        stare = []      # Uszkodzony dziennik to pusty dziennik, nie awaria.
+    for p in przegrani:
+        p["run_id"] = run_id
+        p["kiedy"] = db.now()
+    wszystko = (stare + przegrani)[-ILE_PRZEGRANYCH_TRZYMAMY:]
+    try:
+        PRZEGRANE_TEMATY.parent.mkdir(parents=True, exist_ok=True)
+        PRZEGRANE_TEMATY.write_text(
+            json.dumps(wszystko, ensure_ascii=False, indent=1), encoding="utf-8")
+    except OSError as exc:
+        # Dziennik diagnostyczny NIE MOZE zatrzymac przebiegu. Artykul jest
+        # wazniejszy od notatki o tym, dlaczego inny temat go nie zostal.
+        print("  [tematy] nie zapisalem dziennika przegranych: %s" % exc, flush=True)
+        return 0
+    return len(przegrani)
+```
+
+<!--KOD:stages._powod_przegranej-->
+```python
+def _powod_przegranej(klucz_zwyciezcy, klucz_tematu) -> str:
+    """Ktory skladnik klucza sortowania ROZSTRZYGNAL, i jakimi wartosciami.
+
+    Nie „temat byl gorszy", tylko „przegral na `artykulowy`: 0 wobec 1".
+    Powod liczy KOD z tego, co i tak policzyl, zeby posortowac — nie model
+    o sobie samym. To jest cala roznica wobec `discarded_seeds` z prototypu:
+    samoocena modelu jest niesprawdzalna i wyrownuje sie do stalej, a to tutaj
+    jest odczytem z rzeczywistej decyzji.
+    """
+    for nazwa, u_zwyciezcy, u_tematu in zip(SKLADNIKI_KLUCZA, klucz_zwyciezcy,
+                                            klucz_tematu):
+        if u_zwyciezcy != u_tematu:
+            return "%s: %s wobec %s" % (nazwa, u_tematu, u_zwyciezcy)
+    return "remis na calym kluczu — zadecydowala kolejnosc z modelu"
 ```
 
 <!--KOD:stages._stale_sygnaly-->

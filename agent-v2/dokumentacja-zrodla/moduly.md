@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-3072 wierszy, 73 funkcji na poziomie modułu, 0 klas
+3163 wierszy, 75 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -75,7 +75,9 @@
 | `hosty_ktore_nigdy_nie_dzialaly(conn, min_prob)` | Hosty, ktore probowalismy >=2 razy i ANI RAZU sie nie udalo. |
 | `discovery(conn, run_id, question, recent_domains)` | Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy). |
 | `feasibility(conn, run_id, topics)` | Etap 2 — tani odsiew przed drogą dyskoverią (DeepSeek). |
-| `pick_topic(topics, assessments)` | Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel. |
+| `_powod_przegranej(klucz_zwyciezcy, klucz_tematu)` *(wewn.)* | Ktory skladnik klucza sortowania ROZSTRZYGNAL, i jakimi wartosciami. |
+| `zapisz_przegranych(przegrani, run_id)` | Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej. |
+| `pick_topic(topics, assessments, run_id)` | Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel. |
 | `scout(conn, run_id, count)` | Etap 1 — skaut tematów (Claude). |
 | `bank_fragmentow(conn, dni)` | Nieuzyte fragmenty ze wszystkich artykulow — zaplacone i nieprzeczytane. |
 | `bibliotekarz(conn, run_id, bank)` | Grupuje bank po MECHANIZMIE. Model proponuje, KOD weryfikuje. |
@@ -282,7 +284,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-1626 wierszy, 17 funkcji na poziomie modułu, 0 klas
+1649 wierszy, 18 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -291,6 +293,7 @@
 | `pora_na_publikacje(kiedy)` | Czy teraz wolno publikowac — wg zegara CZYTELNIKOW, nie serwera. |
 | `w_szczycie(kiedy)` | Czy teraz obowiazuje droga taryfa. |
 | `narzedzie_wyszukiwania(model)` | Nazwa narzedzia wyszukiwania i ewentualne ostrzezenie. |
+| `kotwica_dlugosci(glebokosc)` | Zdanie kalibrujace dlugosc, dobrane do ilosci materialu. |
 | `dlugosc_dla(glebokosc)` | Ile slow ma miec artykul o tej glebokosci. |
 | `_tokens_for(chars)` *(wewn.)* | — |
 | `losowa_postawa()` | Ktora postawa dla TEGO komentarza. Wagi, nie rownomiernie. |

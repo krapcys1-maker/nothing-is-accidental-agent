@@ -781,7 +781,7 @@ def main() -> int:
         assessments = cached(
             stage, lambda: stages.feasibility(conn, run_id, topics), args.use_cache
         )
-        topic, verdict = stages.pick_topic(topics, assessments)
+        topic, verdict = stages.pick_topic(topics, assessments, run_id)
         print("\n-- odsiew wykonalności --", flush=True)
         for a in assessments:
             mark = "TAK " if a.get("feasible") else "nie "

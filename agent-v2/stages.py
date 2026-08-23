@@ -621,6 +621,20 @@ NOWA_LINIA = chr(10)
 
 ZUZYTE_FAKTY = config.DATA_DIR / "zuzyte_fakty.json"
 
+# DZIENNIK PRZEGRANYCH TEMATOW. Nie jest bramka i nikt go nie czyta przy
+# wyborze — patrz `zapisz_przegranych`.
+PRZEGRANE_TEMATY = config.DATA_DIR / "tematy_przegrane.json"
+ILE_PRZEGRANYCH_TRZYMAMY = 400
+
+# Nazwy skladnikow klucza sortowania w `pick_topic`, w tej samej kolejnosci.
+# Trzymane obok siebie, bo rozjazd miedzy krotka a ta lista dalby powod
+# przegranej wskazujacy na niewlasciwe pole — czyli klamstwo w dzienniku,
+# ktory ma sluzyc do diagnozy.
+SKLADNIKI_KLUCZA = (
+    "nosny", "artykulowy", "wlasny_ranking", "swiezy", "watki",
+    "waga_glebokosci", "confidence", "expected_primary_sources",
+)
+
 
 def _klucz_faktu(tekst: str) -> str:
     """Odcisk faktu odporny na przestawienie słów i inną liczbę w tym samym zdaniu."""
@@ -1962,8 +1976,65 @@ def feasibility(
     return assessments
 
 
+def _powod_przegranej(klucz_zwyciezcy, klucz_tematu) -> str:
+    """Ktory skladnik klucza sortowania ROZSTRZYGNAL, i jakimi wartosciami.
+
+    Nie „temat byl gorszy", tylko „przegral na `artykulowy`: 0 wobec 1".
+    Powod liczy KOD z tego, co i tak policzyl, zeby posortowac — nie model
+    o sobie samym. To jest cala roznica wobec `discarded_seeds` z prototypu:
+    samoocena modelu jest niesprawdzalna i wyrownuje sie do stalej, a to tutaj
+    jest odczytem z rzeczywistej decyzji.
+    """
+    for nazwa, u_zwyciezcy, u_tematu in zip(SKLADNIKI_KLUCZA, klucz_zwyciezcy,
+                                            klucz_tematu):
+        if u_zwyciezcy != u_tematu:
+            return "%s: %s wobec %s" % (nazwa, u_tematu, u_zwyciezcy)
+    return "remis na calym kluczu — zadecydowala kolejnosc z modelu"
+
+
+def zapisz_przegranych(przegrani: list[dict[str, Any]],
+                       run_id: int | None = None) -> int:
+    """Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej.
+
+    DIAGNOSTYKA, NIE BRAMKA. Nic tego pliku nie czyta przy wyborze tematu
+    i tak ma zostac. Powod jest konkretny: temat odrzucony dzis, bo brakowalo
+    mu drugiego precedensu, moze go miec za pol roku, gdy pojawi sie nowy
+    dokument. Indeks kandydatow na NOTKI dziala inaczej — tam odrzucenie jest
+    ostateczne, bo martwy fakt zostaje martwy — i ta roznica jest celowa.
+
+    Po co to w ogole. Skaut oddaje dziesiec tematow, wygrywa jeden, dziewiec
+    znikalo bez sladu: do bazy trafia tylko zwyciezca, a log mowil najwyzej
+    „NA ARTYKUL: 6 z 10". Gdy skaut oddal ZERO tematow artykulowych, moja
+    pierwsza diagnoza byla bledna — twierdzilem, ze model nie umie podac
+    precedensow przed researchem, a on podal wzorcowy w tym samym przebiegu,
+    tylko jeden przy progu dwa. Z tym dziennikiem widac to od razu.
+    """
+    if not przegrani:
+        return 0
+    try:
+        stare = json.loads(PRZEGRANE_TEMATY.read_text(encoding="utf-8"))
+        stare = [w for w in stare if isinstance(w, dict)] if isinstance(stare, list) else []
+    except (OSError, ValueError):
+        stare = []      # Uszkodzony dziennik to pusty dziennik, nie awaria.
+    for p in przegrani:
+        p["run_id"] = run_id
+        p["kiedy"] = db.now()
+    wszystko = (stare + przegrani)[-ILE_PRZEGRANYCH_TRZYMAMY:]
+    try:
+        PRZEGRANE_TEMATY.parent.mkdir(parents=True, exist_ok=True)
+        PRZEGRANE_TEMATY.write_text(
+            json.dumps(wszystko, ensure_ascii=False, indent=1), encoding="utf-8")
+    except OSError as exc:
+        # Dziennik diagnostyczny NIE MOZE zatrzymac przebiegu. Artykul jest
+        # wazniejszy od notatki o tym, dlaczego inny temat go nie zostal.
+        print("  [tematy] nie zapisalem dziennika przegranych: %s" % exc, flush=True)
+        return 0
+    return len(przegrani)
+
+
 def pick_topic(
-    topics: list[dict[str, Any]], assessments: list[dict[str, Any]]
+    topics: list[dict[str, Any]], assessments: list[dict[str, Any]],
+    run_id: int | None = None
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel.
 
@@ -2056,6 +2127,25 @@ def pick_topic(
               "najlepszy z odrzuconych i zapisuje to w uwagach", flush=True)
         ranked[0]["mimo_odrzucenia"] = True
     best = ranked[0]
+
+    # DZIEWIEC TEMATOW NA DZIESIEC ZNIKALO BEZ SLADU. Do bazy trafia tylko
+    # zwyciezca, wiec przy nastepnej diagnozie nie bylo czego czytac.
+    klucz_zwyciezcy = kolejnosc(best)
+    przegrani = []
+    for a in ranked[1:]:
+        i = int(a.get("index", -1))
+        przegrani.append({
+            "tytul": str(temat(a).get("title") or "")[:200],
+            "powod": _powod_przegranej(klucz_zwyciezcy, kolejnosc(a)),
+            "wygral": str(temat(best).get("title") or "")[:200],
+            "na_artykul": bool(temat(a).get("na_artykul")),
+            "index": i,
+        })
+    ile = zapisz_przegranych(przegrani, run_id)
+    if ile:
+        print("  [tematy] %d przegranych zapisanych z powodem; "
+              "najblizszy: %s" % (ile, przegrani[0]["powod"]), flush=True)
+
     index = int(best.get("index", 0))
     if not 0 <= index < len(topics):
         raise ValueError(f"odsiew wskazał nieistniejący temat: {index}")
