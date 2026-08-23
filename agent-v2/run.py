@@ -658,10 +658,43 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     # wejscie na profil, zero wywolan modelu), maja twardy limit miesieczny,
     # ktorego nie da sie nadrobic pozniej, i to one poszerzaja krag ludzi,
     # do ktorych w ogole mozemy sie potem odezwac.
+    # --- 6. kopia listy subskrybentow, gdy sie zestarzala --------------------
+    def kopia_listy() -> None:
+        """Jedyne aktywo, ktorego nie da sie odtworzyc — i jedyne miejsce,
+        gdzie wlasciciel musial dotad cos kliknac.
+
+        Czyta z WLASNEGO panelu wlasna sesja, ta sama droga, ktora agent
+        wystawia notki. Odmowa nie jest awaria przebiegu: kopia to
+        zabezpieczenie, a nie warunek pracy. Gdy sie nie uda, alarm i tak
+        krzyknie nastepnego ranka i wtedy zostaje reczny eksport.
+        """
+        from datetime import datetime, timezone
+
+        katalog = config.DATA_DIR / "kopie"
+        kopie = sorted(katalog.glob("subskrybenci-*.csv"))
+        if kopie:
+            wiek = (datetime.now(timezone.utc)
+                    - datetime.fromtimestamp(kopie[-1].stat().st_mtime,
+                                             timezone.utc)).days
+            if wiek < config.KOPIA_SUBSKRYBENTOW_CO_ILE_DNI:
+                print(f"  ostatnia kopia ma {wiek} dni — jeszcze swieza",
+                      flush=True)
+                return
+        if not wyslij:
+            print("  (pobralbym liste subskrybentow)", flush=True)
+            return
+        try:
+            import kopia_subskrybentow
+            kopia_subskrybentow.main()
+        except Exception as exc:
+            print(f"  nie zrobilem kopii: {type(exc).__name__}: {exc}"[:160],
+                  flush=True)
+
     for nazwa, robota in (("odpowiedzi", odpowiedzi), ("notki", notki),
                           ("obserwowanie", obserwuj), ("subskrypcje", subskrybuj),
                           ("komentarze", komentarze), ("dyskusje", dyskusje),
-                          ("polubienia", polubienia), ("restacki", restacki)):
+                          ("polubienia", polubienia), ("restacki", restacki),
+                          ("kopia listy", kopia_listy)):
         print(f"\n-- {nazwa} --", flush=True)
         blok(nazwa, robota)
 

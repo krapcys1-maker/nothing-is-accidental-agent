@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1183 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1216 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -106,7 +106,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2392 wierszy, 53 funkcji na poziomie modułu, 0 klas
+2495 wierszy, 55 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -139,6 +139,8 @@
 | `potwierdz_notke(page, tekst, prob)` | Pyta Substacka, czy notka naprawdę wisi na naszym profilu. |
 | `polub_w_kanale(ile, wyslij)` | Polubienia w kanale czytelnika. |
 | `_klik_na_profilu(handle, napisy, rodzaj, wyslij)` *(wewn.)* | Klika JEDEN konkretny przycisk na cudzym profilu — i tylko jego. |
+| `pobierz_subskrybentow()` | Czyta liste subskrybentow z WLASNEGO panelu, wlasna sesja. |
+| `_wiersze_subskrybentow(page)` *(wewn.)* | Wiersze tabeli panelu: adres, typ i data rozpoczecia. |
 | `obserwuj_profil(handle, wyslij)` | Obserwuje cudzy profil — jego notki trafiaja do naszego kanalu. |
 | `zasubskrybuj(handle, wyslij)` | Subskrybuje cudzy profil. Ląduje w skrzynce właściciela, więc wąsko. |
 | `_esc(t)` *(wewn.)* | — |
@@ -279,17 +281,18 @@
 
 ### `kopia_subskrybentow.py` — kopia jedynego aktywa, którego nie da się odtworzyć
 
-135 wierszy, 3 funkcji na poziomie modułu, 0 klas
+198 wierszy, 4 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_wierszy(tekst)` *(wewn.)* | — |
 | `_to_lista_subskrybentow(tekst)` *(wewn.)* | Czy to naprawde eksport listy, a nie przypadkowy plik albo strona HTML. |
+| `pobierz_z_panelu()` | Sciaga liste z wlasnego panelu i zapisuje ja jako CSV do `przychodzace/`. |
 | `main()` | — |
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-1678 wierszy, 19 funkcji na poziomie modułu, 0 klas
+1682 wierszy, 19 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

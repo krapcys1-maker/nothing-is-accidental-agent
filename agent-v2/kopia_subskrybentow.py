@@ -6,21 +6,36 @@ tempie 6-12 subskrypcji miesiecznie sto osob to okolo jedenastu miesiecy
 pracy systemu, a regulamin pozwala zamknac konto natychmiast i w wylacznej
 ocenie Substacka.
 
-## Dlaczego to NIE pobiera samo
+## Jak to sie pobiera
 
-Szukalem endpointu i go nie znalazlem. `/api/v1/subscriber/csv` i dwa
-podobne zwracaja 404. `/api/v1/subscriptions/page_v2`, ktorego uzywa panel,
-oddaje NASZE SUBSKRYPCJE — publikacje, ktore my obserwujemy — a nie naszych
-subskrybentow; widac to po `publication_id: 1`, czyli publikacji samego
-Substacka.
+OD 23 SIERPNIA SAMO, i to jest sprostowanie do tego, co stalo tu wczesniej.
+`browser.pobierz_subskrybentow` czyta liste z WLASNEGO panelu wlasna sesja —
+ta sama przegladarka i ta sama droga, ktora agent wystawia notki. Zamysl calego
+systemu to zero dotyku, a eksport raz na dwa tygodnie byl jedynym miejscem,
+gdzie wlasciciel musial cos kliknac.
 
-Przestalem szukac swiadomie. Powtarzane sondowanie nieudokumentowanych
-adresow to dokladnie to, co regulamin Substacka nazywa scrapingiem, a tu
-probujemy konto ZABEZPIECZYC, nie narazic. Substack ma wlasny, sankcjonowany
-eksport i zajmuje on pol minuty.
+Reczny eksport ZOSTAJE jako droga zapasowa: gdy panel zmieni uklad albo lista
+nie da sie odczytac w calosci, skrypt mowi o tym wprost i czeka na plik.
+
+## Czego dalej NIE robimy
+
+Nie zgadujemy adresow API. `/api/v1/subscriber/csv` i dwa podobne zwracaja
+404, a `/api/v1/subscriptions/page_v2`, ktorego uzywa panel, oddaje NASZE
+SUBSKRYPCJE — publikacje, ktore my obserwujemy — a nie naszych subskrybentow;
+widac to po `publication_id: 1`, czyli publikacji samego Substacka.
+
+Powtarzane sondowanie nieudokumentowanych adresow to jest to, co regulamin
+nazywa scrapingiem. Czytanie WLASNEGO panelu wlasna sesja nie jest — to jest
+wlasciciel patrzacy na wlasne konto, tak samo jak przy publikowaniu notki.
+Roznica jest realna i przebiega dokladnie tedy: zadnego cudzego konta, zadnego
+omijania limitow, zadnego adresu, ktorego panel sam by nie odpytal.
 
 ## Jak zrobic kopie
 
+Automatycznie:  python agent-v2/kopia_subskrybentow.py
+(agent robi to sam co `config.KOPIA_SUBSKRYBENTOW_CO_ILE_DNI` dni)
+
+Recznie, gdy automat odmowi:
 1. Dashboard -> Subscribers -> menu (trzy kropki) -> Export
 2. Zapisz plik do `agent-v2/data/kopie/przychodzace/`
 3. Uruchom:  python agent-v2/kopia_subskrybentow.py
@@ -65,8 +80,56 @@ def _to_lista_subskrybentow(tekst: str) -> tuple[bool, str]:
     return True, ""
 
 
+def pobierz_z_panelu() -> tuple[bool, str]:
+    """Sciaga liste z wlasnego panelu i zapisuje ja jako CSV do `przychodzace/`.
+
+    CELOWO oddaje plik do tego samego katalogu, ktory obsluguje reczny eksport.
+    Dzieki temu automat i czlowiek ida DALEJ TA SAMA DROGA: ta sama walidacja
+    naglowka, to samo porownanie z poprzednia kopia, ten sam alarm przy spadku
+    i te same prawa 0600. Druga sciezka zapisu znaczylaby druga sciezke, na
+    ktorej cos moze pojsc inaczej.
+
+    NIEPELNA LISTA NIE JEST ZAPISYWANA. Kopia, ktora wyglada na komplet, a jest
+    polowa, jest grozniejsza niz brak kopii — przy odtwarzaniu konta nikt nie
+    sprawdza, czy plik byl pelny; sprawdza sie, czy w ogole jest.
+    """
+    try:
+        import browser
+    except Exception as exc:
+        return False, "nie moge uzyc przegladarki: %s" % type(exc).__name__
+
+    print("  pobieram z panelu wlasna sesja...")
+    try:
+        wynik = browser.pobierz_subskrybentow()
+    except Exception as exc:
+        return False, "%s: %s" % (type(exc).__name__, str(exc)[:120])
+
+    wiersze = wynik.get("wiersze") or []
+    if not wynik.get("kompletna"):
+        return False, (wynik.get("powod")
+                       or "panel nie potwierdzil, ze to cala lista")
+    if not wiersze:
+        return False, "panel nie oddal ani jednego adresu"
+
+    PRZYCHODZACE.mkdir(parents=True, exist_ok=True)
+    cel = PRZYCHODZACE / ("z-panelu-%s.csv"
+                          % datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M%S"))
+    with open(cel, "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["Email", "Type", "Start date"])
+        for r in wiersze:
+            w.writerow([r.get("email", ""), r.get("typ", ""), r.get("od", "")])
+    return True, "%d adresow z panelu" % len(wiersze)
+
+
 def main() -> int:
     PRZYCHODZACE.mkdir(parents=True, exist_ok=True)
+    if not sorted(PRZYCHODZACE.glob("*.csv")):
+        # Automat pierwszy. Gdy odmowi, mowi DLACZEGO i schodzimy na reczna
+        # droge — cicha porazka automatu bylaby najgorszym wariantem, bo
+        # wlasciciel przestalby robic eksport, wierzac, ze agent go robi.
+        ok, powod = pobierz_z_panelu()
+        print("  %s: %s" % ("pobrane" if ok else "NIE POBRALEM automatycznie", powod))
     nowe = sorted(PRZYCHODZACE.glob("*.csv"))
     if not nowe:
         print("== kopia listy subskrybentow ==")

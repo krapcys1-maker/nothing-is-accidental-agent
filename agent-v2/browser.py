@@ -1185,6 +1185,102 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
     return wynik
 
 
+def pobierz_subskrybentow() -> dict[str, Any]:
+    """Czyta liste subskrybentow z WLASNEGO panelu, wlasna sesja.
+
+    ## Dlaczego to NIE jest to, czego wczesniej odmowilismy
+
+    Odmowilismy ZGADYWANIA NIEUDOKUMENTOWANYCH ADRESOW API — `/api/v1/subscriber/csv`
+    i podobnych, ktore zwracaja 404. Powtarzane sondowanie takich adresow to
+    dokladnie to, co regulamin Substacka nazywa scrapingiem, a kopia listy ma
+    konto CHRONIC, nie narazac.
+
+    To jest co innego: wlasciciel patrzy na wlasny panel wlasna sesja. Ta sama
+    przegladarka, ta sama sesja i ta sama droga, ktora agent od tygodni wystawia
+    notki i komentarze. Zadnego cudzego konta, zadnego omijania limitow, zadnego
+    adresu, ktorego panel sam by nie odpytal.
+
+    ## Czego ta funkcja NIE gwarantuje i dlaczego to wazne
+
+    Kompletu. Przy czterech subskrybentach tabela miesci sie na jednym ekranie,
+    ale przy stu Substack doladowuje wiersze przy przewijaniu. Dlatego przewijamy
+    do skutku i oddajemy `kompletna=False`, gdy liczba wierszy nadal rosla, kiedy
+    skonczyl sie limit prob.
+
+    NIEPELNA LISTA JEST GROZNIEJSZA NIZ JEJ BRAK: zapisana jako kopia wyglada
+    jak komplet, a przy odtwarzaniu okazuje sie polowa. Dlatego decyzje o zapisie
+    podejmuje `kopia_subskrybentow`, nie ta funkcja — tutaj oddajemy tylko fakty.
+    """
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    wynik: dict[str, Any] = {"wiersze": [], "kompletna": False, "powod": ""}
+    try:
+        page.goto("https://%s.substack.com/publish/subscribers" % config.SUBSTACK_HANDLE,
+                  timeout=READ_TIMEOUT_MS * 2, wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 5000)
+
+        # PRZEWIJAMY DO SKUTKU. Warunek konca to „dwa razy z rzedu tyle samo
+        # wierszy", a nie „przewinelismy N razy" — inaczej wolna siec dawalaby
+        # niepelna liste wygladajaca na pelna.
+        ile_bylo, bez_zmian = -1, 0
+        for _ in range(40):
+            wiersze = _wiersze_subskrybentow(page)
+            if len(wiersze) == ile_bylo:
+                bez_zmian += 1
+                if bez_zmian >= 2:
+                    wynik["kompletna"] = True
+                    break
+            else:
+                bez_zmian = 0
+            ile_bylo = len(wiersze)
+            page.mouse.wheel(0, 4000)
+            page.wait_for_timeout(1200)
+        else:
+            wynik["powod"] = ("lista nadal rosla po 40 przewinieciach — "
+                              "nie moge zarczyc, ze to komplet")
+
+        wynik["wiersze"] = _wiersze_subskrybentow(page)
+        if not wynik["wiersze"]:
+            wynik["kompletna"] = False
+            wynik["powod"] = ("panel nie oddal ani jednego adresu — zmienil sie "
+                              "uklad strony albo wygasla sesja")
+    except Exception as exc:
+        wynik["kompletna"] = False
+        wynik["powod"] = f"{type(exc).__name__}: {exc}"[:200]
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+    return wynik
+
+
+def _wiersze_subskrybentow(page) -> list[dict[str, str]]:
+    """Wiersze tabeli panelu: adres, typ i data rozpoczecia.
+
+    Nie polegamy na klasach CSS — Substack generuje je losowo. Bierzemy komorki
+    wiersza i szukamy tej, ktora wyglada na adres; reszta idzie po kolejnosci,
+    ktora panel pokazuje w naglowku.
+    """
+    import re
+
+    surowe = page.eval_on_selector_all(
+        "table tr, [role=row]",
+        "els => els.map(e => Array.from(e.querySelectorAll('td, [role=cell]'))"
+        ".map(c => (c.innerText || '').trim()))")
+    wiersze: list[dict[str, str]] = []
+    for komorki in surowe or []:
+        adres = next((k for k in komorki if re.fullmatch(r"[\w.+-]+@[\w-]+\.[\w.]+", k)), "")
+        if not adres:
+            continue
+        wiersze.append({
+            "email": adres,
+            "typ": komorki[1] if len(komorki) > 1 else "",
+            "od": next((k for k in komorki if re.search(r"\d{4}", k)), ""),
+        })
+    return wiersze
+
+
 def obserwuj_profil(handle: str, wyslij: bool = False) -> dict[str, Any]:
     """Obserwuje cudzy profil — jego notki trafiaja do naszego kanalu.
 
