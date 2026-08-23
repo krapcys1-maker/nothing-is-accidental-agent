@@ -1,0 +1,72 @@
+{
+  "actual_logical_calls": {
+    "scout": 1
+  },
+  "allowed_logical_calls": {
+    "feasibility": 1
+  },
+  "argv": [
+    "run.py",
+    "--topics",
+    "6",
+    "--use-cache",
+    "--stop-after",
+    "feasibility"
+  ],
+  "browser_imported": false,
+  "capture_ordinals": [],
+  "contract_failures_total": 0,
+  "cost_after": {
+    "exposure_usd": 0.020601,
+    "known_usd": 0.020601,
+    "reserved_or_unknown_usd": 0.0,
+    "rows": [
+      {
+        "cost_status": "KNOWN",
+        "known": 0.020601,
+        "n": 1,
+        "provider": "deepseek",
+        "unresolved": 0
+      }
+    ]
+  },
+  "cost_before": {
+    "exposure_usd": 0.020601,
+    "known_usd": 0.020601,
+    "reserved_or_unknown_usd": 0.0,
+    "rows": [
+      {
+        "cost_status": "KNOWN",
+        "known": 0.020601,
+        "n": 1,
+        "provider": "deepseek",
+        "unresolved": 0
+      }
+    ]
+  },
+  "execution_error": null,
+  "exit_code": 1,
+  "experiment": "normal-v3-live-segments@2",
+  "finished_at": "2026-08-21T17:09:16+00:00",
+  "latest_article": null,
+  "latest_run": {
+    "note": "LiveRunnerError: segment 'feasibility' odmówił nadmiarowego wywołania 'scout'",
+    "stage": "scout",
+    "status": "FAILED"
+  },
+  "new_call_rows": [],
+  "new_exposure_usd": 0.0,
+  "notes": null,
+  "notes_validation": null,
+  "pass": false,
+  "public_fetches": [],
+  "requested_capabilities": [],
+  "routing_unchanged": true,
+  "segment": "feasibility",
+  "stage_cap_usd": 0.03,
+  "stderr": "\n!! stanęło na etapie scout: LiveRunnerError: segment 'feasibility' odmówił nadmiarowego wywołania 'scout'\nTraceback (most recent call last):\n  File \"C:\\Users\\user\\Desktop\\agent project\\agent-v3\\run.py\", line 872, in main\n    topics = cached(stage, lambda: stages.scout(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\agent-v3\\run.py\", line 84, in cached\n    value = produce()\n            ^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\agent-v3\\run.py\", line 872, in <lambda>\n    topics = cached(stage, lambda: stages.scout(\n                                   ^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\agent-v3\\stages.py\", line 2711, in scout\n    text = llm.call(\"scout\", SCOUT_SYSTEM, prompt, conn=conn, run_id=run_id)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\unittest\\mock.py\", line 1139, in __call__\n    return self._mock_call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\unittest\\mock.py\", line 1143, in _mock_call\n    return self._execute_mock_call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\unittest\\mock.py\", line 1204, in _execute_mock_call\n    result = effect(*args, **kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\agent-v3\\normal_live_runner.py\", line 378, in captured_call\n    raise LiveRunnerError(\nLiveRunnerError: segment 'feasibility' odmówił nadmiarowego wywołania 'scout'\n",
+  "stdout": "== polityka V3: mode=model_test kill_switch=False test_target=False ==\n== przebieg 2 ==\n   baza: C:\\Users\\user\\Desktop\\agent project\\agent-v3\\.live-experiments\\E-019-scout-manual-audit\\data\\experiment.db   sufit przebiegu: 0.03 USD\n\n== koszt przebiegu: $0.0000 w 0 wywołaniach ==\n",
+  "substack_requested": false,
+  "topics": null,
+  "zero_retry": true
+}

@@ -1,0 +1,34 @@
+{
+  "created_at": "2026-08-21T16:01:06+00:00",
+  "experiment": "normal-v3-live-segments@2",
+  "fresh_without_seed_or_cache": true,
+  "routing": {
+    "bibliotekarz": "deepseek-v4-pro",
+    "classify": "deepseek-v4-flash",
+    "curiosity": "deepseek-v4-flash",
+    "discovery": "deepseek-v4-pro",
+    "factcheck": "deepseek-v4-flash",
+    "feasibility": "deepseek-v4-flash",
+    "forma": "deepseek-v4-pro",
+    "note": "claude-opus-5",
+    "review": "deepseek-v4-pro",
+    "revise": "claude-fable-5",
+    "scout": "deepseek-v4-pro",
+    "synthesis": "deepseek-v4-pro",
+    "warto_pisac": "deepseek-v4-pro",
+    "write": "claude-fable-5"
+  },
+  "segments": [
+    {
+      "actual_logical_calls": {
+        "scout": 1
+      },
+      "label": "scout-live-only",
+      "new_exposure_usd": 0.049298,
+      "pass": false,
+      "result": "segment-scout-live-only-result.json",
+      "result_sha256": "cff124977ae9bd54d9a214ff0578673e520fa96c173f2a9315accc8c303e6e5a"
+    }
+  ],
+  "substack": "FORBIDDEN_NO_READ_NO_WRITE_NO_SESSION"
+}

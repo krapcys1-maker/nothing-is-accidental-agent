@@ -1,0 +1,54 @@
+{
+  "created_at": "2026-08-21T15:34:25+00:00",
+  "experiment": "normal-v3-live-segments@1",
+  "routing": {
+    "bibliotekarz": "deepseek-v4-pro",
+    "classify": "deepseek-v4-flash",
+    "curiosity": "deepseek-v4-flash",
+    "discovery": "deepseek-v4-pro",
+    "factcheck": "deepseek-v4-flash",
+    "feasibility": "deepseek-v4-flash",
+    "forma": "deepseek-v4-pro",
+    "note": "claude-opus-5",
+    "review": "deepseek-v4-pro",
+    "revise": "claude-fable-5",
+    "scout": "deepseek-v4-pro",
+    "synthesis": "deepseek-v4-pro",
+    "warto_pisac": "deepseek-v4-pro",
+    "write": "claude-fable-5"
+  },
+  "scout_artifact": "C:\\Users\\user\\Desktop\\agent project\\agent-v3\\.live-experiments\\E-016-scout-sse-canary\\result.json",
+  "scout_artifact_sha256": "2ec909c56afabce031f741f34753370e3127156e27073a423454d1d2dab3e504",
+  "segments": [
+    {
+      "actual_logical_calls": {
+        "feasibility": 1
+      },
+      "label": "feasibility",
+      "new_exposure_usd": 0.005868,
+      "pass": true,
+      "result": "segment-feasibility-result.json",
+      "result_sha256": "bbaddc8311942aae296a6e6419749bff3b256221ac67872421611df57a1f895a"
+    },
+    {
+      "actual_logical_calls": {
+        "discovery": 1
+      },
+      "label": "discovery",
+      "new_exposure_usd": 0.1,
+      "pass": false,
+      "result": "segment-discovery-result.json",
+      "result_sha256": "7cb4efd7403b4e46f3b5ac8ded58677f1888953b3824cb233d539270541d7e4f"
+    }
+  ],
+  "substack": "FORBIDDEN_NO_READ_NO_WRITE_NO_SESSION",
+  "topic_count": 6,
+  "topic_titles": [
+    "The moment a water sample tests positive and the utility must decide whether to issue a boil-water notice",
+    "The store return as a fraud score, not a service promise",
+    "The restaurant health grade as a snapshot, not a current guarantee",
+    "The moment a train passes a signal at danger and automatic braking must decide",
+    "The moment a food processor finds a pathogen in one batch and must decide recall scope",
+    "The moment an emergency department has one ventilator left and two patients arrive"
+  ]
+}

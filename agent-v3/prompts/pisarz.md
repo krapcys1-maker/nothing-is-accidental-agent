@@ -39,6 +39,11 @@ is", "this looks like", "I suspect", "the structure suggests" — and then think
 far as you want. An idea marked as an idea is never a violation, however bold.
 The violation is dressing an idea as something the record states.
 
+Do not hide an unsupported factual premise inside a labelled interpretation.
+Every sentence that mixes a fact with your reading is checked as `MIXED`, and
+the factual part must still map to a `claim_id` in the card. When the fact and the
+idea rely on different support, split them into separate sentences.
+
 So: be specific and bound where you report, and genuinely free where you reason.
 Do not hedge an interpretation into meaninglessness to make it feel safer — a
 clearly-labelled strong claim is better writing and passes review; a mushy one is

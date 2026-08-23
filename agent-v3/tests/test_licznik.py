@@ -12,10 +12,13 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, "agent-v3")
 import browser  # noqa: E402
 import config   # noqa: E402
+import operational_day  # noqa: E402
 
 TERAZ = datetime.now(timezone.utc)
-DZIS = TERAZ.strftime("%Y-%m-%d")
-WCZORAJ = (TERAZ - timedelta(days=1)).strftime("%Y-%m-%d")
+DZIS = config.data_redakcyjna(TERAZ)
+WCZORAJ = config.data_redakcyjna(TERAZ - timedelta(days=1))
+DAY_START, DAY_END = operational_day.boundaries(
+    operational_day.editorial_date(TERAZ))
 
 zdane = 0
 oblane = 0
@@ -115,8 +118,8 @@ sprawdz("wpis bez pola 'udane' traktowany jako nieudany",
         tylko(w, "komentarze", "lajki") == {"komentarze": 0, "lajki": 0}, w)
 
 print()
-print("=== 4. CZY TEST W OGOLE WYKRYWA TEN BLAD ===")
-print("    (kontrdowod: liczymy tak, jak liczyl STARY kod — z kanalu profilu)")
+print("=== 4. TELEMETRIA JSONL ODTWARZA WOLUMEN, ALE NIE JEST BEZPIECZNIKIEM ===")
+print("    (twardy limit jest testowany atomowo w test_operational_day.py)")
 
 ustaw([wpis("komentarz") for _ in range(16)])
 
@@ -135,9 +138,9 @@ sprawdz("STARY licznik po 16 komentarzach nadal chce 16 wiecej",
 
 nowy_juz = {"notki": 2, **browser.z_dziennika_dzis()}
 nowy = zostalo_wg(nowy_juz, budzet)
-sprawdz("NOWY licznik po wyczerpaniu normy chce 0",
+sprawdz("telemetria po wyczerpaniu normy pokazuje 0 pozostalych",
         nowy["komentarze"] == 0, nowy)
-sprawdz("test rozroznia stary kod od nowego",
+sprawdz("telemetria rozroznia brak zapisu od pelnego zapisu",
         stary["komentarze"] != nowy["komentarze"])
 
 print()
@@ -150,33 +153,38 @@ import run     # noqa: E402
 def bazka(zamkniete_dzis=0, przerwane_dzis=0, zamkniete_wczoraj=0):
     conn = db.connect(pathlib.Path(tempfile.mkdtemp()) / "t.db")
     for i in range(zamkniete_dzis):
+        started = DAY_START + timedelta(hours=i)
+        finished = started + timedelta(minutes=30)
         conn.execute("INSERT INTO runs (started_at, finished_at, status, stage)"
                      " VALUES (?, ?, 'DONE', 'dzien')",
-                     ("%sT0%s:00:00+00:00" % (DZIS, i), "%sT0%s:30:00+00:00" % (DZIS, i)))
+                     (started.isoformat(), finished.isoformat()))
     for i in range(przerwane_dzis):
+        started = DAY_START + timedelta(hours=8, minutes=i)
         conn.execute("INSERT INTO runs (started_at, status, stage)"
-                     " VALUES (?, 'RUNNING', 'dzien')", ("%sT08:00:00+00:00" % DZIS,))
+                     " VALUES (?, 'RUNNING', 'dzien')", (started.isoformat(),))
     for i in range(zamkniete_wczoraj):
+        started = DAY_START - timedelta(hours=2 + i)
+        finished = started + timedelta(minutes=30)
         conn.execute("INSERT INTO runs (started_at, finished_at, status, stage)"
                      " VALUES (?, ?, 'DONE', 'dzien')",
-                     ("%sT08:00:00+00:00" % WCZORAJ, "%sT08:30:00+00:00" % WCZORAJ))
+                     (started.isoformat(), finished.isoformat()))
     conn.commit()
     return conn
 
 
 N = config.PRZEBIEGOW_DZIENNIE
 sprawdz("przed pierwszym przebiegiem zostalo %s" % N,
-        run.ile_przebiegow_zostalo(bazka()) == N)
+        run.ile_przebiegow_zostalo(bazka(), TERAZ) == N)
 sprawdz("po jednym zamknietym zostalo %s" % (N - 1),
-        run.ile_przebiegow_zostalo(bazka(zamkniete_dzis=1)) == N - 1)
+        run.ile_przebiegow_zostalo(bazka(zamkniete_dzis=1), TERAZ) == N - 1)
 sprawdz("przy ostatnim zostalo 1",
-        run.ile_przebiegow_zostalo(bazka(zamkniete_dzis=N - 1)) == 1)
+        run.ile_przebiegow_zostalo(bazka(zamkniete_dzis=N - 1), TERAZ) == 1)
 sprawdz("nadprogramowy przebieg nie schodzi do zera (dzielenie przez zero)",
-        run.ile_przebiegow_zostalo(bazka(zamkniete_dzis=N + 5)) == 1)
+        run.ile_przebiegow_zostalo(bazka(zamkniete_dzis=N + 5), TERAZ) == 1)
 sprawdz("przebieg PRZERWANY nie zabiera slotu — kolejny go nadrobi",
-        run.ile_przebiegow_zostalo(bazka(przerwane_dzis=2)) == N)
+        run.ile_przebiegow_zostalo(bazka(przerwane_dzis=2), TERAZ) == N)
 sprawdz("wczorajsze przebiegi nie licza sie do dzis",
-        run.ile_przebiegow_zostalo(bazka(zamkniete_wczoraj=9)) == N)
+        run.ile_przebiegow_zostalo(bazka(zamkniete_wczoraj=9), TERAZ) == N)
 
 print()
 print("=== 6. CALA DOBA — czy norma sie domyka ===")
@@ -187,20 +195,20 @@ def doba(dzielnik_stary=False):
     conn = db.connect(pathlib.Path(tempfile.mkdtemp()) / "d.db")
     wykonane = {"notki": 0, "komentarze": 0, "lajki": 0}
     for nr in range(config.PRZEBIEGOW_DZIENNIE):
-        ustaw([wpis("komentarz") for _ in range(wykonane["komentarze"])]
-              + [wpis("polubienie") for _ in range(wykonane["lajki"])])
-        juz = {"notki": wykonane["notki"], **browser.z_dziennika_dzis()}
+        juz = dict(wykonane)  # symulowany snapshot transakcyjnego ledgeru
         zost = zostalo_wg(juz, budzet)
         dziel = config.PRZEBIEGOW_DZIENNIE if dzielnik_stary \
-            else run.ile_przebiegow_zostalo(conn)
+            else run.ile_przebiegow_zostalo(conn, TERAZ)
         wziete = {k: (max(1, round(v / dziel)) if v else 0) for k, v in zost.items()}
         for k in wykonane:
             wykonane[k] += wziete[k]
         print("    przebieg %s: dzielnik=%s  bierze notki=%s komentarze=%s lajki=%s"
               % (nr + 1, dziel, wziete["notki"], wziete["komentarze"], wziete["lajki"]))
+        started = DAY_START + timedelta(hours=nr)
+        finished = started + timedelta(minutes=30)
         conn.execute("INSERT INTO runs (started_at, finished_at, status, stage)"
                      " VALUES (?, ?, 'DONE', 'dzien')",
-                     ("%sT0%s:00:00+00:00" % (DZIS, nr), "%sT0%s:30:00+00:00" % (DZIS, nr)))
+                     (started.isoformat(), finished.isoformat()))
         conn.commit()
     return wykonane
 
@@ -245,20 +253,23 @@ print("=== 8. PRZEBIEG PRZERWANY — czy dzien sie nadrabia ===")
 
 conn = db.connect(pathlib.Path(tempfile.mkdtemp()) / "p.db")
 conn.execute("INSERT INTO runs (started_at, status, stage)"
-             " VALUES (?, 'RUNNING', 'dzien')", ("%sT03:40:00+00:00" % DZIS,))
+             " VALUES (?, 'RUNNING', 'dzien')",
+             ((DAY_START + timedelta(hours=3, minutes=40)).isoformat(),))
 conn.commit()
 ustaw([])
 zost = zostalo_wg({"notki": 0, **browser.z_dziennika_dzis()}, budzet)
-dziel = run.ile_przebiegow_zostalo(conn)
+dziel = run.ile_przebiegow_zostalo(conn, TERAZ)
 sprawdz("po wywalonym przebiegu dzielnik nadal %s, wiec norma sie nadrobi" % N,
         dziel == N, dziel)
 
 conn.execute("INSERT INTO runs (started_at, finished_at, status, stage)"
              " VALUES (?, ?, 'FAILED', 'dzien')",
-             ("%sT03:41:00+00:00" % DZIS, "%sT03:42:00+00:00" % DZIS))
+             ((DAY_START + timedelta(hours=3, minutes=41)).isoformat(),
+              (DAY_START + timedelta(hours=3, minutes=42)).isoformat()))
 conn.commit()
 sprawdz("przebieg zapisany jako FAILED tez nie zabiera slotu",
-        run.ile_przebiegow_zostalo(conn) == N, run.ile_przebiegow_zostalo(conn))
+        run.ile_przebiegow_zostalo(conn, TERAZ) == N,
+        run.ile_przebiegow_zostalo(conn, TERAZ))
 
 print()
 print("=== 9. CZY WYWALONY PRZEBIEG ZAPISUJE SIE JAKO FAILED ===")

@@ -225,38 +225,29 @@ sprawdz("PISZ", w["werdykt"] == "PISZ")
 sprawdz("powód mówi o obu drogach", "obie drogi" in w["powod"], w["powod"])
 
 print()
-print("=== 7. SKAUT PROPONUJE OBA RODZAJE ===")
+print("=== 7. SKAUT NIE JEST ZAMKNIĘTY W DWÓCH STARYCH RODZAJACH ===")
 s = (config.PROMPTS_DIR / "skaut.md").read_text(encoding="utf-8")
 plaski_s = " ".join(s.split())
-sprawdz("prompt ma drugi rodzaj tematu",
-        "a system about to be tested" in plaski_s)
-sprawdz("nazywa go w kontrakcie wyjścia", '"SYSTEM_UNDER_TEST"' in plaski_s)
-sprawdz("wymaga trzech pól", all(x in plaski_s for x in
-                                 ("the_moment", "open_outcome", "governing_record")))
-sprawdz("stawia warunek spisanej procedury",
-        "Condition three is the whole guard" in plaski_s)
-sprawdz("zabrania wróżenia wprost",
-        "we do not publish fortune-telling" in plaski_s)
-sprawdz("i nadal zabrania nazywania instytucji",
-        "narrows the search to what you happen to recall" in plaski_s)
-sprawdz("nadal wymaga mieszanki, nie samych systemów",
-        "do not make every topic the same kind" in plaski_s)
-# Skaut oddal 0 tematow artykulowych z 10, wiec prompt musi teraz ZADAC
-# systemow, a nie tylko ich dopuszczac. Przyczyna zera nie byla w modelu:
-# caly prompt kazal mu szukac zwyklych przedmiotow, a systemy z historia
-# byly doklejone na koncu — szukal w zlym miejscu.
-sprawdz("prompt ZADA polowy systemow, nie tylko ich dopuszcza",
-        "At least half your list must be" in plaski_s)
-sprawdz("i trzech z dwoma precedensami",
-        "must carry two or more precedents each" in plaski_s)
-sprawdz("ale zostawia miejsce na zlamane przekonania",
-        "Keep at least two" in plaski_s)
-sprawdz("pokazuje, GDZIE takich tematow szukac",
-        "scar tissue" in plaski_s and "Mine it" in plaski_s)
-sprawdz("daje wypelniony przyklad precedensu",
-        "what_changed:  prescriptive limits on duty hours" in s)
-sprawdz("nazywa oba tryby porazki",
-        "**Too small.**" in plaski_s and "**Too vague.**" in plaski_s)
+sprawdz("temat nie musi być systemem",
+        "does not have to be a system" in plaski_s)
+sprawdz("tryb jest etykietą opisową, nie enumem",
+        "not an exhaustive enum" in plaski_s)
+sprawdz("nie wolno wciskać tematu w kategorię",
+        "Do not force the topic into a category" in plaski_s)
+sprawdz("kontrfakty są jednym z wielu silników",
+        "change one plausible premise" in plaski_s)
+sprawdz("konflikt dwóch rozsądnych wartości jest silnikiem",
+        "two values that are both reasonable" in plaski_s)
+sprawdz("temat ma mieć niezależne osie", "dimensions" in plaski_s)
+sprawdz("temat ma mieć realne napięcia", "tensions" in plaski_s)
+sprawdz("temat ma mieć otwarte gałęzie", "open_branches" in plaski_s)
+sprawdz("drogi wymagają różnych dowodów", "evidence_needed" in plaski_s)
+sprawdz("notka jest jawnie oddzielona",
+        "can_be_exhausted_in_three_sentences" in plaski_s)
+sprawdz("nie ma magicznej liczby",
+        "There is deliberately no magic count" in plaski_s)
+sprawdz("odrzucone małe zalążki są widoczne", "discarded_seeds" in plaski_s)
+sprawdz("słabość finalisty pozostaje jawna", "fatal_weakness" in plaski_s)
 
 print()
 print("=== 8. KOD SKAUTA STAWIA OBA RODZAJE NA CZELE KOLEJKI ===")

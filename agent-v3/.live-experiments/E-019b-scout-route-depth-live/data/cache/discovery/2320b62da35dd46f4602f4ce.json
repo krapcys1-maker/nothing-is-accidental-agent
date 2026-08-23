@@ -1,0 +1,151 @@
+{
+  "identity": {
+    "version": 4,
+    "stage": "discovery",
+    "input": {
+      "question": "How does an orphaned oil well become a public problem decades after the company that drilled it disappears?",
+      "recent_domains": [],
+      "research_context": {
+        "universe_title": "The Afterlife of Abandoned Infrastructure",
+        "universe_question": "What happens after a mine, dam, cable, factory, or software system is no longer useful to its original owner but remains physically or institutionally present?",
+        "distinct_engine": "The environmental and financial afterlife of extraction is more about legal disappearance than physical drilling; plugging costs land on the public.",
+        "evidence_needed": "Well registries, corporate histories, state orphan well programs, inspection reports, financial assurance records.",
+        "second_act": "The same legal-disappearance mechanism leaves the public holding reclamation costs at abandoned coal mines and orphaned Superfund sites, so the oil-well story opens into a broader afterlife-of-extraction pattern."
+      }
+    },
+    "prompt_version": "9a611a29afef8e9af244",
+    "model": "deepseek-v4-pro"
+  },
+  "value": [
+    {
+      "url": "https://iogcc.ok.gov/sites/g/files/gmc836/f/supplemental_information_orphan_wells_5-28-2020.pdf",
+      "title": "Supplemental Information: Documented Orphan Wells (IOGCC, May 2020)",
+      "publisher": "Interstate Oil and Gas Compact Commission",
+      "class": "PRIMARY",
+      "host_role": "ORIGINATING_AUTHORITY",
+      "access": "FULL_TEXT_NO_LOGIN",
+      "answers_why": false,
+      "has_numbers": true,
+      "note": "IOGCC's own state-survey record of documented orphan wells (2018–2019) by land ownership; 92% on private land, 13% inventory growth year over year. Primary registry/dataset bearing directly on the route's 'well registries' evidence.",
+      "search_result_url": "https://iogcc.ok.gov/sites/g/files/gmc836/f/supplemental_information_orphan_wells_5-28-2020.pdf#1#1",
+      "host": "iogcc.ok.gov"
+    },
+    {
+      "url": "https://www.nmlegis.gov/Sessions/26%20Regular/memorials/house/HM056.html",
+      "title": "House Memorial 56 — Study of Orphaned Well Ownership Transfer Options (New Mexico, 2026)",
+      "publisher": "New Mexico Legislature",
+      "class": "PRIMARY",
+      "host_role": "ORIGINATING_AUTHORITY",
+      "access": "FULL_TEXT_NO_LOGIN",
+      "answers_why": true,
+      "has_numbers": true,
+      "note": "Legislative record defining orphan wells (owner unknown/insolvent/unable to pay), citing $700M–$1.6B state liability and median operator financial assurance of only ~$7,000/well. Primary financial-assurance evidence and explanation of the public-burden mechanism.",
+      "search_result_url": "https://www.nmlegis.gov/Sessions/26%20Regular/memorials/house/HM056.html",
+      "host": "nmlegis.gov"
+    },
+    {
+      "url": "https://www.rrc.state.tx.us/oil-and-gas/research-and-statistics/well-information/orphan-wells-12-months/procedure-for-taking-over-an-orphan-well/",
+      "title": "Procedure for Taking Over an Orphan Well",
+      "publisher": "Railroad Commission of Texas",
+      "class": "PRIMARY",
+      "host_role": "ORIGINATING_AUTHORITY",
+      "access": "FULL_TEXT_NO_LOGIN",
+      "answers_why": false,
+      "has_numbers": false,
+      "note": "State regulator's operative definition of an orphan well (inactive 12 months + delinquent operator's P-5 organization report) and financial-assurance conditions for transfer — the legal-disappearance mechanics in the agency's own words.",
+      "search_result_url": "https://www.rrc.state.tx.us/oil-and-gas/research-and-statistics/well-information/orphan-wells-12-months/procedure-for-taking-over-an-orphan-well/",
+      "host": "rrc.state.tx.us"
+    },
+    {
+      "url": "https://ieefa.org/resources/liability-texas-orphan-wells-soars-numbers-depths-and-costs-rise-sharply",
+      "title": "Liability for Texas orphan wells soars as numbers, depths, and costs rise sharply",
+      "publisher": "Institute for Energy Economics and Financial Analysis (IEEFA)",
+      "class": "SUPPORTING",
+      "host_role": "ORIGINATING_AUTHORITY",
+      "access": "FULL_TEXT_NO_LOGIN",
+      "answers_why": true,
+      "has_numbers": true,
+      "note": "Analysis of RRC data: $202M plugging liability, per-well cost rising $23,807 (2016) to $55,629 (2026), $575M spent on 47,757 wells since 1984. Attributes growth to industry shedding cleanup duties faster than plugging — directly tests the 'plugging costs land on the public' mechanism.",
+      "search_result_url": "https://ieefa.org/resources/liability-texas-orphan-wells-soars-numbers-depths-and-costs-rise-sharply",
+      "host": "ieefa.org"
+    },
+    {
+      "url": "https://carbontracker.org/in-colorado-amnesty-for-oil-producers-plugging-costs-for-the-state/",
+      "title": "In Colorado, Amnesty for Oil Producers, Plugging Costs for the State",
+      "publisher": "Carbon Tracker Initiative",
+      "class": "SUPPORTING",
+      "host_role": "ORIGINATING_AUTHORITY",
+      "access": "FULL_TEXT_NO_LOGIN",
+      "answers_why": true,
+      "has_numbers": true,
+      "note": "Explains the legal-disappearance pathway: a proposed 'voluntary relinquishment' amnesty letting operators forfeit wells to the state and orphan the cleanup onto taxpayers, contrasted with Australia's trailing-liability levy. Answers why public cost arises.",
+      "search_result_url": "https://carbontracker.org/in-colorado-amnesty-for-oil-producers-plugging-costs-for-the-state/#_ftn1",
+      "host": "carbontracker.org"
+    },
+    {
+      "url": "https://www.edf.org/media/utah-modernizes-antiquated-oil-and-gas-bonding-rules-saving-taxpayers-hundreds-millions",
+      "title": "Utah Modernizes Antiquated Oil And Gas Bonding Rules",
+      "publisher": "Environmental Defense Fund",
+      "class": "SUPPORTING",
+      "host_role": "ORIGINATING_AUTHORITY",
+      "access": "FULL_TEXT_NO_LOGIN",
+      "answers_why": true,
+      "has_numbers": true,
+      "note": "States that bonding rates were a fraction of plugging costs, incentivizing operators to walk away and pass costs to taxpayers; cites a 2019 state performance audit. Regulator-decision/why evidence for financial-assurance shortfall.",
+      "search_result_url": "https://www.edf.org/media/utah-modernizes-antiquated-oil-and-gas-bonding-rules-saving-taxpayers-hundreds-millions",
+      "host": "edf.org"
+    },
+    {
+      "url": "https://www.legis.texas.gov/tlodocs/78R/analysis/html/HB00942H.htm",
+      "title": "C.S.H.B. 942 Bill Analysis — oil and gas financial security (78th Legislature)",
+      "publisher": "Texas Legislature",
+      "class": "PRIMARY",
+      "host_role": "ORIGINATING_AUTHORITY",
+      "access": "FULL_TEXT_NO_LOGIN",
+      "answers_why": true,
+      "has_numbers": true,
+      "note": "Legislative committee analysis explaining the purpose of bonding/financial assurance: to give the state a source of funds to plug abandoned wells when the responsible operator cannot or will not. Primary record of why the assurance rule exists.",
+      "search_result_url": "https://www.legis.texas.gov/tlodocs/78R/analysis/html/HB00942H.htm#1",
+      "host": "legis.texas.gov"
+    },
+    {
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-119hr9029ih/xhtml/BILLS-119hr9029ih.html",
+      "title": "H.R. 9029 — Coal Cleanup Taxpayer Protection Act of 2026",
+      "publisher": "U.S. Congress (via GovInfo)",
+      "class": "PRIMARY",
+      "host_role": "OFFICIAL_ARCHIVE",
+      "access": "FULL_TEXT_NO_LOGIN",
+      "answers_why": true,
+      "has_numbers": false,
+      "note": "Second-act evidence: bill ending self-bonding and tightening coal-mine reclamation bonds under SMCRA 'to protect taxpayers from liability' — the same legal-disappearance/under-bonding mechanism at abandoned coal mines.",
+      "search_result_url": "https://www.govinfo.gov/content/pkg/BILLS-119hr9029ih/xhtml/BILLS-119hr9029ih.html#1",
+      "host": "govinfo.gov"
+    },
+    {
+      "url": "https://scholarsbank.uoregon.edu/server/api/core/bitstreams/c4d97525-ebb2-4c8c-85b3-ea614fff7827/content",
+      "title": "Abandoned Mine Lands and Superfund: law review on cleanup funding gaps",
+      "publisher": "University of Oregon (law review)",
+      "class": "SUPPORTING",
+      "host_role": "OFFICIAL_ARCHIVE",
+      "access": "FULL_TEXT_NO_LOGIN",
+      "answers_why": true,
+      "has_numbers": true,
+      "note": "Peer-reviewed legal analysis that the single most compelling impediment to abandoned-mine and Superfund cleanup 'is not regulatory but financial,' with no solvent responsible party — extends the orphan-well second act to hardrock mines and CERCLA sites.",
+      "search_result_url": "https://scholarsbank.uoregon.edu/server/api/core/bitstreams/c4d97525-ebb2-4c8c-85b3-ea614fff7827/content#12#8",
+      "host": "scholarsbank.uoregon.edu"
+    },
+    {
+      "url": "https://regulations.justia.com/regulations/fedreg/2024/05/02/2024-09525.html",
+      "title": "Agency Information Collection: Orphaned Well Site Plugging, Remediation, and Restoration Funding (DOI, 2024)",
+      "publisher": "U.S. Department of the Interior",
+      "class": "PRIMARY",
+      "host_role": "MIRROR",
+      "access": "FULL_TEXT_NO_LOGIN",
+      "answers_why": false,
+      "has_numbers": false,
+      "note": "Interior's Federal Register notice on state/tribal orphan-well program reporting requirements (Section 40601/BIL). Primary record on a Justia mirror — mark host MIRROR, not the originating publisher.",
+      "search_result_url": "https://regulations.justia.com/regulations/fedreg/2024/05/02/2024-09525.html#2",
+      "host": "regulations.justia.com"
+    }
+  ]
+}

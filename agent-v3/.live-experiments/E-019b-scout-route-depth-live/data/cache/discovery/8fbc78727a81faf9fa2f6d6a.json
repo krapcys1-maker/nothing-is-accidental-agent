@@ -1,0 +1,109 @@
+{
+  "identity": {
+    "version": 4,
+    "stage": "discovery",
+    "input": {
+      "question": "How does an orphaned oil well become a public problem decades after the company that drilled it disappears?",
+      "recent_domains": [],
+      "research_context": {
+        "universe_title": "The Afterlife of Abandoned Infrastructure",
+        "universe_question": "What happens after a mine, dam, cable, factory, or software system is no longer useful to its original owner but remains physically or institutionally present?",
+        "distinct_engine": "The environmental and financial afterlife of extraction is more about legal disappearance than physical drilling; plugging costs land on the public.",
+        "evidence_needed": "Well registries, corporate histories, state orphan well programs, inspection reports, financial assurance records.",
+        "second_act": "The same legal-disappearance mechanism leaves the public holding reclamation costs at abandoned coal mines and orphaned Superfund sites, so the oil-well story opens into a broader afterlife-of-extraction pattern."
+      }
+    },
+    "prompt_version": "62a8e8171bae30f13a75",
+    "model": "deepseek-v4-pro"
+  },
+  "value": [
+    {
+      "url": "https://www.law.cornell.edu/uscode/text/42/15907",
+      "title": "42 U.S. Code § 15907 — Orphaned well site plugging, remediation, and restoration",
+      "publisher": "Cornell Law School / Legal Information Institute (U.S. Code)",
+      "class": "PRIMARY",
+      "answers_why": false,
+      "has_numbers": true,
+      "note": "The federal statute creating the orphaned-well program. Defines 'orphaned well' as a well for which no operator can be located or whose operator is unable to plug and reclaim the site — the legal-disappearance definition at the heart of the mechanism. Sets initial/formula/performance grant amounts ($25M initial, $20M regulatory-improvement caps) and requires public cost accounting.",
+      "search_result_url": "https://www.law.cornell.edu/uscode/text/42/15907",
+      "host": "law.cornell.edu"
+    },
+    {
+      "url": "https://california.public.law/codes/public_resources_code_section_3206.3",
+      "title": "California Public Resources Code § 3206.3 — idle and orphan well reporting",
+      "publisher": "California Legislature (via Public.Law mirror)",
+      "class": "PRIMARY",
+      "answers_why": false,
+      "has_numbers": false,
+      "note": "State statute requiring an annual public report listing idle wells, orphan wells, estimated costs of abandoning orphan wells, and a plugging timeline. Defines an orphan well as one 'that has no party responsible for it, leaving the state to plug and abandon it' — a well registry/accountability record.",
+      "search_result_url": "https://california.public.law/codes/public_resources_code_section_3206.3",
+      "host": "california.public.law"
+    },
+    {
+      "url": "https://www.gao.gov/products/gao-18-250",
+      "title": "Oil and Gas Wells: Bureau of Land Management Needs to Improve Its Data and Oversight of Its Potential Liabilities (GAO-18-250)",
+      "publisher": "U.S. Government Accountability Office",
+      "class": "PRIMARY",
+      "answers_why": true,
+      "has_numbers": true,
+      "note": "GAO audit explaining why cleanup costs land on the public: BLM did not systematically track reclamation costs or orphan-well counts, so it could not assure bonds cover the liability. Figures: known orphaned wells rose from 144 (2010) to 219 (2017); average annual reclamation cost $267,600. An audit of the financial-assurance gap.",
+      "search_result_url": "https://www.gao.gov/products/gao-18-250",
+      "host": "gao.gov"
+    },
+    {
+      "url": "https://www.gao.gov/products/gao-10-245",
+      "title": "Oil and Gas Bonds: Bonding Requirements and BLM Expenditures to Reclaim Orphaned Wells (GAO-10-245)",
+      "publisher": "U.S. Government Accountability Office",
+      "class": "PRIMARY",
+      "answers_why": true,
+      "has_numbers": true,
+      "note": "GAO audit quantifying the number, value, and coverage of BLM bonds versus what BLM has paid to reclaim orphaned wells over 20 years and how many remain unreclaimed — direct evidence on the bond-vs-cost shortfall that shifts plugging costs to federal dollars.",
+      "search_result_url": "https://www.gao.gov/products/gao-10-245",
+      "host": "gao.gov"
+    },
+    {
+      "url": "https://www.osmre.gov/programs/reclaiming-abandoned-mine-lands",
+      "title": "Reclaiming Abandoned Mine Lands (Title IV of SMCRA)",
+      "publisher": "Office of Surface Mining Reclamation and Enforcement (U.S. Dept. of the Interior)",
+      "class": "PRIMARY",
+      "answers_why": false,
+      "has_numbers": true,
+      "note": "Second-act parallel: coal operators disappeared before 1977 SMCRA, so reclamation is publicly funded via a per-ton fee. Figures: AML Fund has collected $14.233 billion, distributed $6.569 billion in grants — same legal-disappearance structure as orphaned wells.",
+      "search_result_url": "https://www.osmre.gov/programs/reclaiming-abandoned-mine-lands",
+      "host": "osmre.gov"
+    },
+    {
+      "url": "https://carbontracker.org/reports/billion-dollar-orphans/",
+      "title": "Billion Dollar Orphans: Why millions of oil and gas wells could become wards of the state",
+      "publisher": "Carbon Tracker Initiative",
+      "class": "SUPPORTING",
+      "answers_why": true,
+      "has_numbers": true,
+      "note": "Analysis explaining the causal mechanism: bonding amounts are set far below plugging cost, so when operators disappear the public inherits liability. Figures: 2.6M documented + ~1.2M undocumented unplugged onshore wells; ~$280B plugging cost; states hold surety bonds covering less than 1% of that.",
+      "search_result_url": "https://carbontracker.org/reports/billion-dollar-orphans/",
+      "host": "carbontracker.org"
+    },
+    {
+      "url": "https://www.orphanwell.ca/about-us/fiscal-responsibility",
+      "title": "Fiscal Responsibility — Orphan Well Association (Alberta)",
+      "publisher": "Orphan Well Association (Alberta, Canada)",
+      "class": "PRIMARY",
+      "answers_why": false,
+      "has_numbers": true,
+      "note": "A non-U.S. orphan-well authority's own statement of how it is funded after operators vanish: industry levy since 2002 ($1.14B collected; 2026/27 levy ~$155M) and average decommissioning cost $28,800 per well. Shows the public/industry-carried cost after legal disappearance of operators.",
+      "search_result_url": "https://www.orphanwell.ca/about-us/fiscal-responsibility",
+      "host": "orphanwell.ca"
+    },
+    {
+      "url": "https://digital.library.unt.edu/ark:/67531/metadc301376/m1/66/",
+      "title": "Superfund: Litigation Has Decreased and EPA Needs Better Information on Site Cleanup and Cost Issues (GAO-09-656)",
+      "publisher": "U.S. Government Accountability Office (via UNT Digital Library)",
+      "class": "PRIMARY",
+      "answers_why": true,
+      "has_numbers": true,
+      "note": "Second-act evidence with figures: EPA lacks comprehensive data on orphan shares, and 13% (183 of 1,397) nonfederal NPL sites had no responsible parties identified as of FY2007 — i.e., the public is left holding cleanup where the responsible party has disappeared.",
+      "search_result_url": "https://digital.library.unt.edu/ark:/67531/metadc301376/m1/66/",
+      "host": "digital.library.unt.edu"
+    }
+  ]
+}

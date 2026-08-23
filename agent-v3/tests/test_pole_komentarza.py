@@ -27,6 +27,8 @@ obecnosc pola PRZED pisaniem — a to zmiana kolejnosci calego bloku i decyzja
 wlasciciela, nie moja przy okazji.
 """
 import sys
+import pathlib
+import tempfile
 
 sys.path.insert(0, "agent-v3")
 import browser   # noqa: E402
@@ -83,6 +85,9 @@ class Lista:
 
 
 class Przycisk:
+    def __init__(self, strona):
+        self.strona = strona
+
     def count(self):
         return 1
 
@@ -90,14 +95,16 @@ class Przycisk:
         return True
 
     def click(self, **k):
-        pass
+        if self.strona.blad_klikniecia:
+            raise TimeoutError("awaria po dispatch")
 
 
 class Strona:
     """`pola` to lista widocznosci kolejnych textarea w DRZEWIE."""
 
-    def __init__(self, pola):
+    def __init__(self, pola, blad_klikniecia=False):
         self.pola = pola
+        self.blad_klikniecia = blad_klikniecia
         self.klikniete = []
         self.wpisane = []
         self.keyboard = self
@@ -116,7 +123,7 @@ class Strona:
         return Lista(self, self.pola if sel == "textarea" else [])
 
     def get_by_role(self, rola, name=None, **k):
-        return Lista(self, []) if rola != "button" else _PrzyciskiLista()
+        return Lista(self, []) if rola != "button" else _PrzyciskiLista(self)
 
     def type(self, tekst, **k):
         self.wpisane.append(tekst)
@@ -126,9 +133,12 @@ class Strona:
 
 
 class _PrzyciskiLista:
+    def __init__(self, strona):
+        self.strona = strona
+
     @property
     def first(self):
-        return Przycisk()
+        return Przycisk(self.strona)
 
 
 class Nic:
@@ -147,21 +157,46 @@ class Kontekst:
         return self.strona
 
 
-def komentuj(pola, wyslij=False):
-    strona = Strona(pola)
-    oryg = (browser.podlacz_sie, browser.wymagaj_sesji, browser.naprawde_wyslac,
-            browser.juz_sie_odezwalismy, browser.potwierdz_komentarz)
+class Proba:
+    id = "fake-attempt"
+    idempotency_key = "fake-key"
+    def __init__(self):
+        self.status = "PENDING"
+        self.dispatched = False
+    def __enter__(self): return self
+    def __exit__(self, exc_type, *_args):
+        if exc_type is not None and self.status == "PENDING":
+            self.status = "UNKNOWN" if self.dispatched else "FAILED"
+        return False
+    def dispatch(self): self.dispatched = True
+    def confirm(self, *_args, **_kwargs): self.status = "CONFIRMED"
+    def unknown(self, *_args, **_kwargs): self.status = "UNKNOWN"
+
+
+def komentuj(pola, wyslij=True, blad_klikniecia=False):
+    strona = Strona(pola, blad_klikniecia=blad_klikniecia)
+    tmp = tempfile.TemporaryDirectory()
+    oryg = (browser.podlacz_sie, browser.wymagaj_sesji,
+            browser.wymagaj_wlasciwego_konta, browser.naprawde_wyslac,
+            browser.juz_sie_odezwalismy, browser.potwierdz_komentarz,
+            browser.proba_mutacji, browser.DZIENNIK)
     browser.podlacz_sie = lambda: (Nic(), Nic(), Kontekst(strona))
     browser.wymagaj_sesji = lambda: None
-    browser.naprawde_wyslac = lambda w, r: w
+    browser.wymagaj_wlasciwego_konta = lambda _page: None
+    browser.naprawde_wyslac = lambda w, r, _capability: w
     browser.juz_sie_odezwalismy = lambda p, u: False
-    browser.potwierdz_komentarz = lambda p, u, t=None: False
+    browser.potwierdz_komentarz = lambda p, u, t=None: None
+    browser.proba_mutacji = lambda *_args, **_kwargs: Proba()
+    browser.DZIENNIK = pathlib.Path(tmp.name) / "dziennik-testowy.jsonl"
     try:
         w = browser.wystaw_komentarz("https://ktos.substack.com/p/cos",
                                      "Nasze zdanie o mechanizmie.", wyslij=wyslij)
     finally:
-        (browser.podlacz_sie, browser.wymagaj_sesji, browser.naprawde_wyslac,
-         browser.juz_sie_odezwalismy, browser.potwierdz_komentarz) = oryg
+        (browser.podlacz_sie, browser.wymagaj_sesji,
+         browser.wymagaj_wlasciwego_konta, browser.naprawde_wyslac,
+         browser.juz_sie_odezwalismy, browser.potwierdz_komentarz,
+         browser.proba_mutacji, browser.DZIENNIK) = oryg
+        tmp.cleanup()
     return w, strona
 
 
@@ -170,6 +205,7 @@ w, s = komentuj([True])
 sprawdz("wpisalo sie", w["wpisane"] is True, w)
 sprawdz("bez bledu", w["blad"] is None, w["blad"])
 sprawdz("kliknieto pole nr 0", s.klikniete == [0], s.klikniete)
+sprawdz("brak potwierdzenia daje UNKNOWN", w.get("status") == "UNKNOWN", w)
 
 print()
 print("=== 2. PRZED WLASCIWYM POLEM STOI UKRYTE ===")
@@ -218,6 +254,13 @@ sprawdz("limit na klikniecie pola zszedl z 15 s", "pole.click(timeout=8_000)" in
 sprawdz("i nie zostal nigdzie stary 15-sekundowy",
         'page.locator("textarea").first\n        pole.click(timeout=15_000)'
         not in zrodlo)
+
+print()
+print("=== 7. WYJATEK PO DISPATCH ZACHOWUJE UNKNOWN W WYNIKU ===")
+w, s = komentuj([True], blad_klikniecia=True)
+sprawdz("wynik zachowal UNKNOWN", w.get("status") == "UNKNOWN", w)
+sprawdz("wynik zachowal ID proby", w.get("attempt_id") == "fake-attempt", w)
+sprawdz("blad nie zostal ukryty", "TimeoutError" in (w.get("blad") or ""), w)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

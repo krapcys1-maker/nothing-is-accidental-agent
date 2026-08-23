@@ -11,11 +11,11 @@ pytanie brzmi, czy ta liczba występuje w materiale dowodowym.
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
 
 import config
+import provenance
 
 # Zmyślone przeżycie. Celowo NIE łapie pierwszej osoby w ogóle — „my reading",
 # „I cannot tell you" to jawne wnioskowanie i jest dozwolone. Łapie czasowniki
@@ -106,17 +106,22 @@ DIGITS = re.compile(r"\d[\d.,]*")
 
 
 def _digit_tokens(text: str) -> set[str]:
-    return {m.group(0).rstrip(".,") for m in DIGITS.finditer(text)}
+    return set(provenance.numeric_tokens(text))
 
 
 def numbers_outside_corpus(body: str, card: dict[str, Any]) -> list[str]:
-    """Liczby w tekście, których nie ma nigdzie w materiale dowodowym."""
-    corpus = _digit_tokens(json.dumps(card, ensure_ascii=False))
+    """Liczby w tekście spoza jawnej listy wartości związanych z fragmentami."""
+    corpus = {
+        str(item.get("value") or "")
+        for item in card.get("citable_numbers") or []
+        if item.get("value")
+    }
     return sorted(t for t in _digit_tokens(body) if t not in corpus)
 
 
 def deterministic_floors(body: str, card: dict[str, Any],
-                         poprzednie: list[str] | None = None
+                         poprzednie: list[str] | None = None,
+                         glebokosc: str | None = None,
                          ) -> list[dict[str, str]]:
     """Podłogi bez modelu: 0 USD, milisekundy, zero wywołań.
 
@@ -125,6 +130,18 @@ def deterministic_floors(body: str, card: dict[str, Any],
     sposób wywołania nadal jest poprawny.
     """
     findings: list[dict[str, str]] = []
+
+    if glebokosc is not None:
+        contract = config.dlugosc_dla(glebokosc)
+        words = len(body.split("## Sources", 1)[0].split())
+        if words < contract["min"] or words > contract["max"]:
+            findings.append({
+                "gate": "DLUGOSC_POZA_KONTRAKTEM",
+                "detail": (
+                    f"{words} słów przy kontrakcie {glebokosc.upper()} "
+                    f"{contract['min']}-{contract['max']}"
+                ),
+            })
 
     for match in FABRICATED_EXPERIENCE.finditer(body):
         findings.append({
@@ -462,12 +479,11 @@ def frazy_z_instrukcji(body: str, dlugosc: int = 6) -> list[str]:
 
 
 def verdict(findings: list[dict[str, str]]) -> tuple[str, str | None]:
-    """Artykuł powstaje ZAWSZE. Decyzja właściciela z 2026-08-15.
+    """Historyczny werdykt zapisu, nie decyzja o publikacji.
 
-    Skoro temat przeszedł odsiew, a research jest opłacony i zrobiony, nie ma
-    stanu „zablokowany i koniec". Uwagi wracają do właściciela do przeczytania
-    i ewentualnej poprawki — ale tekst istnieje. Zablokowany artykuł to czysta
-    strata 1,30 USD researchu i zero informacji w zamian.
+    Artykuł zostaje zachowany jako artefakt badawczy niezależnie od wyniku
+    bramek. O publikacji rozstrzyga autonomicznie `editorial.quality_decision`
+    i pełna kontrola po rewizji; wynik nieprzechodzący pozostaje zablokowany.
     """
     return "SAVED", None
 

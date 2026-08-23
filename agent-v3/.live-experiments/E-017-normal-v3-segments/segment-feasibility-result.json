@@ -1,0 +1,87 @@
+{
+  "actual_logical_calls": {
+    "feasibility": 1
+  },
+  "allowed_logical_calls": {
+    "feasibility": 1
+  },
+  "argv": [
+    "run.py",
+    "--topics",
+    "6",
+    "--use-cache",
+    "--stop-after",
+    "feasibility"
+  ],
+  "browser_imported": false,
+  "capture_ordinals": [
+    1
+  ],
+  "contract_failures_total": 0,
+  "cost_after": {
+    "exposure_usd": 0.005868,
+    "known_usd": 0.005868,
+    "reserved_or_unknown_usd": 0.0,
+    "rows": [
+      {
+        "cost_status": "KNOWN",
+        "known": 0.005868,
+        "n": 1,
+        "provider": "deepseek",
+        "unresolved": 0
+      }
+    ]
+  },
+  "cost_before": {
+    "exposure_usd": 0.0,
+    "known_usd": 0.0,
+    "reserved_or_unknown_usd": 0.0,
+    "rows": []
+  },
+  "exit_code": 0,
+  "experiment": "normal-v3-live-segments@1",
+  "finished_at": "2026-08-21T15:35:51+00:00",
+  "latest_article": null,
+  "latest_run": {
+    "note": "zatrzymany po etapie feasibility",
+    "stage": "feasibility",
+    "status": "DONE"
+  },
+  "new_call_rows": [
+    {
+      "at": "2026-08-21T15:34:26.819742+00:00",
+      "cache_hit": 1152,
+      "cost_status": "KNOWN",
+      "cost_usd": 0.005868,
+      "id": 1,
+      "model": "deepseek-v4-flash",
+      "note": null,
+      "ok": 1,
+      "price_verified": 1,
+      "provider": "deepseek",
+      "provider_request_id": null,
+      "purpose": "feasibility",
+      "reconciled_at": null,
+      "reserved_usd": 0.0,
+      "run_id": 1,
+      "tokens_in": 511,
+      "tokens_out": 8709,
+      "web_searches": 0
+    }
+  ],
+  "new_exposure_usd": 0.005868,
+  "notes": null,
+  "notes_validation": null,
+  "pass": true,
+  "public_fetches": [],
+  "requested_capabilities": [
+    "model_call"
+  ],
+  "routing_unchanged": true,
+  "segment": "feasibility",
+  "stage_cap_usd": 0.03,
+  "stderr": "",
+  "stdout": "== polityka V3: mode=model_test kill_switch=False test_target=False ==\n== przebieg 1 ==\n   baza: C:\\Users\\user\\Desktop\\agent project\\agent-v3\\.live-experiments\\E-017-normal-v3-segments\\data\\experiment.db   sufit przebiegu: 0.03 USD\n  [scout] z bezpiecznej pamięci 663192ab9047c439993279f1 — bez opłaty\n\n-- tematy (6) --\n0. The moment a water sample tests positive and the utility must decide whether to issue a boil-water notice\n1. The store return as a fraud score, not a service promise\n2. The restaurant health grade as a snapshot, not a current guarantee\n3. The moment a train passes a signal at danger and automatic braking must decide\n4. The moment a food processor finds a pathogen in one batch and must decide recall scope\n5. The moment an emergency department has one ventilator left and two patients arrive\n  [feasibility] deepseek-v4-flash  wej=511 wyj=8709  $0.0059\n\n-- odsiew wykonalności --\n  TAK  [3] pewność=0.95 źródeł~5  Investigation reports from RAIB/NTSB and ERTMS/ETCS system descriptions give the required rule and its real fa\n  TAK  [4] pewność=0.95 źródeł~5  FDA/USDA recall databases and individual company recall notices document scope decisions and cost-bearing arra\n  TAK  [5] pewność=0.9 źródeł~4  State crisis-standards-of-care protocols and open-access medical ethics papers contain the written triage rule\n  TAK  [1] pewność=0.8 źródeł~3  Retailers' posted return policies and The Retail Equation's consumer-facing disclosure pages are the primary r\n  TAK  [0] pewność=0.9 źródeł~4  EPA's Revised Total Coliform Rule and state boil-water advisory guidance are the accessible record for trigger\n  TAK  [2] pewność=0.9 źródeł~4  City health-department inspection reports and CDC outbreak investigations show the snapshot grading and its li\n\n>> wybrany temat: The moment a water sample tests positive and the utility must decide whether to issue a boil-water notice\n   When a routine water sample shows contamination, what determines whether the utility must tell the public to boil water, and what are the consequences if they wait too long or over-alert?\n   uzasadnienie: EPA's Revised Total Coliform Rule and state boil-water advisory guidance are the accessible record for triggers and consequences.\n\n== koszt przebiegu: $0.0059 w 1 wywołaniach ==\n",
+  "substack_requested": false,
+  "zero_retry": true
+}

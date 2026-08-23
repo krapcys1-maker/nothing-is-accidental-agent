@@ -113,8 +113,7 @@ try:
     # Trzy przebiegi dziennie wolaja te funkcje trzy razy. Gdy pierwszy juz
     # wystawil notke, kolejne maja MILCZEC — nawet jesli w kolejce czeka inny
     # artykul z niewybranymi dniami.
-    from datetime import datetime, timezone   # noqa: E402
-    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    dzis = config.data_redakcyjna()
     ustaw(wpis("Starszy", wystawione=1),
           wpis("Nowszy", wystawione=1, ostatnia=dzis))
     w = stages.artykul_do_promocji()

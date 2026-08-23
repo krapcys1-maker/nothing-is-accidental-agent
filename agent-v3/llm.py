@@ -1,9 +1,8 @@
 """Jedyna warstwa między `run.py` a dostawcą.
 
 Robi cztery rzeczy i nic więcej: sprawdza warunki przed płatnym wywołaniem,
-woła model, liczy koszt, zapisuje wywołanie. Bez rezerwacji, bez rekoncyliacji,
-bez ponowień — świadomy kompromis: jeśli proces zginie w połowie wywołania,
-koszt tego wywołania nie trafi do logu. Limit dzienny ogranicza szkodę.
+rezerwuje ekspozycję, woła model i atomowo rozlicza koszt. Rezerwacja powstaje
+przed dispatch, więc śmierć procesu ani niepełny strumień nie mogą udawać zera.
 """
 
 from __future__ import annotations
@@ -17,8 +16,10 @@ from typing import Any
 import anthropic
 import httpx
 
+import capabilities
 import config
 import db
+import operational_day
 
 
 class BudgetExceeded(RuntimeError):
@@ -38,55 +39,77 @@ class Truncated(RuntimeError):
     """
 
 
+class SearchLimitExceeded(RuntimeError):
+    """Dostawca zakończył płatny call, ale przekroczył limit narzędzia."""
+
+
+def _provider_for_model(model: str) -> str:
+    if model.startswith("deepseek"):
+        return "deepseek"
+    if model == config.IMAGE_MODEL:
+        return "openai"
+    return "anthropic"
+
+
 def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> None:
     """Warunki, które decydują, czy wywołanie może się w ogóle udać.
 
     Sprawdzane ZANIM pójdą pieniądze. Jedno zaniedbanie tej zasady kosztowało
     starego agenta 0,85 USD na eksperymencie niemożliwym od pierwszej sekundy.
     """
-    if config.KILL_SWITCH:
-        raise PreflightFailed("KILL_SWITCH=true — wywołania wstrzymane")
-
     model = config.MODEL_FOR[purpose]
     if model in (config.CLAUDE, config.SONNET, config.FABLE) and not config.ANTHROPIC_API_KEY:
-        raise PreflightFailed("brak ANTHROPIC_API_KEY w .env")
+        raise PreflightFailed("brak AGENT_V3_ANTHROPIC_API_KEY w agent-v3/.env")
     if model.startswith("deepseek") and not config.DEEPSEEK_API_KEY:
-        raise PreflightFailed("brak DEEPSEEK_API_KEY w .env")
+        raise PreflightFailed("brak AGENT_V3_DEEPSEEK_API_KEY w agent-v3/.env")
     if model == config.IMAGE_MODEL and not config.OPENAI_API_KEY:
-        raise PreflightFailed("brak OPENAI_API_KEY w .env")
+        raise PreflightFailed("brak AGENT_V3_OPENAI_API_KEY w agent-v3/.env")
     if model != config.IMAGE_MODEL and model not in config.PRICING:
         raise PreflightFailed(f"model {model!r} nie ma zweryfikowanego cennika")
 
     if purpose not in config.MAX_TOKENS and purpose not in config.BEZ_TOKENOW:
         raise PreflightFailed(f"brak sufitu tokenów dla etapu {purpose!r}")
 
-    # Sufit na jeden przebieg obowiązuje ZAWSZE, także w trybie bez limitu.
-    if run_id is not None:
-        row = conn.execute(
-            "SELECT COALESCE(SUM(cost_usd), 0) AS s FROM calls WHERE run_id = ?",
-            (run_id,),
-        ).fetchone()
-        if float(row["s"]) >= config.RUN_LIMIT_USD:
-            raise BudgetExceeded(
-                f"przebieg wydał już ${float(row['s']):.4f} przy suficie "
-                f"${config.RUN_LIMIT_USD} — zatrzymuję przed etapem {purpose!r}"
-            )
-
-    if config.NO_LIMIT:
-        return
-
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    month = today[:7]
-    spent_today = db.spent_usd(conn, today)
-    spent_month = db.spent_usd(conn, month)
-    if spent_today >= config.DAILY_LIMIT_USD:
-        raise BudgetExceeded(
-            f"limit dzienny wyczerpany: {spent_today:.4f} / {config.DAILY_LIMIT_USD} USD"
+def _reserve_model_call(
+    purpose: str, conn: sqlite3.Connection, run_id: int | None,
+) -> int:
+    """Rezerwuje koszt przez jedyny atomowy interfejs runtime."""
+    model = config.MODEL_FOR[purpose]
+    provider = _provider_for_model(model)
+    current = datetime.now(timezone.utc)
+    day_limit = month_limit = None
+    day_start = day_end = month_start = month_end = None
+    if not config.NO_LIMIT:
+        editorial_date = operational_day.editorial_date(current)
+        day_bounds = operational_day.boundaries(editorial_date)
+        month_bounds = operational_day.month_boundaries(editorial_date)
+        day_start, day_end = (
+            value.isoformat(timespec="seconds") for value in day_bounds)
+        month_start, month_end = (
+            value.isoformat(timespec="seconds") for value in month_bounds)
+        day_limit = float(config.DAILY_LIMIT_USD)
+        month_limit = float(config.MONTHLY_LIMIT_USD)
+    try:
+        call_id, _reserved = db.reserve_model_budget(
+            conn,
+            run_id=run_id,
+            provider=provider,
+            model=model,
+            purpose=purpose,
+            at=current.isoformat(timespec="microseconds"),
+            run_limit_usd=float(config.RUN_LIMIT_USD),
+            day_limit_usd=day_limit,
+            day_start=day_start,
+            day_end=day_end,
+            month_limit_usd=month_limit,
+            month_start=month_start,
+            month_end=month_end,
+            fixed_price_usd=(float(config.IMAGE_PRICE_USD)
+                             if purpose == "obraz" else None),
         )
-    if spent_month >= config.MONTHLY_LIMIT_USD:
-        raise BudgetExceeded(
-            f"limit miesięczny wyczerpany: {spent_month:.4f} / {config.MONTHLY_LIMIT_USD} USD"
-        )
+    except db.ModelBudgetExceeded as exc:
+        raise BudgetExceeded(str(exc)) from exc
+    return call_id
 
 
 def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
@@ -109,7 +132,7 @@ def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
                  "cache": stawka["cache"],
                  "verified": config.PRICING[model]["verified"]}
     else:
-        price = config.PRICING[model]
+        price = config.stawka_anthropic(model)
     # Trafienia w cache platne osobno i ~120x taniej. `tokens_in` liczymy jako
     # miss, bo tak podaje je dostawca po odjeciu trafien.
     usd = (tokens_in / 1_000_000 * price["in"]
@@ -132,6 +155,43 @@ def _log(purpose: str, model: str, tin: int, tout: int, searches: int, usd: floa
         f"  ${usd:.4f}{flag}",
         flush=True,
     )
+
+
+def _anthropic_message_result(
+    message: Any, purpose: str,
+) -> tuple[str, int, int, int, list[str]]:
+    """Wspólne rozliczenie Messages: Anthropic oraz zgodny transport DeepSeek."""
+    if message.stop_reason == "refusal":
+        raise PreflightFailed(f"dostawca odmówił: {message.stop_details}")
+    if message.stop_reason == "max_tokens":
+        raise Truncated(
+            f"odpowiedź ucięta na suficie {config.MAX_TOKENS[purpose]} tokenów "
+            f"dla etapu {purpose!r} — sufit liczy się z kontraktu w config.py, "
+            "więc kontrakt prosi o więcej, niż sufit mieści"
+        )
+
+    text = "".join(b.text for b in message.content if b.type == "text")
+    searches = 0
+    server_tool_use = getattr(message.usage, "server_tool_use", None)
+    if server_tool_use is not None:
+        searches = getattr(server_tool_use, "web_search_requests", 0) or 0
+
+    # URL-e, które wyszukiwarka NAPRAWDĘ zwróciła. Sam JSON od modelu nie
+    # wystarcza: zmyślony adres wygląda w nim identycznie jak prawdziwy, a
+    # kosztuje nieudane pobranie i zafałszowany korpus.
+    urls: list[str] = []
+    for block in message.content:
+        if getattr(block, "type", "") != "web_search_tool_result":
+            continue
+        content = getattr(block, "content", None)
+        if not isinstance(content, list):
+            continue  # błąd narzędzia zwraca obiekt, nie listę
+        for result in content:
+            url = getattr(result, "url", None)
+            if isinstance(url, str):
+                urls.append(url)
+
+    return text, message.usage.input_tokens, message.usage.output_tokens, searches, urls
 
 
 def _call_claude(
@@ -167,38 +227,80 @@ def _call_claude(
     # włączone i liczy się jak wyjście, więc bez strumienia grozi timeout HTTP.
     with client.messages.stream(**kwargs) as stream:
         message = stream.get_final_message()
+    return _anthropic_message_result(message, purpose)
 
-    if message.stop_reason == "refusal":
-        raise PreflightFailed(f"dostawca odmówił: {message.stop_details}")
-    if message.stop_reason == "max_tokens":
+
+def _call_deepseek_anthropic_search(
+    purpose: str, system: str, user: str,
+    collect_trace: list[dict[str, Any]] | None = None,
+) -> tuple[str, int, int, int, list[str]]:
+    """DeepSeek web search przez oficjalny transport Anthropic z `max_uses`.
+
+    E-020 dowiódł, że `/responses` ignoruje limit zapisany w prompcie: wykonał
+    22 wyszukiwania przy maksimum 8. Ten endpoint zachowuje provider, model i
+    routing, ale przenosi limit do kontraktu narzędzia wykonywanego na serwerze.
+    """
+    client = anthropic.Anthropic(
+        api_key=config.DEEPSEEK_API_KEY,
+        base_url=config.DEEPSEEK_ANTHROPIC_BASE_URL,
+        timeout=config.timeout_for(config.MAX_TOKENS[purpose]),
+        max_retries=0,
+    )
+    kwargs: dict[str, Any] = {
+        "model": config.MODEL_FOR[purpose],
+        "max_tokens": config.MAX_TOKENS[purpose],
+        "system": system,
+        "messages": [{"role": "user", "content": user}],
+        "output_config": {"effort": config.DEEPSEEK_EFFORT},
+        "tools": [{
+            "type": config.DEEPSEEK_WEB_SEARCH_TOOL,
+            "name": "web_search",
+            "max_uses": config.DISCOVERY_MAX_SEARCHES,
+        }],
+    }
+    search_trace: dict[str, Any] | None = None
+    if collect_trace is not None:
+        search_trace = {
+            "request_kind": "web_search",
+            "system": system,
+            "user": user,
+            "response": None,
+            "tokens_in": None,
+            "tokens_out": None,
+            "web_searches": None,
+            "search_result_urls": [],
+            "state": "DISPATCH_STARTED",
+        }
+        collect_trace.append(search_trace)
+    try:
+        with client.messages.stream(**kwargs) as stream:
+            message = stream.get_final_message()
+    except BaseException as exc:
+        if search_trace is not None:
+            search_trace["state"] = "FAILED_WITHOUT_FINAL_USAGE"
+            search_trace["error"] = f"{type(exc).__name__}: {exc}"[:500]
+        raise
+    text, tin, tout, searches, urls = _anthropic_message_result(message, purpose)
+    if search_trace is not None:
+        search_trace.update({
+            "response": text, "tokens_in": tin, "tokens_out": tout,
+            "web_searches": searches,
+            "search_result_urls": list(dict.fromkeys(urls)),
+            "state": "COMPLETED_WITH_USAGE", "error": None,
+        })
+    if not urls:
         raise Truncated(
-            f"odpowiedź ucięta na suficie {config.MAX_TOKENS[purpose]} tokenów "
-            f"dla etapu {purpose!r} — sufit liczy się z kontraktu w config.py, "
-            "więc kontrakt prosi o więcej, niż sufit mieści"
+            f"DeepSeek wykonał {searches} wyszukiwań, ale nie zwrócił adresów"
         )
-
-    text = "".join(b.text for b in message.content if b.type == "text")
-    searches = 0
-    server_tool_use = getattr(message.usage, "server_tool_use", None)
-    if server_tool_use is not None:
-        searches = getattr(server_tool_use, "web_search_requests", 0) or 0
-
-    # URL-e, które wyszukiwarka NAPRAWDĘ zwróciła. Sam JSON od modelu nie
-    # wystarcza: zmyślony adres wygląda w nim identycznie jak prawdziwy, a
-    # kosztuje nieudane pobranie i zafałszowany korpus.
-    urls: list[str] = []
-    for block in message.content:
-        if getattr(block, "type", "") != "web_search_tool_result":
-            continue
-        content = getattr(block, "content", None)
-        if not isinstance(content, list):
-            continue  # błąd narzędzia zwraca obiekt, nie listę
-        for result in content:
-            url = getattr(result, "url", None)
-            if isinstance(url, str):
-                urls.append(url)
-
-    return text, message.usage.input_tokens, message.usage.output_tokens, searches, urls
+    print(
+        f"  [{purpose}] wybieram wyłącznie z {len(set(urls))} adresów "
+        "zwróconych przez wyszukiwarkę",
+        flush=True,
+    )
+    picked, tin2, tout2, _selector_user = _deepseek_pick_from_urls(
+        purpose, system, user, urls, draft=text, collect_trace=collect_trace,
+    )
+    return picked, tin + tin2, tout + tout2, searches, urls
 
 
 def _call_deepseek_responses(
@@ -210,10 +312,7 @@ def _call_deepseek_responses(
     wyszukiwania i zwraca prawdziwe adresy, w przeciwieństwie do Haiku i Sonneta,
     które wypisywały je z pamięci.
     """
-    response = httpx.post(
-        f"{config.DEEPSEEK_BASE_URL}/responses",
-        headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"},
-        json={
+    request_json = {
             "model": config.MODEL_FOR[purpose],
             "instructions": system,
             "input": user,
@@ -228,11 +327,104 @@ def _call_deepseek_responses(
             # `max_output_tokens`, więc musi zostać miejsce na odpowiedź.
             "reasoning": {"effort": config.DEEPSEEK_EFFORT},
             "max_output_tokens": config.MAX_TOKENS[purpose],
-        },
-        timeout=config.timeout_for(config.MAX_TOKENS[purpose]) * 3,
-    )
-    response.raise_for_status()
-    payload = response.json()
+            # Tak samo jak chat/completions: długie oczekiwanie na jeden
+            # buforowany JSON kończyło się po stronie pośredniej jako
+            # ``incomplete chunked read``. Responses API ma własne zdarzenia
+            # SSE i terminalne ``response.completed`` z pełnym obiektem,
+            # usage oraz wynikami narzędzia.
+            "stream": True,
+        }
+
+    completed: dict[str, Any] | None = None
+    partial_text: list[str] = []
+    response_id: str | None = None
+    response: httpx.Response | None = None
+    event_name: str | None = None
+    try:
+        with httpx.stream(
+            "POST",
+            f"{config.DEEPSEEK_BASE_URL}/responses",
+            headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"},
+            json=request_json,
+            timeout=config.timeout_for(config.MAX_TOKENS[purpose]) * 3,
+        ) as response:
+            response.raise_for_status()
+            for raw_line in response.iter_lines():
+                line = raw_line.strip()
+                if not line:
+                    event_name = None
+                    continue
+                if line.startswith(":"):
+                    continue
+                if line.startswith("event:"):
+                    event_name = line[6:].strip()
+                    continue
+                if not line.startswith("data:"):
+                    raise httpx.RemoteProtocolError(
+                        "DeepSeek Responses SSE line without event/data prefix",
+                        request=response.request,
+                    )
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    event = json.loads(data)
+                except json.JSONDecodeError as exc:
+                    raise httpx.RemoteProtocolError(
+                        f"invalid DeepSeek Responses SSE JSON at char {exc.pos}",
+                        request=response.request,
+                    ) from exc
+                if not isinstance(event, dict):
+                    raise httpx.RemoteProtocolError(
+                        "DeepSeek Responses SSE event is not an object",
+                        request=response.request,
+                    )
+                event_type = str(event.get("type") or event_name or "")
+                candidate = event.get("response")
+                if isinstance(candidate, dict) and isinstance(candidate.get("id"), str):
+                    response_id = candidate["id"]
+                if event_type == "response.output_text.delta" and isinstance(
+                    event.get("delta"), str
+                ):
+                    partial_text.append(event["delta"])
+                elif event_type == "response.completed":
+                    if not isinstance(candidate, dict):
+                        raise httpx.RemoteProtocolError(
+                            "response.completed lacks a response object",
+                            request=response.request,
+                        )
+                    completed = candidate
+                elif event_type in {"response.failed", "error"}:
+                    detail = event.get("error") or candidate or event
+                    raise httpx.RemoteProtocolError(
+                        f"DeepSeek Responses SSE terminal failure: {detail}",
+                        request=response.request,
+                    )
+    except httpx.RemoteProtocolError as exc:
+        request = getattr(exc, "request", None)
+        if request is None and response is not None:
+            request = response.request
+        raise httpx.RemoteProtocolError(
+            f"{exc}; DeepSeek Responses SSE partial_content_chars="
+            f"{sum(len(part) for part in partial_text)} "
+            f"response_id={response_id or 'unknown'}",
+            request=request,
+        ) from exc
+
+    if completed is None:
+        assert response is not None
+        raise httpx.RemoteProtocolError(
+            "DeepSeek Responses SSE ended without response.completed; "
+            f"partial_content_chars={sum(len(part) for part in partial_text)} "
+            f"response_id={response_id or 'unknown'}",
+            request=response.request,
+        )
+    if completed.get("status") != "completed":
+        raise Truncated(
+            f"DeepSeek Responses zakończył etap {purpose!r} ze statusem "
+            f"{completed.get('status')!r}: {completed.get('incomplete_details')!r}"
+        )
+    payload = completed
 
     text_parts: list[str] = []
     urls: list[str] = []
@@ -259,7 +451,13 @@ def _call_deepseek_responses(
 
     walk(payload.get("output", []))
     text = payload.get("output_text") or "".join(text_parts)
-    usage = payload.get("usage", {})
+    usage = payload.get("usage")
+    if not isinstance(usage, dict):
+        assert response is not None
+        raise httpx.RemoteProtocolError(
+            "DeepSeek Responses response.completed lacks usage",
+            request=response.request,
+        )
 
     # DeepSeek bywa, że przeszukuje i przeszukuje, a bloku `message` nie tworzy
     # — 14 i 24 wyszukiwania kończyły się odpowiedzią, 36 już nie. Ale adresy
@@ -271,7 +469,9 @@ def _call_deepseek_responses(
             f"z {len(set(urls))} znalezionych adresów drugim wywołaniem",
             flush=True,
         )
-        text, tin2, tout2 = _deepseek_pick_from_urls(purpose, system, user, urls)
+        text, tin2, tout2, _selector_user = _deepseek_pick_from_urls(
+            purpose, system, user, urls,
+        )
         return (
             text,
             int(usage.get("input_tokens", 0)) + tin2,
@@ -285,7 +485,6 @@ def _call_deepseek_responses(
             f"DeepSeek wykonał {searches} wyszukiwań i nie zwrócił ani tekstu, "
             f"ani adresów (status={payload.get('status')!r})"
         )
-    usage = payload.get("usage", {})
     return (
         text,
         int(usage.get("input_tokens", 0)),
@@ -296,78 +495,203 @@ def _call_deepseek_responses(
 
 
 def _deepseek_pick_from_urls(
-    purpose: str, system: str, user: str, urls: list[str]
-) -> tuple[str, int, int]:
+    purpose: str, system: str, user: str, urls: list[str], *, draft: str = "",
+    collect_trace: list[dict[str, Any]] | None = None,
+) -> tuple[str, int, int, str]:
     """Drugie, tanie wywołanie: wybierz z adresów, które wyszukiwanie już zwróciło.
 
     Bez narzędzi, więc nie ma jak zapętlić się w szukaniu.
     """
-    unique = list(dict.fromkeys(urls))
-    response = httpx.post(
-        f"{config.DEEPSEEK_BASE_URL}/chat/completions",
-        headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"},
-        json={
-            # MODEL Z ROUTINGU, nie zaszyta stala. Bylo tu config.DEEPSEEK, wiec
-            # kazdy etap bez wyszukiwania jechal na flashu niezaleznie od tego,
-            # co mowil MODEL_FOR — a koszt ksiegowalismy po stawce pro.
-            "model": config.MODEL_FOR[purpose],
-            "max_tokens": config.MAX_TOKENS[purpose],
-            "messages": [
-                {"role": "system", "content": system},
-                {
-                    "role": "user",
-                    "content": (
-                        f"{user}\n\n---\n\nA search has already been run and returned "
-                        f"the addresses below. Do not search again and do not invent "
-                        f"any address — choose only from this list, and return the "
-                        f"JSON described above.\n\n" + "\n".join(unique)
-                    ),
-                },
-            ],
-        },
-        timeout=config.timeout_for(config.MAX_TOKENS[purpose]),
+    unique: list[str] = []
+    url_chars = 0
+    for candidate in dict.fromkeys(urls):
+        if not isinstance(candidate, str):
+            continue
+        added = len(candidate) + 1
+        if url_chars + added > config.DISCOVERY_SELECTOR_MAX_URL_CHARS_TOTAL:
+            break
+        unique.append(candidate)
+        url_chars += added
+    if not unique:
+        raise Truncated("selektor exact-URL nie dostał żadnego adresu")
+    selector_user = (
+        f"{user}\n\n---\n\nA search has already been run. Below are its "
+        "draft and the complete list of addresses actually returned by the "
+        "search tool in this run. Audit the draft and return the final JSON. "
+        "Do not search again, reconstruct an address, or use any URL absent "
+        "from EXACT SEARCH RESULT URLS. Preserve all quality and evidence-role "
+        "requirements from the original task. If a required role is not "
+        "available in the exact list, return the best honest subset instead "
+        "of inventing it.\n\nSEARCH DRAFT:\n"
+        f"{draft or '[no draft text]'}\n\nEXACT SEARCH RESULT URLS:\n"
+        + "\n".join(unique)
     )
-    response.raise_for_status()
-    payload = response.json()
+    selector_trace: dict[str, Any] | None = None
+    if collect_trace is not None:
+        selector_trace = {
+            "request_kind": "exact_url_selector",
+            "system": system,
+            "user": selector_user,
+            "response": None,
+            "tokens_in": None,
+            "tokens_out": None,
+            "web_searches": 0,
+            "search_result_urls": list(unique),
+            "state": "DISPATCH_STARTED",
+        }
+        collect_trace.append(selector_trace)
+    try:
+        response = httpx.post(
+            f"{config.DEEPSEEK_BASE_URL}/chat/completions",
+            headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"},
+            json={
+                # MODEL Z ROUTINGU, nie zaszyta stala. Bylo tu config.DEEPSEEK,
+                # wiec każdy etap bez wyszukiwania jechał na flashu niezależnie
+                # od routingu, a koszt księgowano po stawce pro.
+                "model": config.MODEL_FOR[purpose],
+                "max_tokens": config.MAX_TOKENS[purpose],
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": selector_user},
+                ],
+            },
+            timeout=config.timeout_for(config.MAX_TOKENS[purpose]),
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except BaseException as exc:
+        if selector_trace is not None:
+            selector_trace["state"] = "FAILED_WITHOUT_FINAL_USAGE"
+            selector_trace["error"] = f"{type(exc).__name__}: {exc}"[:500]
+        raise
     usage = payload.get("usage", {})
+    picked = payload["choices"][0]["message"]["content"]
+    tin = int(usage.get("prompt_tokens", 0))
+    tout = int(usage.get("completion_tokens", 0))
+    if selector_trace is not None:
+        selector_trace.update({
+            "response": picked, "tokens_in": tin, "tokens_out": tout,
+            "state": "COMPLETED_WITH_USAGE", "error": None,
+        })
     return (
-        payload["choices"][0]["message"]["content"],
-        int(usage.get("prompt_tokens", 0)),
-        int(usage.get("completion_tokens", 0)),
+        picked, tin, tout,
+        selector_user,
     )
 
 
-def _call_deepseek(purpose: str, system: str, user: str) -> tuple[str, int, int, int]:
-    response = httpx.post(
-        f"{config.DEEPSEEK_BASE_URL}/chat/completions",
-        headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"},
-        json={
-            # MODEL Z ROUTINGU, nie zaszyta stala. Bylo tu config.DEEPSEEK, wiec
-            # kazdy etap bez wyszukiwania jechal na flashu niezaleznie od tego,
-            # co mowil MODEL_FOR — a koszt ksiegowalismy po stawce pro.
-            "model": config.MODEL_FOR[purpose],
-            "max_tokens": config.MAX_TOKENS[purpose],
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-        },
-        timeout=config.timeout_for(config.MAX_TOKENS[purpose]),
-    )
-    response.raise_for_status()
-    payload = response.json()
-    choice = payload["choices"][0]
-    if choice.get("finish_reason") == "length":
+def _call_deepseek(
+    purpose: str, system: str, user: str,
+) -> tuple[str, int, int, int, int]:
+    request_json = {
+        # MODEL Z ROUTINGU, nie zaszyta stala. Bylo tu config.DEEPSEEK, wiec
+        # kazdy etap bez wyszukiwania jechal na flashu niezaleznie od tego,
+        # co mowil MODEL_FOR — a koszt ksiegowalismy po stawce pro.
+        "model": config.MODEL_FOR[purpose],
+        "max_tokens": config.MAX_TOKENS[purpose],
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        # Trzy live scouty przez odpowiedz buforowana konczyly sie po 120-181 s
+        # identycznym ``incomplete chunked read`` i bez usage. Oficjalny
+        # kontrakt DeepSeek przewiduje SSE oraz osobny koncowy chunk usage.
+        # Dla dlugiego rozumowania tokeny musza podtrzymywac polaczenie zamiast
+        # czekac za jednym wielkim JSON-em do konca generacji.
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+    content_parts: list[str] = []
+    usage: dict[str, Any] | None = None
+    finish_reason: str | None = None
+    response_id: str | None = None
+    done = False
+    response: httpx.Response | None = None
+    try:
+        with httpx.stream(
+            "POST",
+            f"{config.DEEPSEEK_BASE_URL}/chat/completions",
+            headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"},
+            json=request_json,
+            timeout=config.timeout_for(config.MAX_TOKENS[purpose]),
+        ) as response:
+            response.raise_for_status()
+            for line in response.iter_lines():
+                line = line.strip()
+                if not line or line.startswith(":"):
+                    continue
+                if not line.startswith("data:"):
+                    raise httpx.RemoteProtocolError(
+                        "DeepSeek SSE line without data prefix",
+                        request=response.request,
+                    )
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    done = True
+                    break
+                try:
+                    chunk = json.loads(data)
+                except json.JSONDecodeError as exc:
+                    raise httpx.RemoteProtocolError(
+                        f"invalid DeepSeek SSE JSON at char {exc.pos}",
+                        request=response.request,
+                    ) from exc
+                if not isinstance(chunk, dict):
+                    raise httpx.RemoteProtocolError(
+                        "DeepSeek SSE chunk is not an object",
+                        request=response.request,
+                    )
+                if isinstance(chunk.get("id"), str):
+                    response_id = chunk["id"]
+                if isinstance(chunk.get("usage"), dict):
+                    usage = chunk["usage"]
+                choices = chunk.get("choices") or []
+                if choices:
+                    choice = choices[0]
+                    delta = choice.get("delta") or {}
+                    if isinstance(delta.get("content"), str):
+                        content_parts.append(delta["content"])
+                    if choice.get("finish_reason") is not None:
+                        finish_reason = str(choice["finish_reason"])
+    except httpx.RemoteProtocolError as exc:
+        request = getattr(exc, "request", None)
+        if request is None and response is not None:
+            request = response.request
+        raise httpx.RemoteProtocolError(
+            f"{exc}; DeepSeek SSE partial_content_chars="
+            f"{sum(len(part) for part in content_parts)} "
+            f"response_id={response_id or 'unknown'}",
+            request=request,
+        ) from exc
+
+    if not done:
+        assert response is not None
+        raise httpx.RemoteProtocolError(
+            "DeepSeek SSE ended without data: [DONE]",
+            request=response.request,
+        )
+    if finish_reason == "length":
         raise Truncated(
             f"odpowiedź ucięta na suficie {config.MAX_TOKENS[purpose]} tokenów "
             f"dla etapu {purpose!r} — bez tego wychodzi z tego niedomknięty JSON"
         )
-    usage = payload.get("usage", {})
+    if finish_reason not in {None, "stop"}:
+        raise Truncated(
+            f"DeepSeek przerwał etap {purpose!r}: finish_reason={finish_reason!r}"
+        )
+    if usage is None:
+        assert response is not None
+        raise httpx.RemoteProtocolError(
+            "DeepSeek SSE reached DONE without the requested usage chunk",
+            request=response.request,
+        )
+    text = "".join(content_parts)
+    if not text.strip():
+        raise Truncated(f"DeepSeek nie zwrócił treści dla etapu {purpose!r}")
     trafienia = int(usage.get("prompt_cache_hit_tokens", 0))
     pudla = int(usage.get("prompt_cache_miss_tokens",
                           usage.get("prompt_tokens", 0) - trafienia))
     return (
-        payload["choices"][0]["message"]["content"],
+        text,
         pudla,
         int(usage.get("completion_tokens", 0)),
         0,
@@ -389,16 +713,15 @@ def przejsciowy(exc: BaseException) -> bool:
     przekroczony budżet, odpowiedź ucięta na suficie. Powtórzy się identycznie,
     więc ponawianie kosztuje i nie zmienia nic.
     """
-    if isinstance(exc, (BudgetExceeded, PreflightFailed, Truncated)):
-        return False
-    if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
+    if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)):
         return True
-    kod = getattr(exc, "status_code", None) or getattr(
-        getattr(exc, "response", None), "status_code", None)
-    if isinstance(kod, int):
-        return kod == 429 or 500 <= kod < 600
-    # Nierozpoznany błąd traktujemy jak trwały: lepiej nie zapłacić drugi raz
-    # za coś, czego nie rozumiemy.
+    cause = getattr(exc, "__cause__", None)
+    if cause is not None and cause is not exc:
+        return przejsciowy(cause)
+    # ReadTimeout, ReadError, RemoteProtocolError, HTTP 429/5xx i każdy błąd
+    # po rozpoczęciu odpowiedzi mogą oznaczać, że dostawca już wygenerował i
+    # naliczył wynik. Bez provider-side idempotency automatyczny retry byłby
+    # nowym płatnym wywołaniem, nie dokończeniem poprzedniego.
     return False
 
 
@@ -411,19 +734,25 @@ def call(
     run_id: int | None = None,
     web_search: bool = False,
     collect_urls: list[str] | None = None,
+    collect_trace: list[dict[str, Any]] | None = None,
 ) -> str:
     """Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi.
 
     `collect_urls`, jeśli podane, zostanie wypełnione adresami, które realnie
     zwróciła wyszukiwarka — do sprawdzenia, czy model nie zmyślił URL-a.
     """
-    _preflight(purpose, conn, run_id)
-    model = config.MODEL_FOR[purpose]
-    provider = "deepseek" if model.startswith("deepseek") else "anthropic"
-
     if config.DRY_RUN:
         print(f"  [{purpose}] DRY_RUN — wywołanie pominięte", flush=True)
         return ""
+
+    try:
+        capabilities.require(capabilities.Capability.MODEL_CALL)
+    except capabilities.CapabilityDenied as exc:
+        raise PreflightFailed(str(exc)) from exc
+    _preflight(purpose, conn, run_id)
+    model = config.MODEL_FOR[purpose]
+    provider = _provider_for_model(model)
+    call_id = _reserve_model_call(purpose, conn, run_id)
 
     for proba in range(1, config.PONOWIENIA + 2):
         try:
@@ -432,8 +761,8 @@ def call(
                     purpose, system, user, web_search)
                 cache_hit = 0
             elif web_search:
-                text, tin, tout, searches, urls = _call_deepseek_responses(
-                    purpose, system, user)
+                text, tin, tout, searches, urls = _call_deepseek_anthropic_search(
+                    purpose, system, user, collect_trace=collect_trace)
                 cache_hit = 0
             else:
                 text, tin, tout, searches, cache_hit = _call_deepseek(
@@ -450,26 +779,47 @@ def call(
                       flush=True)
                 time.sleep(czekaj)
                 continue
-            # Koszt nieudanego wywołania bywa nieznany. Zapisujemy "nie wiadomo"
-            # zamiast zgadywać kwotę — zgadnięta kwota w zapisie finansowym jest
-            # gorsza niż jej brak.
-            db.record_call(
-                conn=conn, run_id=run_id, provider=provider, model=model,
-                purpose=purpose, tokens_in=0, tokens_out=0, web_searches=0,
-                cost_usd=0.0, price_verified=0, ok=0,
-                note=f"{type(exc).__name__}: {exc}"[:500],
-            )
+            note = f"{type(exc).__name__}: {exc}"[:500]
+            if przejsciowy(exc):
+                # Wyczerpano wyłącznie błędy sprzed dispatch; koszt jest znanym 0.
+                db.settle_reserved_call(
+                    conn, call_id, tokens_in=0, tokens_out=0, cache_hit=0,
+                    web_searches=0, cost_usd=0.0, price_verified=False,
+                    ok=False, note=note,
+                )
+            else:
+                db.mark_call_cost_unknown(conn, call_id, note=note)
             raise
 
     trafienia = locals().get("cache_hit", 0) or 0
-    usd, verified = _cost(model, tin, tout, searches, trafienia)
-    db.record_call(
-        conn=conn, run_id=run_id, provider=provider, model=model, purpose=purpose,
-        tokens_in=tin, tokens_out=tout, cache_hit=trafienia,
-        web_searches=searches, cost_usd=usd,
-        price_verified=int(verified), ok=1, note=None,
-    )
+    search_limit_note = None
+    if web_search and searches > config.DISCOVERY_MAX_SEARCHES:
+        search_limit_note = (
+            f"SearchLimitExceeded: dostawca wykonał {searches} wyszukiwań "
+            f"przy limicie {config.DISCOVERY_MAX_SEARCHES}"
+        )
+    try:
+        usd, verified = _cost(model, tin, tout, searches, trafienia)
+        db.settle_reserved_call(
+            conn, call_id, tokens_in=tin, tokens_out=tout, cache_hit=trafienia,
+            web_searches=searches, cost_usd=usd,
+            price_verified=verified, ok=search_limit_note is None,
+            note=search_limit_note,
+        )
+    except Exception as exc:
+        # Transport się udał, więc nawet lokalny błąd rozliczenia zachowuje
+        # ekspozycję do rekoncyliacji zamiast zostawiać martwe RESERVED.
+        row = conn.execute(
+            "SELECT cost_status FROM calls WHERE id=?", (call_id,)
+        ).fetchone()
+        if row is not None and row["cost_status"] == "RESERVED":
+            db.mark_call_cost_unknown(
+                conn, call_id, note=f"{type(exc).__name__}: {exc}"[:500]
+            )
+        raise
     _log(purpose, model, tin, tout, searches, usd, verified)
+    if search_limit_note is not None:
+        raise SearchLimitExceeded(search_limit_note)
     return text
 
 
@@ -482,15 +832,21 @@ def obraz(
     że inaczej wypadłby z licznika: wyłącznik, limit na przebieg i dzienny sufit
     wydatków siedzą w `_preflight`, a nie w każdym wywołaniu z osobna.
     """
-    _preflight("obraz", conn, run_id)
     if config.DRY_RUN:
         print("  [obraz] DRY_RUN — wywołanie pominięte", flush=True)
         return b""
+    try:
+        capabilities.require(capabilities.Capability.MODEL_CALL)
+    except capabilities.CapabilityDenied as exc:
+        raise PreflightFailed(str(exc)) from exc
+    _preflight("obraz", conn, run_id)
     if not config.OPENAI_API_KEY:
-        raise RuntimeError("brak OPENAI_API_KEY")
+        raise RuntimeError("brak AGENT_V3_OPENAI_API_KEY")
 
     import base64
     import urllib.request
+
+    call_id = _reserve_model_call("obraz", conn, run_id)
 
     zadanie = json.dumps({
         "model": config.IMAGE_MODEL,
@@ -510,36 +866,55 @@ def obraz(
             dane = json.loads(odp.read().decode("utf-8"))
         surowy = dane["data"][0]["b64_json"]
     except Exception as exc:
-        db.record_call(
-            conn=conn, run_id=run_id, provider="openai", model=config.IMAGE_MODEL,
-            purpose="obraz", tokens_in=0, tokens_out=0, web_searches=0,
-            cost_usd=0.0, price_verified=0, ok=0,
-            note=f"{type(exc).__name__}: {exc}"[:500],
+        db.mark_call_cost_unknown(
+            conn, call_id, note=f"{type(exc).__name__}: {exc}"[:500]
         )
         raise
 
     usd = config.IMAGE_PRICE_USD
-    db.record_call(
-        conn=conn, run_id=run_id, provider="openai", model=config.IMAGE_MODEL,
-        purpose="obraz", tokens_in=0, tokens_out=0, web_searches=0,
-        cost_usd=usd, price_verified=0, ok=1, note=config.IMAGE_SIZE,
+    db.settle_reserved_call(
+        conn, call_id, tokens_in=0, tokens_out=0, cache_hit=0, web_searches=0,
+        cost_usd=usd, price_verified=False, ok=True, note=config.IMAGE_SIZE,
     )
     print(f"  [obraz] {config.IMAGE_MODEL}  {config.IMAGE_SIZE}  ~${usd:.4f}", flush=True)
     return base64.b64decode(surowy)
 
 
 def parse_json(text: str) -> Any:
-    """Wyciąga obiekt JSON z odpowiedzi modelu.
+    """Parsuje dokładnie jeden obiekt JSON, opcjonalnie w Markdown fence.
 
-    Modele lubią owinąć JSON w ```json. Nie robimy z tego bramki — obcinamy
-    płot i parsujemy.
+    Nie wycinamy już fragmentu od pierwszej do ostatniej klamry. Proza obok
+    obiektu, duplikat klucza i niestandardowe stałe `NaN`/`Infinity` są błędem
+    kontraktu, a nie tekstem do cichej naprawy.
     """
     cleaned = text.strip()
     if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned
-        cleaned = cleaned.rsplit("```", 1)[0]
-    start = cleaned.find("{")
-    end = cleaned.rfind("}")
-    if start == -1 or end == -1:
-        raise ValueError(f"brak JSON w odpowiedzi: {text[:200]!r}")
-    return json.loads(cleaned[start : end + 1])
+        lines = cleaned.splitlines()
+        if len(lines) < 3 or lines[-1].strip() != "```":
+            raise ValueError("niedomknięty Markdown fence wokół JSON")
+        if lines[0].strip().lower() not in {"```", "```json"}:
+            raise ValueError("nieznany rodzaj Markdown fence")
+        cleaned = "\n".join(lines[1:-1]).strip()
+
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplikat klucza JSON: {key!r}")
+            result[key] = value
+        return result
+
+    def reject_constant(value: str) -> None:
+        raise ValueError(f"niedozwolona stała JSON: {value}")
+
+    try:
+        parsed = json.loads(
+            cleaned, object_pairs_hook=unique_object,
+            parse_constant=reject_constant,
+        )
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"niepoprawny pojedynczy JSON: {exc.msg}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(
+            f"korzeń odpowiedzi musi być obiektem, jest {type(parsed).__name__}")
+    return parsed

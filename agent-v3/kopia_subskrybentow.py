@@ -22,8 +22,8 @@ eksport i zajmuje on pol minuty.
 ## Jak zrobic kopie
 
 1. Dashboard -> Subscribers -> menu (trzy kropki) -> Export
-2. Zapisz plik do `agent-v2/data/kopie/przychodzace/`
-3. Uruchom:  python agent-v2/kopia_subskrybentow.py
+2. Zapisz plik do agent-v3/data/kopie/przychodzace/
+3. Uruchom:  python agent-v3/kopia_subskrybentow.py
 
 Skrypt oznaczy plik data, sprawdzi, czy to naprawde CSV z adresami, policzy
 wiersze i porowna z poprzednia kopia. Spadek liczby subskrybentow o wiecej

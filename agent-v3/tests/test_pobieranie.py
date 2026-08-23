@@ -1,15 +1,15 @@
-"""Test drugiego podejscia do pobierania — przez przegladarke.
+"""Regresja granicy pobierania: żaden słabszy transport nie omija safe_fetch."""
 
-Polowa zrodel przepadala i to bylo waskie gardlo jakosci artykulow.
-"""
 import inspect
 import pathlib
 import sys
 
 sys.path.insert(0, "agent-v3")
-import config   # noqa: E402
-import db       # noqa: E402
-import stages   # noqa: E402
+import browser  # noqa: E402
+import config  # noqa: E402
+import safe_fetch  # noqa: E402
+import stages  # noqa: E402
+
 
 zdane = oblane = 0
 
@@ -24,75 +24,53 @@ def sprawdz(nazwa, warunek, szczegol=""):
         print("  BLAD  %s   %s" % (nazwa, szczegol))
 
 
-print("=== 1. CO IDZIE DO DRUGIEGO PODEJSCIA, A CO NIE ===")
+print("=== 1. FETCH UŻYWA WYŁĄCZNIE CENTRALNEGO ADAPTERA ===")
 src = inspect.getsource(stages.fetch)
-sprawdz("brak tresci -> do przegladarki",
-        'reason.startswith("za mało treści")' in src)
-sprawdz("404 NIE idzie do przegladarki (adres nie istnieje)",
-        'reason.startswith("HTTP")' not in src)
-pomoc = inspect.getsource(stages._dobierz_przegladarka)
-sprawdz("odmowa hosta pozostaje odmowa takze w przegladarce",
-        "REFUSAL_PHRASES" in pomoc)
-sprawdz("zasada zapisana wprost w kodzie", "nie omijamy jej narzedziem" in pomoc)
+sprawdz("fetch woła safe_fetch.get", "safe_fetch.get(" in src)
+sprawdz("fetch nie tworzy surowego klienta HTTPX", "httpx.Client" not in src)
+sprawdz("fetch nie włącza automatycznych redirectów", "follow_redirects" not in src)
+sprawdz("zapisuje finalny URL", '"url": final_url' in src)
+sprawdz("zapisuje IP", "resolved_ips_json" in src)
+sprawdz("zapisuje ID wersji dokumentu", "document_id" in src and "content_sha256" in src)
 
 print()
-print("=== 2. ZACHOWANIE BEZ PRZEGLADARKI I NA BLEDACH ===")
-import tempfile  # noqa: E402
-conn = db.connect(pathlib.Path(tempfile.mkdtemp()) / "t.db")
-sprawdz("pusta lista -> nic nie robi i nie wola przegladarki",
-        stages._dobierz_przegladarka(conn, 1, [], []) == [])
+print("=== 2. FALLBACK PRZEGLĄDARKOWY JEST FAIL-CLOSED ===")
+sprawdz("pusta lista pozostaje pusta",
+        stages._dobierz_przegladarka(None, 1, [], []) == [])
+sprawdz("lista stron NIE otwiera przeglądarki",
+        stages._dobierz_przegladarka(
+            None, 1, [{"url": "https://example.com/a"}], []) == [])
 
-import browser  # noqa: E402
-oryg = browser.read_pages
+read_src = inspect.getsource(browser.read_pages)
+wykonywalne = read_src.split('"""')[-1]
+sprawdz("read_pages nie ma page.goto", "page.goto" not in wykonywalne)
+sprawdz("read_pages jawnie odmawia", "raise RuntimeError" in wykonywalne)
+
+oryg = browser.capabilities.require
 try:
-    browser.read_pages = lambda urls: (_ for _ in ()).throw(RuntimeError("padlo"))
-    wynik = stages._dobierz_przegladarka(
-        conn, 1, [{"url": "https://x.example/a", "host": "x.example"}], [])
-    sprawdz("awaria przegladarki nie wywala etapu", wynik == [], wynik)
-
-    # Odzyskanie: strona daje tresc dopiero w przegladarce
-    DLUGI = "Rule text. " * 200
-    browser.read_pages = lambda urls: [
-        {"url": u, "text": DLUGI, "title": "t", "error": None} for u in urls]
-    zrodlo = {"url": "https://mtf.mastercard.com.au/x", "host": "mtf.mastercard.com.au",
-              "class": "PRIMARY", "title": "Rulebook"}
-    conn.execute("INSERT INTO sources (run_id, at, url, domain, fetched_ok, fail_reason)"
-                 " VALUES (?,?,?,?,?,?)", (1, db.now(), zrodlo["url"], zrodlo["host"],
-                                           0, "za mało treści (0 znaków)"))
-    conn.commit()
-    wynik = stages._dobierz_przegladarka(conn, 1, [zrodlo], [])
-    sprawdz("strona rysowana JS-em zostaje ODZYSKANA", len(wynik) == 1, wynik)
-    sprawdz("odzyskana niesie tresc", len(wynik[0].get("text", "")) > 500)
-    sprawdz("zachowuje klase zrodla", wynik[0].get("class") == "PRIMARY")
-    stan = conn.execute("SELECT fetched_ok, fail_reason FROM sources WHERE url=?",
-                        (zrodlo["url"],)).fetchone()
-    sprawdz("zapis w bazie poprawiony na udany", stan[0] == 1, tuple(stan))
-
-    # Odmowa: przegladarka tez nie omija blokady
-    browser.read_pages = lambda urls: [
-        {"url": u, "text": (list(config.REFUSAL_PHRASES)[0] + " ") * 80,
-         "title": "", "error": None} for u in urls]
-    wynik = stages._dobierz_przegladarka(
-        conn, 1, [{"url": "https://blok.example/x", "host": "blok.example"}], [])
-    sprawdz("host, ktory odmawia automatowi, NADAL odmawia", wynik == [], wynik)
-
-    # Pusto i w przegladarce
-    browser.read_pages = lambda urls: [
-        {"url": u, "text": "", "title": "", "error": None} for u in urls]
-    sprawdz("pusto takze w przegladarce -> nie udajemy sukcesu",
-            stages._dobierz_przegladarka(
-                conn, 1, [{"url": "https://p.example/x", "host": "p.example"}], []) == [])
+    browser.capabilities.require = lambda *_args, **_kwargs: None
+    try:
+        browser.read_pages(["https://example.com/a"])
+        odmowa = False
+    except RuntimeError:
+        odmowa = True
+    sprawdz("stare wywołanie kończy się odmową", odmowa)
 finally:
-    browser.read_pages = oryg
+    browser.capabilities.require = oryg
 
 print()
-print("=== 3. CO TO ZMIENIA NA DANYCH Z PRAWDZIWEGO PRZEBIEGU ===")
-# proba 1: 6 znalezionych, 3 pobrane, 2 pierwotne; dwa padly na "0 znakow"
-print("    bylo:  6 znalezionych -> 3 pobrane (2 x pusto, 1 x 404)")
-print("    gdyby przegladarka odzyskala te dwa: 5 z 6")
-sprawdz("prog zrodel pierwotnych to %s" % config.MIN_PRIMARY_SOURCES,
-        config.MIN_PRIMARY_SOURCES >= 2)
-sprawdz("dwa odzyskane zrodla to roznica miedzy 2 a 4 dokumentami", True)
+print("=== 3. LIMITY I DNS SĄ TWARDE ===")
+sprawdz("JSON ma osobny limit",
+        config.FETCH_MAX_JSON_BYTES < config.FETCH_MAX_HTML_BYTES)
+sprawdz("PDF ma osobny większy limit",
+        config.FETCH_MAX_PDF_BYTES > config.FETCH_MAX_HTML_BYTES)
+sprawdz("tekst po parserze też ma limit", config.FETCH_MAX_EXTRACTED_CHARS > 0)
+pdf_src = inspect.getsource(stages._tekst_z_pdf)
+sprawdz("parser PDF ogranicza rozpakowany strumień",
+        "FETCH_MAX_PDF_DECOMPRESSED_STREAM_BYTES" in pdf_src)
+safe_src = pathlib.Path(safe_fetch.__file__).read_text(encoding="utf-8")
+sprawdz("transport wyłącza proxy środowiskowe", "trust_env=False" in safe_src)
+sprawdz("połączenie używa PinnedDNSBackend", "network_backend=PinnedDNSBackend" in safe_src)
 
 print()
 print("=== WYNIK: %s zdanych, %s oblanych ===" % (zdane, oblane))

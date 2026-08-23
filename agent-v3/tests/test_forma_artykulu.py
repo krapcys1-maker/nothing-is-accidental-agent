@@ -109,6 +109,7 @@ try:
         style_examples="X", style_positive="Y", style_negative="Z",
         ruch_koncowy_nazwa=ruch_nazwa, ruch_koncowy=ruch_opis,
         ile_paraleli=opis_paraleli, card_json="{}",
+        editorial_memory_json="{}",
     )
     sprawdz("pisarz.md renderuje sie bez wyjatku", True)
     sprawdz("wylosowany ruch trafia do tekstu promptu", ruch_opis[:50] in wynik)

@@ -33,4 +33,4 @@ a reflex. Put each necessary limitation where the claim arises.
 
 Return only valid JSON with exactly this shape:
 
-{{"title": "<headline>", "subtitle": "<one line>", "body": "<revised plain text>", "numbers_used": ["<each figure used>"], "limits_paragraph_present": true|false, "changes": ["<short description of each material edit>"]}}
+{{"title": "<headline>", "subtitle": "<one line>", "body": "<revised plain text>", "limits_paragraph_present": true|false, "changes": ["<short description of each material edit>"]}}

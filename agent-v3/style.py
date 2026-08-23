@@ -41,9 +41,25 @@ def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def canonical_bytes(raw: bytes) -> bytes:
+    """Kanoniczne bajty korpusu niezależne od checkoutu LF/CRLF.
+
+    Git na Windows może materializować identyczny tekst z CRLF. Pin dotyczy
+    treści, nie ustawienia ``core.autocrlf`` konkretnej maszyny, dlatego tylko
+    zakończenia linii normalizujemy przed hashem. Żadna inna różnica bajtowa
+    nie jest tolerowana.
+    """
+    return raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
+def corpus_sha256(path: Path | None = None) -> str:
+    target = path or config.STYLE_CORPUS
+    return hashlib.sha256(canonical_bytes(target.read_bytes())).hexdigest()
+
+
 def split_paragraphs(raw: bytes) -> tuple[str, ...]:
     """Deterministyczny podział na akapity; styl końca linii nie zmienia numeracji."""
-    normalized = raw.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    normalized = canonical_bytes(raw).decode("utf-8")
     blocks = [block.strip() for block in normalized.split("\n\n")]
     return tuple(block for block in blocks if block)
 
@@ -54,7 +70,7 @@ def load_examples() -> list[dict[str, str]]:
     if not path.exists():
         raise StyleError(f"brak korpusu stylu: {path}")
     raw = path.read_bytes()
-    digest = hashlib.sha256(raw).hexdigest()
+    digest = hashlib.sha256(canonical_bytes(raw)).hexdigest()
     if digest != config.STYLE_CORPUS_SHA256:
         raise StyleError(
             "korpus stylu nie zgadza się z przypiętym hashem — odmawiam uczenia "

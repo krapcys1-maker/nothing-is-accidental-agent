@@ -1,0 +1,232 @@
+{
+  "experiment": "E-007",
+  "date": "2026-08-21",
+  "fixture_sha256": "f09c82c4de02825f5b1b057886e1d9a9f91a231d5c308f2d5944f03d7e98ddb5",
+  "note": "Parsed equivalents of the exact JSON response bodies plus transport and token telemetry. No secrets, production data or Substack content.",
+  "deepseek": {
+    "known_cost_usd": 0.0189827,
+    "unknown_cost_calls": 0,
+    "billing_reconciliation": {
+      "status": "RECONCILED_AGGREGATE_HOURLY",
+      "hour": "2026-08-21T13:00:00+03:00/2026-08-21T14:00:00+03:00",
+      "flash": {"requests": 1, "tokens_in": 692, "tokens_out": 337, "cost_usd": 0.00037466},
+      "pro": {"requests": 2, "tokens_in": 7830, "tokens_out": 6788, "cost_usd": 0.01860804},
+      "evidence": "E-007_rekonsyliacja_dostawcow/deepseek-amount-2026-08-21.csv and deepseek-cost-2026-08-21.csv",
+      "limitation": "The provider export is hourly and has no request IDs; synthesis values are the exact arithmetic residual after subtracting the locally recorded review call."
+    },
+    "calls": [
+      {
+        "purpose": "classify",
+        "model": "deepseek-v4-flash",
+        "tokens_in": 692,
+        "tokens_out": 337,
+        "recorded_cost_usd": 0.000375,
+        "billed_cost_usd": 0.00037466,
+        "response": {
+          "class": "PRIMARY",
+          "relevance": 1.0,
+          "excerpts": [
+            "The Harbor Lighting Ordinance took effect on January 1, 2025.",
+            "Section 4 requires municipal walkways to use fixtures rated at no more than 20 watts.",
+            "The rule applies only to fixtures installed after the effective date.",
+            "A city pilot covered 240 fixtures across six parks.",
+            "The audit recorded an 18% reduction in electricity use during its first 6 months.",
+            "The audit did not measure pedestrian safety or maintenance costs.",
+            "Existing fixtures may remain until replacement.",
+            "The city council adopted the rule after a public hearing."
+          ],
+          "note": "This is an official city record stating the Harbor Lighting Ordinance's requirements and summarizing the pilot audit results."
+        }
+      },
+      {
+        "purpose": "synthesis",
+        "model": "deepseek-v4-pro",
+        "tokens_in": 3038,
+        "tokens_out": 3307,
+        "recorded_cost_usd": 0.0,
+        "billed_cost_usd": 0.00855294,
+        "billing_status": "RECONCILED_FROM_HOURLY_RESIDUAL",
+        "client_response_status": "INCOMPLETE_UNUSABLE",
+        "error": "RemoteProtocolError: peer closed connection without sending complete message body (incomplete chunked read)"
+      },
+      {
+        "purpose": "review",
+        "model": "deepseek-v4-pro",
+        "tokens_in": 4792,
+        "tokens_out": 3481,
+        "recorded_cost_usd": 0.010055,
+        "billed_cost_usd": 0.0100551,
+        "response": {
+          "sentences": [
+            {
+              "sentence_id": "sent_v1_d7166b8c3ea7903d090a3394",
+              "class": "FACT",
+              "support": "SUPPORTED",
+              "claim_ids": ["claim_v1_5a01373a9dd161db8559447a"],
+              "why": ""
+            },
+            {
+              "sentence_id": "sent_v1_267cc39458879414c0798c83",
+              "class": "MIXED",
+              "support": "SUPPORTED",
+              "claim_ids": ["claim_v1_b91faa2b068d3482b2414be6"],
+              "why": ""
+            },
+            {
+              "sentence_id": "sent_v1_eabe4a4648851ab35407ca84",
+              "class": "MIXED",
+              "support": "UNSUPPORTED",
+              "claim_ids": [],
+              "why": "The card does not establish that the pilot prevented 12 accidents; the audit did not measure pedestrian safety."
+            },
+            {
+              "sentence_id": "sent_v1_ee162b81a5e373160cdb4139",
+              "class": "INFERENCE",
+              "support": "NOT_APPLICABLE",
+              "claim_ids": [],
+              "why": ""
+            }
+          ],
+          "summary": "One mixed unit is unsupported because it asserts a 12-accident reduction the card never establishes; all other units are supported or marked as inference."
+        }
+      }
+    ]
+  },
+  "anthropic": {
+    "model": "claude-sonnet-5",
+    "tokens_in": 17437,
+    "tokens_out": 2173,
+    "cost_recorded_before_N016_usd": 0.084906,
+    "cost_at_official_2026_08_21_tariff_usd": 0.056604,
+    "billing_status": "TOKENS_CONFIRMED_COST_ESTIMATED",
+    "billing_evidence": "E-007_rekonsyliacja_dostawcow/anthropic-logs-2026-08-21.png",
+    "calls": [
+      {
+        "purpose": "classify",
+        "provider_request_id": "req_011CeFkmrdBaUpMAMbo3zLbS",
+        "tokens_in": 919,
+        "tokens_out": 211,
+        "response": {
+          "class": "PRIMARY",
+          "relevance": 1.0,
+          "excerpts": [
+            "Section 4 requires municipal walkways to use fixtures rated at no more than 20 watts.",
+            "The rule applies only to fixtures installed after the effective date.",
+            "A city pilot covered 240 fixtures across six parks.",
+            "The audit recorded an 18% reduction in electricity use during its first 6 months.",
+            "The audit did not measure pedestrian safety or maintenance costs.",
+            "Existing fixtures may remain until replacement."
+          ],
+          "note": "This is a primary municipal record describing the ordinance's requirements and the results of its pilot audit."
+        }
+      },
+      {
+        "purpose": "synthesis",
+        "provider_request_id": "req_011CeFkn5nTC3mBwWPi1Yegg",
+        "tokens_in": 3958,
+        "tokens_out": 1393,
+        "response": {
+          "working_thesis": "The Harbor Lighting Ordinance set a wattage cap for new municipal walkway fixtures, and a limited pilot showed energy savings without addressing safety or cost concerns.",
+          "main_mechanism": "The ordinance works by grandfathering existing fixtures while capping wattage only on new installations, so compliance builds gradually through natural replacement rather than mandatory retrofit. The pilot program tested this approach on a subset of fixtures and measured only electricity use, leaving other consequences of the policy unverified.",
+          "confirmed_claims": [
+            {
+              "claim": "The Harbor Lighting Ordinance took effect on January 1, 2025.",
+              "fragment_ids": ["frag_v1_3ef073379acd660a6e0d39a7"]
+            },
+            {
+              "claim": "Section 4 requires municipal walkway fixtures installed after the effective date to be rated at no more than 20 watts.",
+              "fragment_ids": ["frag_v1_b992da8372e414d57e97e37e", "frag_v1_2405526fee34376f68e60a8a"]
+            },
+            {
+              "claim": "Existing fixtures may remain in place until they are replaced.",
+              "fragment_ids": ["frag_v1_47bb083a99f1ffd8798c1022"]
+            },
+            {
+              "claim": "A city pilot covered 240 fixtures across six parks.",
+              "fragment_ids": ["frag_v1_6ee04d77551c72fbb9beb2ff"]
+            },
+            {
+              "claim": "The pilot audit recorded an 18% reduction in electricity use during its first six months.",
+              "fragment_ids": ["frag_v1_24949d4032d420d1d5def60a"]
+            },
+            {
+              "claim": "The audit did not measure pedestrian safety or maintenance costs.",
+              "fragment_ids": ["frag_v1_39956003e3f3394e5258d148"]
+            },
+            {
+              "claim": "The city council adopted the rule after a public hearing.",
+              "fragment_ids": ["frag_v1_b877fc4b3859d71470ff88a4"]
+            }
+          ],
+          "citable_numbers": [
+            {"number_id": "num_v1_3c27b52e6b6f407173015e9d", "means": "Year the ordinance took effect", "claim_index": 0},
+            {"number_id": "num_v1_7191463037bd309550f50087", "means": "Maximum wattage allowed for new fixtures", "claim_index": 1},
+            {"number_id": "num_v1_8a001d9da22da46753136ed8", "means": "Number of fixtures covered by the pilot", "claim_index": 3},
+            {"number_id": "num_v1_28121b5b7c9c0949a77eaae9", "means": "Percentage reduction in electricity use recorded", "claim_index": 4},
+            {"number_id": "num_v1_7edd1abf00594aff87a8d53a", "means": "Number of months covered by the initial audit period", "claim_index": 4}
+          ],
+          "uncertain_claims": [
+            "Whether the 18% electricity reduction will hold beyond the first six months is not established.",
+            "Whether the pilot's results generalize to all municipal walkways citywide is not established.",
+            "Whether the lower wattage fixtures affect pedestrian safety is not established, since the audit excluded that measure."
+          ],
+          "contradictions": [
+            "The ordinance is framed as a lighting reform, but because it only applies to new installations and lets existing fixtures remain indefinitely, its actual near-term effect on citywide energy use is limited despite the pilot's positive results."
+          ],
+          "not_established": [
+            "How long full compliance will take given the replacement-only rule.",
+            "What the pilot's findings mean for maintenance costs or safety outcomes.",
+            "Whether the 18% savings figure is representative of all six parks or driven by a subset."
+          ],
+          "parallel_mechanisms": [
+            {
+              "domain": "Building codes",
+              "how_it_matches": "New energy or safety codes often apply only to new construction, grandfathering existing structures until renovation, so compliance is gradual rather than immediate."
+            },
+            {
+              "domain": "Vehicle emissions standards",
+              "how_it_matches": "Stricter emissions rules typically apply only to newly manufactured vehicles, leaving older ones on the road until natural turnover."
+            },
+            {
+              "domain": "Software security patches",
+              "how_it_matches": "New security requirements often apply only to new deployments, leaving legacy systems running unpatched until they are replaced."
+            }
+          ]
+        }
+      },
+      {
+        "purpose": "review",
+        "provider_request_id": "req_011CeFkoYd1uQg4V6BknD1vc",
+        "tokens_in": 6428,
+        "tokens_out": 393,
+        "response": {
+          "sentences": [
+            {"sentence_id": "sent_v1_d7166b8c3ea7903d090a3394", "class": "FACT", "support": "SUPPORTED", "claim_ids": ["claim_v1_5a01373a9dd161db8559447a"], "why": ""},
+            {"sentence_id": "sent_v1_267cc39458879414c0798c83", "class": "MIXED", "support": "SUPPORTED", "claim_ids": ["claim_v1_b91faa2b068d3482b2414be6"], "why": ""},
+            {"sentence_id": "sent_v1_eabe4a4648851ab35407ca84", "class": "MIXED", "support": "UNSUPPORTED", "claim_ids": [], "why": "The card does not establish that the pilot prevented 12 accidents; no accident data exists."},
+            {"sentence_id": "sent_v1_ee162b81a5e373160cdb4139", "class": "INFERENCE", "support": "NOT_APPLICABLE", "claim_ids": [], "why": ""}
+          ],
+          "summary": "One sentence asserts an unsupported accident-prevention figure not found in the evidence card."
+        }
+      },
+      {
+        "purpose": "review-analogy",
+        "provider_request_id": "req_011CeFkvgzFGHq4TubbyYfFCS",
+        "tokens_in": 6132,
+        "tokens_out": 176,
+        "response": {
+          "sentences": [
+            {
+              "sentence_id": "sent_v1_e800bfe1fcf315c1bfd88085",
+              "class": "MIXED",
+              "support": "UNSUPPORTED",
+              "claim_ids": [],
+              "why": "The claim that vehicle emissions rules usually spare older cars is a factual premise about actual practice that the card does not establish; the card only covers a lighting ordinance."
+            }
+          ],
+          "summary": "The unit asserts a factual premise about vehicle emissions rules' typical practice that has no support in the evidence card."
+        }
+      }
+    ]
+  }
+}

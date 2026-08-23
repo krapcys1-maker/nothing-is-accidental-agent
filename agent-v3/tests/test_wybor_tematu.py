@@ -27,6 +27,12 @@ sys.path.insert(0, "agent-v3")
 import config   # noqa: E402
 import stages   # noqa: E402
 
+HISTORYCZNE_PRECEDENSY_NA_ARTYKUL = 2
+HISTORYCZNE_ZASIEGI_ARTYKULOWE = ("AN_INDUSTRY", "A_COUNTRY")
+# Tylko replay starej architektury. Aktywny scout@3 nie wyprowadza nasycenia z
+# `obvious_coverage`; zachowanie tej stalej w config byloby martwym API.
+HISTORYCZNE_NASYCENIE_OD_ILU = 2
+
 zdane = oblane = 0
 
 
@@ -53,7 +59,9 @@ def przetworz(topics, ranking=None):
         t["nosny"] = bool(t["ma_przekonanie"] or t["ma_stawke"])
         juz = t.get("already_written")
         t["ile_juz_napisano"] = len(juz) if isinstance(juz, list) else 0
-        t["nasycony"] = t["ile_juz_napisano"] >= config.NASYCENIE_OD_ILU
+        t["nasycony"] = (
+            t["ile_juz_napisano"] >= HISTORYCZNE_NASYCENIE_OD_ILU
+        )
         w = t.get("threads")
         t["ile_watkow"] = len(w) if isinstance(w, list) else 0
         t["pozycja"] = 0
@@ -61,8 +69,9 @@ def przetworz(topics, ranking=None):
         t["precedensy"] = [q for q in prec if stages._precedens_ok(q)]
         t["ile_precedensow"] = len(t["precedensy"])
         t["zasieg"] = str(t.get("scale") or "").strip().upper()
-        t["duzy_zasieg"] = t["zasieg"] in config.ZASIEGI_ARTYKULOWE
-        t["na_artykul"] = (t["ile_precedensow"] >= config.PRECEDENSOW_NA_ARTYKUL
+        t["duzy_zasieg"] = t["zasieg"] in HISTORYCZNE_ZASIEGI_ARTYKULOWE
+        t["na_artykul"] = (
+            t["ile_precedensow"] >= HISTORYCZNE_PRECEDENSY_NA_ARTYKUL
                            and t["duzy_zasieg"])
     r = ranking or {}
     for i in r.get("least_written_about", []):
@@ -116,7 +125,9 @@ SWIEZY2 = {
 
 print("=== 1. NASYCENIE: PAMIEC MODELU UZYTA PRZECIW NIEMU ===")
 t = przetworz([dict(CLICHE), dict(SWIEZY)])
-sprawdz("próg nasycenia to 2", config.NASYCENIE_OD_ILU == 2, config.NASYCENIE_OD_ILU)
+sprawdz("historyczny próg nasycenia to 2",
+        HISTORYCZNE_NASYCENIE_OD_ILU == 2,
+        HISTORYCZNE_NASYCENIE_OD_ILU)
 c = next(x for x in t if x["title"].startswith("The Wipe"))
 s = next(x for x in t if x["title"].startswith("The Broken"))
 sprawdz("cliché rozpoznane jako nasycone", c["nasycony"] is True, c["ile_juz_napisano"])
@@ -211,8 +222,9 @@ sprawdz("konklawe jest artykulowe", k["na_artykul"] is True)
 sprawdz("zepsuta maszyna NIE jest artykulowa", m["na_artykul"] is False)
 sprawdz("i idzie za konklawe", t2[0]["title"].startswith("Kiedy"),
         [x["title"][:24] for x in t2])
-sprawdz("prog to dwie udokumentowane awarie",
-        config.PRECEDENSOW_NA_ARTYKUL == 2, config.PRECEDENSOW_NA_ARTYKUL)
+sprawdz("historyczny kontrprzykład używał dwóch udokumentowanych awarii",
+        HISTORYCZNE_PRECEDENSY_NA_ARTYKUL == 2,
+        HISTORYCZNE_PRECEDENSY_NA_ARTYKUL)
 
 # KONTRDOWOD 1: sama historia bez zasiegu to za malo.
 maly = przetworz([dict(KONKLAWE, scale="ONE_PERSON")])[0]
@@ -319,43 +331,43 @@ plaski = " ".join(p.split())
 for martwa in ("score_breakdown", "visual_potential", "discussion_potential",
                "non_obvious", "universality"):
     sprawdz("prompt nie prosi już o %s" % martwa, martwa not in plaski)
-sprawdz("i mówi wprost, czemu je usunięto",
-        "Nothing ever read them" in plaski)
+sprawdz("zamiast martwych ocen wymaga obserwowalnej anatomii pola",
+        all(x in plaski for x in (
+            "dimensions", "tensions", "open_branches", "article_routes"
+        )))
 zrodlo = open("agent-v3/stages.py", encoding="utf-8").read()
 sprawdz("kod nadal ich nie czyta (bo ich nie ma)",
         "score_breakdown" not in zrodlo)
 
 print()
-print("=== 6. SKAUT WIE, ZE PIERWSZY POMYSL JEST NAJGORSZY ===")
-sprawdz("prompt nazywa gatunek po imieniu", "It is a **genre**" in plaski)
+print("=== 6. SKAUT WYMYŚLA, ATAKUJE I PORÓWNUJE WŁASNE POMYSŁY ===")
 sprawdz("wymienia kanon, ktory ma omijać",
         all(x in plaski for x in ("sprinklers", "flushable", "antibacterial")))
-sprawdz("tłumaczy mechanizm dostępności",
-        "Availability is the opposite of the signal" in plaski)
-sprawdz("ostrzega przed własną płynnością",
-        "if the\ntopic assembled itself instantly" in p
-        or "topic assembled itself instantly" in plaski)
-sprawdz("wymaga pola already_written", "already_written" in plaski)
-sprawdz("wymaga pola threads", "`threads`" in plaski)
-sprawdz("zakazuje fałszowania w OBIE strony",
-        "Do not fake this in either direction" in plaski)
+sprawdz("ostrzega przed pierwszym płynnym pomysłem",
+        "The first fluent idea is still a warning" in plaski)
+sprawdz("zamawia większą prywatną pulę",
+        "privately create a much larger pool" in plaski)
+sprawdz("używa wielu silników wymyślania",
+        "Use several engines" in plaski)
+sprawdz("odrzuca odpowiedź mieszczącą się w kilku zdaniach",
+        "useful answer fits in a few sentences" in plaski)
+sprawdz("pokazuje odrzucone zalążki", "discarded_seeds" in plaski)
 sprawdz("prompt zamawia wymuszony wybor",
-        "rank your own list against itself" in plaski)
-sprawdz("i nazywa wprost obserwowana degeneracje",
-        "every answer came back with exactly three items" in plaski)
-sprawdz("mowi, ze porownania nie da sie wyrownac",
-        "A forced comparison cannot" in plaski)
-for k in ("most_written_about", "least_written_about", "richest", "thinnest"):
+        "Rank the final topics against each other" in plaski)
+sprawdz("nie ma magicznego licznika artykułów",
+        "There is deliberately no magic count" in plaski)
+for k in ("largest_article_universe", "most_compelling",
+          "most_original_angle", "most_likely_to_collapse"):
     sprawdz("ranking ma %s" % k, k in plaski)
 
 print()
-print("=== 7. KOTWICA TO JUZ NIE TYLKO PRZEDMIOT ===")
-sprawdz("dopuszcza procedurę, przez którą przeszedł czytelnik",
-        "a procedure the reader has been put through" in plaski)
-sprawdz("dopuszcza moment, który wszyscy widzieli",
-        "a moment everybody watched happen" in plaski)
-sprawdz("i mówi, że przedmiot jest najbardziej wyczerpany",
-        "the most exhausted" in plaski)
+print("=== 7. TEMAT NIE MUSI BYĆ SYSTEMEM ANI PRZEDMIOTEM ===")
+sprawdz("nie wymusza systemu, procedury ani przedmiotu",
+        "does not have to be a system, a procedure or an ordinary object" in plaski)
+sprawdz("otwiera różne domeny wymyślania",
+        all(x in plaski for x in ("economics", "science", "history", "culture")))
+sprawdz("lokalne doświadczenie też może być dużym tematem",
+        "Large does not always mean global" in plaski)
 
 print()
 print("=== 8. GLEBOKOSC LICZY SIE TEZ W PIONIE ===")

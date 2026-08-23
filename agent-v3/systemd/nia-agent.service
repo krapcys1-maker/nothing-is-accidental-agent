@@ -1,30 +1,10 @@
 [Unit]
-Description=Nothing Is Accidental — agent
-After=network-online.target
-Wants=network-online.target
+Description=Agent V3 prototype — deployment deliberately disabled
+RefuseManualStart=yes
 
 [Service]
 Type=oneshot
-User=ubuntu
-WorkingDirectory=/home/ubuntu/nothing-is-accidental-agent
-Environment=AGENT_V2_SERVER=1
-Environment=PYTHONUNBUFFERED=1
-
-# Sufit pamieci: Chromium potrafi rosnac przy dlugich przebiegach, a OOM zabija
-# agenta bez sladu w logu. Przy 12 GB na maszynie 3 GB starcza z zapasem,
-# a przekroczenie konczy sie czytelnym bledem zamiast cichej smierci.
-MemoryMax=3G
-ExecStart=/home/ubuntu/nothing-is-accidental-agent/.venv/bin/python agent-v2/run.py --dzien --wyslij
-
-# Przebieg trwa okolo godziny: same przerwy miedzy dzialaniami to ~42 minuty,
-# bo agent czeka po ludzku (10-25 min po notce). Sufit 2,5 godziny, zeby
-# zawieszony proces nie blokowal zamka w nieskonczonosc, ale zeby normalny
-# przebieg nigdy nie zostal uciety w polowie.
-TimeoutStartSec=9000
-
-# BEZ Restart=. To jest zadanie jednorazowe uruchamiane z zegara, nie usluga.
-# Automatyczny restart po bledzie oznaczalby ponawianie platnych wywolan bez
-# nadzoru — a to najprostsza droga do rachunku, ktorego nikt nie zamawial.
+ExecStart=/usr/bin/false
 
 [Install]
 WantedBy=multi-user.target

@@ -121,7 +121,8 @@ try:
         min_words=900, max_words=1250, style_examples="x", style_positive="y",
         style_negative="z", ile_paraleli="one",
         ruch_koncowy_nazwa="KTO_NA_TYM_STOI",
-        ruch_koncowy="nazwij beneficjenta i tego, kto placi")
+        ruch_koncowy="nazwij beneficjenta i tego, kto placi",
+        editorial_memory_json="{}")
     sprawdz("renderuje się bez wyjątku", True)
     sprawdz("niesie nowe zakazy", "voice of a footnote" in gotowy)
     sprawdz("nie zostało niepodstawione pole",

@@ -1,0 +1,1154 @@
+{
+  "identity": {
+    "version": 3,
+    "stage": "feasibility",
+    "input": {
+      "topics": [
+        {
+          "title": "Suspicion as Default",
+          "central_question": "What changes when institutions design their systems to expect fraud, error, or abuse first, and make the truthful majority prove their innocence?",
+          "mode": "HIDDEN_CAUSE",
+          "why_fascinating": "The most consequential choice in a system is not its rules but its prior: whether it begins from trust or suspicion. That prior quietly redistributes time, dignity, money and power.",
+          "reader_entry_point": "A health insurer refuses a standard scan until the patient's doctor spends an afternoon on hold filling out prior authorization.",
+          "obvious_coverage": [
+            "algorithmic bias",
+            "welfare fraud stigma",
+            "identity verification and KYC",
+            "predictive policing"
+          ],
+          "underexplored_connections": [
+            "False-positive and false-negative costs are asymmetric: institutions bear the visible cost of letting a bad claim through, while individuals bear the hidden cost of being wrongly denied, so systems are biased toward denial even without animus.",
+            "Default suspicion creates a market for 'clearance' services, such as lawyers, fixers and premium support lines, that turn bureaucratic proof into a consumer product.",
+            "Appeals are not a neutral safety net; they are a second system whose difficulty is itself a design choice, filtering claims before an independent judgment.",
+            "The prior of suspicion becomes embedded in data: training models on past decisions that already assumed fraud reproduces that suspicion as a factual baseline."
+          ],
+          "dimensions": [
+            {
+              "name": "institutional risk asymmetry",
+              "question_opened": "Why do false negatives cost institutions differently from false positives, and how does that shape thresholds?",
+              "why_independent": "This is an economic and actuarial question distinct from social experience or technical design."
+            },
+            {
+              "name": "administrative burden",
+              "question_opened": "What does it actually take in time, documents and knowledge to overcome a default denial?",
+              "why_independent": "Burden must be measured through diaries, complaint records and field studies, not inferred from policy."
+            },
+            {
+              "name": "technology and risk models",
+              "question_opened": "How do fraud scores and automated flags encode a starting assumption of suspicion?",
+              "why_independent": "Model training data and performance metrics are technical evidence separate from public policy debates."
+            },
+            {
+              "name": "legal procedure",
+              "question_opened": "Where did the presumption of innocence or eligibility get reversed in bureaucratic law?",
+              "why_independent": "Legal history and doctrine reveal paths that economic or technical analysis cannot."
+            },
+            {
+              "name": "social trust",
+              "question_opened": "What does living under suspicion do to people's willingness to seek help, comply or trust institutions?",
+              "why_independent": "This requires interviews, surveys and ethnographic evidence, not just system output."
+            }
+          ],
+          "tensions": [
+            {
+              "force_a": "the legitimate need to control fraud, waste and abuse",
+              "force_b": "the moral and practical need to avoid burdening truthful claimants",
+              "why_unresolved": "There is no neutral threshold; every choice imposes one party's costs on the other, and those parties have very different political power."
+            },
+            {
+              "force_a": "automation promising faster, cheaper decisions",
+              "force_b": "the slow human process of proving a false positive wrong",
+              "why_unresolved": "The automated denial is instantaneous, but the correction is labor-intensive, so delay becomes a hidden penalty."
+            },
+            {
+              "force_a": "transparency and due process",
+              "force_b": "the opacity needed to prevent gaming of fraud controls",
+              "why_unresolved": "Full explanation of why a claim was denied would help truthful people and fraudsters alike, so institutions hide the logic."
+            }
+          ],
+          "open_branches": [
+            {
+              "possibility": "A rights-based backlash forces institutions to publish false-positive rates and compensate wrongly denied people.",
+              "logic": "Once error rates become visible, they may be litigated like product defects; political pressure shifts from fraud stories to wrongful denial stories.",
+              "what_would_change_our_mind": "Evidence that published error rates do not change public policy or consumer behavior, or that institutions find new ways to hide them."
+            },
+            {
+              "possibility": "Default suspicion bifurcates into premium trust for those who can pay and bureaucratic scrutiny for the rest.",
+              "logic": "If clearance becomes valuable, firms will sell faster identity or eligibility verification; those without money lose time and access.",
+              "what_would_change_our_mind": "Regulation prohibiting tiered verification or consumer resistance reversing such products."
+            },
+            {
+              "possibility": "Systems move toward a 'verify once' model that reduces repeated suspicion but centralizes power in a few identity or risk providers.",
+              "logic": "The cost and frustration of repeated proof creates demand for a single authoritative clearance; convenience overcomes privacy fears.",
+              "what_would_change_our_mind": "Privacy scandals or identity failures that make centralization politically unacceptable."
+            }
+          ],
+          "article_routes": [
+            {
+              "question": "How did the chargeback system turn merchants into the default suspect in card disputes?",
+              "distinct_engine": "Payment networks shifted the burden of proof onto merchants because cardholders control the relationship; this created a whole industry of dispute management.",
+              "evidence_needed": "Card network operating rules, chargeback records, merchant surveys, dispute resolution case files, payment processor data."
+            },
+            {
+              "question": "What does prior authorization in health care actually cost in denied days and human labor?",
+              "distinct_engine": "A clinical denial is not just a financial event; it changes treatment timing and doctor decision-making, making medicine partly administrative.",
+              "evidence_needed": "Claims data, denial appeals, clinical outcomes, physician workflow studies, payer policy manuals."
+            },
+            {
+              "question": "Why do tax authorities use risk scores to select some returns for audit while making random or suspicious selection invisible?",
+              "distinct_engine": "The state's need to demonstrate revenue enforcement shapes audit selection more than fairness; suspicion becomes a revenue tool.",
+              "evidence_needed": "Tax administration reports, audit selection code, taxpayer case records, legal challenges, comparative tax policy."
+            },
+            {
+              "question": "How did hotel check-in and airport security turn ordinary identity into a recurring suspicion ritual?",
+              "distinct_engine": "The trace of risk-based security in everyday hospitality reveals how post-9/11 laws became commercialized and normalized.",
+              "evidence_needed": "Legislative history, TSA directives, hotel property management system requirements, identity verification contracts, traveler interviews."
+            }
+          ],
+          "note_test": {
+            "can_be_exhausted_in_three_sentences": false,
+            "why": "The topic includes legal history, risk modeling, administrative burden, social trust and multiple sectors; one fact about fraud detection cannot exhaust it."
+          },
+          "fatal_weakness": "It may become a generic 'society distrusts the poor' argument; if every branch ends in the same conclusion about inequality, the article universe collapses.",
+          "question": "What changes when institutions design their systems to expect fraud, error, or abuse first, and make the truthful majority prove their innocence?",
+          "kind": "HIDDEN_CAUSE",
+          "already_written": [
+            "algorithmic bias",
+            "welfare fraud stigma",
+            "identity verification and KYC",
+            "predictive policing"
+          ],
+          "threads": [
+            "How did the chargeback system turn merchants into the default suspect in card disputes?",
+            "What does prior authorization in health care actually cost in denied days and human labor?",
+            "Why do tax authorities use risk scores to select some returns for audit while making random or suspicious selection invisible?",
+            "How did hotel check-in and airport security turn ordinary identity into a recurring suspicion ritual?"
+          ],
+          "ile_juz_napisano": 4,
+          "nasycony": false,
+          "ile_watkow": 4,
+          "ile_osi": 5,
+          "ile_napiec": 3,
+          "ile_galezi": 3,
+          "ile_mechanizmow": 4,
+          "ile_rodzajow_dowodu": 4,
+          "ile_nieoczywistych_polaczen": 4,
+          "ma_stawke": true,
+          "ma_przekonanie": false,
+          "nosny": true,
+          "pozycja": 13,
+          "na_artykul": true,
+          "pole_redakcyjne": true,
+          "ranking_breakdown": {
+            "largest_article_universe": {
+              "rank": 1,
+              "delta": 9
+            },
+            "most_compelling": {
+              "rank": 2,
+              "delta": 4
+            }
+          }
+        },
+        {
+          "title": "The Uninsurable World",
+          "central_question": "When private insurers retreat from risks they no longer want to price, what replaces their pricing, capital and social function?",
+          "mode": "TRANSITION",
+          "why_fascinating": "Insurance is a hidden coordination mechanism that tells people where to live, what to build and how to plan. Its absence changes the world before any disaster arrives.",
+          "reader_entry_point": "A homeowner receives a nonrenewal notice not because their house burned, but because risk models now say it might.",
+          "obvious_coverage": [
+            "climate insurance crisis",
+            "Florida or California insurer exits",
+            "reinsurance hardening",
+            "government flood insurance"
+          ],
+          "underexplored_connections": [
+            "Insurance withdrawal acts as undeclared planning: it prices some places out of mortgages and maintenance without a political decision to retreat or adapt.",
+            "When private insurers leave, the state becomes an insurer of last resort, but that turns uncertain risk into contingent public debt and changes political incentives around building codes and land use.",
+            "Uninsurability is not only climate; it also includes landlord insurance in poor neighborhoods, professional liability in high-risk specialties, and product liability for emerging technologies, connecting different social sectors through one mechanism.",
+            "Alternative risk transfer such as parametric products, catastrophe bonds, mutuals and self-insurance creates new winners who can tolerate uncertainty and losers who cannot pay for incomplete cover."
+          ],
+          "dimensions": [
+            {
+              "name": "property and credit markets",
+              "question_opened": "What happens to mortgages, prices and liquidity when insurance is unavailable or unaffordable?",
+              "why_independent": "Real estate and banking data answer this, independent of climate or law."
+            },
+            {
+              "name": "public finance",
+              "question_opened": "How do state-backed insurers and disaster funds shift risk from private premiums to future public budgets?",
+              "why_independent": "Fiscal and actuarial data differ from housing or social experience."
+            },
+            {
+              "name": "building and adaptation",
+              "question_opened": "Does insurance retreat actually change construction practices, or does it just make building uninsurable?",
+              "why_independent": "Engineering and building code evidence is separate from financial market evidence."
+            },
+            {
+              "name": "local knowledge and mutual aid",
+              "question_opened": "What happens when communities create their own risk-sharing arrangements because no formal insurer will cover them?",
+              "why_independent": "Ethnographic and community finance studies capture this, not official market data."
+            },
+            {
+              "name": "legal responsibility",
+              "question_opened": "Who is liable when a property is destroyed after insurance was withdrawn and no public protection existed?",
+              "why_independent": "Courts and administrative law provide distinct answers from markets or climate science."
+            }
+          ],
+          "tensions": [
+            {
+              "force_a": "actuarial fairness requiring prices to reflect rising risk",
+              "force_b": "social fairness requiring broad availability and affordability of coverage",
+              "why_unresolved": "If risk is priced accurately, some people cannot pay; if it is suppressed, the system becomes insolvent or publicly subsidized."
+            },
+            {
+              "force_a": "insurance as a signal that discourages risky building and settlement",
+              "force_b": "insurance as a prerequisite for mortgages and orderly property markets",
+              "why_unresolved": "The same withdrawal that could encourage retreat may also freeze sales, trap owners and destabilize local taxes."
+            },
+            {
+              "force_a": "private capital's need to exit unprofitable risk",
+              "force_b": "the state's legal and political obligation to be the backstop",
+              "why_unresolved": "There is no stable line between private risk and public responsibility, and repeated bailouts can encourage more exposure."
+            }
+          ],
+          "open_branches": [
+            {
+              "possibility": "A two-tier property world emerges: insurable core and uninsurable periphery, with wealth concentrating in the core.",
+              "logic": "Credit, infrastructure investment and maintenance follow insurability, so places that lose coverage lose further investment.",
+              "what_would_change_our_mind": "Evidence that people and capital stay in uninsurable places due to attachment, jobs or public backstops."
+            },
+            {
+              "possibility": "Parametric insurance becomes a mainstream replacement, paying based on triggers rather than actual damage.",
+              "logic": "Parametric products can be cheaper and faster, but they may pay or not pay in ways that decouple from real losses.",
+              "what_would_change_our_mind": "Major parametric failures where policyholders receive nothing despite severe losses or receive payouts without loss, eroding trust."
+            },
+            {
+              "possibility": "The public backstop becomes so large that government insurance programs redefine what risk means politically.",
+              "logic": "Once states carry catastrophic risk, political pressure may force land use changes, stricter codes, or explicit retreat that private markets could not impose.",
+              "what_would_change_our_mind": "Political resistance to land-use rules that prevents any conditions on public insurance."
+            }
+          ],
+          "article_routes": [
+            {
+              "question": "How does a regional insurer decide to stop offering coverage in a multi-county area that has not yet had a disaster?",
+              "distinct_engine": "The decision is driven by reinsurance pricing and model output, revealing how global capital markets reach into local mailboxes.",
+              "evidence_needed": "Insurance rate filings, reinsurance contracts, catastrophe model reports, nonrenewal notices, regulatory hearings."
+            },
+            {
+              "question": "What does an insurer of last resort actually do to its own balance sheet and to policyholders when it grows too fast?",
+              "distinct_engine": "A public insurer is not just a fix; it changes risk management and political exposure, creating a new set of incentives.",
+              "evidence_needed": "State-run insurer financial statements, board minutes, actuarial reports, policyholder complaints, legislative audits."
+            },
+            {
+              "question": "What happens to a mortgage market when lenders can no longer require standard insurance?",
+              "distinct_engine": "Lenders may demand self-insurance, higher down payments, or simply stop lending; credit withdrawal has a different geography than insurance withdrawal.",
+              "evidence_needed": "Mortgage application data, lender underwriting guidelines, property transaction records, bank interviews."
+            },
+            {
+              "question": "Can mutual aid groups or community risk pools cover losses that insurers refuse?",
+              "distinct_engine": "The social structure of trust and reciprocity can mobilize capital, but lacks the scale and legal backing of formal insurance; its strengths and limits differ.",
+              "evidence_needed": "Community group records, disaster recovery case studies, interviews, local economic data."
+            }
+          ],
+          "note_test": {
+            "can_be_exhausted_in_three_sentences": false,
+            "why": "This is not one insurance product but the entire social function of insurance across credit, public finance, construction, law and mutual aid."
+          },
+          "fatal_weakness": "The topic could slip into a narrow climate-insurance news story if it focuses only on Florida or California instead of the general mechanism of insurance retreat.",
+          "question": "When private insurers retreat from risks they no longer want to price, what replaces their pricing, capital and social function?",
+          "kind": "TRANSITION",
+          "already_written": [
+            "climate insurance crisis",
+            "Florida or California insurer exits",
+            "reinsurance hardening",
+            "government flood insurance"
+          ],
+          "threads": [
+            "How does a regional insurer decide to stop offering coverage in a multi-county area that has not yet had a disaster?",
+            "What does an insurer of last resort actually do to its own balance sheet and to policyholders when it grows too fast?",
+            "What happens to a mortgage market when lenders can no longer require standard insurance?",
+            "Can mutual aid groups or community risk pools cover losses that insurers refuse?"
+          ],
+          "ile_juz_napisano": 4,
+          "nasycony": false,
+          "ile_watkow": 4,
+          "ile_osi": 5,
+          "ile_napiec": 3,
+          "ile_galezi": 3,
+          "ile_mechanizmow": 4,
+          "ile_rodzajow_dowodu": 4,
+          "ile_nieoczywistych_polaczen": 4,
+          "ma_stawke": true,
+          "ma_przekonanie": false,
+          "nosny": true,
+          "pozycja": 8,
+          "na_artykul": true,
+          "pole_redakcyjne": true,
+          "ranking_breakdown": {
+            "largest_article_universe": {
+              "rank": 2,
+              "delta": 6
+            },
+            "most_compelling": {
+              "rank": 3,
+              "delta": 2
+            }
+          }
+        },
+        {
+          "title": "The Afterlife of Abandoned Infrastructure",
+          "central_question": "What happens after a mine, dam, cable, factory, or software system is no longer useful to its original owner but remains physically or institutionally present?",
+          "mode": "AFTERLIFE",
+          "why_fascinating": "Retirement is not the end of infrastructure; it is the beginning of a long, often invisible negotiation about who owns decay, memory, pollution, reuse and loss.",
+          "reader_entry_point": "A hiker finds a locked gate and a faded sign warning of an underground mine that no company seems to manage anymore.",
+          "obvious_coverage": [
+            "brownfield redevelopment",
+            "orphaned oil wells",
+            "ruin porn photography",
+            "legacy software maintenance"
+          ],
+          "underexplored_connections": [
+            "Legal abandonment has a half-life: permits, easements, liabilities and ownership records persist long after physical use ends, creating zombie obligations that can be sold, inherited or forgotten.",
+            "Decommissioned infrastructure often becomes a de facto public space or ecological habitat, even when no agency has planned or funded that use, connecting decay to recreation and biodiversity.",
+            "Institutional memory disappears faster than physical structure: the people who know how to safely enter, drain, monitor or demolish an old system retire, leaving hazardous unknown unknowns.",
+            "Abandonment is not always failure; some systems are deliberately allowed to decline because they are politically useful as monuments, bargaining chips, or reserve capacity."
+          ],
+          "dimensions": [
+            {
+              "name": "legal liability and property",
+              "question_opened": "Who holds the obligations of a closed mine or abandoned factory when the original owner is gone?",
+              "why_independent": "This depends on corporate records, permits and case law, not on physical condition."
+            },
+            {
+              "name": "environmental contamination",
+              "question_opened": "What happens to soil, water and wildlife when a toxic site is left instead of cleaned up?",
+              "why_independent": "Ecological and chemical evidence is separate from legal ownership."
+            },
+            {
+              "name": "institutional memory",
+              "question_opened": "How do organizations lose the knowledge needed to safely manage decommissioned systems?",
+              "why_independent": "This is a question of records, training and employment, not of physical decay."
+            },
+            {
+              "name": "reuse and informal occupation",
+              "question_opened": "Who occupies, salvages or repurposes abandoned infrastructure, and on what terms?",
+              "why_independent": "Ethnographic and urban studies evidence differs from legal or environmental data."
+            },
+            {
+              "name": "financial assurance",
+              "question_opened": "How do bonds, escrow accounts and closure funds fail to cover the true cost of abandonment?",
+              "why_independent": "Accounting and regulatory data answer this separately from physical or social outcomes."
+            }
+          ],
+          "tensions": [
+            {
+              "force_a": "the past owner's desire to end liability and remove the asset from its books",
+              "force_b": "the public's long-term exposure to contamination, collapse or data loss",
+              "why_unresolved": "Closure rules often allow companies to walk away with financial assumptions that later prove inadequate."
+            },
+            {
+              "force_a": "preservation of industrial heritage and local memory",
+              "force_b": "remediation and redevelopment that may erase the physical past",
+              "why_unresolved": "The same site can be a toxic hazard and a meaningful landmark, and communities disagree about what should survive."
+            },
+            {
+              "force_a": "the formal legal record of decommissioning",
+              "force_b": "the informal reality of ongoing use, trespass and decay",
+              "why_unresolved": "Paper closure does not match physical or social persistence; neither system fully governs the site."
+            }
+          ],
+          "open_branches": [
+            {
+              "possibility": "A global market emerges for retiring infrastructure projects, with specialized companies buying closure obligations and extracting value from the decline.",
+              "logic": "Closure is expensive, and some firms may develop specialized knowledge to manage risk and salvage value more cheaply than original owners.",
+              "what_would_change_our_mind": "Closure obligations prove impossible to transfer because liability follows the original owner too strongly."
+            },
+            {
+              "possibility": "Some abandoned infrastructure is deliberately rewilded or turned into public space, changing the meaning of 'failure'.",
+              "logic": "As land becomes scarce and ecological restoration valued, abandonment can become a feature rather than a problem.",
+              "what_would_change_our_mind": "Toxic sites where rewilding is unsafe or maintenance costs still require active engineering."
+            },
+            {
+              "possibility": "Digital abandonment, such as legacy software, dead formats and abandoned domains, becomes a larger problem than physical abandonment.",
+              "logic": "More social and economic life depends on software whose maintainers have vanished; failure may be invisible until a critical record or system is needed.",
+              "what_would_change_our_mind": "Emulation, migration and escrow solutions that make digital abandonment manageable."
+            }
+          ],
+          "article_routes": [
+            {
+              "question": "How does an orphaned oil well become a public problem decades after the company that drilled it disappears?",
+              "distinct_engine": "The environmental and financial afterlife of extraction is more about legal disappearance than physical drilling; plugging costs land on the public.",
+              "evidence_needed": "Well registries, corporate histories, state orphan well programs, inspection reports, financial assurance records."
+            },
+            {
+              "question": "What does it take to safely enter and map an abandoned underground mine?",
+              "distinct_engine": "The risk of hidden voids, gases and water means each site is an investigative problem requiring historical, geological and engineering evidence.",
+              "evidence_needed": "Mine maps, safety surveys, exploration reports, interviews with retired miners, accident records."
+            },
+            {
+              "question": "Why do old rail corridors become trails, pipelines, or dispute sites, and what decides among those futures?",
+              "distinct_engine": "A decommissioned corridor is a legal and physical strip that can serve many future uses; its afterlife reflects negotiation between adjacent owners, utilities and governments.",
+              "evidence_needed": "Easements, abandonment proceedings, trail conversion disputes, land use plans, utility leases."
+            },
+            {
+              "question": "What happens when a company stops updating a piece of software that an entire supply chain still uses?",
+              "distinct_engine": "Legacy software is not just old code; it is an institutional dependency whose abandonment redistributes risk and costs to users who never planned to maintain it.",
+              "evidence_needed": "Software license terms, incident reports, migration projects, legacy system operator interviews, procurement records."
+            }
+          ],
+          "note_test": {
+            "can_be_exhausted_in_three_sentences": false,
+            "why": "The subject spans physical decay, legal liability, corporate memory, informal reuse and public finance; one story about a closed mine cannot exhaust it."
+          },
+          "fatal_weakness": "It may become a gallery of abandoned things; the inquiry must stay anchored to the mechanism of abandonment and its obligations, not the aesthetics of decay.",
+          "question": "What happens after a mine, dam, cable, factory, or software system is no longer useful to its original owner but remains physically or institutionally present?",
+          "kind": "AFTERLIFE",
+          "already_written": [
+            "brownfield redevelopment",
+            "orphaned oil wells",
+            "ruin porn photography",
+            "legacy software maintenance"
+          ],
+          "threads": [
+            "How does an orphaned oil well become a public problem decades after the company that drilled it disappears?",
+            "What does it take to safely enter and map an abandoned underground mine?",
+            "Why do old rail corridors become trails, pipelines, or dispute sites, and what decides among those futures?",
+            "What happens when a company stops updating a piece of software that an entire supply chain still uses?"
+          ],
+          "ile_juz_napisano": 4,
+          "nasycony": false,
+          "ile_watkow": 4,
+          "ile_osi": 5,
+          "ile_napiec": 3,
+          "ile_galezi": 3,
+          "ile_mechanizmow": 4,
+          "ile_rodzajow_dowodu": 4,
+          "ile_nieoczywistych_polaczen": 4,
+          "ma_stawke": true,
+          "ma_przekonanie": false,
+          "nosny": true,
+          "pozycja": 5,
+          "na_artykul": true,
+          "pole_redakcyjne": true,
+          "ranking_breakdown": {
+            "largest_article_universe": {
+              "rank": 3,
+              "delta": 3
+            },
+            "most_original_angle": {
+              "rank": 2,
+              "delta": 2
+            }
+          }
+        },
+        {
+          "title": "The Last Human in the Loop",
+          "central_question": "What happens to work, liability, and quality when automated systems are only finished products because hidden humans handle their exceptions?",
+          "mode": "HIDDEN_LABOR",
+          "why_fascinating": "Automation promises to remove human error but keeps a human in reserve for its worst, rarest, and most ambiguous cases, creating a job that is simultaneously essential and denied.",
+          "reader_entry_point": "A customer shouts at a chatbot until it hands the conversation to a person who must instantly understand a broken transcript.",
+          "obvious_coverage": [
+            "gig work platforms",
+            "content moderation trauma",
+            "AI hype and job losses",
+            "Mechanical Turk and annotation factories"
+          ],
+          "underexplored_connections": [
+            "The liability gap: companies claim automation to lower labor costs but still need a human override; when results are wrong, the hidden worker becomes the legal and moral fail-safe without authority.",
+            "Exception handling changes skill: workers no longer execute a stable task but constantly switch from low-attention monitoring to high-stakes intervention, which is cognitively more punishing than ordinary work.",
+            "The 'human in the loop' label is used as a trust seal while the loop's actual design may make meaningful intervention impossible, connecting UX, safety, and marketing to labor law.",
+            "Hidden fallback work creates a new form of deskilling: junior staff become break-fix operators for systems whose underlying logic they cannot inspect, linking automation to loss of institutional knowledge."
+          ],
+          "dimensions": [
+            {
+              "name": "labor process",
+              "question_opened": "What is the actual work of exception handling and how does it differ from traditional task execution?",
+              "why_independent": "It relies on ethnography, shift logs, and worker accounts, not on system output or official automation claims."
+            },
+            {
+              "name": "legal liability",
+              "question_opened": "Who is responsible when a human override fails inside an automated system?",
+              "why_independent": "Legal doctrine, contracts and court records answer this, and they can reach conclusions different from engineering or labor accounts."
+            },
+            {
+              "name": "interface design",
+              "question_opened": "How do screens, dashboards and alerts make some interventions possible and others merely ceremonial?",
+              "why_independent": "Design evidence shows what operators can actually see and do, independent of formal responsibility."
+            },
+            {
+              "name": "error economics",
+              "question_opened": "Why do organizations tolerate certain rare failures instead of paying for more reliable automation?",
+              "why_independent": "Actuarial and cost-of-failure evidence is separate from worker experience or legal rules."
+            },
+            {
+              "name": "organizational memory",
+              "question_opened": "What happens when only a few hidden operators understand the old system beneath the new interface?",
+              "why_independent": "Institutional history and knowledge loss can be studied separately from day-to-day operations."
+            }
+          ],
+          "tensions": [
+            {
+              "force_a": "automation as cost reduction and consistency",
+              "force_b": "human judgment as the only resource that can handle novel or morally loaded cases",
+              "why_unresolved": "The rarer the intervention, the less economic sense it makes to train people for it, yet the higher the stakes of failure."
+            },
+            {
+              "force_a": "legal accountability requiring named human decision-makers",
+              "force_b": "technical systems that distribute or obscure decision points across models and workflows",
+              "why_unresolved": "Law and software have different ideas about what a decision is; neither fully yields."
+            },
+            {
+              "force_a": "the desire to market a product as fully automated",
+              "force_b": "the operational need to admit human labor to maintain quality",
+              "why_unresolved": "Transparency about human fallback changes customer expectations and regulatory exposure, so companies have incentives to hide it."
+            }
+          ],
+          "open_branches": [
+            {
+              "possibility": "Exception handling becomes a recognized, unionized specialty with its own certification and staffing rules.",
+              "logic": "As failures become more consequential and visible, organizations need to guarantee capable human override, and labor demand creates professionalization.",
+              "what_would_change_our_mind": "Evidence that companies continue to outsource exception work invisibly without formal status or that regulators accept purely algorithmic responsibility."
+            },
+            {
+              "possibility": "The 'human in the loop' becomes a ceremonial legal shield with minimal real control.",
+              "logic": "The cost of true oversight is high; design can satisfy formal requirements while giving workers too little information or time to intervene.",
+              "what_would_change_our_mind": "Serious accidents or lawsuits leading to design standards that require measurable human decision time and access to evidence."
+            },
+            {
+              "possibility": "Full automation expands precisely because rare human interventions are too expensive to maintain safely.",
+              "logic": "Organizations may decide that eliminating human fallback and accepting failure is cheaper than maintaining a half-trained exception workforce.",
+              "what_would_change_our_mind": "High-profile failures where a human could have prevented harm, leading to prohibitions on unstaffed automation."
+            }
+          ],
+          "article_routes": [
+            {
+              "question": "What does the job of a remote operator for autonomous vehicles actually look like, and how does vigilance without control shape error?",
+              "distinct_engine": "The gap between supervising a system and driving it; sustained monitoring without authority creates specific cognitive failure.",
+              "evidence_needed": "Operator shift logs, safety reports, workplace ethnography, incident investigations, industry training materials."
+            },
+            {
+              "question": "When a bank's fraud model blocks an ordinary payment, what is the hidden human work of reviewing and releasing it?",
+              "distinct_engine": "Default suspicion creates a separate economy of clearance; false positives become a workload transferred to consumers and internal reviewers.",
+              "evidence_needed": "Payment disputes, complaint records, customer interviews, internal risk manuals, chargeback data."
+            },
+            {
+              "question": "Why do hospitals employ human scribes for AI-assistant documentation systems that were sold as automatic?",
+              "distinct_engine": "Medical language contains ambiguity, blame and coding requirements that the automated system cannot close, so humans complete the loop while liability remains unclear.",
+              "evidence_needed": "Hospital contracts, clinical workflow observations, error reports, medicolegal cases, scribe interviews."
+            },
+            {
+              "question": "How did content moderation shift from user-reported review to hidden queues of exception handling?",
+              "distinct_engine": "Scale created a triage system where the worst content is handled by the least senior workers, with policy ambiguity pushed to them.",
+              "evidence_needed": "Leaked platform documents, labor studies, moderation tickets, psychological assessments, regulatory filings."
+            }
+          ],
+          "note_test": {
+            "can_be_exhausted_in_three_sentences": false,
+            "why": "The subject spans labor, law, design, economics and institutional memory; knowing one example of a human fallback does not answer why fallbacks remain hidden or how they fail."
+          },
+          "fatal_weakness": "The topic could become a familiar critique of AI hype rather than an independent inquiry into exception labor; if all branches reduce to 'companies outsource to underpaid workers,' it collapses.",
+          "question": "What happens to work, liability, and quality when automated systems are only finished products because hidden humans handle their exceptions?",
+          "kind": "HIDDEN_LABOR",
+          "already_written": [
+            "gig work platforms",
+            "content moderation trauma",
+            "AI hype and job losses",
+            "Mechanical Turk and annotation factories"
+          ],
+          "threads": [
+            "What does the job of a remote operator for autonomous vehicles actually look like, and how does vigilance without control shape error?",
+            "When a bank's fraud model blocks an ordinary payment, what is the hidden human work of reviewing and releasing it?",
+            "Why do hospitals employ human scribes for AI-assistant documentation systems that were sold as automatic?",
+            "How did content moderation shift from user-reported review to hidden queues of exception handling?"
+          ],
+          "ile_juz_napisano": 4,
+          "nasycony": false,
+          "ile_watkow": 4,
+          "ile_osi": 5,
+          "ile_napiec": 3,
+          "ile_galezi": 3,
+          "ile_mechanizmow": 4,
+          "ile_rodzajow_dowodu": 4,
+          "ile_nieoczywistych_polaczen": 4,
+          "ma_stawke": true,
+          "ma_przekonanie": false,
+          "nosny": true,
+          "pozycja": -2,
+          "na_artykul": true,
+          "pole_redakcyjne": true,
+          "ranking_breakdown": {
+            "most_original_angle": {
+              "rank": 3,
+              "delta": 1
+            },
+            "most_likely_to_collapse": {
+              "rank": 3,
+              "delta": -3
+            }
+          }
+        },
+        {
+          "title": "The Quality of Recycled Materials",
+          "central_question": "What happens to manufacturing, trade and waste work when recycled materials arrive not as stable commodities but as variable, contaminated feedstocks?",
+          "mode": "MATERIAL_TRANSITION",
+          "why_fascinating": "Recycling is usually framed as a moral act; behind the bin is an industrial problem of creating order from chemical and material chaos, where every batch is a unique geological event.",
+          "reader_entry_point": "A yogurt pot placed in the recycling bin becomes part of a stream that a mill must blend, test and argue about before it can become anything again.",
+          "obvious_coverage": [
+            "recycling is broken",
+            "plastic waste exports",
+            "landfill diversion rates",
+            "single-stream contamination explainers"
+          ],
+          "underexplored_connections": [
+            "Feedstock variability turns recyclers into chemists and speculators: they must blend batches to smooth unknown impurities, much like oil refineries blend crude, but with fewer standard grades.",
+            "Quality is not just purity; it is predictability. A batch with consistent low-level contamination may be more useful than a purer batch with unpredictable spikes, connecting recycling to information economics.",
+            "The informal sector's sorting knowledge, often dismissed as low-value labor, is actually a quality-control system that formal standards do not capture.",
+            "Extended producer responsibility schemes may shift legal ownership of contamination, changing whether brands, municipalities or recyclers absorb the cost of off-spec material."
+          ],
+          "dimensions": [
+            {
+              "name": "materials science",
+              "question_opened": "How do specific contaminants alter the behavior of recycled polymers, fibers or metal alloys?",
+              "why_independent": "This is a lab and process-engineering question, not a policy question."
+            },
+            {
+              "name": "logistics and blending",
+              "question_opened": "How do recyclers sample, test and blend variable feedstock into usable industrial input?",
+              "why_independent": "Operational records and plant data explain this, independent of consumer sorting behavior."
+            },
+            {
+              "name": "informal sorting labor",
+              "question_opened": "What knowledge and value do informal waste pickers contribute to quality, and how is it recognized or ignored?",
+              "why_independent": "Ethnographic and economic evidence from workers differs from materials or policy evidence."
+            },
+            {
+              "name": "global trade regulations",
+              "question_opened": "What happens when waste-importing countries set purity thresholds that exporting local programs cannot meet?",
+              "why_independent": "Trade data and legal instruments answer this separately from local collection."
+            },
+            {
+              "name": "brand and packaging design",
+              "question_opened": "How do packaging designers' choices create contamination that downstream recyclers must solve?",
+              "why_independent": "Design-for-recycling standards are a separate engineering and marketing domain."
+            }
+          ],
+          "tensions": [
+            {
+              "force_a": "local collection programs optimized for convenience and volume",
+              "force_b": "industrial buyers who need predictable, low-contamination feedstock",
+              "why_unresolved": "Making sorting easier for households often makes material quality worse; tightening quality can reduce participation, so goals conflict."
+            },
+            {
+              "force_a": "free trade in secondary materials as an environmental good",
+              "force_b": "importing states' right to refuse contaminated waste as pollution",
+              "why_unresolved": "The same shipment can be classified as raw material or waste depending on purity tests that remain contested."
+            },
+            {
+              "force_a": "formal certification and auditing",
+              "force_b": "informal but highly adaptive sorting knowledge",
+              "why_unresolved": "Audits require stable categories; informal sorting often relies on tacit, local and evolving knowledge that resists standardization."
+            }
+          ],
+          "open_branches": [
+            {
+              "possibility": "Recycled feedstock becomes a differentiated, traded commodity with quality grades, futures and blending hubs.",
+              "logic": "As virgin materials face carbon costs and recycling mandates rise, reliable recycled grades will have enough value to support market infrastructure.",
+              "what_would_change_our_mind": "Persistent price collapses or contamination scandals that make long-term contracts impossible."
+            },
+            {
+              "possibility": "Manufacturers vertically integrate into recycling to control feedstock quality, reducing open-market trading.",
+              "logic": "If quality unpredictability is the main risk, owning the waste stream from collection to pellet lets a company choose its own tolerances.",
+              "what_would_change_our_mind": "Evidence that vertical integration raises costs without solving contamination, or that recyclers retain superior blending knowledge."
+            },
+            {
+              "possibility": "Some materials simply drop out of recycling because their contamination risks exceed their value, even under stricter regulation.",
+              "logic": "Certain plastics or mixed fibers may be technically possible but economically impossible to purify; regulation cannot override chemistry.",
+              "what_would_change_our_mind": "Technical breakthroughs that make hard-to-recycle materials stably and cheaply pure enough for major markets."
+            }
+          ],
+          "article_routes": [
+            {
+              "question": "Why is a bale of recycled paper priced the way it is, and how do mills decide what contamination they can tolerate?",
+              "distinct_engine": "Paper recycling reveals a hidden grading system where moisture, adhesives and fiber length determine value; pricing becomes a negotiation about invisible quality.",
+              "evidence_needed": "Mill contracts, bale specifications, trade pricing data, quality inspection reports, interviews with paper buyers and recyclers."
+            },
+            {
+              "question": "What happens when a country tightens its waste import purity rules by a few percentage points?",
+              "distinct_engine": "A small change in threshold creates a cascade: shippers must test more, local programs stockpile, informal pickers change what they collect.",
+              "evidence_needed": "Customs data, regulatory impact assessments, port inspection records, shipper manifests, waste program budgets."
+            },
+            {
+              "question": "How do battery recyclers handle the unknown chemistries inside a collection of dead cells?",
+              "distinct_engine": "Unlike ordinary scrap, batteries are hazardous, varied and highly reactive; recyclers must sort by chemistry before processing, but labels are often absent.",
+              "evidence_needed": "Battery recycling plant permits, safety incident logs, technical standards, battery teardown studies, trade flows."
+            },
+            {
+              "question": "Who actually knows what is in a bale of plastic after it leaves a municipal sorting facility?",
+              "distinct_engine": "The gap between formal quality certificates and actual contents creates a market for inspection, trust and dispute.",
+              "evidence_needed": "Sampling methodologies, third-party inspection contracts, insurance claims, bale audits, trade disputes."
+            }
+          ],
+          "note_test": {
+            "can_be_exhausted_in_three_sentences": false,
+            "why": "The question spans materials science, logistics, labor, trade law and packaging design; no single explanation of contamination can cover them."
+          },
+          "fatal_weakness": "If the topic is framed only as 'recycling is dirty,' it becomes a familiar waste story; it needs to remain about the industrial coordination problem of variable feedstocks.",
+          "question": "What happens to manufacturing, trade and waste work when recycled materials arrive not as stable commodities but as variable, contaminated feedstocks?",
+          "kind": "MATERIAL_TRANSITION",
+          "already_written": [
+            "recycling is broken",
+            "plastic waste exports",
+            "landfill diversion rates",
+            "single-stream contamination explainers"
+          ],
+          "threads": [
+            "Why is a bale of recycled paper priced the way it is, and how do mills decide what contamination they can tolerate?",
+            "What happens when a country tightens its waste import purity rules by a few percentage points?",
+            "How do battery recyclers handle the unknown chemistries inside a collection of dead cells?",
+            "Who actually knows what is in a bale of plastic after it leaves a municipal sorting facility?"
+          ],
+          "ile_juz_napisano": 4,
+          "nasycony": false,
+          "ile_watkow": 4,
+          "ile_osi": 5,
+          "ile_napiec": 3,
+          "ile_galezi": 3,
+          "ile_mechanizmow": 4,
+          "ile_rodzajow_dowodu": 4,
+          "ile_nieoczywistych_polaczen": 4,
+          "ma_stawke": true,
+          "ma_przekonanie": false,
+          "nosny": true,
+          "pozycja": -3,
+          "na_artykul": true,
+          "pole_redakcyjne": true,
+          "ranking_breakdown": {
+            "most_original_angle": {
+              "rank": 1,
+              "delta": 3
+            },
+            "most_likely_to_collapse": {
+              "rank": 2,
+              "delta": -6
+            }
+          }
+        },
+        {
+          "title": "The Standard Human Body",
+          "central_question": "What happens when everyday objects, safety systems and scientific studies are built around a standardized human body that most actual bodies only partially match?",
+          "mode": "EXCLUSION",
+          "why_fascinating": "The 'average human' is not a person but a design hypothesis with enormous consequences; every mismatch between that phantom and real bodies is a small act of exclusion or risk.",
+          "reader_entry_point": "A seatbelt locks across a pregnant woman's belly, and she realizes the crash test dummy that certified it was a 50th-percentile male.",
+          "obvious_coverage": [
+            "crash test dummy gender bias",
+            "clinical trial underrepresentation",
+            "airplane seat size debates",
+            "one-size-fits-all design histories"
+          ],
+          "underexplored_connections": [
+            "Standards are not just about measurement; they are institutional decisions that convert a statistical construct into a physical template, locking in assumptions for decades through regulation and product liability.",
+            "The cost of not fitting is often shifted to the individual: custom equipment, missed work, injury, or exclusion from work, while designers treat the standard body as neutral.",
+            "Anthropometric data itself is political: who is measured, how often, and which communities are included determines what 'normal' means before any product is made.",
+            "Bodies change over time through aging, pregnancy, disability, nutrition and migration, so a standard set in one era silently becomes less representative, but standards update far more slowly than bodies do."
+          ],
+          "dimensions": [
+            {
+              "name": "safety engineering",
+              "question_opened": "Who is the test dummy or model designed to represent, and what happens to people outside that envelope in a crash, fall or medical emergency?",
+              "why_independent": "This uses biomechanical and crash data, not social or legal evidence."
+            },
+            {
+              "name": "regulation and standards",
+              "question_opened": "How do agencies and standards bodies decide what body measurements count as normal?",
+              "why_independent": "Standards documents and regulatory records are separate from user experience."
+            },
+            {
+              "name": "product design and market segmentation",
+              "question_opened": "Why do some industries create multiple sizes while others treat nonstandard bodies as niche or afterthoughts?",
+              "why_independent": "Market and manufacturing cost data answer this separately from safety."
+            },
+            {
+              "name": "clinical research",
+              "question_opened": "How does drug dosing or treatment fail when trial populations do not match real patient bodies?",
+              "why_independent": "Medical evidence and trial design differ from engineering."
+            },
+            {
+              "name": "everyday exclusion",
+              "question_opened": "What is the lived cost of living in a world proportioned for someone else?",
+              "why_independent": "Personal accounts and disability studies provide evidence distinct from standards or market data."
+            }
+          ],
+          "tensions": [
+            {
+              "force_a": "standardization for mass production, regulatory simplicity and comparability",
+              "force_b": "the radical variation of real human bodies",
+              "why_unresolved": "Any single standard will exclude someone, but unlimited customization is too expensive and may undermine safety comparisons."
+            },
+            {
+              "force_a": "safety testing that uses a few controlled body types to produce clear results",
+              "force_b": "the need to protect people whose bodies differ from those test subjects",
+              "why_unresolved": "Including many bodies can make tests slower, costlier and harder to interpret; excluding them makes inference uncertain."
+            },
+            {
+              "force_a": "treating body differences as special accommodations",
+              "force_b": "recognizing them as normal variation that should be present from the start",
+              "why_unresolved": "The framing changes who pays for the mismatch and how much change is expected of designers versus individuals."
+            }
+          ],
+          "open_branches": [
+            {
+              "possibility": "Digital manufacturing and parametric design make mass customization for bodies more affordable, fragmenting the standard.",
+              "logic": "As scanning and 3D-printed products mature, individualized fit may become a consumer expectation rather than a luxury.",
+              "what_would_change_our_mind": "Evidence that cost, liability and certification still favor a few fixed standards despite digital tools."
+            },
+            {
+              "possibility": "The standard body becomes even more embedded through AI training sets that reproduce historical measurement biases.",
+              "logic": "If algorithms learn from images, tests and trials that already overrepresent certain bodies, they may automate and deepen the old standard.",
+              "what_would_change_our_mind": "Inclusive data collection and bias audits that measurably redistribute AI performance across body types."
+            },
+            {
+              "possibility": "Liability and safety regulation force a move from one standard to a set of representative body models.",
+              "logic": "Lawsuits and crash or safety failures involving excluded bodies may drive regulators to require testing across more types.",
+              "what_would_change_our_mind": "Political or industry resistance that keeps standards unchanged despite evidence of harm."
+            }
+          ],
+          "article_routes": [
+            {
+              "question": "Why did the crash test dummy become male, and how has the regulatory path to a pregnant crash dummy unfolded?",
+              "distinct_engine": "The dummy is a physical manifestation of statistical choices and regulatory inertia; changing it requires not just new dummies but new standards for what counts as valid testing.",
+              "evidence_needed": "Agency records, dummy patent and engineering documents, crash test standards, injury data, regulatory comments."
+            },
+            {
+              "question": "How do pharmaceutical dose trials handle body size, and what happens when doses approved for lower-body-weight populations are given to others?",
+              "distinct_engine": "Drug dosing is often based on limited trial populations, yet real-world metabolism varies; scaling rules are not simple proportionalities.",
+              "evidence_needed": "Clinical trial protocols, pharmacokinetic studies, adverse event reports, drug agency guidance, patient records."
+            },
+            {
+              "question": "Why does protective equipment for workers still fit a narrow range of bodies despite decades of women entering industrial jobs?",
+              "distinct_engine": "Employer procurement and safety standards interact with labor market discrimination to make ill-fitting PPE a subtle form of exclusion from work.",
+              "evidence_needed": "PPE standards, workplace injury data, equipment catalogs, employer procurement policies, worker interviews."
+            },
+            {
+              "question": "What happens when an ergonomic standard set in one country becomes a de facto global design constraint?",
+              "distinct_engine": "International standards carry the body assumptions of their originators into many industries, affecting fit and safety far beyond the original population.",
+              "evidence_needed": "ISO and national standards texts, product design specifications, anthropometric surveys, manufacturing interviews, injury data."
+            }
+          ],
+          "note_test": {
+            "can_be_exhausted_in_three_sentences": false,
+            "why": "The issue spans safety testing, market segmentation, clinical research, regulation and lived exclusion; knowing one mismatch fact does not answer how the standard is made or changes."
+          },
+          "fatal_weakness": "The topic could become a series of 'design excludes women or disabled people' cases without a distinct causal mechanism for how standards persist; it needs to stay on the production of the standard body.",
+          "question": "What happens when everyday objects, safety systems and scientific studies are built around a standardized human body that most actual bodies only partially match?",
+          "kind": "EXCLUSION",
+          "already_written": [
+            "crash test dummy gender bias",
+            "clinical trial underrepresentation",
+            "airplane seat size debates",
+            "one-size-fits-all design histories"
+          ],
+          "threads": [
+            "Why did the crash test dummy become male, and how has the regulatory path to a pregnant crash dummy unfolded?",
+            "How do pharmaceutical dose trials handle body size, and what happens when doses approved for lower-body-weight populations are given to others?",
+            "Why does protective equipment for workers still fit a narrow range of bodies despite decades of women entering industrial jobs?",
+            "What happens when an ergonomic standard set in one country becomes a de facto global design constraint?"
+          ],
+          "ile_juz_napisano": 4,
+          "nasycony": false,
+          "ile_watkow": 4,
+          "ile_osi": 5,
+          "ile_napiec": 3,
+          "ile_galezi": 3,
+          "ile_mechanizmow": 4,
+          "ile_rodzajow_dowodu": 4,
+          "ile_nieoczywistych_polaczen": 4,
+          "ma_stawke": true,
+          "ma_przekonanie": false,
+          "nosny": true,
+          "pozycja": -3,
+          "na_artykul": true,
+          "pole_redakcyjne": true,
+          "ranking_breakdown": {
+            "most_compelling": {
+              "rank": 1,
+              "delta": 6
+            },
+            "most_likely_to_collapse": {
+              "rank": 1,
+              "delta": -9
+            }
+          }
+        }
+      ]
+    },
+    "prompt_version": "ece6af36e2e97d9f1a9b",
+    "model": "deepseek-v4-flash"
+  },
+  "value": [
+    {
+      "index": 1,
+      "feasible": true,
+      "confidence": 0.9,
+      "expected_primary_sources": 4,
+      "depth": "RICH",
+      "parallels": [
+        "federal flood insurance",
+        "pension-benefit guarantee corporations"
+      ],
+      "note": "State-run insurer financial statements and legislative audits are public and freely readable; mutual-aid informal groups are the weakest part of the record.",
+      "route_assessments": [
+        {
+          "route_index": 0,
+          "feasible": true,
+          "confidence": 0.7,
+          "expected_primary_sources": 3,
+          "note": "Rate filings and regulatory/hearing documents are public in many states, but reinsurance contracts and internal catastrophe-model output are proprietary."
+        },
+        {
+          "route_index": 1,
+          "feasible": true,
+          "confidence": 0.95,
+          "expected_primary_sources": 4,
+          "note": "Public state-run insurer annual reports, board minutes and state auditor reports are free and text-readable."
+        },
+        {
+          "route_index": 2,
+          "feasible": true,
+          "confidence": 0.65,
+          "expected_primary_sources": 3,
+          "note": "Fannie Mae/Freddie Mac selling guides, FHA handbooks and HMDA data are public; individual lender underwriting memos are not."
+        },
+        {
+          "route_index": 3,
+          "feasible": true,
+          "confidence": 0.6,
+          "expected_primary_sources": 2,
+          "note": "Formal mutual and public risk-pool financial filings plus microinsurance evaluations exist, but informal mutual-aid groups leave little archived record."
+        }
+      ],
+      "selected_route_index": 1,
+      "selected_route_reason": "The insurer-of-last-resort route has the clearest public record: financial statements, legislative audits and policyholder-outcome data from separate bodies give the article a concrete growth-too-fast tension."
+    },
+    {
+      "index": 2,
+      "feasible": true,
+      "confidence": 0.93,
+      "expected_primary_sources": 4,
+      "depth": "RICH",
+      "parallels": [
+        "decommissioned nuclear power plants",
+        "orphaned Superfund waste sites"
+      ],
+      "note": "Public orphan-well registries, MSHA/OSMRE records and STB abandonment dockets make this the strongest-maintenance source set.",
+      "route_assessments": [
+        {
+          "route_index": 0,
+          "feasible": true,
+          "confidence": 0.9,
+          "expected_primary_sources": 4,
+          "note": "State orphan-well lists, DOI grant tracking and GAO reports are public; financial-assurance records are patchier."
+        },
+        {
+          "route_index": 1,
+          "feasible": true,
+          "confidence": 0.8,
+          "expected_primary_sources": 3,
+          "note": "OSMRE abandoned-mine inventories, MSHA accident investigations and USGS historic mine maps are public primary documents."
+        },
+        {
+          "route_index": 2,
+          "feasible": true,
+          "confidence": 0.95,
+          "expected_primary_sources": 4,
+          "note": "STB abandonment dockets, railbanking court decisions and trail-conversion land-use documents are public and text-readable."
+        },
+        {
+          "route_index": 3,
+          "feasible": true,
+          "confidence": 0.7,
+          "expected_primary_sources": 3,
+          "note": "Vendor end-of-life notices, CVE/NVD entries and public procurement records document legacy-software abandonment; internal migration plans do not."
+        }
+      ],
+      "selected_route_index": 2,
+      "selected_route_reason": "Rail corridors have an unusually explicit paper trail: STB decisions, court railbanking rulings and local trail-conversion plans expose a direct conflict over the corridor's future, with enough primary sources for one focused article."
+    },
+    {
+      "index": 5,
+      "feasible": true,
+      "confidence": 0.88,
+      "expected_primary_sources": 4,
+      "depth": "RICH",
+      "parallels": [
+        "aircraft cockpit anthropometrics",
+        "medical device sizing"
+      ],
+      "note": "NHTSA, ClinicalTrials.gov, FDA and OSHA provide public primary records; the ISO/EN global-standard route is blocked by paywalled standards.",
+      "route_assessments": [
+        {
+          "route_index": 0,
+          "feasible": true,
+          "confidence": 0.92,
+          "expected_primary_sources": 4,
+          "note": "NHTSA's 49 CFR Part 572, Federal Register dockets, dummy patents and public injury databases document the crash-test-dummy choices."
+        },
+        {
+          "route_index": 1,
+          "feasible": true,
+          "confidence": 0.88,
+          "expected_primary_sources": 4,
+          "note": "ClinicalTrials.gov protocols, FDA guidance, FAERS adverse-event data and published pharmacokinetic studies are free primary records."
+        },
+        {
+          "route_index": 2,
+          "feasible": true,
+          "confidence": 0.8,
+          "expected_primary_sources": 3,
+          "note": "OSHA fit requirements, NIOSH reports and BLS injury data are public; employer procurement policies and worker fit histories are private."
+        },
+        {
+          "route_index": 3,
+          "feasible": false,
+          "confidence": 0.15,
+          "expected_primary_sources": 0,
+          "note": "ISO/EN ergonomic standards and proprietary product specifications are paywalled or private, and public anthropometric surveys alone cannot answer the global-constraint question."
+        }
+      ],
+      "selected_route_index": 0,
+      "selected_route_reason": "The crash-test-dummy route is the reader's concrete entry and has the deepest public paper trail — NHTSA rules, docket comments, injury data and dummy patents — and its design-inertia mechanism stands apart from the dosing and PPE routes."
+    },
+    {
+      "index": 0,
+      "feasible": true,
+      "confidence": 0.85,
+      "expected_primary_sources": 4,
+      "depth": "RICH",
+      "parallels": [
+        "welfare benefit verification",
+        "bank de-risking of customer accounts"
+      ],
+      "note": "Prior authorization and tax audit have strong public records; chargeback and hotel-screening routes are real but thinner.",
+      "route_assessments": [
+        {
+          "route_index": 0,
+          "feasible": true,
+          "confidence": 0.78,
+          "expected_primary_sources": 3,
+          "note": "Visa/Mastercard chargeback guides and CFPB/Federal Reserve chargeback rules are public; proprietary chargeback-level merchant records are not."
+        },
+        {
+          "route_index": 1,
+          "feasible": true,
+          "confidence": 0.9,
+          "expected_primary_sources": 4,
+          "note": "CMS/OIG prior-authorization reports and payer policy bulletins are public, and physician-workload studies are open-access scientific records."
+        },
+        {
+          "route_index": 2,
+          "feasible": true,
+          "confidence": 0.72,
+          "expected_primary_sources": 3,
+          "note": "TIGTA/GAO audit-selection reports and IRS Data Book are public; audit scoring code itself is not."
+        },
+        {
+          "route_index": 3,
+          "feasible": true,
+          "confidence": 0.65,
+          "expected_primary_sources": 3,
+          "note": "TSA/DHS privacy impact assessments and REAL ID rulemaking documents are public; hotel property-management contracts are largely private."
+        }
+      ],
+      "selected_route_index": 1,
+      "selected_route_reason": "Prior authorization is the route the reader lands on and has the best mix of public payer manuals, CMS/OIG denial statistics and workflow studies; the unresolved administrative-burden mechanism leaves the other default-suspicion routes open."
+    },
+    {
+      "index": 4,
+      "feasible": true,
+      "confidence": 0.84,
+      "expected_primary_sources": 4,
+      "depth": "RICH",
+      "parallels": [
+        "glass cullet contamination",
+        "compost feedstock contamination"
+      ],
+      "note": "Trade/customs datasets, recycler permits and CalRecycle audits are public; mill contracts and inspection reports are private.",
+      "route_assessments": [
+        {
+          "route_index": 0,
+          "feasible": true,
+          "confidence": 0.65,
+          "expected_primary_sources": 3,
+          "note": "Customs/trade unit values and recycling characterization reports are public; mill contract prices and inspection reports are proprietary."
+        },
+        {
+          "route_index": 1,
+          "feasible": true,
+          "confidence": 0.85,
+          "expected_primary_sources": 4,
+          "note": "Official waste-import policy texts, WTO notifications and customs/trade datasets are public; port inspection logs are not."
+        },
+        {
+          "route_index": 2,
+          "feasible": true,
+          "confidence": 0.9,
+          "expected_primary_sources": 4,
+          "note": "Battery recycler permits, OSHA enforcement records, USGS commodity data and public teardown studies are downloadable primary documents."
+        },
+        {
+          "route_index": 3,
+          "feasible": true,
+          "confidence": 0.6,
+          "expected_primary_sources": 2,
+          "note": "CalRecycle/MRF contamination audits and sampling protocols are public; third-party inspection contracts and insurance claims are not."
+        }
+      ],
+      "selected_route_index": 2,
+      "selected_route_reason": "Battery recycling exposes the variable-input problem in its sharpest safety form, and public permits, OSHA records and teardown studies give an evidence core the commodity-bale routes lack."
+    },
+    {
+      "index": 3,
+      "feasible": true,
+      "confidence": 0.83,
+      "expected_primary_sources": 4,
+      "depth": "RICH",
+      "parallels": [
+        "insurance claims exception handling",
+        "warehouse robotics exception handling"
+      ],
+      "note": "Content moderation has the strongest record via court documents and transparency reports; other routes rely on accident reports and complaint databases.",
+      "route_assessments": [
+        {
+          "route_index": 0,
+          "feasible": true,
+          "confidence": 0.78,
+          "expected_primary_sources": 3,
+          "note": "California DMV collision/disengagement reports and NHTSA investigations are public; operator shift logs and company training internals are not."
+        },
+        {
+          "route_index": 1,
+          "feasible": true,
+          "confidence": 0.85,
+          "expected_primary_sources": 3,
+          "note": "CFPB payment-complaint data and bank consent orders are public; internal risk manuals and chargeback tickets are not."
+        },
+        {
+          "route_index": 2,
+          "feasible": true,
+          "confidence": 0.65,
+          "expected_primary_sources": 3,
+          "note": "Clinical studies of ambient AI scribes and vendor product materials are public; hospital contracts are often private procurement."
+        },
+        {
+          "route_index": 3,
+          "feasible": true,
+          "confidence": 0.9,
+          "expected_primary_sources": 4,
+          "note": "Court filings, whistleblower complaints, EU DSA transparency reports and leaked platform materials are public; moderation ticket queues are proprietary."
+        }
+      ],
+      "selected_route_index": 3,
+      "selected_route_reason": "Content moderation is where hidden exception queues are best documented — court records, regulatory filings and independent worker studies give multiple primary sources and a clear triage mechanism with unresolved policy tension."
+    }
+  ]
+}

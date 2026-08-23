@@ -1,22 +1,26 @@
-"""Czytanie stron przeglądarką — tam, gdzie zwykły HTTP nie wystarcza.
+"""Adapter przeglądarki V3 do odczytu i jawnie bramkowanych mutacji.
 
 Substack renderuje treść JavaScriptem: w HTML-u jest 148 KB, a czytelnego
 tekstu 371 znaków, bo post siedzi w blobie JSON. Zwykły pobieracz zobaczy
 pustą skorupę.
 
-Czytamy WYŁĄCZNIE publiczne strony, bez logowania i bez sesji. Agent otwiera
-je tak jak każdy czytelnik. Publikowanie, komentowanie i polubienia nie
-istnieją w tym pliku i nie powstaną bez osobnej decyzji właściciela.
+Tryb fixture nie otwiera przeglądarki. Odczyt zalogowanego Substacka wymaga
+live_read_only, a każda mutacja wymaga live_test na odseparowanym koncie.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import time
 from pathlib import Path
 from typing import Any
 
+import capabilities
 import config
+import mutation_ledger
+import operational_day
 
 READ_TIMEOUT_MS = 45_000
 SETTLE_MS = 2_500
@@ -24,7 +28,7 @@ SETTLE_MS = 2_500
 # Plik sesji. Powstaje, gdy WŁAŚCICIEL zaloguje się własnoręcznie w otwartym
 # oknie. Hasło nie przechodzi przez ten kod ani przez nic, co ja czytam.
 # `.gitignore` obejmuje ten wzorzec od początku projektu.
-SESSION_FILE = config.DATA_DIR / "storage-state.json"
+SESSION_FILE = config.SESSION_FILE
 
 
 CDP_PORT = 9222
@@ -69,9 +73,12 @@ def wlasciwe_konto(page) -> bool:
                 and rola in {"admin", "owner"}):
             ma_publikacje = True
             break
+    actual_handle = str(kto.get("handle") or "") if isinstance(kto, dict) else ""
     ok = (isinstance(kto, dict)
-          and str(kto.get("handle") or "").lower() == PROFIL_HANDLE.lower()
+          and actual_handle.lower() == PROFIL_HANDLE.lower()
           and ma_publikacje)
+    if ok:
+        capabilities.assert_runtime_account(actual_handle)
     if not ok:
         print(f"  ! NIE TO KONTO albo brak sesji: {str(kto)[:80]}", flush=True)
     return ok
@@ -125,14 +132,14 @@ def z_dziennika_dzis() -> dict[str, int]:
     normy drugi raz dzialala TYLKO dla notek. Dziennik przezywa restart, wiec
     daje te sama gwarancje tam, gdzie Substack milczy.
 
-    Liczymy wylacznie dzialania UDANE i wylacznie dzisiejsze, w UTC — tak samo
-    jak liczy je `ile_dzis_wystawione`, zeby obie polowy licznika mierzyly ten
-    sam dzien.
+    Liczymy wyłącznie działania UDANE i wyłącznie z bieżącej doby redakcyjnej.
+    Ten plik jest telemetrią i materiałem do uzgodnienia ze źródłem; nie jest
+    już bezpiecznikiem limitu. Twardy budżet żyje atomowo w SQLite.
     """
     import json as _json
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    dzis = config.data_redakcyjna()
     ile = {"komentarze": 0, "lajki": 0, "restacki": 0}
     nazwa = {"komentarz": "komentarze", "polubienie": "lajki",
              "restack": "restacki"}
@@ -149,7 +156,13 @@ def z_dziennika_dzis() -> dict[str, int]:
                 continue          # jedna uszkodzona linia nie psuje calej reszty
             if not isinstance(wpis, dict):
                 continue
-            if not str(wpis.get("kiedy", "")).startswith(dzis):
+            try:
+                kiedy = datetime.fromisoformat(
+                    str(wpis.get("kiedy", "")).replace("Z", "+00:00"))
+                dzien_wpisu = config.data_redakcyjna(kiedy)
+            except (TypeError, ValueError):
+                continue
+            if dzien_wpisu != dzis:
                 continue
             if not wpis.get("udane"):
                 continue
@@ -161,7 +174,9 @@ def z_dziennika_dzis() -> dict[str, int]:
     return ile
 
 
-def naprawde_wyslac(wyslij: bool, co: str) -> bool:
+def naprawde_wyslac(
+    wyslij: bool, co: str, capability: capabilities.Capability
+) -> bool:
     """Ostatnie sito przed KAZDYM dzialaniem widocznym publicznie.
 
     DRY_RUN blokowal wywolania modeli, ale NIE blokowal przegladarki — wiec
@@ -172,7 +187,63 @@ def naprawde_wyslac(wyslij: bool, co: str) -> bool:
     if wyslij and config.DRY_RUN:
         print(f"  [{co}] DRY_RUN — NIE wysylam, mimo ze proszono", flush=True)
         return False
+    if wyslij:
+        capabilities.require(capability)
     return wyslij
+
+
+def _tylko_lokalny_podglad(co: str, wynik: dict[str, Any]) -> dict[str, Any]:
+    """Kończy ścieżkę mutującą przed sesją, przeglądarką i transportem."""
+    wynik["preview_only"] = True
+    bezpieczna_nazwa = co.encode("ascii", errors="replace").decode("ascii")
+    print(f"  [{bezpieczna_nazwa}] podglad lokalny - "
+          "bez przegladarki i zdalnego szkicu",
+          flush=True)
+    return wynik
+
+
+def proba_mutacji(
+    kind: str, target: str, payload: str = "", **metadata: Any
+) -> mutation_ledger.Attempt:
+    """Trwale rezerwuje mutację; awaria ledgeru zatrzymuje kliknięcie."""
+    return mutation_ledger.reserve(
+        config.DB_PATH,
+        account=config.TEST_ACCOUNT_HANDLE,
+        kind=kind,
+        target=target,
+        payload=payload,
+        metadata=metadata,
+    )
+
+
+def _stan_proby(
+    wynik: dict[str, Any], attempt: mutation_ledger.Attempt, *, aggregate: bool = False
+) -> None:
+    zapis = {
+        "attempt_id": attempt.id,
+        "idempotency_key": attempt.idempotency_key,
+        "status": attempt.status,
+    }
+    if aggregate:
+        wynik.setdefault("attempts", []).append(zapis)
+    else:
+        wynik.update(zapis)
+
+
+def _blad_mutacji(wynik: dict[str, Any], exc: Exception) -> None:
+    """Zachowuje stan blokującej próby, zamiast spłaszczać go do tekstu."""
+    wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+    if isinstance(exc, mutation_ledger.MutationBlocked):
+        wynik["status"] = "BLOCKED"
+        wynik["blocked_by_status"] = exc.status
+        wynik["blocked_by_attempt_id"] = exc.attempt_id
+    elif isinstance(exc, operational_day.BudgetExhausted):
+        wynik["status"] = "BLOCKED"
+        wynik["blocked_by_status"] = "BUDGET_EXHAUSTED"
+        wynik["operational_day_id"] = exc.day_id
+        wynik["budget_category"] = exc.category
+        wynik["budget_limit"] = exc.limit
+        wynik["budget_accounted"] = exc.accounted
 
 
 def zalogowany(context) -> bool:
@@ -210,12 +281,12 @@ def wymagaj_sesji() -> None:
         raise SystemExit(
             "Brak sesji Substacka.\n"
             "Uruchom Chrome z portem debugowania, zaloguj się i wykonaj:\n"
-            "  python agent-v2/browser.py sesja"
+            "  python agent-v3/browser.py sesja"
         )
     if dni <= 0:
         raise SystemExit(
             f"Sesja Substacka wygasła. Zaloguj się ponownie i wykonaj:\n"
-            "  python agent-v2/browser.py sesja"
+            "  python agent-v3/browser.py sesja"
         )
     if dni <= OSTRZEGAJ_PONIZEJ_DNI:
         print(
@@ -352,6 +423,7 @@ def podlacz_sie():
     przechodzenia CAPTCHY to jest zwykły Chrome — nic nie jest ukrywane ani
     podszywane. Agent podłącza się do gotowej, zalogowanej sesji.
     """
+    capabilities.require(capabilities.Capability.SUBSTACK_READ)
     from playwright.sync_api import sync_playwright
 
     # NA SERWERZE PODŁĄCZAMY SIĘ DO PRAWDZIWEGO CHROME'A, tak samo jak na
@@ -412,7 +484,7 @@ def sprawdz_sesje() -> None:
     try:
         # USUNIETO 2026-08-20 blok wklejony tu omylkowo z `wystaw_notke`.
         # Odwolywal sie do `wyslij`, `tekst` i `wynik`, ktore w tej funkcji nie
-        # istnieja, wiec `python agent-v2/browser.py sesja` konczylo sie
+        # istnieja, wiec python agent-v3/browser.py sesja konczylo sie
         # NameError przy pierwszej linii `try`.
         #
         # To nie byla usterka kosmetyczna: TA WLASNIE KOMENDA jest cytowana
@@ -427,6 +499,7 @@ def sprawdz_sesje() -> None:
         print(f"  sesja: {'ZALOGOWANA' if zalogowany else 'NIEZALOGOWANA'}"
               f"   tekst={len(text)} znaków")
         if zalogowany:
+            capabilities.require(capabilities.Capability.SESSION_WRITE)
             SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
             context.storage_state(path=str(SESSION_FILE))
             dni = dni_do_wygasniecia()
@@ -449,7 +522,7 @@ def sprawdz_serwer() -> None:
     """
     import os
 
-    os.environ["AGENT_V2_SERVER"] = "1"
+    os.environ["AGENT_V3_SERVER"] = "1"
     config.TRYB_SERWERA = True
 
     dni = dni_do_wygasniecia()
@@ -495,6 +568,7 @@ def zaloguj() -> None:
     zapisujemy stan sesji do pliku i od tej pory agent otwiera przeglądarkę
     już zalogowaną.
     """
+    capabilities.require(capabilities.Capability.SESSION_WRITE)
     from playwright.sync_api import sync_playwright
 
     print("Otwieram okno przeglądarki. Zaloguj się na Substacku.")
@@ -550,12 +624,13 @@ def rozpoznanie() -> None:
     nie polubia. Ten kod ma się dowiedzieć, czy nawigacja jest wykonalna —
     zanim ktokolwiek zdecyduje, że agent ma coś wysłać.
     """
+    capabilities.require(capabilities.Capability.SUBSTACK_READ)
     from playwright.sync_api import sync_playwright
 
     if not SESSION_FILE.exists():
         raise SystemExit(
             f"Brak pliku sesji ({SESSION_FILE}).\n"
-            "Uruchom najpierw:  python agent-v2/browser.py zaloguj"
+            "Uruchom najpierw:  python agent-v3/browser.py zaloguj"
         )
 
     # Ekrany edytora rysują się długo, więc czekamy dłużej niż przy czytaniu.
@@ -593,14 +668,11 @@ def rozpoznanie() -> None:
                     print(f"     pola do pisania: {' | '.join(pola[:6])[:150]}", flush=True)
             except Exception as exc:
                 print(f"  {name:26} BŁĄD {type(exc).__name__}: {exc}"[:160], flush=True)
-        # Zapisujemy stan po każdej pracy: Substack odświeża ciasteczko przy
-        # aktywności, więc regularne używanie konta samo przesuwa datę ważności.
-        context.storage_state(path=str(SESSION_FILE))
         context.close()
         browser.close()
 
 
-PROFIL_HANDLE = "nothingisaccidental"
+PROFIL_HANDLE = config.TEST_ACCOUNT_HANDLE
 
 # Substack tłumaczy cudze treści na język interfejsu i podmienia je w HTML-u.
 # Nasza notka po angielsku wyświetlała się po polsku, a odpowiedź Anglika też.
@@ -643,9 +715,9 @@ def ile_dzis_wystawione() -> dict[str, int]:
     Gdyby Substack kiedys zaczal pokazywac wlasne komentarze, to jest jedyne
     miejsce do zmiany.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    dzis = config.data_redakcyjna()
     wynik = {"notki": 0, **z_dziennika_dzis()}
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
@@ -657,7 +729,12 @@ def ile_dzis_wystawione() -> dict[str, int]:
         feed = api_json(page, f"/api/v1/reader/feed/profile/{profil['id']}") or {}
         for x in feed.get("items", []):
             c = (x or {}).get("comment") or {}
-            if not str(c.get("date", "")).startswith(dzis):
+            try:
+                kiedy = datetime.fromisoformat(
+                    str(c.get("date", "")).replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                continue
+            if config.data_redakcyjna(kiedy) != dzis:
                 continue
             # Notka nie ma posta pod soba; komentarz owszem — a komentarzy stad
             # nie bierzemy, bo ten kanal ich nie zwraca.
@@ -1053,6 +1130,66 @@ def potwierdz_restack(page, tekst: str, prob: int = 4) -> bool:
     return False
 
 
+def _id_obiektu_z_trescia(dane: Any, tekst: str) -> str | None:
+    """Zwraca ID najbliższego obiektu, którego własne pole zawiera próbkę."""
+    probka = " ".join((tekst or "").split())[:80]
+    if not probka:
+        return None
+    if isinstance(dane, dict):
+        own = " ".join(
+            str(dane.get(key) or "")
+            for key in ("body", "text", "content", "restack_body")
+        )
+        if probka in " ".join(own.split()):
+            external = dane.get("id") or dane.get("comment_id")
+            if external is not None:
+                return str(external)
+        for value in dane.values():
+            found = _id_obiektu_z_trescia(value, tekst)
+            if found:
+                return found
+    elif isinstance(dane, list):
+        for value in dane:
+            found = _id_obiektu_z_trescia(value, tekst)
+            if found:
+                return found
+    return None
+
+
+def potwierdz_notke_id(page, tekst: str, prob: int = 4) -> str | None:
+    profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
+    if not isinstance(profil, dict) or not profil.get("id"):
+        return None
+    for nr in range(prob):
+        feed = api_json(
+            page,
+            f"/api/v1/reader/feed/profile/{profil['id']}?types%5B%5D=note",
+        )
+        found = _id_obiektu_z_trescia((feed or {}).get("items", []), tekst)
+        if found:
+            return found
+        if nr < prob - 1:
+            page.wait_for_timeout(8000)
+    return None
+
+
+def potwierdz_restack_id(page, tekst: str, prob: int = 4) -> str | None:
+    profil = api_json(page, "/api/v1/user/profile/self")
+    if not isinstance(profil, dict) or not profil.get("id"):
+        return None
+    for nr in range(prob):
+        feed = api_json(
+            page,
+            f"/api/v1/reader/feed/profile/{profil['id']}?types%5B%5D=restack",
+        )
+        found = _id_obiektu_z_trescia((feed or {}).get("items", []), tekst)
+        if found:
+            return found
+        if nr < prob - 1:
+            page.wait_for_timeout(8000)
+    return None
+
+
 def _polubienie_potwierdzone(przycisk) -> bool:
     """Stan przycisku po kliknięciu jest dowodem; samo kliknięcie nim nie jest."""
     try:
@@ -1073,12 +1210,17 @@ def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
     """
     import random
 
-    wyslij = naprawde_wyslac(wyslij, "polubienia")
+    wynik: dict[str, Any] = {"znalezione": 0, "planowane": 0,
+                             "polubione": 0, "blad": None}
+    if not wyslij:
+        return _tylko_lokalny_podglad("polubienia", wynik)
+    wyslij = naprawde_wyslac(
+        wyslij, "polubienia", capabilities.Capability.LIKE)
+    if not wyslij:
+        return _tylko_lokalny_podglad("polubienia", wynik)
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
-    wynik: dict[str, Any] = {"znalezione": 0, "planowane": 0,
-                             "polubione": 0, "blad": None}
     try:
         if wyslij:
             wymagaj_wlasciwego_konta(page)
@@ -1092,16 +1234,30 @@ def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
 
         for i in range(min(ile, przyciski.count())):
             kandydat = przyciski.nth(i)
+            attempt = None
             try:
                 if not kandydat.is_visible():
                     continue
                 if not wyslij:
                     wynik["planowane"] += 1
                     continue
-                kandydat.scroll_into_view_if_needed(timeout=8000)
-                kandydat.click(timeout=8000)
-                page.wait_for_timeout(1500)
-                potwierdzone = _polubienie_potwierdzone(kandydat)
+                obiekt = _notka_przy_przycisku(kandydat)
+                cel = f"{obiekt.get('autor', '')}\n{obiekt.get('tekst', '')}".strip()
+                if not cel:
+                    print("    (pomijam: brak stabilnej tozsamosci obiektu)",
+                          flush=True)
+                    continue
+                with proba_mutacji("like", cel, "") as attempt:
+                    kandydat.scroll_into_view_if_needed(timeout=8000)
+                    attempt.dispatch()
+                    kandydat.click(timeout=8000)
+                    page.wait_for_timeout(1500)
+                    potwierdzone = _polubienie_potwierdzone(kandydat)
+                    if potwierdzone:
+                        attempt.confirm(f"ui-like:{attempt.idempotency_key}")
+                    else:
+                        attempt.unknown("stan przycisku nie potwierdzil polubienia")
+                _stan_proby(wynik, attempt, aggregate=True)
                 zapisz_w_dzienniku("polubienie", udane=potwierdzone)
                 if potwierdzone:
                     wynik["polubione"] += 1
@@ -1111,13 +1267,26 @@ def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
                 else:
                     print("  kliknięte, ale stan polubienia się nie zmienił",
                           flush=True)
+                    break
             except Exception as exc:
                 print(f"    (pominiete: {type(exc).__name__})", flush=True)
+                if (attempt is not None
+                        and attempt.status in {"PENDING", "UNKNOWN"}):
+                    _stan_proby(wynik, attempt, aggregate=True)
+                    _blad_mutacji(wynik, exc)
+                    break
+                if (isinstance(exc, mutation_ledger.MutationBlocked)
+                        and exc.status in {"PENDING", "UNKNOWN"}):
+                    _blad_mutacji(wynik, exc)
+                    break
+                if isinstance(exc, operational_day.BudgetExhausted):
+                    _blad_mutacji(wynik, exc)
+                    break
         if not wyslij:
             print(f"  (nie klikam — tryb sprawdzenia; kliknalbym"
                   f" {wynik['planowane']})", flush=True)
     except Exception as exc:
-        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        _blad_mutacji(wynik, exc)
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
         page.close()
@@ -1143,11 +1312,21 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
     Gdy wlasciwego przycisku nie ma, nie robimy NIC. Klikniecie „w zastepstwie"
     to dokladnie ten blad, ktory to spowodowal.
     """
-    wyslij = naprawde_wyslac(wyslij, rodzaj)
+    wynik: dict[str, Any] = {"handle": handle, "zrobione": False, "blad": None}
+    attempt = None
+    if not wyslij:
+        return _tylko_lokalny_podglad(rodzaj, wynik)
+    capability = (
+        capabilities.Capability.FOLLOW
+        if rodzaj == "obserwacja"
+        else capabilities.Capability.SUBSCRIBE
+    )
+    wyslij = naprawde_wyslac(wyslij, rodzaj, capability)
+    if not wyslij:
+        return _tylko_lokalny_podglad(rodzaj, wynik)
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
-    wynik: dict[str, Any] = {"handle": handle, "zrobione": False, "blad": None}
     try:
         if wyslij:
             wymagaj_wlasciwego_konta(page)
@@ -1162,10 +1341,20 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
             if not wyslij:
                 print("  (nie klikam — tryb sprawdzenia)", flush=True)
                 return wynik
-            k.click(timeout=10_000)
-            page.wait_for_timeout(5000)
-            # Po kliknieciu napis zmienia sie na stan przeciwny.
-            wynik["zrobione"] = k.count() == 0 or not k.is_visible()
+            with proba_mutacji(rodzaj, handle, "") as attempt:
+                attempt.dispatch()
+                k.click(timeout=10_000)
+                page.wait_for_timeout(5000)
+                # Po kliknieciu napis zmienia sie na stan przeciwny.
+                wynik["zrobione"] = k.count() == 0 or not k.is_visible()
+                if wynik["zrobione"]:
+                    attempt.confirm(
+                        f"ui-{rodzaj}:{handle.lower()}",
+                        {"button_before": nazwa},
+                    )
+                else:
+                    attempt.unknown("stan przycisku nie zmienil sie")
+            _stan_proby(wynik, attempt)
             zapisz_w_dzienniku(rodzaj, udane=wynik["zrobione"], komu=handle)
             print("  ZROBIONE" if wynik["zrobione"]
                   else "  KLIKNIETE, ALE STAN SIE NIE ZMIENIL", flush=True)
@@ -1173,7 +1362,9 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
         wynik["blad"] = f"nie ma przycisku {rodzaj} u {handle}"
         print(f"  {wynik['blad']} — nie klikam nic innego", flush=True)
     except Exception as exc:
-        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        if attempt is not None and "attempt_id" not in wynik:
+            _stan_proby(wynik, attempt)
+        _blad_mutacji(wynik, exc)
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
         page.close()
@@ -1385,12 +1576,18 @@ def ustaw_oswiadczenie_ai(wyslij: bool = False) -> dict[str, Any]:
     Ustawienie konta, nie posta — robi się raz i wisi przy wszystkim: przy
     artykułach, notkach i odpowiedziach.
     """
-    wyslij = naprawde_wyslac(wyslij, "oswiadczenie")
-    wymagaj_sesji()
     tekst = tresc_oswiadczenia()
+    wynik: dict[str, Any] = {"tekst": tekst, "zapisane": False, "blad": None}
+    attempt = None
+    if not wyslij:
+        return _tylko_lokalny_podglad("oswiadczenie", wynik)
+    wyslij = naprawde_wyslac(
+        wyslij, "oswiadczenie", capabilities.Capability.SETTINGS)
+    if not wyslij:
+        return _tylko_lokalny_podglad("oswiadczenie", wynik)
+    wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
-    wynik: dict[str, Any] = {"tekst": tekst, "zapisane": False, "blad": None}
     try:
         if wyslij:
             wymagaj_wlasciwego_konta(page)
@@ -1443,14 +1640,23 @@ def ustaw_oswiadczenie_ai(wyslij: bool = False) -> dict[str, Any]:
                 break
         wynik["przycisk_widoczny"] = zapisz is not None
         if wyslij and zapisz is not None:
-            zapisz.click()
-            page.wait_for_timeout(5000)
-            wynik["zapisane"] = True
-            print("  OŚWIADCZENIE ZAPISANE", flush=True)
+            with proba_mutacji(
+                "settings", config.TEST_ACCOUNT_HANDLE, tekst
+            ) as attempt:
+                attempt.dispatch()
+                zapisz.click()
+                page.wait_for_timeout(5000)
+                attempt.unknown(
+                    "interfejs nie zwraca stabilnego ID wersji ustawienia")
+            _stan_proby(wynik, attempt)
+            wynik["blad"] = "zapis wyslany, ale bez zewnetrznego ID"
+            print("  OŚWIADCZENIE MA STAN UNKNOWN", flush=True)
         elif not wyslij:
             print("  (nie zapisuję — tryb sprawdzenia)", flush=True)
     except Exception as exc:
-        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        if attempt is not None and "attempt_id" not in wynik:
+            _stan_proby(wynik, attempt)
+        _blad_mutacji(wynik, exc)
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
         page.close()
@@ -1468,11 +1674,17 @@ def wystaw_odpowiedz_pod_artykulem(
     pod całą notką, tu każdy komentarz ma własny przycisk odpowiedzi. Dzięki temu
     rozmówca dostaje powiadomienie, a wątek czyta się jak rozmowa.
     """
-    wyslij = naprawde_wyslac(wyslij, "odpowiedz pod artykułem")
+    wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
+    attempt = None
+    if not wyslij:
+        return _tylko_lokalny_podglad("odpowiedz pod artykułem", wynik)
+    wyslij = naprawde_wyslac(
+        wyslij, "odpowiedz pod artykułem", capabilities.Capability.REPLY)
+    if not wyslij:
+        return _tylko_lokalny_podglad("odpowiedz pod artykułem", wynik)
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
-    wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
     try:
         if wyslij:
             wymagaj_wlasciwego_konta(page)
@@ -1530,9 +1742,20 @@ def wystaw_odpowiedz_pod_artykulem(
         wynik["przycisk_widoczny"] = wyslac is not None
 
         if wyslij and wyslac is not None:
-            wyslac.click()
-            page.wait_for_timeout(8000)
-            wynik["wyslane"] = potwierdz_komentarz(page, url_artykulu, tekst)
+            with proba_mutacji(
+                "article_reply", f"{url_artykulu}#author={autor}", tekst
+            ) as attempt:
+                attempt.dispatch()
+                wyslac.click()
+                page.wait_for_timeout(8000)
+                external_id = potwierdz_komentarz(
+                    page, url_artykulu, tekst)
+                wynik["wyslane"] = external_id is not None
+                if external_id is not None:
+                    attempt.confirm(str(external_id))
+                else:
+                    attempt.unknown("odpowiedzi nie znaleziono po dispatch")
+            _stan_proby(wynik, attempt)
             zapisz_w_dzienniku("odpowiedz_pod_artykulem", udane=wynik["wyslane"],
                                gdzie=url_artykulu, komu=autor,
                                slow=len(tekst.split()), tekst=tekst[:300])
@@ -1541,7 +1764,9 @@ def wystaw_odpowiedz_pod_artykulem(
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
     except Exception as exc:
-        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        if attempt is not None and "attempt_id" not in wynik:
+            _stan_proby(wynik, attempt)
+        _blad_mutacji(wynik, exc)
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
         page.close()
@@ -1550,69 +1775,201 @@ def wystaw_odpowiedz_pod_artykulem(
     return wynik
 
 
-def potwierdz_artykul(page, tytul: str) -> bool:
-    """Pyta Substacka, czy artykuł naprawdę jest opublikowany."""
-    probka = " ".join(tytul.split())[:50]
+def id_szkicu_z_url(url: str) -> str | None:
+    """ID bieżącego szkicu z adresu edytora, nigdy ze zgadywanego tytułu."""
+    for pattern in (
+        r"/publish/post/(\d+)",
+        r"[?&](?:post_id|draft_id)=(\d+)",
+    ):
+        match = re.search(pattern, url or "")
+        if match:
+            return match.group(1)
+    return None
+
+
+def potwierdz_artykul(
+    page, tytul: str, expected_id: str | None = None
+) -> str | None:
+    """Potwierdza dokładne ID szkicu, dokładny tytuł i stan publikacji."""
+    if not expected_id:
+        return None
     dane = api_json(page, "/api/v1/posts?limit=5",
                     baza=f"https://{config.SUBSTACK_HANDLE}.substack.com")
-    # Ten adres oddaje LISTE, nie obiekt z kluczem "posts" — sprawdzone na zywo.
     lista = dane if isinstance(dane, list) else (dane or {}).get("posts") or []
-    return any(probka in (x.get("title") or "") and x.get("post_date")
-               for x in lista if isinstance(x, dict))
+    expected_title = " ".join((tytul or "").split())
+    for post in lista:
+        if not isinstance(post, dict):
+            continue
+        if (str(post.get("id") or "") == str(expected_id)
+                and " ".join(str(post.get("title") or "").split()) == expected_title
+                and post.get("post_date")):
+            return str(expected_id)
+    return None
+
+
+def _draft_write_intent(
+    artykul: dict[str, Any], sciezka_png: Path | None,
+) -> tuple[str, dict[str, Any]]:
+    """Buduje stabilną, nieprzechowującą treści intencję zapisu szkicu."""
+
+    def text_hash(value: str) -> str:
+        canonical = (value or "").replace("\r\n", "\n").replace("\r", "\n")
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    image_hash = None
+    if sciezka_png is not None and sciezka_png.exists():
+        image_hash = hashlib.sha256(sciezka_png.read_bytes()).hexdigest()
+    metadata = {
+        "intent_schema": "draft-write@1",
+        "title_sha256": text_hash(str(artykul.get("tytul") or "")),
+        "subtitle_sha256": text_hash(str(artykul.get("podtytul") or "")),
+        "html_sha256": text_hash(str(artykul.get("html") or "")),
+        "image_sha256": image_hash,
+    }
+    payload = json.dumps(
+        metadata, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return payload, metadata
+
+
+def _confirmed_draft_from_block(
+    exc: mutation_ledger.MutationBlocked, *, expected_key: str,
+) -> dict[str, Any]:
+    """Pozwala wznowić wyłącznie dokładnie tę samą potwierdzoną intencję."""
+    if exc.status != "CONFIRMED":
+        raise exc
+    row = mutation_ledger.get_attempt(config.DB_PATH, exc.attempt_id)
+    source_ref = str((row or {}).get("source_ref") or "")
+    if (not row
+            or row.get("idempotency_key") != expected_key
+            or row.get("kind") != "draft_write"
+            or not re.fullmatch(r"\d+", source_ref)):
+        raise RuntimeError(
+            "blokująca próba nie jest wznawialnym szkicem tej samej intencji")
+    return row
+
+
+def _editor_url_for_draft(draft_id: str) -> str:
+    if not re.fullmatch(r"\d+", str(draft_id or "")):
+        raise ValueError("ID szkicu musi być niepustą liczbą")
+    return (
+        f"https://{config.SUBSTACK_HANDLE}.substack.com/publish/post/"
+        f"{draft_id}?type=newsletter"
+    )
+
+
+def _continue_to_article_settings(page) -> None:
+    dalej = None
+    for nazwa in ("Kontynuuj", "Continue", "Weiter"):
+        k = page.get_by_role("button", name=nazwa).first
+        if k.count() > 0 and k.is_visible():
+            dalej = k
+            break
+    if dalej is None:
+        raise RuntimeError("nie znalazłem przycisku przejścia do ustawień")
+    dalej.click()
+    page.wait_for_timeout(8000)
+
+
+def _turn_off_ai_detection_for_draft(page) -> None:
+    if not config.WYLACZ_WYKRYWANIE_AI:
+        return
+    for nazwa in ("Wyłącz wykrywanie AI", "Turn off AI detection"):
+        k = page.get_by_role("button", name=nazwa).first
+        if k.count() > 0 and k.is_visible():
+            k.click()
+            page.wait_for_timeout(2500)
+            print("  wykrywanie AI wyłączone dla tego posta", flush=True)
+            break
+
 
 def wystaw_artykul(
     sciezka_md: Path, sciezka_png: Path | None = None, wyslij: bool = False,
 ) -> dict[str, Any]:
-    """Wystawia artykuł na Substacku. Domyślnie WYPEŁNIA i NIE WYSYŁA."""
-    wyslij = naprawde_wyslac(wyslij, "artykul")
-    wymagaj_sesji()
+    """Publikuje artykuł albo wykonuje wyłącznie lokalną walidację pliku."""
     artykul = rozbierz_artykul(sciezka_md)
+    wynik: dict[str, Any] = {"wypelnione": False, "wyslane": False, "blad": None,
+                             "tytul": artykul["tytul"]}
+    draft_attempt = None
+    publish_attempt = None
     if sciezka_png is None:
         kandydat = sciezka_md.with_suffix(".png")
         sciezka_png = kandydat if kandydat.exists() else None
+    if not wyslij:
+        wynik["walidacja_lokalna"] = True
+        return _tylko_lokalny_podglad("artykul", wynik)
+    wyslij = naprawde_wyslac(
+        wyslij, "artykul", capabilities.Capability.PUBLISH_ARTICLE)
+    if not wyslij:
+        return _tylko_lokalny_podglad("artykul", wynik)
+    wymagaj_sesji()
 
     p, browser, context = podlacz_sie()
     page = context.new_page()
-    wynik: dict[str, Any] = {"wypelnione": False, "wyslane": False, "blad": None,
-                             "tytul": artykul["tytul"]}
     try:
-        if wyslij:
-            wymagaj_wlasciwego_konta(page)
-        if wyslij and potwierdz_artykul(page, artykul["tytul"]):
-            print("  artykul o tym tytule juz jest opublikowany — przerywam",
-                  flush=True)
-            wynik["wyslane"] = True
-            wynik["pominiete"] = True
-            return wynik
-
-        page.goto(f"https://{config.SUBSTACK_HANDLE}.substack.com/publish/post"
-                  "?type=newsletter",
-                  timeout=READ_TIMEOUT_MS * 2, wait_until="domcontentloaded")
-        page.wait_for_timeout(SETTLE_MS + 5000)
-        wynik["szkic"] = page.url
-
-        wypelnij_artykul(page, artykul, sciezka_png)
-        wynik["wypelnione"] = True
-
-        dalej = None
-        for nazwa in ("Kontynuuj", "Continue", "Weiter"):
-            k = page.get_by_role("button", name=nazwa).first
-            if k.count() > 0 and k.is_visible():
-                dalej = k
-                break
-        if dalej is None:
-            raise RuntimeError("nie znalazłem przycisku przejścia do ustawień")
-        dalej.click()
-        page.wait_for_timeout(8000)
-
-        if config.WYLACZ_WYKRYWANIE_AI:
-            for nazwa in ("Wyłącz wykrywanie AI", "Turn off AI detection"):
-                k = page.get_by_role("button", name=nazwa).first
-                if k.count() > 0 and k.is_visible():
-                    k.click()
-                    page.wait_for_timeout(2500)
-                    print("  wykrywanie AI wyłączone dla tego posta", flush=True)
-                    break
+        wymagaj_wlasciwego_konta(page)
+        draft_payload, draft_metadata = _draft_write_intent(
+            artykul, sciezka_png)
+        draft_target = "new-article-draft"
+        draft_key, _payload_hash = mutation_ledger.identity(
+            account=config.TEST_ACCOUNT_HANDLE,
+            kind="draft_write",
+            target=draft_target,
+            payload=draft_payload,
+        )
+        try:
+            draft_attempt = proba_mutacji(
+                "draft_write", draft_target, draft_payload, **draft_metadata)
+        except mutation_ledger.MutationBlocked as exc:
+            previous = _confirmed_draft_from_block(exc, expected_key=draft_key)
+            draft_id = str(previous["source_ref"])
+            wynik["draft_reused"] = True
+            wynik["draft_id"] = draft_id
+            wynik.setdefault("attempts", []).append({
+                "attempt_id": previous["id"],
+                "idempotency_key": previous["idempotency_key"],
+                "status": previous["status"],
+                "kind": "draft_write",
+                "reused": True,
+            })
+            page.goto(
+                _editor_url_for_draft(draft_id),
+                timeout=READ_TIMEOUT_MS * 2,
+                wait_until="domcontentloaded",
+            )
+            page.wait_for_timeout(SETTLE_MS + 5000)
+            wynik["szkic"] = page.url
+            _continue_to_article_settings(page)
+        else:
+            with draft_attempt:
+                # Otwarcie nowego edytora może samo utworzyć obiekt po stronie
+                # platformy, więc dispatch jest trwały jeszcze przed page.goto.
+                draft_attempt.dispatch()
+                page.goto(
+                    f"https://{config.SUBSTACK_HANDLE}.substack.com/publish/post"
+                    "?type=newsletter",
+                    timeout=READ_TIMEOUT_MS * 2,
+                    wait_until="domcontentloaded",
+                )
+                page.wait_for_timeout(SETTLE_MS + 5000)
+                wynik["szkic"] = page.url
+                wypelnij_artykul(page, artykul, sciezka_png)
+                wynik["wypelnione"] = True
+                _continue_to_article_settings(page)
+                _turn_off_ai_detection_for_draft(page)
+                draft_id = id_szkicu_z_url(page.url)
+                if not draft_id:
+                    wynik["blad"] = (
+                        "brak stabilnego ID po zapisie zdalnego szkicu")
+                    draft_attempt.unknown(wynik["blad"])
+                else:
+                    draft_attempt.confirm(
+                        draft_id, {"editor_url": page.url})
+            _stan_proby(wynik, draft_attempt, aggregate=True)
+            if not draft_id:
+                print(f"  {wynik['blad']}", flush=True)
+                return wynik
+            wynik["draft_reused"] = False
+            wynik["draft_id"] = draft_id
 
         publikuj = None
         for nazwa in ("Wyślij teraz do wszystkich", "Send to everyone now",
@@ -1624,10 +1981,26 @@ def wystaw_artykul(
                 break
         wynik["przycisk_widoczny"] = publikuj is not None
 
-        if wyslij and publikuj is not None:
-            publikuj.click()
-            page.wait_for_timeout(15000)
-            wynik["wyslane"] = potwierdz_artykul(page, artykul["tytul"])
+        if publikuj is not None:
+            with proba_mutacji(
+                "article_publish",
+                f"draft:{draft_id}",
+                artykul["tytul"] + "\n" + artykul.get("html", ""),
+                draft_attempt_id=(draft_attempt.id if draft_attempt else
+                                  wynik["attempts"][0]["attempt_id"]),
+            ) as publish_attempt:
+                publish_attempt.dispatch()
+                publikuj.click()
+                page.wait_for_timeout(15000)
+                external_id = potwierdz_artykul(
+                    page, artykul["tytul"], draft_id)
+                wynik["wyslane"] = external_id is not None
+                if external_id:
+                    publish_attempt.confirm(external_id)
+                else:
+                    publish_attempt.unknown(
+                        "brak dokładnego ID szkicu w opublikowanych postach")
+            _stan_proby(wynik, publish_attempt)
             zapisz_w_dzienniku("artykul", udane=wynik["wyslane"],
                                tytul=artykul["tytul"])
             print("  ARTYKUŁ POTWIERDZONY U SUBSTACKA" if wynik["wyslane"]
@@ -1642,16 +2015,21 @@ def wystaw_artykul(
                 # what-it-should" stalo sie „the-hole-in-your-airplane-window".
                 # Zgadniety adres odpowiadal 302, wiec link zyl na przekierowaniu,
                 # ktorego nikt nam nie obiecal.
-                adres = potwierdz_adres_artykulu(page, artykul["tytul"])
+                adres = potwierdz_adres_artykulu(
+                    page, artykul["tytul"], draft_id)
                 wynik["url"] = adres
                 # I CZYSTY TEKST, nie HTML. Do promptu notki szlo 9000 znakow
                 # znacznikow, z ktorych model musial wylowic tresc.
                 stages.zapisz_do_promocji(adres, artykul["tytul"],
                                           bez_znacznikow(artykul.get("html", ""))[:2000])
-        elif not wyslij:
-            print("  (nie wysyłam — tryb sprawdzenia; szkic zapisany)", flush=True)
     except Exception as exc:
-        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        if (draft_attempt is not None
+                and not any(item.get("attempt_id") == draft_attempt.id
+                            for item in wynik.get("attempts", []))):
+            _stan_proby(wynik, draft_attempt, aggregate=True)
+        if publish_attempt is not None and "attempt_id" not in wynik:
+            _stan_proby(wynik, publish_attempt)
+        _blad_mutacji(wynik, exc)
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
         page.close()
@@ -1675,17 +2053,43 @@ def potwierdz_odpowiedz(page, note_id: int, tekst: str) -> bool:
             page.wait_for_timeout(8000)
     return False
 
+
+def potwierdz_odpowiedz_id(page, note_id: int, tekst: str) -> str | None:
+    """Zwraca ID dokładnej odpowiedzi albo None po kontrolowanych ponowieniach."""
+    for nr in range(4):
+        watek = api_json(
+            page,
+            f"/api/v1/reader/comment/{note_id}/replies?comment_id={note_id}",
+        )
+        found = _id_obiektu_z_trescia(
+            (watek or {}).get("commentBranches", []), tekst)
+        if found:
+            return found
+        if nr < 3:
+            page.wait_for_timeout(8000)
+    return None
+
+
 def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
-                     kontekst: dict[str, Any] | None = None) -> dict[str, Any]:
+                     kontekst: dict[str, Any] | None = None,
+                     rodzaj_proby: str = "reply") -> dict[str, Any]:
     """Odpowiada w watku — pod nasza notka albo w cudzej dyskusji.
 
     `kontekst` jak przy komentarzu: co wiedzielismy o celu, gdy pisalismy.
+    `rodzaj_proby="discussion_reply"` rozróżnia wejście w cudzą dyskusję od
+    odpowiedzi na reakcję pod własną treścią i obciąża właściwy budżet.
     """
-    wyslij = naprawde_wyslac(wyslij, "odpowiedz")
+    wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
+    attempt = None
+    if not wyslij:
+        return _tylko_lokalny_podglad("odpowiedz", wynik)
+    wyslij = naprawde_wyslac(
+        wyslij, "odpowiedz", capabilities.Capability.REPLY)
+    if not wyslij:
+        return _tylko_lokalny_podglad("odpowiedz", wynik)
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
-    wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
     try:
         if wyslij:
             wymagaj_wlasciwego_konta(page)
@@ -1736,9 +2140,20 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
         wynik["przycisk_widoczny"] = przycisk is not None
 
         if wyslij and przycisk is not None:
-            przycisk.click()
-            page.wait_for_timeout(6000)
-            wynik["wyslane"] = potwierdz_odpowiedz(page, note_id, tekst)
+            with proba_mutacji(
+                rodzaj_proby, f"note:{note_id}", tekst
+            ) as attempt:
+                attempt.dispatch()
+                przycisk.click()
+                page.wait_for_timeout(6000)
+                external_id = potwierdz_odpowiedz_id(
+                    page, note_id, tekst)
+                wynik["wyslane"] = external_id is not None
+                if external_id:
+                    attempt.confirm(external_id)
+                else:
+                    attempt.unknown("odpowiedzi nie znaleziono po dispatch")
+            _stan_proby(wynik, attempt)
             zapisz_w_dzienniku("odpowiedz", udane=wynik["wyslane"],
                                gdzie=f"note/c-{note_id}",
                                slow=len(tekst.split()), tekst=tekst[:300],
@@ -1748,7 +2163,9 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
     except Exception as exc:
-        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        if attempt is not None and "attempt_id" not in wynik:
+            _stan_proby(wynik, attempt)
+        _blad_mutacji(wynik, exc)
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
         page.close()
@@ -1758,17 +2175,18 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
 
 
 def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
-    """Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA.
-
-    `wyslij=False` to nie ostrożność dla samej ostrożności: notki nie da się
-    cofnąć w oczach tych, którzy ją zobaczyli. Najpierw sprawdzamy, czy kod
-    trafia we właściwe pole, dopiero potem wysyłamy.
-    """
-    wyslij = naprawde_wyslac(wyslij, "notka")
+    """Publikuje notkę albo zwraca lokalny podgląd bez przeglądarki."""
+    wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
+    attempt = None
+    if not wyslij:
+        return _tylko_lokalny_podglad("notka", wynik)
+    wyslij = naprawde_wyslac(
+        wyslij, "notka", capabilities.Capability.PUBLISH_NOTE)
+    if not wyslij:
+        return _tylko_lokalny_podglad("notka", wynik)
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
-    wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
     try:
         if wyslij:
             wymagaj_wlasciwego_konta(page)
@@ -1832,25 +2250,31 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
 
         if wyslij and wynik["przycisk_widoczny"]:
             kody = sluchaj_publikacji(page)
-            przycisk.click()
-            page.wait_for_timeout(6000)
-            # Najpierw pytamy o odpowiedz Substacka na sam zapis — jest
-            # natychmiastowa. Kanal profilu sprawdzamy tylko wtedy, gdy
-            # odpowiedzi nie zlapalismy.
-            if any(k == 200 for k in kody):
-                wynik["wyslane"] = True
-                print("  NOTKA PRZYJETA (odpowiedz Substacka: 200)", flush=True)
-            else:
-                wynik["wyslane"] = potwierdz_notke(page, tekst)
-                print("  NOTKA POTWIERDZONA NA PROFILU" if wynik["wyslane"]
-                      else f"  NIE WYSZLA (odpowiedzi: {kody or 'brak'})",
-                      flush=True)
+            with proba_mutacji("note", config.TEST_ACCOUNT_HANDLE, tekst) as attempt:
+                attempt.dispatch()
+                przycisk.click()
+                page.wait_for_timeout(6000)
+                external_id = potwierdz_notke_id(page, tekst)
+                wynik["wyslane"] = external_id is not None
+                if external_id:
+                    attempt.confirm(external_id, {"http_statuses": kody})
+                else:
+                    attempt.unknown(
+                        "brak ID notki po dispatch",
+                        {"http_statuses": kody},
+                    )
+            _stan_proby(wynik, attempt)
+            print("  NOTKA POTWIERDZONA PO ID" if wynik["wyslane"]
+                  else f"  STAN NOTKI UNKNOWN (odpowiedzi: {kody or 'brak'})",
+                  flush=True)
             zapisz_w_dzienniku("notka", udane=wynik["wyslane"],
                                slow=len(tekst.split()), tekst=tekst[:300])
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
     except Exception as exc:
-        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        if attempt is not None and "attempt_id" not in wynik:
+            _stan_proby(wynik, attempt)
+        _blad_mutacji(wynik, exc)
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
         page.close()
@@ -1988,7 +2412,9 @@ def bez_znacznikow(html: str) -> str:
     return _re.sub(r"\s+", " ", tekst).strip()
 
 
-def potwierdz_adres_artykulu(page, tytul: str) -> str:
+def potwierdz_adres_artykulu(
+    page, tytul: str, expected_id: str | None = None
+) -> str:
     """Prawdziwy adres opublikowanego artykulu — od Substacka, nie z tytulu.
 
     Adres byl skladany przez zamiane tytulu na slug, a Substack slugi SKRACA:
@@ -2009,7 +2435,11 @@ def potwierdz_adres_artykulu(page, tytul: str) -> str:
         dane = api_json(page, "/api/v1/posts?limit=5", baza=baza)
         lista = dane if isinstance(dane, list) else (dane or {}).get("posts") or []
         for post in lista:
-            if (post or {}).get("title") == tytul:
+            zgodne_id = (
+                expected_id is None
+                or str((post or {}).get("id") or "") == str(expected_id)
+            )
+            if zgodne_id and (post or {}).get("title") == tytul:
                 adres = post.get("canonical_url") or (
                     f"{baza}/p/{post.get('slug')}" if post.get("slug") else "")
                 if adres:
@@ -2088,11 +2518,17 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
     znaczenie, brzmi: czy warto bylo. Bez tych liczb nie da sie na nie odpowiedziec,
     a kosztuja zero, bo mamy je juz w reku i dotad je wyrzucalismy.
     """
-    wyslij = naprawde_wyslac(wyslij, "komentarz")
+    wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
+    attempt = None
+    if not wyslij:
+        return _tylko_lokalny_podglad("komentarz", wynik)
+    wyslij = naprawde_wyslac(
+        wyslij, "komentarz", capabilities.Capability.COMMENT)
+    if not wyslij:
+        return _tylko_lokalny_podglad("komentarz", wynik)
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
-    wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
     try:
         if wyslij:
             wymagaj_wlasciwego_konta(page)
@@ -2164,16 +2600,19 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
         print(f"  przycisk wysyłki widoczny: {wynik['przycisk_widoczny']}", flush=True)
 
         if wyslij and wynik["przycisk_widoczny"]:
-            przycisk.click()
-            page.wait_for_timeout(6000)
-            # Kliknięcie przycisku nie jest dowodem, że komentarz został przyjęty,
-            # a agent bez człowieka nie ma komu tego sprawdzić. Pytamy więc Substacka.
-            # Strony nie da się do tego użyć: komentarze doklejają się po stronie
-            # klienta i inner_text ich nie widzi — sprawdzenie po tekscie strony dało
-            # fałszywy alarm przy pierwszym realnym komentarzu, który naprawdę wisiał.
-            nasz_numer = potwierdz_komentarz(page, url, tekst)
-            wynik["wyslane"] = nasz_numer is not None
-            wynik["id"] = nasz_numer
+            with proba_mutacji("comment", url, tekst) as attempt:
+                attempt.dispatch()
+                przycisk.click()
+                page.wait_for_timeout(6000)
+                # Sukces wymaga numeru komentarza ze źródła.
+                nasz_numer = potwierdz_komentarz(page, url, tekst)
+                wynik["wyslane"] = nasz_numer is not None
+                wynik["id"] = nasz_numer
+                if nasz_numer is not None:
+                    attempt.confirm(str(nasz_numer))
+                else:
+                    attempt.unknown("komentarza nie znaleziono po dispatch")
+            _stan_proby(wynik, attempt)
             zapisz_w_dzienniku("komentarz", udane=wynik["wyslane"], gdzie=url,
                                slow=len(tekst.split()), tekst=tekst[:300],
                                nasz_id=nasz_numer, **(kontekst or {}))
@@ -2182,7 +2621,9 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
     except Exception as exc:
-        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        if attempt is not None and "attempt_id" not in wynik:
+            _stan_proby(wynik, attempt)
+        _blad_mutacji(wynik, exc)
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
         page.close()
@@ -2204,40 +2645,17 @@ if __name__ == "__main__":
 
 
 def read_pages(urls: list[str]) -> list[dict[str, Any]]:
-    """Otwiera strony w przeglądarce i zwraca ich widoczny tekst.
+    """Celowo wyłączony transport researchu bez przypiętego DNS.
 
-    Jedna instancja przeglądarki na całą listę — start Chromium to sekundy,
-    a stron bywa kilkanaście.
+    Zwykła walidacja przed `page.goto` nie wystarcza: Chromium wykonuje własny
+    DNS i pobiera dowolne subresource'y oraz redirecty. Bez resolvera
+    przypiętego dla całego drzewa żądań ta ścieżka odtwarza SSRF zamknięty w
+    `safe_fetch`. Funkcja pozostaje jako jawna odmowa dla starych wywołań.
     """
-    from playwright.sync_api import sync_playwright
-
-    out: list[dict[str, Any]] = []
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(
-            user_agent=config.FETCH_USER_AGENT,
-            viewport={"width": 1280, "height": 900},
-        )
-        page = context.new_page()
-        for url in urls:
-            entry: dict[str, Any] = {"url": url, "text": "", "title": "", "error": None}
-            try:
-                page.goto(url, timeout=READ_TIMEOUT_MS, wait_until="domcontentloaded")
-                page.wait_for_timeout(SETTLE_MS)  # treść dorysowuje się po JS
-                entry["title"] = page.title()
-                entry["text"] = page.inner_text("body")
-            except Exception as exc:
-                entry["error"] = f"{type(exc).__name__}: {exc}"[:200]
-            out.append(entry)
-            print(
-                f"  [przeglądarka] {'OK  ' if not entry['error'] else 'NIE '} "
-                f"{len(entry['text']):>7} znaków  {url[:58]}"
-                f"{'  ' + entry['error'] if entry['error'] else ''}",
-                flush=True,
-            )
-        context.close()
-        browser.close()
-    return out
+    capabilities.require(capabilities.Capability.PUBLIC_WEB_READ)
+    raise RuntimeError(
+        "research browser wyłączony: brak przypięcia DNS i kontroli subresource'ów"
+    )
 
 
 def restackuj_w_kanale(
@@ -2262,12 +2680,17 @@ def restackuj_w_kanale(
     """
     import random
 
-    wyslij = naprawde_wyslac(wyslij, "restacki")
+    wynik: dict[str, Any] = {"znalezione": 0, "rozwazone": 0, "planowane": 0,
+                             "restackowane": 0, "odmowy": [], "blad": None}
+    if not wyslij:
+        return _tylko_lokalny_podglad("restacki", wynik)
+    wyslij = naprawde_wyslac(
+        wyslij, "restacki", capabilities.Capability.RESTACK)
+    if not wyslij:
+        return _tylko_lokalny_podglad("restacki", wynik)
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
-    wynik: dict[str, Any] = {"znalezione": 0, "rozwazone": 0, "planowane": 0,
-                             "restackowane": 0, "odmowy": [], "blad": None}
     try:
         if wyslij:
             wymagaj_wlasciwego_konta(page)
@@ -2284,6 +2707,7 @@ def restackuj_w_kanale(
             if wykonane >= ile:
                 break
             kandydat = przyciski.nth(i)
+            attempt = None
             try:
                 if not kandydat.is_visible():
                     continue
@@ -2325,21 +2749,31 @@ def restackuj_w_kanale(
                     page.wait_for_timeout(
                         int(random.uniform(*config.ODSTEPY["restack"]) * 1000))
 
-                kandydat.scroll_into_view_if_needed(timeout=8000)
-                kandydat.click(timeout=8000)
-                page.wait_for_timeout(1500)
-                page.get_by_role("menuitem", name="Restack with a note").click(
-                    timeout=8000)
-                page.wait_for_timeout(SETTLE_MS)
-                pole = page.get_by_role("textbox").last
-                pole.click(timeout=8000)
-                pole.type(zdanie, delay=random.randint(18, 45))
-                page.wait_for_timeout(1200)
-                # Substack nazywa przycisk wyslania "Post" — szukamy go
-                # WEWNATRZ okna, nie w calym kanale, zeby nie trafic w cudzy.
-                page.get_by_role("button", name="Post").last.click(timeout=8000)
-                page.wait_for_timeout(SETTLE_MS + 2000)
-                potwierdzone = potwierdz_restack(page, zdanie)
+                cel = (
+                    f"{notka.get('autor', '')}\n{notka.get('tekst', '')}".strip())
+                with proba_mutacji("restack", cel, zdanie) as attempt:
+                    kandydat.scroll_into_view_if_needed(timeout=8000)
+                    kandydat.click(timeout=8000)
+                    page.wait_for_timeout(1500)
+                    page.get_by_role(
+                        "menuitem", name="Restack with a note").click(timeout=8000)
+                    page.wait_for_timeout(SETTLE_MS)
+                    pole = page.get_by_role("textbox").last
+                    pole.click(timeout=8000)
+                    pole.type(zdanie, delay=random.randint(18, 45))
+                    page.wait_for_timeout(1200)
+                    # Dispatch jest bezpośrednio przed mutującym Post.
+                    attempt.dispatch()
+                    page.get_by_role(
+                        "button", name="Post").last.click(timeout=8000)
+                    page.wait_for_timeout(SETTLE_MS + 2000)
+                    external_id = potwierdz_restack_id(page, zdanie)
+                    potwierdzone = external_id is not None
+                    if external_id:
+                        attempt.confirm(external_id)
+                    else:
+                        attempt.unknown("restacku nie znaleziono po dispatch")
+                _stan_proby(wynik, attempt, aggregate=True)
                 zapisz_w_dzienniku(
                     "restack", udane=potwierdzone,
                     komu=notka.get("autor", ""), slow=len(zdanie.split()),
@@ -2351,6 +2785,7 @@ def restackuj_w_kanale(
                 else:
                     print("    kliknięte, ale restacku nie ma w kanale",
                           flush=True)
+                    break
             except Exception as exc:
                 print(f"    (pominiete: {type(exc).__name__}: {exc}"[:150] + ")",
                       flush=True)
@@ -2359,11 +2794,23 @@ def restackuj_w_kanale(
                     page.wait_for_timeout(600)
                 except Exception:
                     pass
+                if (attempt is not None
+                        and attempt.status in {"PENDING", "UNKNOWN"}):
+                    _stan_proby(wynik, attempt, aggregate=True)
+                    _blad_mutacji(wynik, exc)
+                    break
+                if (isinstance(exc, mutation_ledger.MutationBlocked)
+                        and exc.status in {"PENDING", "UNKNOWN"}):
+                    _blad_mutacji(wynik, exc)
+                    break
+                if isinstance(exc, operational_day.BudgetExhausted):
+                    _blad_mutacji(wynik, exc)
+                    break
         if not wyslij:
             print(f"  (nie klikam — tryb sprawdzenia; podalbym dalej"
                   f" {wynik['planowane']})", flush=True)
     except Exception as exc:
-        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        _blad_mutacji(wynik, exc)
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
         page.close()

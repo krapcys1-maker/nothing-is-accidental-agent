@@ -7,22 +7,31 @@ i wypisuje, na czym stanął; uruchamiasz od nowa.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
 import sqlite3
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+import capabilities
 import config
 import db
 import editorial
 import llm
+import model_contracts
+import operational_day
+import provenance
+import safe_fetch
 
 SCOUT_SYSTEM = (
-    "You are a topic scout for the English-language Substack 'Nothing Is "
-    "Accidental', which explains the hidden systems, incentives and decisions "
-    "behind ordinary things. Return only valid JSON."
+    "You are an exceptional inventor of large editorial territories for the "
+    "English-language publication Nothing Is Accidental. Invent across science, "
+    "history, economics, culture, identity, technology, power and human life. "
+    "A topic does not have to be a system, procedure or ordinary object. Return "
+    "only valid JSON."
 )
 
 SEED_HISTORY = config.PROMPTS_DIR / "historia_startowa.json"
@@ -63,9 +72,9 @@ def recent_angles(conn: sqlite3.Connection, limit: int = config.DIVERSITY_LOOKBA
 
 
 REVIEW_SYSTEM = (
-    "You check an article against its evidence card, sentence by sentence. "
-    "Inference, analogy and opinion never fail — only a fact asserted without "
-    "evidence does. Return only valid JSON."
+    "You check pre-numbered article sentence units against an evidence card. "
+    "Pure inference, analogy and opinion do not require evidence, but a mixed "
+    "unit still requires support for every factual premise. Return only valid JSON."
 )
 
 
@@ -73,13 +82,25 @@ def review(
     conn: sqlite3.Connection, run_id: int, card: dict[str, Any], draft: dict[str, Any]
 ) -> dict[str, Any]:
     """Etap 8 — recenzja: rozliczenie każdego zdania (Claude)."""
+    units = provenance.sentence_units(draft["body"])
     prompt = _prompt(
         "recenzent.md",
         card_json=json.dumps(card, ensure_ascii=False, indent=2),
-        body=draft["body"],
+        sentences_json=json.dumps(units, ensure_ascii=False, indent=2),
     )
     text = llm.call("review", REVIEW_SYSTEM, prompt, conn=conn, run_id=run_id)
-    return llm.parse_json(text)
+    raw = _model_json(text, "review", conn=conn, run_id=run_id)
+    try:
+        result = provenance.bind_review(raw, units, card)
+    except Exception as exc:
+        db.record_provenance_check(
+            conn, run_id=run_id, stage="review", subject_id=None,
+            ok=False, error=f"{type(exc).__name__}: {exc}",
+        )
+        raise
+    db.record_provenance_check(
+        conn, run_id=run_id, stage="review", subject_id=None, ok=True)
+    return result
 
 
 FORMA_SYSTEM = (
@@ -106,7 +127,7 @@ def ocen_forme(
     """
     prompt = _prompt("forma.md", body=draft["body"])
     text = llm.call("forma", FORMA_SYSTEM, prompt, conn=conn, run_id=run_id)
-    return llm.parse_json(text)
+    return _model_json(text, "forma", conn=conn, run_id=run_id)
 
 
 def poprzednie_teksty(ile: int | None = None,
@@ -148,9 +169,10 @@ def _nazwa_zrodla(conn: sqlite3.Connection, url: str) -> str:
     sprawdzenia. Sprawdza je ten, kto widzi, CO otwiera.
     """
     row = conn.execute(
-        "SELECT title FROM sources WHERE url = ? AND title IS NOT NULL AND title != ''"
+        "SELECT title FROM sources WHERE (url = ? OR final_url = ?) "
+        "AND title IS NOT NULL AND title != ''"
         " ORDER BY id DESC LIMIT 1",
-        (url,),
+        (url, url),
     ).fetchone()
     tytul = (row["title"] if row else "") or ""
     tytul = " ".join(tytul.split())
@@ -162,52 +184,308 @@ def _nazwa_zrodla(conn: sqlite3.Connection, url: str) -> str:
     return f"{tytul} — {urlparse(url).netloc.replace('www.', '')}"
 
 
+class ArticleSaveRecoveryError(RuntimeError):
+    """Przygotowany zapis nie może zostać bezpiecznie dokończony ani cofnięty."""
+
+
+def _bytes_sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _path_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _under(path: Path, root: Path) -> Path:
+    resolved = path.resolve()
+    base = root.resolve()
+    if resolved != base and base not in resolved.parents:
+        raise ArticleSaveRecoveryError(
+            f"ścieżka transakcji wychodzi poza katalog artykułów: {resolved}")
+    return resolved
+
+
+def _write_prepared(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _remove_if_owned(path: Path, expected_sha256: str, root: Path) -> None:
+    path = _under(path, root)
+    if not path.exists():
+        return
+    if not path.is_file() or _path_sha256(path) != expected_sha256:
+        raise ArticleSaveRecoveryError(
+            f"odmawiam usunięcia obcego lub zmienionego artefaktu: {path}")
+    path.unlink()
+
+
+def _valid_file(path: Path | None, expected: str | None, root: Path) -> bool:
+    if path is None or expected is None:
+        return path is None and expected is None
+    path = _under(path, root)
+    return path.is_file() and _path_sha256(path) == expected
+
+
+def recover_article_saves(
+    conn: sqlite3.Connection, articles_dir: Path | None = None,
+) -> dict[str, int]:
+    """Rekoncyliuje durable intent po śmierci procesu na granicy plik–SQLite."""
+    root = (articles_dir or config.ARTICLES_DIR).resolve()
+    staging = root / ".save-transactions"
+    counts = {"complete": 0, "rolled_back": 0, "broken": 0,
+              "stale_temp_removed": 0}
+    rows = conn.execute(
+        "SELECT * FROM article_save_intents ORDER BY created_at, artifact_key"
+    ).fetchall()
+    referenced_temps: set[Path] = set()
+    broken: list[str] = []
+
+    for row in rows:
+        target = _under(Path(row["target_path"]), root)
+        temp = _under(Path(row["temp_path"]), root)
+        referenced_temps.add(temp)
+        notes_target = (_under(Path(row["notes_path"]), root)
+                        if row["notes_path"] else None)
+        notes_temp = (_under(Path(row["notes_temp_path"]), root)
+                      if row["notes_temp_path"] else None)
+        if notes_temp is not None:
+            referenced_temps.add(notes_temp)
+        article = conn.execute(
+            "SELECT id FROM articles WHERE artifact_key=?", (row["artifact_key"],)
+        ).fetchone()
+
+        def targets_valid() -> bool:
+            return (_valid_file(target, row["file_sha256"], root)
+                    and _valid_file(notes_target, row["notes_sha256"], root))
+
+        status = str(row["status"])
+        if status == "COMPLETE":
+            if article is None or not targets_valid():
+                message = "COMPLETE bez spójnego rekordu lub pliku"
+                conn.execute(
+                    "UPDATE article_save_intents SET status='BROKEN', error=? "
+                    "WHERE artifact_key=?", (message, row["artifact_key"]),
+                )
+                broken.append(f"{row['artifact_key']}: {message}")
+                counts["broken"] += 1
+                continue
+            if temp.exists():
+                _remove_if_owned(temp, row["file_sha256"], root)
+            if notes_temp is not None and notes_temp.exists():
+                _remove_if_owned(notes_temp, row["notes_sha256"], root)
+            counts["complete"] += 1
+            continue
+
+        if status == "BROKEN":
+            broken.append(f"{row['artifact_key']}: {row['error'] or 'BROKEN'}")
+            counts["broken"] += 1
+            continue
+
+        if status == "PREPARED" and article is not None:
+            # Defensywny wariant dla przyszłej zmiany kolejności: jeżeli DB już
+            # ma całość, dokończ atomowe replace z przygotowanych bajtów.
+            if not target.exists() and _valid_file(temp, row["file_sha256"], root):
+                os.replace(temp, target)
+            if (notes_target is not None and not notes_target.exists()
+                    and _valid_file(notes_temp, row["notes_sha256"], root)):
+                os.replace(notes_temp, notes_target)
+            if targets_valid():
+                conn.execute(
+                    "UPDATE article_save_intents SET status='COMPLETE', article_id=?,"
+                    " finished_at=?, error=NULL WHERE artifact_key=?",
+                    (int(article["id"]), db.now(), row["artifact_key"]),
+                )
+                counts["complete"] += 1
+                continue
+            message = "rekord artykułu istnieje, ale brak przygotowanych bajtów"
+            conn.execute(
+                "UPDATE article_save_intents SET status='BROKEN', error=? "
+                "WHERE artifact_key=?", (message, row["artifact_key"]),
+            )
+            broken.append(f"{row['artifact_key']}: {message}")
+            counts["broken"] += 1
+            continue
+
+        if status in {"PREPARED", "ROLLED_BACK"} and article is None:
+            _remove_if_owned(target, row["file_sha256"], root)
+            _remove_if_owned(temp, row["file_sha256"], root)
+            if notes_target is not None:
+                _remove_if_owned(notes_target, row["notes_sha256"], root)
+            if notes_temp is not None:
+                _remove_if_owned(notes_temp, row["notes_sha256"], root)
+            conn.execute(
+                "UPDATE article_save_intents SET status='ROLLED_BACK',"
+                " finished_at=?, error=COALESCE(error, 'recovery rollback')"
+                " WHERE artifact_key=?", (db.now(), row["artifact_key"]),
+            )
+            counts["rolled_back"] += 1
+
+    # Awaria przed utrwaleniem intentu może zostawić wyłącznie plik w
+    # dedykowanym stagingu. Nie ma legalnego właściciela, więc jest śmieciem.
+    if staging.exists():
+        for path in staging.glob("*.tmp"):
+            resolved = _under(path, root)
+            if resolved not in referenced_temps:
+                resolved.unlink()
+                counts["stale_temp_removed"] += 1
+    conn.commit()
+    if broken:
+        raise ArticleSaveRecoveryError("; ".join(broken))
+    return counts
+
+
 def save(
     conn: sqlite3.Connection, run_id: int, topic: dict[str, Any],
     card: dict[str, Any], draft: dict[str, Any], status: str,
     blocked_by: str | None, notes: list[dict[str, str]],
+    revisions: list[dict[str, Any]] | None = None,
+    fault: Any | None = None,
 ) -> Path:
-    """Etap 9 — zapis. Artykuł do szuflady: baza + plik .md."""
+    """Atomowy i idempotentny zapis plik–DB–rewizja–provenance.
+
+    System plików i SQLite nie mają wspólnego commitu. Durable intent sprawia,
+    że śmierć między ``os.replace`` i ``commit`` jest jednoznacznie cofana przy
+    restarcie, a zwykły wyjątek jest rekoncyliowany jeszcze w tym samym procesie.
+    """
+    if conn.in_transaction:
+        raise RuntimeError("zapis artykułu wymaga połączenia bez aktywnej transakcji")
     config.ARTICLES_DIR.mkdir(parents=True, exist_ok=True)
-    slug = re.sub(r"[^a-z0-9]+", "-", (draft.get("title") or "artykul").lower()).strip("-")
-    path = config.ARTICLES_DIR / f"{run_id:04d}-{slug[:60]}.md"
-    # Plik ma być GOTOWY DO WKLEJENIA, a nie mieszanką tekstu i naszych notatek.
-    # Wcześniej trafiał tu nagłówek "Źródła" po polsku — w artykule pisanym po
-    # angielsku — oraz sekcja "Status: SAVED", czyli zapis wewnętrzny, który
-    # czytelnikowi nic nie mówi. Status i tak siedzi w tabeli `articles`, więc
-    # w pliku był duplikatem.
-    urls = list(dict.fromkeys(
-        c.get("url") for c in card.get("confirmed_claims", []) if c.get("url")
-    ))
-    path.write_text(
+    recover_article_saves(conn)
+
+    slug = re.sub(
+        r"[^a-z0-9]+", "-", (draft.get("title") or "artykul").lower()
+    ).strip("-")
+    path = (config.ARTICLES_DIR / f"{run_id:04d}-{slug[:60]}.md").resolve()
+    notes_path = path.with_suffix(".uwagi.md")
+    urls = provenance.citation_urls(card)
+    if not urls and card.get("provenance_version") is None:
+        urls = list(dict.fromkeys(
+            c.get("url") for c in card.get("confirmed_claims", []) if c.get("url")
+        ))
+    article_bytes = (
         f"# {draft.get('title', '')}\n\n*{draft.get('subtitle', '')}*\n\n"
         f"{draft['body']}\n\n---\n\n## Sources\n\n"
         + "\n".join(f"- [{_nazwa_zrodla(conn, url)}]({url})" for url in urls)
-        + "\n",
-        encoding="utf-8",
-    )
-    # Wszystko, co jest naszą notatką, a nie tekstem dla czytelnika, ląduje obok
-    # — i tylko wtedy, gdy jest co zapisać.
-    if status != "SAVED" or blocked_by or notes:
-        path.with_suffix(".uwagi.md").write_text(
-            f"# Uwagi wewnętrzne — {draft.get('title', '')}\n\n"
-            f"Status: {status}" + (f" — {blocked_by}" if blocked_by else "") + "\n\n"
-            + "\n".join(f"- {n}" for n in notes) + "\n",
-            encoding="utf-8",
+        + "\n"
+    ).encode("utf-8")
+    has_notes = status != "SAVED" or bool(blocked_by) or bool(notes)
+    notes_bytes = ((
+        f"# Uwagi wewnętrzne — {draft.get('title', '')}\n\n"
+        f"Status: {status}" + (f" — {blocked_by}" if blocked_by else "") + "\n\n"
+        + "\n".join(f"- {item}" for item in notes) + "\n"
+    ).encode("utf-8") if has_notes else None)
+    file_hash = _bytes_sha256(article_bytes)
+    notes_hash = _bytes_sha256(notes_bytes) if notes_bytes is not None else None
+    identity = json.dumps({
+        "version": 1, "run_id": run_id, "topic": topic,
+        "title": draft.get("title"), "subtitle": draft.get("subtitle"),
+        "body_sha256": _bytes_sha256(str(draft["body"]).encode("utf-8")),
+        "card": card, "status": status, "blocked_by": blocked_by,
+        "notes": notes, "revisions": revisions or [],
+    }, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    artifact_key = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    staging = config.ARTICLES_DIR / ".save-transactions"
+    temp_path = (staging / f"{artifact_key}.article.tmp").resolve()
+    notes_temp = ((staging / f"{artifact_key}.notes.tmp").resolve()
+                  if notes_bytes is not None else None)
+
+    existing = conn.execute(
+        "SELECT i.status, a.id FROM article_save_intents i "
+        "LEFT JOIN articles a ON a.artifact_key=i.artifact_key "
+        "WHERE i.artifact_key=?", (artifact_key,),
+    ).fetchone()
+    if existing and existing["status"] == "COMPLETE" and existing["id"]:
+        return path
+    conflict = conn.execute(
+        "SELECT artifact_key FROM articles WHERE file_path=? AND artifact_key<>?",
+        (str(path), artifact_key),
+    ).fetchone()
+    if conflict or path.exists() or (notes_bytes is not None and notes_path.exists()):
+        raise ArticleSaveRecoveryError(
+            f"docelowa ścieżka ma innego właściciela: {path}")
+
+    def checkpoint(name: str) -> None:
+        if fault is not None:
+            fault(name)
+
+    try:
+        _write_prepared(temp_path, article_bytes)
+        checkpoint("after_article_prepare")
+        if notes_bytes is not None and notes_temp is not None:
+            _write_prepared(notes_temp, notes_bytes)
+        checkpoint("after_notes_prepare")
+        conn.execute(
+            "INSERT INTO article_save_intents "
+            "(artifact_key, run_id, target_path, temp_path, file_sha256, notes_path,"
+            " notes_temp_path, notes_sha256, status, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PREPARED', ?) "
+            "ON CONFLICT(artifact_key) DO UPDATE SET "
+            "target_path=excluded.target_path, temp_path=excluded.temp_path,"
+            "file_sha256=excluded.file_sha256, notes_path=excluded.notes_path,"
+            "notes_temp_path=excluded.notes_temp_path, notes_sha256=excluded.notes_sha256,"
+            "status='PREPARED', article_id=NULL, finished_at=NULL, error=NULL",
+            (artifact_key, run_id, str(path), str(temp_path), file_hash,
+             str(notes_path) if notes_bytes is not None else None,
+             str(notes_temp) if notes_temp is not None else None,
+             notes_hash, db.now()),
         )
-    cur = conn.execute(
-        "INSERT INTO articles (run_id, created_at, topic, title, body, evidence,"
-        " status, blocked_by, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (run_id, db.now(), topic.get("title"), draft.get("title"), draft["body"],
-         json.dumps(card, ensure_ascii=False), status, blocked_by,
-         json.dumps(notes, ensure_ascii=False)),
-    )
-    conn.commit()
-    editorial.register_article(
-        conn, article_id=int(cur.lastrowid), run_id=run_id, topic=topic,
-        card=card, draft=draft, status=status,
-    )
-    return path
+        conn.commit()
+        checkpoint("after_intent_commit")
+
+        conn.execute("BEGIN IMMEDIATE")
+        cur = conn.execute(
+            "INSERT INTO articles (run_id, created_at, topic, title, body, evidence,"
+            " status, blocked_by, notes, artifact_key, file_path, file_sha256,"
+            " notes_path, notes_sha256) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (run_id, db.now(), topic.get("title"), draft.get("title"), draft["body"],
+             json.dumps(card, ensure_ascii=False), status, blocked_by,
+             json.dumps(notes, ensure_ascii=False), artifact_key, str(path), file_hash,
+             str(notes_path) if notes_bytes is not None else None, notes_hash),
+        )
+        article_id = int(cur.lastrowid)
+        checkpoint("after_article_insert")
+        provenance.persist_article_lineage(conn, article_id, card)
+        checkpoint("after_provenance")
+        editorial.register_article(
+            conn, article_id=article_id, run_id=run_id, topic=topic,
+            card=card, draft=draft, status=status, commit=False,
+        )
+        checkpoint("after_content_item")
+        for revision in revisions or []:
+            editorial.record_revision(
+                conn, run_id=run_id, article_id=article_id, commit=False,
+                iteration=int(revision["iteration"]), trigger=revision["trigger"],
+                before=revision["before"], after=revision.get("after"),
+                status=str(revision["status"]), remaining=revision.get("remaining"),
+            )
+        checkpoint("after_revisions")
+
+        os.replace(temp_path, path)
+        checkpoint("after_article_replace")
+        if notes_bytes is not None and notes_temp is not None:
+            os.replace(notes_temp, notes_path)
+        checkpoint("after_notes_replace")
+        conn.execute(
+            "UPDATE article_save_intents SET status='COMPLETE', article_id=?,"
+            " finished_at=?, error=NULL WHERE artifact_key=?",
+            (article_id, db.now(), artifact_key),
+        )
+        checkpoint("before_commit")
+        conn.commit()
+        checkpoint("after_commit")
+        return path
+    except Exception as exc:
+        if conn.in_transaction:
+            conn.rollback()
+        try:
+            recover_article_saves(conn)
+        except ArticleSaveRecoveryError as recovery_exc:
+            raise recovery_exc from exc
+        raise
 
 
 WRITER_SYSTEM = (
@@ -265,7 +543,7 @@ def write(
         card_json=json.dumps(card, ensure_ascii=False, indent=2),
     )
     text = llm.call("write", WRITER_SYSTEM, prompt, conn=conn, run_id=run_id)
-    draft = llm.parse_json(text)
+    draft = _model_json(text, "write", conn=conn, run_id=run_id)
     if not draft.get("body"):
         raise ValueError("pisarz nie zwrócił treści")
     return draft
@@ -276,6 +554,27 @@ REVISE_SYSTEM = (
     "smallest evidence-bound edits needed to resolve the supplied findings. "
     "Return exactly one JSON object."
 )
+
+
+def _model_json(
+    text: str, contract: str, *, conn: sqlite3.Connection | None,
+    run_id: int | None, purpose: str | None = None,
+) -> dict[str, Any]:
+    """Jedyna granica tekst modelu -> obiekt sterujący etapem V3."""
+    contract_id = model_contracts.contract_id(contract)
+    label = purpose or contract
+    try:
+        parsed = llm.parse_json(text)
+        result = model_contracts.validate(contract, parsed)
+    except Exception as exc:
+        db.record_contract_check(
+            conn, run_id=run_id, purpose=label, contract_id=contract_id,
+            ok=False, error=f"{type(exc).__name__}: {exc}",
+        )
+        raise
+    db.record_contract_check(
+        conn, run_id=run_id, purpose=label, contract_id=contract_id, ok=True)
+    return result
 
 
 def revise(
@@ -290,7 +589,7 @@ def revise(
         draft_json=json.dumps(draft, ensure_ascii=False, indent=2),
     )
     text = llm.call("revise", REVISE_SYSTEM, prompt, conn=conn, run_id=run_id)
-    revised = llm.parse_json(text)
+    revised = _model_json(text, "revise", conn=conn, run_id=run_id)
     if not revised.get("body"):
         raise ValueError("redaktor nie zwrócił treści")
     if not isinstance(revised.get("changes"), list):
@@ -354,10 +653,10 @@ def wybierz_do_odpowiedzi(
                        _prompt("kogo_odpowiedziec.md", ile=ile_max,
                                komentarze=opis),
                        conn=conn, run_id=run_id)
-        dane = llm.parse_json(raw)
+        dane = _model_json(raw, "wybor", conn=conn, run_id=run_id)
     except Exception as exc:
-        print(f"  [wybor] nie wyszedl ({exc}) — biore najstarsze", flush=True)
-        return komentarze[: ile_max]
+        print(f"  [wybor] nie wyszedl ({exc}) — autonomiczna cisza", flush=True)
+        return []
 
     wybrane: list[dict[str, Any]] = []
     for o in sorted(dane.get("choices") or [], key=lambda x: x.get("rank", 99)):
@@ -397,7 +696,7 @@ def reply_to(
             # nie szuka i nic nie kosztuje.
             raw = llm.call("reply", REPLY_SYSTEM, prompt, conn=conn, run_id=run_id,
                            web_search=True)
-            data = llm.parse_json(raw)
+            data = _model_json(raw, "reply", conn=conn, run_id=run_id)
         except Exception as exc:
             print(f"  [odpowiedź {i + 1}] nie wyszła: {exc}", flush=True)
             continue
@@ -510,9 +809,8 @@ def grafika(
             title=draft.get("title", ""),
             body=draft.get("body", "")[:6000],
         )
-        brief = llm.parse_json(
-            llm.call("grafika", IMAGE_SYSTEM, prompt, conn=conn, run_id=run_id)
-        )
+        raw = llm.call("grafika", IMAGE_SYSTEM, prompt, conn=conn, run_id=run_id)
+        brief = _model_json(raw, "grafika", conn=conn, run_id=run_id)
         opis = brief.get("prompt") or ""
         if not opis:
             raise ValueError("brief graficzny bez promptu")
@@ -539,56 +837,20 @@ def grafika(
     return brief
 
 
-def _wiek_konta_w_dniach(conn: sqlite3.Connection) -> int:
-    """Ile dni działa to konto — liczone od pierwszego przebiegu w bazie."""
-    row = conn.execute("SELECT MIN(started_at) AS s FROM runs").fetchone()
-    if not row or not row["s"]:
-        return 0
-    from datetime import datetime, timezone
-    try:
-        start = datetime.fromisoformat(str(row["s"]).replace("Z", "+00:00"))
-    except ValueError:
-        return 0
-    return max(0, (datetime.now(timezone.utc) - start).days)
+def budzet_dnia(conn: sqlite3.Connection, kiedy=None) -> dict[str, int]:
+    """Zwraca plan zapisany raz dla jednej doby redakcyjnej.
 
-
-def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
-    """Ile czego agent może dziś zrobić — losowane z widełek, nie stałe.
-
-    Stała liczba dziennie wygląda jak robot, bo człowiek nie ma normy: raz
-    przeczyta pół kanału, raz nic. Losujemy osobno na każdy dzień, a przez
-    pierwszy miesiąc trzymamy się dolnej połowy — nowe konto z jednym artykułem,
-    które nagle obserwuje dwadzieścia osób, wygląda dokładnie jak farma.
+    Losowość jest deterministyczna dla konta, dnia i wersji polityki. Kolejne
+    przebiegi oraz restarty odczytują ten sam JSON z `operational_days`.
     """
-    import random
-
-    rozbieg = _wiek_konta_w_dniach(conn) < config.ROZBIEG_DNI
-
-    def losuj(widelki: tuple[int, int]) -> int:
-        dol, gora = widelki
-        if rozbieg:
-            gora = dol + (gora - dol) // 2
-        return random.randint(dol, gora)
-
-    # Miesięczne przeliczamy na dzień, żeby wszystko było jedną walutą; ułamek
-    # rozstrzyga losowanie, więc w skali miesiąca wychodzi zadana liczba.
-    def z_miesiaca(widelki: tuple[int, int]) -> int:
-        dziennie = losuj(widelki) / 30.0
-        return int(dziennie) + (1 if random.random() < dziennie % 1 else 0)
-
-    budzet = {
-        # Notki nie sa losowane: rozklad tygodnia ma ich piec na dzien i to jest
-        # kontrakt, a nie widelki. Sa w budzecie, zeby liczyc je tak samo jak
-        # reszte przy dzieleniu dnia na przebiegi.
-        "notki": len(config.NOTE_MIX_OTHER_DAY),
-        "lajki": losuj(config.LAJKI_DZIENNIE),
-        "komentarze": losuj(config.KOMENTARZE_DZIENNIE),
-        "follow": z_miesiaca(config.FOLLOW_MIESIECZNIE),
-        "subskrypcje": z_miesiaca(config.SUBSKRYPCJE_MIESIECZNIE),
-        "restacki": losuj(config.RESTACK_DZIENNIE),
-    }
-    print(f"  [budżet dnia{' — rozbieg' if rozbieg else ''}] "
-          + "  ".join(f"{k}={v}" for k, v in budzet.items()), flush=True)
+    plan = operational_day.get_or_create(conn, at=kiedy)
+    budzet = dict(plan["budgets"])
+    print(
+        f"  [budżet {plan['day_key']} {plan['timezone']}"
+        f"{' — rozbieg' if plan['ramp_up'] else ''}] "
+        + "  ".join(f"{k}={v}" for k, v in budzet.items()),
+        flush=True,
+    )
     return budzet
 
 
@@ -722,7 +984,7 @@ def wybierz_cele(
     try:
         raw = llm.call("cele", TARGETS_SYSTEM, _prompt("cele.md", posts=opis),
                        conn=conn, run_id=run_id)
-        oceny = llm.parse_json(raw).get("targets") or []
+        oceny = _model_json(raw, "cele", conn=conn, run_id=run_id).get("targets") or []
     except Exception as exc:
         print(f"  [cele] nie wyszły ({exc})", flush=True)
         return []
@@ -791,7 +1053,8 @@ def znajdz_ciekawostki(
     try:
         raw = llm.call("curiosity", CURIOSITY_SYSTEM, prompt,
                        conn=conn, run_id=run_id, web_search=True)
-        fakty = llm.parse_json(raw).get("facts") or []
+        fakty = _model_json(
+            raw, "curiosity", conn=conn, run_id=run_id).get("facts") or []
     except Exception as exc:
         print(f"  [ciekawostki] nie wyszły ({exc})", flush=True)
         return []
@@ -865,7 +1128,8 @@ def note(
 
     `evidence` to karta artykułu albo fragmenty, których artykuł nie zużył.
     W obu wypadkach notka stoi na materiale ocytowanym, więc nie ma skąd
-    zmyślać liczby. Generujemy kilku kandydatów; wybór należy do właściciela.
+    zmyślać liczby. Kandydaci są autonomicznie sortowani i sprawdzani; pierwszy
+    spełniający kontrakt zostaje wybrany przez kod.
     """
     prompt = _prompt(
         "notka.md",
@@ -895,7 +1159,7 @@ def note(
     for i in range(config.NOTE_CANDIDATES):
         try:
             raw = llm.call("note", NOTE_SYSTEM, prompt, conn=conn, run_id=run_id)
-            data = llm.parse_json(raw)
+            data = _model_json(raw, "note", conn=conn, run_id=run_id)
         except Exception as exc:
             print(f"  [notka {i + 1}] nie wyszła: {exc}", flush=True)
             continue
@@ -1009,9 +1273,7 @@ def artykul_do_promocji() -> dict[str, Any] | None:
     nie byla na tyle pelna, zeby to wyszlo na jaw, ale regula brzmi „jedna
     notka po artykule dziennie" i to jest caly dzien, nie jeden wiersz pliku.
     """
-    from datetime import datetime, timezone
-
-    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    dzis = config.data_redakcyjna()
     kolejka = wczytaj_promocje()
     if any(a.get("ostatnia") == dzis for a in kolejka):
         return None             # dzisiejsza notka promujaca juz poszla
@@ -1024,13 +1286,11 @@ def artykul_do_promocji() -> dict[str, Any] | None:
 
 def odhacz_promocje(url: str) -> None:
     """Odnotowuje, ze artykul dostal dzis swoja notke promujaca."""
-    from datetime import datetime, timezone
-
     dane = wczytaj_promocje()
     for a in dane:
         if a.get("url") == url:
             a["wystawione"] = a.get("wystawione", 0) + 1
-            a["ostatnia"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            a["ostatnia"] = config.data_redakcyjna()
     PROMOCJA.write_text(json.dumps(dane, ensure_ascii=False, indent=1),
                         encoding="utf-8")
 
@@ -1221,7 +1481,7 @@ def ocen_restack(
         _prompt("restack.md", autor=notka.get("autor", "")[:80], tekst=tekst[:2500]),
         conn=conn, run_id=run_id,
     )
-    o = llm.parse_json(surowy)
+    o = _model_json(surowy, "restack", conn=conn, run_id=run_id)
     zdanie = str(o.get("sentence") or "").strip()
 
     # Deklaracja bez zdania to nie decyzja. I odwrotnie: zdanie za dlugie
@@ -1335,7 +1595,9 @@ def sprawdz_fakty(
             "factcheck", FACTCHECK_SYSTEM, prompt,
             conn=conn, run_id=run_id, web_search=True,
         )
-        fakty = llm.parse_json(raw).get("facts") or []
+        fakty = _model_json(
+            raw, "fact_search", conn=conn, run_id=run_id,
+            purpose="factcheck").get("facts") or []
     except Exception as exc:
         print(f"  [fakty] nie udało się sprawdzić ({exc}) — komentarz bez pokrycia",
               flush=True)
@@ -1401,12 +1663,16 @@ def zweryfikuj(
     try:
         raw = llm.call("factcheck", FACTCHECK_SYSTEM, prompt,
                        conn=conn, run_id=run_id, web_search=True)
-        out = llm.parse_json(raw)
+        out = _model_json(
+            raw, "verification", conn=conn, run_id=run_id,
+            purpose="factcheck")
     except Exception as exc:
-        # Awaria weryfikacji to nie jest dowód fałszu. Komentarz i tak stoi na faktach
-        # zebranych przed pisaniem — druga siatka pękła, pierwsza trzyma.
-        return {"claims": [], "safe_to_post": True,
-                "verdict": f"weryfikacja nie doszła do skutku ({exc}) — puszczam na pierwszej siatce"}
+        # Awaria weryfikacji nie dowodzi fałszu, ale tym bardziej nie dowodzi
+        # bezpieczeństwa publikacji. Autonomiczny agent wybiera ciszę i może
+        # wrócić w następnym przebiegu; nie zamienia błędu schematu na zgodę.
+        return {"claims": [], "safe_to_post": False,
+                "verification_available": False,
+                "verdict": f"weryfikacja nie doszła do skutku ({exc}) — nie publikuję"}
     # Próg mieszka tutaj, nie w ocenie modelu: blokuje wyłącznie fakt OBALONY.
     # Nieznalezione to nie nieprawdziwe. Teza o mechanizmach, motywach czy skutkach
     # jest stanowiskiem, a stanowisko ma prawo być głośne i sporne — po to jest to pismo.
@@ -1425,8 +1691,8 @@ def comment_on(
 ) -> dict[str, Any]:
     """Komentarz do cudzego posta — do szuflady.
 
-    Generuje kilku kandydatów i oddaje wszystkich; wybór należy do właściciela.
-    Milczenie jest pełnoprawną odpowiedzią i nie jest porażką.
+    Generuje kilku kandydatów i autonomicznie oznacza pierwszy przechodzący
+    walidację. Milczenie jest pełnoprawną odpowiedzią i nie jest porażką.
     """
     # Domyślnie model pisze z WŁASNEJ WIEDZY, bez szukania na zapas.
     #
@@ -1472,7 +1738,7 @@ def comment_on(
     for i in range(config.COMMENT_CANDIDATES):
         try:
             raw = llm.call("comment", COMMENT_SYSTEM, prompt, conn=conn, run_id=run_id)
-            data = llm.parse_json(raw)
+            data = _model_json(raw, "comment", conn=conn, run_id=run_id)
         except Exception as exc:
             print(f"  [komentarz {i + 1}] nie wyszedł: {exc}", flush=True)
             continue
@@ -1532,33 +1798,56 @@ def comment_on(
 def fallback_card(question: str, evidence: list[dict[str, Any]]) -> dict[str, Any]:
     """Karta złożona z dowodów bez modelu — gdy synteza padnie.
 
-    Zasada właściciela: skoro temat jest wybrany, a research zrobiony i opłacony,
-    artykuł MUSI powstać. Ta karta jest gorsza od syntezy — nie waży dowodów, nie
-    znajduje sprzeczności — ale pozwala pisarzowi ruszyć, zamiast wyrzucać
-    opłacony research do kosza.
+    Polityka odziedziczona z V2 zachowuje wykonany research także wtedy, gdy
+    synteza nie powstanie. Ta karta jest gorsza od syntezy — nie waży dowodów i
+    nie znajduje sprzeczności — dlatego nadal podlega kontraktom provenance,
+    bramkom oraz autonomicznej kwarantannie.
     """
-    claims = [
-        {"claim": e["excerpts"][0][: config.CARD_MAX_CLAIM_CHARS],
-         "evidence": e["excerpts"][0], "url": e["url"]}
-        for e in evidence if e.get("excerpts")
-    ][: config.CARD_MAX_CONFIRMED]
-    numbers = [
-        {"value": n, "means": e.get("title", ""), "url": e["url"]}
-        for e in evidence for n in e.get("numbers", [])
-    ][: config.CARD_MAX_NUMBERS]
-    return {
+    selected: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for source in evidence:
+        fragments = source.get("fragments") or []
+        if fragments:
+            selected.append((source, fragments[0]))
+        if len(selected) >= config.CARD_MAX_CONFIRMED:
+            break
+    claims = [{
+        "claim": fragment["text"][: config.CARD_MAX_CLAIM_CHARS],
+        "fragment_ids": [fragment["fragment_id"]],
+    } for _source, fragment in selected]
+    claim_index = {
+        fragment["fragment_id"]: index
+        for index, (_source, fragment) in enumerate(selected)
+    }
+    numbers = []
+    for source in evidence:
+        for number in source.get("numbers") or []:
+            if number["fragment_id"] not in claim_index:
+                continue
+            numbers.append({
+                "number_id": number["number_id"],
+                "means": source.get("title", ""),
+                "claim_index": claim_index[number["fragment_id"]],
+            })
+            if len(numbers) >= config.CARD_MAX_NUMBERS:
+                break
+        if len(numbers) >= config.CARD_MAX_NUMBERS:
+            break
+    raw = {
         "working_thesis": question,
         "main_mechanism": "",
         "confirmed_claims": claims,
         "citable_numbers": numbers,
+        "parallel_mechanisms": [],
         "uncertain_claims": [],
         "contradictions": [],
         "not_established": [
             "This card was assembled mechanically because the synthesis step "
             "failed; nothing here has been weighed against anything else."
         ],
-        "_fallback": True,
     }
+    card = provenance.bind_card(raw, evidence)
+    card["_fallback"] = True
+    return card
 
 
 SYNTHESIS_SYSTEM = (
@@ -1567,17 +1856,28 @@ SYNTHESIS_SYSTEM = (
 )
 
 
+def _synthesis_source_payload(source: dict[str, Any]) -> dict[str, Any]:
+    """Nie gubi statusu ani czasu dokumentu na granicy classify–synthesis."""
+    return {
+        "document_id": source["document_id"],
+        "url": source["url"],
+        "publisher": source.get("publisher"),
+        "title": source.get("title"),
+        "class": source["class"],
+        "published_at": source.get("published_at"),
+        "retrieved_at": source.get("retrieved_at"),
+        "evidence_status": source.get("evidence_status"),
+        "evidence_roles": list(source.get("evidence_roles") or []),
+        "fragments": source["fragments"],
+        "numbers": source["numbers"],
+    }
+
+
 def synthesis(
     conn: sqlite3.Connection, run_id: int, question: str, evidence: list[dict[str, Any]]
 ) -> dict[str, Any]:
     """Etap 6 — karta dowodowa (Claude)."""
-    payload = [
-        {
-            "url": s["url"], "publisher": s.get("publisher"), "title": s.get("title"),
-            "class": s["class"], "excerpts": s["excerpts"], "numbers": s["numbers"],
-        }
-        for s in evidence
-    ]
+    payload = [_synthesis_source_payload(source) for source in evidence]
     prompt = _prompt(
         "synteza.md",
         question=question,
@@ -1591,10 +1891,13 @@ def synthesis(
         max_claim_chars=config.CARD_MAX_CLAIM_CHARS,
     )
     text = llm.call("synthesis", SYNTHESIS_SYSTEM, prompt, conn=conn, run_id=run_id)
-    card = llm.parse_json(text)
+    raw_card = _model_json(text, "synthesis", conn=conn, run_id=run_id)
 
-    claims = card.get("confirmed_claims") or []
-    numbers = card.get("citable_numbers") or []
+    claims = (raw_card.get("confirmed_claims") or [])[: config.CARD_MAX_CONFIRMED]
+    numbers = [
+        number for number in raw_card.get("citable_numbers") or []
+        if number.get("claim_index", -1) < len(claims)
+    ][: config.CARD_MAX_NUMBERS]
     # Ostrzeżenie, nie bramka. Chuda karta daje chudszy artykuł, ale to jest
     # decyzja właściciela do podjęcia po przeczytaniu, nie powód, żeby zabić
     # opłacony przebieg.
@@ -1606,8 +1909,18 @@ def synthesis(
         )
     # Kontrakt rozmiaru nie zabija karty za nadmiar — przycina. Poprzedni agent
     # odrzucał całość przy siódmym elemencie, gdy prompt prosił o 4-8.
-    card["confirmed_claims"] = claims[: config.CARD_MAX_CONFIRMED]
-    card["citable_numbers"] = numbers[: config.CARD_MAX_NUMBERS]
+    raw_card["confirmed_claims"] = claims
+    raw_card["citable_numbers"] = numbers
+    try:
+        card = provenance.bind_card(raw_card, evidence)
+    except Exception as exc:
+        db.record_provenance_check(
+            conn, run_id=run_id, stage="synthesis", subject_id=None,
+            ok=False, error=f"{type(exc).__name__}: {exc}",
+        )
+        raise
+    db.record_provenance_check(
+        conn, run_id=run_id, stage="synthesis", subject_id=None, ok=True)
     return card
 
 
@@ -1628,7 +1941,17 @@ def classify(
     i oddaje skoncentrowane cytaty.
     """
     kept: list[dict[str, Any]] = []
-    for source in corpus:
+    seen_documents: set[str] = set()
+    for raw_source in corpus:
+        try:
+            source = provenance.documentize(raw_source)
+        except Exception as exc:
+            db.record_provenance_check(
+                conn, run_id=run_id, stage="classify_document", subject_id=None,
+                ok=False, error=f"{type(exc).__name__}: {exc}",
+            )
+            print(f"  [klasyfikacja] dokument pominięty: {exc}", flush=True)
+            continue
         text = source.get("text", "")[: config.CLASSIFY_MAX_INPUT_CHARS]
         prompt = _prompt(
             "klasyfikacja.md",
@@ -1636,13 +1959,18 @@ def classify(
             title=source.get("title", ""),
             publisher=source.get("publisher", ""),
             url=source.get("url", ""),
+            published_at=source.get("published_at", "UNKNOWN"),
+            retrieved_at=source.get("retrieved_at", "UNKNOWN"),
+            evidence_status=source.get("evidence_status", "UNKNOWN"),
+            evidence_roles=json.dumps(
+                source.get("evidence_roles") or [], ensure_ascii=False),
             text=text,
             max_excerpts=config.CLASSIFY_MAX_EXCERPTS,
             max_excerpt_chars=config.CLASSIFY_MAX_EXCERPT_CHARS,
         )
         try:
             raw = llm.call("classify", CLASSIFY_SYSTEM, prompt, conn=conn, run_id=run_id)
-            data = llm.parse_json(raw)
+            data = _model_json(raw, "classify", conn=conn, run_id=run_id)
         except Exception as exc:
             print(f"  [klasyfikacja] {source.get('host')} — pominięty: {exc}", flush=True)
             continue
@@ -1650,9 +1978,30 @@ def classify(
         relevance = float(data.get("relevance", 0) or 0)
         klass = data.get("class", "ODPAD")
         excerpts = [e for e in data.get("excerpts", []) if isinstance(e, str) and e.strip()]
+        if klass != "ODPAD" and excerpts:
+            try:
+                bound = provenance.fragments_from_excerpts(source, excerpts)
+            except Exception as exc:
+                db.record_provenance_check(
+                    conn, run_id=run_id, stage="classify_fragments",
+                    subject_id=source["document_id"], ok=False,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+                print(
+                    f"  [klasyfikacja] {source.get('host')} — fragment odrzucony: {exc}",
+                    flush=True,
+                )
+                continue
+            db.record_provenance_check(
+                conn, run_id=run_id, stage="classify_fragments",
+                subject_id=source["document_id"], ok=True,
+            )
+        else:
+            bound = None
         print(
             f"  [klasyfikacja] {klass:11} trafność={relevance:.2f} "
-            f"fragmentów={len(excerpts):2}  liczb={len(data.get('numbers', [])):2}  "
+            f"fragmentów={len(excerpts):2}  "
+            f"liczb={len((bound or {}).get('numbers', [])):2}  "
             f"{source.get('host')}",
             flush=True,
         )
@@ -1662,15 +2011,17 @@ def classify(
         # a to dosłownie temat artykułu. Trafność zostaje notatką do kolejności.
         if klass == "ODPAD" or not excerpts:
             continue
+        if bound["document_id"] in seen_documents:
+            print(
+                f"  [klasyfikacja] pomijam duplikat dokumentu {bound['document_id']}",
+                flush=True,
+            )
+            continue
+        seen_documents.add(bound["document_id"])
         kept.append({
-            "url": source.get("url"),
-            "host": source.get("host"),
-            "title": source.get("title"),
-            "publisher": source.get("publisher"),
+            **(bound or {}),
             "class": klass,
             "relevance": relevance,
-            "excerpts": excerpts,
-            "numbers": [n for n in data.get("numbers", []) if isinstance(n, str)],
             "note": data.get("note", ""),
         })
 
@@ -1690,58 +2041,21 @@ def classify(
 
 def _dobierz_przegladarka(conn, run_id: int, brakujace: list[dict[str, Any]],
                           juz_mamy: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Drugie podejscie do stron, ktore zwyklemu pobieraniu daly pusty szkielet.
+    """Fail-closed: research browser nie ma jeszcze przypiętego DNS.
 
-    Polowa zrodel przepadala i to bylo waskie gardlo jakosci: artykul o blokadzie
-    na karcie stanal na DWOCH dokumentach z szesciu znalezionych, bo `visa.no`
-    i `mtf.mastercard.com.au` oddaly zero znakow. To nie sa blokady — to strony
-    rysowane JavaScriptem, ktorych klient HTTP nie widzi. Przegladarke mamy
-    i uzywamy jej do komentarzy; tutaj jej nie bylo.
-
-    NIE dotyczy odmow ani bledow 404. Host, ktory mowi automatowi „nie", dostaje
-    „nie" — to zasada projektu i nie omijamy jej narzedziem. Adres, ktory nie
-    istnieje, nie zacznie istniec w przegladarce.
+    Playwright może zweryfikować URL przed nawigacją, ale Chromium rozwiązuje
+    nazwę ponownie i pobiera całe drzewo subresource'ów. To odtwarza lukę SSRF
+    oraz DNS rebinding zamkniętą w `safe_fetch`. Do czasu równoważnego backendu
+    nie wolno obchodzić pustej strony drugim, słabiej kontrolowanym transportem.
     """
     if not brakujace:
         return []
-    import browser
-
-    print(f"  [pobranie] drugie podejscie w przegladarce: {len(brakujace)} stron",
-          flush=True)
-    odzyskane: list[dict[str, Any]] = []
-    try:
-        strony = {s["url"]: s for s in browser.read_pages([x["url"] for x in brakujace])}
-    except Exception as exc:
-        print(f"  [pobranie] przegladarka zawiodla: {type(exc).__name__}", flush=True)
-        return []
-
-    for source in brakujace:
-        strona = strony.get(source["url"]) or {}
-        tekst = (strona.get("text") or "").strip()
-        host = source.get("host") or _host(source["url"])
-        niski = tekst.lower()
-        if any(fraza in niski for fraza in config.REFUSAL_PHRASES):
-            powod = "host odmówił automatowi"
-        elif len(tekst) < config.FETCH_MIN_CHARS:
-            powod = f"też pusto w przeglądarce ({len(tekst)} znaków)"
-        else:
-            powod = None
-        print(f"  [pobranie2] {'OK  ' if powod is None else 'NIE '} {host:28.28} "
-              f"{len(tekst):>6} znaków  {powod or ''}", flush=True)
-        conn.execute(
-            "UPDATE sources SET fetched_ok = ?, fail_reason = ? "
-            "WHERE run_id = ? AND url = ?",
-            (int(powod is None), powod or "odzyskane w przeglądarce",
-             run_id, source["url"]),
-        )
-        if powod is None:
-            wpis = dict(source)
-            wpis["text"] = tekst
-            odzyskane.append(wpis)
-    if odzyskane:
-        print(f"  [pobranie] przegladarka odzyskala {len(odzyskane)} z {len(brakujace)}",
-              flush=True)
-    return odzyskane
+    print(
+        f"  [pobranie] {len(brakujace)} pustych stron bez fallbacku "
+        "przeglądarkowego — brak bezpiecznego przypięcia DNS",
+        flush=True,
+    )
+    return []
 
 
 def fetch(
@@ -1752,72 +2066,80 @@ def fetch(
     Tolerancyjnie: nieudane pobranie nie kończy przebiegu, tylko zmniejsza
     korpus. Blokada hosta jest zapisywana jako blokada, nie obchodzona.
     """
-    import httpx
+    capabilities.require(capabilities.Capability.PUBLIC_WEB_READ)
+
     import trafilatura
 
     fetched: list[dict[str, Any]] = []
-    do_przegladarki: list[dict[str, Any]] = []
-    with httpx.Client(
-        timeout=config.FETCH_TIMEOUT_S,
-        follow_redirects=True,
-        headers={"User-Agent": config.FETCH_USER_AGENT},
-    ) as client:
-        for source in sources:
-            url = source["url"]
-            host = source.get("host") or _host(url)
-            reason = None
-            text = ""
+    for source in sources:
+        requested_url = source["url"]
+        host = source.get("host") or _host(requested_url)
+        retrieved_at = db.now()
+        reason = None
+        text = ""
+        final_url = None
+        redirect_chain: list[str] = []
+        resolved_ips: dict[str, list[str]] = {}
+        try:
+            response = safe_fetch.get(
+                requested_url, timeout=config.FETCH_TIMEOUT_S)
+            final_url = response.url
+            redirect_chain = list(response.redirect_chain)
+            resolved_ips = response.resolved_ips
+            if response.status_code >= 400:
+                reason = f"HTTP {response.status_code}"
+            elif _to_pdf(response, final_url):
+                text = _tekst_z_pdf(response.content)
+                if not text:
+                    reason = "PDF bez warstwy tekstowej (skan?)"
+            else:
+                text = trafilatura.extract(
+                    response.text, include_comments=False) or ""
+                text = text[:config.FETCH_MAX_EXTRACTED_CHARS]
+                lowered = text.lower()
+                if any(phrase in lowered for phrase in config.REFUSAL_PHRASES):
+                    reason = "host odmówił automatowi"
+                elif len(text) < config.FETCH_MIN_CHARS:
+                    reason = f"za mało treści ({len(text)} znaków)"
+        except Exception as exc:
+            reason = f"{type(exc).__name__}: {exc}"[:300]
+
+        entry: dict[str, Any] | None = None
+        if reason is None:
             try:
-                response = client.get(url)
-                body = response.text
-                if response.status_code >= 400:
-                    reason = f"HTTP {response.status_code}"
-                elif _to_pdf(response, url):
-                    # PDF czytamy inaczej niz HTML. Bez tego `response.text`
-                    # jest binarnym smieciem, `trafilatura` oddaje pustke,
-                    # a strona ladowala jako „za malo tresci (0 znakow)".
-                    text = _tekst_z_pdf(response.content)
-                    if not text:
-                        reason = "PDF bez warstwy tekstowej (skan?)"
-                else:
-                    text = trafilatura.extract(body, include_comments=False) or ""
-                    # Frazy odmowy sprawdzamy w WYDOBYTYM TEKŚCIE, nie w surowym
-                    # HTML-u. Surowy HTML zawiera skrypty i konfigurację: każda
-                    # strona Substacka niesie klucz "captcha_site_key" formularza
-                    # logowania, więc kontrola na HTML-u uznawała za zablokowane
-                    # strony, które nikogo nie blokują. To ta sama lekcja co przy
-                    # podłogach artykułu — porównuj z treścią, nie z alfabetem.
-                    lowered = text.lower()
-                    if any(phrase in lowered for phrase in config.REFUSAL_PHRASES):
-                        reason = "host odmówił automatowi"
-                    elif len(text) < config.FETCH_MIN_CHARS:
-                        reason = f"za mało treści ({len(text)} znaków)"
+                entry = provenance.documentize({
+                    **source,
+                    "requested_url": requested_url,
+                    "url": final_url,
+                    "host": _host(final_url or requested_url),
+                    "retrieved_at": retrieved_at,
+                    "redirect_chain": redirect_chain,
+                    "resolved_ips": resolved_ips,
+                    "text": text,
+                })
             except Exception as exc:
-                reason = f"{type(exc).__name__}"
+                reason = f"{type(exc).__name__}: {exc}"[:300]
+        ok = reason is None
+        print(
+            f"  [pobranie] {'OK  ' if ok else 'NIE '} {host:28.28} "
+            f"{len(text):>6} znaków  {reason or ''}",
+            flush=True,
+        )
+        conn.execute(
+            "INSERT INTO sources (run_id, at, url, domain, title, source_class,"
+            " fetched_ok, fail_reason, requested_url, final_url, "
+            "redirect_chain_json, resolved_ips_json, document_id, content_sha256) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (run_id, retrieved_at, requested_url, host, source.get("title"),
+             source.get("class"), int(ok), reason, requested_url, final_url,
+             json.dumps(redirect_chain, ensure_ascii=False),
+             json.dumps(resolved_ips, ensure_ascii=False, sort_keys=True),
+             entry.get("document_id") if entry else None,
+             entry.get("content_sha256") if entry else None),
+        )
+        if ok and entry is not None:
+            fetched.append(entry)
 
-            ok = reason is None
-            print(
-                f"  [pobranie] {'OK  ' if ok else 'NIE '} {host:28.28} "
-                f"{len(text):>6} znaków  {reason or ''}",
-                flush=True,
-            )
-            conn.execute(
-                "INSERT INTO sources (run_id, at, url, domain, title, source_class,"
-                " fetched_ok, fail_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (run_id, db.now(), url, host, source.get("title"),
-                 source.get("class"), int(ok), reason),
-            )
-            if ok:
-                entry = dict(source)
-                entry["text"] = text
-                fetched.append(entry)
-            elif reason and reason.startswith("za mało treści"):
-                # NIE spisujemy na straty: strona moze byc rysowana JavaScriptem,
-                # a zwykly klient HTTP widzi wtedy pusty szkielet. Do drugiego
-                # podejscia w przegladarce.
-                do_przegladarki.append(source)
-
-    fetched.extend(_dobierz_przegladarka(conn, run_id, do_przegladarki, fetched))
     conn.commit()
 
     primary = sum(1 for s in fetched if s.get("class") == "PRIMARY")
@@ -1885,28 +2207,47 @@ def hosty_ktore_nigdy_nie_dzialaly(
 
 
 def discovery(
-    conn: sqlite3.Connection, run_id: int, question: str, recent_domains: list[str]
+    conn: sqlite3.Connection, run_id: int, question: str,
+    recent_domains: list[str], research_context: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy)."""
+    """Etap 3 — dyskoveria źródeł z pełnym briefem wybranej drogi."""
     martwe = hosty_ktore_nigdy_nie_dzialaly(conn)
     if martwe:
         print("  [dyskoveria] pomijam hosty bez ani jednego udanego pobrania: %s"
               % ", ".join(martwe[:8]), flush=True)
+    context = research_context or {}
+    context_lines = [
+        ("Selected universe", context.get("universe_title")),
+        ("Universe question", context.get("universe_question")),
+        ("Article mechanism to test", context.get("distinct_engine")),
+        ("Evidence the route says it needs", context.get("evidence_needed")),
+        ("Evidence-bearing second act", context.get("second_act")),
+    ]
+    rendered_context = "\n".join(
+        f"{label}: {str(value).strip()}"
+        for label, value in context_lines if str(value or "").strip()
+    ) or "No additional route context was recorded."
     prompt = _prompt(
         "dyskoveria.md",
         question=question,
+        research_context=rendered_context,
         max_results=config.DISCOVERY_MAX_RESULTS,
         max_searches=config.DISCOVERY_MAX_SEARCHES,
+        current_date=db.now()[:10],
         min_primary=config.MIN_PRIMARY_SOURCES,
+        min_origin_primary=config.MIN_ORIGIN_PRIMARY_SOURCES,
         min_why=config.MIN_WHY_SOURCES,
+        max_proposed=config.DISCOVERY_MAX_PROPOSED_SOURCES,
         blocked_hosts=", ".join(list(config.BLOCKED_HOSTS) + martwe),
     )
     real_urls: list[str] = []
+    provider_trace: list[dict[str, Any]] = []
     text = llm.call(
         "discovery", DISCOVERY_SYSTEM, prompt,
         conn=conn, run_id=run_id, web_search=True, collect_urls=real_urls,
+        collect_trace=provider_trace,
     )
-    data = llm.parse_json(text)
+    data = _model_json(text, "discovery", conn=conn, run_id=run_id)
     sources = data.get("sources")
     if not isinstance(sources, list) or not sources:
         raise ValueError(f"dyskoveria nie zwróciła źródeł: {text[:300]!r}")
@@ -1921,20 +2262,36 @@ def discovery(
             "dyskoveria nie wykonała ani jednego wyszukiwania — zwrócone adresy "
             "pochodzą z pamięci modelu, nie z sieci"
         )
-    real_hosts = {_host(u) for u in real_urls}
+    real_documents: dict[str, str] = {}
+    for result_url in real_urls:
+        try:
+            real_documents[safe_fetch.normalize_url(result_url)] = result_url
+        except safe_fetch.SafeFetchError:
+            continue
     kept: list[dict[str, Any]] = []
     for source in sources:
-        url = source.get("url", "")
-        host = _host(url)
-        if not url.startswith("http"):
+        try:
+            url = safe_fetch.normalize_url(source.get("url", ""))
+        except safe_fetch.SafeFetchError:
             continue
+        host = _host(url)
         if host in config.BLOCKED_HOSTS or any(host.endswith(b) for b in config.BLOCKED_HOSTS):
             print(f"  [dyskoveria] pomijam {host} — host blokuje automaty", flush=True)
             continue
-        # Adres, którego wyszukiwarka nie zwróciła, jest podejrzany o zmyślenie.
-        if real_hosts and host not in real_hosts:
-            print(f"  [dyskoveria] pomijam {url} — spoza wyników wyszukiwania", flush=True)
+        if source.get("access_claim") != "FULL_TEXT_NO_LOGIN":
+            print(
+                f"  [dyskoveria] pomijam {url} — model nie deklaruje pełnego "
+                f"tekstu bez loginu ({source.get('access_claim', 'UNKNOWN')})",
+                flush=True,
+            )
             continue
+        # Prawdziwa domena nie dowodzi prawdziwego dokumentu. Kandydat musi
+        # odpowiadać dokładnemu wynikowi po bezpiecznej normalizacji URL.
+        if url not in real_documents:
+            print(f"  [dyskoveria] pomijam {url} — brak dokładnego wyniku", flush=True)
+            continue
+        source["url"] = url
+        source["search_result_url"] = real_documents[url]
         source["host"] = host
         kept.append(source)
 
@@ -1945,6 +2302,52 @@ def discovery(
     )
     if not kept:
         raise ValueError("dyskoveria nie zwróciła ani jednego wiarygodnego adresu")
+    origin_primary = sum(
+        1 for source in kept
+        if source.get("class") == "PRIMARY"
+        and source.get("host_role") in {
+            "ORIGINATING_AUTHORITY", "OFFICIAL_ARCHIVE",
+        }
+    )
+    if origin_primary < config.MIN_ORIGIN_PRIMARY_SOURCES:
+        raise ValueError(
+            "dyskoveria zachowała tylko "
+            f"{origin_primary}/{config.MIN_ORIGIN_PRIMARY_SOURCES} dokumentów "
+            "pierwotnych na hoście autora lub oficjalnego archiwum"
+        )
+    proposed = sum(
+        source.get("evidence_status") == "PROPOSED_OR_PENDING"
+        for source in kept
+    )
+    if proposed > config.DISCOVERY_MAX_PROPOSED_SOURCES:
+        raise ValueError(
+            f"dyskoveria zachowała {proposed} źródła proposed/pending przy "
+            f"limicie {config.DISCOVERY_MAX_PROPOSED_SOURCES}"
+        )
+    qualifying_statuses = {
+        "OBSERVED_CURRENT_RECORD", "ENACTED_OR_IN_FORCE",
+        "HISTORICAL_ANALYSIS",
+    }
+    covered: set[str] = set()
+    for source in kept:
+        status = source.get("evidence_status")
+        roles = set(source.get("evidence_roles") or [])
+        if status in qualifying_statuses:
+            covered.update(roles & {"MECHANISM", "SECOND_ACT"})
+        if (
+            status == "OBSERVED_CURRENT_RECORD"
+            and source.get("class") == "PRIMARY"
+            and source.get("host_role") in {
+                "ORIGINATING_AUTHORITY", "OFFICIAL_ARCHIVE",
+            }
+        ):
+            covered.update(roles & {"CURRENT_SCALE"})
+    missing_roles = set(config.DISCOVERY_REQUIRED_ROLES) - covered
+    if missing_roles:
+        raise ValueError(
+            "dyskoveria nie pokryła kwalifikowanymi źródłami ról: "
+            + ", ".join(sorted(missing_roles))
+        )
     return kept
 
 
@@ -1962,16 +2365,38 @@ def feasibility(
     Dostępność źródeł sprawdzamy TUTAJ, już po zróżnicowaniu tematów. Odwrotna
     kolejność zapadła się poprzednio do jednego serwisu.
     """
-    compact = [
-        {"index": i, "title": t.get("title"), "question": t.get("question")}
-        for i, t in enumerate(topics)
-    ]
+    compact = []
+    for i, topic in enumerate(topics):
+        routes = []
+        for route_index, route in enumerate(topic.get("article_routes") or []):
+            if isinstance(route, dict):
+                routes.append({
+                    "route_index": route_index,
+                    "question": route.get("question"),
+                    "distinct_engine": route.get("distinct_engine"),
+                    "evidence_needed": route.get("evidence_needed"),
+                })
+            else:
+                routes.append({
+                    "route_index": route_index,
+                    "question": str(route),
+                    "distinct_engine": "legacy route; not recorded",
+                    "evidence_needed": "legacy route; not recorded",
+                })
+        compact.append({
+            "index": i,
+            "title": topic.get("title"),
+            "universe_question": topic.get("question"),
+            "reader_entry_point": topic.get("reader_entry_point"),
+            "fatal_weakness": topic.get("fatal_weakness"),
+            "article_routes": routes,
+        })
     prompt = _prompt(
         "wykonalnosc.md",
         topics_json=json.dumps(compact, ensure_ascii=False, indent=2),
     )
     text = llm.call("feasibility", FEASIBILITY_SYSTEM, prompt, conn=conn, run_id=run_id)
-    data = llm.parse_json(text)
+    data = _model_json(text, "feasibility", conn=conn, run_id=run_id)
     assessments = data.get("assessments")
     if not isinstance(assessments, list) or not assessments:
         raise ValueError(f"odsiew nie zwrócił ocen: {text[:300]!r}")
@@ -2042,15 +2467,46 @@ def pick_topic(
         """
         return int(bool(temat(a).get("na_artykul")))
 
+    def wybrana_droga(a: dict[str, Any]) -> dict[str, Any]:
+        try:
+            selected = int(a.get("selected_route_index", -1))
+        except (TypeError, ValueError):
+            return {}
+        for route in a.get("route_assessments") or []:
+            if (isinstance(route, dict)
+                    and int(route.get("route_index", -2)) == selected):
+                return route
+        return {}
+
+    def glebokosc_artykulu(a: dict[str, Any]) -> str:
+        route = wybrana_droga(a)
+        return str(route.get("depth") or a.get("depth") or "RICH").upper()
+
+    def pewnosc_artykulu(a: dict[str, Any]) -> float:
+        route = wybrana_droga(a)
+        return float(route.get("confidence", a.get("confidence", 0)) or 0)
+
+    def zrodla_artykulu(a: dict[str, Any]) -> int:
+        route = wybrana_droga(a)
+        return int(route.get(
+            "expected_primary_sources", a.get("expected_primary_sources", 0)
+        ) or 0)
+
     def kolejnosc(a: dict[str, Any]):
         return (nosny(a),
                 artykulowy(a),
-                wlasny_ranking(a),
+                # Ostatecznie piszemy jedna konkretna droge, nie cale
+                # uniwersum. Jej zdolnosc do uniesienia drugiego aktu musi
+                # wygrac z wczesniejszym rankingiem parasola. W E-019
+                # uniwersum nr 0 bylo najwyzej w Scoucie, lecz jego wybrana
+                # droga miala depth=SINGLE; trzy nizej ocenione uniwersa
+                # zawieraly drogi RICH. Stary porzadek wybral krotszy temat.
+                waga.get(glebokosc_artykulu(a), 1),
                 swiezy(a),
+                wlasny_ranking(a),
                 watki(a),
-                waga.get(str(a.get("depth", "RICH")).upper(), 1),
-                a.get("confidence", 0),
-                a.get("expected_primary_sources", 0))
+                pewnosc_artykulu(a),
+                zrodla_artykulu(a))
 
     ranked = sorted((a for a in assessments if a.get("feasible")),
                     key=kolejnosc, reverse=True)
@@ -2071,11 +2527,256 @@ def pick_topic(
         print("  [odsiew] ZADEN temat nie przeszedl wykonalnosci — biore "
               "najlepszy z odrzuconych i zapisuje to w uwagach", flush=True)
         ranked[0]["mimo_odrzucenia"] = True
-    best = ranked[0]
+    best = dict(ranked[0])
     index = int(best.get("index", 0))
     if not 0 <= index < len(topics):
         raise ValueError(f"odsiew wskazał nieistniejący temat: {index}")
-    return topics[index], best
+    selected = dict(topics[index])
+    routes = selected.get("article_routes")
+    if (isinstance(routes, list) and routes
+            and all(isinstance(route, dict) for route in routes)):
+        if "selected_route_index" not in best:
+            raise ValueError("odsiew nie wybrał drogi artykułowej")
+        route_index = int(best["selected_route_index"])
+        if not 0 <= route_index < len(routes):
+            raise ValueError(
+                f"odsiew wskazał nieistniejącą drogę artykułową: {route_index}"
+            )
+        route = dict(routes[route_index])
+        question = str(route.get("question") or "").strip()
+        if not question:
+            raise ValueError("wybrana droga artykułowa nie ma pytania")
+        selected["universe_question"] = (
+            selected.get("question") or selected.get("central_question")
+        )
+        selected["selected_route_index"] = route_index
+        selected["selected_article_route"] = route
+        selected["question"] = question
+        route_assessment = next((
+            item for item in best.get("route_assessments") or []
+            if int(item.get("route_index", -1)) == route_index
+        ), None)
+        if not isinstance(route_assessment, dict):
+            raise ValueError("odsiew nie zwrócił oceny wybranej drogi")
+        best["universe_depth"] = best.get("depth")
+        best["depth"] = route_assessment.get("depth")
+        best["confidence"] = route_assessment.get("confidence")
+        best["expected_primary_sources"] = route_assessment.get(
+            "expected_primary_sources"
+        )
+        best["selected_route_second_act"] = route_assessment.get("second_act")
+        best["selected_route_note"] = route_assessment.get("note")
+    return selected, best
+
+
+def _scout_universe_quality(
+    data: dict[str, Any], topics: list[dict[str, Any]], expected_count: int,
+) -> list[dict[str, Any]]:
+    """Odrzuca oczywista notke, ale NIE udaje, ze liczy jakosc pomyslu.
+
+    Progi ponizej sa tylko zabezpieczeniem przed jedna odpowiedzia rozbita na
+    naglowki. Nie liczymy „potencjalnych artykulow" i nie ma magicznej granicy
+    19/20. Pelne osie, napiecia, galezie, drogi i odrzucone zalazki zostaja w
+    surowym artefakcie odpowiedzi do oceny semantycznej i recznej.
+    """
+    if len(topics) != expected_count:
+        raise ValueError(
+            f"Scout zwrócił {len(topics)} tematów zamiast {expected_count}"
+        )
+
+    def clean_words(value: Any) -> list[str]:
+        return re.findall(r"[a-z0-9]+", str(value or "").casefold())
+
+    def unique_texts(values: list[Any], field: str, min_words: int) -> list[Any]:
+        kept: list[Any] = []
+        seen: set[str] = set()
+        for value in values:
+            raw = value.get(field) if isinstance(value, dict) else value
+            words = clean_words(raw)
+            key = " ".join(words)
+            if len(words) < min_words or not key or key in seen:
+                continue
+            seen.add(key)
+            kept.append(value)
+        return kept
+
+    rejected = data.get("discarded_seeds")
+    if not isinstance(rejected, list) or not rejected:
+        raise ValueError("Scout nie pokazał żadnego odrzuconego małego zalążka")
+    for item in rejected:
+        if (not isinstance(item, dict)
+                or len(clean_words(item.get("title"))) < 2
+                or len(clean_words(item.get("rejection"))) < 5):
+            raise ValueError("Scout oddał pustą lub pozorną przyczynę odrzucenia")
+
+    failures: list[str] = []
+    for index, topic in enumerate(topics):
+        axes = unique_texts(
+            topic.get("dimensions") if isinstance(topic.get("dimensions"), list) else [],
+            "name", 1,
+        )
+        tensions = topic.get("tensions")
+        tensions = tensions if isinstance(tensions, list) else []
+        tensions = [
+            item for item in tensions
+            if isinstance(item, dict)
+            and len(clean_words(item.get("force_a"))) >= 2
+            and len(clean_words(item.get("force_b"))) >= 2
+            and len(clean_words(item.get("why_unresolved"))) >= 5
+        ]
+        branches = unique_texts(
+            topic.get("open_branches")
+            if isinstance(topic.get("open_branches"), list) else [],
+            "possibility", 3,
+        )
+        routes = unique_texts(
+            topic.get("article_routes")
+            if isinstance(topic.get("article_routes"), list) else [],
+            "question", 7,
+        )
+        routes = [
+            item for item in routes
+            if len(clean_words(item.get("distinct_engine"))) >= 4
+            and len(clean_words(item.get("evidence_needed"))) >= 4
+        ]
+        connections = unique_texts(
+            topic.get("underexplored_connections")
+            if isinstance(topic.get("underexplored_connections"), list) else [],
+            "", 6,
+        )
+
+        # Rozne pytania napisane innymi slowami nadal moga miec ten sam motor.
+        # Z tego powodu liczymy osobno unikatowe mechanizmy i rodzaje dowodu.
+        engines = unique_texts(routes, "distinct_engine", 4)
+        evidence = unique_texts(routes, "evidence_needed", 4)
+        note_test = topic.get("note_test") if isinstance(
+            topic.get("note_test"), dict) else {}
+
+        topic["question"] = str(topic.get("central_question") or "").strip()
+        topic["kind"] = str(topic.get("mode") or "OPEN_QUESTION").strip()
+        topic["already_written"] = list(topic.get("obvious_coverage") or [])
+        topic["threads"] = [item.get("question") for item in routes]
+        topic["ile_juz_napisano"] = len(topic["already_written"])
+        # `obvious_coverage` jest kontrdowodem na naiwnosc pomyslu: Scout ma
+        # pokazac znane ujecia, a potem dostarczyc inne polaczenia i drogi.
+        # Stary Scout zwracal liste pojedynczych istniejacych tekstow, wiec jej
+        # liczba mogla byc przyblizeniem nasycenia. W nowym kontrakcie liczenie
+        # wymaganych pozycji `obvious_coverage` oznaczalo wszystkie 6/6 pol
+        # E-018 jako nasycone i kasowalo sygnal swiezosci. Sam fakt, ze temat ma
+        # znane ujecia, nie dowodzi, ze zaproponowane drogi je powtarzaja.
+        topic["nasycony"] = False
+        topic["ile_watkow"] = len(routes)
+        topic["ile_osi"] = len(axes)
+        topic["ile_napiec"] = len(tensions)
+        topic["ile_galezi"] = len(branches)
+        topic["ile_mechanizmow"] = len(engines)
+        topic["ile_rodzajow_dowodu"] = len(evidence)
+        topic["ile_nieoczywistych_polaczen"] = len(connections)
+        topic["ma_stawke"] = (
+            len(clean_words(topic.get("reader_entry_point"))) >= 5
+            and len(clean_words(topic.get("why_fascinating"))) >= 7
+        )
+        topic["ma_przekonanie"] = False
+        topic["nosny"] = topic["ma_stawke"]
+        topic["pozycja"] = 0
+
+        obvious_note = bool(note_test.get("can_be_exhausted_in_three_sentences"))
+        topic["na_artykul"] = (
+            not obvious_note
+            and len(axes) >= config.MIN_OSI_TEMATU
+            and len(tensions) >= config.MIN_NAPIEC_TEMATU
+            and len(branches) >= config.MIN_OTWARTYCH_GALEZI
+            and len(routes) >= config.MIN_ROZNYCH_DROG
+            and len(engines) >= config.MIN_ROZNYCH_DROG
+            and len(evidence) >= config.MIN_ROZNYCH_DROG
+            and len(connections) >= config.MIN_NIEOCZYWISTYCH_POLACZEN
+            and topic["ma_stawke"]
+        )
+        topic["pole_redakcyjne"] = topic["na_artykul"]
+
+        if not topic["na_artykul"]:
+            failures.append(
+                f"{index}:{str(topic.get('title'))[:45]} "
+                f"osie={len(axes)} napięcia={len(tensions)} gałęzie={len(branches)} "
+                f"drogi={len(routes)} mechanizmy={len(engines)} "
+                f"dowody={len(evidence)} połączenia={len(connections)} "
+                f"note={obvious_note} stawka={topic['ma_stawke']}"
+            )
+
+    modes = {
+        str(topic.get("mode") or "").strip().casefold() for topic in topics
+        if str(topic.get("mode") or "").strip()
+    }
+    if len(modes) < min(2, expected_count):
+        failures.append("portfolio używa tylko jednego sposobu wymyślania")
+    if failures:
+        raise ValueError(
+            "Scout odrzucony: kandydaci nie tworzą niezależnych pól "
+            "redakcyjnych; " + " | ".join(failures)
+        )
+
+    ranking = data.get("ranking") or {}
+
+    def ranked_indices(name: str) -> list[int]:
+        values = ranking.get(name)
+        if not isinstance(values, list):
+            return []
+        result: list[int] = []
+        for value in values:
+            if not isinstance(value, (int, float)):
+                continue
+            index = int(value)
+            if 0 <= index < len(topics) and index not in result:
+                result.append(index)
+        return result
+
+    def apply_ranked_signal(name: str, weight: int) -> None:
+        """Zachowuje KOLEJNOSC wymuszonego rankingu, nie tylko czlonkostwo.
+
+        E-018 oddalo uporzadkowane trojki, lecz poprzedni kod dodawal kazdemu
+        ich elementowi identyczna wartosc. Pierwsze i trzecie miejsce stawaly
+        sie tym samym, a remisy rozstrzygal przypadkowy porzadek JSON-u.
+        Mnoznik zachowuje dotychczasowa waznosc kategorii; czynnik 3/2/1
+        zachowuje pozycje wewnatrz trojki.
+        """
+        indices = ranked_indices(name)
+        for ordinal, index in enumerate(indices):
+            delta = weight * (len(indices) - ordinal)
+            topics[index]["pozycja"] += delta
+            topics[index].setdefault("ranking_breakdown", {})[name] = {
+                "rank": ordinal + 1,
+                "delta": delta,
+            }
+
+    apply_ranked_signal("largest_article_universe", 3)
+    apply_ranked_signal("most_compelling", 2)
+    apply_ranked_signal("most_original_angle", 1)
+    apply_ranked_signal("most_likely_to_collapse", -3)
+
+    print(
+        "  [skaut] odrzucił przed finałem: %s"
+        % [str(item.get("title"))[:45] for item in rejected],
+        flush=True,
+    )
+    for topic in topics:
+        print(
+            "  [skaut] POLE: %-40s osie=%d napięcia=%d gałęzie=%d "
+            "drogi=%d mechanizmy=%d dowody=%d"
+            % (
+                str(topic.get("title"))[:40], topic["ile_osi"],
+                topic["ile_napiec"], topic["ile_galezi"], topic["ile_watkow"],
+                topic["ile_mechanizmow"], topic["ile_rodzajow_dowodu"],
+            ),
+            flush=True,
+        )
+
+    topics.sort(
+        key=lambda topic: (
+            -int(topic["pozycja"]), -int(topic["ile_osi"]),
+            -int(topic["ile_mechanizmow"]), -int(topic["ile_galezi"]),
+        )
+    )
+    return topics
 
 
 def scout(
@@ -2102,210 +2803,13 @@ def scout(
             else "(zadne jeszcze nie wplynelo)"),
     )
     text = llm.call("scout", SCOUT_SYSTEM, prompt, conn=conn, run_id=run_id)
-    data = llm.parse_json(text)
+    data = _model_json(text, "scout", conn=conn, run_id=run_id)
     topics = data.get("topics")
     if not isinstance(topics, list) or not topics:
         raise ValueError(f"skaut nie zwrócił tematów: {text[:300]!r}")
 
-    # Temat bez zlamanego przekonania idzie na KONIEC kolejki, nie do kosza.
-    # Do kosza nie, bo przebieg musi skonczyc sie artykulem — to decyzja
-    # wlasciciela i nie wolno jej podwazac cichym filtrem. Ale na koniec tak,
-    # bo `pick_topic` bierze z gory, a temat bez przekonania to temat bez luki:
-    # czytelnik nie ma czego zamknac. Tak wlasnie powstal artykul o symbolu
-    # na kosmetykach, ktory wlasciciel pozniej usunal jako za slaby.
-    for t in topics:
-        wiara = str(t.get("broken_belief") or "").strip()
-        # Samo pole nie wystarczy — musi niesc zdanie, nie ozdobnik.
-        t["ma_przekonanie"] = len(wiara.split()) >= 5
-        if not t["ma_przekonanie"] and wiara:
-            t["uwaga_skauta"] = "pole jest, ale przekonanie nienazwane: %r" % wiara[:60]
+    return _scout_universe_quality(data, topics, count)
 
-        # DRUGI RODZAJ TEMATU: system wystawiony na probe. Nie ma zlamanego
-        # przekonania i miec go nie musi — niesie za to wynik, ktorego nikt nie
-        # moze sprawdzic, bo jeszcze nie zapadl. Warunek, ktory oddziela to od
-        # wrozenia, jest jeden: musi istniec SPISANA PROCEDURA rozstrzygajaca.
-        moment = str(t.get("the_moment") or "").strip()
-        wynik = str(t.get("open_outcome") or "").strip()
-        zapis = str(t.get("governing_record") or "").strip()
-        t["ma_stawke"] = (len(moment.split()) >= 4 and len(wynik.split()) >= 4
-                          and len(zapis.split()) >= 3)
-        if str(t.get("kind") or "").upper() == "SYSTEM_UNDER_TEST" and not t["ma_stawke"]:
-            t["uwaga_skauta"] = ("zadeklarowano system pod proba, ale bez kompletu: "
-                                 "moment=%d slow, wynik=%d, zapis=%d"
-                                 % (len(moment.split()), len(wynik.split()),
-                                    len(zapis.split())))
-        # Temat nadaje sie na czolo kolejki, jesli niesie KTORAKOLWIEK z dwoch
-        # rzeczy. Wczesniej liczylo sie wylacznie przekonanie i temat drugiego
-        # rodzaju ladowal na koncu, czyli nie powstalby nigdy.
-        t["nosny"] = bool(t["ma_przekonanie"] or t["ma_stawke"])
-
-        # NASYCENIE. Model wymienia, co jego zdaniem juz o tym napisano —
-        # i uzywamy jego pamieci PRZECIW niemu. „Wszyscy wierza X o zwyklym
-        # przedmiocie, a X jest nieprawda" to nie jest rzadki wglad, tylko
-        # GATUNEK z kanonem: zraszacze, chusteczki flushable, karta hotelowa,
-        # mydlo antybakteryjne, data na lekach, maszyna z pluszakami. Model
-        # podaje je pierwsze, bo sa najczesciej opisane, czyli najlatwiej
-        # dostepne — a dostepnosc jest odwrotnoscia sygnalu, ktorego szukamy.
-        juz = t.get("already_written")
-        t["ile_juz_napisano"] = len(juz) if isinstance(juz, list) else 0
-        t["nasycony"] = t["ile_juz_napisano"] >= config.NASYCENIE_OD_ILU
-        t["pozycja"] = 0
-
-        # WATKI. Kryterium wlasciciela: jeden temat, o ktorym da sie napisac
-        # piec artykulow, bije piec tematow na jeden artykul kazdy. Temat
-        # o jednym watku to notka, chocby fakt byl najlepszy.
-        w = t.get("threads")
-        t["ile_watkow"] = len(w) if isinstance(w, list) else 0
-
-        # PRECEDENSY — to one dziela artykul od notki, i tego kryterium nie
-        # bylo w ogole. Sama procedura to notka: „gdy maszyna do glosowania
-        # padnie, komisja wydaje karty tymczasowe i wypelnia formularz" jest
-        # kompletna odpowiedzia w jednym zdaniu. Rozbicie jej na podpunkty daje
-        # rozdmuchana notke — a ja liczylem te podpunkty jako watki i myslalem,
-        # ze mierze glebokosc.
-        #
-        # Artykul niesie procedura, ktora POWSTALA, BO COS POSZLO NIE TAK.
-        # Regula zamykania konklawe wziela sie z trzyletniego wakatu, ktory
-        # skonczyl sie dopiero, gdy mieszkancy zdjeli dach i obcieli kardynalom
-        # jedzenie. Bezpieczniki wstrzymujace notowania istnieja z powodu
-        # jednego dnia 1987 roku. Taki regulamin to blizny, a kazda blizna to
-        # scena z ludzmi.
-        prec = t.get("precedents")
-        prec = prec if isinstance(prec, list) else []
-        # Wpis musi niesc ZDARZENIE, DATE i SKUTEK. Sprawdzamy wszystkie trzy,
-        # bo kazde z osobna da sie wypelnic pustym slowem — tak jak model
-        # wypelnil watki szescioma sztukami na kazdy temat.
-        #
-        # `what_changed` jest tu najwazniejsze i o nim latwo zapomniec: caly
-        # sens precedensu polega na tym, ze regulamin jest BLIZNA. Zdarzenie,
-        # po ktorym nic sie nie zmienilo, to anegdota — ciekawa, ale nie ona
-        # niesie tysiac slow. (Tego pola omal nie przeoczylem: wykrywacz
-        # martwych sygnalow zlapal je godzine po tym, jak go napisalem.)
-        t["precedensy"] = [p for p in prec if _precedens_ok(p)]
-        t["ile_precedensow"] = len(t["precedensy"])
-
-        # ZASIEG. Drugie brakujace kryterium. Zepsuta maszyna to 500 glosow
-        # w jednym lokalu; zastrzelony prezydent zatrzymuje caly kraj w tej
-        # samej sekundzie. Oba maja spisana procedure i oba da sie sobie
-        # wyobrazic — rozni je to, KOGO wynik wiaze.
-        t["zasieg"] = str(t.get("scale") or "").strip().upper()
-        t["duzy_zasieg"] = t["zasieg"] in config.ZASIEGI_ARTYKULOWE
-
-        # Na artykul trzeba OBU rzeczy naraz. Sama historia bez stawki to
-        # ciekawostka historyczna, sama stawka bez historii to procedura.
-        t["na_artykul"] = (t["ile_precedensow"] >= config.PRECEDENSOW_NA_ARTYKUL
-                           and t["duzy_zasieg"])
-
-    # WYMUSZONY WYBOR. Listy bezwzgledne DA SIE wyrownac i model to zrobil:
-    # zapytany, ile juz o czyms napisano, kazdemu tematowi przypisal dokladnie
-    # trzy teksty; zapytany o watki — dokladnie szesc. Oba sygnaly spadly do
-    # stalej i przestaly cokolwiek rozrozniac, dokladnie tak jak wczesniej
-    # samooceny wracajace zawsze 1.0.
-    #
-    # Rankingu wyrownac sie nie da. Model musi wskazac, KTORE ze swoich wlasnych
-    # propozycji sa najbardziej oklepane, a ktore najswiezsze — i wtedy nawet
-    # przy identycznych listach dostajemy uzyteczna kolejnosc.
-    r = data.get("ranking") or {}
-
-    def indeksy(klucz: str) -> list[int]:
-        v = r.get(klucz)
-        return [int(i) for i in v if isinstance(i, (int, float))
-                and 0 <= int(i) < len(topics)] if isinstance(v, list) else []
-
-    for i in indeksy("least_written_about"):
-        topics[i]["pozycja"] += 2
-        topics[i]["swiezy_wg_modelu"] = True
-    for i in indeksy("most_written_about"):
-        topics[i]["pozycja"] -= 2
-        topics[i]["oklepany_wg_modelu"] = True
-    for i in indeksy("richest"):
-        topics[i]["pozycja"] += 1
-    for i in indeksy("thinnest"):
-        topics[i]["pozycja"] -= 1
-    if not any(indeksy(k) for k in ("least_written_about", "most_written_about")):
-        print("  [skaut] BRAK rankingu wlasnego — kolejnosc tylko z pol bezwzglednych",
-              flush=True)
-
-    bez = [t for t in topics if not t["nosny"]]
-    stawki = sum(1 for t in topics if t["ma_stawke"] and not t["ma_przekonanie"])
-    nasycone = [t for t in topics if t["nasycony"]]
-    if stawki:
-        print("  [skaut] %d z %d tematow to systemy pod proba (bez zlamanego "
-              "przekonania, ze stawka)" % (stawki, len(topics)), flush=True)
-    if nasycone and len(nasycone) < len(topics):
-        print("  [skaut] %d z %d juz opisanych gdzie indziej — na koniec kolejki:"
-              % (len(nasycone), len(topics)), flush=True)
-        for t in nasycone[:4]:
-            print("     %s (%d znanych tekstow)"
-                  % (str(t.get("title"))[:52], t["ile_juz_napisano"]), flush=True)
-    elif nasycone:
-        # WSZYSTKIE nasycone to nie to samo, co wszystkie oklepane. Kara
-        # nalozona na 100% kandydatow nie przesuwa nikogo — a poprzedni
-        # komunikat mowil „na koniec kolejki", czyli obiecywal odsiew, ktorego
-        # nie bylo. Tu ratuje nas wymuszony ranking, ktorego wyrownac sie nie da.
-        print("  [skaut] wszystkie %d tematow ma po %d znanych tekstow — "
-              "nasycenie nic nie rozroznilo, kolejnosc bierze sie z rankingu"
-              % (len(topics), topics[0]["ile_juz_napisano"]), flush=True)
-    if bez:
-        print("  [skaut] %d z %d tematow bez przekonania I bez stawki — na koniec "
-              "kolejki" % (len(bez), len(topics)), flush=True)
-    # ARTYKUL CZY NOTKA. Wlasciciel: „artykuly musza byc o czyms mocnym i o
-    # czyms, z czym sie masa watkow wiaze, a notki zostawmy do ciekawostek, bo
-    # one tez sa fajne, ale niekoniecznie na artykuly".
-    #
-    # Ciekawostki NIE ida do kosza — sa dobrym materialem, tylko nie tym.
-    # Nie przepycham ich jednak do puli notek automatycznie: temat skauta nie ma
-    # jeszcze zrodla ani skutku w reku, wiec `bramka_kandydata` odrzucilaby
-    # kazdy. Przejsciowka, ktora gubi 100% wejscia, jest gorsza niz jej brak.
-    artykulowe = [t for t in topics if t["na_artykul"]]
-    notkowe = [t for t in topics if t["nosny"] and not t["na_artykul"]]
-    print("  [skaut] NA ARTYKUL: %d z %d (>=%d udokumentowanych awarii + zasieg %s)"
-          % (len(artykulowe), len(topics), config.PRECEDENSOW_NA_ARTYKUL,
-             "/".join(config.ZASIEGI_ARTYKULOWE)), flush=True)
-    for t in artykulowe[:5]:
-        print("     %-46s awarie=%d zasieg=%s"
-              % (str(t.get("title"))[:46], t["ile_precedensow"], t["zasieg"]),
-              flush=True)
-    if notkowe:
-        print("  [skaut] NA NOTKE: %d — dobre, ale procedura bez historii albo "
-              "zbyt waski skutek:" % len(notkowe), flush=True)
-        for t in notkowe[:5]:
-            print("     %-46s awarie=%d zasieg=%s"
-                  % (str(t.get("title"))[:46], t["ile_precedensow"],
-                     t["zasieg"] or "?"), flush=True)
-    if not artykulowe:
-        print("  [skaut] UWAGA: zaden temat nie jest artykulowy — biore "
-              "najlepszy dostepny, ale to sygnal, ze skaut oddal same "
-              "ciekawostki", flush=True)
-    # Pola, z ktorych realnie budujemy kolejnosc w `pick_topic`. Jesli
-    # ktores jest stale, to miejsce w kolejce ustala sie BEZ NIEGO.
-    martwe_pola = _stale_sygnaly(topics, ("nosny", "na_artykul", "nasycony",
-                                          "ile_watkow", "ile_precedensow",
-                                          "zasieg", "depth", "confidence",
-                                          "expected_primary_sources"))
-    if martwe_pola:
-        print("  [skaut] MARTWE W TYM PRZEBIEGU (ta sama wartosc u wszystkich "
-              "%d, wiec nic nie rozroznily): %s"
-              % (len(topics), ", ".join(martwe_pola)), flush=True)
-    print("  [skaut] watki na temat: %s"
-          % sorted((t["ile_watkow"] for t in topics), reverse=True), flush=True)
-    if any(t.get("swiezy_wg_modelu") for t in topics):
-        print("  [skaut] model uznal za najswiezsze: %s"
-              % [str(t.get("title"))[:34] for t in topics
-                 if t.get("swiezy_wg_modelu")], flush=True)
-    if any(t.get("oklepany_wg_modelu") for t in topics):
-        print("  [skaut] model uznal za najbardziej oklepane: %s"
-              % [str(t.get("title"))[:34] for t in topics
-                 if t.get("oklepany_wg_modelu")], flush=True)
-
-    # Do kosza nie idzie nic: przebieg musi skonczyc sie artykulem, to decyzja
-    # wlasciciela i nie wolno jej podwazac cichym filtrem. Ale kolejnosc mowi,
-    # co bierzemy najpierw — a kolejnosc byla dotad zbudowana tak, ze CLICHE
-    # wygrywalo z definicji: temat oklepany zawsze ma najostrzejsze „wszyscy
-    # zakladaja", bo przez to wlasnie zostal oklepany.
-    topics.sort(key=lambda t: (not t["nosny"], not t["na_artykul"],
-                               -t["pozycja"], t["nasycony"], -t["ile_watkow"]))
-    return topics
 
 
 LIBRARIAN_SYSTEM = (
@@ -2315,11 +2819,11 @@ LIBRARIAN_SYSTEM = (
 
 
 def bank_fragmentow(conn: sqlite3.Connection, dni: int = 0) -> list[dict[str, Any]]:
-    """Nieuzyte fragmenty ze wszystkich artykulow — zaplacone i nieprzeczytane.
+    """Udowodnione jako nieużyte fragmenty kart z ledgerem pochodzenia.
 
-    `unused_evidence` bylo zapisywane od poczatku i NIGDY nie czytane: jedno
-    wystapienie w calym kodzie, sam zapis. Przez piec artykulow uzbieralo sie
-    134 ocytowanych fragmentow, ktore kosztowaly tyle samo co te uzyte.
+    Historyczne `unused_evidence` było kopią całego korpusu, więc nie jest
+    przyjmowane do banku. Brak wersji pochodzenia oznacza brak dowodu nieużycia,
+    a nie zgodę na recykling.
 
     `dni` > 0 zawezza do okna czasowego. Dysk wytrzyma wszystko (tysiac
     artykulow to 7 MB), ale KONTEKST nie — trzy tysiace fragmentow to juz
@@ -2338,13 +2842,17 @@ def bank_fragmentow(conn: sqlite3.Connection, dni: int = 0) -> list[dict[str, An
             karta = json.loads(evidence)
         except (ValueError, TypeError):
             continue
+        if karta.get("provenance_version") != provenance.LINEAGE_VERSION:
+            continue
         for zrodlo in karta.get("unused_evidence") or []:
-            for fragment in zrodlo.get("excerpts") or []:
-                tekst = fragment if isinstance(fragment, str) else str(fragment)
+            for fragment in zrodlo.get("fragments") or []:
+                tekst = str(fragment.get("text") or "")
                 if len(tekst.strip()) < 60:
                     continue          # ogryzki nie niosą mechanizmu
                 bank.append({
                     "id": len(bank),
+                    "fragment_id": fragment.get("fragment_id"),
+                    "document_id": fragment.get("document_id"),
                     "text": tekst.strip(),
                     "url": zrodlo.get("url", ""),
                     "publisher": zrodlo.get("publisher") or _host(zrodlo.get("url", "")),
@@ -2377,7 +2885,7 @@ def bibliotekarz(
         _prompt("bibliotekarz.md", bank=opis),
         conn=conn, run_id=run_id,
     )
-    wynik = llm.parse_json(text)
+    wynik = _model_json(text, "bibliotekarz", conn=conn, run_id=run_id)
     po_id = {f["id"]: f for f in bank}
 
     przyjete, odrzucone = [], []
@@ -2516,7 +3024,7 @@ def warto_pisac(
                 card_json=json.dumps(card, ensure_ascii=False, indent=2)[:14000]),
         conn=conn, run_id=run_id,
     )
-    o = llm.parse_json(surowy)
+    o = _model_json(surowy, "warto_pisac", conn=conn, run_id=run_id)
 
     def jest(klucz: str) -> bool:
         blok = o.get(klucz)
@@ -2695,7 +3203,10 @@ def _to_pdf(odpowiedz, url: str) -> bool:
         return False
 
 
-def _tekst_z_pdf(dane: bytes, max_stron: int = 40) -> str:
+def _tekst_z_pdf(
+    dane: bytes, max_stron: int = 40,
+    max_znakow: int = config.FETCH_MAX_EXTRACTED_CHARS,
+) -> str:
     """Warstwa tekstowa PDF-a.
 
     Powod istnienia policzony, nie przeczuty: na 84 probach pobrania szesnascie
@@ -2711,8 +3222,12 @@ def _tekst_z_pdf(dane: bytes, max_stron: int = 40) -> str:
         import io as _io
 
         from pypdf import PdfReader
+        from pypdf import filters as _pdf_filters
     except ImportError:
         return ""
+    poprzedni_limit = _pdf_filters.ZLIB_MAX_OUTPUT_LENGTH
+    _pdf_filters.ZLIB_MAX_OUTPUT_LENGTH = min(
+        poprzedni_limit, config.FETCH_MAX_PDF_DECOMPRESSED_STREAM_BYTES)
     try:
         czytnik = PdfReader(_io.BytesIO(dane))
         kawalki = []
@@ -2721,12 +3236,16 @@ def _tekst_z_pdf(dane: bytes, max_stron: int = 40) -> str:
                 kawalki.append(strona.extract_text() or "")
             except Exception:
                 continue          # jedna zla strona nie psuje calego dokumentu
+            if sum(len(k) for k in kawalki) >= max_znakow:
+                break
     except Exception:
         return ""
+    finally:
+        _pdf_filters.ZLIB_MAX_OUTPUT_LENGTH = poprzedni_limit
     tekst = "\n".join(k.strip() for k in kawalki if k and k.strip())
     # PDF-y lamia wiersze co kilkadziesiat znakow. Bez sklejenia klasyfikacja
     # dostaje sieczke i nie rozpoznaje zdan.
-    return re.sub(r"\n{3,}", "\n\n", tekst).strip()
+    return re.sub(r"\n{3,}", "\n\n", tekst).strip()[:max_znakow]
 
 
 INDEKS_KANDYDATOW = config.DATA_DIR / "indeks_kandydatow.json"
@@ -2986,43 +3505,40 @@ def korpus_fedreg(ile_dokumentow: int = 50, ile_gestych: int = 6) -> list[dict[s
     Dostep jest czysty: HTTP 200, JSON, bez klucza i bez blokad. To odwrotnosc
     naszego zwyklego problemu, gdzie skutecznosc pobran wynosi 65 procent.
     """
-    import httpx
+    capabilities.require(capabilities.Capability.PUBLIC_WEB_READ)
 
     gestych: list[dict[str, Any]] = []
     try:
-        with httpx.Client(timeout=config.FETCH_TIMEOUT_S * 2,
-                          follow_redirects=True,
-                          headers={"User-Agent": config.FETCH_USER_AGENT}) as c:
-            odp = c.get(FEDREG_API, params={
-                "per_page": min(ile_dokumentow, 100), "order": "newest",
-                "conditions[type][]": "RULE", "fields[]": FEDREG_POLA})
-            if odp.status_code != 200:
-                print("  [fedreg] API odmowilo: HTTP %s" % odp.status_code, flush=True)
-                return []
-            dokumenty = odp.json().get("results") or []
-            for d in dokumenty:
-                if len(gestych) >= ile_gestych:
-                    break
-                url = d.get("raw_text_url")
-                if not url:
-                    continue
-                try:
-                    tekst = c.get(url).text
-                except Exception:
-                    continue
-                spor = sum(len(re.findall(w, tekst, re.I)) for w in FEDREG_SPOR)
-                if spor < FEDREG_MIN_SPOR:
-                    continue
-                gestych.append({
-                    "tytul": (d.get("title") or "")[:200],
-                    "urzad": ((d.get("agencies") or [{}])[0].get("name") or "")[:80],
-                    "data": d.get("publication_date", ""),
-                    "url": d.get("html_url", ""),
-                    "spor": spor,
-                    # Przycinamy: preambula bywa polmilionowa, a klasyfikacja
-                    # i tak czyta poczatek, gdzie siedzi uzasadnienie.
-                    "tekst": tekst[:config.FEDREG_MAX_ZNAKOW],
-                })
+        odp = safe_fetch.get(FEDREG_API, params={
+            "per_page": min(ile_dokumentow, 100), "order": "newest",
+            "conditions[type][]": "RULE", "fields[]": FEDREG_POLA},
+            timeout=config.FETCH_TIMEOUT_S * 2)
+        if odp.status_code != 200:
+            print("  [fedreg] API odmowilo: HTTP %s" % odp.status_code, flush=True)
+            return []
+        dokumenty = odp.json().get("results") or []
+        for d in dokumenty:
+            if len(gestych) >= ile_gestych:
+                break
+            url = d.get("raw_text_url")
+            if not url:
+                continue
+            try:
+                tekst = safe_fetch.get(
+                    url, timeout=config.FETCH_TIMEOUT_S * 2).text
+            except Exception:
+                continue
+            spor = sum(len(re.findall(w, tekst, re.I)) for w in FEDREG_SPOR)
+            if spor < FEDREG_MIN_SPOR:
+                continue
+            gestych.append({
+                "tytul": (d.get("title") or "")[:200],
+                "urzad": ((d.get("agencies") or [{}])[0].get("name") or "")[:80],
+                "data": d.get("publication_date", ""),
+                "url": d.get("html_url", ""),
+                "spor": spor,
+                "tekst": tekst[:config.FEDREG_MAX_ZNAKOW],
+            })
     except Exception as exc:
         print("  [fedreg] nie poszlo: %s" % type(exc).__name__, flush=True)
         return []
@@ -3053,7 +3569,8 @@ def kandydaci_z_fedreg(
                 url=dokument.get("url", ""), tekst=dokument.get("tekst", "")),
         conn=conn, run_id=run_id,
     )
-    kandydaci = llm.parse_json(surowy).get("candidates") or []
+    kandydaci = _model_json(
+        surowy, "fedreg", conn=conn, run_id=run_id).get("candidates") or []
     for k in kandydaci:
         # Adres i decydent pochodza z DOKUMENTU, nie z modelu — model potrafi
         # przekrecic jedno i drugie, a to sa jedyne dwie rzeczy, ktorych nie

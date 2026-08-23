@@ -46,23 +46,25 @@ STYLE_CORPUS = PROMPTS_DIR / "styl" / "article_style_samples_v1.txt"
 STYLE_CORPUS_SHA256 = "d4e4e6bf928421d6a0eed6a6cafc796807ea289b275ff1a7aced49329de6638e"
 STYLE_PROFILES_DIR = REPO_ROOT / "instrukcja dla pisania artykulow"
 
-load_dotenv(ENV_PATH)
-# Zapasowo .env z katalogu głównego repozytorium: właściciel dopisał klucz
-# OpenAI tam, a agent szukał go tylko u siebie i widział "BRAK". Sekret ma leżeć
-# w jednym miejscu, więc zamiast kopiować go w dwa pliki, czytamy oba. Bez
-# `override` — plik agenta zawsze wygrywa.
-load_dotenv(REPO_ROOT / ".env", override=False)
+BOOT_MODE = os.environ.get("AGENT_V3_MODE", "fixture").strip()
+if BOOT_MODE != "fixture":
+    load_dotenv(ENV_PATH)
 
 
 def _env(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
 
 
+def _secret(name: str) -> str:
+    """Fixture nie odczytuje kluczy nawet wtedy, gdy proces je odziedziczył."""
+    return "" if BOOT_MODE == "fixture" else _env(name)
+
+
 # --- sekrety -----------------------------------------------------------------
 
-ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
-DEEPSEEK_API_KEY = _env("DEEPSEEK_API_KEY")
-OPENAI_API_KEY = _env("OPENAI_API_KEY")   # wylacznie do grafik
+ANTHROPIC_API_KEY = _secret("AGENT_V3_ANTHROPIC_API_KEY")
+DEEPSEEK_API_KEY = _secret("AGENT_V3_DEEPSEEK_API_KEY")
+OPENAI_API_KEY = _secret("AGENT_V3_OPENAI_API_KEY")   # wylacznie do grafik
 
 # Grafika do artykulu. Wybor NIE jest podyktowany cena: przy jednym obrazie na
 # artykul nawet najdrozsza opcja to grosze miesiecznie, a taniej znaczy tu
@@ -74,8 +76,15 @@ IMAGE_QUALITY = "high"
 IMAGE_PRICE_USD = 0.04   # cennik sierpien 2026, NIEPOTWIERDZONY na fakturze
 IMAGE_TIMEOUT_S = 300
 
-# Konto na Substacku.
-SUBSTACK_HANDLE = "nothingisaccidental"
+# V3 nigdy nie dziedziczy celu produkcyjnego. Obie wartości muszą wskazywać
+# jawnie skonfigurowane, odseparowane konto testowe.
+TEST_ACCOUNT_HANDLE = _env("AGENT_V3_TEST_ACCOUNT_HANDLE")
+SUBSTACK_HANDLE = _env("AGENT_V3_SUBSTACK_HANDLE")
+
+_session_slug = "".join(
+    ch for ch in TEST_ACCOUNT_HANDLE.lower() if ch.isalnum() or ch in {"-", "_"}
+) or "unconfigured"
+SESSION_FILE = DATA_DIR / "sessions" / f"storage-state-v3-{_session_slug}.json"
 
 # Czy agent ma klikac "Wylacz wykrywanie AI" przy kazdej publikacji.
 # WLACZONE decyzja wlasciciela z 2026-08-15. To wybor publiczny, nie ustawienie
@@ -88,8 +97,7 @@ WYLACZ_WYKRYWANIE_AI = True
 
 # --- tryby -------------------------------------------------------------------
 
-DRY_RUN = _env("DRY_RUN", "false").lower() in {"1", "true", "yes"}
-KILL_SWITCH = _env("KILL_SWITCH", "false").lower() in {"1", "true", "yes"}
+DRY_RUN = _env("AGENT_V3_DRY_RUN", "true").lower() in {"1", "true", "yes"}
 NO_LIMIT = _env("AGENT_V3_NO_LIMIT", "0").lower() in {"1", "true", "yes"}
 
 # Serwer bez ekranu: zamiast podlaczac sie do Chrome'a uruchomionego przez
@@ -229,6 +237,7 @@ MODEL_FOR = {
 }
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_ANTHROPIC_BASE_URL = f"{DEEPSEEK_BASE_URL}/anthropic"
 
 # Głębokość rozumowania DeepSeeka na /responses. Tokeny rozumowania liczą się
 # do sufitu wyjścia, więc przy `high` model kończy budżet na szukaniu i nie
@@ -265,7 +274,11 @@ BEZ_TOKENOW = {"obraz"}
 
 PRICING = {
     CLAUDE: {"in": 5.00, "out": 25.00, "verified": True},
-    SONNET: {"in": 3.00, "out": 15.00, "verified": True},
+    # Sonnet 5 ma czasową cenę promocyjną do końca sierpnia 2026. To oficjalna
+    # taryfa, ale jeszcze nie została uzgodniona z fakturą tego konta, dlatego
+    # `verified` pozostaje fałszywe. Funkcja `stawka_anthropic` niżej wybiera
+    # okres i nie pozwala, żeby zaplanowana podwyżka zmieniła historię.
+    SONNET: {"in": 2.00, "out": 10.00, "verified": False},
     FABLE: {"in": 10.00, "out": 50.00, "verified": True},
     # STAWKI POTWIERDZONE FAKTURA (15-19 sierpnia 2026). Dziesiec wierszy
     # rozliczenia odtworzonych co do centa, wiec `verified` znaczy tu wreszcie
@@ -282,6 +295,23 @@ PRICING = {
     DEEPSEEK: {"in": 0.22, "out": 0.66, "cache": 0.007, "verified": True},
     DEEPSEEK_PRO: {"in": 0.66, "out": 1.98, "cache": 0.022, "verified": True},
 }
+
+SONNET_PROMO_END_UTC = "2026-09-01T00:00:00+00:00"
+SONNET_AFTER_PROMO = {"in": 3.00, "out": 15.00, "verified": False}
+
+
+def stawka_anthropic(model: str, kiedy=None) -> dict[str, float | bool]:
+    """Zwraca taryfę obowiązującą w chwili wywołania, bez zmiany historii."""
+    from datetime import datetime, timezone
+
+    if model not in PRICING or model.startswith("deepseek"):
+        raise KeyError(model)
+    kiedy = kiedy or datetime.now(timezone.utc)
+    if kiedy.tzinfo is None or kiedy.utcoffset() is None:
+        raise ValueError("taryfa Anthropic wymaga świadomego datetime")
+    if model == SONNET and kiedy >= datetime.fromisoformat(SONNET_PROMO_END_UTC):
+        return dict(SONNET_AFTER_PROMO)
+    return dict(PRICING[model])
 
 # --- taryfa szczytowa DeepSeeka -----------------------------------------------
 # Od 2026-08-16 16:00 UTC DeepSeek wprowadza ceny szczytowe i pozaszczytowe:
@@ -361,6 +391,10 @@ WEB_SEARCH_TOOL = {
     CLAUDE: "web_search_20260209",
     SONNET: "web_search_20260209",
 }
+# Oficjalny provider DeepSeek Harness używa zgodnego z Anthropic narzędzia
+# 20250305 oraz `max_uses`. Responses API nie ma takiego parametru i w E-020
+# wykonało 22 wyszukiwania mimo limitu 8 zapisanego w prompcie.
+DEEPSEEK_WEB_SEARCH_TOOL = "web_search_20250305"
 
 # Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań.
 WEB_SEARCH_USD_PER_1K = 10.00
@@ -370,7 +404,7 @@ WEB_SEARCH_USD_PER_1K = 10.00
 DAILY_LIMIT_USD = 5.00
 MONTHLY_LIMIT_USD = 40.00
 
-# Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1.
+# Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V3_NO_LIMIT=1.
 # „Bez limitu na budowę" miało znaczyć „nie blokuj eksperymentów", a nie
 # „pozwól jednemu przebiegowi kosztować 2 USD". Przebieg 16 kosztował $1,92,
 # z czego $1,33 poszło na 31 niepotrzebnych rund wyszukiwania.
@@ -402,6 +436,14 @@ DISCOVERY_MAX_RESULTS = 10
 # Koszt krańcowy ~$0,09 za rundę, bo każda przesyła całą rozmowę od nowa.
 # Przy suficie $1,60 na przebieg dyskoveria może wziąć ~$0,8.
 DISCOVERY_MAX_SEARCHES = 8
+DISCOVERY_MAX_PROPOSED_SOURCES = 1
+# Exact-URL selector dostaje pełny raw draft oraz tylko tyle adresów z wyniku
+# narzędzia, ile mieści się w tym limicie znaków. Chroni koszt drugiego inputu
+# bez obcinania listy utrwalanej w śladzie badawczym.
+DISCOVERY_SELECTOR_MAX_URL_CHARS_TOTAL = 16_000
+DISCOVERY_REQUIRED_ROLES = frozenset({
+    "MECHANISM", "CURRENT_SCALE", "SECOND_ACT",
+})
 # Ponizej tylu POBRANYCH zrodel uruchamiamy druga runde dyskoverii, zanim tekst
 # pojdzie do pisarza. Prog z danych, nie z przeczucia: artykuly, ktore wyszly
 # dobrze, mialy 6-7 pobranych zrodel; ten, ktory wyszedl najcienszy i z jedynym
@@ -414,6 +456,7 @@ FEDREG_MAX_ZNAKOW = 60_000
 MIN_ZRODEL_DO_PISANIA = 4
 
 MIN_PRIMARY_SOURCES = 2  # wymóg właściciela: w korpusie ≥2 dokumenty pierwotne
+MIN_ORIGIN_PRIMARY_SOURCES = 2  # dokument pierwotny na origin/official archive
 MIN_WHY_SOURCES = 2  # ≥2 źródła mówiące DLACZEGO, nie tylko treść reguły
 
 # Hosty, które serwują automatom CAPTCHA albo są płatne. Nie omijamy blokad —
@@ -485,20 +528,21 @@ MAX_WORDS = 1200
 # sprawa"), a nie doklejona formulka.
 BUDZET_ZASTRZEZEN = 1
 
-# Od ilu ZNANYCH ISTNIEJACYCH TEKSTOW temat uznajemy za nasycony.
-#
-# Skaut wymienia, co jego zdaniem juz o danym temacie napisano — i uzywamy jego
-# pamieci PRZECIW niemu. „Wszyscy wierza X o zwyklym przedmiocie, a X jest
-# nieprawda" to nie jest rzadki wglad, tylko GATUNEK z kanonem, ktory model ma
-# wyuczony: zraszacze, chusteczki flushable, karta hotelowa przy telefonie,
-# mydlo antybakteryjne, data na lekach, maszyna z pluszakami, wodoodpornosc
-# telefonu. Model podaje je pierwsze, bo sa najczesciej opisane, czyli
-# najlatwiej dostepne — a DOSTEPNOSC JEST ODWROTNOSCIA sygnalu, ktorego
-# szukamy.
-#
-# Prog dwa, nie jeden: jeden przypomniany tekst zdarza sie przy kazdym temacie,
-# ktory w ogole istnieje. Dwa znaczy, ze czytelnik juz to czytal.
-NASYCENIE_OD_ILU = 2
+# Dolne zabezpieczenia przed OCZYWISTA ciekawostka udajaca temat. To nie sa
+# miary jakosci i nie licza potencjalnych artykulow: 19 nie jest gorsze od 20.
+# Lapia tylko przypadek, w ktorym model oddal jedna odpowiedz rozbita na kilka
+# naglowkow. Wlasciwa ocena pozostaje semantyczna i jest widoczna w pelnym
+# artefakcie Scouta.
+MIN_OSI_TEMATU = 3
+MIN_NAPIEC_TEMATU = 2
+MIN_OTWARTYCH_GALEZI = 3
+# Trzy to tylko znaczenie slowa „kilka": jedna droga jest notka, dwie moga byc
+# prostym za/przeciw. Ta liczba NIE estymuje pojemnosci tematu i nie rosnie wraz
+# z ambicja artykulu. Live E-018 oddalo cztery bardzo rozne drogi z osobnymi
+# mechanizmami i zrodlami; odrzucenie ich przez poprzedni prog pieciu bylo
+# dokladnie bledem „19 kontra 20" wskazanym przez wlasciciela.
+MIN_ROZNYCH_DROG = 3
+MIN_NIEOCZYWISTYCH_POLACZEN = 3
 
 # ILE UDOKUMENTOWANYCH AWARII ROBI Z TEMATU ARTYKUL.
 #
@@ -514,10 +558,6 @@ NASYCENIE_OD_ILU = 2
 # 1987 roku. Lancuch sukcesji glowy panstwa ma za soba zamach z 1963 i poprawke
 # z 1967. Taki regulamin czyta sie jak blizny, a kazda blizna to scena z ludzmi.
 #
-# Dwa, nie jeden: jedna awaria to anegdota, dwie to juz wzorzec, ktory da sie
-# pokazac.
-PRECEDENSOW_NA_ARTYKUL = 2
-
 # Co ile dni ma powstawac kopia listy subskrybentow, zanim alarm zacznie o niej
 # przypominac. Eksportu NIE DA SIE zautomatyzowac — endpoint nie istnieje,
 # a sondowanie nieudokumentowanych adresow to scraping wedlug regulaminu
@@ -532,10 +572,6 @@ KOPIA_SUBSKRYBENTOW_CO_ILE_DNI = 14
 # sekundzie. Oba maja spisana procedure, oba da sie sobie wyobrazic — rozni je
 # wylacznie zasieg skutku.
 #
-# Na artykul potrzeba OBU rzeczy naraz: historii awarii i zasiegu. Sama
-# historia bez stawki to ciekawostka, sama stawka bez historii to procedura.
-ZASIEGI_ARTYKULOWE = ("AN_INDUSTRY", "A_COUNTRY")
-
 # Ile ostatnich artykulow porownuje bramka ODCISK_FORMY.
 ILE_TEKSTOW_DO_POROWNANIA_FORMY = 4
 
@@ -1028,6 +1064,20 @@ NOTE_TYPES = {
 # w Rumunii (EET/EEST), czyli najlepsze okno — niedziela 6:00 ET — wypada
 # u niego w niedzielę o 13:00. Agent i tak chodzi z harmonogramu.
 PUBLISH_TIMEZONE = "America/New_York"
+# Jedyna strefa dla granic doby, limitów, cichych dni, promocji i liczników.
+# Jest osobną nazwą kontraktu, choć obecnie celowo równa strefie publikacji.
+EDITORIAL_TIMEZONE = PUBLISH_TIMEZONE
+
+
+def data_redakcyjna(kiedy=None) -> str:
+    """Klucz YYYY-MM-DD jednej doby redakcyjnej."""
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    kiedy = kiedy or datetime.now(timezone.utc)
+    if kiedy.tzinfo is None:
+        raise ValueError("data redakcyjna wymaga czasu ze strefą")
+    return kiedy.astimezone(ZoneInfo(EDITORIAL_TIMEZONE)).date().isoformat()
 
 # UWAGA: CZTERY PONIZSZE STALE NIE SA UZYWANE PRZEZ ZADNA LINIE KODU.
 # Agent wystawia notki rownomiernie w calym oknie OKNO_PUBLIKACJI_ET (6-22 ET),
@@ -1101,6 +1151,11 @@ KOMENTARZE_DZIENNIE = (8, 12)     # 0 jest dozwolone: milczenie bije slaby komen
 # miesiecznie z konta, ktore ma dwa tygodnie, wygladaja jak zbieranie nazwisk.
 FOLLOW_MIESIECZNIE = (20, 30)     # obserwowanie to czytanie, nie zbieranie
 SUBSKRYPCJE_MIESIECZNIE = (6, 12)  # laduje w skrzynce wlasciciela, wiec waskie
+# Odpowiedzi zachowują pierwszeństwo przed aktywnością u innych, ale mają
+# osobny twardy sufit awaryjny. „Poza limitem” nie może znaczyć „bez limitu”.
+ODPOWIEDZI_DZIENNIE = (12, 20)
+ARTYKULY_DZIENNIE = 1
+USTAWIENIA_DZIENNIE = 1
 # ODBLOKOWANE decyzja wlasciciela 2026-08-19. Restack cudzej notki z wlasnym
 # zdaniem trafia do kanalu NASZYCH obserwujacych, powiadamia autora oryginalu
 # i stawia nasze zdanie obok jego — za cene jednego zdania, nie calej notki.
@@ -1140,13 +1195,17 @@ def cichy_dzien(kiedy=None) -> bool:
     zadnego stanu do zapamietania, i nadal identycznie dla wszystkich
     przebiegow tej samej doby.
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import date, datetime, timedelta, timezone
+    from zoneinfo import ZoneInfo
 
     if not CICHE_DNI_WLACZONE or CICHY_DZIEN_NA_ILE < 2:
         return False
     kiedy = kiedy or datetime.now(timezone.utc)
-    dzis = kiedy.strftime("%Y-%m-%d")
-    wczoraj = (kiedy - timedelta(days=1)).strftime("%Y-%m-%d")
+    if kiedy.tzinfo is None:
+        raise ValueError("cichy_dzien wymaga czasu ze strefą")
+    lokalna_data: date = kiedy.astimezone(ZoneInfo(EDITORIAL_TIMEZONE)).date()
+    dzis = lokalna_data.isoformat()
+    wczoraj = (lokalna_data - timedelta(days=1)).isoformat()
     return _cisza_z_hasza(dzis) and not _cisza_z_hasza(wczoraj)
 
 
@@ -1288,11 +1347,9 @@ HASLA_SZUKANIA = (
 )
 ILE_HASEL_NA_PRZEBIEG = 3
 
-# Odpowiedzi POD WLASNYMI tresciami sa poza limitami dziennymi. Decyzja
-# wlasciciela i jest sluszna: limit chroni przed wygladaniem na spamera u obcych,
-# a u siebie jest sie gospodarzem. Pytanie bez odpowiedzi pod wlasnym artykulem
-# szkodzi bardziej niz dziesiec komentarzy za duzo — czytelnik, ktory poswiecil
-# czas i nie dostal odpowiedzi, nie wraca.
+# Odpowiedzi pod własnymi treściami są poza pulą komentarzy u innych i mają
+# pierwszeństwo. Nadal obejmuje je osobny twardy sufit ODPOWIEDZI_DZIENNIE,
+# ponieważ żadna autonomiczna mutacja nie może pozostać bez limitu awaryjnego.
 ODPOWIEDZI_POZA_LIMITEM = True
 
 # Do ilu komentarzy odpowiadamy BEZ wybierania. Przy dwoch odpowiada sie obu.
@@ -1370,6 +1427,14 @@ REFUSAL_PHRASES = (
 FETCH_TIMEOUT_S = 30.0
 FETCH_MIN_CHARS = 400  # krótszy tekst to zwykle strona-zajawka, nie dokument
 FETCH_USER_AGENT = "Mozilla/5.0 (compatible; NothingIsAccidental/1.0; +editorial research)"
+FETCH_MAX_URL_CHARS = 4096
+FETCH_MAX_REDIRECTS = 5
+# Limity odnoszą się do zdekodowanego strumienia, nie deklaracji serwera.
+FETCH_MAX_HTML_BYTES = 5_000_000
+FETCH_MAX_JSON_BYTES = 2_000_000
+FETCH_MAX_PDF_BYTES = 20_000_000
+FETCH_MAX_EXTRACTED_CHARS = 500_000
+FETCH_MAX_PDF_DECOMPRESSED_STREAM_BYTES = 10_000_000
 
 # --- bramki jakości ----------------------------------------------------------
 # NIC NIE BLOKUJE. Te cztery są zgłaszane właścicielowi jako uwagi do

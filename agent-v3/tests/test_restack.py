@@ -28,6 +28,7 @@ def sprawdz(nazwa, warunek, szczegol=""):
 
 def podstaw(odpowiedz):
     """Podmienia model, zeby testowac KOD, nie jego humor."""
+    odpowiedz = {"mechanism_named": "", **odpowiedz}
     stages.llm = types.SimpleNamespace(
         call=lambda *a, **k: json.dumps(odpowiedz), parse_json=llm.parse_json)
 

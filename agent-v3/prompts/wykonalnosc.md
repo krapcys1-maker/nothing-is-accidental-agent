@@ -7,16 +7,18 @@ website. Your job is to judge what already exists — never to steer the subject
 
 ## What you are judging
 
-For each topic, estimate whether a plain HTTP client, with no login and no
-payment, could realistically retrieve **at least two primary documents** bearing
-on the question.
+For each topic and for each of its `article_routes`, estimate whether a plain
+HTTP client, with no login and no payment, could realistically retrieve **at
+least two primary documents** bearing on that route's question. The umbrella
+question defines a continuing editorial territory. It is not automatically the
+question for this one article.
 
 A primary document is itself a record, not a commentary on somebody else's
 record: a register, a filed report, a published standard, a ruling, a dataset, a
 scientific paper, a company statement about its own products, an official
 statistic.
 
-Judge three things honestly:
+Judge three things honestly for every route:
 
 1. **Does it exist?** Did some body anywhere in the world have to write this
    reasoning down? Any country, any language, any sector.
@@ -76,7 +78,27 @@ So judge `depth` for each topic:
 
 Judging RICH is a claim you should be able to back. Either name the parallels in
 `parallels` — two of them, or it is not RICH by that route — or point at the
-three-plus threads the topic already carries. One of the two must hold.
+three-plus routes the topic already carries. One of the two must hold.
+
+Assign `depth` separately to every route. The universe can be RICH because it
+contains four different articles while one route inside it is still SINGLE or
+THIN. `second_act` states what earns the selected article more than a short
+explanation. For RICH it must name a second mechanism, a real disagreement,
+multiple independently evidenced consequences, or a cross-domain parallel. For
+SINGLE state the one mechanism. For THIN state why the answer is exhausted.
+
+Then choose exactly one route for the next article. Prefer the route that has:
+
+1. a concrete reader entry rather than an umbrella abstraction;
+2. at least two reachable primary records from different bodies;
+3. a distinct mechanism and an unresolved tension;
+4. enough evidence for one article without trying to cover the whole universe.
+
+Do not select a THIN route. Do not silently substitute the central question.
+`selected_route_index` is the
+zero-based index inside that topic's `article_routes`. A selected route must be
+marked feasible in `route_assessments`. A different route can be selected on a
+future run; the universe is a reservoir, not a single omnibus article.
 
 Be honest rather than generous. Marking everything RICH puts us straight back to
 padding, and marking everything SINGLE wastes good subjects.
@@ -85,7 +107,7 @@ padding, and marking everything SINGLE wastes good subjects.
 
 Return only valid JSON, shaped exactly as:
 
-{{"assessments": [{{"index": <0-based index of the topic>, "feasible": true|false, "confidence": 0.0-1.0, "expected_primary_sources": <integer>, "depth": "RICH"|"SINGLE"|"THIN", "parallels": ["<other domain where the same mechanism appears>"], "note": "<one sentence: where the record most likely lives, or why it does not>"}}]}}
+{{"assessments": [{{"index": <0-based index of the topic>, "feasible": true|false, "confidence": 0.0-1.0, "expected_primary_sources": <integer>, "depth": "RICH"|"SINGLE"|"THIN", "parallels": ["<other domain where the same mechanism appears>"], "note": "<one sentence: where the record most likely lives, or why it does not>", "route_assessments": [{{"route_index": <0-based index inside article_routes>, "feasible": true|false, "confidence": 0.0-1.0, "expected_primary_sources": <integer>, "depth": "RICH"|"SINGLE"|"THIN", "second_act": "<what earns this route its length, or why it has only one act>", "note": "<where the primary record for this route should live, or why it fails>"}}], "selected_route_index": <index of one feasible non-THIN route>, "selected_route_reason": "<why this route, not the umbrella or another route, should become the next article>"}}]}}
 
 Order the array best-first: RICH before SINGLE, and within each, most
 researchable first. THIN topics go last.

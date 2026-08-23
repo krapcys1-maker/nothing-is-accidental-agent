@@ -18,11 +18,16 @@ import sys
 import traceback
 from typing import Any, Callable
 
+import capabilities
 import config
 import db
 import editorial
 import gates
+import mutation_ledger
+import operational_day
+import provenance
 import stages
+import model_contracts
 
 STAGES = (
     "scout", "feasibility", "discovery", "fetch",
@@ -45,11 +50,38 @@ def _utf8_stdout() -> None:
             pass
 
 
-def _prompt_fingerprint() -> str:
+PROMPT_FOR_STAGE = {
+    "scout": "skaut.md",
+    "feasibility": "wykonalnosc.md",
+    "discovery": "dyskoveria.md",
+    "classify": "klasyfikacja.md",
+    "synthesis": "synteza.md",
+    "warto_pisac": "warto_pisac.md",
+    "write": "pisarz.md",
+    "review": "recenzent.md",
+    "forma": "forma.md",
+    "bibliotekarz": "bibliotekarz.md",
+}
+
+
+def _prompt_fingerprint(stage: str) -> str:
+    """Hash tylko wejsc wykonywalnych danego etapu.
+
+    Jeden globalny hash wszystkich promptow powodowal, ze korekta odsiewu
+    uniewazniala oplacony Scout i normalny segment probowal wywolac go drugi
+    raz. Cache jednego etapu nie moze zalezec od promptu innej roli.
+    """
     digest = hashlib.sha256()
-    for path in sorted(p for p in config.PROMPTS_DIR.rglob("*") if p.is_file()):
-        digest.update(str(path.relative_to(config.PROMPTS_DIR)).encode("utf-8"))
+    filename = PROMPT_FOR_STAGE.get(stage)
+    if filename:
+        path = config.PROMPTS_DIR / filename
+        digest.update(filename.encode("utf-8"))
         digest.update(path.read_bytes())
+    contract = model_contracts.CONTRACTS.get(stage)
+    if contract is not None:
+        digest.update(contract.id.encode("ascii"))
+    if not filename and contract is None:
+        digest.update(f"deterministic:{stage}".encode("utf-8"))
     return digest.hexdigest()[:20]
 
 
@@ -63,10 +95,10 @@ def cached(
     podać stare tematy do nowego przebiegu i odtworzyć cały stary artykuł.
     """
     identity = {
-        "version": 3,
+        "version": 4,
         "stage": stage,
         "input": input_data,
-        "prompt_version": _prompt_fingerprint(),
+        "prompt_version": _prompt_fingerprint(stage),
         "model": config.MODEL_FOR.get(stage, "deterministic"),
     }
     raw = json.dumps(identity, ensure_ascii=False, sort_keys=True, default=str)
@@ -89,25 +121,32 @@ class JuzDziala(RuntimeError):
     pass
 
 
-ZNACZNIK_KOPII_TESTOWEJ = config.AGENT_DIR / "TO_JEST_KOPIA_TESTOWA"
-
-
 def odmow_publikacji_z_kopii(wyslij: bool) -> None:
-    """Kopia testowa nie ma prawa nic opublikowac. Nigdy.
+    """Sprawdza maszynowy kontrakt live_test przed pierwszym zapisem lokalnym."""
+    if not wyslij:
+        return
+    try:
+        capabilities.require(capabilities.Capability.PUBLISH_ARTICLE)
+    except capabilities.CapabilityDenied as exc:
+        raise SystemExit(f"ODMOWA POLITYKI V3: {exc}") from exc
 
-    Wlasciciel: „nie odpalaj go na produkcji, wersja v2 ma byc jako test".
-    Sama dyscyplina nie wystarczy — wystarczy raz dopisac `--wyslij` z pamieci
-    miesnowej i eksperyment wyjdzie na zywe konto, czego nie da sie cofnac.
-    Wiec kopia testowa nosi plik-znacznik obok `config.py`, a ten plik odbiera
-    jej prawo publikowania. Produkcja znacznika nie ma i dziala normalnie.
-    """
-    if wyslij and ZNACZNIK_KOPII_TESTOWEJ.exists():
-        raise SystemExit(
-            "ODMOWA: to jest kopia testowa (%s), a --wyslij publikuje NA ZYWO. "
-            "Produkcja stoi w ~/nothing-is-accidental-agent na galezi main. "
-            "Jesli naprawde chcesz publikowac stad, usun ten plik swiadomie."
-            % ZNACZNIK_KOPII_TESTOWEJ
-        )
+
+def mutacja_niepewna(wynik: dict[str, Any]) -> bool:
+    """UNKNOWN, także odziedziczony z ledgeru, zatrzymuje dalsze mutacje."""
+    if wynik.get("status") in {"PENDING", "UNKNOWN"}:
+        return True
+    if wynik.get("blocked_by_status") in {"PENDING", "UNKNOWN"}:
+        return True
+    return any(
+        proba.get("status") in {"PENDING", "UNKNOWN"}
+        for proba in wynik.get("attempts", [])
+        if isinstance(proba, dict)
+    )
+
+
+def nowy_sukces(wynik: dict[str, Any], pole: str = "wyslane") -> bool:
+    """Licznik przebiegu obejmuje potwierdzone działanie wykonane teraz."""
+    return bool(wynik.get(pole)) and not bool(wynik.get("pominiete"))
 
 
 def zajmij_zamek():
@@ -256,7 +295,7 @@ def zmiesci_sie(rodzaj: str, ile: int, udzial: float = 1.0) -> int:
     return mozliwe
 
 
-def ile_przebiegow_zostalo(conn) -> int:
+def ile_przebiegow_zostalo(conn, kiedy=None) -> int:
     """Ile przebiegow dnia jeszcze bedzie, wliczajac biezacy.
 
     Sluzy do dzielenia dziennej normy. Liczymy przebiegi ZAKONCZONE dzis, wiec
@@ -270,15 +309,12 @@ def ile_przebiegow_zostalo(conn) -> int:
     `.timer` i powtorzenie ich tutaj zlamaloby zasade jednej liczby w jednym
     miejscu — a rozjazd miedzy nimi wychodzilby dopiero po zmianie harmonogramu.
     """
-    from datetime import datetime, timezone
-
-    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    try:
-        (zamkniete,) = conn.execute(
-            "SELECT COUNT(*) FROM runs WHERE stage = 'dzien' AND status = 'DONE'"
-            " AND finished_at LIKE ?", (f"{dzis}%",)).fetchone()
-    except Exception:
-        zamkniete = 0             # licznik nie moze zatrzymac przebiegu
+    plan = operational_day.get_or_create(conn, at=kiedy)
+    (zamkniete,) = conn.execute(
+        "SELECT COUNT(*) FROM runs WHERE stage = 'dzien' AND status = 'DONE' "
+        "AND finished_at >= ? AND finished_at < ?",
+        (plan["starts_at"], plan["ends_at"]),
+    ).fetchone()
     return max(1, config.PRZEBIEGOW_DZIENNIE - int(zamkniete))
 
 
@@ -290,8 +326,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
 
     1. KAŻDY BLOK OSOBNO. Padnięte komentarze nie zabierają ze sobą notek.
        Dzień częściowo udany jest znacznie lepszy od dnia przerwanego w połowie.
-    2. ODPOWIEDZI POZA LIMITEM. U siebie jesteśmy gospodarzem; pytanie bez
-       odpowiedzi pod własnym tekstem szkodzi bardziej niż komentarz za dużo.
+    2. ODPOWIEDZI MAJĄ PIERWSZEŃSTWO, ale także osobny twardy limit awaryjny.
+       Priorytet nie może oznaczać nieograniczonej autonomicznej mutacji.
     3. NIC NIE WYCHODZI BEZ `--wyslij`. Domyślnie agent pokazuje, co by zrobił.
     """
     import time
@@ -305,29 +341,21 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         60, config.LIMIT_CZASU_PRZEBIEGU_S - config.ZAPAS_CZASU_S)
 
     budzet = stages.budzet_dnia(conn)
+    plan = operational_day.snapshot(conn)
 
-    # ILE JUZ DZIS POSZLO — pytamy Substacka, nie wlasnej ksiegowosci.
-    # Wlasciciel zauwazyl, ze dwie notki wyszly trzy minuty po sobie: caly
-    # dzienny przydzial szedl w jednym ciagu, bo przebieg robil wszystko naraz.
-    # Teraz zegar odpala agenta KILKA RAZY DZIENNIE, a kazdy przebieg dobiera
-    # tylko brakujaca czesc — dzieki temu notki rozkladaja sie na godziny,
-    # a nie na minuty.
-    juz = browser.ile_dzis_wystawione()
-    # OBSERWACJE I SUBSKRYPCJE TEZ, i to jest naprawa z 20 sierpnia. Bloki 3c
-    # i 3d braly `budzet["follow"]` oraz `budzet["subskrypcje"]` — czyli PELNY
-    # dzienny przydzial — w KAZDYM z trzech przebiegow. Realny wolumen wychodzil
-    # okolo trzykrotnosci konfiguracji: ~60-70 obserwacji miesiecznie zamiast
-    # 20-30 i ~27 subskrypcji zamiast 6-12. Kazda subskrypcja to poczta do
-    # skrzynki wlasciciela, wiec to nie byla pomylka kosmetyczna.
-    zostalo = {k: max(0, budzet[k] - juz.get(k, 0))
-               for k in ("notki", "komentarze", "lajki", "restacki",
-                         "follow", "subskrypcje")}
+    # Jedynym licznikiem bezpieczeństwa jest transakcyjny ledger SQLite.
+    # JSONL pozostaje czytelną telemetrią, a odczyt profilu rekoncyliacją źródła;
+    # awaria któregokolwiek nie może już oddać zużytej jednostki budżetu.
+    juz = plan["accounted"]
+    zostalo = {
+        k: max(0, int(budzet[k]) - int(juz.get(k, 0))) for k in budzet
+    }
 
     # CICHY DZIEN. Wyciszamy to, co NADAJEMY — notki i restacki. Komentarze,
     # polubienia i obserwacje zostaja, bo to jest czytanie cudzych rzeczy,
     # a nie nadawanie wlasnych. Odpowiedzi zostaja tym bardziej: nieodpisanie
     # komus, kto sie do nas odezwal, nie jest cisza tylko lekcewazeniem.
-    if config.cichy_dzien():
+    if plan["quiet_day"]:
         print("   >> CICHY DZIEN — nie nadajemy wlasnych tresci. Rozmowa idzie"
               " normalnie: odpowiedzi, komentarze i czytanie bez zmian.",
               flush=True)
@@ -347,16 +375,37 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     na_teraz["komentarze"] = zmiesci_sie("komentarz", na_teraz["komentarze"])
     print(f"   dzis juz: notki={juz.get('notki', 0)} "
           f"komentarze={juz.get('komentarze', 0)} lajki={juz.get('lajki', 0)}   "
+          f"follow={juz.get('follow', 0)} subskrypcje={juz.get('subskrypcje', 0)}   "
           f"przebiegow zostalo: {zostalo_przebiegow}   "
           f"w tym przebiegu: notki={na_teraz['notki']} "
           f"komentarze={na_teraz['komentarze']} lajki={na_teraz['lajki']}",
           flush=True)
-    zrobione = {"notki": 0, "komentarze": 0, "odpowiedzi": 0, "polubienia": 0,
-                "restacki": 0}
+    zrobione = {"notki": 0, "komentarze": 0, "odpowiedzi": 0,
+                "polubienia": 0, "restacki": 0, "follow": 0,
+                "subskrypcje": 0}
     # Czy dany rodzaj dzialania juz w tym przebiegu wyszedl. Wspolne dla
     # wszystkich blokow, bo profil widzi jeden ciag zdarzen, nie nasze bloki:
     # komentarz tuz po obserwacji to dla Substacka dwa dzialania pod rzad.
     rytm_stanu: dict[str, bool] = {}
+    stan_mutacji = {"unknown": False}
+
+    def zatrzymaj_po_unknown(wynik: dict[str, Any]) -> bool:
+        if not mutacja_niepewna(wynik):
+            return False
+        stan_mutacji["unknown"] = True
+        print("  stan mutacji UNKNOWN — kończę część mutującą przebiegu",
+              flush=True)
+        return True
+
+    def wyczerpany_budzet(wynik: dict[str, Any]) -> bool:
+        if wynik.get("blocked_by_status") != "BUDGET_EXHAUSTED":
+            return False
+        print(
+            f"  budżet {wynik.get('budget_category')} wyczerpany "
+            f"({wynik.get('budget_accounted')}/{wynik.get('budget_limit')})",
+            flush=True,
+        )
+        return True
 
     # OKNO PUBLIKACJI liczone w strefie CZYTELNIKOW. Poza nim agent nie milczy
     # calkiem — polubienia i odpowiedzi zostaja, bo czytanie o polnocy jest
@@ -376,7 +425,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                   flush=True)
             traceback.print_exc()
 
-    # --- 1. odpowiedzi pod własnymi treściami: pierwsze i bez limitu ----------
+    # --- 1. odpowiedzi pod własnymi treściami: pierwsze, z twardym limitem ----
     def odpowiedzi() -> None:
         # Pod notkami I pod artykułami. Kanał profilu pokazuje tylko notki, więc
         # bez drugiego pytania czytelnik mógłby zadać pytanie pod tekstem
@@ -392,6 +441,9 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                    + browser.odpowiedzi_na_nasze_komentarze())
         if not czekaja:
             return
+        if not na_teraz.get("odpowiedzi"):
+            print("  twardy budżet odpowiedzi wyczerpany", flush=True)
+            return
         # PYTANIA CZYTELNIKOW DO PULI TEMATOW. Zbieramy tutaj, bo tutaj i tak
         # trzymamy w reku wszystko, co do nas przyszlo — a w przebiegu artykulu
         # kazde dodatkowe otwarcie sesji to koszt i ryzyko. Pytanie, ktore ktos
@@ -405,7 +457,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         # jak maszyna, więc powyżej progu agent wybiera — z pierwszeństwem dla
         # niezgody, bo nieodpowiedziany zarzut zostaje ostatnim słowem.
         czekaja = stages.wybierz_do_odpowiedzi(conn, run_id, czekaja)
-        for c in czekaja:
+        for c in czekaja[: na_teraz["odpowiedzi"]]:
             if not zostal_czas("odpowiedzi"):
                 return
             out = stages.reply_to(
@@ -428,13 +480,19 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 if not rytm("odpowiedz", "odpowiedzi", rytm_stanu):
                     return
                 if c.get("gdzie") == "artykul":
-                    browser.wystaw_odpowiedz_pod_artykulem(
+                    wynik = browser.wystaw_odpowiedz_pod_artykulem(
                         c.get("url") or "", c.get("autor") or "", tekst,
                         wyslij=True)
                 else:
-                    browser.wystaw_odpowiedz(c["pod_id"], tekst, wyslij=True)
-                rytm_stanu["odpowiedz"] = True
-            zrobione["odpowiedzi"] += 1
+                    wynik = browser.wystaw_odpowiedz(
+                        c["pod_id"], tekst, wyslij=True)
+                if nowy_sukces(wynik):
+                    rytm_stanu["odpowiedz"] = True
+                    zrobione["odpowiedzi"] += 1
+                elif zatrzymaj_po_unknown(wynik):
+                    return
+                elif wyczerpany_budzet(wynik):
+                    return
 
     # --- 2. notki: pięć dziennie, każda z innego faktu ------------------------
     def notki() -> None:
@@ -472,8 +530,13 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 # a nikt by tego nie zauwazyl.
                 if wynik.get("wyslane") and n.get("promocja_url"):
                     stages.odhacz_promocje(n["promocja_url"])
-                rytm_stanu["notka"] = True
-            zrobione["notki"] += 1
+                if nowy_sukces(wynik):
+                    rytm_stanu["notka"] = True
+                    zrobione["notki"] += 1
+                elif zatrzymaj_po_unknown(wynik):
+                    return
+                elif wyczerpany_budzet(wynik):
+                    return
 
     # --- 3. komentarze u innych ----------------------------------------------
     def komentarze() -> None:
@@ -513,15 +576,21 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             if wyslij:
                 if not rytm("komentarz", "komentarze", rytm_stanu):
                     return
-                browser.wystaw_komentarz(
+                wynik = browser.wystaw_komentarz(
                     cel["url"], dobre[0]["comment"], wyslij=True,
                     kontekst={**opis_celu(cel),
                               "otwarcie": (out.get("otwarcie") or "")[:60],
                               "postawa": out.get("postawa") or ""})
-                # Zapamietujemy U KOGO, zeby nie wracac tam za kilka dni.
-                kanal.zapamietaj_komentarz(cel)
-                rytm_stanu["komentarz"] = True
-            zrobione["komentarze"] += 1
+                if wynik.get("wyslane"):
+                    # Historia celu opisuje wyłącznie potwierdzone działanie.
+                    kanal.zapamietaj_komentarz(cel)
+                    if nowy_sukces(wynik):
+                        rytm_stanu["komentarz"] = True
+                        zrobione["komentarze"] += 1
+                elif zatrzymaj_po_unknown(wynik):
+                    return
+                elif wyczerpany_budzet(wynik):
+                    return
 
     # --- 3b. dyskusje pod cudzymi notkami -------------------------------------
     def dyskusje() -> None:
@@ -565,11 +634,17 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             if wyslij:
                 if not rytm("komentarz", "dyskusje", rytm_stanu):
                     return
-                browser.wystaw_odpowiedz(cel["id"], dobre[0]["comment"],
-                                         wyslij=True,
-                                         kontekst=opis_celu(cel))
-                rytm_stanu["komentarz"] = True
-            zrobione["komentarze"] += 1
+                wynik = browser.wystaw_odpowiedz(
+                    cel["id"], dobre[0]["comment"], wyslij=True,
+                    kontekst=opis_celu(cel),
+                    rodzaj_proby="discussion_reply")
+                if nowy_sukces(wynik):
+                    rytm_stanu["komentarz"] = True
+                    zrobione["komentarze"] += 1
+                elif zatrzymaj_po_unknown(wynik):
+                    return
+                elif wyczerpany_budzet(wynik):
+                    return
 
     # --- 3c. obserwowanie nowych: to, co poszerza krąg ------------------------
     def obserwuj() -> None:
@@ -607,8 +682,14 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                     return
                 # OBSERWUJEMY, nie subskrybujemy. To dwie rozne rzeczy i maja
                 # osobne widelki: obserwacja nie przysyla nic mailem.
-                browser.obserwuj_profil(uchwyt, wyslij=True)
-                rytm_stanu["komentarz"] = True
+                wynik = browser.obserwuj_profil(uchwyt, wyslij=True)
+                if nowy_sukces(wynik, "zrobione"):
+                    rytm_stanu["komentarz"] = True
+                    zrobione["follow"] += 1
+                elif zatrzymaj_po_unknown(wynik):
+                    return
+                elif wyczerpany_budzet(wynik):
+                    return
             else:
                 print(f"  (obserwowałbym: {uchwyt})", flush=True)
 
@@ -640,8 +721,14 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             if wyslij:
                 if not rytm("komentarz", "subskrypcje", rytm_stanu):
                     return
-                browser.zasubskrybuj(uchwyt, wyslij=True)
-                rytm_stanu["komentarz"] = True
+                wynik = browser.zasubskrybuj(uchwyt, wyslij=True)
+                if nowy_sukces(wynik, "zrobione"):
+                    rytm_stanu["komentarz"] = True
+                    zrobione["subskrypcje"] += 1
+                elif zatrzymaj_po_unknown(wynik):
+                    return
+                elif wyczerpany_budzet(wynik):
+                    return
             else:
                 print(f"  (zasubskrybowałbym: {uchwyt})", flush=True)
 
@@ -649,6 +736,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     def polubienia() -> None:
         w = browser.polub_w_kanale(na_teraz["lajki"], wyslij=wyslij)
         zrobione["polubienia"] = w.get("polubione", 0)
+        zatrzymaj_po_unknown(w)
 
     # --- 5. restacki: cudza notka plus nasze zdanie ---------------------------
     def restacki() -> None:
@@ -666,6 +754,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         w = browser.restackuj_w_kanale(
             ile, lambda n: stages.ocen_restack(conn, run_id, n), wyslij=wyslij)
         zrobione["restacki"] = w.get("restackowane", 0)
+        zatrzymaj_po_unknown(w)
         if w.get("odmowy"):
             print(f"  odmów: {len(w['odmowy'])} — milczenie jest pełnym wynikiem",
                   flush=True)
@@ -689,6 +778,10 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                           ("obserwowanie", obserwuj), ("subskrypcje", subskrybuj),
                           ("komentarze", komentarze), ("dyskusje", dyskusje),
                           ("polubienia", polubienia), ("restacki", restacki)):
+        if stan_mutacji["unknown"]:
+            print("\n-- dalsze mutacje pominięte: wcześniejszy stan UNKNOWN --",
+                  flush=True)
+            break
         print(f"\n-- {nazwa} --", flush=True)
         blok(nazwa, robota)
 
@@ -730,11 +823,6 @@ def _sygnal_ma_zostawic_slad() -> None:
 def main() -> int:
     _utf8_stdout()
     _sygnal_ma_zostawic_slad()
-    try:
-        _zamek = zajmij_zamek()   # trzymany do końca procesu
-    except JuzDziala as exc:
-        print(f"  {exc}", flush=True)
-        return 0
     parser = argparse.ArgumentParser(description="agent-v3 — autonomiczny system redakcyjny")
     parser.add_argument("--stop-after", choices=STAGES, help="zatrzymaj się po tym etapie")
     parser.add_argument("--use-cache", action="store_true", help="użyj zapisanych wyników etapów")
@@ -748,8 +836,36 @@ def main() -> int:
     # pierwszym dotknieciem bazy — zeby kopia testowa odpadala, zanim
     # cokolwiek zapisze.
     odmow_publikacji_z_kopii(args.wyslij)
+    polityka = capabilities.status()
+    print(
+        f"== polityka V3: mode={polityka['mode']} "
+        f"kill_switch={polityka['kill_switch']} "
+        f"test_target={polityka['test_target_configured']} ==",
+        flush=True,
+    )
+    try:
+        _zamek = zajmij_zamek()   # trzymany do końca procesu
+    except JuzDziala as exc:
+        print(f"  {exc}", flush=True)
+        return 0
+
+    odzyskane = mutation_ledger.recover_pending(config.DB_PATH)
+    if any(odzyskane.values()):
+        print(
+            "  [ledger] odzyskano po restarcie: "
+            f"FAILED={odzyskane['FAILED']} UNKNOWN={odzyskane['UNKNOWN']}",
+            flush=True,
+        )
 
     conn = db.connect()
+    recovered_articles = stages.recover_article_saves(conn)
+    if any(recovered_articles.values()):
+        print(
+            "  [article-save] recovery: "
+            + " ".join(f"{key}={value}" for key, value in recovered_articles.items()
+                       if value),
+            flush=True,
+        )
     run_id = db.start_run(conn)
     stage = "start"
 
@@ -805,33 +921,68 @@ def main() -> int:
                 f" źródeł~{a.get('expected_primary_sources')}  {a.get('note', '')[:110]}",
                 flush=True,
             )
-        print(f"\n>> wybrany temat: {topic.get('title')}", flush=True)
-        print(f"   {topic.get('question')}", flush=True)
+        print(f"\n>> wybrane uniwersum: {topic.get('title')}", flush=True)
+        if topic.get("selected_article_route"):
+            print(
+                f"   droga [{topic.get('selected_route_index')}]: "
+                f"{topic.get('question')}",
+                flush=True,
+            )
+            print(
+                "   mechanizm: "
+                f"{topic['selected_article_route'].get('distinct_engine', '')}",
+                flush=True,
+            )
+        else:
+            print(f"   {topic.get('question')}", flush=True)
         print(f"   uzasadnienie: {verdict.get('note', '')}", flush=True)
         if args.stop_after == stage:
             return _done(conn, run_id, stage)
 
         stage = "discovery"
         recent = db.recent_domains(conn, config.DIVERSITY_LOOKBACK)
+        selected_route = topic.get("selected_article_route") or {}
+        research_context = {
+            "universe_title": topic.get("title"),
+            "universe_question": topic.get("universe_question"),
+            "distinct_engine": selected_route.get("distinct_engine"),
+            "evidence_needed": selected_route.get("evidence_needed"),
+            "second_act": verdict.get("selected_route_second_act"),
+        }
         sources = cached(
             stage,
-            lambda: stages.discovery(conn, run_id, topic["question"], recent),
+            lambda: stages.discovery(
+                conn, run_id, topic["question"], recent, research_context
+            ),
             args.use_cache,
-            {"question": topic["question"], "recent_domains": recent},
+            {
+                "question": topic["question"],
+                "recent_domains": recent,
+                "research_context": research_context,
+            },
         )
         print(f"\n-- znalezione źródła ({len(sources)}) --", flush=True)
         for s in sources:
             print(
                 f"  [{s.get('class', '?'):9}] {s.get('host')}"
+                f"  {s.get('host_role', '?')}"
                 f"{'  DLACZEGO' if s.get('answers_why') else ''}"
                 f"{'  LICZBY' if s.get('has_numbers') else ''}",
                 flush=True,
             )
             print(f"      {s.get('title', '')[:100]}", flush=True)
         primary = sum(1 for s in sources if s.get("class") == "PRIMARY")
+        origin_primary = sum(
+            1 for s in sources
+            if s.get("class") == "PRIMARY"
+            and s.get("host_role") in {
+                "ORIGINATING_AUTHORITY", "OFFICIAL_ARCHIVE",
+            }
+        )
         why = sum(1 for s in sources if s.get("answers_why"))
         print(
             f"\n   pierwotnych: {primary}/{config.MIN_PRIMARY_SOURCES}   "
+            f"origin/official: {origin_primary}/{config.MIN_ORIGIN_PRIMARY_SOURCES}   "
             f"wyjaśniających DLACZEGO: {why}/{config.MIN_WHY_SOURCES}   "
             f"organizacji: {len({s.get('host') for s in sources})}",
             flush=True,
@@ -865,8 +1016,10 @@ def main() -> int:
             try:
                 juz_mamy = {s.get("host") or s.get("url", "") for s in corpus}
                 dodatkowe = [
-                    s for s in stages.discovery(conn, run_id, topic["question"],
-                                                recent)
+                    s for s in stages.discovery(
+                        conn, run_id, topic["question"], recent,
+                        research_context,
+                    )
                     if (s.get("host") or s.get("url", "")) not in juz_mamy
                 ]
                 if dodatkowe:
@@ -972,7 +1125,8 @@ def main() -> int:
                 else:
                     grupy = stages.bibliotekarz(conn, run_id, bank).get("groups") or []
                     dolozone = [{"domain": ", ".join(g.get("dziedziny", [])),
-                                 "mechanism": g.get("mechanism", ""), "z_banku": True}
+                                 "how_it_matches": g.get("mechanism", ""),
+                                 "origin": "evidence_bank"}
                                 for g in grupy[:2]]
                     if dolozone:
                         card.setdefault("parallel_mechanisms", []).extend(dolozone)
@@ -980,7 +1134,7 @@ def main() -> int:
                               flush=True)
                         for d in dolozone:
                             print("     • [%s] %s"
-                                  % (d["domain"], d["mechanism"][:110]), flush=True)
+                                  % (d["domain"], d["how_it_matches"][:110]), flush=True)
                     else:
                         print("   bank nie ma pary — pisarz dostaje karte jak jest",
                               flush=True)
@@ -1018,25 +1172,13 @@ def main() -> int:
         print("\n-- pisanie --", flush=True)
         article_memory = editorial.memory_brief(
             conn, " ".join(str(topic.get(k) or "") for k in ("title", "question")))
-        try:
-            glebokosc = str(verdict.get("depth") or "RICH").upper()
-            draft = cached(stage,
-                           lambda: stages.write(conn, run_id, card, glebokosc,
-                                                article_memory),
-                           args.use_cache,
-                           {"card": card, "depth": glebokosc,
-                            "editorial_memory": article_memory})
-        except Exception as exc:
-            # Jedno powtórzenie na Opusie, bo tu ginie cały opłacony research.
-            # Opus jest sprawdzonym pisarzem tego potoku; jeśli skonfigurowany
-            # model odmówił albo padł, powtórka na nim ma największą szansę.
-            print(
-                f"  [awaria] pisarz ({config.MODEL_FOR['write']}) padł: {exc}"
-                f" — powtarzam na {config.CLAUDE}",
-                flush=True,
-            )
-            config.MODEL_FOR["write"] = config.CLAUDE
-            draft = stages.write(conn, run_id, card, glebokosc, article_memory)
+        glebokosc = str(verdict.get("depth") or "RICH").upper()
+        draft = cached(stage,
+                       lambda: stages.write(conn, run_id, card, glebokosc,
+                                            article_memory),
+                       args.use_cache,
+                       {"card": card, "depth": glebokosc,
+                        "editorial_memory": article_memory})
         words = len(draft["body"].split())
         print(f"\n   tytuł: {draft.get('title')}", flush=True)
         print(f"   podtytuł: {draft.get('subtitle', '')}", flush=True)
@@ -1062,44 +1204,22 @@ def main() -> int:
                 {"card": card, "draft": draft},
             )
         except Exception as exc:
-            # Recenzja nic nie blokuje, więc jej brak też nie może. Artykuł
-            # trafia do szuflady z adnotacją, że nie został rozliczony zdanie
-            # po zdaniu — właściciel wie, na co patrzy.
-            print(f"  [awaria] recenzja padła ({exc}) — zapisuję bez niej", flush=True)
+            # Brak pełnego ledgeru sentence->claim jest stanem technicznym,
+            # który późniejsza decyzja kieruje do autonomicznej kwarantanny.
+            print(f"  [awaria] recenzja padła ({exc}) — zapisuję w kwarantannie",
+                  flush=True)
             review_available = False
             report = {"sentences": [], "unsupported_facts": [],
                       "summary": f"recenzja niedostępna: {type(exc).__name__}"}
         sentences = report.get("sentences", [])
         counts = {k: sum(1 for s in sentences if s.get("class") == k)
-                  for k in ("FACT", "INFERENCE", "PROSE")}
-        # SKLADAMY Z DWOCH ZRODEL, NIE Z JEDNEGO. Recenzent klasyfikuje KAZDE
-        # zdanie (`supported`) i osobno powtarza te nieoparte w zbiorczej
-        # liscie. Czytalismy wylacznie liste — czyli ufali, ze model poprawnie
-        # przepisze wlasny wynik w drugie miejsce. Zdanie oznaczone jako
-        # nieoparte, ale niepowtorzone, przepadalo bez sladu, i to jest glowny
-        # sygnal jakosci faktograficznej calego potoku.
-        #
-        # Na przebiegu 25 model sie nie pomylil (1 oznaczone, 1 w liscie). To
-        # dowod, ze raz nie zawiodl, a nie ze nie zawiedzie — a redundancja
-        # miedzy dwoma polami tej samej odpowiedzi jest dokladnie tym, czego
-        # kod nie powinien zakladac.
+                  for k in ("FACT", "MIXED", "INFERENCE", "PROSE")}
+        # Lista nieopartych jednostek jest wyliczana przez kod z jedynego
+        # ledgeru. Model nie powtarza własnego wyniku w drugim polu.
         unsupported = list(report.get("unsupported_facts", []) or [])
-        znane = {str(x.get("text", ""))[:60] for x in unsupported}
-        dopisane = 0
-        for s in sentences:
-            if s.get("class") != "FACT" or s.get("supported") is not False:
-                continue
-            if str(s.get("text", ""))[:60] in znane:
-                continue
-            unsupported.append({"text": s.get("text", ""),
-                                "why": s.get("why", "")})
-            dopisane += 1
-        if dopisane:
-            print(f"   [recenzja] {dopisane} zdań oznaczonych jako nieoparte, "
-                  f"których model nie powtórzył w liście zbiorczej — dopisuję",
-                  flush=True)
         print(
             f"   zdań: {len(sentences)}   fakty: {counts['FACT']}   "
+            f"mieszane: {counts['MIXED']}   "
             f"wnioskowanie: {counts['INFERENCE']}   proza: {counts['PROSE']}",
             flush=True,
         )
@@ -1132,7 +1252,12 @@ def main() -> int:
             forma_available = False
 
         findings = gates.deterministic_floors(
-            draft["body"], card, poprzednie=stages.poprzednie_teksty(pomin_tresc=draft["body"]))
+            draft["body"], card,
+            poprzednie=stages.poprzednie_teksty(pomin_tresc=draft["body"]),
+            glebokosc=glebokosc)
+        _preview_card, lineage_findings = provenance.finalize_card(
+            card, evidence, report, draft["body"])
+        findings.extend(lineage_findings)
         findings.extend(gates.uwagi_z_formy(forma, draft["body"]))
         for item in unsupported:
             findings.append({"gate": "FAKT_BEZ_POKRYCIA", "detail": item.get("text", "")})
@@ -1158,95 +1283,147 @@ def main() -> int:
         quality = initial_quality
         did_revision = False
         revision_note: dict[str, str] | None = None
+        revision_records: list[dict[str, Any]] = []
         print(f"   >> decyzja: {quality['action']} — {quality['reason']}", flush=True)
 
-        if quality["action"] in {"REVISE", "REVISE_FACTS"}:
+        revision_iteration = 0
+        while quality["action"] in {"REVISE", "REVISE_FACTS"}:
+            revision_iteration += 1
             stage = "revise"
             before_revision = dict(draft)
+            trigger_quality = quality
             try:
                 revised = cached(
                     stage,
                     lambda: stages.revise(conn, run_id, card, draft,
-                                          quality["findings"]),
+                                          trigger_quality["findings"]),
                     args.use_cache,
                     {"card": card, "draft": draft,
-                     "findings": quality["findings"]},
+                     "findings": trigger_quality["findings"],
+                     "iteration": revision_iteration,
+                     "quality_policy": editorial.QUALITY_POLICY_VERSION},
                 )
                 did_revision = True
                 draft = revised
-                print("\n-- ponowna kontrola po redakcji --", flush=True)
+                print(f"\n-- pełna kontrola po redakcji {revision_iteration} --",
+                      flush=True)
 
-                second_review_ok = second_form_ok = True
+                next_review_ok = next_form_ok = True
                 try:
                     report2 = stages.review(conn, run_id, card, draft)
                 except Exception as exc:
-                    second_review_ok = False
+                    next_review_ok = False
                     report2 = {"sentences": [], "unsupported_facts": [],
                                "summary": f"ponowna recenzja niedostępna: {exc}"}
                 unsupported2 = list(report2.get("unsupported_facts", []) or [])
-                known2 = {str(x.get("text", ""))[:60] for x in unsupported2}
-                for sentence in report2.get("sentences", []) or []:
-                    if sentence.get("class") != "FACT" or sentence.get("supported") is not False:
-                        continue
-                    if str(sentence.get("text", ""))[:60] in known2:
-                        continue
-                    unsupported2.append({"text": sentence.get("text", ""),
-                                         "why": sentence.get("why", "")})
                 try:
                     forma2 = stages.ocen_forme(conn, run_id, draft)
-                except Exception:
-                    second_form_ok = False
-                    forma2 = {}
+                except Exception as exc:
+                    next_form_ok = False
+                    forma2 = {"summary": f"ponowna forma niedostępna: {exc}"}
 
                 findings2 = gates.deterministic_floors(
                     draft["body"], card,
-                    poprzednie=stages.poprzednie_teksty(pomin_tresc=draft["body"]))
+                    poprzednie=stages.poprzednie_teksty(pomin_tresc=draft["body"]),
+                    glebokosc=glebokosc)
+                _preview_card2, lineage_findings2 = provenance.finalize_card(
+                    card, evidence, report2, draft["body"])
+                findings2.extend(lineage_findings2)
                 findings2.extend(gates.uwagi_z_formy(forma2, draft["body"]))
                 findings2.extend({"gate": "FAKT_BEZ_POKRYCIA",
                                   "detail": item.get("text", "")}
                                  for item in unsupported2)
-                if not second_review_ok:
-                    findings2.append({"gate": "KONTROLA_NIEDOSTEPNA",
-                                      "detail": "ponowna recenzja nie doszła do skutku"})
-                if not second_form_ok:
-                    findings2.append({"gate": "KONTROLA_NIEDOSTEPNA",
-                                      "detail": "ponowna obserwacja formy nie doszła do skutku"})
-                quality = editorial.quality_decision(findings2)
-                editorial.record_revision(
-                    conn, run_id=run_id, iteration=1, trigger=initial_quality,
-                    before=before_revision, after=draft,
-                    status="RESOLVED" if quality["can_publish"] else "NEEDS_REVIEW",
-                    remaining=quality,
+                if not next_review_ok:
+                    findings2.append({
+                        "gate": "KONTROLA_NIEDOSTEPNA",
+                        "detail": "ponowna recenzja nie doszła do skutku",
+                    })
+                if not next_form_ok:
+                    findings2.append({
+                        "gate": "KONTROLA_NIEDOSTEPNA",
+                        "detail": "ponowna obserwacja formy nie doszła do skutku",
+                    })
+
+                candidate_quality = editorial.quality_decision(findings2)
+                progress = editorial.revision_progress(
+                    trigger_quality, candidate_quality,
+                    body_changed=(draft.get("body") != before_revision.get("body")),
                 )
+                revision_status = progress["outcome"]
+                if progress["outcome"] in {"NO_IMPROVEMENT", "REGRESSION"}:
+                    quality = editorial.quarantine_after_revision(
+                        candidate_quality,
+                        reason=(f"rewizja {revision_iteration}: "
+                                f"{progress['outcome'].lower()}"),
+                    )
+                elif (candidate_quality["action"] in {"REVISE", "REVISE_FACTS"}
+                      and revision_iteration >= editorial.MAX_AUTONOMOUS_REVISIONS):
+                    quality = editorial.quarantine_after_revision(
+                        candidate_quality,
+                        reason=("osiągnięto limit "
+                                f"{editorial.MAX_AUTONOMOUS_REVISIONS} rewizji"),
+                    )
+                    revision_status = "LIMIT_REACHED"
+                else:
+                    quality = candidate_quality
+
+                revision_records.append({
+                    "iteration": revision_iteration,
+                    "trigger": trigger_quality,
+                    "before": before_revision,
+                    "after": draft,
+                    "status": revision_status,
+                    "remaining": {**quality, "progress": progress},
+                })
                 findings = findings2
                 report = report2
+                forma = forma2
                 revision_note = {
                     "gate": "AUTO_REVISION",
-                    "detail": (f"redakcja wykonana; zostało {quality['finding_count']}"
-                               f" uwag; decyzja {quality['action']}"),
+                    "detail": (
+                        f"iteracja {revision_iteration}: {progress['outcome']}; "
+                        f"zostało {quality['finding_count']} uwag; "
+                        f"decyzja {quality['action']}"
+                    ),
                 }
                 print(f"   >> po redakcji: {quality['action']} — {quality['reason']}",
                       flush=True)
             except Exception as exc:
-                editorial.record_revision(
-                    conn, run_id=run_id, iteration=1, trigger=initial_quality,
-                    before=before_revision, after=None, status="FAILED",
-                    remaining={"error": f"{type(exc).__name__}: {exc}"},
+                failed_findings = [*findings, {
+                    "gate": "KONTROLA_NIEDOSTEPNA",
+                    "detail": f"automatyczna redakcja padła: {exc}",
+                }]
+                failed_quality = editorial.quality_decision(failed_findings)
+                quality = editorial.quarantine_after_revision(
+                    failed_quality,
+                    reason=f"automatyczna redakcja nieudana: {type(exc).__name__}",
                 )
-                findings.append({"gate": "KONTROLA_NIEDOSTEPNA",
-                                 "detail": f"automatyczna redakcja padła: {exc}"})
-                quality = editorial.quality_decision(findings)
-                revision_note = {"gate": "AUTO_REVISION",
-                                 "detail": f"redakcja nieudana: {type(exc).__name__}: {exc}"}
+                revision_records.append({
+                    "iteration": revision_iteration,
+                    "trigger": trigger_quality,
+                    "before": before_revision,
+                    "after": None,
+                    "status": "FAILED",
+                    "remaining": {**quality,
+                                  "error": f"{type(exc).__name__}: {exc}"},
+                })
+                findings = failed_findings
+                revision_note = {
+                    "gate": "AUTO_REVISION",
+                    "detail": f"redakcja nieudana: {type(exc).__name__}: {exc}",
+                }
+                break
 
         can_publish = bool(quality["can_publish"])
-        status = ("REVISED" if did_revision and can_publish else
-                  "READY" if can_publish else "NEEDS_REVIEW")
+        status = str(quality["action"])
         blocked_by = None if can_publish else str(quality["action"])
         notes = [*findings,
-                 {"gate": "EDITORIAL_DECISION",
-                  "detail": f"{quality['action']}: {quality['reason']}"},
-                 {"gate": "DLUGOSC", "detail": f"{len(draft['body'].split())} słów"},
+                  {"gate": "EDITORIAL_DECISION",
+                   "detail": f"{quality['action']}: {quality['reason']}"},
+                  {"gate": "QUALITY_POLICY",
+                   "detail": (f"{quality['policy_version']}:"
+                              f"{quality['policy_hash']}")},
+                  {"gate": "DLUGOSC", "detail": f"{len(draft['body'].split())} słów"},
                  {"gate": "RECENZJA", "detail": report.get("summary", "")}]
         if revision_note:
             notes.append(revision_note)
@@ -1264,15 +1441,25 @@ def main() -> int:
                            % (float(verdict.get("confidence") or 0),
                               verdict.get("expected_primary_sources"))),
             })
-        # Fragmenty, których artykuł nie zużył, zostają zapisane razem z kartą.
-        # Każdy przebieg zbiera ich kilkadziesiąt, a tekst bierze kilka — reszta
-        # to gotowe, ocytowane fakty na notki w dni bez artykułu.
-        card["unused_evidence"] = [
-            {"url": s["url"], "publisher": s.get("publisher"), "excerpts": s["excerpts"],
-             "numbers": s["numbers"]}
-            for s in evidence
+        # Użycie wylicza kod z FINALNEGO ledgeru sentence->claim. Do banku
+        # trafiają tylko fragmenty bez drogi do wspieranego zdania; cytowania
+        # powstają wyłącznie z dokumentów rzeczywiście użytych.
+        card, final_lineage_findings = provenance.finalize_card(
+            card, evidence, report, draft["body"])
+        known_findings = {(item["gate"], item["detail"]) for item in findings}
+        unexpected_lineage = [
+            item for item in final_lineage_findings
+            if (item["gate"], item["detail"]) not in known_findings
         ]
-        path = stages.save(conn, run_id, topic, card, draft, status, blocked_by, notes)
+        if unexpected_lineage:
+            raise RuntimeError(
+                "ledger pochodzenia zmienił wynik między bramką i zapisem: "
+                f"{unexpected_lineage}"
+            )
+        path = stages.save(
+            conn, run_id, topic, card, draft, status, blocked_by, notes,
+            revisions=revision_records,
+        )
         article_row = conn.execute(
             "SELECT id FROM articles WHERE run_id=? ORDER BY id DESC LIMIT 1",
             (run_id,),
@@ -1324,10 +1511,21 @@ def _done(conn, run_id: int, stage: str) -> int:
 
 def _summary(conn, run_id: int) -> None:
     row = conn.execute(
-        "SELECT COALESCE(SUM(cost_usd), 0) AS total, COUNT(*) AS n FROM calls WHERE run_id = ?",
+        "SELECT COALESCE(SUM(cost_usd), 0) AS total, COUNT(*) AS n, "
+        "SUM(CASE WHEN cost_status IN ('RESERVED','UNKNOWN') THEN 1 ELSE 0 END) "
+        "AS unresolved, COALESCE(SUM(CASE WHEN cost_status IN "
+        "('RESERVED','UNKNOWN') THEN reserved_usd ELSE 0 END), 0) AS reserved "
+        "FROM calls WHERE run_id = ?",
         (run_id,),
     ).fetchone()
-    print(f"\n== koszt przebiegu: ${row['total']:.4f} w {row['n']} wywołaniach ==", flush=True)
+    suffix = (
+        f" + UNKNOWN ({row['unresolved']} prób, rezerwacja ${row['reserved']:.4f})"
+        if row["unresolved"] else ""
+    )
+    print(
+        f"\n== koszt przebiegu: ${row['total']:.4f}{suffix} "
+        f"w {row['n']} wywołaniach ==", flush=True,
+    )
 
 
 if __name__ == "__main__":

@@ -123,18 +123,35 @@ class Nic:
         pass
 
 
-def przebieg(ile, ile_notek, zgody):
+class Proba:
+    id = "fake-attempt"
+    idempotency_key = "fake-key"
+    def __init__(self): self.status = "PENDING"
+    def __enter__(self): return self
+    def __exit__(self, *args): return False
+    def dispatch(self): pass
+    def confirm(self, *_args, **_kwargs): self.status = "CONFIRMED"
+    def unknown(self, *_args, **_kwargs): self.status = "UNKNOWN"
+
+
+def przebieg(ile, ile_notek, zgody, potwierdzenie=True):
     """Odpala petle na podstawionej stronie. `zgody` = ile notek dostaje TAK."""
     strona = FalszywaStrona(ile_notek)
     oryg = (browser.podlacz_sie, browser.wymagaj_sesji,
+            browser.wymagaj_wlasciwego_konta,
             browser.naprawde_wyslac, browser._notka_przy_przycisku,
-            browser.zapisz_w_dzienniku)
+            browser.potwierdz_restack_id, browser.zapisz_w_dzienniku,
+            browser.proba_mutacji)
     browser.podlacz_sie = lambda: (Nic(), Nic(), FalszywyKontekst(strona))
     browser.wymagaj_sesji = lambda: None
-    browser.naprawde_wyslac = lambda w, r: w
+    browser.wymagaj_wlasciwego_konta = lambda _page: None
+    browser.naprawde_wyslac = lambda w, r, _capability: w
     browser._notka_przy_przycisku = lambda p: {"tekst": "Cudza notka o czyms.",
                                                "autor": "Ktos"}
+    browser.potwierdz_restack_id = lambda _page, _tekst: (
+        "restack-test-id" if potwierdzenie else None)
     browser.zapisz_w_dzienniku = lambda *a, **k: None
+    browser.proba_mutacji = lambda *_args, **_kwargs: Proba()
     licznik = {"n": 0}
 
     def decyzja(notka):
@@ -147,8 +164,10 @@ def przebieg(ile, ile_notek, zgody):
     try:
         w = browser.restackuj_w_kanale(ile, decyzja, wyslij=True)
     finally:
-        (browser.podlacz_sie, browser.wymagaj_sesji, browser.naprawde_wyslac,
-         browser._notka_przy_przycisku, browser.zapisz_w_dzienniku) = oryg
+        (browser.podlacz_sie, browser.wymagaj_sesji,
+         browser.wymagaj_wlasciwego_konta, browser.naprawde_wyslac,
+         browser._notka_przy_przycisku, browser.potwierdz_restack_id,
+         browser.zapisz_w_dzienniku, browser.proba_mutacji) = oryg
     return w, strona
 
 
@@ -202,7 +221,15 @@ sprawdz("jedna notka, jeden restack", w["restackowane"] == 1, w)
 sprawdz("brak przerwy, bo nie ma na co czekac", dlugie == [], dlugie)
 
 print()
-print("=== 6. ILE CZASU TO ODDAJE ===")
+print("=== 6. UNKNOWN ZATRZYMUJE SERIE ===")
+w, s = przebieg(ile=3, ile_notek=5, zgody=3, potwierdzenie=False)
+sprawdz("nie liczy niepotwierdzonego restacka", w["restackowane"] == 0, w)
+sprawdz("po UNKNOWN byla tylko jedna proba", len(w.get("attempts", [])) == 1, w)
+sprawdz("proba zachowala stan UNKNOWN",
+        w.get("attempts", [{}])[0].get("status") == "UNKNOWN", w)
+
+print()
+print("=== 7. ILE CZASU TO ODDAJE ===")
 sredni = (dol + gora) / 2
 print("    przebieg z 1 restackiem: oszczedza srednio %.0f min" % (sredni / 60))
 print("    dzien z 4 przebiegami:   do %.0f min mniej bezczynnej przegladarki"

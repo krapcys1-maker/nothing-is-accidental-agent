@@ -1,0 +1,102 @@
+{
+  "actual_logical_calls": {
+    "discovery": 1
+  },
+  "allowed_logical_calls": {
+    "discovery": 1
+  },
+  "argv": [
+    "run.py",
+    "--topics",
+    "6",
+    "--use-cache",
+    "--stop-after",
+    "discovery"
+  ],
+  "browser_imported": false,
+  "capture_ordinals": [
+    2
+  ],
+  "contract_failures_total": 0,
+  "cost_after": {
+    "exposure_usd": 0.105868,
+    "known_usd": 0.005868,
+    "reserved_or_unknown_usd": 0.1,
+    "rows": [
+      {
+        "cost_status": "KNOWN",
+        "known": 0.005868,
+        "n": 1,
+        "provider": "deepseek",
+        "unresolved": 0
+      },
+      {
+        "cost_status": "UNKNOWN",
+        "known": 0.0,
+        "n": 1,
+        "provider": "deepseek",
+        "unresolved": 0.1
+      }
+    ]
+  },
+  "cost_before": {
+    "exposure_usd": 0.005868,
+    "known_usd": 0.005868,
+    "reserved_or_unknown_usd": 0.0,
+    "rows": [
+      {
+        "cost_status": "KNOWN",
+        "known": 0.005868,
+        "n": 1,
+        "provider": "deepseek",
+        "unresolved": 0
+      }
+    ]
+  },
+  "exit_code": 1,
+  "experiment": "normal-v3-live-segments@1",
+  "finished_at": "2026-08-21T15:37:08+00:00",
+  "latest_article": null,
+  "latest_run": {
+    "note": "RemoteProtocolError: peer closed connection without sending complete message body (incomplete chunked read)",
+    "stage": "discovery",
+    "status": "FAILED"
+  },
+  "new_call_rows": [
+    {
+      "at": "2026-08-21T15:36:07.581738+00:00",
+      "cache_hit": 0,
+      "cost_status": "UNKNOWN",
+      "cost_usd": 0.0,
+      "id": 2,
+      "model": "deepseek-v4-pro",
+      "note": "RemoteProtocolError: peer closed connection without sending complete message body (incomplete chunked read)",
+      "ok": 0,
+      "price_verified": 0,
+      "provider": "deepseek",
+      "provider_request_id": null,
+      "purpose": "discovery",
+      "reconciled_at": null,
+      "reserved_usd": 0.1,
+      "run_id": 2,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "web_searches": 0
+    }
+  ],
+  "new_exposure_usd": 0.1,
+  "notes": null,
+  "notes_validation": null,
+  "pass": false,
+  "public_fetches": [],
+  "requested_capabilities": [
+    "model_call"
+  ],
+  "routing_unchanged": true,
+  "segment": "discovery",
+  "stage_cap_usd": 0.1,
+  "stderr": "\n!! stanęło na etapie discovery: RemoteProtocolError: peer closed connection without sending complete message body (incomplete chunked read)\nTraceback (most recent call last):\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpx\\_transports\\default.py\", line 101, in map_httpcore_exceptions\n    yield\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpx\\_transports\\default.py\", line 127, in __iter__\n    for part in self._httpcore_stream:\n                ^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpcore\\_sync\\connection_pool.py\", line 407, in __iter__\n    raise exc from None\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpcore\\_sync\\connection_pool.py\", line 403, in __iter__\n    for part in self._stream:\n                ^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpcore\\_sync\\http11.py\", line 342, in __iter__\n    raise exc\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpcore\\_sync\\http11.py\", line 334, in __iter__\n    for chunk in self._connection._receive_response_body(**kwargs):\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpcore\\_sync\\http11.py\", line 203, in _receive_response_body\n    event = self._receive_event(timeout=timeout)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpcore\\_sync\\http11.py\", line 213, in _receive_event\n    with map_exceptions({h11.RemoteProtocolError: RemoteProtocolError}):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpcore\\_exceptions.py\", line 14, in map_exceptions\n    raise to_exc(exc) from exc\nhttpcore.RemoteProtocolError: peer closed connection without sending complete message body (incomplete chunked read)\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\user\\Desktop\\agent project\\agent-v3\\run.py\", line 904, in main\n    sources = cached(\n              ^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\agent-v3\\run.py\", line 84, in cached\n    value = produce()\n            ^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\agent-v3\\run.py\", line 906, in <lambda>\n    lambda: stages.discovery(conn, run_id, topic[\"question\"], recent),\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\agent-v3\\stages.py\", line 2209, in discovery\n    text = llm.call(\n           ^^^^^^^^^\n  File \"C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\unittest\\mock.py\", line 1139, in __call__\n    return self._mock_call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\unittest\\mock.py\", line 1143, in _mock_call\n    return self._execute_mock_call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\unittest\\mock.py\", line 1204, in _execute_mock_call\n    result = effect(*args, **kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\agent-v3\\normal_live_runner.py\", line 334, in captured_call\n    response = real_call(purpose, system, user, **kwargs)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\agent-v3\\llm.py\", line 540, in call\n    text, tin, tout, searches, urls = _call_deepseek_responses(\n                                      ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\agent-v3\\llm.py\", line 232, in _call_deepseek_responses\n    response = httpx.post(\n               ^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpx\\_api.py\", line 304, in post\n    return request(\n           ^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpx\\_api.py\", line 109, in request\n    return client.request(\n           ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpx\\_client.py\", line 825, in request\n    return self.send(request, auth=auth, follow_redirects=follow_redirects)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpx\\_client.py\", line 928, in send\n    raise exc\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpx\\_client.py\", line 922, in send\n    response.read()\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpx\\_models.py\", line 881, in read\n    self._content = b\"\".join(self.iter_bytes())\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpx\\_models.py\", line 897, in iter_bytes\n    for raw_bytes in self.iter_raw():\n                     ^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpx\\_models.py\", line 951, in iter_raw\n    for raw_stream_bytes in self.stream:\n                            ^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpx\\_client.py\", line 153, in __iter__\n    for chunk in self._stream:\n                 ^^^^^^^^^^^^\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpx\\_transports\\default.py\", line 126, in __iter__\n    with map_httpcore_exceptions():\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"C:\\Users\\user\\Desktop\\agent project\\.venv\\Lib\\site-packages\\httpx\\_transports\\default.py\", line 118, in map_httpcore_exceptions\n    raise mapped_exc(message) from exc\nhttpx.RemoteProtocolError: peer closed connection without sending complete message body (incomplete chunked read)\n",
+  "stdout": "== polityka V3: mode=model_test kill_switch=False test_target=False ==\n== przebieg 2 ==\n   baza: C:\\Users\\user\\Desktop\\agent project\\agent-v3\\.live-experiments\\E-017-normal-v3-segments\\data\\experiment.db   sufit przebiegu: 0.1 USD\n  [scout] z bezpiecznej pamięci 663192ab9047c439993279f1 — bez opłaty\n\n-- tematy (6) --\n0. The moment a water sample tests positive and the utility must decide whether to issue a boil-water notice\n1. The store return as a fraud score, not a service promise\n2. The restaurant health grade as a snapshot, not a current guarantee\n3. The moment a train passes a signal at danger and automatic braking must decide\n4. The moment a food processor finds a pathogen in one batch and must decide recall scope\n5. The moment an emergency department has one ventilator left and two patients arrive\n  [feasibility] z bezpiecznej pamięci e0aae27bd0200ab9a565c1e6 — bez opłaty\n\n-- odsiew wykonalności --\n  TAK  [3] pewność=0.95 źródeł~5  Investigation reports from RAIB/NTSB and ERTMS/ETCS system descriptions give the required rule and its real fa\n  TAK  [4] pewność=0.95 źródeł~5  FDA/USDA recall databases and individual company recall notices document scope decisions and cost-bearing arra\n  TAK  [5] pewność=0.9 źródeł~4  State crisis-standards-of-care protocols and open-access medical ethics papers contain the written triage rule\n  TAK  [1] pewność=0.8 źródeł~3  Retailers' posted return policies and The Retail Equation's consumer-facing disclosure pages are the primary r\n  TAK  [0] pewność=0.9 źródeł~4  EPA's Revised Total Coliform Rule and state boil-water advisory guidance are the accessible record for trigger\n  TAK  [2] pewność=0.9 źródeł~4  City health-department inspection reports and CDC outbreak investigations show the snapshot grading and its li\n\n>> wybrany temat: The moment a water sample tests positive and the utility must decide whether to issue a boil-water notice\n   When a routine water sample shows contamination, what determines whether the utility must tell the public to boil water, and what are the consequences if they wait too long or over-alert?\n   uzasadnienie: EPA's Revised Total Coliform Rule and state boil-water advisory guidance are the accessible record for triggers and consequences.\n\n== koszt przebiegu: $0.0000 + UNKNOWN (1 prób, rezerwacja $0.1000) w 1 wywołaniach ==\n",
+  "substack_requested": false,
+  "zero_retry": true
+}

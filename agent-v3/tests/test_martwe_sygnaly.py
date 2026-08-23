@@ -191,16 +191,20 @@ sprawdz("okno publikacji NADAL dziala (to nie to samo co godziny)",
 sprawdz("i jest realnie wolane w przebiegu", "pora_na_publikacje()" in reszta)
 
 print()
-print("=== 6. RECENZENT: SKLADAMY Z DWOCH ZRODEL, NIE Z JEDNEGO ===")
-# Recenzent oznacza kazde zdanie i OSOBNO powtarza nieoparte w liscie.
-# Czytanie tylko listy znaczylo ufanie, ze model poprawnie przepisze wlasny
-# wynik w drugie miejsce.
+print("=== 6. RECENZENT: JEDEN KOMPLETNY LEDGER, NIE DWA POLA MODELU ===")
+# Kod przygotowuje jednostki, wymaga bijekcji ID i sam wylicza listę nieopartych.
 run_src = pathlib.Path("agent-v3/run.py").read_text(encoding="utf-8")
-sprawdz("czytamy takze sentences[].supported",
-        's.get("supported") is not False' in run_src)
-sprawdz("i dopisujemy pominiete do listy",
-        "unsupported.append" in run_src)
-sprawdz("i mowimy o tym w logu", "nie powtórzył w liście zbiorczej" in run_src)
+stages_src = pathlib.Path("agent-v3/stages.py").read_text(encoding="utf-8")
+prov_src = pathlib.Path("agent-v3/provenance.py").read_text(encoding="utf-8")
+review_prompt = pathlib.Path("agent-v3/prompts/recenzent.md").read_text(encoding="utf-8")
+sprawdz("kod nadaje jednostkom sentence_id przed modelem",
+        "provenance.sentence_units" in stages_src)
+sprawdz("wynik przechodzi bijekcyjne bind_review",
+        "provenance.bind_review" in stages_src and "missing or unknown" in prov_src)
+sprawdz("lista nieopartych jest pochodna jednego ledgeru",
+        '"unsupported_facts": unsupported' in prov_src)
+sprawdz("zdanie mieszane nie jest zwolnione z dowodu",
+        "`MIXED`" in review_prompt and '{"FACT", "MIXED"}' in prov_src)
 
 print()
 print("=== 7. STALA U WSZYSTKICH KANDYDATOW = ZERO INFORMACJI ===")
@@ -249,19 +253,26 @@ sprawdz("brak pola u wszystkich = stala None",
         _stale_sygnaly([{}, {}, {}], ("confidence",)) != [])
 
 st_src = pathlib.Path("agent-v3/stages.py").read_text(encoding="utf-8")
-sprawdz("wykrywacz jest realnie wolany w skaucie", "_stale_sygnaly(topics" in st_src)
-sprawdz("i obejmuje watki", '"ile_watkow"' in st_src.split("_stale_sygnaly(topics")[1][:400])
-sprawdz("i nasycenie", '"nasycony"' in st_src.split("_stale_sygnaly(topics")[1][:400])
+aktywny_skaut = st_src.split("def _scout_universe_quality", 1)[1].split(
+    "\ndef scout(", 1
+)[0]
+sprawdz("aktywny skaut nie wrócił do starego sortowania po stałej",
+        "_stale_sygnaly(topics" not in aktywny_skaut)
+sprawdz("osobno liczy mechanizmy dróg",
+        'topic["ile_mechanizmow"]' in aktywny_skaut)
+sprawdz("osobno liczy rodziny dowodów",
+        'topic["ile_rodzajow_dowodu"]' in aktywny_skaut)
 
 print()
-print("=== 8. KOMUNIKAT NIE MOZE OBIECYWAC ODSIEWU, KTOREGO NIE MA ===")
-# Kara nalozona na 100% kandydatow nie przesuwa nikogo. Log mowil
-# „10 z 10 juz opisanych gdzie indziej — na koniec kolejki", czyli brzmial
-# jak odsiew, a byl brakiem odsiewu.
-sprawdz("odsiew ogloszony tylko gdy kogos faktycznie przesuwa",
-        "if nasycone and len(nasycone) < len(topics):" in st_src)
-sprawdz("a przy komplecie mowimy wprost, ze nic nie rozroznilo",
-        "nasycenie nic nie rozroznilo" in st_src)
+print("=== 8. RANKING WZGLĘDNY NIE UDAJE BEZWZGLĘDNEJ JAKOŚCI ===")
+sprawdz("najpierw istnieje niezależna bramka pola redakcyjnego",
+        'if not topic["na_artykul"]' in aktywny_skaut)
+sprawdz("ranking dopiero potem ustawia kolejność",
+        aktywny_skaut.index('if not topic["na_artykul"]')
+        < aktywny_skaut.index('ranking = data.get("ranking")'))
+sprawdz("kolejność korzysta z wymuszonego porównania i anatomii",
+        '-int(topic["pozycja"])' in aktywny_skaut
+        and '-int(topic["ile_mechanizmow"])' in aktywny_skaut)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

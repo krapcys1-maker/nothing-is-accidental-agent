@@ -126,10 +126,68 @@ FACTUAL_GATES = frozenset({
     "ZMYSLONE_PRZEZYCIE",
     "NIEISTNIEJACE_BADANIE",
     "LICZBA_SPOZA_KORPUSU",
+    "LICZBA_BEZ_LANCUCHA",
     "FAKT_BEZ_POKRYCIA",
     "STATYSTYKA_BEZ_ZRODLA",
 })
 TECHNICAL_GATES = frozenset({"KONTROLA_NIEDOSTEPNA"})
+
+QUALITY_POLICY_VERSION = "autonomous-editorial@1"
+MAX_AUTONOMOUS_REVISIONS = 2
+
+# Polityka jest per bramka, nie per sama liczba uwag. Brak podstawy źródłowej
+# nie jest problemem, który redaktor może naprawić parafrazą. Awaria wymaganej
+# kontroli także nie może dostać statusu publikowalnego. Pozostałe znane wady
+# są poprawialne, ale po ograniczonej liczbie iteracji kończą się kwarantanną.
+EVIDENCE_QUARANTINE_GATES = frozenset({"WASKA_PODSTAWA"})
+EDITORIAL_REVISION_GATES = frozenset({
+    "FRAZA_Z_INSTRUKCJI",
+    "ZAPOWIEDZ_GRANIC",
+    "BUDZET_ZASTRZEZEN",
+    "OBWIESZCZONA_POWSCIAGLIWOSC",
+    "ZAKAZANE_OTWARCIE",
+    "NIEWIADOME_NA_KONCU",
+    "ODCISK_FORMY",
+    "GESTOSC_BEATOW",
+    "BRAK_ESKALACJI",
+    "CZYTELNIK_NIEPRZYLAPANY",
+    "OTWARCIE_ZNANE",
+    "DLUGOSC_POZA_KONTRAKTEM",
+})
+
+
+def _gate_policy(gate: str) -> dict[str, Any]:
+    if gate in FACTUAL_GATES:
+        return {"domain": "EVIDENCE", "reaction": "REVISE", "severity": 100}
+    if gate in EVIDENCE_QUARANTINE_GATES:
+        return {"domain": "EVIDENCE", "reaction": "QUARANTINE", "severity": 100}
+    if gate in TECHNICAL_GATES:
+        return {"domain": "EDITORIAL", "reaction": "QUARANTINE", "severity": 100}
+    if gate in EDITORIAL_REVISION_GATES:
+        severity = 80 if gate in {
+            "FRAZA_Z_INSTRUKCJI", "ODCISK_FORMY", "DLUGOSC_POZA_KONTRAKTEM",
+        } else 40
+        return {"domain": "EDITORIAL", "reaction": "REVISE", "severity": severity}
+    # Nowa lub źle nazwana bramka nie może po cichu odziedziczyć statusu
+    # „drobna uwaga”. Najpierw kwarantanna i jawna aktualizacja polityki.
+    return {"domain": "EDITORIAL", "reaction": "QUARANTINE", "severity": 100}
+
+
+_QUALITY_POLICY_MATERIAL = {
+    "version": QUALITY_POLICY_VERSION,
+    "max_revisions": MAX_AUTONOMOUS_REVISIONS,
+    "gates": {
+        gate: _gate_policy(gate)
+        for gate in sorted(
+            FACTUAL_GATES | TECHNICAL_GATES | EVIDENCE_QUARANTINE_GATES
+            | EDITORIAL_REVISION_GATES
+        )
+    },
+    "unknown_gate": _gate_policy("__UNKNOWN__"),
+}
+QUALITY_POLICY_HASH = hashlib.sha256(
+    json.dumps(_QUALITY_POLICY_MATERIAL, sort_keys=True).encode("utf-8")
+).hexdigest()
 
 
 def now() -> str:
@@ -162,12 +220,8 @@ def confidence_for(sample_size: int) -> str:
 
 
 def quality_decision(findings: Iterable[dict[str, Any]]) -> dict[str, Any]:
-    """Przekłada uwagi na działanie redakcyjne, nigdy na wyrzucenie tekstu.
-
-    0-2 zwykłe uwagi mogą iść do publikacji. Faktografia zawsze wymaga rewizji
-    i ponownego sprawdzenia. 3-5 innych uwag wymaga jednej rewizji, a 6+ alarmu.
-    """
-    unique: list[dict[str, str]] = []
+    """Wersjonowana decyzja autonomiczna oparta o wagę każdej bramki."""
+    unique: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for item in findings:
         gate = str(item.get("gate") or "UNKNOWN").strip()
@@ -176,39 +230,97 @@ def quality_decision(findings: Iterable[dict[str, Any]]) -> dict[str, Any]:
         if key in seen:
             continue
         seen.add(key)
-        unique.append({"gate": gate, "detail": detail})
+        policy = _gate_policy(gate)
+        unique.append({"gate": gate, "detail": detail, **policy})
 
     factual = [x for x in unique if x["gate"] in FACTUAL_GATES]
     technical = [x for x in unique if x["gate"] in TECHNICAL_GATES]
+    evidence_quarantine = [
+        x for x in unique
+        if x["domain"] == "EVIDENCE" and x["reaction"] == "QUARANTINE"
+    ]
+    editorial_quarantine = [
+        x for x in unique
+        if x["domain"] == "EDITORIAL" and x["reaction"] == "QUARANTINE"
+    ]
     count = len(unique)
-    if technical:
-        action = "ALARM"
-        reason = "nie wykonano wymaganej kontroli po napisaniu tekstu"
-    elif count >= 6:
-        action, reason = "ALARM", f"{count} niezależnych uwag jakościowych"
+    if evidence_quarantine:
+        action = "QUARANTINED_EVIDENCE"
+        reason = "podstawy źródłowej nie da się naprawić redakcją tekstu"
+    elif technical or editorial_quarantine:
+        action = "QUARANTINED_EDITORIAL"
+        reason = "wymagana kontrola lub znana polityka bramki jest niedostępna"
     elif factual:
         action = "REVISE_FACTS"
         reason = "poważna uwaga faktograficzna: " + ", ".join(
             sorted({x["gate"] for x in factual}))
-    elif count >= 3:
-        action, reason = "REVISE", f"{count} uwagi wymagają jednej redakcji"
+    elif count:
+        action, reason = "REVISE", f"{count} uwag wymaga kontrolowanej redakcji"
     else:
-        action = "READY"
-        reason = "brak uwag" if not count else f"{count} drobne uwagi do akt"
+        action = "READY_AUTONOMOUS"
+        reason = "wszystkie wymagane bramki przeszły"
     return {
         "action": action,
-        "can_publish": action == "READY",
+        "can_publish": action == "READY_AUTONOMOUS",
         "reason": reason,
+        "policy_version": QUALITY_POLICY_VERSION,
+        "policy_hash": QUALITY_POLICY_HASH,
         "finding_count": count,
         "factual_count": len(factual),
         "technical_count": len(technical),
+        "severity_score": sum(int(x["severity"]) for x in unique),
         "findings": unique,
     }
+
+
+def revision_progress(
+    before: dict[str, Any], after: dict[str, Any], *, body_changed: bool,
+) -> dict[str, Any]:
+    """Rozstrzyga poprawę bez arbitralnej oceny modelu."""
+    before_gates = {str(x.get("gate")) for x in before.get("findings") or []}
+    after_gates = {str(x.get("gate")) for x in after.get("findings") or []}
+    new_gates = sorted(after_gates - before_gates)
+    before_score = int(before.get("severity_score") or 0)
+    after_score = int(after.get("severity_score") or 0)
+
+    if after.get("can_publish"):
+        outcome = "RESOLVED"
+    elif not body_changed:
+        outcome = "NO_IMPROVEMENT"
+    elif new_gates or after_score > before_score:
+        outcome = "REGRESSION"
+    elif after_score == before_score:
+        outcome = "NO_IMPROVEMENT"
+    else:
+        outcome = "IMPROVED"
+    return {
+        "outcome": outcome,
+        "before_score": before_score,
+        "after_score": after_score,
+        "new_gates": new_gates,
+    }
+
+
+def quarantine_after_revision(
+    quality: dict[str, Any], *, reason: str,
+) -> dict[str, Any]:
+    """Kończy pętlę bez stanu pośredniego i bez publikacji przez fallback."""
+    result = dict(quality)
+    has_evidence = any(
+        item.get("domain") == "EVIDENCE" for item in quality.get("findings") or []
+    )
+    result["action"] = (
+        "QUARANTINED_EVIDENCE" if has_evidence else "QUARANTINED_EDITORIAL"
+    )
+    result["can_publish"] = False
+    result["reason"] = reason
+    return result
 
 
 def register_article(
     conn: sqlite3.Connection, *, article_id: int, run_id: int,
     topic: dict[str, Any], card: dict[str, Any], draft: dict[str, Any], status: str,
+    commit: bool = True,
 ) -> int:
     mechanism = str(card.get("main_mechanism") or "").strip()
     conn.execute(
@@ -219,7 +331,8 @@ def register_article(
         (article_id, run_id, status, topic.get("title"), draft.get("title"),
          mechanism, now()),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
     row = conn.execute(
         "SELECT id FROM content_items WHERE article_id = ?", (article_id,)
     ).fetchone()
@@ -244,6 +357,7 @@ def record_revision(
     trigger: dict[str, Any], before: dict[str, Any], after: dict[str, Any] | None,
     status: str, remaining: dict[str, Any] | None = None,
     article_id: int | None = None,
+    commit: bool = True,
 ) -> int:
     cur = conn.execute(
         "INSERT INTO article_revisions (article_id, run_id, created_at, iteration,"
@@ -253,7 +367,8 @@ def record_revision(
          _json(after) if after is not None else None, status,
          _json(remaining) if remaining is not None else None),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
     return int(cur.lastrowid)
 
 

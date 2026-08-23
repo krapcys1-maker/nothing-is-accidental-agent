@@ -155,7 +155,7 @@ print("=== 6. KOLUMNY BEZ WARTOSCI DOMYSLNEJ NADAL MUSZA BYC PODANE ===")
 try:
     db.record_call(conn=conn, run_id=run_id, purpose="sierota", tokens_in=1)
     sprawdz("brak provider/model nadal jest bledem", False, "przeszlo po cichu")
-except sqlite3.IntegrityError:
+except (sqlite3.IntegrityError, TypeError):
     sprawdz("brak provider/model nadal jest bledem", True)
 conn.rollback()
 

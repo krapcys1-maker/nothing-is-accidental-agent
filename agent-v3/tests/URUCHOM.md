@@ -27,15 +27,15 @@ nie radzi sobie z polskimi znakami w wyniku.
 |---|---|
 | `test_artykul` | `playwright` i `trafilatura` — pada na komputerze bez nich |
 | `test_czas` | prawdziwego `SIGTERM`, więc tylko Linux |
-| `test_pobieranie` | sieci |
+| `test_pobieranie` | atrap transportu; nie wykonuje prawdziwej sieci |
 | reszta | niczego, chodzą wszędzie |
 
 ## Testy płatne
 
-Siedem plików robi prawdziwe wywołania API i leży w `platne/`. Uruchamia się
-je pojedynczo i świadomie. Powód wydzielenia jest konkretny: raz puściłem
-wszystko jedną pętlą na serwerze i zawiesiła się na `test_bibliotekarz`,
-który czekał na model.
+Jedenaście skryptów leży w `platne/`. Nie wchodzą do zwykłej regresji. Tylko
+`test_provenance_live.py` ma aktualny kontrolowany harness; reszta wymaga przed
+ponownym użyciem wspólnego preflightu, tymczasowej bazy, planu kosztu i
+maszynowego kryterium wyniku. Szczegóły: `platne/PRZECZYTAJ.md`.
 
 ## Zasada, która się tu sprawdziła
 

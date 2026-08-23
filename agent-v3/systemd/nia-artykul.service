@@ -1,14 +1,7 @@
 [Unit]
-Description=Nothing Is Accidental — artykul tygodniowy
-After=network-online.target
-Wants=network-online.target
+Description=Agent V3 article prototype — deployment deliberately disabled
+RefuseManualStart=yes
 
 [Service]
 Type=oneshot
-User=ubuntu
-WorkingDirectory=/home/ubuntu/nothing-is-accidental-agent
-Environment=AGENT_V2_SERVER=1
-Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/ubuntu/nothing-is-accidental-agent/.venv/bin/python agent-v2/run.py --wyslij
-MemoryMax=3G
-TimeoutStartSec=5400
+ExecStart=/usr/bin/false

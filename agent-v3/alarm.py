@@ -28,6 +28,8 @@ from pathlib import Path
 
 import config
 import db
+import capabilities
+import operational_day
 
 HISTORIA = config.DATA_DIR / "alarmy.json"
 CISZA_GODZIN = 24
@@ -35,14 +37,15 @@ CISZA_GODZIN = 24
 
 def _ustawienia() -> dict[str, str]:
     return {
-        "do": os.environ.get("ALARM_EMAIL_TO", "").strip(),
-        "host": os.environ.get("SMTP_HOST", "smtp.gmail.com").strip(),
-        "port": os.environ.get("SMTP_PORT", "587").strip(),
-        "user": os.environ.get("SMTP_USER", "").strip(),
+        "do": os.environ.get("AGENT_V3_ALARM_EMAIL_TO", "").strip(),
+        "host": os.environ.get("AGENT_V3_SMTP_HOST", "smtp.gmail.com").strip(),
+        "port": os.environ.get("AGENT_V3_SMTP_PORT", "587").strip(),
+        "user": os.environ.get("AGENT_V3_SMTP_USER", "").strip(),
         # Google pokazuje haslo aplikacji w czterech grupach po cztery znaki
         # i ludzie wklejaja je ze spacjami. Dziala, ale przez przypadek —
         # wycinamy je, zeby nie bylo zagadka za trzy miesiace.
-        "haslo": os.environ.get("SMTP_PASSWORD", "").replace(" ", "").strip(),
+        "haslo": os.environ.get(
+            "AGENT_V3_SMTP_PASSWORD", "").replace(" ", "").strip(),
     }
 
 
@@ -84,6 +87,11 @@ def wyslij(klucz: str, temat: str, tresc: str) -> bool:
     if not skonfigurowany():
         print(f"  [alarm NIEWYSLANY — brak konfiguracji] {temat}", flush=True)
         return False
+    try:
+        capabilities.require(capabilities.Capability.ALERT_SEND)
+    except capabilities.CapabilityDenied as exc:
+        print(f"  [alarm NIEWYSLANY — polityka V3: {exc}] {temat}", flush=True)
+        return False
 
     poprzednio = _ostatnio(klucz)
     if poprzednio and datetime.now(timezone.utc) - poprzednio < timedelta(
@@ -96,7 +104,8 @@ def wyslij(klucz: str, temat: str, tresc: str) -> bool:
     wiadomosc["From"] = u["user"]
     wiadomosc["To"] = u["do"]
     wiadomosc.set_content(
-        f"{tresc}\n\n--\nagent-v2, {datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC}\n"
+        f"{tresc}\n\n--\nagent-v3 prototype, "
+        f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC}\n"
         f"serwer: {os.uname().nodename if hasattr(os, 'uname') else 'lokalnie'}\n"
     )
     try:
@@ -122,15 +131,12 @@ def sprawdz_sesje_i_ostrzez() -> None:
                "Agent nie ma pliku sesji i nie moze nic wystawic.")
     elif dni <= 0:
         wyslij("sesja-wygasla", "Sesja Substacka WYGASLA",
-               "Agent nie wystawi juz nic, dopoki nie odnowisz sesji.\n"
-               "Zaloguj sie w Chrome na swoim komputerze i wykonaj:\n"
-               "  python agent-v2/browser.py sesja\n"
-               "a potem skopiuj data/storage-state.json na serwer.")
+               "Sesja testowa wygasla; autonomiczne wykonanie live_test "
+               "pozostaje zablokowane.")
     elif dni <= browser.OSTRZEGAJ_PONIZEJ_DNI:
         wyslij("sesja-konczy", f"Sesja Substacka wygasa za {dni} dni",
-               f"Zostalo {dni} dni. Odnow ja, zanim agent zamilknie.\n"
-               "Zaloguj sie w Chrome i wykonaj:\n"
-               "  python agent-v2/browser.py sesja")
+               f"Zostalo {dni} dni; po tym terminie autonomiczne wykonanie "
+               "live_test zostanie zablokowane.")
 
 
 def sprawdz_przebiegi_i_ostrzez(ile: int = 3) -> None:
@@ -234,10 +240,12 @@ def dysk() -> str | None:
 def nadaktywnosc() -> str | None:
     """Czy agent nie zapetlil sie i nie zasypuje Substacka."""
     conn = _polaczenie()
-    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    dzis = operational_day.editorial_date()
+    start, end = operational_day.boundaries(dzis)
     n = conn.execute(
-        "SELECT COUNT(*) AS n FROM calls WHERE date(at) = ? AND purpose IN "
-        "('note', 'comment', 'reply')", (dzis,),
+        "SELECT COUNT(*) AS n FROM calls WHERE at >= ? AND at < ? AND purpose IN "
+        "('note', 'comment', 'reply')",
+        (start.isoformat(timespec="seconds"), end.isoformat(timespec="seconds")),
     ).fetchone()["n"]
     if n > MAX_DZIALAN_DZIENNIE:
         return (f"Dzis {n} wywolan tworzacych tresc przy suficie "
@@ -247,8 +255,22 @@ def nadaktywnosc() -> str | None:
 
 def koszt() -> str | None:
     conn = _polaczenie()
-    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    wydane = db.spent_usd(conn, dzis)
+    dzis = operational_day.editorial_date()
+    start, end = operational_day.boundaries(dzis)
+    unresolved = conn.execute(
+        "SELECT COUNT(*) AS n, COALESCE(SUM(reserved_usd), 0) AS reserved "
+        "FROM calls WHERE at >= ? AND at < ? "
+        "AND cost_status IN ('RESERVED', 'UNKNOWN')",
+        (start.isoformat(timespec="seconds"), end.isoformat(timespec="seconds")),
+    ).fetchone()
+    if unresolved["n"]:
+        return (
+            f"Nierozliczony koszt {unresolved['n']} wywołań; zachowana "
+            f"rezerwacja ${unresolved['reserved']:.2f}. Dostawca jest zablokowany."
+        )
+    wydane = db.spent_usd_between(
+        conn, start.isoformat(timespec="seconds"),
+        end.isoformat(timespec="seconds"))
     if wydane > config.DAILY_LIMIT_USD * 0.9:
         return (f"Dzis wydane ${wydane:.2f} przy dziennym suficie "
                 f"${config.DAILY_LIMIT_USD}.")
@@ -300,11 +322,12 @@ def kopia_subskrybentow() -> str | None:
         return ("nie ma ANI JEDNEJ kopii listy subskrybentow (brak katalogu %s). "
                 "To jedyne aktywo, ktorego nie da sie odtworzyc. Zrob eksport: "
                 "Dashboard -> Subscribers -> Export, plik do %s, potem "
-                "`python agent-v2/kopia_subskrybentow.py`" % (katalog, katalog / "przychodzace"))
+                "python agent-v3/kopia_subskrybentow.py" % (
+                    katalog, katalog / "przychodzace"))
     kopie = sorted(katalog.glob("subskrybenci-*.csv"))
     if not kopie:
         return ("katalog kopii istnieje, ale jest pusty — zadnej kopii listy "
-                "subskrybentow. Patrz `python agent-v2/kopia_subskrybentow.py`")
+                "subskrybentow. Patrz python agent-v3/kopia_subskrybentow.py")
     from datetime import datetime, timezone
 
     najnowsza = max(kopie, key=lambda p: p.stat().st_mtime)
@@ -405,13 +428,21 @@ def przeglad(dni: int = 3) -> None:
     conn = _polaczenie()
     od = granica.strftime("%Y-%m-%d")
     koszt = conn.execute(
-        "SELECT COALESCE(SUM(cost_usd),0) k, COUNT(*) n FROM calls WHERE date(at) >= ?",
+        "SELECT COALESCE(SUM(cost_usd),0) k, COUNT(*) n, "
+        "SUM(CASE WHEN cost_status IN ('RESERVED','UNKNOWN') THEN 1 ELSE 0 END) u, "
+        "COALESCE(SUM(CASE WHEN cost_status IN ('RESERVED','UNKNOWN') "
+        "THEN reserved_usd ELSE 0 END),0) r FROM calls WHERE date(at) >= ?",
         (od,)).fetchone()
     padly = conn.execute(
         "SELECT COUNT(*) n FROM runs WHERE status NOT IN ('DONE','SAVED')"
         " AND started_at >= ?", (granica.isoformat(),)).fetchone()["n"]
     print(f"\n=== KOSZT I PRZEBIEGI ===")
     print(f"  wywolan modeli: {koszt['n']}   koszt: ${koszt['k']:.4f}")
+    if koszt["u"]:
+        print(
+            f"  nierozliczone: {koszt['u']}   zachowana rezerwacja: "
+            f"${koszt['r']:.4f}"
+        )
     print(f"  przebiegow zakonczonych bledem: {padly}")
 
     _co_z_tego_wyszlo(wpisy)

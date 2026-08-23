@@ -10,6 +10,9 @@
 
 anthropic==0.116.0
 httpx==0.28.1
+# Bezpieczny fetch przypina zatwierdzone IP w backendzie połączenia. Jawny pin
+# wersji chroni kontrakt API `network_backend` przed dryfem zależności pośredniej.
+httpcore==1.0.9
 python-dotenv==1.2.2
 playwright==1.62.0
 

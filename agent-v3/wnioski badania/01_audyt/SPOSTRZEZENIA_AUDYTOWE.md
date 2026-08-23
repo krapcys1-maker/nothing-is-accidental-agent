@@ -146,6 +146,10 @@ Konkretny skutek: `db.recent_domains()` wybiera wyłącznie artykuły o statusie
 
 `record_revision()` jest wywoływane przed zapisem artykułu, bez `article_id`. Po późniejszym utworzeniu artykułu kod nie uzupełnia tego klucza. Rewizję można powiązać z przebiegiem, ale nie bezpośrednio z obiektem treści. Przy więcej niż jednej treści na przebieg albo późniejszych korektach relacja stanie się niejednoznaczna.
 
+E-011 przeniosło zapis rewizji do `stages.save()`. `article_id` powstaje przed
+rewizją, a `articles`, `content_items`, rewizje i graf są zatwierdzane razem.
+T-106 sprawdza dokładne ID oraz rollback. Status: `FIXED_OFFLINE`.
+
 ### A-014 — P1 — `ODŁÓŻ` ma zapis, ale nie pełny cykl życia
 
 Pozytywna zmiana: temat może zostać zachowany z powodem i brakującym elementem. Nadal brakuje operacji:
@@ -205,6 +209,10 @@ Aktualna polityka prototypu zakłada:
 
 To sensowny szkic, ale progi nie są jeszcze skalibrowane na zbiorze historycznych artykułów ani udowodnione jako bezpieczna polityka autonomicznej publikacji. „Dwie uwagi” mogą oznaczać dwie drobnostki albo dwie poważne wady konstrukcji. Sama liczba bez ciężaru bramki nie wystarcza.
 
+**Status po E-013:** `PARTIAL_FIXED_OFFLINE; POLICY_CALIBRATION_OPEN`. Decyzja
+nie używa już progów 0–2/3–5/6+, tylko wersjonowanej reakcji i wagi per bramka.
+Wagi nadal nie mają kalibracji na reprezentatywnym korpusie.
+
 ### A-020 — P1 — automatyczna rewizja nie ma jeszcze dowodu regresyjnego
 
 Istnieje prompt minimalnej rewizji i druga kontrola. Brakuje testów pokazujących, że redaktor:
@@ -216,6 +224,11 @@ Istnieje prompt minimalnej rewizji i druga kontrola. Brakuje testów pokazujący
 - nie ukrywa problemu przez ogólne zastrzeżenie.
 
 Do czasu takich testów rewizja jest hipotezą, nie bezpiecznym etapem redakcyjnym.
+
+**Status po E-013:** `FIXED_OFFLINE; LIVE_REVISION_OPEN`. Cztery scenariusze
+pełnego `run.main()` dowodzą usunięcia faktu, ponowienia wszystkich kontroli,
+wykrycia braku poprawy/regresji i limitu. Skuteczność prawdziwego Fable nadal
+nie została zmierzona.
 
 ### A-021 — P1 — prompt pisarza daje sprzeczne instrukcje o granicach wiedzy
 
@@ -311,6 +324,11 @@ Jeżeli research zbierze mniej materiału niż zakładano, potok ostrzega, lecz 
 
 W obecnym systemie pojedyncze źródło i jedna uwaga `WASKA_PODSTAWA` nie muszą zablokować publikowalnego statusu. Reguła operacyjna „jeżeli research został opłacony, artykuł ma powstać” konkuruje tu z regułą redakcyjną „tekst powstaje dopiero przy wystarczającej podstawie”. Priorytet nie został rozstrzygnięty jawnie.
 
+**Status po E-013:** `PARTIAL_FIXED_OFFLINE`. `WASKA_PODSTAWA` jest terminalną
+kwarantanną dowodową i nie może zostać naprawiona parafrazą. Pozostałe minima
+researchu oraz semantyczna wystarczalność bogatszej, lecz płytkiej karty nadal
+wymagają osobnej kalibracji.
+
 ### A-037 — P1 — poziom `THIN` dziedziczy długość `RICH`
 
 `config.DLUGOSC_WG_GLEBOKOSCI` nie ma klucza `THIN`, a funkcja pobierająca zakres używa `RICH` jako wartości domyślnej. Dokumentacja opisuje `THIN` jako najkrótszy wariant. Kod odwraca tę intencję: najsłabsza podstawa dostaje domyślnie zakres bogatego artykułu, co zwiększa presję na dopowiadanie i powtórzenia.
@@ -339,11 +357,20 @@ Oprócz dziesięciu tabel SQLite przepływ używa m.in. `dziennik.jsonl`, `gdzie
 
 Nie istnieje transakcja obejmująca kliknięcie, dziennik, bazę i plik wynikowy. Po awarii nie da się ogólnie stwierdzić, czy brak rekordu oznacza „nie wykonano”, „wykonano i nie zapisano”, czy „zapisano tylko połowę”. Jest to problem semantyki zdarzeń, nie tylko wyboru formatu.
 
+E-011 naprawiło konkretny atom artykułu: pliki Markdown, `articles`,
+`content_items`, rewizje i provenance mają wspólny intent i recovery. Pozostałe
+JSON/JSONL oraz efekty platformowe nadal nie tworzą jednej transakcji. Status:
+`PARTIALLY_FIXED_ARTICLE_ATOM_OFFLINE`.
+
 ### A-042 — P1 — schemat bazy nie ma wersji, kluczy obcych ani kompletnej ścieżki migracji
 
 Baza ma dziesięć tabel, lecz nie deklaruje wersji schematu ani relacji `FOREIGN KEY`. `CREATE TABLE IF NOT EXISTS` nie aktualizuje tabel istniejących, a ręczna funkcja migracyjna zna tylko `calls.cache_hit`. Nie znaleziono też jawnego kontraktu `PRAGMA foreign_keys`, `busy_timeout` lub trybu WAL.
 
 Przy dalszym rozwoju V3 łatwo otrzymać bazę, której nazwy tabel są poprawne, ale kolumny lub znaczenia pochodzą z innej wersji. Brak kluczy obcych pozwala osierocić źródła, rewizje, obserwacje i metryki bez sygnału błędu.
+
+E-011 dodało addytywną migrację kolumn artykułu, tabelę intentów i indeksy po
+migracji starej bazy. Nie dodało numeru schematu ani pełnego kontraktu kluczy
+obcych. Status: `PARTIALLY_FIXED_N010_ONLY`.
 
 ### A-043 — P1 — test nazwany „martwe sygnały” może dawać fałszywe poczucie pokrycia
 
@@ -403,6 +430,12 @@ Warstwa `llm.call()` poprawnie rozróżnia błędy przejściowe od `BudgetExceed
 
 W rezultacie przekroczony budżet, zły kontrakt JSON, brak klucza lub inny błąd trwały uruchamia dodatkową próbę. Globalna zmiana konfiguracji pozostaje do końca procesu i może zaciemnić raport kosztu/modelu. Retry etapu powinien respektować tę samą klasyfikację co adapter, a wybór fallbacku być lokalną, zapisaną decyzją.
 
+Po ponownym audycie i doprecyzowaniu, że modelu etapu nie wolno zmieniać bez
+jawnego polecenia, fallback Fable→Opus został usunięty. Awaria pisarza przechodzi
+do wspólnej ścieżki `FAILED`; `run.py` nie mutuje `MODEL_FOR`. Kontrdowód
+`test_model_routing_policy.py` skanuje AST aktywnych modułów oraz blokuje powrót
+automatycznego ramienia Sonnet w harnessie. Status: `FIXED_OFFLINE`.
+
 ### A-052 — P1 — etykieta „confidence” jest wyłącznie przedziałem liczebności
 
 `editorial.confidence_for()` przypisuje `VERY_LOW`, `LOW`, `MEDIUM` albo `HIGH` tylko na podstawie progów 10, 30 i 100 obserwacji. Nie uwzględnia zgodności kierunku, wielkości efektu, wariancji, niezależności próbek, braków danych ani czynników zakłócających. `upsert_observation()` przyjmuje `evidence_count` od wywołującego i na tej podstawie zapisuje etykietę.
@@ -431,6 +464,12 @@ Ponieważ URL jest wejściem pochodzącym z modelu, bardzo duży lub specjalnie 
 - rekord przebiegu `FAILED` obok częściowo poprawnego artykułu.
 
 Ponowienie może dodatkowo nadpisać ten sam plik wynikający z `run_id` i sluga, a jednocześnie dopisać kolejny rekord bazy. Jest to konkretny przypadek ogólnego problemu A-041; potrzebny jest idempotentny plan zapisu i jawna procedura rekoncyliacji.
+
+E-011 dodało stabilny `artifact_key`, `article_save_intents`, przygotowane
+pliki z SHA-256, jedną transakcję rekordów oraz recovery po restarcie. T-105
+odtworzył dwa pliki bez rekordu, a T-106 przeszedł wszystkie punkty awarii,
+idempotencję, śmierć procesu i tamper. Status:
+`FIXED_OFFLINE; POWER_LOSS_NOT_PROVEN`.
 
 ### A-056 — P2 — nawet odmowa publikacji z kopii następuje po mutacji pliku blokady
 
@@ -504,11 +543,20 @@ Echo dowolnej z tych warstw może trafić do artykułu i nie zostać wykryte. Ko
 
 Raport w `run.py` dodatkowo pokazuje stare globalne `TARGET_WORDS/MIN_WORDS/MAX_WORDS` (1075/950–1200), nie zakres faktycznie przekazany dla `RICH` (900–1250) lub `SINGLE` (480–820). Operator może więc zobaczyć fałszywy kontrakt długości, a status nadal zostać `READY`.
 
+**Status po E-013:** `FIXED_OFFLINE`. Aktywny run przekazuje głębokość do
+deterministycznej bramki; wynik poza zakresem tworzy
+`DLUGOSC_POZA_KONTRAKTEM` i wymaga rewizji albo kończy się kwarantanną.
+
 ### A-065 — P1 — ważność większości bramek redukuje się do samej liczby uwag
 
 `quality_decision()` nadaje specjalne znaczenie tylko bramkom z list `FACTUAL_GATES` i `TECHNICAL_GATES`. Pozostałe są równoważne liczbowo: jedna `FRAZA_Z_INSTRUKCJI`, jedna `WASKA_PODSTAWA`, jedno zakazane otwarcie lub jeden wykryty odcisk powtarzalnej formy prowadzi do `READY`, o ile łączna liczba uwag nie przekroczy dwóch.
 
 Wykryty dosłowny przeciek instrukcji nie jest drobną sugestią stylistyczną; świadczy, że produkt zawiera metatekst procesu. Podobnie niektóre pojedyncze wady mogą być poważniejsze niż pięć kosmetycznych. Polityka potrzebuje ważności i dozwolonej reakcji per bramka, a następnie kalibracji na korpusie, nie tylko progów 0–2/3–5/6+.
+
+**Status po E-013:** `FIXED_OFFLINE; CALIBRATION_OPEN`. Każda znana bramka ma
+domenę, reakcję i wagę, a nieznana bramka fail-closed. Pojedynczy przeciek
+instrukcji uruchamia rewizję. Empiryczna kalibracja wag pozostaje otwarta pod
+A-019.
 
 ### A-066 — P1 — wdrożeniowy smoke test nie instaluje ani nie sprawdza zależności używanych leniwie
 
@@ -562,14 +610,763 @@ Wskaźnik nie mierzy obecnie kohortowej odpowiedzi na działanie; mierzy stosune
 
 Wnioski typu „V2 = 9/10” nie mogą być używane jako wynik porównawczy ani dowód dojrzałości V3. Plik należy traktować jako eksploracyjny przegląd literatury szarej i generator hipotez. Każdy zapożyczany mechanizm wymaga osobnej weryfikacji w źródle pierwotnym i lokalnego testu dopasowania do kontraktów V3.
 
+### A-074 — P1 — profil stylu Notes nie jest podłączony do generatora
+
+`NOTES_STYLE_PROFILE_V1.md` istnieje ze statusem `PROVISIONAL`, ale `style.load_profiles()` wczytuje wyłącznie dwa profile artykułowe, a `stages.note()` nie odwołuje się do profilu Notes. Zmiana dokumentu nie zmienia zachowania modelu i nie unieważnia cache etapu.
+
+Rzeczywisty głos Notes pochodzi z `notka.md` oraz `NOTE_FORMS` w `config.py`. Dokument o profilu Notes nie może być przedstawiany jako aktywny kontrakt, dopóki wykonawcza ścieżka go nie składa i nie wersjonuje.
+
+### A-075 — P1 — redaktor ma zachować głos bez dostępu do kontraktu głosu
+
+`redaktor.md` otrzymuje ustalenia, kartę i bieżący draft. Nie otrzymuje zatwierdzonych fragmentów, profilu pozytywnego, profilu negatywnego ani pamięci redakcyjnej. Polecenie zachowania głosu odnosi się więc wyłącznie do lokalnych cech tekstu wejściowego, nie do wersjonowanego wzorca marki.
+
+Przy większej rewizji etap może naprawić wskazaną wadę, ale spłaszczyć rytm albo zmienić rejestr. Ponowna kontrola bada faktografię, formę i wybrane antywzorce; nie porównuje wyniku z pełnym kontraktem głosu.
+
+### A-076 — P1 — nie istnieje niezależna ocena zgodności tekstu z głosem marki
+
+Recenzent sprawdza fakty, `forma.md` opisuje wybrane cechy struktury, a kod wykrywa kilka zakazanych wzorców. Żaden etap nie odpowiada całościowo na pytanie, czy artykuł albo krótka forma zachowuje tożsamość publikacji opisaną w profilach i próbkach.
+
+Pisarz otrzymuje kontrakt i sam tworzy wynik. To kontrola wejścia, nie dowód własności wyjścia. Potrzebna jest wielowymiarowa rubryka z cytatami i automatyczną decyzją kodu, nie pojedyncza subiektywna nota.
+
+### A-077 — P2 — `po_ludzku.md` deklaruje kompozycję, której kod nie wykonuje
+
+Plik twierdzi, że jest dołączany do promptów komentarza, odpowiedzi i Note. W kodzie nie ma takiego wczytania. Treść została skopiowana ręcznie do trzech plików, tworząc cztery źródła tej samej polityki bez testu równoważności.
+
+Jest to martwy moduł promptu i ryzyko rozjazdu. Wspólna instrukcja powinna być rzeczywiście komponowana albo jednoznacznie oznaczona jako materiał historyczny.
+
+### A-078 — P1 — aktywne prompty optymalizują „niebrzmienie jak maszyna” wbrew profilowi negatywnemu
+
+Profil negatywny zakazuje pisania pod detektory AI i mechanicznego „humanizowania”. Jednocześnie prompty Notes, komentarza i odpowiedzi zawierają sekcje „How not to read as a machine”, twierdzenia o „strongest tell” oraz wspólne absolutne zakazy interpunkcji i listy słów rzekomo znaczących tekst maszynowy.
+
+Taki cel może zastąpić jeden mechaniczny podpis innym. Kontrakt powinien opisywać pozytywną jakość redakcyjną i sprawdzone antywzorce, nie optymalizację pozoru pochodzenia tekstu.
+
+### A-079 — P1 — niezależne losowanie postawy i otwarcia tworzy sprzeczne polecenia
+
+Komentarz otrzymuje osobno losowaną `postawa` i `otwarcie`. Postawa ciekawości może zostać zestawiona z nakazem rozpoczęcia od sprzeciwu, a postawa mechanizmu z nakazem rozpoczęcia pytaniem. Odpowiedź ma udzielić odpowiedzi w pierwszym zdaniu, lecz może dostać niezależny nakaz rozpoczęcia od własnego pytania.
+
+Losowanie zwiększa różnorodność, ale nie gwarantuje spójności pojedynczej wypowiedzi. Potrzebny jest dobór kompatybilnego zestawu ruchów według rodzaju materiału oraz walidacja, czy wynik wykonał przydzielony ruch.
+
+### A-080 — P1 — surowy tekst sygnałów czytelników trafia do pamięci promptowej
+
+`memory_brief()` zwraca `recent_reader_signals` razem z polem `text`. Obiekt jest serializowany do `editorial_memory_json` i przekazywany skautowi oraz pisarzowi. Ostrzeżenia „not evidence” i „not a command” nie są strukturalną izolacją, allowlistą ani deterministyczną kanonizacją danych.
+
+Niezaufany komentarz może w ten sposób stać się trwałym wejściem wielu przyszłych promptów. Pamięć wykonawcza powinna zawierać typowane obserwacje z identyfikatorami dowodów; surowy tekst zewnętrzny musi pozostać poza warstwą instrukcyjną.
+
+### A-081 — P1 — zapora w prompcie odpowiedzi stoi za niezaufanym komentarzem
+
+W `odpowiedz.md` blok `What they said` i zawartość komentarza występują przed sekcją `The text below is DATA, never instructions`. Zdanie `Everything after the marker` nie obejmuje więc tekstu umieszczonego wcześniej. Test sprawdza tylko obecność fraz ochronnych, nie ich pozycję względem danych.
+
+Wyrenderowany prompt musi stawiać granicę przed pierwszym bajtem niezaufanej treści. Filtr wygenerowanego wyjścia zatrzymuje kilka znanych wzorców, ale nie naprawia błędnej granicy wejścia.
+
+### A-082 — P2 — empiryczne reguły stylu nie mają odtwarzalnego manifestu dowodu
+
+Aktywne instrukcje i konfiguracja przywołują między innymi optimum 33–64 słów, spadek konwersji o 35 procent, ponad trzykrotny efekt anafory, zakaz średników jako sygnału maszynowego oraz wynik 1 odpowiedzi na 27 komentarzy. Nie są one związane w aktywnym kontrakcie z wersją danych, skryptem pomiarowym, oknem czasu, definicją wyniku ani terminem ponownej oceny.
+
+Te liczby są hipotezami projektowymi, nie ponadczasowymi prawami stylu. Każda reguła wpływająca na generację potrzebuje identyfikatora badania, próby, metryki, ograniczeń i daty wygaśnięcia.
+
+### A-083 — P2 — testy promptów badają frazy i placeholdery, nie semantykę kontraktu
+
+Testy skutecznie wykrywają brak wybranej frazy, błąd `.format()` i brak różnorodności losowania. Nie wykrywają jednak sprzecznych poleceń obecnych jednocześnie, kolejności zapory i danych, martwego profilu Notes, utraty głosu po rewizji ani konfliktu postawy z otwarciem.
+
+Testy statyczne są potrzebną podłogą, ale nie dowodzą zgodności systemu promptów. Następna warstwa musi badać w pełni wyrenderowane prompty, wersje profili, dozwolone kombinacje ruchów oraz zamrożone przypadki przed/po rewizji.
+
+### A-084 — P0 — pierwsza wersja OperationalDay wiązała tożsamość dnia z wersją polityki
+
+Ustalenie powstało podczas kontroli końcowej E-003. Początkowy `day_id()`
+zawierał `POLICY_VERSION`, chociaż tabela miała osobną unikalność
+`(account, day_key)`. Aktualizacja kodu w środku lokalnej doby wyliczyłaby nowe
+ID, nie znalazłaby starego wiersza, a następnie wpadłaby w konflikt unikalności
+zamiast odczytać zamrożony plan. Była to sprzeczność z główną hipotezą N-006.
+
+Tożsamość dnia została oddzielona od wersji jego treści: ID zależy tylko od
+konta, strefy i lokalnej daty, natomiast wersja oraz hash polityki pozostają
+polami utrwalonego planu. Kontrdowód zmienia jednocześnie widełki i
+`POLICY_VERSION` po utworzeniu dnia; drugie połączenie musi zwrócić ten sam
+wiersz bez przeliczenia. Wynik: 14/14 testów OperationalDay PASS.
+
+### A-085 — P1 — pierwsza projekcja historii DNS nadpisywała wcześniejszy pin tego samego hosta
+
+Ustalenie powstało podczas kontroli końcowej E-004. Bezpieczeństwo każdego
+połączenia było zachowane w `FetchHop`, lecz właściwość `resolved_ips` budowała
+słownik przez przypisanie `host -> lista IP`. Jeżeli redirect wracał do tego
+samego hosta po ponownym rozwiązaniu DNS, późniejsza lista zastępowała
+wcześniejszą. Baza nie zachowywała wtedy całego zbioru adresów rzeczywiście
+zatwierdzonych w przebiegu.
+
+Projekcja agreguje teraz uporządkowaną sumę unikalnych pinów bez nadpisywania.
+Kontrdowód wymusza dwa różne rozwiązania jednego hosta po redirectcie i wymaga
+obu adresów w zapisanej historii. Test jest częścią `test_safe_fetch.py`, który
+finalnie uzyskał 19/19 PASS. Ustalenie ma status `FIXED_OFFLINE`; nie dowodzi
+zachowania prawdziwego resolvera ani TLS.
+
+### A-086 — P1 — niepełna odpowiedź modelu może zostać ponowiona mimo nieznanego kosztu
+
+Ustalenie powstało w live-teście E-007. DeepSeek wykonał klasyfikację, a przy
+syntezie zamknął strumień przed kompletnym body. Klient otrzymał
+`RemoteProtocolError` po wysłaniu żądania, więc nie ma dowodu, że dostawca nie
+naliczył tokenów. `llm.call()` zapisuje jednak takie wywołanie z
+`cost_usd=0`, a każdy `httpx.TransportError` uznaje za przejściowy i w normalnej
+konfiguracji może ponowić.
+
+Zero w kolumnie kosztu nie odróżnia „na pewno bez opłaty” od „opłata
+nieznana”. Retry po stanie niepewnym może podwoić koszt i narusza tę samą zasadę
+rekoncyliacji, którą ledger mutacji stosuje do działań zewnętrznych. Do czasu
+N-017 dostawca z taką próbą pozostaje zablokowany w danym eksperymencie, a
+niewykorzystana część rezerwacji nie jest zwalniana.
+
+Eksport DeepSeek potwierdził, że przerwana synteza wygenerowała 3038/3307
+tokenów i kosztowała 0,00855294 USD. N-017 dodaje trwałe
+`RESERVED/KNOWN/UNKNOWN`, rezerwację przed dispatch, retry wyłącznie błędów
+połączenia sprzed dispatch, blokadę dostawcy po restarcie i jednokrotną
+rekoncyliację. Status: `FIXED_OFFLINE; LIVE_REPLAY_OPEN`.
+
+### A-087 — P1 — bezczasowy cennik Sonnet 5 zawyżał koszt live-testu o 50 procent
+
+Oficjalny cennik odczytany 2026-08-21 podaje dla Sonnet 5 czasową taryfę 2 USD
+za milion tokenów wejścia i 10 USD za milion wyjścia do końca sierpnia, po czym
+3/15 od 2026-09-01. V3 miało bezczasowe 3/15. Cztery wywołania E-007 zostały
+więc lokalnie oszacowane na 0,084906 USD zamiast 0,056604 USD według bieżącej
+taryfy.
+
+N-016 dodało funkcję taryfy zależną od świadomego czasu UTC i test dokładnej
+granicy. Stawka pozostaje oznaczona jako niepotwierdzona, dopóki rachunek konta
+nie zostanie zrekoncyliowany. Status: `FIXED_OFFLINE; BILL_RECONCILIATION_OPEN`.
+
+### A-088 — P1 — adaptery nie zachowują request ID potrzebnego do automatycznej rekoncyliacji
+
+Zrzut Anthropic pozwolił powiązać cztery próby E-007 po dokładnych licznikach i
+request ID. Eksport DeepSeek jest jednak tylko agregatem godzinnym; rozdzielenie
+dwóch żądań Pro wymagało odjęcia lokalnie znanej recenzji od sumy. `calls` ma po
+N-017 miejsce na `provider_request_id`, lecz aktywne adaptery nie zwracają ani
+nie zapisują identyfikatora odpowiedzi/nagłówka dostawcy.
+
+Arytmetyczna różnica jest wystarczająca dla tego izolowanego okna, ale nie skaluje
+się do wielu równoległych przebiegów produkcyjnych. Każdy adapter powinien
+zapisywać ID przy pierwszej dostępnej ramce/nagłówku i przenosić je także do
+`UNKNOWN`. Status: `OPEN`.
+
+### A-089 — P0 — V3 nie ma wersjonowanego kontraktu promocji artefaktu
+
+Obecne `wdroz.sh` kończy się kodem 64, a trzy usługi systemd wykonują
+`/usr/bin/false`. To poprawna blokada prototypu, lecz przejście do produkcji
+wymagałoby dziś ad hoc edycji plików operacyjnych, capability policy i celu
+konta. Nie istnieje jeden niemutowalny release candidate wiążący commit, hashe,
+wersję Pythona, zależności, kontrakty promptów, schemat bazy i wynik bramek.
+
+Łatwa promocja nie może oznaczać usunięcia bezpieczników. Potrzebny jest osobny
+kontroler promocji, który przyjmuje gotowy manifest, wykonuje wszystkie bramki i
+atomowo przełącza wersję albo automatycznie wraca do poprzedniego artefaktu.
+Status: `OPEN`; obecna odmowa wdrożenia pozostaje bez zmian.
+
+### A-090 — P0 — inicjalizacja SQLite nie jest migracją release-grade
+
+`db.connect()` wykonuje `CREATE TABLE IF NOT EXISTS`, następnie addytywne
+`ALTER TABLE`. Kod sam stwierdza, że „to nie jest system migracji”, a błąd
+dodania kolumny jest drukowany i ignorowany. Nie ma `PRAGMA user_version`,
+numerowanych migracji, kopii przed migracją, próby odtworzenia ani testu
+kompatybilności downgrade/rollback.
+
+W produkcji częściowa migracja mogłaby uruchomić nowy kod na starym schemacie.
+Preflight release musi migrować kopię, zweryfikować inwarianty, wykonać backup i
+dopiero potem atomowo dopuścić nowy proces. Status: `OPEN`.
+
+### A-091 — P1 — przypięte zależności bez pełnego locka nie odtwarzają runtime
+
+`requirements.txt` przypina pięć bezpośrednich pakietów, ale repozytorium nie ma
+locka zależności przechodnich, hashy paczek, deklaracji wersji Pythona ani
+wersjonowanego obrazu/runtime. Instalacja Playwright Chromium jest opisana
+komentarzem, lecz wersja przeglądarki i zależności systemowe nie są częścią
+manifestu wydania.
+
+Ta sama wersja kodu może więc dostać inny graf pakietów albo systemowy Chromium.
+Przyszły release wymaga zamrożonego locka z hashami i manifestu runtime.
+Status: `OPEN`.
+
+### A-092 — P1 — artefakty schedulerów nie mają kontraktu healthcheck, canary i rollback
+
+Timery zawierają docelowe harmonogramy, ale odpowiadające im usługi są celowo
+nieuruchamialne i nie deklarują użytkownika, katalogu roboczego, środowiska,
+entrypointu, limitów zasobów ani warunku zdrowia. Nie ma shadow/canary, blokady
+dwóch wersji ani automatycznego powrotu po wzroście `UNKNOWN`, awarii bramek lub
+niezgodności konta.
+
+Bez tych elementów zamiana `/usr/bin/false` na Pythona byłaby wdrożeniem, nie
+promocją zweryfikowanego artefaktu. Status: `OPEN`.
+
+### A-093 — P0 — zdalny szkic artykułu jest modyfikowany przed rezerwacją w ledgerze
+
+`browser.wystaw_artykul()` otwiera żywy edytor, wypełnia tytuł, podtytuł i
+treść, wgrywa obraz na serwer, wstawia przycisk subskrypcji, przechodzi do
+ustawień i może zmienić ustawienie wykrywania AI. Dopiero potem odczytuje ID
+szkicu i tworzy `mutation_attempts.PENDING` dla końcowego kliknięcia publikacji.
+
+Ledger dowodzi zatem intencji publikacji, ale nie obejmuje wcześniejszego zapisu
+prywatnego stanu platformy. Awaria po uploadzie lub autosave, a przed
+`proba_mutacji()`, może pozostawić zdalny szkic bez `attempt_id`, klucza
+idempotencji i ścieżki rekoncyliacji. Domyślny podgląd lokalny jest już
+bezpieczny; luka dotyczy dodatniej ścieżki `live_test` i przyszłej produkcji.
+
+Naprawa nie polega na przeniesieniu istniejącego ledgeru o kilka linii. Zapis
+szkicu i publikacja są dwiema różnymi mutacjami. Pierwsza musi mieć własną
+rezerwację przed pierwszym zapisem zdalnym, hash artykułu i stabilne ID szkicu;
+druga może dopiero na tym ID rezerwować publikację. Status: `OPEN`, karta N-019.
+
+N-019 dodało osobny manifest `draft-write@1`, trwały dispatch przed otwarciem
+nowego edytora, dokładne ID szkicu, wznowienie tej samej intencji oraz osobne
+`article_publish`. Brak ID przechodzi do `UNKNOWN` i nie dopuszcza publikacji.
+T-088 odtworzył starą kolejność, T-089 przeszedł 4/4, T-090 testy sąsiednie
+44/44 metod, a T-091 pełną regresję 45/45 plików bez zmiany `data/`. Status:
+`FIXED_OFFLINE; PLATFORM_LIVE_NOT_RUN`. Fixture nie dowodzi selektorów ani
+autosave żywej platformy; Substack pozostał całkowicie nieużyty.
+
+### A-094 — P1 — kontrakt głosu zależy od nieprzypiętych plików poza `agent-v3`
+
+`style.load_profiles()` czyta dwa profile z
+`REPO_ROOT / "instrukcja dla pisania artykulow"`. Korpus próbek wewnątrz V3 ma
+hash SHA-256 i przypięte akapity, natomiast profile pozytywny i negatywny nie są
+częścią katalogu V3 i nie mają w loaderze oczekiwanych hashy. Izolowana kopia
+`agent-v3` nie potrafi więc napisać artykułu, a zmiana profilu poza bundle może
+zmienić głos bez zmiany wersji V3.
+
+Zależność jest cenna i należy ją zachować, nie odtwarzać od zera. N-013 powinno
+ją skopiować lub opakować jako wersjonowany asset głosu, a N-018 włączyć jej
+hashe do manifestu release. Status: `OPEN`.
+
+### A-095 — P0 — kontrola limitu i rezerwacja kosztu modelu nie są jedną transakcją
+
+`llm.call()` osobno wykonuje `_preflight()`, osobno oblicza
+`_reservation_amount()`, a następnie `db.reserve_call()` robi zwykły `INSERT` i
+`commit`. Między odczytem ekspozycji i insertem nie ma `BEGIN IMMEDIATE` ani
+warunku sprawdzającego limit wewnątrz tej samej transakcji.
+
+Kontrdowód offline uruchomił dwa wątki z osobnymi połączeniami SQLite. Przy
+`RUN_LIMIT_USD=0.25` oba odczytały wolne 0,25 USD i oba zapisały rezerwację
+0,25 USD. Końcowa ekspozycja wyniosła 0,50 USD. Zamek głównego `run.py` nie
+naprawia własności warstwy `llm`, ponieważ płatne uprzęże i przyszłe osobne
+usługi mogą wołać ją poza jednym procesem.
+
+E-009 dodało `reserve_model_budget`, które pod `BEGIN IMMEDIATE` sprawdza
+provider, run/day/month, wylicza pozostałą kwotę i tworzy rezerwację albo
+odmawia. T-092 ponownie odtworzył 0,50 USD ekspozycji starej ścieżki przy
+limicie 0,25 USD; T-093 po zmianie przeszedł 7/7, a T-096 pełną regresję 46/46
+plików bez zmiany `data/`. Runtime tekstu i obrazu nie używa już rozdzielonego
+`reserve_call()`. Status: `FIXED_OFFLINE; LIVE_REPLAY_OPEN`, karta N-020.
+
+### A-096 — P1 — rejestr zapowiadał sześć kart, których nie było w korpusie
+
+`REJESTR_BLEDOW_I_PLAN_NAPRAW.md` nazywa sekcję „Pierwsze piętnaście kart” i
+opisuje N-010–N-015, ale katalog `karty/` zawierał wyłącznie N-001–N-009 oraz
+N-016–N-018. Kolejny agent nie miał więc dla najbliższych priorytetów hipotezy,
+kryteriów akceptacji, testów ani granicy zakresu, mimo że protokół wymaga karty
+dla każdej naprawy.
+
+Brakujące karty zostały utworzone podczas bieżącego audytu na podstawie
+istniejącego kodu i rejestru, bez zmiany zachowania bota. Status:
+`FIXED_DOCUMENTATION`.
+
+### A-097 — P1 — część aktywnych opisów jakości nadal zakłada pozamaszynowe rozstrzygnięcie
+
+Kod `note()` i `comment_on()` autonomicznie sortuje kandydatów i wybiera
+pierwszy przechodzący walidację, a `run.py` autonomicznie rewiduje, blokuje lub
+publikuje artykuł. Mimo tego ich docstringi oraz instrukcje części płatnych prób
+opisywały zewnętrzny wybór lub ocenę jako element rozstrzygający.
+
+To nie jest tylko język. Skrypt wypisujący warianty bez wersjonowanej rubryki,
+oczekiwanego wyniku i asercji nie może być bramką autonomicznego release.
+Opisy wykonawcze zostały skorygowane tam, gdzie kod już wybiera sam; brakujące
+maszynowe kryteria jakości pozostają zakresem N-015. Status:
+`PARTIALLY_FIXED_DOCUMENTATION; ACCEPTANCE_OPEN`.
+
+### A-098 — P1 — katalog testów płatnych nie ma aktualnego, jednolitego kontraktu uruchomienia
+
+`tests/URUCHOM.md` i `tests/platne/PRZECZYTAJ.md` mówiły o siedmiu testach,
+podczas gdy katalog zawiera jedenaście plików Python. Tylko najnowszy harness
+provenance ma jawny preflight trybu, dostawcy i planu etapów. Starsze skrypty
+używają różnych ścieżek `/tmp`, część korzysta z domyślnego `config.DB_PATH`, a
+`test_bibliotekarz.py` może skopiować `zasiew-produkcji.db` do roboczej bazy
+V3. Nie każdy wynik ma asercję ani budżet wykonany przed pierwszym dispatch.
+
+Rozdzielenie katalogu chroni zwykłą regresję, lecz nie chroni przed błędnym
+jawnym uruchomieniem pojedynczego pliku. N-004 musi dać wszystkim płatnym
+uprzężom jeden launcher: tryb `model_test`, katalog tymczasowy, jawny plan
+kosztu, rezerwację, zakaz Substacka, manifest wyjść i wynik maszynowy. Status:
+`PARTIALLY_FIXED_NEW_REPLAY_ONLY; LEGACY_HARNESSES_OPEN`. E-010 dodało taki
+kontrakt dla nowego pełnego replayu: exact routing, nieistniejący wcześniej
+workspace, limit 1,50 USD, wynik JSON i brak importu browsera. T-103 dowiódł
+odmowy przed I/O przy braku kluczy. Starsze pojedyncze skrypty nadal nie są
+opakowane wspólnym launcherem i nie wolno uruchamiać ich jako bramki.
+
+E-007 ujawnił dodatkowo lukę autoryzacji modelu: argument `anthropic` powodował
+automatyczne `MODEL_FOR.update()` do Sonnet 5 dla klasyfikacji, syntezy i
+recenzji. Zgoda na budżet dostawcy została błędnie potraktowana jako zgoda na
+zmianę modelu. Cztery żądania na rachunku Anthropic pochodzą dokładnie z tego
+ramienia: trzy etapy i dodatkowy kontrprzykład recenzji. Normalny routing V3 nie
+używa Sonnetu dla tych etapów. Automatyczne ramię usunięto; harness przyjmuje
+teraz wyłącznie `configured` i nie zmienia `MODEL_FOR`. Status części
+modelowej: `FIXED_OFFLINE; NO_LIVE_REPLAY`.
+
+### A-099 — P1 — potwierdzone ID artykułu ginie przed zapisem `content_items`
+
+`potwierdz_artykul()` zwraca dokładne ID bieżącego szkicu/postu i ledger zapisuje
+je jako `source_ref`. `browser.wystaw_artykul()` ustawia jednak tylko
+`wynik["wyslane"]`; nie kopiuje wartości do `wynik["external_id"]`. `run.py`
+próbuje przekazać właśnie to brakujące pole do `editorial.mark_published()`.
+
+Skutkiem jest rekord `PUBLISHED` z możliwym URL-em, ale bez zewnętrznego ID,
+chociaż tożsamość została chwilę wcześniej potwierdzona. Utrudnia to dokładne
+wiązanie snapshotów, sygnałów i rekoncyliacji z artykułem. Status: `OPEN`, karta
+N-021.
+
+### A-100 — P0 — odnowienie sesji i kopia subskrybentów nie są autonomiczne
+
+Sesja Substacka wygasa, a `browser.wymagaj_sesji()` po jej utracie jedynie
+zatrzymuje pracę i wskazuje interaktywną procedurę odnowienia. Niezależnie
+`kopia_subskrybentow.py` przetwarza dopiero ręcznie dostarczony eksport CSV, a
+`alarm.kopia_subskrybentow()` tylko przypomina o jego wykonaniu. Oba mechanizmy
+są odziedziczone z V2 i użyteczne jako bezpieczny fallback, lecz nie spełniają
+zadeklarowanego celu pełnej autonomii.
+
+Nie wolno naprawiać tego zgadywaniem prywatnych endpointów ani obchodzeniem
+ochrony platformy. Przed produkcją potrzebny jest wspierany kontrakt
+uwierzytelnienia i eksportu albo jawna decyzja, że brak takiej możliwości
+blokuje autonomiczną promocję. Status: `OPEN`, karta N-022.
+
+### A-101 — P1 — test komentarza zapisywał fixture do trwałego dziennika V3
+
+Pełna regresja T-082 przeszła 44/44 plików, ale kontrola hashy ujawniła cztery
+nowe rekordy w `data/dziennik.jsonl`. Pierwsze 11 460 bajtów zachowało
+wcześniejszy SHA-256, a dopisane 764 bajty zawierały wyłącznie testowy URL
+`ktos.substack.com/p/cos` i tekst fixture. Źródłem był
+`tests/test_pole_komentarza.py`: test atrapiał przeglądarkę i ledger, lecz nie
+atrapiał globalnego `browser.DZIENNIK`.
+
+Usunięto dokładnie cztery rozpoznane wpisy testowe, przywracając wcześniejszy
+hash `BCBE21C7…BE0F`. Test ustawia teraz dziennik w katalogu tymczasowym i
+przywraca globalną ścieżkę w `finally`. T-083 potwierdził 19/19 asercji i
+niezmienny hash przed/po. Status: `FIXED_OFFLINE`; szersza hermetyzacja całego
+replayu pozostaje częścią N-004.
+
+### A-102 — P1 — surowy hash CRLF blokował normalnego pisarza na Windows
+
+Pełna 32-call symulacja E-012 przeszła scout, discovery, fetch, klasyfikację i
+syntezę, po czym prawdziwy `style.load_examples()` odmówił przed wywołaniem
+Fable. `config.py` przypinał kanoniczny LF SHA-256 `d4e4e6bf…`, natomiast
+Windows checkout tej samej treści miał surowy hash `0b05cefa…` wskutek CRLF.
+Loader normalizował końce linii przy dzieleniu akapitów, ale nie przed hashem.
+
+N-004 nie ujawnił wady, ponieważ replay podmieniał loadery stylu fixturem.
+Skutek praktyczny: normalny V3 mógł opłacić scout i research, a następnie zawsze
+zatrzymać się przed produktem.
+
+N-023 kanonizuje wyłącznie `CRLF/CR -> LF` przed hashem, zachowując pin treści
+i osobne skróty pięciu akapitów. Preflight E-012 ładuje styl przed kosztem, a
+N-004 używa prawdziwego loadera. Identyczne LF/CRLF przechodzi, dodatkowy bajt
+nie. T-114: 8/8 i replay 7/7; T-117: 49/49. Status:
+`FIXED_OFFLINE; LIVE_WRITER_OPEN`.
+
+### A-103 — P1 — pełny artefakt live nie był ignorowany przez Git
+
+Pierwsza końcowa kontrola T-125 wykazała, że
+`.live-experiments/E-012-editorial-system-live/result.json` nie przechodził
+`git check-ignore`. Bieżący plik nie zawierał kluczy, ale zawiera pełne prompty
+system/user i w przyszłym udanym runie zawierałby również surowe odpowiedzi.
+Przypadkowe dodanie takiego pliku mogłoby ujawnić materiał badawczy i znacznie
+powiększyć repozytorium.
+
+N-024 dodało lokalny `.gitignore` dla `.env` i `.live-experiments/`. T-126
+potwierdził ignorowanie obu ścieżek, zero trafień dokładnych wartości dwóch
+kluczy poza `.env` oraz niezmieniony hash dowodu T-118. Status:
+`FIXED_OFFLINE`; nie dowodzi to polityki retencji ani szyfrowania artefaktów.
+
+
+### A-104 — P0 — normalny scout DeepSeek trzy razy nie dostarczył odpowiedzi
+
+T-118, T-132 i T-136 wykonały trzy różne user prompty na normalnym
+`deepseek-v4-pro`. Pierwsze dwa miały około 23 tys. znaków, trzeci 7 499;
+wszystkie miały różne SHA-256. Po 180,844, 180,875 i 120,703 s peer zamknął
+niepełne chunked body. Nie otrzymano usage, tokenów, request ID ani JSON-u.
+
+Każdy ledger zachował 1,60 USD jako UNKNOWN i zatrzymał dalsze wywołania.
+Skutek wykonawczy: standardowy V3 nie przechodzi etapu 1, więc nie ma live
+tematów, researchu, źródeł, syntezy ani ocen. Fail-closed chroni koszt i
+publikację, lecz operacyjnie zatrzymuje redakcję.
+
+Buforowany adapter zmieniono offline na oficjalny SSE z wymaganym DONE i usage.
+Po trzech UNKNOWN live DeepSeek jest twardo zablokowany do rekoncyliacji.
+Kryterium obalenia: request-level dowód kosztów oraz nowy canary SSE zakończony
+pełnym JSON-em, usage, request ID i kosztem KNOWN. Status:
+`FIXED_OFFLINE; LIVE_BLOCKED_THREE_UNKNOWN`; karta N-025.
+
+### A-105 — P1 — stylowana próbka Fable wypadła poza kontrakt długości
+
+W kontrolowanym A/B ten sam Fable, karta, głębokość, zakończenie i liczba
+paraleli dały 817 słów ze stylem oraz 945 bez stylu. Kontrakt RICH wynosi
+900–1250, więc tylko ablacja spełniła długość. Profil zwiększył user prompt o
+8 162 znaki i koszt wywołania o 0,131700 USD. Jednocześnie stylowana wersja
+miała mniej em dash, uniknęła nadmiaru zastrzeżeń i mocniej wróciła do konkretu
+w zakończeniu.
+
+Surowy artefakt nie zgłosił długości, bo funkcja pomiarowa nie przekazała
+`glebokosc` do deterministycznej bramki. Harness naprawiono testem; produkcyjny
+`run.py` już przekazywał głębokość. Jedna para nie estymuje efektu przyczynowego.
+Kryterium obalenia: wielokrotne, ślepe A/B na wielu kartach bez pogorszenia
+zgodności długości i prawdziwości. Status: `HARNESS_FIXED_OFFLINE;
+STYLE_EFFECT_OPEN`; N-013/N-015.
+
+### A-106 — P1 — rotacja form Notes nie zapewnia różnorodności otwarć
+
+Pięć live Notes Opusa na identycznym fakcie miało 47–52 słowa i wykonało
+zadane układy bloków. Tylko dwa różne pierwsze słowa wystąpiły w całym zestawie,
+a 3/5 próbek zaczęło się od `Your oven clock`. Forma ODWROCENIE zaczęła od
+korekty zamiast uczciwego przekonania i nie wyjaśniła genezy wiary. W czasie
+ramienia lista wcześniejszych otwarć nie była aktualizowana między formami.
+
+Żadna notka nie uzyskała `safe_to_post`, ponieważ fact-check DeepSeek nie
+doszedł do skutku. Kryterium obalenia: sekwencyjny test wielu zestawów, w którym
+każdy wynik aktualizuje pamięć otwarć, formy przechodzą semantyczną rubrykę, a
+fact-check jest kompletny. Status: `OPEN`; N-013/N-015.
+
+### A-107 — P1 — Fable dodaje faktyczne przesłanki poza zamrożoną kartą
+
+Manualna analiza obu live artykułów wykazała twierdzenia nieustanowione przez
+fikcyjną kartę. Wariant stylowany założył między innymi istnienie jaśniejszych
+starych lamp, filamenty, radę miejską, brak budżetu retrofitowego i lampy nadal
+świecące `tonight`. Ablacja dodała kolejność pilot→generalizacja, brak pozycji
+budżetowej, ekip i grup interesu oraz zakres publikacji miasta. Część hipotez
+była oznaczona, lecz wskazane zdania brzmiały jak fakty.
+
+DeepSeek review nie uruchomił się, więc nie ma pomiaru recallu recenzenta.
+Obecny V3 po niedostępnej kontroli powinien kwarantannować tekst, co ogranicza
+skutek. Dodatni live revise usunął kontrolne zdanie o 12 wypadkach bajtowo
+minimalnie, ale nie dowodzi wykrywania spontanicznych przesłanek. Kryterium
+obalenia: zamrożony wielotekstowy korpus i pełna ścieżka
+write→review→revise→review z recall/precision. Status: `OPEN`; N-009/N-011/N-015.
+
+### A-108 — P0 — `/responses` powtórzyło wadę buforowanego transportu
+
+E-017 feasibility zakończyło się poprawnie, lecz następny normalny discovery
+użył buforowanego `/responses` i po 60,750 s stracił kompletne body, usage oraz
+request ID. Rezerwacja 0,10 USD pozostała `UNKNOWN`, bez retry. Ta sama klasa
+wady była już znana dla `/chat/completions`, ale naprawa nie objęła drugiego
+adaptera. SSE `/responses` ma 4/4 PASS offline; live jest zablokowany budżetowo.
+Status: `FIXED_OFFLINE; LIVE_BLOCKED`; N-026.
+
+### A-109 — P1 — ranking względny przepuszczał portfel w całości słaby
+
+E-016 oddało sześć poprawnych strukturalnie tematów. Każdy miał dokładnie trzy
+znane ujęcia i cztery wątki; wszystkie kod oznaczył jako nasycone. Mimo braku
+bezwzględnie dobrego kandydata ranking nadal wybierał najlepszy względnie i
+przekazywał go do feasibility. Boil-water notice przeszedł jako artykuł, choć
+jego użyteczna odpowiedź jest krótką procedurą. Status starej architektury:
+`REPLACED_OFFLINE`; N-027.
+
+### A-110 — P1 — Scout V3 odziedziczył z V2 zbyt wąską ontologię tematu
+
+V2 i dotychczasowy V3 wymagały zwykłego obiektu, procedury albo widocznego
+momentu, a każdy finalista musiał należeć do `BROKEN_BELIEF` lub
+`SYSTEM_UNDER_TEST`. To faworyzowało gotowe explainery i rulebooki zamiast
+wymyślania dużych pytań o ekonomię, naukę, historię, kulturę, pracę czy ludzkie
+doświadczenie. Nowy prompt i kontrakt nie wymagają systemu ani zamkniętej
+taksonomii. Status: `FIXED_OFFLINE; DIVERSE_LIVE_OPEN`; N-027.
+
+### A-111 — P1 — liczba dróg udawała ocenę jakości pomysłu
+
+Pierwsza naprawa próbowała wymagać dokładnie 20 dróg, a następnie arbitralnego
+minimum pięciu. E-018 zwróciło sześć tematów po cztery różne drogi, mechanizmy i
+rodziny dowodu; próg pięciu fałszywie odrzucił wszystkie. Dokładny raw response
+po usunięciu magicznej kwoty przeszedł 6/6. Zostały jedynie grube minima
+wykrywające jedną odpowiedź rozbitą na podpunkty. Status: `FIXED_OFFLINE`;
+N-027.
+
+### A-112 — P0 — atomowa rezerwacja nie ogranicza kosztu settlementu
+
+E-018 miało cap 0,04 USD, ale jedno żądanie kosztowało 0,049298 USD.
+Rezerwacja była atomowa, jednak `max_tokens` nie wynikał z pozostałej kwoty;
+po odpowiedzi settlement zastąpił rezerwację wyższym kosztem. Scout-only ma
+teraz predispatch worst-case refusal, lecz wspólny runtime nadal wymaga
+powiązania capu z maksymalnym wyjściem. Status:
+`SCOUT_HARNESS_FIXED_OFFLINE; SHARED_RUNTIME_OPEN`; N-028; N-020 ponownie
+otwarte w tym zakresie.
+
+### A-113 — P1 — system prompt live nadal kotwiczył model w systemach
+
+User prompt E-018 dopuszczał każdy duży temat, ale system prompt nadal opisywał
+publikację przez `hidden systems` i `ordinary things`. Wszystkie sześć wyników
+można czytać jako systemowe. Po live system prompt otwarto na naukę, historię,
+ekonomię, kulturę, pracę, technologię i ludzkie życie. Jest to naprawa offline;
+nie wolno przypisywać jej wynikowi live E-018. Status:
+`FIXED_OFFLINE; LIVE_VALIDATION_OPEN`; N-027.
+
+### A-114 — P1 — identyczna anatomia może być formatowym wypełnianiem
+
+Każdy z sześciu tematów E-018 miał dokładnie pięć osi, trzy napięcia, trzy
+gałęzie i cztery drogi. Treści były różne, ale stałe liczebności wskazują, że
+model mógł optymalizować kształt JSON-u zamiast naturalnego rozmiaru pomysłu.
+Kontrakt nie zamawia kwot dla pojedynczego tematu, lecz zjawisko wymaga
+replikacji i ręcznej oceny różnorodnych portfeli. Status: `OPEN`; N-027.
+
+### A-115 — P1 — generator Notes optymalizuje sprzeczne cele jedną rubryką
+
+Aktywny `prompts/notka.md` łączy polubienia, rozmowę, zasięg i konwersję w
+jednym pojęciu skuteczności. Pięć form wybiera anatomię tekstu, ale nie wymaga
+jawnego celu takiego jak rozmowa, restack, bezpłatna albo płatna konwersja.
+Badanie porównawcze 10 publicznych przypadków i czterech dużych analiz
+obserwacyjnych wskazuje na realne kompromisy: proste pytanie może zwiększać
+odpowiedzi, lecz szkodzić konwersji; link może zmniejszać reakcje, ale zwiększać
+konwersję przypadającą na reakcję; szeroki wiral może nie dać subskrybentów.
+
+Skutek wykonawczy: autonomiczny selektor nie potrafi rozstrzygnąć, czy Note z
+małą liczbą reakcji i płatną konwersją wygrała z Note o dużym zasięgu bez
+dopasowania odbiorców. Jedna globalna rubryka może karać poprawny kompromis i
+uczyć system niewłaściwego celu.
+
+Kryterium obalenia: prerejestrowany test osobnych celów na wystarczającej
+próbie, stałych oknach pomiaru i izolowanym koncie wykaże, że jedna polityka
+nie pogarsza żadnego z wyników po uwzględnieniu dopasowania odbiorców. Taki
+test wymaga osobnej autoryzacji i nie został wykonany; żaden materiał V3 nie
+został opublikowany. Pełny benchmark:
+`../04_badania_porownawcze/ANALIZA_10_ARTYKULOW_I_10_NOTES_SUBSTACK_2026-08-21.md`.
+Status: `OPEN`.
+
+### A-116 — P1 — ranking Scouta gubił kolejność wymuszonego wyboru
+
+Pola `largest_article_universe`, `most_compelling`, `most_original` i ich
+ujemne odpowiedniki są uporządkowanymi listami. Kod sprawdzał tylko członkostwo,
+więc pierwsze, drugie i trzecie miejsce dostawały tę samą wagę. Exact raw E-018
+tworzył przez to fałszywy remis +5 między `Suspicion as Default` i `The
+Uninsurable World`. Po zachowaniu pozycji 3/2/1 wyniki wynoszą odpowiednio
+13, 8, 5, -2, -3 i -3. Breakdown przechowuje rangę i deltę; kontrprzykład
+sprawdza, że pierwsze miejsce wygrywa z drugim i trzecim. Status:
+`FIXED_OFFLINE; EXACT_RAW_REPLAY_PASS`; N-027; E-019.
+
+### A-117 — P1 — `obvious_coverage` było mylone z nasyceniem tematu
+
+Nowy kontrakt Scouta wymaga przykładów oczywistego pokrycia, aby model wskazał,
+czego unikać. Runtime liczył liczbę tych przykładów jak dowód nasycenia i
+oznaczał wszystkie sześć uniwersów E-018 `nasycony=true`. Pole mierzyło
+znajomość klisz, nie realny rozmiar istniejącego korpusu. Dla nowego kontraktu
+nie ustawia już nasycenia; dedykowany test odtwarza cztery przykłady pokrycia
+bez fałszywego flagowania. Status: `FIXED_OFFLINE; EXACT_RAW_REPLAY_PASS`;
+N-027; E-019.
+
+### A-118 — P1 — research dostawał parasol zamiast wybranej drogi artykułu
+
+Scout E-018 tworzył po cztery różne drogi, ale feasibility widziało jedynie
+nazwę i centralne pytanie uniwersum. `pick_topic()` przekazywał następnie do
+researchu pytanie parasolowe. System potrafił więc wygenerować dobry portfel,
+a potem zmieszać go w jeden ogólny artykuł. `feasibility@3` ocenia wszystkie
+drogi i musi zwrócić `selected_route_index`; runtime kopiuje dokładne pytanie,
+mechanizm i potrzebny dowód wybranej drogi, a brak wyboru kończy się fail-closed.
+F2 live ocenił 24/24 drogi. Status: `FIXED_AND_LIVE_CONTRACT_PASS`;
+N-027; E-019.
+
+### A-119 — P1 — głębokość uniwersum udawała głębokość jednego artykułu
+
+F1 live wybrał prior authorization i odziedziczył `RICH` z całego `Suspicion as
+Default`, choć nie ocenił głębokości tej jednej drogi. Po rozdzieleniu F2
+uczciwie oznaczył ją `SINGLE`, lecz selektor nadal kładł ranking parasola przed
+głębokością artykułu i wybrał ją przed trzema drogami `RICH`. Runtime sortuje
+teraz najpierw po głębokości dokładnej drogi; na tym samym response wygrywa
+osierocony szyb naftowy (`RICH`, drugi akt, cztery rodziny źródeł). Status:
+`FIXED_OFFLINE_ON_LIVE_RAW; MANUAL_SOURCE_PASS; DISCOVERY_OPEN`; N-027; E-019.
+
+### A-120 — P1 — wspólny hash promptów unieważniał cache płatnych etapów
+
+Po zmianie wyłącznie `wykonalnosc.md` normalny segment próbował ponownie
+wykonać Scouta, ponieważ cache używał jednego hasha wszystkich promptów.
+Segmentowa uprząż odmówiła przed dispatch, więc koszt kontrprzykładu wyniósł
+0 USD. Tożsamość cache v4 hashuje teraz tylko prompt danego etapu i jego
+wersjonowany kontrakt. Test sprawdza, że zmiana feasibility nie unieważnia
+cache Scouta. Status: `FIXED_OFFLINE; NEGATIVE_LIVE_REPLAY_PASS`; N-004/N-027;
+E-019.
+
+### A-121 — P2 — atomowy checkpoint uprzęży był niestabilny na Windows
+
+Pełna regresja po E-019 raz przeszła plik kontynuacji, a przy następnym
+uruchomieniu zakończyła go `PermissionError [WinError 5]` podczas
+`os.replace(result.partial.json.tmp, result.partial.json)`. Dziesięć
+samodzielnych powtórzeń odtworzyło 3/10 awarii. Zapis używa teraz unikalnego
+pliku tymczasowego w katalogu docelowym oraz pięciu krótkich, ograniczonych
+prób atomowego `replace`; trwała blokada nadal kończy się fail-closed.
+Kontrprzykład symuluje pierwszą blokadę i drugi sukces, 10/10 powtórzeń po
+naprawie przeszło, a pełna regresja zakończyła się 55/55. Status:
+`FIXED_OFFLINE; WINDOWS_STRESS_10/10_PASS`; E-019.
+
+### A-122 — P1 — discovery gubiło mechanizm i drugi akt wybranej drogi
+
+Po naprawie A-118 discovery otrzymywało dokładne pytanie drogi, ale nadal nie
+dostawało jej `distinct_engine`, `evidence_needed` ani drugiego aktu ocenionego
+przez feasibility. Mogło więc znaleźć poprawne dokumenty o osieroconych
+szybach, które nie testują właściwej hipotezy o prawnym zniknięciu podmiotu i
+przeniesieniu rachunku na publiczne programy. Prompt discovery przenosi teraz
+pełny brief: uniwersum jako kontekst, dokładną drogę, mechanizm, oczekiwany
+dowód i drugi akt; zabrania zamiany drogi na omnibus. Tożsamość cache obejmuje
+cały brief. Test przechwytuje wyrenderowany prompt, a finalna regresja po
+zmianie przeszła 55/55. Status: `FIXED_OFFLINE; LIVE_DISCOVERY_NEXT`;
+N-004/N-027; E-020.
+
+### A-123 — P1 — limit wyszukiwań discovery był tylko prośbą w prompcie
+
+Normalne live E-020 wykonało 22 elementy `web_search_call`, mimo że prompt
+nakazywał zatrzymać się po 8. Runner uznał przebieg za PASS, ponieważ liczył
+logiczne wywołania modelu, koszt i kontrakt JSON, ale nie porównywał faktycznej
+liczby użyć narzędzia z `DISCOVERY_MAX_SEARCHES`. Oficjalny DeepSeek
+`/responses` nie udostępnia `max_uses`; własna auto-kontynuacja dostawcy nie
+jest równoważna limitowi projektu. Skutek: niestabilny koszt, rozwleczony input
+i fałszywie zielony segment. Kryterium obalenia: twardy limit po stronie
+narzędzia oraz niezależny postwarunek runtime, który przy przekroczeniu
+rozlicza znany usage jako FAIL. Status: `LIVE_REPRODUCED; FIXED_OFFLINE`;
+E-020/N-026/N-028.
+
+### A-124 — P1 — jedna etykieta PRIMARY miesza dokument z autorytetem hosta
+
+E-020 raportowało 7 źródeł `PRIMARY`, zaliczając obok origin publisherów GAO,
+OSMRE i OWA również tekst prawa na Cornell/LII, mirror California Public Law
+oraz stronę raportu GAO w UNT Digital Library. Dokument może być pierwotnym
+rekordem, choć host jest mirrorem; te własności nie są równoważne i nie wolno
+ich sumować jednym licznikiem jakości. Skutek: UI i bramka zawyżają niezależność
+oraz autorytet korpusu. Kryterium obalenia: osobne pola klasy dokumentu, roli
+hosta i dostępności pełnego tekstu, plus minimalna liczba origin/official
+primary po exact-URL filter. Status: `LIVE_REPRODUCED; FIXED_OFFLINE`;
+E-020/N-027.
+
+### A-125 — P1 — discovery pominęło silniejszy bieżący rekord urzędowy
+
+Zestaw E-020 zawiera dwa trafne audyty GAO i program OSMRE, ale nie wybrał BLM
+2024, GAO-19-615, strony stanowego programu DOI ani raportu DOI FY2025. Ręczny
+benchmark znalazł w nich bezpośrednio aktualne definicje, nowe bonding minimum,
+skalę ryzyka, 84% prawdopodobnie za niskich bonds oraz bieżące miliardy
+programu. Jednocześnie automat zachował niedostępny ręcznie mirror UNT i
+landing page reportu wymagającego loginu. Jedna próba nie dowodzi trwałej
+stronniczości wyszukiwarki, ale obala tezę, że wynik był już jakościowo
+optymalny. Kryterium obalenia: ponowny live po A-123/A-124, ręczny audyt każdego
+URL-a i niegorsze pokrycie mechanizmu, bieżącej skali oraz drugiego aktu niż
+zamrożony benchmark urzędowy. E-021 ponownie nie wybrało BLM 2024,
+GAO-19-615 ani bieżących stron i raportu DOI; nie jest to już pojedyncza
+obserwacja. Status: `OPEN; LIVE_REPRODUCED_TWICE;
+MANUAL_BASELINE_RECORDED`; E-020/E-021.
+
+### A-126 — P1 — deklaracja dostępu modelu udawała wynik rzeczywistego fetchu
+
+Kontrakt `discovery@2` wymagał od modelu pola `access`, ale discovery nie
+otwiera jeszcze wybranych dokumentów. W E-021 model oznaczył raport IOGCC jako
+`FULL_TEXT_NO_LOGIN`, podczas gdy bezpośrednia ręczna próba wejścia zakończyła
+się HTTP 526. Walidacja schematu przyjęła zatem deklarację z odpowiedzi modelu
+jak zweryfikowaną własność sieci. Kryterium obalenia: pole na etapie discovery
+jest jawnie tylko twierdzeniem (`access_claim`), a rzeczywista dostępność jest
+ustalana dopiero przez bezpieczny fetch i nie może wcześniej zaliczać bramki.
+Status: `LIVE_REPRODUCED; FIXED_OFFLINE; FETCH_LIVE_REQUIRED`; E-021/N-028.
+
+### A-127 — P1 — proposed records i wtórne omówienia mogły wypełnić pozorną kompletność
+
+E-021 zwróciło m.in. projekt H.R. 9029 oraz artykuł EDF zamiast wskazanych w
+nim pierwotnych reguł lub audytów. Liczniki typu dokumentu i origin-primary nie
+odróżniały jeszcze: bieżącego pomiaru skali, zaobserwowanego mechanizmu,
+historycznego drugiego aktu i jedynie proponowanej polityki. Zestaw mógł więc
+przejść kontrakt, choć nie dowodził wszystkich ról potrzebnych artykułowi.
+Kryterium obalenia: datowany status dowodu, jawne role dowodowe, maksymalnie
+jeden rekord proposed oraz obowiązkowy current-scale z bieżącego origin lub
+official archive. Status: `LIVE_REPRODUCED; FIXED_OFFLINE;
+LIVE_REPLAY_REQUIRED`; E-021/N-026/N-028.
+
+### A-128 — P1 — live capture nie utrwalał listy wyników narzędzia wyszukiwania
+
+E-022 zapisało finalny raw JSON, liczbę 46 search-result URL-i oraz informację,
+które z 10 propozycji przeszły exact gate, ale nie zapisało samych 46 adresów.
+Po zakończeniu procesu nie dało się więc niezależnie odtworzyć, dlaczego
+realny i wartościowy OSMRE nie był dokładnym wynikiem bieżącej sesji ani
+skontrolować wszystkich kandydatów odrzuconych przed finalnym JSON-em.
+Kryterium obalenia: capture utrwala uporządkowaną pełną listę URL-i, każdy
+wewnętrzny request, jego pełny prompt, raw odpowiedź, tokeny i hashe, także gdy
+późniejsza bramka etapu kończy się FAIL. Status: `LIVE_REPRODUCED;
+FIXED_OFFLINE; LIVE_TRACE_REQUIRED`; E-022/N-026.
+
+### A-129 — P1 — urwany stream znikał z licznika provider requestów capture
+
+E-023 rzeczywiście wysłało pierwszy request wyszukiwania, po czym peer zamknął
+stream bez pełnego body i usage. Ledger prawidłowo zachował 0,30 USD jako
+`UNKNOWN`, ale `provider_request_count` w capture wyniósł 0, ponieważ trace był
+dopisywany dopiero po `get_final_message()`. Licznik przeczył więc własnemu
+stack trace i rezerwacji kosztu. Kryterium obalenia: wpis `DISPATCH_STARTED`
+powstaje przed oczekiwaniem na body, a błąd bez usage zmienia go na
+`FAILED_WITHOUT_FINAL_USAGE` z pełnym promptem, hashem i klasą wyjątku.
+Status: `LIVE_REPRODUCED; FIXED_OFFLINE; LIVE_TRACE_REQUIRED`; E-023/N-026.
+
+### A-130 — P1 — metadane czasu i statusu dowodu znikały przed syntezą
+
+E-024 pobrało właściwą stronę GAO-19-615. Jest to report opublikowany w 2019,
+ale ta sama żywa strona zawiera status rekomendacji „As of February 2026”.
+Discovery przechowuje `published_at`, `evidence_status` i `evidence_roles`, lecz
+prompt klasyfikacji ich nie widział, payload syntezy je usuwał, a końcowy
+`evidence_manifest` provenance przechowywał tylko URL, tytuł, publisher i klasę.
+System mógł więc przypisać datę dokumentu dynamicznie aktualizowanemu fragmentowi
+albo utracić rozróżnienie rekordu bieżącego, historycznego i proponowanego.
+Kryterium obalenia: fetch dodaje `retrieved_at`; classify i synthesis widzą oraz
+przenoszą wszystkie cztery metadane; manifest provenance je zachowuje; prompt
+zabrania traktowania publication/retrieval date jako daty każdego twierdzenia;
+test kontrprzykładu 2019/2026 przechodzi. Status: `LIVE_REPRODUCED;
+FIXED_OFFLINE; LIVE_CLASSIFY_REQUIRED`; test celu 3/3, sąsiednie 107/107 i pełna
+regresja 57/57; E-024/N-009.
 
 ## Kontrole wykonane bez kontaktu z produkcją
 
 - Inwentaryzacja plików V3 i wyszukiwanie statyczne przepływów danych/statusów.
 - Parsowanie AST wszystkich 59 plików `.py`: **0 błędów składni**.
 - Nie importowano modułów integracyjnych w sposób uruchamiający sieć.
-- Nie uruchomiono testów sieciowych ani płatnych.
+- W audycie bazowym nie uruchomiono testów sieciowych ani płatnych. Późniejszy
+  E-007 wykonał wyłącznie wywołania modeli na syntetycznym korpusie; bez
+  Substacka, przeglądarki, sesji i danych produkcyjnych.
 - Nie uruchomiono żadnego skryptu publikującego, wdrożeniowego ani przeglądarkowego.
+
+## Status wdrożenia ustaleń po audycie bazowym
+
+Rejestr zachowuje brzmienie problemów z dnia audytu oraz wad znalezionych w
+trakcie eksperymentów. Nie oznacza to, że każdy
+wpis pozostaje otwarty. Na gałęzi prototypowej V3 A-029–A-032 otrzymały status
+`FIXED_OFFLINE`: istnieje utrwalony `OperationalDay`, transakcyjny budżet każdej
+mutacji, wspólna strefa redakcyjna i niezależność limitów od JSONL. Kontrdowody
+oraz nieudane próby opisuje
+`../06_testy_i_budzet/RAPORT_EKSPERYMENTU_E-003_DOBA_I_BUDZET.md`.
+
+A-084 został wykryty i usunięty przed zamknięciem tego samego eksperymentu;
+test zmiany wersji polityki jest częścią stałej regresji.
+
+A-033, A-034, A-054 oraz wykryte podczas implementacji A-085 mają status
+`FIXED_OFFLINE`: jeden adapter sprawdza publiczny unicast, przypina DNS do
+połączenia, ponownie waliduje redirecty, ogranicza odpowiedź i PDF, wymaga
+dokładnego URL wyniku oraz zapisuje finalny dokument i pełny zbiór pinów.
+Browserowy fallback researchu jest fail-closed. Kontrdowody i ograniczenia
+opisuje
+`../06_testy_i_budzet/RAPORT_EKSPERYMENTU_E-004_BEZPIECZNY_FETCH.md`.
+
+A-018 i A-038 mają status `FIXED_OFFLINE`: 22 aktywne granice odpowiedzi
+modeli wskazują jawne kontrakty `nazwa@wersja:hash_struktury`, parser jest
+ścisły, wynik walidacji pozostaje w SQLite, a karta syntezy ma jeden kanoniczny
+kształt. Awaria weryfikacji i selekcji kończy się autonomicznie fail-closed.
+Kontrdowody, pełny rejestr wersji i ograniczenia opisuje
+`../06_testy_i_budzet/RAPORT_EKSPERYMENTU_E-005_WERSJONOWANE_SCHEMATY_LLM.md`.
+
+A-015, A-016, A-035 i A-039 mają status
+`FIXED_OFFLINE; LIVE_PARTIAL_PASS`. Dokumenty, dosłowne fragmenty, liczby,
+twierdzenia, jednostki zdaniowe i cytowania mają deterministyczne ID oraz
+walidowane relacje. Pełna bijekcja recenzji obejmuje klasę `MIXED`, liczby są
+wydobywane wyłącznie z zatwierdzonych fragmentów, a `unused_evidence` i lista
+źródeł wynikają z faktycznego użycia w finalnym tekście. Zerwany graf blokuje
+zapis, a historyczne karty bez dowodu nie trafiają do banku. Kontrdowody i
+ograniczenia semantyczne opisuje
+`../06_testy_i_budzet/RAPORT_EKSPERYMENTU_E-006_POCHODZENIE_TWIERDZEN.md`.
+Historyczny override Sonnet przeszedł trzy granice, a oba badane ramiona
+wykonały recenzję `MIXED`; nie był to jednak standardowy routing V3 ani
+autoryzowana zmiana modelu. Synteza DeepSeek nie ma dodatniego wyniku z powodu
+niepełnego strumienia. Pełny ślad i errata znajdują się w
+`../06_testy_i_budzet/RAPORT_EKSPERYMENTU_E-007_LIVE_PROVENANCE.md`.
+
+Statusy offline nie obejmują żywej integracji. Pełny replay fixture jest 7/7.
+E-016 i E-018 potwierdziły live transport oraz kontrakt Scouta DeepSeek.
+E-018 exact raw replay dał 6/6 pól redakcyjnych, ale poprawiony system prompt
+ma tylko dowód offline. Discovery E-017 dodało czwarty `UNKNOWN` 0,10 USD, a
+E-018 przekroczyło cap 0,04→0,049298 USD. Brak rekoncyliacji i pełnych wyników
+pozostałych ról nadal ogranicza wniosek; szczegóły w raporcie E-018.
 
 ## Hipoteza kolejności późniejszych napraw — jeszcze nie wdrażać
 

@@ -1,0 +1,162 @@
+{
+  "anthropic_input": {
+    "cost": {
+      "baseline_before_continuation_usd": 1.6755867000000002,
+      "by_provider_and_status": [
+        {
+          "cost_status": "KNOWN",
+          "known": 1.34143,
+          "n": 8,
+          "provider": "anthropic",
+          "unresolved": 0
+        }
+      ],
+      "known_usd": 1.34143,
+      "new_exposure_usd": 1.34143,
+      "program_exposure_including_history_usd": 1.4170167,
+      "program_exposure_including_t118_usd": 3.0170167,
+      "reserved_or_unknown_usd": 0.0
+    },
+    "path": "C:\\Users\\user\\Desktop\\agent project\\agent-v3\\.live-experiments\\E-014-anthropic-controlled-live\\result.json",
+    "sha256": "a3b95579abe736959b09810fef736e75fceca8adbde62a12809312b36c4c2801",
+    "status": "COMPLETE"
+  },
+  "arm": "deepseek",
+  "browser_imported": false,
+  "budget": {
+    "arm_max_usd": 3.25,
+    "baseline_exposure_usd": 1.6755867000000002,
+    "both_arms_program_max_usd": 8.4255867,
+    "global_limit_usd": 10.0,
+    "historical_cost_usd": 0.0755867,
+    "t118_unknown_charged_usd": 1.6
+  },
+  "call_ledger": [
+    {
+      "at": "2026-08-21T14:33:54.396837+00:00",
+      "cache_hit": 0,
+      "cost_status": "UNKNOWN",
+      "cost_usd": 0.0,
+      "id": 1,
+      "model": "deepseek-v4-pro",
+      "note": "RemoteProtocolError: peer closed connection without sending complete message body (incomplete chunked read)",
+      "ok": 0,
+      "price_verified": 0,
+      "provider": "deepseek",
+      "purpose": "scout",
+      "reserved_usd": 1.6,
+      "run_id": 1,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "web_searches": 0
+    }
+  ],
+  "calls_raw": [
+    {
+      "error": "RemoteProtocolError: peer closed connection without sending complete message body (incomplete chunked read)",
+      "finished_at": "2026-08-21T14:36:55+00:00",
+      "model": "deepseek-v4-pro",
+      "ordinal": 1,
+      "purpose": "scout",
+      "response": null,
+      "response_sha256": null,
+      "seconds": 180.875,
+      "started_at": "2026-08-21T14:33:54+00:00",
+      "system": "You are a topic scout for the English-language Substack 'Nothing Is Accidental', which explains the hidden systems, incentives and decisions behind ordinary things. Return only valid JSON.",
+      "system_sha256": "8330fc735f0764bccffd6d7336eab3b20e06dfdc4d65f614ecfef60a23e9a7bf",
+      "user": "You are a topic scout for the English-language Substack \"Nothing Is Accidental\",\nwhich explains the hidden systems, incentives and decisions behind ordinary things.\n\nPropose 6 article topic ideas.\n\n## Before anything else: the test you will fail if you are not careful\n\nAlmost everything you are about to think of has been written a thousand times.\n\n\"Everyone believes X about an ordinary object, and X is wrong\" is not a rare\ninsight. It is a **genre**, with a canon you have read: the sprinklers that do\nnot all go off, the wipes that are not flushable, the hotel card the phone does\nnot erase, the antibacterial soap that is not, the expiry date on medicine, the\nclaw machine, the waterproof phone. Every one of those has thousands of articles\nbehind it. Proposing them is not scouting. It is reciting.\n\nThe first idea that arrives is almost always from that canon, **because it is\nthe most written-about and therefore the most available to you.** Availability is\nthe opposite of the signal we want. Treat your own fluency as a warning: if the\ntopic assembled itself instantly and completely, somebody else already published\nit.\n\nSo for every topic you must answer, honestly: **what already exists about this?**\nName what you believe has been written. If you can name it easily, we do not\nwant the topic. If nothing comes to mind after genuinely trying, that is the\nsignal. Do not fake this in either direction — claiming ignorance about the\nflushable wipes would be a lie, and we would catch it.\n\n## The phenomenon\n\nEach topic must be concrete, ordinary and immediately recognisable. That means\none of:\n\n- **an object** the reader has stood in front of, waited for, paid for or thrown\n  away, **or**\n- **a procedure the reader has been put through** — a claim, a queue, an\n  application, a verification, a refund, a boarding, an admission, **or**\n- **a moment everybody watched happen** and nobody could explain while it was\n  happening.\n\nThe object is the easiest and it is also the most exhausted. Prefer the other\ntwo. A reader recognises \"the time the machine at the polling place stopped\nworking\" as surely as they recognise a bottle, and almost nobody has written it\nout.\n\n## The first kind of topic: a belief that is wrong\n\nThere are two kinds and they are described in turn. This is the first; the\nsecond begins below, under \"a system about to be tested\". Every topic you\npropose must be one or the other, and you should propose a mix.\n\n**A topic of this kind must name a belief that is wrong.**\n\nNot a fact readers don't know — nearly everything is that, and it is not enough.\nA belief they actively hold, would state out loud if asked, and which the record\ncontradicts.\n\nThis is not a stylistic preference. Curiosity is a response to a **gap the reader\nrecognises in their own knowledge**, and a gap only exists where there was a\nbelief. Someone who has no opinion about a thing has no gap, feels no pull, and\nwill not read. Someone who is confidently wrong feels the pull the instant you\nsay so.\n\nIt is also why our worst article failed and had to be deleted. It was about a\nsymbol printed on cosmetics packaging. The facts were fine, the sources were\ngood — and most readers had never consciously noticed that symbol, so they held\nno belief about it, so there was nothing to break. We spent a full paid research\nrun discovering that.\n\nThe test, applied before you propose anything:\n\n> Can I write the reader's wrong belief as one plain sentence, in their words,\n> starting with \"everyone assumes…\"?\n\nIf you cannot, this topic is not of the first kind. It may still be of the\nsecond — but do not label it so merely because the belief would not come.\n\n**Strong, because the belief is real and wrong:**\n- *Everyone assumes the yellow traffic light lasts the same everywhere.* It is\n  computed per intersection, and a downhill approach lengthens it.\n- *Everyone assumes the petrol station is holding their money.* The bank holds\n  it and controls when it comes back.\n- *Everyone assumes school-bus yellow was chosen because it is the most visible\n  colour.* It was chosen as the best background for black lettering.\n\n**Dead, because there is no belief to break:**\n- The open-jar symbol on cosmetics — most readers have never registered it.\n- The length of an annex to a tuna-labelling regulation — nobody has a prior.\n- \"Here is an interesting fact about lighthouses\" — interesting is not a belief.\n\nAim at the belief that is **widely held and confidently wrong**, and prefer the\nones where being wrong costs the reader something — money, time, safety, or the\nfeeling of having understood their own life.\n\n## The second kind of topic: a system about to be tested\n\nEverything above describes a **closed** question. Something is already settled;\nthe reader believed otherwise; we show the record. It works, and most of what we\npublish should be that.\n\nBut a closed question ends when the reader reaches the last paragraph. They are\nsatisfied, and they leave. A publication made only of closed questions has to\nwin its reader back from nothing every single week.\n\nSo there is a second kind, and you may propose either. **Start here, not with\nobjects.** This one asks:\n\n> **What happens when this system is tested, and who decided that?**\n\n### Where these live, and how to find them\n\nDo not start from an object and ask whether it has a system. Start from the\n**rulebook** and ask what wrote it.\n\nAlmost every serious procedure in the world is **scar tissue**. Somebody died,\nor an institution nearly stopped working, and the clause exists because of that\nday. That is not a rare property — it is how rulebooks are made. Once you look\nfor it, the supply is very large:\n\n- **aviation** — crew rest, duty hours, runway incursions, diversion, grounded\n  fleets, what a captain may overrule\n- **elections and succession** — deadlocked votes, a candidate dying mid-ballot,\n  a head of state incapacitated, who signs while nobody is in charge\n- **markets and banks** — halted trading, a bank failing on a Friday, a clearing\n  house short, deposits above the guarantee\n- **medicine and hospitals** — a full emergency room turning ambulances away,\n  power failing mid-operation, a drug recalled while people are on it\n- **nuclear, chemical, industrial** — evacuation orders, exclusion zones,\n  who may refuse to restart a plant\n- **food and water** — a boil-water order, a recall the maker refuses,\n  a contaminated batch already in shops\n- **buildings and fire** — alarms disabled during works, evacuation of a tower,\n  who condemns a structure\n- **transport and shipping** — a stuck vessel, a stranded train, a port closed\n- **courts, prisons, borders** — a trial collapsing, a mistaken release,\n  someone stateless in transit\n\nEach of those has documented disasters with dates, names and the rule that\nfollowed. **That is the seam. Mine it.** You are not being asked to invent\nanything — you are being asked to recall what already happened and what it\nchanged.\n\nExamples of the shape:\n\n- What happens to trading when a market falls far enough, fast enough — who\n  stops it, at what point, and for how long.\n- What happens if the people whose job is to choose a successor cannot agree,\n  and how long that has been allowed to run before.\n- What happens to a flight when the airport it is heading for closes.\n- What happens to the money in an account when the institution holding it fails\n  on a Friday afternoon.\n- What happens to a country in the hours after its head of state is killed.\n\n### The two failure modes, named\n\n**Too small.** A hotel overbooking your room, a shop's card minimum, a missing\nwill — these have procedures, but the procedure binds one person and nothing was\nrewritten because of them. That is a note. Good, publishable, but a note.\n\n**Too vague.** \"What happens in a war\" has no rulebook you can name. Skip it.\n\nAim between: **a moment that stops an institution, governed by a document, with\ndead people or a near-catastrophe behind the clause.**\n\n**Four conditions. The third keeps us honest; the fourth decides the length.**\n\n1. **The reader can picture the moment.** They have seen it, or seen it nearly\n   happen. Not an abstraction.\n2. **The outcome is genuinely open** — it has not happened, or has happened so\n   rarely that nothing settled it.\n3. **A written procedure decides it, and it exists in the record.** Statutes,\n   constitutions, exchange rules, operating manuals, contracts.\n4. **The procedure has a history.** It was written, or rewritten, because\n   something went wrong — and you can name at least two of those occasions.\n\nA subject that meets the first three and not the fourth is a **note**: there is\na rule, here it is, done in forty words. A subject that meets all four is an\narticle, because each occasion the system failed is a scene with people in it,\nand the clause that followed is the consequence. That is the difference between\n\"what happens when a voting machine fails\" — a form and a provisional ballot —\nand \"what happens when the people who must choose a successor cannot agree\",\nwhere the answer runs through a three-year deadlock, a roof removed by an\nimpatient town, and a rule written afterwards to make sure it never repeated.\n\nCondition three is the whole guard, and it is not negotiable. Without a document\nthat decides the outcome, this is fortune-telling, and we do not publish\nfortune-telling however dramatic the question sounds. With it, this is exactly\nwhat we always do — a rulebook nobody has read — attached to a moment everybody\ncan imagine.\n\n**What this is not.** It is not a gap in our own knowledge. \"Nobody tracks where\neach container ends up\" is an admission that the answer exists and went\nunrecorded. That is not a stake. A stake is a question the world has not\nanswered yet, with a document naming who answers it and how.\n\nIt is also not a prediction. We never say what will happen. We say what the\nprocedure says happens, where the procedure contradicts itself, and what\noccurred the last time it was tried.\n\n## Do not answer your own question\n\nYou have read no sources yet.\n\n- Do not name the motive. No \"not because X but because Y\".\n- Do not write any number, percentage, timeframe or proportion. Anything you\n  write now is invented, and the research stage will spend real money failing to\n  confirm it.\n- The title is an internal handle, not the published headline. Let it describe\n  the phenomenon rather than announce a conclusion.\n\nThis does not make topics dull. Documented figures are routinely stranger than\ninvented ones, and the hook is harvested later, out of the record, by the writer.\nYour job is to predict WHERE a surprising fact lives, not to guess what it says.\n\n## Do not name the institution or the document\n\nWrite the question about the phenomenon itself, in plain language.\n\nDo NOT name the agency, regulator, standards body or document family you imagine\nwould answer it, and do not steer the question towards one. A previous version of\nthis prompt required exactly that, and the result was twelve consecutive topics\nabout UK government regulations — naming the source up front narrows the search to\nwhatever the scout can already recall, which is a small and repetitive set.\n\nSearching is somebody else's job and it covers the whole web. Ask the question\nwell and let it find the answer.\n\n## What our readers actually asked\n\nThese are questions real people left under our notes, our articles and our\ncomments, and nobody answered them:\n\n(zadne jeszcze nie wplynelo)\n\nA question somebody took the trouble to type is worth more than one you invent,\nfor a reason that is not sentimental: it is **proof that the belief exists**.\nYou have to guess whether readers hold a wrong assumption; a question is the\nassumption showing itself.\n\nUse them when one fits — as the seed of a topic, not as the topic's wording.\nIgnore them when none does. A forced answer to a weak question is worse than a\ngood invented one, and these are not orders.\n\n## What this publication has learned from its own history\n\nThis is measured editorial memory, not a command and not a popularity score.\nIts dimensions stay separate on purpose. A topic with high discussion and low\nreach may be more useful than a topic with many likes. Confidence reflects the\nnumber of observations. Treat VERY_LOW and LOW patterns as hypotheses only.\n\nDo not repeat an old argument. Prefer an unresolved reader question, a useful\ndisagreement, or a mechanism the publication has not yet completed.\n\n{\n  \"live_experiment\": {\n    \"replication_id\": \"E-014-DEEPSEEK-SCOUT-R2-DISTINCT-FROM-T118\",\n    \"purpose\": \"independent live replication after T118 transport failure\",\n    \"difference_from_t118\": \"non-empty frozen editorial memory and an explicit replication marker; this is not a retry of the prior request\",\n    \"constraints_not_evidence\": [\n      \"prefer a named governing record\",\n      \"prefer a mechanism with at least one dated precedent\"\n    ]\n  }\n}\n\nThese angles have been covered recently. Do not repeat or paraphrase any of them,\nand do not stay in the same subject area:\n\n[\n  \"Two Lorries Overtaking Each Other For Three Miles\",\n  \"The Café Tables Occupying The Footway\",\n  \"The Two Black Sleeves On A Plug's Pins\",\n  \"Why Every Number Plate Looks Identical\",\n  \"The Card Machine Suddenly Wants Your PIN\"\n]\n\n## Output\n\nReturn only valid JSON, shaped as:\n\n{\"topics\": [ ... ], \"ranking\": {\"most_written_about\": [<3 indices>], \"least_written_about\": [<3 indices>], \"richest\": [<3 indices>], \"thinnest\": [<3 indices>]}}\n\nEach topic is an object with keys: title, question, **kind**,\n**already_written**, **scale**, **precedents**, **threads**, plus the fields\nits kind requires.\n\n`already_written` is a list of strings, possibly empty. `threads` is a list of\nquestion strings. `ranking` holds zero-based indices into `topics`.\n\n**`scale`** — who the outcome binds. One of exactly these words:\n\n- `ONE_PERSON` — the reader, or one customer, one tenant, one passenger.\n- `A_PLACE` — one shop, one precinct, one building, one flight.\n- `AN_INDUSTRY` — everyone who trades, flies, insures, ships.\n- `A_COUNTRY` — the state itself has to keep functioning through it.\n\nThis is the second thing that separates an article from a note, and it is easy\nto miss because both feel dramatic while you are writing them down. A voting\nmachine failing is `A_PLACE`: five hundred votes, one precinct, a form to fill\nin. A head of state being shot is `A_COUNTRY`: there is a succession written\ndown, a chain of command, a moment where nobody is certain who is in charge, and\nevery one of those clauses exists because it went wrong before.\n\nBoth are picturable. Both have a rulebook. Only one of them stops a country.\n\nDo not inflate this. A refund dispute is `ONE_PERSON` however annoying it was.\n\n`precedents` is a list of objects, possibly empty, each shaped:\n\n{\"when\": \"<roughly when>\", \"what_happened\": \"<what people saw, in one sentence>\", \"what_changed\": \"<the rule or practice that came out of it, or 'nothing'>\"}\n\nAn empty `precedents` list is an honest answer and marks the subject as a note.\nA fabricated entry is the worst thing you can put in this file.\n\n`kind` is either `\"BROKEN_BELIEF\"` or `\"SYSTEM_UNDER_TEST\"`. Do not label a topic\n`SYSTEM_UNDER_TEST` merely because you could not write its broken belief.\n\n**At least half your list must be `SYSTEM_UNDER_TEST`, and at least three of\nthem must carry two or more precedents each. Keep at least two\n`BROKEN_BELIEF` as well — do not make every topic the same kind.** The first\nkind has produced good pieces and we are not abandoning it; it is simply not\nwhere the long ones come from. This is a hard requirement, not a preference. A list where every entry is an ordinary object with an empty\n`precedents` array is a failed list — it means you searched your memory for\nthings rather than for rulebooks, and we will have nothing to publish at\narticle length. If your first pass comes out that way, do the second pass\nproperly: pick a field from the list above, recall its famous disaster, and work\nbackwards to the moment a reader would recognise.\n\n**For `BROKEN_BELIEF`, also give `broken_belief` and `why_they_believe_it`.**\n\n`broken_belief` is the reader's wrong belief, in their words, one plain sentence\nbeginning \"Everyone assumes\". If you cannot write it, this is not that kind.\n\n`why_they_believe_it` is one sentence on where that belief comes from — what\nabout the ordinary experience of the object makes the wrong idea reasonable.\nA belief nobody has a reason to hold is one you invented to satisfy this field.\n\n**For `SYSTEM_UNDER_TEST`, instead give `the_moment`, `open_outcome` and\n`governing_record`.**\n\n`the_moment` is the situation the reader can picture, one sentence, no numbers.\n\n`open_outcome` is the question nobody can currently look up, phrased as the\nreader would ask it out loud.\n\n`governing_record` is what kind of written procedure you expect decides it —\ndescribed by its nature, not named. \"The exchange's own halt rules\" is right.\n\"NYSE Rule 80B\" is wrong, for the same reason you do not name institutions\nanywhere else in this brief: naming it narrows the search to what you happen to\nrecall. If you cannot say that any written procedure decides this, drop the\ntopic — that is the difference between our work and fortune-telling.\n\n## Two more fields, required for both kinds\n\n**`already_written`** — what you believe already exists on this subject.\n\nGive a list. Each entry is a short description of a piece you are fairly\nconfident has been published: what it argued and roughly where such a thing\nappears. You are not being asked for citations and you will not be penalised for\nimprecision. You are being asked to be honest about saturation.\n\nAn empty list means you genuinely tried and nothing came to mind. That is the\nstrongest thing a topic can have here, and it is also the easiest thing to fake,\nso do not fake it. A topic where you can name three pieces is a topic where the\nreader has already read three pieces.\n\n**`precedents`** — the times this actually went wrong, and what came out of it.\n\n**This is the field that decides whether a subject is an article or a note, and\nit is the one that has been missing.** Read it twice.\n\nA procedure on its own is a note. \"When a voting machine fails, poll workers\nissue provisional ballots and file a form\" is a complete answer in a sentence,\nand no list of sub-questions changes that. Who signs the form, how many hours\nthey may extend, what the form is called — those are clauses of one procedure,\nnot separate stories. Splitting a procedure into its own paragraphs and calling\nthem threads produces a padded note, which is exactly what we keep publishing.\n\nWhat carries an article is a procedure **that exists because something went\nwrong**, more than once, in ways somebody could recount over dinner.\n\nThe papal conclave is the clean example. After one pope died the cardinals\nargued for the better part of three years, until the townspeople took the roof\noff the building they were sitting in and cut their food down to bread and\nwater. The rule that locks a conclave in a sealed room came *out of that*. Read\nthat rulebook and you are reading scar tissue: each clause is a disaster\nsomebody had to survive first. Trading halts exist because of a specific day in\n1987. That is what a thousand words is made of.\n\nSo list, for each topic, the occasions when this system was genuinely tested.\nFor each: roughly when, what actually happened — with the people or the place in\nit, not the administrative summary — and what rule or change came out of it\nafterwards.\n\n**A worked example of a filled-in entry**, so there is no doubt about the level\nof detail wanted:\n\n```\nwhen:          2009\nwhat_happened: a regional airliner went down on approach with everyone aboard\n               killed, and the inquiry centred on two exhausted pilots who had\n               commuted overnight to reach the aircraft\nwhat_changed:  prescriptive limits on duty hours and minimum rest, replacing\n               rules the industry had set for itself\n```\n\nThat is one entry. Two like it and the subject carries an article.\n\n**You already know dozens of these.** Do not tell yourself you cannot recall\nthem — every field in the list above has famous ones, and you are not being\nasked for citations, only for what happened and what changed. Approximate dates\nare fine; \"the late 1980s\" is an acceptable `when`.\n\n**Fewer than two, and the subject is a note.** Say so honestly with a short list\nor an empty one. But before you write an empty list, go back and ask whether you\nchose a subject too small to have a history — that is almost always what an\nempty list means. A hotel overbooking has no disasters behind it because nothing\nabout it was ever bad enough to rewrite a law. **Change the subject, not the\nanswer.**\n\nDo not invent incidents to fill this field. A fabricated precedent is worse than\nan empty list, because the research stage will spend real money failing to find\nit. If you are unsure whether something happened, say what you believe and let\nthe research check it — but do not manufacture a date.\n\n**`threads`** — the separate questions this one subject would answer.\n\nEach thread must be answerable on its own, from its own documents, and leave the\nothers still open. A thread that cannot be answered without first answering\nanother is the same thread. Clauses of a single procedure are one thread between\nthem, however many paragraphs they would fill.\n\n**Do not include scores.** Earlier versions of this brief asked for seven numbers\nbetween zero and one. Nothing ever read them, and self-assigned scores drift to\nthe top of their range regardless of the thing being scored. Facts and lists are\ncheckable; a number you assign to your own idea is not.\n\n## Last: rank your own list against itself\n\nThe two lists above have a failure mode, and it has already happened. Asked how\nmuch exists about a topic, every answer came back with exactly three items.\nAsked how many threads a topic carries, every answer came back with exactly six.\nBoth lists were padded to a comfortable length and told us nothing — the same\nway the scores did, in different clothes.\n\nAn absolute judgement can be equalised. A forced comparison cannot. So finish by\nsorting your own proposals against each other:\n\n- **`most_written_about`** — the three topics from your list that a reader is\n  most likely to have already read about somewhere. Somebody has to be in this\n  list. If you believe all your topics are equally fresh, you are wrong about at\n  least one of them, and this is where you say which.\n- **`least_written_about`** — the three that you would be most surprised to find\n  already covered.\n- **`richest`** — the three whose threads are most genuinely separate, in the\n  sense that answering one leaves the others still open.\n- **`thinnest`** — the three that would be exhausted quickest, whatever the\n  thread list says.\n\nEach list holds exactly three indices into your `topics` array, zero-based. The\nsame index may not appear in both halves of a pair.\n\nThese four lists decide which topic gets a paid research run, so put real work\ninto them. The rest of the fields are the evidence; this is the judgement.\n",
+      "user_sha256": "802d568aa5f3b45dabba0d79c8ba745e3426f4a150b31cd02e5ab90979b81b15",
+      "web_search": false
+    }
+  ],
+  "contract_checks": [],
+  "cost": {
+    "baseline_before_continuation_usd": 1.6755867000000002,
+    "by_provider_and_status": [
+      {
+        "cost_status": "UNKNOWN",
+        "known": 0.0,
+        "n": 1,
+        "provider": "deepseek",
+        "unresolved": 1.6
+      }
+    ],
+    "known_usd": 0.0,
+    "new_exposure_usd": 1.6,
+    "program_exposure_including_history_usd": 1.6755867000000002,
+    "program_exposure_including_t118_usd": 3.2755867000000003,
+    "reserved_or_unknown_usd": 1.6
+  },
+  "database_sha256_at_final_checkpoint": "703baea1543610a92240df38247f9b7356aeca7514967214d6dc2b1ffe691afd",
+  "dispatch_contract": {
+    "automatic_transport_retries": 0,
+    "max_calls": 23,
+    "max_calls_by_model": {
+      "deepseek-v4-flash": 10,
+      "deepseek-v4-pro": 13
+    },
+    "normal_routing_unchanged": true
+  },
+  "evaluation_input": {
+    "anthropic_artifact_sha256": "a3b95579abe736959b09810fef736e75fceca8adbde62a12809312b36c4c2801",
+    "fixture_card_sha256": "828a4755133d74ec60b069de956162e5eefa8236a08be1343f6b23a676817da9",
+    "fixture_question": "What did the Harbor Lighting Ordinance require and establish?"
+  },
+  "experiment": "editorial-live-continuation@1",
+  "finished_at": "2026-08-21T14:36:55+00:00",
+  "phases": {
+    "deepseek_scout_distinct_replication": {
+      "error": "RemoteProtocolError: peer closed connection without sending complete message body (incomplete chunked read)",
+      "finished_at": "2026-08-21T14:36:55+00:00",
+      "run_id": 1,
+      "seconds": 180.875,
+      "started_at": "2026-08-21T14:33:54+00:00",
+      "status": "FAIL",
+      "value": null
+    }
+  },
+  "provenance_checks": [],
+  "requested_capabilities": [
+    "model_call"
+  ],
+  "routing": {
+    "classify": "deepseek-v4-flash",
+    "discovery": "deepseek-v4-pro",
+    "factcheck": "deepseek-v4-flash",
+    "feasibility": "deepseek-v4-flash",
+    "forma": "deepseek-v4-pro",
+    "note": "claude-opus-5",
+    "review": "deepseek-v4-pro",
+    "revise": "claude-fable-5",
+    "scout": "deepseek-v4-pro",
+    "synthesis": "deepseek-v4-pro",
+    "warto_pisac": "deepseek-v4-pro",
+    "write": "claude-fable-5"
+  },
+  "routing_unchanged": true,
+  "scout_replication": {
+    "changed_input": {
+      "live_experiment": {
+        "constraints_not_evidence": [
+          "prefer a named governing record",
+          "prefer a mechanism with at least one dated precedent"
+        ],
+        "difference_from_t118": "non-empty frozen editorial memory and an explicit replication marker; this is not a retry of the prior request",
+        "purpose": "independent live replication after T118 transport failure",
+        "replication_id": "E-014-DEEPSEEK-SCOUT-R2-DISTINCT-FROM-T118"
+      }
+    },
+    "id": "E-014-DEEPSEEK-SCOUT-R2-DISTINCT-FROM-T118",
+    "materially_distinct_from_t118": true
+  },
+  "started_at": "2026-08-21T14:33:54+00:00",
+  "status": "STOPPED_FAIL_CLOSED",
+  "stop_reason": "1 RESERVED/UNKNOWN cost rows; no further deepseek dispatch",
+  "substack": "FORBIDDEN_NO_READ_NO_WRITE_NO_SESSION",
+  "t118_policy": {
+    "new_deepseek_call_allowed_because": "user explicitly required continued live testing; the next scout prompt is materially distinct and the full T118 reservation remains charged",
+    "same_prompt_retry": false,
+    "unknown_cost_reconciled": false,
+    "unknown_cost_treated_as_full_reservation": true
+  }
+}

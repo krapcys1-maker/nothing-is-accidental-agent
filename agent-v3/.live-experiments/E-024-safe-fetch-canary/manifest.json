@@ -1,0 +1,162 @@
+{
+  "api_cost_usd": 0.0,
+  "error": null,
+  "experiment": "E-024",
+  "fetched_count": 5,
+  "mode": "model_test",
+  "model_calls": 0,
+  "requested_count": 6,
+  "run_id": 1,
+  "sources": [
+    {
+      "class": "PRIMARY",
+      "content_sha256": "0e520a5324b4b6d26918d1351aebad8f12af5af015d809e8eae28a41f019930c",
+      "document_id": "doc_v1_bd22f6fcfd61c973b4c728a3",
+      "evidence_role": "CURRENT_SCALE",
+      "fail_reason": null,
+      "fetched_ok": true,
+      "final_url": "https://www.doi.gov/sites/default/files/documents/2024-11/fy-2024-owpo-annual-congressional-reportfinal-publishing.pdf",
+      "key": "doi_fy2024",
+      "redirect_chain": [
+        "https://www.doi.gov/sites/default/files/documents/2024-11/fy-2024-owpo-annual-congressional-reportfinal-publishing.pdf"
+      ],
+      "resolved_ips": {
+        "www.doi.gov": [
+          "23.219.79.86",
+          "23.219.79.92"
+        ]
+      },
+      "text_chars": 82024,
+      "text_path": "doi_fy2024.txt",
+      "text_sha256_recomputed": "0e520a5324b4b6d26918d1351aebad8f12af5af015d809e8eae28a41f019930c",
+      "title": "DOI FY2024 Orphaned Wells Program annual report",
+      "url": "https://www.doi.gov/sites/default/files/documents/2024-11/fy-2024-owpo-annual-congressional-reportfinal-publishing.pdf"
+    },
+    {
+      "class": "PRIMARY",
+      "content_sha256": "2ca85dc403009acb5c40568944b0633458e8b97cfc428a4ffddb6810a0ff02fc",
+      "document_id": "doc_v1_9b3bdb5ecab12cb42d2613b4",
+      "evidence_role": "CURRENT_SCALE",
+      "fail_reason": null,
+      "fetched_ok": true,
+      "final_url": "https://www.blm.gov/sites/default/files/docs/2024-06/BLM-OilandGas-Orphanwells-Factsheet-June2024.pdf",
+      "key": "blm_2024",
+      "redirect_chain": [
+        "https://www.blm.gov/sites/default/files/docs/2024-06/BLM-OilandGas-Orphanwells-Factsheet-June2024.pdf"
+      ],
+      "resolved_ips": {
+        "www.blm.gov": [
+          "172.65.90.24",
+          "172.65.90.25",
+          "172.65.90.26",
+          "172.65.90.27"
+        ]
+      },
+      "text_chars": 7046,
+      "text_path": "blm_2024.txt",
+      "text_sha256_recomputed": "2ca85dc403009acb5c40568944b0633458e8b97cfc428a4ffddb6810a0ff02fc",
+      "title": "BLM orphaned wells factsheet, June 2024",
+      "url": "https://www.blm.gov/sites/default/files/docs/2024-06/BLM-OilandGas-Orphanwells-Factsheet-June2024.pdf"
+    },
+    {
+      "class": "PRIMARY",
+      "content_sha256": "e6942630600c4f1cfe44402b77da0d327b8881b213e4a1d4181993c64c84641e",
+      "document_id": "doc_v1_06c58f28b0040dae7639d970",
+      "evidence_role": "CAUSAL_MECHANISM",
+      "fail_reason": null,
+      "fetched_ok": true,
+      "final_url": "https://www.gao.gov/products/gao-19-615",
+      "key": "gao_2019",
+      "redirect_chain": [
+        "https://www.gao.gov/products/gao-19-615"
+      ],
+      "resolved_ips": {
+        "www.gao.gov": [
+          "104.81.60.34",
+          "104.81.60.81"
+        ]
+      },
+      "text_chars": 5792,
+      "text_path": "gao_2019.txt",
+      "text_sha256_recomputed": "e6942630600c4f1cfe44402b77da0d327b8881b213e4a1d4181993c64c84641e",
+      "title": "GAO-19-615 Oil and Gas: Bureau of Land Management Should Address Risks from Insufficient Bonds",
+      "url": "https://www.gao.gov/products/gao-19-615"
+    },
+    {
+      "class": "PRIMARY",
+      "content_sha256": "d6b512e03aecf36fa3314c373b49f7f9b1bc7b8b9ecca2e5a0d824f023e04bdc",
+      "document_id": "doc_v1_6c0674814586169e362c73b8",
+      "evidence_role": "SECOND_ACT",
+      "fail_reason": null,
+      "fetched_ok": true,
+      "final_url": "https://www.osmre.gov/programs/reclaiming-abandoned-mine-lands",
+      "key": "osmre_aml",
+      "redirect_chain": [
+        "https://www.osmre.gov/programs/reclaiming-abandoned-mine-lands"
+      ],
+      "resolved_ips": {
+        "www.osmre.gov": [
+          "104.18.36.30",
+          "172.64.151.226"
+        ]
+      },
+      "text_chars": 3338,
+      "text_path": "osmre_aml.txt",
+      "text_sha256_recomputed": "d6b512e03aecf36fa3314c373b49f7f9b1bc7b8b9ecca2e5a0d824f023e04bdc",
+      "title": "OSMRE Reclaiming Abandoned Mine Lands",
+      "url": "https://www.osmre.gov/programs/reclaiming-abandoned-mine-lands"
+    },
+    {
+      "class": "PRIMARY",
+      "content_sha256": "1e44591efc36990b7ae1339f0ce3b1634cd15cd8f6f9324c5832746c3ff93374",
+      "document_id": "doc_v1_daae6d3f5184e967181e8ed8",
+      "evidence_role": "CAUSAL_MECHANISM",
+      "fail_reason": null,
+      "fetched_ok": true,
+      "final_url": "https://oklahoma.gov/content/dam/ok/en/iogcc/documents/publications/protecting_our_countrys_resources-the_states_case-2008.pdf",
+      "key": "iogcc_2008",
+      "redirect_chain": [
+        "https://oklahoma.gov/content/dam/ok/en/iogcc/documents/publications/protecting_our_countrys_resources-the_states_case-2008.pdf"
+      ],
+      "resolved_ips": {
+        "oklahoma.gov": [
+          "3.174.230.33",
+          "3.174.230.58",
+          "3.174.230.79",
+          "3.174.230.115"
+        ]
+      },
+      "text_chars": 106810,
+      "text_path": "iogcc_2008.txt",
+      "text_sha256_recomputed": "1e44591efc36990b7ae1339f0ce3b1634cd15cd8f6f9324c5832746c3ff93374",
+      "title": "IOGCC Protecting Our Country's Resources",
+      "url": "https://oklahoma.gov/content/dam/ok/en/iogcc/documents/publications/protecting_our_countrys_resources-the_states_case-2008.pdf"
+    },
+    {
+      "class": "SUPPORTING",
+      "content_sha256": null,
+      "document_id": null,
+      "evidence_role": "COUNTEREVIDENCE",
+      "fail_reason": "HTTP 403",
+      "fetched_ok": false,
+      "final_url": "https://thecapitolforum.com/early-bids-for-orphan-well-plugging-reveal-cracks-in-states-ability-to-accurately-track-well-ownership-active-operators-are-poised-to-further-exploit-state-processes-to-offload-retirement-ob/",
+      "key": "capitol_forum",
+      "redirect_chain": [
+        "https://thecapitolforum.com/early-bids-for-orphan-well-plugging-reveal-cracks-in-states-ability-to-accurately-track-well-ownership-active-operators-are-poised-to-further-exploit-state-processes-to-offload-retirement-ob/"
+      ],
+      "resolved_ips": {
+        "thecapitolforum.com": [
+          "141.193.213.10",
+          "141.193.213.11"
+        ]
+      },
+      "text_chars": 0,
+      "text_path": null,
+      "text_sha256_recomputed": null,
+      "title": "The Capitol Forum orphan well ownership investigation",
+      "url": "https://thecapitolforum.com/early-bids-for-orphan-well-plugging-reveal-cracks-in-states-ability-to-accurately-track-well-ownership-active-operators-are-poised-to-further-exploit-state-processes-to-offload-retirement-ob/"
+    }
+  ],
+  "status": "DONE",
+  "substack_accesses": 0
+}

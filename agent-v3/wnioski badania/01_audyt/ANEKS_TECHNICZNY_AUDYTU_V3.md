@@ -542,6 +542,9 @@ Same liczby nie są automatycznym werdyktem. W automatyzacji UI część wyjątk
 | A-066–A-068 | `requirements.txt`, `wdroz.sh`, Playwright i środowisko serwera |
 | A-069–A-072 | adaptery `/api/v1`, pętla restacków, konwerter HTML i `alarm.przeglad` |
 | A-073 | `tutaj jest do zaczerpiecia z neta.txt`, metodologia porównawcza |
+| A-074–A-083 | prompty krótkich form, `style.py`, profile stylu, `editorial.py`, `config.py`, testy promptów |
+| A-084 | `operational_day.py`, schemat unikalności dnia, test zmiany wersji polityki |
+| A-085 | `safe_fetch.py`, historia pinów DNS, `test_safe_fetch.py` |
 
 Pełne uzasadnienie każdego identyfikatora znajduje się w `SPOSTRZEZENIA_AUDYTOWE.md`.
 
@@ -563,6 +566,12 @@ Pełne uzasadnienie każdego identyfikatora znajduje się w `SPOSTRZEZENIA_AUDYT
 12. Rewizja nie może dodać nowego faktu bez dowodu.
 13. Status ma tylko dozwolone przejścia.
 14. Każdy rekord zależny ma istniejącego rodzica.
+15. Każda rola otrzymuje wersjonowaną tożsamość marki i właściwy profil gatunku.
+16. Redaktor zachowuje głos w mierzalnych wymiarach przed/po rewizji.
+17. Niezaufany tekst występuje wyłącznie po jawnej granicy danych i nie trafia surowo do pamięci promptowej.
+18. Przydzielone ruchy, postawy i otwarcia są zgodne semantycznie.
+19. Każda empiryczna reguła promptu ma odtwarzalny manifest dowodu i termin ponownej oceny.
+20. Test promptu bada wyrenderowany kontrakt, nie tylko obecność frazy w szablonie.
 15. Cache jest unieważniany przez zmianę wejścia, promptu, kodu kontraktu, konfiguracji i wersji schematu.
 16. Koszt przed wywołaniem ma wystarczającą rezerwę lub etap nie startuje.
 17. Obserwacja redakcyjna może zostać obalona i wygaszona.
@@ -665,5 +674,17 @@ Legenda podstawy: **D** — bezpośrednia inspekcja artefaktu; **T** — wniosek
 | A-071 | D/T/H | średnia dla exploita | URL jest kanonizowany, a atrybut escapowany z cudzysłowami przed paste |
 | A-072 | D/T | wysoka | licznik łączy każdą reakcję z działaniem w tej samej kohorcie publikacji |
 | A-073 | D | wysoka | porównanie ma jawny protokół, rubrykę, daty i niezależną replikację ocen |
+| A-074 | D | wysoka | profil Notes jest ładowany przez wykonywaną ścieżkę albo jawnie oznaczony jako nieaktywny |
+| A-075 | D/T/H | wysoka dla braku wejścia | redaktor dostaje wersjonowany kontrakt głosu, a test przed/po nie wykazuje regresji |
+| A-076 | D/T/H | wysoka dla braku kontroli | niezależna rubryka wskazuje cytaty i rozstrzyga osobne wymiary głosu |
+| A-077 | D | wysoka | wspólny fragment jest komponowany z jednego źródła albo usunięty z aktywnego kontraktu |
+| A-078 | D/H | wysoka dla sprzeczności | prompty opisują jakość redakcyjną bez celu optymalizacji pozoru pochodzenia |
+| A-079 | D/T | wysoka | generator nie tworzy sprzecznych par postawa–otwarcie na pełnej macierzy wariantów |
+| A-080 | D/T/H | wysoka dla przepływu | surowy sygnał zewnętrzny nie występuje w pamięci przekazywanej pisarzowi ani skautowi |
+| A-081 | D/T | wysoka | test wyrenderowanego promptu umieszcza granicę danych przed komentarzem |
+| A-082 | D/R | wysoka | każda liczbowa reguła stylu wskazuje dataset, metrykę, skrypt, ograniczenia i datę rewizji |
+| A-083 | D/T | wysoka | testy wykrywają konflikt semantyczny, błędną kolejność danych i utratę głosu po rewizji |
+| A-084 | D/T | wysoka | zmiana wersji polityki w środku dnia zwraca istniejący plan bez konfliktu unikalności |
+| A-085 | D/T | wysoka | dwa rozwiązania jednego hosta po redirectcie pozostają w historii pinów bez nadpisania |
 
-Pewność odnosi się do istnienia opisanego mechanizmu w badanej wersji, nie do częstości szkody na produkcji. Szczególnie A-033, A-040, A-054 i A-071 zawierają scenariusze zagrożeń, których nie wolno potwierdzać na żywym środowisku.
+Pewność odnosi się do istnienia opisanego mechanizmu w badanej wersji, nie do częstości szkody na produkcji. Szczególnie A-033, A-040, A-054, A-071 i A-080–A-081 zawierają scenariusze zagrożeń, których nie wolno potwierdzać na żywym środowisku.

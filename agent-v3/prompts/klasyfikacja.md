@@ -33,22 +33,30 @@ quote as fact.
 Prefer passages that state a rule, a reason, a threshold, a decision or a
 measurement over passages that merely introduce a topic.
 
-**numbers** — every specific figure, percentage, concentration, temperature,
-duration or threshold that appears in the passages you selected, each with the
-few words around it that say what it measures. If there are none, return an
-empty list. Do not compute, round or convert anything.
+The metadata below describes the document, not automatically every claim in it.
+A live page may contain a report published in one year and a recommendation
+status updated years later. Preserve explicit dates inside the verbatim passage.
+Never replace an excerpt's own "as of" date with the publication date or the
+retrieval date. Retrieval is only the moment this copy was observed.
+
+Numbers are extracted deterministically from the accepted verbatim passages
+after this step. Do not create a separate list of them.
 
 ## Output
 
 Return only valid JSON, shaped exactly as:
 
-{{"class": "PRIMARY"|"SUPPORTING"|"ODPAD", "relevance": 0.0, "excerpts": ["..."], "numbers": ["..."], "note": "<one sentence on what this document is>"}}
+{{"class": "PRIMARY"|"SUPPORTING"|"ODPAD", "relevance": 0.0, "excerpts": ["..."], "note": "<one sentence on what this document is>"}}
 
 ## The document
 
 Title: {title}
 Publisher: {publisher}
 URL: {url}
+Published: {published_at}
+Retrieved: {retrieved_at}
+Evidence status: {evidence_status}
+Expected evidence roles: {evidence_roles}
 
 ---
 {text}

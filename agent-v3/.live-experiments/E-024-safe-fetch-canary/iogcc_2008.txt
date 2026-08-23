@@ -1,0 +1,2494 @@
+Protecting our country’s resources: the states’ case
+DISCLAIMER
+ 
+This report was prepared as an account of work sponsored by an agency of the United States 
+Government. Neither the United States Government nor any agency thereof, nor any of their employees, 
+makes any warranty, express or implied, or assumes any legal liability or responsibility for the accuracy, 
+completeness, or usefulness of any information, apparatus, product, or process disclosed, or represents that 
+its use would not infringe privately owned rights. Reference herein to any specific commercial product, 
+process, or service by trade name, trademark, manufacturer, or otherwise, does not necessarily constitute 
+or imply its endorsement, recommendation, or favoring by the United States Government or any agency 
+thereof. The views and opinions of authors expressed herein do no necessarily state or reflect those of the 
+United States Government or any agency thereof.
+Protecting our country’s resources: the states’ case
+Protecting our country’s resources: the states’ case
+ABSTRACT
+This study was performed as part of Cooperative Agree-
+ment DE-FC26-06NT15567 with the Department of Energy 
+National Energy Technology Laboratory. Research was 
+undertaken as part of a larger effort to assist state govern-
+ments in the effective, efficient and environmentally sound 
+regulation of the exploration and production of natural gas 
+and crude oil. Specific projects in the agreement include 
+evaluating the scope of the country’s orphan oil and natural 
+gas wells and proposing solutions for permanently sealing 
+these wells, evaluating the impact of new technologies on 
+environmental protection, and assessing technology issues 
+associated with wells nearing the end of productive life. 
+Protecting Our Country’s Resources: The States’ Case is the 
+culmination of an in-depth study of the country’s orphan oil 
+and natural gas wells.
+The Interstate Oil and Gas Compact Commission 
+(IOGCC) has been studying orphan wells as an ancillary 
+segment of reports it compiled in 1992, 1996 and 2000. 
+These reports documented the potential presence and es-
+timated numbers of orphan wells in the United States, the 
+plugging costs associated with them, sources of “plugging 
+funds” for individual states, and individual state statutes and 
+regulations associated with orphan wells.
+Technology improvements, such as GIS tracking and 
+computerized record-keeping, and introduction of innova-
+tive methods for locating orphan wells have allowed states to 
+address identifying and plugging wells that were abandoned 
+years, and even decades ago, by unidentified parties.
+Most states define an orphan well as being inactive and 
+having no responsible party to properly plug the well and 
+restore the location. Well owners might have ceased to exist 
+as a business entity or might never have been known. For 
+purposes of this report an orphan well is described as a well 
+that is not producing or injecting, has not received state ap-
+proval to remain idle, and for which the operator is unknown 
+or insolvent.
+Site restoration, which involves the removal of equip-
+ment, trash and debris, the repair of erosion, and removal of 
+hydrocarbons and closing pits, can prevent potential safety 
+hazards and allow landowners and citizens to employ the 
+impacted area for other uses. In some cases, there is potential 
+for groundwater contamination and wells must be “plugged” 
+to reduce environmental risks.
+The responsibility for monitoring restoring well sites, 
+and plugging orphan wells falls inevitably to individual 
+states. Most oil and gas producing states have established 
+plugging funds derived from taxes on production, fees or 
+other assessments to plug orphan wells. When funds fall 
+short of the need, most states stretch their money by priori-
+tizing wells that pose environmental hazards. Other major 
+issues involving orphan wells are identifying them and 
+subsequently monitoring their condition.
+The current study is a continuation of the collection of 
+data associated with orphan wells since 1992 and includes 
+questions intended to provide a more comprehensive view of 
+the situation. Prior years’ data were analyzed and reviewed 
+to identify trends, commonalities, and regional differences 
+among the states. Plugging funds, changes and trends are 
+also analyzed to give a more accurate picture of the efforts 
+of the states to address the wells and current orphan well 
+numbers. In addition, anecdotal reports of unique regional 
+issues and innovative solutions are included in the report.
+Data were collected by surveying the state regulatory 
+personnel and by obtaining input from industry representa-
+tives. State oil and gas agencies were issued a survey via 
+e-mail. The number of actual and possible orphan wells was 
+compiled initially in March 2007 by telephone. The states 
+were then surveyed in May and any contradicting data were 
+resolved. Additionally, state agency representatives were 
+personally interviewed on a one-on-one basis for more infor-
+mation and data confirmation.
+There are approximately 50,000 wells awaiting site 
+restoration or plugging. Remediating all sites would be an 
+extremely large burden. Many of these wells have been pri-
+oritized according to the threat they pose to the environment. 
+In fact, the majority of orphan wells pose little or no threat to 
+the environment. Others, however, should be plugged in pro-
+active programs to prevent potential environmental impacts.
+In general, states should be commended for their efforts, 
+both in finding and remediating orphan wells. The states also 
+have set up regulatory structures that require adequate bond-
+ing or insurance coverage to prevent the likelihood of the 
+unfunded liability of orphan wells in the future.
+It must, however, be noted that while states have estab-
+lished plugging funds, those funds are insufficient to address 
+timely cleanup of the remaining orphan wells. Therefore, it’s 
+essential to establish innovative programs to plug existing 
+orphan wells. 
+i
+Protecting our country’s resources: the states’ case 
+TABLE OF CONTENTS
+ABSTRACT ..........................................................................................................................i
+PREFACE ............................................................................................................................2
+EXECUTIVE SUMMARY ...................................................................................................3
+INTRODUCTION .................................................................................................................4
+LIMITATIONS OF THE STUDY ..........................................................................................5
+METHODOLOGY ................................................................................................................5
+STUDY RESULTS ...............................................................................................................6
+Orphan Wells ..................................................................................................................6
+Plugging Funds ..............................................................................................................8
+Security or Financial Assurance ..............................................................................12
+Efforts to Find & Plug ................................................................................................14
+Pennsylvania: A Case Study ..................................................................................14
+California: Adopt-a-well ..........................................................................................14
+Oklahoma: Voluntary Assessment ........................................................................14
+Texas: Production Tax incentives ........................................................................14
+Michigan: industry support ...................................................................................15
+CANADIAN PROVINCES .................................................................................................15
+RECOMMENDATIONS ....................................................................................................16
+DATA TABLES ..................................................................................................................17
+APPENDICES ...................................................................................................................27
+STATE SUMMARIES .......................................................................................................27
+State summary introduction .....................................................................................27
+GRAPHICAL MATERIALS LIST ......................................................................................62
+REFERENCES ..................................................................................................................62
+BIBLIOGRAPHY ...............................................................................................................62
+LIST OF ACRONYMS AND ABBREVIATIONS ..............................................................62
+Protecting our country’s resources: the states’ case
+PREFACE
+Since man discovered fire, humans around the globe 
+continuously have sought better ways to generate power, 
+heat and light. The use of petroleum resources actually 
+occurred relatively early. Seep oil, oil naturally rising to 
+the surface in a river or pond, or through a mine, has been 
+collected since the Middle Ages. One method involved 
+damming rivers and creeks with oil seeps located nearby to 
+create a pond where oil could be skimmed from the surface. 
+And, oil has been produced from wells as early as A.D. 347 
+in China, using bits attached to bamboo poles, which were 
+then pounded into the ground.
+It was not until the late 1800s that the value of oil 
+and natural gas as a universal energy source became clear. 
+California may have been one of the first states to harness 
+the “waste” (natural gas and oil byproducts) of water or 
+brine wells to light the Stockton Courthouse. Today, oil 
+and natural gas account for more than 60 percent of energy 
+consumed in the United States. The United States imports a 
+majority, some estimate more than 58 percent, of its oil and 
+around 16 percent of its natural gas supplies. As countries 
+like China develop and world demand grows for petroleum 
+resources, not only will the nation’s domestic petroleum 
+industry become more important, but the stewardship of 
+existing and potential reserves will also grow in significance. 
+Those, and the many compelling reasons to correctly 
+manage our environment, form the basis of the long standing 
+concern with, and study of, the nation’s orphan wells.
+As the recognized authority on this subject, the 
+IOGCC presents this report as a compelling call to action 
+to industry, state governments and agencies and to the 
+federal government. States call on industry to provide 
+responsibly for the plugging and remediation of all current 
+wells and to expand and continue the partnership to address 
+orphan wells. The IOGCC also calls on state government 
+to assess and address regulatory requirements to assure 
+that wells are initiated and managed in an economically 
+and environmentally responsible manner. The IOGCC also 
+calls on the federal government to follow the states’ lead in 
+identifying and plugging orphan wells located on federal 
+properties and to release funding as provided in the Energy 
+Policy Act of 2005.
+The IOGCC thanks the states and their representatives 
+for their diligent assistance in compiling the data for this 
+report and for their continued efforts to find and remediate 
+problem orphan wells.
+Protecting our country’s resources: the states’ case 
+EXECUTIVE SUMMARY
+The Interstate Oil and Gas Compact Commission 
+(IOGCC) has been studying orphan wells and the costs and 
+regulations associated with managing these wells since 1992. 
+Orphan wells, defined here as abandoned oil and natural gas 
+wells that have no identified or solvent owner, have been 
+a part of the oil and natural gas industry’s landscape since 
+the beginning. One of the fundamental issues with orphan 
+wells is that data concerning their existence is, by definition, 
+inexact. Data collection in the early years was incomplete at 
+best and many owners and operators were lost in the course 
+of history as the industry cycled through boom and bust. Post-
+regulation, bust cycles have continued to contribute to the 
+number of orphan wells, but not in such daunting numbers.
+The first drilling for oil and gas in the United States 
+occurred during the early to mid-1800s. In many states, 
+only a few wells were drilled (many of these dry holes) in 
+the very earliest years, as wildcatters searched widely for 
+oil and gas resources. In states where exploration activities 
+were successful, however, a fairly large number of wells 
+were drilled and produced prior to the enactment of state 
+regulations. Since many of these wells were drilled between 
+1860 and 1930, the exact number is uncertain. On average, 
+60 years elapsed between the drilling of the first exploratory 
+well and the establishment of a formal regulatory system. 
+This resulted in the majority of the orphan wells today. In our 
+1999 survey, member states reported estimates of the number 
+of pre-regulatory wells drilled in their states that indicated a 
+potential on the low side of just over 828,000 to a high side 
+estimate of 1.06 million wells nationally.
+Currently, there are around 60,000 orphan wells on 
+plugging lists, a figure that appears not to have shifted greatly 
+despite the states’ prodigious efforts at plugging orphan wells. 
+This is due largely to the more aggressive approach states are 
+taking to find the wells. States estimate that potentially more 
+than 90,000 orphan wells exist but remain undocumented at 
+this time. Meanwhile, states are moving to plug the known 
+orphan wells. Some older producing areas are addressing 
+the problem with significant increases in their state plugging 
+funds. Other states have taken the initiative to ensure that the 
+wells posing the greatest environmental threats are plugged 
+first. New York has changed its prioritization to mirror the 
+IOGCC’s environmental scoring system for abandoned wells. 
+Similarly, California has adjusted its processes so an “acute 
+orphan well” has priority for plugging. States reporting that 
+their prioritization schemes for plugging wells have not 
+changed since the last report in 2000 are Alabama, Colorado, 
+Kentucky, Louisiana, Michigan, Nebraska, New Mexico, 
+Oklahoma, Utah, West Virginia and Wyoming. Other states, 
+where production occurred later, benefit from the protection 
+of state laws and regulations at the start of their oil and natural 
+gas history. 
+“Thankfully, our oil and gas regulations were in place 
+early enough that orphan wells are not a significant problem in 
+Nebraska,” said William H. Sydow, director of the Nebraska 
+Oil & Gas Conservation Commission. “At the present time, 
+our agency secures funds through the budget/appropriation 
+process and uses our commission’s cash fund to plug and 
+abandon any orphaned wells.”
+As part of a cooperative agreement with the Department 
+of Energy, IOGCC has been tasked with evaluating the scope 
+of the country’s orphan oil and natural gas well situation and 
+the efforts to manage these wells. This report is a culmination 
+of our most current study of the nation’s orphan wells and 
+how states address problems associated with these wells. 
+What is clear is that most states have increased their efforts 
+and their expenditures since our first study in 1992 and are 
+earnestly engaged in identifying and remediating orphan 
+wells. Additionally, over the course of this period, states 
+have made significant headway in acquiring and managing 
+orphan well data. Still the total scope of the problem remains 
+somewhat ambiguous.
+Over the years, states have been the leaders in 
+implementing innovative programs related to orphan well 
+management. For example, agencies have allowed the sale of 
+orphan wells to operators who believe a return to productive 
+status is a possibility. Other states have considered tax credits 
+for operators who voluntarily plug orphan wells in the vicinity 
+of their active operations. 
+IOGCC member states trust that some day a report on 
+orphan wells will be unnecessary. Their ultimate goal is to 
+find and plug every orphan well, while taking the necessary 
+precautions to prevent future orphan wells. The IOGCC 
+expresses its appreciation to the participating states and 
+agencies, not only for providing the data that form the core 
+of this report, but also for their creative efforts to find the 
+nation’s orphan wells and adequately plug them.
+Protecting our country’s resources: the states’ case
+INTRODUCTION
+The Interstate Oil and Gas Compact Commission 
+(IOGCC) has been studying orphan wells as an ancillary 
+segment of reports it compiled in 1992, 1996 and 2000. These 
+reports documented the potential presence and estimated 
+numbers of orphan wells in the United States, the plugging 
+costs associated with them, sources of “plugging funds” for 
+individual states, and individual state statutes and regulations 
+associated with orphan wells. 
+The advent of technology improvements, such as GIS 
+tracking and computerized recordkeeping, and introduction 
+of innovative methods for locating orphan wells has allowed 
+states to begin to fully address identifying and plugging 
+wells that were abandoned years, and even decades ago, by 
+unidentified parties. As part of a grant with the Department 
+of Energy, IOGCC has undertaken the task of conducting a 
+more in-depth evaluation of the scope of the country’s orphan 
+oil and natural gas wells and identifying potential solutions to 
+permanently sealing these wells. 
+Most states define an orphan well as being inactive and 
+having no responsible party to properly plug the well and 
+restore the location. Well owners might have ceased to exist 
+as a business entity or might never have been known. Some 
+states, such as West Virginia and Indiana, have yet to statutorily 
+define an orphan well. Kentucky and Wyoming define orphan 
+wells as having no bonding. Although terminology used by 
+individual states varies, for the purposes of this report, an 
+orphan well is defined as:
+A well that is not producing or injecting, has 
+not received state approval to remain idle, 
+and for which the operator is unknown or 
+insolvent. 
+The causes of orphan wells are varied. Historically, 
+factors that contribute to the development of orphan wells 
+are a combination of technological capabilities of the era and 
+the economic climate. During the earliest years of petroleum 
+production, wells were literally abandoned. The wooden 
+superstructure might have been salvaged for other uses and 
+as metal replaced wood, the casings and superstructure were 
+sometimes pulled for use in other wells or for salvage value, 
+particularly during the two World Wars when steel was in 
+short supply. The well hole itself was left either unplugged 
+or plugged with tree stumps, logs, mud, or a variety of other 
+readily available materials. Generally, wells drilled prior to 
+the 1930s were shallow and lacked a cement plug. California 
+was the first state to make plugging with cement mandatory, 
+but by then, the state estimates nearly 30,000 wells had been 
+drilled. As drilling technology and state oversight improved, 
+wells were going deeper and plugging procedures were 
+established. Still, many wells pre-dating 1952 were probably 
+plugged improperly. Early cement plugs were not always 
+effective as their compounds lacked the chemical components 
+to withstand down-hole temperatures and pressure, so failing 
+to harden properly. This led to the establishment of industry 
+standards in 1952. Recurrent bust cycles have contributed to 
+the orphan well inventory.
+The responsibility for monitoring and plugging orphan 
+wells falls inevitably to individual states. Most oil and gas 
+producing states have established plugging funds derived 
+from taxes on production, fees or other assessments to plug 
+orphan wells. The earliest funds were established in the 1960s 
+and the latest in the 1990s. The average cost to properly drill 
+out and plug an orphan well varies widely depending on 
+well depth and condition, terrain and other variable factors. 
+It covers a range from $2,000 to $40,000, with most states 
+reporting an average cost between $6,000 to $12,000. When 
+funds fall short of the need, most states stretch their money 
+by prioritizing wells that pose environmental hazards. The 
+current survey revealed 11 producing states had more than 
+1,000 wells approved for plugging on lists waiting for state 
+funds. Illinois, Kansas, Kentucky, Louisiana, Missouri, New 
+York, Ohio, Oklahoma, Pennsylvania, Texas and West Virginia 
+all reported waiting lists numbering in the thousands, with 
+Kentucky and Texas reporting the most at 10,600 and 11,220 
+wells on the waiting list respectively. In some respects, this 
+is a measure of the states’ prodigious work in identifying and 
+documenting orphan wells and as such is a testimony to their 
+diligence. In other respects, it begins to reveal the size and 
+significance of the burden many states face.
+“Since the start of the current Texas program in 1991, the 
+Texas Railroad Commission has plugged more than 41,000 
+wells at a total cost of approximately $80 million,” said 
+Texas Railroad Commissioner, Victor Carrillo. Although we 
+consider our program a huge success, our current orphan well 
+count still exceeds 11,000 wells. Minimizing, and ultimately 
+eliminating, this orphan well count is a priority for me. 
+Plugging orphan wells is an important environmental goal 
+because it eliminates the potential damage that old, abandoned 
+wells can pose to underground fresh water sources.” Other 
+major issues involving orphan wells are identifying them 
+and subsequently monitoring their condition. Location and
+Protecting our country’s resources: the states’ case 
+other data pertaining to wells drilled in the first 20 years 
+of petroleum exploration are incomplete at best. Likewise, 
+data concerning wells abandoned by companies that have 
+long vanished also are incomplete. Such wells are often 
+barely visible and are in remote areas where they have gone 
+undetected for decades. Orphan wells can pose both physical 
+and environmental hazards, because hydrocarbons, salts, and 
+ground water migrate. An unplugged well creates a conduit 
+allowing these materials to mingle, either contaminating 
+underground aquifers and water wells, or seeping to the surface 
+to contaminate fields, waterways, or ponds. Similarly, water 
+and salts can migrate into and contaminate petroleum reserves 
+through abandoned and improperly plugged orphan wells. 
+Beyond the contamination, surface seeps can accelerate the 
+risk and ferocity of wild fires. As unplugged wells deteriorate 
+over time, they can cave in on themselves or give way to 
+unsuspecting animals and humans. 
+The current study is a continuation of the collection of 
+data associated with orphan wells since 1992 and included 
+questions intended to provide a more comprehensive view of 
+the situation. Prior years’ data were analyzed and reviewed 
+to identify trends, commonalities, and regional differences 
+amongst the states.
+Plugging funds, changes and trends are also analyzed, 
+in order to give a more accurate picture of the efforts of the 
+states to address the wells and current orphan well numbers. 
+In addition, anecdotal reports of unique regional issues and 
+innovative solutions are included in the report.
+The report includes sections covering: 
+	 n Limitations of the study
+ n Methodology 
+ n Study results
+• Orphan well statistics: individual and 
+collective
+• Plugging funds 
+• Security or financial assurance
+• Salvage value of orphan wells
+ n Efforts to find and plug orphan wells 
+ n Statutory summary
+ n Recommendations 
+ n Appendices
+• Domestic orphan wells at-a-glance
+• In-depth state-by-state descriptions
+n Statutory authority and definitions 
+n Unique definitions of orphan wells
+n Security or financial assurance 
+n Regional and anecdotal 
+information 
+LIMITATIONS OF THE STUDY
+Data on orphan wells were collected from IOGCC 
+member states and international affiliates. Thirty-four of 
+IOGCC’s member states participated in the study, of whom 
+eight reported no plugging activity for the period 2000 to 
+2006. Another 10 reported plugging activity in the hundreds, 
+nine reported in the thousands. Again, for purposes of this 
+study, an orphan well is defined as a well that is not producing 
+or injecting, has not received state approval to remain idle, and 
+for which the operator is unknown or is not solvent. At this 
+point, there are no standardized data collection requirements 
+for the classification of orphan wells. Each of the oil and 
+natural gas producing regions of the United States has unique 
+variables to contend with such as geologic formations, local 
+and state regulations and regulatory structure, and data 
+collection methodologies. 
+Among the data collected were the number of orphan 
+wells plugged, the number of orphan wells on each state’s 
+plugging list, and the estimated number of unidentified and/or 
+undocumented orphan wells that could potentially exist. This 
+estimated number was gathered in hopes of anticipating the 
+potential long-term costs to plug wells that have not yet been 
+found. Bonding information has been compiled to demonstrate 
+how the states are taking preventive measures to deal with 
+abandoned and idle wells on-going, to keep wells drilled today 
+from becoming the liability of state taxpayers in the future. 
+Plugging regulations and prioritization schemes have been 
+collected so the states can view the wide range of alternatives. 
+As well, information on average cost to plug and the funds 
+and funding sources was compiled. Statutory definitions and 
+authority specific to orphan wells and preventing them also 
+have been compiled.   
+METHODOLOGY
+Data were collected by surveying the state regulatory 
+personnel and with input from industry representatives. State 
+oil and gas agencies were issued a survey via e-mail. The 
+number of actual and possible orphan wells was compiled 
+initially in March 2007 by telephone. The states were then 
+surveyed in May and any contradicting data were resolved. 
+Additionally, state agency representatives were personally 
+interviewed on a one-on-one basis for additional information 
+and data confirmation.
+The study questionnaire requested information on a range 
+of topics to provide insights into state programs addressing 
+orphan wells. The information obtained from the states falls 
+within the following categories:
+Protecting our country’s resources: the states’ case
+Orphan well data.  States were asked to provide the 
+number of wells plugged, the amount of plugging funds 
+expended, and an estimate of the number of unidentified and / 
+or undocumented orphan wells in their state.
+Plugging funds. Many states have established plugging 
+funds to ensure that wells are properly plugged and abandoned. 
+Several states have increased the amounts of these funds in 
+recent years. 
+Security or financial assurance.  Most states require 
+some form of security or financial assurance. The methods 
+and amounts vary, but financial assurance is required on most 
+wells to ensure proper plugging and abandonment - even in 
+the case of operator insolvency. 
+Salvage value of orphan wells. Most states can salvage 
+lease equipment or hydrocarbons left in storage tanks and use 
+the salvage value to offset the cost of state-funded plugging. 
+Efforts to find and plug orphan wells.  Several states 
+have developed programs to help find and plug orphan wells. 
+They range from volunteer groups searching for orphan wells 
+to states offering tax incentives to landowners willing to adopt 
+an orphan well.
+Statutory authority . Authority dealing with orphan 
+wells.
+Anecdotal information.  Many states have unique 
+regional and/or regulatory environments that provide more 
+insight into the orphan well situation and may provide a basis 
+for further study.
+Additionally, prior years’ survey data were consolidated and 
+analyzed beginning with the initial survey year of 1992 serving 
+as the base year. Inconsistencies were identified, adjusted and 
+verified with the reporting state agency on a case-by-case 
+basis. This is intended to provide a comprehensive view of 
+orphan well status and trends since the inception of research.
+DISCLAIMER
+Although many efforts were made to test the accuracy 
+and consistency of the data, conflicts remain as a result of 
+several inherent areas. States differ as to fiscal years and 
+data collection in the states may adhere to fiscal year time 
+frames or may follow calendar years. Some states have broad 
+responsibilities for plugging a variety of wells (orphan, 
+insolvent but known operator, etc.) while others address only 
+orphan oil and natural gas wells as defined in this study. Some 
+states use plugging funds for site remediation, while others 
+have separate funds. Some states consider site remediation 
+costs as part of the cost to plug and others do not. Some states 
+reported data in our earliest reports that cannot be supported 
+currently. While the states and their staffs have gone far above 
+and beyond the call to assist us in every way to bring the basis 
+of this data into conformity, there is still the chance that some 
+data presented in this report may contain flaws. However, 
+we believe that such flaws, if they exist, are not materially 
+significant to the purpose of this report, which is principally to 
+establish the existence and direction of states’ efforts toward 
+addressing orphan wells.
+STUDY RESULTS
+ORPhAn WELLS
+Orphan Well Plugging Wait List. Surveyed states report-
+ed 59,222 wells on plugging or site remediation waiting lists 
+in 2006. Since the initial study in 1992, states have reported 
+steady increases to the number of wells on their wait lists, 
+despite marked increases in the number of wells plugged and 
+funds expended each survey period. States continue to locate 
+formerly undocumented wells for a variety of reasons such 
+as the advent of technology improvements like GIS tracking 
+and satellite photography, computerized record-keeping, and 
+the introduction of innovative methods for locating wells.
+With 11,220 orphan wells on its plugging list, Texas 
+reports having the most identified orphan wells waiting to be 
+plugged, with Kentucky not far behind with 10,600. Penn-
+sylvania and Kansas report 8,700 and 7,271 wells on waiting 
+lists, respectively. The next cluster of significant numbers 
+is reported by New York at 4,800, Illinois at 3,900, Louisi-
+ana at 3,183, Oklahoma and Ohio at 2,089 and Missouri at 
+2,000.
+The number of wells waiting to be plugged in individual 
+states at any given time may depend on a variety of fac-
+tors, such as the number of oil and gas wells within the state 
+regulatory program, the adequacy of security or financial as-
+surance provided by oil and gas operators, the availability of 
+state plugging funds and staff resources, and state procure-
+ment procedures. Legal issues arising from insolvency also 
+can delay plugging by either operators or the state.
+Undocumented / Unidentified Orphan Wells. In 1996, the 
+states were asked to provide a high to low estimated range of 
+the number of undocumented or unidentified orphan wells. 
+This year, surveyed states were asked to estimate the number 
+of undocumented or unidentified orphan wells not on their 
+plugging wait lists. Surveyed states used a variety of methods 
+to estimate the amount of undocumented or unidentified wells 
+in their regions, from an estimate based upon historical figures, 
+to a calculation of a percentage of wells on their current lists.
+Protecting our country’s resources: the states’ case 
+Figure 1. Total estimated orphan wells: all surveyed states (2006)
+State Wait list Undocumented Total Orphan Wells
+Alabama 0 3 3
+Alaska 15 0 15
+Arkansas 577 1,200 1,777
+California 430 967 1,397
+Colorado 45 45 90
+Florida 17 150 167
+Illinois 3,900 0 3,900
+Indiana 598 1,300 1,898
+Kansas 7,271 10,729 18,000
+Kentucky 10,600 2,500 13,100
+Louisiana 3,183 625 3,808
+Michigan 100 15 115
+Mississippi 49 0 49
+Missouri 2,000 0 2,000
+Montana 90 475 565
+Nebraska 6 6 12
+New Mexico 134 0 134
+New York 4,800 40,000 44,800
+North Dakota 4 0 4
+Ohio 2,089 9,000 11,089
+Oklahoma 2,089 10,000 12,089
+Pennsylvania 8,700 0 8,700
+Tennessee   
+Texas 11,220 0 11,220
+Utah 8 59 67
+Virginia 37 70 107
+West Virginia 1,260 13,000 14,260
+Wyoming 0 5 5
+Grand Totals 59,222 90,149 149,371
+Protecting our country’s resources: the states’ case
+Figure 2. Total Estimated Orphan Wells
+Figure 2 shows the total estimated orphan wells for all surveyed states. Prior studies reported 
+only the number of wells on waiting lists (line). 2006 survey respondents were asked to estimate 
+the number of undocumented and/or unidentified wells (square), which, when added to wait list 
+figures provides an estimate of the total number of orphan wells in the nation (triangle).
+The range of undocumented and/or unidentified wells 
+is wide. Some states declined to provide an estimate, while 
+others used a formula based on the number of undocumented 
+wells that are discovered on average in a year and projecting 
+forward. Six of the surveyed states, Alaska, Illinois, Missouri, 
+North Dakota, Texas and Pennsylvania did not provide an 
+estimate of undocumented wells. Historically, Alaska, New 
+Mexico and North Dakota have a smaller amount of wells 
+on their wait lists as compared to other states. The states 
+which, in this survey, estimated the highest potential number 
+of undocumented wells include New York with an estimate 
+of 40,000, West Virginia with 13,000, Kansas with 10,729 
+and Oklahoma with 10,000. In all cases, these estimates were 
+lower than the original low to high estimate range that states 
+provided in 1999, which is likely indicative of the progress 
+these states are making. Arguably, any estimate is a fluid 
+number and is not, in itself, important. Rather this estimate 
+is significant as an indicator of the potential cost to plug and 
+remediate to which the states may be exposed.
+As unplugged orphan wells are identified, they are 
+generally included on waiting lists or databases established 
+by the states and prioritized for plugging and abandonment. 
+States prioritize among wells to be plugged, focusing on those 
+that pose the greatest potential harm. It should be noted that 
+states plug wells other than orphan wells and these wells 
+affect the waiting list.  Also, some orphan wells may later be 
+adopted by an operator and returned to production or other 
+use. 
+PLuGGInG FunDS
+Most states have established plugging funds that vary 
+widely, both in scope and funding mechanisms, to ensure that 
+wells for which no or insufficient financial assurance exists 
+are properly plugged and abandoned. As orphan wells are 
+identified, they are included on waiting lists established by 
+the states and prioritized for plugging. The number of wells 
+on each state’s waiting list may be different from the number 
+of orphan wells because: states plug wells other than orphan 
+	 1992	 1996	 1999	 2006
+160,000
+140,000
+120,000
+100,000
+80,000
+60,000
+40,0000
+20,000
+0
+–•–	Plugging	wait	lists
+n	 Estimate	undocu-
+mented	orphan
+	 wells
+▲   Total	orphan	wells
+	 (estimated)
+Total	Estimated	Orphan	Wells
+All	surveyed	states
+Survey	Year
+n
+▲
+•
+• •
+•
+#	of	Wells
+▲ ▲ ▲n n n
+Protecting our country’s resources: the states’ case 
+wells; some orphan wells may later be adopted by an operator 
+and returned to production or other use; or because states 
+prioritize among wells to be plugged, focusing on those that 
+pose the greatest potential harm. 
+The plugging of orphan wells by state regulatory agencies 
+remains a significant issue. While most states have increased 
+the amounts in their plugging funds in the last six years, 
+some states have maintained the same amount. New Mexico 
+established an Oil and Gas Reclamation Fund in 1977. Well 
+operators pay a percent of taxable value of sold products, of 
+which a percentage goes to the fund. In the reporting period, 
+New Mexico expended $6,130,113 from the fund to plug 396 
+wells. Missouri and Nebraska reported the lowest expenditures 
+and minimal plugging activity for the period $23,890 / 8 wells 
+and $35,000 / 5 wells respectively. However, while Nebraska 
+has a relatively small number of orphan wells on their data list, 
+Missouri reports about 2,000. The number of wells waiting to 
+be plugged in individual states at any given time may depend 
+on a variety of factors, such as the number of oil and gas wells 
+within the state regulatory program, the adequacy of security 
+or financial assurance provided by oil and gas operators, 
+the availability of state plugging funds and staff resources, 
+and state procurement procedures. Legal issues arising from 
+insolvency can also delay plugging by either their operators 
+or the state.
+Plugging funds expended. 
+In the 1999 report 10 states reported spending $1 million 
+or more on plugging orphan wells, with Texas far and away 
+the leader at a reported $30.8 million. In the 2006 survey, 16 
+states reported spending $1 million or more, with 5 states 
+spending between $1 and $3 million, 3 states at $5 to $6 
+million and 6 states spending between $8 and $13 million, and 
+2 states spending upward of $26,000. Fourteen states reported 
+significant increases in spending for the 2000 to 2006 period 
+over the prior report, in some cases as much as 17 times as 
+much or more. Three states reported declines in spending, 
+while 5 states reported spending consistent with prior periods. 
+Clearly as states have addressed the identification of orphan 
+wells and as the industry’s fortunes have improved over recent 
+times, states have been exceptionally diligent in addressing 
+the need. Data tables are located in the Appendices.
+Figure 3. Percent increase in wells plugged: All surveyed states by survey year
+Survey Year # of Wells % increase (decrease)
+1992 7,606
+1996 12,274 61.37%
+1999 23,658 92.75%
+2006 28,089 18.73%
+Total 71,627
+Protecting our country’s resources: the states’ case0
+Total	Plugging	Funds	Expended
+All	surveyed	states
+$160,000,000
+$140,000,000
+$120,000,000
+$100,000,000
+$80,000000
+$60,000,000
+$40,000,000
+$20,000,000	
+Funds	Expened
+$
+	 1992	 1996	 1999	 2008
+•		$93,165,113
+$144,935,556
+•		$40,789,199		•	$40,877,763
+•
+	 1992	 1996	 1999
+30,000
+25,000
+20,000
+15,000
+10,000
+5,000
+0
+n	12,274
+n	23,658
+n	28,089
+n	7,606
+–n–	#	of	wells	plugged
+–▲– Average	cost	perwell
+▲	$5,354
+▲	$3,330 ▲	$3,938 ▲	$5,160
+Survey
+year
+Survey	year
+Figure 4. Total plugging funds expended: All surveyed states by survey year
+Figure 5. Total wells plugged by survey year/Average cost per well
+Protecting our country’s resources: the states’ case 
+Sources of state plugging funds.
+The mechanisms used to supply the needed money to 
+the state plugging funds vary greatly. Some states use general 
+appropriations, but most state plugging funds sources can 
+be grouped into four general categories: fees, public funds, 
+revenue, and taxes. Individual states often leverage many 
+different sources to address plugging orphan wells. For 
+example, Michigan, Montana and Pennsylvania have two funds 
+that can be used for the plugging of orphan wells. Michigan 
+has an Environmental Remediation fund and an Orphan Well 
+Fund. Pennsylvania has an Abandoned Well Plugging Fund 
+and an Orphan Well Fund. Montana has a Resource Indemnity 
+Trust Tax and a Damage Mitigation Account, which is funded 
+by statutory appropriation plus bond forfeitures. From 1992 
+until 2005, Arkansas used general funds on a case by case basis 
+to plug orphan wells. In 2005, the state established a Plugging 
+Fund, which has benefited their efforts significantly. In almost 
+every case, the sources of funding are inextricably tied to the 
+oil and natural gas exploration and production industry in each 
+state. Levies, assessments, bonds or taxes are imposed on well 
+operations and production. As a result, as the market price for 
+oil and natural gas encourages exploration and production as 
+it has over the recent period, funding available to states also 
+improves. However, states are also tasked with addressing 
+many long, unfunded needs, such as highways and bridges, so 
+that funding for plugging orphan wells is not always a given. 
+And, even with improved funding, the need often outstrips 
+resources. Survey data shows that states have spent roughly 
+$319.1 million to plug and remediate 71,618 wells nationally, 
+for an average cost of $4,456 per well. If all of the nearly 
+150,000 orphan wells identified in this survey required state 
+plugging, the cost to the state oil and gas regulatory agencies 
+would be in excess of $668 million. The reported balance in 
+state plugging funds currently totals about $2.8 million, which 
+is insufficient to cover the probable plugging costs to address 
+the 59,781 orphan wells on the states’ waiting lists.
+Figure 6. Sources of Plugging Funds: All surveyed states
+State Fee Fine Public Revenue Tax
+Alabama
+Alaska p
+Arkansas p
+California p
+Colorado
+Illinois p
+Indiana p p
+Kansas p
+Kentucky p
+Louisiana
+Michigan
+Mississippi p
+Missouri p
+Montana p
+Nebraska p
+New Mexico p
+New York p p p
+North Dakota p p p p
+Ohio
+Oklahoma p
+Pennsylvania p
+Tennessee p
+Texas
+Utah
+Virginia p
+West Virginia
+Wyoming
+Protecting our country’s resources: the states’ case
+Figure 7. Sources of state plugging funds
+Fees
+Annual fee A routine fee charged to operators of oil and gas wells
+Idle well fee A fee that operators pay for an inactive, unplugged well
+Permit fee A fee that operators pay when they get a permit to produce
+Civil penalties Penalty imposed by regulating authority for noncompliance
+Settlements
+Public Funds
+Appropriations Legislative action authorizing the expenditure of public (state or local government) funds for some 
+designated purpose
+Operating budget State Oil and Gas Agency operating budget
+Revenue
+Forfeited bonds Deposited monies paid to ensure adequate funding is available for inactive well plugging by 
+operators
+Salvage Proceeds from the sale of any equipment or other items of value at plugging site
+Taxes
+Excise tax Tax imposed on the sale of specific goods or services, or on licenses to engage in certain activities 
+(also called mil levy, conservation tax)
+Production 
+Assessment
+A state or municipal tax on oil and gas products levied at the wellhead for the removal of the 
+hydrocarbons. (Also called Severance Tax)
+SECuRITy OR FInAnCIAL ASSuRAnCE
+The primary purpose of security or financial assurance 
+requirements in the producing states is to ensure proper 
+plugging and abandonment of oil and gas wells in the event 
+the operator becomes insolvent. Many states have made recent 
+changes to upgrade their security and financial assurance 
+requirements. The majority of oil and gas producing states 
+require specific security or financial assurance in the form of 
+a surety bond, cash, certificate of deposit or irrevocable letter 
+of credit. The security or financial assurance can be used to 
+ensure performance, plugging of the wellbore at the time of 
+abandonment, restoration of the surface, or a combination of 
+any of the above. The date that security or financial assurance 
+requirements were established varies widely among the states, 
+but the states where production started most recently have 
+required security or financial assurance since the inception of 
+their programs. States have security requirements for single 
+wells as well as blanket bonds. Single well security may be 
+based on well depth (15 states), a set fee structure (15 states), 
+a hybrid of the two (North Dakota), or by acre of disturbed 
+land (Virginia). Blanket bonds may likewise be based on the 
+number of wells (8 states), a set fee structure (17 states) or a 
+hybrid of the two (4 states).
+Figure 8. Distribution of Security Types: 
+All surveyed states
+Type of Security # of 
+states
+% of 
+states w/ 
+type*
+CD 24 80%
+Cash 24 80%
+Certificate of Insurance 1 3%
+Escrow Account 2 7%
+Financial Statements 7 23%
+Letter of Credit 16 53%
+Liens 2 7%
+Security Interest 2 7%
+Surety & Performance Bonds 30 100%
+*30 states surveyed
+Protecting our country’s resources: the states’ case 
+Figure 9. Types of Securities Permitted by States
+Type Definition
+Cash Deposit A payment given as a guarantee that an obligation will be met
+CD Certificate of Deposit
+Certificate of Insurance A formal document used to record a fact and used as proof of the fact
+Consolidated Financial 
+Fund
+A user-defined combination of several consolidation units, grouped together for consolidation 
+and reporting purposes
+Escrow Account
+A separate bank account, segregated from a broker’s own funds, in which the broker is 
+required by state law to deposit all monies collected for clients; in some states called a Trust 
+Account
+Financial Statements A report of basic accounting data that helps investors understand a firm’s financial history 
+and activities
+Letter of Credit, Irrevocable
+A letter of credit where payment is guaranteed as long as the seller meets all conditions 
+stipulated. A revocable letter of credit can be cancelled or altered by the buyer without 
+permission of the seller
+Liens The right to take another’s property if an obligation is not discharged
+Performance Bonds A surety bond between two parties, insuring one party against loss if the terms of a contract 
+are not fulfilled
+Security Interest The creditor’s right to take property or a portion of property offered as security
+Surety Bonds A contract by which one party agrees to make payment on any default or the debt of another 
+party 
+SALV AGE VALUE OF ORPHAN WELLS
+While orphan wells represent an economic liability to the 
+state as there is often inadequate or non-existent security to 
+cover the cost of plugging these wells and the state must plug 
+the well first and then attempt to claim the security, orphan 
+wells are not necessarily without economic value. On younger 
+wells, lease equipment, hydrocarbons in storage tanks on the 
+location and hydrocarbons that remain in the reservoir have 
+value. Some states attempt to realize any benefit from the assets 
+remaining on such wells. Three states, Arizona, Nebraska and 
+Utah, attempt to determine the potential value of remaining 
+reservoir hydrocarbons prior to plugging a well. These states 
+look variously for the potential of enhanced recovery methods 
+and remaining production potential. Utah, along with a 
+few other states, contacts operators of surrounding leases 
+for interest in taking over an orphan well. In many cases, 
+operators will do so to protect their hydrocarbon reservoirs 
+and as good corporate citizens. 
+Older wells do not frequently offer much in the way 
+of salvage value. Texas has one of the most active well 
+plugging programs. It reported only a very few wells had 
+an equipment salvage value greater than the plugging costs. 
+Usually equipment on the older wells, if still in place, has 
+no resale value, only scrap metal value. In most states the 
+contractor who plugs the well is allowed to take possession of 
+the equipment, reducing the cost of plugging proportionate to 
+the salvage value of the equipment. While some states have 
+experienced difficulties in the bid evaluation process, this has 
+generally proven to be an efficient and cost-saving solution. 
+ 
+IOGCC: Lending a helping hand for the future
+On a national front, the IOGCC has been 
+committed to securing federal funding for the 
+plugging of orphan wells. While states have made 
+extensive efforts to find and plug their wells, 
+federal funding could accelerate plugging wells 
+posing the greatest hazards. 
+“There are believed to be tens of thousands 
+of orphan wells in this country. Many of these 
+wells are very shallow and pose no risk to the 
+environment. However there are others that are 
+unplugged or inadequately plugged and are a 
+genuine threat to the environment and safety. We 
+have to focus on these problem wells and we are 
+working with Congress on federal funding for a 
+permanent fix.”
+- North Dakota Governor John Hoeven, former 
+chairman of the IOGCC, May 10, 2007, IOGCC 
+2007 Midyear Issue Summit.
+Protecting our country’s resources: the states’ case
+EFFORTS TO FIND & PLUG
+Most states have inaugurated significant programs for 
+identifying and addressing orphan wells. The states should be 
+commended for these efforts, and the IOGCC will continue to 
+encourage all states to find ways to identify and address their 
+orphan wells. Following are some innovative efforts by states 
+to gather resources, to search for wells, to plug them, or to 
+utilize them. 
+ 
+Pennsylvania: A Case Study 
+Pennsylvania has produced oil and natural gas since 
+1859 and for the first forty years was responsible for nearly 
+half of the world’s production of oil until the east Texas oil 
+boom in 1901. Most of Pennsylvania’s production of the 
+period occurred around Titusville, in an area now known as 
+Oil Creek State Park. Without the benefit of geologic science, 
+Pennsylvania oilfields were discovered by physical evidence 
+such as surface oil seeps. Wells were drilled at random and 
+often very close together. A famous tintype from 1871 shows 
+a location known as Triumph Hill with a veritable forest of 
+wooden derricks. It would only be much later that petroleum 
+engineers would understand that drilling too many well too 
+closely together actually reduces production capability, as 
+well as increasing environmental damage. At the time, all 
+anyone worried about was fire. Drake’s first well lasted only a 
+couple of months before being consumed by fire. 
+With its long history of petroleum production, 
+Pennsylvania was particularly concerned with orphan 
+wells. Oil Creek State Park falls under the jurisdiction of 
+the Pennsylvania Department of Conservation and Natural 
+Resources (DCNR). To augment a small staff, the Park 
+Manager would recruit summer interns to help canvas the 
+park in search of orphan wells. Then, in 2002, a partnership 
+was developed involving the Pennsylvania Department of 
+Environmental Protection (DEP), the Environmental Alliance 
+for Senior Involvement (EASI), and the Pennsylvania 
+Senior Environment Corps (PaSEC), a statewide network 
+of seniors who monitor water resources. EASI is a national 
+nonprofit coalition of environmental, seniors, and volunteer 
+organizations founded in 1991 following an agreement 
+between the U.S. Environmental Protection Agency (EPA) 
+and the American Association of Retired Persons (AARP). 
+EASI typically partners with national, state, and local public 
+and private organizations to provide opportunities for seniors 
+to play an active, visible role in improving the environment in 
+their communities. 
+PaSec, EASI, the Venango Conservation District, the 
+DCNR and DEP established a pilot project 
+to train and equip senior volunteers to locate and mark orphan 
+wells in Oil Creek State Park. The Park offered a ready 
+combination of key success factors for the project: state land 
+ownership providing access and administrative support, a 
+large probability of orphan wellsresulting from historical 
+activity, and an active PaSEC volunteer cadre ready to go. 
+DEP provided a startup grant of $40,000. 
+“This is a tremendous opportunity to protect the 
+environment in this beautiful state park, and potentially 
+throughout northwestern Pennsylvania, where thousands of 
+these abandoned, orphan wells exist. Oil can seep into and 
+contaminate groundwater and surface water. Sinkholes can 
+develop around these old wells, presenting a danger to 
+hikers, hunters, and all visitors to Oil Creek State Park,” said 
+Pennsylvania Secretary of Environmental Protection Kathleen 
+A. McGinty.  
+EASI has existing training programs for its members 
+for its water monitoring projects. These programs include 
+safety, site location and recording methodology. DEP and 
+DCNR added training in operating hand-held global positions 
+system units, mapping coordinates and downloading data for 
+transmission to state databases. While in the field, volunteers 
+had the support, as needed, of the Venango Conservation 
+District and the Bureau of Oil and Gas management, DEP. 
+The funding proficed hand-held GPS units, first aid kits, 
+topographical maps and compasses, briar-proof pants, orange 
+safety vests and hats, computer software, markers, flag and 
+tags and digital cameras, as well as portable radios and walkie-
+talkies to communicate with state park personnel.
+“We always go out in teams, no less than three and I’d 
+say six is about the most. We get in a spaced line, set a bearing 
+and head for it. It’s hard to keep the line with the way the 
+terrain dips and rises, but it’s important for safety and to be 
+sure we’re covering the area. Sometimes a well site is just a 
+depression in a field, maybe three or so feet across. We test 
+the surface to see it’s an open shaft. We take photos, enter a 
+description of the site and record the latitude and longitude. 
+The report goes to the Venango Conservation District and the 
+DEP, who verifies the data and adds the sites to the official 
+list,” said John Kolojejchick, one of the senior volunteers 
+participating in the Oil Creek pilot program. 
+As of October 2003, the PaSEC volunteers had identified 
+57 potential orphan wells. By June 2007, the volunteers have 
+found and marked more than 317 orphan wells in Oil Creek 
+State Park. With the pilot program proving so successful, the 
+project alliance moved forward to launch a second phase, with 
+an additional $20,000 in funding and the desire of the seniors 
+to increase the area of interest and build participation in the
+Protecting our country’s resources: the states’ case 
+program. Four areas were added to the project to include some 
+game lands and forestry preserves. Four years since inception, 
+the project has found, marked, and stored in the database the 
+location of more than 360 orphan wells. They have logged 
+880 volunteer hours and spent a mere $60,000. More than 225 
+of these wells have been plugged. 
+In addition to its extensive efforts to find and plug orphan 
+wells; Pennsylvania also is attempting to track down liable 
+operators. Where the state determines that a prior owner or 
+operator received economic benefit subsequent to April 18, 
+1979, other than benefit derived only as a landowner or from a 
+royalty interest, from an orphan well or from a well which has 
+not been registered, such owner or operator is held responsible 
+for plugging of the well. 
+Pennsylvania’s orphan well program demonstrates that 
+identifying orphan wells need not be a job restricted to the 
+young or professional, or for that matter, those who get paid to 
+do it. Nor does it necessarily require an extensive budget. The 
+key ingredient for success is collaboration. Pennsylvania used 
+a collaborative style that extended beyond agency offices to 
+embrace the support and involvement of the community. By 
+sharing resources, expertise and support, the project became 
+affordable and effective.
+California: Adopt-a-well
+California’s Orphan Well Program has been authorized to 
+plug and abandon idle-deserted wells since 1976. From 1977 
+to 2004, 1,062 orphan wells were plugged at a cost of $14.8 
+million. The program is authorized to spend up to $1 million 
+a year to plug orphan wells. A list of orphan wells in the state 
+is maintained for adoption under the “adopt a well” program. 
+This program allows prospective operators to enter into an 
+agreement to test for further extraction of an orphan well for up 
+to 90 days without incurring any liability for plugging. After 
+this time, if the test is successful, the prospective operator 
+can then adopt the well by posting a bond and becoming its 
+permanent operator. If the test is unsuccessful, the prospective 
+operator can walk away from the agreement without incurring 
+any liability. 
+Oklahoma: Voluntary assessment
+In 1993, leaders representing Oklahoma’s oil producers 
+and royalty owners, working with the Oklahoma Legislature, 
+formed the Oklahoma Energy Resources Board (OERB). 
+Oklahoma’s natural gas producers joined soon after. At the 
+heart of OERB’s mission is the on-going commitment to 
+restoring Oklahoma’s orphaned and abandoned well sites left 
+by operators who have since disappeared. Site restoration 
+includes (1) the removal of equipment, concrete, trash and 
+debris; (2) soil erosion and scarring repair; (3) the removal 
+of hydrocarbons; (4) closing of pits; and (5) the removal of 
+lease roads and location pads (OERB 2008). Funded through 
+a voluntary assessment paid by producers and royalty owners 
+on the sale of oil and natural gas in Oklahoma, OERB’s 
+environmental restorations cost landowners and taxpayers 
+nothing. Since 1994, Oklahoma’s oil and natural gas producers 
+and royalty owners have voluntarily contributed $70 million. 
+OERB has restored more than 7,800 abandoned sites. 
+Texas: Production tax incentives
+As an incentive to put orphan wells back into production 
+in Texas, the Legislature passed a bill to exempt gas and 
+casinghead gas from any well the Texas Railroad Commission 
+certified as an orphan. When the certified orphan well is 
+put back into production by an approved operator, the well 
+is eligible for a 100 percent exemption from natural gas 
+production tax and the oilfield cleanup fee for as long as the 
+certified operator manages the well. 
+Michigan: Industry support
+Michigan’s Orphan Well Fund was established in 1994 
+with revenue from a severance tax on the oil and gas industry. 
+Two percent of the severance tax revenue, but not less than 
+$1 million, is credited to the fund annually. This funding 
+goes toward plugging, response activity, or site restoration 
+at abandoned or improperly closed oil and gas wells. For 
+Fiscal Year 2004-2005, the total cost for plugging, response 
+activity, and site restoration for all projects was $1,167,235. 
+However, $164,463 was returned to the Orphan Well Fund as 
+a result of sales from well tubing, casing, and equipment, and 
+$67,610 from the collection of well bonds. Fiscal Year 2004-
+2005 represented the tenth year that funds were expended 
+from the fund. Nineteen wells were plugged, interim response 
+activities were performed on three wells, and eight oil storage 
+tanks were remediated. 
+Michigan also deposits funds from salvaged equipment 
+from plugged well sites into their Orphan Well Fund. In 2006, 
+the value of salvage totaled $160,845. Further, the Office of 
+Geological Survey posts a list of orphaned wells on its Web 
+site. Operators are allowed to take over orphaned wells if they 
+get leases for the minerals under the original drilling unit.
+Protecting our country’s resources: the states’ case
+CANADIAN PROVINCES
+The U.S. is not unique in dealing with the issue of orphan 
+wells. All oil and gas producing countries have similar 
+issues. In Canada, the provinces have taken aggressive steps 
+in partnership with industry to identify and reclaim orphan 
+wells, pipelines and facilities.
+Alberta: Government/Industry collaborative partnership
+Alberta has an Oil and Gas Orphan Abandonment and 
+Reclamation Association operating as a non-profit organization 
+under the registered trade name of the Orphan Well Association 
+(OWA). The OWA operates under the delegated authority of 
+the Alberta Energy and Utilities Board (EUB). OWA was 
+established as a joint initiative between the upstream oil and 
+gas industry and the provincial government in January 2002 
+and commenced operations on April 1, 2002. The Alberta 
+government supports this initiative to deal with upstream 
+oil and gas orphans through its regulatory agencies, Alberta 
+Energy and Utilities Board (EUB) and Alberta Environment 
+(AENV) which: (1) initiate appropriate enforcement actions to 
+ensure that the responsible parties address their obligations to 
+deal with their well and facility abandonment and reclamation 
+liabilities, and (2) develop appropriate policies to minimize 
+unfunded orphan liability and to prevent new orphans. The 
+purpose of the OWA is to manage the abandonment and 
+reclamation of upstream oil and gas orphan wells, pipelines, 
+facilities and their associated sites. 
+The OWA provides information on its activities to a 
+stakeholder group known as the Fund Advisory Committee 
+or FAC. The FAC provides advice and input into the ongoing 
+development of government policies related to upstream oil 
+and gas orphans. Members of the FAC include representatives 
+from industry - Canadian Association of Petroleum Producers 
+(CAPP), Small Explorers and Producers Association of 
+Canada (SEPAC), and representatives from the provincial 
+government - the Alberta Energy and Utilities Board (EUB), 
+Alberta Environment (AENV), Alberta Department of 
+Energy (AE), and Alberta Sustainable Resource Development 
+(ASRD).
+The OWA operates under the direction of its members who 
+include:  the Canadian Association of Petroleum Producers 
+(CAPP), the Small Explorers and Producers Association of 
+Canada (SEPAC), and the EUB.  Industry funds all of the 
+costs incurred by the OWA, mostly through an Orphan Fund 
+Levy.  This levy is based on the abandonment and reclamation 
+liabilities held by each company and it is collected annually 
+by the EUB and remitted to the OWA.
+Fiscal Year 2005/06 was a benchmark year of operations 
+for OWA. Expenditures on operational activities increased 
+to an historical high of almost $12 million compared to 
+almost $9 million the previous year. The focus of OWA’s 
+operations shifted in 2005/2006 from well abandonment to 
+site reclamation, allowing OWA to catch up on its inventory 
+of outstanding well abandonments. A significant proportion 
+of OWA’s operations was dedicated to remediation (dealing 
+with contaminants) on orphan sites. 
+Saskatchewan: Updates its regulations
+Saskatchewan Industry and Resources recently announced 
+efforts to revise its regulatory environment to make it more 
+relevant to current oil and gas development practices and 
+technology. In 1989, the province had established an Oil and 
+Gas Environmental Fund to address the costs of reclaiming 
+orphan wells. Government and industry leaders have worked 
+together as a group to establish new funding rules. The 
+proposed changes address two key components: a security 
+deposit system and an annual orphan fund levy. A security 
+deposit is collected from companies whose liability is 
+greater than their assets, with the difference between the two 
+comprising the amount of the security deposit.  This serves the 
+dual purposes of preventing an individual without sufficient 
+economic means from acquiring oil and gas wells or facilities 
+and secondly should the company become bankrupt, then 
+the security deposit will cover the cost of decommissioning 
+and reclaiming the orphan property. In a case where the 
+security deposit amount is insufficient to cover the cost of the 
+necessary work, all of the oil and gas companies operating in 
+Saskatchewan will be levied a fee, The Orphan Fund Levy, to 
+make up the shortfall. 
+RECOMMENDATIONS
+There are approximately 50,000 wells awaiting plugging 
+that have been prioritized according to the environmental 
+threats they pose. Plugging all orphan wells would be an 
+extremely large financial burden on the states. Today’s 
+petroleum prices provide an incentive to identify and address 
+orphan wells because the revenue to the states has increased 
+and this, combined with modern technology, has enabled the 
+states to respond to the need more aggressively. 
+States should be commended for their efforts to date, both 
+in finding and remediating orphan wells. The states have also 
+set up regulatory structures that require adequate bonding or 
+insurance coverage, in an effort to prevent the likelihood of 
+orphan wells in the future.  
+It must, however, be noted that while states have
+Protecting our country’s resources: the states’ case 
+established plugging funds, those funds are insufficient 
+to address timely cleanup of the remaining orphan wells. 
+Therefore, it’s essential that the states, along with IOGCC, 
+continue to explore innovative and financial means to plug 
+all existing orphan wells. As unremediated orphan wells 
+can cause as much damage to precious petroleum resource 
+reserves as to the surface environment or to water resources, 
+assistance from many directions is needed to help the states in 
+their efforts. 
+An orphan oil and gas well plugging program for the 
+states was established in Section 349 (g) and (h) of the Energy 
+Policy Act of 2005. That legislation authorizes up to $20 
+million annually in federal matching funds to help states plug 
+their abandoned wells. However, to date no money has been 
+appropriated. IOGCC will continue to present the cause and to 
+educate Congress about the issues and costs related to orphan 
+wells with the goal of seeing this legislation meet its intended 
+goal to help the states address this significant environmental 
+issue.
+IOGCC encourages the states to continue their efforts 
+to plug these orphaned wells in a logical manner, focusing 
+on wells posing the greatest threats. States are encouraged 
+to review the adequacy of financial assurance requirements 
+for operators/owners to ensure future orphan wells will be 
+plugged without public funds. 
+Still other states have employed creative approaches to 
+find undocumented orphan wells for evaluation and to increase 
+plugging funds. Those stories are presented here in an effort 
+to provide states with access to new approaches that they may 
+find useful. The IOGCC is also conducting a study of the well-
+closure process in hopes of identifying lower cost materials 
+and processes to stretch limited plugging funds. 
+Further, both in the states and elsewhere, it is clear that 
+the oil and natural gas industry can be creative and important 
+partners in addressing this significant issue. The IOGCC urges 
+states and industry to continue to work in partnership and to 
+find ways in which to expand that partnership.
+Protecting our country’s resources: the states’ case
+DATA TABLES
+Figure 10. Plugging Funds Expended: All surveyed states per survey period 
+*Fields marked with an “*” indicate that no data was reported or available for that survey period
+State Survey Year Plugging funds expended # of wells plugged Average Cost per Well
+Alabama
+1992 * * *
+1996 * * *
+1999 * * *
+2006 * * *
+Alabama Total * * *
+Alaska
+1992 * * *
+1996 * * *
+1999 * * *
+2006 200,000 5 40,000
+Alaska Total 200,000 5 40,000
+Arkansas
+1992 2,500 3 833
+1996 75,500 8 9,438
+1999 110,000 20 5,500
+2006 990,000 178 5,562
+Arkansas Total 1,178,000 209 5,636
+California
+1992 2,887,000 179 16,128
+1996 1,585,000 70 22,643
+1999 4,543,000 431 10,541
+2006 8,390,282 451 18,604
+California Total 17,405,282 1,131 15,389
+Colorado
+1992 132,193 2 66,097
+1996 454,199 30 15,140
+1999 867,085 104 8,337
+2006 1,671,944 82 20,390
+Colorado Total 3,125,421 218 14,337
+Florida 2006 650,000 9 72,222
+Florida Total 650,000 9 72,222
+Illinois
+1992 75,000 12 6,250
+1996 1,025,000 243 4,218
+1999 1,800,000 783 2,299
+2006 10,100,000 2,162 4,672
+Illinois Total 13,000,000 3,200 4,063
+Indiana
+1992 75,000 * *
+1996 125,000 9 13,889
+1999 340,000 73 4,658
+2006 361,297 25 14,452
+Indiana Total 901,297 107 8,423
+Protecting our country’s resources: the states’ case 
+*Fields marked with an “*” indicate that no data was reported or available for that survey period
+State Survey Year Plugging funds expended # of wells plugged Average Cost per Well
+Kansas
+1992 * * *
+1996 1,528,000 1,250 1,222
+1999 6,983,000 1,892 3,691
+2006 13,366,630 4,542 2,943
+Kansas Total 21,877,630 7,684 2,847
+Kentucky
+ 
+ 
+ 
+ 
+    
+1992 619,000 432 1,433
+1996 704,150 204 3,452
+1999 1,726,850 804 2,148
+2006 3,557,034 1,603 2,219
+Kentucky Total 6,607,034 3,043 2,171
+Louisiana
+1992 153,606 6 25,601
+1996 3,246,394 121 26,830
+1999 14,431,000 627 23,016
+2006 27,169,000 974 27,894
+Louisiana Total 45,000,000 1,728 26,042
+Michigan
+1992 1,110,900 50 22,218
+1996 1,133,000 50 22,660
+1999 6,789,100 100 67,891
+2006 4,644,874 47 98,827
+Michigan Total 13,677,874 247 55,376
+Mississippi
+1992 * * *
+1996 300,000 30 10,000
+1999 500,000 55 9,091
+2006 3,380,000 255 13,255
+Mississippi Total 4,180,000 340 12,294
+Missouri
+1992 22,000 25 880
+1996 21,000 40 525
+1999 22,500 69 326
+2006 23,890 8 2,986
+Missouri Total 89,390 142 630
+Montana
+1992 725,000 9 80,556
+1996 1,180,000 46 25,652
+1999 3,180,000 137 23,212
+2006 3,291,481 315 10,449
+Montana Total 8,376,481 507 16,522
+Nebraska
+1992 * * *
+1996 * * *
+1999 * * *
+2006 35,000 5 7,000
+Nebraska Total 35,000 5 7,000
+Protecting our country’s resources: the states’ case0
+*Fields marked with an “*” indicate that no data was reported or available for that survey period
+State Survey Year Plugging funds expended # of wells plugged Average Cost per Well
+New Mexico
+1992 * * *
+1996 * * *
+1999 556,536 43 12,943
+2006 6,130,113 424 14,458
+New Mexico Total 6,686,649 467 14,318
+  New York
+ 
+ 
+1992 83,000 3 27,667
+1996 250,000 6 41,667
+1999 250,000 6 41,667
+2006 250,000 48 5,208
+New York Total 833,000 63 13,222
+North Dakota
+1992 50,000 * *
+1996 63,000 3 21,000
+1999 226,000 11 20,545
+2006 225,000 8 28,125
+North Dakota Total 564,000 22 25,636
+Ohio
+1992 11,200,000 1,127 9,938
+1996 11,200,000 1,127 9,938
+1999 12,256,000 1,372 8,933
+2006 26,000,000 1,739 14,951
+Ohio Total 60,656,000 5,365 11,306
+Oklahoma
+1992 889,000 292 3,045
+1996 2,360,762 514 4,593
+1999 5,970,000 1,455 4,103
+2006 3,963,564 1,497 2,648
+Oklahoma Total 13,183,326 3,758 3,508
+Pennsylvania
+1992 814,000 38 21,421
+1996 964,000 43 22,419
+1999 814,000 57 14,281
+2006 12,755,310 1,555 8,203
+Pennsylvania Total 15,347,310 1,693 9,065
+Texas
+1992 21,858,000 5,402 4,046
+1996 14,216,158 8,421 1,688
+1999 30,823,842 15,476 1,992
+2006 11,293,316 11,848 953
+Texas Total 78,191,316 41,147 1,900
+  Utah
+ 
+1992 * * *
+1996 106,000 14 7,571
+1999 283,000 46 6,152
+2006 714,594 22 32,482
+Utah Total 1,103,594 82 13,458
+Protecting our country’s resources: the states’ case 
+*Fields marked with an “*” indicate that no data was reported or available for that survey period
+State Survey Year Plugging funds expended # of wells plugged Average Cost per Well
+  Virginia
+ 
+ 
+1992 * * *
+1996 * * *
+1999 250,000 11 22,727
+2006 150,000 13 11,538
+Virginia Total 400,000 24 16,667
+ West Virginia
+ 
+1992 102,000 26 3,923
+1996 258,000 39 6,615
+1999 205,800 22 9,355
+2006 1,049,227 41 25,591
+West Virginia Total 1,615,027 128 12,617
+  Wyoming
+ 
+ 
+1992 * * *
+1996 82,600 6 13,767
+1999 237,400 64 3,709
+2006 4,573,000 233 19,627
+Wyoming Total 4,893,000 303 16,149
+Grand Total  319,776,631 71,627 4,464
+Figure 11. Securities Permitted by Surveyed States
+State
+Date Security First 
+Required
+Modified Since 2000 
+Survey
+Regulatory Authority 
+Adjustment Permitted
+Separate Site 
+Restoration Bond
+CD
+Cash
+Certificate of Insurance
+Consolidated Financial 
+Fund
+Escrow Account
+Financial Statements
+Letter of Credit
+Liens
+Security Interest
+Surety and/or 
+Performance Bonds
+Alabama 1945 ü ü
+Alaska 1958 ü ü ü ü ü
+Arizona 1959 ü ü ü ü ü
+Arkansas 1983 ü ü ü ü ü
+California 1931 ü ü ü
+Colorado 1951 ü ü ü ü ü ü ü ü ü ü ü
+Florida 1946 ü ü ü ü ü ü
+Illinois 1939 ü ü ü ü
+Indiana 1947 ü ü ü ü
+Kansas 1982 ü ü ü ü ü ü
+Kentucky
+Louisiana 2000 ü ü ü ü ü
+Maryland 1957 ü ü ü ü
+Michigan 1931 ü ü ü ü ü ü
+Protecting our country’s resources: the states’ case
+State
+Date Security First 
+Required
+Modified Since 2000 
+Survey
+Regulatory Authority 
+Adjustment Permitted
+Separate Site 
+Restoration Bond
+CD
+Cash
+Certificate of Insurance
+Consolidated Financial 
+Fund
+Escrow Account
+Financial Statements
+Letter of Credit
+Liens
+Security Interest
+Surety and/or 
+Performance Bonds
+Mississippi 1992 ü ü ü ü
+Missouri 1966 ü ü ü ü
+Montana 1954 ü ü ü ü
+Nebraska 1959 ü ü ü ü
+Nevada 1954 ü ü ü ü
+New Mexico 1935 ü ü ü ü ü ü
+New York 1963 ü ü ü ü
+North Dakota 1941 ü ü
+Ohio 1963 ü ü ü ü ü
+Oklahoma 1922 ü ü ü ü ü
+Pennsylvania 1985 ü ü ü
+Tennessee 1943 ü ü ü
+Texas 1983 ü ü ü
+Utah 1955 ü ü ü ü ü
+Virginia 1955 ü ü ü
+West Virginia 1963 ü ü ü ü ü
+Wyoming 1951 ü ü ü ü
+Protecting our country’s resources: the states’ case 
+Figure 12. State security or financial assurance requirements: Single wells
+State Security Depth (feet) or Criteria Conditions
+Alabama MIN $5,000 
+MAX $50,000 
+Alaska MIN $100,000 Single well bonds allowed for estimated 
+cost of P & A if less than $100,000
+Arizona MIN $10,000 
+MAX $20,000 
+< 10,000
+> 10,000
+Arkansas MIN $3,000 
+MAX $15,000 
+California
+MIN $15,000 
+$20,000 
+MAX $30,000 
+< 5,000
+5,001 - 9,999
+> 10,000
+Colorado $5,000 
+Florida $50,000 
+$100,000 
+< 9,000
+> 9,000
+$100,000 / producer
+$200,000 / producer
+Illinois $1,500 
+$3,000 
+< 2,000
+> 2,000
+Indiana $2,500 
+Kansas $1 Multiplied times the aggregate depth for 
+all wells drilled or operated
+Louisiana
+$1 per foot
+$2 per foot
+$3 per foot
+< 3,000
+3,001 - 9,999
+> 10,000
+Maryland MIN $100,000 
+Michigan MIN $10,000 
+MAX $30,000 
+Mississippi
+$10,000 
+$15,000 
+$30,000 
+$50,000 
+< 10,000
+10,001 - 16,000
+16,001 - 20,000
+> 20,000
+Missouri
+$1,000 
+$2,000 
+$3,000 
+$4,000 
+$4,000 
+0 - 500
+501 - 1,000
+1,001 - 2,000
+2,001 - 5000
+ + $1/ ft > 5,001
+Montana
+$1,500 
+$5,000 
+$10,000 
+< 2,000
+2,001 - 3,500
+> 3,500
+Nebraska $5,000 
+Nevada $10,000 
+New Mexico
+$5,000 
+$10,000 
++ $1/ft
++ $1/ft
+Major producing counties
+Other counties
+Protecting our country’s resources: the states’ case
+State Security Depth (feet) or Criteria Conditions
+New York
+$2,500 
+$5,000 
+Varies
+< 2,500
+2,501 - 6,000
+> 6,000
+Security covers plugging & restoration
+Anticipated costs 
+North Dakota $20,000 
+Wells drilled to a total depth of 2,000 feet 
+may be bonded in a lesser amount upon 
+approval
+Ohio $5,000 
+Oklahoma Varies As established by licensed plugger
+Pennsylvania $2,500 
+Tennessee $5,000 
+Texas $2 per foot Total aggregate depth
+Utah $15,000 
+$120,000 
+< 1,000
+> 1,000
+Virginia $10,000 + $2,000
+ / per acre
+West Virginia $5,000 
+Wyoming $10,000 
+$20,000 
+< 2,000
+> 2,000
+Figure 13. State security or financial assurance requirements: Blanket bonds
+State Blanket Bond # of Wells Amount / Conditions
+Alabama $100,000
+Alaska Minimum $200,000
+Arizona
+$25,000
+$50,000
+$250,000
+10
+10 – 50
+> 50
+Can be required on state leases
+Arkansas
+$25,000
+$50,000
+$100,000
+< 50
+> 50
+> 100
+California
+$100,000
+$250,000
+$1,000,000
+< 50
+> 50
+All wells
+Colorado $30,000
+$100,000
+< 100
+> 100
+For surface:
+$2,000 for non-irrigated land
+$5,000 for irrigated land
+$25,000 blanket statewide assurance
+Florida $1,000,000 10
+Illinois
+$25,000
+$50,000
+$100,000
+< 25
+26 – 50
+> 50
+Indiana $45,000
+Kansas MIN $15,000
+MAX $45,000 Varies according to depth
+Protecting our country’s resources: the states’ case 
+State Blanket Bond # of Wells Amount / Conditions
+Louisiana
+$25,000
+$125,000
+$250,000
+< 10
+11 – 99
+> 100
+Maryland MAX $500,000
+Michigan MIN $100,000
+MAX $250,000 One performance bond covers all wells
+Mississippi $100,000
+Missouri $20,000
+$30,000
+< 50 (0 -800 ft)
+< 15 (801 – 1,200 ft)
+Montana $50,000
+Nebraska $25,000
+Nevada $50,000
+New Mexico $50,000
+New York $25,000 - $100,000
+$40,000 - $150,000
+North Dakota $50,000
+$100,000
+< 10
+> 10
+The $50,000 blanket bond is limited in 
+its coverage to contain no more than 
+three unplugged dry holes, plugged 
+wells with site not reclaimed, and/or 
+abandoned wells;
+The $100,000 bond is limited to six
+Ohio $15,000
+$30,000 $30,000 bond for financial statements
+Oklahoma $25,000
+$50,000 Net worth for financial statement
+Pennsylvania $25,000 Security covers drilling, plugging, water 
+supply, replacement and restoration
+Tennessee $20,000 Required when the landowner/lessee is 
+not party to the leasing agreement
+Texas
+$25,000
+$50,000
+$250,000
+1 – 10
+11 – 99
+>100
+For reclamation plants only; in the 
+amount required to close the facility
+Utah
+$15,000
+$30,000
+$60,000
+1000 – 3000
+3,001 – 10,000
+>10,000
+Security covers drilling, plugging, water 
+supply, replacement and restoration
+Virginia
+$25,000
+$50,000
+$75,000
+$100,000
+1 – 15
+16 – 30
+31 – 50
+> 50
+West Virginia $50,000
+Wyoming $75,000
+Additional amount may be required for 
+dormant wells or pits; Agency requires 
+bonding for some pits
+Protecting our country’s resources: the states’ case
+Figure 14. Salvage Valuation
+State Valuation methodology Anecdotal Information
+Arkansas Competitive bid by plugging contractors Value of well site production equipment is used to offset 
+plugging cost
+California Competitive bid by plugging contractors Value of well site production equipment is used to offset 
+plugging cost
+Colorado Competitive bid by plugging contractors  
+Illinois Current market value  Surface equipment value estimated only
+Indiana Competitive bid by resellers
+State agency attempts to locate an interested operator to 
+produce wells; Wells that cause environmental damages 
+are plugged
+Kansas Sealed bid 
+Wells must be determined to have no economic value 
+before state plugging. Proceeds from salvage are 
+deposited in the Abandoned Well Plugging Fund (approx 
+$60,000/year)
+Kentucky Competitive bid by plugging contractors
+Louisiana Competitive bid by plugging contractors Bidders separately identify and place value on each piece 
+of salvage equipment on a well-by-well basis
+Michigan  
+Any funds from salvage are returned to the Orphan Well 
+Fund. For the 2006 plugging season, the value of salvage 
+was $160,845.
+Mississippi Competitive bid by plugging contractors  
+Nebraska
+Nebraska has typically not included the value in a cost 
+estimate to plug a well. Contractors have been selected on 
+the basis of their ability to do the required work and their 
+price sheets and not a firm bid. Cost of abandonment is 
+based on time worked. Wells are evaluated to determine a 
+level of interest by other operators who may wish to bond 
+and utilize the wells.
+The companies performing the plugging work have sold 
+the equipment and retained 10% of the sales price. The 
+remaining 90% of the value has been credited back on the 
+final invoice for the plugging of the wells.
+North Dakota Current market value  
+Ohio Current market value
+ORC 1509.072 states that this has to be done. Rarely, 
+is there any equipment or asset value. Salvage value is 
+deducted from the contract price by plugging contractor.
+Oklahoma  Competitive bid by plugging contractors  
+Utah Current market value
+A full procedure and cost analysis is prepared for each 
+well prior to bidding out the projects. Aside from a 
+brief review of production history, reserves are not fully 
+estimated. However, operators in the vicinity are notified 
+that the well is going to be plugged and have the option 
+to take over the well. Salvage value, if any is included 
+in the cost analysis and would be considered as part of a 
+responsible bid.
+Protecting our country’s resources: the states’ case 
+STATE SUMMARIES
+STATE SuMMARy InTRODuCTIOn 
+States have statutory authorities and regulatory 
+mechanisms to address orphan wells.  While the IOGCC 
+provided a definition for “orphan well” for purposes of 
+this study, state definitions vary and are included in this 
+category.  Some states differentiate between abandoned and 
+orphaned wells, and those definitions are also reflected in 
+this category.  Also included, is the specific information from 
+the individual states concerning the date of establishment of 
+the state regulatory program, the authorities used to regulate 
+abandoned, idle, and orphan wells, statutory or regulatory 
+definitions, and changes or improvements in programs.  A 
+synopsis of state authorities and definitions is included in 
+Appendices A through FF.
+Over the course of the four survey periods, some elements 
+begin to emerge as points of note. In the first survey year, 1992, 
+only 17 states reported any plugging activity. Texas reported 
+plugging 5,402 wells, followed by Ohio at 1,127 and Kansas 
+with 1,060. Kentucky reported plugging 432 and Oklahoma, 
+292. The rest of the numbers reported were less than 50 and 
+most below 30. Waiting lists were obviously random in most 
+cases and the average costs to plug were reported at a high 
+for Montana of $80,000 and a low for Arkansas of $833, with 
+most reporting within the range of 16,000 to 27,000. By the 
+second survey period reported in 1996, 22 states reported 
+plugging activity and the leaders in volume remained the 
+same. The waiting lists were clearly becoming more defined, 
+with eight states reporting zero, six reporting 30 or less, six 
+states reporting waiting lists numbering in the thousands and 
+five in the hundreds. Generally costs to plug went up and 
+began to show more diversity. The new leader in high costs 
+was Colorado at $125,038 (a standing record) and the low was 
+Missouri at $1,075. Most of the reporting states clustered into 
+three cost ranges: $2,000 to $4,000, $9,000 to $17,000 and 
+$22,000 to $25,000.
+In the third reporting period, the study of 1999 showed 
+that only four states reported no plugging activity. Texas 
+and Kansas remained the first and second leader in plugging 
+activity reporting 15,476 and 1,892 wells plugged respectively. 
+Third place turned into a cluster of states: Oklahoma (1,455), 
+Kentucky (1440), Ohio (1,372) and Illinois (1,038). Waiting 
+lists also moved up in numbers with only six states reporting 
+zero wells, five reporting 20 or less, nine reporting in the 
+hundreds and five reporting in the thousands. That period’s 
+leader in average plugging costs was New York at $41,667 and 
+the low was Missouri at $949. Nine states reported costs in the 
+range of $2,000 to $6,000, four states reported cost ranges of 
+$13,000 to $19,000 and five reported costs above $22,000.
+For this most current study period, only three states 
+reported no plugging activity. Texas and Kansas retained their 
+leadership positions, 10,910 and 4,542 respectively. Only 
+two states clustered in the third position, Illinois at 3,200 and 
+Kentucky at 3,043. The waiting lists, however, continued to 
+develop with only two reporting no wells, ten states reported 
+in the thousands and six reported in the hundreds. Michigan 
+reported the high in average plugging costs at $55,376, with 
+Alaska a strong second at $40,000. The low cost state was 
+Tennessee at $1,035. The ranges became somewhat more 
+blurred with a defined clump reporting in the $1,000 to $5,000 
+range, but almost a steady progression from $7,000 up to 
+28,000.
+Protecting our country’s resources: the states’ case
+Regulatory Authority
+State Oil and Gas Board
+PO Box 869999
+Tuscaloosa, AL 35486-6999
+www.ogb.state.al.us
+Background
+Regulation of oil and gas wells in Alabama began in 
+1945 through legislation establishing the State Oil and 
+Gas Board. The act provided the authority to regulate 
+oil and gas wells, protect ground water, and provide for 
+plugging, abandonment, and bonding. State Oil and Gas 
+Board regulations were promulgated effective Oct. 1, 1946, 
+to regulate these activities. Section 917-6 of the Code of 
+Alabama provides for regulation of oil and gas wells by 
+requiring the “drilling, casing and plugging of wells to be 
+done in such a manner as to prevent the escape of oil and gas 
+out of one stratum to another,” and “to prevent the pollution 
+of fresh water supplies by oil, gas or salt water.” 
+Alabama has established a Well Plugging Fund to 
+collect and disburse fees for the purpose of plugging coalbed 
+methane gas wells. The fund will be used when the failure to 
+plug a well poses a threat to the environment or to the public 
+health, safety or welfare.
+State Plugging Efforts
+Currently, Alabama does not have a plugging fund 
+dedicated to orphan wells. State plugging funds are 
+dedicated to plugging coalbed methane gas wells.
+Sources of Plugging Funds
+Fee Permit fee
+Definitions
+Abandoned Well
+Alabama statutes define an abandoned well as one that 
+has not been used for six consecutive months and cannot 
+be operated, whether because it is a dry hole or production 
+has ceased, or operations have not been conducted, or for 
+other reasons.
+Orphan Well
+Alabama does not statutorily define an orphan well, per 
+se, but addresses abandoned wells.
+Temporarily Abandoned Well
+A temporarily abandoned well is statutorily defined as 
+a well currently not producing oil and/or gas that has been 
+approved for future utility by the state supervisor.
+Blanket Bonds  
+ Amount Add’l Criteria Number of Wells 
+Base $100,00  
+Single Well Securities
+ Amount Add’l Criteria Depth         
+Maximum $50,000   
+Minimum $5,000
+Statutory Authorities
+Plugging Fund
+Coalbed Methane Gas Plugging Fund: Ala. Code § 9-17-133
+Authority to Regulate
+Ala. Code 1975 § 9-17-6
+Definitions
+Alabama Oil & Gas Regulations § 400-1-1-05
+Security or Financial Assurance 
+Date Security First Required:  1945
+ Modified Since 2000 Survey £
+ Regulatory Authority Adjustment  R 
+ Separate Site Restoration Bond £
+Types of Security Bonds Allowed
+CD £	
+Cash £	
+Certificate of Insurance £
+Consolidated Financial Fund £
+Escrow Account £
+Financial Statements £
+Letter of Credit £
+Liens £ 
+Security Interest £
+Surety and/or Performance Bonds R 
+ 
+Appendix A: Alabama
+Protecting our country’s resources: the states’ case 
+Regulatory Authority
+Alaska Oil & Gas Commission
+333 West Seventh Avenue, Suite 100
+Anchorage, AK 99501-3935
+www.state.ak.us/local/
+Background
+The Alaska Oil and Gas Conservation Commission 
+began its regulation of oil and gas wells on Oct. 1, 1958. AS 
+31.05.030 describes the commission’s authority to regulate 
+oil and gas wells in the state. Plugging and abandonment 
+regulations began in 1958 and were revised in 1986 and 
+1999. Ground water protection began generally in 1958. 
+Authority to take primacy under the Safe Drinking Water Act 
+began in 1984 and was revised in 1986 and 1999.
+State Plugging Efforts
+Sources of Plugging Funds
+Public Operating budget
+Definitions
+Abandoned Well
+An abandoned well is defined as a well plugged in 
+accordance with 20 AAC 25.112, which dictates the setting 
+of subsurface and surface plugs.
+Temporarily Abandoned Well
+Alaska does not use the term temporarily abandoned 
+well, but rather uses the terms “suspended” and “shut-in” in 
+the state’s regulations. In Alaska, a suspended well is a well 
+plugged in accordance with 20 AAC 25.110 with a reserved 
+option to re-enter and re-drill the well or complete the 
+well. A shut-in well is defined as a well where the surface, 
+wellhead, or subsurface valves have been closed to halt flow 
+from or into the well, with the completion interval remaining 
+open to the tubing below the closed valves.
+ 
+Blanket Bonds  
+ Amount Add’l Criteria Number of Wells  
+Minimum $200,00
+Single Well Securities
+ Amount Add’l Criteria Depth          
+Maximum $100,000
+Single well bonds allowed for estimated cost of P & A if less than 
+$100,000
+Statutory Authorities
+Abandoned Wells
+ 20 AAC 25.105 and 20 AAC 25.112
+Authority to Regulate
+Alaska Statute Title 31 Chap 5 §31.05.030
+Security or Financial Assurance 
+Date Security First Required:  1958
+ Modified Since 2000 Survey £
+ Regulatory Authority Adjustment  R 
+ Separate Site Restoration Bond R
+Types of Security Bonds Allowed
+CD R	
+Cash £	
+Certificate of Insurance £
+Consolidated Financial Fund £
+Escrow Account £
+Financial Statements £
+Letter of Credit R
+Liens £ 
+Security Interest £
+Surety and/or Performance Bonds R 
+Appendix B: Alaska
+Protecting our country’s resources: the states’ case0
+Appendix C: Arizona
+Regulatory Authority
+Arizona Geological Survey
+416 West Congress Street, Suite 100
+Tucson, AZ 85701
+www.azgs.state.az.us
+Background
+The Arizona Oil and Gas Conservation Commission 
+was established in 1959 to administer the Conservation Act 
+of 1951, which was expanded in 1978 to include regulation 
+of enhanced recovery, disposal and storage wells. As of 
+July 1991, the Arizona Geological Survey provides staff 
+support to the commission to administer and enforce the 
+laws relating to the conservation of oil and gas. Rules 
+promulgated pursuant to statutory authority are reviewed 
+every five years and new rules are adopted, outdated rules 
+repealed, and existing rules amended as necessary to be 
+consistent with applicable federal law, and to account for 
+technological advances and currently accepted practices in 
+the regulated industry. In 1995, Arizona amended its laws to 
+allow the commission to forfeit the bond of owners who fail 
+to properly plug each dry or abandoned well and to sue them 
+for plugging costs in excess of the bond amount. The Arizona 
+Department of Water Resources has authority over water 
+wells, and the Arizona Department of Environmental Quality 
+has authority over Class I, III, IV , and V injection wells.
+State Plugging Efforts
+Arizona has no orphan wells, and therefore has no need 
+for plugging efforts relative to such wells.
+Definitions
+Abandoned Well
+An abandoned well is defined as one that is not 
+producing, injecting, or plugged and is not capable of being 
+put to some future beneficial use.
+Temporarily Abandoned Well
+Arizona defines a temporarily abandoned well as a well 
+that is not producing, injecting, or plugged but might be 
+capable of being put to some future beneficial use.
+Blanket Bonds  
+ Amount Add’l Criteria Number of Well   
+Minimum $25,000  10
+Mid $50,000  10 - 50
+Maximum $250,00  > 50
+Single Well Securities
+ Amount Add’l Criteria Depth       
+Maximum $20,000 > 10,000
+Minimum $10,000 < 10,000
+Can be required on state leases
+Statutory Authorities
+Plugging Oil and Gas Wells
+27-524(E), and 27-516 (A)(3)
+Authority to Regulate
+27-515, and 27-516
+Security or Financial Assurance 
+Date Security First Required:  1959
+ Modified Since 2000 Survey £
+ Regulatory Authority Adjustment  R 
+ Separate Site Restoration Bond R
+Types of Security Bonds Allowed
+CD R	
+Cash R	
+Certificate of Insurance £
+Consolidated Financial Fund £
+Escrow Account £
+Financial Statements £
+Letter of Credit £
+Liens £ 
+Security Interest £
+Surety and/or Performance Bonds R
+Protecting our country’s resources: the states’ case 
+Appendix D: Arkansas
+Regulatory Authority
+Oil & Gas Commission
+301 Natural Resources Drive, Suite 102
+Little Rock, AR 72205
+www.aogc.state.ar.us
+Background
+Arkansas began regulating oil and gas wells in 1939. 
+Required plugging and abandonment procedures were also 
+enacted in 1939, as were efforts for the protection of ground 
+water. The Arkansas Oil and Gas Commission is the state 
+office responsible for enforcing the regulations. A significant 
+revision to the regulations was adopted in 1983 to include 
+bonding or a letter of credit for security purposes. In 1995, 
+the state reduced its bonding
+State Plugging Efforts
+The Arkansas Abandoned and Orphan Well Plugging 
+Fund was created by statute in 2005. The fund is funded 
+by an annual well fee assessed to operators or wells in the 
+state. The fee generates approximately $250,000 annually. 
+Prior to the establishment of the plugging fund, abandoned 
+and orphan wells were plugged utilizing funds from the 
+commission operating budget.
+Sources of Plugging Funds
+Fee Annual operating fee
+Definitions
+Abandoned Well
+Arkansas defines an abandoned well as any well that 
+is not producing, has not received regulatory approval to 
+remain idle or temporarily abandoned and has an unknown 
+or insolvent operator.
+Temporarily Abandoned Well
+A temporarily abandoned well is a well that has been 
+shut-in due to well bore problems or economic reasons, but 
+has not been plugged.
+Blanket Bonds  
+ Amount Add’l Criteria Number of Well 
+Minimum $25,000 < 50
+Mid $50,000 51 - 99
+Maximum $100,00 > 100
+Single Well Securities
+ Amount Add’l Criteria Depth         
+Maximum $15,000
+Minimum $3,000
+Statutory Authorities
+Plugging Fund
+Ark. Stat. Ann. § 15-71-115 (2007)
+Authority to Regulate
+Ark. Stat. Ann. § 15-71-110 (2007), § 15-72-217
+Security or Financial Assurance 
+Date Security First Required:  1983
+ Modified Since 2000 Survey £
+ Regulatory Authority Adjustment  R 
+ Separate Site Restoration Bond £
+Types of Security Bonds Allowed
+CD R	
+Cash R	
+Certificate of Insurance £
+Consolidated Financial Fund £
+Escrow Account £
+Financial Statements £
+Letter of Credit R
+Liens £ 
+Security Interest £
+Surety and/or Performance Bonds R
+Protecting our country’s resources: the states’ case
+Regulatory Authority
+Department of Conservation
+801 K. Street MS 20-20
+Sacramento, CA 95814
+www.consrv.ca.gov/DOG
+Background
+California began its regulatory program in 1915, which 
+included plugging and abandonment procedures. A ground 
+water protection component was added in 1929. Two years 
+later, the first well-bonding requirements were established. 
+Revisions to update/enhance the statutes and regulations 
+have occurred throughout the history of the program. The 
+California Division of Oil, Gas, and Geothermal Resources 
+is responsible for its maintenance.
+State Plugging Efforts
+California made major changes to its bonding statutes 
+on Jan. 1, 1999. For individual well bonds, each amount was 
+increased by $5,000. Amounts are based on depths and come 
+in three increments: wells < 5,000’ = $15,000; wells > 5,000’ 
+but <10,000’ = $20,000; and wells >10,000’ = $30,000. 
+Blanket bonds are: $1 million “super” blanket bond covers 
+all wells, including idle wells; $250,000 covers more than 50 
+wells, but not idle wells; and $100,000 covers 50 or fewer 
+wells, but not idle wells. 
+Regarding orphan wells, the state has an innovative 
+orphan well adoption program, which allows for an 
+opportunity to bring wells back into production. The division 
+maintains a list of orphan wells that are available for 
+adoption. This program allows prospective operators to enter 
+into a three-way agreement to test an orphan well for up to 
+90 days without incurring any liability for plugging the well. 
+If the test is successful, the prospective operator can adopt 
+the well by posting a bond and becoming its permanent 
+operator. If the test is unsuccessful, the prospective operator 
+can walk away from the agreement with no liability incurred.
+Sources of Plugging Funds
+Fee Idle well fee
+Tax Production assessment
+Definitions
+Abandoned Well
+The state defines an abandoned well as one properly 
+plugged, with the site location restored, and all reports filed.
+Orphan Well
+In California, an orphan well is defined as a well that 
+has been deserted and has no viable operator or owner. 
+California uses the term “idle-deserted” to define a well with 
+no operator responsible for its plugging and abandonment.
+California also defines an “acute orphan well” as a well that 
+could pose an immediate danger to life, health, or natural 
+resources, but with no viable operator responsible for 
+plugging and abandoning the well.
+Blanket Bonds  
+ Amount Add’l Criteria Number of Well  
+Minimum $100,00 < 50
+Mid $250,00 > 50
+Maximum $1,000,0 All wells
+Single Well Securities
+ Amount Add’l Criteria Depth         
+Maximum $30,000 > 10,000
+Mid $20,000 5,001 - 10,000
+Minimum $15,000 < 5,000
+Statutory Authorities
+Authority to Regulate
+Public Resources Code 
+(PRC) 3106, 3237, 3250, 3260, and 3263]; Idle Deserted 
+Wells – [PRC 3237 and 3251
+Security or Financial Assurance 
+Date Security First Required:  1931 
+ Modified Since 2000 Survey £
+ Regulatory Authority Adjustment  £ 
+ Separate Site Restoration Bond £
+Types of Security Bonds Allowed
+CD R	
+Cash R	
+Certificate of Insurance £
+Consolidated Financial Fund £
+Escrow Account £
+Financial Statements £
+Letter of Credit £
+Liens £ 
+Security Interest £
+Surety and/or Performance Bonds R
+Appendix E: California
+Protecting our country’s resources: the states’ case 
+Regulatory Authority
+Oil & Gas Conservation Commission
+1120 Lincoln Street, Suite 801
+Denver, CO 80203-2136
+www.oil-gas.state.co.us
+Background
+The Colorado Oil and Gas Conservation Commission 
+(COGCC) began regulating oil and gas wells in 1951. 
+Regulation of ground water protection and plugging 
+and abandonment procedures also began that year. The 
+commission has the authority to regulate the drilling, 
+production and plugging of oil and gas related wells and all 
+other operations for the production of oil or gas. COGCC 
+also controls the shooting and chemical treatment of wells, 
+well spacing, and all oil and gas operations to prevent and 
+mitigate significant adverse environmental impacts on any 
+air, water, soil or biological resources resulting from oil 
+and gas operations to the extent necessary to protect public 
+health, safety, and welfare; taking into consideration cost-
+effectiveness and technical feasibility.
+In 1989, an amendment to the Water Quality Control 
+Act designated the COGCC as an implementing agency 
+for ground water standards and classifications. In 1994, 
+legislation required the commission to balance promotion of 
+oil and gas development with the protection of public health, 
+safety and welfare. This legislation also expanded the types 
+of financial surety accepted. In 1995, the commission began 
+requiring mechanical integrity testing on any well idle for 
+more than two years.
+State Plugging Efforts
+Colorado’s source of plugging comes from a mill levy 
+imposed on the market value of all oil and gas produced, 
+saved, sold or transported from the field. The COGCC 
+receives an annual appropriation of $220,000 that is 
+dedicated to plugging and reclaiming orphaned wells out 
+of these funds. The uncommitted balance of this fund could 
+be appropriated to plug additional wells or respond to 
+emergencies.
+Sources of Plugging Funds
+Tax Excise tax
+Definitions
+Abandoned Well
+An abandoned well is a well that is properly abandoned 
+per COGCC specifications outlined in COGCC Rule 319 a.
+Orphan Well
+An orphaned well is defined as a well where no operator 
+can be located. An inactive well (for financial assurance 
+purposes) is defined as any well from which no production 
+has been sold for a period of 12 consecutive months; any 
+well that has been temporarily abandoned for a period of 
+six consecutive months; or any injection well which has not 
+been utilized.
+Temporarily Abandoned Well
+A temporarily abandoned well is incapable of 
+production or injection without the addition of one or more 
+pieces of wellhead or other equipment, including: valves, 
+tubing, rods, pumps, heater-treaters, separators, dehydrators, 
+compressors, piping, or tanks.
+Blanket Bonds  
+ Amount Add’l Criteria Number of Well  
+Minimum $30,000 < 100
+Maximum $100,00 > 100
+Other $25,000 Surface Blanket 
+Other $5,000 Surface Irrigated land
+Other $2,000 Surface Non-irrigated
+Single Well Securities
+ Amount Add’l Criteria Depth         
+Base $5,000
+Statutory Authorities
+Plugging Fund
+C.R.S. 34-60-122
+Authority to Regulate
+C.R.S. 34-60-106 (2)]; Abandonment – [Rule 319 a]
+Security or Financial Assurance 
+Date Security First Required:  1951 
+Modified Since 2000 Survey £
+ Regulatory Authority Adjustment  R 
+ Separate Site Restoration Bond R
+Types of Security Bonds Allowed
+CD R	
+Cash R	
+Certificate of Insurance R
+Consolidated Financial Fund R
+Escrow Account R
+Financial Statements R
+Letter of Credit £
+Liens R 
+Security Interest R
+Surety and/or Performance Bonds R
+Appendix F: Colorado
+Protecting our country’s resources: the states’ case
+Regulatory Authority
+Department of Environmental Protection
+903 West Tennessee Street, MS 720
+Tallahassee, FL 32304-7700
+www.dep.state.fl.us/geology
+Background
+Florida began regulation of oil and gas wells in 1945 
+and has made revisions to its regulations in 1962, 1972, 
+1981, 1989 and 1993. Ground water protection and plugging 
+and abandonment procedures began in 1946. The Florida 
+Geological Survey has responsibility for regulation of oil 
+and gas wells in the state. 
+State Plugging Efforts
+Florida has established a Minerals Trust Fund to assist 
+in plugging of abandoned wells. These funds are intended 
+for use when the operator cannot or will not correct the 
+violations within a reasonable time.
+Definitions
+Abandoned Well
+An abandoned well is one that has been permanently 
+plugged and forsaken.
+Temporarily Abandoned Well
+In Florida, temporarily abandoned wells are those with 
+existing perforations plugged that could be re-entered.
+Blanket Bonds  
+ Amount Add’l Criteria Number of Well 
+Base $1,000,0 10
+Single Well Securities
+Amount Add’l Criteria Depth         
+Maximum  $100,000 $200,000 / > 9,000 
+  producer 
+Base $50,000 $100,000 / < 9,000
+  producer
+Statutory Authorities
+Plugging Fund
+Minerals Trust Fund: Florida Statutes, Chapter 376.40
+Authority to Regulate
+Florida Statutes, Chapter 377, Part I, Florida Administrative 
+Code, Rule 62C-26.008, F.S.A. § 376.40
+Security or Financial Assurance
+Date Security First Required:  1946 
+Modified Since 2000 Survey R
+ Regulatory Authority Adjustment  R 
+ Separate Site Restoration Bond £
+Types of Security Bonds Allowed
+CD R	
+Cash R	
+Certificate of Insurance £
+Consolidated Financial Fund £
+Escrow Account R
+Financial Statements £
+Letter of Credit £
+Liens £ 
+Security Interest £
+Surety and/or Performance Bonds R
+Appendix G: Florida
+Protecting our country’s resources: the states’ case 
+Regulatory Authority
+Department of Natural Resources
+One Natural Resources Way
+Springfield, IL 67206
+www.dnr.state.il.us/mines/dog
+Background
+The Illinois Oil and Gas Act was adopted in 1939. It 
+provides the Department of Natural Resources, Division of 
+Oil and Gas in the Office of Mines and Minerals with the 
+authority to define and regulate idle, orphan and temporarily 
+abandoned wells. While the measure generally specified 
+the protection of ground water, specific surface casing 
+requirements were not mandated until 1984. Plugging 
+requirements, which have been modified since the adoption 
+of the law, have been in place since its passage in 1939. 
+No significant revision occurred until 1988, when 
+authority for the regulation of oil and gas wells was removed 
+from the State Mining Board and given to the director of 
+the Department of Mines and Minerals (part of the Illinois 
+Department of Natural Resources), effective July 1, 1995. 
+In 1989, the Division of Oil and Gas was given enforcement 
+authority in the form of administrative orders, including 
+the issuance of civil penalties for violations. Bonding 
+requirements for wells were eliminated in 1990 and replaced 
+with an annual well fee, thus creating the State Plugging and 
+Restoration Program. In 1997, the act was amended to create 
+the Landowner Grant Program to plug abandoned wells and 
+to establish salvage procedures for abandoned production 
+equipment. The department uses this program to offset 
+plugging costs. Over the last nine years, the oil and gas 
+rules have undergone 24 amendments, including: revision of 
+temporary abandonment; plugging and mechanical integrity 
+testing rules for Class II wells; revision of permitting 
+requirements of production wells and Class II Injection 
+wells and revised rules for the operation and construction of 
+production and Class II wells; rules addressing the handling, 
+transportation, and disposal of exploration and production 
+(E&P) waste; and the elimination of produced water pits. 
+In accordance with the oil and gas rules, all idle wells 
+must be reported to the department and put on temporary 
+abandoned status if they have been idle for more than 
+two years. Operators, which do not report idle wells to 
+the department, are issued a notice of violation for failure 
+to request temporary abandoned status. If the well is not 
+granted temporarily abandoned status, the well is ordered 
+plugged. If no operator for the well can be located, after 
+notice and hearing, the unit is placed into the State Plugging 
+and Restoration Program.
+State Plugging Efforts
+Statutes in Illinois require the department to 
+annually publish a financial report describing the income, 
+expenditures, and obligations of the Underground Resources 
+Conservation Enforcement Fund and the Plugging and 
+Restoration Fund, including the number of orphan wells 
+identified and the status of closure of these wells.
+In the case of orphan wells, the State of Illinois files 
+a lien for all fees due and for all funds expended by the 
+department to plug, replug, repair or restore the site of the 
+orphan well. The lien extends to the entire owners’ and 
+operators’ interest in the well and to all equipment used in 
+connection with the operating of the well, as well as to the 
+entire acreage included in the drilling unit or units. The lien 
+created in the case of an orphan well is prior and superior 
+to any mortgage or other lien except for the lien of local 
+property taxes.
+The department may elect to plug, replug, repair, or 
+restore the well site of any orphan well, but only after a 
+determination by the department, in accordance with its 
+rules, that the well is orphaned. In cases where no permittee 
+can be identified or located and no contributions have been 
+made to the fund attributable to the operation of the well, 
+expenditures are limited to amounts attributable to the fund’s 
+interest earnings or from amounts in the fund other 
+than permittee contributions, unless those amounts are 
+otherwise restricted.
+Sources of Plugging Funds
+Fee Annual operating fee
+Definitions
+Orphan Well
+Illinois defines a well as orphan if its bond has not been 
+paid for the past two years, no oil or gas has been produced 
+in two years, and no owner can be identified by the state. A 
+well that has been drilled for purposes other than those for 
+which a permit is required can also be considered an orphan 
+Appendix H: Illinois
+Protecting our country’s resources: the states’ case
+well if it serves as a conduit for oil or salt water intrusions 
+into fresh water zones or onto the surface.
+Temporarily Abandoned Well
+A temporarily abandoned well is a well that has been 
+inactive for more than two years and has been temporarily 
+abandoned in accordance with state rules.
+Blanket Bonds  
+ Amount Add’l Criteria Number of Well 
+Minimum $25,000 < 25
+Mid $50,000 26 – 50
+Maximum $100,00 > 50
+Single Well Securities
+ Amount Add’l Criteria Depth        
+Maximum $3,000  > 2,000
+Base $1,500  < 2,000
+Statutory Authorities
+Plugging Oil and Gas Wells
+Orphan Well Plugging: 225 ILCS 725/1.2; 19.5; 19.6; 19.8
+Definitions
+225 ILCS 725/1
+Authority to Regulate
+225 ILCS 725/1, 225 ILCS 725/1
+Security or Financial Assurance
+Date Security First Required:  1939
+ Modified Since 2000 Survey £
+ Regulatory Authority Adjustment  R 
+ Separate Site Restoration Bond £	
+Types of Security Bonds Allowed
+CD R	
+Cash £	
+Certificate of Insurance £
+Consolidated Financial Fund £
+Escrow Account £
+Financial Statements R
+Letter of Credit £
+Liens £ 
+Security Interest £
+Surety and/or Performance Bonds R

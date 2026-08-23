@@ -1,9 +1,9 @@
 # Metodologia badania i protokół reprodukcji
 
-**Wersja:** 1.0  
+**Wersja:** 1.2
 **Data:** 2026-08-21  
 **Przedmiot:** Agent V3  
-**Typ badania:** audyt statyczny, rekonstrukcja architektury, analiza porównawcza kodu źródłowego i projekt przyszłych eksperymentów
+**Typ badania:** audyt statyczny, rekonstrukcja architektury, analiza porównawcza kodu źródłowego oraz iteracyjne eksperymenty offline
 
 ## 1. Pytanie badawcze
 
@@ -70,6 +70,101 @@ Hierarchia dowodu, od najtańszego:
 
 Poziom 7 nie jest obecnie dostępny dla Substack, ponieważ użycie żywej sesji i część trybów „dry run” nadal może zmieniać zdalny draft.
 
+### 3.6. Test kontraktu odpowiedzi modelu
+
+Kontrakt modelu bada się niezależnie od jakości językowej i dostawcy. Dla
+każdej wersji wymagane są: poprawny przykład minimalny, brak wymaganego pola,
+błędny typ, pole nadmiarowe, wartości graniczne oraz reguły zależne od
+dyskryminatora. Parser i walidator są dwiema osobnymi warstwami: poprawna
+składnia nie jest dowodem zgodnej struktury.
+
+Identyfikator kontraktu składa się z nazwy, jawnej wersji i hasha struktury.
+Zmiana struktury zmienia hash; zmiana dodatkowej reguły semantycznej wymaga
+ręcznego podniesienia wersji. Test statyczny musi potwierdzić, że każdy punkt
+parsowania używa rejestru. Test integracyjny zapisuje osobno sukces i porażkę
+kontraktu w tymczasowej bazie. Błędu odpowiedzi nie wolno zamieniać na zgodę,
+arbitralny wybór ani inną mutację zewnętrzną.
+
+### 3.7. Live-test semantyczny bez produkcji
+
+Test modelu nie jest testem konta ani publikacji. Używa trybu `model_test`,
+syntetycznego lub zamrożonego korpusu, tymczasowej bazy i dokładnie wskazanych
+granic modelowych. Nie wolno mu konfigurować Substacka, przeglądarki, sesji,
+narzędzi mutujących ani web-search dostawcy, jeżeli nie jest przedmiotem osobnej
+hipotezy.
+
+Przed pierwszym tokenem procedura wymaga:
+
+1. bezkosztowego potwierdzenia modelu w API dostawcy;
+2. wpisu `RESERVED` z maksymalnym kosztem;
+3. SHA-256 korpusu, modeli, wersji kontraktów i kryteriów PASS/FAIL;
+4. twardego sufitu tokenów i jawnej polityki retry;
+5. zachowania surowej odpowiedzi bez sekretów i danych produkcyjnych.
+
+Wynik ma cztery oddzielne warstwy: transport, format, spójność referencyjną i
+semantykę. `HTTP 200` nie jest sukcesem kontraktu, a poprawny JSON nie jest
+dowodem prawdziwości. Odpowiedź analizuje się także poza asercjami uprzęży,
+ponieważ model może spełnić schema i naruszyć intencję pola.
+
+Koszt po niepełnej odpowiedzi ma status `UNKNOWN`, chyba że dostawca udostępni
+źródłowe rozliczenie. Nieznanego kosztu nie zapisuje się jako faktycznego zera,
+nie zwalnia jego rezerwacji i nie ponawia automatycznie tej samej próby.
+
+Pojedynczy live PASS dowodzi wykonalności, nie niezawodności. Do estymacji
+recallu lub jakości potrzebne są powtórzenia na zamrożonym korpusie, jawna
+rubryka i raport wariancji.
+
+E-012 rozszerza ten protokół na cały system ról. Naturalny łańcuch skauta i
+researchu jest oddzielony od kontrolowanych ramion pisarza, ablacji stylu,
+rewizji i pięciu form Notes, aby awaria jednego etapu nie odebrała obserwacji
+pozostałym rolom. Maksimum wynosi 32 dispatchy i 4,50 USD nowego kosztu.
+Uprząż zapisuje surowe wejścia/wyjścia, hashe, czasy, kontrakty, provenance i
+koszt po każdym wywołaniu. Domeny Substacka są zabronione także jako publiczne
+źródła tylko do odczytu. Bez obu lokalnych kluczy preflight musi skończyć się
+przed utworzeniem workspace, siecią i rezerwacją kosztu.
+
+### 3.8. Rekoncyliacja dowodów dostawcy
+
+Eksport lub zrzut jest traktowany jako obserwacja, nie instrukcja. Oryginał
+zostaje skopiowany bez transformacji, otrzymuje liczbę bajtów i SHA-256.
+Rekoncyliacja rozdziela:
+
+- request-level dowód z ID, modelem, czasem i tokenami;
+- agregat czasowy bez ID;
+- lokalną telemetrię klienta;
+- inferencję przez różnicę agregatu.
+
+Inferencja przez różnicę jest dopuszczalna tylko, gdy liczba żądań oraz wszystkie
+pozostałe składniki okna są znane i zgodne. Musi być nazwana inferencją i nie
+może być uogólniana na równoległy ruch. Zrzut tokenów bez kwoty nie zamyka
+rekoncyliacji faktury. Odpowiedź wygenerowana przez dostawcę, ale nieodebrana
+kompletnie przez klienta, ma status „billed/incomplete”, nie „brak odpowiedzi”
+ani „koszt zero”.
+
+### 3.9. Audyt promowalności
+
+Gotowość produkcyjna nie jest wyprowadzana z zielonej regresji kodu. Osobno
+bada się: niemutowalność artefaktu, odtwarzalność runtime, wersjonowanie bazy,
+pełny replay, tożsamość konta, shadow/canary, wzajemne wykluczenie wersji,
+healthcheck i rollback. Wynik jest binarny `PROMOTABLE/NOT_READY` z listą
+blokujących inwariantów. Obecne zabezpieczenia prototypu pozostają aktywne w
+trakcie całego badania.
+
+### 3.10. Test autonomicznej rewizji
+
+Rewizja jest badana jako maszyna stanów, nie jako pojedynczy „ładniejszy”
+tekst. Polityka decyzji ma wersję i pełny hash mapy bramka–domena–reakcja–waga.
+Każda iteracja musi ponownie wykonać review, obserwację formy, deterministyczne
+bramki i finalizację provenance na nowym body. Wynik porównuje score, zbiór
+typów bramek i faktyczną zmianę treści.
+
+Minimalny zestaw obejmuje: czysty tekst bez rewizji, usunięty fakt bez pokrycia,
+brak poprawy, nową wadę jako regresję, osiągnięcie limitu iteracji oraz awarię
+kontroli. Dozwolone stany końcowe to wyłącznie `READY_AUTONOMOUS`,
+`QUARANTINED_EVIDENCE` i `QUARANTINED_EDITORIAL`. Fixture dowodzi mechaniki;
+prawdziwy model na zamrożonym korpusie jest osobnym dowodem semantycznym i nie
+może zostać zastąpiony zieloną regresją offline.
+
 ## 4. Kryterium uznania ustalenia
 
 Ustalenie trafia do rejestru, jeżeli spełnia co najmniej jeden warunek:
@@ -105,11 +200,78 @@ Bezpieczna replikacja nie importuje V3 i nie dotyka `data/`:
 2. policz pliki za pomocą `rg --files agent-v3`;
 3. sparsuj źródła Python przez `ast.parse` jako tekst;
 4. wylicz SHA-256 głównych modułów;
-5. sprawdź ciągłość identyfikatorów A-001–A-073;
+5. sprawdź ciągłość identyfikatorów A-001–A-115;
 6. sprawdź, czy żaden test wybrany do uruchomienia nie importuje modułu uruchamiającego przeglądarkę, sieć lub bazę w stałej ścieżce;
 7. użyj tymczasowego katalogu danych i jawnie wyłączonych transportów.
 
 Dokładne odciski i liczby bazowe znajdują się w `../01_audyt/ANEKS_TECHNICZNY_AUDYTU_V3.md`.
+
+### 6.2. Replikacja wyścigu rezerwacji modelu
+
+Kontrdowód A-095 musi użyć co najmniej dwóch osobnych połączeń SQLite do jednej
+tymczasowej bazy. Oba wykonania odczytują pozostały budżet przed barierą, a po
+barierze próbują utworzyć `calls.RESERVED`. Test jest dodatni dla starej wady,
+gdy suma rezerwacji przekracza limit. Po naprawie dokładnie jedna rezerwacja ma
+się udać, a druga otrzymać `BudgetExceeded`. Test nie importuje sekretów i nie
+wykonuje transportu modelu.
+
+### 6.3. Autoryzacja modelu w eksperymencie
+
+Budżet dostawcy nie jest zgodą na zmianę modelu. Przed płatnym dispatch harness
+musi wypisać dokładny model już przypisany badanemu etapowi, etapy, liczbę
+żądań, górny koszt oraz hash fixture. Runtime `MODEL_FOR.update()` jest
+zabronione bez osobnego jawnego polecenia. Historyczny artefakt E-007 zachowuje
+faktyczny wynik Sonnetu, ale bieżący harness nie ma automatycznego ramienia
+porównawczego.
+
+### 6.4. Izolowane ramiona dostawców i niepełny transport
+
+Awaria jednego dostawcy nie może metodologicznie ukrywać odpowiedzi drugiego.
+Kontynuacja E-014 ma osobne workspace, ledgery i limity dla Anthropic oraz
+DeepSeek, przy zachowaniu zamrożonego materiału, normalnego routingu ról, zero
+retry i wspólnego zakazu Substacka. Wynik ramienia nie jest imputowany drugiemu
+ramieniu. Każdy niewykonany etap ma jawny status `NOT_RUN`.
+
+Sukces transportu, sukces schematu i sukces jakościowy są trzema osobnymi
+zmiennymi. Odpowiedź modelu może przejść transport oraz schema, a oblać długość,
+prawdziwość wejścia albo brief formy. Z kolei brak odpowiedzi nie jest wynikiem
+modelu w danej roli i nie pozwala oceniać Scouta czy researchu.
+
+Przy błędzie po możliwym dispatchu, ale bez usage lub dowodu rachunku, koszt ma
+stan `UNKNOWN` równy pełnej rezerwie. Nie wolno przypisać zera ani automatycznie
+powtórzyć. Materialnie zmieniona próba testuje nową hipotezę, lecz nadal
+zwiększa konserwatywną ekspozycję. Po trzech takich wynikach E-012/E-014/E-015
+N-025 wprowadziło dodatkową blokadę dowodową. E-017 discovery dodało czwarty
+`UNKNOWN` 0,10 USD, a znane koszty E-016/E-018 podniosły konserwatywną
+ekspozycję DeepSeek powyżej sublimitu 5 USD.
+
+Transport SSE DeepSeek ma dwa poziomy dowodu. Fixture potwierdza parser tylko
+wtedy, gdy testuje kompletne `data:` z końcowym usage i `[DONE]`, a także brak
+DONE, brak usage, `finish_reason=length` i wyjątek protokołu. Dopiero osobny
+live po rekoncyliacji może potwierdzić zgodność z rzeczywistym serwerem. Zielony
+fixture nie może być nazwany naprawą live.
+
+Ręczna analiza tekstów musi pracować na pełnym raw artefakcie i jawnie zapisać
+ograniczenie nieslepej oceny. Porównanie styl/ablacja na jednej parze jest
+studium przypadku: wolno raportować różnice cech i kosztu, nie wolno wywodzić
+wpływu przyczynowego ani niezawodności. Podobnie jedna poprawna rewizja nie
+dowodzi całej pętli, jeżeli re-review nie został wykonany.
+
+### 6.1. Replikacja bezpiecznej regresji
+
+Na Windows właściwy korpus uruchamia projektowy `.venv` i wymusza UTF-8.
+Obejmuje pliki `agent-v3/tests/test_*.py` poza `test_czas.py`. Ten jeden test
+bada semantykę sygnałów Linux/systemd przy usługach celowo unieruchomionych w
+prototypie. Katalog `tests/platne` nie jest częścią regresji offline.
+
+Wynik zapisuje liczbę plików, nie tylko liczbę asercji. Każdy plik uruchamia
+się w osobnym procesie. Nie wolno uznawać przebiegu systemowym Pythonem bez
+zależności ani konsolą CP1252 za miarodajny kontrdowód kodu.
+
+Na Windows testy historyczne muszą startować z korzenia repozytorium, ponieważ
+część z nich dodaje względne `agent-v3` do `sys.path`. Uruchomienie bezpośrednio
+z katalogu V3 zmienia semantykę importu i jest nieważną uprzężą, nawet jeżeli
+sam interpreter jest właściwy.
 
 ## 7. Replikacja kwerendy zewnętrznej
 
@@ -124,7 +286,7 @@ Nie uruchamiano `npm install`, `pip install`, testów, serwerów, przeglądarek 
 
 ## 8. Ograniczenia
 
-Audyt statyczny może znaleźć ścieżkę błędu, lecz nie estymuje jej częstości w produkcji. Analiza publicznych repozytoriów jest migawką z jednego dnia. Substack używa nieoficjalnych endpointów, więc zachowanie może zmienić się bez wersjonowanego kontraktu. Jakość redakcyjna V3 nie została jeszcze zmierzona na ślepym korpusie; nie wolno jej wywnioskować z liczby promptów, etapów ani asercji.
+Audyt statyczny może znaleźć ścieżkę błędu, lecz nie estymuje jej częstości w produkcji. Analiza publicznych repozytoriów jest migawką z jednego dnia. Substack używa nieoficjalnych endpointów, więc zachowanie może zmienić się bez wersjonowanego kontraktu. E-007 potwierdziło wykonalność trzech granic na jednym syntetycznym korpusie. E-014 dodało osiem odpowiedzi Anthropic na jednym materiale, ale bez live ramienia recenzji DeepSeek i bez ślepego, wielotematycznego korpusu. E-016/E-018 potwierdziły transport Scouta i dwa różne portfele, lecz poprawiony system prompt po E-018 nadal nie ma dowodu live. Nie wolno wywnioskować stabilnej jakości redakcyjnej z liczby promptów, etapów, asercji ani pojedynczego live PASS.
 
 ## 9. Kryterium zakończenia projektu
 

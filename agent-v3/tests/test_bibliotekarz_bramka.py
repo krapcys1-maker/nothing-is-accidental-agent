@@ -20,8 +20,16 @@ BANK = [
 ]
 
 def podstaw(odpowiedz):
+    # Fixture bada bramkę dziedzin, ale nadal musi spełnić pełny kontrakt
+    # odpowiedzi modelu. Uzupełniamy wyłącznie pola niezależne od tej asercji.
+    dane = json.loads(odpowiedz)
+    for grupa in dane.get("groups", []):
+        grupa.setdefault("why_it_travels", "fixture")
+        grupa.setdefault("missing", "")
+        for member in grupa.get("members", []):
+            member.setdefault("role", "fixture")
     stages.llm = types.SimpleNamespace(
-        call=lambda *a, **k: odpowiedz, parse_json=llm.parse_json)
+        call=lambda *a, **k: json.dumps(dane), parse_json=llm.parse_json)
 
 import json
 print("=== 1. JEDNA DZIEDZINA — MA ODPASC ===")

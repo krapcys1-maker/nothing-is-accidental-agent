@@ -19,14 +19,16 @@ behind it, so an unsupported claim here does not slip through — it kills the r
 ## Rules for each part
 
 **confirmed_claims** — {min_confirmed} to {max_confirmed} claims the evidence
-genuinely establishes. Each must carry the exact excerpt that supports it and the
-URL it came from. If you cannot quote the support verbatim, it is not confirmed.
-Each claim at most {max_claim_chars} characters.
+genuinely establishes. Each must carry one or more `fragment_ids` from the
+evidence below. Do not copy or invent an ID. If no listed fragment supports the
+claim, it is not confirmed. Each claim at most {max_claim_chars} characters.
 
 **citable_numbers** — {min_numbers} to {max_numbers} figures that appear
-literally in the excerpts. Copy the digits exactly as written. Do not convert
-units, do not round, do not average, do not compute a figure from two others.
-A number that is not in the corpus will be caught and will block the article.
+in the deterministic `numbers` inventory below. Select its exact `number_id`,
+say what it means, and point to the zero-based `claim_index` whose fragments
+contain that number. Do not copy digits into this output, convert units, round,
+average or compute a figure. A number not tied to both a fragment and a claim is
+rejected by code.
 
 **main_mechanism** — the hidden system the article exists to explain, in a few
 sentences. This is where you say how the pieces connect. Ground each link in the
@@ -45,6 +47,16 @@ that ignores the contradiction is a false one.
 **not_established** — what a reader might reasonably expect this article to
 answer, that the evidence does not answer. The writer will state these limits
 once, in the text.
+
+## Time and evidence status
+
+`published_at` describes the document, `retrieved_at` says when this exact live
+copy was observed, and `evidence_status`/`evidence_roles` preserve why discovery
+selected it. None of these fields is automatically the date of every claim. A
+live page can combine a 2019 report with a recommendation status updated in
+2026. When a fragment contains its own date or "as of" qualifier, that exact
+fragment controls. Never silently move a claim to the document publication or
+retrieval date.
 
 ## Where else this same shape appears
 
@@ -67,10 +79,10 @@ countdown that starts when you break the seal — true, sourced, and finished in
 two sentences. With nothing to open outward into, it was padded to eleven
 hundred words and nobody was any richer for reading it.
 
-These are the writer's READING, not claims from the record, so they do not need
-sources — but they must be accurate. A parallel that does not survive a moment's
-thought is worse than none, because it invites the reader to stop trusting the
-parts that are sourced.
+These are the writer's READING, not claims from the record. The comparison itself
+does not need a source, but any factual premise embedded in it must already exist
+as a `confirmed_claim`. A parallel that does not survive a moment's thought is
+worse than none, because it invites the reader to stop trusting the sourced parts.
 
 If the mechanism genuinely appears nowhere else, return an empty list. Saying so
 honestly lets the article be written short instead of stretched.
@@ -79,7 +91,7 @@ honestly lets the article be written short instead of stretched.
 
 Return only valid JSON, shaped exactly as:
 
-{{"working_thesis": "...", "main_mechanism": "...", "confirmed_claims": [{{"claim": "...", "evidence": "<verbatim excerpt>", "url": "..."}}], "citable_numbers": [{{"value": "...", "means": "...", "url": "..."}}], "parallel_mechanisms": [{{"domain": "...", "how_it_matches": "<one sentence: the same logic doing the same work>"}}], "uncertain_claims": ["..."], "contradictions": ["..."], "not_established": ["..."]}}
+{{"working_thesis": "...", "main_mechanism": "...", "confirmed_claims": [{{"claim": "...", "fragment_ids": ["frag_v1_..."]}}], "citable_numbers": [{{"number_id": "num_v1_...", "means": "...", "claim_index": 0}}], "parallel_mechanisms": [{{"domain": "...", "how_it_matches": "<one sentence: the same logic doing the same work>"}}], "uncertain_claims": ["..."], "contradictions": ["..."], "not_established": ["..."]}}
 
 ## The evidence
 

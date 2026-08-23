@@ -1,0 +1,82 @@
+{
+  "actual_logical_calls": {
+    "scout": 1
+  },
+  "allowed_logical_calls": {
+    "scout": 1
+  },
+  "argv": null,
+  "browser_imported": false,
+  "capture_ordinals": [
+    1
+  ],
+  "contract_failures_total": 0,
+  "cost_after": {
+    "exposure_usd": 0.049298,
+    "known_usd": 0.049298,
+    "reserved_or_unknown_usd": 0.0,
+    "rows": [
+      {
+        "cost_status": "KNOWN",
+        "known": 0.049298,
+        "n": 1,
+        "provider": "deepseek",
+        "unresolved": 0
+      }
+    ]
+  },
+  "cost_before": {
+    "exposure_usd": 0.0,
+    "known_usd": 0.0,
+    "reserved_or_unknown_usd": 0.0,
+    "rows": []
+  },
+  "execution_error": "ValueError: Scout odrzucony: kandydaci nie tworzą niezależnych pól redakcyjnych; 0:The Last Human in the Loop osie=5 napięcia=3 gałęzie=3 drogi=4 mechanizmy=4 dowody=4 połączenia=4 note=False stawka=True | 1:Suspicion as Default osie=5 napięcia=3 gałęzie=3 drogi=4 mechanizmy=4 dowody=4 połączenia=4 note=False stawka=True | 2:The Quality of Recycled Materials osie=5 napięcia=3 gałęzie=3 drogi=4 mechanizmy=4 dowody=4 połączenia=4 note=False stawka=True | 3:The Uninsurable World osie=5 napięcia=3 gałęzie=3 drogi=4 mechanizmy=4 dowody=4 połączenia=4 note=False stawka=True | 4:The Afterlife of Abandoned Infrastructure osie=5 napięcia=3 gałęzie=3 drogi=4 mechanizmy=4 dowody=4 połączenia=4 note=False stawka=True | 5:The Standard Human Body osie=5 napięcia=3 gałęzie=3 drogi=4 mechanizmy=4 dowody=4 połączenia=4 note=False stawka=True",
+  "exit_code": 1,
+  "experiment": "normal-v3-live-segments@2",
+  "finished_at": "2026-08-21T16:05:51+00:00",
+  "latest_article": null,
+  "latest_run": {
+    "note": "ValueError: Scout odrzucony: kandydaci nie tworzą niezależnych pól redakcyjnych; 0:The Last Human in the Loop osie=5 napięcia=3 gałęzie=3 drogi=4 mechanizmy=4 dowody=4 połączenia=4 note=False stawka=True | 1:Suspicion as Default osie=5 napięcia=3 gałęzie=3 drogi=4 mechanizmy=4 dowody=4 połączenia=4 note=False stawka=True | 2:The Quality of Recycled Materials osie=5 napięcia=3 gałęzie=3 drogi=4 mechanizmy=4 dowody=4 połączenia=4 note=False stawka=True | 3:The Uninsurable World osie=5 napięcia=3 g",
+    "stage": "scout_live_only",
+    "status": "FAILED"
+  },
+  "new_call_rows": [
+    {
+      "at": "2026-08-21T16:01:06.765182+00:00",
+      "cache_hit": 0,
+      "cost_status": "KNOWN",
+      "cost_usd": 0.049298,
+      "id": 1,
+      "model": "deepseek-v4-pro",
+      "note": null,
+      "ok": 1,
+      "price_verified": 1,
+      "provider": "deepseek",
+      "provider_request_id": null,
+      "purpose": "scout",
+      "reconciled_at": null,
+      "reserved_usd": 0.0,
+      "run_id": 1,
+      "tokens_in": 2295,
+      "tokens_out": 24133,
+      "web_searches": 0
+    }
+  ],
+  "new_exposure_usd": 0.049298,
+  "notes": null,
+  "notes_validation": null,
+  "pass": false,
+  "public_fetches": [],
+  "requested_capabilities": [
+    "model_call"
+  ],
+  "routing_unchanged": true,
+  "segment": "scout-live-only",
+  "stage_cap_usd": 0.04,
+  "stderr": "",
+  "stdout": "  [scout] deepseek-v4-pro  wej=2295 wyj=24133  $0.0493\n",
+  "substack_requested": false,
+  "topics": null,
+  "zero_retry": true
+}

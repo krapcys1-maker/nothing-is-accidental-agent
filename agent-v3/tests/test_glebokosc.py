@@ -79,7 +79,7 @@ sprawdz("write bierze dlugosc z glebokosci", 'config.dlugosc_dla(glebokosc)' in 
 zrodlo_r = pathlib.Path("agent-v3/run.py").read_text(encoding="utf-8")
 sprawdz("run.py czyta depth z odsiewu", 'verdict.get("depth")' in zrodlo_r)
 sprawdz("run.py przekazuje glebokosc do pisarza",
-        "stages.write(conn, run_id, card, glebokosc)" in zrodlo_r)
+        "stages.write(conn, run_id, card, glebokosc," in zrodlo_r)
 
 for g, d in (("RICH", r), ("SINGLE", s)):
     # Ruch koncowy i liczba paraleli sa od teraz losowane per artykul, wiec
@@ -90,7 +90,8 @@ for g, d in (("RICH", r), ("SINGLE", s)):
         "pisarz.md", language="English", target_words=d["cel"], min_words=d["min"],
         max_words=d["max"], style_examples="x", style_positive="y",
         style_negative="z", ruch_koncowy_nazwa=ruch_nazwa, ruch_koncowy=ruch_opis,
-        ile_paraleli=opis_paraleli, card_json="{}")
+        ile_paraleli=opis_paraleli, card_json="{}",
+        editorial_memory_json="{}")
     sprawdz("prompt dla %s niesie cel %s slow" % (g, d["cel"]), str(d["cel"]) in gotowy)
 
 print()

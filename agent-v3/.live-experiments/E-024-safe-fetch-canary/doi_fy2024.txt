@@ -1,0 +1,1853 @@
+ORPHANED WELLS PROGRAM 
+ ANNUAL REPORT TO CONGRESS 
+                              
+                                      November 2024 
+ 
+         Bipartisan Infrastructure Law Section 40601  
+     Prepared by the Orphaned Wells Program Office
+Orphaned Wells Program FY 2024 Annual Report  i 
+ 
+ 
+Orphaned Wells Program Office 
+Policy and Environmental Management 
+Office of Policy, Management and Budget 
+ 
+ 
+U.S. Department of the Interior 
+Washington, D.C. 
+ 
+ 
+https://www.doi.gov/orphanedwells 
+orphanedwells@ios.doi.gov 
+ 
+ 
+ 
+ 
+ 
+ 
+VISION STATEMENT 
+Transform a legacy of environmental pollution into a legacy of environmental 
+stewardship by serving as a collaborative and empowering resource for states, Tribes, 
+federal agencies, and the broader orphaned wells community, working to identify, plug, 
+remediate, and restore orphaned oil and gas wells and well sites. 
+ 
+ 
+MISSION STATEMENT 
+Fulfill the orphaned wells requirements of the Bipartisan Infrastructure Law and 
+Secretary’s Order 3409 by facilitating the effective, accountable, and efficient 
+implementation of the state, Tribal, and federal assistance programs to reduce methane 
+emissions, prevent groundwater and surface water contamination, eliminate health and 
+safety hazards, create good paying jobs and benefit historically disadvantaged 
+communities. 
+ 
+ 
+ 
+ 
+ 
+Cover page photo: U.S. Geological Survey (USGS) scientist Karl Haase taking a methane reading 
+from an orphaned well in Toole County, MT. Photo credit: Nick Gianoutsos (USGS).
+Orphaned Wells Program FY 2024 Annual Report  1 
+ 
+Orphaned Wells Program Annual Report to Congress 
+Fiscal Year 2024 
+ 
+Table of Contents 
+Message from the Director ………………………………………………………………...…………..5  
+Section 1: Orphaned Wells Program Overview ………..…………..………………………………..7 
+         Background ........................................................................................................................... 7 
+         Distribution of FY 2024 Bipartisan Infrastructure Law Funds .............................................. 9 
+         Significant Fiscal Year 2024 Orphaned Wells Program Milestones.................................. 10 
+Section 2: Federal Orphaned Wells Program ............................................................................. 11 
+          Federal Program Funding and Activities ........................................................................... 12 
+          Monitoring Progress........................................................................................................... 14 
+          Federal Partner FY 2024 Accomplishments ..................................................................... 15 
+Section 3: State Orphaned Wells Program ................................................................................. 17 
+      Environmental Justice............................................................................................................ 17 
+      State Initial Grants ................................................................................................................. 19 
+      State Formula Grants ............................................................................................................ 20 
+      Phase 1 State Formula Grants ....................................................................................... 22 
+             Phase 2 State Formula Grants ....................................................................................... 23 
+             Department of the Interior State Site Visits and Funding Announcements .................. 25 
+      Bipartisan Infrastructure Law Team Visits Deuel County, Nebraska ............................ 25 
+      Bipartisan Infrastructure Law Team Visits Erie County, New York ............................... 26 
+      Secretary Haaland Announces Phase 1 Formula Grants in Michigan and California .. 28 
+      Acting Deputy Secretary Laura Daniel-Davis Visits New Mexico and California .......... 29 
+     Performance Grants – Matching and Regulatory Improvement Grants ................................ 31 
+Section 4: Tribal Orphaned Wells Program................................................................................. 32 
+             Phase 2 Funding Opportunity ........................................................................................ 34 
+             Tribal Consultation & Engagement ................................................................................ 36 
+Section 5: Well Inventories .......................................................................................................... 37 
+             Undocumented Orphaned Wells .................................................................................... 38 
+             Plugged Orphaned Wells Inventory ............................................................................... 39 
+             Wells at Risk of Becoming Orphaned ............................................................................ 41 
+Section 6: Methane Emissions .................................................................................................... 42 
+            Emissions from Unplugged Orphaned Wells .................................................................. 42 
+            Methane Measurement Guidelines ................................................................................. 43 
+            Methane Emission Reductions ........................................................................................ 44 
+            Federal Program Methane Measurements ..................................................................... 45
+Orphaned Wells Program FY 2024 Annual Report  2 
+ 
+           State Grant Program Methane Measurements ................................................................ 46 
+Section 7: Economic Opportunities ............................................................................................. 48 
+Section 8: Future Planning .......................................................................................................... 51 
+         Strategic Planning ............................................................................................................. 51 
+         National Academies of Sciences (NAS) Workshop ......................................................... 51 
+         Interstate Oil & Gas Compact Commission Consultation ................................................ 52 
+         American Association for the Advancement of Science (AAAS) ..................................... 53 
+         Orphaned Wells Program Outlook .................................................................................... 53 
+ 
+List of Figures 
+Figure 1. Before (left) and after (right) an orphaned well was plugged next to a private 
+residence in Kentucky. .............................................................................................................. 7 
+Figure 2. BIL funds allocated by program. .................................................................................... 8 
+Figure 3. The distribution of FY 2024 BIL funds to federal partners. ......................................... 11 
+Figure 5. Orphaned well at Matagorda Island (June 2024). ....................................................... 12 
+Figure 4. Orphaned well at Matagorda Island (April 2024). ........................................................ 12 
+Figure 6. Map of the cumulative 199 wells plugged on public lands and waters under the 
+Federal Program. ..................................................................................................................... 13 
+Figure 7. OWPO and federal partners at Atchafalaya National Wildlife Refuge (NWR). .......... 14 
+Figure 8. The “Mudget #1 Well” in Lake Meredith National Recreation Area. ........................... 15 
+Figure 9. Map of the 114 orphaned wells plugged by federal partners within CEJST 
+disadvantaged communities. ................................................................................................... 16 
+Figure 10. Map of orphaned wells plugged by states using initial and formula grant funds 
+between October 1, 2023, and September 30, 2024. ............................................................ 17 
+Figure 11. Map of orphaned wells plugged by states between October 1, 2023, and September 
+30, 2024, within CEJST disadvantaged communities. ........................................................... 18 
+Figure 12. Habitat restoration work in Meigs County, Ohio. ....................................................... 19 
+Figure 13. Little Brown Bat. ......................................................................................................... 19 
+Figure 14. Acreage of habitat restored by states using BIL orphaned wells program grant 
+funding through FY 2024. ........................................................................................................ 20 
+Figure 15. The beginning of the reclamation process at the Rice State 3H site in Bottineau 
+County, ND; June 2023. .......................................................................................................... 21 
+Figure 16. The Rice State 3H site ready to be returned to the landowner; September 2023. .. 21 
+Figure 17. Map of wells plugged by the State of Texas using Phase 1 Formula Grant funds as 
+of September 30, 2024. ........................................................................................................... 23 
+Figure 18. Cable Tool Rig at Katalla Wellsite Chilkat 25. ........................................................... 24 
+Figure 19. Signs of physical hazards in Katalla – bear tracks. ................................................... 25 
+Figure 20. Well plugging in Deuel County, Nebraska. ................................................................ 25 
+Figure 21. Department staff meet with Nebraska officials and a local farmer who had wells on
+Orphaned Wells Program FY 2024 Annual Report  3 
+ 
+his property cleaned up with BIL funds. .................................................................................. 26 
+Figure 22. Infrastructure Coordinator Stachelberg speaks during an October 2023 orphaned 
+well press event in NY. ............................................................................................................ 26 
+Figure 23. (Left) Interior Department and NY State officials at the Burg J 1 well in October 
+2023. (Right) Burg J 1 well plugging underway. ..................................................................... 27 
+Figure 24. The front lawn of a home in Alden, NY, 10 months after the Burg J 1 orphaned gas 
+well was plugged. .................................................................................................................... 27 
+Figure 25. Secretary Haaland speaks with EGLE’s Oil, Gas, and Minerals Division Director 
+Adam Wygant at the Laborers’ Wayne Training. Photo credit: EGLE. .................................. 28 
+Figure 26. Secretary Haaland announces CA’s $35 million Phase 1 Formula Grant alongside 
+LA Mayor Karen Bass and CA Natural Resources Agency Deputy Secretary for Energy Le-
+Quyen Nguyen. ........................................................................................................................ 28 
+Figure 27. Secretary Haaland during an orphaned well discussion with California stakeholders.
+ ................................................................................................................................................. 29 
+Figure 28. Acting Deputy Secretary Laura Daniel Davis speaks with CalGEM staff and 
+contractors during an orphaned well site visit. ........................................................................ 29 
+Figure 29. Acting Deputy Secretary Laura Daniel Davis meets with officials from New Mexico’s 
+Energy, Mineral and Natural Resources Department during a May 2024 visit to announce 
+the State’s $25 million Phase 1 Formula Grant. ..................................................................... 30 
+Figure 30. Drone usage in Navajo County, AZ. .......................................................................... 30 
+Figure 31. Navajo Nation orphaned well. .................................................................................... 32 
+Figure 32. Map of Tribal Program grants awarded in FY 2023 and FY 2024. ........................... 33 
+Figure 33. Fort Belknap well Gros #1. ......................................................................................... 34 
+Figure 34. Navajo Nation Utah09 well. ........................................................................................ 36 
+Figure 35. Trend in IOGCC published documented orphaned wells.......................................... 38 
+Figure 36. Transition from undocumented to documented orphaned wells. .............................. 39 
+Figure 37. Orphaned Well N-18293 in Lee County, Kentucky. .................................................. 40 
+Figure 38. Depiction of various subsurface methane sources and pathways that can lead to 
+surface emissions. ................................................................................................................... 42 
+Figure 39. A DOE employee measures methane from an orphaned well in Texas. Photo taken 
+by the USFS............................................................................................................................. 43 
+Figure 40. Using equipment to conduct a methane detection test at a well in Nebraska. ......... 44 
+Figure 41. Using equipment to conduct a methane detection test at an orphaned well in a 
+National Wildlife Refuge. ......................................................................................................... 45 
+Figure 42. Mower Lumber #1 wellsite, Gauley River NRA, West Virginia – Before & After 
+Plugging. .................................................................................................................................. 46 
+Figure 43. Secretary Haaland speaks with state officials and labor leaders during an orphaned 
+well roundtable at the Operating Engineers 324 Stationary Career Center in Detroit, 
+Michigan, in July 2024. ............................................................................................................ 50 
+Figure 44. A panel discussion during the July 2024 NAS workshop in Washington D.C. ......... 51
+Orphaned Wells Program FY 2024 Annual Report  4 
+ 
+List of Tables 
+Table 1. BIL funds Announced and Obligated through FY 2024 (in billions). .............................. 9 
+Table 2. Highlights of FY 2024 federal partner accomplishments. ............................................. 15 
+Table 3. State Formula Grant award eligibility, including Phase 1 awards. ............................... 22 
+Table 4. Phase 2 Tribal Grant awards through FY 2024. ........................................................... 35 
+Table 5. Summary of state reported plugged well methane emissions data. ............................ 47 
+Table 6. Jobs supported and Gross Domestic Product (GDP) contributions from BIL Orphaned 
+Wells Program funding by Fiscal Year. ................................................................................... 48 
+ 
+ 
+List of Abbreviations and Acronyms  
+AAAS  American Association for the Advancement of Sciences 
+BIL  Bipartisan Infrastructure Law   
+BLM  Bureau of Land Management 
+BSEE  Bureau of Safety and Environmental Enforcement 
+CEJST  Climate and Economic Justice Screening Tool 
+CO2  Carbon Dioxide  
+Department U.S. Department of the Interior  
+EMIS  Environmental Management Information System 
+EPA  U.S. Environmental Protection Agency  
+FWS  U.S. Fish and Wildlife Services 
+FY  Fiscal Year 
+g/h  Grams Per Hour 
+GDP  Gross Domestic Product 
+IIJA  Infrastructure Investment and Jobs Act 
+IOGCC Interstate Oil and Gas Compact Commission 
+NAS  National Academy of Sciences 
+NPS  National Park Service 
+OWPO  Orphaned Wells Program Office 
+SO  Secretary's Order 
+Template Orphaned Well Data Reporting Template 
+USFS  Department of Agriculture U.S. Forest Service 
+USGS  U.S. Geological Survey
+Orphaned Wells Program FY 2024 Annual Report  5 
+ 
+Orphaned Wells Program Annual Report to Congress 
+                             Fiscal Year 2024 
+ 
+Message from the Director - The U.S. Department of the Interior’s 
+Orphaned Wells Program Office (OWPO) is proud to submit the Annual 
+Report to Congress, as required by Section 40601(f) of the Infrastructure 
+Investment and Jobs Act, commonly known as the Bipartisan 
+Infrastructure Law (BIL). This report highlights the accomplishments 
+made possible through Bipartisan Infrastructure Law funds distributed to 
+states, Tribes, and our federal partners – the Bureau of Land 
+Management (BLM), Bureau of Safety and Environmental Enforcement 
+(BSEE), U.S. Fish and Wildlife Service (FWS), National Park Service 
+(NPS), and the U.S. Department of Agriculture Forest Service.     
+In FY 2024, the orphaned wells program reached a significant milestone 
+– the distribution of over $1 billion in funding to states, Tribes, and our 
+federal partners in the Department of the Interior and the Department of Agriculture. This historic 
+investment supported orphaned well plugging and well site reclamation, resulting in methane mitigation, 
+the prevention of groundwater and surface water contamination, habitat restoration, the creation of 
+good-paying jobs, and supported revitalization efforts of economically disadvantaged communities. 
+Approximately 44 percent of the orphaned wells plugged by states and federal partners through FY 
+2024 were located in disadvantaged communities, as identified by the Climate and Economic Justice 
+Screening Tool, demonstrating the program’s commitment to achieving the goals of the Justice40 
+Initiative. 
+This fiscal year, we capitalized on opportunities to share the incredible impacts of this once-in-a-
+generation investment in cleaning up legacy pollution through StoryMaps such as Orphaned Oil and 
+Gas Wells 101, Plugging Away, and Methane Emissions from Orphaned Wells. We’ve taken the 
+opportunity to think strategically about the program to maximize the BIL’s economic impact in our newly 
+published Strategic Plan for FY 2025 – FY 2030 and we’ve spurred the scientific community to expand 
+knowledge and understanding of the orphaned wells problem by sponsoring events such as the 
+National Academy of Sciences hosted Practices and Standards for Plugging Orphaned and Abandoned 
+Hydrocarbon Wells workshop.   
+Importantly, we’ve continued to work together with key stakeholders such as the Interstate Oil and Gas 
+Compact Commission to transform a legacy of environmental pollution into a legacy of environmental 
+stewardship. The report showcases the accomplishments of all our partners during this fiscal year to 
+inventory, plug, and restore orphaned wells and well sites and highlights the more than $2.1 billion in 
+new funding opportunities the OWPO made available this fiscal year. Thank you for your interest in this 
+exciting new program that is reducing the harmful impacts of orphaned wells nationwide through 
+funding made possible under the Bipartisan Infrastructure Law. 
+ 
+Kimbra Davis 
+Director, Orphaned Wells Program Office 
+U.S. Department of the Interior
+Orphaned Wells Program FY 2024 Annual Report  6 
+ 
+Orphaned Wells Program FY 2024 At-a-Glance 
+  
+~$56M 
+Distributed in FY 2024 for 
+Well Plugging, Remediation 
+and Restoration on Federal 
+Lands  
+    
+9,636 wells*  
+Plugged and Abandoned 
+on State, Private, and 
+Federal Land 
+Estimated Annual Methane 
+Emissions Reduction  
+(Expressed as a Carbon Dioxide 
+Equivalent) 
+ 
+155,000 
+metric tons*** 
+~$29M 
+Awarded for Tribal 
+Implementation and 
+Development Grants in 
+FY 2024 
+    
+558 habitat 
+acres**  
+Restored on State and 
+Private Lands 
+~$527M 
+Awarded to States in FY 
+2024 for Initial, Formula, 
+and Performance Grants 
+    
+Notes.  *    The cumulative counts of wells plugged on state, private, and federal land is as reported by   
+                  states and federal agencies as of September 30, 2024.  
+            **  The cumulative acreage of habitat restored on state and private lands is as of September 30,     
+                 2024. 
+           *** The cumulative estimated methane emissions reduction data, expressed in carbon dioxide      
+                equivalent, is based on state and federal reporting as of June 30, 2024.
+Orphaned Wells Program FY 2024 Annual Report  7 
+ 
+Section 1: Orphaned Wells Program Overview 
+Background 
+The Infrastructure Investment and Jobs Act (Public Law 117-58), signed into law on November 
+15, 2021, and commonly known as the Bipartisan Infrastructure Law (BIL), is a historic 
+investment in our Nation’s infrastructure. Section 40601, “Orphaned Well Site Plugging, 
+Remediation, and Restoration,” in Title VI, “Methane Reduction Infrastructure,” confronts the 
+potent atmospheric pollution that orphaned oil and gas wells emit, while also accounting for the 
+legacy impact that orphaned wells have on their surrounding environment. Under the 
+Bipartisan Infrastructure Law, orphaned wells on federal land are defined as wells that are not 
+used for an authorized purpose and for which no operator can be located or the operator of 
+which is unable to plug the well and remediate and reclaim the well site.1 States may have a 
+different definition for orphaned wells on state and private lands. 
+ 
+Analysis conducted by the Environmental Defense Fund estimates that 14 million people in the 
+United States live within one mile of an orphaned well.2 Figure 1 is an example of how these 
+orphaned oil and gas wells can be located adjacent to occupied residences, posing a direct 
+threat to human health and the environment because of deteriorating infrastructure, methane 
+and other gaseous emissions, and oil leaks.3 
+ 
+ 
+1 Orphaned Wells Program Office: Definition List.  
+2 Environmental Defense Fund (07/11/2023): Landmark study reveals that millions of Americans live less than a 
+mile from an orphaned oil and gas well.  
+3 Photos provided by the Kentucky Division of Oil and Gas within the KY Energy and Environment Cabinet. Pre 
+and post plugging on private land in Kentucky. 
+Figure 1. Before (left) and after (right) an orphaned well was plugged next to 
+a private residence in Kentucky.
+Orphaned Wells Program FY 2024 Annual Report  8 
+ 
+Section 40601 of the BIL provides $4.677 billion in orphaned well site plugging, remediation, 
+and restoration funding allocated across the following programs:  
+ 
+• Federal Program - $250 million for wells on federal land and waters;  
+• State Program - $4.275 billion for wells on state and private lands; and  
+• Tribal Program - $150 million for wells on Tribal lands.  
+ 
+Funding under these programs may be used by federal, state, and Tribal fund recipients to 
+conduct a variety of activities, including the following: 
+ 
+• Plug orphaned wells; 
+• Identify and prioritize orphaned wells and well sites; 
+• Measure air emissions and groundwater contamination from wells; 
+• Identify and address disproportionate burdens on disadvantaged communities; 
+• Remediate and reclaim orphaned well sites and contaminated soil; and 
+• Restore native species and adjacent land. 
+ 
+In addition to the $4.675 million in program funding listed above, the BIL authorizes $2 million 
+in appropriated funds for the Interstate Oil and Gas Compact Commission (IOGCC) to carry 
+out responsibilities outlined in Section 40601.  Figure 2 summarizes the $4.677 billion of 
+appropriated BIL funds allocated by program area.   
+ 
+   
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Figure 2. BIL funds allocated by program. 
+$2.000B
+$1.500B
+$0.775B
+$0.250B
+$0.150B
+$0.002B
+$0.000B
+$0.500B
+$1.000B
+$1.500B
+$2.000B
+ 
+$4.677B
+Orphaned Wells Program FY 2024 Annual Report  9 
+ 
+The distribution of FY 2024 Bipartisan Infrastructure Law funding, along with a discussion of 
+wells plugged and other activities conducted to date, is detailed in this report in Section 2: 
+Federal Orphaned Wells Program, Section 3: State Orphaned Wells Program, and 
+Section 4: Tribal Orphaned Wells Program.  
+ 
+Section 5: Well Inventories discusses inventories of orphaned wells and wells at risk of 
+becoming orphaned. Section 6: Methane Emissions addresses the work to advance the 
+goals of the Biden-Harris Administration’s Methane Action Plan and progress made on 
+programmatic methane emission reductions. Section 7: Economic Opportunities discusses 
+the economic benefits from orphaned wells plugging and Section 8: Future Planning 
+presents an outlook of the Orphaned Wells Program activities for the coming years.  
+ 
+Section 40601(f) of the BIL requires the Department to annually submit to Congress a report 
+describing, among other elements, the programs established, and the funds distributed.   
+ 
+Distribution of FY 2024 Bipartisan Infrastructure Law Funds 
+Through Fiscal Year 2024, the Department has announced 
+approximately $2.1 billion in BIL funds for state, federal, and Tribal 
+program participants for inventorying and plugging orphaned wells, 
+including remediation and restoration work. Of this announced 
+amount, in Fiscal Year 2024, the Department obligated $609.6 
+million in BIL funds to state, federal, and Tribal program participants 
+This brings the cumulative funding obligated to approximately $1.3 
+billion of the $4.677 billion appropriated for the Orphaned Wells 
+Program. Table 1 shows the cumulative breakdown by program 
+area.  
+ 
+Table 1. BIL funds Announced and Obligated through FY 2024 
+(in billions). 
+BIL Orphaned Wells 
+Program 
+Total BIL 
+Program Funding 
+Available 
+BIL Program Funding 
+Announced through 
+September 2024 
+BIL Program Funding 
+Obligated through 
+September 2024 
+Federal Program $0.250  $0.148 $0.148 
+State Program $4.275 $1.912  $1.087 
+Tribal Program $0.150 $0.068 $0.068 
+IOGCC Funding $0.002 $0.000 $0.000 
+TOTAL $4.677 $2.128  $1.303 
+ 
+ 
+The following page lists significant fiscal year 2024 Orphaned Wells Program milestones.  
+$609.6 million 
+obligated in FY 
+2024 for orphaned 
+well plugging, 
+remediation, and 
+reclamation.
+Orphaned Wells Program FY 2024 Annual Report  10 
+ 
+Significant Fiscal Year 2024 Orphaned Wells Program Milestones  
+March 2024: $55 
+million made 
+available for Tribes 
+in Phase 2 
+ 
+July 2024: National 
+Academy of Sciences 
+Hosts Orphaned Well 
+Plugging Workshop 
+January 2024: One 
+year anniversary of 
+the Orphaned Wells 
+Program Office 
+Tribal  
+ 
+ 
+ 
+Federal  
+ 
+State OWPO  
+ 
+February 2024: $50.51 
+million invested to 
+plug orphan wells on 
+Federal lands 
+March 2024: $55 
+million made 
+available for Phase 2 
+Tribal Grants 
+January 2024: 1st State 
+Phase 1 Formula Grant 
+Awarded to Texas 
+September 2024: $29 
+million in Phase 2 
+Tribal Grants 
+Awarded 
+May 2024: State 
+Matching Grant 
+Guidance Released (up 
+to $30 million per state) 
+August 2024: Phase 2 
+State Formula Grant 
+Application Period 
+Opened
+Orphaned Wells Program FY 2024 Annual Report  11 
+ 
+Section 2: Federal Orphaned Wells Program 
+In Fiscal Year 2024, the Federal Orphaned Wells Program 
+distributed $55.66 million to the following Department of the 
+Interior and Department of Agriculture bureaus to plug, reclaim, 
+and remediate 123 orphaned oil and gas wells, remove legacy 
+oilfield equipment, and conduct inventory efforts to identify and 
+characterize additional orphaned wells: 
+• Bureau of Land Management (BLM),  
+• Bureau of Safety and Environmental Enforcement (BSEE),  
+• U.S. Fish and Wildlife Service (FWS),  
+• National Park Service (NPS), and 
+• U.S. Forest Service (USFS). 
+ 
+In February 2024, the Department announced $50.51 million for 
+the bureaus, and between March and June, $5.15 million in supplemental funding was 
+distributed to BLM and BSEE due to unforeseen costs associated with changes in contractor 
+pricing and unanticipated site conditions. 
+ 
+The FY 2024 federal projects are located across 19 states on 28 national park units, 11 
+national wildlife refuge units, 2 offshore oilfield locations in the Gulf of Mexico, and 5 national 
+forests with a total project funding of about $53.27 million (an additional $2.39 million was used 
+for administrative funding to support federal projects). Figure 3 is a pie chart showing the 
+distribution of FY 2024 BIL funds to federal partners. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+$53.27 million in 
+Federal Project Funding 
+ 
+123 wells to be plugged 
+(with FY 2024 funding) 
+27 Federal projects 
+funded in FY 2024 
+ 
+2 offshore well sites 
+funded in FY 2024 
+FY 2024 Federal Project Funding by Bureau (Millions) 
+ 
+ 
+ 
+$148.3 million in 
+Federal Program 
+funding distributed to 
+date (FY 2022 - FY 
+2024) for orphaned 
+well inventory, 
+plugging, and 
+remediation.  
+BLM, 
+$5.36
+BSEE, 
+$11.15
+FWS, 
+$16.82
+NPS, 
+$5.57
+USFS, 
+$14.37
+Figure 3. The distribution of FY 2024 BIL funds to federal partners.
+Orphaned Wells Program FY 2024 Annual Report  12 
+ 
+Federal Program Funding and Activities 
+The Bipartisan infrastructure Law allocated $250 million to the 
+Federal Orphaned Wells Program. Portions of this amount are 
+allocated to the Orphaned Wells Program Office as administrative 
+funding (3.0%) and the Office of the Inspector General for 
+oversight purposes (0.5%), which leaves $241.3 million for the 
+Federal Program. The program was designed to distribute project 
+funding in roughly equal proportions over about five years. This 
+approach allows the program to fund the highest priority projects 
+each year and account for new information, such as the discovery 
+of additional orphaned wells during inventory efforts or increases 
+to estimated well plugging contract costs. 
+ 
+Bipartisan Infrastructure Law Success Story – Gulf of Mexico, Matagorda Island, Texas 
+ 
+An important part of BSEE’s responsibilities is ensuring that infrastructure used in exploration, 
+development, and production activities is properly decommissioned to provide for the long-term 
+protection of offshore resources and the environment. In 2023, BSEE awarded contracts for 
+the decommissioning of nine orphaned wells and platform safety repairs in the Matagorda 
+Island lease area, which lies in federal waters approximately 12 miles off the Texas coast. 
+Figure 4 shows the orphaned well platform before “make safe” operations and Figure 5 shows 
+the same platform after BSEE completed “make safe” operations. Using Bipartisan 
+Infrastructure Law funding, the Matagorda Island project is tackling the most urgent offshore 
+decommissioning needs to minimize the risk of environmental pollution and safety incidents. In 
+September 2024, BSEE advanced to the active pipeline decommissioning phase of the 
+Matagorda Island area project.   
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  
+199 orphaned 
+wells plugged as 
+of September 30, 
+2024, on federal 
+land under the 
+Federal Program. 
+ 
+  
+Figure 4. Orphaned well at Matagorda 
+Island (June 2024). 
+Figure 5. Orphaned well at 
+Matagorda Island (April 2024).
+Orphaned Wells Program FY 2024 Annual Report  13 
+ 
+ 
+As of September 30, 2024, the OWPO’s federal partners reported plugging 199 orphaned 
+wells, 85 of those wells were plugged during FY 2024. A map of total Federal wells plugged is 
+displayed in Figure 6. Funding distributed from FY 2022 through FY 2024 is designed to plug a 
+total of 599 orphaned wells (269 wells with funding allocated in FY 2022, 207 wells with 
+funding allocated in FY 2023, and 123 wells with funding allocated in FY 2024).  
+ 
+ 
+In addition to plugging orphaned wells, Federal Program funding is used for other associated 
+activities, such as reclamation, remediation, site preparation, and inventory. There is a vast 
+number of undocumented orphaned wells across the nation, and funding to conduct well 
+inventory allows federal agencies to further document environmental hazards on public lands 
+and ensure continued stewardship.  
+ 
+ 
+ 
+ 
+ 
+Figure 6. Map of the cumulative 199 wells plugged on public lands and waters under the 
+Federal Program.
+Orphaned Wells Program FY 2024 Annual Report  14 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Monitoring Progress  
+The OWPO Federal Program staff conduct site visits to monitor the on-the-ground progress of 
+funded projects (Figure 7). Site visits involve coordination with each agency’s land managers 
+and their partners to observe orphaned wells activities as they occur in real time. In addition to 
+site visits, OWPO ensures quarterly updates to the program’s database, the Environmental 
+Management Information System’s Orphaned Wells Module (EMIS-OWM). This system stores 
+important data associated with these orphaned wells projects, including the number of wells 
+plugged, amount of methane emissions reduced (in grams per hour), and impacts to the 
+surrounding environment.  
+ 
+OWPO conducts randomized monitoring reviews for all bureaus to ensure that funding is being 
+spent as intended and allowed. This information includes adhering to established well-plugging 
+procedures and standards and providing comprehensive records of the work completed. This 
+process helps ensure that federal agencies comply with their individual land management or 
+land use plans as well as all applicable local, state, and federal laws and regulations. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Figure 7. OWPO and federal partners at Atchafalaya National 
+Wildlife Refuge (NWR). 
+Note: In May 2024, the Department’s BIL Implementation team and OWPO staff 
+traveled to Atchafalaya NWR in Lacombe, Louisiana. This project plugged and 
+reclaimed seven orphaned well sites between May and June of 2024.
+Orphaned Wells Program FY 2024 Annual Report  15 
+ 
+Bipartisan Infrastructure Law Success Story – National Park Service Well Inventory 
+ 
+The National Park Service is pursuing significant 
+inventory efforts with BIL funds. There are 
+approximately 1,800 oil and gas wells located in 
+nearly 50 national parks. An estimated 364 of the 
+wells are operating, while the remaining wells are 
+inactive, plugged, abandoned, or orphaned. Since 
+2022, the National Park Service has initiated 45 
+BIL-funded projects for well plugging, site 
+reclamation and infrastructure removal activities in 
+national parks. These activities have mitigated 
+environmental hazards and improved public health 
+and safety by reducing the release of methane gas 
+into the atmosphere as well as removing safety 
+hazards associated with abandoned and orphaned 
+wells.  
+ 
+Federal Partner FY 2024 Accomplishments 
+During FY 2024, the federal partners realized significant results that contributed to the overall 
+success of the Orphaned Wells Program. Highlights of the FY 2024 accomplishments are 
+included in Table 2 for each of the federal partners that received Federal Orphaned Wells 
+Program funding.  
+ 
+Table 2. Highlights of FY 2024 federal partner accomplishments. 
+Federal Partner FY 2024 Accomplishments 
+National Park Service 
+• Plugged 6 wells 
+• Completed 7 total projects  
+• Inspected 307 well sites  
+• Identified and Inspected 15 orphaned wells 
+• Completed extensive plugging and reclamation projects in Big 
+Thicket National Preserve, Texas 
+Bureau of Safety and 
+Environmental 
+Enforcement  
+• Temporarily plugged 6 orphaned wells 
+• Completed make safe repairs on Matagorda Island Area Project 
+• Awarded a five-year contract for on-site pipeline decommissioning 
+activities 
+Bureau of Land 
+Management  
+• Plugged and reclaimed 9 wells: 1 in Colorado, 1 in Arizona, and 7 
+in Wyoming 
+ 
+ 
+Photo taken in October 2022 during a NPS 
+inventory and inspection trip. The NPS received BIL 
+funds to plug the well in FY 2023 and anticipates 
+plugging the well in FY 2025. 
+Figure 8. The “Mudget #1 Well” in Lake 
+Meredith National Recreation Area.
+Orphaned Wells Program FY 2024 Annual Report  16 
+ 
+Federal Partner FY 2024 Accomplishments 
+Fish and Wildlife 
+Service  
+• Plugged 59 wells 
+• Completed 4 projects in Louisiana and Oklahoma 
+• Assessed 226 newly identified orphaned wells on refuge lands 
+• Established agreement with Texas Railroad Commission to plug 
+orphaned wells on refuges in Texas 
+U.S. Forest Service  
+• Plugged 10 wells  
+• Entered a cost share agreement with Pennsylvania Department of 
+Environmental Protection to plug 18 wells in the Allegheny 
+National Forest 
+• Entered into an agreement with the Texas Railroad Commission 
+to address orphaned wells on federal public lands 
+ 
+Of the 199 orphaned wells plugged on federal lands as of September 30, 2024, 114 of them 
+(57 percent) are within disadvantaged communities, as identified by the Climate and Economic 
+Justice Screening Tool (CEJST). The distribution of wells plugged by federal partners within 
+CEJEST disadvantaged communities are mapped in Figure 9.  
+ 
+Figure 9. Map of the 114 orphaned wells plugged by federal partners within CEJST 
+disadvantaged communities.
+Orphaned Wells Program FY 2024 Annual Report  17 
+ 
+Section 3: State Orphaned Wells Program 
+The Bipartisan Infrastructure Law creates three types of grants under the State Orphaned 
+Wells Program: Initial Grants, Formula Grants, and Performance Grants. States may utilize 
+grant funding, on state and private lands, for any of the purposes described under Section 
+40601(c)(2)(A) of the BIL, including:  
+ 
+1) To plug, remediate and reclaim orphaned wells; 
+2) To identify and characterize undocumented orphaned wells; 
+3) To measure and track emissions of methane and contamination of groundwater or 
+surface water associated with orphaned wells; and 
+4) To identify and address any disproportionate burden of adverse human health or 
+environmental effects of orphaned wells on disadvantaged communities. 
+ 
+As of September 30, 2024, the State Orphaned Wells Program has awarded 45 grants totaling 
+over $1 billion across Initial, Formula and Performance grants, and with this BIL funding, 9,437 
+wells have been plugged by states (see Figure 10).4 
+  
+ 
+4 This data is self-reported by states and subject to OWPO verification. The map includes OK wells plugged 
+through June 30, 2024. 
+ 
+ Figure 10. Map of orphaned wells plugged by states using initial and formula grant 
+funds between October 1, 2023, and September 30, 2024.
+Orphaned Wells Program FY 2024 Annual Report  18 
+ 
+Environmental Justice 
+The Department’s orphaned wells program advances the Biden-Harris administration’s 
+ambitious environmental justice goals through the Justice40 Initiative, which sets a goal to 
+deliver 40 percent of the overall benefits of certain federal investments to disadvantaged 
+communities that have been marginalized by underinvestment and overburdened by pollution.  
+Orphaned well plugging and remediation contributes to the Department’s Environmental 
+Justice strategy to meet the needs of communities with environmental justice concerns by 
+reducing disparate environmental burdens and increasing access to environmental benefits 
+that help make communities safe, vibrant, and healthy places in which to live, work, learn, and 
+recreate. Investments for states from the BIL for orphaned wells plugging benefit 
+disadvantaged communities by reducing water contamination, remediating soil, restoring 
+habitat, and reducing harmful methane emissions caused by leaking oil and gas well 
+infrastructure. Using the CEJST published by the White House Council on Environmental 
+Quality, as of September 30, 2024, 44 percent of the 9,437 wells plugged with Bipartisan 
+Infrastructure Law funds by states are in disadvantaged communities (See Figure 11).  
+ 
+Figure 11. Map of orphaned wells plugged by states between October 1, 2023, and 
+September 30, 2024, within CEJST disadvantaged communities.
+Orphaned Wells Program FY 2024 Annual Report  19 
+ 
+State Initial Grants 
+The Department has awarded $565 million in State Initial grants to state orphaned well 
+programs in 25 states. Twenty-two states have received large-scale Initial grants of $25 million 
+with three states receiving small-scale Initial grants up to $5 million. Eligible states that have 
+not yet received an initial grant may still apply for a small-scale grant. The Initial grants allow 
+states to strengthen existing well-plugging programs, help build capacity to expand or initiate 
+well-plugging activities or apply for a future Formula 
+or Performance grant.   
+ 
+State initial grant recipients have reported through 
+quarterly and 15-month reviews that the awarded 
+grant funds have directly contributed to the plugging 
+of nearly 9,000 wells on state and private lands. For 
+the initial grant work, State Orphaned Well Program 
+staff have conducted twelve state site visits to 
+ensure that grant recipients conduct operations in 
+accordance with all applicable laws, statutes, 
+regulations, policies, and approved terms and 
+conditions. 
+ 
+Grant recipients are required to submit performance, 
+financial, and data reports on specific intervals 
+detailing their progress in orphaned well activities 
+funded by the BIL. These reports provide the 
+Department with important data, including the 
+states’ orphaned well inventory, the number of wells 
+plugged, acres of habitat restored, and other 
+performance metrics. 
+ 
+Bipartisan Infrastructure Law Success Story – Habitat Restoration in Meigs County, 
+Ohio 
+ 
+Through the BIL funding, Ohio has taken 
+efforts to rehabilitate endangered 
+species, specifically Little Brown Bats, 
+which are valuable for agriculture and 
+beneficial to farmers. Re-establishment of 
+the endangered species’ habitat located 
+in the vicinity of orphaned oil and gas 
+wells is being addressed by the state. 
+The state has utilized grant funding to 
+minimize effects and re-establish Little 
+Brown Bat habitat near orphaned oil and 
+gas wells adjacent to an organic farm in 
+Meigs County, Ohio.  
+Figure 12. Habitat restoration 
+work in Meigs County, Ohio. 
+Figure 13. Little Brown Bat.
+Orphaned Wells Program FY 2024 Annual Report  20 
+ 
+State Habitat Restoration 
+Habitat restoration is a marker of the final stages of 
+orphaned well plugging and restoration. Accordingly, there 
+is often a significant lag time between well plugging and 
+abandonment and habitat restoration. Of the wells plugged 
+on federal, state, and private lands using Bipartisan 
+Infrastructure Law funds to date, only a small portion 
+reached the habitat restoration phase, and, as such, the 
+picture of eventual habitat restoration is incomplete. As of 
+September 30, 2024, 558 habitat acres have been 
+restored following the plugging and abandonment of 1,885 wells on state and private lands 
+(see Figure 14). The remaining wells plugged either do not require habitat restoration, have not 
+reached this phase, or the state has yet to report on habitat restoration efforts. This data 
+remains a priority for the OWPO, and a metric for acres of habitat restored is included in the 
+data reporting templates provided to federal bureaus, states, and Tribes. It is important to note 
+that acreage of “habitat restored” as reported by the states to the OWPO every quarter is not 
+the only, or necessarily best metric to measure and communicate the improving land condition 
+and health actively occurring due to BIL-funded activities across the country.   
+ 
+Figure 14. Acreage of habitat restored by states using BIL orphaned wells program 
+grant funding through FY 2024. 
+ 
+ 
+AR, CO, MI, 
+MS, NM, NY , 
+OH, PA, 105.97
+IN, 203.83
+KY, 46.9
+LA, 46.5
+MT, 43.03
+ND, 54.55
+WV, 57.82
+558 habitat acres 
+have been restored 
+following the plugging 
+and abandonment of 
+1,885 wells on state 
+and private lands. 
+ 
+558 habitat acres 
+have been restored 
+from plugging and 
+abandonment of 
+1,885 wells on state 
+and private lands.
+Orphaned Wells Program FY 2024 Annual Report  21 
+ 
+Bipartisan Infrastructure Law Success Story – Habitat Restoration in Bottineau County, 
+North Dakota 
+ 
+The North Dakota Department of 
+Mineral Resources is using a 
+portion of the BIL funding the state 
+has received from the Department 
+to reclaim farmland impacted by 
+orphaned oil and gas wells and 
+infrastructure across the state. 
+North Dakota received a $25 million 
+Initial Grant in August 2022 and a 
+$25 million Phase 1 Formula Grant 
+in May 2024. As of September 30, 
+2024, ND has plugged 71 orphaned 
+wells and restored nearly 55 acres 
+of habitat associated with 53 
+orphaned wells with BIL funds. 
+ 
+ 
+ 
+The Rice State 3H well site was on private 
+property in Bottineau County, North Dakota. 
+According to the state, the site consisted of 
+a well drilled in the late 1980s and a flowline. 
+The site had been orphaned for three years. 
+The North Dakota Department of Mineral 
+Resources used Initial Grant funding for this 
+reclamation project. Work at the site began 
+in June 2023 and was completed in 
+September 2023. Approximately 0.6 acres of 
+land was restored to its original condition 
+and returned to the landowner to be farmed. 
+Photos were provided to the Department of 
+the Interior by the North Dakota Department 
+of Mineral Resources. 
+ 
+State Formula Grants 
+Under the Bipartisan Infrastructure Law, 26 
+states are eligible to collectively receive up 
+to $1.93 billion in Formula Grant funding 
+from the Department across multiple annual 
+phases. Table 3 shows total State Formula 
+Grant eligibility by state and breaks down the eligibility for Phase 1 and Phase 2, including the 
+Phase 1 grants awarded in FY 2024. 
+ 
+Figure 15. The beginning of the reclamation 
+process at the Rice State 3H site in Bottineau 
+County, ND; June 2023. 
+Figure 16. The Rice State 3H site 
+ready to be returned to the 
+landowner; September 2023.
+Orphaned Wells Program FY 2024 Annual Report  22 
+ 
+Table 3. State Formula Grant award eligibility, including Phase 1 awards. 
+State Total Formula 
+Grant Eligibility 
+Phase 1 
+Eligibility 
+Phase 1 
+Awards 
+(as of 
+9/30/2024) 
+Phase 2 
+Eligibility 
+Alabama $1,681,430 $1,681,430 -- $1,681,430 
+Alaska $28,336,497 $25,000,000 $25,000,000 $3,336,497 
+Arizona $4,871,791 $4,871,791 $4,871,791 $0 
+Arkansas $5,589,721 $5,589,721 $5,589,721 $0 
+California $140,870,510 $35,217,628 $35,217,628 $52,826,441 
+Colorado $54,064,506 $25,000,000 $25,000,000 $29,064,506 
+Illinois $36,875,485 $25,000,000 $25,000,000 $11,875,485 
+Indiana $14,076,668 $14,076,668 $14,076,668 $0 
+Kansas $33,666,697 $25,000,000 -- $33,666,697 
+Kentucky $78,980,737 $25,000,000 $25,000,000 $35,000,000 
+Louisiana $86,449,520 $25,000,000 $25,000,000 $35,000,000 
+Michigan $5,873,295 $5,873,295 $5,873,295 $0 
+Mississippi $6,830,345 $6,830,345 $6,830,345 $0 
+Missouri $26,925,384 $25,000,000 $5,123,494 $21,801,890 
+Montana $5,139,423 $5,139,423 -- $5,139,423 
+Nebraska $4,151,076 $4,151,076 -- $4,151,076 
+New Mexico $72,260,163 $25,000,000 $25,000,000 $35,000,000 
+New York $44,672,162 $25,000,000 $25,000,000 $19,672,162 
+North Dakota $55,266,234 $25,000,000 $25,000,000 $30,266,234 
+Ohio $231,028,206 $57,757,052 $57,757,052 $86,635,577 
+Oklahoma $205,226,972 $51,306,743 -- $102,613,486 
+Pennsylvania $305,625,896 $76,406,474 $76,406,474 $114,609,711 
+Texas $318,695,029 $79,673,757 $79,673,757 $119,510,636 
+Utah $5,229,389 $5,229,389 -- $5,229,389 
+West Virginia $116,932,226 $29,233,057 $29,233,057 $43,849,585 
+Wyoming $40,680,639 $25,000,000 -- $35,000,000 
+Total $1,930,000,000 $658,037,849 $520,635,282 $825,930,225 
+Note:  -- Indicates the state had not received a Phase 1 award as of 9/30/2024. 
+ 
+ 
+Phase 1 State Formula Grants 
+The Department issued Phase 1 State Formula Grant Guidance (Phase 1 Guidance) on July 7, 
+2023, and announced the availability of $658 million in BIL funds for 26 states. The Phase 1 
+Guidance outlined the application process for states to receive Phase 1 Formula grants and 
+specified the requirements for carrying out activities. The Phase 1 Formula Grants will 
+strengthen states' well-plugging programs and provide substantial financial resources over 
+several years to plug, remediate, and reclaim thousands of orphaned wells on state and 
+private lands.
+Orphaned Wells Program FY 2024 Annual Report  23 
+ 
+ 
+Under Phase 1 of the Formula Grant program, states could apply for a grant of up to $25 
+million or up to 25 percent of the state’s total formula eligibility, whichever was greater, without 
+exceeding their total eligibility. States eligible to receive more than $25 million in total Formula 
+Grant funding can submit additional Formula grant applications in future phases until they have 
+been awarded their full eligible amount. Once a state receives a Formula grant, it has five 
+years from the date of receipt to obligate the funds for authorized activities and purposes.  
+ 
+The funding available in Phase 1 represented 34 percent of the $1.93 billion in total Formula 
+grant eligibility. The Phase 1 application window closed on December 31, 2023, and the 
+Department began awarding Phase 1 Formula Grants in January 2024. Through the end of FY 
+2024, $520 million in Phase 1 Formula Grant funding has been awarded to 19 states. With this 
+funding, states will continue to plug orphaned wells, reclaim affected sites, and develop 
+comprehensive orphaned well programs.   
+ 
+Bipartisan Infrastructure Law Success Story – Texas 
+ 
+On January 12, 2024, Texas 
+became the first state to receive 
+a Phase 1 Formula Grant from 
+the Department when it was 
+awarded $79.67 million. Through 
+a collaborative partnership with 
+the OWPO, the Railroad 
+Commission of Texas (RRC) has 
+been at the forefront of plugging 
+wells with Formula Grant funding 
+under the Bipartisan 
+Infrastructure Law. Since January 
+2024, the RRC has plugged 310 
+orphaned wells with Phase 1 
+Formula funds (see Figure 17), 
+bringing the total number of wells 
+plugged with BIL funds in Texas 
+to 1,072. 
+ 
+ 
+ 
+ 
+Phase 2 State Formula Grants 
+On August 14, 2024, the Department issued Phase 2 State Formula Grant Guidance (Phase 2 
+Guidance). The application window closes on December 13, 2024. The Phase 2 Guidance 
+allows States to apply for a grant of up to $35 million, or 50 percent of the State’s total 
+remaining eligible formula grant amount, whichever of the two is greater. This means that 
+States that have $35 million or less in remaining Formula Grant funding eligibility after Phase 1 
+are permitted to apply for all their remaining funds during Phase 2. States eligible to receive 
+more than $35 million in total Formula Grant funds may apply for their remaining Formula 
+Figure 17. Map of wells plugged by the State of Texas 
+using Phase 1 Formula Grant funds as of September 
+30, 2024.
+Orphaned Wells Program FY 2024 Annual Report  24 
+ 
+Grant funds in subsequent phases. The Department will continue to offer States maximum 
+flexibility by providing up to six annual Formula Grant application windows.  
+ 
+The OWPO, in partnership with the Interior Business Center and in coordination with the 
+Interstate Oil and Gas Compact Commission, conducted a webinar on the Formula Phase 2 
+guidance to provide states with an overview of the requirements and eligibility for funding.  
+ 
+As was required under Phase 1 Formula Grants, recipients of Phase 2 Formula Grants are 
+required to: 
+ 
+• Measure methane emissions pre- and post-plugging from orphaned wells plugged with 
+formula grants;  
+• Screen for groundwater and surface water impacts caused by orphaned wells; and   
+• Include in their well prioritization approaches orphaned wells creating burdens for 
+nearby disadvantaged communities.  
+ 
+Bipartisan Infrastructure Law Success Story – Katalla, Alaska 
+ 
+Katalla, located about 50 miles southeast of 
+Cordova, Alaska, was once a bustling oil town 
+with a peak population of over 5,000 residents. 
+Established at the center of Alaska's first oil 
+field in 1902, Katalla played a significant role in 
+the early oil industry. However, the town's 
+fortunes declined due to a series of events, 
+including the destruction of its refinery by fire 
+on Christmas Eve 1933. This refinery, which 
+had by that point produced 6.5 million gallons 
+of oil, was never rebuilt. Today, Katalla is a 
+ghost town, accessible only by helicopter or 
+boat. The Alaska Oil and Gas Conservation 
+Commission (AOGCC) aims to use some of its 
+$25 million Initial grant received in 2022 and 
+$25 million Formula Phase 1 Grant received in 
+June 2024 to plug the numerous orphaned oil 
+wells in this remote and historic area. 
+ 
+ 
+ 
+ 
+ 
+ 
+Figure 18. Cable Tool Rig at 
+Katalla Wellsite Chilkat 25.
+Orphaned Wells Program FY 2024 Annual Report  25 
+ 
+In Alaska, the cost to plug each orphaned well 
+can reach up to $3.5 million due to complex and 
+unique challenges (Figure 16) compared to 
+projects in the lower 48 states. Tackling high-cost, 
+high-priority sites in Katalla not only furthers the 
+program’s environmental and safety goals but 
+also establishes a crucial benchmark for 
+assessing the success of orphaned well plugging 
+and remediation efforts across diverse geographic 
+climates, geological conditions, and topographies 
+nationwide. 
+ 
+Department of the Interior State Site 
+Visits and Funding Announcements 
+In 2024, the “Investing in America” tour 
+highlighted ongoing efforts nationwide to 
+remediate the impacts of orphaned oil and gas 
+wells with Bipartisan Infrastructure Law funding. 
+This included visits to states using initial grant 
+funds and visit to states to announce Phase 1 
+Formula Grant awards. 
+ 
+Bipartisan Infrastructure Law Team Visits 
+Deuel County, Nebraska 
+Through the Bipartisan Infrastructure Law funding, 
+Nebraska is restoring farmland impacted by 
+orphaned wells and abandoned oil and gas 
+equipment. As of September 30, 2024, Nebraska 
+reported plugging 316 wells with its $25 million 
+Initial grant. In August 2024, members of the 
+Department’s Bipartisan Infrastructure Law team 
+traveled to Nebraska to meet with officials from the 
+Nebraska Oil and Gas Conservation Commission, 
+view well plugging operations, and speak with 
+landowners that were positively impacted by the 
+work happening on the ground.  
+ 
+During the visit, the Department met with Dave 
+Carlson, a fifth-generation rancher in Deuel 
+County, who had 17 orphaned wells on his ranch 
+plugged with funding from the state’s Initial grant. 
+The ranch was purchased in the late 1980s, and 
+Mr. Carlson farms wheat, corn, hay, and runs a 
+cow-calf operation. Now that the wells are 
+plugged, they no longer pose safety and environmental risks to the farm, his ranch, or to the 
+local community. 
+Figure 20. Well plugging in Deuel 
+County, Nebraska. 
+Figure 19. Signs of physical 
+hazards in Katalla – bear tracks.
+Orphaned Wells Program FY 2024 Annual Report  26 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Bipartisan Infrastructure Law Team Visits Erie County, New York 
+Using Bipartisan Infrastructure Law funding, New York is plugging orphaned wells in urban, 
+suburban, and rural communities across the state. New York received a $25 million Initial grant 
+in August 2022, and in October 
+2023, Interior Department 
+Infrastructure Coordinator 
+Winnie Stachelberg traveled to 
+Erie County, NY, to participate 
+in a press conference with New 
+York State officials to announce 
+the start of the well-plugging 
+program and view the first well 
+plugged by the New York 
+Department of Environmental 
+Conservation (DEC) with BIL 
+funds.  
+ 
+During the visit, Department 
+officials and staff also witnessed 
+active plugging operations at 
+the “Burg J 1” orphaned gas 
+well in the town of Alden. The 
+well was reported to the DEC in 
+2021 from landowners who were concerned about brine from the well leaking into their front 
+yard. A DEC inspection determined the well was leaking over 1,000 grams per hour of gas, as 
+well as brine, and was located within 200 feet of the residence. Plugging operations were 
+completed and the methane emissions were eliminated in November 2023. Final site 
+reclamation was approved in December 2023. 
+ 
+Figure 21. Department staff meet with Nebraska officials 
+and a local farmer who had wells on his property cleaned 
+up with BIL funds. 
+Figure 22. Infrastructure Coordinator Stachelberg 
+speaks during an October 2023 orphaned well press 
+event in NY.
+Orphaned Wells Program FY 2024 Annual Report  27 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+In September 2024, Infrastructure Coordinator Stachelberg returned to the state to again meet 
+with New York DEC officials, view well sites plugged and remediated with Initial grant funds, 
+view sites that will be cleaned-up with formula grant funds, and speak with landowners 
+positively impacted by the work happening on the ground. During the visit, DEC and Interior 
+Department officials visited the site of the Burg J 1 gas well that was plugged using BIL funds 
+in late 2023.  
+ 
+The property owners were 
+thrilled with the plugging and 
+restoration work and thankful 
+that the polluting well leaking 
+brine and gas no longer posed 
+a threat. As of September 30, 
+2024, the State reported that it 
+plugged 31 orphaned wells. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Figure 23. (Left) Interior Department and NY State officials at the Burg J 1 
+well in October 2023. (Right) Burg J 1 well plugging underway. 
+ 
+ 
+ 
+Figure 24. The front lawn of a home in Alden, NY, 
+10 months after the Burg J 1 orphaned gas well 
+was plugged.
+Orphaned Wells Program FY 2024 Annual Report  28 
+ 
+Secretary Haaland Announces Phase 1 Formula Grants in Michigan and California 
+In 2024, Secretary Deb Haaland visited 
+several states to announce new funding 
+under the Bipartisan Infrastructure Law for 
+orphaned well plugging and remediation.  
+ 
+In August 2022, the Interior Department 
+awarded the Michigan Department of 
+Environment, Great Lakes, and Energy 
+(EGLE) a $25 million BIL Initial grant, and 
+the state reported that it plugged nearly half 
+of its approximately 450 documented 
+orphaned wells with this funding. In March 
+2024, Secretary Haaland traveled to 
+Michigan, where she announced the state 
+was receiving a $5.87 million Phase 1 
+Formula Grant from the Department and 
+held an orphaned well roundtable at the 
+Laborers’ Wayne Training Center. As part of 
+its Phase 1 award, Michigan will measure methane emissions from orphaned wells the state 
+plugs, screen for groundwater and surface water impacts, and prioritize cleaning up wells near 
+overburdened, low-income, and Tribal communities. During the roundtable discussion, 
+Secretary Haaland spoke with state officials, labor leaders, and contractors about the 
+significance of the BIL’s historic investment in orphaned well clean-up and the importance of 
+growing the well plugging and remediation workforce in Michigan and across the country. 
+ 
+In August 2022, the Interior Department 
+awarded the California Geologic Energy 
+Management Division (CalGEM) of the 
+Department of Conservation a $25 million BIL 
+Initial grant, and the state has plugged 170 
+orphaned wells with this funding. In May 2024, 
+Secretary Haaland traveled to Los Angeles, 
+California, where she held a press conference 
+with LA Mayor Karen Bass and Natural 
+Resources Agency Deputy Secretary for 
+Energy Le-Quyen Nguyen, where she 
+announced the State was receiving a $35.2 
+million Phase 1 Formula Grant from the 
+Interior Department. With this new funding, 
+California expects to plug and remediate 206 
+high-risk orphaned oil and gas wells that 
+threaten communities and decommission 47 
+attendant production facilities with 
+approximately 70,000 feet of associated 
+pipelines.  
+Figure 25. Secretary Haaland speaks with 
+EGLE’s Oil, Gas, and Minerals Division 
+Director Adam Wygant at the Laborers’ 
+Wayne Training. Photo credit: EGLE. 
+Figure 26. Secretary Haaland announces 
+CA’s $35 million Phase 1 Formula Grant 
+alongside LA Mayor Karen Bass and CA 
+Natural Resources Agency Deputy 
+Secretary for Energy Le-Quyen Nguyen.
+Orphaned Wells Program FY 2024 Annual Report  29 
+ 
+ 
+During the visit, Secretary 
+Haaland also received a briefing 
+from CalGEM on how the state 
+was using its Initial orphaned well 
+grant and the state’s plan for its 
+Phase 1 formula grant. The 
+briefing allowed various orphaned 
+well stakeholders, including labor 
+groups and environmental justice 
+advocates, to provide their 
+perspectives on well plugging and 
+remediation work happening 
+across California.  
+ 
+ 
+ 
+ 
+Acting Deputy Secretary Laura Daniel-Davis Visits California and New Mexico 
+In March 2024, Acting Deputy 
+Secretary Laura Daniel-Davis visited 
+Santa Barbara, California, to visit 
+several orphaned well sites being 
+cleaned-up with Bipartisan 
+Infrastructure Law funding and meet 
+with officials and staff from the 
+California Geologic Energy 
+Management Division. The Acting 
+Deputy Secretary received a briefing 
+from CalGEM on the state’s use of 
+the $25 million Initial grant California 
+received in 2022, discussed the 
+hazards and impacts of orphaned 
+wells on local communities, and 
+visited several orphaned well sites in 
+the Cat Canyon oil field. As of 
+September 30th, California has 
+plugged 170 wells with Bipartisan 
+Infrastructure Law funding. 
+Figure 27. Secretary Haaland during an orphaned 
+well discussion with California stakeholders. 
+Figure 28. Acting Deputy Secretary Laura Daniel 
+Davis speaks with CalGEM staff and contractors 
+during an orphaned well site visit.
+Orphaned Wells Program FY 2024 Annual Report  30 
+ 
+ 
+In May 2024, the Acting 
+Deputy Secretary visited 
+Albuquerque, New Mexico, 
+where she announced the 
+state was receiving a $25 
+million Phase 1 Formula 
+Grant under President 
+Biden’s Investing in America 
+agenda to plug 
+approximately 117 orphaned 
+wells, remediate four sites 
+and complete surface 
+restoration of 33 locations 
+with the grant funding. 
+During the visit, the Acting 
+Deputy Secretary met 
+with representatives 
+from New Mexico’s Energy, 
+Minerals and Natural 
+Resources Department to 
+hear about their work 
+cleaning up legacy pollution across the state. As of September 30th, New Mexico has plugged 
+137 wells and conducted extensive surface remediation and restoration of orphaned well sites 
+using Initial grant funds. 
+ 
+Bipartisan Infrastructure Law Success Story – Navajo County, Arizona 
+         
+Through the BIL, locating undocumented orphaned oil 
+and gas wells and tackling legacy pollution associated 
+with orphaned oil and gas wells is being addressed by 
+the State of Arizona. The state has utilized grant 
+funding during its first phase to locate undocumented 
+orphaned oil and gas wells in Navajo County. 
+Undocumented orphaned oil and gas wells can 
+potentially release methane, a known greenhouse gas 
+and petroleum contaminants into the environment. To 
+inventory these undocumented orphaned wells, 
+technology such as drones fitted with iron detecting 
+sensors are utilized to locate wells for plugging 
+prioritization, based on potential releases of methane 
+and petroleum contaminants to the environment and 
+effects on communities.     
+ 
+The use of drones is anticipated to locate 120 orphaned 
+oil and gas wells for plugging and abandonment. The 
+plugging and remediation cleanup efforts will help ensure communities and environmental 
+receptors are not affected by on-going releases. Reduction in methane emissions is also 
+anticipated following subsequent phases of the project. 
+Figure 29. Acting Deputy Secretary Laura Daniel Davis 
+meets with officials from New Mexico’s Energy, Mineral 
+and Natural Resources Department during a May 2024 
+visit to announce the State’s $25 million Phase 1 
+Formula Grant. 
+Figure 30. Drone usage in 
+Navajo County, AZ.
+Orphaned Wells Program FY 2024 Annual Report  31 
+ 
+ 
+Performance Grants – Matching and Regulatory Improvement Grants 
+The BIL appropriated $1.5 billion for State Performance Grants. Like Formula Grants, 
+Performance Grants may be used on state and private land for activities specified in Section 
+40601(c)(2) of the BIL.  
+ 
+There are two categories of performance grants: Matching and Regulatory Improvement 
+grants. Matching Grants encourage increased state orphaned-well spending above past 
+spending levels by awarding a state a grant equal to what it spends in a given fiscal year 
+above its 2010-2019 average. Only states that receive an Initial Grant are eligible to receive a 
+Matching Grant, and a state may receive no more than 1 Matching Grant per fiscal year. A 
+state may receive up to a total of $30 million in Matching Grants from the Department. The 
+OWPO released Final Matching Grant guidance for states in May 2024, and has awarded one 
+Matching Grant so far: in June 2024, West Virginia received a $1.9 million grant. 
+ 
+Regulatory Improvement Grants (RIGs) encourage regulatory improvements or reward states 
+that have already made improvements. States are eligible for two types of RIGs: 
+ 
+• Plugging Standards Grants: Intended to incentivize states to implement standards and 
+procedures designed to ensure that wells located in the state are plugged in an effective 
+manner.   
+• Program Improvement Grants: Intended to incentivize states to implement other 
+improvements to state programs designed to reduce future orphaned well burdens.  
+ 
+The OWPO released draft RIG guidance for public comment on October 1, 2024, and it’s 
+anticipated that final RIG guidance will be released in the first quarter of FY 2025. Under the 
+draft RIG guidance, states are eligible to receive a Plugging Standards RIG of up to $20 million 
+and a Program Improvement RIG of up to $20 million, for a total of $40 million per state. By 
+incentivizing states to improve their standards, procedures, and orphaned well programs, 
+these grants will help to better protect the environment and help prevent the creation of new 
+orphaned wells.  
+ 
+Between Matching Grants and RIGs, states are eligible to receive up to $70 million in 
+Performance Grants under the Bipartisan Infrastructure Law.
+Orphaned Wells Program FY 2024 Annual Report  32 
+ 
+Section 4: Tribal Orphaned Wells Program 
+The Bipartisan Infrastructure Law provides $150 million for well plugging, remediation, and 
+reclamation on Tribal land. Tribes may use this available amount for any of the purposes 
+described under Section 40601(d)(2)(A) of the BIL, including to: 
+ 
+• Plug, remediate, or reclaim 
+orphaned wells on Tribal land;  
+• Restore soil and habitat in the 
+degraded area and 
+decommission or remove 
+associated infrastructure; 
+• Identify and characterize 
+additional undocumented wells 
+on Tribal land; and  
+• Develop or administer a Tribal 
+program to carry out plugging, 
+remediation, and reclamation 
+activities. 
+ 
+“Tribal land” is defined as any land 
+or interest in land owned by a 
+Tribe, the title to which is: 
+ 
+1) Held in trust by the United States;  
+ 
+2) Subject to a restriction against alienation under Federal law. This includes plugging, 
+abandonment, and reclamation of wells drilled into minerals that are held in trust or 
+restricted status for a Tribe, even if the surface estate is not; and remediation of surface 
+that is held in trust or restricted status for a Tribe, even if the minerals are not. Lands 
+owned by individual Indians in trust or restricted status are not eligible. 
+ 
+As part of a multi-year funding strategy designed to allow Tribes to build capacity and move 
+toward implementation in successive years, the Department made $50 million available during 
+an initial funding opportunity (Phase 1) and invited Tribes to apply for three types of project 
+funding under the FY 2023 Technical Guidance, published in November 2022:  
+ 
+1) Tribal Program Development Grants to fund activities to develop and administer a 
+Tribal program to carry out plugging, remediation, and reclamation activities for 
+orphaned wells on Tribal land, including identification and assessment, training, and 
+other capacity-building activities.  
+ 
+2) Tribal Implementation Grants to fund plugging, remediation, and reclamation 
+activities.  
+ 
+Figure 31. Navajo Nation orphaned well.
+Orphaned Wells Program FY 2024 Annual Report  33 
+ 
+3) In Lieu of Grant assistance through which a Tribe may request that the Secretary 
+administer and carry out plugging, remediation, and reclamation activities related to 
+eligible orphaned wells on behalf of a Tribe. 
+ 
+Grant proposals from eligible applicants, totaling $122 million, far exceeded the Phase 1 
+allotted funding, requiring a funding allocation strategy for an equitable, transparent, and 
+sustainable approach to making partial awards. Under the Phase 1 opportunity, the 
+Department awarded nearly $40 million in grants to ten Tribes, including over $34 million in 
+Implementation Grants to support plugging, remediation, and reclamation activities for known 
+orphaned wells on Tribal lands, as well as over $4.9 million for Program Development Grants 
+to support capacity-building activities and assist Tribes in identifying, locating, inventorying, 
+and assessing potentially orphaned wells on Tribal lands. This phase also provided $805,000 
+for in-lieu of grant funding to the Bureau of Indian Affairs to provide direct services to mitigate 
+orphaned wells on a Tribe’s behalf. Phase 1 funding supported plugging activities for 414 wells 
+and assessment of an additional 559 wells, as well as capacity-building activities to assist 
+Tribes in the identification and assessment of orphaned wells. Figure 32 contains a map of 
+Phase 1 and Phase 2 Tribal Grants awarded in FY 2023 and FY 2024. 
+ 
+ 
+Figure 32. Map of Tribal Program grants awarded in FY 2023 and FY 2024.
+Orphaned Wells Program FY 2024 Annual Report  34 
+ 
+Bipartisan Infrastructure Law Success Story – Fort Belknap Indian Community 
+ 
+In FY 2023, the Fort Belknap Indian Community received a Phase 1 $1 million Program 
+Development Grant to research, assess, and inventory orphaned wells on the Fort Belknap 
+Indian Reservation. The Program Development grant also provided the Tribe with the ability to 
+build up administrative and technical capacity to be able to move into the implementation 
+phase of plugging and remediating orphaned wells on their land. Since the time Fort Belknap 
+was awarded their Phase 1 grant, the Tribe was able to identify 33 orphaned wells that have 
+been left abandoned and either 
+unplugged or plugged improperly 
+and have resulted in risk to the 
+surrounding environment. The 
+Tribe also identified a potential 
+for 16 more orphan wells that 
+have been discovered through 
+archived record and data 
+research. This initial success has 
+placed the Tribe in a position to 
+apply for a Tribal Implementation 
+grant in future years, where the 
+funding will be focused on 
+properly plugging these 
+abandoned wells and 
+remediating the surrounding soil, 
+thereby protecting vital ground 
+and surface water from 
+contamination from these 
+otherwise unidentified legacy 
+pollution sources.   
+ 
+Phase 2 Funding Opportunity 
+Following the Phase 1 opportunity, the Department evaluated the entire award cycle and 
+proposed revisions to application requirements and guidance to streamline processes and 
+better serve Tribes. After soliciting Tribal feedback during a series of “listening sessions” in 
+January and February 2024, the Department invited Tribes to apply for an estimated $55 
+million of funding available during the Phase 2 award cycle under separate guidance published 
+in March 2024. The Department invited Tribes to weekly virtual office hours, including brief 
+structured presentations and open question-and-answer sessions, during the grant application 
+period. The Department provided optional workplan and budget templates to assist Tribes in 
+developing and submitting grant proposals. The Department continues to accept requests for 
+in-lieu-of-grant assistance for review and award on a rolling basis through December 31, 2024. 
+ 
+Phase 2 grant proposals, totaling $120.4 million, also exceeded the allotted funding and the 
+remaining Tribal allocation, necessitating an allocation strategy of partial awards for 
+Implementation Grant proposals. Seven Tribes submitted requests to address unmet needs 
+and six new applicants applied for grant funding to support both capacity-building and plugging 
+and abandonment, remediation, and reclamation activities at orphaned well sites on Tribal 
+land. The Department awarded approximately $29 million in Phase 2 grants during FY 2024 
+Figure 33. Fort Belknap well Gros #1.
+Orphaned Wells Program FY 2024 Annual Report  35 
+ 
+and continues to assist Phase 2 Tribal applicants in completing application requirements (See 
+Table 4).  
+ 
+ 
+Table 4. Phase 2 Tribal Grant awards through FY 2024. 
+ 
+Tribe or Nation Type of Tribal 
+Grant Planned Activities with Funds Total Grant 
+Amount 
+Caddo Nation of 
+Oklahoma 
+Program 
+Development and 
+Implementation 
+Grants 
+Assess up to 20 wells; identify 
+undocumented wells; plug wells 
+and remediate well sites 
+$3,707,129  
+Navajo Nation Implementation 
+Grant 
+Identify and assess 
+undocumented wells; plug and 
+remediate 19 wells; conduct 
+post-plugging inspections 
+$4,970,911  
+Osage Nation 
+Program 
+Development 
+Grant 
+Develop remediation plans; map 
+boundaries of contaminated 
+areas; prioritize well sites 
+$1,000,000  
+Osage Nation Implementation 
+Grant 
+Conduct plugging and 
+remediation work at up to 91 
+orphaned well sites 
+$10,059,548  
+Seneca Nation of 
+Indians 
+Implementation 
+Grant 
+Fund plugging of up to 25 
+orphaned wells in the Tribe’s 
+Allegany Territory 
+$2,500,000  
+Chickasaw Nation Implementation 
+Grant 
+Evaluate ten well sites; compile 
+and analyze data; develop 
+plugging standards and 
+guidelines; continue site visits 
+and train Tribal staff 
+$499,993  
+Chippewa Cree 
+Tribe of the Rocky 
+Boy Reservation 
+Implementation 
+Grant 
+Plug, remediate, and reclaim 17 
+orphaned well sites $2,006,533  
+Comanche Nation 
+Program 
+Development 
+Grant 
+Establish program to evaluate 23 
+documented and approximately 
+250 potentially documented 
+orphaned wells; further Tribal 
+training efforts 
+$1,000,000  
+Jicarilla Apache 
+Nation 
+Implementation 
+Grant 
+Evaluate and prioritize wells; 
+plug, remediate, reclaim up to 19 
+orphaned well sites and adjacent 
+lands 
+$3,162,500  
+Total Phase 2 Tribal Grants Through Fiscal Year 2024 $28,906,614
+Orphaned Wells Program FY 2024 Annual Report  36 
+ 
+Native nations are often disproportionately burdened by environmental pollution. The 
+Department works directly with Tribes to ensure that their voices are integrated into decision-
+making processes and to provide Tribal Nations with the greatest possible autonomy to 
+address the needs and priorities of their people.  
+ 
+Tribal Consultation & Engagement 
+The OWPO also provided technical assistance to Tribal grant recipients by engaging in early 
+collaboration to understand the technical needs of each Tribal grant recipient. During FY 2024, 
+the OWPO coordinated environmental compliance reviews for Phase 1 Tribal grants. This 
+included coordinating a program authorization for recipients to initiate National Historic 
+Preservation Act Section 106 reviews (through a letter of intention to the Advisory Council on 
+Historic Preservation and then through formal notification to the recipients), as well as reviews 
+of no effect/no further review projects. To date, OWPO has issued Authorizations to Proceed 
+for 8 of the 12 Phase 1 grants. Environmental reviews for the remaining 4 projects are 
+underway. 
+ 
+Bipartisan Infrastructure Law Success Story – Navajo Nation  
+ 
+In Fiscal Year 2024, the Department visited Navajo Nation to gain a better understanding on 
+the needs and impacts of addressing orphaned well sites on Tribal land. During the site visit 
+Department staff had the opportunity to view the 
+many complex issues that the Navajo Nation is 
+facing when correctly remediating this legacy 
+pollution left behind from orphaned wells. The 
+Navajo Nation has discovered through their 
+comprehensive inventory and assessment 
+phase many wells that have been incorrectly 
+plugged, some of which were actively leaking 
+potentially hazardous liquids into the 
+surrounding environment. Many of these 
+discoveries required emergency plugging 
+actions and resulted in extensive and expensive 
+contaminated soil remediation projects. In Figure 
+31, well “Utah09” has a well head that was not 
+visible at ground surface under a bubbling 
+spring. The well caused the formation of an 
+unnatural warm spring which formed a tributary 
+to Montezuma Creek. Without OWPO Tribal 
+Grant program awards, many of these actively 
+leaking wells would have continued to go 
+undiscovered. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Figure 34. Navajo Nation Utah09 well.
+Orphaned Wells Program FY 2024 Annual Report  37 
+ 
+Section 5: Well Inventories 
+The extent of orphaned wells across the United States is not fully 
+known. While many states, federal agencies, and organizations have 
+developed estimates of orphaned well inventories, a comprehensive 
+national inventory does not exist. The process of inventorying wells 
+relies on the categorization of a well as orphaned, abandoned, idled, 
+or an alternative category. These categorizations vary between 
+states and federal agencies as the definition of “orphaned” is not 
+uniform. The uncertainty of the estimated number of total 
+documented and undocumented orphaned wells highlights the 
+challenge that the OWPO faces in administering financial assistance 
+to support plugging, remediating, and reclaiming orphaned wells.  
+ 
+As the Department reported to Congress in March 2022, the Interior Department’s most recent 
+inventory of orphaned wells has identified nearly 16,000 wells on federal lands.5 In Fiscal Year 
+2025, the OWPO will coordinate with the federal partners to update the estimated inventory of 
+orphaned wells on federal lands. The Bureau of Land Management is currently working with 
+the Bureau of Indian Affairs to create an independent inventory of orphaned wells on Tribal 
+lands, and the OWPO plans to report additional information on this effort in FY 2025. 
+ 
+With regard to state orphaned well inventories:  
+ 
+• Data from the U.S. Geological Survey published in 2022 sets the documented orphaned 
+well inventory at 117,672 wells across 27 states. The USGS is currently updating this 
+dataset and expects to release a new orphaned well inventory in FY 2025. 
+ 
+• Based on data submitted by states to the Department in December 2021 in response to the 
+State Formula Grant notices of intent requirement, 26 states reported having 126,806 
+documented orphaned wells. The Orphaned Wells Program used this inventory in the FY 
+2023 Report to Congress. 
+ 
+• In July 2024, the Interstate Oil and Gas Compact Commission released the Idle and 
+Orphan Oil and Gas Wells: State and Provincial Regulatory Strategies report, which 
+contained an update to state-reported orphaned well data.6 According to the IOGCC, the 29 
+responding states reported a total of 141,959 documented orphan wells as of December 
+31, 2023 (see Figure 35). While the states continue to plug orphan wells, according to the 
+IOGCC, the number of documented orphaned wells increased by approximately 54 percent 
+since 2020.  
+ 
+ 
+ 
+5 Testimony of Steve Feldgus, Ph.D., before the House Subcommittee on Energy and Mineral Resources. March 
+31, 2022. https://www.blm.gov/sites/default/files/docs/2022-
+04/DOI%20Testimony_Benefits%20of%20the%20Legacy%20Pollution%20Clean-
+Up%20Programs%20in%20the%20Bipartisan%20Infrastructure%20Law.pdf 
+6 https://oklahoma.gov/content/dam/ok/en/iogcc/documents/publications/Orphan%20Wells%20Revised.pdf 
+141,959 
+documented 
+orphaned wells 
+reported by 
+states to the 
+IOGCC. 
+ 
+141,959 
+documented 
+orphaned wells 
+reported by 
+states to the 
+IOGCC.
+Orphaned Wells Program FY 2024 Annual Report  38 
+ 
+ 
+ 
+ 
+ 
+Undocumented Orphaned Wells 
+There is a data gap between the number of documented and undocumented orphaned wells 
+that creates a challenge to well inventory efforts. Undocumented orphaned wells (UOWs) are 
+wells that lack an operator of record (orphaned well) and do not exist in regulators’ inventories. 
+As with orphaned wells, UOWs provide uncontrolled pathways for methane and other 
+substances to migrate upwards towards the surface where they can interact with groundwater 
+and enter the atmosphere. The presence of UOWs is a major geotechnical hazard when 
+developing subsurface resources (oil & gas, geothermal, carbon capture utilization and 
+storage, etc.).  
+ 
+The Bipartisan Infrastructure Law directed the U.S. Department of Energy (DOE) to collaborate 
+with the IOGCC and the Department of the Interior to develop a program focused on reducing 
+the impact of undocumented orphaned wells. The BIL allocated $30 million dollars to this effort 
+to help communities reduce methane emissions and eliminate other environmental impacts. 
+The focus of the DOE’s Undocumented Orphaned Wells Program (UOWP) is to establish a 
+consortium of National Labs dedicated to developing techniques, technologies and best 
+practices for the identification and characterization of undocumented orphan wells, and to 
+share the results of this work with federal, state, and Tribal partners.  
+ 
+Bipartisan Infrastructure Law Success Story – CATALOG7 
+In September 2022, the Consortium Advancing Technology for Assessment of Lost Oil & Gas 
+Wells (CATALOG) was initiated and consisted of six work packages covering several topics: 
+Methane Detection and Quantification; Well Identification; Sensor Fusion and Data Integration 
+with Machine Learning; Characterization; Integration and Best Practices; and Data 
+Management. Five National Labs are collaborators: Los Alamos National Lab, Sandia National 
+Lab, Lawrence Livermore National Lab, Lawrence Berkeley National Lab, and the National 
+Energy Technology Laboratory.  
+ 
+CATALOG is currently deploying field teams across the county in collaboration with federal, 
+state, and Tribal partners to identify and characterize UOWs. CATALOG is integrating drones, 
+ 
+7 Details of the UOWP activities, including the 2023 Annual Year End Report, can be found on the CATALOG 
+website at https://catalog.energy.gov   
+Figure 35. Trend in IOGCC published documented orphaned wells.

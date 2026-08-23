@@ -1,0 +1,36 @@
+{
+  "experiment": "E-019b",
+  "evaluated_at": "2026-08-21T20:20:00+03:00",
+  "input_scout_capture_sha256": "841bce55ff7571a2d2e6a4d5af6ce0390a826f5a37eaa711cba3151d8196c395",
+  "input_feasibility_response_sha256": "949bace39965bd85d5fe9a650fea29b5540ee764740148457a954da1c11075b5",
+  "paid_calls_added": 0,
+  "initial_runtime_selection": {
+    "universe": "Suspicion as Default",
+    "route_index": 1,
+    "route_question": "What does prior authorization in health care actually cost in denied days and human labor?",
+    "route_depth": "SINGLE",
+    "manual_verdict": "FAIL",
+    "reason": "The selector placed the Scout umbrella ranking before the depth of the exact article route and therefore chose a SINGLE route while three RICH routes were available."
+  },
+  "deterministic_fix": "The exact selected route depth is now ordered before freshness and the umbrella ranking.",
+  "final_selection": {
+    "universe": "The Afterlife of Abandoned Infrastructure",
+    "universe_question": "What happens after a mine, dam, cable, factory, or software system is no longer useful to its original owner but remains physically or institutionally present?",
+    "route_index": 0,
+    "route_question": "How does an orphaned oil well become a public problem decades after the company that drilled it disappears?",
+    "distinct_engine": "The environmental and financial afterlife of extraction is more about legal disappearance than physical drilling; plugging costs land on the public.",
+    "route_depth": "RICH",
+    "confidence": 0.9,
+    "expected_primary_sources": 4,
+    "second_act": "The same legal-disappearance mechanism leaves the public holding reclamation costs at abandoned coal mines and orphaned Superfund sites, so the oil-well story opens into a broader afterlife-of-extraction pattern.",
+    "manual_verdict": "PASS_TO_DISCOVERY"
+  },
+  "manual_source_checks": [
+    "https://www.blm.gov/sites/default/files/docs/2024-06/BLM-OilandGas-Orphanwells-Factsheet-June2024.pdf",
+    "https://www.gao.gov/products/gao-19-615",
+    "https://www.gao.gov/products/gao-18-250",
+    "https://www.doi.gov/state-orphaned-wells-program",
+    "https://www.doi.gov/sites/default/files/documents/2025-11/fy-2025-orphaned-wells-congressional-report.pdf"
+  ],
+  "substack_activity": false
+}

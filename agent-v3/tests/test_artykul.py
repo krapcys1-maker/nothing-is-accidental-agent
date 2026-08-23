@@ -88,14 +88,11 @@ finally:
     stages.PROMOCJA = oryg_promocja
 
 print()
-print("=== 4. SCIEZKA ARTYKULU MA SWOJ LIMIT CZASU W USLUDZE ===")
+print("=== 4. USLUGA ARTYKULU V3 JEST CELOWO NIEURUCHAMIALNA ===")
 usluga = pathlib.Path("agent-v3/systemd/nia-artykul.service").read_text(encoding="utf-8")
-import re  # noqa: E402
-m = re.search(r"TimeoutStartSec=(\d+)", usluga)
-sprawdz("usluga artykulu ma limit czasu", bool(m))
-if m:
-    print("    limit: %s min" % (int(m.group(1)) // 60))
-    sprawdz("limit co najmniej godzina", int(m.group(1)) >= 3600, m.group(1))
+sprawdz("prototyp konczy usluge bez uruchomienia kodu",
+        "ExecStart=/usr/bin/false" in usluga, usluga)
+sprawdz("usluga nie ma flagi publikacji", "--wyslij" not in usluga, usluga)
 
 print()
 print("=== WYNIK: %s zdanych, %s oblanych ===" % (zdane, oblane))

@@ -13,7 +13,8 @@ Nic nie kosztuje: samo API i pobranie tekstu, zero wywolan modelu.
 import re
 import sys
 
-sys.path.insert(0, "agent-v2")
+sys.path.insert(0, "agent-v3")
+import safe_fetch  # noqa: E402
 
 ILE_DOKUMENTOW = 100
 API = "https://www.federalregister.gov/api/v1/documents.json"
@@ -29,42 +30,40 @@ SPOR = (r"commenters?\b", r"\bwe disagree\b", r"\bwe decline\b",
 
 
 def main() -> int:
-    import httpx
-
     print("pobieram %d najnowszych przepisow (typ RULE)..." % ILE_DOKUMENTOW,
           flush=True)
-    with httpx.Client(timeout=45, follow_redirects=True) as c:
-        r = c.get(API, params={"per_page": ILE_DOKUMENTOW, "order": "newest",
-                               "conditions[type][]": "RULE", "fields[]": POLA})
-        if r.status_code != 200:
-            print("API odmowilo: HTTP %s" % r.status_code)
-            return 1
-        dokumenty = r.json().get("results") or []
-        print("dostalem %d" % len(dokumenty), flush=True)
+    r = safe_fetch.get(API, params={
+        "per_page": ILE_DOKUMENTOW, "order": "newest",
+        "conditions[type][]": "RULE", "fields[]": POLA}, timeout=45)
+    if r.status_code != 200:
+        print("API odmowilo: HTTP %s" % r.status_code)
+        return 1
+    dokumenty = r.json().get("results") or []
+    print("dostalem %d" % len(dokumenty), flush=True)
 
-        z_tekstem = brak_tekstu = 0
-        wyniki = []
-        for i, d in enumerate(dokumenty, 1):
-            url = d.get("raw_text_url")
-            if not url:
-                brak_tekstu += 1
-                continue
-            try:
-                t = c.get(url).text
-            except Exception:
-                brak_tekstu += 1
-                continue
-            z_tekstem += 1
-            trafienia = sum(len(re.findall(w, t, re.I)) for w in SPOR)
-            wyniki.append({
-                "tytul": (d.get("title") or "")[:70],
-                "urzad": ((d.get("agencies") or [{}])[0].get("name") or "")[:34],
-                "znakow": len(t),
-                "spor": trafienia,
-                "url": d.get("html_url", ""),
-            })
-            if i % 20 == 0:
-                print("  ... %d/%d" % (i, len(dokumenty)), flush=True)
+    z_tekstem = brak_tekstu = 0
+    wyniki = []
+    for i, d in enumerate(dokumenty, 1):
+        url = d.get("raw_text_url")
+        if not url:
+            brak_tekstu += 1
+            continue
+        try:
+            t = safe_fetch.get(url, timeout=45).text
+        except Exception:
+            brak_tekstu += 1
+            continue
+        z_tekstem += 1
+        trafienia = sum(len(re.findall(w, t, re.I)) for w in SPOR)
+        wyniki.append({
+            "tytul": (d.get("title") or "")[:70],
+            "urzad": ((d.get("agencies") or [{}])[0].get("name") or "")[:34],
+            "znakow": len(t),
+            "spor": trafienia,
+            "url": d.get("html_url", ""),
+        })
+        if i % 20 == 0:
+            print("  ... %d/%d" % (i, len(dokumenty)), flush=True)
 
     print()
     print("=" * 78)

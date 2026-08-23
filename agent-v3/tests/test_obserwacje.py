@@ -89,16 +89,30 @@ class Kontekst:
         pass
 
 
-oryg = (browser.podlacz_sie, browser.wymagaj_sesji, browser.DZIENNIK,
-        browser.naprawde_wyslac)
+class Proba:
+    id = "fake-attempt"
+    idempotency_key = "fake-key"
+    status = "CONFIRMED"
+    def __enter__(self): return self
+    def __exit__(self, *args): return False
+    def dispatch(self): pass
+    def confirm(self, *_args, **_kwargs): pass
+    def unknown(self, *_args, **_kwargs): pass
+
+
+oryg = (browser.podlacz_sie, browser.wymagaj_sesji,
+        browser.wymagaj_wlasciwego_konta, browser.DZIENNIK,
+        browser.naprawde_wyslac, browser.proba_mutacji)
 
 
 def ustaw(dostepne):
     klikniete.clear()
     s = Strona(dostepne)
     browser.wymagaj_sesji = lambda: None
+    browser.wymagaj_wlasciwego_konta = lambda _page: None
     browser.podlacz_sie = lambda: (Kontekst(s), Kontekst(s), Kontekst(s))
-    browser.naprawde_wyslac = lambda wyslij, co: wyslij
+    browser.naprawde_wyslac = lambda wyslij, co, _capability: wyslij
+    browser.proba_mutacji = lambda *_args, **_kwargs: Proba()
     browser.DZIENNIK = pathlib.Path(tempfile.mkdtemp()) / "d.jsonl"
 
 
@@ -143,17 +157,18 @@ try:
     browser.obserwuj_profil("ktos", wyslij=False)
     sprawdz("tryb sprawdzenia nie klika nic", klikniete == [], klikniete)
 finally:
-    (browser.podlacz_sie, browser.wymagaj_sesji, browser.DZIENNIK,
-     browser.naprawde_wyslac) = oryg
+    (browser.podlacz_sie, browser.wymagaj_sesji,
+     browser.wymagaj_wlasciwego_konta, browser.DZIENNIK,
+     browser.naprawde_wyslac, browser.proba_mutacji) = oryg
 
 print()
 print("=== 2. OSOBNE BUDZETY ===")
 
 zrodlo = pathlib.Path("agent-v3/run.py").read_text(encoding="utf-8")
 sprawdz("blok obserwowania uzywa budzetu 'follow'",
-        'budzet["follow"]' in zrodlo)
+        'if not na_teraz.get("follow")' in zrodlo)
 sprawdz("blok subskrypcji uzywa budzetu 'subskrypcje'",
-        'budzet["subskrypcje"]' in zrodlo)
+        'if not na_teraz.get("subskrypcje")' in zrodlo)
 sprawdz("obserwowanie wola obserwuj_profil, nie zasubskrybuj",
         "browser.obserwuj_profil(uchwyt, wyslij=True)" in zrodlo)
 sprawdz("subskrypcje sa osobnym blokiem dnia",

@@ -1,0 +1,444 @@
+{
+  "identity": {
+    "version": 3,
+    "stage": "feasibility",
+    "input": {
+      "topics": [
+        {
+          "already_written": [
+            "Local news coverage of boil-water advisories",
+            "Public health explainers on water testing and notification",
+            "Investigations into delayed notifications such as the Flint water crisis"
+          ],
+          "duzy_zasieg": true,
+          "governing_record": "Written drinking water monitoring and notification procedures that specify which contaminants, at what levels, and within what timeframes require public alerts.",
+          "ile_juz_napisano": 3,
+          "ile_precedensow": 3,
+          "ile_watkow": 4,
+          "kind": "SYSTEM_UNDER_TEST",
+          "ma_przekonanie": false,
+          "ma_stawke": true,
+          "na_artykul": true,
+          "nasycony": true,
+          "nosny": true,
+          "open_outcome": "Whether the public will be told to boil water, and whether the utility will be praised for caution or criticized for overreacting or underreacting.",
+          "pozycja": 3,
+          "precedensy": [
+            {
+              "what_changed": "Enhanced drinking water regulations for filtration and disinfection",
+              "what_happened": "A cryptosporidium outbreak in Milwaukee's drinking water sickened hundreds of thousands and killed dozens",
+              "when": "1993"
+            },
+            {
+              "what_changed": "Revisions to lead and copper rules and increased transparency requirements for water quality reports",
+              "what_happened": "The drinking water in Flint, Michigan, was contaminated with lead after a source switch without corrosion control",
+              "when": "2014"
+            },
+            {
+              "what_changed": "Stricter water testing and operator certification requirements",
+              "what_happened": "Walkerton, Ontario, E. coli outbreak from contaminated well water killed seven people",
+              "when": "2000"
+            }
+          ],
+          "precedents": [
+            {
+              "what_changed": "Enhanced drinking water regulations for filtration and disinfection",
+              "what_happened": "A cryptosporidium outbreak in Milwaukee's drinking water sickened hundreds of thousands and killed dozens",
+              "when": "1993"
+            },
+            {
+              "what_changed": "Revisions to lead and copper rules and increased transparency requirements for water quality reports",
+              "what_happened": "The drinking water in Flint, Michigan, was contaminated with lead after a source switch without corrosion control",
+              "when": "2014"
+            },
+            {
+              "what_changed": "Stricter water testing and operator certification requirements",
+              "what_happened": "Walkerton, Ontario, E. coli outbreak from contaminated well water killed seven people",
+              "when": "2000"
+            }
+          ],
+          "question": "When a routine water sample shows contamination, what determines whether the utility must tell the public to boil water, and what are the consequences if they wait too long or over-alert?",
+          "scale": "AN_INDUSTRY",
+          "swiezy_wg_modelu": true,
+          "the_moment": "A water utility lab technician sees a positive coliform result from a routine sample; the utility manager must decide within a few hours whether to issue a boil-water advisory for the entire town or just retest.",
+          "threads": [
+            "What sampling frequency and thresholds for contaminants trigger a public notification versus internal remediation?",
+            "How do utilities weigh the cost of a false alarm (public panic, lost trust) against the risk of delayed notification?",
+            "What written procedures govern how quickly after a positive sample a boil-water notice must be issued and how it is communicated?",
+            "How do water utilities coordinate with health departments and regulators when a contamination event occurs?"
+          ],
+          "title": "The moment a water sample tests positive and the utility must decide whether to issue a boil-water notice",
+          "zasieg": "AN_INDUSTRY"
+        },
+        {
+          "already_written": [
+            "Consumer advice columns on how to win return disputes",
+            "Business press on return fraud statistics and retailer losses",
+            "Investigative reports on companies that track customer return histories"
+          ],
+          "broken_belief": "Everyone assumes a store's return policy is a customer-service promise, but it is actually a loss-prevention system that scores each customer's behavior.",
+          "duzy_zasieg": true,
+          "ile_juz_napisano": 3,
+          "ile_precedensow": 2,
+          "ile_watkow": 4,
+          "kind": "BROKEN_BELIEF",
+          "ma_przekonanie": true,
+          "ma_stawke": false,
+          "na_artykul": true,
+          "nasycony": true,
+          "nosny": true,
+          "pozycja": 1,
+          "precedensy": [
+            {
+              "what_changed": "Many retailers tightened return windows and added restocking fees",
+              "what_happened": "A major outdoor retailer ended its legendary lifetime return policy after customers returned decades-old items",
+              "when": "2018"
+            },
+            {
+              "what_changed": "Permanent changes to return management systems and data sharing among retailers",
+              "what_happened": "During pandemic closures, retailers extended return windows but also implemented stricter fraud detection and tracking of serial returners",
+              "when": "2020"
+            }
+          ],
+          "precedents": [
+            {
+              "what_changed": "Many retailers tightened return windows and added restocking fees",
+              "what_happened": "A major outdoor retailer ended its legendary lifetime return policy after customers returned decades-old items",
+              "when": "2018"
+            },
+            {
+              "what_changed": "Permanent changes to return management systems and data sharing among retailers",
+              "what_happened": "During pandemic closures, retailers extended return windows but also implemented stricter fraud detection and tracking of serial returners",
+              "when": "2020"
+            }
+          ],
+          "question": "Why do stores sometimes refuse a return from a customer who has a receipt and the item in new condition, and what hidden criteria are being applied?",
+          "scale": "AN_INDUSTRY",
+          "swiezy_wg_modelu": true,
+          "threads": [
+            "How do retailers identify 'serial returners' and what data do they use to flag them?",
+            "What happens when a legitimate customer is wrongly flagged as a potential fraud risk?",
+            "How do return policies balance customer service goals against loss prevention and inventory management?",
+            "What written procedures govern when a store associate may override a system-generated return denial?"
+          ],
+          "title": "The store return as a fraud score, not a service promise",
+          "why_they_believe_it": "The cashier processes the return quickly and politely, the receipt is accepted without question, and the store advertises 'hassle-free returns,' so the customer experiences the policy as a service rather than a risk assessment.",
+          "zasieg": "AN_INDUSTRY"
+        },
+        {
+          "already_written": [
+            "Local news investigations into restaurants with high grades that later had outbreaks",
+            "Public health explainers on restaurant inspection frequency",
+            "Academic studies on the effectiveness of letter grading systems"
+          ],
+          "broken_belief": "Everyone assumes the letter grade posted near a restaurant's door reflects the kitchen's cleanliness right now, but it only certifies conditions on the day of the last inspection.",
+          "duzy_zasieg": true,
+          "ile_juz_napisano": 3,
+          "ile_precedensow": 2,
+          "ile_watkow": 4,
+          "kind": "BROKEN_BELIEF",
+          "ma_przekonanie": true,
+          "ma_stawke": false,
+          "na_artykul": true,
+          "nasycony": true,
+          "nosny": true,
+          "pozycja": 1,
+          "precedensy": [
+            {
+              "what_changed": "Increased food safety requirements for fresh produce and improved traceability",
+              "what_happened": "A large hepatitis A outbreak at a Pennsylvania restaurant was traced to contaminated green onions, despite the restaurant having passed recent inspections",
+              "when": "2003"
+            },
+            {
+              "what_changed": "New food safety protocols and paid sick leave policies",
+              "what_happened": "Multiple E. coli and norovirus outbreaks at a national chain with good health grades revealed weaknesses in supply chain and employee sick policies",
+              "when": "2015"
+            }
+          ],
+          "precedents": [
+            {
+              "what_changed": "Increased food safety requirements for fresh produce and improved traceability",
+              "what_happened": "A large hepatitis A outbreak at a Pennsylvania restaurant was traced to contaminated green onions, despite the restaurant having passed recent inspections",
+              "when": "2003"
+            },
+            {
+              "what_changed": "New food safety protocols and paid sick leave policies",
+              "what_happened": "Multiple E. coli and norovirus outbreaks at a national chain with good health grades revealed weaknesses in supply chain and employee sick policies",
+              "when": "2015"
+            }
+          ],
+          "question": "Why can a restaurant with an 'A' health grade still cause a foodborne illness outbreak, and what does the grade actually certify?",
+          "scale": "AN_INDUSTRY",
+          "swiezy_wg_modelu": true,
+          "threads": [
+            "How often are restaurant health inspections performed, and what specific violations determine the grade?",
+            "What happens to a restaurant's grade if a violation is found after the inspection, before the next scheduled visit?",
+            "How do inspection results get communicated to the public, and what information is omitted from the posted grade?",
+            "What legal mechanisms exist to close a restaurant that has a good grade but is later linked to an outbreak?"
+          ],
+          "title": "The restaurant health grade as a snapshot, not a current guarantee",
+          "why_they_believe_it": "The grade is displayed prominently and looks official, and the restaurant continues to operate, so patrons assume it represents an ongoing standard rather than a historical snapshot.",
+          "zasieg": "AN_INDUSTRY"
+        },
+        {
+          "already_written": [
+            "News investigations into specific collisions such as Chatsworth and Philadelphia",
+            "Industry trade press on positive train control implementation",
+            "General explainers on railway signaling and automatic train protection"
+          ],
+          "duzy_zasieg": true,
+          "governing_record": "Written operating rules and technical specifications that define when and how an automatic train protection system must apply brakes, including override conditions and testing requirements.",
+          "ile_juz_napisano": 3,
+          "ile_precedensow": 3,
+          "ile_watkow": 4,
+          "kind": "SYSTEM_UNDER_TEST",
+          "ma_przekonanie": false,
+          "ma_stawke": true,
+          "na_artykul": true,
+          "nasycony": true,
+          "nosny": true,
+          "oklepany_wg_modelu": true,
+          "open_outcome": "Whether the train will stop before a conflict point, or whether the driver's reaction and the system's design will allow a collision or derailment.",
+          "pozycja": -1,
+          "precedensy": [
+            {
+              "what_changed": "Introduction of block signaling and stricter operating rules requiring space between trains",
+              "what_happened": "A passenger train collision at Armagh, Ireland, after a train divided and a following train ran into the rear portion",
+              "when": "1889"
+            },
+            {
+              "what_changed": "Legislation requiring positive train control systems on major railroads",
+              "what_happened": "A commuter train collided head-on with a freight train near Chatsworth, California, after the engineer ran a red signal while distracted",
+              "when": "2008"
+            },
+            {
+              "what_changed": "Increased focus on automatic speed enforcement and curve overspeed protection",
+              "what_happened": "An Amtrak train derailed on a curve in Philadelphia at more than twice the speed limit",
+              "when": "2015"
+            }
+          ],
+          "precedents": [
+            {
+              "what_changed": "Introduction of block signaling and stricter operating rules requiring space between trains",
+              "what_happened": "A passenger train collision at Armagh, Ireland, after a train divided and a following train ran into the rear portion",
+              "when": "1889"
+            },
+            {
+              "what_changed": "Legislation requiring positive train control systems on major railroads",
+              "what_happened": "A commuter train collided head-on with a freight train near Chatsworth, California, after the engineer ran a red signal while distracted",
+              "when": "2008"
+            },
+            {
+              "what_changed": "Increased focus on automatic speed enforcement and curve overspeed protection",
+              "what_happened": "An Amtrak train derailed on a curve in Philadelphia at more than twice the speed limit",
+              "when": "2015"
+            }
+          ],
+          "question": "What happens in the seconds after a train passes a red signal, and which written procedure determines whether the train stops or a collision occurs?",
+          "scale": "AN_INDUSTRY",
+          "the_moment": "A train passes a red signal at speed; an alert sounds in the cab and the automatic braking system begins to calculate whether to intervene.",
+          "threads": [
+            "What physical systems detect a train passing a signal at danger and how do they communicate with the train?",
+            "How do railway operating rules allocate responsibility between the driver, dispatcher, and automatic systems when a signal is passed?",
+            "What are the thresholds or conditions under which an automatic brake application can be overridden or delayed?",
+            "How have accident investigations changed the written procedures for testing and maintaining these systems?"
+          ],
+          "title": "The moment a train passes a signal at danger and automatic braking must decide",
+          "zasieg": "AN_INDUSTRY"
+        },
+        {
+          "already_written": [
+            "Consumer-focused articles on major recalls like peanut butter and romaine lettuce",
+            "Trade press on recall insurance and cost recovery",
+            "Investigative pieces on traceability gaps in the food supply chain"
+          ],
+          "duzy_zasieg": true,
+          "governing_record": "Written recall plans and traceability procedures that specify sampling thresholds, lot identification, and notification duties when contamination is confirmed.",
+          "ile_juz_napisano": 3,
+          "ile_precedensow": 3,
+          "ile_watkow": 4,
+          "kind": "SYSTEM_UNDER_TEST",
+          "ma_przekonanie": false,
+          "ma_stawke": true,
+          "na_artykul": true,
+          "nasycony": true,
+          "nosny": true,
+          "oklepany_wg_modelu": true,
+          "open_outcome": "Whether the recall will be limited to the confirmed lot or expand to all potentially affected product, and whether the company will bear the cost or pass it to suppliers or insurers.",
+          "pozycja": -1,
+          "precedensy": [
+            {
+              "what_changed": "Mandatory HACCP plans for meat and poultry processors and stricter cooking temperatures",
+              "what_happened": "Undercooked hamburgers from a fast-food chain caused E. coli O157:H7 infections and deaths in the US",
+              "when": "1993"
+            },
+            {
+              "what_changed": "Strengthened food safety regulations requiring preventive controls and more frequent inspections",
+              "what_happened": "A nationwide salmonella outbreak linked to peanut butter from a single processing plant",
+              "when": "2008-2009"
+            },
+            {
+              "what_changed": "Voluntary labeling of growing regions and improved traceability in leafy greens",
+              "what_happened": "Romaine lettuce contaminated with E. coli led to a nationwide advisory and product destruction",
+              "when": "2018"
+            }
+          ],
+          "precedents": [
+            {
+              "what_changed": "Mandatory HACCP plans for meat and poultry processors and stricter cooking temperatures",
+              "what_happened": "Undercooked hamburgers from a fast-food chain caused E. coli O157:H7 infections and deaths in the US",
+              "when": "1993"
+            },
+            {
+              "what_changed": "Strengthened food safety regulations requiring preventive controls and more frequent inspections",
+              "what_happened": "A nationwide salmonella outbreak linked to peanut butter from a single processing plant",
+              "when": "2008-2009"
+            },
+            {
+              "what_changed": "Voluntary labeling of growing regions and improved traceability in leafy greens",
+              "what_happened": "Romaine lettuce contaminated with E. coli led to a nationwide advisory and product destruction",
+              "when": "2018"
+            }
+          ],
+          "question": "When a single sample tests positive for a dangerous pathogen, what determines how far back and how widely a food recall extends, and who bears the cost of pulling product from shelves?",
+          "scale": "AN_INDUSTRY",
+          "the_moment": "A quality control lab reports a positive pathogen test from one production line, and the company must decide within hours whether to recall a single lot, a day's production, or weeks of output.",
+          "threads": [
+            "How do traceability records determine the boundary between recalled and non-recalled lots?",
+            "What legal authority allows a company or regulator to order a recall versus requesting a voluntary withdrawal?",
+            "How do insurance and indemnity agreements allocate the financial loss among growers, processors, distributors, and retailers?",
+            "What testing and sampling protocols determine when a positive result triggers a recall versus a routine sanitation response?"
+          ],
+          "title": "The moment a food processor finds a pathogen in one batch and must decide recall scope",
+          "zasieg": "AN_INDUSTRY"
+        },
+        {
+          "already_written": [
+            "Reporting on COVID-19 triage protocols in Italy and New York",
+            "Ethics journal articles on crisis standards of care",
+            "News pieces on specific lawsuits over ventilator allocation"
+          ],
+          "duzy_zasieg": true,
+          "governing_record": "Written crisis standards of care that define allocation criteria, decision-making authority, and documentation requirements when demand exceeds supply.",
+          "ile_juz_napisano": 3,
+          "ile_precedensow": 2,
+          "ile_watkow": 4,
+          "kind": "SYSTEM_UNDER_TEST",
+          "ma_przekonanie": false,
+          "ma_stawke": true,
+          "na_artykul": true,
+          "nasycony": true,
+          "nosny": true,
+          "oklepany_wg_modelu": true,
+          "open_outcome": "Which patient will be connected to the ventilator, and whether the written scoring system will be followed exactly or overridden by a clinician who disagrees with the result.",
+          "pozycja": -3,
+          "precedensy": [
+            {
+              "what_changed": "Development of formal crisis standards of care frameworks for disasters",
+              "what_happened": "After Hurricane Katrina, hospitals in New Orleans were cut off and staff had to make triage decisions without clear guidance",
+              "when": "2005"
+            },
+            {
+              "what_changed": "New state laws and hospital policies codifying triage criteria and legal immunity for providers",
+              "what_happened": "During the COVID-19 pandemic, some hospitals implemented triage teams and scoring systems to allocate ventilators and ICU beds",
+              "when": "2020"
+            }
+          ],
+          "precedents": [
+            {
+              "what_changed": "Development of formal crisis standards of care frameworks for disasters",
+              "what_happened": "After Hurricane Katrina, hospitals in New Orleans were cut off and staff had to make triage decisions without clear guidance",
+              "when": "2005"
+            },
+            {
+              "what_changed": "New state laws and hospital policies codifying triage criteria and legal immunity for providers",
+              "what_happened": "During the COVID-19 pandemic, some hospitals implemented triage teams and scoring systems to allocate ventilators and ICU beds",
+              "when": "2020"
+            }
+          ],
+          "question": "When a hospital runs out of a critical resource, what written triage procedure decides which patient receives treatment, and what happens when that procedure conflicts with a doctor's individual judgment?",
+          "scale": "AN_INDUSTRY",
+          "the_moment": "Two critically ill patients arrive at the same emergency department, but only one ventilator is available; the triage officer opens a binder or laptop and begins to score each patient.",
+          "threads": [
+            "What scoring systems or criteria are written into triage protocols, and how are they weighted (e.g., age, comorbidities, likelihood of survival)?",
+            "How do triage decisions get reviewed or challenged after the emergency has passed?",
+            "What legal protections or liabilities do clinicians have when following or deviating from the written protocol?",
+            "How do hospitals train staff to apply the protocol consistently when resource scarcity is sudden?"
+          ],
+          "title": "The moment an emergency department has one ventilator left and two patients arrive",
+          "zasieg": "AN_INDUSTRY"
+        }
+      ]
+    },
+    "prompt_version": "24d4f65e75cc3132f843",
+    "model": "deepseek-v4-flash"
+  },
+  "value": [
+    {
+      "index": 3,
+      "feasible": true,
+      "confidence": 0.95,
+      "expected_primary_sources": 5,
+      "depth": "RICH",
+      "parallels": [
+        "aircraft TCAS collision-avoidance logic",
+        "automotive automatic emergency braking"
+      ],
+      "note": "Investigation reports from RAIB/NTSB and ERTMS/ETCS system descriptions give the required rule and its real failure cases."
+    },
+    {
+      "index": 4,
+      "feasible": true,
+      "confidence": 0.95,
+      "expected_primary_sources": 5,
+      "depth": "RICH",
+      "parallels": [
+        "NHTSA automotive safety recalls",
+        "FDA medical device correction notices"
+      ],
+      "note": "FDA/USDA recall databases and individual company recall notices document scope decisions and cost-bearing arrangements."
+    },
+    {
+      "index": 5,
+      "feasible": true,
+      "confidence": 0.9,
+      "expected_primary_sources": 4,
+      "depth": "RICH",
+      "parallels": [
+        "military mass-casualty triage",
+        "solid-organ transplant allocation"
+      ],
+      "note": "State crisis-standards-of-care protocols and open-access medical ethics papers contain the written triage rule and the doctor-duty conflict."
+    },
+    {
+      "index": 1,
+      "feasible": true,
+      "confidence": 0.8,
+      "expected_primary_sources": 3,
+      "depth": "RICH",
+      "parallels": [
+        "insurance risk scoring by consumer-reporting bureaus",
+        "FICO credit-scoring denials"
+      ],
+      "note": "Retailers' posted return policies and The Retail Equation's consumer-facing disclosure pages are the primary record for the hidden return score."
+    },
+    {
+      "index": 0,
+      "feasible": true,
+      "confidence": 0.9,
+      "expected_primary_sources": 4,
+      "depth": "SINGLE",
+      "parallels": [],
+      "note": "EPA's Revised Total Coliform Rule and state boil-water advisory guidance are the accessible record for triggers and consequences."
+    },
+    {
+      "index": 2,
+      "feasible": true,
+      "confidence": 0.9,
+      "expected_primary_sources": 4,
+      "depth": "SINGLE",
+      "parallels": [],
+      "note": "City health-department inspection reports and CDC outbreak investigations show the snapshot grading and its limits."
+    }
+  ]
+}

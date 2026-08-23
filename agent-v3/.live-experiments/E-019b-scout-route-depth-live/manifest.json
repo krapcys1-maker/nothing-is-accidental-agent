@@ -1,0 +1,85 @@
+{
+  "created_at": "2026-08-21T17:10:19+00:00",
+  "experiment": "normal-v3-live-segments@2",
+  "routing": {
+    "bibliotekarz": "deepseek-v4-pro",
+    "classify": "deepseek-v4-flash",
+    "curiosity": "deepseek-v4-flash",
+    "discovery": "deepseek-v4-pro",
+    "factcheck": "deepseek-v4-flash",
+    "feasibility": "deepseek-v4-flash",
+    "forma": "deepseek-v4-pro",
+    "note": "claude-opus-5",
+    "review": "deepseek-v4-pro",
+    "revise": "claude-fable-5",
+    "scout": "deepseek-v4-pro",
+    "synthesis": "deepseek-v4-pro",
+    "warto_pisac": "deepseek-v4-pro",
+    "write": "claude-fable-5"
+  },
+  "scout_artifact": "C:\\Users\\user\\Desktop\\agent project\\agent-v3\\.live-experiments\\E-018-scout-universe-live\\model-captures.json",
+  "scout_artifact_sha256": "841bce55ff7571a2d2e6a4d5af6ce0390a826f5a37eaa711cba3151d8196c395",
+  "scout_source_kind": "exact_raw_capture_replay",
+  "segments": [
+    {
+      "actual_logical_calls": {
+        "feasibility": 1
+      },
+      "label": "feasibility",
+      "new_exposure_usd": 0.019462,
+      "pass": true,
+      "result": "segment-feasibility-result.json",
+      "result_sha256": "283f400aa4dc11b9ad0debfeede91e6b04287223fddfed76784c598b9cc48549"
+    },
+    {
+      "actual_logical_calls": {
+        "discovery": 1
+      },
+      "label": "discovery",
+      "new_exposure_usd": 0.115807,
+      "pass": true,
+      "result": "segment-discovery-result.json",
+      "result_sha256": "ceacd023e054f23a90f8228518c1f6efd4bc0dabc4b3e1499e0ba602b50f3698"
+    },
+    {
+      "actual_logical_calls": {
+        "discovery": 1
+      },
+      "label": "discovery",
+      "new_exposure_usd": 0.033609,
+      "pass": true,
+      "result": "segment-discovery-result.json",
+      "result_sha256": "acc9c352917de015ce6074c603b2b34361ebbed9da6d040416203b981e0fdffa"
+    },
+    {
+      "actual_logical_calls": {
+        "discovery": 1
+      },
+      "label": "discovery",
+      "new_exposure_usd": 0.04258100000000001,
+      "pass": false,
+      "result": "segment-discovery-result.json",
+      "result_sha256": "a7bd9eaaff44432955ab41b7cd63e2f12dd46adab9cbd6bdc63e47c658f99a16"
+    },
+    {
+      "actual_logical_calls": {
+        "discovery": 1
+      },
+      "label": "discovery",
+      "new_exposure_usd": 0.3,
+      "pass": false,
+      "result": "segment-discovery-result.json",
+      "result_sha256": "b873bf3b2388833fea08e5c80f1bb73ccf3d68a59a0c42ff94929576b57159b7"
+    }
+  ],
+  "substack": "FORBIDDEN_NO_READ_NO_WRITE_NO_SESSION",
+  "topic_count": 6,
+  "topic_titles": [
+    "Suspicion as Default",
+    "The Uninsurable World",
+    "The Afterlife of Abandoned Infrastructure",
+    "The Last Human in the Loop",
+    "The Quality of Recycled Materials",
+    "The Standard Human Body"
+  ]
+}

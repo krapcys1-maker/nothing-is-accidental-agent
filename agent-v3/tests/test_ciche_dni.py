@@ -8,6 +8,7 @@ lekcewazenie.
 import re
 import sys
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, "agent-v3")
 import config   # noqa: E402
@@ -26,7 +27,7 @@ def sprawdz(nazwa, warunek, szczegol=""):
 
 
 print("=== 1. TA SAMA ODPOWIEDZ PRZEZ CALY DZIEN (kontrdowod na losowanie) ===")
-d = datetime(2026, 8, 24, tzinfo=timezone.utc)
+d = datetime(2026, 8, 24, tzinfo=ZoneInfo(config.EDITORIAL_TIMEZONE))
 odpowiedzi = {config.cichy_dzien(d.replace(hour=h)) for h in (0, 6, 11, 19, 23)}
 sprawdz("piec przebiegow tego samego dnia zgadza sie", len(odpowiedzi) == 1,
         odpowiedzi)
@@ -71,7 +72,7 @@ config.CICHE_DNI_WLACZONE = pierwotne
 print()
 print("=== 5. CISZA WYCISZA NADAWANIE, NIE ROZMOWE ===")
 zrodlo = open("agent-v3/run.py", encoding="utf-8").read()
-blok = re.search(r"if config\.cichy_dzien\(\):(.{0,700})", zrodlo, re.S)
+blok = re.search(r'if plan\["quiet_day"\]:(.{0,700})', zrodlo, re.S)
 sprawdz("cichy dzien jest wpiety w przebieg", blok is not None)
 if blok:
     t = blok.group(1)
@@ -79,8 +80,10 @@ if blok:
     sprawdz("wycisza restacki", 'zostalo["restacki"] = 0' in t)
     sprawdz("NIE wycisza komentarzy", 'zostalo["komentarze"] = 0' not in t, t[:200])
     sprawdz("NIE wycisza polubien", 'zostalo["lajki"] = 0' not in t, t[:200])
-sprawdz("odpowiedzi nie sa objete limitem dnia",
-        config.ODPOWIEDZI_POZA_LIMITEM is True)
+sprawdz("odpowiedzi maja osobny twardy limit dnia",
+        config.ODPOWIEDZI_POZA_LIMITEM is True
+        and config.ODPOWIEDZI_DZIENNIE[0] > 0
+        and config.ODPOWIEDZI_DZIENNIE[1] >= config.ODPOWIEDZI_DZIENNIE[0])
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
