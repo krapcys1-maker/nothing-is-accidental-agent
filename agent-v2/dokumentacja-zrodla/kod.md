@@ -65,6 +65,99 @@ def _dopisz_brakujace_kolumny(conn: sqlite3.Connection) -> None:
                           flush=True)
 ```
 
+<!--KOD:llm.call-->
+```python
+def call(
+    purpose: str,
+    system: str,
+    user: str,
+    *,
+    conn: sqlite3.Connection,
+    run_id: int | None = None,
+    web_search: bool = False,
+    collect_urls: list[str] | None = None,
+) -> str:
+    """Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi.
+
+    `collect_urls`, jeśli podane, zostanie wypełnione adresami, które realnie
+    zwróciła wyszukiwarka — do sprawdzenia, czy model nie zmyślił URL-a.
+    """
+    _preflight(purpose, conn, run_id)
+    model = config.MODEL_FOR[purpose]
+    provider = "deepseek" if model.startswith("deepseek") else "anthropic"
+
+    # STALA, KTORA WYGLADA JAK USTAWIENIE. Wpis w EFFORT czyta sie jak decyzja
+    # o kosztach, a przy modelu spoza Claude nie robi NIC.
+    #
+    # Pierwsza wersja tego ostrzezenia stala w `_call_claude` i BYLA MARTWA:
+    # do tamtej funkcji nie ma jak wejsc nic spoza Claude, bo `call` rozstrzyga
+    # dostawce wyzej. Wykrywacz martwych obietnic sam byl martwa obietnica —
+    # i przeszedl testy, bo test szukal napisu w pliku, a nie sprawdzal, czy
+    # ten kod da sie w ogole wykonac. Tu, po ustaleniu modelu i przed
+    # rozdzieleniem, widac oba przypadki.
+    #
+    # Raz na proces, nie przy kazdym wywolaniu: chodzi o to, zeby bylo wiadomo,
+    # a nie zeby zalac log.
+    if (purpose in config.EFFORT and provider != "anthropic"
+            and purpose not in _EFFORT_BEZ_SKUTKU):
+        _EFFORT_BEZ_SKUTKU.add(purpose)
+        print(f"  [effort] {purpose}={config.EFFORT[purpose]} NIE MA SKUTKU"
+              f" — etap chodzi na {model}, a to pokretlo dziala tylko na"
+              f" modelach Claude (DeepSeek ma DEEPSEEK_EFFORT"
+              f"={config.DEEPSEEK_EFFORT})", flush=True)
+
+    if config.DRY_RUN:
+        print(f"  [{purpose}] DRY_RUN — wywołanie pominięte", flush=True)
+        return ""
+
+    for proba in range(1, config.PONOWIENIA + 2):
+        try:
+            if provider == "anthropic":
+                text, tin, tout, searches, urls = _call_claude(
+                    purpose, system, user, web_search)
+                cache_hit = 0
+            elif web_search:
+                text, tin, tout, searches, urls = _call_deepseek_responses(
+                    purpose, system, user)
+                cache_hit = 0
+            else:
+                text, tin, tout, searches, cache_hit = _call_deepseek(
+                    purpose, system, user)
+                urls = []
+            if collect_urls is not None:
+                collect_urls.extend(urls)
+            break
+        except Exception as exc:
+            if przejsciowy(exc) and proba <= config.PONOWIENIA:
+                czekaj = config.PONOWIENIE_ODSTEP_S * 2 ** (proba - 1)
+                print(f"  [{purpose}] {type(exc).__name__} — przejściowy, "
+                      f"ponawiam za {czekaj}s ({proba}/{config.PONOWIENIA})",
+                      flush=True)
+                time.sleep(czekaj)
+                continue
+            # Koszt nieudanego wywołania bywa nieznany. Zapisujemy "nie wiadomo"
+            # zamiast zgadywać kwotę — zgadnięta kwota w zapisie finansowym jest
+            # gorsza niż jej brak.
+            db.record_call(
+                conn=conn, run_id=run_id, provider=provider, model=model,
+                purpose=purpose, tokens_in=0, tokens_out=0, web_searches=0,
+                cost_usd=0.0, price_verified=0, ok=0,
+                note=f"{type(exc).__name__}: {exc}"[:500],
+            )
+            raise
+
+    trafienia = locals().get("cache_hit", 0) or 0
+    usd, verified = _cost(model, tin, tout, searches, trafienia)
+    db.record_call(
+        conn=conn, run_id=run_id, provider=provider, model=model, purpose=purpose,
+        tokens_in=tin, tokens_out=tout, cache_hit=trafienia,
+        web_searches=searches, cost_usd=usd,
+        price_verified=int(verified), ok=1, note=None,
+    )
+    _log(purpose, model, tin, tout, searches, usd, verified)
+    return text
+```
+
 <!--KOD:llm._cost-->
 ```python
 def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
@@ -74,7 +167,17 @@ def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
     # dwukrotnosc — na tyle duzo, ze usrednianie zafalszowaloby zapis.
     if model.startswith("deepseek"):
         stawka = config.stawka_deepseek(model)
+        # KLUCZ `cache` TEZ, i to nie jest kosmetyka. Bez niego linijka nizej
+        # robi `price.get("cache", price["in"])` i wycenia trafienia w cache
+        # stawka WEJSCIOWA — czyli trzydziestokrotnie za drogo u pro ($0,66
+        # zamiast $0,022).
+        #
+        # `stawka_deepseek` zwraca ten klucz swiadomie i ma przy nim komentarz
+        # o tej samej pomylce. Poprawka zatrzymala sie jednak w polowie drogi:
+        # funkcja zaczela go oddawac, a `_cost` nadal go nie przepisywal, wiec
+        # nic sie nie zmienilo. Blad zglosilem jako naprawiony, a nie byl.
         price = {"in": stawka["in"], "out": stawka["out"],
+                 "cache": stawka["cache"],
                  "verified": config.PRICING[model]["verified"]}
     else:
         price = config.PRICING[model]
@@ -199,6 +302,90 @@ def obraz(
     return base64.b64decode(surowy)
 ```
 
+<!--KOD:stages.discovery-->
+```python
+def discovery(
+    conn: sqlite3.Connection, run_id: int, question: str, recent_domains: list[str]
+) -> list[dict[str, Any]]:
+    """Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy)."""
+    martwe = hosty_ktore_nigdy_nie_dzialaly(conn)
+    if martwe:
+        print("  [dyskoveria] pomijam hosty bez ani jednego udanego pobrania: %s"
+              % ", ".join(martwe[:8]), flush=True)
+    prompt = _prompt(
+        "dyskoveria.md",
+        question=question,
+        max_results=config.DISCOVERY_MAX_RESULTS,
+        max_searches=config.DISCOVERY_MAX_SEARCHES,
+        min_primary=config.MIN_PRIMARY_SOURCES,
+        min_why=config.MIN_WHY_SOURCES,
+        blocked_hosts=", ".join(list(config.BLOCKED_HOSTS) + martwe),
+        # DOMENY OSTATNICH ARTYKULOW. Baza liczyla je co przebieg
+        # (`db.recent_domains`), przekazywalismy je tu w parametrze — i nie
+        # czytala ich ani jedna linia. Docstring w db.py obiecywal „wejscie do
+        # reguly roznorodnosci", ktorej nie bylo nigdzie.
+        #
+        # To PREFERENCJA, nie bramka. Twardy zakaz zlozony z pozostalymi
+        # filtrami (martwe hosty, BLOCKED_HOSTS, adresy spoza wynikow
+        # wyszukiwania) potrafilby wyzerowac liste zrodel i wywalic przebieg
+        # PO oplaceniu researchu — a przy MIN_PRIMARY_SOURCES ten sam
+        # regulator czesto jest jedynym miejscem, gdzie dokument w ogole lezy.
+        #
+        # Sformulowanie ZAKAZUJE nawyku, nie NAKAZUJE pozycji — regula
+        # nakazujaca pozycje po dziesieciu tekstach sama staje sie podpisem
+        # maszyny (ta sama zasada co w gates.py).
+        ostatnie_domeny=(", ".join(
+            d for d in (recent_domains or [])[:15]
+            if d and d.strip() == d and " " not in d
+        ) or "(none yet - this is the first article of this account)"),
+    )
+    real_urls: list[str] = []
+    text = llm.call(
+        "discovery", DISCOVERY_SYSTEM, prompt,
+        conn=conn, run_id=run_id, web_search=True, collect_urls=real_urls,
+    )
+    data = llm.parse_json(text)
+    sources = data.get("sources")
+    if not isinstance(sources, list) or not sources:
+        raise ValueError(f"dyskoveria nie zwróciła źródeł: {text[:300]!r}")
+
+    # Brak wyników wyszukiwania znaczy, że model NIE SZUKAŁ i podaje adresy
+    # z pamięci. Zamykamy się, a nie otwieramy: pierwsza wersja tego filtru
+    # miała warunek „jeśli są wyniki, sprawdzaj", więc przy zerze wyników
+    # przepuściła dziesięć zmyślonych adresów, z których pobrały się trzy,
+    # a klasyfikacja odrzuciła wszystkie.
+    if not real_urls:
+        raise ValueError(
+            "dyskoveria nie wykonała ani jednego wyszukiwania — zwrócone adresy "
+            "pochodzą z pamięci modelu, nie z sieci"
+        )
+    real_hosts = {_host(u) for u in real_urls}
+    kept: list[dict[str, Any]] = []
+    for source in sources:
+        url = source.get("url", "")
+        host = _host(url)
+        if not url.startswith("http"):
+            continue
+        if host in config.BLOCKED_HOSTS or any(host.endswith(b) for b in config.BLOCKED_HOSTS):
+            print(f"  [dyskoveria] pomijam {host} — host blokuje automaty", flush=True)
+            continue
+        # Adres, którego wyszukiwarka nie zwróciła, jest podejrzany o zmyślenie.
+        if real_hosts and host not in real_hosts:
+            print(f"  [dyskoveria] pomijam {url} — spoza wyników wyszukiwania", flush=True)
+            continue
+        source["host"] = host
+        kept.append(source)
+
+    print(
+        f"  [dyskoveria] {len(real_urls)} wyników wyszukiwania -> "
+        f"{len(sources)} zaproponowanych -> {len(kept)} po filtrze",
+        flush=True,
+    )
+    if not kept:
+        raise ValueError("dyskoveria nie zwróciła ani jednego wiarygodnego adresu")
+    return kept
+```
+
 <!--KOD:stages.pick_topic-->
 ```python
 def pick_topic(
@@ -239,13 +426,6 @@ def pick_topic(
         lekach. Kazdy z nich to tysiace istniejacych tekstow.
         """
         return int(not temat(a).get("nasycony", False))
-
-    def artykulowy(a: dict[str, Any]) -> int:
-        """Czy temat ma udokumentowana historie awarii I zasieg poza jedno
-        miejsce. Sama procedura to notka — kompletna odpowiedz w jednym zdaniu,
-        ktorej rozbicie na podpunkty daje rozdmuchana notke, a nie artykul.
-        """
-        return int(bool(temat(a).get("na_artykul")))
 
     def wlasny_ranking(a: dict[str, Any]) -> int:
         """Gdzie model postawil ten temat wsrod SWOICH wlasnych propozycji.
@@ -446,6 +626,51 @@ def _precedens_ok(p: Any) -> bool:
     if len(zmiana.split()) < 3:
         return False
     return not re.match(r"^\W*(nothing|none|no\s|nic|brak)", zmiana, re.I)
+```
+
+<!--KOD:stages._stale_sygnaly-->
+```python
+def _stale_sygnaly(topics: list[dict], pola: tuple[str, ...]) -> list[str]:
+    """Ktore z pol mialy TE SAMA wartosc u WSZYSTKICH kandydatow.
+
+    Trzeci raz ta sama wada, wiec tym razem wykrywacz zostaje w kodzie zamiast
+    w komentarzu. Samooceny wracaly zawsze 1.0. Watki — zawsze szesc. Znane
+    teksty — zawsze trzy. Za kazdym razem pole bylo czytane, sortowanie z niego
+    korzystalo, testy przechodzily, a sygnal nie rozrozinial NICZEGO, bo mial
+    u wszystkich te sama wartosc. Martwy sygnal tego rodzaju jest gorszy niz
+    brak pola: log wyglada na bogaty, kolejnosc na przemyslana.
+
+    Pole stale u wszystkich kandydatow to zero informacji — niezaleznie od
+    tego, czy stala jest wysoka czy niska. Nie zgaduje przyczyny (moze model
+    wyrownuje, moze prompt zle pyta) i niczego nie blokuje; wypisuje fakt,
+    zeby nastepnym razem nie trzeba bylo tego wypatrzec golym okiem w logu.
+    """
+    if len(topics) < 2:
+        return []
+    martwe = []
+    for pole in pola:
+        wartosci = {repr(t.get(pole)) for t in topics}
+        if len(wartosci) == 1:
+            martwe.append("%s=%s" % (pole, wartosci.pop()))
+    return martwe
+```
+
+<!--KOD:stages.losuj_odstep-->
+```python
+def losuj_odstep(co: str = "") -> float:
+    """Losuje przerwę, ale jej NIE odsypia.
+
+    Rozdzielone, bo wywołujący musi znać długość przerwy ZANIM w nią wejdzie.
+    Przebieg 28 zginął dokładnie na tym: `odczekaj` losowało 86 minut i od razu
+    zasypiało, a na zegarze przebiegu zostało dwadzieścia. Systemd ubił proces
+    w środku snu, w drugim z ośmiu bloków — sześć pozostałych nie wykonało się
+    w ogóle. Kto ma zdecydować, czy przerwa się zmieści, musi najpierw
+    zobaczyć liczbę.
+    """
+    import random
+
+    dol, gora = config.ODSTEPY.get(co, config.ODSTEP_MIEDZY_DZIALANIAMI)
+    return random.uniform(dol, gora)
 ```
 
 <!--KOD:stages.bramka_kandydata-->
@@ -971,6 +1196,37 @@ def frazy_z_instrukcji(body: str, dlugosc: int = 6) -> list[str]:
     return trafienia
 ```
 
+<!--KOD:run.rytm-->
+```python
+def rytm(co: str, na_co: str, stan: dict) -> bool:
+    """Przerwa MIEDZY dwoma dzialaniami tego samego rodzaju.
+
+    Trzeci raz ta sama wada, tym razem zamknieta w jednym miejscu dla wszystkich
+    blokow. Przerwa byla odsypiana PO dzialaniu, wiec:
+
+      1. po OSTATNIEJ notce w bloku agent spal jeszcze 45-90 minut, choc nie
+         mial juz czego robic — to jest dokladnie ta sama usterka, ktora
+         naprawilem wczesniej dla restackow i ktorej wtedy nie poszukalem
+         nigdzie indziej;
+      2. sen zaczynal sie BEZ pytania, czy sie zmiesci. `zostal_czas` mowilo
+         tylko „czy zostala jakakolwiek sekunda", wiec przepuszczalo
+         dziewiecdziesieciominutowa przerwe przy dwudziestu minutach na zegarze.
+
+    Teraz przerwa jest najpierw losowana, potem sprawdzana wobec konca
+    przebiegu, i dopiero wtedy odsypiana — a pierwsze dzialanie w przebiegu nie
+    czeka na nic, bo nie ma na co.
+    """
+    import stages as _s
+
+    if not stan.get(co):
+        return zostal_czas(na_co)
+    przerwa = _s.losuj_odstep(co)
+    if not zostal_czas(na_co, przerwa):
+        return False
+    _s.odczekaj(co, przerwa)
+    return True
+```
+
 <!--KOD:run.zmiesci_sie-->
 ```python
 def zmiesci_sie(rodzaj: str, ile: int, udzial: float = 1.0) -> int:
@@ -1010,7 +1266,7 @@ def zmiesci_sie(rodzaj: str, ile: int, udzial: float = 1.0) -> int:
 
 <!--KOD:run.zostal_czas-->
 ```python
-def zostal_czas(na_co: str = "") -> bool:
+def zostal_czas(na_co: str = "", potrzeba_s: float = 0.0) -> bool:
     """Czy zdazymy jeszcze cokolwiek zrobic przed koncem czasu przebiegu.
 
     Systemd tnie przebieg po `TimeoutStartSec` i robi to SIGTERM-em w dowolnym
@@ -1024,10 +1280,16 @@ def zostal_czas(na_co: str = "") -> bool:
     if _KONIEC_CZASU is None:
         return True
     zostalo = _KONIEC_CZASU - time.time()
-    if zostalo > 0:
+    if zostalo > potrzeba_s:
         return True
-    print(f"  czas przebiegu wyczerpany — odpuszczam {na_co or 'reszte'}"
-          f" (dokoncze w nastepnym przebiegu)", flush=True)
+    if potrzeba_s:
+        print(f"  czas przebiegu wyczerpany — odpuszczam {na_co or 'reszte'}"
+              f" (przerwa {potrzeba_s / 60:.0f} min nie zmiesci sie"
+              f" w {max(0.0, zostalo) / 60:.0f} min; dokoncze w nastepnym"
+              f" przebiegu)", flush=True)
+    else:
+        print(f"  czas przebiegu wyczerpany — odpuszczam {na_co or 'reszte'}"
+              f" (dokoncze w nastepnym przebiegu)", flush=True)
     return False
 ```
 

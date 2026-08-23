@@ -152,19 +152,9 @@ def _call_claude(
         "messages": [{"role": "user", "content": user}],
     }
     # `effort` istnieje na Opusie 5, Sonnecie 5 i Fable 5.
-    if purpose in config.EFFORT:
-        if model in (config.CLAUDE, config.SONNET, config.FABLE):
-            kwargs["output_config"] = {"effort": config.EFFORT[purpose]}
-        elif purpose not in _EFFORT_BEZ_SKUTKU:
-            # STALA, KTORA WYGLADA JAK USTAWIENIE. Wpis w EFFORT czyta sie jak
-            # decyzja o kosztach, a przy modelu spoza Claude nie robi NIC —
-            # i nie widac tego nigdzie. Mowimy raz na proces, nie przy kazdym
-            # wywolaniu: chodzi o to, zeby bylo wiadomo, a nie zeby zalac log.
-            _EFFORT_BEZ_SKUTKU.add(purpose)
-            print(f"  [effort] {purpose}={config.EFFORT[purpose]} NIE MA SKUTKU"
-                  f" — etap chodzi na {model}, a to pokretlo dziala tylko na"
-                  f" modelach Claude (DeepSeek ma DEEPSEEK_EFFORT"
-                  f"={config.DEEPSEEK_EFFORT})", flush=True)
+    if purpose in config.EFFORT and model in (config.CLAUDE, config.SONNET,
+                                              config.FABLE):
+        kwargs["output_config"] = {"effort": config.EFFORT[purpose]}
     if web_search:
         # max_uses JEST OBOWIĄZKOWE. Bez niego model robił 17, potem 31 rund
         # wyszukiwania, a każda runda przesyła całą rozmowę od nowa jako wejście
@@ -433,6 +423,26 @@ def call(
     _preflight(purpose, conn, run_id)
     model = config.MODEL_FOR[purpose]
     provider = "deepseek" if model.startswith("deepseek") else "anthropic"
+
+    # STALA, KTORA WYGLADA JAK USTAWIENIE. Wpis w EFFORT czyta sie jak decyzja
+    # o kosztach, a przy modelu spoza Claude nie robi NIC.
+    #
+    # Pierwsza wersja tego ostrzezenia stala w `_call_claude` i BYLA MARTWA:
+    # do tamtej funkcji nie ma jak wejsc nic spoza Claude, bo `call` rozstrzyga
+    # dostawce wyzej. Wykrywacz martwych obietnic sam byl martwa obietnica —
+    # i przeszedl testy, bo test szukal napisu w pliku, a nie sprawdzal, czy
+    # ten kod da sie w ogole wykonac. Tu, po ustaleniu modelu i przed
+    # rozdzieleniem, widac oba przypadki.
+    #
+    # Raz na proces, nie przy kazdym wywolaniu: chodzi o to, zeby bylo wiadomo,
+    # a nie zeby zalac log.
+    if (purpose in config.EFFORT and provider != "anthropic"
+            and purpose not in _EFFORT_BEZ_SKUTKU):
+        _EFFORT_BEZ_SKUTKU.add(purpose)
+        print(f"  [effort] {purpose}={config.EFFORT[purpose]} NIE MA SKUTKU"
+              f" — etap chodzi na {model}, a to pokretlo dziala tylko na"
+              f" modelach Claude (DeepSeek ma DEEPSEEK_EFFORT"
+              f"={config.DEEPSEEK_EFFORT})", flush=True)
 
     if config.DRY_RUN:
         print(f"  [{purpose}] DRY_RUN — wywołanie pominięte", flush=True)

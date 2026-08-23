@@ -42,11 +42,78 @@ alarm_src = pathlib.Path("agent-v2/alarm.py").read_text(encoding="utf-8")
 print("=== 1. MARTWY WPIS EFFORT MOWI O SOBIE ===")
 sprawdz("EFFORT nadal wyraza intencje dla wszystkich etapow",
         len(config.EFFORT) >= 6, sorted(config.EFFORT))
-sprawdz("llm mowi, gdy wpis nie ma skutku", "NIE MA SKUTKU" in llm_src)
-sprawdz("i mowi raz na proces, nie przy kazdym wywolaniu",
-        "_EFFORT_BEZ_SKUTKU" in llm_src
-        and llm_src.count("_EFFORT_BEZ_SKUTKU") >= 3,
-        llm_src.count("_EFFORT_BEZ_SKUTKU"))
+
+# TEN TEST BYL LUSTREM. Sprawdzal `"NIE MA SKUTKU" in llm_src`, czyli obecnosc
+# NAPISU w pliku — i przechodzil, chociaz ostrzezenie stalo w `_call_claude`,
+# do ktorej nie ma jak wejsc nic spoza Claude. Wykrywacz martwych obietnic sam
+# byl martwa obietnica. Teraz wolamy `llm.call` naprawde i patrzymy, co wypisze.
+import contextlib   # noqa: E402
+import io           # noqa: E402
+import sqlite3      # noqa: E402
+import tempfile     # noqa: E402
+
+import db           # noqa: E402
+import llm          # noqa: E402
+
+
+def _co_wypisze(purpose):
+    """Odpala `llm.call` w DRY_RUN i oddaje to, co poszlo na ekran."""
+    with tempfile.TemporaryDirectory() as tmp:
+        conn = db.connect(pathlib.Path(tmp) / "t.db")
+        run_id = db.start_run(conn)
+        llm._EFFORT_BEZ_SKUTKU.clear()
+        stary = config.DRY_RUN
+        config.DRY_RUN = True
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                llm.call(purpose, "s", "u", conn=conn, run_id=run_id)
+        finally:
+            config.DRY_RUN = stary
+            conn.close()
+        return buf.getvalue()
+
+
+deepseekowe = [p for p in config.EFFORT
+               if config.MODEL_FOR.get(p, "").startswith("deepseek")]
+claudowe = [p for p in config.EFFORT
+            if not config.MODEL_FOR.get(p, "").startswith("deepseek")]
+sprawdz("sa etapy z EFFORT chodzace na DeepSeeku", bool(deepseekowe), deepseekowe)
+sprawdz("i sa chodzace na Claude", bool(claudowe), claudowe)
+
+if deepseekowe:
+    wyjscie = _co_wypisze(deepseekowe[0])
+    sprawdz("etap deepseekowy DOSTAJE ostrzezenie (naprawde, nie w napisie)",
+            "NIE MA SKUTKU" in wyjscie, repr(wyjscie[:160]))
+    sprawdz("i ostrzezenie nazywa model", config.MODEL_FOR[deepseekowe[0]] in wyjscie)
+if claudowe:
+    # KONTRDOWOD: tam, gdzie pokretlo DZIALA, nie wolno straszyc.
+    sprawdz("etap claudowy NIE dostaje ostrzezenia",
+            "NIE MA SKUTKU" not in _co_wypisze(claudowe[0]))
+# Raz na proces: drugie wywolanie tego samego etapu ma juz milczec.
+if deepseekowe:
+    with tempfile.TemporaryDirectory() as tmp2:
+        c2 = db.connect(pathlib.Path(tmp2) / "t.db")
+        r2 = db.start_run(c2)
+        llm._EFFORT_BEZ_SKUTKU.clear()
+        st = config.DRY_RUN
+        config.DRY_RUN = True
+        b1, b2 = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(b1):
+            llm.call(deepseekowe[0], "s", "u", conn=c2, run_id=r2)
+        with contextlib.redirect_stdout(b2):
+            llm.call(deepseekowe[0], "s", "u", conn=c2, run_id=r2)
+        config.DRY_RUN = st
+        c2.close()
+        sprawdz("pierwsze wywolanie mowi", "NIE MA SKUTKU" in b1.getvalue())
+        sprawdz("drugie juz milczy", "NIE MA SKUTKU" not in b2.getvalue())
+# I sprawdzenie, ze ostrzezenie NIE wrocilo do funkcji, ktora go nie widzi.
+import ast as _ast   # noqa: E402
+for _w in _ast.walk(_ast.parse(llm_src)):
+    if isinstance(_w, _ast.FunctionDef) and _w.name == "_call_claude":
+        _seg = _ast.get_source_segment(llm_src, _w) or ""
+        sprawdz("ostrzezenia nie ma w _call_claude (tam jest nieosiagalne)",
+                "NIE MA SKUTKU" not in _seg)
 # KONTRDOWOD: samo ostrzezenie nie moze zastapic dzialania tam, gdzie pokretlo
 # DZIALA. Model Claude ma nadal dostawac output_config.
 sprawdz("na Claude pokretlo nadal dziala",

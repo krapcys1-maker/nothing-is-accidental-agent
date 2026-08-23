@@ -29,9 +29,9 @@
 {{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<who decided it and when — a body, a committee, a statute, a year. Empty string if the record names nobody>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "domain": "<the everyday area it belongs to>"}}]}}
 ```
 
-#### `dyskoveria.md` (37 wierszy)
+#### `dyskoveria.md` (41 wierszy)
 
-**Pola wejściowe:** `blocked_hosts`, `max_results`, `max_searches`, `min_primary`, `min_why`, `question`
+**Pola wejściowe:** `blocked_hosts`, `max_results`, `max_searches`, `min_primary`, `min_why`, `ostatnie_domeny`, `question`
 
 **Kontrakt wyjścia:**
 
@@ -121,9 +121,7 @@
 
 #### `OSWIADCZENIE_AI.md` (56 wierszy)
 
-**Pola wejściowe:** —
-
-*Materiał referencyjny — wklejany do innych promptów, nie ma własnego wyjścia.*
+**Pola wejściowe:** *(brak)*
 
 #### `pisarz.md` (229 wierszy)
 
@@ -137,9 +135,7 @@
 
 #### `po_ludzku.md` (57 wierszy)
 
-**Pola wejściowe:** —
-
-*Materiał referencyjny — wklejany do innych promptów, nie ma własnego wyjścia.*
+**Pola wejściowe:** *(brak)*
 
 #### `recenzent.md` (59 wierszy)
 
@@ -163,24 +159,20 @@
 
 #### `ROZWOJ_KONTA.md` (102 wierszy)
 
-**Pola wejściowe:** —
-
-*Materiał referencyjny — wklejany do innych promptów, nie ma własnego wyjścia.*
+**Pola wejściowe:** *(brak)*
 
 #### `SKAD_BRAC.md` (127 wierszy)
 
-**Pola wejściowe:** —
+**Pola wejściowe:** *(brak)*
 
-*Materiał referencyjny — wklejany do innych promptów, nie ma własnego wyjścia.*
-
-#### `skaut.md` (359 wierszy)
+#### `skaut.md` (436 wierszy)
 
 **Pola wejściowe:** `count`, `history_json`, `pytania_czytelnikow`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"topics": [ ... ], "ranking": {{"most_written_about": [<3 indices>], "least_written_about": [<3 indices>], "richest": [<3 indices>], "thinnest": [<3 indices>]}}}} Each topic is an object with keys: title, question, **kind**, **already_written**, **scale**, **precedents**, **threads**, plus the fields its kind requires. `already_written` is a list of strings, possibly empty. `threads` is a list of question strings. `ranking` holds zero-based indices into `topics`. **`scale`** — who the outcome binds. One of exactly these words: - `ONE_PERSON` — the reader, or one customer, one tenant, one passenger. - `A_PLACE` — one shop, one precinct, one building, one flight. - `AN_INDUSTRY` — everyone who trades, flies, insures, ships. - `A_COUNTRY` — the state itself has to keep functioning through it. This is the second thing that separates an article from a note, and it is easy to miss because both feel dramatic while you are writing them down. A voting machine failing is `A_PLACE`: five hundred votes, one precinct, a form to fill in. A head of state being shot is `A_COUNTRY`: there is a succession written down, a chain of command, a moment where nobody is certain who is in charge, and every one of those clauses exists because it went wrong before. Both are picturable. Both have a rulebook. Only one of them stops a country. Do not inflate this. A refund dispute is `ONE_PERSON` however a
+{{"when": "<roughly when>", "what_happened": "<what people saw, in one sentence>", "what_changed": "<the rule or practice that came out of it, or 'nothing'>"}}
 ```
 
 #### `synteza.md` (86 wierszy)
@@ -225,6 +217,4 @@
 
 #### `ZASADY_NOTEK_I_KOMENTARZY.md` (139 wierszy)
 
-**Pola wejściowe:** —
-
-*Materiał referencyjny — wklejany do innych promptów, nie ma własnego wyjścia.*
+**Pola wejściowe:** *(brak)*

@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1073 wierszy, 13 funkcji na poziomie modułu, 1 klas
+1171 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -10,7 +10,8 @@
 | `odmow_publikacji_z_kopii(wyslij)` | Kopia testowa nie ma prawa nic opublikowac. Nigdy. |
 | `zajmij_zamek()` | Nie pozwala dwóm przebiegom działać naraz. |
 | `opis_celu(cel)` | Co wiedzielismy o celu w chwili pisania — do dziennika. |
-| `zostal_czas(na_co)` | Czy zdazymy jeszcze cokolwiek zrobic przed koncem czasu przebiegu. |
+| `zostal_czas(na_co, potrzeba_s)` | Czy zdazymy jeszcze cokolwiek zrobic przed koncem czasu przebiegu. |
+| `rytm(co, na_co, stan)` | Przerwa MIEDZY dwoma dzialaniami tego samego rodzaju. |
 | `zmiesci_sie(rodzaj, ile, udzial)` | Ile z zaplanowanych dzialan NAPRAWDE zmiesci sie w czasie przebiegu. |
 | `ile_przebiegow_zostalo(conn)` | Ile przebiegow dnia jeszcze bedzie, wliczajac biezacy. |
 | `dzien(conn, run_id, wyslij)` | Jeden dzień pracy konta: notki, komentarze, odpowiedzi, polubienia. |
@@ -19,10 +20,9 @@
 | `_done(conn, run_id, stage)` *(wewn.)* | — |
 | `_summary(conn, run_id)` *(wewn.)* | — |
 
-
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-2972 wierszy, 71 funkcji na poziomie modułu
+3043 wierszy, 73 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -41,7 +41,8 @@
 | `_wiek_konta_w_dniach(conn)` *(wewn.)* | Ile dni działa to konto — liczone od pierwszego przebiegu w bazie. |
 | `budzet_dnia(conn)` | Ile czego agent może dziś zrobić — losowane z widełek, nie stałe. |
 | `sesje_dnia()` | Rozkłada dzień na kilka posiedzeń zamiast jednego ciągu. |
-| `odczekaj(co)` | Przerwa po działaniu, dobrana do tego, ile ono zajmuje CZLOWIEKOWI. |
+| `losuj_odstep(co)` | Losuje przerwę, ale jej NIE odsypia. |
+| `odczekaj(co, ile)` | Przerwa po działaniu, dobrana do tego, ile ono zajmuje CZLOWIEKOWI. |
 | `_klucz_faktu(tekst)` *(wewn.)* | Odcisk faktu odporny na przestawienie słów i inną liczbę w tym samym zdaniu. |
 | `tekst_faktu(x)` | Fakt bywa slownikiem (`{"fact": ..., "url": ...}`), a bywa samym zdaniem. |
 | `wczytaj_zuzyte()` | — |
@@ -57,7 +58,7 @@
 | `_slowa(tekst)` *(wewn.)* | Znaczace slowa tekstu, obciete do rdzenia. |
 | `_o_tym_samym(a, b)` *(wewn.)* | Czy dwa teksty mowia o tej samej rzeczy. |
 | `wybierz_material(zapas, unikaj)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
-| `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, il` | Pięć notek na jeden dzień, każda z innego materiału. |
+| `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, ile, od)` | Pięć notek na jeden dzień, każda z innego materiału. |
 | `ocen_restack(conn, run_id, notka)` | Czy podac te notke dalej i z jakim zdaniem. |
 | `_podloga_z_pamieci(tekst)` *(wewn.)* | Dwie podlogi, ktore dzialaja BEZ karty dowodowej. |
 | `_otwarcie_formulka(zdanie)` *(wewn.)* | Czy zdanie zaczyna sie od zapowiedzi ruchu zamiast od samego ruchu. |
@@ -91,6 +92,7 @@
 | `bramka_kandydata(k)` | Czy z tego da sie zrobic notke. Sprawdza KOD, nie model. |
 | `wczytaj_indeks()` | Indeks kandydatow. Uszkodzony plik to pusty indeks, nie awaria. |
 | `_zapisz_indeks(indeks)` *(wewn.)* | — |
+| `_stale_sygnaly(topics, pola)` *(wewn.)* | Ktore z pol mialy TE SAMA wartosc u WSZYSTKICH kandydatow. |
 | `_precedens_ok(p)` *(wewn.)* | Czy ten wpis to naprawde precedens, a nie wypelniacz. |
 | `dopisz_kandydatow(kandydaci)` | Przepuszcza kandydatow przez bramke i dokłada do indeksu. |
 | `wez_kandydatow(ile)` | Wyjmuje kandydatow gotowych do pisania i ZNACZY ich jako uzytych. |
@@ -98,10 +100,9 @@
 | `korpus_fedreg(ile_dokumentow, ile_gestych)` | Preambuly przepisow, w ktorych regulator ODPOWIADA na zastrzezenia. |
 | `kandydaci_z_fedreg(conn, run_id, dokument)` | Wyciaga kandydatow z jednej preambuly i oddaje w ksztalcie indeksu. |
 
-
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2314 wierszy, 51 funkcji na poziomie modułu
+2305 wierszy, 51 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -157,10 +158,9 @@
 | `restackuj_w_kanale(ile, decyzja, wyslij)` | Podaje dalej cudze notki z wlasnym zdaniem. |
 | `_notka_przy_przycisku(przycisk)` *(wewn.)* | Tresc i autor notki, przy ktorej stoi ten przycisk. |
 
-
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-533 wierszy, 11 funkcji na poziomie modułu, 3 klas
+568 wierszy, 11 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -172,14 +172,13 @@
 | `_deepseek_pick_from_urls(purpose, system, user, urls)` *(wewn.)* | Drugie, tanie wywołanie: wybierz z adresów, które wyszukiwanie już zwróciło. |
 | `_call_deepseek(purpose, system, user)` *(wewn.)* | — |
 | `przejsciowy(exc)` | Czy ten błąd ma szansę minąć sam. |
-| `call(purpose, system, user, conn, run_id, web_search, collect_urls)` | Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi. |
-| `obraz(opis, conn, run_id)` | Generuje grafikę do artykułu i zapisuje jej koszt tam, gdzie resztę. |
+| `call(purpose, system, user)` | Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi. |
+| `obraz(opis)` | Generuje grafikę do artykułu i zapisuje jej koszt tam, gdzie resztę. |
 | `parse_json(text)` | Wyciąga obiekt JSON z odpowiedzi modelu. |
-
 
 ### `gates.py` — bramki jakości; żadna nie blokuje
 
-514 wierszy, 16 funkcji na poziomie modułu
+514 wierszy, 16 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -200,10 +199,9 @@
 | `verdict(findings)` | Artykuł powstaje ZAWSZE. Decyzja właściciela z 2026-08-15. |
 | `zapowiedziany_akapit_granic(body)` | Czy akapit o granicach zaczyna sie od zdania o samym sobie. |
 
-
 ### `db.py` — schemat i zapis
 
-203 wierszy, 8 funkcji na poziomie modułu
+203 wierszy, 8 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -216,10 +214,9 @@
 | `spent_usd(conn, since_prefix)` | Suma kosztów od znacznika czasu zaczynającego się danym prefiksem. |
 | `recent_domains(conn, limit)` | Domeny z ostatnich N artykułów — wejście do reguły różnorodności. |
 
-
 ### `kanal.py` — pamięć o cudzych publikacjach
 
-295 wierszy, 10 funkcji na poziomie modułu
+295 wierszy, 10 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -234,10 +231,9 @@
 | `notki_z_kanalu(ile)` | Cudze notki, pod ktorymi mozna wejsc w dyskusje. |
 | `szukaj_nowych(ile)` | Szuka NOWYCH kont wyszukiwarka Substacka, poza naszym kregiem. |
 
-
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-491 wierszy, 17 funkcji na poziomie modułu
+559 wierszy, 18 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -253,12 +249,12 @@
 | `zawieszone()` | Przebiegi, ktore zostaly w stanie RUNNING na zawsze. |
 | `dysk()` | — |
 | `nadaktywnosc()` | Czy agent nie zapetlil sie i nie zasypuje Substacka. |
-| `koszt()` | — |
+| `koszt()` | Czy zblizamy sie do sufitu — dziennego ALBO miesiecznego. |
 | `powtorki()` | Czy agent nie zaczal pisac wciaz tego samego. |
+| `kopia_subskrybentow()` | Czy istnieje AKTUALNA kopia listy subskrybentow. |
 | `sprawdz_wszystko()` | Uruchamia komplet kontroli i alarmuje o tym, co znalazl. |
 | `przeglad(dni)` | Co agent NAPRAWDE zrobil przez ostatnie dni i gdzie sie pomylil. |
 | `_co_z_tego_wyszlo(wpisy)` *(wewn.)* | Czy nasze dzialania w ogole wracaja — i ktore z nich. |
-
 
 ### `style.py` — korpus stylu dla pisarza
 
@@ -272,3 +268,35 @@
 | `load_profiles()` | Profil pozytywny i negatywny stylu artykułu. |
 | `corpus_words()` | Wszystkie słowa korpusu — podłoga porównuje tekst z korpusem, nie z alfabetem. |
 
+### `kopia_subskrybentow.py` — kopia jedynego aktywa, którego nie da się odtworzyć
+
+135 wierszy, 3 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_wierszy(tekst)` *(wewn.)* | — |
+| `_to_lista_subskrybentow(tekst)` *(wewn.)* | Czy to naprawde eksport listy, a nie przypadkowy plik albo strona HTML. |
+| `main()` | — |
+
+### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
+
+1586 wierszy, 16 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_env(name, default)` *(wewn.)* | — |
+| `stawka_deepseek(model, kiedy)` | Stawka DeepSeeka z uwzglednieniem pory doby po wejsciu nowej taryfy. |
+| `pora_na_publikacje(kiedy)` | Czy teraz wolno publikowac — wg zegara CZYTELNIKOW, nie serwera. |
+| `w_szczycie(kiedy)` | Czy teraz obowiazuje droga taryfa. |
+| `dlugosc_dla(glebokosc)` | Ile slow ma miec artykul o tej glebokosci. |
+| `_tokens_for(chars)` *(wewn.)* | — |
+| `losowa_postawa()` | Ktora postawa dla TEGO komentarza. Wagi, nie rownomiernie. |
+| `losowe_otwarcie()` | — |
+| `losowa_dlugosc()` | Ile slow ma miec ta konkretna wypowiedz. |
+| `_cisza_z_hasza(dzien)` *(wewn.)* | — |
+| `cichy_dzien(kiedy)` | Czy dzis nie nadajemy. Ta sama odpowiedz przez caly dzien. |
+| `timeout_for(max_tokens)` | Termin w sekundach, który realnie pokrywa podany sufit tokenów. |
+| `losowy_ruch_koncowy()` | Czym konczy sie TEN artykul. Rowne szanse, bez powtarzania formuly. |
+| `losowa_liczba_paraleli(glebokosc)` | Ile paraleli w drugim akcie. Krotki artykul nigdy nie bierze trzech. |
+| `losowe_generatory(ile)` | Ktore wzorce w tym przebiegu. Ten sam generator dwa dni z rzedu daje |
+| `co_teraz_w_reku(kiedy)` | Rzeczy, ktorych czytelnik dotyka wlasnie teraz. |
