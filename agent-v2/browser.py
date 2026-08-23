@@ -1302,6 +1302,48 @@ def _wiersze_subskrybentow(page) -> list[dict[str, str]]:
     return zloz_wiersze_subskrybentow(surowe)
 
 
+def uchwyt_autora(host: str) -> str | None:
+    """Konto CZLOWIEKA, ktory pisze pod tym adresem — nie konto publikacji.
+
+    OBSERWOWANIE I SUBSKRYPCJA TO DWIE ROZNE RZECZY i tutaj ta roznica przestaje
+    byc teoria. Strona PUBLIKACJI ma przycisk `Subscribe`. Przycisk `Follow`
+    maja profile LUDZI.
+
+    `uchwyt_publikacji` dla adresow w domenie Substacka robi skrot
+    `host.split(".")[0]`, wiec oddaje uchwyt PUBLIKACJI — a obserwacja szukala
+    potem `Follow` tam, gdzie go z definicji nie ma. Sto procent porazek, po
+    cichu, przez tygodnie: zero obserwacji przy normie okolo dwudziestu pieciu
+    miesiecznie. Wyszlo dopiero wtedy, gdy porazki zaczely zostawiac slad
+    w dzienniku — wczesniej blok wygladal na taki, ktory sie nie odbywa.
+
+    Autora czytamy z `publishedBylines` — ta droga juz istniala w
+    `uchwyt_publikacji`, ale byla uzywana wylacznie przy wlasnych domenach.
+    Gdy nie da sie ustalic, oddajemy None: lepiej nie obserwowac nikogo niz
+    klikac na chybil trafil na cudzym profilu.
+    """
+    host = (host or "").strip().lower().rstrip("/")
+    if not host:
+        return None
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    try:
+        posty = api_json(page, "/api/v1/posts?limit=3", baza=f"https://{host}")
+        lista = posty if isinstance(posty, list) else (posty or {}).get("posts") or []
+        for post in lista:
+            for bylina in (post or {}).get("publishedBylines") or []:
+                uchwyt = (bylina or {}).get("handle")
+                if uchwyt:
+                    return str(uchwyt)
+        return None
+    except Exception:
+        return None
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+
+
 def obserwuj_profil(handle: str, wyslij: bool = False) -> dict[str, Any]:
     """Obserwuje cudzy profil — jego notki trafiaja do naszego kanalu.
 

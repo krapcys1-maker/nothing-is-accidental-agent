@@ -573,10 +573,19 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         for host in kandydaci[: na_teraz["follow"]]:
             if not zostal_czas("obserwowanie"):
                 return
-            # Nie `host.split(".")[0]`: przy wlasnej domenie dawalo to "www"
-            # i agent probowal obserwowac konto o tej nazwie.
-            uchwyt = browser.uchwyt_publikacji(host)
+            # UCHWYT AUTORA, NIE PUBLIKACJI. Strona publikacji ma `Subscribe`;
+            # `Follow` maja profile ludzi — a my szukalismy `Follow`
+            # na stronie publikacji i nie znalezlismy go ani razu.
+            uchwyt = browser.uchwyt_autora(host)
             if not uchwyt:
+                # POMINIECIE TEZ JEST WYNIKIEM. Cichy `continue` to dokladnie
+                # ten mechanizm, przez ktory obserwacje tygodniami udawaly, ze
+                # ich nie ma: blok bez sladu w dzienniku wyglada na blok, ktory
+                # sie nie odbywa. Proba byla, wiec ma zostawic powod.
+                if wyslij:
+                    browser.dopisz_wynik(
+                        "obserwacja", {}, komu=host,
+                        powod=f"nie ustalilem konta autora dla {host}")
                 print(f"  (nie ustalilem konta dla {host} — pomijam)", flush=True)
                 continue
             if wyslij:

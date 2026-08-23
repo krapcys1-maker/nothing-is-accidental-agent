@@ -2,6 +2,7 @@
 
 Kazda zmiana z kontrdowodem. Nic nie publikuje.
 """
+import ast
 import hashlib
 import pathlib
 import sys
@@ -252,6 +253,109 @@ finally:
     stages.ZUZYTE_FAKTY = oryg_plik
 
 print()
+print()
+print("=== 6. UCHWYT OSOBY, NIE UCHWYT PUBLIKACJI ===")
+# Tu mieszkal blad, ktory dawal STO PROCENT porazek po cichu. `obserwuj()`
+# liczyl uchwyt przez `uchwyt_publikacji`, a ta funkcja dla adresow w domenie
+# Substacka robi skrot `host.split(".")[0]`. Dla
+# `writersartistsyearbook.substack.com` wychodzil `writersartistsyearbook` —
+# uchwyt PUBLIKACJI. Strona publikacji ma `Subscribe`; `Follow` maja profile
+# LUDZI. Wiec szukalismy przycisku, ktorego tam z definicji nie ma.
+#
+# Zero obserwacji przy normie okolo dwudziestu pieciu miesiecznie. Zobaczylismy
+# to dopiero wtedy, gdy porazki zaczely zostawiac slad w dzienniku.
+#
+# KONTRDOWOD: byline oddaje INNY uchwyt niz nazwa publikacji. Kod sprzed
+# naprawy oddalby nazwe publikacji i ten test by go oblal.
+
+wywolania = []
+
+
+class FikcyjnaStrona:
+    def close(self):
+        pass
+
+
+class FikcyjnyKontekst:
+    def new_page(self):
+        return FikcyjnaStrona()
+
+
+class Zamykalne:
+    def close(self):
+        pass
+
+    def stop(self):
+        pass
+
+
+def fikcyjne_api(page, sciezka, baza=None):
+    wywolania.append((sciezka, baza))
+    if "bezbyline" in (baza or ""):
+        return {"posts": [{"title": "bez autora"}]}
+    if "pusto" in (baza or ""):
+        return {"posts": []}
+    return {"posts": [{"title": "x",
+                       "publishedBylines": [{"handle": "emma-shevah"}]}]}
+
+
+stare = (browser.wymagaj_sesji, browser.podlacz_sie, browser.api_json)
+try:
+    browser.wymagaj_sesji = lambda: None
+    browser.podlacz_sie = lambda: (Zamykalne(), Zamykalne(), FikcyjnyKontekst())
+    browser.api_json = fikcyjne_api
+
+    HOST = "writersartistsyearbook.substack.com"
+    autor = browser.uchwyt_autora(HOST)
+    publikacja = browser.uchwyt_publikacji(HOST)
+
+    print("    host:       %s" % HOST)
+    print("    do FOLLOW:  %s" % autor)
+    print("    do SUBSCRIBE: %s" % publikacja)
+
+    sprawdz("obserwacja dostaje uchwyt CZLOWIEKA", autor == "emma-shevah", autor)
+    sprawdz("subskrypcja zostaje przy uchwycie PUBLIKACJI",
+            publikacja == "writersartistsyearbook", publikacja)
+    sprawdz("KONTRDOWOD: to dwie rozne wartosci, wiec test je rozroznia",
+            autor != publikacja)
+    sprawdz("uchwyt autora czytany z bylines, nie z hosta",
+            wywolania and "/api/v1/posts" in wywolania[0][0]
+            and HOST in (wywolania[0][1] or ""), wywolania[:1])
+    sprawdz("brak byline -> None, zamiast zgadywania",
+            browser.uchwyt_autora("bezbyline.substack.com") is None)
+    sprawdz("brak postow -> None", browser.uchwyt_autora("pusto.substack.com") is None)
+
+    ile = len(wywolania)
+    sprawdz("pusty host nie rusza przegladarki",
+            browser.uchwyt_autora("") is None and len(wywolania) == ile)
+finally:
+    browser.wymagaj_sesji, browser.podlacz_sie, browser.api_json = stare
+
+# I to, co naprawde decyduje: KTORY blok run.py po ktory uchwyt siega.
+# Sprawdzane po drzewie skladni, nie grepem, zeby trafic w cialo wlasciwej
+# funkcji, a nie w pierwsze pasujace slowo w pliku.
+drzewo = ast.parse(pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8"))
+uchwyty = {}
+for w in ast.walk(drzewo):
+    if isinstance(w, ast.FunctionDef) and w.name in ("obserwuj", "subskrybuj"):
+        uchwyty[w.name] = {
+            n.func.attr for n in ast.walk(w)
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+        }
+
+sprawdz("blok obserwacji wola uchwyt_autora",
+        "uchwyt_autora" in uchwyty.get("obserwuj", set()))
+sprawdz("blok obserwacji JUZ NIE wola uchwyt_publikacji",
+        "uchwyt_publikacji" not in uchwyty.get("obserwuj", set()),
+        sorted(uchwyty.get("obserwuj", ())))
+sprawdz("blok subskrypcji dalej wola uchwyt_publikacji",
+        "uchwyt_publikacji" in uchwyty.get("subskrybuj", set()))
+sprawdz("i NIE przelaczyl sie na autora — subskrybuje sie publikacje",
+        "uchwyt_autora" not in uchwyty.get("subskrybuj", set()))
+sprawdz("nieustalony autor zostawia slad w dzienniku",
+        "dopisz_wynik" in uchwyty.get("obserwuj", set()))
+
+
 print("=== PRODUKCJA ===")
 zle = 0
 for p in PILNOWANE:
