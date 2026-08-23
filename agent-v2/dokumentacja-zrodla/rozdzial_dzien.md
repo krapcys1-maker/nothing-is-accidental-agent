@@ -4,6 +4,8 @@
 > obserwacje i subskrypcje biorące pełny dzienny budżet w każdym przebiegu.
 > Opisy zostawiono, bo pokazują klasę błędu, nie tylko jego wystąpienie.
 
+> **Uwaga o wydrukach kodu w tym rozdziale.** Są przepisywane ręcznie i właśnie dlatego starzeją się po cichu — pięć z nich pokazywało przerwę `stages.odczekaj(...)` **po** działaniu, czyli kod, który po ostatniej notce spał jeszcze 45–90 minut i zasypiał bez pytania, czy sen się zmieści. Tak zginęły przebiegi 24, 28, 30 i 34, ucięte przez systemd po 2,5 godziny. Gdy wydruk tutaj różni się od **sekcji VII**, obowiązuje sekcja VII: ona jest wycinana z kodu przez `ast` przy każdym składaniu dokumentu.
+
 ### Ścieżka dnia i styk z Substackiem
 
 Ten rozdział opisuje jedną gałąź agenta: `run.py --dzien`. To jest cała rutyna społeczna konta — odpowiedzi, notki, obserwowanie, subskrypcje, komentarze, dyskusje, polubienia, restacki — plus warstwa, która te decyzje zamienia w kliknięcia w Substacku (`browser.py`) i w wiedzę o cudzych publikacjach (`kanal.py`). Ścieżka artykułu (`scout → … → forma`) jest osobna i tutaj nie występuje.
@@ -135,7 +137,7 @@ Czyli agent sam kończy po 2h15, piętnaście minut przed tym, jak zetnie go sys
     if _KONIEC_CZASU is None:
         return True
     zostalo = _KONIEC_CZASU - time.time()
-    if zostalo > 0:
+    if zostalo > potrzeba_s:      # NIE `> 0` — patrz nizej
         return True
     print(f"  czas przebiegu wyczerpany — odpuszczam {na_co or 'reszte'}"
           f" (dokoncze w nastepnym przebiegu)", flush=True)
@@ -197,7 +199,7 @@ ODSTEP_MIEDZY_DZIALANIAMI = (45, 180)   # zapas dla czynnosci bez wlasnego wpisu
 Odstęp notek 45–90 min nie jest estetyką: profil pokazywał notki **parami** kilkanaście minut po sobie, potem trzy i pół godziny ciszy — czyli kształt PRZEBIEGU narysowany na osi czasu. Nikt nie musiał analizować stylu.
 
 Zużywają go dwie drogi:
-- `stages.odczekaj(co)` (`stages.py:586`) — po odpowiedzi, notce, komentarzu, obserwacji i subskrypcji (te dwie ostatnie wołają `odczekaj("komentarz")`):
+- `run.rytm(co, na_co, stan)` (`run.py:168`) — **jedna droga dla wszystkich bloków**. Losuje przerwę przez `stages.losuj_odstep`, pyta `zostal_czas(na_co, przerwa)`, czy się zmieści, i dopiero wtedy odsypia ją przez `stages.odczekaj(co, przerwa)`. Przerwa stoi **między** dwoma działaniami tego samego rodzaju — nigdy po ostatnim, nigdy przed pierwszym:
 
 ```python
     dol, gora = config.ODSTEPY.get(co, config.ODSTEP_MIEDZY_DZIALANIAMI)
@@ -473,13 +475,15 @@ Pierwszy i **poza limitem dziennym** (`config.ODPOWIEDZI_POZA_LIMITEM = True`, k
                 continue
             tekst = kandydaci[0]["reply"]
             if wyslij:
+                if not rytm("odpowiedz", "odpowiedzi", rytm_stanu):
+                    return
                 if c.get("gdzie") == "artykul":
                     browser.wystaw_odpowiedz_pod_artykulem(
                         c.get("url") or "", c.get("autor") or "", tekst,
                         wyslij=True)
                 else:
                     browser.wystaw_odpowiedz(c["pod_id"], tekst, wyslij=True)
-                stages.odczekaj("odpowiedz")
+                rytm_stanu["odpowiedz"] = True
             zrobione["odpowiedzi"] += 1
 ```
 
@@ -653,12 +657,16 @@ Element zwycięski dostaje znacznik `data-nia="1"` i dopiero po nim jest lokaliz
             if not gotowe:
                 continue
             if wyslij:
+                # PRZERWA IDZIE PRZED KOLEJNA NOTKA, NIE PO POPRZEDNIEJ,
+                # i nie zaczyna sie, jesli nie miesci sie do konca przebiegu.
+                if not rytm("notka", "notki", rytm_stanu):
+                    return
                 wynik = browser.wystaw_notke(gotowe[0]["note"].strip(), wyslij=True)
                 if wynik.get("wyslane") and n.get("fakt"):
                     stages.zapisz_zuzyte([n["fakt"]])
                 if wynik.get("wyslane") and n.get("promocja_url"):
                     stages.odhacz_promocje(n["promocja_url"])
-                stages.odczekaj("notka")
+                rytm_stanu["notka"] = True
             zrobione["notki"] += 1
 ```
 
@@ -851,7 +859,7 @@ Endpoint publikujący notkę to **`POST /api/v1/comment/feed`** — ten sam, kt�
                               "otwarcie": (out.get("otwarcie") or "")[:60],
                               "postawa": out.get("postawa") or ""})
                 kanal.zapamietaj_komentarz(cel)
-                stages.odczekaj("komentarz")
+                rytm_stanu["komentarz"] = True
             zrobione["komentarze"] += 1
 ```
 
@@ -1065,7 +1073,7 @@ Te liczby są w ręku przy wyborze celu i do niedawna były wyrzucane. Bez nich 
                 browser.wystaw_odpowiedz(cel["id"], dobre[0]["comment"],
                                          wyslij=True,
                                          kontekst=opis_celu(cel))
-                stages.odczekaj("komentarz")
+                rytm_stanu["komentarz"] = True
             zrobione["komentarze"] += 1
 ```
 
@@ -1113,7 +1121,7 @@ Wystawienie idzie przez `wystaw_odpowiedz`, bo pod notką wątek jest płaski.
                 continue
             if wyslij:
                 browser.obserwuj_profil(uchwyt, wyslij=True)
-                stages.odczekaj("komentarz")
+                rytm_stanu["komentarz"] = True
 ```
 
 Pula to **wyłącznie klucze `gdzie_komentowalismy.json`** — czyli hosty, u których naprawdę zostawiliśmy komentarz. „Obserwowanie kogoś, kogo się nie czytało, to zbieranie nazwisk, a nie budowanie kręgu." Blok `subskrybuj` jest identyczny, z `budzet["subskrypcje"]` i `browser.zasubskrybuj`.

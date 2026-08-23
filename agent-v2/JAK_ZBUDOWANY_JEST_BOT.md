@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 40 zestawów
-testów, 976 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 980 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -1696,7 +1696,7 @@ Zapis pliku:
 
 Wiersz w `calls` z `purpose="obraz"`, `cost_usd = 0.04`, `price_verified = 0`, `note = "1536x1024"`.
 
-**WADA — grafika nie powstaje bez `--wyslij`.** Wywołanie `stages.grafika(...)` siedzi wewnątrz `if args.wyslij:`. Przebieg do szuflady (domyślny, ten, o którym mówi cały docstring modułu — „jeden artykuł do szuflady") **nigdy** nie wygeneruje nagłówka. Właściciel oglądający `.md` nie zobaczy okładki, na której ma się wypowiedzieć przed publikacją.
+**~~WADA — grafika nie powstaje bez `--wyslij`.~~ ZAMKNIĘTE 23 sierpnia.** Wywołanie siedziało wewnątrz `if args.wyslij:`, więc przebieg do szuflady — ten domyślny, o którym mówi cały docstring modułu — **nigdy** nie generował nagłówka, a właściciel oglądający `.md` nie widział okładki, na którą ma się wypowiedzieć przed publikacją. Gorsze było jednak co innego: **nie istniał ani jeden przebieg, w którym ścieżka graficzna mogła zepsuć się bezpiecznie**. Sprawdzała się wyłącznie na żywo, przy prawdziwej publikacji i za prawdziwe pieniądze — dlatego okładka zgubiona przez usterkę zapisu wywołań wyszła na jaw dopiero po fakcie. Dziś `stages.grafika` stoi przed gałęzią publikacji i nadal nie ma prawa zatrzymać artykułu.
 
 ---
 
@@ -1706,7 +1706,10 @@ Wiersz w `calls` z `purpose="obraz"`, `cost_usd = 0.04`, `price_verified = 0`, `
         if args.wyslij:
             import browser
 
-            stages.grafika(conn, run_id, draft, sciezka_artykulu=path)
+        # ZAWSZE, PRZED galezia publikacji — patrz run.py:1134.
+        stages.grafika(conn, run_id, draft, sciezka_artykulu=path)
+
+        if args.wyslij:
             print("\n-- publikacja --", flush=True)
             wynik = browser.wystaw_artykul(path, wyslij=True)
             print(f">> {'OPUBLIKOWANY' if wynik.get('wyslane') else 'NIE POSZEDŁ'}"
@@ -1767,7 +1770,7 @@ Wpis w `data/promocja.json` domyka pętlę: `recent_angles` (etap 1) czyta tę l
 | `data/cache/<etap>.json` | wynik etapu | każdy z 9 cache'owanych etapów |
 | `data/articles/NNNN-slug.md` | gotowy do wklejenia artykuł + `## Sources` | etap 12 |
 | `data/articles/NNNN-slug.uwagi.md` | status + wszystkie uwagi bramek | etap 12 |
-| `data/articles/NNNN-slug.png` | nagłówek | etap 13, tylko przy `--wyslij` |
+| `data/articles/NNNN-slug.png` | nagłówek | etap 13, **każdy przebieg** |
 | `data/promocja.json` | adres, tytuł, 2000 znaków tekstu | etap 14, po potwierdzeniu |
 | `data/agent.lock` | PID | start |
 
@@ -1792,7 +1795,7 @@ Schemat bazy to cztery tabele bez migracji (`db.py:22-80`), zakładane przez `CR
 13. **Kolejność `unused_evidence` vs. bramki jest nośna i nieudokumentowana.**
 14. **`frazy_z_instrukcji` nie widzi wstrzykniętych fragmentów stylu ani opisu ruchu końcowego.**
 15. **`## Sources` pomija źródła wnoszące same liczby.**
-16. **Grafika nie powstaje bez `--wyslij`** — przebieg „do szuflady" nie produkuje okładki.
+16. ~~**Grafika nie powstaje bez `--wyslij`**~~ — **zamknięte 23 sierpnia**, okładka powstaje w każdym przebiegu.
 17. **Podmiana pisarza na Opusa przy awarii jest trwała** i sprzeczna z bieżącą decyzją konfiguracyjną; przy `BudgetExceeded` powtórka jest gwarantowaną stratą.
 18. **`artykulowy` zdefiniowana dwa razy w `pick_topic`**, z rozbieżnymi docstringami.
 19. **`mimo_odrzucenia` nie dociera do uwag** mimo komentarza, że dociera.
@@ -1811,6 +1814,8 @@ Schemat bazy to cztery tabele bez migracji (`db.py:22-80`), zakładane przez `CR
 > martwe `sprawdz_sesje`/`zaloguj` (wklejka z `wystaw_notke`) oraz
 > obserwacje i subskrypcje biorące pełny dzienny budżet w każdym przebiegu.
 > Opisy zostawiono, bo pokazują klasę błędu, nie tylko jego wystąpienie.
+
+> **Uwaga o wydrukach kodu w tym rozdziale.** Są przepisywane ręcznie i właśnie dlatego starzeją się po cichu — pięć z nich pokazywało przerwę `stages.odczekaj(...)` **po** działaniu, czyli kod, który po ostatniej notce spał jeszcze 45–90 minut i zasypiał bez pytania, czy sen się zmieści. Tak zginęły przebiegi 24, 28, 30 i 34, ucięte przez systemd po 2,5 godziny. Gdy wydruk tutaj różni się od **sekcji VII**, obowiązuje sekcja VII: ona jest wycinana z kodu przez `ast` przy każdym składaniu dokumentu.
 
 ### Ścieżka dnia i styk z Substackiem
 
@@ -1943,7 +1948,7 @@ Czyli agent sam kończy po 2h15, piętnaście minut przed tym, jak zetnie go sys
     if _KONIEC_CZASU is None:
         return True
     zostalo = _KONIEC_CZASU - time.time()
-    if zostalo > 0:
+    if zostalo > potrzeba_s:      # NIE `> 0` — patrz nizej
         return True
     print(f"  czas przebiegu wyczerpany — odpuszczam {na_co or 'reszte'}"
           f" (dokoncze w nastepnym przebiegu)", flush=True)
@@ -2005,7 +2010,7 @@ ODSTEP_MIEDZY_DZIALANIAMI = (45, 180)   # zapas dla czynnosci bez wlasnego wpisu
 Odstęp notek 45–90 min nie jest estetyką: profil pokazywał notki **parami** kilkanaście minut po sobie, potem trzy i pół godziny ciszy — czyli kształt PRZEBIEGU narysowany na osi czasu. Nikt nie musiał analizować stylu.
 
 Zużywają go dwie drogi:
-- `stages.odczekaj(co)` (`stages.py:586`) — po odpowiedzi, notce, komentarzu, obserwacji i subskrypcji (te dwie ostatnie wołają `odczekaj("komentarz")`):
+- `run.rytm(co, na_co, stan)` (`run.py:168`) — **jedna droga dla wszystkich bloków**. Losuje przerwę przez `stages.losuj_odstep`, pyta `zostal_czas(na_co, przerwa)`, czy się zmieści, i dopiero wtedy odsypia ją przez `stages.odczekaj(co, przerwa)`. Przerwa stoi **między** dwoma działaniami tego samego rodzaju — nigdy po ostatnim, nigdy przed pierwszym:
 
 ```python
     dol, gora = config.ODSTEPY.get(co, config.ODSTEP_MIEDZY_DZIALANIAMI)
@@ -2281,13 +2286,15 @@ Pierwszy i **poza limitem dziennym** (`config.ODPOWIEDZI_POZA_LIMITEM = True`, k
                 continue
             tekst = kandydaci[0]["reply"]
             if wyslij:
+                if not rytm("odpowiedz", "odpowiedzi", rytm_stanu):
+                    return
                 if c.get("gdzie") == "artykul":
                     browser.wystaw_odpowiedz_pod_artykulem(
                         c.get("url") or "", c.get("autor") or "", tekst,
                         wyslij=True)
                 else:
                     browser.wystaw_odpowiedz(c["pod_id"], tekst, wyslij=True)
-                stages.odczekaj("odpowiedz")
+                rytm_stanu["odpowiedz"] = True
             zrobione["odpowiedzi"] += 1
 ```
 
@@ -2461,12 +2468,16 @@ Element zwycięski dostaje znacznik `data-nia="1"` i dopiero po nim jest lokaliz
             if not gotowe:
                 continue
             if wyslij:
+                # PRZERWA IDZIE PRZED KOLEJNA NOTKA, NIE PO POPRZEDNIEJ,
+                # i nie zaczyna sie, jesli nie miesci sie do konca przebiegu.
+                if not rytm("notka", "notki", rytm_stanu):
+                    return
                 wynik = browser.wystaw_notke(gotowe[0]["note"].strip(), wyslij=True)
                 if wynik.get("wyslane") and n.get("fakt"):
                     stages.zapisz_zuzyte([n["fakt"]])
                 if wynik.get("wyslane") and n.get("promocja_url"):
                     stages.odhacz_promocje(n["promocja_url"])
-                stages.odczekaj("notka")
+                rytm_stanu["notka"] = True
             zrobione["notki"] += 1
 ```
 
@@ -2659,7 +2670,7 @@ Endpoint publikujący notkę to **`POST /api/v1/comment/feed`** — ten sam, kt�
                               "otwarcie": (out.get("otwarcie") or "")[:60],
                               "postawa": out.get("postawa") or ""})
                 kanal.zapamietaj_komentarz(cel)
-                stages.odczekaj("komentarz")
+                rytm_stanu["komentarz"] = True
             zrobione["komentarze"] += 1
 ```
 
@@ -2873,7 +2884,7 @@ Te liczby są w ręku przy wyborze celu i do niedawna były wyrzucane. Bez nich 
                 browser.wystaw_odpowiedz(cel["id"], dobre[0]["comment"],
                                          wyslij=True,
                                          kontekst=opis_celu(cel))
-                stages.odczekaj("komentarz")
+                rytm_stanu["komentarz"] = True
             zrobione["komentarze"] += 1
 ```
 
@@ -2921,7 +2932,7 @@ Wystawienie idzie przez `wystaw_odpowiedz`, bo pod notką wątek jest płaski.
                 continue
             if wyslij:
                 browser.obserwuj_profil(uchwyt, wyslij=True)
-                stages.odczekaj("komentarz")
+                rytm_stanu["komentarz"] = True
 ```
 
 Pula to **wyłącznie klucze `gdzie_komentowalismy.json`** — czyli hosty, u których naprawdę zostawiliśmy komentarz. „Obserwowanie kogoś, kogo się nie czytało, to zbieranie nazwisk, a nie budowanie kręgu." Blok `subskrybuj` jest identyczny, z `budzet["subskrypcje"]` i `browser.zasubskrybuj`.

@@ -1246,7 +1246,7 @@ Zapis pliku:
 
 Wiersz w `calls` z `purpose="obraz"`, `cost_usd = 0.04`, `price_verified = 0`, `note = "1536x1024"`.
 
-**WADA — grafika nie powstaje bez `--wyslij`.** Wywołanie `stages.grafika(...)` siedzi wewnątrz `if args.wyslij:`. Przebieg do szuflady (domyślny, ten, o którym mówi cały docstring modułu — „jeden artykuł do szuflady") **nigdy** nie wygeneruje nagłówka. Właściciel oglądający `.md` nie zobaczy okładki, na której ma się wypowiedzieć przed publikacją.
+**~~WADA — grafika nie powstaje bez `--wyslij`.~~ ZAMKNIĘTE 23 sierpnia.** Wywołanie siedziało wewnątrz `if args.wyslij:`, więc przebieg do szuflady — ten domyślny, o którym mówi cały docstring modułu — **nigdy** nie generował nagłówka, a właściciel oglądający `.md` nie widział okładki, na którą ma się wypowiedzieć przed publikacją. Gorsze było jednak co innego: **nie istniał ani jeden przebieg, w którym ścieżka graficzna mogła zepsuć się bezpiecznie**. Sprawdzała się wyłącznie na żywo, przy prawdziwej publikacji i za prawdziwe pieniądze — dlatego okładka zgubiona przez usterkę zapisu wywołań wyszła na jaw dopiero po fakcie. Dziś `stages.grafika` stoi przed gałęzią publikacji i nadal nie ma prawa zatrzymać artykułu.
 
 ---
 
@@ -1256,7 +1256,10 @@ Wiersz w `calls` z `purpose="obraz"`, `cost_usd = 0.04`, `price_verified = 0`, `
         if args.wyslij:
             import browser
 
-            stages.grafika(conn, run_id, draft, sciezka_artykulu=path)
+        # ZAWSZE, PRZED galezia publikacji — patrz run.py:1134.
+        stages.grafika(conn, run_id, draft, sciezka_artykulu=path)
+
+        if args.wyslij:
             print("\n-- publikacja --", flush=True)
             wynik = browser.wystaw_artykul(path, wyslij=True)
             print(f">> {'OPUBLIKOWANY' if wynik.get('wyslane') else 'NIE POSZEDŁ'}"
@@ -1317,7 +1320,7 @@ Wpis w `data/promocja.json` domyka pętlę: `recent_angles` (etap 1) czyta tę l
 | `data/cache/<etap>.json` | wynik etapu | każdy z 9 cache'owanych etapów |
 | `data/articles/NNNN-slug.md` | gotowy do wklejenia artykuł + `## Sources` | etap 12 |
 | `data/articles/NNNN-slug.uwagi.md` | status + wszystkie uwagi bramek | etap 12 |
-| `data/articles/NNNN-slug.png` | nagłówek | etap 13, tylko przy `--wyslij` |
+| `data/articles/NNNN-slug.png` | nagłówek | etap 13, **każdy przebieg** |
 | `data/promocja.json` | adres, tytuł, 2000 znaków tekstu | etap 14, po potwierdzeniu |
 | `data/agent.lock` | PID | start |
 
@@ -1342,7 +1345,7 @@ Schemat bazy to cztery tabele bez migracji (`db.py:22-80`), zakładane przez `CR
 13. **Kolejność `unused_evidence` vs. bramki jest nośna i nieudokumentowana.**
 14. **`frazy_z_instrukcji` nie widzi wstrzykniętych fragmentów stylu ani opisu ruchu końcowego.**
 15. **`## Sources` pomija źródła wnoszące same liczby.**
-16. **Grafika nie powstaje bez `--wyslij`** — przebieg „do szuflady" nie produkuje okładki.
+16. ~~**Grafika nie powstaje bez `--wyslij`**~~ — **zamknięte 23 sierpnia**, okładka powstaje w każdym przebiegu.
 17. **Podmiana pisarza na Opusa przy awarii jest trwała** i sprzeczna z bieżącą decyzją konfiguracyjną; przy `BudgetExceeded` powtórka jest gwarantowaną stratą.
 18. **`artykulowy` zdefiniowana dwa razy w `pick_topic`**, z rozbieżnymi docstringami.
 19. **`mimo_odrzucenia` nie dociera do uwag** mimo komentarza, że dociera.

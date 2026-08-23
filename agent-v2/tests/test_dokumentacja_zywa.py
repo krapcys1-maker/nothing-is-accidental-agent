@@ -146,5 +146,65 @@ sprawdz("prompt uzywany zostaje wsrod roboczych",
         "skaut.md" in czytane, sorted(czytane)[:5])
 
 print()
+print("=== 7. ROZDZIALY RECZNE NIE POKAZUJA KODU, KTOREGO KOD ZAKAZUJE ===")
+# Sekcje mechaniczne sa generowane i rozjechac sie nie moga. Rozdzialy
+# analityczne sa pisane recznie — i wlasnie one starzeja sie po cichu.
+#
+# Piec wydrukow w rozdziale IV pokazywalo `stages.odczekaj(...)` na koncu petli,
+# czyli przerwe PO dzialaniu. Odtworzenie ich literalnie daje kod, ktory po
+# ostatniej notce spi jeszcze 45-90 minut i zasypia bez pytania, czy sen sie
+# zmiesci — te dwie wady uciely przebiegi 24, 28, 30 i 34.
+#
+# Wydruk, ktory NIE PRZESZEDLBY testow tego repozytorium, nie ma prawa stac
+# w dokumencie uczacym, jak ten kod napisac.
+RECZNE = sorted(pathlib.Path("agent-v2/dokumentacja-zrodla").glob("rozdzial_*.md"))
+RECZNE += [pathlib.Path("agent-v2/dokumentacja-zrodla/wstep.md"),
+           pathlib.Path("agent-v2/dokumentacja-zrodla/wady.md")]
+sprawdz("rozdzialy reczne istnieja", len(RECZNE) >= 5, len(RECZNE))
+
+# (wzorzec, dlaczego zakazany, gdzie stoi prawda)
+ZAKAZANE = [
+    ('                stages.odczekaj(',
+     "przerwa PO dzialaniu w petli bloku — tak zginely cztery przebiegi",
+     "run.rytm, wolany PRZED dzialaniem"),
+    ('def zostal_czas(na_co: str = "") -> bool:',
+     "sygnatura bez `potrzeba_s` — bez niej rytm nie ma jak zapytac,"
+     " czy przerwa sie zmiesci",
+     "run.py:141"),
+    ("    if zostalo > 0:",
+     "stary warunek: „czy zostala jakakolwiek sekunda\" zamiast"
+     " „czy starczy na to, co za chwile zrobie\"",
+     "run.zostal_czas"),
+    ("tylko przy `--wyslij`",
+     "okladka powstaje w kazdym przebiegu, przed galezia publikacji",
+     "run.py:1134"),
+]
+znalezione = []
+for plik in RECZNE:
+    if not plik.exists():
+        continue
+    tresc = plik.read_text(encoding="utf-8")
+    for wzorzec, powod, prawda in ZAKAZANE:
+        if wzorzec in tresc:
+            znalezione.append("%s -> %r (%s; prawda: %s)"
+                              % (plik.name, wzorzec[:44], powod, prawda))
+sprawdz("zaden rozdzial reczny nie pokazuje zakazanego wzorca",
+        not znalezione, znalezione[:3])
+
+# KONTRDOWOD dla samego testu: wzorce musza byc takie, ktore DA SIE znalezc.
+# Test szukajacy czegos, czego nigdy nie bylo, przechodzi zawsze i nie chroni
+# przed niczym. Sprawdzamy je na tresci, ktora je zawiera.
+udawany = "\n".join(w for w, _, _ in ZAKAZANE)
+zlapane = sum(1 for w, _, _ in ZAKAZANE if w in udawany)
+sprawdz("wykrywacz lapie wszystkie cztery wzorce na probce",
+        zlapane == len(ZAKAZANE), "%d z %d" % (zlapane, len(ZAKAZANE)))
+
+# Sekcja VII jest generowana, wiec TAM te wzorce moga wystapic tylko wtedy,
+# gdy sa w kodzie. Sprawdzamy, ze nie sa.
+run_src = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
+sprawdz("i sam kod ich nie zawiera",
+        "stages.odczekaj(" not in run_src and "if zostalo > 0:" not in run_src)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
