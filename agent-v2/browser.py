@@ -59,6 +59,37 @@ def wlasciwe_konto(page) -> bool:
 DZIENNIK = config.DATA_DIR / "dziennik.jsonl"
 
 
+def dopisz_wynik(rodzaj: str, wynik: dict, **szczegoly) -> None:
+    """Jeden wpis na dzialanie — takze wtedy, gdy sie NIE UDALO, i z powodem.
+
+    DWIE DZIURY NARAZ, obie groznie ciche.
+
+    Pierwsza: wpis do dziennika stal WEWNATRZ `try`, a wyjatek byl lapany
+    nizej. Akcja, ktora wywalila sie bledem, nie zostawiala w dzienniku
+    ZADNEGO sladu — nie wiedzielismy nie tylko dlaczego, ale i ze w ogole
+    byla. Licznik wolumenow liczylby wiec z danych, ktore same gubia porazki.
+
+    Druga: gdy nie znalezlismy przycisku wysylki, kod nie wchodzil w zadna
+    galez i przechodzil dalej w milczeniu. To najczestsza realna awaria przy
+    obcym interfejsie i akurat ona nie zostawiala niczego.
+
+    Zapis jest IDEMPOTENTNY: pierwszy, ktory zdazy, wygrywa. Dzieki temu
+    sciezka sukcesu zapisuje szczegoly, a `finally` domyka tylko te przebiegi,
+    ktore do niej nie doszly.
+    """
+    if wynik.get("_zapisane"):
+        return
+    wynik["_zapisane"] = True
+    udane = bool(wynik.get("wyslane") or wynik.get("zrobione"))
+    if not udane:
+        szczegoly["powod"] = (
+            wynik.get("blad")
+            or ("nie znalazlem przycisku wysylki"
+                if wynik.get("przycisk_widoczny") is False else "")
+            or "Substack nie potwierdzil, ze wyszlo")
+    zapisz_w_dzienniku(rodzaj, udane=udane, **szczegoly)
+
+
 def zapisz_w_dzienniku(rodzaj: str, **szczegoly) -> None:
     """Dziennik DZIALAN, nie wywolan modelu.
 
@@ -969,11 +1000,44 @@ def sluchaj_publikacji(page) -> list[int]:
     o awariach takich agentow zalecal wprost: patrzec na odpowiedz API zapisu,
     a nie na wlasny log sukcesu.
     """
-    kody: list[int] = []
-    page.on("response", lambda r: kody.append(r.status)
+    odpowiedzi: list = []
+    page.on("response", lambda r: odpowiedzi.append(r)
             if "/api/v1/comment/feed" in r.url and r.request.method == "POST"
             else None)
-    return kody
+    return odpowiedzi
+
+
+def id_z_odpowiedzi(odpowiedzi: list) -> str:
+    """Identyfikator notki, ktory Substack oddal przy zapisie.
+
+    BRAKOWALO GO I TO ROZRYWALO POMIAR NA POL. Dziennik zapisywal osobno
+    „wystawilismy notke o trybie samolotowym" i osobno „notka 315733831
+    zebrala trzy polubienia" — bez zadnego pola, po ktorym da sie stwierdzic,
+    czy to ta sama. Wiedzielismy, ze publikujemy, i nie wiedzielismy, co
+    z tego dziala.
+
+    Bralismy z odpowiedzi WYLACZNIE kod HTTP, a tresc — z identyfikatorem
+    utworzonej notki — szla do kosza.
+
+    Ciala odpowiedzi czytamy DOPIERO TU, po klknieciu i odczekaniu, a nie
+    w callbacku zdarzenia: w callbacku tresc bywa jeszcze niedostepna i
+    czytanie jej potrafi rzucic. Brak identyfikatora nie jest bledem —
+    notka wyszla albo nie wyszla niezaleznie od tego, czy umiemy ja pozniej
+    odnalezc.
+    """
+    for r in odpowiedzi:
+        try:
+            if r.status != 200:
+                continue
+            dane = r.json()
+        except Exception:
+            continue
+        # Ksztalt odpowiedzi nie jest przez nikogo obiecany, wiec sprawdzamy
+        # kilka miejsc zamiast zakladac jedno.
+        for wezel in (dane, (dane or {}).get("comment"), (dane or {}).get("item")):
+            if isinstance(wezel, dict) and wezel.get("id") is not None:
+                return str(wezel["id"])
+    return ""
 
 
 def potwierdz_notke(page, tekst: str, prob: int = 4) -> bool:
@@ -1041,7 +1105,12 @@ def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
                 page.wait_for_timeout(
                     int(random.uniform(*config.ODSTEPY["lajk"]) * 1000))
             except Exception as exc:
+                # POLKNIETA PORAZKA. Szlo do logu i nigdzie indziej, wiec
+                # dziennik pokazywal same udane polubienia — a przy 67%
+                # realizacji normy pytanie brzmi wlasnie „co sie nie udalo".
+                powod = f"{type(exc).__name__}: {exc}"[:140]
                 print(f"    (pominiete: {type(exc).__name__})", flush=True)
+                zapisz_w_dzienniku("polubienie", udane=False, powod=powod)
         if not wyslij:
             print(f"  (nie klikam — tryb sprawdzenia; kliknalbym"
                   f" {wynik['polubione']})", flush=True)
@@ -1093,7 +1162,7 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
             page.wait_for_timeout(5000)
             # Po kliknieciu napis zmienia sie na stan przeciwny.
             wynik["zrobione"] = k.count() == 0 or not k.is_visible()
-            zapisz_w_dzienniku(rodzaj, udane=wynik["zrobione"], komu=handle)
+            dopisz_wynik(rodzaj, wynik, komu=handle)
             print("  ZROBIONE" if wynik["zrobione"]
                   else "  KLIKNIETE, ALE STAN SIE NIE ZMIENIL", flush=True)
             return wynik
@@ -1456,7 +1525,7 @@ def wystaw_odpowiedz_pod_artykulem(
             wyslac.click()
             page.wait_for_timeout(8000)
             wynik["wyslane"] = potwierdz_komentarz(page, url_artykulu, tekst)
-            zapisz_w_dzienniku("odpowiedz_pod_artykulem", udane=wynik["wyslane"],
+            dopisz_wynik("odpowiedz_pod_artykulem", wynik,
                                gdzie=url_artykulu, komu=autor,
                                slow=len(tekst.split()), tekst=tekst[:300])
             print("  ODPOWIEDŹ POD ARTYKUŁEM POTWIERDZONA" if wynik["wyslane"]
@@ -1549,7 +1618,7 @@ def wystaw_artykul(
             publikuj.click()
             page.wait_for_timeout(15000)
             wynik["wyslane"] = potwierdz_artykul(page, artykul["tytul"])
-            zapisz_w_dzienniku("artykul", udane=wynik["wyslane"],
+            dopisz_wynik("artykul", wynik,
                                tytul=artykul["tytul"])
             print("  ARTYKUŁ POTWIERDZONY U SUBSTACKA" if wynik["wyslane"]
                   else "  KLIKNIĘTE, ALE SUBSTACK GO NIE POKAZUJE", flush=True)
@@ -1657,7 +1726,7 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
             przycisk.click()
             page.wait_for_timeout(6000)
             wynik["wyslane"] = potwierdz_odpowiedz(page, note_id, tekst)
-            zapisz_w_dzienniku("odpowiedz", udane=wynik["wyslane"],
+            dopisz_wynik("odpowiedz", wynik,
                                gdzie=f"note/c-{note_id}",
                                slow=len(tekst.split()), tekst=tekst[:300],
                                **(kontekst or {}))
@@ -1747,9 +1816,10 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
         print(f"  przycisk wysyłki widoczny: {wynik['przycisk_widoczny']}", flush=True)
 
         if wyslij and wynik["przycisk_widoczny"]:
-            kody = sluchaj_publikacji(page)
+            odpowiedzi = sluchaj_publikacji(page)
             przycisk.click()
             page.wait_for_timeout(6000)
+            kody = [r.status for r in odpowiedzi]
             # Najpierw pytamy o odpowiedz Substacka na sam zapis — jest
             # natychmiastowa. Kanal profilu sprawdzamy tylko wtedy, gdy
             # odpowiedzi nie zlapalismy.
@@ -1761,14 +1831,24 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
                 print("  NOTKA POTWIERDZONA NA PROFILU" if wynik["wyslane"]
                       else f"  NIE WYSZLA (odpowiedzi: {kody or 'brak'})",
                       flush=True)
-            zapisz_w_dzienniku("notka", udane=wynik["wyslane"],
-                               slow=len(tekst.split()), tekst=tekst[:300])
+            wynik["id"] = id_z_odpowiedzi(odpowiedzi)
+            if wynik["wyslane"]:
+                print("  id notki: %s" % (wynik["id"] or
+                      "NIE ODCZYTANY — reakcji nie da sie z nia polaczyc"),
+                      flush=True)
+            dopisz_wynik("notka", wynik, slow=len(tekst.split()),
+                         tekst=tekst[:300], id=wynik["id"])
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
     except Exception as exc:
         wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
+        # DOMKNIECIE: jesli sciezka sukcesu nie zdazyla zapisac — bo wyjatek
+        # albo bo nie bylo przycisku — porazka i tak trafia do dziennika.
+        if wyslij:
+            dopisz_wynik("notka", wynik, slow=len(tekst.split()),
+                         tekst=tekst[:300], id=wynik.get("id", ""))
         page.close()
         browser.close()
         p.stop()
@@ -2088,7 +2168,7 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
             nasz_numer = potwierdz_komentarz(page, url, tekst)
             wynik["wyslane"] = nasz_numer is not None
             wynik["id"] = nasz_numer
-            zapisz_w_dzienniku("komentarz", udane=wynik["wyslane"], gdzie=url,
+            dopisz_wynik("komentarz", wynik, gdzie=url,
                                slow=len(tekst.split()), tekst=tekst[:300],
                                nasz_id=nasz_numer, **(kontekst or {}))
             print("  KOMENTARZ POTWIERDZONY U SUBSTACKA" if wynik["wyslane"]
@@ -2255,8 +2335,15 @@ def restackuj_w_kanale(
                                    komu=notka.get("autor", ""), slow=len(zdanie.split()))
                 print(f"    podane dalej {wynik['restackowane']}/{ile}", flush=True)
             except Exception as exc:
+                # Tak samo jak przy polubieniach: porazka szla do logu i nigdzie
+                # indziej. Restacki chodza na 33% normy — bez tego wpisu nie ma
+                # jak stwierdzic, czy to brak kandydatow w kanale, czy zmieniony
+                # interfejs Substacka.
+                powod = f"{type(exc).__name__}: {exc}"[:140]
                 print(f"    (pominiete: {type(exc).__name__}: {exc}"[:150] + ")",
                       flush=True)
+                zapisz_w_dzienniku("restack", udane=False, powod=powod,
+                                   komu=notka.get("autor", ""))
                 try:
                     page.keyboard.press("Escape")
                     page.wait_for_timeout(600)

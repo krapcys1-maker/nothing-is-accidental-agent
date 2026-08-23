@@ -1192,6 +1192,35 @@ KOMENTARZE_DZIENNIE = (8, 12)     # 0 jest dozwolone: milczenie bije slaby komen
 # miesiecznie z konta, ktore ma dwa tygodnie, wygladaja jak zbieranie nazwisk.
 FOLLOW_MIESIECZNIE = (20, 30)     # obserwowanie to czytanie, nie zbieranie
 SUBSKRYPCJE_MIESIECZNIE = (6, 12)  # laduje w skrzynce wlasciciela, wiec waskie
+
+
+def normy_dzienne() -> dict[str, float]:
+    """Ile czego POWINNO wychodzic dziennie — srodek widelek.
+
+    Liczone z tych samych stalych, ktore rozdzielaja budzet, zeby nie powstala
+    druga lista liczb do rozjechania. Klucze sa takie, jak `rodzaj` w dzienniku
+    dzialan — inaczej licznik porownywalby normy z niczym.
+
+    PO CO. Przez osiem dni agent wystawil 23 notki przy normie 5 dziennie,
+    czyli 58 procent, komentarzy 55, restackow 33 — i nikt tego nie wiedzial,
+    bo nikt nie liczyl. Licznik `zrobione` zyl w pamieci jednego przebiegu,
+    drukowal sie na koncu i ginal. Norma bez pomiaru jest zyczeniem.
+    """
+    return {
+        "notka": float(len(NOTE_MIX_OTHER_DAY)),
+        "polubienie": sum(LAJKI_DZIENNIE) / 2,
+        "komentarz": sum(KOMENTARZE_DZIENNIE) / 2,
+        "restack": sum(RESTACK_DZIENNIE) / 2,
+        "subskrypcja": sum(SUBSKRYPCJE_MIESIECZNIE) / 2 / 30,
+        "follow": sum(FOLLOW_MIESIECZNIE) / 2 / 30,
+    }
+
+
+# Ponizej ilu procent normy uznajemy, ze cos jest zepsute, a nie po prostu
+# chudsze. Prog jest niski celowo: budzety sa LOSOWANE z widelek i dzielone
+# na przebiegi, wiec wahania rzedu kilkunastu procent to normalna praca.
+# Polowa normy utrzymujaca sie przez tydzien to juz nie wahanie.
+PROG_ALARMU_WOLUMENU = 60
 # ODBLOKOWANE decyzja wlasciciela 2026-08-19. Restack cudzej notki z wlasnym
 # zdaniem trafia do kanalu NASZYCH obserwujacych, powiadamia autora oryginalu
 # i stawia nasze zdanie obok jego — za cene jednego zdania, nie calej notki.

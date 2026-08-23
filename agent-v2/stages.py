@@ -527,20 +527,41 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
     które nagle obserwuje dwadzieścia osób, wygląda dokładnie jak farma.
     """
     import random
+    from datetime import datetime, timezone
 
     rozbieg = _wiek_konta_w_dniach(conn) < config.ROZBIEG_DNI
+
+    # LOSUJEMY RAZ NA DOBE, NIE RAZ NA PRZEBIEG.
+    #
+    # Ziarno bierze sie z daty, wiec wszystkie przebiegi tego samego dnia
+    # licza TEN SAM budzet, a kazdy kolejny dzien inny. Bez pliku, bez tabeli,
+    # bez stanu do odtwarzania po awarii — data jest wszystkim, czego trzeba.
+    #
+    # Dotad kazdy przebieg losowal osobno i dzielil wynik przez liczbe
+    # pozostalych przebiegow. Przy malych widelkach to zjadalo cala reszte:
+    # budzet 1 restack podzielony na trzy przebiegi daje zero, zero i jeden —
+    # i tak samo nastepnego dnia. Zmierzone na dzienniku: restacki wychodzily
+    # 1, 1, 1, 1, odchylenie standardowe ZERO. Dzien po dniu ta sama liczba
+    # to jest dokladnie ten podpis maszyny, ktorego unikamy.
+    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    los = random.Random("%s|nia-budzet-dnia" % dzis)
 
     def losuj(widelki: tuple[int, int]) -> int:
         dol, gora = widelki
         if rozbieg:
-            gora = dol + (gora - dol) // 2
-        return random.randint(dol, gora)
+            # ROZBIEG MA OBNIZAC SREDNIA, NIE ZABIJAC LOSOWANIE.
+            # Bylo `gora = dol + (gora - dol) // 2` i przy widelkach szerokosci
+            # jeden — (1, 2) dla restackow — dawalo to `1 + 0 = 1`, czyli
+            # randint(1, 1). Kazde waskie widelki byly w rozbiegu STALA.
+            polowa = dol + (gora - dol) // 2
+            gora = min(gora, max(polowa, dol + 1)) if gora > dol else gora
+        return los.randint(dol, gora)
 
     # Miesięczne przeliczamy na dzień, żeby wszystko było jedną walutą; ułamek
     # rozstrzyga losowanie, więc w skali miesiąca wychodzi zadana liczba.
     def z_miesiaca(widelki: tuple[int, int]) -> int:
         dziennie = losuj(widelki) / 30.0
-        return int(dziennie) + (1 if random.random() < dziennie % 1 else 0)
+        return int(dziennie) + (1 if los.random() < dziennie % 1 else 0)
 
     budzet = {
         # Notki nie sa losowane: rozklad tygodnia ma ich piec na dzien i to jest
@@ -1974,6 +1995,106 @@ def feasibility(
     if not isinstance(assessments, list) or not assessments:
         raise ValueError(f"odsiew nie zwrócił ocen: {text[:300]!r}")
     return assessments
+
+
+def podsumowanie_dzialan(dni: int = 7) -> dict[str, dict[str, float]]:
+    """Ile czego WYSZLO w ostatnich `dni` dniach, wobec normy z configu.
+
+    Dziennik dzialan zapisywal wszystko od poczatku i nikt tego nie czytal.
+    Licznik `zrobione` w run.py zyl w pamieci jednego przebiegu, drukowal sie
+    na koncu i ginal — wiec na pytanie „czy agent w ogole komentuje" nie bylo
+    odpowiedzi inaczej niz przez reczne grepowanie pliku.
+
+    Zmierzone przy pisaniu tej funkcji, osiem dni: notki 58% normy, komentarze
+    55%, polubienia 67%, restacki 33%. Norma bez pomiaru jest zyczeniem.
+
+    Zwraca slownik rodzaj -> {udane, nieudane, na_dzien, norma, realizacja}.
+    Rodzaje BEZ normy tez sa liczone (odpowiedzi, artykuly) — one nie maja
+    dziennego kontraktu, ale ich nagly zanik tez chcemy zobaczyc.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    plik = config.DATA_DIR / "dziennik.jsonl"
+    granica = (datetime.now(timezone.utc) - timedelta(days=dni)).isoformat()
+    udane: dict[str, int] = {}
+    nieudane: dict[str, int] = {}
+    try:
+        for linia in plik.read_text(encoding="utf-8").splitlines():
+            linia = linia.strip()
+            if not linia:
+                continue
+            try:
+                w = json.loads(linia)
+            except ValueError:
+                continue
+            if not isinstance(w, dict):
+                continue
+            rodzaj = str(w.get("rodzaj") or "")
+            # `skutek` to reakcje CUDZE, nie nasze dzialania — liczenie ich
+            # razem z notkami dalo by licznik, ktory rosnie, gdy ktos nas lubi.
+            if not rodzaj or rodzaj == "skutek":
+                continue
+            if str(w.get("kiedy") or "") < granica:
+                continue
+            (udane if w.get("udane") else nieudane)[rodzaj] = \
+                (udane if w.get("udane") else nieudane).get(rodzaj, 0) + 1
+    except OSError:
+        return {}
+
+    normy = config.normy_dzienne()
+    wynik: dict[str, dict[str, float]] = {}
+    for rodzaj in sorted(set(udane) | set(nieudane) | set(normy)):
+        u = udane.get(rodzaj, 0)
+        na_dzien = u / max(1, dni)
+        norma = normy.get(rodzaj)
+        wynik[rodzaj] = {
+            "udane": u,
+            "nieudane": nieudane.get(rodzaj, 0),
+            "na_dzien": round(na_dzien, 2),
+            "norma": norma if norma is not None else 0.0,
+            "realizacja": round(100 * na_dzien / norma) if norma else None,
+        }
+    return wynik
+
+
+def powody_porazek(dni: int = 7) -> list[tuple[str, str, int]]:
+    """Dlaczego dzialania sie NIE UDALY — pogrupowane, najczestsze pierwsze.
+
+    Sam licznik mowi „3 nieudane komentarze" i na tym konczy pomoc. Pytanie
+    brzmi „dlaczego", a odpowiedz do niedawna nie istniala: porazki albo szly
+    tylko do logu przebiegu (polubienia, restacki), albo nie zostawialy sladu
+    w ogole, bo zapis do dziennika stal wewnatrz `try`, a wyjatek byl lapany
+    nizej.
+
+    Zwraca (rodzaj, powod, ile). Powod jest skracany do samej klasy bledu tam,
+    gdzie da sie to zrobic — inaczej kazdy timeout z innym adresem byl by
+    osobna pozycja i lista przestalaby cokolwiek grupowac.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    plik = config.DATA_DIR / "dziennik.jsonl"
+    granica = (datetime.now(timezone.utc) - timedelta(days=dni)).isoformat()
+    licz: dict[tuple[str, str], int] = {}
+    try:
+        for linia in plik.read_text(encoding="utf-8").splitlines():
+            linia = linia.strip()
+            if not linia:
+                continue
+            try:
+                w = json.loads(linia)
+            except ValueError:
+                continue
+            if (not isinstance(w, dict) or w.get("udane")
+                    or w.get("rodzaj") == "skutek"
+                    or str(w.get("kiedy") or "") < granica):
+                continue
+            powod = str(w.get("powod") or "nie zapisano powodu")
+            klucz = (str(w.get("rodzaj") or "?"), powod.split(":")[0][:60])
+            licz[klucz] = licz.get(klucz, 0) + 1
+    except OSError:
+        return []
+    return sorted(((r, p, n) for (r, p), n in licz.items()),
+                  key=lambda x: -x[2])
 
 
 def _powod_przegranej(klucz_zwyciezcy, klucz_tematu) -> str:

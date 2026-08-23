@@ -278,6 +278,38 @@ def koszt() -> str | None:
     return None
 
 
+def wolumeny() -> str | None:
+    """Czy agent robi tyle, ile deklaruje — czy tylko wyglada, ze robi.
+
+    NAJTRUDNIEJSZA DO ZAUWAZENIA KLASA AWARII: nic sie nie wywala, log wyglada
+    normalnie, przebieg konczy sie `DONE`, a polowa dzialan nie wychodzi.
+    Zmierzone przy pisaniu tej kontroli, osiem dni produkcji: notki 58% normy,
+    komentarze 55%, restacki 33%. Nikt tego nie wiedzial przez dwa tygodnie,
+    bo licznik zyl w pamieci jednego przebiegu i ginal razem z nim.
+
+    Prog jest niski celowo. Budzety sa LOSOWANE z widelek i dzielone na
+    przebiegi, wiec wahania kilkunastoprocentowe to normalna praca. Polowa
+    normy utrzymujaca sie przez tydzien to nie wahanie, tylko usterka.
+    """
+    import stages
+
+    dane = stages.podsumowanie_dzialan(7)
+    if not dane:
+        return None
+    slabe = [(r, d) for r, d in dane.items()
+             if d["realizacja"] is not None
+             and d["realizacja"] < config.PROG_ALARMU_WOLUMENU]
+    if not slabe:
+        return None
+    slabe.sort(key=lambda x: x[1]["realizacja"])
+    opis = ", ".join("%s %d%% (%d z ~%d)"
+                     % (r, d["realizacja"], d["udane"], round(d["norma"] * 7))
+                     for r, d in slabe)
+    return ("Przez ostatnie 7 dni agent zrobil znacznie mniej, niz deklaruje: "
+            + opis + ". Nic sie nie wywalilo — to jest ta awaria, ktorej nie "
+            "widac w logu.")
+
+
 def powtorki() -> str | None:
     """Czy agent nie zaczal pisac wciaz tego samego.
 
@@ -349,9 +381,34 @@ def sprawdz_wszystko() -> list[str]:
         ("nadaktywnosc", "Agent robi za duzo", nadaktywnosc),
         ("koszt", "Koszt blisko sufitu", koszt),
         ("powtorki", "Agent sie powtarza", powtorki),
+        ("wolumeny", "Agent robi mniej, niz deklaruje", wolumeny),
         ("kopia-subskrybentow", "BRAK KOPII LISTY SUBSKRYBENTOW",
          kopia_subskrybentow),
     )
+    # TABELA WOLUMENOW DRUKOWANA ZAWSZE, nie tylko gdy cos jest nie tak.
+    # Alarm ma odpowiadac na pytanie „ile wyszlo", a nie tylko krzyczec, gdy
+    # jest zle — inaczej cisza znaczy „albo dobrze, albo kontrola nie dziala".
+    try:
+        import stages
+
+        dane = stages.podsumowanie_dzialan(7)
+        if dane:
+            print("--- co wyszlo przez 7 dni ---")
+            for rodzaj, d in dane.items():
+                norma = ("  norma ~%.1f/dzien -> %s%%"
+                         % (d["norma"], d["realizacja"])) if d["realizacja"] is not None else ""
+                nieud = ("  nieudanych %d" % d["nieudane"]) if d["nieudane"] else ""
+                print("  %-12s %4d   %.2f/dzien%s%s"
+                      % (rodzaj, d["udane"], d["na_dzien"], norma, nieud))
+            powody = stages.powody_porazek(7)
+            if powody:
+                print("--- dlaczego sie nie udalo ---")
+                for rodzaj, powod, ile in powody[:8]:
+                    print("  %-12s %3dx  %s" % (rodzaj, ile, powod))
+            print()
+    except Exception as exc:
+        print("  (nie policzylem wolumenow: %s)" % type(exc).__name__)
+
     znalezione: list[str] = []
     for klucz, temat, funkcja in kontrole:
         try:

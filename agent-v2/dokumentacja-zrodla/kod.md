@@ -851,20 +851,41 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
     które nagle obserwuje dwadzieścia osób, wygląda dokładnie jak farma.
     """
     import random
+    from datetime import datetime, timezone
 
     rozbieg = _wiek_konta_w_dniach(conn) < config.ROZBIEG_DNI
+
+    # LOSUJEMY RAZ NA DOBE, NIE RAZ NA PRZEBIEG.
+    #
+    # Ziarno bierze sie z daty, wiec wszystkie przebiegi tego samego dnia
+    # licza TEN SAM budzet, a kazdy kolejny dzien inny. Bez pliku, bez tabeli,
+    # bez stanu do odtwarzania po awarii — data jest wszystkim, czego trzeba.
+    #
+    # Dotad kazdy przebieg losowal osobno i dzielil wynik przez liczbe
+    # pozostalych przebiegow. Przy malych widelkach to zjadalo cala reszte:
+    # budzet 1 restack podzielony na trzy przebiegi daje zero, zero i jeden —
+    # i tak samo nastepnego dnia. Zmierzone na dzienniku: restacki wychodzily
+    # 1, 1, 1, 1, odchylenie standardowe ZERO. Dzien po dniu ta sama liczba
+    # to jest dokladnie ten podpis maszyny, ktorego unikamy.
+    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    los = random.Random("%s|nia-budzet-dnia" % dzis)
 
     def losuj(widelki: tuple[int, int]) -> int:
         dol, gora = widelki
         if rozbieg:
-            gora = dol + (gora - dol) // 2
-        return random.randint(dol, gora)
+            # ROZBIEG MA OBNIZAC SREDNIA, NIE ZABIJAC LOSOWANIE.
+            # Bylo `gora = dol + (gora - dol) // 2` i przy widelkach szerokosci
+            # jeden — (1, 2) dla restackow — dawalo to `1 + 0 = 1`, czyli
+            # randint(1, 1). Kazde waskie widelki byly w rozbiegu STALA.
+            polowa = dol + (gora - dol) // 2
+            gora = min(gora, max(polowa, dol + 1)) if gora > dol else gora
+        return los.randint(dol, gora)
 
     # Miesięczne przeliczamy na dzień, żeby wszystko było jedną walutą; ułamek
     # rozstrzyga losowanie, więc w skali miesiąca wychodzi zadana liczba.
     def z_miesiaca(widelki: tuple[int, int]) -> int:
         dziennie = losuj(widelki) / 30.0
-        return int(dziennie) + (1 if random.random() < dziennie % 1 else 0)
+        return int(dziennie) + (1 if los.random() < dziennie % 1 else 0)
 
     budzet = {
         # Notki nie sa losowane: rozklad tygodnia ma ich piec na dzien i to jest
@@ -1467,7 +1488,7 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
             page.wait_for_timeout(5000)
             # Po kliknieciu napis zmienia sie na stan przeciwny.
             wynik["zrobione"] = k.count() == 0 or not k.is_visible()
-            zapisz_w_dzienniku(rodzaj, udane=wynik["zrobione"], komu=handle)
+            dopisz_wynik(rodzaj, wynik, komu=handle)
             print("  ZROBIONE" if wynik["zrobione"]
                   else "  KLIKNIETE, ALE STAN SIE NIE ZMIENIL", flush=True)
             return wynik
@@ -1586,8 +1607,15 @@ def restackuj_w_kanale(
                                    komu=notka.get("autor", ""), slow=len(zdanie.split()))
                 print(f"    podane dalej {wynik['restackowane']}/{ile}", flush=True)
             except Exception as exc:
+                # Tak samo jak przy polubieniach: porazka szla do logu i nigdzie
+                # indziej. Restacki chodza na 33% normy — bez tego wpisu nie ma
+                # jak stwierdzic, czy to brak kandydatow w kanale, czy zmieniony
+                # interfejs Substacka.
+                powod = f"{type(exc).__name__}: {exc}"[:140]
                 print(f"    (pominiete: {type(exc).__name__}: {exc}"[:150] + ")",
                       flush=True)
+                zapisz_w_dzienniku("restack", udane=False, powod=powod,
+                                   komu=notka.get("autor", ""))
                 try:
                     page.keyboard.press("Escape")
                     page.wait_for_timeout(600)

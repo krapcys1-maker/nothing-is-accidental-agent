@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **11 plików**, 10 713 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **11 plików**, 11 007 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 42 zestawów
-testów, 1051 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 43 zestawów
+testów, 1107 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-3163 wierszy, 75 funkcji na poziomie modułu, 0 klas
+3284 wierszy, 77 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -217,6 +217,8 @@ wiec nie da sie go rozjechac z kodem.
 | `hosty_ktore_nigdy_nie_dzialaly(conn, min_prob)` | Hosty, ktore probowalismy >=2 razy i ANI RAZU sie nie udalo. |
 | `discovery(conn, run_id, question, recent_domains)` | Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy). |
 | `feasibility(conn, run_id, topics)` | Etap 2 — tani odsiew przed drogą dyskoverią (DeepSeek). |
+| `podsumowanie_dzialan(dni)` | Ile czego WYSZLO w ostatnich `dni` dniach, wobec normy z configu. |
+| `powody_porazek(dni)` | Dlaczego dzialania sie NIE UDALY — pogrupowane, najczestsze pierwsze. |
 | `_powod_przegranej(klucz_zwyciezcy, klucz_tematu)` *(wewn.)* | Ktory skladnik klucza sortowania ROZSTRZYGNAL, i jakimi wartosciami. |
 | `zapisz_przegranych(przegrani, run_id)` | Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej. |
 | `pick_topic(topics, assessments, run_id)` | Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel. |
@@ -246,11 +248,12 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2305 wierszy, 51 funkcji na poziomie modułu, 0 klas
+2392 wierszy, 53 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `wlasciwe_konto(page)` | Czy jestesmy na WLASCIWYM koncie tuz przed publikacja. |
+| `dopisz_wynik(rodzaj, wynik, **szczegoly)` | Jeden wpis na dzialanie — takze wtedy, gdy sie NIE UDALO, i z powodem. |
 | `zapisz_w_dzienniku(rodzaj, **szczegoly)` | Dziennik DZIALAN, nie wywolan modelu. |
 | `z_dziennika_dzis()` | Ile komentarzy i polubien poszlo dzis — wedlug naszego zapisu. |
 | `naprawde_wyslac(wyslij, co)` | Ostatnie sito przed KAZDYM dzialaniem widocznym publicznie. |
@@ -274,6 +277,7 @@ wiec nie da sie go rozjechac z kodem.
 | `komentarze_pod_artykulami(ile)` | Cudze komentarze pod NASZYMI artykulami, na ktore nie odpisalismy. |
 | `nieodpowiedziane(ile)` | Cudze odpowiedzi pod naszymi notkami, na które jeszcze nie odpisaliśmy. |
 | `sluchaj_publikacji(page)` | Zbiera kody odpowiedzi na zapytania PUBLIKUJACE. |
+| `id_z_odpowiedzi(odpowiedzi)` | Identyfikator notki, ktory Substack oddal przy zapisie. |
 | `potwierdz_notke(page, tekst, prob)` | Pyta Substacka, czy notka naprawdę wisi na naszym profilu. |
 | `polub_w_kanale(ile, wyslij)` | Polubienia w kanale czytelnika. |
 | `_klik_na_profilu(handle, napisy, rodzaj, wyslij)` *(wewn.)* | Klika JEDEN konkretny przycisk na cudzym profilu — i tylko jego. |
@@ -378,7 +382,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-559 wierszy, 18 funkcji na poziomie modułu, 0 klas
+616 wierszy, 19 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -395,6 +399,7 @@ wiec nie da sie go rozjechac z kodem.
 | `dysk()` | — |
 | `nadaktywnosc()` | Czy agent nie zapetlil sie i nie zasypuje Substacka. |
 | `koszt()` | Czy zblizamy sie do sufitu — dziennego ALBO miesiecznego. |
+| `wolumeny()` | Czy agent robi tyle, ile deklaruje — czy tylko wyglada, ze robi. |
 | `powtorki()` | Czy agent nie zaczal pisac wciaz tego samego. |
 | `kopia_subskrybentow()` | Czy istnieje AKTUALNA kopia listy subskrybentow. |
 | `sprawdz_wszystko()` | Uruchamia komplet kontroli i alarmuje o tym, co znalazl. |
@@ -426,7 +431,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-1649 wierszy, 18 funkcji na poziomie modułu, 0 klas
+1678 wierszy, 19 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -441,6 +446,7 @@ wiec nie da sie go rozjechac z kodem.
 | `losowa_postawa()` | Ktora postawa dla TEGO komentarza. Wagi, nie rownomiernie. |
 | `losowe_otwarcie()` | — |
 | `losowa_dlugosc()` | Ile slow ma miec ta konkretna wypowiedz. |
+| `normy_dzienne()` | Ile czego POWINNO wychodzic dziennie — srodek widelek. |
 | `_cisza_z_hasza(dzien)` *(wewn.)* | — |
 | `cichy_dzien(kiedy)` | Czy dzis nie nadajemy. Ta sama odpowiedz przez caly dzien. |
 | `timeout_for(max_tokens)` | Termin w sekundach, który realnie pokrywa podany sufit tokenów. |
@@ -6797,20 +6803,41 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
     które nagle obserwuje dwadzieścia osób, wygląda dokładnie jak farma.
     """
     import random
+    from datetime import datetime, timezone
 
     rozbieg = _wiek_konta_w_dniach(conn) < config.ROZBIEG_DNI
+
+    # LOSUJEMY RAZ NA DOBE, NIE RAZ NA PRZEBIEG.
+    #
+    # Ziarno bierze sie z daty, wiec wszystkie przebiegi tego samego dnia
+    # licza TEN SAM budzet, a kazdy kolejny dzien inny. Bez pliku, bez tabeli,
+    # bez stanu do odtwarzania po awarii — data jest wszystkim, czego trzeba.
+    #
+    # Dotad kazdy przebieg losowal osobno i dzielil wynik przez liczbe
+    # pozostalych przebiegow. Przy malych widelkach to zjadalo cala reszte:
+    # budzet 1 restack podzielony na trzy przebiegi daje zero, zero i jeden —
+    # i tak samo nastepnego dnia. Zmierzone na dzienniku: restacki wychodzily
+    # 1, 1, 1, 1, odchylenie standardowe ZERO. Dzien po dniu ta sama liczba
+    # to jest dokladnie ten podpis maszyny, ktorego unikamy.
+    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    los = random.Random("%s|nia-budzet-dnia" % dzis)
 
     def losuj(widelki: tuple[int, int]) -> int:
         dol, gora = widelki
         if rozbieg:
-            gora = dol + (gora - dol) // 2
-        return random.randint(dol, gora)
+            # ROZBIEG MA OBNIZAC SREDNIA, NIE ZABIJAC LOSOWANIE.
+            # Bylo `gora = dol + (gora - dol) // 2` i przy widelkach szerokosci
+            # jeden — (1, 2) dla restackow — dawalo to `1 + 0 = 1`, czyli
+            # randint(1, 1). Kazde waskie widelki byly w rozbiegu STALA.
+            polowa = dol + (gora - dol) // 2
+            gora = min(gora, max(polowa, dol + 1)) if gora > dol else gora
+        return los.randint(dol, gora)
 
     # Miesięczne przeliczamy na dzień, żeby wszystko było jedną walutą; ułamek
     # rozstrzyga losowanie, więc w skali miesiąca wychodzi zadana liczba.
     def z_miesiaca(widelki: tuple[int, int]) -> int:
         dziennie = losuj(widelki) / 30.0
-        return int(dziennie) + (1 if random.random() < dziennie % 1 else 0)
+        return int(dziennie) + (1 if los.random() < dziennie % 1 else 0)
 
     budzet = {
         # Notki nie sa losowane: rozklad tygodnia ma ich piec na dzien i to jest
@@ -7413,7 +7440,7 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
             page.wait_for_timeout(5000)
             # Po kliknieciu napis zmienia sie na stan przeciwny.
             wynik["zrobione"] = k.count() == 0 or not k.is_visible()
-            zapisz_w_dzienniku(rodzaj, udane=wynik["zrobione"], komu=handle)
+            dopisz_wynik(rodzaj, wynik, komu=handle)
             print("  ZROBIONE" if wynik["zrobione"]
                   else "  KLIKNIETE, ALE STAN SIE NIE ZMIENIL", flush=True)
             return wynik
@@ -7532,8 +7559,15 @@ def restackuj_w_kanale(
                                    komu=notka.get("autor", ""), slow=len(zdanie.split()))
                 print(f"    podane dalej {wynik['restackowane']}/{ile}", flush=True)
             except Exception as exc:
+                # Tak samo jak przy polubieniach: porazka szla do logu i nigdzie
+                # indziej. Restacki chodza na 33% normy — bez tego wpisu nie ma
+                # jak stwierdzic, czy to brak kandydatow w kanale, czy zmieniony
+                # interfejs Substacka.
+                powod = f"{type(exc).__name__}: {exc}"[:140]
                 print(f"    (pominiete: {type(exc).__name__}: {exc}"[:150] + ")",
                       flush=True)
+                zapisz_w_dzienniku("restack", udane=False, powod=powod,
+                                   komu=notka.get("autor", ""))
                 try:
                     page.keyboard.press("Escape")
                     page.wait_for_timeout(600)
@@ -10401,6 +10435,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `KOMENTARZE_DZIENNIE` | `(8, 12)` | Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo k |
 | `FOLLOW_MIESIECZNIE` | `(20, 30)` | Obserwacje wykonywaly sie ZERO razy przez piec dni przy budzecie 30-44 miesiecznie. Przyczyna nie byla w liczbie, tylko w kolejnosci blokow  |
 | `SUBSKRYPCJE_MIESIECZNIE` | `(6, 12)` | — |
+| `PROG_ALARMU_WOLUMENU` | `60` | Ponizej ilu procent normy uznajemy, ze cos jest zepsute, a nie po prostu chudsze. Prog jest niski celowo: budzety sa LOSOWANE z widelek i dz |
 | `CICHY_DZIEN_NA_ILE` | `8` | ODBLOKOWANE decyzja wlasciciela 2026-08-19. Restack cudzej notki z wlasnym zdaniem trafia do kanalu NASZYCH obserwujacych, powiadamia autora |
 | `CICHE_DNI_WLACZONE` | `True` | — |
 | `RESTACK_DZIENNIE` | `(1, 2)` | Zjechane z 2-4 na 1-2 (2026-08-20). Restack stawia NASZE nazwisko obok cudzego tekstu — to najmocniejszy gest w calym repertuarze i jedyny,  |
