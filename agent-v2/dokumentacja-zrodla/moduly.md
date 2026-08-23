@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-3043 wierszy, 73 funkcji na poziomie modułu, 0 klas
+3072 wierszy, 73 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -259,12 +259,13 @@
 
 ### `style.py` — korpus stylu dla pisarza
 
-106 wierszy, 5 funkcji na poziomie modułu, 1 klas
+127 wierszy, 6 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
 | `_sha256(text)` *(wewn.)* | — |
 | `split_paragraphs(raw)` | Deterministyczny podział na akapity; styl końca linii nie zmienia numeracji. |
+| `bajty_kanoniczne(raw)` | Bajty korpusu niezależne od tego, jak git zmaterializował plik. |
 | `load_examples()` | Zwraca zatwierdzone fragmenty stylu albo rzuca, jeśli korpus się nie zgadza. |
 | `load_profiles()` | Profil pozytywny i negatywny stylu artykułu. |
 | `corpus_words()` | Wszystkie słowa korpusu — podłoga porównuje tekst z korpusem, nie z alfabetem. |

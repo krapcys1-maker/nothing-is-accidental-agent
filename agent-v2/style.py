@@ -43,9 +43,30 @@ def _sha256(text: str) -> str:
 
 def split_paragraphs(raw: bytes) -> tuple[str, ...]:
     """Deterministyczny podział na akapity; styl końca linii nie zmienia numeracji."""
-    normalized = raw.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    normalized = bajty_kanoniczne(raw).decode("utf-8")
     blocks = [block.strip() for block in normalized.split("\n\n")]
     return tuple(block for block in blocks if block)
+
+
+def bajty_kanoniczne(raw: bytes) -> bytes:
+    """Bajty korpusu niezależne od tego, jak git zmaterializował plik.
+
+    Pin dotyczy TREŚCI, nie ustawienia `core.autocrlf` konkretnej maszyny.
+    Na Windowsie ten sam tekst wychodzi z checkoutu z CRLF i daje inny skrót —
+    a `split_paragraphs` tuż niżej i tak normalizuje końce linii, mówiąc wprost
+    „styl końca linii nie zmienia numeracji". Plik przeczył więc sam sobie:
+    dwa wiersze niżej końce linii były bez znaczenia, a przy skrócie
+    rozstrzygały o tym, czy pisarz w ogóle ruszy.
+
+    KOSZTOWAŁO TO OPŁACONY RESEARCH. Przebieg 13 (18 sierpnia) stoi w bazie
+    produkcyjnej jako FAILED na etapie `write` z powodem „korpus stylu nie
+    zgadza się z przypiętym hashem" — research zapłacony, artykułu nie ma.
+
+    Normalizujemy WYŁĄCZNIE zakończenia linii. Każda inna różnica bajtowa
+    nadal zatrzymuje pisarza i tak ma zostać: korpus stylu to jedyna rzecz
+    odróżniająca to konto od tysiąca innych.
+    """
+    return raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
 
 
 def load_examples() -> list[dict[str, str]]:
@@ -54,7 +75,7 @@ def load_examples() -> list[dict[str, str]]:
     if not path.exists():
         raise StyleError(f"brak korpusu stylu: {path}")
     raw = path.read_bytes()
-    digest = hashlib.sha256(raw).hexdigest()
+    digest = hashlib.sha256(bajty_kanoniczne(raw)).hexdigest()
     if digest != config.STYLE_CORPUS_SHA256:
         raise StyleError(
             "korpus stylu nie zgadza się z przypiętym hashem — odmawiam uczenia "

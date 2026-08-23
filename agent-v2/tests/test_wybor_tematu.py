@@ -369,5 +369,93 @@ sprawdz("i daje przykład, który wcześniej wypadał jako THIN",
         "cannot agree" in plaski_w)
 
 print()
+print("=== RANKING SKAUTA: BEZ POWTORZEN I Z WAGA POZYCJI ===")
+# Komentarz w stages.py nazywa wymuszony ranking JEDYNYM sygnalem, ktorego
+# model nie umie wyrownac — i wlasnie ten sygnal byl policzony dwa razy zle.
+#
+# 1. Filtr sprawdzal tylko ZAKRES indeksu, nie deduplikowal. Ranking [0,0,0]
+#    dawal tematowi zero SZESC punktow, [2,2,2,2,2] — dziesiec. Wynik zalezal
+#    od tego, czy model powtorzyl liczbe.
+# 2. Kolejnosc byla wyrzucana: przy [0,1,2] wszystkie trzy dostawaly po tyle
+#    samo. Model odpowiada uporzadkowana lista, a my czytalismy ja jak zbior.
+import pathlib     # noqa: E402
+
+_st = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+sprawdz("indeksy() deduplikuje", "i not in bez_powtorzen" in _st)
+sprawdz("i istnieje wazenie pozycja", "def wazenie(" in _st)
+sprawdz("wagi malejaca z pozycja", "sila * (len(lista) - pozycja)" in _st)
+
+
+def _pozycje(ranking, n=6):
+    """Odtwarza logike rankingu z stages.py na czystych danych."""
+    topics = [{"pozycja": 0} for _ in range(n)]
+    r = ranking
+
+    def indeksy(klucz):
+        v = r.get(klucz)
+        if not isinstance(v, list):
+            return []
+        out = []
+        for x in v:
+            if not isinstance(x, (int, float)):
+                continue
+            i = int(x)
+            if 0 <= i < n and i not in out:
+                out.append(i)
+        return out
+
+    def wazenie(klucz, sila):
+        lista = indeksy(klucz)
+        for poz, i in enumerate(lista):
+            topics[i]["pozycja"] += sila * (len(lista) - poz)
+
+    wazenie("least_written_about", 2)
+    wazenie("most_written_about", -2)
+    wazenie("richest", 1)
+    wazenie("thinnest", -1)
+    return [t["pozycja"] for t in topics]
+
+
+# KOLEJNOSC MA ZNACZYC. To jest cala tresc naprawy numer dwa.
+w = _pozycje({"least_written_about": [2, 1, 0]})
+sprawdz("ranking [2,1,0] daje malejaco: temat 2 > 1 > 0",
+        w[2] > w[1] > w[0], w)
+w = _pozycje({"least_written_about": [0, 1, 2]})
+sprawdz("i odwrotnie przy [0,1,2]", w[0] > w[1] > w[2], w)
+
+# POWTORZENIE NIE MOZE MNOZYC. To jest naprawa numer jeden.
+sprawdz("[0,0,0] daje tyle samo co [0]",
+        _pozycje({"least_written_about": [0, 0, 0]})
+        == _pozycje({"least_written_about": [0]}),
+        _pozycje({"least_written_about": [0, 0, 0]}))
+sprawdz("piec powtorzen tez nie pompuje",
+        max(_pozycje({"least_written_about": [2] * 5})) == 2,
+        _pozycje({"least_written_about": [2] * 5}))
+
+# KONTRDOWOD: stara logika MUSI dawac inny wynik, inaczej naprawa byla zbedna
+# i test niczego nie pilnuje.
+def _po_staremu(ranking, n=6):
+    topics = [0] * n
+    for i in ranking.get("least_written_about", []):
+        if isinstance(i, (int, float)) and 0 <= int(i) < n:
+            topics[int(i)] += 2
+    return topics
+
+
+sprawdz("stara logika pompowala powtorzenia do szesciu",
+        max(_po_staremu({"least_written_about": [0, 0, 0]})) == 6)
+sprawdz("i gubila kolejnosc — trzy rozne dostawaly po tyle samo",
+        len(set(x for x in _po_staremu({"least_written_about": [0, 1, 2]}) if x)) == 1)
+
+# Smieci nie moga niczego wywrocic ani przemycic.
+sprawdz("indeks poza zakresem jest odrzucany",
+        _pozycje({"least_written_about": [99, 0]})[0] > 0)
+sprawdz("napis w liscie nie wywala", _pozycje({"least_written_about": ["a", 1]})[1] > 0)
+sprawdz("brak rankingu to same zera", _pozycje({}) == [0] * 6)
+# Kierunki zostaja przeciwne: oklepany schodzi w dol.
+sprawdz("most_written_about odejmuje",
+        _pozycje({"most_written_about": [3]})[3] < 0)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

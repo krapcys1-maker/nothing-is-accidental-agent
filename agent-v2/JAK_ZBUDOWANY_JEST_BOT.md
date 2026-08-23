@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **11 plików**, 10 549 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **11 plików**, 10 599 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -57,7 +57,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
 **WADA — 11 plików zamiast dziesięciu.** Najbliższe usunięciu:
-`style.py` (106 wierszy, wołany tylko z `stages.py`) i
+`style.py` (127 wierszy, wołany tylko z `stages.py`) i
 `kopia_subskrybentow.py` (135 wierszy, narzędzie ręczne poza
 przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
 
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 40 zestawów
-testów, 985 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 41 zestawów
+testów, 1016 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-3043 wierszy, 73 funkcji na poziomie modułu, 0 klas
+3072 wierszy, 73 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -401,12 +401,13 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `style.py` — korpus stylu dla pisarza
 
-106 wierszy, 5 funkcji na poziomie modułu, 1 klas
+127 wierszy, 6 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
 | `_sha256(text)` *(wewn.)* | — |
 | `split_paragraphs(raw)` | Deterministyczny podział na akapity; styl końca linii nie zmienia numeracji. |
+| `bajty_kanoniczne(raw)` | Bajty korpusu niezależne od tego, jak git zmaterializował plik. |
 | `load_examples()` | Zwraca zatwierdzone fragmenty stylu albo rzuca, jeśli korpus się nie zgadza. |
 | `load_profiles()` | Profil pozytywny i negatywny stylu artykułu. |
 | `corpus_words()` | Wszystkie słowa korpusu — podłoga porównuje tekst z korpusem, nie z alfabetem. |

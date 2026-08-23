@@ -2185,20 +2185,49 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
     r = data.get("ranking") or {}
 
     def indeksy(klucz: str) -> list[int]:
-        v = r.get(klucz)
-        return [int(i) for i in v if isinstance(i, (int, float))
-                and 0 <= int(i) < len(topics)] if isinstance(v, list) else []
+        """Indeksy z rankingu: BEZ POWTORZEN, w kolejnosci podanej przez model.
 
-    for i in indeksy("least_written_about"):
-        topics[i]["pozycja"] += 2
+        Filtr sprawdzal wylacznie zakres, wiec ten sam indeks liczyl sie tyle
+        razy, ile razy model go wymienil. Zmierzone: ranking [0,0,0] dawal
+        tematowi zero az SZESC punktow, a [2,2,2,2,2] — dziesiec. Jedyny
+        sygnal, o ktorym komentarz nizej mowi, ze modelowi nie da sie go
+        wyrownac, byl wiec artefaktem tego, czy model powtorzyl liczbe.
+        """
+        v = r.get(klucz)
+        if not isinstance(v, list):
+            return []
+        bez_powtorzen: list[int] = []
+        for x in v:
+            if not isinstance(x, (int, float)):
+                continue
+            i = int(x)
+            if 0 <= i < len(topics) and i not in bez_powtorzen:
+                bez_powtorzen.append(i)
+        return bez_powtorzen
+
+    def wazenie(klucz: str, sila: int) -> list[int]:
+        """Punkty MALEJACE z pozycja na liscie.
+
+        Kolejnosc byla wyrzucana: przy [0,1,2] wszystkie trzy tematy dostawaly
+        po tyle samo. Model pytany o ranking odpowiada uporzadkowana lista —
+        „najbardziej oklepany" stoi pierwszy — a my traktowalismy ja jak zbior.
+        Wymuszony wybor jest jedynym sygnalem, ktorego model nie umie wyrownac,
+        wiec wyrzucanie polowy jego tresci bylo marnotrawstwem najcenniejszego,
+        co skaut oddaje.
+        """
+        lista = indeksy(klucz)
+        for pozycja, i in enumerate(lista):
+            topics[i]["pozycja"] += sila * (len(lista) - pozycja)
+        return lista
+
+    # Sila 2 dla „ile juz o tym napisano", 1 dla „ile w tym materialu" —
+    # ta proporcja byla tu wczesniej i zostaje.
+    for i in wazenie("least_written_about", 2):
         topics[i]["swiezy_wg_modelu"] = True
-    for i in indeksy("most_written_about"):
-        topics[i]["pozycja"] -= 2
+    for i in wazenie("most_written_about", -2):
         topics[i]["oklepany_wg_modelu"] = True
-    for i in indeksy("richest"):
-        topics[i]["pozycja"] += 1
-    for i in indeksy("thinnest"):
-        topics[i]["pozycja"] -= 1
+    wazenie("richest", 1)
+    wazenie("thinnest", -1)
     if not any(indeksy(k) for k in ("least_written_about", "most_written_about")):
         print("  [skaut] BRAK rankingu wlasnego — kolejnosc tylko z pol bezwzglednych",
               flush=True)
