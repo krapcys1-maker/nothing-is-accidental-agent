@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **11 plików**, 10 497 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **11 plików**, 10 537 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -80,13 +80,23 @@ przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
 
 ```
 run.py ──┬─> stages.py ──┬─> llm.py ──> DeepSeek | Anthropic | OpenAI
-         │               ├─> gates.py
          │               ├─> style.py
-         │               └─> db.py
+         │               └─> browser.py   (wyjatek 2 — dobor zrodel)
+         ├─> gates.py        (bramki orkiestruje ROZDZIELNIK, nie etapy)
+         ├─> db.py
          ├─> browser.py ──> Playwright ──> Chrome ──> Substack
          ├─> kanal.py
          └─> alarm.py
+
+wszystkie moduly ──> config.py   (stale i losowania — ZALACZNIK B)
+
+poza przebiegiem:  kopia_subskrybentow.py   (narzedzie reczne)
 ```
+
+> Diagram pokazywal wczesniej osiem modulow z jedenastu i wieszal `gates.py`
+> pod `stages.py`. Obie rzeczy myla przy odtwarzaniu: brakowalo `config.py`,
+> od ktorego zalezy kazdy modul, a bramki wolane z wnetrza etapow odbieraja
+> systemowi wlasnosc, na ktorej stoi — **etap nie ocenia sam siebie**.
 
 **Reguła rozdziału i jej DWA wyjątki:** `stages.py` nigdy nie dotyka
 przeglądarki, `browser.py` nigdy nie woła modelu.
@@ -104,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 40 zestawów
-testów, 968 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 976 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -292,11 +302,12 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-568 wierszy, 11 funkcji na poziomie modułu, 3 klas
+580 wierszy, 12 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
 | `_preflight(purpose, conn, run_id)` *(wewn.)* | Warunki, które decydują, czy wywołanie może się w ogóle udać. |
+| `_narzedzie_wyszukiwania(model)` *(wewn.)* | Nazwa narzedzia wyszukiwania; ostrzega RAZ NA PROCES o braku wpisu. |
 | `_cost(model, tokens_in, tokens_out, web_searches, cache_hit)` *(wewn.)* | — |
 | `_log(purpose, model, tin, tout, searches, usd, verified)` *(wewn.)* | — |
 | `_call_claude(purpose, system, user, web_search)` *(wewn.)* | — |
@@ -412,7 +423,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-1598 wierszy, 16 funkcji na poziomie modułu, 0 klas
+1626 wierszy, 17 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -420,6 +431,7 @@ wiec nie da sie go rozjechac z kodem.
 | `stawka_deepseek(model, kiedy)` | Stawka DeepSeeka z uwzglednieniem pory doby po wejsciu nowej taryfy. |
 | `pora_na_publikacje(kiedy)` | Czy teraz wolno publikowac — wg zegara CZYTELNIKOW, nie serwera. |
 | `w_szczycie(kiedy)` | Czy teraz obowiazuje droga taryfa. |
+| `narzedzie_wyszukiwania(model)` | Nazwa narzedzia wyszukiwania i ewentualne ostrzezenie. |
 | `dlugosc_dla(glebokosc)` | Ile slow ma miec artykul o tej glebokosci. |
 | `_tokens_for(chars)` *(wewn.)* | — |
 | `losowa_postawa()` | Ktora postawa dla TEGO komentarza. Wagi, nie rownomiernie. |
@@ -820,6 +832,11 @@ Zwraca `(topic, verdict)`. Z `verdict` używane jest dalej **tylko** `depth`.
         max_results=config.DISCOVERY_MAX_RESULTS,
         max_searches=config.DISCOVERY_MAX_SEARCHES,
         min_primary=config.MIN_PRIMARY_SOURCES,
+        # ... min_why, blocked_hosts ...
+        # OSTATNIE_DOMENY JEST OBOWIAZKOWE. Prompt ma placeholder
+        # {ostatnie_domeny}; pominiecie go daje KeyError w `str.format`
+        # — czyli PO oplaceniu skauta i odsiewu.
+        ostatnie_domeny=...,
         min_why=config.MIN_WHY_SOURCES,
         blocked_hosts=", ".join(list(config.BLOCKED_HOSTS) + martwe),
     )
@@ -888,9 +905,9 @@ Zauważ: filtr działa na poziomie **hosta**, nie adresu. Model może więc poda
 
 Nic — zapis do `sources` robi dopiero etap 4.
 
-**WADA — reguła różnorodności domen jest liczona i wyrzucana.** `run.py:725` robi `recent = db.recent_domains(conn, config.DIVERSITY_LOOKBACK)` i podaje jako czwarty argument. Sygnatura to `def discovery(conn, run_id, question, recent_domains)`. W całym ciele funkcji `recent_domains` **nie występuje ani razu**. Zapytanie SQL z `JOIN`-em po `articles`/`sources` wykonuje się co przebieg, a wynik nigdy nie dociera do promptu. Docstring `db.recent_domains` mówi „wejście do reguły różnorodności" — reguły nie ma.
+**~~WADA — reguła różnorodności domen jest liczona i wyrzucana.~~ ZAMKNIĘTE 23 sierpnia.** Zapytanie SQL wykonywało się co przebieg, wynik szedł do `discovery` czwartym argumentem i **nie był czytany ani razu** — a docstring obiecywał „wejście do reguły różnorodności". Dziś domeny trafiają do promptu jako `ostatnie_domeny`, jako **preferencja, nie bramka**: twardy filtr hostów potrafiłby wyzerować listę źródeł i wywalić przebieg **po** opłaceniu researchu, bo przy `MIN_PRIMARY_SOURCES` ten sam regulator bywa jedynym miejscem, gdzie dokument leży. Sformułowanie zakazuje **nawyku**, nie nakazuje pozycji.
 
-**WADA — `WEB_SEARCH_TOOL` nie zna Fable.** `llm._call_claude` robi `config.WEB_SEARCH_TOOL[model]`, a słownik (`config.py:357-361`) ma tylko `CLAUDE` i `SONNET`. Dziś nie wybucha, bo dyskoveria jest u DeepSeeka, a `CHEAP_MODE` przestawia ją na Opusa. Ale `AGENT_V2_WRITER` i każda przyszła zmiana `MODEL_FOR["discovery"]` na Fable da `KeyError` w środku płatnej ścieżki.
+**~~WADA — `WEB_SEARCH_TOOL` nie zna Fable.~~ ZAMKNIĘTE 23 sierpnia.** Słownik miał tylko `CLAUDE` i `SONNET`, a `llm._call_claude` robił `config.WEB_SEARCH_TOOL[model]` — czyli `KeyError` w środku płatnej ścieżki dla każdego modelu Anthropic spoza słownika. Wpisu dla Fable nie było, choć to **na nim chodzi pisarz**. Dziś: `FABLE` dopisany, a odczyt idzie przez `config.narzedzie_wyszukiwania(model)`, które nieznanemu modelowi daje najnowszą znaną wersję narzędzia i **głośne ostrzeżenie raz na proces**. Źle zgadnięta wersja kończy się błędem od API, który widać; `KeyError` w połowie płatnej ścieżki widać dużo gorzej.
 
 ---
 
@@ -10209,6 +10226,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `MNOZNIK_SZCZYT` | `2.0` | Mnozniki wzgledem stawek wyzej, po wejsciu nowej taryfy. Szczyt to DOKLADNIE dwukrotnosc bazy, jednakowo dla wejscia, wyjscia i cache. Spraw |
 | `MNOZNIK_POZA_SZCZYTEM` | `1.0` | — |
 | `WEB_SEARCH_TOOL` | `{ CLAUDE: "web_search_20260209", SONNET: "we` | Filtrowanie dynamiczne (`_20260209`) jest na Opusie i Sonnecie 5. |
+| `NAJNOWSZE_WYSZUKIWANIE` | `"web_search_20260209"` | Wersja narzedzia wyszukiwania dla modelu Anthropic, z galezia awaryjna. |
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
 | `DAILY_LIMIT_USD` | `5.00` | — |
 | `MONTHLY_LIMIT_USD` | `40.00` | — |

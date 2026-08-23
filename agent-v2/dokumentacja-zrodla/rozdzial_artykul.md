@@ -382,6 +382,11 @@ Zwraca `(topic, verdict)`. Z `verdict` używane jest dalej **tylko** `depth`.
         max_results=config.DISCOVERY_MAX_RESULTS,
         max_searches=config.DISCOVERY_MAX_SEARCHES,
         min_primary=config.MIN_PRIMARY_SOURCES,
+        # ... min_why, blocked_hosts ...
+        # OSTATNIE_DOMENY JEST OBOWIAZKOWE. Prompt ma placeholder
+        # {ostatnie_domeny}; pominiecie go daje KeyError w `str.format`
+        # — czyli PO oplaceniu skauta i odsiewu.
+        ostatnie_domeny=...,
         min_why=config.MIN_WHY_SOURCES,
         blocked_hosts=", ".join(list(config.BLOCKED_HOSTS) + martwe),
     )
@@ -450,9 +455,9 @@ Zauważ: filtr działa na poziomie **hosta**, nie adresu. Model może więc poda
 
 Nic — zapis do `sources` robi dopiero etap 4.
 
-**WADA — reguła różnorodności domen jest liczona i wyrzucana.** `run.py:725` robi `recent = db.recent_domains(conn, config.DIVERSITY_LOOKBACK)` i podaje jako czwarty argument. Sygnatura to `def discovery(conn, run_id, question, recent_domains)`. W całym ciele funkcji `recent_domains` **nie występuje ani razu**. Zapytanie SQL z `JOIN`-em po `articles`/`sources` wykonuje się co przebieg, a wynik nigdy nie dociera do promptu. Docstring `db.recent_domains` mówi „wejście do reguły różnorodności" — reguły nie ma.
+**~~WADA — reguła różnorodności domen jest liczona i wyrzucana.~~ ZAMKNIĘTE 23 sierpnia.** Zapytanie SQL wykonywało się co przebieg, wynik szedł do `discovery` czwartym argumentem i **nie był czytany ani razu** — a docstring obiecywał „wejście do reguły różnorodności". Dziś domeny trafiają do promptu jako `ostatnie_domeny`, jako **preferencja, nie bramka**: twardy filtr hostów potrafiłby wyzerować listę źródeł i wywalić przebieg **po** opłaceniu researchu, bo przy `MIN_PRIMARY_SOURCES` ten sam regulator bywa jedynym miejscem, gdzie dokument leży. Sformułowanie zakazuje **nawyku**, nie nakazuje pozycji.
 
-**WADA — `WEB_SEARCH_TOOL` nie zna Fable.** `llm._call_claude` robi `config.WEB_SEARCH_TOOL[model]`, a słownik (`config.py:357-361`) ma tylko `CLAUDE` i `SONNET`. Dziś nie wybucha, bo dyskoveria jest u DeepSeeka, a `CHEAP_MODE` przestawia ją na Opusa. Ale `AGENT_V2_WRITER` i każda przyszła zmiana `MODEL_FOR["discovery"]` na Fable da `KeyError` w środku płatnej ścieżki.
+**~~WADA — `WEB_SEARCH_TOOL` nie zna Fable.~~ ZAMKNIĘTE 23 sierpnia.** Słownik miał tylko `CLAUDE` i `SONNET`, a `llm._call_claude` robił `config.WEB_SEARCH_TOOL[model]` — czyli `KeyError` w środku płatnej ścieżki dla każdego modelu Anthropic spoza słownika. Wpisu dla Fable nie było, choć to **na nim chodzi pisarz**. Dziś: `FABLE` dopisany, a odczyt idzie przez `config.narzedzie_wyszukiwania(model)`, które nieznanemu modelowi daje najnowszą znaną wersję narzędzia i **głośne ostrzeżenie raz na proces**. Źle zgadnięta wersja kończy się błędem od API, który widać; `KeyError` w połowie płatnej ścieżki widać dużo gorzej.
 
 ---
 

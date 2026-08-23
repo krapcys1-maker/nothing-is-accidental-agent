@@ -42,6 +42,7 @@
 | `MNOZNIK_SZCZYT` | `2.0` | Mnozniki wzgledem stawek wyzej, po wejsciu nowej taryfy. Szczyt to DOKLADNIE dwukrotnosc bazy, jednakowo dla wejscia, wyjscia i cache. Spraw |
 | `MNOZNIK_POZA_SZCZYTEM` | `1.0` | — |
 | `WEB_SEARCH_TOOL` | `{ CLAUDE: "web_search_20260209", SONNET: "we` | Filtrowanie dynamiczne (`_20260209`) jest na Opusie i Sonnecie 5. |
+| `NAJNOWSZE_WYSZUKIWANIE` | `"web_search_20260209"` | Wersja narzedzia wyszukiwania dla modelu Anthropic, z galezia awaryjna. |
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
 | `DAILY_LIMIT_USD` | `5.00` | — |
 | `MONTHLY_LIMIT_USD` | `40.00` | — |

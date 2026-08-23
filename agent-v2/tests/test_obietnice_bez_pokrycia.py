@@ -165,5 +165,32 @@ sprawdz("i nadal nie zatrzymuje artykulu przy awarii",
         "NIGDY nie zatrzymuje" in run_src)
 
 print()
+print("=== 4. KAZDY MODEL ANTHROPIC UMIE SZUKAC ===")
+# Bylo `config.WEB_SEARCH_TOOL[model]` — surowy odczyt ze slownika, ktory mial
+# wpisy tylko dla dwoch modeli. Trzeci, `claude-fable-5`, to ten, NA KTORYM
+# CHODZI PISARZ. KeyError wypadalby w srodku platnego wywolania, po oplaceniu
+# wszystkich wczesniejszych etapow — czyli w najdrozszym mozliwym miejscu.
+sprawdz("kazdy model Claude z routingu ma wpis albo galaz awaryjna",
+        all(config.narzedzie_wyszukiwania(m)[0]
+            for m in (config.CLAUDE, config.SONNET, config.FABLE)))
+for m in (config.CLAUDE, config.SONNET, config.FABLE):
+    sprawdz("  %s bez ostrzezenia (ma wlasny wpis)" % m,
+            config.narzedzie_wyszukiwania(m)[1] == "")
+# KONTRDOWOD: nieznany model NIE moze wywalic przebiegu, ale MUSI byc slyszalny.
+nazwa, uwaga = config.narzedzie_wyszukiwania("claude-czegos-takiego-nie-ma")
+sprawdz("nieznany model dostaje narzedzie zamiast wyjatku", bool(nazwa))
+sprawdz("i glosne ostrzezenie", "nie ma wpisu w WEB_SEARCH_TOOL" in uwaga)
+sprawdz("llm nie czyta juz slownika wprost",
+        "config.WEB_SEARCH_TOOL[" not in llm_src)
+sprawdz("tylko przez funkcje", "_narzedzie_wyszukiwania(model)" in llm_src)
+sprawdz("i mowi o braku raz na proces", "_WYSZUKIWANIE_BEZ_WPISU" in llm_src)
+# Kazdy model uzywany przez etapy z web_search musi byc obslugiwany.
+modele_z_routingu = {m for m in config.MODEL_FOR.values()
+                     if m.startswith("claude")}
+sprawdz("zaden model z routingu nie wywala sie na wyszukiwaniu",
+        all(config.narzedzie_wyszukiwania(m)[0] for m in modele_z_routingu),
+        sorted(modele_z_routingu))
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

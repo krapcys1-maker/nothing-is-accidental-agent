@@ -80,13 +80,23 @@ przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
 
 ```
 run.py ──┬─> stages.py ──┬─> llm.py ──> DeepSeek | Anthropic | OpenAI
-         │               ├─> gates.py
          │               ├─> style.py
-         │               └─> db.py
+         │               └─> browser.py   (wyjatek 2 — dobor zrodel)
+         ├─> gates.py        (bramki orkiestruje ROZDZIELNIK, nie etapy)
+         ├─> db.py
          ├─> browser.py ──> Playwright ──> Chrome ──> Substack
          ├─> kanal.py
          └─> alarm.py
+
+wszystkie moduly ──> config.py   (stale i losowania — ZALACZNIK B)
+
+poza przebiegiem:  kopia_subskrybentow.py   (narzedzie reczne)
 ```
+
+> Diagram pokazywal wczesniej osiem modulow z jedenastu i wieszal `gates.py`
+> pod `stages.py`. Obie rzeczy myla przy odtwarzaniu: brakowalo `config.py`,
+> od ktorego zalezy kazdy modul, a bramki wolane z wnetrza etapow odbieraja
+> systemowi wlasnosc, na ktorej stoi — **etap nie ocenia sam siebie**.
 
 **Reguła rozdziału i jej DWA wyjątki:** `stages.py` nigdy nie dotyka
 przeglądarki, `browser.py` nigdy nie woła modelu.

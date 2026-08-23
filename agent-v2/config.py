@@ -357,7 +357,35 @@ def w_szczycie(kiedy=None) -> bool:
 WEB_SEARCH_TOOL = {
     CLAUDE: "web_search_20260209",
     SONNET: "web_search_20260209",
+    # FABLE brakowalo, a to na nim chodzi pisarz. Dzis nie wybucha, bo
+    # `write` nie szuka w sieci — ale jedna zmiana MODEL_FOR wystarczyla,
+    # zeby dostac KeyError w SRODKU platnej sciezki, po oplaceniu
+    # wczesniejszych etapow.
+    FABLE: "web_search_20260209",
 }
+
+# Wersja narzedzia wyszukiwania dla modelu Anthropic, z galezia awaryjna.
+NAJNOWSZE_WYSZUKIWANIE = "web_search_20260209"
+
+
+def narzedzie_wyszukiwania(model: str) -> tuple[str, str]:
+    """Nazwa narzedzia wyszukiwania i ewentualne ostrzezenie.
+
+    Bylo `WEB_SEARCH_TOOL[model]` — czyli KeyError dla kazdego modelu
+    Anthropic spoza slownika, rzucany w srodku platnego wywolania, po
+    oplaceniu wszystkich wczesniejszych etapow. Wpisu dla Fable po prostu
+    nie bylo, choc to na nim chodzi pisarz.
+
+    Nieznany model dostaje najnowsza znana wersje narzedzia i GLOSNE
+    ostrzezenie. Zle zgadnieta wersja narzedzia konczy sie bledem od API,
+    ktory widac; KeyError w polowie platnej sciezki widac duzo gorzej.
+    """
+    if model in WEB_SEARCH_TOOL:
+        return WEB_SEARCH_TOOL[model], ""
+    return NAJNOWSZE_WYSZUKIWANIE, (
+        "model %s nie ma wpisu w WEB_SEARCH_TOOL — biore %s. "
+        "Dopisz go, zanim ktos zmieni MODEL_FOR."
+        % (model, NAJNOWSZE_WYSZUKIWANIE))
 
 # Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań.
 WEB_SEARCH_USD_PER_1K = 10.00

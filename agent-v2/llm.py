@@ -90,6 +90,18 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
 # Etapy, o ktorych juz powiedzielismy, ze ich EFFORT nie dziala.
 _EFFORT_BEZ_SKUTKU: set[str] = set()
 
+# Modele, o ktorych brakujacym wpisie w WEB_SEARCH_TOOL juz mowilismy.
+_WYSZUKIWANIE_BEZ_WPISU: set[str] = set()
+
+
+def _narzedzie_wyszukiwania(model: str) -> str:
+    """Nazwa narzedzia wyszukiwania; ostrzega RAZ NA PROCES o braku wpisu."""
+    nazwa, uwaga = config.narzedzie_wyszukiwania(model)
+    if uwaga and model not in _WYSZUKIWANIE_BEZ_WPISU:
+        _WYSZUKIWANIE_BEZ_WPISU.add(model)
+        print("  [wyszukiwanie] %s" % uwaga, flush=True)
+    return nazwa
+
 
 def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
           cache_hit: int = 0) -> tuple[float, bool]:
@@ -161,7 +173,7 @@ def _call_claude(
         # — 164 411 tokenów wejścia i $1,33 za jeden etap. Ograniczona liczba
         # wyszukiwań i tak zwraca dziesięć źródeł.
         kwargs["tools"] = [{
-            "type": config.WEB_SEARCH_TOOL[model],
+            "type": _narzedzie_wyszukiwania(model),
             "name": "web_search",
             "max_uses": config.DISCOVERY_MAX_SEARCHES,
         }]
