@@ -45,7 +45,11 @@ ZAKAZY = {
     "wnioskowanie znaczy sie struktura zdania":     "not by a label",
     "nie obwieszczaj powsciagliwosci":              "announce your own restraint",
     "kazda liczba niesie zrodlo w swoim zdaniu":    "carries its source in the sentence",
-    "niewiadome pojedynczo, tam gdzie powstaja":    "where it arises, alone",
+    # Bylo: "where it arises, alone" — zdanie zakazywalo akapitu granic,
+    # ktory PIEC innych miejsc promptu zaklada (regula, regula o pierwszym
+    # zdaniu, zakaz rozdymania, pole schematu, bramka). Zostal jeden
+    # akapit, a to zdanie rzadzi teraz jego POLOZENIEM.
+    "granice tam, gdzie otwiera sie luka":          "where the gap opens",
 }
 for opis, fraza in ZAKAZY.items():
     sprawdz("%-46s" % opis, fraza in PLASKI, fraza)

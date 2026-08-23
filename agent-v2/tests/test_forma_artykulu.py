@@ -94,18 +94,29 @@ sprawdz("prompt zakazuje nazywania materialu 'the excerpts'",
         "The excerpts" in PISARZ and "the published guidance" in PISARZ)
 sprawdz("nadal stoi zakaz konczenia podsumowaniem",
         "closing with a summary" in PISARZ)
-# ZMIANA DECYZJI (2026-08-23). Bylo: „One paragraph. Not two, not three."
-# Prompt zawieral JEDNOCZESNIE to zdanie i — osiemdziesiat wierszy nizej —
-# „Put each unknown where it arises, alone." Jedno kazalo zebrac granice
-# w jeden akapit, drugie zabranialo ich zbierac w ogole. Oba napisano, zeby
-# naprawic TE SAMA awarie: artykul, ktory spedzil trzecia czesc dlugosci na
-# tym, czego dowody nie mowia. Zostaje mocniejsze z nich — zakaz zbierania
-# czyni wypelniacz niemozliwym strukturalnie, a nie tylko ograniczonym.
-sprawdz("nie ma juz nakazu zbierania granic w jeden akapit",
-        "One paragraph. Not two, not three." not in PISARZ)
-sprawdz("jest za to zakaz zbierania", "Never collect them." in PISARZ)
-sprawdz("i regula o niewiadomych, z ktora sie nie kloci",
-        "Put each unknown where it arises, alone." in PISARZ)
+# ZGODNOSC, NIE BRZMIENIE. Rano zapisalem tu asercje na konkretne zdanie
+# i zabetonowala ona bledne rozstrzygniecie: przeczytalem dwie sprzeczne reguly
+# i przestawilem te, ktora stala po stronie WIEKSZOSCI. Akapit granic jest
+# zalozony w PIECIU miejscach — regula „Say the limits once", cala regula
+# o pierwszym zdaniu TEGO akapitu z przykladami, zakaz „do not expand the
+# limits paragraph", pole schematu `limits_paragraph_present` czytane
+# w run.py, oraz bramka `gates.zapowiedziany_akapit_granic`, ktora bada
+# pierwsze zdanie tego akapitu i bez niego nie ma sensu.
+#
+# Wiec test pyta teraz o to, co naprawde ma byc prawda: zadne zdanie promptu
+# nie zakazuje akapitu, ktory piec innych miejsc zaklada.
+sprawdz("prompt zamawia JEDEN akapit granic",
+        "One paragraph, and only one." in PISARZ
+        and "Say the limits once" in PISARZ)
+sprawdz("i rzadzi jego POLOZENIEM, nie istnieniem",
+        "Put that paragraph where the gap opens" in PISARZ)
+sprawdz("zadne zdanie nie zakazuje zbierania granic",
+        "Never collect them." not in PISARZ
+        and "Put each unknown where it arises, alone." not in PISARZ)
+sprawdz("zakaz rozdymania nadal zaklada, ze akapit istnieje",
+        "expand the limits paragraph" in PISARZ)
+sprawdz("schemat nadal pyta o obecnosc akapitu",
+        "limits_paragraph_present" in PISARZ)
 
 print()
 print("=== 4. PROMPT SIE RENDERUJE (kontrdowod: KeyError na nowym polu) ===")

@@ -387,11 +387,29 @@ print("=== 11. PISARZ NIE DOSTAJE DWOCH SPRZECZNYCH POLECEN ===")
 # stron: „zmiesc granice w jeden akapit" kontra „nigdy ich nie zbieraj".
 # Model dostawal oba naraz.
 pisarz = pathlib.Path("agent-v2/prompts/pisarz.md").read_text(encoding="utf-8")
-sprawdz("nie ma juz nakazu zbierania granic w jeden akapit",
-        "One paragraph. Not two, not three." not in pisarz)
-sprawdz("zostal zakaz zbierania", "Never collect them." in pisarz)
-sprawdz("i regula o niewiadomych, z ktora sie zgadza",
-        "Put each unknown where it arises, alone." in pisarz)
+# ZGODNOSC, NIE BRZMIENIE. Rano zapisalem tu asercje na konkretne zdanie
+# i zabetonowala ona bledne rozstrzygniecie: przeczytalem dwie sprzeczne reguly
+# i przestawilem te, ktora stala po stronie WIEKSZOSCI. Akapit granic jest
+# zalozony w PIECIU miejscach — regula „Say the limits once", cala regula
+# o pierwszym zdaniu TEGO akapitu z przykladami, zakaz „do not expand the
+# limits paragraph", pole schematu `limits_paragraph_present` czytane
+# w run.py, oraz bramka `gates.zapowiedziany_akapit_granic`, ktora bada
+# pierwsze zdanie tego akapitu i bez niego nie ma sensu.
+#
+# Wiec test pyta teraz o to, co naprawde ma byc prawda: zadne zdanie promptu
+# nie zakazuje akapitu, ktory piec innych miejsc zaklada.
+sprawdz("prompt zamawia JEDEN akapit granic",
+        "One paragraph, and only one." in pisarz
+        and "Say the limits once" in pisarz)
+sprawdz("i rzadzi jego POLOZENIEM, nie istnieniem",
+        "Put that paragraph where the gap opens" in pisarz)
+sprawdz("zadne zdanie nie zakazuje zbierania granic",
+        "Never collect them." not in pisarz
+        and "Put each unknown where it arises, alone." not in pisarz)
+sprawdz("zakaz rozdymania nadal zaklada, ze akapit istnieje",
+        "expand the limits paragraph" in pisarz)
+sprawdz("schemat nadal pyta o obecnosc akapitu",
+        "limits_paragraph_present" in pisarz)
 # Kotwica dlugosci ma sie skalowac — inaczej pracuje przeciw DLUGOSC_WG_GLEBOKOSCI.
 sprawdz("kotwica dlugosci jest polem, nie wpisana na sztywno",
         "{kotwica_dlugosci}" in pisarz and "1048 and 1101" not in pisarz)

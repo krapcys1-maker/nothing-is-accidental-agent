@@ -118,11 +118,29 @@ sprawdz("pisarz ma pisac krotko, gdy paralel brak", "write short" in pisarz)
 
 print()
 print("=== 6. CIECIA W PISARZU ===")
-# ZMIANA DECYZJI (2026-08-23): prompt mial JEDNOCZESNIE nakaz zbierania
-# granic w jeden akapit i zakaz zbierania ich w ogole. Zostal zakaz.
-sprawdz("granice nie sa zbierane w osobny akapit",
-        "Never collect them." in pisarz
-        and "One paragraph. Not two, not three." not in pisarz)
+# ZGODNOSC, NIE BRZMIENIE. Rano zapisalem tu asercje na konkretne zdanie
+# i zabetonowala ona bledne rozstrzygniecie: przeczytalem dwie sprzeczne reguly
+# i przestawilem te, ktora stala po stronie WIEKSZOSCI. Akapit granic jest
+# zalozony w PIECIU miejscach — regula „Say the limits once", cala regula
+# o pierwszym zdaniu TEGO akapitu z przykladami, zakaz „do not expand the
+# limits paragraph", pole schematu `limits_paragraph_present` czytane
+# w run.py, oraz bramka `gates.zapowiedziany_akapit_granic`, ktora bada
+# pierwsze zdanie tego akapitu i bez niego nie ma sensu.
+#
+# Wiec test pyta teraz o to, co naprawde ma byc prawda: zadne zdanie promptu
+# nie zakazuje akapitu, ktory piec innych miejsc zaklada.
+sprawdz("prompt zamawia JEDEN akapit granic",
+        "One paragraph, and only one." in pisarz
+        and "Say the limits once" in pisarz)
+sprawdz("i rzadzi jego POLOZENIEM, nie istnieniem",
+        "Put that paragraph where the gap opens" in pisarz)
+sprawdz("zadne zdanie nie zakazuje zbierania granic",
+        "Never collect them." not in pisarz
+        and "Put each unknown where it arises, alone." not in pisarz)
+sprawdz("zakaz rozdymania nadal zaklada, ze akapit istnieje",
+        "expand the limits paragraph" in pisarz)
+sprawdz("schemat nadal pyta o obecnosc akapitu",
+        "limits_paragraph_present" in pisarz)
 sprawdz("zakaz powtarzania mechanizmu", "Name the mechanism once" in pisarz)
 
 print()

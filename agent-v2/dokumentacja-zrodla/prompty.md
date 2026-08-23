@@ -123,7 +123,7 @@
 {{"reply": "<the reply, or null>", "reason_if_silent": "<one sentence, only when reply is null>", "kind": "answer"|"correction_accepted"|"disagreement"|"built_on"}}
 ```
 
-#### `pisarz.md` (231 wierszy)
+#### `pisarz.md` (234 wierszy)
 
 **Pola wejściowe:** `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
@@ -153,7 +153,7 @@
 {{"restack": true|false, "reason": "<one sentence: why this is or is not worth passing on>", "sentence": "<your sentence, or empty string if restack is false>", "mechanism_named": "<the other place this same logic runs, or empty string>"}}
 ```
 
-#### `skaut.md` (442 wierszy)
+#### `skaut.md` (445 wierszy)
 
 **Pola wejściowe:** `count`, `history_json`, `pytania_czytelnikow`
 

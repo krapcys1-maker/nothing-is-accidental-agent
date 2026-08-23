@@ -115,8 +115,11 @@ print("=== 6. PROMPT ZAPOBIEGA, NIE TYLKO WYKRYWA ===")
 
 sprawdz("prompt mowi, ze nie jest slownikiem",
         "This brief is scaffolding, not vocabulary." in PISARZ)
-sprawdz("prompt uprzedza, ze istnieje kontrola slowo w slowo",
-        "word for word" in PISARZ)
+# PROG PODANY ZGODNIE Z KODEM. Prompt mowil „word for word", a bramka
+# porownuje ciagi SZESCIOWYRAZOWE — czyli straszyla szerzej, niz
+# egzekwuje, i zniechecala pisarza do fraz, ktorych sama nie lapie.
+sprawdz("prompt uprzedza o kontroli i podaje jej prawdziwy prog",
+        "six words in a row" in PISARZ)
 sprawdz("znikla najbardziej cytowalna fraza z 0020",
         "the simplest sentence that is still" not in PISARZ)
 sprawdz("ale polecenie o bodzcu nadal stoi",

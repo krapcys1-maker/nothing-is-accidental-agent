@@ -202,9 +202,12 @@ occurred the last time it was tried.
 You have read no sources yet.
 
 - Do not name the motive. No "not because X but because Y".
-- Do not write any number, percentage, timeframe or proportion. Anything you
-  write now is invented, and the research stage will spend real money failing to
-  confirm it.
+- Do not write any number, percentage, proportion or statistic in the title,
+  the question or the description. Anything you invent now is invented, and
+  the research stage will spend real money failing to confirm it. The one
+  exception is `when` inside a precedent, which asks for a rough date and
+  says so — an approximate decade there is not a claim, it is a pointer for
+  the researcher.
 - The title is an internal handle, not the published headline. Let it describe
   the phenomenon rather than announce a conclusion.
 
