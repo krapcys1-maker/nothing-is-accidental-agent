@@ -68,12 +68,24 @@ for i, tekst in enumerate(czyste):
 print()
 print("=== 3. ZACHODZACE CIAGI SKLEJAJA SIE W JEDNA UWAGE ===")
 
-podwojna = ("A few things this evidence does not settle, and I will say them once "
-            "rather than hedge throughout, though the record is clear enough.")
+# JEDNA DLUGA WKLEJKA Z JEDNEGO MIEJSCA PROMPTU. Daje kilkanascie zachodzacych
+# szesciogramow, ktore MUSZA sklecic sie w jedna uwage — inaczej jedno wklejone
+# zdanie zglaszaloby sie piec razy i uwagi utonelyby w szumie.
+podwojna = ("Some lead-in sentence. The restraint is real and it should be "
+            "invisible: state what the record says, and then more text.")
 t = gates.frazy_z_instrukcji(podwojna)
 sprawdz("jedna wklejka to jedna uwaga, nie piec", len(t) == 1, t)
 sprawdz("sklejona fraza jest dluzsza niz prog szesciu slow",
         t and len(t[0].split()) > 6, t)
+# KONTRDOWOD, ktory sam sie dzis objawil: DWIE osobne wklejki z ROZNYCH miejsc
+# promptu maja dac DWIE uwagi. Sklejanie ma laczyc ciagi zachodzace, a nie
+# wszystko, co znalezione — inaczej pisarz wklejajacy dwa akapity dostawalby
+# jedna uwage i drugi przechodzilby niezauwazony.
+rozne = ("A few things this evidence does not settle, and I will say them once "
+         "rather than hedge throughout, though the record is clear enough.")
+sprawdz("dwie osobne wklejki to dwie uwagi",
+        len(gates.frazy_z_instrukcji(rozne)) == 2,
+        gates.frazy_z_instrukcji(rozne))
 
 print()
 print("=== 4. SZEROKOSC PODSTAWY ===")
