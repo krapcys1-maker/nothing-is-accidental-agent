@@ -148,18 +148,32 @@ print()
 print("=== 4. DZIENNIK NIE MOZE ZATRZYMAC PRZEBIEGU ===")
 # Artykul jest wazniejszy od notatki o tym, dlaczego inny temat nim nie zostal.
 stary = stages.PRZEGRANE_TEMATY
-try:
-    stages.PRZEGRANE_TEMATY = pathlib.Path("Z:/nie-ma-takiego-dysku/x.json")
-    t, o = _dane()
-    wybrany3, _ = stages.pick_topic(t, o, run_id=101)
-    sprawdz("nieudany zapis nie przerywa wyboru tematu", True)
-    sprawdz("i temat jest ten sam co przy udanym zapisie",
-            wybrany3["title"] == "Wieza przestaje odpowiadac")
-except Exception as exc:
-    sprawdz("nieudany zapis nie przerywa wyboru tematu", False,
-            "%s: %s" % (type(exc).__name__, exc))
-finally:
-    stages.PRZEGRANE_TEMATY = stary
+# SCIEZKA, KTORA NIE ZAPISZE SIE NIGDZIE. Bylo tu "Z:/nie-ma-takiego-dysku" —
+# na Windowsie faktycznie nie ma takiego dysku, ale na Linuksie "Z:" to zwykla,
+# legalna nazwa katalogu. Zapis sie tam UDAWAL, a asercja obok twierdzila, ze
+# byl nieudany: test przechodzil na serwerze nie dlatego, ze kod przezyl awarie,
+# tylko dlatego, ze awarii nie bylo. Zostawial przy okazji smiec w repozytorium.
+#
+# Katalog nie moze powstac POD PLIKIEM i to jest prawda na obu systemach.
+with tempfile.TemporaryDirectory() as tmp:
+    zapora = pathlib.Path(tmp) / "to-jest-plik"
+    zapora.write_text("nie katalog", encoding="utf-8")
+    try:
+        stages.PRZEGRANE_TEMATY = zapora / "x.json"
+        t, o = _dane()
+        wybrany3, _ = stages.pick_topic(t, o, run_id=101)
+        sprawdz("nieudany zapis nie przerywa wyboru tematu", True)
+        sprawdz("i temat jest ten sam co przy udanym zapisie",
+                wybrany3["title"] == "Wieza przestaje odpowiadac")
+        # KONTRDOWOD: gdyby zapis jednak przeszedl, test bada cos innego niz
+        # mysli — i ma o tym powiedziec, zamiast zaliczyc sie po cichu.
+        sprawdz("zapis NAPRAWDE sie nie udal (inaczej to nie ten test)",
+                not (zapora / "x.json").exists() and zapora.is_file())
+    except Exception as exc:
+        sprawdz("nieudany zapis nie przerywa wyboru tematu", False,
+                "%s: %s" % (type(exc).__name__, exc))
+    finally:
+        stages.PRZEGRANE_TEMATY = stary
 
 with tempfile.TemporaryDirectory() as tmp:
     uszkodzony = pathlib.Path(tmp) / "tematy_przegrane.json"
