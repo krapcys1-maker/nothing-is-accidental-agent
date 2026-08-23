@@ -94,8 +94,18 @@ sprawdz("prompt zakazuje nazywania materialu 'the excerpts'",
         "The excerpts" in PISARZ and "the published guidance" in PISARZ)
 sprawdz("nadal stoi zakaz konczenia podsumowaniem",
         "closing with a summary" in PISARZ)
-sprawdz("nadal stoi limit jednego akapitu o granicach",
-        "One paragraph. Not two, not three." in PISARZ)
+# ZMIANA DECYZJI (2026-08-23). Bylo: „One paragraph. Not two, not three."
+# Prompt zawieral JEDNOCZESNIE to zdanie i — osiemdziesiat wierszy nizej —
+# „Put each unknown where it arises, alone." Jedno kazalo zebrac granice
+# w jeden akapit, drugie zabranialo ich zbierac w ogole. Oba napisano, zeby
+# naprawic TE SAMA awarie: artykul, ktory spedzil trzecia czesc dlugosci na
+# tym, czego dowody nie mowia. Zostaje mocniejsze z nich — zakaz zbierania
+# czyni wypelniacz niemozliwym strukturalnie, a nie tylko ograniczonym.
+sprawdz("nie ma juz nakazu zbierania granic w jeden akapit",
+        "One paragraph. Not two, not three." not in PISARZ)
+sprawdz("jest za to zakaz zbierania", "Never collect them." in PISARZ)
+sprawdz("i regula o niewiadomych, z ktora sie nie kloci",
+        "Put each unknown where it arises, alone." in PISARZ)
 
 print()
 print("=== 4. PROMPT SIE RENDERUJE (kontrdowod: KeyError na nowym polu) ===")
@@ -105,7 +115,7 @@ ile, opis_paraleli = config.losowa_liczba_paraleli("RICH")
 try:
     wynik = stages._prompt(
         "pisarz.md",
-        language="English", target_words=1075, min_words=950, max_words=1200,
+        language="English", target_words=1075, min_words=950, max_words=1200, kotwica_dlugosci="x",
         style_examples="X", style_positive="Y", style_negative="Z",
         ruch_koncowy_nazwa=ruch_nazwa, ruch_koncowy=ruch_opis,
         ile_paraleli=opis_paraleli, card_json="{}",
@@ -130,7 +140,7 @@ print("=== 5. BRAK POLA NADAL JEST BLEDEM, NIE CICHYM PRZEJSCIEM ===")
 try:
     stages._prompt(
         "pisarz.md",
-        language="English", target_words=1075, min_words=950, max_words=1200,
+        language="English", target_words=1075, min_words=950, max_words=1200, kotwica_dlugosci="x",
         style_examples="X", style_positive="Y", style_negative="Z",
         card_json="{}",
     )

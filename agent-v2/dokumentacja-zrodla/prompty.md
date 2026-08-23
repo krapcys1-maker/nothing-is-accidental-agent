@@ -153,7 +153,7 @@
 {{"restack": true|false, "reason": "<one sentence: why this is or is not worth passing on>", "sentence": "<your sentence, or empty string if restack is false>", "mechanism_named": "<the other place this same logic runs, or empty string>"}}
 ```
 
-#### `skaut.md` (436 wierszy)
+#### `skaut.md` (442 wierszy)
 
 **Pola wejściowe:** `count`, `history_json`, `pytania_czytelnikow`
 

@@ -118,7 +118,8 @@ import stages   # noqa: E402
 try:
     gotowy = stages._prompt(
         "pisarz.md", card_json="{}", language="English", target_words=1075,
-        min_words=900, max_words=1250, style_examples="x", style_positive="y",
+        min_words=900, max_words=1250, kotwica_dlugosci="x",
+        style_examples="x", style_positive="y",
         style_negative="z", ile_paraleli="one",
         ruch_koncowy_nazwa="KTO_NA_TYM_STOI",
         ruch_koncowy="nazwij beneficjenta i tego, kto placi")

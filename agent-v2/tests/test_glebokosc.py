@@ -92,7 +92,7 @@ for g, d in (("RICH", r), ("SINGLE", s)):
     _, opis_paraleli = config.losowa_liczba_paraleli(g)
     gotowy = stages._prompt(
         "pisarz.md", language="English", target_words=d["cel"], min_words=d["min"],
-        max_words=d["max"], style_examples="x", style_positive="y",
+        max_words=d["max"], kotwica_dlugosci="x", style_examples="x", style_positive="y",
         style_negative="z", ruch_koncowy_nazwa=ruch_nazwa, ruch_koncowy=ruch_opis,
         ile_paraleli=opis_paraleli, card_json="{}")
     sprawdz("prompt dla %s niesie cel %s slow" % (g, d["cel"]), str(d["cel"]) in gotowy)
@@ -118,8 +118,11 @@ sprawdz("pisarz ma pisac krotko, gdy paralel brak", "write short" in pisarz)
 
 print()
 print("=== 6. CIECIA W PISARZU ===")
-sprawdz("jeden akapit granic, nie trzy", "One paragraph. Not two, not three." in pisarz)
-sprawdz("zakaz relacji z researchu", "Never narrate the research" in pisarz)
+# ZMIANA DECYZJI (2026-08-23): prompt mial JEDNOCZESNIE nakaz zbierania
+# granic w jeden akapit i zakaz zbierania ich w ogole. Zostal zakaz.
+sprawdz("granice nie sa zbierane w osobny akapit",
+        "Never collect them." in pisarz
+        and "One paragraph. Not two, not three." not in pisarz)
 sprawdz("zakaz powtarzania mechanizmu", "Name the mechanism once" in pisarz)
 
 print()

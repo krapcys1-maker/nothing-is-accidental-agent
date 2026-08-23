@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 41 zestawów
-testów, 1026 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 1029 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -9330,7 +9330,7 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/skaut.md`
 
-**436 wierszy.** Pola wejsciowe: `count`, `history_json`, `pytania_czytelnikow`
+**442 wierszy.** Pola wejsciowe: `count`, `history_json`, `pytania_czytelnikow`
 
 ````markdown
 You are a topic scout for the English-language Substack "Nothing Is Accidental",
@@ -9765,7 +9765,13 @@ sorting your own proposals against each other:
   thread list says.
 
 Each list holds exactly three indices into your `topics` array, zero-based. The
-same index may not appear in both halves of a pair.
+same index may not appear in both halves of a pair, and no index may repeat
+within a list.
+
+**Order each triple, strongest case first.** The first index in `most_written_about`
+is the one you would bet has been covered most; the first in `richest` is the one
+carrying the most. We read the order, not just the membership — a list given in
+any order throws away half of what you know.
 
 These four lists decide which topic gets a paid research run, so put real work
 into them. The rest of the fields are the evidence; this is the judgement.

@@ -382,6 +382,14 @@ import pathlib     # noqa: E402
 
 _st = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
 sprawdz("indeksy() deduplikuje", "i not in bez_powtorzen" in _st)
+# KOD NIE MOZE WIEDZIEC O MODELU WIECEJ, NIZ MU POWIEDZIANO. Wazenie pozycja
+# zaklada, ze listy sa uporzadkowane — a prompt tego wczesniej NIE zamawial,
+# mowil tylko „exactly three indices". Zalozenie niepokryte kontraktem to
+# zgadywanie, nawet gdy trafne.
+_sk = pathlib.Path("agent-v2/prompts/skaut.md").read_text(encoding="utf-8")
+sprawdz("prompt zamawia KOLEJNOSC w rankingu",
+        "Order each triple, strongest case first" in _sk)
+sprawdz("i zakazuje powtorzen w liscie", "no index may repeat" in _sk)
 sprawdz("i istnieje wazenie pozycja", "def wazenie(" in _st)
 sprawdz("wagi malejaca z pozycja", "sila * (len(lista) - pozycja)" in _st)
 
