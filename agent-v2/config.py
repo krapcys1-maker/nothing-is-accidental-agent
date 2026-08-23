@@ -596,6 +596,22 @@ THINKING_HEADROOM_TOKENS = 28000
 
 # Głębokość myślenia. Jawnie, bo domyślne `high` na Opusie 5 potrafi podwoić
 # rachunek za wyjście bez pytania.
+#
+# TO JEST POKRETLO WYLACZNIE DLA MODELI CLAUDE i tak ma zostac. Sprawdzone na
+# trzydziestu dniach produkcji: z szesciu wpisow ponizej dociera do API DOKLADNIE
+# JEDEN — `write`, bo tylko on chodzi na Claude. `scout`, `discovery`,
+# `synthesis` i `review` chodza na DeepSeeku, a `forma` nie wywolala sie ani
+# razu (dodana po ostatnim artykule).
+#
+# DeepSeek ma wlasne pokretlo, DEEPSEEK_EFFORT="low", i jest ono JEDNO dla
+# wszystkich etapow z twardego powodu: tokeny rozumowania licza sie do
+# max_output_tokens, wiec "high" potrafi zjesc caly budzet i nie zostawic
+# miejsca na odpowiedz (bylo: 11 wyszukiwan, status completed, zero tekstu).
+# Przepiecie tych wpisow na DeepSeeka odtworzyloby dokladnie te awarie.
+#
+# Wpisy dla etapow deepseekowych ZOSTAJA, bo wyrazaja intencje na wypadek
+# przepiecia etapu na Claude. Zeby jednak nie byly cicha ozdoba, `llm.call`
+# mowi RAZ NA PROCES, ktory wpis nie zadzialal i dlaczego.
 EFFORT = {
     "scout": "medium",
     "discovery": "medium",

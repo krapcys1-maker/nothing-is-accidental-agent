@@ -87,6 +87,10 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
         )
 
 
+# Etapy, o ktorych juz powiedzielismy, ze ich EFFORT nie dziala.
+_EFFORT_BEZ_SKUTKU: set[str] = set()
+
+
 def _cost(model: str, tokens_in: int, tokens_out: int, web_searches: int,
           cache_hit: int = 0) -> tuple[float, bool]:
     # DeepSeek liczy od 2026-08-16 wg pory doby, wiec stawke bierzemy na moment
@@ -148,8 +152,19 @@ def _call_claude(
         "messages": [{"role": "user", "content": user}],
     }
     # `effort` istnieje na Opusie 5, Sonnecie 5 i Fable 5.
-    if purpose in config.EFFORT and model in (config.CLAUDE, config.SONNET, config.FABLE):
-        kwargs["output_config"] = {"effort": config.EFFORT[purpose]}
+    if purpose in config.EFFORT:
+        if model in (config.CLAUDE, config.SONNET, config.FABLE):
+            kwargs["output_config"] = {"effort": config.EFFORT[purpose]}
+        elif purpose not in _EFFORT_BEZ_SKUTKU:
+            # STALA, KTORA WYGLADA JAK USTAWIENIE. Wpis w EFFORT czyta sie jak
+            # decyzja o kosztach, a przy modelu spoza Claude nie robi NIC —
+            # i nie widac tego nigdzie. Mowimy raz na proces, nie przy kazdym
+            # wywolaniu: chodzi o to, zeby bylo wiadomo, a nie zeby zalac log.
+            _EFFORT_BEZ_SKUTKU.add(purpose)
+            print(f"  [effort] {purpose}={config.EFFORT[purpose]} NIE MA SKUTKU"
+                  f" — etap chodzi na {model}, a to pokretlo dziala tylko na"
+                  f" modelach Claude (DeepSeek ma DEEPSEEK_EFFORT"
+                  f"={config.DEEPSEEK_EFFORT})", flush=True)
     if web_search:
         # max_uses JEST OBOWIĄZKOWE. Bez niego model robił 17, potem 31 rund
         # wyszukiwania, a każda runda przesyła całą rozmowę od nowa jako wejście

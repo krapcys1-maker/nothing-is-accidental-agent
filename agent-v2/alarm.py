@@ -246,12 +246,35 @@ def nadaktywnosc() -> str | None:
 
 
 def koszt() -> str | None:
+    """Czy zblizamy sie do sufitu — dziennego ALBO miesiecznego.
+
+    Sufit miesieczny byl EGZEKWOWANY (`llm._preflight` rzuca BudgetExceeded),
+    ale nikt o nim nie ostrzegal. Pierwszym sygnalem bylby wiec agent padajacy
+    w polowie przebiegu — w najgorszym razie po oplaceniu researchu i przed
+    napisaniem artykulu. Ostrzezenie ma przyjsc, gdy da sie jeszcze cos z tym
+    zrobic, a nie w chwili zatrzymania.
+
+    Prog miesieczny jest nizszy niz dzienny (75% wobec 90%), bo miesiac zostaje
+    wyczerpany na wiele dni przed koncem i wtedy cisza jest dluga.
+    """
     conn = _polaczenie()
-    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    teraz = datetime.now(timezone.utc)
+    dzis = teraz.strftime("%Y-%m-%d")
     wydane = db.spent_usd(conn, dzis)
     if wydane > config.DAILY_LIMIT_USD * 0.9:
         return (f"Dzis wydane ${wydane:.2f} przy dziennym suficie "
                 f"${config.DAILY_LIMIT_USD}.")
+
+    wydane_m = db.spent_usd(conn, dzis[:7])
+    if wydane_m > config.MONTHLY_LIMIT_USD * 0.75:
+        import calendar
+
+        zostalo_dni = calendar.monthrange(teraz.year, teraz.month)[1] - teraz.day
+        zostalo_usd = config.MONTHLY_LIMIT_USD - wydane_m
+        return (f"W tym miesiacu wydane ${wydane_m:.2f} przy suficie "
+                f"${config.MONTHLY_LIMIT_USD}. Zostalo ${zostalo_usd:.2f} "
+                f"na {zostalo_dni} dni — po wyczerpaniu agent staje w miejscu, "
+                f"w ktorym akurat jest.")
     return None
 
 

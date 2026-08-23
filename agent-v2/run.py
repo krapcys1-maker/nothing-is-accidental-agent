@@ -751,6 +751,23 @@ def main() -> int:
         flush=True,
     )
 
+    # NIE ZACZYNAJ TEGO, CZEGO NIE SKONCZYSZ — ta sama zasada co przy przerwach
+    # miedzy dzialaniami. Sufit miesieczny jest egzekwowany PRZED KAZDYM
+    # wywolaniem, wiec artykul mogl paść w dowolnym miejscu: po oplaconym
+    # researchu i przed napisaniem, albo po napisaniu i przed recenzja.
+    # Pieniadze wydane, artykulu nie ma. Skoro znamy koszt calego przebiegu
+    # (RUN_LIMIT_USD), umiemy o to zapytac zawczasu.
+    if not config.NO_LIMIT:
+        from datetime import datetime as _dt, timezone as _tz
+
+        _m = _dt.now(_tz.utc).strftime("%Y-%m")
+        _zostalo = config.MONTHLY_LIMIT_USD - db.spent_usd(conn, _m)
+        if _zostalo < config.RUN_LIMIT_USD:
+            print(f"   MIESIAC NA WYCZERPANIU: zostalo ${_zostalo:.2f}, a caly "
+                  f"artykul to do ${config.RUN_LIMIT_USD}. Nie zaczynam — "
+                  f"lepiej nie napisac nic niz zaplacic za polowe.", flush=True)
+            return _done(conn, run_id, "budzet")
+
     try:
         stage = "scout"
         topics = cached(stage, lambda: stages.scout(conn, run_id, args.topics), args.use_cache)
@@ -1104,12 +1121,21 @@ def main() -> int:
         print(f"\n>> {status}" + (f" ({blocked_by})" if blocked_by else ""), flush=True)
         print(f">> zapisano: {path}", flush=True)
 
+        # OKLADKA POWSTAJE Z ARTYKULEM, NIE Z PUBLIKACJA. Stala wczesniej
+        # wewnatrz galezi `--wyslij`, wiec kazdy przebieg bez publikacji
+        # zapisywal na dysk artykul BEZ okladki, a cala sciezka graficzna
+        # sprawdzala sie wylacznie na zywo, za prawdziwe pieniadze i przy
+        # prawdziwej publikacji. Dlatego okladka zgubiona przez usterke
+        # zapisu wywolan wyszla na jaw dopiero po fakcie: nie bylo ani
+        # jednego przebiegu, w ktorym mogla sie zepsuc bezpiecznie.
+        #
+        # Grafika NIGDY nie zatrzymuje artykulu: brak czterech centow na
+        # obrazek nie moze wyrzucic do kosza researchu za czterdziesci.
+        stages.grafika(conn, run_id, draft, sciezka_artykulu=path)
+
         if args.wyslij:
             import browser
 
-            # Grafika NIGDY nie zatrzymuje artykułu: brak czterech centów na
-            # obrazek nie może wyrzucić do kosza researchu za czterdzieści.
-            stages.grafika(conn, run_id, draft, sciezka_artykulu=path)
             print("\n-- publikacja --", flush=True)
             wynik = browser.wystaw_artykul(path, wyslij=True)
             print(f">> {'OPUBLIKOWANY' if wynik.get('wyslane') else 'NIE POSZEDŁ'}"
