@@ -192,5 +192,52 @@ sprawdz("zaden model z routingu nie wywala sie na wyszukiwaniu",
         sorted(modele_z_routingu))
 
 print()
+print("=== 5. --stop-after ZATRZYMUJE NA KAZDYM ETAPIE, KTORY PRZYJMUJE ===")
+# `review` i `forma` byly w STAGES, wiec argparse przyjmowal je jako
+# `--stop-after` bez slowa sprzeciwu — a po nich NIE BYLO ani jednego
+# sprawdzenia. `--stop-after review --wyslij` szedl do konca i PUBLIKOWAL.
+#
+# Flaga, ktora ma zatrzymac przed publikacja, a publikuje, jest gorsza od jej
+# braku: brak widac od razu, cicha bezczynnosc dopiero po fakcie — czyli po
+# opublikowaniu tekstu, ktory mial poczekac.
+import ast as _a   # noqa: E402
+import re as _r    # noqa: E402
+
+drzewo_run = _a.parse(run_src)
+STAGES = None
+for _w in drzewo_run.body:
+    if (isinstance(_w, _a.Assign) and len(_w.targets) == 1
+            and isinstance(_w.targets[0], _a.Name)
+            and _w.targets[0].id == "STAGES"):
+        STAGES = [e.value for e in _w.value.elts]
+sprawdz("STAGES istnieje i nie jest pusta", bool(STAGES), STAGES)
+
+# Ktory etap ma po sobie sprawdzenie: idziemy liniami, tak jak wykonuje sie kod.
+biezacy, honorowane = None, set()
+for _l in run_src.splitlines():
+    _m = _r.search(r'^\s*stage = "([a-z_]+)"', _l)
+    if _m:
+        biezacy = _m.group(1)
+    if "args.stop_after ==" in _l:
+        # Sprawdzenie moze porownywac ze zmienna `stage` albo z nazwa wprost.
+        _n = _r.search(r'args\.stop_after == "([a-z_]+)"', _l)
+        honorowane.add(_n.group(1) if _n else biezacy)
+
+if STAGES:
+    bez_zatrzymania = [e for e in STAGES if e not in honorowane]
+    sprawdz("kazdy etap z STAGES da sie zatrzymac", not bez_zatrzymania,
+            bez_zatrzymania)
+    # KONTRDOWOD: test bylby pusty, gdyby `honorowane` bylo puste albo gdyby
+    # zbieral nazwy spoza STAGES. Wymagamy realnego pokrycia.
+    sprawdz("i sprawdzen jest tyle, ile etapow", len(honorowane) >= len(STAGES),
+            "%d wobec %d" % (len(honorowane), len(STAGES)))
+    sprawdz("dwa etapy, ktore wczesniej wypadaly, sa objete",
+            {"review", "forma"} <= honorowane, sorted(honorowane))
+# Argparse nie moze przyjmowac nazwy, ktorej nie ma w STAGES — inaczej wracamy
+# do punktu wyjscia inna droga.
+sprawdz("lista wyboru argparse to dokladnie STAGES",
+        "choices=STAGES" in run_src or "choices=list(STAGES)" in run_src)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

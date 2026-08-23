@@ -1052,6 +1052,15 @@ def main() -> int:
             flush=True,
         )
 
+        # ZATRZYMANIE PO RECENZJI. `review` i `forma` byly w STAGES, wiec
+        # argparse przyjmowal je jako `--stop-after` bez slowa sprzeciwu —
+        # a po nich NIE BYLO ani jednego sprawdzenia. `--stop-after review
+        # --wyslij` szedl wiec do konca i PUBLIKOWAL. Flaga, ktora ma
+        # zatrzymac przed publikacja, a publikuje, jest gorsza od jej braku:
+        # brak widac od razu, cicha bezczynnosc dopiero po fakcie.
+        if args.stop_after == stage:
+            return _done(conn, run_id, stage)
+
         # Obserwacja formy — osobne wywołanie od recenzji. Recenzent chroni
         # wnioskowanie przed zgłoszeniem (śmiała interpretacja nie jest wadą),
         # a ta bramka liczy m.in. zastrzeżenia; złączone tępiłyby się nawzajem.
@@ -1108,6 +1117,9 @@ def main() -> int:
                            % (float(verdict.get("confidence") or 0),
                               verdict.get("expected_primary_sources"))),
             })
+        if args.stop_after == "forma":
+            return _done(conn, run_id, "forma")
+
         # Fragmenty, których artykuł nie zużył, zostają zapisane razem z kartą.
         # Każdy przebieg zbiera ich kilkadziesiąt, a tekst bierze kilka — reszta
         # to gotowe, ocytowane fakty na notki w dni bez artykułu.
