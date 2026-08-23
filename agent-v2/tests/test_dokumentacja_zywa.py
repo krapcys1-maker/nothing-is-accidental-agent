@@ -109,5 +109,42 @@ sprawdz("zalacznik promptow ma aktualna tresc skauta", probka.strip() in po,
         probka[:70])
 
 print()
+print("=== 5. TEN SAM WYNIK NA KAZDYM SYSTEMIE ===")
+# Bylo `sorted(PROMPTY_KAT.glob("*.md"))`, czyli sortowanie obiektow Path.
+# Na Windowsie porownuja sie one BEZ UWZGLEDNIENIA WIELKOSCI LITER, na Linuksie
+# z uwzglednieniem — wiec ten sam generator dawal dwa rozne dokumenty na dwoch
+# maszynach. Test „przebudowa niczego nie zmienia" przechodzil lokalnie
+# i oblewal na serwerze, co jest najgorszym rodzajem testu: takim, ktory uczy,
+# ze czerwony wynik to pewnie srodowisko.
+sprawdz("prompty sortuja sie po nazwie jako napisie, nie po Path",
+        "key=lambda f: f.name" in sklej_src)
+nazwy = [n for n, _ in sklej._prompty()]
+sprawdz("i wynik jest posortowany wlasnie tak", nazwy == sorted(nazwy), nazwy[:4])
+# KONTRDOWOD: gdyby porzadek zalezal od wielkosci liter, pliki PISANE WERSALIKAMI
+# wyladowalyby w innym miejscu niz reszta. Sprawdzamy, ze siedza na poczatku,
+# czyli tam, gdzie stawia je porzadek ASCII — jednakowo wszedzie.
+wersaliki = [n for n in nazwy if n[0].isupper()]
+sprawdz("pliki WERSALIKAMI stoja na poczatku, jak w ASCII",
+        bool(wersaliki) and nazwy[:len(wersaliki)] == wersaliki, nazwy[:6])
+
+print()
+print("=== 6. PLIK, KTOREGO KOD NIE CZYTA, NIE UDAJE PROMPTU ===")
+# Cztery pliki w prompts/ nie sa wolane znikad. Dokument przedstawial je jako
+# „prompty robocze" z adnotacja „pola wejsciowe: brak" — czyli kazdy
+# odtwarzajacy bota szukalby miejsca, w ktorym sa wolane. Nie ma takiego.
+czytane = sklej._czytane_przez_kod()
+nieczytane = [n for n in nazwy if n not in czytane]
+sprawdz("generator odroznia czytane od nieczytanych", bool(czytane))
+if nieczytane:
+    sprawdz("i dokument nazywa je osobno",
+            "A.2. Pliki w `prompts/`, ktorych kod NIE czyta" in po)
+    for n in nieczytane:
+        sprawdz("  %s jest w sekcji A.2, nie wsrod promptow" % n,
+                ("`prompts/%s` (" % n) in po)
+# KONTRDOWOD: plik, ktory kod NAPRAWDE czyta, nie moze wpasc do A.2.
+sprawdz("prompt uzywany zostaje wsrod roboczych",
+        "skaut.md" in czytane, sorted(czytane)[:5])
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

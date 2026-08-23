@@ -1,4 +1,8 @@
 
+#### `OSWIADCZENIE_AI.md` (56 wierszy)
+
+**Pola wejściowe:** *(brak)*
+
 #### `bibliotekarz.md` (53 wierszy)
 
 **Pola wejściowe:** `bank`
@@ -119,10 +123,6 @@
 {{"reply": "<the reply, or null>", "reason_if_silent": "<one sentence, only when reply is null>", "kind": "answer"|"correction_accepted"|"disagreement"|"built_on"}}
 ```
 
-#### `OSWIADCZENIE_AI.md` (56 wierszy)
-
-**Pola wejściowe:** *(brak)*
-
 #### `pisarz.md` (229 wierszy)
 
 **Pola wejściowe:** `card_json`, `ile_paraleli`, `language`, `max_words`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
@@ -132,10 +132,6 @@
 ```json
 {{"title": "<the published headline>", "subtitle": "<one line>", "body": "<the article, plain text with blank lines between paragraphs>", "numbers_used": ["<each figure you wrote, exactly as written>"], "limits_paragraph_present": true|false}}
 ```
-
-#### `po_ludzku.md` (57 wierszy)
-
-**Pola wejściowe:** *(brak)*
 
 #### `recenzent.md` (59 wierszy)
 
@@ -156,14 +152,6 @@
 ```json
 {{"restack": true|false, "reason": "<one sentence: why this is or is not worth passing on>", "sentence": "<your sentence, or empty string if restack is false>", "mechanism_named": "<the other place this same logic runs, or empty string>"}}
 ```
-
-#### `ROZWOJ_KONTA.md` (102 wierszy)
-
-**Pola wejściowe:** *(brak)*
-
-#### `SKAD_BRAC.md` (127 wierszy)
-
-**Pola wejściowe:** *(brak)*
 
 #### `skaut.md` (436 wierszy)
 
@@ -214,7 +202,3 @@
 ```json
 {{"assessments": [{{"index": <0-based index of the topic>, "feasible": true|false, "confidence": 0.0-1.0, "expected_primary_sources": <integer>, "depth": "RICH"|"SINGLE"|"THIN", "parallels": ["<other domain where the same mechanism appears>"], "note": "<one sentence: where the record most likely lives, or why it does not>"}}]}}
 ```
-
-#### `ZASADY_NOTEK_I_KOMENTARZY.md` (139 wierszy)
-
-**Pola wejściowe:** *(brak)*

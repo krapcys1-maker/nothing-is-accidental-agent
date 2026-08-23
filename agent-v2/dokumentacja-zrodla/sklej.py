@@ -219,13 +219,36 @@ def _kontrakt_wyjscia(tresc: str) -> str:
 
 
 def _prompty() -> list[tuple[str, str]]:
-    return [(p.name, p.read_text(encoding="utf-8"))
-            for p in sorted(PROMPTY_KAT.glob("*.md"))]
+    """Wszystkie pliki z prompts/, w kolejnosci NIEZALEZNEJ OD SYSTEMU.
+
+    Bylo `sorted(PROMPTY_KAT.glob(...))`, czyli sortowanie obiektow Path —
+    a te na Windowsie porownuja sie BEZ UWZGLEDNIENIA WIELKOSCI LITER, na
+    Linuksie z uwzglednieniem. Ten sam generator dawal wiec dwa rozne
+    dokumenty na dwoch maszynach i test „przebudowa niczego nie zmienia"
+    przechodzil lokalnie, a oblewal na serwerze. Sortujemy po nazwie jako
+    napisie, bo napisy porownuja sie wszedzie tak samo.
+    """
+    return [(f.name, f.read_text(encoding="utf-8"))
+            for f in sorted(PROMPTY_KAT.glob("*.md"), key=lambda f: f.name)]
+
+
+def _czytane_przez_kod() -> set[str]:
+    """Ktore pliki z prompts/ wystepuja doslownie w kodzie agenta.
+
+    Prosty test na obecnosc nazwy w zrodle. Wystarcza, bo prompty laduje sie
+    przez `_prompt("nazwa.md", ...)`, a plik, ktorego nazwa nie pada nigdzie,
+    nie ma jak zostac wczytany.
+    """
+    zrodla = "".join(f.read_text(encoding="utf-8") for f in AGENT.glob("*.py"))
+    return {n for n, _ in _prompty() if n in zrodla}
 
 
 def gen_prompty() -> str:
+    czytane = _czytane_przez_kod()
     wiersze = [""]
     for nazwa, tresc in _prompty():
+        if nazwa not in czytane:
+            continue
         pola = _pola_promptu(tresc)
         wiersze += [
             "#### `%s` (%d wierszy)" % (nazwa, len(tresc.splitlines())),
@@ -257,7 +280,9 @@ def gen_zalacznik_prompty() -> str:
         "---",
         "",
     ]
-    for nazwa, tresc in _prompty():
+    czytane = _czytane_przez_kod()
+    nieczytane = [(n, t) for n, t in _prompty() if n not in czytane]
+    for nazwa, tresc in [(n, t) for n, t in _prompty() if n in czytane]:
         pola = _pola_promptu(tresc)
         wiersze += [
             "#### `prompts/%s`" % nazwa,
@@ -273,6 +298,24 @@ def gen_zalacznik_prompty() -> str:
             "---",
             "",
         ]
+    if nieczytane:
+        # PLIKI, KTORE LEZA W prompts/, A NIE SA PROMPTAMI. Dokument
+        # przedstawial je wczesniej jako „prompty robocze" z adnotacja „pola
+        # wejsciowe: brak" — czyli kazdy odtwarzajacy bota szukalby miejsca,
+        # w ktorym sa wolane. Nie ma takiego miejsca. To notatki wlasciciela
+        # i tak maja byc opisane.
+        wiersze += [
+            "### A.2. Pliki w `prompts/`, ktorych kod NIE czyta",
+            "",
+            "Nazwa zadnego z nich nie pada w zrodlach agenta, wiec nie ma jak",
+            "trafic do modelu. Leza tu jako notatki i zasady dla czlowieka —",
+            "nie szukaj miejsca, w ktorym sa wolane, bo takiego nie ma.",
+            "",
+        ]
+        for nazwa, tresc in nieczytane:
+            wiersze += ["- `prompts/%s` (%d wierszy)"
+                        % (nazwa, len(tresc.splitlines()))]
+        wiersze.append("")
     return NL.join(wiersze)
 
 
