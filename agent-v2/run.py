@@ -560,6 +560,28 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         Obserwujemy TYLKO tych, u których naprawdę byliśmy — nie z listy
         podpowiedzi. Obserwowanie kogoś, kogo się nie czytało, to zbieranie
         nazwisk, a nie budowanie kręgu.
+        
+        WYCOFANE 2026-08-23. Substack zdjal przycisk „Follow" z profili.
+        Zmierzone tego dnia na szesciu profilach — trzech zupelnie obcych
+        i trzech z naszej historii: kazdy pokazuje „Subscribe" i „Message",
+        a slowo „Follow" nie wystepuje w ich HTML ANI RAZ. Nie ma go rowniez
+        na zakladce `/@kto/notes`.
+
+        Przycisk zyje wylacznie w widgetach „kogo obserwowac" — w kanale
+        i w kolumnie obok notek. Czyli w LISCIE PODPOWIEDZI, a obserwowanie
+        kogos, kogo sie nie czytalo, to zbieranie nazwisk. Ta funkcja broni
+        sie przed tym od pierwszego dnia i nie zamierzam tego odwracac po to,
+        zeby rubryka przestala pokazywac zero.
+
+        Wczesniej diagnoza byla inna i bledna: myslalem, ze bierzemy uchwyt
+        PUBLIKACJI zamiast uchwytu CZLOWIEKA. Sprawdzone na zywym API —
+        dla wszystkich pieciu hostow z historii oba uchwyty sa identyczne.
+        Nie o to chodzilo.
+
+        Blok zostaje nietkniety i wroci jedna stala, gdyby przycisk wrocil.
+        Norma jest zerowa, wiec nie rezerwuje budzetu i nie zaklamuje licznika
+        wolumenow: rubryka wiecznie na zerze mowi „cos jest zepsute", a tutaj
+        nie ma czego naprawiac.
         """
         if not na_teraz.get("follow"):
             return
@@ -573,10 +595,9 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         for host in kandydaci[: na_teraz["follow"]]:
             if not zostal_czas("obserwowanie"):
                 return
-            # UCHWYT AUTORA, NIE PUBLIKACJI. Strona publikacji ma `Subscribe`;
-            # `Follow` maja profile ludzi — a my szukalismy `Follow`
-            # na stronie publikacji i nie znalezlismy go ani razu.
-            uchwyt = browser.uchwyt_autora(host)
+            # Nie `host.split(".")[0]`: przy wlasnej domenie dawalo to "www"
+            # i agent probowal obserwowac konto o tej nazwie.
+            uchwyt = browser.uchwyt_publikacji(host)
             if not uchwyt:
                 # POMINIECIE TEZ JEST WYNIKIEM. Cichy `continue` to dokladnie
                 # ten mechanizm, przez ktory obserwacje tygodniami udawaly, ze

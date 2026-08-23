@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **11 plików**, 11 302 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **11 plików**, 11 287 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 43 zestawów
-testów, 1170 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 1174 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1229 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1250 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -248,7 +248,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2558 wierszy, 57 funkcji na poziomie modułu, 0 klas
+2516 wierszy, 56 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -284,7 +284,6 @@ wiec nie da sie go rozjechac z kodem.
 | `pobierz_subskrybentow()` | Czyta liste subskrybentow z WLASNEGO panelu, wlasna sesja. |
 | `zloz_wiersze_subskrybentow(surowe)` | Sklada wiersze z komorek tabeli panelu: adres, typ i data rozpoczecia. |
 | `_wiersze_subskrybentow(page)` *(wewn.)* | Czyta komorki tabeli z panelu i oddaje je zlozone. |
-| `uchwyt_autora(host)` | Konto CZLOWIEKA, ktory pisze pod tym adresem — nie konto publikacji. |
 | `obserwuj_profil(handle, wyslij)` | Obserwuje cudzy profil — jego notki trafiaja do naszego kanalu. |
 | `zasubskrybuj(handle, wyslij)` | Subskrybuje cudzy profil. Ląduje w skrzynce właściciela, więc wąsko. |
 | `_esc(t)` *(wewn.)* | — |
@@ -436,7 +435,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-1682 wierszy, 19 funkcji na poziomie modułu, 0 klas
+1688 wierszy, 19 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -10484,7 +10483,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `NOTE_MIX_OTHER_DAY` | `("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "` | — |
 | `LAJKI_DZIENNIE` | `(10, 16)` | --- zachowanie spoleczne: widelki, nie stale liczby ------------------------- Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma no |
 | `KOMENTARZE_DZIENNIE` | `(8, 12)` | Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo k |
-| `FOLLOW_MIESIECZNIE` | `(20, 30)` | Obserwacje wykonywaly sie ZERO razy przez piec dni przy budzecie 30-44 miesiecznie. Przyczyna nie byla w liczbie, tylko w kolejnosci blokow  |
+| `FOLLOW_MIESIECZNIE` | `(0, 0)` | ZERO, BO PRZYCISKA NIE MA. Obserwacje nie wykonaly sie ANI RAZU i przez tygodnie wygladalo to na blad kolejnosci blokow albo za waski budzet |
 | `SUBSKRYPCJE_MIESIECZNIE` | `(6, 12)` | — |
 | `PROG_ALARMU_WOLUMENU` | `60` | Ponizej ilu procent normy uznajemy, ze cos jest zepsute, a nie po prostu chudsze. Prog jest niski celowo: budzety sa LOSOWANE z widelek i dz |
 | `CICHY_DZIEN_NA_ILE` | `8` | ODBLOKOWANE decyzja wlasciciela 2026-08-19. Restack cudzej notki z wlasnym zdaniem trafia do kanalu NASZYCH obserwujacych, powiadamia autora |

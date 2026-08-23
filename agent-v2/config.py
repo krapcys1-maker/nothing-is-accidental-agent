@@ -1177,7 +1177,7 @@ NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", 
 #   zmierzone (srednia z 5 dni)   bylo w konfiguracji   ustawiam
 #   lajki        9,6              12-20                 10-16
 #   komentarze   7,0              15-20                 8-12
-#   obserwacje   0,0 (!)          30-44/mies            20-30/mies
+#   obserwacje   0,0 (!)          30-44/mies            0 (nie ma przycisku)
 #   subskrypcje  ~0,8/dzien       6-12/mies             6-12/mies (bez zmian)
 #   restacki     0,4              2-4/dzien             1-2/dzien
 LAJKI_DZIENNIE = (10, 16)
@@ -1186,11 +1186,17 @@ LAJKI_DZIENNIE = (10, 16)
 # trzy warianty plus sprawdzenie faktow, okolo trzech centow. Przy dwunastu
 # dziennie wychodzi ~11 USD miesiecznie samych komentarzy.
 KOMENTARZE_DZIENNIE = (8, 12)     # 0 jest dozwolone: milczenie bije slaby komentarz
-# Obserwacje wykonywaly sie ZERO razy przez piec dni przy budzecie 30-44
-# miesiecznie. Przyczyna nie byla w liczbie, tylko w kolejnosci blokow —
-# patrz `run.py`. Liczbe i tak scinam, bo trzydziesci cztery obserwacje
-# miesiecznie z konta, ktore ma dwa tygodnie, wygladaja jak zbieranie nazwisk.
-FOLLOW_MIESIECZNIE = (20, 30)     # obserwowanie to czytanie, nie zbieranie
+# ZERO, BO PRZYCISKA NIE MA. Obserwacje nie wykonaly sie ANI RAZU i przez
+# tygodnie wygladalo to na blad kolejnosci blokow albo za waski budzet.
+# Sprawdzone 2026-08-23 na szesciu profilach: Substack zdjal „Follow" ze stron
+# profilowych. Zostaly „Subscribe" i „Message", a samo slowo „Follow" nie
+# wystepuje w HTML tych stron ani razu — i nie ma go tez na `/@kto/notes`.
+# Przetrwal wylacznie w widgetach „kogo obserwowac", czyli w liscie podpowiedzi.
+#
+# Zero jest tu UCZCIWSZE niz mala liczba: budzetu nie rezerwujemy na zdolnosc,
+# ktorej nie mamy, a licznik wolumenow nie pokazuje wiecznego zera, ktore
+# czytaloby sie jak awaria. Wrocic to jedna zmiana w tym wierszu.
+FOLLOW_MIESIECZNIE = (0, 0)       # patrz wyzej: nie ma czego kliknac
 SUBSKRYPCJE_MIESIECZNIE = (6, 12)  # laduje w skrzynce wlasciciela, wiec waskie
 
 

@@ -112,7 +112,7 @@
 | `NOTE_MIX_OTHER_DAY` | `("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "` | — |
 | `LAJKI_DZIENNIE` | `(10, 16)` | --- zachowanie spoleczne: widelki, nie stale liczby ------------------------- Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma no |
 | `KOMENTARZE_DZIENNIE` | `(8, 12)` | Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo k |
-| `FOLLOW_MIESIECZNIE` | `(20, 30)` | Obserwacje wykonywaly sie ZERO razy przez piec dni przy budzecie 30-44 miesiecznie. Przyczyna nie byla w liczbie, tylko w kolejnosci blokow  |
+| `FOLLOW_MIESIECZNIE` | `(0, 0)` | ZERO, BO PRZYCISKA NIE MA. Obserwacje nie wykonaly sie ANI RAZU i przez tygodnie wygladalo to na blad kolejnosci blokow albo za waski budzet |
 | `SUBSKRYPCJE_MIESIECZNIE` | `(6, 12)` | — |
 | `PROG_ALARMU_WOLUMENU` | `60` | Ponizej ilu procent normy uznajemy, ze cos jest zepsute, a nie po prostu chudsze. Prog jest niski celowo: budzety sa LOSOWANE z widelek i dz |
 | `CICHY_DZIEN_NA_ILE` | `8` | ODBLOKOWANE decyzja wlasciciela 2026-08-19. Restack cudzej notki z wlasnym zdaniem trafia do kanalu NASZYCH obserwujacych, powiadamia autora |

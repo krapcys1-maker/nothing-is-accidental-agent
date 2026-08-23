@@ -20,6 +20,7 @@ Budzet, ktorego nie da sie wydac, nie jest budzetem: klamie w logu, psuje
 dzielenie normy na przebiegi i ukrywa, ze cos w ogole nie chodzi.
 """
 import re
+import pathlib
 import sys
 
 sys.path.insert(0, "agent-v2")
@@ -64,8 +65,13 @@ sprawdz("komentarze 8-12 (było 15-20)", config.KOMENTARZE_DZIENNIE == (8, 12),
         config.KOMENTARZE_DZIENNIE)
 sprawdz("restacki 1-2 (było 2-4)", config.RESTACK_DZIENNIE == (1, 2),
         config.RESTACK_DZIENNIE)
-sprawdz("obserwacje 20-30/mies (było 30-44)",
-        config.FOLLOW_MIESIECZNIE == (20, 30), config.FOLLOW_MIESIECZNIE)
+# WYCOFANE 2026-08-23: Substack zdjal przycisk „Follow" ze stron profilowych.
+# Zmierzone na szesciu profilach — trzech obcych i trzech z naszej historii:
+# wszedzie „Subscribe" i „Message", slowa „Follow" nie ma w HTML ani razu,
+# ani na `/@kto/notes`. Przetrwal tylko w widgetach „kogo obserwowac".
+# Zero, bo budzetu nie rezerwuje sie na zdolnosc, ktorej sie nie ma.
+sprawdz("obserwacje 0/mies — nie ma czego kliknac",
+        config.FOLLOW_MIESIECZNIE == (0, 0), config.FOLLOW_MIESIECZNIE)
 sprawdz("subskrypcje bez zmian 6-12/mies",
         config.SUBSKRYPCJE_MIESIECZNIE == (6, 12), config.SUBSKRYPCJE_MIESIECZNIE)
 sprawdz("notki nietknięte — to silnik wzrostu",
@@ -76,7 +82,21 @@ print("=== 3. KAZDE WIDELKI MAJA SENS JAKO WIDELKI ===")
 for nazwa in ("LAJKI_DZIENNIE", "KOMENTARZE_DZIENNIE", "RESTACK_DZIENNIE",
               "FOLLOW_MIESIECZNIE", "SUBSKRYPCJE_MIESIECZNIE"):
     dol, gora = getattr(config, nazwa)
-    sprawdz("%-24s dół <= góra, oba > 0" % nazwa, 0 < dol <= gora, (dol, gora))
+    # ZERO JEST DOZWOLONE, ale tylko jako (0, 0) — czyli zdolnosc swiadomie
+    # wylaczona. Widelki w rodzaju (0, 5) albo (5, 0) to zawsze literowka,
+    # a nie decyzja, i te loop ma dalej lapac.
+    wylaczone = (dol, gora) == (0, 0)
+    sprawdz("%-24s dół <= góra, oba > 0 albo jawne (0, 0)" % nazwa,
+            wylaczone or 0 < dol <= gora, (dol, gora))
+    if wylaczone:
+        # Wylaczona zdolnosc musi miec napisany POWOD przy stalej. Bez tego
+        # zero jest nieodroznialne od pomylki i za pol roku nikt nie bedzie
+        # wiedzial, czy to decyzja, czy ktos zjechal palcem.
+        zrodlo_cfg = pathlib.Path("agent-v2/config.py").read_text(encoding="utf-8")
+        blok = zrodlo_cfg[:zrodlo_cfg.index(nazwa + " = ")]
+        akapit = blok.rsplit(chr(10) + chr(10), 1)[-1]
+        sprawdz("%-24s zero ma napisany powod tuz obok" % nazwa,
+                akapit.count("#") >= 3 and len(akapit) > 200, len(akapit))
 
 print()
 print("=== 4. RESTACK JEST NAJRZADSZY ZE WSZYSTKIEGO ===")

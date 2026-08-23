@@ -161,8 +161,23 @@ sprawdz("subskrypcje sa osobnym blokiem dnia",
         '("subskrypcje", subskrybuj)' in zrodlo)
 print("    widelki: obserwacje %s/mies, subskrypcje %s/mies"
       % (config.FOLLOW_MIESIECZNIE, config.SUBSKRYPCJE_MIESIECZNIE))
-sprawdz("subskrypcji ma byc wyraznie mniej niz obserwacji",
-        config.SUBSKRYPCJE_MIESIECZNIE[1] < config.FOLLOW_MIESIECZNIE[0])
+# Asercja wisiala na liczbie obserwacji: subskrypcji mialo byc mniej NIZ ICH.
+# Po wycofaniu obserwacji (2026-08-23, Substack zdjal „Follow" z profili)
+# obserwacji jest zero, wiec porownanie stalo sie niespelnialne — a bronilo
+# rzeczy, ktora dalej jest prawdziwa i nie ma z obserwacjami nic wspolnego.
+#
+# Awaria, przed ktora to stalo: `_klik_na_profilu` probowal kolejno „Subscribe"
+# i „Follow" i bral pierwszy znaleziony, a „Subscribe" jest zawsze — wiec kazda
+# proba obserwacji konczyla sie SUBSKRYPCJA. Agent subskrybowal w tempie
+# obserwacji, prosto do skrzynki wlasciciela. Miara tego bledu jest wielkosc
+# BEZWZGLEDNA subskrypcji, nie ich stosunek do czegokolwiek.
+sprawdz("subskrypcji jest malo, bo ladzia w skrzynce wlasciciela",
+        config.SUBSKRYPCJE_MIESIECZNIE[1] <= 12, config.SUBSKRYPCJE_MIESIECZNIE)
+sprawdz("i wielokrotnie mniej niz komentarzy, ktore nikogo nie zasypuja",
+        config.SUBSKRYPCJE_MIESIECZNIE[1] * 4 < config.KOMENTARZE_DZIENNIE[0] * 30,
+        (config.SUBSKRYPCJE_MIESIECZNIE, config.KOMENTARZE_DZIENNIE))
+sprawdz("KONTRDOWOD: tempo obserwacji sprzed naprawy by tego nie przeszlo",
+        not (30 <= 12))
 
 print()
 print("=== 3. NOTKI NIE POWTARZAJA TEMATU ===")
@@ -254,106 +269,77 @@ finally:
 
 print()
 print()
-print("=== 6. UCHWYT OSOBY, NIE UCHWYT PUBLIKACJI ===")
-# Tu mieszkal blad, ktory dawal STO PROCENT porazek po cichu. `obserwuj()`
-# liczyl uchwyt przez `uchwyt_publikacji`, a ta funkcja dla adresow w domenie
-# Substacka robi skrot `host.split(".")[0]`. Dla
-# `writersartistsyearbook.substack.com` wychodzil `writersartistsyearbook` —
-# uchwyt PUBLIKACJI. Strona publikacji ma `Subscribe`; `Follow` maja profile
-# LUDZI. Wiec szukalismy przycisku, ktorego tam z definicji nie ma.
+print("=== 6. OBSERWACJE WYCOFANE, BO PRZYCISKA NIE MA ===")
+# Obserwacje nie wykonaly sie ANI RAZU i przez tygodnie wygladalo to na blad
+# kolejnosci blokow albo za waski budzet. Moja pierwsza diagnoza byla tez
+# bledna: myslalem, ze bierzemy uchwyt PUBLIKACJI zamiast uchwytu CZLOWIEKA.
+# Sprawdzone na zywym API — dla wszystkich pieciu hostow z historii oba uchwyty
+# sa IDENTYCZNE, wiec nie o to chodzilo.
 #
-# Zero obserwacji przy normie okolo dwudziestu pieciu miesiecznie. Zobaczylismy
-# to dopiero wtedy, gdy porazki zaczely zostawiac slad w dzienniku.
+# Prawdziwy powod, zmierzony 2026-08-23 na szesciu profilach (trzech obcych
+# i trzech z naszej historii): Substack zdjal „Follow" ze stron profilowych.
+# Zostalo „Subscribe" i „Message", a slowo „Follow" nie wystepuje w ich HTML
+# ani razu — ani na `/@kto/notes`. Przycisk przetrwal tylko w widgetach
+# „kogo obserwowac", czyli w liscie PODPOWIEDZI, ktorej ta funkcja unika
+# od pierwszego dnia.
 #
-# KONTRDOWOD: byline oddaje INNY uchwyt niz nazwa publikacji. Kod sprzed
-# naprawy oddalby nazwe publikacji i ten test by go oblal.
+# Test pilnuje teraz, ze zdolnosc jest WYLACZONA SWIADOMIE, a nie zepsuta.
 
-wywolania = []
+sprawdz("norma obserwacji to zero", config.FOLLOW_MIESIECZNIE == (0, 0),
+        config.FOLLOW_MIESIECZNIE)
+sprawdz("i powod stoi przy stalej, nie w commicie",
+        "Substack zdjal" in pathlib.Path("agent-v2/config.py").read_text(
+            encoding="utf-8"))
+sprawdz("subskrypcje NIETKNIETE — to osobna, dzialajaca zdolnosc",
+        config.SUBSKRYPCJE_MIESIECZNIE[1] > 0, config.SUBSKRYPCJE_MIESIECZNIE)
 
+# Zerowa norma nie moze wysadzic licznika ani udawac awarii. Rubryka wiecznie
+# na zerze czytalaby sie jak „cos jest zepsute" — a tu nie ma czego naprawiac.
+sprawdz("licznik zna rodzaj 'obserwacja'", "obserwacja" in config.normy_dzienne())
+sprawdz("i jego norma dzienna to zero",
+        config.normy_dzienne()["obserwacja"] == 0)
 
-class FikcyjnaStrona:
-    def close(self):
-        pass
+with tempfile.TemporaryDirectory() as tmp:
+    stary_kat = config.DATA_DIR
+    try:
+        config.DATA_DIR = pathlib.Path(tmp)
+        (config.DATA_DIR / "dziennik.jsonl").write_text(
+            '{"rodzaj": "lajk", "udane": true, "kiedy": "2999-01-01T00:00:00Z"}\n',
+            encoding="utf-8")
+        pods = stages.podsumowanie_dzialan(7)
+    finally:
+        config.DATA_DIR = stary_kat
+    obs = pods.get("obserwacja", {})
+    sprawdz("zerowa norma nie dzieli przez zero", isinstance(pods, dict))
+    sprawdz("realizacja to BRAK, a nie 0% — inaczej wyglada jak awaria",
+            obs.get("realizacja") is None, obs.get("realizacja"))
 
-
-class FikcyjnyKontekst:
-    def new_page(self):
-        return FikcyjnaStrona()
-
-
-class Zamykalne:
-    def close(self):
-        pass
-
-    def stop(self):
-        pass
-
-
-def fikcyjne_api(page, sciezka, baza=None):
-    wywolania.append((sciezka, baza))
-    if "bezbyline" in (baza or ""):
-        return {"posts": [{"title": "bez autora"}]}
-    if "pusto" in (baza or ""):
-        return {"posts": []}
-    return {"posts": [{"title": "x",
-                       "publishedBylines": [{"handle": "emma-shevah"}]}]}
-
-
-stare = (browser.wymagaj_sesji, browser.podlacz_sie, browser.api_json)
-try:
-    browser.wymagaj_sesji = lambda: None
-    browser.podlacz_sie = lambda: (Zamykalne(), Zamykalne(), FikcyjnyKontekst())
-    browser.api_json = fikcyjne_api
-
-    HOST = "writersartistsyearbook.substack.com"
-    autor = browser.uchwyt_autora(HOST)
-    publikacja = browser.uchwyt_publikacji(HOST)
-
-    print("    host:       %s" % HOST)
-    print("    do FOLLOW:  %s" % autor)
-    print("    do SUBSCRIBE: %s" % publikacja)
-
-    sprawdz("obserwacja dostaje uchwyt CZLOWIEKA", autor == "emma-shevah", autor)
-    sprawdz("subskrypcja zostaje przy uchwycie PUBLIKACJI",
-            publikacja == "writersartistsyearbook", publikacja)
-    sprawdz("KONTRDOWOD: to dwie rozne wartosci, wiec test je rozroznia",
-            autor != publikacja)
-    sprawdz("uchwyt autora czytany z bylines, nie z hosta",
-            wywolania and "/api/v1/posts" in wywolania[0][0]
-            and HOST in (wywolania[0][1] or ""), wywolania[:1])
-    sprawdz("brak byline -> None, zamiast zgadywania",
-            browser.uchwyt_autora("bezbyline.substack.com") is None)
-    sprawdz("brak postow -> None", browser.uchwyt_autora("pusto.substack.com") is None)
-
-    ile = len(wywolania)
-    sprawdz("pusty host nie rusza przegladarki",
-            browser.uchwyt_autora("") is None and len(wywolania) == ile)
-finally:
-    browser.wymagaj_sesji, browser.podlacz_sie, browser.api_json = stare
-
-# I to, co naprawde decyduje: KTORY blok run.py po ktory uchwyt siega.
-# Sprawdzane po drzewie skladni, nie grepem, zeby trafic w cialo wlasciwej
-# funkcji, a nie w pierwsze pasujace slowo w pliku.
-drzewo = ast.parse(pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8"))
-uchwyty = {}
-for w in ast.walk(drzewo):
-    if isinstance(w, ast.FunctionDef) and w.name in ("obserwuj", "subskrybuj"):
-        uchwyty[w.name] = {
-            n.func.attr for n in ast.walk(w)
-            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
-        }
-
-sprawdz("blok obserwacji wola uchwyt_autora",
-        "uchwyt_autora" in uchwyty.get("obserwuj", set()))
-sprawdz("blok obserwacji JUZ NIE wola uchwyt_publikacji",
-        "uchwyt_publikacji" not in uchwyty.get("obserwuj", set()),
-        sorted(uchwyty.get("obserwuj", ())))
-sprawdz("blok subskrypcji dalej wola uchwyt_publikacji",
-        "uchwyt_publikacji" in uchwyty.get("subskrybuj", set()))
-sprawdz("i NIE przelaczyl sie na autora — subskrybuje sie publikacje",
-        "uchwyt_autora" not in uchwyty.get("subskrybuj", set()))
-sprawdz("nieustalony autor zostawia slad w dzienniku",
-        "dopisz_wynik" in uchwyty.get("obserwuj", set()))
+# KONTRDOWOD: to wylaczenie jedna stala, a nie wyprucie bloku. Gdyby przycisk
+# wrocil, blok ma byc na miejscu i gotowy — inaczej „wycofane" znaczy „usuniete"
+# i nikt tego nie odkreci.
+zrodlo_run = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
+drzewo = ast.parse(zrodlo_run)
+blok = [w for w in ast.walk(drzewo)
+        if isinstance(w, ast.FunctionDef) and w.name == "obserwuj"]
+sprawdz("blok obserwacji NADAL ISTNIEJE w kodzie", len(blok) == 1)
+sprawdz("i nadal potrafilby kliknac, gdyby norma wrocila",
+        "obserwuj_profil" in {n.func.attr for n in ast.walk(blok[0])
+                              if isinstance(n, ast.Call)
+                              and isinstance(n.func, ast.Attribute)})
+sprawdz("powod wycofania stoi w samym bloku",
+        "WYCOFANE 2026-08-23" in ast.get_docstring(blok[0]))
+# KONTRDOWOD, ze to naprawde jedna stala: budzet dnia musi liczyc pozycje
+# „follow" WLASNIE z FOLLOW_MIESIECZNIE. Gdyby liczyl ja skadinad, zmiana
+# stalej niczego by nie odkrecila, a „wycofane" znaczyloby „zakopane".
+zrodlo_stages = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+budzet = [w for w in ast.walk(ast.parse(zrodlo_stages))
+          if isinstance(w, ast.FunctionDef) and w.name == "budzet_dnia"]
+stale_w_budzecie = {n.attr for n in ast.walk(budzet[0])
+                    if isinstance(n, ast.Attribute)}
+sprawdz("budzet dnia liczy follow z tej wlasnie stalej",
+        "FOLLOW_MIESIECZNIE" in stale_w_budzecie)
+sprawdz("KONTRDOWOD: subskrypcje maja SWOJA stala, wiec sa niezalezne",
+        "SUBSKRYPCJE_MIESIECZNIE" in stale_w_budzecie)
 
 
 print("=== PRODUKCJA ===")
