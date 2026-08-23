@@ -100,3 +100,24 @@ agent-v2/data/
 
 # Osobista konfiguracja uprawnien Claude Code — nie czesc projektu
 .claude/settings.local.json
+
+# === 2026-08-23: zatkane dziury w siatce na sekrety ===
+# Przy porzadkach na GitHubie sprawdzilem, ktore nazwy plikow by sie
+# przeslizgnely. `haslo i login do konta na substack.txt` byl chroniony
+# przez wzorzec `*login*` — czyli przez PRZYPADEK W NAZWIE, nie przez regule.
+# Nazwa `klucze api.txt` juz by przeszla, a repozytorium jest publiczne.
+#
+# Wzorce nizej sa szersze niz to, co dzis lezy na dysku. To jest celowe:
+# siatka na sekrety ma lapac to, czego jeszcze nie ma.
+*sekret*
+*sekrety*
+*klucz*
+*klucze*
+*logowania*
+*api-key*
+*apikey*
+*api_key*
+*.pem
+*.p12
+id_rsa*
+id_ed25519*

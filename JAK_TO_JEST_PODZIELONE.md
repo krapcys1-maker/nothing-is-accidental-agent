@@ -1,15 +1,22 @@
 # Co gdzie stoi — mapa dla wracającego po przerwie
 
-Ten plik istnieje, bo nazwy się mylą. Katalog **`agent-v2/`** to *obecny,
-działający bot*, a gałąź **`v2-test`** to *eksperyment z bankiem researchu*.
-To dwie różne rzeczy i „v2" znaczy w nich co innego.
+Ten plik istnieje, bo nazwy się mylą.
 
-## Dwie gałęzie, dwa światy
+> **Zmiana z 23 sierpnia 2026.** Gałąź `v2-test` już nie istnieje — została
+> wmergowana w `main` i usunięta razem z pięćdziesięcioma trzema innymi przy
+> porządkach. Jej treść żyje w `main`; spis wszystkich usuniętych gałęzi
+> z numerami commitów stoi w [`docs/GALEZIE_USUNIETE_2026-08-23.md`](docs/GALEZIE_USUNIETE_2026-08-23.md).
+>
+> **Kopia testowa na serwerze została** — nadal stoi w `~/nia-v2-test`
+> ze znacznikiem `TO_JEST_KOPIA_TESTOWA` i nadal odmawia publikacji. Zmieniło
+> się tylko to, że nie jest już osobną gałęzią.
 
-| | `main` | `v2-test` |
+## Dwa katalogi na serwerze, jedna gałąź
+
+| | produkcja | kopia testowa |
 |---|---|---|
-| co to jest | **PRODUKCJA** — bot, który publikuje na żywo | **EKSPERYMENT** — bank researchu, bibliotekarz, styl grafik |
-| gdzie stoi na serwerze | `~/nothing-is-accidental-agent` | `~/nia-v2-test` |
+| gdzie stoi | `~/nothing-is-accidental-agent` | `~/nia-v2-test` |
+| gałąź | `main` | `main` |
 | kto to uruchamia | `nia-agent.timer` (11:20, 19:20, 23:40 UTC) | wyłącznie ręcznie |
 | baza | `~/nothing-is-accidental-agent/agent-v2/data/agent-v2.db` | `~/nia-v2-test/agent-v2/data/agent-v2.db` |
 | czy publikuje | **tak, na żywo** | **nie — kod odmawia** |
