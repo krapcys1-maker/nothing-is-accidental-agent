@@ -1255,30 +1255,51 @@ def pobierz_subskrybentow() -> dict[str, Any]:
     return wynik
 
 
-def _wiersze_subskrybentow(page) -> list[dict[str, str]]:
-    """Wiersze tabeli panelu: adres, typ i data rozpoczecia.
+def zloz_wiersze_subskrybentow(surowe) -> list[dict[str, str]]:
+    """Sklada wiersze z komorek tabeli panelu: adres, typ i data rozpoczecia.
 
-    Nie polegamy na klasach CSS — Substack generuje je losowo. Bierzemy komorki
-    wiersza i szukamy tej, ktora wyglada na adres; reszta idzie po kolejnosci,
-    ktora panel pokazuje w naglowku.
+    Osobna, CZYSTA funkcja — bez przegladarki — bo pierwsza wersja brala typ
+    z `komorki[1]` na sztywno i wstawiala tam POWTORZONY ADRES. Wyszlo to
+    dopiero na zywym pobraniu, przy ogladaniu zapisanego pliku. Nie polegamy
+    juz na numerze kolumny: znajdujemy komorke z adresem i bierzemy NASTEPNA,
+    bo w naglowku panelu typ stoi zaraz za subskrybentem.
+
+    Nie polegamy tez na klasach CSS — Substack generuje je losowo
+    (`container-_91AK1`), wiec selektor po klasie padnie przy pierwszym
+    wdrozeniu po ich stronie.
     """
     import re
 
+    adres_re = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
+    wiersze: list[dict[str, str]] = []
+    for komorki in surowe or []:
+        komorki = [str(k or "").strip() for k in komorki]
+        gdzie = next((i for i, k in enumerate(komorki)
+                      if adres_re.fullmatch(k)), None)
+        if gdzie is None:
+            continue
+        # Typ to nastepna komorka, ale nigdy druga kopia adresu ani pusta.
+        typ = ""
+        for k in komorki[gdzie + 1:]:
+            if k and not adres_re.fullmatch(k):
+                typ = k
+                break
+        wiersze.append({
+            "email": komorki[gdzie],
+            "typ": typ,
+            "od": next((k for k in komorki[gdzie + 1:]
+                        if re.search(r"\b(19|20)\d{2}\b", k)), ""),
+        })
+    return wiersze
+
+
+def _wiersze_subskrybentow(page) -> list[dict[str, str]]:
+    """Czyta komorki tabeli z panelu i oddaje je zlozone."""
     surowe = page.eval_on_selector_all(
         "table tr, [role=row]",
         "els => els.map(e => Array.from(e.querySelectorAll('td, [role=cell]'))"
         ".map(c => (c.innerText || '').trim()))")
-    wiersze: list[dict[str, str]] = []
-    for komorki in surowe or []:
-        adres = next((k for k in komorki if re.fullmatch(r"[\w.+-]+@[\w-]+\.[\w.]+", k)), "")
-        if not adres:
-            continue
-        wiersze.append({
-            "email": adres,
-            "typ": komorki[1] if len(komorki) > 1 else "",
-            "od": next((k for k in komorki if re.search(r"\d{4}", k)), ""),
-        })
-    return wiersze
+    return zloz_wiersze_subskrybentow(surowe)
 
 
 def obserwuj_profil(handle: str, wyslij: bool = False) -> dict[str, Any]:

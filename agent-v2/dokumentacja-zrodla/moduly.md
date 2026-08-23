@@ -106,7 +106,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2495 wierszy, 55 funkcji na poziomie modułu, 0 klas
+2516 wierszy, 56 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -140,7 +140,8 @@
 | `polub_w_kanale(ile, wyslij)` | Polubienia w kanale czytelnika. |
 | `_klik_na_profilu(handle, napisy, rodzaj, wyslij)` *(wewn.)* | Klika JEDEN konkretny przycisk na cudzym profilu — i tylko jego. |
 | `pobierz_subskrybentow()` | Czyta liste subskrybentow z WLASNEGO panelu, wlasna sesja. |
-| `_wiersze_subskrybentow(page)` *(wewn.)* | Wiersze tabeli panelu: adres, typ i data rozpoczecia. |
+| `zloz_wiersze_subskrybentow(surowe)` | Sklada wiersze z komorek tabeli panelu: adres, typ i data rozpoczecia. |
+| `_wiersze_subskrybentow(page)` *(wewn.)* | Czyta komorki tabeli z panelu i oddaje je zlozone. |
 | `obserwuj_profil(handle, wyslij)` | Obserwuje cudzy profil — jego notki trafiaja do naszego kanalu. |
 | `zasubskrybuj(handle, wyslij)` | Subskrybuje cudzy profil. Ląduje w skrzynce właściciela, więc wąsko. |
 | `_esc(t)` *(wewn.)* | — |
