@@ -135,6 +135,7 @@ Fable'a; wcześniej ciążyła ku 1220.
 ## Dziennik
 
 ### 2026-08-19 — galaz v2-test: bank, bibliotekarz, Fable do notek
+*(Galaz wmergowana w `main` i usunieta 23 sierpnia przy porzadkach — tresc zyje w `main`. Kopia testowa na serwerze `~/nia-v2-test` ZOSTALA, ze znacznikiem `TO_JEST_KOPIA_TESTOWA` i z odmowa publikacji.)*
 Eksperyment odciety od produkcji: klon `~/nia-v2-test`, wlasna baza (DATA_DIR
 wywodzi sie z polozenia config.py, wiec dzieli sie sam), plik-znacznik
 `TO_JEST_KOPIA_TESTOWA` odbiera prawo do `--wyslij`. Produkcja stoi na `main`

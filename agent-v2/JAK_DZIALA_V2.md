@@ -1,6 +1,7 @@
 # Jak działa bot v2 — pełny obraz, koszty i gdzie da się jeszcze uciąć
 
-Stan na 2026-08-19, gałąź `v2-test`. Wszystkie liczby pochodzą z bazy
+Stan na 2026-08-19, spisany wtedy na gałęzi `v2-test`
+(gałęzi już nie ma — wmergowana w `main` 23 sierpnia). Wszystkie liczby pochodzą z bazy
 produkcyjnej i z faktury DeepSeeka, nie z szacunków.
 
 ---

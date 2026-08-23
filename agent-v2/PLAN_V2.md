@@ -1,6 +1,12 @@
 # Plan v2 — co mamy, czego brakuje, co działa, co nie
 
-Stan na 2026-08-19. Gałąź `v2-test`, produkcja nietknięta na `main` (tag `v1`).
+Stan na 2026-08-19, spisany wtedy na gałęzi `v2-test`.
+
+> **Nieaktualne od 23 sierpnia:** gałęzi `v2-test` już nie ma — została
+> wmergowana w `main` i usunięta razem z 53 innymi przy porządkach.
+> Ten plik zostaje jako zapis planu z tamtego dnia, nie jako opis dzisiaj.
+> Stan bieżący: [`README.md`](../README.md) i
+> [`PROGRESS.md`](PROGRESS.md).
 
 ---
 

@@ -43,7 +43,8 @@ git checkout v1
 ```
 
 Tag `v1` wskazuje commit `57c9496` — pięć artykułów, publikacja bez człowieka,
-14 zestawów testów. Cokolwiek stanie się na `v2-test`, ten punkt zostaje.
+14 zestawów testów — tyle było **wtedy**; dziś jest ich 43. Cokolwiek
+stanie się dalej, ten punkt powrotu zostaje.
 
 ## Reszta orientacji
 
@@ -54,9 +55,19 @@ Tag `v1` wskazuje commit `57c9496` — pięć artykułów, publikacja bez człow
 - **`archiwum/`** — stary agent (~40 000 linii, 42 migracje, dwa artykuły).
   Tylko do czytania. Nie wskrzeszamy.
 
-## Uwaga o starych gałęziach
+## Gałęzie — posprzątane 23 sierpnia 2026
 
-Na zdalnym repozytorium leży ~55 gałęzi po starym agencie (`dev/*`, `codex/*`,
-`stage3/*`, `prec5/*` i podobne). Nic z nich nie korzysta. Zostały, bo ich
-kasowanie to decyzja właściciela, nie moja — ale przy szukaniu czegokolwiek
-warto wiedzieć, że aktualne są **tylko** `main` i `v2-test`.
+Leżało tu ~55 gałęzi po starym agencie (`dev/*`, `codex/*`, `stage3/*`,
+`prec5/*`). **Usunięte.** Na zdalnym repozytorium jest dziś jedna gałąź:
+`main`.
+
+Sprawdzone przed usunięciem, nie po: 52 z 54 były wmergowane w `main`, więc
+ich commity żyją w historii głównej gałęzi; dwie pozostałe miały tagi
+archiwalne wskazujące na te same commity. Spis wszystkich, z numerami commitów
+i informacją gdzie każda przetrwała, stoi w
+[`docs/GALEZIE_USUNIETE_2026-08-23.md`](docs/GALEZIE_USUNIETE_2026-08-23.md).
+
+Odzyskanie dowolnej: `git checkout -b <nazwa> <sha>`.
+
+Tagi zostają jako punkty powrotu — `v1`, `v2`, `archive/*` oraz
+`prototyp-gpt-2026-08`.
