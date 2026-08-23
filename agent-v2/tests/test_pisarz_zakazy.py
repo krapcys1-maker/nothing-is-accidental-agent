@@ -137,5 +137,33 @@ except Exception as e:
     sprawdz("renderuje się bez wyjątku", False, repr(e))
 
 print()
+print("=== OTWARCIE: ZAKAZ ZOSTAJE, NAKAZ ZDJETY ===")
+# Nakaz „Open with the collision itself" byl jednoczesnie najtrwalsza sygnatura
+# i kanalem fabrykacji. Dla SYSTEM_UNDER_TEST karta NIE NIESIE polowki-
+# zalozenia — skaut daje tam `the_moment`, `open_outcome` i `governing_record`
+# wprost „instead" — a kontyngent zada, zeby polowa listy byla tego rodzaju.
+# Wiec przy co drugim artykule pisarz dorabial „everyone assumes" z niczego,
+# i nikt tego nie lapal: recenzent klasyfikuje takie zdania jako PROSE.
+sprawdz("nie ma juz nakazu jednego otwarcia",
+        "Open with the collision itself" not in PLASKI)
+sprawdz("jest zakaz dorabiania brakujacej polowki",
+        "Do not manufacture the missing half." in PLASKI)
+sprawdz("i powod, dla ktorego nikt by tego nie zlapal",
+        "no figure to check and no source to miss" in PLASKI)
+# PODLOGA MUSI ZOSTAC — zdjecie nakazu nie moze otworzyc drogi errandom
+# ani teasowaniu mechanizmu.
+sprawdz("zakaz otwarcia-polecenia zostal",
+        "Do not open by sending the reader to go and look at something." in PLASKI)
+sprawdz("i zakaz przetrzymywania mechanizmu",
+        "Name that mechanism early and plainly. Do not withhold it for a reveal."
+        in PLASKI)
+sprawdz("kolizja nadal DOZWOLONA tam, gdzie karta ja niesie",
+        "the collision between" in PLASKI and "broken_belief" in PLASKI)
+# KONTRDOWOD: gdyby prompt po prostu milczal o otwarciu, powyzsze przeszloby
+# tak samo. Wymagamy, zeby aktywnie kierowal do tego, co karta MA.
+sprawdz("prompt mowi, czym otwierac przy braku przekonania",
+        "Open with whatever this card actually holds." in PLASKI)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

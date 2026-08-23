@@ -123,7 +123,7 @@
 {{"reply": "<the reply, or null>", "reason_if_silent": "<one sentence, only when reply is null>", "kind": "answer"|"correction_accepted"|"disagreement"|"built_on"}}
 ```
 
-#### `pisarz.md` (234 wierszy)
+#### `pisarz.md` (246 wierszy)
 
 **Pola wejściowe:** `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
