@@ -1212,7 +1212,11 @@ def normy_dzienne() -> dict[str, float]:
         "komentarz": sum(KOMENTARZE_DZIENNIE) / 2,
         "restack": sum(RESTACK_DZIENNIE) / 2,
         "subskrypcja": sum(SUBSKRYPCJE_MIESIECZNIE) / 2 / 30,
-        "follow": sum(FOLLOW_MIESIECZNIE) / 2 / 30,
+        # NAZWA MUSI BYC TAKA, JAK `rodzaj` W DZIENNIKU. Bylo tu "follow",
+        # a `browser.obserwuj_profil` zapisuje "obserwacja" — licznik
+        # porownywal wiec norme z niczym i zglaszal 0% przy dzialajacym
+        # bloku. Dokladnie ta klasa bledu, ktora ten licznik ma lapac.
+        "obserwacja": sum(FOLLOW_MIESIECZNIE) / 2 / 30,
     }
 
 

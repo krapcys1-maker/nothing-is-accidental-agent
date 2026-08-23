@@ -340,5 +340,49 @@ sprawdz("i nic w potoku jej nie czyta",
         "normy_dzienne" not in pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8"))
 
 print()
+print("=== 10. NAZWY NORM ZGADZAJA SIE Z NAZWAMI W DZIENNIKU ===")
+# MOJ WLASNY BLAD, zlapany godzine po napisaniu licznika. Norma nazywala sie
+# "follow", a `browser.obserwuj_profil` zapisuje "obserwacja" — licznik
+# porownywal wiec norme z NICZYM i pokazal 0% przy bloku, ktory dziala.
+# Falszywy alarm z narzedzia, ktore ma lapac falszywe spokoje, jest gorszy
+# niz brak narzedzia.
+import ast as _ast2   # noqa: E402
+
+_br = pathlib.Path("agent-v2/browser.py").read_text(encoding="utf-8")
+_rodzaje = set()
+for _w in _ast2.walk(_ast2.parse(_br)):
+    if not isinstance(_w, _ast2.Call):
+        continue
+    _nazwa = getattr(_w.func, "id", "")
+    # `dopisz_wynik("notka", ...)` i `zapisz_w_dzienniku("polubienie", ...)`
+    if _nazwa in ("dopisz_wynik", "zapisz_w_dzienniku") and _w.args:
+        if isinstance(_w.args[0], _ast2.Constant) and isinstance(_w.args[0].value, str):
+            _rodzaje.add(_w.args[0].value)
+    # `_klik_na_profilu(handle, napisy, "obserwacja", wyslij)` — rodzaj trzeci.
+    if _nazwa == "_klik_na_profilu" and len(_w.args) >= 3:
+        if isinstance(_w.args[2], _ast2.Constant) and isinstance(_w.args[2].value, str):
+            _rodzaje.add(_w.args[2].value)
+
+sprawdz("znalazlem rodzaje zapisywane w kodzie", len(_rodzaje) >= 6, sorted(_rodzaje))
+_bez_pokrycia = sorted(set(config.normy_dzienne()) - _rodzaje)
+sprawdz("kazda norma ma odpowiadajacy rodzaj w dzienniku",
+        not _bez_pokrycia, _bez_pokrycia)
+# KONTRDOWOD: gdyby wykrywacz zbieral wszystko jak leci, powyzsze przeszloby
+# zawsze. Nazwa, ktorej w kodzie NIE MA, musi zostac wychwycona.
+sprawdz("nazwa spoza kodu bylaby zlapana", "follow" not in _rodzaje, sorted(_rodzaje))
+
+print()
+print("=== 11. BRAK PRZYCISKU TO TEZ WYNIK ===")
+# Blok obserwacji chodzil po profilach przez siedem dni, za kazdym razem nie
+# znajdowal przycisku „Follow" i odchodzil z pustymi rekami — BEZ WPISU.
+# W dzienniku wygladalo to jak blok, ktory sie nie odbyl. Tego nie da sie
+# naprawic, czego nie widac.
+sprawdz("brak przycisku domykany w `finally`",
+        _br.count("dopisz_wynik(rodzaj, wynik, komu=handle)") >= 2,
+        _br.count("dopisz_wynik(rodzaj, wynik, komu=handle)"))
+sprawdz("i powod nazywa brakujacy przycisk",
+        'f"nie ma przycisku {rodzaj} u {handle}"' in _br)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

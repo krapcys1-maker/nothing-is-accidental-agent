@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **11 plików**, 11 007 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **11 plików**, 11 018 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 43 zestawów
-testów, 1107 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 1112 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -248,7 +248,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2392 wierszy, 53 funkcji na poziomie modułu, 0 klas
+2399 wierszy, 53 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -431,7 +431,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-1678 wierszy, 19 funkcji na poziomie modułu, 0 klas
+1682 wierszy, 19 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -7450,6 +7450,13 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
         wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
+        # BRAK PRZYCISKU TO TEZ WYNIK i musi zostawic slad. Bez tego blok
+        # obserwacji, ktory nie znalazl ani jednego przycisku „Follow" przez
+        # siedem dni, wygladal w dzienniku jak blok, ktory sie nie odbyl —
+        # a on sie odbywal, chodzil po profilach i za kazdym razem odchodzil
+        # z pustymi rekami. Tego nie da sie naprawic, czego nie widac.
+        if wyslij:
+            dopisz_wynik(rodzaj, wynik, komu=handle)
         page.close()
         browser.close()
         p.stop()

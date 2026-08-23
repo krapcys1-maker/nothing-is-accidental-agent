@@ -1172,6 +1172,13 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
         wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
+        # BRAK PRZYCISKU TO TEZ WYNIK i musi zostawic slad. Bez tego blok
+        # obserwacji, ktory nie znalazl ani jednego przycisku „Follow" przez
+        # siedem dni, wygladal w dzienniku jak blok, ktory sie nie odbyl —
+        # a on sie odbywal, chodzil po profilach i za kazdym razem odchodzil
+        # z pustymi rekami. Tego nie da sie naprawic, czego nie widac.
+        if wyslij:
+            dopisz_wynik(rodzaj, wynik, komu=handle)
         page.close()
         browser.close()
         p.stop()
