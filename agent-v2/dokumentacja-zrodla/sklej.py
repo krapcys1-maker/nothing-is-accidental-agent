@@ -328,12 +328,43 @@ GENERATORY = {
 }
 
 
+def _liczby() -> dict[str, str]:
+    """Liczby, ktore w dokumencie MUSZA pochodzic z kodu, a nie z pamieci.
+
+    Sekcja I podawala 10 171 wierszy, sekcja II tego samego dokumentu inna
+    liczbe — obie o tym samym bocie, w odleglosci trzystu wierszy. Liczba
+    wpisana recznie w dokumencie o kodzie rozjedzie sie zawsze; pytanie tylko
+    kiedy. Wiec jej tam nie wpisujemy.
+    """
+    pliki = sorted(AGENT.glob("*.py"))
+    wierszy = sum(len(f.read_text(encoding="utf-8").splitlines()) for f in pliki)
+    testy = sorted((AGENT / "tests").glob("test_*.py"))
+    sprawdzen = sum(f.read_text(encoding="utf-8").count("sprawdz(") for f in testy)
+
+    def ile_wierszy(nazwa: str) -> str:
+        f = AGENT / nazwa
+        return str(len(f.read_text(encoding="utf-8").splitlines())) if f.exists() else "?"
+
+    return {
+        "{{ile_plikow}}": str(len(pliki)),
+        "{{ile_wierszy}}": "%d %03d" % divmod(wierszy, 1000) if wierszy >= 1000
+                           else str(wierszy),
+        "{{ile_zestawow}}": str(len(testy)),
+        "{{ile_sprawdzen}}": str(sprawdzen),
+        "{{wiersze_style}}": ile_wierszy("style.py"),
+        "{{wiersze_kopii}}": ile_wierszy("kopia_subskrybentow.py"),
+    }
+
+
 def czytaj(nazwa: str) -> str:
     p = KAT / nazwa
     if not p.exists():
         ostrzez("BRAK CZESCI: %s" % nazwa)
         return NL + "> *(brakuje sekcji `%s` — dokument niekompletny)*" % nazwa + NL
-    return p.read_text(encoding="utf-8").rstrip() + NL
+    tresc = p.read_text(encoding="utf-8").rstrip() + NL
+    for znacznik, wartosc in _liczby().items():
+        tresc = tresc.replace(znacznik, wartosc)
+    return tresc
 
 
 CZESCI = [
@@ -393,6 +424,12 @@ def main() -> int:
         naglowek = NL.join(NAGLOWKI.get(klucz, []))
         czesci.append((naglowek + NL if naglowek else "") + tresc)
     dokument = NL.join(czesci)
+    # Znacznik, ktorego nikt nie podstawil, to liczba, ktorej w dokumencie
+    # nie ma — a wyglada jak literowka, nie jak brak.
+    import re as _re
+    for osierocony in sorted(set(_re.findall(r"\{\{[a-z_]+\}\}", dokument))):
+        ostrzez("znacznik %s nie zostal podstawiony — dopisz go do _liczby()"
+                % osierocony)
     CEL.write_text(dokument, encoding="utf-8")
     print("  zapisano %s" % CEL.name)
     print("    wierszy: %d" % len(dokument.splitlines()))

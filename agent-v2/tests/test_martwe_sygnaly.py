@@ -171,12 +171,59 @@ sprawdz("zrodlem prawdy o bramkach jest gates.deterministic_floors",
         pathlib.Path("agent-v2/gates.py").read_text(encoding="utf-8"))
 
 print()
-print("=== 5. GODZINY NOTEK: NIEUZYWANE I OZNACZONE JAKO NIEUZYWANE ===")
-# Jesli kiedys zaczna dzialac, ten test ma o tym powiedziec.
-uzywane = bool(re.search(r"\bBEST_NOTE_HOURS\b", reszta))
-print("    BEST_NOTE_HOURS uzywane w kodzie: %s" % uzywane)
-sprawdz("config OSTRZEGA, ze sa nieuzywane",
-        "NIE SA UZYWANE PRZEZ ZADNA LINIE KODU" in cfg)
+print("=== 5. GODZINY NOTEK: KAZDA STALA Z OSOBNA ===")
+# TEN TEST PILNOWAL NIEPRAWDY. Sprawdzal tylko BEST_NOTE_HOURS, a potem
+# potwierdzal, ze config OSTRZEGA o nieuzywanych stalych — nie sprawdzajac,
+# czy to ostrzezenie jest prawdziwe dla KAZDEJ z nich. Nie bylo:
+# `WORST_NOTE_HOURS` stalo w bloku "CZTERY PONIZSZE STALE NIE SA UZYWANE PRZEZ
+# ZADNA LINIE KODU" (stale byly trzy) i jest EGZEKWOWANE przez
+# `pora_na_publikacje` — miedzy 12:00 a 13:59 u czytelnikow agent nie wystawia
+# ani notek, ani komentarzy. Kto uwierzylby komentarzowi i skasowal ta stala,
+# dostalby NameError w funkcji wolanej na poczatku kazdego przebiegu dnia.
+#
+# Sprawdzamy wiec KAZDA stala osobno, w obie strony.
+def _uzyta(nazwa):
+    """Czy stala pada gdziekolwiek POZA wlasna definicja i komentarzami."""
+    bez_komentarzy = re.sub(r"^\s*#.*$", "", cfg, flags=re.M)
+    bez_definicji = re.sub(r"^" + nazwa + r"\s*=.*$", "", bez_komentarzy, flags=re.M)
+    return (bool(re.search(r"\b" + nazwa + r"\b", bez_definicji))
+            or bool(re.search(r"\b" + nazwa + r"\b", reszta)))
+
+
+NAZWANE_JAKO_MARTWE = ("BEST_NOTE_HOURS", "BEST_NOTE_DAYS")
+for nazwa in NAZWANE_JAKO_MARTWE:
+    sprawdz("%s jest naprawde nieuzywana" % nazwa, not _uzyta(nazwa))
+# KONTRDOWOD: stala EGZEKWOWANA nie moze stac w bloku "nieuzywane".
+sprawdz("WORST_NOTE_HOURS jest uzywana", _uzyta("WORST_NOTE_HOURS"))
+sprawdz("i config mowi o niej, ze jest EGZEKWOWANA", "EGZEKWOWANE" in cfg)
+# Liczba w naglowku musi zgadzac sie z liczba stalych pod nim — bylo "CZTERY"
+# przy trzech stalych, z czego jedna zywa.
+naglowek = re.search(r"UWAGA: (\w+) PONIZSZE STALE NIE SA UZYWANE", cfg)
+sprawdz("naglowek bloku martwych stalych istnieje", naglowek is not None)
+if naglowek:
+    LICZEBNIKI = {"JEDNA": 1, "DWIE": 2, "TRZY": 3, "CZTERY": 4, "PIEC": 5}
+    sprawdz("i podaje tyle stalych, ile ich naprawde jest",
+            LICZEBNIKI.get(naglowek.group(1)) == len(NAZWANE_JAKO_MARTWE),
+            "%s wobec %d" % (naglowek.group(1), len(NAZWANE_JAKO_MARTWE)))
+
+# ZACHOWANIE SPRAWDZONE NAPRAWDE, nie odczytane z komentarza.
+from datetime import datetime, timezone   # noqa: E402
+from zoneinfo import ZoneInfo             # noqa: E402
+
+sys.path.insert(0, "agent-v2")
+import config as _cfg                      # noqa: E402
+
+
+def _wolno(godzina_et):
+    t = datetime(2026, 8, 23, godzina_et, 30,
+                 tzinfo=ZoneInfo(_cfg.PUBLISH_TIMEZONE)).astimezone(timezone.utc)
+    return _cfg.pora_na_publikacje(t)[0]
+
+
+for g in _cfg.WORST_NOTE_HOURS:
+    sprawdz("o %02d:30 ET agent NIE publikuje" % g, not _wolno(g))
+sprawdz("a godzine wczesniej owszem", _wolno(min(_cfg.WORST_NOTE_HOURS) - 1))
+sprawdz("i godzine pozniej tez", _wolno(max(_cfg.WORST_NOTE_HOURS) + 1))
 # Config jest lamany do 79 znakow, a zdanie przechodzi przez granice wiersza
 # RAZEM ze znakiem komentarza — samo sklejenie bialych znakow zostawia w srodku
 # „#". Wiec najpierw zdejmujemy znaki komentarza, potem sklejamy.

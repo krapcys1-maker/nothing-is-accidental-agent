@@ -1177,7 +1177,15 @@ Warunek jest zawsze prawdziwy — `notes` zawiera co najmniej `DLUGOSC` i `RECEN
 
 #### Etap 13 — grafika
 
-**Funkcja:** `stages.grafika` (`stages.py:457`), wołana z `run.py:1030` **tylko przy `--wyslij`**.
+**Funkcja:** `stages.grafika` (`stages.py:457`), wołana **zawsze** — bezpośrednio po `stages.save`, **przed** gałęzią `--wyslij`.
+
+> **Poprawione 23 sierpnia.** Wywołanie stało wcześniej *wewnątrz* gałęzi
+> `if args.wyslij:`, więc każdy przebieg bez publikacji zapisywał na dysk
+> artykuł **bez okładki**, a cała ścieżka graficzna sprawdzała się wyłącznie
+> na żywo, za prawdziwe pieniądze i przy prawdziwej publikacji. Nie było ani
+> jednego przebiegu, w którym mogła zepsuć się bezpiecznie — i dlatego
+> okładka zgubiona przez usterkę zapisu wywołań wyszła na jaw dopiero po
+> fakcie. **Nie przenoś tego z powrotem do gałęzi publikacji.**
 **Modele:** brief u `deepseek-v4-flash` (sufit **32 000**), obraz u `gpt-image-1.5`.
 
 ```python

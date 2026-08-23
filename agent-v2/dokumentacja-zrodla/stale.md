@@ -100,8 +100,8 @@
 | `NOTE_FORM_MIX` | `("SCENA", "KONTRAST", "ZACZEP_I_KONKRET", "P` | — |
 | `NOTE_TYPES` | `{ "ARTYKUL": ( "A fact from an article publi` | — |
 | `PUBLISH_TIMEZONE` | `"America/New_York"` | Strefa czasowa publikacji. Liczy się strefa CZYTELNIKÓW, nie właściciela: konto jest anglojęzyczne, więc publiczność jest głównie amerykańsk |
-| `BEST_NOTE_HOURS` | `(6, 7, 8)` | UWAGA: CZTERY PONIZSZE STALE NIE SA UZYWANE PRZEZ ZADNA LINIE KODU. Agent wystawia notki rownomiernie w calym oknie OKNO_PUBLIKACJI_ET (6-22 |
-| `WORST_NOTE_HOURS` | `(12, 13)` | — |
+| `WORST_NOTE_HOURS` | `(12, 13)` | NAJGORSZE OKNO — I TO JEST STALA EGZEKWOWANA, nie zapis ustalen. `pora_na_publikacje` odmawia publikacji w tych godzinach, wiec miedzy 12:00 |
+| `BEST_NOTE_HOURS` | `(6, 7, 8)` | UWAGA: DWIE PONIZSZE STALE NIE SA UZYWANE PRZEZ ZADNA LINIE KODU. Agent nie wazy notek wedlug tych godzin ani dni — rozklada je losowo w okn |
 | `BEST_NOTE_DAYS` | `("sunday", "saturday")` | — |
 | `OKNO_PUBLIKACJI_ET` | `(6, 22)` | TWARDE OKNO PUBLIKACJI, w czasie CZYTELNIKOW. Agent wystawil notki o 03:57 i 04:00 UTC — czyli 23:57 i polnoc w Nowym Jorku. Tekst wrzucony, |
 | `WORST_NOTE_DAYS` | `("monday", "friday")` | — |

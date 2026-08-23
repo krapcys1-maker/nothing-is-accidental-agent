@@ -1057,9 +1057,22 @@ NOTE_TYPES = {
 # u niego w niedzielę o 13:00. Agent i tak chodzi z harmonogramu.
 PUBLISH_TIMEZONE = "America/New_York"
 
-# UWAGA: CZTERY PONIZSZE STALE NIE SA UZYWANE PRZEZ ZADNA LINIE KODU.
-# Agent wystawia notki rownomiernie w calym oknie OKNO_PUBLIKACJI_ET (6-22 ET),
-# z losowymi odstepami, i nie waży ich wcale wedlug tych godzin.
+# NAJGORSZE OKNO — I TO JEST STALA EGZEKWOWANA, nie zapis ustalen.
+# `pora_na_publikacje` odmawia publikacji w tych godzinach, wiec miedzy 12:00
+# a 13:59 u czytelnikow agent nie wystawia ANI notek, ANI komentarzy. To dwie
+# z szesnastu godzin okna, codziennie.
+#
+# Stala stala wczesniej w bloku opisanym jako „NIE SA UZYWANE PRZEZ ZADNA LINIE
+# KODU" i to bylo grozne w konkretny sposob: kto uwierzylby temu komentarzowi
+# i skasowal ja jako martwa, dostalby NameError w `pora_na_publikacje`, czyli
+# w funkcji wolanej na poczatku KAZDEGO przebiegu dnia. Komentarz mowil tez
+# „agent wystawia notki rownomiernie w calym oknie 6-22 ET" — nieprawda
+# wlasnie z powodu tej stalej.
+WORST_NOTE_HOURS = (12, 13)  # ET, zwłaszcza w piątek — EGZEKWOWANE
+
+# UWAGA: DWIE PONIZSZE STALE NIE SA UZYWANE PRZEZ ZADNA LINIE KODU.
+# Agent nie wazy notek wedlug tych godzin ani dni — rozklada je losowo
+# w oknie OKNO_PUBLIKACJI_ET z pominieciem WORST_NOTE_HOURS wyzej.
 #
 # To nie jest usterka do cichego naprawienia, bo NASZE WLASNE ZRODLA SIE NIE
 # ZGADZAJA: ponizsze dane mowia, ze najlepsze jest 6-8 rano czasu nowojorskiego,
@@ -1068,8 +1081,7 @@ PUBLISH_TIMEZONE = "America/New_York"
 # dwoch. Do tego czasu stale zostaja jako ZAPIS USTALEN, wyraznie oznaczony
 # jako nieuzywany — patrz `test_martwe_sygnaly.py`.
 BEST_NOTE_HOURS = (6, 7, 8)  # ET — NIEUZYWANE
-WORST_NOTE_HOURS = (12, 13)  # ET, zwłaszcza w piątek
-BEST_NOTE_DAYS = ("sunday", "saturday")
+BEST_NOTE_DAYS = ("sunday", "saturday")  # NIEUZYWANE
 
 # TWARDE OKNO PUBLIKACJI, w czasie CZYTELNIKOW. Agent wystawil notki o 03:57
 # i 04:00 UTC — czyli 23:57 i polnoc w Nowym Jorku. Tekst wrzucony, gdy

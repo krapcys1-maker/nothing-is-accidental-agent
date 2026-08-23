@@ -49,17 +49,17 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **11 plików**, 10 171 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **11 plików**, 10 497 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
 | jedno polecenie uruchamiające | `python agent-v2/run.py` | dotrzymane |
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
-**WADA — jedenaście plików zamiast dziesięciu.** Najbliższe usunięciu:
+**WADA — 11 plików zamiast dziesięciu.** Najbliższe usunięciu:
 `style.py` (106 wierszy, wołany tylko z `stages.py`) i
-`kopia_subskrybentow.py` (125 wierszy, narzędzie ręczne poza przebiegiem).
-Scalenie któregokolwiek przywraca zgodność z mandatem.
+`kopia_subskrybentow.py` (135 wierszy, narzędzie ręczne poza
+przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
 
 ### I.2. Zasady o mocy nadrzędnej nad kodem
 
@@ -88,15 +88,24 @@ run.py ──┬─> stages.py ──┬─> llm.py ──> DeepSeek | Anthropic
          └─> alarm.py
 ```
 
-**Reguła rozdziału, przestrzegana bez wyjątku poza jednym udokumentowanym:**
-`stages.py` nigdy nie dotyka przeglądarki, `browser.py` nigdy nie woła modelu.
-Wyjątek: `browser.restackuj_w_kanale(ile, decyzja, wyslij)` przyjmuje funkcję
-decyzyjną jako argument, więc sama decyzja zostaje w `stages` — przeglądarka
-tylko klika.
+**Reguła rozdziału i jej DWA wyjątki:** `stages.py` nigdy nie dotyka
+przeglądarki, `browser.py` nigdy nie woła modelu.
+
+1. `browser.restackuj_w_kanale(ile, decyzja, wyslij)` przyjmuje funkcję
+   decyzyjną jako argument, więc sama decyzja zostaje w `stages` —
+   przeglądarka tylko klika.
+2. `stages.py:1672` **importuje `browser`** i woła `browser.read_pages`,
+   żeby dobrać brakujące źródła w trakcie researchu. To jest prawdziwe
+   złamanie reguły, nie odwrócenie zależności jak w punkcie 1.
+
+> Dokument mówił wcześniej „bez wyjątku poza jednym udokumentowanym", czyli
+> wprost zachęcał, żeby przestać szukać dalszych. Drugi wyjątek siedzi
+> w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 35 zestawów testów, 950
-asercji, żaden nie otwiera Chrome i żaden nie woła płatnego modelu.
+się testować bez przeglądarki i bez pieniędzy**. 40 zestawów
+testów, 968 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
 
@@ -403,7 +412,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-1586 wierszy, 16 funkcji na poziomie modułu, 0 klas
+1598 wierszy, 16 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -1606,7 +1615,15 @@ Warunek jest zawsze prawdziwy — `notes` zawiera co najmniej `DLUGOSC` i `RECEN
 
 #### Etap 13 — grafika
 
-**Funkcja:** `stages.grafika` (`stages.py:457`), wołana z `run.py:1030` **tylko przy `--wyslij`**.
+**Funkcja:** `stages.grafika` (`stages.py:457`), wołana **zawsze** — bezpośrednio po `stages.save`, **przed** gałęzią `--wyslij`.
+
+> **Poprawione 23 sierpnia.** Wywołanie stało wcześniej *wewnątrz* gałęzi
+> `if args.wyslij:`, więc każdy przebieg bez publikacji zapisywał na dysk
+> artykuł **bez okładki**, a cała ścieżka graficzna sprawdzała się wyłącznie
+> na żywo, za prawdziwe pieniądze i przy prawdziwej publikacji. Nie było ani
+> jednego przebiegu, w którym mogła zepsuć się bezpiecznie — i dlatego
+> okładka zgubiona przez usterkę zapisu wywołań wyszła na jaw dopiero po
+> fakcie. **Nie przenoś tego z powrotem do gałęzi publikacji.**
 **Modele:** brief u `deepseek-v4-flash` (sufit **32 000**), obraz u `gpt-image-1.5`.
 
 ```python
@@ -7503,11 +7520,15 @@ działające.
 | 2 | `articles.status` zawsze `SAVED`, `blocked_by` zawsze `NULL` | kolumny sugerują decyzję, której nie ma | mylące przy czytaniu bazy |
 | 3 | `feasible` prawdziwe w 6 ocenach na 6 | odsiew nie odrzuca niczego, więc nie jest odsiewem | płacimy za etap, który nie filtruje |
 | 4 | `threads` i `already_written` wyrównane do stałej przez model | obchodzone wymuszonym wyborem, **nie naprawione u źródła** | dwa pola bez wartości informacyjnej |
-| 5 | `BEST_NOTE_HOURS`, `WORST_NOTE_HOURS`, `BEST/WORST_NOTE_DAYS` nieużywane | **nasze własne źródła się nie zgadzają**: config mówi 6–8 ET, research z 18 sierpnia 19:00–22:00 UTC (15–18 ET) | notki wystawiane równomiernie w oknie 6–22 ET, bez ważenia |
+| 5 | `BEST_NOTE_HOURS` i `BEST_NOTE_DAYS` nieużywane | **nasze własne źródła się nie zgadzają**: config mówi 6–8 ET, research z 18 sierpnia 19:00–22:00 UTC (15–18 ET) — dopóki to nie zostanie rozstrzygnięte, nic nie waży godzin | dwie stałe jako zapis ustaleń, wyraźnie oznaczone |
+| 5b | ~~`WORST_NOTE_HOURS` nieużywane~~ **NIEPRAWDA — poprawione 23 sierpnia** | stała stała w bloku opisanym jako „nie są używane przez żadną linię kodu", a jest **egzekwowana** przez `config.pora_na_publikacje`: między 12:00 a 13:59 u czytelników agent nie wystawia ani notek, ani komentarzy | kto skasowałby ją jako martwą, dostałby `NameError` w funkcji wołanej na początku **każdego** przebiegu dnia |
 | 6 | brak przeglądu materiału już zapisanego | klasyfikacja tylko na wejściu; po zmianie kryteriów w indeksie zostaje materiał ze starych reguł | 20 sierpnia kryteria zmieniły się dwa razy |
-| 7 | kolejność bloku komentarzy | trzy warianty + factcheck płacone **zanim** sprawdzimy, czy pod postem jest pole komentarza | ~3 centy na każdy post bez pola |
-| 8 | dwie zerowe bazy i trzy kopie `.przed-*` w `data/` | śmieci; jedną zerową bazę stworzyło złe zapytanie diagnostyczne | brak |
-| 9 | skaut nie trafia w kryteria artykułowe | przy progu „dwie udokumentowane awarie + zasięg ponad jedno miejsce" ostatni przebieg dał **0 z 10** | mamy miernik, nie mamy generatora |
+| 7 | ~~kolejność bloku komentarzy~~ **ZAMKNIĘTE** | `browser.mozna_komentowac` stoi **przed** pobraniem strony i przed wszystkimi płatnymi krokami | zostaje wąski przypadek: gdy API nie oddaje `write_comment_permissions`, funkcja zwraca `True` i płacimy mimo wszystko |
+| 8 | dwie zerowe bazy w `data/` | `agent.db` i `zasiew-produkcji.db`, obie 0 B; żywa baza to `agent-v2.db` — zerowe pliki są pułapką przy diagnostyce i raz już wysłały mnie do pustej bazy | brak funkcjonalnego |
+| 9 | ~~skaut nie trafia w kryteria artykułowe~~ **ZAMKNIĘTE 23 sierpnia** | prompt przepisany pod ten próg: zaczyna od tego, **gdzie** szukać (procedura jako blizna po katastrofie, dziewięć gęstych dziedzin), nazywa dwa tryby porażki i pokazuje wzorcowy precedens | pomiar po zmianie: **6 z 10** artykułowych, każdy z dwiema udokumentowanymi awariami |
+| 10 | cztery pliki w `prompts/` nie są czytane przez żaden kod | `ROZWOJ_KONTA.md`, `SKAD_BRAC.md`, `ZASADY_NOTEK_I_KOMENTARZY.md`, `po_ludzku.md` — nazwy nie padają w źródłach | to notatki właściciela; generator wypisuje je osobno w ZAŁĄCZNIKU A.2, żeby nie udawały promptów |
+| 11 | `EFFORT` dociera do API tylko dla jednego etapu z sześciu | reszta chodzi na DeepSeeku, który tego pokrętła nie czyta; przepięcie go tam odtworzyłoby awarię „rozumowanie zjada budżet odpowiedzi" | `llm.call` mówi o tym raz na proces, więc wpis przestał być cichą ozdobą |
+| 12 | żaden przebieg nie chodził jeszcze z naprawą rytmu | `run.rytm` wdrożony 23 sierpnia o 02:41, po ostatnim przebiegu | pierwszy sprawdzian przy najbliższym odpaleniu zegara |
 
 ### VIII.2. Decyzje należące do właściciela, nie do kodu
 
@@ -10246,8 +10267,8 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `NOTE_FORM_MIX` | `("SCENA", "KONTRAST", "ZACZEP_I_KONKRET", "P` | — |
 | `NOTE_TYPES` | `{ "ARTYKUL": ( "A fact from an article publi` | — |
 | `PUBLISH_TIMEZONE` | `"America/New_York"` | Strefa czasowa publikacji. Liczy się strefa CZYTELNIKÓW, nie właściciela: konto jest anglojęzyczne, więc publiczność jest głównie amerykańsk |
-| `BEST_NOTE_HOURS` | `(6, 7, 8)` | UWAGA: CZTERY PONIZSZE STALE NIE SA UZYWANE PRZEZ ZADNA LINIE KODU. Agent wystawia notki rownomiernie w calym oknie OKNO_PUBLIKACJI_ET (6-22 |
-| `WORST_NOTE_HOURS` | `(12, 13)` | — |
+| `WORST_NOTE_HOURS` | `(12, 13)` | NAJGORSZE OKNO — I TO JEST STALA EGZEKWOWANA, nie zapis ustalen. `pora_na_publikacje` odmawia publikacji w tych godzinach, wiec miedzy 12:00 |
+| `BEST_NOTE_HOURS` | `(6, 7, 8)` | UWAGA: DWIE PONIZSZE STALE NIE SA UZYWANE PRZEZ ZADNA LINIE KODU. Agent nie wazy notek wedlug tych godzin ani dni — rozklada je losowo w okn |
 | `BEST_NOTE_DAYS` | `("sunday", "saturday")` | — |
 | `OKNO_PUBLIKACJI_ET` | `(6, 22)` | TWARDE OKNO PUBLIKACJI, w czasie CZYTELNIKOW. Agent wystawil notki o 03:57 i 04:00 UTC — czyli 23:57 i polnoc w Nowym Jorku. Tekst wrzucony, |
 | `WORST_NOTE_DAYS` | `("monday", "friday")` | — |

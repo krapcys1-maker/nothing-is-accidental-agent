@@ -49,17 +49,17 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **11 plików**, 10 171 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **{{ile_plikow}} plików**, {{ile_wierszy}} wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
 | jedno polecenie uruchamiające | `python agent-v2/run.py` | dotrzymane |
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
-**WADA — jedenaście plików zamiast dziesięciu.** Najbliższe usunięciu:
-`style.py` (106 wierszy, wołany tylko z `stages.py`) i
-`kopia_subskrybentow.py` (125 wierszy, narzędzie ręczne poza przebiegiem).
-Scalenie któregokolwiek przywraca zgodność z mandatem.
+**WADA — {{ile_plikow}} plików zamiast dziesięciu.** Najbliższe usunięciu:
+`style.py` ({{wiersze_style}} wierszy, wołany tylko z `stages.py`) i
+`kopia_subskrybentow.py` ({{wiersze_kopii}} wierszy, narzędzie ręczne poza
+przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
 
 ### I.2. Zasady o mocy nadrzędnej nad kodem
 
@@ -88,15 +88,24 @@ run.py ──┬─> stages.py ──┬─> llm.py ──> DeepSeek | Anthropic
          └─> alarm.py
 ```
 
-**Reguła rozdziału, przestrzegana bez wyjątku poza jednym udokumentowanym:**
-`stages.py` nigdy nie dotyka przeglądarki, `browser.py` nigdy nie woła modelu.
-Wyjątek: `browser.restackuj_w_kanale(ile, decyzja, wyslij)` przyjmuje funkcję
-decyzyjną jako argument, więc sama decyzja zostaje w `stages` — przeglądarka
-tylko klika.
+**Reguła rozdziału i jej DWA wyjątki:** `stages.py` nigdy nie dotyka
+przeglądarki, `browser.py` nigdy nie woła modelu.
+
+1. `browser.restackuj_w_kanale(ile, decyzja, wyslij)` przyjmuje funkcję
+   decyzyjną jako argument, więc sama decyzja zostaje w `stages` —
+   przeglądarka tylko klika.
+2. `stages.py:1672` **importuje `browser`** i woła `browser.read_pages`,
+   żeby dobrać brakujące źródła w trakcie researchu. To jest prawdziwe
+   złamanie reguły, nie odwrócenie zależności jak w punkcie 1.
+
+> Dokument mówił wcześniej „bez wyjątku poza jednym udokumentowanym", czyli
+> wprost zachęcał, żeby przestać szukać dalszych. Drugi wyjątek siedzi
+> w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 35 zestawów testów, 950
-asercji, żaden nie otwiera Chrome i żaden nie woła płatnego modelu.
+się testować bez przeglądarki i bez pieniędzy**. {{ile_zestawow}} zestawów
+testów, {{ile_sprawdzen}} sprawdzeń, żaden nie otwiera Chrome i żaden nie
+woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
 

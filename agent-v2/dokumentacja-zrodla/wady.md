@@ -14,11 +14,15 @@ działające.
 | 2 | `articles.status` zawsze `SAVED`, `blocked_by` zawsze `NULL` | kolumny sugerują decyzję, której nie ma | mylące przy czytaniu bazy |
 | 3 | `feasible` prawdziwe w 6 ocenach na 6 | odsiew nie odrzuca niczego, więc nie jest odsiewem | płacimy za etap, który nie filtruje |
 | 4 | `threads` i `already_written` wyrównane do stałej przez model | obchodzone wymuszonym wyborem, **nie naprawione u źródła** | dwa pola bez wartości informacyjnej |
-| 5 | `BEST_NOTE_HOURS`, `WORST_NOTE_HOURS`, `BEST/WORST_NOTE_DAYS` nieużywane | **nasze własne źródła się nie zgadzają**: config mówi 6–8 ET, research z 18 sierpnia 19:00–22:00 UTC (15–18 ET) | notki wystawiane równomiernie w oknie 6–22 ET, bez ważenia |
+| 5 | `BEST_NOTE_HOURS` i `BEST_NOTE_DAYS` nieużywane | **nasze własne źródła się nie zgadzają**: config mówi 6–8 ET, research z 18 sierpnia 19:00–22:00 UTC (15–18 ET) — dopóki to nie zostanie rozstrzygnięte, nic nie waży godzin | dwie stałe jako zapis ustaleń, wyraźnie oznaczone |
+| 5b | ~~`WORST_NOTE_HOURS` nieużywane~~ **NIEPRAWDA — poprawione 23 sierpnia** | stała stała w bloku opisanym jako „nie są używane przez żadną linię kodu", a jest **egzekwowana** przez `config.pora_na_publikacje`: między 12:00 a 13:59 u czytelników agent nie wystawia ani notek, ani komentarzy | kto skasowałby ją jako martwą, dostałby `NameError` w funkcji wołanej na początku **każdego** przebiegu dnia |
 | 6 | brak przeglądu materiału już zapisanego | klasyfikacja tylko na wejściu; po zmianie kryteriów w indeksie zostaje materiał ze starych reguł | 20 sierpnia kryteria zmieniły się dwa razy |
-| 7 | kolejność bloku komentarzy | trzy warianty + factcheck płacone **zanim** sprawdzimy, czy pod postem jest pole komentarza | ~3 centy na każdy post bez pola |
-| 8 | dwie zerowe bazy i trzy kopie `.przed-*` w `data/` | śmieci; jedną zerową bazę stworzyło złe zapytanie diagnostyczne | brak |
-| 9 | skaut nie trafia w kryteria artykułowe | przy progu „dwie udokumentowane awarie + zasięg ponad jedno miejsce" ostatni przebieg dał **0 z 10** | mamy miernik, nie mamy generatora |
+| 7 | ~~kolejność bloku komentarzy~~ **ZAMKNIĘTE** | `browser.mozna_komentowac` stoi **przed** pobraniem strony i przed wszystkimi płatnymi krokami | zostaje wąski przypadek: gdy API nie oddaje `write_comment_permissions`, funkcja zwraca `True` i płacimy mimo wszystko |
+| 8 | dwie zerowe bazy w `data/` | `agent.db` i `zasiew-produkcji.db`, obie 0 B; żywa baza to `agent-v2.db` — zerowe pliki są pułapką przy diagnostyce i raz już wysłały mnie do pustej bazy | brak funkcjonalnego |
+| 9 | ~~skaut nie trafia w kryteria artykułowe~~ **ZAMKNIĘTE 23 sierpnia** | prompt przepisany pod ten próg: zaczyna od tego, **gdzie** szukać (procedura jako blizna po katastrofie, dziewięć gęstych dziedzin), nazywa dwa tryby porażki i pokazuje wzorcowy precedens | pomiar po zmianie: **6 z 10** artykułowych, każdy z dwiema udokumentowanymi awariami |
+| 10 | cztery pliki w `prompts/` nie są czytane przez żaden kod | `ROZWOJ_KONTA.md`, `SKAD_BRAC.md`, `ZASADY_NOTEK_I_KOMENTARZY.md`, `po_ludzku.md` — nazwy nie padają w źródłach | to notatki właściciela; generator wypisuje je osobno w ZAŁĄCZNIKU A.2, żeby nie udawały promptów |
+| 11 | `EFFORT` dociera do API tylko dla jednego etapu z sześciu | reszta chodzi na DeepSeeku, który tego pokrętła nie czyta; przepięcie go tam odtworzyłoby awarię „rozumowanie zjada budżet odpowiedzi" | `llm.call` mówi o tym raz na proces, więc wpis przestał być cichą ozdobą |
+| 12 | żaden przebieg nie chodził jeszcze z naprawą rytmu | `run.rytm` wdrożony 23 sierpnia o 02:41, po ostatnim przebiegu | pierwszy sprawdzian przy najbliższym odpaleniu zegara |
 
 ### VIII.2. Decyzje należące do właściciela, nie do kodu
 
