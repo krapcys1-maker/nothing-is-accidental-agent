@@ -97,6 +97,16 @@ def main() -> int:
         dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         cel = KATALOG / ("subskrybenci-%s.csv" % dzis)
         cel.write_text(tekst, encoding="utf-8")
+        # TYLKO WLASCICIEL. To sa cudze adresy e-mail, a domyslne prawa na
+        # serwerze to 0664 — czytelne dla kazdego konta na maszynie. Ta sama
+        # klasa niedopatrzenia co sesja przegladarki zapisana z 0644.
+        # Ustawiamy przy KAZDYM zapisie, nie raz recznie, bo recznie znaczy
+        # „przy pierwszej kopii", a kopii ma byc trzydziesci.
+        try:
+            cel.chmod(0o600)
+        except OSError:
+            # Windows nie ma tych praw i to nie jest powod, zeby stracic kopie.
+            pass
         plik.unlink()
         print("  ZAPISANE: %s   %d subskrybentow" % (cel.name, ile))
         if ostatnia is not None:
