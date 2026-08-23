@@ -33,9 +33,13 @@ sprawdz("waski temat dostaje wyraznie krotsza forme", s["cel"] < r["cel"] * 0.7,
 sprawdz("krotki artykul ma sensowne dno (nie notka)", s["min"] >= 400, s["min"])
 sprawdz("dlugi nie przekracza tego, co czyta sie do konca", r["max"] <= 1300, r["max"])
 sprawdz("zakresy sie nie nakladaja", s["max"] < r["min"], (s["max"], r["min"]))
-sprawdz("nieznana glebokosc -> zachowujemy sie jak przy RICH",
-        config.dlugosc_dla("COKOLWIEK") == r)
-sprawdz("pusta glebokosc tez", config.dlugosc_dla("") == r)
+# ZMIANA DECYZJI (2026-08-20). Bylo: nieznana glebokosc dostaje RICH. Nieznana
+# glebokosc znaczy jednak „model oddal cos spoza slownika", czyli NIE WIEM, ile
+# tu jest materialu — a odpowiedzia na „nie wiem" nie moze byc forma najdluzsza,
+# bo to maksymalizuje ryzyko wypelniacza. Srodek jest uczciwy w obie strony.
+sprawdz("nieznana glebokosc -> forma srodkowa, nie najdluzsza",
+        config.dlugosc_dla("COKOLWIEK") == s)
+sprawdz("pusta glebokosc tez", config.dlugosc_dla("") == s)
 
 print()
 print("=== 2. WYBOR TEMATU: GLEBOKOSC PRZED PEWNOSCIA ===")
@@ -125,6 +129,57 @@ sprawdz("prompt odroznia symbol od przedmiotu", "A symbol is not an object" in g
 sprawdz("podaje wpadke jako przyklad", "jam jar" in grafika)
 sprawdz("daje test: czy da sie to podniesc w domu",
         "pick this object up in your house" in grafika)
+
+print()
+print("=== THIN: NAJMNIEJ MATERIALU, NAJKROTSZA FORMA ===")
+# Prompt odsiewu mowi o THIN wprost: „the finding is a sentence. No article at
+# any length." A tabela dlugosci miala tylko RICH i SINGLE, wiec THIN wpadal
+# w galaz domyslna rowna RICH i dostawal 1075 slow. Temat o najmniejszej ilosci
+# materialu dostawal najdluzsza forme — dokladnie ta usterka, przed ktora ta
+# tabela powstala.
+r = config.dlugosc_dla("RICH")
+sg = config.dlugosc_dla("SINGLE")
+th = config.dlugosc_dla("THIN")
+sprawdz("THIN ma wlasny wpis", th != r, th)
+sprawdz("i jest krotszy od SINGLE", th["cel"] < sg["cel"], (th["cel"], sg["cel"]))
+sprawdz("a SINGLE od RICH", sg["cel"] < r["cel"], (sg["cel"], r["cel"]))
+# KONTRDOWOD: sam osobny wpis nie wystarczy, jesli bylby rownie dlugi.
+# Roznica ma byc odczuwalna, nie kosmetyczna.
+sprawdz("THIN jest krotszy od RICH o ponad polowe", th["cel"] * 2 < r["cel"],
+        (th["cel"], r["cel"]))
+sprawdz("kazdy poziom ma spojne min/cel/max",
+        all(w["min"] <= w["cel"] <= w["max"] for w in (r, sg, th)))
+sprawdz("i zakresy sie nie nakladaja",
+        th["max"] <= sg["cel"] and sg["max"] <= r["cel"],
+        (th["max"], sg["cel"], sg["max"], r["cel"]))
+
+# GALAZ DOMYSLNA. Nieznana glebokosc znaczy „nie wiem, ile tu jest materialu" —
+# na to uczciwa odpowiedzia jest forma srednia, nie najdluzsza.
+for nieznane in ("", None, "cokolwiek", "rich "):
+    sprawdz("nieznane %r dostaje SINGLE, nie RICH" % nieznane,
+            config.dlugosc_dla(nieznane)["cel"] == sg["cel"],
+            config.dlugosc_dla(nieznane))
+# Ale poprawna nazwa ma dzialac niezaleznie od wielkosci liter.
+sprawdz("mala litera to nadal ta sama glebokosc",
+        config.dlugosc_dla("thin") == th)
+
+# Liczba paraleli jest LOSOWANA, wiec jedno wywolanie nie dowodzi niczego —
+# pierwsza wersja tej asercji porownala dwa losy i przeszla przez przypadek.
+# Sprawdzamy rozklad: krotki artykul nigdy nie bierze trzech paraleli, bo
+# nie ma ich z czego rozwinac.
+losy_thin = {config.losowa_liczba_paraleli("THIN")[0] for _ in range(300)}
+losy_single = {config.losowa_liczba_paraleli("SINGLE")[0] for _ in range(300)}
+losy_rich = {config.losowa_liczba_paraleli("RICH")[0] for _ in range(300)}
+sprawdz("THIN nigdy nie bierze trzech paraleli", 3 not in losy_thin, losy_thin)
+sprawdz("SINGLE tez nie", 3 not in losy_single, losy_single)
+sprawdz("a RICH moze", 3 in losy_rich, losy_rich)
+sprawdz("kazdy bierze co najmniej jedna", min(losy_thin | losy_rich) >= 1)
+
+# Kolejnosc wyboru tematu MUSI stawiac THIN na koncu — inaczej krotsza forma
+# staje sie wygodna wymowka zamiast ostatniej deski ratunku.
+zrodlo = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+sprawdz("THIN wazy najmniej przy wyborze tematu",
+        '"RICH": 2, "SINGLE": 1, "THIN": 0' in zrodlo)
 
 print()
 print("=== WYNIK: %s zdanych, %s oblanych ===" % (zdane, oblane))

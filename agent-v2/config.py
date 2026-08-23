@@ -457,13 +457,30 @@ DLUGOSC_WG_GLEBOKOSCI = {
     "RICH":   {"cel": 1075, "min": 900, "max": 1250},
     # jeden mechanizm, dobrze udokumentowany
     "SINGLE": {"cel": 650,  "min": 480, "max": 820},
+    # USTALENIE NA JEDNO ZDANIE. Prompt odsiewu mowi o THIN wprost: „no article
+    # at any length, it belongs in a note". Mimo to wpis tu jest, bo potok nie
+    # ma prawa odmowic — artykul powstaje ZAWSZE (decyzja wlasciciela). Gdy
+    # THIN jest jedynym, co przeszlo, ma dostac forme najkrotsza z mozliwych.
+    #
+    # Bez tego wpisu THIN wpadal w galaz domyslna, czyli RICH, i temat
+    # o najmniejszej ilosci materialu dostawal 1075 slow do wypelnienia.
+    # To jest DOKLADNIE ta usterka, przed ktora cala ta tabela powstala:
+    # artykul o symbolu otwartego sloiczka mial material na trzysta slow
+    # i wypelnil tysiac tym samym mechanizmem opisanym trzy razy.
+    "THIN":   {"cel": 420,  "min": 300, "max": 560},
 }
 
 
 def dlugosc_dla(glebokosc: str) -> dict[str, int]:
-    """Ile slow ma miec artykul o tej glebokosci."""
+    """Ile slow ma miec artykul o tej glebokosci.
+
+    Galaz domyslna to SINGLE, nie RICH. Nieznana glebokosc znaczy „nie wiem,
+    ile tu jest materialu" — a na to uczciwa odpowiedzia jest forma srednia,
+    nie najdluzsza. Domyslny RICH kazal pisarzowi zapelnic tysiac slow zawsze,
+    gdy model oddal cokolwiek spoza slownika.
+    """
     return DLUGOSC_WG_GLEBOKOSCI.get(
-        (glebokosc or "").upper(), DLUGOSC_WG_GLEBOKOSCI["RICH"])
+        (glebokosc or "").upper(), DLUGOSC_WG_GLEBOKOSCI["SINGLE"])
 
 
 TARGET_WORDS = 1075

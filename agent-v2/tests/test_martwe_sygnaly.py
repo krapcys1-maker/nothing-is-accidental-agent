@@ -264,5 +264,39 @@ sprawdz("a przy komplecie mowimy wprost, ze nic nie rozroznilo",
         "nasycenie nic nie rozroznilo" in st_src)
 
 print()
+print("=== 9. PARAMETR PRZEKAZYWANY I NIECZYTANY ===")
+# Trzeci wariant tej samej wady, tym razem po stronie Pythona, nie modelu.
+# `db.recent_domains` liczylo domeny ostatnich artykulow PRZY KAZDYM przebiegu,
+# run.py przekazywalo je do `stages.discovery`, a cialo funkcji nie tykalo ich
+# ani razu. Docstring w db.py obiecywal „wejscie do reguly roznorodnosci",
+# ktorej nie bylo nigdzie w repozytorium. To nie moglo byc rusztowaniem —
+# rusztowanie to pole, ktore MODEL musi napisac; tego parametru model nigdy
+# nie widzial.
+st = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+sprawdz("recent_domains jest teraz czytany, nie tylko przyjmowany",
+        st.count("recent_domains") >= 2, st.count("recent_domains"))
+dysk = pathlib.Path("agent-v2/prompts/dyskoveria.md").read_text(encoding="utf-8")
+sprawdz("i dociera do promptu dyskoverii", "{ostatnie_domeny}" in dysk)
+# ZAKAZUJE nawyku, nie NAKAZUJE pozycji — inaczej po dziesieciu tekstach sama
+# regula staje sie podpisem maszyny.
+sprawdz("regula zakazuje nawyku, nie nakazuje zrodla",
+        "out of habit" in dysk and "no other host carries it" in dysk)
+
+print()
+print("=== 10. KAZDY PLACEHOLDER PROMPTU MA SWOJ ARGUMENT ===")
+# `_prompt` robi str.format. Placeholder bez argumentu to KeyError, ktory
+# wybucha PO oplaceniu wczesniejszych etapow. Argument bez placeholdera jest
+# cichszy i grozniejszy: nie wywala niczego, tylko po cichu nic nie robi —
+# czyli usterka zostaje, a wyglada na naprawiona.
+import re as _re
+POJEDYNCZY = _re.compile(r"(?<!\{)\{([a-z_][a-z0-9_]*)\}(?!\})")
+braki = []
+for plik in sorted(pathlib.Path("agent-v2/prompts").glob("*.md")):
+    for pole in set(POJEDYNCZY.findall(plik.read_text(encoding="utf-8"))):
+        if ("%s=" % pole) not in st:
+            braki.append("%s -> %s" % (plik.name, pole))
+sprawdz("zaden prompt nie ma placeholdera bez argumentu", not braki, braki)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

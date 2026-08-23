@@ -25,6 +25,10 @@ Requirements:
 5. Free, no login, readable as HTML or text. Skip these hosts, they block
    automated reading: {blocked_hosts}
 6. No forums, Q&A sites or vendor blogs.
+7. These hosts already carried the sources of our recent articles:
+   {ostatnie_domeny}
+   Do not reach for one of them out of habit. Go there when the record itself
+   lives there and no other host carries it — not because it worked last time.
 
 If the evidence is not there, return what genuinely bears on the question,
 including anything that contradicts it. Do not substitute pages that merely

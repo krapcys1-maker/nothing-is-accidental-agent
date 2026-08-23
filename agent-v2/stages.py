@@ -1865,6 +1865,24 @@ def discovery(
         min_primary=config.MIN_PRIMARY_SOURCES,
         min_why=config.MIN_WHY_SOURCES,
         blocked_hosts=", ".join(list(config.BLOCKED_HOSTS) + martwe),
+        # DOMENY OSTATNICH ARTYKULOW. Baza liczyla je co przebieg
+        # (`db.recent_domains`), przekazywalismy je tu w parametrze — i nie
+        # czytala ich ani jedna linia. Docstring w db.py obiecywal „wejscie do
+        # reguly roznorodnosci", ktorej nie bylo nigdzie.
+        #
+        # To PREFERENCJA, nie bramka. Twardy zakaz zlozony z pozostalymi
+        # filtrami (martwe hosty, BLOCKED_HOSTS, adresy spoza wynikow
+        # wyszukiwania) potrafilby wyzerowac liste zrodel i wywalic przebieg
+        # PO oplaceniu researchu — a przy MIN_PRIMARY_SOURCES ten sam
+        # regulator czesto jest jedynym miejscem, gdzie dokument w ogole lezy.
+        #
+        # Sformulowanie ZAKAZUJE nawyku, nie NAKAZUJE pozycji — regula
+        # nakazujaca pozycje po dziesieciu tekstach sama staje sie podpisem
+        # maszyny (ta sama zasada co w gates.py).
+        ostatnie_domeny=(", ".join(
+            d for d in (recent_domains or [])[:15]
+            if d and d.strip() == d and " " not in d
+        ) or "(none yet - this is the first article of this account)"),
     )
     real_urls: list[str] = []
     text = llm.call(
