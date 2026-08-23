@@ -444,7 +444,11 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 # inaczej artykul dostawal mniej niz piec notek promujacych,
                 # a nikt by tego nie zauwazyl.
                 if wynik.get("wyslane") and n.get("promocja_url"):
-                    stages.odhacz_promocje(n["promocja_url"])
+                    # Tresc idzie razem z odhaczeniem, zeby jutrzejsza notka
+                    # promujaca wiedziala, czego juz nie powtarzac.
+                    stages.odhacz_promocje(
+                        n["promocja_url"],
+                        (gotowe[0].get("note") or "").strip())
                 rytm_stanu["notka"] = True
             zrobione["notki"] += 1
 

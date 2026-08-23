@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1216 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1220 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-3284 wierszy, 77 funkcji na poziomie modułu, 0 klas
+3300 wierszy, 77 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -54,7 +54,7 @@
 | `zapisz_do_promocji(url, tytul, tekst)` | Zapisuje opublikowany artykul do promowania przez kolejne dni. |
 | `wczytaj_promocje()` | — |
 | `artykul_do_promocji()` | Artykul, ktory dzis czeka na notke promujaca — najwyzej JEDNA na dobe. |
-| `odhacz_promocje(url)` | Odnotowuje, ze artykul dostal dzis swoja notke promujaca. |
+| `odhacz_promocje(url, tekst)` | Odnotowuje, ze artykul dostal dzis swoja notke promujaca — I CO W NIEJ BYLO. |
 | `_slowa(tekst)` *(wewn.)* | Znaczace slowa tekstu, obciete do rdzenia. |
 | `_o_tym_samym(a, b)` *(wewn.)* | Czy dwa teksty mowia o tej samej rzeczy. |
 | `wybierz_material(zapas, unikaj)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |

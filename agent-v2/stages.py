@@ -1023,8 +1023,19 @@ def artykul_do_promocji() -> dict[str, Any] | None:
     return None
 
 
-def odhacz_promocje(url: str) -> None:
-    """Odnotowuje, ze artykul dostal dzis swoja notke promujaca."""
+def odhacz_promocje(url: str, tekst: str = "") -> None:
+    """Odnotowuje, ze artykul dostal dzis swoja notke promujaca — I CO W NIEJ BYLO.
+
+    Bez drugiego argumentu trzy notki promujace jeden artykul niosly te sama
+    fraze trzy dni z rzedu: karta promocyjna to caly tekst artykulu, podawany
+    bez zmian, a model wybieral z niego za kazdym razem to, co najbardziej
+    rzuca sie w oczy. Zmierzone na dzienniku: „ASTM, which maintains the
+    standard, says" i „68% of Americans" po trzy razy w trzy dni.
+
+    Indeks `zuzyte_fakty` tego nie lapal i lapac nie mogl — on pilnuje
+    ciekawostek, ktore pochodza z puli faktow; promocja nie przechodzi przez
+    te pule w ogole. Wiec pamiec siedzi tam, gdzie juz stoi stan promocji.
+    """
     from datetime import datetime, timezone
 
     dane = wczytaj_promocje()
@@ -1032,6 +1043,8 @@ def odhacz_promocje(url: str) -> None:
         if a.get("url") == url:
             a["wystawione"] = a.get("wystawione", 0) + 1
             a["ostatnia"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            if tekst:
+                a.setdefault("powiedziane", []).append(str(tekst)[:400])
     PROMOCJA.write_text(json.dumps(dane, ensure_ascii=False, indent=1),
                         encoding="utf-8")
 
@@ -1135,7 +1148,10 @@ def notki_dnia(
     if promowany and typy and "ARTYKUL" not in typy:
         typy[0] = "ARTYKUL"       # pierwsza notka dnia promuje artykul
         karta = {"article_title": promowany["tytul"],
-                 "article_text": promowany["tekst"]}
+                 "article_text": promowany["tekst"],
+                 # CO JUZ O TYM ARTYKULE POWIEDZIELISMY. Bez tego dzien drugi
+                 # i trzeci dostawaly to samo wejscie co dzien pierwszy.
+                 "already_said_in_earlier_notes": promowany.get("powiedziane") or []}
         link_artykulu = promowany["url"]
         print(f"  [promocja] dzien {promowany['wystawione'] + 1}"
               f"/{config.NOTEK_PROMUJACYCH}: {promowany['tytul'][:44]}", flush=True)

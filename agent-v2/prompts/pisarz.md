@@ -141,6 +141,17 @@ stake in how it went. Where the record contradicts the framing you were given,
 simply write what the record says, as though that had been the subject all
 along.
 
+**And do not perform your own restraint.** "I will not invent it", "I want to be
+careful here", "and I will say them once rather than hedge throughout" — these
+announce a virtue instead of exercising one. The restraint is real and it should
+be invisible: state what the record says, stop where it stops, and let the
+stopping speak. A reader who is told you are being careful has been handed your
+self-assessment; a reader who watches you stop has evidence.
+
+This is not the same as saying what you believe. "My reading is", "this looks
+like", "the structure suggests" mark an inference as yours and they stay —
+they are about the claim, not about your conduct.
+
 This includes how you name your material. "The excerpts", "the sources I can
 cite", "the evidence card" and "the material here" describe a pile of text
 somebody handed you. Write "the published guidance", "the regulation", "the

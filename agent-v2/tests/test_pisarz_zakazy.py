@@ -165,5 +165,25 @@ sprawdz("prompt mowi, czym otwierac przy braku przekonania",
         "Open with whatever this card actually holds." in PLASKI)
 
 print()
+print("=== POWSCIAGLIWOSC MA BYC NIEWIDOCZNA ===")
+# Cztery z szesciu artykulow przystawaly, zeby powiedziec o wlasnej ostroznosci:
+# „I will not invent it", „I want to be careful here", „and I will say them once
+# rather than hedge throughout". Czytelnik, ktoremu mowi sie, ze jest sie
+# ostroznym, dostaje samoocene; czytelnik, ktory widzi zatrzymanie, dostaje dowod.
+sprawdz("prompt zakazuje ogloszen o wlasnej powsciagliwosci",
+        "do not perform your own restraint" in PLASKI)
+sprawdz("i cytuje konkretne przyklady z opublikowanych tekstow",
+        "I will not invent it" in PLASKI and "I want to be careful here" in PLASKI)
+sprawdz("i nazywa roznice: samoocena kontra dowod",
+        "watches you stop has evidence" in PLASKI)
+# KONTRDOWOD, I TO JEST TU NAJWAZNIEJSZE: zakaz NIE MOZE zabrac markerow
+# wnioskowania. Recenzent po nich rozpoznaje INFERENCE i oszczedza smiale
+# odczytania — bez nich czesc z nich dostawalaby flage albo cicho wypadala.
+sprawdz("markery wnioskowania zostaja wprost dozwolone",
+        "they stay" in PLASKI and "about the claim, not about your conduct" in PLASKI)
+for m in ("my reading is", "this looks like", "the structure suggests"):
+    sprawdz("  marker %r nadal w prompcie" % m, m in PLASKI)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

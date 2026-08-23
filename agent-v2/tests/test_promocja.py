@@ -153,5 +153,56 @@ finally:
     stages.PROMOCJA = ORYG
 
 print()
+print("=== TRZY NOTKI PROMUJACE NIE MOGA POWTARZAC TEGO SAMEGO ===")
+# Zmierzone na dzienniku produkcji: trzy notki promujace artykul 0025, z trzech
+# kolejnych dni, nioslY te sama fraze „ASTM, which maintains the standard, says"
+# i ten sam „68% of Americans". Karta promocyjna to CALY TEKST ARTYKULU podawany
+# bez zmian, wiec model co dzien wybieral z niego to samo.
+#
+# Indeks `zuzyte_fakty` tego nie lapal i lapac nie mogl — on pilnuje ciekawostek
+# z puli faktow, a promocja przez te pule nie przechodzi w ogole.
+import json as _json         # noqa: E402
+import tempfile as _tmp      # noqa: E402
+
+with _tmp.TemporaryDirectory() as _kat:
+    _stary = stages.PROMOCJA
+    stages.PROMOCJA = pathlib.Path(_kat) / "promocja.json"
+    try:
+        stages.PROMOCJA.write_text(_json.dumps(
+            [{"url": "u1", "tytul": "T", "tekst": "tresc", "wystawione": 0}]),
+            encoding="utf-8")
+        stages.odhacz_promocje("u1", "Pierwsza notka: ASTM i 68 procent.")
+        stages.odhacz_promocje("u1", "Druga notka: zupelnie co innego.")
+        _d = _json.loads(stages.PROMOCJA.read_text(encoding="utf-8"))[0]
+        sprawdz("dzien promocji nadal sie liczy", _d["wystawione"] == 2, _d)
+        sprawdz("i tresc kazdej notki jest zapamietana",
+                len(_d.get("powiedziane") or []) == 2, _d.get("powiedziane"))
+        sprawdz("w kolejnosci, w jakiej wyszly",
+                _d["powiedziane"][0].startswith("Pierwsza"), _d.get("powiedziane"))
+        # KONTRDOWOD: odhaczenie BEZ tresci nie moze dopisywac pustych wpisow —
+        # inaczej lista rosnie o nic i model dostaje szum.
+        stages.odhacz_promocje("u1", "")
+        _d2 = _json.loads(stages.PROMOCJA.read_text(encoding="utf-8"))[0]
+        sprawdz("puste odhaczenie nie dopisuje wpisu",
+                len(_d2["powiedziane"]) == 2, _d2["powiedziane"])
+        sprawdz("ale dzien i tak sie liczy", _d2["wystawione"] == 3)
+    finally:
+        stages.PROMOCJA = _stary
+
+# Karta promocyjna MUSI niesc te pamiec do modelu, inaczej zapis jest ozdoba.
+_st = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+sprawdz("karta promocyjna niesie juz powiedziane",
+        '"already_said_in_earlier_notes"' in _st)
+_run = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
+sprawdz("i run.py przekazuje tresc przy odhaczaniu",
+        "odhacz_promocje(" in _run and 'gotowe[0].get("note")' in _run)
+# I prompt musi tego ZAKAZYWAC — samo podanie pola nic nie znaczy.
+_n = pathlib.Path("agent-v2/prompts/notka.md").read_text(encoding="utf-8")
+sprawdz("prompt zakazuje powtarzania wydanych zdan",
+        "already_said_in_earlier_notes" in _n and "those sentences are" in _n)
+sprawdz("i nazywa, jak to wyglada z zewnatrz",
+        "working through a backlog" in _n)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

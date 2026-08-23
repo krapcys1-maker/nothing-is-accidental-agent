@@ -158,3 +158,14 @@ Return only valid JSON:
 ## The evidence
 
 {evidence}
+
+**If the evidence carries `already_said_in_earlier_notes`, those sentences are
+spent.** They went out in the feed on earlier days, to the same people. Do not
+restate them, do not paraphrase them, and do not lean on the same figure or the
+same named body. An article carries more than one fact; find the one that has
+not been used yet. If everything worth saying has already been said, say so by
+writing about a smaller detail rather than by repeating the headline one.
+
+A reader who sees the same sentence twice in three days does not think the
+account is consistent. They think it is a machine working through a backlog.
+
