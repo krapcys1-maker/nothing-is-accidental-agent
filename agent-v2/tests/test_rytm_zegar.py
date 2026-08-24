@@ -161,5 +161,65 @@ sprawdz("i rytm jest wolany co najmniej szesc razy",
         zrodlo.count("if not rytm(") >= 6, zrodlo.count("if not rytm("))
 
 print()
+print("=== 7. ZWLOKA PRZED PIERWSZA NOTKA TEZ PYTA ZEGAR ===")
+# Naprawa siostrzana do sekcji 4: tamta zamknela sen MIEDZY notkami (rytm()
+# pyta zegar przed kazda przerwa), ale ZWLOKA_PRZED_NOTKAMI to INNY time.sleep,
+# w innym miejscu tej samej funkcji notki(), i mial dokladnie ta sama dziure —
+# zabil jedyna zaplanowana notke przebiegu z 19.08 (proces zginal 14,5 min
+# w 34-minutowa zwloke). Sprawdzane strukturalnie po AST, nie grepem: musi
+# istniec 'if zostal_czas(...)' obejmujacy WLASNIE ten time.sleep(ile), a nie
+# gdziekolwiek w pliku (samo istnienie zostal_czas() gdzie indziej nic nie
+# mowi o TYM konkretnym wywolaniu).
+import ast   # noqa: E402
+
+drzewo = ast.parse(zrodlo)
+notki_fn = next(w for w in ast.walk(drzewo)
+                if isinstance(w, ast.FunctionDef) and w.name == "notki")
+
+
+def _strazcy_dla(funkcja, nazwa_zmiennej):
+    sleepy = [n for n in ast.walk(funkcja)
+              if isinstance(n, ast.Call)
+              and isinstance(n.func, ast.Attribute) and n.func.attr == "sleep"
+              and len(n.args) == 1 and isinstance(n.args[0], ast.Name)
+              and n.args[0].id == nazwa_zmiennej]
+    if not sleepy:
+        return None, []
+    linia = sleepy[0].lineno
+    strazcy = [n for n in ast.walk(funkcja)
+               if isinstance(n, ast.If)
+               and isinstance(n.test, ast.Call)
+               and getattr(n.test.func, "id", "") == "zostal_czas"
+               and n.body and n.body[0].lineno <= linia <= n.body[-1].end_lineno]
+    return sleepy[0], strazcy
+
+
+sleepy_ile, strazcy = _strazcy_dla(notki_fn, "ile")
+sprawdz("blok notek ma dokladnie jeden time.sleep(ile)", sleepy_ile is not None)
+sprawdz("i jest wewnatrz 'if zostal_czas(...)' — nie goly sleep",
+        len(strazcy) >= 1, sleepy_ile.lineno if sleepy_ile else None)
+if strazcy:
+    arg = strazcy[0].test.args[0] if strazcy[0].test.args else None
+    sprawdz("straznik dostaje etykiete zwiazana ze zwloka/notkami",
+            isinstance(arg, ast.Constant)
+            and ("notk" in arg.value or "zwlok" in arg.value), getattr(arg, "value", None))
+
+# KONTRDOWOD: ten sam wykrywacz na SYNTETYCZNYM fragmencie starego wzorca
+# (goly sleep, bez strazy) musi powiedziec "brak straznika" — inaczej test
+# przeszedlby tak samo na zepsutym kodzie.
+STARY_WZORZEC = '''
+def notki():
+    if wyslij:
+        ile = 123
+        print("zwloka")
+        time.sleep(ile)
+'''
+stara_fn = next(w for w in ast.walk(ast.parse(STARY_WZORZEC))
+                if isinstance(w, ast.FunctionDef) and w.name == "notki")
+_, stare_strazcy = _strazcy_dla(stara_fn, "ile")
+sprawdz("KONTRDOWOD: stary, nieoslonieniy wzorzec zostaje wykryty jako zly",
+        len(stare_strazcy) == 0, len(stare_strazcy))
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

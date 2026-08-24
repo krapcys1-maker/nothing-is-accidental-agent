@@ -421,8 +421,17 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         if wyslij:
             import random as _r
             ile = _r.uniform(*config.ZWLOKA_PRZED_NOTKAMI)
-            print(f"  (zwloka {ile / 60:.0f} min przed pierwsza notka)", flush=True)
-            time.sleep(ile)
+            # NAPRAWA SIOSTRZANA DO dfc1e95a. Tamta zamknela sen MIEDZY notkami
+            # (rytm() pyta zegar przed kazda przerwa) — ten sen, PRZED PIERWSZA
+            # notka, mial dokladnie ta sama dziure i zabil jedyna zaplanowana
+            # notke przebiegu z 19.08: proces zginal 14,5 min w 34-minutowa
+            # zwloke. Zwloka jest ozdobna (chowa, ze trzy przebiegi dziennie
+            # startuja o tej samej minucie); notki nie sa. Gdy oba naraz sie nie
+            # miesca, zwloke pomijamy i piszemy od razu.
+            if zostal_czas("zwloke przed notkami", ile):
+                print(f"  (zwloka {ile / 60:.0f} min przed pierwsza notka)",
+                      flush=True)
+                time.sleep(ile)
         for n in stages.notki_dnia(conn, run_id, ile=na_teraz["notki"],
                                    od=juz.get("notki", 0)):
             if not zostal_czas("notki"):

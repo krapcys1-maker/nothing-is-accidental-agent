@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1250 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1259 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
