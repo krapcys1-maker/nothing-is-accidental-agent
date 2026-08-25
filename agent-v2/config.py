@@ -396,7 +396,20 @@ WEB_SEARCH_USD_PER_1K = 10.00
 
 # --- limity pieniężne --------------------------------------------------------
 
-DAILY_LIMIT_USD = 5.00
+# SUFIT DZIENNY PODNIESIONY NA CZAS DOMYKANIA PRZEROBKI KONTA.
+#
+# 5,00 USD to wartosc dla NORMALNEJ pracy agenta i do niej wracamy. Zmierzone
+# na czterech spokojnych dniach: 0,55 / 0,69 / 0,87 / 0,69 USD na dobe, czyli
+# okolo jednej siodmej sufitu — zapas byl duzy.
+#
+# 25 sierpnia przerobka konta na tematy o AI wymagala wielokrotnych przebiegow
+# testowych i sufit zostal dotkniety: 5,39 USD, z czego 3,04 na samo pisanie
+# (cztery artykuly, bo trzy razy znajdowalem wade i puszczalem od nowa).
+# Wlasciciel autoryzowal na te prace 10 USD wprost, wiec sufit rowna sie tej
+# kwocie — nie wiecej.
+#
+# PO ZAKONCZENIU PRZEROBKI WRACA 5,00. To nie jest nowa norma, tylko okno.
+DAILY_LIMIT_USD = 10.00
 MONTHLY_LIMIT_USD = 40.00
 
 # Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1.
