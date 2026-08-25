@@ -757,82 +757,85 @@ NOTE_CANDIDATES = 1
 # a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas na kilka dni.
 # DZIEDZINY, Z KTORYCH BIORA SIE TEMATY NOTEK.
 #
-# Prompt mial na sztywno piec obszarow: lotniska, supermarkety, subskrypcje,
-# miasta, codzienna technika. Lista zuzytych faktow blokowala powtorzenie
-# konkretu, ale nie blokowala krazenia po tym samym terytorium — i widac to
-# w dwunastu pierwszych notkach: jajka, mleko, bankomat, banknoty, winda, znak
-# stop, dlugopis, hydrant. Amerykanska infrastruktura i przepisy konsumenckie
-# w kolko.
+# Historia tej listy w dwoch krokach.
 #
-# Komentarze rotowaly osiemnascie hasel od poczatku. Notki nie rotowaly nic.
+# KROK PIERWSZY: prompt mial na sztywno piec obszarow — lotniska, supermarkety,
+# subskrypcje, miasta, codzienna technika. Lista zuzytych faktow blokowala
+# powtorzenie konkretu, ale nie blokowala krazenia po tym samym terytorium, i
+# widac to w dwunastu pierwszych notkach: jajka, mleko, bankomat, banknoty,
+# winda, znak stop, dlugopis, hydrant. Amerykanska infrastruktura i przepisy
+# konsumenckie w kolko. Komentarze rotowaly osiemnascie hasel od poczatku;
+# notki nie rotowaly nic. Stad rotacja i druga os (GENERATORY).
+#
+# KROK DRUGI, 25 sierpnia 2026: cala lista wymieniona z codziennej
+# infrastruktury na SZTUCZNA INTELIGENCJE — decyzja wlasciciela o tym, o czym
+# konto ma pisac. Rotacja i generatory zostaja bez zmian, bo problem, ktory
+# rozwiazywaly, jest ten sam: bez drugiej osi model wraca tam, gdzie mu
+# najlatwiej.
+#
+# GENERATORY sa NIETKNIETE i to jest celowe. Sa neutralne wobec tematu, a pod
+# AI trafiaja wrecz lepiej niz pod szampon: MEASUREMENT („liczba, ktora wyglada
+# na pomiar, a jest pasmem") to dokladnie benchmark, MIRROR („dwie jurysdykcje,
+# przeciwne zasady") to AI Act obok Waszyngtonu, DECIDER („ktos to wybral, ma
+# nazwisko i date") to czlowiek, ktory ustawil prog odmowy.
 DZIEDZINY_CIEKAWOSTEK = (
-    # --- codzienna infrastruktura i przepisy (byla to CALA lista) ------------
-    "airports, borders and air travel",
-    "supermarkets, food retail and what may be claimed on a label",
-    "subscriptions, pricing, billing and fees",
-    "streets, traffic and city infrastructure",
-    "housing, construction and building codes",
-    "post, parcels, ports and shipping containers",
-    "water, sewage, electricity and heating",
-    "waste, recycling and packaging",
-    "lifts, escalators, locks, keys and doors",
-    "weights, measures, calendars and timekeeping",
+    # --- co te systemy realnie robia i jak sa zbudowane ---------------------
+    "how a model is actually trained, and which step costs what",
+    "what happens between your question and the answer appearing",
+    "context windows, memory and what a system forgets on purpose",
+    "tokenizers: why a machine sees text differently than you do",
+    "fine-tuning, distillation and making a small model punch up",
+    "retrieval: how a system looks something up before answering",
+    "agents that use tools, and where the loop breaks",
+    "multimodal systems: images, audio and video as one problem",
+    "open-weight models and what 'open' turns out to mean",
+    "inference cost: why the same answer has three different prices",
 
-    # --- pieniadze i firmy ---------------------------------------------------
-    "how large companies actually make their money",
-    "banking, cash, payments and what a currency really is",
-    "insurance and how risk gets priced",
-    "supply chains and who bears the cost when they break",
-    "advertising, brands and what an image is allowed to promise",
-    "Substack and the economics of online publishing itself",
-    "monopolies, cartels and the rules written to stop them",
+    # --- pomiar, czyli miejsce gdzie najczesciej sie klamie ------------------
+    "benchmarks, leaderboards and what a score actually counts",
+    "evaluation sets, contamination and testing on the answers",
+    "what 'state of the art' means and who decides it is over",
+    "human preference ratings and the people paid to give them",
+    "reproducing a published result, and how often it fails",
+    "the gap between a demo and the same system on a bad day",
 
-    # --- prawo, w tym prawo dziwne ------------------------------------------
-    "laws that sound invented but are real, and why they were passed",
-    "laws that stayed on the books long after they stopped making sense",
-    "courts, evidence and how a fact gets proved officially",
-    "rights that had to be fought for in ordinary places",
+    # --- sprzet, prad, pieniadze --------------------------------------------
+    "chips: who makes them, who cannot buy them, and why",
+    "data centres, cooling and where the electricity comes from",
+    "the physical supply chain behind one training run",
+    "what an AI company actually sells, and to whom",
+    "compute deals, cloud credits and circular money",
+    "the cost of a query versus the price on the invoice",
 
-    # --- historia -----------------------------------------------------------
-    "how an everyday thing worked before the modern version",
-    "the medieval world: guilds, tolls, markets, punishment, measurement",
-    "ancient and pre-modern engineering that still constrains us",
-    "wars, treaties and borders that explain a present-day rule",
-    "how something was standardised, and who lost the argument",
+    # --- w swiecie: nauka, medycyna, praca -----------------------------------
+    "AI in drug discovery, and which part is genuinely new",
+    "protein structure, materials and problems that were stuck",
+    "diagnosis, screening and where a model beats or loses to a doctor",
+    "AI in weather, climate and physical simulation",
+    "mathematics and proof: what a machine has and has not done",
+    "robots: what is hard about a hand, a door, a staircase",
+    "self-driving: the last few percent and why it costs everything",
+    "AI in warfare, targeting and the decisions being delegated",
+    "which jobs changed first, measured rather than predicted",
+    "translation, subtitles and languages with almost no data",
 
-    # --- swiat poza Ameryka --------------------------------------------------
-    "Europe: a rule or system that differs sharply from the American one",
-    "Africa: infrastructure, money or law that works on its own logic",
-    "Asia: standards, cities and industry",
-    "South America: resources, cities and regulation",
-    "Australia, New Zealand and the Pacific",
-    "the same ordinary thing governed oppositely in two countries",
+    # --- ludzie, prawo, wladza -----------------------------------------------
+    "the EU AI Act, and the same question answered in Washington",
+    "copyright, training data and cases actually filed",
+    "who owns the output, in law rather than in terms of service",
+    "safety testing, red teams and what a system card omits",
+    "model refusals, guardrails and how they are removed",
+    "surveillance, face recognition and where it is already running",
+    "deepfakes, provenance and proving a recording is real",
+    "AI in schools, exams and detection tools that do not work",
+    "chatbots as companions, therapists and what that does",
+    "the people labelling data, where they are and what they are paid",
 
-    # --- ludzie i spoleczenstwo ---------------------------------------------
-    "schools, exams, qualifications and who gets let in",
-    "work: hours, wages, safety and what a job legally is",
-    "health, medicine, pharmacies and medical devices",
-    "funerals, births, names and the paperwork of a life",
-    "language, writing systems and why spelling is what it is",
-    "sport: rules, equipment, officiating and money",
-    "museums, libraries, archives and who owns the past",
-
-    # --- przyroda i nauka ----------------------------------------------------
-    "animals: behaviour, law protecting them, and what we got wrong",
-    "plants, farming, livestock and where food actually comes from",
-    "weather, climate and the instruments that measure them",
-    "geology, oceans, rivers and what the ground decides",
-    "astronomy, space agencies and the rules of orbit",
-    "physics and chemistry hiding inside an ordinary object",
-    "medicine and biology: a mechanism most people have backwards",
-    "measurement and instruments: how we know a number is true",
-
-    # --- technika ------------------------------------------------------------
-    "everyday consumer technology and its defaults",
-    "telephones, spectrum, cables and telecoms",
-    "cars, trains, buses and how they are made safe",
-    "computing, software and the standards nobody voted on",
-    "paper, printing, typography and the shape of a page",
+    # --- historia i to, co juz przerabialismy --------------------------------
+    "an AI idea from decades ago that only now had the hardware",
+    "a previous AI winter, and what its promises sounded like",
+    "a technology hype cycle that resolved, and how it resolved",
+    "the researchers who were right early and ignored",
 )
 ILE_DZIEDZIN_NA_PRZEBIEG = 5
 
@@ -1676,19 +1679,42 @@ def losowe_generatory(ile: int = 0) -> list[str]:
 # w sierpniu to nie przypadek.
 #
 # Miesiace wg polkuli polnocnej, bo tam jest wiekszosc czytelnikow anglojezycznych.
+# RYTM ROKU W TEJ DZIEDZINIE.
+#
+# Bylo tu dwanascie hasel konsumenckich: opony zimowe, filtry UV, rozliczenie
+# podatku. Pod publikacje o AI to martwy balast — czytelnik nie „trzyma w reku"
+# niczego, co zalezy od pory roku.
+#
+# Ale rok w tej dziedzinie MA rytm i jest on realny: konferencje, kwartalne
+# wyniki producentow sprzetu, terminy w przepisach, cykl akademicki. To sa
+# okresy WZMOZONEJ UWAGI, nie fakty do zacytowania — i tak sa opisane, bo
+# terminy sie przesuwaja, a model tego nie czuje. Kazde haslo mowi GDZIE
+# patrzec, a nie CO jest prawda.
 W_TYM_MIESIACU = {
-    1: "new year deadlines, gym memberships, winter tyres, heating bills, sales",
-    2: "tax paperwork, insurance renewals, road salt and potholes, flu season",
-    3: "clock change, spring cleaning, allergy season, tax filing",
-    4: "tax deadlines, garden chemicals, travel booking, allergy medication",
-    5: "sunscreen going on shelves, barbecues, bicycles, exam season",
-    6: "air conditioning, travel documents, festivals, water restrictions",
-    7: "air conditioning, sunscreen, flight delays, ice cream and cold chain",
-    8: "sunscreen, school supplies, holiday flights, wildfire and air quality",
-    9: "back to school, heating switched on, harvest and food labelling",
-    10: "heating, clock change, energy tariffs, Halloween packaging",
-    11: "winter tyres, dark evenings and lighting, holiday shopping, deliveries",
-    12: "deliveries and parcels, holiday lighting, alcohol limits, returns policy",
+    1: "year-ahead predictions everywhere, CES hardware claims, budget and "
+       "hiring plans set for the year",
+    2: "earnings calls from chip and cloud companies, EU rules with dates "
+       "attached, conference paper decisions",
+    3: "GPU and hardware announcements, spring model releases, university "
+       "admissions and what students are told about AI",
+    4: "quarterly results, compute spending disclosed to investors, "
+       "regulatory consultations closing",
+    5: "big developer conferences and the demos shown at them, exam season "
+       "and detection tools, summer internships",
+    6: "developer conferences continuing, mid-year model releases, summer "
+       "school and research internships beginning",
+    7: "conference season in machine learning, half-year retrospectives, "
+       "quiet-period releases",
+    8: "back-to-school procurement, autumn model releases being trailed, "
+       "energy and cooling under summer peak load",
+    9: "school and university year starting with new AI policies, autumn "
+       "launches, quarterly hardware results",
+    10: "earnings season, year-end model releases, compliance deadlines "
+        "arriving, safety reports published",
+    11: "end-of-year launches, conference pre-prints, annual safety and "
+        "transparency reporting",
+    12: "year in review everywhere, December conferences, budgets and "
+        "compute contracts signed for next year",
 }
 
 

@@ -89,7 +89,7 @@
 | `NOTE_MIN_WORDS` | `33` | --- notki i komentarze ------------------------------------------------------ Zmierzone na publicznych analizach Substacka: 33-64 słowa dają |
 | `NOTE_MAX_WORDS` | `64` | — |
 | `NOTE_CANDIDATES` | `1` | Ilu kandydatów generujemy, żeby wybrać jednego. Sensowne tylko dlatego, że DeepSeek kosztuje grosze — u Fable'a byłoby to nie do obronienia. |
-| `DZIEDZINY_CIEKAWOSTEK` | `( # --- codzienna infrastruktura i przepisy ` | Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich, a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas n |
+| `DZIEDZINY_CIEKAWOSTEK` | `( # --- co te systemy realnie robia i jak sa` | Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich, a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas n |
 | `ILE_DZIEDZIN_NA_PRZEBIEG` | `5` | — |
 | `CURIOSITY_BATCH` | `8` | — |
 | `CURIOSITY_MEMORY` | `60` | Ile ostatnio zuzytych faktow pokazujemy szukajacemu jako zakaz powtorki. Bez tego to samo szukanie codziennie oddaje te same slynne osiem. |
@@ -155,4 +155,4 @@
 | `GENERATORY` | `{ "MEASUREMENT": "A number that looks like a` | --- generatory tematow ------------------------------------------------------ Mielismy 52 DZIEDZINY, czyli odpowiedz na pytanie GDZIE szukac |
 | `ILE_GENERATOROW_NA_PRZEBIEG` | `4` | — |
 | `KANDYDATOW_NA_PRZEBIEG` | `25` | Ile kandydatow-jednolinijkowcow zamawiamy, zanim cokolwiek napiszemy. Nadprodukcja jest obowiazkowa: piec notek z piatki pomyslow to mediana |
-| `W_TYM_MIESIACU` | `{ 1: "new year deadlines, gym memberships, w` | --- co czytelnik trzyma w reku W TYM MIESIACU ------------------------------- Najtansza dzwignia, jaka mamy, i nie mielismy jej wcale. Zwykl |
+| `W_TYM_MIESIACU` | `{ 1: "year-ahead predictions everywhere, CES` | --- co czytelnik trzyma w reku W TYM MIESIACU ------------------------------- Najtansza dzwignia, jaka mamy, i nie mielismy jej wcale. Zwykl |

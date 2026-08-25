@@ -112,9 +112,23 @@ sprawdz("kazdy miesiac ma rzeczy w reku",
 sierpien = config.co_teraz_w_reku(datetime(2026, 8, 15, tzinfo=timezone.utc))
 styczen = config.co_teraz_w_reku(datetime(2026, 1, 15, tzinfo=timezone.utc))
 sprawdz("sierpien to nie styczen", sierpien != styczen)
-sprawdz("sierpien wymienia krem z filtrem", "sunscreen" in sierpien, sierpien)
-sprawdz("pazdziernik wymienia ogrzewanie",
-        "heating" in config.co_teraz_w_reku(datetime(2026, 10, 1, tzinfo=timezone.utc)))
+# ZASADA, NIE SLOWO. Stalo tu "sierpien wymienia krem z filtrem" i
+# "pazdziernik wymienia ogrzewanie" — przypiete do rzeczy, o ktorych konto
+# wtedy pisalo. Po zmianie dziedziny na AI (25 sierpnia 2026) oba sie oblaly,
+# choc REGULA ocalala w calosci: podpowiedz sezonowa ma byc konkretna, rozna
+# w kazdym miesiacu i ma mowic, gdzie patrzec. Test pyta wiec o to.
+_miesiace = [config.co_teraz_w_reku(datetime(2026, m, 15, tzinfo=timezone.utc))
+             for m in range(1, 13)]
+sprawdz("kazdy miesiac mowi cos konkretnego (nie jedno slowo)",
+        all(len(x.split()) >= 4 for x in _miesiace),
+        [len(x.split()) for x in _miesiace])
+sprawdz("miesiace sie nie powtarzaja", len(set(_miesiace)) == 12,
+        len(set(_miesiace)))
+# KONTRDOWOD: gdyby podpowiedzi byly ogolnikami w rodzaju "AI news", powyzsze
+# przeszloby. Wymagamy, zeby kazdy miesiac niosl RZECZOWNIKI z tej dziedziny,
+# a nie sama nazwe dziedziny.
+_puste = [x for x in _miesiace if "AI" in x and len(set(x.lower().split())) < 6]
+sprawdz("zadna podpowiedz nie jest ogolnikiem", not _puste, _puste)
 
 print()
 print("=== 8. PROMPT NIESIE OBIE OSIE I SEZON ===")

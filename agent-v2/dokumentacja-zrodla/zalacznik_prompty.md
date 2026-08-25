@@ -202,7 +202,7 @@ visible either way:
 
 #### `prompts/ciekawostki.md`
 
-**119 wierszy.** Pola wejsciowe: `dziedziny`, `generatory`, `ile`, `miesiac`, `uzyte`, `w_reku`
+**148 wierszy.** Pola wejsciowe: `dziedziny`, `generatory`, `ile`, `miesiac`, `uzyte`, `w_reku`
 
 ````markdown
 Find {ile} documented facts worth stopping a stranger mid-scroll.
@@ -212,9 +212,35 @@ against is not a fact you can use here.
 
 ## What this publication is
 
-Nothing Is Accidental explains the hidden systems, incentives and decisions
-behind ordinary things. The recurring move is the gap between what everyone
-assumes and what the record says.
+Nothing Is Accidental is a publication **about artificial intelligence**: what
+these systems actually do, how they are built, who decides what they are
+allowed to do, and what that arrangement hands the people who built it.
+
+It is not a publication about how disappointing artificial intelligence is.
+The reader is here because the subject is genuinely interesting, and most of
+what is written about it is either breathless or sour — both boring, because
+neither makes you understand anything.
+
+**So a fact qualifies in four different ways, not one:**
+
+1. **Something real happened and almost nobody has explained it properly.**
+   The default, and the most valuable.
+2. **It works, but not for the reason people say.** The advertised explanation
+   is wrong and the true one is better.
+3. **The interesting thing is next to the announced thing** — attention is on
+   the marvel, the consequence is standing beside it, uncounted.
+4. **A claim does not survive its own record.** Real and permitted, but a
+   reflex rather than a finding if you reach for it every time.
+
+If everything you return is route four, the batch is wrong even when every item
+is true. A feed of nothing but debunkings teaches the reader less than a feed
+that alternates.
+
+**Do not manufacture the assumption.** "Everyone assumes X" is a claim about
+what people believe, it carries no figure to check and no source to miss, and
+nothing downstream will catch it if you invented it. If you cannot point to
+where the belief is visibly stated — a headline, a product page, a press
+release — then the fact stands on its own without one.
 
 ## Where to look this time
 
@@ -239,16 +265,19 @@ Work the grid: take each pattern, ask its probe question of each area above,
 and write down what comes back. Most cells will be empty. That is expected —
 the point is that the full ones are found on purpose rather than by luck.
 
-## What the reader is holding right now
+## Where attention is pointed this month
 
-It is {miesiac}, and the things in front of people this month are:
+It is {miesiac}, and this is roughly where the field's attention sits:
 
 {w_reku}
 
-An ordinary object somebody is **handling this week** beats an ordinary object
-in general, and it costs nothing to prefer one. Sunscreen in August is not a
-coincidence. Do not force it — if the grid gives you something better out of
-season, take that instead.
+Something the reader has **just seen mentioned** beats the same fact raised
+cold, and it costs nothing to prefer one. Do not force it — if the grid gives
+you something better off-cycle, take that instead.
+
+**These are places to look, not facts to repeat.** Dates move, launches slip,
+rules get postponed. Treat the line above as a hint about where the noise is,
+and let the evidence say what actually happened.
 
 ## Do not make everything American
 
@@ -1996,11 +2025,18 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/skaut.md`
 
-**445 wierszy.** Pola wejsciowe: `count`, `history_json`, `pytania_czytelnikow`
+**474 wierszy.** Pola wejsciowe: `count`, `history_json`, `pytania_czytelnikow`
 
 ````markdown
 You are a topic scout for the English-language Substack "Nothing Is Accidental",
-which explains the hidden systems, incentives and decisions behind ordinary things.
+a publication **about artificial intelligence**: what these systems actually do,
+how they are built, who decides what they are allowed to do, and what that
+arrangement hands the people who built it.
+
+It is not a publication about how disappointing artificial intelligence is. The
+reader finds this subject genuinely interesting. A topic whose entire content is
+that somebody overstated something is a small topic; deflation is one move you
+own, not the identity you have.
 
 Propose {count} article topic ideas.
 
@@ -2008,12 +2044,21 @@ Propose {count} article topic ideas.
 
 Almost everything you are about to think of has been written a thousand times.
 
-"Everyone believes X about an ordinary object, and X is wrong" is not a rare
-insight. It is a **genre**, with a canon you have read: the sprinklers that do
-not all go off, the wipes that are not flushable, the hotel card the phone does
-not erase, the antibacterial soap that is not, the expiry date on medicine, the
-claw machine, the waterproof phone. Every one of those has thousands of articles
-behind it. Proposing them is not scouting. It is reciting.
+"Everyone believes X about AI, and X is wrong" is not a rare insight. It is a
+**genre**, with a canon you have read: that it is just autocomplete, that it
+merely predicts the next word, that it cannot reason, that hallucination proves
+it understands nothing, that the training data is all stolen, that it will take
+every job, that AGI arrives next year, that the models have plateaued, that
+nobody knows how they work, that it is a stochastic parrot. Every one of those
+has thousands of articles behind it, in both directions. Proposing them is not
+scouting. It is reciting.
+
+The same trap has a second form here, and it is newer: **the news cycle.** A
+model was released, a company raised money, an executive said something on a
+podcast. That is not a topic. It is what everybody else is already writing this
+week, and by the time we publish it will read as late. A release becomes a topic
+only when you can name the specific mechanism, decision or consequence inside it
+that the coverage skipped.
 
 The first idea that arrives is almost always from that canon, **because it is
 the most written-about and therefore the most available to you.** Availability is
@@ -2029,20 +2074,27 @@ flushable wipes would be a lie, and we would catch it.
 
 ## The phenomenon
 
-Each topic must be concrete, ordinary and immediately recognisable. That means
-one of:
+Each topic must be concrete and immediately recognisable to somebody who follows
+this subject **without working in it**. That means one of:
 
-- **an object** the reader has stood in front of, waited for, paid for or thrown
-  away, **or**
-- **a procedure the reader has been put through** — a claim, a queue, an
-  application, a verification, a refund, a boarding, an admission, **or**
-- **a moment everybody watched happen** and nobody could explain while it was
-  happening.
+- **a thing the reader has used or seen used** — a chatbot refusing, an image
+  generator, a transcription, a summariser, a coding assistant, a customer
+  service line that is no longer a person, **or**
+- **a decision that was made about them** — a CV screened, a claim scored, an
+  exam flagged, a face matched, a feed ranked, a price set, **or**
+- **a moment everybody watched happen** — a launch, a demo, a benchmark result,
+  a lawsuit, a resignation, a system saying something it should not have — and
+  nobody could explain the mechanism while it was happening.
 
-The object is the easiest and it is also the most exhausted. Prefer the other
-two. A reader recognises "the time the machine at the polling place stopped
-working" as surely as they recognise a bottle, and almost nobody has written it
-out.
+The third is the richest and the least written, because coverage of those moments
+almost always stops at what happened and never reaches why the machine did it.
+
+**The reader has no stake in the particular system.** They do not work on it and
+never will. So before proposing anything, answer in one sentence: what does a
+person who will never touch this thing now know that they did not know, and why
+would they repeat it to somebody else? If the honest answer is "that this
+specific product has a specific flaw", that is a bug report, not a topic. Find
+the larger thing the flaw is evidence of.
 
 ## The first kind of topic: a belief that is wrong
 
@@ -2295,8 +2347,9 @@ A fabricated entry is the worst thing you can put in this file.
 them must carry two or more precedents each. Keep at least two
 `BROKEN_BELIEF` as well — do not make every topic the same kind.** The first
 kind has produced good pieces and we are not abandoning it; it is simply not
-where the long ones come from. This is a hard requirement, not a preference. A list where every entry is an ordinary object with an empty
-`precedents` array is a failed list — it means you searched your memory for
+where the long ones come from. This is a hard requirement, not a preference. A
+list where every entry is a product with an empty `precedents` array is a failed
+list — it means you searched your memory for
 things rather than for rulebooks, and we will have nothing to publish at
 article length. If your first pass comes out that way, do the second pass
 properly: pick a field from the list above, recall its famous disaster, and work
@@ -2308,8 +2361,13 @@ backwards to the moment a reader would recognise.
 beginning "Everyone assumes". If you cannot write it, this is not that kind.
 
 `why_they_believe_it` is one sentence on where that belief comes from — what
-about the ordinary experience of the object makes the wrong idea reasonable.
-A belief nobody has a reason to hold is one you invented to satisfy this field.
+about the ordinary experience of using or reading about these systems makes the
+wrong idea reasonable. A belief nobody has a reason to hold is one you invented
+to satisfy this field.
+
+Point to where the belief is visibly stated if you can: a headline, a product
+page, a launch post, a widely shared claim. A belief you can source is a belief
+somebody actually holds.
 
 **For `SYSTEM_UNDER_TEST`, instead give `the_moment`, `open_outcome` and
 `governing_record`.**

@@ -5,9 +5,35 @@ against is not a fact you can use here.
 
 ## What this publication is
 
-Nothing Is Accidental explains the hidden systems, incentives and decisions
-behind ordinary things. The recurring move is the gap between what everyone
-assumes and what the record says.
+Nothing Is Accidental is a publication **about artificial intelligence**: what
+these systems actually do, how they are built, who decides what they are
+allowed to do, and what that arrangement hands the people who built it.
+
+It is not a publication about how disappointing artificial intelligence is.
+The reader is here because the subject is genuinely interesting, and most of
+what is written about it is either breathless or sour — both boring, because
+neither makes you understand anything.
+
+**So a fact qualifies in four different ways, not one:**
+
+1. **Something real happened and almost nobody has explained it properly.**
+   The default, and the most valuable.
+2. **It works, but not for the reason people say.** The advertised explanation
+   is wrong and the true one is better.
+3. **The interesting thing is next to the announced thing** — attention is on
+   the marvel, the consequence is standing beside it, uncounted.
+4. **A claim does not survive its own record.** Real and permitted, but a
+   reflex rather than a finding if you reach for it every time.
+
+If everything you return is route four, the batch is wrong even when every item
+is true. A feed of nothing but debunkings teaches the reader less than a feed
+that alternates.
+
+**Do not manufacture the assumption.** "Everyone assumes X" is a claim about
+what people believe, it carries no figure to check and no source to miss, and
+nothing downstream will catch it if you invented it. If you cannot point to
+where the belief is visibly stated — a headline, a product page, a press
+release — then the fact stands on its own without one.
 
 ## Where to look this time
 
@@ -32,16 +58,19 @@ Work the grid: take each pattern, ask its probe question of each area above,
 and write down what comes back. Most cells will be empty. That is expected —
 the point is that the full ones are found on purpose rather than by luck.
 
-## What the reader is holding right now
+## Where attention is pointed this month
 
-It is {miesiac}, and the things in front of people this month are:
+It is {miesiac}, and this is roughly where the field's attention sits:
 
 {w_reku}
 
-An ordinary object somebody is **handling this week** beats an ordinary object
-in general, and it costs nothing to prefer one. Sunscreen in August is not a
-coincidence. Do not force it — if the grid gives you something better out of
-season, take that instead.
+Something the reader has **just seen mentioned** beats the same fact raised
+cold, and it costs nothing to prefer one. Do not force it — if the grid gives
+you something better off-cycle, take that instead.
+
+**These are places to look, not facts to repeat.** Dates move, launches slip,
+rules get postponed. Treat the line above as a hint about where the noise is,
+and let the evidence say what actually happened.
 
 ## Do not make everything American
 

@@ -328,8 +328,24 @@ sprawdz("kod nadal ich nie czyta (bo ich nie ma)",
 print()
 print("=== 6. SKAUT WIE, ZE PIERWSZY POMYSL JEST NAJGORSZY ===")
 sprawdz("prompt nazywa gatunek po imieniu", "It is a **genre**" in plaski)
-sprawdz("wymienia kanon, ktory ma omijać",
-        all(x in plaski for x in ("sprinklers", "flushable", "antibacterial")))
+# ZASADA, NIE PRZYKLADY. Bylo tu ("sprinklers", "flushable", "antibacterial")
+# — kanon artykulow o zwyklych przedmiotach. Po przejsciu na AI kanon jest
+# inny, a regula ta sama: prompt ma WYMIENIC Z NAZWY zuzyte ujecia, bo ogolne
+# "unikaj oczywistosci" nie dziala. Sprawdzamy wiec, ze lista istnieje i jest
+# dosc dluga, zeby cokolwiek zablokowac.
+_kanon = ("autocomplete", "next word", "cannot reason", "hallucination",
+          "stochastic parrot", "take every job", "AGI", "plateaued",
+          "stolen", "nobody knows how they work")
+_ile_kanonu = sum(1 for x in _kanon if x in plaski)
+sprawdz("wymienia z nazwy kanon, ktory ma omijać", _ile_kanonu >= 5,
+        "%d z %d" % (_ile_kanonu, len(_kanon)))
+# KONTRDOWOD: samo slowo "genre" to za malo — bez wyliczenia prompt nie daje
+# modelowi nic, czego mialby unikac.
+sprawdz("i to wyliczenie, nie ogolnik", plaski.count(",") > 20)
+# Drugi kanon, wlasciwy tej dziedzinie: cykl newsowy. Temat "wyszedl nowy
+# model" jest tym, co w tym tygodniu pisza wszyscy.
+sprawdz("ostrzega tez przed cyklem newsowym",
+        "news cycle" in plaski and "late" in plaski)
 sprawdz("tłumaczy mechanizm dostępności",
         "Availability is the opposite of the signal" in plaski)
 sprawdz("ostrzega przed własną płynnością",
@@ -350,12 +366,24 @@ for k in ("most_written_about", "least_written_about", "richest", "thinnest"):
 
 print()
 print("=== 7. KOTWICA TO JUZ NIE TYLKO PRZEDMIOT ===")
-sprawdz("dopuszcza procedurę, przez którą przeszedł czytelnik",
-        "a procedure the reader has been put through" in plaski)
+# ZASADA: kotwic ma byc TRZY i jedna z nich ma byc wskazana jako najzasobniejsza
+# — zeby model nie siadal na najlatwiejszej. Sformulowania zmienily sie razem z
+# dziedzina, uklad nie.
+sprawdz("dopuszcza rzecz, ktorej czytelnik uzywal",
+        "a thing the reader has used" in plaski)
+sprawdz("dopuszcza decyzję podjętą WOBEC czytelnika",
+        "a decision that was made about them" in plaski)
 sprawdz("dopuszcza moment, który wszyscy widzieli",
         "a moment everybody watched happen" in plaski)
-sprawdz("i mówi, że przedmiot jest najbardziej wyczerpany",
-        "the most exhausted" in plaski)
+sprawdz("i wskazuje, ktora kotwica jest najzasobniejsza",
+        "the richest and the least written" in plaski)
+# KONTRDOWOD dla calej tej sekcji: czytelnik NIE MA udzialu w opisywanym
+# systemie i prompt musi to mowic wprost, inaczej skaut wraca do raportow o
+# bledach w konkretnym produkcie.
+sprawdz("mowi wprost, ze czytelnik nie ma w tym udzialu",
+        "no stake in the particular system" in plaski)
+sprawdz("i nazywa wpadke, ktora z tego wynika",
+        "a bug report, not a topic" in plaski)
 
 print()
 print("=== 8. GLEBOKOSC LICZY SIE TEZ W PIONIE ===")
