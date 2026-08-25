@@ -186,7 +186,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-580 wierszy, 12 funkcji na poziomie modułu, 3 klas
+641 wierszy, 13 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -201,6 +201,7 @@
 | `przejsciowy(exc)` | Czy ten błąd ma szansę minąć sam. |
 | `call(purpose, system, user)` | Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi. |
 | `obraz(opis)` | Generuje grafikę do artykułu i zapisuje jej koszt tam, gdzie resztę. |
+| `_obiekty_json(tekst)` *(wewn.)* | Kolejne ZBILANSOWANE obiekty JSON w tekscie, od lewej. |
 | `parse_json(text)` | Wyciąga obiekt JSON z odpowiedzi modelu. |
 
 ### `gates.py` — bramki jakości; żadna nie blokuje
@@ -380,3 +381,13 @@
 | `wczytaj()` | Ostatnia zapisana odpowiedz. Pusty slownik, gdy nie ma albo jest zepsuta. |
 | `pobierz(conn, run_id, wymus)` | Aktualny stan modeli. Z pliku, gdy swiezy; inaczej pyta na nowo. |
 | `jako_tekst(dane)` | Stan modeli w postaci, ktora wchodzi do promptu. |
+
+### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
+
+220 wierszy, 3 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `temat_z_faktu(conn, run_id, fakt)` | Zamienia udokumentowany fakt w brief artykulu. |
+| `wybierz_fakt(conn, run_id, ile)` | Swiezy fakt z puli ciekawostek, ktory NIE powtarza zadnego artykulu. |
+| `main()` | — |

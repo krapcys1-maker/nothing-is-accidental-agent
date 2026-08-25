@@ -165,5 +165,60 @@ sprawdz("baza testu to nie produkcja", "tmp" in str(config.DB_PATH).lower()
         or "temp" in str(config.DB_PATH).lower(), config.DB_PATH)
 
 print()
+print("=== ODPOWIEDZ MODELU Z PROZA WOKOL JSON-A ===")
+# DWIE AWARIE Z JEDNEGO DNIA, 25 sierpnia 2026:
+#   warto_pisac       -> JSONDecodeError: Extra data: line 1 column 1866
+#   znajdz_ciekawostki -> brak JSON w odpowiedzi: "I'll work the grid across..."
+# To drugie kosztowalo dwadziescia wyszukiwan i 0,13 USD, po czym oddalo zero.
+#
+# Przyczyna byla jedna: parser bral wycinek od PIERWSZEGO nawiasu otwierajacego
+# do OSTATNIEGO zamykajacego. Model z wlaczonym wyszukiwaniem pisze zdanie o
+# tym, co zaraz zrobi, potem JSON, czasem komentarz na koncu — i kazdy nawias
+# w tej prozie przesuwal granice wycinka.
+import llm as _llm   # noqa: E402
+
+_PROBKI = [
+    ('{"a": 1}', {"a": 1}, "goly JSON"),
+    ("```json" + chr(10) + '{"a": 1}' + chr(10) + "```", {"a": 1}, "w plocie"),
+    ("I will work the grid.{\"a\": 1}", {"a": 1}, "proza przed"),
+    ('{"a": 1}' + chr(10) + "That is my answer.", {"a": 1},
+     "proza po — to bylo Extra data"),
+    ("Here {is} my answer: {\"a\": 1}", {"a": 1}, "nawias w prozie przed"),
+    ('{"a": 1} and also {"b": 2}', {"a": 1}, "dwa obiekty, bierze pierwszy"),
+    ('{"t": "brace } inside"}', {"t": "brace } inside"}, "nawias w napisie"),
+    ('{"a": {"b": [1,2]}}', {"a": {"b": [1, 2]}}, "zagniezdzony"),
+]
+for _tekst, _oczek, _opis in _PROBKI:
+    try:
+        _w = _llm.parse_json(_tekst)
+    except Exception as _e:
+        _w = "%s: %s" % (type(_e).__name__, _e)
+    sprawdz(_opis, _w == _oczek, _w)
+
+# KONTRDOWOD 1: proza BEZ zadnego JSON-a nadal musi rzucac. Bez tego parser
+# zwracalby cokolwiek i etap szedlby dalej z pusta karta.
+try:
+    _llm.parse_json("zadnego jsona tu nie ma")
+    sprawdz("proza bez JSON nadal rzuca wyjatek", False, "nie rzucil")
+except ValueError:
+    sprawdz("proza bez JSON nadal rzuca wyjatek", True)
+
+# KONTRDOWOD 2: stary sposob — od pierwszego do ostatniego nawiasu — MUSI
+# oblewac sie na probce, ktora dzis przechodzi. Inaczej test niczego nie mierzy.
+import json as _json
+_stary_by_padl = False
+# Probka musi zawierac nawias PO JSON-ie, bo dopiero wtedy stary wycinek
+# „od pierwszego do ostatniego" siega za koniec obiektu. Sama proza bez
+# nawiasu starego parsera nie lamala — i wlasnie dlatego pierwsza wersja tego
+# kontrdowodu byla bezwartosciowa.
+_probka = '{"a": 1} and also {"b": 2}'
+_i, _j = _probka.find("{"), _probka.rfind("}")
+try:
+    _json.loads(_probka[_i:_j + 1])
+except ValueError:
+    _stary_by_padl = True
+sprawdz("stary parser oblalby sie na tej samej probce", _stary_by_padl)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

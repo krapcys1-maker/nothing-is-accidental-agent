@@ -60,6 +60,7 @@ MODULY = [
     ("raport_statystyk.py", "te same dane w tabeli dla człowieka"),
     ("korpus_kanalow.py", "o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło"),
     ("aktualne_modele.py", "jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci"),
+    ("artykul_z_puli.py", "artykuł bierze temat z tej samej puli, co notki"),
 ]
 
 # Funkcje pokazane w calosci w sekcji VII. Wybor jest REDAKCYJNY — to te, ktorych

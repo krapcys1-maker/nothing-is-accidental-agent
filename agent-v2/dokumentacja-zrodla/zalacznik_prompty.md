@@ -2688,7 +2688,7 @@ into them. The rest of the fields are the evidence; this is the judgement.
 
 #### `prompts/synteza.md`
 
-**86 wierszy.** Pola wejsciowe: `evidence_json`, `max_claim_chars`, `max_confirmed`, `max_contradictions`, `max_numbers`, `max_uncertain`, `min_confirmed`, `min_numbers`, `question`
+**95 wierszy.** Pola wejsciowe: `evidence_json`, `max_claim_chars`, `max_confirmed`, `max_contradictions`, `max_numbers`, `max_uncertain`, `min_confirmed`, `min_numbers`, `question`
 
 ````markdown
 You are building the evidence card for one article. Everything the writer is
@@ -2720,6 +2720,15 @@ Each claim at most {max_claim_chars} characters.
 literally in the excerpts. Copy the digits exactly as written. Do not convert
 units, do not round, do not average, do not compute a figure from two others.
 A number that is not in the corpus will be caught and will block the article.
+
+**And say WHOSE number it is, in `means`, whenever the excerpt attributes it.**
+"The UK AI Safety Institute measured X" is a different object from "a review
+said the Institute measured X". The second one is a copy, and copies drift: a
+real card carried "about seven times more likely" from two secondary reviews,
+when the Institute's own report said 7% against 3% — a percentage rewritten as
+a multiple. If the excerpt you are copying from is not the body that produced
+the figure, put that in `means` explicitly, so the check downstream knows to go
+and find the original.
 
 **main_mechanism** — the hidden system the article exists to explain, in a few
 sentences. This is where you say how the pieces connect. Ground each link in the
@@ -2935,7 +2944,7 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/weryfikacja.md`
 
-**107 wierszy.** Pola wejsciowe: `context`, `dzis`, `text`
+**139 wierszy.** Pola wejsciowe: `context`, `dzis`, `text`
 
 ````markdown
 Check a short text that is about to be published in public — a comment, a note
@@ -2978,6 +2987,38 @@ accurate. This is the single most common way this publication has been wrong.
 Be exact about near-misses. "X excluded Y" and "X did not include Y" can differ
 in a way that matters. If the text overstates the strength or the intent of
 something a source describes more weakly, that is `refuted`, not `confirmed`.
+
+## A number with somebody's name on it has to come from them
+
+**When the text says an institution found, measured or reported a figure, the
+source you confirm it against must be that institution.** A blog, a news story,
+a newsletter or a review quoting the figure is not confirmation. It is a copy,
+and copies drift.
+
+This is not hypothetical caution. A real card carried "the UK AI Safety
+Institute found the model about seven times more likely to compromise safety
+research tasks", sourced to two secondary analyses. The Institute's own report
+says the model continued sabotage in 7% of cases against 3% for the older one —
+a little over twice, not seven times. Somebody turned a percentage into a
+multiple, and the check passed because the secondary source did say it.
+
+So when a claim attaches a number to a named body:
+
+1. **Search for that body's own publication** — the report, the paper, the
+   filing, the press release. One extra search.
+2. **Read the figure there.** If the text matches, mark it `confirmed` and give
+   the primary URL, not the one the author used.
+3. **If the primary source says something different, that is `refuted`** — even
+   when a dozen articles repeat the version in the text. Say what the primary
+   source actually says.
+4. **If you cannot find the primary source at all, that is `unverified`**, not
+   `confirmed`. A figure that only exists in retellings is a rumour with a
+   decimal point.
+
+Watch specifically for a percentage rewritten as a multiple, a rate rewritten
+as a total, a sample rewritten as a population, and a figure about one model or
+one year attached to a whole company or a whole field. Those four account for
+almost every number that is technically sourced and still wrong.
 
 ## True and dead is still wrong
 

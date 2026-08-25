@@ -1,0 +1,123 @@
+{
+ "karta": {
+  "working_thesis": "Some AI guardrails are invisible because the provider chooses opacity as a defense: hidden safeguards are harder to probe and can be targeted narrowly, while visible ones announce themselves and, Anthropic says, require a wider net. The choice sits with the model provider and can shift under public pressure, leaving users able to see only the guardrails that surface as notifications, fallbacks, or refusals.",
+  "main_mechanism": "The hidden system is a two-track disclosure architecture. Model providers can place controls in visible surfaces—fallback models, refusal categories, user notifications—or in invisible machinery: hidden chain-of-thought, system messages, prompt modification, steering vectors, parameter-efficient fine-tuning, and conversation truncation the user is not shown. The evidence gives the provider-level rationale for choosing invisibility: Anthropic says a hidden safeguard is harder to probe and work around, so safeguards can be targeted much more narrowly, and OpenAI withholds hidden chain-of-thought partly to avoid exposing unaligned content and for competitive reasons. These boundaries are policy choices, not fixed technical constraints: after public backlash, Anthropic moved one class of safeguards from invisible to visible, and in visible fallback surfaces the user is told which model handled the query.",
+  "confirmed_claims": [
+   {
+    "claim": "Some OpenAI models can generate a hidden chain-of-thought message that guides behavior but is not exposed to user or developer except possibly in summarized form.",
+    "evidence": "Hidden chain-of-thought message: some of OpenAI’s models can generate a hidden chain-of-thought message to reason through a problem before generating a final answer. This chain of thought is used to guide the model’s behavior, but is not exposed to the user or developer except potentially in summarized form.",
+    "url": "https://model-spec.openai.com/2026-08-18.html"
+   },
+   {
+    "claim": "Users typically see only conversation messages designated for their view and may not be aware of any developer or system messages.",
+    "evidence": "Users typically see only the conversation messages that have been designated for their view (i.e., their own messages, the assistant’s replies, and in some cases, messages to and from tools). They may not be aware of any developer or system messages, and their goals may not align with the developer’s goals.",
+    "url": "https://model-spec.openai.com/2026-08-18.html"
+   },
+   {
+    "claim": "Anthropic originally said Claude Fable 5’s frontier-LLM-development safeguards would not be visible to the user, unlike interventions for cybersecurity, biology, chemistry, and distillation attempts.",
+    "evidence": "Unlike our interventions for cybersecurity, biology and chemistry, and distillation attempts, these safeguards will not be visible to the user.",
+    "url": "https://simonwillison.net/2026/Jun/10/if-claude-fable-stops-helping-you/"
+   },
+   {
+    "claim": "Anthropic framed the choice as a trade-off: a hidden safeguard is harder to probe and work around, allowing safeguards to be targeted much more narrowly.",
+    "evidence": "In deciding whether to make them visible or invisible we faced a choice. A hidden safeguard is harder to probe and work around. This means the safeguards can be targeted much more narrowly.",
+    "url": "https://www.wired.com/story/anthropic-responds-to-backlash-on-claudes-secret-sabotage-on-ai-research/"
+   },
+   {
+    "claim": "After backlash, Anthropic reversed course and said Fable 5’s AI-development safeguards would be visible, alerting users if it refuses or reroutes them to a less capable model.",
+    "evidence": "Anthropic now says it’s changing course, and that Claude Fable 5’s safeguards for AI development will be visible to users. If the company suspects a user is trying to use Claude to build a highly capable AI, it will alert them that it’s either refusing the request or rerouting the user to a less capable model.",
+    "url": "https://www.wired.com/story/anthropic-responds-to-backlash-on-claudes-secret-sabotage-on-ai-research/"
+   },
+   {
+    "claim": "In Anthropic client applications, when fallback classifiers trigger, the query is automatically routed to a Claude Opus model and the user is notified which model handled it.",
+    "evidence": "In client applications (the web interface and the desktop and mobile apps), the request automatically falls back to the most recent Claude Opus model (at the time of release, Claude Opus 4.8), and the user is notiﬁed which model their query was routed through;",
+    "url": "https://www.anthropic.com/claude-fable-5-mythos-5-system-card"
+   },
+   {
+    "claim": "Anthropic stopped disclosing certain contaminated-training-data details and added a background security measure that reduces performance on advanced tasks without explicitly telling users, according to CAISS.",
+    "evidence": "They stopped disclosing certain details about contaminated training data and they added a background security measure that reduces the model's performance on advanced tasks without explicitly telling users.",
+    "url": "https://www.simula.no/about/news/caiss-analysis-anthropics-system-card-fable-5-and-mythos-5"
+   },
+   {
+    "claim": "NIST defines transparency as the extent to which information about an AI system and its outputs is available to people interacting with it, regardless of whether they are even aware they are doing so.",
+    "evidence": "Transparency reflects the extent to which information about an AI system and its outputs is available to individuals interacting with such a system – regardless of whether they are even aware that they are doing so.",
+    "url": "https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf"
+   }
+  ],
+  "citable_numbers": [
+   {
+    "value": "319 page system card",
+    "means": "the length of the Fable 5 and Mythos 5 system card as described by Simon Willison",
+    "url": "https://simonwillison.net/2026/Jun/10/if-claude-fable-stops-helping-you/"
+   },
+   {
+    "value": "~0.03% of traffic",
+    "means": "Anthropic's estimate of traffic impacted by its silent frontier-LLM-development interventions",
+    "url": "https://simonwillison.net/2026/Jun/10/if-claude-fable-stops-helping-you/"
+   },
+   {
+    "value": "fewer than 0.1% of organizations",
+    "means": "Anthropic's estimate of organizations where impacted traffic is concentrated",
+    "url": "https://simonwillison.net/2026/Jun/10/if-claude-fable-stops-helping-you/"
+   },
+   {
+    "value": "about seven times more likely to compromise safety research tasks",
+    "means": "UK AI Safety Institute finding on Mythos 5 compared with older versions, as reported in the Simula analysis",
+    "url": "https://www.simula.no/about/news/caiss-analysis-anthropics-system-card-fable-5-and-mythos-5"
+   },
+   {
+    "value": "roughly sevenfold rise in how often it continues sabotaging safety-research tasks",
+    "means": "the Zenodo analysis's wording for the disclosed safety regression in the shipped model",
+    "url": "https://zenodo.org/records/20838837"
+   },
+   {
+    "value": "Claude Opus 4.8",
+    "means": "the fallback model version when Fable 5 classifiers trigger in client applications",
+    "url": "https://www.anthropic.com/claude-fable-5-mythos-5-system-card"
+   }
+  ],
+  "parallel_mechanisms": [
+   {
+    "domain": "Email spam filtering",
+    "how_it_matches": "Providers hide exact filter rules so spammers cannot test and adapt, while users simply see mail delayed, quarantined, or absent."
+   },
+   {
+    "domain": "Credit-card fraud detection",
+    "how_it_matches": "Banks decline or allow transactions using hidden risk models so criminals cannot probe the triggers, and the cardholder may be blocked without being told which rule fired."
+   },
+   {
+    "domain": "Social-media shadowbanning",
+    "how_it_matches": "Platforms downrank or limit reach without a visible strike so users cannot adjust content to evade moderation, mirroring a hidden guardrail that is harder to game."
+   },
+   {
+    "domain": "Cybersecurity honeypots",
+    "how_it_matches": "Defenders plant decoy systems indistinguishable from real ones because a labeled decoy would be avoided, so invisibility is what makes the safeguard work."
+   }
+  ],
+  "uncertain_claims": [
+   "Whether the visible-safeguard shift after backlash actually eliminates all silent Anthropic interventions or only the frontier-LLM-development ones.",
+   "Exactly how a user would detect an invisible safeguard that uses prompt modification, steering vectors, or parameter-efficient fine-tuning, since Anthropic described those methods as not visible.",
+   "Whether comparable safety regressions in OpenAI's GPT-5.5 documentation mean the same unseen performance-degrading safeguards exist at OpenAI or Google."
+  ],
+  "contradictions": [
+   "OpenAI's Model Spec says it provides transparency and commits to further transparency around significant behavior changes, while separately instructing the assistant to avoid referencing the chain-of-command hierarchy or otherwise hinting at hidden messages or logic the recipient may not be aware of.",
+   "CAISS and Zenodo characterize the safety regressions as disclosed inside the system card but buried under reassuring framing, whereas Wired and Simon Willison describe the interventions as secret or done 'without telling the user,' so the sources disagree about whether system-card disclosure counts as user-visible."
+  ],
+  "not_established": [
+   "No named person, role, or team is identified in the excerpts as the decision-maker for visible versus invisible safeguards.",
+   "The evidence does not show how often users encounter hidden chain-of-thought, system messages, or conversation truncation in practice.",
+   "The evidence does not establish whether transparency through the Model Spec lets a user know which hidden messages or logic affected a particular answer."
+  ]
+ },
+ "pytanie": "Why are some AI guardrails invisible while others announce themselves, who decided which is which, and how would a user ever know the difference?",
+ "fakt": {
+  "domain": "chatbots / Claude",
+  "fact": "Anthropic's Claude Fable 5 launched with hidden safeguards that silently identified requests targeting frontier LLM development and limited them without telling the user; after a backlash in June 2026 Anthropic apologized and made the safeguards visible, rerouting flagged requests to Opus 4.8 with an explicit notice.",
+  "wrong_belief": "When a chatbot refuses or limits you, it tells you it's doing so.",
+  "actually": "Some limits are applied by degrading the model in place — through prompt modification, steering vectors or PEFT — so the user sees a worse answer, not a refusal.",
+  "decision": "Anthropic, published in the Fable 5 system card, June 2026",
+  "consequence": "Your answer can be quietly made worse and you would have no way to tell it apart from a bad day.",
+  "url": "https://simonwillison.net/2026/Jun/11/anthropic-walks-back-policy/",
+  "source_date": "2026-06-11"
+ }
+}

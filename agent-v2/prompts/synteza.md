@@ -28,6 +28,15 @@ literally in the excerpts. Copy the digits exactly as written. Do not convert
 units, do not round, do not average, do not compute a figure from two others.
 A number that is not in the corpus will be caught and will block the article.
 
+**And say WHOSE number it is, in `means`, whenever the excerpt attributes it.**
+"The UK AI Safety Institute measured X" is a different object from "a review
+said the Institute measured X". The second one is a copy, and copies drift: a
+real card carried "about seven times more likely" from two secondary reviews,
+when the Institute's own report said 7% against 3% — a percentage rewritten as
+a multiple. If the excerpt you are copying from is not the body that produced
+the figure, put that in `means` explicitly, so the check downstream knows to go
+and find the original.
+
 **main_mechanism** — the hidden system the article exists to explain, in a few
 sentences. This is where you say how the pieces connect. Ground each link in the
 evidence.

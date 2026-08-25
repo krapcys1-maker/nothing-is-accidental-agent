@@ -563,18 +563,79 @@ def obraz(
     return base64.b64decode(surowy)
 
 
+def _obiekty_json(tekst: str):
+    """Kolejne ZBILANSOWANE obiekty JSON w tekscie, od lewej.
+
+    Liczymy nawiasy, pomijajac te wewnatrz napisow i te poprzedzone znakiem
+    ucieczki. Dzieki temu obiekt konczy sie tam, gdzie naprawde sie konczy,
+    a nie na ostatnim nawiasie w calej odpowiedzi.
+    """
+    i, n = 0, len(tekst)
+    while i < n:
+        if tekst[i] != "{":
+            i += 1
+            continue
+        glebokosc, w_napisie, ucieczka = 0, False, False
+        for j in range(i, n):
+            z = tekst[j]
+            if ucieczka:
+                ucieczka = False
+                continue
+            if z == "\\":
+                ucieczka = True
+                continue
+            if z == '"':
+                w_napisie = not w_napisie
+                continue
+            if w_napisie:
+                continue
+            if z == "{":
+                glebokosc += 1
+            elif z == "}":
+                glebokosc -= 1
+                if glebokosc == 0:
+                    yield tekst[i:j + 1]
+                    i = j + 1
+                    break
+        else:
+            return          # nawias sie nie domknal do konca tekstu
+        if glebokosc != 0:
+            return
+
+
 def parse_json(text: str) -> Any:
     """Wyciąga obiekt JSON z odpowiedzi modelu.
 
-    Modele lubią owinąć JSON w ```json. Nie robimy z tego bramki — obcinamy
-    płot i parsujemy.
+    DWIE AWARIE Z JEDNEGO DNIA, obie kosztowne i obie ciche az do wyjatku.
+    25 sierpnia 2026: `warto_pisac` padlo na `Extra data: line 1 column 1866`,
+    a szukanie ciekawostek na `brak JSON w odpowiedzi: "I'll work the grid..."`.
+    To drugie kosztowalo dwadziescia wyszukiwan i 0,13 USD, po czym oddalo zero.
+
+    Przyczyna byla jedna: bralismy wycinek od PIERWSZEGO `{` do OSTATNIEGO `}`.
+    Model z wlaczonym wyszukiwaniem pisze zdanie o tym, co zaraz zrobi, potem
+    JSON, czasem jeszcze komentarz na koncu — a kazdy nawias w tej prozie
+    przesuwal granice wycinka. Wystarczyl jeden, zeby caly etap przepadl.
+
+    Teraz szukamy ZBILANSOWANYCH obiektow i bierzemy pierwszy, ktory sie
+    parsuje. Gdyby zaden — probujemy najdluzszego, bo model bywa ucina wczesny
+    fragment przykladu ze swojego wlasnego promptu.
     """
     cleaned = text.strip()
     if cleaned.startswith("```"):
         cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned
         cleaned = cleaned.rsplit("```", 1)[0]
-    start = cleaned.find("{")
-    end = cleaned.rfind("}")
-    if start == -1 or end == -1:
-        raise ValueError(f"brak JSON w odpowiedzi: {text[:200]!r}")
-    return json.loads(cleaned[start : end + 1])
+
+    kandydaci = list(_obiekty_json(cleaned))
+    for k in kandydaci:
+        try:
+            return json.loads(k)
+        except ValueError:
+            continue
+    # Najdluzszy jako ostatnia szansa: krotkie obiekty na poczatku bywaja
+    # fragmentem instrukcji, ktory model przepisal, zanim odpowiedzial.
+    for k in sorted(kandydaci, key=len, reverse=True):
+        try:
+            return json.loads(k)
+        except ValueError:
+            continue
+    raise ValueError(f"brak JSON w odpowiedzi: {text[:200]!r}")
