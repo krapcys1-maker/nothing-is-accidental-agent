@@ -840,6 +840,18 @@ CURIOSITY_BATCH = 8
 # Ile ostatnio zuzytych faktow pokazujemy szukajacemu jako zakaz powtorki.
 # Bez tego to samo szukanie codziennie oddaje te same slynne osiem.
 CURIOSITY_MEMORY = 60
+
+# Ile OSTATNICH WYSTAWIONYCH NOTEK bot pamieta, wybierajac material na dzis.
+#
+# Rozne od `CURIOSITY_MEMORY`, ktore pamieta zuzyte FAKTY po dokladnym odcisku.
+# Ten sam fakt powiedziany innymi slowami daje inny odcisk i przechodzil — tak
+# poszly dwie notki o symbolu otwartego sloika, 23 i 24 sierpnia.
+#
+# Dwanascie to okolo czterech dni przy obecnych trzech notkach dziennie.
+# Zmierzone na 29 notkach: okno osmiu lapie te same powtorki co okno czterdziestu,
+# wiec dwanascie jest z zapasem, a nie na wyrost. Dluzsza pamiec nic nie dodaje,
+# a kazde dodatkowe porownanie to kolejna szansa na falszywy alarm.
+PAMIEC_NOTEK = 12
 COMMENT_CANDIDATES = 3
 
 # DLUGOSC KOMENTARZA I ODPOWIEDZI losowana osobno za kazdym razem.

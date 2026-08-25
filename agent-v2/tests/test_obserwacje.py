@@ -233,6 +233,62 @@ sprawdz("krotkie teksty nie sa oceniane (za malo slow)",
         stages._o_tym_samym("eggs", "eggs") is False)
 
 print()
+print("=== 4b. PAMIEC NIE KONCZY SIE O POLNOCY ===")
+# 23 i 24 sierpnia poszly dwie notki o tym samym symbolu otwartego sloika na
+# butelce szamponu. Ten sam fakt, inne zdania. Ochrona istniala i dzialala —
+# tylko `juz_o_tym` zaczynalo KAZDY DZIEN puste, wiec pytala wylacznie o to,
+# co wystawiamy dzisiaj. Miedzy dniami zostawal `_klucz_faktu`, odcisk
+# DOKLADNY, ktory na przeformulowaniu puszcza.
+WCZORAJ = ("Open-jar symbol on a shampoo bottle means the product carries no "
+           "expiry date at all. The number beside it counts months from the day "
+           "the lid first comes off. Under 30 months of unopened durability, the "
+           "law requires a printed best-before instead.")
+DZIS = {"domain": "Cosmetics labelling",
+        "fact": ("Your shampoo bottle carries that little open jar instead of an "
+                 "expiry date, not alongside one. Under cosmetics law, anything "
+                 "lasting more than 30 months unopened is excused from printing a "
+                 "best-before at all.")}
+
+sprawdz("dokladny odcisk faktu NIE lapie przeformulowania",
+        stages._klucz_faktu(WCZORAJ) != stages._klucz_faktu(DZIS["fact"]))
+sprawdz("ale rozmyta miara juz tak",
+        stages._o_tym_samym(DZIS["fact"], WCZORAJ,
+                            **stages.POROWNANIE_MIEDZY_DNIAMI) is True)
+sprawdz("wiec material z wczoraj zostaje odrzucony",
+        stages.wybierz_material([dict(DZIS)], [], [WCZORAJ]) is None)
+# KONTRDOWOD: bez pamieci poprzednich dni ten sam material przechodzi — czyli
+# test naprawde mierzy TE zmiane, a nie cokolwiek innego.
+sprawdz("a bez tej pamieci przeszedlby (tak powstala wpadka)",
+        stages.wybierz_material([dict(DZIS)], [])["domain"] == "Cosmetics labelling")
+
+# Prog miedzy dniami MUSI byc ostrzejszy od dziennego, inaczej blokuje notki
+# na przypadkowych slowach. Zmierzone: przy progu dziennym notka o cenach w UE
+# zderzala sie z notka o filtrach UV na `nothing`, `number`, `whole`.
+LUZNE_A = ("Sticker price in the EU is the whole price. VAT and every other tax "
+           "are already inside the number on the shelf, so nothing is added at "
+           "the till.")
+LUZNE_B = ("Sunscreen's SPF number says nothing about the rays that age your "
+           "skin. It measures UVB only, and the whole label turns on that.")
+sprawdz("prog miedzy dniami jest ostrzejszy od dziennego",
+        stages.POROWNANIE_MIEDZY_DNIAMI["prog"] > 0.15
+        and stages.POROWNANIE_MIEDZY_DNIAMI["min_wspolnych"] > 2,
+        stages.POROWNANIE_MIEDZY_DNIAMI)
+sprawdz("i luzne zderzenie NIE blokuje notki",
+        stages._o_tym_samym(LUZNE_A, LUZNE_B,
+                            **stages.POROWNANIE_MIEDZY_DNIAMI) is False)
+
+# Adres w notce promocyjnej nie jest tematem. Dwie notki z linkiem mialy trzy
+# wspolne slowa — `https`, `substack`, nazwa publikacji — zanim ktokolwiek
+# spojrzal, o czym sa.
+Z_LINKIEM = "Airplane windows have a tiny hole. https://nothingisaccidental.substack.com/p/x"
+Z_LINKIEM_2 = "Eggs are refrigerated in America. https://nothingisaccidental.substack.com/p/y"
+sprawdz("adres nie wpada do slow tematu",
+        not ({"https", "substa"} & stages._slowa(Z_LINKIEM)),
+        sorted(stages._slowa(Z_LINKIEM)))
+sprawdz("wiec dwie notki z linkiem nie sa 'o tym samym'",
+        stages._o_tym_samym(Z_LINKIEM, Z_LINKIEM_2) is False)
+
+print()
 print("=== 5. FAKT W PAMIECI ZUZYTYCH TO ZDANIE, NIE SLOWNIK ===")
 
 oryg_plik = stages.ZUZYTE_FAKTY

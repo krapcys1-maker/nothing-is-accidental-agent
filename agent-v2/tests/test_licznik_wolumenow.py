@@ -384,5 +384,88 @@ sprawdz("i powod nazywa brakujacy przycisk",
         'f"nie ma przycisku {rodzaj} u {handle}"' in _br)
 
 print()
+print("=== 12. PRACA POD NORMA KOMENTARZY LICZY SIE JAKO KOMENTARZ ===")
+# Wejscie w dyskusje pod CUDZA notka to komentarz: bierze miejsce z dziennego
+# budzetu komentarzy, zjada rytm komentarzy i jest ta sama praca co komentarz
+# pod cudzym artykulem. Do dziennika szlo jednak jako `odpowiedz`, czyli do
+# kategorii BEZ normy — bo obsluguje je ta sama funkcja, co odpowiadanie u
+# siebie w watku.
+#
+# Zmierzone na produkcji, siedem dni: 29 wpisow `odpowiedz`, z czego 23 mialy
+# kontekst cudzego celu, czyli byly komentarzami. Licznik raportowal 30%
+# realizacji normy komentarzy; realnie bylo 63%. Alarm „agent robi mniej niz
+# deklaruje" w tej czesci nie mowil o agencie, tylko o wlasnym bledzie.
+import ast as _ast
+
+_run = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
+_drzewo = _ast.parse(_run)
+
+def _znajdz(nazwa, wezel):
+    for w in _ast.walk(wezel):
+        if isinstance(w, (_ast.FunctionDef, _ast.AsyncFunctionDef)) and w.name == nazwa:
+            return w
+    return None
+
+def _rodzaj_w(wezel):
+    """Jakie `rodzaj=` przekazuja wywolania wystaw_odpowiedz w tym wezle."""
+    z = []
+    for w in _ast.walk(wezel):
+        if not isinstance(w, _ast.Call):
+            continue
+        f = w.func
+        if not (isinstance(f, _ast.Attribute) and f.attr == "wystaw_odpowiedz"):
+            continue
+        podane = None
+        for kw in w.keywords:
+            if kw.arg == "rodzaj" and isinstance(kw.value, _ast.Constant):
+                podane = kw.value.value
+        z.append(podane)
+    return z
+
+_dyskusje = _znajdz("dyskusje", _drzewo)
+sprawdz("blok dyskusji istnieje w cyklu", _dyskusje is not None)
+
+_w_dyskusjach = _rodzaj_w(_dyskusje) if _dyskusje else []
+sprawdz("dyskusje wystawiaja dokladnie jedna odpowiedz", len(_w_dyskusjach) == 1,
+        _w_dyskusjach)
+sprawdz("i mowia, ze to KOMENTARZ", _w_dyskusjach == ["komentarz"], _w_dyskusjach)
+
+_normy = config.normy_dzienne()
+sprawdz("a `komentarz` ma dzienna norme, wiec licznik to zobaczy",
+        _normy.get("komentarz"), _normy.get("komentarz"))
+
+# KONTRDOWOD 1: gdyby ktos naprawil to przez zmiane DOMYSLNEJ wartosci w
+# browser.py, odpowiadanie we wlasnym watku tez zaczeloby sie liczyc jako
+# komentarz i licznik zawyzalby zamiast zanizac. Odpowiedzi u siebie MUSZA
+# zostac bez normy.
+_odpowiedzi = _znajdz("odpowiedzi", _drzewo)
+if _odpowiedzi is None:
+    # blok odpowiedzi bywa pisany bez wlasnej funkcji — wtedy szukamy poza
+    # dyskusjami, po calym pliku
+    _wszystkie = _rodzaj_w(_drzewo)
+    _poza = [x for x in _wszystkie if x != "komentarz"]
+    sprawdz("odpowiedzi we wlasnych watkach zostaja bez `rodzaj=komentarz`",
+            _poza == [None], _wszystkie)
+else:
+    sprawdz("odpowiedzi we wlasnych watkach zostaja bez `rodzaj=komentarz`",
+            _rodzaj_w(_odpowiedzi) == [None], _rodzaj_w(_odpowiedzi))
+
+# KONTRDOWOD 2: sam wykrywacz musi widziec brak parametru jako brak. Gdyby
+# `_rodzaj_w` zwracalo cokolwiek prawdziwego dla wywolania bez `rodzaj=`,
+# oba sprawdzenia wyzej przechodzilyby zawsze.
+_probka = _ast.parse("browser.wystaw_odpowiedz(1, 'x', wyslij=True)")
+sprawdz("wywolanie bez `rodzaj=` czyta sie jako brak", _rodzaj_w(_probka) == [None],
+        _rodzaj_w(_probka))
+
+# I strona przegladarki: parametr musi realnie dojechac do dziennika, a nie
+# tylko stac w sygnaturze.
+sprawdz("browser przyjmuje `rodzaj` w wystaw_odpowiedz",
+        'rodzaj: str = "odpowiedz"' in _br)
+sprawdz("i zapisuje wlasnie jego, nie stala",
+        "dopisz_wynik(rodzaj, wynik," in _br)
+sprawdz("stara stala zniknela z tego zapisu",
+        'dopisz_wynik("odpowiedz", wynik,' not in _br)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

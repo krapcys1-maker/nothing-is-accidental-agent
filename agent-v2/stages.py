@@ -858,6 +858,49 @@ def ostatnie_otwarcia(rodzaj: str = "notka", ile: int = 8) -> list[str]:
     return otwarcia[-ile:]
 
 
+def ostatnie_notki(ile: int = 12) -> list[str]:
+    """TRESCI ostatnich wystawionych notek — zeby nie napisac drugi raz tego samego.
+
+    Rozne od `ostatnie_otwarcia`, ktore pilnuje tylko PIERWSZEGO SLOWA. Tu chodzi
+    o temat calej notki.
+
+    Wpadka, ktora to wymusila: 23 i 24 sierpnia poszly dwie notki o tym samym
+    symbolu otwartego sloika na butelce szamponu. Ten sam fakt, inne zdania.
+
+    Ochrona miedzy dniami byla wtedy jedna — `_klucz_faktu`, czyli posortowany
+    zbior slow faktu. Odcisk DOKLADNY: ten sam fakt powiedziany innymi slowami
+    daje inny odcisk i przechodzi. Rozmyty wykrywacz `_o_tym_samym` widzial te
+    dwie notki jako ten sam temat (55% wspolnych rdzeni) — tylko nikt go nie
+    pytal o wczoraj, bo `juz_o_tym` zaczynalo kazdy dzien puste.
+
+    Pytamy DZIENNIKA, nie wlasnej ksiegowosci: liczy sie to, co naprawde
+    wyszlo w swiat, a nie to, co zamierzalismy wystawic.
+    """
+    plik = config.DATA_DIR / "dziennik.jsonl"
+    if not plik.exists():
+        return []
+    teksty: list[str] = []
+    try:
+        for linia in plik.read_text(encoding="utf-8").splitlines():
+            linia = linia.strip()
+            if not linia:
+                continue
+            try:
+                w = json.loads(linia)
+            except ValueError:
+                continue
+            if not isinstance(w, dict) or w.get("rodzaj") != "notka":
+                continue
+            if not w.get("udane"):
+                continue
+            tekst = (w.get("tekst") or "").strip()
+            if tekst:
+                teksty.append(tekst)
+    except OSError:
+        return []
+    return teksty[-ile:]
+
+
 def note(
     conn: sqlite3.Connection, run_id: int, note_type: str, evidence: dict[str, Any],
     link: str | None = None, note_form: str = "PROSTA",
@@ -1068,27 +1111,59 @@ def _slowa(tekst: str) -> set[str]:
     kodu dwa rozne slowa — a mowia o tym samym. Bierzemy od czterech liter, bo
     inaczej wypada „eggs", czyli akurat to slowo, o ktore w tej wpadce chodzilo.
     """
-    return {s[:6] for s in re.findall(r"[a-z]{4,}", (tekst or "").lower())
+    # Adresy WYLATUJA przed liczeniem slow. Notka promujaca artykul niesie link,
+    # a z linku wpadaly do puli „https", „substack" i nazwa publikacji — wiec
+    # dwie notki z linkiem mialy trzy wspolne slowa, zanim ktokolwiek spojrzal
+    # na ich temat. Zmierzone: notka o okienku w samolocie zderzala sie z notka
+    # o jajkach wylacznie na tych trzech.
+    bez_adresow = " ".join(s for s in (tekst or "").split()
+                           if not s.lower().startswith("http"))
+    return {s[:6] for s in re.findall(r"[a-z]{4,}", bez_adresow.lower())
             if s not in _PUSTE_SLOWA}
 
 
-def _o_tym_samym(a: str, b: str) -> bool:
+def _o_tym_samym(a: str, b: str, min_wspolnych: int = 2,
+                 prog: float = 0.15) -> bool:
     """Czy dwa teksty mowia o tej samej rzeczy.
 
     Nie chodzi o identyczne zdania, tylko o TEMAT. Wymagamy DWOCH warunkow naraz:
-    co najmniej dwoch wspolnych slow znaczacych i zauwazalnego ich udzialu.
-    Pojedyncze wspolne slowo to zbieg okolicznosci; dwa przy krotkim tekscie to
-    juz ten sam temat.
+    dosc wspolnych slow znaczacych i zauwazalnego ich udzialu. Pojedyncze
+    wspolne slowo to zbieg okolicznosci; dwa przy krotkim tekscie to juz ten
+    sam temat.
+
+    Progi sa PARAMETREM, bo to samo pytanie zadajemy w dwoch sytuacjach o
+    roznym koszcie pomylki — patrz `POROWNANIE_MIEDZY_DNIAMI`.
     """
     x, y = _slowa(a), _slowa(b)
     if len(x) < 4 or len(y) < 4:
         return False
     wspolne = x & y
-    return len(wspolne) >= 2 and len(wspolne) / min(len(x), len(y)) >= 0.15
+    return (len(wspolne) >= min_wspolnych
+            and len(wspolne) / min(len(x), len(y)) >= prog)
+
+
+# Prog dla porownania z POPRZEDNIMI DNIAMI, ostrzejszy niz dla biezacego dnia.
+#
+# Powod jest zmierzony na 29 wystawionych notkach. Przy progu dziennym (2 slowa,
+# 0.15) okno dwunastu poprzednich notek blokowalo dziewiec z nich — ale tylko
+# piec bylo prawdziwymi powtorkami (trzy razy jajka, trzy razy kod zywicy, dwa
+# razy szampon). Cztery byly falszywe: notka o cenach w UE „zderzala sie" z
+# notka o filtrach UV na slowach `nothing`, `number`, `whole`.
+#
+# Sily zderzen rozdzielaly sie czysto:
+#     prawdziwe powtorki   0.31 - 0.87, od 4 do 20 wspolnych rdzeni
+#     falszywe alarmy      0.15 - 0.17, od 2 do 3 wspolnych rdzeni
+#
+# Ponizsze wartosci leza w tej przerwie: lapia 5 z 5 prawdziwych, odrzucaja
+# 4 z 4 falszywych. Ostrzejszy prog wlasnie TU, bo miedzy dniami porownan jest
+# kilkanascie razy wiecej niz w obrebie dnia, a falszywy alarm kosztuje notke —
+# przy realizacji normy notek na poziomie 63% to nie jest darmowe.
+POROWNANIE_MIEDZY_DNIAMI = {"min_wspolnych": 4, "prog": 0.30}
 
 
 def wybierz_material(zapas: list[dict[str, Any]],
-                     unikaj: list[str]) -> dict[str, Any] | None:
+                     unikaj: list[str],
+                     wczesniej: list[str] | None = None) -> dict[str, Any] | None:
     """Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy.
 
     Poprzednio bylo `zapas.pop(0)` — pierwszy z brzegu. W przebiegu z 17 sierpnia
@@ -1103,6 +1178,12 @@ def wybierz_material(zapas: list[dict[str, Any]],
     for i, f in enumerate(zapas):
         temat = "%s %s" % (f.get("domain") or "", f.get("fact") or "")
         if any(_o_tym_samym(temat, u) for u in unikaj if u):
+            continue
+        # To samo pytanie o POPRZEDNIE DNI, ale ostrzej — inaczej ochrona przed
+        # powtorka konczyla sie o polnocy. 23 i 24 sierpnia poszly dwie notki o
+        # tym samym symbolu na butelce szamponu.
+        if any(_o_tym_samym(temat, u, **POROWNANIE_MIEDZY_DNIAMI)
+               for u in (wczesniej or []) if u):
             continue
         return zapas.pop(i)
     # Wszystko zderza sie z tym, co juz mamy — lepiej wystawic mniej niz
@@ -1162,6 +1243,9 @@ def notki_dnia(
     # O czym juz dzis mowimy. Promowany artykul liczy sie od razu — to od niego
     # zaczela sie wpadka z dwiema notkami o jajkach w odstepie trzynastu minut.
     juz_o_tym: list[str] = []
+    # Co poszlo w swiat w poprzednich dniach. Trzymane OSOBNO od `juz_o_tym`,
+    # bo porownuje sie ostrzejszym progiem — patrz `POROWNANIE_MIEDZY_DNIAMI`.
+    wczesniejsze: list[str] = ostatnie_notki(config.PAMIEC_NOTEK)
     if karta:
         juz_o_tym.append("%s %s" % (karta.get("article_title") or "",
                                     (karta.get("article_text") or "")[:400]))
@@ -1175,7 +1259,7 @@ def notki_dnia(
                 if not zapas:
                     print("  [notki] brak materiału — kończę dzień krócej", flush=True)
                     break
-            fakt = wybierz_material(zapas, juz_o_tym)
+            fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze)
             if fakt is None:
                 print("  [notki] został tylko materiał o tym samym, co już dziś"
                       " wystawiamy — kończę dzień krócej", flush=True)

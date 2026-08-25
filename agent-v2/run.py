@@ -551,9 +551,13 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             if wyslij:
                 if not rytm("komentarz", "dyskusje", rytm_stanu):
                     return
+                # `rodzaj="komentarz"`, bo to jest komentarz — pod cudza
+                # notka zamiast pod cudzym artykulem. Liczy sie do tej samej
+                # normy, z ktorej bierzemy na to miejsce kilka linii wyzej.
                 browser.wystaw_odpowiedz(cel["id"], dobre[0]["comment"],
                                          wyslij=True,
-                                         kontekst=opis_celu(cel))
+                                         kontekst=opis_celu(cel),
+                                         rodzaj="komentarz")
                 rytm_stanu["komentarz"] = True
             zrobione["komentarze"] += 1
 

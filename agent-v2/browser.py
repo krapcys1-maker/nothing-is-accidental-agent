@@ -1789,12 +1789,28 @@ def potwierdz_odpowiedz(page, note_id: int, tekst: str) -> bool:
     return False
 
 def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
-                     kontekst: dict[str, Any] | None = None) -> dict[str, Any]:
+                     kontekst: dict[str, Any] | None = None,
+                     rodzaj: str = "odpowiedz") -> dict[str, Any]:
     """Odpowiada w watku — pod nasza notka albo w cudzej dyskusji.
 
     `kontekst` jak przy komentarzu: co wiedzielismy o celu, gdy pisalismy.
+
+    `rodzaj` mowi, CZYM to dzialanie jest dla licznika wolumenow, bo jedna
+    funkcja obsluguje dwie rozne rzeczy:
+
+      - odpowiedz we WLASNYM watku, komus kto skomentowal nasza notke
+        (`odpowiedz` — nie ma dziennej normy, bo zalezy od cudzych reakcji),
+      - wejscie w dyskusje POD CUDZA notka (`komentarz` — ma norme, i jest to
+        ta sama praca co komentarz pod cudzym artykulem).
+
+    Zmierzone na dzienniku produkcji, siedem dni: 29 wpisow `odpowiedz`, z
+    czego 23 to byly komentarze pod cudzymi notkami. Licznik pokazywal wiec
+    30% realizacji normy komentarzy przy realnych 63%, bo wieksza czesc pracy
+    ladowala w kategorii, ktora normy nie ma. Alarm o „agent robi mniej niz
+    deklaruje" byl w tej czesci bledem pomiaru, nie bledem dzialania — a alarm,
+    ktory regularnie klamie, uczy ludzi nie patrzec na alarmy.
     """
-    wyslij = naprawde_wyslac(wyslij, "odpowiedz")
+    wyslij = naprawde_wyslac(wyslij, rodzaj)
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
@@ -1850,7 +1866,7 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
             przycisk.click()
             page.wait_for_timeout(6000)
             wynik["wyslane"] = potwierdz_odpowiedz(page, note_id, tekst)
-            dopisz_wynik("odpowiedz", wynik,
+            dopisz_wynik(rodzaj, wynik,
                                gdzie=f"note/c-{note_id}",
                                slow=len(tekst.split()), tekst=tekst[:300],
                                **(kontekst or {}))
