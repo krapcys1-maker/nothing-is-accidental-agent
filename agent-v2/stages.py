@@ -21,10 +21,15 @@ import korpus_kanalow
 import db
 import llm
 
+# TRZECI KOMUNIKAT SYSTEMOWY Z POPRZEDNIEJ EPOKI, znaleziony przy tym samym
+# przegladzie co CURIOSITY_SYSTEM. Skaut dostawal "ordinary things" w
+# komunikacie systemowym i "artificial intelligence" w prompcie — a to tlumaczy,
+# czemu kazdy przebieg skreca ku przepisom i procedurom.
 SCOUT_SYSTEM = (
     "You are a topic scout for the English-language Substack 'Nothing Is "
-    "Accidental', which explains the hidden systems, incentives and decisions "
-    "behind ordinary things. Return only valid JSON."
+    "Accidental', a publication about artificial intelligence: what these "
+    "systems do, how they are built, and who decides what they are allowed to "
+    "do. Return only valid JSON."
 )
 
 SEED_HISTORY = config.PROMPTS_DIR / "historia_startowa.json"
@@ -695,7 +700,7 @@ SKLADNIKI_KLUCZA = (
     # `test_przegrane_tematy` porownuje dlugosci i to jest jego glowna wartosc:
     # dopisanie skladnika bez nazwy zrobiloby raport o przegranych, ktory
     # przypisuje powody do zlych pol.
-    "nosny", "niepowtorzony", "artykulowy", "wlasny_ranking", "swiezy",
+    "niepowtorzony", "nosny", "artykulowy", "wlasny_ranking", "swiezy",
     "watki", "waga_glebokosci", "confidence", "expected_primary_sources",
 )
 
@@ -787,9 +792,21 @@ def wybierz_cele(
     return wybrane
 
 
+# KOMUNIKAT SYSTEMOWY BYL Z POPRZEDNIEJ EPOKI — i to jest gorsze, niz wyglada.
+#
+# Stalo tu "documented facts about ORDINARY THINGS", podczas gdy prompt
+# uzytkownika w TYM SAMYM wywolaniu mowi "a publication about artificial
+# intelligence". Model dostawal wiec dwie sprzeczne instrukcje naraz, a
+# komunikat systemowy jest zwykle mocniejszy — pismo o AI bylo ciagniete z
+# powrotem ku szamponom i przepisom konsumenckim.
+#
+# Przegladu 25 promptow to nie objelo, bo ten tekst siedzi w KODZIE, nie w
+# pliku promptu. Znalazl go dopiero audyt.
 CURIOSITY_SYSTEM = (
-    "You find documented facts about ordinary things for an anonymous editorial "
-    "brand. You search before you answer and you never state a fact you cannot "
+    "You find documented facts about artificial intelligence for an anonymous "
+    "editorial brand: what these systems do, how they are built, who decides "
+    "what they may do, and what that arrangement hands the people who built "
+    "them. You search before you answer and you never state a fact you cannot "
     "put a source against. Return only valid JSON."
 )
 
@@ -948,6 +965,29 @@ def kuplet_korygujacy(tekst: str) -> bool:
                      r"(it's|it is|they're|they are|that's|that is)\b",
                      z, re.IGNORECASE):
             return True
+
+    # TRZECIA POSTAC, I NAJCZESTSZA — apozycja z przecinkiem: „X, not Y".
+    #
+    # Audyt zmierzyl to na 30 wystawionych notkach i wynik przewraca poprzedni
+    # pomiar: dwie postacie wyzej lapaly 4 notki, a ta lapie 12, przy czym
+    # ZBIORY SA ROZLACZNE. Razem 16 z 30 — czyli 53%, a nie 17%, na ktorych
+    # opieralem decyzje „sortujemy zamiast odrzucac".
+    #
+    # Realne przyklady z konta:
+    #   „It was a cost-cutting move, not a tradition."
+    #   „A negotiated business compromise, not a unit of nature."
+    #   „The loaf was built to the statute, not the market."
+    #   „A quarter less oxygen is a weight decision, not bad luck."
+    #
+    # Detektor powstal 25 sierpnia, PO 29 z 30 notek — wiec korpus, na ktorym
+    # go kalibrowalem, w ogole go nie testowal. Lekcja jest o mierzeniu
+    # przyrzadem zbudowanym pod jeden przypadek.
+    #
+    # Zostaje kryterium SORTOWANIA, nie bramka: przy 53% i trzech kandydatach
+    # sortowanie zwykle ma z czego wybierac, a odrzucanie kosztowaloby polowe
+    # notek.
+    if re.search(r",\s+not\b", czyste, re.IGNORECASE):
+        return True
     return False
 
 
@@ -1804,7 +1844,24 @@ def notki_dnia(
     # FORMY ida wlasnym rytmem, przesunietym wzgledem typow. Gdyby chodzily w tej
     # samej kolejnosci, kazda CIEKAWOSTKA bylaby zawsze tej samej formy i
     # zamienilibysmy jedna monotonie na druga.
-    formy = [config.NOTE_FORM_MIX[(od + i) % len(config.NOTE_FORM_MIX)]
+    #
+    # OBIETNICA BYLA, PRZESUNIECIA NIE BYLO. Stalo tu `(od + i)`, czyli TO SAMO
+    # przesuniecie, ktorym tniemy typy dwie linie wyzej — wiec typ z pozycji i
+    # zawsze dostawal forme z pozycji i, a rytmy chodzily w zamku.
+    #
+    # Gorzej: `od` to liczba notek juz DZIS wystawionych, wiec w ciagu doby
+    # dochodzi najwyzej do pieciu i o polnocy wraca do zera. Form jest osiem.
+    # Zmierzone przez audyt na 30 wystawionych notkach: PYTANIE, ODWROCENIE i
+    # LICZBA nie wyszly ANI RAZU, a trzy z czterech typow mialy na stale
+    # przypisana jedna forme. Mechanizm, ktory mial zapobiegac jednakowemu
+    # ksztaltowi notek, sam go produkowal.
+    #
+    # DZIEN ROKU sprawia, ze cykl form dryfuje wzgledem cyklu typow: co dobe
+    # przesuwa sie o jeden, wiec po osmiu dniach kazda para typ-forma zdazy
+    # wystapic, a zaden dzien nie powtarza poprzedniego.
+    from datetime import datetime as _dt, timezone as _tz
+    _dryf = _dt.now(_tz.utc).timetuple().tm_yday
+    formy = [config.NOTE_FORM_MIX[(_dryf + od + i) % len(config.NOTE_FORM_MIX)]
              for i in range(len(typy))]
 
     # JEDNA notka promujaca dziennie, przez kolejne dni po publikacji artykulu.
@@ -3016,8 +3073,20 @@ def pick_topic(
             for w in wczesniejsze if w))
 
     def kolejnosc(a: dict[str, Any]):
-        return (nosny(a),
-                niepowtorzony(a),
+        # NIEPOWTORZONY PRZED NOSNYM — i to jest zmiana po audycie.
+        #
+        # Bylo odwrotnie, wiec temat juz opisany wygrywal z nowym, jesli tylko
+        # mial stawke. Odtworzone na prawdziwym artykule z bazy: agent po raz
+        # drugi napisalby o sprawie Robodebt, a w uwagach zobaczylbys "nosny:
+        # 0 wobec 1" — bo powod przegranej zatrzymuje sie na pierwszej roznicy
+        # i o powtorce nie bylo ani slowa.
+        #
+        # Nosnosc jest w praktyce prawie zawsze prawdziwa: w jedynej realnej
+        # probce mialo ja wszystkie szesc tematow. Przesuniecie jej o jedno
+        # miejsce nic wiec nie kosztuje, a zamyka wade, na ktora wlasciciel
+        # zwracal uwage trzy razy jednego dnia.
+        return (niepowtorzony(a),
+                nosny(a),
                 artykulowy(a),
                 wlasny_ranking(a),
                 swiezy(a),
@@ -3534,10 +3603,34 @@ def warto_pisac(
       DOLOZ  — jest zlamane przekonanie, ale materialu za malo: szukamy pary
       ODLOZ  — nie ma zlamanego przekonania, czyli nie ma luki
     """
+    # KARTA SZLA TU UCIETA W POLOWIE ZDANIA. Limit 14000 znakow nie mial przy
+    # sobie zadnego pomiaru, a audyt policzyl, ze ucinal 7 z 8 kart — model
+    # dostawal skladniowo zepsuty JSON bez zadnego znacznika, ze czegos brakuje,
+    # i na tym podejmowal decyzje "pisac czy nie". Pisarz i recenzent dostaja
+    # karte w calosci, wiec bramka byla jedynym etapem sadzacym po urywku.
+    #
+    # Zamiast ciac na sztywno: probujemy calosci, a gdy naprawde jest za duza,
+    # ucinamy NAJDLUZSZE listy, nie ogon dokumentu. Konstrukcja karty jest
+    # wtedy nienaruszona, a to ona niesie decyzje.
+    _pelna = json.dumps(card, ensure_ascii=False, indent=2)
+    if len(_pelna) > 14000:
+        _skrocona = dict(card)
+        for _pole in ("confirmed_claims", "citable_numbers",
+                      "parallel_mechanisms", "uncertain_claims"):
+            _lista = _skrocona.get(_pole)
+            if isinstance(_lista, list) and len(_lista) > 6:
+                _skrocona[_pole] = _lista[:6]
+                _skrocona["_uwaga_%s" % _pole] = (
+                    "skrocone z %d pozycji, zeby karta zmiescila sie w limicie"
+                    % len(_lista))
+        _pelna = json.dumps(_skrocona, ensure_ascii=False, indent=2)
+        print("  [warto_pisac] karta skrocona z %d znakow — przycieto listy, "
+              "nie ogon" % len(json.dumps(card, ensure_ascii=False, indent=2)),
+              flush=True)
+
     surowy = llm.call(
         "warto_pisac", WORTH_SYSTEM,
-        _prompt("warto_pisac.md",
-                card_json=json.dumps(card, ensure_ascii=False, indent=2)[:14000]),
+        _prompt("warto_pisac.md", card_json=_pelna[:14000]),
         conn=conn, run_id=run_id,
     )
     o = llm.parse_json(surowy)
@@ -4066,9 +4159,9 @@ def korpus_fedreg(ile_dokumentow: int = 50, ile_gestych: int = 6) -> list[dict[s
 
 FEDREG_SYSTEM = (
     "You read the preamble of a published regulation and extract candidates for "
-    "an editorial brand that explains the decisions behind ordinary things. "
-    "A candidate exists only where a documented decision produced something a "
-    "reader can touch. Return only valid JSON."
+    "an editorial brand that explains how artificial intelligence is built, "
+    "deployed and governed. A candidate exists only where a documented decision "
+    "produced something a reader can touch. Return only valid JSON."
 )
 
 

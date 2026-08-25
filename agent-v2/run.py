@@ -881,7 +881,14 @@ def main() -> int:
         # skauta — patrz `niepowtorzony`.
         topic, verdict = stages.pick_topic(
             topics, assessments, run_id,
-            wczesniejsze=stages.tematy_do_porownania(conn))
+            # ARTYKULY *I* NOTKI. Konto ma jednego czytelnika, nie dwoch —
+            # notka i artykul o tym samym w jeden dzien to dla niego po prostu
+            # dwa razy to samo. 25 sierpnia poszla notka o kenijskich
+            # anotatorach, a po poludniu ten sam temat wygral wybor artykulu
+            # przy 53% wspolnych rdzeni wobec progu 20%, bo straznik pytal
+            # wylacznie o poprzednie artykuly.
+            wczesniejsze=(stages.tematy_do_porownania(conn)
+                          + stages.ostatnie_notki(1000)))
         print("\n-- odsiew wykonalności --", flush=True)
         for a in assessments:
             mark = "TAK " if a.get("feasible") else "nie "

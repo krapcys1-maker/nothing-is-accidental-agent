@@ -48,21 +48,58 @@ print("=== 2. FORMY NIE CHODZA W PARZE Z TYPAMI ===")
 
 TYPY = list(config.NOTE_MIX_OTHER_DAY)
 print("    typy dnia:  %s" % TYPY)
+
+
+def _forma(dzien_roku, od, i):
+    """DOKLADNIE ten wzor, ktorego uzywa `stages.notki_dnia`.
+
+    Stara wersja tego testu liczyla `(od + i)`, czyli formule BEZ dryfu — wiec
+    sprawdzala cos, czego kod nie robil, i przechodzila. Przez to nie zauwazyla,
+    ze trzy z osmiu form sa nieosiagalne: `od` to liczba notek juz DZIS
+    wystawionych, dochodzi najwyzej do pieciu i o polnocy wraca do zera, a form
+    jest osiem. Audyt policzyl na 30 wystawionych notkach: PYTANIE, ODWROCENIE
+    i LICZBA nie wyszly ANI RAZU.
+    """
+    return config.NOTE_FORM_MIX[(dzien_roku + od + i) % len(config.NOTE_FORM_MIX)]
+
+
 pary = []
 for od, ile in ((0, 2), (2, 2), (4, 1)):
     t = TYPY[od:od + ile]
-    f = [config.NOTE_FORM_MIX[(od + i) % len(config.NOTE_FORM_MIX)]
-         for i in range(len(t))]
+    f = [_forma(237, od, i) for i in range(len(t))]
     for a, b in zip(t, f):
         pary.append((a, b))
     print("    przebieg od=%s: %s" % (od, list(zip(t, f))))
 
-ciekawostki = [f for t, f in pary if t == "CIEKAWOSTKA"]
-sprawdz("CIEKAWOSTKA nie zawsze ma te sama forme",
-        len(set(ciekawostki)) > 1, ciekawostki)
 sprawdz("w ciagu dnia jest kilka roznych form",
         len({f for _, f in pary}) >= 4, {f for _, f in pary})
 sprawdz("dzien ma tyle form co typow", len(pary) == len(TYPY), len(pary))
+
+# KAZDA FORMA MUSI BYC OSIAGALNA. To jest sprawdzenie, ktorego brakowalo.
+osiagalne = set()
+pary_wszystkie = set()
+for dzien in range(1, 30):
+    for od, ile in ((0, 2), (2, 2), (4, 1)):
+        for i, typ in enumerate(TYPY[od:od + ile]):
+            f = _forma(dzien, od, i)
+            osiagalne.add(f)
+            pary_wszystkie.add((typ, f))
+brakujace = sorted(set(config.NOTE_FORM_MIX) - osiagalne)
+sprawdz("KAZDA forma wypada w ciagu miesiaca", not brakujace, brakujace)
+sprawdz("i par typ-forma jest duzo wiecej niz typow",
+        len(pary_wszystkie) >= len(TYPY) * 4, len(pary_wszystkie))
+
+# KONTRDOWOD: stary wzor BEZ dryfu zostawialby czesc form nieosiagalna.
+stare_osiagalne = {config.NOTE_FORM_MIX[(od + i) % len(config.NOTE_FORM_MIX)]
+                   for od, ile in ((0, 2), (2, 2), (4, 1))
+                   for i in range(ile)}
+sprawdz("stary wzor NIE osiagal wszystkich form (test rozroznia)",
+        set(config.NOTE_FORM_MIX) - stare_osiagalne,
+        sorted(set(config.NOTE_FORM_MIX) - stare_osiagalne))
+
+ciekawostki = [f for t, f in pary_wszystkie if t == "CIEKAWOSTKA"]
+sprawdz("CIEKAWOSTKA nie zawsze ma te sama forme",
+        len(set(ciekawostki)) > 1, ciekawostki)
 
 print()
 print("=== 3. PROMPT DOSTAJE FORME ===")
@@ -173,9 +210,20 @@ for p in PILNOWANE:
 
 print()
 print("=== KUPLET KORYGUJACY JEST DRUGIM KRYTERIUM, NIE BRAMKA ===")
-# Recenzja zimnego czytelnika nazwala ruch „nie X. Y." tikiem konta. Policzone
-# na 29 wystawionych notkach: wykrywacz znajduje go w 4, czyli 14%. Dosc, zeby
-# czytelnik przewijajacy profil zobaczyl rytm, za malo, zeby odrzucac notki.
+# Recenzja zimnego czytelnika nazwala ruch „nie X. Y." tikiem konta.
+#
+# PIERWSZY POMIAR BYL ZLY I TO JEST TU NAJWAZNIEJSZE. Wykrywacz lapal wtedy 4
+# z 30 notek, czyli 14%, i na tej liczbie oparlem decyzje „sortujemy zamiast
+# odrzucac". Audyt policzyl trzecia postac tego samego ruchu — apozycje z
+# przecinkiem, „X, not Y" — i znalazl ja w 12 notkach, przy czym ZBIORY SA
+# ROZLACZNE. Razem 16 z 30, czyli 53%.
+#
+# Wykrywacz powstal PO 29 z 30 notek, wiec korpus, na ktorym go kalibrowalem,
+# w ogole go nie testowal. Przyrzad zbudowany pod jeden przypadek mierzy
+# wlasnie ten przypadek.
+#
+# Nadal sortujemy, nie odrzucamy: przy 53% i trzech kandydatach na notke
+# sortowanie zwykle ma z czego wybierac, a odrzucanie kosztowaloby polowe.
 sprawdz("dwa zdania: zaprzeczenie, potem poprawka",
         stages.kuplet_korygujacy(
             "Nothing about the answer changes. Only the queue does.") is True)
@@ -185,6 +233,20 @@ sprawdz("ten sam ruch w jednym zdaniu",
 sprawdz("wariant ze skroceniem",
         stages.kuplet_korygujacy(
             "That jar is not added information. It's the substitute.") is True)
+# TRZECIA POSTAC — najczestsza, i przez pierwsza wersje niewidziana.
+sprawdz("apozycja z przecinkiem: X, not Y",
+        stages.kuplet_korygujacy(
+            "It was a cost-cutting move, not a tradition.") is True)
+sprawdz("apozycja w drugiej czesci zdania",
+        stages.kuplet_korygujacy(
+            "Standard gauge won because Parliament made it the law, not because "
+            "it was technically superior.") is True)
+# KONTRDOWOD: samo slowo "not" bez przecinka przed nim NIE jest tikiem —
+# inaczej detektor lapalby kazde zdanie przeczace i sortowanie staloby sie
+# losowe.
+sprawdz("zwykle przeczenie bez apozycji nie jest tikiem",
+        stages.kuplet_korygujacy(
+            "The system does not publish its error rate anywhere.") is False)
 
 # KONTRDOWOD: zdanie z zaprzeczeniem, ale BEZ poprawki, nie jest kupletem.
 # Bez tego wykrywacz lapalby kazde zdanie przeczace i sortowanie stalo by sie

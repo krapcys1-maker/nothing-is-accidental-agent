@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **16 plików**, 13 927 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **16 plików**, 14 027 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 44 zestawów
-testów, 1330 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 1336 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1286 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1293 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-4096 wierszy, 93 funkcji na poziomie modułu, 0 klas
+4189 wierszy, 93 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -6514,8 +6514,20 @@ def pick_topic(
             for w in wczesniejsze if w))
 
     def kolejnosc(a: dict[str, Any]):
-        return (nosny(a),
-                niepowtorzony(a),
+        # NIEPOWTORZONY PRZED NOSNYM — i to jest zmiana po audycie.
+        #
+        # Bylo odwrotnie, wiec temat juz opisany wygrywal z nowym, jesli tylko
+        # mial stawke. Odtworzone na prawdziwym artykule z bazy: agent po raz
+        # drugi napisalby o sprawie Robodebt, a w uwagach zobaczylbys "nosny:
+        # 0 wobec 1" — bo powod przegranej zatrzymuje sie na pierwszej roznicy
+        # i o powtorce nie bylo ani slowa.
+        #
+        # Nosnosc jest w praktyce prawie zawsze prawdziwa: w jedynej realnej
+        # probce mialo ja wszystkie szesc tematow. Przesuniecie jej o jedno
+        # miejsce nic wiec nie kosztuje, a zamyka wade, na ktora wlasciciel
+        # zwracal uwage trzy razy jednego dnia.
+        return (niepowtorzony(a),
+                nosny(a),
                 artykulowy(a),
                 wlasny_ranking(a),
                 swiezy(a),
@@ -6593,10 +6605,34 @@ def warto_pisac(
       DOLOZ  — jest zlamane przekonanie, ale materialu za malo: szukamy pary
       ODLOZ  — nie ma zlamanego przekonania, czyli nie ma luki
     """
+    # KARTA SZLA TU UCIETA W POLOWIE ZDANIA. Limit 14000 znakow nie mial przy
+    # sobie zadnego pomiaru, a audyt policzyl, ze ucinal 7 z 8 kart — model
+    # dostawal skladniowo zepsuty JSON bez zadnego znacznika, ze czegos brakuje,
+    # i na tym podejmowal decyzje "pisac czy nie". Pisarz i recenzent dostaja
+    # karte w calosci, wiec bramka byla jedynym etapem sadzacym po urywku.
+    #
+    # Zamiast ciac na sztywno: probujemy calosci, a gdy naprawde jest za duza,
+    # ucinamy NAJDLUZSZE listy, nie ogon dokumentu. Konstrukcja karty jest
+    # wtedy nienaruszona, a to ona niesie decyzje.
+    _pelna = json.dumps(card, ensure_ascii=False, indent=2)
+    if len(_pelna) > 14000:
+        _skrocona = dict(card)
+        for _pole in ("confirmed_claims", "citable_numbers",
+                      "parallel_mechanisms", "uncertain_claims"):
+            _lista = _skrocona.get(_pole)
+            if isinstance(_lista, list) and len(_lista) > 6:
+                _skrocona[_pole] = _lista[:6]
+                _skrocona["_uwaga_%s" % _pole] = (
+                    "skrocone z %d pozycji, zeby karta zmiescila sie w limicie"
+                    % len(_lista))
+        _pelna = json.dumps(_skrocona, ensure_ascii=False, indent=2)
+        print("  [warto_pisac] karta skrocona z %d znakow — przycieto listy, "
+              "nie ogon" % len(json.dumps(card, ensure_ascii=False, indent=2)),
+              flush=True)
+
     surowy = llm.call(
         "warto_pisac", WORTH_SYSTEM,
-        _prompt("warto_pisac.md",
-                card_json=json.dumps(card, ensure_ascii=False, indent=2)[:14000]),
+        _prompt("warto_pisac.md", card_json=_pelna[:14000]),
         conn=conn, run_id=run_id,
     )
     o = llm.parse_json(surowy)
