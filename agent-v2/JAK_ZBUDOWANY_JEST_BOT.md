@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **16 plików**, 14 073 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **16 plików**, 14 124 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -529,7 +529,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-283 wierszy, 3 funkcji na poziomie modułu, 0 klas
+334 wierszy, 3 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

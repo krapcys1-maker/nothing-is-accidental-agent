@@ -205,6 +205,57 @@ def main() -> int:
     card.setdefault("broken_belief", brief.get("broken_belief") or "")
     card.setdefault("why_they_believe_it", brief.get("why_they_believe_it") or "")
 
+    # --- HAMULEC PRZED NAJDROZSZYM ETAPEM ---------------------------------
+    #
+    # `--do-karty` konczy tu, po syntezie, przed pisarzem. Kosztuje okolo
+    # 0,38 USD zamiast 1,40, bo samo pisanie to 0,76.
+    #
+    # POWOD JEST POLICZONY. 25 sierpnia zaplacilem CZTERY pisania po 0,76 USD
+    # i ani jedna znaleziona wada nie byla w pisaniu:
+    #   przebieg 1 — powtorzony temat (wybor tematu)
+    #   przebieg 2 — powtorzony temat, tym razem z dzisiejsza notka
+    #   przebieg 3 — metaanaliza cytowana z drugiej reki (dyskoveria)
+    #                oraz butelka po sosie w naglowku (grafika)
+    #   przebieg 4 — filtr adresow blokowal zrodla pierwotne (dyskoveria)
+    #
+    # Trzy z czterech widac bylo na karcie dowodowej: jakie zrodla, jakiej
+    # daty, czy sa pierwotne. Czwarta — powtorke tematu — jeszcze wczesniej,
+    # przy samym tytule.
+    #
+    # 3,04 USD na pisanie, z ktorego nic nie wynikalo poza tym, ze wada byla
+    # gdzie indziej.
+    if "--do-karty" in sys.argv:
+        print()
+        print("=" * 72)
+        print("KARTA DOWODOWA — STOP PRZED PISARZEM")
+        print("=" * 72)
+        print("TEZA:", str(card.get("working_thesis", ""))[:400])
+        print()
+        daty = card.get("source_dates") or {}
+        print("DATY ZRODEL: najnowsze %s, najstarsze %s"
+              % (daty.get("newest", "?"), daty.get("oldest", "?")))
+        if daty.get("note"):
+            print("   uwaga:", str(daty["note"])[:200])
+        for u in stages.swiezosc_karty(card):
+            print("   [%s] %s" % (u.get("gate"), str(u.get("detail"))[:130]))
+        print()
+        print("LICZBY DO CYTOWANIA (%d):" % len(card.get("citable_numbers") or []))
+        for n in (card.get("citable_numbers") or [])[:8]:
+            print("   - %s" % str(n)[:170])
+        print()
+        print("ZRODLA W KORPUSIE:")
+        widziane = set()
+        for c in (evidence if isinstance(evidence, list) else []):
+            h = str(c.get("url") or "")[:70]
+            if h and h not in widziane:
+                widziane.add(h)
+                print("   %-10s %s" % (c.get("class", "?"), h))
+        print()
+        print("CZEGO NIE USTALONO:")
+        for x in (card.get("not_established") or [])[:5]:
+            print("   - %s" % str(x)[:150])
+        return 0
+
     print()
     print("-- czy jest tu luka --", flush=True)
     ocena = stages.warto_pisac(conn, run_id, card)
