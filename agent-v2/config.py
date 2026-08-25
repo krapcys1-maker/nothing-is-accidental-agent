@@ -1308,6 +1308,23 @@ WORST_NOTE_DAYS = ("monday", "friday")
 # starszymi z zimnym juz linkiem.
 NOTEK_PROMUJACYCH = 3
 
+# PO ILU DNIACH ARTYKUL PRZESTAJE BYC PROMOWANY, nawet jesli nie wybral swoich
+# trzech notek. `artykul_do_promocji` sam nazwal ten problem w docstringu —
+# „link juz zimny, artykul dawno zepchniety w dol kanalu" — ale nazwal go tylko
+# w komentarzu. W kodzie nie bylo zadnej daty waznosci, wiec artykul z
+# niewybranym dniem czekal w kolejce w nieskonczonosc.
+#
+# Zmierzone 26 sierpnia na produkcji: w kolejce lezaly cztery teksty z epoki
+# przedmiotow codziennych (jajka, okno w samolocie, szampon, kod na butelce),
+# dwa z nich z niewybranymi dniami. Po wyczerpaniu biezacego artykulu kanal o AI
+# wystawilby notke promujaca artykul o szamponie sprzed tygodnia.
+#
+# Siedem dni, nie trzy: przydzial to trzy dni Z RZEDU zaraz po publikacji, ale
+# dzien potrafi wypasc (cichy dzien, wyczerpany limit notek), wiec okno musi
+# miec zapas na nadrobienie. Tydzien miesci trzy dni plus cztery na poslizg i
+# konczy sie, zanim link zdazy ostygnac.
+OKNO_PROMOCJI_DNI = 7
+
 # MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu.
 #
 # Powod jest w NOTE_TYPES przy samym typie: wszystkie pozostale wymagaja karty

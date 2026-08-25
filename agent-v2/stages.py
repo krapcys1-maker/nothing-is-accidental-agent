@@ -1592,9 +1592,16 @@ PROMOCJA = config.DATA_DIR / "promocja.json"
 
 def zapisz_do_promocji(url: str, tytul: str, tekst: str) -> None:
     """Zapisuje opublikowany artykul do promowania przez kolejne dni."""
+    from datetime import datetime, timezone
+
     dane = wczytaj_promocje()
+    # `dodane` to kotwica okna promocji (config.OKNO_PROMOCJI_DNI). Bez niej nie
+    # da sie powiedziec, czy artykul jest jeszcze swiezy — `ostatnia` mowi tylko,
+    # kiedy poszla ostatnia notka, wiec artykul nigdy nieprzemowiony wygladalby
+    # tak samo jak opublikowany dzis.
     dane.append({"url": url, "tytul": tytul, "tekst": tekst[:9000],
-                 "wystawione": 0, "ostatnia": None})
+                 "wystawione": 0, "ostatnia": None,
+                 "dodane": datetime.now(timezone.utc).strftime("%Y-%m-%d")})
     PROMOCJA.parent.mkdir(parents=True, exist_ok=True)
     PROMOCJA.write_text(json.dumps(dane, ensure_ascii=False, indent=1),
                         encoding="utf-8")
@@ -1637,14 +1644,23 @@ def artykul_do_promocji() -> dict[str, Any] | None:
     nie byla na tyle pelna, zeby to wyszlo na jaw, ale regula brzmi „jedna
     notka po artykule dziennie" i to jest caly dzien, nie jeden wiersz pliku.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime, timedelta, timezone
 
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     kolejka = wczytaj_promocje()
     if any(a.get("ostatnia") == dzis for a in kolejka):
         return None             # dzisiejsza notka promujaca juz poszla
+    granica = (datetime.now(timezone.utc)
+               - timedelta(days=config.OKNO_PROMOCJI_DNI)).strftime("%Y-%m-%d")
     for a in reversed(kolejka):
         if a.get("wystawione", 0) >= config.NOTEK_PROMUJACYCH:
+            continue
+        # OKNO WAZNOSCI. Wpis bez `dodane` pochodzi sprzed tej reguly, wiec z
+        # definicji nie jest dzisiejszy — traktujemy go jak przeterminowany.
+        # To nie jest ostroznosc na wyrost: wlasnie takie wpisy zostaly w
+        # kolejce po przestawieniu konta na AI i to one wystawilyby notke
+        # promujaca artykul o szamponie.
+        if str(a.get("dodane") or "") < granica:
             continue
         return a
     return None

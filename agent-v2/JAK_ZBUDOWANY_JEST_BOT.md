@@ -49,14 +49,14 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **16 plików**, 14 207 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **17 plików**, 14 337 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
 | jedno polecenie uruchamiające | `python agent-v2/run.py` | dotrzymane |
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
-**WADA — 16 plików zamiast dziesięciu.** Najbliższe usunięciu:
+**WADA — 17 plików zamiast dziesięciu.** Najbliższe usunięciu:
 `style.py` (127 wierszy, wołany tylko z `stages.py`) i
 `kopia_subskrybentow.py` (198 wierszy, narzędzie ręczne poza
 przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 44 zestawów
-testów, 1336 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 1343 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-4222 wierszy, 93 funkcji na poziomie modułu, 0 klas
+4238 wierszy, 93 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -455,7 +455,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-1980 wierszy, 20 funkcji na poziomie modułu, 0 klas
+1997 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -537,6 +537,15 @@ wiec nie da sie go rozjechac z kodem.
 | `wybierz_fakt(conn, run_id, ile)` | Swiezy fakt z puli ciekawostek, ktory NIE powtarza zadnego artykulu. |
 | `main()` | — |
 | `_napisz_i_zapisz(conn, run_id, brief, card)` *(wewn.)* | Od bramki „warto pisac" do zapisu i grafiki. |
+
+### `migracja_okno_promocji.py` — jednorazowo: data publikacji z dziennika do kolejki promocji
+
+97 wierszy, 2 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `daty_publikacji()` | Tytul artykulu -> data pierwszej udanej publikacji (YYYY-MM-DD). |
+| `main()` | — |
 
 
 ## III. Sciezka artykulu — dziesiec etapow
@@ -7063,14 +7072,23 @@ def artykul_do_promocji() -> dict[str, Any] | None:
     nie byla na tyle pelna, zeby to wyszlo na jaw, ale regula brzmi „jedna
     notka po artykule dziennie" i to jest caly dzien, nie jeden wiersz pliku.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime, timedelta, timezone
 
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     kolejka = wczytaj_promocje()
     if any(a.get("ostatnia") == dzis for a in kolejka):
         return None             # dzisiejsza notka promujaca juz poszla
+    granica = (datetime.now(timezone.utc)
+               - timedelta(days=config.OKNO_PROMOCJI_DNI)).strftime("%Y-%m-%d")
     for a in reversed(kolejka):
         if a.get("wystawione", 0) >= config.NOTEK_PROMUJACYCH:
+            continue
+        # OKNO WAZNOSCI. Wpis bez `dodane` pochodzi sprzed tej reguly, wiec z
+        # definicji nie jest dzisiejszy — traktujemy go jak przeterminowany.
+        # To nie jest ostroznosc na wyrost: wlasnie takie wpisy zostaly w
+        # kolejce po przestawieniu konta na AI i to one wystawilyby notke
+        # promujaca artykul o szamponie.
+        if str(a.get("dodane") or "") < granica:
             continue
         return a
     return None
@@ -11350,6 +11368,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `OKNO_PUBLIKACJI_ET` | `(6, 22)` | TWARDE OKNO PUBLIKACJI, w czasie CZYTELNIKOW. Agent wystawil notki o 03:57 i 04:00 UTC — czyli 23:57 i polnoc w Nowym Jorku. Tekst wrzucony, |
 | `WORST_NOTE_DAYS` | `("monday", "friday")` | — |
 | `NOTEK_PROMUJACYCH` | `3` | Rozkład na tydzień: pięć notek dziennie, dzień publikacji artykułu ma własny. Ile notek promuje jeden artykul i przez ile dni. Decyzja wlasc |
+| `OKNO_PROMOCJI_DNI` | `7` | PO ILU DNIACH ARTYKUL PRZESTAJE BYC PROMOWANY, nawet jesli nie wybral swoich trzech notek. `artykul_do_promocji` sam nazwal ten problem w do |
 | `NOTE_MIX_ARTICLE_DAY` | `("ARTYKUL", "ARTYKUL", "CIEKAWOSTKA", "SPROS` | MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu. Powod jest w NOTE_TYPES przy samym typie: wszystkie pozostale wymagaja  |
 | `KSZTALTY_MYSLI` | `{ "PYTANIE": ( "Ask something nobody can set` | KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL. Powod jest zmierzony: opis typu wymienial pytanie i obserwacje jako d |
 | `NOTE_MIX_OTHER_DAY` | `("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "` | — |

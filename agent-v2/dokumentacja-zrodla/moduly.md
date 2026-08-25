@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-4222 wierszy, 93 funkcji na poziomie modułu, 0 klas
+4238 wierszy, 93 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -313,7 +313,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-1980 wierszy, 20 funkcji na poziomie modułu, 0 klas
+1997 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -395,3 +395,12 @@
 | `wybierz_fakt(conn, run_id, ile)` | Swiezy fakt z puli ciekawostek, ktory NIE powtarza zadnego artykulu. |
 | `main()` | — |
 | `_napisz_i_zapisz(conn, run_id, brief, card)` *(wewn.)* | Od bramki „warto pisac" do zapisu i grafiki. |
+
+### `migracja_okno_promocji.py` — jednorazowo: data publikacji z dziennika do kolejki promocji
+
+97 wierszy, 2 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `daty_publikacji()` | Tytul artykulu -> data pierwszej udanej publikacji (YYYY-MM-DD). |
+| `main()` | — |

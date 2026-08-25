@@ -1028,14 +1028,23 @@ def artykul_do_promocji() -> dict[str, Any] | None:
     nie byla na tyle pelna, zeby to wyszlo na jaw, ale regula brzmi „jedna
     notka po artykule dziennie" i to jest caly dzien, nie jeden wiersz pliku.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime, timedelta, timezone
 
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     kolejka = wczytaj_promocje()
     if any(a.get("ostatnia") == dzis for a in kolejka):
         return None             # dzisiejsza notka promujaca juz poszla
+    granica = (datetime.now(timezone.utc)
+               - timedelta(days=config.OKNO_PROMOCJI_DNI)).strftime("%Y-%m-%d")
     for a in reversed(kolejka):
         if a.get("wystawione", 0) >= config.NOTEK_PROMUJACYCH:
+            continue
+        # OKNO WAZNOSCI. Wpis bez `dodane` pochodzi sprzed tej reguly, wiec z
+        # definicji nie jest dzisiejszy — traktujemy go jak przeterminowany.
+        # To nie jest ostroznosc na wyrost: wlasnie takie wpisy zostaly w
+        # kolejce po przestawieniu konta na AI i to one wystawilyby notke
+        # promujaca artykul o szamponie.
+        if str(a.get("dodane") or "") < granica:
             continue
         return a
     return None

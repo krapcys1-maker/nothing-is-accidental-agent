@@ -50,10 +50,19 @@ def ustaw(*wpisy):
                                encoding="utf-8")
 
 
-def wpis(tytul, wystawione=0, ostatnia=None):
+def _dzis(przesuniecie=0):
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc)
+            + timedelta(days=przesuniecie)).strftime("%Y-%m-%d")
+
+
+def wpis(tytul, wystawione=0, ostatnia=None, dodane=None):
+    # `dodane` domyslnie DZISIAJ: te przypadki badaja kolejnosc i liczniki, a
+    # nie okno waznosci, wiec maja byc swieze. Okno ma wlasna sekcje nizej.
     return {"url": "https://x/p/%s" % tytul.lower().replace(" ", "-"),
             "tytul": tytul, "tekst": "tresc", "wystawione": wystawione,
-            "ostatnia": ostatnia}
+            "ostatnia": ostatnia,
+            "dodane": dodane if dodane is not None else _dzis()}
 
 
 try:
@@ -149,6 +158,56 @@ try:
     w = stages.artykul_do_promocji()
     sprawdz("nowy artykul wchodzi przed niedokonczony starszy",
             w and w["tytul"] == "Dzisiejszy", w and w["tytul"])
+
+    print()
+    print("=== 7. OKNO WAZNOSCI: STARY ARTYKUL PRZESTAJE BYC PROMOWANY ===")
+    # Zmierzone 26 sierpnia na produkcji. Konto przestawiono na AI, ale w
+    # kolejce zostaly cztery teksty z epoki przedmiotow codziennych, dwa z
+    # niewybranymi dniami. Nic ich nie usuwalo, bo jedynym warunkiem wyjscia
+    # bylo wybranie trzech notek. Po wyczerpaniu biezacego artykulu kanal o AI
+    # wystawilby notke promujaca artykul o szamponie sprzed tygodnia.
+    sprawdz("OKNO_PROMOCJI_DNI istnieje", config.OKNO_PROMOCJI_DNI == 7,
+            getattr(config, "OKNO_PROMOCJI_DNI", "brak"))
+
+    ustaw(wpis("Szampon", wystawione=1,
+               dodane=_dzis(-config.OKNO_PROMOCJI_DNI - 1)))
+    sprawdz("artykul spoza okna nie jest promowany",
+            stages.artykul_do_promocji() is None,
+            (stages.artykul_do_promocji() or {}).get("tytul"))
+
+    # KONTRDOWOD: przed poprawka jedynym warunkiem bylo `wystawione`, wiec ten
+    # sam wpis zostalby wybrany. Bez tego sprawdzenia test nie odrozniac wersji.
+    po_staremu = next((a for a in reversed(stages.wczytaj_promocje())
+                       if a.get("wystawione", 0) < config.NOTEK_PROMUJACYCH),
+                      None)
+    sprawdz("stary sposob wystawilby szampon (test rozroznia)",
+            po_staremu and po_staremu["tytul"] == "Szampon",
+            po_staremu and po_staremu["tytul"])
+
+    # GRANICA JEST WLACZAJACA: ostatni dzien okna jeszcze promuje.
+    ustaw(wpis("Ostatni dzien", dodane=_dzis(-config.OKNO_PROMOCJI_DNI)))
+    w = stages.artykul_do_promocji()
+    sprawdz("w ostatnim dniu okna jeszcze promujemy",
+            w and w["tytul"] == "Ostatni dzien", w and w["tytul"])
+
+    # WPIS BEZ `dodane` pochodzi sprzed tej reguly — traktujemy jak stary.
+    stary_format = {"url": "https://x/p/legacy", "tytul": "Bez daty",
+                    "tekst": "tresc", "wystawione": 0, "ostatnia": None}
+    ustaw(stary_format)
+    sprawdz("wpis bez `dodane` nie jest promowany",
+            stages.artykul_do_promocji() is None,
+            (stages.artykul_do_promocji() or {}).get("tytul"))
+
+    # ...ale swiezy artykul dopisany OBOK niego nadal dziala. Okno ma odcinac
+    # przeterminowane, nie zatrzymywac kolejki.
+    ustaw(stary_format)
+    stages.zapisz_do_promocji("https://x/p/swiezy", "Swiezy", "tresc")
+    w = stages.artykul_do_promocji()
+    sprawdz("swiezy obok przeterminowanego dziala",
+            w and w["tytul"] == "Swiezy", w and w["tytul"])
+    sprawdz("i zapis stempluje `dodane`",
+            stages.wczytaj_promocje()[-1].get("dodane") == _dzis(),
+            stages.wczytaj_promocje()[-1].get("dodane"))
 finally:
     stages.PROMOCJA = ORYG
 
