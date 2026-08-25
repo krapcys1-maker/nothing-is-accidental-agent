@@ -1258,6 +1258,47 @@ def main() -> int:
         if args.wyslij:
             import browser
 
+            # SPRAWDZENIE FAKTOW PRZED PUBLIKACJA. Do 25 sierpnia artykul
+            # jechal do sieci BEZ NIEGO, a notka o nim — z nim.
+            #
+            # Skad to wiadomo. 25 sierpnia poszedl artykul „The Watermark Was
+            # Never a Verdict", oparty na tym, ze kalifornijska SB 942 wymaga
+            # znaku wodnego w TEKSCIE. Nastepnego dnia notka promujaca ten sam
+            # artykul dostala `zweryfikuj()` i ODPADLA: obowiazki SB 942
+            # obejmuja obraz, wideo i dzwiek — slowo „text" zostalo z czesci
+            # nakladajacej obowiazki usuniete. Notka za pol centa zlapala blad,
+            # ktorego artykul za 76 centow nie mial jak zlapac.
+            #
+            # DLACZEGO GO NIE BYLO. `gates.verdict` zwraca zawsze „SAVED" —
+            # decyzja wlasciciela z 15 sierpnia, sluszna w swiecie, gdzie
+            # artykul ladowal jako szkic do przeczytania. Gdy publikacja stala
+            # sie automatyczna, „nic nie blokuje" zaczelo znaczyc „nic nie
+            # sprawdza". Brama zaprojektowana pod czlowieka w petli przezyla do
+            # wersji bez czlowieka.
+            #
+            # ZAPIS ZOSTAJE, PUBLIKACJA NIE. Artykul jest juz na dysku razem z
+            # okladka — research nie przepada i wlasciciel ma co czytac. Blokada
+            # dotyczy wylacznie wyjscia na zewnatrz, bo tam blad kosztuje
+            # wiarygodnosc, a nie pieniadze.
+            #
+            # `zweryfikuj` przy wlasnej awarii przepuszcza (patrz jego kod):
+            # zepsuta weryfikacja to nie dowod falszu.
+            print("\n-- sprawdzenie faktow przed publikacja --", flush=True)
+            audyt = stages.zweryfikuj(conn, run_id, draft["body"],
+                                      draft.get("title", ""))
+            if not audyt.get("safe_to_post"):
+                print("!! NIE PUBLIKUJE: %s"
+                      % str(audyt.get("verdict", ""))[:300], flush=True)
+                for c in (audyt.get("claims") or []):
+                    if str(c.get("status")) in ("refuted", "outdated", "unverified"):
+                        print("   [%s] %s" % (c.get("status"),
+                                              str(c.get("claim"))[:150]), flush=True)
+                print(">> artykul zapisany (%s), do decyzji wlasciciela" % path,
+                      flush=True)
+                return _done(conn, run_id, stage)
+            print("   przechodzi: %s" % str(audyt.get("verdict", ""))[:150],
+                  flush=True)
+
             print("\n-- publikacja --", flush=True)
             wynik = browser.wystaw_artykul(path, wyslij=True)
             print(f">> {'OPUBLIKOWANY' if wynik.get('wyslane') else 'NIE POSZEDŁ'}"

@@ -71,6 +71,31 @@ as a total, a sample rewritten as a population, and a figure about one model or
 one year attached to a whole company or a whole field. Those four account for
 almost every number that is technically sourced and still wrong.
 
+The same rule has two shapes that catch nothing unless you look for them by
+name.
+
+**A quote inside an official document may not be that document's own voice.**
+Committee reports, consultations and regulatory decisions reproduce what other
+people submitted — industry objections, agency letters, sponsor arguments. Find
+the attribution line just above the quote. If the text credits the body with
+something the body was merely printing, that is `refuted`: the claim about who
+said it is false even when the sentence is quoted correctly.
+
+**A claim about what a law requires must be checked against the enacted text**,
+not a bill version, committee analysis or press release. Bills change most in
+the places that were most contested, so an analysis is a snapshot of an
+argument, not a statement of the rule. Search for the chaptered statute or the
+codified section. If the enacted text does not impose what the claim says, that
+is `refuted`, and say which version you read.
+
+Both happened at once, 25 August 2026, in one published article. It said
+California's Senate Judiciary Committee stated flatly that text cannot be
+watermarked, making that part of SB 942 impossible to obey. The sentence is in
+the analysis — as a block quote from the coalition lobbying against the bill.
+And the legislature then removed AI-generated text from the duties; the law
+operative since 2 August 2026 covers image, video and audio only. Two checks,
+one search each, would have stopped it.
+
 ## True and dead is still wrong
 
 A claim can be perfectly accurate and still ruin the piece, because the world

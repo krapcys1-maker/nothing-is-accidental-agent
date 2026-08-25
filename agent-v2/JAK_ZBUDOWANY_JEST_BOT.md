@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **17 plików**, 14 344 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **17 plików**, 14 385 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 44 zestawów
-testów, 1343 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 45 zestawów
+testów, 1358 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1293 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1334 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -8424,7 +8424,7 @@ find another. Ten candidates that pass are worth more than thirty that do not.
 
 #### `prompts/dyskoveria.md`
 
-**58 wierszy.** Pola wejsciowe: `blocked_hosts`, `max_results`, `max_searches`, `min_primary`, `min_why`, `ostatnie_domeny`, `question`
+**92 wierszy.** Pola wejsciowe: `blocked_hosts`, `max_results`, `max_searches`, `min_primary`, `min_why`, `ostatnie_domeny`, `question`
 
 ````markdown
 Search the web, then return {max_results} sources for this question:
@@ -8471,6 +8471,40 @@ Requirements:
     Copies drift, and they drop exactly the caveats that make a number mean
     something. A commentary is allowed in the corpus as commentary; it is not
     allowed to stand in for the thing it summarises.
+
+6b. **A claim about what a LAW REQUIRES must come from the enacted text.** A
+    committee analysis, a floor analysis, a press release or a bill version is
+    a document ABOUT a bill at one moment. Bills change, and they change most
+    where they were most contested. Get the chaptered statute or the codified
+    section, and state which version you read and its date.
+
+    Measured 26 August 2026. An article went out built on California's Senate
+    Judiciary Committee analysis of SB 942 from April 2024. Between July and
+    August 2024 the legislature struck AI-generated TEXT out of the duties; the
+    law that became operative on 2 August 2026 — three weeks before we
+    published — reaches image, video and audio only. The word "text" survives in
+    exactly one place, the definition of the SYSTEM, not of the output that must
+    be marked. We described a superseded draft in the present tense as live law,
+    and the whole piece was about text.
+
+    The penalty and the user threshold in that article were both correct and
+    both verified at source. Verifying the numbers attached to a law is not
+    verifying that the law says what you claim. It only feels like it.
+
+6c. **Before quoting a document, check whose voice you are quoting.** Official
+    analyses reproduce submissions: industry objections, agency letters,
+    sponsor arguments. A block quote inside a committee report is evidence that
+    somebody SAID it, never that the committee FOUND it. Look for the
+    attribution line immediately above the quote and carry it into the claim.
+
+    Same article, same day, and this was the worse half. The sentence "there
+    isn't a program that can watermark text, making the requirements impossible
+    to comply with" is genuinely in the analysis — as a block quote from the
+    coalition lobbying against the bill. The line above it reads "A coalition in
+    opposition, including Technet, writes:". The committee's own words, a few
+    lines earlier, are far weaker and say nothing special about text. We printed
+    the lobbyists' claim as the legislature's own finding, which inverts what
+    the record shows.
 7. These hosts already carried the sources of our recent articles:
    {ostatnie_domeny}
    Do not reach for one of them out of habit. Go there when the record itself
@@ -10963,7 +10997,7 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/weryfikacja.md`
 
-**162 wierszy.** Pola wejsciowe: `context`, `dzis`, `text`
+**187 wierszy.** Pola wejsciowe: `context`, `dzis`, `text`
 
 ````markdown
 Check a short text that is about to be published in public — a comment, a note
@@ -11038,6 +11072,31 @@ Watch specifically for a percentage rewritten as a multiple, a rate rewritten
 as a total, a sample rewritten as a population, and a figure about one model or
 one year attached to a whole company or a whole field. Those four account for
 almost every number that is technically sourced and still wrong.
+
+The same rule has two shapes that catch nothing unless you look for them by
+name.
+
+**A quote inside an official document may not be that document's own voice.**
+Committee reports, consultations and regulatory decisions reproduce what other
+people submitted — industry objections, agency letters, sponsor arguments. Find
+the attribution line just above the quote. If the text credits the body with
+something the body was merely printing, that is `refuted`: the claim about who
+said it is false even when the sentence is quoted correctly.
+
+**A claim about what a law requires must be checked against the enacted text**,
+not a bill version, committee analysis or press release. Bills change most in
+the places that were most contested, so an analysis is a snapshot of an
+argument, not a statement of the rule. Search for the chaptered statute or the
+codified section. If the enacted text does not impose what the claim says, that
+is `refuted`, and say which version you read.
+
+Both happened at once, 25 August 2026, in one published article. It said
+California's Senate Judiciary Committee stated flatly that text cannot be
+watermarked, making that part of SB 942 impossible to obey. The sentence is in
+the analysis — as a block quote from the coalition lobbying against the bill.
+And the legislature then removed AI-generated text from the duties; the law
+operative since 2 August 2026 covers image, video and audio only. Two checks,
+one search each, would have stopped it.
 
 ## True and dead is still wrong
 

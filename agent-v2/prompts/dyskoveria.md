@@ -42,6 +42,40 @@ Requirements:
     Copies drift, and they drop exactly the caveats that make a number mean
     something. A commentary is allowed in the corpus as commentary; it is not
     allowed to stand in for the thing it summarises.
+
+6b. **A claim about what a LAW REQUIRES must come from the enacted text.** A
+    committee analysis, a floor analysis, a press release or a bill version is
+    a document ABOUT a bill at one moment. Bills change, and they change most
+    where they were most contested. Get the chaptered statute or the codified
+    section, and state which version you read and its date.
+
+    Measured 26 August 2026. An article went out built on California's Senate
+    Judiciary Committee analysis of SB 942 from April 2024. Between July and
+    August 2024 the legislature struck AI-generated TEXT out of the duties; the
+    law that became operative on 2 August 2026 — three weeks before we
+    published — reaches image, video and audio only. The word "text" survives in
+    exactly one place, the definition of the SYSTEM, not of the output that must
+    be marked. We described a superseded draft in the present tense as live law,
+    and the whole piece was about text.
+
+    The penalty and the user threshold in that article were both correct and
+    both verified at source. Verifying the numbers attached to a law is not
+    verifying that the law says what you claim. It only feels like it.
+
+6c. **Before quoting a document, check whose voice you are quoting.** Official
+    analyses reproduce submissions: industry objections, agency letters,
+    sponsor arguments. A block quote inside a committee report is evidence that
+    somebody SAID it, never that the committee FOUND it. Look for the
+    attribution line immediately above the quote and carry it into the claim.
+
+    Same article, same day, and this was the worse half. The sentence "there
+    isn't a program that can watermark text, making the requirements impossible
+    to comply with" is genuinely in the analysis — as a block quote from the
+    coalition lobbying against the bill. The line above it reads "A coalition in
+    opposition, including Technet, writes:". The committee's own words, a few
+    lines earlier, are far weaker and say nothing special about text. We printed
+    the lobbyists' claim as the legislature's own finding, which inverts what
+    the record shows.
 7. These hosts already carried the sources of our recent articles:
    {ostatnie_domeny}
    Do not reach for one of them out of habit. Go there when the record itself
