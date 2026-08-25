@@ -8366,7 +8366,7 @@ find another. Ten candidates that pass are worth more than thirty that do not.
 
 #### `prompts/dyskoveria.md`
 
-**41 wierszy.** Pola wejsciowe: `blocked_hosts`, `max_results`, `max_searches`, `min_primary`, `min_why`, `ostatnie_domeny`, `question`
+**58 wierszy.** Pola wejsciowe: `blocked_hosts`, `max_results`, `max_searches`, `min_primary`, `min_why`, `ostatnie_domeny`, `question`
 
 ````markdown
 Search the web, then return {max_results} sources for this question:
@@ -8396,6 +8396,23 @@ Requirements:
 5. Free, no login, readable as HTML or text. Skip these hosts, they block
    automated reading: {blocked_hosts}
 6. No forums, Q&A sites or vendor blogs.
+
+6a. **If a search result quotes a study, a report or an official finding BY
+    NAME, go and get that document itself.** Search for it directly — by
+    author, title, or the institution that published it — and return THAT url,
+    not the page quoting it. One extra search.
+
+    This is not tidiness. A real article ended up citing "an opinion piece from
+    a digital innovation hub, citing a meta-analysis by Diel and colleagues,
+    reports 55.54 per cent" — when the meta-analysis itself, 56 papers and
+    86,155 participants, was one search away and says the same figure with its
+    confidence interval, which the retelling dropped. The interval was the
+    interesting part: it crosses 50%, so the result is not significantly better
+    than chance.
+
+    Copies drift, and they drop exactly the caveats that make a number mean
+    something. A commentary is allowed in the corpus as commentary; it is not
+    allowed to stand in for the thing it summarises.
 7. These hosts already carried the sources of our recent articles:
    {ostatnie_domeny}
    Do not reach for one of them out of habit. Go there when the record itself
@@ -8613,7 +8630,7 @@ point at an entry in `beliefs`.
 
 #### `prompts/grafika.md`
 
-**78 wierszy.** Pola wejsciowe: `body`, `title`
+**101 wierszy.** Pola wejsciowe: `body`, `title`
 
 ````markdown
 Write the image brief for the header illustration of this article.
@@ -8636,16 +8653,35 @@ render reads as decoration rather than evidence.
 
 ## Choosing the subject
 
-Pick **one ordinary physical object** at the centre of what the article is
-about. Not a scene, not a metaphor, not a person.
+Pick **one physical object** at the centre of what the article is about. Not a
+scene, not a metaphor, not a person.
 
-- The object should be the thing the reader already meets — the packaging, the
-  fitting, the sign, the coin, the valve, the badge on the machine.
-- If the article is about a rule, find the object the rule acts on.
-- If the article is about an incentive, find the object the money passes
-  through.
-- Prefer the specific over the general: not "a car", but "the speedometer face
-  of an ordinary compact car".
+**This publication is about artificial intelligence, so the object comes from
+where the reader actually meets these systems.** That is a real constraint and
+it has been got wrong: an article about who must label synthetic media was given
+a photograph of a sauce bottle, because the brief said "packaging" and the model
+obliged. The reader saw sauce.
+
+Objects that belong here:
+
+- the surfaces where an answer arrives — a phone showing a reply, a laptop
+  screen edge with a cursor mid-sentence, a chat window's send button
+- the paperwork — a printed system card, a terms page, a filing, a court
+  docket, a consent form, a compliance checklist
+- the machinery — a server rack door, a cooling duct, the nameplate on an
+  accelerator, a power busbar, a fibre trunk
+- the human end of it — a call-centre headset, a badge scanner, a delivery
+  driver's handset, a labelling workstation, a hospital display
+- the artefacts of governance — a warning label on a screen, a "report this"
+  form, a redaction, a watermark strip
+
+**Do not borrow an object from another domain because it works as a metaphor.**
+A label on a jar is a label, but a piece about content labelling illustrated
+with a jar is a piece about jam. If the article is about a rule, find the object
+the rule acts on IN THIS FIELD — the screen, the file, the form, the rack.
+
+- Prefer the specific over the general: not "a computer", but "the back of a
+  rack-mounted server, one blue cable seated, one hanging loose".
 
 ## A symbol is not an object
 
@@ -8657,6 +8693,10 @@ This went wrong once and it is worth naming. An article about the open-jar
 symbol printed on cosmetics got a header showing an actual glass jar with a
 tilted lid. The reader saw a jam jar. The subject should have been the back of
 a shampoo bottle: the thing the rule acts on, the thing they own.
+
+The same mistake in this field would be photographing a watermark, a padlock
+icon or a robot. Photograph the screen the warning appears on, the rack the
+model runs in, the form somebody fills in afterwards.
 
 The test: could you pick this object up in your house? A pictogram fails it.
 

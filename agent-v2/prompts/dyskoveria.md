@@ -25,6 +25,23 @@ Requirements:
 5. Free, no login, readable as HTML or text. Skip these hosts, they block
    automated reading: {blocked_hosts}
 6. No forums, Q&A sites or vendor blogs.
+
+6a. **If a search result quotes a study, a report or an official finding BY
+    NAME, go and get that document itself.** Search for it directly — by
+    author, title, or the institution that published it — and return THAT url,
+    not the page quoting it. One extra search.
+
+    This is not tidiness. A real article ended up citing "an opinion piece from
+    a digital innovation hub, citing a meta-analysis by Diel and colleagues,
+    reports 55.54 per cent" — when the meta-analysis itself, 56 papers and
+    86,155 participants, was one search away and says the same figure with its
+    confidence interval, which the retelling dropped. The interval was the
+    interesting part: it crosses 50%, so the result is not significantly better
+    than chance.
+
+    Copies drift, and they drop exactly the caveats that make a number mean
+    something. A commentary is allowed in the corpus as commentary; it is not
+    allowed to stand in for the thing it summarises.
 7. These hosts already carried the sources of our recent articles:
    {ostatnie_domeny}
    Do not reach for one of them out of habit. Go there when the record itself
