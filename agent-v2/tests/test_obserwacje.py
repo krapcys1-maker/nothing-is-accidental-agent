@@ -4,6 +4,7 @@ Kazda zmiana z kontrdowodem. Nic nie publikuje.
 """
 import ast
 import hashlib
+import json
 import pathlib
 import sys
 import tempfile
@@ -32,7 +33,11 @@ def odcisk(p):
 
 
 PILNOWANE = [config.DB_PATH, config.DATA_DIR / "zuzyte_fakty.json",
-             config.DATA_DIR / "promocja.json", config.DATA_DIR / "dziennik.jsonl"]
+             config.DATA_DIR / "promocja.json", config.DATA_DIR / "dziennik.jsonl",
+             # Skrot pamieci permanentnej. Pilnowany, bo powstaje SAM przy
+             # pierwszym pytaniu o pamiec — test, ktory zapomni go przekierowac
+             # do katalogu tymczasowego, zalozylby go w produkcji po cichu.
+             stages.PAMIEC_NOTEK_PLIK]
 PRZED = {str(p): odcisk(p) for p in PILNOWANE}
 
 print("=== 1. OBSERWOWANIE KLIKA TYLKO 'FOLLOW' ===")
@@ -287,6 +292,281 @@ sprawdz("adres nie wpada do slow tematu",
         sorted(stages._slowa(Z_LINKIEM)))
 sprawdz("wiec dwie notki z linkiem nie sa 'o tym samym'",
         stages._o_tym_samym(Z_LINKIEM, Z_LINKIEM_2) is False)
+
+print()
+print("=== 4c. PAMIEC JEST PERMANENTNA, NIE 'WIEKSZA' ===")
+# Okno dwunastu bylo ochrona z terminem waznosci: powtorka sprzed pieciu dni
+# przechodzila z automatu. Wlasciciel chce zera powtorzen NIGDY.
+#
+# Zmierzone 2026-08-25 na 29 wystawionych notkach: okna 8, 12, 20, 40 i pamiec
+# PELNA blokuja te same PIEC notek. Zero roznicy, zero falszywych alarmow —
+# z 399 par o roznych tematach prog miedzy dniami nie przepuscil ani jednej.
+# Pelny rachunek stoi w docstringu `stages.pamiec_wystawionych`.
+
+
+def dziennik_z_notek(katalog, teksty):
+    """Buduje dziennik z podanych tekstow — po jednej UDANEJ notce na tekst."""
+    import json as _json
+    linie = [_json.dumps({"kiedy": "2026-08-2%dT10:00:00+00:00" % (i % 10),
+                          "rodzaj": "notka", "udane": True, "tekst": t},
+                         ensure_ascii=False)
+             for i, t in enumerate(teksty)]
+    (katalog / "dziennik.jsonl").write_text("\n".join(linie) + "\n",
+                                            encoding="utf-8")
+
+
+# Wypelniacz o slownictwie, ktore nie wystepuje w zadnej notce testowej.
+WYPELNIACZ = [
+    ("Harbour beacon %d turns green only when the estuary channel depth clears "
+     "four metres, and the lantern keeper logs every sweep by hand." % i)
+    for i in range(119)
+]
+
+with tempfile.TemporaryDirectory() as tmp:
+    tmp = pathlib.Path(tmp)
+    stary_kat, stary_plik = config.DATA_DIR, stages.PAMIEC_NOTEK_PLIK
+    stare_okno = config.PAMIEC_NOTEK
+    try:
+        config.DATA_DIR = tmp
+        stages.PAMIEC_NOTEK_PLIK = tmp / "wystawione_notki.json"
+
+        # Notka o szamponie idzie na SAM POCZATEK, 119 notek przed dzisiejsza.
+        dziennik_z_notek(tmp, [WCZORAJ] + WYPELNIACZ)
+        pamiec = stages.pamiec_wystawionych()
+        print("    notek w dzienniku: 120, odciskow w pamieci: %d" % len(pamiec))
+        sprawdz("pamiec obejmuje wszystkie 120 notek", len(pamiec) == 120,
+                len(pamiec))
+        sprawdz("notka sprzed 119 pozycji NADAL blokuje powtorke",
+                stages.wybierz_material([dict(DZIS)], [], pamiec) is None)
+
+        # KONTRDOWOD: to samo z oknem dwunastu, czyli kodem sprzed zmiany.
+        # Notka o szamponie wypada z okna i powtorka przechodzi jak gdyby nigdy nic.
+        config.PAMIEC_NOTEK = 12
+        okno = stages.pamiec_wystawionych()
+        sprawdz("KONTRDOWOD: okno 12 pamieta tylko 12 ostatnich", len(okno) == 12,
+                len(okno))
+        sprawdz("KONTRDOWOD: i przy oknie 12 powtorka PRZECHODZI (tak bylo)",
+                stages.wybierz_material([dict(DZIS)], [], okno) is not None)
+        config.PAMIEC_NOTEK = stare_okno
+        sprawdz("stan obowiazujacy to pamiec bez okna",
+                config.PAMIEC_NOTEK is None, config.PAMIEC_NOTEK)
+
+        # LUZNE ZDERZENIE NADAL NIE BLOKUJE — to jest cena, ktorej nie placimy.
+        # Przy pamieci bez konca kazda zapamietana notka to kolejna szansa na
+        # falszywy alarm, a falszywy alarm kosztuje notke przy realizacji normy 60%.
+        dziennik_z_notek(tmp, [LUZNE_A] + WYPELNIACZ)
+        stages.PAMIEC_NOTEK_PLIK.unlink()       # inny dziennik = liczymy od zera
+        pamiec_luzna = stages.pamiec_wystawionych()
+        luzny = stages.wybierz_material(
+            [{"domain": "Sun care", "fact": LUZNE_B}], [], pamiec_luzna)
+        sprawdz("luzne zderzenie NIE blokuje mimo pelnej pamieci",
+                luzny is not None and luzny["domain"] == "Sun care", luzny)
+        sprawdz("i 119 obcych notek tez go nie blokuje",
+                len(pamiec_luzna) == 120, len(pamiec_luzna))
+
+        # DZIENNIK ZOSTAJE ZRODLEM PRAWDY: liczy sie to, co NAPRAWDE wyszlo.
+        (tmp / "dziennik.jsonl").write_text("\n".join([
+            '{"rodzaj": "notka", "udane": false, "tekst": %s}' % json.dumps(WCZORAJ),
+            '{"rodzaj": "lajk", "udane": true, "tekst": %s}' % json.dumps(WCZORAJ),
+            '{"rodzaj": "notka", "udane": true, "tekst": ""}',
+            'to nie jest JSON',
+        ]) + "\n", encoding="utf-8")
+        stages.PAMIEC_NOTEK_PLIK.unlink()
+        sprawdz("nieudana notka, lajk, pusty tekst i smiec NIE wchodza do pamieci",
+                stages.pamiec_wystawionych() == [],
+                stages.pamiec_wystawionych())
+    finally:
+        config.DATA_DIR, stages.PAMIEC_NOTEK_PLIK = stary_kat, stary_plik
+        config.PAMIEC_NOTEK = stare_okno
+
+print()
+print("=== 4d. SKROT CZYTA TYLKO PRZYROST DZIENNIKA ===")
+# Dziennik rosnie bez konca: 29 notek to 7822 bajty samego tekstu, czyli ~270 B
+# na notke. Przy trzech notkach dziennie sam ich udzial to ~3,6 MB po dziesieciu
+# latach, a dziennik notuje takze komentarze, lajki, restacki i odpowiedzi.
+# Czytanie calosci przy kazdej notce jest wiec bez przyszlosci.
+
+with tempfile.TemporaryDirectory() as tmp:
+    tmp = pathlib.Path(tmp)
+    stary_kat, stary_plik = config.DATA_DIR, stages.PAMIEC_NOTEK_PLIK
+    try:
+        config.DATA_DIR = tmp
+        stages.PAMIEC_NOTEK_PLIK = tmp / "wystawione_notki.json"
+        dziennik_z_notek(tmp, WYPELNIACZ[:10])
+        stages.pamiec_wystawionych()
+        skrot = json.loads(stages.PAMIEC_NOTEK_PLIK.read_text(encoding="utf-8"))
+        rozmiar = (tmp / "dziennik.jsonl").stat().st_size
+        sprawdz("skrot zapamietal, dokad doczytal", skrot["bajtow"] == rozmiar,
+                (skrot["bajtow"], rozmiar))
+
+        # KONTRDOWOD NA PRZYROSTOWOSC: wkladamy do skrotu odcisk, ktorego
+        # w dzienniku NIE MA. Kod czytajacy caly dziennik od nowa by go zgubil.
+        skrot["odciski"].append(["zmyslo", "odcisk", "ktory", "istni"])
+        stages.PAMIEC_NOTEK_PLIK.write_text(json.dumps(skrot), encoding="utf-8")
+        with open(tmp / "dziennik.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps({"rodzaj": "notka", "udane": True,
+                                "tekst": WYPELNIACZ[11]}) + "\n")
+        po = stages.pamiec_wystawionych()
+        sprawdz("dopisana notka doszla do pamieci", len(po) == 12, len(po))
+        sprawdz("KONTRDOWOD: zmyslony odcisk PRZETRWAL, czyli dziennik nie byl"
+                " czytany od poczatku", frozenset(
+                    ["zmyslo", "odcisk", "ktory", "istni"]) in po)
+
+        # Urwana linia — dziennik dopisuje inny proces, czytanie moze trafic
+        # w srodek zapisu. Polowa notki nie moze wpasc do pamieci jako odcisk.
+        with open(tmp / "dziennik.jsonl", "a", encoding="utf-8") as f:
+            f.write('{"rodzaj": "notka", "udane": true, "tekst": "urwana w po')
+        sprawdz("urwana ostatnia linia nie wchodzi do pamieci",
+                len(stages.pamiec_wystawionych()) == 12)
+
+        # ROTACJA: inny plik pod ta sama nazwa. Bez tej kontroli odciski ze
+        # starego dziennika zostalyby na wieki, blokujac tematy bez powodu.
+        dziennik_z_notek(tmp, WYPELNIACZ[:3])
+        po_rotacji = stages.pamiec_wystawionych()
+        sprawdz("rotacja dziennika przelicza skrot od zera",
+                len(po_rotacji) == 3, len(po_rotacji))
+        sprawdz("KONTRDOWOD: bez tej kontroli zostaloby 12 starych odciskow",
+                frozenset(["zmyslo", "odcisk", "ktory", "istni"]) not in po_rotacji)
+
+        # Zmiana SPOSOBU liczenia rdzeni tez uniewaznia skrot — inaczej stare
+        # odciski przestaja byc porownywalne z nowymi i pamiec klamie po cichu.
+        stare_puste = stages._PUSTE_SLOWA
+        try:
+            stages._PUSTE_SLOWA = frozenset(list(stare_puste) + ["harbour"])
+            sprawdz("inna lista pustych slow zmienia sygnature rdzeni",
+                    stages._sygnatura_rdzeni() != json.loads(
+                        stages.PAMIEC_NOTEK_PLIK.read_text(
+                            encoding="utf-8"))["rdzenie"])
+            odswiezone = stages.pamiec_wystawionych()
+            sprawdz("i przebudowuje pamiec z dziennika", len(odswiezone) == 3,
+                    len(odswiezone))
+        finally:
+            stages._PUSTE_SLOWA = stare_puste
+    finally:
+        config.DATA_DIR, stages.PAMIEC_NOTEK_PLIK = stary_kat, stary_plik
+
+print()
+print("=== 4e. DZIEN SIE NIE ZAGLADZA ===")
+# Do 25 sierpnia zderzenie calej puli konczylo dzien natychmiast. Przy pamieci
+# bez konca to bedzie zdarzac sie czesciej: zmierzone q ~ 4e-5 na pare daje
+# przy 10 000 zapamietanych notek okolo 35% szans, ze POJEDYNCZY material sie
+# zderzy. Osiem faktow z puli to 0,35^8; z druga pula 0,35^16.
+
+ZDERZONY = {"domain": "Cosmetics labelling", "fact": DZIS["fact"]}
+SWIEZY_1 = {"domain": "Air travel",
+            "fact": ("The tiny hole in the middle pane of an airplane window is "
+                     "a bleed hole that keeps the outer pane carrying the "
+                     "pressure load during flight.")}
+SWIEZY_2 = {"domain": "Restaurants",
+            "fact": ("Under the tip credit, employers may pay tipped staff a "
+                     "lower base wage whenever gratuities cover the difference.")}
+PAMIEC_TESTOWA = [frozenset(stages._slowa(WCZORAJ))]
+
+sprawdz("KONTRDOWOD: sama pula NIE daje sie wybrac (tu konczyl sie stary dzien)",
+        stages.wybierz_material([dict(ZDERZONY)], [], PAMIEC_TESTOWA) is None)
+
+oryg_stages = (stages.znajdz_ciekawostki, stages.note,
+               stages.artykul_do_promocji, stages.pamiec_wystawionych)
+wolania = []
+
+
+def dzien_probny(nowe_fakty, ile):
+    """Odpala `notki_dnia` bez modelu i bez dysku. Zwraca (notki, ile_szukan)."""
+    wolania.clear()
+    stages.artykul_do_promocji = lambda: None
+    stages.pamiec_wystawionych = lambda: PAMIEC_TESTOWA
+    stages.znajdz_ciekawostki = lambda conn, run_id, ile=8: (
+        wolania.append("szukanie") or [dict(f) for f in nowe_fakty])
+    stages.note = lambda conn, run_id, typ, material, link=None, note_form="PROSTA": {
+        "typ": typ, "material": material, "candidates": []}
+    return stages.notki_dnia(None, 0, ciekawostki=[dict(ZDERZONY)], ile=ile), \
+        len(wolania)
+
+
+try:
+    notki, szukan = dzien_probny([SWIEZY_1, SWIEZY_2], 2)
+    sprawdz("cala pula zderzona -> agent DOBIERA material zamiast konczyc",
+            len(notki) == 2, len(notki))
+    sprawdz("i szukal DOKLADNIE RAZ, nie raz na notke", szukan == 1, szukan)
+    sprawdz("notki stoja na SWIEZYM materiale, nie na zderzonym",
+            all("Cosmetics" not in str(n["material"]) for n in notki), notki)
+
+    # I nie zapetla sie: gdy dobrany material tez sie zderza, dzien konczy sie
+    # krocej — po JEDNEJ dodatkowej probie, nie po nieskonczonej liczbie.
+    notki2, szukan2 = dzien_probny([dict(ZDERZONY)], 2)
+    sprawdz("gdy dobrany material TEZ sie zderza -> dzien konczy sie krocej",
+            len(notki2) == 0, len(notki2))
+    sprawdz("i nadal szukal dokladnie raz (brak petli)", szukan2 == 1, szukan2)
+finally:
+    (stages.znajdz_ciekawostki, stages.note, stages.artykul_do_promocji,
+     stages.pamiec_wystawionych) = oryg_stages
+
+print()
+print("=== 4f. RECZNA EDYCJA DZIENNIKA NIE GUBI NOTKI ===")
+# ZNALEZIONE PRZEZ ADWERSARZA, POTWIERDZONE POMIAREM. Skrot pamieci czytal
+# tylko PRZYROST dziennika, a przed przebudowa sprawdzal trzy rzeczy: glowe
+# pliku (najwyzej 4 kB), rozmiar i sygnature liczenia rdzeni.
+#
+# Przy 40 notkach dziennik ma 8,5 kB — czyli kontrola obejmowala POLOWE pliku.
+# Przy 11 000 notek obejmowalaby 0,016%. Kazda zmiana poza glowa, ktora nie
+# zmniejszyla pliku ponizej zapamietanego offsetu, przechodzila przez wszystkie
+# trzy warunki, a `seek` ladowal W SRODKU WIERSZA. Ulamek wiersza wywalal
+# `json.loads`, ktory jest cicho pomijany — wiec notka znikala z pamieci NA
+# ZAWSZE, przy spokojnym logu. Wychodzi to na jaw dopiero w dniu, w ktorym ta
+# notka wyjdzie drugi raz, czyli dokladnie wtedy, gdy juz jest za pozno.
+#
+# Czwarty warunek jest tani: bajt tuz przed offsetem MUSI byc koncem linii.
+import json as _json
+
+_kat = pathlib.Path(tempfile.mkdtemp())
+_stary_data, _stary_plik = config.DATA_DIR, stages.PAMIEC_NOTEK_PLIK
+config.DATA_DIR = _kat
+stages.PAMIEC_NOTEK_PLIK = _kat / "wystawione_notki.json"
+_dz = _kat / "dziennik.jsonl"
+
+
+def _wpis(i, tekst):
+    return _json.dumps({"rodzaj": "notka", "udane": True,
+                        "kiedy": "2026-08-%02d" % (i % 28 + 1), "tekst": tekst},
+                       ensure_ascii=False)
+
+
+try:
+    _linie = [_wpis(i, "Notka numer %d o innym temacie: %s widgets and %s"
+                    % (i, i * 7, i * 13)) for i in range(40)]
+    _linie[30] = _wpis(30, "Wind turbines shed ice by heating the blade root before dawn")
+    _dz.write_text("\n".join(_linie) + "\n", encoding="utf-8")
+
+    _p1 = stages.pamiec_wystawionych()
+    sprawdz("pierwsze czytanie widzi wszystkie notki", len(_p1) == 40, len(_p1))
+    sprawdz("i notka o turbinach w niej jest",
+            any("turbin" in " ".join(sorted(o)) for o in _p1))
+
+    # Wlasciciel skraca recznie wiersz 30, agent dopisuje dwie notki. Plik
+    # znowu jest WIEKSZY niz zapamietany offset, wiec warunek „obciety" nie
+    # zadziala, a zmiana lezy poza glowa.
+    _linie[30] = _wpis(30, "Wind turbines shed ice by heating blade root")
+    _linie.append(_wpis(41, "Zupelnie nowa notka alpha beta gamma delta"))
+    _linie.append(_wpis(42, "I jeszcze jedna nowa notka epsilon zeta eta"))
+    _dz.write_text("\n".join(_linie) + "\n", encoding="utf-8")
+
+    _p2 = stages.pamiec_wystawionych()
+    sprawdz("po recznej edycji pamiec ma WSZYSTKIE notki", len(_p2) == 42, len(_p2))
+    sprawdz("i edytowana notka NIE zginela",
+            any("turbin" in " ".join(sorted(o)) for o in _p2))
+
+    # KONTRDOWOD: sprawdzenie musi realnie patrzec na bajt przed offsetem.
+    # Podstawiamy skrot z offsetem, ktory lada w srodku wiersza — pamiec ma
+    # to wykryc i przeliczyc od zera, a nie przyjac ulamek.
+    _skrot = _json.loads(stages.PAMIEC_NOTEK_PLIK.read_text(encoding="utf-8"))
+    _skrot["bajtow"] = max(1, int(_skrot.get("bajtow", 100)) - 17)
+    stages.PAMIEC_NOTEK_PLIK.write_text(
+        _json.dumps(_skrot, ensure_ascii=False), encoding="utf-8")
+    _p3 = stages.pamiec_wystawionych()
+    sprawdz("offset w srodku wiersza wymusza przeliczenie od zera",
+            len(_p3) == 42, len(_p3))
+finally:
+    config.DATA_DIR, stages.PAMIEC_NOTEK_PLIK = _stary_data, _stary_plik
 
 print()
 print("=== 5. FAKT W PAMIECI ZUZYTYCH TO ZDANIE, NIE SLOWNIK ===")

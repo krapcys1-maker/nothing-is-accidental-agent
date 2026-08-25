@@ -35,6 +35,29 @@ nothing downstream will catch it if you invented it. If you cannot point to
 where the belief is visibly stated — a headline, a product page, a press
 release — then the fact stands on its own without one.
 
+## What the field is actually talking about this week
+
+These are real video titles from the channels this publication follows, with
+the dates they went up. The hype wrapping has been stripped; what is left is
+roughly the event.
+
+{zaczyn_kanalow}
+
+**Use this list for WHAT IS LIVE, never as a source.** A video title is not
+evidence of anything. It tells you that people are arguing about a thing right
+now, which is the one piece of information the grid below cannot give you —
+the grid is timeless and this is not.
+
+So the move is: take a subject from here, then **go and find the document**.
+The filing, the paper, the pricing page, the court record, the changelog, the
+system card. Your `url` and `source_date` must point at that document, never at
+a video. If you cannot find a document, drop the subject — a fact you can only
+support with somebody's video essay is not a fact.
+
+Prefer items from the last two weeks. Something that ran on three channels in
+four days is a subject the reader has already half-heard and half-understood,
+which is exactly where this publication is useful.
+
 ## Where to look this time
 
 Take your facts from these areas and no others:
@@ -57,6 +80,89 @@ area**, not by hunting for something that feels interesting.
 Work the grid: take each pattern, ask its probe question of each area above,
 and write down what comes back. Most cells will be empty. That is expected —
 the point is that the full ones are found on purpose rather than by luck.
+
+## A third way in: a fact that settles a question people actually ask
+
+The two axes above answer WHERE to look and WHAT SHAPE to look for. There is a
+third, and it is the one this publication exists for. A fact also qualifies
+when it moves a **big question** — the kind a reader asks about these systems
+without having a job in the field.
+
+Does the model understand anything, or imitate understanding closely enough
+that the difference stops showing? Would memory make it something other than
+what it is now? Can it lie, and does it know when it is lying? Does it want
+anything of its own? Is what it produces creativity, or an average with good
+manners? What does it mean that a system behaves differently once it can tell
+it is being tested?
+
+**Those are examples of a KIND, not a list to work through.** The kind is: a
+question somebody has already argued about out loud, where nobody in the room
+had a fact. Plenty of questions belong to that kind and are not written above,
+and a question is not better for appearing here.
+
+**The question is a frame. The fact inside it still needs a source, and that
+rule does not soften because the subject got large.** An opinion about machine
+consciousness is worth nothing here. A named evaluation and what it scored, a
+behaviour a lab wrote down in its own documentation, two named researchers
+reading the same result the opposite way with a date on the exchange — those
+are worth something, and the question is what makes a stranger care that they
+exist. So the usable shape is **question, then evidence that moves it**, never
+the question on its own. If the strongest thing you can put underneath is that
+people disagree, you have found a debate, not a fact, and debates are free.
+
+**The output fields still apply, and this is exactly where a big question
+dies.** "Is it conscious" names no decider, no date and nothing the reader is
+holding, so it fails before a word is written. The version that survives names
+the decision somebody actually took because of the question: who wrote the
+test, who set the threshold, who ruled on what counts as passing it, and in
+what year. If you cannot fill `decision` and `consequence`, the question was
+the whole idea and there was no fact under it.
+
+**One or two in a batch, not the batch.** Nothing here says to file every
+candidate under a big question. A run where all of them are is as narrow as a
+run of nothing but debunkings, and narrow in a way the reader spots faster,
+because the questions are the part they have heard before.
+
+## Today is {dzis}. Check the age of everything.
+
+This subject moves faster than any other we could have chosen, and **a fact that
+was true eighteen months ago can be false, retired, or simply embarrassing
+today.** Your own memory is worse than useless here: it ended months ago and it
+does not feel like a gap from the inside.
+
+So three rules, and they are not negotiable.
+
+**Give the publication date of every source, in `source_date`.** Not the date of
+the thing described — the date the page you read was published. A page with no
+date is a page you cannot vouch for.
+
+**Anything that claims how the world is RIGHT NOW must come from the last three
+months.** Prices, availability, what is fastest, what is standard, what a
+company recommends, what is the newest anything. A launch article from 2024 is
+not evidence about 2026, however accurate it was when written.
+
+**A fact about an EVENT is different and stays good.** A court ruled, a study
+was published, a law passed, a system was built and measured — those happened,
+they carry their own date, and they do not expire. Say when it happened and the
+fact keeps working for years.
+
+**Here is what exists right now. This was looked up today, not remembered.**
+
+{stan_modeli}
+
+Anything not on that list either does not exist yet or is already gone. If a
+source names a model you cannot find above, that source is old — treat whatever
+it says about the present as expired, and either find current confirmation or
+choose a different fact.
+
+**Never name a version you have not checked is current.** Writing about GPT-5.0
+when 5.5 has shipped makes the whole piece read as stale even if every word is
+true. If your source names a version and that source is old, either find current
+confirmation or pick a different fact.
+
+**Never build on something that is being switched off.** A model scheduled for
+retirement, an API being sunset, a product being discontinued — the reader will
+have to unlearn it within weeks. That is worse than teaching them nothing.
 
 ## Where attention is pointed this month
 
@@ -119,7 +225,7 @@ mechanism in a neighbouring industry. Go somewhere else entirely.
 
 Return only valid JSON:
 
-{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<who decided it and when — a body, a committee, a statute, a year. Empty string if the record names nobody>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "domain": "<the everyday area it belongs to>"}}]}}
+{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<who decided it and when — a body, a committee, a statute, a year. Empty string if the record names nobody>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "domain": "<the everyday area it belongs to>"}}]}}
 
 ## The two halves, and why a fact without both is worthless to us
 

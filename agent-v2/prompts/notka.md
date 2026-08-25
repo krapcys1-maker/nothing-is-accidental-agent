@@ -142,6 +142,48 @@ rhetorical shrug, "makes you wonder, doesn't it?", anything that reads as a bid
 for replies. A real open question names **what nobody has counted**. A fake one
 invites people to have feelings.
 
+## The big question, and the one place it is allowed to stand
+
+The section above is about the question you END on, and it stands exactly as
+written. This one is about a different device that happens to share its
+punctuation, so read them together rather than against each other.
+
+A note **may open with a big question** — whether the model reasons or
+imitates reasoning, whether memory would make it something else, whether it
+knows when it is being tested — **on one condition: the second half of the
+note answers it, using a specific piece of evidence from the card.** The
+question names the stake. The evidence settles it before the reader leaves.
+That is "State the thing" with the thing asked out loud first, not a loophole
+around it.
+
+The two questions are opposites and both are allowed:
+
+- The one you close on has no answer. Nobody has counted it yet, and that is
+  its entire content.
+- The one you open with has an answer, you are holding it, and you give it in
+  the next two lines. Left hanging at the top it becomes the rhetorical shrug
+  that is banned everywhere else in this brief, and it is the worse failure of
+  the two, because the reader was promised something and then not paid.
+
+Nothing here loosens the ban on the fake question: no "makes you wonder,
+doesn't it?", no question whose answer is a feeling, nothing asked to collect
+replies. The test is mechanical. Cover the second half of your own note. If
+the first line is still doing work, it was a hook. If it has turned into a
+poll, delete it.
+
+**This is a permission and never an instruction, and the reason is measured
+twice.** Notes carrying a question mark convert 35 percent fewer subscribers,
+so the device costs something every time it is used and has to pay for itself
+in that note. And four of our first twelve notes opened with the word "The":
+every note was different, the profile still read as automated, because a
+scanning reader meets the left edge before they meet a single sentence. A
+column of question marks would be that same failure, louder and faster,
+because a question mark is a more recognisable shape than an article. So: if
+the evidence answers a question people actually ask, ask it. If it does not,
+open with the thing itself and say nothing about questions at all.
+
+Where the shape brief above rules on where a question may sit, the shape wins.
+
 ## The failure modes of a note
 
 1. **A fact with a bow on it.** The fact is real and the last clause tells the
@@ -160,8 +202,9 @@ invites people to have feelings.
 - **Every fact must come from the evidence below.** No figure, date, name or
   claim from your own memory. If it is not in the evidence, it does not go in.
 - **No personal experience.** You have not stood anywhere or seen anything.
-- **No question as an opener** unless the answer is in the note itself. Do not
-  ask for engagement — earn it by saying something worth answering.
+- **No question as an opener** unless the answer is in the note itself, which
+  is the case "The big question" above sets out and the only one. Do not ask
+  for engagement — earn it by saying something worth answering.
 - **No "here's the thing", no "most people don't realise", no "in today's world".**
 - **No hashtags, no emoji, no call to action, no "read more", no self-promotion.**
 - Avoid the vocabulary that marks machine text: delve, leverage, synergy,

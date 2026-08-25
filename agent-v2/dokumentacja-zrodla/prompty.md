@@ -23,14 +23,14 @@
 {{"targets": [{{"index": <number>, "worth_it": true|false, "what_i_would_add": "<one concrete sentence, or empty when worth_it is false>", "why_not": "<one sentence, only when worth_it is false>"}}]}}
 ```
 
-#### `ciekawostki.md` (148 wierszy)
+#### `ciekawostki.md` (254 wierszy)
 
-**Pola wejściowe:** `dziedziny`, `generatory`, `ile`, `miesiac`, `uzyte`, `w_reku`
+**Pola wejściowe:** `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `zaczyn_kanalow`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<who decided it and when — a body, a committee, a statute, a year. Empty string if the record names nobody>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "domain": "<the everyday area it belongs to>"}}]}}
+{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<who decided it and when — a body, a committee, a statute, a year. Empty string if the record names nobody>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "domain": "<the everyday area it belongs to>"}}]}}
 ```
 
 #### `dyskoveria.md` (41 wierszy)
@@ -103,7 +103,7 @@
 {{"comment": "<the comment, or null>", "reason_if_silent": "<one sentence, only when comment is null>", "what_it_adds": "<one sentence naming what this comment contributes that the post did not say>"}}
 ```
 
-#### `notka.md` (237 wierszy)
+#### `notka.md` (280 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
 
@@ -183,14 +183,14 @@
 {{"contradicted_belief": {{"present": true|false, "the_belief": "<the reader's wrong belief in their own words, or empty string>", "evidence": "<what in the card breaks it, or why nothing does>"}}, "named_decider": {{"present": true|false, "evidence": "<who, from the card, or why nobody is named>"}}, "felt_number": {{"present": true|false, "evidence": "<the figure and what it measures, or why the only figures are labels>"}}, "second_domain": {{"present": true|false, "evidence": "<the other field, or why the parallels stay inside one industry>"}}, "unsettled_outcome": {{"present": true|false, "the_question": "<the open question in the reader's own words, or empty string>", "the_situation": "<what the reader pictures, or empty string>", "governed_by": "<the written rule from the card that decides it, quoted or named — or why nothing in the card governs it>"}}, "what_would_rescue_it": "<one sentence naming the shape of the missing piece>", "one_line_verdict": "<one sentence on what this card actually has>"}}
 ```
 
-#### `weryfikacja.md` (62 wierszy)
+#### `weryfikacja.md` (107 wierszy)
 
-**Pola wejściowe:** `context`, `text`
+**Pola wejściowe:** `context`, `dzis`, `text`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"claims": [{{"claim": "<what the text asserts>", "status": "confirmed"|"refuted"|"unverified", "url": "<source, or empty>", "what_the_source_says": "<one sentence, required for refuted>"}}], "safe_to_post": true|false, "verdict": "<one sentence>"}}
+{{"claims": [{{"claim": "<what the text asserts>", "status": "confirmed"|"refuted"|"outdated"|"unverified", "url": "<source, or empty>", "source_date": "<when that source was published, YYYY-MM-DD, or empty>", "what_the_source_says": "<one sentence, required for refuted and outdated>"}}], "safe_to_post": true|false, "verdict": "<one sentence>"}}
 ```
 
 #### `wykonalnosc.md` (95 wierszy)

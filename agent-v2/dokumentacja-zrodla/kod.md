@@ -1610,8 +1610,20 @@ def restackuj_w_kanale(
                 page.get_by_role("button", name="Post").last.click(timeout=8000)
                 page.wait_for_timeout(SETTLE_MS + 2000)
                 wynik["restackowane"] += 1
+                # Restack tworzy NOWA notke z wlasnym numerem. Bez niego
+                # restack byl jedyna forma publikacji, ktorej nie dalo sie
+                # zmierzyc — a to najcenniejszy sygnal, jaki mamy: w badaniu
+                # 9 641 notek restack konwertowal dwunastokrotnie lepiej niz
+                # polubienie.
+                numer_restacka = ""
+                try:
+                    numer_restacka = numer_naszej_notki(page, zdanie, prob=2)
+                except Exception:
+                    pass
                 zapisz_w_dzienniku("restack", udane=True,
-                                   komu=notka.get("autor", ""), slow=len(zdanie.split()))
+                                   komu=notka.get("autor", ""),
+                                   slow=len(zdanie.split()),
+                                   tekst=zdanie[:300], id=numer_restacka)
                 print(f"    podane dalej {wynik['restackowane']}/{ile}", flush=True)
             except Exception as exc:
                 # Tak samo jak przy polubieniach: porazka szla do logu i nigdzie

@@ -360,6 +360,22 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         # Najpierw dopisujemy, co wynikło z tego, co juz zrobilismy — bez tego
         # dziennik mowi tylko, co wystawilismy, a nie czy ktokolwiek zauwazyl.
         browser.dopisz_skutki()
+        # A TERAZ ILE TO KOSZTOWALO I CO PRZYNIOSLO. `dopisz_skutki` mowi, ze
+        # ktos zareagowal; statystyki mowia, ILU LUDZI W OGOLE ZOBACZYLO wpis i
+        # ilu z nich z niego zostalo — subskrybenci i obserwujacy przypisani do
+        # KONKRETNEJ notki. Bez tego nie da sie odroznic notki, ktora nikogo nie
+        # obeszla, od notki, ktorej nikt nie zobaczyl, a to sa dwie zupelnie
+        # rozne wady i leczy sie je czym innym.
+        #
+        # Wolamy TU, bo i tak otwieramy przegladarke na skutki, a statystyki
+        # odswiezaja sie raz na godzine — czesciej i tak nie ma po co.
+        try:
+            browser.statystyki_pozycji()
+        except Exception as exc:
+            # Pomiar NIGDY nie zabija przebiegu. Wpis, ktorego nie zmierzylismy,
+            # kosztuje nas wiedze; przebieg, ktory sie wywalil na pomiarze,
+            # kosztuje caly dzien publikacji.
+            print("  (statystyk nie zebralem: %s)" % type(exc).__name__, flush=True)
         czekaja = (browser.nieodpowiedziane()
                    + browser.komentarze_pod_artykulami()
                    + browser.odpowiedzi_na_nasze_komentarze())

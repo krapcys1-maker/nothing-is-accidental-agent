@@ -93,7 +93,11 @@
 | `ILE_DZIEDZIN_NA_PRZEBIEG` | `5` | — |
 | `CURIOSITY_BATCH` | `8` | — |
 | `CURIOSITY_MEMORY` | `60` | Ile ostatnio zuzytych faktow pokazujemy szukajacemu jako zakaz powtorki. Bez tego to samo szukanie codziennie oddaje te same slynne osiem. |
-| `PAMIEC_NOTEK` | `12` | Ile OSTATNICH WYSTAWIONYCH NOTEK bot pamieta, wybierajac material na dzis. Rozne od `CURIOSITY_MEMORY`, ktore pamieta zuzyte FAKTY po doklad |
+| `PAMIEC_NOTEK` | `None` | Ile OSTATNICH WYSTAWIONYCH NOTEK bot pamieta, wybierajac material na dzis. `None` = WSZYSTKIE, jakie kiedykolwiek wyszly. To jest stan obowi |
+| `MAKS_WIEK_ZRODLA_DNI` | `90` | ILE DNI MOZE MIEC ZRODLO FAKTU, KTORY TWIERDZI COS O STANIE TERAZ. Wlasciciel ustawil to sam, dwa razy. Najpierw ogolnie: „cos, co mialo sen |
+| `TWIERDZI_O_TERAZ` | `( "now", "currently", "today", "these days",` | Slowa, po ktorych poznajemy, ze zdanie twierdzi cos o STANIE SWIATA TERAZ, a nie opowiada o zdarzeniu z wlasna data. Tylko takie zdania podl |
+| `ZNIKA` | `( "deprecat", "retired", "retirement", "suns` | Slowa, ktore mowia, ze rzecz jest W TRAKCIE ZNIKANIA. Publikacja o AI nie ma po co opisywac czegos, co za osiem tygodni przestanie istniec — |
+| `WZORZEC_WERSJI` | `r"\b(gpt|claude|gemini|llama|mistral|qwen|gr` | NAZWA PRODUKTU Z NUMEREM WERSJI. Wlasciciel: „nie ma mi pisac o GPT 5.0, jak jest juz 5.5". Zdanie, ktore nazywa konkretna wersje, starzeje  |
 | `COMMENT_CANDIDATES` | `3` | — |
 | `DLUGOSCI_WYPOWIEDZI` | `( (12, 3), # jedno zdanie, najczestsze u lud` | DLUGOSC KOMENTARZA I ODPOWIEDZI losowana osobno za kazdym razem. Sam prompt tego nie zalatwi: proszony o roznorodnosc model i tak osiada w w |
 | `POSTAWY_KOMENTARZA` | `{ "CIEKAWOSC": (7, ( "Say what genuinely cau` | SPOSOB OTWARCIA, losowany tak samo jak dlugosc i z tego samego powodu. Zmierzone na naszych wlasnych komentarzach: SIEDEM Z DZIEWIECIU zaczy |

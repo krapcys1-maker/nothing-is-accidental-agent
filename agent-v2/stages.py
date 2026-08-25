@@ -7,6 +7,7 @@ i wypisuje, na czym stanął; uruchamiasz od nowa.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sqlite3
@@ -14,7 +15,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+import aktualne_modele
 import config
+import korpus_kanalow
 import db
 import llm
 
@@ -751,6 +754,27 @@ CURIOSITY_SYSTEM = (
 )
 
 
+def zaczyn_z_kanalow(ile: int = 26) -> str:
+    """Tematy, o ktorych mowi sie w tym tygodniu — do promptu, nie do cytowania.
+
+    NIGDY NIE ZABIJA PRZEBIEGU. Gdy kanaly nie odpowiadaja, oddajemy pusty
+    napis i prompt radzi sobie sama siatka dziedzin. Notka bez zaczynu jest
+    mniej aktualna; brak notki jest gorszy.
+    """
+    try:
+        wpisy = korpus_kanalow.korpus_kanalow(ile=ile)
+    except Exception as exc:
+        print("  [kanaly] nie zebralem zaczynu (%s)" % type(exc).__name__,
+              flush=True)
+        return "(could not be fetched today)"
+    if not wpisy:
+        return "(nothing fetched today)"
+    return NOWA_LINIA.join(
+        "- [%s] %s — %s" % (str(w.get("data"))[:10], w.get("kanal") or "?",
+                            w.get("temat") or "")
+        for w in wpisy)
+
+
 def znajdz_ciekawostki(
     conn: sqlite3.Connection, run_id: int, ile: int = config.CURIOSITY_BATCH
 ) -> list[dict[str, Any]]:
@@ -784,6 +808,11 @@ def znajdz_ciekawostki(
         dziedziny=NOWA_LINIA.join(f"- {d}" for d in dziedziny),
         generatory=NOWA_LINIA.join(
             f"**{g}** — {config.GENERATORY[g]}" for g in generatory),
+        zaczyn_kanalow=zaczyn_z_kanalow(),
+        dzis=teraz.strftime("%d %B %Y"),
+        stan_modeli=(aktualne_modele.jako_tekst(
+            aktualne_modele.pobierz(conn=conn, run_id=run_id))
+            or "(could not be checked today — so name no version at all)"),
         miesiac=teraz.strftime("%B"),
         w_reku=config.co_teraz_w_reku(teraz) or "(nothing seasonal listed)",
         uzyte=("\n".join(f"- {t}" for t in zuzyte[-config.CURIOSITY_MEMORY:])
@@ -801,6 +830,23 @@ def znajdz_ciekawostki(
     # samo szukanie codziennie oddaje te same słynne fakty. Odsiewamy w kodzie.
     znane = {_klucz_faktu(t) for t in zuzyte}
     swieze = [f for f in fakty if _klucz_faktu(f["fact"]) not in znane]
+
+    # ODSIEW PRZETERMINOWANYCH. Sprawdzanie faktow pyta „czy to prawda" i na
+    # tym konczy — wiec przepuscilo notke o modelach o1 opartą na artykule o
+    # ich premierze sprzed 628 dni. Fakt byl prawdziwy. Model znika z API
+    # osiem tygodni po tej notce.
+    przed = len(swieze)
+    zostaje = []
+    for f in swieze:
+        wolno, powod = swiezosc_faktu(f)
+        if wolno:
+            zostaje.append(f)
+        else:
+            print("  [swiezosc] odrzucam: %s — %s"
+                  % ((f.get("fact") or "")[:60], powod), flush=True)
+    swieze = zostaje
+    if przed != len(swieze):
+        print("  [swiezosc] zostalo %d z %d" % (len(swieze), przed), flush=True)
     if len(swieze) < len(fakty):
         print(f"  [ciekawostki] odrzucone jako już użyte: {len(fakty) - len(swieze)}",
               flush=True)
@@ -896,6 +942,121 @@ def ostatnie_otwarcia(rodzaj: str = "notka", ile: int = 8) -> list[str]:
     return otwarcia[-ile:]
 
 
+def wiek_zrodla_w_dniach(data_zrodla: str, teraz=None) -> int | None:
+    """Ile dni ma zrodlo. None, gdy daty nie da sie odczytac.
+
+    Przyjmujemy rozne ksztalty, bo model oddaje to, co znalazl na stronie:
+    "2024-12-05", "2024-12", "December 2024", "2024". Rok bez miesiaca liczymy
+    od POCZATKU roku — czyli na niekorzysc materialu, bo lepiej odrzucic dobry
+    fakt niz wystawic przeterminowany.
+
+    DZIEN BIERZEMY Z ZEGARA, nie z pamieci modelu. To brzmi oczywisto, ale
+    dokladnie tego brakowalo: model nie wiedzial, ktory jest dzien, wiec nie
+    mial jak zauwazyc, ze pisze o czyms sprzed dwoch lat.
+    """
+    import re as _re
+    from datetime import datetime, timezone
+
+    s = str(data_zrodla or "").strip()
+    if not s:
+        return None
+    teraz = teraz or datetime.now(timezone.utc)
+
+    MIESIACE = {m.lower(): i for i, m in enumerate(
+        ["January", "February", "March", "April", "May", "June", "July",
+         "August", "September", "October", "November", "December"], start=1)}
+
+    rok = mies = dzien = None
+    m = _re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", s)
+    if m:
+        rok, mies, dzien = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    else:
+        m = _re.search(r"(\d{4})-(\d{1,2})\b", s)
+        if m:
+            rok, mies, dzien = int(m.group(1)), int(m.group(2)), 1
+        else:
+            m = _re.search(r"([A-Za-z]+)\s+(\d{4})", s)
+            if m and m.group(1).lower() in MIESIACE:
+                rok, mies, dzien = int(m.group(2)), MIESIACE[m.group(1).lower()], 1
+            else:
+                m = _re.search(r"\b(?:19|20)\d{2}\b", s)
+                if m:
+                    rok, mies, dzien = int(m.group(0)), 1, 1
+    if not rok:
+        return None
+    try:
+        kiedy = datetime(rok, max(1, min(12, mies or 1)),
+                         max(1, min(28, dzien or 1)), tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return (teraz - kiedy).days
+
+
+def nazywa_wersje(tekst: str) -> str:
+    """Czy zdanie nazywa konkretna wersje produktu. Zwraca ja albo pusty napis.
+
+    Wlasciciel: „nie ma mi pisac o GPT 5.0, jak jest juz 5.5". Zdanie z numerem
+    wersji starzeje sie razem z nia, nawet gdy sam fakt pozostaje prawdziwy.
+    """
+    import re as _re
+
+    m = _re.search(config.WZORZEC_WERSJI, str(tekst or ""), _re.IGNORECASE)
+    return m.group(0) if m else ""
+
+
+def swiezosc_faktu(fakt: dict[str, Any], teraz=None) -> tuple[bool, str]:
+    """Czy ten fakt nadaje sie do wystawienia DZISIAJ.
+
+    Zwraca (wolno, powod). Powod jest niepusty tylko przy odmowie.
+
+    CZTERY ODMOWY, kazda z innego powodu:
+
+    1. RZECZ, KTORA ZNIKA. Model albo produkt z ogloszonym koncem zycia nie
+       jest tematem — czytelnik dostanie wiedze, ktora przeterminuje sie,
+       zanim skonczy czytac. Tak wlasnie wyszlo z o1.
+
+    2. NAZWANA WERSJA przy starym zrodle. „GPT 5.0" ze zrodla sprzed roku
+       brzmi jak sprzed roku, choc fakt moze byc prawdziwy.
+
+    3. ZRODLO BEZ DATY przy twierdzeniu o stanie teraz. Material bez daty jest
+       nieodrozninalny od materialu sprzed dwoch lat.
+
+    4. ZRODLO ZA STARE przy twierdzeniu o stanie teraz. Prog w
+       `config.MAKS_WIEK_ZRODLA_DNI` — 90 dni, decyzja wlasciciela.
+
+    NIE ODRZUCAMY faktow o ZDARZENIACH. Wyrok sadu z 2023 roku, badanie
+    opublikowane w 2024, ustawa uchwalona kiedykolwiek — to rzeczy, ktore sie
+    wydarzyly i nie przestana. Wlasciciel powiedzial to wprost: „jesli jest
+    temat z 2024, ok, ale ma byc sprawdzony najnowszymi danymi".
+    """
+    tekst = " ".join([
+        str(fakt.get("fact") or ""),
+        str(fakt.get("actually") or ""),
+    ])
+    male = tekst.lower()
+
+    for slowo in config.ZNIKA:
+        if slowo in male:
+            return False, "rzecz z ogloszonym koncem zycia (%r)" % slowo
+
+    wiek = wiek_zrodla_w_dniach(fakt.get("source_date"), teraz=teraz)
+    wersja = nazywa_wersje(tekst)
+    o_teraz = [s for s in config.TWIERDZI_O_TERAZ if s in male]
+
+    if not wersja and not o_teraz:
+        return True, ""
+
+    co = ("nazywa wersje %r" % wersja) if wersja else \
+         ("twierdzi o stanie teraz (%r)" % o_teraz[0])
+
+    if wiek is None:
+        return False, "%s, a zrodlo nie ma daty" % co
+    if wiek > config.MAKS_WIEK_ZRODLA_DNI:
+        return False, "%s, a zrodlo ma %d dni (prog %d)" % (
+            co, wiek, config.MAKS_WIEK_ZRODLA_DNI)
+    return True, ""
+
+
 def ostatnie_notki(ile: int = 12) -> list[str]:
     """TRESCI ostatnich wystawionych notek — zeby nie napisac drugi raz tego samego.
 
@@ -913,30 +1074,258 @@ def ostatnie_notki(ile: int = 12) -> list[str]:
 
     Pytamy DZIENNIKA, nie wlasnej ksiegowosci: liczy sie to, co naprawde
     wyszlo w swiat, a nie to, co zamierzalismy wystawic.
+
+    UWAGA: ta funkcja czyta CALY dziennik. Do wyboru materialu sluzy dzis
+    `pamiec_wystawionych`, ktore czyta tylko przyrost — patrz tam.
     """
     plik = config.DATA_DIR / "dziennik.jsonl"
     if not plik.exists():
         return []
-    teksty: list[str] = []
     try:
-        for linia in plik.read_text(encoding="utf-8").splitlines():
-            linia = linia.strip()
-            if not linia:
-                continue
-            try:
-                w = json.loads(linia)
-            except ValueError:
-                continue
-            if not isinstance(w, dict) or w.get("rodzaj") != "notka":
-                continue
-            if not w.get("udane"):
-                continue
-            tekst = (w.get("tekst") or "").strip()
-            if tekst:
-                teksty.append(tekst)
+        teksty = _notki_z_dziennika(plik.read_text(encoding="utf-8"))
     except OSError:
         return []
     return teksty[-ile:]
+
+
+def _notki_z_dziennika(kawalek: str) -> list[str]:
+    """Teksty UDANYCH notek z podanego kawalka dziennika, w kolejnosci zapisu.
+
+    Wydzielone z `ostatnie_notki`, bo pamiec permanentna czyta dziennik
+    KAWALKAMI (tylko to, co dopisano od ostatniego razu) i musi filtrowac
+    dokladnie tak samo. Dwie kopie tego samego filtra rozjechalyby sie przy
+    pierwszej zmianie nazwy pola — a wtedy pamiec cicho zgubilaby czesc notek.
+    """
+    teksty: list[str] = []
+    for linia in kawalek.splitlines():
+        linia = linia.strip()
+        if not linia:
+            continue
+        try:
+            w = json.loads(linia)
+        except ValueError:
+            continue
+        if not isinstance(w, dict) or w.get("rodzaj") != "notka":
+            continue
+        if not w.get("udane"):
+            continue
+        tekst = (w.get("tekst") or "").strip()
+        if tekst:
+            teksty.append(tekst)
+    return teksty
+
+
+# --- PAMIEC PERMANENTNA WYSTAWIONYCH NOTEK -----------------------------------
+#
+# Skrot dziennika: odciski (rdzenie slow) WSZYSTKICH notek, ktore kiedykolwiek
+# wyszly w swiat. ZRODLEM PRAWDY zostaje dziennik — ten plik jest z niego
+# WYLICZANY i wolno go skasowac w dowolnej chwili, odtworzy sie sam.
+#
+# Dlaczego nie dopisuje go ten, kto publikuje. Bylyby wtedy dwa zapisy tej
+# samej rzeczy w dwoch miejscach i pierwszy nieudany zapis rozjechalby je na
+# zawsze — a rozjazd w pamieci powtorek jest niewidoczny az do dnia, w ktorym
+# notka wyjdzie drugi raz. Tu rozjazd jest niemozliwy z konstrukcji: przyrost
+# zawsze bierze sie z dziennika.
+#
+# Po co w takim razie plik. Zeby nie czytac calego dziennika przy kazdej notce.
+# Zmierzone: 29 notek to 7822 bajty samego tekstu, czyli okolo 270 B na notke —
+# przy trzech notkach dziennie sam ich udzial w dzienniku urosnie do ~3,6 MB
+# po dziesieciu latach, a dziennik notuje takze komentarze, lajki, restacki
+# i odpowiedzi. Tu czytamy tylko to, co dopisano od ostatniego razu.
+PAMIEC_NOTEK_PLIK = config.DATA_DIR / "wystawione_notki.json"
+
+# Ile bajtow poczatku dziennika bierzemy na sygnature. Poczatek pliku
+# dopisywanego na koniec NIGDY sie nie zmienia, wiec inna sygnatura znaczy
+# „to jest inny dziennik" (rotacja, przeniesienie, reczna przebudowa) i skrot
+# trzeba policzyc od zera. Bez tej kontroli odciski ze starego dziennika
+# zostalyby na wieki w pamieci nowego, blokujac tematy bez powodu.
+#
+# To jest SUFIT, nie stala dlugosc — dlugosc uzyta naprawde leci do skrotu
+# w polu `glowa_bajtow`. Pierwsza wersja czytala zawsze `f.read(4096)` i na
+# mlodym dzienniku (10 notek to ~2 kB) brala CALY plik: kazde dopisanie zmienialo
+# „glowe", skrot uznawal to za inny dziennik i przeliczal sie od zera. Zlapane
+# przez test przyrostowosci — pamiec dzialala, tylko czytala wszystko za kazdym
+# razem, czyli dokladnie to, czego ten plik mial nie robic.
+_GLOWA_DZIENNIKA = 4096
+
+
+def _sygnatura_rdzeni() -> str:
+    """Odcisk SPOSOBU liczenia rdzeni, nie tresci.
+
+    Skrot trzyma wynik `_slowa`, a nie tekst. Gdy zmieni sie lista pustych slow
+    albo dlugosc rdzenia, stare odciski przestaja byc porownywalne z nowymi —
+    i pamiec zaczyna klamac po cichu, bo nic sie nie wywala, tylko czesc
+    powtorek przestaje sie lapac. Recznie podbijana „wersja formatu" to zyczenie;
+    to tutaj jest pomiar. Zmiana `_slowa` albo `_PUSTE_SLOWA` przebudowuje skrot
+    z dziennika sama, przy najblizszym uruchomieniu.
+    """
+    try:
+        import inspect
+        zrodlo = inspect.getsource(_slowa)
+    except Exception:
+        zrodlo = ""      # spakowany interpreter: zostaje sama lista slow
+    material = " ".join(sorted(_PUSTE_SLOWA)) + "|" + zrodlo
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
+
+
+def _wczytaj_skrot_notek() -> dict[str, Any]:
+    """Skrot z dysku albo pusty. Uszkodzony plik to pusty skrot, nie awaria."""
+    try:
+        dane = json.loads(PAMIEC_NOTEK_PLIK.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return dane if isinstance(dane, dict) else {}
+
+
+def pamiec_wystawionych() -> list[frozenset[str]]:
+    """Odciski WSZYSTKICH wystawionych notek. Pamiec nie ma konca.
+
+    Zwraca rdzenie slow, nie teksty — bo tak sie ich uzywa. Stara droga
+    tokenizowala kazda zapamietana notke przy KAZDYM porownaniu: zmierzone
+    8 kandydatow wobec 10 000 zapamietanych notek to 1,86 s przy tokenizacji
+    w petli i 0,005 s na gotowych odciskach, czyli 370 razy taniej. Przy oknie
+    dwunastu nikt by tego nie zauwazyl; przy pamieci bez konca to jest roznica
+    miedzy „dziala" a „dzien stoi".
+
+    RYZYKO, KTORE TA FUNKCJA OTWIERA — FALSZYWE ZDERZENIE. Im wiecej notek
+    w pamieci, tym wieksza szansa, ze nowy material przypadkiem trafi w cztery
+    wspolne rdzenie z czyms sprzed pol roku. Falszywy alarm KOSZTUJE NOTKE,
+    a realizacja normy notek to dzis 60% — kazda zablokowana boli.
+    ZMIERZONE 2026-08-25 na 29 wystawionych notkach:
+        okno 8      -> 5 blokad
+        okno 12     -> 5 blokad   (stan sprzed tej zmiany)
+        okno 20     -> 5 blokad
+        okno 40     -> 5 blokad
+        PAMIEC PELNA-> 5 blokad   TE SAME PIEC
+    Czyli: pamiec permanentna nie zablokowala ANI JEDNEJ notki wiecej niz okno
+    dwunastu. Wszystkie 5 to prawdziwe powtorki (3x jajka, 3x kod zywicy,
+    2x szampon).
+    Z 406 par: 6 kolidujacych i wszystkie 6 to naprawde ten sam temat.
+    Z 399 par o ROZNYCH tematach prog miedzy dniami przepuscil 0 (zero).
+    Najblizej progu podeszla para „kod zywicy" - „szampon": 4 wspolne rdzenie,
+    ale udzial 0.16 przy wymaganych 0.30 — to DRUGI warunek `_zderzenie` niesie
+    tu caly zapas, nie liczba wspolnych slow.
+    Dlaczego wiec NIE podnosimy progu wraz z wielkoscia pamieci, choc szansa
+    zderzenia rosnie z N: kazde podniesienie kosztuje od razu, a kupuje zero.
+    Zmierzone na tych samych 29 notkach:
+        min_wspolnych 4->5   traci 1 z 6 prawdziwych powtorek (jajka, 4/0.31)
+        prog 0.30->0.35      traci te sama powtorke
+        oba naraz            0 falszywych bylo i 0 falszywych zostaje
+    Podnoszenie progu wymienia zmierzona strate na urojony zysk. Rozklad ogona
+    par obcych (>=1 rdzen: 147, >=2: 39, >=3: 10, >=4: 1, >=5: 0 — iloraz ~0,26
+    na kazdy kolejny rdzen) daje szacunek szansy falszywego zderzenia pary
+    q ~ 4e-5, czyli przy 10 000 zapamietanych notek okolo 35% szans, ze
+    POJEDYNCZY material w cos trafi. I wlasnie dlatego obrona nie siedzi
+    w progu, tylko w `notki_dnia`: pula ma osiem faktow, a gdy zderzy sie cala,
+    agent dobiera nowa. Zeby stracic notke, falszywie zderzyc musialoby sie
+    szesnascie faktow z rzedu — 0,35^16, czyli raz na kilkadziesiat milionow dni.
+    KIEDY WROCIC DO TEMATU: gdy licznik `[pamiec]` w logu dnia pokaze, ze
+    materialy odrzucane przez pamiec przestaly byc prawdziwymi powtorkami.
+    """
+    plik = config.DATA_DIR / "dziennik.jsonl"
+    skrot = _wczytaj_skrot_notek()
+    odciski: list[list[str]] = [list(o) for o in (skrot.get("odciski") or [])
+                               if isinstance(o, (list, tuple))]
+    if not plik.exists():
+        return _przytnij_pamiec(odciski)
+
+    sygnatura = _sygnatura_rdzeni()
+    try:
+        rozmiar = plik.stat().st_size
+        with open(plik, "rb") as f:
+            # Glowe liczymy na TEJ SAMEJ dlugosci, na jakiej policzyl ja
+            # poprzedni przebieg — inaczej rosnacy plik zmienialby ja sam.
+            dlugosc = skrot.get("glowa_bajtow")
+            if not (isinstance(dlugosc, int) and 0 < dlugosc <= _GLOWA_DZIENNIKA):
+                dlugosc = _GLOWA_DZIENNIKA
+            glowa = hashlib.sha256(f.read(dlugosc)).hexdigest()[:16]
+            od = skrot.get("bajtow")
+            od = od if isinstance(od, int) and od >= 0 else 0
+            # Trzy powody przebudowy od zera, kazdy znaczy „skrot mowi o czyms
+            # innym niz ten plik": inny dziennik (glowa), dziennik obciety
+            # (rozmiar), inny sposob liczenia rdzeni (sygnatura).
+            if (skrot.get("glowa") != glowa
+                    or skrot.get("rdzenie") != sygnatura
+                    or od > rozmiar):
+                od, odciski = 0, []
+            # CZWARTY POWOD, I ZLAPANY DOPIERO PRZEZ ADWERSARZA: kontrola glowy
+            # obejmuje najwyzej pierwsze 4 kB. Przy 40 notkach dziennik ma juz
+            # 8,5 kB, czyli sprawdzamy polowe; przy 11 000 notek — 0,016%.
+            # Kazda zmiana POZA glowa, ktora nie zmniejszy pliku ponizej `od`,
+            # przechodzila przez wszystkie trzy warunki wyzej.
+            #
+            # Odtworzony scenariusz: wlasciciel skraca recznie wiersz 30 o 41
+            # bajtow, agent dopisuje dwie notki, plik znowu jest wiekszy niz
+            # `od` — i `seek(od)` lada W SRODKU WIERSZA. Ulamek wywala
+            # `json.loads`, ktory jest cicho pomijany, wiec jedna notka znika
+            # z pamieci NA ZAWSZE, a log pokazuje spokojne „notek w pamieci: 41".
+            # Wychodzi na jaw dopiero w dniu, w ktorym ta notka wyjdzie drugi raz.
+            #
+            # Sprawdzenie jest tanie: bajt tuz przed `od` MUSI byc koncem linii.
+            # Jesli nie jest, skrot mowi o innym ukladzie pliku niz ten na dysku.
+            if od > 0:
+                f.seek(od - 1)
+                if f.read(1) != b"\n":
+                    print("  [pamiec] dziennik zmienil sie w srodku — licze od"
+                          " nowa", flush=True)
+                    od, odciski = 0, []
+            f.seek(od)
+            przyrost = f.read()
+            # Ostatnia linia moze byc URWANA W POLOWIE: dziennik dopisuje inny
+            # proces i czytanie moze trafic w srodek zapisu. Bierzemy tylko to,
+            # co konczy sie znakiem konca linii, a reszte zostawiamy na nastepny
+            # raz — inaczej polowa notki wpadlaby do pamieci jako kaleki odcisk.
+            koniec = przyrost.rfind(b"\n")
+            nowa_glowa, nowa_dlugosc = glowa, dlugosc
+            if koniec >= 0:
+                # Glowa ZAWSZE w obrebie tego, co juz przeczytalismy do konca —
+                # ten kawalek pliku jest odtad niezmienny.
+                nowa_dlugosc = min(_GLOWA_DZIENNIKA, od + koniec + 1)
+                f.seek(0)
+                nowa_glowa = hashlib.sha256(
+                    f.read(nowa_dlugosc)).hexdigest()[:16]
+    except OSError:
+        return _przytnij_pamiec(odciski)
+
+    if koniec >= 0:
+        kawalek = przyrost[:koniec + 1].decode("utf-8", "replace")
+        od += koniec + 1
+        for tekst in _notki_z_dziennika(kawalek):
+            odciski.append(sorted(_slowa(tekst)))
+        _zapisz_skrot_notek(odciski, od, nowa_glowa, nowa_dlugosc, sygnatura)
+    return _przytnij_pamiec(odciski)
+
+
+def _przytnij_pamiec(odciski: list[list[str]]) -> list[frozenset[str]]:
+    """Zamienia odciski na zbiory i honoruje `config.PAMIEC_NOTEK`.
+
+    `None` znaczy WSZYSTKIE i tak jest ustawione. Liczba wraca do starego okna
+    bez ruszania kodu — dzwignia odwrotu ma byc jedna stala.
+    """
+    if isinstance(config.PAMIEC_NOTEK, int) and config.PAMIEC_NOTEK >= 0:
+        odciski = odciski[-config.PAMIEC_NOTEK:] if config.PAMIEC_NOTEK else []
+    return [frozenset(o) for o in odciski]
+
+
+def _zapisz_skrot_notek(odciski: list[list[str]], bajtow: int, glowa: str,
+                        glowa_bajtow: int, sygnatura: str) -> None:
+    """Zapisuje skrot. NIGDY nie przerywa dnia.
+
+    Ta sama zasada co przy dzienniku przegranych tematow: pamiec podreczna,
+    ktora wywala agenta, byla by gorsza od jej braku. Nieudany zapis znaczy
+    tylko tyle, ze nastepny przebieg przeczyta dziennik od tego samego miejsca.
+    """
+    try:
+        PAMIEC_NOTEK_PLIK.parent.mkdir(parents=True, exist_ok=True)
+        PAMIEC_NOTEK_PLIK.write_text(
+            json.dumps({"skad": "wyliczone z dziennik.jsonl, mozna skasowac",
+                        "bajtow": bajtow, "glowa": glowa,
+                        "glowa_bajtow": glowa_bajtow, "rdzenie": sygnatura,
+                        "notek": len(odciski), "odciski": odciski},
+                       ensure_ascii=False),
+            encoding="utf-8")
+    except OSError as exc:
+        print("  [pamiec] nie zapisalem skrotu notek: %s" % exc, flush=True)
 
 
 def note(
@@ -1166,6 +1555,22 @@ def _slowa(tekst: str) -> set[str]:
             if s not in _PUSTE_SLOWA}
 
 
+def _zderzenie(x: set[str] | frozenset[str], y: set[str] | frozenset[str],
+               min_wspolnych: int = 2, prog: float = 0.15) -> bool:
+    """To samo pytanie co `_o_tym_samym`, ale na GOTOWYCH rdzeniach.
+
+    Wydzielone, bo pamiec permanentna trzyma odciski policzone raz przy
+    dopisaniu do skrotu. Tokenizacja w petli porownan kosztowala 1,86 s na
+    8 kandydatow wobec 10 000 notek; tak jest 0,005 s — patrz
+    `pamiec_wystawionych`.
+    """
+    if len(x) < 4 or len(y) < 4:
+        return False
+    wspolne = x & y
+    return (len(wspolne) >= min_wspolnych
+            and len(wspolne) / min(len(x), len(y)) >= prog)
+
+
 def _o_tym_samym(a: str, b: str, min_wspolnych: int = 2,
                  prog: float = 0.15) -> bool:
     """Czy dwa teksty mowia o tej samej rzeczy.
@@ -1178,12 +1583,7 @@ def _o_tym_samym(a: str, b: str, min_wspolnych: int = 2,
     Progi sa PARAMETREM, bo to samo pytanie zadajemy w dwoch sytuacjach o
     roznym koszcie pomylki — patrz `POROWNANIE_MIEDZY_DNIAMI`.
     """
-    x, y = _slowa(a), _slowa(b)
-    if len(x) < 4 or len(y) < 4:
-        return False
-    wspolne = x & y
-    return (len(wspolne) >= min_wspolnych
-            and len(wspolne) / min(len(x), len(y)) >= prog)
+    return _zderzenie(_slowa(a), _slowa(b), min_wspolnych, prog)
 
 
 # Prog dla porownania z POPRZEDNIMI DNIAMI, ostrzejszy niz dla biezacego dnia.
@@ -1207,7 +1607,7 @@ POROWNANIE_MIEDZY_DNIAMI = {"min_wspolnych": 4, "prog": 0.30}
 
 def wybierz_material(zapas: list[dict[str, Any]],
                      unikaj: list[str],
-                     wczesniej: list[str] | None = None) -> dict[str, Any] | None:
+                     wczesniej: list[Any] | None = None) -> dict[str, Any] | None:
     """Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy.
 
     Poprzednio bylo `zapas.pop(0)` — pierwszy z brzegu. W przebiegu z 17 sierpnia
@@ -1218,20 +1618,32 @@ def wybierz_material(zapas: list[dict[str, Any]],
     o tym samym w odstepie trzynastu minut.
 
     Roznorodnosc byla w puli. Zabraklo jej dopiero w wyborze.
+
+    `wczesniej` przyjmuje ZAROWNO teksty, JAK I gotowe zbiory rdzeni. Pamiec
+    permanentna podaje odciski (`pamiec_wystawionych`), bo tokenizowanie
+    dziesieciu tysiecy notek raz na kandydata kosztowalo 1,86 s zamiast 0,005 s.
+    Teksty zostaja, bo tak wola testy i tak wygladalo wywolanie do 25 sierpnia.
     """
+    # Rdzenie liczone RAZ na wywolanie, nie raz na pare. Przy oknie dwunastu
+    # nie mialo to znaczenia; przy pamieci bez konca to jest caly koszt.
+    unikaj_rdzenie = [_slowa(u) for u in unikaj if u]
+    wczesniej_rdzenie = [u if isinstance(u, (set, frozenset)) else _slowa(u)
+                         for u in (wczesniej or []) if u]
     for i, f in enumerate(zapas):
-        temat = "%s %s" % (f.get("domain") or "", f.get("fact") or "")
-        if any(_o_tym_samym(temat, u) for u in unikaj if u):
+        temat = _slowa("%s %s" % (f.get("domain") or "", f.get("fact") or ""))
+        if any(_zderzenie(temat, u) for u in unikaj_rdzenie):
             continue
         # To samo pytanie o POPRZEDNIE DNI, ale ostrzej — inaczej ochrona przed
         # powtorka konczyla sie o polnocy. 23 i 24 sierpnia poszly dwie notki o
-        # tym samym symbolu na butelce szamponu.
-        if any(_o_tym_samym(temat, u, **POROWNANIE_MIEDZY_DNIAMI)
-               for u in (wczesniej or []) if u):
+        # tym samym symbolu na butelce szamponu. Od 25 sierpnia ta lista nie ma
+        # konca: pamietamy WSZYSTKIE wystawione notki, nie ostatnie dwanascie.
+        if any(_zderzenie(temat, u, **POROWNANIE_MIEDZY_DNIAMI)
+               for u in wczesniej_rdzenie):
             continue
         return zapas.pop(i)
-    # Wszystko zderza sie z tym, co juz mamy — lepiej wystawic mniej niz
-    # powtorzyc temat.
+    # Wszystko zderza sie z tym, co juz mamy. NIE jest to jeszcze koniec dnia:
+    # `notki_dnia` dobiera wtedy nowy material — powtorzyc nie wolno, ale
+    # milczec tez nie ma po co.
     return None
 
 
@@ -1287,9 +1699,18 @@ def notki_dnia(
     # O czym juz dzis mowimy. Promowany artykul liczy sie od razu — to od niego
     # zaczela sie wpadka z dwiema notkami o jajkach w odstepie trzynastu minut.
     juz_o_tym: list[str] = []
-    # Co poszlo w swiat w poprzednich dniach. Trzymane OSOBNO od `juz_o_tym`,
-    # bo porownuje sie ostrzejszym progiem — patrz `POROWNANIE_MIEDZY_DNIAMI`.
-    wczesniejsze: list[str] = ostatnie_notki(config.PAMIEC_NOTEK)
+    # Co poszlo w swiat w poprzednich dniach — WSZYSTKO, od pierwszej notki.
+    # Trzymane OSOBNO od `juz_o_tym`, bo porownuje sie ostrzejszym progiem —
+    # patrz `POROWNANIE_MIEDZY_DNIAMI`. To sa gotowe odciski, nie teksty.
+    wczesniejsze = pamiec_wystawionych()
+    print("  [pamiec] notek w pamieci: %d (%s)"
+          % (len(wczesniejsze),
+             "wszystkie" if config.PAMIEC_NOTEK is None
+             else "okno %s" % config.PAMIEC_NOTEK), flush=True)
+    # JEDNA dodatkowa proba dobrania materialu na caly dzien. Nie na notke:
+    # szukanie ciekawostek to platne wywolanie modelu, a piec notek razy druga
+    # proba to piec dodatkowych rachunkow za to samo.
+    dobrano_nowy: bool = False
     if karta:
         juz_o_tym.append("%s %s" % (karta.get("article_title") or "",
                                     (karta.get("article_text") or "")[:400]))
@@ -1304,6 +1725,27 @@ def notki_dnia(
                     print("  [notki] brak materiału — kończę dzień krócej", flush=True)
                     break
             fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze)
+            if fakt is None and not dobrano_nowy:
+                # DZIEN NIE MOZE SIE ZAGLODZIC. Do 25 sierpnia to bylo `break`:
+                # cala pula zderzona = koniec dnia. Przy oknie dwunastu zdarzalo
+                # sie to rzadko, przy pamieci bez konca bedzie czesciej —
+                # zmierzone na 29 notkach: q ~ 4e-5 na pare, wiec przy 10 000
+                # zapamietanych notek okolo 35% szans, ze POJEDYNCZY material
+                # sie zderzy. Osiem faktow z rzedu to 0,35^8, a z ta druga pula
+                # 0,35^16. Brak materialu przestaje byc powodem milczenia,
+                # a powtorka nadal nim nie jest.
+                #
+                # Dokladnie ten sam ruch, co przy pustym zapasie kilka linii
+                # wyzej — tylko powodem jest zderzenie, nie pustka.
+                dobrano_nowy = True
+                print("  [notki] cała pula zderza się z pamięcią — szukam"
+                      " nowego materiału (jedna dodatkowa próba)", flush=True)
+                nowe = znajdz_ciekawostki(conn, run_id)
+                if nowe:
+                    # Nowe idzie NA POCZATEK: stare i tak sie zderza, wiec
+                    # przeszukiwanie ich najpierw byloby praca na darmo.
+                    zapas = nowe + zapas
+                    fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze)
             if fakt is None:
                 print("  [notki] został tylko materiał o tym samym, co już dziś"
                       " wystawiamy — kończę dzień krócej", flush=True)
@@ -1542,7 +1984,11 @@ def zweryfikuj(
     zweryfikowanych faktów. Tym razem pamięć modelu trafiła. Nie ma powodu zakładać,
     że trafi zawsze.
     """
-    prompt = _prompt("weryfikacja.md", context=kontekst, text=tekst)
+    # DZIEN Z ZEGARA, nie z pamieci modelu. Bez tego weryfikacja nie ma
+    # jak zauwazyc, ze zrodlo sprzed dwoch lat opisuje inny swiat.
+    from datetime import datetime as _dt, timezone as _tz
+    prompt = _prompt("weryfikacja.md", context=kontekst, text=tekst,
+                     dzis=_dt.now(_tz.utc).strftime("%d %B %Y"))
     try:
         raw = llm.call("factcheck", FACTCHECK_SYSTEM, prompt,
                        conn=conn, run_id=run_id, web_search=True)

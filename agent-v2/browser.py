@@ -675,6 +675,152 @@ def ile_dzis_wystawione() -> dict[str, int]:
         p.stop()
 
 
+def statystyki_pozycji(pozycje: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """Pobiera statystyki NASZYCH tresci — jedna przegladarka na cala liste.
+
+    `pozycje` to lista slownikow {"rodzaj": "notka"|"restack"|"artykul",
+    "id": <numer>, "tekst": <skrot, opcjonalnie>}.
+
+    ODPOWIADA NA PYTANIE, KTOREGO DOTAD NIE UMIELISMY ZADAC: ile wejsc mial
+    konkretny wpis, ile z nich zamienilo sie w polubienie, i ilu ludzi z tego
+    JEDNEGO wpisu zaczelo nas obserwowac albo subskrybowac. Dziennik wiedzial
+    tylko, ze cos wystawilismy.
+
+    Zrodlo: `/api/v1/note_stats/c-<id>` — ten sam adres, ktorego uzywa przycisk
+    „View stats" pod nasza notka. Sprawdzone na zywym koncie 25 sierpnia:
+    notka 321505067 miala 17 wyswietlen, z tego feed 8, permalinki 3, profil 1;
+    odbiorcy: niezwiazani 8, subskrybenci 1, obserwujacy 0; interakcje 6, czyli
+    4 polubienia i 2 odpowiedzi. Opis karty interakcji wprost wymienia wsrod
+    nich subskrypcje i obserwacje, wiec przypisanie subskrybenta do KONKRETNEJ
+    notki jest tu mozliwe — a nigdzie indziej w API nie jest.
+
+    Statystyki odswiezaja sie mniej wiecej raz na godzine, wiec pomiar
+    powtarzamy; `statystyki.zapisz` trzyma HISTORIE, nie ostatnia wartosc.
+
+    Restack liczy sie jako notka, bo Substack nadaje mu wlasny numer notki.
+    """
+    import statystyki
+
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    zebrane: list[dict[str, Any]] = []
+    try:
+        if not pozycje:
+            # Lista skladana W TEJ SAMEJ sesji, zeby nie otwierac przegladarki
+            # dwa razy — start Chromium to sekundy, a robimy to co przebieg.
+            pozycje = nasze_pozycje_do_pomiaru(page)
+        for poz in pozycje:
+            ident = str(poz.get("id") or "").strip()
+            if not ident:
+                continue
+            rodzaj = str(poz.get("rodzaj") or "notka")
+            try:
+                dane = api_json(page, f"/api/v1/note_stats/c-{ident}")
+            except Exception as exc:
+                # Pojedyncza pozycja, ktorej nie da sie odczytac, NIE moze
+                # zabrac calej reszty — inaczej jeden skasowany wpis kosztuje
+                # nas pomiar wszystkich pozostalych.
+                print(f"  [statystyki] {ident}: {type(exc).__name__}", flush=True)
+                continue
+            if not isinstance(dane, dict):
+                continue
+            rekord = statystyki.z_kart(dane)
+            statystyki.zapisz(rodzaj, ident, rekord, tekst=poz.get("tekst") or "")
+            rekord["id"] = ident
+            rekord["rodzaj"] = rodzaj
+            zebrane.append(rekord)
+            print("  [statystyki] %s %s: %s wysw, %s polub, %s odp, %s subskr"
+                  % (rodzaj, ident, rekord.get("wyswietlenia"),
+                     rekord.get("polubienia"), rekord.get("odpowiedzi"),
+                     rekord.get("subskrypcje")), flush=True)
+    finally:
+        page.close()
+        browser.close()
+        p.stop()
+    return zebrane
+
+
+def nasze_pozycje_do_pomiaru(page=None, ile: int = 60) -> list[dict[str, Any]]:
+    """Co wystawilismy i ma wlasny numer — czyli co da sie zmierzyc.
+
+    DWA ZRODLA, I TO NIE JEST NADMIAROWOSC.
+
+    PROFIL jest zrodlem prawdy o notkach. Kanal profilu oddaje kazda nasza
+    notke razem z numerem, niezaleznie od tego, czy nasz dziennik ten numer
+    zapisal. A nie zapisywal: zmierzone 25 sierpnia, z 29 wystawionych notek
+    numer mial SZESC. Gdybysmy pytali wylacznie wlasnej ksiegowosci, 23 notki
+    byly by dla pomiaru niewidzialne — i to te starsze, czyli akurat te, ktore
+    zdazyly cos zebrac.
+
+    DZIENNIK dokłada to, czego na profilu nie ma: komentarze pod cudzymi
+    tekstami (pole `nasz_id`) i odpowiedzi w cudzych watkach (numer w polu
+    `gdzie` w postaci „note/c-<numer>").
+
+    `page` podaje sie, gdy sesja przegladarki juz jest otwarta — zeby nie
+    otwierac drugiej. Bez niej czytamy sam dziennik.
+    """
+    import json as _json
+    import re as _re
+
+    widziane: dict[str, dict[str, Any]] = {}
+
+    # --- profil: nasze notki z numerami ---
+    if page is not None:
+        try:
+            profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
+            if isinstance(profil, dict) and profil.get("id"):
+                feed = api_json(page, f"/api/v1/reader/feed/profile/{profil['id']}"
+                                      "?types%5B%5D=note") or {}
+                for poz in feed.get("items") or []:
+                    k = poz.get("comment") if isinstance(poz, dict) else None
+                    if not isinstance(k, dict) or k.get("id") is None:
+                        continue
+                    widziane[str(k["id"])] = {
+                        "rodzaj": "notka",
+                        "id": str(k["id"]),
+                        "tekst": " ".join(str(k.get("body") or "").split())[:200],
+                    }
+        except Exception as exc:
+            print("  [statystyki] profilu nie odczytalem: %s"
+                  % type(exc).__name__, flush=True)
+
+    # --- dziennik: komentarze i odpowiedzi, ktorych na profilu nie ma ---
+    if DZIENNIK.exists():
+        try:
+            for linia in DZIENNIK.read_text(encoding="utf-8").splitlines():
+                linia = linia.strip()
+                if not linia:
+                    continue
+                try:
+                    w = _json.loads(linia)
+                except ValueError:
+                    continue
+                if not isinstance(w, dict) or not w.get("udane"):
+                    continue
+                rodzaj = str(w.get("rodzaj") or "")
+                if rodzaj not in ("notka", "restack", "komentarz", "odpowiedz"):
+                    continue
+                ident = w.get("id") or w.get("nasz_id")
+                if not ident:
+                    m = _re.search(r"note/c-(\d+)", str(w.get("gdzie") or ""))
+                    ident = m.group(1) if m else None
+                if not ident:
+                    continue
+                ident = str(ident)
+                if ident in widziane:
+                    continue
+                widziane[ident] = {
+                    "rodzaj": "notka" if rodzaj in ("notka", "restack") else rodzaj,
+                    "id": ident,
+                    "tekst": (w.get("tekst") or "")[:200],
+                }
+        except OSError:
+            pass
+
+    return list(widziane.values())[-ile:]
+
+
 def dopisz_skutki() -> int:
     """Dopisuje do dziennika, CO Z NASZYCH DZIALAN WYNIKLO.
 
@@ -1040,6 +1186,42 @@ def id_z_odpowiedzi(odpowiedzi: list) -> str:
     return ""
 
 
+def numer_naszej_notki(page, tekst: str, prob: int = 4) -> str:
+    """Numer notki odczytany z NASZEGO PROFILU po jej tresci.
+
+    DRUGIE PODEJSCIE DO TEGO SAMEGO PROBLEMU. Pierwsze — `id_z_odpowiedzi` —
+    czyta cialo odpowiedzi HTTP po klknieciu „Post". Zmierzone na dzienniku:
+    z 29 wystawionych notek numer trafil do dziennika SZESC RAZY. Ksztaltu tej
+    odpowiedzi nikt nie obiecuje i najwyrazniej sie zmienil.
+
+    Tu pytamy o to, co Substack POKAZUJE, a nie co odpowiedzial: kanal profilu
+    oddaje nasze notki razem z numerami. Dopasowujemy po pierwszych 60 znakach
+    tresci — dosc, zeby odroznic dwie notki, i odporne na to, ze Substack
+    przycina albo formatuje tekst.
+
+    Zwraca pusty napis, gdy nie znalazl. Brak numeru NIE jest bledem publikacji:
+    notka wyszla albo nie wyszla niezaleznie od tego, czy umiemy ja pozniej
+    odnalezc — ale bez numeru nie zmierzymy, co przyniosla.
+    """
+    probka = " ".join(tekst.split())[:60]
+    profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
+    if not isinstance(profil, dict) or not profil.get("id"):
+        return ""
+    for nr in range(prob):
+        feed = api_json(page, f"/api/v1/reader/feed/profile/{profil['id']}"
+                              "?types%5B%5D=note")
+        for poz in (feed or {}).get("items") or []:
+            k = poz.get("comment") if isinstance(poz, dict) else None
+            if not isinstance(k, dict):
+                continue
+            tresc = " ".join(str(k.get("body") or "").split())
+            if probka and probka in tresc and k.get("id") is not None:
+                return str(k["id"])
+        if nr < prob - 1:
+            page.wait_for_timeout(8000)
+    return ""
+
+
 def potwierdz_notke(page, tekst: str, prob: int = 4) -> bool:
     """Pyta Substacka, czy notka naprawdę wisi na naszym profilu.
 
@@ -1048,22 +1230,13 @@ def potwierdz_notke(page, tekst: str, prob: int = 4) -> bool:
     poprawnie — a fałszywy alarm w tę stronę jest grozniejszy niz brak
     potwierdzenia: rozbraja zabezpieczenie przed wystawieniem tego samego
     drugi raz.
-    """
-    import json as _json
 
-    probka = " ".join(tekst.split())[:60]
-    profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
-    if not isinstance(profil, dict) or not profil.get("id"):
-        return False
-    for nr in range(prob):
-        feed = api_json(page, f"/api/v1/reader/feed/profile/{profil['id']}"
-                              "?types%5B%5D=note")
-        if probka in " ".join(_json.dumps((feed or {}).get("items", []),
-                                          ensure_ascii=False).split()):
-            return True
-        if nr < prob - 1:
-            page.wait_for_timeout(8000)
-    return False
+    Stoi na `numer_naszej_notki`, bo to jest to samo pytanie: notka wisi
+    wtedy, gdy ma numer na naszym profilu. Wczesniej ta funkcja robila
+    DOKLADNIE TEN SAM przebieg po kanale, po czym wyrzucala numer i zwracala
+    samo tak — czyli ten sam blad, co przy ciele odpowiedzi HTTP.
+    """
+    return bool(numer_naszej_notki(page, tekst, prob=prob))
 
 def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
     """Polubienia w kanale czytelnika.
@@ -1972,6 +2145,10 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
                       else f"  NIE WYSZLA (odpowiedzi: {kody or 'brak'})",
                       flush=True)
             wynik["id"] = id_z_odpowiedzi(odpowiedzi)
+            if not wynik["id"] and wynik["wyslane"]:
+                # Odpowiedz nie dala numeru — pytamy profil. Bez tego 23 z 29
+                # notek nie mialo numeru i nie dalo sie im pobrac statystyk.
+                wynik["id"] = numer_naszej_notki(page, tekst, prob=2)
             if wynik["wyslane"]:
                 print("  id notki: %s" % (wynik["id"] or
                       "NIE ODCZYTANY — reakcji nie da sie z nia polaczyc"),
@@ -2471,8 +2648,20 @@ def restackuj_w_kanale(
                 page.get_by_role("button", name="Post").last.click(timeout=8000)
                 page.wait_for_timeout(SETTLE_MS + 2000)
                 wynik["restackowane"] += 1
+                # Restack tworzy NOWA notke z wlasnym numerem. Bez niego
+                # restack byl jedyna forma publikacji, ktorej nie dalo sie
+                # zmierzyc — a to najcenniejszy sygnal, jaki mamy: w badaniu
+                # 9 641 notek restack konwertowal dwunastokrotnie lepiej niz
+                # polubienie.
+                numer_restacka = ""
+                try:
+                    numer_restacka = numer_naszej_notki(page, zdanie, prob=2)
+                except Exception:
+                    pass
                 zapisz_w_dzienniku("restack", udane=True,
-                                   komu=notka.get("autor", ""), slow=len(zdanie.split()))
+                                   komu=notka.get("autor", ""),
+                                   slow=len(zdanie.split()),
+                                   tekst=zdanie[:300], id=numer_restacka)
                 print(f"    podane dalej {wynik['restackowane']}/{ile}", flush=True)
             except Exception as exc:
                 # Tak samo jak przy polubieniach: porazka szla do logu i nigdzie

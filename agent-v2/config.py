@@ -198,6 +198,10 @@ MODEL_FOR = {
     "comment": DEEPSEEK_PRO,
     "reply": DEEPSEEK_PRO,
     "factcheck": DEEPSEEK,
+    # Pytanie „jakie modele sa dzisiaj" MUSI isc na model z wyszukiwaniem —
+    # to jest cala jego wartosc. Ten sam, co sprawdzanie faktow, bo robi
+    # dokladnie to samo: konfrontuje pamiec ze swiatem.
+    "aktualne_modele": DEEPSEEK,
     "curiosity": DEEPSEEK,
     "grafika": DEEPSEEK,
     "cele": DEEPSEEK,
@@ -723,6 +727,9 @@ MAX_TOKENS = {
     "comment": _tokens_for(600) + 8000,
     "reply": _tokens_for(600) + 8000,
     "factcheck": 24000,
+    # Pytanie o stan modeli wraca lista kilkunastu pozycji z datami —
+    # krotka odpowiedz, ale wyszukiwanie dokłada do wyjscia swoje rundy.
+    "aktualne_modele": 16000,
     "curiosity": 24000,
     "grafika": 4000,
     "cele": 6000,
@@ -773,11 +780,17 @@ NOTE_CANDIDATES = 1
 # rozwiazywaly, jest ten sam: bez drugiej osi model wraca tam, gdzie mu
 # najlatwiej.
 #
-# GENERATORY sa NIETKNIETE i to jest celowe. Sa neutralne wobec tematu, a pod
-# AI trafiaja wrecz lepiej niz pod szampon: MEASUREMENT („liczba, ktora wyglada
-# na pomiar, a jest pasmem") to dokladnie benchmark, MIRROR („dwie jurysdykcje,
-# przeciwne zasady") to AI Act obok Waszyngtonu, DECIDER („ktos to wybral, ma
-# nazwisko i date") to czlowiek, ktory ustawil prog odmowy.
+# CALA DWUNASTKA GENERATOROW PRZETRWALA TE ZMIANE bez jednej poprawki i to
+# jest celowe. Sa neutralne wobec tematu, a pod AI trafiaja wrecz lepiej niz pod
+# szampon: MEASUREMENT („liczba, ktora wyglada na pomiar, a jest pasmem") to
+# dokladnie benchmark, MIRROR („dwie jurysdykcje, przeciwne zasady") to AI Act
+# obok Waszyngtonu, DECIDER („ktos to wybral, ma nazwisko i date") to czlowiek,
+# ktory ustawil prog odmowy.
+#
+# TEGO SAMEGO DNIA, PO ZMIERZENIU PIERWSZEGO PRZEBIEGU, doszly do nich dwa
+# nowe: SEEMING i UNBIDDEN. Powod stoi przy nich samych — dwanascie starych
+# pyta o liczbe, jurysdykcje, decydenta i awarie, a zadne o zachowanie samego
+# systemu, wiec zaden fakt z przebiegu nie stanal pod wielkim pytaniem.
 DZIEDZINY_CIEKAWOSTEK = (
     # --- co te systemy realnie robia i jak sa zbudowane ---------------------
     "how a model is actually trained, and which step costs what",
@@ -845,16 +858,77 @@ CURIOSITY_BATCH = 8
 CURIOSITY_MEMORY = 60
 
 # Ile OSTATNICH WYSTAWIONYCH NOTEK bot pamieta, wybierajac material na dzis.
+# `None` = WSZYSTKIE, jakie kiedykolwiek wyszly. To jest stan obowiazujacy.
 #
 # Rozne od `CURIOSITY_MEMORY`, ktore pamieta zuzyte FAKTY po dokladnym odcisku.
 # Ten sam fakt powiedziany innymi slowami daje inny odcisk i przechodzil — tak
 # poszly dwie notki o symbolu otwartego sloika, 23 i 24 sierpnia.
 #
-# Dwanascie to okolo czterech dni przy obecnych trzech notkach dziennie.
-# Zmierzone na 29 notkach: okno osmiu lapie te same powtorki co okno czterdziestu,
-# wiec dwanascie jest z zapasem, a nie na wyrost. Dluzsza pamiec nic nie dodaje,
-# a kazde dodatkowe porownanie to kolejna szansa na falszywy alarm.
-PAMIEC_NOTEK = 12
+# BYLO 12, czyli okolo czterech dni. Wlasciciel chce zera powtorzen NIGDY, wiec
+# okno znika. Bez tego powtorka sprzed pieciu dni przechodzila z automatu:
+# ochrona konczyla sie nie o polnocy, tylko o dwunastej notce.
+#
+# Czy to kosztuje falszywe alarmy — ZMIERZONE 2026-08-25 na 29 wystawionych
+# notkach (`stages.pamiec_wystawionych` niesie caly rachunek):
+#     okno 8, 12, 20, 40 oraz PAMIEC PELNA  ->  5 blokad, te same piec.
+# Zero roznicy. Wszystkie 5 to prawdziwe powtorki (3x jajka, 3x kod zywicy,
+# 2x szampon), zero falszywych. Z 399 par o ROZNYCH tematach prog miedzy
+# dniami nie przepuscil ani jednej.
+#
+# Ta stala zostaje jako JEDYNA dzwignia odwrotu: wpisanie tu liczby wraca do
+# okna, bez ruszania kodu. Tak samo jak `FOLLOW_MIESIECZNIE` przy wycofanych
+# obserwacjach — wylaczenie ma byc jedna stala, a nie wypruciem bloku.
+PAMIEC_NOTEK = None
+
+# ILE DNI MOZE MIEC ZRODLO FAKTU, KTORY TWIERDZI COS O STANIE TERAZ.
+#
+# Wlasciciel ustawil to sam, dwa razy. Najpierw ogolnie: „cos, co mialo sens w
+# styczniu 2026, w maju juz moze byc nieaktualne" — cztery miesiace. Potem, po
+# zlapaniu notki o o1, konkretnie: dane maja byc „max 2-3 miesiace do tylu".
+#
+# Stad 90 dni, a nie 180, ktore wpisalem najpierw. To jest decyzja wlasciciela
+# o tym, jak swieze ma byc konto, nie wynik pomiaru — i tak jest zapisana.
+#
+# Zlapane na zywym tekscie: notka o ukrytych tokenach w modelach o1, napisana
+# 25 sierpnia 2026 na podstawie artykulu o ich premierze z konca 2024. Okolo
+# 700 dni. Sprawdzanie faktow ja przepuscilo, bo fakt byl PRAWDZIWY.
+MAKS_WIEK_ZRODLA_DNI = 90
+
+# Slowa, po ktorych poznajemy, ze zdanie twierdzi cos o STANIE SWIATA TERAZ,
+# a nie opowiada o zdarzeniu z wlasna data. Tylko takie zdania podlegaja
+# progowi wieku — wyrok sadu z 2023 roku jest dobry i bedzie dobry dalej.
+TWIERDZI_O_TERAZ = (
+    "now", "currently", "today", "these days", "at present",
+    "newest", "latest", "the first", "the only", "the fastest", "the best",
+    "state of the art", "state-of-the-art", "cutting edge", "leading",
+    "costs", "cost is", "is priced", "price is", "charges", "sells for",
+    "is available", "you can now", "offers", "supports", "recommends",
+    "no longer", "has become", "is the standard", "generate", "generates",
+)
+
+# Slowa, ktore mowia, ze rzecz jest W TRAKCIE ZNIKANIA. Publikacja o AI nie ma
+# po co opisywac czegos, co za osiem tygodni przestanie istniec — a dokladnie
+# to sie stalo z o1.
+ZNIKA = (
+    "deprecat", "retired", "retirement", "sunset", "end of life",
+    "end-of-life", "will be removed", "shutting down", "discontinued",
+    "no longer available", "legacy model", "being phased out",
+)
+
+# NAZWA PRODUKTU Z NUMEREM WERSJI. Wlasciciel: „nie ma mi pisac o GPT 5.0, jak
+# jest juz 5.5". Zdanie, ktore nazywa konkretna wersje, starzeje sie razem z
+# nia — nawet gdy sam fakt pozostaje prawdziwy. Dlatego nazwanie wersji samo w
+# sobie wlacza prog wieku.
+#
+# Wzorzec celuje w rodziny, ktore realnie numeruja wydania. Nie probuje byc
+# pelna lista modeli swiata — taka lista przeterminowala by sie szybciej niz
+# material, ktory ma pilnowac.
+WZORZEC_WERSJI = (
+    r"\b(gpt|claude|gemini|llama|mistral|qwen|grok|deepseek|phi|command)"
+    r"[\s\-]?[0-9]+(\.[0-9]+)?\b"
+    r"|\bo[0-9]+(-(mini|pro|preview))?\b"
+    r"|\b(sonnet|opus|haiku|turbo|flash)[\s\-]?[0-9]+(\.[0-9]+)?\b"
+)
 COMMENT_CANDIDATES = 3
 
 # DLUGOSC KOMENTARZA I ODPOWIEDZI losowana osobno za kazdym razem.
@@ -1654,6 +1728,50 @@ GENERATORY = {
     "BOUNDARY": "The system must rule on a moment that does not exist. Probe: what "
                 "happens exactly at the edge — midnight, the date line, the instant "
                 "of payment?",
+    # DWA WZORCE POD WIELKIE PYTANIA, dopisane 25 sierpnia 2026.
+    #
+    # POMIAR, KTORY TO WYMUSIL. Ostatni przebieg ciekawostek oddal cztery dobre
+    # fakty: ukryte tokeny rozumowania w o1 rozliczane jak wyjscie, cztery ceny
+    # tego samego modelu Gemini, AlphaFold i miejsca wiazania, radiolodzy przy
+    # mammografii. Kazdy z nazwanym decydentem i data. I ZERO z czterech stoi
+    # pod pytaniem, ktore czytelnik zadaje sam z siebie („czy to rozumie", „czy
+    # potrafi klamac") — a wlasnie takich pyta wlasciciel, wskazujac AI
+    # Revolution, Wesa Rotha i „This Is IT".
+    #
+    # Przyczyna jest w siatce, nie w modelu: dwanascie wzorcow powyzej pyta
+    # o LICZBE, JURYSDYKCJE, DECYDENTA i AWARIE. Zaden nie pyta o ZACHOWANIE
+    # SAMEGO SYSTEMU, wiec model nie mial jak trafic tam nawet przypadkiem.
+    #
+    # DLACZEGO TO NIE SA DUPLIKATY — sprawdzone po kolei wobec calej dwunastki:
+    #   SEEMING vs MEASUREMENT: MEASUREMENT startuje z liczby wydrukowanej na
+    #     rzeczy i pyta, czego jest ilorazem. SEEMING startuje z ZACHOWANIA
+    #     i pyta, czy w ogole istnieje liczba, ktora je rozstrzyga. Przeciwne
+    #     kierunki, a druga polowa przypadkow nie ma zadnej liczby na wejsciu.
+    #   UNBIDDEN vs FAILURE: FAILURE to „zachowal sie DOKLADNIE jak
+    #     zaprojektowano i dlatego pekl". UNBIDDEN to dokladnie odwrotnie —
+    #     nikt tego nie zaprojektowal. Wspolny jest tylko incydent.
+    #   UNBIDDEN vs CONFESSION: CONFESSION wymaga, zeby regulamin sam sie
+    #     przyznal NA PISMIE. UNBIDDEN obejmuje takze przypadek, w ktorym nikt
+    #     sie nie przyznal i zachowanie znalazl ktos z zewnatrz.
+    # Trzeciego nie dokladam: DECIDER („kto ustawil prog odmowy, nazwisko
+    # i rok") juz obsluguje pytanie „czy model ma wlasne cele" od strony
+    # czlowieka, ktory te cele wpisal, i nie potrzebuje blizniaka.
+    # KONCOWKA PRZEPISANA PO KRYTYCE. Stalo tu „— or is there no such test yet,
+    # and who says so?", czyli sonda zamawiala doslownie to, czego akapit obok
+    # w prompcie zabrania: „jesli najmocniejsze, co masz pod spodem, to ze
+    # ludzie sie nie zgadzaja, znalazles spor, a spory sa za darmo".
+    # Brak testu jest dobrym znaleziskiem, ale musi byc UDOKUMENTOWANY brakiem
+    # w dokumencie — pusta rubryka w karcie systemowej, zestaw ewaluacji, ktory
+    # tego nie mierzy — a nie czyjas opinia, ze testu nie ma.
+    "SEEMING": "A behaviour that reads as thinking, and the measurement that "
+               "says what it is. Probe: what here looks like a mind at work, "
+               "and which published test tells the appearance from the thing — "
+               "or which evaluation suite, system card or audit visibly leaves "
+               "that box empty?",
+    "UNBIDDEN": "The system does something nobody specified, and its builders "
+                "found out afterwards. Probe: what behaviour appeared that was "
+                "not designed, who noticed it first, and what did they change "
+                "once they had?",
 }
 
 ILE_GENERATOROW_NA_PRZEBIEG = 4

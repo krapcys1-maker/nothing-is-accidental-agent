@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1263 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1279 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-3428 wierszy, 79 funkcji na poziomie modułu, 0 klas
+3874 wierszy, 90 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -48,16 +48,27 @@
 | `wczytaj_zuzyte()` | — |
 | `zapisz_zuzyte(nowe)` | Pamięć zużytych ciekawostek — poza bazą, bo budżet to cztery tabele. |
 | `wybierz_cele(conn, run_id, posty)` | Które posty z kanału zasługują na komentarz. |
+| `zaczyn_z_kanalow(ile)` | Tematy, o ktorych mowi sie w tym tygodniu — do promptu, nie do cytowania. |
 | `znajdz_ciekawostki(conn, run_id, ile)` | Materiał na notki w dni bez artykułu. |
 | `kuplet_korygujacy(tekst)` | Czy tekst uzywa ruchu „nie X. Y." — zaprzeczenie, potem poprawka. |
 | `ostatnie_otwarcia(rodzaj, ile)` | Pierwsze slowa ostatnich notek — zeby kolejna nie zaczela sie tak samo. |
+| `wiek_zrodla_w_dniach(data_zrodla, teraz)` | Ile dni ma zrodlo. None, gdy daty nie da sie odczytac. |
+| `nazywa_wersje(tekst)` | Czy zdanie nazywa konkretna wersje produktu. Zwraca ja albo pusty napis. |
+| `swiezosc_faktu(fakt, teraz)` | Czy ten fakt nadaje sie do wystawienia DZISIAJ. |
 | `ostatnie_notki(ile)` | TRESCI ostatnich wystawionych notek — zeby nie napisac drugi raz tego samego. |
+| `_notki_z_dziennika(kawalek)` *(wewn.)* | Teksty UDANYCH notek z podanego kawalka dziennika, w kolejnosci zapisu. |
+| `_sygnatura_rdzeni()` *(wewn.)* | Odcisk SPOSOBU liczenia rdzeni, nie tresci. |
+| `_wczytaj_skrot_notek()` *(wewn.)* | Skrot z dysku albo pusty. Uszkodzony plik to pusty skrot, nie awaria. |
+| `pamiec_wystawionych()` | Odciski WSZYSTKICH wystawionych notek. Pamiec nie ma konca. |
+| `_przytnij_pamiec(odciski)` *(wewn.)* | Zamienia odciski na zbiory i honoruje `config.PAMIEC_NOTEK`. |
+| `_zapisz_skrot_notek(odciski, bajtow, glowa, glowa_bajtow, sygnatura)` *(wewn.)* | Zapisuje skrot. NIGDY nie przerywa dnia. |
 | `note(conn, run_id, note_type, evidence, link, note_form)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `zapisz_do_promocji(url, tytul, tekst)` | Zapisuje opublikowany artykul do promowania przez kolejne dni. |
 | `wczytaj_promocje()` | — |
 | `artykul_do_promocji()` | Artykul, ktory dzis czeka na notke promujaca — najwyzej JEDNA na dobe. |
 | `odhacz_promocje(url, tekst)` | Odnotowuje, ze artykul dostal dzis swoja notke promujaca — I CO W NIEJ BYLO. |
 | `_slowa(tekst)` *(wewn.)* | Znaczace slowa tekstu, obciete do rdzenia. |
+| `_zderzenie(x, y, min_wspolnych, prog)` *(wewn.)* | To samo pytanie co `_o_tym_samym`, ale na GOTOWYCH rdzeniach. |
 | `_o_tym_samym(a, b, min_wspolnych, prog)` *(wewn.)* | Czy dwa teksty mowia o tej samej rzeczy. |
 | `wybierz_material(zapas, unikaj, wczesniej)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
 | `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, ile, od)` | Pięć notek na jeden dzień, każda z innego materiału. |
@@ -108,7 +119,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2532 wierszy, 56 funkcji na poziomie modułu, 0 klas
+2721 wierszy, 59 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -132,12 +143,15 @@
 | `_plaskie(galaz)` *(wewn.)* | Rozwija gałąź wątku do płaskiej listy komentarzy. |
 | `_kiedy(c)` *(wewn.)* | — |
 | `ile_dzis_wystawione()` | Ile notek, komentarzy i polubien poszlo dzisiaj. |
+| `statystyki_pozycji(pozycje)` | Pobiera statystyki NASZYCH tresci — jedna przegladarka na cala liste. |
+| `nasze_pozycje_do_pomiaru(page, ile)` | Co wystawilismy i ma wlasny numer — czyli co da sie zmierzyc. |
 | `dopisz_skutki()` | Dopisuje do dziennika, CO Z NASZYCH DZIALAN WYNIKLO. |
 | `odpowiedzi_na_nasze_komentarze(ile)` | Odpowiedzi na NASZE komentarze zostawione pod CUDZYMI tekstami. |
 | `komentarze_pod_artykulami(ile)` | Cudze komentarze pod NASZYMI artykulami, na ktore nie odpisalismy. |
 | `nieodpowiedziane(ile)` | Cudze odpowiedzi pod naszymi notkami, na które jeszcze nie odpisaliśmy. |
 | `sluchaj_publikacji(page)` | Zbiera kody odpowiedzi na zapytania PUBLIKUJACE. |
 | `id_z_odpowiedzi(odpowiedzi)` | Identyfikator notki, ktory Substack oddal przy zapisie. |
+| `numer_naszej_notki(page, tekst, prob)` | Numer notki odczytany z NASZEGO PROFILU po jej tresci. |
 | `potwierdz_notke(page, tekst, prob)` | Pyta Substacka, czy notka naprawdę wisi na naszym profilu. |
 | `polub_w_kanale(ile, wyslij)` | Polubienia w kanale czytelnika. |
 | `_klik_na_profilu(handle, napisy, rodzaj, wyslij)` *(wewn.)* | Klika JEDEN konkretny przycisk na cudzym profilu — i tylko jego. |
@@ -295,7 +309,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-1726 wierszy, 19 funkcji na poziomie modułu, 0 klas
+1844 wierszy, 19 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -318,3 +332,50 @@
 | `losowa_liczba_paraleli(glebokosc)` | Ile paraleli w drugim akcie. Krotki artykul nigdy nie bierze trzech. |
 | `losowe_generatory(ile)` | Ktore wzorce w tym przebiegu. Ten sam generator dwa dni z rzedu daje |
 | `co_teraz_w_reku(kiedy)` | Rzeczy, ktorych czytelnik dotyka wlasnie teraz. |
+
+### `statystyki.py` — co przyniosła każda pozycja: wejścia, reakcje, subskrypcje
+
+422 wierszy, 10 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_liczba(x)` *(wewn.)* | Cokolwiek z API -> int. Nigdy nie rzuca. |
+| `_karty(dane)` *(wewn.)* | `cards` -> {cardId: karta}. Odporne na `cards` = None i wpisy bez id. |
+| `_pozycje(karta)` *(wewn.)* | `items` listCarda -> {tytul: liczba}, w kolejnosci z API. |
+| `_suma(karta)` *(wewn.)* | Liczba zbiorcza z karty: `value`, `count`, `total`, naglowek, suma pozycji. |
+| `z_kart(dane)` | Odpowiedz `/api/v1/note_stats/c-{ID}` -> plaski rekord o stalych kluczach. |
+| `_plik()` *(wewn.)* | Sciezka liczona przy KAZDYM wywolaniu, nie raz przy imporcie. |
+| `zapisz(rodzaj, identyfikator, rekord, tekst)` | Dopisuje JEDEN pomiar. Nigdy nie przerywa dzialania agenta. |
+| `wczytaj(rodzaj)` | Wszystkie pomiary z pliku, w kolejnosci zapisu. Uszkodzone linie pomija. |
+| `najnowsze_per_pozycja(rodzaj)` | {identyfikator: ostatni pomiar}. To sie czyta przy raporcie. |
+| `podsumowanie(rodzaj)` | Sumy i srednie PO POZYCJACH, nie po pomiarach. |
+
+### `raport_statystyk.py` — te same dane w tabeli dla człowieka
+
+118 wierszy, 2 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_skrot(tekst, ile)` *(wewn.)* | — |
+| `main()` | — |
+
+### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
+
+167 wierszy, 3 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `oczysc(tytul)` | Zdejmuje obietnice, zostawia zdarzenie. |
+| `przetworz(wpisy)` | (nazwa_kanalu, element) -> kandydaci. Czysta funkcja, testowalna. |
+| `korpus_kanalow(ile)` | — |
+
+### `aktualne_modele.py` — jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci
+
+183 wierszy, 4 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_swieze(dane)` *(wewn.)* | Czy zapisana odpowiedz jest jeszcze wazna. |
+| `wczytaj()` | Ostatnia zapisana odpowiedz. Pusty slownik, gdy nie ma albo jest zepsuta. |
+| `pobierz(conn, run_id, wymus)` | Aktualny stan modeli. Z pliku, gdy swiezy; inaczej pyta na nowo. |
+| `jako_tekst(dane)` | Stan modeli w postaci, ktora wchodzi do promptu. |

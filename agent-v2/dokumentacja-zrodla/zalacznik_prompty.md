@@ -204,7 +204,7 @@ visible either way:
 
 #### `prompts/ciekawostki.md`
 
-**148 wierszy.** Pola wejsciowe: `dziedziny`, `generatory`, `ile`, `miesiac`, `uzyte`, `w_reku`
+**254 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `zaczyn_kanalow`
 
 ````markdown
 Find {ile} documented facts worth stopping a stranger mid-scroll.
@@ -244,6 +244,29 @@ nothing downstream will catch it if you invented it. If you cannot point to
 where the belief is visibly stated — a headline, a product page, a press
 release — then the fact stands on its own without one.
 
+## What the field is actually talking about this week
+
+These are real video titles from the channels this publication follows, with
+the dates they went up. The hype wrapping has been stripped; what is left is
+roughly the event.
+
+{zaczyn_kanalow}
+
+**Use this list for WHAT IS LIVE, never as a source.** A video title is not
+evidence of anything. It tells you that people are arguing about a thing right
+now, which is the one piece of information the grid below cannot give you —
+the grid is timeless and this is not.
+
+So the move is: take a subject from here, then **go and find the document**.
+The filing, the paper, the pricing page, the court record, the changelog, the
+system card. Your `url` and `source_date` must point at that document, never at
+a video. If you cannot find a document, drop the subject — a fact you can only
+support with somebody's video essay is not a fact.
+
+Prefer items from the last two weeks. Something that ran on three channels in
+four days is a subject the reader has already half-heard and half-understood,
+which is exactly where this publication is useful.
+
 ## Where to look this time
 
 Take your facts from these areas and no others:
@@ -266,6 +289,89 @@ area**, not by hunting for something that feels interesting.
 Work the grid: take each pattern, ask its probe question of each area above,
 and write down what comes back. Most cells will be empty. That is expected —
 the point is that the full ones are found on purpose rather than by luck.
+
+## A third way in: a fact that settles a question people actually ask
+
+The two axes above answer WHERE to look and WHAT SHAPE to look for. There is a
+third, and it is the one this publication exists for. A fact also qualifies
+when it moves a **big question** — the kind a reader asks about these systems
+without having a job in the field.
+
+Does the model understand anything, or imitate understanding closely enough
+that the difference stops showing? Would memory make it something other than
+what it is now? Can it lie, and does it know when it is lying? Does it want
+anything of its own? Is what it produces creativity, or an average with good
+manners? What does it mean that a system behaves differently once it can tell
+it is being tested?
+
+**Those are examples of a KIND, not a list to work through.** The kind is: a
+question somebody has already argued about out loud, where nobody in the room
+had a fact. Plenty of questions belong to that kind and are not written above,
+and a question is not better for appearing here.
+
+**The question is a frame. The fact inside it still needs a source, and that
+rule does not soften because the subject got large.** An opinion about machine
+consciousness is worth nothing here. A named evaluation and what it scored, a
+behaviour a lab wrote down in its own documentation, two named researchers
+reading the same result the opposite way with a date on the exchange — those
+are worth something, and the question is what makes a stranger care that they
+exist. So the usable shape is **question, then evidence that moves it**, never
+the question on its own. If the strongest thing you can put underneath is that
+people disagree, you have found a debate, not a fact, and debates are free.
+
+**The output fields still apply, and this is exactly where a big question
+dies.** "Is it conscious" names no decider, no date and nothing the reader is
+holding, so it fails before a word is written. The version that survives names
+the decision somebody actually took because of the question: who wrote the
+test, who set the threshold, who ruled on what counts as passing it, and in
+what year. If you cannot fill `decision` and `consequence`, the question was
+the whole idea and there was no fact under it.
+
+**One or two in a batch, not the batch.** Nothing here says to file every
+candidate under a big question. A run where all of them are is as narrow as a
+run of nothing but debunkings, and narrow in a way the reader spots faster,
+because the questions are the part they have heard before.
+
+## Today is {dzis}. Check the age of everything.
+
+This subject moves faster than any other we could have chosen, and **a fact that
+was true eighteen months ago can be false, retired, or simply embarrassing
+today.** Your own memory is worse than useless here: it ended months ago and it
+does not feel like a gap from the inside.
+
+So three rules, and they are not negotiable.
+
+**Give the publication date of every source, in `source_date`.** Not the date of
+the thing described — the date the page you read was published. A page with no
+date is a page you cannot vouch for.
+
+**Anything that claims how the world is RIGHT NOW must come from the last three
+months.** Prices, availability, what is fastest, what is standard, what a
+company recommends, what is the newest anything. A launch article from 2024 is
+not evidence about 2026, however accurate it was when written.
+
+**A fact about an EVENT is different and stays good.** A court ruled, a study
+was published, a law passed, a system was built and measured — those happened,
+they carry their own date, and they do not expire. Say when it happened and the
+fact keeps working for years.
+
+**Here is what exists right now. This was looked up today, not remembered.**
+
+{stan_modeli}
+
+Anything not on that list either does not exist yet or is already gone. If a
+source names a model you cannot find above, that source is old — treat whatever
+it says about the present as expired, and either find current confirmation or
+choose a different fact.
+
+**Never name a version you have not checked is current.** Writing about GPT-5.0
+when 5.5 has shipped makes the whole piece read as stale even if every word is
+true. If your source names a version and that source is old, either find current
+confirmation or pick a different fact.
+
+**Never build on something that is being switched off.** A model scheduled for
+retirement, an API being sunset, a product being discontinued — the reader will
+have to unlearn it within weeks. That is worse than teaching them nothing.
 
 ## Where attention is pointed this month
 
@@ -328,7 +434,7 @@ mechanism in a neighbouring industry. Go somewhere else entirely.
 
 Return only valid JSON:
 
-{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<who decided it and when — a body, a committee, a statute, a year. Empty string if the record names nobody>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "domain": "<the everyday area it belongs to>"}}]}}
+{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<who decided it and when — a body, a committee, a statute, a year. Empty string if the record names nobody>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "domain": "<the everyday area it belongs to>"}}]}}
 
 ## The two halves, and why a fact without both is worthless to us
 
@@ -993,7 +1099,7 @@ Title: {title}
 
 #### `prompts/notka.md`
 
-**237 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
+**280 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
 
 ````markdown
 Write a Substack Note for the anonymous editorial brand Nothing Is Accidental —
@@ -1140,6 +1246,48 @@ rhetorical shrug, "makes you wonder, doesn't it?", anything that reads as a bid
 for replies. A real open question names **what nobody has counted**. A fake one
 invites people to have feelings.
 
+## The big question, and the one place it is allowed to stand
+
+The section above is about the question you END on, and it stands exactly as
+written. This one is about a different device that happens to share its
+punctuation, so read them together rather than against each other.
+
+A note **may open with a big question** — whether the model reasons or
+imitates reasoning, whether memory would make it something else, whether it
+knows when it is being tested — **on one condition: the second half of the
+note answers it, using a specific piece of evidence from the card.** The
+question names the stake. The evidence settles it before the reader leaves.
+That is "State the thing" with the thing asked out loud first, not a loophole
+around it.
+
+The two questions are opposites and both are allowed:
+
+- The one you close on has no answer. Nobody has counted it yet, and that is
+  its entire content.
+- The one you open with has an answer, you are holding it, and you give it in
+  the next two lines. Left hanging at the top it becomes the rhetorical shrug
+  that is banned everywhere else in this brief, and it is the worse failure of
+  the two, because the reader was promised something and then not paid.
+
+Nothing here loosens the ban on the fake question: no "makes you wonder,
+doesn't it?", no question whose answer is a feeling, nothing asked to collect
+replies. The test is mechanical. Cover the second half of your own note. If
+the first line is still doing work, it was a hook. If it has turned into a
+poll, delete it.
+
+**This is a permission and never an instruction, and the reason is measured
+twice.** Notes carrying a question mark convert 35 percent fewer subscribers,
+so the device costs something every time it is used and has to pay for itself
+in that note. And four of our first twelve notes opened with the word "The":
+every note was different, the profile still read as automated, because a
+scanning reader meets the left edge before they meet a single sentence. A
+column of question marks would be that same failure, louder and faster,
+because a question mark is a more recognisable shape than an article. So: if
+the evidence answers a question people actually ask, ask it. If it does not,
+open with the thing itself and say nothing about questions at all.
+
+Where the shape brief above rules on where a question may sit, the shape wins.
+
 ## The failure modes of a note
 
 1. **A fact with a bow on it.** The fact is real and the last clause tells the
@@ -1158,8 +1306,9 @@ invites people to have feelings.
 - **Every fact must come from the evidence below.** No figure, date, name or
   claim from your own memory. If it is not in the evidence, it does not go in.
 - **No personal experience.** You have not stood anywhere or seen anything.
-- **No question as an opener** unless the answer is in the note itself. Do not
-  ask for engagement — earn it by saying something worth answering.
+- **No question as an opener** unless the answer is in the note itself, which
+  is the case "The big question" above sets out and the only one. Do not ask
+  for engagement — earn it by saying something worth answering.
 - **No "here's the thing", no "most people don't realise", no "in today's world".**
 - **No hashtags, no emoji, no call to action, no "read more", no self-promotion.**
 - Avoid the vocabulary that marks machine text: delve, leverage, synergy,
@@ -2761,7 +2910,7 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/weryfikacja.md`
 
-**62 wierszy.** Pola wejsciowe: `context`, `text`
+**107 wierszy.** Pola wejsciowe: `context`, `dzis`, `text`
 
 ````markdown
 Check a short text that is about to be published in public — a comment, a note
@@ -2788,9 +2937,16 @@ and statements about what the thing being responded to said.
 Search for each claim. Judge it against what the sources actually say, not
 against what sounds right.
 
-- `confirmed` — a source states this. Give the URL.
+- `confirmed` — a source states this, **and it is still the case today**.
+  Give the URL.
 - `refuted` — a source contradicts it. Give the URL and say what the source says.
+- `outdated` — it was true when the source was written and **is no longer true,
+  or is about to stop being true.** Give the URL that shows the change.
 - `unverified` — you searched and could not find support either way.
+
+**Check the publication date of every source you use, and check it against
+today's date.** A source is not evidence about now merely because it is
+accurate. This is the single most common way this publication has been wrong.
 
 **`unverified` is not a soft `confirmed`.** If you cannot find it, say so.
 
@@ -2798,10 +2954,43 @@ Be exact about near-misses. "X excluded Y" and "X did not include Y" can differ
 in a way that matters. If the text overstates the strength or the intent of
 something a source describes more weakly, that is `refuted`, not `confirmed`.
 
+## True and dead is still wrong
+
+A claim can be perfectly accurate and still ruin the piece, because the world
+moved after the source was published. This subject moves faster than any other,
+so treat currency as a separate question from truth, and ask it every time.
+
+**Three checks that have each already failed here:**
+
+1. **Does the thing still exist?** A model, an API, a product, a programme. If
+   it has been deprecated, retired, sunset or scheduled for removal, the claim
+   is `outdated` however true it is. Real case: a note explained hidden
+   reasoning tokens in OpenAI's o1 models, sourced from the launch coverage.
+   Every word was true. The models are being removed from the API weeks later.
+
+2. **Is the version current?** Naming a specific release is a claim about the
+   present. If a newer one has shipped, mark it `outdated` and say which.
+   Writing about 5.0 when 5.5 exists makes the whole text read as stale.
+
+3. **Has the count or the price changed?** "Four tiers" was right when the
+   announcement was written and wrong once a fifth was added. Re-count against
+   a current source rather than trusting the one the author used.
+
+**And check whether a future date has already passed.** A source saying
+something "will happen by June 15" is not evidence that it is going to happen
+if June 15 is behind us. Look for what actually happened — and if the
+announcement was reversed, delayed or changed in between, that reversal is
+usually the more interesting fact, so say so in `what_the_source_says`.
+
 ## The verdict
 
-`safe_to_post` is false **only when a source actually contradicts something the
-text states as fact.** That is the whole test.
+`safe_to_post` is false when either of two things is true:
+
+- a source actually **contradicts** something the text states as fact, or
+- something the text states as current is **`outdated`** — the thing is gone,
+  superseded, already happened, or counted differently now.
+
+Those two, and nothing else.
 
 An argument that cannot be looked up is not a failure. This publication exists
 to say what other people are not saying — a claim about incentives, motives or
@@ -2817,7 +3006,12 @@ record says is untrue. Nothing else.
 
 Return only valid JSON:
 
-{{"claims": [{{"claim": "<what the text asserts>", "status": "confirmed"|"refuted"|"unverified", "url": "<source, or empty>", "what_the_source_says": "<one sentence, required for refuted>"}}], "safe_to_post": true|false, "verdict": "<one sentence>"}}
+{{"claims": [{{"claim": "<what the text asserts>", "status": "confirmed"|"refuted"|"outdated"|"unverified", "url": "<source, or empty>", "source_date": "<when that source was published, YYYY-MM-DD, or empty>", "what_the_source_says": "<one sentence, required for refuted and outdated>"}}], "safe_to_post": true|false, "verdict": "<one sentence>"}}
+
+## Today
+
+Today is {dzis}. Every "is", "now", "currently" and "the newest" in the text
+below is a claim about this date, not about the date its source was written.
 
 ## Context
 
