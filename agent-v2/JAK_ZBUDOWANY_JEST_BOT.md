@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **16 plików**, 14 027 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **16 plików**, 14 060 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-4189 wierszy, 93 funkcji na poziomie modułu, 0 klas
+4222 wierszy, 93 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -6395,6 +6395,7 @@ def discovery(
         )
     real_hosts = {_host(u) for u in real_urls}
     kept: list[dict[str, Any]] = []
+    spoza = 0
     for source in sources:
         url = source.get("url", "")
         host = _host(url)
@@ -6403,10 +6404,35 @@ def discovery(
         if host in config.BLOCKED_HOSTS or any(host.endswith(b) for b in config.BLOCKED_HOSTS):
             print(f"  [dyskoveria] pomijam {host} — host blokuje automaty", flush=True)
             continue
-        # Adres, którego wyszukiwarka nie zwróciła, jest podejrzany o zmyślenie.
+        # ADRES SPOZA WYNIKOW WYSZUKIWANIA: nie odrzucamy, tylko oznaczamy
+        # i limitujemy.
+        #
+        # Filtr porownywal HOSTY i przez to blokowal dokladnie te zrodla, po
+        # ktore prompt kaze siegac. Zlapane na przebiegu 25 sierpnia: model
+        # oddal oryginalne sledztwo TIME o kenijskich anotatorach, artykul
+        # Guardiana, dwa raporty Fairwork, dokument ONZ i propozycje opieki
+        # psychologicznej dla anotatorow — wszystkie SZESC odrzucone, bo akurat
+        # to wyszukiwanie nie zwrocilo niczego z tych domen.
+        #
+        # Powod filtru jest realny i zostaje: raz przepuscil dziesiec zmyslonych
+        # adresow. Ale test byl nie ten. Pytal "czy wyszukiwarka to zwrocila",
+        # a pytanie brzmi "czy to istnieje" — i na to odpowiada POBRANIE, nie
+        # wyszukiwarka. Zmyslony adres nie ma czego oddac.
+        #
+        # Limit trzy, bo z tamtych dziesieciu zmyslonych trzy jednak sie
+        # pobraly (strony oddajace 200 na nieistniejacej sciezce). Klasyfikacja
+        # je wtedy odrzucila — druga siatka trzyma — ale nie ma po co jej
+        # zasypywac. Trzy wystarcza na metaanalize, raport i wyrok.
         if real_hosts and host not in real_hosts:
-            print(f"  [dyskoveria] pomijam {url} — spoza wyników wyszukiwania", flush=True)
-            continue
+            if spoza >= MAKS_SPOZA_WYSZUKIWANIA:
+                print(f"  [dyskoveria] pomijam {url} — spoza wyszukiwania, "
+                      f"limit {MAKS_SPOZA_WYSZUKIWANIA} wykorzystany", flush=True)
+                continue
+            spoza += 1
+            source["spoza_wyszukiwania"] = True
+            print(f"  [dyskoveria] {host} spoza wyszukiwania — przepuszczam, "
+                  f"rozstrzygnie pobranie ({spoza}/{MAKS_SPOZA_WYSZUKIWANIA})",
+                  flush=True)
         source["host"] = host
         kept.append(source)
 
