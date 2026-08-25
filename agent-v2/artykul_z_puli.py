@@ -203,12 +203,54 @@ def main() -> int:
 
     print()
     print("-- recenzja --", flush=True)
-    recenzja = stages.review(conn, run_id, card, draft)
-    forma = stages.ocen_forme(conn, run_id, draft)
-    uwagi = stages.uwagi_z_formy(forma, draft["body"]) if hasattr(
-        stages, "uwagi_z_formy") else []
+    raport = stages.review(conn, run_id, card, draft)
+    # Dwa zrodla nieopartych faktow, tak jak w run.py: jawna lista recenzenta
+    # ORAZ zdania sklasyfikowane jako FACT z `supported: false`. Recenzent
+    # wypelnia raz jedno, raz drugie, i branie tylko jednego gubi polowe.
+    bez_pokrycia = list(raport.get("unsupported_facts") or [])
+    znane = {str(x.get("text", ""))[:60] for x in bez_pokrycia}
+    for s in raport.get("sentences") or []:
+        if s.get("class") != "FACT" or s.get("supported") is not False:
+            continue
+        if str(s.get("text", ""))[:60] in znane:
+            continue
+        bez_pokrycia.append({"text": s.get("text", ""), "why": s.get("why", "")})
 
-    sciezka = stages.save(conn, run_id, brief, card, draft, "SAVED", [], uwagi)
+    try:
+        forma = stages.ocen_forme(conn, run_id, draft)
+    except Exception as exc:
+        print("  [awaria] obserwacja formy padla (%s) — ide dalej"
+              % type(exc).__name__, flush=True)
+        forma = {}
+
+    # BRAMKI JAKOSCI — dokladnie te, co w run.py. Pierwsza wersja tego
+    # sterownika ich NIE WOLALA: sprawdzala `hasattr(stages, "uwagi_z_formy")`,
+    # a ta funkcja mieszka w `gates`, wiec warunek byl zawsze falszywy i uwagi
+    # cicho znikaly. Skrot, ktory wylaczal kontrole, nie wygladajac na to.
+    import gates
+    uwagi = gates.deterministic_floors(
+        draft["body"], card,
+        poprzednie=stages.poprzednie_teksty(pomin_tresc=draft["body"]))
+    uwagi.extend(gates.uwagi_z_formy(forma, draft["body"]))
+    for item in bez_pokrycia:
+        uwagi.append({"gate": "FAKT_BEZ_POKRYCIA", "detail": item.get("text", "")})
+
+    print()
+    print("-- uwagi (nic nie blokuje) --", flush=True)
+    for u in uwagi:
+        print("   [%s] %s" % (u.get("gate"), str(u.get("detail"))[:150]), flush=True)
+    if not uwagi:
+        print("   czysto — zadna uwaga", flush=True)
+
+    status, blokada = gates.verdict(uwagi)
+    notatki = [*uwagi,
+               {"gate": "DLUGOSC", "detail": "%d slow" % len(draft["body"].split())},
+               {"gate": "RECENZJA", "detail": raport.get("summary", "")}]
+
+    # `blocked_by` to NAPIS, nie lista — sqlite nie przyjmie listy i caly
+    # artykul przepada po zaplaceniu za niego. Zdarzylo sie raz, 25 sierpnia.
+    sciezka = stages.save(conn, run_id, brief, card, draft, status,
+                          blokada or "", notatki)
     print()
     print(">> zapisano: %s" % sciezka, flush=True)
 
