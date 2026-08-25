@@ -250,6 +250,9 @@ def main() -> int:
         draft["body"], card,
         poprzednie=stages.poprzednie_teksty(pomin_tresc=draft["body"]))
     uwagi.extend(gates.uwagi_z_formy(forma, draft["body"]))
+    # WIEK MATERIALU — jedyne sprawdzenie daty na tej sciezce. Patrz
+    # `stages.swiezosc_karty`.
+    uwagi.extend(stages.swiezosc_karty(card))
     for item in bez_pokrycia:
         uwagi.append({"gate": "FAKT_BEZ_POKRYCIA", "detail": item.get("text", "")})
 

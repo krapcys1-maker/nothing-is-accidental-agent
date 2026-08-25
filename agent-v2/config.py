@@ -924,10 +924,23 @@ ZNIKA = (
 # pelna lista modeli swiata — taka lista przeterminowala by sie szybciej niz
 # material, ktory ma pilnowac.
 WZORZEC_WERSJI = (
-    r"\b(gpt|claude|gemini|llama|mistral|qwen|grok|deepseek|phi|command)"
-    r"[\s\-]?[0-9]+(\.[0-9]+)?\b"
-    r"|\bo[0-9]+(-(mini|pro|preview))?\b"
-    r"|\b(sonnet|opus|haiku|turbo|flash)[\s\-]?[0-9]+(\.[0-9]+)?\b"
+    # LITERA PO CYFRZE. Wzorzec konczyl sie na `[0-9]+(\.[0-9]+)?\b`, wiec
+    # "GPT-5" lapal, a "GPT-4o" NIE — po czworce idzie "o", czyli znak slowa,
+    # i granica `\b` nie pasowala. Zmierzone przez audyt: dziura obejmowala
+    # cala rodzine 4o, w tym "GPT-4o mini". Dodane `[a-z]?` zamyka ja, nie
+    # psujac dopasowania do "5" ani do "4.5".
+    # DWIE DZIURY DOMKNIETE PO POMIARZE na 19 realnych nazwach:
+    #   `v` przed cyfra — "DeepSeek-V4" nie pasowal,
+    #   slowo poziomu miedzy marka a numerem — "Mistral Medium 3.5" nie pasowal.
+    # Lista poziomow jest ZAMKNIETA celowo: dowolne slowo daloby falszywki
+    # w rodzaju "gemini is a constellation 3 stars away".
+    r"\b(gpt|claude|gemini|llama|mistral|qwen|grok|deepseek|phi|command|"
+    r"mythos|fable)"
+    r"(\s+(medium|large|small|mini|pro|max|ultra|flash|lite|turbo|instant|"
+    r"thinking|sonnet|opus|haiku))?"
+    r"[\s\-]?v?[0-9]+(\.[0-9]+)?[a-z]?\b"
+    r"|\bo[0-9]+(\s*-?\s*(mini|pro|preview))?\b"
+    r"|\b(sonnet|opus|haiku|turbo|flash|lite)[\s\-]?v?[0-9]+(\.[0-9]+)?[a-z]?\b"
 )
 COMMENT_CANDIDATES = 3
 

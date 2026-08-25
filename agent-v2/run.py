@@ -1189,6 +1189,9 @@ def main() -> int:
         findings = gates.deterministic_floors(
             draft["body"], card, poprzednie=stages.poprzednie_teksty(pomin_tresc=draft["body"]))
         findings.extend(gates.uwagi_z_formy(forma, draft["body"]))
+        # WIEK MATERIALU. Sciezka artykulu nie miala zadnego sprawdzenia daty —
+        # patrz `stages.swiezosc_karty`.
+        findings.extend(stages.swiezosc_karty(card))
         for item in unsupported:
             findings.append({"gate": "FAKT_BEZ_POKRYCIA", "detail": item.get("text", "")})
 

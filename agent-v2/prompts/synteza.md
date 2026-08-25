@@ -37,6 +37,19 @@ a multiple. If the excerpt you are copying from is not the body that produced
 the figure, put that in `means` explicitly, so the check downstream knows to go
 and find the original.
 
+**source_dates** — kiedy powstaly zrodla, na ktorych to stoi.
+
+This is not bookkeeping. The writer is instructed to open with one datestamp,
+and until now the card carried no date at all — so twenty-four cards produced
+twenty-four articles with nothing to stamp. Worse, an article about a
+fast-moving subject can rest entirely on material two years old and nothing in
+the chain notices.
+
+Give the real publication dates of the sources, not the dates of the events
+they describe. If the newest thing you have is old, say so plainly in `note`:
+"nothing here is more recent than [month]" is a sentence the writer needs, and
+a reader deserves.
+
 **main_mechanism** — the hidden system the article exists to explain, in a few
 sentences. This is where you say how the pieces connect. Ground each link in the
 evidence.
@@ -88,7 +101,7 @@ honestly lets the article be written short instead of stretched.
 
 Return only valid JSON, shaped exactly as:
 
-{{"working_thesis": "...", "main_mechanism": "...", "confirmed_claims": [{{"claim": "...", "evidence": "<verbatim excerpt>", "url": "..."}}], "citable_numbers": [{{"value": "...", "means": "...", "url": "..."}}], "parallel_mechanisms": [{{"domain": "...", "how_it_matches": "<one sentence: the same logic doing the same work>"}}], "uncertain_claims": ["..."], "contradictions": ["..."], "not_established": ["..."]}}
+{{"working_thesis": "...", "main_mechanism": "...", "confirmed_claims": [{{"claim": "...", "evidence": "<verbatim excerpt>", "url": "..."}}], "citable_numbers": [{{"value": "...", "means": "...", "url": "..."}}], "parallel_mechanisms": [{{"domain": "...", "how_it_matches": "<one sentence: the same logic doing the same work>"}}], "uncertain_claims": ["..."], "contradictions": ["..."], "not_established": ["..."], "source_dates": {{"newest": "<YYYY-MM-DD of the most recent source you used>", "oldest": "<YYYY-MM-DD of the oldest>", "note": "<one clause: what the reader should know about how current this is>"}}}}
 
 ## The evidence
 

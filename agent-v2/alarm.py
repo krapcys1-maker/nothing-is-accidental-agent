@@ -167,8 +167,22 @@ CISZA_ALARMOWA_H = 26
 DYSK_OSTRZEZENIE = 80
 DYSK_ALARM = 92
 
-# Ile najwyzej dzialan dziennie uznajemy za normalne. Powyzej tego cos sie
+# Ile najwyzej dzialan na dobe uznajemy za normalne. Powyzej tego cos sie
 # zapetlilo — a konto zbanowane za spam jest nie do odzyskania.
+#
+# LICZYMY TO, CO WYSZLO W SWIAT, nie wywolania modelu. Ban bierze sie z tego,
+# co widzi Substack. Na jeden komentarz ida trzy warianty plus sprawdzanie
+# faktow: zmierzone 25 sierpnia, 27 wywolan "comment" wobec 4 komentarzy w
+# dzienniku — siedmiokrotnosc.
+#
+# Przy liczeniu wywolan sufit 60 bylby dotykany przez normalna prace (54 w
+# oknie 24h tego samego dnia), wiec alarm wylby codziennie i nauczylby nas go
+# ignorowac. A realne ryzyko — 60 opublikowanych dzialan — nie bylo mierzone
+# wcale.
+#
+# Suma norm dziennych z configu to okolo 30 dzialan. Sufit 60 jest wiec
+# podwojeniem tego, co zaplanowane: dosc luzny, zeby nie krzyczec na dobry
+# dzien, i dosc ciasny, zeby zlapac zapetlenie.
 MAX_DZIALAN_DZIENNIE = 60
 
 
@@ -232,16 +246,49 @@ def dysk() -> str | None:
 
 
 def nadaktywnosc() -> str | None:
-    """Czy agent nie zapetlil sie i nie zasypuje Substacka."""
-    conn = _polaczenie()
-    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    n = conn.execute(
-        "SELECT COUNT(*) AS n FROM calls WHERE date(at) = ? AND purpose IN "
-        "('note', 'comment', 'reply')", (dzis,),
-    ).fetchone()["n"]
+    """Czy agent nie zapetlil sie i nie zasypuje Substacka.
+
+    OKNO KROCZACE 24 GODZIN, nie kalendarzowe "dzisiaj" — i to jest cala
+    poprawka, bez ktorej ten straznik byl ozdoba.
+
+    Alarm chodzi o 07:00 UTC. Wszystkie trzy przebiegi agenta (11:20, 19:20,
+    23:40 UTC) leza PO nim, wiec o siodmej rano kubelek "dzisiaj" jest pusty
+    z definicji. Zmierzone przez audyt: sufit 60 dzialan zostal realnie
+    przekroczony dwukrotnie — 141 wywolan 16 sierpnia, 81 siedemnastego — a
+    w pliku alarmow nie ma ani jednego wpisu o nadaktywnosci. Jedyny straznik
+    miedzy zapetleniem a banem konta nigdy niczego nie zobaczyl.
+
+    Zapetlenie i tak nie respektuje polnocy: przebieg o 23:40, ktory oszalal,
+    zasypie Substacka o 00:15 i w kalendarzowym "dzis" bedzie wygladal
+    niewinnie.
+    """
+    import json as _json
+
+    granica = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    # DZIENNIK, NIE BAZA WYWOLAN. Tu stoi to, co naprawde wyszlo na Substacka —
+    # patrz uzasadnienie przy MAX_DZIALAN_DZIENNIE.
+    plik = config.DATA_DIR / "dziennik.jsonl"
+    n = 0
+    try:
+        for linia in plik.read_text(encoding="utf-8").splitlines():
+            linia = linia.strip()
+            if not linia:
+                continue
+            try:
+                w = _json.loads(linia)
+            except ValueError:
+                continue
+            if not isinstance(w, dict) or not w.get("udane"):
+                continue
+            if str(w.get("rodzaj") or "") in ("skutek", ""):
+                continue
+            if str(w.get("kiedy") or "") >= granica:
+                n += 1
+    except OSError:
+        return None
     if n > MAX_DZIALAN_DZIENNIE:
-        return (f"Dzis {n} wywolan tworzacych tresc przy suficie "
-                f"{MAX_DZIALAN_DZIENNIE}. Cos sie zapetlilo.")
+        return (f"W ostatnich 24 godzinach {n} wywolan tworzacych tresc przy "
+                f"suficie {MAX_DZIALAN_DZIENNIE}. Cos sie zapetlilo.")
     return None
 
 
@@ -260,10 +307,21 @@ def koszt() -> str | None:
     conn = _polaczenie()
     teraz = datetime.now(timezone.utc)
     dzis = teraz.strftime("%Y-%m-%d")
+
+    # DWA DNI OSOBNO, nie tylko dzisiejszy. Alarm chodzi o 07:00 UTC, a
+    # przebiegi agenta o 11:20, 19:20 i 23:40 — wiec o siodmej "dzisiaj" jest
+    # jeszcze puste i pytanie o nie zawsze odpowiadalo zero.
+    #
+    # Nie robimy tu okna kroczacego, bo sufit JEST kalendarzowy (`_preflight`
+    # liczy wydatki per data). Okno daloby falszywy alarm: dwa dni po 60%
+    # sufitu to 120% w oknie, a zaden dzien nie zostal przekroczony.
+    wczoraj = (teraz - timedelta(days=1)).strftime("%Y-%m-%d")
+    for dzien, opis in ((wczoraj, "Wczoraj"), (dzis, "Dzis")):
+        wydane = db.spent_usd(conn, dzien)
+        if wydane > config.DAILY_LIMIT_USD * 0.9:
+            return (f"{opis} wydane ${wydane:.2f} przy dziennym suficie "
+                    f"${config.DAILY_LIMIT_USD}.")
     wydane = db.spent_usd(conn, dzis)
-    if wydane > config.DAILY_LIMIT_USD * 0.9:
-        return (f"Dzis wydane ${wydane:.2f} przy dziennym suficie "
-                f"${config.DAILY_LIMIT_USD}.")
 
     wydane_m = db.spent_usd(conn, dzis[:7])
     if wydane_m > config.MONTHLY_LIMIT_USD * 0.75:

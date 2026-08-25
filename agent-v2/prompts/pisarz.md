@@ -195,9 +195,18 @@ So:
 - **A rule, a price, a deadline or a policy is a fact with a date on it.** If
   the card does not say when it was true, treat it as possibly expired and say
   what the card says happened *at that time*, not what is the case now.
-- **One datestamp, at the top, and nowhere else.** *"Figures checked
-  [date from the card]."* Do not sprinkle "as of March" through the prose —
-  that produces documentation, not writing.
+- **One datestamp, at the top, and nowhere else.** The card carries
+  `source_dates`, with the newest and oldest source it stands on. Use the
+  NEWEST one: *"Figures checked against sources to [that date]."* Do not
+  sprinkle "as of March" through the prose — that produces documentation, not
+  writing.
+
+  **And if `source_dates.note` says the material is old, the reader is told
+  once, plainly, in your own words.** A piece about this subject resting on
+  nothing newer than last year is a piece with a caveat, and hiding the caveat
+  is worse than the age. This is the one place where saying how you know is not
+  narrating the research — it is the reader's right to weigh what they are
+  reading.
 
 ## The four ways in
 

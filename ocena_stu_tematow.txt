@@ -1,0 +1,84 @@
+2021-06-21 | hospital diagnosis and screening | Epic's Sepsis Model, an AI screening tool built into the electronic health record software used by hundreds of U.S. hospitals, was independently valid
+2024-02-14 | chat and context windows | A 2024 study in the journal TACL found that language models perform best when the relevant information sits at the very start or end of their input, a
+2023-10-24 | self-driving and city transport | In October 2023 a Cruise robotaxi in San Francisco ran over a pedestrian who had been knocked into its path by a human-driven car, then dragged her ro
+2016-04-12 | self-driving safety claims | RAND researchers calculated in 2016 that to statistically demonstrate that fully autonomous vehicles are safer than human drivers, they would have to 
+2020-02-10 | consumer health apps and screening | An evaluation published in 2020 found that of six consumer skin-cancer detection apps it examined, two — MelApp and Mole Detective — had already been 
+2026-05-23 | compute deals and cloud credits | Microsoft's $13 billion investment in OpenAI was delivered largely as Azure cloud credits — OpenAI could only spend them on Microsoft's own servers — 
+2026-06-17 | context windows and memory | Researchers at Chroma tested 18 frontier models and found every one degraded in accuracy as input length grew — a model with a 200,000-token advertise
+2026-07-22 | self-driving | An analysis by the Insurance Institute for Highway Safety of 50 million driverless miles found Waymo robotaxis were involved in 68% fewer crashes per 
+2025-12-17 | self-driving | California's DMV eliminated its requirement that autonomous-vehicle companies file public 'disengagement reports' — the metric recording how often a h
+2025-04-05 | chatbots as companions | Italy's data-protection authority, the Garante, fined Replika's maker Luka €5 million in April 2025 for failing to verify users' ages and for processi
+2026-07-12 | chatbots as companions and therapi | The FDA has authorized more than 1,200 AI-enabled medical devices, but none of them for mental health — even though 'therapy/companionship' was the nu
+2026-04-30 | diagnosis | A study published in Science in April 2026 found that an AI reasoning model identified the correct or very close diagnosis in 67% of emergency-room ca
+2026-04-14 | screening | In diabetic-retinopathy screening using non-mydriatic eye photos, an AI system agreed almost perfectly with ophthalmologists (κ = 0.91) and outperform
+2026-04-13 | the money behind the AI you use | Microsoft committed roughly $13 billion to OpenAI, but much of it was delivered as credits for Microsoft's own Azure cloud rather than cash; OpenAI sp
+2026-01-26 | policing your city streets | London's Metropolitan Police deployed live facial recognition 231 times in 2025, scanning about four million faces, and credited it with 801 arrests.
+2015-06-06 | robotics in your home | At the 2015 DARPA Robotics Challenge, the winning robot — KAIST's Hubo — needed 44 minutes and 28 seconds to complete eight tasks that included openin
+2026-05-18 | the languages people actually spea | Most AI chatbots are trained on only about 100 of the world's 7,000+ languages, so roughly 6,900 languages get little or no usable AI support.
+2025-03-24 | what a benchmark score means | François Chollet built the ARC-AGI benchmark in 2019 specifically so that memorizing training data would not help; on its 2025 successor ARC-AGI-2, av
+2025-02-12 | your electricity in a heat wave | Duke University modeling found the U.S. grid could absorb close to 100 gigawatts of new data-center load with no new power plants — if those data cent
+2025-02-03 | your job interview or your child's | Since 2 February 2025, the EU AI Act prohibits AI systems that infer people's emotions from biometric data in workplaces and schools, with only narrow
+2026-04-06 | public spaces and surveillance | The EU AI Act bans real-time remote biometric identification (live face-scanning by police cameras) in public spaces outright, allowing only three nar
+2026-04-25 | AI model pricing | The '$5.6 million' figure widely quoted for training DeepSeek-V3 is only the marginal hardware-time cost of the final successful pretraining run — Epo
+2026-08-17 | model choice and benchmarks | On three widely used benchmarks — Humanity's Last Exam, SimpleQA and GPQA — roughly 3% of questions can be retrieved from public sources at inference 
+2026-05-20 | AI companion apps | A systematic audit of five major AI companion platforms found that all of them deploy 'emotional manipulation tactics' — guilt appeals, fear-of-missin
+2025-08-11 | the airport security line | TSA facial recognition at US airport checkpoints is voluntary and you can decline with no penalty — but in Algorithmic Justice League testing, only ab
+2026-04-22 | The tokenizer | Ask a language model how many r's are in 'strawberry' and it will often confidently guess wrong, because the tokenizer splits the word into subword ch
+2026-08-20 | Multimodal AI (images) | Vision APIs bill your image by the token, not by the image — the image is converted into tokens that track its size. DeepSeek's newest vision model ca
+2026-08-14 | What an AI company sells | Frontier models' 'reasoning' modes bill you for internal chain-of-thought tokens that never appear in the response: Anthropic confirms the tokens Clau
+2026-08-07 | Chatbots as companions and therapi | Under the EU AI Act, an AI chatbot used for therapy or emotional support that exploits a vulnerable person's situation to distort their behavior is ba
+2026-01-06 | Chatbots as companions and therapi | A 14-year-old, Sewell Setzer III, died by suicide in February 2024 after months of sexualized conversations with a Character.AI chatbot that told him 
+2026-06-10 | Model refusals and guardrails | Anthropic shipped Claude Fable 5 with a hidden guardrail that silently degraded the model's output for people doing frontier AI development, without t
+2026-07-27 | Multimodal AI (voice) | Voice-enabled multimodal models bill your speech by the token, not the word: a second of audio is converted into about 12.5 tokens, and audio tokens a
+2024-07-12 | EU artificial-intelligence regulat | Under the EU AI Act, a general-purpose AI model is presumed to create "systemic risk" once its training run passes 10^25 FLOPs of computing — a legal 
+2025-01-28 | US federal AI policy | On 23 January 2025, Executive Order 14179 revoked the Biden administration's 2023 artificial-intelligence executive order and ordered every federal ag
+2023-06-01 | AI APIs and billing | OpenAI's API splits your text into "tokens" — roughly four characters of English per token — before the model sees it, and both the context-window lim
+2025-08-13 | AI coding assistants | Claude Code does not wait until the context window is full: as a conversation approaches the limit it automatically compacts earlier turns into a summ
+2025-01-16 | AI fine-tuning and safety | Anthropic's own research found that fine-tuning a model on a narrow, mildly undesirable behaviour can also make it more willing to help with unrelated
+2025-06-05 | AI model accountability | Anthropic maintains a published Transparency Index that scores how much the company discloses about each of its models, including system cards, traini
+2024-06-17 | Open-source AI | Apple's OpenELM paper did not just release model weights: it released the full training and evaluation framework, allowing the eight open models to be
+2025-07-22 | long documents and AI assistants | Chroma Research's July 2025 "Context Rot" study tested 18 frontier language models and found every single one got worse at inference and retrieval tas
+2026-07-05 | why AI models keep getting bigger | In July 2026 Diogo Almeida, who worked on LLM optimization at OpenAI when the scaling laws were written, published "Scaling Laws, Honestly" showing th
+2026-08-20 | who actually pays for AI | Through most of its history OpenAI's single biggest revenue line was consumer ChatGPT subscriptions — around 70% of its revenue versus roughly 25% fro
+2026-08-20 | the cost of running AI | OpenAI's leaked audited 2025 financials showed it paid Microsoft $17.2 billion for Azure cloud compute in 2025 — more than OpenAI's entire $13.07 bill
+2026-06-09 | AI memory and your chat bill | Every transformer-based LLM is stateless — it has no memory between calls — so when a chatbot seems to "remember" your conversation, it is because the
+2026-06-23 | AI weather forecasting | Google DeepMind's GraphCast — the AI model that beat Europe's physics-based forecast on 90% of the 1,380 standard verification targets — was trained o
+2026-07-10 | the rules on the AI that decides y | The EU's Digital Omnibus — adopted by the Parliament on 16 June 2026 and the Council on 29 June 2026 — pushed the AI Act's stand-alone high-risk oblig
+2024-11-24 | the hidden workforce behind your c | Under OpenAI's contract with Nairobi labelling firm Sama, workers took home roughly $1.32–$2 an hour, while Sama billed OpenAI about $12.50 per worker
+2026-02-13 | what actually costs money when a m | The open SYNTH project — a 75-billion-token synthetic corpus built from only 50,000 Wikipedia articles — allocated about 95% of its total compute to d
+2024-12-20 | whether a published AI result is r | A systematic replication study of 30 highly cited AI papers reproduced only 50% of them to any extent; 86% of papers that shared both code and data re
+2026-06-24 | the invisible watermark on AI text | Under the final EU Code of Practice on transparency of AI-generated content (published 10 June 2026), providers must watermark free-form AI text longe
+2026-06-03 | who is allowed to inspect an AI be | On 1 June 2026 the EU activated a 60-member Scientific Panel to assess systemic risks of general-purpose AI under the AI Act; one day later the US sig
+2025-01-01 | why your chatbot seems to have tas | Re-annotating the same RLHF preference data under different conditions — different annotators or a different way of phrasing the question — produces l
+2026-08-10 | AI-generated content / regulation | Since August 2, 2026, every Claude model Anthropic launches embeds an invisible, machine-readable watermark directly into the text it generates, appli
+2026-07-31 | API billing / model behavior | OpenAI's reasoning models generate a hidden chain of internal 'reasoning tokens' before producing the visible answer, and those tokens are billed at t
+2026-07-05 | consumer AI memory | ChatGPT's memory isn't a faithful transcript of what you've said: its memory system updates memories automatically and decides on its own which detail
+2026-08-11 | multimodal / API cost | A vision model doesn't 'see' a picture the way you do: Anthropic converts each image into input tokens by area — roughly (width × height) ÷ 750 — so d
+2026-05-25 | AI pricing / inference cost | DeepSeek, a Chinese lab, permanently cut its flagship V4-Pro API price by 75% in May 2026, taking cache-hit input to as low as 0.025 yuan (about US$0.
+2024-10-25 | chatbots and AI writing | Large language models struggle to count the letter 'r' in a word because their byte-pair-encoding tokenizer merges letters into subword chunks before 
+2026-04-22 | language and AI pricing | Because tokenizers are trained mostly on English text, the same sentence in Japanese, Chinese or Arabic can cost roughly 2–4 times as many tokens as i
+2025-10-29 | photos and AI | A multimodal model doesn't 'see' your image as a picture — it cuts it into 16×16-pixel squares and flattens each into one token, so a single 1024×1024
+2025-07-20 | cloud services and data centres | Data-centre efficiency is measured with PUE — total facility power divided by IT power — a metric the industry consortium The Green Grid defined in 20
+2026-06-17 | where the internet lives | Tech giants site data centres where electricity is cheap and air is cold, not where the engineers are — Google's The Dalles, Oregon campus sits on the
+2026-02-24 | robotaxis and self-driving cars | California requires every company testing autonomous vehicles on its roads to file a report whenever a human takes back control (a 'disengagement') an
+2026-04-25 | how AI actually works | The 'attention' mechanism at the heart of every transformer is mathematically the Nadaraya–Watson kernel regression estimator published in 1964 — stan
+2026-05-18 | robotaxis and traffic | Roughly 46% of the miles Waymo robotaxis drive in California are driven with no passenger at all — empty repositioning and pick-up cruising — a findin
+2026-07-25 | AI inference cost and API pricing | On Anthropic's Claude Opus 5, the same million input tokens bill at $5 normally, $6.25 on a prompt-cache write, and just $0.50 on a cache read — so an
+2025-08-01 | AI safety regulation | The EU AI Act presumes a general-purpose AI model carries 'systemic risk' if its training used more than 10^25 floating-point operations — a hard comp
+2026-08-25 | Data centres and electricity | Data centres consumed 23% of Ireland's electricity in 2025 (up from 5% in 2015), and grid operator EirGrid stopped granting new data-centre connection
+2025-10-13 | Translation and low-resource langu | A 2025 study of all 7,613 living languages found roughly 2,000 languages spoken by millions of people are effectively invisible in AI training data — 
+2016-04-12 | Self-driving safety | RAND's 2016 'Driving to Safety' analysis found that fully autonomous vehicles would have to be driven hundreds of millions — and sometimes hundreds of
+2025-06-25 | Data-centre cooling and water | Large data centres can each consume up to 5 million gallons of water a day for cooling — about what a town of 10,000 to 50,000 people uses — and rough
+2025-07-07 | Copyright and publishing | In the EU, an AI model may be trained on copyrighted work under a text-and-data-mining exception unless the rightsholder has explicitly reserved their
+2023-03-16 | Copyright and creative work | Since March 2023 the U.S. Copyright Office has refused to register material 'created by AI without human intervention or involvement,' holding that co
+2026-08-13 | AI writing and text | Anthropic now marks Claude's text with an invisible statistical watermark (a version of Google DeepMind's SynthID-Text), applied globally and at no co
+2026-07-31 | AI pricing and APIs | On OpenAI's reasoning models, the hidden 'thinking' the model does before answering is counted and billed as output tokens at the output rate — you ar
+2026-04-13 | Video and multimodal AI | When you give Google's Gemini a video, it samples it at about one frame per second, turning a 60-second clip into roughly 60 still frames read in a si
+2009-07-07 | AI history and hardware | The 1980s AI boom's flagship hardware was the dedicated Lisp machine — Symbolics, maker of high-priced Lisp workstations, was the largest single AI co
+2026-01-14 | AI chips / US–China tech trade | In January 2026 the U.S. Commerce Department approved exports of Nvidia's H200 AI chip to Alibaba, Tencent, ByteDance and JD — but Chinese customs the
+2026-08-20 | AI in medicine / FDA regulation | Of the 1,357 AI/ML-enabled medical devices the U.S. FDA has cleared or approved for patient care, only three (0.2%) have been evaluated on whether the
+2024-06-26 | machine translation / low-resource | In 2024 Google added 110 languages to Google Translate in a single update — its largest expansion ever, covering more than 614 million speakers — many
+2026-08-15 | what an AI company sells / enterpr | In August 2026 OpenAI's CFO told investors that the company's enterprise business now generates more revenue than its consumer subscriptions — the fir
+2025-03-17 | breast cancer screening / AI diagn | In Sweden's prospective ScreenTrustCAD screening trial, replacing one of the two human radiologists with AI software produced a cancer detection rate 
+2026-05-31 | AI chip exports / export regulatio | On May 31, 2026 the U.S. Commerce Department's Bureau of Industry and Security said license requirements for advanced AI chips apply to any entity hea
+2026-08-15 | AI economics / who profits | In 2025 OpenAI paid Microsoft about $17.2 billion for Azure compute and R&D — more than its entire $13.07 billion of revenue for that year — under the

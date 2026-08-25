@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1283 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1286 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-3998 wierszy, 92 funkcji na poziomie modułu, 0 klas
+4096 wierszy, 93 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -55,6 +55,7 @@
 | `ostatnie_otwarcia(rodzaj, ile)` | Pierwsze slowa ostatnich notek — zeby kolejna nie zaczela sie tak samo. |
 | `wiek_zrodla_w_dniach(data_zrodla, teraz)` | Ile dni ma zrodlo. None, gdy daty nie da sie odczytac. |
 | `nazywa_wersje(tekst)` | Czy zdanie nazywa konkretna wersje produktu. Zwraca ja albo pusty napis. |
+| `swiezosc_karty(card, teraz)` | Ile lat ma material, na ktorym stanie artykul. Zwraca uwagi, nie werdykt. |
 | `swiezosc_faktu(fakt, teraz)` | Czy ten fakt nadaje sie do wystawienia DZISIAJ. |
 | `ostatnie_notki(ile)` | TRESCI ostatnich wystawionych notek — zeby nie napisac drugi raz tego samego. |
 | `_notki_z_dziennika(kawalek)` *(wewn.)* | Teksty UDANYCH notek z podanego kawalka dziennika, w kolejnosci zapisu. |
@@ -262,7 +263,7 @@
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-616 wierszy, 19 funkcji na poziomie modułu, 0 klas
+674 wierszy, 19 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -312,7 +313,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-1954 wierszy, 20 funkcji na poziomie modułu, 0 klas
+1967 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -386,7 +387,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-280 wierszy, 3 funkcji na poziomie modułu, 0 klas
+283 wierszy, 3 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

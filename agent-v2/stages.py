@@ -1044,6 +1044,54 @@ def nazywa_wersje(tekst: str) -> str:
     return m.group(0) if m else ""
 
 
+def swiezosc_karty(card: dict[str, Any], teraz=None) -> list[dict[str, str]]:
+    """Ile lat ma material, na ktorym stanie artykul. Zwraca uwagi, nie werdykt.
+
+    SCIEZKA ARTYKULU NIE MIALA ZADNEGO SPRAWDZENIA DATY — audyt policzyl, ze
+    sprawdzenie wieku bylo w calym kodzie wolane raz, przy notkach, a `gates.py`
+    nie zawieral ani jednej linii o dacie. W dziedzinie, w ktorej modele znikaja
+    co osiem tygodni, artykul moze stanac w calosci na materiale sprzed dwoch
+    lat i nikt tego nie zauwazy.
+
+    Nie blokujemy. Decyzja wlasciciela z 15 sierpnia mowi, ze bramki artykulu
+    oddaja uwagi: skoro temat wybrany, a research oplacony, artykul ma powstac.
+    Ale uwaga trafia do pliku `.uwagi.md`, wiec przy czytaniu wiadomo, na czym
+    ten tekst stal.
+    """
+    daty = card.get("source_dates")
+    if not isinstance(daty, dict):
+        return [{"gate": "KARTA_BEZ_DAT",
+                 "detail": "karta nie niesie dat zrodel — nie wiadomo, ile ma lat"}]
+
+    uwagi: list[dict[str, str]] = []
+    najnowsze = wiek_zrodla_w_dniach(daty.get("newest"), teraz=teraz)
+    najstarsze = wiek_zrodla_w_dniach(daty.get("oldest"), teraz=teraz)
+
+    if najnowsze is None:
+        uwagi.append({"gate": "KARTA_BEZ_DAT",
+                      "detail": "pole `newest` puste albo nieczytelne: %r"
+                                % daty.get("newest")})
+    elif najnowsze > config.MAKS_WIEK_ZRODLA_DNI:
+        # NAJNOWSZE zrodlo starsze niz prog znaczy, ze NIC w tym artykule nie
+        # jest swieze. To nie jest to samo, co jedno stare zrodlo obok nowych.
+        uwagi.append({
+            "gate": "CALY_MATERIAL_STARY",
+            "detail": ("najnowsze zrodlo ma %d dni (prog %d) — w tym artykule "
+                       "nie ma niczego biezacego"
+                       % (najnowsze, config.MAKS_WIEK_ZRODLA_DNI))})
+
+    if najstarsze is not None and najstarsze > 365 * 3:
+        uwagi.append({
+            "gate": "ZRODLO_SPRZED_LAT",
+            "detail": "najstarsze zrodlo ma %d dni — sprawdz, czy opisuje "
+                      "swiat, ktory jeszcze istnieje" % najstarsze})
+
+    if daty.get("note"):
+        uwagi.append({"gate": "UWAGA_O_WIEKU",
+                      "detail": str(daty["note"])[:200]})
+    return uwagi
+
+
 def swiezosc_faktu(fakt: dict[str, Any], teraz=None) -> tuple[bool, str]:
     """Czy ten fakt nadaje sie do wystawienia DZISIAJ.
 
@@ -1069,10 +1117,17 @@ def swiezosc_faktu(fakt: dict[str, Any], teraz=None) -> tuple[bool, str]:
     wydarzyly i nie przestana. Wlasciciel powiedzial to wprost: „jesli jest
     temat z 2024, ok, ale ma byc sprawdzony najnowszymi danymi".
     """
-    tekst = " ".join([
-        str(fakt.get("fact") or ""),
-        str(fakt.get("actually") or ""),
-    ])
+    # WSZYSTKIE PIEC POL, ktore dostaje pisarz — nie dwa.
+    #
+    # Audyt zmierzyl: bramka ogladala `fact` i `actually`, a pisarz dostaje
+    # takze `wrong_belief`, `consequence` i `decision`. Nazwa modelu schowana
+    # w ktorymkolwiek z tych trzech przechodzila bez sprawdzenia wieku, a slowo
+    # "deprecated" w polu `consequence` obchodzilo takze liste rzeczy
+    # wycofanych. Policzone na 56 kandydatach: 7 z nich (12,5%) omijalo prog
+    # tylko dlatego, ze sygnal siedzial w nieczytanym polu.
+    tekst = " ".join(str(fakt.get(k) or "") for k in
+                     ("fact", "actually", "wrong_belief", "consequence",
+                      "decision"))
     male = tekst.lower()
 
     for slowo in config.ZNIKA:
@@ -2087,15 +2142,52 @@ def zweryfikuj(
         # zebranych przed pisaniem — druga siatka pękła, pierwsza trzyma.
         return {"claims": [], "safe_to_post": True,
                 "verdict": f"weryfikacja nie doszła do skutku ({exc}) — puszczam na pierwszej siatce"}
-    # Próg mieszka tutaj, nie w ocenie modelu: blokuje wyłącznie fakt OBALONY.
-    # Nieznalezione to nie nieprawdziwe. Teza o mechanizmach, motywach czy skutkach
-    # jest stanowiskiem, a stanowisko ma prawo być głośne i sporne — po to jest to pismo.
-    obalone = [c for c in out.get("claims", []) if c.get("status") == "refuted"]
+    # Próg mieszka tutaj, nie w ocenie modelu.
+    #
+    # ZOSTAJE, bo to decyzja wlasciciela o tym, czym jest to pismo: nieznalezione
+    # to nie nieprawdziwe, a teza o mechanizmach, motywach czy skutkach jest
+    # STANOWISKIEM i ma prawo byc glosne i sporne.
+    #
+    # DOCHODZI ROZROZNIENIE, bo bez niego wyszla nieprawda. 24 sierpnia o 20:53
+    # poszla notka z data „standardized 1946" — klauzula niepodwazalnosci to
+    # Nowy Jork 1906 i Standard Policy Law 1907. Przeszla przez PLATNE
+    # sprawdzanie faktow z dwunastoma wyszukiwaniami, bo status byl
+    # `unverified`, a `unverified` przechodzilo.
+    #
+    # „Standardized 1946" NIE JEST TEZA. To data. Rozdzielamy wiec:
+    #   - twierdzenie NIESPRAWDZALNE (mechanizm, motyw, skutek) — przechodzi,
+    #   - twierdzenie SPRAWDZALNE, ktorego nie potwierdzono — nie przechodzi.
+    # Rozroznikiem jest LICZBA: data, kwota, odsetek, rok sa albo w rekordzie,
+    # albo ich nie ma. Teza o tym, dlaczego instytucja cos robi, liczby nie ma
+    # i miec nie musi.
+    #
+    # `outdated` dolozony do promptu weryfikacji 25 sierpnia byl przez ten kod
+    # ignorowany — czyli tamta naprawa istniala tylko na papierze.
+    def _ma_sprawdzalny_konkret(c: dict) -> bool:
+        """Czy w twierdzeniu jest liczba — data, kwota, odsetek, rok."""
+        tekst = "%s %s" % (c.get("claim") or "", c.get("what_the_source_says") or "")
+        return bool(re.search(r"\d", tekst))
+
+    blokujace = []
     for c in out.get("claims", []):
-        if c.get("status") != "confirmed":
-            print(f"    {'! OBALONE' if c.get('status') == 'refuted' else '· nieznalezione'}: "
-                  f"{str(c.get('claim'))[:80]}", flush=True)
-    out["safe_to_post"] = not obalone
+        status = str(c.get("status") or "")
+        if status in ("refuted", "outdated"):
+            blokujace.append(c)
+        elif status == "unverified" and _ma_sprawdzalny_konkret(c):
+            blokujace.append(c)
+
+    for c in out.get("claims", []):
+        status = str(c.get("status") or "")
+        if status == "confirmed":
+            continue
+        etykieta = {"refuted": "! OBALONE",
+                    "outdated": "! NIEAKTUALNE"}.get(
+                        status,
+                        "! NIEPOTWIERDZONA LICZBA" if _ma_sprawdzalny_konkret(c)
+                        else "· nieznalezione (teza, przechodzi)")
+        print(f"    {etykieta}: {str(c.get('claim'))[:80]}", flush=True)
+
+    out["safe_to_post"] = not blokujace
     return out
 
 
@@ -3840,6 +3932,12 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]]) -> dict[str, int]:
             "decision": str(k.get("decision") or "")[:200],
             "consequence": str(k.get("consequence") or "")[:200],
             "url": str(k.get("url") or "")[:400],
+            # DATA ZRODLA GINELA TUTAJ. Prompt ciekawostek jej zada, bramka
+            # swiezosci na niej stoi, a zapis kandydata jej nie przepisywal —
+            # zmierzone przez audyt: 104 wpisy w indeksie, ZERO z data. Skutek:
+            # kandydat wyjety z indeksu tydzien pozniej nie ma jak przejsc
+            # sprawdzenia wieku, bo nie wiadomo, ile ma lat.
+            "source_date": str(k.get("source_date") or "")[:40],
             "domain": str(k.get("domain") or "")[:80],
             "status": "nowy" if ok else "odrzucony",
             "powod": powod,
