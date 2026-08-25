@@ -2020,16 +2020,44 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
         # Pole odpowiedzi otwiera dopiero kliknięcie KONTENERA — kliknięcie w sam
         # napis nic nie robi. Napisy trzymamy w kilku językach, bo interfejs idzie
         # za językiem przeglądarki, a na serwerze będzie inny niż tutaj.
+        # JEDNA NIEUDANA PROBA NIE MOZE ZABRAC POZOSTALYCH.
+        #
+        # Zlapane na produkcji 25 sierpnia: napis "Leave a reply" byl
+        # znajdowany, ale klikniecie w jego rodzica wywalalo sie na timeoucie
+        # 15 s — i wyjatek przerywal CALA petle, wiec kolejne napisy i kolejne
+        # kandydatury nie mialy szansy. Dwie odpowiedzi przepadly tego dnia,
+        # kazda po oplaceniu napisania tekstu.
+        #
+        # Trzy zmiany, kazda z powodu:
+        #   - proba w `try`, zeby nieudany kandydat kosztowal tylko siebie,
+        #   - `scroll_into_view`, bo pierwsze dopasowanie przy wielu komentarzach
+        #     bywa poza ekranem, a element poza ekranem bywa nieklikalny,
+        #   - klikamy TAKZE sam element, nie tylko rodzica: uklad Substacka
+        #     zmienia sie i raz dziala jedno, raz drugie.
         otwarte = False
         for napis in ("Zostaw odpowiedź", "Leave a reply", "Reply", "Antwort"):
-            kand = page.get_by_text(napis, exact=False).first
-            if kand.count() == 0:
-                continue
-            kand.locator("xpath=..").click(timeout=15_000)
-            page.wait_for_timeout(3000)
-            if page.locator("[contenteditable=true]").count() > 0:
-                otwarte = True
+            if otwarte:
                 break
+            wszystkie = page.get_by_text(napis, exact=False)
+            if wszystkie.count() == 0:
+                continue
+            for nr in range(min(3, wszystkie.count())):
+                kand = wszystkie.nth(nr)
+                for cel, opis in ((kand.locator("xpath=.."), "rodzic"),
+                                  (kand, "sam napis")):
+                    try:
+                        cel.scroll_into_view_if_needed(timeout=5_000)
+                        cel.click(timeout=8_000)
+                    except Exception as exc:
+                        print("    (%s/%d %s: %s)"
+                              % (napis, nr, opis, type(exc).__name__), flush=True)
+                        continue
+                    page.wait_for_timeout(2500)
+                    if page.locator("[contenteditable=true]").count() > 0:
+                        otwarte = True
+                        break
+                if otwarte:
+                    break
         if not otwarte:
             raise RuntimeError("nie otworzyłem pola odpowiedzi")
 
