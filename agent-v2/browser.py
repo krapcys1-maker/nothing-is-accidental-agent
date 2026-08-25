@@ -818,7 +818,21 @@ def nasze_pozycje_do_pomiaru(page=None, ile: int = 60) -> list[dict[str, Any]]:
         except OSError:
             pass
 
-    return list(widziane.values())[-ile:]
+    # NASZE NOTKI NIGDY NIE WYPADAJA Z POMIARU.
+    #
+    # Stalo tu `list(widziane.values())[-ile:]`, czyli „zostaw `ile` ostatnich".
+    # A notki dopisywane sa PIERWSZE, wiec obcinanie od poczatku wycinalo
+    # dokladnie je. Zmierzone na produkcji: 60 pozycji do pomiaru, z tego
+    # 36 komentarzy i 24 odpowiedzi — i ANI JEDNEJ notki, mimo ze profil
+    # oddal ich dwanascie. Raport statystyk pokazywal wiec wszystko procz
+    # tego, co sami wystawiamy.
+    #
+    # Notka jest nasza wlasna trescia i jedyna, ktora ma pelne statystyki;
+    # komentarz pod cudzym artykulem oddaje same zera, bo nie jest notka.
+    # Limit obcina wiec RESZTE, nie notki.
+    nasze = [x for x in widziane.values() if x["rodzaj"] == "notka"]
+    reszta = [x for x in widziane.values() if x["rodzaj"] != "notka"]
+    return nasze + reszta[-max(0, ile - len(nasze)):]
 
 
 def dopisz_skutki() -> int:
