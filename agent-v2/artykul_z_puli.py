@@ -115,13 +115,31 @@ def wybierz_fakt(conn, run_id, ile: int = 8) -> dict:
     fakty = stages.znajdz_ciekawostki(conn, run_id, ile=ile)
     if not fakty:
         raise ValueError("pula ciekawostek pusta")
-    byle_co = stages.tematy_do_porownania(conn)
+
+    # DWIE PAMIECI, NIE JEDNA — i to kosztowalo caly artykul.
+    #
+    # Pierwsza wersja pytala tylko o poprzednie ARTYKULY. 25 sierpnia o 11:28
+    # poszla notka o kenijskich anotatorach i stawce 12,50 USD za godzine, a po
+    # poludniu artykul wzial z puli dokladnie ten sam fakt i napisal o nim
+    # tysiac slow. Zaden artykul o tym nie byl, wiec straznik milczal.
+    #
+    # Konto ma jednego czytelnika, nie dwoch. Dla niego notka i artykul o tym
+    # samym w jeden dzien to po prostu dwa razy to samo.
+    wczesniej = list(stages.tematy_do_porownania(conn))
+    notki = stages.ostatnie_notki(1000)
+    wczesniej.extend(notki)
+    print("  [temat] pamiec: %d artykulow + %d notek"
+          % (len(wczesniej) - len(notki), len(notki)), flush=True)
+
     for f in fakty:
         opis = "%s %s" % (f.get("domain") or "", f.get("fact") or "")
-        if any(stages._o_tym_samym(opis, w, **stages.POWTORKA_TEMATU)
-               for w in byle_co if w):
-            print("  [temat] pomijam, juz o tym pisalismy: %s"
-                  % (f.get("fact") or "")[:64], flush=True)
+        kolizja = next((w for w in wczesniej if w and stages._o_tym_samym(
+            opis, w, **stages.POWTORKA_TEMATU)), None)
+        if kolizja:
+            print("  [temat] pomijam, juz o tym bylo: %s"
+                  % (f.get("fact") or "")[:60], flush=True)
+            print("          zderza sie z: %s"
+                  % " ".join(str(kolizja).split())[:80], flush=True)
             continue
         return f
     print("  [temat] wszystko koliduje — biore pierwszy", flush=True)

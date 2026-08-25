@@ -1368,6 +1368,22 @@ def _zapisz_skrot_notek(odciski: list[list[str]], bajtow: int, glowa: str,
         print("  [pamiec] nie zapisalem skrotu notek: %s" % exc, flush=True)
 
 
+def _opis_typu(note_type: str) -> str:
+    """Opis typu, a przy MYSLI takze PRZYDZIELONY ksztalt.
+
+    Ksztalt losuje kod, nie model — patrz `config.KSZTALTY_MYSLI`. Zmierzone:
+    postawiony przed wyborem miedzy pytaniem a obserwacja, model wybral
+    obserwacje szesc razy na szesc.
+    """
+    opis = config.NOTE_TYPES[note_type]
+    if note_type != "MYSL":
+        return opis
+    ksztalt = config.losowy_ksztalt_mysli()
+    print("  [mysl] ksztalt: %s" % ksztalt, flush=True)
+    return "%s\n\n**The shape you are assigned this time: %s** — %s" % (
+        opis, ksztalt, config.KSZTALTY_MYSLI[ksztalt])
+
+
 def note(
     conn: sqlite3.Connection, run_id: int, note_type: str, evidence: dict[str, Any],
     link: str | None = None, note_form: str = "PROSTA",
@@ -1384,7 +1400,7 @@ def note(
         min_words=config.NOTE_MIN_WORDS,
         max_words=config.NOTE_MAX_WORDS,
         note_type=note_type,
-        type_brief=config.NOTE_TYPES[note_type],
+        type_brief=_opis_typu(note_type),
         note_form=note_form,
         form_brief=config.NOTE_FORMS.get(note_form, config.NOTE_FORMS["PROSTA"]),
         evidence=json.dumps(evidence, ensure_ascii=False, indent=2)[:9000],
@@ -1772,7 +1788,22 @@ def notki_dnia(
                                     (karta.get("article_text") or "")[:400]))
     for nr, typ in enumerate(typy):
         forma = formy[nr] if nr < len(formy) else "PROSTA"
-        if typ == "ARTYKUL" and karta:
+        if typ == "MYSL":
+            # JEDYNY TYP BEZ KARTY DOWODOWEJ — i dlatego nie zabiera faktu z
+            # puli. Fakt zuzyty na notke, ktorej nie wolno go uzyc, przepadlby
+            # bez sladu: pula jest platna i wystarcza na kilka dni.
+            #
+            # Zamiast dowodu dostaje KONTEKST: o czym mowi sie w tej dziedzinie
+            # w tym tygodniu. Nie po to, zeby cytowac — po to, zeby mysl byla
+            # o czyms biezacym, a nie o AI w ogolnosci.
+            material = {"nie_cytuj_tego": (
+                "Context only. These are things being discussed this week. "
+                "Do NOT quote, cite, or state any of them as fact — you have "
+                "no evidence card and this type is not allowed to make "
+                "checkable claims. Use them only so your thought is about "
+                "something current."),
+                "o_czym_sie_mowi": zaczyn_z_kanalow(14)}
+        elif typ == "ARTYKUL" and karta:
             material = karta
         else:
             if not zapas:
@@ -1817,7 +1848,9 @@ def notki_dnia(
                      note_form=forma)
         # Fakt jedzie razem z notka, zeby `run.py` mial co odhaczyc dopiero
         # wtedy, gdy notka naprawde pojdzie w swiat.
-        wynik["fakt"] = tekst_faktu(material.get("fact")) or None
+        # MYSL nie zuzyla zadnego faktu, wiec nie ma czego odhaczac.
+        wynik["fakt"] = (None if typ == "MYSL"
+                         else tekst_faktu(material.get("fact")) or None)
         # Ta sama zasada co przy faktach: dzien promocji odhacza ten, kto notke
         # NAPRAWDE wystawil. Wystarczylo, ze kandydat przeszedl bramke — wiec
         # nieudana publikacja albo zwykle sprawdzenie zjadaly po cichu jeden

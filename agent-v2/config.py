@@ -1165,6 +1165,43 @@ NOTE_FORM_MIX = ("SCENA", "KONTRAST", "ZACZEP_I_KONKRET", "PROSTA", "LISTA",
                  "PYTANIE", "ODWROCENIE", "LICZBA")
 
 NOTE_TYPES = {
+    # MYSL — jedyny typ ZWOLNIONY z karty dowodowej, i jedyny, ktoremu nie
+    # wolno niesc faktu.
+    #
+    # Wlasciciel pokazal cztery notki z kont, ktore chce nasladowac. Zadna nie
+    # miala ani jednego udokumentowanego faktu — zero zrodel, zero liczb, zero
+    # nazwisk — a ta zlozona z samych pytan ("Should AI have its own universal
+    # language?") zebrala pietnascie komentarzy. Wiecej niz cokolwiek, co dotad
+    # wystawilismy przy naszych 26 polubieniach na dwanascie notek.
+    #
+    # Nasze pozostale cztery typy wymagaja dowodu, wiec takiej notki nie da sie
+    # u nas napisac. Ten typ to naprawia, placac twarda cena: bez faktu znaczy
+    # BEZ FAKTU. Dzieki temu sprawdzanie faktow jest tu EGZEKUTOREM, a nie
+    # przeszkoda — notka bez sprawdzalnego twierdzenia nie ma czego oblac,
+    # a notka, ktora fakt przemyci, oblewa sie sama.
+    "MYSL": (
+        "A thought, a question, or an observation about what it is like to "
+        "live alongside these systems. NO EVIDENCE CARD, and therefore NO "
+        "FACTS: no number, no date, no named company doing a named thing, no "
+        "study, no percentage, nothing a reader could look up and find false. "
+        "If your idea needs a fact to stand up, it is a different note type "
+        "and you should say so instead of inventing one.\n\n"
+        "What is left is the part people actually answer: a question nobody "
+        "can settle, an observation about the shared experience of using this "
+        "stuff, a position you would defend out loud. It may be openly "
+        "uncertain. It may be funny. It may admit that you are behind, "
+        "confused, or annoyed — those read as human because they are the "
+        "things a person says and an account never does.\n\n"
+        "Two shapes work. FIRST: the open question, asked in earnest, with "
+        "the two or three ways it could go named underneath — not a rhetorical "
+        "question whose answer you are holding. SECOND: the observation that "
+        "names something everyone has felt and nobody has said, followed by "
+        "what you think it means.\n\n"
+        "Speak in the first person and mean it. 'I think', 'I just realised', "
+        "'maybe' are allowed here and nowhere else in this publication. The "
+        "reader is being invited to disagree, so give them a specific thing "
+        "to disagree with, not a mood."
+    ),
     "ARTYKUL": (
         "A fact from an article published today. State the fact so it stands on "
         "its own, then let the link do the rest. Do not summarise the article "
@@ -1245,8 +1282,60 @@ WORST_NOTE_DAYS = ("monday", "friday")
 # starszymi z zimnym juz linkiem.
 NOTEK_PROMUJACYCH = 3
 
-NOTE_MIX_ARTICLE_DAY = ("ARTYKUL", "ARTYKUL", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE")
-NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", "CIEKAWOSTKA")
+# MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu.
+#
+# Powod jest w NOTE_TYPES przy samym typie: wszystkie pozostale wymagaja karty
+# dowodowej, a konta, ktore wlasciciel wskazal jako wzor, zbieraja rozmowe
+# notkami bez ani jednego faktu. Jedna na dzien, nie wiecej — wlasciciel
+# powiedzial wprost "nie maja byc wszystkie takie", i ma racje: feed samych
+# rozmyslan bez pokrycia to inne konto, nie nasze.
+NOTE_MIX_ARTICLE_DAY = ("ARTYKUL", "ARTYKUL", "CIEKAWOSTKA", "SPROSTOWANIE", "MYSL")
+
+# KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL.
+#
+# Powod jest zmierzony: opis typu wymienial pytanie i obserwacje jako dwie
+# mozliwosci, a model wybral obserwacje SZESC RAZY NA SZESC i szesc razy
+# zaczal od slowa "I". Notki byly dobre, ksztalt byl jeden.
+#
+# To ta sama choroba, co samooceny wracajace zawsze 1.0 i watki zawsze po
+# szesc — postawiony przed wyborem, model zbiega do stalej. I to samo
+# lekarstwo, co przy ruchu koncowym artykulu i formie notki: losowac w kodzie.
+#
+# Notka wlasciciela z pietnastoma komentarzami — najwiecej ze wszystkiego, co
+# pokazal — byla PYTANIEM. Czyli ksztaltem, ktorego model nie wybral ani razu.
+KSZTALTY_MYSLI = {
+    "PYTANIE": (
+        "Ask something nobody can settle, in earnest, and mean the question. "
+        "Name two or three ways it could go underneath — that is the part "
+        "people answer. You are not holding a hidden answer: if you know how "
+        "it comes out, this is the wrong shape. End on the open end, not on a "
+        "resolution. Do NOT open with the question and then quietly answer it."
+    ),
+    "OBSERWACJA": (
+        "Name something everyone who uses these systems has felt and nobody "
+        "has said out loud, then say what you think it means. First person, "
+        "specific, about a habit or a moment rather than about the industry."
+    ),
+    "TEZA": (
+        "State a position you would defend out loud, then the reasoning that "
+        "got you there, then the part of it you are least sure about. Give "
+        "the reader something precise to disagree with. No hedging into "
+        "mush — a clearly stated wrong opinion is better than a safe one."
+    ),
+    "CUDZE_ZDANIE": (
+        "Somebody else's take that you keep turning over — argued with, not "
+        "reported. Say what it gets right, then where you come off it. Do not "
+        "name or quote anyone: you have no evidence card, so the position is "
+        "described in your own words as a position, never attributed."
+    ),
+}
+
+
+def losowy_ksztalt_mysli() -> str:
+    """Ktory ksztalt dostaje ta MYSL. Losowany, bo wybor zbiega do stalej."""
+    import random
+    return random.choice(list(KSZTALTY_MYSLI))
+NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", "MYSL")
 
 # --- zachowanie spoleczne: widelki, nie stale liczby -------------------------
 # Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma normy. Losujemy

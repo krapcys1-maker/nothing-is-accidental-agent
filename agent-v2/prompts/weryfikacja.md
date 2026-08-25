@@ -99,6 +99,29 @@ if June 15 is behind us. Look for what actually happened — and if the
 announcement was reversed, delayed or changed in between, that reversal is
 usually the more interesting fact, so say so in `what_the_source_says`.
 
+## If the context says this note is type MYSL
+
+That type is **forbidden from making factual claims at all.** It has no evidence
+card and it is not allowed one: it exists to carry a thought, a question, or an
+observation about living alongside these systems.
+
+So the test inverts. You are not checking whether its facts hold up — you are
+checking that **it has none.**
+
+- A note of this type with no checkable claim is `safe_to_post: true`, even
+  though you confirmed nothing. There was nothing to confirm. Do not fail it
+  for being unverifiable; unverifiable is the specification.
+- A note of this type that names a number, a date, a study, a percentage, or a
+  specific company doing a specific thing has **broken its own contract**.
+  Mark that claim `refuted` and fail the note, whether or not the claim is
+  true. A true fact smuggled in here is still a fact the writer had no evidence
+  for, and the next one will not be true.
+
+Opinions, predictions, analogies and questions are not claims. "I think we are
+making a mistake by teaching models to sound certain" asserts nothing you could
+look up. "Models are trained to sound certain because users punish hedging"
+does — it is a claim about why companies do something, and it needs a source.
+
 ## The verdict
 
 `safe_to_post` is false when either of two things is true:
