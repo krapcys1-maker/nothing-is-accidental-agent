@@ -150,7 +150,7 @@
 | `MAX_TIMEOUT_S` | `300` | Twardy sufit na JEDNO wywolanie. Bez niego wyliczenie z sufitu tokenow dawalo 965 sekund, a przy wyszukiwaniu razy trzy — 48 MINUT. Jedno za |
 | `REFUSAL_PHRASES` | `( "you have been blocked", "access denied", ` | — |
 | `FETCH_TIMEOUT_S` | `30.0` | — |
-| `FETCH_MIN_CHARS` | `400` | — |
+| `FETCH_MIN_CHARS` | `1500` | ILE ZNAKOW MUSI ODDAC STRONA, ZEBY LICZYC SIE JAKO ZRODLO. Bylo 400 i to bylo za malo w sposob, ktory widac dopiero na przebiegu. Zmierzone  |
 | `FETCH_USER_AGENT` | `"Mozilla/5.0 (compatible; NothingIsAccidenta` | — |
 | `RUCHY_KONCOWE` | `{ "DO_SPRAWDZENIA": ( "Close by handing the ` | --- ruch koncowy i szerokosc drugiego aktu -------------------------------- Dwa artykuly napisane PO naprawie szamponu (0017 "The Gas You Di |
 | `RUCH_KONCOWY_MIX` | `("DO_SPRAWDZENIA", "KTO_NA_TYM_STOI", "POWRO` | — |

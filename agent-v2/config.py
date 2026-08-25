@@ -1587,7 +1587,28 @@ REFUSAL_PHRASES = (
 )
 
 FETCH_TIMEOUT_S = 30.0
-FETCH_MIN_CHARS = 400  # krótszy tekst to zwykle strona-zajawka, nie dokument
+# ILE ZNAKOW MUSI ODDAC STRONA, ZEBY LICZYC SIE JAKO ZRODLO.
+#
+# Bylo 400 i to bylo za malo w sposob, ktory widac dopiero na przebiegu.
+# Zmierzone 25 sierpnia 2026 na artykule o automatycznym wykrywaniu naduzyc
+# w zasilkach, dziewiec zrodel:
+#
+#     amnesty.nl                      146038 znakow   12 fragmentow   2 liczby
+#     hrw.org                          81669           11             10
+#     documents.uow.edu.au              7891
+#     cdn.greens.org.au                 3275
+#     autoriteitpersoonsgegevens.nl      716            3              0
+#     openresearch-repository.anu.edu.au 483            2              0
+#
+# Obie strony ponizej tysiaca znakow oddaly ZERO liczb, a mimo to weszly do
+# bilansu jako pelnoprawne zrodla pierwotne — jedna z nich dostala nawet
+# trafnosc 0.80. To sa banery zgody i strony tytulowe repozytoriow, z ktorych
+# klasyfikator wyciaga "fragmenty" ze stopki.
+#
+# Prog 1500 lezy w przerwie: odrzuca obie zajawki, przepuszcza najmniejsze
+# realne zrodlo z tego przebiegu (3275). Nie stawiam go wyzej, bo krotkie
+# dokumenty urzedowe — zawiadomienie, postanowienie, nota — bywaja prawdziwe.
+FETCH_MIN_CHARS = 1500
 FETCH_USER_AGENT = "Mozilla/5.0 (compatible; NothingIsAccidental/1.0; +editorial research)"
 
 # --- bramki jakości ----------------------------------------------------------

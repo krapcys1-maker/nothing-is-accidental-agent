@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **15 plików**, 13 250 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **15 plików**, 13 271 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -452,7 +452,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-1844 wierszy, 19 funkcji na poziomie modułu, 0 klas
+1865 wierszy, 19 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -11171,7 +11171,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `MAX_TIMEOUT_S` | `300` | Twardy sufit na JEDNO wywolanie. Bez niego wyliczenie z sufitu tokenow dawalo 965 sekund, a przy wyszukiwaniu razy trzy — 48 MINUT. Jedno za |
 | `REFUSAL_PHRASES` | `( "you have been blocked", "access denied", ` | — |
 | `FETCH_TIMEOUT_S` | `30.0` | — |
-| `FETCH_MIN_CHARS` | `400` | — |
+| `FETCH_MIN_CHARS` | `1500` | ILE ZNAKOW MUSI ODDAC STRONA, ZEBY LICZYC SIE JAKO ZRODLO. Bylo 400 i to bylo za malo w sposob, ktory widac dopiero na przebiegu. Zmierzone  |
 | `FETCH_USER_AGENT` | `"Mozilla/5.0 (compatible; NothingIsAccidenta` | — |
 | `RUCHY_KONCOWE` | `{ "DO_SPRAWDZENIA": ( "Close by handing the ` | --- ruch koncowy i szerokosc drugiego aktu -------------------------------- Dwa artykuly napisane PO naprawie szamponu (0017 "The Gas You Di |
 | `RUCH_KONCOWY_MIX` | `("DO_SPRAWDZENIA", "KTO_NA_TYM_STOI", "POWRO` | — |
