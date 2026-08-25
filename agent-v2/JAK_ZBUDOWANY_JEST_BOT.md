@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **17 plików**, 14 337 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **17 plików**, 14 344 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -455,7 +455,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-1997 wierszy, 20 funkcji na poziomie modułu, 0 klas
+2004 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -11299,7 +11299,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `WEB_SEARCH_TOOL` | `{ CLAUDE: "web_search_20260209", SONNET: "we` | Filtrowanie dynamiczne (`_20260209`) jest na Opusie i Sonnecie 5. |
 | `NAJNOWSZE_WYSZUKIWANIE` | `"web_search_20260209"` | Wersja narzedzia wyszukiwania dla modelu Anthropic, z galezia awaryjna. |
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
-| `DAILY_LIMIT_USD` | `10.00` | SUFIT DZIENNY PODNIESIONY NA CZAS DOMYKANIA PRZEROBKI KONTA. 5,00 USD to wartosc dla NORMALNEJ pracy agenta i do niej wracamy. Zmierzone na  |
+| `DAILY_LIMIT_USD` | `5.00` | SUFIT DZIENNY PODNIESIONY NA CZAS DOMYKANIA PRZEROBKI KONTA. 5,00 USD to wartosc dla NORMALNEJ pracy agenta i do niej wracamy. Zmierzone na  |
 | `MONTHLY_LIMIT_USD` | `40.00` | — |
 | `PONOWIENIA` | `2` | Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1. „Bez limitu na budowę" miało znaczyć „nie blokuj eksperymentów", a n |
 | `PONOWIENIE_ODSTEP_S` | `8` | — |

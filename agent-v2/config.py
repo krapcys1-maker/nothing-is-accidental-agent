@@ -409,7 +409,14 @@ WEB_SEARCH_USD_PER_1K = 10.00
 # kwocie — nie wiecej.
 #
 # PO ZAKONCZENIU PRZEROBKI WRACA 5,00. To nie jest nowa norma, tylko okno.
-DAILY_LIMIT_USD = 10.00
+#
+# OKNO ZAMKNIETE 25 sierpnia o 21:40 UTC. Dzien testowy zamknal sie na 7,40 USD
+# przy autoryzowanych 10 — artykul, dwie notki, cztery komentarze, dziesiec
+# polubien, restack i subskrypcja zmiescily sie w tej kwocie. O 00:04 UTC timer
+# odpala przebieg BEZ NADZORU, a sufit 10 USD byl zgoda na jeden dzien pracy
+# przy wlascicielu, nie stala swoboda dla nocnych przebiegow. Normalna doba
+# kosztuje 0,69–0,87 USD, wiec 5,00 zostawia ponad pieciokrotny zapas.
+DAILY_LIMIT_USD = 5.00
 MONTHLY_LIMIT_USD = 40.00
 
 # Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1.
