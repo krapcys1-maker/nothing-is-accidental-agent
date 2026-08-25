@@ -15,11 +15,20 @@ That produces a rule with a hard consequence for this publication:
 **Curiosity peaks at middling prior confidence.** A reader who knows nothing
 about a thing cannot tell what is missing — they do not know what they do not
 know, so there is no gap to open. A reader who already knows the answer has no
-gap either. The pull lives in the middle: they have met the object a thousand
+gap either. The pull lives in the middle: they have met the thing a thousand
 times and never examined it.
 
-This is why we write about ordinary things. The ordinary object supplies the
-prior belief for free.
+This is why we write about the systems people have already met — a chatbot that
+refused, a CV that was screened, a benchmark everybody quoted, a summary that
+was confidently wrong. The recognisable thing supplies the prior belief for
+free.
+
+**In this subject the failure mode is the opposite one and it is easy to hit.**
+A paper, a repository, an internal evaluation, a configuration file: the reader
+has never met any of them and holds no belief about them at all. Confidence near
+zero, so no gap, so nothing to close — however genuine the finding is. The
+recognisable half has to come first, and the document is the proof, not the
+subject.
 
 **And it is why one of our own articles failed.** A piece about the
 period-after-opening symbol printed on cosmetics was dull, and the diagnosis was
@@ -28,6 +37,12 @@ no belief at all about that symbol — many have never consciously noticed it.
 Confidence near zero, so no gap, so nothing to close. The padding was a symptom.
 By contrast, every reader believes the yellow traffic light lasts the same
 everywhere. That belief is wrong, and saying so opens a gap instantly.
+
+The same test, in this subject: nearly everyone believes a chatbot's confident
+tone tracks how sure it is, that a higher benchmark score means a better answer
+for them, or that the price on an API page is what a query costs. Each of those
+is a held belief, each is wrong in a specific way, and each opens a gap the
+moment you say so. That is the shape to look for.
 
 **Boredom is successful prediction.** The mind is a prediction engine; when the
 world matches the forecast there is nothing to process. What earns attention is a

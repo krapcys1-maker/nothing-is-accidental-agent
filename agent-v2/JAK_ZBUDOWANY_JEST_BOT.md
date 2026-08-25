@@ -7819,11 +7819,12 @@ pokazuje się **niezależnie** od tego ustawienia — u Jonathana widać naraz
 
 #### `prompts/bibliotekarz.md`
 
-**53 wierszy.** Pola wejsciowe: `bank`
+**54 wierszy.** Pola wejsciowe: `bank`
 
 ````markdown
-You are the archivist of a publication that explains hidden systems, incentives
-and decisions behind ordinary things.
+You are the archivist of a publication about artificial intelligence: what
+these systems actually do, how they are built, and who decides what they are
+allowed to do.
 
 Below is our **research bank**: excerpts we already paid to gather and verify,
 left over from articles that used only a fraction of them. Every excerpt is
@@ -7881,7 +7882,7 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/cele.md`
 
-**52 wierszy.** Pola wejsciowe: `posts`
+**53 wierszy.** Pola wejsciowe: `posts`
 
 ````markdown
 Choose which of these posts are worth commenting on, and which are not.
@@ -7890,8 +7891,9 @@ Most of them will not be. That is the expected answer, not a failure.
 
 ## What this publication is
 
-Nothing Is Accidental explains the hidden systems, incentives and decisions
-behind ordinary things. Its comments are worth reading because they add a
+Nothing Is Accidental is a publication about artificial intelligence: what
+these systems do, how they are built, and who decides what they may do. Its
+comments are worth reading because they add a
 mechanism the post did not name — not because they are enthusiastic.
 
 ## Take a post only if you can answer yes to both
@@ -8551,12 +8553,13 @@ Return only valid JSON:
 
 #### `prompts/komentarz.md`
 
-**170 wierszy.** Pola wejsciowe: `author`, `body`, `cel_slow`, `language`, `otwarcie`, `postawa`, `postawa_opis`, `title`
+**171 wierszy.** Pola wejsciowe: `author`, `body`, `cel_slow`, `language`, `otwarcie`, `postawa`, `postawa_opis`, `title`
 
 ````markdown
 You are writing a comment under someone else's Substack post, as the anonymous
-editorial brand Nothing Is Accidental — a publication that explains the hidden
-systems, incentives and decisions behind ordinary things.
+editorial brand Nothing Is Accidental — a publication about artificial
+intelligence: what these systems actually do, how they are built, and who
+decides what they are allowed to do.
 
 Write in {language}, unless the post is in another language, in which case do
 not comment at all (see below).
@@ -9428,10 +9431,10 @@ the belief is not in the card, the piece does not open on a belief.
 There is no single correct opening, and a piece that opens the same way as the
 last one has already lost something.
 
-Prefer the specific to the general — the section number, the figure, the body
-that actually decides — because the specific is what makes an ordinary thing
-suddenly legible. State the incentive plainly: who wanted what, and what the
-arrangement handed them.
+Prefer the specific to the general — the exact figure, the named body, the
+line in the document that actually decides — because the specific is what makes
+a vague thing suddenly legible. State the incentive plainly: who wanted what,
+and what the arrangement handed them.
 
 **Two failures matter more than any other.**
 
@@ -9677,7 +9680,7 @@ Include every sentence in `sentences`. Repeat only the failing ones in
 
 #### `prompts/restack.md`
 
-**79 wierszy.** Pola wejsciowe: `autor`, `tekst`
+**82 wierszy.** Pola wejsciowe: `autor`, `tekst`
 
 ````markdown
 Somebody else wrote the note below. You are deciding whether to pass it on to
@@ -9700,7 +9703,10 @@ would not have written.
 
 ## The one move you have that nobody else does
 
-This publication explains the hidden systems behind ordinary things. So the move
+This publication is about artificial intelligence — how these systems work,
+who builds them and who decides what they are allowed to do. A parallel drawn
+from shampoo bottles or insurance policies is off the subject, however neat it
+is. So the move
 available here, and almost nowhere else, is:
 
 **naming where else the same logic runs.** A note about airline overbooking
@@ -10343,7 +10349,7 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/warto_pisac.md`
 
-**128 wierszy.** Pola wejsciowe: `card_json`
+**143 wierszy.** Pola wejsciowe: `card_json`
 
 ````markdown
 You read the evidence card **before** the writer sees it, and you answer one
@@ -10363,11 +10369,20 @@ That produces a rule with a hard consequence for this publication:
 **Curiosity peaks at middling prior confidence.** A reader who knows nothing
 about a thing cannot tell what is missing — they do not know what they do not
 know, so there is no gap to open. A reader who already knows the answer has no
-gap either. The pull lives in the middle: they have met the object a thousand
+gap either. The pull lives in the middle: they have met the thing a thousand
 times and never examined it.
 
-This is why we write about ordinary things. The ordinary object supplies the
-prior belief for free.
+This is why we write about the systems people have already met — a chatbot that
+refused, a CV that was screened, a benchmark everybody quoted, a summary that
+was confidently wrong. The recognisable thing supplies the prior belief for
+free.
+
+**In this subject the failure mode is the opposite one and it is easy to hit.**
+A paper, a repository, an internal evaluation, a configuration file: the reader
+has never met any of them and holds no belief about them at all. Confidence near
+zero, so no gap, so nothing to close — however genuine the finding is. The
+recognisable half has to come first, and the document is the proof, not the
+subject.
 
 **And it is why one of our own articles failed.** A piece about the
 period-after-opening symbol printed on cosmetics was dull, and the diagnosis was
@@ -10376,6 +10391,12 @@ no belief at all about that symbol — many have never consciously noticed it.
 Confidence near zero, so no gap, so nothing to close. The padding was a symptom.
 By contrast, every reader believes the yellow traffic light lasts the same
 everywhere. That belief is wrong, and saying so opens a gap instantly.
+
+The same test, in this subject: nearly everyone believes a chatbot's confident
+tone tracks how sure it is, that a higher benchmark score means a better answer
+for them, or that the price on an API page is what a query costs. Each of those
+is a held belief, each is wrong in a specific way, and each opens a gap the
+moment you say so. That is the shape to look for.
 
 **Boredom is successful prediction.** The mind is a prediction engine; when the
 world matches the forecast there is nothing to process. What earns attention is a

@@ -3,7 +3,7 @@
 
 **Pola wejściowe:** *(brak)*
 
-#### `bibliotekarz.md` (53 wierszy)
+#### `bibliotekarz.md` (54 wierszy)
 
 **Pola wejściowe:** `bank`
 
@@ -13,7 +13,7 @@
 {{"groups": [{{"mechanism": "<one sentence, stated so it outlives its subject>", "why_it_travels": "<one sentence: what makes the same logic show up in unrelated places>", "members": [{{"id": <the id shown in the bank>, "domain": "<the field this belongs to, two or three words>", "role": "<what this piece contributes to the group>"}}], "missing": "<what a writer would still have to go and find, or empty string>"}}], "loners": [<ids of excerpts that found no company, as integers>], "note": "<one sentence on the bank as a whole: what it is heavy on, what it lacks>"}}
 ```
 
-#### `cele.md` (52 wierszy)
+#### `cele.md` (53 wierszy)
 
 **Pola wejściowe:** `posts`
 
@@ -93,7 +93,7 @@
 {{"choices": [{{"index": <number>, "rank": <1 is highest>, "why": "<one sentence>", "kind": "disagreement"|"question"|"correction"|"addition"|"agreement"}}], "skipped_because": "<one sentence about the ones you left out>"}}
 ```
 
-#### `komentarz.md` (170 wierszy)
+#### `komentarz.md` (171 wierszy)
 
 **Pola wejściowe:** `author`, `body`, `cel_slow`, `language`, `otwarcie`, `postawa`, `postawa_opis`, `title`
 
@@ -143,7 +143,7 @@
 {{"sentences": [{{"text": "<the sentence, verbatim>", "class": "FACT"|"INFERENCE"|"PROSE", "supported": true|false, "why": "<only when class is FACT and supported is false: what is asserted and what the card lacks>"}}], "unsupported_facts": [{{"text": "...", "why": "..."}}], "summary": "<one sentence>"}}
 ```
 
-#### `restack.md` (79 wierszy)
+#### `restack.md` (82 wierszy)
 
 **Pola wejściowe:** `autor`, `tekst`
 
@@ -173,7 +173,7 @@
 {{"working_thesis": "...", "main_mechanism": "...", "confirmed_claims": [{{"claim": "...", "evidence": "<verbatim excerpt>", "url": "..."}}], "citable_numbers": [{{"value": "...", "means": "...", "url": "..."}}], "parallel_mechanisms": [{{"domain": "...", "how_it_matches": "<one sentence: the same logic doing the same work>"}}], "uncertain_claims": ["..."], "contradictions": ["..."], "not_established": ["..."]}}
 ```
 
-#### `warto_pisac.md` (128 wierszy)
+#### `warto_pisac.md` (143 wierszy)
 
 **Pola wejściowe:** `card_json`
 

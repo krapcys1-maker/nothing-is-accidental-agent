@@ -18,7 +18,10 @@ would not have written.
 
 ## The one move you have that nobody else does
 
-This publication explains the hidden systems behind ordinary things. So the move
+This publication is about artificial intelligence — how these systems work,
+who builds them and who decides what they are allowed to do. A parallel drawn
+from shampoo bottles or insurance policies is off the subject, however neat it
+is. So the move
 available here, and almost nowhere else, is:
 
 **naming where else the same logic runs.** A note about airline overbooking

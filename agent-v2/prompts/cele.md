@@ -4,8 +4,9 @@ Most of them will not be. That is the expected answer, not a failure.
 
 ## What this publication is
 
-Nothing Is Accidental explains the hidden systems, incentives and decisions
-behind ordinary things. Its comments are worth reading because they add a
+Nothing Is Accidental is a publication about artificial intelligence: what
+these systems do, how they are built, and who decides what they may do. Its
+comments are worth reading because they add a
 mechanism the post did not name — not because they are enthusiastic.
 
 ## Take a post only if you can answer yes to both

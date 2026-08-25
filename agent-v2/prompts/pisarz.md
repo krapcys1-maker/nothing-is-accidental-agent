@@ -256,10 +256,10 @@ the belief is not in the card, the piece does not open on a belief.
 There is no single correct opening, and a piece that opens the same way as the
 last one has already lost something.
 
-Prefer the specific to the general — the section number, the figure, the body
-that actually decides — because the specific is what makes an ordinary thing
-suddenly legible. State the incentive plainly: who wanted what, and what the
-arrangement handed them.
+Prefer the specific to the general — the exact figure, the named body, the
+line in the document that actually decides — because the specific is what makes
+a vague thing suddenly legible. State the incentive plainly: who wanted what,
+and what the arrangement handed them.
 
 **Two failures matter more than any other.**
 
