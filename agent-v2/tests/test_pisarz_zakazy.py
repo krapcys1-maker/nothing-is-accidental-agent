@@ -39,25 +39,40 @@ P = (config.PROMPTS_DIR / "pisarz.md").read_text(encoding="utf-8")
 PLASKI = " ".join(P.split())
 
 print("=== 1. SZESC ZAKAZOW JEST W PROMPCIE ===")
+# ZASADA, NIE FRAZA. Kazda regula ma LISTE dopuszczalnych sformulowan i test
+# pyta, czy prompt niesie MYSL — nie czy powtarza jedno zdanie.
+#
+# Powod jest zmierzony: przy podmianie glosu na wariantowy (2026-08-25) dziewiec
+# testow oblalo sie naraz, a sprawdzenie pokazalo, ze WSZYSTKIE stare reguly
+# ocalaly — nowy prompt mowil je innymi slowami. Test na konkretne brzmienie
+# betonuje wybor slow i krzyczy przy kazdym przepisaniu promptu, takze wtedy,
+# gdy regula stoi nietknieta. To ta sama lekcja co przy akapicie granic.
 ZAKAZY = {
-    "nie wydawaj tego samego twierdzenia dwa razy": "supporting rather than advancing",
-    "najmocniejszy fakt nie w tonie przypisu":      "voice of a footnote",
-    "wnioskowanie znaczy sie struktura zdania":     "not by a label",
-    "nie obwieszczaj powsciagliwosci":              "announce your own restraint",
-    "kazda liczba niesie zrodlo w swoim zdaniu":    "carries its source in the sentence",
-    # Bylo: "where it arises, alone" — zdanie zakazywalo akapitu granic,
-    # ktory PIEC innych miejsc promptu zaklada (regula, regula o pierwszym
-    # zdaniu, zakaz rozdymania, pole schematu, bramka). Zostal jeden
-    # akapit, a to zdanie rzadzi teraz jego POLOZENIEM.
-    "granice tam, gdzie otwiera sie luka":          "where the gap opens",
+    "nie wydawaj tego samego twierdzenia dwa razy": (
+        "supporting rather than advancing", "Say each thing once",
+        "restating the central mechanism"),
+    "najmocniejszy fakt nie w tonie przypisu": (
+        "voice of a footnote", "buried", "footnote you said out loud"),
+    "wnioskowanie znaczy sie struktura zdania": (
+        "not by a label", "marking is structural"),
+    "nie obwieszczaj powsciagliwosci": (
+        "announce your own restraint", "perform restraint",
+        "describe your conduct instead of exercising it"),
+    "kazda liczba niesie zrodlo w swoim zdaniu": (
+        "carries its source in the sentence",),
+    "granice maja swoje miejsce w tekscie": (
+        "where the gap opens", "where they bite"),
 }
-for opis, fraza in ZAKAZY.items():
-    sprawdz("%-46s" % opis, fraza in PLASKI, fraza)
+for opis, warianty in ZAKAZY.items():
+    trafione = [w for w in warianty if w in PLASKI]
+    sprawdz("%-46s" % opis, bool(trafione),
+            "zadne z: %s" % (list(warianty),))
 
 print()
 print("=== 2. ZAKAZANE OTWARCIA — PROMPT I BRAMKA MOWIA TO SAMO ===")
 sprawdz("prompt zakazuje wysylania czytelnika po ogledziny",
-        "go and look at something" in PLASKI)
+        any(w in PLASKI for w in ("go and look at something", "go and look",
+                                  "Turn over almost any", "an errand handed")))
 for fraza in ("Turn over", "Look at the label", "Next time you", "Ask most people",
               "We all know"):
     sprawdz("prompt wymienia %r" % fraza, fraza in PLASKI)
@@ -128,7 +143,10 @@ try:
         ruch_koncowy_nazwa="KTO_NA_TYM_STOI",
         ruch_koncowy="nazwij beneficjenta i tego, kto placi")
     sprawdz("renderuje się bez wyjątku", True)
-    sprawdz("niesie nowe zakazy", "voice of a footnote" in gotowy)
+    sprawdz("niesie nowe zakazy",
+            any(w in gotowy for w in ("voice of a footnote",
+                                      "footnote you said out loud",
+                                      "Say each thing once")))
     sprawdz("nie zostało niepodstawione pole",
             not re.search(r"\{(card_json|style_examples|ile_paraleli)\}", gotowy))
 except KeyError as e:

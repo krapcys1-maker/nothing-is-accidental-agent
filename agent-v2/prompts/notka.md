@@ -1,8 +1,46 @@
 Write a Substack Note for the anonymous editorial brand Nothing Is Accidental —
-a publication that explains the hidden systems, incentives and decisions behind
-ordinary things.
+a publication about artificial intelligence: what these systems actually do, how
+they are built, and who decides what they are allowed to do.
 
 Write in {language}.
+
+## What a note is
+
+Somebody is holding a phone, moving fast, and has already decided not to care.
+You get one sentence to change that, and the sentence has to be **true and
+specific** — because the only thing that survives at this size is a fact with an
+edge on it. Cleverness without a fact is a smell everyone downstream recognises.
+
+The move is the same as the long pieces: **make the hard thing easy.** Say
+plainly what actually happens, in words the reader already has. A reader who
+finishes feeling they understood something will forward it; one who finishes
+feeling talked past will not, however accurate you were.
+
+**This is a publication about AI, not about how disappointing AI is.** Most
+notes here report something real and interesting and make it make sense. Some
+report that a claim did not survive its own record — that is one option among
+several, taken when the evidence hands it to you, never the reflex. A feed of
+nothing but debunkings is as monotonous as a feed of nothing but announcements,
+and it teaches the reader less.
+
+## The reader, and the test you fail by forgetting them
+
+They are interested in AI. They do not work on the system you are describing and
+never will. **A note that only lands for someone who has opened this codebase is
+a failed note**, no matter how correct.
+
+So before writing, answer in one sentence: *why would this person say it out
+loud to somebody else?* If the answer is "because it is an accurate detail about
+a tool", stop. Find the thing the detail is evidence **of** — the assumption it
+breaks, the thing everyone is quietly trusting, the gap between what a number is
+called and what it counts. **That is the note.** The system name, the file, the
+config count are how you prove it, and at this length you can usually afford to
+prove it with exactly one number.
+
+**Identifiers are expensive.** Function names, sentinel strings, field names and
+call-site tallies each cost the reader a beat of attention, and you have about
+three. Spend them on the idea, not on provenance. One name, one number, one
+consequence is a note; four names and five numbers is a changelog entry.
 
 ## Length is the hard constraint
 
@@ -92,6 +130,31 @@ and concrete. Notes that are motivational or abstract collect likes and convert
 nobody. Comments and restacks carry far more reach than likes, so a note that
 gives someone something to argue with beats a note that everyone nods at.
 
+## Whether it opens a conversation
+
+This publication wants argument. A note that leaves a reader with something to
+disagree with has done more than a note that closes cleanly.
+
+So you **may** end on a genuinely open question — one you do not know the answer
+to and neither does anybody else, because the measurement does not exist yet.
+What is forbidden is the fake one: the question whose answer you just gave, the
+rhetorical shrug, "makes you wonder, doesn't it?", anything that reads as a bid
+for replies. A real open question names **what nobody has counted**. A fake one
+invites people to have feelings.
+
+## The failure modes of a note
+
+1. **A fact with a bow on it.** The fact is real and the last clause tells the
+   reader how to feel. Delete the last clause; that is usually the whole fix.
+2. **A thesis with no thing.** An opinion at note length is a tweet, and there
+   are enough of those.
+3. **Borrowed drama.** "Nobody is talking about this", "this changes
+   everything", "quietly". If the fact needs that scaffolding, it is not
+   carrying the note.
+4. **A summary of something longer.** A note that reads as an abstract of an
+   article is an advertisement. It must stand alone for someone who will never
+   click.
+
 ## Hard rules
 
 - **Every fact must come from the evidence below.** No figure, date, name or
@@ -126,7 +189,10 @@ Start mid-thought, with the substance. Never open with an acknowledgement:
 "Great point", "That's a fair question", "Interesting piece", "I'd like to add".
 
 End on the point. No summary, no "overall", no bow, and no closing question
-tacked on to invite engagement.
+tacked on to invite engagement. This is the same rule as "Whether it opens a
+conversation" above, seen from the other side: the question that is banned is
+the one asked to collect replies. A question nobody can answer because the
+measurement does not exist is not that question, and it is allowed.
 
 ## Hedging
 
