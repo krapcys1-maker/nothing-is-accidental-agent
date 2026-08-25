@@ -427,5 +427,48 @@ sprawdz("wykrywacz wywolan zlapalby prawdziwe wejscie do API",
         & ZAKAZANE == {"api_json"})
 
 print()
+print("=== SWIEZA NOTKA: KARTA ZBIORCZA MILCZY, ROZBICIE JUZ MOWI ===")
+# ZNALEZIONE RECZNYM SPRAWDZENIEM 25 sierpnia, na dwunastu notkach produkcji.
+# Dla dojrzalych obie liczby zgadzaly sie co do jednego: 26=26, 19=19, 14=14,
+# 12=12. Ale notka wystawiona tego samego dnia miala w karcie zbiorczej ZERO,
+# a w rozbiciu po powierzchniach OSIEM — raport pokazywal wpis bez ani jednego
+# wejscia, ktory realnie mial osiem.
+#
+# Powierzchnie to te same wyswietlenia w rozbiciu, wiec ich suma nie moze
+# przekroczyc calosci. Gdy przekracza, znaczy to, ze calosci wlasnie nie znamy.
+_SWIEZA = {"cards": [
+    {"cardId": "impressions", "type": "chartCard", "headers": [{"value": 0}],
+     "items": []},
+    {"cardId": "surfaces", "type": "listCard", "items": [
+        {"title": "Feed", "value": 5}, {"title": "Other", "value": 3}]},
+]}
+_r = statystyki.z_kart(_SWIEZA)
+sprawdz("wyswietlenia biora sie z rozbicia, gdy karta zbiorcza ma zero",
+        _r["wyswietlenia"] == 8, _r["wyswietlenia"])
+
+# KONTRDOWOD 1: przy zgodnych liczbach NIC sie nie zmienia — inaczej poprawka
+# zawyzalaby kazdy pomiar przez podwojne liczenie.
+_DOJRZALA = {"cards": [
+    {"cardId": "impressions", "type": "chartCard", "headers": [{"value": 26}]},
+    {"cardId": "surfaces", "type": "listCard", "items": [
+        {"title": "Feed", "value": 20}, {"title": "Other", "value": 6}]},
+]}
+sprawdz("przy zgodnych liczbach wynik sie nie zmienia",
+        statystyki.z_kart(_DOJRZALA)["wyswietlenia"] == 26)
+
+# KONTRDOWOD 2: gdy karta zbiorcza mowi WIECEJ niz rozbicie, wygrywa ona —
+# bo rozbicie moze nie wymieniac wszystkich powierzchni.
+_NIEPELNE = {"cards": [
+    {"cardId": "impressions", "type": "chartCard", "headers": [{"value": 30}]},
+    {"cardId": "surfaces", "type": "listCard", "items": [
+        {"title": "Feed", "value": 4}]},
+]}
+sprawdz("karta zbiorcza wygrywa, gdy mowi wiecej",
+        statystyki.z_kart(_NIEPELNE)["wyswietlenia"] == 30)
+
+sprawdz("brak obu kart daje zero, nie wyjatek",
+        statystyki.z_kart({"cards": []})["wyswietlenia"] == 0)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

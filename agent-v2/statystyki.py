@@ -213,8 +213,26 @@ def z_kart(dane: dict) -> dict:
     odbiorcy = _pozycje(karty.get("audience"))
     interakcje = _pozycje(karty.get("interactions"))
 
+    # WYSWIETLENIA: karta zbiorcza ALBO suma powierzchni, ktorekolwiek wieksze.
+    #
+    # Zmierzone recznie 25 sierpnia na dwunastu notkach. Dla dojrzalych obie
+    # liczby zgadzaly sie co do jednego: 26=26, 19=19, 14=14, 12=12. Ale notka
+    # wystawiona tego samego dnia miala w karcie zbiorczej ZERO, a w rozbiciu
+    # po powierzchniach osiem — czyli raport pokazywal wpis bez ani jednego
+    # wejscia, ktory realnie mial osiem.
+    #
+    # Powod jest zapisany wyzej przy `_suma`: nazwy pola z liczba wyswietlen
+    # nie mielismy zmierzonej, wiec czytamy po kolei kilka kandydatow. Przy
+    # swiezej notce karta zbiorcza najwyrazniej jeszcze zadnego z nich nie
+    # niesie, a rozbicie juz tak.
+    #
+    # Bierzemy wieksza. Powierzchnie to te same wyswietlenia w rozbiciu, wiec
+    # ich suma NIE MOZE przekroczyc calosci — a gdy przekracza, to znaczy, ze
+    # calosci wlasnie nie znamy.
+    _z_karty = _suma(karty.get("impressions"))
+    _z_powierzchni = sum(powierzchnie.values())
     rekord: dict = {
-        "wyswietlenia": _suma(karty.get("impressions")),
+        "wyswietlenia": max(_z_karty, _z_powierzchni),
         "powierzchnie": powierzchnie,
         "odbiorcy": odbiorcy,
         "interakcje": interakcje,
