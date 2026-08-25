@@ -154,24 +154,27 @@ def jako_tekst(dane: dict[str, Any] | None = None) -> str:
     dane = dane if dane is not None else wczytaj()
     if not dane or not dane.get("aktualne"):
         return ""
-    linie = ["Checked %s." % (dane.get("sprawdzone") or "recently"), ""]
-    linie.append("CURRENT — these exist today:")
-    for m in dane.get("aktualne") or []:
-        linie.append("  - %s %s (released %s) — %s" % (
-            m.get("lab", "?"), m.get("model", "?"),
-            m.get("wydany", "?"), m.get("po_co", "")))
+
+    # KROTKO, I TO JEST POPRAWKA PO AWARII. Pierwsza wersja wypisywala wszystkie
+    # znalezione modele z opisami plus cala liste wycofanych — przy 25 i 16
+    # pozycjach to kilkadziesiat wierszy w prompcie, ktory i tak ma juz 255.
+    #
+    # Skutek zmierzony 25 sierpnia: szukanie ciekawostek zrobilo TRZYDZIESCI
+    # wyszukiwan, zjadlo 388 tysiecy tokenow wejscia i nie oddalo zadnego JSON-a.
+    # Model gonil za weryfikacja kazdej pozycji zamiast szukac faktow.
+    #
+    # Ta sekcja ma odpowiadac na jedno pytanie — "czy ta nazwa jeszcze istnieje"
+    # — i do tego wystarczy sama nazwa z data. Opisy "po co to jest" nie sluza
+    # niczemu w tym miejscu, a kusza do sprawdzania.
+    linie = ["Checked %s. Names and dates only — this is a list to check a name"
+             " against, not material." % (dane.get("sprawdzone") or "recently")]
+    linie.append("CURRENT: " + ", ".join(
+        "%s (%s)" % (m.get("model", "?"), str(m.get("wydany", "?"))[:7])
+        for m in (dane.get("aktualne") or [])[:16]))
     wyc = dane.get("wycofane") or []
     if wyc:
-        linie.append("")
-        linie.append("GONE OR GOING — do not build anything on these:")
-        for m in wyc:
-            linie.append("  - %s%s%s" % (
-                m.get("model", "?"),
-                (" (goes %s)" % m["kiedy_znika"]) if m.get("kiedy_znika") else "",
-                (" — %s" % m["uwaga"]) if m.get("uwaga") else ""))
-    if dane.get("uwagi"):
-        linie.append("")
-        linie.append(str(dane["uwagi"]))
+        linie.append("GONE OR GOING, do not build on these: " + ", ".join(
+            str(m.get("model", "?")) for m in wyc[:12]))
     return "\n".join(linie)
 
 

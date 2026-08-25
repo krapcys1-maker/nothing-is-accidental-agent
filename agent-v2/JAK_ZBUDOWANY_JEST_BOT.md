@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **16 plików**, 14 124 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **16 plików**, 14 127 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -518,7 +518,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `aktualne_modele.py` — jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci
 
-183 wierszy, 4 funkcji na poziomie modułu, 0 klas
+186 wierszy, 4 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -8129,7 +8129,7 @@ visible either way:
 
 #### `prompts/ciekawostki.md`
 
-**254 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `zaczyn_kanalow`
+**267 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `zaczyn_kanalow`
 
 ````markdown
 Find {ile} documented facts worth stopping a stranger mid-scroll.
@@ -8191,6 +8191,19 @@ support with somebody's video essay is not a fact.
 Prefer items from the last two weeks. Something that ran on three channels in
 four days is a subject the reader has already half-heard and half-understood,
 which is exactly where this publication is useful.
+
+## Before you start: how much searching is enough
+
+**Stop searching once you have {ile} facts you can source, and write the JSON.**
+
+This is a real limit, not a style note. One run made thirty search calls, spent
+its whole budget on them and returned no answer at all — the model kept chasing
+every requirement in this brief instead of converging. Everything below is a
+description of what a good fact looks like, not a checklist you must satisfy
+item by item before you may answer.
+
+If a search comes back thin, take the fact you already have and move on. Five
+solid facts beat eight you never got to write down.
 
 ## Where to look this time
 

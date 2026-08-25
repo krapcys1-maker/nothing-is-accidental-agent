@@ -58,6 +58,19 @@ Prefer items from the last two weeks. Something that ran on three channels in
 four days is a subject the reader has already half-heard and half-understood,
 which is exactly where this publication is useful.
 
+## Before you start: how much searching is enough
+
+**Stop searching once you have {ile} facts you can source, and write the JSON.**
+
+This is a real limit, not a style note. One run made thirty search calls, spent
+its whole budget on them and returned no answer at all — the model kept chasing
+every requirement in this brief instead of converging. Everything below is a
+description of what a good fact looks like, not a checklist you must satisfy
+item by item before you may answer.
+
+If a search comes back thin, take the fact you already have and move on. Five
+solid facts beat eight you never got to write down.
+
 ## Where to look this time
 
 Take your facts from these areas and no others:

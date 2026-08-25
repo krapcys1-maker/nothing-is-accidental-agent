@@ -376,7 +376,7 @@
 
 ### `aktualne_modele.py` — jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci
 
-183 wierszy, 4 funkcji na poziomie modułu, 0 klas
+186 wierszy, 4 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
