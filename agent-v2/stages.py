@@ -64,6 +64,42 @@ def recent_angles(conn: sqlite3.Connection, limit: int = config.DIVERSITY_LOOKBA
     return angles
 
 
+def tematy_do_porownania(conn: sqlite3.Connection,
+                         limit: int = config.DIVERSITY_LOOKBACK) -> list[str]:
+    """Poprzednie artykuly w postaci NADAJACEJ SIE DO POROWNANIA.
+
+    Rozne od `recent_angles`, ktore oddaje same tytuly do promptu skauta.
+    Tytul jest metafora — „Convicted by Deadline" nie ma ani jednego slowa
+    wspolnego z „automated debt recovery" — wiec do wykrywania powtorki jest
+    najgorszym mozliwym materialem.
+
+    Zmierzone: przy porownaniu po samych tytulach temat o Robodebt wrocil
+    nastepnego przebiegu pod nazwa „The Debt Letter No One Can Cancel" i
+    przeszedl, bo wspolny byl jeden rdzen („letter") przy wymaganych czterech.
+
+    Bierzemy wiec `topic` + `title` + poczatek TRESCI. Tresc niesie nazwy
+    instytucji, liczby i rzeczowniki tematu, czyli dokladnie to, na czym
+    rozmyta miara pracuje.
+    """
+    try:
+        rows = conn.execute(
+            "SELECT topic, title, body FROM articles "
+            "ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    except Exception:
+        return []
+    wynik = []
+    for r in rows:
+        d = dict(r)
+        # Pierwsze 1200 znakow tresci: doc, zeby niesc temat, za malo, zeby
+        # zderzac sie z kazdym artykulem o czymkolwiek.
+        wynik.append(" ".join(filter(None, [
+            str(d.get("topic") or ""),
+            str(d.get("title") or ""),
+            str(d.get("body") or "")[:1200],
+        ])))
+    return wynik
+
+
 REVIEW_SYSTEM = (
     "You check an article against its evidence card, sentence by sentence. "
     "Inference, analogy and opinion never fail — only a fact asserted without "
@@ -655,8 +691,12 @@ ILE_PRZEGRANYCH_TRZYMAMY = 400
 # przegranej wskazujacy na niewlasciwe pole — czyli klamstwo w dzienniku,
 # ktory ma sluzyc do diagnozy.
 SKLADNIKI_KLUCZA = (
-    "nosny", "artykulowy", "wlasny_ranking", "swiezy", "watki",
-    "waga_glebokosci", "confidence", "expected_primary_sources",
+    # Kolejnosc MUSI odpowiadac krotce z `pick_topic.kolejnosc` — test
+    # `test_przegrane_tematy` porownuje dlugosci i to jest jego glowna wartosc:
+    # dopisanie skladnika bez nazwy zrobiloby raport o przegranych, ktory
+    # przypisuje powody do zlych pol.
+    "nosny", "niepowtorzony", "artykulowy", "wlasny_ranking", "swiezy",
+    "watki", "waga_glebokosci", "confidence", "expected_primary_sources",
 )
 
 
@@ -1603,6 +1643,22 @@ def _o_tym_samym(a: str, b: str, min_wspolnych: int = 2,
 # kilkanascie razy wiecej niz w obrebie dnia, a falszywy alarm kosztuje notke —
 # przy realizacji normy notek na poziomie 63% to nie jest darmowe.
 POROWNANIE_MIEDZY_DNIAMI = {"min_wspolnych": 4, "prog": 0.30}
+
+# Prog dla POWTORKI TEMATU ARTYKULU. Osobny, bo porownujemy krotki opis tematu
+# (kilkanascie rdzeni) z CALYM artykulem (kilkaset), a przy takiej dysproporcji
+# udzial jest zawsze niski — nie dlatego, ze tematy sa rozne, tylko dlatego, ze
+# jedna strona jest dluga.
+#
+# Zmierzone na 7 artykulach w bazie, przy kandydatach z realnego przebiegu:
+#     powtorka Robodebt      4 wspolne rdzenie, udzial 0.25
+#     halt gieldowy          2                         0.17
+#     robotaxi               1                         0.09
+#     pamiec modelu          1                         0.17
+#     flaga plagiatu         1                         0.11
+# Rozroznia LICZBA RDZENI (4 wobec najwyzej 2), nie udzial. Prog udzialu
+# zostaje jako druga bariera, ale nizszy: 0.20 przepuszcza powtorke i odrzuca
+# najblizszy falszywy przypadek (0.17).
+POWTORKA_TEMATU = {"min_wspolnych": 4, "prog": 0.20}
 
 
 def wybierz_material(zapas: list[dict[str, Any]],
@@ -2745,7 +2801,7 @@ def zapisz_przegranych(przegrani: list[dict[str, Any]],
 
 def pick_topic(
     topics: list[dict[str, Any]], assessments: list[dict[str, Any]],
-    run_id: int | None = None
+    run_id: int | None = None, wczesniejsze: list[str] | None = None
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel.
 
@@ -2808,8 +2864,35 @@ def pick_topic(
         """
         return int(bool(temat(a).get("na_artykul")))
 
+    def niepowtorzony(a: dict[str, Any]) -> int:
+        """Czy tego tematu nie opisalismy juz pod inna nazwa.
+
+        Sprawdzenie W KODZIE, bo prosba w prompcie zawiodla w sposob mozliwy
+        do zmierzenia: 25 sierpnia rano poszedl artykul „The Overpayment Letter
+        No Human Read", a po poludniu ten sam skaut — z tym tytulem na liscie
+        zakazanych — zaproponowal „The Debt Letter No One Can Cancel" i wygral
+        ranking. Ten sam Robodebt, te same zrodla, przemianowany tytul.
+
+        Porownujemy TYTUL RAZEM Z PYTANIEM, bo tytul bywa metafora („Convicted
+        by Deadline"), a pytanie nazywa rzecz wprost. Prog ostry, ten sam co
+        miedzy dniami przy notkach — luzny blokowalby tematy sasiadujace, a
+        temat sasiadujacy to jeszcze nie powtorka.
+
+        Nie odrzucamy, tylko spychamy na koniec kolejki. Gdy caly przebieg
+        oddaje same powtorki, lepiej napisac powtorke niz nic — research jest
+        juz oplacony, a zasada wlasciciela mowi, ze artykul ma powstac.
+        """
+        if not wczesniejsze:
+            return 1
+        t_ = temat(a)
+        opis = "%s %s" % (t_.get("title") or "", t_.get("question") or "")
+        return int(not any(
+            _o_tym_samym(opis, w, **POWTORKA_TEMATU)
+            for w in wczesniejsze if w))
+
     def kolejnosc(a: dict[str, Any]):
         return (nosny(a),
+                niepowtorzony(a),
                 artykulowy(a),
                 wlasny_ranking(a),
                 swiezy(a),
@@ -2817,6 +2900,13 @@ def pick_topic(
                 waga.get(str(a.get("depth", "RICH")).upper(), 1),
                 a.get("confidence", 0),
                 a.get("expected_primary_sources", 0))
+
+    if wczesniejsze:
+        zepchniete = [temat(a).get("title") for a in assessments
+                      if a.get("feasible") and not niepowtorzony(a)]
+        if zepchniete:
+            print("  [tematy] juz o tym pisalismy, na koniec kolejki: %s"
+                  % ", ".join(str(x)[:40] for x in zepchniete if x), flush=True)
 
     ranked = sorted((a for a in assessments if a.get("feasible")),
                     key=kolejnosc, reverse=True)
@@ -2875,6 +2965,7 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
     prompt = _prompt(
         "skaut.md",
         count=count,
+        zaczyn_kanalow=zaczyn_z_kanalow(),
         history_json=json.dumps(history, ensure_ascii=False, indent=2),
         pytania_czytelnikow=(
             "\n".join("- " + p for p in pytania) if pytania

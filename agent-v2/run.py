@@ -877,7 +877,11 @@ def main() -> int:
         assessments = cached(
             stage, lambda: stages.feasibility(conn, run_id, topics), args.use_cache
         )
-        topic, verdict = stages.pick_topic(topics, assessments, run_id)
+        # Katy z poprzednich artykulow ida do WYBORU, nie tylko do promptu
+        # skauta — patrz `niepowtorzony`.
+        topic, verdict = stages.pick_topic(
+            topics, assessments, run_id,
+            wczesniejsze=stages.tematy_do_porownania(conn))
         print("\n-- odsiew wykonalności --", flush=True)
         for a in assessments:
             mark = "TAK " if a.get("feasible") else "nie "

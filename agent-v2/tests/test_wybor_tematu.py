@@ -493,5 +493,55 @@ sprawdz("most_written_about odejmuje",
         _pozycje({"most_written_about": [3]})[3] < 0)
 
 print()
+print("=== TEMAT NIE WRACA POD INNA NAZWA ===")
+# ZLAPANE NA ZYWYM PRZEBIEGU 25 sierpnia. Rano powstal artykul „The Overpayment
+# Letter No Human Read" o australijskim Robodebt. Po poludniu ten sam skaut,
+# majac ten tytul na liscie zakazanych w prompcie, zaproponowal „The Debt Letter
+# No One Can Cancel" — i wybor padl na niego. Ten sam temat, przemianowany.
+#
+# Regula roznorodnosci byla PROSBA W PROMPCIE. Prosba nie jest gwarancja — ta
+# lekcja jest w projekcie zapisana juz przy otwarciach notek.
+_POPRZEDNI = ("The Overpayment Letter No Human Read Convicted by Deadline "
+              "Cahoo learned that she owed the State of Michigan $34,475. A piece "
+              "of software had accused her of unemployment-benefit fraud, waited "
+              "for her to answer a letter she never received, treated her silence "
+              "as a confession, and filed the resulting debt away for later. "
+              "Michigan's unemployment agency ran a system called MiDAS.")
+
+_POWTORKA = {"title": "The Debt Letter No One Can Cancel",
+             "question": "What happens when a government's automated fraud detection "
+                         "system declares a family owes money, but the system is wrong?",
+             "nosny": True, "na_artykul": True, "pozycja": 5, "nasycony": False}
+_INNY = {"title": "The Chatbot That Remembers You",
+         "question": "What does a model keeping memory of you change about what it is?",
+         "nosny": True, "na_artykul": True, "pozycja": 0, "nasycony": False}
+_OCENY = [{"index": 0, "feasible": True, "confidence": 0.95},
+          {"index": 1, "feasible": True, "confidence": 0.70}]
+
+_wybrany, _ = stages.pick_topic([_POWTORKA, _INNY], _OCENY, 1,
+                                wczesniejsze=[_POPRZEDNI])
+sprawdz("powtorzony temat NIE zostaje wybrany",
+        _wybrany.get("title") == "The Chatbot That Remembers You",
+        _wybrany.get("title"))
+
+# KONTRDOWOD: bez pamieci wygrywa powtorka — czyli test mierzy TE zmiane,
+# a nie przypadkowa kolejnosc. Powtorka ma tu wyzsza `pozycja` wlasnie po to.
+_bez, _ = stages.pick_topic([_POWTORKA, _INNY], _OCENY, 1)
+sprawdz("a bez pamieci wygralaby (tak powstala wpadka)",
+        _bez.get("title") == "The Debt Letter No One Can Cancel",
+        _bez.get("title"))
+
+# Prog musi rozrozniac powtorke od tematu sasiadujacego. Zmierzone na 7
+# artykulach: powtorka 4 wspolne rdzenie, najblizszy inny temat 2.
+sprawdz("temat sasiadujacy NIE jest uznany za powtorke",
+        not stages._o_tym_samym(
+            "The Stop That Happens When the Machines Outrun the Humans "
+            "What triggers a trading halt when algorithms move faster than people?",
+            _POPRZEDNI, **stages.POWTORKA_TEMATU))
+sprawdz("prog powtorki jest osobny od progu miedzy dniami",
+        stages.POWTORKA_TEMATU != stages.POROWNANIE_MIEDZY_DNIAMI,
+        (stages.POWTORKA_TEMATU, stages.POROWNANIE_MIEDZY_DNIAMI))
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

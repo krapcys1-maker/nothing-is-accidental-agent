@@ -93,9 +93,45 @@ sprawdz("prompt pozwala je zignorowac", "these are not orders" in skaut)
 
 print()
 print("=== 7. PROMPT SKAUTA SIE RENDERUJE ===")
+# KONTRAKT PROMPT <-> KOD, sprawdzany w obie strony.
+#
+# Stala tu recznie wpisana lista pol i to bylo zle w sposob, ktory zlapala
+# dopiero produkcja: 25 sierpnia prompt skauta dostal pole `zaczyn_kanalow`
+# (tematy z kanalow wlasciciela), kod go nie podawal, i `format()` wywalal sie
+# na `KeyError`. Test przechodzil, bo renderowal prompt WLASNA lista pol
+# zamiast tej, ktorej uzywa kod. Ta sama wada byla w test_generatory.
+import string as _string
+import ast as _ast
+
+_skaut_pola = {f for _, f, _, _ in _string.Formatter().parse(skaut) if f}
+_zrodlo_st = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+_pola_kodu = set()
+for _w in _ast.walk(_ast.parse(_zrodlo_st)):
+    if not isinstance(_w, _ast.Call):
+        continue
+    _f = _w.func
+    _nazwa = _f.attr if isinstance(_f, _ast.Attribute) else getattr(_f, "id", "")
+    if _nazwa != "_prompt" or not _w.args:
+        continue
+    _p1 = _w.args[0]
+    if isinstance(_p1, _ast.Constant) and _p1.value == "skaut.md":
+        _pola_kodu = {kw.arg for kw in _w.keywords if kw.arg}
+
+sprawdz("znalazlem wywolanie promptu skauta w kodzie", bool(_pola_kodu),
+        sorted(_pola_kodu))
+sprawdz("kod podaje KAZDE pole, ktorego prompt zada",
+        not (_skaut_pola - _pola_kodu), sorted(_skaut_pola - _pola_kodu))
+sprawdz("i nie podaje pol, ktorych prompt nie ma",
+        not (_pola_kodu - _skaut_pola), sorted(_pola_kodu - _skaut_pola))
+sprawdz("prompt naprawde ma pola do podstawienia", len(_skaut_pola) >= 3,
+        sorted(_skaut_pola))
+
 try:
-    gotowy = stages._prompt("skaut.md", count=6, history_json="[]",
-                            pytania_czytelnikow="- pytanie testowe")
+    gotowy = stages._prompt(
+        "skaut.md",
+        **{k: ("- pytanie testowe" if k == "pytania_czytelnikow" else
+               "[]" if k == "history_json" else 6 if k == "count" else "X")
+           for k in _skaut_pola})
     sprawdz("renderuje sie bez wyjatku", True)
     sprawdz("pytanie trafia do tekstu", "pytanie testowe" in gotowy)
 except Exception as e:

@@ -2180,7 +2180,7 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/skaut.md`
 
-**474 wierszy.** Pola wejsciowe: `count`, `history_json`, `pytania_czytelnikow`
+**499 wierszy.** Pola wejsciowe: `count`, `history_json`, `pytania_czytelnikow`, `zaczyn_kanalow`
 
 ````markdown
 You are a topic scout for the English-language Substack "Nothing Is Accidental",
@@ -2226,6 +2226,31 @@ Name what you believe has been written. If you can name it easily, we do not
 want the topic. If nothing comes to mind after genuinely trying, that is the
 signal. Do not fake this in either direction — claiming ignorance about the
 flushable wipes would be a lie, and we would catch it.
+
+## What the field is arguing about this week
+
+Real video titles from the channels this publication follows, with dates. Hype
+wrapping stripped; what is left is roughly the event.
+
+{zaczyn_kanalow}
+
+**This is a list of LIVE SUBJECTS, never a source.** A video title proves
+nothing. It tells you what people have already half-heard this week, and that is
+the one thing you cannot get from your own memory — your memory ended months ago
+and it does not feel like it ended.
+
+Two ways to use it, both legitimate:
+
+- **Take a subject from the list and find what the coverage skipped.** Everyone
+  reported that the thing happened. Almost nobody read the filing, the system
+  card, the court record or the changelog underneath it. That gap is ours.
+- **Take a subject from the list and find the older, documented case it rhymes
+  with.** A thing that happened this week, explained through a thing that was
+  ruled on three years ago, is the strongest shape this publication has.
+
+What you may not do is propose the video's own claim as the topic. "A lab
+released a model" is not a topic. It is what everybody is publishing today, and
+by the time we are out it reads as late.
 
 ## The phenomenon
 

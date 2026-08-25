@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **15 plików**, 13 141 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **15 plików**, 13 250 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 44 zestawów
-testów, 1314 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 1322 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1279 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1283 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -164,12 +164,13 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-3874 wierszy, 90 funkcji na poziomie modułu, 0 klas
+3965 wierszy, 91 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_prompt(name, **fields)` *(wewn.)* | — |
 | `recent_angles(conn, limit)` | Ostatnie kąty redakcyjne — wejście do reguły różnorodności. |
+| `tematy_do_porownania(conn, limit)` | Poprzednie artykuly w postaci NADAJACEJ SIE DO POROWNANIA. |
 | `review(conn, run_id, card, draft)` | Etap 8 — recenzja: rozliczenie każdego zdania (Claude). |
 | `ocen_forme(conn, run_id, draft)` | Obserwacja formy: beaty, eskalacja, moment przyłapania, znajomość otwarcia. |
 | `poprzednie_teksty(ile, pomin_tresc)` | Treści kilku ostatnich artykułów — materiał dla bramki ODCISK_FORMY. |
@@ -234,7 +235,7 @@ wiec nie da sie go rozjechac z kodem.
 | `powody_porazek(dni)` | Dlaczego dzialania sie NIE UDALY — pogrupowane, najczestsze pierwsze. |
 | `_powod_przegranej(klucz_zwyciezcy, klucz_tematu)` *(wewn.)* | Ktory skladnik klucza sortowania ROZSTRZYGNAL, i jakimi wartosciami. |
 | `zapisz_przegranych(przegrani, run_id)` | Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej. |
-| `pick_topic(topics, assessments, run_id)` | Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel. |
+| `pick_topic(topics, assessments, run_id, wczesniejsze)` | Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel. |
 | `scout(conn, run_id, count)` | Etap 1 — skaut tematów (Claude). |
 | `bank_fragmentow(conn, dni)` | Nieuzyte fragmenty ze wszystkich artykulow — zaplacone i nieprzeczytane. |
 | `bibliotekarz(conn, run_id, bank)` | Grupuje bank po MECHANIZMIE. Model proponuje, KOD weryfikuje. |
@@ -261,7 +262,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2721 wierszy, 59 funkcji na poziomie modułu, 0 klas
+2735 wierszy, 59 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -6409,7 +6410,7 @@ def discovery(
 ```python
 def pick_topic(
     topics: list[dict[str, Any]], assessments: list[dict[str, Any]],
-    run_id: int | None = None
+    run_id: int | None = None, wczesniejsze: list[str] | None = None
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel.
 
@@ -6472,8 +6473,35 @@ def pick_topic(
         """
         return int(bool(temat(a).get("na_artykul")))
 
+    def niepowtorzony(a: dict[str, Any]) -> int:
+        """Czy tego tematu nie opisalismy juz pod inna nazwa.
+
+        Sprawdzenie W KODZIE, bo prosba w prompcie zawiodla w sposob mozliwy
+        do zmierzenia: 25 sierpnia rano poszedl artykul „The Overpayment Letter
+        No Human Read", a po poludniu ten sam skaut — z tym tytulem na liscie
+        zakazanych — zaproponowal „The Debt Letter No One Can Cancel" i wygral
+        ranking. Ten sam Robodebt, te same zrodla, przemianowany tytul.
+
+        Porownujemy TYTUL RAZEM Z PYTANIEM, bo tytul bywa metafora („Convicted
+        by Deadline"), a pytanie nazywa rzecz wprost. Prog ostry, ten sam co
+        miedzy dniami przy notkach — luzny blokowalby tematy sasiadujace, a
+        temat sasiadujacy to jeszcze nie powtorka.
+
+        Nie odrzucamy, tylko spychamy na koniec kolejki. Gdy caly przebieg
+        oddaje same powtorki, lepiej napisac powtorke niz nic — research jest
+        juz oplacony, a zasada wlasciciela mowi, ze artykul ma powstac.
+        """
+        if not wczesniejsze:
+            return 1
+        t_ = temat(a)
+        opis = "%s %s" % (t_.get("title") or "", t_.get("question") or "")
+        return int(not any(
+            _o_tym_samym(opis, w, **POWTORKA_TEMATU)
+            for w in wczesniejsze if w))
+
     def kolejnosc(a: dict[str, Any]):
         return (nosny(a),
+                niepowtorzony(a),
                 artykulowy(a),
                 wlasny_ranking(a),
                 swiezy(a),
@@ -6481,6 +6509,13 @@ def pick_topic(
                 waga.get(str(a.get("depth", "RICH")).upper(), 1),
                 a.get("confidence", 0),
                 a.get("expected_primary_sources", 0))
+
+    if wczesniejsze:
+        zepchniete = [temat(a).get("title") for a in assessments
+                      if a.get("feasible") and not niepowtorzony(a)]
+        if zepchniete:
+            print("  [tematy] juz o tym pisalismy, na koniec kolejki: %s"
+                  % ", ".join(str(x)[:40] for x in zepchniete if x), flush=True)
 
     ranked = sorted((a for a in assessments if a.get("feasible")),
                     key=kolejnosc, reverse=True)
@@ -9994,7 +10029,7 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/skaut.md`
 
-**474 wierszy.** Pola wejsciowe: `count`, `history_json`, `pytania_czytelnikow`
+**499 wierszy.** Pola wejsciowe: `count`, `history_json`, `pytania_czytelnikow`, `zaczyn_kanalow`
 
 ````markdown
 You are a topic scout for the English-language Substack "Nothing Is Accidental",
@@ -10040,6 +10075,31 @@ Name what you believe has been written. If you can name it easily, we do not
 want the topic. If nothing comes to mind after genuinely trying, that is the
 signal. Do not fake this in either direction — claiming ignorance about the
 flushable wipes would be a lie, and we would catch it.
+
+## What the field is arguing about this week
+
+Real video titles from the channels this publication follows, with dates. Hype
+wrapping stripped; what is left is roughly the event.
+
+{zaczyn_kanalow}
+
+**This is a list of LIVE SUBJECTS, never a source.** A video title proves
+nothing. It tells you what people have already half-heard this week, and that is
+the one thing you cannot get from your own memory — your memory ended months ago
+and it does not feel like it ended.
+
+Two ways to use it, both legitimate:
+
+- **Take a subject from the list and find what the coverage skipped.** Everyone
+  reported that the thing happened. Almost nobody read the filing, the system
+  card, the court record or the changelog underneath it. That gap is ours.
+- **Take a subject from the list and find the older, documented case it rhymes
+  with.** A thing that happened this week, explained through a thing that was
+  ruled on three years ago, is the strongest shape this publication has.
+
+What you may not do is propose the video's own claim as the topic. "A lab
+released a model" is not a topic. It is what everybody is publishing today, and
+by the time we are out it reads as late.
 
 ## The phenomenon
 

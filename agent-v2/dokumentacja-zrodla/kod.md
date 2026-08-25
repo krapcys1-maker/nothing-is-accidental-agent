@@ -390,7 +390,7 @@ def discovery(
 ```python
 def pick_topic(
     topics: list[dict[str, Any]], assessments: list[dict[str, Any]],
-    run_id: int | None = None
+    run_id: int | None = None, wczesniejsze: list[str] | None = None
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel.
 
@@ -453,8 +453,35 @@ def pick_topic(
         """
         return int(bool(temat(a).get("na_artykul")))
 
+    def niepowtorzony(a: dict[str, Any]) -> int:
+        """Czy tego tematu nie opisalismy juz pod inna nazwa.
+
+        Sprawdzenie W KODZIE, bo prosba w prompcie zawiodla w sposob mozliwy
+        do zmierzenia: 25 sierpnia rano poszedl artykul „The Overpayment Letter
+        No Human Read", a po poludniu ten sam skaut — z tym tytulem na liscie
+        zakazanych — zaproponowal „The Debt Letter No One Can Cancel" i wygral
+        ranking. Ten sam Robodebt, te same zrodla, przemianowany tytul.
+
+        Porownujemy TYTUL RAZEM Z PYTANIEM, bo tytul bywa metafora („Convicted
+        by Deadline"), a pytanie nazywa rzecz wprost. Prog ostry, ten sam co
+        miedzy dniami przy notkach — luzny blokowalby tematy sasiadujace, a
+        temat sasiadujacy to jeszcze nie powtorka.
+
+        Nie odrzucamy, tylko spychamy na koniec kolejki. Gdy caly przebieg
+        oddaje same powtorki, lepiej napisac powtorke niz nic — research jest
+        juz oplacony, a zasada wlasciciela mowi, ze artykul ma powstac.
+        """
+        if not wczesniejsze:
+            return 1
+        t_ = temat(a)
+        opis = "%s %s" % (t_.get("title") or "", t_.get("question") or "")
+        return int(not any(
+            _o_tym_samym(opis, w, **POWTORKA_TEMATU)
+            for w in wczesniejsze if w))
+
     def kolejnosc(a: dict[str, Any]):
         return (nosny(a),
+                niepowtorzony(a),
                 artykulowy(a),
                 wlasny_ranking(a),
                 swiezy(a),
@@ -462,6 +489,13 @@ def pick_topic(
                 waga.get(str(a.get("depth", "RICH")).upper(), 1),
                 a.get("confidence", 0),
                 a.get("expected_primary_sources", 0))
+
+    if wczesniejsze:
+        zepchniete = [temat(a).get("title") for a in assessments
+                      if a.get("feasible") and not niepowtorzony(a)]
+        if zepchniete:
+            print("  [tematy] juz o tym pisalismy, na koniec kolejki: %s"
+                  % ", ".join(str(x)[:40] for x in zepchniete if x), flush=True)
 
     ranked = sorted((a for a in assessments if a.get("feasible")),
                     key=kolejnosc, reverse=True)
