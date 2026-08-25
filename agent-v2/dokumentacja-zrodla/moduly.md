@@ -387,10 +387,11 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-334 wierszy, 3 funkcji na poziomie modułu, 0 klas
+386 wierszy, 4 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `temat_z_faktu(conn, run_id, fakt)` | Zamienia udokumentowany fakt w brief artykulu. |
 | `wybierz_fakt(conn, run_id, ile)` | Swiezy fakt z puli ciekawostek, ktory NIE powtarza zadnego artykulu. |
 | `main()` | — |
+| `_napisz_i_zapisz(conn, run_id, brief, card)` *(wewn.)* | Od bramki „warto pisac" do zapisu i grafiki. |

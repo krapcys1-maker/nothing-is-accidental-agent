@@ -151,6 +151,24 @@ def main() -> int:
     run_id = db.start_run(conn, "artykul-z-puli")
     print("== artykul z puli ciekawostek ==", flush=True)
 
+    # --- SCIEZKA Z ZATWIERDZONEJ KARTY ------------------------------------
+    #
+    # `--z-karty` pomija szukanie tematu i caly research: wczytuje karte
+    # zapisana przez `--do-karty` i rusza od pisarza. Dzieki temu obejrzenie
+    # materialu przed napisaniem kosztuje 0,38 USD RAZ, a nie dwa razy.
+    if "--z-karty" in sys.argv:
+        import json as _json
+        _plik = config.DATA_DIR / "karta_do_zatwierdzenia.json"
+        if not _plik.exists():
+            print("BRAK zatwierdzonej karty — najpierw --do-karty", flush=True)
+            return 1
+        _zapis = _json.loads(_plik.read_text(encoding="utf-8"))
+        card = _zapis["card"]
+        brief = _zapis["brief"]
+        print("  karta wczytana: %s" % brief.get("title"), flush=True)
+        print("  pytanie: %s" % str(brief.get("question"))[:130], flush=True)
+        return _napisz_i_zapisz(conn, run_id, brief, card)
+
     fakt = wybierz_fakt(conn, run_id)
     print()
     print("  FAKT:   %s" % (fakt.get("fact") or "")[:200], flush=True)
@@ -254,8 +272,38 @@ def main() -> int:
         print("CZEGO NIE USTALONO:")
         for x in (card.get("not_established") or [])[:5]:
             print("   - %s" % str(x)[:150])
+
+        # KARTA ZAPISANA, ZEBY NIE PLACIC DYSKOVERII DRUGI RAZ.
+        #
+        # Pierwsza wersja hamulca konczyla tu i tyle — a wtedy napisanie
+        # zatwierdzonego artykulu wymagalo puszczenia calego lancucha od nowa,
+        # czyli oplacenia szukania tematu, dyskoverii, pobierania, klasyfikacji
+        # i syntezy PO RAZ DRUGI. Hamulec, ktory oszczedza 0,76 na pisaniu i
+        # kaze zaplacic 0,38 na research, oszczedza polowe tego, co obiecuje.
+        #
+        # `--z-karty` wczytuje ten plik i rusza od pisarza.
+        import json as _json
+        _plik = config.DATA_DIR / "karta_do_zatwierdzenia.json"
+        try:
+            _plik.parent.mkdir(parents=True, exist_ok=True)
+            _plik.write_text(_json.dumps(
+                {"card": card, "brief": brief, "fakt": fakt},
+                ensure_ascii=False, indent=1), encoding="utf-8")
+            print()
+            print(">> karta zapisana: %s" % _plik)
+            print(">> zeby napisac TEN artykul bez placenia researchu drugi raz:")
+            print("   .venv/bin/python agent-v2/artykul_z_puli.py --z-karty")
+        except OSError as exc:
+            print("   (karty nie zapisalem: %s)" % exc)
         return 0
 
+
+def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
+    """Od bramki „warto pisac" do zapisu i grafiki.
+
+    Wydzielone, zeby `--z-karty` mogl tu wejsc z zatwierdzona karta bez
+    placenia researchu drugi raz.
+    """
     print()
     print("-- czy jest tu luka --", flush=True)
     ocena = stages.warto_pisac(conn, run_id, card)
@@ -328,6 +376,10 @@ def main() -> int:
 
     stages.grafika(conn, run_id, draft, sciezka_artykulu=sciezka)
     return 0
+
+
+    return _napisz_i_zapisz(conn, run_id, brief, card)
+
 
 
 if __name__ == "__main__":
