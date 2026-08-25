@@ -827,6 +827,44 @@ def znajdz_ciekawostki(
     return fakty
 
 
+_KUPLET_NEGACJA = re.compile(
+    r"\b(isn't|is not|aren't|are not|wasn't|was not|doesn't|does not|"
+    r"don't|do not|never|nothing|no one|nobody)\b", re.IGNORECASE)
+_KUPLET_POPRAWKA = re.compile(
+    r"\b(it's|it is|that's|that is|they're|only|the real|what it is|"
+    r"instead)\b", re.IGNORECASE)
+
+
+def kuplet_korygujacy(tekst: str) -> bool:
+    """Czy tekst uzywa ruchu „nie X. Y." — zaprzeczenie, potem poprawka.
+
+    Recenzja zimnego czytelnika (23 sierpnia) nazwala to TIKIEM KONTA: ruch
+    wraca w artykulach i w notkach tak czesto, ze staje sie podpisem. Sam w
+    sobie jest dobry i czasem najlepszy — problem jest wylacznie w POWTARZANIU.
+
+    Policzone przed dolozeniem tego kodu, na 29 wystawionych notkach: 5 z nich,
+    czyli 17%. Dosc, zeby czytelnik przewijajacy profil zobaczyl rytm.
+
+    Dlatego to NIE JEST bramka odrzucajaca, tylko drugie kryterium sortowania
+    kandydatow — dokladnie jak `powtarza_otwarcie`. Notka z kupletem jest
+    nadal lepsza niz brak notki, a przy trzech kandydatach zwykle jest z czego
+    wybierac za darmo.
+    """
+    czyste = (tekst or "").replace(chr(10), " ")
+    zdania = [z.strip() for z in re.split(r"(?<=[.!?])\s+", czyste) if z.strip()]
+    for i in range(len(zdania) - 1):
+        if (_KUPLET_NEGACJA.search(zdania[i])
+                and _KUPLET_POPRAWKA.search(zdania[i + 1])):
+            return True
+    # ten sam ruch scisniety w jedno zdanie: „X is not Y, it's Z"
+    for z in zdania:
+        if re.search(r"\b(is not|isn't|aren't|are not)\b[^.]{0,60}?[,.]\s*"
+                     r"(it's|it is|they're|they are|that's|that is)\b",
+                     z, re.IGNORECASE):
+            return True
+    return False
+
+
 def ostatnie_otwarcia(rodzaj: str = "notka", ile: int = 8) -> list[str]:
     """Pierwsze slowa ostatnich notek — zeby kolejna nie zaczela sie tak samo.
 
@@ -981,9 +1019,15 @@ def note(
         slowa = (d.get("note") or "").split()
         return bool(slowa) and slowa[0].strip("\"'.,").lower() in zajete_otwarcia
 
-    candidates.sort(key=powtarza_otwarcie)
+    # DRUGIE kryterium: kuplet korygujacy „nie X. Y." — patrz
+    # `kuplet_korygujacy`. Otwarcie wazniejsze, bo widac je w kolumnie profilu
+    # zanim ktokolwiek zacznie czytac; tik dopiero przy czytaniu.
+    candidates.sort(key=lambda d: (powtarza_otwarcie(d),
+                                   kuplet_korygujacy(d.get("note") or "")))
     if candidates and powtarza_otwarcie(candidates[0]):
         print("    (wszyscy kandydaci zaczynaja jak poprzednie notki)", flush=True)
+    elif candidates and kuplet_korygujacy(candidates[0].get("note") or ""):
+        print("    (wszyscy kandydaci uzywaja ruchu nie-X-Y)", flush=True)
 
     for data in candidates:
         text = (data.get("note") or "").strip()

@@ -172,6 +172,53 @@ for p in PILNOWANE:
     print("  %-24s %s" % (pathlib.Path(p).name, "bez zmian" if ok else "ZMIENIONA"))
 
 print()
+print("=== KUPLET KORYGUJACY JEST DRUGIM KRYTERIUM, NIE BRAMKA ===")
+# Recenzja zimnego czytelnika nazwala ruch „nie X. Y." tikiem konta. Policzone
+# na 29 wystawionych notkach: wykrywacz znajduje go w 4, czyli 14%. Dosc, zeby
+# czytelnik przewijajacy profil zobaczyl rytm, za malo, zeby odrzucac notki.
+sprawdz("dwa zdania: zaprzeczenie, potem poprawka",
+        stages.kuplet_korygujacy(
+            "Nothing about the answer changes. Only the queue does.") is True)
+sprawdz("ten sam ruch w jednym zdaniu",
+        stages.kuplet_korygujacy(
+            "The number is not a measurement, it is a band.") is True)
+sprawdz("wariant ze skroceniem",
+        stages.kuplet_korygujacy(
+            "That jar is not added information. It's the substitute.") is True)
+
+# KONTRDOWOD: zdanie z zaprzeczeniem, ale BEZ poprawki, nie jest kupletem.
+# Bez tego wykrywacz lapalby kazde zdanie przeczace i sortowanie stalo by sie
+# losowe.
+sprawdz("samo zaprzeczenie to nie kuplet",
+        stages.kuplet_korygujacy(
+            "You pay for sentences the model never shows you. OpenAI's o1 "
+            "models think in hidden reasoning tokens.") is False)
+sprawdz("powtorzona fraza to tez nie kuplet",
+        stages.kuplet_korygujacy(
+            "Two years in, a misstatement cannot void the policy. Two years "
+            "is the incontestability clause.") is False)
+sprawdz("zwykla notka bez ruchu",
+        stages.kuplet_korygujacy(
+            "Same model, same prompt, four prices. Google halves the bill "
+            "for off-peak.") is False)
+
+# NAJWAZNIEJSZE: to ma SORTOWAC, a nie odrzucac. Notka z kupletem jest nadal
+# lepsza niz brak notki — dokladnie ta sama zasada, co przy powtorzonym
+# otwarciu. Sprawdzamy to na kodzie, nie na obietnicy.
+_st = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
+sprawdz("kuplet uzyty w kluczu sortowania",
+        "kuplet_korygujacy(d.get(" in _st)
+_linie_z_kupletem = [l for l in _st.split("\n")
+                     if "kuplet_korygujacy" in l and not l.strip().startswith("#")]
+sprawdz("kuplet uzyty w trzech miejscach: definicja, sortowanie, komunikat",
+        len(_linie_z_kupletem) == 3, len(_linie_z_kupletem))
+sprawdz("i zadna z tych linii nie odrzuca notki",
+        not any("safe_to_post" in l or "continue" in l for l in _linie_z_kupletem),
+        _linie_z_kupletem)
+sprawdz("otwarcie ma pierwszenstwo przed tikiem",
+        _st.index("powtarza_otwarcie(d)") < _st.index("kuplet_korygujacy(d.get("))
+
+print()
 print("=== WYNIK: %s zdanych, %s oblanych%s ===" %
       (zdane, oblane, ", PRODUKCJA RUSZONA" if zle else ""))
 sys.exit(1 if (oblane or zle) else 0)
