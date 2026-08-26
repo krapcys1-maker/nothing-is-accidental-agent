@@ -2902,7 +2902,21 @@ def discovery(
         "discovery", DISCOVERY_SYSTEM, prompt,
         conn=conn, run_id=run_id, web_search=True, collect_urls=real_urls,
     )
-    data = llm.parse_json(text)
+    try:
+        data = llm.parse_json(text)
+    except Exception:
+        # TEN SAM RATUNEK, CO PRZY CIEKAWOSTKACH, i tu jest potrzebniejszy.
+        # Zmierzone 26 sierpnia na calej historii bazy: `discovery` robi
+        # SREDNIO 20,2 wyszukiwania na wywolanie (maks. 32) wobec 14,4 przy
+        # ciekawostkach, a kosztuje 4,61 USD — drugi wydatek po pisaniu.
+        # Przepalone wywolanie dyskoverii jest wiec drozsze niz przepalona
+        # ciekawostka i tak samo odzyskiwalne: material zostal znaleziony,
+        # tylko oddany zdaniami.
+        print("  [dyskoveria] brak JSON — probuje odzyskac z tekstu", flush=True)
+        ratunek = llm.ratuj_json("discovery", text, conn=conn, run_id=run_id)
+        if not ratunek:
+            raise
+        data = llm.parse_json(ratunek)
     sources = data.get("sources")
     if not isinstance(sources, list) or not sources:
         raise ValueError(f"dyskoveria nie zwróciła źródeł: {text[:300]!r}")
