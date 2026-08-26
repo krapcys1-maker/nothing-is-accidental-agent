@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **17 plików**, 14 506 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **17 plików**, 14 517 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 46 zestawów
-testów, 1385 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 1387 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-4347 wierszy, 94 funkcji na poziomie modułu, 0 klas
+4358 wierszy, 94 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -8161,7 +8161,7 @@ visible either way:
 
 #### `prompts/ciekawostki.md`
 
-**307 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `zaczyn_kanalow`
+**310 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `zaczyn_kanalow`
 
 ````markdown
 Find {ile} documented facts worth stopping a stranger mid-scroll.
@@ -8348,7 +8348,10 @@ being true. Give its date and URL, and say what it does to the claim.**
   claim. A conditional exception written up as "zero permissions" is this case.
 - `control_verdict: "ENDS"` — the arrangement is over. The contract was
   cancelled, the vendor left, the rule was repealed, the product was withdrawn.
-  Do not offer the fact at all.
+  **Offer the fact anyway, and put what happened in `control_fact`.** A dead
+  arrangement is not a dead subject: it is a subject with an ending, which is
+  usually the most interesting part and almost always the part nobody wrote
+  down. What is forbidden is presenting it as the way things are.
 
 The control document does **not** have to be newer than your source. It has to
 be the one that GOVERNS. A company's 2026 annual report may state a figure that
@@ -9191,7 +9194,7 @@ Title: {title}
 
 #### `prompts/notka.md`
 
-**295 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
+**303 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
 
 ````markdown
 Write a Substack Note for the anonymous editorial brand Nothing Is Accidental —
@@ -9460,20 +9463,28 @@ Return only valid JSON:
 
 {{"note": "<the note>", "words": <integer>, "fact_used": "<the single fact from the evidence this rests on>", "source_url": "<the url that fact came from>"}}
 
-## If your fact carries `control_verdict: "MODIFIES"`, you must say the catch
+## If your fact carries `control_verdict` MODIFIES or ENDS, say what became of it
 
-Some facts come with a second finding: still broadly true, but something
-narrows or conditions it. That qualifier sits in `control_fact`, and **it goes
-in the note, in the same breath as the claim** — not as a footnote, not left
-out because it costs you the clean line.
+**Writing about the past is entirely allowed.** A contract signed in 2021, a
+study from 2023, a law passed in 2018 — all fine, and often the best material.
+The rule is not about age. It is that a note resting on an old fact has to tell
+the reader **what the thing is now**, and that sentence sits in `control_fact`.
 
-It usually costs about eight words. "Zero permissions" becomes "no advance
-licence for the training step, if six conditions hold". That version is more
-interesting, not less, because the conditions are where the argument actually
-is — and the flat version is the one a reader can catch you on.
+- `MODIFIES` — still broadly true, but conditioned. Carry the qualifier in the
+  same breath as the claim. "Zero permissions" becomes "no advance licence for
+  the training step, if six conditions hold". Eight words, and the note gets
+  more interesting, because the conditions are where the argument actually is.
+- `ENDS` — the arrangement is over. Say so, in the note. "Those were the rates
+  in 2021; the contract was cancelled eight months early and the vendor left
+  the business entirely." That is not a retraction of your note, it is the end
+  of the story, and a story with an ending beats a snapshot.
 
-A note that states the headline and drops the catch is worse than one that
-never ran, because it reads as checked.
+Past tense is not enough on its own. "Workers were paid under two dollars an
+hour" is true and still leaves a reader in August 2026 believing it describes
+something running. The ending has to be visible.
+
+A note that states the headline and drops what became of it is worse than one
+that never ran, because it reads as checked.
 
 ## The evidence
 

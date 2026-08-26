@@ -1213,13 +1213,24 @@ def swiezosc_faktu(fakt: dict[str, Any], teraz=None) -> tuple[bool, str]:
     werdykt = str(fakt.get("control_verdict") or "").strip().upper()
     kontrola = str(fakt.get("control_fact") or "").strip()
 
-    if werdykt == "ENDS":
-        return False, "uklad juz nie istnieje: %s" % (kontrola[:120] or "ENDS")
-    if werdykt == "MODIFIES":
+    # WIEK NICZEGO NIE ODRZUCA. Pisanie o historii jest w porzadku, pod jednym
+    # warunkiem: notka ma powiedziec, czym rzecz jest DZISIAJ.
+    #
+    # Pierwsza wersja tej bramki odrzucala ENDS wprost — i wlasciciel zatrzymal
+    # mnie tego samego dnia: „odnoszenie sie do historii jest ok, jesli pozniej
+    # piszemy o terazniejszosci, tego nie mozemy zakazywac". Mial racje, a moja
+    # wersja zakazywalaby notki o kenijskich kontraktach z 2021 — napisanej w
+    # czasie przeszlym, z data, czyli bez zadnego bledu.
+    #
+    # „Sama zerwala kontrakt w lutym 2022 i wyszla z moderacji w 2023" nie psuje
+    # takiej notki. Domyka ja i czyni CIEKAWSZA, bo pokazuje, co sie z tym
+    # ukladem stalo. Wiec ENDS i MODIFIES traktujemy tak samo: przechodza, ale
+    # tylko z trescia, ktora pisarz ma obowiazek powiedziec.
+    if werdykt in ("ENDS", "MODIFIES"):
         # Zastrzezenie bez tresci jest gorsze niz brak zastrzezenia: wyglada na
-        # sprawdzone. Pisarz ma je NIESC, wiec musi je dostac.
+        # sprawdzone, a nie niesie niczego, co pisarz moglby powiedziec.
         if not kontrola:
-            return False, "MODIFIES bez zastrzezenia w control_fact"
+            return False, "%s bez tresci w control_fact" % werdykt
         return True, ""
     if werdykt == "CONFIRMS":
         wiek_k = wiek_zrodla_w_dniach(fakt.get("control_date"), teraz=teraz)

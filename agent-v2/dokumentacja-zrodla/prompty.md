@@ -23,7 +23,7 @@
 {{"targets": [{{"index": <number>, "worth_it": true|false, "what_i_would_add": "<one concrete sentence, or empty when worth_it is false>", "why_not": "<one sentence, only when worth_it is false>"}}]}}
 ```
 
-#### `ciekawostki.md` (307 wierszy)
+#### `ciekawostki.md` (310 wierszy)
 
 **Pola wejściowe:** `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `zaczyn_kanalow`
 
@@ -103,7 +103,7 @@
 {{"comment": "<the comment, or null>", "reason_if_silent": "<one sentence, only when comment is null>", "what_it_adds": "<one sentence naming what this comment contributes that the post did not say>"}}
 ```
 
-#### `notka.md` (295 wierszy)
+#### `notka.md` (303 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
 

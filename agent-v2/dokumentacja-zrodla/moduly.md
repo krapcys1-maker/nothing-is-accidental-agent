@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-4347 wierszy, 94 funkcji na poziomie modułu, 0 klas
+4358 wierszy, 94 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

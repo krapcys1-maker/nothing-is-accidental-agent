@@ -264,20 +264,28 @@ Return only valid JSON:
 
 {{"note": "<the note>", "words": <integer>, "fact_used": "<the single fact from the evidence this rests on>", "source_url": "<the url that fact came from>"}}
 
-## If your fact carries `control_verdict: "MODIFIES"`, you must say the catch
+## If your fact carries `control_verdict` MODIFIES or ENDS, say what became of it
 
-Some facts come with a second finding: still broadly true, but something
-narrows or conditions it. That qualifier sits in `control_fact`, and **it goes
-in the note, in the same breath as the claim** — not as a footnote, not left
-out because it costs you the clean line.
+**Writing about the past is entirely allowed.** A contract signed in 2021, a
+study from 2023, a law passed in 2018 — all fine, and often the best material.
+The rule is not about age. It is that a note resting on an old fact has to tell
+the reader **what the thing is now**, and that sentence sits in `control_fact`.
 
-It usually costs about eight words. "Zero permissions" becomes "no advance
-licence for the training step, if six conditions hold". That version is more
-interesting, not less, because the conditions are where the argument actually
-is — and the flat version is the one a reader can catch you on.
+- `MODIFIES` — still broadly true, but conditioned. Carry the qualifier in the
+  same breath as the claim. "Zero permissions" becomes "no advance licence for
+  the training step, if six conditions hold". Eight words, and the note gets
+  more interesting, because the conditions are where the argument actually is.
+- `ENDS` — the arrangement is over. Say so, in the note. "Those were the rates
+  in 2021; the contract was cancelled eight months early and the vendor left
+  the business entirely." That is not a retraction of your note, it is the end
+  of the story, and a story with an ending beats a snapshot.
 
-A note that states the headline and drops the catch is worse than one that
-never ran, because it reads as checked.
+Past tense is not enough on its own. "Workers were paid under two dollars an
+hour" is true and still leaves a reader in August 2026 believing it describes
+something running. The ending has to be visible.
+
+A note that states the headline and drops what became of it is worse than one
+that never ran, because it reads as checked.
 
 ## The evidence
 

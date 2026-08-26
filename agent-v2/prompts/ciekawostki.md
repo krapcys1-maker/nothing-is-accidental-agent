@@ -182,7 +182,10 @@ being true. Give its date and URL, and say what it does to the claim.**
   claim. A conditional exception written up as "zero permissions" is this case.
 - `control_verdict: "ENDS"` — the arrangement is over. The contract was
   cancelled, the vendor left, the rule was repealed, the product was withdrawn.
-  Do not offer the fact at all.
+  **Offer the fact anyway, and put what happened in `control_fact`.** A dead
+  arrangement is not a dead subject: it is a subject with an ending, which is
+  usually the most interesting part and almost always the part nobody wrote
+  down. What is forbidden is presenting it as the way things are.
 
 The control document does **not** have to be newer than your source. It has to
 be the one that GOVERNS. A company's 2026 annual report may state a figure that

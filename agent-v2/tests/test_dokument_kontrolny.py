@@ -17,10 +17,20 @@ TRZY NOTKI, KTORE TO WYPUSCILO, i wszystkie trzy mialy dobra kotwice:
   - Microsoft: liczba z 10-K prawdziwa, ale uklad zmienila umowa
     restrukturyzacyjna STARSZA od raportu.
 
-DWIE RZECZY, KTORE Z TEGO WYNIKAJA:
+TRZY RZECZY, KTORE Z TEGO WYNIKAJA:
   1. Dokument kontrolny nie musi byc NOWSZY od zrodla. Ma RZADZIC.
   2. Wiek kotwicy przestaje byc powodem odrzucenia. Badanie z 2023 i ustawa z
      2018 maja przechodzic czysto — wlasciciel powiedzial to wprost.
+  3. WIEK NIE ODRZUCA NICZEGO, TAKZE ZERWANEGO UKLADU. Pierwsza wersja tej
+     bramki odrzucala ENDS i wlasciciel zatrzymal to tego samego dnia:
+     „odnoszenie sie do historii jest ok, jesli pozniej piszemy o
+     terazniejszosci, tego nie mozemy zakazywac". Notka o kontraktach z 2021,
+     w czasie przeszlym i z data, nie ma zadnego bledu — ma miec ciag dalszy.
+     Jedyny wymog: notka musi powiedziec, czym rzecz jest DZISIAJ.
+
+     Sam czas przeszly nie wystarcza. „Pracownikom placono ponizej dwoch
+     dolarow za godzine" jest prawda i zostawia czytelnika w sierpniu 2026 z
+     przekonaniem, ze opisuje cos dzialajacego. Zakonczenie ma byc widoczne.
 """
 import datetime
 import sys
@@ -53,11 +63,17 @@ def wolno(**kw):
     return stages.swiezosc_faktu(fakt(**kw), teraz=TERAZ)
 
 
-print("=== 1. ENDS: UKLAD JUZ NIE ISTNIEJE ===")
+print("=== 1. WIEK NICZEGO NIE ODRZUCA — ANI NAWET ZERWANY UKLAD ===")
+# Pierwsza wersja tej bramki odrzucala ENDS wprost. Wlasciciel zatrzymal to tego
+# samego dnia: „odnoszenie sie do historii jest ok, jesli pozniej piszemy o
+# terazniejszosci, tego nie mozemy zakazywac". Notka o kenijskich kontraktach z
+# 2021 — w czasie przeszlym, z data — nie ma zadnego bledu. Ma miec ciag dalszy.
 ok, powod = wolno(control_verdict="ENDS",
                   control_fact="Sama zerwala kontrakt w lutym 2022")
-sprawdz("fakt o zerwanym ukladzie odpada", not ok, powod)
-sprawdz("i powod nazywa rzecz po imieniu", "nie istnieje" in powod, powod)
+sprawdz("fakt o zerwanym ukladzie PRZECHODZI", ok, powod)
+ok, powod = wolno(control_verdict="ENDS", control_fact="")
+sprawdz("ale bez opisania, co sie stalo — nie", not ok, powod)
+sprawdz("powod nazywa puste pole", "control_fact" in powod, powod)
 
 print()
 print("=== 2. MODIFIES: PRZECHODZI TYLKO Z ZASTRZEZENIEM ===")
@@ -104,11 +120,16 @@ ok, _ = wolno(fact="Sama paid workers under two dollars an hour",
               source_date="2023-01-18")
 sprawdz("bez pol kontrolnych stara sciezka nadal przepuszcza", ok)
 
-# A z polami kontrolnymi ten sam fakt odpada. To jest cala roznica.
+# Z polami kontrolnymi ten sam fakt nadal przechodzi — ale juz NIE MOZE wyjsc
+# bez zdania o tym, ze uklad sie skonczyl. Roznica nie jest w tym, czy notka
+# powstanie, tylko w tym, czy powie czytelnikowi prawde o dzisiaj.
 ok, _ = wolno(fact="Sama paid workers under two dollars an hour",
               source_date="2023-01-18", control_verdict="ENDS",
-              control_fact="kontrakt zerwany w lutym 2022")
-sprawdz("z polami kontrolnymi ten sam fakt odpada", not ok)
+              control_fact="kontrakt zerwany w lutym 2022, dostawca wyszedl z moderacji w 2023")
+sprawdz("z opisanym zakonczeniem przechodzi", ok)
+ok, _ = wolno(fact="Sama paid workers under two dollars an hour",
+              source_date="2023-01-18", control_verdict="ENDS", control_fact="")
+sprawdz("bez opisanego zakonczenia odpada", not ok)
 
 print()
 print("=== 6. STARE ODMOWY NIE ZNIKLY ===")
