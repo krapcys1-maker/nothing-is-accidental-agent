@@ -1185,6 +1185,66 @@ def swiezosc_faktu(fakt: dict[str, Any], teraz=None) -> tuple[bool, str]:
     wersja = nazywa_wersje(tekst)
     o_teraz = [s for s in config.TWIERDZI_O_TERAZ if s in male]
 
+    # --- DOKUMENT KONTROLNY -------------------------------------------------
+    #
+    # `source_date` mowi, SKAD fakt pochodzi. Nie mowi, czy fakt jest jeszcze
+    # prawdziwy — a im trwalsze zrodlo, tym mniej mowi: ustawa, glosne
+    # sledztwo i recenzowana praca istnieja dalej dlugo po tym, jak uklad,
+    # ktory opisuja, zostal renegocjowany albo zerwany.
+    #
+    # ZMIERZONE 26 sierpnia na setce tematow. Warunek nizej — „jesli nie ma
+    # nazwanej wersji i nie ma slowa z listy, przepusc" — konczyl bramke ZANIM
+    # ktokolwiek spojrzal na date. 43 z 54 tematow po progu przechodzilo
+    # nieprzeczytanych. Swiezosc byla sprawdzana slownikiem trzydziestu slow,
+    # nie data.
+    #
+    # Trzy wady, ktore to wypuscilo, i wszystkie trzy mialy dobra kotwice:
+    #   - Kenia: liczby zgodne ze sledztwem TIME, ale Sama zerwala kontrakt w
+    #     lutym 2022 i wyszla z moderacji w 2023. Uklad nie istnieje.
+    #   - Japonia: art. 30-4 nadal obowiazuje, ale „zero pozwolen" zaciera szesc
+    #     warunkow, a porownanie „ani USA, ani UE" jest falszywe — art. 4
+    #     dyrektywy DSM to tez wyjatek bez pozwolenia.
+    #   - Microsoft: liczba z 10-K prawdziwa, ale uklad zmienila umowa
+    #     restrukturyzacyjna STARSZA od raportu.
+    #
+    # Stad dwie rzeczy naraz: dokument kontrolny NIE MUSI byc nowszy od zrodla
+    # (ma RZADZIC, nie byc swiezy), a wiek kotwicy przestaje byc powodem
+    # odrzucenia. Badanie z 2023 i ustawa z 2018 maja przechodzic czysto.
+    werdykt = str(fakt.get("control_verdict") or "").strip().upper()
+    kontrola = str(fakt.get("control_fact") or "").strip()
+
+    if werdykt == "ENDS":
+        return False, "uklad juz nie istnieje: %s" % (kontrola[:120] or "ENDS")
+    if werdykt == "MODIFIES":
+        # Zastrzezenie bez tresci jest gorsze niz brak zastrzezenia: wyglada na
+        # sprawdzone. Pisarz ma je NIESC, wiec musi je dostac.
+        if not kontrola:
+            return False, "MODIFIES bez zastrzezenia w control_fact"
+        return True, ""
+    if werdykt == "CONFIRMS":
+        wiek_k = wiek_zrodla_w_dniach(fakt.get("control_date"), teraz=teraz)
+        # Brak daty kontrolnej uchodzi TYLKO wtedy, gdy model zapisal, ze
+        # szukal i nic nowszego nie ma. Puste pole to nie to samo.
+        if wiek_k is None:
+            if kontrola:
+                return True, ""
+            return False, "CONFIRMS bez daty kontrolnej i bez sladu szukania"
+        if wiek_k > config.MAKS_WIEK_ZRODLA_DNI:
+            return False, ("dokument kontrolny ma %d dni (prog %d) — to nie "
+                           "jest sprawdzenie stanu na dzis"
+                           % (wiek_k, config.MAKS_WIEK_ZRODLA_DNI))
+        return True, ""
+
+    # --- BEZ KONTROLI: STARA SCIEZKA, ale glosno ----------------------------
+    #
+    # Prog nie jest jeszcze zamkniety, bo nie zmierzylem, jak czesto model
+    # naprawde wypelnia te pola. „Norma bez pomiaru jest zyczeniem" dziala w obie
+    # strony: bramka zamknieta na nieopomiarowanym polu potrafi wyzerowac cala
+    # produkcje notek. Wiec liczymy braki, a domkniemy po pomiarze.
+    if not werdykt:
+        print("  [swiezosc] fakt BEZ dokumentu kontrolnego — stara sciezka: %s"
+              % (str(fakt.get("fact") or "")[:70]), flush=True)
+
     if not wersja and not o_teraz:
         return True, ""
 

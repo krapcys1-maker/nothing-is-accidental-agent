@@ -1063,10 +1063,17 @@ def grafika(
 ) -> dict[str, Any]:
     """Nagłówek graficzny artykułu.
 
-    Rozpoznawalność bierze się z powtarzalności, nie z pomysłowości: model
-    wybiera PRZEDMIOT, a sposób pokazania go jest przepisywany dosłownie z
-    `prompts/grafika.md`. Dzięki temu tożsamość wizualna zmienia się w jednym
-    miejscu, a nie osobno przy każdym artykule.
+    Rozpoznawalność bierze się z powtarzalności PALETY, ŚWIATŁA I NASTROJU,
+    przepisywanych dosłownie z `prompts/grafika.md`. Model wybiera SCENĘ i
+    kadr; tożsamość wizualna zmienia się w jednym miejscu, nie osobno przy
+    każdym artykule.
+
+    Do 26 sierpnia 2026 powtarzalność szła dalej: model wybierał jeden PRZEDMIOT,
+    zawsze wyizolowany, zawsze na szarym papierze. To była reguła napisana dla
+    konta o rzeczach codziennych, gdzie butelka szamponu na tle czytała się jak
+    eksponat. Przy koncie o AI dała laptop z pustym białym ekranem leżący na
+    papierze — poprawny wobec briefu i martwy. Scena odpowiada na pytania,
+    na które eksponat nie mógł: gdzie to jest i co się tu przed chwilą działo.
     """
     # GRAFIKA NIGDY NIE ZABIJA ARTYKUŁU. Zasada właściciela mówi wprost: gdy
     # temat jest wybrany, a research zrobiony i opłacony, artykuł MUSI powstać.

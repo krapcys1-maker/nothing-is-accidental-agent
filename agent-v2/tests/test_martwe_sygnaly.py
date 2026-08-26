@@ -60,6 +60,9 @@ RUSZTOWANIE = {
         "object": "wymusza konkret przy przylapaniu czytelnika",
         "supports": "wskazuje, ktore przekonanie wspiera zdanie — pilnuje, ze wsparcie nie jest przekonaniem",
     },
+    "ciekawostki.md": {
+        "control_url": "zmusza do ZNALEZIENIA dokumentu rzadzacego, nie samego wpisania daty; kod czyta control_date/verdict/fact, adres zostaje w zapisie do sprawdzenia recznego",
+    },
     "grafika.md": {
         "why_this_scene": "zmusza do wyboru sceny Z TEKSTU, nie ilustracji tematu",
     },

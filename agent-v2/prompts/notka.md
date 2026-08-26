@@ -264,6 +264,21 @@ Return only valid JSON:
 
 {{"note": "<the note>", "words": <integer>, "fact_used": "<the single fact from the evidence this rests on>", "source_url": "<the url that fact came from>"}}
 
+## If your fact carries `control_verdict: "MODIFIES"`, you must say the catch
+
+Some facts come with a second finding: still broadly true, but something
+narrows or conditions it. That qualifier sits in `control_fact`, and **it goes
+in the note, in the same breath as the claim** — not as a footnote, not left
+out because it costs you the clean line.
+
+It usually costs about eight words. "Zero permissions" becomes "no advance
+licence for the training step, if six conditions hold". That version is more
+interesting, not less, because the conditions are where the argument actually
+is — and the flat version is the one a reader can catch you on.
+
+A note that states the headline and drops the catch is worse than one that
+never ran, because it reads as checked.
+
 ## The evidence
 
 {evidence}

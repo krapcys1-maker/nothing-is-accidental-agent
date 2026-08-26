@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **17 plików**, 14 439 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **17 plików**, 14 506 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 45 zestawów
-testów, 1369 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 46 zestawów
+testów, 1385 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-4280 wierszy, 94 funkcji na poziomie modułu, 0 klas
+4347 wierszy, 94 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -7108,10 +7108,17 @@ def grafika(
 ) -> dict[str, Any]:
     """Nagłówek graficzny artykułu.
 
-    Rozpoznawalność bierze się z powtarzalności, nie z pomysłowości: model
-    wybiera PRZEDMIOT, a sposób pokazania go jest przepisywany dosłownie z
-    `prompts/grafika.md`. Dzięki temu tożsamość wizualna zmienia się w jednym
-    miejscu, a nie osobno przy każdym artykule.
+    Rozpoznawalność bierze się z powtarzalności PALETY, ŚWIATŁA I NASTROJU,
+    przepisywanych dosłownie z `prompts/grafika.md`. Model wybiera SCENĘ i
+    kadr; tożsamość wizualna zmienia się w jednym miejscu, nie osobno przy
+    każdym artykule.
+
+    Do 26 sierpnia 2026 powtarzalność szła dalej: model wybierał jeden PRZEDMIOT,
+    zawsze wyizolowany, zawsze na szarym papierze. To była reguła napisana dla
+    konta o rzeczach codziennych, gdzie butelka szamponu na tle czytała się jak
+    eksponat. Przy koncie o AI dała laptop z pustym białym ekranem leżący na
+    papierze — poprawny wobec briefu i martwy. Scena odpowiada na pytania,
+    na które eksponat nie mógł: gdzie to jest i co się tu przed chwilą działo.
     """
     # GRAFIKA NIGDY NIE ZABIJA ARTYKUŁU. Zasada właściciela mówi wprost: gdy
     # temat jest wybrany, a research zrobiony i opłacony, artykuł MUSI powstać.
@@ -8154,7 +8161,7 @@ visible either way:
 
 #### `prompts/ciekawostki.md`
 
-**267 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `zaczyn_kanalow`
+**307 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `zaczyn_kanalow`
 
 ````markdown
 Find {ile} documented facts worth stopping a stranger mid-scroll.
@@ -8318,6 +8325,46 @@ was published, a law passed, a system was built and measured — those happened,
 they carry their own date, and they do not expire. Say when it happened and the
 fact keeps working for years.
 
+## The control document — a second date, and the one that decides
+
+`source_date` says where the fact CAME FROM. It cannot say whether the fact is
+still true, and the more permanent the source looks, the less it tells you: a
+founding statute, a landmark investigation and a peer-reviewed paper all keep
+existing long after the arrangement they describe has been renegotiated,
+cancelled or overtaken.
+
+So answer one more question for every fact, in your own searching:
+
+**Name the newest document that would have to change for this claim to stop
+being true. Give its date and URL, and say what it does to the claim.**
+
+- `control_verdict: "CONFIRMS"` — you searched and the governing document still
+  says what the claim says. **The age of your original source stops mattering.**
+  A 2018 statute still in force, a 2023 study replicated since, a 2016 report
+  whose finding held — all fine, and they should be here.
+- `control_verdict: "MODIFIES"` — still broadly true, but something narrows,
+  conditions or complicates it. Then `control_fact` must carry the qualifier in
+  one clause, and the writer is required to say it in the same breath as the
+  claim. A conditional exception written up as "zero permissions" is this case.
+- `control_verdict: "ENDS"` — the arrangement is over. The contract was
+  cancelled, the vendor left, the rule was repealed, the product was withdrawn.
+  Do not offer the fact at all.
+
+The control document does **not** have to be newer than your source. It has to
+be the one that GOVERNS. A company's 2026 annual report may state a figure that
+a restructuring agreement signed three months earlier already changed.
+
+If you search and genuinely find nothing that governs the claim more recently,
+say so in `control_fact` — "searched, nothing newer than the source" — and use
+`CONFIRMS`. What is not acceptable is leaving the field empty because you did
+not look.
+
+**Watch the comparative clause hardest.** In note after note the anchored fact
+was fine and the sentence comparing it to something else was wrong, because the
+comparand was never dated or sourced at all. "Neither the US nor the EU", "more
+than half of the whole business", "the only country that" — every one of those
+needs its own control document, or it must come out.
+
 **Here is what exists right now. This was looked up today, not remembered.**
 
 {stan_modeli}
@@ -8397,7 +8444,7 @@ mechanism in a neighbouring industry. Go somewhere else entirely.
 
 Return only valid JSON:
 
-{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<who decided it and when — a body, a committee, a statute, a year. Empty string if the record names nobody>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "domain": "<the everyday area it belongs to>"}}]}}
+{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<who decided it and when — a body, a committee, a statute, a year. Empty string if the record names nobody>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "control_date": "<YYYY-MM-DD of the newest document that GOVERNS this claim — see \"The control document\" above. Not necessarily newer than source_date>", "control_url": "<url of that document>", "control_verdict": "CONFIRMS"|"MODIFIES"|"ENDS", "control_fact": "<one clause. For MODIFIES, the qualifier the writer must carry. For CONFIRMS, what you checked and found unchanged>", "domain": "<the everyday area it belongs to>"}}]}}
 
 ## The two halves, and why a fact without both is worthless to us
 
@@ -9144,7 +9191,7 @@ Title: {title}
 
 #### `prompts/notka.md`
 
-**280 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
+**295 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
 
 ````markdown
 Write a Substack Note for the anonymous editorial brand Nothing Is Accidental —
@@ -9412,6 +9459,21 @@ underscore, crucial, seamless, holistic, myriad, tapestry.
 Return only valid JSON:
 
 {{"note": "<the note>", "words": <integer>, "fact_used": "<the single fact from the evidence this rests on>", "source_url": "<the url that fact came from>"}}
+
+## If your fact carries `control_verdict: "MODIFIES"`, you must say the catch
+
+Some facts come with a second finding: still broadly true, but something
+narrows or conditions it. That qualifier sits in `control_fact`, and **it goes
+in the note, in the same breath as the claim** — not as a footnote, not left
+out because it costs you the clean line.
+
+It usually costs about eight words. "Zero permissions" becomes "no advance
+licence for the training step, if six conditions hold". That version is more
+interesting, not less, because the conditions are where the argument actually
+is — and the flat version is the one a reader can catch you on.
+
+A note that states the headline and drops the catch is worse than one that
+never ran, because it reads as checked.
 
 ## The evidence
 
