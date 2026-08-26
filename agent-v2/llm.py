@@ -628,8 +628,13 @@ RATUNEK_PROSBA = """The text below was produced by a model that was asked for
 JSON and returned prose instead. It has already done the work — the findings
 are in there, just not in the required shape.
 
-Return them as the JSON object that was asked for. Take nothing from your own
-knowledge: every value must come from the text.
+Reshape them into EXACTLY this JSON, using these key names and no others:
+
+%s
+
+Take nothing from your own knowledge: every value must come from the text
+below. Leave a field as an empty string when the text does not say. Do not
+rename keys, do not add keys, do not wrap the result in anything.
 
 TEXT:
 
@@ -637,7 +642,8 @@ TEXT:
 """
 
 
-def ratuj_json(purpose: str, tekst: str, *, conn, run_id=None) -> str:
+def ratuj_json(purpose: str, tekst: str, ksztalt: str, *, conn,
+               run_id=None) -> str:
     """Drugie podejście do odpowiedzi, która nie zawierała JSON-a.
 
     DLACZEGO TO ISTNIEJE — POMIAR, NIE PRZECZUCIE. W siedem dni cztery
@@ -658,13 +664,22 @@ def ratuj_json(purpose: str, tekst: str, *, conn, run_id=None) -> str:
     więc musi odpowiedzieć. Koszt rzędu paru dziesiątych centa wobec dziesięciu
     centów, które inaczej przepadają w całości.
 
+    `ksztalt` JEST OBOWIĄZKOWY i to jest poprawka po teście na żywym modelu.
+    Pierwsza wersja mówiła tylko „zwróć JSON, o który proszono" — a model nigdy
+    tamtej prośby nie widział. Oddał poprawny JSON pod kluczem `findings`
+    zamiast `facts`, więc wołający wyciągnął z niego ZERO pozycji. Naprawa
+    wyglądała na działającą i nie dawała nic; kosztowało to 0,0019 USD, żeby
+    się dowiedzieć. Kształt musi przyjść z miejsca wołania, bo tylko ono wie,
+    o co pytał pierwotny prompt.
+
     Zwraca surowy tekst drugiego wywołania. Gdy i on zawiedzie, oddaje pusty
     napis — wołający zachowuje się wtedy tak, jak dotąd przy braku JSON-a.
     """
     if not (tekst or "").strip():
         return ""
     try:
-        return call(purpose, RATUNEK_SYSTEM, RATUNEK_PROSBA % tekst[:60_000],
+        return call(purpose, RATUNEK_SYSTEM,
+                    RATUNEK_PROSBA % (ksztalt, tekst[:60_000]),
                     conn=conn, run_id=run_id, web_search=False)
     except Exception as exc:
         print("  [ratunek] nie udało się odzyskać JSON-a (%s: %s)"

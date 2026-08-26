@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **17 plików**, 14 613 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **17 plików**, 14 655 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-4385 wierszy, 94 funkcji na poziomie modułu, 0 klas
+4412 wierszy, 94 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -331,7 +331,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-710 wierszy, 14 funkcji na poziomie modułu, 3 klas
+725 wierszy, 14 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -347,7 +347,7 @@ wiec nie da sie go rozjechac z kodem.
 | `call(purpose, system, user)` | Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi. |
 | `obraz(opis)` | Generuje grafikę do artykułu i zapisuje jej koszt tam, gdzie resztę. |
 | `_obiekty_json(tekst)` *(wewn.)* | Kolejne ZBILANSOWANE obiekty JSON w tekscie, od lewej. |
-| `ratuj_json(purpose, tekst)` | Drugie podejście do odpowiedzi, która nie zawierała JSON-a. |
+| `ratuj_json(purpose, tekst, ksztalt)` | Drugie podejście do odpowiedzi, która nie zawierała JSON-a. |
 | `parse_json(text)` | Wyciąga obiekt JSON z odpowiedzi modelu. |
 
 ### `gates.py` — bramki jakości; żadna nie blokuje
@@ -6401,7 +6401,9 @@ def discovery(
         # ciekawostka i tak samo odzyskiwalne: material zostal znaleziony,
         # tylko oddany zdaniami.
         print("  [dyskoveria] brak JSON — probuje odzyskac z tekstu", flush=True)
-        ratunek = llm.ratuj_json("discovery", text, conn=conn, run_id=run_id)
+        ratunek = llm.ratuj_json(
+            "discovery", text, KSZTALT_DYSKOVERII,
+            conn=conn, run_id=run_id)
         if not ratunek:
             raise
         data = llm.parse_json(ratunek)

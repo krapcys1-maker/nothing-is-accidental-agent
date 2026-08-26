@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-4385 wierszy, 94 funkcji na poziomie modułu, 0 klas
+4412 wierszy, 94 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -189,7 +189,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-710 wierszy, 14 funkcji na poziomie modułu, 3 klas
+725 wierszy, 14 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -205,7 +205,7 @@
 | `call(purpose, system, user)` | Woła model właściwy dla etapu i zapisuje koszt. Zwraca tekst odpowiedzi. |
 | `obraz(opis)` | Generuje grafikę do artykułu i zapisuje jej koszt tam, gdzie resztę. |
 | `_obiekty_json(tekst)` *(wewn.)* | Kolejne ZBILANSOWANE obiekty JSON w tekscie, od lewej. |
-| `ratuj_json(purpose, tekst)` | Drugie podejście do odpowiedzi, która nie zawierała JSON-a. |
+| `ratuj_json(purpose, tekst, ksztalt)` | Drugie podejście do odpowiedzi, która nie zawierała JSON-a. |
 | `parse_json(text)` | Wyciąga obiekt JSON z odpowiedzi modelu. |
 
 ### `gates.py` — bramki jakości; żadna nie blokuje

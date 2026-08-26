@@ -355,7 +355,9 @@ def discovery(
         # ciekawostka i tak samo odzyskiwalne: material zostal znaleziony,
         # tylko oddany zdaniami.
         print("  [dyskoveria] brak JSON — probuje odzyskac z tekstu", flush=True)
-        ratunek = llm.ratuj_json("discovery", text, conn=conn, run_id=run_id)
+        ratunek = llm.ratuj_json(
+            "discovery", text, KSZTALT_DYSKOVERII,
+            conn=conn, run_id=run_id)
         if not ratunek:
             raise
         data = llm.parse_json(ratunek)

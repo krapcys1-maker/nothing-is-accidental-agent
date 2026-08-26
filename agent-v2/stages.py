@@ -896,7 +896,9 @@ def znajdz_ciekawostki(
             # stracone. Szczegoly w `llm.ratuj_json`.
             print("  [ciekawostki] brak JSON — probuje odzyskac z tekstu",
                   flush=True)
-            ratunek = llm.ratuj_json("curiosity", raw, conn=conn, run_id=run_id)
+            ratunek = llm.ratuj_json(
+                "curiosity", raw, KSZTALT_CIEKAWOSTEK,
+                conn=conn, run_id=run_id)
             fakty = llm.parse_json(ratunek).get("facts") or [] if ratunek else []
             print("  [ciekawostki] odzyskane: %d faktow" % len(fakty), flush=True)
     except Exception as exc:
@@ -1676,6 +1678,29 @@ def note(
             break
         print(f"    ODPADA: {str(audyt.get('verdict', ''))[:76]}", flush=True)
     return {"type": note_type, "candidates": candidates}
+
+
+# KSZTALTY DLA RATUNKU JSON-a (`llm.ratuj_json`).
+#
+# Ratunek dostaje sama proze i musi wiedziec, w co ja przelozyc. Bez tego model
+# oddaje poprawny JSON pod wlasnymi nazwami kluczy — zmierzone na zywo: przy
+# ciekawostkach zwrocil `findings` zamiast `facts`, wiec kod wyciagnal z niego
+# zero pozycji. Naprawa wygladala na dzialajaca i nie dawala nic.
+#
+# Trzymamy te ksztalty PRZY KODZIE, ktory je czyta, a nie w prompcie: prompt
+# opisuje, czego szukac, a to jest kontrakt na odpowiedz.
+KSZTALT_CIEKAWOSTEK = (
+    '{"facts": [{"fact": "", "wrong_belief": "", "actually": "", '
+    '"decision": "", "consequence": "", "url": "", "source_date": "", '
+    '"control_date": "", "control_url": "", "control_verdict": '
+    '"CONFIRMS|MODIFIES|ENDS", "control_fact": "", "domain": ""}]}'
+)
+
+KSZTALT_DYSKOVERII = (
+    '{"sources": [{"url": "", "title": "", "host": "", '
+    '"class": "PRIMARY|SECONDARY", "answers_why": true, "has_numbers": true, '
+    '"source_date": ""}]}'
+)
 
 
 PROMOCJA = config.DATA_DIR / "promocja.json"
@@ -2913,7 +2938,9 @@ def discovery(
         # ciekawostka i tak samo odzyskiwalne: material zostal znaleziony,
         # tylko oddany zdaniami.
         print("  [dyskoveria] brak JSON — probuje odzyskac z tekstu", flush=True)
-        ratunek = llm.ratuj_json("discovery", text, conn=conn, run_id=run_id)
+        ratunek = llm.ratuj_json(
+            "discovery", text, KSZTALT_DYSKOVERII,
+            conn=conn, run_id=run_id)
         if not ratunek:
             raise
         data = llm.parse_json(ratunek)
