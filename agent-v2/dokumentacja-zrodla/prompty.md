@@ -23,14 +23,14 @@
 {{"targets": [{{"index": <number>, "worth_it": true|false, "what_i_would_add": "<one concrete sentence, or empty when worth_it is false>", "why_not": "<one sentence, only when worth_it is false>"}}]}}
 ```
 
-#### `ciekawostki.md` (310 wierszy)
+#### `ciekawostki.md` (352 wierszy)
 
 **Pola wejściowe:** `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `zaczyn_kanalow`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<who decided it and when — a body, a committee, a statute, a year. Empty string if the record names nobody>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "control_date": "<YYYY-MM-DD of the newest document that GOVERNS this claim — see \"The control document\" above. Not necessarily newer than source_date>", "control_url": "<url of that document>", "control_verdict": "CONFIRMS"|"MODIFIES"|"ENDS", "control_fact": "<one clause. For MODIFIES, the qualifier the writer must carry. For CONFIRMS, what you checked and found unchanged>", "domain": "<the everyday area it belongs to>"}}]}}
+{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<WHAT MAKES IT SO: a decision (who signed it and when), a measurement (who tested it and what came back), a constraint (what about the design or the mathematics forces it), or a trade-off (what is given up and by whom). Not necessarily a person or an institution. Empty string only if you cannot name any of the four>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "control_date": "<YYYY-MM-DD of the newest document that GOVERNS this claim — see \"The control document\" above. Not necessarily newer than source_date>", "control_url": "<url of that document>", "control_verdict": "CONFIRMS"|"MODIFIES"|"ENDS", "control_fact": "<one clause. For MODIFIES, the qualifier the writer must carry. For CONFIRMS, what you checked and found unchanged>", "domain": "<the everyday area it belongs to>"}}]}}
 ```
 
 #### `dyskoveria.md` (92 wierszy)

@@ -204,7 +204,7 @@ visible either way:
 
 #### `prompts/ciekawostki.md`
 
-**310 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `zaczyn_kanalow`
+**352 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `zaczyn_kanalow`
 
 ````markdown
 Find {ile} documented facts worth stopping a stranger mid-scroll.
@@ -333,12 +333,17 @@ the question on its own. If the strongest thing you can put underneath is that
 people disagree, you have found a debate, not a fact, and debates are free.
 
 **The output fields still apply, and this is exactly where a big question
-dies.** "Is it conscious" names no decider, no date and nothing the reader is
-holding, so it fails before a word is written. The version that survives names
-the decision somebody actually took because of the question: who wrote the
-test, who set the threshold, who ruled on what counts as passing it, and in
-what year. If you cannot fill `decision` and `consequence`, the question was
-the whole idea and there was no fact under it.
+dies.** "Is it conscious" names no mechanism, no date and nothing the reader
+can see, so it fails before a word is written. The version that survives names
+what makes it so — and here that is usually a MEASUREMENT rather than a
+decision: what the evaluation actually asked, what score came back, on which
+date. Sometimes it is a constraint instead: the question dissolves once you can
+say what about the architecture forces the behaviour.
+
+If you cannot fill `decision` and `consequence`, the question was the whole
+idea and there was no fact under it. But do not read `decision` as "find me an
+official" — a benchmark result with a method you can read fills it perfectly
+well, and in this field it fills it better.
 
 **One or two in a batch, not the batch.** Nothing here says to file every
 candidate under a big question. A run where all of them are is as narrow as a
@@ -458,9 +463,36 @@ wanting to know who found that out. In practice that means:
 
 - **It is about something the reader already meets.** A pricing rule, a queue, a
   standard, a default setting, a piece of infrastructure they walk past.
-- **Somebody decided it.** The interesting part is almost never the fact itself
-  but the decision, the incentive or the constraint behind it. A number with no
+- **Something makes it so, and you can name what.** The interesting part is
+  almost never the fact itself but the mechanism behind it. A number with no
   mechanism behind it is trivia, and trivia is forgettable.
+
+  **A decision is one kind of mechanism, not the only kind, and in this field
+  it is the minority.** Measured on our own last hundred topics: 61 per cent
+  carried legal or regulatory language, while only 7 per cent of the areas we
+  search are legal. The skew was made here, by asking every fact to name
+  somebody who signed something. Laws have signatures. The best facts about
+  these systems do not.
+
+  Four mechanisms, all equally admissible:
+
+  1. **A decision** — someone chose, and they have a name and a date. A statute,
+     a committee, a pricing change, a default someone set.
+  2. **A measurement** — someone tested it and the number came back. A
+     benchmark, an evaluation, an audit, an experiment with a method you can
+     read. Nobody decided the result; they found it.
+  3. **A constraint** — it falls out of how the thing is built, and no one chose
+     it. Architecture, arithmetic, thermodynamics, the shape of the data. Why a
+     model keeps nothing between requests, why the middle of a long input is
+     read worse than the ends, why one medium takes a watermark and another
+     does not.
+  4. **A trade-off** — an engineering choice with a cost somebody is paying,
+     usually quietly, usually not the person who made the choice.
+
+  Mechanisms 2 and 3 are where this field is most interesting and they are
+  exactly what a decision-shaped question filters out. If a batch comes back
+  and every fact names an institution, the batch is wrong even when every item
+  is true.
 - **It survives being looked up.** Give the source that states it. Prefer the
   primary document — a filing, a standard, a regulation, a court record, a
   company's own statement — over an article describing one.
@@ -473,7 +505,8 @@ wanting to know who found that out. In practice that means:
   arrival — no Coca-Cola formula, no QWERTY-slowed-typists, no Y2K.
 - Anything where the surprising version is the debunked version. Check which way
   round the record actually runs before you use it.
-- Pure numbers with no human decision behind them.
+- Pure numbers with nothing behind them — no decision, no measurement, no
+  constraint, no trade-off. A figure you cannot explain the origin of.
 
 Aim wide: {ile} facts spread across the areas listed above, not {ile} angles on
 one subject. If two of your facts share a mechanism, drop one and go elsewhere.
@@ -490,7 +523,7 @@ mechanism in a neighbouring industry. Go somewhere else entirely.
 
 Return only valid JSON:
 
-{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<who decided it and when — a body, a committee, a statute, a year. Empty string if the record names nobody>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "control_date": "<YYYY-MM-DD of the newest document that GOVERNS this claim — see \"The control document\" above. Not necessarily newer than source_date>", "control_url": "<url of that document>", "control_verdict": "CONFIRMS"|"MODIFIES"|"ENDS", "control_fact": "<one clause. For MODIFIES, the qualifier the writer must carry. For CONFIRMS, what you checked and found unchanged>", "domain": "<the everyday area it belongs to>"}}]}}
+{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<WHAT MAKES IT SO: a decision (who signed it and when), a measurement (who tested it and what came back), a constraint (what about the design or the mathematics forces it), or a trade-off (what is given up and by whom). Not necessarily a person or an institution. Empty string only if you cannot name any of the four>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "control_date": "<YYYY-MM-DD of the newest document that GOVERNS this claim — see \"The control document\" above. Not necessarily newer than source_date>", "control_url": "<url of that document>", "control_verdict": "CONFIRMS"|"MODIFIES"|"ENDS", "control_fact": "<one clause. For MODIFIES, the qualifier the writer must carry. For CONFIRMS, what you checked and found unchanged>", "domain": "<the everyday area it belongs to>"}}]}}
 
 ## The two halves, and why a fact without both is worthless to us
 
@@ -509,14 +542,23 @@ This is checked in code: a consequence without "your" is rejected before
 anything is written, because it means you named a category of people rather
 than an object the reader is holding.
 
-`decision` and `consequence` are the other pair. A decision with no consequence
-the reader meets is administrative history. A consequence with no decision
-behind it is a curiosity. **The note exists only where a documented decision
-produced something the reader is holding.**
+`decision` and `consequence` are the other pair, and `decision` is badly named:
+it holds whatever MAKES THE FACT SO — the decision, the measurement, the
+constraint or the trade-off. A mechanism with no consequence the reader meets
+is administrative history. A consequence with no mechanism behind it is a
+curiosity. **The note exists only where a documented mechanism produced
+something the reader can see, hold or wait for.**
 
 Test each candidate before returning it: can you say *"most people think X,
-actually Y, because someone decided Z"* in one breath? If not, leave it out and
-find another. Ten candidates that pass are worth more than thirty that do not.
+actually Y, because Z"* in one breath — where Z is a decision, a measurement,
+a constraint or a trade-off? If not, leave it out and find another. Ten
+candidates that pass are worth more than thirty that do not.
+
+The old version of this test read "because someone decided Z", and that single
+word is what tilted the whole feed towards courtrooms and statutes: it is the
+only shape a law reliably has. A finding with no author still passes now, and
+should — the generator UNBIDDEN literally asks for things nobody specified,
+and under the old test every one of them failed the contract on the way out.
 ````
 
 ---
