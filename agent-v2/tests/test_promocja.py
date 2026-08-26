@@ -208,6 +208,56 @@ try:
     sprawdz("i zapis stempluje `dodane`",
             stages.wczytaj_promocje()[-1].get("dodane") == _dzis(),
             stages.wczytaj_promocje()[-1].get("dodane"))
+
+    print()
+    print("=== 8. JEDNO NIE OD FAKTOW ZDEJMUJE ARTYKUL NA STALE ===")
+    # Zmierzone 25/26 sierpnia. Notka promujaca „The Watermark Was Never a
+    # Verdict" odpadla o 21:44 przy 13 wyszukiwaniach — teza artykulu o SB 942
+    # jest nieprawdziwa. Werdykt wyrzucono. O 00:43 nastepny przebieg napisal
+    # INNA notke o tym samym, dostal 22 wyszukiwania i PRZEPUSCIL. Falsz
+    # wyszedl w swiat. Bramka losowa, ktora wraca nazajutrz po nowe losowanie,
+    # jest tylko zwloka przed przepuszczeniem.
+    ustaw(wpis("Watermark"))
+    przed = stages.artykul_do_promocji()
+    sprawdz("przed zakwestionowaniem artykul jest w kolejce",
+            przed and przed["tytul"] == "Watermark", przed and przed["tytul"])
+
+    stages.zakwestionuj_promocje(przed["url"], "centralna teza jest bledna")
+    sprawdz("po zakwestionowaniu nie wraca",
+            stages.artykul_do_promocji() is None,
+            (stages.artykul_do_promocji() or {}).get("tytul"))
+
+    zapis = stages.wczytaj_promocje()[0]
+    sprawdz("powod zostaje zapisany",
+            "bledna" in str(zapis.get("powod_zakwestionowania")),
+            zapis.get("powod_zakwestionowania"))
+    sprawdz("i data tez", bool(zapis.get("zakwestionowany")),
+            zapis.get("zakwestionowany"))
+
+    # KONTRDOWOD: przed poprawka liczyly sie tylko `wystawione` i okno, wiec ten
+    # sam wpis zostalby wybrany nastepnego dnia — i to jest dokladnie to, co
+    # sie stalo na produkcji.
+    po_staremu = next((a for a in reversed(stages.wczytaj_promocje())
+                       if a.get("wystawione", 0) < config.NOTEK_PROMUJACYCH
+                       and str(a.get("dodane") or "") >= _dzis(-config.OKNO_PROMOCJI_DNI)),
+                      None)
+    sprawdz("stary sposob promowalby go dalej (test rozroznia)",
+            po_staremu and po_staremu["tytul"] == "Watermark",
+            po_staremu and po_staremu["tytul"])
+
+    # Zakwestionowanie NIE moze zatrzymywac calej kolejki.
+    ustaw(wpis("Zly"), wpis("Dobry"))
+    kolejka = stages.wczytaj_promocje()
+    stages.zakwestionuj_promocje(kolejka[1]["url"], "cos nie gra")
+    w = stages.artykul_do_promocji()
+    sprawdz("inny artykul nadal przechodzi",
+            w and w["tytul"] == "Zly", w and w["tytul"])
+
+    # Nieznany adres nie moze wywalic przebiegu ani niczego popsuc.
+    stages.zakwestionuj_promocje("https://x/p/nie-ma-takiego", "nieistotne")
+    sprawdz("nieznany adres nie psuje pliku",
+            len(stages.wczytaj_promocje()) == 2,
+            len(stages.wczytaj_promocje()))
 finally:
     stages.PROMOCJA = ORYG
 

@@ -63,14 +63,14 @@
 {{"beliefs": [{{"belief": "<in your own words, one sentence>", "first_stated": "<verbatim sentence from the article>"}}], "support_only": [{{"quote": "<verbatim sentence>", "supports": <index into beliefs>}}], "hardest_fact": {{"quote": "<verbatim>", "why": "<one clause>"}}, "procedural_nearby": {{"quote": "<verbatim>"}}, "same_register": true|false, "reader_moment": {{"quote": "<verbatim>", "object": "<the thing the reader holds>"}}, "opening_claim": {{"quote": "<verbatim>", "already_familiar": true|false}}, "summary": "<one sentence>"}}
 ```
 
-#### `grafika.md` (101 wierszy)
+#### `grafika.md` (109 wierszy)
 
 **Pola wejściowe:** `body`, `title`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"subject": "<the object, in a few words>", "why_this_object": "<one sentence tying it to the article's mechanism>", "prompt": "<the full image prompt: your subject sentence first, then the style block below copied word for word>"}}
+{{"subject": "<the scene, in one line>", "why_this_scene": "<one sentence tying it to the article's mechanism>", "prompt": "<the full image prompt: your scene sentence and its concrete detail first, then the style block below copied word for word>"}}
 ```
 
 #### `klasyfikacja.md` (54 wierszy)

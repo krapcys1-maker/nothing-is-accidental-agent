@@ -144,12 +144,39 @@ sprawdz("schemat nadal pyta o obecnosc akapitu",
 sprawdz("zakaz powtarzania mechanizmu", "Name the mechanism once" in pisarz)
 
 print()
-print("=== 7. GRAFIKA: SYMBOL TO NIE PRZEDMIOT ===")
+print("=== 7. GRAFIKA: SCENA Z KONTEKSTEM, SYMBOL TO NIE TEMAT ===")
 grafika = (config.PROMPTS_DIR / "grafika.md").read_text(encoding="utf-8")
-sprawdz("prompt odroznia symbol od przedmiotu", "A symbol is not an object" in grafika)
-sprawdz("podaje wpadke jako przyklad", "jam jar" in grafika)
-sprawdz("daje test: czy da sie to podniesc w domu",
-        "pick this object up in your house" in grafika)
+# BIALE ZNAKI SCIAGNIETE DO JEDNEJ SPACJI. Pierwsza wersja tego bloku szukala
+# „no lettering" i oblala sie, bo w prompcie zdanie lamie sie akurat miedzy „no"
+# a „lettering". Regula byla na miejscu, test patrzyl na uklad akapitu.
+_g = " ".join(grafika.lower().split())
+
+# TEN BLOK BYL WCZESNIEJ PRZYPIETY DO ZDAN, NIE DO REGUL, i to sie zemscilo.
+# Sprawdzal doslownie „A symbol is not an object" i „pick this object up in your
+# house". Gdy 26 sierpnia doktryna grafiki zmienila sie z eksponatu na scene,
+# oblal sie — mimo ze regula o symbolu przezyla w calosci, tylko innymi slowami.
+# To ta sama lekcja, co przy podmianie glosu: reguly przezywaja przeformulowanie,
+# testy przypiete do brzmienia nie.
+#
+# Teraz pilnujemy tego, co ma byc TRWALE: obu wpadek kupionych bledem i samej
+# reguly. Brzmienie wolno zmieniac.
+sprawdz("prompt odroznia symbol od tego, co go nosi",
+        "symbol" in _g and ("not a subject" in _g or "not an object" in _g))
+sprawdz("pamieta wpadke ze sloikiem", "jam" in _g and "jar" in _g)
+sprawdz("pamieta wpadke z butelka sosu", "sauce" in _g)
+
+# NOWA DOKTRYNA, od 26 sierpnia. Eksponat na szarym papierze byl regula dla
+# konta o przedmiotach codziennych; przy AI dawal laptop z pustym bialym ekranem
+# lezacy na tle — poprawny wzgledem briefu i zupelnie martwy. Wlasciciel:
+# „to nie musi byc przedmiot, kontekst, wiecej kreatywnosci".
+sprawdz("zada SCENY, nie wyizolowanego przedmiotu",
+        "scene, not a specimen" in _g or ("scene" in _g and "specimen" in _g))
+sprawdz("zapisuje, czemu stara regula odpadla",
+        "laptop" in _g and "grey paper" in _g)
+sprawdz("wymaga konkretu, ktory osadza miejsce w czasie",
+        "could only be this place" in _g)
+sprawdz("nadal zakazuje tekstu i logo w kadrze",
+        "no lettering" in _g and "no logos" in _g)
 
 print()
 print("=== THIN: NAJMNIEJ MATERIALU, NAJKROTSZA FORMA ===")

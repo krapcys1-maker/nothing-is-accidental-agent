@@ -455,6 +455,18 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             gotowe = [k for k in n["candidates"]
                       if k.get("safe_to_post") and k.get("length_ok")]
             if not gotowe:
+                # Notka promujaca nie ma wlasnych faktow — streszcza artykul.
+                # Gdy odpadla na sprawdzeniu, zakwestionowany jest ARTYKUL, i
+                # trzeba to zapamietac: inaczej jutrzejszy przebieg napisze o
+                # tym samym inaczej i pojdzie po nowe losowanie. Dokladnie to
+                # sie stalo 25/26 sierpnia — szczegoly w `zakwestionuj_promocje`.
+                if n.get("promocja_url"):
+                    powod = ""
+                    for k in n["candidates"]:
+                        powod = str((k.get("weryfikacja") or {}).get("verdict") or "")
+                        if powod:
+                            break
+                    stages.zakwestionuj_promocje(n["promocja_url"], powod)
                 continue
             if wyslij:
                 if not rytm("notka", "notki", rytm_stanu):

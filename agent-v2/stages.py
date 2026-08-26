@@ -505,10 +505,17 @@ def grafika(
 ) -> dict[str, Any]:
     """Nagłówek graficzny artykułu.
 
-    Rozpoznawalność bierze się z powtarzalności, nie z pomysłowości: model
-    wybiera PRZEDMIOT, a sposób pokazania go jest przepisywany dosłownie z
-    `prompts/grafika.md`. Dzięki temu tożsamość wizualna zmienia się w jednym
-    miejscu, a nie osobno przy każdym artykule.
+    Rozpoznawalność bierze się z powtarzalności PALETY, ŚWIATŁA I NASTROJU,
+    przepisywanych dosłownie z `prompts/grafika.md`. Model wybiera SCENĘ i
+    kadr; tożsamość wizualna zmienia się w jednym miejscu, nie osobno przy
+    każdym artykule.
+
+    Do 26 sierpnia 2026 powtarzalność szła dalej: model wybierał jeden PRZEDMIOT,
+    zawsze wyizolowany, zawsze na szarym papierze. To była reguła napisana dla
+    konta o rzeczach codziennych, gdzie butelka szamponu na tle czytała się jak
+    eksponat. Przy koncie o AI dała laptop z pustym białym ekranem leżący na
+    papierze — poprawny wobec briefu i martwy. Scena odpowiada na pytania,
+    na które eksponat nie mógł: gdzie to jest i co się tu przed chwilą działo.
     """
     # GRAFIKA NIGDY NIE ZABIJA ARTYKUŁU. Zasada właściciela mówi wprost: gdy
     # temat jest wybrany, a research zrobiony i opłacony, artykuł MUSI powstać.
@@ -1590,6 +1597,43 @@ def note(
 PROMOCJA = config.DATA_DIR / "promocja.json"
 
 
+def zakwestionuj_promocje(url: str, powod: str) -> None:
+    """Artykul, ktorego notka promujaca odpadla na sprawdzeniu faktow.
+
+    ODRZUCENIE NOTKI PROMUJACEJ JEST DOWODEM O ARTYKULE, NIE O NOTCE. Taka
+    notka nie ma wlasnych faktow — streszcza tekst, ktory reklamuje. Gdy
+    sprawdzenie mowi „centralna teza jest bledna", mowi to o artykule.
+
+    ZMIERZONE 25/26 sierpnia 2026 i to jest cala przyczyna tej funkcji.
+    Notka promujaca „The Watermark Was Never a Verdict" odpadla o 21:44 przy
+    trzynastu wyszukiwaniach: teza o tym, ze SB 942 wymaga znaku wodnego w
+    tekscie, jest nieprawdziwa. Werdykt poszedl do kosza. O 00:43 nastepny
+    przebieg napisal INNA notke o tym samym, dostal DWADZIESCIA DWA
+    wyszukiwania — i przepuscil. Falsz wyszedl w swiat.
+
+    Sprawdzanie faktow jest losowe. Bramka, ktora po odrzuceniu wraca nazajutrz
+    po nowe losowanie, nie jest bramka — to zwloka przed przepuszczeniem.
+    Pierwsze „nie" ma wiec zatrzymywac promocje na stale, a nie na jeden dzien.
+
+    Artykul zostaje na Substacku i zostaje w pliku: to nie jest kasowanie, tylko
+    zdjecie z kolejki reklamowej do decyzji wlasciciela.
+    """
+    from datetime import datetime, timezone
+
+    dane = wczytaj_promocje()
+    for a in dane:
+        if a.get("url") != url:
+            continue
+        a["zakwestionowany"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        a["powod_zakwestionowania"] = str(powod or "")[:400]
+        PROMOCJA.parent.mkdir(parents=True, exist_ok=True)
+        PROMOCJA.write_text(json.dumps(dane, ensure_ascii=False, indent=1),
+                            encoding="utf-8")
+        print("  [promocja] ZDJETY Z KOLEJKI (sprawdzenie faktow): %s"
+              % str(powod or "")[:120], flush=True)
+        return
+
+
 def zapisz_do_promocji(url: str, tytul: str, tekst: str) -> None:
     """Zapisuje opublikowany artykul do promowania przez kolejne dni."""
     from datetime import datetime, timezone
@@ -1661,6 +1705,11 @@ def artykul_do_promocji() -> dict[str, Any] | None:
         # kolejce po przestawieniu konta na AI i to one wystawilyby notke
         # promujaca artykul o szamponie.
         if str(a.get("dodane") or "") < granica:
+            continue
+        # ZAKWESTIONOWANY NIE WRACA. Patrz `zakwestionuj_promocje` — jedno „nie"
+        # od sprawdzenia faktow zdejmuje artykul z kolejki na stale, bo inaczej
+        # kolejny przebieg po prostu losuje jeszcze raz.
+        if a.get("zakwestionowany"):
             continue
         return a
     return None

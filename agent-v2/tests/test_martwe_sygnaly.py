@@ -61,7 +61,7 @@ RUSZTOWANIE = {
         "supports": "wskazuje, ktore przekonanie wspiera zdanie — pilnuje, ze wsparcie nie jest przekonaniem",
     },
     "grafika.md": {
-        "why_this_object": "zmusza do wyboru przedmiotu Z TEKSTU, nie ilustracji tematu",
+        "why_this_scene": "zmusza do wyboru sceny Z TEKSTU, nie ilustracji tematu",
     },
     "notka.md": {
         "fact_used": "model ma wskazac fakt, na ktorym stoi notka — zapora przed zmysleniem",

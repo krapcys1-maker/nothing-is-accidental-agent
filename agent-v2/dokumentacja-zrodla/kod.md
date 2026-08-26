@@ -1046,6 +1046,11 @@ def artykul_do_promocji() -> dict[str, Any] | None:
         # promujaca artykul o szamponie.
         if str(a.get("dodane") or "") < granica:
             continue
+        # ZAKWESTIONOWANY NIE WRACA. Patrz `zakwestionuj_promocje` — jedno „nie"
+        # od sprawdzenia faktow zdejmuje artykul z kolejki na stale, bo inaczej
+        # kolejny przebieg po prostu losuje jeszcze raz.
+        if a.get("zakwestionowany"):
+            continue
         return a
     return None
 ```

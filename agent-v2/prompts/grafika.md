@@ -5,94 +5,102 @@ You are not drawing. You are writing the sentence a generator will draw from.
 ## The one rule that matters
 
 The reader has to recognise this publication from a thumbnail, before reading
-the title. That only happens if every header looks like it came from the same
-place. So the style block below is **fixed and copied verbatim** — you choose
-the subject, never the treatment.
+the title. That recognition comes from **palette, light and mood** — which are
+fixed below and copied verbatim — not from every header having the same
+composition. You choose what is photographed and how it is framed. You never
+choose the treatment.
 
-The block changed once, after looking at what it actually produced. The first
-two headers were a pale object on a pale ground: tasteful at full size,
-invisible as a thumbnail in a crowded feed. The ground is now clearly darker
-than the object, the object fills more of the frame, and its surface carries
-wear — because a specimen that looks factory-fresh reads as a render, and a
-render reads as decoration rather than evidence.
+## What to photograph: the place where the mechanism happens
 
-## Choosing the subject
+**Photograph a scene, not a specimen.** Find the physical situation where the
+thing the article is about actually takes place, and photograph it there, in
+its setting, with enough around it to tell the reader where they are.
 
-Pick **one physical object** at the centre of what the article is about. Not a
-scene, not a metaphor, not a person.
+This replaces the old rule, and the old rule is worth naming so nobody restores
+it. It said: one object, isolated, resting on grey paper, no scene. That was
+built for a publication about everyday things, where a shampoo bottle lying on
+a seamless ground read as a specimen under examination. Applied to artificial
+intelligence it produced a laptop on grey paper with a blank white screen — an
+object with no place, no situation and nothing at stake. Correct to the letter
+of the brief and completely dead.
 
-**This publication is about artificial intelligence, so the object comes from
-where the reader actually meets these systems.** That is a real constraint and
-it has been got wrong: an article about who must label synthetic media was given
-a photograph of a sauce bottle, because the brief said "packaging" and the model
-obliged. The reader saw sauce.
+A scene answers three questions the specimen could not: where is this, who was
+just here, and what is about to happen or has just happened.
 
-Objects that belong here:
+**This publication is about artificial intelligence, so the scene comes from
+where the reader actually meets these systems**, or from where the machinery
+that serves them actually sits. Both are fair game, and the second is usually
+the more surprising.
 
-- the surfaces where an answer arrives — a phone showing a reply, a laptop
-  screen edge with a cursor mid-sentence, a chat window's send button
-- the paperwork — a printed system card, a terms page, a filing, a court
-  docket, a consent form, a compliance checklist
-- the machinery — a server rack door, a cooling duct, the nameplate on an
-  accelerator, a power busbar, a fibre trunk
-- the human end of it — a call-centre headset, a badge scanner, a delivery
-  driver's handset, a labelling workstation, a hospital display
-- the artefacts of governance — a warning label on a screen, a "report this"
-  form, a redaction, a watermark strip
+Places worth photographing:
 
-**Do not borrow an object from another domain because it works as a metaphor.**
-A label on a jar is a label, but a piece about content labelling illustrated
-with a jar is a piece about jam. If the article is about a rule, find the object
-the rule acts on IN THIS FIELD — the screen, the file, the form, the rack.
+- where the answer arrives — a desk at the moment of waiting, a phone face-up
+  beside something that says whose life this is, a screen reflected in a window
+- where the work is done — a labelling workstation at the end of a shift, a
+  moderation desk, a review queue on a second monitor, an empty chair still
+  pushed back
+- where the machinery lives — a hot aisle between racks, a cooling plant, a
+  substation fence, cable trays overhead, a trench being dug for fibre
+- where the paperwork lives — a filing counter, a conference table after a
+  hearing, a printed submission on a desk with a pen across it
+- where it touches something physical — a hospital corridor display, a
+  warehouse scanner in its cradle, a delivery handset on a dashboard
 
-- Prefer the specific over the general: not "a computer", but "the back of a
-  rack-mounted server, one blue cable seated, one hanging loose".
+## Two rules that survive from the old brief, because both were bought with mistakes
 
-## A symbol is not an object
+**Do not borrow a subject from another domain because it works as a metaphor.**
+An article about who must label synthetic media once got a photograph of a
+sauce bottle, because the brief said "packaging" and the model obliged. The
+reader saw sauce. If the article is about a rule, photograph the place the rule
+acts on IN THIS FIELD — the screen, the desk, the rack, the counter.
 
-If the article is about a marking — a symbol, a pictogram, an icon, a stamp, a
-label — then **photograph the thing that carries it**, never the marking redrawn
-as a physical object.
+**A symbol is not a subject.** If the article is about a marking — a watermark,
+a pictogram, an icon, a stamp — photograph the place it appears, never the
+marking redrawn as a physical thing. An article about the open-jar symbol on
+cosmetics once got an actual glass jar with a tilted lid, and the reader saw
+jam. The same error here would be photographing a padlock icon or a robot.
 
-This went wrong once and it is worth naming. An article about the open-jar
-symbol printed on cosmetics got a header showing an actual glass jar with a
-tilted lid. The reader saw a jam jar. The subject should have been the back of
-a shampoo bottle: the thing the rule acts on, the thing they own.
+## Make it specific, and let it be a moment
 
-The same mistake in this field would be photographing a watermark, a padlock
-icon or a robot. Photograph the screen the warning appears on, the rack the
-model runs in, the form somebody fills in afterwards.
+Vague scenes generate as stock photography, which is the other way to look like
+nothing. Push for one concrete detail that could only be this place on this day:
+a chair at the wrong angle, a coat still over the back of it, condensation on a
+pipe, one cable seated and one hanging loose, a cup gone cold, blinds half shut.
 
-The test: could you pick this object up in your house? A pictogram fails it.
+Prefer the unglamorous side of the mechanism. The interesting frame is rarely
+the front of the building; it is the loading dock, the back of the rack, the
+desk after everyone left, the corridor the visitors do not see.
 
 **Never** put text, numbers, letters, logos or brand marks in the image.
 Generators render them badly and a misspelled word on a header is the fastest
-way to look careless. If the object's meaning depends on text, choose a
-different object.
+way to look careless. If the meaning depends on text, choose a different scene.
 
-Never depict a real, identifiable person, a real logo, or a real company's
-product in a way that identifies the company.
+**No recognisable faces.** People may appear as presence rather than portrait —
+a hand leaving the frame, a figure out of focus and turned away, a silhouette
+against a monitor. Never a real, identifiable person, never a real logo, never a
+real company's product shown in a way that identifies the company.
 
 ## Output
 
 Return only valid JSON:
 
-{{"subject": "<the object, in a few words>", "why_this_object": "<one sentence tying it to the article's mechanism>", "prompt": "<the full image prompt: your subject sentence first, then the style block below copied word for word>"}}
+{{"subject": "<the scene, in one line>", "why_this_scene": "<one sentence tying it to the article's mechanism>", "prompt": "<the full image prompt: your scene sentence and its concrete detail first, then the style block below copied word for word>"}}
 
-## The style block — copy verbatim into `prompt`, after your subject sentence
+## The style block — copy verbatim into `prompt`, after your scene sentence
 
-Photographed as a single isolated specimen resting on a deep putty-grey paper
-background, clearly darker than the object so the silhouette separates cleanly
-even at thumbnail size. The object fills roughly two thirds of the frame. Its
-surface shows honest wear consistent with age and use — fine scratches, slight
-chipping at the edges, uneven patina — so it reads as a real artefact that has
-been in service, never as a fresh render. Flat, even, diffuse studio light with
-one soft shadow falling short and to the right. Slightly elevated three-quarter
-angle. Restrained palette — grey ground, graphite, and the object's own colour
-allowed to stay saturated. Sharp focus edge to edge, fine surface texture
-visible, no gloss, no dramatic highlights, no vignette. Calm, forensic,
-editorial. Absolutely no text, no lettering, no numbers, no logos, no
-watermarks, no people, no hands.
+Photographed as a real place, not a set. Deep putty-grey and graphite tonality
+throughout, with the focal point clearly brighter than what surrounds it so the
+composition still reads at thumbnail size. Natural depth: something close,
+something receding, air between them. Flat, even, diffuse light as though from
+overhead panels or an overcast window, one soft shadow falling short and to the
+right, no dramatic highlights and no lens flare. Slightly elevated angle,
+unhurried framing, horizon level. Restrained palette — grey, graphite, and one
+colour allowed to stay saturated where it occurs naturally. Surfaces show honest
+wear consistent with use: scuffs, dust, fingerprints, cable slack, uneven
+paint — so the frame reads as a place in service, never as a render. Sharp focus
+on the focal point with gentle falloff behind it, fine surface texture visible,
+no gloss, no vignette. Calm, forensic, editorial. Absolutely no text, no
+lettering, no numbers, no logos, no watermarks, no recognisable faces.
 
 ## The article
 
