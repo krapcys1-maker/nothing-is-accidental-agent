@@ -237,6 +237,20 @@ def _call_deepseek_responses(
             # modelowi wołać narzędzie w kółko — 15 wyszukiwań i ani jednego
             # zdania odpowiedzi. Nakaz szukania siedzi w prompcie.
             "tool_choice": "auto",
+            # TWARDEGO LIMITU WYSZUKIWAŃ TU NIE MA I NIE DA SIĘ GO DOŁOŻYĆ.
+            # Sprawdzone na żywo 26 sierpnia 2026, bo kusi, żeby przepisać
+            # `max_uses` z gałęzi Anthropic:
+            #   - `max_uses` — nierozpoznane, zachowuje się jak pole, które
+            #     zmyśliłem na próbę (`zmyslone_pole_xyz`): HTTP 200, brak echa,
+            #   - `max_tool_calls` — JEST w schemacie odpowiedzi, ale po wysłaniu
+            #     wartości 3 wraca jako `None`, czyli wartość nie została
+            #     przyjęta.
+            # Oba dają HTTP 200, więc samo „nie wywaliło się" niczego tu nie
+            # dowodzi. Parametr, który nic nie robi, jest gorszy niż jego brak,
+            # bo wygląda jak zabezpieczenie.
+            #
+            # Stąd `llm.ratuj_json`: skoro nie da się zapobiec rozbieganiu,
+            # odzyskujemy to, co już opłacone.
             # BEZ tego model przepala cały budżet wyjścia na rozumowanie
             # i wyszukiwanie, a bloku `message` nigdy nie tworzy: 11 wyszukiwań,
             # status "completed", zero tekstu. Tokeny rozumowania liczą się do
@@ -601,6 +615,61 @@ def _obiekty_json(tekst: str):
             return          # nawias sie nie domknal do konca tekstu
         if glebokosc != 0:
             return
+
+
+RATUNEK_SYSTEM = (
+    "You extract structured data. You are given text somebody already wrote. "
+    "Return the JSON object it describes, and nothing else. Do not research, "
+    "do not add facts, do not correct anything — only what is already there. "
+    "If the text truly contains no usable data, return the empty object {}."
+)
+
+RATUNEK_PROSBA = """The text below was produced by a model that was asked for
+JSON and returned prose instead. It has already done the work — the findings
+are in there, just not in the required shape.
+
+Return them as the JSON object that was asked for. Take nothing from your own
+knowledge: every value must come from the text.
+
+TEXT:
+
+%s
+"""
+
+
+def ratuj_json(purpose: str, tekst: str, *, conn, run_id=None) -> str:
+    """Drugie podejście do odpowiedzi, która nie zawierała JSON-a.
+
+    DLACZEGO TO ISTNIEJE — POMIAR, NIE PRZECZUCIE. W siedem dni cztery
+    wywołania `curiosity` oddały tokeny i nie oddały JSON-a: 0,1273 / 0,1132 /
+    0,0915 / 0,0341 USD, razem 0,3661 — czternaście procent budżetu tego etapu.
+    Wejście rosło do 355–477 tysięcy tokenów, bo każda runda wyszukiwania
+    przesyła całą rozmowę od nowa, i model gubił wątek zamiast zamknąć
+    odpowiedź.
+
+    NAPRAWA NA DRUGIEJ ŚCIEŻCE JUŻ BYŁA i to jest tu najważniejsze. Gałąź
+    Anthropic ma `max_uses` i komentarz opisujący dokładnie ten objaw. Ale
+    `curiosity` chodzi na DeepSeeku przez `/responses`, gdzie twardego limitu
+    wyszukiwań nie ma — więc naprawa nigdy tego etapu nie dotyczyła.
+
+    Ratunek nie zapobiega przepaleniu; ODZYSKUJE to, co już zapłacone. Model
+    naprawdę znalazł materiał, tylko oddał go zdaniami. Drugie wywołanie
+    dostaje ten tekst BEZ NARZĘDZIA WYSZUKIWANIA — nie ma jak szukać dalej,
+    więc musi odpowiedzieć. Koszt rzędu paru dziesiątych centa wobec dziesięciu
+    centów, które inaczej przepadają w całości.
+
+    Zwraca surowy tekst drugiego wywołania. Gdy i on zawiedzie, oddaje pusty
+    napis — wołający zachowuje się wtedy tak, jak dotąd przy braku JSON-a.
+    """
+    if not (tekst or "").strip():
+        return ""
+    try:
+        return call(purpose, RATUNEK_SYSTEM, RATUNEK_PROSBA % tekst[:60_000],
+                    conn=conn, run_id=run_id, web_search=False)
+    except Exception as exc:
+        print("  [ratunek] nie udało się odzyskać JSON-a (%s: %s)"
+              % (type(exc).__name__, str(exc)[:100]), flush=True)
+        return ""
 
 
 def parse_json(text: str) -> Any:

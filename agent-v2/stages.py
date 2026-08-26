@@ -885,7 +885,20 @@ def znajdz_ciekawostki(
     try:
         raw = llm.call("curiosity", CURIOSITY_SYSTEM, prompt,
                        conn=conn, run_id=run_id, web_search=True)
-        fakty = llm.parse_json(raw).get("facts") or []
+        try:
+            fakty = llm.parse_json(raw).get("facts") or []
+        except Exception:
+            # RATUNEK, NIE PONOWIENIE. Model przeszukal sieć i znalazl materiał
+            # — po prostu oddal go zdaniami zamiast JSON-em. Ponowne szukanie
+            # kosztowaloby tyle samo co pierwsze; drugie wywolanie BEZ
+            # wyszukiwania kosztuje ulamek i pracuje na tym, co juz mamy.
+            # Zmierzone: cztery takie przypadki w tydzien, 0,3661 USD w calosci
+            # stracone. Szczegoly w `llm.ratuj_json`.
+            print("  [ciekawostki] brak JSON — probuje odzyskac z tekstu",
+                  flush=True)
+            ratunek = llm.ratuj_json("curiosity", raw, conn=conn, run_id=run_id)
+            fakty = llm.parse_json(ratunek).get("facts") or [] if ratunek else []
+            print("  [ciekawostki] odzyskane: %d faktow" % len(fakty), flush=True)
     except Exception as exc:
         print(f"  [ciekawostki] nie wyszły ({exc})", flush=True)
         return []
