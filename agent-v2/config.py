@@ -1024,7 +1024,15 @@ POSTAWY_KOMENTARZA = {
         "industry, another country, another era. The pleasure here is the "
         "unexpected match, so make the connection precise or do not make it."
     )),
-    "PYTANIE": (3, (
+    # WAGA PODNIESIONA Z 3 NA 6, 30 sierpnia 2026. Wlasciciel zapytal, czy
+    # komentarze zachecaja do dyskusji. Zmierzone na 81 wystawionych: pytanie
+    # zawiera 10 procent — i to nie byl dryf, tylko dokladnie ta waga (3/29).
+    # System robil to, co mu kazano; kazano mu za malo.
+    #
+    # Szesc, nie dziesiec: komentarz konczacy sie pytaniem ZA KAZDYM RAZEM to
+    # osobny podpis bota, a postawy CIEKAWOSC i ROZSZERZENIE i tak otwieraja
+    # watek bez znaku zapytania. Przy szostce pyta wprost mniej wiecej co piaty.
+    "PYTANIE": (6, (
         "Ask one question you actually want answered, about something the piece "
         "genuinely leaves open. Not rhetorical, not a test, not a question whose "
         "answer you are about to supply. If you would not read the reply with "
