@@ -123,5 +123,19 @@ sprawdz("i skladaja sie w jedno pytanie przed wyszukiwaniem",
         0 < i_pod < src.find("stages.discovery(conn, run_id, pytanie_do_researchu"))
 
 print()
+print("=== 6. ARTYKUL TEZ SIEGA NAJPIERW DO SPIZARNI ===")
+# Podlaczylem indeks do notek i zostawilem sciezke artykulu na swiezym
+# szukaniu. Zywy test tego samego wieczora: 18 wyszukiwan, 450 tys. tokenow
+# wejscia i 0,127 USD po to, zeby wybrac jeden fakt — podczas gdy w indeksie
+# lezaly gotowe, oplacone i przepuszczone przez bramke.
+i_spizarnia = src.find("stages.wez_kandydatow(ile)")
+i_szukanie = src.find("stages.znajdz_ciekawostki(conn, run_id, ile=ile)")
+sprawdz("wybierz_fakt pyta indeks", i_spizarnia > 0, i_spizarnia)
+sprawdz("i robi to PRZED platnym szukaniem",
+        0 < i_spizarnia < i_szukanie, (i_spizarnia, i_szukanie))
+sprawdz("szukanie zostaje jako droga awaryjna, nie znika",
+        i_szukanie > 0, i_szukanie)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

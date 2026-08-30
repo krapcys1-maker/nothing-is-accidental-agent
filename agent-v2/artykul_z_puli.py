@@ -203,7 +203,24 @@ def wybierz_fakt(conn, run_id, ile: int = 8) -> dict:
     twierdzen o stanie teraz, zadnych wycofywanych modeli, zadnych wersji bez
     potwierdzenia). Tu odsiewamy tylko to, o czym juz pisalismy dluga forma.
     """
-    fakty = stages.znajdz_ciekawostki(conn, run_id, ile=ile)
+    # NAJPIERW SPIZARNIA, DOPIERO POTEM ZAKUPY — tak samo jak w `notki_dnia`.
+    #
+    # Podlaczylem indeks do notek 30 sierpnia i zostawilem sciezke artykulu na
+    # swiezym szukaniu. Zywy test tego samego wieczora pokazal, ile to kosztuje:
+    # jedno wywolanie `curiosity`, 18 wyszukiwan, 450 tys. tokenow wejscia i
+    # 0,127 USD — po to, zeby wybrac jeden fakt, podczas gdy w indeksie lezaly
+    # gotowe, juz oplacone i juz przepuszczone przez bramke.
+    #
+    # Zmierzone: kazde wyszukiwanie to 10-19 tys. tokenow wejscia, bo serwer
+    # prowadzi petle u siebie i rozlicza kazda runde osobno. Nie da sie tego
+    # ograniczyc parametrem (`max_uses` i `max_tool_calls` sa ignorowane), wiec
+    # jedyny sposob na tanszy artykul to NIE SZUKAC, kiedy nie trzeba.
+    fakty = stages.wez_kandydatow(ile)
+    if fakty:
+        print("  [temat] z indeksu: %d kandydatow (bez wyszukiwania)"
+              % len(fakty), flush=True)
+    else:
+        fakty = stages.znajdz_ciekawostki(conn, run_id, ile=ile)
     if not fakty:
         raise ValueError("pula ciekawostek pusta")
 
