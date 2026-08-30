@@ -184,7 +184,10 @@ def ostatnie_uwagi(ile: int = 2) -> str:
             if m.group(1) in ("DLUGOSC", "RECENZJA"):
                 continue
             d = re.search(r"'detail':\s*[\"'](.{0,150})", linia)
-            wybrane.append("- %s: %s" % (m.group(1), (d.group(1) if d else "")))
+            # Ogon skladni slownika obcinamy — wpis konczacy sie na `'}` albo
+            # `"}` wnosi do promptu smiec, ktory model widzi jako tresc.
+            szczegol = re.sub(r"[\"']?\}?\s*$", "", (d.group(1) if d else ""))
+            wybrane.append("- %s: %s" % (m.group(1), szczegol))
     # Kazda wada RAZ, nawet gdy powtorzyla sie w obu tekstach — powtorzenie w
     # liscie nie czyni jej wazniejsza, tylko dluzsza.
     return "\n".join(dict.fromkeys(wybrane))
