@@ -540,6 +540,29 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             if x.get("url") and x["url"] not in widziane:
                 widziane.add(x["url"])
                 unikalne.append(x)
+
+        # PLATNE PUBLIKACJE ODSIEWAMY PRZED OCENA, NIE PO NIEJ.
+        #
+        # Zmierzone w dzienniku z siedmiu dni: CZTERDZIESCI DWA razy uslyszeliśmy
+        # „komentarze tylko dla placacych" — za kazdym razem PO tym, jak model
+        # ocenil cel (i wzial za to pieniadze), i po uruchomieniu przegladarki,
+        # zeby o to zapytac. W jednym przebiegu z czterech wybranych celow TRZY
+        # okazaly sie platne i wyszedl JEDEN komentarz z zaplanowanych trzech.
+        #
+        # To jest ustawienie publikacji, nie awaria, wiec pamietamy je po
+        # pierwszej obserwacji. Udany komentarz kasuje host z listy, wiec
+        # zmiana ustawien u wydawcy odblokowuje go sama.
+        platne = browser.hosty_tylko_dla_placacych()
+        if platne:
+            from urllib.parse import urlparse as _urlparse
+            przed = len(unikalne)
+            unikalne = [x for x in unikalne
+                        if _urlparse(x.get("url", "")).netloc.lower()
+                        .removeprefix("www.") not in platne]
+            if przed != len(unikalne):
+                print("  [cele] odsiane platne publikacje: %d z %d"
+                      % (przed - len(unikalne), przed), flush=True)
+
         cele = stages.wybierz_cele(conn, run_id, unikalne)
         for cel in cele[: na_teraz["komentarze"]]:
             if not zostal_czas("komentarze"):
@@ -568,6 +591,11 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                               "postawa": out.get("postawa") or ""})
                 # Zapamietujemy U KOGO, zeby nie wracac tam za kilka dni.
                 kanal.zapamietaj_komentarz(cel)
+                # I zdejmujemy host z listy platnych, jesli tam byl: skoro
+                # komentarz wszedl, ustawienia sie zmienily.
+                from urllib.parse import urlparse as _up
+                browser.zapomnij_platny_host(
+                    _up(cel.get("url", "")).netloc)
                 rytm_stanu["komentarz"] = True
             zrobione["komentarze"] += 1
 

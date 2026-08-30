@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1409 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1437 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -132,7 +132,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2929 wierszy, 62 funkcji na poziomie modułu, 0 klas
+3003 wierszy, 65 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -187,6 +187,9 @@
 | `potwierdz_odpowiedz(page, note_id, tekst)` | Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku. |
 | `wystaw_odpowiedz(note_id, tekst, wyslij, kontekst, rodzaj)` | Odpowiada w watku — pod nasza notka albo w cudzej dyskusji. |
 | `wystaw_notke(tekst, wyslij)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
+| `zapamietaj_platny_host(host, prawo)` | Host, ktory wprost mowi, ze komentowac moga tylko placacy. |
+| `hosty_tylko_dla_placacych()` | Hosty, gdzie komentowac moga tylko placacy — do odsiania PRZED ocena. |
+| `zapomnij_platny_host(host)` | Udany komentarz kasuje host z listy — wydawca mogl zmienic ustawienia. |
 | `hosty_gdzie_komentarz_nie_wchodzi(min_prob)` | Hosty, gdzie probowalismy >=2 razy i ANI RAZ komentarz nie wszedl. |
 | `mozna_komentowac(url)` | Czy pod tym tekstem wolno nam w ogóle napisać. |
 | `uchwyt_publikacji(host)` | Nazwa konta do obserwowania — z hosta albo, gdy trzeba, z API. |

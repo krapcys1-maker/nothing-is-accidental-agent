@@ -2311,6 +2311,65 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
     return wynik
 
 
+PLATNE_HOSTY = config.DATA_DIR / "platne_komentarze.json"
+
+
+def zapamietaj_platny_host(host: str, prawo: str) -> None:
+    """Host, ktory wprost mowi, ze komentowac moga tylko placacy."""
+    import json as _json
+    host = (host or "").lower().removeprefix("www.")
+    if not host:
+        return
+    try:
+        stan = (_json.loads(PLATNE_HOSTY.read_text(encoding="utf-8"))
+                if PLATNE_HOSTY.exists() else {})
+        if not isinstance(stan, dict):
+            stan = {}
+        if host in stan:
+            return
+        from datetime import datetime as _dt, timezone as _tz
+        stan[host] = {"prawo": prawo,
+                      "kiedy": _dt.now(_tz.utc).isoformat()}
+        PLATNE_HOSTY.parent.mkdir(parents=True, exist_ok=True)
+        PLATNE_HOSTY.write_text(_json.dumps(stan, ensure_ascii=False, indent=1),
+                                encoding="utf-8")
+        print("  [platne] zapamietane: %s (%s)" % (host, prawo), flush=True)
+    except Exception as exc:
+        # Pamiec jest premia, nie warunkiem. Jej awaria nie moze zatrzymac
+        # przebiegu — najwyzej zapytamy tego hosta jeszcze raz.
+        print("  [platne] nie zapisalem %s (%s)" % (host, type(exc).__name__),
+              flush=True)
+
+
+def hosty_tylko_dla_placacych() -> set[str]:
+    """Hosty, gdzie komentowac moga tylko placacy — do odsiania PRZED ocena.
+
+    Czyta plik z dysku, nie rusza sieci. Uzywane w `run.py`, zeby model nie
+    placil za ocene celow, pod ktorymi i tak nie wolno nam napisac ani slowa.
+    """
+    import json as _json
+    try:
+        stan = _json.loads(PLATNE_HOSTY.read_text(encoding="utf-8"))
+        return {str(h).lower() for h in stan} if isinstance(stan, dict) else set()
+    except Exception:
+        return set()
+
+
+def zapomnij_platny_host(host: str) -> None:
+    """Udany komentarz kasuje host z listy — wydawca mogl zmienic ustawienia."""
+    import json as _json
+    host = (host or "").lower().removeprefix("www.")
+    try:
+        stan = _json.loads(PLATNE_HOSTY.read_text(encoding="utf-8"))
+        if isinstance(stan, dict) and stan.pop(host, None) is not None:
+            PLATNE_HOSTY.write_text(_json.dumps(stan, ensure_ascii=False, indent=1),
+                                    encoding="utf-8")
+            print("  [platne] %s znowu przyjmuje komentarze — zdjety z listy"
+                  % host, flush=True)
+    except Exception:
+        pass
+
+
 def hosty_gdzie_komentarz_nie_wchodzi(min_prob: int = 2) -> set[str]:
     """Hosty, gdzie probowalismy >=2 razy i ANI RAZ komentarz nie wszedl.
 
@@ -2411,8 +2470,23 @@ def mozna_komentowac(url: str) -> bool:
             return True
         prawo = str(post.get("write_comment_permissions") or "").lower()
         if prawo in {"only_paid", "only_founding", "none", "no_one"}:
-            print(f"  komentarze tylko dla placacych ({prawo}) — odpuszczam"
-                  f" przed pisaniem", flush=True)
+            print(f"  {host}: komentarze tylko dla placacych ({prawo}) —"
+                  f" odpuszczam przed pisaniem", flush=True)
+            # ZAPAMIETUJEMY, i to jest poprawka z 30 sierpnia.
+            #
+            # Dotad ta odmowa byla tylko DRUKOWANA. Publikacja platna wracala
+            # wiec do puli przy kazdym przebiegu, model placil za jej ocene, a
+            # potem uruchamialismy przegladarke, zeby uslyszec to samo. W logu
+            # z siedmiu dni: CZTERDZIESCI DWA razy.
+            #
+            # JEDNA OBSERWACJA WYSTARCZY, inaczej niz przy nieudanych
+            # komentarzach, gdzie prog wynosi dwie proby. Tam jedno
+            # niepowodzenie moze byc awaria po drugiej stronie; tutaj API
+            # oddaje USTAWIENIE publikacji, a nie wynik proby.
+            #
+            # Zapis jest ODWRACALNY: udane wystawienie komentarza kasuje host z
+            # listy, wiec zmiana ustawien u wydawcy odblokowuje go sama.
+            zapamietaj_platny_host(host, prawo)
             return False
         return True
     except Exception:
