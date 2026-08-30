@@ -2240,6 +2240,65 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
     return wynik
 
 
+def hosty_gdzie_komentarz_nie_wchodzi(min_prob: int = 2) -> set[str]:
+    """Hosty, gdzie probowalismy >=2 razy i ANI RAZ komentarz nie wszedl.
+
+    TA SAMA WADA, CO PRZY ZRODLACH, w innym miejscu. `hosty_ktore_nigdy_nie_
+    dzialaly` powstalo, bo porazki pobierania byly zapisywane od poczatku i
+    nigdy nie wracaly do dyskoverii — `fda.gov` przepadl 3 razy na 3, a slot
+    i tak byl na niego wydawany. Dziennik zapisuje nieudane komentarze razem z
+    adresem od poczatku i nikt ich nie czytal.
+
+    ZMIERZONE 30 sierpnia 2026: 11 nieudanych komentarzy z 92 prob (12 procent)
+    i 7 odpowiedzi z 47. Sprawdzone u zrodla — 0 z 6 sprawdzalnych bylo jednak
+    opublikowanych, wiec to prawdziwa strata, a nie blad rozpoznania. Kosztowalo
+    0,61 USD, czyli 92 procent calego przepalenia. Adresy powtarzaly sie:
+    slowboring.com, thebignewsletter.com, malone.news — publikacje, ktore
+    CZYTAC pozwalaja wszystkim, a KOMENTOWAC nie.
+
+    PROG DWOCH PROB, nie jednej — tak samo jak przy zrodlach: jedno niepowodzenie
+    to awaria po drugiej stronie, dwa z rzedu to wlasciwosc hosta. Jedno UDANE
+    wystawienie kasuje host z listy, wiec zmiana ustawien u wydawcy odblokowuje
+    go sama, bez naszej ingerencji.
+
+    Podzial pracy z `mozna_komentowac` jest celowy: tam zostaje optymizm wobec
+    hosta NIEZNANEGO („przy watpliwosci probuje"), tu jest pamiec o hoscie
+    SPRAWDZONYM. Optymizm kosztuje wtedy jedna probe, a nie dziesiata.
+    """
+    import collections as _c
+    import json as _json
+    from urllib.parse import urlparse
+
+    udane: _c.Counter = _c.Counter()
+    nieudane: _c.Counter = _c.Counter()
+    try:
+        if not DZIENNIK.exists():
+            return set()
+        for linia in DZIENNIK.read_text(encoding="utf-8").splitlines():
+            linia = linia.strip()
+            if not linia:
+                continue
+            try:
+                w = _json.loads(linia)
+            except ValueError:
+                continue
+            if not isinstance(w, dict) or w.get("rodzaj") != "komentarz":
+                continue
+            gdzie = str(w.get("gdzie") or "")
+            # Notki nie maja hosta w tym sensie — komentuje pod nimi kazdy
+            # i nie ma tam czego pamietac.
+            if not gdzie.startswith("http"):
+                continue
+            host = urlparse(gdzie).netloc.lower()
+            if not host:
+                continue
+            (udane if w.get("udane") else nieudane)[host] += 1
+    except OSError:
+        return set()
+    return {h for h, ile in nieudane.items()
+            if ile >= min_prob and udane[h] == 0}
+
+
 def mozna_komentowac(url: str) -> bool:
     """Czy pod tym tekstem wolno nam w ogóle napisać.
 
@@ -2259,6 +2318,16 @@ def mozna_komentowac(url: str) -> bool:
     if "/note/c-" in url:
         return True                   # pod notkami komentuje kazdy
     from urllib.parse import urlparse
+
+    # PAMIEC PRZED PYTANIEM. Host, u ktorego dwa razy nic nie weszlo, nie
+    # zasluguje na trzecie pytanie do API ani na trzeci oplacony tekst — patrz
+    # `hosty_gdzie_komentarz_nie_wchodzi`. To sprawdzenie jest darmowe: czyta
+    # dziennik z dysku, nie rusza sieci.
+    host = urlparse(url).netloc.lower()
+    if host and host in hosty_gdzie_komentarz_nie_wchodzi():
+        print("  %s: dwa razy nic tam nie weszlo — nie place za trzeci raz"
+              % host, flush=True)
+        return False
 
     wymagaj_sesji()
     p, browser, context = podlacz_sie()

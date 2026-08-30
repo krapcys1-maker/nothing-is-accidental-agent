@@ -123,7 +123,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2789 wierszy, 59 funkcji na poziomie modułu, 0 klas
+2858 wierszy, 60 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -176,6 +176,7 @@
 | `potwierdz_odpowiedz(page, note_id, tekst)` | Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku. |
 | `wystaw_odpowiedz(note_id, tekst, wyslij, kontekst, rodzaj)` | Odpowiada w watku — pod nasza notka albo w cudzej dyskusji. |
 | `wystaw_notke(tekst, wyslij)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
+| `hosty_gdzie_komentarz_nie_wchodzi(min_prob)` | Hosty, gdzie probowalismy >=2 razy i ANI RAZ komentarz nie wszedl. |
 | `mozna_komentowac(url)` | Czy pod tym tekstem wolno nam w ogóle napisać. |
 | `uchwyt_publikacji(host)` | Nazwa konta do obserwowania — z hosta albo, gdy trzeba, z API. |
 | `juz_sie_odezwalismy(page, url)` | Czy JUZ napisalismy cokolwiek pod tym postem albo pod ta notka. |
