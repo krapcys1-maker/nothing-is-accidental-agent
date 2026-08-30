@@ -4813,6 +4813,60 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
     # kandydat zostaje w banku ze statusem „nowy"; przeoczenie kosztuje dwie
     # notki o tym samym. Dlatego prog ostrzejszy z dwoch — ten skalibrowany na
     # porownaniu dwoch tekstow notkowej dlugosci.
+    # RZADKIE SLOWO JAKO DRUGI SYGNAL BLIZNIACTWA.
+    #
+    # Zmierzone na zywym banku 30 sierpnia: dwie kandydatury o tym samym
+    # frameworku DeepSeek DSpark przeszly obok siebie. Wspolnych rdzeni szesc na
+    # dwadziescia piec, udzial 0,240 przy progu 0,30 — o wlos za malo, bo jedna
+    # opisywala publikacje z uczelnia, druga numer arXiv, wiec RESZTA slow byla
+    # inna. Trzy inne pary tego samego przebiegu zostaly zlapane poprawnie.
+    #
+    # Ale wsrod tych szesciu wspolnych stalo `dspark` — nazwa wlasna, ktora nie
+    # wystepuje NIGDZIE INDZIEJ w banku. Dwa fakty dzielace rzadki identyfikator
+    # sa tym samym tematem niezaleznie od proporcji, i to jest sygnal, ktory kod
+    # potrafi policzyc sam: liczymy, w ilu kandydaturach dany rdzen w ogole
+    # wystepuje.
+    #
+    # Prog dwoch: skoro obaj blizniacy go maja, „nie wiecej niz dwa" znaczy
+    # „tylko ta para". Slowa pospolite w rodzaju `model` czy `tokens` siedza w
+    # kilkunastu wpisach i nie strzela.
+    _czestosc: dict[str, int] = {}
+    for k, _ in swiezi:
+        for slowo in _slowa(str(k.get("fact") or "")):
+            _czestosc[slowo] = _czestosc.get(slowo, 0) + 1
+
+    def _dzielą_rzadkie(a: str, b: str) -> str:
+        """Rzadkie slowo LUZUJE PROPORCJE, ale nie liczbe wspolnych rdzeni.
+
+        Pierwsza wersja wymagala tylko rzadkiego slowa i byla katastrofalna —
+        zywy test na banku pietnastu kandydatur uznal uklad Jalapeno za
+        blizniaka wlamania na Hugging Face, a framework DSpark za blizniaka
+        kosztow inferencji. Powod prosty: przy pietnastu wpisach mnostwo
+        ZWYKLYCH slow trafia sie dokladnie w dwoch, wiec „rzadkie" nie znaczylo
+        „charakterystyczne".
+
+        Prawdziwy ksztalt tej wady byl inny. Para DSpark miala SZESC wspolnych
+        rdzeni — czyli powyzej progu liczbowego — i odpadla wylacznie na
+        PROPORCJI (0,240 przy 0,30), bo jedna kandydatura opisywala publikacje z
+        uczelnia, a druga numer arXiv, wiec reszta slow byla inna. Wiec luzujemy
+        dokladnie to, co zawiodlo, i nic wiecej.
+        """
+        wspolne = _slowa(a) & _slowa(b)
+        if len(wspolne) < POROWNANIE_MIEDZY_DNIAMI["min_wspolnych"]:
+            return ""
+        # NAZWA WLASNA, NIE ZWYKLE SLOWO. Sam prog czestosci nadal dawal
+        # falszywe trafienia — „DSpark" zderzal sie z dokumentami inwestorskimi,
+        # bo dzielily cztery pospolite rdzenie, z ktorych jeden trafil sie
+        # akurat dwa razy. Rdzen, ktory ma odroznic JEDNA RZECZ od innej, musi
+        # wygladac jak nazwa: wielka litera albo cyfra w oryginalnym tekscie.
+        # „DSpark", „Jalapeño", „GB300" tak; „report", „august", „single" nie.
+        nazwy = {w.lower()[:6] for tekst in (a, b)
+                 for w in re.findall(r"[A-Za-z][A-Za-z0-9'’-]*", tekst)
+                 if (w[:1].isupper() and len(w) > 3) or any(c.isdigit() for c in w)}
+        rzadkie = [w for w in wspolne
+                   if len(w) >= 5 and _czestosc.get(w, 0) <= 2 and w in nazwy]
+        return sorted(rzadkie)[0] if rzadkie else ""
+
     wziete: list[dict[str, Any]] = []
     blizniaki: list[tuple[str, str]] = []
     for k, _ in swiezi:
@@ -4822,9 +4876,12 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
         blizniak = next(
             (w for w in wziete
              if _o_tym_samym(tresc, str(w.get("fact") or ""),
-                             **POROWNANIE_MIEDZY_DNIAMI)), None)
+                             **POROWNANIE_MIEDZY_DNIAMI)
+             or _dzielą_rzadkie(tresc, str(w.get("fact") or ""))), None)
         if blizniak is not None:
-            blizniaki.append((tresc, str(blizniak.get("fact") or "")))
+            rzadkie = _dzielą_rzadkie(tresc, str(blizniak.get("fact") or ""))
+            blizniaki.append((tresc + ((" [rzadkie: %s]" % rzadkie) if rzadkie else ""),
+                              str(blizniak.get("fact") or "")))
             continue
         wziete.append(k)
     # GLOSNO, nie po cichu. Partia przycieta bez slowa wyglada jak partia
