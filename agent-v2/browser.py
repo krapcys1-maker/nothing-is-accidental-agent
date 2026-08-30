@@ -135,9 +135,9 @@ def z_dziennika_dzis() -> dict[str, int]:
     from datetime import datetime, timezone
 
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    ile = {"komentarze": 0, "lajki": 0, "restacki": 0}
+    ile = {"komentarze": 0, "lajki": 0, "restacki": 0, "notki": 0}
     nazwa = {"komentarz": "komentarze", "polubienie": "lajki",
-             "restack": "restacki"}
+             "restack": "restacki", "notka": "notki"}
     try:
         if not DZIENNIK.exists():
             return ile
@@ -636,19 +636,35 @@ def _kiedy(c: dict) -> float:
 def ile_dzis_wystawione() -> dict[str, int]:
     """Ile notek, komentarzy i polubien poszlo dzisiaj.
 
-    NOTKI liczymy u Substacka, bo rzeczywistosc jest lepszym zrodlem niz wlasna
-    ksiegowosc: po restarcie albo przerwanym przebiegu ksiegowosc sie rozjezdza
-    i agent wystawia dzienna norme drugi raz.
+    WSZYSTKO LICZYMY Z DZIENNIKA, I TO JEST POPRAWKA Z 30 SIERPNIA 2026.
 
-    KOMENTARZE I POLUBIENIA licza sie z dziennika, bo Substack ich nie oddaje —
-    kanal profilu zwraca same notki. Powod i sprawdzenie: `z_dziennika_dzis`.
-    Gdyby Substack kiedys zaczal pokazywac wlasne komentarze, to jest jedyne
-    miejsce do zmiany.
+    Notki szly wczesniej z kanalu profilu, bo „rzeczywistosc jest lepszym
+    zrodlem niz wlasna ksiegowosc". Zalozenie bylo takie, ze na tym profilu
+    publikuje wylacznie bot. Nieprawda: wlasciciel pisze notki RECZNIE, a kanal
+    profilu nie odroznia jego notek od naszych — wiec kazda notka wlasciciela
+    po cichu kasowala jedna notke bota.
+
+    ZMIERZONE, nie wydedukowane. 29 sierpnia kanal pokazywal piec notek, z
+    czego dwie byly bota; 28 sierpnia szesc, z czego jedna. Licznik meldowal
+    „dzienny przydzial juz wyczerpany" przy normie piec, a bot wystawil dwie.
+    Przez pietnascie dni dalo to 2,9 notki dziennie zamiast pieciu — 57 procent
+    normy. Wlasciciel opisal to jako dwa osobne fakty („dopisywalem notki" i
+    „on prawie nic nie dal"), a to byl jeden fakt.
+
+    Dziennik zapisuje wylacznie WLASNE dzialania, wiec atrybucja jest w nim z
+    definicji poprawna. Przezywa restart — to wlasnie ta gwarancja, dla ktorej
+    komentarze i polubienia liczyly sie z niego od poczatku. Notki byly jedyna
+    kategoria czytana skadinad i jedyna, ktora sie rozjezdzala.
+
+    ODCZYT Z SUBSTACKA ZOSTAJE, ale juz nie decyduje — sluzy do KONTROLI. Gdy
+    liczby sie roznia, mowimy o tym glosno w logu, zamiast po cichu zabierac
+    botowi przydzial. Roznica jest zwykle miara recznej pracy wlasciciela i to
+    jest uzyteczna informacja, a nie usterka.
     """
     from datetime import datetime, timezone
 
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    wynik = {"notki": 0, **z_dziennika_dzis()}
+    wynik = z_dziennika_dzis()          # <- to jest teraz zrodlo decyzji
     wymagaj_sesji()
     p, browser, context = podlacz_sie()
     page = context.new_page()
@@ -656,15 +672,25 @@ def ile_dzis_wystawione() -> dict[str, int]:
         profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
         if not isinstance(profil, dict) or not profil.get("id"):
             return wynik
-        feed = api_json(page, f"/api/v1/reader/feed/profile/{profil['id']}") or {}
+        # Filtr typu — taki sam, jak w trzech pozostalych miejscach pytajacych
+        # ten endpoint (szukaj `types%5B%5D=note`). To jedno go nie mialo.
+        feed = api_json(page, f"/api/v1/reader/feed/profile/{profil['id']}"
+                              "?types%5B%5D=note") or {}
+        na_profilu = 0
         for x in feed.get("items", []):
             c = (x or {}).get("comment") or {}
             if not str(c.get("date", "")).startswith(dzis):
                 continue
-            # Notka nie ma posta pod soba; komentarz owszem — a komentarzy stad
-            # nie bierzemy, bo ten kanal ich nie zwraca.
             if not c.get("post_id"):
-                wynik["notki"] += 1
+                na_profilu += 1
+        # KONTROLA, NIE DECYZJA. Nadmiar to notki wlasciciela pisane recznie i
+        # ma zostac widoczny, bo to jedyne miejsce, w ktorym ta praca sie
+        # ujawnia. Wczesniej ten sam nadmiar cicho zabieral botowi przydzial.
+        if na_profilu != wynik["notki"]:
+            print("  [licznik] na profilu %d notek, bot wystawil %d"
+                  " — roznica %+d to praca reczna wlasciciela"
+                  % (na_profilu, wynik["notki"], na_profilu - wynik["notki"]),
+                  flush=True)
         return wynik
     except Exception as exc:
         print(f"  (nie policzylem dzisiejszych: {type(exc).__name__})", flush=True)

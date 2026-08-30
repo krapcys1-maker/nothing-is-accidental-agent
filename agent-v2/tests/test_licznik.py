@@ -187,9 +187,17 @@ def doba(dzielnik_stary=False):
     conn = db.connect(pathlib.Path(tempfile.mkdtemp()) / "d.db")
     wykonane = {"notki": 0, "komentarze": 0, "lajki": 0}
     for nr in range(config.PRZEBIEGOW_DZIENNIE):
-        ustaw([wpis("komentarz") for _ in range(wykonane["komentarze"])]
+        # NOTKI TEZ IDA PRZEZ DZIENNIK — od 30 sierpnia 2026 to jedyne zrodlo
+        # licznika. Wczesniej symulacja podawala je osobno:
+        #     juz = {"notki": wykonane["notki"], **browser.z_dziennika_dzis()}
+        # i gdy `z_dziennika_dzis` zaczelo zwracac `notki`, rozpakowanie
+        # NADPISYWALO symulowana liczbe zerem — kazdy przebieg bral pelny
+        # budzet i doba dawala 9 notek zamiast 5. Ten sam wzorzec siedzial w
+        # kodzie produkcyjnym (`wynik = {"notki": 0, **z_dziennika_dzis()}`).
+        ustaw([wpis("notka") for _ in range(wykonane["notki"])]
+              + [wpis("komentarz") for _ in range(wykonane["komentarze"])]
               + [wpis("polubienie") for _ in range(wykonane["lajki"])])
-        juz = {"notki": wykonane["notki"], **browser.z_dziennika_dzis()}
+        juz = browser.z_dziennika_dzis()
         zost = zostalo_wg(juz, budzet)
         dziel = config.PRZEBIEGOW_DZIENNIE if dzielnik_stary \
             else run.ile_przebiegow_zostalo(conn)

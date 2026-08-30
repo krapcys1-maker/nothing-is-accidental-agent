@@ -22,11 +22,37 @@ def sprawdz(nazwa, warunek, szczegol=""):
 print("=== 1. ODSTEP MIEDZY NOTKAMI ===")
 dol, gora = config.ODSTEPY["notka"]
 print("    %s-%s min (bylo 10-25)" % (dol // 60, gora // 60))
-sprawdz("dolna granica co najmniej 40 min", dol >= 2400, dol)
-sprawdz("gorna co najmniej 80 min", gora >= 4800, gora)
+# PRZYCIETE 30 sierpnia 2026 z 45-90 na 35-65 min. Prog nie zostal ROZLUZNIONY
+# dla wygody — zostal PRZELICZONY, bo poprzedni czynil norme nieosiagalna:
+# budzet na notki w przebiegu to 81 min, dwie notki przy odstepie 68 min
+# potrzebowaly 76 min, a zwloka przed pierwsza notka zjadala kolejne 20.
+# 96 min przy budzecie 81 znaczy, ze druga notka nie miala prawa wyjsc — i przez
+# pietnascie dni nie wychodzila (2,9 notki dziennie przy normie 5).
+#
+# To, czego ten test pilnuje, sie NIE zmienilo: odstep ma byc na tyle dlugi, zeby
+# notki nie wychodzily parami kilkanascie minut po sobie. Pol godziny do godziny
+# to nadal czlowiek wracajacy do tematu, a nie przebieg widoczny na osi czasu.
+sprawdz("dolna granica co najmniej 30 min", dol >= 1800, dol)
+sprawdz("gorna co najmniej 60 min", gora >= 3600, gora)
 sprawdz("STARY odstep 10-25 min dawal pary (test rozroznia)", dol > 1500)
-sprawdz("komentarze zostaly krotkie (to inna czynnosc)",
-        config.ODSTEPY["komentarz"][1] <= 600, config.ODSTEPY["komentarz"])
+# DWIE NOTKI MUSZA SIE ZMIESCIC — to jest wlasciwy prog, a nie sama liczba minut.
+# Bez tego sprawdzenia mozna znowu wydluzyc odstep i cicho wrocic do 57 procent.
+_budzet = (config.LIMIT_CZASU_PRZEBIEGU_S - config.ZAPAS_CZASU_S)     * config.UDZIAL_CZASU_NA_NOTKI
+_zwloka = sum(config.ZWLOKA_PRZED_NOTKAMI) / 2
+_dwie = 2 * config.CZAS_DZIALANIA_S + (dol + gora) / 2
+sprawdz("dwie notki mieszcza sie w budzecie PO odjeciu zwloki",
+        _dwie <= _budzet - _zwloka,
+        "potrzeba %.0f min, zostaje %.0f min" % (_dwie / 60, (_budzet - _zwloka) / 60))
+
+# KOMENTARZE WYDLUZONE, nie skrocone — decyzja wlasciciela z 30 sierpnia:
+# „co najmniej 5 min opoznienia po komentarzu, zeby nie wygladal jak bot
+# nakurwiajacy 10 komentarzy w 10 sekund". Dolna granica byla 3 min i to za
+# malo widac na osi czasu przy serii komentarzy.
+sprawdz("komentarz ma co najmniej 5 min odstepu",
+        config.ODSTEPY["komentarz"][0] >= 300, config.ODSTEPY["komentarz"])
+sprawdz("i nadal jest krotszy niz notka (to inna czynnosc)",
+        config.ODSTEPY["komentarz"][1] < config.ODSTEPY["notka"][0],
+        (config.ODSTEPY["komentarz"], config.ODSTEPY["notka"]))
 sprawdz("polubienia nadal najkrotsze",
         config.ODSTEPY["lajk"][1] < config.ODSTEPY["komentarz"][0])
 
@@ -35,7 +61,15 @@ print("=== 2. ZWLOKA PRZED PIERWSZA NOTKA ===")
 zd, zg = config.ZWLOKA_PRZED_NOTKAMI
 print("    0-%s min" % (zg // 60))
 sprawdz("zwloka istnieje", zg > 0)
-sprawdz("zwloka co najmniej pol godziny w gorze", zg >= 1800, zg)
+# PRZYCIETE 30 sierpnia 2026 z 40 na 15 min. Zadanie zwloki to ROZMYCIE
+# MINUTY STARTU, a nie dlugosc sama w sobie — kwadrans losowego przesuniecia
+# ukrywa moment startu tak samo dobrze jak czterdziesci minut. Roznica jest w
+# cenie: zwloka szla z budzetu notek, o czym planista nie wiedzial, i to ona
+# wypychala druga notke poza przebieg.
+sprawdz("zwloka rozmywa start (co najmniej 10 min w gorze)", zg >= 600, zg)
+sprawdz("ale nie zjada juz miejsca na druga notke",
+        sum(config.ZWLOKA_PRZED_NOTKAMI) / 2 <= 900,
+        config.ZWLOKA_PRZED_NOTKAMI)
 sprawdz("moze byc zerowa (nie zawsze czekamy)", zd == 0, zd)
 
 print()
@@ -105,11 +139,26 @@ import run as _run  # noqa: E402
 budzet = config.LIMIT_CZASU_PRZEBIEGU_S - config.ZAPAS_CZASU_S
 _run._KONIEC_CZASU = _t.time() + budzet
 n = _run.zmiesci_sie("notka", 4, config.UDZIAL_CZASU_NA_NOTKI)
-k = _run.zmiesci_sie("komentarz", 14)
-print("    pelny przebieg (%s min): notki %s/4, komentarze %s/14" % (budzet // 60, n, k))
+# NA PRZEBIEG PRZYPADA TERAZ OKOLO CZTERECH KOMENTARZY, nie czternascie:
+# norma poszla z 10 na 19 dziennie, ale przebiegow jest piec zamiast trzech, a
+# odstep wzrosl z 3-8 na 5-15 min. Pytanie „czy czternascie wejdzie w jeden
+# przebieg" przestalo cokolwiek znaczyc — czternascie przy dziesieciominutowym
+# odstepie to trzy godziny i wejsc NIE MA prawa.
+import math as _m   # noqa: E402
+na_przebieg = _m.ceil(sum(config.KOMENTARZE_DZIENNIE) / 2 / config.PRZEBIEGOW_DZIENNIE)
+k = _run.zmiesci_sie("komentarz", na_przebieg)
+print("    pelny przebieg (%s min): notki %s/4, komentarze %s/%s"
+      % (budzet // 60, n, k, na_przebieg))
 sprawdz("cztery notki NIE mieszcza sie w przebiegu", n < 4, n)
-sprawdz("ale dwie sie mieszcza (dzien ma 5 notek na 3 przebiegi)", n >= 2, n)
-sprawdz("komentarze nadal wchodza w calosci", k == 14, k)
+sprawdz("ale dwie sie mieszcza (dzien ma 5 notek na %d przebiegow)"
+        % config.PRZEBIEGOW_DZIENNIE, n >= 2, n)
+sprawdz("dzienna porcja komentarzy wchodzi w przebieg w calosci",
+        k == na_przebieg, "%s z %s" % (k, na_przebieg))
+# KONTRDOWOD: przy starym odstepie 3-8 min i czternastu na przebieg pytanie bylo
+# latwe. Sprawdzamy, ze nowy odstep NAPRAWDE ogranicza — inaczej test niczego
+# nie pilnuje.
+sprawdz("a czternascie komentarzy juz NIE (test rozroznia)",
+        _run.zmiesci_sie("komentarz", 14) < 14)
 
 _run._KONIEC_CZASU = _t.time() + 600
 sprawdz("gdy zostalo 10 min, notek prawie nie ma",

@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **17 plików**, 14 655 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **17 plików**, 14 717 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 46 zestawów
-testów, 1387 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 47 zestawów
+testów, 1405 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -265,7 +265,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2763 wierszy, 59 funkcji na poziomie modułu, 0 klas
+2789 wierszy, 59 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -457,7 +457,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2004 wierszy, 20 funkcji na poziomie modułu, 0 klas
+2040 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -11578,7 +11578,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `KSZTALTY_MYSLI` | `{ "PYTANIE": ( "Ask something nobody can set` | KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL. Powod jest zmierzony: opis typu wymienial pytanie i obserwacje jako d |
 | `NOTE_MIX_OTHER_DAY` | `("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "` | — |
 | `LAJKI_DZIENNIE` | `(10, 16)` | --- zachowanie spoleczne: widelki, nie stale liczby ------------------------- Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma no |
-| `KOMENTARZE_DZIENNIE` | `(8, 12)` | Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo k |
+| `KOMENTARZE_DZIENNIE` | `(15, 23)` | Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo k |
 | `FOLLOW_MIESIECZNIE` | `(0, 0)` | ZERO, BO PRZYCISKA NIE MA. Obserwacje nie wykonaly sie ANI RAZU i przez tygodnie wygladalo to na blad kolejnosci blokow albo za waski budzet |
 | `SUBSKRYPCJE_MIESIECZNIE` | `(6, 12)` | — |
 | `PROG_ALARMU_WOLUMENU` | `60` | Ponizej ilu procent normy uznajemy, ze cos jest zepsute, a nie po prostu chudsze. Prog jest niski celowo: budzety sa LOSOWANE z widelek i dz |
@@ -11586,13 +11586,13 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `CICHE_DNI_WLACZONE` | `True` | — |
 | `RESTACK_DZIENNIE` | `(1, 2)` | Zjechane z 2-4 na 1-2 (2026-08-20). Restack stawia NASZE nazwisko obok cudzego tekstu — to najmocniejszy gest w calym repertuarze i jedyny,  |
 | `RESTACK_MAX_SLOW` | `40` | Dopisek do cudzej notki. Powyzej tego to juz nie dopisek, tylko wlasna notka doczepiona do czyjegos tekstu — a wtedy lepiej napisac wlasna n |
-| `PRZEBIEGOW_DZIENNIE` | `3` | Pierwszy miesiac na dolnej polowie widelek. Nowe konto z jednym artykulem, ktore nagle obserwuje dwadziescia osob, wyglada dokladnie jak far |
+| `PRZEBIEGOW_DZIENNIE` | `5` | Pierwszy miesiac na dolnej polowie widelek. Nowe konto z jednym artykulem, ktore nagle obserwuje dwadziescia osob, wyglada dokladnie jak far |
 | `LIMIT_CZASU_PRZEBIEGU_S` | `9000` | ILE CZASU MA PRZEBIEG. Musi zgadzac sie z `TimeoutStartSec` w pliku uslugi — to jedyne miejsce, gdzie ta sama liczba stoi dwa razy, i pilnuj |
 | `ZAPAS_CZASU_S` | `900` | Zapas na domkniecie: ostatnia publikacja, zamkniecie przebiegu, alarm. |
 | `ROZBIEG_DNI` | `30` | — |
 | `ODSTEPY` | `{ # 45-90 MIN, nie 10-25. Zmierzone na profi` | Odstepy miedzy dzialaniami, w sekundach. Pietnascie polubien w dziewiecdziesiat sekund to nie jest czytanie i kazdy system to widzi. Odstepy |
 | `ODSTEP_MIEDZY_DZIALANIAMI` | `(45, 180)` | — |
-| `ZWLOKA_PRZED_NOTKAMI` | `(0, 2400)` | ZWLOKA PRZED PIERWSZA NOTKA PRZEBIEGU. Bez niej pierwsza notka wychodzila zawsze kilka minut po starcie zegara, wiec trzy razy dziennie o te |
+| `ZWLOKA_PRZED_NOTKAMI` | `(0, 900)` | ZWLOKA PRZED PIERWSZA NOTKA PRZEBIEGU. Bez niej pierwsza notka wychodzila zawsze kilka minut po starcie zegara, wiec trzy razy dziennie o te |
 | `UDZIAL_CZASU_NA_NOTKI` | `0.60` | ILE CZASU PRZEBIEGU WOLNO ZJESC SAMYM NOTKOM. Rozdzielnik dzienny nie wiedzial nic o czasie: dzielil norme tak, jakby dzialania byly natychm |
 | `CZAS_DZIALANIA_S` | `240` | Ile trwa samo dzialanie poza przerwa: napisanie, sprawdzenie faktow, wystawienie i potwierdzenie u zrodla. Z realnych przebiegow. |
 | `MIN_WIEK_POSTA_MIN` | `(90, 900)` | NIE KOMENTUJEMY SWIEZYCH POSTOW. Wlasciciel opisal to najlepiej: napisal notke i piec sekund pozniej ktos odpisal ogolnikowa zgoda — i to zd |

@@ -1413,7 +1413,16 @@ LAJKI_DZIENNIE = (10, 16)
 # czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo kazdy to
 # trzy warianty plus sprawdzenie faktow, okolo trzech centow. Przy dwunastu
 # dziennie wychodzi ~11 USD miesiecznie samych komentarzy.
-KOMENTARZE_DZIENNIE = (8, 12)     # 0 jest dozwolone: milczenie bije slaby komentarz
+#
+# PODNIESIONE 30 sierpnia 2026 decyzja wlasciciela z (8, 12) do (15, 23).
+# Rachunek kosztu zostaje wazny — okolo trzech centow za komentarz, wiec przy
+# dziewietnastu dziennie to ~17 USD miesiecznie. Zmienil sie natomiast argument
+# o „podpisie bota": nie chodzi o LICZBE, tylko o ODSTEPY. Osiemnascie
+# komentarzy przez czternascie godzin to czytelnik; osiemnascie w kwadrans to
+# maszyna. Dlatego razem z ta zmiana odstep komentarza poszedl z 3-8 na 5-15
+# minut (patrz ODSTEPY) i doszly dwa przebiegi na dobe — bez tego norma nie
+# miala gdzie sie zmiescic w czasie.
+KOMENTARZE_DZIENNIE = (15, 23)    # 0 jest dozwolone: milczenie bije slaby komentarz
 # ZERO, BO PRZYCISKA NIE MA. Obserwacje nie wykonaly sie ANI RAZU i przez
 # tygodnie wygladalo to na blad kolejnosci blokow albo za waski budzet.
 # Sprawdzone 2026-08-23 na szesciu profilach: Substack zdjal „Follow" ze stron
@@ -1523,7 +1532,14 @@ RESTACK_MAX_SLOW = 40
 # Ile razy dziennie odpala sie agent. Dzienny przydzial dzieli sie na tyle
 # przebiegow, zeby notki rozkladaly sie na GODZINY, a nie wychodzily jedna po
 # drugiej w odstepie trzech minut — to wlasciciel zauwazyl na profilu.
-PRZEBIEGOW_DZIENNIE = 3
+# PIEC OD 30 sierpnia 2026, bylo trzy. Nie dlatego, ze agent ma robic wiecej
+# rzeczy na raz, tylko dlatego, ze normy nie mialy gdzie sie zmiescic w czasie.
+# Policzone: 19 komentarzy przy odstepie srednio 10 min to 236 min samego
+# czekania, notki potrzebuja kolejnych ~190. Razem 426 min przy pojemnosci
+# 3 x 150 = 450 — zero zapasu, wiec pierwsze potkniecie zabieralo norme.
+# Przy pieciu przebiegach na przebieg przypadaja 4 komentarze i 1 notka, co
+# miesci sie z zapasem.
+PRZEBIEGOW_DZIENNIE = 5
 
 # ILE CZASU MA PRZEBIEG. Musi zgadzac sie z `TimeoutStartSec` w pliku uslugi —
 # to jedyne miejsce, gdzie ta sama liczba stoi dwa razy, i pilnuje tego test,
@@ -1557,8 +1573,23 @@ ODSTEPY = {
     # Gorna granica jest przycieta do przebiegu: dwie notki po 90 minut mieszcza
     # sie w limicie czasu, trzy juz nie — i wtedy `zostal_czas` uczciwie konczy
     # dzien krocej, zamiast dac sie przeciac w polowie.
-    "notka":      (2700, 5400),  # 45-90 min
-    "komentarz":  (180, 480),    #  3-8 min: przeczytac cudzy tekst i odpowiedziec
+    # PRZYCIETE 30 sierpnia 2026 po policzeniu, dlaczego norma notek stala na
+    # 57 procent przez pietnascie dni. Arytmetyka byla bezlitosna: budzet na
+    # notki w przebiegu to 81 min, dwie notki przy odstepie 68 min potrzebuja
+    # 76 min — a zwloka przed pierwsza notka zjadala srednio kolejne 20 min,
+    # o czym planista nie wiedzial. 76 + 20 = 96 min przy budzecie 81, wiec
+    # druga notka NIE MIALA PRAWA sie zmiescic. Trzy przebiegi po jednej notce
+    # to 3 dziennie; zmierzona srednia wynosila 2,9.
+    #
+    # 35-65 min zamiast 45-90: dwie notki potrzebuja teraz 58 min i mieszcza sie
+    # z zapasem, a rytm nadal nie jest rytmem maszyny — pol godziny do godziny
+    # przerwy miedzy notkami czyta sie jak czlowiek wracajacy do tematu.
+    "notka":      (2100, 3900),  # 35-65 min
+    # CO NAJMNIEJ PIEC MINUT — decyzja wlasciciela z 30 sierpnia: „zeby nie
+    # wygladal jak bot nakurwiajacy 10 komentarzy w 10 sekund". Dolna granica
+    # byla 3 min i to za malo: przy serii komentarzy trzyminutowe odstepy widac
+    # na osi czasu tak samo dobrze, jak sekundowe.
+    "komentarz":  (300, 900),    #  5-15 min: przeczytac cudzy tekst i odpowiedziec
     "odpowiedz":  (120, 420),    #  2-7 min
     "lajk":       (30, 90),      # 0,5-1,5 min: przewijanie kanalu
     # Restack wymaga PRZECZYTANIA cudzej notki i napisania wlasnego zdania.
@@ -1572,7 +1603,12 @@ ODSTEP_MIEDZY_DZIALANIAMI = (45, 180)   # zapas dla czynnosci bez wlasnego wpisu
 # zawsze kilka minut po starcie zegara, wiec trzy razy dziennie o tej samej
 # porze co do kwadransa. Losowa zwloka rozmywa sam moment startu — godziny
 # zostaja te, ktore wybralismy, ale minuty przestaja byc przewidywalne.
-ZWLOKA_PRZED_NOTKAMI = (0, 2400)        # 0-40 min
+# PRZYCIETE 30 sierpnia 2026 z (0, 2400). Zwloka jest OZDOBNA — rozmywa moment
+# startu — ale wydawana byla z tego samego budzetu, co notki, i planista o niej
+# nie wiedzial: `zmiesci_sie` liczylo miejsce na dwie notki PRZED odespaniem
+# sredniego kwadransa. Przy budzecie 81 min i dwoch notkach za 58 min zapas
+# wynosi 23 min, wiec zwloka do 15 min go nie zjada, a nadal robi swoje.
+ZWLOKA_PRZED_NOTKAMI = (0, 900)         # 0-15 min
 
 # ILE CZASU PRZEBIEGU WOLNO ZJESC SAMYM NOTKOM.
 #

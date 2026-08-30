@@ -66,7 +66,8 @@ def _z_dziennikiem(wpisy, dni=7):
 print("=== 1. LICZY TO, CO WYSZLO ===")
 wpisy = ([{"rodzaj": "notka", "udane": True, "kiedy": _kiedy(1)}] * 10
          + [{"rodzaj": "notka", "udane": False, "kiedy": _kiedy(1)}] * 2
-         + [{"rodzaj": "komentarz", "udane": True, "kiedy": _kiedy(2)}] * 70)
+         + [{"rodzaj": "komentarz", "udane": True, "kiedy": _kiedy(2)}]
+         * int(config.normy_dzienne()["komentarz"] * 7))
 d = _z_dziennikiem(wpisy)
 sprawdz("liczy udane", d["notka"]["udane"] == 10, d.get("notka"))
 sprawdz("i osobno nieudane", d["notka"]["nieudane"] == 2, d.get("notka"))
@@ -74,7 +75,10 @@ sprawdz("dzieli przez liczbe dni", d["notka"]["na_dzien"] == round(10 / 7, 2),
         d["notka"]["na_dzien"])
 sprawdz("norma pochodzi z configu",
         d["notka"]["norma"] == config.normy_dzienne()["notka"])
-# 70 komentarzy przez 7 dni = 10/dzien = dokladnie norma.
+# Tyle komentarzy, ile wynosi norma razy siedem dni — czyli dokladnie 100%.
+# LICZBA POCHODZI Z CONFIGU, nie jest wpisana na sztywno: norma zmienila sie
+# 30 sierpnia z 10 na 19 i wpisane 70 zaczelo znaczyc 53 procent zamiast stu.
+# Test ma sprawdzac, czy licznik dobrze DZIELI, a nie pamietac stara norme.
 sprawdz("realizacja liczona wobec normy", d["komentarz"]["realizacja"] == 100,
         d["komentarz"])
 

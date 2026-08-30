@@ -61,8 +61,16 @@ print()
 print("=== 2. KONKRETNE DECYZJE Z 20 SIERPNIA ===")
 sprawdz("lajki 10-16 (było 12-20)", config.LAJKI_DZIENNIE == (10, 16),
         config.LAJKI_DZIENNIE)
-sprawdz("komentarze 8-12 (było 15-20)", config.KOMENTARZE_DZIENNIE == (8, 12),
+# PODNIESIONE 30 sierpnia 2026 decyzja wlasciciela do 15-23. Argument z 20
+# sierpnia brzmial „osiemnascie komentarzy dziennie to podpis bota" — i byl
+# sluszny wobec OWCZESNYCH odstepow 3-8 min. Wlasciciel przeformulowal go
+# trafniej: bot poznaje sie nie po LICZBIE, tylko po tym, ze wystawia je jeden
+# po drugim. Razem z ta zmiana odstep poszedl na 5-15 min, a przebiegow jest
+# piec zamiast trzech, wiec 19 komentarzy rozklada sie na ~190 minut.
+sprawdz("komentarze 15-23 (bylo 8-12)", config.KOMENTARZE_DZIENNIE == (15, 23),
         config.KOMENTARZE_DZIENNIE)
+sprawdz("i odstep urosl razem z liczba — inaczej to byloby seria",
+        config.ODSTEPY["komentarz"][0] >= 300, config.ODSTEPY["komentarz"])
 sprawdz("restacki 1-2 (było 2-4)", config.RESTACK_DZIENNIE == (1, 2),
         config.RESTACK_DZIENNIE)
 # WYCOFANE 2026-08-23: Substack zdjal przycisk „Follow" ze stron profilowych.
@@ -153,11 +161,19 @@ print()
 print("=== 8. ILE TO KOSZTUJE MIESIECZNIE ===")
 # Zmierzone na produkcji: komentarz to trzy warianty + factcheck ~ 3 centy.
 ZA_KOMENTARZ = 0.03
-for opis, ile in (("było (15-20/dzień)", 17.5), ("jest (8-12/dzień)", 10.0)):
+for opis, ile in (("było (8-12/dzień)", 10.0),
+                  ("jest (15-23/dzień)", sum(config.KOMENTARZE_DZIENNIE) / 2)):
     print("    %-22s %5.1f/dzień -> $%5.2f miesięcznie" % (opis, ile, ile * 30 * ZA_KOMENTARZ))
-sprawdz("nowe widełki oszczędzają ponad 5 USD miesięcznie",
-        (17.5 - sum(config.KOMENTARZE_DZIENNIE) / 2) * 30 * ZA_KOMENTARZ > 5,
-        (17.5 - sum(config.KOMENTARZE_DZIENNIE) / 2) * 30 * ZA_KOMENTARZ)
+# KOSZT MA BYC ZNANY, NIE MINIMALNY. Wlasciciel swiadomie podniosl norme, wiec
+# test przestaje bronic oszczednosci, a zaczyna bronic tego, zeby rachunek nie
+# uciekl bez decyzji: 19/dobe to ~17 USD miesiecznie i to jest gorna granica,
+# ktora ma sie nie przesunac po cichu.
+_miesiecznie = sum(config.KOMENTARZE_DZIENNIE) / 2 * 30 * ZA_KOMENTARZ
+sprawdz("miesieczny koszt komentarzy ponizej 25 USD", _miesiecznie < 25,
+        "$%.2f" % _miesiecznie)
+sprawdz("i miesci sie w sufucie miesiecznym",
+        _miesiecznie < config.MONTHLY_LIMIT_USD,
+        "$%.2f z $%.2f" % (_miesiecznie, config.MONTHLY_LIMIT_USD))
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

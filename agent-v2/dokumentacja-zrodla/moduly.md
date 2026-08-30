@@ -123,7 +123,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2763 wierszy, 59 funkcji na poziomie modułu, 0 klas
+2789 wierszy, 59 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -315,7 +315,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2004 wierszy, 20 funkcji na poziomie modułu, 0 klas
+2040 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
