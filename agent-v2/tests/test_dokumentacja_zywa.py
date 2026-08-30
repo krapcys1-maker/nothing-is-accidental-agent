@@ -82,16 +82,36 @@ sprawdz("kazda funkcja z KOD_DOSLOWNIE istnieje", not brakujace, brakujace)
 print()
 print("=== 3. DOKUMENT W REPOZYTORIUM JEST AKTUALNY ===")
 # To jest cala pointa. Skladamy na nowo i porownujemy z tym, co lezy w repo.
+# TEST NIE ZMIENIA REPOZYTORIUM. `sklej.py` pisze prosto do sledzonych plikow —
+# i nie tylko do dokumentu koncowego, ale takze do KAZDEJ czesci mechanicznej w
+# `dokumentacja-zrodla/`. Samo sprawdzenie zostawialo wiec brudne drzewo, a na
+# serwerze brudne drzewo BLOKUJE NASTEPNE WDROZENIE (`git merge --ff-only`
+# odmawia). Zdarzylo sie to 30 sierpnia: testy przeszly 52/52 i tym samym
+# uniemozliwily wgranie kolejnej wersji, bo odbudowaly dokumentacje.
+#
+# Wykrywamy nieaktualnosc i PRZYWRACAMY stan sprzed — wszystkich plikow, nie
+# jednego. Odbudowa jest robota czlowieka przed commitem, nie skutkiem ubocznym
+# testu. Liste bierzemy z samego generatora, zeby nie rozjechala sie, gdy ktos
+# dolozy nowa czesc.
+_dotykane = [PAPER] + [sklej.KAT / n for n in sklej.GENERATORY]
+_kopie = {p: p.read_text(encoding="utf-8") for p in _dotykane if p.exists()}
+
 przed = PAPER.read_text(encoding="utf-8")
 wynik = subprocess.run([sys.executable, str(SKLEJ)],
                        capture_output=True, text=True)
 po = PAPER.read_text(encoding="utf-8")
+
+_zmienione = [p.name for p, tresc in _kopie.items()
+              if p.read_text(encoding="utf-8") != tresc]
+for p, tresc in _kopie.items():
+    if p.read_text(encoding="utf-8") != tresc:
+        p.write_text(tresc, encoding="utf-8")
 sprawdz("skladanie konczy sie bez ostrzezen", wynik.returncode == 0,
         wynik.stdout[-400:])
-sprawdz("przebudowa NICZEGO nie zmienia — dokument jest aktualny",
-        przed == po,
-        "roznica %d znakow; uruchom: python agent-v2/dokumentacja-zrodla/sklej.py"
-        % abs(len(przed) - len(po)))
+sprawdz("przebudowa NICZEGO nie zmienia — dokumentacja jest aktualna",
+        not _zmienione,
+        "nieaktualne: %s; uruchom: python agent-v2/dokumentacja-zrodla/sklej.py"
+        % ", ".join(_zmienione))
 
 print()
 print("=== 4. TRESC ODPOWIADA DZISIEJSZEMU KODOWI ===")

@@ -4617,7 +4617,44 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
     # nieoceniony dostaje range na koncu kolejki, zeby nie wypychal ocenionych,
     # ale i nie przepadl.
     swiezi.sort(key=lambda para: para[0].get("ranga", 10 ** 6))
-    wziete = [k for k, _ in swiezi][:max(0, ile)]
+
+    # BLIZNIAKI W JEDNEJ PARTII. Ranking ustawia kandydatow wzgledem siebie, ale
+    # nie pyta, czy dwaj sasiedzi nie mowia tego samego — i nie zapyta, bo to
+    # jest praca dla kodu, nie dla modelu. Zywy przebieg 30 sierpnia oddal bank,
+    # w ktorym pozycje #7 i #8 obie tlumaczyly, czemu odpowiedz plynie slowo po
+    # slowie. Wziete razem daja dwie notki o jednej rzeczy w jednym dniu —
+    # dokladnie wpadke z 23 i 24 sierpnia, gdy dwa razy poszedl symbol otwartego
+    # sloika.
+    #
+    # Rozmyty wykrywacz `_o_tym_samym` istnial od dawna i bank go NIE WOLAL.
+    # To ten sam ksztalt wady, co reszta tego audytu: sygnal wytworzony i
+    # wyrzucony.
+    #
+    # NIE ODRZUCAMY, TYLKO POMIJAMY W TEJ PARTII. Koszt pomylki jest tu
+    # asymetryczny: falszywe trafienie kosztuje jeden przebieg zwloki, bo
+    # kandydat zostaje w banku ze statusem „nowy"; przeoczenie kosztuje dwie
+    # notki o tym samym. Dlatego prog ostrzejszy z dwoch — ten skalibrowany na
+    # porownaniu dwoch tekstow notkowej dlugosci.
+    wziete: list[dict[str, Any]] = []
+    blizniaki: list[tuple[str, str]] = []
+    for k, _ in swiezi:
+        if len(wziete) >= max(0, ile):
+            break
+        tresc = str(k.get("fact") or "")
+        blizniak = next(
+            (w for w in wziete
+             if _o_tym_samym(tresc, str(w.get("fact") or ""),
+                             **POROWNANIE_MIEDZY_DNIAMI)), None)
+        if blizniak is not None:
+            blizniaki.append((tresc, str(blizniak.get("fact") or "")))
+            continue
+        wziete.append(k)
+    # GLOSNO, nie po cichu. Partia przycieta bez slowa wyglada jak partia
+    # kompletna — a to jest wlasnie ta klasa bledu, ktora tropimy.
+    for tresc, wzorzec in blizniaki:
+        print("  [indeks] blizniak zostaje w banku: %s (juz biore: %s)"
+              % (tresc[:64], wzorzec[:64]), flush=True)
+
     if wziete:
         znaczniki = {id(k) for k in wziete}
         for k in indeks:

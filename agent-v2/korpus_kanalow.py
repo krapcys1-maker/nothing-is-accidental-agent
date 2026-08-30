@@ -209,10 +209,33 @@ def wielkie_wydarzenia(korpus: list[dict[str, Any]], min_kanalow: int = 3,
     return wyniki
 
 
+# Korpus zbudowany w tym procesie, i kiedy. Trzynascie zapytan HTTP na kanaly
+# YouTube'a nie jest darmowe w czasie, a przebieg wola te funkcje DWA RAZY:
+# raz po zaczyn do promptu ciekawostek, raz po wykrywacz wielkich wydarzen.
+# Zmierzone 30 sierpnia: w logu jednego przebiegu linia „180 filmow z 13
+# kanalow" pojawiala sie dwukrotnie, kilkanascie sekund po sobie.
+#
+# TERMIN, NIE WIECZNOSC. Przebieg dnia potrafi trwac ponad godzine, wiec zapas
+# bez terminu oznaczalby, ze pod koniec cyklu patrzymy na kanaly sprzed 90
+# minut. Pol godziny to kompromis: w jednym przebiegu pobieramy raz, a proces
+# dlugowieczny i tak sie odswiezy.
+_ZAPAS: dict[str, Any] = {"kiedy": 0.0, "wpisy": None}
+ZAPAS_WAZNY_S = 1800
+
+
 def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
+    import time
+
     import httpx
 
     import config
+
+    # Zapas trzyma PELNA liste, a nie przyciete `ile` — inaczej wywolanie po 26
+    # tematow zatrulo by pozniejsze wywolanie po 200, ktorego potrzebuje
+    # wykrywacz wydarzen.
+    if (_ZAPAS["wpisy"] is not None
+            and time.time() - _ZAPAS["kiedy"] < ZAPAS_WAZNY_S):
+        return list(_ZAPAS["wpisy"])[:ile]
 
     wpisy: list[tuple[str, Any]] = []
     with httpx.Client(timeout=config.FETCH_TIMEOUT_S, follow_redirects=True,
@@ -230,6 +253,12 @@ def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
     k = przetworz(wpisy)
     print("  [kanaly] %d filmow z %d kanalow -> %d tematow"
           % (len(wpisy), len(KANALY), len(k)), flush=True)
+    # Zapas zapisujemy TYLKO wtedy, gdy cos przyszlo. Zapamietanie pustki po
+    # sieciowej wpadce wyciszyloby kanaly na pol godziny, a prompt dostalby
+    # „(nothing fetched today)" mimo dzialajacej sieci.
+    if k:
+        _ZAPAS["wpisy"] = list(k)
+        _ZAPAS["kiedy"] = time.time()
     return k[:ile]
 
 
