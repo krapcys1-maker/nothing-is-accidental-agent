@@ -424,6 +424,17 @@
 | `slad(dni)` | Gdzie dokladnie psuja sie publikacje — wg pozycji w serii i odstepu. |
 | `main()` | — |
 
+### `audyt_tematow.py` — audyt segmentu tematow na zywych danych: jedenascie etapow, od kanalow po zwrot do puli
+
+244 wierszy, 4 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `etap(nr, nazwa)` | — |
+| `werdykt(nazwa, stan, szczegol)` | — |
+| `bank()` | — |
+| `main()` | — |
+
 ### `migracja_okno_promocji.py` — jednorazowo: data publikacji z dziennika do kolejki promocji
 
 97 wierszy, 2 funkcji na poziomie modułu, 0 klas
