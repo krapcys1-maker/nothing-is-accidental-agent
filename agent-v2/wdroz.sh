@@ -45,7 +45,15 @@ if [ -e "$ZAMEK" ] && ! flock -n "$ZAMEK" -c true 2>/dev/null; then
     echo "  PRZEBIEG TRWA (zamek zajety) — nie wdrazam, sprobuj po jego zakonczeniu"
     exit 1
 fi
-if pgrep -f "[r]un\.py --dzien" >/dev/null; then
+# TYLKO PROCESY PYTHONA. Wzorzec bez `python` lapal takze cudze POLECENIA, w
+# ktorych ten napis wystepuje — a wystarczy jedna petla czekajaca
+#     while pgrep -f "run.py --dzien"; do sleep 60; done
+# zeby zablokowac wdrozenia na zawsze: jej wlasny wiersz polecenia zawiera
+# wzorzec, wiec czeka sama na siebie i nigdy nie konczy. Dwie takie sieroty
+# wisialy na serwerze 30 sierpnia i przez pol godziny udawaly trwajacy przebieg.
+#
+# Nawiasy w "[r]un" zostaja — chronia przed dopasowaniem samego `pgrep`.
+if pgrep -f "python.*[r]un\.py --dzien" >/dev/null; then
     echo "  PRZEBIEG TRWA — nie wdrazam, sprobuj po jego zakonczeniu"
     exit 1
 fi
