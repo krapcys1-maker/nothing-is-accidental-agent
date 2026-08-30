@@ -1340,6 +1340,19 @@ NOTEK_PROMUJACYCH = 3
 # konczy sie, zanim link zdazy ostygnac.
 OKNO_PROMOCJI_DNI = 7
 
+# DZIEN, W KTORYM KONTO PRZESTALO BYC PISMEM O PRZEDMIOTACH CODZIENNYCH.
+#
+# Nie jest to data historyczna dla ozdoby — czyta ja `wez_kandydatow`. Indeks
+# kandydatow przetrwal przeprowadzke i trzyma material obu pism naraz. Zmierzone
+# 30 sierpnia 2026 na 119 wolnych kandydatach:
+#     do 24 sierpnia   65 pozycji, z tego 1 o AI
+#     od 25 sierpnia   54 pozycje, z tego 46 o AI
+# Rozdzial jest ostry, wiec data dziala jak filtr, a nie jak przyblizenie.
+#
+# TA SAMA KLASA WADY, CO SZAMPON W KOLEJCE PROMOCYJNEJ: rzeczy z poprzedniego
+# pisma nie znikaja same, tylko czekaja w kolejce, az cos po nie siegnie.
+DATA_PRZESTAWIENIA = "2026-08-25"
+
 # MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu.
 #
 # Powod jest w NOTE_TYPES przy samym typie: wszystkie pozostale wymagaja karty

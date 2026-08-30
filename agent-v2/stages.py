@@ -4370,7 +4370,23 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
     wystawic to samo dwa razy.
     """
     indeks = wczytaj_indeks()
-    wolni = [k for k in indeks if k.get("status") == "nowy"]
+    # SPIZARNIA Z POPRZEDNIEGO PISMA SIE NIE LICZY.
+    #
+    # 30 sierpnia podlaczylem indeks do notek — i o malo nie cofnalem konta o
+    # tydzien. Zmierzone tego samego wieczora: ze 119 wolnych kandydatow tylko
+    # 47 dotyczylo AI. Rozdzial jest ostry i idzie po dacie przestawienia:
+    #     do 24 sierpnia   65 kandydatow, z tego 1 o AI
+    #     od 25 sierpnia   54 kandydatow, z tego 46 o AI
+    # Bez tego filtru sześćdziesiąt jeden procent notek wracaloby do jajek,
+    # szamponu i kodow na butelkach — dokladnie ta sama wada, co artykul o
+    # szamponie czekajacy w kolejce promocyjnej.
+    #
+    # Data, nie slownik: filtr slownikowy na slowa o AI przepuscilby wszystko,
+    # co przypadkiem wspomina "model" albo "training", a odrzucil dobry temat
+    # o prawie autorskim. Dzien przestawienia konta jest faktem, nie heurystyka.
+    wolni = [k for k in indeks
+             if k.get("status") == "nowy"
+             and str(k.get("kiedy") or "")[:10] >= config.DATA_PRZESTAWIENIA]
     wziete = wolni[:max(0, ile)]
     if wziete:
         znaczniki = {id(k) for k in wziete}

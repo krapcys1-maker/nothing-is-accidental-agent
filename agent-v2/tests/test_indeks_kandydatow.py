@@ -200,5 +200,49 @@ sprawdz("prompt fedreg zamawia forme z 'your'",
         'using the word "your"' in prompt_fr)
 
 print()
+print("=== SPIZARNIA Z POPRZEDNIEGO PISMA SIE NIE LICZY ===")
+# 30 sierpnia 2026 podlaczylem indeks do notek i o malo nie cofnalem konta
+# o tydzien. Indeks przetrwal przeprowadzke i trzyma material obu pism naraz.
+# Zmierzone na 119 wolnych kandydatach:
+#     do 24 sierpnia   65 pozycji, z tego 1 o AI
+#     od 25 sierpnia   54 pozycje, z tego 46 o AI
+# Bez filtru 61 procent notek wracaloby do jajek i szamponu — ta sama wada,
+# co artykul o szamponie czekajacy w kolejce promocyjnej.
+import tempfile as _tmp2   # noqa: E402
+import json as _js2        # noqa: E402
+
+_kat2 = pathlib.Path(_tmp2.mkdtemp())
+_stary_indeks = stages.INDEKS_KANDYDATOW
+stages.INDEKS_KANDYDATOW = _kat2 / "indeks.json"
+try:
+    def _kand(fakt, kiedy):
+        return {"fact": fakt, "status": "nowy", "kiedy": kiedy + "T10:00:00+00:00"}
+
+    stages.INDEKS_KANDYDATOW.write_text(_js2.dumps([
+        _kand("Stary temat o szamponie", "2026-08-22"),
+        _kand("Stary temat o jajkach", "2026-08-24"),
+        _kand("Nowy temat o modelach", config.DATA_PRZESTAWIENIA),
+        _kand("Nowszy temat o tokenach", "2026-08-28"),
+    ], ensure_ascii=False), encoding="utf-8")
+
+    wziete2 = stages.wez_kandydatow(10)
+    fakty2 = [k["fact"] for k in wziete2]
+    sprawdz("bierze tylko material po przestawieniu konta",
+            fakty2 == ["Nowy temat o modelach", "Nowszy temat o tokenach"],
+            fakty2)
+    sprawdz("dzien przestawienia WCHODZI (granica wlaczajaca)",
+            "Nowy temat o modelach" in fakty2, fakty2)
+
+    # KONTRDOWOD: bez filtru wzieloby wszystkie cztery — i wlasnie to robilo
+    # przez pol godziny miedzy podlaczeniem indeksu a ta poprawka.
+    stages.INDEKS_KANDYDATOW.write_text(_js2.dumps([
+        _kand("Stary A", "2026-08-22"), _kand("Stary B", "2026-08-24"),
+    ], ensure_ascii=False), encoding="utf-8")
+    sprawdz("sama stara spizarnia oddaje PUSTO (test rozroznia)",
+            stages.wez_kandydatow(10) == [], stages.wez_kandydatow(10))
+finally:
+    stages.INDEKS_KANDYDATOW = _stary_indeks
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
