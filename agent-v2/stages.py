@@ -1696,11 +1696,23 @@ KSZTALT_CIEKAWOSTEK = (
     '"CONFIRMS|MODIFIES|ENDS", "control_fact": "", "domain": ""}]}'
 )
 
+# Pola kontraktu ciekawostek wyprowadzone z samego ksztaltu — zeby zapis do
+# indeksu nie mogl sie z nim rozjechac. Patrz `dopisz_kandydatow`.
+def _pola_ksztaltu(ksztalt: str, pomin: tuple[str, ...] = ("facts",)) -> tuple[str, ...]:
+    """Nazwy pol z kontraktu na odpowiedz, bez klucza opakowujacego."""
+    import re as _re
+    return tuple(k for k in dict.fromkeys(_re.findall(r'"([a-z_]+)":', ksztalt))
+                 if k not in pomin)
+
+
 KSZTALT_DYSKOVERII = (
     '{"sources": [{"url": "", "title": "", "host": "", '
     '"class": "PRIMARY|SECONDARY", "answers_why": true, "has_numbers": true, '
     '"source_date": ""}]}'
 )
+
+
+_POLA_Z_KSZTALTU = _pola_ksztaltu(KSZTALT_CIEKAWOSTEK)
 
 
 PROMOCJA = config.DATA_DIR / "promocja.json"
@@ -2093,7 +2105,26 @@ def notki_dnia(
             material = karta
         else:
             if not zapas:
-                zapas = znajdz_ciekawostki(conn, run_id)
+                # NAJPIERW SPIZARNIA, DOPIERO POTEM ZAKUPY.
+                #
+                # Indeks kandydatow byl TYLKO DO ZAPISU. `wez_kandydatow` i
+                # `stan_indeksu` nie mialy ani jednego wywolania produkcyjnego —
+                # istnialy wylacznie w tescie, ktorego tytul brzmi „JEDNO
+                # WYSZUKIWANIE ZASILA WIELE PRZEBIEGOW". Uzasadnienie wydatku
+                # bylo zapisane w kodzie i nie realizowane przez zadna linie.
+                #
+                # Zmierzone 30 sierpnia 2026: 119 przyjetych, NIEUZYTYCH
+                # kandydatow lezalo na dysku, a `curiosity` placilo za nowe
+                # wyszukiwanie przy kazdym pustym zapasie — 3,14 USD na 47
+                # wywolan, przy 8,99 USD calej sekcji znajdowania tematu (36
+                # procent budzetu agenta). Wada byla nazwana w audycie z 23
+                # sierpnia i przestala tydzien nietknieta.
+                zapas = wez_kandydatow(config.CURIOSITY_BATCH)
+                if zapas:
+                    print("  [notki] wziete z indeksu: %d (bez nowego"
+                          " wyszukiwania)" % len(zapas), flush=True)
+                if not zapas:
+                    zapas = znajdz_ciekawostki(conn, run_id)
                 if not zapas:
                     print("  [notki] brak materiału — kończę dzień krócej", flush=True)
                     break
@@ -4095,11 +4126,42 @@ def bramka_kandydata(k: dict[str, Any]) -> tuple[bool, str]:
     # BRAMKA 1 — NAZWANY DECYDENT Z DATA. To jest cala premisa pisma: „jaka
     # decyzja, przepis albo interes za tym stoi". Zabija „dlaczego niebo jest
     # niebieskie" jednym ruchem, bo nikt tego nie zdecydowal.
+    # ROK JEST WYMAGANY TYLKO OD DECYZJI, nie od kazdego mechanizmu.
+    #
+    # Ta bramka powstala, gdy pole nazywalo sie „kto zdecydowal i kiedy" i
+    # rzeczywiscie kazdy dopuszczalny mechanizm mial date. 30 sierpnia 2026
+    # doktryna sie rozszerzyla: mechanizmem jest tez POMIAR (kto zmierzyl i co
+    # wyszlo), OGRANICZENIE (co w budowie albo matematyce to wymusza) i
+    # KOMPROMIS. Bramka o tym nie wiedziala i zostala sprzecznoscia, ktora sam
+    # wprowadzilem, zmieniajac prompt i nie zagladajac do kodu.
+    #
+    # OGRANICZENIE NIE MA ROKU Z DEFINICJI. Zmierzone na 173 kandydatach:
+    # DWADZIESCIA DZIEWIEC odrzucen „decydent bez daty" dotyczylo faktow, w
+    # ktorych roku nie ma w ZADNYM polu — bo go nie moze byc. Wsrod nich
+    # tokenizacja subwordowa jako powod bledu ze „strawberry", okno kontekstu
+    # gubiace najstarsze tokeny, dostepnosc danych treningowych decydujaca o
+    # tym, ktore z 6900 jezykow model rozumie. To sa najlepsze tematy tego
+    # pisma, odrzucane za to, ze nikt ich nie podpisal.
+    #
+    # Odrzucenie jest OSTATECZNE, wiec kazdy taki fakt przepadl na zawsze.
     decyzja = str(k.get("decision") or "").strip()
     if len(decyzja.split()) < 2:
-        return False, "nikt tego nie zdecydowal — to zjawisko, nie mechanizm"
+        return False, "nie umiem nazwac, co to sprawia — ani decyzji, ani pomiaru"
+    # Sprawdzamy SYGNAL POZYTYWNY — czy nazwano mechanizm INNY niz decyzja — a
+    # nie obecnosc czasownika decyzyjnego gdziekolwiek w zdaniu. Pierwsza wersja
+    # szukala takze slow decyzyjnych i odrzucila „the tokenizer architecture
+    # forces it; NOBODY CHOSE it", bo zlapala „chose" w zaprzeczeniu. Wzorzec
+    # negatywny na tekscie swobodnym zawsze bedzie tak przegrywal.
+    _NIE_DECYZJA = re.compile(
+        r"\b(measur|tested|scored|benchmark|evaluat|audit|observ|"
+        r"architect|tokeni|context window|arithmetic|by construction|"
+        r"falls out|trade-?off|constraint|forces it|because it is built)", re.I)
     if not re.search(r"(1[5-9]|20)\d{2}", decyzja):
-        return False, "decydent bez daty: %r" % decyzja[:60]
+        # Brak roku uchodzi WYLACZNIE przy pomiarze, ograniczeniu i kompromisie.
+        # Decyzja bez daty nadal odpada — „ktos kiedys ustalil" nie jest
+        # mechanizmem, tylko zasloneciem tego, ze nie wiadomo kto i kiedy.
+        if not _NIE_DECYZJA.search(decyzja):
+            return False, "decyzja bez daty: %r" % decyzja[:60]
 
     # BRAMKA 2 — ZLAMANE PRZEKONANIE. Najostrzejsza regula w calym potoku:
     # „wiekszosc nie wie" to NIE JEST przekonanie, tylko niewiedza, a niewiedza
@@ -4142,12 +4204,29 @@ def bramka_kandydata(k: dict[str, Any]) -> tuple[bool, str]:
     #   zle:    „an Atlantic-region pelagic longline permit holder",
     #           „GS and FWS wildland firefighters assigned to prescribed burns"
     #
-    # Wymog „your" wymusza odpowiedz na pytanie CO MA CZYTELNIK zamiast KOGO
-    # TO DOTYCZY. Prompt zamawia dokladnie taka forme, wiec to nie jest
+    # Wymog DRUGIEJ OSOBY wymusza odpowiedz na pytanie CO MA CZYTELNIK zamiast
+    # KOGO TO DOTYCZY. Prompt zamawia dokladnie taka forme, wiec to nie jest
     # zgadywanka — to sprawdzenie, czy model wykonal polecenie.
-    if not re.search(r"\byour\b", skutek, re.IGNORECASE):
-        return False, ("skutek nazywa kogos, nie rzecz czytelnika (brak slowa "
-                       "'your'): %r" % skutek[:70])
+    #
+    # SZUKALO SAMEGO „your" I TO BYLA WADA NA JEDNA LITERE. Zmierzone 30
+    # sierpnia 2026 na 173 kandydatach z produkcji: SZESNASCIE odrzucen z
+    # powodem „brak slowa 'your'" dotyczylo zdan pisanych w drugiej osobie —
+    # „the model you talk to", „the sandbox you're told keeps a model
+    # contained", „the number you see on a benchmark leaderboard", „the
+    # entry-level job you apply for". To jest DOKLADNIE forma, ktorej ta
+    # bramka zada, odrzucana przez brak litery „r".
+    #
+    # Zginal na tym najlepszy material, jaki potok znalazl. Odrzucenie jest
+    # OSTATECZNE — wpis dostaje status „odrzucony" na zawsze — wiec te fakty
+    # nie wracaja nigdy.
+    #
+    # BRAMKA SIE NIE ROZLUZNIA: oba pierwotne kontrprzyklady, ktore ja
+    # wywolaly („an Atlantic-region pelagic longline permit holder", „GS and
+    # FWS wildland firefighters"), nadal nie zawieraja zadnej drugiej osoby.
+    if not re.search(r"\byou\b|\byour\b|\byou're\b|\byours\b|\byourself\b",
+                     skutek, re.IGNORECASE):
+        return False, ("skutek nazywa kogos, nie rzecz czytelnika (brak drugiej"
+                       " osoby): %r" % skutek[:70])
 
     # BRAMKA 4 — SPRAWDZALNOSC. Jesli nie umiemy nazwac, GDZIE mieszka
     # odpowiedz, to weryfikacja padnie pozniej — a wtedy research bedzie juz
@@ -4254,6 +4333,20 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]]) -> dict[str, int]:
             # kandydat wyjety z indeksu tydzien pozniej nie ma jak przejsc
             # sprawdzenia wieku, bo nie wiadomo, ile ma lat.
             "source_date": str(k.get("source_date") or "")[:40],
+            # I ZGINELA DRUGI RAZ, TEGO SAMEGO DNIA. 30 sierpnia doszly cztery
+            # pola dokumentu kontrolnego (`control_*`) — prompt ich zada,
+            # `swiezosc_faktu` na nich stoi, a ten zapis ich nie przepisywal.
+            # Zmierzone tego samego wieczora: 0 ze 173 wpisow w indeksie ma
+            # `control_verdict`. Ta sama klasa bledu, dwa wiersze nizej opisana
+            # dla `source_date`, powtorzona przy pierwszej okazji.
+            #
+            # DLATEGO POLA IDA Z KSZTALTU, nie z recznej listy. Kontrakt na
+            # odpowiedz (`KSZTALT_CIEKAWOSTEK`) i kontrakt na zapis to teraz
+            # jedno zrodlo — kazde nowe pole promptu przepisze sie samo i nie
+            # zginie po raz trzeci.
+            **{p: str(k.get(p) or "")[:400] for p in _POLA_Z_KSZTALTU
+               if p not in ("fact", "wrong_belief", "actually", "decision",
+                            "consequence", "url", "source_date", "domain")},
             "domain": str(k.get("domain") or "")[:80],
             "status": "nowy" if ok else "odrzucony",
             "powod": powod,
