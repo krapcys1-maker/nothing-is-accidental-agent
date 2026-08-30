@@ -297,6 +297,57 @@ WRITER_SYSTEM = (
 )
 
 
+def karta_dla_pisarza(card: dict[str, Any],
+                      teraz: Any = None) -> dict[str, Any]:
+    """Karta bez zastrzezenia, ktorego nie wolno opublikowac.
+
+    DWA ARTYKULY Z RZEDU ZGINELY NA TYM SAMYM ZDANIU, 30 sierpnia. Oba mialy
+    kazde twierdzenie o temacie potwierdzone zrodlami pierwotnymi. Oba zatrzymala
+    bramka faktow — i za kazdym razem na zdaniu o NASZYCH ZRODLACH, nie o temacie:
+
+        karta:   „Only METR's URL carries an explicit publication date;
+                  the other sources are undated in the excerpts."
+        tekst 1: „the OpenAI, Hugging Face and CyberScoop accounts are undated"
+        tekst 2: „only METR's carries an explicit publication date; the passages
+                  we rely on (...) reached us undated"
+        bramka:  „the OpenAI, Hugging Face and CyberScoop accounts ALL carry
+                  explicit dates"
+
+    Po pierwszej porazce poprawilem regule w promptcie. NIE WYSTARCZYLO: zdanie
+    ma DWIE polowy i zakwalifikowana zostala tylko druga. Pierwsza — ktore
+    zrodlo ma date — jest twierdzeniem o cudzych dokumentach zawsze, niezaleznie
+    od tego, jak ja opakowac.
+
+    ZRODLO PROBLEMU NIE JEST U PISARZA. Tabela `sources` NIE MA kolumny z data;
+    potok nigdy nie wyciaga daty publikacji. Model syntezy widzi wyciagi, nie
+    widzi w nich daty i melduje to uczciwie — a to jest zdanie o NASZYM
+    POBIERANIU, nie o swiecie. Strony te daty maja i sprawdzacz je znajduje.
+
+    A zastrzezenie nie bylo nawet potrzebne: `newest` w tej karcie to 2026-08-26,
+    czyli material mial CZTERY DNI. Nota o wieku doszla do tekstu, ktory na
+    niczym starym nie stoi.
+
+    Wiec: gdy material jest swiezy, nota o wieku sie NIE NALEZY i nie idzie do
+    pisarza. Gdy jest stary albo nieznanego wieku — idzie, bo wtedy niesie to,
+    po co powstala, a prawo czytelnika do zwazenia wieku jest prawdziwe.
+
+    RECENZENT DOSTAJE KARTE PELNA. On nie pisze tekstu, tylko sprawdza go wobec
+    materialu — i ma widziec wszystko, co o tym materiale wiemy.
+
+    MODEL OBSERWUJE, KOD DECYDUJE. Prosba w promptcie juz raz nie wystarczyla.
+    Kod nie oddaje pisarzowi zdania, ktorego pisarz nie ma jak obronic.
+    """
+    daty = card.get("source_dates")
+    if not isinstance(daty, dict) or not str(daty.get("note") or "").strip():
+        return card
+    wiek = wiek_zrodla_w_dniach(daty.get("newest"), teraz=teraz)
+    if wiek is None or wiek > config.MAKS_WIEK_ZRODLA_DNI:
+        return card
+    czysta = dict(card)
+    czysta["source_dates"] = dict(daty, note="")
+    return czysta
+
+
 def write(
     conn: sqlite3.Connection, run_id: int, card: dict[str, Any],
     glebokosc: str = "RICH",
@@ -343,7 +394,11 @@ def write(
         # CO ZARZUCONO POPRZEDNIM TEKSTOM. Patrz `ostatnie_uwagi`: ten sygnal
         # powstawal przy kazdym artykule i konczyl na dysku.
         poprzednie_uwagi=ostatnie_uwagi() or "(brak — to pierwszy artykul)",
-        card_json=json.dumps(card, ensure_ascii=False, indent=2),
+        # KARTA PRZYCIETA, NIE SUROWA — patrz `karta_dla_pisarza`. Zapis
+        # w bazie zostaje pelny, recenzent tez dostaje pelna; przycinamy
+        # wylacznie to, co idzie do PISANIA.
+        card_json=json.dumps(karta_dla_pisarza(card), ensure_ascii=False,
+                             indent=2),
     )
     text = llm.call("write", WRITER_SYSTEM, prompt, conn=conn, run_id=run_id)
     draft = llm.parse_json(text)
