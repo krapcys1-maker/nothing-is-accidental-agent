@@ -4665,6 +4665,12 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
     return wziete
 
 
+# Trzy jedyne powody, dla ktorych wolno skasowac oplaconego kandydata. KOD, nie
+# zdanie — model, ktory ma do wyboru trzy pozycje, nie napisze „szeroko opisana
+# premiera produktu". Patrz `posortuj_bank`, gdzie kod je weryfikuje.
+POWODY_WYRZUCENIA = ("NOT_AI", "NOTHING_TO_CHECK", "NO_MECHANISM")
+
+
 BANK_SYSTEM = (
     "You rank candidate facts for a publication about artificial intelligence. "
     "You return an order, never a score. Return only valid JSON."
@@ -4738,6 +4744,42 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
     # (zmierzone na pierwszym przebiegu: 2 z 15). Polowa znaczy, ze model
     # zmienil kryterium, a nie ze bank nagle zgnil — wiec ufamy KOLEJNOSCI,
     # ktora i tak zepchnie slabe na dol, a kasowania nie stosujemy.
+    # POWOD WYRZUCENIA SPRAWDZA KOD, NIE PROMPT. Zmierzone na dwoch kolejnych
+    # przebiegach: bank.md ma caly akapit zakazujacy wyrzucania „za to, ze
+    # szeroko opisane, ze to premiera produktu albo ze mniej ciekawe niz
+    # sasiedzi", z opisem konkretnej straty — ukladu scalonego zaprojektowanego
+    # w dziewiec miesiecy, ktory poszedl do kosza razem z komunikatem prasowym.
+    # Model wyrzucil DOKLADNIE TEN SAM fakt drugi raz, slowami „a widely covered
+    # product launch, not a finding". Dwa z trzech odrzucen lamaly reguly
+    # wlasnego promptu.
+    #
+    # Zakaz w prompcie przegral dwa razy z rzedu, wiec przestaje byc zakazem, a
+    # zaczyna byc sprawdzeniem. Model wybiera KOD z trzech, a nie pisze zdanie —
+    # majac do wyboru trzy pozycje, nie napisze „szeroko opisana premiera".
+    #
+    # NO_MECHANISM odrzucamy osobno i to jest sedno: `bramka_kandydata` JUZ
+    # ZMIERZYLA, ze pole `decision` opisuje mechanizm (prog: szesc slow, bez
+    # gestu w rodzaju „nikt nie zdecydowal"). Odrzucenie „brak mechanizmu"
+    # przeczy wiec sprawdzeniu, ktore kod sam wykonal i zapisal. Kod ma swoj
+    # pomiar i nie musi wierzyc opisowi.
+    for i, o in list(oceny.items()):
+        if not o.get("wyrzuc"):
+            continue
+        kod = str(o.get("kod_wyrzucenia") or "").strip().upper()
+        odmowa = ""
+        if kod not in POWODY_WYRZUCENIA:
+            odmowa = ("powod spoza listy (%r)"
+                      % (kod or str(o.get("powod_wyrzucenia"))[:60]))
+        elif kod == "NO_MECHANISM":
+            decyzja = str(wolni[i].get("decision") or "").strip()
+            if len(decyzja.split()) >= 6:
+                odmowa = ("NO_MECHANISM, a mechanizm jest opisany: %r"
+                          % decyzja[:70])
+        if odmowa:
+            print("  [bank] NIE kasuje %r — %s"
+                  % (str(wolni[i].get("fact"))[:60], odmowa), flush=True)
+            oceny[i] = {**o, "wyrzuc": False}
+
     do_wyrzucenia = sum(1 for o in oceny.values() if o.get("wyrzuc"))
     if do_wyrzucenia > len(wolni) / 2:
         print("  [bank] model chcial wyrzucic %d z %d — to nie jest ocena"
@@ -4746,17 +4788,42 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
               flush=True)
         oceny = {i: {**o, "wyrzuc": False} for i, o in oceny.items()}
 
+    # SUFIT NA ZNACZNIK ARTYKULOWY. Pytany po kolei „czy to unioslo by artykul",
+    # model mowi tak prawie zawsze — to ta sama degeneracja, co przy notach.
+    # Zmierzone na dwoch partiach: 7 z 13 (54%) i 14 z 21 (67%), przy prompcie,
+    # ktory mowi wprost „wiekszosc kandydatow to notki". Znacznik zaznaczony u
+    # dwoch trzecich banku nie niesie zadnej informacji, a decyduje, co idzie na
+    # DROZSZA sciezke.
+    #
+    # Kod bierze wiec KOLEJNOSC, ktorej model nie potrafi zdegenerowac, i
+    # zostawia znacznik tylko na czolowce. Kto ma artykul niesc, rozstrzyga
+    # ranking; ilu ich moze byc, rozstrzyga sufit.
+    limit_artykulow = max(1, int(len(wolni) * config.BANK_UDZIAL_ARTYKULOW))
+    artykulowych = 0
+    scietych = 0
+
     wyrzucone = 0
     for ranga, i in enumerate(kolejnosc):
         k = wolni[i]
         o = oceny.get(i) or {}
         k["ranga"] = ranga
-        k["na_artykul"] = bool(o.get("na_artykul"))
+        chce_artykul = bool(o.get("na_artykul"))
+        if chce_artykul and artykulowych < limit_artykulow:
+            k["na_artykul"] = True
+            artykulowych += 1
+        else:
+            k["na_artykul"] = False
+            scietych += 1 if chce_artykul else 0
         k["dlaczego_mocny"] = str(o.get("dlaczego_mocny") or "")[:200]
         if o.get("wyrzuc"):
             k["status"] = "odrzucony"
             k["powod"] = "bank: %s" % str(o.get("powod_wyrzucenia") or "slaby")[:150]
             wyrzucone += 1
+    if scietych:
+        # GLOSNO. Sufit, ktory tnie po cichu, wyglada jak ocena modelu.
+        print("  [bank] znacznik artykulowy: zostawiam %d (sufit %d z %d), "
+              "sciete %d slabszych" % (artykulowych, limit_artykulow,
+                                       len(wolni), scietych), flush=True)
     _zapisz_indeks(indeks)
     print("  [bank] ocenione %d, wyrzucone %d, zostaje %d"
           % (len(wolni), wyrzucone, len(wolni) - wyrzucone), flush=True)

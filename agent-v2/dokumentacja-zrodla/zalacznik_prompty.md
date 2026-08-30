@@ -79,7 +79,7 @@ pokazuje się **niezależnie** od tego ustawienia — u Jonathana widać naraz
 
 #### `prompts/bank.md`
 
-**85 wierszy.** Pola wejsciowe: `kandydaci`
+**102 wierszy.** Pola wejsciowe: `kandydaci`
 
 ````markdown
 Rank these candidate facts against each other, strongest first, and say which
@@ -124,16 +124,21 @@ So `wyrzuc: true` is for things that are **definitionally not ours**, never for
 things that are merely weaker than their neighbours. Weaker belongs at the
 bottom of the order — that is what the order is for.
 
-Throw away only these:
+There are exactly three grounds, and you must name which one applies by its
+code. You are choosing from a list of three, not writing a sentence — if none
+of the three fits, the candidate is not being thrown away.
 
-- **Not about artificial intelligence.** The most common one and the least
-  forgivable. A fact about pharmaceutical regulation, food labelling or car
-  dealerships is not our subject however good it is. Judge the SUBJECT, not
+- **`NOT_AI`** — not about artificial intelligence. The most common one and the
+  least forgivable. A fact about pharmaceutical regulation, food labelling or
+  car dealerships is not our subject however good it is. Judge the SUBJECT, not
   whether the word "AI" appears somewhere in the sentence.
-- **Nothing to check.** An opinion, a forecast, a claim about what people
+- **`NOTHING_TO_CHECK`** — an opinion, a forecast, a claim about what people
   believe, or a figure with no source behind it.
-- **The mechanism is missing entirely.** It says what happened and cannot say
-  what makes it so — not even badly.
+- **`NO_MECHANISM`** — it says what happened and cannot say what makes it so,
+  not even badly. **Read the candidate's own `decision` line before choosing
+  this one.** Every candidate here already passed a gate that measured that
+  line, so if it names a decision, a measurement, a constraint or a trade-off,
+  this ground does not apply and the code will refuse the deletion.
 
 **Do NOT throw away for being widely covered, for being a product launch, or
 for being less interesting than the others.** Those are ranking judgements and
@@ -156,13 +161,25 @@ arrangement runs in another company, country or product).
 A fact with neither is a good note and a bad article: complete in two sentences,
 and a thousand words of it would be padding. Most candidates are notes. Say so.
 
+**This is a selection, not a verdict on each one in turn.** Asked candidate by
+candidate whether something could carry a thousand words, almost everything gets
+a yes — measured here at two thirds of the bank, in batches where the honest
+answer was a handful. So pick: **at most a third of the list**, and only where
+you can name the second act or the second place out loud. Anything past that
+share is cut by the order anyway, strongest kept, so a generous list does not
+help the candidates in it — it only hides which ones you actually meant.
+
 ## Output
 
 Return only valid JSON. `kolejnosc` lists every id exactly once, strongest
 first. Do not omit any id and do not invent one.
 
 {{"kolejnosc": [<id>, <id>, ...],
-  "oceny": [{{"id": <id>, "wyrzuc": true|false, "powod_wyrzucenia": "<one clause, empty when keeping>", "na_artykul": true|false, "dlaczego_mocny": "<one clause — what would make a stranger stop>"}}]}}
+  "oceny": [{{"id": <id>, "wyrzuc": true|false, "kod_wyrzucenia": "NOT_AI"|"NOTHING_TO_CHECK"|"NO_MECHANISM"|"", "powod_wyrzucenia": "<one clause saying why that code applies, empty when keeping>", "na_artykul": true|false, "dlaczego_mocny": "<one clause — what would make a stranger stop>"}}]}}
+
+`kod_wyrzucenia` must be one of the three codes whenever `wyrzuc` is true, and
+empty otherwise. A deletion with any other value is refused and the candidate is
+kept — so a code you cannot honestly pick is a candidate you are not deleting.
 
 ## The candidates
 

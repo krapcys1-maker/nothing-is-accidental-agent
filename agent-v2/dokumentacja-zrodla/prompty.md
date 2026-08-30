@@ -3,7 +3,7 @@
 
 **Pola wejściowe:** *(brak)*
 
-#### `bank.md` (85 wierszy)
+#### `bank.md` (102 wierszy)
 
 **Pola wejściowe:** `kandydaci`
 

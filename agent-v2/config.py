@@ -1358,6 +1358,18 @@ OKNO_PROMOCJI_DNI = 7
 # pisma nie znikaja same, tylko czekaja w kolejce, az cos po nie siegnie.
 DATA_PRZESTAWIENIA = "2026-08-25"
 
+# Jaka czesc banku moze niesc znacznik „na artykul".
+#
+# Pytany po kolei „czy to unioslo by artykul", model mowi tak prawie zawsze —
+# ta sama degeneracja, co przy notach. Zmierzone na dwoch partiach: 7 z 13
+# (54%) i 14 z 21 (67%), przy prompcie mowiacym wprost „wiekszosc kandydatow
+# to notki". Znacznik u dwoch trzecich banku nie niesie informacji, a decyduje,
+# co idzie na DROZSZA sciezke.
+#
+# Jedna trzecia nie jest wrozeniem: przy piecu notkach dziennie i artykule co
+# kilka dni nawet tyle jest zapasem z gora. Kto ma niesc — rozstrzyga ranking.
+BANK_UDZIAL_ARTYKULOW = 0.33
+
 
 # --- BANK POMYSLOW: BUFOR, NIE MAGAZYN --------------------------------------
 #
