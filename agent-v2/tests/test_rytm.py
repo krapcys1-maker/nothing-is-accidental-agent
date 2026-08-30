@@ -53,6 +53,16 @@ sprawdz("komentarz ma co najmniej 5 min odstepu",
 sprawdz("i nadal jest krotszy niz notka (to inna czynnosc)",
         config.ODSTEPY["komentarz"][1] < config.ODSTEPY["notka"][0],
         (config.ODSTEPY["komentarz"], config.ODSTEPY["notka"]))
+# ODPOWIEDZI TEZ, i to nie jest ozdoba tej reguly. Komentarze pod NOTKAMI ida
+# sciezka `wystaw_odpowiedz`, wiec odstep "odpowiedz" rzadzi wlasnie tym, co sie
+# psulo najbardziej: 30 procent porazek pod notkami wobec 7 pod postami.
+# Zmierzone po pozycji w serii: 10% przy pierwszej akcji, 31% przy drugiej,
+# 50% przy czwartej — przy odstepie srednio czterech minut.
+sprawdz("odpowiedz ma co najmniej 5 min odstepu",
+        config.ODSTEPY["odpowiedz"][0] >= 300, config.ODSTEPY["odpowiedz"])
+sprawdz("kazda wypowiedz do czlowieka ma co najmniej 5 min",
+        min(config.ODSTEPY[k][0] for k in ("komentarz", "odpowiedz")) >= 300,
+        {k: config.ODSTEPY[k] for k in ("komentarz", "odpowiedz")})
 sprawdz("polubienia nadal najkrotsze",
         config.ODSTEPY["lajk"][1] < config.ODSTEPY["komentarz"][0])
 

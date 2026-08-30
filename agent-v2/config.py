@@ -1598,7 +1598,25 @@ ODSTEPY = {
     # byla 3 min i to za malo: przy serii komentarzy trzyminutowe odstepy widac
     # na osi czasu tak samo dobrze, jak sekundowe.
     "komentarz":  (300, 900),    #  5-15 min: przeczytac cudzy tekst i odpowiedziec
-    "odpowiedz":  (120, 420),    #  2-7 min
+    # WYDLUZONE Z 2-7 NA 5-15 MIN, 30 sierpnia 2026 — z pomiaru, nie z ostroznosci.
+    #
+    # Odpowiedzi i komentarze pod NOTKAMI ida ta sama sciezka (`wystaw_odpowiedz`),
+    # i to ona sie psula: komentarz pod postem przepadal w 7 procentach, pod notka
+    # w 30, odpowiedz pod notka w 15. Rozbite na pozycje w serii wyszlo tak:
+    #
+    #     pierwsza akcja  39 prob   4 porazki   10%
+    #     druga           16        5           31%
+    #     trzecia          8        2           25%
+    #     czwarta          4        2           50%
+    #
+    # Awaryjnosc potraja sie PO PIERWSZEJ AKCJI, przy odstepie srednio czterech
+    # minut. Cel nie ma z tym nic wspolnego — to samo tempo. Sprawdzone osobno:
+    # 0 z 7 zgubionych odpowiedzi wyladowalo gdziekolwiek na naszym profilu, wiec
+    # nie chodzi o klikniecie w zly element, tylko o to, ze wysylka nie przechodzi.
+    #
+    # PROBKI SA MALE (16, 8, 4) i to trzeba pamietac: kierunek jest wyrazny,
+    # dokladne liczby nie. Wracamy do pomiaru po tygodniu na nowym odstepie.
+    "odpowiedz":  (300, 900),    #  5-15 min
     "lajk":       (30, 90),      # 0,5-1,5 min: przewijanie kanalu
     # Restack wymaga PRZECZYTANIA cudzej notki i napisania wlasnego zdania.
     # Kilkanascie sekund miedzy jednym a drugim znaczyloby, ze nie czytalismy
