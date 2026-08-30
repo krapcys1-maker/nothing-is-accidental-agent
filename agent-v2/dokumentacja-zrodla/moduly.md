@@ -398,6 +398,16 @@
 | `main()` | — |
 | `_napisz_i_zapisz(conn, run_id, brief, card)` *(wewn.)* | Od bramki „warto pisac" do zapisu i grafiki. |
 
+### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
+
+158 wierszy, 3 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `wczytaj(dni)` | (zrobione, nieudane) — liczniki per dzien i rodzaj. |
+| `_znak(ile, norma)` *(wewn.)* | Jak daleko od normy. Prog alarmu jest ten sam, co w `alarm.py`. |
+| `main()` | — |
+
 ### `migracja_okno_promocji.py` — jednorazowo: data publikacji z dziennika do kolejki promocji
 
 97 wierszy, 2 funkcji na poziomie modułu, 0 klas

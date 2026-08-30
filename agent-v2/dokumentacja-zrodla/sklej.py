@@ -61,6 +61,7 @@ MODULY = [
     ("korpus_kanalow.py", "o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło"),
     ("aktualne_modele.py", "jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci"),
     ("artykul_z_puli.py", "artykuł bierze temat z tej samej puli, co notki"),
+    ("norma.py", "licznik produkcji: ile agent wystawil wobec normy dziennej"),
     ("migracja_okno_promocji.py",
      "jednorazowo: data publikacji z dziennika do kolejki promocji"),
 ]

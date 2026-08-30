@@ -49,14 +49,14 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **17 plików**, 14 725 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **18 plików**, 14 883 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
 | jedno polecenie uruchamiające | `python agent-v2/run.py` | dotrzymane |
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
-**WADA — 17 plików zamiast dziesięciu.** Najbliższe usunięciu:
+**WADA — 18 plików zamiast dziesięciu.** Najbliższe usunięciu:
 `style.py` (127 wierszy, wołany tylko z `stages.py`) i
 `kopia_subskrybentow.py` (198 wierszy, narzędzie ręczne poza
 przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
@@ -539,6 +539,16 @@ wiec nie da sie go rozjechac z kodem.
 | `wybierz_fakt(conn, run_id, ile)` | Swiezy fakt z puli ciekawostek, ktory NIE powtarza zadnego artykulu. |
 | `main()` | — |
 | `_napisz_i_zapisz(conn, run_id, brief, card)` *(wewn.)* | Od bramki „warto pisac" do zapisu i grafiki. |
+
+### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
+
+158 wierszy, 3 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `wczytaj(dni)` | (zrobione, nieudane) — liczniki per dzien i rodzaj. |
+| `_znak(ile, norma)` *(wewn.)* | Jak daleko od normy. Prog alarmu jest ten sam, co w `alarm.py`. |
+| `main()` | — |
 
 ### `migracja_okno_promocji.py` — jednorazowo: data publikacji z dziennika do kolejki promocji
 
