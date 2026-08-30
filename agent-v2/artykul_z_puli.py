@@ -453,6 +453,16 @@ def main() -> int:
             print("   (karty nie zapisalem: %s)" % exc)
         return 0
 
+    # NORMALNA SCIEZKA — bez `--do-karty` idziemy prosto do pisarza.
+    #
+    # Ta linia byla przez chwile OSIEROCONA: wyladowala za koncem
+    # `_napisz_i_zapisz`, wiec `main` przelatywalo przez `if` powyzej i wypadalo
+    # z funkcji, zwracajac None. Przebieg konczyl sie KODEM 0 i bez artykulu —
+    # bez wyjatku, bez ostrzezenia, z opłaconym researchem za 0,40 USD i pustym
+    # katalogiem. Zlapane zywym przebiegiem 30 sierpnia, nie testem: zaden test
+    # nie wolal `main()`, wiec nieosiagalny kod nie mial jak sie ujawnic.
+    return _napisz_i_zapisz(conn, run_id, brief, card)
+
 
 def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
     """Od bramki „warto pisac" do zapisu i grafiki.
@@ -582,7 +592,6 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
     return 0
 
 
-    return _napisz_i_zapisz(conn, run_id, brief, card)
 
 
 

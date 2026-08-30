@@ -137,5 +137,44 @@ sprawdz("szukanie zostaje jako droga awaryjna, nie znika",
         i_szukanie > 0, i_szukanie)
 
 print()
+print("=== 7. KOD ZA `return` JEST NIEOSIAGALNY I NIKT TEGO NIE ZAUWAZY ===")
+# ZLAPANE ZYWYM PRZEBIEGIEM 30 sierpnia. Dopisujac publikacje na koncu
+# `_napisz_i_zapisz` wypchnalem poza zasieg linie, ktora nalezala do `main`:
+#     return _napisz_i_zapisz(conn, run_id, brief, card)
+# wyladowala ZA `return 0`. `main` przelatywalo przez galaz `--do-karty`,
+# wypadalo z funkcji i zwracalo None — czyli KOD WYJSCIA 0.
+#
+# Przebieg konczyl sie bez wyjatku, bez ostrzezenia, z oplaconym researchem za
+# 0,40 USD i pustym katalogiem artykulow. Zaden test tego nie zlapal, bo zaden
+# nie wolal `main()` — a nieosiagalny kod nie ma jak sie ujawnic inaczej niz
+# przez brak skutku.
+import ast as _ast   # noqa: E402
+
+_drzewo = _ast.parse(src)
+_martwe = []
+for _f in _ast.walk(_drzewo):
+    if not isinstance(_f, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+        continue
+    for _blok in (_f.body,):
+        for _i, _w in enumerate(_blok[:-1]):
+            if isinstance(_w, (_ast.Return, _ast.Raise)):
+                _martwe.append("%s: linia %d po %s"
+                               % (_f.name, _blok[_i + 1].lineno,
+                                  type(_w).__name__))
+sprawdz("zaden kod nie stoi za `return` na koncu funkcji",
+        not _martwe, _martwe)
+
+# I sprawdzenie wprost tego, co przepadlo: normalna sciezka `main` MUSI
+# wywolywac pisarza. Bez tego przebieg konczy sie cicho i bez artykulu.
+_main = next(f for f in _drzewo.body
+             if isinstance(f, _ast.FunctionDef) and f.name == "main")
+_ostatnia = _main.body[-1]
+sprawdz("main konczy sie wywolaniem pisarza, nie `if`-em",
+        isinstance(_ostatnia, _ast.Return)
+        and isinstance(_ostatnia.value, _ast.Call)
+        and getattr(_ostatnia.value.func, "id", "") == "_napisz_i_zapisz",
+        _ast.dump(_ostatnia)[:120])
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
