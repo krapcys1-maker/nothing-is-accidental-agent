@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **18 plików**, 15 765 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **18 plików**, 15 782 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-4774 wierszy, 98 funkcji na poziomie modułu, 0 klas
+4791 wierszy, 98 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -8183,7 +8183,7 @@ pokazuje się **niezależnie** od tego ustawienia — u Jonathana widać naraz
 
 #### `prompts/bank.md`
 
-**71 wierszy.** Pola wejsciowe: `kandydaci`
+**85 wierszy.** Pola wejsciowe: `kandydaci`
 
 ````markdown
 Rank these candidate facts against each other, strongest first, and say which
@@ -8219,22 +8219,36 @@ In roughly this order of weight:
 5. **It is not the news everybody already ran.** A model launch that three
    channels covered this week is not a finding.
 
-## What to throw away, and be strict about it
+## What to throw away — and the bar is high, on purpose
 
-Mark `wyrzuc: true` when any of these is true. A weak candidate kept in the bank
-costs money every time it is considered and eventually gets published on a thin
-day.
+Throwing away is **permanent**. The candidate was paid for, and once it is gone
+it never comes back. Keeping a mediocre one costs a single further look.
 
-- **Not about artificial intelligence.** This is the most common one and the
-  least forgivable. A fact about pharmaceutical regulation, food labelling or
-  car dealerships is not our subject however good it is. Judge the SUBJECT, not
+So `wyrzuc: true` is for things that are **definitionally not ours**, never for
+things that are merely weaker than their neighbours. Weaker belongs at the
+bottom of the order — that is what the order is for.
+
+Throw away only these:
+
+- **Not about artificial intelligence.** The most common one and the least
+  forgivable. A fact about pharmaceutical regulation, food labelling or car
+  dealerships is not our subject however good it is. Judge the SUBJECT, not
   whether the word "AI" appears somewhere in the sentence.
 - **Nothing to check.** An opinion, a forecast, a claim about what people
   believe, or a figure with no source behind it.
-- **Already common knowledge.** If the reader could have told you this, there is
-  no piece in it.
-- **The mechanism is missing.** It says what happened and cannot say what makes
-  it so.
+- **The mechanism is missing entirely.** It says what happened and cannot say
+  what makes it so — not even badly.
+
+**Do NOT throw away for being widely covered, for being a product launch, or
+for being less interesting than the others.** Those are ranking judgements and
+they go into the order.
+
+This rule exists because of a real loss. A candidate about a company's first
+custom inference chip was discarded as "a widely covered product launch" — and
+the fact carried, inside it, that the chip was designed in about nine months
+when custom silicon normally takes years. That is a mechanism, and it went in
+the bin with the press release. Bury a launch at the bottom of the order if you
+must; do not delete it.
 
 ## Which ones could carry a whole article
 

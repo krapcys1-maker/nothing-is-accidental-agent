@@ -4592,6 +4592,23 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
     kolejnosc = list(dict.fromkeys(kolejnosc))
     kolejnosc += [i for i in range(len(wolni)) if i not in kolejnosc]
 
+    # ZAPORA NA MASOWE WYRZUCANIE. Odrzucenie jest TRWALE, wiec model, ktory
+    # zrobi sie surowy, kasuje oplacony material bez odwolania. Prompt prosi,
+    # zeby wyrzucac tylko rzeczy definicyjnie nie nasze — ale prosba w prompcie
+    # nie jest zapora, co ten projekt sprawdzil juz kilkanascie razy.
+    #
+    # Prog polowy partii: przy uczciwym banku wyrzuca sie pojedyncze sztuki
+    # (zmierzone na pierwszym przebiegu: 2 z 15). Polowa znaczy, ze model
+    # zmienil kryterium, a nie ze bank nagle zgnil — wiec ufamy KOLEJNOSCI,
+    # ktora i tak zepchnie slabe na dol, a kasowania nie stosujemy.
+    do_wyrzucenia = sum(1 for o in oceny.values() if o.get("wyrzuc"))
+    if do_wyrzucenia > len(wolni) / 2:
+        print("  [bank] model chcial wyrzucic %d z %d — to nie jest ocena"
+              " pojedynczych sztuk, tylko zmiana kryterium. Nie kasuje,"
+              " zostaje sama kolejnosc." % (do_wyrzucenia, len(wolni)),
+              flush=True)
+        oceny = {i: {**o, "wyrzuc": False} for i, o in oceny.items()}
+
     wyrzucone = 0
     for ranga, i in enumerate(kolejnosc):
         k = wolni[i]
