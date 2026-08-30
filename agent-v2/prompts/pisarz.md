@@ -437,6 +437,19 @@ Return only valid JSON, shaped exactly as:
 
 {{"title": "<the published headline>", "subtitle": "<one line>", "body": "<the article, plain text with blank lines between paragraphs>", "numbers_used": ["<each figure you wrote, exactly as written>"], "limits_paragraph_present": true|false}}
 
+## What the last pieces were pulled up on
+
+These are the faults the form check found in the most recent articles. They are
+**not a shape to copy and not a checklist** — you are not required to do the
+opposite of each one. They are here so the same fault does not run three times
+in a row, which is how a publication acquires a tic.
+
+{poprzednie_uwagi}
+
+Read them, then write your own piece. If one of them does not apply to this
+material, ignore it — forcing a reader-address into a piece that has no object
+for it is worse than the fault it was meant to fix.
+
 ## The evidence card
 
 {card_json}

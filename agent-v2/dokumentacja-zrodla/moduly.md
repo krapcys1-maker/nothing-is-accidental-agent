@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-4601 wierszy, 95 funkcji na poziomie modułu, 0 klas
+4642 wierszy, 96 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -31,6 +31,7 @@
 | `tematy_do_porownania(conn, limit)` | Poprzednie artykuly w postaci NADAJACEJ SIE DO POROWNANIA. |
 | `review(conn, run_id, card, draft)` | Etap 8 — recenzja: rozliczenie każdego zdania (Claude). |
 | `ocen_forme(conn, run_id, draft)` | Obserwacja formy: beaty, eskalacja, moment przyłapania, znajomość otwarcia. |
+| `ostatnie_uwagi(ile)` | Co zarzucono OSTATNIM artykulom — do promptu pisarza. |
 | `poprzednie_teksty(ile, pomin_tresc)` | Treści kilku ostatnich artykułów — materiał dla bramki ODCISK_FORMY. |
 | `_nazwa_zrodla(conn, url)` *(wewn.)* | Nazwa źródła zamiast gołego adresu. |
 | `save(conn, run_id, topic, card, draft, status, blocked_by, notes)` | Etap 9 — zapis. Artykuł do szuflady: baza + plik .md. |

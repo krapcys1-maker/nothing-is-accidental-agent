@@ -139,7 +139,7 @@ try:
         "pisarz.md", card_json="{}", language="English", target_words=1075,
         min_words=900, max_words=1250, kotwica_dlugosci="x",
         style_examples="x", style_positive="y",
-        style_negative="z", ile_paraleli="one",
+        style_negative="z", ile_paraleli="one", poprzednie_uwagi="(brak)",
         ruch_koncowy_nazwa="KTO_NA_TYM_STOI",
         ruch_koncowy="nazwij beneficjenta i tego, kto placi")
     sprawdz("renderuje się bez wyjątku", True)

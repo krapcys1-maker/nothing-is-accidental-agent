@@ -152,6 +152,44 @@ def ocen_forme(
     return llm.parse_json(text)
 
 
+def ostatnie_uwagi(ile: int = 2) -> str:
+    """Co zarzucono OSTATNIM artykulom — do promptu pisarza.
+
+    SYGNAL BYL PRODUKOWANY I WYRZUCANY. `forma` oglada gotowy tekst, `gates`
+    zamienia obserwacje w uwage, `save` zapisuje ja do pliku `.uwagi.md` —
+    i na tym koniec. Pisarz nastepnego artykulu dostaje przyklady stylu,
+    dlugosc, ruch koncowy i karte, a o tym, co zarzucono poprzedniemu, nie wie
+    nic. Petla konczy sie na dysku.
+    """
+    wybrane: list[str] = []
+    try:
+        pliki = sorted(config.ARTICLES_DIR.glob("*.uwagi.md"),
+                       key=lambda p: p.stat().st_mtime, reverse=True)[:max(0, ile)]
+    except OSError:
+        return ""
+    for p in pliki:
+        try:
+            tekst = p.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for linia in tekst.splitlines():
+            linia = linia.strip()
+            if not linia.startswith("- {"):
+                continue
+            m = re.search(r"'gate':\s*'([A-Z_]+)'", linia)
+            if not m:
+                continue
+            # DLUGOSC i RECENZJA to zapis stanu, nie zarzut — wpisywanie ich
+            # jako „wady do uniknięcia" nauczyloby pisarza unikac dlugosci.
+            if m.group(1) in ("DLUGOSC", "RECENZJA"):
+                continue
+            d = re.search(r"'detail':\s*[\"'](.{0,150})", linia)
+            wybrane.append("- %s: %s" % (m.group(1), (d.group(1) if d else "")))
+    # Kazda wada RAZ, nawet gdy powtorzyla sie w obu tekstach — powtorzenie w
+    # liscie nie czyni jej wazniejsza, tylko dluzsza.
+    return "\n".join(dict.fromkeys(wybrane))
+
+
 def poprzednie_teksty(ile: int | None = None,
                       pomin_tresc: str | None = None) -> list[str]:
     """Treści kilku ostatnich artykułów — materiał dla bramki ODCISK_FORMY.
@@ -299,6 +337,9 @@ def write(
         ruch_koncowy_nazwa=ruch_nazwa,
         ruch_koncowy=ruch_opis,
         ile_paraleli=opis_paraleli,
+        # CO ZARZUCONO POPRZEDNIM TEKSTOM. Patrz `ostatnie_uwagi`: ten sygnal
+        # powstawal przy kazdym artykule i konczyl na dysku.
+        poprzednie_uwagi=ostatnie_uwagi() or "(brak — to pierwszy artykul)",
         card_json=json.dumps(card, ensure_ascii=False, indent=2),
     )
     text = llm.call("write", WRITER_SYSTEM, prompt, conn=conn, run_id=run_id)

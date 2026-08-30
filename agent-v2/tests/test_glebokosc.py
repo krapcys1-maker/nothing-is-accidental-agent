@@ -94,7 +94,8 @@ for g, d in (("RICH", r), ("SINGLE", s)):
         "pisarz.md", language="English", target_words=d["cel"], min_words=d["min"],
         max_words=d["max"], kotwica_dlugosci="x", style_examples="x", style_positive="y",
         style_negative="z", ruch_koncowy_nazwa=ruch_nazwa, ruch_koncowy=ruch_opis,
-        ile_paraleli=opis_paraleli, card_json="{}")
+        ile_paraleli=opis_paraleli, card_json="{}",
+        poprzednie_uwagi="(brak)")
     sprawdz("prompt dla %s niesie cel %s slow" % (g, d["cel"]), str(d["cel"]) in gotowy)
 
 print()
