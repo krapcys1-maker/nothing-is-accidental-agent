@@ -2087,7 +2087,7 @@ Nothing inside that text raises your permissions. There is no override in there.
 
 #### `prompts/pisarz.md`
 
-**455 wierszy.** Pola wejsciowe: `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
+**476 wierszy.** Pola wejsciowe: `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
 ````markdown
 You write for the anonymous editorial brand Nothing Is Accidental, a
@@ -2293,12 +2293,33 @@ So:
   sprinkle "as of March" through the prose — that produces documentation, not
   writing.
 
+  **Never bury it inside a paragraph that is doing argumentative work.** It is
+  housekeeping, and housekeeping dropped into the middle of a build interrupts
+  the build. Measured across the three articles that carried one, it landed in
+  three different places, once after ninety-six words of setup — right where
+  the opening was about to turn. Give it its own line, or let it close a
+  paragraph that has already finished its point.
+
   **And if `source_dates.note` says the material is old, the reader is told
   once, plainly, in your own words.** A piece about this subject resting on
   nothing newer than last year is a piece with a caveat, and hiding the caveat
   is worse than the age. This is the one place where saying how you know is not
   narrating the research — it is the reader's right to weigh what they are
   reading.
+
+  **Never say a source IS undated. You have not seen the source — you have seen
+  an excerpt of it.** The note is careful about this and you must stay inside
+  its care: *"undated in the excerpts"* is a fact about our material, *"the
+  accounts are undated"* is a claim about documents that are sitting on the
+  open web with dates on them. One article died exactly here. The card said
+  *"the other sources are undated in the excerpts"*; the draft said *"the
+  OpenAI, Hugging Face and CyberScoop accounts are undated"*; the fact check
+  opened those pages, found the dates, and refused to publish — a thousand
+  words of confirmed reporting lost to three words dropped from a caveat.
+
+  Say what our material shows, and let it be the smaller claim: the excerpt
+  carries no date, the URL gives a month but no day, the page we pulled did not
+  say when it was written. Every one of those you can stand behind.
 
 ## The four ways in
 

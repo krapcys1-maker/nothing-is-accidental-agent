@@ -247,16 +247,27 @@ def main() -> int:
         werdykt("kazdy artykul miesci sie w ktorymkolwiek pasmie",
                 "OK" if w_pasmie == len(dlugosci) else "UWAGA",
                 "%d z %d" % (w_pasmie, len(dlugosci)))
-        # SKALOWANIE DLUGOSCI ISTNIEJE, ALE SIE NIE ODZYWA — bo odsiew
-        # porzadkuje tematy RICH przed SINGLE, a wybor bierze najlepszy.
-        # To skutek doboru, nie zepsuty mechanizm; melduje, zeby nie wygladal
-        # na dzialajacy filtr, ktorym nie jest.
+        # SKALOWANIE DLUGOSCI DOTAD SIE NIE ODEZWALO, i to z DWOCH roznych
+        # przyczyn na dwoch sciezkach — dlatego ta uwaga zostaje, dopoki nie
+        # wyjdzie pierwszy artykul krotszy niz RICH.
+        #
+        #   `artykul_z_puli.py` (ta, ktora publikuje): `glebokosc` czytano
+        #     z `ocena.get("depth")`, a kontrakt `warto_pisac.md` pola `depth`
+        #     NIE MA — pole czytane, nigdy nieustawiane, wiec zawsze RICH.
+        #     Naprawione: glebokosc liczy KOD z pieciu filarow oceny.
+        #   `run.py`: `wykonalnosc.md` porzadkuje tematy RICH przed SINGLE,
+        #     a wybor bierze najlepszy — wiec RICH wygrywa doborem.
+        #
+        # Pierwsza przyczyna byla wada, druga nia nie jest. Historyczne
+        # jedenascie artykulow powstalo przed poprawka, wiec ich plaska
+        # dlugosc nie mowi nic o dzisiejszym stanie.
         rich = pasma["RICH"]
         wszystkie_rich = all(d >= rich["min"] for d in dlugosci)
         werdykt("skalowanie dlugosci ma sie czym odezwac",
                 "UWAGA" if wszystkie_rich else "OK",
-                "wszystkie %d artykulow w pasmie RICH — krotsze formy"
-                " nigdy nie wyszly" % len(dlugosci) if wszystkie_rich else "")
+                "wszystkie %d artykulow w pasmie RICH; martwe pole `depth`"
+                " naprawione, czekamy na pierwszy krotszy" % len(dlugosci)
+                if wszystkie_rich else "")
     uwagi = Counter()
     z_uwagami = 0
     for a in art:

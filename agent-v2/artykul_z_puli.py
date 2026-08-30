@@ -488,7 +488,13 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
     print()
     print("   tytul: %s" % draft.get("title"), flush=True)
     print("   podtytul: %s" % draft.get("subtitle", ""), flush=True)
-    print("   dlugosc: %d slow" % len(draft["body"].split()), flush=True)
+    # ZAKRES RAZEM Z LICZBA. Sama liczba slow nie mowi, czy artykul jest za
+    # krotki — a pasma sa trzy i roznia sie dwuipolkrotnie. `run.py` drukowal
+    # tu przez dlugi czas staly cel 1075, czyli wartosc sprzed skalowania.
+    _dl = config.dlugosc_dla(glebokosc)
+    print("   dlugosc: %d slow (cel %d, zakres %d-%d dla %s)"
+          % (len(draft["body"].split()), _dl["cel"], _dl["min"], _dl["max"],
+             glebokosc), flush=True)
 
     print()
     print("-- recenzja --", flush=True)
