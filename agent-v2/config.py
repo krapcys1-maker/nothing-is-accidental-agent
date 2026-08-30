@@ -197,6 +197,10 @@ MODEL_FOR = {
     "note": CLAUDE,
     "comment": DEEPSEEK_PRO,
     "reply": DEEPSEEK_PRO,
+    # RANKING BANKU POMYSLOW. Flash, bo to porzadkowanie kilkudziesieciu
+    # jednozdaniowych opisow, a nie rozumowanie o tresci — i ma byc tanie,
+    # zeby oplacalo sie wolac je czesto.
+    "bank": DEEPSEEK,
     "factcheck": DEEPSEEK,
     # Pytanie „jakie modele sa dzisiaj" MUSI isc na model z wyszukiwaniem —
     # to jest cala jego wartosc. Ten sam, co sprawdzanie faktow, bo robi
@@ -746,6 +750,7 @@ MAX_TOKENS = {
     "note": _tokens_for(400) + 8000,
     "comment": _tokens_for(600) + 8000,
     "reply": _tokens_for(600) + 8000,
+    "bank": 24000,
     "factcheck": 24000,
     # Pytanie o stan modeli wraca lista kilkunastu pozycji z datami —
     # krotka odpowiedz, ale wyszukiwanie dokłada do wyjscia swoje rundy.

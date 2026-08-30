@@ -4511,6 +4511,12 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
             k["powod"] = powod[:200]
         _zapisz_indeks(indeks)
 
+    # NAJMOCNIEJSZE PIERWSZE. Bank byl konsumowany w kolejnosci WSTAWIANIA —
+    # `swiezi[:ile]` — wiec genialny fakt sprzed tygodnia czekal za przecietnym
+    # z wczoraj. `ranga` pochodzi z `posortuj_bank`; kandydat jeszcze
+    # nieoceniony dostaje range na koncu kolejki, zeby nie wypychal ocenionych,
+    # ale i nie przepadl.
+    swiezi.sort(key=lambda para: para[0].get("ranga", 10 ** 6))
     wziete = [k for k, _ in swiezi][:max(0, ile)]
     if wziete:
         znaczniki = {id(k) for k in wziete}
@@ -4520,6 +4526,87 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
                 k["uzyty_kiedy"] = db.now()
         _zapisz_indeks(indeks)
     return wziete
+
+
+BANK_SYSTEM = (
+    "You rank candidate facts for a publication about artificial intelligence. "
+    "You return an order, never a score. Return only valid JSON."
+)
+
+
+def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
+                  ile: int = 40) -> dict[str, int]:
+    """Ustawia bank pomyslow od najmocniejszego i wyrzuca slabe.
+
+    PO CO. Bank byl konsumowany W KOLEJNOSCI WSTAWIANIA — `wez_kandydatow`
+    bralo pierwsze N wolnych. Genialny fakt sprzed tygodnia i przecietny z
+    wczoraj byly traktowane identycznie, a starszy szedl pierwszy. Slaby
+    kandydat nie znikal nigdy: kosztowal przy kazdym rozwazaniu i predzej czy
+    pozniej wychodzil w chudy dzien.
+
+    Brakowalo tez dwoch sprawdzen, ktorych nie robil NIKT w calym potoku:
+    czy temat jest w ogole O AI, i czy jest ciekawy.
+
+    RANKING, NIE OCENA — i to nie jest szczegol. Pytany o noty model daje
+    prawie wszystkiemu to samo wysokie 8: samooceny w tym potoku degeneruja do
+    stalej (pewnosc zawsze 1.0, watki zawsze 6, znane teksty zawsze 3). Opiera
+    sie temu WYMUSZONY WYBOR — ustawienie kandydatow wzgledem siebie. Dlatego
+    prompt zada `kolejnosc`, a nie punktow.
+
+    MODEL OBSERWUJE, KOD DECYDUJE: model oddaje kolejnosc i werdykty, kod
+    zapisuje range, kasuje wyrzuconych i nic nie liczy z jego not.
+    """
+    indeks = wczytaj_indeks()
+    wolni = [k for k in indeks
+             if k.get("status") == "nowy"
+             and str(k.get("kiedy") or "")[:10] >= config.DATA_PRZESTAWIENIA]
+    if len(wolni) < 2:
+        print("  [bank] za malo kandydatow do rankingu (%d)" % len(wolni),
+              flush=True)
+        return {"ocenione": 0, "wyrzucone": 0}
+    wolni = wolni[:ile]
+
+    opis = "\n\n".join(
+        "id: %d\nfakt: %s\nmechanizm: %s\ndla czytelnika: %s\ndziedzina: %s"
+        % (i, str(k.get("fact") or "")[:400], str(k.get("decision") or "")[:200],
+           str(k.get("consequence") or "")[:200], str(k.get("domain") or "")[:80])
+        for i, k in enumerate(wolni))
+
+    try:
+        dane = llm.parse_json(llm.call(
+            "bank", BANK_SYSTEM, _prompt("bank.md", kandydaci=opis),
+            conn=conn, run_id=run_id))
+    except Exception as exc:
+        # RANKING NIE MOZE WYWALIC PRZEBIEGU. Bez niego bank dziala jak dotad,
+        # czyli w kolejnosci wstawiania — gorzej, ale nie martwo.
+        print("  [bank] ranking sie nie udal (%s) — zostaje stara kolejnosc"
+              % type(exc).__name__, flush=True)
+        return {"ocenione": 0, "wyrzucone": 0}
+
+    oceny = {int(o["id"]): o for o in (dane.get("oceny") or [])
+             if isinstance(o, dict) and str(o.get("id", "")).isdigit()}
+    kolejnosc = [int(i) for i in (dane.get("kolejnosc") or [])
+                 if str(i).isdigit() and int(i) < len(wolni)]
+    # Kazdy id RAZ. Model potrafi powtorzyc pozycje albo pominac — kolejnosc
+    # ma byc permutacja, wiec brakujacych dopisujemy na koniec.
+    kolejnosc = list(dict.fromkeys(kolejnosc))
+    kolejnosc += [i for i in range(len(wolni)) if i not in kolejnosc]
+
+    wyrzucone = 0
+    for ranga, i in enumerate(kolejnosc):
+        k = wolni[i]
+        o = oceny.get(i) or {}
+        k["ranga"] = ranga
+        k["na_artykul"] = bool(o.get("na_artykul"))
+        k["dlaczego_mocny"] = str(o.get("dlaczego_mocny") or "")[:200]
+        if o.get("wyrzuc"):
+            k["status"] = "odrzucony"
+            k["powod"] = "bank: %s" % str(o.get("powod_wyrzucenia") or "slaby")[:150]
+            wyrzucone += 1
+    _zapisz_indeks(indeks)
+    print("  [bank] ocenione %d, wyrzucone %d, zostaje %d"
+          % (len(wolni), wyrzucone, len(wolni) - wyrzucone), flush=True)
+    return {"ocenione": len(wolni), "wyrzucone": wyrzucone}
 
 
 def zwroc_kandydatow(kandydaci: list[dict[str, Any]]) -> int:

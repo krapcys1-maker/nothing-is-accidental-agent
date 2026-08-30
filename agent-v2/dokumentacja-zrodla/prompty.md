@@ -3,6 +3,16 @@
 
 **Pola wejściowe:** *(brak)*
 
+#### `bank.md` (71 wierszy)
+
+**Pola wejściowe:** `kandydaci`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"kolejnosc": [<id>, <id>, ...],
+```
+
 #### `bibliotekarz.md` (54 wierszy)
 
 **Pola wejściowe:** `bank`
