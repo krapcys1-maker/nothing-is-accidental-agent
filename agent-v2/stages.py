@@ -3838,6 +3838,32 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
     # Nie przepycham ich jednak do puli notek automatycznie: temat skauta nie ma
     # jeszcze zrodla ani skutku w reku, wiec `bramka_kandydata` odrzucilaby
     # kazdy. Przejsciowka, ktora gubi 100% wejscia, jest gorsza niz jej brak.
+    # SUFIT, BO OBA WEJSCIA REGULY SPADLY DO STALEJ.
+    #
+    # Regula brzmi „dwa precedensy i duzy zasieg" i wyglada na wymagajaca, ale
+    # zmierzone na przebiegu 30 sierpnia: OSIEM Z OSMIU tematow spelnialo oba
+    # warunki, bo model dal kazdemu po trzy precedensy i kazdemu ten sam zasieg
+    # AN_INDUSTRY. Wykrywacz martwych sygnalow zameldowal to wprost —
+    # `na_artykul=True, zasieg='AN_INDUSTRY'` u wszystkich. Znacznik, ktory ma
+    # sto procent, nie niesie zadnej informacji, a decyduje o DROZSZEJ sciezce.
+    #
+    # To ta sama degeneracja, ktora tego samego dnia zlapalem w banku (67%
+    # oznaczonych) i wczesniej przy samoocenach zawsze rownych 1.0. Lekarstwo
+    # tez to samo: bierzemy sygnal, ktorego model NIE POTRAFI WYROWNAC — jego
+    # wlasny wymuszony ranking — i zostawiamy znacznik na czolowce.
+    #
+    # Nie podnosimy progu precedensow ani nie zwezamy zasiegow: przy stalej
+    # wartosci obie te zmiany albo nie zmienia nic, albo wytna wszystko.
+    limit_art = max(1, int(len(topics) * config.BANK_UDZIAL_ARTYKULOW))
+    kandydaci_art = sorted([t for t in topics if t["na_artykul"]],
+                           key=lambda t: -t["pozycja"])
+    if len(kandydaci_art) > limit_art:
+        for t in kandydaci_art[limit_art:]:
+            t["na_artykul"] = False
+        print("  [skaut] znacznik artykulowy mial %d z %d — sufit %d, "
+              "zostawiam czolowke wymuszonego rankingu"
+              % (len(kandydaci_art), len(topics), limit_art), flush=True)
+
     artykulowe = [t for t in topics if t["na_artykul"]]
     notkowe = [t for t in topics if t["nosny"] and not t["na_artykul"]]
     print("  [skaut] NA ARTYKUL: %d z %d (>=%d udokumentowanych awarii + zasieg %s)"
