@@ -88,5 +88,33 @@ for u in uslugi:
                 re.search(r"^Restart=", tresc, re.M) is None)
 
 print()
+print("=== 4. ZEGAR WSKAZUJE NA SCIEZKE, KTORA NAPRAWDE UZYWAMY ===")
+# `artykul_z_puli.py` powstal 25 sierpnia 2026, zeby ZASTAPIC sciezke skauta:
+# skaut wymaga dwoch udokumentowanych precedensow, a pod AI takie tematy sa
+# tylko trzy — zasilki, auta autonomiczne, gielda — wiec trzy artykuly z rzedu
+# wyszly o zautomatyzowanej biurokracji zamiast o AI.
+#
+# Zastepnik napisano, uzywano RECZNIE i przez piec dni NIE WPIETO W ZEGAR.
+# `nia-artykul.service` wskazywal caly czas na sciezke zastapiona, wiec gdyby
+# timer wystartowal, produkowalby te sama monokulture i pomijal bramke
+# „uniesie artykul", podpytania do researchu, glebokosc z pieciu filarow oraz
+# spizarnie kandydatow. Ta sama klasa zaniedbania, co szampon w kolejce
+# promocyjnej: zmiana zrobiona, resztka po niej nie sprzatnieta.
+_artykul = [u for u in uslugi if "artykul" in u.name]
+sprawdz("jednostka artykulu istnieje", bool(_artykul), [u.name for u in uslugi])
+for u in _artykul:
+    tresc = u.read_text(encoding="utf-8")
+    exec_line = next((l for l in tresc.splitlines()
+                      if l.startswith("ExecStart=")), "")
+    sprawdz("%s uruchamia sciezke z puli, nie skauta" % u.name,
+            "artykul_z_puli.py" in exec_line, exec_line[:90])
+    sprawdz("%s nie wola run.py na artykul" % u.name,
+            "run.py" not in exec_line, exec_line[:90])
+    # Bez --wyslij timer napisalby artykul i zostawil go na dysku, czyli
+    # tygodniowa publikacja przestalaby wychodzic bez jednego komunikatu.
+    sprawdz("%s ma --wyslij, inaczej nic nie wychodzi" % u.name,
+            "--wyslij" in exec_line, exec_line[:90])
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

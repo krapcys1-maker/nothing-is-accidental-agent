@@ -532,6 +532,53 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
     print(">> zapisano: %s" % sciezka, flush=True)
 
     stages.grafika(conn, run_id, draft, sciezka_artykulu=sciezka)
+
+    # --- PUBLIKACJA -------------------------------------------------------
+    #
+    # DLACZEGO TO TU DOSZLO. Sciezka artykulu byla rozdarta na dwie polowy i
+    # zadna nie umiala calej roboty:
+    #   `run.py --wyslij` publikuje i ma bramke faktow, ale bierze temat od
+    #     skauta — a wlasnie skaut dawal pod AI monokulture (patrz naglowek
+    #     tego pliku: trzy artykuly z rzedu o zautomatyzowanej biurokracji),
+    #   ten plik bierze temat z puli, ma bramke „uniesie artykul", podpytania
+    #     i glebokosc z filarow — i nie umial opublikowac ani jednej linijki.
+    # `nia-artykul.service` wskazywal caly czas na te pierwsza. Zastepnik
+    # napisano, uzywano recznie i nigdy nie wpieto w zegar.
+    #
+    # DOMYSLNIE WYLACZONE. Bez `--wyslij` artykul konczy na dysku, tak jak dotad.
+    if "--wyslij" not in sys.argv:
+        print(">> bez --wyslij: artykul zostaje na dysku", flush=True)
+        return 0
+
+    import browser
+
+    # SPRAWDZENIE FAKTOW PRZED PUBLIKACJA — ta sama bramka, co w `run.py`.
+    # Zapis zostaje, publikacja nie: artykul jest juz na dysku z okladka, wiec
+    # research nie przepada i wlasciciel ma co czytac. Blokujemy wylacznie
+    # wyjscie na zewnatrz, bo tam blad kosztuje wiarygodnosc, a nie pieniadze.
+    # `zweryfikuj` przy wlasnej awarii przepuszcza — zepsuta weryfikacja nie
+    # jest dowodem falszu.
+    print()
+    print("-- sprawdzenie faktow przed publikacja --", flush=True)
+    audyt = stages.zweryfikuj(conn, run_id, draft["body"], draft.get("title", ""))
+    if not audyt.get("safe_to_post"):
+        print("!! NIE PUBLIKUJE: %s" % str(audyt.get("verdict", ""))[:300],
+              flush=True)
+        for c in (audyt.get("claims") or []):
+            if str(c.get("status")) in ("refuted", "outdated", "unverified"):
+                print("   [%s] %s" % (c.get("status"),
+                                      str(c.get("claim"))[:150]), flush=True)
+        print(">> artykul zapisany (%s), do decyzji wlasciciela" % sciezka,
+              flush=True)
+        return 0
+    print("   przechodzi: %s" % str(audyt.get("verdict", ""))[:150], flush=True)
+
+    print()
+    print("-- publikacja --", flush=True)
+    wynik = browser.wystaw_artykul(sciezka, wyslij=True)
+    print(">> %s%s" % ("OPUBLIKOWANY" if wynik.get("wyslane") else "NIE POSZEDL",
+                       "  " + str(wynik.get("blad")) if wynik.get("blad") else ""),
+          flush=True)
     return 0
 
 
