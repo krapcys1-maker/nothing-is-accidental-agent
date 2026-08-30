@@ -1072,9 +1072,46 @@ def znajdz_ciekawostki(
     # publikowal dwa. Szesc gineło bezpowrotnie przy kazdym uruchomieniu, takze
     # w trybie sprawdzenia, gdzie nic nie szlo w swiat. Fakt odhacza teraz ten,
     # kto go NAPRAWDE wystawil: `run.py`, po potwierdzonej publikacji notki.
-    print(f"  [ciekawostki] z pokryciem: {len(fakty)}", flush=True)
+    # KOTWICA W KANALACH — MIERZONA, NIE DEKLAROWANA.
+    #
+    # Wlasciciel postawil prog: trzy czwarte materialu ma wychodzic z kanalow,
+    # ktore konto obserwuje. Kwota siedziala najpierw tylko w brefie skauta, a
+    # bank napelnia TA sciezka — wiec prog nie dotyczyl tego, co naprawde idzie
+    # na notki.
+    #
+    # NIE PYTAMY MODELU, SKAD WZIAL FAKT. Pole deklarowane trzeba by sprawdzac,
+    # a skoro i tak trzeba sprawdzac, to pole jest zbedne: porownujemy tresc
+    # faktu z prawdziwym korpusem tym samym rozmytym wykrywaczem, ktorego uzywa
+    # ochrona przed powtorkami. Kod liczy, model nie ma jak sciemnic.
+    try:
+        import korpus_kanalow as _kk2
+        _korpus = _kk2.korpus_kanalow(200)
+    except Exception:
+        _korpus = []
+    _KOTWICA = {"min_wspolnych": 2, "prog": 0.12}
     for f in fakty:
-        print(f"    · [{f.get('domain', '')[:18]}] {f.get('fact', '')[:88]}", flush=True)
+        _tekst = " ".join(str(f.get(k) or "") for k in
+                          ("fact", "wrong_belief", "actually", "domain"))
+        _traf = next((w for w in _korpus
+                      if _o_tym_samym(_tekst, w.get("temat", ""), **_KOTWICA)),
+                     None)
+        f["z_kanalu"] = bool(_traf)
+        f["kanal_zrodlowy"] = (_traf or {}).get("kanal", "")
+
+    _zakotwiczone = sum(1 for f in fakty if f.get("z_kanalu"))
+    print(f"  [ciekawostki] z pokryciem: {len(fakty)}", flush=True)
+    if fakty:
+        _udzial = 100.0 * _zakotwiczone / len(fakty)
+        print("  [ciekawostki] z kanalow: %d z %d (%.0f%%), prog %.0f%%"
+              % (_zakotwiczone, len(fakty), _udzial,
+                 100 * config.SKAUT_UDZIAL_Z_KANALOW), flush=True)
+        if _udzial < 100 * config.SKAUT_UDZIAL_Z_KANALOW:
+            # GLOSNO, ale nie odrzucamy: oplacony material ma wejsc do banku, a
+            # kolejnosc i tak stawia zakotwiczone przed reszta.
+            print("  [ciekawostki] PONIZEJ PROGU KOTWIC — material wchodzi, ale"
+                  " zakotwiczone maja pierwszenstwo przy wyjmowaniu", flush=True)
+    for f in fakty:
+        print(f"    · [{'KANAL:' + f.get('kanal_zrodlowy', '')[:12] if f.get('z_kanalu') else f.get('domain', '')[:18]}] {f.get('fact', '')[:80]}", flush=True)
 
     # WSZYSTKO IDZIE DO INDEKSU, nie tylko to, co zuzyjemy dzis. Dotad kazde
     # wyszukiwanie zylo jeden przebieg: $0,05 i 6-20 zapytan produkowalo osiem
@@ -4740,7 +4777,12 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
     # z wczoraj. `ranga` pochodzi z `posortuj_bank`; kandydat jeszcze
     # nieoceniony dostaje range na koncu kolejki, zeby nie wypychal ocenionych,
     # ale i nie przepadl.
-    swiezi.sort(key=lambda para: para[0].get("ranga", 10 ** 6))
+    # KOTWICA PRZED RANGA. Prog wlasciciela: trzy czwarte materialu z kanalow.
+    # Ranking modelu ustawia jakosc, ale przy rownej jakosci pierwszenstwo ma to,
+    # o czym mowi sie w tym tygodniu — bo to jest jedyne, czego model nie ma z
+    # wlasnej pamieci.
+    swiezi.sort(key=lambda para: (not para[0].get("z_kanalu"),
+                                  para[0].get("ranga", 10 ** 6)))
 
     # BLIZNIAKI W JEDNEJ PARTII. Ranking ustawia kandydatow wzgledem siebie, ale
     # nie pyta, czy dwaj sasiedzi nie mowia tego samego — i nie zapyta, bo to

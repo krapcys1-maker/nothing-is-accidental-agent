@@ -33,7 +33,7 @@
 {{"targets": [{{"index": <number>, "worth_it": true|false, "what_i_would_add": "<one concrete sentence, or empty when worth_it is false>", "why_not": "<one sentence, only when worth_it is false>"}}]}}
 ```
 
-#### `ciekawostki.md` (374 wierszy)
+#### `ciekawostki.md` (390 wierszy)
 
 **Pola wejściowe:** `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`
 
@@ -163,7 +163,7 @@
 {{"restack": true|false, "reason": "<one sentence: why this is or is not worth passing on>", "sentence": "<your sentence, or empty string if restack is false>", "mechanism_named": "<the other place this same logic runs, or empty string>"}}
 ```
 
-#### `skaut.md` (590 wierszy)
+#### `skaut.md` (637 wierszy)
 
 **Pola wejściowe:** `count`, `history_json`, `pytania_czytelnikow`, `zaczyn_kanalow`
 

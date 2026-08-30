@@ -76,6 +76,22 @@ system card. Your `url` and `source_date` must point at that document, never at
 a video. If you cannot find a document, drop the subject — a fact you can only
 support with somebody's video essay is not a fact.
 
+**THREE QUARTERS OF WHAT YOU RETURN MUST START HERE, and this is counted by
+code, not taken on trust.** Your facts are compared against this list after you
+return them, and the share is reported.
+
+**Take the claim in the headline and be the one who checks it.** That is the
+move, not the thing to avoid. Five hundred channels will repeat that a chip
+beats the market leader; nobody will open the specification and say what the
+number was, who measured it, on what workload, and what the comparison leaves
+out. A claim plus the document that settles it is exactly the shape of fact this
+publication wants.
+
+Do not tell yourself the week was thin. Measured on the day this was written:
+156 subjects from 12 channels, five to eight new every day. A headline that
+sounds like hype is still somebody saying something, on a date, in a place —
+which is checkable, and checking it is the work nobody else does.
+
 Prefer items from the last two weeks. Something that ran on three channels in
 four days is a subject the reader has already half-heard and half-understood,
 which is exactly where this publication is useful.

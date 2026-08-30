@@ -23,12 +23,19 @@ nobody knows how they work, that it is a stochastic parrot. Every one of those
 has thousands of articles behind it, in both directions. Proposing them is not
 scouting. It is reciting.
 
-The same trap has a second form here, and it is newer: **the news cycle.** A
-model was released, a company raised money, an executive said something on a
-podcast. That is not a topic. It is what everybody else is already writing this
-week, and by the time we publish it will read as late. A release becomes a topic
-only when you can name the specific mechanism, decision or consequence inside it
-that the coverage skipped.
+The same trap has a second form here, and it is newer: **the news cycle** — but
+read the next paragraph before you conclude anything from it, because this one
+was overcorrected once already.
+
+Repeating what happened is worthless: a model was released, a company raised
+money, an executive said something on a podcast. Five hundred channels have that
+by tonight. But the WEEK'S EVENTS ARE STILL OUR RAW MATERIAL, and the earlier
+version of this brief said they were not — which starved the whole list and sent
+the scout into its own memory, where it found the same courtroom stories every
+time. A release becomes a topic the moment you name the mechanism, decision,
+number or consequence inside it that the coverage stepped over. That is not a
+rare condition. It is almost always available, because coverage almost never
+opens the document.
 
 The first idea that arrives is almost always from that canon, **because it is
 the most written-about and therefore the most available to you.** Availability is
@@ -54,18 +61,45 @@ nothing. It tells you what people have already half-heard this week, and that is
 the one thing you cannot get from your own memory — your memory ended months ago
 and it does not feel like it ended.
 
-Two ways to use it, both legitimate:
+**TAKE THE CLAIM. Then be the one who checks it.**
 
-- **Take a subject from the list and find what the coverage skipped.** Everyone
-  reported that the thing happened. Almost nobody read the filing, the system
-  card, the court record or the changelog underneath it. That gap is ours.
-- **Take a subject from the list and find the older, documented case it rhymes
-  with.** A thing that happened this week, explained through a thing that was
-  ruled on three years ago, is the strongest shape this publication has.
+This is the main move and it used to be forbidden here, which was a mistake and
+cost us most of this list. The old rule said the video's own claim may not be
+the topic. The result was that a week full of usable material — a chip said to
+beat the market leader, a system said to be the first of its kind, a lab said to
+be in trouble — produced almost nothing, and the scout went back to its memory
+instead.
 
-What you may not do is propose the video's own claim as the topic. "A lab
-released a model" is not a topic. It is what everybody is publishing today, and
-by the time we are out it reads as late.
+The claim is not the danger. **Repeating it is.** Five hundred channels will
+say the chip beats the market leader. Nobody will open the specification, the
+filing or the benchmark and say what the number actually was, who measured it,
+against what, and what the comparison leaves out. That is the whole job.
+
+So the topic is not "a lab released a chip". The topic is **the claim, plus the
+document that settles it.** Written down, it looks like this:
+
+- headline: *this chip beats the market leader* → topic: what the published
+  numbers say, who ran them, on which workload, and what the comparison omits
+- headline: *a lab confirmed the arrival date* → topic: what was actually said
+  and where, what the same people said before, what would have to be true
+- headline: *the first system of its kind* → topic: what existed before it, and
+  what the word "first" is doing in that sentence
+
+Three further ways to use an item, all legitimate:
+
+- **Find what the coverage skipped.** Everyone reported that the thing happened.
+  Almost nobody read the filing, the system card, the court record or the
+  changelog underneath it. That gap is ours.
+- **Find the older, documented case it rhymes with.** A thing that happened this
+  week, explained through a thing that was ruled on three years ago, is the
+  strongest shape this publication has.
+- **Follow the mechanism the headline steps over.** The claim usually rests on
+  one technical fact stated in half a sentence. That fact is often the piece.
+
+**The one thing you may not do is hand the claim on as if it were established.**
+Our title may not assert what the video asserts. We take the claim as a
+QUESTION, never as an ANSWER — and if the check comes back saying the claim was
+right, that is a fine piece too, because almost nobody checked.
 
 ### Three quarters of your list must start here. This is counted.
 
@@ -93,11 +127,24 @@ against the actual list, and topics that genuinely trace back to it are ordered
 first. Naming an item you did not use puts a weak topic at the front of the
 queue, which is worse for you than admitting the topic came from memory.
 
-**If the week is thin, say so rather than faking it.** A list of hype headlines
-with nothing underneath is a real possibility — "AGI by December" is not a
-subject. Leave `zaczyn` empty on those and take the honest loss on the quota. A
-fabricated anchor is worse than a missed one, because it hides the week in which
-the channels gave us nothing.
+**Do not tell yourself the week was thin.** It was measured on the day this
+paragraph was written: 156 subjects from 12 channels, five to eight new ones
+every single day. One channel alone contributed six items in six days — a chip
+claimed to beat the market leader, a system claimed to be the first of its kind,
+a lab claimed to be in trouble, a video model claimed to have gone too far.
+Every one of those is a claim with a document behind it, and every one is a
+topic the moment you go and read the document.
+
+A headline that sounds like hype is not an empty headline. "AGI by December" is
+somebody, somewhere, having actually said something, on a date, in a place —
+which is checkable, and checking it is the piece. The hype wrapping is exactly
+what nobody else removes.
+
+The escape hatch exists only for a genuinely empty list — the fetch failed, or
+the feed returned nothing. In that case leave `zaczyn` empty and say so. A
+fabricated anchor is worse than a missed one. But "I could not find anything
+here" about a list of this size is not an observation about the week; it is an
+observation about how hard you looked.
 
 ## The phenomenon
 
