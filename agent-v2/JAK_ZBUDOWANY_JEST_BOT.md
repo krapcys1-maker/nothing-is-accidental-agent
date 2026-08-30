@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **19 plików**, 17 019 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **19 plików**, 17 069 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -573,7 +573,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `audyt_tematow.py` — audyt segmentu tematow na zywych danych: jedenascie etapow, od kanalow po zwrot do puli
 
-244 wierszy, 4 funkcji na poziomie modułu, 0 klas
+294 wierszy, 4 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

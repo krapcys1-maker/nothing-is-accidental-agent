@@ -219,7 +219,57 @@ def main() -> int:
             "%d wobec %d" % (len(po), len(nowi)))
 
     # ---------------------------------------------------------------
-    etap(10, "PROMPTY")
+    etap(10, "KOTWICA W KANALACH — prog wlasciciela")
+    zakotw = [k for k in zywi if k.get("z_kanalu")]
+    if zywi:
+        udzial = 100.0 * len(zakotw) / len(zywi)
+        print("  z kanalow %d z %d (%.0f%%), prog %.0f%%"
+              % (len(zakotw), len(zywi), udzial,
+                 100 * config.SKAUT_UDZIAL_Z_KANALOW))
+        kanaly = collections.Counter(k.get("kanal_zrodlowy") for k in zakotw)
+        for nazwa, ile in kanaly.most_common(6):
+            print("    %-22s %d" % (nazwa or "(bez nazwy)", ile))
+        werdykt("bank trzyma prog kotwic",
+                "OK" if udzial >= 100 * config.SKAUT_UDZIAL_Z_KANALOW
+                else "UWAGA", "%.0f%%" % udzial)
+        werdykt("kotwice pamietaja, z ktorego kanalu",
+                "OK" if all(k.get("kanal_zrodlowy") for k in zakotw) else "BLAD",
+                "%d bez nazwy" % sum(1 for k in zakotw
+                                     if not k.get("kanal_zrodlowy")))
+        werdykt("material nie jest z jednego kanalu",
+                "OK" if len(kanaly) >= 3 else "UWAGA",
+                "%d roznych kanalow" % len(kanaly))
+    else:
+        werdykt("bank ma cokolwiek do sprawdzenia", "UWAGA", "bank pusty")
+
+    # ---------------------------------------------------------------
+    etap(11, "ZIELONE SWIATLO I SEDZIA")
+    zielone = [k for k in zywi if k.get("zielone_swiatlo")]
+    werdykt("dokladnie jedno zielone swiatlo",
+            "OK" if len(zielone) == 1 else ("UWAGA" if not ocenieni else "BLAD"),
+            "%d" % len(zielone))
+    if zielone:
+        z = zielone[0]
+        print("  >> %s" % str(z.get("fact"))[:96])
+        print("     kanal: %s | ranga: %s" % (z.get("kanal_zrodlowy"),
+                                              z.get("ranga")))
+        werdykt("zielone swiatlo ma range 0", z.get("ranga") == 0, z.get("ranga"))
+    z_uzasadnieniem = [k for k in ocenieni if str(k.get("podobne_do") or "").strip()]
+    if ocenieni:
+        werdykt("sedzia porownuje ze zmierzonym odbiorem",
+                "OK" if len(z_uzasadnieniem) >= len(ocenieni) * 0.5 else "UWAGA",
+                "%d z %d ma pole `podobne_do`" % (len(z_uzasadnieniem),
+                                                  len(ocenieni)))
+    dowody = stages.co_zadzialalo()
+    werdykt("sedzia dostaje prawdziwe pomiary",
+            "OK" if "likes" in dowody and "THESE DID NOT" in dowody else "UWAGA",
+            dowody[:40])
+    werdykt("i sa one z epoki AI",
+            "OK" if "shampoo" not in dowody.lower() else "BLAD",
+            "szampon w dowodach" if "shampoo" in dowody.lower() else "")
+
+    # ---------------------------------------------------------------
+    etap(12, "PROMPTY")
     korzen = KATALOG.parent
     w = subprocess.run([sys.executable, "agent-v2/tests/test_prompty_o_ai.py"],
                        capture_output=True, text=True, cwd=str(korzen))
