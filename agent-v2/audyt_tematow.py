@@ -253,7 +253,8 @@ def main() -> int:
         print("  >> %s" % str(z.get("fact"))[:96])
         print("     kanal: %s | ranga: %s" % (z.get("kanal_zrodlowy"),
                                               z.get("ranga")))
-        werdykt("zielone swiatlo ma range 0", z.get("ranga") == 0, z.get("ranga"))
+        werdykt("zielone swiatlo ma range 0",
+                "OK" if z.get("ranga") == 0 else "BLAD", str(z.get("ranga")))
     z_uzasadnieniem = [k for k in ocenieni if str(k.get("podobne_do") or "").strip()]
     if ocenieni:
         werdykt("sedzia porownuje ze zmierzonym odbiorem",
