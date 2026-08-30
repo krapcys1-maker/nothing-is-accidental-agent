@@ -328,8 +328,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         print("   >> CICHY DZIEN — nie nadajemy wlasnych tresci. Rozmowa idzie"
               " normalnie: odpowiedzi, komentarze i czytanie bez zmian.",
               flush=True)
-        zostalo["notki"] = 0
-        zostalo["restacki"] = 0
+        for _poz in config.CICHY_DZIEN_WYCISZA:
+            zostalo[_poz] = 0
     # Reszte dzielimy przez przebiegi, ktore JESZCZE dzis beda — nie przez
     # wszystkie. Dzielenie przez wszystkie systematycznie zaniza: przy budzecie
     # 16 komentarzy trzy przebiegi braly 5, 4 i 2, czyli 11 zamiast 16. Przez

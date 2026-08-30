@@ -75,10 +75,23 @@ blok = re.search(r"if config\.cichy_dzien\(\):(.{0,700})", zrodlo, re.S)
 sprawdz("cichy dzien jest wpiety w przebieg", blok is not None)
 if blok:
     t = blok.group(1)
-    sprawdz("wycisza notki", 'zostalo["notki"] = 0' in t)
-    sprawdz("wycisza restacki", 'zostalo["restacki"] = 0' in t)
-    sprawdz("NIE wycisza komentarzy", 'zostalo["komentarze"] = 0' not in t, t[:200])
-    sprawdz("NIE wycisza polubien", 'zostalo["lajki"] = 0' not in t, t[:200])
+    # ZASADA, NIE BRZMIENIE. Ten warunek byl przypiety do dokladnej linii
+    # `zostalo["notki"] = 0` i pekl 30 sierpnia, gdy dwie zahardkodowane
+    # pozycje zastapiono petla po `config.CICHY_DZIEN_WYCISZA` — regula stala
+    # nietknieta, test nie. Lista jest teraz w jednym miejscu, bo `norma.py`
+    # tez musi ja znac: inaczej licznik krzyczy „0/5, ponizej progu" w dniu
+    # zaprojektowanej ciszy i uczy ignorowania siebie.
+    sprawdz("wycisza to, co wymienia config",
+            "CICHY_DZIEN_WYCISZA" in t
+            or all('zostalo[%r] = 0' % p in t for p in config.CICHY_DZIEN_WYCISZA),
+            t[:200])
+    sprawdz("a config wymienia notki i restacki",
+            set(config.CICHY_DZIEN_WYCISZA) == {"notki", "restacki"},
+            config.CICHY_DZIEN_WYCISZA)
+    for rozmowa in ("komentarze", "lajki"):
+        sprawdz("NIE wycisza pozycji %r" % rozmowa,
+                rozmowa not in config.CICHY_DZIEN_WYCISZA
+                and 'zostalo["%s"] = 0' % rozmowa not in t, t[:200])
 sprawdz("odpowiedzi nie sa objete limitem dnia",
         config.ODPOWIEDZI_POZA_LIMITEM is True)
 

@@ -233,12 +233,24 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     month = today[:7]
-    spent_today = db.spent_usd(conn, today)
-    spent_month = db.spent_usd(conn, month)
-    if spent_today >= config.DAILY_LIMIT_USD:
+
+    # KAZDY TOR MA WLASNY SUFIT. Przebieg sprawdzajacy nie zjada budzetu konta,
+    # ale tez nie jest bez granic — „bez limitu na testy" konczy sie petla,
+    # ktora w nocy wydaje wszystko. Patrz `db.start_run`.
+    tryb = db.tryb_przebiegu(conn, run_id)
+    sufit_dnia = (config.TEST_LIMIT_USD if tryb == "test"
+                  else config.DAILY_LIMIT_USD)
+    spent_today = db.spent_usd(conn, today, tryb=tryb)
+    if spent_today >= sufit_dnia:
         raise BudgetExceeded(
-            f"limit dzienny wyczerpany: {spent_today:.4f} / {config.DAILY_LIMIT_USD} USD"
+            f"limit dzienny toru {tryb!r} wyczerpany: "
+            f"{spent_today:.4f} / {sufit_dnia} USD"
         )
+
+    # SUFIT MIESIECZNY LICZY OBA TORY RAZEM. Miesiac chroni rachunek, nie
+    # rozdzial obowiazkow — pieniadze wychodza z tej samej karty.
+    spent_month = (db.spent_usd(conn, month, tryb="produkcja")
+                   + db.spent_usd(conn, month, tryb="test"))
     if spent_month >= config.MONTHLY_LIMIT_USD:
         raise BudgetExceeded(
             f"limit miesięczny wyczerpany: {spent_month:.4f} / {config.MONTHLY_LIMIT_USD} USD"

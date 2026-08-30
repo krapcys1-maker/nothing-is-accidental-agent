@@ -104,6 +104,10 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
 # danych". Ta funkcja robi dokladnie tyle i ani kroku wiecej.
 NOWE_KOLUMNY = {
     "calls": {"cache_hit": "INTEGER NOT NULL DEFAULT 0"},
+    # TOR PRZEBIEGU. „produkcja" to praca konta, „test" to sprawdzanie kodu.
+    # Domyslnie produkcja, bo bezpieczniejsza pomylka to policzyc test jako
+    # produkcje (mniej wolnego budzetu) niz odwrotnie.
+    "runs": {"tryb": "TEXT NOT NULL DEFAULT 'produkcja'"},
 }
 
 
@@ -125,13 +129,41 @@ def _dopisz_brakujace_kolumny(conn: sqlite3.Connection) -> None:
                           flush=True)
 
 
-def start_run(conn: sqlite3.Connection, stage: str = "start") -> int:
+def start_run(conn: sqlite3.Connection, stage: str = "start",
+              tryb: str | None = None) -> int:
+    """Nowy przebieg. `tryb` to „produkcja" albo „test".
+
+    TOR TESTOWY ISTNIEJE, ZEBY SPRAWDZANIE NIE JADLO SUFITU KONTA. 30 sierpnia
+    dzien audytu segmentu tematow zjadl 3,87 USD do poludnia — w wiekszosci na
+    MOJE przebiegi sprawdzajace, nie na notki i komentarze. Sufit dzienny
+    chroni przed rozbieganym agentem w nocy i ma pilnowac PRACY KONTA, a nie
+    pracy nad kodem.
+
+    Tryb bierze sie z jawnego argumentu albo ze zmiennej `NIA_TRYB`. Domyslnie
+    produkcja — bezpieczniejsza pomylka to policzyc test jako produkcje niz
+    otworzyc produkcji drugi, luzniejszy sufit.
+    """
+    import os
+    wybrany = (tryb or os.environ.get("NIA_TRYB") or "produkcja").strip().lower()
+    if wybrany not in ("produkcja", "test"):
+        wybrany = "produkcja"
     cur = conn.execute(
-        "INSERT INTO runs (started_at, status, stage) VALUES (?, 'RUNNING', ?)",
-        (now(), stage),
+        "INSERT INTO runs (started_at, status, stage, tryb) VALUES (?, 'RUNNING', ?, ?)",
+        (now(), stage, wybrany),
     )
     conn.commit()
     return int(cur.lastrowid)
+
+
+def tryb_przebiegu(conn: sqlite3.Connection, run_id: int | None) -> str:
+    """Tor, do ktorego nalezy przebieg. Bez przebiegu — produkcja."""
+    if run_id is None:
+        return "produkcja"
+    try:
+        w = conn.execute("SELECT tryb FROM runs WHERE id = ?", (run_id,)).fetchone()
+    except sqlite3.Error:
+        return "produkcja"
+    return (w["tryb"] if w and w["tryb"] else "produkcja")
 
 
 def finish_run(
@@ -176,16 +208,25 @@ def record_call(conn: sqlite3.Connection, **fields: Any) -> None:
     conn.commit()
 
 
-def spent_usd(conn: sqlite3.Connection, since_prefix: str) -> float:
+def spent_usd(conn: sqlite3.Connection, since_prefix: str,
+              tryb: str = "produkcja") -> float:
     """Suma kosztów od znacznika czasu zaczynającego się danym prefiksem.
 
     `since_prefix` to `YYYY-MM-DD` dla doby albo `YYYY-MM` dla miesiąca — daty są
     zapisane w ISO 8601 UTC, więc porównanie prefiksem wystarczy i nie wymaga
     drugiej reprezentacji czasu w bazie.
+
+    `tryb` ODDZIELA PRACE KONTA OD PRACY NAD KODEM. Sufit dzienny chroni przed
+    rozbieganym agentem w nocy; przebiegi sprawdzajace nie maja go zjadac.
+    Wywolanie bez przebiegu liczy sie do produkcji — bezpieczniejsza pomylka.
     """
     row = conn.execute(
-        "SELECT COALESCE(SUM(cost_usd), 0) AS total FROM calls WHERE at LIKE ?",
-        (f"{since_prefix}%",),
+        """SELECT COALESCE(SUM(c.cost_usd), 0) AS total
+             FROM calls c
+             LEFT JOIN runs r ON r.id = c.run_id
+            WHERE c.at LIKE ?
+              AND COALESCE(r.tryb, 'produkcja') = ?""",
+        (f"{since_prefix}%", tryb),
     ).fetchone()
     return float(row["total"])
 

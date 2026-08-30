@@ -199,7 +199,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-725 wierszy, 14 funkcji na poziomie modułu, 3 klas
+737 wierszy, 14 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -243,17 +243,18 @@
 
 ### `db.py` — schemat i zapis
 
-203 wierszy, 8 funkcji na poziomie modułu, 0 klas
+244 wierszy, 9 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `now()` | — |
 | `connect(path)` | Otwiera bazę i zakłada schemat, jeśli go nie ma. |
 | `_dopisz_brakujace_kolumny(conn)` *(wewn.)* | — |
-| `start_run(conn, stage)` | — |
+| `start_run(conn, stage, tryb)` | Nowy przebieg. `tryb` to „produkcja" albo „test". |
+| `tryb_przebiegu(conn, run_id)` | Tor, do ktorego nalezy przebieg. Bez przebiegu — produkcja. |
 | `finish_run(conn, run_id, status, stage, note)` | — |
 | `record_call(conn, **fields)` | Zapisuje wywołanie, wstawiając TYLKO te kolumny, które ktoś podał. |
-| `spent_usd(conn, since_prefix)` | Suma kosztów od znacznika czasu zaczynającego się danym prefiksem. |
+| `spent_usd(conn, since_prefix, tryb)` | Suma kosztów od znacznika czasu zaczynającego się danym prefiksem. |
 | `recent_domains(conn, limit)` | Domeny z ostatnich N artykułów — wejście do reguły różnorodności. |
 
 ### `kanal.py` — pamięć o cudzych publikacjach
@@ -325,7 +326,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2125 wierszy, 20 funkcji na poziomie modułu, 0 klas
+2173 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -414,10 +415,11 @@
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
-277 wierszy, 5 funkcji na poziomie modułu, 0 klas
+309 wierszy, 6 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
+| `_data(dzien)` *(wewn.)* | „2026-08-30" -> datetime w UTC. `cichy_dzien` pyta o obiekt, nie napis. |
 | `wczytaj(dni)` | (zrobione, nieudane) — liczniki per dzien i rodzaj. |
 | `_znak(ile, norma)` *(wewn.)* | Jak daleko od normy. Prog alarmu jest ten sam, co w `alarm.py`. |
 | `przebiegow_dzis()` | Ile przebiegow agenta domknelo sie dzis. Zero, gdy bazy nie ma. |

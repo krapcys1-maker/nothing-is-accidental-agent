@@ -440,6 +440,19 @@ import datetime as _dt_sufit  # noqa: E402
 _DZIS_UTC = _dt_sufit.datetime.now(_dt_sufit.timezone.utc).strftime("%Y-%m-%d")
 SUFIT_PODNIESIONY_NA = "2026-08-30"
 DAILY_LIMIT_USD = 10.00 if _DZIS_UTC == SUFIT_PODNIESIONY_NA else 5.00
+
+# SUFIT TORU TESTOWEGO — osobny od produkcyjnego i CELOWO NIE NIESKONCZONY.
+#
+# Wlasciciel: „nie licz budzetu do testow, to cos osobnego". Zgoda co do
+# rozdzialu, ale „nie licz" i „bez granic" to dwie rozne rzeczy. Przebieg
+# sprawdzajacy w petli potrafi wydac wiecej niz caly dzien pracy konta — a
+# pomylka w skrypcie doraznym jest ZNACZNIE bardziej prawdopodobna niz w
+# kodzie, ktory przeszedl testy.
+#
+# Trzy dolary to okolo dwudziestu pelnych przebiegow szukania ciekawostek albo
+# ponad stu rankingow banku. Na dzien pracy nad kodem starczy z zapasem, a
+# przy petli bez wyjscia strata konczy sie na kwocie, ktora nie boli.
+TEST_LIMIT_USD = 3.00
 MONTHLY_LIMIT_USD = 40.00
 
 # Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1.
@@ -1575,6 +1588,22 @@ PROG_ALARMU_WOLUMENU = 60
 # gorzej niz brak ciszy. Dlatego liczymy ja z daty, deterministycznie.
 CICHY_DZIEN_NA_ILE = 8          # srednio jeden na osiem dni
 CICHE_DNI_WLACZONE = True
+
+# CO WYCISZA CICHY DZIEN — jedna lista, dwoch czytelnikow.
+#
+# `run.py` zeruje przydzial na te pozycje; `norma.py` nie wlicza takich dni do
+# sredniej. Bez wspolnej listy te dwa miejsca sie rozjezdzaja i licznik krzyczy
+# „0/5, ponizej progu" w dniu, w ktorym system zachowal sie dokladnie tak, jak
+# zaprojektowano. Alarm, ktory myli sie regularnie, uczy ignorowania siebie.
+#
+# WYCISZAMY TO, CO NADAJEMY. Komentarze, polubienia i odpowiedzi zostaja, bo to
+# czytanie cudzych rzeczy — a nieodpisanie komus, kto sie odezwal, nie jest
+# cisza, tylko lekcewazeniem.
+#
+# Dwie nazwy tej samej rzeczy, bo budzet mowi w liczbie mnogiej, a dziennik w
+# pojedynczej. Zgodnosc obu krotek pilnuje test.
+CICHY_DZIEN_WYCISZA = ("notki", "restacki")
+CICHY_DZIEN_WYCISZA_RODZAJE = ("notka", "restack")
 
 
 def _cisza_z_hasza(dzien: str) -> bool:

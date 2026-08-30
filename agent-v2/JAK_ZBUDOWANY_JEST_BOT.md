@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **19 plików**, 16 422 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **19 plików**, 16 555 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 56 zestawów
-testów, 1561 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 57 zestawów
+testów, 1582 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -341,7 +341,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-725 wierszy, 14 funkcji na poziomie modułu, 3 klas
+737 wierszy, 14 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -385,17 +385,18 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `db.py` — schemat i zapis
 
-203 wierszy, 8 funkcji na poziomie modułu, 0 klas
+244 wierszy, 9 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `now()` | — |
 | `connect(path)` | Otwiera bazę i zakłada schemat, jeśli go nie ma. |
 | `_dopisz_brakujace_kolumny(conn)` *(wewn.)* | — |
-| `start_run(conn, stage)` | — |
+| `start_run(conn, stage, tryb)` | Nowy przebieg. `tryb` to „produkcja" albo „test". |
+| `tryb_przebiegu(conn, run_id)` | Tor, do ktorego nalezy przebieg. Bez przebiegu — produkcja. |
 | `finish_run(conn, run_id, status, stage, note)` | — |
 | `record_call(conn, **fields)` | Zapisuje wywołanie, wstawiając TYLKO te kolumny, które ktoś podał. |
-| `spent_usd(conn, since_prefix)` | Suma kosztów od znacznika czasu zaczynającego się danym prefiksem. |
+| `spent_usd(conn, since_prefix, tryb)` | Suma kosztów od znacznika czasu zaczynającego się danym prefiksem. |
 | `recent_domains(conn, limit)` | Domeny z ostatnich N artykułów — wejście do reguły różnorodności. |
 
 ### `kanal.py` — pamięć o cudzych publikacjach
@@ -467,7 +468,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2125 wierszy, 20 funkcji na poziomie modułu, 0 klas
+2173 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -556,10 +557,11 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
-277 wierszy, 5 funkcji na poziomie modułu, 0 klas
+309 wierszy, 6 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
+| `_data(dzien)` *(wewn.)* | „2026-08-30" -> datetime w UTC. `cichy_dzien` pyta o obiekt, nie napis. |
 | `wczytaj(dni)` | (zrobione, nieudane) — liczniki per dzien i rodzaj. |
 | `_znak(ile, norma)` *(wewn.)* | Jak daleko od normy. Prog alarmu jest ten sam, co w `alarm.py`. |
 | `przebiegow_dzis()` | Ile przebiegow agenta domknelo sie dzis. Zero, gdy bazy nie ma. |
@@ -6316,12 +6318,24 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     month = today[:7]
-    spent_today = db.spent_usd(conn, today)
-    spent_month = db.spent_usd(conn, month)
-    if spent_today >= config.DAILY_LIMIT_USD:
+
+    # KAZDY TOR MA WLASNY SUFIT. Przebieg sprawdzajacy nie zjada budzetu konta,
+    # ale tez nie jest bez granic — „bez limitu na testy" konczy sie petla,
+    # ktora w nocy wydaje wszystko. Patrz `db.start_run`.
+    tryb = db.tryb_przebiegu(conn, run_id)
+    sufit_dnia = (config.TEST_LIMIT_USD if tryb == "test"
+                  else config.DAILY_LIMIT_USD)
+    spent_today = db.spent_usd(conn, today, tryb=tryb)
+    if spent_today >= sufit_dnia:
         raise BudgetExceeded(
-            f"limit dzienny wyczerpany: {spent_today:.4f} / {config.DAILY_LIMIT_USD} USD"
+            f"limit dzienny toru {tryb!r} wyczerpany: "
+            f"{spent_today:.4f} / {sufit_dnia} USD"
         )
+
+    # SUFIT MIESIECZNY LICZY OBA TORY RAZEM. Miesiac chroni rachunek, nie
+    # rozdzial obowiazkow — pieniadze wychodza z tej samej karty.
+    spent_month = (db.spent_usd(conn, month, tryb="produkcja")
+                   + db.spent_usd(conn, month, tryb="test"))
     if spent_month >= config.MONTHLY_LIMIT_USD:
         raise BudgetExceeded(
             f"limit miesięczny wyczerpany: {spent_month:.4f} / {config.MONTHLY_LIMIT_USD} USD"
@@ -11844,7 +11858,10 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `WEB_SEARCH_TOOL` | `{ CLAUDE: "web_search_20260209", SONNET: "we` | Filtrowanie dynamiczne (`_20260209`) jest na Opusie i Sonnecie 5. |
 | `NAJNOWSZE_WYSZUKIWANIE` | `"web_search_20260209"` | Wersja narzedzia wyszukiwania dla modelu Anthropic, z galezia awaryjna. |
 | `WEB_SEARCH_USD_PER_1K` | `10.00` | Wyszukiwanie po stronie Anthropic: USD za 1000 zapytań. |
-| `DAILY_LIMIT_USD` | `5.00` | SUFIT DZIENNY PODNIESIONY NA CZAS DOMYKANIA PRZEROBKI KONTA. 5,00 USD to wartosc dla NORMALNEJ pracy agenta i do niej wracamy. Zmierzone na  |
+| `_DZIS_UTC` | `_dt_sufit.datetime.now(_dt_sufit.timezone.ut` | — |
+| `SUFIT_PODNIESIONY_NA` | `"2026-08-30"` | — |
+| `DAILY_LIMIT_USD` | `10.00 if _DZIS_UTC == SUFIT_PODNIESIONY_NA e` | — |
+| `TEST_LIMIT_USD` | `3.00` | SUFIT TORU TESTOWEGO — osobny od produkcyjnego i CELOWO NIE NIESKONCZONY. Wlasciciel: „nie licz budzetu do testow, to cos osobnego". Zgoda c |
 | `MONTHLY_LIMIT_USD` | `40.00` | — |
 | `PONOWIENIA` | `2` | Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1. „Bez limitu na budowę" miało znaczyć „nie blokuj eksperymentów", a n |
 | `PONOWIENIE_ODSTEP_S` | `8` | — |
@@ -11928,6 +11945,8 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `PROG_ALARMU_WOLUMENU` | `60` | Ponizej ilu procent normy uznajemy, ze cos jest zepsute, a nie po prostu chudsze. Prog jest niski celowo: budzety sa LOSOWANE z widelek i dz |
 | `CICHY_DZIEN_NA_ILE` | `8` | ODBLOKOWANE decyzja wlasciciela 2026-08-19. Restack cudzej notki z wlasnym zdaniem trafia do kanalu NASZYCH obserwujacych, powiadamia autora |
 | `CICHE_DNI_WLACZONE` | `True` | — |
+| `CICHY_DZIEN_WYCISZA` | `("notki", "restacki")` | CO WYCISZA CICHY DZIEN — jedna lista, dwoch czytelnikow. `run.py` zeruje przydzial na te pozycje; `norma.py` nie wlicza takich dni do sredni |
+| `CICHY_DZIEN_WYCISZA_RODZAJE` | `("notka", "restack")` | — |
 | `RESTACK_DZIENNIE` | `(1, 2)` | Zjechane z 2-4 na 1-2 (2026-08-20). Restack stawia NASZE nazwisko obok cudzego tekstu — to najmocniejszy gest w calym repertuarze i jedyny,  |
 | `RESTACK_MAX_SLOW` | `40` | Dopisek do cudzej notki. Powyzej tego to juz nie dopisek, tylko wlasna notka doczepiona do czyjegos tekstu — a wtedy lepiej napisac wlasna n |
 | `PRZEBIEGOW_DZIENNIE` | `5` | Pierwszy miesiac na dolnej polowie widelek. Nowe konto z jednym artykulem, ktore nagle obserwuje dwadziescia osob, wyglada dokladnie jak far |

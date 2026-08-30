@@ -45,6 +45,11 @@ RODZAJE = ("notka", "komentarz", "polubienie", "restack", "subskrypcja",
 NIEWYKONALNE = {"obserwacja": "Substack zdjal przycisk Follow"}
 
 
+def _data(dzien: str):
+    """„2026-08-30" -> datetime w UTC. `cichy_dzien` pyta o obiekt, nie napis."""
+    return datetime.strptime(dzien, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+
 def wczytaj(dni: int):
     """(zrobione, nieudane) — liczniki per dzien i rodzaj."""
     granica = (datetime.now(timezone.utc) - timedelta(days=dni)).strftime("%Y-%m-%d")
@@ -214,9 +219,15 @@ def main() -> int:
             # wtedy nie zauwazy sie dnia, w ktorym naprawde cos padlo.
             print("   (norma rozklada sie na caly dzien — do konca zostalo %d)"
                   % (config.PRZEBIEGOW_DZIENNIE - zrobione_przebiegi))
+        cicho = config.cichy_dzien()
+        if cicho:
+            print("   >> DZIS JEST CICHY DZIEN — %s wyciszone celowo, zero nie"
+                  " jest tu porazka" % ", ".join(config.CICHY_DZIEN_WYCISZA_RODZAJE))
         for r in RODZAJE:
             ile, norma = zrobione[dzis][r], normy.get(r, 0)
-            if r in NIEWYKONALNE:
+            if cicho and r in config.CICHY_DZIEN_WYCISZA_RODZAJE:
+                print("  %-12s %3d      — cichy dzien, nie nadajemy" % (r, ile))
+            elif r in NIEWYKONALNE:
                 print("  %-12s %3d      — %s" % (r, ile, NIEWYKONALNE[r]))
             elif norma >= 1:
                 print("  %-12s %3d / %-4.0f %3.0f%%%s" % (
@@ -232,23 +243,39 @@ def main() -> int:
     print(naglowek)
     print("  " + "-" * (len(naglowek) - 2))
 
+    # CICHY DZIEN NIE JEST DNIEM NIEWYKONANEJ NORMY. Srednia liczy sie dla
+    # kazdej pozycji z INNEJ liczby dni: notki i restacki tylko z dni, w
+    # ktorych mialy prawo wyjsc. Bez tego jeden dzien na osiem zaniza wynik o
+    # jedna osma i po miesiacu wyglada to jak trwaly spadek produkcji.
+    ciche = {d for d in kolejne if config.cichy_dzien(_data(d))}
     sumy = collections.Counter()
+    dni_liczone = collections.Counter()
     for d in kolejne:
+        cicho = d in ciche
         wiersz = "  %-11s" % d
         for r in RODZAJE:
             ile = zrobione[d][r]
-            sumy[r] += ile
+            wyciszony = cicho and r in config.CICHY_DZIEN_WYCISZA_RODZAJE
+            if not wyciszony:
+                sumy[r] += ile
+                dni_liczone[r] += 1
             norma = normy.get(r, 0)
             wiersz += "%12s" % (
-                "%d/%.0f%s" % (ile, norma, _znak(ile, norma)) if norma >= 1
-                else (str(ile) if ile else "-"))
-        print(wiersz)
+                "cisza" if wyciszony
+                else ("%d/%.0f%s" % (ile, norma, _znak(ile, norma)) if norma >= 1
+                      else (str(ile) if ile else "-")))
+        print(wiersz + ("   << cichy dzien" if cicho else ""))
 
     print("  " + "-" * (len(naglowek) - 2))
     n = len(kolejne)
+
+    def _srednia(r):
+        ile_dni = dni_liczone[r] or 1
+        return sumy[r] / ile_dni
+
     for etykieta, wart in (
-            ("SREDNIA", lambda r: "%.1f" % (sumy[r] / n)),
-            ("% NORMY", lambda r: ("%.0f%%" % (100.0 * (sumy[r] / n) / normy[r])
+            ("SREDNIA", lambda r: "%.1f" % _srednia(r)),
+            ("% NORMY", lambda r: ("%.0f%%" % (100.0 * _srednia(r) / normy[r])
                                    if normy.get(r, 0) >= 1 else "-"))):
         print("  %-11s" % etykieta + "".join("%12s" % wart(r) for r in RODZAJE))
 
@@ -262,9 +289,14 @@ def main() -> int:
     for r, powod in NIEWYKONALNE.items():
         print("  %s: %s — zero nie jest tu porazka" % (r, powod))
 
+    if ciche:
+        print("  ciche dni w oknie: %d (%s) — %s nie licza sie z nich do sredniej"
+              % (len(ciche), ", ".join(sorted(ciche)),
+                 ", ".join(config.CICHY_DZIEN_WYCISZA_RODZAJE)))
+
     ponizej = [r for r in RODZAJE
                if normy.get(r, 0) >= 1 and r not in NIEWYKONALNE
-               and 100.0 * (sumy[r] / n) / normy[r] < config.PROG_ALARMU_WOLUMENU]
+               and 100.0 * _srednia(r) / normy[r] < config.PROG_ALARMU_WOLUMENU]
     if ponizej:
         print()
         print("  PONIZEJ PROGU %d%%: %s" % (config.PROG_ALARMU_WOLUMENU,
