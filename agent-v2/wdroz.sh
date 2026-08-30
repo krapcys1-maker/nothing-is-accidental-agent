@@ -10,6 +10,28 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+# TEN SKRYPT DZIALA TYLKO NA SERWERZE. Ciagnie z origin, uzywa .venv/bin/python
+# i pyta o zamek przebiegu — wszystkie trzy rzeczy maja sens wylacznie tam.
+#
+# Uruchomiony z maszyny roboczej nie mowil tego wprost, tylko brnal dalej i
+# konczyl mylnym komunikatem. 30 sierpnia wypisal „PRZEBIEG TRWA (zamek zajety)"
+# w chwili, gdy na serwerze nie chodzil zaden proces, a usluga byla wygaszona.
+# Przyczyna: sprawdzal zamek LOKALNY, ktory zostal po nieumyslnym przebiegu na
+# maszynie roboczej, a Git Bash nie ma polecenia `flock`, wiec „nie umiem
+# sprawdzic" wychodzilo z tego samego warunku co „zajete". Pol godziny na
+# szukanie procesu, ktorego nie bylo.
+if [ ! -x ".venv/bin/python" ]; then
+    echo "  TO NIE JEST SERWER — brak .venv/bin/python."
+    echo "  Wdrazaj tak:  ssh <serwer> 'cd ~/nothing-is-accidental-agent && bash agent-v2/wdroz.sh'"
+    exit 2
+fi
+if ! command -v flock >/dev/null 2>&1; then
+    echo "  BRAK POLECENIA flock — nie umiem sprawdzic, czy trwa przebieg."
+    echo "  Przerywam, bo wdrozenie w srodku przebiegu podmienia kod pod dzialajacym procesem."
+    exit 2
+fi
+
 POPRZEDNIA=$(git rev-parse --short HEAD)
 echo "  wersja przed wdrozeniem: $POPRZEDNIA"
 
