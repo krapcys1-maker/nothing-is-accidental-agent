@@ -111,13 +111,30 @@ solid facts beat eight you never got to write down.
 
 ## Where to look this time
 
-Take your facts from these areas and no others:
+**The live subjects above are the material. These areas are the LENS you look
+through, not a second place to go shopping.**
+
+That order matters and it was wrong until now. This section used to say "take
+your facts from these areas and no others", which is a categorical instruction,
+and it beat every softer request to start from the week's subjects. Measured on
+a clean run: six facts, not one anchored in the channels, with source dates from
+2024, 2022 and 1992 — a story about Japanese computers from thirty-four years
+ago, in a week when the channels were arguing about a chip said to beat the
+market leader.
+
+So the areas are here to stop you hunting for "something interesting", which
+returns trivia. Point them AT the live subjects:
 
 {dziedziny}
 
-These rotate every run. Going back to the areas you find easiest is how a feed
-turns monotonous, and the reader notices the sameness long before they notice
-the repetition.
+These rotate every run, so the same subject seen through a different lens gives
+a different fact. Going back to the areas you find easiest is how a feed turns
+monotonous, and the reader notices the sameness long before they notice the
+repetition.
+
+**The last quarter of your facts may come from these areas alone**, with no live
+subject behind them — that is what the quarter is for. The other three quarters
+start from the list above.
 
 ## WHAT SHAPE to look for — apply each pattern to each area
 
@@ -128,9 +145,19 @@ area**, not by hunting for something that feels interesting.
 
 {generatory}
 
-Work the grid: take each pattern, ask its probe question of each area above,
-and write down what comes back. Most cells will be empty. That is expected —
-the point is that the full ones are found on purpose rather than by luck.
+Work the grid, but work it ON THE WEEK'S SUBJECTS: take a live subject from
+the list further up, pick a pattern, and ask the pattern's probe question of
+that subject. The area tells you which aspect of it to press.
+
+A worked example of the whole move, so the shape is not in doubt. Live subject:
+*a chip is said to beat the market leader*. Pattern MARGIN asks what the number
+actually is at the edge. Area: how models are served and priced. The question
+becomes: on which workload was that comparison run, what does the published
+figure exclude, and what does the same silicon cost per token in practice. The
+answer is a document, and the document is our fact.
+
+Most cells will be empty. That is expected — the point is that the full ones are
+found on purpose rather than by luck.
 
 ## A third way in: a fact that settles a question people actually ask
 
@@ -337,8 +364,10 @@ wanting to know who found that out. In practice that means:
 - Pure numbers with nothing behind them — no decision, no measurement, no
   constraint, no trade-off. A figure you cannot explain the origin of.
 
-Aim wide: {ile} facts spread across the areas listed above, not {ile} angles on
-one subject. If two of your facts share a mechanism, drop one and go elsewhere.
+Aim wide: {ile} facts spread across DIFFERENT LIVE SUBJECTS, not {ile} angles on
+one. If two of your facts share a mechanism, drop one and go elsewhere. The
+week's list is long enough that repeating a subject is a choice, not a
+constraint.
 
 ## Already used — do not return these, or anything close to them
 
