@@ -189,9 +189,26 @@ def z_dziennika_dzis() -> dict[str, int]:
     from datetime import datetime, timezone
 
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    ile = {"komentarze": 0, "lajki": 0, "restacki": 0, "notki": 0}
+    # SUBSKRYPCJE I OBSERWACJE TEZ, i to jest poprawka z 30 sierpnia 2026.
+    #
+    # Tych dwoch pozycji licznik NIE ZWRACAL, wiec `run.py` liczyl
+    #     zostalo = budzet - juz.get("subskrypcje", 0)
+    # czyli budzet minus zero — PELNY dzienny przydzial w KAZDYM przebiegu. A
+    # rozdzielnik ma `max(1, round(...))`, zeby male budzety nie zaokraglaly sie
+    # do zera, wiec budzet 1 zamienial sie w jedna subskrypcje NA PRZEBIEG.
+    #
+    # ZMIERZONE na odtworzonych budzetach: 25 i 26 sierpnia plan 1, wykonanie 2;
+    # 29 sierpnia plan 1, wykonanie 3. Srednio 140% planu. Kazda subskrypcja to
+    # poczta do skrzynki wlasciciela, wiec to nie jest drobiazg kosmetyczny —
+    # i jest to DOKLADNIE ta sama wada, ktora tego samego dnia znalazlem przy
+    # notkach: licznik nie widzial dzialania, wiec ochrona przed powtorzeniem
+    # normy nie dzialala dla niego wcale.
+    ile = {"komentarze": 0, "lajki": 0, "restacki": 0, "notki": 0,
+           "subskrypcje": 0, "follow": 0}
+    # Klucz po lewej to `rodzaj` z dziennika, po prawej nazwa z budzetu.
     nazwa = {"komentarz": "komentarze", "polubienie": "lajki",
-             "restack": "restacki", "notka": "notki"}
+             "restack": "restacki", "notka": "notki",
+             "subskrypcja": "subskrypcje", "obserwacja": "follow"}
     try:
         if not DZIENNIK.exists():
             return ile

@@ -15,6 +15,28 @@ everything the same high mark and the ranking carries no information. Asked to
 put them in order, it has to decide. So the order is the answer; a number would
 not be.
 
+## What actually landed on this account — read this before ranking
+
+Not opinions about what performs. These are our own notes with the reception
+they measurably got: likes, replies, and how many people were shown them.
+
+{co_zadzialalo}
+
+Read the two groups against each other before you rank anything, and notice
+what separates them rather than what they are about. Then say, for the ones you
+put near the top, which side they resemble.
+
+Two warnings about reading this evidence, both from real mistakes:
+
+- **Views are not success.** A note shown to fifty people and liked by two did
+  worse than one shown to twenty-three and answered by five. The measure that
+  matters is whether anybody did something that costs them a moment — and a
+  reply costs more than a like.
+- **Do not copy the subjects, copy what made them work.** The strongest note on
+  this account happens to be about how reasoning models present their reasoning.
+  That does not mean "write more about reasoning models". It means the reader
+  recognised something they had personally seen and had wrong.
+
 ## What makes one stronger than another
 
 In roughly this order of weight:
@@ -91,7 +113,7 @@ Return only valid JSON. `kolejnosc` lists every id exactly once, strongest
 first. Do not omit any id and do not invent one.
 
 {{"kolejnosc": [<id>, <id>, ...],
-  "oceny": [{{"id": <id>, "wyrzuc": true|false, "kod_wyrzucenia": "NOT_AI"|"NOTHING_TO_CHECK"|"NO_MECHANISM"|"", "powod_wyrzucenia": "<one clause saying why that code applies, empty when keeping>", "na_artykul": true|false, "dlaczego_mocny": "<one clause — what would make a stranger stop>"}}]}}
+  "oceny": [{{"id": <id>, "wyrzuc": true|false, "kod_wyrzucenia": "NOT_AI"|"NOTHING_TO_CHECK"|"NO_MECHANISM"|"", "powod_wyrzucenia": "<one clause saying why that code applies, empty when keeping>", "na_artykul": true|false, "dlaczego_mocny": "<one clause — what would make a stranger stop>", "podobne_do": "<which side of the measured evidence this resembles, and in what respect — one clause; empty if neither>"}}]}}
 
 `kod_wyrzucenia` must be one of the three codes whenever `wyrzuc` is true, and
 empty otherwise. A deletion with any other value is refused and the candidate is

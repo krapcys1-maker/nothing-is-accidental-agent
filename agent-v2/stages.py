@@ -3847,7 +3847,78 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
     # co bierzemy najpierw — a kolejnosc byla dotad zbudowana tak, ze CLICHE
     # wygrywalo z definicji: temat oklepany zawsze ma najostrzejsze „wszyscy
     # zakladaja", bo przez to wlasnie zostal oklepany.
-    topics.sort(key=lambda t: (not t["nosny"], not t["na_artykul"],
+    # --- KOTWICA W ZACZYNIE, SPRAWDZONA POMIAREM -------------------------
+    #
+    # Wlasciciel postawil prog: trzy czwarte tematow ma wychodzic z kanalow,
+    # ktore konto obserwuje. Zmierzone przed ta zmiana: PIEC na dwadziescia,
+    # czyli 25%. Pozostale pietnascie przyszlo z pamieci modelu — i pamiec dala
+    # niemal wylacznie historie sadowe. Wszystkie osiem tematow artykulowych
+    # okazalo sie pozwem, nakazem regulatora albo ugoda; ani jeden nie mowil o
+    # tym, co maszyna robi. To sa dwie strony jednej wady, bo kanaly mowia
+    # wlasnie o rzeczy samej: modelach, ukladach, oknach kontekstu, cenach.
+    #
+    # DEKLARACJA MODELU TO SYGNAL, NIE DOWOD. Pole `zaczyn` sprawdzamy wobec
+    # PRAWDZIWEJ listy tym samym rozmytym porownaniem, ktorego uzywa wykrywacz
+    # powtorek. Model, ktory wpisze kotwice, jakiej nie uzyl, nie awansuje.
+    #
+    # Prog porownania LUZNIEJSZY niz przy powtorkach: pytamy „czy to sie o cos
+    # opiera", a nie „czy to jest to samo".
+    try:
+        import korpus_kanalow as _kk
+        korpus = _kk.korpus_kanalow(200)
+    except Exception as exc:
+        korpus = []
+        print("  [skaut] nie sprawdzilem kotwic (%s)" % type(exc).__name__,
+              flush=True)
+
+    KOTWICA = {"min_wspolnych": 2, "prog": 0.12}
+    zakotwiczone = 0
+    deklarowane = 0
+    for t in topics:
+        deklaracja = str(t.get("zaczyn") or "").strip()
+        t["zaczyn_deklarowany"] = bool(deklaracja)
+        deklarowane += 1 if deklaracja else 0
+        tekst = " ".join(str(t.get(k) or "") for k in
+                         ("title", "question", "broken_belief", "the_moment",
+                          "zaczyn"))
+        trafienie = next((w for w in korpus
+                          if _o_tym_samym(tekst, w.get("temat", ""), **KOTWICA)),
+                         None)
+        t["z_kanalu"] = bool(trafienie)
+        t["kanal_zrodlowy"] = (trafienie or {}).get("kanal", "")
+        zakotwiczone += 1 if trafienie else 0
+
+    if topics:
+        udzial = 100.0 * zakotwiczone / len(topics)
+        print("  [skaut] z kanalow: %d z %d (%.0f%%), prog %.0f%% — "
+              "deklarowanych kotwic: %d"
+              % (zakotwiczone, len(topics), udzial,
+                 100 * config.SKAUT_UDZIAL_Z_KANALOW, deklarowane), flush=True)
+        if udzial < 100 * config.SKAUT_UDZIAL_Z_KANALOW:
+            # GLOSNO, ale NIE ODRZUCAMY. Tydzien, w ktorym kanaly mowia samymi
+            # naglowkami, jest mozliwy i nie jest wina skauta — a lista przycieta
+            # do kwoty byloby gorsza od listy pelnej z uczciwa adnotacja.
+            print("  [skaut] PONIZEJ PROGU KOTWIC — kanaly daly %.0f%%."
+                  " Albo tydzien byl chudy, albo skaut poszedl w pamiec."
+                  % udzial, flush=True)
+        falszywe = [t for t in topics
+                    if t.get("zaczyn_deklarowany") and not t.get("z_kanalu")]
+        if falszywe:
+            print("  [skaut] kotwica deklarowana, ale nieznaleziona w zaczynie:"
+                  " %d — %s" % (len(falszywe),
+                                [str(x.get("title"))[:30] for x in falszywe[:3]]),
+                  flush=True)
+
+    # Do kosza nie idzie nic: przebieg musi skonczyc sie artykulem, to decyzja
+    # wlasciciela i nie wolno jej podwazac cichym filtrem. Ale kolejnosc mowi,
+    # co bierzemy najpierw — a kolejnosc byla dotad zbudowana tak, ze CLICHE
+    # wygrywalo z definicji: temat oklepany zawsze ma najostrzejsze „wszyscy
+    # zakladaja", bo przez to wlasnie zostal oklepany.
+    #
+    # KOTWICA IDZIE NA CZOLO KLUCZA. Temat oparty o to, o czym mowi sie w tym
+    # tygodniu, ma pierwszenstwo przed rownie dobrym tematem z pamieci.
+    topics.sort(key=lambda t: (not t.get("z_kanalu"),
+                               not t["nosny"], not t["na_artykul"],
                                -t["pozycja"], t["nasycony"], -t["ile_watkow"]))
     return topics
 
@@ -4724,6 +4795,50 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
 POWODY_WYRZUCENIA = ("NOT_AI", "NOTHING_TO_CHECK", "NO_MECHANISM")
 
 
+def co_zadzialalo(ile: int = 6) -> str:
+    """NASZE wlasne notki z ZMIERZONYM odbiorem — material dla sedziego banku.
+
+    PO CO. Sedzia banku mial ocenic, „czy nieznajomy przestanie przewijac", i
+    robil to z wlasnych przekonan o tym, co ludzie lubia. My mamy pomiar:
+    wyswietlenia, polubienia i odpowiedzi kazdej wystawionej pozycji.
+
+    Model obserwuje, kod decyduje — takze tutaj. Kod wybiera, ktore notki
+    pokazac (najmocniejsze i najslabsze wedlug tej samej miary), a model ma z
+    nich wyciagnac wniosek. Nie pytamy go o ocene w skali; pokazujemy dowody.
+
+    MIARA: polubienia + 3 x odpowiedzi. Odpowiedz jest rzadsza i drozsza od
+    polubienia — ktos musial cos napisac — wiec wazy wiecej. Wyswietlenia
+    zostaja w opisie, ale NIE wchodza do miary: mowia, ilu ludziom Substack
+    pokazal notke, a nie czy ktokolwiek ja uznal za warta czegokolwiek.
+    """
+    try:
+        import statystyki
+        naj = statystyki.najnowsze_per_pozycja("notka")
+    except Exception:
+        return "(no measurements available yet)"
+    if not naj:
+        return "(no measurements available yet)"
+
+    def punkty(r):
+        return (statystyki._liczba(r.get("polubienia"))
+                + 3 * statystyki._liczba(r.get("odpowiedzi")))
+
+    posort = sorted(naj.values(), key=punkty, reverse=True)
+    if len(posort) < 4:
+        return "(too few measurements to compare)"
+
+    def wiersz(r):
+        return ("  %s likes, %s replies, %s views — %s"
+                % (r.get("polubienia", 0), r.get("odpowiedzi", 0),
+                   r.get("wyswietlenia", 0),
+                   " ".join(str(r.get("tekst") or "").split())[:150]))
+
+    gora = [wiersz(r) for r in posort[:ile]]
+    dol = [wiersz(r) for r in posort[-ile:]]
+    return (NOWA_LINIA.join(["THESE LANDED:"] + gora + ["", "THESE DID NOT:"]
+                            + dol))
+
+
 BANK_SYSTEM = (
     "You rank candidate facts for a publication about artificial intelligence. "
     "You return an order, never a score. Return only valid JSON."
@@ -4770,7 +4885,9 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
 
     try:
         dane = llm.parse_json(llm.call(
-            "bank", BANK_SYSTEM, _prompt("bank.md", kandydaci=opis),
+            "bank", BANK_SYSTEM,
+            _prompt("bank.md", kandydaci=opis,
+                    co_zadzialalo=co_zadzialalo()),
             conn=conn, run_id=run_id))
     except Exception as exc:
         # RANKING NIE MOZE WYWALIC PRZEBIEGU. Bez niego bank dziala jak dotad,
@@ -4868,6 +4985,13 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
             k["na_artykul"] = False
             scietych += 1 if chce_artykul else 0
         k["dlaczego_mocny"] = str(o.get("dlaczego_mocny") or "")[:200]
+        k["podobne_do"] = str(o.get("podobne_do") or "")[:200]
+        # ZIELONE SWIATLO ZAPALA KOD, NIE MODEL. Pierwszy w kolejnosci
+        # idzie do publikacji jako pierwszy — tak juz dziala
+        # `wez_kandydatow`, ktore bierze po randze. Pole istnieje po to,
+        # zeby to bylo WIDOCZNE w indeksie, a nie domyslne z sortowania:
+        # wlasciciel ma moc zajrzec i zobaczyc, co dostalo pierwszenstwo.
+        k["zielone_swiatlo"] = (ranga == 0)
         if o.get("wyrzuc"):
             k["status"] = "odrzucony"
             k["powod"] = "bank: %s" % str(o.get("powod_wyrzucenia") or "slaby")[:150]

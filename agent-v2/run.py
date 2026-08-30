@@ -336,7 +336,17 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     # pozostale wychodzi 5, 6 i 5. Ostatni przebieg dnia dzieli przez jeden,
     # wiec dobiera cala reszte i norma sie domyka.
     zostalo_przebiegow = ile_przebiegow_zostalo(conn)
-    na_teraz = {k: max(1, round(v / zostalo_przebiegow)) if v else 0
+    # `max(1, ...)` ISTNIEJE PO TO, zeby budzet mniejszy niz liczba przebiegow
+    # nie zaokraglal sie do zera i nie przepadal — ale NIE MOZE przekroczyc
+    # tego, co zostalo. Przy budzecie 1 i piatce przebiegow dawalo to jedna
+    # sztuke w KAZDYM z nich, czyli pieciokrotnosc planu.
+    #
+    # Wlasciwa naprawa siedzi w `browser.z_dziennika_dzis`, ktory nie liczyl
+    # subskrypcji ani obserwacji, wiec `zostalo` nigdy nie malalo. To tutaj to
+    # druga linia obrony: gdyby ktores dzialanie znowu wypadlo z licznika,
+    # przekroczenie zatrzyma sie na jednej sztuce zamiast rosnac z kazdym
+    # przebiegiem.
+    na_teraz = {k: min(v, max(1, round(v / zostalo_przebiegow))) if v else 0
                 for k, v in zostalo.items()}
     # Obietnica przyciete do zegara. Notki maja pierwszenstwo, ale nie caly przebieg.
     na_teraz["notki"] = zmiesci_sie("notka", na_teraz["notki"],

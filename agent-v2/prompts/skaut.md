@@ -67,6 +67,38 @@ What you may not do is propose the video's own claim as the topic. "A lab
 released a model" is not a topic. It is what everybody is publishing today, and
 by the time we are out it reads as late.
 
+### Three quarters of your list must start here. This is counted.
+
+**At least 75% of the topics you return must begin from an item in the list
+above**, and each of those must say which one, in a field called `zaczyn`,
+quoting enough of the live subject to be recognisable. The remaining quarter may
+come from anywhere.
+
+Why the quota exists, measured rather than assumed: on the last full run only
+five topics in twenty could be traced back to this list. The other fifteen came
+out of memory — and memory produced an almost unbroken run of courtroom stories,
+because that is the shape memory has for this subject. Every single one of the
+article-length topics turned out to be a lawsuit, a regulator's order or a
+settlement. Not one was about what the machines actually do. A publication about
+artificial intelligence had proposed twenty topics in which the machine was a
+circumstance and the institution was the subject.
+
+This list is the cure, because it is the one input that talks about **the thing
+itself** — models, chips, context windows, benchmarks, prices, what changed
+between two versions. Anchoring here does not make a topic newsy; it makes it
+current, and the anchor is where you START, never what you WRITE.
+
+**The anchor is checked by code, not taken on trust.** Your `zaczyn` is compared
+against the actual list, and topics that genuinely trace back to it are ordered
+first. Naming an item you did not use puts a weak topic at the front of the
+queue, which is worse for you than admitting the topic came from memory.
+
+**If the week is thin, say so rather than faking it.** A list of hype headlines
+with nothing underneath is a real possibility — "AGI by December" is not a
+subject. Leave `zaczyn` empty on those and take the honest loss on the quota. A
+fabricated anchor is worse than a missed one, because it hides the week in which
+the channels gave us nothing.
+
 ## The phenomenon
 
 Each topic must be concrete and immediately recognisable to somebody who follows
@@ -324,8 +356,13 @@ Return only valid JSON, shaped as:
 {{"topics": [ ... ], "ranking": {{"most_written_about": [<3 indices>], "least_written_about": [<3 indices>], "richest": [<3 indices>], "thinnest": [<3 indices>]}}}}
 
 Each topic is an object with keys: title, question, **kind**,
-**already_written**, **scale**, **precedents**, **threads**, plus the fields
-its kind requires.
+**already_written**, **scale**, **precedents**, **threads**, **zaczyn**, plus
+the fields its kind requires.
+
+**`zaczyn`** is the live subject this topic starts from, quoted closely enough
+from the list above to be recognised — or an empty string when the topic came
+from somewhere else. At least three quarters of the list must have it filled,
+and the anchor is verified against the actual list, not taken on trust.
 
 `already_written` is a list of strings, possibly empty. `threads` is a list of
 question strings. `ranking` holds zero-based indices into `topics`.
@@ -430,6 +467,35 @@ them threads produces a padded note, which is exactly what we keep publishing.
 
 What carries an article is a procedure **that exists because something went
 wrong**, more than once, in ways somebody could recount over dinner.
+
+**A PRECEDENT DOES NOT HAVE TO BE A LAWSUIT, and this is the correction that
+matters most.** Measured on a full run of twenty topics: every single
+article-length one was a court case, a regulator's order or a settlement. Not
+one was about what the machines do. The field had quietly come to mean "when did
+somebody sue", and a publication about artificial intelligence was proposing
+topics in which the machine was a circumstance and the institution was the
+subject.
+
+The thing this field really asks is: **has this been tested more than once, in
+public, with a result somebody had to answer for?** Inside our subject that
+happens constantly without a courtroom:
+
+- a claimed capability that did not survive somebody else running it
+- a benchmark found to be inside the training data, and the score withdrawn
+- a behaviour that changed between two versions, with the maker explaining why
+- a method that replaced an earlier one because the earlier one failed a case
+  it was supposed to handle
+- a paper corrected, retracted, or reversed by the replication
+- a limit announced as impossible and then moved
+
+For these, `what_changed` is not "a rule was written" but "the score was pulled",
+"the default was reversed", "the next release did it differently", "the field
+stopped using it". That is the same shape — a thing tested in public, twice,
+with consequences — and it is where the topics that are actually ABOUT these
+systems will come from.
+
+A list where every precedent is litigation is as unbalanced as a list where
+every precedent is a benchmark. Mix them.
 
 The clean example inside our own subject is the lawyer who filed a brief citing
 cases that did not exist, because the assistant that drafted it produced them

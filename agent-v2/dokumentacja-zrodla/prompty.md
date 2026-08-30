@@ -3,9 +3,9 @@
 
 **Pola wejściowe:** *(brak)*
 
-#### `bank.md` (102 wierszy)
+#### `bank.md` (124 wierszy)
 
-**Pola wejściowe:** `kandydaci`
+**Pola wejściowe:** `co_zadzialalo`, `kandydaci`
 
 **Kontrakt wyjścia:**
 
@@ -163,7 +163,7 @@
 {{"restack": true|false, "reason": "<one sentence: why this is or is not worth passing on>", "sentence": "<your sentence, or empty string if restack is false>", "mechanism_named": "<the other place this same logic runs, or empty string>"}}
 ```
 
-#### `skaut.md` (524 wierszy)
+#### `skaut.md` (590 wierszy)
 
 **Pola wejściowe:** `count`, `history_json`, `pytania_czytelnikow`, `zaczyn_kanalow`
 

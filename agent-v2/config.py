@@ -1686,6 +1686,23 @@ LIMIT_CZASU_PRZEBIEGU_S = 9000
 # Zapas na domkniecie: ostatnia publikacja, zamkniecie przebiegu, alarm.
 ZAPAS_CZASU_S = 900
 
+# Jaka czesc tematow skauta ma wychodzic z kanalow, ktore konto obserwuje.
+#
+# Decyzja wlasciciela z 30 sierpnia, po pomiarze: przed nia z kanalow
+# pochodzilo PIEC tematow na dwadziescia (25%), a pozostale pietnascie z pamieci
+# modelu. Pamiec dala niemal wylacznie historie sadowe — wszystkie osiem tematow
+# artykulowych bylo pozwem, nakazem regulatora albo ugoda, ani jeden nie mowil o
+# tym, co maszyna robi.
+#
+# Kanaly sa jedynym zrodlem, ktore mowi o RZECZY SAMEJ: modelach, ukladach,
+# oknach kontekstu, benchmarkach, cenach. Kwota naprawia wiec dwie rzeczy naraz
+# — aktualnosc i to, ze konto o AI przestalo pisac o AI.
+#
+# PROG, NIE OBCIECIE. Ponizej progu mowimy glosno w logu i ustawiamy zakotwiczone
+# na czele kolejki, ale nie kasujemy reszty: tydzien, w ktorym kanaly mowia samymi
+# naglowkami, jest mozliwy i nie jest wina skauta.
+SKAUT_UDZIAL_Z_KANALOW = 0.75
+
 ROZBIEG_DNI = 30
 
 # Odstepy miedzy dzialaniami, w sekundach. Pietnascie polubien w dziewiecdziesiat

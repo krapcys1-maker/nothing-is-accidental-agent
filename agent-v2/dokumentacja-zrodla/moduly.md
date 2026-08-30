@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1370 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1380 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-5096 wierszy, 102 funkcji na poziomie modułu, 0 klas
+5220 wierszy, 103 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -120,6 +120,7 @@
 | `_precedens_ok(p)` *(wewn.)* | Czy ten wpis to naprawde precedens, a nie wypelniacz. |
 | `dopisz_kandydatow(kandydaci)` | Przepuszcza kandydatow przez bramke i dokłada do indeksu. |
 | `wez_kandydatow(ile)` | Wyjmuje kandydatow gotowych do pisania i ZNACZY ich jako uzytych. |
+| `co_zadzialalo(ile)` | NASZE wlasne notki z ZMIERZONYM odbiorem — material dla sedziego banku. |
 | `posortuj_bank(conn, run_id, ile)` | Ustawia bank pomyslow od najmocniejszego i wyrzuca slabe. |
 | `_termin_waznosci(dni)` *(wewn.)* | Kiedy ta kandydatura przestaje byc tematem. Data z godzina, w UTC. |
 | `_po_terminie(k)` *(wewn.)* | Czy kandydatura jest juz po swoim terminie przydatnosci. |
@@ -131,7 +132,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2912 wierszy, 62 funkcji na poziomie modułu, 0 klas
+2929 wierszy, 62 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -327,7 +328,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2191 wierszy, 20 funkcji na poziomie modułu, 0 klas
+2208 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

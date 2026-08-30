@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **19 plików**, 16 689 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **19 plików**, 16 857 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 58 zestawów
-testów, 1601 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 60 zestawów
+testów, 1634 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1370 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1380 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-5096 wierszy, 102 funkcji na poziomie modułu, 0 klas
+5220 wierszy, 103 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -262,6 +262,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_precedens_ok(p)` *(wewn.)* | Czy ten wpis to naprawde precedens, a nie wypelniacz. |
 | `dopisz_kandydatow(kandydaci)` | Przepuszcza kandydatow przez bramke i dokłada do indeksu. |
 | `wez_kandydatow(ile)` | Wyjmuje kandydatow gotowych do pisania i ZNACZY ich jako uzytych. |
+| `co_zadzialalo(ile)` | NASZE wlasne notki z ZMIERZONYM odbiorem — material dla sedziego banku. |
 | `posortuj_bank(conn, run_id, ile)` | Ustawia bank pomyslow od najmocniejszego i wyrzuca slabe. |
 | `_termin_waznosci(dni)` *(wewn.)* | Kiedy ta kandydatura przestaje byc tematem. Data z godzina, w UTC. |
 | `_po_terminie(k)` *(wewn.)* | Czy kandydatura jest juz po swoim terminie przydatnosci. |
@@ -273,7 +274,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2912 wierszy, 62 funkcji na poziomie modułu, 0 klas
+2929 wierszy, 62 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -469,7 +470,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2191 wierszy, 20 funkcji na poziomie modułu, 0 klas
+2208 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -8216,7 +8217,7 @@ pokazuje się **niezależnie** od tego ustawienia — u Jonathana widać naraz
 
 #### `prompts/bank.md`
 
-**102 wierszy.** Pola wejsciowe: `kandydaci`
+**124 wierszy.** Pola wejsciowe: `co_zadzialalo`, `kandydaci`
 
 ````markdown
 Rank these candidate facts against each other, strongest first, and say which
@@ -8235,6 +8236,28 @@ This is deliberate. Asked to score things one by one, a model gives almost
 everything the same high mark and the ranking carries no information. Asked to
 put them in order, it has to decide. So the order is the answer; a number would
 not be.
+
+## What actually landed on this account — read this before ranking
+
+Not opinions about what performs. These are our own notes with the reception
+they measurably got: likes, replies, and how many people were shown them.
+
+{co_zadzialalo}
+
+Read the two groups against each other before you rank anything, and notice
+what separates them rather than what they are about. Then say, for the ones you
+put near the top, which side they resemble.
+
+Two warnings about reading this evidence, both from real mistakes:
+
+- **Views are not success.** A note shown to fifty people and liked by two did
+  worse than one shown to twenty-three and answered by five. The measure that
+  matters is whether anybody did something that costs them a moment — and a
+  reply costs more than a like.
+- **Do not copy the subjects, copy what made them work.** The strongest note on
+  this account happens to be about how reasoning models present their reasoning.
+  That does not mean "write more about reasoning models". It means the reader
+  recognised something they had personally seen and had wrong.
 
 ## What makes one stronger than another
 
@@ -8312,7 +8335,7 @@ Return only valid JSON. `kolejnosc` lists every id exactly once, strongest
 first. Do not omit any id and do not invent one.
 
 {{"kolejnosc": [<id>, <id>, ...],
-  "oceny": [{{"id": <id>, "wyrzuc": true|false, "kod_wyrzucenia": "NOT_AI"|"NOTHING_TO_CHECK"|"NO_MECHANISM"|"", "powod_wyrzucenia": "<one clause saying why that code applies, empty when keeping>", "na_artykul": true|false, "dlaczego_mocny": "<one clause — what would make a stranger stop>"}}]}}
+  "oceny": [{{"id": <id>, "wyrzuc": true|false, "kod_wyrzucenia": "NOT_AI"|"NOTHING_TO_CHECK"|"NO_MECHANISM"|"", "powod_wyrzucenia": "<one clause saying why that code applies, empty when keeping>", "na_artykul": true|false, "dlaczego_mocny": "<one clause — what would make a stranger stop>", "podobne_do": "<which side of the measured evidence this resembles, and in what respect — one clause; empty if neither>"}}]}}
 
 `kod_wyrzucenia` must be one of the three codes whenever `wyrzuc` is true, and
 empty otherwise. A deletion with any other value is refused and the candidate is
@@ -10680,7 +10703,7 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/skaut.md`
 
-**524 wierszy.** Pola wejsciowe: `count`, `history_json`, `pytania_czytelnikow`, `zaczyn_kanalow`
+**590 wierszy.** Pola wejsciowe: `count`, `history_json`, `pytania_czytelnikow`, `zaczyn_kanalow`
 
 ````markdown
 You are a topic scout for the English-language Substack "Nothing Is Accidental",
@@ -10751,6 +10774,38 @@ Two ways to use it, both legitimate:
 What you may not do is propose the video's own claim as the topic. "A lab
 released a model" is not a topic. It is what everybody is publishing today, and
 by the time we are out it reads as late.
+
+### Three quarters of your list must start here. This is counted.
+
+**At least 75% of the topics you return must begin from an item in the list
+above**, and each of those must say which one, in a field called `zaczyn`,
+quoting enough of the live subject to be recognisable. The remaining quarter may
+come from anywhere.
+
+Why the quota exists, measured rather than assumed: on the last full run only
+five topics in twenty could be traced back to this list. The other fifteen came
+out of memory — and memory produced an almost unbroken run of courtroom stories,
+because that is the shape memory has for this subject. Every single one of the
+article-length topics turned out to be a lawsuit, a regulator's order or a
+settlement. Not one was about what the machines actually do. A publication about
+artificial intelligence had proposed twenty topics in which the machine was a
+circumstance and the institution was the subject.
+
+This list is the cure, because it is the one input that talks about **the thing
+itself** — models, chips, context windows, benchmarks, prices, what changed
+between two versions. Anchoring here does not make a topic newsy; it makes it
+current, and the anchor is where you START, never what you WRITE.
+
+**The anchor is checked by code, not taken on trust.** Your `zaczyn` is compared
+against the actual list, and topics that genuinely trace back to it are ordered
+first. Naming an item you did not use puts a weak topic at the front of the
+queue, which is worse for you than admitting the topic came from memory.
+
+**If the week is thin, say so rather than faking it.** A list of hype headlines
+with nothing underneath is a real possibility — "AGI by December" is not a
+subject. Leave `zaczyn` empty on those and take the honest loss on the quota. A
+fabricated anchor is worse than a missed one, because it hides the week in which
+the channels gave us nothing.
 
 ## The phenomenon
 
@@ -11009,8 +11064,13 @@ Return only valid JSON, shaped as:
 {{"topics": [ ... ], "ranking": {{"most_written_about": [<3 indices>], "least_written_about": [<3 indices>], "richest": [<3 indices>], "thinnest": [<3 indices>]}}}}
 
 Each topic is an object with keys: title, question, **kind**,
-**already_written**, **scale**, **precedents**, **threads**, plus the fields
-its kind requires.
+**already_written**, **scale**, **precedents**, **threads**, **zaczyn**, plus
+the fields its kind requires.
+
+**`zaczyn`** is the live subject this topic starts from, quoted closely enough
+from the list above to be recognised — or an empty string when the topic came
+from somewhere else. At least three quarters of the list must have it filled,
+and the anchor is verified against the actual list, not taken on trust.
 
 `already_written` is a list of strings, possibly empty. `threads` is a list of
 question strings. `ranking` holds zero-based indices into `topics`.
@@ -11115,6 +11175,35 @@ them threads produces a padded note, which is exactly what we keep publishing.
 
 What carries an article is a procedure **that exists because something went
 wrong**, more than once, in ways somebody could recount over dinner.
+
+**A PRECEDENT DOES NOT HAVE TO BE A LAWSUIT, and this is the correction that
+matters most.** Measured on a full run of twenty topics: every single
+article-length one was a court case, a regulator's order or a settlement. Not
+one was about what the machines do. The field had quietly come to mean "when did
+somebody sue", and a publication about artificial intelligence was proposing
+topics in which the machine was a circumstance and the institution was the
+subject.
+
+The thing this field really asks is: **has this been tested more than once, in
+public, with a result somebody had to answer for?** Inside our subject that
+happens constantly without a courtroom:
+
+- a claimed capability that did not survive somebody else running it
+- a benchmark found to be inside the training data, and the score withdrawn
+- a behaviour that changed between two versions, with the maker explaining why
+- a method that replaced an earlier one because the earlier one failed a case
+  it was supposed to handle
+- a paper corrected, retracted, or reversed by the replication
+- a limit announced as impossible and then moved
+
+For these, `what_changed` is not "a rule was written" but "the score was pulled",
+"the default was reversed", "the next release did it differently", "the field
+stopped using it". That is the same shape — a thing tested in public, twice,
+with consequences — and it is where the topics that are actually ABOUT these
+systems will come from.
+
+A list where every precedent is litigation is as unbalanced as a list where
+every precedent is a benchmark. Mix them.
 
 The clean example inside our own subject is the lawyer who filed a brief citing
 cases that did not exist, because the assistant that drafted it produced them
@@ -11956,6 +12045,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `PRZEBIEGOW_DZIENNIE` | `5` | Pierwszy miesiac na dolnej polowie widelek. Nowe konto z jednym artykulem, ktore nagle obserwuje dwadziescia osob, wyglada dokladnie jak far |
 | `LIMIT_CZASU_PRZEBIEGU_S` | `9000` | ILE CZASU MA PRZEBIEG. Musi zgadzac sie z `TimeoutStartSec` w pliku uslugi — to jedyne miejsce, gdzie ta sama liczba stoi dwa razy, i pilnuj |
 | `ZAPAS_CZASU_S` | `900` | Zapas na domkniecie: ostatnia publikacja, zamkniecie przebiegu, alarm. |
+| `SKAUT_UDZIAL_Z_KANALOW` | `0.75` | Jaka czesc tematow skauta ma wychodzic z kanalow, ktore konto obserwuje. Decyzja wlasciciela z 30 sierpnia, po pomiarze: przed nia z kanalow |
 | `ROZBIEG_DNI` | `30` | — |
 | `ODSTEPY` | `{ # 45-90 MIN, nie 10-25. Zmierzone na profi` | Odstepy miedzy dzialaniami, w sekundach. Pietnascie polubien w dziewiecdziesiat sekund to nie jest czytanie i kazdy system to widzi. Odstepy |
 | `ODSTEP_MIEDZY_DZIALANIAMI` | `(45, 180)` | — |

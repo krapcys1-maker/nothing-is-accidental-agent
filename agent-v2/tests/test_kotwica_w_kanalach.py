@@ -1,0 +1,165 @@
+# -*- coding: utf-8 -*-
+"""Trzy czwarte tematow ma wychodzic z kanalow — i to liczy KOD.
+
+DLACZEGO TO POWSTALO — dwie obserwacje wlasciciela, ktore okazaly sie jedna wada.
+
+  „te tematy sa za bardzo dookola ai, czemu?"
+  „ma to byc 75% z tych kanalow yt"
+
+ZMIERZONE na pelnym przebiegu dwudziestu tematow: z kanalow pochodzilo PIEC
+(25%), z pytan czytelnikow dwa, z pamieci modelu trzynascie. A pamiec dala
+niemal wylacznie historie sadowe — wszystkie osiem tematow artykulowych bylo
+pozwem, nakazem regulatora, ugoda albo wytyczna izby. Ani jeden nie mowil o
+tym, co maszyna robi; maszyna byla okolicznoscia, a instytucja tematem.
+
+To sa dwie strony jednego problemu, bo kanaly sa jedynym zrodlem mowiacym o
+RZECZY SAMEJ: modelach, ukladach, oknach kontekstu, benchmarkach, cenach.
+
+DEKLARACJA MODELU TO SYGNAL, NIE DOWOD. Pole `zaczyn` sprawdzamy wobec
+prawdziwej listy tym samym rozmytym porownaniem, ktorego uzywa wykrywacz
+powtorek. Model, ktory wpisze kotwice, jakiej nie uzyl, nie awansuje w
+kolejce — i jest to wypisane w logu.
+
+PROG, NIE OBCIECIE. Ponizej kwoty mowimy glosno, ale nie kasujemy tematow:
+tydzien, w ktorym kanaly mowia samymi naglowkami („AGI by December"), jest
+mozliwy i nie jest wina skauta. Lista przycieta do kwoty byloby gorsza od
+pelnej z uczciwa adnotacja.
+
+BEZ PYTESTA, bez platnych wywolan. Uruchamiac z korzenia repozytorium.
+"""
+import json
+import sys
+
+sys.path.insert(0, "agent-v2")
+import config          # noqa: E402
+import korpus_kanalow  # noqa: E402
+import stages          # noqa: E402
+
+zdane = oblane = 0
+
+
+def sprawdz(nazwa, warunek, szczegol=""):
+    global zdane, oblane
+    if warunek:
+        zdane += 1
+        print("  OK    %s" % nazwa)
+    else:
+        oblane += 1
+        print("  BLAD  %s   %s" % (nazwa, szczegol))
+
+
+KORPUS = [
+    {"temat": "openai custom inference chip built with broadcom", "kanal": "a",
+     "data": "2026-08-30"},
+    {"temat": "context window benchmark contamination found in evaluation set",
+     "kanal": "b", "data": "2026-08-30"},
+    {"temat": "minimax model feels fast and cheap on long documents",
+     "kanal": "c", "data": "2026-08-29"},
+]
+
+# Temat oparty o pierwsza pozycje korpusu.
+Z_KANALU = {
+    "title": "The Chip Built in Nine Months",
+    "question": "What did the custom inference chip built with Broadcom change "
+                "about who sets the price of a token?",
+    "kind": "BROKEN_BELIEF", "scale": "AN_INDUSTRY",
+    "zaczyn": "openai custom inference chip built with broadcom",
+    "broken_belief": "Everyone assumes the chip changes what the model can do.",
+    "precedents": [], "threads": [], "already_written": [],
+}
+# Temat z pamieci — nic wspolnego z korpusem.
+Z_PAMIECI = {
+    "title": "The Tenant Screening Report",
+    "question": "When a rental application is refused by an algorithmic "
+                "screening report, what must the landlord disclose?",
+    "kind": "SYSTEM_UNDER_TEST", "scale": "AN_INDUSTRY", "zaczyn": "",
+    "the_moment": "A renter is refused a flat by a screening report.",
+    "precedents": [], "threads": [], "already_written": [],
+}
+# Temat, ktory DEKLARUJE kotwice, ale jej nie uzyl.
+KLAMIE = dict(Z_PAMIECI, title="The Report That Claimed an Anchor",
+              zaczyn="openai custom inference chip built with broadcom")
+
+print("=== 0. ATRAPY SA TYM, ZA CO JE BIORE ===")
+PROG = {"min_wspolnych": 2, "prog": 0.12}
+tekst_kan = " ".join(str(Z_KANALU.get(k) or "") for k in
+                     ("title", "question", "broken_belief", "zaczyn"))
+tekst_pam = " ".join(str(Z_PAMIECI.get(k) or "") for k in
+                     ("title", "question", "the_moment", "zaczyn"))
+sprawdz("temat z kanalu naprawde zderza sie z korpusem",
+        any(stages._o_tym_samym(tekst_kan, w["temat"], **PROG) for w in KORPUS))
+sprawdz("temat z pamieci NIE zderza sie z korpusem",
+        not any(stages._o_tym_samym(tekst_pam, w["temat"], **PROG)
+                for w in KORPUS))
+
+print()
+print("=== 1. PROG ISTNIEJE I JEST TYM, O CO PROSZONO ===")
+sprawdz("SKAUT_UDZIAL_Z_KANALOW = 0.75",
+        abs(config.SKAUT_UDZIAL_Z_KANALOW - 0.75) < 1e-9,
+        config.SKAUT_UDZIAL_Z_KANALOW)
+
+print()
+print("=== 2. BRIEF ZADA KOTWICY I MOWI, ZE JEST LICZONA ===")
+brief = open("agent-v2/prompts/skaut.md", encoding="utf-8").read()
+sprawdz("brief nazywa kwote", "75%" in brief)
+sprawdz("brief opisuje pole zaczyn", "`zaczyn`" in brief)
+sprawdz("brief mowi, ze kod to sprawdza",
+        "checked by code" in brief or "verified against the actual list" in brief)
+sprawdz("brief pozwala przyznac sie do chudego tygodnia",
+        "thin" in brief and "fabricated anchor" in brief)
+
+print()
+print("=== 3. PRECEDENS NIE MUSI BYC POZWEM ===")
+# To druga polowa tej samej wady: dopoki precedens znaczyl „kiedy ktos pozwal",
+# kazdy artykul musial byc historia sadowa.
+sprawdz("brief mowi wprost, ze precedens to nie tylko sprawa sadowa",
+        "DOES NOT HAVE TO BE A LAWSUIT" in brief)
+for slowo in ("benchmark", "retracted", "between two versions"):
+    sprawdz("  brief wymienia %r jako precedens" % slowo, slowo in brief)
+
+print()
+print("=== 4. KOD MIERZY KOTWICE, NIE WIERZY DEKLARACJI ===")
+zrodlo = open("agent-v2/stages.py", encoding="utf-8").read()
+sprawdz("skaut liczy udzial z kanalow", "z kanalow: %d z %d" in zrodlo)
+sprawdz("i porownuje z progiem z konfiguracji",
+        "SKAUT_UDZIAL_Z_KANALOW" in zrodlo)
+sprawdz("kotwica wchodzi na czolo klucza sortowania",
+        'key=lambda t: (not t.get("z_kanalu")' in zrodlo)
+sprawdz("falszywa deklaracja jest wypisywana",
+        "kotwica deklarowana, ale nieznaleziona" in zrodlo)
+sprawdz("ponizej progu mowimy glosno", "PONIZEJ PROGU KOTWIC" in zrodlo)
+sprawdz("ale NIE kasujemy tematow", "nie kasujemy" in zrodlo.lower()
+        or "NIE ODRZUCAMY" in zrodlo)
+
+print()
+print("=== 5. SORTOWANIE STAWIA ZAKOTWICZONE NA CZELE ===")
+def klucz(t):
+    return (not t.get("z_kanalu"), not t["nosny"], not t["na_artykul"],
+            -t["pozycja"], t["nasycony"], -t["ile_watkow"])
+
+
+baza = {"nosny": True, "na_artykul": False, "pozycja": 0,
+        "nasycony": False, "ile_watkow": 4}
+a = dict(baza, tytul="z kanalu", z_kanalu=True, pozycja=0)
+b = dict(baza, tytul="z pamieci, mocniejszy", z_kanalu=False, pozycja=9,
+         na_artykul=True)
+posortowane = sorted([b, a], key=klucz)
+sprawdz("zakotwiczony wyprzedza mocniejszy z pamieci",
+        posortowane[0]["tytul"] == "z kanalu",
+        [x["tytul"] for x in posortowane])
+
+print()
+print("=== 6. KONTRDOWOD: BEZ KOTWICY WYGRYWA TEN Z PAMIECI ===")
+# Gdyby kotwica nic nie zmieniala, sekcja 5 przechodzilaby rowniez wtedy.
+def klucz_bez(t):
+    return (not t["nosny"], not t["na_artykul"], -t["pozycja"],
+            t["nasycony"], -t["ile_watkow"])
+
+
+sprawdz("stara kolejnosc stawiala z pamieci pierwszy",
+        sorted([b, a], key=klucz_bez)[0]["tytul"] == "z pamieci, mocniejszy",
+        [x["tytul"] for x in sorted([b, a], key=klucz_bez)])
+
+print()
+print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
+sys.exit(1 if oblane else 0)

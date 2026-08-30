@@ -139,6 +139,7 @@
 | `PRZEBIEGOW_DZIENNIE` | `5` | Pierwszy miesiac na dolnej polowie widelek. Nowe konto z jednym artykulem, ktore nagle obserwuje dwadziescia osob, wyglada dokladnie jak far |
 | `LIMIT_CZASU_PRZEBIEGU_S` | `9000` | ILE CZASU MA PRZEBIEG. Musi zgadzac sie z `TimeoutStartSec` w pliku uslugi — to jedyne miejsce, gdzie ta sama liczba stoi dwa razy, i pilnuj |
 | `ZAPAS_CZASU_S` | `900` | Zapas na domkniecie: ostatnia publikacja, zamkniecie przebiegu, alarm. |
+| `SKAUT_UDZIAL_Z_KANALOW` | `0.75` | Jaka czesc tematow skauta ma wychodzic z kanalow, ktore konto obserwuje. Decyzja wlasciciela z 30 sierpnia, po pomiarze: przed nia z kanalow |
 | `ROZBIEG_DNI` | `30` | — |
 | `ODSTEPY` | `{ # 45-90 MIN, nie 10-25. Zmierzone na profi` | Odstepy miedzy dzialaniami, w sekundach. Pietnascie polubien w dziewiecdziesiat sekund to nie jest czytanie i kazdy system to widzi. Odstepy |
 | `ODSTEP_MIEDZY_DZIALANIAMI` | `(45, 180)` | — |
