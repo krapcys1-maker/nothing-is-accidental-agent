@@ -420,7 +420,26 @@ WEB_SEARCH_USD_PER_1K = 10.00
 # odpala przebieg BEZ NADZORU, a sufit 10 USD byl zgoda na jeden dzien pracy
 # przy wlascicielu, nie stala swoboda dla nocnych przebiegow. Normalna doba
 # kosztuje 0,69–0,87 USD, wiec 5,00 zostawia ponad pieciokrotny zapas.
-DAILY_LIMIT_USD = 5.00
+# OKNO OTWARTE PONOWNIE 30 sierpnia — I SAMO SIE ZAMYKA.
+#
+# Dzien audytu segmentu tematow zjadl 3,87 USD do poludnia, z czego wiekszosc na
+# MOJE przebiegi sprawdzajace: trzy przejscia sciezki artykulu, dwa pelne
+# przebiegi szukania ciekawostek, cztery rankingi banku, skaut. To nie jest
+# produkcja konta — to jest praca nad kodem, ktora akurat kosztuje przez API.
+#
+# Wlasciciel: „zwieksz budzet na dzis do 10 albo nie licz budzetu do testow, to
+# cos osobnego". Ma racje co do zasady i wlasciwa odpowiedzia jest OSOBNY TOR
+# TESTOWY, a nie wieksza liczba — bo wieksza liczba wroci jutro jako ten sam
+# problem. Tor powstaje osobno; to tutaj ratuje dzisiejszy przebieg.
+#
+# DATA, NIE PRZELACZNIK. Poprzednim razem sufit 10 USD zostal wlaczony na dzien
+# pracy przy wlascicielu i trzeba go bylo pamietac wylaczyc — a o 00:04 timer
+# odpala przebieg BEZ NADZORU. Tym razem podniesienie WYGASA SAMO: jutro plik
+# jest ten sam, a sufit z powrotem 5,00, bez niczyjej pamieci.
+import datetime as _dt_sufit  # noqa: E402
+_DZIS_UTC = _dt_sufit.datetime.now(_dt_sufit.timezone.utc).strftime("%Y-%m-%d")
+SUFIT_PODNIESIONY_NA = "2026-08-30"
+DAILY_LIMIT_USD = 10.00 if _DZIS_UTC == SUFIT_PODNIESIONY_NA else 5.00
 MONTHLY_LIMIT_USD = 40.00
 
 # Sufit na JEDEN przebieg. Działa ZAWSZE, także przy AGENT_V2_NO_LIMIT=1.
