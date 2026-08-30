@@ -80,6 +80,21 @@ def _znak(ile: float, norma: float) -> str:
     return "!" if proc >= config.PROG_ALARMU_WOLUMENU else "!!"
 
 
+def przebiegow_dzis() -> int:
+    """Ile przebiegow agenta domknelo sie dzis. Zero, gdy bazy nie ma."""
+    try:
+        import db
+        conn = db.connect()
+        dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        (ile,) = conn.execute(
+            "SELECT COUNT(*) FROM runs WHERE finished_at LIKE ? AND stage = 'dzien'",
+            (dzis + "%",)).fetchone()
+        conn.close()
+        return int(ile or 0)
+    except Exception:
+        return 0
+
+
 def slad(dni: int) -> int:
     """Gdzie dokladnie psuja sie publikacje — wg pozycji w serii i odstepu.
 
@@ -188,7 +203,17 @@ def main() -> int:
 
     if args.dzis:
         dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        print("STAN NA DZIS (%s, UTC)" % dzis)
+        zrobione_przebiegi = przebiegow_dzis()
+        print("STAN NA DZIS (%s, UTC) — po %d z %d przebiegow"
+              % (dzis, zrobione_przebiegi, config.PRZEBIEGOW_DZIENNIE))
+        if zrobione_przebiegi < config.PRZEBIEGOW_DZIENNIE:
+            # BEZ TEGO LICZNIK KLAMIE O CZWARTEJ RANO. Doba UTC zaczyna sie w
+            # nocy, pierwszy przebieg idzie po 11:00 — wiec do poludnia kazda
+            # pozycja pokazuje "0%!!" i wyglada jak awaria. Licznik, ktory
+            # codziennie rano krzyczy bez powodu, uczy ignorowania siebie, a
+            # wtedy nie zauwazy sie dnia, w ktorym naprawde cos padlo.
+            print("   (norma rozklada sie na caly dzien — do konca zostalo %d)"
+                  % (config.PRZEBIEGOW_DZIENNIE - zrobione_przebiegi))
         for r in RODZAJE:
             ile, norma = zrobione[dzis][r], normy.get(r, 0)
             if r in NIEWYKONALNE:

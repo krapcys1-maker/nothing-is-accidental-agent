@@ -403,12 +403,13 @@
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
-252 wierszy, 4 funkcji na poziomie modułu, 0 klas
+277 wierszy, 5 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `wczytaj(dni)` | (zrobione, nieudane) — liczniki per dzien i rodzaj. |
 | `_znak(ile, norma)` *(wewn.)* | Jak daleko od normy. Prog alarmu jest ten sam, co w `alarm.py`. |
+| `przebiegow_dzis()` | Ile przebiegow agenta domknelo sie dzis. Zero, gdy bazy nie ma. |
 | `slad(dni)` | Gdzie dokladnie psuja sie publikacje — wg pozycji w serii i odstepu. |
 | `main()` | — |
 
