@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **18 plików**, 15 883 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **18 plików**, 15 989 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-4863 wierszy, 101 funkcji na poziomie modułu, 0 klas
+4895 wierszy, 101 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -520,12 +520,14 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
 
-167 wierszy, 3 funkcji na poziomie modułu, 0 klas
+241 wierszy, 5 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `oczysc(tytul)` | Zdejmuje obietnice, zostawia zdarzenie. |
 | `przetworz(wpisy)` | (nazwa_kanalu, element) -> kandydaci. Czysta funkcja, testowalna. |
+| `_rdzen(temat)` *(wewn.)* | Slowa nosne tytulu — do porownywania, czy dwa kanaly mowia o tym samym. |
+| `wielkie_wydarzenia(korpus, min_kanalow, min_wspolnych, swiezosc_dni)` | Rzeczy, o ktorych mowi NARAZ kilka roznych kanalow. |
 | `korpus_kanalow(ile)` | — |
 
 ### `aktualne_modele.py` — jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci
@@ -8405,7 +8407,7 @@ visible either way:
 
 #### `prompts/ciekawostki.md`
 
-**352 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `zaczyn_kanalow`
+**374 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`
 
 ````markdown
 Find {ile} documented facts worth stopping a stranger mid-scroll.
@@ -8444,6 +8446,28 @@ what people believe, it carries no figure to check and no source to miss, and
 nothing downstream will catch it if you invented it. If you cannot point to
 where the belief is visibly stated — a headline, a product page, a press
 release — then the fact stands on its own without one.
+
+## Happening right now — this takes precedence
+
+{wydarzenia}
+
+When something is listed here, it means three or more independent channels
+covered the same thing within the last four days. That is a real event, not a
+headline.
+
+**Give it first claim on your search — and then do our job on it, not theirs.**
+The event tells you WHEN the reader is looking this way. It does not tell you
+what to write. Five hundred other people are already publishing "what the new
+model can do"; the reason anyone reads us is the part they all skipped.
+
+So take the event as the occasion, then find the mechanism, the number, the
+decision or the constraint nobody else bothered with. A fact drawn from a live
+event still has to clear everything below — a source, a checkable figure,
+something that makes a stranger stop.
+
+If the event yields nothing that clears that bar, drop it and work the grid.
+An empty priority lane is fine; a thin piece published because something was
+trending is not.
 
 ## What the field is actually talking about this week
 

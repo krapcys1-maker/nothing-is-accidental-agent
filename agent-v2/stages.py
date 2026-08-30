@@ -895,9 +895,35 @@ def znajdz_ciekawostki(
     # NIE DOKLADAMY DO PELNEGO BANKU. Patrz `bank_pelny`: bez tego zapas rosnie
     # bez konca, a przy duzym zapasie nowe tematy nie wchodza wcale, bo
     # uzupelnianie odpala sie tylko przy pustce.
-    if bank_pelny():
-        print("  [ciekawostki] bank pelny (>=%d wolnych) — nie szukam"
-              % config.BANK_MAKS_WOLNYCH, flush=True)
+    # WIELKIE WYDARZENIE OMIJA SUFIT BANKU. Wlasciciel: „jak wychodzi nowy model
+    # albo jest duze wydarzenie AI, to musi miec pierwszenstwo przed wszystkim".
+    #
+    # Napiecie z reszta doktryny jest pozorne i warto je nazwac, bo latwo tu
+    # zrobic z konta kanal newsowy. Skaut i bank maja regule „wyszedl nowy model
+    # to nie temat, tylko to, co w tym tygodniu pisza wszyscy" — i ona ZOSTAJE.
+    # Wydarzenie mowi nam, KIEDY czytelnik patrzy w te strone; nie mowi, CO mamy
+    # napisac. Tresc przechodzi te same bramki co zawsze.
+    #
+    # Sygnal liczy KOD, nie model: ten sam rdzen tematu u co najmniej trzech
+    # ROZNYCH kanalow, nie starszy niz cztery doby. Jeden kanal krzyczacy
+    # „EVERYTHING CHANGED" to naglowek, nie wydarzenie.
+    wydarzenia = []
+    try:
+        import korpus_kanalow
+        wydarzenia = korpus_kanalow.wielkie_wydarzenia(
+            korpus_kanalow.korpus_kanalow(200))
+    except Exception as exc:
+        print("  [wydarzenia] nie sprawdzilem (%s)" % type(exc).__name__,
+              flush=True)
+
+    if wydarzenia:
+        print("  [wydarzenia] %d wielkich: %s" % (
+            len(wydarzenia),
+            "; ".join(", ".join(w["o_czym"][:3]) for w in wydarzenia[:2])),
+            flush=True)
+    elif bank_pelny():
+        print("  [ciekawostki] bank pelny (>=%d wolnych) i zadnego wielkiego"
+              " wydarzenia — nie szukam" % config.BANK_MAKS_WOLNYCH, flush=True)
         return []
 
     zuzyte = wczytaj_zuzyte()
@@ -925,6 +951,12 @@ def znajdz_ciekawostki(
         generatory=NOWA_LINIA.join(
             f"**{g}** — {config.GENERATORY[g]}" for g in generatory),
         zaczyn_kanalow=zaczyn_z_kanalow(),
+        # WYDARZENIE JAKO OKAZJA, NIE TEMAT — patrz komentarz wyzej.
+        wydarzenia=("\n".join(
+            "- %s (mowi o tym %d kanalow): %s"
+            % (", ".join(w["o_czym"][:4]), w["kanalow"], w["tytuly"][0][:90])
+            for w in wydarzenia[:3])
+            or "(nic wielkiego dzis — pracuj z siatki ponizej)"),
         dzis=teraz.strftime("%d %B %Y"),
         stan_modeli=(aktualne_modele.jako_tekst(
             aktualne_modele.pobierz(conn=conn, run_id=run_id))

@@ -35,6 +35,28 @@ nothing downstream will catch it if you invented it. If you cannot point to
 where the belief is visibly stated — a headline, a product page, a press
 release — then the fact stands on its own without one.
 
+## Happening right now — this takes precedence
+
+{wydarzenia}
+
+When something is listed here, it means three or more independent channels
+covered the same thing within the last four days. That is a real event, not a
+headline.
+
+**Give it first claim on your search — and then do our job on it, not theirs.**
+The event tells you WHEN the reader is looking this way. It does not tell you
+what to write. Five hundred other people are already publishing "what the new
+model can do"; the reason anyone reads us is the part they all skipped.
+
+So take the event as the occasion, then find the mechanism, the number, the
+decision or the constraint nobody else bothered with. A fact drawn from a live
+event still has to clear everything below — a source, a checkable figure,
+something that makes a stranger stop.
+
+If the event yields nothing that clears that bar, drop it and work the grid.
+An empty priority lane is fine; a thin piece published because something was
+trending is not.
+
 ## What the field is actually talking about this week
 
 These are real video titles from the channels this publication follows, with

@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-4863 wierszy, 101 funkcji na poziomie modułu, 0 klas
+4895 wierszy, 101 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -378,12 +378,14 @@
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
 
-167 wierszy, 3 funkcji na poziomie modułu, 0 klas
+241 wierszy, 5 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `oczysc(tytul)` | Zdejmuje obietnice, zostawia zdarzenie. |
 | `przetworz(wpisy)` | (nazwa_kanalu, element) -> kandydaci. Czysta funkcja, testowalna. |
+| `_rdzen(temat)` *(wewn.)* | Slowa nosne tytulu — do porownywania, czy dwa kanaly mowia o tym samym. |
+| `wielkie_wydarzenia(korpus, min_kanalow, min_wspolnych, swiezosc_dni)` | Rzeczy, o ktorych mowi NARAZ kilka roznych kanalow. |
 | `korpus_kanalow(ile)` | — |
 
 ### `aktualne_modele.py` — jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci

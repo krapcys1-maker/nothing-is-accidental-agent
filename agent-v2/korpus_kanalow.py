@@ -135,6 +135,80 @@ def przetworz(wpisy: list[tuple[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+# Slowa, ktore nie odrozniaja jednego wydarzenia od drugiego. Bez tej listy
+# „AI" i „model" laczylyby w jedno wydarzenie cala tablice.
+_TLO = {
+    "the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "for",
+    "with", "is", "are", "was", "were", "it", "its", "this", "that", "you",
+    "your", "we", "our", "just", "now", "new", "ai", "model", "models", "gpt",
+    "llm", "how", "why", "what", "chatgpt", "openai", "google", "than",
+    "from", "has", "have", "can", "will", "about", "more", "most", "first",
+}
+
+
+def _rdzen(temat: str) -> set[str]:
+    """Slowa nosne tytulu — do porownywania, czy dwa kanaly mowia o tym samym."""
+    return {s for s in re.findall(r"[a-z0-9][a-z0-9\-\.]{2,}", temat.lower())
+            if s not in _TLO}
+
+
+def wielkie_wydarzenia(korpus: list[dict[str, Any]], min_kanalow: int = 3,
+                       min_wspolnych: int = 2,
+                       swiezosc_dni: int = 4) -> list[dict[str, Any]]:
+    """Rzeczy, o ktorych mowi NARAZ kilka roznych kanalow.
+
+    PO CO. Wlasciciel: „jak wychodzi nowy model albo jest duze wydarzenie AI,
+    to musi miec pierwszenstwo przed wszystkim".
+
+    To stoi w napieciu z regula, ktora skaut i bank maja od poczatku: „wyszedl
+    nowy model" nie jest tematem, tylko tym, co w tym tygodniu pisza wszyscy.
+    Regula jest sluszna — bez niej stajemy sie jednym z pieciuset kanalow
+    opisujacych premiere.
+    
+    Napiecie znika, gdy rozdzielic OKAZJE od TEMATU. Wydarzenie mowi nam, KIEDY
+    czytelnik patrzy w te strone; nie mowi, CO mamy napisac. Tresc nadal musi
+    przejsc te same bramki — mechanizm, zlamane przekonanie, sprawdzalnosc.
+    Wykrycie wydarzenia daje wiec PIERWSZENSTWO W KOLEJCE, nigdy zwolnienia
+    z jakosci.
+
+    SYGNAL JEST OBIEKTYWNY I LICZY GO KOD, nie model: ten sam rdzen tematu
+    u co najmniej `min_kanalow` ROZNYCH kanalow. Jeden kanal krzyczacy
+    „EVERYTHING CHANGED" to nie wydarzenie, tylko naglowek.
+    """
+    grupy: list[dict[str, Any]] = []
+    for poz in korpus or []:
+        rdzen = _rdzen(poz.get("temat", ""))
+        if len(rdzen) < min_wspolnych:
+            continue
+        for g in grupy:
+            if len(g["rdzen"] & rdzen) >= min_wspolnych:
+                g["pozycje"].append(poz)
+                g["kanaly"].add(poz.get("kanal", ""))
+                g["rdzen"] &= rdzen or g["rdzen"]
+                break
+        else:
+            grupy.append({"rdzen": rdzen, "pozycje": [poz],
+                          "kanaly": {poz.get("kanal", "")}})
+    # PIERWSZENSTWO PRZYSLUGUJE TEMU, CO DZIEJE SIE TERAZ. Bez tego progu
+    # wykrywacz oddawal jako „wielkie wydarzenie" premiere sprzed szesnastu dni
+    # — zlapane pierwszym uruchomieniem na zywym korpusie. Rzecz, o ktorej trzy
+    # kanaly mowily dwa tygodnie temu, jest historia, a nie powodem, zeby
+    # przestawiac kolejke.
+    from datetime import datetime as _d, timedelta as _td, timezone as _tz
+    granica = (_d.now(_tz.utc) - _td(days=swiezosc_dni)).strftime("%Y-%m-%d")
+
+    wyniki = [{"o_czym": sorted(g["rdzen"])[:6],
+               "kanalow": len(g["kanaly"]),
+               "kanaly": sorted(g["kanaly"]),
+               "tytuly": [p["temat"] for p in g["pozycje"][:4]],
+               "data": max((p.get("data") or "") for p in g["pozycje"])}
+              for g in grupy if len(g["kanaly"]) >= min_kanalow
+              and max((p.get("data") or "") for p in g["pozycje"]) >= granica]
+    wyniki.sort(key=lambda w: (-w["kanalow"], w["data"]), reverse=False)
+    wyniki.sort(key=lambda w: w["kanalow"], reverse=True)
+    return wyniki
+
+
 def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
     import httpx
 
