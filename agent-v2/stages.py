@@ -4690,6 +4690,18 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]]) -> dict[str, int]:
                if p not in ("fact", "wrong_belief", "actually", "decision",
                             "consequence", "url", "source_date", "domain")},
             "domain": str(k.get("domain") or "")[:80],
+            # KOTWICA MUSI PRZEZYC ZAPIS. Szosty raz tego samego ksztaltu wady
+            # w jednym dniu: sygnal policzony i wyrzucony. `znajdz_ciekawostki`
+            # liczy, z ktorego kanalu wyszedl fakt, log pokazuje [KANAL:...] —
+            # a do banku to nie trafialo, bo pola ida z KSZTALTU ODPOWIEDZI
+            # MODELU, a te dwa liczy kod PO odpowiedzi.
+            #
+            # Skutek byl niewidoczny i kosztowny: `wez_kandydatow` sortuje
+            # kotwica przed ranga, a kotwica byla zawsze pusta, wiec cale
+            # pierwszenstwo dla tematow z tego tygodnia bylo martwe. W banku
+            # wszystko wygladalo na „z pamieci", takze to, co przyszlo z kanalu.
+            "z_kanalu": bool(k.get("z_kanalu")),
+            "kanal_zrodlowy": str(k.get("kanal_zrodlowy") or "")[:60],
             "status": "nowy" if ok else "odrzucony",
             "powod": powod,
             "kiedy": db.now(),
