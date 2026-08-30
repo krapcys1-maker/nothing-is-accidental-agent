@@ -1201,9 +1201,17 @@ def main() -> int:
         words = len(draft["body"].split())
         print(f"\n   tytuł: {draft.get('title')}", flush=True)
         print(f"   podtytuł: {draft.get('subtitle', '')}", flush=True)
+        # ZAKRES MUSI BYC TEN, KTORY DOSTAL PISARZ. Stalo tu `config.TARGET_WORDS`
+        # (1075) i plaski zakres 950-1200 — czyli wartosci sprzed skalowania
+        # dlugosci do ilosci materialu. Artykul THIN, napisany poprawnie na 430
+        # slow przy celu 420, wypisywal sie jako „430 slow (cel 1075, zakres
+        # 950-1200)": wygladal na polowe tego, co mial miec, i przy nadzorze
+        # kazalby szukac usterki tam, gdzie jej nie ma.
+        dl = config.dlugosc_dla(glebokosc)
         print(
             f"   długość: {words} słów "
-            f"(cel {config.TARGET_WORDS}, zakres {config.MIN_WORDS}-{config.MAX_WORDS})",
+            f"(glebokosc {glebokosc or '?'}, cel {dl['cel']}, "
+            f"zakres {dl['min']}-{dl['max']})",
             flush=True,
         )
         print(f"   akapit o granicach: {draft.get('limits_paragraph_present')}", flush=True)

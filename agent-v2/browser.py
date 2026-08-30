@@ -812,6 +812,34 @@ def statystyki_pozycji(pozycje: list[dict[str, Any]] | None = None) -> list[dict
             if not ident:
                 continue
             rodzaj = str(poz.get("rodzaj") or "notka")
+            # ARTYKUL MA WLASNE ZRODLO I NIE PYTAMY O NIEGO DRUGI RAZ.
+            #
+            # Zmierzone na zywo 30 sierpnia: `/api/v1/note_stats/p-<id>` oddaje
+            # dla artykulu JEDNA karte (sam podglad wpisu), a dla notki PIEC
+            # (wyswietlenia, powierzchnie, odbiorcy, interakcje). Odpowiedz jest
+            # poprawna i pusta — wiec przedrostek `p-` dawal piec rekordow
+            # z samymi zerami, co jest gorsze niz brak pomiaru: wyglada na dane.
+            #
+            # Prawdziwe liczby leza w panelu wydawcy i sa juz w `poz`, wzięte
+            # JEDNYM zapytaniem dla wszystkich artykulow naraz.
+            if rodzaj == "artykul":
+                rekord = poz.get("statystyki")
+                if not rekord:
+                    continue
+                statystyki.zapisz(rodzaj, ident, rekord,
+                                  tekst=poz.get("tekst") or "")
+                rekord = dict(rekord, id=ident, rodzaj=rodzaj)
+                zebrane.append(rekord)
+                print("  [statystyki] artykul %s: %s wysw, %s polub, %s odp,"
+                      " %s klik, %s zapisow"
+                      % (ident, rekord.get("wyswietlenia"),
+                         rekord.get("polubienia"), rekord.get("odpowiedzi"),
+                         rekord.get("klikniecia_w_link"),
+                         rekord.get("subskrypcje")), flush=True)
+                continue
+            # NOTKI, KOMENTARZE I ODPOWIEDZI — wspolna koncowka `c-`.
+            # Artykul odszedl wyzej: jego statystyk tu NIE MA (sprawdzone
+            # 30 sierpnia — `p-<id>` oddaje jedna karte podgladu i zero liczb).
             try:
                 dane = api_json(page, f"/api/v1/note_stats/c-{ident}")
             except Exception as exc:
@@ -836,6 +864,84 @@ def statystyki_pozycji(pozycje: list[dict[str, Any]] | None = None) -> list[dict
         browser.close()
         p.stop()
     return zebrane
+
+
+def _artykuly_z_panelu(page, baza: str) -> dict[str, dict[str, Any]]:
+    """Nasze artykuly razem ze statystykami — JEDNYM zapytaniem.
+
+    ZNALEZIONE POMIAREM, NIE ZGADNIETE. Artykulow nie mierzylismy wcale: 369
+    pomiarow komentarzy, 365 notek, 24 odpowiedzi, ZERO artykulow. Pierwsza
+    proba szla `/api/v1/note_stats/p-<id>` — ta sama koncowka co dla notki,
+    inny przedrostek. Odpowiedz przychodzila poprawna i PUSTA: artykul dostaje
+    stamtad jedna karte (podglad wpisu), notka piec. Piec rekordow z zerami
+    wyglada jak pomiar i nim nie jest, wiec ta droga zostala porzucona.
+
+    Liczby sa w panelu wydawcy, pod `/api/v1/post_management/published`, i to
+    dla WSZYSTKICH artykulow naraz — zero otwierania stron po jednej.
+    Zmierzone 30 sierpnia na zywym koncie:
+
+        The Watermark Was Never a Verdict   8 wysw,  4 wyslane, 2 otwarte, 3 zapisy
+        The Egg Aisle Is a Legal Document  32 wysw,  4 wyslane, 1 otwarte, 3 klikniecia
+
+    RESTACKI SA W INNYM MIEJSCU. Panel ich nie podaje, archiwum tak — i to nie
+    to samo co `stats.shares`: dla tego samego wpisu archiwum mowilo 1 restack,
+    a panel 0 udostepnien. Bierzemy wiec obie listy i sklejamy po numerze,
+    zamiast podstawiac jedno pod drugie.
+    """
+    wynik: dict[str, dict[str, Any]] = {}
+
+    restacki: dict[str, int] = {}
+    archiwum = api_json(page, "/api/v1/archive?sort=new&limit=30", baza=baza)
+    for post in archiwum if isinstance(archiwum, list) else []:
+        if isinstance(post, dict) and post.get("id") is not None:
+            restacki[str(post["id"])] = int(post.get("restacks") or 0)
+
+    panel = api_json(page, "/api/v1/post_management/published"
+                           "?offset=0&limit=30&order_by=post_date"
+                           "&order_direction=desc", baza=baza)
+    posty = (panel or {}).get("posts") if isinstance(panel, dict) else None
+    if not isinstance(posty, list):
+        print("  [statystyki] panel wydawcy oddal %s zamiast listy postow"
+              % type(panel).__name__, flush=True)
+        return wynik
+
+    for post in posty:
+        if not isinstance(post, dict) or post.get("id") is None:
+            continue
+        ident = str(post["id"])
+        s = post.get("stats") if isinstance(post.get("stats"), dict) else {}
+
+        def licz(*klucze: str) -> int:
+            return sum(int(s.get(k) or 0) for k in klucze)
+
+        wynik[ident] = {
+            "rodzaj": "artykul",
+            "id": ident,
+            "tekst": " ".join(str(post.get("title") or "").split())[:200],
+            "statystyki": {
+                "wyswietlenia": int(s.get("views") or 0),
+                # ODPOWIEDZI TO WATEK CALY, nie same komentarze najwyzszego
+                # poziomu. `comment_count` liczy tylko te pierwsze — pod
+                # „The Egg Aisle" bylo 2 i 2, wiec pominiecie odpowiedzi
+                # zanizaloby o polowe.
+                "odpowiedzi": (int(post.get("comment_count") or 0)
+                               + int(post.get("child_comment_count") or 0)),
+                "polubienia": int(post.get("reaction_count") or 0),
+                "restacki": restacki.get(ident, 0),
+                # ZAPISY, NIE PLATNE SUBSKRYPCJE. `signups_within_1_day` to
+                # nowi czytelnicy przypisani do TEGO wpisu — jedyna liczba
+                # w calym API, ktora wiaze subskrybenta z konkretna trescia.
+                "subskrypcje": licz("signups_within_1_day"),
+                "klikniecia_w_link": int(s.get("clicks") or 0),
+                # POCZTA. Artykul, inaczej niz notka, jest tez wysylka — i to
+                # jest liczba, ktorej notka nie ma wcale.
+                "wyslane": int(s.get("sent") or 0),
+                "dostarczone": int(s.get("delivered") or 0),
+                "otwarcia": int(s.get("opened") or 0),
+                "udostepnienia": int(s.get("shares") or 0),
+            },
+        }
+    return wynik
 
 
 def nasze_pozycje_do_pomiaru(page=None, ile: int = 60) -> list[dict[str, Any]]:
@@ -878,6 +984,28 @@ def nasze_pozycje_do_pomiaru(page=None, ile: int = 60) -> list[dict[str, Any]]:
                         "id": str(k["id"]),
                         "tekst": " ".join(str(k.get("body") or "").split())[:200],
                     }
+            # --- ARCHIWUM: nasze ARTYKULY -----------------------------------
+            #
+            # Dodane 30 sierpnia, bo artykulow nie mierzylismy WCALE. Numery
+            # sa w `/api/v1/archive`, a statystyki pod ta sama koncowka co
+            # notki, z przedrostkiem `p-` zamiast `c-` — sprawdzone na zywo.
+            #
+            # To jest najdrozsza rzecz, jaka to konto produkuje (research plus
+            # pisanie to okolo dolara za sztuke), i jedyna, o ktorej wiedzielismy
+            # tylko tyle, ze wyszla.
+            # ADRES BAZOWY JEST TU OBOWIAZKOWY. `/api/v1/archive` nalezy do
+            # NASZEJ PUBLIKACJI, nie do serwisu — a `api_json` bez `baza` pyta
+            # substack.com. Pierwsza wersja tej poprawki nie podawala bazy i
+            # przebieg na zywo oddal 46 pozycji i ZERO artykulow: zapytanie
+            # poszlo pod zly adres, oddalo cos, co nie jest lista, i `or []`
+            # zamienilo to w cisze. Dokladnie ta pomylka, przed ktora ostrzega
+            # docstring `api_json`.
+            moja_publikacja = f"https://{config.SUBSTACK_HANDLE}.substack.com"
+            try:
+                widziane.update(_artykuly_z_panelu(page, moja_publikacja))
+            except Exception as exc:
+                print("  [statystyki] panel wydawcy: %s"
+                      % type(exc).__name__, flush=True)
         except Exception as exc:
             print("  [statystyki] profilu nie odczytalem: %s"
                   % type(exc).__name__, flush=True)
@@ -927,9 +1055,29 @@ def nasze_pozycje_do_pomiaru(page=None, ile: int = 60) -> list[dict[str, Any]]:
     # Notka jest nasza wlasna trescia i jedyna, ktora ma pelne statystyki;
     # komentarz pod cudzym artykulem oddaje same zera, bo nie jest notka.
     # Limit obcina wiec RESZTE, nie notki.
-    nasze = [x for x in widziane.values() if x["rodzaj"] == "notka"]
-    reszta = [x for x in widziane.values() if x["rodzaj"] != "notka"]
-    return nasze + reszta[-max(0, ile - len(nasze)):]
+    # DRUGI RAZ TEN SAM BLAD, wiec regula jest teraz OGOLNA, nie wyliczona.
+    #
+    # Poprawka wyzej chronila NOTKI po nazwie. Gdy 30 sierpnia doszly artykuly,
+    # wpadly do `reszty` — a poniewaz dopisujemy je PRZED dziennikiem, staly na
+    # jej poczatku i `reszta[-N:]` wycinala wlasnie je. Przebieg na zywo oddawal
+    # 60 pozycji: 32 notki, 27 komentarzy, 1 odpowiedz i ZERO artykulow, mimo ze
+    # archiwum oddawalo piec. Endpoint dzialal, przedrostek `p-` dzialal,
+    # gubil je limit.
+    #
+    # Nasza wlasna tresc nie podlega limitowi. Limit istnieje po to, zeby nie
+    # mierzyc w nieskonczonosc CUDZYCH watkow, w ktorych zostawilismy komentarz.
+    #
+    # `[-0:]` TO CALA LISTA, NIE PUSTA. Ta linijka brzmiala
+    # `reszta[-max(0, ile - len(nasze)):]`, wiec gdy naszych tresci bylo tyle
+    # co limit albo wiecej, wycinek stawal sie `reszta[0:]` i limit przestawal
+    # istniec — akurat wtedy, gdy zaczyna byc potrzebny. Dzis notek jest 12
+    # i to nie boli; przy szescdziesieciu przebieg otwieralby w przegladarce
+    # KAZDY komentarz, jaki kiedykolwiek zostawilismy. Liczymy wiec jawnie.
+    NASZE_RODZAJE = ("artykul", "notka")
+    nasze = [x for x in widziane.values() if x["rodzaj"] in NASZE_RODZAJE]
+    reszta = [x for x in widziane.values() if x["rodzaj"] not in NASZE_RODZAJE]
+    zostalo = max(0, ile - len(nasze))
+    return nasze + (reszta[-zostalo:] if zostalo else [])
 
 
 def dopisz_skutki() -> int:

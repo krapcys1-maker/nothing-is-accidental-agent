@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1437 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1445 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -132,7 +132,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-3003 wierszy, 65 funkcji na poziomie modułu, 0 klas
+3151 wierszy, 66 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -159,6 +159,7 @@
 | `_kiedy(c)` *(wewn.)* | — |
 | `ile_dzis_wystawione()` | Ile notek, komentarzy i polubien poszlo dzisiaj. |
 | `statystyki_pozycji(pozycje)` | Pobiera statystyki NASZYCH tresci — jedna przegladarka na cala liste. |
+| `_artykuly_z_panelu(page, baza)` *(wewn.)* | Nasze artykuly razem ze statystykami — JEDNYM zapytaniem. |
 | `nasze_pozycje_do_pomiaru(page, ile)` | Co wystawilismy i ma wlasny numer — czyli co da sie zmierzyc. |
 | `dopisz_skutki()` | Dopisuje do dziennika, CO Z NASZYCH DZIALAN WYNIKLO. |
 | `odpowiedzi_na_nasze_komentarze(ile)` | Odpowiedzi na NASZE komentarze zostawione pod CUDZYMI tekstami. |
