@@ -905,23 +905,60 @@ def bramka_kandydata(k: dict[str, Any]) -> tuple[bool, str]:
     #
     # Odrzucenie jest OSTATECZNE, wiec kazdy taki fakt przepadl na zawsze.
     decyzja = str(k.get("decision") or "").strip()
-    if len(decyzja.split()) < 2:
-        return False, "nie umiem nazwac, co to sprawia — ani decyzji, ani pomiaru"
-    # Sprawdzamy SYGNAL POZYTYWNY — czy nazwano mechanizm INNY niz decyzja — a
-    # nie obecnosc czasownika decyzyjnego gdziekolwiek w zdaniu. Pierwsza wersja
-    # szukala takze slow decyzyjnych i odrzucila „the tokenizer architecture
-    # forces it; NOBODY CHOSE it", bo zlapala „chose" w zaprzeczeniu. Wzorzec
-    # negatywny na tekscie swobodnym zawsze bedzie tak przegrywal.
-    _NIE_DECYZJA = re.compile(
-        r"\b(measur|tested|scored|benchmark|evaluat|audit|observ|"
-        r"architect|tokeni|context window|arithmetic|by construction|"
-        r"falls out|trade-?off|constraint|forces it|because it is built)", re.I)
-    if not re.search(r"(1[5-9]|20)\d{2}", decyzja):
-        # Brak roku uchodzi WYLACZNIE przy pomiarze, ograniczeniu i kompromisie.
-        # Decyzja bez daty nadal odpada — „ktos kiedys ustalil" nie jest
-        # mechanizmem, tylko zasloneciem tego, ze nie wiadomo kto i kiedy.
-        if not _NIE_DECYZJA.search(decyzja):
-            return False, "decyzja bez daty: %r" % decyzja[:60]
+
+    # MECHANIZM MA BYC OPISANY, NIE WSKAZANY GESTEM — i to jest wlasciwy
+    # rozroznik, ktorego szukalem trzy razy w zlym miejscu.
+    #
+    # Prog szesciu slow, nie dwoch. Zmierzone na zywych danych 30 sierpnia:
+    #   ODPADA (3-4 slowa, machniecie reka):
+    #     „ustalone przez komitet"          — nikt nienazwany, nic konkretnego
+    #     „nikt, tak dziala fizyka"         — wprost brak mechanizmu
+    #   PRZECHODZI (12-20 slow, opis):
+    #     „Providers each choose their own serving stack — hardware, precision,
+    #      batching policy, caching"
+    #     „A face-recognition system returns ranked candidates, never a
+    #      certainty, so a false match is a ranking artefact"
+    #     „Kather and colleagues at Heidelberg measured it on 500+ real ED cases"
+    #
+    # Dlugosc rozdziela je czysto, a lista slow kluczowych nie rozdzielala ich
+    # ani razu: probowalem slow decyzyjnych (zlapala „chose" w zaprzeczeniu) i
+    # slow niedecyzyjnych (przepuscila trzy z pieciu falszywych odrzucen).
+    # Opis mechanizmu po prostu MUSI byc dluzszy niz gest — to wlasnosc rzeczy,
+    # nie slownictwa.
+    if len(decyzja.split()) < 6:
+        return False, ("mechanizm wskazany gestem, nie opisany: %r"
+                       % decyzja[:60])
+    # I jawne przyznanie, ze mechanizmu nie ma. Dluga wersja „nikogo tu nie ma"
+    # przeszlaby przez sam prog dlugosci.
+    if re.search(r"\b(nobody|no one|nothing|not decided by anyone|"
+                 r"nikt|nie zdecydowal)\b", decyzja, re.I):
+        return False, ("nikt tego nie sprawil — to zjawisko, nie mechanizm: %r"
+                       % decyzja[:60])
+    # WYMOG ROKU ZNIESIONY 30 sierpnia 2026, po dwoch nieudanych probach
+    # zwezenia go — i to jest lekcja o metodzie, nie o tej jednej regule.
+    #
+    # Rok byl PROXY NA AKTUALNOSC z czasow, gdy pole nazywalo sie „kto
+    # zdecydowal i kiedy", a jedynym dopuszczalnym mechanizmem byla decyzja.
+    # Dzis aktualnosc mierzy DOKUMENT KONTROLNY (`swiezosc_faktu`): pyta wprost,
+    # co musialoby sie zmienic, zeby twierdzenie przestalo byc prawdziwe, i
+    # sprawdza date tego dokumentu. Trzymanie prymitywnego zamiennika obok
+    # prawdziwego pomiaru to jest sposob, w jaki dorobilismy sie 30 falszywych
+    # odrzucen na 32.
+    #
+    # PROBOWALEM GO ZWEZIC DWA RAZY I DWA RAZY PRZEGRALEM ZE SLOWNIKIEM:
+    #   - wersja z lista slow decyzyjnych odrzucila „the tokenizer architecture
+    #     forces it; NOBODY CHOSE it", bo zlapala „chose" w zaprzeczeniu,
+    #   - wersja z lista slow niedecyzyjnych odrzucila na ZYWYCH danych trzy z
+    #     pieciu nowych kandydatow: „providers each choose their own serving
+    #     stack", „NEDA traded trained humans for a bot", „a face-recognition
+    #     system returns ranked candidates, never a certainty". Same
+    #     ograniczenia i kompromisy — dokladnie material, na ktorym nam zalezy.
+    # Wzorzec slownikowy na tekscie swobodnym zawsze bedzie dziurawy w te
+    # strone, w ktora akurat nie patrzylem. To ta sama wada, co `\byour\b`.
+    #
+    # CO ZOSTAJE ZAMIAST NIEGO: wymog dwoch slow wyzej (zabija „nikt tego nie
+    # zdecydowal"), zlamane przekonanie, skutek w drugiej osobie, sprawdzalnosc
+    # — i dokument kontrolny, ktory robi to, do czego rok byl zastepnikiem.
 
     # BRAMKA 2 — ZLAMANE PRZEKONANIE. Najostrzejsza regula w calym potoku:
     # „wiekszosc nie wie" to NIE JEST przekonanie, tylko niewiedza, a niewiedza
