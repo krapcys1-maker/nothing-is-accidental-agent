@@ -274,5 +274,47 @@ finally:
     stages.INDEKS_KANDYDATOW = _stary_indeks
 
 print()
+print("=== NIEUZYTE KANDYDATURY WRACAJA DO PULI ===")
+# Sciezka artykulu bierze OSIEM, szuka pierwszego bez kolizji i uzywa JEDNEGO.
+# `wez_kandydatow` znaczylo jako zuzyte wszystkie osiem, wiec kazdy przebieg
+# palil siedem oplaconych kandydatur. Zmierzone 30 sierpnia: spizarnia zeszla
+# z 53 wolnych do JEDNEGO w cztery przebiegi testowe.
+_kat3 = pathlib.Path(_tmp2.mkdtemp())
+_st3 = stages.INDEKS_KANDYDATOW
+stages.INDEKS_KANDYDATOW = _kat3 / "i.json"
+try:
+    _w = [{"fact": "Zupelnie inny fakt numer %s o systemach" % litera,
+           "status": "uzyty",
+           "kiedy": config.DATA_PRZESTAWIENIA + "T10:00:00+00:00",
+           "uzyty_kiedy": "x"} for litera in "ABCDE"]
+    stages.INDEKS_KANDYDATOW.write_text(_js2.dumps(_w, ensure_ascii=False),
+                                        encoding="utf-8")
+    _ile = stages.zwroc_kandydatow(_w[1:])
+    _po = _js2.loads(stages.INDEKS_KANDYDATOW.read_text(encoding="utf-8"))
+    _stany = [k["status"] for k in _po]
+    sprawdz("oddaje dokladnie te, ktorych nie uzyto", _ile == 4, _ile)
+    sprawdz("uzyty zostaje uzyty", _stany[0] == "uzyty", _stany)
+    sprawdz("reszta wraca jako nowa", all(s == "nowy" for s in _stany[1:]), _stany)
+    sprawdz("i traci znacznik uzycia",
+            all("uzyty_kiedy" not in k for k in _po[1:]))
+
+    # KONTRDOWOD NA MOJEJ WLASNEJ POMYLCE. Pierwsza wersja dopasowywala po
+    # `_klucz_faktu`, ktory NORMALIZUJE tekst po to, by wykrywac powtorki —
+    # wiec fakty rozniace sie jedna cyfra dzielily klucz i funkcja oddala do
+    # puli takze ten NAPRAWDE uzyty. Zlapane wlasnym testem od razu: oddawala
+    # piec zamiast czterech.
+    _bliskie = [{"fact": "Fakt %d o modelach" % i, "status": "uzyty",
+                 "kiedy": config.DATA_PRZESTAWIENIA + "T10:00:00+00:00"}
+                for i in range(3)]
+    stages.INDEKS_KANDYDATOW.write_text(_js2.dumps(_bliskie, ensure_ascii=False),
+                                        encoding="utf-8")
+    stages.zwroc_kandydatow(_bliskie[1:])
+    _po2 = _js2.loads(stages.INDEKS_KANDYDATOW.read_text(encoding="utf-8"))
+    sprawdz("podobne fakty nie odznaczaja sie nawzajem",
+            _po2[0]["status"] == "uzyty", [k["status"] for k in _po2])
+finally:
+    stages.INDEKS_KANDYDATOW = _st3
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

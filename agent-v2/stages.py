@@ -4522,6 +4522,48 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
     return wziete
 
 
+def zwroc_kandydatow(kandydaci: list[dict[str, Any]]) -> int:
+    """Oddaje do puli kandydatow, ktorych ostatecznie NIE uzyto.
+
+    `wez_kandydatow` znaczy jako uzyte wszystko, co wyda — bo przy notkach
+    wydane naprawde ida do pisania, po kolei, w tym samym przebiegu.
+
+    SCIEZKA ARTYKULU DZIALA INACZEJ i tego nie przewidzialem: bierze osiem,
+    szuka pierwszego, ktory nie powtarza wczesniejszego tematu, i uzywa JEDNEGO.
+    Pozostalych siedem zostawalo oznaczonych jako zuzyte i przepadalo.
+    Zmierzone 30 sierpnia: spizarnia zeszla z 53 wolnych do JEDNEGO w cztery
+    przebiegi testowe — 32 oplacone kandydatury spalone na 4 artykuly.
+
+    Kolizje tez wracaja. Kolizja jest wlasciwoscia PARY tematow, a nie tematu:
+    zderzenie z dzisiejsza notka nie znaczy, ze fakt jest zly, tylko ze dzis nie
+    pasuje. Odrzucenie go na zawsze kosztowaloby drugi raz tyle samo.
+    """
+    if not kandydaci:
+        return 0
+    # PELNA TRESC, NIE `_klucz_faktu`. Klucz normalizuje tekst po to, zeby
+    # wykrywac POWTORKI — dwa fakty o tym samym dostaja ten sam klucz i to jest
+    # jego zaleta. Tutaj byloby to wada: oddawanie do puli po kluczu odznaczylo
+    # by takze kandydata, ktorego naprawde uzyto, bo dzieli klucz z pominietym.
+    # Zlapane wlasnym testem od razu po napisaniu — oddal piec zamiast czterech.
+    tresci = {" ".join(str(k.get("fact") or "").split()) for k in kandydaci}
+    tresci.discard("")
+    if not tresci:
+        return 0
+    indeks = wczytaj_indeks()
+    ile = 0
+    for k in indeks:
+        if k.get("status") != "uzyty":
+            continue
+        if " ".join(str(k.get("fact") or "").split()) in tresci:
+            k["status"] = "nowy"
+            k.pop("uzyty_kiedy", None)
+            ile += 1
+    if ile:
+        _zapisz_indeks(indeks)
+        print("  [indeks] oddane do puli, bo nieuzyte: %d" % ile, flush=True)
+    return ile
+
+
 def stan_indeksu() -> dict[str, int]:
     """Ile mamy zapasu i ile odsialismy — do wypisania przy starcie."""
     indeks = wczytaj_indeks()

@@ -249,8 +249,13 @@ def wybierz_fakt(conn, run_id, ile: int = 8) -> dict:
             print("          zderza sie z: %s"
                   % " ".join(str(kolizja).split())[:80], flush=True)
             continue
+        # RESZTA WRACA DO PULI. Bierzemy osiem, uzywamy jednego — a
+        # `wez_kandydatow` oznaczylo jako zuzyte wszystkie osiem. Bez tego
+        # kazdy przebieg artykulu palil siedem oplaconych kandydatur.
+        stages.zwroc_kandydatow([x for x in fakty if x is not f])
         return f
     print("  [temat] wszystko koliduje — biore pierwszy", flush=True)
+    stages.zwroc_kandydatow(fakty[1:])
     return fakty[0]
 
 
