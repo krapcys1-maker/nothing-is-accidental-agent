@@ -23,6 +23,39 @@ genuinely establishes. Each must carry the exact excerpt that supports it and th
 URL it came from. If you cannot quote the support verbatim, it is not confirmed.
 Each claim at most {max_claim_chars} characters.
 
+**THE EXCERPT MUST CARRY THE WHOLE CLAIM, INCLUDING ITS CIRCUMSTANCE.** Not just
+the subject — the timing, the exclusivity, the obligation and the quantity too.
+This is where claims quietly grow, and it is measured: four cards in ninety-three
+claims added a circumstance the quote does not contain.
+
+    claim : "...must review another submission BEFORE RESULTS ARE RELEASED"
+    quote : "Each submitter is required to review at least one other submission."
+            — true, and says nothing about when
+
+    claim : "the numbers appear because STATE LAWS REQUIRED THEM, passing in 39 states"
+    quote : "The laws eventually passed in 39 states."
+            — which laws, requiring what, is not in the sentence
+
+    claim : "...and will apply to ONLY A SMALL PORTION of deepfakes"
+    quote : "...will play a role in reducing the number of deep fakes circulating,
+            especially those created by users with unsophisticated software"
+            — a different statement wearing the same coat
+
+    claim : "BEFORE THE FINAL VOTE, the screenwriters' federation insisted..."
+    quote : the federation's position, with no date and no vote in it
+
+Every one of those claims is probably true somewhere in its document. That is
+exactly the trap: the check passes because the quote EXISTS, and nobody notices
+that it does not REACH. In August this cost us an article — a lobbyists' block
+quote printed as the committee's own finding, where every fragment was genuinely
+in the document.
+
+So before writing a claim, read your own quote back and ask: **if this sentence
+were all I had, would it still say what I just wrote?** If the answer needs the
+rest of the page, either quote the part that carries the circumstance, or drop
+the circumstance from the claim. A narrower claim that its quote fully supports
+is worth more than a fuller one that leans on a document the reader cannot see.
+
 **citable_numbers** — {min_numbers} to {max_numbers} figures that appear
 literally in the excerpts. Copy the digits exactly as written. Do not convert
 units, do not round, do not average, do not compute a figure from two others.

@@ -173,7 +173,7 @@
 {{"when": "<roughly when>", "what_happened": "<what people saw, in one sentence>", "what_changed": "<the rule or practice that came out of it, or 'nothing'>"}}
 ```
 
-#### `synteza.md` (116 wierszy)
+#### `synteza.md` (149 wierszy)
 
 **Pola wejściowe:** `evidence_json`, `max_claim_chars`, `max_confirmed`, `max_contradictions`, `max_numbers`, `max_uncertain`, `min_confirmed`, `min_numbers`, `question`
 
