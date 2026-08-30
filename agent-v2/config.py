@@ -1358,6 +1358,35 @@ OKNO_PROMOCJI_DNI = 7
 # pisma nie znikaja same, tylko czekaja w kolejce, az cos po nie siegnie.
 DATA_PRZESTAWIENIA = "2026-08-25"
 
+
+# --- BANK POMYSLOW: BUFOR, NIE MAGAZYN --------------------------------------
+#
+# Wlasciciel, 30 sierpnia: „nie moze byc tak, ze mamy za duzo tematow w banku,
+# bo sie okaze, ze po czasie beda same stare tematy dawac, bo wszystko bedzie
+# z banku szlo, bo sie nazbieralo".
+#
+# Ryzyko jest prawdziwe i sam je stworzylem, podlaczajac bank. Uzupelnianie
+# rusza dopiero, gdy bank pustoszeje — wiec przy duzym zapasie `znajdz_
+# ciekawostki` nie odpala sie NIGDY i zaden nowy temat nie wchodzi. Ranking
+# sortuje po sile, wiec mocny temat sprzed dwoch tygodni bezterminowo
+# wyprzedza slabszy, ale DZISIEJSZY. Bank kostnieje.
+#
+# Zmierzone: bank mial 53 wolne pozycje przy zuzyciu pieciu na dobe. Dziesiec
+# dni zapasu — dokladnie ten stan.
+#
+# SUFIT ZAPASU. Powyzej tej liczby nie szukamy nowych faktow. Cztery doby
+# to dosc, zeby wiekszosc przebiegow nie placila za szukanie, i za malo, zeby
+# bank zaczal zyc wlasnym zyciem. Oszczednosc i tak zostaje: bez banku kazdy
+# z pieciu przebiegow placil za wlasne szukanie.
+BANK_MAKS_WOLNYCH = 20
+
+# TERMIN WAZNOSCI W BANKU, liczony od dnia dopisania — osobny od wieku ZRODLA.
+# To sa dwa rozne pytania: dokument kontrolny mowi, czy fakt jest nadal
+# prawdziwy, a to mowi, czy jest jeszcze AKTUALNY jako temat. Fakt o modelu
+# sprzed tygodnia bywa prawdziwy i martwy zarazem — korpus kanalow obraca sie
+# w dniach, wiec tydzien to w tej dziedzinie zamierzchlosc.
+BANK_MAKS_DNI = 7
+
 # MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu.
 #
 # Powod jest w NOTE_TYPES przy samym typie: wszystkie pozostale wymagaja karty

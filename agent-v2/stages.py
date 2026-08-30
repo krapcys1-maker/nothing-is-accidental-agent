@@ -892,6 +892,14 @@ def znajdz_ciekawostki(
     cztery z pięciu notek dziennie są właśnie takie. Bez tego etapu jedyne
     źródło to pamięć modelu — czyli dokładnie to, co wycięliśmy z komentarzy.
     """
+    # NIE DOKLADAMY DO PELNEGO BANKU. Patrz `bank_pelny`: bez tego zapas rosnie
+    # bez konca, a przy duzym zapasie nowe tematy nie wchodza wcale, bo
+    # uzupelnianie odpala sie tylko przy pustce.
+    if bank_pelny():
+        print("  [ciekawostki] bank pelny (>=%d wolnych) — nie szukam"
+              % config.BANK_MAKS_WOLNYCH, flush=True)
+        return []
+
     zuzyte = wczytaj_zuzyte()
     import random
 
@@ -4448,6 +4456,13 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]]) -> dict[str, int]:
             "status": "nowy" if ok else "odrzucony",
             "powod": powod,
             "kiedy": db.now(),
+            # TERMIN PRZYDATNOSCI WPISANY WPROST, z data i godzina — decyzja
+            # wlasciciela z 30 sierpnia. Wczesniej liczylem go w locie z daty
+            # dopisania, co dzialalo tak samo, ale bylo NIEWIDOCZNE: przy
+            # recznym przegladzie banku nie dalo sie powiedziec, kiedy co
+            # znika, bez liczenia w glowie. Zapisany termin widac, da sie go
+            # ustawic rozny dla roznych tematow i tlumaczy sie sam.
+            "wazny_do": _termin_waznosci(),
         })
         znane.add(klucz)
         licznik["przyjete" if ok else "odrzucone"] += 1
@@ -4499,8 +4514,17 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
     # Przeterminowany dostaje wlasny status, nie „uzyty": nie zostal wykorzystany
     # i nie ma udawac, ze byl. Odrzucenie jest trwale, bo fakt bedzie tylko
     # starszy — a przy okazji widac w indeksie, ile materialu zjada leżakowanie.
+    # TERMIN WAZNOSCI W BANKU — osobny od wieku ZRODLA. Dokument kontrolny mowi,
+    # czy fakt jest nadal PRAWDZIWY; to mowi, czy jest jeszcze AKTUALNY jako
+    # temat. Fakt sprzed tygodnia bywa prawdziwy i martwy zarazem. Bez tego
+    # bank kostnieje: mocny stary temat bezterminowo wyprzedza slabszy dzisiejszy.
     swiezi, przeterminowani = [], []
     for k in wolni:
+        if _po_terminie(k):
+            przeterminowani.append(
+                (k, "po terminie przydatnosci (%s)"
+                    % (k.get("wazny_do") or "termin liczony z daty dopisania")))
+            continue
         wolno, powod = swiezosc_faktu(k)
         (swiezi if wolno else przeterminowani).append((k, powod))
     if przeterminowani:
@@ -4624,6 +4648,54 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
     print("  [bank] ocenione %d, wyrzucone %d, zostaje %d"
           % (len(wolni), wyrzucone, len(wolni) - wyrzucone), flush=True)
     return {"ocenione": len(wolni), "wyrzucone": wyrzucone}
+
+
+def _termin_waznosci(dni: int | None = None) -> str:
+    """Kiedy ta kandydatura przestaje byc tematem. Data z godzina, w UTC."""
+    from datetime import datetime as _d, timedelta as _td, timezone as _tz
+    ile = config.BANK_MAKS_DNI if dni is None else dni
+    return (_d.now(_tz.utc) + _td(days=ile)).strftime("%Y-%m-%d %H:%M")
+
+
+def _po_terminie(k: dict[str, Any]) -> bool:
+    """Czy kandydatura jest juz po swoim terminie przydatnosci.
+
+    Wpisy sprzed tej zmiany terminu nie maja — dla nich liczymy go ze starej
+    reguly (dzien dopisania + `BANK_MAKS_DNI`), zeby nie zyly wiecznie tylko
+    dlatego, ze powstaly wczesniej.
+    """
+    from datetime import datetime as _d, timedelta as _td, timezone as _tz
+    teraz = _d.now(_tz.utc).strftime("%Y-%m-%d %H:%M")
+    termin = str(k.get("wazny_do") or "")
+    if not termin:
+        dopisane = str(k.get("kiedy") or "")[:10]
+        if not dopisane:
+            return False
+        try:
+            termin = (_d.strptime(dopisane, "%Y-%m-%d")
+                      + _td(days=config.BANK_MAKS_DNI)).strftime("%Y-%m-%d %H:%M")
+        except ValueError:
+            return False
+    return termin < teraz
+
+
+def bank_pelny() -> bool:
+    """Czy zapas wystarczy, zeby NIE placic za nowe szukanie.
+
+    Bank ma byc BUFOREM, nie magazynem. Powyzej sufitu nie dokladamy, bo
+    inaczej rosnie bez konca i po tygodniu wszystko idzie ze starych zapasow —
+    uzupelnianie odpala sie tylko przy pustce, wiec duzy bank znaczy, ze nowe
+    tematy nie wchodza WCALE.
+
+    Liczymy tylko to, co naprawde da sie wziac: wolne, po dacie przestawienia
+    konta i w terminie waznosci banku. Zapas z samych przeterminowanych nie
+    jest zapasem.
+    """
+    ile = sum(1 for k in wczytaj_indeks()
+              if k.get("status") == "nowy"
+              and str(k.get("kiedy") or "")[:10] >= config.DATA_PRZESTAWIENIA
+              and not _po_terminie(k))
+    return ile >= config.BANK_MAKS_WOLNYCH
 
 
 def zwroc_kandydatow(kandydaci: list[dict[str, Any]]) -> int:

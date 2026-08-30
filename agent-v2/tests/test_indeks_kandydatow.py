@@ -316,5 +316,68 @@ finally:
     stages.INDEKS_KANDYDATOW = _st3
 
 print()
+print("=== BANK JEST BUFOREM, NIE MAGAZYNEM ===")
+# WLASCICIEL, 30 sierpnia: „nie moze byc tak, ze mamy za duzo tematow w banku,
+# bo sie okaze, ze po czasie beda same stare tematy dawac, bo wszystko bedzie
+# z banku szlo, bo sie nazbieralo".
+#
+# Ryzyko bylo prawdziwe i powstalo przy podlaczaniu banku: uzupelnianie rusza
+# dopiero przy pustce, wiec duzy zapas znaczy, ze NOWE TEMATY NIE WCHODZA
+# WCALE, a ranking po sile bezterminowo stawia mocny stary temat przed
+# slabszym, ale dzisiejszym. Zmierzone: bank mial 53 wolne pozycje przy
+# zuzyciu pieciu na dobe — dziesiec dni zapasu.
+from datetime import datetime as _dt, timedelta as _tdl, timezone as _tzn  # noqa: E402
+
+_kat4 = pathlib.Path(_tmp2.mkdtemp())
+_st4 = stages.INDEKS_KANDYDATOW
+stages.INDEKS_KANDYDATOW = _kat4 / "i.json"
+try:
+    _teraz = _dt.now(_tzn.utc)
+
+    def _kb(fakt, dni_do_konca):
+        return {"fact": fakt, "status": "nowy",
+                "kiedy": config.DATA_PRZESTAWIENIA + "T10:00:00+00:00",
+                "wazny_do": (_teraz + _tdl(days=dni_do_konca)).strftime(
+                    "%Y-%m-%d %H:%M")}
+
+    # TERMIN PRZYDATNOSCI WPISANY WPROST, z data i godzina.
+    _termin = stages._termin_waznosci()
+    sprawdz("termin ma date i godzine",
+            len(_termin) == 16 and _termin[4] == "-" and _termin[13] == ":",
+            _termin)
+    sprawdz("i lezy w przyszlosci o BANK_MAKS_DNI",
+            _termin > _teraz.strftime("%Y-%m-%d %H:%M"), _termin)
+
+    stages.INDEKS_KANDYDATOW.write_text(_js2.dumps([
+        _kb("Wazny jeszcze trzy dni o modelach jezykowych", 3),
+        _kb("Wygasl wczoraj o systemach uczacych sie", -1),
+    ], ensure_ascii=False), encoding="utf-8")
+    _w = [x["fact"] for x in stages.wez_kandydatow(10)]
+    sprawdz("po terminie nie wychodzi z banku",
+            _w == ["Wazny jeszcze trzy dni o modelach jezykowych"], _w)
+    _po = _js2.loads(stages.INDEKS_KANDYDATOW.read_text(encoding="utf-8"))
+    _stan = {k["fact"][:12]: k["status"] for k in _po}
+    sprawdz("i dostaje status przeterminowany",
+            _stan.get("Wygasl wczor") == "przeterminowany", _stan)
+
+    # SUFIT ZAPASU: powyzej niego nie dokladamy, zeby bank nie rosl bez konca.
+    stages.INDEKS_KANDYDATOW.write_text(_js2.dumps(
+        [_kb("Fakt numer %d o rozmaitych systemach" % i, 3)
+         for i in range(config.BANK_MAKS_WOLNYCH + 2)],
+        ensure_ascii=False), encoding="utf-8")
+    sprawdz("pelny bank jest rozpoznany", stages.bank_pelny())
+
+    # KONTRDOWOD: same przeterminowane to NIE jest zapas — inaczej sufit
+    # zablokowalby uzupelnianie akurat wtedy, gdy bank jest martwy.
+    stages.INDEKS_KANDYDATOW.write_text(_js2.dumps(
+        [_kb("Stary fakt numer %d o systemach" % i, -1)
+         for i in range(config.BANK_MAKS_WOLNYCH + 5)],
+        ensure_ascii=False), encoding="utf-8")
+    sprawdz("bank z samych przeterminowanych NIE jest pelny",
+            not stages.bank_pelny())
+finally:
+    stages.INDEKS_KANDYDATOW = _st4
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
