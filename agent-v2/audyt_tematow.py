@@ -226,7 +226,7 @@ def main() -> int:
         print("  z kanalow %d z %d (%.0f%%), prog %.0f%%"
               % (len(zakotw), len(zywi), udzial,
                  100 * config.SKAUT_UDZIAL_Z_KANALOW))
-        kanaly = collections.Counter(k.get("kanal_zrodlowy") for k in zakotw)
+        kanaly = Counter(k.get("kanal_zrodlowy") for k in zakotw)
         for nazwa, ile in kanaly.most_common(6):
             print("    %-22s %d" % (nazwa or "(bez nazwy)", ile))
         werdykt("bank trzyma prog kotwic",
