@@ -1032,6 +1032,21 @@ def main() -> int:
                 print(f"  [awaria] druga runda padla ({exc}) — pisze z tego, co jest",
                       flush=True)
 
+        # DOPIERO TERAZ PUSTY KORPUS KONCZY PRZEBIEG, i to jest cala roznica.
+        #
+        # Wczesniej wyjatek leciał wewnatrz `stages.fetch`, wiec druga runda
+        # powyzej byla NIEOSIAGALNA — zabezpieczenie nie dzialalo dokladnie
+        # wtedy, gdy bylo najbardziej potrzebne. Przebieg 91 oddal cztery
+        # zrodla, same pierwotne, wszystkie padly na blokadzie, i umarl zamiast
+        # dobrac inne.
+        #
+        # Konczymy jawnie i bez wyjatku: research jest oplacony, wiec przebieg
+        # ma sie zamknac zapisanym powodem, a nie sladem stosu.
+        if not corpus:
+            print("\n!! po dwoch rundach korpus jest pusty — nie ma z czego"
+                  " pisac. Konce przebieg bez artykulu.", flush=True)
+            return _done(conn, run_id, "fetch")
+
         if args.stop_after == stage:
             return _done(conn, run_id, stage)
 

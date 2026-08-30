@@ -3012,6 +3012,11 @@ def _dobierz_przegladarka(conn, run_id: int, brakujace: list[dict[str, Any]],
     return odzyskane
 
 
+# Odpowiedzi, ktore znacza „nie wpuszczam TEGO KLIENTA", a nie „tego nie ma".
+# Przy nich warto sprobowac zwykla przegladarka; przy 404 nie ma czego probowac.
+_DO_PONOWIENIA = ("HTTP 401", "HTTP 403", "HTTP 429", "HTTP 503", "HTTP 502")
+
+
 def fetch(
     conn: sqlite3.Connection, run_id: int, sources: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -3079,10 +3084,36 @@ def fetch(
                 entry = dict(source)
                 entry["text"] = text
                 fetched.append(entry)
-            elif reason and reason.startswith("za mało treści"):
-                # NIE spisujemy na straty: strona moze byc rysowana JavaScriptem,
-                # a zwykly klient HTTP widzi wtedy pusty szkielet. Do drugiego
-                # podejscia w przegladarce.
+            elif reason and (reason.startswith("za mało treści")
+                             or reason in _DO_PONOWIENIA
+                             or reason.endswith("Error")):
+                # NIE spisujemy na straty. Dwa rozne powody, jedno lekarstwo:
+                #
+                # „za malo tresci" — strona moze byc rysowana JavaScriptem, a
+                # zwykly klient HTTP widzi wtedy pusty szkielet.
+                #
+                # BLOKADA (403/401/429/503) — ZLAPANE ZYWYM PRZEBIEGIEM 30
+                # sierpnia i to jest wazniejsza polowa. Odkad dyskoveria
+                # przestala dopychac liste omowieniami i oddaje SAME DOKUMENTY,
+                # trafia prosto w hosty, ktore blokuja najostrzej: SSRN, CanLII,
+                # Stanford Law, opencasebook. Przebieg oddal cztery zrodla, same
+                # pierwotne — i wszystkie cztery padly, trzy na 403. Poprawiajac
+                # JAKOSC zrodel, pogorszylem SKUTECZNOSC pobierania.
+                #
+                # Zmierzone wczesniej na 28 archiwalnych blokadach: przegladarka
+                # odzyskuje 7%. Malo — ale odlozylem te poprawke wlasnie na tej
+                # liczbie, a teraz widac, ze liczylem ja na zlym materiale.
+                # Tamte hosty byly z epoki przedmiotow; te sa tym, po co research
+                # w ogole istnieje, a jedno odzyskane orzeczenie (283 tys. znakow)
+                # ratuje caly przebieg. Koszt jest bliski zeru: to TA SAMA sesja
+                # przegladarki, ktora i tak sie odpala.
+                #
+                # GRANICA ZOSTAJE: jesli strona MOWI, ze nie zyczy sobie automatu
+                # (`REFUSAL_PHRASES`), przyjmujemy to takze w przegladarce —
+                # sprawdza to `_dobierz_przegladarka`. Uzywamy zwyklej
+                # przegladarki, tej samej, ktorej uzylby czlowiek: bez podmiany
+                # tozsamosci, bez posrednikow, bez omijania captcha. 404 nie
+                # ponawiamy, bo tam naprawde niczego nie ma.
                 do_przegladarki.append(source)
 
     fetched.extend(_dobierz_przegladarka(conn, run_id, do_przegladarki, fetched))
@@ -3097,7 +3128,20 @@ def fetch(
             flush=True,
         )
     if not fetched:
-        raise ValueError("nie pobrano ani jednej strony — nie ma z czego pisać")
+        # NIE RZUCAMY WYJATKU, i to jest poprawka z zywego przebiegu 30 sierpnia.
+        #
+        # `run.py` ma tuz za tym wywolaniem druga runde dyskoverii — wlasnie na
+        # wypadek chudego albo bezwartosciowego korpusu. Wyjatek leci JEDNAK
+        # WEWNATRZ tej funkcji, wiec sterowanie nigdy tam nie wracalo:
+        # zabezpieczenie bylo nieosiagalne dokladnie w chwili, w ktorej bylo
+        # najbardziej potrzebne. Przebieg 91 oddal cztery zrodla, same
+        # pierwotne, wszystkie cztery padly na blokadzie — i umarl, zamiast
+        # dobrac inne.
+        #
+        # Pusta lista jest uczciwa odpowiedzia: „nie mam nic". Co z tym zrobic,
+        # decyduje ten, kto wolal — a on ma na to plan.
+        print("  [pobranie] ZERO stron — oddaje pusto, druga runda zdecyduje",
+              flush=True)
     return fetched
 
 

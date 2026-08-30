@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1394 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1409 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-5425 wierszy, 103 funkcji na poziomie modułu, 0 klas
+5469 wierszy, 103 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
