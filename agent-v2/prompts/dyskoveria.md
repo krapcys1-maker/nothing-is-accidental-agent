@@ -1,25 +1,50 @@
-Search the web, then return {max_results} sources for this question:
+Search the web, then return sources for this question:
 
 {question}
 
 Search first — you do not know which URLs exist, and any address from memory
 will be discarded.
 
+## What you are counted on: PRIMARY DOCUMENTS, not a full list
+
+**You are not filling {max_results} slots.** {max_results} is a ceiling, not a
+target, and a short list of records beats a long list padded with commentary.
+
+This is measured, not a preference. Across thirteen runs: the ones that searched
+least came back with 7.5 sources of which **5.1 were primary**; the ones that
+searched most came back with 10.0 sources of which **3.0 were primary**. Seventy
+per cent more searching bought forty per cent FEWER records. The pattern is
+plain — once the documents run out, extra searching goes into padding the list
+with people writing about the documents.
+
+The best run in that set found ten primary sources in eleven searches. The worst
+found one primary in twenty-five.
+
+So:
+
+- **Return every primary document you found, and stop.** Six primary sources and
+  nothing else is an excellent answer.
+- **Add a supporting source only when it does something a record cannot** —
+  explains why the rule exists, or supplies a figure the record does not carry.
+- **Never add a source to reach a number.** A commentary included because the
+  list looked short is worse than a shorter list: it costs a fetch, it competes
+  for the writer's attention, and it is where invented detail gets in.
+
 **Run at most {max_searches} searches, then stop and write the JSON.** Searching
-without ever answering is a failed run: the answer is the only thing that counts,
-and partial sources are worth more than none. If you have not found everything
-after {max_searches} searches, return what you have.
+without ever answering is a failed run. If you have not found everything after
+{max_searches} searches, return what you have.
 
 Requirements:
 
-1. At least {min_primary} sources must be PRIMARY — the record itself (a
-   regulation, standard, filed report, dataset, study, patent, official
-   statistic, or a company statement about its own products), not an article
-   about the record. A catalogue or reseller listing the document is not the
-   document.
+1. **At least {min_primary} sources must be PRIMARY, and primary sources should
+   be the MAJORITY of what you return** — the record itself (a regulation,
+   standard, filed report, dataset, study, patent, official statistic, or a
+   company statement about its own products), not an article about the record.
+   A catalogue or reseller listing the document is not the document.
 2. At least {min_why} sources must explain WHY the rule or practice exists — an
    impact assessment, consultation, regulator decision, audit, evaluation or
-   peer-reviewed paper. Vendor and consultancy pages do not count.
+   peer-reviewed paper. Vendor and consultancy pages do not count. A primary
+   record can satisfy this too, and often does.
 3. At least one source must carry figures.
 4. Use at least three different organisations. Any country, any language.
 5. Free, no login, readable as HTML or text. Skip these hosts, they block

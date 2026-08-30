@@ -3153,16 +3153,33 @@ def hosty_ktore_nigdy_nie_dzialaly(
 
 
 def discovery(
-    conn: sqlite3.Connection, run_id: int, question: str, recent_domains: list[str]
+    conn: sqlite3.Connection, run_id: int, question: str,
+    recent_domains: list[str], tylko_pierwotne: bool = False,
 ) -> list[dict[str, Any]]:
-    """Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy)."""
+    """Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy).
+
+    `tylko_pierwotne` sluzy DRUGIEJ RUNDZIE. Zmierzone na trzynastu przebiegach:
+    dyskoveria dopycha liste do dziesieciu pozycji, a gdy dokumenty pierwotne sie
+    koncza, dopycha ja omowieniami — przebiegi z najdluzszym szukaniem mialy
+    SREDNIO 3,0 zrodla pierwotne wobec 5,1 przy najkrotszym. Druga runda ma wiec
+    dobierac REKORDY, a nie kolejne teksty o rekordach.
+    """
     martwe = hosty_ktore_nigdy_nie_dzialaly(conn)
     if martwe:
         print("  [dyskoveria] pomijam hosty bez ani jednego udanego pobrania: %s"
               % ", ".join(martwe[:8]), flush=True)
     prompt = _prompt(
         "dyskoveria.md",
-        question=question,
+        question=(question if not tylko_pierwotne
+                  else NOWA_LINIA.join([
+                      question, "",
+                      "SECOND ROUND — WE ALREADY HAVE COMMENTARY."
+                      " Return PRIMARY records only:"
+                      " the regulation, the filing, the dataset,"
+                      " the study, the standard, the company's own statement."
+                      " A source that is not the record itself is of no use"
+                      " here, however good it is. Fewer is fine; none is an"
+                      " honest answer."])),
         max_results=config.DISCOVERY_MAX_RESULTS,
         max_searches=config.DISCOVERY_MAX_SEARCHES,
         min_primary=config.MIN_PRIMARY_SOURCES,

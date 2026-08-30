@@ -995,14 +995,28 @@ def main() -> int:
         #
         # Druga dyskoveria kosztuje ~$0,28. Artykul napisany z trzech zrodel
         # kosztuje caly przebieg i wychodzi cienki, wiec to sie oplaca.
-        if len(corpus) < config.MIN_ZRODEL_DO_PISANIA:
-            print(f"\n-- za chudo ({len(corpus)} < {config.MIN_ZRODEL_DO_PISANIA})"
-                  " — druga runda --", flush=True)
+        # DRUGA RUNDA TAKZE PRZY BRAKU REKORDOW, nie tylko przy pustym korpusie.
+        #
+        # Zmierzone na trzynastu przebiegach z jednym wywolaniem dyskoverii:
+        # korpus bywa PELNY i jednoczesnie bezwartosciowy. Przebieg z 25
+        # wyszukiwaniami oddal dziewiec pobranych zrodel, z czego JEDNO
+        # pierwotne; inny siedem, z czego jedno. Warunek liczacy same sztuki
+        # tego nie widzi — dziewiec to duzo wiecej niz prog czterech, wiec druga
+        # runda nie odpalala sie nigdy, a pisarz dostawal dziewiec tekstow O
+        # dokumencie i ani jednego dokumentu.
+        pierwotnych = sum(1 for s in corpus if s.get("class") == "PRIMARY")
+        za_chudo = len(corpus) < config.MIN_ZRODEL_DO_PISANIA
+        bez_rekordow = pierwotnych < config.MIN_PRIMARY_SOURCES
+        if za_chudo or bez_rekordow:
+            print(f"\n-- druga runda: zrodel {len(corpus)}"
+                  f"/{config.MIN_ZRODEL_DO_PISANIA}, pierwotnych"
+                  f" {pierwotnych}/{config.MIN_PRIMARY_SOURCES} --", flush=True)
             try:
                 juz_mamy = {s.get("host") or s.get("url", "") for s in corpus}
                 dodatkowe = [
                     s for s in stages.discovery(conn, run_id, topic["question"],
-                                                recent)
+                                                recent,
+                                                tylko_pierwotne=bez_rekordow)
                     if (s.get("host") or s.get("url", "")) not in juz_mamy
                 ]
                 if dodatkowe:

@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1380 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1394 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-5408 wierszy, 103 funkcji na poziomie modułu, 0 klas
+5425 wierszy, 103 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -93,7 +93,7 @@
 | `fetch(conn, run_id, sources)` | Etap 4 — pobranie stron. Zwykły HTTP, żadnego modelu, 0 USD. |
 | `_host(url)` *(wewn.)* | — |
 | `hosty_ktore_nigdy_nie_dzialaly(conn, min_prob)` | Hosty, ktore probowalismy >=2 razy i ANI RAZU sie nie udalo. |
-| `discovery(conn, run_id, question, recent_domains)` | Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy). |
+| `discovery(conn, run_id, question, recent_domains, tylko_pierwotne)` | Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy). |
 | `feasibility(conn, run_id, topics)` | Etap 2 — tani odsiew przed drogą dyskoverią (DeepSeek). |
 | `podsumowanie_dzialan(dni)` | Ile czego WYSZLO w ostatnich `dni` dniach, wobec normy z configu. |
 | `powody_porazek(dni)` | Dlaczego dzialania sie NIE UDALY — pogrupowane, najczestsze pierwsze. |

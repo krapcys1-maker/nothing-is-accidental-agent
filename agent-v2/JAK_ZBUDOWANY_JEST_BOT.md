@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **19 plików**, 17 096 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **19 plików**, 17 127 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 62 zestawów
-testów, 1659 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 63 zestawów
+testów, 1677 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1380 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1394 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-5408 wierszy, 103 funkcji na poziomie modułu, 0 klas
+5425 wierszy, 103 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -235,7 +235,7 @@ wiec nie da sie go rozjechac z kodem.
 | `fetch(conn, run_id, sources)` | Etap 4 — pobranie stron. Zwykły HTTP, żadnego modelu, 0 USD. |
 | `_host(url)` *(wewn.)* | — |
 | `hosty_ktore_nigdy_nie_dzialaly(conn, min_prob)` | Hosty, ktore probowalismy >=2 razy i ANI RAZU sie nie udalo. |
-| `discovery(conn, run_id, question, recent_domains)` | Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy). |
+| `discovery(conn, run_id, question, recent_domains, tylko_pierwotne)` | Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy). |
 | `feasibility(conn, run_id, topics)` | Etap 2 — tani odsiew przed drogą dyskoverią (DeepSeek). |
 | `podsumowanie_dzialan(dni)` | Ile czego WYSZLO w ostatnich `dni` dniach, wobec normy z configu. |
 | `powody_porazek(dni)` | Dlaczego dzialania sie NIE UDALY — pogrupowane, najczestsze pierwsze. |
@@ -6405,16 +6405,33 @@ def obraz(
 <!--KOD:stages.discovery-->
 ```python
 def discovery(
-    conn: sqlite3.Connection, run_id: int, question: str, recent_domains: list[str]
+    conn: sqlite3.Connection, run_id: int, question: str,
+    recent_domains: list[str], tylko_pierwotne: bool = False,
 ) -> list[dict[str, Any]]:
-    """Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy)."""
+    """Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy).
+
+    `tylko_pierwotne` sluzy DRUGIEJ RUNDZIE. Zmierzone na trzynastu przebiegach:
+    dyskoveria dopycha liste do dziesieciu pozycji, a gdy dokumenty pierwotne sie
+    koncza, dopycha ja omowieniami — przebiegi z najdluzszym szukaniem mialy
+    SREDNIO 3,0 zrodla pierwotne wobec 5,1 przy najkrotszym. Druga runda ma wiec
+    dobierac REKORDY, a nie kolejne teksty o rekordach.
+    """
     martwe = hosty_ktore_nigdy_nie_dzialaly(conn)
     if martwe:
         print("  [dyskoveria] pomijam hosty bez ani jednego udanego pobrania: %s"
               % ", ".join(martwe[:8]), flush=True)
     prompt = _prompt(
         "dyskoveria.md",
-        question=question,
+        question=(question if not tylko_pierwotne
+                  else NOWA_LINIA.join([
+                      question, "",
+                      "SECOND ROUND — WE ALREADY HAVE COMMENTARY."
+                      " Return PRIMARY records only:"
+                      " the regulation, the filing, the dataset,"
+                      " the study, the standard, the company's own statement."
+                      " A source that is not the record itself is of no use"
+                      " here, however good it is. Fewer is fine; none is an"
+                      " honest answer."])),
         max_results=config.DISCOVERY_MAX_RESULTS,
         max_searches=config.DISCOVERY_MAX_SEARCHES,
         min_primary=config.MIN_PRIMARY_SOURCES,
@@ -8906,31 +8923,56 @@ and under the old test every one of them failed the contract on the way out.
 
 #### `prompts/dyskoveria.md`
 
-**92 wierszy.** Pola wejsciowe: `blocked_hosts`, `max_results`, `max_searches`, `min_primary`, `min_why`, `ostatnie_domeny`, `question`
+**117 wierszy.** Pola wejsciowe: `blocked_hosts`, `max_results`, `max_searches`, `min_primary`, `min_why`, `ostatnie_domeny`, `question`
 
 ````markdown
-Search the web, then return {max_results} sources for this question:
+Search the web, then return sources for this question:
 
 {question}
 
 Search first — you do not know which URLs exist, and any address from memory
 will be discarded.
 
+## What you are counted on: PRIMARY DOCUMENTS, not a full list
+
+**You are not filling {max_results} slots.** {max_results} is a ceiling, not a
+target, and a short list of records beats a long list padded with commentary.
+
+This is measured, not a preference. Across thirteen runs: the ones that searched
+least came back with 7.5 sources of which **5.1 were primary**; the ones that
+searched most came back with 10.0 sources of which **3.0 were primary**. Seventy
+per cent more searching bought forty per cent FEWER records. The pattern is
+plain — once the documents run out, extra searching goes into padding the list
+with people writing about the documents.
+
+The best run in that set found ten primary sources in eleven searches. The worst
+found one primary in twenty-five.
+
+So:
+
+- **Return every primary document you found, and stop.** Six primary sources and
+  nothing else is an excellent answer.
+- **Add a supporting source only when it does something a record cannot** —
+  explains why the rule exists, or supplies a figure the record does not carry.
+- **Never add a source to reach a number.** A commentary included because the
+  list looked short is worse than a shorter list: it costs a fetch, it competes
+  for the writer's attention, and it is where invented detail gets in.
+
 **Run at most {max_searches} searches, then stop and write the JSON.** Searching
-without ever answering is a failed run: the answer is the only thing that counts,
-and partial sources are worth more than none. If you have not found everything
-after {max_searches} searches, return what you have.
+without ever answering is a failed run. If you have not found everything after
+{max_searches} searches, return what you have.
 
 Requirements:
 
-1. At least {min_primary} sources must be PRIMARY — the record itself (a
-   regulation, standard, filed report, dataset, study, patent, official
-   statistic, or a company statement about its own products), not an article
-   about the record. A catalogue or reseller listing the document is not the
-   document.
+1. **At least {min_primary} sources must be PRIMARY, and primary sources should
+   be the MAJORITY of what you return** — the record itself (a regulation,
+   standard, filed report, dataset, study, patent, official statistic, or a
+   company statement about its own products), not an article about the record.
+   A catalogue or reseller listing the document is not the document.
 2. At least {min_why} sources must explain WHY the rule or practice exists — an
    impact assessment, consultation, regulator decision, audit, evaluation or
-   peer-reviewed paper. Vendor and consultancy pages do not count.
+   peer-reviewed paper. Vendor and consultancy pages do not count. A primary
+   record can satisfy this too, and often does.
 3. At least one source must carry figures.
 4. Use at least three different organisations. Any country, any language.
 5. Free, no login, readable as HTML or text. Skip these hosts, they block
