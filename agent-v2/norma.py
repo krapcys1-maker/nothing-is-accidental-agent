@@ -80,12 +80,106 @@ def _znak(ile: float, norma: float) -> str:
     return "!" if proc >= config.PROG_ALARMU_WOLUMENU else "!!"
 
 
+def slad(dni: int) -> int:
+    """Gdzie dokladnie psuja sie publikacje — wg pozycji w serii i odstepu.
+
+    PO CO OSOBNY WIDOK. Norma mowi ILE wyszlo, a nie DLACZEGO reszta nie.
+    30 sierpnia trzeba bylo odtwarzac pozycje w serii z timestampow dziennika,
+    grupujac wpisy po przerwach i zgadujac granice serii — i dopiero to
+    pokazalo, ze awaryjnosc potraja sie po pierwszej akcji. Agent zna te liczbe
+    w chwili dzialania; teraz ja zapisuje (`nr_w_serii`, `od_poprzedniej_s`),
+    a to jest miejsce, w ktorym sie ja czyta.
+
+    Wpisy sprzed 30 sierpnia tych pol nie maja i sa tu pomijane — lepiej
+    pokazac mniej niz zmyslic pozycje.
+    """
+    granica = (datetime.now(timezone.utc) - timedelta(days=dni)).strftime("%Y-%m-%d")
+    wpisy = []
+    if DZIENNIK.exists():
+        with DZIENNIK.open(encoding="utf-8") as plik:
+            for linia in plik:
+                linia = linia.strip()
+                if not linia:
+                    continue
+                try:
+                    w = json.loads(linia)
+                except ValueError:
+                    continue
+                if not isinstance(w, dict) or "nr_w_serii" not in w:
+                    continue
+                if str(w.get("kiedy") or "")[:10] < granica:
+                    continue
+                wpisy.append(w)
+
+    if not wpisy:
+        print("Brak wpisow ze sladem przebiegu.")
+        print("Slad zapisywany jest od 30 sierpnia 2026 — poczekaj na przebieg.")
+        return 0
+
+    print("SLAD PRZEBIEGU — %d dzialan z ostatnich %d dni" % (len(wpisy), dni))
+
+    print()
+    print("=== AWARYJNOSC WG POZYCJI W SERII ===")
+    print("  %-8s %-14s %6s %8s %7s" % ("rodzaj", "ktora z rzedu", "prob",
+                                        "porazek", "%"))
+    licz: dict = collections.defaultdict(lambda: [0, 0])
+    for w in wpisy:
+        klucz = (w.get("rodzaj"), min(int(w.get("nr_w_serii") or 1), 5))
+        licz[klucz][0] += 1
+        licz[klucz][1] += 0 if w.get("udane") else 1
+    for (rodzaj, nr), (prob, zle) in sorted(licz.items()):
+        etykieta = "%d%s" % (nr, "+" if nr == 5 else "")
+        print("  %-8s %-14s %6d %8d %6.0f%%" % (
+            rodzaj, etykieta, prob, zle, 100.0 * zle / prob))
+
+    print()
+    print("=== AWARYJNOSC WG ODSTEPU OD POPRZEDNIEJ ===")
+    # Przedzialy dobrane pod decyzje, ktora jest do podjecia: czy piec minut
+    # wystarcza. Pierwsza akcja w przebiegu nie ma odstepu i tu nie wchodzi.
+    progi = ((0, 300, "ponizej 5 min"), (300, 600, "5-10 min"),
+             (600, 1200, "10-20 min"), (1200, 10 ** 9, "ponad 20 min"))
+    kubelki: dict = collections.defaultdict(lambda: [0, 0])
+    for w in wpisy:
+        sek = w.get("od_poprzedniej_s")
+        if sek is None:
+            continue
+        for dol, gora, nazwa in progi:
+            if dol <= sek < gora:
+                kubelki[nazwa][0] += 1
+                kubelki[nazwa][1] += 0 if w.get("udane") else 1
+                break
+    if not kubelki:
+        print("  (jeszcze zadnej akcji z poprzedniczka w tym samym przebiegu)")
+    for _, _, nazwa in progi:
+        if nazwa in kubelki:
+            prob, zle = kubelki[nazwa]
+            print("  %-14s %6d prob %6d porazek %6.0f%%" % (
+                nazwa, prob, zle, 100.0 * zle / prob))
+
+    print()
+    print("=== NAJCZESTSZE POWODY ===")
+    powody: collections.Counter = collections.Counter()
+    for w in wpisy:
+        if not w.get("udane"):
+            powody[str(w.get("powod") or "?")[:58]] += 1
+    for powod, ile in powody.most_common(6):
+        print("  %3dx  %s" % (ile, powod))
+    if not powody:
+        print("  (zadnej porazki w tym okresie)")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dni", type=int, default=14)
     ap.add_argument("--dzis", action="store_true",
                     help="tylko dzisiejszy stan, jedna linia na rodzaj")
+    ap.add_argument("--slad", action="store_true",
+                    help="awaryjnosc wg pozycji w serii i odstepu")
     args = ap.parse_args()
+
+    if args.slad:
+        return slad(args.dni)
 
     normy = config.normy_dzienne()
     dni = 1 if args.dzis else args.dni

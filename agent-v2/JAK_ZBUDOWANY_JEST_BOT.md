@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **18 plików**, 14 970 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **18 plików**, 15 142 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 48 zestawów
-testów, 1418 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 49 zestawów
+testów, 1433 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1346 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1370 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -265,11 +265,13 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2858 wierszy, 60 funkcji na poziomie modułu, 0 klas
+2912 wierszy, 62 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `wlasciwe_konto(page)` | Czy jestesmy na WLASCIWYM koncie tuz przed publikacja. |
+| `pod_rzad_nieudanych(rodzaj)` | Ile porazek tego rodzaju poszlo BEZPOSREDNIO po sobie w tym przebiegu. |
+| `slad_przebiegu()` | Podsumowanie tego, co ten proces zrobil — do wypisania na koncu. |
 | `dopisz_wynik(rodzaj, wynik, **szczegoly)` | Jeden wpis na dzialanie — takze wtedy, gdy sie NIE UDALO, i z powodem. |
 | `zapisz_w_dzienniku(rodzaj, **szczegoly)` | Dziennik DZIALAN, nie wywolan modelu. |
 | `z_dziennika_dzis()` | Ile komentarzy i polubien poszlo dzis — wedlug naszego zapisu. |
@@ -543,12 +545,13 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
-158 wierszy, 3 funkcji na poziomie modułu, 0 klas
+252 wierszy, 4 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `wczytaj(dni)` | (zrobione, nieudane) — liczniki per dzien i rodzaj. |
 | `_znak(ile, norma)` *(wewn.)* | Jak daleko od normy. Prog alarmu jest ten sam, co w `alarm.py`. |
+| `slad(dni)` | Gdzie dokladnie psuja sie publikacje — wg pozycji w serii i odstepu. |
 | `main()` | — |
 
 ### `migracja_okno_promocji.py` — jednorazowo: data publikacji z dziennika do kolejki promocji
@@ -7507,11 +7510,35 @@ def rytm(co: str, na_co: str, stan: dict) -> bool:
     przebiegu, i dopiero wtedy odsypiana — a pierwsze dzialanie w przebiegu nie
     czeka na nic, bo nie ma na co.
     """
+    import browser as _b
     import stages as _s
 
     if not stan.get(co):
         return zostal_czas(na_co)
     przerwa = _s.losuj_odstep(co)
+
+    # WYCOFANIE PO SERII PORAZEK — reakcja W TRAKCIE, nie dopiero w analizie.
+    #
+    # Zmierzone 30 sierpnia na sciezce notkowej: pierwsza akcja w serii psula
+    # sie w 10 procentach, druga w 31, czwarta w 50. Przy takim rozkladzie
+    # czwarta proba pod rzad jest rzutem moneta za oplacony tekst, a przebieg
+    # szedl dalej, bo nikt nie liczyl porazek POD RZAD.
+    #
+    # Dwie z rzedu: podwajamy przerwe. Tempo jest jedyna zmienna, ktora
+    # pokrywa sie z awaryjnoscia, wiec zwolnienie jest jedyna rzecza, ktora
+    # mozemy zrobic natychmiast i bez zgadywania przyczyny.
+    # Trzy z rzedu: konczymy ten blok. Nie kasujemy dnia — kolejny przebieg
+    # zaczyna z czystym licznikiem i moze sie okazac, ze to bylo chwilowe.
+    pod_rzad = _b.pod_rzad_nieudanych(co)
+    if pod_rzad >= 3:
+        print("  [wycofanie] %s: trzy porazki pod rzad — koncze ten blok,"
+              " nastepny przebieg sprobuje od nowa" % co, flush=True)
+        return False
+    if pod_rzad >= 2:
+        przerwa *= 2
+        print("  [wycofanie] %s: dwie porazki pod rzad — przerwa %.0f min"
+              " zamiast zwyklej" % (co, przerwa / 60), flush=True)
+
     if not zostal_czas(na_co, przerwa):
         return False
     _s.odczekaj(co, przerwa)

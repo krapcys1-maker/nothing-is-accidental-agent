@@ -59,6 +59,43 @@ def wlasciwe_konto(page) -> bool:
 DZIENNIK = config.DATA_DIR / "dziennik.jsonl"
 
 
+# --- SLAD PRZEBIEGU: dane, ktore trzeba bylo odtwarzac z timestampow ---------
+#
+# 30 sierpnia szukalem, czemu komentarze pod notkami przepadaja w 30 procentach.
+# Odpowiedz siedziala w POZYCJI W SERII: pierwsza akcja psula sie w 10
+# procentach, druga w 31, czwarta w 50. Zeby to zobaczyc, musialem grupowac
+# wpisy dziennika po odstepach czasu i zgadywac, gdzie konczy sie jedna seria,
+# a zaczyna druga — czyli rekonstruowac coś, co agent WIEDZIAL w chwili
+# dzialania i wyrzucal.
+#
+# Teraz to zapisuje. Trzy pola, kazde odpowiada na pytanie, ktore juz raz
+# musialem zadac danym:
+#   `nr_w_serii`      — ktora to akcja tego rodzaju w TYM przebiegu,
+#   `od_poprzedniej_s`— ile sekund realnie minelo (nie ile wylosowano),
+#   `pod_rzad_zle`    — ile porazek tego rodzaju poszlo bezposrednio przed ta.
+#
+# Ostatnie pole sluzy takze do reakcji W TRAKCIE, nie tylko do analizy pozniej
+# — patrz `pod_rzad_nieudanych` i `run.rytm`.
+_W_SERII: dict[str, int] = {}
+_OSTATNIA: dict[str, float] = {}
+_POD_RZAD_ZLE: dict[str, int] = {}
+
+
+def pod_rzad_nieudanych(rodzaj: str) -> int:
+    """Ile porazek tego rodzaju poszlo BEZPOSREDNIO po sobie w tym przebiegu.
+
+    Zerowane przez kazde powodzenie. Czyta to `run.rytm`, zeby zwolnic tempo
+    zanim przebieg przepali kolejny oplacony tekst.
+    """
+    return _POD_RZAD_ZLE.get(rodzaj, 0)
+
+
+def slad_przebiegu() -> dict[str, dict]:
+    """Podsumowanie tego, co ten proces zrobil — do wypisania na koncu."""
+    return {r: {"prob": n, "pod_rzad_zle": _POD_RZAD_ZLE.get(r, 0)}
+            for r, n in sorted(_W_SERII.items())}
+
+
 def dopisz_wynik(rodzaj: str, wynik: dict, **szczegoly) -> None:
     """Jeden wpis na dzialanie — takze wtedy, gdy sie NIE UDALO, i z powodem.
 
@@ -87,6 +124,23 @@ def dopisz_wynik(rodzaj: str, wynik: dict, **szczegoly) -> None:
             or ("nie znalazlem przycisku wysylki"
                 if wynik.get("przycisk_widoczny") is False else "")
             or "Substack nie potwierdzil, ze wyszlo")
+
+    # SLAD PRZEBIEGU — patrz komentarz przy `_W_SERII`. Liczymy TU, a nie w
+    # `run.py`, zeby zadna sciezka publikacji nie mogla o tym zapomniec:
+    # kazde dzialanie i tak przechodzi przez ten jeden zapis.
+    _W_SERII[rodzaj] = _W_SERII.get(rodzaj, 0) + 1
+    szczegoly["nr_w_serii"] = _W_SERII[rodzaj]
+    poprzednia = _OSTATNIA.get(rodzaj)
+    if poprzednia is not None:
+        szczegoly["od_poprzedniej_s"] = round(time.time() - poprzednia)
+    _OSTATNIA[rodzaj] = time.time()
+    szczegoly["pod_rzad_zle"] = _POD_RZAD_ZLE.get(rodzaj, 0)
+    # Zerowane KAZDYM powodzeniem: interesuje nas seria, nie suma dobowa.
+    _POD_RZAD_ZLE[rodzaj] = 0 if udane else _POD_RZAD_ZLE.get(rodzaj, 0) + 1
+    if not udane and _POD_RZAD_ZLE[rodzaj] >= 2:
+        print("  [slad] %s: %d porazki pod rzad w tym przebiegu — zwalniam"
+              % (rodzaj, _POD_RZAD_ZLE[rodzaj]), flush=True)
+
     zapisz_w_dzienniku(rodzaj, udane=udane, **szczegoly)
 
 

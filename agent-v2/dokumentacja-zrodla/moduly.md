@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1346 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1370 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -123,11 +123,13 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-2858 wierszy, 60 funkcji na poziomie modułu, 0 klas
+2912 wierszy, 62 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `wlasciwe_konto(page)` | Czy jestesmy na WLASCIWYM koncie tuz przed publikacja. |
+| `pod_rzad_nieudanych(rodzaj)` | Ile porazek tego rodzaju poszlo BEZPOSREDNIO po sobie w tym przebiegu. |
+| `slad_przebiegu()` | Podsumowanie tego, co ten proces zrobil — do wypisania na koncu. |
 | `dopisz_wynik(rodzaj, wynik, **szczegoly)` | Jeden wpis na dzialanie — takze wtedy, gdy sie NIE UDALO, i z powodem. |
 | `zapisz_w_dzienniku(rodzaj, **szczegoly)` | Dziennik DZIALAN, nie wywolan modelu. |
 | `z_dziennika_dzis()` | Ile komentarzy i polubien poszlo dzis — wedlug naszego zapisu. |
@@ -401,12 +403,13 @@
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
-158 wierszy, 3 funkcji na poziomie modułu, 0 klas
+252 wierszy, 4 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `wczytaj(dni)` | (zrobione, nieudane) — liczniki per dzien i rodzaj. |
 | `_znak(ile, norma)` *(wewn.)* | Jak daleko od normy. Prog alarmu jest ten sam, co w `alarm.py`. |
+| `slad(dni)` | Gdzie dokladnie psuja sie publikacje — wg pozycji w serii i odstepu. |
 | `main()` | — |
 
 ### `migracja_okno_promocji.py` — jednorazowo: data publikacji z dziennika do kolejki promocji

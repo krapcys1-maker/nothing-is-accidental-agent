@@ -183,11 +183,35 @@ def rytm(co: str, na_co: str, stan: dict) -> bool:
     przebiegu, i dopiero wtedy odsypiana — a pierwsze dzialanie w przebiegu nie
     czeka na nic, bo nie ma na co.
     """
+    import browser as _b
     import stages as _s
 
     if not stan.get(co):
         return zostal_czas(na_co)
     przerwa = _s.losuj_odstep(co)
+
+    # WYCOFANIE PO SERII PORAZEK — reakcja W TRAKCIE, nie dopiero w analizie.
+    #
+    # Zmierzone 30 sierpnia na sciezce notkowej: pierwsza akcja w serii psula
+    # sie w 10 procentach, druga w 31, czwarta w 50. Przy takim rozkladzie
+    # czwarta proba pod rzad jest rzutem moneta za oplacony tekst, a przebieg
+    # szedl dalej, bo nikt nie liczyl porazek POD RZAD.
+    #
+    # Dwie z rzedu: podwajamy przerwe. Tempo jest jedyna zmienna, ktora
+    # pokrywa sie z awaryjnoscia, wiec zwolnienie jest jedyna rzecza, ktora
+    # mozemy zrobic natychmiast i bez zgadywania przyczyny.
+    # Trzy z rzedu: konczymy ten blok. Nie kasujemy dnia — kolejny przebieg
+    # zaczyna z czystym licznikiem i moze sie okazac, ze to bylo chwilowe.
+    pod_rzad = _b.pod_rzad_nieudanych(co)
+    if pod_rzad >= 3:
+        print("  [wycofanie] %s: trzy porazki pod rzad — koncze ten blok,"
+              " nastepny przebieg sprobuje od nowa" % co, flush=True)
+        return False
+    if pod_rzad >= 2:
+        przerwa *= 2
+        print("  [wycofanie] %s: dwie porazki pod rzad — przerwa %.0f min"
+              " zamiast zwyklej" % (co, przerwa / 60), flush=True)
+
     if not zostal_czas(na_co, przerwa):
         return False
     _s.odczekaj(co, przerwa)
