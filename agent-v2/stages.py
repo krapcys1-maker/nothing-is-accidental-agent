@@ -4819,6 +4819,57 @@ def co_zadzialalo(ile: int = 6) -> str:
     if not naj:
         return "(no measurements available yet)"
 
+    # TYLKO POMIARY Z EPOKI AI. Konto do 25 sierpnia pisalo o przedmiotach
+    # codziennych i te notki nadal siedza w statystykach — dwie najslabsze w
+    # calym zbiorze dotycza symbolu na butelce szamponu.
+    #
+    # Podanie ich sedziemu jako dowodu „co dziala na tym koncie" jest DOKLADNIE
+    # ta sama wada, ktora tego samego dnia wycielismy z dziewieciu promptow:
+    # uczenie na materiale sprzed przestawienia. Gorzej nawet, bo tu wyglada na
+    # twardy pomiar — a mierzy inna publikacje, czytana przez innych ludzi.
+    #
+    # Wlasciciel zlapal to natychmiast: „jaki szampon, o ai piszemy".
+    # DATA PUBLIKACJI, NIE POMIARU. Pole `kiedy` w statystykach to chwila, w
+    # ktorej ZMIERZYLISMY notke, wiec jest zawsze dzisiejsza — pierwsza wersja
+    # tego filtru nie odsiala niczego i szampon przeszedl dalej. Prawdziwa data
+    # wystawienia siedzi w dzienniku dzialan, razem z trescia, wiec laczymy
+    # jedno z drugim po poczatku tekstu.
+    granica = config.DATA_PRZESTAWIENIA
+    kiedy_wystawiona: dict[str, str] = {}
+    try:
+        import json as _js
+        dz = config.DATA_DIR / "dziennik.jsonl"
+        for linia in dz.read_text(encoding="utf-8").splitlines():
+            linia = linia.strip()
+            if not linia:
+                continue
+            try:
+                w = _js.loads(linia)
+            except ValueError:
+                continue
+            if w.get("rodzaj") != "notka" or not w.get("udane"):
+                continue
+            klucz = " ".join(str(w.get("tekst") or "").split())[:60].lower()
+            if klucz:
+                kiedy_wystawiona.setdefault(klucz, str(w.get("kiedy") or "")[:10])
+    except Exception:
+        pass
+
+    def _wystawiona(r) -> str:
+        klucz = " ".join(str(r.get("tekst") or "").split())[:60].lower()
+        return kiedy_wystawiona.get(klucz, "")
+
+    # Pomiar, ktorego nie da sie polaczyc z dziennikiem, ZOSTAJE. Odsiewamy
+    # tylko to, o czym WIEMY, ze jest sprzed przestawienia — nieznane traktujemy
+    # jak nasze, bo cicha utrata dowodow jest gorsza od jednego starego wpisu.
+    po_przestawieniu = {k: r for k, r in naj.items()
+                        if not _wystawiona(r) or _wystawiona(r) >= granica}
+    odsiane = len(naj) - len(po_przestawieniu)
+    if odsiane:
+        print("  [odbior] pomijam %d pomiarow sprzed przestawienia konta (%s)"
+              % (odsiane, granica), flush=True)
+    naj = po_przestawieniu
+
     def punkty(r):
         return (statystyki._liczba(r.get("polubienia"))
                 + 3 * statystyki._liczba(r.get("odpowiedzi")))
