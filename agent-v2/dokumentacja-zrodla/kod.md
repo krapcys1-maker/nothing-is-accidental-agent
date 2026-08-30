@@ -580,8 +580,31 @@ def pick_topic(
             print("  [tematy] juz o tym pisalismy, na koniec kolejki: %s"
                   % ", ".join(str(x)[:40] for x in zepchniete if x), flush=True)
 
+    # MARTWE POLA ODSIEWU — meldujemy je tak samo, jak u skauta.
+    #
+    # Zmierzone 30 sierpnia: `feasible` bylo True w SZESCIU ocenach na szesc,
+    # czyli filtr ponizej nie odfiltrowywal niczego. Reszta pol rozroznia
+    # naprawde (`confidence` 0,85-0,55, `depth` RICH/SINGLE/THIN, `parallels`
+    # puste u polowy), wiec wybor nie jest losowy — ale linijka, ktora WYGLADA
+    # na bramke i nia nie jest, jest gorsza niz jej brak: log wyglada na
+    # przesiany, a kolejnosc na przemyslana.
+    #
+    # Nie przebudowuje tu promptu, bo nie mam dowodu, ze wybor jest zly —
+    # a dzis raz juz podjalem decyzje na zle dobranym materiale. Melduje.
+    martwe_oceny = _stale_sygnaly(assessments, ("feasible", "depth",
+                                                "confidence",
+                                                "expected_primary_sources"))
+    if martwe_oceny:
+        print("  [odsiew] MARTWE W TYM PRZEBIEGU (ta sama wartosc u wszystkich"
+              " %d, wiec nic nie rozroznily): %s"
+              % (len(assessments), ", ".join(martwe_oceny)), flush=True)
+
     ranked = sorted((a for a in assessments if a.get("feasible")),
                     key=kolejnosc, reverse=True)
+    if len(ranked) == len(assessments) and assessments:
+        print("  [odsiew] `feasible` przepuscilo WSZYSTKIE %d — kolejnosc"
+              " bierze sie z rankingu, nie z tego filtru" % len(assessments),
+              flush=True)
     if not ranked:
         # ODSIEW ZGLASZA, NIE BLOKUJE — tak jak wszystko inne w tym potoku.
         # Wczesniej leciał tu wyjatek i przebieg umieral. Zasada wlasciciela

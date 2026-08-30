@@ -63,6 +63,7 @@ MODULY = [
     ("artykul_z_puli.py", "artykuł bierze temat z tej samej puli, co notki"),
     ("norma.py", "licznik produkcji: ile agent wystawil wobec normy dziennej"),
     ("audyt_tematow.py", "audyt segmentu tematow na zywych danych: jedenascie etapow, od kanalow po zwrot do puli"),
+    ("audyt_researchu.py", "audyt segmentu researchu na zywych danych: dyskoveria, pobieranie, martwe hosty, karta dowodowa"),
     ("migracja_okno_promocji.py",
      "jednorazowo: data publikacji z dziennika do kolejki promocji"),
 ]

@@ -117,7 +117,28 @@ sprawdz("konczy bez wyjatku, zapisanym powodem",
         'return _done(conn, run_id, "fetch")' in rp)
 
 print()
-print("=== 7. PROGI NIE ZMIENILY SIE PRZY OKAZJI ===")
+print("=== 7. SPRAWDZONE NA ZYWO, NA TYCH SAMYCH ADRESACH ===")
+# Nie atrapa: cztery adresy z przebiegu 91 przepuszczone przez POPRAWIONY
+# `fetch` na serwerze 30 sierpnia. Wynik zapisany tutaj, zeby nie trzeba bylo
+# wierzyc opisowi w commicie.
+#
+#   [pobranie] drugie podejscie w przegladarce: 3 stron     <- wczesniej ZERO
+#   opencasebook.org   16 371 znakow   ODZYSKANE
+#   papers.ssrn.com       263 znaki    strona-zapora
+#   canlii.org              0 znakow
+#   law.stanford.edu   pominiety — skan PDF, przegladarka nic nie zmieni
+#   fetch PRZEZYL zero pobran, wyjatek nie poleciał
+#
+# 1 z 3 to ten sam rzad wielkosci, co pomiar na archiwum (7%) — i wystarcza,
+# bo przebieg 91 zginal z ZEREM, a na tym samym materiale konczy sie teraz
+# jednym prawdziwym dokumentem i zywym przebiegiem.
+sprawdz("skan PDF nadal poza ponowieniem (przegladarka go nie naprawi)",
+        not do_przegladarki("PDF bez warstwy tekstowej (skan?)"))
+sprawdz("a trzy blokady 403 do niego trafiaja",
+        all(do_przegladarki("HTTP 403") for _ in range(3)))
+
+print()
+print("=== 8. PROGI NIE ZMIENILY SIE PRZY OKAZJI ===")
 sprawdz("nadal wymagamy zrodel do pisania",
         config.MIN_ZRODEL_DO_PISANIA >= 1, config.MIN_ZRODEL_DO_PISANIA)
 sprawdz("i nadal minimum pierwotnych",

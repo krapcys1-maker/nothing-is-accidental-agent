@@ -49,14 +49,14 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **19 plików**, 17 186 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **20 plików**, 17 405 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
 | jedno polecenie uruchamiające | `python agent-v2/run.py` | dotrzymane |
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
-**WADA — 19 plików zamiast dziesięciu.** Najbliższe usunięciu:
+**WADA — 20 plików zamiast dziesięciu.** Najbliższe usunięciu:
 `style.py` (127 wierszy, wołany tylko z `stages.py`) i
 `kopia_subskrybentow.py` (198 wierszy, narzędzie ręczne poza
 przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 65 zestawów
-testów, 1713 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 1715 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-5469 wierszy, 103 funkcji na poziomie modułu, 0 klas
+5492 wierszy, 103 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -580,6 +580,16 @@ wiec nie da sie go rozjechac z kodem.
 | `etap(nr, nazwa)` | — |
 | `werdykt(nazwa, stan, szczegol)` | — |
 | `bank()` | — |
+| `main()` | — |
+
+### `audyt_researchu.py` — audyt segmentu researchu na zywych danych: dyskoveria, pobieranie, martwe hosty, karta dowodowa
+
+196 wierszy, 3 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `etap(nr, nazwa)` | — |
+| `werdykt(nazwa, stan, szczegol)` | — |
 | `main()` | — |
 
 ### `migracja_okno_promocji.py` — jednorazowo: data publikacji z dziennika do kolejki promocji
@@ -6668,8 +6678,31 @@ def pick_topic(
             print("  [tematy] juz o tym pisalismy, na koniec kolejki: %s"
                   % ", ".join(str(x)[:40] for x in zepchniete if x), flush=True)
 
+    # MARTWE POLA ODSIEWU — meldujemy je tak samo, jak u skauta.
+    #
+    # Zmierzone 30 sierpnia: `feasible` bylo True w SZESCIU ocenach na szesc,
+    # czyli filtr ponizej nie odfiltrowywal niczego. Reszta pol rozroznia
+    # naprawde (`confidence` 0,85-0,55, `depth` RICH/SINGLE/THIN, `parallels`
+    # puste u polowy), wiec wybor nie jest losowy — ale linijka, ktora WYGLADA
+    # na bramke i nia nie jest, jest gorsza niz jej brak: log wyglada na
+    # przesiany, a kolejnosc na przemyslana.
+    #
+    # Nie przebudowuje tu promptu, bo nie mam dowodu, ze wybor jest zly —
+    # a dzis raz juz podjalem decyzje na zle dobranym materiale. Melduje.
+    martwe_oceny = _stale_sygnaly(assessments, ("feasible", "depth",
+                                                "confidence",
+                                                "expected_primary_sources"))
+    if martwe_oceny:
+        print("  [odsiew] MARTWE W TYM PRZEBIEGU (ta sama wartosc u wszystkich"
+              " %d, wiec nic nie rozroznily): %s"
+              % (len(assessments), ", ".join(martwe_oceny)), flush=True)
+
     ranked = sorted((a for a in assessments if a.get("feasible")),
                     key=kolejnosc, reverse=True)
+    if len(ranked) == len(assessments) and assessments:
+        print("  [odsiew] `feasible` przepuscilo WSZYSTKIE %d — kolejnosc"
+              " bierze sie z rankingu, nie z tego filtru" % len(assessments),
+              flush=True)
     if not ranked:
         # ODSIEW ZGLASZA, NIE BLOKUJE — tak jak wszystko inne w tym potoku.
         # Wczesniej leciał tu wyjatek i przebieg umieral. Zasada wlasciciela
