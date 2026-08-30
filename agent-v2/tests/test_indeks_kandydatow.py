@@ -233,6 +233,36 @@ try:
     sprawdz("dzien przestawienia WCHODZI (granica wlaczajaca)",
             "Nowy temat o modelach" in fakty2, fakty2)
 
+    print()
+    print("=== SWIEZOSC SPRAWDZANA PRZY WYJMOWANIU, NIE TYLKO PRZY WKLADANIU ===")
+    # Zywy test zlapal luke otwarta przez podlaczenie spizarni: `swiezosc_faktu`
+    # wolane jest tylko w `znajdz_ciekawostki`, wiec kandydat wyjety z indeksu
+    # nie przechodzil sprawdzenia wieku ANI RAZU. A to wlasnie on lezal i sie
+    # starzal — prog liczy sie wobec DZISIAJ, wiec dokument kontrolny dobry przy
+    # wkladaniu bywa przeterminowany dwa tygodnie pozniej.
+    def _k(fakt, control_date, verdict="CONFIRMS"):
+        return {"fact": fakt, "status": "nowy",
+                "kiedy": config.DATA_PRZESTAWIENIA + "T10:00:00+00:00",
+                "control_verdict": verdict, "control_date": control_date,
+                "control_fact": "sprawdzone"}
+
+    from datetime import datetime, timedelta, timezone   # noqa: E402
+    _swiezy = (datetime.now(timezone.utc) - timedelta(days=10)).strftime("%Y-%m-%d")
+    _stary = (datetime.now(timezone.utc) - timedelta(days=400)).strftime("%Y-%m-%d")
+    stages.INDEKS_KANDYDATOW.write_text(_js2.dumps([
+        _k("Lezal za dlugo", _stary),
+        _k("Nadal swiezy", _swiezy),
+    ], ensure_ascii=False), encoding="utf-8")
+    wziete3 = [k["fact"] for k in stages.wez_kandydatow(10)]
+    sprawdz("przeterminowany nie wychodzi ze spizarni",
+            wziete3 == ["Nadal swiezy"], wziete3)
+    _po = _js2.loads(stages.INDEKS_KANDYDATOW.read_text(encoding="utf-8"))
+    _stan = {k["fact"]: k["status"] for k in _po}
+    sprawdz("i dostaje wlasny status, nie 'uzyty'",
+            _stan.get("Lezal za dlugo") == "przeterminowany", _stan)
+    sprawdz("bo nie zostal wykorzystany i nie ma udawac, ze byl",
+            _stan.get("Nadal swiezy") == "uzyty", _stan)
+
     # KONTRDOWOD: bez filtru wzieloby wszystkie cztery — i wlasnie to robilo
     # przez pol godziny miedzy podlaczeniem indeksu a ta poprawka.
     stages.INDEKS_KANDYDATOW.write_text(_js2.dumps([

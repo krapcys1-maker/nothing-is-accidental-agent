@@ -1198,7 +1198,23 @@ def swiezosc_faktu(fakt: dict[str, Any], teraz=None) -> tuple[bool, str]:
 
     wiek = wiek_zrodla_w_dniach(fakt.get("source_date"), teraz=teraz)
     wersja = nazywa_wersje(tekst)
-    o_teraz = [s for s in config.TWIERDZI_O_TERAZ if s in male]
+    # SLOWO, NIE PODCIAG — i to jest wada zlapana zywym testem 30 sierpnia.
+    #
+    # Bylo `if s in male`, czyli zwykle szukanie podciagu. Zmierzone na 181
+    # kandydatach z produkcji: CZTERNASCIE (8 procent) dostawalo trafienie
+    # wylacznie z podciagu, i nie byly to drobiazgi —
+    #     'leading'  trafialo w 'misleading'   (slowo o przeciwnym znaczeniu)
+    #     'now'      trafialo w 'known', 'knows', 'knowing', 'knowledge',
+    #                'nowhere'
+    # Bramka swiezosci odrzucala wiec fakty za to, ze zawieraly slowo „wiedza".
+    #
+    # ODMIANY ZOSTAJA CELOWO. Same granice slowa zepsulyby dwanascie dobrych
+    # trafien: 'generate' w 'generated' i 'generates' to ta sama teraźniejszosc,
+    # tylko odmieniona. Dlatego dopuszczamy koncowki, ale nie doklejanie w
+    # srodku ani przedrostki — „nowhere" ma cztery litery po „now" i wypada,
+    # „misleading" nie zaczyna sie od „leading" i wypada.
+    o_teraz = [s for s in config.TWIERDZI_O_TERAZ
+               if re.search(r"\b%s(?:s|d|es|ed|ing)?\b" % re.escape(s), male)]
 
     # --- DOKUMENT KONTROLNY -------------------------------------------------
     #
@@ -4424,7 +4440,34 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
     wolni = [k for k in indeks
              if k.get("status") == "nowy"
              and str(k.get("kiedy") or "")[:10] >= config.DATA_PRZESTAWIENIA]
-    wziete = wolni[:max(0, ile)]
+
+    # SWIEZOSC SPRAWDZANA PRZY WYJMOWANIU, NIE TYLKO PRZY WKLADANIU.
+    #
+    # Zywy test 30 sierpnia zlapal luke, ktora sam otworzylem podlaczajac
+    # spizarnie: `swiezosc_faktu` wolane jest wylacznie w `znajdz_ciekawostki`,
+    # wiec kandydat wyjety z indeksu nie przechodzil sprawdzenia wieku ANI RAZU.
+    # A to wlasnie on jest najbardziej narazony — lezal i sie starzal.
+    #
+    # Prog liczy sie wobec DZISIAJ, wiec dokument kontrolny sprzed 80 dni jest
+    # dobry przy wkladaniu i przeterminowany dwa tygodnie pozniej. Sprawdzenie
+    # przy wkladaniu odpowiada na inne pytanie niz sprawdzenie przy wyjmowaniu.
+    #
+    # Przeterminowany dostaje wlasny status, nie „uzyty": nie zostal wykorzystany
+    # i nie ma udawac, ze byl. Odrzucenie jest trwale, bo fakt bedzie tylko
+    # starszy — a przy okazji widac w indeksie, ile materialu zjada leżakowanie.
+    swiezi, przeterminowani = [], []
+    for k in wolni:
+        wolno, powod = swiezosc_faktu(k)
+        (swiezi if wolno else przeterminowani).append((k, powod))
+    if przeterminowani:
+        print("  [indeks] przeterminowane w spizarni: %d"
+              % len(przeterminowani), flush=True)
+        for k, powod in przeterminowani:
+            k["status"] = "przeterminowany"
+            k["powod"] = powod[:200]
+        _zapisz_indeks(indeks)
+
+    wziete = [k for k, _ in swiezi][:max(0, ile)]
     if wziete:
         znaczniki = {id(k) for k in wziete}
         for k in indeks:
