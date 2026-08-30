@@ -1109,6 +1109,7 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
     }
     print(f"  [budżet dnia{' — rozbieg' if rozbieg else ''}] "
           + "  ".join(f"{k}={v}" for k, v in budzet.items()), flush=True)
+    _zapisz_budzet_dnia(dzis, budzet, rozbieg)
     return budzet
 ```
 

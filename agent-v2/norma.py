@@ -45,6 +45,36 @@ RODZAJE = ("notka", "komentarz", "polubienie", "restack", "subskrypcja",
 NIEWYKONALNE = {"obserwacja": "Substack zdjal przycisk Follow"}
 
 
+def budzety_dzienne() -> dict:
+    """Ile agent SOBIE ZALOZYL kazdego dnia — z pliku, nie z dzisiejszej konfiguracji.
+
+    WYKONANIE PLANU I AMBICJA TO DWA ROZNE PYTANIA. `config.normy_dzienne()`
+    mowi, ile POWINNO wychodzic docelowo; zapisany budzet mowi, ile agent w tym
+    dniu w ogole zamierzal. Mierzenie wykonania ambicja daje dwa falszywe
+    alarmy naraz: przez pierwsze 30 dni budzet leci dolna polowa widelek
+    (rozbieg), a kazda zmiana widelek przepisuje historie wstecz.
+
+    Zmierzone 30 sierpnia: 29 sierpnia agent zalozyl 10 komentarzy i zrobil 6 —
+    60% wlasnego planu — a licznik pokazywal 32%, bo widelki zmienily sie tego
+    samego dnia z (8,12) na (15,23).
+    """
+    import json
+    plik = config.DATA_DIR / "budzety.json"
+    try:
+        stan = json.loads(plik.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(stan, dict):
+        return {}
+    # Przepisujemy na nazwy z dziennika, zeby licznik nie musial tlumaczyc.
+    wynik = {}
+    for dzien, wpis in stan.items():
+        b = (wpis or {}).get("budzet") or {}
+        wynik[dzien] = {config.BUDZET_NA_RODZAJ[k]: v
+                        for k, v in b.items() if k in config.BUDZET_NA_RODZAJ}
+    return wynik
+
+
 def _data(dzien: str):
     """„2026-08-30" -> datetime w UTC. `cichy_dzien` pyta o obiekt, nie napis."""
     return datetime.strptime(dzien, "%Y-%m-%d").replace(tzinfo=timezone.utc)
@@ -248,23 +278,42 @@ def main() -> int:
     # ktorych mialy prawo wyjsc. Bez tego jeden dzien na osiem zaniza wynik o
     # jedna osma i po miesiacu wyglada to jak trwaly spadek produkcji.
     ciche = {d for d in kolejne if config.cichy_dzien(_data(d))}
+    zalozone = budzety_dzienne()
     sumy = collections.Counter()
+    wykonane = collections.Counter()
+    plany = collections.Counter()
     dni_liczone = collections.Counter()
+    bez_planu = []
     for d in kolejne:
         cicho = d in ciche
+        plan_dnia = zalozone.get(d)
+        if plan_dnia is None:
+            bez_planu.append(d)
         wiersz = "  %-11s" % d
         for r in RODZAJE:
             ile = zrobione[d][r]
             wyciszony = cicho and r in config.CICHY_DZIEN_WYCISZA_RODZAJE
+            # PLAN TEGO DNIA, a gdy go nie zapisano — dzisiejsza norma, i
+            # wtedy dzien jest oznaczony gwiazdka, zeby nikt nie czytal tego
+            # jako pomiaru wykonania.
+            cel = (plan_dnia or {}).get(r, normy.get(r, 0))
             if not wyciszony:
                 sumy[r] += ile
                 dni_liczone[r] += 1
-            norma = normy.get(r, 0)
+                # WYKONANIE LICZYMY TYLKO Z DNI, KTORYCH PLAN ZNAMY. Dzien bez
+                # zapisanego planu podstawialby dzisiejsza norme i alarm
+                # meldowalby niewykonanie planu, ktorego nikt wtedy nie mial.
+                if plan_dnia is not None:
+                    wykonane[r] += ile
+                    plany[r] += cel
             wiersz += "%12s" % (
                 "cisza" if wyciszony
-                else ("%d/%.0f%s" % (ile, norma, _znak(ile, norma)) if norma >= 1
+                else ("%d/%.0f%s" % (ile, cel, _znak(ile, cel)) if cel >= 1
                       else (str(ile) if ile else "-")))
-        print(wiersz + ("   << cichy dzien" if cicho else ""))
+        znaki = ("   << cichy dzien" if cicho else "")
+        if plan_dnia is None:
+            znaki += "  *plan nieznany"
+        print(wiersz + znaki)
 
     print("  " + "-" * (len(naglowek) - 2))
     n = len(kolejne)
@@ -273,8 +322,14 @@ def main() -> int:
         ile_dni = dni_liczone[r] or 1
         return sumy[r] / ile_dni
 
+    def _wykonanie(r):
+        """Ile z tego, co agent SOBIE ZALOZYL, naprawde zrobil."""
+        return (100.0 * wykonane[r] / plany[r]) if plany[r] else None
+
     for etykieta, wart in (
             ("SREDNIA", lambda r: "%.1f" % _srednia(r)),
+            ("% PLANU", lambda r: ("%.0f%%" % _wykonanie(r)
+                                   if _wykonanie(r) is not None else "-")),
             ("% NORMY", lambda r: ("%.0f%%" % (100.0 * _srednia(r) / normy[r])
                                    if normy.get(r, 0) >= 1 else "-"))):
         print("  %-11s" % etykieta + "".join("%12s" % wart(r) for r in RODZAJE))
@@ -294,13 +349,21 @@ def main() -> int:
               % (len(ciche), ", ".join(sorted(ciche)),
                  ", ".join(config.CICHY_DZIEN_WYCISZA_RODZAJE)))
 
+    if bez_planu:
+        print("  dni bez zapisanego planu (*): %d — mierzone dzisiejsza norma,"
+              " wiec to NIE jest pomiar wykonania" % len(bez_planu))
+
+    # ALARM NA WYKONANIU PLANU, NIE NA AMBICJI. Norma mowi, dokad zmierzamy;
+    # plan mowi, co agent mial dzis zrobic. Tylko drugie jest pod jego
+    # kontrola, a alarm ma budzic wtedy, gdy cos NIE DZIALA — nie wtedy, gdy
+    # konto jest mlode albo widelki podniesiono wczoraj.
     ponizej = [r for r in RODZAJE
-               if normy.get(r, 0) >= 1 and r not in NIEWYKONALNE
-               and 100.0 * _srednia(r) / normy[r] < config.PROG_ALARMU_WOLUMENU]
+               if r not in NIEWYKONALNE and _wykonanie(r) is not None
+               and _wykonanie(r) < config.PROG_ALARMU_WOLUMENU]
     if ponizej:
         print()
-        print("  PONIZEJ PROGU %d%%: %s" % (config.PROG_ALARMU_WOLUMENU,
-                                            ", ".join(ponizej)))
+        print("  PONIZEJ PROGU %d%% WYKONANIA PLANU: %s"
+              % (config.PROG_ALARMU_WOLUMENU, ", ".join(ponizej)))
         return 1
     return 0
 

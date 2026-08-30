@@ -1603,7 +1603,25 @@ CICHE_DNI_WLACZONE = True
 # Dwie nazwy tej samej rzeczy, bo budzet mowi w liczbie mnogiej, a dziennik w
 # pojedynczej. Zgodnosc obu krotek pilnuje test.
 CICHY_DZIEN_WYCISZA = ("notki", "restacki")
-CICHY_DZIEN_WYCISZA_RODZAJE = ("notka", "restack")
+
+# NAZWA W BUDZECIE -> NAZWA W DZIENNIKU. Dwie konwencje istnieja naprawde:
+# budzet mowi „ile czego dzis wolno" (liczba mnoga), dziennik notuje pojedyncze
+# zdarzenia (liczba pojedyncza). Dopoki to tlumaczenie siedzialo w glowie, dwa
+# miejsca w kodzie mialy wlasne kopie i jedno z nich sie rozjechalo — licznik
+# porownywal norme „follow" z dziennikiem, ktory zapisuje „obserwacja", i
+# meldowal 0% przy dzialajacym bloku.
+BUDZET_NA_RODZAJ = {
+    "notki": "notka",
+    "komentarze": "komentarz",
+    "lajki": "polubienie",
+    "restacki": "restack",
+    "subskrypcje": "subskrypcja",
+    "follow": "obserwacja",
+}
+
+# Wyprowadzone, NIE przepisane recznie — zeby nie dalo sie rozjechac.
+CICHY_DZIEN_WYCISZA_RODZAJE = tuple(BUDZET_NA_RODZAJ[k]
+                                    for k in CICHY_DZIEN_WYCISZA)
 
 
 def _cisza_z_hasza(dzien: str) -> bool:

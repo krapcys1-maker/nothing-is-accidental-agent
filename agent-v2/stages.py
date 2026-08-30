@@ -671,7 +671,60 @@ def budzet_dnia(conn: sqlite3.Connection) -> dict[str, int]:
     }
     print(f"  [budżet dnia{' — rozbieg' if rozbieg else ''}] "
           + "  ".join(f"{k}={v}" for k, v in budzet.items()), flush=True)
+    _zapisz_budzet_dnia(dzis, budzet, rozbieg)
     return budzet
+
+
+BUDZETY = config.DATA_DIR / "budzety.json"
+
+
+def _zapisz_budzet_dnia(dzien: str, budzet: dict[str, int],
+                        rozbieg: bool) -> None:
+    """Zapisuje, ile agent SOBIE ZALOZYL na ten dzien.
+
+    PO CO. Licznik normy porownywal wykonanie z `config.normy_dzienne()`, czyli
+    ze SRODKIEM WIDELEK Z DZISIAJ. To jest zle z dwoch powodow naraz i oba
+    zmierzylem 30 sierpnia:
+
+    1. NORMA BYLA WSTECZNA. Widelki komentarzy zmienily sie tego dnia z (8,12)
+       na (15,23). Dzien 29 sierpnia, w ktorym agent zalozyl sobie 10 i zrobil
+       6 — czyli 60% wlasnego planu — pokazywal sie jako 32% normy, bo mierzono
+       go liczba, ktora wtedy nie istniala.
+
+    2. ROZBIEG OBNIZA BUDZET, A NIE NORME. Przez pierwsze 30 dni budzet leci
+       DOLNA POLOWA widelek, wiec srodek widelek jest systematycznie wyzszy niz
+       to, co system w ogole zamierza zrobic. Norma nieosiagalna z arytmetyki
+       nie mierzy jakosci pracy, tylko wiek konta.
+
+    Wykonanie planu i ambicja to dwa rozne pytania. Dopoki alarm nie umial ich
+    rozroznic, meldowal awarie w dniach, w ktorych wszystko dzialalo — a alarm,
+    ktory myli sie regularnie, uczy ignorowania siebie.
+
+    NIE NADPISUJEMY. Budzet jest deterministyczny w obrebie doby (ziarno z
+    daty), wiec kazdy przebieg policzy to samo; ale gdyby zmienila sie
+    konfiguracja w srodku dnia, obowiazuje ten, wedlug ktorego agent DZIALAL
+    od rana.
+    """
+    import json
+    try:
+        stan = (json.loads(BUDZETY.read_text(encoding="utf-8"))
+                if BUDZETY.exists() else {})
+        if not isinstance(stan, dict):
+            stan = {}
+        if dzien in stan:
+            return
+        stan[dzien] = {"budzet": dict(budzet), "rozbieg": bool(rozbieg)}
+        # Trzymamy 120 dni. Plik ma byc do czytania, nie archiwum.
+        for stary in sorted(stan)[:-120]:
+            stan.pop(stary, None)
+        BUDZETY.parent.mkdir(parents=True, exist_ok=True)
+        BUDZETY.write_text(json.dumps(stan, ensure_ascii=False, indent=1),
+                           encoding="utf-8")
+    except Exception as exc:
+        # NIGDY NIE ZABIJA PRZEBIEGU. Licznik jest wazny, ale nie wazniejszy
+        # od pracy, ktora mierzy.
+        print("  [budzet] nie zapisalem dziennego budzetu (%s)"
+              % type(exc).__name__, flush=True)
 
 
 def sesje_dnia() -> list[dict[str, Any]]:
