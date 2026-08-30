@@ -73,7 +73,20 @@ Return only valid JSON:
   "broken_belief": "<one plain sentence beginning 'Everyone assumes', or empty if the fact breaks no belief>",
   "why_they_believe_it": "<one sentence on where that belief comes from, or empty>",
   "the_moment": "<the concrete moment a reader can picture, one sentence>",
-  "search_terms": ["<3-6 phrases a researcher should search to document this properly>"]}}
+  "search_terms": ["<3-6 phrases a researcher should search to document this properly>"],
+  "sub_questions": ["<4-6 questions THE ARTICLE MUST ANSWER. Not search phrases — questions, each ending in a question mark. Together they should be the skeleton of the piece: what is the arrangement, who set it up, what does it cost and to whom, where else does it run, what would have to change for it to stop. A note answers one of these; an article answers most of them.>"],
+  "second_act": "<what happened AFTER the fact itself — a consequence, a reversal, a court case, an amendment, a company changing course. Empty string if nothing did.>",
+  "beyond_one_place": "<where the same arrangement runs OUTSIDE the one company, country or product in the fact. Name it concretely. Empty string if it is confined to one place.>"}}
+
+## Before you answer: is this an article at all?
+
+Be honest in `second_act` and `beyond_one_place`, and leave them EMPTY when the
+record gives you nothing. A fact with neither is a good NOTE and a bad article:
+complete in two sentences, and a thousand words of it would be padding.
+
+You are not being asked to justify writing this. Something else decides that,
+and it decides on those two fields. Filling them with hedges to be helpful is
+the one thing that breaks this.
 """
 
 
@@ -103,6 +116,84 @@ def temat_z_faktu(conn, run_id, fakt: dict) -> dict:
     brief["data_zrodla"] = fakt.get("source_date", "")
     brief["fakt_wyjsciowy"] = fakt.get("fact", "")
     return brief
+
+
+def glebokosc_z_oceny(ocena: dict) -> str:
+    """RICH / SINGLE / THIN — liczone z tego, co `warto_pisac` ZOBACZYLO.
+
+    SYGNAL BYL MARTWY. Kod czytal `ocena.get("depth")`, a kontrakt
+    `warto_pisac.md` pola `depth` NIE MA — produkuje je `wykonalnosc.md`, etap,
+    ktorego sciezka z puli w ogole nie wola. Wiec `glebokosc` bylo ZAWSZE
+    „RICH": pisarzowi zawsze kazano pisac najglebsza forme, niezaleznie od tego,
+    czy fakt to unosi. Jedyny mechanizm, ktory mogl skrocic chudy artykul,
+    cicho defaultowal na najdluzszy. Pole czytane, nigdy nieustawiane.
+
+    MODEL OBSERWUJE, KOD DECYDUJE — dlatego nie dopisuje `depth` do promptu i
+    nie pytam modelu drugi raz o to samo. `warto_pisac` juz odpowiada na piec
+    pytan tak/nie z uzasadnieniem; glebokosc jest ICH SUMA, a suma to robota
+    dla kodu. Samoocena „jak gleboki jest ten material" degeneruje do stalej,
+    tak samo jak wszystkie inne samooceny w tym potoku.
+
+    Progi: cztery lub piec filarow to RICH, dwa lub trzy SINGLE, jeden albo
+    zero THIN. Piec filarow to zlamane przekonanie, nazwany decydent, odczuwalna
+    liczba, druga dziedzina i nierozstrzygniety wynik — i to wlasnie ich brak
+    daje „lanie wody", bo pisarz nie ma czym wypelnic tysiaca slow poza
+    powtarzaniem tezy.
+    """
+    FILARY = ("contradicted_belief", "named_decider", "felt_number",
+              "second_domain", "unsettled_outcome")
+    ile = sum(1 for f in FILARY
+              if isinstance(ocena.get(f), dict) and ocena[f].get("present"))
+    if ile >= 4:
+        return "RICH"
+    return "SINGLE" if ile >= 2 else "THIN"
+
+
+def uniesie_artykul(brief: dict) -> tuple[bool, str]:
+    """Czy z tego faktu da sie napisac TYSIAC SLOW, czy tylko dwa zdania.
+
+    MODEL OBSERWUJE, KOD DECYDUJE. Prompt briefu prosil o „pytanie warte tej
+    dlugosci" i to bylo wszystko — a prosba w prompcie nie jest bramka.
+    Wlasciciel nazwal ryzyko wprost: „notatka moze byc o jednej malej kwestii,
+    cala informacja w dwoch zdaniach i za bardzo nie ma co rozwijac, a artykul
+    jakby wzial te info, to byloby lanie wody".
+
+    Dwa warunki, oba brane z tego, co model ZOBACZYL w rekordzie, a nie z jego
+    oceny, czy warto:
+
+    DRUGI AKT — czy po samym fakcie cos jeszcze sie stalo. Skutek, odwrocenie,
+    sprawa w sadzie, nowelizacja, firma zmieniajaca kurs. Fakt bez drugiego
+    aktu jest kompletny w jednym zdaniu i rozbicie go na akapity daje
+    rozdmuchana notke.
+
+    ZASIEG POZA JEDNO MIEJSCE — czy ten sam uklad chodzi gdzies poza jedna
+    firma, krajem albo produktem. Bez tego czytelnik bez zwiazku z ta jedna
+    rzecza nie ma po co czytac tysiaca slow.
+
+    JEDEN WYSTARCZY, nie oba. Wymaganie obu odrzucaloby dobre tematy: prawo,
+    ktore dopiero weszlo, nie ma jeszcze drugiego aktu, ale ma zasieg; awaria
+    w jednej firmie nie ma zasiegu, ale ma ciag dalszy, ktory jest cala
+    historia. Zadnego z dwoch — to jest notka.
+
+    Ta sama zasada, co przy `warto_pisac`, tylko PRZED researchem: tam ocena
+    przychodzi po wydaniu 0,32 USD i tak nic nie blokuje.
+    """
+    drugi = " ".join(str(brief.get("second_act") or "").split())
+    zasieg = " ".join(str(brief.get("beyond_one_place") or "").split())
+
+    # Krotkie wypelniacze („none", „n/a", „unclear") to puste pole napisane
+    # inaczej. Model proszony o uczciwosc czasem zamiast pustki wpisuje slowo.
+    def _pusty(s: str) -> bool:
+        return len(s.split()) < 4 or s.lower().rstrip(".") in {
+            "none", "n/a", "na", "unclear", "unknown", "nothing", "not stated"}
+
+    ma_drugi = not _pusty(drugi)
+    ma_zasieg = not _pusty(zasieg)
+    if ma_drugi or ma_zasieg:
+        return True, ("drugi akt: %s" % drugi[:70]) if ma_drugi else (
+            "zasieg: %s" % zasieg[:70])
+    return False, ("ani drugiego aktu, ani zasiegu poza jedno miejsce — "
+                   "to jest notka, nie artykul")
 
 
 def wybierz_fakt(conn, run_id, ile: int = 8) -> dict:
@@ -182,6 +273,42 @@ def main() -> int:
     print("  ZLAMANE PRZEKONANIE: %s" % (brief.get("broken_belief") or "(brak)"),
           flush=True)
 
+    # BRAMKA ARTYKULOWA — PRZED RESEARCHEM, bo po nim jest juz za pozno.
+    # Odrzucony fakt WRACA DO PULI jako material na notke: nie jest zly, tylko
+    # nie unosi tysiaca slow. Probujemy kolejnych, zamiast poddawac sie na
+    # pierwszym — dokladnie tak, jak `wybierz_fakt` robi to przy powtorkach.
+    unosi, powod = uniesie_artykul(brief)
+    proby = 1
+    while not unosi and proby < 4:
+        print("  ODPADA: %s" % powod, flush=True)
+        print("  (fakt zostaje w puli jako material na notke)", flush=True)
+        proby += 1
+        print()
+        print("-- proba %d: nastepny fakt --" % proby, flush=True)
+        try:
+            fakt = wybierz_fakt(conn, run_id)
+        except ValueError as exc:
+            print("  %s — koncze" % exc, flush=True)
+            return 1
+        brief = temat_z_faktu(conn, run_id, fakt)
+        print("  TYTUL:  %s" % brief.get("title"), flush=True)
+        print("  PYTANIE: %s" % brief.get("question"), flush=True)
+        unosi, powod = uniesie_artykul(brief)
+    if not unosi:
+        print("  ODPADA: %s" % powod, flush=True)
+        print(">> po %d probach zaden fakt nie uniesie artykulu — nie pisze."
+              " Pula zostaje na notki." % proby, flush=True)
+        return 1
+    print("  UNIESIE: %s" % powod, flush=True)
+
+    pod = [q for q in (brief.get("sub_questions") or []) if str(q).strip()]
+    if pod:
+        print()
+        print("  PYTANIA, NA KTORE ARTYKUL MA ODPOWIEDZIEC (%d):" % len(pod),
+              flush=True)
+        for q in pod:
+            print("    - %s" % str(q)[:110], flush=True)
+
     if "--tylko-temat" in sys.argv:
         return 0
 
@@ -189,7 +316,19 @@ def main() -> int:
     print()
     print("-- dyskoveria --", flush=True)
     recent = db.recent_domains(conn, config.DIVERSITY_LOOKBACK)
-    sources = stages.discovery(conn, run_id, brief["question"], recent)
+    # PODPYTANIA IDA DO DYSKOVERII, nie tylko do pisarza. Bez tego byly by
+    # ozdoba: model wypisalby szesc pytan, research szedlby po jednym glownym,
+    # a pisarz dostalby karte, ktora odpowiada na jedno z szesciu. Wlasciciel
+    # prosil wprost o to, zeby temat artykulu byl BARDZIEJ ZBADANY niz temat
+    # notki — a to znaczy wiecej pytan na wejsciu researchu, nie wiecej slow
+    # na wyjsciu pisarza.
+    pytanie_do_researchu = brief["question"]
+    if pod:
+        pytanie_do_researchu = (
+            brief["question"]
+            + "\n\nThe article must also answer:\n"
+            + "\n".join("- %s" % q for q in pod))
+    sources = stages.discovery(conn, run_id, pytanie_do_researchu, recent)
 
     print()
     print("-- pobieranie --", flush=True)
@@ -199,8 +338,8 @@ def main() -> int:
         print()
         print("-- za chudo — druga runda --", flush=True)
         juz = {c.get("url") for c in corpus}
-        dodatkowe = [s for s in stages.discovery(conn, run_id, brief["question"],
-                                                 recent)
+        dodatkowe = [s for s in stages.discovery(conn, run_id,
+                                                 pytanie_do_researchu, recent)
                      if s.get("url") not in juz]
         if dodatkowe:
             corpus = corpus + stages.fetch(conn, run_id, dodatkowe)
@@ -311,7 +450,8 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
 
     print()
     print("-- pisanie --", flush=True)
-    glebokosc = str(ocena.get("depth") or "RICH").upper()
+    glebokosc = glebokosc_z_oceny(ocena)
+    print("   glebokosc: %s" % glebokosc, flush=True)
     draft = stages.write(conn, run_id, card, glebokosc)
     print()
     print("   tytul: %s" % draft.get("title"), flush=True)
