@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **18 plików**, 15 989 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **18 plików**, 16 033 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 50 zestawów
-testów, 1480 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 52 zestawów
+testów, 1483 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-4895 wierszy, 101 funkcji na poziomie modułu, 0 klas
+4939 wierszy, 101 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -8282,7 +8282,7 @@ first. Do not omit any id and do not invent one.
 
 #### `prompts/bibliotekarz.md`
 
-**54 wierszy.** Pola wejsciowe: `bank`
+**57 wierszy.** Pola wejsciowe: `bank`
 
 ````markdown
 You are the archivist of a publication about artificial intelligence: what
@@ -8299,25 +8299,28 @@ quoting. You are looking for what these pieces have in common.
 Not topics. **Mechanisms.**
 
 A mechanism is the logic that makes an arrangement work, stated so it survives
-being lifted out of its subject. "Traffic lights are timed locally" is a topic.
-"A deliberately uniform interface hides a calibration that varies by location"
-is a mechanism — and once stated that way, an airbag and a bridge weight limit
-belong to it too.
+being lifted out of its subject. "This assistant refuses medical questions" is
+a topic. "A uniform surface hides a filter that was tuned for the operator's
+liability, not the user's question" is a mechanism — and once stated that way,
+a content moderation queue and an insurer's automated triage belong to it too.
 
-The publication's best article so far did exactly this. It began with the colour
-of a school bus and became a distinction between two kinds of standard: one
-enforced by physical lock-in, which fails by freezing, and one enforced by
-convention, which fails by fragmentation. The colour was interesting only once
-it had company.
+The publication's best article so far did exactly this. It began with one
+company's refusal wording and became a distinction between two kinds of limit:
+one written into the weights during training, which fails silently and cannot be
+appealed, and one applied by a separate filter afterwards, which fails loudly
+and can be switched off by whoever rents the system. The wording was interesting
+only once it had company.
 
 ## The one rule that matters
 
 A group is worth proposing **only when at least two excerpts in it come from
-genuinely different domains.** Aviation and cosmetics. Payment systems and road
-engineering. Food safety and fire regulation.
+genuinely different domains.** Everything here is about artificial intelligence,
+so the distance has to be found INSIDE the subject: how a model is trained and
+how a court treats its output. Chip supply and hiring decisions. Medical triage
+and the terms in a labelling contractor's agreement.
 
-Two excerpts about the same industry are not a group, they are one subject split
-in half. If everything you can assemble comes from one field, say so and return
+Two excerpts about the same company, the same product or the same week of
+coverage are not a group, they are one subject split in half. If everything you can assemble comes from one field, say so and return
 fewer groups. A short honest answer beats a padded one — a later pass will
 re-read this bank when more material has accumulated.
 
@@ -8891,7 +8894,7 @@ Return only this JSON:
 
 #### `prompts/fedreg.md`
 
-**92 wierszy.** Pola wejsciowe: `data`, `tekst`, `tytul`, `url`, `urzad`
+**93 wierszy.** Pola wejsciowe: `data`, `tekst`, `tytul`, `url`, `urzad`
 
 ````markdown
 Below is the preamble of a published US regulation. An agency issuing a rule has
@@ -8914,7 +8917,8 @@ held the belief, and the agency is on the record saying what is true instead.
 ## The four things every candidate needs
 
 **1. The wrong belief.** One sentence, in the words an ordinary person would
-use. Not "commenters argued" — what would a reader in a supermarket assume?
+use. Not "commenters argued" — what would a reader who does not work in this
+field assume?
 
 > The sharpest rule here: **"most people don't know" is not a belief.** It is
 > ignorance, and it produces trivia. The belief must be something a reader
@@ -9615,10 +9619,10 @@ not know" — nearly everything qualifies for that and it is why so many notes
 land as trivia and get scrolled past.
 
 Before writing, say to yourself in one plain sentence what the reader wrongly
-believes: *most people assume the yellow light is the same length everywhere*,
-*most people assume the petrol station is holding their money*. If you cannot
-write that sentence, this material is trivia and the note will not travel,
-however unusual the fact is.
+believes: *most people assume the assistant remembers the conversation it is
+having*, *most people assume a refusal means something dangerous was detected*.
+If you cannot write that sentence, this material is trivia and the note will not
+travel, however unusual the fact is.
 
 The reason is not taste. Curiosity is a response to a gap somebody recognises
 in their own knowledge, and a gap only exists where there was a belief. A reader
@@ -10539,7 +10543,7 @@ Include every sentence in `sentences`. Repeat only the failing ones in
 
 #### `prompts/restack.md`
 
-**82 wierszy.** Pola wejsciowe: `autor`, `tekst`
+**83 wierszy.** Pola wejsciowe: `autor`, `tekst`
 
 ````markdown
 Somebody else wrote the note below. You are deciding whether to pass it on to
@@ -10568,10 +10572,11 @@ from shampoo bottles or insurance policies is off the subject, however neat it
 is. So the move
 available here, and almost nowhere else, is:
 
-**naming where else the same logic runs.** A note about airline overbooking
-meets the fuel-pump hold; a note about a confusing label meets the
-period-after-opening symbol. Two lines that demonstrate the whole premise of the
-publication in practice, on somebody else's post, in front of their readers.
+**naming where else the same logic runs.** A post about a model refusing a
+request meets the moderation queue that was tuned to the same liability; a post
+about a benchmark score meets the evaluation a lab ran on itself before
+shipping. Two lines that demonstrate the whole premise of the publication in
+practice, on somebody else's post, in front of their readers.
 
 **But do not announce the move.** The first live test produced two restacks and
 both opened with the identical words — *"This is the same mechanism as…"*. Two
@@ -10580,11 +10585,11 @@ restack begins the same way reads as a script running, not a person reading.
 
 Say the other case and let the reader see the rectangle. Compare:
 
-- Formula: *This is the same mechanism as a fuel-pump hold.*
-- Better: *Fuel pumps do this too — the hold is sized to the biggest tank you
-  might have, not the fuel you bought.*
-- Better: *Cosmetics regulators reached the opposite answer to the same
-  question, and the label still looks identical.*
+- Formula: *This is the same mechanism as the pre-release evaluation.*
+- Better: *The safety evaluation does this too — it is sized to the worst
+  request anybody might send, not the one you actually sent.*
+- Better: *Two jurisdictions reached the opposite answer to that same question,
+  and the disclosure on the page still looks identical in both.*
 
 If your sentence would work with the subject swapped for anything else, it is
 the formula, not a thought.
@@ -10630,7 +10635,7 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/skaut.md`
 
-**499 wierszy.** Pola wejsciowe: `count`, `history_json`, `pytania_czytelnikow`, `zaczyn_kanalow`
+**524 wierszy.** Pola wejsciowe: `count`, `history_json`, `pytania_czytelnikow`, `zaczyn_kanalow`
 
 ````markdown
 You are a topic scout for the English-language Substack "Nothing Is Accidental",
@@ -10744,11 +10749,13 @@ belief. Someone who has no opinion about a thing has no gap, feels no pull, and
 will not read. Someone who is confidently wrong feels the pull the instant you
 say so.
 
-It is also why our worst article failed and had to be deleted. It was about a
-symbol printed on cosmetics packaging. The facts were fine, the sources were
-good — and most readers had never consciously noticed that symbol, so they held
-no belief about it, so there was nothing to break. We spent a full paid research
-run discovering that.
+It is also why our worst article failed and had to be deleted. It was built on a
+marking that almost nobody had ever consciously noticed. The facts were fine and
+the sources were good — and because no reader held a belief about the thing,
+there was nothing to break. We spent a full paid research run discovering that.
+The subject of this publication has changed since; the mistake has not stopped
+being available, and a clause in a licence nobody reads is the same failure in
+new clothes.
 
 The test, applied before you propose anything:
 
@@ -10759,17 +10766,19 @@ If you cannot, this topic is not of the first kind. It may still be of the
 second — but do not label it so merely because the belief would not come.
 
 **Strong, because the belief is real and wrong:**
-- *Everyone assumes the yellow traffic light lasts the same everywhere.* It is
-  computed per intersection, and a downhill approach lengthens it.
-- *Everyone assumes the petrol station is holding their money.* The bank holds
-  it and controls when it comes back.
-- *Everyone assumes school-bus yellow was chosen because it is the most visible
-  colour.* It was chosen as the best background for black lettering.
+- *Everyone assumes the assistant remembers the conversation they are having.*
+  Most of them re-read the whole thing from the start on every turn, and what
+  falls out of the middle is decided by a rule nobody shows you.
+- *Everyone assumes a refusal means the system detected something dangerous.*
+  A large share of them are decided before the model sees the request at all,
+  by a separate and much cruder thing sitting in front of it.
+- *Everyone assumes the free tier and the paid tier are the same system doing
+  the same amount of work.*
 
 **Dead, because there is no belief to break:**
-- The open-jar symbol on cosmetics — most readers have never registered it.
-- The length of an annex to a tuna-labelling regulation — nobody has a prior.
-- "Here is an interesting fact about lighthouses" — interesting is not a belief.
+- The exact wording of a licence clause on a model card — nobody has a prior.
+- A number in a benchmark table two versions out of date.
+- "Here is an interesting fact about transformers" — interesting is not a belief.
 
 Aim at the belief that is **widely held and confidently wrong**, and prefer the
 ones where being wrong costs the reader something — money, time, safety, or the
@@ -10792,58 +10801,72 @@ objects.** This one asks:
 
 ### Where these live, and how to find them
 
-Do not start from an object and ask whether it has a system. Start from the
+Do not start from a product and ask whether it has a system. Start from the
 **rulebook** and ask what wrote it.
 
-Almost every serious procedure in the world is **scar tissue**. Somebody died,
-or an institution nearly stopped working, and the clause exists because of that
-day. That is not a rare property — it is how rulebooks are made. Once you look
-for it, the supply is very large:
+A procedure worth a thousand words is **scar tissue**. Something went wrong to
+somebody, publicly enough that a rule had to be written afterwards, and the
+clause exists because of that week. This is not rare in our subject. It is young
+enough that most of its rulebooks were written inside the last few years, and
+you can still see the incident showing through the text.
 
-- **aviation** — crew rest, duty hours, runway incursions, diversion, grounded
-  fleets, what a captain may overrule
-- **elections and succession** — deadlocked votes, a candidate dying mid-ballot,
-  a head of state incapacitated, who signs while nobody is in charge
-- **markets and banks** — halted trading, a bank failing on a Friday, a clearing
-  house short, deposits above the guarantee
-- **medicine and hospitals** — a full emergency room turning ambulances away,
-  power failing mid-operation, a drug recalled while people are on it
-- **nuclear, chemical, industrial** — evacuation orders, exclusion zones,
-  who may refuse to restart a plant
-- **food and water** — a boil-water order, a recall the maker refuses,
-  a contaminated batch already in shops
-- **buildings and fire** — alarms disabled during works, evacuation of a tower,
-  who condemns a structure
-- **transport and shipping** — a stuck vessel, a stranded train, a port closed
-- **courts, prisons, borders** — a trial collapsing, a mistaken release,
-  someone stateless in transit
+The seam runs wherever **a machine decides something about a person and a
+document says what happens when it turns out to be wrong.** That is a very large
+territory. What follows is a sample of it to prove the supply, not a menu to
+pick from — a topic that could only have come from this list is a topic every
+other scout would have found too:
 
-Each of those has documented disasters with dates, names and the rule that
-followed. **That is the seam. Mine it.** You are not being asked to invent
+- **a decision made about somebody** — a benefit stopped, a claim scored, a CV
+  filtered, an exam flagged, a face matched, an account closed with no human
+  anywhere in the path
+- **the courtroom** — machine output offered as evidence, invented citations
+  filed in a real case, who answers when the thing that spoke was rented
+- **what was promised and what shipped** — the launch claim, the system card,
+  the evaluation that ran before release and who was able to stop it
+- **the material underneath** — where the training data came from, who was paid
+  for it, what a deletion demand means once a thing has been trained
+- **withdrawal** — a model retired while businesses run on it, an assistant
+  changing behaviour overnight, notice periods that exist or do not
+- **the invisible labour** — the people who label, moderate and correct, and
+  what their contracts say about the work
+- **the thing that acts on its own** — an agent that spends money, sends a
+  message or files something, and the complaint or chargeback rule behind it
+- **safety-critical use** — cleared once, updated continuously, and whether the
+  original clearance still covers what now runs
+- **who may say what a system is** — provenance marks, disclosure duties,
+  audits, and what any of it obliges when nobody is looking
+
+Each of those has documented cases with dates, people and the rule that came
+after. **That is the seam. Mine it.** You are not being asked to invent
 anything — you are being asked to recall what already happened and what it
 changed.
 
 Examples of the shape:
 
-- What happens to trading when a market falls far enough, fast enough — who
-  stops it, at what point, and for how long.
-- What happens if the people whose job is to choose a successor cannot agree,
-  and how long that has been allowed to run before.
-- What happens to a flight when the airport it is heading for closes.
-- What happens to the money in an account when the institution holding it fails
-  on a Friday afternoon.
-- What happens to a country in the hours after its head of state is killed.
+- What happens to the people an automated fraud system wrongly accused, once it
+  is admitted the system was wrong — who repays them, under what obligation.
+- What happens to a case built on evidence a machine produced, when the method
+  behind it cannot be examined by the other side.
+- What happens to the businesses running on a model when its maker withdraws
+  it — what notice was owed, and where that is written down.
+- What happens inside a company when its own evaluation says the system is not
+  safe to ship — who is empowered to stop the release, and on paper.
+- What happens to somebody's data after they demand its deletion and it is
+  already inside the weights.
 
 ### The two failure modes, named
 
-**Too small.** A hotel overbooking your room, a shop's card minimum, a missing
-will — these have procedures, but the procedure binds one person and nothing was
-rewritten because of them. That is a note. Good, publishable, but a note.
+**Too small.** One account wrongly suspended, one refund a chatbot promised in
+error, one generator refusing a prompt — these have procedures, but the
+procedure binds one person and nothing was rewritten because of them. That is a
+note. Good, publishable, but a note.
 
-**Too vague.** "What happens in a war" has no rulebook you can name. Skip it.
+**Too vague.** "What happens when AI takes the jobs" has no rulebook you can
+name. Skip it.
 
-Aim between: **a moment that stops an institution, governed by a document, with
-dead people or a near-catastrophe behind the clause.**
+Aim between: **a moment that stops an institution or reaches a whole class of
+people at once, governed by a document, with somebody's real loss behind the
+clause.**
 
 **Four conditions. The third keeps us honest; the fourth decides the length.**
 
@@ -10860,10 +10883,12 @@ A subject that meets the first three and not the fourth is a **note**: there is
 a rule, here it is, done in forty words. A subject that meets all four is an
 article, because each occasion the system failed is a scene with people in it,
 and the clause that followed is the consequence. That is the difference between
-"what happens when a voting machine fails" — a form and a provisional ballot —
-and "what happens when the people who must choose a successor cannot agree",
-where the answer runs through a three-year deadlock, a roof removed by an
-impatient town, and a rule written afterwards to make sure it never repeated.
+"what happens when a chatbot quotes a policy the company does not have" — a
+tribunal, a small sum, finished in forty words — and "what happens to the people
+an automated system wrongly accuses of fraud", where the answer runs through
+tens of thousands of households, years of repayment demands, a government that
+resigned over it, and the rules written afterwards to stop a machine doing that
+unattended again.
 
 Condition three is the whole guard, and it is not negotiable. Without a document
 that decides the outcome, this is fortune-telling, and we do not publish
@@ -10953,15 +10978,17 @@ question strings. `ranking` holds zero-based indices into `topics`.
 - `A_COUNTRY` — the state itself has to keep functioning through it.
 
 This is the second thing that separates an article from a note, and it is easy
-to miss because both feel dramatic while you are writing them down. A voting
-machine failing is `A_PLACE`: five hundred votes, one precinct, a form to fill
-in. A head of state being shot is `A_COUNTRY`: there is a succession written
-down, a chain of command, a moment where nobody is certain who is in charge, and
-every one of those clauses exists because it went wrong before.
+to miss because both feel dramatic while you are writing them down. One shop's
+camera misidentifying one customer is `A_PLACE`: one branch, one complaint, a
+form to fill in. A national benefits system flagging families as fraudsters is
+`A_COUNTRY`: the money has to be clawed back or repaid, ministers have to answer
+for it, and every clause written afterwards exists because it went wrong at that
+scale first.
 
 Both are picturable. Both have a rulebook. Only one of them stops a country.
 
-Do not inflate this. A refund dispute is `ONE_PERSON` however annoying it was.
+Do not inflate this. An assistant refusing your prompt is `ONE_PERSON` however
+annoying it was.
 
 `precedents` is a list of objects, possibly empty, each shaped:
 
@@ -10980,9 +11007,10 @@ kind has produced good pieces and we are not abandoning it; it is simply not
 where the long ones come from. This is a hard requirement, not a preference. A
 list where every entry is a product with an empty `precedents` array is a failed
 list — it means you searched your memory for
-things rather than for rulebooks, and we will have nothing to publish at
+products rather than for rulebooks, and we will have nothing to publish at
 article length. If your first pass comes out that way, do the second pass
-properly: pick a field from the list above, recall its famous disaster, and work
+properly: think of an occasion when an automated decision was later admitted to
+have been wrong, recall what it cost the people it was wrong about, and work
 backwards to the moment a reader would recognise.
 
 **For `BROKEN_BELIEF`, also give `broken_belief` and `why_they_believe_it`.**
@@ -11033,23 +11061,24 @@ reader has already read three pieces.
 **This is the field that decides whether a subject is an article or a note, and
 it is the one that has been missing.** Read it twice.
 
-A procedure on its own is a note. "When a voting machine fails, poll workers
-issue provisional ballots and file a form" is a complete answer in a sentence,
-and no list of sub-questions changes that. Who signs the form, how many hours
-they may extend, what the form is called — those are clauses of one procedure,
-not separate stories. Splitting a procedure into its own paragraphs and calling
+A procedure on its own is a note. "When an account is closed by an automated
+check, the holder files an appeal and a reviewer looks at it" is a complete
+answer in a sentence, and no list of sub-questions changes that. Who reviews it,
+how many days they have, what the form is called — those are clauses of one
+procedure, not separate stories. Splitting a procedure into its own paragraphs and calling
 them threads produces a padded note, which is exactly what we keep publishing.
 
 What carries an article is a procedure **that exists because something went
 wrong**, more than once, in ways somebody could recount over dinner.
 
-The papal conclave is the clean example. After one pope died the cardinals
-argued for the better part of three years, until the townspeople took the roof
-off the building they were sitting in and cut their food down to bread and
-water. The rule that locks a conclave in a sealed room came *out of that*. Read
-that rulebook and you are reading scar tissue: each clause is a disaster
-somebody had to survive first. Trading halts exist because of a specific day in
-1987. That is what a thousand words is made of.
+The clean example inside our own subject is the lawyer who filed a brief citing
+cases that did not exist, because the assistant that drafted it produced them
+and sounded certain. The sanction was one story, and the smaller one. What came
+*out of it* was the second: courts began issuing standing orders about what must
+be disclosed and certified when a filing was machine-drafted, and those orders
+are now a rulebook somebody can read. Each clause is a specific bad week that
+somebody had. That is what a thousand words is made of — not the incident, the
+clause it left behind.
 
 So list, for each topic, the occasions when this system was genuinely tested.
 For each: roughly when, what actually happened — with the people or the place in
@@ -11060,12 +11089,13 @@ afterwards.
 of detail wanted:
 
 ```
-when:          2009
-what_happened: a regional airliner went down on approach with everyone aboard
-               killed, and the inquiry centred on two exhausted pilots who had
-               commuted overnight to reach the aircraft
-what_changed:  prescriptive limits on duty hours and minimum rest, replacing
-               rules the industry had set for itself
+when:          the early 2020s
+what_happened: a man was arrested at his own house in front of his children
+               after a face-matching system returned him as the suspect from a
+               shop's security footage, and he was held for most of a day before
+               anybody compared the photograph on file to the man in the cell
+what_changed:  rules in that jurisdiction forbidding an arrest on a match alone,
+               requiring independent evidence first, written after the case
 ```
 
 That is one entry. Two like it and the subject carries an article.
@@ -11078,9 +11108,9 @@ are fine; "the late 1980s" is an acceptable `when`.
 **Fewer than two, and the subject is a note.** Say so honestly with a short list
 or an empty one. But before you write an empty list, go back and ask whether you
 chose a subject too small to have a history — that is almost always what an
-empty list means. A hotel overbooking has no disasters behind it because nothing
-about it was ever bad enough to rewrite a law. **Change the subject, not the
-answer.**
+empty list means. One request being refused has no disasters behind it, because
+nothing about it was ever bad enough to make anybody rewrite a rule. **Change
+the subject, not the answer.**
 
 Do not invent incidents to fill this field. A fabricated precedent is worse than
 an empty list, because the research stage will spend real money failing to find
@@ -11138,7 +11168,7 @@ into them. The rest of the fields are the evidence; this is the judgement.
 
 #### `prompts/synteza.md`
 
-**108 wierszy.** Pola wejsciowe: `evidence_json`, `max_claim_chars`, `max_confirmed`, `max_contradictions`, `max_numbers`, `max_uncertain`, `min_confirmed`, `min_numbers`, `question`
+**116 wierszy.** Pola wejsciowe: `evidence_json`, `max_claim_chars`, `max_confirmed`, `max_contradictions`, `max_numbers`, `max_uncertain`, `min_confirmed`, `min_numbers`, `question`
 
 ````markdown
 You are building the evidence card for one article. Everything the writer is
@@ -11220,12 +11250,20 @@ Name **two to four other domains where the same mechanism shows up**. Not
 loose comparisons — the same logic doing the same work somewhere the reader
 would not expect.
 
-A worked example from a piece that succeeded. The subject was the vent hole in
-an aircraft window: pierce the inner pane so it carries no pressure, and the
-outer pane takes the whole load. The shape is *build a deliberate weakness so
-you can choose where the strength goes*. The same shape is the electrical fuse,
-the sacrificial anode on a ship's hull, and the crumple zone in a car. Three
-domains, one idea, and the article became about something larger than a window.
+A worked example of the move. Take *build a deliberate weakness so you can
+choose where the strength goes* — a shape this publication proved on an earlier
+subject, before it wrote about these systems. Inside this subject it is
+everywhere, and in places that do not resemble each other: a model trained to
+refuse an entire category so no hard case ever reaches a judgement; a service
+that quietly drops to a smaller model under load so it degrades instead of
+failing; a slice of a benchmark withheld from training so the number still means
+something afterwards. Three places, one idea — and the piece becomes about
+something larger than the thing it started with.
+
+Notice what those three have in common besides the shape: **none of them is the
+same kind of work.** One is training, one is serving, one is measurement. That
+distance is what you are looking for. Two chatbots doing a similar thing is one
+domain twice.
 
 A piece that failed had none of this. The open-jar symbol on cosmetics is a
 countdown that starts when you break the seal — true, sourced, and finished in
@@ -11255,11 +11293,17 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/warto_pisac.md`
 
-**143 wierszy.** Pola wejsciowe: `card_json`
+**151 wierszy.** Pola wejsciowe: `card_json`
 
 ````markdown
 You read the evidence card **before** the writer sees it, and you answer one
 question: is there a gap here that a stranger would feel?
+
+This is for "Nothing Is Accidental", a publication **about artificial
+intelligence**: what these systems actually do, how they are built, who decides
+what they are allowed to do, and what that arrangement hands the people who
+built it. Material that is not about that subject does not become worth writing
+by being interesting.
 
 You are not deciding whether to publish. You are deciding whether this material
 stands on its own, or whether it must wait for company from the archive.
@@ -11295,8 +11339,9 @@ period-after-opening symbol printed on cosmetics was dull, and the diagnosis was
 wrong for weeks: we blamed its length. The real fault was that most readers hold
 no belief at all about that symbol — many have never consciously noticed it.
 Confidence near zero, so no gap, so nothing to close. The padding was a symptom.
-By contrast, every reader believes the yellow traffic light lasts the same
-everywhere. That belief is wrong, and saying so opens a gap instantly.
+By contrast, every reader who has used one of these systems believes it is
+reading their whole conversation back every time they reply. That belief is
+wrong, and saying so opens a gap instantly.
 
 The same test, in this subject: nearly everyone believes a chatbot's confident
 tone tracks how sure it is, that a higher benchmark score means a better answer
@@ -11346,8 +11391,9 @@ quantity, a price, a count? A section number, docket reference or identifier
 made of digits does not count: it is a label, not a magnitude.
 
 **4. THE SECOND DOMAIN.** Does `parallel_mechanisms` point at a field genuinely
-different from the subject's own? Aviation and cosmetics counts. Two payment
-systems does not.
+different from the subject's own? Everything here is about artificial
+intelligence, so the distance is found inside it: model training and courtroom
+evidence counts. Two chatbots does not.
 
 **5. THE UNSETTLED OUTCOME.** This one is different in kind from the four above,
 and it is the only one that can carry a piece on its own, so read it slowly.
@@ -11603,7 +11649,7 @@ below is a claim about this date, not about the date its source was written.
 
 #### `prompts/wykonalnosc.md`
 
-**95 wierszy.** Pola wejsciowe: `topics_json`
+**97 wierszy.** Pola wejsciowe: `topics_json`
 
 ````markdown
 You are screening article topics for whether they can actually be researched.
@@ -11654,11 +11700,13 @@ It was stretched to eleven hundred words by restating the mechanism three times,
 spending three paragraphs on what the evidence did not say, and narrating its own
 research. Well documented, correctly reported, and dull.
 
-Compare a piece that worked: the vent hole in an aircraft window. Same shape of
-finding — one mechanism, well sourced — but it had **a second act**. The same
-pattern (build a deliberate weakness so you can choose where the strength goes)
-turned out to be the fuse, the sacrificial anode, the crumple zone. Three
-domains, one idea.
+Compare a finding that carried. Same shape — one mechanism, well sourced — but
+it had **a second act**: the pattern turned up again somewhere that did not
+resemble it. *Build a deliberate weakness so you can choose where the strength
+goes* is the refusal that covers a whole category rather than judge each case,
+the fallback to a smaller model under load, and the benchmark slice held back
+from training. Three places, one idea, and none of the three is the same kind of
+work as the others.
 
 So judge `depth` for each topic:
 

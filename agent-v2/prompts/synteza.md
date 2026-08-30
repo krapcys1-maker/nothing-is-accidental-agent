@@ -77,12 +77,20 @@ Name **two to four other domains where the same mechanism shows up**. Not
 loose comparisons — the same logic doing the same work somewhere the reader
 would not expect.
 
-A worked example from a piece that succeeded. The subject was the vent hole in
-an aircraft window: pierce the inner pane so it carries no pressure, and the
-outer pane takes the whole load. The shape is *build a deliberate weakness so
-you can choose where the strength goes*. The same shape is the electrical fuse,
-the sacrificial anode on a ship's hull, and the crumple zone in a car. Three
-domains, one idea, and the article became about something larger than a window.
+A worked example of the move. Take *build a deliberate weakness so you can
+choose where the strength goes* — a shape this publication proved on an earlier
+subject, before it wrote about these systems. Inside this subject it is
+everywhere, and in places that do not resemble each other: a model trained to
+refuse an entire category so no hard case ever reaches a judgement; a service
+that quietly drops to a smaller model under load so it degrades instead of
+failing; a slice of a benchmark withheld from training so the number still means
+something afterwards. Three places, one idea — and the piece becomes about
+something larger than the thing it started with.
+
+Notice what those three have in common besides the shape: **none of them is the
+same kind of work.** One is training, one is serving, one is measurement. That
+distance is what you are looking for. Two chatbots doing a similar thing is one
+domain twice.
 
 A piece that failed had none of this. The open-jar symbol on cosmetics is a
 countdown that starts when you break the seal — true, sourced, and finished in

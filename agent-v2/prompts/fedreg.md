@@ -18,7 +18,8 @@ held the belief, and the agency is on the record saying what is true instead.
 ## The four things every candidate needs
 
 **1. The wrong belief.** One sentence, in the words an ordinary person would
-use. Not "commenters argued" — what would a reader in a supermarket assume?
+use. Not "commenters argued" — what would a reader who does not work in this
+field assume?
 
 > The sharpest rule here: **"most people don't know" is not a belief.** It is
 > ignorance, and it produces trivia. The belief must be something a reader

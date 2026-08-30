@@ -13,7 +13,7 @@
 {{"kolejnosc": [<id>, <id>, ...],
 ```
 
-#### `bibliotekarz.md` (54 wierszy)
+#### `bibliotekarz.md` (57 wierszy)
 
 **Pola wejściowe:** `bank`
 
@@ -53,7 +53,7 @@
 {{"sources": [{{"url": "...", "title": "...", "publisher": "...", "class": "PRIMARY"|"SUPPORTING", "answers_why": true, "has_numbers": true, "note": "..."}}]}}
 ```
 
-#### `fedreg.md` (92 wierszy)
+#### `fedreg.md` (93 wierszy)
 
 **Pola wejściowe:** `data`, `tekst`, `tytul`, `url`, `urzad`
 
@@ -153,7 +153,7 @@
 {{"sentences": [{{"text": "<the sentence, verbatim>", "class": "FACT"|"INFERENCE"|"PROSE", "supported": true|false, "why": "<only when class is FACT and supported is false: what is asserted and what the card lacks>"}}], "unsupported_facts": [{{"text": "...", "why": "..."}}], "summary": "<one sentence>"}}
 ```
 
-#### `restack.md` (82 wierszy)
+#### `restack.md` (83 wierszy)
 
 **Pola wejściowe:** `autor`, `tekst`
 
@@ -163,7 +163,7 @@
 {{"restack": true|false, "reason": "<one sentence: why this is or is not worth passing on>", "sentence": "<your sentence, or empty string if restack is false>", "mechanism_named": "<the other place this same logic runs, or empty string>"}}
 ```
 
-#### `skaut.md` (499 wierszy)
+#### `skaut.md` (524 wierszy)
 
 **Pola wejściowe:** `count`, `history_json`, `pytania_czytelnikow`, `zaczyn_kanalow`
 
@@ -173,7 +173,7 @@
 {{"when": "<roughly when>", "what_happened": "<what people saw, in one sentence>", "what_changed": "<the rule or practice that came out of it, or 'nothing'>"}}
 ```
 
-#### `synteza.md` (108 wierszy)
+#### `synteza.md` (116 wierszy)
 
 **Pola wejściowe:** `evidence_json`, `max_claim_chars`, `max_confirmed`, `max_contradictions`, `max_numbers`, `max_uncertain`, `min_confirmed`, `min_numbers`, `question`
 
@@ -183,7 +183,7 @@
 {{"working_thesis": "...", "main_mechanism": "...", "confirmed_claims": [{{"claim": "...", "evidence": "<verbatim excerpt>", "url": "..."}}], "citable_numbers": [{{"value": "...", "means": "...", "url": "..."}}], "parallel_mechanisms": [{{"domain": "...", "how_it_matches": "<one sentence: the same logic doing the same work>"}}], "uncertain_claims": ["..."], "contradictions": ["..."], "not_established": ["..."], "source_dates": {{"newest": "<YYYY-MM-DD of the most recent source you used>", "oldest": "<YYYY-MM-DD of the oldest>", "note": "<one clause: what the reader should know about how current this is>"}}}}
 ```
 
-#### `warto_pisac.md` (143 wierszy)
+#### `warto_pisac.md` (151 wierszy)
 
 **Pola wejściowe:** `card_json`
 
@@ -203,7 +203,7 @@
 {{"claims": [{{"claim": "<what the text asserts>", "status": "confirmed"|"refuted"|"outdated"|"unverified", "url": "<source, or empty>", "source_date": "<when that source was published, YYYY-MM-DD, or empty>", "what_the_source_says": "<one sentence, required for refuted and outdated>"}}], "safe_to_post": true|false, "verdict": "<one sentence>"}}
 ```
 
-#### `wykonalnosc.md` (95 wierszy)
+#### `wykonalnosc.md` (97 wierszy)
 
 **Pola wejściowe:** `topics_json`
 

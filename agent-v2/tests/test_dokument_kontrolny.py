@@ -98,15 +98,47 @@ ok, powod = wolno(source_date="2018-05-25", control_verdict="CONFIRMS",
 sprawdz("ustawa z 2018 przechodzi (kotwica 3015 dni)", ok, powod)
 
 print()
-print("=== 4. CONFIRMS MUSI BYC SPRAWDZENIEM NA DZIS ===")
-ok, powod = wolno(control_verdict="CONFIRMS", control_date="2024-01-01",
-                  control_fact="x")
-sprawdz("stary dokument kontrolny nie jest sprawdzeniem", not ok, powod)
-sprawdz("prog liczony na DACIE KONTROLNEJ", "kontrolny ma" in powod, powod)
+print("=== 4. CONFIRMS MUSI BYC SPRAWDZENIEM NA DZIS — ALE TYLKO TAM, ===")
+print("===    GDZIE 'DZIS' W OGOLE COS ZNACZY                        ===")
+# ZMIERZONE 30 sierpnia na produkcji. Prog stal na KAZDYM CONFIRMS i wyrzucal
+# piec z osmiu OPLACONYCH faktow. Cztery z tych pieciu byly bezczasowe: liczba
+# genow kodujacych bialko, prefill czytajacy caly prompt naraz, kuracja danych
+# treningowych, badanie podluzne. Dla nich nie istnieje swiezszy dokument
+# rzadzacy, bo nic sie nie zmienilo — prog nie chronil przed niczym i kosztowal
+# 62% partii.
+#
+# Ta sekcja sprawdzala prog na atrapie `fact="x"`, czyli na zdaniu, ktore
+# niczego nie twierdzi o terazniejszosci. Dlatego przechodzila, choc opisywala
+# regule szersza, niz nam potrzebna.
+TERAZ_TEKST = ("The newest model from that lab supports a far larger context "
+               "window than the one before it.")
+BEZCZASOWY = ("In a 12-month longitudinal study, participants described their "
+              "own reasoning differently afterwards.")
 
-ok, _ = wolno(control_verdict="CONFIRMS", control_date="",
+ok, powod = wolno(fact=TERAZ_TEKST, control_verdict="CONFIRMS",
+                  control_date="2024-01-01", control_fact="x")
+sprawdz("stary dokument nie jest sprawdzeniem, gdy fakt mowi o dzis",
+        not ok, powod)
+sprawdz("prog liczony na DACIE KONTROLNEJ", "kontroln" in powod, powod)
+
+ok, powod = wolno(fact=BEZCZASOWY, control_verdict="CONFIRMS",
+                  control_date="2024-01-01",
+                  control_fact="szukalem, nic nowszego nie zmienia wyniku")
+sprawdz("ale fakt bezczasowy ze starym dokumentem PRZECHODZI", ok, powod)
+ok, powod = wolno(fact=BEZCZASOWY, control_verdict="CONFIRMS",
+                  control_date="2024-01-01", control_fact="")
+sprawdz("bezczasowy bez sladu szukania nadal odpada", not ok, powod)
+
+ok, _ = wolno(fact=BEZCZASOWY, control_verdict="CONFIRMS", control_date="",
               control_fact="szukalem, nic nowszego nie ma")
 sprawdz("brak daty uchodzi ze sladem szukania", ok)
+# Druga polowa tej samej wady: przed poprawka POMINIECIE daty bylo latwiejsza
+# droga niz jej podanie. Model z prawdziwym dokumentem w reku byl odrzucany,
+# model bez dokumentu — nie. Nagradzalismy mniej informacji.
+ok, powod = wolno(fact=TERAZ_TEKST, control_verdict="CONFIRMS",
+                  control_date="", control_fact="szukalem, nic nowszego nie ma")
+sprawdz("przy twierdzeniu o dzis brak daty NIE jest latwiejsza droga",
+        not ok, powod)
 ok, powod = wolno(control_verdict="CONFIRMS", control_date="", control_fact="")
 sprawdz("ale puste pole juz nie", not ok, powod)
 

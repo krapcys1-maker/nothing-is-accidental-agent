@@ -106,10 +106,10 @@ not know" — nearly everything qualifies for that and it is why so many notes
 land as trivia and get scrolled past.
 
 Before writing, say to yourself in one plain sentence what the reader wrongly
-believes: *most people assume the yellow light is the same length everywhere*,
-*most people assume the petrol station is holding their money*. If you cannot
-write that sentence, this material is trivia and the note will not travel,
-however unusual the fact is.
+believes: *most people assume the assistant remembers the conversation it is
+having*, *most people assume a refusal means something dangerous was detected*.
+If you cannot write that sentence, this material is trivia and the note will not
+travel, however unusual the fact is.
 
 The reason is not taste. Curiosity is a response to a gap somebody recognises
 in their own knowledge, and a gap only exists where there was a belief. A reader

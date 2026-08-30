@@ -1349,15 +1349,59 @@ def swiezosc_faktu(fakt: dict[str, Any], teraz=None) -> tuple[bool, str]:
         return True, ""
     if werdykt == "CONFIRMS":
         wiek_k = wiek_zrodla_w_dniach(fakt.get("control_date"), teraz=teraz)
-        # Brak daty kontrolnej uchodzi TYLKO wtedy, gdy model zapisal, ze
-        # szukal i nic nowszego nie ma. Puste pole to nie to samo.
+
+        # CZY TEN FAKT W OGOLE MOZE SIE ZESTARZEC. To jest cale rozroznienie i
+        # kosztowalo pieniadze, zanim je zobaczylem.
+        #
+        # Zmierzone na przebiegu 30 sierpnia: z osmiu OPLACONYCH faktow piec
+        # wylecialo na tym progu, a cztery z tych pieciu byly BEZCZASOWE —
+        # dwadziescia tysiecy genow kodujacych bialko, prefill czytajacy caly
+        # prompt naraz, kuracja danych treningowych, badanie podluzne sprzed
+        # roku. Dla nich nie istnieje swiezszy dokument rzadzacy, bo nic sie
+        # nie zmienilo. Model podal PRAWDZIWY dokument z prawdziwa data i
+        # zostal za to ukarany.
+        #
+        # Gorzej: kara byla ZA PRECYZJE. Model, ktory daty nie poda wcale, a
+        # napisze „szukalem, nie ma nowszego", przechodzil. Ten sam model z
+        # dokumentem w reku — nie. Zachecalismy do mniej informacji.
+        #
+        # Prompt mowil zreszta cos innego niz kod: „dokument kontrolny NIE MUSI
+        # byc nowszy od zrodla, ma RZADZIC", i wprost blogoslawil ustawe z 2018
+        # wciaz obowiazujaca. Kod ja odrzucal. Sygnal wytworzony i wyrzucony.
+        #
+        # Wiec prog zostaje tam, gdzie ma sens: przy twierdzeniu, ktore MOWI O
+        # STANIE DZIS albo nazywa wersje. Tam stary dokument naprawde nie jest
+        # sprawdzeniem — uklad z Kenii wygladal dobrze pod stara kontrola.
+        # Przy fakcie bezczasowym prog nie chronil przed niczym.
+        moze_sie_zestarzec = bool(wersja or o_teraz)
+
         if wiek_k is None:
-            if kontrola:
-                return True, ""
-            return False, "CONFIRMS bez daty kontrolnej i bez sladu szukania"
+            # Brak daty uchodzi TYLKO przy fakcie bezczasowym i tylko ze
+            # sladem szukania. Przy twierdzeniu o dzis brak daty to luka, nie
+            # skromnosc — i zamykamy ja, zeby pominiecie daty nigdy nie bylo
+            # latwiejsza droga niz jej podanie.
+            if not kontrola:
+                return False, "CONFIRMS bez daty kontrolnej i bez sladu szukania"
+            if moze_sie_zestarzec:
+                return False, ("CONFIRMS bez daty kontrolnej, a fakt mowi o "
+                               "stanie teraz (%s)"
+                               % (("wersja %r" % wersja) if wersja
+                                  else repr(o_teraz[0])))
+            return True, ""
+
         if wiek_k > config.MAKS_WIEK_ZRODLA_DNI:
-            return False, ("dokument kontrolny ma %d dni (prog %d) — to nie "
-                           "jest sprawdzenie stanu na dzis"
+            if not moze_sie_zestarzec:
+                # Fakt bezczasowy z prawdziwym, starym dokumentem rzadzacym.
+                # To jest dokladnie ten przypadek, ktory prompt opisuje jako
+                # dobry, i ma przechodzic — ale nadal ze sladem, ze ktos
+                # szukal. Dokument bez zdania o sprawdzeniu to nie kontrola.
+                if kontrola:
+                    return True, ""
+                return False, ("dokument kontrolny ma %d dni i nie ma sladu "
+                               "szukania" % wiek_k)
+            return False, ("dokument kontrolny ma %d dni (prog %d), a fakt "
+                           "mowi o stanie teraz — to nie jest sprawdzenie "
+                           "stanu na dzis"
                            % (wiek_k, config.MAKS_WIEK_ZRODLA_DNI))
         return True, ""
 

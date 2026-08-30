@@ -12,25 +12,28 @@ quoting. You are looking for what these pieces have in common.
 Not topics. **Mechanisms.**
 
 A mechanism is the logic that makes an arrangement work, stated so it survives
-being lifted out of its subject. "Traffic lights are timed locally" is a topic.
-"A deliberately uniform interface hides a calibration that varies by location"
-is a mechanism — and once stated that way, an airbag and a bridge weight limit
-belong to it too.
+being lifted out of its subject. "This assistant refuses medical questions" is
+a topic. "A uniform surface hides a filter that was tuned for the operator's
+liability, not the user's question" is a mechanism — and once stated that way,
+a content moderation queue and an insurer's automated triage belong to it too.
 
-The publication's best article so far did exactly this. It began with the colour
-of a school bus and became a distinction between two kinds of standard: one
-enforced by physical lock-in, which fails by freezing, and one enforced by
-convention, which fails by fragmentation. The colour was interesting only once
-it had company.
+The publication's best article so far did exactly this. It began with one
+company's refusal wording and became a distinction between two kinds of limit:
+one written into the weights during training, which fails silently and cannot be
+appealed, and one applied by a separate filter afterwards, which fails loudly
+and can be switched off by whoever rents the system. The wording was interesting
+only once it had company.
 
 ## The one rule that matters
 
 A group is worth proposing **only when at least two excerpts in it come from
-genuinely different domains.** Aviation and cosmetics. Payment systems and road
-engineering. Food safety and fire regulation.
+genuinely different domains.** Everything here is about artificial intelligence,
+so the distance has to be found INSIDE the subject: how a model is trained and
+how a court treats its output. Chip supply and hiring decisions. Medical triage
+and the terms in a labelling contractor's agreement.
 
-Two excerpts about the same industry are not a group, they are one subject split
-in half. If everything you can assemble comes from one field, say so and return
+Two excerpts about the same company, the same product or the same week of
+coverage are not a group, they are one subject split in half. If everything you can assemble comes from one field, say so and return
 fewer groups. A short honest answer beats a padded one — a later pass will
 re-read this bank when more material has accumulated.
 

@@ -46,11 +46,13 @@ It was stretched to eleven hundred words by restating the mechanism three times,
 spending three paragraphs on what the evidence did not say, and narrating its own
 research. Well documented, correctly reported, and dull.
 
-Compare a piece that worked: the vent hole in an aircraft window. Same shape of
-finding — one mechanism, well sourced — but it had **a second act**. The same
-pattern (build a deliberate weakness so you can choose where the strength goes)
-turned out to be the fuse, the sacrificial anode, the crumple zone. Three
-domains, one idea.
+Compare a finding that carried. Same shape — one mechanism, well sourced — but
+it had **a second act**: the pattern turned up again somewhere that did not
+resemble it. *Build a deliberate weakness so you can choose where the strength
+goes* is the refusal that covers a whole category rather than judge each case,
+the fallback to a smaller model under load, and the benchmark slice held back
+from training. Three places, one idea, and none of the three is the same kind of
+work as the others.
 
 So judge `depth` for each topic:
 

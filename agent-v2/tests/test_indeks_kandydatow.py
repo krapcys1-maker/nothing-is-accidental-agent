@@ -240,8 +240,22 @@ try:
     # nie przechodzil sprawdzenia wieku ANI RAZU. A to wlasnie on lezal i sie
     # starzal — prog liczy sie wobec DZISIAJ, wiec dokument kontrolny dobry przy
     # wkladaniu bywa przeterminowany dwa tygodnie pozniej.
+    # ATRAPA MUSI MIEC BADANA WLASCIWOSC. Pierwsza wersja tego testu uzywala
+    # tekstow „Lezal za dlugo" i „Nadal swiezy" — zdan, ktore niczego nie
+    # twierdza o terazniejszosci. Od 30 sierpnia prog wieku dokumentu
+    # kontrolnego dotyczy TYLKO twierdzen o stanie dzis (fakt bezczasowy nie ma
+    # swiezszego dokumentu rzadzacego, bo nic sie nie zmienilo), wiec obie
+    # atrapy przechodzily i test mierzyl cos innego, niz mial w nazwie.
+    #
+    # Uwaga na podzial robot: samo LEZENIE w banku to nie jest ta bramka.
+    # Kandydatura starzeje sie wlasnym terminem `wazny_do` i wypada przez
+    # `_po_terminie`. Tutaj chodzi o co innego — o dokument kontrolny, ktory
+    # byl dobry przy wkladaniu, a dwa tygodnie pozniej juz nie jest
+    # sprawdzeniem stanu na dzis.
+    _TERAZ = "the newest model now offers a larger window"
+
     def _k(fakt, control_date, verdict="CONFIRMS"):
-        return {"fact": fakt, "status": "nowy",
+        return {"fact": "%s — %s" % (fakt, _TERAZ), "status": "nowy",
                 "kiedy": config.DATA_PRZESTAWIENIA + "T10:00:00+00:00",
                 "control_verdict": verdict, "control_date": control_date,
                 "control_fact": "sprawdzone"}
@@ -249,19 +263,21 @@ try:
     from datetime import datetime, timedelta, timezone   # noqa: E402
     _swiezy = (datetime.now(timezone.utc) - timedelta(days=10)).strftime("%Y-%m-%d")
     _stary = (datetime.now(timezone.utc) - timedelta(days=400)).strftime("%Y-%m-%d")
+    _DLUGO = "Lezal za dlugo — %s" % _TERAZ
+    _SWIEZY_F = "Nadal swiezy — %s" % _TERAZ
     stages.INDEKS_KANDYDATOW.write_text(_js2.dumps([
         _k("Lezal za dlugo", _stary),
         _k("Nadal swiezy", _swiezy),
     ], ensure_ascii=False), encoding="utf-8")
     wziete3 = [k["fact"] for k in stages.wez_kandydatow(10)]
     sprawdz("przeterminowany nie wychodzi ze spizarni",
-            wziete3 == ["Nadal swiezy"], wziete3)
+            wziete3 == [_SWIEZY_F], wziete3)
     _po = _js2.loads(stages.INDEKS_KANDYDATOW.read_text(encoding="utf-8"))
     _stan = {k["fact"]: k["status"] for k in _po}
     sprawdz("i dostaje wlasny status, nie 'uzyty'",
-            _stan.get("Lezal za dlugo") == "przeterminowany", _stan)
+            _stan.get(_DLUGO) == "przeterminowany", _stan)
     sprawdz("bo nie zostal wykorzystany i nie ma udawac, ze byl",
-            _stan.get("Nadal swiezy") == "uzyty", _stan)
+            _stan.get(_SWIEZY_F) == "uzyty", _stan)
 
     # KONTRDOWOD: bez filtru wzieloby wszystkie cztery — i wlasnie to robilo
     # przez pol godziny miedzy podlaczeniem indeksu a ta poprawka.

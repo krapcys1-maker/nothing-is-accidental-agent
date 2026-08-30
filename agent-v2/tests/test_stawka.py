@@ -253,8 +253,14 @@ sprawdz("ale zostawia miejsce na zlamane przekonania",
         "Keep at least two" in plaski_s)
 sprawdz("pokazuje, GDZIE takich tematow szukac",
         "scar tissue" in plaski_s and "Mine it" in plaski_s)
+# ZASADA, NIE BRZMIENIE. Ten warunek byl przypiety do jednego zdania
+# („prescriptive limits on duty hours") i pekl, gdy przyklad lotniczy zastapiono
+# przykladem z naszej dziedziny. Regula stala nietknieta, test nie. Sprawdzamy
+# wiec, czy wzor JEST WYPELNIONY — trzy pola z trescia — a nie co w nim stoi.
+_wzor = s.split("when:", 1)[-1][:900] if "when:" in s else ""
 sprawdz("daje wypelniony przyklad precedensu",
-        "what_changed:  prescriptive limits on duty hours" in s)
+        "what_happened:" in _wzor and "what_changed:" in _wzor
+        and len(_wzor.split("what_changed:", 1)[-1].strip()) > 40)
 sprawdz("nazywa oba tryby porazki",
         "**Too small.**" in plaski_s and "**Too vague.**" in plaski_s)
 

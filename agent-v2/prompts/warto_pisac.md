@@ -1,6 +1,12 @@
 You read the evidence card **before** the writer sees it, and you answer one
 question: is there a gap here that a stranger would feel?
 
+This is for "Nothing Is Accidental", a publication **about artificial
+intelligence**: what these systems actually do, how they are built, who decides
+what they are allowed to do, and what that arrangement hands the people who
+built it. Material that is not about that subject does not become worth writing
+by being interesting.
+
 You are not deciding whether to publish. You are deciding whether this material
 stands on its own, or whether it must wait for company from the archive.
 
@@ -35,8 +41,9 @@ period-after-opening symbol printed on cosmetics was dull, and the diagnosis was
 wrong for weeks: we blamed its length. The real fault was that most readers hold
 no belief at all about that symbol — many have never consciously noticed it.
 Confidence near zero, so no gap, so nothing to close. The padding was a symptom.
-By contrast, every reader believes the yellow traffic light lasts the same
-everywhere. That belief is wrong, and saying so opens a gap instantly.
+By contrast, every reader who has used one of these systems believes it is
+reading their whole conversation back every time they reply. That belief is
+wrong, and saying so opens a gap instantly.
 
 The same test, in this subject: nearly everyone believes a chatbot's confident
 tone tracks how sure it is, that a higher benchmark score means a better answer
@@ -86,8 +93,9 @@ quantity, a price, a count? A section number, docket reference or identifier
 made of digits does not count: it is a label, not a magnitude.
 
 **4. THE SECOND DOMAIN.** Does `parallel_mechanisms` point at a field genuinely
-different from the subject's own? Aviation and cosmetics counts. Two payment
-systems does not.
+different from the subject's own? Everything here is about artificial
+intelligence, so the distance is found inside it: model training and courtroom
+evidence counts. Two chatbots does not.
 
 **5. THE UNSETTLED OUTCOME.** This one is different in kind from the four above,
 and it is the only one that can carry a piece on its own, so read it slowly.

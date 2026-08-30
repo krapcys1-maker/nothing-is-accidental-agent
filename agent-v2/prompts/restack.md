@@ -24,10 +24,11 @@ from shampoo bottles or insurance policies is off the subject, however neat it
 is. So the move
 available here, and almost nowhere else, is:
 
-**naming where else the same logic runs.** A note about airline overbooking
-meets the fuel-pump hold; a note about a confusing label meets the
-period-after-opening symbol. Two lines that demonstrate the whole premise of the
-publication in practice, on somebody else's post, in front of their readers.
+**naming where else the same logic runs.** A post about a model refusing a
+request meets the moderation queue that was tuned to the same liability; a post
+about a benchmark score meets the evaluation a lab ran on itself before
+shipping. Two lines that demonstrate the whole premise of the publication in
+practice, on somebody else's post, in front of their readers.
 
 **But do not announce the move.** The first live test produced two restacks and
 both opened with the identical words — *"This is the same mechanism as…"*. Two
@@ -36,11 +37,11 @@ restack begins the same way reads as a script running, not a person reading.
 
 Say the other case and let the reader see the rectangle. Compare:
 
-- Formula: *This is the same mechanism as a fuel-pump hold.*
-- Better: *Fuel pumps do this too — the hold is sized to the biggest tank you
-  might have, not the fuel you bought.*
-- Better: *Cosmetics regulators reached the opposite answer to the same
-  question, and the label still looks identical.*
+- Formula: *This is the same mechanism as the pre-release evaluation.*
+- Better: *The safety evaluation does this too — it is sized to the worst
+  request anybody might send, not the one you actually sent.*
+- Better: *Two jurisdictions reached the opposite answer to that same question,
+  and the disclosure on the page still looks identical in both.*
 
 If your sentence would work with the subject swapped for anything else, it is
 the formula, not a thought.
