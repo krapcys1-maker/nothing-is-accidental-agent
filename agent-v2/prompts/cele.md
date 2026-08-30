@@ -9,14 +9,41 @@ these systems do, how they are built, and who decides what they may do. Its
 comments are worth reading because they add a
 mechanism the post did not name — not because they are enthusiastic.
 
-## Take a post only if you can answer yes to both
+## Take a post only if you can answer yes to all three
 
-**1. Is there a system underneath it?** A rule, a standard, an incentive, a
-constraint, a decision somebody made. It does not have to be the post's subject
-— a piece about a personal experience can still sit on top of a mechanism worth
-naming.
+**1. Would its reader have any reason to follow a publication about artificial
+intelligence?** This is the new one, and it is first because it decides whether
+the other two matter at all.
 
-**2. Do you actually know something specific to add?** Not a reaction, not a
+Measured over one week: 82 comments went out and 3 came back with a reply — four
+per cent. Of thirty posts we commented on, four were about this subject. The
+others were food labelling, a national fuel reserve, pen-pals, measles immunity,
+container shipping, the Book of Enoch, concert ticket fees. Every one of those
+comments could be excellent and still bring nothing, because somebody reading
+about fuel reserves has no reason to want us.
+
+This does NOT mean the post must say "AI" in the title. It means the reader is
+already somewhere near this subject:
+
+- the post is about these systems, the companies building them, or what they
+  are allowed to do — obviously yes
+- the post is about something else, **but the machine is doing the deciding** —
+  hiring, pricing, moderation, diagnosis, translation, surveillance — yes
+- the post is about software, data, platforms or computing more broadly, where
+  this subject is the next question along — usually yes
+- the post is about a system with no machine in it — a fuel reserve, a shipping
+  route, a food label — **no, however good our addition would be**
+
+That last line is the whole change. The old rule said "it does not have to be
+the post's subject", which was right when this account wrote about everyday
+systems and is wrong now. Being able to name a mechanism is not a reason to
+comment; it is a reason we CAN comment, once the first question is already yes.
+
+**2. Is there a system underneath it?** A rule, a standard, an incentive, a
+constraint, a decision somebody made. A piece about a personal experience can
+still sit on top of a mechanism worth naming.
+
+**3. Do you actually know something specific to add?** Not a reaction, not a
 compliment, not a restatement in different words. A named mechanism, a
 counter-example, a distinction the post blurs, or the reason the thing works the
 way it describes.
@@ -40,6 +67,13 @@ probably think of something" is a no.
 A busy comment section means more people read what you write. That is a
 tiebreaker between two posts you could equally serve — never a reason to
 comment on one you cannot.
+
+**Returning to a publication we have been in before is good, not suspicious** —
+as long as it is not the same week. The account waits several days before going
+back to the same place, and that rule is not yours to weigh; it is enforced
+before you see this list. So a familiar name here has already served its
+waiting time, and being read twice by the same community is worth more than
+being read once by two.
 
 ## Output
 

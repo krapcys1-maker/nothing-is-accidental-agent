@@ -23,7 +23,7 @@
 {{"groups": [{{"mechanism": "<one sentence, stated so it outlives its subject>", "why_it_travels": "<one sentence: what makes the same logic show up in unrelated places>", "members": [{{"id": <the id shown in the bank>, "domain": "<the field this belongs to, two or three words>", "role": "<what this piece contributes to the group>"}}], "missing": "<what a writer would still have to go and find, or empty string>"}}], "loners": [<ids of excerpts that found no company, as integers>], "note": "<one sentence on the bank as a whole: what it is heavy on, what it lacks>"}}
 ```
 
-#### `cele.md` (53 wierszy)
+#### `cele.md` (87 wierszy)
 
 **Pola wejściowe:** `posts`
 
@@ -103,7 +103,7 @@
 {{"choices": [{{"index": <number>, "rank": <1 is highest>, "why": "<one sentence>", "kind": "disagreement"|"question"|"correction"|"addition"|"agreement"}}], "skipped_because": "<one sentence about the ones you left out>"}}
 ```
 
-#### `komentarz.md` (171 wierszy)
+#### `komentarz.md` (213 wierszy)
 
 **Pola wejściowe:** `author`, `body`, `cel_slow`, `language`, `otwarcie`, `postawa`, `postawa_opis`, `title`
 
