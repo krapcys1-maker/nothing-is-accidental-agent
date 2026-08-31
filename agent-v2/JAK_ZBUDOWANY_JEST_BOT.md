@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **21 plików**, 18 966 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **21 plików**, 19 009 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 77 zestawów
-testów, 1929 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 78 zestawów
+testów, 1940 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -275,7 +275,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-3540 wierszy, 73 funkcji na poziomie modułu, 0 klas
+3583 wierszy, 74 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -292,6 +292,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_chrome_odpowiada()` *(wewn.)* | — |
 | `uruchom_chrome()` | Otwiera Chrome na trwałym profilu agenta, jeśli jeszcze nie działa. |
 | `rozgrzej(context)` | Pozwala Cloudflare wydać zgodę dla adresu, z którego akurat działamy. |
+| `plaski(tekst)` | Tekst sprowadzony do znakow, ktore SAMI piszemy — do POROWNYWANIA. |
 | `api_json(page, sciezka, baza)` | Czyta API WCHODZĄC na adres, zamiast wołać `fetch` ze strony. |
 | `podlacz_sie()` | Podłącza się do Chrome'a, którego uruchomił i zalogował WŁAŚCICIEL. |
 | `sprawdz_sesje()` | Czy Chrome właściciela jest zalogowany i co agent w nim widzi. |

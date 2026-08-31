@@ -133,7 +133,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-3540 wierszy, 73 funkcji na poziomie modułu, 0 klas
+3583 wierszy, 74 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -150,6 +150,7 @@
 | `_chrome_odpowiada()` *(wewn.)* | — |
 | `uruchom_chrome()` | Otwiera Chrome na trwałym profilu agenta, jeśli jeszcze nie działa. |
 | `rozgrzej(context)` | Pozwala Cloudflare wydać zgodę dla adresu, z którego akurat działamy. |
+| `plaski(tekst)` | Tekst sprowadzony do znakow, ktore SAMI piszemy — do POROWNYWANIA. |
 | `api_json(page, sciezka, baza)` | Czyta API WCHODZĄC na adres, zamiast wołać `fetch` ze strony. |
 | `podlacz_sie()` | Podłącza się do Chrome'a, którego uruchomił i zalogował WŁAŚCICIEL. |
 | `sprawdz_sesje()` | Czy Chrome właściciela jest zalogowany i co agent w nim widzi. |

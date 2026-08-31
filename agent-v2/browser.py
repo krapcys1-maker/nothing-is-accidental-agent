@@ -378,6 +378,49 @@ def rozgrzej(context) -> bool:
         page.close()
 
 
+# ZNAKI TYPOGRAFICZNE, KTORE WSTAWIA EDYTOR SUBSTACKA. Piszemy prosty apostrof,
+# a ProseMirror zapisuje typograficzny — wiec `doesn't` u nas i `doesn’t` u nich
+# to dla porownania dwa rozne napisy.
+_ZAMIANY = {
+    chr(0x2018): "'", chr(0x2019): "'",          # ' '
+    chr(0x201C): '"', chr(0x201D): '"',          # " "
+    chr(0x2013): "-", chr(0x2014): "-",          # – —
+    chr(0x2026): "...",                          # …
+    chr(0x00A0): " ", chr(0x2009): " ",          # spacje nielamiace i cienkie
+    chr(0x2032): "'", chr(0x02BC): "'",          # ′ ʼ
+}
+
+
+def plaski(tekst: str) -> str:
+    """Tekst sprowadzony do znakow, ktore SAMI piszemy — do POROWNYWANIA.
+
+    ODKRYTE POMIAREM 31 sierpnia 2026. Dwanascie komentarzy na sto i dwanascie
+    odpowiedzi na piecdziesiat trzy konczylo sie w dzienniku jako „Substack nie
+    potwierdzil, ze wyszlo". Sprawdzone na zywo: WSZYSTKIE TRZY sprawdzone
+    odpowiedzi BYLY na Substacku. Nie zawodzilo wystawianie, tylko
+    POTWIERDZANIE.
+
+    Potwierdzenie porownuje doslownie pierwsze 60 znakow naszego tekstu z tym,
+    co oddaje API. Edytor Substacka zamienia proste apostrofy na typograficzne,
+    wiec `doesn't` nigdy nie trafialo w `doesn’t`.
+
+    ZMIERZONE, nie zgadniete:
+        nieudane: 75% ma apostrof albo cudzyslow w pierwszych 60 znakach
+        udane:    17%
+
+    KOSZT TEGO BLEDU BYL PODWOJNY. Dziennik pokazywal porazki, ktorych nie bylo,
+    wiec wykonanie planu wygladalo gorzej niz jest — a to ta sama liczba, na
+    ktorej stoi alarm „agent robi mniej, niz deklaruje".
+
+    Nie grozilo natomiast podwojnym komentarzem: `juz_sie_odezwalismy` pyta
+    Substacka, a nie naszej ksiegowosci.
+    """
+    wynik = " ".join(str(tekst or "").split())
+    for znak, zamiast in _ZAMIANY.items():
+        wynik = wynik.replace(znak, zamiast)
+    return wynik
+
+
 def api_json(page, sciezka: str, baza: str | None = None) -> Any:
     """Czyta API WCHODZĄC na adres, zamiast wołać `fetch` ze strony.
 
@@ -1656,7 +1699,7 @@ def numer_naszej_notki(page, tekst: str, prob: int = 4) -> str:
     notka wyszla albo nie wyszla niezaleznie od tego, czy umiemy ja pozniej
     odnalezc — ale bez numeru nie zmierzymy, co przyniosla.
     """
-    probka = " ".join(tekst.split())[:60]
+    probka = plaski(tekst)[:60]
     profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
     if not isinstance(profil, dict) or not profil.get("id"):
         return ""
@@ -1668,7 +1711,7 @@ def numer_naszej_notki(page, tekst: str, prob: int = 4) -> str:
             if not isinstance(k, dict):
                 continue
             tresc = " ".join(str(k.get("body") or "").split())
-            if probka and probka in tresc and k.get("id") is not None:
+            if probka and probka in plaski(tresc) and k.get("id") is not None:
                 return str(k["id"])
         if nr < prob - 1:
             page.wait_for_timeout(8000)
@@ -2489,12 +2532,12 @@ def wystaw_odpowiedz_pod_artykulem(
 
 def potwierdz_artykul(page, tytul: str) -> bool:
     """Pyta Substacka, czy artykuł naprawdę jest opublikowany."""
-    probka = " ".join(tytul.split())[:50]
+    probka = plaski(tytul)[:50]
     dane = api_json(page, "/api/v1/posts?limit=5",
                     baza=f"https://{config.SUBSTACK_HANDLE}.substack.com")
     # Ten adres oddaje LISTE, nie obiekt z kluczem "posts" — sprawdzone na zywo.
     lista = dane if isinstance(dane, list) else (dane or {}).get("posts") or []
-    return any(probka in (x.get("title") or "") and x.get("post_date")
+    return any(probka in plaski(x.get("title") or "") and x.get("post_date")
                for x in lista if isinstance(x, dict))
 
 def wystaw_artykul(
@@ -2598,12 +2641,12 @@ def potwierdz_odpowiedz(page, note_id: int, tekst: str) -> bool:
     """Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku."""
     import json as _json
 
-    probka = " ".join(tekst.split())[:60]
+    probka = plaski(tekst)[:60]
     for nr in range(4):
         watek = api_json(page, f"/api/v1/reader/comment/{note_id}/replies"
                                f"?comment_id={note_id}")
-        if probka in " ".join(_json.dumps((watek or {}).get("commentBranches", []),
-                                          ensure_ascii=False).split()):
+        if probka in plaski(_json.dumps((watek or {}).get("commentBranches", []),
+                                        ensure_ascii=False)):
             return True
         if nr < 3:
             page.wait_for_timeout(8000)
@@ -3170,7 +3213,7 @@ def potwierdz_komentarz(page, url: str, tekst: str) -> int | None:
     """
     from urllib.parse import urlparse
 
-    probka = " ".join(tekst.split())[:60]
+    probka = plaski(tekst)[:60]
 
     # NOTKA TO NIE ARTYKUL i nie ma jej pod adresem artykulow. Ostatni czlon
     # adresu notki wyglada jak slug (`c-315876268`), wiec pytanie szlo do
@@ -3185,7 +3228,7 @@ def potwierdz_komentarz(page, url: str, tekst: str) -> int | None:
             wszystkie = [c for g in (watek.get("commentBranches") or [])
                          for c in _plaskie(g)]
             for c in wszystkie:
-                if probka in " ".join((c.get("body") or "").split()):
+                if probka in plaski(c.get("body") or ""):
                     return c.get("id") or -1
             if nr < 3:
                 page.wait_for_timeout(8000)
