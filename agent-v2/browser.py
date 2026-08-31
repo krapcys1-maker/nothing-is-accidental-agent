@@ -1008,6 +1008,18 @@ def zapisz_wzrost_konta(profil: dict[str, Any]) -> dict[str, Any] | None:
     NOWA_LINIA = chr(10)
     if not isinstance(profil, dict):
         return None
+    # ZERO Z NIEUDANEGO ODCZYTU TO NIE JEST POMIAR. W szeregu czasowym wiersz
+    # z samymi zerami jest nie do odroznienia od dnia, w ktorym wszyscy odeszli
+    # — a audyt policzyl z takich dwoch wierszy „subskrybentow -7" godzine po
+    # tym, jak to napisalem.
+    #
+    # Te sama pulapke ominalem w `zapisz_czytelnikow` („porazka nie dopisuje
+    # pustego zrzutu") i wpadlem w nia obok, bo pisalem te dwie funkcje osobno.
+    # Regula jest jedna: brak danych ma wygladac na brak danych, nie na wynik.
+    if not any(profil.get(k) for k in ("subscriberCountNumber", "followerCount",
+                                       "rough_num_free_subscribers_int",
+                                       "visibleSubscriptionsCount")):
+        return None
     stan = {
         "kiedy": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "subskrybenci": int(profil.get("subscriberCountNumber") or 0),

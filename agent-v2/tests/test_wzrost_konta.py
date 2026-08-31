@@ -99,8 +99,24 @@ try:
             ok = False
             opis += " (WYJATEK %s)" % type(exc).__name__
         sprawdz("  %s -> bez wyjatku" % opis, ok)
-    sprawdz("pusty slownik daje zera, nie brak kluczy",
-            (browser.zapisz_wzrost_konta({}) or {}).get("subskrybenci") == 0)
+    # ZERO Z NIEUDANEGO ODCZYTU NIE MOZE TRAFIC DO SZEREGU. Pierwsza wersja
+    # tego testu zatwierdzala odwrotnie („pusty slownik daje zera") i produkcja
+    # dostala dwa wiersze z samymi zerami — audyt policzyl z nich
+    # „subskrybentow -7" godzine pozniej. Wiersz zerowy jest nie do odroznienia
+    # od dnia, w ktorym wszyscy odeszli.
+    przed = len(browser.WZROST.read_text(encoding="utf-8").strip().splitlines())
+    sprawdz("pusty profil nie daje wiersza",
+            browser.zapisz_wzrost_konta({}) is None)
+    sprawdz("profil bez licznikow tez nie",
+            browser.zapisz_wzrost_konta({"id": 1, "handle": "x"}) is None)
+    sprawdz("i nic nie dopisalo sie do pliku",
+            len(browser.WZROST.read_text(encoding="utf-8")
+                .strip().splitlines()) == przed)
+    # KONTRDOWOD: jeden niezerowy licznik wystarczy, zeby wiersz powstal —
+    # inaczej zgubilibysmy dzien, w ktorym naprawde spadlo do zera.
+    sprawdz("ale jeden prawdziwy licznik juz tak",
+            (browser.zapisz_wzrost_konta({"followerCount": 3}) or {})
+            .get("obserwujacy") == 3)
 
     print()
     print("=== 4. WPIETE TAM, GDZIE PROFIL I TAK JEST CZYTANY ===")
