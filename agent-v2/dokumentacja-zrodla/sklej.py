@@ -64,6 +64,7 @@ MODULY = [
     ("norma.py", "licznik produkcji: ile agent wystawil wobec normy dziennej"),
     ("audyt_tematow.py", "audyt segmentu tematow na zywych danych: jedenascie etapow, od kanalow po zwrot do puli"),
     ("audyt_researchu.py", "audyt segmentu researchu na zywych danych: dyskoveria, pobieranie, martwe hosty, karta dowodowa"),
+    ("audyt_systemu.py", "audyt CALEGO systemu na zywych danych: publikowanie, normy, komentarze, statystyki, artykul, pieniadze, pamiec"),
     ("migracja_okno_promocji.py",
      "jednorazowo: data publikacji z dziennika do kolejki promocji"),
 ]

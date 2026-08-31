@@ -1742,6 +1742,147 @@ def obserwuj_profil(handle: str, wyslij: bool = False) -> dict[str, Any]:
     return _klik_na_profilu(handle, ("Follow", "Obserwuj"), "obserwacja", wyslij)
 
 
+def kogo_polecamy(page=None) -> list[dict[str, Any]]:
+    """Kogo nasza publikacja poleca — z API, nie z pamieci.
+
+    `/api/v1/recommendations/from/<id publikacji>` oddaje liste. Pusta lista
+    znaczy, ze nie polecamy nikogo — i tak bylo do 30 sierpnia 2026, przy
+    zerowej liczbie subskrypcji przyslanych ta droga.
+    """
+    wlasny = page is None
+    if wlasny:
+        wymagaj_sesji()
+        p, br, ctx = podlacz_sie()
+        page = ctx.new_page()
+    try:
+        baza = f"https://{config.SUBSTACK_HANDLE}.substack.com"
+        prof = api_json(page, "/api/v1/publication/self", baza=baza)
+        ident = (prof or {}).get("id") if isinstance(prof, dict) else None
+        if not ident:
+            # Numer publikacji stoi tez przy kazdym naszym poscie.
+            posty = api_json(page, "/api/v1/archive?limit=1", baza=baza)
+            if isinstance(posty, list) and posty and isinstance(posty[0], dict):
+                ident = posty[0].get("publication_id")
+        if not ident:
+            return []
+        lista = api_json(page, f"/api/v1/recommendations/from/{ident}", baza=baza)
+        return lista if isinstance(lista, list) else []
+    finally:
+        if wlasny:
+            page.close()
+            br.close()
+            p.stop()
+
+
+def polec_publikacje(fraza: str, powod: str,
+                     wyslij: bool = False) -> dict[str, Any]:
+    """Dodaje REKOMENDACJE publikacji. Domyslnie wypelnia i NIE zatwierdza.
+
+    CZEMU NIE Z PROPOZYCJI SUBSTACKA. Ekran `/publish/recommendations` podsuwa
+    dziesiec publikacji „ktore moze Pan/Pani chciec polecic". Sprawdzone
+    30 sierpnia 2026 — z tych dziesieciu JEDNA dotykala AI:
+
+        Construction Physics, Urbanism Speakeasy, mandates, Malone News,
+        OpenTheBooks, It's Not Sustainable, Your Brain on Money,
+        The Nemeth Report, The Butter Girlfriend, People of Interest
+
+    Substack liczy je z historii czytania konta, a ta pochodzi sprzed
+    przestawienia na AI. To ta sama skaza, co w banku tematow i w dziewieciu
+    promptach — tylko po stronie Substacka, gdzie nie da sie jej wyczyscic
+    inaczej niz czytajac nowe rzeczy. Publikacja o AI polecajaca newsletter
+    o masle to dokladnie ten „wyglad bota", ktorego wlasciciel nie chce.
+
+    Dlatego szukamy SAMI: okno „Dodaj rekomendacje" ma pole „Wyszukaj osobe
+    lub publikacje...". Sprawdzone na zywo.
+
+    OPIS JEST WYMAGANY (Substack oznacza go „Wymagane"), i slusznie: polecenie
+    bez powodu to sam podpis. `powod` idzie w pole „Powiedz swoim subskrybentom,
+    za co pokochaja ten Substack".
+
+    REKOMENDACJA JEST PUBLICZNA I TRWALA — stawia nasze nazwisko obok cudzego
+    na stronie powitalnej i w pasku bocznym. Dlatego `wyslij=False` domyslnie,
+    tak samo jak przy notce.
+    """
+    wyslij = naprawde_wyslac(wyslij, "rekomendacja")
+    wymagaj_sesji()
+    p, browser_, context = podlacz_sie()
+    page = context.new_page()
+    wynik: dict[str, Any] = {"fraza": fraza, "wpisane": False,
+                             "zrobione": False, "blad": None}
+    try:
+        przed = {str(x.get("id") or x.get("publication_id"))
+                 for x in kogo_polecamy(page) if isinstance(x, dict)}
+
+        page.goto(f"https://{config.SUBSTACK_HANDLE}.substack.com"
+                  "/publish/recommendations",
+                  timeout=READ_TIMEOUT_MS * 2, wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 4000)
+
+        guzik = page.get_by_role("button", name="Dodaj rekomendację").first
+        if guzik.count() == 0:
+            wynik["blad"] = "nie ma przycisku „Dodaj rekomendację”"
+            return wynik
+        guzik.click(timeout=10_000)
+        # OKNO POTRZEBUJE CZASU. Pierwsze rozpoznanie zajrzalo po 3,5 s i nie
+        # zobaczylo ani okna, ani wyszukiwarki — wniosek „nie da sie wybrac
+        # samemu" byl falszywy. Po 6 s oba sa na miejscu.
+        page.wait_for_timeout(6000)
+
+        szukajka = page.get_by_role("combobox").first
+        if szukajka.count() == 0:
+            wynik["blad"] = "okno sie otworzylo, ale nie ma wyszukiwarki"
+            return wynik
+        szukajka.fill(fraza, timeout=10_000)
+        page.wait_for_timeout(5000)
+
+        # Wybor z podpowiedzi. Bierzemy pozycje, ktora NAPRAWDE zawiera fraze —
+        # klikniecie „w zastepstwie" to ten sam blad, przez ktory agent
+        # subskrybowal zamiast obserwowac.
+        trafienie = page.get_by_role("option", name=re.compile(
+            re.escape(fraza.split()[0]), re.I)).first
+        if trafienie.count() == 0:
+            trafienie = page.get_by_text(fraza, exact=False).last
+        if trafienie.count() == 0:
+            wynik["blad"] = f"wyszukiwarka nie znalazla {fraza!r}"
+            return wynik
+        trafienie.click(timeout=10_000)
+        page.wait_for_timeout(3000)
+
+        opis = page.get_by_placeholder(re.compile("pokochaj", re.I)).first
+        if opis.count():
+            opis.fill(powod[:280], timeout=10_000)
+            wynik["wpisane"] = True
+        page.wait_for_timeout(1500)
+
+        if not wyslij:
+            print("  (nie zatwierdzam — tryb sprawdzenia)", flush=True)
+            return wynik
+
+        zatwierdz = page.get_by_role("button",
+                                     name="Dodaj rekomendację").last
+        zatwierdz.click(timeout=10_000)
+        page.wait_for_timeout(6000)
+
+        # SPRAWDZAMY SKUTEK, NIE TO, ZE KLIKNIECIE SIE NIE WYWALILO. Tak samo
+        # jak przy pamieci platnych hostow: oslona `try` juz raz zamienila
+        # blad w wypisane ostrzezenie, a funkcja po cichu nie robila nic.
+        po = {str(x.get("id") or x.get("publication_id"))
+              for x in kogo_polecamy(page) if isinstance(x, dict)}
+        wynik["zrobione"] = len(po) > len(przed)
+        wynik["polecanych_teraz"] = len(po)
+        dopisz_wynik("rekomendacja", wynik, komu=fraza)
+        print("  REKOMENDACJA DODANA" if wynik["zrobione"]
+              else "  KLIKNIETE, ALE LISTA SIE NIE ZMIENILA", flush=True)
+    except Exception as exc:
+        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        print(f"  [rekomendacja] {wynik['blad']}", flush=True)
+    finally:
+        page.close()
+        browser_.close()
+        p.stop()
+    return wynik
+
+
 def zasubskrybuj(handle: str, wyslij: bool = False) -> dict[str, Any]:
     """Subskrybuje cudzy profil. Ląduje w skrzynce właściciela, więc wąsko."""
     return _klik_na_profilu(handle, ("Subscribe", "Subskrybuj"), "subskrypcja",

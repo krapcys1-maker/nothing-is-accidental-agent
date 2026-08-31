@@ -133,7 +133,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-3151 wierszy, 66 funkcji na poziomie modułu, 0 klas
+3292 wierszy, 68 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -176,6 +176,8 @@
 | `zloz_wiersze_subskrybentow(surowe)` | Sklada wiersze z komorek tabeli panelu: adres, typ i data rozpoczecia. |
 | `_wiersze_subskrybentow(page)` *(wewn.)* | Czyta komorki tabeli z panelu i oddaje je zlozone. |
 | `obserwuj_profil(handle, wyslij)` | Obserwuje cudzy profil — jego notki trafiaja do naszego kanalu. |
+| `kogo_polecamy(page)` | Kogo nasza publikacja poleca — z API, nie z pamieci. |
+| `polec_publikacje(fraza, powod, wyslij)` | Dodaje REKOMENDACJE publikacji. Domyslnie wypelnia i NIE zatwierdza. |
 | `zasubskrybuj(handle, wyslij)` | Subskrybuje cudzy profil. Ląduje w skrzynce właściciela, więc wąsko. |
 | `_esc(t)` *(wewn.)* | — |
 | `rozbierz_artykul(sciezka)` | Rozkłada plik artykułu na tytuł, podtytuł i treść jako HTML. |
@@ -453,6 +455,18 @@
 |---|---|
 | `etap(nr, nazwa)` | — |
 | `werdykt(nazwa, stan, szczegol)` | — |
+| `main()` | — |
+
+### `audyt_systemu.py` — audyt CALEGO systemu na zywych danych: publikowanie, normy, komentarze, statystyki, artykul, pieniadze, pamiec
+
+393 wierszy, 5 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `etap(nr, nazwa)` | — |
+| `werdykt(nazwa, stan, szczegol)` | — |
+| `dziennik()` | — |
+| `dzien(w)` | — |
 | `main()` | — |
 
 ### `migracja_okno_promocji.py` — jednorazowo: data publikacji z dziennika do kolejki promocji

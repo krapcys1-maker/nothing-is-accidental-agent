@@ -173,24 +173,48 @@ def main() -> int:
     etap(3, "KOMENTARZE — czy nie wygladamy na bota")
     kom = [w for w in po_pivocie
            if w.get("rodzaj") in ("komentarz", "odpowiedz") and w.get("udane")]
+    # DWA RODZAJE KOMENTARZY, DWA POLA. Pod cudzym ARTYKULEM `gdzie` to adres;
+    # pod cudza NOTKA `gdzie` to „note/c-<numer>", a publikacja stoi w polu
+    # `publikacja`. Pierwsza wersja tego audytu brala tylko hosty z adresow —
+    # czyli 19 z 50 komentarzy, a 31 pomijala CALKIEM. Do tego dzielila maksimum
+    # przez WSZYSTKIE komentarze, takze te bez hosta, wiec drukowany udzial byl
+    # zanizony ponad dwukrotnie. Wniosek „nie wygladamy na bota" byl prawdziwy,
+    # ale wyszedl ze szczescia, nie z metody.
     hosty = Counter()
+    bez_adresu = 0
     for w in kom:
         host = urlparse(str(w.get("gdzie") or "")).netloc.lower()
         if host:
             hosty[host.removeprefix("www.")] += 1
-    print("  komentarzy i odpowiedzi po przestawieniu: %d w %d publikacjach"
+            continue
+        kto = " ".join(str(w.get("publikacja") or "").split())
+        if kto:
+            hosty[kto] += 1
+        else:
+            bez_adresu += 1
+    print("  komentarzy i odpowiedzi po przestawieniu: %d w %d miejscach"
           % (len(kom), len(hosty)))
+    if bez_adresu:
+        # Nie zgadujemy, gdzie poszly. Melduje, bo pomiar bez tej liczby
+        # wyglada na pelny, a nie jest.
+        werdykt("kazdy komentarz wie, gdzie poszedl",
+                "OK" if bez_adresu * 5 <= len(kom) else "UWAGA",
+                "%d z %d bez adresu i bez nazwy publikacji"
+                % (bez_adresu, len(kom)))
     for h, i in hosty.most_common(6):
         print("    %-42s %d" % (h[:42], i))
     if hosty:
         najwiecej = hosty.most_common(1)[0][1]
-        udzial = najwiecej / max(1, len(kom))
+        # MIANOWNIK TO PRZYPISANE, NIE WSZYSTKIE. Dzielenie przez `len(kom)`
+        # rozwadnia udzial o kazdy komentarz, ktorego nie umiemy przypisac.
+        przypisane = sum(hosty.values())
+        udzial = najwiecej / max(1, przypisane)
         # PROG WLASCICIELA: „nie ma nakurwiac na jednym profilu". Jedna
         # publikacja ponad polowa wszystkiego to juz tak wyglada.
         werdykt("zadna publikacja nie zbiera polowy komentarzy",
                 "OK" if udzial < 0.5 else "BLAD",
-                "najwiecej %d z %d (%d%%)"
-                % (najwiecej, len(kom), round(100 * udzial)))
+                "najwiecej %d z %d przypisanych (%d%%)"
+                % (najwiecej, przypisane, round(100 * udzial)))
         werdykt("pula jest wezsza niz caly Substack, ale nie jednoosobowa",
                 "OK" if len(hosty) >= 3 else "UWAGA",
                 "%d publikacji" % len(hosty))
