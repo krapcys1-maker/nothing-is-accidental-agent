@@ -251,6 +251,43 @@ def z_kart(dane: dict) -> dict:
     zmierzone = dane.get("lastUpdatedAt") if isinstance(dane, dict) else None
     rekord["zmierzone"] = zmierzone if isinstance(zmierzone, str) else ""
 
+    # LICZNIKI Z KARTY `note` — JEDYNE, KTORE SA ZAWSZE.
+    #
+    # ZMIERZONE 31 sierpnia na zywym koncie. Komentarz pod cudzym ARTYKULEM
+    # dostaje z tej koncowki JEDNA karte (`note`), a nie piec, gdy nie zebral
+    # ani jednego wejscia:
+    #
+    #     bez kart:  ['note']
+    #     z kartami: ['note', 'impressionValues', 'surfaces', 'audience',
+    #                 'interactions']
+    #
+    # Z 52 naszych komentarzy 37 mialo sama karte podgladu. Dotad zapisywalismy
+    # dla nich same zera i nie dalo sie odroznic „nikt nie zobaczyl" od „nie
+    # wiemy".
+    #
+    # A KARTA `note` NIESIE LICZNIKI ZAWSZE — `like_count`, `restack_count`,
+    # `reply_count` — takze wtedy, gdy kart statystyk brak. Czytalismy ja
+    # wylacznie po date wystawienia i wyrzucalismy reszte.
+    #
+    # Karta zbiorcza ma pierwszenstwo, gdy jest: pochodzi z panelu statystyk
+    # i bywa pelniejsza. Liczniki `note` sa DROGA ZAPASOWA, nie nadpisaniem.
+    _n = _karty(dane).get("note")
+    for _klucz in ("note", "note"):
+        _n = _n.get(_klucz) if isinstance(_n, dict) else None
+    if isinstance(_n, dict):
+        for _pole, _skad in (("polubienia", "like_count"),
+                             ("restacki", "restack_count"),
+                             ("odpowiedzi", "reply_count")):
+            if not rekord.get(_pole):
+                rekord[_pole] = _liczba(_n.get(_skad))
+
+    # CZY SUBSTACK W OGOLE POLICZYL ZASIEG. Bez tego pola raport nie odrozni
+    # „zero wejsc" od „nie ma karty" — a to ta sama pomylka, przez ktora
+    # zapisany wiersz zerowy wygladal jak dzien, w ktorym wszyscy odeszli.
+    rekord["ma_karty_zasiegu"] = bool(karty.get("impressions")
+                                      or karty.get("surfaces")
+                                      or karty.get("impressionValues"))
+
     # KIEDY TO WYSTAWILISMY — bez tego pomiaru nie da sie z niczym porownac.
     #
     # `zmierzone` mowi, kiedy PYTALISMY, i to jest zupelnie inna data: pomiary

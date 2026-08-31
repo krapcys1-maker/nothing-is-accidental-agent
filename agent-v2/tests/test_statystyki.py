@@ -80,10 +80,14 @@ PROBKA = {
 # statystyk epoki AI od wczesniejszych: pomiary sa zawsze swieze, takze te
 # notek sprzed miesiaca, a laczenie z dziennikiem po numerze gubilo dziesiec
 # notek na 37 (dziennik nie ma numerow tych starszych).
+# `ma_karty_zasiegu` doszlo 31 sierpnia razem z licznikami z karty `note`.
+# Zmierzone tego dnia: z 52 naszych komentarzy 37 dostaje z API JEDNA karte
+# (`note`) zamiast pieciu — Substack nie liczy zasiegu wpisow, ktore nic nie
+# zebraly. Bez tego pola raport nie odrozni „zero wejsc" od „nie ma karty".
 KLUCZE = {"wyswietlenia", "powierzchnie", "odbiorcy", "interakcje",
           "interakcje_razem", "polubienia", "odpowiedzi", "restacki",
           "subskrypcje", "obserwacje", "klikniecia_w_link", "zmierzone",
-          "wystawione"}
+          "wystawione", "ma_karty_zasiegu"}
 
 
 def _w_pustym_katalogu(funkcja):

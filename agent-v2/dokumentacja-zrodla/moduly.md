@@ -369,7 +369,7 @@
 
 ### `statystyki.py` — co przyniosła każda pozycja: wejścia, reakcje, subskrypcje
 
-464 wierszy, 10 funkcji na poziomie modułu, 0 klas
+501 wierszy, 10 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
