@@ -218,6 +218,25 @@ def main() -> int:
         werdykt("pula jest wezsza niz caly Substack, ale nie jednoosobowa",
                 "OK" if len(hosty) >= 3 else "UWAGA",
                 "%d publikacji" % len(hosty))
+        # POLUBIENIA TEZ MAJA WIEDZIEC, GDZIE POSZLY. To NAJCZESTSZE nasze
+        # dzialanie — 151 wobec 95 komentarzy — i do 31 sierpnia zapisywalo sie
+        # jako `{kiedy, rodzaj, udane}` i nic wiecej. Nie dalo sie wiec nawet
+        # ZMIERZYC, czy lajkujemy pod AI, czy pod rezerwa paliwowa.
+        lajki = [w for w in po_pivocie
+                 if w.get("rodzaj") == "polubienie" and w.get("udane")]
+        z_celem = [w for w in lajki if str(w.get("publikacja") or "").strip()]
+        if lajki:
+            print("  polubien: %d, z zapisanym celem: %d"
+                  % (len(lajki), len(z_celem)))
+            for h, i in Counter(str(w.get("publikacja"))
+                                for w in z_celem).most_common(5):
+                print("    %-42s %d" % (h[:42], i))
+        # Prog niski, bo historia sprzed poprawki zostaje w pliku na zawsze —
+        # pytamy, czy zapis DZIALA, nie czy przepisano przeszlosc.
+        werdykt("polubienia zapisuja, czyj wpis polubily",
+                "OK" if z_celem else "UWAGA",
+                "%d z %d ma cel" % (len(z_celem), len(lajki)))
+
         odstep = getattr(config, "ODSTEP_DNI_NA_PUBLIKACJE", 0)
         werdykt("odstep miedzy wizytami w tej samej publikacji stoi",
                 "OK" if odstep >= 3 else "BLAD", "%s dni" % odstep)

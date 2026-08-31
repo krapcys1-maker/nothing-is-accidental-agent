@@ -1497,6 +1497,43 @@ def potwierdz_notke(page, tekst: str, prob: int = 4) -> bool:
     """
     return bool(numer_naszej_notki(page, tekst, prob=prob))
 
+_AUTOR_PRZY_PRZYCISKU = """
+el => {
+  let w = el;
+  for (let i = 0; i < 12 && w; i++) {
+    w = w.parentElement;
+    if (!w) break;
+    const a = w.querySelector('a[href*="/@"]');
+    if (a) return {href: a.getAttribute('href') || '',
+                   tekst: (a.textContent || '').trim().slice(0, 80)};
+  }
+  return null;
+}
+"""
+
+
+def _autor_przy_przycisku(przycisk) -> dict[str, str] | None:
+    """Kto napisal wpis, przy ktorym stoi ten przycisk.
+
+    Szuka W GORE od przycisku pierwszego odnosnika do profilu. Zmierzone na
+    zywym kanale: autor stoi jeden poziom wyzej, 5 na 5 wpisow.
+
+    Nie podnosi wyjatku — brak autora ma znaczyc „nie wiem", a nie „przerwij
+    polubienia". Zapis jest premia, samo dzialanie wazniejsze.
+    """
+    try:
+        dane = przycisk.evaluate(_AUTOR_PRZY_PRZYCISKU)
+    except Exception:
+        return None
+    if not isinstance(dane, dict):
+        return None
+    nazwa = " ".join(str(dane.get("tekst") or "").split())
+    uchwyt = str(dane.get("href") or "").rsplit("/@", 1)[-1].strip("/")
+    if not nazwa and not uchwyt:
+        return None
+    return {"nazwa": nazwa or uchwyt, "uchwyt": uchwyt}
+
+
 def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
     """Polubienia w kanale czytelnika.
 
@@ -1526,14 +1563,31 @@ def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
             try:
                 if not kandydat.is_visible():
                     continue
+                # CZYJ TO WPIS. Polubienie zapisywalo sie jako
+                # `{kiedy, rodzaj, udane}` i nic wiecej — 151 polubien wobec
+                # 95 komentarzy, czyli NAJCZESTSZE nasze dzialanie, i jedyne,
+                # o ktorym nie wiedzielismy zupelnie nic poza tym, ze bylo.
+                #
+                # Ma to takie samo znaczenie, co przy komentarzach: konto o AI,
+                # ktore lajkuje pod rezerwa paliwowa, wydaje najczestszy gest
+                # na publicznosc bez powodu, zeby nas obserwowac. Bez zapisu
+                # nie da sie tego nawet ZMIERZYC, a wiec i naprawic.
+                #
+                # Zmierzone przed napisaniem tego kodu: autor stoi JEDEN poziom
+                # nad przyciskiem, 5 na 5 sprawdzonych wpisow w kanale.
+                kto = _autor_przy_przycisku(kandydat)
                 if not wyslij:
                     wynik["polubione"] += 1
                     continue
                 kandydat.scroll_into_view_if_needed(timeout=8000)
                 kandydat.click(timeout=8000)
                 wynik["polubione"] += 1
-                print(f"  polubione {wynik['polubione']}/{ile}", flush=True)
-                zapisz_w_dzienniku("polubienie", udane=True)
+                print("  polubione %d/%d%s"
+                      % (wynik["polubione"], ile,
+                         ("  — %s" % kto["nazwa"]) if kto else ""), flush=True)
+                zapisz_w_dzienniku("polubienie", udane=True,
+                                   **({"publikacja": kto["nazwa"],
+                                       "komu": kto["uchwyt"]} if kto else {}))
                 page.wait_for_timeout(
                     int(random.uniform(*config.ODSTEPY["lajk"]) * 1000))
             except Exception as exc:

@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **21 plików**, 18 258 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **21 plików**, 18 331 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 71 zestawów
-testów, 1827 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 72 zestawów
+testów, 1842 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -275,7 +275,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-3292 wierszy, 68 funkcji na poziomie modułu, 0 klas
+3346 wierszy, 69 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -312,6 +312,7 @@ wiec nie da sie go rozjechac z kodem.
 | `id_z_odpowiedzi(odpowiedzi)` | Identyfikator notki, ktory Substack oddal przy zapisie. |
 | `numer_naszej_notki(page, tekst, prob)` | Numer notki odczytany z NASZEGO PROFILU po jej tresci. |
 | `potwierdz_notke(page, tekst, prob)` | Pyta Substacka, czy notka naprawdę wisi na naszym profilu. |
+| `_autor_przy_przycisku(przycisk)` *(wewn.)* | Kto napisal wpis, przy ktorym stoi ten przycisk. |
 | `polub_w_kanale(ile, wyslij)` | Polubienia w kanale czytelnika. |
 | `_klik_na_profilu(handle, napisy, rodzaj, wyslij)` *(wewn.)* | Klika JEDEN konkretny przycisk na cudzym profilu — i tylko jego. |
 | `pobierz_subskrybentow()` | Czyta liste subskrybentow z WLASNEGO panelu, wlasna sesja. |
@@ -601,7 +602,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `audyt_systemu.py` — audyt CALEGO systemu na zywych danych: publikowanie, normy, komentarze, statystyki, artykul, pieniadze, pamiec
 
-393 wierszy, 5 funkcji na poziomie modułu, 0 klas
+412 wierszy, 5 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
