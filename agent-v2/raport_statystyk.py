@@ -128,6 +128,64 @@ def dwie_epoki(najnowsze: dict) -> None:
         print("    %-6s %s" % (epoka, opis))
 
 
+def wzrost_konta() -> None:
+    """Ilu nas czyta i czy tego przybywa.
+
+    To jedyna liczba, ktora mierzy CEL calego systemu wprost. Reszta raportu
+    mowi, co przyniosl konkretny wpis; ta mowi, czy konto rosnie.
+
+    Do 31 sierpnia 2026 nie byla nigdzie zapisywana — krzywa z panelu Substacka
+    zyla wylacznie u Substacka.
+    """
+    import json as _json
+    import browser as _browser
+
+    if not _browser.WZROST.exists():
+        return
+    stany = []
+    for linia in _browser.WZROST.read_text(encoding="utf-8").splitlines():
+        linia = linia.strip()
+        if not linia:
+            continue
+        try:
+            w = _json.loads(linia)
+        except ValueError:
+            continue
+        if isinstance(w, dict):
+            stany.append(w)
+    if not stany:
+        return
+
+    print()
+    print("=" * 96)
+    print("ILU NAS CZYTA")
+    print("=" * 96)
+    # Jeden wiersz na DZIEN, nie na pomiar: mierzymy kilka razy dziennie,
+    # a krzywa dzienna jest tym, o co chodzi.
+    po_dniach: dict[str, dict] = {}
+    for w in stany:
+        po_dniach[str(w.get("kiedy") or "")[:10]] = w
+    dni = sorted(po_dniach)
+    print("%-12s %13s %13s %13s" % (
+        "DZIEN", "SUBSKRYBENCI", "OBSERWUJACY", "MY SUBSKR."))
+    for d in dni[-14:]:
+        w = po_dniach[d]
+        print("%-12s %13d %13d %13d" % (
+            d, int(w.get("subskrybenci") or 0),
+            int(w.get("obserwujacy") or 0),
+            int(w.get("nasze_subskrypcje") or 0)))
+    if len(dni) >= 2:
+        a, b = po_dniach[dni[0]], po_dniach[dni[-1]]
+        print("-" * 96)
+        print("OD %s DO %s: subskrybentow %+d, obserwujacych %+d"
+              % (dni[0], dni[-1],
+                 int(b.get("subskrybenci") or 0) - int(a.get("subskrybenci") or 0),
+                 int(b.get("obserwujacy") or 0) - int(a.get("obserwujacy") or 0)))
+    else:
+        print()
+        print("   To pierwszy zapis — przyrostu nie ma jeszcze z czego policzyc.")
+
+
 def main() -> int:
     rodzaj = sys.argv[1] if len(sys.argv) > 1 else None
 
@@ -212,6 +270,7 @@ def main() -> int:
             print("   %-16s %s" % (nazwa, ile))
 
     dwie_epoki(najnowsze)
+    wzrost_konta()
     return 0
 
 

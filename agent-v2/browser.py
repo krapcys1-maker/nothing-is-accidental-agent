@@ -866,6 +866,61 @@ def statystyki_pozycji(pozycje: list[dict[str, Any]] | None = None) -> list[dict
     return zebrane
 
 
+WZROST = config.DATA_DIR / "wzrost.jsonl"
+
+
+def zapisz_wzrost_konta(profil: dict[str, Any]) -> dict[str, Any] | None:
+    """Ilu nas czyta DZISIAJ — jedna linia na pomiar, historia zostaje.
+
+    CZEGO NIE MIELISMY. System zapisywal subskrypcje przypisane do KONKRETNEGO
+    wpisu (pole `subskrypcje` w statystykach) i wlasne wychodzace subskrypcje
+    („my subskrybujemy kogos", 18 wpisow w dzienniku). LACZNEJ liczby naszych
+    subskrybentow w czasie NIE zapisywal nikt. Jedyny slad to kopia listy
+    z 23 sierpnia 2026 — cztery osoby — i nic pozniej.
+
+    Krzywa 4 -> 8 z panelu Substacka zyla wylacznie u Substacka. Cel calego
+    systemu to wzrost konta, a jedyna liczba, ktora ten wzrost mierzy wprost,
+    nie byla nigdzie zapisywana.
+
+    ZERO DODATKOWYCH ZAPYTAN. `/api/v1/user/<handle>/public_profile` i tak
+    wolamy przy kazdym pomiarze, zeby dostac numer profilu. Te liczby juz
+    w tej odpowiedzi sa.
+
+    DWIE LICZBY NA SUBSKRYBENTOW, BO SUBSTACK PODAJE DWIE. Zmierzone
+    31 sierpnia: panel wydawcy mowil 8, `subscriberCountNumber` 7, a zakladka
+    „Subskrybenci" wymieniala siedem osob — osma jest najpewniej wlasciciel
+    konta. Zapisujemy obie zamiast wybierac, ktora jest „prawdziwa": roznica
+    jest stala i sama w sobie informuje.
+    """
+    import json as _json
+    from datetime import datetime, timezone
+
+    NOWA_LINIA = chr(10)
+    if not isinstance(profil, dict):
+        return None
+    stan = {
+        "kiedy": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "subskrybenci": int(profil.get("subscriberCountNumber") or 0),
+        "subskrybenci_darmowi": int(
+            profil.get("rough_num_free_subscribers_int") or 0),
+        "obserwujacy": int(profil.get("followerCount") or 0),
+        # NASZE wychodzace subskrypcje i rekomendacje — to samo zrodlo, a bez
+        # nich nie widac, czy wzrost idzie za nasza aktywnoscia, czy mimo niej.
+        "nasze_subskrypcje": int(profil.get("visibleSubscriptionsCount") or 0),
+        "nasze_rekomendacje": int(
+            profil.get("primaryPublicationRecommendationCount") or 0),
+    }
+    try:
+        WZROST.parent.mkdir(parents=True, exist_ok=True)
+        with WZROST.open("a", encoding="utf-8") as f:
+            f.write(_json.dumps(stan, ensure_ascii=False) + NOWA_LINIA)
+    except OSError as exc:
+        # Zapis jest premia, pomiar wazniejszy — tak samo jak przy autorze
+        # polubionego wpisu.
+        print("  [wzrost] nie zapisalem: %s" % type(exc).__name__, flush=True)
+    return stan
+
+
 def _artykuly_z_panelu(page, baza: str) -> dict[str, dict[str, Any]]:
     """Nasze artykuly razem ze statystykami — JEDNYM zapytaniem.
 
@@ -976,6 +1031,11 @@ def nasze_pozycje_do_pomiaru(page=None, ile: int = 60) -> list[dict[str, Any]]:
     if page is not None:
         try:
             profil = api_json(page, f"/api/v1/user/{PROFIL_HANDLE}/public_profile")
+            # ILU NAS CZYTA — z odpowiedzi, ktora i tak wlasnie przyszla.
+            stan = zapisz_wzrost_konta(profil)
+            if stan:
+                print("  [wzrost] subskrybentow %d, obserwujacych %d"
+                      % (stan["subskrybenci"], stan["obserwujacy"]), flush=True)
             if isinstance(profil, dict) and profil.get("id"):
                 feed = api_json(page, f"/api/v1/reader/feed/profile/{profil['id']}"
                                       "?types%5B%5D=note") or {}

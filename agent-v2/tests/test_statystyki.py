@@ -70,9 +70,20 @@ PROBKA = {
     ],
 }
 
+# KOMPLET KLUCZY REKORDU — kontrakt, nie wyliczanka. Raport, ktory raz dostaje
+# slownik z polem, a raz bez, wywala sie na pierwszej pozycji, ktorej nikt nie
+# polubil, czyli na najczestszym przypadku.
+#
+# `wystawione` doszlo 31 sierpnia 2026 i TEN TEST ZLAPAL BRAK AKTUALIZACJI —
+# tak, jak mial. Pole niesie date WYSTAWIENIA pozycji, w odroznieniu od
+# `zmierzone`, ktore mowi, kiedy PYTALISMY. Bez niego nie dalo sie rozdzielic
+# statystyk epoki AI od wczesniejszych: pomiary sa zawsze swieze, takze te
+# notek sprzed miesiaca, a laczenie z dziennikiem po numerze gubilo dziesiec
+# notek na 37 (dziennik nie ma numerow tych starszych).
 KLUCZE = {"wyswietlenia", "powierzchnie", "odbiorcy", "interakcje",
           "interakcje_razem", "polubienia", "odpowiedzi", "restacki",
-          "subskrypcje", "obserwacje", "klikniecia_w_link", "zmierzone"}
+          "subskrypcje", "obserwacje", "klikniecia_w_link", "zmierzone",
+          "wystawione"}
 
 
 def _w_pustym_katalogu(funkcja):

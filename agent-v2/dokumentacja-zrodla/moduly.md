@@ -133,7 +133,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-3350 wierszy, 69 funkcji na poziomie modułu, 0 klas
+3410 wierszy, 70 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -160,6 +160,7 @@
 | `_kiedy(c)` *(wewn.)* | — |
 | `ile_dzis_wystawione()` | Ile notek, komentarzy i polubien poszlo dzisiaj. |
 | `statystyki_pozycji(pozycje)` | Pobiera statystyki NASZYCH tresci — jedna przegladarka na cala liste. |
+| `zapisz_wzrost_konta(profil)` | Ilu nas czyta DZISIAJ — jedna linia na pomiar, historia zostaje. |
 | `_artykuly_z_panelu(page, baza)` *(wewn.)* | Nasze artykuly razem ze statystykami — JEDNYM zapytaniem. |
 | `nasze_pozycje_do_pomiaru(page, ile)` | Co wystawilismy i ma wlasny numer — czyli co da sie zmierzyc. |
 | `dopisz_skutki()` | Dopisuje do dziennika, CO Z NASZYCH DZIALAN WYNIKLO. |
@@ -380,13 +381,14 @@
 
 ### `raport_statystyk.py` — te same dane w tabeli dla człowieka
 
-219 wierszy, 4 funkcji na poziomie modułu, 0 klas
+278 wierszy, 5 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_skrot(tekst, ile)` *(wewn.)* | — |
 | `_mediana(liczby)` *(wewn.)* | — |
 | `dwie_epoki(najnowsze)` | Epoka AI osobno, epoka ukrytych systemow osobno. |
+| `wzrost_konta()` | Ilu nas czyta i czy tego przybywa. |
 | `main()` | — |
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło

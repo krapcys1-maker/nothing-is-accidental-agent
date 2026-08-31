@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **21 plików**, 18 460 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **21 plików**, 18 579 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 73 zestawów
-testów, 1855 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 74 zestawów
+testów, 1871 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -275,7 +275,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-3350 wierszy, 69 funkcji na poziomie modułu, 0 klas
+3410 wierszy, 70 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -302,6 +302,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_kiedy(c)` *(wewn.)* | — |
 | `ile_dzis_wystawione()` | Ile notek, komentarzy i polubien poszlo dzisiaj. |
 | `statystyki_pozycji(pozycje)` | Pobiera statystyki NASZYCH tresci — jedna przegladarka na cala liste. |
+| `zapisz_wzrost_konta(profil)` | Ilu nas czyta DZISIAJ — jedna linia na pomiar, historia zostaje. |
 | `_artykuly_z_panelu(page, baza)` *(wewn.)* | Nasze artykuly razem ze statystykami — JEDNYM zapytaniem. |
 | `nasze_pozycje_do_pomiaru(page, ile)` | Co wystawilismy i ma wlasny numer — czyli co da sie zmierzyc. |
 | `dopisz_skutki()` | Dopisuje do dziennika, CO Z NASZYCH DZIALAN WYNIKLO. |
@@ -522,13 +523,14 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `raport_statystyk.py` — te same dane w tabeli dla człowieka
 
-219 wierszy, 4 funkcji na poziomie modułu, 0 klas
+278 wierszy, 5 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_skrot(tekst, ile)` *(wewn.)* | — |
 | `_mediana(liczby)` *(wewn.)* | — |
 | `dwie_epoki(najnowsze)` | Epoka AI osobno, epoka ukrytych systemow osobno. |
+| `wzrost_konta()` | Ilu nas czyta i czy tego przybywa. |
 | `main()` | — |
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
