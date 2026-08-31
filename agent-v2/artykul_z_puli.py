@@ -260,8 +260,37 @@ def wybierz_fakt(conn, run_id, ile: int = 8) -> dict:
 
 
 def main() -> int:
+    """Otwiera przebieg, oddaje robote i ZAMYKA go — takze przy wyjatku.
+
+    PRZEBIEG BYL OTWIERANY I NIGDY NIE ZAMYKANY. `start_run` bylo, `finish_run`
+    NIE BYLO ANI RAZU (dla porownania `run.py` wola je piec razy). Skutek:
+    kazdy przebieg artykulu zostawal w stanie RUNNING na zawsze, a po trzech
+    godzinach `alarm.zawieszone` zamykal go jako STALE i wysylal wlascicielowi
+    maila „przebiegi wisialy w RUNNING".
+
+    Zmierzone 31 sierpnia: alarm zglosil cztery takie przebiegi — 85, 94, 95, 96
+    — z czego 94, 95 i 96 to trzy podejscia do artykulu z poprzedniego wieczora,
+    w tym TO, KTORE SIE UDALO I OPUBLIKOWALO.
+
+    To gorsze niz smiec w tabeli: alarm o zawieszeniu odzywal sie po KAZDEJ
+    publikacji, wiec prawdziwe zawieszenie utoneloby w szumie. Alarm, ktory
+    klamie regularnie, uczy ignorowac alarmy.
+    """
     conn = db.connect()
     run_id = db.start_run(conn, "artykul-z-puli")
+    try:
+        kod = _przebieg(conn, run_id)
+    except BaseException as exc:
+        # BaseException, nie Exception: przerwanie z klawiatury albo SIGTERM
+        # tez ma zostawic zamkniety przebieg, a nie wiszacy.
+        db.finish_run(conn, run_id, "ERROR", "artykul",
+                      f"{type(exc).__name__}: {exc}"[:200])
+        raise
+    db.finish_run(conn, run_id, "DONE" if kod == 0 else "SKIPPED", "artykul")
+    return kod
+
+
+def _przebieg(conn, run_id: int) -> int:
     print("== artykul z puli ciekawostek ==", flush=True)
 
     # --- SCIEZKA Z ZATWIERDZONEJ KARTY ------------------------------------

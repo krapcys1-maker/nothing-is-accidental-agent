@@ -441,6 +441,22 @@ _DZIS_UTC = _dt_sufit.datetime.now(_dt_sufit.timezone.utc).strftime("%Y-%m-%d")
 SUFIT_PODNIESIONY_NA = "2026-08-30"
 DAILY_LIMIT_USD = 10.00 if _DZIS_UTC == SUFIT_PODNIESIONY_NA else 5.00
 
+
+def sufit_dnia(dzien: str) -> float:
+    """Sufit obowiazujacy W TYM DNIU, nie dzisiaj.
+
+    `DAILY_LIMIT_USD` mowi o DZISIAJ i to jest poprawne dla egzekwowania.
+    Ale alarm kosztu patrzy takze na WCZORAJ — a wczoraj sufit mogl byc inny.
+
+    Zmierzone 31 sierpnia: alarm doniosl „Wczoraj wydane $7.22 przy dziennym
+    suficie $5.0". Wczorajszy sufit wynosil DZIESIEC (podniesiony na jeden
+    dzien pracy przy wlascicielu), wiec zaden sufit nie zostal przekroczony —
+    alarm porownal wczorajszy wydatek z dzisiejsza wartoscia stalej.
+
+    Falszywy alarm uczy ignorowac alarmy, a ten akurat ma pilnowac pieniedzy.
+    """
+    return 10.00 if str(dzien)[:10] == SUFIT_PODNIESIONY_NA else 5.00
+
 # SUFIT TORU TESTOWEGO — osobny od produkcyjnego i CELOWO NIE NIESKONCZONY.
 #
 # Wlasciciel: „nie licz budzetu do testow, to cos osobnego". Zgoda co do

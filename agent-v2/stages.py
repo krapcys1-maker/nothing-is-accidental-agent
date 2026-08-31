@@ -3473,18 +3473,65 @@ def podsumowanie_dzialan(dni: int = 7) -> dict[str, dict[str, float]]:
     except OSError:
         return {}
 
+    # PLAN AGENTA, NIE JEGO AMBICJA — I BEZ CICHYCH DNI.
+    #
+    # Realizacja liczona wobec `normy_dzienne()` klamie z dwoch powodow naraz:
+    #
+    #   1. Norma to cel DOCELOWY (19 komentarzy dziennie), a agent przez
+    #      pierwszy miesiac chodzi na rozbiegu i sam sobie zaklada 8-16.
+    #      Mierzenie wykonania celem docelowym zanizalo o polowe.
+    #   2. Cichy dzien wycisza notki i restacki Z ZALOZENIA, wiec wliczanie go
+    #      do mianownika karze system za poprawne zachowanie.
+    #
+    # Zmierzone 31 sierpnia na tych samych siedmiu dniach:
+    #      wobec normy docelowej:  komentarze 29%, notki 51%
+    #      wobec wlasnego planu:   komentarze 54%, notki 60%
+    # Alarm wyslal do wlasciciela te pierwsza pare. Niedobor jest prawdziwy,
+    # ale niemal dwukrotnie mniejszy niz zgloszony — a alarm, ktory przesadza,
+    # uczy ignorowac alarmy.
+    from datetime import datetime as _dt, timedelta as _td
+    import norma as _norma
+
+    zalozone = {}
+    try:
+        zalozone = _norma.budzety_dzienne() or {}
+    except Exception:
+        pass
+
+    okno = [(datetime.now(timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
+            for i in range(1, dni + 1)]
+    plan: dict[str, float] = {}
+    for d in okno:
+        cichy = False
+        try:
+            cichy = config.cichy_dzien(
+                _dt.strptime(d, "%Y-%m-%d").replace(tzinfo=timezone.utc))
+        except Exception:
+            pass
+        wyciszone = set(config.CICHY_DZIEN_WYCISZA_RODZAJE) if cichy else set()
+        dzienny = zalozone.get(d) if isinstance(zalozone.get(d), dict) else {}
+        for rodzaj, ile in (dzienny or {}).items():
+            if rodzaj in wyciszone:
+                continue
+            plan[rodzaj] = plan.get(rodzaj, 0.0) + float(ile or 0)
+
     normy = config.normy_dzienne()
     wynik: dict[str, dict[str, float]] = {}
-    for rodzaj in sorted(set(udane) | set(nieudane) | set(normy)):
+    for rodzaj in sorted(set(udane) | set(nieudane) | set(normy) | set(plan)):
         u = udane.get(rodzaj, 0)
         na_dzien = u / max(1, dni)
         norma = normy.get(rodzaj)
+        # Plan zalozony wygrywa; norma docelowa zostaje jako droga zapasowa,
+        # gdy `budzety.json` jeszcze nie ma zapisu z tych dni.
+        oczekiwane = plan.get(rodzaj) or ((norma or 0) * dni)
         wynik[rodzaj] = {
             "udane": u,
             "nieudane": nieudane.get(rodzaj, 0),
             "na_dzien": round(na_dzien, 2),
             "norma": norma if norma is not None else 0.0,
-            "realizacja": round(100 * na_dzien / norma) if norma else None,
+            "oczekiwane": round(oczekiwane, 1),
+            "z_planu": bool(plan.get(rodzaj)),
+            "realizacja": (round(100 * u / oczekiwane) if oczekiwane else None),
         }
     return wynik
 

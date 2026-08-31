@@ -318,9 +318,15 @@ def koszt() -> str | None:
     wczoraj = (teraz - timedelta(days=1)).strftime("%Y-%m-%d")
     for dzien, opis in ((wczoraj, "Wczoraj"), (dzis, "Dzis")):
         wydane = db.spent_usd(conn, dzien)
-        if wydane > config.DAILY_LIMIT_USD * 0.9:
+        # SUFIT Z TAMTEGO DNIA, NIE Z DZISIAJ. `DAILY_LIMIT_USD` mowi o dzis,
+        # a pytamy takze o wczoraj — i wczoraj sufit mogl byc podniesiony na
+        # jeden dzien pracy przy wlascicielu. Alarm porownujacy wczorajszy
+        # wydatek z dzisiejsza stala doniosl „$7.22 przy suficie $5.0" w dniu,
+        # w ktorym obowiazywal sufit dziesieciu dolarow.
+        sufit = config.sufit_dnia(dzien)
+        if wydane > sufit * 0.9:
             return (f"{opis} wydane ${wydane:.2f} przy dziennym suficie "
-                    f"${config.DAILY_LIMIT_USD}.")
+                    f"${sufit:.2f}.")
     wydane = db.spent_usd(conn, dzis)
 
     wydane_m = db.spent_usd(conn, dzis[:7])
@@ -360,8 +366,13 @@ def wolumeny() -> str | None:
     if not slabe:
         return None
     slabe.sort(key=lambda x: x[1]["realizacja"])
-    opis = ", ".join("%s %d%% (%d z ~%d)"
-                     % (r, d["realizacja"], d["udane"], round(d["norma"] * 7))
+    # LICZBA W MAILU MA BYC TA SAMA, CO W PROGU. Wczesniej prog liczyl sie
+    # z `realizacja`, a mianownik w tekscie z `norma * 7` — dwie rozne rzeczy,
+    # wiec mail podawal procent niepasujacy do wlasnych liczb w nawiasie.
+    opis = ", ".join("%s %d%% (%d z ~%d%s)"
+                     % (r, d["realizacja"], d["udane"],
+                        round(d.get("oczekiwane") or d["norma"] * 7),
+                        "" if d.get("z_planu") else ", wobec normy docelowej")
                      for r, d in slabe)
     return ("Przez ostatnie 7 dni agent zrobil znacznie mniej, niz deklaruje: "
             + opis + ". Nic sie nie wywalilo — to jest ta awaria, ktorej nie "

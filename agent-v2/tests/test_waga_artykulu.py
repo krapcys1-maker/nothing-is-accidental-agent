@@ -164,16 +164,29 @@ for _f in _ast.walk(_drzewo):
 sprawdz("zaden kod nie stoi za `return` na koncu funkcji",
         not _martwe, _martwe)
 
-# I sprawdzenie wprost tego, co przepadlo: normalna sciezka `main` MUSI
-# wywolywac pisarza. Bez tego przebieg konczy sie cicho i bez artykulu.
-_main = next(f for f in _drzewo.body
-             if isinstance(f, _ast.FunctionDef) and f.name == "main")
-_ostatnia = _main.body[-1]
-sprawdz("main konczy sie wywolaniem pisarza, nie `if`-em",
+# I sprawdzenie wprost tego, co przepadlo: normalna sciezka MUSI wywolywac
+# pisarza. Bez tego przebieg konczy sie cicho i bez artykulu.
+#
+# 31 sierpnia robota przeniosla sie z `main` do `_przebieg`: `main` jest teraz
+# opakowaniem, ktore otwiera przebieg, oddaje robote i ZAMYKA go takze przy
+# wyjatku. Powod byl konkretny — `start_run` bylo, `finish_run` nie bylo ani
+# razu, wiec kazdy przebieg artykulu wisial w RUNNING, dopoki alarm nie zamknal
+# go jako STALE i nie wyslal maila po KAZDEJ publikacji.
+#
+# Kontrakt zostaje ten sam, tylko dotyczy `_przebieg`.
+_praca = next(f for f in _drzewo.body
+              if isinstance(f, _ast.FunctionDef) and f.name == "_przebieg")
+_ostatnia = _praca.body[-1]
+sprawdz("robota konczy sie wywolaniem pisarza, nie `if`-em",
         isinstance(_ostatnia, _ast.Return)
         and isinstance(_ostatnia.value, _ast.Call)
         and getattr(_ostatnia.value.func, "id", "") == "_napisz_i_zapisz",
         _ast.dump(_ostatnia)[:120])
+# A `main` ma przebieg ZAMYKAC — inaczej wraca mail o wiszacych przebiegach.
+_main = next(f for f in _drzewo.body
+             if isinstance(f, _ast.FunctionDef) and f.name == "main")
+sprawdz("main zamyka przebieg, ktory otworzyl",
+        "finish_run" in _ast.dump(_main))
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

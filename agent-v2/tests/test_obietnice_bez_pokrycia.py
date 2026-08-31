@@ -129,9 +129,16 @@ print()
 print("=== 2. LIMIT MIESIECZNY: OSTRZEGA, ZANIM ZATRZYMA ===")
 sprawdz("alarm patrzy tez na miesiac", "MONTHLY_LIMIT_USD" in alarm_src)
 sprawdz("i mowi, ile dni zostalo", "zostalo_dni" in alarm_src)
+# Prog dzienny liczy sie teraz z `sufit_dnia(dzien)`, a nie ze stalej
+# `DAILY_LIMIT_USD`. Powod: alarm patrzy takze na WCZORAJ, a wczoraj sufit
+# mogl byc inny (podniesienie wygasa samo o polnocy). 31 sierpnia alarm
+# doniosl „Wczoraj wydane $7.22 przy suficie $5.0" w dniu, w ktorym
+# obowiazywal sufit dziesieciu dolarow.
 sprawdz("prog miesieczny jest nizszy niz dzienny",
         "MONTHLY_LIMIT_USD * 0.75" in alarm_src
-        and "DAILY_LIMIT_USD * 0.9" in alarm_src)
+        and "sufit * 0.9" in alarm_src)
+sprawdz("sufit dzienny brany z TAMTEGO dnia, nie z dzisiaj",
+        "config.sufit_dnia(dzien)" in alarm_src)
 # NIE ZACZYNAJ TEGO, CZEGO NIE SKONCZYSZ — ta sama zasada co przy przerwach.
 sprawdz("artykul nie startuje, gdy miesiac nie udzwignie calego",
         "MIESIAC NA WYCZERPANIU" in run_src)
