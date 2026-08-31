@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1445 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1496 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -340,7 +340,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2224 wierszy, 21 funkcji na poziomie modułu, 0 klas
+2261 wierszy, 21 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

@@ -564,6 +564,57 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                       % (przed - len(unikalne), przed), flush=True)
 
         cele = stages.wybierz_cele(conn, run_id, unikalne)
+
+        # SZUKAJ, AZ ZNAJDZIESZ — DECYZJA WLASCICIELA 31 SIERPNIA.
+        #
+        # Dotad bylo: jedna pula, jedna ocena, koniec. Jesli z trzynastu
+        # kandydatow przechodzil jeden, wychodzil JEDEN komentarz i przebieg
+        # szedl dalej — mimo ze plan mowil pietnascie. Zmierzone tego dnia:
+        #     [cele] warte komentarza: 0/15, potem 3/17
+        # czyli dwie proby na przebieg i trzy komentarze z pietnastu.
+        #
+        # Teraz dobieramy kolejne partie, dopoki nie mamy tylu celow, ile
+        # przewiduje plan na TEN przebieg. Kazda runda losuje inne hasla
+        # (`szukaj_nowych` losuje z puli), wiec kolejna partia to inne konta,
+        # nie te same odsiane drugi raz.
+        #
+        # TRZY OGRANICZNIKI, BO „AZ ZNAJDZIE" BEZ NICH ZNACZY „W NIESKONCZONOSC":
+        #   - `RUNDY_SZUKANIA_CELOW` prob (kazda to jedno platne wywolanie oceny),
+        #   - czas przebiegu, ten sam co wszedzie,
+        #   - runda, ktora nie przyniosla ANI JEDNEGO nowego adresu, konczy
+        #     szukanie: wyszukiwarka oddaje to samo, wiec kolejna nie pomoze.
+        #
+        # ODSTEPY SIE NIE ZMIENIAJA. Wiecej celow to nie szybsze pisanie —
+        # `rytm()` nadal trzyma 5-15 minut miedzy komentarzami. Wlasciciel byl
+        # jednoznaczny: „nie chodzi o LICZBE, tylko o ODSTEPY".
+        rundy = 1
+        while (len(cele) < na_teraz["komentarze"]
+               and rundy < config.RUNDY_SZUKANIA_CELOW
+               and zostal_czas("komentarze")):
+            rundy += 1
+            print("  [cele] mam %d z %d — runda %d szukania"
+                  % (len(cele), na_teraz["komentarze"], rundy), flush=True)
+            dobrane = [x for x in kanal.szukaj_nowych()
+                       if x.get("rodzaj") != "notka" and x.get("url")
+                       and x["url"] not in widziane]
+            if not dobrane:
+                print("  [cele] wyszukiwarka nie oddaje juz nic nowego"
+                      " — koncze szukanie", flush=True)
+                break
+            for x in dobrane:
+                widziane.add(x["url"])
+            if platne:
+                from urllib.parse import urlparse as _up2
+                dobrane = [x for x in dobrane
+                           if _up2(x["url"]).netloc.lower().removeprefix("www.")
+                           not in platne]
+            if not dobrane:
+                continue
+            cele = cele + stages.wybierz_cele(conn, run_id, dobrane)
+        if rundy > 1:
+            print("  [cele] po %d rundach: %d celow"
+                  % (rundy, len(cele)), flush=True)
+
         for cel in cele[: na_teraz["komentarze"]]:
             if not zostal_czas("komentarze"):
                 return

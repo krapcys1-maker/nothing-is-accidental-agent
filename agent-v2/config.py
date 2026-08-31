@@ -1853,18 +1853,55 @@ ODSTEP_DNI_NA_PUBLIKACJE = 4
 # co juz znamy, wiec sam z siebie nie przyprowadzi nikogo nowego — a wlasnie
 # o nowych ludzi chodzi. Wyszukiwarka Substacka oddaje konta spoza naszego kregu.
 #
-# Hasla opisuja NASZ rewir: ukryte systemy, przepisy, bodzce i decyzje za
-# rzeczami codziennymi. Losujemy kilka przy kazdym przebiegu, zeby nie wracac
+# DZIESIATY RAZ TA SAMA CHOROBA: ZOSTALOSC PO EPOCE PRZEDMIOTOW.
+#
+# Do 31 sierpnia 2026 wszystkie osiemnascie hasel opisywalo POPRZEDNIE pismo:
+# „food labeling rules", „packaging regulation", „building codes regulation",
+# „transport standards"... ANI JEDNO nie dotyczylo AI — piec dni po
+# przestawieniu konta i po poprawieniu dwudziestu blokow w dziewieciu promptach,
+# po wyczyszczeniu banku tematow i po zaostrzeniu reguly celow.
+#
+# SKUTEK BYL DOKLADNIE ODWROTNY DO WYGLADU. Agent szukal „przepisow
+# o etykietowaniu zywnosci", dostawal posty o etykietowaniu zywnosci, po czym
+# regula `cele.md` — poprawnie — odrzucala je wszystkie, bo nie dotycza AI.
+# W logu wygladalo to na wybrednosc modelu:
+#     [cele] warte komentarza: 0/15
+#     [cele] warte komentarza: 1/13
+# a bylo szukaniem nie tego, czego trzeba. System nie zawodzil w znajdowaniu;
+# szukal zlej rzeczy i poprawnie odrzucal to, co znalazl.
+#
+# Hasla opisuja teraz NASZ rewir: AI i to, co ona zmienia w pracy, prawie,
+# pieniadzach i zaufaniu. Nie sama technika — pod postem o rozmiarze modelu nie
+# mamy nic do dodania. Losujemy kilka przy kazdym przebiegu, zeby nie wracac
 # ciagle do tej samej niszy.
 HASLA_SZUKANIA = (
-    "building codes regulation", "food labeling rules", "safety standards history",
-    "why prices are set", "infrastructure decisions", "product recall",
-    "packaging regulation", "transport standards", "consumer protection rule",
-    "why this design exists", "hidden fees", "zoning", "supply chain incentives",
-    "medical device rules", "aviation regulation", "energy efficiency standard",
-    "why companies do this", "unintended consequences policy",
+    # rdzen: systemy AI i ich dzialanie w swiecie
+    "AI agents", "AI regulation", "AI safety", "machine learning in production",
+    "large language models", "AI policy", "AI evaluation", "model deployment",
+    # gdzie AI dotyka ludzi — tu sa czytelnicy, nie sami inzynierowie
+    "AI and work", "AI hiring", "algorithmic decision making",
+    "automated decisions", "AI copyright", "AI and privacy",
+    "content moderation AI", "AI in healthcare", "AI and education",
+    # pieniadze i wladza wokol AI
+    "AI startups", "AI infrastructure", "data centers energy",
+    "AI chips", "training data", "open source AI", "AI accountability",
 )
-ILE_HASEL_NA_PRZEBIEG = 3
+# PIEC, NIE TRZY. Przy trzech haslach na przebieg i osiemnastu w puli agent
+# ogladal jedna szosta rewiru na raz — a po zaostrzeniu reguly celow (tylko
+# posty o AI) waska pula zamieniala sie w zero kandydatow. Zmierzone 31 sierpnia:
+# 13-17 obejrzanych, 0-3 warte komentarza, przy planie pietnastu.
+ILE_HASEL_NA_PRZEBIEG = 5
+
+# ILE RAZY SZUKAC CELOW W JEDNYM PRZEBIEGU, zanim odpuscimy.
+#
+# „Niech szuka, az znajdzie" bez ogranicznika znaczy „w nieskonczonosc", a kazda
+# runda to jedno platne wywolanie oceny celow (~3 centy). Cztery rundy przy
+# pieciu haslach kazda to dwadziescia hasel na przebieg — cala pula — wiec
+# piata i tak nie miala by czego dolozyc.
+#
+# Petla konczy sie WCZESNIEJ, gdy wyszukiwarka przestaje oddawac nowe adresy
+# albo gdy skonczy sie czas przebiegu. Ogranicznik jest sufitem, nie celem.
+RUNDY_SZUKANIA_CELOW = 4
 
 # Odpowiedzi POD WLASNYMI tresciami sa poza limitami dziennymi. Decyzja
 # wlasciciela i jest sluszna: limit chroni przed wygladaniem na spamera u obcych,

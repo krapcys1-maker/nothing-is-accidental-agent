@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **21 plików**, 18 878 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **21 plików**, 18 966 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 76 zestawów
-testów, 1909 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 77 zestawów
+testów, 1929 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1445 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1496 wierszy, 14 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -482,7 +482,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2224 wierszy, 21 funkcji na poziomie modułu, 0 klas
+2261 wierszy, 21 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -12382,8 +12382,9 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `MIN_WIEK_NOTKI_MIN` | `(20, 90)` | NOTKA TO NIE ARTYKUL i zyje godziny, nie dni. Ten sam prog co dla artykulow oznaczal, ze pod notki wchodzilismy zawsze PO koncu rozmowy: prz |
 | `KOMFORTOWO_KOMENTARZY` | `25` | ILU KOMENTARZY POD CELEM JESZCZE NIE UWAZAMY ZA TLOK. Wyszukiwarka oddawala posty ze srednio 45 komentarzami, jeden ze 126 — a komentarz sto |
 | `ODSTEP_DNI_NA_PUBLIKACJE` | `4` | Ile dni odstepu przed kolejnym komentarzem pod TA SAMA publikacja. Komentarz pod kazdym kolejnym tekstem tej samej osoby to drugi najczyteln |
-| `HASLA_SZUKANIA` | `( "building codes regulation", "food labelin` | HASLA, KTORYMI AGENT SZUKA NOWYCH KONT. Kanal czytelnika pokazuje tylko to, co juz znamy, wiec sam z siebie nie przyprowadzi nikogo nowego — |
-| `ILE_HASEL_NA_PRZEBIEG` | `3` | — |
+| `HASLA_SZUKANIA` | `( # rdzen: systemy AI i ich dzialanie w swie` | HASLA, KTORYMI AGENT SZUKA NOWYCH KONT. Kanal czytelnika pokazuje tylko to, co juz znamy, wiec sam z siebie nie przyprowadzi nikogo nowego — |
+| `ILE_HASEL_NA_PRZEBIEG` | `5` | PIEC, NIE TRZY. Przy trzech haslach na przebieg i osiemnastu w puli agent ogladal jedna szosta rewiru na raz — a po zaostrzeniu reguly celow |
+| `RUNDY_SZUKANIA_CELOW` | `4` | ILE RAZY SZUKAC CELOW W JEDNYM PRZEBIEGU, zanim odpuscimy. „Niech szuka, az znajdzie" bez ogranicznika znaczy „w nieskonczonosc", a kazda ru |
 | `ODPOWIEDZI_POZA_LIMITEM` | `True` | Odpowiedzi POD WLASNYMI tresciami sa poza limitami dziennymi. Decyzja wlasciciela i jest sluszna: limit chroni przed wygladaniem na spamera  |
 | `ODPOWIADAJ_WSZYSTKIM_DO` | `5` | Do ilu komentarzy odpowiadamy BEZ wybierania. Przy dwoch odpowiada sie obu. Przy dwustu odpowiedz pod kazdym wyglada jak maszyna — nawet gdy |
 | `WYBIERAJ_POWYZEJ` | `20` | — |

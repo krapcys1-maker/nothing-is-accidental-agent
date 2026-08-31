@@ -150,8 +150,9 @@
 | `MIN_WIEK_NOTKI_MIN` | `(20, 90)` | NOTKA TO NIE ARTYKUL i zyje godziny, nie dni. Ten sam prog co dla artykulow oznaczal, ze pod notki wchodzilismy zawsze PO koncu rozmowy: prz |
 | `KOMFORTOWO_KOMENTARZY` | `25` | ILU KOMENTARZY POD CELEM JESZCZE NIE UWAZAMY ZA TLOK. Wyszukiwarka oddawala posty ze srednio 45 komentarzami, jeden ze 126 — a komentarz sto |
 | `ODSTEP_DNI_NA_PUBLIKACJE` | `4` | Ile dni odstepu przed kolejnym komentarzem pod TA SAMA publikacja. Komentarz pod kazdym kolejnym tekstem tej samej osoby to drugi najczyteln |
-| `HASLA_SZUKANIA` | `( "building codes regulation", "food labelin` | HASLA, KTORYMI AGENT SZUKA NOWYCH KONT. Kanal czytelnika pokazuje tylko to, co juz znamy, wiec sam z siebie nie przyprowadzi nikogo nowego — |
-| `ILE_HASEL_NA_PRZEBIEG` | `3` | — |
+| `HASLA_SZUKANIA` | `( # rdzen: systemy AI i ich dzialanie w swie` | HASLA, KTORYMI AGENT SZUKA NOWYCH KONT. Kanal czytelnika pokazuje tylko to, co juz znamy, wiec sam z siebie nie przyprowadzi nikogo nowego — |
+| `ILE_HASEL_NA_PRZEBIEG` | `5` | PIEC, NIE TRZY. Przy trzech haslach na przebieg i osiemnastu w puli agent ogladal jedna szosta rewiru na raz — a po zaostrzeniu reguly celow |
+| `RUNDY_SZUKANIA_CELOW` | `4` | ILE RAZY SZUKAC CELOW W JEDNYM PRZEBIEGU, zanim odpuscimy. „Niech szuka, az znajdzie" bez ogranicznika znaczy „w nieskonczonosc", a kazda ru |
 | `ODPOWIEDZI_POZA_LIMITEM` | `True` | Odpowiedzi POD WLASNYMI tresciami sa poza limitami dziennymi. Decyzja wlasciciela i jest sluszna: limit chroni przed wygladaniem na spamera  |
 | `ODPOWIADAJ_WSZYSTKIM_DO` | `5` | Do ilu komentarzy odpowiadamy BEZ wybierania. Przy dwoch odpowiada sie obu. Przy dwustu odpowiedz pod kazdym wyglada jak maszyna — nawet gdy |
 | `WYBIERAJ_POWYZEJ` | `20` | — |
