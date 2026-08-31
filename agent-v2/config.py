@@ -335,7 +335,32 @@ def stawka_deepseek(model: str, kiedy=None) -> dict[str, float]:
 
 
 def pora_na_publikacje(kiedy=None) -> tuple[bool, str]:
-    """Czy teraz wolno publikowac — wg zegara CZYTELNIKOW, nie serwera."""
+    """Czy teraz wolno wystawiac NOTKI — wg zegara CZYTELNIKOW, nie serwera.
+
+    DOTYCZY WYLACZNIE NOTEK. Komentarze i odpowiedzi stoja pod CUDZYMI
+    tekstami: ich widocznosc zalezy od ruchu na tamtym poscie, a nie od tego,
+    czy nasza publicznosc akurat spi. Blokowanie ich oknem bylo rozszerzeniem
+    reguly poza jej wlasne uzasadnienie („nowe tresci konkuruja o miejsce
+    w kanale") — patrz `run.py`.
+
+    „NAJGORSZE OKNO" PRZESTALO BYC BRAMKA 31 sierpnia 2026, decyzja
+    wlasciciela („nawet za cene wypuszczania poza oknami, bo tak to do konca
+    swiata bedziemy sie bawic z czekaniem na agenta i jego okno").
+
+    ZMIERZONE TEGO DNIA, i to jest cala argumentacja: przebieg o 17:00 UTC
+    wypada 13:00 ET, czyli DOKLADNIE w `WORST_NOTE_HOURS`. Blokowal sie wiec
+    CODZIENNIE — jeden z pieciu przebiegow, 20% dziennej zdolnosci. Tego dnia
+    znalazl DZIEWIEC celow wartych komentarza (`warte komentarza: 9/23`,
+    najlepszy wynik od przestawienia konta) i nie wystawil ANI JEDNEGO.
+
+    A sama regula stala na wlasnym zaprzeczeniu: komentarz dwa akapity nizej
+    w tym pliku mowi wprost, ze NASZE WLASNE ZRODLA SIE NIE ZGADZAJA — jedno
+    wskazuje 6-8 ET, drugie 15-18 ET. Egzekwowanie godzin, o ktorych sami
+    piszemy, ze nie wiemy, kosztowalo nas piata czesc dnia.
+
+    Prog snu ZOSTAJE. To jest inne twierdzenie i lepiej uzasadnione: tekst
+    wrzucony, gdy publicznosc spi, traci pierwsze godziny widocznosci.
+    """
     from datetime import datetime, timezone
     from zoneinfo import ZoneInfo
 
@@ -347,7 +372,11 @@ def pora_na_publikacje(kiedy=None) -> tuple[bool, str]:
         return False, (f"{g:02d}:{lokalnie.minute:02d} u czytelnikow — poza oknem "
                        f"{dol}:00-{gora}:00, publicznosc spi")
     if g in WORST_NOTE_HOURS:
-        return False, (f"{g:02d}:00 u czytelnikow — najgorsze okno wg researchu")
+        # NIE BLOKUJEMY, MELDUJEMY. Zapis zostaje, zeby dalo sie pozniej
+        # sprawdzic, czy notki z tych godzin faktycznie wypadaja gorzej —
+        # a `wystawione` w statystykach daje juz do tego godzine.
+        return True, (f"{g:02d}:{lokalnie.minute:02d} u czytelnikow"
+                      f" (godzina oznaczona jako slabsza — nie blokuje)")
     return True, f"{g:02d}:{lokalnie.minute:02d} u czytelnikow"
 
 
@@ -1339,7 +1368,11 @@ PUBLISH_TIMEZONE = "America/New_York"
 # w funkcji wolanej na poczatku KAZDEGO przebiegu dnia. Komentarz mowil tez
 # „agent wystawia notki rownomiernie w calym oknie 6-22 ET" — nieprawda
 # wlasnie z powodu tej stalej.
-WORST_NOTE_HOURS = (12, 13)  # ET, zwłaszcza w piątek — EGZEKWOWANE
+# OD 31 SIERPNIA 2026 NIE JEST BRAMKA, tylko adnotacja w logu — patrz
+# `pora_na_publikacje`. Blokowala codziennie przebieg o 17:00 UTC (13:00 ET),
+# czyli jeden z pieciu, a stala na badaniu, ktoremu przeczy inne badanie w tym
+# samym pliku.
+WORST_NOTE_HOURS = (12, 13)  # ET — TYLKO ADNOTACJA, nie blokada
 
 # UWAGA: DWIE PONIZSZE STALE NIE SA UZYWANE PRZEZ ZADNA LINIE KODU.
 # Agent nie wazy notek wedlug tych godzin ani dni — rozklada je losowo

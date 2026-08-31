@@ -372,8 +372,25 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     wolno, powod = config.pora_na_publikacje()
     print(f"   okno publikacji: {'TAK' if wolno else 'NIE'} — {powod}", flush=True)
     if not wolno:
+        # OKNO WYCISZA NOTKI, NIE KOMENTARZE — poprawka z 31 sierpnia 2026.
+        #
+        # Uzasadnienie okna brzmi: „nowe tresci konkuruja o miejsce w kanale,
+        # a tekst wrzucony, gdy publicznosc spi, traci pierwsze godziny
+        # widocznosci". To jest prawda o NOTCE — naszej wlasnej tresci na
+        # naszym profilu.
+        #
+        # Komentarz stoi pod CUDZYM tekstem. Jego widocznosc zalezy od ruchu
+        # na TAMTYM poscie, na ktory nasza pora dnia nie ma wplywu; a autor,
+        # do ktorego piszemy, moze byc w zupelnie innej strefie. Rozszerzenie
+        # reguly na komentarze bylo wiec siegnieciem poza jej wlasne
+        # uzasadnienie.
+        #
+        # Koszt byl policzalny: 17:00 UTC to 13:00 ET, wiec ten przebieg
+        # wyciszal sie CODZIENNIE. 31 sierpnia znalazl dziewiec celow wartych
+        # komentarza i nie wystawil zadnego.
         na_teraz["notki"] = 0
-        na_teraz["komentarze"] = 0
+        print("   (komentarze IDA — okno dotyczy naszych tresci, nie cudzych"
+              " watkow)", flush=True)
 
     def blok(nazwa: str, robota) -> None:
         try:

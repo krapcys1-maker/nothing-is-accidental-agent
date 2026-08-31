@@ -198,7 +198,18 @@ for nazwa in NAZWANE_JAKO_MARTWE:
     sprawdz("%s jest naprawde nieuzywana" % nazwa, not _uzyta(nazwa))
 # KONTRDOWOD: stala EGZEKWOWANA nie moze stac w bloku "nieuzywane".
 sprawdz("WORST_NOTE_HOURS jest uzywana", _uzyta("WORST_NOTE_HOURS"))
-sprawdz("i config mowi o niej, ze jest EGZEKWOWANA", "EGZEKWOWANE" in cfg)
+# OD 31 SIERPNIA 2026 NIE JEST JUZ BRAMKA, tylko adnotacja w logu. Powod:
+# przebieg o 17:00 UTC to 13:00 ET, czyli dokladnie ta godzina — blokowal sie
+# CODZIENNIE, jeden z pieciu, a tego dnia znalazl dziewiec celow wartych
+# komentarza i nie wystawil zadnego. Sama regula stala przy tym na wlasnym
+# zaprzeczeniu: `config.py` mowi wprost, ze nasze zrodla o godzinach sie nie
+# zgadzaja.
+#
+# CEL TEGO SPRAWDZENIA SIE NIE ZMIENIL: stala ma byc UZYWANA, zeby nikt nie
+# skasowal jej jako martwej i nie dostal NameError w funkcji wolanej na
+# poczatku kazdego przebiegu.
+sprawdz("i config mowi wprost, ze to juz nie blokada",
+        "TYLKO ADNOTACJA, nie blokada" in cfg)
 # Liczba w naglowku musi zgadzac sie z liczba stalych pod nim — bylo "CZTERY"
 # przy trzech stalych, z czego jedna zywa.
 naglowek = re.search(r"UWAGA: (\w+) PONIZSZE STALE NIE SA UZYWANE", cfg)
@@ -223,8 +234,21 @@ def _wolno(godzina_et):
     return _cfg.pora_na_publikacje(t)[0]
 
 
+# GODZINY OZNACZONE JAKO SLABSZE JUZ NIE BLOKUJA — ale nadal sa nazwane
+# w powodzie, zeby dalo sie potem sprawdzic, czy notki z tych godzin naprawde
+# wypadaja gorzej (`wystawione` w statystykach daje juz godzine).
 for g in _cfg.WORST_NOTE_HOURS:
-    sprawdz("o %02d:30 ET agent NIE publikuje" % g, not _wolno(g))
+    sprawdz("o %02d:30 ET agent PUBLIKUJE" % g, _wolno(g))
+    _powod = _cfg.pora_na_publikacje(
+        datetime(2026, 8, 23, g, 30,
+                 tzinfo=ZoneInfo(_cfg.PUBLISH_TIMEZONE)).astimezone(timezone.utc))[1]
+    sprawdz("  ale %02d:00 ET jest odnotowana jako slabsza" % g,
+            "slabsza" in _powod, _powod)
+
+# PROG SNU ZOSTAJE BRAMKA. To inne twierdzenie i lepiej uzasadnione: tekst
+# wrzucony, gdy publicznosc spi, traci pierwsze godziny widocznosci.
+for g in (23, 1, 4):
+    sprawdz("o %02d:30 ET agent nadal NIE publikuje" % g, not _wolno(g))
 sprawdz("a godzine wczesniej owszem", _wolno(min(_cfg.WORST_NOTE_HOURS) - 1))
 sprawdz("i godzine pozniej tez", _wolno(max(_cfg.WORST_NOTE_HOURS) + 1))
 # Config jest lamany do 79 znakow, a zdanie przechodzi przez granice wiersza
