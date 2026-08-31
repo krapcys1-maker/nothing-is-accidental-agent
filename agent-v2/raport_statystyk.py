@@ -29,6 +29,105 @@ def _skrot(tekst: str, ile: int = 46) -> str:
     return (t[: ile - 1] + "…") if len(t) > ile else t
 
 
+# Dzien, w ktorym konto przestalo pisac o ukrytych systemach w zwyklych
+# rzeczach, a zaczelo o AI. Wszystko starsze opisuje INNA publikacje i
+# mieszanie tego z dzisiejszym stanem juz raz doprowadzilo do zlej decyzji.
+PIVOT = "2026-08-25"
+
+POLA = ("wyswietlenia", "polubienia", "odpowiedzi", "restacki",
+        "subskrypcje", "obserwacje", "klikniecia_w_link")
+
+
+def _mediana(liczby: list[int]) -> float:
+    if not liczby:
+        return 0.0
+    s = sorted(liczby)
+    n = len(s)
+    return float(s[n // 2]) if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2
+
+
+def dwie_epoki(najnowsze: dict) -> None:
+    """Epoka AI osobno, epoka ukrytych systemow osobno.
+
+    DZIELIMY PO DACIE WYSTAWIENIA, NIGDY PO DACIE POMIARU. Pole `zmierzone`
+    mowi, kiedy PYTALISMY — a pytamy zawsze niedawno, takze o notki sprzed
+    miesiaca. Podzial po nim daje dwie epoki, z ktorych jedna jest pusta; ta
+    sama pomylka przepuscila juz raz filtr, ktory nie odfiltrowal niczego.
+
+    `wystawione` dopisano do rekordu 31 sierpnia 2026. Pomiary starsze go nie
+    maja i trafiaja do osobnej kolumny zamiast po cichu doliczyc sie do
+    ktorejkolwiek epoki — bo doliczone po cichu skrzywilyby porownanie w
+    strone, ktorej nie widac.
+    """
+    epoki: dict[str, list[dict]] = {"PRZED": [], "AI": [], "?": []}
+    for r in najnowsze.values():
+        data = str(r.get("wystawione") or "")[:10]
+        if not data:
+            epoki["?"].append(r)
+        else:
+            epoki["AI" if data >= PIVOT else "PRZED"].append(r)
+
+    if not epoki["AI"] and not epoki["PRZED"]:
+        print()
+        print("PODZIAL NA EPOKI: zaden pomiar nie ma jeszcze daty wystawienia.")
+        print("   Pole `wystawione` dopisano 31.08.2026 — pojawi sie przy")
+        print("   nastepnym pomiarze kazdej pozycji.")
+        return
+
+    print()
+    print("=" * 96)
+    print("EPOKA AI (od %s) OSOBNO OD EPOKI UKRYTYCH SYSTEMOW" % PIVOT)
+    print("=" * 96)
+    if epoki["?"]:
+        print("  bez daty wystawienia (pomiar sprzed 31.08): %d — NIE wliczone"
+              " do zadnej epoki" % len(epoki["?"]))
+
+    for rodzaj in sorted({str(r.get("rodzaj") or "?")
+                          for r in najnowsze.values()}):
+        wiersze = []
+        for epoka in ("PRZED", "AI"):
+            poz = [r for r in epoki[epoka]
+                   if str(r.get("rodzaj") or "?") == rodzaj]
+            if poz:
+                wiersze.append((epoka, poz))
+        if not wiersze:
+            continue
+        print()
+        print("  %s" % rodzaj.upper())
+        print("    %-8s %6s %10s %10s %10s %10s" % (
+            "EPOKA", "ILE", "WEJSC", "MED.WEJSC", "POLUBIEN", "SUBSKR"))
+        for epoka, poz in wiersze:
+            wejscia = [int(r.get("wyswietlenia") or 0) for r in poz]
+            print("    %-8s %6d %10d %10.1f %10d %10d" % (
+                epoka, len(poz), sum(wejscia), _mediana(wejscia),
+                sum(int(r.get("polubienia") or 0) for r in poz),
+                sum(int(r.get("subskrypcje") or 0) for r in poz)))
+
+    # POLA, KTORE NIGDY NIE DRGNELY. Pole zawsze zerowe wyglada w tabeli tak
+    # samo jak pole, ktore po prostu dzis nic nie zebralo — a to zupelnie inna
+    # informacja: pierwsze znaczy, ze mierzymy cos, czego nie dostajemy.
+    martwe = [p for p in POLA
+              if not any(int(r.get(p) or 0) for r in najnowsze.values())]
+    if martwe:
+        print()
+        print("  MIERZONE, ALE ZAWSZE ZEROWE (we wszystkich epokach): %s"
+              % ", ".join(martwe))
+
+    print()
+    print("  SKAD PRZYCHODZILY WEJSCIA, wg epoki:")
+    for epoka in ("PRZED", "AI"):
+        lic: dict[str, int] = {}
+        for r in epoki[epoka]:
+            for nazwa, ile in (r.get("powierzchnie") or {}).items():
+                lic[str(nazwa)] = lic.get(str(nazwa), 0) + int(ile or 0)
+        razem = sum(lic.values())
+        if not razem:
+            continue
+        opis = ", ".join("%s %d (%d%%)" % (n, i, round(100 * i / razem))
+                         for n, i in sorted(lic.items(), key=lambda x: -x[1])[:4])
+        print("    %-6s %s" % (epoka, opis))
+
+
 def main() -> int:
     rodzaj = sys.argv[1] if len(sys.argv) > 1 else None
 
@@ -111,6 +210,8 @@ def main() -> int:
         print("SKAD PRZYCHODZA WEJSCIA:")
         for nazwa, ile in sorted(powierzchnie.items(), key=lambda x: -x[1]):
             print("   %-16s %s" % (nazwa, ile))
+
+    dwie_epoki(najnowsze)
     return 0
 
 

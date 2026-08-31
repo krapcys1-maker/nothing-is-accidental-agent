@@ -133,7 +133,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-3346 wierszy, 69 funkcji na poziomie modułu, 0 klas
+3350 wierszy, 69 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -363,7 +363,7 @@
 
 ### `statystyki.py` — co przyniosła każda pozycja: wejścia, reakcje, subskrypcje
 
-440 wierszy, 10 funkcji na poziomie modułu, 0 klas
+464 wierszy, 10 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -380,11 +380,13 @@
 
 ### `raport_statystyk.py` — te same dane w tabeli dla człowieka
 
-118 wierszy, 2 funkcji na poziomie modułu, 0 klas
+219 wierszy, 4 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_skrot(tekst, ile)` *(wewn.)* | — |
+| `_mediana(liczby)` *(wewn.)* | — |
+| `dwie_epoki(najnowsze)` | Epoka AI osobno, epoka ukrytych systemow osobno. |
 | `main()` | — |
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło

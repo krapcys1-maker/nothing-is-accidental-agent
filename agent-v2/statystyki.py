@@ -201,7 +201,7 @@ def z_kart(dane: dict) -> dict:
     Klucze zawsze te same, niezaleznie od tego, ilu kart brakuje:
         wyswietlenia, powierzchnie, odbiorcy, interakcje, interakcje_razem,
         polubienia, odpowiedzi, restacki, subskrypcje, obserwacje,
-        klikniecia_w_link, zmierzone
+        klikniecia_w_link, zmierzone, wystawione
 
     `interakcje_razem` to naglowek karty, czyli liczba OD SUBSTACKA, podczas gdy
     `interakcje` sumuja sie z pozycji. Trzymamy obie, bo ich roznica jest
@@ -250,6 +250,30 @@ def z_kart(dane: dict) -> dict:
 
     zmierzone = dane.get("lastUpdatedAt") if isinstance(dane, dict) else None
     rekord["zmierzone"] = zmierzone if isinstance(zmierzone, str) else ""
+
+    # KIEDY TO WYSTAWILISMY — bez tego pomiaru nie da sie z niczym porownac.
+    #
+    # `zmierzone` mowi, kiedy PYTALISMY, i to jest zupelnie inna data: pomiary
+    # sa zawsze swieze, takze te notek sprzed miesiaca. Przy probie rozdzielenia
+    # epoki AI od epoki o ukrytych systemach trzeba bylo laczyc kazda pozycje
+    # z dziennikiem po numerze — a dziennik numerow starszych notek nie ma
+    # (z 29 wystawionych mial SZESC). Dziesieciu notek na 37 nie dalo sie
+    # przypisac do zadnej epoki.
+    #
+    # Substack podaje te date w karcie `note`, obok tresci. Zapisujemy ja
+    # przy KAZDYM pomiarze, wiec plik statystyk przestaje zalezec od tego,
+    # czy nasza wlasna ksiegowosc zapamietala numer.
+    # `or {}` CHRONI PRZED PUSTA WARTOSCIA, NIE PRZED ZLYM TYPEM. Pierwsza
+    # wersja szla lancuchem `.get(...) or {}` i wywalala sie AttributeError,
+    # gdy `note` bylo napisem zamiast slownika — a wyjatek tutaj zabralby caly
+    # pomiar, bo statystyki sa dodatkiem, nie warunkiem dzialania.
+    wystawione = _karty(dane).get("note")
+    for klucz in ("note", "note", "timestamp"):
+        if not isinstance(wystawione, dict):
+            wystawione = None
+            break
+        wystawione = wystawione.get(klucz)
+    rekord["wystawione"] = wystawione if isinstance(wystawione, str) else ""
     return rekord
 
 

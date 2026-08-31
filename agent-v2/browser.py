@@ -919,6 +919,10 @@ def _artykuly_z_panelu(page, baza: str) -> dict[str, dict[str, Any]]:
             "id": ident,
             "tekst": " ".join(str(post.get("title") or "").split())[:200],
             "statystyki": {
+                # KIEDY TO WYSZLO. Ta sama informacja, co `wystawione`
+                # w `statystyki.z_kart` — bez niej pomiaru nie da sie
+                # przypisac do epoki inaczej niz laczeniem po tytule.
+                "wystawione": str(post.get("post_date") or ""),
                 "wyswietlenia": int(s.get("views") or 0),
                 # ODPOWIEDZI TO WATEK CALY, nie same komentarze najwyzszego
                 # poziomu. `comment_count` liczy tylko te pierwsze — pod
