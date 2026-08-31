@@ -866,6 +866,116 @@ def statystyki_pozycji(pozycje: list[dict[str, Any]] | None = None) -> list[dict
     return zebrane
 
 
+CZYTELNICY = config.DATA_DIR / "czytelnicy.jsonl"
+
+# Odnosniki, ktore sa nawigacja Substacka, a nie ludzmi. Bez tej listy kazdy
+# zrzut mialby w sobie „Explore" i „Dashboard" jako naszych obserwujacych.
+_NIE_LUDZIE = {"explore", "dashboard", "profile", "create", "more", "home",
+               "notes", "chat", "search", "settings", "inbox"}
+
+
+def _ludzie_z_zakladki(page) -> list[dict[str, str]]:
+    """Kto jest na tej zakladce — nazwa i uchwyt, bez nawigacji strony."""
+    wynik: dict[str, str] = {}
+    try:
+        odnosniki = page.locator('a[href^="/@"]').all()
+    except Exception:
+        return []
+    for a in odnosniki[:200]:
+        try:
+            href = a.get_attribute("href") or ""
+            nazwa = " ".join((a.inner_text() or "").split())[:80]
+        except Exception:
+            continue
+        uchwyt = href.split("/@", 1)[-1].split("/")[0].split("?")[0].strip()
+        if not uchwyt or uchwyt.lower() in _NIE_LUDZIE:
+            continue
+        if uchwyt.lower() == str(PROFIL_HANDLE).lower():
+            continue          # my sami
+        # Pierwsza napotkana nazwa wygrywa: ta sama osoba bywa odnosnikiem
+        # dwa razy (awatar bez tekstu i nazwa), a awatar oddaje pusty napis.
+        if uchwyt not in wynik or (not wynik[uchwyt] and nazwa):
+            wynik[uchwyt] = nazwa
+    return [{"uchwyt": u, "nazwa": n or u} for u, n in wynik.items()]
+
+
+def kto_nas_czyta(page=None) -> dict[str, Any]:
+    """KTO nas obserwuje i subskrybuje — imiennie i z data.
+
+    PO CO, SKORO ZNAMY JUZ LICZBY. Bo liczba nie da sie z niczym polaczyc.
+    31 sierpnia konto uroslo z czterech subskrybentow do osmiu, a system wykonal
+    w tym czasie okolo pieciuset dzialan — i nie ma sposobu, zeby powiedziec,
+    ktore z nich cokolwiek przynioslo. Majac liste z DATA, mozna zapytac wprost:
+    czy ci, ktorzy nas zaobserwowali, pojawili sie wczesniej wsrod naszych
+    komentarzy i polubien. To roznica miedzy „komentowanie dziala" jako
+    przekonaniem a jako pomiarem.
+
+    DROGA JEST TA SAMA, CO PRZY KOPII SUBSKRYBENTOW: wlasny panel, wlasna
+    sesja. Cztery zgadniete adresy API (`/user/<id>/followers` i podobne)
+    oddaly puste odpowiedzi i na tym poprzestalem — powtarzane sondowanie
+    nieudokumentowanych adresow to jest dokladnie to, co nasz wlasny kod
+    nazywa scrapingiem.
+
+    Zapisujemy CALY zrzut przy kazdym wywolaniu, nie roznice. Zrzuty sa male
+    (kilkanascie osob), a roznica policzona pozniej jest odwracalna — roznica
+    zapisana zamiast stanu juz nie.
+    """
+    wlasny = page is None
+    if wlasny:
+        wymagaj_sesji()
+        p_, br_, ctx = podlacz_sie()
+        page = ctx.new_page()
+    wynik: dict[str, Any] = {"obserwujacy": [], "subskrybenci": [], "blad": None}
+    try:
+        page.goto(f"https://substack.com/@{PROFIL_HANDLE}/followers",
+                  timeout=READ_TIMEOUT_MS * 2, wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 5000)
+
+        # Zakladka otwarta domyslnie to „Followers" — bierzemy ja bez klikania.
+        wynik["obserwujacy"] = _ludzie_z_zakladki(page)
+
+        for napis in ("Subscribers", "Subskrybenci"):
+            zakladka = page.get_by_role("tab", name=napis, exact=False).first
+            if zakladka.count() == 0:
+                continue
+            zakladka.click(timeout=10_000)
+            page.wait_for_timeout(5000)
+            wynik["subskrybenci"] = _ludzie_z_zakladki(page)
+            break
+    except Exception as exc:
+        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        print("  [czytelnicy] %s" % wynik["blad"], flush=True)
+    finally:
+        if wlasny:
+            page.close()
+            br_.close()
+            p_.stop()
+    return wynik
+
+
+def zapisz_czytelnikow(page=None) -> dict[str, Any] | None:
+    """Zrzut listy czytelnikow do pliku, jeden wiersz na wywolanie."""
+    import json as _json
+    from datetime import datetime, timezone
+
+    NOWA_LINIA = chr(10)
+    kto = kto_nas_czyta(page)
+    if kto.get("blad") and not kto["obserwujacy"] and not kto["subskrybenci"]:
+        return None
+    zrzut = {
+        "kiedy": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "obserwujacy": kto["obserwujacy"],
+        "subskrybenci": kto["subskrybenci"],
+    }
+    try:
+        CZYTELNICY.parent.mkdir(parents=True, exist_ok=True)
+        with CZYTELNICY.open("a", encoding="utf-8") as f:
+            f.write(_json.dumps(zrzut, ensure_ascii=False) + NOWA_LINIA)
+    except OSError as exc:
+        print("  [czytelnicy] nie zapisalem: %s" % type(exc).__name__, flush=True)
+    return zrzut
+
+
 WZROST = config.DATA_DIR / "wzrost.jsonl"
 
 
@@ -1036,6 +1146,14 @@ def nasze_pozycje_do_pomiaru(page=None, ile: int = 60) -> list[dict[str, Any]]:
             if stan:
                 print("  [wzrost] subskrybentow %d, obserwujacych %d"
                       % (stan["subskrybenci"], stan["obserwujacy"]), flush=True)
+            # KTO, NIE TYLKO ILU. Liczba mowi, ze konto rosnie; lista pozwala
+            # zapytac, CZY ROSNIE OD NASZYCH DZIALAN. Jedno wejscie na strone
+            # na caly pomiar.
+            zrzut = zapisz_czytelnikow(page)
+            if zrzut:
+                print("  [czytelnicy] obserwujacych %d, subskrybentow %d"
+                      % (len(zrzut["obserwujacy"]), len(zrzut["subskrybenci"])),
+                      flush=True)
             if isinstance(profil, dict) and profil.get("id"):
                 feed = api_json(page, f"/api/v1/reader/feed/profile/{profil['id']}"
                                       "?types%5B%5D=note") or {}

@@ -366,7 +366,73 @@ def main() -> int:
             "%.2f USD" % config.DAILY_LIMIT_USD)
 
     # ---------------------------------------------------------------
-    etap(7, "PROMOCJA I PAMIEC — czy nic sie nie starzeje w cichosci")
+    etap(7, "CO NAS KOSZTUJE JEDEN CZYTELNIK")
+    # JEDYNA LICZBA, KTORA WIAZE PIENIADZE Z CELEM. Reszta audytu mowi, czy
+    # system dziala; ta mowi, czy warto. Wlasciciel nie podejmie tej decyzji,
+    # nie majac jej przed oczami — a do 31 sierpnia nie byla nigdzie liczona,
+    # bo nie zapisywalismy liczby subskrybentow w czasie.
+    stany = []
+    if browser.WZROST.exists():
+        for linia in browser.WZROST.read_text(encoding="utf-8").splitlines():
+            try:
+                w = json.loads(linia)
+            except ValueError:
+                continue
+            if isinstance(w, dict) and w.get("kiedy"):
+                stany.append(w)
+    if len(stany) < 2:
+        werdykt("koszt czytelnika policzalny", "UWAGA",
+                "za malo zapisow wzrostu (%d) — potrzebne co najmniej dwa dni"
+                % len(stany))
+    else:
+        a, b = stany[0], stany[-1]
+        od, do = str(a["kiedy"])[:10], str(b["kiedy"])[:10]
+        przyrost = (int(b.get("subskrybenci") or 0)
+                    - int(a.get("subskrybenci") or 0))
+        wydane = c.execute(
+            "SELECT COALESCE(SUM(k.cost_usd),0) FROM calls k"
+            " LEFT JOIN runs r ON r.id=k.run_id"
+            " WHERE COALESCE(r.tryb,'produkcja')='produkcja'"
+            " AND substr(k.at,1,10) BETWEEN ? AND ?", (od, do)).fetchone()[0]
+        print("  od %s do %s: wydane %.2f USD, subskrybentow %+d"
+              % (od, do, wydane, przyrost))
+        if przyrost > 0:
+            werdykt("koszt jednego subskrybenta", "OK",
+                    "%.2f USD" % (wydane / przyrost))
+        else:
+            # ZERO PRZYROSTU TO NIE JEST KOSZT NIESKONCZONY, tylko brak
+            # odpowiedzi. Dzielenie przez zero dawaloby liczbe, ktora wyglada
+            # na pomiar i nim nie jest.
+            werdykt("koszt jednego subskrybenta", "UWAGA",
+                    "%.2f USD wydane, zero przyrostu w tym oknie" % wydane)
+
+    # ILE MATERIALU ZJADA LEZAKOWANIE. Bank bierze NAJLEPSZE z puli, wiec odpad
+    # jest cena selekcji, nie wada. Ale nikt go dotad nie liczyl, a rzad
+    # wielkosci decyduje, czy zbieramy w sam raz, czy dwa razy za duzo.
+    import stages as _stages
+    indeks = _stages.wczytaj_indeks()
+    if indeks:
+        lic = Counter(str(k.get("status")) for k in indeks)
+        print("  bank: %s  (sufit %d wpisow, termin %d dni)"
+              % (dict(lic), 600, config.BANK_MAKS_DNI))
+        zmarnowane = lic.get("przeterminowany", 0)
+        wziete = lic.get("uzyty", 0)
+        rozliczone = zmarnowane + wziete
+        if rozliczone:
+            udzial = zmarnowane / rozliczone
+            werdykt("wiecej pomyslow uzywamy niz przeterminowujemy",
+                    "OK" if udzial < 0.5 else "UWAGA",
+                    "%d przeterminowanych na %d rozliczonych (%d%%)"
+                    % (zmarnowane, rozliczone, round(100 * udzial)))
+        else:
+            werdykt("bank ma juz co rozliczac", "UWAGA",
+                    "nic jeszcze nie zostalo ani uzyte, ani przeterminowane")
+        werdykt("bank daleko od sufitu",
+                "OK" if len(indeks) < 600 * 0.8 else "UWAGA",
+                "%d z 600" % len(indeks))
+
+    # ---------------------------------------------------------------
+    etap(8, "PROMOCJA I PAMIEC — czy nic sie nie starzeje w cichosci")
     okno = getattr(config, "OKNO_PROMOCJI_DNI", None)
     werdykt("kolejka promocji ma date waznosci",
             "OK" if okno else "BLAD", "%s dni" % okno)
