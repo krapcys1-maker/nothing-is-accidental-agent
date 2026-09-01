@@ -1,6 +1,8 @@
 """Ustawienia, ktore wygladaja jak decyzje, a nie robia nic.
 
-Trzy usterki jednej rodziny, wszystkie potwierdzone na produkcji:
+Piec usterek jednej rodziny. Trzy pierwsze zmierzone na produkcji, dwie
+ostatnie znalezione odczytem kodu — ta roznica jest wazna i wlasnie tego ten
+plik pilnuje: usterka zmierzona i usterka utajona to nie to samo.
 
 1. EFFORT ma szesc wpisow i przez trzydziesci dni dotarl do API DOKLADNIE
    JEDEN. Cztery etapy chodza na DeepSeeku, ktory tego pokretla nie czyta,
@@ -15,6 +17,12 @@ Trzy usterki jednej rodziny, wszystkie potwierdzone na produkcji:
    publikacji zapisywal artykul bez okladki, a sciezka graficzna sprawdzala
    sie wylacznie na zywo, za prawdziwe pieniadze. Dlatego okladka zgubiona
    przez usterke zapisu wywolan wyszla na jaw dopiero po fakcie.
+
+4. Wybor narzedzia wyszukiwania czytal slownik po nazwie modelu. Model bez
+   osobnego wpisu powodowal `KeyError` dopiero w srodku platnego lancucha.
+
+5. `--stop-after` przyjmowal etapy `review` i `forma`, ale po zadnym nie bylo
+   zatrzymania; z `--wyslij` przebieg publikowal mimo polecenia stop.
 """
 import pathlib
 import sys

@@ -222,8 +222,9 @@ print("=== KUPLET KORYGUJACY JEST DRUGIM KRYTERIUM, NIE BRAMKA ===")
 # w ogole go nie testowal. Przyrzad zbudowany pod jeden przypadek mierzy
 # wlasnie ten przypadek.
 #
-# Nadal sortujemy, nie odrzucamy: przy 53% i trzech kandydatach na notke
-# sortowanie zwykle ma z czego wybierac, a odrzucanie kosztowaloby polowe.
+# Nadal sortujemy, nie odrzucamy, ale przy `NOTE_CANDIDATES = 1` sortowanie
+# listy jednoelementowej niczego nie wybiera. Detektor pozostaje potrzebny do
+# pokazania modelowi tego ruchu w ostatnich notkach.
 sprawdz("dwa zdania: zaprzeczenie, potem poprawka",
         stages.kuplet_korygujacy(
             "Nothing about the answer changes. Only the queue does.") is True)

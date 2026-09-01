@@ -75,9 +75,22 @@ _stare_wyd = korpus_kanalow.wielkie_wydarzenia
 _stary_korpus = korpus_kanalow.korpus_kanalow
 _stary_pelny = stages.bank_pelny
 _stare_zuzyte = stages.wczytaj_zuzyte
+_stara_pamiec_wyd = stages.WYDARZENIA_OBSLUZONE
 
 stages.INDEKS_KANDYDATOW = katalog / "indeks.json"
 stages.INDEKS_KANDYDATOW.write_text("[]", encoding="utf-8")
+# PAMIEC WYDARZEN TEZ DO KATALOGU TYMCZASOWEGO.
+#
+# Od 1 wrzesnia 2026 `znajdz_ciekawostki` zapamietuje, o ktorych wydarzeniach
+# juz dobieralo material — inaczej jedno zdarzenie otwieralo furtke przy kazdym
+# z pieciu przebiegow dziennie (zmierzone: szesc pelnych szukan w trzy dni o tej
+# samej premierze GLM 5.3, okolo 13,6 USD miesiecznie).
+#
+# Bez tej podmiany test pisal do PRODUKCYJNEGO `data/wydarzenia_obsluzone.json`
+# i sam stawal sie zalezny od kolejnosci: pierwszy przebieg zapamietywal swoje
+# zdarzenie-atrape, drugi juz nie przebijal sufitu banku — bo kod SLUSZNIE uznal
+# je za znane. Test oblewal, a kod byl w porzadku.
+stages.WYDARZENIA_OBSLUZONE = katalog / "wydarzenia.json"
 stages.llm.call = lambda *a, **kw: json.dumps({"facts": [FAKT]})
 stages.zaczyn_z_kanalow = lambda *a, **kw: "(brak w tescie)"
 korpus_kanalow.korpus_kanalow = lambda *a, **kw: []
@@ -139,6 +152,7 @@ try:
     sprawdz("jeden kanal krzyczacy — nie",
             not korpus_kanalow.wielkie_wydarzenia(jeden_glosny))
 finally:
+    stages.WYDARZENIA_OBSLUZONE = _stara_pamiec_wyd
     stages.INDEKS_KANDYDATOW = _stary_indeks
     stages.llm.call = _stare_call
     stages.zaczyn_z_kanalow = _stary_zaczyn

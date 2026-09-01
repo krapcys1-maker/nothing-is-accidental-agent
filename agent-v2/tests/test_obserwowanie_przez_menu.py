@@ -437,9 +437,10 @@ print()
 print("=== 8. MENU NIE ODPOWIADA PO KLIKNIECIU: NIEPEWNOSC NA KORZYSC ===")
 # `potwierdz_obserwacje` oddaje None, gdy menu nie ma ANI pozycji obserwowania,
 # ANI odobserwowania. Prog jest niesymetryczny swiadomie — falszywe „nie udalo
-# sie" kosztuje cala dzienna norme (przy 30-44/mies to ~1,2 obserwacji na
-# dobe, czyli zwykle jedyna tego dnia), falszywe „udalo sie" kosztuje jeden
-# slot. Ale None ma byc WIDOCZNE w dzienniku, a nie zniknac w „udane".
+# sie" moze kosztowac zaplanowana obserwacje z dnia, w ktorym przydzial wynosi
+# jeden. Przy 10-16/mies plan to ~0,43 na dobe, czyli obserwacja mniej wiecej
+# co drugi dzien; falszywe „udalo sie" kosztuje jeden slot. None ma jednak byc
+# WIDOCZNE w dzienniku, a nie zniknac w „udane".
 
 
 class StronaNiemaPoKliku(Strona):

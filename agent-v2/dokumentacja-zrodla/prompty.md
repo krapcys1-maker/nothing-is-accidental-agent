@@ -40,7 +40,7 @@
 **Kontrakt wyjścia:**
 
 ```json
-{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<WHAT MAKES IT SO: a decision (who signed it and when), a measurement (who tested it and what came back), a constraint (what about the design or the mathematics forces it), or a trade-off (what is given up and by whom). Not necessarily a person or an institution. Empty string only if you cannot name any of the four>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "control_date": "<YYYY-MM-DD of the newest document that GOVERNS this claim — see \"The control document\" above. Not necessarily newer than source_date>", "control_url": "<url of that document>", "control_verdict": "CONFIRMS"|"MODIFIES"|"ENDS", "control_fact": "<one clause. For MODIFIES, the qualifier the writer must carry. For CONFIRMS, what you checked and found unchanged>", "domain": "<the everyday area it belongs to>"}}]}}
+{{"facts": [{{"fact": "<one or two sentences, the fact itself, specific and checkable>", "wrong_belief": "<what most people believe, written as a plain sentence they would say out loud>", "actually": "<what is true instead, one sentence>", "decision": "<WHAT MAKES IT SO: a decision (who signed it and when), a measurement (who tested it and what came back), a constraint (what about the design or the mathematics forces it), or a trade-off (what is given up and by whom). Not necessarily a person or an institution. Empty string only if you cannot name any of the four>", "consequence": "<the thing the reader can touch, hold, see or wait for because of that decision>", "url": "<source that states it>", "source_date": "<the date THAT SOURCE was published, as YYYY-MM-DD. Not the date of the event it describes. Empty string only if the page genuinely carries no date>", "control_date": "<YYYY-MM-DD of the newest document that GOVERNS this claim — see \"The control document\" above. Not necessarily newer than source_date>", "control_url": "<url of that document>", "control_verdict": "CONFIRMS"|"MODIFIES"|"ENDS", "control_fact": "<one clause. For MODIFIES, the qualifier the writer must carry. For CONFIRMS, what you checked and found unchanged>", "domain": "<the part of the AI stack, industry or public record it belongs to>"}}]}}
 ```
 
 #### `dyskoveria.md` (117 wierszy)
@@ -60,7 +60,7 @@
 **Kontrakt wyjścia:**
 
 ```json
-{{"candidates": [{{"fact": "<one or two sentences, the thing itself, specific and checkable>", "wrong_belief": "<what an ordinary reader would assume, in their words>", "actually": "<what this document says instead>", "decision": "<who decided and when, from the text>", "consequence": "<what the reader touches, holds, pays or waits for>", "domain": "<the everyday area this belongs to>"}}]}}
+{{"candidates": [{{"fact": "<one or two sentences, the thing itself, specific and checkable>", "wrong_belief": "<what an ordinary reader would assume, in their words>", "actually": "<what this document says instead>", "decision": "<who decided and when, from the text>", "consequence": "<what the reader touches, holds, pays or waits for>", "domain": "<the part of the AI stack, industry or public record this belongs to>"}}]}}
 ```
 
 #### `forma.md` (98 wierszy)
@@ -133,7 +133,7 @@
 {{"reply": "<the reply, or null>", "reason_if_silent": "<one sentence, only when reply is null>", "kind": "answer"|"correction_accepted"|"disagreement"|"built_on"}}
 ```
 
-#### `pisarz.md` (480 wierszy)
+#### `pisarz.md` (519 wierszy)
 
 **Pola wejściowe:** `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
@@ -173,7 +173,7 @@
 {{"when": "<roughly when>", "what_happened": "<what people saw, in one sentence>", "what_changed": "<the rule or practice that came out of it, or 'nothing'>"}}
 ```
 
-#### `synteza.md` (149 wierszy)
+#### `synteza.md` (150 wierszy)
 
 **Pola wejściowe:** `evidence_json`, `max_claim_chars`, `max_confirmed`, `max_contradictions`, `max_numbers`, `max_uncertain`, `min_confirmed`, `min_numbers`, `question`
 

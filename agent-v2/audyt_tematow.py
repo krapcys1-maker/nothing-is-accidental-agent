@@ -274,7 +274,7 @@ def main() -> int:
     korzen = KATALOG.parent
     w = subprocess.run([sys.executable, "agent-v2/tests/test_prompty_o_ai.py"],
                        capture_output=True, text=True, cwd=str(korzen))
-    werdykt("zaden prompt nie uczy na epoce przedmiotow",
+    werdykt("zaden prompt nie zawiera slowa z listy epoki przedmiotow",
             "OK" if w.returncode == 0 else "BLAD",
             (w.stdout or w.stderr)[-200:] if w.returncode else "")
 

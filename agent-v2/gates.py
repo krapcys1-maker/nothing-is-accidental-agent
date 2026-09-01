@@ -1,12 +1,12 @@
-"""Cztery bramki, które blokują. Reszta to notatki.
+"""Bramki wykrywaja naruszenia, ale zadna nie blokuje artykulu.
 
-Wybór właściciela z 2026-08-15. Każda z tych czterech ma udokumentowane
-trafienie na starym agencie; wszystko inne (styl, tytuł, brief, długość,
-myślniki) niczego nie złapało, więc jest zapisywane i NIE zatrzymuje artykułu.
+Pierwotny wybor wlasciciela z 2026-08-15 wskazywal cztery blokujace bramki,
+z udokumentowanym trafieniem kazdej na starym agencie. Biezacy `verdict`
+zapisuje jednak wszystkie wyniki jako uwagi i zawsze zwraca status `SAVED`.
 
-Podłogi porównują tekst z KORPUSEM, nie z alfabetem. Kontrola „czy jest tu
-cyfra" daje fałszywe alarmy na zdaniach, które cytują materiał; właściwe
-pytanie brzmi, czy ta liczba występuje w materiale dowodowym.
+Podlogi porownuja tekst z KORPUSEM, nie z alfabetem. Kontrola „czy jest tu
+cyfra" daje falszywe alarmy na zdaniach, ktore cytuja material; wlasciwe
+pytanie brzmi, czy ta liczba wystepuje w materiale dowodowym.
 """
 
 from __future__ import annotations

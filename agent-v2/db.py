@@ -1,12 +1,13 @@
-"""Baza: cztery tabele, zero migracji, zero triggerów, zero CHECK-ów z limitami.
+"""Baza: cztery tabele, waskie migracje kolumn, zero triggerow i limitow CHECK.
 
-Schemat powstaje z `CREATE TABLE IF NOT EXISTS` przy starcie. Zmiana schematu to
-zmiana tego pliku — nie ma drabiny wersji, bo poprzedni agent miał 42 migracje
-i to one blokowały produkcję, nie brak funkcji.
+Nowa baza powstaje z `CREATE TABLE IF NOT EXISTS` przy starcie, a istniejaca
+dostaje brakujace kolumny przez `_dopisz_brakujace_kolumny`. Nie ma drabiny
+wersji ani przepisywania danych, bo poprzedni agent mial 42 migracje i to one
+blokowaly produkcje, nie brak funkcji.
 
-Limitów nie ma w `CHECK`-ach celowo: limit przypięty w schemacie to drugie
-miejsce, w którym żyje ta sama liczba, a wtedy podniesienie jej w kodzie wywala
-produkcję (stary agent: `attempt_no IN (1,2)` w ośmiu tabelach, 1,84 USD do kosza).
+Limitow nie ma w `CHECK`-ach celowo: limit przypiety w schemacie to drugie
+miejsce, w ktorym zyje ta sama liczba, a wtedy podniesienie jej w kodzie wywala
+produkcje (stary agent: `attempt_no IN (1,2)` w osmiu tabelach, 1,84 USD do kosza).
 """
 
 from __future__ import annotations
@@ -99,9 +100,9 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
 # `CREATE TABLE IF NOT EXISTS` istniejacej tabeli NIE rusza, wiec bez tego
 # pierwszy zapis do starej bazy konczy sie bledem „no such column".
 #
-# To nie jest system migracji i ma nim nie byc — projekt stoi na zasadzie
-# „zmiana schematu to nowa kolumna z wartoscia domyslna, nigdy przepisywanie
-# danych". Ta funkcja robi dokladnie tyle i ani kroku wiecej.
+# To jest celowo waski system migracji: „zmiana schematu to nowa kolumna z
+# wartoscia domyslna, nigdy przepisywanie danych". Funkcja robi dokladnie tyle
+# i ani kroku wiecej; nie utrzymuje wersji ani migracji danych.
 NOWE_KOLUMNY = {
     "calls": {"cache_hit": "INTEGER NOT NULL DEFAULT 0"},
     # TOR PRZEBIEGU. „produkcja" to praca konta, „test" to sprawdzanie kodu.

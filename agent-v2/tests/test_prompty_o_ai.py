@@ -118,6 +118,15 @@ SPRZED_PRZESTAWIENIA = [
     # paraleli. Fraza byla podzbiorem tego slowa, wiec nic nie tracimy.
     "oven", "clock", "your ticket", "call-out", "permit holder",
     "firefighter", "carton", "shelf", "bottle", "junction", "faa",
+    # Dopisane 1 wrzesnia wieczorem, po niezaleznym odczycie kodu.
+    # TE NIE SA RZECZOWNIKAMI, tylko FRAZAMI RAMUJACYMI — i wlasnie dlatego
+    # przelezly przez liste zbudowana ze slownictwa przedmiotow. Nie byly
+    # nieaktualnym komentarzem: `synteza.md` definiowala przez „hidden system"
+    # pole `main_mechanism`, ktore idzie do promptu pisarza przy KAZDYM
+    # artykule, a `ciekawostki.md` i `fedreg.md` kazaly modelowi klasyfikowac
+    # kazdy fakt do „everyday area". Instrukcja z poprzedniej epoki dzialala
+    # wiec dalej, a ten test swiecil na zielono.
+    "hidden system", "everyday area", "everyday object", "ordinary object",
 ]
 
 # Miejsca, gdzie takie slowo stoi CELOWO. Klucz to etykieta zrodla (nazwa
@@ -210,7 +219,14 @@ sprawdz("kazda forma z NOTE_FORM_MIX jest skanowana",
          if "config.py:NOTE_FORMS[%s]" % f not in NAZWY_ZRODEL])
 
 print()
-print("=== 1. ZADEN PROMPT NIE UCZY NA PRZEDMIOTACH ===")
+# WERDYKT MOWI, CO NAPRAWDE SPRAWDZA. Brzmial „ZADEN PROMPT NIE UCZY NA
+# PRZEDMIOTACH" — a to jest twierdzenie o KOMPLETNOSCI, ktorego zamknieta lista
+# slow nigdy nie udowodni. 1 wrzesnia niezalezny odczyt kodu pokazal, ze przy
+# zielonym tescie `synteza.md` wciaz definiowala `main_mechanism` jako „hidden
+# system", a dwa inne prompty kazaly klasyfikowac fakty do „everyday area".
+# Zielone „zaden prompt nie uczy" znaczylo wtedy tyle, co „nie znalazlem slowa
+# z mojej niepelnej listy" — i to ma byc napisane wprost.
+print("=== 1. ZADEN PROMPT NIE ZAWIERA SLOWA Z LISTY EPOKI PRZEDMIOTOW ===")
 wszystkie_trafienia = []
 for etykieta, linie in WSZYSTKIE:
     if etykieta in ZAWIESZONE:
@@ -223,7 +239,7 @@ for etykieta, linie in WSZYSTKIE:
         if znalezione:
             wszystkie_trafienia.append("%s:%d %r" % (etykieta, nr,
                                                      znalezione[0]))
-sprawdz("zaden prompt nie uczy na epoce przedmiotow",
+sprawdz("zaden prompt nie zawiera slowa z listy (to NIE dowod kompletnosci)",
         not wszystkie_trafienia,
         "; ".join(wszystkie_trafienia[:6]))
 
@@ -306,7 +322,7 @@ if not ZAWIESZONE:
             pliki <= set(NAZWY_ZRODEL), sorted(pliki - set(NAZWY_ZRODEL)))
     sprawdz("w tym fedreg.md, zawieszony do 1 wrzesnia",
             "fedreg.md" in NAZWY_ZRODEL)
-    sprawdz("i fedreg.md nie ma juz ani jednej linii z epoki przedmiotow",
+    sprawdz("i fedreg.md nie ma linii ze slowem z listy",
             not [linia for linia in (PROMPTY / "fedreg.md")
                  .read_text(encoding="utf-8").splitlines()
                  if trafienia_w_linii(linia)],

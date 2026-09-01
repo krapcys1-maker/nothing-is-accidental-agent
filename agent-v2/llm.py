@@ -1,9 +1,13 @@
-"""Jedyna warstwa między `run.py` a dostawcą.
+"""Jedyna warstwa miedzy `run.py` a dostawca.
 
-Robi cztery rzeczy i nic więcej: sprawdza warunki przed płatnym wywołaniem,
-woła model, liczy koszt, zapisuje wywołanie. Bez rezerwacji, bez rekoncyliacji,
-bez ponowień — świadomy kompromis: jeśli proces zginie w połowie wywołania,
-koszt tego wywołania nie trafi do logu. Limit dzienny ogranicza szkodę.
+Robi cztery rzeczy: sprawdza warunki przed platnym wywolaniem, wola model,
+liczy koszt i zapisuje wywolanie. Bledy przejsciowe ponawia do limitu
+`config.PONOWIENIA` (dzis 2, czyli najwyzej trzy proby); nadal nie ma
+rezerwacji ani rekoncyliacji. Nazwa `LLM_RETRIES`, ktora stala tu wczesniej,
+NIE ISTNIEJE w tym repozytorium — kto szedl ja sprawdzic, trafial wylacznie na
+to zdanie. Jesli proces zginie
+w polowie wywolania, koszt tej proby nie trafi do logu. Limit dzienny ogranicza
+szkode.
 """
 
 from __future__ import annotations

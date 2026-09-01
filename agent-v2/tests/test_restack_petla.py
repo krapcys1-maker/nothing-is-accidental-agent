@@ -11,10 +11,10 @@ wyjscia (`restackowane >= ile`) sprawdza sie dopiero na GORZE nastepnego
 obrotu. Po wykonaniu normy agent spal wiec jeszcze do polgodziny z otwarta
 przegladarka i dopiero potem wychodzil.
 
-Przy `ile=1` — czyli w typowym przypadku, bo budzet 2-4 restacki rozklada sie
-na 3-4 przebiegi — KAZDA taka przerwa byla w calosci pusta. W przebiegu, w
-ktorym to zobaczylem, blok obserwowania zostal wczesniej odpuszczony ZE
-WZGLEDU NA BRAK CZASU.
+Przy `ile=1` — czyli w typowym dodatnim przydziale, bo budzet 1-2 restacki
+rozklada sie na piec przebiegow — KAZDA taka przerwa byla w calosci pusta.
+W przebiegu, w ktorym to zobaczylem, blok obserwowania zostal wczesniej
+odpuszczony ZE WZGLEDU NA BRAK CZASU.
 
 Petla siedzi w Playwrightcie, wiec strona jest podstawiona. Podstawiamy tylko
 to, czego petla dotyka, i liczymy przerwy dluzsze niz minuta — reszta
@@ -159,7 +159,8 @@ sprawdz("dolna granica to co najmniej 5 minut", dol >= 300, dol)
 
 print()
 print("=== 1. JEDEN RESTACK, NORMA WYKONANA — ZERO DLUGICH PRZERW ===")
-# To jest przypadek z produkcji: budzet 2-4 restacki na 3-4 przebiegi = 1.
+# To jest przypadek z produkcji: dodatni przydzial z budzetu 1-2 restacki
+# rozlozonego na piec przebiegow wynosi 1.
 w, s = przebieg(ile=1, ile_notek=4, zgody=1)
 dlugie = [p for p in s.przerwy if p > DLUGIE_MS]
 sprawdz("restack sie wykonal", w["restackowane"] == 1, w)

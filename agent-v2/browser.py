@@ -1186,8 +1186,8 @@ def zapisz_czytelnikow(page=None) -> dict[str, Any] | None:
 # pokrywalo sie z ta lista juz po samym TANIM mapowaniu `host.split(".")[0]`,
 # a naprawde wiecej (`www.malone.news` -> `rwmalonemd`,
 # `moneywithkatie.substack.com` -> `katiegattitassin`). Przy budzecie okolo
-# 1,2 obserwacji na dobe to mniej wiecej jeden dzien na siedem zjadany na
-# kims, kogo juz obserwujemy — i do 1 wrzesnia zapisywany jako PORAZKA.
+# 0,43 obserwacji na dobe i pokryciu 8 z 92 hostow oznacza to mniej wiecej
+# jedna zbedna probe na 27 dni — do 1 wrzesnia zapisywana jako PORAZKA.
 #
 # DLACZEGO PAMIEC NA DYSKU, A NIE PYTANIE DO SUBSTACKA PRZY KAZDYM PRZEBIEGU.
 # Bo lista i tak przychodzi z czegos, co juz chodzi: `nasze_pozycje_do_pomiaru`
@@ -2372,8 +2372,8 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
 
     OBSERWOWANIE I SUBSKRYPCJA TO DWIE ROZNE RZECZY. Obserwowanie sprawia, ze
     czyjes notki pojawiaja sie w naszym kanale; subskrypcja przysyla jego teksty
-    MAILEM do skrzynki wlasciciela. Dlatego widelki sa inne: 30-44 obserwacje
-    miesiecznie, ale tylko 6-12 subskrypcji.
+    MAILEM do skrzynki wlasciciela. Biezace widelki sa osobne: 10-16 obserwacji
+    miesiecznie i 12-20 subskrypcji.
 
     Jedna funkcja probowala kolejno „Subscribe", „Subskrybuj", „Follow",
     „Obserwuj" i brala pierwszy znaleziony. Na profilu Substacka „Subscribe" jest
@@ -2664,9 +2664,10 @@ def potwierdz_obserwacje(page) -> bool | None:
 
     NIEPEWNOSC LICZYMY NA KORZYSC OBSERWACJI — ta sama decyzja i ten sam
     powod, co w `potwierdz_polubienie`. Dziennik jest jedynym licznikiem
-    obserwacji dnia, wiec falszywe „nie udalo sie" kosztuje CALA dzienna
-    norme (przy 30-44 miesiecznie to okolo 1,2 obserwacji na dobe — czyli
-    zwykle jedyna tego dnia), a falszywe „udalo sie" kosztuje jeden slot.
+    obserwacji dnia, wiec falszywe „nie udalo sie" moze kosztowac zaplanowana
+    obserwacje z dnia, w ktorym przydzial wynosi jeden. Przy 10-16 miesiecznie
+    plan daje srednio 0,43 na dobe, czyli obserwacje mniej wiecej co drugi dzien;
+    falszywe „udalo sie" kosztuje jeden slot.
     Progi sa niesymetryczne swiadomie. Roznica wobec lajka jest taka, ze tu
     None powinno byc rzadkie: to nie „nie umiem odczytac przycisku", tylko
     „menu w ogole nie odpowiedzialo", czyli osobna awaria — i dlatego trafia
@@ -2719,8 +2720,8 @@ def potwierdz_obserwacje(page) -> bool | None:
 def obserwuj_profil(handle: str, wyslij: bool = False) -> dict[str, Any]:
     """Obserwuje cudzy profil — jego notki trafiaja do naszego kanalu.
 
-    Nie przysyla nic mailem, wiec limit jest szerszy niz przy subskrypcji:
-    30-44 obserwacje miesiecznie wobec 6-12 subskrypcji.
+    Nie przysyla nic mailem. Biezacy limit obserwacji jest wezszy niz limit
+    subskrypcji: 10-16 miesiecznie wobec 12-20.
 
     NIE UZYWA `_klik_na_profilu`. Tamta funkcja szuka przycisku NA WIERZCHU
     strony i dla obserwacji nie mogla znalezc nic, bo na wierzchu sa tylko
@@ -3680,7 +3681,8 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
     return wynik
 
 
-def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
+def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
+                 forma: str = "") -> dict[str, Any]:
     """Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA.
 
     `wyslij=False` to nie ostrożność dla samej ostrożności: notki nie da się
@@ -3777,7 +3779,8 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
                       "NIE ODCZYTANY — reakcji nie da sie z nia polaczyc"),
                       flush=True)
             dopisz_wynik("notka", wynik, slow=len(tekst.split()),
-                         tekst=tekst[:300], id=wynik["id"])
+                         tekst=tekst[:300], id=wynik["id"],
+                         typ=typ, forma=forma)
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
     except Exception as exc:
@@ -3788,7 +3791,8 @@ def wystaw_notke(tekst: str, wyslij: bool = False) -> dict[str, Any]:
         # albo bo nie bylo przycisku — porazka i tak trafia do dziennika.
         if wyslij:
             dopisz_wynik("notka", wynik, slow=len(tekst.split()),
-                         tekst=tekst[:300], id=wynik.get("id", ""))
+                         tekst=tekst[:300], id=wynik.get("id", ""),
+                         typ=typ, forma=forma)
         page.close()
         browser.close()
         p.stop()

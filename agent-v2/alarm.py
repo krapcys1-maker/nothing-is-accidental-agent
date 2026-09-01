@@ -162,8 +162,8 @@ def sprawdz_przebiegi_i_ostrzez(ile: int = 3) -> None:
                "  journalctl -u nia-agent.service -n 60 --no-pager")
 
 
-# Ile godzin ciszy uznajemy za awarie. Agent chodzi trzy razy dziennie, wiec
-# doba bez sladu znaczy, ze trzy przebiegi z rzedu sie nie odbyly.
+# Ile godzin ciszy uznajemy za awarie. Agent chodzi piec razy dziennie, wiec
+# doba bez sladu znaczy, ze piec przebiegow z rzedu sie nie odbylo.
 CISZA_ALARMOWA_H = 26
 
 # Progi zajetosci dysku. Pelny dysk to najbardziej podstepna awaria VPS-a: baza
@@ -184,9 +184,9 @@ DYSK_ALARM = 92
 # ignorowac. A realne ryzyko — 60 opublikowanych dzialan — nie bylo mierzone
 # wcale.
 #
-# Suma norm dziennych z configu to okolo 30 dzialan. Sufit 60 jest wiec
-# podwojeniem tego, co zaplanowane: dosc luzny, zeby nie krzyczec na dobry
-# dzien, i dosc ciasny, zeby zlapac zapetlenie.
+# Suma norm dziennych z configu to okolo 39,5 dzialania. Sufit 60 jest wiec
+# okolo 1,52-krotnoscia planu: nadal ma zapas na dobry dzien, a pozostaje
+# dostatecznie ciasny, zeby zlapac zapetlenie.
 MAX_DZIALAN_DZIENNIE = 60
 
 
@@ -260,8 +260,9 @@ def nadaktywnosc() -> str | None:
     OKNO KROCZACE 24 GODZIN, nie kalendarzowe "dzisiaj" — i to jest cala
     poprawka, bez ktorej ten straznik byl ozdoba.
 
-    Alarm chodzi o 07:00 UTC. Wszystkie trzy przebiegi agenta (11:20, 19:20,
-    23:40 UTC) leza PO nim, wiec o siodmej rano kubelek "dzisiaj" jest pusty
+    Alarm chodzi o 07:00 UTC. Wszystkie piec przebiegow agenta (11:20, 17:00,
+    19:20, 21:30 i 23:40 UTC) leza PO nim, wiec o siodmej rano kubelek
+    "dzisiaj" jest pusty
     z definicji. Zmierzone przez audyt: sufit 60 dzialan zostal realnie
     przekroczony dwukrotnie — 141 wywolan 16 sierpnia, 81 siedemnastego — a
     w pliku alarmow nie ma ani jednego wpisu o nadaktywnosci. Jedyny straznik
@@ -318,8 +319,8 @@ def koszt() -> str | None:
     dzis = teraz.strftime("%Y-%m-%d")
 
     # DWA DNI OSOBNO, nie tylko dzisiejszy. Alarm chodzi o 07:00 UTC, a
-    # przebiegi agenta o 11:20, 19:20 i 23:40 — wiec o siodmej "dzisiaj" jest
-    # jeszcze puste i pytanie o nie zawsze odpowiadalo zero.
+    # przebiegi agenta o 11:20, 17:00, 19:20, 21:30 i 23:40 — wiec o siodmej
+    # "dzisiaj" jest jeszcze puste i pytanie o nie zawsze odpowiadalo zero.
     #
     # Nie robimy tu okna kroczacego, bo sufit JEST kalendarzowy (`_preflight`
     # liczy wydatki per data). Okno daloby falszywy alarm: dwa dni po 60%
@@ -422,8 +423,14 @@ def kopia_subskrybentow() -> str | None:
     Wszystko inne w tym projekcie da sie odtworzyc: teksty, karty dowodowe,
     okladki i cala historia kosztow leza w repozytorium albo powstaja na nowo za
     kilka centow. Lista subskrybentow zyje WYLACZNIE u Substacka, a regulamin
-    pozwala zamknac konto natychmiast i w wylacznej ocenie serwisu. Przy tempie
-    6-12 subskrypcji miesiecznie sto osob to okolo jedenastu miesiecy pracy.
+    pozwala zamknac konto natychmiast i w wylacznej ocenie serwisu. Przy
+    zmierzonym tempie okolo 2,2 nowego subskrybenta miesiecznie sto osob na
+    liscie to okolo czterdziestu pieciu miesiecy pracy.
+
+    NIE dziel stu przez `SUBSKRYPCJE_MIESIECZNIE` (12-20). Ta stala liczy
+    subskrypcje, ktore MY klikamy cudzym publikacjom; ta funkcja pilnuje listy
+    osob, ktore subskrybuja NAS. Pomylka dawala „6,25 miesiaca", czyli siedem
+    razy za malo, i to w zdaniu uzasadniajacym alarm.
 
     Eksportu nie da sie zautomatyzowac — endpoint nie istnieje, a sondowanie
     nieudokumentowanych adresow to dokladnie to, co regulamin nazywa

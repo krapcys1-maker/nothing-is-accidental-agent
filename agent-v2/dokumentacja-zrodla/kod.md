@@ -320,7 +320,7 @@ def discovery(
     conn: sqlite3.Connection, run_id: int, question: str,
     recent_domains: list[str], tylko_pierwotne: bool = False,
 ) -> list[dict[str, Any]]:
-    """Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy).
+    """Etap 3 — dyskoveria zrodel (DeepSeek V4 Pro + web_search dostawcy).
 
     `tylko_pierwotne` sluzy DRUGIEJ RUNDZIE. Zmierzone na trzynastu przebiegach:
     dyskoveria dopycha liste do dziesieciu pozycji, a gdy dokumenty pierwotne sie
@@ -463,7 +463,10 @@ def pick_topic(
     topics: list[dict[str, Any]], assessments: list[dict[str, Any]],
     run_id: int | None = None, wczesniejsze: list[str] | None = None
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel.
+    """Wybiera temat leksykograficznie wedlug dziewieciu kryteriow.
+
+    Kolejnosc to: niepowtorzenie, nosnosc, artykulowosc, ranking modelu,
+    swiezosc, watki, glebokosc, pewnosc i liczba zrodel.
 
     Glebokosc idzie przed pewnoscia, bo dobrze udokumentowany temat bez drugiego
     aktu daje artykul poprawny i nudny — a to jest gorsze niz temat nieco slabiej
@@ -490,8 +493,9 @@ def pick_topic(
     def swiezy(a: dict[str, Any]) -> int:
         """Czy tego jeszcze nie opisano gdzie indziej.
 
-        TO JEST NAJWAZNIEJSZY KLUCZ PO NOSNOSCI i powod, dla ktorego ranking
-        w ogole przepisano. Temat oklepany ma z definicji NAJOSTRZEJSZE
+        TO JEST PIATY KLUCZ: po niepowtorzeniu, nosnosci, artykulowosci i
+        rankingu modelu. To takze powod, dla ktorego ranking w ogole przepisano.
+        Temat oklepany ma z definicji NAJOSTRZEJSZE
         „wszyscy zakladaja" — bo dokladnie dlatego zostal oklepany. Ranking
         oparty na sile zlamanego przekonania wybieral wiec kanon internetowego
         mythbustingu: zraszacze, chusteczki, mydlo antybakteryjne, data na
@@ -1176,11 +1180,11 @@ def artykul_do_promocji() -> dict[str, Any] | None:
 
     JEDNA NA DOBE ZNACZY JEDNA, NIE JEDNA NA ARTYKUL. Wczesniej warunek
     „promowany dzis" tylko POMIJAL ten artykul i szedl dalej po liscie. Ta
-    funkcja jest wolana raz na przebieg, a przebiegow jest trzy dziennie —
-    wiec drugi przebieg dostawal nastepny artykul z kolejki i tego samego dnia
-    wychodzila druga notka promujaca, a trzeciego dnia trzecia. Kolejka nigdy
-    nie byla na tyle pelna, zeby to wyszlo na jaw, ale regula brzmi „jedna
-    notka po artykule dziennie" i to jest caly dzien, nie jeden wiersz pliku.
+    funkcja jest wolana raz na przebieg, a przebiegow jest piec dziennie —
+    wiec drugi przebieg dostawal nastepny artykul z kolejki, a kolejne mogly
+    tego samego dnia wystawic jeszcze trzy notki promujace inne teksty. Kolejka
+    nigdy nie byla na tyle pelna, zeby to wyszlo na jaw, ale regula brzmi
+    „jedna notka po artykule dziennie" i to jest caly dzien, nie jeden wiersz.
     """
     from datetime import datetime, timedelta, timezone
 
@@ -1261,8 +1265,20 @@ def grafika(
         return brief   # DRY_RUN
     cel = (sciezka_artykulu.with_suffix(".png") if sciezka_artykulu
            else config.ARTICLES_DIR / f"{run_id:04d}-naglowek.png")
-    cel.parent.mkdir(parents=True, exist_ok=True)
-    cel.write_bytes(dane)
+    # ZAPIS TEZ POD OSLONA — bez tego obietnica u gory („GRAFIKA NIGDY NIE
+    # ZABIJA ARTYKULU") byla nieprawdziwa. Osloniete bylo generowanie obrazka,
+    # a `mkdir` i `write_bytes` stały POZA `try`, wiec pelny dysk albo brak
+    # praw leczial na wylot i zatrzymywal przebieg PRZED publikacja — czyli
+    # brak czterech centow na obrazek wyrzucal do kosza research za czterdziesci
+    # dolarow, dokladnie to, czemu ta oslona mial zapobiegac.
+    # Znalezione 1 wrzesnia 2026 niezaleznym odczytem kodu, nie testem.
+    try:
+        cel.parent.mkdir(parents=True, exist_ok=True)
+        cel.write_bytes(dane)
+    except OSError as exc:
+        print(f"  [grafika] NIE ZAPISANA ({type(exc).__name__}: {exc}) — "
+              f"artykuł wychodzi bez nagłówka", flush=True)
+        return {"blad": f"{type(exc).__name__}: {exc}"[:200]}
     brief["plik"] = str(cel)
     print(f"  [grafika] zapisana: {cel.name}  {len(dane) // 1024} KB", flush=True)
     return brief
@@ -1779,8 +1795,8 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
 
     OBSERWOWANIE I SUBSKRYPCJA TO DWIE ROZNE RZECZY. Obserwowanie sprawia, ze
     czyjes notki pojawiaja sie w naszym kanale; subskrypcja przysyla jego teksty
-    MAILEM do skrzynki wlasciciela. Dlatego widelki sa inne: 30-44 obserwacje
-    miesiecznie, ale tylko 6-12 subskrypcji.
+    MAILEM do skrzynki wlasciciela. Biezace widelki sa osobne: 10-16 obserwacji
+    miesiecznie i 12-20 subskrypcji.
 
     Jedna funkcja probowala kolejno „Subscribe", „Subskrybuj", „Follow",
     „Obserwuj" i brala pierwszy znaleziony. Na profilu Substacka „Subscribe" jest

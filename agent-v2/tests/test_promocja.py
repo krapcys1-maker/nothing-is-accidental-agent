@@ -11,11 +11,11 @@ kanalu. Slowo „po artykule" znaczy zaraz po nim.
 
 Przy okazji wyszla druga rzecz, ktorej nie szukalem. Warunek „ten artykul byl
 juz dzis promowany" tylko POMIJAL go i szedl dalej po liscie. Funkcja jest
-wolana raz na przebieg, a przebiegow jest trzy dziennie — wiec drugi przebieg
-brał nastepny artykul z kolejki i tego samego dnia wychodzila DRUGA notka
-promujaca, tyle ze innego tekstu. Nigdy sie to nie ujawnilo, bo kolejka nie
-byla dosc pelna. Regula mowi „jedna dziennie" i to jest caly dzien, nie jeden
-wiersz pliku.
+wolana raz na przebieg, a przebiegow jest piec dziennie — wiec kolejne
+cztery przebiegi mogly brac nastepne artykuly z kolejki i tego samego dnia
+wystawiac dalsze notki promujace. Nigdy sie to nie ujawnilo, bo kolejka nie
+byla dosc pelna. Regula mowi „jedna dziennie" i to jest caly dzien, nie
+jeden wiersz pliku.
 """
 import json
 import pathlib
@@ -119,8 +119,8 @@ try:
 
     print()
     print("=== 4. JEDNA NA DOBE ZNACZY JEDNA, NIE JEDNA NA ARTYKUL ===")
-    # Trzy przebiegi dziennie wolaja te funkcje trzy razy. Gdy pierwszy juz
-    # wystawil notke, kolejne maja MILCZEC — nawet jesli w kolejce czeka inny
+    # Piec przebiegow dziennie wola te funkcje piec razy. Gdy pierwszy juz
+    # wystawil notke, pozostale maja MILCZEC — nawet jesli w kolejce czeka inny
     # artykul z niewybranymi dniami.
     from datetime import datetime, timezone   # noqa: E402
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")

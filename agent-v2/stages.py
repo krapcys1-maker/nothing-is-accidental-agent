@@ -1,8 +1,9 @@
-"""Etapy łańcucha, po kolei, w pamięci.
+"""Etapy lancucha, po kolei, w pamieci.
 
-Każdy etap to jedna funkcja: dostaje wynik poprzedniego, zwraca swój. Bez
-kolejki, bez dzierżaw, bez zgód. Awaria = proces kończy się z kodem błędu
-i wypisuje, na czym stanął; uruchamiasz od nowa.
+Kazdy etap to jedna funkcja: dostaje wynik poprzedniego, zwraca swoj. Bez
+kolejki, bez dzierzaw, bez zgod. Nieobsluzona awaria konczy proces z kodem
+bledu i wypisuje, na czym stanal; `run.py` przechwytuje jednak awarie
+`warto_pisac`, recenzji i obserwacji formy, wypisuje je i prowadzi przebieg dalej.
 """
 
 from __future__ import annotations
@@ -139,7 +140,7 @@ REVIEW_SYSTEM = (
 def review(
     conn: sqlite3.Connection, run_id: int, card: dict[str, Any], draft: dict[str, Any]
 ) -> dict[str, Any]:
-    """Etap 8 — recenzja: rozliczenie każdego zdania (Claude)."""
+    """Etap 8 — recenzja: rozliczenie kazdego zdania (DeepSeek V4 Pro)."""
     prompt = _prompt(
         "recenzent.md",
         card_json=json.dumps(card, ensure_ascii=False, indent=2),
@@ -698,9 +699,9 @@ def plan_tygodnia(dzien_artykulu: int = 6) -> list[dict[str, Any]]:
         if dzien_art:
             typy = config.NOTE_MIX_ARTICLE_DAY
         else:
-            # Obrót zestawu wg numeru dnia: bez tego poniedziałek i sobota
-            # dostawały identyczny plan i tydzień wyglądał jak jeden dzień
-            # powtórzony sześć razy.
+            # Obrot zestawu wg numeru dnia rozklada piecioelementowy mix po
+            # tygodniu. Cykl ma piec dni, wiec poniedzialek i sobota dostaja
+            # ten sam plan, a pozostale dni inne kolejnosci.
             mix = config.NOTE_MIX_OTHER_DAY
             typy = tuple(mix[(numer + i) % len(mix)] for i in range(len(mix)))
         # Najlepsze okna najpierw, resztę rozkładamy przez dzień; piątkowego
@@ -779,8 +780,20 @@ def grafika(
         return brief   # DRY_RUN
     cel = (sciezka_artykulu.with_suffix(".png") if sciezka_artykulu
            else config.ARTICLES_DIR / f"{run_id:04d}-naglowek.png")
-    cel.parent.mkdir(parents=True, exist_ok=True)
-    cel.write_bytes(dane)
+    # ZAPIS TEZ POD OSLONA — bez tego obietnica u gory („GRAFIKA NIGDY NIE
+    # ZABIJA ARTYKULU") byla nieprawdziwa. Osloniete bylo generowanie obrazka,
+    # a `mkdir` i `write_bytes` stały POZA `try`, wiec pelny dysk albo brak
+    # praw leczial na wylot i zatrzymywal przebieg PRZED publikacja — czyli
+    # brak czterech centow na obrazek wyrzucal do kosza research za czterdziesci
+    # dolarow, dokladnie to, czemu ta oslona mial zapobiegac.
+    # Znalezione 1 wrzesnia 2026 niezaleznym odczytem kodu, nie testem.
+    try:
+        cel.parent.mkdir(parents=True, exist_ok=True)
+        cel.write_bytes(dane)
+    except OSError as exc:
+        print(f"  [grafika] NIE ZAPISANA ({type(exc).__name__}: {exc}) — "
+              f"artykuł wychodzi bez nagłówka", flush=True)
+        return {"blad": f"{type(exc).__name__}: {exc}"[:200]}
     brief["plik"] = str(cel)
     print(f"  [grafika] zapisana: {cel.name}  {len(dane) // 1024} KB", flush=True)
     return brief
@@ -922,8 +935,9 @@ def sesje_dnia() -> list[dict[str, Any]]:
     całej dobowej aktywności w jednym ciągu o równej godzinie: zagląda kilka
     razy, nierówno, czasem wcale.
 
-    Zwraca posiedzenia z godziną (UTC) i udziałem dziennego budżetu. Sam podział
-    jest losowany, więc dwa dni nigdy nie wyglądają tak samo.
+    Zwraca posiedzenia z godzina (UTC) i udzialem dziennego budzetu. Sam podzial
+    jest losowany bez kontroli unikalnosci: powtorka jest mozliwa, ale plan nie
+    wynika ze stalego rozkladu.
     """
     import random
 
@@ -1104,9 +1118,10 @@ CURIOSITY_SYSTEM = (
 def zaczyn_z_kanalow(ile: int = 26) -> str:
     """Tematy, o ktorych mowi sie w tym tygodniu — do promptu, nie do cytowania.
 
-    NIGDY NIE ZABIJA PRZEBIEGU. Gdy kanaly nie odpowiadaja, oddajemy pusty
-    napis i prompt radzi sobie sama siatka dziedzin. Notka bez zaczynu jest
-    mniej aktualna; brak notki jest gorszy.
+    NIGDY NIE ZABIJA PRZEBIEGU. Gdy kanaly nie odpowiadaja, oddajemy jawny
+    tekst zastepczy; gdy nie ma wpisow, oddajemy osobny tekst o pustym wyniku.
+    Prompt w obu przypadkach radzi sobie sama siatka dziedzin. Notka bez
+    zaczynu jest mniej aktualna; brak notki jest gorszy.
     """
     try:
         wpisy = korpus_kanalow.korpus_kanalow(ile=ile)
@@ -1444,8 +1459,8 @@ def kuplet_korygujacy(tekst: str) -> bool:
 
     Dlatego to NIE JEST bramka odrzucajaca, tylko drugie kryterium sortowania
     kandydatow — dokladnie jak `powtarza_otwarcie`. Notka z kupletem jest
-    nadal lepsza niz brak notki, a przy trzech kandydatach zwykle jest z czego
-    wybierac za darmo.
+    nadal lepsza niz brak notki. Przy `NOTE_CANDIDATES = 1` sortowanie nie ma
+    wyboru; realna ochrone daje pokazanie modelowi tikow z ostatnich notek.
     """
     return bool(zdania_z_tikiem(tekst))
 
@@ -1495,9 +1510,9 @@ def zdania_z_tikiem(tekst: str) -> list[str]:
     # go kalibrowalem, w ogole go nie testowal. Lekcja jest o mierzeniu
     # przyrzadem zbudowanym pod jeden przypadek.
     #
-    # Zostaje kryterium SORTOWANIA, nie bramka: przy 53% i trzech kandydatach
-    # sortowanie zwykle ma z czego wybierac, a odrzucanie kosztowaloby polowe
-    # notek.
+    # Zostaje kryterium SORTOWANIA, nie bramka. Przy `NOTE_CANDIDATES = 1`
+    # sortowanie listy jednoelementowej niczego nie wybiera; detektor sluzy
+    # przede wszystkim do pokazania modelowi jego ostatnich tikow w prompcie.
     for z in zdania:
         if re.search(r",\s+not\b", z, re.IGNORECASE):
             znalezione.append(z)
@@ -1507,10 +1522,15 @@ def zdania_z_tikiem(tekst: str) -> list[str]:
 def ostatnie_otwarcia(rodzaj: str = "notka", ile: int = 8) -> list[str]:
     """Pierwsze slowa ostatnich notek — zeby kolejna nie zaczela sie tak samo.
 
-    Cztery z dwunastu naszych notek zaczynaly sie od „The". Prompt moze o to
-    prosic, ale prosba nie jest gwarancja: model chwyta ten sam rytm, bo material
-    jest podobny. Kandydatow mamy trzech, wiec da sie wybrac tego, ktory nie
-    powtarza otwarcia — i to jest sprawdzenie w kodzie, nie zyczenie w prompcie.
+    Cztery z dwunastu naszych notek zaczynaly sie od „The". Model chwyta ten sam
+    rytm, bo material jest podobny.
+
+    TA FUNKCJA MA DWA WYWOLANIA I DZIALAJA INACZEJ — nie uogolniaj jednego na
+    drugie. Przy NOTKACH `NOTE_CANDIDATES = 1`, wiec sortowanie nie ma z czego
+    wybierac i realna ochrona jest podanie ostatnich otwarc do promptu
+    (`notka.md`: „Do not open with any of them"). Przy KOMENTARZACH kandydatow
+    jest trzech, wiec kod naprawde wybiera — a do promptu komentarza otwarcia
+    nie trafiaja wcale.
     """
     plik = config.DATA_DIR / "dziennik.jsonl"
     if not plik.exists():
@@ -2231,8 +2251,8 @@ def note(
 
     # WERYFIKACJA LENIWA. Sprawdzamy po kolei i konczymy na pierwszym, ktory
     # przechodzi — bo wystawiamy JEDNEGO kandydata, a sprawdzenie kosztuje tyle
-    # co jego napisanie. Przy pieciu notkach dziennie po trzech kandydatow to
-    # roznica miedzy pietnastoma sprawdzeniami a szescioma.
+    # co jego napisanie. Dawniej, przy trzech kandydatach, ograniczalo to liczbe
+    # sprawdzen; dzis `NOTE_CANDIDATES = 1`, wiec piec notek to najwyzej piec.
     # NAJPIERW ci, ktorzy nie zaczynaja sie jak ostatnie notki. Nie odrzucamy
     # nikogo — tylko przesuwamy na koniec kolejki, bo notka z powtorzonym
     # otwarciem jest nadal lepsza niz brak notki.
@@ -2283,7 +2303,13 @@ def note(
             print(f"    ZASTRZEZENIA (notka i tak idzie): "
                   f"{str(audyt.get('verdict', ''))[:120]}", flush=True)
         break
-    return {"type": note_type, "candidates": candidates}
+    # FORMA WYCHODZI RAZEM Z TYPEM, zeby dziennik mogl ja zapisac.
+    # Bez tego nie da sie zmierzyc, czy formy w ogole sie roznicuja: dziennik
+    # zapisywal przy notce tylko dlugosc i tresc, wiec „zero pytajnikow w 51
+    # notkach" bylo faktem, ktorego nie dalo sie wytlumaczyc — czy forma
+    # PYTANIE nie wypadla, czy wypadla i model jej nie wykonal. Audyt na 30
+    # notkach wykazal, ze PYTANIE, ODWROCENIE i LICZBA nie wyszly ANI RAZU.
+    return {"type": note_type, "forma": note_form, "candidates": candidates}
 
 
 # KSZTALTY DLA RATUNKU JSON-a (`llm.ratuj_json`).
@@ -2409,11 +2435,11 @@ def artykul_do_promocji() -> dict[str, Any] | None:
 
     JEDNA NA DOBE ZNACZY JEDNA, NIE JEDNA NA ARTYKUL. Wczesniej warunek
     „promowany dzis" tylko POMIJAL ten artykul i szedl dalej po liscie. Ta
-    funkcja jest wolana raz na przebieg, a przebiegow jest trzy dziennie —
-    wiec drugi przebieg dostawal nastepny artykul z kolejki i tego samego dnia
-    wychodzila druga notka promujaca, a trzeciego dnia trzecia. Kolejka nigdy
-    nie byla na tyle pelna, zeby to wyszlo na jaw, ale regula brzmi „jedna
-    notka po artykule dziennie" i to jest caly dzien, nie jeden wiersz pliku.
+    funkcja jest wolana raz na przebieg, a przebiegow jest piec dziennie —
+    wiec drugi przebieg dostawal nastepny artykul z kolejki, a kolejne mogly
+    tego samego dnia wystawic jeszcze trzy notki promujace inne teksty. Kolejka
+    nigdy nie byla na tyle pelna, zeby to wyszlo na jaw, ale regula brzmi
+    „jedna notka po artykule dziennie" i to jest caly dzien, nie jeden wiersz.
     """
     from datetime import datetime, timedelta, timezone
 
@@ -2781,12 +2807,14 @@ def notki_dnia(
     ile: int | None = None,
     od: int = 0,
 ) -> list[dict[str, Any]]:
-    """Pięć notek na jeden dzień, każda z innego materiału.
+    """Do pieciu notek z dziennego planu, kazda z innego materialu.
 
-    Podawanie modelowi całej puli faktów naraz nie daje różnorodności, tylko
-    pięć wariantów tego samego: przy pierwszym realnym przebiegu cztery z pięciu
-    kandydatur chwyciły ten sam fakt o windzie. Jedna notka dostaje więc jeden
-    fakt i zestaw dnia różni się z konstrukcji, a nie z nadziei.
+    `ile` i `od` wybieraja czesc planu przypisana do biezacego przebiegu; bez
+    `ile` funkcja bierze cale piec pozycji. Podawanie modelowi calej puli faktow
+    naraz nie daje roznorodnosci, tylko piec wariantow tego samego: przy
+    pierwszym realnym przebiegu cztery z pieciu kandydatur chwycily ten sam fakt
+    o windzie. Jedna notka dostaje wiec jeden fakt i zestaw dnia rozni sie z
+    konstrukcji, a nie z nadziei.
     """
     typy = list(config.NOTE_MIX_ARTICLE_DAY if dzien_artykulu
                 else config.NOTE_MIX_OTHER_DAY)
@@ -3507,7 +3535,7 @@ SYNTHESIS_SYSTEM = (
 def synthesis(
     conn: sqlite3.Connection, run_id: int, question: str, evidence: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    """Etap 6 — karta dowodowa (Claude)."""
+    """Etap 6 — karta dowodowa (DeepSeek V4 Pro)."""
     payload = [
         {
             "url": s["url"], "publisher": s.get("publisher"), "title": s.get("title"),
@@ -3869,7 +3897,7 @@ def discovery(
     conn: sqlite3.Connection, run_id: int, question: str,
     recent_domains: list[str], tylko_pierwotne: bool = False,
 ) -> list[dict[str, Any]]:
-    """Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy).
+    """Etap 3 — dyskoveria zrodel (DeepSeek V4 Pro + web_search dostawcy).
 
     `tylko_pierwotne` sluzy DRUGIEJ RUNDZIE. Zmierzone na trzynastu przebiegach:
     dyskoveria dopycha liste do dziesieciu pozycji, a gdy dokumenty pierwotne sie
@@ -4250,7 +4278,10 @@ def pick_topic(
     topics: list[dict[str, Any]], assessments: list[dict[str, Any]],
     run_id: int | None = None, wczesniejsze: list[str] | None = None
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel.
+    """Wybiera temat leksykograficznie wedlug dziewieciu kryteriow.
+
+    Kolejnosc to: niepowtorzenie, nosnosc, artykulowosc, ranking modelu,
+    swiezosc, watki, glebokosc, pewnosc i liczba zrodel.
 
     Glebokosc idzie przed pewnoscia, bo dobrze udokumentowany temat bez drugiego
     aktu daje artykul poprawny i nudny — a to jest gorsze niz temat nieco slabiej
@@ -4277,8 +4308,9 @@ def pick_topic(
     def swiezy(a: dict[str, Any]) -> int:
         """Czy tego jeszcze nie opisano gdzie indziej.
 
-        TO JEST NAJWAZNIEJSZY KLUCZ PO NOSNOSCI i powod, dla ktorego ranking
-        w ogole przepisano. Temat oklepany ma z definicji NAJOSTRZEJSZE
+        TO JEST PIATY KLUCZ: po niepowtorzeniu, nosnosci, artykulowosci i
+        rankingu modelu. To takze powod, dla ktorego ranking w ogole przepisano.
+        Temat oklepany ma z definicji NAJOSTRZEJSZE
         „wszyscy zakladaja" — bo dokladnie dlatego zostal oklepany. Ranking
         oparty na sile zlamanego przekonania wybieral wiec kanon internetowego
         mythbustingu: zraszacze, chusteczki, mydlo antybakteryjne, data na
@@ -4436,7 +4468,7 @@ def pick_topic(
 
 
 def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[str, Any]]:
-    """Etap 1 — skaut tematów (Claude)."""
+    """Etap 1 — skaut tematow (DeepSeek V4 Pro)."""
     history = recent_angles(conn)
     # Pytania czytelnikow sa jedynym POZYTYWNYM sygnalem, jaki skaut dostaje.
     # Dotad mial wylacznie liste tematow, ktorych ma NIE powtarzac — czyli
@@ -4901,7 +4933,7 @@ def dopisz_do_banku_notek(notki: list[dict[str, Any]]) -> int:
 
     Po co bank: dobra notka nie musi powstac w tej samej minucie, w ktorej ma
     pojsc w swiat. Research o Substacku mowi, ze notka zyje 7-10 dni i ze
-    licza sie godziny szczytu — a nasz agent budzi sie trzy razy dziennie
+    licza sie godziny szczytu — a nasz agent budzi sie piec razy dziennie
     i musi wtedy COS napisac. Bank rozdziela pisanie od publikowania: piszemy,
     gdy mamy dobry material, wystawiamy, gdy jest dobra pora.
     """

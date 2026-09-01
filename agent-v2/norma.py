@@ -77,13 +77,14 @@ RODZAJE = ("notka", "komentarz", "polubienie", "restack", "subskrypcja",
 # i zobaczyc, czego w nim nie ma.
 NIEWYKONALNE: dict[str, str] = {}
 
-# KIEDY PROCENT COS ZNACZY — TRZY LICZBY, TRZY ROZNE PYTANIA.
+# KIEDY PROCENT COS ZNACZY — CZTERY LICZBY, CZTERY ROZNE PYTANIA.
 #
 # Prog 60% stosowany bez wzgledu na wielkosc planu robi z licznika generator
-# szumu. `subskrypcja` ma norme 0,3 na dobe, czyli plan okolo 2 na tydzien —
-# JEDNA mniej to juz 50%, czyli alarm. Tak samo restacki: plan 1-2 na dzien,
-# wiec kazdy dzien bez restacka to 0% i wykrzyknik w tabeli. `obserwacja` byla
-# przed tym chroniona lista NIEWYKONALNE, `subskrypcja` nie byla przez nic.
+# szumu. `subskrypcja` ma norme 0,53 na dobe, czyli plan okolo 3,7 na tydzien:
+# jedna mniej zostawia okolo 73%, ale dwie mniej juz okolo 46%. Tak samo
+# restacki: plan 1-2 na dzien, wiec kazdy dzien bez restacka to 0% i wykrzyknik
+# w tabeli. `obserwacja` byla przed tym chroniona lista NIEWYKONALNE,
+# `subskrypcja` nie byla przez nic.
 #
 # OD 1 WRZESNIA 2026 NIEWYKONALNE JEST PUSTE, wiec `obserwacja` i `subskrypcja`
 # opieraja sie juz WYLACZNIE o te progi — i to jest zamierzone. Oslona ma byc
@@ -410,7 +411,7 @@ def _znak(ile: float, norma: float) -> str:
     oknie 7 dni z `stages.podsumowanie_dzialan`. Wspolny miedzy tym plikiem a
     `alarm.py` jest wiec sam PROCENT, a nie minimum — i tak to zdanie ma sie
     czytac. Skutek dla wlasciciela: mail o wolumenach nadal potrafi zaalarmowac
-    o subskrypcjach (plan ~2 na tydzien), o ktorych ten licznik swiadomie
+    o subskrypcjach (plan ~3,7 na tydzien), o ktorych ten licznik swiadomie
     milczy. Domkniecie tego wymaga zmiany w `alarm.py`, nie tutaj.
     """
     if norma < MIN_PLAN_DZIENNY_DO_ZNAKU:

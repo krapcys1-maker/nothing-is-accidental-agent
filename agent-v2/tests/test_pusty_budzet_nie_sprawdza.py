@@ -333,8 +333,13 @@ def swiat_dnia(slad, st):
         mozna_komentowac=lambda url: True,
         read_pages=lambda urls: [{"url": u, "title": "Kto podpisuje wyjatek",
                                   "text": "tresc cudzego posta"} for u in urls],
-        wystaw_notke=lambda tekst, wyslij=False: (
-            slad.notki.append({"tekst": tekst, "wyslij": wyslij})
+        # `typ` i `forma` doszly 1 wrzesnia 2026: dziennik zapisywal przy notce
+        # tylko dlugosc i tresc, wiec nie dalo sie zmierzyc, czy formy w ogole
+        # sie roznicuja. Atrapa je przyjmuje i ZAPISUJE — inaczej test milczalby
+        # o tym, ze produkcja przestala je przekazywac.
+        wystaw_notke=lambda tekst, wyslij=False, typ="", forma="": (
+            slad.notki.append({"tekst": tekst, "wyslij": wyslij,
+                               "typ": typ, "forma": forma})
             or {"wyslane": True, "blad": None}),
         wystaw_komentarz=lambda url, tekst, wyslij=False, kontekst=None: (
             slad.komentarze.append({"url": url, "tekst": tekst, "wyslij": wyslij})

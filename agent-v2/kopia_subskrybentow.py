@@ -2,9 +2,14 @@
 
 Teksty, karty dowodowe, okladki i cala historia kosztow powstaja lokalnie
 i leza w gicie. Lista subskrybentow nie: zyje wylacznie u Substacka. Przy
-tempie 6-12 subskrypcji miesiecznie sto osob to okolo jedenastu miesiecy
-pracy systemu, a regulamin pozwala zamknac konto natychmiast i w wylacznej
-ocenie Substacka.
+zmierzonym tempie okolo 2,2 nowego subskrybenta miesiecznie sto osob na liscie
+to okolo czterdziestu pieciu miesiecy pracy systemu, a regulamin pozwala
+zamknac konto natychmiast i w wylacznej ocenie Substacka.
+
+`SUBSKRYPCJE_MIESIECZNIE` (12-20) NIE JEST TU MNOZNIKIEM i dwa razy juz nim
+bylo przez pomylke: ta stala liczy subskrypcje, ktore MY klikamy CUDZYM
+publikacjom, a ten plik wycenia liste osob, ktore subskrybuja NAS. Podzielenie
+stu przez nasze wyjscia dawalo „6,25 miesiaca" — siedem razy za malo.
 
 ## Jak to sie pobiera
 

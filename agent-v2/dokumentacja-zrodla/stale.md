@@ -30,10 +30,10 @@
 | `FABLE` | `"claude-fable-5"` | — |
 | `DEEPSEEK` | `"deepseek-v4-flash"` | — |
 | `DEEPSEEK_PRO` | `"deepseek-v4-pro"` | — |
-| `MODEL_FOR` | `{ "scout": DEEPSEEK_PRO, "feasibility": DEEP` | Decyzja właściciela 2026-08-15: DeepSeek do wszystkiego poza pisaniem. Pisanie zostaje u Opusa 5, bo to jest produkt. |
+| `MODEL_FOR` | `{ "scout": DEEPSEEK_PRO, "feasibility": DEEP` | Decyzja wlasciciela 2026-08-15 zaczela od DeepSeeka poza pisaniem. Po pozniejszych testach artykuly trafily do Fable 5, notki do Opusa 5, a  |
 | `DEEPSEEK_BASE_URL` | `"https://api.deepseek.com"` | — |
 | `DEEPSEEK_EFFORT` | `"low"` | Głębokość rozumowania DeepSeeka na /responses. Tokeny rozumowania liczą się do sufitu wyjścia, więc przy `high` model kończy budżet na szuka |
-| `CHEAP_MODE` | `_env("AGENT_V2_CHEAP", "0").lower() in {"1",` | Tryb tani: wszystko na DeepSeeku. Do testowania HYDRAULIKI — czy łańcuch przechodzi, czy JSON się parsuje, czy zapis działa. Przebieg kosztu |
+| `CHEAP_MODE` | `_env("AGENT_V2_CHEAP", "0").lower() in {"1",` | Tryb tani: wszystko na DeepSeeku poza dyskoveria, ktora ten jawny override zostawia u Claude'a. Sluzy do testowania HYDRAULIKI — czy lancuch |
 | `BEZ_TOKENOW` | `{"obraz"}` | — |
 | `PRICING` | `{ CLAUDE: {"in": 5.00, "out": 25.00, "verifi` | — |
 | `STAWKI_PRZED_PODWYZKA` | `{ DEEPSEEK: {"in": 0.14, "out": 0.28, "cache` | --- taryfa szczytowa DeepSeeka ----------------------------------------------- Od 2026-08-16 16:00 UTC DeepSeek wprowadza ceny szczytowe i p |
@@ -91,7 +91,7 @@
 | `MAX_TOKENS` | `{ # 6 tematow: tytul, pytanie, ZLAMANE PRZEK` | — |
 | `NOTE_MIN_WORDS` | `33` | --- notki i komentarze ------------------------------------------------------ Zmierzone na publicznych analizach Substacka: 33-64 słowa dają |
 | `NOTE_MAX_WORDS` | `64` | — |
-| `NOTE_CANDIDATES` | `1` | Ilu kandydatów generujemy, żeby wybrać jednego. Sensowne tylko dlatego, że DeepSeek kosztuje grosze — u Fable'a byłoby to nie do obronienia. |
+| `NOTE_CANDIDATES` | `1` | Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe warianty tego samego zdania niczego nie dokladaly, a placilismy za n |
 | `DZIEDZINY_CIEKAWOSTEK` | `( # --- co te systemy realnie robia i jak sa` | Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich, a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas n |
 | `ILE_DZIEDZIN_NA_PRZEBIEG` | `5` | — |
 | `CURIOSITY_BATCH` | `8` | — |
@@ -145,7 +145,7 @@
 | `ROZBIEG_DNI` | `30` | — |
 | `ODSTEPY` | `{ # 45-90 MIN, nie 10-25. Zmierzone na profi` | Odstepy miedzy dzialaniami, w sekundach. Pietnascie polubien w dziewiecdziesiat sekund to nie jest czytanie i kazdy system to widzi. Odstepy |
 | `ODSTEP_MIEDZY_DZIALANIAMI` | `(45, 180)` | — |
-| `ZWLOKA_PRZED_NOTKAMI` | `(0, 900)` | ZWLOKA PRZED PIERWSZA NOTKA PRZEBIEGU. Bez niej pierwsza notka wychodzila zawsze kilka minut po starcie zegara, wiec trzy razy dziennie o te |
+| `ZWLOKA_PRZED_NOTKAMI` | `(0, 900)` | ZWLOKA PRZED PIERWSZA NOTKA PRZEBIEGU. Bez niej pierwsza notka wychodzila zawsze kilka minut po starcie zegara, wiec piec razy dziennie o te |
 | `UDZIAL_CZASU_NA_NOTKI` | `0.60` | ILE CZASU PRZEBIEGU WOLNO ZJESC SAMYM NOTKOM. Rozdzielnik dzienny nie wiedzial nic o czasie: dzielil norme tak, jakby dzialania byly natychm |
 | `CZAS_DZIALANIA_S` | `240` | Ile trwa samo dzialanie poza przerwa: napisanie, sprawdzenie faktow, wystawienie i potwierdzenie u zrodla. Z realnych przebiegow. |
 | `MIN_WIEK_POSTA_MIN` | `(90, 900)` | NIE KOMENTUJEMY SWIEZYCH POSTOW. Wlasciciel opisal to najlepiej: napisal notke i piec sekund pozniej ktos odpisal ogolnikowa zgoda — i to zd |

@@ -83,8 +83,9 @@ they describe. If the newest thing you have is old, say so plainly in `note`:
 "nothing here is more recent than [month]" is a sentence the writer needs, and
 a reader deserves.
 
-**main_mechanism** — the hidden system the article exists to explain, in a few
-sentences. This is where you say how the pieces connect. Ground each link in the
+**main_mechanism** — the mechanism the article exists to explain: the
+decision, constraint or trade-off that makes the thing work the way it does.
+In a few sentences. This is where you say how the pieces connect. Ground each link in the
 evidence.
 
 **uncertain_claims** — up to {max_uncertain} things the evidence gestures at but

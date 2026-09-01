@@ -1040,7 +1040,7 @@ def _procent(licznik: int, mianownik: int) -> str:
 
 
 def naglowek() -> list[str]:
-    """Trzy do pieciu wierszy dla codziennej kontroli. Same liczby z mianownikiem."""
+    """Jeden wiersz bez zrzutow albo cztery do szesciu. Liczby z mianownikiem."""
     linie = []
     okno = okno_pomiaru()
     if not okno["zrzutow"]:

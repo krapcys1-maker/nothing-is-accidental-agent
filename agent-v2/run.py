@@ -1037,8 +1037,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     rytm_stanu: dict[str, bool] = {}
     # Hamulec liczy porazki OD POCZATKU BLOKU — patrz `_pod_rzad_w_bloku`.
     # Bazy sa wiec wazne tylko w obrebie jednego przebiegu i musza zniknac
-    # razem z nim; `dzien()` bywa wolane wiecej niz raz w jednym procesie
-    # (testy, `--dwa-razy`), a stara baza przeniosla by hamulec na nastepny.
+    # razem z nim. Testy wolaja `dzien()` wiecej niz raz w jednym procesie,
+    # a stara baza przeniosla by hamulec na nastepne wywolanie.
     _BAZA_HAMULCA.clear()
 
     # OKNO PUBLIKACJI liczone w strefie CZYTELNIKOW. Poza nim agent nie milczy
@@ -1203,7 +1203,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             print("  dzienny przydzial notek juz wyczerpany", flush=True)
             return
         # Losowa zwloka PRZED pierwsza notka. Bez niej pierwsza notka
-        # wychodzila zawsze kilka minut po starcie zegara, wiec trzy razy
+        # wychodzila zawsze kilka minut po starcie zegara, wiec piec razy
         # dziennie o tej samej porze co do kwadransa. Godziny zostaja te,
         # ktore wybralismy; przewidywalne przestaja byc minuty.
         if wyslij:
@@ -1213,9 +1213,14 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             # (rytm() pyta zegar przed kazda przerwa) — ten sen, PRZED PIERWSZA
             # notka, mial dokladnie ta sama dziure i zabil jedyna zaplanowana
             # notke przebiegu z 19.08: proces zginal 14,5 min w 34-minutowa
-            # zwloke. Zwloka jest ozdobna (chowa, ze trzy przebiegi dziennie
-            # startuja o tej samej minucie); notki nie sa. Gdy oba naraz sie nie
-            # miesca, zwloke pomijamy i piszemy od razu.
+            # zwloke. Zwloka jest ozdobna; notki nie sa. Gdy oba naraz sie
+            # nie miesca, zwloke pomijamy i piszemy od razu.
+            #
+            # Stalo tu „chowa, ze przebiegi startuja o stalych minutach" — a to
+            # nieprawda: `systemd/nia-agent.timer` ma `RandomizedDelaySec=1500`,
+            # wiec kazdy z pieciu startow jest juz rozmyty po 25-minutowym oknie,
+            # ZANIM kod dojdzie do tej zwloki. Zwloka odsuwa PIERWSZA NOTKE od
+            # startu przebiegu, a nie start przebiegu od zegara.
             if zostal_czas("zwloke przed notkami", ile):
                 print(f"  (zwloka {ile / 60:.0f} min przed pierwsza notka)",
                       flush=True)
@@ -1243,7 +1248,9 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             if wyslij:
                 if not rytm("notka", "notki", rytm_stanu):
                     return
-                wynik = browser.wystaw_notke(gotowe[0]["note"].strip(), wyslij=True)
+                wynik = browser.wystaw_notke(gotowe[0]["note"].strip(), wyslij=True,
+                                             typ=n.get("type", ""),
+                                             forma=n.get("forma", ""))
                 # Fakt odhaczamy DOPIERO po potwierdzonej publikacji. Wczesniej
                 # znikal juz przy znalezieniu, wiec przepadal takze wtedy, gdy
                 # notka nie poszla albo gdy przebieg byl tylko sprawdzeniem.

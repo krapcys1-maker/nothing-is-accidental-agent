@@ -107,16 +107,19 @@ FABLE = "claude-fable-5"  # najmocniejszy, dwa razy droższy od Opusa
 DEEPSEEK = "deepseek-v4-flash"
 DEEPSEEK_PRO = "deepseek-v4-pro"  # ma server-side web_search przez /responses
 
-# Decyzja właściciela 2026-08-15: DeepSeek do wszystkiego poza pisaniem.
-# Pisanie zostaje u Opusa 5, bo to jest produkt.
+# Decyzja wlasciciela 2026-08-15 zaczela od DeepSeeka poza pisaniem. Po
+# pozniejszych testach artykuly trafily do Fable 5, notki do Opusa 5, a etapy
+# DeepSeeka zostaly rozdzielone miedzy wariant Pro i Flash ponizej.
 MODEL_FOR = {
     "scout": DEEPSEEK_PRO,
     "feasibility": DEEPSEEK,  # tani odsiew przed drogim krokiem
-    # Dyskoveria MUSI być u Anthropic (DeepSeek nie ma wyszukiwania), ale nie
-    # musi być u Opusa: wybór adresów to praca mechaniczna, nie ocena. Każda
-    # runda przesyła całą rozmowę od nowa, więc wejście rośnie do ~146 tys.
-    # tokenów — na Opusie $0,73 za samo wejście, na Sonnecie $0,29.
-    # Dyskoveria u Opusa, bo TYLKO ona działa od początku do końca.
+    # Dyskoveria dziala na DeepSeek V4 Pro przez `/responses` z server-side
+    # `web_search`: wybor adresow to praca mechaniczna, nie ocena. Kazda runda
+    # przesyla cala rozmowe od nowa, wiec wejscie rosnie — zmierzone na
+    # trzynastu wywolaniach `discovery` na DeepSeeku: od 72 do ponad 196 tys.
+    # tokenow. (Liczba „~146 tys." opisywala epoke Opusa i domykal ja rachunek
+    # $0,73 po stawce Anthropic; po przejsciu na DeepSeeka nie znaczy juz nic.)
+    # Opus byl wczesniejsza droga, zanim skrocenie promptu domknelo DeepSeeka.
     #
     # Sprawdzone na żywo, żeby nie powtarzać:
     #  - Haiku 4.5, Sonnet 5: NIE wywołują wyszukiwania w ogóle, wypisują adresy
@@ -149,9 +152,9 @@ MODEL_FOR = {
     # chronic wnioskowanie przed zgloszeniem, a ta bramka liczy m.in.
     # zastrzezenia. Zlaczone w jedno pytanie tepilyby sie nawzajem.
     "forma": DEEPSEEK_PRO,
-    # Notki i komentarze na DeepSeeku — decyzja właściciela. Przy ~$0,002 za
-    # sztukę można wygenerować kilkanaście kandydatów i wybrać najlepszego,
-    # co dla czterdziestu słów działa lepiej niż jedno drogie podejście.
+    # Komentarze ida na DeepSeek V4 Pro, notki na Claude Opus 5. Notka ma jeden
+    # wariant (`NOTE_CANDIDATES = 1`), wiec nie powstaje pula kilkunastu
+    # kandydatow do wyboru.
     # PODZIAL PO TESCIE A/B NA TYM SAMYM POSCIE. Pro przynioslo konkretny
     # precedens (protokol z Amsterdamu 1997 o czuciu zwierzat) i nazwalo
     # asymetrie kosztu bledu; flash dal trafna, ale ogolniejsza uwage. Roznica
@@ -240,11 +243,11 @@ DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 # zdąża napisać odpowiedzi.
 DEEPSEEK_EFFORT = "low"
 
-# Tryb tani: wszystko na DeepSeeku. Do testowania HYDRAULIKI — czy łańcuch
-# przechodzi, czy JSON się parsuje, czy zapis działa. Przebieg kosztuje wtedy
-# grosze zamiast ~1 USD. NIE służy do oceny jakości tekstu, bo produktem jest
-# to, co napisze Opus. Dyskoveria zostaje u Claude'a nawet tutaj: DeepSeek nie
-# ma wyszukiwania po stronie dostawcy, więc bez niej nie ma czego pobierać.
+# Tryb tani: wszystko na DeepSeeku poza dyskoveria, ktora ten jawny override
+# zostawia u Claude'a. Sluzy do testowania HYDRAULIKI — czy lancuch przechodzi,
+# JSON sie parsuje i zapis dziala — nie do oceny produkcyjnego tekstu Fable 5.
+# Produkcyjna dyskoveria korzysta z web_search DeepSeek V4 Pro; wyjatek dotyczy
+# tylko tego trybu.
 CHEAP_MODE = _env("AGENT_V2_CHEAP", "0").lower() in {"1", "true", "yes"}
 
 if CHEAP_MODE:
@@ -845,11 +848,9 @@ MAX_TOKENS = {
 NOTE_MIN_WORDS = 33
 NOTE_MAX_WORDS = 64
 
-# Ilu kandydatów generujemy, żeby wybrać jednego. Sensowne tylko dlatego, że
-# DeepSeek kosztuje grosze — u Fable'a byłoby to nie do obronienia.
-# Trzech kandydatow, nie pieciu: odkad kazda notka dostaje WLASNY fakt,
-# piaty wariant tego samego zdania niczego nie dokladal, a placilismy za
-# niego i za jego weryfikacje.
+# Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe
+# warianty tego samego zdania niczego nie dokladaly, a placilismy za nie i ich
+# weryfikacje. Dzis notke pisze Opus, a kandydat jest jeden.
 # JEDEN WARIANT, NIE TRZY. Trzy istnialy tylko po to, zeby po napisaniu wybrac
 # ten, ktory nie powtarza pierwszego slowa poprzednich notek — czyli placilismy
 # za dwa wyrzucone teksty, zeby zalatwic cos, o czym wystarczylo modelowi
@@ -1744,7 +1745,7 @@ PROG_ALARMU_WOLUMENU = 60
 # i stawia nasze zdanie obok jego — za cene jednego zdania, nie calej notki.
 #
 # Wask0 celowo. Restack jest publicznym aktem na cudzej tresci: przy dziesieciu
-# dziennie konto wyglada jak wzmacniacz, a nie jak ktos, kto czyta. Dwa-cztery
+# dziennie konto wyglada jak wzmacniacz, a nie jak ktos, kto czyta. Jeden-dwa
 # to tyle, ile czlowiek naprawde uzna za warte podania dalej.
 # --- ciche dni ---------------------------------------------------------------
 # Publikacja nadajaca identycznie codziennie czyta sie jak kanal, a nie jak
@@ -1940,7 +1941,7 @@ ODSTEPY = {
 ODSTEP_MIEDZY_DZIALANIAMI = (45, 180)   # zapas dla czynnosci bez wlasnego wpisu
 
 # ZWLOKA PRZED PIERWSZA NOTKA PRZEBIEGU. Bez niej pierwsza notka wychodzila
-# zawsze kilka minut po starcie zegara, wiec trzy razy dziennie o tej samej
+# zawsze kilka minut po starcie zegara, wiec piec razy dziennie o tej samej
 # porze co do kwadransa. Losowa zwloka rozmywa sam moment startu — godziny
 # zostaja te, ktore wybralismy, ale minuty przestaja byc przewidywalne.
 # PRZYCIETE 30 sierpnia 2026 z (0, 2400). Zwloka jest OZDOBNA — rozmywa moment
@@ -2164,11 +2165,13 @@ FETCH_MIN_CHARS = 1500
 FETCH_USER_AGENT = "Mozilla/5.0 (compatible; NothingIsAccidental/1.0; +editorial research)"
 
 # --- bramki jakości ----------------------------------------------------------
-# NIC NIE BLOKUJE. Te cztery są zgłaszane właścicielowi jako uwagi do
-# przeczytania; artykuł powstaje zawsze i trafia do szuflady.
+# NIC NIE BLOKUJE. Bramki są zgłaszane właścicielowi jako uwagi do przeczytania;
+# artykuł powstaje zawsze i trafia do szuflady. („Te cztery" stało tu do
+# 1 września 2026 i przeczyło zdaniu trzy wiersze niżej: bramek jest trzynaście
+# deterministycznych i cztery obserwacyjne.)
 
 # USUNIETA 2026-08-20 lista FLAGGED_GATES. Wymieniala CZTERY bramki, nie byla
-# przez nic czytana, a bramek jest dzis dwanascie deterministycznych i cztery
+# przez nic czytana, a bramek jest dzis trzynascie deterministycznych i cztery
 # obserwacyjne. Nieaktualna lista, ktorej nikt nie uzywa, jest gorsza niz jej
 # brak: opisuje system, ktory przestal istniec. Zrodlem prawdy jest
 # `gates.deterministic_floors`.

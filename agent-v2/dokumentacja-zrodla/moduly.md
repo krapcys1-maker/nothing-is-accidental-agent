@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-2683 wierszy, 26 funkcji na poziomie modułu, 1 klas
+2690 wierszy, 26 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -34,14 +34,14 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-6208 wierszy, 115 funkcji na poziomie modułu, 0 klas
+6240 wierszy, 115 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_prompt(name, **fields)` *(wewn.)* | — |
 | `recent_angles(conn, limit)` | Ostatnie kąty redakcyjne — wejście do reguły różnorodności. |
 | `tematy_do_porownania(conn, limit)` | Poprzednie artykuly w postaci NADAJACEJ SIE DO POROWNANIA. |
-| `review(conn, run_id, card, draft)` | Etap 8 — recenzja: rozliczenie każdego zdania (Claude). |
+| `review(conn, run_id, card, draft)` | Etap 8 — recenzja: rozliczenie kazdego zdania (DeepSeek V4 Pro). |
 | `ocen_forme(conn, run_id, draft)` | Obserwacja formy: beaty, eskalacja, moment przyłapania, znajomość otwarcia. |
 | `ostatnie_uwagi(ile)` | Co zarzucono OSTATNIM artykulom — do promptu pisarza. |
 | `poprzednie_teksty(ile, pomin_tresc)` | Treści kilku ostatnich artykułów — materiał dla bramki ODCISK_FORMY. |
@@ -102,7 +102,7 @@
 | `_o_tym_samym(a, b, min_wspolnych, prog)` *(wewn.)* | Czy dwa teksty mowia o tej samej rzeczy. |
 | `teksty_ostatnich_notek(ile)` | Tresci ostatnich notek — do porownania po NAZWACH WLASNYCH. |
 | `wybierz_material(zapas, unikaj, wczesniej, teksty)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
-| `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, ile, od)` | Pięć notek na jeden dzień, każda z innego materiału. |
+| `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, ile, od)` | Do pieciu notek z dziennego planu, kazda z innego materialu. |
 | `ocen_restack(conn, run_id, notka)` | Czy podac te notke dalej i z jakim zdaniem. |
 | `_podloga_z_pamieci(tekst)` *(wewn.)* | Dwie podlogi, ktore dzialaja BEZ karty dowodowej. |
 | `_otwarcie_formulka(zdanie)` *(wewn.)* | Czy zdanie zaczyna sie od zapowiedzi ruchu zamiast od samego ruchu. |
@@ -111,20 +111,20 @@
 | `zweryfikuj(conn, run_id, tekst, kontekst)` | Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem. |
 | `comment_on(conn, run_id, post, fakty)` | Komentarz do cudzego posta — do szuflady. |
 | `fallback_card(question, evidence)` | Karta złożona z dowodów bez modelu — gdy synteza padnie. |
-| `synthesis(conn, run_id, question, evidence)` | Etap 6 — karta dowodowa (Claude). |
+| `synthesis(conn, run_id, question, evidence)` | Etap 6 — karta dowodowa (DeepSeek V4 Pro). |
 | `classify(conn, run_id, question, corpus)` | Etap 5 — klasyfikacja i wyciąg fragmentów (DeepSeek). |
 | `_dobierz_przegladarka(conn, run_id, brakujace, juz_mamy)` *(wewn.)* | Drugie podejscie do stron, ktore zwyklemu pobieraniu daly pusty szkielet. |
 | `fetch(conn, run_id, sources)` | Etap 4 — pobranie stron. Zwykły HTTP, żadnego modelu, 0 USD. |
 | `_host(url)` *(wewn.)* | — |
 | `hosty_ktore_nigdy_nie_dzialaly(conn, min_prob)` | Hosty, ktore probowalismy >=2 razy i ANI RAZU sie nie udalo. |
-| `discovery(conn, run_id, question, recent_domains, tylko_pierwotne)` | Etap 3 — dyskoveria źródeł (Claude + wyszukiwanie po stronie dostawcy). |
+| `discovery(conn, run_id, question, recent_domains, tylko_pierwotne)` | Etap 3 — dyskoveria zrodel (DeepSeek V4 Pro + web_search dostawcy). |
 | `feasibility(conn, run_id, topics)` | Etap 2 — tani odsiew przed drogą dyskoverią (DeepSeek). |
 | `podsumowanie_dzialan(dni)` | Ile czego WYSZLO w ostatnich `dni` dniach, wobec normy z configu. |
 | `powody_porazek(dni)` | Dlaczego dzialania sie NIE UDALY — pogrupowane, najczestsze pierwsze. |
 | `_powod_przegranej(klucz_zwyciezcy, klucz_tematu)` *(wewn.)* | Ktory skladnik klucza sortowania ROZSTRZYGNAL, i jakimi wartosciami. |
 | `zapisz_przegranych(przegrani, run_id)` | Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej. |
-| `pick_topic(topics, assessments, run_id, wczesniejsze)` | Wybiera temat: najpierw GLEBOKOSC, potem pewnosc i liczba zrodel. |
-| `scout(conn, run_id, count)` | Etap 1 — skaut tematów (Claude). |
+| `pick_topic(topics, assessments, run_id, wczesniejsze)` | Wybiera temat leksykograficznie wedlug dziewieciu kryteriow. |
+| `scout(conn, run_id, count)` | Etap 1 — skaut tematow (DeepSeek V4 Pro). |
 | `bank_fragmentow(conn, dni)` | Nieuzyte fragmenty ze wszystkich artykulow — zaplacone i nieprzeczytane. |
 | `bibliotekarz(conn, run_id, bank)` | Grupuje bank po MECHANIZMIE. Model proponuje, KOD weryfikuje. |
 | `wczytaj_bank_notek()` | Gotowe notki czekajace na swoj moment. Plik, nie tabela — limit czterech |
@@ -156,7 +156,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-4661 wierszy, 86 funkcji na poziomie modułu, 0 klas
+4665 wierszy, 86 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -231,7 +231,7 @@
 | `wystaw_artykul(sciezka_md, sciezka_png, wyslij)` | Wystawia artykuł na Substacku. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
 | `potwierdz_odpowiedz(page, note_id, tekst)` | Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku. |
 | `wystaw_odpowiedz(note_id, tekst, wyslij, kontekst, rodzaj)` | Odpowiada w watku — pod nasza notka albo w cudzej dyskusji. |
-| `wystaw_notke(tekst, wyslij)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
+| `wystaw_notke(tekst, wyslij, typ, forma)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
 | `zapamietaj_platny_host(host, prawo)` | Host, ktory wprost mowi, ze komentowac moga tylko placacy. |
 | `hosty_tylko_dla_placacych()` | Hosty, gdzie komentowac moga tylko placacy — do odsiania PRZED ocena. |
 | `zapomnij_platny_host(host)` | Udany komentarz kasuje host z listy — wydawca mogl zmienic ustawienia. |
@@ -249,7 +249,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-737 wierszy, 14 funkcji na poziomie modułu, 3 klas
+741 wierszy, 14 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -295,7 +295,7 @@
 
 ### `db.py` — schemat i zapis
 
-244 wierszy, 9 funkcji na poziomie modułu, 0 klas
+245 wierszy, 9 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -328,7 +328,7 @@
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-771 wierszy, 20 funkcji na poziomie modułu, 0 klas
+778 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -368,7 +368,7 @@
 
 ### `kopia_subskrybentow.py` — kopia jedynego aktywa, którego nie da się odtworzyć
 
-198 wierszy, 4 funkcji na poziomie modułu, 0 klas
+203 wierszy, 4 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -379,7 +379,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2417 wierszy, 21 funkcji na poziomie modułu, 0 klas
+2420 wierszy, 21 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -479,7 +479,7 @@
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
-1105 wierszy, 13 funkcji na poziomie modułu, 0 klas
+1106 wierszy, 13 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -559,7 +559,7 @@
 | `kanaly()` | Co poprzedzilo pojawienie sie czytelnika — osobowo i pozycyjnie. |
 | `pomiar_oslepl()` | Czy w ogole mamy z czego liczyc wzajemnosc. |
 | `_procent(licznik, mianownik)` *(wewn.)* | — |
-| `naglowek()` | Trzy do pieciu wierszy dla codziennej kontroli. Same liczby z mianownikiem. |
+| `naglowek()` | Jeden wiersz bez zrzutow albo cztery do szesciu. Liczby z mianownikiem. |
 | `raport()` | Pelna odpowiedz na cztery pytania. Kazda liczba z mianownikiem. |
 | `main()` | — |
 
