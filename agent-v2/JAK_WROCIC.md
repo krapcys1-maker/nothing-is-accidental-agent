@@ -104,6 +104,37 @@ pgrep -af "[r]un\.py --dzien"
 Bez nawiasów `pgrep -f` potrafi dopasować własne polecenie i zawsze odpowie, że
 agent pracuje. Nabraliśmy się na to raz — stąd ta uwaga.
 
+## Wdrożenie nowego kodu
+
+**Najpierw sprawdź, czy przebieg nie trwa** — sekcja wyżej. Dopiero potem
+`git pull`.
+
+```bash
+flock -n agent-v2/data/agent.lock -c true && git pull --ff-only || echo "PRACUJE — poczekaj"
+```
+
+Dlaczego to ma znaczenie: **prompty (`agent-v2/prompts/*.md`) są czytane z
+dysku przy KAŻDYM wywołaniu**, nie raz na starcie. `git pull` w trakcie
+przebiegu podmienia je pod działającym procesem, więc jedna notka może wyjść
+na starym prompcie, a następna na nowym — i nic tego nie zgłosi. Pliki `.py`
+są bezpieczniejsze, bo Python trzyma je w pamięci od pierwszego importu, ale
+funkcja importowana leniwie po raz pierwszy PO pullu wciągnie już nowy kod.
+
+Zdarzyło się to 1 września 2026: przebieg wystartował 11:38 UTC, pull poszedł
+11:52. Skończyło się bez szkody — w tamtym commicie nie było zmian w
+promptach, a wszystkie moduły były już w pamięci (sprawdzone: zero błędów
+importu w `journalctl`). Ale sprawdzenie było PO fakcie, a miało być przed.
+
+Po wdrożeniu, na serwerze:
+
+```bash
+for t in agent-v2/tests/test_*.py; do PYTHONIOENCODING=utf-8 .venv/bin/python "$t" >/dev/null 2>&1 || echo "OBLANY: $t"; done
+```
+
+Serwer musi mieć **wszystko zielone**. Na Windowsie `test_artykul.py` i
+`test_czas.py` oblewają się zawsze (brak `playwright`, sygnały POSIX) — na
+serwerze nie mają prawa.
+
 ## Harmonogram
 
 ```
