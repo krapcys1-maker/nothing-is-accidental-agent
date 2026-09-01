@@ -129,8 +129,14 @@ try:
     src = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
     poczatek = src.find("def rytm(")
     ciało = src[poczatek:poczatek + 2600]
+    # Hamulec liczy porazki TEGO BLOKU, nie wszystkich blokow naraz — patrz
+    # `test_hamulec_per_blok.py`. `_pod_rzad_w_bloku` stoi na
+    # `browser.pod_rzad_nieudanych`, tylko odejmuje stan z chwili wejscia
+    # w blok, wiec to nadal ten sam licznik.
     sprawdz("rytm pyta o porazki pod rzad",
-            "pod_rzad_nieudanych(co)" in ciało, ciało[:200])
+            "_pod_rzad_w_bloku(co, na_co)" in ciało, ciało[:200])
+    sprawdz("i liczy je z `browser.pod_rzad_nieudanych`",
+            "pod_rzad_nieudanych(co)" in src, "licznik przestal byc tym samym")
     sprawdz("dwie porazki wydluzaja przerwe",
             "przerwa *= 2" in ciało, ciało[-400:])
     sprawdz("trzy koncza blok",

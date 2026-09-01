@@ -1291,11 +1291,25 @@ def deterministic_floors(body: str, card: dict[str, Any],
             "gate": "NIEISTNIEJACE_BADANIE",
             "detail": body[max(0, match.start() - 60):match.end() + 60].strip(),
         })
+    # DWIE UWAGI, NIE JEDNA. Liczba z faktu z puli NIE jest zmyślona — stoi w
+    # rekordzie, który ma URL i datę i przeszedł bramkę świeżości. Nie jest
+    # jednak w niczym, co pobraliśmy. Wrzucenie jej do korpusu uciszało
+    # kontrolę; wrzucenie jej pod `LICZBA_SPOZA_KORPUSU` kazałoby komunikatowi
+    # kłamać („nie występuje w materiale dowodowym"). Własna uwaga mówi prawdę
+    # i podpowiada, co z nią zrobić.
+    _z_puli = _digit_tokens(json.dumps(_niepobrane(card), ensure_ascii=False))
     for token in numbers_outside_corpus(body, card):
-        findings.append({
-            "gate": "LICZBA_SPOZA_KORPUSU",
-            "detail": f"liczba {token!r} nie występuje w materiale dowodowym",
-        })
+        if token in _z_puli:
+            findings.append({
+                "gate": "LICZBA_TYLKO_Z_PULI",
+                "detail": (f"liczba {token!r} stoi wyłącznie na fakcie z puli "
+                           "— tego dokumentu nikt nie pobrał, sprawdź ją w źródle"),
+            })
+        else:
+            findings.append({
+                "gate": "LICZBA_SPOZA_KORPUSU",
+                "detail": f"liczba {token!r} nie występuje w materiale dowodowym",
+            })
     for fraza in frazy_z_instrukcji(body):
         findings.append({
             "gate": "FRAZA_Z_INSTRUKCJI",
@@ -1402,9 +1416,17 @@ def uwagi_z_formy(obserwacja: dict[str, Any], body: str) -> list[dict[str, str]]
     moment = obserwacja.get("reader_moment")
     if not moment or not (moment or {}).get("quote"):
         uwagi.append({
+            # TRESC KOMUNIKATU OPISYWALA KONTRAKT, KTOREGO JUZ NIE MA.
+            # `forma.md` przestal wymagac fizycznego przedmiotu („It does not
+            # have to be a thing they can pick up"), bo pod AI wiekszosc
+            # artykulow zadnego nie ma; bramka sprawdza wylacznie obecnosc
+            # `quote`. Zachowanie sie nie zmienilo, ale wlasciciel czytajacy
+            # `.uwagi.md` dostawal opis reguly z epoki przedmiotow.
             "gate": "CZYTELNIK_NIEPRZYLAPANY",
-            "detail": ("nigdzie nie ma zwrotu do TEGO czytelnika z jednym "
-                       "konkretnym przedmiotem — statystyka o innych to nie to"),
+            "detail": ("nigdzie nie ma zwrotu do TEGO czytelnika z jedna "
+                       "rzecza z jego wlasnego zycia — odpowiedz, ktora dostal, "
+                       "cena, ktora zaplacil, decyzja o nim; statystyka o "
+                       "innych to nie to"),
         })
 
     otwarcie = obserwacja.get("opening_claim") or {}
@@ -1587,9 +1609,16 @@ def rytm(co: str, na_co: str, stan: dict) -> bool:
     Teraz przerwa jest najpierw losowana, potem sprawdzana wobec konca
     przebiegu, i dopiero wtedy odsypiana — a pierwsze dzialanie w przebiegu nie
     czeka na nic, bo nie ma na co.
+
+    Ta sama funkcja trzyma HAMULEC po serii porazek, liczony PER BLOK (`na_co`),
+    nie per rodzaj dzialania — patrz `_BAZA_HAMULCA` i `_pod_rzad_w_bloku`.
     """
-    import browser as _b
     import stages as _s
+
+    # BAZA HAMULCA ZAPISUJE SIE TU, PRZED wczesnym wyjsciem — patrz
+    # `_pod_rzad_w_bloku`. Blok ma liczyc od stanu, w jakim go zastal, a nie od
+    # stanu po swojej wlasnej pierwszej probie.
+    pod_rzad = _pod_rzad_w_bloku(co, na_co)
 
     if not stan.get(co):
         return zostal_czas(na_co)
@@ -1607,10 +1636,9 @@ def rytm(co: str, na_co: str, stan: dict) -> bool:
     # mozemy zrobic natychmiast i bez zgadywania przyczyny.
     # Trzy z rzedu: konczymy ten blok. Nie kasujemy dnia — kolejny przebieg
     # zaczyna z czystym licznikiem i moze sie okazac, ze to bylo chwilowe.
-    pod_rzad = _b.pod_rzad_nieudanych(co)
     if pod_rzad >= 3:
-        print("  [wycofanie] %s: trzy porazki pod rzad — koncze ten blok,"
-              " nastepny przebieg sprobuje od nowa" % co, flush=True)
+        print("  [wycofanie] %s: trzy porazki pod rzad — koncze blok %s,"
+              " nastepny przebieg sprobuje od nowa" % (co, na_co), flush=True)
         return False
     if pod_rzad >= 2:
         przerwa *= 2
@@ -1915,6 +1943,33 @@ def restackuj_w_kanale(
                     numer_restacka = numer_naszej_notki(page, zdanie, prob=2)
                 except Exception:
                     pass
+                # OTWARTE, SWIADOMIE NIETKNIETE: `udane=True` ponizej opiera sie
+                # na samym lancuchu klikniec, a nie na potwierdzeniu. To jest ta
+                # sama doktryna „klikniecie nie jest dowodem", ktora obowiazuje
+                # przy komentarzu, notce, odpowiedzi i — od 31 sierpnia — przy
+                # polubieniu. Restack zostaje jedynym dzialaniem, ktore jej nie
+                # przestrzega, i wiem o tym.
+                #
+                # DLACZEGO NIE ZAMYKAM TEGO TERAZ. Jedyny sygnal, jaki mam pod
+                # reka, to `numer_restacka` — i on juz jest w dzienniku, w polu
+                # `id`. Pusty `id` znaczy tylko tyle, ze nie odnalazlem notki na
+                # profilu przy `prob=2`, czyli w dwoch podejsciach z jedna
+                # osmiosekundowa przerwa. Jak zawodny jest taki odczyt, wiadomo
+                # z pomiaru poprzedniego mechanizmu: `id_z_odpowiedzi` trafil
+                # numer 6 razy na 29 notek. Gdybym na tej podstawie postawil
+                # `udane=False`, restacki masowo znikalyby z licznika, a licznik
+                # z dziennika jest dla nich jedyny — Substack nie oddaje ich
+                # zadnym endpointem. Falszywe „nie udalo sie" kosztuje tu cala
+                # dzienna norme, falszywe „udalo sie" jeden slot (patrz
+                # `potwierdz_polubienie`), wiec zgadywanie jest drozsze niz
+                # opisane ryzyko.
+                #
+                # CO ZAMKNELOBY SPRAWE: policzyc na produkcji, w ilu wpisach
+                # `restack` pole `id` jest niepuste. Jesli wychodzi blisko 100
+                # procent, `id` nadaje sie na warunek i wtedy — dopiero wtedy —
+                # `udane` powinno od niego zalezec. Nie zgaduje, jak Substack
+                # nazywa stan przycisku po restacku, i nie ruszam tego bez tej
+                # liczby.
                 zapisz_w_dzienniku("restack", udane=True,
                                    komu=notka.get("autor", ""),
                                    slow=len(zdanie.split()),

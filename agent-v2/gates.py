@@ -109,9 +109,42 @@ def _digit_tokens(text: str) -> set[str]:
     return {m.group(0).rstrip(".,") for m in DIGITS.finditer(text)}
 
 
+def _niepobrane(card: dict[str, Any]) -> list[dict[str, Any]]:
+    """Twierdzenia oznaczone `not_fetched` — dolozone, nie wyciagniete.
+
+    Wstawia je `artykul_z_puli.py`: fakt z puli ciekawostek, ktory wybral temat,
+    ma dojsc do pisarza i do sekcji `## Sources`, ale NIE jest wyciagiem z
+    pobranego dokumentu — to wypowiedz modelu z `znajdz_ciekawostki` z
+    doklejonym URL-em. Nikt tej strony nie pobral ani nie sklasyfikowal.
+    """
+    return [c for c in (card.get("confirmed_claims") or [])
+            if isinstance(c, dict) and c.get("not_fetched")]
+
+
+def _korpus_pobranych(card: dict[str, Any]) -> set[str]:
+    """Liczby z materialu, ktory NAPRAWDE pobralismy.
+
+    Bez tego korpus szedl z `json.dumps(card)`, czyli obejmowal takze
+    twierdzenie dolozone recznie — a wtedy bramka zaczynala akceptowac liczby,
+    ktorych nie ma w zadnym pobranym dokumencie. Kontrola liczb bez tej roznicy
+    sprawdza sama siebie.
+
+    ZOSTAJE ZNANA WADA, SZERSZA OD TEJ: karta niesie w tym momencie takze
+    `ocena_ciekawosci` i `parallel_mechanisms` z banku, czyli wypowiedzi modelu
+    z cytatami. Ich liczby nadal wchodza do korpusu. To osobna sprawa niz
+    wstrzykniety fakt i osobna decyzja — tu zamykamy tylko to, co sami
+    otworzylismy.
+    """
+    pobrane = dict(card)
+    pobrane["confirmed_claims"] = [
+        c for c in (card.get("confirmed_claims") or [])
+        if not (isinstance(c, dict) and c.get("not_fetched"))]
+    return _digit_tokens(json.dumps(pobrane, ensure_ascii=False))
+
+
 def numbers_outside_corpus(body: str, card: dict[str, Any]) -> list[str]:
-    """Liczby w tekście, których nie ma nigdzie w materiale dowodowym."""
-    corpus = _digit_tokens(json.dumps(card, ensure_ascii=False))
+    """Liczby w tekście, których nie ma nigdzie w POBRANYM materiale."""
+    corpus = _korpus_pobranych(card)
     return sorted(t for t in _digit_tokens(body) if t not in corpus)
 
 
@@ -136,11 +169,25 @@ def deterministic_floors(body: str, card: dict[str, Any],
             "gate": "NIEISTNIEJACE_BADANIE",
             "detail": body[max(0, match.start() - 60):match.end() + 60].strip(),
         })
+    # DWIE UWAGI, NIE JEDNA. Liczba z faktu z puli NIE jest zmyślona — stoi w
+    # rekordzie, który ma URL i datę i przeszedł bramkę świeżości. Nie jest
+    # jednak w niczym, co pobraliśmy. Wrzucenie jej do korpusu uciszało
+    # kontrolę; wrzucenie jej pod `LICZBA_SPOZA_KORPUSU` kazałoby komunikatowi
+    # kłamać („nie występuje w materiale dowodowym"). Własna uwaga mówi prawdę
+    # i podpowiada, co z nią zrobić.
+    _z_puli = _digit_tokens(json.dumps(_niepobrane(card), ensure_ascii=False))
     for token in numbers_outside_corpus(body, card):
-        findings.append({
-            "gate": "LICZBA_SPOZA_KORPUSU",
-            "detail": f"liczba {token!r} nie występuje w materiale dowodowym",
-        })
+        if token in _z_puli:
+            findings.append({
+                "gate": "LICZBA_TYLKO_Z_PULI",
+                "detail": (f"liczba {token!r} stoi wyłącznie na fakcie z puli "
+                           "— tego dokumentu nikt nie pobrał, sprawdź ją w źródle"),
+            })
+        else:
+            findings.append({
+                "gate": "LICZBA_SPOZA_KORPUSU",
+                "detail": f"liczba {token!r} nie występuje w materiale dowodowym",
+            })
     for fraza in frazy_z_instrukcji(body):
         findings.append({
             "gate": "FRAZA_Z_INSTRUKCJI",
@@ -368,9 +415,17 @@ def uwagi_z_formy(obserwacja: dict[str, Any], body: str) -> list[dict[str, str]]
     moment = obserwacja.get("reader_moment")
     if not moment or not (moment or {}).get("quote"):
         uwagi.append({
+            # TRESC KOMUNIKATU OPISYWALA KONTRAKT, KTOREGO JUZ NIE MA.
+            # `forma.md` przestal wymagac fizycznego przedmiotu („It does not
+            # have to be a thing they can pick up"), bo pod AI wiekszosc
+            # artykulow zadnego nie ma; bramka sprawdza wylacznie obecnosc
+            # `quote`. Zachowanie sie nie zmienilo, ale wlasciciel czytajacy
+            # `.uwagi.md` dostawal opis reguly z epoki przedmiotow.
             "gate": "CZYTELNIK_NIEPRZYLAPANY",
-            "detail": ("nigdzie nie ma zwrotu do TEGO czytelnika z jednym "
-                       "konkretnym przedmiotem — statystyka o innych to nie to"),
+            "detail": ("nigdzie nie ma zwrotu do TEGO czytelnika z jedna "
+                       "rzecza z jego wlasnego zycia — odpowiedz, ktora dostal, "
+                       "cena, ktora zaplacil, decyzja o nim; statystyka o "
+                       "innych to nie to"),
         })
 
     otwarcie = obserwacja.get("opening_claim") or {}
@@ -403,11 +458,23 @@ def szerokosc_podstawy(card: dict[str, Any]) -> tuple[int, list[str]]:
     tego, co zapis mowi, ale post z jednym zrodlem wyglada cienko niezaleznie
     od tego, jak dobrze jest napisany. To uwaga, nie blokada: czasem jedno
     zrodlo to cala dokumentacja, jaka w ogole istnieje.
+
+    NIE LICZYMY HOSTA, KTOREGO NIKT NIE POBRAL. Sciezka artykulu z puli doklada
+    do karty fakt, ktory wybral temat — z URL-em, ale bez pobrania i bez
+    klasyfikacji. Liczony razem z reszta dawal drugiego hosta z niczego, wiec
+    `WASKA_PODSTAWA` MILCZALA na artykule stojacym realnie na jednym zrodle.
+    Uwaga, ktora zamyka sie sama od dolozonego wpisu, nie jest uwaga.
+
+    Odnosnik i tak trafia pod tekst — `stages.save` sklada sekcje `## Sources`
+    z tych samych `confirmed_claims`, a ona nie pyta o `not_fetched`. Czytelnik
+    widzi wiec dwa odnosniki, a wlasciciel dostaje uwage, ze pobrany jest jeden.
     """
     from urllib.parse import urlparse
 
     hosty: list[str] = []
     for c in card.get("confirmed_claims", []) or []:
+        if isinstance(c, dict) and c.get("not_fetched"):
+            continue
         url = c.get("url")
         if not url:
             continue

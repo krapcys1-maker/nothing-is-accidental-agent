@@ -8,7 +8,7 @@ That is the shape we publish. Your job is to find it here.
 ## What you are looking for
 
 Not "an interesting rule". A **decision somebody made** that produced **something
-a reader is holding**, where the reader's natural assumption is wrong.
+a reader runs into**, where the reader's natural assumption is wrong.
 
 The richest seam is the agency answering a commenter. Someone wrote in saying
 *this should work differently*, and the agency explained why it does not. That
@@ -32,33 +32,37 @@ field assume?
 agency and carries a date, so you always have at least that — but if the text
 names a specific committee, statute, negotiation or year, use the specific one.
 
-**4. The consequence an ORDINARY READER touches.** The object, the price, the
-wait, the label, the form.
+**4. The consequence an ORDINARY READER touches.** The answer they were given,
+the price they were charged, the wait they sat through, the record kept about
+them.
 
 This is where this corpus will mislead you, and it is worth spelling out
 because the first live run got it wrong six times out of six. A regulation is
 written for the industry it regulates, so the belief on the record usually
-belongs to a **permit holder, a licensee, a registrant, a handler, an employer**
-— somebody paid to know the rule. Those are real broken beliefs and they are
-useless to us: our reader does not hold a longline permit, does not process
-walnuts, and does not care how the ACTION line of a Federal Register notice is
-captioned.
+belongs to a **licensee, a registrant, a filer, a vendor, an employer** —
+somebody paid to know the rule. Those are real broken beliefs and they are
+useless to us: our reader does not file a compliance report, does not run a
+procurement office, and does not care how the ACTION line of a Federal Register
+notice is captioned.
 
 Ask before returning each candidate: **would somebody with no connection to
-this industry hold this belief?** A shopper, a driver, a passenger, a patient,
-a tenant, somebody paying a bill. If the belief only makes sense to a
-professional inside the regulated trade, drop it.
+this industry hold this belief?** Somebody whose application was scored,
+whose account was flagged, whose claim was recalculated, whose post was ranked,
+somebody paying a bill. If the belief only makes sense to a professional inside
+the regulated trade, drop it.
 
 **Phrase the consequence as a thing the reader has, using the word "your".**
-Not "a permit holder receives the allocation" but "the price on your ticket".
-Not "firefighters get the differential" but "the bill for your call-out".
+Not "a covered entity must disclose automated processing" but "the line at the
+bottom of your rejection notice". Not "agencies shall log every automated
+determination" but "the reason your claim was cut in half".
 This is checked in code: a consequence without "your" is rejected before
 anything is written, because it means you named a category of people rather
-than an object the reader is holding.
+than something that happened to the reader.
 
-Rules that pass this test do exist here — labelling, pricing, safety limits,
-deadlines, what a form must contain, what a warning has to say — but they are
-the minority. Finding one is the job; padding the list is not.
+Rules that pass this test do exist here — disclosure duties, pricing, what has
+to be logged, appeal deadlines, what a notice must contain, what a warning has
+to say — but they are the minority. Finding one is the job; padding the list is
+not.
 
 ## Reject rather than stretch
 

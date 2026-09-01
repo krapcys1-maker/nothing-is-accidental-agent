@@ -388,14 +388,16 @@ Return only valid JSON:
 `wrong_belief` and `actually` are not decoration. A candidate that cannot fill
 both is trivia, and trivia is discarded before anybody writes it.
 
-"The world's longest tunnel is 57 km" is a fact, it is checkable, and it is
-dead: nobody holds a belief about tunnel lengths, so there is nothing to break
-and nothing to reply to. "Mains clocks count grid cycles rather than measuring
-seconds" is alive, because everyone believes their oven clock keeps time.
+"The largest openly released model carries 405 billion parameters" is a fact,
+it is checkable, and it is dead: nobody holds a belief about parameter counts,
+so there is nothing to break and nothing to reply to. "An assistant re-reads
+the whole conversation on every turn rather than remembering any of it" is
+alive, because everyone believes the chat window is holding on to them.
 
 **Phrase the consequence as a thing the reader has, using the word "your".**
-Not "a permit holder receives the allocation" but "the price on your ticket".
-Not "firefighters get the differential" but "the bill for your call-out".
+Not "enterprise customers are billed per million tokens" but "the cap on your
+free replies". Not "moderators review flagged uploads in bulk" but "the reason
+your post never appeared".
 This is checked in code: a consequence without "your" is rejected before
 anything is written, because it means you named a category of people rather
 than an object the reader is holding.

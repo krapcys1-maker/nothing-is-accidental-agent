@@ -33,7 +33,7 @@
 {{"targets": [{{"index": <number>, "worth_it": true|false, "what_i_would_add": "<one concrete sentence, or empty when worth_it is false>", "why_not": "<one sentence, only when worth_it is false>"}}]}}
 ```
 
-#### `ciekawostki.md` (419 wierszy)
+#### `ciekawostki.md` (421 wierszy)
 
 **Pola wejściowe:** `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`
 
@@ -53,7 +53,7 @@
 {{"sources": [{{"url": "...", "title": "...", "publisher": "...", "class": "PRIMARY"|"SUPPORTING", "answers_why": true, "has_numbers": true, "note": "..."}}]}}
 ```
 
-#### `fedreg.md` (93 wierszy)
+#### `fedreg.md` (97 wierszy)
 
 **Pola wejściowe:** `data`, `tekst`, `tytul`, `url`, `urzad`
 
@@ -63,14 +63,14 @@
 {{"candidates": [{{"fact": "<one or two sentences, the thing itself, specific and checkable>", "wrong_belief": "<what an ordinary reader would assume, in their words>", "actually": "<what this document says instead>", "decision": "<who decided and when, from the text>", "consequence": "<what the reader touches, holds, pays or waits for>", "domain": "<the everyday area this belongs to>"}}]}}
 ```
 
-#### `forma.md` (87 wierszy)
+#### `forma.md` (98 wierszy)
 
 **Pola wejściowe:** `body`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"beliefs": [{{"belief": "<in your own words, one sentence>", "first_stated": "<verbatim sentence from the article>"}}], "support_only": [{{"quote": "<verbatim sentence>", "supports": <index into beliefs>}}], "hardest_fact": {{"quote": "<verbatim>", "why": "<one clause>"}}, "procedural_nearby": {{"quote": "<verbatim>"}}, "same_register": true|false, "reader_moment": {{"quote": "<verbatim>", "object": "<the thing the reader holds>"}}, "opening_claim": {{"quote": "<verbatim>", "already_familiar": true|false}}, "summary": "<one sentence>"}}
+{{"beliefs": [{{"belief": "<in your own words, one sentence>", "first_stated": "<verbatim sentence from the article>"}}], "support_only": [{{"quote": "<verbatim sentence>", "supports": <index into beliefs>}}], "hardest_fact": {{"quote": "<verbatim>", "why": "<one clause>"}}, "procedural_nearby": {{"quote": "<verbatim>"}}, "same_register": true|false, "reader_moment": {{"quote": "<verbatim>", "object": "<the one thing out of the reader's own life that is named>"}}, "opening_claim": {{"quote": "<verbatim>", "already_familiar": true|false}}, "summary": "<one sentence>"}}
 ```
 
 #### `grafika.md` (109 wierszy)
@@ -83,7 +83,7 @@
 {{"subject": "<the scene, in one line>", "why_this_scene": "<one sentence tying it to the article's mechanism>", "prompt": "<the full image prompt: your scene sentence and its concrete detail first, then the style block below copied word for word>"}}
 ```
 
-#### `klasyfikacja.md` (54 wierszy)
+#### `klasyfikacja.md` (58 wierszy)
 
 **Pola wejściowe:** `max_excerpt_chars`, `max_excerpts`, `publisher`, `question`, `text`, `title`, `url`
 
@@ -123,7 +123,7 @@
 {{"note": "<the note>", "words": <integer>, "fact_used": "<the single fact from the evidence this rests on>", "source_url": "<the url that fact came from>"}}
 ```
 
-#### `odpowiedz.md` (183 wierszy)
+#### `odpowiedz.md` (205 wierszy)
 
 **Pola wejściowe:** `cel_slow`, `comment`, `commenter`, `evidence`, `language`, `otwarcie`, `under_what`
 
@@ -163,7 +163,7 @@
 {{"restack": true|false, "reason": "<one sentence: why this is or is not worth passing on>", "sentence": "<your sentence, or empty string if restack is false>", "mechanism_named": "<the other place this same logic runs, or empty string>"}}
 ```
 
-#### `skaut.md` (637 wierszy)
+#### `skaut.md` (651 wierszy)
 
 **Pola wejściowe:** `count`, `history_json`, `pytania_czytelnikow`, `zaczyn_kanalow`
 

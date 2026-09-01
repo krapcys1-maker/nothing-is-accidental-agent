@@ -26,11 +26,12 @@ separate belief. A restatement in a new register is not a separate belief. A
 consequence that follows immediately from a belief already listed is not a
 separate belief.
 
-Worked example of the error to avoid. Suppose an article says: a symbol looked
-like a certification because of its shape; state laws then required it on
-everything; so it appeared on products nobody would ever process. That is **one**
-belief — the symbol spread far beyond what it certified — supported three ways.
-Listing it as three is the specific failure this section exists to catch.
+Worked example of the error to avoid. Suppose an article says: a benchmark
+score was reported from a model's single best run; vendors then quoted that one
+number in their marketing; so a system that fails most of the time was sold as
+one that passes. That is **one** belief — the headline score describes a best
+case and not ordinary behaviour — supported three ways. Listing it as three is
+the specific failure this section exists to catch.
 
 Only once the merged list is settled, find for each entry the sentence in the
 article where that belief first arrives, and quote it verbatim.
@@ -57,12 +58,22 @@ differently? Judge only what is on the page.
 ## 3. The reader moment
 
 Is there a place where the article stops talking about people in general and
-addresses **this reader**, holding **one concrete object**?
+addresses **this reader**, naming **one specific thing out of their own life**?
+
+It does not have to be a thing they can pick up. An answer they were given, a
+price they were charged, a wait they sat through, a setting they were never
+shown, a decision taken about them — each of these counts, as long as it is
+theirs and it is one thing rather than a class of things. Demanding a physical
+object here would fail every article whose subject has none.
 
 "68% of Americans believe" is not this. That is a statistic about other people.
-"The carton in your door shelf" is this.
+"The rejection you were never given a reason for" is this, and so is "the three
+seconds before your answer starts arriving".
 
-Quote it if it exists, and name the object. If there is none, return `null`.
+A generic second person is also not this. "You might wonder" and "you have
+probably heard" name nothing; do not accept them.
+
+Quote it if it exists, and name the thing. If there is none, return `null`.
 
 ## 4. The opening claim
 
@@ -76,7 +87,7 @@ that opening claim, not about the article as a whole.
 
 Return only valid JSON, shaped exactly as:
 
-{{"beliefs": [{{"belief": "<in your own words, one sentence>", "first_stated": "<verbatim sentence from the article>"}}], "support_only": [{{"quote": "<verbatim sentence>", "supports": <index into beliefs>}}], "hardest_fact": {{"quote": "<verbatim>", "why": "<one clause>"}}, "procedural_nearby": {{"quote": "<verbatim>"}}, "same_register": true|false, "reader_moment": {{"quote": "<verbatim>", "object": "<the thing the reader holds>"}}, "opening_claim": {{"quote": "<verbatim>", "already_familiar": true|false}}, "summary": "<one sentence>"}}
+{{"beliefs": [{{"belief": "<in your own words, one sentence>", "first_stated": "<verbatim sentence from the article>"}}], "support_only": [{{"quote": "<verbatim sentence>", "supports": <index into beliefs>}}], "hardest_fact": {{"quote": "<verbatim>", "why": "<one clause>"}}, "procedural_nearby": {{"quote": "<verbatim>"}}, "same_register": true|false, "reader_moment": {{"quote": "<verbatim>", "object": "<the one thing out of the reader's own life that is named>"}}, "opening_claim": {{"quote": "<verbatim>", "already_familiar": true|false}}, "summary": "<one sentence>"}}
 
 `reader_moment` is `null` when there is none. `beliefs` holds only merged,
 distinct beliefs — never one entry per sentence. Every `supports` index must

@@ -117,6 +117,20 @@ Fable'a; wcześniej ciążyła ku 1220.
 
 ## Otwarte
 
+- **Notki nie maja podlogi na zmyslone przezycie.** Podloga byla nalozona i
+  cofnieta 1 wrzesnia: obejmowala wszystkie piec typow zamiast samego MYSL,
+  `VAGUE_STUDY` blokowal zdania nazywajace zrodlo, pismo i date, a `config.py`
+  w ksztalcie OBSERWACJA wprost zamawia pierwsza osobe, ktora ta sama bramka
+  odrzuca. Przy `NOTE_CANDIDATES = 1` notka dnia przepadala bez sladu.
+- **`zakwestionuj_promocje` jest kodem nieosiagalnym.** Warunek przywrocony
+  swiadomie 1 wrzesnia. Cena znana: 25/26 sierpnia falsz o „The Watermark Was
+  Never a Verdict" wyszedl w swiat, bo artykul zostal w kolejce. Bez warunku
+  KAZDY powod odrzucenia notki kasowal artykul na stale, takze bez `--wyslij`.
+- **`co_dodamy` ginie w drodze do promptu** — `stages.comment_on` je czyta,
+  `run.py` nie przekazuje w zadnym z dwoch miejsc.
+- **`restackuj_w_kanale` zapisuje `udane=True` bez potwierdzenia**, a lokator
+  polubien nie ma `exact=True`. Oba nietkniete swiadomie: nikt nie zmierzyl na
+  zywo, jak Substack nazywa te stany, a zla bramka wylaczylaby funkcje CICHO.
 - **Skuteczność pobrań waha się od 1/6 do 6/6.** Martwe adresy (404) i blokady
   botów. Częściowo zaadresowane szukaniem dziesięciu źródeł zamiast sześciu.
 - **Stawki DeepSeeka niepotwierdzone** — każde takie wywołanie ma w bazie
@@ -133,6 +147,39 @@ Fable'a; wcześniej ciążyła ku 1220.
   `nieodpowiedziane()` chodzi tylko po naszych notkach.
 
 ## Dziennik
+
+### 2026-09-01 — audyt pieciu agentow: naprawy okazaly sie szkodliwe, kontrola je zlapala
+
+Pelny zapis: `docs/AUDYT_PIECIU_AGENTOW_2026-09-01.md`.
+
+Audyt prowadzony dwuetapowo, maksymalnie piecioma agentami naraz: najpierw
+naprawy, potem **niezalezna kontrola kazdej naprawy przez innego agenta**.
+19 znalezisk potwierdzonych, 0 falszywych — ale kontrola wykryla **7 szkod
+wprowadzonych przez same naprawy** i to jest glowny wynik.
+
+Najostrzejsze: wpisy porazek dolozone do dziennika zaczely na zawsze skreslac
+hosty przy NASZEJ awarii (timeout, padnieta sesja), a lista martwych hostow
+nie miala okna czasowego i domykala petle — zdjecie z listy wymagalo udanego
+komentarza, ktorego zapora nie pozwalala sprobowac. Osobno: podloga w `note()`
+plus zdjecie warunku przy promocji dawaly razem jedno „I noticed" kasujace
+artykul z kolejki NA STALE, z pustym powodem, przy zerze platnych wywolan,
+a dziennik pisal „(sprawdzenie faktow)".
+
+Trzy razy w tej sesji test przechodzil na kodzie martwym, bo odwzorowywal
+WYOBRAZENIE wywolania, nie produkcje. Stad dwie reguly, ktore weszly na stale:
+**zadnych asercji po tresci zrodla** (`"..." in ZRODLO` przechodzi takze na
+kodzie martwym) i **kontrdowod musi byc ODTWORZONY, nie opisany** — kazdy nowy
+test uruchamiany na pliku z `git show HEAD:...`, z prawdziwymi liczbami.
+
+Zamkniete m.in.: potwierdzanie polubien zamiast zakladania, hamulec per blok
+(byl globalny i gasil blok dyskusji, ktory daje 23 z 29 wypowiedzi), odwrocony
+bodziec w `norma.py` (zero dzialan dawalo 100%, piec dzialan 80%), bariera
+wstrzykniecia w `odpowiedz.md`, ktora pilnowala pustego miejsca, oraz fakt
+wracajacy do puli PO petli zamiast w jej srodku (cztery „kolejne proby" braly
+ten sam fakt).
+
+Dwie poprawki **cofniete swiadomie** — patrz „Otwarte".
+
 
 ### 2026-08-19 — galaz v2-test: bank, bibliotekarz, Fable do notek
 *(Galaz wmergowana w `main` i usunieta 23 sierpnia przy porzadkach — tresc zyje w `main`. Kopia testowa na serwerze `~/nia-v2-test` ZOSTALA, ze znacznikiem `TO_JEST_KOPIA_TESTOWA` i z odmowa publikacji.)*

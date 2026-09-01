@@ -548,7 +548,18 @@ def przeglad(dni: int = 3) -> None:
             print(f"  {w['kiedy'][5:16]}  {w['rodzaj']:<20} {str(w.get('gdzie') or w.get('komu') or '')[:44]}")
 
     # dlugosci: czy nie robimy wszystkiego w jednym rozmiarze
-    dlugosci = [w["slow"] for w in wpisy if isinstance(w.get("slow"), int)]
+    #
+    # TYLKO Z UDANYCH. Odkad porazki trafiaja do dziennika z kazdej galezi
+    # (1 wrzesnia), wpis nieudany tez niesie `slow` — bo tekst BYL napisany
+    # i oplacony, tylko nigdzie nie wyszedl. Rozklad liczony razem z nimi
+    # opisywalby wiec dlugosci, ktorych nikt nigdy nie przeczytal, a to
+    # zestawienie odpowiada na jedno pytanie: czy nasze WIDOCZNE wypowiedzi
+    # nie sa podejrzanie rowne. Przy zmierzonych 11 nieudanych komentarzach
+    # na 92 proby to jest 12 procent zmyslonego materialu w probce, i to
+    # z ogona rozkladu (porazki lubia sie kupic w jednym miejscu serii).
+    # Ta sama poprawka co w `srednia_wyswietlen`: mierzyc to, co istnieje.
+    dlugosci = [w["slow"] for w in wpisy
+                if w.get("udane") and isinstance(w.get("slow"), int)]
     if len(dlugosci) >= 3:
         import statistics
         print("\n=== DLUGOSCI WYPOWIEDZI ===")

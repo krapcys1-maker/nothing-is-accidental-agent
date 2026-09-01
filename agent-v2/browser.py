@@ -113,6 +113,9 @@ def dopisz_wynik(rodzaj: str, wynik: dict, **szczegoly) -> None:
     Zapis jest IDEMPOTENTNY: pierwszy, ktory zdazy, wygrywa. Dzieki temu
     sciezka sukcesu zapisuje szczegoly, a `finally` domyka tylko te przebiegi,
     ktore do niej nie doszly.
+
+    KAZDA PORAZKA NIESIE TEZ, O KIM MOWI — pole `o_hoscie`. Patrz komentarz
+    ponizej i `hosty_gdzie_komentarz_nie_wchodzi`.
     """
     if wynik.get("_zapisane"):
         return
@@ -124,6 +127,25 @@ def dopisz_wynik(rodzaj: str, wynik: dict, **szczegoly) -> None:
             or ("nie znalazlem przycisku wysylki"
                 if wynik.get("przycisk_widoczny") is False else "")
             or "Substack nie potwierdzil, ze wyszlo")
+
+        # O KIM MOWI TA PORAZKA: o CELU czy o NAS.
+        #
+        # Odkad porazki trafiaja do dziennika z KAZDEJ galezi (a nie tylko
+        # z „kliknelismy i nie potwierdzilo"), sam wpis z adresem przestal byc
+        # dowodem na cokolwiek po stronie hosta. Timeout, padnieta sesja albo
+        # zamkniety Chrome to awaria po NASZEJ stronie — a
+        # `hosty_gdzie_komentarz_nie_wchodzi` czytalo je tak samo jak odmowe
+        # Substacka i po dwoch takich wpisach kasowalo host na zawsze.
+        #
+        # `klikniete` ustawia sciezka publikacji TUZ PO nacisnieciu przycisku
+        # wysylki. True znaczy: przegladarka zyla, strona sie wczytala, pole
+        # bylo, tekst wszedl, przycisk byl i zostal nacisniety — a mimo to
+        # potwierdzenie u Substacka nic nie widzi. To JEDYNA klasa porazki,
+        # ktora mowi cos o hoscie, i dokladnie ta, ktora karmila liste przed
+        # 1 wrzesnia. Wszystko inne (brak pola, brak przycisku, wyjatek) nadal
+        # zostawia slad i nadal liczy sie do `pod_rzad_zle` i do raportu, ale
+        # nie skresla hosta.
+        szczegoly["o_hoscie"] = bool(wynik.get("klikniete"))
 
     # SLAD PRZEBIEGU — patrz komentarz przy `_W_SERII`. Liczymy TU, a nie w
     # `run.py`, zeby zadna sciezka publikacji nie mogla o tym zapomniec:
@@ -1771,6 +1793,102 @@ def _autor_przy_przycisku(przycisk) -> dict[str, str] | None:
     return {"nazwa": nazwa or uchwyt, "uchwyt": uchwyt}
 
 
+# ODCZYT STANU PYTA NAJPIERW, CZY WEZEL NADAL JEST W DOKUMENCIE.
+#
+# Docstring `potwierdz_polubienie` zakladal lancuch: React podmienia wezel ->
+# uchwyt odpiety -> `evaluate` rzuca -> `None` -> liczymy na korzysc. Srodkowe
+# ogniwo jest ZALOZENIEM, ktorego nikt tu nie zmierzyl, a Playwrighta nie ma
+# lokalnie i zywych przebiegow nie wolno robic dla samego sprawdzenia. Jesli
+# odpiety wezel zyje dalej w stercie JS — a tak dziala DOM, dopoki cokolwiek
+# trzyma referencje — to `evaluate` NIE rzuci, tylko odda STARE atrybuty.
+# Wyszloby `po == przed`, czyli twarde „nie udalo sie" i utrata slotu przy
+# polubieniu, ktore weszlo.
+#
+# Nie zgadujemy wiec, co zrobi Playwright: pytamy o to sam wezel. `isConnected`
+# jest wlasnoscia DOM (nie Playwrighta) i mowi wprost, czy element wisi jeszcze
+# w dokumencie. Wezel poza dokumentem oddaje `null`, czyli „nie wiem" — ta sama
+# odpowiedz, co rzucony wyjatek, i ta sama, ktora `potwierdz_polubienie` liczy
+# na korzysc polubienia. Odpowiedz przestaje zalezec od tego, czy cos rzuci.
+_STAN_PRZYCISKU = """
+el => {
+  if (!el.isConnected) return null;
+  const a = n => el.getAttribute(n) || '';
+  return [a('aria-pressed'), a('aria-checked'), a('aria-label'), a('title'),
+          a('class'), (el.innerText || '').trim(), el.innerHTML].join('|');
+}
+"""
+
+
+def _uchwyt_wezla(lokator):
+    """Uchwyt do KONKRETNEGO wezla DOM, albo None. Nie podnosi wyjatku.
+
+    Lokator `przyciski.nth(i)` wyszukuje po nazwie „Like" za kazdym razem od
+    nowa, wiec po polubieniu — gdy Substack przerysuje przycisk — ten sam
+    `nth(i)` moze pokazywac juz INNY wpis. Do porownania „przed i po" trzeba
+    czegos, co zostaje przy tym samym elemencie.
+    """
+    try:
+        return lokator.element_handle(timeout=5000)
+    except Exception:
+        return None
+
+
+def _stan_przycisku(uchwyt) -> str | None:
+    """Jak przycisk wyglada — wszystkie sygnaly naraz, sklejone w jeden napis.
+
+    Nie zgadujemy, PO CZYM Substack pokazuje polubienie. Audyt z 23 sierpnia
+    proponowal `aria-pressed`, ale tego atrybutu nikt na tym kanale nie
+    zmierzyl, a sprawdzanie jednego atrybutu, ktorego moze nie byc, dawaloby
+    „nie udalo sie" przy KAZDYM polubieniu. Bierzemy wiec wszystko, co widac
+    na przycisku: stan, nazwe, klase, tekst i wnetrze. Polubienie, ktore
+    weszlo, zmienia co najmniej jedno — licznik, napis albo wypelnienie serca.
+
+    None znaczy „nie odczytalem", nie „bez zmian" — patrz `potwierdz_polubienie`.
+    Sa TRZY drogi do tego None i wszystkie prowadza do tej samej odpowiedzi:
+    brak uchwytu, wyjatek (zniszczony kontekst po nawigacji) i `null` oddane
+    przez sam skrypt, gdy wezel wypadl z dokumentu. Ostatnia jest tu nowa
+    i celowa — patrz komentarz przy `_STAN_PRZYCISKU`.
+    """
+    if uchwyt is None:
+        return None
+    try:
+        stan = uchwyt.evaluate(_STAN_PRZYCISKU)
+    except Exception:
+        return None
+    return stan if isinstance(stan, str) else None
+
+
+def potwierdz_polubienie(uchwyt, przed: str | None) -> bool | None:
+    """Czy przycisk po klknieciu wyglada inaczej niz przed nim.
+
+    True  — zmienil sie, klik cos zrobil.
+    False — oba stany odczytane i IDENTYCZNE, czyli klik nie zrobil nic.
+    None  — nie wiadomo (nie dalo sie odczytac stanu; React potrafi podmienic
+            caly wezel, a wtedy uchwyt jest odpiety od dokumentu).
+
+    NIE OPIERAMY SIE NA TYM, ZE COS RZUCI. Pierwsza wersja tego opisu zakladala,
+    ze odpiety wezel wywoła wyjatek w `evaluate` — zalozenie, ktorego nikt nie
+    zmierzyl, a ktore przy odpietym (lecz zywym) wezle daje odczyt STARYCH
+    atrybutow, czyli `po == przed`, czyli twarde False. Dlatego skrypt sam pyta
+    o `isConnected` i oddaje `null`, gdy wezla nie ma juz w dokumencie.
+
+    NIEPEWNOSC LICZYMY NA KORZYSC POLUBIENIA i to jest decyzja, nie
+    niedbalstwo. Dziennik jest JEDYNYM licznikiem lajkow dnia — Substack nie
+    oddaje naszych polubien zadnym endpointem, patrz `z_dziennika_dzis` —
+    wiec falszywe „nie udalo sie" zaniza licznik i nastepny przebieg bierze
+    pelny dzienny przydzial od nowa. Ten sam mechanizm zamienil budzet
+    1 subskrypcji na 1 subskrypcje NA PRZEBIEG (25 i 26 sierpnia: plan 1,
+    wykonanie 2). Falszywe „udalo sie" kosztuje jeden slot, falszywe „nie
+    udalo sie" kosztuje cala dzienna norme — dlatego progi sa niesymetryczne.
+    """
+    if przed is None:
+        return None
+    po = _stan_przycisku(uchwyt)
+    if po is None:
+        return None
+    return po != przed
+
+
 def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
     """Polubienia w kanale czytelnika.
 
@@ -1791,6 +1909,17 @@ def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
                   wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS + 6000)
 
+        # OTWARTE, SWIADOMIE NIETKNIETE: ten lokator nie ma `exact=True`, wiec
+        # Playwright dopasowuje po PODCIAGU — zlapie takze „Liked" i „Unlike",
+        # gdyby Substack tak nazywal przycisk po polubieniu. Klikniecie
+        # w polubiony wpis ZDEJMUJE polubienie, a sprawdzenie stanu ponizej
+        # tego nie wylapie: zdjecie polubienia tez zmienia przycisk.
+        # `_klik_na_profilu` ma `exact=True` wlasnie dlatego.
+        #
+        # Nie zmieniam tego bez pomiaru na zywym kanale. Gdyby pelna nazwa
+        # brzmiala inaczej niz „Like", `exact=True` wylaczyloby polubienia
+        # CALKOWICIE i nikt by tego nie zauwazyl — dziennik zapisywalby po
+        # prostu zero prob, czyli to samo, co spokojny dzien.
         przyciski = page.get_by_role("button", name="Like")
         wynik["znalezione"] = przyciski.count()
         print(f"  do polubienia w kanale: {wynik['znalezione']}", flush=True)
@@ -1817,14 +1946,41 @@ def polub_w_kanale(ile: int, wyslij: bool = False) -> dict[str, Any]:
                     wynik["polubione"] += 1
                     continue
                 kandydat.scroll_into_view_if_needed(timeout=8000)
+                # KLIKNIECIE NIE JEST DOWODEM — ta sama zasada, ktora przy
+                # komentarzu, notce i odpowiedzi jest przestrzegana od dawna,
+                # a przy polubieniach nie byla wcale. Zapis szedl w NASTEPNEJ
+                # linii po `click()`, wiec wszystkie 151 polubien w dzienniku
+                # na 31 sierpnia bylo „udanych" z definicji. Klik, ktory
+                # Playwright wykonal, a Substack odrzucil (limit po ich
+                # stronie, sesja wygasla w polowie przebiegu, przycisk
+                # przerysowany przez Reacta miedzy `is_visible` a `click`),
+                # zjadal slot z dziennego budzetu i zawyzal jedyna miare
+                # skutecznosci, jaka `alarm.przeglad` ma.
+                uchwyt = _uchwyt_wezla(kandydat)
+                przed = _stan_przycisku(uchwyt)
                 kandydat.click(timeout=8000)
+                # Przycisk przerysowuje sie dopiero po odpowiedzi Substacka.
+                page.wait_for_timeout(1500)
+                potwierdzone = potwierdz_polubienie(uchwyt, przed)
+                opis = ({"publikacja": kto["nazwa"], "komu": kto["uchwyt"]}
+                        if kto else {})
+                if potwierdzone is False:
+                    print("    (klikniete, ale przycisk sie nie zmienil —"
+                          " nie licze tego jako polubienia)", flush=True)
+                    zapisz_w_dzienniku("polubienie", udane=False,
+                                       powod="przycisk nie zmienil stanu"
+                                             " po klknieciu", **opis)
+                    page.wait_for_timeout(
+                        int(random.uniform(*config.ODSTEPY["lajk"]) * 1000))
+                    continue
                 wynik["polubione"] += 1
-                print("  polubione %d/%d%s"
+                print("  polubione %d/%d%s%s"
                       % (wynik["polubione"], ile,
-                         ("  — %s" % kto["nazwa"]) if kto else ""), flush=True)
+                         ("  — %s" % kto["nazwa"]) if kto else "",
+                         "" if potwierdzone else "  (bez potwierdzenia)"),
+                      flush=True)
                 zapisz_w_dzienniku("polubienie", udane=True,
-                                   **({"publikacja": kto["nazwa"],
-                                       "komu": kto["uchwyt"]} if kto else {}))
+                                   potwierdzone=bool(potwierdzone), **opis)
                 page.wait_for_timeout(
                     int(random.uniform(*config.ODSTEPY["lajk"]) * 1000))
             except Exception as exc:
@@ -2511,6 +2667,7 @@ def wystaw_odpowiedz_pod_artykulem(
 
         if wyslij and wyslac is not None:
             wyslac.click()
+            wynik["klikniete"] = True     # jak w `wystaw_komentarz`
             page.wait_for_timeout(8000)
             wynik["wyslane"] = potwierdz_komentarz(page, url_artykulu, tekst)
             dopisz_wynik("odpowiedz_pod_artykulem", wynik,
@@ -2524,6 +2681,24 @@ def wystaw_odpowiedz_pod_artykulem(
         wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
+        # TA SAMA DZIURA, CO W `wystaw_komentarz` — patrz komentarz przy jej
+        # `finally`. Tutaj jedyne wyjscie bez zapisu bylo najgorsze z mozliwych:
+        # `raise RuntimeError("nie znalazłem przycisku odpowiedzi")` znaczy, ze
+        # ktos napisal pod NASZYM artykulem i nie dostal odpowiedzi — a dziennik
+        # wygladal, jakbysmy w ogole nie probowali. Ta funkcja nie ma sciezki
+        # „pominiete", wiec nie ma tu czego wykluczac.
+        #
+        # `try` wokol zapisu — z tego samego powodu, co w `wystaw_komentarz`:
+        # budowanie argumentow potrafi rzucic, a wtedy `page.close()`,
+        # `browser.close()` i `p.stop()` ponizej nie wykonuja sie wcale.
+        try:
+            if wyslij:
+                dopisz_wynik("odpowiedz_pod_artykulem", wynik,
+                             gdzie=url_artykulu, komu=autor,
+                             slow=len(tekst.split()), tekst=tekst[:300])
+        except Exception as exc:
+            print("  (nie zapisalem odpowiedzi pod artykulem do dziennika: %s)"
+                  % type(exc).__name__, flush=True)
         page.close()
         browser.close()
         p.stop()
@@ -2756,6 +2931,7 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
 
         if wyslij and przycisk is not None:
             przycisk.click()
+            wynik["klikniete"] = True     # jak w `wystaw_komentarz`
             page.wait_for_timeout(6000)
             wynik["wyslane"] = potwierdz_odpowiedz(page, note_id, tekst)
             dopisz_wynik(rodzaj, wynik,
@@ -2770,6 +2946,34 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
         wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
+        # TA SAMA DZIURA, CO W `wystaw_komentarz` — patrz komentarz przy jej
+        # `finally`. Tutaj boli podwojnie, bo `raise RuntimeError("nie
+        # otworzyłem pola odpowiedzi")` wyzej to NAJCZESTSZA awaria tej
+        # funkcji (25 sierpnia dwie odpowiedzi przepadly na jednym timeoucie),
+        # a wychodzila przez `except` i nie zostawiala nic.
+        #
+        # SPROSTOWANIE Z 1 WRZESNIA: poprzednia wersja tego komentarza mowila,
+        # ze 7 nieudanych odpowiedzi na 47 prob (pomiar z 30 sierpnia) bylo
+        # „wszystkie niewidoczne". Nieprawda — wlasnie z dziennika ten pomiar
+        # pochodzi. Zapis stal bezwarunkowo w galezi wysylkowej, wiec klasa
+        # „kliknelismy, odpowiedzi nie ma w watku" byla widoczna od poczatku.
+        # Niewidoczne bylo to, co NIE DOSZLO do klikniecia: nieotwarte pole
+        # odpowiedzi, brak przycisku wysylki i kazdy wyjatek.
+        #
+        # `rodzaj` bierzemy z argumentu, bo ta jedna funkcja robi dwie rzeczy
+        # i licznik wolumenow musi dostac to samo slowo, co przy powodzeniu.
+        #
+        # `try` wokol zapisu — z tego samego powodu, co w `wystaw_komentarz`:
+        # budowanie argumentow potrafi rzucic, a wtedy `page.close()`,
+        # `browser.close()` i `p.stop()` ponizej nie wykonuja sie wcale.
+        try:
+            if wyslij and not wynik.get("pominiete"):
+                dopisz_wynik(rodzaj, wynik, gdzie=f"note/c-{note_id}",
+                             slow=len(tekst.split()), tekst=tekst[:300],
+                             **(kontekst or {}))
+        except Exception as exc:
+            print("  (nie zapisalem odpowiedzi do dziennika: %s)"
+                  % type(exc).__name__, flush=True)
         page.close()
         browser.close()
         p.stop()
@@ -2950,8 +3154,40 @@ def zapomnij_platny_host(host: str) -> None:
         pass
 
 
-def hosty_gdzie_komentarz_nie_wchodzi(min_prob: int = 2) -> set[str]:
-    """Hosty, gdzie probowalismy >=2 razy i ANI RAZ komentarz nie wszedl.
+# OKNO PAMIECI O MARTWYCH HOSTACH — I JEDYNA DROGA ZEJSCIA Z TEJ LISTY.
+#
+# Ta lista jest TWARDA BRAMKA: `mozna_komentowac` odmawia przed proba, a
+# `run.dzien` odsiewa cel jeszcze przed ocena, wiec host raz na niej zamkniety
+# nie ma jak zdobyc UDANEGO komentarza, ktory by go zdjal. Bez okna czasowego
+# petla domyka sie na zawsze — a dziennik nie jest nigdzie przycinany ani
+# rotowany, wiec wpis sprzed roku blokowalby host dzisiaj.
+#
+# OKNO JEST WIEC WYJSCIEM AWARYJNYM, nie ozdoba. Po zamknieciu hosta
+# przestajemy do niego chodzic, wiec nowe wpisy nie powstaja — a gdy dwa stare
+# wypadna z okna, licznik spada ponizej progu i host wraca do puli sam.
+# Kosztuje to jedna probe raz na 14 dni.
+#
+# CZTERNASCIE DNI, i te liczbe wybralem tak:
+#   - musi byc DLUZSZE niz `config.ODSTEP_DNI_NA_PUBLIKACJE` = 4 dni, bo tyle
+#     `kanal.zapamietaj_komentarz` i tak trzyma nas z dala od publikacji,
+#     u ktorej juz bylismy. Okno krotsze niz 4 dni wygasaloby, zanim host
+#     w ogole wroci do rozwazenia — czyli pamiec nie oszczedzalaby ani jednej
+#     proby i cala funkcja bylaby dekoracja;
+#   - jest ROWNE `OSTRZEGAJ_PONIZEJ_DNI` = 14 z gory tego pliku, jedynej innej
+#     stalej dniowej w `browser.py` — nie mnoze konwencji;
+#   - przy zmierzonym tempie 92 prob komentarza na 7 dni (30 sierpnia 2026),
+#     czyli ~13 dziennie, w oknie miesci sie okolo 180 prob. Prog dwoch
+#     nieudanych odnosi sie wiec do gestej, biezacej probki, a nie do sumy
+#     „od poczatku dziejow";
+#   - a cena pomylki w druga strone jest mala: host, ktory naprawde nie
+#     przyjmuje komentarzy, wraca na liste po dwoch kolejnych probach.
+PAMIEC_MARTWYCH_HOSTOW_DNI = 14
+
+
+def hosty_gdzie_komentarz_nie_wchodzi(min_prob: int = 2,
+                                      dni: int = PAMIEC_MARTWYCH_HOSTOW_DNI) -> set[str]:
+    """Hosty, gdzie w ostatnich `dni` dniach probowalismy >=2 razy i ANI RAZ
+    komentarz nie wszedl.
 
     TA SAMA WADA, CO PRZY ZRODLACH, w innym miejscu. `hosty_ktore_nigdy_nie_
     dzialaly` powstalo, bo porazki pobierania byly zapisywane od poczatku i
@@ -2971,14 +3207,35 @@ def hosty_gdzie_komentarz_nie_wchodzi(min_prob: int = 2) -> set[str]:
     wystawienie kasuje host z listy, wiec zmiana ustawien u wydawcy odblokowuje
     go sama, bez naszej ingerencji.
 
+    LICZA SIE TYLKO PORAZKI, KTORE MOWIA O HOSCIE (`o_hoscie` — patrz
+    `dopisz_wynik`). Od 1 wrzesnia porazki trafiaja do dziennika z KAZDEJ
+    galezi `wystaw_komentarz`, wiec sam nieudany wpis z adresem przestal byc
+    dowodem czegokolwiek: timeout, padnieta sesja i zamkniety Chrome zapisuja
+    sie tak samo jak odmowa Substacka. Odtworzone na atrapie: dwa wpisy
+    `TimeoutError`/`TargetClosedError`, dwa rozne posty, jeden host — i
+    `slowboring.com` uznany za martwy, choc nie powiedzial nam ani slowa.
+
+    STARE WPISY, BEZ POLA `o_hoscie`, NIE LICZA SIE WCALE. To jest wybor, nie
+    przeoczenie. Kuszace bylo uznac je za dowod na hosta — bo przed 1 wrzesnia
+    zapis stal wylacznie w galezi „kliknelismy i nie potwierdzilo", czyli
+    dokladnie w tej jednej klasie. Ale poprawka lezala w drzewie roboczym
+    zanim ktokolwiek ja przejrzal, wiec czesc wpisow bez tego pola moze juz
+    pochodzic z niej i byc zwyklym timeoutem. Z samego wpisu tych dwoch
+    zrodel nie odroznimy. Uznanie ich za dowod odtworzyloby wade na danych,
+    ktore juz leza na dysku; zignorowanie kosztuje najwyzej jedna dodatkowa
+    probe na host, po ktorej powstaja juz wpisy nowego ksztaltu. Po
+    PAMIEC_MARTWYCH_HOSTOW_DNI dniach pytanie znika samo.
+
     Podzial pracy z `mozna_komentowac` jest celowy: tam zostaje optymizm wobec
     hosta NIEZNANEGO („przy watpliwosci probuje"), tu jest pamiec o hoscie
     SPRAWDZONYM. Optymizm kosztuje wtedy jedna probe, a nie dziesiata.
     """
     import collections as _c
     import json as _json
+    from datetime import datetime, timedelta, timezone
     from urllib.parse import urlparse
 
+    granica = datetime.now(timezone.utc) - timedelta(days=dni)
     udane: _c.Counter = _c.Counter()
     nieudane: _c.Counter = _c.Counter()
     try:
@@ -2994,6 +3251,16 @@ def hosty_gdzie_komentarz_nie_wchodzi(min_prob: int = 2) -> set[str]:
                 continue
             if not isinstance(w, dict) or w.get("rodzaj") != "komentarz":
                 continue
+            # Wpis bez czytelnej daty pomijamy w calosci. Nie umiemy powiedziec,
+            # czy jest z wczoraj czy sprzed roku, a to jest tu cala roznica.
+            try:
+                kiedy = datetime.fromisoformat(str(w.get("kiedy") or ""))
+            except ValueError:
+                continue
+            if kiedy.tzinfo is None:
+                kiedy = kiedy.replace(tzinfo=timezone.utc)
+            if kiedy < granica:
+                continue
             gdzie = str(w.get("gdzie") or "")
             # Notki nie maja hosta w tym sensie — komentuje pod nimi kazdy
             # i nie ma tam czego pamietac.
@@ -3002,7 +3269,10 @@ def hosty_gdzie_komentarz_nie_wchodzi(min_prob: int = 2) -> set[str]:
             host = urlparse(gdzie).netloc.lower()
             if not host:
                 continue
-            (udane if w.get("udane") else nieudane)[host] += 1
+            if w.get("udane"):
+                udane[host] += 1
+            elif w.get("o_hoscie"):
+                nieudane[host] += 1
     except OSError:
         return set()
     return {h for h, ile in nieudane.items()
@@ -3338,6 +3608,12 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
 
         if wyslij and wynik["przycisk_widoczny"]:
             przycisk.click()
+            # OD TEJ LINII PORAZKA MOWI O HOSCIE, NIE O NAS — patrz
+            # `dopisz_wynik`. Wszystko po naszej stronie juz sie udalo:
+            # przegladarka, strona, pole, tekst, przycisk. Jesli komentarza
+            # potem nie widac, to jest cecha tego hosta i tylko takie wpisy
+            # wolno liczyc `hosty_gdzie_komentarz_nie_wchodzi`.
+            wynik["klikniete"] = True
             page.wait_for_timeout(6000)
             # Kliknięcie przycisku nie jest dowodem, że komentarz został przyjęty,
             # a agent bez człowieka nie ma komu tego sprawdzić. Pytamy więc Substacka.
@@ -3358,6 +3634,52 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
         wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
         print(f"  BŁĄD: {wynik['blad']}", flush=True)
     finally:
+        # PORAZKA TEZ MUSI ZOSTAWIC SLAD. Zapis stal wylacznie w galezi
+        # „wysylamy i przycisk byl", wiec TRZY konce tej funkcji nie trafialy
+        # do dziennika w ogole: „nie ma pola komentarza pod tym postem"
+        # (zdarzylo sie dwa razy pierwszego dnia na produkcji — scalesignals
+        # i glowwithella), brak przycisku wysylki i kazdy wyjatek.
+        #
+        # CO BYLO WIDAC, A CO NIE — poprawione 1 wrzesnia, bo poprzednia wersja
+        # tego komentarza mowila nieprawde. Zapis w galezi wysylkowej stal TRZY
+        # LINIE po `potwierdz_komentarz` i BEZ warunku na powodzenie, wiec
+        # klasa „kliknelismy, Substack nie pokazuje" byla w dzienniku od
+        # poczatku — to wlasnie z niej pochodzi pomiar 11 nieudanych na 92
+        # proby z 30 sierpnia, `pod_rzad_nieudanych("komentarz")` te porazki
+        # widzial, a `hosty_gdzie_komentarz_nie_wchodzi` dostawalo dokladnie
+        # ten jeden, najlepszy sygnal i nic poza nim.
+        #
+        # BRAKOWALO natomiast trzech wymienionych wyzej klas — i tylko ich.
+        # Kosztowaly one: nieuwzgledniona porazka w serii (wycofanie po trzech
+        # z rzedu ruszalo z opoznieniem), brak powodu w raporcie i cisze tam,
+        # gdzie awaria interfejsu wygladala jak spokojny dzien. `wystaw_notke`
+        # i `_klik_na_profilu` domykaly to w `finally` od dawna — tamta
+        # poprawka nie objela komentarzy.
+        #
+        # POMINIETYCH NIE ZAPISUJEMY, i to jest swiadoma roznica wobec notki.
+        # `juz_sie_odezwalismy` oddaje True takze wtedy, gdy nie odczytalo
+        # naszego id („nie wiem, czyli nie ryzykuje"), wiec wpis „udany
+        # komentarz" wymyslilby dzialanie, ktorego nie bylo — i zjadl slot
+        # z dziennego licznika, ktory dla komentarzy jest jedynym, jaki mamy.
+        # Z tego samego powodu `run.dzien` nie liczy pominiecia do normy dnia.
+        #
+        # ZAPIS NIE MOZE POWSTRZYMAC SPRZATANIA. Wolanie stoi w `finally`
+        # PRZED `page.close()`, a buduje argumenty — `len(tekst.split())`,
+        # rozpakowanie `kontekst` — wiec potrafi rzucic samo z siebie.
+        # Zmierzone side-by-side na atrapie: przy `tekst`, ktory nie jest
+        # napisem, wersja bez tej oslony rzucala `AttributeError`, a
+        # `page.close()`, `browser.close()` i `p.stop()` NIE WYKONYWALY SIE
+        # WCALE — czyli jedna zla wartosc zostawiala otwarta strone Chrome
+        # i proces sterownika na caly przebieg. Dziennik, ktory wywala agenta,
+        # bylby gorszy od jego braku (patrz `zapisz_w_dzienniku`).
+        try:
+            if wyslij and not wynik.get("pominiete"):
+                dopisz_wynik("komentarz", wynik, gdzie=url,
+                             slow=len(tekst.split()), tekst=tekst[:300],
+                             nasz_id=wynik.get("id"), **(kontekst or {}))
+        except Exception as exc:
+            print("  (nie zapisalem komentarza do dziennika: %s)"
+                  % type(exc).__name__, flush=True)
         page.close()
         browser.close()
         p.stop()
@@ -3520,6 +3842,33 @@ def restackuj_w_kanale(
                     numer_restacka = numer_naszej_notki(page, zdanie, prob=2)
                 except Exception:
                     pass
+                # OTWARTE, SWIADOMIE NIETKNIETE: `udane=True` ponizej opiera sie
+                # na samym lancuchu klikniec, a nie na potwierdzeniu. To jest ta
+                # sama doktryna „klikniecie nie jest dowodem", ktora obowiazuje
+                # przy komentarzu, notce, odpowiedzi i — od 31 sierpnia — przy
+                # polubieniu. Restack zostaje jedynym dzialaniem, ktore jej nie
+                # przestrzega, i wiem o tym.
+                #
+                # DLACZEGO NIE ZAMYKAM TEGO TERAZ. Jedyny sygnal, jaki mam pod
+                # reka, to `numer_restacka` — i on juz jest w dzienniku, w polu
+                # `id`. Pusty `id` znaczy tylko tyle, ze nie odnalazlem notki na
+                # profilu przy `prob=2`, czyli w dwoch podejsciach z jedna
+                # osmiosekundowa przerwa. Jak zawodny jest taki odczyt, wiadomo
+                # z pomiaru poprzedniego mechanizmu: `id_z_odpowiedzi` trafil
+                # numer 6 razy na 29 notek. Gdybym na tej podstawie postawil
+                # `udane=False`, restacki masowo znikalyby z licznika, a licznik
+                # z dziennika jest dla nich jedyny — Substack nie oddaje ich
+                # zadnym endpointem. Falszywe „nie udalo sie" kosztuje tu cala
+                # dzienna norme, falszywe „udalo sie" jeden slot (patrz
+                # `potwierdz_polubienie`), wiec zgadywanie jest drozsze niz
+                # opisane ryzyko.
+                #
+                # CO ZAMKNELOBY SPRAWE: policzyc na produkcji, w ilu wpisach
+                # `restack` pole `id` jest niepuste. Jesli wychodzi blisko 100
+                # procent, `id` nadaje sie na warunek i wtedy — dopiero wtedy —
+                # `udane` powinno od niego zalezec. Nie zgaduje, jak Substack
+                # nazywa stan przycisku po restacku, i nie ruszam tego bez tej
+                # liczby.
                 zapisz_w_dzienniku("restack", udane=True,
                                    komu=notka.get("autor", ""),
                                    slow=len(zdanie.split()),

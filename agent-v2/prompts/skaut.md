@@ -416,20 +416,34 @@ question strings. `ranking` holds zero-based indices into `topics`.
 
 **`scale`** — who the outcome binds. One of exactly these words:
 
-- `ONE_PERSON` — the reader, or one customer, one tenant, one passenger.
-- `A_PLACE` — one shop, one precinct, one building, one flight.
-- `AN_INDUSTRY` — everyone who trades, flies, insures, ships.
+- `ONE_PERSON` — the reader, or one applicant, one patient, one account holder.
+- `A_PLACE` — one employer, one hospital, one school district, one platform.
+- `AN_INDUSTRY` — everyone who lends, hires, insures, diagnoses or moderates
+  under the same rulebook.
 - `A_COUNTRY` — the state itself has to keep functioning through it.
 
 This is the second thing that separates an article from a note, and it is easy
-to miss because both feel dramatic while you are writing them down. One shop's
-camera misidentifying one customer is `A_PLACE`: one branch, one complaint, a
-form to fill in. A national benefits system flagging families as fraudsters is
-`A_COUNTRY`: the money has to be clawed back or repaid, ministers have to answer
-for it, and every clause written afterwards exists because it went wrong at that
-scale first.
+to miss because both feel dramatic while you are writing them down. One
+employer's screening tool ranking one applicant out is `A_PLACE`: one company,
+one complaint, a form to fill in. A national benefits system flagging families
+as fraudsters is `A_COUNTRY`: the money has to be clawed back or repaid,
+ministers have to answer for it, and every clause written afterwards exists
+because it went wrong at that scale first.
 
 Both are picturable. Both have a rulebook. Only one of them stops a country.
+
+**Judge who the OUTCOME binds, not how far the technology has spread.** Every
+subject on this list involves software sold in many countries; that fact is
+true of all of them and therefore tells you nothing. If the reason you gave for
+a scale would still hold after deleting the specific decision from the topic,
+it is not a reason.
+
+`AN_INDUSTRY` is the one that gets over-claimed, and it has already collapsed
+once: on a live run eight topics out of eight came back with it, so the field
+carried no information and the expensive path was picked at random. It is
+correct only when the SAME outcome is imposed across a trade by a shared rule,
+a shared model or a shared supplier. A hundred firms each buying a different
+tool is a hundred `A_PLACE` topics, not one industry.
 
 Do not inflate this. An assistant refusing your prompt is `ONE_PERSON` however
 annoying it was.

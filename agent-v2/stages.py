@@ -420,6 +420,49 @@ WYBOR_SYSTEM = (
 )
 
 
+def _ile_reakcji(k: dict[str, Any]) -> str:
+    """„(reakcji: N)" TYLKO wtedy, gdy zrodlo to pole w ogole wypelnia.
+
+    Dopisek „(reakcji: 0)" przy komentarzu z miejsca, w ktorym reakcji NIKT nie
+    liczy, nie jest zerem — jest brakiem pomiaru podanym modelowi jako pomiar.
+    Dwa z trzech zrodel (`nieodpowiedziane`, `odpowiedzi_na_nasze_komentarze`)
+    nie oddaja tego pola wcale, wiec model widzial trzydziesci martwych zer
+    i uczyl sie z nich, ze te watki sa martwe.
+    """
+    return "" if k.get("reakcje") is None else " (reakcji: %d)" % (k["reakcje"] or 0)
+
+
+def _po_rowno_ze_zrodel(komentarze: list[dict[str, Any]],
+                        ile: int) -> list[dict[str, Any]]:
+    """Wycinek listy, ktory NIE MOZE zaglodzic zadnego miejsca rozmowy.
+
+    Trzy zrodla wypelniaja rozne pola (patrz `wybierz_do_odpowiedzi`), wiec
+    jeden wspolny ranking zawsze premiuje to zrodlo, ktore mierzy najwiecej.
+    Bierzemy wiec na zmiane: pierwszy z kazdego zrodla, potem drugi z kazdego.
+
+    Wewnatrz zrodla liczba znaczy to samo dla wszystkich wpisow, wiec tam
+    sortowanie po reakcjach i swiezosci jest uczciwe. `data` porownujemy jako
+    napis ISO — tak ja oddaje API Substacka i tak sie sortuje chronologicznie.
+    """
+    grupy: dict[str, list[dict[str, Any]]] = {}
+    for k in komentarze:
+        # `gdzie` wypelniaja dwa zrodla ("artykul", "komentarz_obcy"); brak
+        # tego pola to odpowiedz pod nasza notka — patrz `run.py`, ktory
+        # rozgalezia sie dokladnie tym samym testem.
+        grupy.setdefault(str(k.get("gdzie") or "notka"), []).append(k)
+    for grupa in grupy.values():
+        grupa.sort(key=lambda k: ((k.get("reakcje") or 0), str(k.get("data") or "")),
+                   reverse=True)
+    wybrane: list[dict[str, Any]] = []
+    poziom = 0
+    while len(wybrane) < ile and any(poziom < len(g) for g in grupy.values()):
+        for grupa in grupy.values():
+            if poziom < len(grupa) and len(wybrane) < ile:
+                wybrane.append(grupa[poziom])
+        poziom += 1
+    return wybrane
+
+
 def wybierz_do_odpowiedzi(
     conn: sqlite3.Connection, run_id: int, komentarze: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -438,23 +481,37 @@ def wybierz_do_odpowiedzi(
               " KAZDEMU (male konto zyje z rozmowy)", flush=True)
         return komentarze
 
-    # DUZO KOMENTARZY: pierwszenstwo maja watki NAJBARDZIEJ ZYWE. Nie dlatego,
-    # ze popularne jest lepsze, tylko dlatego, ze tam siedzi dyskusja, ktora
-    # warto ciagnac, i tam nasza odpowiedz zobaczy najwiecej ludzi.
+    # DUZO KOMENTARZY: PO ROWNO Z KAZDEGO MIEJSCA ROZMOWY.
+    #
+    # STALO TU SORTOWANIE PO POLACH, KTORYCH NIKT NIE WYPELNIA. Klucz brzmial
+    # `(reakcje or 0) * 2 + (odpowiedzi or 0) * 3`, a `run.py` sklada te liste
+    # z trzech zrodel i zadne z nich nie oddaje tych pol kompletnie:
+    #   - `browser.nieodpowiedziane`            — ani `reakcje`, ani `odpowiedzi`,
+    #   - `browser.odpowiedzi_na_nasze_komentarze` — ani `reakcje`, ani `odpowiedzi`,
+    #   - `browser.komentarze_pod_artykulami`   — `reakcje` tak, `odpowiedzi` nie.
+    # Czyli `odpowiedzi` bylo ZAWSZE zerem, a `reakcje` zerem dla dwoch zrodel
+    # z trzech. Sortowanie po samych zerach jest stabilne, wiec kolejnosc
+    # zostawala ta z wejscia, a komunikat mowil „najpierw najzywsze watki".
+    #
+    # I GORZEJ: naprawa „sortujmy po tym, co jest" bylaby wada, nie naprawa.
+    # Jedyne zrodlo z `reakcje` to komentarze pod NASZYMI artykulami, wiec po
+    # takim sortowaniu odpowiedzi pod naszymi notkami i odpowiedzi na nasze
+    # komentarze u obcych ladowalyby ZA kazdym komentarzem z jedna reakcja —
+    # a przy ciecu do 24 wypadalyby z listy w calosci. Wlasnie to trzecie
+    # zrodlo `browser.py` nazywa „najgorszym mozliwym miejscem na milczenie".
+    #
+    # Liczba jest porownywalna TYLKO wewnatrz jednego zrodla. Wiec sortujemy
+    # wewnatrz zrodla, a miedzy zrodlami bierzemy na zmiane.
     if len(komentarze) > config.WYBIERAJ_POWYZEJ:
-        komentarze = sorted(
-            komentarze,
-            key=lambda k: ((k.get("reakcje") or 0) * 2
-                           + (k.get("odpowiedzi") or 0) * 3),
-            reverse=True,
-        )[: config.MAX_ODPOWIEDZI_DUZE * 3]
-        print(f"  [odpowiedzi] duzo komentarzy — najpierw najzywsze watki",
-              flush=True)
+        komentarze = _po_rowno_ze_zrodel(komentarze,
+                                         config.MAX_ODPOWIEDZI_DUZE * 3)
+        print("  [odpowiedzi] duzo komentarzy — biore po rowno z kazdego"
+              " miejsca rozmowy (%d)" % len(komentarze), flush=True)
     ile_max = (config.MAX_ODPOWIEDZI_DUZE if len(komentarze) > config.WYBIERAJ_POWYZEJ
                else config.MAX_ODPOWIEDZI_MALE)
 
     opis = "\n\n".join(
-        f"[{i}] {k.get('autor', '')} (reakcji: {k.get('reakcje', 0)})\n"
+        f"[{i}] {k.get('autor', '')}{_ile_reakcji(k)}\n"
         f"    {(k.get('tekst') or '')[:400]}"
         for i, k in enumerate(komentarze)
     )
@@ -1204,18 +1261,36 @@ def kuplet_korygujacy(tekst: str) -> bool:
     nadal lepsza niz brak notki, a przy trzech kandydatach zwykle jest z czego
     wybierac za darmo.
     """
+    return bool(zdania_z_tikiem(tekst))
+
+
+def zdania_z_tikiem(tekst: str) -> list[str]:
+    """TE SAME trzy postacie tiku, ale oddane jako ZDANIA, nie jako „tak/nie".
+
+    Powstalo, zeby dalo sie POKAZAC modelowi jego wlasny tik. `note()` ma
+    jednego kandydata (`config.NOTE_CANDIDATES = 1`), wiec sortowanie po tym
+    wykrywaczu sortuje liste jednoelementowa i nie robi nic — a otwarcia
+    dostaly w prompcie zamiennik (`ostatnie_otwarcia_json`) i tik nie dostal
+    zadnego. Zamiennikiem sa wlasne zdania z ostatnich notek, a do tego trzeba
+    zdania, nie flagi.
+
+    Jeden wykrywacz, dwa wyjscia: funkcja wyzej pyta ten sam kod o „czy w
+    ogole", zeby dwie kopie tych regul nie rozjechaly sie po pierwszej
+    poprawce jednej z nich.
+    """
     czyste = (tekst or "").replace(chr(10), " ")
     zdania = [z.strip() for z in re.split(r"(?<=[.!?])\s+", czyste) if z.strip()]
+    znalezione: list[str] = []
     for i in range(len(zdania) - 1):
         if (_KUPLET_NEGACJA.search(zdania[i])
                 and _KUPLET_POPRAWKA.search(zdania[i + 1])):
-            return True
+            znalezione.append("%s %s" % (zdania[i], zdania[i + 1]))
     # ten sam ruch scisniety w jedno zdanie: „X is not Y, it's Z"
     for z in zdania:
         if re.search(r"\b(is not|isn't|aren't|are not)\b[^.]{0,60}?[,.]\s*"
                      r"(it's|it is|they're|they are|that's|that is)\b",
                      z, re.IGNORECASE):
-            return True
+            znalezione.append(z)
 
     # TRZECIA POSTAC, I NAJCZESTSZA — apozycja z przecinkiem: „X, not Y".
     #
@@ -1237,9 +1312,10 @@ def kuplet_korygujacy(tekst: str) -> bool:
     # Zostaje kryterium SORTOWANIA, nie bramka: przy 53% i trzech kandydatach
     # sortowanie zwykle ma z czego wybierac, a odrzucanie kosztowaloby polowe
     # notek.
-    if re.search(r",\s+not\b", czyste, re.IGNORECASE):
-        return True
-    return False
+    for z in zdania:
+        if re.search(r",\s+not\b", z, re.IGNORECASE):
+            znalezione.append(z)
+    return znalezione
 
 
 def ostatnie_otwarcia(rodzaj: str = "notka", ile: int = 8) -> list[str]:
@@ -1894,6 +1970,33 @@ def note(
             sorted(ostatnie_otwarcia()) or ["(zadnych jeszcze nie ma)"],
             ensure_ascii=False),
     )
+    # I TO SAMO DLA TIKU „nie X. Y." — DRUGIE KRYTERIUM, KTORE NIE MIALO
+    # ZAMIENNIKA.
+    #
+    # `candidates.sort` nizej ma dwa kryteria: powtorzone otwarcie i ten tik.
+    # Otwarcia dostaly zamiennik w prompcie (`ostatnie_otwarcia_json`) wlasnie
+    # po to, zeby nie placic za trzech kandydatow — i `NOTE_CANDIDATES` spadlo
+    # do JEDNEGO. Sortowanie listy jednoelementowej nie robi nic, wiec tik,
+    # zmierzony w 16 z 30 wystawionych notek (53%), przestal byc pilnowany
+    # przez cokolwiek: prompt o nim nie wspomina ani slowem.
+    #
+    # Zamiennik jest tej samej postaci co przy otwarciach: nie prosba, tylko
+    # DANE, ktorych model nie ma — jego wlasne zdania z ostatnich notek.
+    # Ogolna regula „nie uzywaj tego ruchu" jest dla modelu abstrakcja;
+    # trzy jego wlasne zdania obok siebie sa dowodem.
+    tiki = [z for t in teksty_ostatnich_notek(12) for z in zdania_z_tikiem(t)]
+    if tiki:
+        prompt += (
+            "\n\n## The move that has become this account's signature\n\n"
+            "These are sentences from our own recent notes. Every one of them "
+            "makes the same move: state what the thing is not, then correct it "
+            "(\"X, not Y\", \"It isn't A. It's B\"). It was in 16 of our last "
+            "30 notes.\n\n"
+            + "\n".join("- %s" % z[:160] for z in tiki[:4])
+            + "\n\nThe move is fine once. Repeated down a profile it is a tic, "
+            "and a reader scanning the column sees the rhythm before they read "
+            "a word. Make your point without the correction frame: say what "
+            "the thing IS, and let the wrong belief go unmentioned.")
     zajete_otwarcia = set(ostatnie_otwarcia())
     candidates: list[dict[str, Any]] = []
     for i in range(config.NOTE_CANDIDATES):
@@ -1946,10 +2049,18 @@ def note(
     # zanim ktokolwiek zacznie czytac; tik dopiero przy czytaniu.
     candidates.sort(key=lambda d: (powtarza_otwarcie(d),
                                    kuplet_korygujacy(d.get("note") or "")))
+    # KOMUNIKAT MOWI, CO SIE NAPRAWDE STANIE. Stalo tu „(wszyscy kandydaci
+    # zaczynaja jak poprzednie notki)" — zdanie prawdziwe przy trzech
+    # kandydatach i mylace przy jednym, bo `NOTE_CANDIDATES` wynosi 1: nie ma
+    # zadnych „wszystkich", jest jeden kandydat, i tak czy owak idzie w swiat.
+    # Log, ktory brzmi jak odrzucenie, a konczy sie publikacja, uczy czytajacego
+    # dziennik czegos nieprawdziwego o wlasnym agencie.
+    ilu = "wszyscy kandydaci" if len(candidates) > 1 else "kandydat"
     if candidates and powtarza_otwarcie(candidates[0]):
-        print("    (wszyscy kandydaci zaczynaja jak poprzednie notki)", flush=True)
+        print("    (%s zaczyna jak poprzednie notki — wystawiam mimo to)"
+              % ilu, flush=True)
     elif candidates and kuplet_korygujacy(candidates[0].get("note") or ""):
-        print("    (wszyscy kandydaci uzywaja ruchu nie-X-Y)", flush=True)
+        print("    (%s uzywa ruchu nie-X-Y — wystawiam mimo to)" % ilu, flush=True)
 
     for data in candidates:
         text = (data.get("note") or "").strip()
@@ -2655,8 +2766,30 @@ def notki_dnia(
         # Ta sama zasada co przy faktach: dzien promocji odhacza ten, kto notke
         # NAPRAWDE wystawil. Wystarczylo, ze kandydat przeszedl bramke — wiec
         # nieudana publikacja albo zwykle sprawdzenie zjadaly po cichu jeden
-        # z pieciu dni promocji artykulu. Zlapane przez test, ktory pilnuje,
-        # czy przebieg bez publikowania rusza pliki produkcji.
+        # z pieciu dni promocji artykulu.
+        #
+        # DLUG, SWIADOMY (1 wrzesnia 2026). Przy tym warunku
+        # `zakwestionuj_promocje` jest KODEM NIEOSIAGALNYM: `run.py` czyta
+        # dla niej `promocja_url` wylacznie w galezi `if not gotowe:`, a
+        # w `note()` `safe_to_post` ustawia sie dopiero PO sprawdzeniu
+        # dlugosci, wiec `safe_to_post=True` implikuje `length_ok=True` i
+        # oba warunki wykluczaja sie wzajemnie.
+        #
+        # CENA TEJ NIEOSIAGALNOSCI JEST ZNANA: 25/26 sierpnia notka
+        # promujaca „The Watermark Was Never a Verdict" odpadla na
+        # sprawdzeniu faktow o 21:44, artykul ZOSTAL w kolejce, nastepny
+        # przebieg o 00:43 napisal o nim inna notke i falsz wyszedl w swiat.
+        #
+        # ZDJECIE TEGO WARUNKU BYLO PROBOWANE I COFNIETE. Bez niego kazdy
+        # powod odrzucenia notki — dlugosc, zapora wstrzykniec, podloga —
+        # kasowal artykul z kolejki NA STALE, z pustym powodem, a dziennik
+        # pisal „(sprawdzenie faktow)" przy zerze platnych wywolan.
+        # Dzialo sie to takze w przebiegu BEZ --wyslij, bo `run.py` wola
+        # `zakwestionuj_promocje` poza blokiem publikowania.
+        #
+        # POPRAWNA NAPRAWA (niezrobiona): `zakwestionuj_promocje` ma
+        # odmawiac dzialania, gdy powod nie jest werdyktem sprawdzenia
+        # faktow, a `run.py` ma wolac ja wewnatrz `if wyslij:`.
         if typ == "ARTYKUL" and promowany and any(
                 k.get("safe_to_post") for k in wynik["candidates"]):
             wynik["promocja_url"] = promowany["url"]
@@ -2969,6 +3102,31 @@ def comment_on(
             "for anything factual, and cite nothing that is not here) ---\n"
             + "\n".join(f"- {f.get('fact')}  [{f.get('url')}]" for f in fakty)
         )
+    # PO CO W OGOLE WYBRALISMY TEN POST — do tej pory ginelo po drodze.
+    #
+    # `wybierz_cele` zapisuje przy kazdym przyjetym celu `co_dodamy`, czyli
+    # jedno konkretne zdanie modelu o tym, co MY mamy tu do dodania. `cele.md`
+    # czyni z tego trzeci warunek dopuszczenia celu: „If you cannot say
+    # concretely what you would add, the answer is no". A potem to pole nie
+    # bylo czytane NIGDZIE w calym repozytorium — komentarz pisal sie od zera,
+    # nie wiedzac, za co ten post zostal wybrany.
+    #
+    # Wchodzi ta sama droga co zweryfikowane fakty kilka linii wyzej: doklejone
+    # do `body` z wlasnym naglowkiem, bo `prompts/komentarz.md` nie ma na to
+    # miejsca, a dopisanie pola do `_prompt` bez miejsca w szablonie byloby
+    # dokladnie ta sama wada, ktora tu naprawiamy — zapis, ktorego nikt nie
+    # czyta. Tekst przycinamy PRZED doklejeniem, zeby limit 12000 znakow nizej
+    # nie odcial wlasnie tego dopisku.
+    if post.get("co_dodamy"):
+        post = dict(post)
+        post["text"] = (
+            post.get("text", "")[:9000]
+            + "\n\n--- WHY THIS POST WAS SELECTED (your own note from the "
+            "target-selection stage: the one concrete thing you said you would "
+            "add here). Write THAT comment. If it no longer holds up against "
+            "the text above, stay silent instead. ---\n"
+            + str(post["co_dodamy"])[:600]
+        )
     otwarcie = config.losowe_otwarcie()
     # POSTAWA PRZYDZIELONA, nie wybrana przez model. Prompt oferowal cztery ruchy
     # i mowil „wybierz jeden"; model niemal zawsze bral ten sam. Wagi sprawiaja,
@@ -3026,6 +3184,27 @@ def comment_on(
             data["safe_to_post"] = False
             data["odrzucony"] = powod
             print(f"    ODRZUCONY PRZED SPRAWDZENIEM: {powod}", flush=True)
+            continue
+        # DWIE PODLOGI Z PAMIECI — patrz `_podloga_z_pamieci`, ktorej docstring
+        # wymienia „komentarz, odpowiedz, restack". Odpowiedz je miala i
+        # blokowala, restack je mial i blokowal; KOMENTARZ, wymieniony pierwszy,
+        # nie mial zadnej. Pilnowalo go jedno zdanie w `prompts/komentarz.md`
+        # („Never claim personal experience") — a prosba w prompcie nie jest
+        # bramka i ten projekt zaplacil juz za te lekcje dwoma artykulami.
+        #
+        # `zweryfikuj` tego nie zastepuje: sprawdza twierdzenia wobec zrodel,
+        # a zmyslone przezycie nie jest twierdzeniem sprawdzalnym — nie ma
+        # czego wyszukac. „I asked three people about this" przechodzilo wiec
+        # przez cala scianke i szlo na CUDZY post pod nazwa pisma, w miejscu,
+        # gdzie autor dostaje powiadomienie.
+        #
+        # Sprawdzamy PRZED `zweryfikuj`, ktore jest platnym wyszukiwaniem:
+        # blokada zapada tak czy owak, wiec placenie za nia jest bez sensu.
+        podloga = _podloga_z_pamieci(text)
+        if podloga:
+            data["safe_to_post"] = False
+            data["odrzucony"] = "podloga: %s" % podloga
+            print(f"    ODRZUCONY PRZED SPRAWDZENIEM: {podloga}", flush=True)
             continue
         audyt = zweryfikuj(conn, run_id, text, post.get("title", ""))
         data["weryfikacja"] = audyt

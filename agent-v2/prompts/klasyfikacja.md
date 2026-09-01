@@ -33,10 +33,14 @@ quote as fact.
 Prefer passages that state a rule, a reason, a threshold, a decision or a
 measurement over passages that merely introduce a topic.
 
-**numbers** — every specific figure, percentage, concentration, temperature,
-duration or threshold that appears in the passages you selected, each with the
-few words around it that say what it measures. If there are none, return an
-empty list. Do not compute, round or convert anything.
+**numbers** — every specific figure that appears in the passages you selected,
+each with the few words around it that say what it measures. A figure is a
+figure whatever it counts: a percentage, a count of people or cases, a
+duration, a price or a rate, a threshold, an accuracy or error rate, a
+confidence score, a model or dataset size, a wait, a cost per unit of usage, a
+headcount, a fine. Do not skip one because it does not look like the kind of
+number you expected this document to carry. If there are none, return an empty
+list. Do not compute, round or convert anything.
 
 ## Output
 

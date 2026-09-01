@@ -165,6 +165,62 @@ def zostal_czas(na_co: str = "", potrzeba_s: float = 0.0) -> bool:
     return False
 
 
+# HAMULEC LICZY SIE PER BLOK, NIE PER RODZAJ DZIALANIA.
+#
+# `browser._POD_RZAD_ZLE` jest slownikiem po RODZAJU i globalnym dla procesu, a
+# zerowanym wylacznie powodzeniem. Tymczasem `rytm("komentarz", ...)` wola nie
+# tylko blok komentarzy, ale takze dyskusje pod cudzymi notkami, obserwowanie
+# i subskrypcje — cztery bloki na jednym liczniku. Trzy nieudane komentarze pod
+# rzad konczyly wiec blok komentarzy i NATYCHMIAST po nim trzy nastepne, ktore
+# nie wykonaly ani jednej proby. Obserwowanie i subskrypcje wrecz nie moga tego
+# licznika podniesc (zapisuja sie jako `obserwacja`/`subskrypcja`), tylko go
+# czytaja — dziedziczyly cudza porazke i konczyly sie w milczeniu, bo `rytm`
+# zwracalo False jeszcze przed pierwszym klknieciem.
+#
+# ILE TO KOSZTOWALO. Wg pomiaru z `browser.wystaw_odpowiedz` (siedem dni:
+# 29 wpisow `odpowiedz`, z czego 23 to komentarze pod cudzymi notkami) blok
+# dyskusji daje WIEKSZOSC wypowiedzi agenta — i to on gasl jako pierwszy po
+# bloku komentarzy. Nowe klasy porazek z 1 wrzesnia (brak pola, brak przycisku,
+# wyjatek) trafiaja teraz do dziennika, wiec ten licznik zapala sie czesciej
+# niz dotad i wada z cichej robi sie codzienna.
+#
+# ILE KOSZTUJE ZMIANA. Przy naprawde padnietym Substacku kazdy blok wyda teraz
+# do 3 wlasnych prob, zanim sie wycofa, zamiast dziedziczyc cudze. Platne sa
+# tylko dwa z czterech blokow (komentarze i dyskusje pisza tekst modelem;
+# obserwowanie i subskrypcje to samo klikanie), a ocena jednego celu kosztuje
+# okolo 2,3 centa — czyli najgorszy przypadek to 3 dodatkowe proby, ~0,07 USD
+# na przebieg. Za to blok, ktory dziala, nie ginie przez blok, ktory nie
+# dziala.
+#
+# PROG ZOSTAJE TEN SAM: 2 pod rzad podwajaja przerwe, 3 koncza blok. Zmieniam
+# ZASIEG, nie liczbe — hamulec ma sens i chroni przed dobijaniem sie do
+# padnietego Substacka, tylko ma to robic tam, gdzie naprawde sie psuje.
+_BAZA_HAMULCA: dict[str, int] = {}
+
+
+def _pod_rzad_w_bloku(co: str, na_co: str) -> int:
+    """Ile porazek pod rzad naliczyl TEN blok, odkad sie zaczal.
+
+    Odejmujemy stan licznika z chwili PIERWSZEGO wejscia w blok. Baza zapisuje
+    sie wiec zanim blok cokolwiek zrobil — takze wtedy, gdy `rytm` wychodzi
+    wczesniej („pierwsze dzialanie w przebiegu nie czeka na nic"). Zapisana
+    dopiero przy drugim wolaniu bralaby juz wlasna porazke tego bloku za cudzy
+    dlug i prog przesunalby sie z trzech porazek na cztery.
+
+    Powodzenie zeruje licznik globalnie, wiec gdy biezaca wartosc spadnie
+    ponizej zapisanej bazy, baza traci sens i wraca do zera — inaczej blok po
+    sukcesie liczylby porazki od wartosci ujemnej i hamulec nie zadzialalby
+    juz nigdy.
+    """
+    import browser as _b
+
+    biezacy = _b.pod_rzad_nieudanych(co)
+    baza = _BAZA_HAMULCA.setdefault(na_co, biezacy)
+    if biezacy < baza:
+        baza = _BAZA_HAMULCA[na_co] = 0
+    return biezacy - baza
+
+
 def rytm(co: str, na_co: str, stan: dict) -> bool:
     """Przerwa MIEDZY dwoma dzialaniami tego samego rodzaju.
 
@@ -182,9 +238,16 @@ def rytm(co: str, na_co: str, stan: dict) -> bool:
     Teraz przerwa jest najpierw losowana, potem sprawdzana wobec konca
     przebiegu, i dopiero wtedy odsypiana — a pierwsze dzialanie w przebiegu nie
     czeka na nic, bo nie ma na co.
+
+    Ta sama funkcja trzyma HAMULEC po serii porazek, liczony PER BLOK (`na_co`),
+    nie per rodzaj dzialania — patrz `_BAZA_HAMULCA` i `_pod_rzad_w_bloku`.
     """
-    import browser as _b
     import stages as _s
+
+    # BAZA HAMULCA ZAPISUJE SIE TU, PRZED wczesnym wyjsciem — patrz
+    # `_pod_rzad_w_bloku`. Blok ma liczyc od stanu, w jakim go zastal, a nie od
+    # stanu po swojej wlasnej pierwszej probie.
+    pod_rzad = _pod_rzad_w_bloku(co, na_co)
 
     if not stan.get(co):
         return zostal_czas(na_co)
@@ -202,10 +265,9 @@ def rytm(co: str, na_co: str, stan: dict) -> bool:
     # mozemy zrobic natychmiast i bez zgadywania przyczyny.
     # Trzy z rzedu: konczymy ten blok. Nie kasujemy dnia — kolejny przebieg
     # zaczyna z czystym licznikiem i moze sie okazac, ze to bylo chwilowe.
-    pod_rzad = _b.pod_rzad_nieudanych(co)
     if pod_rzad >= 3:
-        print("  [wycofanie] %s: trzy porazki pod rzad — koncze ten blok,"
-              " nastepny przebieg sprobuje od nowa" % co, flush=True)
+        print("  [wycofanie] %s: trzy porazki pod rzad — koncze blok %s,"
+              " nastepny przebieg sprobuje od nowa" % (co, na_co), flush=True)
         return False
     if pod_rzad >= 2:
         przerwa *= 2
@@ -364,6 +426,11 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     # wszystkich blokow, bo profil widzi jeden ciag zdarzen, nie nasze bloki:
     # komentarz tuz po obserwacji to dla Substacka dwa dzialania pod rzad.
     rytm_stanu: dict[str, bool] = {}
+    # Hamulec liczy porazki OD POCZATKU BLOKU — patrz `_pod_rzad_w_bloku`.
+    # Bazy sa wiec wazne tylko w obrebie jednego przebiegu i musza zniknac
+    # razem z nim; `dzien()` bywa wolane wiecej niz raz w jednym procesie
+    # (testy, `--dwa-razy`), a stara baza przeniosla by hamulec na nastepny.
+    _BAZA_HAMULCA.clear()
 
     # OKNO PUBLIKACJI liczone w strefie CZYTELNIKOW. Poza nim agent nie milczy
     # calkiem — polubienia i odpowiedzi zostaja, bo czytanie o polnocy jest
@@ -468,12 +535,33 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 if not rytm("odpowiedz", "odpowiedzi", rytm_stanu):
                     return
                 if c.get("gdzie") == "artykul":
-                    browser.wystaw_odpowiedz_pod_artykulem(
+                    wynik = browser.wystaw_odpowiedz_pod_artykulem(
                         c.get("url") or "", c.get("autor") or "", tekst,
                         wyslij=True)
                 else:
-                    browser.wystaw_odpowiedz(c["pod_id"], tekst, wyslij=True)
+                    wynik = browser.wystaw_odpowiedz(c["pod_id"], tekst,
+                                                     wyslij=True)
+                # Rytm odmierza sie NIEZALEZNIE od wyniku: przegladarka byla
+                # otwarta, watek wczytany, tekst wpisany.
                 rytm_stanu["odpowiedz"] = True
+                # DOMKNIECIE POPRAWKI Z 1 WRZESNIA. Bloki `komentarze()`
+                # i `dyskusje()` dostaly ten warunek, a ten — dwa bloki wyzej
+                # i z ta sama wada — nie. Wynik obu funkcji byl tu IGNOROWANY,
+                # wiec `zrobione["odpowiedzi"]` roslo takze po odpowiedzi,
+                # ktorej Substack nie pokazuje. To ta sama rozbieznosc miedzy
+                # podsumowaniem przebiegu a pomiarem z dziennika, dla ktorej
+                # cala ta poprawka powstala: `wyslane` ustawia
+                # `potwierdz_odpowiedz`/`potwierdz_komentarz`, czyli pytanie do
+                # Substacka, i to samo `wyslane` decyduje o polu `udane`
+                # w dzienniku. Mierzone 30 sierpnia: 7 nieudanych odpowiedzi
+                # na 47 prob — 15 procent zawyzenia tego licznika.
+                #
+                # POMINIECIE TEZ NIE LICZY SIE DO DNIA, tak jak przy
+                # komentarzu: `wystaw_odpowiedz` oddaje wtedy `wyslane=True`,
+                # choc nic nie wyszlo, a `potwierdz_odpowiedz` moze tak
+                # odpowiedziec takze przy awarii odczytu.
+                if wynik.get("pominiete") or not wynik.get("wyslane"):
+                    continue
             zrobione["odpowiedzi"] += 1
 
     # --- 2. notki: pięć dziennie, każda z innego faktu ------------------------
@@ -580,6 +668,45 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 print("  [cele] odsiane platne publikacje: %d z %d"
                       % (przed - len(unikalne), przed), flush=True)
 
+        # I TAK SAMO HOSTY, U KTORYCH KOMENTARZ DWA RAZY NIE WSZEDL.
+        #
+        # Ta sama wada co przy platnych, o kilkanascie linii dalej w tym samym
+        # bloku. `hosty_gdzie_komentarz_nie_wchodzi` bylo pytane dopiero
+        # wewnatrz `mozna_komentowac`, czyli PO `wybierz_cele` — a wiec model
+        # placil za ocene celow na hostach, o ktorych juz z dziennika wiemy, ze
+        # nic tam nie wchodzi. Odpowiedz jest darmowa: czyta plik z dysku, nie
+        # rusza sieci, wiec nie ma powodu, zeby stala za platna ocena.
+        #
+        # ZMIERZONE 30 sierpnia 2026: 11 nieudanych komentarzy z 92 prob, a
+        # adresy sie powtarzaly — slowboring.com, thebignewsletter.com,
+        # malone.news wracaly do oceny w kazdym przebiegu.
+        #
+        # HOST POROWNUJEMY DOKLADNIE TAK JAK ZAPORA: samo `netloc.lower()`, bez
+        # zdejmowania `www.`, bo `hosty_gdzie_komentarz_nie_wchodzi` buduje
+        # klucze z adresow w dzienniku rowniez bez zdejmowania. Inna
+        # normalizacja odsialaby tutaj co innego, niz odrzuci `mozna_komentowac`
+        # — a wtedy przedplata i zapora rozjechalyby sie po cichu.
+        #
+        # WYPISUJEMY NAZWY, NIE SAMA LICZBE. To sito wycina cel PRZED ocena,
+        # wiec wyjasniajacy komunikat z `mozna_komentowac` („dwa razy nic tam
+        # nie weszlo") nigdy sie nie pokaze — sito jest jedynym miejscem, gdzie
+        # widac, KTORY host wypadl. Bez nazw blednie zamkniety host wygladalby
+        # w logu jak brak kandydatow.
+        martwe = browser.hosty_gdzie_komentarz_nie_wchodzi()
+        if martwe:
+            from urllib.parse import urlparse as _up_m
+            przed = len(unikalne)
+            wyciete = sorted({_up_m(x.get("url", "")).netloc.lower()
+                              for x in unikalne
+                              if _up_m(x.get("url", "")).netloc.lower() in martwe})
+            unikalne = [x for x in unikalne
+                        if _up_m(x.get("url", "")).netloc.lower()
+                        not in martwe]
+            if przed != len(unikalne):
+                print("  [cele] odsiane hosty bez wejscia komentarza: %d z %d"
+                      " (%s)" % (przed - len(unikalne), przed,
+                                 ", ".join(wyciete[:6])), flush=True)
+
         cele = stages.wybierz_cele(conn, run_id, unikalne)
 
         # SZUKAJ, AZ ZNAJDZIESZ — DECYZJA WLASCICIELA 31 SIERPNIA.
@@ -625,6 +752,14 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 dobrane = [x for x in dobrane
                            if _up2(x["url"]).netloc.lower().removeprefix("www.")
                            not in platne]
+            # Kolejne partie ida prosto do platnego `wybierz_cele`, wiec musza
+            # przejsc PRZEZ TE SAME dwa sita co pula pierwsza. Bez tego runda
+            # druga i dalsze kupowaly ocene dokladnie tych hostow, ktore runda
+            # pierwsza odsiala za darmo.
+            if martwe:
+                from urllib.parse import urlparse as _up3
+                dobrane = [x for x in dobrane
+                           if _up3(x["url"]).netloc.lower() not in martwe]
             if not dobrane:
                 continue
             cele = cele + stages.wybierz_cele(conn, run_id, dobrane)
@@ -652,11 +787,63 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             if wyslij:
                 if not rytm("komentarz", "komentarze", rytm_stanu):
                     return
-                browser.wystaw_komentarz(
+                wynik = browser.wystaw_komentarz(
                     cel["url"], dobre[0]["comment"], wyslij=True,
                     kontekst={**opis_celu(cel),
                               "otwarcie": (out.get("otwarcie") or "")[:60],
                               "postawa": out.get("postawa") or ""})
+                # Rytm odmierza sie NIEZALEZNIE od wyniku: przegladarka byla
+                # otwarta, strona wczytana, tekst wpisany — nastepne dzialanie
+                # ma czekac tyle samo, co po komentarzu udanym.
+                rytm_stanu["komentarz"] = True
+                # DALEJ IDZIEMY TYLKO PO POTWIERDZENIU. `wystaw_komentarz`
+                # oddaje slownik, w ktorym `wyslane` to jedyny dowod: ustawia
+                # je `potwierdz_komentarz`, czyli pytanie do Substacka, a nie
+                # samo klikniecie. Ten wynik byl tu IGNOROWANY, wiec kazda
+                # z trzech linii nizej wykonywala sie takze wtedy, gdy
+                # komentarz nie wszedl — a nie wchodzil w 11 probach na 92
+                # (pomiar z 30 sierpnia 2026). Ceny tego bledu byly trzy:
+                #   - `zapamietaj_komentarz` palilo publikacje na
+                #     ODSTEP_DNI_NA_PUBLIKACJE = 4 dni za komentarz, ktorego
+                #     tam nie ma,
+                #   - `zapomnij_platny_host` kasowalo host z listy platnych
+                #     wbrew wlasnemu opisowi („UDANY komentarz kasuje host"),
+                #     wiec ta sama platna publikacja wracala do oceny,
+                #   - licznik rosl mimo braku komentarza — a to na nim stoi
+                #     alarm „agent robi mniej, niz deklaruje".
+                # To samo `wyslane` decyduje o polu `udane` w dzienniku
+                # (`dopisz_wynik`), wiec licznik przebiegu mowi teraz to samo,
+                # co pomiar z dziennika.
+                #
+                # POMINIECIE NIE LICZY SIE DO DNIA — decyzja, nie przeoczenie.
+                # `wystaw_komentarz` oddaje przy pominieciu `{"wyslane": True,
+                # "pominiete": True}`, wiec sam warunek na `wyslane` je
+                # przepuszczal: licznik przebiegu rosl o 1, `zapamietaj_
+                # komentarz` i `zapomnij_platny_host` odpalaly, a dziennik
+                # dostawal ZERO wpisow (`wystaw_komentarz` swiadomie pominiec
+                # nie zapisuje). Czyli dokladnie ta rozbieznosc podsumowania
+                # z pomiarem, ktora ta poprawka miala zamknac.
+                #
+                # DLACZEGO NIE LICZYMY. Dzienny przydzial komentarzy liczy sie
+                # z dzialan UDANYCH, wiec policzone pominiecie zjada slot za
+                # cos, co sie nie wydarzylo. Gorzej: `juz_sie_odezwalismy`
+                # oddaje True takze wtedy, gdy nie odczytalo naszego id („nie
+                # wiem, czyli nie ryzykuje") — awaria `/public_profile`
+                # wystarczy. Przy liczeniu pominiec jedna taka awaria wypalilaby
+                # caly dzienny budzet komentarzy bez ani jednego komentarza.
+                # Nie liczac ich, przebieg po prostu probuje dalej z nastepnym
+                # celem — a to jest zachowanie, ktorego chcemy.
+                #
+                # `zapamietaj_komentarz` i `zapomnij_platny_host` tym bardziej
+                # nie moga odpalic: pierwsze paliloby publikacje na
+                # ODSTEP_DNI_NA_PUBLIKACJE = 4 dni, drugie zdejmowaloby host
+                # z listy platnych — jedno i drugie na podstawie komentarza,
+                # ktorego w tym przebiegu nie napisalismy.
+                if wynik.get("pominiete"):
+                    print("  (pominiete — nie licze do normy dnia)", flush=True)
+                    continue
+                if not wynik.get("wyslane"):
+                    continue
                 # Zapamietujemy U KOGO, zeby nie wracac tam za kilka dni.
                 kanal.zapamietaj_komentarz(cel)
                 # I zdejmujemy host z listy platnych, jesli tam byl: skoro
@@ -664,7 +851,6 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 from urllib.parse import urlparse as _up
                 browser.zapomnij_platny_host(
                     _up(cel.get("url", "")).netloc)
-                rytm_stanu["komentarz"] = True
             zrobione["komentarze"] += 1
 
     # --- 3b. dyskusje pod cudzymi notkami -------------------------------------
@@ -712,11 +898,30 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 # `rodzaj="komentarz"`, bo to jest komentarz — pod cudza
                 # notka zamiast pod cudzym artykulem. Liczy sie do tej samej
                 # normy, z ktorej bierzemy na to miejsce kilka linii wyzej.
-                browser.wystaw_odpowiedz(cel["id"], dobre[0]["comment"],
-                                         wyslij=True,
-                                         kontekst=opis_celu(cel),
-                                         rodzaj="komentarz")
+                # OTWARCIE I POSTAWA JADA TAKZE STAD, tak jak w bloku wyzej.
+                # Dotad szedl sam `opis_celu`, wiec przydzielona postawa i
+                # przydzielone otwarcie nie trafialy do dziennika — a wg
+                # pomiaru z `browser.py` (siedem dni: 29 wpisow `odpowiedz`,
+                # z czego 23 to komentarze pod cudzymi notkami) to WLASNIE
+                # ten blok daje wiekszosc wypowiedzi. Rozklad postaw i
+                # roznorodnosc otwarc byly wiec mierzone na jednej szostej
+                # materialu.
+                wynik = browser.wystaw_odpowiedz(
+                    cel["id"], dobre[0]["comment"], wyslij=True,
+                    kontekst={**opis_celu(cel),
+                              "otwarcie": (out.get("otwarcie") or "")[:60],
+                              "postawa": out.get("postawa") or ""},
+                    rodzaj="komentarz")
                 rytm_stanu["komentarz"] = True
+                # Jak przy komentarzu pod artykulem: `wyslane` ustawia
+                # `potwierdz_odpowiedz`, czyli sprawdzenie w watku, a nie samo
+                # klikniecie. Wynik byl tu ignorowany, wiec licznik rosl takze
+                # po 7 nieudanych odpowiedziach z 47 (pomiar z 30 sierpnia).
+                # I tak samo pominiecie: `wystaw_odpowiedz` oddaje wtedy
+                # `wyslane=True` bez zadnego wpisu w dzienniku — patrz dluzsze
+                # uzasadnienie w bloku `komentarze()`.
+                if wynik.get("pominiete") or not wynik.get("wyslane"):
+                    continue
             zrobione["komentarze"] += 1
 
     # --- 3c. obserwowanie nowych: to, co poszerza krąg ------------------------

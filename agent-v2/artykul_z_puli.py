@@ -118,6 +118,15 @@ def temat_z_faktu(conn, run_id, fakt: dict) -> dict:
     return brief
 
 
+# Glebokosc, gdy bramka `warto_pisac` PADLA — nie gdy powiedziala „nic tu nie
+# ma". Brak odpowiedzi to nie jest odpowiedz „THIN": THIN znaczy „material na
+# dwa zdania" i skraca artykul do 420 slow, a po awarii bramki nie wiemy o
+# materiale nic. Fakt przeszedl juz `uniesie_artykul`, wiec ma drugi akt albo
+# zasieg poza jedno miejsce — srodkowe pasmo jest jedynym, ktore niczego nie
+# zmysla. Patrz `config.DLUGOSC_WG_GLEBOKOSCI`: SINGLE to 650 slow (480-820).
+GLEBOKOSC_BEZ_OCENY = "SINGLE"
+
+
 def glebokosc_z_oceny(ocena: dict) -> str:
     """RICH / SINGLE / THIN — liczone z tego, co `warto_pisac` ZOBACZYLO.
 
@@ -139,11 +148,42 @@ def glebokosc_z_oceny(ocena: dict) -> str:
     liczba, druga dziedzina i nierozstrzygniety wynik — i to wlasnie ich brak
     daje „lanie wody", bo pisarz nie ma czym wypelnic tysiaca slow poza
     powtarzaniem tezy.
+
+    LICZYMY WERDYKT KODU, NIE SUROWE `present` MODELU. Bralismy filary wprost
+    z pol modelu (`ocena["contradicted_belief"]["present"]`), a `warto_pisac`
+    czesc z nich UNIEWAZNIA i zapisuje wynik OBOK, w `o["przekonanie"]`,
+    `o["stawka"]` i `o["filary"]` — zagniezdzone `present` zostaje `True`.
+    Uniewaznia w trzech sytuacjach, wszystkie realne: przekonanie zaznaczone,
+    ale nienazwane (`the_belief` krotsze niz 4 slowa), nierozstrzygniety wynik
+    bez pytania, oraz wynik, ktorego „regula" zaprzecza istnieniu reguly.
+
+    Skutek starej wersji: karta z werdyktem ODLOZ — czyli „ani luki, ani
+    stawki" — mogla dostac cztery filary z surowych pol i wyjsc jako RICH,
+    a wiec cel 1075 slow. To jest dokladnie ta usterka, dla ktorej tabela
+    `DLUGOSC_WG_GLEBOKOSCI` powstala, tylko wejsciem innym drzwiami.
+
+    Surowe pola zostaja jako droga awaryjna, gdy dostaniemy ocene bez pol
+    dokladanych przez kod (np. z zapisanej karty albo z testu).
     """
-    FILARY = ("contradicted_belief", "named_decider", "felt_number",
-              "second_domain", "unsettled_outcome")
-    ile = sum(1 for f in FILARY
-              if isinstance(ocena.get(f), dict) and ocena[f].get("present"))
+    def _surowy(pole: str) -> bool:
+        blok = ocena.get(pole)
+        return bool(isinstance(blok, dict) and blok.get("present"))
+
+    filary_kodu = ocena.get("filary")
+    if not isinstance(filary_kodu, dict):
+        filary_kodu = {}
+
+    def _filar(pole: str) -> bool:
+        if pole in filary_kodu:
+            return bool(filary_kodu[pole])
+        return _surowy(pole)
+
+    przekonanie = (bool(ocena["przekonanie"]) if "przekonanie" in ocena
+                   else _surowy("contradicted_belief"))
+    stawka = (bool(ocena["stawka"]) if "stawka" in ocena
+              else _surowy("unsettled_outcome"))
+    ile = sum((przekonanie, stawka, _filar("named_decider"),
+               _filar("felt_number"), _filar("second_domain")))
     if ile >= 4:
         return "RICH"
     return "SINGLE" if ile >= 2 else "THIN"
@@ -290,6 +330,79 @@ def main() -> int:
     return kod
 
 
+def _zrob_miejsce_na_fakt(card: dict) -> None:
+    """Robi miejsce na wstrzykniete twierdzenie, nie tracac zadnego ZRODLA.
+
+    DZIEWIATE TWIERDZENIE. `config.CARD_MAX_CONFIRMED` to 8 i `stages.synthesis`
+    przycina do tylu (`claims[: config.CARD_MAX_CONFIRMED]`). Wstrzykniecie
+    dokladalo dziewiate, a `audyt_researchu.py:158-161` liczy srednia na karte
+    i przy przekroczeniu sufitu meldowal „UWAGA — karta rozdeta". `config.py`
+    jest zajety przez innego agenta, wiec sufit zostaje, a miejsce robimy tutaj.
+
+    NIE TNIEMY OSTATNIEGO NA SLEPO. Ostatnie twierdzenie bywa jedynym z
+    czwartego hosta, a wtedy wycinajac je zwezalibysmy podstawe artykulu i
+    kasowali odnosnik z sekcji `## Sources` — czyli naprawiajac liczbe pozycji,
+    psulibysmy to, czego ta liczba pilnuje. Wypada wiec OSTATNIE twierdzenie,
+    ktorego host wystepuje jeszcze gdzies indziej: znika powtorka, nie zrodlo.
+
+    Gdy kazde twierdzenie ma wlasny host, karta wychodzi z dziewiatka i mowimy
+    to glosno. Sufit, ktory tnie po cichu, wyglada jak ocena modelu.
+    """
+    from urllib.parse import urlparse
+
+    claims = card.get("confirmed_claims")
+    if not isinstance(claims, list) or len(claims) < config.CARD_MAX_CONFIRMED:
+        return
+
+    def _host(c) -> str:
+        if not isinstance(c, dict):
+            return ""
+        h = (urlparse(str(c.get("url") or "")).netloc or "").lower()
+        return h[4:] if h.startswith("www.") else h
+
+    for i in range(len(claims) - 1, -1, -1):
+        host = _host(claims[i])
+        if host and any(_host(c) == host for j, c in enumerate(claims) if j != i):
+            usuniete = claims.pop(i)
+            opis = str(usuniete.get("claim") or "")[:70]
+            print("  [karta] sufit %d twierdzen — wypada powtorka z %s: %s"
+                  % (config.CARD_MAX_CONFIRMED, host, opis), flush=True)
+            return
+    print("  [karta] sufit %d twierdzen, ale kazde ma wlasny host — karta "
+          "wychodzi z %d, zeby nie stracic zrodla"
+          % (config.CARD_MAX_CONFIRMED, len(claims) + 1), flush=True)
+
+
+def _rozszerz_najstarsze(card: dict, data_faktu) -> None:
+    """Data wstrzyknietego zrodla wazy — ale TYLKO w strone ostrzezenia.
+
+    POLE BYLO MARTWE. Wstrzykniete twierdzenie nioslo `source_date`, a
+    `stages.swiezosc_karty` (stages.py:~1427) czyta wylacznie
+    `card["source_dates"]`, wiec data zrodla, od ktorego caly temat sie zaczal,
+    nie wazyla na nic. Sygnal produkowany i wyrzucany.
+
+    ROZSZERZAMY `oldest`, NIGDY `newest`. To nie jest symetryczne i nie moze
+    byc. `newest` decyduje o uwadze `CALY_MATERIAL_STARY` i o tym, czy
+    `stages.karta_dla_pisarza` skasuje note o wieku — podniesienie go data
+    dokumentu, ktorego nikt nie pobral, UCISZALOBY ostrzezenie. `oldest` moze
+    tylko dolozyc uwage `ZRODLO_SPRZED_LAT`. Kierunek, ktory potrafi wylacznie
+    ostrzec, jest bezpieczny; kierunek, ktory potrafi uciszyc, nie jest.
+
+    Nie tworzymy `source_dates` od zera: karta bez dat ma dostac
+    `KARTA_BEZ_DAT`, a nie date jedynego niepobranego zrodla.
+    """
+    daty = card.get("source_dates")
+    data = str(data_faktu or "").strip()[:10]
+    if not isinstance(daty, dict) or not data:
+        return
+    stare = str(daty.get("oldest") or "").strip()[:10]
+    if stare and stare <= data:
+        return
+    daty["oldest"] = data
+    print("  [karta] najstarsze zrodlo cofniete na %s (fakt z puli)" % data,
+          flush=True)
+
+
 def _przebieg(conn, run_id: int) -> int:
     print("== artykul z puli ciekawostek ==", flush=True)
 
@@ -330,15 +443,42 @@ def _przebieg(conn, run_id: int) -> int:
     # pierwszym — dokladnie tak, jak `wybierz_fakt` robi to przy powtorkach.
     unosi, powod = uniesie_artykul(brief)
     proby = 1
+    # ODDAJEMY PO PETLI, NIE W SRODKU — i to jest naprawa regresu, ktory sam
+    # tu wpisalem. `zwroc_kandydatow([fakt])` stalo WEWNATRZ petli, wiec
+    # odwracalo status odrzuconego na „nowy" ZANIM `wybierz_fakt` siegnelo po
+    # nastepnego. `wez_kandydatow` sortuje deterministycznie po
+    # `(not z_kanalu, ranga)`, a oddanie nie rusza ani rangi, ani pozycji w
+    # indeksie — wiec oddany fakt wracal na to samo miejsce i byl wybierany
+    # ponownie.
+    #
+    # ZMIERZONE na prawdziwej parze `wez_kandydatow`/`zwroc_kandydatow`
+    # (indeks w katalogu tymczasowym, osiem kandydatow, `ranga` 0-7):
+    #     z oddaniem w petli:  1. Nairobi | 2. Nairobi | 3. Nairobi
+    #     bez oddania w petli: 1. Nairobi | 2. Palantir | 3. Cambridge
+    # Czyli cztery oplacone wywolania `temat_z_faktu` na TYM SAMYM fakcie,
+    # kandydaci 2-8 nietknieci, a ekran drukowal „-- proba N: nastepny fakt --".
+    #
+    # Oba cele daja sie pogodzic tylko przez odroczenie: w petli odrzucony
+    # zostaje „uzyty" (wiec nie wraca pod reke), a po petli wszystkie wracaja
+    # do puli jako material na notke. Jedno wywolanie na koniec, wiec nic nie
+    # jest oddawane dwa razy.
+    odrzucone: list[dict] = []
     while not unosi and proby < 4:
         print("  ODPADA: %s" % powod, flush=True)
         print("  (fakt zostaje w puli jako material na notke)", flush=True)
+        print("   — wroci do niej po zakonczeniu prob, zeby petla siegnela"
+              " po NASTEPNEGO kandydata, a nie po tego samego", flush=True)
+        odrzucone.append(fakt)
         proby += 1
         print()
         print("-- proba %d: nastepny fakt --" % proby, flush=True)
         try:
             fakt = wybierz_fakt(conn, run_id)
         except ValueError as exc:
+            # Pula wyschla w polowie petli — to, co juz odrzucilismy, i tak
+            # musi wrocic, inaczej wyjatek kasuje oplacone kandydatury.
+            if odrzucone:
+                stages.zwroc_kandydatow(odrzucone)
             print("  %s — koncze" % exc, flush=True)
             return 1
         brief = temat_z_faktu(conn, run_id, fakt)
@@ -347,6 +487,13 @@ def _przebieg(conn, run_id: int) -> int:
         unosi, powod = uniesie_artykul(brief)
     if not unosi:
         print("  ODPADA: %s" % powod, flush=True)
+        # Ostatni odrzucony wraca tak samo jak trzy poprzednie — inaczej zdanie
+        # ponizej („pula zostaje na notki") byloby nieprawda o tym wlasnie
+        # fakcie, ktorym przebieg sie skonczyl.
+        odrzucone.append(fakt)
+    if odrzucone:
+        stages.zwroc_kandydatow(odrzucone)
+    if not unosi:
         print(">> po %d probach zaden fakt nie uniesie artykulu — nie pisze."
               " Pula zostaje na notki." % proby, flush=True)
         return 1
@@ -412,6 +559,78 @@ def _przebieg(conn, run_id: int) -> int:
     # w ogole wybralismy, i pisarz ma go widziec razem z reszta dowodow.
     card.setdefault("broken_belief", brief.get("broken_belief") or "")
     card.setdefault("why_they_believe_it", brief.get("why_they_believe_it") or "")
+
+    # KOMENTARZ WYZEJ BYL OBIETNICA BEZ POKRYCIA. Do karty szly wylacznie te
+    # dwa pola; sam fakt, jego URL i data szly do `brief` (`fakt_wyjsciowy`,
+    # `zrodlo_faktu`, `data_zrodla`) i NIE BYLY CZYTANE NIGDZIE — sprawdzone
+    # grepem po calym repo: trzy przypisania, zero odczytow.
+    #
+    # Skutek byl podwojny. Pisarz nie widzial zdania, ktore uzasadnilo wybor
+    # tematu (widzi wylacznie `card_json`). Sekcja `## Sources` w zapisanym
+    # pliku sklada sie z URL-i `confirmed_claims`, wiec zrodlo faktu nie
+    # trafialo do artykulu, mimo ze to od niego wszystko sie zaczelo.
+    #
+    # TRZECI POWOD, KTORY SAM TU WPISALEM, BYL BLEDNY: „liczby z tego faktu
+    # bramka `LICZBA_SPOZA_KORPUSU` uznawala za zmyslone, wiec dobrze, ze
+    # wejda do korpusu". To nie jest zaleta, tylko rozbrojenie kontroli —
+    # patrz akapit nizej i `gates._korpus_pobranych`.
+    #
+    # Wchodzi jako `confirmed_claims`, a nie jako osobne pole, bo tylko tak
+    # dosiega wszystkich trzech miejsc naraz. Fakt jest udokumentowany: pula
+    # przepuscila go przez bramke swiezosci razem ze zrodlem i data.
+    #
+    # ALE NIE JAKO ZWYKLE TWIERDZENIE — i to jest poprawka po kontroli.
+    # `confirmed_claims` to zbior, NA KTORYM STOJA DWIE BRAMKI
+    # DETERMINISTYCZNE, a fakt z puli nie jest wyciagiem z pobranego
+    # dokumentu: to wypowiedz modelu z `znajdz_ciekawostki` z doklejonym
+    # URL-em. Nikt tej strony nie pobral ani nie sklasyfikowal.
+    #
+    # Bez znacznika rozbrajal obie:
+    #   `gates.szerokosc_podstawy` liczylo host, ktorego nikt nie pobral, wiec
+    #     `WASKA_PODSTAWA` milczala na artykule stojacym realnie na jednym
+    #     zrodle — a ta uwaga powstala dokladnie po takim artykule (0020,
+    #     „The Fossil of a Vote", jeden odnosnik);
+    #   `gates.numbers_outside_corpus` bierze korpus z `json.dumps(card)`, wiec
+    #     liczby z tego faktu stawaly sie „obecne w materiale dowodowym".
+    #
+    # DLATEGO `not_fetched`, a nie kolejne martwe pole. Obie bramki teraz je
+    # CZYTAJA (patrz `gates.szerokosc_podstawy` i `gates._korpus_pobranych`):
+    # host sie nie liczy, a liczba stad idzie pod wlasna uwaga
+    # `LICZBA_TYLKO_Z_PULI`, ktora mowi prawde — nie „zmyslona", tylko
+    # „niepobrana, sprawdz w zrodle". Klucz po angielsku, bo ta karta jedzie
+    # do pisarza jako `card_json` i ma sie tlumaczyc sama.
+    _fakt_txt = " ".join(str(brief.get("fakt_wyjsciowy") or "").split())
+    _fakt_url = str(brief.get("zrodlo_faktu") or "").strip()
+    if _fakt_txt and _fakt_url:
+        _juz = {str(c.get("url") or "")
+                for c in (card.get("confirmed_claims") or [])
+                if isinstance(c, dict)}
+        if _fakt_url not in _juz:
+            # `evidence` BYLO KOPIA `claim` — ten sam napis dwa razy. To
+            # jedyne twierdzenie w karcie, ktorego „cytat" nie jest wyciagiem
+            # ze zrodla, czyli dokladnie wzorzec, przed ktorym stoi regula
+            # `MUST CARRY THE WHOLE CLAIM` w `synteza.md` i caly
+            # `test_cytat_niesie_twierdzenie.py`. Zaden kod tego nie sprawdza,
+            # wiec przechodzilo cicho.
+            #
+            # Rekord z puli niesie DWA osobne zdania: `control_fact` (co mowi
+            # dokument kontrolny) i `actually` (co jest naprawde prawda wedlug
+            # zrodla). Ktorekolwiek z nich jest odrebnym zdaniem, a nie echem
+            # twierdzenia. Gdy nie ma zadnego, zostaje sam fakt — ale wtedy
+            # `not_fetched` mowi wprost, ze to nie jest cytat.
+            _wyciag = " ".join(str(fakt.get("control_fact")
+                                   or fakt.get("actually") or "").split())
+            _zrob_miejsce_na_fakt(card)
+            card.setdefault("confirmed_claims", []).insert(0, {
+                "claim": _fakt_txt,
+                "evidence": _wyciag or _fakt_txt,
+                "url": _fakt_url,
+                "not_fetched": True,
+            })
+            print("  fakt wyjsciowy dolozony do karty: %s (%s)"
+                  % (_fakt_url[:60], brief.get("data_zrodla") or "brak daty"),
+                  flush=True)
+            _rozszerz_najstarsze(card, brief.get("data_zrodla"))
 
     # --- HAMULEC PRZED NAJDROZSZYM ETAPEM ---------------------------------
     #
@@ -506,14 +725,94 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
     """
     print()
     print("-- czy jest tu luka --", flush=True)
-    ocena = stages.warto_pisac(conn, run_id, card)
-    print("   werdykt: %s" % str(ocena.get("verdict") or ocena)[:200], flush=True)
+    # BRAMKA JEST DORADCZA — I DOTAD MOGLA ZABIC CALY PRZEBIEG.
+    #
+    # `run.py` opakowuje dokladnie to wywolanie i pisze dlaczego: „Jej awaria
+    # nie moze kosztowac oplaconego researchu". Tu stalo golo, mimo ze NICZEGO
+    # nie blokuje — wiec jeden `ValueError` z `llm.parse_json` wyrzucal do kosza
+    # dyskoverie, pobieranie, klasyfikacje i synteze, czyli okolo 0,40 USD.
+    # To nie hipoteza: `llm.parse_json` dokumentuje taka awarie z 25 sierpnia
+    # 2026 — „`warto_pisac` padlo na `Extra data: line 1 column 1866`".
+    # Lamalo to takze regule wlasciciela z `gates.py`: artykul powstaje ZAWSZE.
+    ocena: dict = {}
+    try:
+        ocena = stages.warto_pisac(conn, run_id, card)
+        # WERDYKT SIEDZI POD `werdykt`, NIE POD `verdict`. Kontrakt
+        # `prompts/warto_pisac.md` zwraca `one_line_verdict`, a wlasciwy werdykt
+        # sklada KOD w `stages.warto_pisac` i zapisuje po polsku. Czytanie
+        # `verdict` dawalo zawsze None, wiec log drukowal surowy `repr` calego
+        # slownika uciety na 200 znakach — czyli nie mowil nic.
+        print("   filary: %d z 3 (%s)"
+              % (ocena.get("ile_filarow", 0),
+                 ", ".join(k for k, v in (ocena.get("filary") or {}).items() if v)
+                 or "zaden"), flush=True)
+        print("   werdykt: %s — %s"
+              % (ocena.get("werdykt"), str(ocena.get("powod") or "")[:160]),
+              flush=True)
+        # ZAPISUJEMY OD RAZU, NIE ZA GALEZIA BANKU. Ta linia stala PO calym
+        # bloku DOLOZ, wiec awaria `bank_fragmentow` albo `bibliotekarz`
+        # wyrzucala z `try` i karta szla do zapisu BEZ `ocena_ciekawosci` —
+        # mimo ze sama ocena byla juz policzona i kilka linii nizej decydowala
+        # o glebokosci. Karta w `articles.evidence` jest jedynym miejscem, z
+        # ktorego bank fragmentow cokolwiek czyta; „ocena jest, ale w karcie
+        # jej nie ma" to znowu sygnal policzony i wyrzucony.
+        card["ocena_ciekawosci"] = ocena
+
+        if ocena.get("werdykt") == "DOLOZ":
+            # TO JEST MOMENT, DLA KTOREGO BANK ISTNIEJE — cytat z `run.py`,
+            # ktory te galaz ma. Ta sciezka NIE MIALA JEJ WCALE: werdykt DOLOZ
+            # znaczy „luka jest, ale materialu za malo", i bez banku szedl do
+            # pisarza dokladnie tak samo jak PISZ. Bibliotekarz szuka pary
+            # w juz zaplaconych resztkach z innej dziedziny — tak powstal
+            # najlepszy tekst serii.
+            print("   szukam pary w banku...", flush=True)
+            bank = stages.bank_fragmentow(conn)
+            if not bank:
+                print("   bank pusty — pisarz dostaje karte jak jest", flush=True)
+            else:
+                grupy = stages.bibliotekarz(conn, run_id, bank).get("groups") or []
+                dolozone = [{"domain": ", ".join(g.get("dziedziny", [])),
+                             "mechanism": g.get("mechanism", ""), "z_banku": True}
+                            for g in grupy[:2]]
+                if dolozone:
+                    card.setdefault("parallel_mechanisms", []).extend(dolozone)
+                    print("   dolozono %d mechanizmow z banku:" % len(dolozone),
+                          flush=True)
+                    for d in dolozone:
+                        print("     • [%s] %s"
+                              % (d["domain"], d["mechanism"][:110]), flush=True)
+                else:
+                    print("   bank nie ma pary — pisarz dostaje karte jak jest",
+                          flush=True)
+    except Exception as exc:
+        print("  [awaria] bramka ciekawosci padla (%s: %s) — pisze bez niej"
+              % (type(exc).__name__, str(exc)[:120]), flush=True)
+        # OCENA ZOSTAJE, JESLI TO NIE ONA PADLA. Gdy wywrocil sie dopiero bank
+        # albo bibliotekarz, filary sa juz policzone i glebokosc ma z czego
+        # powstac — kasowanie ich zeslaloby dobry material na srodkowe pasmo.
+        # Kasujemy wylacznie ksztalt, ktorego nie da sie policzyc.
+        if not isinstance(ocena, dict):
+            ocena = {}
 
     print()
     print("-- pisanie --", flush=True)
-    glebokosc = glebokosc_z_oceny(ocena)
+    # GLEBOKOSC BEZ OCENY. `glebokosc_z_oceny({})` daje THIN, czyli cel 420
+    # slow — i tak ma byc, gdy bramka POWIEDZIALA, ze filarow nie ma. Ale gdy
+    # bramka PADLA, nie wiemy nic, a THIN znaczy „material na dwa zdania".
+    # Fakt przeszedl juz `uniesie_artykul`, wiec ma drugi akt albo zasieg;
+    # srodkowe pasmo (650 slow) nie udaje wiedzy w zadna strone.
+    glebokosc = glebokosc_z_oceny(ocena) if ocena else GLEBOKOSC_BEZ_OCENY
     print("   glebokosc: %s" % glebokosc, flush=True)
-    draft = stages.write(conn, run_id, card, glebokosc)
+    try:
+        draft = stages.write(conn, run_id, card, glebokosc)
+    except Exception as exc:
+        # Jedno powtorzenie na Opusie, tak jak w `run.py`: tu ginie caly
+        # oplacony research, a Opus jest sprawdzonym pisarzem tego potoku.
+        print("  [awaria] pisarz (%s) padl: %s — powtarzam na %s"
+              % (config.MODEL_FOR.get("write"), str(exc)[:120], config.CLAUDE),
+              flush=True)
+        config.MODEL_FOR["write"] = config.CLAUDE
+        draft = stages.write(conn, run_id, card, glebokosc)
     print()
     print("   tytul: %s" % draft.get("title"), flush=True)
     print("   podtytul: %s" % draft.get("subtitle", ""), flush=True)
@@ -527,7 +826,18 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
 
     print()
     print("-- recenzja --", flush=True)
-    raport = stages.review(conn, run_id, card, draft)
+    # RECENZJA NIC NIE BLOKUJE, WIEC JEJ BRAK TEZ NIE MOZE. `gates.verdict`
+    # zwraca SAVED niezaleznie od raportu; padniecie tego etapu wyrzucalo do
+    # kosza gotowy, oplacony tekst (samo pisanie to 0,76 USD). Artykul idzie
+    # do szuflady z adnotacja, ze nie rozliczono go zdanie po zdaniu —
+    # wlasciciel widzi w uwagach, na co patrzy. Tak samo jak w `run.py`.
+    try:
+        raport = stages.review(conn, run_id, card, draft)
+    except Exception as exc:
+        print("  [awaria] recenzja padla (%s: %s) — zapisuje bez niej"
+              % (type(exc).__name__, str(exc)[:120]), flush=True)
+        raport = {"sentences": [], "unsupported_facts": [],
+                  "summary": "recenzja niedostepna: %s" % type(exc).__name__}
     # Dwa zrodla nieopartych faktow, tak jak w run.py: jawna lista recenzenta
     # ORAZ zdania sklasyfikowane jako FACT z `supported: false`. Recenzent
     # wypelnia raz jedno, raz drugie, i branie tylko jednego gubi polowe.

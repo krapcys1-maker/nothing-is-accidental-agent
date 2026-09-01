@@ -136,9 +136,9 @@ that is fine — the other four questions are a complete road on their own.
 ## What is missing
 
 Then, in one sentence: if this card is thin, what exact shape of company would
-rescue it? Name the shape, not a topic. "A case where the same event-triggered
-clock governs something in an unrelated industry" is useful. "More sources" is
-not.
+rescue it? Name the shape, not a topic. "A case where the same automated
+decision, taken with no named reviewer, governs something in an unrelated
+industry" is useful. "More sources" is not.
 
 ## Output
 

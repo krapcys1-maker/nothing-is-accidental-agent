@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1513 wierszy, 14 funkcji na poziomie modułu, 1 klas
+1718 wierszy, 15 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -11,6 +11,7 @@
 | `zajmij_zamek()` | Nie pozwala dwóm przebiegom działać naraz. |
 | `opis_celu(cel)` | Co wiedzielismy o celu w chwili pisania — do dziennika. |
 | `zostal_czas(na_co, potrzeba_s)` | Czy zdazymy jeszcze cokolwiek zrobic przed koncem czasu przebiegu. |
+| `_pod_rzad_w_bloku(co, na_co)` *(wewn.)* | Ile porazek pod rzad naliczyl TEN blok, odkad sie zaczal. |
 | `rytm(co, na_co, stan)` | Przerwa MIEDZY dwoma dzialaniami tego samego rodzaju. |
 | `zmiesci_sie(rodzaj, ile, udzial)` | Ile z zaplanowanych dzialan NAPRAWDE zmiesci sie w czasie przebiegu. |
 | `ile_przebiegow_zostalo(conn)` | Ile przebiegow dnia jeszcze bedzie, wliczajac biezacy. |
@@ -22,7 +23,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-5789 wierszy, 107 funkcji na poziomie modułu, 0 klas
+5968 wierszy, 110 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -37,6 +38,8 @@
 | `save(conn, run_id, topic, card, draft, status, blocked_by, notes)` | Etap 9 — zapis. Artykuł do szuflady: baza + plik .md. |
 | `karta_dla_pisarza(card, teraz)` | Karta bez zastrzezenia, ktorego nie wolno opublikowac. |
 | `write(conn, run_id, card, glebokosc)` | Etap 7 — artykuł (Claude). To jest produkt. |
+| `_ile_reakcji(k)` *(wewn.)* | „(reakcji: N)" TYLKO wtedy, gdy zrodlo to pole w ogole wypelnia. |
+| `_po_rowno_ze_zrodel(komentarze, ile)` *(wewn.)* | Wycinek listy, ktory NIE MOZE zaglodzic zadnego miejsca rozmowy. |
 | `wybierz_do_odpowiedzi(conn, run_id, komentarze)` | Komu odpisac, gdy komentarzy jest wiecej niz kilka. |
 | `reply_to(conn, run_id, comment, evidence)` | Odpowiedź na komentarz pod własną treścią — do szuflady. |
 | `plan_tygodnia(dzien_artykulu)` | Harmonogram tygodnia: co i kiedy wychodzi. |
@@ -55,6 +58,7 @@
 | `zaczyn_z_kanalow(ile)` | Tematy, o ktorych mowi sie w tym tygodniu — do promptu, nie do cytowania. |
 | `znajdz_ciekawostki(conn, run_id, ile)` | Materiał na notki w dni bez artykułu. |
 | `kuplet_korygujacy(tekst)` | Czy tekst uzywa ruchu „nie X. Y." — zaprzeczenie, potem poprawka. |
+| `zdania_z_tikiem(tekst)` | TE SAME trzy postacie tiku, ale oddane jako ZDANIA, nie jako „tak/nie". |
 | `ostatnie_otwarcia(rodzaj, ile)` | Pierwsze slowa ostatnich notek — zeby kolejna nie zaczela sie tak samo. |
 | `wiek_zrodla_w_dniach(data_zrodla, teraz)` | Ile dni ma zrodlo. None, gdy daty nie da sie odczytac. |
 | `nazywa_wersje(tekst)` | Czy zdanie nazywa konkretna wersje produktu. Zwraca ja albo pusty napis. |
@@ -136,7 +140,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-3583 wierszy, 74 funkcji na poziomie modułu, 0 klas
+3932 wierszy, 77 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -179,6 +183,9 @@
 | `numer_naszej_notki(page, tekst, prob)` | Numer notki odczytany z NASZEGO PROFILU po jej tresci. |
 | `potwierdz_notke(page, tekst, prob)` | Pyta Substacka, czy notka naprawdę wisi na naszym profilu. |
 | `_autor_przy_przycisku(przycisk)` *(wewn.)* | Kto napisal wpis, przy ktorym stoi ten przycisk. |
+| `_uchwyt_wezla(lokator)` *(wewn.)* | Uchwyt do KONKRETNEGO wezla DOM, albo None. Nie podnosi wyjatku. |
+| `_stan_przycisku(uchwyt)` *(wewn.)* | Jak przycisk wyglada — wszystkie sygnaly naraz, sklejone w jeden napis. |
+| `potwierdz_polubienie(uchwyt, przed)` | Czy przycisk po klknieciu wyglada inaczej niz przed nim. |
 | `polub_w_kanale(ile, wyslij)` | Polubienia w kanale czytelnika. |
 | `_klik_na_profilu(handle, napisy, rodzaj, wyslij)` *(wewn.)* | Klika JEDEN konkretny przycisk na cudzym profilu — i tylko jego. |
 | `pobierz_subskrybentow()` | Czyta liste subskrybentow z WLASNEGO panelu, wlasna sesja. |
@@ -203,7 +210,7 @@
 | `zapamietaj_platny_host(host, prawo)` | Host, ktory wprost mowi, ze komentowac moga tylko placacy. |
 | `hosty_tylko_dla_placacych()` | Hosty, gdzie komentowac moga tylko placacy — do odsiania PRZED ocena. |
 | `zapomnij_platny_host(host)` | Udany komentarz kasuje host z listy — wydawca mogl zmienic ustawienia. |
-| `hosty_gdzie_komentarz_nie_wchodzi(min_prob)` | Hosty, gdzie probowalismy >=2 razy i ANI RAZ komentarz nie wszedl. |
+| `hosty_gdzie_komentarz_nie_wchodzi(min_prob, dni)` | Hosty, gdzie w ostatnich `dni` dniach probowalismy >=2 razy i ANI RAZ |
 | `mozna_komentowac(url)` | Czy pod tym tekstem wolno nam w ogóle napisać. |
 | `uchwyt_publikacji(host)` | Nazwa konta do obserwowania — z hosta albo, gdy trzeba, z API. |
 | `juz_sie_odezwalismy(page, url)` | Czy JUZ napisalismy cokolwiek pod tym postem albo pod ta notka. |
@@ -238,12 +245,14 @@
 
 ### `gates.py` — bramki jakości; żadna nie blokuje
 
-514 wierszy, 16 funkcji na poziomie modułu, 0 klas
+581 wierszy, 18 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_digit_tokens(text)` *(wewn.)* | — |
-| `numbers_outside_corpus(body, card)` | Liczby w tekście, których nie ma nigdzie w materiale dowodowym. |
+| `_niepobrane(card)` *(wewn.)* | Twierdzenia oznaczone `not_fetched` — dolozone, nie wyciagniete. |
+| `_korpus_pobranych(card)` *(wewn.)* | Liczby z materialu, ktory NAPRAWDE pobralismy. |
+| `numbers_outside_corpus(body, card)` | Liczby w tekście, których nie ma nigdzie w POBRANYM materiale. |
 | `deterministic_floors(body, card, poprzednie)` | Podłogi bez modelu: 0 USD, milisekundy, zero wywołań. |
 | `_akapity(body)` *(wewn.)* | — |
 | `zastrzezenia(body)` | Zastrzezenia w pierwszej osobie. Budzet: jedno na tekst. |
@@ -294,7 +303,7 @@
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-701 wierszy, 19 funkcji na poziomie modułu, 0 klas
+712 wierszy, 19 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -344,7 +353,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2294 wierszy, 21 funkcji na poziomie modułu, 0 klas
+2303 wierszy, 21 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -424,7 +433,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-639 wierszy, 7 funkcji na poziomie modułu, 0 klas
+949 wierszy, 9 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -433,20 +442,28 @@
 | `uniesie_artykul(brief)` | Czy z tego faktu da sie napisac TYSIAC SLOW, czy tylko dwa zdania. |
 | `wybierz_fakt(conn, run_id, ile)` | Swiezy fakt z puli ciekawostek, ktory NIE powtarza zadnego artykulu. |
 | `main()` | Otwiera przebieg, oddaje robote i ZAMYKA go — takze przy wyjatku. |
+| `_zrob_miejsce_na_fakt(card)` *(wewn.)* | Robi miejsce na wstrzykniete twierdzenie, nie tracac zadnego ZRODLA. |
+| `_rozszerz_najstarsze(card, data_faktu)` *(wewn.)* | Data wstrzyknietego zrodla wazy — ale TYLKO w strone ostrzezenia. |
 | `_przebieg(conn, run_id)` *(wewn.)* | — |
 | `_napisz_i_zapisz(conn, run_id, brief, card)` *(wewn.)* | Od bramki „warto pisac" do zapisu i grafiki. |
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
-372 wierszy, 7 funkcji na poziomie modułu, 0 klas
+884 wierszy, 13 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `budzety_dzienne()` | Ile agent SOBIE ZALOZYL kazdego dnia — z pliku, nie z dzisiejszej konfiguracji. |
 | `_data(dzien)` *(wewn.)* | „2026-08-30" -> datetime w UTC. `cichy_dzien` pyta o obiekt, nie napis. |
+| `_poprawna_data(dzien)` *(wewn.)* | Czy da sie z tego zrobic date. Zepsuty wpis ma znikac, nie zabijac raport. |
 | `wczytaj(dni)` | (zrobione, nieudane) — liczniki per dzien i rodzaj. |
-| `_znak(ile, norma)` *(wewn.)* | Jak daleko od normy. Prog alarmu jest ten sam, co w `alarm.py`. |
+| `slad_dziennika(zalozone)` | (najstarszy znany dzien, zbior dni z JAKIMKOLWIEK wpisem w dzienniku). |
+| `_znak(ile, norma)` *(wewn.)* | Jak daleko od planu NA TEN DZIEN. Sam PROCENT jest ten sam, co w `alarm.py`. |
+| `dni_okna(dni, z_wpisami, zalozone, najstarszy)` | Wszystkie dni okna — TAKZE te, w ktorych nie wyszlo NIC. |
+| `_komorka(ile, cel, wyciszony, ma_wpisy, w_toku, szacowany)` *(wewn.)* | Jedna kratka tabeli. `cel is None` znaczy „planu nie znamy". |
 | `przebiegow_dzis()` | Ile przebiegow agenta domknelo sie dzis. Zero, gdy bazy nie ma. |
+| `godziny_przebiegow()` | Minuty od polnocy UTC, o ktorych systemd odpala agenta. |
+| `przebiegow_naleznych(teraz)` | (ile przebiegow POWINNO juz oddac swoja czesc, ile ich jest na dobe). |
 | `slad(dni)` | Gdzie dokladnie psuja sie publikacje — wg pozycji w serii i odstepu. |
 | `main()` | — |
 

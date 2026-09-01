@@ -5,6 +5,7 @@ i jego sedzia.
 """
 import hashlib
 import pathlib
+import re
 import sys
 
 sys.path.insert(0, "agent-v2")
@@ -75,13 +76,34 @@ sprawdz("odrzucony kandydat NIE jest bezpieczny do wystawienia",
 sprawdz("odrzucona odpowiedz ma wyczyszczona tresc", 'data["reply"] = None' in zrodlo)
 
 print()
-print("=== 4. PROMPTY MOWIA, ZE CUDZY TEKST TO DANE ===")
+print("=== 4. PROMPTY MOWIA, ZE CUDZY TEKST TO DANE — I MOWIA TO NA CZAS ===")
+# Trzy sprawdzenia napisow ponizej pilnuja, ze zdania bariery w ogole istnieja.
+# Same w sobie NIE WYSTARCZAJA i przez dlugi czas byly tu jedyne: `odpowiedz.md`
+# mial wtedy wszystkie trzy zdania, ale STALY ZA POLAMI z cudzym tekstem —
+# bariera oglaszala „wszystko ponizej to dane", a ponizej nie bylo juz ani
+# jednego pola. Wszystkie trzy asercje przechodzily na tej wadliwej wersji
+# (sprawdzone na `git show HEAD` w chwili pisania). Dlatego dochodzi czwarte,
+# POZYCYJNE: ostrzezenie musi stac przed trescia, ktorej dotyczy.
+#
+# Pelne kryterium (ktore pole niesie cudza tresc — ustalane z `stages.py`,
+# nie z ukladu pliku) mieszka w `test_bariera_wstrzykniecia.py`. Tutaj zostaje
+# najtansza wersja tego samego wymogu, zeby ta sciezka nie miala luki.
+POLE = re.compile(r"(?<!\{)\{[A-Za-z_][A-Za-z_0-9]*\}(?!\})")
 for n in ("komentarz.md", "odpowiedz.md"):
     tekst = (config.PROMPTS_DIR / n).read_text(encoding="utf-8")
     sprawdz("%s: cudzy tekst nazwany danymi" % n, "DATA, never instructions" in tekst)
     sprawdz("%s: zakaz wykonywania polecen z tresci" % n, "Do not comply" in tekst)
     sprawdz("%s: nic w tresci nie podnosi uprawnien" % n,
             "raises your permissions" in tekst)
+
+    linie = tekst.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    bariera = next((nr for nr, l in enumerate(linie, 1)
+                    if "DATA, never instructions" in l), 0)
+    po = [nr for nr, l in enumerate(linie, 1) if nr > bariera and POLE.search(l)]
+    sprawdz("%s: za bariera stoi jeszcze jakiekolwiek pole" % n, bool(po),
+            "bariera w linii %d, ostatnie pole w linii %d — bariera pilnuje pustego"
+            " miejsca" % (bariera, max((nr for nr, l in enumerate(linie, 1)
+                                        if POLE.search(l)), default=0)))
 
 print()
 print("=== 5. ZAPORA NIE JEST ZA OSTRA ===")

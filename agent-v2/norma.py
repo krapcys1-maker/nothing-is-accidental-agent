@@ -17,6 +17,22 @@ profilu pokazuje takze notki pisane recznie przez wlasciciela i wlasnie to
 mylenie kosztowalo agenta przydzial: 29 sierpnia profil mial piec notek, z
 czego dwie byly bota.
 
+JAK CZYTAC TABELE. `5/10` to zrobione wobec PLANU tego dnia (z `budzety.json`),
+nie wobec dzisiejszej normy. Znak zapytania nigdy nie jest zerem: `?` znaczy
+„o tym dniu nie wiemy nic", a `5/?` — „wiemy, ile wyszlo, nie wiemy, ile bylo
+zaplanowane"; pozycja bez ani jednego zmierzonego dnia ma `-` takze w SREDNIEJ
+i w `% NORMY`, nigdy `0`. Tylda (`0/5~`) znaczy „planu nie zapisano i nie ma
+sladu przebiegu, wiec plan jest OSZACOWANY z normy dobowej" — to jedyna
+liczba w tabeli, ktora nie jest pomiarem. Dzien bez ani jednego wpisu ma wlasny
+wiersz i podpis; nie znika z tabeli, bo dzien calkowitej awarii jest jedyna
+rzecza, ktorej ten licznik ma NIE przegapic.
+
+DZIEN BIEZACY jest rozliczany z tej czesci planu, ktora POWINNA byla juz wyjsc
+o tej porze — z harmonogramu w `systemd/nia-agent.timer`, nie z tego, ile
+przebiegow sie odbylo. Inaczej licznik nagradzalby bezczynnosc: doba, w ktorej
+nie wyszlo NIC, meldowala do polnocy `% PLANU 100%`, a doba z jedna udana
+notka o poranku — 84%.
+
     python agent-v2/norma.py            # ostatnie 14 dni
     python agent-v2/norma.py --dni 30
     python agent-v2/norma.py --dzis     # sam dzisiejszy stan, krotko
@@ -44,6 +60,61 @@ RODZAJE = ("notka", "komentarz", "polubienie", "restack", "subskrypcja",
 # „brak przycisku", a nie jako 0 procent normy.
 NIEWYKONALNE = {"obserwacja": "Substack zdjal przycisk Follow"}
 
+# NAJMNIEJSZY PLAN, PRZY KTORYM PROCENT COS ZNACZY — DWIE LICZBY, DWA PYTANIA.
+#
+# Prog 60% stosowany bez wzgledu na wielkosc planu robi z licznika generator
+# szumu. `subskrypcja` ma norme 0,3 na dobe, czyli plan okolo 2 na tydzien —
+# JEDNA mniej to juz 50%, czyli alarm. Tak samo restacki: plan 1-2 na dzien,
+# wiec kazdy dzien bez restacka to 0% i wykrzyknik w tabeli. `obserwacja` jest
+# przed tym chroniona lista NIEWYKONALNE, `subskrypcja` nie byla przez nic.
+#
+# BYLA TU JEDNA STALA (`MIN_PLAN_DO_ALARMU = 5`) I RZADZILA DWIEMA SKALAMI:
+# `_znak` porownywal ja z planem DZIENNYM (jedna kratka tabeli), a alarm na
+# dole z SUMA PLANU W CALYM OKNIE. Zmierzone: 7 dni, plan restackow 2/dobe,
+# zero wykonanych — tabela przez caly tydzien pokazywala `0/2` BEZ ZNAKU
+# (2 < 5), a dol drukowal „PONIZEJ PROGU 60%: restack" (14 >= 5) i zwracal
+# kod 1. Docstring `_znak` obiecywal dokladnie odwrotnie: „zeby nie bylo tak,
+# ze tabela krzyczy o pozycji, o ktorej alarm swiadomie milczy". Jedna liczba
+# nie moze rzadzic obiema skalami, wiec sa dwie i maja rozne nazwy.
+#
+# Realne plany dzienne (`stages.budzet_dnia`): notki 5, komentarze 15-23,
+# lajki 10-16, restacki 1-2, subskrypcje 0 albo 1.
+
+# DLA JEDNEJ KRATKI TABELI — porownywany z planem NA TEN DZIEN.
+#
+# Trzy, bo przy planie 3 jeden brakujacy element to 33%, a przy planie 2 —
+# 50%, czyli liczba nieodroznialna od zaokraglenia. NIE PIEC: plan notek to
+# `len(config.NOTE_MIX_OTHER_DAY)`, czyli DOKLADNIE 5, wiec prog 5 stawial
+# najwazniejsza pozycje licznika na samej granicy — `_znak(0, 4) == ""`, a
+# `_znak(0, 5) == "!!"`. Skrocenie tej krotki o JEDEN element wyciszalo
+# wykrzykniki przy notkach, czyli przy pozycji, od ktorej caly licznik sie
+# zaczal, i nic by tego nie zauwazylo. Przy progu 3 trzeba by skrocic krotke
+# z 5 do 2. Granicy pilnuje `tests/test_dzien_awarii.py`.
+MIN_PLAN_DZIENNY_DO_ZNAKU = 3
+
+# DLA ALARMU NA DOLE — porownywany z SUMA PLANU W CALYM OKNIE.
+#
+# Dziesiec, bo dopiero przy planie 10 zejscie ponizej progu 60% oznacza CZTERY
+# brakujace sztuki; przy planie 4 wystarcza DWIE, a dwie sztuki to jeszcze
+# pech. Zmierzone na realnych normach: subskrypcje maja plan losowany z ulamka
+# 0,3/dobe, wiec w oknie 14 dni ich suma to okolo 4,2 — przy progu 5 alarm
+# przelaczal sie OD KOSTKI, nie od wyniku (raz 4, raz 5, mniej wiecej po
+# polowie), a przy `--dni 30` (suma ~9) wracal zawsze. Przy progu 10 milcza az
+# do okna ~33 dni. Restacki przy 1,5/dobe daja w oknie 14 dni 21 i alarmuja
+# normalnie, bo dziewiec brakujacych restackow w dwa tygodnie to juz nie pech.
+#
+# NIE MILCZYMY o tych pozycjach: procent nadal stoi w tabeli, a osobna linia
+# nazywa je po imieniu razem z wielkoscia planu — w OBU widokach, takze w
+# `--dzis`. Nie budzimy tylko alarmu, bo alarm, ktory myli sie regularnie,
+# uczy ignorowania siebie.
+MIN_PLAN_W_OKNIE_DO_ALARMU = 10
+
+# Godziny przebiegow CZYTAMY z jednostki systemd, a nie przepisujemy tutaj.
+# `run.py:265-268` nazywa te zasade wprost („powtorzenie ich tutaj zlamaloby
+# zasade jednej liczby w jednym miejscu"), a `tests/test_rytm.py:132` juz ten
+# plik czyta z Pythona.
+ZEGAR = Path(__file__).resolve().parent / "systemd" / "nia-agent.timer"
+
 
 def budzety_dzienne() -> dict:
     """Ile agent SOBIE ZALOZYL kazdego dnia — z pliku, nie z dzisiejszej konfiguracji.
@@ -69,15 +140,51 @@ def budzety_dzienne() -> dict:
     # Przepisujemy na nazwy z dziennika, zeby licznik nie musial tlumaczyc.
     wynik = {}
     for dzien, wpis in stan.items():
-        b = (wpis or {}).get("budzet") or {}
-        wynik[dzien] = {config.BUDZET_NA_RODZAJ[k]: v
-                        for k, v in b.items() if k in config.BUDZET_NA_RODZAJ}
+        # NARZEDZIE POMIAROWE NIE MOZE UMIERAC NA ZEPSUTYM WPISIE. Ta petla
+        # stala POZA `try` z odczytu pliku, wiec wartosc dnia inna niz slownik
+        # („2026-08-31": "psu") wywracala caly raport `AttributeError`-em i
+        # kasowala wszystkie pozostale liczby.
+        if not _poprawna_data(dzien) or not isinstance(wpis, dict):
+            continue
+        b = wpis.get("budzet")
+        # BRAK ZAPISU TO NIE JEST ZAPISANE ZERO. Bylo tu `or {}`, wiec dzien
+        # bez klucza „budzet" dostawal PUSTY SLOWNIK — a pusty slownik nie
+        # jest `None`, wiec dzien nie dostawal gwiazdki „*plan nieznany", za to
+        # wszystkie szesc pozycji ladowalo na liscie „dopisz je do
+        # BUDZET_NA_RODZAJ". Rada byla falszywa: te klucze SA w tej mapie
+        # (config.py:1671-1678), brakowalo samego zapisu budzetu.
+        if not isinstance(b, dict) or not b:
+            continue
+        # Wartosc nieliczbowa traktujemy jak brak pozycji, a nie jak plan:
+        # `plany[r] += "piec"` wywracalo raport `TypeError`-em.
+        wynik[dzien] = {
+            config.BUDZET_NA_RODZAJ[k]: float(v)
+            for k, v in b.items()
+            if k in config.BUDZET_NA_RODZAJ
+            and isinstance(v, (int, float)) and not isinstance(v, bool)}
     return wynik
 
 
 def _data(dzien: str):
     """„2026-08-30" -> datetime w UTC. `cichy_dzien` pyta o obiekt, nie napis."""
     return datetime.strptime(dzien, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+
+def _poprawna_data(dzien) -> bool:
+    """Czy da sie z tego zrobic date. Zepsuty wpis ma znikac, nie zabijac raport.
+
+    `2026-08-32` (dzien, ktorego nie ma) i `nie-data-x` wywracaly caly licznik
+    `ValueError`-em z `_data`, wiec JEDNA zepsuta linia dziennika kasowala
+    wszystkie pozostale liczby. Narzedzie pomiarowe ma wtedy pokazac mniej, a
+    nie nie pokazac nic.
+    """
+    if not isinstance(dzien, str):
+        return False
+    try:
+        _data(dzien)
+        return True
+    except ValueError:
+        return False
 
 
 def wczytaj(dni: int):
@@ -99,20 +206,160 @@ def wczytaj(dni: int):
             if not isinstance(w, dict) or w.get("rodzaj") not in RODZAJE:
                 continue
             dzien = str(w.get("kiedy") or "")[:10]
-            if not dzien or dzien < granica:
+            if not dzien or dzien < granica or not _poprawna_data(dzien):
                 continue
             (zrobione if w.get("udane") else nieudane)[dzien][w["rodzaj"]] += 1
     return zrobione, nieudane
 
 
+def slad_dziennika(zalozone: dict):
+    """(najstarszy znany dzien, zbior dni z JAKIMKOLWIEK wpisem w dzienniku).
+
+    DWIE RZECZY NARAZ, BO OBIE WYMAGAJA PRZECZYTANIA CALEGO PLIKU i obie pytaja
+    o to samo: czy tego dnia agent w ogole zyl. `wczytaj` odsiewa rodzaje spoza
+    RODZAJE (norma.py:121), a `browser.py:1138` zapisuje takze
+    `rodzaj: "artykul"` — wiec doba z opublikowanym artykulem i dwiema
+    odpowiedziami wyglada w `zrobione`/`nieudane` na dobe calkowicie martwa.
+    Tutaj liczy sie KAZDY poprawny wpis: artykul nie jest mierzony, ale
+    dowodzi, ze maszyna wstala, a to rozstrzyga, czy wolno podstawic
+    oszacowanie planu.
+
+    PO CO OSOBNA FUNKCJA. Poczatek okna liczyl sie jako `min(znane | {dzis})`,
+    gdzie `znane` bylo juz PRZYCIETE do okna — czyli „pierwszy dzien z danymi
+    W OKNIE". A to jest dokladnie ten sygnal, ktory calkowita awaria kasuje:
+    im dluzej agent nie dziala, tym pozniej zaczyna sie tabela.
+    Zmierzone przed poprawka: `--dni 14`, dane tylko z trzech ostatnich dni ->
+    tabela miala trzy wiersze, `% PLANU 100%` i podpis `dni: 3`. Jedenastu
+    martwych dni nie bylo widac ani wierszem, ani liczba, ani przypisem.
+    Koniec okna byl naprawiony, poczatek nadal przesuwal sie z danymi.
+
+    Zakresu i tak nie ciagniemy przed instalacje — dni sprzed niej nie sa
+    awaria, tylko nieistnieniem — ale data instalacji ma sie brac z CALEJ
+    historii (dziennik + wszystkie zapisane budzety), nie z okna.
+    """
+    kandydaci = [d for d in zalozone if _poprawna_data(d)]
+    ze_sladem = set()
+    if DZIENNIK.exists():
+        with DZIENNIK.open(encoding="utf-8") as plik:
+            for linia in plik:
+                linia = linia.strip()
+                if not linia:
+                    continue
+                try:
+                    w = json.loads(linia)
+                except ValueError:
+                    continue
+                if not isinstance(w, dict):
+                    continue
+                dzien = str(w.get("kiedy") or "")[:10]
+                if _poprawna_data(dzien):
+                    kandydaci.append(dzien)
+                    ze_sladem.add(dzien)
+    return (min(kandydaci) if kandydaci else None), ze_sladem
+
+
 def _znak(ile: float, norma: float) -> str:
-    """Jak daleko od normy. Prog alarmu jest ten sam, co w `alarm.py`."""
-    if norma < 1:
+    """Jak daleko od planu NA TEN DZIEN. Sam PROCENT jest ten sam, co w `alarm.py`.
+
+    Przy planie mniejszym niz MIN_PLAN_DZIENNY_DO_ZNAKU procent nie niesie
+    informacji (plan 2, brak jednego = 50%), wiec wykrzyknika nie stawiamy.
+
+    TO NIE JEST TA SAMA BRAMKA, CO NA DOLE RAPORTU, i celowo: tutaj pytamy o
+    JEDEN DZIEN, tam o SUME CALEGO OKNA. Wczesniej stala byla jedna i udawala,
+    ze rzadzi obiema skalami.
+
+    OBIETNICA JEST WIEC WEZSZA, NIZ BYLA, ale za to prawdziwa. Tabela moze
+    milczec tam, gdzie alarm krzyczy: `0/2` restacka jednego dnia nie znaczy
+    nic, a `0/21` przez dwa tygodnie znaczy wszystko — to jest cala wartosc
+    sumowania. Zakazany jest kierunek ODWROTNY, bo to on uczy ignorowania
+    tabeli: pozycja, o ktorej tabela krzyczy codziennie, a alarm milczy, nie
+    znika po cichu — dolna linia „ponizej progu, ale plan za maly na alarm"
+    nazywa ja po imieniu razem z wielkoscia planu, w obu widokach.
+
+    A `alarm.py` NIE MA zadnej bramki na wielkosc planu: `alarm.wolumeny()`
+    filtruje wylacznie po `config.PROG_ALARMU_WOLUMENU` (alarm.py:381), na
+    oknie 7 dni z `stages.podsumowanie_dzialan`. Wspolny miedzy tym plikiem a
+    `alarm.py` jest wiec sam PROCENT, a nie minimum — i tak to zdanie ma sie
+    czytac. Skutek dla wlasciciela: mail o wolumenach nadal potrafi zaalarmowac
+    o subskrypcjach (plan ~2 na tydzien), o ktorych ten licznik swiadomie
+    milczy. Domkniecie tego wymaga zmiany w `alarm.py`, nie tutaj.
+    """
+    if norma < MIN_PLAN_DZIENNY_DO_ZNAKU:
         return ""
     proc = 100.0 * ile / norma
     if proc >= 90:
         return " "
     return "!" if proc >= config.PROG_ALARMU_WOLUMENU else "!!"
+
+
+def dni_okna(dni: int, z_wpisami: set, zalozone: dict, najstarszy=None) -> list:
+    """Wszystkie dni okna — TAKZE te, w ktorych nie wyszlo NIC.
+
+    NAJPOWAZNIEJSZA WADA TEGO LICZNIKA, znaleziona w audycie. Lista dni
+    powstawala jako `sorted(zrobione)`, czyli z kluczy slownika, ktory dostawal
+    dzien wylacznie wtedy, gdy tego dnia UDALO SIE co najmniej jedno dzialanie.
+    Dzien calkowitej awarii — agent nie wstal albo wszystko poszlo do
+    `nieudane` — nie mial wiersza w tabeli i nie wchodzil ani do sredniej, ani
+    do procentu wykonania planu.
+
+    Zmierzone na atrapie: piec dni po 5 notek i 10 komentarzy, z czego jeden
+    dzien W CALOSCI nieudany. Prawda to 20/25 notek i 40/50 komentarzy, czyli
+    80%. Raport pokazywal cztery wiersze, „% PLANU 100%" i podpis „dni: 4" pod
+    oknem pieciu dni. Ten sam mechanizm ukrywal dwa ostatnie dni, w ktorych
+    agent w ogole sie nie odpalil — tabela konczyla sie po prostu wczesniej.
+
+    Dlatego dni bierzemy z KALENDARZA, nie z danych: CALE zadane okno, od
+    `dzis - dni` po dzis. Przed instalacje nie siegamy — dni sprzed niej nie sa
+    awaria, tylko nieistnieniem — ale date instalacji podaje
+    `slad_dziennika` z CALEJ historii, a nie „pierwszy dzien z danymi w
+    oknie": to drugie przesuwalo poczatek tabeli razem z awaria i chowalo
+    jedenascie martwych dni z czternastu. Dni z dziennika spoza tego zakresu
+    (data z przyszlosci po przestawionym zegarze) dokladamy pojedynczo, zeby
+    zepsuta data nie wygenerowala tysiaca pustych wierszy.
+    """
+    teraz = datetime.now(timezone.utc)
+    dzis = teraz.strftime("%Y-%m-%d")
+    granica = (teraz - timedelta(days=dni)).strftime("%Y-%m-%d")
+    znane = {d for d in z_wpisami if d >= granica}
+    znane |= {d for d in zalozone if granica <= d <= dzis}
+    # Bez zadnej historii pokazujemy sam dzis — pusta baza to nie jest okno
+    # czternastu dni awarii, tylko narzedzie uruchomione przed pierwszym
+    # przebiegiem.
+    start = najstarszy if najstarszy else dzis
+    start = max(start, granica)
+    start = min(start, dzis)
+    zakres = set()
+    biezacy = _data(start)
+    koniec = _data(dzis)
+    while biezacy <= koniec:
+        zakres.add(biezacy.strftime("%Y-%m-%d"))
+        biezacy += timedelta(days=1)
+    return sorted(zakres | znane)
+
+
+def _komorka(ile: int, cel, wyciszony: bool, ma_wpisy: bool,
+             w_toku: bool, szacowany: bool = False) -> str:
+    """Jedna kratka tabeli. `cel is None` znaczy „planu nie znamy".
+
+    `szacowany` dokleja `~`: plan tego dnia nie zostal zapisany i jest
+    PODSTAWIONY z normy dobowej. Oszacowanie ma sie roznic od pomiaru w samej
+    kratce, bo inaczej wlasciciel czyta zgadniete `0/5` tak samo jak zmierzone.
+    """
+    if wyciszony:
+        return "cisza"
+    # BRAK DANYCH MA WYGLADAC NA BRAK DANYCH, NIE NA ZERO. Dzien bez wpisow i
+    # bez planu oraz dzisiejszy dzien przed pierwszym przebiegiem to nie sa
+    # zera — nie wiemy o nich nic i tak maja sie czytac.
+    if w_toku or (not ma_wpisy and cel is None):
+        return "?"
+    if cel is None:
+        return "%d/?" % ile
+    tylda = "~" if szacowany else ""
+    if cel >= 1:
+        return "%d/%.0f%s%s" % (ile, cel, tylda, _znak(ile, cel))
+    # Plan ponizej jednego to nie jest liczba, ktora da sie oszacowac — `-~`
+    # sugerowaloby oszacowanie tam, gdzie nie ma czego szacowac.
+    return "%d" % ile if ile else "-"
 
 
 def przebiegow_dzis() -> int:
@@ -128,6 +375,60 @@ def przebiegow_dzis() -> int:
         return int(ile or 0)
     except Exception:
         return 0
+
+
+def godziny_przebiegow() -> list:
+    """Minuty od polnocy UTC, o ktorych systemd odpala agenta.
+
+    Czytane z `nia-agent.timer`, bo tam ta lista juz jest i drugiej byc nie
+    moze. Gdy pliku nie ma (uruchomienie poza serwerem, np. na Windows),
+    zakladamy rowny rozklad — lepszy od udawania, ze cala doba jest
+    rozliczalna od pierwszej minuty.
+    """
+    minuty = []
+    try:
+        for linia in ZEGAR.read_text(encoding="utf-8").splitlines():
+            linia = linia.strip()
+            if not linia.startswith("OnCalendar="):
+                continue
+            czesci = linia.split("=", 1)[1].split()[-1].split(":")
+            minuty.append(int(czesci[0]) * 60 + int(czesci[1]))
+    except Exception:
+        minuty = []
+    if not minuty:
+        n = max(1, config.PRZEBIEGOW_DZIENNIE)
+        return [round(24 * 60 * (i + 1) / (n + 1.0)) for i in range(n)]
+    return sorted(minuty)
+
+
+def przebiegow_naleznych(teraz=None) -> tuple:
+    """(ile przebiegow POWINNO juz oddac swoja czesc, ile ich jest na dobe).
+
+    TO NIE JEST `przebiegow_dzis()` I NIE MOZE NIM BYC. Tamta funkcja liczy
+    przebiegi, ktore SIE ODBYLY (`SELECT COUNT(*) ... finished_at LIKE dzis`).
+    Uzycie jej jako mianownika odtworzyloby dokladnie te wade, ktora ten kod
+    naprawia: maszyna lezy -> zero domknietych przebiegow -> zero oczekiwanych
+    -> doba calkowitej awarii znowu niewidoczna. Ile POWINNO sie odbyc, wie
+    wylacznie ZEGAR, i tylko on moze to rozstrzygac.
+
+    Przebieg liczy sie jako nalezny dopiero wtedy, gdy zaczal sie NASTEPNY.
+    Przebieg TRWA (`config.LIMIT_CZASU_PRZEBIEGU_S` = 9000 s, czyli 2,5 h) i
+    rozklada akcje na caly swoj czas, a `RandomizedDelaySec=1500` przesuwa mu
+    jeszcze start o do 25 minut — wiec o 11:45, kwadrans po nominalnym starcie
+    przebiegu z 11:20, jego notka nie ma prawa istniec i zadanie jej byloby tym
+    samym „0%!!" o czwartej rano, ktore galaz `--dzis` juz raz naprawiala.
+
+    Przy harmonogramie 11:20 / 17:00 / 19:20 / 21:30 / 23:40 UTC daje to:
+    do 17:00 — 0/5, potem 1/5, od 19:20 — 2/5, od 21:30 — 3/5, od 23:40 — 4/5.
+    Ostatni przebieg doby domyka sie juz po polnocy, wiec w obrebie doby nie
+    jest liczony; jego czesc wchodzi nazajutrz, gdy dzien jest pelny.
+    """
+    teraz = teraz or datetime.now(timezone.utc)
+    minuty_teraz = teraz.hour * 60 + teraz.minute
+    godziny = godziny_przebiegow()
+    n = len(godziny)
+    nalezne = sum(1 for i in range(n - 1) if minuty_teraz >= godziny[i + 1])
+    return nalezne, n
 
 
 def slad(dni: int) -> int:
@@ -234,10 +535,17 @@ def main() -> int:
     normy = config.normy_dzienne()
     dni = 1 if args.dzis else args.dni
     zrobione, nieudane = wczytaj(dni)
-    kolejne = sorted(zrobione) or [datetime.now(timezone.utc).strftime("%Y-%m-%d")]
+    # ZANIM COKOLWIEK ZAJRZY DO `zrobione[d]`. To defaultdict — samo czytanie
+    # zaklada klucz, wiec zbior „dni, w ktorych cokolwiek zapisano" trzeba
+    # zdjac teraz albo nigdy.
+    z_wpisami = set(zrobione) | set(nieudane)
+    zalozone = budzety_dzienne()
+    dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    najstarszy, ze_sladem = slad_dziennika(zalozone)
+    kolejne = dni_okna(dni, z_wpisami, zalozone, najstarszy)
+    nalezne_dzis, przebiegow = przebiegow_naleznych()
 
     if args.dzis:
-        dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         zrobione_przebiegi = przebiegow_dzis()
         print("STAN NA DZIS (%s, UTC) — po %d z %d przebiegow"
               % (dzis, zrobione_przebiegi, config.PRZEBIEGOW_DZIENNIE))
@@ -253,17 +561,50 @@ def main() -> int:
         if cicho:
             print("   >> DZIS JEST CICHY DZIEN — %s wyciszone celowo, zero nie"
                   " jest tu porazka" % ", ".join(config.CICHY_DZIEN_WYCISZA_RODZAJE))
+        # TA SAMA WADA, KTORA WIDOK WIELODNIOWY NAPRAWIL — I ZOSTALA TUTAJ.
+        # Ta galaz mierzyla wykonanie `config.normy_dzienne()`, czyli AMBICJA,
+        # i nigdy nie zagladala do zapisanego budzetu. Zmierzone na atrapie
+        # rozbiegu: plan dnia 8 komentarzy, agent zrobil 8 — czyli 100%
+        # wlasnego planu — a `--dzis` pokazywalo „8 / 19  42%!!". Docstring
+        # `budzety_dzienne` nazywa te wade po imieniu od 30 sierpnia.
+        plan = zalozone.get(dzis)
+        if plan is None:
+            print("   (planu na dzis NIE ZAPISANO — kolumna po ukosniku to"
+                  " norma docelowa, a to NIE jest pomiar wykonania planu)")
+        else:
+            print("   (kolumna po ukosniku to PLAN NA DZIS z budzetu, nie"
+                  " norma docelowa)")
         for r in RODZAJE:
-            ile, norma = zrobione[dzis][r], normy.get(r, 0)
+            ile = zrobione[dzis][r]
+            cel = (plan or {}).get(r)
+            znany = cel is not None
+            if not znany:
+                cel = normy.get(r, 0)
             if cicho and r in config.CICHY_DZIEN_WYCISZA_RODZAJE:
                 print("  %-12s %3d      — cichy dzien, nie nadajemy" % (r, ile))
             elif r in NIEWYKONALNE:
                 print("  %-12s %3d      — %s" % (r, ile, NIEWYKONALNE[r]))
-            elif norma >= 1:
+            elif not znany:
+                print("  %-12s %3d      (plan nieznany; norma %.2f/dobe)"
+                      % (r, ile, cel))
+            elif cel >= 1:
                 print("  %-12s %3d / %-4.0f %3.0f%%%s" % (
-                    r, ile, norma, 100.0 * ile / norma, _znak(ile, norma)))
+                    r, ile, cel, 100.0 * ile / cel, _znak(ile, cel)))
             else:
-                print("  %-12s %3d      (norma %.2f/dobe)" % (r, ile, norma))
+                print("  %-12s %3d      (plan na dzis: %.0f)" % (r, ile, cel))
+        # NIE MILCZYMY O POZYCJACH BEZ ZNAKU — TAKZE TUTAJ. Naglowek pliku
+        # obiecuje, ze „osobna linia nazywa je po imieniu razem z wielkoscia
+        # planu", a ta galaz tej linii NIE MIALA: przy realnym budzecie
+        # restack 0/2 i subskrypcja 0/1 stoja z „0%" bez znaku i bez slowa
+        # wyjasnienia, wiec czyta sie to jak przeoczenie licznika.
+        male = [(r, (plan or {}).get(r)) for r in RODZAJE
+                if r not in NIEWYKONALNE
+                and (plan or {}).get(r) is not None
+                and 1 <= (plan or {}).get(r) < MIN_PLAN_DZIENNY_DO_ZNAKU]
+        if male:
+            print("   (bez znaku, bo plan na dzis za maly na procent: %s —"
+                  " jeden brak to juz 50%%, wiec wykrzyknik nic by nie znaczyl)"
+                  % ", ".join("%s %.0f" % (r, c) for r, c in male))
         return 0
 
     naglowek = "  %-11s" % "dzien" + "".join("%12s" % r[:11] for r in RODZAJE)
@@ -278,66 +619,196 @@ def main() -> int:
     # ktorych mialy prawo wyjsc. Bez tego jeden dzien na osiem zaniza wynik o
     # jedna osma i po miesiacu wyglada to jak trwaly spadek produkcji.
     ciche = {d for d in kolejne if config.cichy_dzien(_data(d))}
-    zalozone = budzety_dzienne()
     sumy = collections.Counter()
     wykonane = collections.Counter()
     plany = collections.Counter()
     dni_liczone = collections.Counter()
     bez_planu = []
+    bez_wpisow = []
+    bez_planu_pozycji = set()
+    szacowane = []
+    zmierzone_dni = 0
     for d in kolejne:
         cicho = d in ciche
         plan_dnia = zalozone.get(d)
-        if plan_dnia is None:
+        ma_wpisy = d in z_wpisami
+        # DZISIAJ JESZCZE TRWA — ALE NIE ROZSTRZYGA O TYM OBECNOSC WPISOW.
+        #
+        # Bylo tu `d == dzis and not ma_wpisy`, czyli warunek BEZ ZEGARA, i
+        # dawal bodziec dokladnie odwrotny do zamierzonego. Zmierzone na tej
+        # samej bazie (cztery pelne doby wczesniej, plan notek 5/dobe):
+        #   23:00, zero wpisow (cala doba przepadla) -> % PLANU 100%
+        #   11:00, jedna notka (pierwszy przebieg poszedl dobrze) ->  84%
+        #   11:00, jedna NIEUDANA proba (`z_wpisami` obejmuje nieudane) -> 80%
+        # Czyli NIEROBIENIE NICZEGO dawalo raport lepszy niz zrobienie czegos,
+        # a jedna nieudana proba o 11:05 wciagala cala dobe do rozliczenia z
+        # CALODOBOWEGO planu, gdy zostaly jeszcze cztery przebiegi.
+        #
+        # Teraz decyduje wylacznie zegar: dzien biezacy rozliczamy z tej czesci
+        # planu, ktora POWINNA byla juz wyjsc (`przebiegow_naleznych`), a `?`
+        # zostaje tylko dopoki nie jest nalezny zaden przebieg. Przy 23:00 i
+        # planie 5 notek daje to cel 3 — wiec doba calkowitej awarii schodzi ze
+        # 100% na 87% jeszcze przed polnoca, a poranna notka niczego nie psuje.
+        czesciowy = (d == dzis and nalezne_dzis > 0)
+        w_toku = (d == dzis and nalezne_dzis <= 0)
+        # DOBA, W KTOREJ MASZYNA NAPRAWDE NIE WSTALA. `budzety.json` powstaje
+        # wylacznie WEWNATRZ przebiegu, wiec gdy serwer lezal, nie ma ani wpisu,
+        # ani budzetu — i dzien wypadal z `% PLANU`. Zmierzone: dwie doby
+        # calkowitej awarii z pieciu, a naglowek meldowal `% PLANU 100%`.
+        # Skoro planu tego dnia nie znamy, podstawiamy NORME DOBOWA i mowimy
+        # wprost, ze to oszacowanie (`~` w kratce, osobna linia na dole).
+        # Podstawiamy TYLKO gdy nie ma ani budzetu, ani ZADNEGO sladu w
+        # dzienniku — czyli gdy nic nie dowodzi, ze agent tego dnia w ogole
+        # zyl. „Zadnego sladu" znaczy tu takze braku artykulu i odpowiedzi,
+        # ktorych ten licznik nie mierzy (`ze_sladem`, nie `ma_wpisy`):
+        # doba z opublikowanym artykulem NIE jest doba, w ktorej maszyna nie
+        # wstala, wiec zmyslanie jej planu byloby zmyslaniem awarii. Dzien,
+        # ktory wstal, ale budzetu nie zapisal, dalej pokazuje `N/?` i nie
+        # wchodzi do wykonania: tam podstawienie normy byloby powrotem do
+        # mierzenia AMBICJA, ktore `budzety_dzienne` nazywa wada od 30 sierpnia.
+        szacowany = (plan_dnia is None and d not in ze_sladem and not w_toku)
+        if szacowany:
+            plan_dnia = {r: normy.get(r, 0) for r in RODZAJE}
+            szacowane.append(d)
+        elif plan_dnia is None and not w_toku:
+            # Dzien W TOKU przed pierwszym naleznym przebiegiem nie ma jeszcze
+            # zapisanego budzetu i to jest NORMALNE — `stages.budzet_dnia`
+            # zapisuje go dopiero w przebiegu. Wiersz mowi o tym wprost, wiec
+            # na liste „brakow" nie trafia.
             bez_planu.append(d)
+        if not ma_wpisy and not w_toku:
+            bez_wpisow.append(d)
         wiersz = "  %-11s" % d
+        dzien_zmierzony = False
         for r in RODZAJE:
             ile = zrobione[d][r]
             wyciszony = cicho and r in config.CICHY_DZIEN_WYCISZA_RODZAJE
-            # PLAN TEGO DNIA, a gdy go nie zapisano — dzisiejsza norma, i
-            # wtedy dzien jest oznaczony gwiazdka, zeby nikt nie czytal tego
-            # jako pomiaru wykonania.
-            cel = (plan_dnia or {}).get(r, normy.get(r, 0))
-            if not wyciszony:
-                sumy[r] += ile
-                dni_liczone[r] += 1
-                # WYKONANIE LICZYMY TYLKO Z DNI, KTORYCH PLAN ZNAMY. Dzien bez
-                # zapisanego planu podstawialby dzisiejsza norme i alarm
-                # meldowalby niewykonanie planu, ktorego nikt wtedy nie mial.
-                if plan_dnia is not None:
+            # PLAN TEGO DNIA I TEJ POZYCJI; `None` znaczy „nie wiemy".
+            #
+            # Bylo tu `.get(r, normy.get(r, 0))`, czyli podstawienie dzisiejszej
+            # normy, i zabezpieczenie „liczymy tylko dni, ktorych plan znamy"
+            # dzialalo na poziomie DNIA, nie POZYCJI. Zapisany budzet bez
+            # jednego klucza — pierwsza nowa pozycja niedopisana do
+            # BUDZET_NA_RODZAJ — dostawal wiec zmyslony cel i BYL wliczany, bez
+            # gwiazdki. Odtworzone na atrapie: budzet bez `subskrypcje` dawal
+            # plan 0,3 z dzisiejszej normy, wykonanie 0% i alarm o pozycji,
+            # ktorej agent w ogole na ten dzien nie zaplanowal.
+            cel = (plan_dnia or {}).get(r)
+            znany = cel is not None
+            if plan_dnia is not None and not znany and not szacowany:
+                bez_planu_pozycji.add(r)
+            # DZIEN BIEZACY ROZLICZAMY Z CZESCI PLANU, NIE Z CALEGO. Patrz
+            # `przebiegow_naleznych` — o 21:30 nalezne sa trzy przebiegi z
+            # pieciu, wiec plan 5 notek znaczy dzis 3, a nie 5.
+            if znany and czesciowy:
+                cel = cel * nalezne_dzis / float(przebiegow)
+            if not wyciszony and not w_toku:
+                # Do sredniej wchodzi dzien, o ktorym cos wiemy: byly wpisy
+                # (takze same nieudane) albo byl plan, wiec zero jest pomiarem.
+                # DZIEN BIEZACY DO SREDNIEJ NIE WCHODZI: srednia jest „na
+                # dobe", a dzisiejsza doba jest niepelna — wliczona zanizalaby
+                # ja o tyle, ile przebiegow jeszcze nie bylo. Do `% PLANU`
+                # wchodzi, bo tam mianownik jest przyciety do tej samej pory.
+                if not czesciowy and (ma_wpisy or znany):
+                    sumy[r] += ile
+                    dni_liczone[r] += 1
+                    dzien_zmierzony = True
+                # WYKONANIE LICZYMY TYLKO Z DNI, KTORYCH PLAN ZNAMY ALBO
+                # SWIADOMIE OSZACOWALISMY. Dzien, ktory wstal, a planu nie
+                # zapisal, nadal wypada — inaczej alarm meldowalby niewykonanie
+                # planu, ktorego nikt wtedy nie mial.
+                if znany:
                     wykonane[r] += ile
                     plany[r] += cel
-            wiersz += "%12s" % (
-                "cisza" if wyciszony
-                else ("%d/%.0f%s" % (ile, cel, _znak(ile, cel)) if cel >= 1
-                      else (str(ile) if ile else "-")))
-        znaki = ("   << cichy dzien" if cicho else "")
-        if plan_dnia is None:
+            wiersz += "%12s" % _komorka(ile, cel, wyciszony, ma_wpisy, w_toku,
+                                        szacowany)
+        if dzien_zmierzony:
+            zmierzone_dni += 1
+        # CICHY DZIEN MOWI, CZEGO NIE NADAJEMY — NIE, ZE NIC SIE NIE DZIALO.
+        # Bez tej listy w nawiasie ten sam wiersz nosil `<< cichy dzien` i
+        # `<< ANI JEDNEGO WPISU` naraz i czytalo sie to jak sprzecznosc, choc
+        # obie etykiety mowia prawde o czym innym: cisza dotyczy notek i
+        # restackow, a brak wpisow takze komentarzy i lajkow, ktorych cichy
+        # dzien NIE wycisza — i to jest wtedy prawdziwa awaria.
+        znaki = ("   << cichy dzien (%s wyciszone)"
+                 % ", ".join(config.CICHY_DZIEN_WYCISZA_RODZAJE)) if cicho else ""
+        if w_toku:
+            znaki += "  << dzien w toku, zaden przebieg jeszcze nie nalezny"
+        elif czesciowy:
+            znaki += ("  << dzien w toku, rozliczony z %d z %d przebiegow"
+                      % (nalezne_dzis, przebiegow))
+        if not ma_wpisy and not w_toku:
+            # Dwie rozne rzeczy, dwie rozne etykiety. Dzien ze sladem w
+            # dzienniku, ale bez wpisu MIERZONEGO rodzaju, to nie jest doba
+            # calkowitej awarii — agent cos robil, tylko nie to, co ten
+            # licznik liczy (np. wystawil artykul).
+            znaki += ("  << zaden MIERZONY wpis" if d in ze_sladem
+                      else "  << ANI JEDNEGO WPISU")
+        zle = sum((nieudane.get(d) or {}).values())
+        if zle:
+            # BEZ DATY NIE DA SIE TEGO UZYC. Suma nieudanych prob stala tylko
+            # na dole raportu, wiec dzien, w ktorym padlo wszystko, wygladal w
+            # tabeli tak samo jak dzien, w ktorym agent nic nie probowal.
+            znaki += "  << %d nieudanych prob" % zle
+        if plan_dnia is None and not w_toku:
             znaki += "  *plan nieznany"
         print(wiersz + znaki)
 
     print("  " + "-" * (len(naglowek) - 2))
-    n = len(kolejne)
 
     def _srednia(r):
-        ile_dni = dni_liczone[r] or 1
-        return sumy[r] / ile_dni
+        """None, gdy tej pozycji nie zmierzylismy ANI RAZU.
+
+        Bylo `dni_liczone[r] or 1`, czyli dzielenie 0/1 i twarde `0.0` w
+        SREDNIEJ, ktore `% NORMY` przenosila dalej jako `0%`. Wychodzil z tego
+        raport mowiacy w jednym wierszu „-" (nie wiemy), a dwie linie nizej
+        „0% normy" o tej samej pozycji — i to wlasnie o tym zdaniu z
+        naglowka pliku („Znak zapytania nigdy nie jest zerem") mial pilnowac.
+        """
+        return sumy[r] / dni_liczone[r] if dni_liczone[r] else None
 
     def _wykonanie(r):
         """Ile z tego, co agent SOBIE ZALOZYL, naprawde zrobil."""
         return (100.0 * wykonane[r] / plany[r]) if plany[r] else None
 
+    def _procent_normy(r):
+        sr = _srednia(r)
+        if sr is None or normy.get(r, 0) < 1:
+            return "-"
+        return "%.0f%%" % (100.0 * sr / normy[r])
+
     for etykieta, wart in (
-            ("SREDNIA", lambda r: "%.1f" % _srednia(r)),
+            ("SREDNIA", lambda r: ("%.1f" % _srednia(r)
+                                   if _srednia(r) is not None else "-")),
             ("% PLANU", lambda r: ("%.0f%%" % _wykonanie(r)
                                    if _wykonanie(r) is not None else "-")),
-            ("% NORMY", lambda r: ("%.0f%%" % (100.0 * _srednia(r) / normy[r])
-                                   if normy.get(r, 0) >= 1 else "-"))):
+            ("% NORMY", _procent_normy)):
         print("  %-11s" % etykieta + "".join("%12s" % wart(r) for r in RODZAJE))
 
     braki = {r: sum(nieudane[d][r] for d in nieudane) for r in RODZAJE}
     braki = {r: v for r, v in braki.items() if v}
     print()
-    print("  dni: %d (%s .. %s)" % (n, kolejne[0], kolejne[-1]))
+    # `dni: N` LICZY DNI ZMIERZONE, NIE DLUGOSC OKNA. Bylo `len(kolejne)`, czyli
+    # razem z dniem w toku i z dniami `?` — trzy doby po 5 notek plus dzien
+    # biezacy dawaly `SREDNIA 5.0` (mianownik 3) i podpis `dni: 4` pod ta sama
+    # kreska. Mianownik sredniej i liczba w podpisie musza byc ta sama liczba.
+    ogon = ""
+    if zmierzone_dni != len(kolejne):
+        ogon = " — z okna %d dni; reszta w toku albo bez danych" % len(kolejne)
+    print("  dni: %d (%s .. %s)%s"
+          % (zmierzone_dni, kolejne[0], kolejne[-1], ogon))
+    if bez_wpisow:
+        # „NIC" ZNACZY TU „NIC Z MIERZONYCH RODZAJOW". `wczytaj` odsiewa wpisy
+        # spoza RODZAJE (norma.py:121), a `browser.py:1138` zapisuje takze
+        # `rodzaj: "artykul"` — wiec doba z opublikowanym artykulem i dwiema
+        # odpowiedziami ma tu `ma_wpisy=False`. Zdanie „agent nie zapisal nic"
+        # bylo o takim dniu po prostu nieprawdziwe.
+        print("  DNI BEZ ANI JEDNEGO WPISU: %d (%s) — zadnego wpisu MIERZONYCH"
+              " rodzajow (%s); artykuly i odpowiedzi nie sa tu liczone."
+              " Tam, gdzie plan byl znany, zero jest wliczone"
+              % (len(bez_wpisow), ", ".join(bez_wpisow[:6])
+                 + (" ..." if len(bez_wpisow) > 6 else ""),
+                 ", ".join(RODZAJE)))
     if braki:
         print("  nieudane proby: %s" % ", ".join(
             "%s %d" % (r, v) for r, v in sorted(braki.items())))
@@ -349,17 +820,58 @@ def main() -> int:
               % (len(ciche), ", ".join(sorted(ciche)),
                  ", ".join(config.CICHY_DZIEN_WYCISZA_RODZAJE)))
 
+    if szacowane:
+        # OSZACOWANIE MA SIE ROZNIC OD POMIARU. Te dni nie maja ani wpisu, ani
+        # zapisanego budzetu — `budzety.json` powstaje wylacznie wewnatrz
+        # przebiegu, wiec ich brak znaczy „maszyna nie wstala". Bez tej linii i
+        # bez `~` w kratce wlasciciel czytalby podstawiona norme jak plan,
+        # ktory agent naprawde sobie zalozyl.
+        print("  dni bez sladu przebiegu (~): %d (%s) — ani wpisu, ani"
+              " zapisanego budzetu, wiec plan jest OSZACOWANY z normy dobowej"
+              " (%s). To jedyna pozycja w tabeli, ktora nie jest pomiarem"
+              % (len(szacowane), ", ".join(szacowane[:6])
+                 + (" ..." if len(szacowane) > 6 else ""),
+                 "  ".join("%s=%.1f" % (r, normy.get(r, 0)) for r in RODZAJE)))
     if bez_planu:
-        print("  dni bez zapisanego planu (*): %d — mierzone dzisiejsza norma,"
-              " wiec to NIE jest pomiar wykonania" % len(bez_planu))
+        print("  dni bez zapisanego planu, ale ZE SLADEM przebiegu (*): %d —"
+              " pokazane jako `?`, NIE licza sie do wykonania planu"
+              % len(bez_planu))
+    if bez_planu_pozycji:
+        # RADA MUSI PASOWAC DO PRZYCZYNY. Bylo tu samo „dopisz je do
+        # BUDZET_NA_RODZAJ" i przy pustym zapisie budzetu bylo to zdanie
+        # falszywe: wszystkie szesc kluczy TAM JEST (config.py:1671-1678),
+        # brakowalo samego zapisu. Pusty budzet nie trafia juz tutaj.
+        print("  pozycje bez planu w ZAPISANYM budzecie (?): %s — albo klucza"
+              " nie ma w BUDZET_NA_RODZAJ, albo zapisana wartosc nie jest"
+              " liczba; tak czy tak pozycja wypada z pomiaru"
+              % ", ".join(sorted(bez_planu_pozycji)))
 
     # ALARM NA WYKONANIU PLANU, NIE NA AMBICJI. Norma mowi, dokad zmierzamy;
     # plan mowi, co agent mial dzis zrobic. Tylko drugie jest pod jego
     # kontrola, a alarm ma budzic wtedy, gdy cos NIE DZIALA — nie wtedy, gdy
     # konto jest mlode albo widelki podniesiono wczoraj.
-    ponizej = [r for r in RODZAJE
-               if r not in NIEWYKONALNE and _wykonanie(r) is not None
-               and _wykonanie(r) < config.PROG_ALARMU_WOLUMENU]
+    ponizej, za_maly_plan = [], []
+    for r in RODZAJE:
+        proc = _wykonanie(r)
+        if r in NIEWYKONALNE or proc is None:
+            continue
+        if proc >= config.PROG_ALARMU_WOLUMENU:
+            continue
+        # Procent z SUMY PLANU W OKNIE mniejszej niz MIN_PLAN_W_OKNIE_DO_ALARMU
+        # to nie pomiar, tylko zaokraglenie — pokazujemy go, ale nikogo nim nie
+        # budzimy. Skala jest tu inna niz w `_znak` (okno, nie doba) i dlatego
+        # stala tez jest inna.
+        (ponizej if plany[r] >= MIN_PLAN_W_OKNIE_DO_ALARMU
+         else za_maly_plan).append(r)
+    if za_maly_plan:
+        print()
+        # Jedno miejsce po przecinku, bo plany tych wlasnie pozycji bywaja
+        # ulamkowe (subskrypcja 0,3/dobe) i „z planu 0" przy niezerowym planie
+        # czytaloby sie jak blad licznika.
+        print("  ponizej progu, ale plan za maly na alarm (< %d w oknie): %s"
+              % (MIN_PLAN_W_OKNIE_DO_ALARMU, ", ".join(
+                  "%s %.0f%% z planu %.1f" % (r, _wykonanie(r), plany[r])
+                  for r in za_maly_plan)))
     if ponizej:
         print()
         print("  PONIZEJ PROGU %d%% WYKONANIA PLANU: %s"
