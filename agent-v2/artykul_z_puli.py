@@ -42,6 +42,31 @@ import db          # noqa: E402
 import llm         # noqa: E402
 import stages      # noqa: E402
 
+# WYJATKI, KTORYCH ZADNA OSLONA W TYM PLIKU NIE MA PRAWA POLKNAC.
+#
+# `llm.BudgetExceeded` i `llm.PreflightFailed` dziedzicza po `RuntimeError`,
+# wiec kazde `except Exception` lapalo je razem ze zwyklymi awariami etapu.
+# Roznica jest zasadnicza: `ValueError` z `llm.parse_json` mowi „ten jeden
+# etap nie oddal JSON-a", a te dwa mowia „ZADNE nastepne platne wywolanie sie
+# nie uda" — budzet wyczerpany (`RUN_LIMIT_USD` 1,60 / `DAILY_LIMIT_USD`)
+# albo `KILL_SWITCH=true`. Oslona, ktora to poklyka, zamienia zatrzymanie
+# w ciche pominiecie kontroli.
+#
+# ZMIERZONA SZKODA. Pisanie na Fable to okolo 0,76 USD, czyli prawie polowa
+# sufitu przebiegu — `_preflight` przepuszcza pisarza i wywraca sie dopiero na
+# recenzji. Przed oslonami `BudgetExceeded` wychodzil z `_napisz_i_zapisz`,
+# `main` zamykal przebieg jako ERROR i nic nie szlo na Substacka. Z oslonami
+# raport recenzji byl pusty, obserwacja formy tez, a `stages.zweryfikuj` na TYM
+# SAMYM bledzie budzetu oddaje `safe_to_post: True` z uzasadnieniem „puszczam
+# na pierwszej siatce" — gdzie pierwsza siatka to recenzja, ktora przed chwila
+# padla po cichu. Artykul bez recenzji i bez sprawdzenia faktow wychodzil na
+# zewnatrz.
+#
+# `llm.Truncated` NIE jest tu wymieniony celowo: odpowiedz ucieta na suficie
+# tokenow to awaria jednego wywolania, ktora powtorka albo kolejny etap moga
+# przezyc, i budzet po niej nadal istnieje.
+PRZERYWAJA = (llm.BudgetExceeded, llm.PreflightFailed)
+
 SYSTEM = (
     "You turn a documented fact into the question an article will answer. "
     "Return only valid JSON."
@@ -550,6 +575,12 @@ def _przebieg(conn, run_id: int) -> int:
     print("-- synteza --", flush=True)
     try:
         card = stages.synthesis(conn, run_id, brief["question"], evidence)
+    except PRZERYWAJA:
+        # Ta sama zasada, co przy trzech oslonach w `_napisz_i_zapisz`: karta
+        # zapasowa ma sens po awarii JEDNEGO wywolania, a nie wtedy, gdy budzet
+        # sie skonczyl — bo wtedy pisarz zaraz za nia to najdrozszy etap
+        # przebiegu i tak samo sie wywroci.
+        raise
     except Exception as exc:
         print("  synteza padla (%s) — karta zapasowa" % type(exc).__name__,
               flush=True)
@@ -784,6 +815,11 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
                 else:
                     print("   bank nie ma pary — pisarz dostaje karte jak jest",
                           flush=True)
+    except PRZERYWAJA:
+        # Budzet albo wylacznik — na wylot, patrz `PRZERYWAJA`. Gdyby zostalo
+        # polkniete tutaj, pisarz ponizej i tak by sie wywrocil na tym samym
+        # bledzie, tylko juz pod druga oslona, i tak dalej az do publikacji.
+        raise
     except Exception as exc:
         print("  [awaria] bramka ciekawosci padla (%s: %s) — pisze bez niej"
               % (type(exc).__name__, str(exc)[:120]), flush=True)
@@ -805,6 +841,15 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
     print("   glebokosc: %s" % glebokosc, flush=True)
     try:
         draft = stages.write(conn, run_id, card, glebokosc)
+    except PRZERYWAJA:
+        # POWTORKA NA OPUSIE NIE MA PRAWA RUSZYC PRZY WYCZERPANYM BUDZECIE.
+        # Opus jest DROZSZY od tego, co wlasnie padlo, wiec oslona podwajalaby
+        # wydatek dokladnie w chwili, gdy `_preflight` powiedzial, ze pieniedzy
+        # nie ma. Przy `KILL_SWITCH=true` powtorka i tak wroci z tym samym
+        # `PreflightFailed` — czyli jedno wywolanie po nic i wyjatek na koniec.
+        # Ten `except` musi stac PRZED ogolnym, bo Python bierze pierwszy
+        # pasujacy.
+        raise
     except Exception as exc:
         # Jedno powtorzenie na Opusie, tak jak w `run.py`: tu ginie caly
         # oplacony research, a Opus jest sprawdzonym pisarzem tego potoku.
@@ -828,11 +873,24 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
     print("-- recenzja --", flush=True)
     # RECENZJA NIC NIE BLOKUJE, WIEC JEJ BRAK TEZ NIE MOZE. `gates.verdict`
     # zwraca SAVED niezaleznie od raportu; padniecie tego etapu wyrzucalo do
-    # kosza gotowy, oplacony tekst (samo pisanie to 0,76 USD). Artykul idzie
-    # do szuflady z adnotacja, ze nie rozliczono go zdanie po zdaniu —
-    # wlasciciel widzi w uwagach, na co patrzy. Tak samo jak w `run.py`.
+    # kosza gotowy, oplacony tekst (samo pisanie to 0,76 USD).
+    #
+    # „SZUFLADA" TO BYLO ZDANIE NIEPRAWDZIWE, i tak tu stalo. `run.py` konczy
+    # przebieg na zapisie, ale `systemd/nia-artykul.service` wola TEN plik jako
+    # `artykul_z_puli.py --wyslij`, a `--wyslij` prowadzi przez `stages.save`,
+    # `stages.grafika` i `stages.zweryfikuj` prosto do
+    # `browser.wystaw_artykul(..., wyslij=True)`. Zadna szuflada po drodze nie
+    # stoi: adnotacja „recenzja niedostepna" ladowala w uwagach zapisanego
+    # artykulu, ktory chwile pozniej i tak wychodzil na Substacka.
+    #
+    # Dlatego polykamy tu WYLACZNIE awarie samej recenzji (zly JSON, timeout,
+    # odmowa jednego wywolania). Wyczerpany budzet i wylacznik ida na wylot —
+    # przy nich `stages.zweryfikuj` tez padnie i odda `safe_to_post: True`,
+    # czyli publikacja poszlaby bez ANI JEDNEJ dzialajacej kontroli.
     try:
         raport = stages.review(conn, run_id, card, draft)
+    except PRZERYWAJA:
+        raise
     except Exception as exc:
         print("  [awaria] recenzja padla (%s: %s) — zapisuje bez niej"
               % (type(exc).__name__, str(exc)[:120]), flush=True)
@@ -852,6 +910,12 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
 
     try:
         forma = stages.ocen_forme(conn, run_id, draft)
+    except PRZERYWAJA:
+        # Czwarta oslona, tej samej klasy co trzy powyzej. Gdy budzet konczy
+        # sie dopiero tutaj (recenzja jeszcze przeszla), polkniecie prowadzi
+        # do tej samej publikacji bez sprawdzenia faktow: `stages.zweryfikuj`
+        # jest kolejnym platnym wywolaniem i padnie na tym samym bledzie.
+        raise
     except Exception as exc:
         print("  [awaria] obserwacja formy padla (%s) — ide dalej"
               % type(exc).__name__, flush=True)

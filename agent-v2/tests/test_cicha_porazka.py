@@ -726,8 +726,12 @@ print("=== 14. KONTRDOWOD: BEZ `o_hoscie` NASZ TIMEOUT ZABIJAL HOST ===")
 # posty, jeden host. Z poprawka host zyje, bez niej — jest martwy.
 bez_klasyfikacji = stary_browser(
     "browser_bez_o_hoscie",
-    ('        szczegoly["o_hoscie"] = bool(wynik.get("klikniete"))\n', ""),
-    ("            elif w.get(\"o_hoscie\"):\n", "            else:\n"))
+    ('        szczegoly["klikniete"] = bool(wynik.get("klikniete"))\n'
+     '        szczegoly["o_hoscie"] = bool(wynik.get("klikniete")\n'
+     '                                     and wynik.get("potwierdzenie_odpowiedzialo"))\n',
+     ""),
+    ('            elif w.get("o_hoscie")'
+     ' and w.get("powod") == POWOD_HOST_NIE_POKAZUJE:\n', "            else:\n"))
 
 
 def dwa_timeouty(modul):

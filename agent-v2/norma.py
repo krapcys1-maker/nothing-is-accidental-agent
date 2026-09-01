@@ -60,7 +60,7 @@ RODZAJE = ("notka", "komentarz", "polubienie", "restack", "subskrypcja",
 # „brak przycisku", a nie jako 0 procent normy.
 NIEWYKONALNE = {"obserwacja": "Substack zdjal przycisk Follow"}
 
-# NAJMNIEJSZY PLAN, PRZY KTORYM PROCENT COS ZNACZY — DWIE LICZBY, DWA PYTANIA.
+# KIEDY PROCENT COS ZNACZY — TRZY LICZBY, TRZY ROZNE PYTANIA.
 #
 # Prog 60% stosowany bez wzgledu na wielkosc planu robi z licznika generator
 # szumu. `subskrypcja` ma norme 0,3 na dobe, czyli plan okolo 2 na tydzien —
@@ -75,7 +75,13 @@ NIEWYKONALNE = {"obserwacja": "Substack zdjal przycisk Follow"}
 # (2 < 5), a dol drukowal „PONIZEJ PROGU 60%: restack" (14 >= 5) i zwracal
 # kod 1. Docstring `_znak` obiecywal dokladnie odwrotnie: „zeby nie bylo tak,
 # ze tabela krzyczy o pozycji, o ktorej alarm swiadomie milczy". Jedna liczba
-# nie moze rzadzic obiema skalami, wiec sa dwie i maja rozne nazwy.
+# nie moze rzadzic obiema skalami, wiec sa osobne i maja rozne nazwy.
+#
+# TRZECIA DOSZLA, BO BRAMKA ALARMU WYCISZALA POZYCJE MARTWA. Pytania sa trzy:
+# „czy warto stawiac wykrzyknik w tej kratce" (plan JEDNEGO dnia), „czy ten
+# niedobor to juz praca, a nie kostka" (ile SZTUK brakuje w oknie) i „czy tu w
+# ogole cokolwiek wyszlo" (zero, ktore nie podlega bramce). Szczegoly przy
+# kazdej ze stalych nizej.
 #
 # Realne plany dzienne (`stages.budzet_dnia`): notki 5, komentarze 15-23,
 # lajki 10-16, restacki 1-2, subskrypcje 0 albo 1.
@@ -92,22 +98,58 @@ NIEWYKONALNE = {"obserwacja": "Substack zdjal przycisk Follow"}
 # z 5 do 2. Granicy pilnuje `tests/test_dzien_awarii.py`.
 MIN_PLAN_DZIENNY_DO_ZNAKU = 3
 
-# DLA ALARMU NA DOLE — porownywany z SUMA PLANU W CALYM OKNIE.
+# DLA ALARMU NA DOLE — LICZYMY BRAKUJACE SZTUKI, NIE WIELKOSC PLANU.
 #
-# Dziesiec, bo dopiero przy planie 10 zejscie ponizej progu 60% oznacza CZTERY
-# brakujace sztuki; przy planie 4 wystarcza DWIE, a dwie sztuki to jeszcze
-# pech. Zmierzone na realnych normach: subskrypcje maja plan losowany z ulamka
-# 0,3/dobe, wiec w oknie 14 dni ich suma to okolo 4,2 — przy progu 5 alarm
-# przelaczal sie OD KOSTKI, nie od wyniku (raz 4, raz 5, mniej wiecej po
-# polowie), a przy `--dni 30` (suma ~9) wracal zawsze. Przy progu 10 milcza az
-# do okna ~33 dni. Restacki przy 1,5/dobe daja w oknie 14 dni 21 i alarmuja
-# normalnie, bo dziewiec brakujacych restackow w dwa tygodnie to juz nie pech.
+# Bylo tu `plany[r] >= 10`, czyli bramka na SUME PLANU W OKNIE, i wyciszala
+# rzecz, ktorej wyciszyc nie wolno: pozycje CALKOWICIE MARTWA. Zmierzone przy
+# realnych budzetach (`stages.budzet_dnia`, dwiescie przesunietych okien):
 #
-# NIE MILCZYMY o tych pozycjach: procent nadal stoi w tabeli, a osobna linia
-# nazywa je po imieniu razem z wielkoscia planu — w OBU widokach, takze w
-# `--dzis`. Nie budzimy tylko alarmu, bo alarm, ktory myli sie regularnie,
-# uczy ignorowania siebie.
-MIN_PLAN_W_OKNIE_DO_ALARMU = 10
+#   * subskrypcje — suma planu 2,0 na 7 dni i 3,9 na 14 dni, NIGDY 10 (przy
+#     `--dni 40` dopiero w 62% okien). Blok subskrypcji padajacy na amen
+#     (Substack przestawia przycisk, kazda proba nieudana) dawal wiec 0% z
+#     planu 4, kod wyjscia 0 i linijke „plan za maly na alarm" — na zawsze;
+#   * restacki — suma planu na 7 dni: min 8, srednio 10,7, max 14. Prog 10
+#     lezal w SRODKU tego rozkladu, wiec ta sama martwa pozycja przy `--dni 7`
+#     raz krzyczala, a raz milczala (20% okien ponizej 10), za to przy
+#     `--dni 14` (suma 22) krzyczala zawsze. Dlugosc okna jest wyborem
+#     czlowieka, a nie wlasnoscia awarii.
+#
+# CZTERY BRAKI, BO TYLE ZNACZYLA STARA STALA NA PROGU. „Plan >= 10" przy progu
+# 60% to dokladnie „brakuje >= 4 sztuki" (0,4 * 10) — i to zdanie stalo w jej
+# wlasnym komentarzu. Liczymy wiec wprost braki: na progu obie reguly daja to
+# samo, a im glebiej ponizej progu, tym nowa jest czulsza (przy wykonaniu 20%
+# cztery braki to plan 5, nie 10). ZADNEGO alarmu ze starej reguly nowa nie
+# gubi: proc < 60 i plan >= 10 daje braki > 4 zawsze.
+#
+# Cztery, a nie dwie: dwie brakujace sztuki to jeszcze pech losowania (plan
+# subskrypcji bywa 2 na tydzien, wiec jedna mniej to 50%), cztery to juz
+# czterokrotnie powtorzona porazka.
+#
+# CO ZOSTAJE ZALEZNE OD OKNA I DLACZEGO TAK MA BYC. Braki sie uzbieraja, wiec
+# awaria POLOWICZNA moze milczec na krotkim oknie i odezwac sie na dluzszym:
+# subskrypcje wykonane w polowie to 2 braki na 7 dni (cisza) i 4 na 14 (alarm).
+# To nie jest ta sama wada, co poprzednio — kierunek jest jednostajny. Dluzsze
+# okno moze wynik tylko WZMOCNIC, nigdy wyciszyc, bo braki rosna razem z nim, a
+# pozycja MARTWA budzi w kazdym oknie. Stara bramka lamala oba te warunki:
+# przy `--dni 7` restacki wypadaly raz nad, raz pod progiem 10.
+MIN_BRAKOW_W_OKNIE_DO_ALARMU = 4
+
+# ZERO NIE JEST ZAOKRAGLENIEM MALEGO PLANU — I DLATEGO NIE PODLEGA BRAMCE.
+#
+# Bramka wyzej ma tlumic wyniki BLISKIE progu, gdzie procent robi sie
+# nieodroznialny od kostki. Zero jest skrajnoscia, nie zaokragleniem: pozycja,
+# ktora przy niezerowym planie nie wystawila w calym oknie ANI JEDNEJ sztuki,
+# nie jest pechem tylko martwym blokiem — i jest taka samo martwa przy `--dni 7`
+# co przy `--dni 14`. To jedyny werdykt, ktory nie ma prawa zalezec od okna.
+#
+# JEDNA CALA SZTUKA, bo plan ponizej jednej to plan, ktorego tego dnia nie ma:
+# budzet zapisuje liczby CALKOWITE (`stages.budzet_dnia`), wiec subskrypcje
+# maja 0 albo 1 na dobe, a ulamek 0,3 bierze sie z podstawienia normy albo z
+# przyciecia dnia biezacego do naleznych przebiegow. Przy planie 0,3 zero jest
+# zgodnoscia z planem, a nie awaria. Zmierzone: przy realnych budzetach suma
+# planu subskrypcji siega 1 w 91% okien siedmiodniowych i w 100% okien
+# czternastodniowych — martwy blok budzi wiec w obu, a nie tylko w dluzszym.
+MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE = 1
 
 # Godziny przebiegow CZYTAMY z jednostki systemd, a nie przepisujemy tutaj.
 # `run.py:265-268` nazywa te zasade wprost („powtorzenie ich tutaj zlamaloby
@@ -273,8 +315,10 @@ def _znak(ile: float, norma: float) -> str:
     nic, a `0/21` przez dwa tygodnie znaczy wszystko — to jest cala wartosc
     sumowania. Zakazany jest kierunek ODWROTNY, bo to on uczy ignorowania
     tabeli: pozycja, o ktorej tabela krzyczy codziennie, a alarm milczy, nie
-    znika po cichu — dolna linia „ponizej progu, ale plan za maly na alarm"
-    nazywa ja po imieniu razem z wielkoscia planu, w obu widokach.
+    znika po cichu — dolna linia „ponizej progu, ale za malo brakow na alarm"
+    nazywa ja po imieniu razem z planem i liczba brakow, w obu widokach. A
+    pozycja, ktora nie wystawila NICZEGO, budzi alarm niezaleznie od tego, jak
+    maly byl plan (`MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE`).
 
     A `alarm.py` NIE MA zadnej bramki na wielkosc planu: `alarm.wolumeny()`
     filtruje wylacznie po `config.PROG_ALARMU_WOLUMENU` (alarm.py:381), na
@@ -568,15 +612,73 @@ def main() -> int:
         # wlasnego planu — a `--dzis` pokazywalo „8 / 19  42%!!". Docstring
         # `budzety_dzienne` nazywa te wade po imieniu od 30 sierpnia.
         plan = zalozone.get(dzis)
-        if plan is None:
-            print("   (planu na dzis NIE ZAPISANO — kolumna po ukosniku to"
-                  " norma docelowa, a to NIE jest pomiar wykonania planu)")
+        # DOBA, W KTOREJ AGENT NIE WSTAL, MA SIE TU CZYTAC TAK SAMO JAK W
+        # TABELI — I NIE CZYTALA SIE.
+        #
+        # Poprawka „mierz PLANEM, nie ambicja" trafila tylko w polowe: widok
+        # wielodniowy dostal do niej PARE (`szacowany` — gdy planu nie ma i nie
+        # ma zadnego sladu przebiegu, podstawiamy norme i znaczymy `~`), a ta
+        # galaz nie. Skutek zmierzony o 23:00 UTC po dobie, w ktorej timer
+        # lezal caly dzien: tabela pokazywala `notka 0/4~!!`, a `--dzis`
+        # „notka 0 (plan nieznany; norma 5.00/dobe)" — bez procentu, bez `!!` i
+        # z naglowkiem „a to NIE jest pomiar wykonania planu", ktory czyta sie
+        # jak „nie ma o czym mowic". A `budzety.json` powstaje WYLACZNIE
+        # wewnatrz przebiegu, wiec „planu nie zapisano i nie ma sladu" to nie
+        # jest brak wiedzy, tylko podpis doby calkowitej awarii.
+        #
+        # TRZY ROZNE PRZYPADKI, TRZY ROZNE ZDANIA — dokladnie jak w tabeli:
+        #   * jest budzet                      -> plan zmierzony;
+        #   * brak budzetu, ale JEST slad      -> `plan nieznany` (agent zyl,
+        #     planu nie znamy; podstawienie normy byloby mierzeniem AMBICJA);
+        #   * brak budzetu i BRAK sladu        -> plan OSZACOWANY z normy.
+        bez_sladu = dzis not in ze_sladem
+        # ZEGAR ROZSTRZYGA, TAK SAMO JAK W TABELI (`w_toku`). Przed pierwszym
+        # naleznym przebiegiem zero nie jest jeszcze porazka i procent bylby tym
+        # samym „0%!! o czwartej rano", ktore ta galaz juz raz naprawiala.
+        szacowany = plan is None and bez_sladu and nalezne_dzis > 0
+        if szacowany:
+            plan = {r: normy.get(r, 0) for r in RODZAJE}
+        # PRZYCINAMY DO NALEZNYCH PRZEBIEGOW — TAK SAMO JAK `czesciowy` W
+        # TABELI I TAK SAMO JAK OBIECUJE NAGLOWEK TEGO PLIKU („dzien biezacy
+        # jest rozliczany z tej czesci planu, ktora POWINNA byla juz wyjsc").
+        # Ta galaz dzielila przez plan CALODOBOWY, wiec o 11:00 po pierwszym
+        # udanym przebiegu meldowala „notka 1 / 5  20%!!" — a doba, w ktorej
+        # nie wyszlo nic, milczala. To jest ten sam odwrocony bodziec, ktory
+        # tabela juz naprawila: nierobienie niczego wygladalo lepiej niz praca.
+        # Przy `nalezne_dzis == 0` nie przycinamy, bo cel przyciety do zera nie
+        # jest zadnym rozliczeniem: o tej porze nic jeszcze nie mialo wyjsc i
+        # mowi o tym osobna linia („norma rozklada sie na caly dzien"), tak jak
+        # w tabeli mowi o tym `?` i podpis „dzien w toku".
+        cele = {}
+        for r in RODZAJE:
+            c = (plan or {}).get(r)
+            if c is not None and nalezne_dzis > 0:
+                c = c * nalezne_dzis / float(przebiegow)
+            cele[r] = c
+        przyciete = ((" przyciety do %d z %d naleznych przebiegow"
+                      % (nalezne_dzis, przebiegow)) if nalezne_dzis > 0
+                     else " (zaden przebieg nie jest jeszcze nalezny)")
+        if szacowany:
+            print("   >> ANI JEDNEGO SLADU PRZEBIEGU DZIS — budzet powstaje"
+                  " wylacznie wewnatrz przebiegu, wiec tak wyglada doba, w"
+                  " ktorej agent nie wstal")
+            print("   (plan po ukosniku jest OSZACOWANY z normy dobowej (~),"
+                  "%s — to jedyna liczba ponizej, ktora nie jest pomiarem)"
+                  % przyciete)
+        elif plan is None and bez_sladu:
+            print("   (planu na dzis jeszcze NIE ZAPISANO i nie ma sladu"
+                  " przebiegu, ale zaden przebieg nie jest jeszcze nalezny —"
+                  " zero nie jest o tej porze porazka)")
+        elif plan is None:
+            print("   (planu na dzis NIE ZAPISANO, choc agent dzis dzialal —"
+                  " kolumna po ukosniku to norma docelowa, a to NIE jest"
+                  " pomiar wykonania planu)")
         else:
-            print("   (kolumna po ukosniku to PLAN NA DZIS z budzetu, nie"
-                  " norma docelowa)")
+            print("   (kolumna po ukosniku to PLAN NA DZIS z budzetu,%s, nie"
+                  " norma docelowa)" % przyciete)
         for r in RODZAJE:
             ile = zrobione[dzis][r]
-            cel = (plan or {}).get(r)
+            cel = cele[r]
             znany = cel is not None
             if not znany:
                 cel = normy.get(r, 0)
@@ -588,19 +690,29 @@ def main() -> int:
                 print("  %-12s %3d      (plan nieznany; norma %.2f/dobe)"
                       % (r, ile, cel))
             elif cel >= 1:
-                print("  %-12s %3d / %-4.0f %3.0f%%%s" % (
-                    r, ile, cel, 100.0 * ile / cel, _znak(ile, cel)))
+                # Tylda przy planie znaczy to samo, co w kratce tabeli: ta
+                # liczba jest PODSTAWIONA z normy, a nie zapisana przez agenta.
+                print("  %-12s %3d / %-5s %3.0f%%%s" % (
+                    r, ile, "%.0f%s" % (cel, "~" if szacowany else ""),
+                    100.0 * ile / cel, _znak(ile, cel)))
             else:
-                print("  %-12s %3d      (plan na dzis: %.0f)" % (r, ile, cel))
+                # Jedno miejsce po przecinku, bo tu z definicji stoi plan
+                # MNIEJSZY NIZ JEDEN (0,3 subskrypcji na dobe, jeszcze
+                # przyciete do naleznych przebiegow) — „plan na dzis: 0"
+                # czytaloby sie jak zero zapisane w budzecie.
+                print("  %-12s %3d      (plan na dzis: %.1f%s)"
+                      % (r, ile, cel, "~" if szacowany else ""))
         # NIE MILCZYMY O POZYCJACH BEZ ZNAKU — TAKZE TUTAJ. Naglowek pliku
         # obiecuje, ze „osobna linia nazywa je po imieniu razem z wielkoscia
         # planu", a ta galaz tej linii NIE MIALA: przy realnym budzecie
         # restack 0/2 i subskrypcja 0/1 stoja z „0%" bez znaku i bez slowa
         # wyjasnienia, wiec czyta sie to jak przeoczenie licznika.
-        male = [(r, (plan or {}).get(r)) for r in RODZAJE
-                if r not in NIEWYKONALNE
-                and (plan or {}).get(r) is not None
-                and 1 <= (plan or {}).get(r) < MIN_PLAN_DZIENNY_DO_ZNAKU]
+        # Z `cele`, a nie z surowego budzetu: wykrzyknika nie stawia `_znak` po
+        # celu FAKTYCZNIE uzytym w wierszu, wiec lista musi mowic o tej samej
+        # liczbie, ktora stoi po ukosniku.
+        male = [(r, cele[r]) for r in RODZAJE
+                if r not in NIEWYKONALNE and cele[r] is not None
+                and 1 <= cele[r] < MIN_PLAN_DZIENNY_DO_ZNAKU]
         if male:
             print("   (bez znaku, bo plan na dzis za maly na procent: %s —"
                   " jeden brak to juz 50%%, wiec wykrzyknik nic by nie znaczyl)"
@@ -850,28 +962,39 @@ def main() -> int:
     # plan mowi, co agent mial dzis zrobic. Tylko drugie jest pod jego
     # kontrola, a alarm ma budzic wtedy, gdy cos NIE DZIALA — nie wtedy, gdy
     # konto jest mlode albo widelki podniesiono wczoraj.
-    ponizej, za_maly_plan = [], []
+    ponizej, za_malo_brakow = [], []
     for r in RODZAJE:
         proc = _wykonanie(r)
         if r in NIEWYKONALNE or proc is None:
             continue
         if proc >= config.PROG_ALARMU_WOLUMENU:
             continue
-        # Procent z SUMY PLANU W OKNIE mniejszej niz MIN_PLAN_W_OKNIE_DO_ALARMU
-        # to nie pomiar, tylko zaokraglenie — pokazujemy go, ale nikogo nim nie
-        # budzimy. Skala jest tu inna niz w `_znak` (okno, nie doba) i dlatego
-        # stala tez jest inna.
-        (ponizej if plany[r] >= MIN_PLAN_W_OKNIE_DO_ALARMU
-         else za_maly_plan).append(r)
-    if za_maly_plan:
+        brakuje = plany[r] - wykonane[r]
+        # DWA POWODY, ZEBY OBUDZIC, I ZADEN Z NICH NIE JEST WIELKOSCIA PLANU.
+        #
+        # 1. NIC NIE WYSZLO. Zero przy planie co najmniej jednej calej sztuki
+        #    to nie zaokraglenie malego planu, tylko martwy blok — i jest
+        #    martwy tak samo przy `--dni 7` co przy `--dni 14`. Bramka, ktora
+        #    to wyciszala, kasowala jedyna awarie, o ktora ten licznik powstal.
+        # 2. BRAKUJE DUZO SZTUK. Skala jest tu inna niz w `_znak` (okno, nie
+        #    doba), bo brakow sie uzbiera; procent liczony z dwoch sztuk to
+        #    kostka, a nie pomiar.
+        martwa = (wykonane[r] == 0
+                  and plany[r] >= MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE)
+        (ponizej if martwa or brakuje >= MIN_BRAKOW_W_OKNIE_DO_ALARMU
+         else za_malo_brakow).append(r)
+    if za_malo_brakow:
         print()
         # Jedno miejsce po przecinku, bo plany tych wlasnie pozycji bywaja
         # ulamkowe (subskrypcja 0,3/dobe) i „z planu 0" przy niezerowym planie
-        # czytaloby sie jak blad licznika.
-        print("  ponizej progu, ale plan za maly na alarm (< %d w oknie): %s"
-              % (MIN_PLAN_W_OKNIE_DO_ALARMU, ", ".join(
-                  "%s %.0f%% z planu %.1f" % (r, _wykonanie(r), plany[r])
-                  for r in za_maly_plan)))
+        # czytaloby sie jak blad licznika. LICZBA BRAKOW STOI OBOK PROCENTU, bo
+        # to ona rozstrzyga o milczeniu — bez niej wlasciciel czytalby „40% i
+        # cisza" jako awarie licznika, a nie jako „brakuje poltorej sztuki".
+        print("  ponizej progu, ale za malo brakow na alarm (< %d w oknie): %s"
+              % (MIN_BRAKOW_W_OKNIE_DO_ALARMU, ", ".join(
+                  "%s %.0f%% z planu %.1f, brakuje %.1f"
+                  % (r, _wykonanie(r), plany[r], plany[r] - wykonane[r])
+                  for r in za_malo_brakow)))
     if ponizej:
         print()
         print("  PONIZEJ PROGU %d%% WYKONANIA PLANU: %s"

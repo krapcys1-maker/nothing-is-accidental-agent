@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **21 plików**, 20 967 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **21 plików**, 21 380 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 91 zestawów
-testów, 2425 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 95 zestawów
+testów, 2572 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1718 wierszy, 15 funkcji na poziomie modułu, 1 klas
+1806 wierszy, 15 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -165,7 +165,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-5968 wierszy, 110 funkcji na poziomie modułu, 0 klas
+6033 wierszy, 110 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -282,7 +282,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-3932 wierszy, 77 funkcji na poziomie modułu, 0 klas
+4005 wierszy, 77 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -575,7 +575,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-949 wierszy, 9 funkcji na poziomie modułu, 0 klas
+1013 wierszy, 9 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -591,7 +591,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
-884 wierszy, 13 funkcji na poziomie modułu, 0 klas
+1007 wierszy, 13 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

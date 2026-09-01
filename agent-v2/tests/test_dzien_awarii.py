@@ -401,16 +401,23 @@ try:
     sprawdz("procent nadal stoi w tabeli", plan[SUBSKRYPCJA] == "50%", plan)
     sprawdz("ale alarm milczy", "PONIZEJ PROGU" not in tekst, tekst)
     sprawdz("i kod wyjscia to zero", kod == 0, kod)
-    sprawdz("powod jest nazwany, z wielkoscia planu",
-            "plan za maly na alarm" in tekst and "z planu 2.0" in tekst,
-            [l for l in tekst.splitlines() if "za maly" in l])
+    # POWOD MILCZENIA TO LICZBA BRAKOW, NIE WIELKOSC PLANU. Bramka stala
+    # kiedys na sumie planu (`>= 10`) i wyciszala przez to pozycje CALKOWICIE
+    # MARTWA; teraz pyta, ile sztuk brakuje — tu jedna, wiec cisza.
+    sprawdz("powod jest nazwany, z planem I liczba brakow",
+            "za malo brakow na alarm" in tekst and "z planu 2.0" in tekst
+            and "brakuje 1.0" in tekst,
+            [l for l in tekst.splitlines() if "brakow" in l])
+    sprawdz("i milczy dlatego, ze cos jednak wyszlo (1 z 2)",
+            "subskrypcja 50%" in tekst, tekst)
     # KONTRDOWOD 1: stara regula (sam prog, bez minimum) TU BY STRZELILA.
     sprawdz("KONTRDOWOD: 50%% jest ponizej progu %d%%"
             % config.PROG_ALARMU_WOLUMENU,
             50 < config.PROG_ALARMU_WOLUMENU)
-    # KONTRDOWOD 2: minimum nie moze uciszac wszystkiego. Ta sama porazka na
+    # KONTRDOWOD 2: bramka nie moze uciszac wszystkiego. Ta sama porazka na
     # pozycji o duzym planie ma nadal budzic. Dwa dni po 5 notek to plan 10 w
-    # oknie, czyli dokladnie MIN_PLAN_W_OKNIE_DO_ALARMU.
+    # oknie, z czego wyszly dwie — brakuje osmiu, czyli dwa razy wiecej niz
+    # MIN_BRAKOW_W_OKNIE_DO_ALARMU.
     przygotuj([wpis(2, "notka")] * 1 + [wpis(1, "notka")] * 1,
               {dzien(2): dict(PELNY), dzien(1): dict(PELNY)})
     kod, tekst = uruchom("--dni", "2")
@@ -566,17 +573,24 @@ try:
     pora_doby(0)
 
     print()
-    print("=== 10. DWIE SKALE, DWIE STALE — I GRANICA PRZY NOTKACH ===")
+    print("=== 10. TRZY PYTANIA, TRZY STALE — I GRANICA PRZY NOTKACH ===")
     # `MIN_PLAN_DO_ALARMU` byla JEDNA i porownywala sie raz z planem DZIENNYM
     # (`_znak`), raz z SUMA PLANU W OKNIE (alarm). Nic nie pilnowalo tez tego,
-    # ze prog 5 stal DOKLADNIE na wysokosci planu notek.
+    # ze prog 5 stal DOKLADNIE na wysokosci planu notek. Trzecia stala doszla,
+    # gdy okazalo sie, ze bramka alarmu wycisza pozycje calkowicie martwa.
     sprawdz("stale maja rozne nazwy i rozne wartosci",
-            norma.MIN_PLAN_DZIENNY_DO_ZNAKU != norma.MIN_PLAN_W_OKNIE_DO_ALARMU
+            len({norma.MIN_PLAN_DZIENNY_DO_ZNAKU,
+                 norma.MIN_BRAKOW_W_OKNIE_DO_ALARMU,
+                 norma.MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE}) == 3
             and not hasattr(norma, "MIN_PLAN_DO_ALARMU"),
             (norma.MIN_PLAN_DZIENNY_DO_ZNAKU,
-             norma.MIN_PLAN_W_OKNIE_DO_ALARMU))
-    sprawdz("prog okna jest wiekszy niz prog doby (okno sumuje)",
-            norma.MIN_PLAN_W_OKNIE_DO_ALARMU > norma.MIN_PLAN_DZIENNY_DO_ZNAKU)
+             norma.MIN_BRAKOW_W_OKNIE_DO_ALARMU,
+             norma.MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE))
+    # ZADNA Z NICH NIE JEST JUZ SUMA PLANU W OKNIE. Ta bramka zalezala od
+    # dlugosci okna, czyli od liczby, ktora wpisuje czlowiek.
+    sprawdz("bramki na WIELKOSC planu w oknie juz nie ma",
+            not hasattr(norma, "MIN_PLAN_W_OKNIE_DO_ALARMU"),
+            [n for n in dir(norma) if n.startswith("MIN_")])
     sprawdz("granica `_znak` lezy dokladnie na progu dziennym",
             norma._znak(0, norma.MIN_PLAN_DZIENNY_DO_ZNAKU - 1) == ""
             and norma._znak(0, norma.MIN_PLAN_DZIENNY_DO_ZNAKU) == "!!")
@@ -592,23 +606,23 @@ try:
     sprawdz("KONTRDOWOD: przy starym progu 5 wyciszalo (%d < 5)"
             % (ile_notek - 1), ile_notek - 1 < 5, ile_notek)
 
-    # ZAKAZANY KIERUNEK: tabela krzyczy, alarm milczy PO CICHU. Jeden dzien,
-    # plan notek 5 -> `0/5!!` w tabeli, a suma okna 5 < 10, wiec alarm nie
-    # budzi. Ma o tym POWIEDZIEC, a nie zniknac.
+    # ZAKAZANY KIERUNEK BYL TU ZAMROZONY OD ZLEJ STRONY. Jeden dzien, ZAPISANY
+    # plan 5 notek, zero wykonanych: tabela pisala `0/5!!`, a alarm milczal
+    # (suma planu 5 < 10) i ten test uznawal to za poprawne, o ile milczenie
+    # bylo nazwane. Doba, w ktorej z pieciu zaplanowanych notek nie wyszla ANI
+    # JEDNA, jest awaria w kazdym oknie — nazwanie jej nie zastapi kodu 1.
     przygotuj([], {dzien(1): dict(PELNY)})
     kod, tekst = uruchom("--dni", "1")
     wiersz = kolumny(tekst, dzien(1)) or PUSTE
     sprawdz("tabela krzyczy o notkach przy planie dziennym 5",
             wiersz[NOTKA].endswith("!!"), wiersz)
-    # Notka ma byc w linii wyjasniajacej, a NIE na liscie budzacej. Komentarze
-    # przy planie 10 w tym samym oknie alarmuja normalnie — to pokazuje, ze
-    # bramka dziala na pozycje, a nie ucisza calego raportu.
-    sprawdz("a alarm, ktory milczy, nazywa te pozycje po imieniu",
-            "plan za maly na alarm" in tekst
-            and "notka 0%" in tekst.split("plan za maly na alarm")[1]
-            and "notka" not in tekst.split("PONIZEJ PROGU")[-1],
+    sprawdz("i alarm juz nie milczy o pozycji, ktora nie wystawila NICZEGO",
+            "PONIZEJ PROGU" in tekst
+            and "notka" in tekst.split("PONIZEJ PROGU")[1] and kod == 1,
             [l for l in tekst.splitlines()
-             if "za maly" in l or "PONIZEJ PROGU" in l])
+             if "brakow" in l or "PONIZEJ PROGU" in l])
+    sprawdz("nie ma jej tez na liscie wyciszonych",
+            "za malo brakow na alarm" not in tekst, tekst)
     # DOZWOLONY KIERUNEK: tabela milczy o `0/2` restacka, alarm po siedmiu
     # dniach krzyczy. To jest cala wartosc sumowania i nie jest sprzecznoscia.
     w10, b10 = [], {}

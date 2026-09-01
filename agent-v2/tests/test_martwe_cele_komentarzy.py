@@ -99,8 +99,15 @@ def k(host, udane, rodzaj="komentarz", dni_temu=1.0, o_hoscie=None):
 
 
 # Skrot na najczestszy przypadek: porazka, ktora NAPRAWDE mowi o hoscie.
+#
+# `powod` NIE JEST OZDOBA. Wpis produkcyjny z `o_hoscie=True` zawsze niesie
+# wlasnie ten powod — inne powody znacza wyjatek po naszej stronie, a takiego
+# wpisu czytelnik nie liczy (patrz `hosty_gdzie_komentarz_nie_wchodzi`).
+# Atrapa bez `powod` udawalaby ksztalt, ktory w dzienniku nie wystepuje.
 def zle(host, dni_temu=1.0):
-    return k(host, False, dni_temu=dni_temu, o_hoscie=True)
+    w = k(host, False, dni_temu=dni_temu, o_hoscie=True)
+    w["powod"] = browser.POWOD_HOST_NIE_POKAZUJE
+    return w
 
 
 try:
@@ -290,7 +297,8 @@ try:
                    ("            if kiedy < granica:\n                continue\n",
                     ""))
     bez_klas = bez("browser_bez_klasyfikacji",
-                   ('            elif w.get("o_hoscie"):\n',
+                   ('            elif w.get("o_hoscie")'
+                    ' and w.get("powod") == POWOD_HOST_NIE_POKAZUJE:\n',
                     "            else:\n"))
 
     # (a) wpis sprzed roku

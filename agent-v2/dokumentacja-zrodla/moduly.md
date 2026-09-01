@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1718 wierszy, 15 funkcji na poziomie modułu, 1 klas
+1806 wierszy, 15 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -23,7 +23,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-5968 wierszy, 110 funkcji na poziomie modułu, 0 klas
+6033 wierszy, 110 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -140,7 +140,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-3932 wierszy, 77 funkcji na poziomie modułu, 0 klas
+4005 wierszy, 77 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -433,7 +433,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-949 wierszy, 9 funkcji na poziomie modułu, 0 klas
+1013 wierszy, 9 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -449,7 +449,7 @@
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
-884 wierszy, 13 funkcji na poziomie modułu, 0 klas
+1007 wierszy, 13 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

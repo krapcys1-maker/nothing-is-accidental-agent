@@ -20,7 +20,33 @@ from typing import Any, Callable
 import config
 import db
 import gates
+import llm
 import stages
+
+# DWA WYJATKI, KTORE NIE SA AWARIA JEDNEGO WYWOLANIA, TYLKO STANEM KONTA.
+#
+# `llm.BudgetExceeded` i `llm.PreflightFailed` dziedzicza po `RuntimeError`,
+# wiec kazde `except Exception` ponizej lapalo je razem ze zlym JSON-em.
+# `PreflightFailed` leci z `KILL_SWITCH=true`, braku klucza API, braku sufitu
+# tokenow i odmowy dostawcy; `BudgetExceeded` z sufitu przebiegu (1,60 USD),
+# dziennego sufitu toru i miesiecznego.
+#
+# WADA ZASTANA, NIE REGRES: `git show e88b456 -- agent-v2/run.py` nie tknal
+# zadnej z czterech oslon ponizej. Ale ekspozycja byla ta sama, co w
+# `artykul_z_puli.py`: sciezka `--wyslij` prowadzi przez `save`, `grafika`
+# i `zweryfikuj` prosto do `browser.wystaw_artykul(path, wyslij=True)`, a
+# `stages.zweryfikuj` na tym samym bledzie budzetu oddawalo `safe_to_post:
+# True`. Cztery polkniete bramki plus przepuszczajaca piata to publikacja
+# bez ani jednej dzialajacej kontroli.
+#
+# Krotka jest DOKLADNIE ta sama, co w `artykul_z_puli.PRZERYWAJA`
+# i `stages.PRZERYWAJA` — trzy pliki maja mowic to samo. Bierzemy klasy
+# z `llm`, a nie ze `stages`, bo testy podmieniaja `stages` na atrape.
+#
+# `llm.Truncated` NIE jest tu wymieniony celowo: odpowiedz ucieta na suficie
+# tokenow to awaria JEDNEGO wywolania, po ktorej budzet nadal istnieje —
+# i to wlasnie ona ma prawo isc dalej z wartoscia zapasowa.
+PRZERYWAJA = (llm.BudgetExceeded, llm.PreflightFailed)
 
 STAGES = (
     "scout", "feasibility", "discovery", "fetch",
@@ -462,6 +488,30 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     def blok(nazwa: str, robota) -> None:
         try:
             robota()
+        except PRZERYWAJA as exc:
+            # DZIEWIEC BLOKOW, JEDNO KONTO. Ta oslona ma izolowac awarie
+            # JEDNEGO bloku od osmiu pozostalych — i to jest sluszne przy
+            # padnietej przegladarce albo zlym JSON-ie. Przy wyczerpanym
+            # budzecie i przy `KILL_SWITCH=true` izolowac nie ma czego: kazdy
+            # nastepny platny blok wywroci sie na tym samym bledzie, a
+            # `dzien()` mimo to dochodzil do konca i `main` zamykal przebieg
+            # jako DONE.
+            #
+            # DLACZEGO TO NIE JEST TYLKO KOSMETYKA. `ile_przebiegow_zostalo`
+            # liczy przebiegi `stage='dzien' AND status='DONE'` i odejmuje je
+            # od `PRZEBIEGOW_DZIENNIE`. Przebieg, w ktorym nie poszlo NIC,
+            # zjadal wiec jedno z trzech miejsc w dniu i wygladal w bazie jak
+            # dzien odrobiony — zapis, ktory potem uchodzi za pomiar.
+            #
+            # `main` ma nad tym `except BaseException` (patrz `--dzien`), ktore
+            # zamyka przebieg jako FAILED z nazwa wyjatku w notatce i podnosi
+            # go dalej — czyli dokladnie ta sciezka, ktora `alarm.py` czyta.
+            print(f"  [{nazwa}] PRZERWANE: {type(exc).__name__}: {exc}"[:200],
+                  flush=True)
+            print("  (to nie jest awaria bloku, tylko stan konta — konczę "
+                  "dzień zamiast dobijać się do wyczerpanego budżetu)",
+                  flush=True)
+            raise
         except Exception as exc:
             print(f"  [{nazwa}] blok padł: {type(exc).__name__}: {exc}"[:160],
                   flush=True)
@@ -1379,6 +1429,12 @@ def main() -> int:
                 lambda: stages.synthesis(conn, run_id, topic["question"], evidence),
                 args.use_cache,
             )
+        except PRZERYWAJA:
+            # Karta zapasowa ma sens po awarii JEDNEGO wywolania. Przy pustym
+            # budzecie zaraz za nia stoi pisarz — najdrozszy etap przebiegu
+            # (~0,76 USD) — i wywroci sie na tym samym bledzie. Ta sama oslona
+            # stoi w `artykul_z_puli.py`.
+            raise
         except Exception as exc:
             print(f"  [awaria] synteza padła ({exc}) — składam kartę z dowodów", flush=True)
             card = stages.fallback_card(topic["question"], evidence)
@@ -1445,6 +1501,12 @@ def main() -> int:
                         print("   bank nie ma pary — pisarz dostaje karte jak jest",
                               flush=True)
             card["ocena_ciekawosci"] = ocena
+        except PRZERYWAJA:
+            # Budzet albo wylacznik — na wylot, patrz `PRZERYWAJA` na gorze
+            # pliku. Gdyby zostalo polkniete tutaj, pisarz ponizej wywrocilby
+            # sie na tym samym bledzie, tylko juz pod druga oslona, i tak dalej
+            # az do `browser.wystaw_artykul`.
+            raise
         except Exception as exc:
             # Bramka jest doradcza. Jej awaria nie moze kosztowac oplaconego
             # researchu — artykul powstaje tak czy owak.
@@ -1460,6 +1522,14 @@ def main() -> int:
             draft = cached(stage,
                            lambda: stages.write(conn, run_id, card, glebokosc),
                            args.use_cache)
+        except PRZERYWAJA:
+            # POWTORKA NA OPUSIE NIE MA PRAWA RUSZYC PRZY WYCZERPANYM BUDZECIE.
+            # Opus jest DROZSZY od tego, co wlasnie padlo, wiec oslona
+            # podwajalaby wydatek (~0,76 USD drugi raz) dokladnie w chwili, gdy
+            # `llm._preflight` powiedzial, ze pieniedzy nie ma. Przy
+            # `KILL_SWITCH=true` powtorka i tak wroci z tym samym
+            # `PreflightFailed` — jedno wywolanie po nic i wyjatek na koniec.
+            raise
         except Exception as exc:
             # Jedno powtórzenie na Opusie, bo tu ginie cały opłacony research.
             # Opus jest sprawdzonym pisarzem tego potoku; jeśli skonfigurowany
@@ -1501,6 +1571,17 @@ def main() -> int:
             report = cached(
                 stage, lambda: stages.review(conn, run_id, card, draft), args.use_cache
             )
+        except PRZERYWAJA:
+            # „SZUFLADA" TO ZDANIE NIEPRAWDZIWE NA SCIEZCE `--wyslij`. Ponizej
+            # stoi `stages.zweryfikuj` i `browser.wystaw_artykul(path,
+            # wyslij=True)`, a `zweryfikuj` przy tym samym bledzie budzetu tez
+            # padnie — czyli adnotacja „recenzja niedostepna" ladowalaby
+            # w uwagach artykulu, ktory chwile pozniej wychodzi na Substacka
+            # bez ani jednej dzialajacej kontroli.
+            #
+            # Polykamy tu WYLACZNIE awarie samej recenzji: zly JSON, timeout,
+            # odmowe jednego wywolania.
+            raise
         except Exception as exc:
             # Recenzja nic nie blokuje, więc jej brak też nie może. Artykuł
             # trafia do szuflady z adnotacją, że nie został rozliczony zdanie
@@ -1572,6 +1653,13 @@ def main() -> int:
                   % (f"{100 * gdzie:.0f}% głębokości" if gdzie is not None
                      else ("jest, ale nie znalazłem w tekście" if moment else "brak")),
                   flush=True)
+        except PRZERYWAJA:
+            # Czwarta oslona tej samej klasy. Gdy budzet konczy sie dopiero
+            # tutaj (recenzja jeszcze przeszla), polkniecie prowadzi do tej
+            # samej publikacji bez sprawdzenia faktow: `stages.zweryfikuj`
+            # kilkadziesiat linii nizej jest kolejnym platnym wywolaniem
+            # i padnie na tym samym bledzie.
+            raise
         except Exception as exc:
             print(f"  [awaria] obserwacja formy padła ({exc}) — idę dalej",
                   flush=True)

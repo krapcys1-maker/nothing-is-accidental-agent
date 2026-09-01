@@ -21,6 +21,30 @@ import korpus_kanalow
 import db
 import llm
 
+# DWA WYJATKI, KTORE NIE SA AWARIA JEDNEGO WYWOLANIA, TYLKO STANEM KONTA.
+#
+# `llm.BudgetExceeded` i `llm.PreflightFailed` dziedzicza po `RuntimeError`,
+# wiec KAZDE `except Exception` w tym pliku lapie je razem ze zlym JSON-em.
+# `PreflightFailed` leci z `KILL_SWITCH=true`, braku klucza API, braku sufitu
+# tokenow i odmowy dostawcy; `BudgetExceeded` z sufitu przebiegu (1,60 USD),
+# dziennego sufitu toru i miesiecznego. Po zadnym z nich nastepne wywolanie
+# nie ma prawa sie udac — wiec „odwrot" w postaci `continue` albo wartosci
+# zapasowej jest odwrotem pozornym.
+#
+# ZMIERZONA SZKODA W TYM PLIKU. `zweryfikuj` na `llm.BudgetExceeded` oddawalo
+# `safe_to_post: True` z uzasadnieniem „puszczam na pierwszej siatce" — a jest
+# ostatnia bramka przed `browser.wystaw_artykul`, `browser.wystaw_notke`
+# i `browser.wystaw_komentarz`. Przy pustym budzecie notka, komentarz i artykul
+# wychodzily wiec BEZ ANI JEDNEGO sprawdzenia faktow, tlumaczac sie siatka,
+# ktora chwile wczesniej padla na tym samym bledzie.
+#
+# Ta sama krotka stoi w `artykul_z_puli.py` (patrz tam `PRZERYWAJA`) — oba
+# pliki maja mowic to samo.
+#
+# `llm.Truncated` NIE jest tu wymieniony celowo: odpowiedz ucieta na suficie
+# tokenow to awaria JEDNEGO wywolania, a budzet po niej nadal istnieje.
+PRZERYWAJA = (llm.BudgetExceeded, llm.PreflightFailed)
+
 # TRZECI KOMUNIKAT SYSTEMOWY Z POPRZEDNIEJ EPOKI, znaleziony przy tym samym
 # przegladzie co CURIOSITY_SYSTEM. Skaut dostawal "ordinary things" w
 # komunikacie systemowym i "artificial intelligence" w prompcie — a to tlumaczy,
@@ -564,6 +588,12 @@ def reply_to(
             raw = llm.call("reply", REPLY_SYSTEM, prompt, conn=conn, run_id=run_id,
                            web_search=True)
             data = llm.parse_json(raw)
+        except PRZERYWAJA:
+            # Jak w `note()` i `comment_on()`. Odpowiedz nie przechodzi przez
+            # `zweryfikuj` (nie ma karty dowodowej, wiec nie ma czego sprawdzac),
+            # ale petla po kandydatach jest ta sama i tak samo klamie: przy
+            # wylaczniku oddawala „MILCZY" zamiast „nie wolno bylo zadzwonic".
+            raise
         except Exception as exc:
             print(f"  [odpowiedź {i + 1}] nie wyszła: {exc}", flush=True)
             continue
@@ -2003,6 +2033,16 @@ def note(
         try:
             raw = llm.call("note", NOTE_SYSTEM, prompt, conn=conn, run_id=run_id)
             data = llm.parse_json(raw)
+        except PRZERYWAJA:
+            # `continue` jest tu odwrotem POZORNYM: po wyczerpanym budzecie
+            # albo przy `KILL_SWITCH=true` zaden nastepny kandydat nie ma prawa
+            # sie udac, wiec petla oddawala pusta liste, `notki_dnia` szlo po
+            # nastepny fakt, a caly dzien konczyl sie jako DONE z zerem notek —
+            # czyli awaria konta wygladala w dzienniku jak spokojny dzien, w
+            # ktorym model nie mial nic do powiedzenia. `run.py` liczy zamkniete
+            # przebiegi DONE (`ile_przebiegow_zostalo`), wiec taki zapis uchodzil
+            # potem za pomiar wykonanej pracy.
+            raise
         except Exception as exc:
             print(f"  [notka {i + 1}] nie wyszła: {exc}", flush=True)
             continue
@@ -3016,6 +3056,25 @@ def zweryfikuj(
         raw = llm.call("factcheck", FACTCHECK_SYSTEM, prompt,
                        conn=conn, run_id=run_id, web_search=True)
         out = llm.parse_json(raw)
+    except PRZERYWAJA:
+        # „SPRAWDZILEM I NIE WIEM" TO NIE TO SAMO, CO „NIE SPRAWDZILEM".
+        #
+        # Uzasadnienie ponizej („zepsuta weryfikacja nie jest dowodem falszu")
+        # jest prawdziwe dla zlego JSON-a albo padnietego wyszukiwania: model
+        # poszedl, poszukal i nie umial oddac wyniku. Przy wyczerpanym budzecie
+        # albo `KILL_SWITCH=true` weryfikacja sie NIE ODBYLA i odbyc sie nie
+        # moze — a wtedy `safe_to_post: True` jest zdaniem nieprawdziwym
+        # wpisanym do zapisu, ktory chwile pozniej uchodzi za pomiar.
+        #
+        # ZASIEG JEST SZERSZY NIZ ARTYKUL: te funkcje wolaja takze `note()`
+        # i `comment_on()`, wiec przy pustym budzecie notka i komentarz tez
+        # wychodzily bez sprawdzenia. Przerwanie leci na wylot we wszystkich
+        # trzech sciezkach; kazdy wolajacy ma nad soba domkniecie przebiegu
+        # (`run.py` — `except Exception` przy artykule i `blok()` przy dniu,
+        # `artykul_z_puli.main` — `finish_run(ERROR)`).
+        #
+        # Musi stac PRZED ogolnym `except`, bo Python bierze pierwszy pasujacy.
+        raise
     except Exception as exc:
         # Awaria weryfikacji to nie jest dowód fałszu. Komentarz i tak stoi na faktach
         # zebranych przed pisaniem — druga siatka pękła, pierwsza trzyma.
@@ -3149,6 +3208,12 @@ def comment_on(
         try:
             raw = llm.call("comment", COMMENT_SYSTEM, prompt, conn=conn, run_id=run_id)
             data = llm.parse_json(raw)
+        except PRZERYWAJA:
+            # Ta sama zasada, co w `note()` kilkaset linii wyzej: przy pustym
+            # budzecie nastepny kandydat tez padnie, a pusta lista kandydatow
+            # jest nieodroznialna od „model wolal milczec" — a milczenie jest
+            # tu pelnoprawna odpowiedzia, wiec nikt tego nie zglosi jako awarii.
+            raise
         except Exception as exc:
             print(f"  [komentarz {i + 1}] nie wyszedł: {exc}", flush=True)
             continue

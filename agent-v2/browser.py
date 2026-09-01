@@ -96,6 +96,13 @@ def slad_przebiegu() -> dict[str, dict]:
             for r, n in sorted(_W_SERII.items())}
 
 
+# JEDYNY POWOD, KTORY MOWI COS O HOSCIE. Stoi jako stala, bo czytaja go DWA
+# miejsca — `dopisz_wynik` przy zapisie i `hosty_gdzie_komentarz_nie_wchodzi`
+# przy czytaniu — a rozjechanie sie tych dwoch napisow wylaczyloby pamiec
+# martwych hostow po cichu.
+POWOD_HOST_NIE_POKAZUJE = "Substack nie potwierdzil, ze wyszlo"
+
+
 def dopisz_wynik(rodzaj: str, wynik: dict, **szczegoly) -> None:
     """Jeden wpis na dzialanie — takze wtedy, gdy sie NIE UDALO, i z powodem.
 
@@ -126,7 +133,7 @@ def dopisz_wynik(rodzaj: str, wynik: dict, **szczegoly) -> None:
             wynik.get("blad")
             or ("nie znalazlem przycisku wysylki"
                 if wynik.get("przycisk_widoczny") is False else "")
-            or "Substack nie potwierdzil, ze wyszlo")
+            or POWOD_HOST_NIE_POKAZUJE)
 
         # O KIM MOWI TA PORAZKA: o CELU czy o NAS.
         #
@@ -137,15 +144,41 @@ def dopisz_wynik(rodzaj: str, wynik: dict, **szczegoly) -> None:
         # `hosty_gdzie_komentarz_nie_wchodzi` czytalo je tak samo jak odmowe
         # Substacka i po dwoch takich wpisach kasowalo host na zawsze.
         #
+        # POTRZEBNE SA DWA FAKTY, NIE JEDEN, i pierwsza wersja tej poprawki
+        # miala tylko pierwszy.
+        #
         # `klikniete` ustawia sciezka publikacji TUZ PO nacisnieciu przycisku
-        # wysylki. True znaczy: przegladarka zyla, strona sie wczytala, pole
-        # bylo, tekst wszedl, przycisk byl i zostal nacisniety — a mimo to
-        # potwierdzenie u Substacka nic nie widzi. To JEDYNA klasa porazki,
-        # ktora mowi cos o hoscie, i dokladnie ta, ktora karmila liste przed
-        # 1 wrzesnia. Wszystko inne (brak pola, brak przycisku, wyjatek) nadal
+        # wysylki — a wiec ZANIM ktokolwiek zapytal Substacka, czy komentarz
+        # wisi. Samo to znaczy tyle, ze przegladarka zyla, strona sie wczytala,
+        # pole bylo, tekst wszedl i przycisk zostal nacisniety.
+        #
+        # `potwierdzenie_odpowiedzialo` ustawia sie dopiero wtedy, gdy
+        # `potwierdz_komentarz` / `potwierdz_odpowiedz` WROCILO — z odpowiedzia
+        # „jest" albo „nie ma". Te funkcje robia do czterech `api_json`, kazde
+        # to `page.goto` z timeoutem, i zadne z nich niczego nie polyka. Wyjatek
+        # w ich trakcie (timeout nawigacji, wyzwanie Cloudflare,
+        # `TargetClosedError`, gdy wlasciciel zamknie swojego Chrome'a — a agent
+        # podpina sie wlasnie do jego okna) leci przez `except` do `finally`,
+        # ktory od 1 wrzesnia zapisuje BEZWARUNKOWO.
+        #
+        # Zlozenie tych dwoch zmian dalo skutek odwrotny do zamierzonego: kazdy
+        # taki wyjatek szedl do dziennika jako `o_hoscie=True`, czyli jako dowod
+        # przeciwko hostowi. Zmierzone side-by-side na atrapie Playwrighta,
+        # wyjatek w `page.goto` PO klknieciu: dwa wpisy, jeden host, i
+        # `slowboring.com` uznany za martwy na 14 dni, choc nie powiedzial nam
+        # ani slowa. Petla domykala sie sama — sito w `run.py` wycina cele
+        # z takiego hosta PRZED platna ocena, wiec host nie mial jak zdobyc
+        # wpisu `udane=True`, ktory jako jedyny kasuje go z listy.
+        #
+        # `o_hoscie` ma znaczyc JEDNA rzecz: „kliknelismy, a Substack tego nie
+        # pokazuje". To odpowiedz z potwierdzania, nie sam fakt klikniecia.
+        # Wyjatek w trakcie potwierdzania to „nie wiem", a „nie wiem" nie jest
+        # dowodem. Wszystko inne (brak pola, brak przycisku, wyjatek) nadal
         # zostawia slad i nadal liczy sie do `pod_rzad_zle` i do raportu, ale
         # nie skresla hosta.
-        szczegoly["o_hoscie"] = bool(wynik.get("klikniete"))
+        szczegoly["klikniete"] = bool(wynik.get("klikniete"))
+        szczegoly["o_hoscie"] = bool(wynik.get("klikniete")
+                                     and wynik.get("potwierdzenie_odpowiedzialo"))
 
     # SLAD PRZEBIEGU — patrz komentarz przy `_W_SERII`. Liczymy TU, a nie w
     # `run.py`, zeby zadna sciezka publikacji nie mogla o tym zapomniec:
@@ -2669,7 +2702,13 @@ def wystaw_odpowiedz_pod_artykulem(
             wyslac.click()
             wynik["klikniete"] = True     # jak w `wystaw_komentarz`
             page.wait_for_timeout(8000)
-            wynik["wyslane"] = potwierdz_komentarz(page, url_artykulu, tekst)
+            odp = potwierdz_komentarz(page, url_artykulu, tekst)
+            # DRUGA POLOWA DOWODU — jak w `wystaw_komentarz`. Tu chodzi
+            # o komentarze pod NASZYM artykulem, wiec dzis zaden konsument
+            # `o_hoscie` tego nie czyta; wzorzec jest ten sam i rozjechanie sie
+            # trzech kopii tej sciezki juz raz nas kosztowalo.
+            wynik["potwierdzenie_odpowiedzialo"] = True
+            wynik["wyslane"] = odp
             dopisz_wynik("odpowiedz_pod_artykulem", wynik,
                                gdzie=url_artykulu, komu=autor,
                                slow=len(tekst.split()), tekst=tekst[:300])
@@ -2933,7 +2972,12 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
             przycisk.click()
             wynik["klikniete"] = True     # jak w `wystaw_komentarz`
             page.wait_for_timeout(6000)
-            wynik["wyslane"] = potwierdz_odpowiedz(page, note_id, tekst)
+            odp = potwierdz_odpowiedz(page, note_id, tekst)
+            # DRUGA POLOWA DOWODU — jak w `wystaw_komentarz`. `potwierdz_odpowiedz`
+            # robi do czterech `api_json` i nie polyka wyjatkow, wiec bez tej
+            # linii kazdy timeout po klknieciu wygladalby jak odmowa hosta.
+            wynik["potwierdzenie_odpowiedzialo"] = True
+            wynik["wyslane"] = odp
             dopisz_wynik(rodzaj, wynik,
                                gdzie=f"note/c-{note_id}",
                                slow=len(tekst.split()), tekst=tekst[:300],
@@ -3215,6 +3259,22 @@ def hosty_gdzie_komentarz_nie_wchodzi(min_prob: int = 2,
     `TimeoutError`/`TargetClosedError`, dwa rozne posty, jeden host — i
     `slowboring.com` uznany za martwy, choc nie powiedzial nam ani slowa.
 
+    SAMO KLKNIECIE TO ZA MALO — poprawione po tym, jak pierwsza wersja tego
+    rozroznienia oparla `o_hoscie` wylacznie na fladze `klikniete`. Flaga
+    zapala sie TUZ PO nacisnieciu przycisku, a potwierdzanie zaczyna sie
+    dopiero potem i robi do czterech nawigacji, ktore moga sie wywalic. Wpis
+    liczy sie do listy dopiero, gdy Substack ODPOWIEDZIAL „nie ma tego" —
+    dwa fakty, nie jeden. Patrz `dopisz_wynik`.
+
+    I TO SAMO PYTANIE ZADAJEMY WPISOM, KTORE JUZ LEZA NA DYSKU. Przez jeden
+    dzien kod zapisywal `o_hoscie=True` takze wtedy, gdy porazka byla wyjatkiem
+    po naszej stronie — a taki wpis niesie w `powod` nazwe wyjatku, wiec sam
+    sobie przeczy. Nie liczymy go. Dla wpisow powstajacych dzis to nic nie
+    zmienia (przy `o_hoscie=True` powod z definicji brzmi
+    POWOD_HOST_NIE_POKAZUJE), a tamte inaczej blokowalyby zdrowy host przez
+    cale okno: sito w `run.py` wycina go z puli PRZED ocena, wiec udany
+    komentarz — jedyna droga wyjscia — jest poza zasiegiem.
+
     STARE WPISY, BEZ POLA `o_hoscie`, NIE LICZA SIE WCALE. To jest wybor, nie
     przeoczenie. Kuszace bylo uznac je za dowod na hosta — bo przed 1 wrzesnia
     zapis stal wylacznie w galezi „kliknelismy i nie potwierdzilo", czyli
@@ -3271,7 +3331,16 @@ def hosty_gdzie_komentarz_nie_wchodzi(min_prob: int = 2,
                 continue
             if w.get("udane"):
                 udane[host] += 1
-            elif w.get("o_hoscie"):
+            # WPIS, KTORY SAM SOBIE PRZECZY, NIE JEST DOWODEM. `o_hoscie=True`
+            # przy powodzie mowiacym „TimeoutError" albo „TargetClosedError"
+            # nie da sie pogodzic z definicja tego pola — to sa wpisy z jednego
+            # dnia, kiedy `o_hoscie` liczylo sie z samej flagi `klikniete`,
+            # zapalanej PRZED potwierdzaniem. Kod juz takich nie produkuje, ale
+            # te, ktore zdazyly powstac, leza na dysku przez cale okno 14 dni
+            # i host nie ma jak sie z nich wybronic: sito w `run.py` wycina go
+            # z puli, wiec `udane=True`, jedyna droga wyjscia, jest poza
+            # zasiegiem. Tu kosztuje to jedna linie.
+            elif w.get("o_hoscie") and w.get("powod") == POWOD_HOST_NIE_POKAZUJE:
                 nieudane[host] += 1
     except OSError:
         return set()
@@ -3608,11 +3677,10 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
 
         if wyslij and wynik["przycisk_widoczny"]:
             przycisk.click()
-            # OD TEJ LINII PORAZKA MOWI O HOSCIE, NIE O NAS — patrz
-            # `dopisz_wynik`. Wszystko po naszej stronie juz sie udalo:
-            # przegladarka, strona, pole, tekst, przycisk. Jesli komentarza
-            # potem nie widac, to jest cecha tego hosta i tylko takie wpisy
-            # wolno liczyc `hosty_gdzie_komentarz_nie_wchodzi`.
+            # OD TEJ LINII WSZYSTKO PO NASZEJ STRONIE JUZ SIE UDALO:
+            # przegladarka, strona, pole, tekst, przycisk. To POLOWA dowodu
+            # przeciw hostowi — druga polowa to odpowiedz z potwierdzania,
+            # ustawiana trzy linie nizej. Patrz `dopisz_wynik`.
             wynik["klikniete"] = True
             page.wait_for_timeout(6000)
             # Kliknięcie przycisku nie jest dowodem, że komentarz został przyjęty,
@@ -3621,6 +3689,11 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
             # klienta i inner_text ich nie widzi — sprawdzenie po tekscie strony dało
             # fałszywy alarm przy pierwszym realnym komentarzu, który naprawdę wisiał.
             nasz_numer = potwierdz_komentarz(page, url, tekst)
+            # SUBSTACK ODPOWIEDZIAL — „jest" albo „nie ma". Dopiero to czyni
+            # z porazki dowod przeciw hostowi. Gdy `potwierdz_komentarz` rzuci
+            # (do czterech `page.goto`, zadne nie polyka wyjatku), ta linia sie
+            # nie wykona i porazka zostanie w dzienniku jako „nie wiem".
+            wynik["potwierdzenie_odpowiedzialo"] = True
             wynik["wyslane"] = nasz_numer is not None
             wynik["id"] = nasz_numer
             dopisz_wynik("komentarz", wynik, gdzie=url,

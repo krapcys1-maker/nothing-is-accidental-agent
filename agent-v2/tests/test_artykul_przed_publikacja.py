@@ -19,6 +19,12 @@ CZEGO PILNUJE TEN TEST. Ze miedzy wejsciem w galaz `--wyslij` a wywolaniem
 `browser.wystaw_artykul` stoi `stages.zweryfikuj`, i ze przy niepowodzeniu
 sciezka WRACA zamiast publikowac. Zapis artykulu ma zostac — blokujemy wyjscie
 na zewnatrz, nie prace.
+
+SEKCJA 5 ZOSTALA PRZEROBIONA 1 wrzesnia 2026. Sprawdzala zachowanie
+`zweryfikuj` przez czytanie pierwszych 2000 znakow jego zrodla — czyli gasla
+przy samym przesunieciu komentarza i nie odrozniala zlej odpowiedzi modelu od
+pustego konta. Teraz uruchamia prawdziwa funkcje z podmienionym `llm.call`.
+Pelny pomiar obu roznic siedzi w `test_pusty_budzet_nie_sprawdza.py`.
 """
 import pathlib
 import sys
@@ -108,17 +114,60 @@ sprawdz("i wypisywane sa poszczegolne zakwestionowane twierdzenia",
         "refuted" in po_audycie and "claims" in po_audycie, po_audycie[:300])
 
 print()
-print("=== 5. `zweryfikuj` PRZY WLASNEJ AWARII PRZEPUSZCZA ===")
+print("=== 5. `zweryfikuj`: AWARIA PRZEPUSZCZA, PUSTY BUDZET NIE ===")
 # Zepsuta weryfikacja to nie dowod falszu. Gdyby awaria blokowala, jedna
 # padnieta sesja sieciowa kasowalaby artykul wart 76 centow.
-import stages   # noqa: E402
-zrodlo_zweryfikuj = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
-poczatek = zrodlo_zweryfikuj.find("def zweryfikuj(")
-cialo = zrodlo_zweryfikuj[poczatek:poczatek + 2000]
-sprawdz("awaria oddaje safe_to_post = True",
-        '"safe_to_post": True' in cialo, cialo[:200])
+#
+# ALE „SPRAWDZILEM I NIE WIEM" TO NIE TO SAMO, CO „NIE SPRAWDZILEM". Przy
+# `llm.BudgetExceeded` i `llm.PreflightFailed` weryfikacja sie NIE ODBYLA
+# i odbyc sie nie moze — tam `safe_to_post: True` bylo zdaniem nieprawdziwym
+# wpisanym do zapisu, ktory chwile pozniej uchodzi za pomiar.
+#
+# TA SEKCJA BYLA WCZESNIEJ CZYTANIEM ZRODLA (`'"safe_to_post": True' in cialo`
+# na pierwszych 2000 znakach funkcji). Dwie wady naraz: przesuniecie komentarza
+# o kilkanascie linii gasilo ja bez zmiany zachowania, a rozroznienia miedzy
+# zla odpowiedzia a pustym kontem nie widziala w ogole. Teraz mierzymy przez
+# URUCHOMIENIE, z prawdziwymi klasami wyjatkow z `llm`.
+import contextlib   # noqa: E402
+import io           # noqa: E402
+
+import llm          # noqa: E402
+import stages       # noqa: E402
+
+TEKST = " ".join(["word"] * 200)
+
+
+def _zweryfikuj_gdy(wyjatek):
+    """Oddaje (wynik, wyjatek) prawdziwego `zweryfikuj` przy danej awarii."""
+    def _rzuca(*a, **k):
+        raise wyjatek
+    stary = llm.call
+    llm.call = _rzuca
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            return stages.zweryfikuj(object(), 1, TEKST, "tytul"), None
+    except BaseException as exc:      # noqa: BLE001 — mierzymy, co wylatuje
+        return None, exc
+    finally:
+        llm.call = stary
+
+
+wynik, wyjatek = _zweryfikuj_gdy(ValueError("Extra data: line 1 column 1866"))
+sprawdz("zwykla awaria oddaje safe_to_post = True",
+        wynik is not None and wynik.get("safe_to_post") is True,
+        wynik if wynik else type(wyjatek).__name__)
 sprawdz("i mowi wprost, ze puszcza na pierwszej siatce",
-        "pierwszej siatce" in cialo)
+        wynik is not None and "pierwszej siatce" in str(wynik.get("verdict", "")),
+        wynik)
+
+_, wyjatek = _zweryfikuj_gdy(llm.BudgetExceeded("limit dzienny wyczerpany"))
+sprawdz("wyczerpany budzet NIE przepuszcza — leci na wylot",
+        isinstance(wyjatek, llm.BudgetExceeded), type(wyjatek).__name__)
+
+_, wyjatek = _zweryfikuj_gdy(llm.PreflightFailed("KILL_SWITCH=true"))
+sprawdz("wylacznik tak samo — leci na wylot",
+        isinstance(wyjatek, llm.PreflightFailed), type(wyjatek).__name__)
+
 sprawdz("funkcja istnieje i jest wywolywalna", callable(stages.zweryfikuj))
 
 print()
