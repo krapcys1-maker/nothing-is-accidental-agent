@@ -1489,6 +1489,25 @@ BANK_UDZIAL_ARTYKULOW = 0.33
 # z pieciu przebiegow placil za wlasne szukanie.
 BANK_MAKS_WOLNYCH = 20
 
+# ILE RAZY NA DOBE WOLNO DOBIERAC MATERIAL DO BANKU.
+#
+# Bylo: przy kazdym z pieciu przebiegow. Zmierzone 1 wrzesnia 2026 na
+# produkcji: srednio 266 517 tokenow wejscia i 14,6 wyszukan w sieci na jedno
+# wywolanie, 46 wywolan przez osiem dni — okolo 13,6 USD miesiecznie, przy
+# banku, w ktorym 58 z 69 pozycji lezalo NIEUZYTYCH.
+#
+# Sufit banku (`BANK_MAKS_WOLNYCH`) mial to zatrzymywac i przez trzy dni nie
+# zatrzymal ANI RAZU, bo obchodzila go regula o wielkim wydarzeniu — a
+# wydarzeniem bylo za kazdym razem to samo: premiera GLM 5.3 sprzed kilku dni.
+SZUKANIE_BANKU_NA_DOBE = 1
+
+# JAK DLUGO TO SAMO WYDARZENIE NIE OTWIERA FURTKI DRUGI RAZ.
+#
+# Wlasciciel: „chce napisac o tym w tym samym dniu, max dzien po". Dwie doby
+# pokrywaja to okno dokladnie. Po nich ten sam rdzen moze wrocic — jesli
+# temat naprawde odzyl, zasluguje na drugie podejscie.
+WYDARZENIE_WAZNE_DNI = 2
+
 # TERMIN WAZNOSCI W BANKU, liczony od dnia dopisania — osobny od wieku ZRODLA.
 # To sa dwa rozne pytania: dokument kontrolny mowi, czy fakt jest nadal
 # prawdziwy, a to mowi, czy jest jeszcze AKTUALNY jako temat. Fakt o modelu

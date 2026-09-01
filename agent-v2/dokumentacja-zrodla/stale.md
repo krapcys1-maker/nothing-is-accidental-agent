@@ -120,6 +120,8 @@
 | `DATA_PRZESTAWIENIA` | `"2026-08-25"` | DZIEN, W KTORYM KONTO PRZESTALO BYC PISMEM O PRZEDMIOTACH CODZIENNYCH. Nie jest to data historyczna dla ozdoby — czyta ja `wez_kandydatow`.  |
 | `BANK_UDZIAL_ARTYKULOW` | `0.33` | Jaka czesc banku moze niesc znacznik „na artykul". Pytany po kolei „czy to unioslo by artykul", model mowi tak prawie zawsze — ta sama degen |
 | `BANK_MAKS_WOLNYCH` | `20` | --- BANK POMYSLOW: BUFOR, NIE MAGAZYN -------------------------------------- Wlasciciel, 30 sierpnia: „nie moze byc tak, ze mamy za duzo tem |
+| `SZUKANIE_BANKU_NA_DOBE` | `1` | ILE RAZY NA DOBE WOLNO DOBIERAC MATERIAL DO BANKU. Bylo: przy kazdym z pieciu przebiegow. Zmierzone 1 wrzesnia 2026 na produkcji: srednio 26 |
+| `WYDARZENIE_WAZNE_DNI` | `2` | JAK DLUGO TO SAMO WYDARZENIE NIE OTWIERA FURTKI DRUGI RAZ. Wlasciciel: „chce napisac o tym w tym samym dniu, max dzien po". Dwie doby pokryw |
 | `BANK_MAKS_DNI` | `7` | TERMIN WAZNOSCI W BANKU, liczony od dnia dopisania — osobny od wieku ZRODLA. To sa dwa rozne pytania: dokument kontrolny mowi, czy fakt jest |
 | `NOTE_MIX_ARTICLE_DAY` | `("ARTYKUL", "ARTYKUL", "CIEKAWOSTKA", "SPROS` | MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu. Powod jest w NOTE_TYPES przy samym typie: wszystkie pozostale wymagaja  |
 | `KSZTALTY_MYSLI` | `{ "PYTANIE": ( "Ask something nobody can set` | KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL. Powod jest zmierzony: opis typu wymienial pytanie i obserwacje jako d |

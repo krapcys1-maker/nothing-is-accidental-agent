@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **22 plików**, 25 128 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **22 plików**, 25 259 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 108 zestawów
-testów, 3112 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 109 zestawów
+testów, 3127 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -176,7 +176,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-6096 wierszy, 111 funkcji na poziomie modułu, 0 klas
+6208 wierszy, 115 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -210,6 +210,10 @@ wiec nie da sie go rozjechac z kodem.
 | `zapisz_zuzyte(nowe)` | Pamięć zużytych ciekawostek — poza bazą, bo budżet to cztery tabele. |
 | `wybierz_cele(conn, run_id, posty)` | Które posty z kanału zasługują na komentarz. |
 | `zaczyn_z_kanalow(ile)` | Tematy, o ktorych mowi sie w tym tygodniu — do promptu, nie do cytowania. |
+| `_rdzen_wydarzenia(w)` *(wewn.)* | Klucz zdarzenia: posortowane slowa rdzenia, zeby ta sama premiera |
+| `_nowe_wydarzenia(wydarzenia)` *(wewn.)* | Ktore z tych zdarzen sa NOWE — czyli nie dobieralismy juz o nich materialu. |
+| `_zapamietaj_wydarzenia(nowe, znane)` *(wewn.)* | Zapisuje, ze o tych zdarzeniach juz dobieralismy material. |
+| `_przebiegi_z_bankiem_dzis(conn)` *(wewn.)* | Ile PRZEBIEGOW dobieralo dzis material do banku. |
 | `znajdz_ciekawostki(conn, run_id, ile)` | Materiał na notki w dni bez artykułu. |
 | `kuplet_korygujacy(tekst)` | Czy tekst uzywa ruchu „nie X. Y." — zaprzeczenie, potem poprawka. |
 | `zdania_z_tikiem(tekst)` | TE SAME trzy postacie tiku, ale oddane jako ZDANIA, nie jako „tak/nie". |
@@ -517,7 +521,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2398 wierszy, 21 funkcji na poziomie modułu, 0 klas
+2417 wierszy, 21 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -12556,6 +12560,8 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `DATA_PRZESTAWIENIA` | `"2026-08-25"` | DZIEN, W KTORYM KONTO PRZESTALO BYC PISMEM O PRZEDMIOTACH CODZIENNYCH. Nie jest to data historyczna dla ozdoby — czyta ja `wez_kandydatow`.  |
 | `BANK_UDZIAL_ARTYKULOW` | `0.33` | Jaka czesc banku moze niesc znacznik „na artykul". Pytany po kolei „czy to unioslo by artykul", model mowi tak prawie zawsze — ta sama degen |
 | `BANK_MAKS_WOLNYCH` | `20` | --- BANK POMYSLOW: BUFOR, NIE MAGAZYN -------------------------------------- Wlasciciel, 30 sierpnia: „nie moze byc tak, ze mamy za duzo tem |
+| `SZUKANIE_BANKU_NA_DOBE` | `1` | ILE RAZY NA DOBE WOLNO DOBIERAC MATERIAL DO BANKU. Bylo: przy kazdym z pieciu przebiegow. Zmierzone 1 wrzesnia 2026 na produkcji: srednio 26 |
+| `WYDARZENIE_WAZNE_DNI` | `2` | JAK DLUGO TO SAMO WYDARZENIE NIE OTWIERA FURTKI DRUGI RAZ. Wlasciciel: „chce napisac o tym w tym samym dniu, max dzien po". Dwie doby pokryw |
 | `BANK_MAKS_DNI` | `7` | TERMIN WAZNOSCI W BANKU, liczony od dnia dopisania — osobny od wieku ZRODLA. To sa dwa rozne pytania: dokument kontrolny mowi, czy fakt jest |
 | `NOTE_MIX_ARTICLE_DAY` | `("ARTYKUL", "ARTYKUL", "CIEKAWOSTKA", "SPROS` | MIESZANKA DNIA. Ostatnia pozycja to MYSL — notka bez zadnego dowodu. Powod jest w NOTE_TYPES przy samym typie: wszystkie pozostale wymagaja  |
 | `KSZTALTY_MYSLI` | `{ "PYTANIE": ( "Ask something nobody can set` | KSZTALTY NOTKI TYPU MYSL. Losowane w kodzie i podawane jako PRZYDZIAL. Powod jest zmierzony: opis typu wymienial pytanie i obserwacje jako d |

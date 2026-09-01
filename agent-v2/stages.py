@@ -1122,6 +1122,87 @@ def zaczyn_z_kanalow(ile: int = 26) -> str:
         for w in wpisy)
 
 
+WYDARZENIA_OBSLUZONE = config.DATA_DIR / "wydarzenia_obsluzone.json"
+
+
+def _rdzen_wydarzenia(w: dict[str, Any]) -> str:
+    """Klucz zdarzenia: posortowane slowa rdzenia, zeby ta sama premiera
+    opisana raz jako „glm, 5.3", a raz „5.3, glm" byla JEDNYM zdarzeniem."""
+    slowa = [str(x).strip().lower() for x in (w.get("o_czym") or []) if str(x).strip()]
+    return ",".join(sorted(slowa)[:3])
+
+
+def _nowe_wydarzenia(
+    wydarzenia: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """Ktore z tych zdarzen sa NOWE — czyli nie dobieralismy juz o nich materialu.
+
+    Bez tego jedno zdarzenie otwiera furtke przy KAZDYM przebiegu: zmierzone
+    1 wrzesnia 2026, premiera GLM 5.3 dala szesc pelnych szukan w trzy dni.
+    Pamiec wygasa po `config.WYDARZENIE_WAZNE_DNI`, wiec cos, co wraca po
+    tygodniu jako nowa fala, dostanie swoja szanse jeszcze raz.
+    """
+    from datetime import datetime, timedelta, timezone
+    try:
+        znane = json.loads(WYDARZENIA_OBSLUZONE.read_text(encoding="utf-8"))
+        if not isinstance(znane, dict):
+            znane = {}
+    except (OSError, ValueError):
+        znane = {}
+    granica = (datetime.now(timezone.utc)
+               - timedelta(days=config.WYDARZENIE_WAZNE_DNI)).date().isoformat()
+    nowe = [w for w in (wydarzenia or [])
+            if str(znane.get(_rdzen_wydarzenia(w), "")) < granica]
+    return nowe, znane
+
+
+def _zapamietaj_wydarzenia(nowe: list[dict[str, Any]],
+                           znane: dict[str, str]) -> None:
+    """Zapisuje, ze o tych zdarzeniach juz dobieralismy material."""
+    from datetime import datetime, timezone
+    dzis = datetime.now(timezone.utc).date().isoformat()
+    for w in nowe:
+        znane[_rdzen_wydarzenia(w)] = dzis
+    try:
+        WYDARZENIA_OBSLUZONE.parent.mkdir(parents=True, exist_ok=True)
+        WYDARZENIA_OBSLUZONE.write_text(
+            json.dumps(znane, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception as exc:
+        # Nieudany zapis nie moze zabrac dnia — najwyzej zdarzenie otworzy
+        # furtke drugi raz, czyli wrocimy do zachowania sprzed poprawki.
+        print("  [wydarzenia] nie zapisalem pamieci (%s)" % type(exc).__name__,
+              flush=True)
+
+
+def _przebiegi_z_bankiem_dzis(conn: sqlite3.Connection) -> int:
+    """Ile PRZEBIEGOW dobieralo dzis material do banku.
+
+    Liczone z tabeli `calls`, bo tam i tak zapisujemy kazde wywolanie modelu —
+    osobny plik stanu bylby druga prawda, ktora moze sie rozjechac z pierwsza.
+    Liczymy przebiegi, nie wywolania: jedno wejscie w `znajdz_ciekawostki`
+    potrafi wolac model kilka razy (zmierzone: 1-3).
+    """
+    from datetime import datetime, timezone
+    if conn is None:
+        # Bez bazy nie da sie policzyc. W produkcji `conn` jest zawsze —
+        # `notki_dnia` i `artykul_z_puli` maja go otwartego. `None` pojawia sie
+        # w testach, ktore sprawdzaja co innego, i tam limit ma nie przeszkadzac.
+        return 0
+    dzis = datetime.now(timezone.utc).date().isoformat()
+    try:
+        r = conn.execute(
+            "SELECT COUNT(DISTINCT run_id) FROM calls"
+            " WHERE purpose = ? AND substr(at, 1, 10) = ?",
+            ("curiosity", dzis)).fetchone()
+        return int(r[0]) if r and r[0] is not None else 0
+    except sqlite3.Error:
+        # WYLACZNIE bledy bazy. Szerokie `except Exception` polknelo tu przy
+        # pisaniu prawdziwy `NameError` z brakujacego importu i funkcja cicho
+        # oddawala zero — czyli limit dobowy nie dzialalby wcale, a test
+        # pokazywalby „zero przebiegow" zamiast bledu.
+        return 0
+
+
 def znajdz_ciekawostki(
     conn: sqlite3.Connection, run_id: int, ile: int = config.CURIOSITY_BATCH
 ) -> list[dict[str, Any]]:
@@ -1160,8 +1241,39 @@ def znajdz_ciekawostki(
             len(wydarzenia),
             "; ".join(", ".join(w["o_czym"][:3]) for w in wydarzenia[:2])),
             flush=True)
+    # WYDARZENIE OTWIERA FURTKE RAZ, NIE W KOLKO — i to jest cala poprawka.
+    #
+    # Zmierzone na produkcji 1 wrzesnia 2026: przez TRZY DNI bramka
+    # `bank_pelny` nie zatrzymala ANI RAZU, mimo ze bank mial 58 wolnych
+    # pozycji przy sufcie 20. Obchodzila ja ta gałąź — a „wielkim wydarzeniem"
+    # bylo przy kazdym z pieciu przebiegow dziennie TO SAMO: premiera GLM 5.3
+    # sprzed kilku dni. Szesc pelnych szukan w trzy dni o jednym zdarzeniu.
+    #
+    # Cena: srednio 266 517 tokenow wejscia i 14,6 wyszukan w sieci na
+    # wywolanie, okolo 13,6 USD miesiecznie — przy banku, w ktorym 58 z 69
+    # pozycji lezalo nieuzytych.
+    #
+    # Pierwszenstwo wydarzenia ZOSTAJE i ma zostac: wlasciciel chce pisac o
+    # premierze modelu tego samego dnia, najpozniej nastepnego. Zmienia sie
+    # tylko to, ze o TYM SAMYM wydarzeniu dobieramy material raz.
+    nowe_wyd, znane_wyd = _nowe_wydarzenia(wydarzenia)
+    if wydarzenia and not nowe_wyd:
+        print("  [wydarzenia] wszystkie juz obsluzone wczesniej — nie"
+              " otwieram furtki drugi raz", flush=True)
+    if nowe_wyd:
+        _zapamietaj_wydarzenia(nowe_wyd, znane_wyd)
+    elif _przebiegi_z_bankiem_dzis(conn) >= config.SZUKANIE_BANKU_NA_DOBE:
+        # Zwykle dobieranie do banku: RAZ NA DOBE, nie przy kazdym z pieciu
+        # przebiegow. Licznik czytamy z tabeli `calls`, bo tam i tak zapisujemy
+        # kazde wywolanie — osobny plik stanu bylby druga prawda. Liczymy
+        # PRZEBIEGI, nie wywolania: jedno wejscie tutaj potrafi wolac model
+        # kilka razy.
+        print("  [ciekawostki] dzis juz dobieralismy do banku — nie szukam"
+              " drugi raz (limit %d/dobe)" % config.SZUKANIE_BANKU_NA_DOBE,
+              flush=True)
+        return []
     elif bank_pelny():
-        print("  [ciekawostki] bank pelny (>=%d wolnych) i zadnego wielkiego"
+        print("  [ciekawostki] bank pelny (>=%d wolnych) i zadnego NOWEGO"
               " wydarzenia — nie szukam" % config.BANK_MAKS_WOLNYCH, flush=True)
         return []
 
