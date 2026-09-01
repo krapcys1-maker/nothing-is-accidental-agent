@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-5703 wierszy, 106 funkcji na poziomie modułu, 0 klas
+5789 wierszy, 107 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -80,7 +80,8 @@
 | `nazwy_wlasne(tekst)` | Nazwy wlasne i identyfikatory z tekstu, sprowadzone do jednej postaci. |
 | `wspolna_nazwa(a, b, korpus, maks_czestosc)` | Nazwa wlasna, ktora wystepuje w OBU tekstach i jest rzadka w korpusie. |
 | `_o_tym_samym(a, b, min_wspolnych, prog)` *(wewn.)* | Czy dwa teksty mowia o tej samej rzeczy. |
-| `wybierz_material(zapas, unikaj, wczesniej)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
+| `teksty_ostatnich_notek(ile)` | Tresci ostatnich notek — do porownania po NAZWACH WLASNYCH. |
+| `wybierz_material(zapas, unikaj, wczesniej, teksty)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
 | `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, ile, od)` | Pięć notek na jeden dzień, każda z innego materiału. |
 | `ocen_restack(conn, run_id, notka)` | Czy podac te notke dalej i z jakim zdaniem. |
 | `_podloga_z_pamieci(tekst)` *(wewn.)* | Dwie podlogi, ktore dzialaja BEZ karty dowodowej. |
@@ -293,7 +294,7 @@
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-685 wierszy, 19 funkcji na poziomie modułu, 0 klas
+701 wierszy, 19 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -371,7 +372,7 @@
 
 ### `statystyki.py` — co przyniosła każda pozycja: wejścia, reakcje, subskrypcje
 
-501 wierszy, 10 funkcji na poziomie modułu, 0 klas
+519 wierszy, 10 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

@@ -467,6 +467,11 @@ def podsumowanie(rodzaj: str | None = None) -> dict:
             "obserwacje": _liczba(poz.get("obserwacje")),
             "wyswietlenia": _liczba(poz.get("wyswietlenia")),
         }
+    # Pozycje, dla ktorych Substack POLICZYL zasieg. Rekordy sprzed
+    # 31 sierpnia 2026 nie maja tego pola — traktujemy je jak zmierzone,
+    # bo inaczej cala historia wypadlaby z mianownika.
+    zmierzone_zasiegiem = [p for p in lista
+                           if p.get("ma_karty_zasiegu", True)]
     return {
         "pozycje": len(lista),
         # Liczba linii, nie pozycji. Stoi obok celowo: gdy ktos zobaczy 1
@@ -494,8 +499,21 @@ def podsumowanie(rodzaj: str | None = None) -> dict:
         "interakcje_z_pozycji": sum(
             sum(_liczba(v) for v in (p.get("interakcje") or {}).values())
             for p in lista),
-        # Dzielenie przez liczbe POZYCJI. Pusty plik daje 0.0, a nie wyjatek:
-        # raport z pierwszego dnia po instalacji jest normalnym przypadkiem.
-        "srednia_wyswietlen": round(wyswietlenia / len(lista), 2) if lista else 0.0,
+        # DZIELIMY PRZEZ ZMIERZONE, NIE PRZEZ WSZYSTKIE.
+        #
+        # Substack nie liczy zasiegu wpisow, ktore nic nie zebraly — takie
+        # dostaja JEDNA karte zamiast pieciu i zapisuja sie z zerem. Zmierzone
+        # na produkcji: 37 z 52 komentarzy. Wliczanie ich do mianownika
+        # zanizalo srednia okolo trzy i pol raza i czytalo sie jak „nasze
+        # komentarze nie maja zasiegu", podczas gdy czesc z nich po prostu nie
+        # zostala policzona.
+        #
+        # `ma_karty_zasiegu` powstalo wlasnie po to i do tej pory nie bylo
+        # czytane NIGDZIE poza testami — sygnal wytworzony i wyrzucony,
+        # dziesiaty raz ten ksztalt.
+        "srednia_wyswietlen": round(
+            wyswietlenia / len(zmierzone_zasiegiem), 2)
+        if zmierzone_zasiegiem else 0.0,
+        "pozycje_bez_zasiegu": len(lista) - len(zmierzone_zasiegiem),
         "najlepsza": najlepsza,
     }

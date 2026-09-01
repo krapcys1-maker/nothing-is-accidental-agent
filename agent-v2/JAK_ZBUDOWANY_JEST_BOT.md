@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **21 plików**, 19 205 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **21 plików**, 19 325 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 81 zestawów
-testów, 1991 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 1995 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-5703 wierszy, 106 funkcji na poziomie modułu, 0 klas
+5789 wierszy, 107 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -222,7 +222,8 @@ wiec nie da sie go rozjechac z kodem.
 | `nazwy_wlasne(tekst)` | Nazwy wlasne i identyfikatory z tekstu, sprowadzone do jednej postaci. |
 | `wspolna_nazwa(a, b, korpus, maks_czestosc)` | Nazwa wlasna, ktora wystepuje w OBU tekstach i jest rzadka w korpusie. |
 | `_o_tym_samym(a, b, min_wspolnych, prog)` *(wewn.)* | Czy dwa teksty mowia o tej samej rzeczy. |
-| `wybierz_material(zapas, unikaj, wczesniej)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
+| `teksty_ostatnich_notek(ile)` | Tresci ostatnich notek — do porownania po NAZWACH WLASNYCH. |
+| `wybierz_material(zapas, unikaj, wczesniej, teksty)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
 | `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, ile, od)` | Pięć notek na jeden dzień, każda z innego materiału. |
 | `ocen_restack(conn, run_id, notka)` | Czy podac te notke dalej i z jakim zdaniem. |
 | `_podloga_z_pamieci(tekst)` *(wewn.)* | Dwie podlogi, ktore dzialaja BEZ karty dowodowej. |
@@ -435,7 +436,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-685 wierszy, 19 funkcji na poziomie modułu, 0 klas
+701 wierszy, 19 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -513,7 +514,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `statystyki.py` — co przyniosła każda pozycja: wejścia, reakcje, subskrypcje
 
-501 wierszy, 10 funkcji na poziomie modułu, 0 klas
+519 wierszy, 10 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

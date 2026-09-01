@@ -2328,9 +2328,49 @@ POROWNANIE_MIEDZY_DNIAMI = {"min_wspolnych": 4, "prog": 0.30}
 POWTORKA_TEMATU = {"min_wspolnych": 4, "prog": 0.20}
 
 
+def teksty_ostatnich_notek(ile: int = 40) -> list[str]:
+    """Tresci ostatnich notek — do porownania po NAZWACH WLASNYCH.
+
+    PO CO OSOBNO OD `pamiec_wystawionych`. Tamta oddaje ODCISKI (zbiory
+    rdzeni) i ma racje: tokenizowanie dziesieciu tysiecy notek przy kazdym
+    porownaniu to 1,86 s zamiast 0,005 s. Ale rdzen gubi wielkosc liter
+    i cyfry, a wlasnie one odrozniaja nazwe wlasna od zwyklego slowa —
+    `GLM-5.3-Flash` po tokenizacji jest nie do odroznienia od trzech
+    pospolitych slow.
+
+    OGRANICZONE OKNO, I TO NIE JEST OSZCZEDNOSC NA SILE. Powtorka nazwy boli
+    wtedy, gdy czytelnik widzi ja obok siebie — trzy notki o GLM-5.3-Flash
+    wyszly W CIAGU JEDNEGO DNIA. Po czterdziestu notkach (osiem dni pracy)
+    nikt nie pamieta, ze pisalismy o tym modelu, a blokowanie tematu na
+    zawsze kosztowaloby notke przy realizacji normy 63%.
+    """
+    plik = config.DATA_DIR / "dziennik.jsonl"
+    try:
+        linie = plik.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    teksty: list[str] = []
+    # Od konca, bo interesuja nas OSTATNIE — i konczymy, gdy mamy dosc.
+    for linia in reversed(linie):
+        linia = linia.strip()
+        if not linia:
+            continue
+        try:
+            w = json.loads(linia)
+        except ValueError:
+            continue
+        if (isinstance(w, dict) and w.get("rodzaj") == "notka"
+                and w.get("udane") and w.get("tekst")):
+            teksty.append(str(w["tekst"]))
+            if len(teksty) >= max(1, ile):
+                break
+    return teksty
+
+
 def wybierz_material(zapas: list[dict[str, Any]],
                      unikaj: list[str],
-                     wczesniej: list[Any] | None = None) -> dict[str, Any] | None:
+                     wczesniej: list[Any] | None = None,
+                     teksty: list[str] | None = None) -> dict[str, Any] | None:
     """Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy.
 
     Poprzednio bylo `zapas.pop(0)` — pierwszy z brzegu. W przebiegu z 17 sierpnia
@@ -2354,7 +2394,25 @@ def wybierz_material(zapas: list[dict[str, Any]],
     # zapisu (wielkie litery i cyfry), ktorego rdzenie juz nie niosa. Gdy
     # wywolujacy poda gotowe zbiory rdzeni, ten sygnal po prostu nie dziala —
     # i tak jest lepiej niz udawac, ze dziala.
-    teksty_wczesniej = [u for u in (wczesniej or []) if isinstance(u, str) and u]
+    # TEKSTY PRZYCHODZA OSOBNYM PARAMETREM, BO `wczesniej` ICH NIE NIESIE.
+    #
+    # WLASNY REGRES, ZLAPANY PRZEZ AUDYT GODZINE PO NAPISANIU. Pierwsza wersja
+    # tego bloku filtrowala `wczesniej` przez `isinstance(u, str)` — a jedyny
+    # produkcyjny wywolujacy podaje `pamiec_wystawionych()`, ktora zwraca
+    # `list[frozenset[str]]` (odciski, nie teksty, i slusznie: tokenizowanie
+    # 10 000 notek przy kazdym porownaniu to 1,86 s zamiast 0,005 s).
+    #
+    # Filtr dawal wiec ZAWSZE pusta liste i caly wykrywacz wspolnej nazwy byl
+    # martwy w kazdym przebiegu. Test przekazywal napisy, wiec dowodzil
+    # dzialania ksztaltu, ktorego produkcja nie uzywa — dokladnie ta pulapka,
+    # ktora ten projekt nazywa „test z atrapa mowi, ze cos jest wolane; nie
+    # mowi, czy oddaje cokolwiek uzytecznego".
+    #
+    # `unikaj` to DZISIEJSZE notki i one tez sa tekstami — trzy notki o GLM
+    # wyszly jednego dnia, wiec porownanie musi obejmowac takze je.
+    teksty_wczesniej = [u for u in list(teksty or []) + list(unikaj or [])
+                        if isinstance(u, str) and u]
+    teksty_wczesniej += [u for u in (wczesniej or []) if isinstance(u, str) and u]
     wczesniej_rdzenie = [u if isinstance(u, (set, frozenset)) else _slowa(u)
                          for u in (wczesniej or []) if u]
     for i, f in enumerate(zapas):
@@ -2460,6 +2518,28 @@ def notki_dnia(
         link_artykulu = promowany["url"]
         print(f"  [promocja] dzien {promowany['wystawione'] + 1}"
               f"/{config.NOTEK_PROMUJACYCH}: {promowany['tytul'][:44]}", flush=True)
+    # SEDZIA BANKU — WOLANY WRESZCIE. Do 1 wrzesnia 2026 `posortuj_bank` nie
+    # mial ANI JEDNEGO wywolania produkcyjnego: jedyne w calym repo byly
+    # w `tests/test_bramka_banku.py`. Skutki byly dwa i oba widac w notkach:
+    #
+    #   - `ranga` nie powstawala NIGDY, wiec sortowanie w `wez_kandydatow`
+    #     (`(not z_kanalu, ranga)`) mialo drugi czlon o tej samej wartosci
+    #     u wszystkich. Bank byl konsumowany w KOLEJNOSCI WSTAWIANIA —
+    #     dokladnie ta wada, dla ktorej ten sedzia powstal.
+    #   - slaby i powtorzony kandydat nie znikal nigdy, wiec bank zapelnil
+    #     sie blizniakami: zmierzone 31 sierpnia na 53 wpisach — GLM-5.3 osiem
+    #     razy, Jalapeno siedem, Hugging Face piec. To z takiego banku wyszly
+    #     trzy notki o jednym modelu w jeden dzien.
+    #
+    # Wolamy PRZED wzieciem materialu i tylko wtedy, gdy jest co sortowac.
+    # Awaria sedziego nie moze zabrac dnia: bank nieposortowany jest gorszy
+    # od posortowanego, ale duzo lepszy od braku notek.
+    try:
+        posortuj_bank(conn, run_id)
+    except Exception as exc:
+        print("  [bank] sedzia nie przeszedl (%s) — biore bank taki, jaki jest"
+              % type(exc).__name__, flush=True)
+
     if ciekawostki is None:
         ciekawostki = znajdz_ciekawostki(conn, run_id)
     zapas = list(ciekawostki)
@@ -2471,6 +2551,10 @@ def notki_dnia(
     # Trzymane OSOBNO od `juz_o_tym`, bo porownuje sie ostrzejszym progiem —
     # patrz `POROWNANIE_MIEDZY_DNIAMI`. To sa gotowe odciski, nie teksty.
     wczesniejsze = pamiec_wystawionych()
+    # TEKSTY OSOBNO — patrz `teksty_ostatnich_notek`. Odciski nie niosa
+    # wielkich liter ani cyfr, wiec po nich nie da sie rozpoznac nazwy
+    # wlasnej, a to ona zlapala trzy notki o jednym modelu w jeden dzien.
+    teksty_notek = teksty_ostatnich_notek()
     print("  [pamiec] notek w pamieci: %d (%s)"
           % (len(wczesniejsze),
              "wszystkie" if config.PAMIEC_NOTEK is None
@@ -2526,7 +2610,8 @@ def notki_dnia(
                 if not zapas:
                     print("  [notki] brak materiału — kończę dzień krócej", flush=True)
                     break
-            fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze)
+            fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze,
+                                    teksty=teksty_notek)
             if fakt is None and not dobrano_nowy:
                 # DZIEN NIE MOZE SIE ZAGLODZIC. Do 25 sierpnia to bylo `break`:
                 # cala pula zderzona = koniec dnia. Przy oknie dwunastu zdarzalo
@@ -2547,7 +2632,8 @@ def notki_dnia(
                     # Nowe idzie NA POCZATEK: stare i tak sie zderza, wiec
                     # przeszukiwanie ich najpierw byloby praca na darmo.
                     zapas = nowe + zapas
-                    fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze)
+                    fakt = wybierz_material(zapas, juz_o_tym, wczesniejsze,
+                                    teksty=teksty_notek)
             if fakt is None:
                 print("  [notki] został tylko materiał o tym samym, co już dziś"
                       " wystawiamy — kończę dzień krócej", flush=True)

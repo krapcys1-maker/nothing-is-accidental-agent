@@ -142,18 +142,62 @@ sprawdz("korzysta z TEKSTOW, nie z gotowych rdzeni",
 sprawdz("i mowi w logu, co pominal", "[notki] pomijam" in blok)
 
 print()
-print("=== 7. DZIALANIE OD KONCA: WYBOR POMIJA POWTORKE ===")
+print("=== 7. DZIALANIE W KSZTALCIE, KTORY WOLA PRODUKCJA ===")
+# TU BYLA WADA TEGO TESTU, ZLAPANA PRZEZ AUDYT GODZINE PO NAPISANIU.
+#
+# Pierwsza wersja podawala TEKSTY w parametrze `wczesniej` — i przechodzila.
+# Ale produkcja podaje tam `pamiec_wystawionych()`, czyli `list[frozenset]`
+# (odciski, nie teksty, i slusznie: tokenizowanie 10 000 notek przy kazdym
+# porownaniu to 1,86 s zamiast 0,005 s). Kod filtrowal `isinstance(u, str)`,
+# wiec w produkcji dostawal ZAWSZE pusta liste i caly wykrywacz byl martwy.
+#
+# Test dowodzil dzialania ksztaltu, ktorego produkcja nie uzywa — dokladnie
+# to, co ten projekt nazywa „test z atrapa mowi, ze cos jest wolane; nie
+# mowi, czy oddaje cokolwiek uzytecznego".
+#
+# Dlatego kazde wywolanie ponizej wyglada TAK SAMO jak w `notki_dnia`:
+# odciski w `wczesniej`, teksty osobnym parametrem.
+def _odciski(*teksty):
+    return [frozenset(stages._slowa(x)) for x in teksty]
+
+
 wynik = stages.wybierz_material(
     [{"domain": "AI", "fact": GLM_B},
      {"domain": "AI", "fact": "Roughly 1200 agents traded 70,000 messages."}],
-    unikaj=[], wczesniej=[GLM_A, INNA])
+    unikaj=[], wczesniej=_odciski(GLM_A, INNA), teksty=[GLM_A, INNA])
 sprawdz("wzial temat o agentach, nie drugi raz o GLM",
         wynik and "1200 agents" in str(wynik.get("fact")), wynik)
 # KONTRDOWOD: bez notki o GLM w pamieci ten sam kandydat ma przejsc.
 wynik2 = stages.wybierz_material(
-    [{"domain": "AI", "fact": GLM_B}], unikaj=[], wczesniej=[INNA])
+    [{"domain": "AI", "fact": GLM_B}], unikaj=[],
+    wczesniej=_odciski(INNA), teksty=[INNA])
 sprawdz("a bez GLM w pamieci bierze go normalnie",
         wynik2 and "Ox Alpha" in str(wynik2.get("fact")), wynik2)
+
+# SAME ODCISKI, BEZ TEKSTOW — dokladnie to, co bylo w produkcji przed
+# poprawka. Ma przepuscic, bo z odciskow nazwy wlasnej nie da sie odczytac;
+# ta linijka istnieje po to, zeby bylo widac, CZEGO odciski nie umieja.
+wynik3 = stages.wybierz_material(
+    [{"domain": "AI", "fact": GLM_B}], unikaj=[], wczesniej=_odciski(GLM_A))
+sprawdz("same odciski nie niosa nazwy — i test to POKAZUJE",
+        wynik3 and "Ox Alpha" in str(wynik3.get("fact")), wynik3)
+
+# DZISIEJSZE NOTKI (`unikaj`) TEZ SA POROWNYWANE. Trzy notki o GLM wyszly
+# W CIAGU JEDNEGO DNIA, wiec sama pamiec z poprzednich dni nie wystarczy.
+wynik4 = stages.wybierz_material(
+    [{"domain": "AI", "fact": GLM_B},
+     {"domain": "AI", "fact": "Roughly 1200 agents traded 70,000 messages."}],
+    unikaj=[GLM_A], wczesniej=[])
+sprawdz("powtorka w obrebie JEDNEGO dnia tez jest lapana",
+        wynik4 and "1200 agents" in str(wynik4.get("fact")), wynik4)
+
+print()
+print("=== 8. TEKSTY NOTEK MAJA SKAD PRZYJSC ===")
+sprawdz("jest `teksty_ostatnich_notek`",
+        hasattr(stages, "teksty_ostatnich_notek"))
+sprawdz("i produkcja ja wola",
+        "teksty=teksty_notek" in pathlib.Path("agent-v2/stages.py")
+        .read_text(encoding="utf-8"))
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

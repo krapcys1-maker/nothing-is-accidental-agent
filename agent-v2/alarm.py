@@ -142,7 +142,11 @@ def sprawdz_przebiegi_i_ostrzez(ile: int = 3) -> None:
     """
     conn = db.connect()
     ostatnie = conn.execute(
-        "SELECT status, stage, note FROM runs WHERE status != 'RUNNING'"
+        # TYLKO TOR PRODUKCYJNY. Trzy nieudane przebiegi DEWELOPERSKIE
+        # wysylaly wlascicielowi „Agent padl 3 razy pod rzad" — a agent
+        # dzialal. Kolumna `runs.tryb` istnieje wlasnie po to.
+        "SELECT status, stage, note FROM runs"
+        " WHERE status != 'RUNNING' AND COALESCE(tryb,'produkcja')='produkcja'"
         " ORDER BY id DESC LIMIT ?", (ile,),
     ).fetchall()
     if len(ostatnie) < ile:
@@ -200,7 +204,12 @@ def cisza() -> str | None:
     przy martwym agencie NOWYCH przebiegow po prostu nie ma.
     """
     conn = _polaczenie()
-    row = conn.execute("SELECT MAX(started_at) AS ostatni FROM runs").fetchone()
+    # PRZEBIEG TESTOWY NIE JEST DOWODEM, ZE KONTO ZYJE. Bez tego filtru
+    # praca nad kodem uciszala alarm o martwym agencie produkcyjnym — a to
+    # jedyny alarm, ktory lapie „agent w ogole nie wstal".
+    row = conn.execute(
+        "SELECT MAX(started_at) AS ostatni FROM runs"
+        " WHERE COALESCE(tryb,'produkcja')='produkcja'").fetchone()
     if not row or not row["ostatni"]:
         return "Agent nie ma w bazie ANI JEDNEGO przebiegu."
     try:
@@ -327,9 +336,16 @@ def koszt() -> str | None:
         if wydane > sufit * 0.9:
             return (f"{opis} wydane ${wydane:.2f} przy dziennym suficie "
                     f"${sufit:.2f}.")
-    wydane = db.spent_usd(conn, dzis)
-
-    wydane_m = db.spent_usd(conn, dzis[:7])
+    # OBA TORY, TAK JAK EGZEKWOWANIE. `db.spent_usd` ma `tryb="produkcja"`
+    # domyslnie, a `llm._preflight` sumuje produkcje I test:
+    #     spent_month = spent_usd(..., "produkcja") + spent_usd(..., "test")
+    # Alarm liczacy sam tor produkcyjny mogl wiec MILCZEC do konca: przy
+    # suficie 40 USD i 15 USD wydanych na testach `BudgetExceeded` leci przy
+    # 25 USD produkcji, a prog alarmu (0,75 x 40 = 30 USD produkcyjnych) nie
+    # zostaje osiagniety nigdy. Czyli alarm nie ostrzegal dokladnie przed ta
+    # awaria, dla ktorej powstal — „agent padajacy w polowie przebiegu".
+    wydane_m = (db.spent_usd(conn, dzis[:7], tryb="produkcja")
+                + db.spent_usd(conn, dzis[:7], tryb="test"))
     if wydane_m > config.MONTHLY_LIMIT_USD * 0.75:
         import calendar
 
