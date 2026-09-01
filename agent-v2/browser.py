@@ -972,13 +972,19 @@ _NIE_LUDZIE = {"explore", "dashboard", "profile", "create", "more", "home",
                "notes", "chat", "search", "settings", "inbox"}
 
 
-def _ludzie_z_zakladki(page) -> list[dict[str, str]]:
-    """Kto jest na tej zakladce — nazwa i uchwyt, bez nawigacji strony."""
+def _ludzie_z_zakladki_ze_stanem(page) -> tuple[list[dict[str, str]], bool]:
+    """Kto jest na tej zakladce ORAZ czy zakladke w ogole udalo sie odczytac.
+
+    DWA WYNIKI, BO PUSTA LISTA ZNACZY DZIS DWIE ROZNE RZECZY: „na zakladce
+    nie ma nikogo" i „zakladka nie odpowiedziala". Bez tego rozroznienia zrzut
+    z padnietym odczytem zapisuje sie jak zrzut z pustego konta — patrz
+    `zapisz_czytelnikow`.
+    """
     wynik: dict[str, str] = {}
     try:
         odnosniki = page.locator('a[href^="/@"]').all()
     except Exception:
-        return []
+        return [], False
     for a in odnosniki[:200]:
         try:
             href = a.get_attribute("href") or ""
@@ -994,7 +1000,12 @@ def _ludzie_z_zakladki(page) -> list[dict[str, str]]:
         # dwa razy (awatar bez tekstu i nazwa), a awatar oddaje pusty napis.
         if uchwyt not in wynik or (not wynik[uchwyt] and nazwa):
             wynik[uchwyt] = nazwa
-    return [{"uchwyt": u, "nazwa": n or u} for u, n in wynik.items()]
+    return [{"uchwyt": u, "nazwa": n or u} for u, n in wynik.items()], True
+
+
+def _ludzie_z_zakladki(page) -> list[dict[str, str]]:
+    """Sama lista ludzi z zakladki. Dla wolajacych, ktorych stan nie obchodzi."""
+    return _ludzie_z_zakladki_ze_stanem(page)[0]
 
 
 def kto_nas_czyta(page=None) -> dict[str, Any]:
@@ -1017,20 +1028,57 @@ def kto_nas_czyta(page=None) -> dict[str, Any]:
     Zapisujemy CALY zrzut przy kazdym wywolaniu, nie roznice. Zrzuty sa male
     (kilkanascie osob), a roznica policzona pozniej jest odwracalna — roznica
     zapisana zamiast stanu juz nie.
+
+    KTORA LISTE NAPRAWDE ODCZYTALISMY — POLE `odczytane`. Obserwujacych
+    bierzemy z zakladki otwartej domyslnie, a subskrybentow dopiero po
+    KLIKNIECIU w druga zakladke. Gdy pekalo samo klikniecie, obserwujacy byli
+    juz w wyniku, wiec zrzut zapisywal sie z pusta lista subskrybentow
+    i wygladal na udany. `wzajemnosc.czytelnicy` czyta te zrzuty po NUMERZE
+    („kto doszedl po zrzucie zerowym, ten przyszedl po naszej akcji") — gdyby
+    okrojony byl zrzut PIERWSZY, caly komplet subskrybentow dostalby
+    `pierwszy_zrzut > 0` i raport oglosilby ich jako pozyskanych naszym
+    dzialaniem. Odpowiedz na pytanie wlasciciela „skad biora sie czytelnicy"
+    bylaby wtedy zbudowana na jednym nieudanym kliknieciu.
+
+    DWIE ZAKLADKI SA ROZLACZNE, I DLATEGO LICZNIK JEST WIEKSZY OD LISTY.
+    Zmierzone 1 wrzesnia 2026 na siedmiu parach zrzutow: subskrybenci zgadzaja
+    sie z `subscriberCountNumber` co do jednego we WSZYSTKICH siedmiu parach,
+    a obserwujacy sa krotsi o 1, potem stale o 2 (8/7, 9/7, 11/9, 11/9, 11/9,
+    11/9, 12/10). Rozstrzyga to jeden przypadek: „Leonard" ma w dzienniku
+    zdarzenie `follow` z 2026-08-31T06:25:10 (a wiec obserwuje), licznik
+    `followerCount` podskoczyl wtedy z 8 na 9 i juz nie spadl — a na zakladce
+    „Followers" nie ma go w ZADNYM z szesciu pozniejszych zrzutow, za to jako
+    `leonard896188` stoi na zakladce „Subscribers" tej samej strony. Uchwyt
+    ma, konta nie skasowal, nasz filtr go nie tyka. Kto obserwuje I
+    subskrybuje, tego Substack pokazuje wylacznie w „Subscribers" — obie
+    listy sa w kazdym zrzucie ROZLACZNE (10 + 9 osob, zero czesci wspolnej).
+    Brakujaca dwojka nie jest wiec nienazwana: to dwie osoby policzone przez
+    `followerCount`, a wypisane na drugiej zakladce.
+
+    NIE DOKLADAMY Z TEGO POWODU ANI JEDNEGO ZAPYTANIA. Nie ma czego doczytac:
+    to nie paginacja (lista rosnie swobodnie 7 -> 10, a niedobor stoi na 2)
+    ani konta usuniete. Dodatkowe wejscia na kolejne strony byly by ruchem po
+    dane, ktore juz mamy — a regulamin Substacka zakazuje `crawls/scrapes/
+    spiders` wprost.
     """
     wlasny = page is None
     if wlasny:
         wymagaj_sesji()
         p_, br_, ctx = podlacz_sie()
         page = ctx.new_page()
-    wynik: dict[str, Any] = {"obserwujacy": [], "subskrybenci": [], "blad": None}
+    # `odczytane` to lista zakladek, ktore NAPRAWDE odpowiedzialy. Pusta lista
+    # znaczy „nie wiemy nic", a nie „konto jest puste".
+    wynik: dict[str, Any] = {"obserwujacy": [], "subskrybenci": [],
+                             "odczytane": [], "blad": None}
     try:
         page.goto(f"https://substack.com/@{PROFIL_HANDLE}/followers",
                   timeout=READ_TIMEOUT_MS * 2, wait_until="domcontentloaded")
         page.wait_for_timeout(SETTLE_MS + 5000)
 
         # Zakladka otwarta domyslnie to „Followers" — bierzemy ja bez klikania.
-        wynik["obserwujacy"] = _ludzie_z_zakladki(page)
+        wynik["obserwujacy"], ok = _ludzie_z_zakladki_ze_stanem(page)
+        if ok:
+            wynik["odczytane"].append("obserwujacy")
 
         for napis in ("Subscribers", "Subskrybenci"):
             zakladka = page.get_by_role("tab", name=napis, exact=False).first
@@ -1038,8 +1086,16 @@ def kto_nas_czyta(page=None) -> dict[str, Any]:
                 continue
             zakladka.click(timeout=10_000)
             page.wait_for_timeout(5000)
-            wynik["subskrybenci"] = _ludzie_z_zakladki(page)
+            wynik["subskrybenci"], ok = _ludzie_z_zakladki_ze_stanem(page)
+            if ok:
+                wynik["odczytane"].append("subskrybenci")
             break
+        else:
+            # BRAK ZAKLADKI TO NIE JEST WYJATEK, WIEC NIKT SIE O NIM NIE
+            # DOWIADYWAL. Petla konczyla sie po cichu, `blad` zostawal `None`,
+            # a zrzut szedl na dysk z pusta lista subskrybentow.
+            wynik["blad"] = "nie ma zakladki Subscribers"
+            print("  [czytelnicy] %s" % wynik["blad"], flush=True)
     except Exception as exc:
         wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
         print("  [czytelnicy] %s" % wynik["blad"], flush=True)
@@ -1052,18 +1108,59 @@ def kto_nas_czyta(page=None) -> dict[str, Any]:
 
 
 def zapisz_czytelnikow(page=None) -> dict[str, Any] | None:
-    """Zrzut listy czytelnikow do pliku, jeden wiersz na wywolanie."""
+    """Zrzut listy czytelnikow do pliku, jeden wiersz na wywolanie.
+
+    ZRZUT OKROJONY ZAPISUJE SIE Z ETYKIETA, A NIE JAKO PELNY. Stary warunek
+    („zwroc None, gdy jest blad I obie listy sa puste") przepuszczal na dysk
+    zrzut, w ktorym obserwujacy sa, a subskrybentow nie ma, bo peklo samo
+    klikniecie w druga zakladke. Taki wiersz jest nieodroznialny od dnia, w
+    ktorym konto nie mialo subskrybentow — a `wzajemnosc` policzylaby z niego,
+    ze wszyscy subskrybenci „pojawili sie po naszej akcji". Zapisujemy wiec
+    pole `odczytane` z nazwami zakladek, ktore naprawde odpowiedzialy.
+
+    ZGODNOSC WSTECZ. Siedem zrzutow z 31 sierpnia i 1 wrzesnia tego pola nie
+    ma i nie dostanie. Ich brak znaczy „nie wiem, ktora liste odczytano" —
+    czyli dokladnie tyle, ile wiedzielismy o nich przedtem. Czytajacy ma
+    sprawdzac `"subskrybenci" in zrzut.get("odczytane", [...])`, a nie zakladac
+    pustke, gdy klucza nie ma.
+
+    ZAPISUJEMY TEZ `blad`, I TO JEST POPRAWKA Z 1 WRZESNIA 2026. Zrzut mowil,
+    KTORE zakladki odpowiedzialy, i nie mowil, DLACZEGO ta druga nie
+    odpowiedziala. `kto_nas_czyta` rozroznia trzy przyczyny — brak zakladki
+    „Subscribers", wyjatek nawigacji i niepowodzenie odczytu odnosnikow —
+    a wszystkie trzy wygladaly w pliku tak samo: krotsza lista `odczytane`.
+    Bez powodu nie da sie odroznic awarii jednorazowej od zmiany w interfejsie
+    Substacka, czyli od rzeczy, ktora wymaga poprawki kodu.
+
+    TRZY STANY, NIE DWA. `"blad": null` znaczy „bylo dobrze"; `"blad": "..."`
+    znaczy „bylo tak"; BRAK KLUCZA znaczy „nie wiadomo" i tak nalezy czytac
+    siedem istniejacych zrzutow. Czytajacy ma pytac
+    `zrzut.get("blad", "nie wiadomo")`, a nie `zrzut.get("blad")` — to drugie
+    zamienia siedem „nie wiem" w siedem „bez bledu".
+    """
     import json as _json
     from datetime import datetime, timezone
 
     NOWA_LINIA = chr(10)
     kto = kto_nas_czyta(page)
-    if kto.get("blad") and not kto["obserwujacy"] and not kto["subskrybenci"]:
+    odczytane = list(kto.get("odczytane") or [])
+    # NIC NIE ODCZYTANE TO NIE JEST POMIAR. Wczesniej bramka pytala o `blad`
+    # i o puste listy; teraz pyta wprost o to, co nas obchodzi — czy
+    # ktorakolwiek zakladka w ogole odpowiedziala. Konto, ktore naprawde nie ma
+    # nikogo, przechodzi (obie zakladki odczytane, obie puste); przebieg, w
+    # ktorym strona nie wstala, nie przechodzi i nie zostawia sladu.
+    if not odczytane:
         return None
     zrzut = {
         "kiedy": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "obserwujacy": kto["obserwujacy"],
         "subskrybenci": kto["subskrybenci"],
+        "odczytane": odczytane,
+        # ZAWSZE, TAKZE GDY JEST `None`. Pole zapisane tylko przy awarii nie
+        # dawalo by trzeciego stanu: brak klucza znaczylby wtedy i „stary
+        # zrzut", i „nowy zrzut bez bledu". Zapisane zawsze — brak klucza
+        # dotyczy wylacznie siedmiu zrzutow sprzed tej zmiany.
+        "blad": kto.get("blad"),
     }
     try:
         CZYTELNICY.parent.mkdir(parents=True, exist_ok=True)
@@ -1417,6 +1514,13 @@ def nasze_pozycje_do_pomiaru(page=None, ile: int = 60) -> list[dict[str, Any]]:
                 print("  [czytelnicy] obserwujacych %d, subskrybentow %d"
                       % (len(zrzut["obserwujacy"]), len(zrzut["subskrybenci"])),
                       flush=True)
+                # OKROJONY ZRZUT MA BYC SLYSZALNY W LOGU TEGO SAMEGO
+                # PRZEBIEGU, a nie dopiero w raporcie za tydzien.
+                brak = [z for z in ("obserwujacy", "subskrybenci")
+                        if z not in zrzut.get("odczytane", [])]
+                if brak:
+                    print("  [czytelnicy] ! ZRZUT OKROJONY, nie odczytano: %s"
+                          % ", ".join(brak), flush=True)
             # I DRUGA STRONA: KOGO MY OBSERWUJEMY. Ta sama otwarta sesja, jedno
             # wejscie na zakladke wiecej — a blok obserwacji dostaje dzieki
             # temu odsiew puli BEZ ani jednego wlasnego zapytania do Substacka.
@@ -1550,6 +1654,24 @@ def dopisz_skutki() -> int:
     Kazde zdarzenie zapisujemy RAZ — po jego wlasnym numerze, ktory Substack
     nadaje. Inaczej kazdy przebieg dopisywalby te same polubienia od nowa
     i statystyka rosla by sama z siebie.
+
+    ZAPISUJEMY NAZWE **I** UCHWYT, BO NAZWA SAMA JEST NIEROZWIAZYWALNA.
+    Do 1 wrzesnia 2026 ta petla brala z obiektu uzytkownika wylacznie `name`
+    i wyrzucala reszte. Skutek zmierzony na produkcyjnym dzienniku tego dnia
+    (635 wierszy, 199 wpisow `skutek`, 69 roznych osob): `czytelnicy.jsonl`
+    rozwiazuje 11 nazw z 69 — i sa to dokladnie ci, ktorzy juz nas czytaja,
+    wiec jako cele bezuzyteczni; rownosc slugu nazwy ze slugiem hosta z
+    historii komentarzy trafia 7 z 69, z czego po odsianiu wszystkiego sprzed
+    przestawienia konta na AI zostaja TRZY (`hedleyrees.substack.com`,
+    `www.ryanpuzycki.com`, `davidoks.blog`). Czyli 62 z 69 osob, ktore same
+    dotknely naszej tresci, nie dalo sie zamienic na cel — nie dlatego, ze
+    ich nie ma, tylko dlatego, ze uchwyt lezal w reku i nie byl zapisywany.
+
+    NOWE POLE JEST DOPISANE, A NIE ZAMIENIONE. `kto` zostaje tym samym, czym
+    bylo (lista nazw wyswietlanych), bo czytaja je `wzajemnosc.py` i
+    `run.kogo_juz_dotknelismy`, a 199 istniejacych wpisow nowego pola nie ma
+    i miec nie bedzie — czytelnik ma traktowac jego brak jako „nie wiem",
+    nie jako „nikt".
     """
     import json as _json
 
@@ -1573,6 +1695,7 @@ def dopisz_skutki() -> int:
     p, browser, context = podlacz_sie()
     page = context.new_page()
     nowych = 0
+    z_uchwytem = bez_uchwytu = 0
     try:
         kanal = api_json(page, "/api/v1/activity-feed-web?filter=all") or {}
         if not isinstance(kanal, dict):
@@ -1598,19 +1721,64 @@ def dopisz_skutki() -> int:
             #
             # Kanal aktywnosci dotyczy WYLACZNIE naszych tresci, wiec nie ma tu
             # czego odsiewac — nieznany rodzaj to nowa wiadomosc, nie smiec.
-            kto = [(ludzie.get(i) or {}).get("name")
-                   for i in (z.get("recent_sender_ids") or [])]
+            # NAZWA I UCHWYT SKLADANE PARAMI, NIGDY DWIEMA PETLAMI. Stara
+            # linijka budowala `kto` z `recent_sender_ids`, a potem odsiewala
+            # `[k for k in kto if k][:5]` — gdyby uchwyty leciec obok tak samo,
+            # ale bez tego odsiewu, to przy PIERWSZYM nadawcy bez nazwy nazwa
+            # osoby drugiej dostalaby uchwyt osoby trzeciej. Taki rozjazd jest
+            # niewidoczny w pliku i daje cel wygladajacy na zmierzony, a nie
+            # bedacy nim. Para powstaje wiec raz, odsiew i `[:5]` tna JEDNA
+            # liste par, a `kto[i]` i `uchwyty[i]` sa z definicji ta sama osoba.
+            #
+            # ODSIEW PO NAZWIE ZOSTAJE TAKI SAM, ZEBY `kto` sie nie zmienilo.
+            # Zmierzone na produkcyjnym dzienniku (199 wpisow `skutek`): w
+            # KAZDYM z nich `ilu` rowna sie dlugosci `kto`, czyli nadawca bez
+            # nazwy nie trafil sie ani razu i ten filtr nigdy nie odpalil.
+            pary: list[tuple[str, str | None]] = []
+            for i in (z.get("recent_sender_ids") or []):
+                osoba = ludzie.get(i) or {}
+                nazwa = osoba.get("name")
+                if not nazwa:
+                    continue
+                # BRAK UCHWYTU MA BYC WIDOCZNY JAKO BRAK. `None` (a nie pusty
+                # napis) odroznia „tej osoby nie umiemy nazwac uchwytem" od
+                # „nie bylo nikogo" (pusta lista) i od wpisu sprzed tej zmiany
+                # (klucza nie ma wcale) — kazdy z tych trzech stanow znaczy co
+                # innego dla wyboru celu.
+                uchwyt = osoba.get("handle")
+                uchwyt = str(uchwyt).strip() or None if uchwyt else None
+                pary.append((nazwa, uchwyt))
+            pary = pary[:5]
+            bez_uchwytu += sum(1 for _, u in pary if not u)
+            z_uchwytem += sum(1 for _, u in pary if u)
             zapisz_w_dzienniku(
                 "skutek", udane=True, zdarzenie=klucz, typ=typ,
                 # `czego` to numer NASZEJ tresci, ktora wywolala reakcje —
                 # po nim laczymy skutek z wpisem o jej wystawieniu.
                 czego=z.get("target_comment_id"),
                 ilu=int(z.get("sender_count") or 0),
-                kto=[k for k in kto if k][:5],
+                kto=[n for n, _ in pary],
+                # POLE, KTOREGO BRAK ZABIJAL CALE PIERWSZENSTWO CELOW.
+                # Zmierzone 1 wrzesnia 2026 na produkcyjnym dzienniku (635
+                # wierszy, 199 wpisow `skutek`, 69 roznych osob): przez
+                # `czytelnicy.jsonl` da sie odgadnac uchwyt 11 osobom i sa to
+                # dokladnie nasi obecni czytelnicy, a przez rownosc slugu nazwy
+                # ze slugiem hosta — 7, z czego po odsiewie tematycznym zostaja
+                # TRZY zywe cele. Uchwyt lezal w tym samym obiekcie uzytkownika,
+                # ktory ta petla juz trzyma w reku, i byl wyrzucany.
+                uchwyty=[u for _, u in pary],
                 kiedy_zdarzenia=str(z.get("created_at") or "")[:19])
             nowych += 1
         if nowych:
             print(f"  [skutki] nowych reakcji na nasze tresci: {nowych}", flush=True)
+            # POMIAR ZAMIAST ZALOZENIA. Nazwy pola `handle` w `kanal["users"]`
+            # nie da sie potwierdzic z plikow na dysku — zaden zapisany zrzut
+            # tej odpowiedzi nie istnieje. Ta linijka sprawia, ze PIERWSZY
+            # przebieg po wdrozeniu odpowiada na to pomiarem: „0 z uchwytem"
+            # znaczy, ze pole nazywa sie inaczej, i widac to od razu, zamiast
+            # po tygodniu cichych `null` w dzienniku.
+            print("  [skutki] reagujacych z uchwytem: %d, bez uchwytu: %d"
+                  % (z_uchwytem, bez_uchwytu), flush=True)
         return nowych
     except Exception as exc:
         print(f"  (nie dopisalem skutkow: {type(exc).__name__})", flush=True)

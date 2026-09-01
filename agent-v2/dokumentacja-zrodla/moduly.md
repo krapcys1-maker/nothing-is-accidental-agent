@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1919 wierszy, 15 funkcji na poziomie modułu, 1 klas
+2676 wierszy, 26 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -15,6 +15,17 @@
 | `rytm(co, na_co, stan)` | Przerwa MIEDZY dwoma dzialaniami tego samego rodzaju. |
 | `zmiesci_sie(rodzaj, ile, udzial)` | Ile z zaplanowanych dzialan NAPRAWDE zmiesci sie w czasie przebiegu. |
 | `ile_przebiegow_zostalo(conn)` | Ile przebiegow dnia jeszcze bedzie, wliczajac biezacy. |
+| `_slug(tekst)` *(wewn.)* | Nazwa do porownywania: same litery i cyfry ASCII, malymi. |
+| `_slug_hosta(host)` *(wewn.)* | Pierwszy czlon adresu jako slug: `www.ryanpuzycki.com` -> `ryanpuzycki`. |
+| `_reakcje_z_dziennika()` *(wewn.)* | Jeden przebieg po dzienniku, dwie odpowiedzi o tych samych ludziach. |
+| `kogo_juz_dotknelismy()` | Slugi nazw ludzi, ktorzy zareagowali na NASZA tresc — z dziennika. |
+| `nasi_czytelnicy()` | Uchwyty ludzi, ktorzy JUZ nas czytaja — z `czytelnicy.jsonl`. Tylko odczyt. |
+| `reagujacy_jako_cele()` | Ludzie, ktorzy zareagowali na nasza tresc, jako CELE WPROST. Zero sieci. |
+| `_przeplot(pierwsza, druga)` *(wewn.)* | Na przemian z dwoch list; gdy jedna sie konczy, druga idzie dalej. |
+| `cele_wedlug_pierwszenstwa(historia)` | Hosty do zaczepienia, w kolejnosci pierwszenstwa. Zero sieci. |
+| `powod_pustej_puli(rachunek)` | Zdanie do dziennika, gdy po odsianiu nie zostal nikt. |
+| `kogo_juz_subskrybujemy()` | Uchwyty, na ktore subskrypcja NIE MA JUZ CO wysylac. Z dziennika, bez sieci. |
+| `czy_juz_subskrybujemy(host, zamkniete, pamiec)` | Czy ten HOST wskazuje konto, na ktore nie ma juz po co wchodzic. |
 | `dzien(conn, run_id, wyslij)` | Jeden dzień pracy konta: notki, komentarze, odpowiedzi, polubienia. |
 | `_sygnal_ma_zostawic_slad()` *(wewn.)* | Zamienia SIGTERM na wyjatek, zeby przebieg zdazyl sie zapisac. |
 | `main()` | — |
@@ -140,7 +151,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-4493 wierszy, 85 funkcji na poziomie modułu, 0 klas
+4661 wierszy, 86 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -168,7 +179,8 @@
 | `_kiedy(c)` *(wewn.)* | — |
 | `ile_dzis_wystawione()` | Ile notek, komentarzy i polubien poszlo dzisiaj. |
 | `statystyki_pozycji(pozycje)` | Pobiera statystyki NASZYCH tresci — jedna przegladarka na cala liste. |
-| `_ludzie_z_zakladki(page)` *(wewn.)* | Kto jest na tej zakladce — nazwa i uchwyt, bez nawigacji strony. |
+| `_ludzie_z_zakladki_ze_stanem(page)` *(wewn.)* | Kto jest na tej zakladce ORAZ czy zakladke w ogole udalo sie odczytac. |
+| `_ludzie_z_zakladki(page)` *(wewn.)* | Sama lista ludzi z zakladki. Dla wolajacych, ktorych stan nie obchodzi. |
 | `kto_nas_czyta(page)` | KTO nas obserwuje i subskrybuje — imiennie i z data. |
 | `zapisz_czytelnikow(page)` | Zrzut listy czytelnikow do pliku, jeden wiersz na wywolanie. |
 | `kogo_obserwujemy()` | Kogo juz obserwujemy — Z DYSKU, BEZ SIECI. |
@@ -311,7 +323,7 @@
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-712 wierszy, 19 funkcji na poziomie modułu, 0 klas
+771 wierszy, 20 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -331,6 +343,7 @@
 | `wolumeny()` | Czy agent robi tyle, ile deklaruje — czy tylko wyglada, ze robi. |
 | `powtorki()` | Czy agent nie zaczal pisac wciaz tego samego. |
 | `kopia_subskrybentow()` | Czy istnieje AKTUALNA kopia listy subskrybentow. |
+| `pomiar_wzajemnosci()` | Czy nadal mamy z czego liczyc, kto sie odwzajemnia. |
 | `sprawdz_wszystko()` | Uruchamia komplet kontroli i alarmuje o tym, co znalazl. |
 | `przeglad(dni)` | Co agent NAPRAWDE zrobil przez ostatnie dni i gdzie sie pomylil. |
 | `_co_z_tego_wyszlo(wpisy)` *(wewn.)* | Czy nasze dzialania w ogole wracaja — i ktore z nich. |
@@ -361,7 +374,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2339 wierszy, 21 funkcji na poziomie modułu, 0 klas
+2398 wierszy, 21 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -461,7 +474,7 @@
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
-1030 wierszy, 13 funkcji na poziomie modułu, 0 klas
+1105 wierszy, 13 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -502,15 +515,47 @@
 
 ### `audyt_systemu.py` — audyt CALEGO systemu na zywych danych: publikowanie, normy, komentarze, statystyki, artykul, pieniadze, pamiec
 
-573 wierszy, 6 funkcji na poziomie modułu, 0 klas
+636 wierszy, 7 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
+| `czy_pominiecie(rodzaj)` | Czy ten wpis jest pominieciem. Po KONCOWCE nazwy, nie po liscie nazw. |
 | `policz_rodzaje(wpisy)` | (udane, nieudane, pominiete) — trzy liczniki, bo stany naprawde sa trzy. |
 | `etap(nr, nazwa)` | — |
 | `werdykt(nazwa, stan, szczegol)` | — |
 | `dziennik()` | — |
 | `dzien(w)` | — |
+| `main()` | — |
+
+### `wzajemnosc.py` — czy zaczepieni sie odwzajemniaja: liczy PO naszej akcji, osobno stan nieorzekalny
+
+1381 wierszy, 24 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `wczytaj(nazwa)` | Wiersze pliku JSONL z katalogu danych. Uszkodzona linia nie kasuje reszty. |
+| `_chwila(tekst)` *(wewn.)* | ISO-8601 na moment w UTC, bez strefy. Zwraca None zamiast rzucac. |
+| `_nazwa(tekst)` *(wewn.)* | Nazwa wyswietlana do porownywania: male litery, jedna spacja. |
+| `_uchwyt(tekst)` *(wewn.)* | Uchwyt do porownywania: male litery, same znaki alfanumeryczne. |
+| `_licznik_z_chwili(kiedy, liczniki)` *(wewn.)* | Zapis `wzrost.jsonl` z tego samego momentu, co zrzut imienny — albo nic. |
+| `zrzuty_czytelnikow()` | Zrzuty po kolei, KAZDY Z OCENA, CZY NIE JEST OKROJONY. |
+| `czytelnicy()` | Uchwyt czytelnika -> co o nim wiemy ze zrzutow. |
+| `kolejnosc(wpis, akcja)` | Czy czytelnik pojawil sie PO naszym dzialaniu, PRZED nim, czy nie wiadomo. |
+| `okno_pomiaru()` | Od kiedy do kiedy w ogole widzimy, kto nas czyta. |
+| `pokrycie()` | Ilu czytelnikow LICZY Substack, a ilu umiemy nazwac po imieniu. |
+| `_pusty_kubel()` *(wewn.)* | Swiezy komplet licznikow. Funkcja, a nie stala: `dict(STALA)` kopiuje |
+| `zaczepienia()` | Kogo zaczepilismy — osobno udane, nieudane i POMINIETE. |
+| `odwzajemnienie()` | Ilu z zaczepionych pojawilo sie POTEM na naszej liscie czytelnikow. |
+| `slepe_okno()` | O ile nasze najstarsze zaczepienie wyprzedza pierwszy zrzut czytelnikow. |
+| `_reakcje()` *(wewn.)* | Zdarzenia `skutek` rozdzielone na kubelki plus licznik typow nieznanych. |
+| `skad_przyszli()` | Ilu naszych czytelnikow zetknelo sie wczesniej z nasza trescia. |
+| `_nasze_pozycje()` *(wewn.)* | Identyfikator wystawionej tresci -> rodzaj i chwila wystawienia. |
+| `opoznienia()` | Dwa rozne czasy, celowo NIE zsumowane w jeden. |
+| `kanaly()` | Co poprzedzilo pojawienie sie czytelnika — osobowo i pozycyjnie. |
+| `pomiar_oslepl()` | Czy w ogole mamy z czego liczyc wzajemnosc. |
+| `_procent(licznik, mianownik)` *(wewn.)* | — |
+| `naglowek()` | Trzy do pieciu wierszy dla codziennej kontroli. Same liczby z mianownikiem. |
+| `raport()` | Pelna odpowiedz na cztery pytania. Kazda liczba z mianownikiem. |
 | `main()` | — |
 
 ### `migracja_okno_promocji.py` — jednorazowo: data publikacji z dziennika do kolejki promocji

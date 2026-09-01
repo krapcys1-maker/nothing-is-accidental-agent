@@ -1569,8 +1569,8 @@ NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", 
 #   zmierzone (srednia z 5 dni)   bylo w konfiguracji   ustawiam
 #   lajki        9,6              12-20                 10-16
 #   komentarze   7,0              15-20                 8-12
-#   obserwacje   0,0 (!)          30-44/mies            30-44/mies (patrz nizej)
-#   subskrypcje  ~0,8/dzien       6-12/mies             6-12/mies (bez zmian)
+#   obserwacje   0,0 (!)          30-44/mies            10-16/mies (1 wrzesnia)
+#   subskrypcje  ~0,8/dzien       6-12/mies             12-20/mies (1 wrzesnia)
 #   restacki     0,4              2-4/dzien             1-2/dzien
 #
 # WYKRZYKNIK PRZY OBSERWACJACH BYL JEDYNYM PRAWDZIWYM SYGNALEM W TEJ TABELI
@@ -1626,8 +1626,67 @@ KOMENTARZE_DZIENNIE = (15, 23)    # 0 jest dozwolone: milczenie bije slaby komen
 # obserwowanie ma potwierdzanie skutku, a profil juz obserwowany zapisuje
 # sie jako `obserwacja_pominieta` i nie zjada slotu. Jesli tempo okaze sie
 # za wysokie, obniz TU i nigdzie indziej.
-FOLLOW_MIESIECZNIE = (30, 44)     # obserwacja nie przysyla nic mailem
-SUBSKRYPCJE_MIESIECZNIE = (6, 12)  # laduje w skrzynce wlasciciela, wiec waskie
+#
+# --- ODWROCONE TEGO SAMEGO DNIA, 1 WRZESNIA 2026, PO ZMIERZENIU SKUTKU -----
+#
+# Wpis wyzej stoi w calosci, bo opisuje, dlaczego obserwacje w ogole wrocily
+# z zera — i to nadal jest prawda. Nieprawdziwe bylo to, po co je podnosilismy.
+#
+# UZASADNIENIE OBU STALYCH MOWILO O NASZYM KOSZCIE, NIE O SKUTKU. Przy
+# `SUBSKRYPCJE_MIESIECZNIE` stalo doslownie „laduje w skrzynce wlasciciela,
+# wiec waskie", a przy `FOLLOW_MIESIECZNIE` — „obserwacja nie przysyla nic
+# mailem". Obie liczby byly wiec dobrane wedlug tego, co NAS mniej kosztuje,
+# i wyszlo z tego trzy i pol raza wiecej dzialania w kanale, ktory dziala
+# gorzej. To jest optymalizacja przeciw wlasnemu celowi.
+#
+# CZTERY POMIARY Z 1 WRZESNIA 2026, na ktorych stoja nowe liczby:
+#
+# 1. ODZEW WPROST. Cudzy eksperyment na 120 kontach: obserwacja -> 20% odzewu,
+#    ale tylko 3,4% subskrypcji zwrotnych; subskrypcja -> 15% odzewu i 11,5%
+#    subskrypcji. Ludzie odwdzieczaja sie DOSLOWNIE tym samym. To POSZLAKA
+#    (jeden autor, nie dane platformy) i jedyna liczba tutaj, ktora nie jest
+#    nasza — dlatego caly rachunek nizej jest podany tak, zeby dalo sie go
+#    przeliczyc innym wspolczynnikiem.
+# 2. NASZE WLASNE ZERO. Z 12 kont, ktorym dalismy subskrypcje, odwzajemnilo sie
+#    ZERO. Mediana ich wielkosci ~5300 subskrybentow (skrajne 348 000
+#    i 111 000) — celowalismy w duze i to jest osobna wada, ktora naprawia
+#    kryterium doboru celu w `run.py`, a nie te widelki.
+# 3. SKAD NAPRAWDE BIORA SIE CZYTELNICY. 11 z 19 naszych czytelnikow zostawilo
+#    wczesniej slad interakcji z nami (wpisy `rodzaj="skutek"` w dzienniku:
+#    199 rekordow, 69 roznych osob). 0 z 19 to konto, ktore MY zasubskrybowalismy.
+# 4. ILE TE STALE DAJA NAPRAWDE. Nie „srodek widelek": przepuszczone przez
+#    prawdziwe `stages.budzet_dnia` (`z_miesiaca` losuje ulamek dnia osobno,
+#    a rozbieg scina gorna polowe widelek) przez 365 dni poza rozbiegiem
+#    i 30 dni w rozbiegu.
+#
+#       stale        follow/mies  sub/mies  dzialan  oczekiwani subskrybenci
+#       (30,44)+(6,12)     37,23      8,38     45,6  1,27 + 0,96 = 2,23
+#       (10,16)+(12,20)    12,74     15,37     28,1  0,43 + 1,77 = 2,20
+#       to samo, rozbieg    7,00     16,00     23,0  0,24 + 1,84 = 2,08
+#
+#    Czyli TEN SAM oczekiwany wynik (2,23 -> 2,20, roznica 1,3%) przy 38 procent
+#    mniejszej liczbie dzialan na cudzych profilach. Sprawdzalem tez warianty
+#    ostrzejsze — (8,12)+(16,24) daje 2,53 przy 29,2 dzialaniach — i ich NIE
+#    biore: rachunek stoi na jednej poszlace z punktu 1, wiec nie ma podstaw
+#    zeby na niej optymalizowac do drugiego miejsca po przecinku. Bierzemy
+#    liczby, ktore przy tej samej pracy sa wyraznie ostrozniejsze.
+#
+# KOSZT, KTOREGO NIE ZNOSIMY I NIE UDAJEMY, ZE ZNOSIMY. Kazda subskrypcja to
+# poczta w skrzynce wlasciciela, a nowe widelki podnosza ja z ~8 do ~15 maili
+# miesiecznie z nowych zrodel. Sprawdzone 1 wrzesnia w calym `agent-v2`:
+# NIE MA w kodzie zadnego ustawienia wyciszania powiadomien przy subskrybowaniu
+# (`_klik_na_profilu` klika „Subscribe" i nic wiecej; jedyne „wycisz"
+# w repozytorium to `CICHY_DZIEN_WYCISZA`, ktore dotyczy NASZEGO nadawania,
+# oraz „Mute" w menu cudzego profilu, ktorego swiadomie nie tykamy). Nie
+# dorabiam go tutaj — to zmiana w cudzym pliku i osobna decyzja. Do tego czasu
+# to jest znany, przyjety koszt, a nie przeoczenie.
+#
+# CO MUSI ZAJSC, ZEBY TO ODWROCIC. Jesli po miesiacu `norma.py` pokaze, ze
+# subskrypcje nadal daja zero nowych czytelnikow, to nie widelki sa wtedy zle,
+# tylko DOBOR CELU — i poprawka idzie do `run.cele_wedlug_pierwszenstwa`,
+# nie tutaj.
+FOLLOW_MIESIECZNIE = (10, 16)      # 12,7/mies realnie; 0 z 19 czytelnikow stad
+SUBSKRYPCJE_MIESIECZNIE = (12, 20)  # 15,4/mies realnie; 3,4x lepsza konwersja
 
 
 def normy_dzienne() -> dict[str, float]:

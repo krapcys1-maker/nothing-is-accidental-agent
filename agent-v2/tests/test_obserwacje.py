@@ -200,13 +200,24 @@ print("    widelki: obserwacje %s/mies, subskrypcje %s/mies"
 # proba obserwacji konczyla sie SUBSKRYPCJA. Agent subskrybowal w tempie
 # obserwacji, prosto do skrzynki wlasciciela. Miara tego bledu jest wielkosc
 # BEZWZGLEDNA subskrypcji, nie ich stosunek do czegokolwiek.
-sprawdz("subskrypcji jest malo, bo ladzia w skrzynce wlasciciela",
-        config.SUBSKRYPCJE_MIESIECZNIE[1] <= 12, config.SUBSKRYPCJE_MIESIECZNIE)
+#
+# SUFIT PODNIESIONY 1 WRZESNIA 2026 z 12 do 20 miesiecznie i to jest zmiana
+# uzasadniona SKUTKIEM, nie wygoda: subskrypcja ma 11,5% konwersji zwrotnej
+# wobec 3,4% przy obserwacji, a obserwacje zeszly w tym samym ruchu z 44 do 16.
+# Miara bledu, przed ktorym ta sekcja stoi, sie nie zmienia: awaria polegala na
+# tym, ze subskrypcje szly W TEMPIE OBSERWACJI z tamtej epoki, czyli do 44
+# miesiecznie. Ta liczba jest wiec dalej progiem, tylko juz nie czyta sie jej
+# z konfiguracji — bo w konfiguracji jej po prostu nie ma.
+TEMPO_OBSERWACJI_SPRZED_NAPRAWY = 44
+sprawdz("subskrypcje nie ida w tempie obserwacji sprzed naprawy",
+        config.SUBSKRYPCJE_MIESIECZNIE[1] < TEMPO_OBSERWACJI_SPRZED_NAPRAWY,
+        config.SUBSKRYPCJE_MIESIECZNIE)
 sprawdz("i wielokrotnie mniej niz komentarzy, ktore nikogo nie zasypuja",
         config.SUBSKRYPCJE_MIESIECZNIE[1] * 4 < config.KOMENTARZE_DZIENNIE[0] * 30,
         (config.SUBSKRYPCJE_MIESIECZNIE, config.KOMENTARZE_DZIENNIE))
 sprawdz("KONTRDOWOD: tempo obserwacji sprzed naprawy by tego nie przeszlo",
-        not (30 <= 12))
+        not (TEMPO_OBSERWACJI_SPRZED_NAPRAWY
+             < TEMPO_OBSERWACJI_SPRZED_NAPRAWY))
 
 print()
 print("=== 3. NOTKI NIE POWTARZAJA TEMATU ===")
@@ -649,10 +660,15 @@ print("=== 6. OBSERWACJE ODWIESZONE — WYCOFANIE STALO NA ZLYM WNIOSKU ===")
 # TA SEKCJA PILNOWALA WYCOFANIA I ZOSTAJE — ODWROCONA. Nie kasuje jej, bo
 # to ona ma nie pozwolic, zeby zdolnosc wygasla po cichu drugi raz.
 
-sprawdz("norma obserwacji wrocila do 30-44/mies",
-        config.FOLLOW_MIESIECZNIE == (30, 44), config.FOLLOW_MIESIECZNIE)
-sprawdz("subskrypcje NIETKNIETE — to osobna zdolnosc",
-        config.SUBSKRYPCJE_MIESIECZNIE == (6, 12), config.SUBSKRYPCJE_MIESIECZNIE)
+# WIDELKI PRZESUNIETE 1 WRZESNIA 2026, ale pytanie tej sekcji sie NIE ZMIENIA:
+# ma pilnowac, zeby zdolnosc nie wygasla po cichu drugi raz. Zdolnosc zyje,
+# dopoki stala jest niezerowa i norma dzienna dodatnia; sama wielkosc idzie
+# teraz za skutkiem i jest uzasadniona przy `config.FOLLOW_MIESIECZNIE`.
+sprawdz("norma obserwacji jest niezerowa i wezsza niz sprzed 1 wrzesnia",
+        config.FOLLOW_MIESIECZNIE == (10, 16), config.FOLLOW_MIESIECZNIE)
+sprawdz("subskrypcje sa teraz SZERSZE od obserwacji — to one konwertuja",
+        config.SUBSKRYPCJE_MIESIECZNIE == (12, 20),
+        config.SUBSKRYPCJE_MIESIECZNIE)
 sprawdz("licznik zna rodzaj 'obserwacja'", "obserwacja" in config.normy_dzienne())
 sprawdz("i jego norma dzienna jest DODATNIA",
         config.normy_dzienne()["obserwacja"] > 0,

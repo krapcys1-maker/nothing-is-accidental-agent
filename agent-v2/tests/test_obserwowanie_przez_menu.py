@@ -555,48 +555,97 @@ sprawdz("norma.normy liczy obserwacje z tej samej stalej",
         config.normy_dzienne()["obserwacja"])
 
 # Budzet dnia: mierzymy ZACHOWANIE `stages.budzet_dnia`, nie tresc config.
-# Data nie ma znaczenia dla tej asercji i to jest wlasnie jej sila:
-# `z_miesiaca((30,44))` daje randint(30,44)/30 in [1,00; 1,47], czyli
-# int()==1 i wynik 1 albo 2 — DLA KAZDEGO ziarna. Przy rozbiegu gora spada
-# do 37, czyli [1,00; 1,23] — nadal 1 albo 2. Przy (0, 0) zawsze 0.
+#
+# PYTANIE MUSIALO ZMIENIC SKALE 1 wrzesnia 2026, i to nie jest oslabienie
+# testu. Stalo tu „budzet obserwacji jest DODATNI" liczone z JEDNEJ doby, bo
+# przy (30,44) kazdy dzien mial co najmniej jedna obserwacje: randint(30,44)/30
+# to [1,00; 1,47], wiec `int()` dawal 1 dla kazdego ziarna. Widelki zeszly do
+# (10,16) — decyzja wlasciciela, uzasadnienie i caly rachunek stoja przy
+# `config.FOLLOW_MIESIECZNIE` — czyli [0,33; 0,53], gdzie ZERO W DANEJ DOBIE
+# JEST POPRAWNYM WYNIKIEM, a nie wycofaniem zdolnosci. Asercja o jednej dobie
+# mierzylaby od tej pory kalendarz.
+#
+# Skala, na ktorej to pytanie nadal cos znaczy, to MIESIAC — bo taka jest
+# stala. Sumujemy wiec 30 kolejnych dob przez PRAWDZIWE `budzet_dnia`,
+# podstawiajac date (ziarno bierze sie z niej), i pytamy o to samo co
+# przedtem: czy blok ma cokolwiek do zrobienia.
 zapisy = []
 stare_zapisz = stages._zapisz_budzet_dnia
 stare_wiek = stages._wiek_konta_w_dniach
 stages._zapisz_budzet_dnia = lambda *a, **k: zapisy.append(a)
+
+
+def _miesiac_budzetow():
+    """Suma 30 kolejnych dob z prawdziwego `budzet_dnia`. Data USTALONA.
+
+    `budzet_dnia` czyta date przez `from datetime import datetime` WEWNATRZ
+    funkcji, wiec siega do `sys.modules` — podmieniamy wiec caly modul na czas
+    wywolania. Dzieki temu test nie zalezy od dnia, w ktorym go uruchomiono.
+    """
+    import datetime as _dt
+    import types as _types
+
+    prawdziwy = sys.modules["datetime"]
+    fake = _types.ModuleType("datetime")
+
+    class _FakeDT(_dt.datetime):
+        _teraz = None
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls._teraz
+
+    fake.datetime, fake.timezone, fake.timedelta = (
+        _FakeDT, _dt.timezone, _dt.timedelta)
+    suma = {"follow": 0, "subskrypcje": 0}
+    baza = _dt.datetime(2026, 9, 1, 12, 0, tzinfo=_dt.timezone.utc)
+    for i in range(30):
+        _FakeDT._teraz = baza + _dt.timedelta(days=i)
+        sys.modules["datetime"] = fake
+        try:
+            buf = io.StringIO()
+            so, sys.stdout = sys.stdout, buf
+            try:
+                b = stages.budzet_dnia(None)
+            finally:
+                sys.stdout = so
+        finally:
+            sys.modules["datetime"] = prawdziwy
+        suma["follow"] += b["follow"]
+        suma["subskrypcje"] += b["subskrypcje"]
+    return suma
+
+
 try:
     for opis, wiek in (("konto dojrzale", 999), ("rozbieg", 1)):
         stages._wiek_konta_w_dniach = lambda conn, _w=wiek: _w
-        buf = io.StringIO()
-        so, sys.stdout = sys.stdout, buf
-        try:
-            b = stages.budzet_dnia(None)
-        finally:
-            sys.stdout = so
-        print("    [%s] follow=%d subskrypcje=%d"
-              % (opis, b["follow"], b["subskrypcje"]))
-        sprawdz("[%s] budzet obserwacji jest DODATNI" % opis,
-                b["follow"] >= 1, b)
+        m = _miesiac_budzetow()
+        print("    [%s] miesiac: follow=%d subskrypcje=%d"
+              % (opis, m["follow"], m["subskrypcje"]))
+        sprawdz("[%s] miesieczny budzet obserwacji jest DODATNI" % opis,
+                m["follow"] >= 1, m)
+        # NOWA ASERCJA, KTOREJ TU BYC NIE MOGLO: od 1 wrzesnia subskrypcje maja
+        # byc LICZNIEJSZE od obserwacji, bo to one konwertuja (11,5% wobec
+        # 3,4%). Przedtem stala mowila odwrotnie i nikt tego nie mierzyl.
+        sprawdz("[%s] subskrypcji jest wiecej niz obserwacji" % opis,
+                m["subskrypcje"] > m["follow"], m)
 
         # KONTRDOWOD 3: te sama funkcja z wycofana stala.
         stara_stala = config.FOLLOW_MIESIECZNIE
         config.FOLLOW_MIESIECZNIE = (0, 0)
         try:
-            buf = io.StringIO()
-            so, sys.stdout = sys.stdout, buf
-            try:
-                b0 = stages.budzet_dnia(None)
-            finally:
-                sys.stdout = so
+            m0 = _miesiac_budzetow()
         finally:
             config.FOLLOW_MIESIECZNIE = stara_stala
-        print("    [%s] KONTRDOWOD (0,0): follow=%d" % (opis, b0["follow"]))
-        sprawdz("[%s] KONTRDOWOD: przy (0, 0) budzet byl ZEROWY" % opis,
-                b0["follow"] == 0, b0)
+        print("    [%s] KONTRDOWOD (0,0): follow w miesiacu=%d"
+              % (opis, m0["follow"]))
+        sprawdz("[%s] KONTRDOWOD: przy (0, 0) CALY MIESIAC byl ZEROWY" % opis,
+                m0["follow"] == 0, m0)
 finally:
     stages._zapisz_budzet_dnia = stare_zapisz
     stages._wiek_konta_w_dniach = stare_wiek
 sprawdz("i nic nie poszlo do pliku budzetow (atrapa przechwycila zapis)",
-        len(zapisy) == 4, len(zapisy))
+        len(zapisy) == 120, len(zapisy))
 
 
 print()
@@ -605,11 +654,30 @@ print("=== 12. NORMA PRZESTAJE UCISZAC OBSERWACJE ===")
 # `_znak` i bramki alarmu, a nie tresc slownika.
 sprawdz("NIEWYKONALNE jest puste — zadna pozycja nie ma recznej oslony",
         norma.NIEWYKONALNE == {}, norma.NIEWYKONALNE)
-sprawdz("tydzien bez ani jednej obserwacji daje wiecej brakow niz prog alarmu"
-        " (%d)" % norma.MIN_BRAKOW_W_OKNIE_DO_ALARMU,
-        config.normy_dzienne()["obserwacja"] * 7
-        > norma.MIN_BRAKOW_W_OKNIE_DO_ALARMU,
-        config.normy_dzienne()["obserwacja"] * 7)
+# KTORA BRAMKA ALARMU LAPIE MARTWY BLOK — SPRAWDZONE PONOWNIE 1 WRZESNIA 2026.
+#
+# Stalo tu, ze tydzien bez obserwacji przekracza `MIN_BRAKOW_W_OKNIE_DO_ALARMU`
+# (4). Przy planie 1,2 na dobe tak bylo: 8,4 braku. Po obnizeniu widelek do
+# (10,16) plan to 0,43 na dobe, czyli 3,03 braku na tydzien — PONIZEJ tej
+# bramki. Gdyby to byla jedyna droga, obnizenie widelek uciszyloby alarm,
+# ktory kosztowal dziewiec dni.
+#
+# NIE JEST JEDYNA i to trzeba mierzyc, a nie zakladac. `norma.py` budzi z DWOCH
+# powodow (linie „martwa = ..."), a drugi z nich nie patrzy na liczbe brakow:
+# ZERO wykonanych przy planie w oknie >= `MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE`
+# (1) to martwy blok niezaleznie od dlugosci okna. Plan tygodniowy 3,03 mija
+# ten prog trzykrotnie, wiec tydzien bez ani jednej obserwacji nadal budzi.
+tydzien_obserwacji = config.normy_dzienne()["obserwacja"] * 7
+print("    plan obserwacji na 7 dni: %.2f  (prog zera: %d, prog brakow: %d)"
+      % (tydzien_obserwacji, norma.MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE,
+         norma.MIN_BRAKOW_W_OKNIE_DO_ALARMU))
+sprawdz("tydzien bez ani jednej obserwacji nadal budzi alarm — bramka ZERA",
+        tydzien_obserwacji >= norma.MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE,
+        tydzien_obserwacji)
+sprawdz("to samo dla subskrypcji, ktorych jest teraz wiecej",
+        config.normy_dzienne()["subskrypcja"] * 7
+        >= norma.MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE,
+        config.normy_dzienne()["subskrypcja"] * 7)
 
 
 print()

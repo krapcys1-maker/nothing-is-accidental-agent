@@ -367,6 +367,589 @@ def ile_przebiegow_zostalo(conn) -> int:
     return max(1, config.PRZEBIEGOW_DZIENNIE - int(zamkniete))
 
 
+# --- KRYTERIUM DOBORU CELU ---------------------------------------------------
+#
+# DZIEN, W KTORYM KONTO PRZESTALO PISAC O CZYM INNYM. 25 sierpnia 2026 konto
+# zostalo przestawione na AI. Historia komentarzy `gdzie_komentowalismy.json`
+# pamieta jednak WSZYSTKO, co bylo przedtem — zmierzone 1 wrzesnia 2026:
+# 94 hosty, z czego 53 (58 procent) ma ostatni komentarz sprzed tej daty i sa
+# to blogi o jedzeniu, zdrowiu, modzie i literaturze.
+#
+# TE 53 NIE SA NEUTRALNYM TLEM PULI. Obserwowanie wysyla im powiadomienie
+# mailem, ktore sciaga ich na nasz profil — a nasza lista obserwowanych jest
+# publiczna i Substack nie daje jej ukryc (subskrypcje maja ustawienie
+# prywatnosci, obserwacje nie). Losowanie z calosci znaczylo wiec: w 58
+# przypadkach na 100 zapraszamy na profil o AI kogos, kto czytal u nas
+# o czym innym, i zostawiamy po sobie publiczny slad.
+PRZESTAWIENIE_KONTA_NA_AI = "2026-08-25"
+
+# NAJKROTSZY ZMIERZONY ZBIEG NAZWY Z HOSTEM TO `ixcarus` — 7 znakow. Prog 6
+# jest wiec ponizej wszystkiego, co dzis dziala, i odcina wylacznie zbiegi
+# tak krotkie, ze byly by przypadkiem (np. osoba „Post" i host `post.substack.com`,
+# ktory naprawde jest w naszej historii).
+MIN_DLUGOSC_ZBIEGU = 6
+
+# --- HAMULEC NA ODRUCH „TY MNIE POLUBILES, JA CIE OBSERWUJE" -----------------
+#
+# Odkad `browser.dopisz_skutki` zapisuje UCHWYT reagujacego, ten czlowiek moze
+# byc celem WPROST. To zdejmuje sufit z poziomu pierwszego — i dokladnie
+# dlatego wymaga hamulca, ktorego przedtem nie bylo po co stawiac.
+#
+# CO SIE STANIE BEZ HAMULCA, POLICZONE NA PRODUKCJI (1 wrzesnia 2026,
+# `agent-v2/data/dziennik.jsonl`, 635 wierszy, 199 wpisow `skutek`):
+#
+#   * `dopisz_skutki` chodzi w bloku 1 tego samego przebiegu, w ktorym bloki
+#     3c i 3d obserwuja i subskrybuja — kilka minut pozniej, ten sam proces;
+#   * opoznienie miedzy REAKCJA a jej zapisem: mediana 5,0 h, ale 24 z 199
+#     zdarzen (12 procent) zapisalo sie w niecala godzine, najszybsze po
+#     2 minutach. Czyli co osma reakcja bylaby odwzajemniona obserwacja
+#     w ciagu godziny, a czasem w ciagu minut;
+#   * naplyw nowych reagujacych: 69 osob w 18 dni, 27 w ostatnich 7 dniach,
+#     czyli 3,9 na dobe. Budzet dzialan na cudzych profilach to
+#     0,42 obserwacji + 0,51 subskrypcji = 0,93 na dobe (`config`,
+#     przepuszczone przez `stages.budzet_dnia`).
+#
+# 3,9 wchodzi, 0,93 wychodzi — bez hamulca poziom reagujacych nie oproznilby
+# sie NIGDY, a poziom hostow z naszej wlasnej historii czytania nie zostalby
+# osiagniety ANI RAZU. Konto odpowiadalo by obserwacja na kazde polubienie
+# i na nic innego. To jest ta „sztuczna lub nieautentyczna aktywnosc", ktora
+# w regulaminie Substacka stoi jako powod usuwania kont.
+#
+# TRZY HAMULCE, KAZDY Z WLASNA LICZBA, ZADEN NIE UDAJE CZLOWIEKA.
+#
+# 1. ODSTEP. Reagujacy wchodzi do puli dopiero, gdy jego reakcja ma co
+#    najmniej dobe. Prog jest DLUZSZY niz nasze wlasne opoznienie zapisu
+#    (97 procent zdarzen zapisuje sie w mniej niz 24 h), wiec nikt nie moze
+#    byc zaczepiony w tym przebiegu, ktory go zobaczyl — a to jedyny odruch,
+#    ktory naprawde widac z zewnatrz.
+# 2. PROG SYGNALU. Jedno polubienie to najtansza rzecz na Substacku i samo
+#    bywa zaczepka. Zadamy DWOCH reakcji albo JEDNEJ, ktora wymagala pisania
+#    (odpowiedz pod nasza notka albo pod naszym komentarzem). Zmierzone na
+#    tych samych 69 osobach: 26 ma dwie reakcje lub wiecej, 21 nam
+#    odpowiedzialo, suma zbiorow to 31 — czyli prog odsiewa 38 z 69.
+# 3. NIE ZACZEPIAMY TYCH, KTORZY JUZ NAS CZYTAJA. Piec osob z tych 69 to
+#    wpis `typ="follow"` (zaobserwowali NAS), piec to `free_subscription`
+#    (zasubskrybowali NAS); dodatkowo 19 uchwytow stoi w `czytelnicy.jsonl`.
+#    Obserwacja zwrotna w te strone nie poszerza zasiegu ani o jedna osobe,
+#    a wyglada dokladnie jak automat odwzajemniajacy.
+#
+# ILE ZOSTAJE. Na produkcyjnych 69 osobach: 31 po progu, 26 po odsianiu
+# naszych czytelnikow, 20 po odstepie doby. Naplyw spada z 3,9 na 1,1 na dobe
+# — nadal wiecej niz budzet 0,93, dlatego dochodzi jeszcze PRZEPLOT (patrz
+# `cele_wedlug_pierwszenstwa`), ktory oddaje co drugi slot hostom z historii.
+ODSTEP_OD_REAKCJI_H = 24
+MIN_REAKCJI_BEZ_ROZMOWY = 2
+
+# Zdarzenia, ktore znacza „ta osoba nam ODPISALA", a nie „kliknela". Nazwy sa
+# Substacka: `note_reply` pod nasza notka, `comment_reply` pod naszym
+# komentarzem. Dopasowanie po fragmencie, bo lista zamknieta juz raz zawiodla
+# w tym samym pliku — patrz komentarz o `note_restack` w `dopisz_skutki`.
+FRAGMENT_ROZMOWY = "reply"
+
+# Zdarzenia, ktore znacza „ta osoba juz nas czyta". Wtedy nie ma czego
+# zdobywac: obserwacja zwrotna nie poszerza zasiegu, tylko domyka petle.
+REAKCJE_JUZ_CZYTA = ("follow", "free_subscription", "paid_subscription")
+
+
+def _slug(tekst: str) -> str:
+    """Nazwa do porownywania: same litery i cyfry ASCII, malymi.
+
+    Znaki spoza ASCII wypadaja celowo — „Eunnuri (은누리) Lee" ma zostac
+    `eunnurilee`, bo tak samo nazywa sie host tej osoby.
+    """
+    import re
+
+    return re.sub(r"[^a-z0-9]", "", str(tekst or "").lower())
+
+
+def _slug_hosta(host: str) -> str:
+    """Pierwszy czlon adresu jako slug: `www.ryanpuzycki.com` -> `ryanpuzycki`."""
+    h = str(host or "").strip().lower().rstrip("/")
+    if h.startswith("www."):
+        h = h[4:]
+    return _slug(h.split(".")[0])
+
+
+def _reakcje_z_dziennika() -> tuple[set[str], dict[str, dict]]:
+    """Jeden przebieg po dzienniku, dwie odpowiedzi o tych samych ludziach.
+
+    Oddaje `(slugi_nazw, po_uchwycie)`:
+
+      * `slugi_nazw` — do STAREJ drogi, ktora zestawia nazwe wyswietlana ze
+        slugiem hosta z historii komentarzy. Ta droga trafia 7 osob z 69
+        i zostaje, bo dziala takze dla 199 wpisow sprzed 1 wrzesnia 2026,
+        ktore uchwytu nie maja i nigdy nie dostana (`dopisz_skutki` pomija
+        zdarzenia juz zapisane, wiec historii nie da sie uzupelnic wstecz);
+      * `po_uchwycie` — {uchwyt: {"ile", "rozmowa", "juz_czyta", "ostatnia"}},
+        czyli NOWA droga: reagujacy jako cel wprost.
+
+    TRZY STANY POLA `uchwyty`, I KAZDY ZNACZY CO INNEGO. Brak klucza to wpis
+    sprzed poprawki („nie wiem"), `[]` to zdarzenie bez nadawcow, a `None`
+    w srodku listy to jeden konkretny czlowiek, ktorego uchwytu Substack nie
+    podal. Zaden z tych trzech nie jest bledem i zaden nie moze wywalic
+    doboru celu — wiec czytamy defensywnie i po prostu pomijamy.
+
+    NAZWA I UCHWYT SA PARAMI Z KONSTRUKCJI, ale ufamy temu tylko wtedy, gdy
+    obie listy maja te sama dlugosc. `browser.dopisz_skutki` buduje je z jednej
+    listy par, wiec rowna dlugosc jest tam gwarantowana; nierowna oznacza wpis
+    z innego zrodla albo recznie ruszany plik, a wtedy `kto[i]` i `uchwyty[i]`
+    moglyby byc roznymi osobami. Cel wygladajacy na zmierzony, a nie bedacy
+    nim, jest gorszy od braku celu — patrz `tests/test_uchwyt_reakcji.py`.
+    """
+    import json as _json
+
+    import browser
+
+    slugi: set[str] = set()
+    po_uchwycie: dict[str, dict] = {}
+    moj = _slug(config.SUBSTACK_HANDLE)
+    try:
+        if not browser.DZIENNIK.exists():
+            return slugi, po_uchwycie
+        for linia in browser.DZIENNIK.read_text(encoding="utf-8").splitlines():
+            linia = linia.strip()
+            if not linia:
+                continue
+            try:
+                wpis = _json.loads(linia)
+            except ValueError:
+                continue          # jedna zepsuta linia nie psuje calej reszty
+            if not isinstance(wpis, dict) or wpis.get("rodzaj") != "skutek":
+                continue
+            kto = list(wpis.get("kto") or [])
+            for nazwa in kto:
+                s = _slug(nazwa)
+                if len(s) >= MIN_DLUGOSC_ZBIEGU:
+                    slugi.add(s)
+            uchwyty = wpis.get("uchwyty")
+            if not isinstance(uchwyty, list) or len(uchwyty) != len(kto):
+                continue          # stary wpis albo rozjazd — nie zgadujemy
+            typ = str(wpis.get("typ") or "")
+            kiedy = str(wpis.get("kiedy_zdarzenia") or wpis.get("kiedy") or "")
+            for uchwyt in uchwyty:
+                uchwyt = str(uchwyt or "").strip().lstrip("@")
+                if not uchwyt:
+                    continue      # `None` znaczy „tej osoby nie umiem nazwac"
+                # MY SAMI JESTESMY W TYM KANALE. Zmierzone na produkcji:
+                # 9 zdarzen `scheduled_note_sent` ma w polu `kto` wpisane
+                # „Nothing Is Accidental", czyli nas — Substack melduje w tym
+                # samym kanale, ze nasza zaplanowana notka poszla. Dopoki cel
+                # wychodzil z rownosci nazwy z hostem, bronil nas przed tym
+                # odsiew `host == moj_host`; przy uchwycie WPROST agent
+                # probowalby zaobserwowac wlasny profil.
+                if _slug(uchwyt) == moj:
+                    continue
+                stan = po_uchwycie.setdefault(
+                    uchwyt, {"ile": 0, "rozmowa": False,
+                             "juz_czyta": False, "ostatnia": ""})
+                stan["ile"] += 1
+                if FRAGMENT_ROZMOWY in typ:
+                    stan["rozmowa"] = True
+                if typ in REAKCJE_JUZ_CZYTA:
+                    stan["juz_czyta"] = True
+                if kiedy > stan["ostatnia"]:
+                    stan["ostatnia"] = kiedy
+    except OSError:
+        pass                      # brak dziennika to pusta wiedza, nie awaria
+    return slugi, po_uchwycie
+
+
+def kogo_juz_dotknelismy() -> set[str]:
+    """Slugi nazw ludzi, ktorzy zareagowali na NASZA tresc — z dziennika.
+
+    ## Po co ta droga zostaje, skoro reagujacy ma juz uchwyt
+
+    Bo 199 wpisow `skutek` sprzed 1 wrzesnia 2026 uchwytu NIE MA i nie
+    dostanie: `browser.dopisz_skutki` pomija zdarzenia, ktore juz zapisal, wiec
+    kanalu aktywnosci nie da sie odczytac po raz drugi po to samo. Te 69 osob
+    zostaje wiec na zawsze widoczne wylacznie przez nazwe — i ta droga trafia
+    z nich 7, z czego po odsiewie tematycznym 3.
+
+    Wpisy `rodzaj="skutek"` to jedyna zmierzona przeslanka, jaka mamy o tym,
+    skad biora sie czytelnicy: 11 z 19 naszych czytelnikow zostawilo wczesniej
+    taki slad, a 0 z 19 to konto, ktore MY zasubskrybowalismy.
+
+    CO TA DROGA UMIE, A CZEGO NIE. Umie tylko PODNIESC host, ktory i tak jest
+    w historii naszych komentarzy — nie potrafi zrobic celu z osoby, ktorej
+    nazwa nie sklada sie na adres. Nowa droga (`reagujacy_jako_cele`) potrafi,
+    bo dostaje uchwyt wprost. Obie zyja obok siebie i licza sie osobno
+    w `rachunek`, zeby bylo widac, ktora naprawde cos daje.
+    """
+    return _reakcje_z_dziennika()[0]
+
+
+def nasi_czytelnicy() -> set[str]:
+    """Uchwyty ludzi, ktorzy JUZ nas czytaja — z `czytelnicy.jsonl`. Tylko odczyt.
+
+    Po co: zaczepianie ich nie poszerza zasiegu ani o jedna osobe, a wyglada
+    dokladnie jak automat odwzajemniajacy — patrz hamulec nr 3 przy
+    `ODSTEP_OD_REAKCJI_H`.
+
+    SUMA ZE WSZYSTKICH ZRZUTOW, NIE OSTATNI. Kto raz nas czytal, ten nas zna;
+    zniknieciecie z ostatniego zrzutu znaczy najczesciej, ze przeszedl miedzy
+    zakladkami (Substack pokazuje osobe obserwujaca I subskrybujaca wylacznie
+    w „Subscribers" — zmierzone na przypadku „Leonard", patrz
+    `browser.kto_nas_czyta`), a nie ze przestal nas czytac.
+
+    ZRZUT OKROJONY NIE JEST DOWODEM NA NIEOBECNOSC, ale nam to nie szkodzi:
+    ta funkcja buduje sume, wiec brakujaca zakladka moze najwyzej NIE DODAC
+    kogos, kogo dodal inny zrzut. Blad w te strone kosztuje jedno wejscie na
+    profil; blad w druga skreslalby cel bez powodu.
+    """
+    import json as _json
+
+    import browser
+
+    uchwyty: set[str] = set()
+    try:
+        if not browser.CZYTELNICY.exists():
+            return uchwyty
+        for linia in browser.CZYTELNICY.read_text(encoding="utf-8").splitlines():
+            linia = linia.strip()
+            if not linia:
+                continue
+            try:
+                zrzut = _json.loads(linia)
+            except ValueError:
+                continue
+            if not isinstance(zrzut, dict):
+                continue
+            for grupa in ("obserwujacy", "subskrybenci"):
+                for osoba in zrzut.get(grupa) or []:
+                    if not isinstance(osoba, dict):
+                        continue
+                    u = str(osoba.get("uchwyt") or "").strip().lstrip("@")
+                    if u:
+                        uchwyty.add(u)
+    except OSError:
+        pass                      # brak pliku to pusta wiedza, nie awaria
+    return uchwyty
+
+
+def reagujacy_jako_cele() -> tuple[list[str], dict]:
+    """Ludzie, ktorzy zareagowali na nasza tresc, jako CELE WPROST. Zero sieci.
+
+    Oddaje `(adresy, rachunek)`. Adres ma postac `<uchwyt>.substack.com`,
+    i to jest decyzja, nie skrot — uzasadnienie nizej.
+
+    ## Dlaczego reagujacy wchodzi do puli, a nie tylko podnosi kogos w niej
+
+    Do 1 wrzesnia 2026 poziom pierwszy tylko PODNOSIL hosty, ktore i tak byly
+    w historii naszych komentarzy. Znaczylo to, ze osoba, ktora polubila nasza
+    notke, ale pod ktorej publikacja nigdy nie komentowalismy, byla dla doboru
+    celu niewidzialna — zmierzone: 62 z 69 takich osob. Uchwyt zmienia to
+    wprost: mamy czym ja zaadresowac, wiec nie ma po co udawac, ze jej nie ma.
+
+    ODSIEW TEMATYCZNY JEJ NIE DOTYCZY, i to tez jest swiadome. Granica
+    `PRZESTAWIENIE_KONTA_NA_AI` pyta „czy czytalismy ich PO tym, jak konto
+    zaczelo pisac o AI" — bo host z historii moze pochodzic sprzed zmiany
+    tematu. Reagujacy nie ma tego problemu: on zareagowal na TE tresc, ktora
+    konto wystawia dzis. Sam jest swiezszym dowodem niz data komentarza.
+
+    ## Dlaczego adres, a nie sam uchwyt
+
+    Cala dalsza droga w `obserwuj` i `subskrybuj` bierze HOST i sama wyprowadza
+    z niego uchwyt. Wsadzenie golego uchwytu do tej listy weszlo by w
+    `browser.uchwyt_publikacji("hedleyrees")`, ktore dla nazwy bez kropki
+    otwiera sesje przegladarki i pyta `https://hedleyrees/api/v1/posts` —
+    czyli adres, ktorego nie ma. Postac `<uchwyt>.substack.com` przechodzi
+    natomiast przez cala droge BEZ ANI JEDNEGO ZAPYTANIA:
+    `uchwyt_publikacji` skraca ja z powrotem do uchwytu jednym `split`,
+    `czy_juz_obserwujemy` i `czy_juz_subskrybujemy` porownuja uchwyt
+    z uchwytem, a `obserwuj_profil` i `zasubskrybuj` i tak ida na
+    `substack.com/@uchwyt`. POD SAM TEN ADRES NIC NIGDY NIE WCHODZI — jest
+    formatem wewnetrznym, nie obietnica, ze taka publikacja istnieje.
+
+    CO Z TEGO WYNIKA I CZEGO NIE UDAJE. Reagujacy, ktory nie ma wlasnej
+    publikacji, nie ma tez przycisku „Subscribe" — blok subskrypcji wejdzie
+    u niego raz, zapisze „nie ma przycisku subskrypcja" i `kogo_juz_subskrybujemy`
+    zamknie go na zawsze. Kosztuje to JEDNO wejscie na profil, raz na osobe,
+    i jest dokladnie tym samym, co dzis kosztuje `newyorker`. Obserwowanie
+    dziala u kazdego, bo nie wymaga publikacji.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    _, po_uchwycie = _reakcje_z_dziennika()
+    czytelnicy = nasi_czytelnicy()
+    granica = (datetime.now(timezone.utc)
+               - timedelta(hours=ODSTEP_OD_REAKCJI_H)).isoformat()[:19]
+
+    slabi = swiezy = juz_czytaja = 0
+    adresy: list[str] = []
+    for uchwyt, stan in sorted(po_uchwycie.items()):
+        if stan["juz_czyta"] or uchwyt in czytelnicy:
+            juz_czytaja += 1
+            continue
+        if stan["ile"] < MIN_REAKCJI_BEZ_ROZMOWY and not stan["rozmowa"]:
+            slabi += 1
+            continue
+        # ODSTEP LICZY SIE OD REAKCJI, NIE OD JEJ ZAPISU. `kiedy_zdarzenia` to
+        # czas, ktory widzi czlowiek po drugiej stronie; `kiedy` to godzina
+        # naszego przebiegu i o niej on nie wie nic. Reakcja bez czytelnej daty
+        # CZEKA — brak daty nie moze byc przepustka, bo to jedyny warunek,
+        # ktory stoi miedzy nami a odruchem.
+        if not stan["ostatnia"] or stan["ostatnia"][:19] > granica:
+            swiezy += 1
+            continue
+        adresy.append("%s.substack.com" % uchwyt)
+    return adresy, {
+        "reagujacy_z_uchwytem": len(po_uchwycie),
+        "reagujacy_juz_czyta": juz_czytaja,
+        "reagujacy_slabi": slabi,
+        "reagujacy_swiezy": swiezy,
+        "reagujacy": len(adresy),
+        # PROGI JADA W RACHUNKU, A NIE JAKO GLOBALNE STALE. Bloki `obserwuj`
+        # i `subskrybuj` sa w testach WYCINANE z `run.py` przez `ast`
+        # i uruchamiane w wasskiej przestrzeni nazw — kazda stala, po ktora
+        # blok siega bezposrednio, musi tam byc dopisana recznie i cicho
+        # wywraca test przy nastepnej zmianie. Liczba, ktora blok tylko
+        # drukuje, ma isc razem z reszta rachunku.
+        "odstep_h": ODSTEP_OD_REAKCJI_H,
+        "prog_reakcji": MIN_REAKCJI_BEZ_ROZMOWY,
+    }
+
+
+def _przeplot(pierwsza: list[str], druga: list[str]) -> list[str]:
+    """Na przemian z dwoch list; gdy jedna sie konczy, druga idzie dalej.
+
+    Nie `pierwsza + druga`, bo przy budzecie 0,93 dzialania na dobe i naplywie
+    1,1 reagujacego na dobe druga lista nie zostalaby osiagnieta nigdy — patrz
+    rachunek przy `cele_wedlug_pierwszenstwa`.
+    """
+    wynik: list[str] = []
+    for i in range(max(len(pierwsza), len(druga))):
+        if i < len(pierwsza):
+            wynik.append(pierwsza[i])
+        if i < len(druga):
+            wynik.append(druga[i])
+    return wynik
+
+
+def cele_wedlug_pierwszenstwa(historia: dict) -> tuple[list[str], dict]:
+    """Hosty do zaczepienia, w kolejnosci pierwszenstwa. Zero sieci.
+
+    Zwraca `(kandydaci, rachunek)`. `rachunek` jest po to, zeby blok mial co
+    wydrukowac i czym uzasadnic ZERO — pusta pula z podanym powodem jest
+    uczciwa, pusta pula bez powodu wyglada jak blok, ktory sie nie odbyl.
+
+    ## Co bylo przedtem
+
+    `random.shuffle` na CALEJ historii komentarzy. Zadnego kryterium: ani
+    wielkosci, ani tematu, ani jezyka, ani swiezosci. Skutek zmierzony
+    1 wrzesnia 2026: z 12 kont, ktorym dalismy subskrypcje, odwzajemnilo sie
+    zero, a mediana ich wielkosci to ~5300 subskrybentow (skrajne 348 000
+    i 111 000) — czyli los systematycznie prowadzil nas do duzych kont, dla
+    ktorych jestesmy szumem.
+
+    ## Trzy poziomy, z czego jeden jest twardy, a jeden slabszy niz w zamysle
+
+    0. WPROST: czlowiek, ktory zareagowal na nasza tresc i ma zapisany uchwyt
+       (`reagujacy_jako_cele`). To nie jest juz podnoszenie kogos z puli, tylko
+       ROZSZERZENIE puli o ludzi, ktorych w niej nigdy nie bylo — 62 z 69
+       reagujacych nie ma w historii naszych komentarzy zadnego hosta.
+    1. NAJMOCNIEJ Z HOSTOW: host, ktorego nazwa zgadza sie z kims, kto juz
+       zareagowal na nasza tresc (`kogo_juz_dotknelismy` — i tam stoi, ile
+       z tego naprawde da sie wyprowadzic: 7 osob z 69).
+    2. POTEM: host z komentarzem od `PRZESTAWIENIE_KONTA_NA_AI` wlacznie.
+       41 z 94 hostow na dzien wdrozenia.
+    3. NIGDY: host, ktorego OSTATNI komentarz jest starszy. 53 z 94.
+
+    ## Poziom 0 NIE zjada calej puli, i to jest osobna decyzja
+
+    Reagujacych przybywa 3,9 na dobe, a po hamulcach 1,1 (patrz
+    `ODSTEP_OD_REAKCJI_H`). Budzet dzialan na cudzych profilach to 0,93 na
+    dobe. Gdyby poziom 0 szedl w calosci przed hostami, poziom 2 nie zostalby
+    osiagniety ANI RAZU — konto przestaloby obserwowac kogokolwiek, kogo
+    naprawde czyta, i odpowiadaloby wylacznie na reakcje.
+
+    Dlatego pula powstaje PRZEPLOTEM: reagujacy, host, reagujacy, host.
+    Pierwszy slot nadal nalezy do reagujacego (to najmocniejszy sygnal, jaki
+    mamy), ale co drugi wraca do historii czytania — przy budzecie ponizej
+    jednego dzialania na dobe znaczy to mniej wiecej co drugi dzien. Gdy
+    ktorakolwiek lista sie konczy, druga idzie dalej bez przerw.
+
+    Poziom 3 dziala dokladnie tak, bo `kanal.zapamietaj_komentarz` NADPISUJE
+    date przy kazdym komentarzu. Wartosc jest wiec zawsze data OSTATNIEGO
+    komentarza, a `data < granica` znaczy „nie komentowalismy tam ani razu po
+    przestawieniu konta" — bez potrzeby trzymania calej historii dat.
+
+    HOST BEZ CZYTELNEJ DATY TEZ WYPADA. Nie dlatego, ze cos o nim wiemy, tylko
+    dlatego, ze nie wiemy nic: cena pomylki jest niesymetryczna. Falszywe
+    odsianie kosztuje jednego kandydata z puli, ktora i tak rosnie o okolo
+    piec hostow dziennie; falszywe dopuszczenie wysyla maila komus, kogo
+    przestalismy czytac.
+
+    LOS ZOSTAJE, ALE JUZ TYLKO WEWNATRZ POZIOMU. Stala kolejnosc byla by tu
+    gorsza niz los: agent codziennie zaczynalby od tego samego konca listy,
+    a rowny rytm to jedyny podpis automatu, ktorego Substack nie musi nawet
+    szukac. Los rozstrzyga wiec remisy w obrebie poziomu, a nie to, ktory
+    poziom idzie pierwszy.
+    """
+    import random
+
+    moj_host = "%s.substack.com" % config.SUBSTACK_HANDLE
+    po, przed = [], []
+    for host, kiedy in (historia or {}).items():
+        if not host or host == moj_host:
+            continue
+        if str(kiedy or "")[:10] >= PRZESTAWIENIE_KONTA_NA_AI:
+            po.append(host)
+        else:
+            przed.append(host)
+
+    reagujacy, rachunek = reagujacy_jako_cele()
+    # TEN SAM CZLOWIEK NIE MOZE STAC W PULI DWA RAZY. `hedleyrees` jest
+    # jednoczesnie reagujacym i hostem `hedleyrees.substack.com` z historii
+    # komentarzy — bez tego odsiewu poszedlby przez dwa poziomy naraz i zjadl
+    # dwa sloty na jednym profilu. Porownujemy slugiem, bo host z historii bywa
+    # wlasna domena (`www.ryanpuzycki.com` to `puzycki`... i akurat tam slug
+    # NIE zbiega sie z uchwytem — dlatego to sito lapie tylko czesc, a reszte
+    # domyka `czy_juz_obserwujemy` po rozwiazaniu uchwytu).
+    juz_w_reakcjach = {_slug_hosta(a) for a in reagujacy}
+    # LICZBY DO `rachunek` BIERZEMY SPRZED ODSIEWU DUBLI. Inaczej pusta pula
+    # tlumaczylaby sie krotsza historia, niz naprawde mamy — a to jest ta sama
+    # klasa klamstwa, przed ktora broni `powod_pustej_puli`.
+    ilu_po, ilu_przed = len(po), len(przed)
+    po_odsianiu = [h for h in po if _slug_hosta(h) not in juz_w_reakcjach]
+    zdublowani = ilu_po - len(po_odsianiu)
+    po = po_odsianiu
+
+    dotkneli = kogo_juz_dotknelismy()
+    ze_skutkiem = [h for h in po if _slug_hosta(h) in dotkneli]
+    reszta = [h for h in po if _slug_hosta(h) not in dotkneli]
+    # LOS ZOSTAJE, ALE JUZ TYLKO WEWNATRZ POZIOMU — takze wsrod reagujacych.
+    # Kolejnosc „od najswiezszej reakcji" byla by tu najgorsza z mozliwych:
+    # to dokladnie ten wzorzec, ktory hamulce maja rozbroic.
+    random.shuffle(reagujacy)
+    random.shuffle(ze_skutkiem)
+    random.shuffle(reszta)
+    hosty = ze_skutkiem + reszta
+    rachunek.update({
+        "wszystkich": ilu_po + ilu_przed,
+        "sprzed_przestawienia": ilu_przed,
+        "po_przestawieniu": ilu_po,
+        "ze_skutkiem": len(ze_skutkiem),
+        "zdublowani": zdublowani,
+    })
+    return _przeplot(reagujacy, hosty), rachunek
+
+
+def powod_pustej_puli(rachunek: dict) -> str:
+    """Zdanie do dziennika, gdy po odsianiu nie zostal nikt.
+
+    Zero z powodem jest uczciwe; zero udajace wynik nie jest. A powod musi
+    niesc LICZBY, bo za pol roku nikt nie odtworzy, czy pula byla pusta, bo
+    historia byla krotka, czy dlatego, ze cala wpadla w odsiew tematyczny.
+
+    PO ROZSZERZENIU PULI ZDANIE MUSI MIEC OBA POZIOMY. Od 1 wrzesnia 2026
+    kandydat moze przyjsc z historii komentarzy ALBO z reakcji na nasza tresc,
+    i kazdy z tych dwoch ma wlasny odsiew. Zero mowiace tylko o hostach
+    byloby juz zerem bez powodu — czyli dokladnie tym, przed czym ta funkcja
+    powstala, tylko o jedno pietro wyzej.
+    """
+    return ("pula pusta po odsianiu: %d hostow w historii, %d sprzed"
+            " przestawienia konta na AI (%s), %d po nim"
+            "; reagujacych z uchwytem %d, z tego %d juz nas czyta,"
+            " %d ponizej progu %d reakcji (bez odpowiedzi),"
+            " %d mlodszych niz %d h, w puli %d"
+            % (rachunek.get("wszystkich", 0),
+               rachunek.get("sprzed_przestawienia", 0),
+               PRZESTAWIENIE_KONTA_NA_AI,
+               rachunek.get("po_przestawieniu", 0),
+               rachunek.get("reagujacy_z_uchwytem", 0),
+               rachunek.get("reagujacy_juz_czyta", 0),
+               rachunek.get("reagujacy_slabi", 0), MIN_REAKCJI_BEZ_ROZMOWY,
+               rachunek.get("reagujacy_swiezy", 0), ODSTEP_OD_REAKCJI_H,
+               rachunek.get("reagujacy", 0)))
+
+
+def kogo_juz_subskrybujemy() -> set[str]:
+    """Uchwyty, na ktore subskrypcja NIE MA JUZ CO wysylac. Z dziennika, bez sieci.
+
+    ## Co to kosztowalo
+
+    `subskrybuj` nie sprawdzalo niczego. Zmierzone 1 wrzesnia 2026 na
+    produkcyjnym dzienniku: 18 prob subskrypcji, 6 w kosz. Jedna z nich to
+    `theweeklyscrapbook` — konto zasubskrybowane 16 sierpnia, na ktore agent
+    wszedl ponownie 25 sierpnia i zapisal porazke „nie ma przycisku
+    subskrypcja". Przycisku nie bylo, bo mowil juz „Subscribed".
+
+    ## Dwa rodzaje wpisow i dlaczego oba znacza to samo dla planu dnia
+
+    * `udane=True` — subskrypcja weszla. Druga jest bezcelowa.
+    * `udane=False` z powodem „nie ma przycisku subskrypcja" — profil
+      ODPOWIEDZIAL, tylko nie tym, czego chcielismy. Tak wyglada i konto juz
+      zasubskrybowane (`theweeklyscrapbook`), i publikacja bez substackowego
+      przycisku (`newyorker`, `post`). W obu przypadkach kolejne wejscie da
+      dokladnie ten sam wynik.
+
+    POWODOW INNYCH NIE BIERZEMY, i to jest cala ostroznosc tej funkcji.
+    Timeout, padnieta sesja albo zamkniety Chrome to awaria PO NASZEJ STRONIE
+    — „nie wiem" nie jest dowodem i nie moze skreslac konta na zawsze. To ta
+    sama zasada, ktora `browser.dopisz_wynik` nazywa `o_hoscie`.
+
+    NAPIS JEST WSPOLNY Z `browser._klik_na_profilu` I NIKT TEGO NIE PILNUJE.
+    Tam powstaje `f"nie ma przycisku {rodzaj} u {handle}"`, tu go czytamy.
+    Rozjechanie sie tych dwoch miejsc wylaczy odsiew po cichu — dokladnie tak,
+    jak `browser.POWOD_HOST_NIE_POKAZUJE` musial stac sie stala. Docelowo ten
+    napis ma tam zostac stala i byc importowany; do tego czasu pilnuje go test.
+    """
+    import json as _json
+
+    import browser
+
+    zamkniete: set[str] = set()
+    try:
+        if not browser.DZIENNIK.exists():
+            return zamkniete
+        for linia in browser.DZIENNIK.read_text(encoding="utf-8").splitlines():
+            linia = linia.strip()
+            if not linia:
+                continue
+            try:
+                wpis = _json.loads(linia)
+            except ValueError:
+                continue
+            if not isinstance(wpis, dict) or wpis.get("rodzaj") != "subskrypcja":
+                continue
+            komu = str(wpis.get("komu") or "").strip().lstrip("@")
+            if not komu:
+                continue
+            if wpis.get("udane"):
+                zamkniete.add(komu)
+            elif str(wpis.get("powod") or "").startswith(
+                    "nie ma przycisku subskrypcja"):
+                zamkniete.add(komu)
+    except OSError:
+        pass                      # brak dziennika to pusta wiedza, nie awaria
+    return zamkniete
+
+
+def czy_juz_subskrybujemy(host: str, zamkniete: set[str],
+                          pamiec: dict | None = None) -> bool:
+    """Czy ten HOST wskazuje konto, na ktore nie ma juz po co wchodzic.
+
+    Tanie sito PRZED `browser.uchwyt_publikacji`, ktore dla wlasnej domeny
+    kosztuje osobna sesje przegladarki i zapytanie do API. Dla adresow
+    w domenie Substacka jest dokladne, bo `uchwyt_publikacji` wyprowadza uchwyt
+    ta sama regula (`host.split(".")[0]`), wiec porownujemy uchwyt z uchwytem.
+
+    Dla wlasnej domeny probujemy jeszcze mapy `host->uchwyt` z pamieci
+    obserwowanych — to ten sam plik, ktory odsiewa obserwacje, i jedyne
+    miejsce, gdzie `www.malone.news` laczy sie z `rwmalonemd`. Gdy mapy nie ma,
+    oddajemy False i sprawdzamy jeszcze raz PO rozwiazaniu uchwytu; kosztuje to
+    zapytanie, ale nie kosztuje slotu.
+    """
+    host = str(host or "").strip().lower().rstrip("/")
+    if not host:
+        return False
+    if host.endswith(".substack.com"):
+        if host.split(".")[0] in zamkniete:
+            return True
+    uchwyt = (pamiec or {}).get("hosty", {}).get(host)
+    return bool(uchwyt and uchwyt in zamkniete)
+
+
 def dzien(conn, run_id: int, wyslij: bool) -> int:
     """Jeden dzień pracy konta: notki, komentarze, odpowiedzi, polubienia.
 
@@ -1011,6 +1594,20 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         nadal nie tykamy widgetow „kogo obserwowac", bo to lista podpowiedzi.
         Bierzemy wylacznie hosty z naszej historii czytania.
 
+        WYBOR CELU PRZESTAL BYC LOSEM (1 wrzesnia 2026). Historia czytania
+        nadal jest jedynym zrodlem, ale nie idzie juz do losowania w calosci:
+        `cele_wedlug_pierwszenstwa` odcina hosty, u ktorych ostatni raz
+        komentowalismy przed przestawieniem konta na AI (53 z 94 zmierzone
+        tego dnia — blogi o jedzeniu, zdrowiu, modzie i literaturze),
+        i stawia na poczatku te, ktore juz zareagowaly na nasza tresc.
+
+        DLACZEGO AKURAT TU TO BOLI NAJBARDZIEJ. Obserwacja WYSYLA
+        POWIADOMIENIE MAILEM, a nasza lista obserwowanych jest publiczna
+        i Substack nie daje jej ukryc (subskrypcje maja ustawienie
+        prywatnosci, obserwacje nie). Losowy host sprzed przestawienia konta
+        to nie jest neutralne pudlo — to zaproszenie na profil o AI wyslane
+        komus, kto czytal u nas o czym innym, plus publiczny slad.
+
         PULA JEST ODSIEWANA PRZED LOSOWANIEM (poprawka z 1 wrzesnia 2026).
         Historia komentarzy zawiera takze ludzi, ktorych juz obserwujemy —
         zmierzone: 26 obserwowanych wobec 92 hostow w historii. Losowanie bez
@@ -1021,13 +1618,22 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         uchwyt PUBLIKACJI zamiast uchwytu CZLOWIEKA. Sprawdzone na zywym API —
         dla wszystkich pieciu hostow z historii oba uchwyty sa identyczne.
         Nie o to chodzilo ani wtedy, ani teraz.
+
+        PULA PRZESTALA BYC SAMA HISTORIA CZYTANIA (1 wrzesnia 2026, wieczor).
+        Odkad reakcja na nasza tresc niesie uchwyt, reagujacy jest celem
+        WPROST — 62 z 69 takich osob nie ma w historii komentarzy zadnego
+        hosta i byly dla tego bloku niewidzialne. Zdanie „bierzemy wylacznie
+        hosty z naszej historii czytania" dotyczy nadal LISTY PODPOWIEDZI
+        Substacka i tego sie trzymamy; czlowiek, ktory sam do nas napisal albo
+        dwa razy polubil nasza notke, nie jest podpowiedzia algorytmu.
+        Hamulce, ktore maja z tego nie zrobic automatu odwzajemniajacego, stoja
+        przy `ODSTEP_OD_REAKCJI_H`.
         """
         if not na_teraz.get("follow"):
             return
-        znani = set(kanal._historia())
-        if not znani:
+        historia = kanal._historia()
+        if not historia:
             return
-        import random
 
         # ODSIEW PRZED LOSOWANIEM, A NIE PO NIM — i to jest cala roznica.
         #
@@ -1044,28 +1650,57 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         # do Substacka. Zrzut listy robi pomiar, ktory i tak chodzi — patrz
         # `browser.OBSERWOWANI`.
         pamiec = browser.kogo_obserwujemy()
-        wszyscy = [h for h in znani
-                   if h and h != f"{config.SUBSTACK_HANDLE}.substack.com"]
+        # KRYTERIUM PRZED LOSEM. Do 1 wrzesnia 2026 pula szla przez `shuffle`
+        # bez ZADNEGO kryterium — ani wielkosci, ani tematu, ani jezyka, ani
+        # swiezosci. `cele_wedlug_pierwszenstwa` wycina hosty, ktorych ostatni
+        # komentarz jest sprzed przestawienia konta na AI (53 z 94 zmierzone
+        # tego dnia), i stawia na poczatku te, ktore juz zareagowaly na nasza
+        # tresc. Los zostaje, ale juz tylko wewnatrz poziomu.
+        wszyscy, rachunek = cele_wedlug_pierwszenstwa(historia)
         kandydaci = [h for h in wszyscy
                      if not browser.czy_juz_obserwujemy(h, pamiec)]
-        if len(kandydaci) != len(wszyscy):
-            print("  pula: %d hostow, %d odsianych (juz ich obserwujemy)"
-                  % (len(wszyscy), len(wszyscy) - len(kandydaci)), flush=True)
+        print("  pula: %d hostow w historii, %d odsianych tematycznie"
+              " (ostatni komentarz sprzed %s), %d z reakcja na nasza tresc;"
+              " reagujacych z uchwytem %d, w puli %d (%d juz nas czyta,"
+              " %d ponizej progu, %d mlodszych niz %d h);"
+              " %d zostaje po odsianiu obserwowanych"
+              % (rachunek["wszystkich"], rachunek["sprzed_przestawienia"],
+                 PRZESTAWIENIE_KONTA_NA_AI, rachunek["ze_skutkiem"],
+                 rachunek["reagujacy_z_uchwytem"], rachunek["reagujacy"],
+                 rachunek["reagujacy_juz_czyta"], rachunek["reagujacy_slabi"],
+                 rachunek["reagujacy_swiezy"], rachunek["odstep_h"],
+                 len(kandydaci)), flush=True)
         if not kandydaci:
             # PULA WYCZERPANA TO STAN POPRAWNY, NIE AWARIA — ale musi zostawic
             # slad, bo inaczej wraca stary problem w nowym przebraniu: blok bez
             # wpisu wyglada na blok, ktory sie nie odbywa. `obserwacja_pominieta`
             # jest poza `norma.RODZAJE`, wiec nie liczy sie ani do wykonanych,
             # ani do nieudanych — patrz `browser.obserwuj_profil`.
+            #
+            # NIE WRACAMY DO LOSU Z CALOSCI, i to jest decyzja, nie
+            # przeoczenie. Odsiew tematyczny nie jest preferencja, tylko
+            # granica: host sprzed przestawienia konta dostaje od nas maila
+            # z zaproszeniem na profil o AI, ktorego nie chcial. Zero
+            # z podanym powodem jest uczciwe; zero udajace wynik nie.
             if wyslij:
                 browser.zapisz_w_dzienniku(
                     "obserwacja_pominieta", udane=True,
-                    powod="pula wyczerpana: wszystkie %d hostow z historii"
-                          " komentarzy juz obserwujemy" % len(wszyscy))
-            print("  wszystkich z historii juz obserwujemy — nie ma kogo",
-                  flush=True)
+                    powod=(powod_pustej_puli(rachunek)
+                           if not wszyscy else
+                           # „HOSTOW" JUZ BY KLAMALO. Od 1 wrzesnia 2026 w puli
+                           # stoja takze reagujacy, ktorych w historii
+                           # komentarzy nie ma wcale — powod ma podac oba
+                           # poziomy osobno, inaczej wraca zero bez powodu.
+                           "pula wyczerpana: wszystkie %d celow juz"
+                           " obserwujemy (%d hostow po odsianiu tematycznym,"
+                           " %d reagujacych na nasza tresc)"
+                           % (len(wszyscy), rachunek["po_przestawieniu"]
+                              - rachunek["zdublowani"],
+                              rachunek["reagujacy"])))
+            print("  nie ma kogo obserwowac — %s"
+                  % ("cala pula tematyczna juz obserwowana" if wszyscy
+                     else powod_pustej_puli(rachunek)), flush=True)
             return
-        random.shuffle(kandydaci)
 
         # ZAPAS NA ODPADY. Petla nie chodzi juz po `kandydaci[:budzet]`, bo
         # host, ktorego uchwytu nie ustalilismy, i host, ktory okazal sie juz
@@ -1158,38 +1793,160 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                 powod="pominietych %d z %d wylosowanych: znamy ich z pamieci"
                       " obserwowanych" % (z_pamieci, len(kandydaci)))
 
-    # --- 3d. subskrypcje: rzadko, bo lądują w skrzynce właściciela ------------
+    # --- 3d. subskrypcje: NAJMOCNIEJSZY sygnal, jaki umiemy wyslac ------------
     def subskrybuj() -> None:
-        """Subskrybuje NIELICZNE publikacje, ktore naprawde czytamy.
+        """Subskrybuje publikacje, ktore naprawde czytamy — i pilnuje dubli.
 
         Budzet `subskrypcje` byl liczony i nigdy nieuzywany — blokiem sterowal
         budzet `follow`, a funkcja i tak klikala „Subscribe". Agent subskrybowal
         wiec w tempie obserwacji: do 44 miesiecznie zamiast 6-12, i kazda z nich
         przysylala poczte do skrzynki wlasciciela.
+
+        NAGLOWEK BLOKU MOWIL „rzadko, bo laduja w skrzynce wlasciciela" i to
+        bylo cale uzasadnienie waskosci. Zmierzone 1 wrzesnia 2026: subskrypcje
+        maja 11,5 procent konwersji zwrotnej wobec 3,4 procent przy obserwacji,
+        czyli blok scisniety naszym kosztem byl tym, ktory dziala najlepiej.
+        Widelki poszly w gore — powod i caly rachunek stoja przy
+        `config.SUBSKRYPCJE_MIESIECZNIE`.
+
+        ODSIEW DUBLI, ktorego ten blok nie mial wcale. Zmierzone na dzienniku:
+        18 prob, 6 w kosz, w tym `theweeklyscrapbook` — konto zasubskrybowane
+        16 sierpnia, na ktore agent wszedl ponownie 25 sierpnia i zapisal
+        porazke „nie ma przycisku subskrypcja", bo przycisk mowil juz
+        „Subscribed". Duble ida teraz jak pominiecia obserwacji: osobnym
+        rodzajem `subskrypcja_pominieta`, ktory jest poza `norma.RODZAJE`,
+        wiec nie liczy sie ani do wykonanych, ani do nieudanych — i nie zjada
+        slotu.
+
+        CZEGO ODSIEW CELOWO NIE ROBI: nie odrzuca konta dlatego, ze je
+        OBSERWUJEMY. Substack pokazuje jedna wspolna liste dla obserwacji
+        i subskrypcji, wiec kusi, zeby uzyc tu `browser.czy_juz_obserwujemy` —
+        ale ta lista nie mowi, KTORA z dwoch rzeczy postawila tam dany uchwyt.
+        Obserwowanie kogos nie subskrybuje go: przycisk „Subscribe" nadal jest
+        i nadal dziala. Odsiew po tej liscie zamykalby wiec droge z 3,4 procent
+        do 11,5 procent dokladnie tym ludziom, ktorych juz czytamy — zmierzone
+        8 hostow z 92 na dzien pomiaru, czyli okolo 9 procent puli skazane na
+        slabszy kanal na zawsze. Jedyny przypadek, ktorego przez to nie lapiemy
+        z gory, to subskrypcja zrobiona RECZNIE przez wlasciciela; kosztuje ona
+        JEDNO wejscie na profil, po ktorym „nie ma przycisku subskrypcja" trafia
+        do dziennika i `kogo_juz_subskrybujemy` pamieta to juz na zawsze.
+
+        REAGUJACY WCHODZI DO PULI TAKZE TUTAJ, mimo ze to blok drozszy
+        spolecznie. Powod jest zmierzony: subskrypcje maja 11,5 procent
+        konwersji zwrotnej wobec 3,4 procent przy obserwacji, wiec mocniejszy
+        sygnal ma isc mocniejszym kanalem. Znany koszt: reagujacy bez wlasnej
+        publikacji nie ma przycisku „Subscribe" — to jedno wejscie na profil,
+        po ktorym `kogo_juz_subskrybujemy` zamyka go na zawsze, dokladnie tak
+        samo jak `newyorker`. Obserwowanie dziala u niego dalej.
         """
         if not na_teraz.get("subskrypcje"):
             return
-        znani = set(kanal._historia())
-        if not znani:
+        historia = kanal._historia()
+        if not historia:
             return
-        import random
 
-        kandydaci = [h for h in znani
-                     if h and h != f"{config.SUBSTACK_HANDLE}.substack.com"]
-        random.shuffle(kandydaci)
-        for host in kandydaci[: na_teraz["subskrypcje"]]:
+        # TE SAME DWA POZIOMY, CO PRZY OBSERWACJI, i to jest zamierzone: jesli
+        # host jest za stary tematycznie na obserwacje, to na subskrypcje —
+        # ktora zaglada wlascicielowi do skrzynki i zostawia u nich slad
+        # w liscie subskrybentow — jest za stary tym bardziej.
+        wszyscy, rachunek = cele_wedlug_pierwszenstwa(historia)
+        pamiec = browser.kogo_obserwujemy()
+        zamkniete = kogo_juz_subskrybujemy()
+        kandydaci = [h for h in wszyscy
+                     if not czy_juz_subskrybujemy(h, zamkniete, pamiec)]
+        print("  pula: %d hostow w historii, %d odsianych tematycznie"
+              " (ostatni komentarz sprzed %s), %d z reakcja na nasza tresc;"
+              " reagujacych z uchwytem %d, w puli %d (%d juz nas czyta,"
+              " %d ponizej progu, %d mlodszych niz %d h);"
+              " %d zostaje po odsianiu juz zasubskrybowanych"
+              % (rachunek["wszystkich"], rachunek["sprzed_przestawienia"],
+                 PRZESTAWIENIE_KONTA_NA_AI, rachunek["ze_skutkiem"],
+                 rachunek["reagujacy_z_uchwytem"], rachunek["reagujacy"],
+                 rachunek["reagujacy_juz_czyta"], rachunek["reagujacy_slabi"],
+                 rachunek["reagujacy_swiezy"], rachunek["odstep_h"],
+                 len(kandydaci)), flush=True)
+        if not kandydaci:
+            # ZERO Z POWODEM, NIE POWROT DO LOSU Z CALOSCI. Ta sama zasada, co
+            # przy obserwacji: odsiew tematyczny to granica, nie preferencja.
+            if wyslij:
+                browser.zapisz_w_dzienniku(
+                    "subskrypcja_pominieta", udane=True,
+                    powod=(powod_pustej_puli(rachunek) if not wszyscy else
+                           # Oba poziomy osobno — patrz ten sam komentarz
+                           # w bloku obserwacji.
+                           "pula wyczerpana: wszystkie %d celow juz"
+                           " subskrybujemy (%d hostow po odsianiu"
+                           " tematycznym, %d reagujacych na nasza tresc)"
+                           % (len(wszyscy), rachunek["po_przestawieniu"]
+                              - rachunek["zdublowani"],
+                              rachunek["reagujacy"])))
+            print("  nie ma kogo subskrybowac — %s"
+                  % ("cala pula tematyczna juz zasubskrybowana" if wszyscy
+                     else powod_pustej_puli(rachunek)), flush=True)
+            return
+
+        # ZAPAS NA ODPADY — ta sama liczba i ten sam powod, co przy obserwacji.
+        # Host, ktorego uchwytu nie da sie ustalic z hosta, wymaga zapytania do
+        # API i dopiero PO nim wiadomo, czy to dubel. Taki obrot nie jest proba
+        # i nie moze zjadac slotu; zapas domyka to od gory, zeby jeden przebieg
+        # nie obszedl calej puli.
+        ZAPAS_NA_ODPADY = 4
+        proby = 0
+        z_pamieci = 0
+        zostal_slad = False
+        for host in kandydaci[: na_teraz["subskrypcje"] + ZAPAS_NA_ODPADY]:
+            if proby >= na_teraz["subskrypcje"]:
+                break
             if not zostal_czas("subskrypcje"):
-                return
+                break
             uchwyt = browser.uchwyt_publikacji(host)
+            # DRUGIE SPRAWDZENIE, JUZ PO ROZWIAZANIU UCHWYTU. Tanie sito wyzej
+            # jest dokladne tylko dla adresow w domenie Substacka; dla wlasnej
+            # domeny (24 z 92 hostow) uchwyt wychodzi dopiero z API i dopiero
+            # tutaj widac, ze `www.ryanpuzycki.com` to `puzycki`, ktorego
+            # zasubskrybowalismy 30 sierpnia.
+            if uchwyt and uchwyt in zamkniete:
+                z_pamieci += 1
+                print(f"  ({host} -> @{uchwyt} juz zasubskrybowany wedlug"
+                      f" dziennika — nie wchodze na profil)", flush=True)
+                continue
             if not uchwyt:
+                # POMINIECIE TEZ JEST WYNIKIEM — dokladnie jak przy obserwacji.
+                # Cichy `continue` stal tu do 1 wrzesnia 2026 i to przez niego
+                # trzy proby zapisane w dzienniku jako `komu='www'` nie mialy
+                # w sobie ani slowa o tym, ktorego adresu dotyczyly.
+                if wyslij:
+                    browser.dopisz_wynik(
+                        "subskrypcja", {}, komu=host,
+                        powod=f"nie ustalilem konta autora dla {host}")
+                    zostal_slad = True
+                print(f"  (nie ustalilem konta dla {host} — pomijam)", flush=True)
                 continue
             if wyslij:
                 if not rytm("komentarz", "subskrypcje", rytm_stanu):
-                    return
+                    break
                 browser.zasubskrybuj(uchwyt, wyslij=True)
                 rytm_stanu["komentarz"] = True
+                # PROBA LICZY SIE TAKZE WTEDY, GDY PROFIL ODMOWIL. Weszlismy
+                # na cudza strone i dostalismy odpowiedz — to jest zuzyty slot.
+                # Powtorka nie grozi: `zasubskrybuj` zapisuje powod, a
+                # `kogo_juz_subskrybujemy` czyta go przy nastepnym przebiegu.
+                proby += 1
+                zostal_slad = True
             else:
                 print(f"  (zasubskrybowałbym: {uchwyt})", flush=True)
+                proby += 1
+
+        # DZIEN BEZ ANI JEDNEJ PROBY MA POWIEDZIEC DLACZEGO. Bez tego wpisu
+        # odsiew zalatalby jedna dziure i otworzyl te sama, co przedtem: blok
+        # chodzi, nie wystawia nic i nie zostawia sladu, wiec z zewnatrz
+        # wyglada jak blok, ktorego nie ma. Tylko wtedy, gdy nic innego nie
+        # zapisalo — jedno zdarzenie ma zostawic jeden slad.
+        if wyslij and proby == 0 and z_pamieci and not zostal_slad:
+            browser.zapisz_w_dzienniku(
+                "subskrypcja_pominieta", udane=True,
+                powod="pominietych %d z %d kandydatow: juz ich subskrybujemy"
+                      " wedlug dziennika" % (z_pamieci, len(kandydaci)))
 
     # --- 4. polubienia: najtańszy uczciwy sygnał ------------------------------
     def polubienia() -> None:

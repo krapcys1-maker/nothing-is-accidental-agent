@@ -457,6 +457,30 @@ def kopia_subskrybentow() -> str | None:
     return None
 
 
+def pomiar_wzajemnosci() -> str | None:
+    """Czy nadal mamy z czego liczyc, kto sie odwzajemnia.
+
+    ALARM O POMIARZE, NIE O WYNIKU — i dlatego jest tu, a nie w raporcie.
+    Zla liczba odwzajemnien to informacja strategiczna i nie budzi sie po nia
+    nikogo mailem. Ale BRAK liczby jest awaria dokladnie tej klasy, dla ktorej
+    powstal ten plik — z zastrzezeniem, ktore ten docstring podawal do
+    1 wrzesnia 2026 blednie: `browser.zapisz_czytelnikow` NIE odrzucal kazdego
+    zepsutego zrzutu. Oddawal None tylko wtedy, gdy byl blad I OBIE listy byly
+    puste, a obserwujacy trafiaja do wyniku ZANIM kod klika w zakladke
+    subskrybentow — wiec pekniecie na kliknieciu zapisywalo zrzut OKROJONY,
+    ktory w pliku wyglada na udany. Wszystko swieci na zielono, a za miesiac
+    pytanie „czy warto obserwowac" znowu nie ma odpowiedzi. Kontrola wykrywa
+    dzis takze taki zrzut, nie tylko brak zrzutu — siedem zrzutow z konca
+    sierpnia powstalo przed poprawka w `browser` i nie ma pola `odczytane`.
+
+    Cala tresc kontroli siedzi w `wzajemnosc.pomiar_oslepl` razem z progiem
+    i jego uzasadnieniem — tutaj jest tylko podlaczenie do zegara.
+    """
+    import wzajemnosc
+
+    return wzajemnosc.pomiar_oslepl()
+
+
 def sprawdz_wszystko() -> list[str]:
     """Uruchamia komplet kontroli i alarmuje o tym, co znalazl."""
     kontrole = (
@@ -469,6 +493,8 @@ def sprawdz_wszystko() -> list[str]:
         ("wolumeny", "Agent robi mniej, niz deklaruje", wolumeny),
         ("kopia-subskrybentow", "BRAK KOPII LISTY SUBSKRYBENTOW",
          kopia_subskrybentow),
+        ("pomiar-wzajemnosci", "POMIAR WZAJEMNOSCI OSLEPL",
+         pomiar_wzajemnosci),
     )
     # TABELA WOLUMENOW DRUKOWANA ZAWSZE, nie tylko gdy cos jest nie tak.
     # Alarm ma odpowiadac na pytanie „ile wyszlo", a nie tylko krzyczec, gdy
@@ -493,6 +519,25 @@ def sprawdz_wszystko() -> list[str]:
             print()
     except Exception as exc:
         print("  (nie policzylem wolumenow: %s)" % type(exc).__name__)
+
+    # WZAJEMNOSC DRUKOWANA ZAWSZE, TAK SAMO JAK TABELA WOLUMENOW, i z tego
+    # samego powodu: to jest odpowiedz na pytanie „ile z tego wrocilo", a nie
+    # ostrzezenie. Stoi TUTAJ, w sciezce bez argumentow, bo tylko ona chodzi
+    # z zegara (nia-alarm.timer, 07:00 UTC). `przeglad` i `norma.py` nie sa
+    # odpalane przez nic — ich wynik czyta wylacznie czlowiek, ktory sam po
+    # niego siegnie, a wlasnie takiego czlowieka przez pol miesiaca nie bylo:
+    # `czytelnicy.jsonl` zapisywal sie od 31 sierpnia i nie przeczytal go
+    # ZADEN modul.
+    try:
+        import wzajemnosc
+
+        print("--- wzajemnosc: kto nas czyta wobec zaczepionych ---")
+        for linia in wzajemnosc.naglowek():
+            print(linia)
+        print("  (pelne zestawienie: python agent-v2/alarm.py przeglad)")
+        print()
+    except Exception as exc:
+        print("  (nie policzylem wzajemnosci: %s)" % type(exc).__name__)
 
     znalezione: list[str] = []
     for klucz, temat, funkcja in kontrole:
@@ -591,6 +636,20 @@ def przeglad(dni: int = 3) -> None:
     print(f"  przebiegow zakonczonych bledem: {padly}")
 
     _co_z_tego_wyszlo(wpisy)
+
+    # PELNA WZAJEMNOSC LICZY SIE Z CALEJ HISTORII, NIE Z OKNA `dni`.
+    # `przeglad` patrzy na ostatnie trzy doby, a subskrypcje, ktore chcemy
+    # rozliczyc, sa z 16-30 sierpnia i w tym oknie ich nie ma. Wyciecie ich
+    # oknem dawaloby „zero zaczepien, zero odwzajemnien" — czyli dokladnie
+    # tak samo, jak wyglada dzialajacy kanal bez odzewu.
+    try:
+        import wzajemnosc
+
+        for linia in wzajemnosc.raport():
+            print(linia)
+    except Exception as exc:
+        print("\n  (nie policzylem wzajemnosci: %s: %s)"
+              % (type(exc).__name__, exc))
 
 
 def _co_z_tego_wyszlo(wpisy: list[dict]) -> None:

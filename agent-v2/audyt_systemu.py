@@ -52,22 +52,46 @@ PIVOT = "2026-08-25"
 RODZAJE_WYCHODZACE = ("notka", "komentarz", "odpowiedz", "polubienie",
                       "restack", "subskrypcja", "obserwacja")
 
-# ROZLICZANE Z PLANU DNIA (etap 2) — WEZSZA LISTA, I TO NIE JEST WYJATEK,
-# TYLKO ARYTMETYKA.
+# ROZLICZANE Z PLANU DNIA (etap 2) — REGULA, NIE WYPISANA LISTA NAZW.
 #
 # Prog „zrobione >= plan * 0,6" niesie informacje dopiero przy planie, ktory
-# da sie w ogole podzielic. Realne normy dobowe (`config.normy_dzienne`):
-# notka 5, komentarz ~18, polubienie ~13, restack 1,5, obserwacja ~1,2
-# (`FOLLOW_MIESIECZNIE` 30-44 na 30 dni), subskrypcja 0,3 (6-12 na miesiac).
+# da sie w ogole podzielic — a to jest wlasnosc PLANU TEGO DNIA, nie nazwy
+# rodzaju. Stala tu recznie wypisana krotka („notka", „komentarz",
+# „polubienie", „restack", „obserwacja") i ZESTARZALA SIE W CIAGU JEDNEGO DNIA.
 #
-# `obserwacja` DOSZLA 1 WRZESNIA 2026, bo lezy w tej samej skali co restack,
-# ktory stoi tu od poczatku. `subskrypcja` zostaje poza lista: przy 0,3 na dobe
-# wiekszosc dni ma plan ZERO, a 60% z zera nie jest pytaniem. Ten sam rachunek
-# prowadzi `norma.py` (`MIN_PLAN_DZIENNY_DO_ZNAKU` = 3 dla kratki tabeli,
-# `MIN_BRAKOW_W_OKNIE_DO_ALARMU` = 4 dla alarmu) — i tam obserwacje takze
-# podlegaja WYLACZNIE progom, od kiedy `NIEWYKONALNE` jest puste.
-RODZAJE_Z_PLANEM = ("notka", "komentarz", "polubienie", "restack",
-                    "obserwacja")
+# Jej wlasne uzasadnienie mowilo: „obserwacja ~1,2 na dobe (`FOLLOW_MIESIECZNIE`
+# 30-44 na 30 dni)" i „`subskrypcja` zostaje poza lista: przy 0,3 na dobe
+# wiekszosc dni ma plan ZERO". Odwrocenie budzetow 1 wrzesnia 2026
+# (`FOLLOW_MIESIECZNIE` 30-44 -> 10-16, `SUBSKRYPCJE_MIESIECZNIE` 6-12 -> 12-20)
+# odwrocilo dokladnie te dwie liczby: obserwacja 0,433/dobe, subskrypcja
+# 0,533/dobe. Lista rozliczala wiec z planu kanal MNIEJSZY — i to ten, ktory
+# sama miala wykluczac — a glownego nie rozliczala wcale.
+#
+# ZMIERZONE na prawdziwym `stages.budzet_dnia` (ziarno z daty, 365 dob):
+# plan obserwacji jest ZEROWY w 57,5% dob poza rozbiegiem i 62,7% w rozbiegu,
+# plan subskrypcji — w 48,8% i 52,3%. Produkcja jest w rozbiegu, a w zapisanym
+# `budzety.json` z serwera (17 dob) `follow=0` stoi 9 razy, `subskrypcje=0`
+# dziesiec razy — 1 wrzesnia obie pozycje maja ZERO.
+#
+# DRUGA POLOWA TEJ SAMEJ WADY SIEDZIALA W `plan_dnia.get(r) or normy.get(r)`.
+# Zapisane ZERO jest falszywe, wiec `or` podstawialo w jego miejsce ulamkowa
+# NORME (0,433) i audyt zadal 60% z niej — 0,26 obserwacji — od doby, ktorej
+# wlasny plan wynosil ZERO. Zero bylo tam ZGODNOSCIA Z PLANEM, a raport
+# drukowal UWAGA na ponad polowie dob. Falszywy alarm uczy ignorowac alarmy,
+# wiec zapisany plan czytamy przez `is None`, a nie przez prawdziwosc.
+#
+# REGULA: rozliczamy KAZDY rodzaj z `RODZAJE_WYCHODZACE`, ktorego plan NA TEN
+# DZIEN to co najmniej JEDNA CALA SZTUKA. Ponizej jednej nie ma czego dzielic:
+# wykonanie jest liczba calkowita, wiec „0,6 sztuki" znaczy tylko „cokolwiek
+# albo nic", a zero przy planie 0,43 jest wykonaniem planu, nie brakiem. Ta sama
+# liczba i ten sam powod stoja w `norma.MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE`.
+#
+# CO TA REGULA DAJE NA DZISIEJSZYCH LICZBACH: notka (5), komentarz (15-23),
+# polubienie (10-16) i restack (1-2) rozliczaja sie zawsze — tak jak dotad;
+# obserwacja i subskrypcja tylko w dobach, w ktorych budzet naprawde dal im
+# cala sztuke; `odpowiedz` nigdy, bo nie ma ani budzetu, ani normy. Nastepna
+# zmiana widelek nie wymaga tkniecia tego pliku.
+MIN_PLAN_DNIA_DO_ROZLICZENIA = 1
 
 # POMINIECIE NIE JEST ANI SUKCESEM, ANI PORAZKA — I DLATEGO MA WLASNY LICZNIK.
 #
@@ -86,24 +110,54 @@ RODZAJE_Z_PLANEM = ("notka", "komentarz", "polubienie", "restack",
 #
 # `norma.RODZAJE` tego rodzaju NIE ZAWIERA i zawierac nie ma — ten licznik
 # musi go pominac sam, bo czyta dziennik wprost.
-POMINIECIA = ("obserwacja_pominieta",)
+#
+# REGULA PO KONCOWCE, NIE ZAMKNIETA KROTKA — POPRAWKA Z 1 WRZESNIA 2026.
+#
+# Stalo tu `POMINIECIA = ("obserwacja_pominieta",)` i zestarzalo sie tego
+# samego dnia: doszedl `subskrypcja_pominieta` (`run.py:1524` i `1592`, takze
+# `udane=True`, gdy cel jest juz zasubskrybowany) i do krotki nie trafil, wiec
+# `policz_rodzaje` liczyl go jako SUKCES — dokladnie to, czego zabraniaja
+# akapity wyzej.
+#
+# GDZIE DOKLADNIE SIEDZIALA SZKODA, ZMIERZONE (4 notki udane, 2 komentarze
+# nieudane, 6 wpisow „ten profil juz subskrybujemy"): werdykt „wychodzi:
+# subskrypcja" sie NIE zmienial, bo licznik trzymal pominiecia pod wlasnym
+# kluczem. Falszywa byla SUMA — `sum(udane.values())` szlo z 4 na 10, a to jest
+# mianownik progu „porazki nie dominuja": werdykt schodzil z UWAGA na OK przy
+# ZERZE prawdziwych subskrypcji. Do tego szesc pominiec stalo w kolumnie
+# „udane" jako osobny rodzaj, wiec raport pokazywal prace, ktorej nie bylo.
+#
+# TEN SAM PROJEKT ROZSTRZYGNAL TO POPRAWNIE OBOK: `wzajemnosc.zaczepienia`
+# (`wzajemnosc.py:333-341`) poznaje pominiecia po KONCOWCE nazwy i pisze wprost
+# dlaczego — „gdy dojdzie `subskrypcja_pominieta`, ma trafic do wlasciwej kupki
+# od pierwszego dnia, a nie po tym, jak ktos zauwazy przekrecony licznik".
+# Krotka wypisana recznie jest lista rodzajow, ktore ktos ZDAZYL dopisac;
+# koncowka jest wlasnoscia samego rodzaju i nie wymaga niczyjej pamieci.
+KONCOWKA_POMINIECIA = "_pominieta"
+
+
+def czy_pominiecie(rodzaj) -> bool:
+    """Czy ten wpis jest pominieciem. Po KONCOWCE nazwy, nie po liscie nazw."""
+    return str(rodzaj or "").endswith(KONCOWKA_POMINIECIA)
 
 
 def policz_rodzaje(wpisy: list[dict]) -> tuple[Counter, Counter, Counter]:
     """(udane, nieudane, pominiete) — trzy liczniki, bo stany naprawde sa trzy.
 
     Dzielenie dziennika samym `udane` mialo sens, dopoki kazdy wpis byl proba.
-    Od 1 wrzesnia 2026 jest rodzaj, ktory proba nie jest (patrz `POMINIECIA`),
-    a nosi `udane=True` — wiec `Counter(... if w.get("udane"))` zaliczalby go
-    do sukcesow. Jedno miejsce, w ktorym to sie rozstrzyga, zeby zadna suma
-    nizej nie musiala o tym pamietac.
+    Od 1 wrzesnia 2026 sa rodzaje, ktore proba nie sa (patrz
+    `KONCOWKA_POMINIECIA`), a nosza `udane=True` — wiec
+    `Counter(... if w.get("udane"))` zaliczalby je do sukcesow. Jedno miejsce,
+    w ktorym to sie rozstrzyga, zeby zadna suma nizej nie musiala o tym
+    pamietac — i zeby nastepny rodzaj z ta koncowka nie musial byc nigdzie
+    dopisany.
     """
     udane: Counter = Counter()
     nieudane: Counter = Counter()
     pominiete: Counter = Counter()
     for w in wpisy:
         rodzaj = w.get("rodzaj")
-        if rodzaj in POMINIECIA:
+        if czy_pominiecie(rodzaj):
             pominiete[rodzaj] += 1
             continue
         (udane if w.get("udane") else nieudane)[rodzaj] += 1
@@ -194,9 +248,10 @@ def main() -> int:
     if nieudane:
         naj = nieudane.most_common(3)
         # MIANOWNIK TO PROBY, NIE WPISY. `sum(udane.values())` bralo wszystko,
-        # co ma `udane=True` — a od 1 wrzesnia jest tam takze
-        # `obserwacja_pominieta`, ktora nie jest praca. Kazde pominiecie
-        # podnosilo wiec prog, powyzej ktorego porazki „dominuja", i robilo
+        # co ma `udane=True` — a od 1 wrzesnia sa tam takze
+        # `obserwacja_pominieta` i `subskrypcja_pominieta`, ktore praca nie sa.
+        # Kazde pominiecie podnosilo wiec prog, powyzej ktorego porazki
+        # „dominuja", i robilo
         # ten werdykt lagodniejszym za stan, w ktorym NIC nie wyszlo.
         # `policz_rodzaje` odsiewa to u zrodla, wiec ta suma juz liczy proby.
         werdykt("porazki nie dominuja",
@@ -207,10 +262,10 @@ def main() -> int:
     etap(2, "NORMA — plan wobec wykonania, dzien po dniu")
     dni = defaultdict(Counter)
     for w in po_pivocie:
-        # `POMINIECIA` odpadaja tu z tego samego powodu, co w etapie 1: ponizej
+        # Pominiecia odpadaja tu z tego samego powodu, co w etapie 1: ponizej
         # ta liczba idzie wprost do „plan X w dniu Y" i pominiecie liczone jak
         # wykonanie meldowaloby wykonany plan przy zerze prawdziwych obserwacji.
-        if w.get("udane") and w.get("rodzaj") not in POMINIECIA:
+        if w.get("udane") and not czy_pominiecie(w.get("rodzaj")):
             dni[dzien(w)][str(w.get("rodzaj"))] += 1
     for d in sorted(dni)[-7:]:
         print("    %s  %s" % (d, "  ".join(
@@ -246,19 +301,27 @@ def main() -> int:
             if cichy:
                 print("    (%s byl CICHYM DNIEM — %s sa wyciszone z zalozenia)"
                       % (ost, ", ".join(sorted(wyciszone)) or "nadawane tresci"))
-            for rodzaj in RODZAJE_Z_PLANEM:
+            for rodzaj in RODZAJE_WYCHODZACE:
                 if rodzaj in wyciszone:
                     werdykt("plan %s w dniu %s" % (rodzaj, ost), "OK",
                             "cichy dzien — wyciszone z zalozenia")
                     continue
-                plan = plan_dnia.get(rodzaj) or normy.get(rodzaj)
-                if not plan:
+                # ZAPISANE ZERO TO NIE JEST BRAK ZAPISU. `or` mylil te dwie
+                # rzeczy i podstawial norme tam, gdzie agent swiadomie nic nie
+                # zaplanowal — powody i zmierzone liczby przy
+                # `MIN_PLAN_DNIA_DO_ROZLICZENIA`.
+                zapisany = plan_dnia.get(rodzaj)
+                plan = zapisany if zapisany is not None else normy.get(rodzaj)
+                # PROG Z PLANU, NIE Z NAZWY RODZAJU. Ponizej jednej calej
+                # sztuki „60% planu" nie jest pytaniem: wykonanie jest liczba
+                # calkowita, wiec zero przy planie 0,43 to zgodnosc z planem.
+                if not plan or plan < MIN_PLAN_DNIA_DO_ROZLICZENIA:
                     continue
                 zrobione = dni[ost].get(rodzaj, 0)
                 werdykt("plan %s w dniu %s" % (rodzaj, ost),
                         "OK" if zrobione >= plan * 0.6 else "UWAGA",
                         "%d z %g%s" % (zrobione, plan,
-                                       " (zalozony)" if plan_dnia.get(rodzaj)
+                                       " (zalozony)" if zapisany is not None
                                        else " (norma docelowa)"))
     else:
         werdykt("normy dzienne sa policzalne", "BLAD",

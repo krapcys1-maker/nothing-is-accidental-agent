@@ -85,11 +85,32 @@ NIEWYKONALNE: dict[str, str] = {}
 # wiec kazdy dzien bez restacka to 0% i wykrzyknik w tabeli. `obserwacja` byla
 # przed tym chroniona lista NIEWYKONALNE, `subskrypcja` nie byla przez nic.
 #
-# OD 1 WRZESNIA 2026 NIEWYKONALNE JEST PUSTE, wiec `obserwacja` (plan ~1,2 na
-# dobe) opiera sie juz WYLACZNIE o te trzy progi — i to jest zamierzone. Blok
-# obserwacji martwy przez tydzien daje okolo 8-9 brakujacych sztuk, czyli
-# wiecej niz `MIN_BRAKOW_W_OKNIE_DO_ALARMU` (4), wiec alarm zadziala. Oslona
-# ma byc prog liczony z planu, a nie reczny wpis mowiacy „tego sie nie da".
+# OD 1 WRZESNIA 2026 NIEWYKONALNE JEST PUSTE, wiec `obserwacja` i `subskrypcja`
+# opieraja sie juz WYLACZNIE o te progi — i to jest zamierzone. Oslona ma byc
+# prog liczony z planu, a nie reczny wpis mowiacy „tego sie nie da".
+#
+# ALE UZASADNIENIE, KTORE TU STALO, PRZESTALO BYC PRAWDA TEGO SAMEGO DNIA.
+# Stalo: „obserwacja (plan ~1,2 na dobe) (...) blok martwy przez tydzien daje
+# okolo 8-9 brakujacych sztuk, czyli wiecej niz `MIN_BRAKOW_W_OKNIE_DO_ALARMU`
+# (4), wiec alarm zadziala". Po odwroceniu budzetow (`FOLLOW_MIESIECZNIE`
+# 30-44 -> 10-16, `SUBSKRYPCJE_MIESIECZNIE` 6-12 -> 12-20) plan obserwacji to
+# 0,433 na dobe, czyli 3,03 na tydzien — PONIZEJ tej bramki, nie powyzej;
+# subskrypcji 0,533, czyli 3,73 — takze ponizej. Zmierzone na prawdziwym
+# `stages.budzet_dnia`: suma planu w oknie 7 dni to srednio 3,00 obserwacji
+# i 3,57 subskrypcji, a `>= 4` osiaga tylko 34% i 53% okien.
+#
+# BLOK CALKOWICIE MARTWY BUDZI DALEJ — nie ta bramka, tylko
+# `MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE`, ktora zera nie tlumi (99% okien
+# siedmiodniowych ma plan obserwacji >= 1, 100% dla subskrypcji). Dziura byla
+# POMIEDZY: blok POLOWICZNIE martwy. Zmierzone — okno 7 dni, plan 3, wykonane
+# 1: `proc` 33% ponizej progu 60, ale `brakuje` = 2 < 4, a `martwa` = False, bo
+# `wykonane != 0`. Pozycja szla na liste „ponizej progu, ale za malo brakow" i
+# `norma.py` konczyla kodem 0 — czyli glowny kanal umieral po cichu, a licznik
+# to tlumaczyl. Ta klasa wady kosztowala juz dziewiec dni.
+#
+# DLATEGO PROGOW JEST TERAZ CZTERY, a czwarty (`..._O_POLOWIE`) opisuje wprost
+# blok polowiczny. Bramka od brakow zostaje nietknieta — nowy warunek tylko
+# DOKLADA alarmy, wiec zaden dotychczasowy nie znika.
 #
 # BYLA TU JEDNA STALA (`MIN_PLAN_DO_ALARMU = 5`) I RZADZILA DWIEMA SKALAMI:
 # `_znak` porownywal ja z planem DZIENNYM (jedna kratka tabeli), a alarm na
@@ -100,14 +121,15 @@ NIEWYKONALNE: dict[str, str] = {}
 # ze tabela krzyczy o pozycji, o ktorej alarm swiadomie milczy". Jedna liczba
 # nie moze rzadzic obiema skalami, wiec sa osobne i maja rozne nazwy.
 #
-# TRZECIA DOSZLA, BO BRAMKA ALARMU WYCISZALA POZYCJE MARTWA. Pytania sa trzy:
-# „czy warto stawiac wykrzyknik w tej kratce" (plan JEDNEGO dnia), „czy ten
-# niedobor to juz praca, a nie kostka" (ile SZTUK brakuje w oknie) i „czy tu w
-# ogole cokolwiek wyszlo" (zero, ktore nie podlega bramce). Szczegoly przy
-# kazdej ze stalych nizej.
+# TRZECIA DOSZLA, BO BRAMKA ALARMU WYCISZALA POZYCJE MARTWA, a CZWARTA — bo
+# wyciszala pozycje POLOWICZNIE martwa. Pytania sa cztery: „czy warto stawiac
+# wykrzyknik w tej kratce" (plan JEDNEGO dnia), „czy ten niedobor to juz praca,
+# a nie kostka" (ile SZTUK brakuje w oknie), „czy tu w ogole cokolwiek wyszlo"
+# (zero, ktore nie podlega bramce) i „czy brakuje wiecej, niz wyszlo" (polowa
+# planu przy planie, ktory da sie polowic). Szczegoly przy kazdej ze stalych.
 #
 # Realne plany dzienne (`stages.budzet_dnia`): notki 5, komentarze 15-23,
-# lajki 10-16, restacki 1-2, subskrypcje 0 albo 1.
+# lajki 10-16, restacki 1-2, subskrypcje 0 albo 1, obserwacje 0 albo 1.
 
 # DLA JEDNEJ KRATKI TABELI — porownywany z planem NA TEN DZIEN.
 #
@@ -173,6 +195,43 @@ MIN_BRAKOW_W_OKNIE_DO_ALARMU = 4
 # planu subskrypcji siega 1 w 91% okien siedmiodniowych i w 100% okien
 # czternastodniowych — martwy blok budzi wiec w obu, a nie tylko w dluzszym.
 MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE = 1
+
+# BLOK POLOWICZNIE MARTWY — BRAKUJE WIECEJ, NIZ WYSZLO.
+#
+# TA STALA POWSTALA, BO BRAMKA OD BRAKOW NIE DAWALA SIE OSIAGNAC NA RZADKICH
+# KANALACH. „Brakuje >= 4" przy planie tygodniowym 3,0 (obserwacja) i 3,7
+# (subskrypcja) jest wieksze niz CALY plan, wiec zaden poziom wykonania poza
+# zerem nie mial prawa jej ruszyc. Bramka, ktorej nie da sie osiagnac, nie jest
+# filtrem szumu tylko trwalym wyciszeniem — a trwale wyciszenie to dokladnie to,
+# czym byla `NIEWYKONALNE` i za co zaplacilismy dziewiec dni bez obserwacji.
+#
+# ZMIERZONE (okno 7 dni, plan 3, wykonane 1): 33% wykonania, `brakuje` 2,
+# `martwa` False. Przed ta stala: cisza i kod wyjscia 0. Po niej: alarm i kod 1.
+#
+# WARUNEK JEST STRICTE OSTRZEJSZY OD PROGU 60%: „wykonane * 2 <= plan", czyli
+# BRAKUJE CO NAJMNIEJ TYLE, ILE WYSZLO. Pas 50-60% zostaje wyciszony, bo przy
+# planie 3-6 sztuk rozstrzyga go pojedyncza sztuka i to naprawde jest kostka.
+#
+# TRZY, A NIE DWIE — I TO JEST TA SAMA GRANICA, CO W `_znak`. Przy planie 2
+# „polowa" to jeden brak, czyli dokladnie ten alarm od kostki, dla ktorego
+# `MIN_BRAKOW_W_OKNIE_DO_ALARMU` w ogole powstalo („plan subskrypcji bywa 2 na
+# tydzien, wiec jedna mniej to 50%"). Przy planie 3 „polowa" to juz dwa braki
+# na trzy zaplanowane sztuki.
+#
+# CO DOKLADNIE DOKLADA, POLICZONE WPROST. Nowy warunek jest OR-em, wiec nie
+# gubi zadnego starego alarmu; nowe sa tylko te pary (plan, wykonane), ktore
+# mijaly stare bramki: (3,1), (4,1), (4,2), (5,2), (6,3). Wszystkie leza w
+# przedziale planu 3-6, czyli dokladnie tam, gdzie wypadaja tygodniowe plany
+# obserwacji i subskrypcji — restacki (plan 7 dni: min 8, srednio 10,7) i
+# pozostale pozycje budzily sie juz wczesniej brakami. Cisza zostaje tam, gdzie
+# ma zostac: (2,1) — jedna sztuka z dwoch — i (7,4) — 57%, czyli o wlos od
+# progu.
+#
+# ZALEZNOSC OD OKNA IDZIE W DOZWOLONYM KIERUNKU. Kanal stojacy trwale na
+# polowie planu budzi w KAZDYM oknie, w ktorym plan siega trzech sztuk (dla
+# obserwacji: 7 dni w 63% okien, 14 dni w 97%), a dluzsze okno moze go tylko
+# wzmocnic — nigdy wyciszyc.
+MIN_PLAN_W_OKNIE_DO_ALARMU_O_POLOWIE = 3
 
 # Godziny przebiegow CZYTAMY z jednostki systemd, a nie przepisujemy tutaj.
 # `run.py:265-268` nazywa te zasade wprost („powtorzenie ich tutaj zlamaloby
@@ -341,7 +400,10 @@ def _znak(ile: float, norma: float) -> str:
     znika po cichu — dolna linia „ponizej progu, ale za malo brakow na alarm"
     nazywa ja po imieniu razem z planem i liczba brakow, w obu widokach. A
     pozycja, ktora nie wystawila NICZEGO, budzi alarm niezaleznie od tego, jak
-    maly byl plan (`MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE`).
+    maly byl plan (`MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE`) — a pozycja, ktorej
+    brakuje WIECEJ, NIZ WYSZLO, budzi od planu trzech sztuk w oknie
+    (`MIN_PLAN_W_OKNIE_DO_ALARMU_O_POLOWIE`), bo bramka od liczby brakow jest
+    dla rzadkich kanalow nieosiagalna.
 
     A `alarm.py` NIE MA zadnej bramki na wielkosc planu: `alarm.wolumeny()`
     filtruje wylacznie po `config.PROG_ALARMU_WOLUMENU` (alarm.py:381), na
@@ -993,7 +1055,7 @@ def main() -> int:
         if proc >= config.PROG_ALARMU_WOLUMENU:
             continue
         brakuje = plany[r] - wykonane[r]
-        # DWA POWODY, ZEBY OBUDZIC, I ZADEN Z NICH NIE JEST WIELKOSCIA PLANU.
+        # TRZY POWODY, ZEBY OBUDZIC, I ZADEN Z NICH NIE JEST WIELKOSCIA PLANU.
         #
         # 1. NIC NIE WYSZLO. Zero przy planie co najmniej jednej calej sztuki
         #    to nie zaokraglenie malego planu, tylko martwy blok — i jest
@@ -1002,9 +1064,17 @@ def main() -> int:
         # 2. BRAKUJE DUZO SZTUK. Skala jest tu inna niz w `_znak` (okno, nie
         #    doba), bo brakow sie uzbiera; procent liczony z dwoch sztuk to
         #    kostka, a nie pomiar.
+        # 3. BRAKUJE WIECEJ, NIZ WYSZLO. Punkt 2 jest nieosiagalny dla kanalu,
+        #    ktorego CALY plan tygodniowy jest mniejszy niz cztery sztuki
+        #    (obserwacja 3,0, subskrypcja 3,7) — a bramka nieosiagalna to
+        #    trwale wyciszenie, nie filtr szumu. Powody i rachunek przy
+        #    `MIN_PLAN_W_OKNIE_DO_ALARMU_O_POLOWIE`.
         martwa = (wykonane[r] == 0
                   and plany[r] >= MIN_PLAN_W_OKNIE_DO_ALARMU_O_ZERZE)
-        (ponizej if martwa or brakuje >= MIN_BRAKOW_W_OKNIE_DO_ALARMU
+        polowiczna = (plany[r] >= MIN_PLAN_W_OKNIE_DO_ALARMU_O_POLOWIE
+                      and wykonane[r] * 2 <= plany[r])
+        (ponizej if martwa or polowiczna
+         or brakuje >= MIN_BRAKOW_W_OKNIE_DO_ALARMU
          else za_malo_brakow).append(r)
     if za_malo_brakow:
         print()
@@ -1013,7 +1083,12 @@ def main() -> int:
         # czytaloby sie jak blad licznika. LICZBA BRAKOW STOI OBOK PROCENTU, bo
         # to ona rozstrzyga o milczeniu — bez niej wlasciciel czytalby „40% i
         # cisza" jako awarie licznika, a nie jako „brakuje poltorej sztuki".
-        print("  ponizej progu, ale za malo brakow na alarm (< %d w oknie): %s"
+        # POWODOW MILCZENIA JEST TERAZ DWA I OBA MAJA STAC W TEJ LINII. Sama
+        # liczba brakow przestala rozstrzygac: pozycja moze tu wisiec takze
+        # dlatego, ze wyszlo WIECEJ niz polowa planu. Bez drugiej liczby
+        # wlasciciel czytalby „57% i cisza" jak awarie licznika.
+        print("  ponizej progu, ale za malo brakow na alarm (< %d w oknie)"
+              " i wiecej niz polowa planu: %s"
               % (MIN_BRAKOW_W_OKNIE_DO_ALARMU, ", ".join(
                   "%s %.0f%% z planu %.1f, brakuje %.1f"
                   % (r, _wykonanie(r), plany[r], plany[r] - wykonane[r])

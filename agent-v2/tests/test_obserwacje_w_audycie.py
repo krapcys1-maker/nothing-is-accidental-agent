@@ -344,10 +344,22 @@ sprawdz("KONTRDOWOD: %s meldowalo tu OK, bo pominiecia podnosily mianownik"
 print()
 print("=== 6. PLAN DNIA TAKZE OBEJMUJE OBSERWACJE ===")
 _plan = sorted(n.split()[1] for n in nazwy(E2_NOWY) if n.startswith("plan "))
-sprawdz("etap 2 rozlicza z planu dokladnie liste RODZAJE_Z_PLANEM",
-        _plan == sorted(_wzorzec.RODZAJE_Z_PLANEM), _plan)
-sprawdz("a obserwacja jest na niej",
-        "obserwacja" in _wzorzec.RODZAJE_Z_PLANEM, _wzorzec.RODZAJE_Z_PLANEM)
+# LISTA RODZAJOW ZNIKLA 1 WRZESNIA 2026 PO POLUDNIU — rozstrzyga PLAN DNIA.
+# `RODZAJE_Z_PLANEM` byla wypisana recznie i zestarzala sie tego samego dnia,
+# w ktorym powstala (odwrocone budzety: obserwacja 0,433/dobe, subskrypcja
+# 0,533). Dzis rozliczamy kazdy rodzaj, ktoremu budzet dal co najmniej jedna
+# cala sztuke — a budzet tej doby (`follow=2`, `subskrypcje=1`) dal ja obu.
+# Powody i zmierzone liczby: `tests/test_pominiecia_i_plan_w_audycie.py`.
+_budzet_doby = {"notki": 5, "komentarze": 10, "lajki": 12, "restacki": 2,
+                "follow": 2, "subskrypcje": 1}
+_oczekiwane_z_planem = sorted(
+    config.BUDZET_NA_RODZAJ[k] for k, v in _budzet_doby.items()
+    if v >= _wzorzec.MIN_PLAN_DNIA_DO_ROZLICZENIA)
+sprawdz("etap 2 rozlicza z planu dokladnie te rodzaje, ktorym budzet dal"
+        " co najmniej jedna cala sztuke",
+        _plan == _oczekiwane_z_planem, (_plan, _oczekiwane_z_planem))
+sprawdz("a obserwacja jest wsrod nich, bo budzet dal jej 2",
+        "obserwacja" in _plan, _plan)
 sprawdz("plan 2 obserwacji i zero wykonanych to UWAGA, nie cisza",
         stan(E2_NOWY, "plan obserwacja w dniu %s" % DZIEN) == "UWAGA",
         [(s, n, d) for s, n, d in werdykty(E2_NOWY) if "obserwacja" in n])

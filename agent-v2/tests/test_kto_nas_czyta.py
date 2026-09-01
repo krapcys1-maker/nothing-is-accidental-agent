@@ -133,7 +133,8 @@ browser.CZYTELNICY = pathlib.Path(tempfile.mkdtemp()) / "czytelnicy.jsonl"
 try:
     browser.kto_nas_czyta = lambda page=None: {
         "obserwujacy": [{"uchwyt": "a", "nazwa": "A"}],
-        "subskrybenci": [{"uchwyt": "b", "nazwa": "B"}], "blad": None}
+        "subskrybenci": [{"uchwyt": "b", "nazwa": "B"}],
+        "odczytane": ["obserwujacy", "subskrybenci"], "blad": None}
     z1 = browser.zapisz_czytelnikow()
     z2 = browser.zapisz_czytelnikow()
     linie = browser.CZYTELNICY.read_text(encoding="utf-8").strip().splitlines()
@@ -145,7 +146,8 @@ try:
     # ZRZUT, KTORY SIE NIE UDAL, NIE MOZE UDAWAC PUSTEGO KONTA. Zapisana pusta
     # lista wygladalaby pozniej jak dzien, w ktorym wszyscy odeszli.
     browser.kto_nas_czyta = lambda page=None: {
-        "obserwujacy": [], "subskrybenci": [], "blad": "TimeoutError"}
+        "obserwujacy": [], "subskrybenci": [], "odczytane": [],
+        "blad": "TimeoutError"}
     sprawdz("porazka nie dopisuje pustego zrzutu",
             browser.zapisz_czytelnikow() is None
             and len(browser.CZYTELNICY.read_text(encoding="utf-8")

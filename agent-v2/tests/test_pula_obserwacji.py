@@ -70,6 +70,7 @@ sys.path.insert(0, str(KORZEN / "agent-v2"))
 import browser        # noqa: E402
 import config         # noqa: E402
 import norma          # noqa: E402
+import run            # noqa: E402
 
 zdane = 0
 oblane = 0
@@ -240,10 +241,17 @@ def wytnij(src: str, nazwa: str) -> str:
 
 
 class Kanal:
-    """Historia komentarzy — jedyne zrodlo puli. Odwzorowuje `kanal._historia`."""
+    """Historia komentarzy — jedyne zrodlo puli. Odwzorowuje `kanal._historia`.
+
+    DATA JEST PO PRZESTAWIENIU KONTA NA AI (`run.PRZESTAWIENIE_KONTA_NA_AI`
+    = 2026-08-25), bo od 1 wrzesnia `obserwuj` odsiewa hosty, u ktorych
+    ostatni komentarz jest starszy — to osobne kryterium i ma wlasny test
+    (`test_wybor_celu.py`). Tutaj mierzymy odsiew po PAMIECI OBSERWOWANYCH,
+    wiec pula musi przechodzic przez tamto sito bez ubytku.
+    """
 
     def __init__(self, hosty):
-        self.hosty = {h: "2026-08-16T12:00:00+00:00" for h in hosty}
+        self.hosty = {h: "2026-08-31T12:00:00+00:00" for h in hosty}
 
     def _historia(self):
         return dict(self.hosty)
@@ -300,7 +308,13 @@ def uruchom_blok(mod_browser, kod_bloku, hosty, obserwowani_na_substacku,
         ns = {"browser": mod_browser, "config": config, "kanal": Kanal(hosty),
               "na_teraz": {"follow": budzet}, "wyslij": True,
               "rytm_stanu": {}, "zostal_czas": lambda *a, **k: True,
-              "rytm": lambda *a, **k: True, "print": print}
+              "rytm": lambda *a, **k: True, "print": print,
+              # Pomocnicy z poziomu modulu `run` — blok jest funkcja
+              # zagniezdzona, wiec normalnie widzi je przez globals() modulu.
+              # Wersja z `64d881a` ich nie wola, wiec obie sciezki dzialaja.
+              "cele_wedlug_pierwszenstwa": run.cele_wedlug_pierwszenstwa,
+              "powod_pustej_puli": run.powod_pustej_puli,
+              "PRZESTAWIENIE_KONTA_NA_AI": run.PRZESTAWIENIE_KONTA_NA_AI}
         exec(compile(kod_bloku, "run.py::obserwuj", "exec"), ns)
         buf, stare_out = io.StringIO(), sys.stdout
         sys.stdout = buf

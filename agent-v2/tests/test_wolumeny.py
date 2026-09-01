@@ -91,10 +91,22 @@ sprawdz("restacki 1-2 (było 2-4)", config.RESTACK_DZIENNIE == (1, 2),
 # odwrocony. Zero w tej stali kosztowalo dziewiec dni bez ani jednej
 # obserwacji, a nie wygladalo na awarie, bo `norma.NIEWYKONALNE` tlumaczylo
 # powstale zero tym samym nieprawdziwym zdaniem.
-sprawdz("obserwacje 30-44/mies — przycisk jest, tylko w menu",
-        config.FOLLOW_MIESIECZNIE == (30, 44), config.FOLLOW_MIESIECZNIE)
-sprawdz("subskrypcje bez zmian 6-12/mies",
-        config.SUBSKRYPCJE_MIESIECZNIE == (6, 12), config.SUBSKRYPCJE_MIESIECZNIE)
+#
+# LICZBY ZMIENIONE 1 WRZESNIA 2026 — TEGO SAMEGO DNIA, DECYZJA WLASCICIELA.
+# Sam fakt „nie jest zero" zostaje pilnowany, ale wielkosci ida za SKUTKIEM,
+# a nie za naszym kosztem: subskrypcja ma 11,5% konwersji zwrotnej, obserwacja
+# 3,4%, a nasi wlasni czytelnicy nie przyszli z ANI JEDNEJ subskrypcji, ktora
+# dalismy (0 z 19). Caly rachunek stoi przy `config.SUBSKRYPCJE_MIESIECZNIE`.
+sprawdz("obserwacje 10-16/mies — przycisk jest, ale to slabszy kanal",
+        config.FOLLOW_MIESIECZNIE == (10, 16), config.FOLLOW_MIESIECZNIE)
+sprawdz("subskrypcje 12-20/mies — kanal, ktory jako jedyny konwertuje",
+        config.SUBSKRYPCJE_MIESIECZNIE == (12, 20),
+        config.SUBSKRYPCJE_MIESIECZNIE)
+sprawdz("i to subskrypcji jest WIECEJ, bo za to placi sie skutkiem",
+        sum(config.SUBSKRYPCJE_MIESIECZNIE) > sum(config.FOLLOW_MIESIECZNIE),
+        (config.SUBSKRYPCJE_MIESIECZNIE, config.FOLLOW_MIESIECZNIE))
+sprawdz("KONTRDOWOD: stary uklad (30,44)+(6,12) mial to dokladnie odwrotnie",
+        not (sum((6, 12)) > sum((30, 44))))
 sprawdz("notki nietknięte — to silnik wzrostu",
         len(config.NOTE_MIX_OTHER_DAY) == 5, len(config.NOTE_MIX_OTHER_DAY))
 
