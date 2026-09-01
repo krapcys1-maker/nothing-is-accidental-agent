@@ -49,8 +49,43 @@ Prompty to pliki `.md`. Zero migracji, triggerów, zgód, kolejek.
 4. **Skaut nie nazywa instytucji w pytaniu** — to był powód dwunastu tematów
    pod rząd o `gov.uk`.
 5. **Fable 5 pisze**, DeepSeek robi całą resztę.
-6. **Nic nie wychodzi na zewnątrz.** Publikacja i komentarze nie istnieją.
-   Hasła do Substacka wpisuje właściciel; plik z nimi jest w `.gitignore`.
+6. ~~**Nic nie wychodzi na zewnątrz.**~~ **NIEAKTUALNE.** Konto publikuje
+   artykuły, notki, komentarze, odpowiedzi, polubienia, restacki, obserwacje
+   i subskrypcje. Hasła nadal wpisuje właściciel; plik z nimi jest w
+   `.gitignore`.
+
+7. **KONTO MA BYĆ W 100% AUTONOMICZNE. ŻADNYCH ZATWIERDZEŃ.**
+   Decyzja właściciela, 1 września 2026, powtórzona pięć razy tego dnia po
+   tym, jak gotowy artykuł stanął z komunikatem „do decyzji właściciela".
+
+   **Nic nie ma czekać na człowieka. Nigdy.** Żadna bramka, żaden werdykt,
+   żadna wątpliwość nie może zatrzymać rzeczy, która ma wyjść. Jeśli coś jest
+   zaplanowane, ma wyjść — i to dotyczy artykułów, notek, komentarzy i
+   wszystkiego, co przyjdzie później.
+
+   **Lepiej, żeby coś wyszło niejasne, niż żeby nie wyszło.** Słowa
+   właściciela: *„jak gdzieś będzie błąd, to będzie — ludzie masę błędów
+   popełniają i nikt nie płacze nad rozlanym mlekiem, nawet lepiej będzie,
+   bardziej po ludzku"*.
+
+   **Nic się nie wycina.** Wycinanie zdań, które czegoś nie przeszły, było
+   zbudowane i cofnięte tego samego dnia. Tekst z dziurą po wyciętym zdaniu
+   urywa się w połowie myśli — to gorsze dla czytelnika niż jedno słabe
+   zdanie. Tekst idzie taki, jaki został napisany.
+
+   **Sprawdzenia zostają jako LOG, nie jako bramka.** Widać w dzienniku, co
+   model zakwestionował, i tyle. Nikt na to nie czeka i nic przez to nie stoi.
+
+   **Trzy rzeczy, które NADAL blokują — i tylko one:**
+   zapora przeciw wstrzyknięciu (cudzy tekst próbujący pisać przez nasze
+   konto), podłogi z pamięci przy komentarzu (zmyślone przeżycie, nienazwane
+   badanie) oraz wyczerpany budżet i wyłącznik `KILL_SWITCH`. Pierwsze dwie
+   bronią przed czymś, czego sprawdzenie faktów nie umie sprawdzić; trzecia
+   to brak pieniędzy, nie wątpliwość.
+
+   Uzasadnienie właściciela wobec sprawdzania faktów: *„co ta data tak
+   naprawdę zmieniła w tym tekście? nic. same modele już mają potęgę wiedzy
+   plus wiedzę z netu"*.
 
 ## Osiem ostatnich przebiegów
 

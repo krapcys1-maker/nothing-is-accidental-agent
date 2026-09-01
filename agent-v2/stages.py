@@ -2155,12 +2155,22 @@ def note(
             print("    ODRZUCONA PRZED SPRAWDZENIEM: %s" % data.get("odrzucony"),
                   flush=True)
             continue
+        # SPRAWDZENIE FAKTOW JEST LOGIEM, NIE BRAMKA — tak samo jak przy
+        # artykule (patrz `run.py` i `artykul_z_puli.py`). Bylo bramka i to
+        # bylo gorsze niz przy artykule: `NOTE_CANDIDATES = 1`, wiec kandydat
+        # jest jeden i po odpadnieciu petla nie ma nastepnego. Notka dnia
+        # znikala w ciszy, a jedynym sladem byla linia „ODPADA" w logu.
+        #
+        # `czysty` powyzej ZOSTAJE bramka i ma zostac: to zapora przeciw
+        # wstrzyknieciu, czyli obrona przed cudzym tekstem probujacym pisac
+        # przez nasze konto. To jest co innego niz watpliwosc co do faktu.
         audyt = zweryfikuj(conn, run_id, text, f"Substack note, type {note_type}")
         data["weryfikacja"] = audyt
-        data["safe_to_post"] = bool(audyt.get("safe_to_post"))
-        if data["safe_to_post"]:
-            break
-        print(f"    ODPADA: {str(audyt.get('verdict', ''))[:76]}", flush=True)
+        data["safe_to_post"] = True
+        if not audyt.get("safe_to_post"):
+            print(f"    ZASTRZEZENIA (notka i tak idzie): "
+                  f"{str(audyt.get('verdict', ''))[:120]}", flush=True)
+        break
     return {"type": note_type, "candidates": candidates}
 
 
@@ -3315,13 +3325,22 @@ def comment_on(
             data["odrzucony"] = "podloga: %s" % podloga
             print(f"    ODRZUCONY PRZED SPRAWDZENIEM: {podloga}", flush=True)
             continue
+        # SPRAWDZENIE FAKTOW JEST LOGIEM, NIE BRAMKA — tak samo jak przy notce
+        # i artykule. Dwie bramki POWYZEJ zostaja i maja zostac: zapora przeciw
+        # wstrzyknieciu (cudzy tekst probujacy pisac przez nasze konto) oraz
+        # podlogi z pamieci (zmyslone przezycie, nienazwane badanie). Tamte
+        # bronia przed czyms, czego `zweryfikuj` nie umie sprawdzic — a to jest
+        # co innego niz watpliwosc co do faktu.
         audyt = zweryfikuj(conn, run_id, text, post.get("title", ""))
         data["weryfikacja"] = audyt
-        data["safe_to_post"] = bool(audyt.get("safe_to_post"))
-        print(f"    -> {'PRZECHODZI' if data['safe_to_post'] else 'ODPADA'}: "
-              f"{str(audyt.get('verdict', ''))[:78]}", flush=True)
-        if data["safe_to_post"]:
-            break
+        data["safe_to_post"] = True
+        if not audyt.get("safe_to_post"):
+            print(f"    ZASTRZEZENIA (komentarz i tak idzie): "
+                  f"{str(audyt.get('verdict', ''))[:110]}", flush=True)
+        else:
+            print(f"    -> PRZECHODZI: "
+                  f"{str(audyt.get('verdict', ''))[:78]}", flush=True)
+        break
     return {
         "post": post.get("url"),
         "title": post.get("title"),
