@@ -21,10 +21,10 @@ Przy wyczerpanym budzecie albo `KILL_SWITCH=true` wszystkie trzy wychodzily
 BEZ ANI JEDNEGO sprawdzenia faktow, tlumaczac sie siatka, ktora chwile
 wczesniej padla na tym samym bledzie.
 
-ZMIERZONE TYM PLIKIEM — ten sam harness, dwa drzewa (HEAD i po naprawie).
+ZMIERZONE TYM PLIKIEM — ten sam harness, dwa drzewa (e88b456 i po naprawie).
 Wszystkie liczby ponizej sa wynikiem uruchomienia, nie oszacowaniem:
 
-                                              HEAD            po naprawie
+                                              e88b456            po naprawie
     notka: kandydat z safe_to_post=True       TAK             zaden
     notka: browser.wystaw_notke               1 wystawienie   0
     komentarz: kandydat z safe_to_post=True   TAK             zaden
@@ -39,11 +39,11 @@ Wszystkie liczby ponizej sa wynikiem uruchomienia, nie oszacowaniem:
                                                etapie forma"   KILL_SWITCH…"
     budzet pada na pisarzu: stages.write       2 wywolania     1 wywolanie
 
-Werdykt, ktorym HEAD tlumaczyl publikacje notki i komentarza, brzmial doslownie:
+Werdykt, ktorym e88b456 tlumaczyl publikacje notki i komentarza, brzmial doslownie:
 „weryfikacja nie doszla do skutku (limit dzienny toru 'produkcja' wyczerpany:
 5.0100 / 5.0 USD) — puszczam na pierwszej siatce".
 
-CALY TEN PLIK NA KOPII DRZEWA `git archive HEAD agent-v2` (czyli `stages.py`
+CALY TEN PLIK NA KOPII DRZEWA `git archive e88b456 agent-v2` (czyli `stages.py`
 i `run.py` z `git show HEAD:...`, uruchomione z tego samego harnessu):
     18 zdanych, 15 OBLANYCH.
 Na drzewie po naprawie:
@@ -113,15 +113,25 @@ PRZED = {str(p): odcisk(p) for p in PILNOWANE}
 KAT = pathlib.Path(tempfile.mkdtemp())
 
 
+PRZED_NAPRAWA = "e88b456"  # commit audytowy, stan sprzed tej poprawki
+
+
 def z_gita(sciezka):
-    return subprocess.check_output(["git", "show", "HEAD:%s" % sciezka])
+# PRZYPIETY SHA, NIE `HEAD`. Ten test oblal sie na serwerze zaraz po
+# wypchnieciu poprawki: `git show HEAD:` po commicie pokazuje juz KOD
+# NAPRAWIONY, wiec kontrdowod porownywal naprawe z naprawa i wszystkie
+# dziesiec asercji „przed naprawa bylo zle" oblewalo sie z automatu.
+# Test mierzacy sie wzgledem `HEAD` traci sens w chwili commita,
+# ktorego strzeze — dlatego wersja odniesienia jest tu wpisana na sztywno.
+    return subprocess.check_output(
+        ["git", "show", "%s:%s" % (PRZED_NAPRAWA, sciezka)])
 
 
-# Dwa drzewa: to na dysku i to z HEAD-a. Kontrdowod jest ODTWORZONY, nie opisany.
+# Dwa drzewa: to na dysku i to sprzed naprawy. Kontrdowod jest ODTWORZONY, nie opisany.
 DRZEWA = {
     "teraz": {"stages": pathlib.Path("agent-v2/stages.py").read_bytes(),
               "run": pathlib.Path("agent-v2/run.py").read_bytes()},
-    "HEAD": {"stages": z_gita("agent-v2/stages.py"),
+    "PRZED": {"stages": z_gita("agent-v2/stages.py"),
              "run": z_gita("agent-v2/run.py")},
 }
 
@@ -208,7 +218,7 @@ def para(wersja):
     """`stages` i `run` z jednego drzewa, spiete ze soba.
 
     `run.py` robi `import stages` przy wykonaniu, wiec podstawiamy nasza kopie
-    do `sys.modules` na czas exec-a — inaczej `run` z HEAD-a pracowalby na
+    do `sys.modules` na czas exec-a — inaczej `run` sprzed naprawy pracowalby na
     `stages` z dysku i kontrdowod nie mierzylby tego, co trzeba.
     """
     st = zbuduj(DRZEWA[wersja]["stages"], "agent-v2/stages.py", "stages_%s" % wersja)
@@ -557,14 +567,14 @@ sprawdz("artykul wychodzi, gdy weryfikacja dziala",
 
 print()
 print("=== 1. BUDZET PADA W WYSZUKIWANIU — NOTKA ===")
-n1 = {w: dzien(w, "factcheck", budzet) for w in ("teraz", "HEAD")}
+n1 = {w: dzien(w, "factcheck", budzet) for w in ("teraz", "PRZED")}
 sprawdz("teraz: nic nie poszlo na Substacka",
         n1["teraz"]["slad"].notki == [], n1["teraz"]["slad"].notki)
-sprawdz("KONTRDOWOD: na HEAD notka SZLA bez sprawdzenia faktow",
-        n1["HEAD"]["slad"].notki != [], n1["HEAD"]["slad"].notki)
+sprawdz("KONTRDOWOD: przed naprawa notka SZLA bez sprawdzenia faktow",
+        n1["PRZED"]["slad"].notki != [], n1["PRZED"]["slad"].notki)
 
 # To samo mierzone o pietro nizej: na samym `stages.note`, bez `run.dzien`.
-for wersja in ("teraz", "HEAD"):
+for wersja in ("teraz", "PRZED"):
     st, _ = para(wersja)
     wyjatek = wynik = None
     with contextlib.redirect_stdout(io.StringIO()), llm_pada("factcheck", budzet):
@@ -580,17 +590,17 @@ for wersja in ("teraz", "HEAD"):
                 isinstance(wyjatek, llm.BudgetExceeded),
                 type(wyjatek).__name__)
     else:
-        sprawdz("KONTRDOWOD: na HEAD `note` oddawalo safe_to_post=True",
+        sprawdz("KONTRDOWOD: przed naprawa `note` oddawalo safe_to_post=True",
                 wynik is not None and bezpieczne(wynik) != [], wynik)
 
 print()
 print("=== 2. BUDZET PADA W WYSZUKIWANIU — KOMENTARZ ===")
 sprawdz("teraz: nic nie poszlo pod cudzy post",
         n1["teraz"]["slad"].komentarze == [], n1["teraz"]["slad"].komentarze)
-sprawdz("KONTRDOWOD: na HEAD komentarz SZEDL bez sprawdzenia faktow",
-        n1["HEAD"]["slad"].komentarze != [], n1["HEAD"]["slad"].komentarze)
+sprawdz("KONTRDOWOD: przed naprawa komentarz SZEDL bez sprawdzenia faktow",
+        n1["PRZED"]["slad"].komentarze != [], n1["PRZED"]["slad"].komentarze)
 
-for wersja in ("teraz", "HEAD"):
+for wersja in ("teraz", "PRZED"):
     st, _ = para(wersja)
     wyjatek = wynik = None
     with contextlib.redirect_stdout(io.StringIO()), llm_pada("factcheck", budzet):
@@ -605,13 +615,13 @@ for wersja in ("teraz", "HEAD"):
                 wynik is None or bezpieczne(wynik) == [],
                 wynik if wynik else type(wyjatek).__name__)
     else:
-        sprawdz("KONTRDOWOD: na HEAD `comment_on` oddawalo safe_to_post=True",
+        sprawdz("KONTRDOWOD: przed naprawa `comment_on` oddawalo safe_to_post=True",
                 wynik is not None and bezpieczne(wynik) != [], wynik)
 
 print()
 print("=== 3. WYLACZNIK (KILL_SWITCH) — ZADNA Z TRZECH SCIEZEK NIE PUBLIKUJE ===")
-w3 = {w: dzien(w, "factcheck", wylacznik) for w in ("teraz", "HEAD")}
-a3 = {w: artykul(w, "factcheck", wylacznik) for w in ("teraz", "HEAD")}
+w3 = {w: dzien(w, "factcheck", wylacznik) for w in ("teraz", "PRZED")}
+a3 = {w: artykul(w, "factcheck", wylacznik) for w in ("teraz", "PRZED")}
 sprawdz("teraz: notka nie wychodzi", w3["teraz"]["slad"].notki == [],
         w3["teraz"]["slad"].notki)
 sprawdz("teraz: komentarz nie wychodzi", w3["teraz"]["slad"].komentarze == [],
@@ -622,12 +632,12 @@ sprawdz("teraz: PreflightFailed dochodzi do `main` jako wyjatek",
         isinstance(a3["teraz"]["wyjatek"], llm.PreflightFailed)
         or a3["teraz"]["kod"] == 1,
         (type(a3["teraz"]["wyjatek"]).__name__, a3["teraz"]["kod"]))
-sprawdz("KONTRDOWOD: na HEAD przy wylaczonych wywolaniach wychodzila notka",
-        w3["HEAD"]["slad"].notki != [], w3["HEAD"]["slad"].notki)
-sprawdz("KONTRDOWOD: i komentarz", w3["HEAD"]["slad"].komentarze != [],
-        w3["HEAD"]["slad"].komentarze)
-sprawdz("KONTRDOWOD: i artykul", a3["HEAD"]["slad"].artykuly != [],
-        a3["HEAD"]["slad"].artykuly)
+sprawdz("KONTRDOWOD: przed naprawa przy wylaczonych wywolaniach wychodzila notka",
+        w3["PRZED"]["slad"].notki != [], w3["PRZED"]["slad"].notki)
+sprawdz("KONTRDOWOD: i komentarz", w3["PRZED"]["slad"].komentarze != [],
+        w3["PRZED"]["slad"].komentarze)
+sprawdz("KONTRDOWOD: i artykul", a3["PRZED"]["slad"].artykuly != [],
+        a3["PRZED"]["slad"].artykuly)
 
 print()
 print("=== 4. PRZEBIEG SIE ZAMYKA — ZERO WIERSZY W RUNNING ===")
@@ -647,8 +657,8 @@ sprawdz("artykul: uwaga niesie nazwe wyjatku, wiec alarm wie, na co patrzy",
 sprawdz("dzien: przerwanie wychodzi z `dzien` na wylot, wiec `main` zapisze FAILED",
         isinstance(w3["teraz"]["wyjatek"], llm.PreflightFailed),
         type(w3["teraz"]["wyjatek"]).__name__)
-sprawdz("KONTRDOWOD: na HEAD `dzien` konczyl sie bez wyjatku, czyli DONE",
-        w3["HEAD"]["wyjatek"] is None, type(w3["HEAD"]["wyjatek"]).__name__)
+sprawdz("KONTRDOWOD: przed naprawa `dzien` konczyl sie bez wyjatku, czyli DONE",
+        w3["PRZED"]["wyjatek"] is None, type(w3["PRZED"]["wyjatek"]).__name__)
 
 print()
 print("=== 5. ZWYKLA AWARIA WERYFIKACJI NADAL PRZEPUSZCZA (nie przesadzilem) ===")
@@ -656,43 +666,43 @@ print("=== 5. ZWYKLA AWARIA WERYFIKACJI NADAL PRZEPUSZCZA (nie przesadzilem) ===
 # poszukal i oddal smiec. Budzet po niej istnieje, wiec „zepsuta weryfikacja
 # nie jest dowodem falszu" ma dalej obowiazywac — i obowiazuje tak samo na
 # obu drzewach.
-z5 = {w: dzien(w, "factcheck", zly_json) for w in ("teraz", "HEAD")}
+z5 = {w: dzien(w, "factcheck", zly_json) for w in ("teraz", "PRZED")}
 sprawdz("teraz: notka przy zlym JSON-ie nadal wychodzi",
         len(z5["teraz"]["slad"].notki) == 1, z5["teraz"]["slad"].notki)
 sprawdz("teraz: komentarz przy zlym JSON-ie nadal wychodzi",
         len(z5["teraz"]["slad"].komentarze) == 1, z5["teraz"]["slad"].komentarze)
-sprawdz("zachowanie IDENTYCZNE jak na HEAD — nic tu nie zmieniono",
+sprawdz("zachowanie IDENTYCZNE jak przed naprawa — nic tu nie zmieniono",
         (len(z5["teraz"]["slad"].notki), len(z5["teraz"]["slad"].komentarze))
-        == (len(z5["HEAD"]["slad"].notki), len(z5["HEAD"]["slad"].komentarze)),
-        (z5["teraz"]["slad"].notki, z5["HEAD"]["slad"].notki))
-a5 = {w: artykul(w, "factcheck", zly_json) for w in ("teraz", "HEAD")}
-sprawdz("artykul przy zlym JSON-ie nadal wychodzi, tak jak na HEAD",
+        == (len(z5["PRZED"]["slad"].notki), len(z5["PRZED"]["slad"].komentarze)),
+        (z5["teraz"]["slad"].notki, z5["PRZED"]["slad"].notki))
+a5 = {w: artykul(w, "factcheck", zly_json) for w in ("teraz", "PRZED")}
+sprawdz("artykul przy zlym JSON-ie nadal wychodzi, tak jak przed naprawa",
         [x["wyslij"] for x in a5["teraz"]["slad"].artykuly]
-        == [x["wyslij"] for x in a5["HEAD"]["slad"].artykuly] != [],
-        (a5["teraz"]["slad"].artykuly, a5["HEAD"]["slad"].artykuly))
+        == [x["wyslij"] for x in a5["PRZED"]["slad"].artykuly] != [],
+        (a5["teraz"]["slad"].artykuly, a5["PRZED"]["slad"].artykuly))
 
 print()
 print("=== 6. BUDZET PADA NA RECENZJI ARTYKULU — CZTERY OSLONY W run.py ===")
 # Recenzja jest polykana celowo (nic nie blokuje), ale na sciezce `--wyslij`
 # za nia stoi `zweryfikuj` i `browser.wystaw_artykul`. Polkniecie budzetu tutaj
 # to publikacja bez ani jednej dzialajacej kontroli.
-r6 = {w: artykul(w, "review", budzet) for w in ("teraz", "HEAD")}
+r6 = {w: artykul(w, "review", budzet) for w in ("teraz", "PRZED")}
 sprawdz("teraz: artykul nie wychodzi, gdy budzet padl na recenzji",
         r6["teraz"]["slad"].artykuly == [], r6["teraz"]["slad"].artykuly)
 sprawdz("teraz: przebieg zamkniety raz, jako FAILED",
         len(r6["teraz"]["slad"].zamkniecia) == 1
         and r6["teraz"]["slad"].zamkniecia[0]["status"] == "FAILED",
         r6["teraz"]["slad"].zamkniecia)
-sprawdz("KONTRDOWOD: na HEAD szedl na Substacka mimo padnietej recenzji",
-        [x for x in r6["HEAD"]["slad"].artykuly if x["wyslij"] is True],
-        r6["HEAD"]["slad"].artykuly)
+sprawdz("KONTRDOWOD: przed naprawa szedl na Substacka mimo padnietej recenzji",
+        [x for x in r6["PRZED"]["slad"].artykuly if x["wyslij"] is True],
+        r6["PRZED"]["slad"].artykuly)
 
 print()
 print("=== 7. BUDZET PADA NA PISARZU — POWTORKA NA OPUSIE NIE RUSZA ===")
 # `run.py` przy awarii pisarza powtarza na Opusie, ktory jest DROZSZY od tego,
 # co wlasnie padlo. Przy pustym budzecie to drugie 0,76 USD za nic.
-licznik = {"teraz": 0, "HEAD": 0}
-for wersja in ("teraz", "HEAD"):
+licznik = {"teraz": 0, "PRZED": 0}
+for wersja in ("teraz", "PRZED"):
     stary_model = dict(config.MODEL_FOR)
     st, rn = para(wersja)
     slad = Slad()
@@ -742,8 +752,8 @@ for wersja in ("teraz", "HEAD"):
 
 sprawdz("teraz: `stages.write` wolany DOKLADNIE raz przy pustym budzecie",
         licznik["teraz"] == 1, licznik)
-sprawdz("KONTRDOWOD: na HEAD pisarz szedl DWA razy, drugi na drozszym modelu",
-        licznik["HEAD"] == 2, licznik)
+sprawdz("KONTRDOWOD: przed naprawa pisarz szedl DWA razy, drugi na drozszym modelu",
+        licznik["PRZED"] == 2, licznik)
 
 print()
 print("=== PRODUKCJA ===")
