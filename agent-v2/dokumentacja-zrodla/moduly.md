@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1806 wierszy, 15 funkcji na poziomie modułu, 1 klas
+1919 wierszy, 15 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -140,7 +140,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-4005 wierszy, 77 funkcji na poziomie modułu, 0 klas
+4493 wierszy, 85 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -171,6 +171,11 @@
 | `_ludzie_z_zakladki(page)` *(wewn.)* | Kto jest na tej zakladce — nazwa i uchwyt, bez nawigacji strony. |
 | `kto_nas_czyta(page)` | KTO nas obserwuje i subskrybuje — imiennie i z data. |
 | `zapisz_czytelnikow(page)` | Zrzut listy czytelnikow do pliku, jeden wiersz na wywolanie. |
+| `kogo_obserwujemy()` | Kogo juz obserwujemy — Z DYSKU, BEZ SIECI. |
+| `_zapisz_kogo_obserwujemy(pamiec)` *(wewn.)* | Nigdy nie przerywa dzialania — to pamiec pomocnicza, nie warunek pracy. |
+| `zapamietaj_obserwowanego(uchwyt, host)` | Dopisuje JEDNEGO do pamieci — po udanej obserwacji albo po zastaniu |
+| `czy_juz_obserwujemy(host, pamiec)` | Czy ten HOST wskazuje kogos, kogo juz obserwujemy. Bez sieci. |
+| `odswiez_kogo_obserwujemy(page)` | Przepisuje pamiec ze strony `/@my/following`. Wymaga OTWARTEJ sesji. |
 | `zapisz_wzrost_konta(profil)` | Ilu nas czyta DZISIAJ — jedna linia na pomiar, historia zostaje. |
 | `_artykuly_z_panelu(page, baza)` *(wewn.)* | Nasze artykuly razem ze statystykami — JEDNYM zapytaniem. |
 | `nasze_pozycje_do_pomiaru(page, ile)` | Co wystawilismy i ma wlasny numer — czyli co da sie zmierzyc. |
@@ -191,6 +196,9 @@
 | `pobierz_subskrybentow()` | Czyta liste subskrybentow z WLASNEGO panelu, wlasna sesja. |
 | `zloz_wiersze_subskrybentow(surowe)` | Sklada wiersze z komorek tabeli panelu: adres, typ i data rozpoczecia. |
 | `_wiersze_subskrybentow(page)` *(wewn.)* | Czyta komorki tabeli z panelu i oddaje je zlozone. |
+| `_pozycje_menu(page)` *(wewn.)* | Teksty pozycji OTWARTEGO menu, w kolejnosci ekranu. Nic nie klika. |
+| `_otworz_menu_profilu(page)` *(wewn.)* | Klika kolko „..." w naglowku profilu. Otwarcie menu nie zmienia stanu. |
+| `potwierdz_obserwacje(page)` | Czy menu profilu mowi teraz, ze go OBSERWUJEMY. Otwiera menu i czyta. |
 | `obserwuj_profil(handle, wyslij)` | Obserwuje cudzy profil — jego notki trafiaja do naszego kanalu. |
 | `kogo_polecamy(page)` | Kogo nasza publikacja poleca — z API, nie z pamieci. |
 | `polec_publikacje(fraza, powod, wyslij)` | Dodaje REKOMENDACJE publikacji. Domyslnie wypelnia i NIE zatwierdza. |
@@ -353,7 +361,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2303 wierszy, 21 funkcji na poziomie modułu, 0 klas
+2339 wierszy, 21 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -433,7 +441,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1013 wierszy, 9 funkcji na poziomie modułu, 0 klas
+1351 wierszy, 13 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -445,11 +453,15 @@
 | `_zrob_miejsce_na_fakt(card)` *(wewn.)* | Robi miejsce na wstrzykniete twierdzenie, nie tracac zadnego ZRODLA. |
 | `_rozszerz_najstarsze(card, data_faktu)` *(wewn.)* | Data wstrzyknietego zrodla wazy — ale TYLKO w strone ostrzezenia. |
 | `_przebieg(conn, run_id)` *(wewn.)* | — |
+| `_katalog_ratunku()` *(wewn.)* | Katalog OBOK `ARTICLES_DIR`, nigdy w nim. |
+| `_ramka(powod, brak, katalog)` *(wewn.)* | Ostrzezenie, ktore idzie na POCZATEK `.md`, a nie tylko obok niego. |
+| `_zrodla(card)` *(wewn.)* | Sekcja `## Sources` — bez pytania bazy o nazwy zrodel. |
+| `_ratuj_tekst(run_id, brief, card, draft, etap, exc, raport)` *(wewn.)* | Gotowy tekst na dysk, gdy budzet albo wylacznik przerywa PO pisaniu. |
 | `_napisz_i_zapisz(conn, run_id, brief, card)` *(wewn.)* | Od bramki „warto pisac" do zapisu i grafiki. |
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
-1007 wierszy, 13 funkcji na poziomie modułu, 0 klas
+1030 wierszy, 13 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -490,10 +502,11 @@
 
 ### `audyt_systemu.py` — audyt CALEGO systemu na zywych danych: publikowanie, normy, komentarze, statystyki, artykul, pieniadze, pamiec
 
-478 wierszy, 5 funkcji na poziomie modułu, 0 klas
+573 wierszy, 6 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
+| `policz_rodzaje(wpisy)` | (udane, nieudane, pominiete) — trzy liczniki, bo stany naprawde sa trzy. |
 | `etap(nr, nazwa)` | — |
 | `werdykt(nazwa, stan, szczegol)` | — |
 | `dziennik()` | — |

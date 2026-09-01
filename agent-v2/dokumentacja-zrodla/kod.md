@@ -1789,6 +1789,14 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
 
     Gdy wlasciwego przycisku nie ma, nie robimy NIC. Klikniecie „w zastepstwie"
     to dokladnie ten blad, ktory to spowodowal.
+
+    TA FUNKCJA OBSLUGUJE JUZ TYLKO SUBSKRYPCJE. Rozdzielenie napisow bylo
+    konieczne, ale NIEWYSTARCZAJACE: obserwowania nie da sie tu zrobic zadnym
+    zestawem napisow, bo przycisku obserwowania NIE MA na wierzchu strony —
+    siedzi w menu pod kolkiem „...". Zmierzone 1 wrzesnia 2026: w naglowku
+    profilu sa dokladnie trzy przyciski — „Subscribe", „Message" i kolko
+    z `aria-label="Profile actions"`. Obserwowanie ma wiec wlasna droge,
+    patrz `obserwuj_profil`.
     """
     wyslij = naprawde_wyslac(wyslij, rodzaj)
     wymagaj_sesji()

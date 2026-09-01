@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **21 plików**, 21 380 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **21 plików**, 22 473 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 95 zestawów
-testów, 2572 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 99 zestawów
+testów, 2789 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-1806 wierszy, 15 funkcji na poziomie modułu, 1 klas
+1919 wierszy, 15 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -282,7 +282,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-4005 wierszy, 77 funkcji na poziomie modułu, 0 klas
+4493 wierszy, 85 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -313,6 +313,11 @@ wiec nie da sie go rozjechac z kodem.
 | `_ludzie_z_zakladki(page)` *(wewn.)* | Kto jest na tej zakladce — nazwa i uchwyt, bez nawigacji strony. |
 | `kto_nas_czyta(page)` | KTO nas obserwuje i subskrybuje — imiennie i z data. |
 | `zapisz_czytelnikow(page)` | Zrzut listy czytelnikow do pliku, jeden wiersz na wywolanie. |
+| `kogo_obserwujemy()` | Kogo juz obserwujemy — Z DYSKU, BEZ SIECI. |
+| `_zapisz_kogo_obserwujemy(pamiec)` *(wewn.)* | Nigdy nie przerywa dzialania — to pamiec pomocnicza, nie warunek pracy. |
+| `zapamietaj_obserwowanego(uchwyt, host)` | Dopisuje JEDNEGO do pamieci — po udanej obserwacji albo po zastaniu |
+| `czy_juz_obserwujemy(host, pamiec)` | Czy ten HOST wskazuje kogos, kogo juz obserwujemy. Bez sieci. |
+| `odswiez_kogo_obserwujemy(page)` | Przepisuje pamiec ze strony `/@my/following`. Wymaga OTWARTEJ sesji. |
 | `zapisz_wzrost_konta(profil)` | Ilu nas czyta DZISIAJ — jedna linia na pomiar, historia zostaje. |
 | `_artykuly_z_panelu(page, baza)` *(wewn.)* | Nasze artykuly razem ze statystykami — JEDNYM zapytaniem. |
 | `nasze_pozycje_do_pomiaru(page, ile)` | Co wystawilismy i ma wlasny numer — czyli co da sie zmierzyc. |
@@ -333,6 +338,9 @@ wiec nie da sie go rozjechac z kodem.
 | `pobierz_subskrybentow()` | Czyta liste subskrybentow z WLASNEGO panelu, wlasna sesja. |
 | `zloz_wiersze_subskrybentow(surowe)` | Sklada wiersze z komorek tabeli panelu: adres, typ i data rozpoczecia. |
 | `_wiersze_subskrybentow(page)` *(wewn.)* | Czyta komorki tabeli z panelu i oddaje je zlozone. |
+| `_pozycje_menu(page)` *(wewn.)* | Teksty pozycji OTWARTEGO menu, w kolejnosci ekranu. Nic nie klika. |
+| `_otworz_menu_profilu(page)` *(wewn.)* | Klika kolko „..." w naglowku profilu. Otwarcie menu nie zmienia stanu. |
+| `potwierdz_obserwacje(page)` | Czy menu profilu mowi teraz, ze go OBSERWUJEMY. Otwiera menu i czyta. |
 | `obserwuj_profil(handle, wyslij)` | Obserwuje cudzy profil — jego notki trafiaja do naszego kanalu. |
 | `kogo_polecamy(page)` | Kogo nasza publikacja poleca — z API, nie z pamieci. |
 | `polec_publikacje(fraza, powod, wyslij)` | Dodaje REKOMENDACJE publikacji. Domyslnie wypelnia i NIE zatwierdza. |
@@ -495,7 +503,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2303 wierszy, 21 funkcji na poziomie modułu, 0 klas
+2339 wierszy, 21 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -575,7 +583,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1013 wierszy, 9 funkcji na poziomie modułu, 0 klas
+1351 wierszy, 13 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -587,11 +595,15 @@ wiec nie da sie go rozjechac z kodem.
 | `_zrob_miejsce_na_fakt(card)` *(wewn.)* | Robi miejsce na wstrzykniete twierdzenie, nie tracac zadnego ZRODLA. |
 | `_rozszerz_najstarsze(card, data_faktu)` *(wewn.)* | Data wstrzyknietego zrodla wazy — ale TYLKO w strone ostrzezenia. |
 | `_przebieg(conn, run_id)` *(wewn.)* | — |
+| `_katalog_ratunku()` *(wewn.)* | Katalog OBOK `ARTICLES_DIR`, nigdy w nim. |
+| `_ramka(powod, brak, katalog)` *(wewn.)* | Ostrzezenie, ktore idzie na POCZATEK `.md`, a nie tylko obok niego. |
+| `_zrodla(card)` *(wewn.)* | Sekcja `## Sources` — bez pytania bazy o nazwy zrodel. |
+| `_ratuj_tekst(run_id, brief, card, draft, etap, exc, raport)` *(wewn.)* | Gotowy tekst na dysk, gdy budzet albo wylacznik przerywa PO pisaniu. |
 | `_napisz_i_zapisz(conn, run_id, brief, card)` *(wewn.)* | Od bramki „warto pisac" do zapisu i grafiki. |
 
 ### `norma.py` — licznik produkcji: ile agent wystawil wobec normy dziennej
 
-1007 wierszy, 13 funkcji na poziomie modułu, 0 klas
+1030 wierszy, 13 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -632,10 +644,11 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `audyt_systemu.py` — audyt CALEGO systemu na zywych danych: publikowanie, normy, komentarze, statystyki, artykul, pieniadze, pamiec
 
-478 wierszy, 5 funkcji na poziomie modułu, 0 klas
+573 wierszy, 6 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
+| `policz_rodzaje(wpisy)` | (udane, nieudane, pominiete) — trzy liczniki, bo stany naprawde sa trzy. |
 | `etap(nr, nazwa)` | — |
 | `werdykt(nazwa, stan, szczegol)` | — |
 | `dziennik()` | — |
@@ -2287,8 +2300,8 @@ Widełki (`config.py:1079-1150`), z komentarzem, że są **przejrzane na własny
 |---|---|---|---|
 | notki | `len(NOTE_MIX_OTHER_DAY)` | 5 (stałe) | kontrakt rozkładu tygodnia, nie widełki |
 | lajki | `LAJKI_DZIENNIE` | 10–16 | zmierzone 9,6 |
-| komentarze | `KOMENTARZE_DZIENNIE` | 8–12 | zmierzone 7,0; „0 jest dozwolone" |
-| follow | `FOLLOW_MIESIECZNIE` | 20–30/mies | zmierzone **0,0** |
+| komentarze | `KOMENTARZE_DZIENNIE` | 15–23 | podniesione 30.08 z 8–12 (wtedy zmierzone wykonanie 7,0/dobę); „0 jest dozwolone" |
+| follow | `FOLLOW_MIESIECZNIE` | 30–44/mies | 23.08 zerowane, 01.09 odwieszone (przed zerowaniem 20–30) |
 | subskrypcje | `SUBSKRYPCJE_MIESIECZNIE` | 6–12/mies | ląduje w skrzynce właściciela |
 | restacki | `RESTACK_DZIENNIE` | 1–2 | zjechane z 2–4 |
 
@@ -7937,6 +7950,14 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
 
     Gdy wlasciwego przycisku nie ma, nie robimy NIC. Klikniecie „w zastepstwie"
     to dokladnie ten blad, ktory to spowodowal.
+
+    TA FUNKCJA OBSLUGUJE JUZ TYLKO SUBSKRYPCJE. Rozdzielenie napisow bylo
+    konieczne, ale NIEWYSTARCZAJACE: obserwowania nie da sie tu zrobic zadnym
+    zestawem napisow, bo przycisku obserwowania NIE MA na wierzchu strony —
+    siedzi w menu pod kolkiem „...". Zmierzone 1 wrzesnia 2026: w naglowku
+    profilu sa dokladnie trzy przyciski — „Subscribe", „Message" i kolko
+    z `aria-label="Profile actions"`. Obserwowanie ma wiec wlasna droge,
+    patrz `obserwuj_profil`.
     """
     wyslij = naprawde_wyslac(wyslij, rodzaj)
     wymagaj_sesji()
@@ -12491,7 +12512,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `NOTE_MIX_OTHER_DAY` | `("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "` | — |
 | `LAJKI_DZIENNIE` | `(10, 16)` | --- zachowanie spoleczne: widelki, nie stale liczby ------------------------- Stala liczba dziennie wyglada jak robot, bo czlowiek nie ma no |
 | `KOMENTARZE_DZIENNIE` | `(15, 23)` | Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo k |
-| `FOLLOW_MIESIECZNIE` | `(0, 0)` | ZERO, BO PRZYCISKA NIE MA. Obserwacje nie wykonaly sie ANI RAZU i przez tygodnie wygladalo to na blad kolejnosci blokow albo za waski budzet |
+| `FOLLOW_MIESIECZNIE` | `(30, 44)` | ZEROWANE 2026-08-23, PRZYWROCONE 2026-09-01 — BO WNIOSEK BYL FALSZYWY. Stalo tu `(0, 0)` z uzasadnieniem „Substack zdjal Follow ze stron pro |
 | `SUBSKRYPCJE_MIESIECZNIE` | `(6, 12)` | — |
 | `PROG_ALARMU_WOLUMENU` | `60` | Ponizej ilu procent normy uznajemy, ze cos jest zepsute, a nie po prostu chudsze. Prog jest niski celowo: budzety sa LOSOWANE z widelek i dz |
 | `CICHY_DZIEN_NA_ILE` | `8` | ODBLOKOWANE decyzja wlasciciela 2026-08-19. Restack cudzej notki z wlasnym zdaniem trafia do kanalu NASZYCH obserwujacych, powiadamia autora |

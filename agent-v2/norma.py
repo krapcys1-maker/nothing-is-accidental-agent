@@ -55,18 +55,41 @@ RODZAJE = ("notka", "komentarz", "polubienie", "restack", "subskrypcja",
            "obserwacja")
 
 # Pozycje NIEWYKONALNE nie sa porazka i nie moga zanizac wyniku na zawsze.
-# Substack zdjal przycisk „Follow" ze stron profilowych — sprawdzone na szesciu
-# profilach 23 sierpnia 2026. Dopoki go nie ma, obserwacje pokazujemy jako
-# „brak przycisku", a nie jako 0 procent normy.
-NIEWYKONALNE = {"obserwacja": "Substack zdjal przycisk Follow"}
+#
+# PUSTE OD 1 WRZESNIA 2026 I TO JEST NAJWAZNIEJSZA ZMIANA W TYM PLIKU.
+#
+# Stalo tu `{"obserwacja": "Substack zdjal przycisk Follow"}` i przez dziewiec
+# dni tabela TLUMACZYLA ZERO ZDANIEM, KTORE NIE BYLO PRAWDA. Skutek jest gorszy
+# niz samo zero: zero z wyjasnieniem przestaje wygladac na problem, wiec nikt
+# go nie sprawdza. Agent nie obserwowal nikogo przez dziewiec dni i zadna
+# rubryka o tym nie krzyczala — bo ta rubryka byla wyciszona recznie.
+#
+# Pomiar z 23 sierpnia byl dobry: na szesciu profilach slowa „Follow" naprawde
+# nie bylo w HTML. Zly byl wniosek. Przycisk siedzi w menu pod kolkiem „...",
+# ktore Substack dorysowuje DOPIERO PO KLIKNIECIU — w HTML zamknietej strony
+# nie ma go i byc nie moze. Sprawdzone ponownie 1 wrzesnia 2026 na zywej sesji,
+# na szesciu profilach; szczegoly i zmierzone etykiety stoja przy
+# `browser.obserwuj_profil`.
+#
+# CO MUSI ZAJSC, ZEBY TU COS WROCILO. Wpis na tej liscie ma sens wylacznie
+# wtedy, gdy zdolnosci NIE DA SIE wykonac — a nie wtedy, gdy nie umiemy jej
+# wykonac. Roznicy nie rozstrzyga sie czytaniem HTML-a: trzeba otworzyc menu
+# i zobaczyc, czego w nim nie ma.
+NIEWYKONALNE: dict[str, str] = {}
 
 # KIEDY PROCENT COS ZNACZY — TRZY LICZBY, TRZY ROZNE PYTANIA.
 #
 # Prog 60% stosowany bez wzgledu na wielkosc planu robi z licznika generator
 # szumu. `subskrypcja` ma norme 0,3 na dobe, czyli plan okolo 2 na tydzien —
 # JEDNA mniej to juz 50%, czyli alarm. Tak samo restacki: plan 1-2 na dzien,
-# wiec kazdy dzien bez restacka to 0% i wykrzyknik w tabeli. `obserwacja` jest
+# wiec kazdy dzien bez restacka to 0% i wykrzyknik w tabeli. `obserwacja` byla
 # przed tym chroniona lista NIEWYKONALNE, `subskrypcja` nie byla przez nic.
+#
+# OD 1 WRZESNIA 2026 NIEWYKONALNE JEST PUSTE, wiec `obserwacja` (plan ~1,2 na
+# dobe) opiera sie juz WYLACZNIE o te trzy progi — i to jest zamierzone. Blok
+# obserwacji martwy przez tydzien daje okolo 8-9 brakujacych sztuk, czyli
+# wiecej niz `MIN_BRAKOW_W_OKNIE_DO_ALARMU` (4), wiec alarm zadziala. Oslona
+# ma byc prog liczony z planu, a nie reczny wpis mowiacy „tego sie nie da".
 #
 # BYLA TU JEDNA STALA (`MIN_PLAN_DO_ALARMU = 5`) I RZADZILA DWIEMA SKALAMI:
 # `_znak` porownywal ja z planem DZIENNYM (jedna kratka tabeli), a alarm na

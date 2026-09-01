@@ -978,8 +978,15 @@ CURIOSITY_MEMORY = 60
 # dniami nie przepuscil ani jednej.
 #
 # Ta stala zostaje jako JEDYNA dzwignia odwrotu: wpisanie tu liczby wraca do
-# okna, bez ruszania kodu. Tak samo jak `FOLLOW_MIESIECZNIE` przy wycofanych
-# obserwacjach — wylaczenie ma byc jedna stala, a nie wypruciem bloku.
+# okna, bez ruszania kodu. Tak samo jak `FOLLOW_MIESIECZNIE` przy obserwacjach
+# — wylaczenie ma byc jedna stala, a nie wypruciem bloku.
+#
+# TA DZWIGNIA ZDALA EGZAMIN W OBIE STRONY. Obserwacje byly wylaczone od
+# 23 sierpnia do 1 wrzesnia 2026 i wlaczenie ich z powrotem kosztowalo jedna
+# liczbe — blok czekal nietkniety. Ale dzwignia ma tez druga strone, ktora
+# wtedy zawiodla: dopoki zero stalo w konfiguracji Z WYJASNIENIEM, nie bylo
+# jak zauwazyc, ze wyjasnienie jest falszywe. Wylaczenie na jedna stala jest
+# tanie w odwrocie i drogie w rewizji.
 PAMIEC_NOTEK = None
 
 # ILE DNI MOZE MIEC ZRODLO FAKTU, KTORY TWIERDZI COS O STANIE TERAZ.
@@ -1562,9 +1569,15 @@ NOTE_MIX_OTHER_DAY = ("CIEKAWOSTKA", "CIEKAWOSTKA", "DYSKUSJA", "SPROSTOWANIE", 
 #   zmierzone (srednia z 5 dni)   bylo w konfiguracji   ustawiam
 #   lajki        9,6              12-20                 10-16
 #   komentarze   7,0              15-20                 8-12
-#   obserwacje   0,0 (!)          30-44/mies            0 (nie ma przycisku)
+#   obserwacje   0,0 (!)          30-44/mies            30-44/mies (patrz nizej)
 #   subskrypcje  ~0,8/dzien       6-12/mies             6-12/mies (bez zmian)
 #   restacki     0,4              2-4/dzien             1-2/dzien
+#
+# WYKRZYKNIK PRZY OBSERWACJACH BYL JEDYNYM PRAWDZIWYM SYGNALEM W TEJ TABELI
+# i przez trzy dni nikt nie umial go odczytac. 23 sierpnia wpisano tu „0 (nie
+# ma przycisku)" — na podstawie prawdziwego pomiaru i falszywego wniosku —
+# i wykrzyknik zniknal razem z problemem. 1 wrzesnia 2026 widelki wracaja;
+# powod stoi przy samej stalej `FOLLOW_MIESIECZNIE`.
 LAJKI_DZIENNIE = (10, 16)
 # Osiemnascie komentarzy dziennie pod cudzymi tekstami to nie jest tempo
 # czytelnika, tylko podpis bota — i kosztuje najwiecej po pisaniu, bo kazdy to
@@ -1580,17 +1593,40 @@ LAJKI_DZIENNIE = (10, 16)
 # minut (patrz ODSTEPY) i doszly dwa przebiegi na dobe — bez tego norma nie
 # miala gdzie sie zmiescic w czasie.
 KOMENTARZE_DZIENNIE = (15, 23)    # 0 jest dozwolone: milczenie bije slaby komentarz
-# ZERO, BO PRZYCISKA NIE MA. Obserwacje nie wykonaly sie ANI RAZU i przez
-# tygodnie wygladalo to na blad kolejnosci blokow albo za waski budzet.
-# Sprawdzone 2026-08-23 na szesciu profilach: Substack zdjal „Follow" ze stron
-# profilowych. Zostaly „Subscribe" i „Message", a samo slowo „Follow" nie
-# wystepuje w HTML tych stron ani razu — i nie ma go tez na `/@kto/notes`.
-# Przetrwal wylacznie w widgetach „kogo obserwowac", czyli w liscie podpowiedzi.
+# ZEROWANE 2026-08-23, PRZYWROCONE 2026-09-01 — BO WNIOSEK BYL FALSZYWY.
 #
-# Zero jest tu UCZCIWSZE niz mala liczba: budzetu nie rezerwujemy na zdolnosc,
-# ktorej nie mamy, a licznik wolumenow nie pokazuje wiecznego zera, ktore
-# czytaloby sie jak awaria. Wrocic to jedna zmiana w tym wierszu.
-FOLLOW_MIESIECZNIE = (0, 0)       # patrz wyzej: nie ma czego kliknac
+# Stalo tu `(0, 0)` z uzasadnieniem „Substack zdjal Follow ze stron
+# profilowych". POMIAR, NA KTORYM TO STALO, BYL PRAWDZIWY: na szesciu profilach
+# slowo „Follow" nie wystepowalo w HTML ani razu i nie bylo go tez na
+# `/@kto/notes`. FALSZYWY BYL WNIOSEK. Przycisk jest — siedzi w menu pod
+# kolkiem „..." obok „Subscribe" i „Message", a to menu Substack dorysowuje
+# DOPIERO PO KLIKNIECIU. W HTML zamknietej strony nie ma go i byc nie moze,
+# wiec tamten pomiar nie mogl go zobaczyc.
+#
+# Zmierzone ponownie 2026-09-01 na zywej sesji, na szesciu profilach: menu
+# oddaje „Follow" tam, gdzie nie obserwujemy, i „Unfollow" tam, gdzie juz
+# obserwujemy. Etykiety w obu jezykach i lista sprawdzonych profili stoja
+# przy `browser.obserwuj_profil`.
+#
+# Zero kosztowalo dziewiec dni bez ani jednej obserwacji, a najgorsze bylo to,
+# ze nie wygladalo na awarie: `norma.NIEWYKONALNE` tlumaczylo je tym samym
+# nieprawdziwym zdaniem.
+#
+# WIDELKI NIE SA POWROTEM DO STANU SPRZED WYCOFANIA — to swiadome
+# podniesienie, decyzja wlasciciela z 1 wrzesnia 2026. Prawdziwa historia
+# tej stalej z `git log -S`: (10,20) -> (20,30) w `227c266` 20 sierpnia ->
+# (0,0) w `ca55ce0` 23 sierpnia przy wycofaniu. Czyli ostatnia wartoscia,
+# ktora NAPRAWDE chodzila w produkcji, bylo (20,30) — i tylko przez trzy dni.
+# Para (30,44) do 1 wrzesnia nie istniala w kodzie ani razu: zyla wylacznie
+# w opisach przy `browser.obserwuj_profil` i `run.py`, ktore przez caly ten
+# czas mowily o widelkach, jakich stala nigdy nie miala.
+#
+# Wybor (30,44) zamiast (20,30) podnosi wolumen o okolo polowe, do ~1,2
+# obserwacji na dobe. Ryzyko jest po stronie tempa, nie poprawnosci:
+# obserwowanie ma potwierdzanie skutku, a profil juz obserwowany zapisuje
+# sie jako `obserwacja_pominieta` i nie zjada slotu. Jesli tempo okaze sie
+# za wysokie, obniz TU i nigdzie indziej.
+FOLLOW_MIESIECZNIE = (30, 44)     # obserwacja nie przysyla nic mailem
 SUBSKRYPCJE_MIESIECZNIE = (6, 12)  # laduje w skrzynce wlasciciela, wiec waskie
 
 

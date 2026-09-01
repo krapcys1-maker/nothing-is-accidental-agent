@@ -270,8 +270,8 @@ Widełki (`config.py:1079-1150`), z komentarzem, że są **przejrzane na własny
 |---|---|---|---|
 | notki | `len(NOTE_MIX_OTHER_DAY)` | 5 (stałe) | kontrakt rozkładu tygodnia, nie widełki |
 | lajki | `LAJKI_DZIENNIE` | 10–16 | zmierzone 9,6 |
-| komentarze | `KOMENTARZE_DZIENNIE` | 8–12 | zmierzone 7,0; „0 jest dozwolone" |
-| follow | `FOLLOW_MIESIECZNIE` | 20–30/mies | zmierzone **0,0** |
+| komentarze | `KOMENTARZE_DZIENNIE` | 15–23 | podniesione 30.08 z 8–12 (wtedy zmierzone wykonanie 7,0/dobę); „0 jest dozwolone" |
+| follow | `FOLLOW_MIESIECZNIE` | 30–44/mies | 23.08 zerowane, 01.09 odwieszone (przed zerowaniem 20–30) |
 | subskrypcje | `SUBSKRYPCJE_MIESIECZNIE` | 6–12/mies | ląduje w skrzynce właściciela |
 | restacki | `RESTACK_DZIENNIE` | 1–2 | zjechane z 2–4 |
 

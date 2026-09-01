@@ -1074,6 +1074,159 @@ def zapisz_czytelnikow(page=None) -> dict[str, Any] | None:
     return zrzut
 
 
+# --- KOGO MY OBSERWUJEMY -----------------------------------------------------
+#
+# DRUGA STRONA `czytelnicy.jsonl`: tamten plik mowi, KTO CZYTA NAS, ten — KOGO
+# CZYTAMY MY. Powstal, bo blok obserwacji losowal z calej historii komentarzy
+# BEZ ZADNEGO ODSIEWU i regularnie trafial na kogos, kogo juz obserwujemy.
+#
+# ZMIERZONE 1 wrzesnia 2026 na zywym koncie (odczyt, nic nie klikniete):
+# `substack.com/@nothingisaccidental/following` oddaje 26 uchwytow, a
+# `visibleSubscriptionsCount` z `/api/v1/user/<handle>/public_profile` = 26 —
+# co do jednego tyle samo, wiec ta strona NIE dokleja zadnych podpowiedzi
+# „kogo obserwowac" i `_ludzie_z_zakladki` czyta z niej dokladnie liste
+# obserwowanych. Historia komentarzy miala tego dnia 92 hosty; osiem z nich
+# pokrywalo sie z ta lista juz po samym TANIM mapowaniu `host.split(".")[0]`,
+# a naprawde wiecej (`www.malone.news` -> `rwmalonemd`,
+# `moneywithkatie.substack.com` -> `katiegattitassin`). Przy budzecie okolo
+# 1,2 obserwacji na dobe to mniej wiecej jeden dzien na siedem zjadany na
+# kims, kogo juz obserwujemy — i do 1 wrzesnia zapisywany jako PORAZKA.
+#
+# DLACZEGO PAMIEC NA DYSKU, A NIE PYTANIE DO SUBSTACKA PRZY KAZDYM PRZEBIEGU.
+# Bo lista i tak przychodzi z czegos, co juz chodzi: `nasze_pozycje_do_pomiaru`
+# otwiera sesje przy KAZDYM pomiarze i czyta juz zakladke `/followers`
+# (`zapisz_czytelnikow`). Dolozenie tam jednego `goto` na `/following` kosztuje
+# ulamek tego, co osobna sesja przegladarki w bloku obserwacji (start Chrome to
+# sekundy, a blok ma dobowy budzet jednej sztuki). Blok obserwacji nie wchodzi
+# wiec do sieci ANI RAZU — czyta ten plik.
+#
+# PAMIEC SIE SAMA LECZY. Zrzut przepisuje uchwyty w calosci (odobserwowanie
+# przez wlasciciela znika z pamieci samo), a `obserwuj_profil` dopisuje kazdego,
+# kogo wlasnie zaobserwowal albo u kogo zastal „Unfollow" — wiec nawet przy
+# pustym pliku pomylka kosztuje jedno wejscie na profil, raz.
+OBSERWOWANI = config.DATA_DIR / "kogo_obserwujemy.json"
+
+
+def kogo_obserwujemy() -> dict[str, Any]:
+    """Kogo juz obserwujemy — Z DYSKU, BEZ SIECI.
+
+    `uchwyty`: {uchwyt: kiedy} — stan przepisany ze strony `/following` plus to,
+    czego dowiedzielismy sie po drodze.
+    `hosty`:   {host: uchwyt} — mapa hosta z historii komentarzy na uchwyt,
+    ktorej NIE DA SIE wyprowadzic ze zrzutu. Bez niej `www.malone.news` nie ma
+    jak trafic w `rwmalonemd`, bo tanie `host.split(".")[0]` dziala wylacznie
+    dla adresow w domenie Substacka, a i tam bywa mylne
+    (`theweeklyscrapbook.substack.com` to konto `weeklyscrapbook`).
+    """
+    import json as _json
+
+    pusto: dict[str, Any] = {"zrzut": None, "uchwyty": {}, "hosty": {}}
+    try:
+        if not OBSERWOWANI.exists():
+            return pusto
+        dane = _json.loads(OBSERWOWANI.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return pusto
+    if not isinstance(dane, dict):
+        return pusto
+    return {"zrzut": dane.get("zrzut"),
+            "uchwyty": dict(dane.get("uchwyty") or {}),
+            "hosty": dict(dane.get("hosty") or {})}
+
+
+def _zapisz_kogo_obserwujemy(pamiec: dict[str, Any]) -> None:
+    """Nigdy nie przerywa dzialania — to pamiec pomocnicza, nie warunek pracy."""
+    import json as _json
+
+    try:
+        OBSERWOWANI.parent.mkdir(parents=True, exist_ok=True)
+        OBSERWOWANI.write_text(
+            _json.dumps(pamiec, ensure_ascii=False, indent=1), encoding="utf-8")
+    except OSError as exc:
+        print("  [obserwowani] nie zapisalem: %s" % type(exc).__name__,
+              flush=True)
+
+
+def zapamietaj_obserwowanego(uchwyt: str, host: str | None = None) -> None:
+    """Dopisuje JEDNEGO do pamieci — po udanej obserwacji albo po zastaniu
+    „Unfollow" w menu.
+
+    Dwa fakty maja dwoch wlascicieli i dlatego funkcja bierze oba osobno:
+    `obserwuj_profil` wie, KOGO wlasnie obserwujemy (uchwyt), a blok w `run.py`
+    wie, Z KTOREGO HOSTA ten uchwyt sie wzial. Sam uchwyt nie wystarczy do
+    odsiania puli, bo pula jest lista hostow.
+    """
+    from datetime import datetime, timezone
+
+    uchwyt = (uchwyt or "").strip().lstrip("@")
+    if not uchwyt:
+        return
+    pamiec = kogo_obserwujemy()
+    pamiec["uchwyty"][uchwyt] = datetime.now(timezone.utc).isoformat(
+        timespec="seconds")
+    host = (host or "").strip().lower().rstrip("/")
+    if host:
+        pamiec["hosty"][host] = uchwyt
+    _zapisz_kogo_obserwujemy(pamiec)
+
+
+def czy_juz_obserwujemy(host: str, pamiec: dict[str, Any] | None = None) -> bool:
+    """Czy ten HOST wskazuje kogos, kogo juz obserwujemy. Bez sieci.
+
+    PRZY WATPLIWOSCI ODPOWIADA „NIE" — i to jest wybor, nie przeoczenie. Cena
+    pomylki jest niesymetryczna: falszywe „tak" kasuje z puli kogos, kogo
+    moglibysmy zaobserwowac (i nie dowiemy sie o tym nigdy), falszywe „nie"
+    kosztuje jedno wejscie na profil, po ktorym `obserwuj_profil` odczytuje
+    prawde z menu i dopisuje ja do pamieci.
+    """
+    pamiec = kogo_obserwujemy() if pamiec is None else pamiec
+    host = (host or "").strip().lower().rstrip("/")
+    if not host:
+        return False
+    if host in pamiec.get("hosty", {}):
+        return True
+    if host.endswith(".substack.com"):
+        return host.split(".")[0] in pamiec.get("uchwyty", {})
+    return False
+
+
+def odswiez_kogo_obserwujemy(page) -> int | None:
+    """Przepisuje pamiec ze strony `/@my/following`. Wymaga OTWARTEJ sesji.
+
+    Zwraca liczbe odczytanych osob albo None przy awarii odczytu.
+
+    PUSTY ODCZYT NIE KASUJE PAMIECI — ta sama zasada, co przy `zapisz_
+    czytelnikow`: zapisane zero wygladaloby jak konto, ktore nie obserwuje
+    nikogo, i jednym zapisem odblokowaloby cala pule.
+    """
+    from datetime import datetime, timezone
+
+    try:
+        page.goto(f"https://substack.com/@{PROFIL_HANDLE}/following",
+                  timeout=READ_TIMEOUT_MS * 2, wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 5000)
+        ludzie = _ludzie_z_zakladki(page)
+    except Exception as exc:
+        print("  [obserwowani] %s" % f"{type(exc).__name__}: {exc}"[:120],
+              flush=True)
+        return None
+    if not ludzie:
+        print("  [obserwowani] zakladka nic nie oddala — zostawiam pamiec",
+              flush=True)
+        return 0
+    teraz = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    stara = kogo_obserwujemy()
+    swiezi = {x["uchwyt"]: stara["uchwyty"].get(x["uchwyt"]) or teraz
+              for x in ludzie}
+    # HOSTY, KTORYCH UCHWYT ZNIKNAL ZE ZRZUTU, WYPADAJA RAZEM Z NIM. Inaczej
+    # odobserwowanie przez wlasciciela zostawaloby w pamieci na zawsze i host
+    # nie mialby jak wrocic do puli.
+    hosty = {h: u for h, u in stara["hosty"].items() if u in swiezi}
+    _zapisz_kogo_obserwujemy({"zrzut": teraz, "uchwyty": swiezi,
+                              "hosty": hosty})
+    return len(swiezi)
+
+
 WZROST = config.DATA_DIR / "wzrost.jsonl"
 
 
@@ -1264,6 +1417,15 @@ def nasze_pozycje_do_pomiaru(page=None, ile: int = 60) -> list[dict[str, Any]]:
                 print("  [czytelnicy] obserwujacych %d, subskrybentow %d"
                       % (len(zrzut["obserwujacy"]), len(zrzut["subskrybenci"])),
                       flush=True)
+            # I DRUGA STRONA: KOGO MY OBSERWUJEMY. Ta sama otwarta sesja, jedno
+            # wejscie na zakladke wiecej — a blok obserwacji dostaje dzieki
+            # temu odsiew puli BEZ ani jednego wlasnego zapytania do Substacka.
+            # Patrz `OBSERWOWANI`: 8 z 92 hostow historii to konta, ktore juz
+            # obserwujemy, i kazde takie losowanie zjadalo caly dzienny slot.
+            ilu = odswiez_kogo_obserwujemy(page)
+            if ilu:
+                print("  [obserwowani] znamy %d kont, ktore juz obserwujemy"
+                      % ilu, flush=True)
             if isinstance(profil, dict) and profil.get("id"):
                 feed = api_json(page, f"/api/v1/reader/feed/profile/{profil['id']}"
                                       "?types%5B%5D=note") or {}
@@ -2052,6 +2214,14 @@ def _klik_na_profilu(handle: str, napisy: tuple[str, ...], rodzaj: str,
 
     Gdy wlasciwego przycisku nie ma, nie robimy NIC. Klikniecie „w zastepstwie"
     to dokladnie ten blad, ktory to spowodowal.
+
+    TA FUNKCJA OBSLUGUJE JUZ TYLKO SUBSKRYPCJE. Rozdzielenie napisow bylo
+    konieczne, ale NIEWYSTARCZAJACE: obserwowania nie da sie tu zrobic zadnym
+    zestawem napisow, bo przycisku obserwowania NIE MA na wierzchu strony —
+    siedzi w menu pod kolkiem „...". Zmierzone 1 wrzesnia 2026: w naglowku
+    profilu sa dokladnie trzy przyciski — „Subscribe", „Message" i kolko
+    z `aria-label="Profile actions"`. Obserwowanie ma wiec wlasna droge,
+    patrz `obserwuj_profil`.
     """
     wyslij = naprawde_wyslac(wyslij, rodzaj)
     wymagaj_sesji()
@@ -2214,12 +2384,330 @@ def _wiersze_subskrybentow(page) -> list[dict[str, str]]:
     return zloz_wiersze_subskrybentow(surowe)
 
 
+# --- OBSERWOWANIE SIEDZI W MENU „...", NIE NA WIERZCHU ----------------------
+#
+# 23 sierpnia 2026 uznalismy, ze Substack ZDJAL przycisk „Follow" z profili.
+# Podstawa: szesc profili, slowo „Follow" nie wystepowalo w HTML ani razu.
+# POMIAR BYL PRAWDZIWY, WNIOSEK FALSZYWY. Przycisk jest — siedzi w menu pod
+# kolkiem „..." obok „Subscribe" i „Message", a to menu Substack DORYSOWUJE
+# DOPIERO PO KLIKNIECIU. W HTML zamknietej strony faktycznie go nie ma, wiec
+# pomiar nie mogl go zobaczyc i nie zobaczyl. Kosztowalo to dziewiec dni
+# zerowych obserwacji, ktore nikomu nie wygladaly na awarie, bo tabela normy
+# tlumaczyla je zdaniem o zdjetym przycisku.
+#
+# ZMIERZONE PONOWNIE 1 wrzesnia 2026, na zywej sesji na serwerze, przez
+# otwarcie menu i ODCZYT (zadna pozycja nie zostala klknieta):
+#
+#   przycisk otwierajacy   aria-label="Profile actions" (en)
+#                          aria-label="Działania w profilu" (pl)
+#   menu, gdy NIE obserwujemy   Copy link / Share / Send message /
+#                               Follow / Mute / Block / Report
+#   menu, gdy JUZ obserwujemy   Copy link / Share / [Send message] /
+#                               Unfollow / [Manage Subscription] /
+#                               Mute / Block / Report
+#
+# Profile sprawdzone: @genieai, @uniqueviolation, @mrghosh996 (nieobserwowani)
+# oraz @rwmalonemd, @thinkingincentives, @openthebooks (obserwowani).
+#
+# TRZY RZECZY, KTORE TEN POMIAR ROZSTRZYGA, A KTORYCH NIE WOLNO ZGADYWAC:
+#
+# 1. JEZYK NIE JEST WLASNOSCIA KONTA, TYLKO PRZEGLADARKI. Wlasciciel widzi
+#    menu po polsku, a Chrome na serwerze — tym samym kontem, ta sama sesja —
+#    po angielsku (`navigator.language` = en-US). Sprawdzone wprost: ta sama
+#    strona otwarta z `locale="pl-PL"` oddaje „Skopiuj link / Udostępnij /
+#    Wyślij wiadomość / Obserwuj / Wycisz / Zablokuj / Zgłoś". Dlatego etykiety
+#    trzymamy PARAMI i nie zakladamy, ktora zobaczymy.
+#
+# 2. LICZBA POZYCJI I ICH KOLEJNOSC SIE ZMIENIAJA. „Send message" znika u
+#    jednych, „Manage Subscription" dochodzi u innych — menu ma raz 7, raz 8
+#    pozycji, a „Follow" stoi raz na czwartym, raz na trzecim miejscu. Wybor
+#    po numerze pozycji trafilby predzej czy pozniej w „Mute" albo „Block".
+#
+# 3. „Unfollow" ZAWIERA W SOBIE „Follow". Dopasowanie po fragmencie tekstu —
+#    domyslne `exact=False` w Playwrighcie — na profilu JUZ OBSERWOWANYM
+#    trafiloby w „Unfollow" i ODOBSERWOWALOBY kogos w bloku, ktory ma
+#    obserwowac. Dlatego teksty czytamy sami i porownujemy przez `==`, zamiast
+#    powierzac to dopasowywaczowi biblioteki.
+MENU_PROFILU = ("Profile actions", "Działania w profilu")
+
+# Pozycja, ktora obserwuje. Klikamy WYLACZNIE cos, co jest na tej liscie.
+OBSERWUJ_POZYCJE = ("Follow", "Obserwuj")
+
+# Pozycja, ktora ODOBSERWOWUJE. To nie jest lista do klikania, tylko do
+# ROZPOZNAWANIA: jej obecnosc znaczy „juz go obserwujemy" i wtedy nie klikamy
+# NIC. Sluzy tez za potwierdzenie po klknieciu — patrz `potwierdz_obserwacje`.
+JUZ_OBSERWUJEMY_POZYCJE = ("Unfollow", "Przestań obserwować")
+
+
+def _pozycje_menu(page) -> list[str]:
+    """Teksty pozycji OTWARTEGO menu, w kolejnosci ekranu. Nic nie klika.
+
+    Bierzemy `role=menuitem`, bo tylko to Substack nadaje pozycjom menu —
+    klasy CSS sa generowane losowo (`item-Npdq6R`) i padna przy pierwszym
+    wdrozeniu po ich stronie.
+    """
+    pozycje = page.get_by_role("menuitem")
+    teksty: list[str] = []
+    for i in range(pozycje.count()):
+        try:
+            # Sklejamy biale znaki, bo pozycja bywa lamana na dwie linie,
+            # a porownujemy pozniej przez rownosc.
+            teksty.append(" ".join(pozycje.nth(i).inner_text().split()))
+        except Exception:
+            teksty.append("")
+    return teksty
+
+
+def _otworz_menu_profilu(page) -> bool:
+    """Klika kolko „..." w naglowku profilu. Otwarcie menu nie zmienia stanu.
+
+    NIE SZUKAMY PO NAZWIE „More". Pierwsze rozpoznanie zrobilo dokladnie to
+    i `get_by_role("button", name="More")` trafilo w NASZ WLASNY pasek boczny —
+    wyszlo menu „Saved / Archive / Appearance / Settings / Sign out", czyli
+    ustawienia konta zamiast czynnosci profilu. Na stronie sa jeszcze menu
+    „More options" przy KAZDEJ notce. Bierzemy wiec jedyna etykiete, ktora
+    dotyczy profilu i wystepuje na stronie dokladnie raz.
+    """
+    for etykieta in MENU_PROFILU:
+        kolko = page.locator('button[aria-label="%s"]' % etykieta)
+        if kolko.count() == 0:
+            continue
+        kolko.first.click(timeout=10_000)
+        # Menu rysuje sie po kliknieciu; 2,5 s wystarczylo na wszystkich
+        # szesciu profilach w rozpoznaniu.
+        page.wait_for_timeout(2500)
+        return True
+    return False
+
+
+def potwierdz_obserwacje(page) -> bool | None:
+    """Czy menu profilu mowi teraz, ze go OBSERWUJEMY. Otwiera menu i czyta.
+
+    True  — jest pozycja odobserwowania, czyli obserwacja weszla.
+    False — nadal jest pozycja „Obserwuj", czyli klik nic nie zrobil.
+    None  — nie wiadomo: menu sie nie otworzylo albo nie ma ani jednej,
+            ani drugiej pozycji (zmieniony uklad, wygasla sesja).
+
+    TO JEST MOCNIEJSZE POTWIERDZENIE NIZ PRZY POLUBIENIU i dlatego wyglada
+    inaczej. Przy lajku nie ma czego zapytac poza samym przyciskiem, wiec
+    `potwierdz_polubienie` porownuje jego wyglad przed i po. Tutaj Substack
+    sam odpowiada na pytanie „czy obserwujesz": menu podmienia „Follow" na
+    „Unfollow". Pytamy wiec o STAN, a nie o to, czy cos drgnelo.
+
+    NIEPEWNOSC LICZYMY NA KORZYSC OBSERWACJI — ta sama decyzja i ten sam
+    powod, co w `potwierdz_polubienie`. Dziennik jest jedynym licznikiem
+    obserwacji dnia, wiec falszywe „nie udalo sie" kosztuje CALA dzienna
+    norme (przy 30-44 miesiecznie to okolo 1,2 obserwacji na dobe — czyli
+    zwykle jedyna tego dnia), a falszywe „udalo sie" kosztuje jeden slot.
+    Progi sa niesymetryczne swiadomie. Roznica wobec lajka jest taka, ze tu
+    None powinno byc rzadkie: to nie „nie umiem odczytac przycisku", tylko
+    „menu w ogole nie odpowiedzialo", czyli osobna awaria — i dlatego trafia
+    do dziennika jako `potwierdzone=None`, a nie znika w „udane".
+    """
+    # OTWARTE, SWIADOMIE NIETKNIETE: te funkcje przeszla na zywo TYLKO droga
+    # do klikniecia, nie samo potwierdzenie po nim. 1 wrzesnia 2026 puscilem
+    # `obserwuj_profil(wyslij=False)` na czterech profilach (@genieai,
+    # @mrghosh996 — wolne; @rwmalonemd, @thinkingincentives — obserwowane)
+    # i kod za kazdym razem otworzyl menu, odczytal 7 albo 8 pozycji i podjal
+    # wlasciwa decyzje. Ale `wyslij=False` zatrzymuje sie PRZED klknieciem,
+    # wiec galezi „klikamy, potem czytamy menu jeszcze raz" nie widzialem
+    # w dzialaniu — sprawdzenie jej wymaga zaobserwowania kogos naprawde,
+    # czego nie robie bez zgody wlasciciela.
+    #
+    # CO DOKLADNIE ZMIERZYC, ZEBY TO ZAMKNAC — jedna obserwacja, trzy odczyty
+    # (stan na 1 wrzesnia 2026, nadal NIEWYKONANE):
+    #
+    #   1. `obserwuj_profil(<wolny profil>, wyslij=False)` — zapisz liste
+    #      z wiersza „menu profilu @...": ma byc 7 albo 8 pozycji z „Follow";
+    #   2. to samo z `wyslij=True` — jeden raz, na tym samym profilu;
+    #   3. trzy zapisy o tym samym zdarzeniu musza sie zgodzic:
+    #      * dziennik: `rodzaj="obserwacja"`, `udane=True`, `potwierdzone=True`,
+    #      * `kogo_obserwujemy()["uchwyty"]` ma ten uchwyt,
+    #      * `obserwuj_profil(ten sam profil, wyslij=False)` oddaje teraz
+    #        `juz_obserwowany=True` — czyli menu po kliknieciu naprawde mowi
+    #        „Unfollow", a nie tylko my tak twierdzimy.
+    #
+    # Gdyby wyszlo `potwierdzone=None` przy punkcie 3 mowiacym „Unfollow",
+    # znaczy to, ze Substack PO KLIKNIECIU przerysowuje menu inaczej niz przy
+    # zwyklym otwarciu — wtedy trzeba wydluzyc `wait_for_timeout(4000)`
+    # w `obserwuj_profil`, a NIE zmieniac progow.
+    #
+    # Kosztem jest jedna nieodwracalna zmiana stanu konta, wiec wymaga zgody
+    # wlasciciela. Do tego czasu notatka zostaje.
+    if not _otworz_menu_profilu(page):
+        return None
+    teksty = _pozycje_menu(page)
+    try:
+        page.keyboard.press("Escape")
+    except Exception:
+        pass
+    if any(t in JUZ_OBSERWUJEMY_POZYCJE for t in teksty):
+        return True
+    if any(t in OBSERWUJ_POZYCJE for t in teksty):
+        return False
+    return None
+
+
 def obserwuj_profil(handle: str, wyslij: bool = False) -> dict[str, Any]:
     """Obserwuje cudzy profil — jego notki trafiaja do naszego kanalu.
 
-    Nie przysyla nic mailem, wiec limit jest szerszy niz przy subskrypcji.
+    Nie przysyla nic mailem, wiec limit jest szerszy niz przy subskrypcji:
+    30-44 obserwacje miesiecznie wobec 6-12 subskrypcji.
+
+    NIE UZYWA `_klik_na_profilu`. Tamta funkcja szuka przycisku NA WIERZCHU
+    strony i dla obserwacji nie mogla znalezc nic, bo na wierzchu sa tylko
+    „Subscribe", „Message" i kolko „...". Zostaje przy subskrypcji, gdzie
+    przycisk naprawde jest na wierzchu.
+
+    ZADNEJ POZYCJI POZA „Follow"/„Obserwuj" NIE KLIKAMY. W tym samym menu
+    stoja „Mute", „Block" i „Report" — klikniecie „w zastepstwie" jest tu
+    duzo drozsze niz przy subskrypcji, bo blokady i zgloszenia nie cofa sie
+    po cichu. Gdy pozycji nie ma, funkcja odchodzi z pustymi rekami i zapisuje
+    powod.
+
+    „JUZ GO OBSERWUJEMY" NIE JEST PORAZKA. Menu z pozycja „Unfollow" znaczy,
+    ze pula sie wyczerpala — nie ze cos nie zadzialalo. Taki przebieg idzie do
+    dziennika jako `obserwacja_pominieta` (`udane=True`), a nie jako nieudana
+    `obserwacja`, i dopisuje uchwyt do `OBSERWOWANI`, zeby jutro nie kosztowal
+    juz nawet wejscia na strone. Patrz komentarz przy `OBSERWOWANI`.
     """
-    return _klik_na_profilu(handle, ("Follow", "Obserwuj"), "obserwacja", wyslij)
+    wyslij = naprawde_wyslac(wyslij, "obserwacja")
+    wymagaj_sesji()
+    p, browser, context = podlacz_sie()
+    page = context.new_page()
+    wynik: dict[str, Any] = {"handle": handle, "zrobione": False,
+                             "juz_obserwowany": False, "potwierdzone": None,
+                             "pozycje": [], "blad": None, "powod": None}
+    try:
+        page.goto(f"https://substack.com/@{handle}", timeout=READ_TIMEOUT_MS * 2,
+                  wait_until="domcontentloaded")
+        page.wait_for_timeout(SETTLE_MS + 4000)
+
+        if not _otworz_menu_profilu(page):
+            wynik["blad"] = f"nie ma kolka „...” na profilu {handle}"
+            print(f"  {wynik['blad']}", flush=True)
+            return wynik
+
+        teksty = _pozycje_menu(page)
+        wynik["pozycje"] = teksty
+        print(f"  menu profilu @{handle}: {teksty}", flush=True)
+
+        # NAJPIERW PYTAMY, CZY JUZ OBSERWUJEMY, i dopiero potem szukamy
+        # czego kliknac. Odwrotna kolejnosc nic by nie zmienila przy dwoch
+        # zmierzonych jezykach, ale przy trzecim, ktorego nie zmierzylem,
+        # slowo „obserwuj" moze siedziec w obu pozycjach naraz. Wtedy ta
+        # kolejnosc jest roznica miedzy „nie robimy nic" a „odobserwowalismy".
+        juz = [t for t in teksty if t in JUZ_OBSERWUJEMY_POZYCJE]
+        if juz:
+            # `powod`, NIE `blad` — i to jest cala poprawka z 1 wrzesnia 2026.
+            # Zastanie „Unfollow" znaczy, ze pula sie wyczerpala, a nie ze cos
+            # zawiodlo. Dopoki siedzialo to w polu `blad`, `dopisz_wynik`
+            # zapisywalo dzien jako PORAZKE obserwacji — czyli tak samo, jak
+            # wygladalo zniknieciecie przycisku, ktore kosztowalo dziewiec dni.
+            # Licznik nie mial jak odroznic tych dwoch rzeczy.
+            wynik["juz_obserwowany"] = True
+            wynik["powod"] = f"juz obserwujemy {handle} — menu pokazuje {juz[0]!r}"
+            print(f"  {wynik['powod']} — nie klikam nic", flush=True)
+            try:
+                page.keyboard.press("Escape")
+            except Exception:
+                pass
+            return wynik
+
+        # Rownosc, nie fragment: „Unfollow" zawiera w sobie „Follow".
+        gdzie = next((i for i, t in enumerate(teksty)
+                      if t in OBSERWUJ_POZYCJE), None)
+        if gdzie is None:
+            wynik["blad"] = (f"menu profilu {handle} nie ma pozycji obserwowania"
+                             f" (jest: {', '.join(teksty) or 'nic'})")
+            print(f"  {wynik['blad']} — nie klikam nic innego", flush=True)
+            try:
+                page.keyboard.press("Escape")
+            except Exception:
+                pass
+            return wynik
+
+        if not wyslij:
+            print(f"  (nie klikam — tryb sprawdzenia; kliknalbym"
+                  f" {teksty[gdzie]!r})", flush=True)
+            return wynik
+
+        # SPRAWDZAMY TEKST JESZCZE RAZ, TUZ PRZED KLIKNIECIEM. Numer `gdzie`
+        # pochodzi z odczytu sprzed chwili, a menu jest rysowane Reactem —
+        # gdyby przerysowalo sie miedzy odczytem a klikiem, ten sam numer
+        # wskazywalby juz inna pozycje, a pod czwartym numerem stoi „Mute".
+        # Klikamy tylko wtedy, gdy pod tym numerem NADAL stoi to, co czytalismy.
+        cel = page.get_by_role("menuitem").nth(gdzie)
+        teraz = " ".join(cel.inner_text().split())
+        if teraz not in OBSERWUJ_POZYCJE:
+            wynik["blad"] = (f"pozycja {gdzie} zmienila sie z {teksty[gdzie]!r}"
+                             f" na {teraz!r} — nie klikam")
+            print(f"  {wynik['blad']}", flush=True)
+            return wynik
+        cel.click(timeout=10_000)
+        page.wait_for_timeout(4000)
+
+        # ESCAPE PRZED POTWIERDZANIEM, ZEBY STAN MENU BYL ZNANY. Menu Substacka
+        # zamyka sie po wyborze pozycji — tak dzialaja menu tego typu — ale
+        # tego akurat NIE ZMIERZYLEM, bo pomiar byl czysto odczytowy i zadnej
+        # pozycji nie klikalem. Gdyby menu zostalo otwarte, `potwierdz_
+        # obserwacje` kliknelaby kolko po raz drugi i tym samym je ZAMKNELA,
+        # a potem nie znalazlaby ani jednej pozycji i oddala None — czyli
+        # „nie wiem" tam, gdzie odpowiedz byla na wyciagniecie reki. Escape na
+        # zamknietym menu nic nie robi, wiec kosztuje nas zero.
+        try:
+            page.keyboard.press("Escape")
+            page.wait_for_timeout(800)
+        except Exception:
+            pass
+
+        wynik["potwierdzone"] = potwierdz_obserwacje(page)
+        # None znaczy „nie odczytalem", nie „nie udalo sie" — patrz docstring
+        # `potwierdz_obserwacje`. Tylko twarde False jest porazka.
+        wynik["zrobione"] = wynik["potwierdzone"] is not False
+        print("  ZROBIONE" if wynik["potwierdzone"] is True
+              else ("  KLIKNIETE, ALE MENU NADAL PROPONUJE OBSERWOWANIE"
+                    if wynik["potwierdzone"] is False
+                    else "  KLIKNIETE, BEZ POTWIERDZENIA"), flush=True)
+    except Exception as exc:
+        wynik["blad"] = f"{type(exc).__name__}: {exc}"[:200]
+        print(f"  BŁĄD: {wynik['blad']}", flush=True)
+    finally:
+        # BRAK POZYCJI TO TEZ WYNIK i musi zostawic slad — to jest dokladnie
+        # ta dziura, przez ktora dziewiec dni zerowych obserwacji wygladalo
+        # na blok, ktory sie nie odbywa. `dopisz_wynik` jest idempotentny,
+        # wiec zapis stad nie dubluje niczego.
+        if wyslij and (wynik["zrobione"] or wynik["juz_obserwowany"]):
+            # PAMIETAMY, ZEBY NIE LOSOWAC TEGO SAMEGO JUTRO. Zapis idzie takze
+            # przy `potwierdzone=None` (czyli „kliknelismy, nie odczytalismy
+            # skutku"): jesli obserwacja jednak nie weszla, najblizszy zrzut
+            # `/following` wyrzuci ten uchwyt z pamieci sam, bo przepisuje
+            # liste w calosci. Falszywy wpis kosztuje wiec najwyzej jeden dzien
+            # nieobecnosci w puli, a jego brak — powtorzone wejscie na profil.
+            zapamietaj_obserwowanego(handle)
+        if wyslij and wynik["juz_obserwowany"]:
+            # NIE `dopisz_wynik`, I TO JEST SEDNO. Tamta funkcja zna dwa stany:
+            # udane i nieudane — a „juz go obserwujemy" nie jest ani jednym,
+            # ani drugim. Zapisane jako porazka zanizalo norme i podbijalo
+            # `pod_rzad_zle` (dwie z rzedu zwalniaja caly blok), a zapisane
+            # jako sukces klamaloby, ze obserwacji przybylo.
+            #
+            # OSOBNY `rodzaj` ZAMIAST OSOBNEGO POLA, bo `norma.wczytaj` dzieli
+            # wpisy po `udane` i patrzy WYLACZNIE na `norma.RODZAJE`
+            # („obserwacja" tam jest, „obserwacja_pominieta" nie ma i nie ma
+            # miec). Dzieki temu licznik nie liczy tego ani do wykonanych, ani
+            # do nieudanych, a `slad_dziennika` — ktory czyta KAZDY wpis —
+            # nadal widzi, ze maszyna tego dnia zyla. Zero zmian w `norma.py`.
+            zapisz_w_dzienniku("obserwacja_pominieta", udane=True, komu=handle,
+                               powod=wynik["powod"], juz_obserwowany=True)
+        elif wyslij:
+            dopisz_wynik("obserwacja", wynik, komu=handle,
+                         potwierdzone=wynik["potwierdzone"],
+                         juz_obserwowany=wynik["juz_obserwowany"])
+        page.close()
+        browser.close()
+        p.stop()
+    return wynik
 
 
 def kogo_polecamy(page=None) -> list[dict[str, Any]]:

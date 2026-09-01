@@ -39,6 +39,76 @@ WERDYKTY: list[tuple[str, str]] = []
 # (sedzia banku dostal do oceny notki o szamponie).
 PIVOT = "2026-08-25"
 
+# CO MA WYCHODZIC NA ZEWNATRZ — JEDNA LISTA, DWOCH CZYTELNIKOW (etap 1 i 2).
+#
+# Byly tu dwie recznie przepisane krotki po szesc pozycji, w dwoch miejscach
+# tego samego pliku. Trzecia kopia powstalaby przy pierwszym nowym rodzaju,
+# a rozjechanie sie kopii to dokladnie ta klasa bledu, ktora ten audyt lapie
+# (`config.normy_dzienne` mowila „follow", dziennik zapisywal „obserwacja"
+# i licznik meldowal 0% przy dzialajacym bloku).
+#
+# `obserwacja` JEST TU OD 1 WRZESNIA 2026 i to jest sedno zmiany — powody
+# stoja przy petli werdyktow w etapie 1.
+RODZAJE_WYCHODZACE = ("notka", "komentarz", "odpowiedz", "polubienie",
+                      "restack", "subskrypcja", "obserwacja")
+
+# ROZLICZANE Z PLANU DNIA (etap 2) — WEZSZA LISTA, I TO NIE JEST WYJATEK,
+# TYLKO ARYTMETYKA.
+#
+# Prog „zrobione >= plan * 0,6" niesie informacje dopiero przy planie, ktory
+# da sie w ogole podzielic. Realne normy dobowe (`config.normy_dzienne`):
+# notka 5, komentarz ~18, polubienie ~13, restack 1,5, obserwacja ~1,2
+# (`FOLLOW_MIESIECZNIE` 30-44 na 30 dni), subskrypcja 0,3 (6-12 na miesiac).
+#
+# `obserwacja` DOSZLA 1 WRZESNIA 2026, bo lezy w tej samej skali co restack,
+# ktory stoi tu od poczatku. `subskrypcja` zostaje poza lista: przy 0,3 na dobe
+# wiekszosc dni ma plan ZERO, a 60% z zera nie jest pytaniem. Ten sam rachunek
+# prowadzi `norma.py` (`MIN_PLAN_DZIENNY_DO_ZNAKU` = 3 dla kratki tabeli,
+# `MIN_BRAKOW_W_OKNIE_DO_ALARMU` = 4 dla alarmu) — i tam obserwacje takze
+# podlegaja WYLACZNIE progom, od kiedy `NIEWYKONALNE` jest puste.
+RODZAJE_Z_PLANEM = ("notka", "komentarz", "polubienie", "restack",
+                    "obserwacja")
+
+# POMINIECIE NIE JEST ANI SUKCESEM, ANI PORAZKA — I DLATEGO MA WLASNY LICZNIK.
+#
+# `obserwacja_pominieta` zapisuje sie z `udane=True` w trzech sytuacjach i
+# zadna z nich nie jest wystawieniem czegokolwiek: profil okazal sie juz
+# obserwowany („Unfollow" w menu, `browser.py:2701`), cala pula hostow z
+# historii komentarzy jest juz obserwowana (`run.py:1061`), albo wszyscy
+# wylosowani byli znani z pamieci (`run.py:1156`). Slotu dnia to nie zjada
+# (`run.py:1087` liczy wylacznie proby), wiec blok probuje dalej.
+#
+# WLICZONE DO `udane` — podnosilyby „wychodzi: obserwacja" na OK przy ZERZE
+# prawdziwych obserwacji, czyli robilyby dokladnie to, co robilo zdanie
+# o „braku przycisku": tlumaczylyby zero. Wliczone do `nieudane` — zanizalyby
+# wynik za stan calkowicie poprawny i podbijaly „porazki dominuja". Stoja wiec
+# osobno: raport je pokazuje i o nic z nich nie pyta.
+#
+# `norma.RODZAJE` tego rodzaju NIE ZAWIERA i zawierac nie ma — ten licznik
+# musi go pominac sam, bo czyta dziennik wprost.
+POMINIECIA = ("obserwacja_pominieta",)
+
+
+def policz_rodzaje(wpisy: list[dict]) -> tuple[Counter, Counter, Counter]:
+    """(udane, nieudane, pominiete) — trzy liczniki, bo stany naprawde sa trzy.
+
+    Dzielenie dziennika samym `udane` mialo sens, dopoki kazdy wpis byl proba.
+    Od 1 wrzesnia 2026 jest rodzaj, ktory proba nie jest (patrz `POMINIECIA`),
+    a nosi `udane=True` — wiec `Counter(... if w.get("udane"))` zaliczalby go
+    do sukcesow. Jedno miejsce, w ktorym to sie rozstrzyga, zeby zadna suma
+    nizej nie musiala o tym pamietac.
+    """
+    udane: Counter = Counter()
+    nieudane: Counter = Counter()
+    pominiete: Counter = Counter()
+    for w in wpisy:
+        rodzaj = w.get("rodzaj")
+        if rodzaj in POMINIECIA:
+            pominiete[rodzaj] += 1
+            continue
+        (udane if w.get("udane") else nieudane)[rodzaj] += 1
+    return udane, nieudane, pominiete
+
 
 def etap(nr: int, nazwa: str) -> None:
     print()
@@ -86,26 +156,49 @@ def main() -> int:
         return 1
     print("  wpisow w dzienniku: %d, po przestawieniu na AI (%s): %d"
           % (len(wpisy), PIVOT, len(po_pivocie)))
-    udane = Counter(w.get("rodzaj") for w in po_pivocie if w.get("udane"))
-    nieudane = Counter(w.get("rodzaj") for w in po_pivocie if not w.get("udane"))
+    udane, nieudane, pominiete = policz_rodzaje(po_pivocie)
     for rodzaj in sorted(set(udane) | set(nieudane)):
         print("    %-12s udane %3d, nieudane %2d"
               % (rodzaj, udane.get(rodzaj, 0), nieudane.get(rodzaj, 0)))
+    # POMINIECIA STOJA OBOK TABELI, NIE W NIEJ. Kolumny nazywaja sie „udane"
+    # i „nieudane", wiec kazda liczba postawiona w ktorejkolwiek z nich cos
+    # twierdzi — a pominiecie nie twierdzi ani jednego, ani drugiego. Powody
+    # przy `POMINIECIA`.
+    if pominiete:
+        print("    pominiecia (ani sukces, ani porazka): %s"
+              % ", ".join("%s %d" % (r, i) for r, i in sorted(pominiete.items())))
     # KAZDY RODZAJ MA WYCHODZIC. Rodzaj, ktorego nie ma ani razu, to albo
     # martwa galaz, albo cichy blad — jedno i drugie warto zobaczyc.
-    for rodzaj in ("notka", "komentarz", "odpowiedz", "polubienie",
-                   "restack", "subskrypcja"):
+    #
+    # OBSERWACJE WESZLY DO TEJ PETLI 1 WRZESNIA 2026, BEZ WLASNEGO ZDANIA.
+    # Stal tu osobny werdykt „obserwacje (follow) — znane ograniczenie" i
+    # drukowal „brak przycisku w sesji", bo 23 sierpnia uznano, ze Substack
+    # zdjal „Follow" z profili. POMIAR BYL DOBRY: slowa „Follow" naprawde nie
+    # ma w HTML profilu. ZLY BYL WNIOSEK — menu z ta pozycja Substack
+    # dorysowuje DOPIERO PO KLIKNIECIU `button[aria-label="Profile actions"]`,
+    # wiec w HTML zamknietej strony przycisku nie ma i byc nie moze. Zmierzone
+    # ponownie na zywej sesji 1 wrzesnia 2026 (sam odczyt, zero klikniec): menu
+    # to `Copy link / Share / Send message / Follow / Mute / Block / Report`,
+    # a na profilu juz obserwowanym w miejscu „Follow" stoi „Unfollow".
+    #
+    # DLACZEGO TO BYLO GORSZE TUTAJ NIZ GDZIEKOLWIEK INDZIEJ. Jedynym
+    # produktem tego pliku jest raport dla czlowieka. Zero z wyjasnieniem
+    # przestaje wygladac na problem, wiec nikt go nie sprawdza — audyt, ktory
+    # tlumaczy zero zdaniem nieprawdziwym, jest gorszy od audytu, ktory tego
+    # zera w ogole nie zauwaza. To samo zdanie stalo w `norma.NIEWYKONALNE`
+    # i zostalo zdjete tego samego dnia; ta lista jest dzis pusta.
+    for rodzaj in RODZAJE_WYCHODZACE:
         werdykt("wychodzi: %s" % rodzaj,
                 "OK" if udane.get(rodzaj) else "UWAGA",
                 "%d od %s" % (udane.get(rodzaj, 0), PIVOT))
-    # OBSERWACJE. Przycisku „Follow" na Substacku nie da sie dosiegnac
-    # z naszej sesji — to ustalenie, nie usterka. Melduje jako UWAGE, zeby
-    # nie zniknelo z pola widzenia, ale nie jako BLAD.
-    werdykt("obserwacje (follow) — znane ograniczenie",
-            "OK" if udane.get("obserwacja") else "UWAGA",
-            "%d prob; brak przycisku w sesji" % udane.get("obserwacja", 0))
     if nieudane:
         naj = nieudane.most_common(3)
+        # MIANOWNIK TO PROBY, NIE WPISY. `sum(udane.values())` bralo wszystko,
+        # co ma `udane=True` — a od 1 wrzesnia jest tam takze
+        # `obserwacja_pominieta`, ktora nie jest praca. Kazde pominiecie
+        # podnosilo wiec prog, powyzej ktorego porazki „dominuja", i robilo
+        # ten werdykt lagodniejszym za stan, w ktorym NIC nie wyszlo.
+        # `policz_rodzaje` odsiewa to u zrodla, wiec ta suma juz liczy proby.
         werdykt("porazki nie dominuja",
                 "OK" if sum(nieudane.values()) < sum(udane.values()) / 2 else "UWAGA",
                 ", ".join("%s %d" % (r, i) for r, i in naj))
@@ -114,13 +207,15 @@ def main() -> int:
     etap(2, "NORMA — plan wobec wykonania, dzien po dniu")
     dni = defaultdict(Counter)
     for w in po_pivocie:
-        if w.get("udane"):
+        # `POMINIECIA` odpadaja tu z tego samego powodu, co w etapie 1: ponizej
+        # ta liczba idzie wprost do „plan X w dniu Y" i pominiecie liczone jak
+        # wykonanie meldowaloby wykonany plan przy zerze prawdziwych obserwacji.
+        if w.get("udane") and w.get("rodzaj") not in POMINIECIA:
             dni[dzien(w)][str(w.get("rodzaj"))] += 1
     for d in sorted(dni)[-7:]:
         print("    %s  %s" % (d, "  ".join(
             "%s %d" % (r, i) for r, i in sorted(dni[d].items())
-            if r in ("notka", "komentarz", "odpowiedz", "polubienie",
-                     "restack", "subskrypcja"))))
+            if r in RODZAJE_WYCHODZACE)))
     # PLAN AGENTA, NIE DZISIEJSZA AMBICJA. `config.normy_dzienne()` mowi, ile
     # POWINNO wychodzic docelowo; `norma.budzety_dzienne()` — ile agent w tym
     # dniu w ogole sobie zalozyl. Mierzenie wykonania ambicja daje falszywy
@@ -151,7 +246,7 @@ def main() -> int:
             if cichy:
                 print("    (%s byl CICHYM DNIEM — %s sa wyciszone z zalozenia)"
                       % (ost, ", ".join(sorted(wyciszone)) or "nadawane tresci"))
-            for rodzaj in ("notka", "komentarz", "polubienie", "restack"):
+            for rodzaj in RODZAJE_Z_PLANEM:
                 if rodzaj in wyciszone:
                     werdykt("plan %s w dniu %s" % (rodzaj, ost), "OK",
                             "cichy dzien — wyciszone z zalozenia")

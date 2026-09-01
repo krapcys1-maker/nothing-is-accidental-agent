@@ -42,12 +42,29 @@ ZMIERZONE — ten sam harness, dwie wersje pliku, budzet padajacy na recenzji:
               grafika -> zweryfikuj                        (BudgetExceeded)
     teraz:    warto_pisac -> write -> review               (BudgetExceeded)
 
+DRUGA AKTUALIZACJA, 1 WRZESNIA 2026 — GOTOWY TEKST MA PRZEZYC, ALE ZADEN ETAP
+GO NIE ZAPISUJE. Do tej pory naprawiona wersja urywala sie na recenzji i
+gotowy tekst — okolo 0,76 USD za samo pisanie — nie trafial nawet na dysk.
+Wlasciciel zdecydowal: zapisac, nie wyrzucac; zapis jest darmowy.
+
+Ratunek pisze plik SAM, bez `stages.save`, do katalogu siostrzanego wobec
+`ARTICLES_DIR` i BEZ wiersza w `articles` — dlatego slad etapow konczy sie na
+recenzji, dokladnie tak jak przed dolozeniem ratunku. Powod jest osobny i
+zmierzony w `test_ratunek_tekstu.py`: zapis przez `stages.save` wpuszczal
+niesprawdzony tekst do korpusu i psul szesciu czytelnikow, ktorzy nie filtruja
+po statusie.
+
+Roznica wobec e88b456 jest mierzalna i zmierzona: stara wersja wola po
+recenzji `ocen_forme`, `grafika` i `zweryfikuj`, czyli TRZY platne wywolania
+przy koncie, ktore nie ma juz na jedno; naprawiona nie wola ani jednego.
+
 Roznice, wszystkie policzone przez ten plik:
 
                                           e88b456        po naprawie
     wystaw_artykul(wyslij=True)           WOLANE(*)      nie wolane
     wyjatek z `_napisz_i_zapisz`          brak, kod 0(*) BudgetExceeded
-    dochodzi do `save` i `grafika`        TAK            NIE
+    platne etapy po padnietej recenzji    3              0
+    dochodzi do `grafika`                 TAK            NIE
     stages.write przy budzecie na write   2 razy         1 raz
     MODEL_FOR["write"] po awarii pisarza  claude-opus-5  claude-fable-5
     budzet na `ocen_forme`                brnie do konca zatrzymuje na formie
@@ -58,10 +75,19 @@ Roznice, wszystkie policzone przez ten plik:
     konczy sie `BudgetExceeded` z bramki zamiast wystawieniem — i wlasnie to
     mierza dzis sekcje 3, 6 i 7.
 
-CALY TEN PLIK PUSZCZONY NA DRZEWIE Z `git show e88b456:...` W MIEJSCU
-PRODUKCJI dawal 23 zdane i 8 OBLANYCH (pomiar sprzed naprawy bramki). Na
-drzewie po naprawie: 35 zdanych, 0 oblanych. Sekcje 9 i 10 przechodza w obu —
-`main` wady nie mial, tylko wyjatek do niego nie docieral.
+CALY TEN PLIK PUSZCZONY W MIEJSCU PRODUKCJI, przemierzony 1 wrzesnia 2026 po
+dolozeniu zapisu ratunkowego (`git show <SHA>:agent-v2/artykul_z_puli.py`
+w miejscu pliku, potem przywrocenie — odcisk sha256 sprawdzony):
+
+    e88b456 (regresja polykajaca budzet):   29 zdanych, 7 OBLANYCH
+    64d881a (przed zapisem ratunkowym):     34 zdane,   2 OBLANE
+    drzewo teraz:                           36 zdanych, 0 oblanych
+
+Te dwie oblane na `64d881a` to dokladnie sekcje 2 i 6: przed zmiana przebieg
+urywal sie na recenzji bez zapisu, wiec gotowy tekst przepadal. Sekcje 9 i 10
+przechodza we wszystkich trzech — `main` wady nie mial, tylko wyjatek do niego
+nie docieral. (Poprzedni pomiar, sprzed naprawy `stages.zweryfikuj` i sprzed
+ratunku, dawal na e88b456 23 zdane i 8 oblanych przy innym zestawie asercji.)
 
 Powtorka pisarza na Opusie jest osobna szkoda: e88b456 przy budzecie na
 `warto_pisac` albo na `write` placilo za pisarza DWA razy (~0,76 USD kazde,
@@ -296,6 +322,16 @@ def przebieg(sciezka, pada_na, fabryka, budzet_wyczerpany=True):
     stare_moduly = {k: sys.modules.get(k) for k in ("gates", "browser")}
     stary_argv = sys.argv[:]
     stary_model = dict(config.MODEL_FOR)
+    # KATALOG NA CZAS PRZEBIEGU — INACZEJ RATUNEK PISZE DO PRODUKCJI.
+    # `AtrapaStages.save` jest atrapa i nic nie zapisuje, wiec do 1 wrzesnia
+    # ten harness nie dotykal dysku wcale. Ratunek pisze PRAWDZIWE pliki i
+    # liczy swoj katalog z `config.ARTICLES_DIR.parent` — bez tej podmiany
+    # zostawial komplet w `agent-v2/data/artykuly-przerwane/`. Zmierzone: po
+    # jednym przebiegu tego pliku lezaly tam cztery pliki z atrapy.
+    stary_kat = config.ARTICLES_DIR
+    korzen = pathlib.Path(tempfile.mkdtemp())
+    (korzen / "articles").mkdir()
+    config.ARTICLES_DIR = korzen / "articles"
     sys.modules["gates"] = AtrapaGates()
     sys.modules["browser"] = br
     sys.argv = ["artykul_z_puli.py", "--wyslij"]
@@ -313,6 +349,7 @@ def przebieg(sciezka, pada_na, fabryka, budzet_wyczerpany=True):
         # slownik, ktory badany plik przestawia na Opusa — sprawdzanie go po
         # sprzataniu dawaloby zawsze wartosc wyjsciowa, czyli asercje o niczym.
         model_po = config.MODEL_FOR.get("write")
+        config.ARTICLES_DIR = stary_kat
         sys.argv = stary_argv
         config.MODEL_FOR.clear()
         config.MODEL_FOR.update(stary_model)
@@ -321,9 +358,11 @@ def przebieg(sciezka, pada_na, fabryka, budzet_wyczerpany=True):
                 sys.modules.pop(k, None)
             else:
                 sys.modules[k] = v
+    ratkat = korzen / "artykuly-przerwane"
     return {"slad": slad, "wyjatek": wyjatek, "kod": kod,
             "wystawienia": br.wystawienia, "ekran": buf.getvalue(),
-            "model_po": model_po, "modul": mod}
+            "model_po": model_po, "modul": mod, "korzen": korzen,
+            "ratunek": sorted(ratkat.glob("*.md")) if ratkat.exists() else []}
 
 
 def budzet():
@@ -378,9 +417,23 @@ sprawdz("nic nie poszlo na Substacka",
 sprawdz("wyjatek wychodzi z `_napisz_i_zapisz` na wylot",
         isinstance(teraz["wyjatek"], llm.BudgetExceeded),
         type(teraz["wyjatek"]).__name__)
-sprawdz("zatrzymuje sie NA recenzji, nie brnie do zapisu",
-        "save" not in teraz["slad"] and "grafika" not in teraz["slad"],
+# ZMIANA KONTRAKTU Z 1 WRZESNIA 2026 — ta asercja brzmiala „nie brnie do
+# zapisu" i pilnowala `"save" not in slad`. Wlasciciel zdecydowal odwrotnie:
+# gotowy tekst, za ktory zaplacono okolo 0,76 USD, ma trafic NA DYSK, bo zapis
+# jest darmowy. Nie zmienilo sie natomiast NIC z tego, czego ten plik pilnuje
+# naprawde: `grafika` i `zweryfikuj` wolaja modele, wiec przy pustym budzecie
+# nadal nie wolno ich tknac, a `wystaw_artykul` stoi za `raise`.
+# Ratunek i jego ramka blokujaca sa mierzone w `test_ratunek_tekstu.py`.
+sprawdz("zatrzymuje sie NA recenzji: zaden platny etap dalej nie rusza",
+        "grafika" not in teraz["slad"] and "zweryfikuj" not in teraz["slad"],
         teraz["slad"])
+sprawdz("...i po recenzji nie rusza ZADEN etap — nawet darmowy `save`",
+        teraz["slad"] == ["warto_pisac", "write", "review"], teraz["slad"])
+sprawdz("...a mimo to gotowy tekst jest na dysku: ratunek pisze plik sam,"
+        " poza `ARTICLES_DIR` i bez wiersza w `articles`",
+        len(teraz["ratunek"]) == 1
+        and list((teraz["korzen"] / "articles").glob("*")) == [],
+        [p.name for p in teraz["korzen"].glob("*")])
 
 print()
 print("=== 3. KONTRDOWOD ODTWORZONY: e88b456 NA TYM SAMYM HARNESSIE ===")
@@ -401,9 +454,11 @@ sprawdz("DZIS: ta sama stara wersja NIE publikuje — zatrzymuje ja bramka",
         stare["wystawienia"] == []
         and isinstance(stare["wyjatek"], llm.BudgetExceeded),
         (stare["wystawienia"], type(stare["wyjatek"]).__name__))
-sprawdz("a naprawiona wersja nie dochodzi nawet do zapisu — o cztery etapy"
-        " wczesniej",
-        len(teraz["slad"]) < len(stare["slad"]),
+sprawdz("a naprawiona wersja konczy o TRZY PLATNE etapy wczesniej — i nie"
+        " wola nawet `save`",
+        len(teraz["slad"]) < len(stare["slad"])
+        and [e for e in stare["slad"] if e not in teraz["slad"]]
+        == ["ocen_forme", "save", "grafika", "zweryfikuj"],
         (teraz["slad"], stare["slad"]))
 print("       slad e88b456: %s" % " -> ".join(stare["slad"]))
 print("       slad teraz:   %s" % " -> ".join(teraz["slad"]))
@@ -444,8 +499,13 @@ print()
 print("=== 6. BUDZET PADA DOPIERO NA OBSERWACJI FORMY ===")
 t6 = przebieg(ZRODLO_TERAZ, "ocen_forme", budzet)
 s6 = przebieg(STARE, "ocen_forme", budzet)
-sprawdz("teraz: recenzja przeszla, ale forma zatrzymuje przed zapisem",
-        t6["wystawienia"] == [] and "save" not in t6["slad"], t6["slad"])
+# Tak samo jak w sekcji 2: „przed zapisem" zastapione przez „przed KAZDYM
+# NASTEPNYM PLATNYM etapem". Tekst byl juz napisany i oplacony, wiec od
+# 1 wrzesnia 2026 ratunek zapisuje go rowniez tutaj.
+sprawdz("teraz: recenzja przeszla, ale forma zatrzymuje przed okladka i"
+        " sprawdzeniem faktow",
+        t6["wystawienia"] == [] and "grafika" not in t6["slad"]
+        and "zweryfikuj" not in t6["slad"], t6["slad"])
 sprawdz("KONTRDOWOD: e88b456 brnelo do zapisu i okladki takze w tym wariancie",
         "save" in s6["slad"] and "grafika" in s6["slad"], s6["slad"])
 sprawdz("KONTRDOWOD: i dopiero ostatnia bramka je dzis zatrzymuje",

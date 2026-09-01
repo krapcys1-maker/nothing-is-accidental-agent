@@ -76,8 +76,15 @@ Warto o tym pamiętać, gdyby powrót miał być trwały:
 - Wolumeny poniżej normy: notki 63%, polubienia 70%.
 - **Brak pętli zwrotnej**: 71 zapisanych reakcji czytelników, których żaden kod
   nie czyta.
-- Obserwacje wycofane na stałe — Substack zdjął przycisk „Follow" ze stron
-  profilowych (sprawdzone na sześciu profilach, zero wystąpień w HTML).
+- **Obserwacje wycofane — i to było błędem, nie właściwością tej wersji.**
+  Stało tu: „Substack zdjął przycisk «Follow» ze stron profilowych (sprawdzone
+  na sześciu profilach, zero wystąpień w HTML)". Pomiar był prawdziwy, wniosek
+  fałszywy: przycisk siedzi w menu pod kółkiem „…", które Substack rysuje
+  dopiero po kliknięciu, więc w HTML zamkniętej strony go nie ma i być nie
+  może. Ta wersja archiwum ma więc `FOLLOW_MIESIECZNIE = (0, 0)` i nie
+  obserwuje nikogo; po powrocie do niej trzeba to odkręcić ręcznie —
+  widełki `(30, 44)` plus droga przez menu w `browser.obserwuj_profil`.
+  Pełny opis pomyłki: `docs/BLEDNY_WNIOSEK_O_OBSERWACJACH_2026-08-23.md`.
 
 ## Zasada
 

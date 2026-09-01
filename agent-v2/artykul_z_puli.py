@@ -348,8 +348,18 @@ def main() -> int:
     except BaseException as exc:
         # BaseException, nie Exception: przerwanie z klawiatury albo SIGTERM
         # tez ma zostawic zamkniety przebieg, a nie wiszacy.
+        #
+        # SLAD PO URATOWANYM TEKSCIE IDZIE TU, ZARAZ ZA NAZWA WYJATKU. Plik
+        # lezy poza katalogiem artykulow i nie ma wiersza w `articles`, wiec
+        # `runs.note` jest JEDYNYM miejscem w bazie, z ktorego czlowiek moze
+        # sie o nim dowiedziec — a `alarm.sprawdz_przebiegi_i_ostrzez`
+        # (alarm.py:158) wkleja te note do maila, przycieta do 120 znakow.
+        # Dlatego nazwa pliku stoi PRZED trescia bledu: ogon i tak odpada.
+        uwaga = type(exc).__name__
+        if URATOWANE:
+            uwaga += " [tekst uratowany: %s]" % URATOWANE[-1].name
         db.finish_run(conn, run_id, "ERROR", "artykul",
-                      f"{type(exc).__name__}: {exc}"[:200])
+                      f"{uwaga}: {exc}"[:200])
         raise
     db.finish_run(conn, run_id, "DONE" if kod == 0 else "SKIPPED", "artykul")
     return kod
@@ -580,6 +590,13 @@ def _przebieg(conn, run_id: int) -> int:
         # zapasowa ma sens po awarii JEDNEGO wywolania, a nie wtedy, gdy budzet
         # sie skonczyl — bo wtedy pisarz zaraz za nia to najdrozszy etap
         # przebiegu i tak samo sie wywroci.
+        #
+        # I NIE MA TU CZEGO RATOWAC. `_ratuj_tekst` stoi przy recenzji i
+        # obserwacji formy, czyli za pisarzem. Tutaj tekstu jeszcze nie ma —
+        # zapisanie karty jako „artykulu" wsadziloby do `articles` pusta
+        # skorupe, ktora `stages.tematy_do_porownania` policzy jako temat juz
+        # napisany i zablokuje go na przyszlosc. Uratowalibysmy zero slow i
+        # stracili temat.
         raise
     except Exception as exc:
         print("  synteza padla (%s) — karta zapasowa" % type(exc).__name__,
@@ -748,6 +765,304 @@ def _przebieg(conn, run_id: int) -> int:
     return _napisz_i_zapisz(conn, run_id, brief, card)
 
 
+# GDZIE LADUJE URATOWANY TEKST — I DLACZEGO NIE W `ARTICLES_DIR`.
+#
+# Pierwsza wersja ratunku wolala `stages.save`, czyli pisala `.md` i `.uwagi.md`
+# do `config.ARTICLES_DIR` i wstawiala wiersz do `articles`. Tekst przezywal —
+# i wchodzil do korpusu, po ktorym globuje i selectuje reszta systemu. Zmierzone
+# SZESC czytelnikow, ktorzy zaczynali go liczyc jako artykul; zaden z nich NIE
+# FILTRUJE po statusie, wiec `NIESPRAWDZONY` nie zatrzymywal ani jednego:
+#
+#   `stages.ostatnie_uwagi` (stages.py:190, ile=2, mtime malejaco) — uratowany
+#     `.uwagi.md` jest z definicji najswiezszy, wiec ZAWSZE zajmowal jedno z
+#     dwoch miejsc petli zwrotnej do pisarza, a wnosil ZERO linii: obie jego
+#     notatki (`RECENZJA`, `DLUGOSC`) odsiewa stages.py:208.
+#   `stages.poprzednie_teksty` (stages.py:237) — jedno z czterech miejsc
+#     (`ILE_TEKSTOW_DO_POROWNANIA_FORMY`) materialu bramki ODCISK_FORMY, i to
+#     miejsce MARTWE: ramka blokujaca przestawia `gates.odcisk_formy` w dwoch
+#     cechach z szesciu (`otwarcie` = „>" zamiast pierwszego slowa akapitu,
+#     `liczba_w_otwarciu` = True, bo w ramce stoi „0,76 USD"), a
+#     `gates.powtorzona_forma` wymaga pieciu zgodnych z szesciu. Taki wpis nie
+#     moze sie odezwac NIGDY i wypycha tekst, ktory by mogl.
+#   `audyt_systemu.py:323/330/334` — TRWALE rozbrojenie kontrdowodu na martwa
+#     bramke. `:323` zwieksza `z_uwagami` za kazdy artykul z niepustymi `notes`
+#     (uratowany ma zawsze dwie), `:330` przy zliczaniu bramek pomija dokladnie
+#     `DLUGOSC` i `RECENZJA`. Mianownik rosnie, licznik nie, wiec warunku
+#     `i == z_uwagami` z `:334` nie spelni juz ZADNA bramka — i nie przez jeden
+#     dzien, tylko dopoki wiersz siedzi w `articles`, czyli zawsze.
+#   `stages.tematy_do_porownania` (stages.py:115) — `topic/title/body` ze
+#     WSZYSTKICH wierszy, bez filtra statusu; to pamiec powtorek `wybierz_fakt`.
+#     Nieopublikowany tekst spalalby swoj wlasny temat na zawsze.
+#   `stages.recent_angles` (stages.py:74) — to samo po `topic`: jedno z pieciu
+#     miejsc listy „katow juz zajetych", ktora dostaje skaut.
+#   `audyt_researchu.py:138` — srednie po `evidence`, liczone jak dla artykulu,
+#     ktory przeszedl kontrole.
+#
+# CEL RATUNKU TEGO NIE WYMAGA. Chodzi o zachowanie tekstu, za ktory zaplacono
+# okolo 0,76 USD, zeby czlowiek mogl go dokonczyc — a nie o to, zeby bral
+# udzial w korpusie, w petli zwrotnej, w bramkach formy i w audytach. Poprawki
+# po stronie tych szesciu czytelnikow siedza w `stages.py` i `audyt_systemu.py`,
+# czyli w plikach, ktorych ta zmiana nie tyka.
+#
+# WIEC RATUNEK NIE UZYWA JUZ `stages.save`. Pisze wlasny komplet plikow do
+# SIOSTRZANEGO katalogu i NIE WSTAWIA WIERSZA DO `articles`. `_ratuj_tekst` nie
+# dostaje juz nawet `conn` — brak polaczenia jest tu wlasnoscia, nie
+# niedopatrzeniem: funkcja bez uchwytu do bazy nie ma jak niczego do niej
+# dopisac, ani teraz, ani po nastepnej przerobce.
+#
+# CENA, JAWNIE: bez wiersza w `articles` `stages.bank_fragmentow` (stages.py:4635)
+# nie zobaczy `unused_evidence` z tej karty. Dlatego karta ladzie obok tekstu
+# jako `.karta.json`, w DOKLADNIE tym ksztalcie, ktory czyta `--z-karty`
+# (linia ~441): material nie jest skasowany, tylko czeka na swiadoma decyzje
+# czlowieka zamiast wchodzic do obiegu sam.
+NAZWA_KATALOGU_RATUNKU = "artykuly-przerwane"
+NAZWA_SPISU = "CZYTAJ_TO.txt"
+
+
+def _katalog_ratunku() -> Path:
+    """Katalog OBOK `ARTICLES_DIR`, nigdy w nim.
+
+    Liczony z `ARTICLES_DIR`, a nie wpisany na sztywno w `config` — `config.py`
+    jest zajety przez innego agenta, a przy okazji wychodzi z tego wlasnosc
+    warta wiecej niz jedna stala: test, ktory przestawia katalog artykulow na
+    tymczasowy, przestawia TYM SAMYM katalog ratunku, wiec nie ma jak zapisac
+    niczego do produkcyjnego `data/` przez zapomnienie.
+    """
+    return config.ARTICLES_DIR.parent / NAZWA_KATALOGU_RATUNKU
+
+
+# SCIEZKI URATOWANE W TYM PROCESIE — czyta je `main`, zeby wpisac je do
+# `runs.note`. Zmienna modulu, bo `_ratuj_tekst` siedzi trzy ramki glebiej niz
+# `main` i nie ma jak nic zwrocic: miedzy nimi leci `raise`. Proces obsluguje
+# JEDEN przebieg, wiec lista nie ma jak sie przeciac miedzy przebiegami.
+URATOWANE: list[Path] = []
+
+# STATUS TEKSTU URATOWANEGO Z PRZERWANEGO PRZEBIEGU.
+#
+# Od kiedy ratunek nie pisze do `articles`, ten napis nie jest juz wartoscia
+# kolumny — jest ETYKIETA w plikach, ktore czyta czlowiek. Zostaje ta sama, bo
+# mowi to, co trzeba: nikt niczego nie zablokowal (to znaczylo `BLOCKED`, stan
+# zniesiony 15 sierpnia 2026), tylko ZADNA kontrola sie nie odbyla.
+STATUS_URATOWANY = "NIESPRAWDZONY"
+
+# Pierwsza linia pliku. `browser.rozbierz_artykul` (browser.py:2383-2384) bierze
+# `linie[0]` jako TYTUL, wiec dopoki ta ramka stoi, recznie wystawiony szkic
+# mialby tytul „NIE PUBLIKOWAC..." — awaria widoczna zamiast cichej.
+RAMKA_BLOKUJACA = "# NIE PUBLIKOWAC"
+
+
+def _ramka(powod: str, brak: list[str], katalog: Path) -> str:
+    """Ostrzezenie, ktore idzie na POCZATEK `.md`, a nie tylko obok niego.
+
+    `stages.save` pisze plik CELOWO gotowy do wklejenia: tytul, podtytul, tresc,
+    zrodla — bez statusu, bo „status i tak siedzi w tabeli `articles`". Tu nie
+    ma nawet wiersza w tabeli, a tekst nie przeszedl ZADNEJ kontroli. Ramka idzie
+    do `.md`, bo obok juz raz nie wystarczylo: adnotacja „recenzja niedostepna"
+    ladowala w `.uwagi.md` artykulu, ktory chwile pozniej i tak wychodzil na
+    Substacka (patrz komentarz nad oslona recenzji).
+
+    `brak` to lista kontroli, ktore sie NIE odbyly — wyliczona przez wolajacego
+    z tego, dokad przebieg doszedl, a nie wpisana na sztywno. Ramka mowiaca
+    „bez recenzji" nad tekstem, ktory recenzje przeszedl, byla by falszem w
+    ostrzezeniu, czyli dokladnie tym, czego to ostrzezenie ma pilnowac.
+
+    Ramka mowi tez, GDZIE lezy — plik bez czytelnika to ten sam sygnal
+    produkowany i wyrzucany, ktory tepimy w calym tym audycie.
+    """
+    return "\n".join([
+        RAMKA_BLOKUJACA + " — TEKST NIESPRAWDZONY",
+        "",
+        "> %s" % powod,
+        "> Kontrole, ktore sie NIE odbyly: %s." % ", ".join(brak),
+        "> Zapisany, bo samo pisanie kosztowalo okolo 0,76 USD, a zapis jest",
+        "> darmowy — wyrzucenie gotowego tekstu bylo strata bez korzysci.",
+        "> Etykieta: %s. Ten tekst NIE MA wiersza w tabeli `articles` i NIE"
+        % STATUS_URATOWANY,
+        "> lezy w katalogu artykulow — celowo, zeby nie liczyl sie jako artykul",
+        "> napisany. Lezy w `%s`; obok stoi `%s`." % (katalog, NAZWA_SPISU),
+        "> Zeby to opublikowac, trzeba SWIADOMIE usunac te ramke i przepuscic",
+        "> tekst przez kontrole. Dopoki stoi, jest pierwsza linia pliku, a",
+        "> `browser.rozbierz_artykul` bierze pierwsza linie jako tytul.",
+        "",
+        "---",
+        "",
+        "",
+    ])
+
+
+SPIS = """TEKSTY Z PRZEBIEGOW, KTORE SIE NIE DOKONCZYLY
+
+Kazdy plik `.md` w tym katalogu to artykul NAPISANY I OPLACONY (okolo 0,76 USD
+za samo pisanie), ktorego przebieg przerwal budzet albo wylacznik ZANIM odbyla
+sie recenzja, bramki jakosci i sprawdzenie faktow.
+
+ZADEN Z NICH NICZEGO NIE PRZESZEDL. Kazdy zaczyna sie ramka „%s"
+i ta ramka ma tam zostac, dopoki czlowiek nie przeczyta tekstu.
+
+To NIE jest katalog artykulow (`data/articles/`) i nie jest nim celowo. Nic
+stad nie trafia do korpusu stylu, do petli zwrotnej pisarza, do bramki
+ODCISK_FORMY, do pamieci powtorek tematu ani do audytow — dopoki czlowiek sam
+czegos stad nie przeniesie.
+
+CO Z TYM ZROBIC — dwie drogi:
+
+  1. Przeczytac `.md`, poprawic recznie, usunac ramke i wystawic samemu.
+     Uwagi z przerwanego przebiegu leza obok, w `.uwagi.txt`.
+
+  2. Napisac ten artykul jeszcze raz, NIE placac researchu drugi raz:
+       cp <plik>.karta.json agent-v2/data/karta_do_zatwierdzenia.json
+       .venv/bin/python agent-v2/artykul_z_puli.py --z-karty
+     `.karta.json` ma dokladnie ten ksztalt, ktorego oczekuje `--z-karty`,
+     wiec przebieg rusza od pisarza. Temat NIE jest spalony: skoro wiersza w
+     `articles` nie ma, pamiec powtorek o nim nie wie.
+
+Gdy plik jest juz niepotrzebny — skasowac caly komplet (`.md`, `.uwagi.txt`,
+`.karta.json`). Nic w kodzie tego katalogu nie czyta.
+""" % RAMKA_BLOKUJACA
+
+
+def _zrodla(card: dict) -> str:
+    """Sekcja `## Sources` — bez pytania bazy o nazwy zrodel.
+
+    `stages.save` podmienia URL na tytul przez `_nazwa_zrodla(conn, url)`.
+    Ratunek `conn` juz nie dostaje (patrz komentarz nad `NAZWA_KATALOGU_RATUNKU`),
+    wiec bierze host. Adres i tak jest calym, sprawdzalnym odnosnikiem, a
+    ladniejsza nazwa nie jest warta oddawania ratunkowi uchwytu do bazy.
+    """
+    from urllib.parse import urlparse
+
+    urls = list(dict.fromkeys(
+        c.get("url") for c in (card.get("confirmed_claims") or [])
+        if isinstance(c, dict) and c.get("url")))
+    return "\n".join(
+        "- [%s](%s)" % (urlparse(u).netloc.replace("www.", "") or u, u)
+        for u in urls)
+
+
+def _ratuj_tekst(run_id, brief, card, draft, etap: str, exc,
+                 raport=None) -> None:
+    """Gotowy tekst na dysk, gdy budzet albo wylacznik przerywa PO pisaniu.
+
+    DECYZJA WLASCICIELA: zapisac, nie wyrzucac. Zapis jest darmowy, a pisanie
+    na Fable kosztuje okolo 0,76 USD — prawie polowe sufitu przebiegu
+    (`RUN_LIMIT_USD` 1,60). `stages.review` stalo w linii ~891, a `stages.save`
+    dopiero ~953, wiec `raise` z recenzji leci PRZED zapisem i oplacony tekst
+    nie trafial nawet na dysk.
+
+    CZEGO TA FUNKCJA NIE ROBI, i to jest wazniejsze niz to, co robi:
+      nie wola NICZEGO PLATNEGO. `stages.grafika` i `stages.zweryfikuj` to
+        wywolania modelu, wiec przy wyczerpanym budzecie wywroca sie na tym
+        samym `_preflight`, tylko po drodze zaplacone. Zapisujemy sam tekst;
+      nie wola bramek. `gates.deterministic_floors` jest darmowe, ale stoimy
+        w obsludze wyjatku — jego wlasna awaria zabralaby ratunek I zaslonila
+        pierwotne przerwanie. Ocena i tak jest bez wartosci, skoro recenzji
+        nie bylo;
+      nie dotyka BAZY. Nie ma `conn`, wiec nie ma wiersza w `articles` —
+        dlaczego, patrz dlugi komentarz nad `NAZWA_KATALOGU_RATUNKU`;
+      nie pisze do `ARTICLES_DIR`. Komplet idzie do katalogu siostrzanego,
+        po ktorym nikt nie globuje;
+      nie podnosi wyjatku. Wolajacy robi `raise` zaraz po nas, wiec przebieg
+        konczy sie ERROR-em tak samo jak dotad. Blad z ratunku nie ma prawa
+        podmienic `BudgetExceeded` na `OSError` — alarm patrzy na nazwe wyjatku;
+      nie otwiera zadnej drogi do `browser.wystaw_artykul`. Publikacja stoi
+        ~50 linii nizej, za `raise` wolajacego, i bierze `sciezka` z lokalnej
+        zmiennej tego samego przebiegu — nigdy z katalogu ani z bazy.
+
+    NOTATKI IDA POD `RECENZJA` I `DLUGOSC` — nazwy zostaja te same, co przy
+    zwyklym zapisie, zeby czlowiek czytal jeden format, a nie dwa. Nic ich juz
+    nie odsiewa, bo nikt ich nie czyta: `.uwagi.txt` nie jest `.uwagi.md` i nie
+    lezy w `ARTICLES_DIR`, wiec `stages.ostatnie_uwagi` go nie widzi.
+
+    `raport` to wynik recenzji, gdy ta zdazyla przejsc (przerwanie dopiero na
+    obserwacji formy). Rozroznienie bierzemy z NIEGO, nie z nazwy etapu:
+    ostrzezenie „bez recenzji" nad tekstem, ktory recenzje przeszedl, byloby
+    falszem — a to jest ostrzezenie, wiec falsz w nim kosztuje najwiecej.
+    """
+    import json as _json
+    import re as _re
+
+    powod = "Przebieg przerwany na etapie %s: %s: %s" % (
+        etap, type(exc).__name__, " ".join(str(exc).split())[:120])
+    # Bramki jakosci (`gates.deterministic_floors`, `gates.uwagi_z_formy`,
+    # `stages.swiezosc_karty`) i sprawdzenie faktow (`stages.zweryfikuj`) stoja
+    # ZAWSZE ponizej obu tych przerwan, wiec ich brak jest pewny w obu
+    # przypadkach. Recenzja zalezy od tego, dokad przebieg doszedl.
+    brak = ["bramki jakosci", "sprawdzenie faktow przed publikacja"]
+    if raport is None:
+        brak.insert(0, "recenzja")
+        brak.insert(1, "obserwacja formy")
+        recenzja = "NIE ODBYLA SIE — " + powod
+    else:
+        brak.insert(0, "obserwacja formy")
+        recenzja = "przeszla, ale jej uwag nikt nie zestawil z bramkami — %s" % (
+            " ".join(str(raport.get("summary") or "").split())[:150] or "bez podsumowania")
+    tresc = str((draft or {}).get("body") or "").strip()
+    if not tresc:
+        # Nie ma czego ratowac, a pusty plik jest gorszy niz brak: kaze
+        # czlowiekowi otworzyc go i przekonac sie, ze nic w nim nie ma.
+        print("  [ratunek] nie ma tekstu do uratowania — nie zapisuje pustego"
+              " artykulu", flush=True)
+        return
+    notatki = [
+        {"gate": "RECENZJA", "detail": recenzja},
+        {"gate": "DLUGOSC", "detail": "%d slow" % len(tresc.split())},
+    ]
+    # WSZYSTKO PONIZEJ JEST W `try`, LACZNIE Z LICZENIEM SCIEZKI. Pierwsza
+    # wersja liczyla katalog i slug PRZED `try` — a wtedy awaria w tych dwoch
+    # linijkach wychodzila z ratunku na wylot i PODMIENIALA `BudgetExceeded` na
+    # `OSError`. `alarm` i `finish_run` patrza na nazwe wyjatku, wiec
+    # przerwanie budzetowe znikneloby z dziennika przez blad zapisu pliku.
+    # Zlapane testem (sekcja 11), nie rozumowaniem.
+    sciezka = None
+    try:
+        katalog = _katalog_ratunku()
+        slug = _re.sub(r"[^a-z0-9]+", "-",
+                       (draft.get("title") or "artykul").lower()).strip("-")
+        sciezka = katalog / ("%04d-%s.md" % (run_id, slug[:60]))
+        katalog.mkdir(parents=True, exist_ok=True)
+        # JEDEN ZAPIS, RAMKA JUZ W SRODKU. Wczesniej plik pisal `stages.save`,
+        # a ramke dopisywalo osobne przejscie — miedzy nimi istniala chwila,
+        # w ktorej gotowy tekst lezal na dysku BEZ ostrzezenia, i awaria
+        # dopisania zostawiala go w tym stanie na stale.
+        sciezka.write_text(
+            _ramka(powod, brak, katalog)
+            + "# %s\n\n*%s*\n\n%s\n\n---\n\n## Sources\n\n%s\n"
+            % (draft.get("title", ""), draft.get("subtitle", ""),
+               draft["body"], _zrodla(card)),
+            encoding="utf-8")
+        sciezka.with_suffix(".uwagi.txt").write_text(
+            "# Uwagi wewnetrzne — %s\n\nStatus: %s — %s\n\nTemat: %s\n\n%s\n"
+            % (draft.get("title", ""), STATUS_URATOWANY, powod,
+               (brief or {}).get("title") or "",
+               "\n".join("- %s" % n for n in notatki)),
+            encoding="utf-8")
+        # KARTA W KSZTALCIE, KTORY CZYTA `--z-karty` (linia ~441). To jedyna
+        # rekompensata za brak wiersza w `articles`: research za okolo 0,40 USD
+        # nie jest skasowany, tylko czeka na decyzje czlowieka.
+        sciezka.with_suffix(".karta.json").write_text(
+            _json.dumps({"card": card, "brief": brief}, ensure_ascii=False,
+                        indent=1), encoding="utf-8")
+        (katalog / NAZWA_SPISU).write_text(SPIS, encoding="utf-8")
+    except Exception as blad:      # noqa: BLE001 — patrz docstring
+        # `Exception`, nie `OSError`: nie tylko dysk. Zly typ w `draft`,
+        # nieserializowalna karta, katalog tylko do odczytu — kazde z nich
+        # wyszloby stad jako INNY wyjatek niz ten, ktory przerwal przebieg.
+        print("  [ratunek] ZAPIS SIE NIE UDAL (%s: %s) — tekst przepadl"
+              % (type(blad).__name__, str(blad)[:120]), flush=True)
+        return
+    URATOWANE.append(sciezka)
+    print("  [ratunek] tekst URATOWANY (%d slow): %s"
+          % (len(tresc.split()), sciezka), flush=True)
+    print("  [ratunek] obok: %s (uwagi) i %s (karta do `--z-karty`)"
+          % (sciezka.with_suffix(".uwagi.txt").name,
+             sciezka.with_suffix(".karta.json").name), flush=True)
+    print("  [ratunek] SZUKAJ TEGO W: %s — opis w %s"
+          % (katalog, NAZWA_SPISU), flush=True)
+    print("  [ratunek] %s, NIE do publikacji: nic nie poszlo na zewnatrz, nie"
+          " ma wiersza w `articles` i nie lezy w katalogu artykulow"
+          % STATUS_URATOWANY, flush=True)
+
+
 def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
     """Od bramki „warto pisac" do zapisu i grafiki.
 
@@ -819,6 +1134,10 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
         # Budzet albo wylacznik — na wylot, patrz `PRZERYWAJA`. Gdyby zostalo
         # polkniete tutaj, pisarz ponizej i tak by sie wywrocil na tym samym
         # bledzie, tylko juz pod druga oslona, i tak dalej az do publikacji.
+        #
+        # BEZ RATUNKU: pisarz jeszcze nie ruszyl, `draft` nie istnieje.
+        # Przerwanie w tym miejscu nic nie kosztowalo poza researchem, a
+        # researchu na dysk nie zapisujemy jako artykulu.
         raise
     except Exception as exc:
         print("  [awaria] bramka ciekawosci padla (%s: %s) — pisze bez niej"
@@ -849,6 +1168,11 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
         # `PreflightFailed` — czyli jedno wywolanie po nic i wyjatek na koniec.
         # Ten `except` musi stac PRZED ogolnym, bo Python bierze pierwszy
         # pasujacy.
+        #
+        # BEZ RATUNKU, i to jest ten sam powod, dla ktorego nie ma powtorki:
+        # pisarz sie NIE UDAL, wiec `draft` nie istnieje. Gdyby istnial choc
+        # kawalek, ratunek by tu byl — ale `stages.write` albo oddaje caly
+        # obiekt, albo rzuca.
         raise
     except Exception as exc:
         # Jedno powtorzenie na Opusie, tak jak w `run.py`: tu ginie caly
@@ -889,7 +1213,15 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
     # czyli publikacja poszlaby bez ANI JEDNEJ dzialajacej kontroli.
     try:
         raport = stages.review(conn, run_id, card, draft)
-    except PRZERYWAJA:
+    except PRZERYWAJA as exc:
+        # TEKST JUZ ISTNIEJE I JUZ ZA NIEGO ZAPLACONO — ratujemy go na dysk,
+        # zanim wyjatek poleci dalej. To jedyna roznica wobec poprzedniej
+        # wersji: `raise` byl tu goly, a `stages.save` stoi 60 linii nizej,
+        # wiec przerwanie na recenzji kasowalo okolo 0,76 USD gotowego pisania.
+        # Zapis NIE zmienia niczego innego: publikacja jest za tym `raise`, a
+        # ratunek pisze POZA `ARTICLES_DIR` i bez wiersza w `articles`, wiec
+        # zaden z szesciu czytelnikow korpusu go nie widzi.
+        _ratuj_tekst(run_id, brief, card, draft, "recenzji", exc)
         raise
     except Exception as exc:
         print("  [awaria] recenzja padla (%s: %s) — zapisuje bez niej"
@@ -910,11 +1242,17 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
 
     try:
         forma = stages.ocen_forme(conn, run_id, draft)
-    except PRZERYWAJA:
+    except PRZERYWAJA as exc:
         # Czwarta oslona, tej samej klasy co trzy powyzej. Gdy budzet konczy
         # sie dopiero tutaj (recenzja jeszcze przeszla), polkniecie prowadzi
         # do tej samej publikacji bez sprawdzenia faktow: `stages.zweryfikuj`
         # jest kolejnym platnym wywolaniem i padnie na tym samym bledzie.
+        #
+        # RATUNEK TAKI SAM JAK PRZY RECENZJI — tekst jest napisany i oplacony.
+        # `raport` idzie dalej, bo recenzja TU JUZ PRZESZLA: ramka ma wyliczyc
+        # to, czego naprawde nie bylo, a nie straszyc na zapas.
+        _ratuj_tekst(run_id, brief, card, draft, "obserwacji formy", exc,
+                     raport=raport)
         raise
     except Exception as exc:
         print("  [awaria] obserwacja formy padla (%s) — ide dalej"

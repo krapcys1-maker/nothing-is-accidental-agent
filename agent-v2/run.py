@@ -986,28 +986,41 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         Obserwujemy TYLKO tych, u których naprawdę byliśmy — nie z listy
         podpowiedzi. Obserwowanie kogoś, kogo się nie czytało, to zbieranie
         nazwisk, a nie budowanie kręgu.
-        
-        WYCOFANE 2026-08-23. Substack zdjal przycisk „Follow" z profili.
-        Zmierzone tego dnia na szesciu profilach — trzech zupelnie obcych
-        i trzech z naszej historii: kazdy pokazuje „Subscribe" i „Message",
-        a slowo „Follow" nie wystepuje w ich HTML ANI RAZ. Nie ma go rowniez
-        na zakladce `/@kto/notes`.
 
-        Przycisk zyje wylacznie w widgetach „kogo obserwowac" — w kanale
-        i w kolumnie obok notek. Czyli w LISCIE PODPOWIEDZI, a obserwowanie
-        kogos, kogo sie nie czytalo, to zbieranie nazwisk. Ta funkcja broni
-        sie przed tym od pierwszego dnia i nie zamierzam tego odwracac po to,
-        zeby rubryka przestala pokazywac zero.
+        ODWIESZONE 2026-09-01. Stalo tu „WYCOFANE 2026-08-23. Substack zdjal
+        przycisk «Follow» z profili" — i to zdanie nie bylo prawda.
 
-        Wczesniej diagnoza byla inna i bledna: myslalem, ze bierzemy uchwyt
-        PUBLIKACJI zamiast uchwytu CZLOWIEKA. Sprawdzone na zywym API —
+        POMIAR Z 23 SIERPNIA BYL DOBRY, WNIOSEK ZLY. Szesc profili naprawde
+        nie mialo slowa „Follow" w HTML, bo przycisk siedzi w menu pod kolkiem
+        „..." obok „Subscribe" i „Message", a Substack rysuje to menu DOPIERO
+        PO KLIKNIECIU. W HTML zamknietej strony go nie ma i byc nie moze —
+        czytanie HTML-a nie moglo rozstrzygnac tego pytania.
+
+        Wniosek pociagnal za soba trzy rzeczy naraz i to one kosztowaly
+        dziewiec dni: budzet `follow` zszedl do zera, ten blok przestal cokolwiek
+        robic, a `norma.NIEWYKONALNE` wytlumaczylo powstale zero zdaniem
+        o zdjetym przycisku. Zero, ktore ma wyjasnienie, przestaje wygladac na
+        problem — dlatego nikt nie zapytal ponownie.
+
+        Zmierzone ponownie 1 wrzesnia 2026 na zywej sesji, przez OTWARCIE menu
+        (bez klikania czegokolwiek w srodku): na trzech profilach nieobserwowanych
+        menu ma pozycje „Follow", na trzech obserwowanych — „Unfollow". Droga
+        do przycisku i zmierzone etykiety stoja przy `browser.obserwuj_profil`.
+
+        NIE ZMIENIA SIE ZASADA, KTOREJ TA FUNKCJA BRONI OD PIERWSZEGO DNIA:
+        nadal nie tykamy widgetow „kogo obserwowac", bo to lista podpowiedzi.
+        Bierzemy wylacznie hosty z naszej historii czytania.
+
+        PULA JEST ODSIEWANA PRZED LOSOWANIEM (poprawka z 1 wrzesnia 2026).
+        Historia komentarzy zawiera takze ludzi, ktorych juz obserwujemy —
+        zmierzone: 26 obserwowanych wobec 92 hostow w historii. Losowanie bez
+        odsiewu zjadalo na takim trafieniu caly dzienny slot i zapisywalo go
+        jako porazke. Szczegoly przy `browser.OBSERWOWANI`.
+
+        Jeszcze wczesniejsza diagnoza tez byla bledna: myslalem, ze bierzemy
+        uchwyt PUBLIKACJI zamiast uchwytu CZLOWIEKA. Sprawdzone na zywym API —
         dla wszystkich pieciu hostow z historii oba uchwyty sa identyczne.
-        Nie o to chodzilo.
-
-        Blok zostaje nietkniety i wroci jedna stala, gdyby przycisk wrocil.
-        Norma jest zerowa, wiec nie rezerwuje budzetu i nie zaklamuje licznika
-        wolumenow: rubryka wiecznie na zerze mowi „cos jest zepsute", a tutaj
-        nie ma czego naprawiac.
+        Nie o to chodzilo ani wtedy, ani teraz.
         """
         if not na_teraz.get("follow"):
             return
@@ -1016,14 +1029,80 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             return
         import random
 
-        kandydaci = [h for h in znani if h and h != f"{config.SUBSTACK_HANDLE}.substack.com"]
+        # ODSIEW PRZED LOSOWANIEM, A NIE PO NIM — i to jest cala roznica.
+        #
+        # Do 1 wrzesnia 2026 pula szla do losowania w calosci, a budzet ciety
+        # byl przez `kandydaci[:1]`. Trafienie na kogos, kogo juz obserwujemy,
+        # konczylo wiec dzien: `obserwuj_profil` slusznie nie klikalo nic,
+        # dziennik zapisywal PORAZKE, a slot dnia przepadal. Zmierzone tego
+        # dnia na zywym koncie: 26 obserwowanych, 92 hosty w historii, 8 na
+        # pewno wspolnych juz po samym mapowaniu nazwy hosta (naprawde wiecej,
+        # bo `www.malone.news` to `rwmalonemd`) — czyli okolo jednego dnia na
+        # siedem zjadanego na pustym losowaniu i zapisywanego jako awaria.
+        #
+        # Pamiec czytamy RAZ na blok: to jeden plik z dysku, a nie zapytanie
+        # do Substacka. Zrzut listy robi pomiar, ktory i tak chodzi — patrz
+        # `browser.OBSERWOWANI`.
+        pamiec = browser.kogo_obserwujemy()
+        wszyscy = [h for h in znani
+                   if h and h != f"{config.SUBSTACK_HANDLE}.substack.com"]
+        kandydaci = [h for h in wszyscy
+                     if not browser.czy_juz_obserwujemy(h, pamiec)]
+        if len(kandydaci) != len(wszyscy):
+            print("  pula: %d hostow, %d odsianych (juz ich obserwujemy)"
+                  % (len(wszyscy), len(wszyscy) - len(kandydaci)), flush=True)
+        if not kandydaci:
+            # PULA WYCZERPANA TO STAN POPRAWNY, NIE AWARIA — ale musi zostawic
+            # slad, bo inaczej wraca stary problem w nowym przebraniu: blok bez
+            # wpisu wyglada na blok, ktory sie nie odbywa. `obserwacja_pominieta`
+            # jest poza `norma.RODZAJE`, wiec nie liczy sie ani do wykonanych,
+            # ani do nieudanych — patrz `browser.obserwuj_profil`.
+            if wyslij:
+                browser.zapisz_w_dzienniku(
+                    "obserwacja_pominieta", udane=True,
+                    powod="pula wyczerpana: wszystkie %d hostow z historii"
+                          " komentarzy juz obserwujemy" % len(wszyscy))
+            print("  wszystkich z historii juz obserwujemy — nie ma kogo",
+                  flush=True)
+            return
         random.shuffle(kandydaci)
-        for host in kandydaci[: na_teraz["follow"]]:
+
+        # ZAPAS NA ODPADY. Petla nie chodzi juz po `kandydaci[:budzet]`, bo
+        # host, ktorego uchwytu nie ustalilismy, i host, ktory okazal sie juz
+        # obserwowany, NIE SA PROBA i nie moga zjadac slotu. Zapas domyka to
+        # od gory: bez niego przebieg z pamiecia rozjechana wobec Substacka
+        # potrafilby obejsc wszystkie 92 hosty, a kazdy to osobna sesja
+        # przegladarki. Cztery, bo zmierzony odsetek juz-obserwowanych w puli
+        # to okolo 13 procent, wiec cztery pudla z rzedu to juz nie pech,
+        # tylko znak, ze pamiec jest do odswiezenia.
+        ZAPAS_NA_ODPADY = 4
+        proby = 0
+        # DWA RODZAJE POMINIEC, BO ZOSTAWIAJA ROZNY SLAD. Pominiecie z menu
+        # zapisuje `obserwuj_profil` (byl na profilu, przeczytal „Unfollow");
+        # pominiecie z pamieci nie zapisuje nic, bo nic sie nie wydarzylo —
+        # i dlatego tylko ono moze zostawic dzien bez ani jednego wpisu.
+        z_pamieci = 0
+        zostal_slad = False
+        for host in kandydaci[: na_teraz["follow"] + ZAPAS_NA_ODPADY]:
+            if proby >= na_teraz["follow"]:
+                break
             if not zostal_czas("obserwowanie"):
-                return
+                break
             # Nie `host.split(".")[0]`: przy wlasnej domenie dawalo to "www"
             # i agent probowal obserwowac konto o tej nazwie.
             uchwyt = browser.uchwyt_publikacji(host)
+            # UCHWYT SPRAWDZAMY DRUGI RAZ, JUZ PO ROZWIAZANIU. Dla wlasnej
+            # domeny (24 z 92 hostow w puli) nazwa konta wychodzi dopiero
+            # z API, wiec odsiew po hoscie nie mial jej jak rozpoznac:
+            # `www.malone.news` to `rwmalonemd`, ktorego obserwujemy od dawna.
+            # Zlapane tutaj oszczedza cale wejscie na profil, a zapisana mapa
+            # host->uchwyt sprawia, ze jutro odsieje sie juz przed losowaniem.
+            if uchwyt and uchwyt in pamiec["uchwyty"]:
+                browser.zapamietaj_obserwowanego(uchwyt, host=host)
+                z_pamieci += 1
+                print(f"  ({host} -> @{uchwyt} juz obserwowany wedlug pamieci"
+                      f" — nie wchodze na profil)", flush=True)
+                continue
             if not uchwyt:
                 # POMINIECIE TEZ JEST WYNIKIEM. Cichy `continue` to dokladnie
                 # ten mechanizm, przez ktory obserwacje tygodniami udawaly, ze
@@ -1033,17 +1112,51 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                     browser.dopisz_wynik(
                         "obserwacja", {}, komu=host,
                         powod=f"nie ustalilem konta autora dla {host}")
+                    zostal_slad = True
                 print(f"  (nie ustalilem konta dla {host} — pomijam)", flush=True)
                 continue
             if wyslij:
                 if not rytm("komentarz", "obserwowanie", rytm_stanu):
-                    return
+                    break
                 # OBSERWUJEMY, nie subskrybujemy. To dwie rozne rzeczy i maja
                 # osobne widelki: obserwacja nie przysyla nic mailem.
-                browser.obserwuj_profil(uchwyt, wyslij=True)
+                wynik_obs = browser.obserwuj_profil(uchwyt, wyslij=True)
                 rytm_stanu["komentarz"] = True
+                # POLE `juz_obserwowany` BYLO PRODUKOWANE I WYRZUCANE: szlo do
+                # dziennika i nie czytal go w calym repo nikt. Teraz decyduje
+                # o dwoch rzeczach naraz — czy slot dnia zostal zuzyty i czy
+                # ten host ma jeszcze kiedykolwiek wrocic do losowania.
+                if wynik_obs.get("juz_obserwowany"):
+                    browser.zapamietaj_obserwowanego(uchwyt, host=host)
+                    zostal_slad = True     # wpis zrobil `obserwuj_profil`
+                    print(f"  ({host} -> @{uchwyt} juz obserwowany — nie liczy"
+                          f" sie jako proba, biore nastepnego)", flush=True)
+                    continue
+                if wynik_obs.get("zrobione"):
+                    # HOST, NIE SAM UCHWYT. `obserwuj_profil` zapamietal juz
+                    # uchwyt, ale tylko tutaj wiadomo, z ktorego adresu on sie
+                    # wzial — a pula jest lista adresow.
+                    browser.zapamietaj_obserwowanego(uchwyt, host=host)
+                proby += 1
+                zostal_slad = True
             else:
                 print(f"  (obserwowałbym: {uchwyt})", flush=True)
+                proby += 1
+
+        # DZIEN, W KTORYM NIE PROBOWALISMY ANI RAZU, MA POWIEDZIEC DLACZEGO.
+        # Bez tego wpisu odsiew zalatalby jedna dziure i otworzyl te sama co
+        # przedtem: blok chodzi, nie wystawia nic i nie zostawia sladu, wiec
+        # z zewnatrz wyglada jak blok, ktorego nie ma.
+        #
+        # TYLKO WTEDY, GDY NIC INNEGO NIE ZAPISALO. Jedno zdarzenie ma zostawic
+        # jeden slad: gdy `obserwuj_profil` juz zapisalo pominiecie, drugi wpis
+        # o tym samym dniu tylko rozmydla dziennik. Wyjscia po czasie i po
+        # hamulcu rytmu drukuja swoje wlasne powody i nie sa tym przypadkiem.
+        if wyslij and proby == 0 and z_pamieci and not zostal_slad:
+            browser.zapisz_w_dzienniku(
+                "obserwacja_pominieta", udane=True,
+                powod="pominietych %d z %d wylosowanych: znamy ich z pamieci"
+                      " obserwowanych" % (z_pamieci, len(kandydaci)))
 
     # --- 3d. subskrypcje: rzadko, bo lądują w skrzynce właściciela ------------
     def subskrybuj() -> None:

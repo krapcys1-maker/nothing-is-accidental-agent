@@ -73,13 +73,26 @@ sprawdz("i odstep urosl razem z liczba — inaczej to byloby seria",
         config.ODSTEPY["komentarz"][0] >= 300, config.ODSTEPY["komentarz"])
 sprawdz("restacki 1-2 (było 2-4)", config.RESTACK_DZIENNIE == (1, 2),
         config.RESTACK_DZIENNIE)
-# WYCOFANE 2026-08-23: Substack zdjal przycisk „Follow" ze stron profilowych.
-# Zmierzone na szesciu profilach — trzech obcych i trzech z naszej historii:
-# wszedzie „Subscribe" i „Message", slowa „Follow" nie ma w HTML ani razu,
-# ani na `/@kto/notes`. Przetrwal tylko w widgetach „kogo obserwowac".
-# Zero, bo budzetu nie rezerwuje sie na zdolnosc, ktorej sie nie ma.
-sprawdz("obserwacje 0/mies — nie ma czego kliknac",
-        config.FOLLOW_MIESIECZNIE == (0, 0), config.FOLLOW_MIESIECZNIE)
+# WYCOFANE 2026-08-23, ODWIESZONE 2026-09-01 — BO WNIOSEK BYL FALSZYWY.
+#
+# Stalo tu `== (0, 0)` z uzasadnieniem „Substack zdjal przycisk «Follow» ze
+# stron profilowych; zmierzone na szesciu profilach: wszedzie «Subscribe»
+# i «Message», slowa «Follow» nie ma w HTML ani razu". POMIAR BYL PRAWDZIWY,
+# WNIOSEK FALSZYWY: przycisk siedzi w menu pod kolkiem „...", ktore Substack
+# rysuje DOPIERO PO KLIKNIECIU, wiec w HTML zamknietej strony go nie ma i byc
+# nie moze. Czytanie HTML-a nie moglo tego rozstrzygnac.
+#
+# Zmierzone ponownie 2026-09-01 na zywej sesji: menu oddaje „Follow" tam,
+# gdzie nie obserwujemy, i „Unfollow" tam, gdzie obserwujemy. Pelny pomiar
+# i szescioro sprawdzonych profili stoja w
+# `tests/test_obserwowanie_przez_menu.py`.
+#
+# TEN TEST PILNOWAL WYCOFANIA PRZEZ DZIEWIEC DNI I DLATEGO ZOSTAJE — tylko
+# odwrocony. Zero w tej stali kosztowalo dziewiec dni bez ani jednej
+# obserwacji, a nie wygladalo na awarie, bo `norma.NIEWYKONALNE` tlumaczylo
+# powstale zero tym samym nieprawdziwym zdaniem.
+sprawdz("obserwacje 30-44/mies — przycisk jest, tylko w menu",
+        config.FOLLOW_MIESIECZNIE == (30, 44), config.FOLLOW_MIESIECZNIE)
 sprawdz("subskrypcje bez zmian 6-12/mies",
         config.SUBSKRYPCJE_MIESIECZNIE == (6, 12), config.SUBSKRYPCJE_MIESIECZNIE)
 sprawdz("notki nietknięte — to silnik wzrostu",

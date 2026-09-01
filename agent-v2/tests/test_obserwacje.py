@@ -12,6 +12,7 @@ import tempfile
 sys.path.insert(0, "agent-v2")
 import browser  # noqa: E402
 import config   # noqa: E402
+import norma    # noqa: E402
 import stages   # noqa: E402
 
 zdane = oblane = 0
@@ -40,7 +41,26 @@ PILNOWANE = [config.DB_PATH, config.DATA_DIR / "zuzyte_fakty.json",
              stages.PAMIEC_NOTEK_PLIK]
 PRZED = {str(p): odcisk(p) for p in PILNOWANE}
 
-print("=== 1. OBSERWOWANIE KLIKA TYLKO 'FOLLOW' ===")
+print("=== 1. SUBSKRYPCJA KLIKA TYLKO 'SUBSCRIBE' ===")
+#
+# TA SEKCJA MIALA WCZESNIEJ DRUGA POLOWE I BYLA ONA ZIELONA NAD MARTWYM KODEM.
+#
+# Do 1 wrzesnia 2026 stalo tu takze „obserwowanie klika 'Follow'", sprawdzane
+# na atrapie profilu z DWOMA przyciskami na wierzchu: „Subscribe" i „Follow".
+# Atrapa przechodzila, `obserwuj_profil` klikalo „Follow", test swiecil na
+# zielono — a w produkcji obserwacje przez dziewiec dni wynosily ZERO.
+#
+# Powod: TAKI PROFIL NIE ISTNIEJE. Zmierzone na zywo 1 wrzesnia 2026, szesc
+# profili: w naglowku sa dokladnie trzy przyciski — „Subscribe", „Message"
+# i kolko z `aria-label="Profile actions"`. Przycisku „Follow" na wierzchu nie
+# ma i nigdy nie bylo; obserwowanie siedzi w menu pod tym kolkiem. Atrapa
+# kodowala falszywy model swiata, wiec test mierzyl zgodnosc kodu z tym
+# falszem, a nie z Substackiem.
+#
+# Sprawdzenie obserwowania przeniesione do `test_obserwowanie_przez_menu.py`,
+# gdzie atrapa odwzorowuje ZMIERZONE menu. Tutaj zostaje subskrypcja — ona
+# naprawde chodzi przyciskiem na wierzchu — bo to ona broni rozdzielenia
+# obu zdolnosci, o ktore ten plik chodzi.
 
 klikniete = []
 
@@ -109,17 +129,12 @@ def ustaw(dostepne):
 
 
 try:
-    # Profil, na ktorym sa OBA przyciski — tak wyglada kazdy profil Substacka.
-    ustaw({"Subscribe", "Follow"})
-    w = browser.obserwuj_profil("ktos", wyslij=True)
-    sprawdz("obserwowanie klika 'Follow'", klikniete == ["Follow"], klikniete)
-    sprawdz("i NIE klika 'Subscribe'", "Subscribe" not in klikniete, klikniete)
-    sprawdz("melduje sukces", w["zrobione"] is True, w)
-
-    ustaw({"Subscribe", "Follow"})
+    # Profil taki, jaki NAPRAWDE jest: na wierzchu „Subscribe" i „Message",
+    # a obserwowanie schowane w menu (dla tej atrapy: nieosiagalne).
+    ustaw({"Subscribe", "Message"})
     browser.zasubskrybuj("ktos", wyslij=True)
     sprawdz("subskrypcja klika 'Subscribe'", klikniete == ["Subscribe"], klikniete)
-    sprawdz("i NIE klika 'Follow'", "Follow" not in klikniete, klikniete)
+    sprawdz("i NIE klika 'Message'", "Message" not in klikniete, klikniete)
 
     # KONTRDOWOD: stara kolejnosc na tym samym profilu.
     stara_kolejnosc = ("Subscribe", "Subskrybuj", "Follow", "Obserwuj")
@@ -128,26 +143,35 @@ try:
             pierwszy_stary == "Subscribe")
 
     # Gdy wlasciwego przycisku NIE MA — nie wolno kliknac zastepczego.
-    ustaw({"Subscribe"})
-    w = browser.obserwuj_profil("ktos", wyslij=True)
-    sprawdz("brak 'Follow' -> NIE klika nic", klikniete == [], klikniete)
+    ustaw({"Message"})
+    w = browser.zasubskrybuj("ktos", wyslij=True)
+    sprawdz("brak 'Subscribe' -> subskrypcja NIE klika nic", klikniete == [],
+            klikniete)
     sprawdz("i melduje, ze sie nie udalo", w["zrobione"] is False, w)
-    sprawdz("z powodem", "obserwacja" in (w["blad"] or ""), w["blad"])
+    sprawdz("z powodem", "subskrypcja" in (w["blad"] or ""), w["blad"])
 
-    ustaw({"Follow"})
+    # Polska wersja interfejsu.
+    ustaw({"Subskrybuj", "Wiadomość"})
     browser.zasubskrybuj("ktos", wyslij=True)
-    sprawdz("brak 'Subscribe' -> subskrypcja tez nic nie klika", klikniete == [],
+    sprawdz("dziala po polsku: 'Subskrybuj'", klikniete == ["Subskrybuj"],
             klikniete)
 
-    # Polska wersja interfejsu
-    ustaw({"Obserwuj", "Subskrybuj"})
-    browser.obserwuj_profil("ktos", wyslij=True)
-    sprawdz("dziala po polsku: 'Obserwuj'", klikniete == ["Obserwuj"], klikniete)
-
-    # Tryb sprawdzenia nie klika
-    ustaw({"Subscribe", "Follow"})
-    browser.obserwuj_profil("ktos", wyslij=False)
+    # Tryb sprawdzenia nie klika.
+    ustaw({"Subscribe", "Message"})
+    browser.zasubskrybuj("ktos", wyslij=False)
     sprawdz("tryb sprawdzenia nie klika nic", klikniete == [], klikniete)
+
+    # I DOWOD, ZE STARA DROGA NIE UMIALA OBSERWOWAC. Na tej samej atrapie —
+    # czyli na profilu takim, jaki jest naprawde — przedpoprawkowa
+    # implementacja `obserwuj_profil` odchodzi z pustymi rekami. To jest ta
+    # zerowa obserwacja, ktora przez dziewiec dni tlumaczono zdjetym
+    # przyciskiem.
+    ustaw({"Subscribe", "Message"})
+    w = browser._klik_na_profilu("ktos", ("Follow", "Obserwuj"), "obserwacja",
+                                 True)
+    sprawdz("KONTRDOWOD: stara droga obserwacji nie klikala nic",
+            klikniete == [], klikniete)
+    sprawdz("KONTRDOWOD: i konczyla sie porazka", w["zrobione"] is False, w)
 finally:
     (browser.podlacz_sie, browser.wymagaj_sesji, browser.DZIENNIK,
      browser.naprawde_wyslac) = oryg
@@ -605,36 +629,38 @@ finally:
 
 print()
 print()
-print("=== 6. OBSERWACJE WYCOFANE, BO PRZYCISKA NIE MA ===")
+print("=== 6. OBSERWACJE ODWIESZONE — WYCOFANIE STALO NA ZLYM WNIOSKU ===")
 # Obserwacje nie wykonaly sie ANI RAZU i przez tygodnie wygladalo to na blad
-# kolejnosci blokow albo za waski budzet. Moja pierwsza diagnoza byla tez
-# bledna: myslalem, ze bierzemy uchwyt PUBLIKACJI zamiast uchwytu CZLOWIEKA.
-# Sprawdzone na zywym API — dla wszystkich pieciu hostow z historii oba uchwyty
-# sa IDENTYCZNE, wiec nie o to chodzilo.
+# kolejnosci blokow albo za waski budzet. Pierwsza diagnoza byla bledna:
+# uchwyt PUBLIKACJI zamiast uchwytu CZLOWIEKA. Sprawdzone na zywym API — dla
+# wszystkich pieciu hostow z historii oba uchwyty sa IDENTYCZNE.
 #
-# Prawdziwy powod, zmierzony 2026-08-23 na szesciu profilach (trzech obcych
-# i trzech z naszej historii): Substack zdjal „Follow" ze stron profilowych.
-# Zostalo „Subscribe" i „Message", a slowo „Follow" nie wystepuje w ich HTML
-# ani razu — ani na `/@kto/notes`. Przycisk przetrwal tylko w widgetach
-# „kogo obserwowac", czyli w liscie PODPOWIEDZI, ktorej ta funkcja unika
-# od pierwszego dnia.
+# DRUGA DIAGNOZA TEZ BYLA BLEDNA i to ona kosztowala dziewiec dni. 2026-08-23
+# zmierzono szesc profili i stwierdzono, ze Substack ZDJAL „Follow" ze stron
+# profilowych — slowa „Follow" nie ma w ich HTML ani razu. POMIAR BYL
+# PRAWDZIWY, WNIOSEK FALSZYWY: przycisk siedzi w menu pod kolkiem „...", ktore
+# Substack rysuje DOPIERO PO KLIKNIECIU. W HTML zamknietej strony go nie ma
+# i byc nie moze, wiec czytanie HTML-a nie moglo tego rozstrzygnac.
 #
-# Test pilnuje teraz, ze zdolnosc jest WYLACZONA SWIADOMIE, a nie zepsuta.
+# Zmierzone ponownie 2026-09-01 na zywej sesji: menu oddaje „Follow" tam, gdzie
+# nie obserwujemy, i „Unfollow" tam, gdzie obserwujemy. Pelny pomiar w
+# `test_obserwowanie_przez_menu.py`.
+#
+# TA SEKCJA PILNOWALA WYCOFANIA I ZOSTAJE — ODWROCONA. Nie kasuje jej, bo
+# to ona ma nie pozwolic, zeby zdolnosc wygasla po cichu drugi raz.
 
-sprawdz("norma obserwacji to zero", config.FOLLOW_MIESIECZNIE == (0, 0),
-        config.FOLLOW_MIESIECZNIE)
-sprawdz("i powod stoi przy stalej, nie w commicie",
-        "Substack zdjal" in pathlib.Path("agent-v2/config.py").read_text(
-            encoding="utf-8"))
-sprawdz("subskrypcje NIETKNIETE — to osobna, dzialajaca zdolnosc",
-        config.SUBSKRYPCJE_MIESIECZNIE[1] > 0, config.SUBSKRYPCJE_MIESIECZNIE)
-
-# Zerowa norma nie moze wysadzic licznika ani udawac awarii. Rubryka wiecznie
-# na zerze czytalaby sie jak „cos jest zepsute" — a tu nie ma czego naprawiac.
+sprawdz("norma obserwacji wrocila do 30-44/mies",
+        config.FOLLOW_MIESIECZNIE == (30, 44), config.FOLLOW_MIESIECZNIE)
+sprawdz("subskrypcje NIETKNIETE — to osobna zdolnosc",
+        config.SUBSKRYPCJE_MIESIECZNIE == (6, 12), config.SUBSKRYPCJE_MIESIECZNIE)
 sprawdz("licznik zna rodzaj 'obserwacja'", "obserwacja" in config.normy_dzienne())
-sprawdz("i jego norma dzienna to zero",
-        config.normy_dzienne()["obserwacja"] == 0)
+sprawdz("i jego norma dzienna jest DODATNIA",
+        config.normy_dzienne()["obserwacja"] > 0,
+        config.normy_dzienne()["obserwacja"])
 
+# NAJWAZNIEJSZE: dzien bez ani jednej obserwacji ma sie liczyc jako 0 PROCENT,
+# a nie jako „BRAK". Do 1 wrzesnia bylo odwrotnie i wlasnie to zamykalo sprawe:
+# `norma.NIEWYKONALNE` zamienialo zero w kreske, a kreska nie budzi nikogo.
 with tempfile.TemporaryDirectory() as tmp:
     stary_kat = config.DATA_DIR
     try:
@@ -646,24 +672,47 @@ with tempfile.TemporaryDirectory() as tmp:
     finally:
         config.DATA_DIR = stary_kat
     obs = pods.get("obserwacja", {})
-    sprawdz("zerowa norma nie dzieli przez zero", isinstance(pods, dict))
-    sprawdz("realizacja to BRAK, a nie 0% — inaczej wyglada jak awaria",
-            obs.get("realizacja") is None, obs.get("realizacja"))
+    sprawdz("podsumowanie nadal sie liczy", isinstance(pods, dict))
+    print("    obserwacja w podsumowaniu: %s" % (obs,))
+    sprawdz("zero obserwacji to 0%, a NIE „brak” — inaczej nikt tego nie zauwazy",
+            obs.get("realizacja") == 0, obs.get("realizacja"))
 
-# KONTRDOWOD: to wylaczenie jedna stala, a nie wyprucie bloku. Gdyby przycisk
-# wrocil, blok ma byc na miejscu i gotowy — inaczej „wycofane" znaczy „usuniete"
-# i nikt tego nie odkreci.
+# KONTRDOWOD: gdyby stala wrocila do (0, 0), ta sama funkcja znowu oddalaby
+# „brak" zamiast zera. Odtwarzamy to, zamiast opowiadac.
+stara_stala = config.FOLLOW_MIESIECZNIE
+config.FOLLOW_MIESIECZNIE = (0, 0)
+try:
+    with tempfile.TemporaryDirectory() as tmp:
+        stary_kat = config.DATA_DIR
+        try:
+            config.DATA_DIR = pathlib.Path(tmp)
+            (config.DATA_DIR / "dziennik.jsonl").write_text(
+                '{"rodzaj": "lajk", "udane": true,'
+                ' "kiedy": "2999-01-01T00:00:00Z"}\n', encoding="utf-8")
+            pods0 = stages.podsumowanie_dzialan(7)
+        finally:
+            config.DATA_DIR = stary_kat
+finally:
+    config.FOLLOW_MIESIECZNIE = stara_stala
+print("    KONTRDOWOD (0,0): %s" % (pods0.get("obserwacja", {}),))
+sprawdz("KONTRDOWOD: przy (0, 0) to samo zero czytalo sie jako „brak”",
+        pods0.get("obserwacja", {}).get("realizacja") is None,
+        pods0.get("obserwacja", {}).get("realizacja"))
+
+# Blok w run.py ma NADAL istniec i nadal wolac obserwowanie — wycofanie bylo
+# jedna stala, a nie wypruciem kodu, i wlasnie dzieki temu powrot kosztowal
+# jedna liczbe.
 zrodlo_run = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
 drzewo = ast.parse(zrodlo_run)
 blok = [w for w in ast.walk(drzewo)
         if isinstance(w, ast.FunctionDef) and w.name == "obserwuj"]
-sprawdz("blok obserwacji NADAL ISTNIEJE w kodzie", len(blok) == 1)
-sprawdz("i nadal potrafilby kliknac, gdyby norma wrocila",
+sprawdz("blok obserwacji ISTNIEJE w kodzie", len(blok) == 1)
+sprawdz("i wola obserwuj_profil, a nie zasubskrybuj",
         "obserwuj_profil" in {n.func.attr for n in ast.walk(blok[0])
                               if isinstance(n, ast.Call)
                               and isinstance(n.func, ast.Attribute)})
-sprawdz("powod wycofania stoi w samym bloku",
-        "WYCOFANE 2026-08-23" in ast.get_docstring(blok[0]))
+sprawdz("norma.NIEWYKONALNE nie ucisza juz zadnej pozycji",
+        norma.NIEWYKONALNE == {}, norma.NIEWYKONALNE)
 # KONTRDOWOD, ze to naprawde jedna stala: budzet dnia musi liczyc pozycje
 # „follow" WLASNIE z FOLLOW_MIESIECZNIE. Gdyby liczyl ja skadinad, zmiana
 # stalej niczego by nie odkrecila, a „wycofane" znaczyloby „zakopane".
