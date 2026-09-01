@@ -2580,6 +2580,8 @@ def main() -> int:
              "numbers": s["numbers"]}
             for s in evidence
         ]
+        # Stopka z data zrodel PRZED zapisem — patrz `stages.wstaw_date_zrodel`.
+        draft["body"] = stages.wstaw_date_zrodel(draft["body"], card)
         path = stages.save(conn, run_id, topic, card, draft, status, blocked_by, notes)
 
         print(f"\n>> {status}" + (f" ({blocked_by})" if blocked_by else ""), flush=True)
@@ -2625,19 +2627,35 @@ def main() -> int:
             #
             # `zweryfikuj` przy wlasnej awarii przepuszcza (patrz jego kod):
             # zepsuta weryfikacja to nie dowod falszu.
+            # OBALONE ZDANIE NIE KONCZY PRZEBIEGU — patrz blizniaczy blok w
+            # `artykul_z_puli.py`. Stalo tu „do decyzji wlasciciela", czyli
+            # czekanie na czlowieka w systemie, ktorego celem jest ZERO zgod
+            # czlowieka. Zdjete 1 wrzesnia 2026, w obu sciezkach naraz, zeby
+            # nie rozjechaly sie tak, jak juz raz w tej sesji.
             print("\n-- sprawdzenie faktow przed publikacja --", flush=True)
-            audyt = stages.zweryfikuj(conn, run_id, draft["body"],
-                                      draft.get("title", ""))
-            if not audyt.get("safe_to_post"):
-                print("!! NIE PUBLIKUJE: %s"
-                      % str(audyt.get("verdict", ""))[:300], flush=True)
-                for c in (audyt.get("claims") or []):
-                    if str(c.get("status")) in ("refuted", "outdated", "unverified"):
-                        print("   [%s] %s" % (c.get("status"),
-                                              str(c.get("claim"))[:150]), flush=True)
-                print(">> artykul zapisany (%s), do decyzji wlasciciela" % path,
+            for runda in range(3):
+                audyt = stages.zweryfikuj(conn, run_id, draft["body"],
+                                          draft.get("title", ""))
+                if audyt.get("safe_to_post"):
+                    break
+                print("   [%d] obalone: %s"
+                      % (runda + 1, str(audyt.get("verdict", ""))[:200]),
                       flush=True)
-                return _done(conn, run_id, stage)
+                oczyszczony, wyciete = stages.usun_obalone(draft["body"], audyt)
+                if not wyciete:
+                    print("   nic do wyciecia — publikuje mimo to", flush=True)
+                    break
+                for z in wyciete:
+                    print("   - wyciete: %s" % z[:150], flush=True)
+                draft["body"] = oczyszczony
+                # Zapis MUSI isc po kazdej rundzie: publikacja czyta PLIK
+                # z dysku, a nie `draft`, wiec bez tego poszedlby na Substacka
+                # tekst sprzed wyciecia — czyli dokladnie ten obalony.
+                path = stages.save(conn, run_id, topic, card, draft, status,
+                                   blocked_by, notes)
+            else:
+                print("   trzy rundy nie wystarczyly — publikuje po wycieciu",
+                      flush=True)
             print("   przechodzi: %s" % str(audyt.get("verdict", ""))[:150],
                   flush=True)
 

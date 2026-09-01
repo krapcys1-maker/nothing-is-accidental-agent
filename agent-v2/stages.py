@@ -372,6 +372,78 @@ def karta_dla_pisarza(card: dict[str, Any],
     return czysta
 
 
+ZDANIE_O_ZRODLACH = re.compile(
+    r"[^.!?\n]*\bfigures?\b[^.!?\n]*\bchecked\b[^.!?\n]*[.!?]", re.IGNORECASE)
+
+
+def wstaw_date_zrodel(tekst: str, card: dict[str, Any]) -> str:
+    """Stopka z data zrodel pisana PRZEZ KOD, nie przez model.
+
+    TRZECI raz z rzedu ta jedna linijka zablokowala gotowy artykul. Ostatni
+    raz 1 wrzesnia 2026: sprawdzenie faktow napisalo wprost „every substantive
+    claim about the AI industry is confirmed by current primary sources", po
+    czym obalilo caly tekst za JEDNO zdanie — „figures checked against sources
+    dated up to July 9, 2026" — bo artykul cytowal zrodla z 4 i 5 sierpnia.
+
+    Przyczyna nie lezala w modelu. `pisarz.md` kazal MU przepisac date z karty
+    do zdania, a karta ma ja w `source_dates["newest"]` i kod czyta to pole w
+    czterech miejscach. Prosilismy o przepisanie liczby, ktora mamy pod reka, i
+    karalismy za pomylke. Data wstawiana stad jest poprawna z konstrukcji.
+
+    Gdy karta nie ma dat, stopki NIE MA — zdanie o zrodlach bez zrodel byloby
+    dokladnie tym falszem, ktory ta funkcja usuwa.
+    """
+    daty = card.get("source_dates") or {}
+    najnowsza = str(daty.get("newest") or "").strip()
+    bez_starej = ZDANIE_O_ZRODLACH.sub("", tekst or "").strip()
+    czesci = [c.strip() for c in bez_starej.split("\n\n") if c.strip()]
+    if not najnowsza:
+        # Bez dat nie ma stopki, ale nie zostawiamy po niej dziury: akapit,
+        # w ktorym stalo tylko to zdanie, znika w calosci.
+        return "\n\n".join(czesci)
+    # „One datestamp, at the top" — tak jak zamawial prompt, tylko bez
+    # proszenia o to modelu.
+    i = 1 if (czesci and czesci[0].lstrip().startswith("#")) else 0
+    czesci.insert(i, "Figures checked against sources to %s." % najnowsza)
+    return "\n\n".join(czesci)
+
+
+def usun_obalone(tekst: str, audyt: dict[str, Any]) -> tuple[str, list[str]]:
+    """Wycina zdania niosace obalone twierdzenia. Oddaje (tekst, co wyciete).
+
+    Usuniecie zdania nigdy nie DOKLADA twierdzenia, wiec jest bezpieczne w
+    jedna strone: tekst po tej operacji nie moze byc mniej prawdziwy niz przed.
+    Dlatego wolno to zrobic bez pytania czlowieka.
+
+    Dopasowanie po wspolnych slowach dluzszych niz cztery znaki, prog polowy:
+    twierdzenie z audytu jest PARAFRAZA zdania, nie jego kopia, wiec rownosc
+    napisow nie trafilaby nigdy.
+    """
+    obalone = [str(c.get("claim") or "") for c in (audyt.get("claims") or [])
+               if str(c.get("status")) in ("refuted", "outdated")]
+    if not obalone:
+        return tekst, []
+
+    def slowa(t: str) -> set:
+        return set(re.findall(r"[a-z0-9]{5,}", (t or "").lower()))
+
+    zbiory = [z for z in (slowa(t) for t in obalone) if z]
+    wyciete: list[str] = []
+    nowe: list[str] = []
+    for akapit in (tekst or "").split("\n\n"):
+        zostaja = []
+        for zdanie in re.split(r"(?<=[.!?])\s+", akapit):
+            sz = slowa(zdanie)
+            if any(len(sz & st) >= max(2, len(st) // 2) for st in zbiory):
+                wyciete.append(zdanie.strip())
+            else:
+                zostaja.append(zdanie)
+        sklejony = " ".join(x for x in zostaja if x.strip()).strip()
+        if sklejony:
+            nowe.append(sklejony)
+    return "\n\n".join(nowe), wyciete
+
+
 def write(
     conn: sqlite3.Connection, run_id: int, card: dict[str, Any],
     glebokosc: str = "RICH",

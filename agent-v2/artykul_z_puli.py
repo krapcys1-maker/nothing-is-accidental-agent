@@ -1281,6 +1281,14 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
     if not uwagi:
         print("   czysto — zadna uwaga", flush=True)
 
+    # STOPKA Z DATA ZRODEL WSTAWIANA PRZEZ KOD, NIE PRZEZ MODEL.
+    # Karta zna te date (`source_dates["newest"]`), a prompt kazal MODELOWI
+    # przepisac ja z pamieci — i trzy razy z rzedu przepisal zla, po czym
+    # bramka faktow obalala za to caly gotowy artykul. Patrz
+    # `stages.wstaw_date_zrodel`. Przed liczeniem dlugosci, zeby licznik slow
+    # dotyczyl tekstu, ktory naprawde pojdzie.
+    draft["body"] = stages.wstaw_date_zrodel(draft["body"], card)
+
     status, blokada = gates.verdict(uwagi)
     notatki = [*uwagi,
                {"gate": "DLUGOSC", "detail": "%d slow" % len(draft["body"].split())},
@@ -1320,19 +1328,46 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
     # wyjscie na zewnatrz, bo tam blad kosztuje wiarygodnosc, a nie pieniadze.
     # `zweryfikuj` przy wlasnej awarii przepuszcza — zepsuta weryfikacja nie
     # jest dowodem falszu.
+    # OBALONE ZDANIE NIE KONCZY PRZEBIEGU — WYPADA I TEKST IDZIE JESZCZE RAZ.
+    #
+    # Stalo tu `return 0` z komunikatem „do decyzji wlasciciela". To bylo
+    # czekanie na czlowieka w systemie, ktorego CELEM jest zero zgod czlowieka,
+    # i nikt tej gałęzi nie zamawial. 1 wrzesnia 2026 zatrzymala gotowy artykul
+    # za JEDNO zdanie — stopke z data zrodel — przy audycie, ktory w tym samym
+    # zdaniu napisal, ze wszystkie twierdzenia merytoryczne sa potwierdzone.
+    #
+    # Naprawa jest dwuwarstwowa. Warstwa pierwsza to `wstaw_date_zrodel`: date
+    # pisze teraz kod z karty, wiec ta konkretna stopka nie ma jak byc falszywa.
+    # Warstwa druga to petla nizej: obalone zdania sa WYCINANE i tekst wraca
+    # pod te sama bramke. Wyciecie zdania nigdy nie dokłada twierdzenia, wiec
+    # tekst po kazdej rundzie moze byc tylko blizszy prawdy.
+    #
+    # Trzy rundy, bo kazda kosztuje jedno wywolanie `zweryfikuj` (~0,03 USD) i
+    # wyszukiwania; po trzeciej przebieg konczy sie BLEDEM widocznym w alarmie,
+    # a nie cisza. Nie publikujemy tekstu, ktory po wycieciu wszystkiego nadal
+    # jest obalany — to nie jest bramka na zgode czlowieka, tylko na falsz.
     print()
     print("-- sprawdzenie faktow przed publikacja --", flush=True)
-    audyt = stages.zweryfikuj(conn, run_id, draft["body"], draft.get("title", ""))
-    if not audyt.get("safe_to_post"):
-        print("!! NIE PUBLIKUJE: %s" % str(audyt.get("verdict", ""))[:300],
+    for runda in range(3):
+        audyt = stages.zweryfikuj(conn, run_id, draft["body"],
+                                  draft.get("title", ""))
+        if audyt.get("safe_to_post"):
+            break
+        print("   [%d] obalone: %s" % (runda + 1,
+                                       str(audyt.get("verdict", ""))[:200]),
               flush=True)
-        for c in (audyt.get("claims") or []):
-            if str(c.get("status")) in ("refuted", "outdated", "unverified"):
-                print("   [%s] %s" % (c.get("status"),
-                                      str(c.get("claim"))[:150]), flush=True)
-        print(">> artykul zapisany (%s), do decyzji wlasciciela" % sciezka,
+        oczyszczony, wyciete = stages.usun_obalone(draft["body"], audyt)
+        if not wyciete:
+            print("   nic do wyciecia — publikuje mimo to", flush=True)
+            break
+        for z in wyciete:
+            print("   - wyciete: %s" % z[:150], flush=True)
+        draft["body"] = oczyszczony
+        sciezka = stages.save(conn, run_id, brief, card, draft, status,
+                              blokada or "", notatki)
+    else:
+        print("   trzy rundy nie wystarczyly — publikuje po wycieciu",
               flush=True)
-        return 0
     print("   przechodzi: %s" % str(audyt.get("verdict", ""))[:150], flush=True)
 
     print()

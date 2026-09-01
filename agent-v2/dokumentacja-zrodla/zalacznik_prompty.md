@@ -2130,7 +2130,7 @@ Author of the comment: {commenter}
 
 #### `prompts/pisarz.md`
 
-**476 wierszy.** Pola wejsciowe: `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
+**480 wierszy.** Pola wejsciowe: `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
 ````markdown
 You write for the anonymous editorial brand Nothing Is Accidental, a
@@ -2330,18 +2330,22 @@ So:
 - **A rule, a price, a deadline or a policy is a fact with a date on it.** If
   the card does not say when it was true, treat it as possibly expired and say
   what the card says happened *at that time*, not what is the case now.
-- **One datestamp, at the top, and nowhere else.** The card carries
-  `source_dates`, with the newest and oldest source it stands on. Use the
-  NEWEST one: *"Figures checked against sources to [that date]."* Do not
-  sprinkle "as of March" through the prose — that produces documentation, not
-  writing.
+- **Do not write a datestamp. It is added for you, after you finish.**
+  You used to be asked to copy the newest date out of `source_dates` into a
+  line reading *"Figures checked against sources to [that date]."* Three
+  articles in a row were then blocked by the fact-check gate — not for
+  anything they argued, but for that one line, because the date copied out was
+  not the date the sources carried. The last time, the checker said in the same
+  breath that every substantive claim in the piece was confirmed.
 
-  **Never bury it inside a paragraph that is doing argumentative work.** It is
-  housekeeping, and housekeeping dropped into the middle of a build interrupts
-  the build. Measured across the three articles that carried one, it landed in
-  three different places, once after ninety-six words of setup — right where
-  the opening was about to turn. Give it its own line, or let it close a
-  paragraph that has already finished its point.
+  So the line is now written by code, from the card, where the date already
+  is. **If you write one yourself it will be stripped.** Do not sprinkle "as of
+  March" through the prose either — that produces documentation, not writing.
+
+- **Dates inside the argument are still yours.** When a rule, a price or a
+  deadline only holds as of some date, say so where it matters. What you are
+  released from is the housekeeping line at the top, not from dating the facts
+  you actually use.
 
   **And if `source_dates.note` says the material is old, the reader is told
   once, plainly, in your own words.** A piece about this subject resting on

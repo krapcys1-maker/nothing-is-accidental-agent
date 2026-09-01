@@ -86,8 +86,18 @@ sprawdz("nota o wieku nadal trafia do czytelnika",
         "the reader is told once, plainly" in brief)
 sprawdz("i nadal jest nazwana prawem czytelnika",
         "the reader's right to weigh" in brief)
-sprawdz("jedna data u gory nadal obowiazuje",
-        "One datestamp, at the top" in brief)
+# 1 wrzesnia 2026: stopke z data pisze teraz KOD (`stages.wstaw_date_zrodel`),
+# a prompt ma modelowi tego ZABRANIAC. Trzy artykuly z rzedu zablokowala bramka
+# faktow za te jedna linijke — model przepisywal date z pamieci, choc karta ma
+# ja w `source_dates["newest"]`, a kod czyta to pole w czterech miejscach.
+# Ostatni raz audyt napisal w tym samym zdaniu, ze wszystkie twierdzenia
+# merytoryczne sa potwierdzone, i mimo to obalil caly tekst.
+sprawdz("prompt ZABRANIA modelowi pisac stopke z data",
+        "Do not write a datestamp" in brief)
+sprawdz("i mowi, ze doda ja kod",
+        "written by code" in brief and "will be stripped" in brief)
+sprawdz("ale daty WEWNATRZ argumentu zostaja u modelu",
+        "Dates inside the argument are still yours" in brief)
 
 print()
 print("=== 5. KONTRDOWOD: PROMPT SPRZED POPRAWKI MUSI TU POLEC ===")

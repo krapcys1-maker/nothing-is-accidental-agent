@@ -177,6 +177,18 @@ class AtrapaStages:
     wyobrazam ostatnia bramke, a to ona decyduje o publikacji.
     """
 
+    # Czyste funkcje (bez sieci, modelu i bazy) ida do PRAWDZIWEGO `stages` —
+    # atrapowanie ich zamienialoby test w sprawdzanie wlasnej atrapy.
+    @staticmethod
+    def wstaw_date_zrodel(tekst, card):
+        import stages as _s
+        return _s.wstaw_date_zrodel(tekst, card)
+
+    @staticmethod
+    def usun_obalone(tekst, audyt):
+        import stages as _s
+        return _s.usun_obalone(tekst, audyt)
+
     def __init__(self, slad, pada_na, fabryka, budzet_wyczerpany):
         self.slad = slad
         self.pada_na = pada_na

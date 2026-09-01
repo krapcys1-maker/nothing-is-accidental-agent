@@ -92,26 +92,42 @@ sprawdz("decyzja czytana jest z safe_to_post",
         "safe_to_post" in wycinek, wycinek[-200:])
 
 print()
-print("=== 3. NIEPOWODZENIE ZATRZYMUJE PUBLIKACJE, NIE PRACE ===")
-# Miedzy sprawdzeniem a `wystaw_artykul` musi byc wyjscie ze sciezki. Bez niego
-# ostrzezenie tylko by sie wypisalo, a artykul i tak by poszedl — czyli
-# dokladnie to, co robila stara brama „nic nie blokuje".
+print("=== 3. OBALONE ZDANIE WYPADA, ARTYKUL IDZIE ===")
+# ZMIANA KONTRAKTU, 1 wrzesnia 2026. Stalo tu wymaganie, zeby miedzy
+# sprawdzeniem a `wystaw_artykul` bylo WYJSCIE ze sciezki. To wyjscie konczylo
+# sie zdaniem „do decyzji wlasciciela" — czyli czekaniem na czlowieka w
+# systemie, ktorego celem jest ZERO zgod czlowieka.
+#
+# Tego samego dnia zatrzymalo gotowy artykul za JEDNO zdanie (stopke z data
+# zrodel) przy audycie, ktory w tym samym zdaniu napisal, ze wszystkie
+# twierdzenia merytoryczne sa potwierdzone. Decyzja wlasciciela: artykul
+# zaplanowany ma wyjsc; obalone zdanie ma zostac wyciete, a nie zatrzymac
+# caly tekst.
+#
+# Te asercje sa po TRESCI ZRODLA i to jest ich wada — zostaja tylko dlatego,
+# ze pilnuja KSZTALTU petli, ktorej nie da sie uruchomic bez platnego
+# `zweryfikuj`. Zachowanie mierza `test_artykul_nie_ginie_po_drodze.py` i
+# smoke-test helperow w `stages`.
 po_audycie = wycinek[wycinek.find("stages.zweryfikuj("):] if "stages.zweryfikuj(" in wycinek else ""
-sprawdz("jest wyjscie ze sciezki przed publikacja",
-        "return" in po_audycie, po_audycie[:200])
-sprawdz("i wyjscie zalezy od NIEPOWODZENIA sprawdzenia",
-        'not audyt.get("safe_to_post")' in po_audycie, po_audycie[:200])
-sprawdz("artykul mimo to zostaje zapisany",
-        "zapisany" in po_audycie or "path" in po_audycie, po_audycie[:200])
+sprawdz("NIE MA juz wyjscia czekajacego na czlowieka",
+        "do decyzji wlasciciela" not in po_audycie, po_audycie[:200])
+sprawdz("obalone zdania sa wycinane",
+        "usun_obalone(" in po_audycie, po_audycie[:300])
+sprawdz("i tekst wraca pod te sama bramke (petla rund)",
+        "for runda in range(" in wycinek, wycinek[:300])
+sprawdz("po wycieciu artykul jest zapisywany na nowo",
+        "stages.save(" in po_audycie, po_audycie[:300])
 
 print()
 print("=== 4. SPRAWDZENIE NIE MOZE BYC CICHE ===")
-# Zablokowany artykul, o ktorym nikt sie nie dowiaduje, jest gorszy niz
-# opublikowany z bledem: znika bez sladu i nikt nie wie, czego szukac.
-sprawdz("powod blokady jest wypisywany",
-        "NIE PUBLIKUJE" in po_audycie, po_audycie[:200])
-sprawdz("i wypisywane sa poszczegolne zakwestionowane twierdzenia",
-        "refuted" in po_audycie and "claims" in po_audycie, po_audycie[:300])
+# Wyciecie, o ktorym nikt sie nie dowiaduje, jest gorsze niz brak wyciecia:
+# artykul zmienia sie po drodze i nikt nie wie, co z niego wypadlo.
+sprawdz("powod obalenia jest wypisywany",
+        "obalone:" in po_audycie, po_audycie[:300])
+sprawdz("i wypisywane jest kazde wyciete zdanie",
+        "wyciete:" in po_audycie, po_audycie[:300])
+sprawdz("data zrodel wstawiana jest przez KOD, nie przez model",
+        "wstaw_date_zrodel(" in src, "brak w calym pliku")
 
 print()
 print("=== 5. `zweryfikuj`: AWARIA PRZEPUSZCZA, PUSTY BUDZET NIE ===")

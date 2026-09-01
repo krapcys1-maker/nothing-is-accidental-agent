@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **22 plików**, 25 035 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **22 plików**, 25 160 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 108 zestawów
-testów, 3109 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 3113 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-2676 wierszy, 26 funkcji na poziomie modułu, 1 klas
+2694 wierszy, 26 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -176,7 +176,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-6033 wierszy, 110 funkcji na poziomie modułu, 0 klas
+6105 wierszy, 112 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -190,6 +190,8 @@ wiec nie da sie go rozjechac z kodem.
 | `_nazwa_zrodla(conn, url)` *(wewn.)* | Nazwa źródła zamiast gołego adresu. |
 | `save(conn, run_id, topic, card, draft, status, blocked_by, notes)` | Etap 9 — zapis. Artykuł do szuflady: baza + plik .md. |
 | `karta_dla_pisarza(card, teraz)` | Karta bez zastrzezenia, ktorego nie wolno opublikowac. |
+| `wstaw_date_zrodel(tekst, card)` | Stopka z data zrodel pisana PRZEZ KOD, nie przez model. |
+| `usun_obalone(tekst, audyt)` | Wycina zdania niosace obalone twierdzenia. Oddaje (tekst, co wyciete). |
 | `write(conn, run_id, card, glebokosc)` | Etap 7 — artykuł (Claude). To jest produkt. |
 | `_ile_reakcji(k)` *(wewn.)* | „(reakcji: N)" TYLKO wtedy, gdy zrodlo to pole w ogole wypelnia. |
 | `_po_rowno_ze_zrodel(komentarze, ile)` *(wewn.)* | Wycinek listy, ktory NIE MOZE zaglodzic zadnego miejsca rozmowy. |
@@ -596,7 +598,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1351 wierszy, 13 funkcji na poziomie modułu, 0 klas
+1386 wierszy, 13 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -10489,7 +10491,7 @@ Author of the comment: {commenter}
 
 #### `prompts/pisarz.md`
 
-**476 wierszy.** Pola wejsciowe: `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
+**480 wierszy.** Pola wejsciowe: `card_json`, `ile_paraleli`, `kotwica_dlugosci`, `language`, `max_words`, `min_words`, `poprzednie_uwagi`, `ruch_koncowy`, `ruch_koncowy_nazwa`, `style_examples`, `style_negative`, `style_positive`, `target_words`
 
 ````markdown
 You write for the anonymous editorial brand Nothing Is Accidental, a
@@ -10689,18 +10691,22 @@ So:
 - **A rule, a price, a deadline or a policy is a fact with a date on it.** If
   the card does not say when it was true, treat it as possibly expired and say
   what the card says happened *at that time*, not what is the case now.
-- **One datestamp, at the top, and nowhere else.** The card carries
-  `source_dates`, with the newest and oldest source it stands on. Use the
-  NEWEST one: *"Figures checked against sources to [that date]."* Do not
-  sprinkle "as of March" through the prose — that produces documentation, not
-  writing.
+- **Do not write a datestamp. It is added for you, after you finish.**
+  You used to be asked to copy the newest date out of `source_dates` into a
+  line reading *"Figures checked against sources to [that date]."* Three
+  articles in a row were then blocked by the fact-check gate — not for
+  anything they argued, but for that one line, because the date copied out was
+  not the date the sources carried. The last time, the checker said in the same
+  breath that every substantive claim in the piece was confirmed.
 
-  **Never bury it inside a paragraph that is doing argumentative work.** It is
-  housekeeping, and housekeeping dropped into the middle of a build interrupts
-  the build. Measured across the three articles that carried one, it landed in
-  three different places, once after ninety-six words of setup — right where
-  the opening was about to turn. Give it its own line, or let it close a
-  paragraph that has already finished its point.
+  So the line is now written by code, from the card, where the date already
+  is. **If you write one yourself it will be stripped.** Do not sprinkle "as of
+  March" through the prose either — that produces documentation, not writing.
+
+- **Dates inside the argument are still yours.** When a rule, a price or a
+  deadline only holds as of some date, say so where it matters. What you are
+  released from is the housekeeping line at the top, not from dating the facts
+  you actually use.
 
   **And if `source_dates.note` says the material is old, the reader is told
   once, plainly, in your own words.** A piece about this subject resting on

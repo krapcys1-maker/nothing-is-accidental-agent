@@ -199,6 +199,17 @@ def _rzucaj(fabryka):
 class AtrapaStages:
     """Atrapa etapow PLATNYCH. `save` jest prawdziwe — patrz naglowek pliku."""
 
+    # Czyste funkcje ida do PRAWDZIWEGO `stages` — nie wolaja modelu ani bazy.
+    @staticmethod
+    def wstaw_date_zrodel(tekst, card):
+        import stages as _s
+        return _s.wstaw_date_zrodel(tekst, card)
+
+    @staticmethod
+    def usun_obalone(tekst, audyt):
+        import stages as _s
+        return _s.usun_obalone(tekst, audyt)
+
     def __init__(self, slad, pada_na, fabryka, budzet_wyczerpany, conn):
         self.slad = slad
         self.pada_na = pada_na
