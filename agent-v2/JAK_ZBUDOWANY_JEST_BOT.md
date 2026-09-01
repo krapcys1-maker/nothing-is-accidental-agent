@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **21 plików**, 19 096 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **21 plików**, 19 205 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 80 zestawów
-testów, 1972 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 81 zestawów
+testów, 1991 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -164,7 +164,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-5594 wierszy, 104 funkcji na poziomie modułu, 0 klas
+5703 wierszy, 106 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -219,6 +219,8 @@ wiec nie da sie go rozjechac z kodem.
 | `odhacz_promocje(url, tekst)` | Odnotowuje, ze artykul dostal dzis swoja notke promujaca — I CO W NIEJ BYLO. |
 | `_slowa(tekst)` *(wewn.)* | Znaczace slowa tekstu, obciete do rdzenia. |
 | `_zderzenie(x, y, min_wspolnych, prog)` *(wewn.)* | To samo pytanie co `_o_tym_samym`, ale na GOTOWYCH rdzeniach. |
+| `nazwy_wlasne(tekst)` | Nazwy wlasne i identyfikatory z tekstu, sprowadzone do jednej postaci. |
+| `wspolna_nazwa(a, b, korpus, maks_czestosc)` | Nazwa wlasna, ktora wystepuje w OBU tekstach i jest rzadka w korpusie. |
 | `_o_tym_samym(a, b, min_wspolnych, prog)` *(wewn.)* | Czy dwa teksty mowia o tej samej rzeczy. |
 | `wybierz_material(zapas, unikaj, wczesniej)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
 | `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, ile, od)` | Pięć notek na jeden dzień, każda z innego materiału. |

@@ -22,7 +22,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-5594 wierszy, 104 funkcji na poziomie modułu, 0 klas
+5703 wierszy, 106 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -77,6 +77,8 @@
 | `odhacz_promocje(url, tekst)` | Odnotowuje, ze artykul dostal dzis swoja notke promujaca — I CO W NIEJ BYLO. |
 | `_slowa(tekst)` *(wewn.)* | Znaczace slowa tekstu, obciete do rdzenia. |
 | `_zderzenie(x, y, min_wspolnych, prog)` *(wewn.)* | To samo pytanie co `_o_tym_samym`, ale na GOTOWYCH rdzeniach. |
+| `nazwy_wlasne(tekst)` | Nazwy wlasne i identyfikatory z tekstu, sprowadzone do jednej postaci. |
+| `wspolna_nazwa(a, b, korpus, maks_czestosc)` | Nazwa wlasna, ktora wystepuje w OBU tekstach i jest rzadka w korpusie. |
 | `_o_tym_samym(a, b, min_wspolnych, prog)` *(wewn.)* | Czy dwa teksty mowia o tej samej rzeczy. |
 | `wybierz_material(zapas, unikaj, wczesniej)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
 | `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, ile, od)` | Pięć notek na jeden dzień, każda z innego materiału. |

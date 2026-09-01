@@ -2197,6 +2197,87 @@ def _zderzenie(x: set[str] | frozenset[str], y: set[str] | frozenset[str],
             and len(wspolne) / min(len(x), len(y)) >= prog)
 
 
+def nazwy_wlasne(tekst: str) -> set[str]:
+    """Nazwy wlasne i identyfikatory z tekstu, sprowadzone do jednej postaci.
+
+    MYSLNIK I SPACJA TO TA SAMA NAZWA. Zmierzone 31 sierpnia na trzech notkach
+    z jednego dnia: dwie pisaly `GLM-5.3-Flash`, trzecia `GLM-5.3 Flash`.
+    Dla porownania po slowach byly to trzy rozne napisy — i wykrywacz uznal
+    wszystkie trzy notki za rozne, mimo ze mowily o tym samym modelu.
+
+    Bierzemy slowa wygladajace na NAZWE, nie zwykle: wielka litera albo cyfra.
+    „GLM-5.3-Flash", „Jalapeno", „GB300" tak; „report", „august" nie.
+    """
+    # POCZATEK ZDANIA NIE ROBI Z SLOWA NAZWY. Bez tego „Cheap models are..."
+    # oddawalo `cheap` jako nazwe wlasna, a wtedy dwa dowolne teksty
+    # zaczynajace sie tym samym slowem wygladaly na blizniaki. Pierwszy wyraz
+    # po kropce liczy sie tylko wtedy, gdy ma cyfre albo wielka litere
+    # w srodku — „GPT-5" tak, „Cheap" nie.
+    tekst = str(tekst or "")
+    po_kropce = {m.start() for m in re.finditer(r"(?:^|[.!?]\s+)", tekst)}
+    wynik = set()
+    for m in re.finditer(r"[A-Za-z][A-Za-z0-9'’.-]*", tekst):
+        w = m.group(0)
+        rdzen = w.strip(".-'’").lower()
+        if len(rdzen) < 4:
+            continue
+        wewnetrzna_wielka = any(c.isupper() for c in w[1:])
+        ma_cyfre = any(c.isdigit() for c in w)
+        if m.start() in po_kropce and not (ma_cyfre or wewnetrzna_wielka):
+            continue
+        if not ((w[:1].isupper() and len(w) > 3) or ma_cyfre):
+            continue
+        # Myslnik i kropka znikaja, zeby `glm-5.3-flash` i `glm 5.3 flash`
+        # byly tym samym. Same cyfry odpadaja — „2026" nie jest nazwa.
+        plaska = "".join(c for c in rdzen if c not in ".-")
+        if not plaska or plaska.isdigit():
+            continue
+        wynik.add(plaska)
+        # I JESZCZE RDZEN DO OSTATNIEJ CYFRY. Bez tego `GLM-5.3-Flash`
+        # (jeden token) nie spotyka sie z `GLM-5.3 Flash` (dwa tokeny) —
+        # a to byly dwie z trzech notek o tym samym modelu, wystawione
+        # tego samego dnia. Wersja skrocona `glm53` jest wspolna obu.
+        cyfry = [i for i, c in enumerate(plaska) if c.isdigit()]
+        if cyfry:
+            trzon = plaska[:cyfry[-1] + 1]
+            if len(trzon) >= 4 and not trzon.isdigit():
+                wynik.add(trzon)
+    return wynik
+
+
+def wspolna_nazwa(a: str, b: str, korpus: list[str] | None = None,
+                  maks_czestosc: int = 2) -> str:
+    """Nazwa wlasna, ktora wystepuje w OBU tekstach i jest rzadka w korpusie.
+
+    DRUGI SYGNAL BLIZNIACTWA, obok liczby wspolnych slow. Powstal 31 sierpnia,
+    bo pierwszy zawiodl w sposob widoczny golym okiem: tego dnia wyszly TRZY
+    notki o modelu GLM-5.3-Flash — o wskaznikach powtorzen, o chinskich
+    ukladach i o cenie — a `_o_tym_samym` uznal kazda pare za rozna, bo
+    wspolnych slow bylo cztery przy progu opartym na proporcji. Dwie z nich
+    dzielily DOSLOWNIE token `glm-5.3-flash`.
+
+    Czytelnik nie widzi trzech roznych ustalen. Widzi trzy notki o tym samym
+    modelu w ciagu jednego dnia — i to jest ta „plaskosc", o ktorej mowil
+    wlasciciel.
+
+    RZADKOSC LICZYMY W KORPUSIE, nie w parze. Nazwa, ktora pada w polowie
+    naszych notek (np. „OpenAI"), nie odroznia niczego — blokowalaby wszystko.
+    Bez korpusu wymagamy samej wspolnej nazwy: wywolujacy decyduje, czy ma
+    czym mierzyc czestosc.
+    """
+    wspolne = nazwy_wlasne(a) & nazwy_wlasne(b)
+    if not wspolne:
+        return ""
+    if korpus is None:
+        return sorted(wspolne)[0]
+    czestosc: dict[str, int] = {}
+    for tekst in korpus:
+        for nazwa in nazwy_wlasne(tekst):
+            czestosc[nazwa] = czestosc.get(nazwa, 0) + 1
+    rzadkie = [n for n in wspolne if czestosc.get(n, 0) <= maks_czestosc]
+    return sorted(rzadkie)[0] if rzadkie else ""
+
+
 def _o_tym_samym(a: str, b: str, min_wspolnych: int = 2,
                  prog: float = 0.15) -> bool:
     """Czy dwa teksty mowia o tej samej rzeczy.
@@ -2269,6 +2350,11 @@ def wybierz_material(zapas: list[dict[str, Any]],
     # Rdzenie liczone RAZ na wywolanie, nie raz na pare. Przy oknie dwunastu
     # nie mialo to znaczenia; przy pamieci bez konca to jest caly koszt.
     unikaj_rdzenie = [_slowa(u) for u in unikaj if u]
+    # TEKSTY, NIE TYLKO RDZENIE. Sygnal nazwy wlasnej potrzebuje oryginalnego
+    # zapisu (wielkie litery i cyfry), ktorego rdzenie juz nie niosa. Gdy
+    # wywolujacy poda gotowe zbiory rdzeni, ten sygnal po prostu nie dziala —
+    # i tak jest lepiej niz udawac, ze dziala.
+    teksty_wczesniej = [u for u in (wczesniej or []) if isinstance(u, str) and u]
     wczesniej_rdzenie = [u if isinstance(u, (set, frozenset)) else _slowa(u)
                          for u in (wczesniej or []) if u]
     for i, f in enumerate(zapas):
@@ -2282,6 +2368,29 @@ def wybierz_material(zapas: list[dict[str, Any]],
         if any(_zderzenie(temat, u, **POROWNANIE_MIEDZY_DNIAMI)
                for u in wczesniej_rdzenie):
             continue
+        # DRUGI SYGNAL: WSPOLNA NAZWA WLASNA.
+        #
+        # Porownanie po slowach zawiodlo w sposob widoczny golym okiem.
+        # 31 sierpnia wyszly TRZY notki o modelu GLM-5.3-Flash — o wskaznikach
+        # powtorzen, o chinskich ukladach i o cenie — a kazda para byla wedlug
+        # `_o_tym_samym` „rozna", bo wspolnych slow bylo cztery przy progu
+        # opartym na proporcji. Dwie z nich dzielily DOSLOWNIE `glm-5.3-flash`.
+        #
+        # Czytelnik nie widzi trzech roznych ustalen. Widzi trzy notki o tym
+        # samym modelu w ciagu dnia — i to jest ta „plaskosc".
+        #
+        # Rzadkosc liczymy w KORPUSIE wystawionych notek: nazwa, ktora pada
+        # w polowie z nich (np. „OpenAI"), nie odroznia niczego i blokowalaby
+        # wszystko.
+        if teksty_wczesniej:
+            fakt_tekst = "%s %s" % (f.get("domain") or "", f.get("fact") or "")
+            wspolna = next(
+                (n for u in teksty_wczesniej
+                 if (n := wspolna_nazwa(fakt_tekst, u, teksty_wczesniej))), "")
+            if wspolna:
+                print("  [notki] pomijam — ta sama nazwa co w juz wystawionej"
+                      " notce: %s" % wspolna, flush=True)
+                continue
         return zapas.pop(i)
     # Wszystko zderza sie z tym, co juz mamy. NIE jest to jeszcze koniec dnia:
     # `notki_dnia` dobiera wtedy nowy material — powtorzyc nie wolno, ale

@@ -211,12 +211,29 @@ print("=== SPIZARNIA Z POPRZEDNIEGO PISMA SIE NIE LICZY ===")
 import tempfile as _tmp2   # noqa: E402
 import json as _js2        # noqa: E402
 
+import datetime as _dt2   # noqa: E402
 _kat2 = pathlib.Path(_tmp2.mkdtemp())
 _stary_indeks = stages.INDEKS_KANDYDATOW
 stages.INDEKS_KANDYDATOW = _kat2 / "indeks.json"
 try:
+    # TERMIN WAZNOSCI PODANY WPROST, ZEBY TEST NIE ZALEZAL OD DZISIEJSZEJ DATY.
+    #
+    # BOMBA ZEGAROWA, ktora wybuchla 1 wrzesnia 2026. Atrapy mialy `kiedy`
+    # ustawione na dzien przestawienia konta (25 sierpnia), a `_po_terminie`
+    # liczy dla wpisow bez `wazny_do` termin jako `kiedy` + BANK_MAKS_DNI (7).
+    # 25 sierpnia + 7 dni = 1 wrzesnia — wiec tego dnia caly ten blok zaczal
+    # oblewac, mimo ze nikt niczego nie zmienil.
+    #
+    # Test mieszal dwie rozne rzeczy w jednym polu: GRANICE EPOKI (czy material
+    # jest sprzed przestawienia konta) i TERMIN WAZNOSCI. Rozdzielamy je:
+    # `kiedy` odpowiada dalej za epoke, `wazny_do` jest zawsze w przyszlosci,
+    # bo ten blok nie bada przeterminowania — bada granice epoki.
+    _daleko = (_dt2.datetime.now(_dt2.timezone.utc)
+               + _dt2.timedelta(days=30)).strftime("%Y-%m-%d %H:%M")
+
     def _kand(fakt, kiedy):
-        return {"fact": fakt, "status": "nowy", "kiedy": kiedy + "T10:00:00+00:00"}
+        return {"fact": fakt, "status": "nowy",
+                "kiedy": kiedy + "T10:00:00+00:00", "wazny_do": _daleko}
 
     stages.INDEKS_KANDYDATOW.write_text(_js2.dumps([
         _kand("Stary temat o szamponie", "2026-08-22"),
@@ -254,9 +271,16 @@ try:
     # sprawdzeniem stanu na dzis.
     _TERAZ = "the newest model now offers a larger window"
 
+    # TERMIN WAZNOSCI W PRZYSZLOSCI — inaczej `_po_terminie` odsiewa OBIE
+    # atrapy, zanim bramka swiezosci w ogole zostanie zapytana, i test mierzy
+    # nie to, co ma w nazwie. Wybuchlo to 1 wrzesnia 2026: `kiedy` = dzien
+    # przestawienia (25.08) plus BANK_MAKS_DNI (7) daje dokladnie ten dzien.
+    # Komentarz wyzej mowi to wprost — „samo LEZENIE w banku to nie jest ta
+    # bramka" — ale atrapa i tak dawala sie zlapac tej drugiej.
     def _k(fakt, control_date, verdict="CONFIRMS"):
         return {"fact": "%s — %s" % (fakt, _TERAZ), "status": "nowy",
                 "kiedy": config.DATA_PRZESTAWIENIA + "T10:00:00+00:00",
+                "wazny_do": _daleko,
                 "control_verdict": verdict, "control_date": control_date,
                 "control_fact": "sprawdzone"}
 
