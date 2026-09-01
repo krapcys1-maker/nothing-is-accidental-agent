@@ -111,21 +111,22 @@ print("=== 3. OBALONE ZDANIE WYPADA, ARTYKUL IDZIE ===")
 po_audycie = wycinek[wycinek.find("stages.zweryfikuj("):] if "stages.zweryfikuj(" in wycinek else ""
 sprawdz("NIE MA juz wyjscia czekajacego na czlowieka",
         "do decyzji wlasciciela" not in po_audycie, po_audycie[:200])
-sprawdz("obalone zdania sa wycinane",
-        "usun_obalone(" in po_audycie, po_audycie[:300])
-sprawdz("i tekst wraca pod te sama bramke (petla rund)",
-        "for runda in range(" in wycinek, wycinek[:300])
-sprawdz("po wycieciu artykul jest zapisywany na nowo",
-        "stages.save(" in po_audycie, po_audycie[:300])
+sprawdz("nie ma juz zadnego `return` miedzy sprawdzeniem a publikacja",
+        "return" not in po_audycie, po_audycie[:300])
+# WYCINANIE ZDAN BYLO ZBUDOWANE I COFNIETE tego samego dnia: wyciete zdanie
+# zostawia dziure w srodku akapitu, a to gorsze dla czytelnika niz jedno slabe
+# zdanie. Ta asercja pilnuje, zeby nie wrocilo.
+sprawdz("i tekst NIE JEST ciety",
+        "usun_obalone" not in src, "wycinanie wrocilo")
 
 print()
 print("=== 4. SPRAWDZENIE NIE MOZE BYC CICHE ===")
-# Wyciecie, o ktorym nikt sie nie dowiaduje, jest gorsze niz brak wyciecia:
-# artykul zmienia sie po drodze i nikt nie wie, co z niego wypadlo.
-sprawdz("powod obalenia jest wypisywany",
-        "obalone:" in po_audycie, po_audycie[:300])
-sprawdz("i wypisywane jest kazde wyciete zdanie",
-        "wyciete:" in po_audycie, po_audycie[:300])
+# Skoro nic nie blokuje, log jest JEDYNYM sladem po tym, co model
+# zakwestionowal. Bez niego sprawdzenie byloby wydatkiem bez odbiorcy.
+sprawdz("zastrzezenia sa wypisywane",
+        "ZASTRZEZENIA" in po_audycie, po_audycie[:300])
+sprawdz("i wypisywane jest kazde zakwestionowane twierdzenie",
+        "refuted" in po_audycie and "claims" in po_audycie, po_audycie[:300])
 sprawdz("data zrodel wstawiana jest przez KOD, nie przez model",
         "wstaw_date_zrodel(" in src, "brak w calym pliku")
 

@@ -408,40 +408,12 @@ def wstaw_date_zrodel(tekst: str, card: dict[str, Any]) -> str:
     return "\n\n".join(czesci)
 
 
-def usun_obalone(tekst: str, audyt: dict[str, Any]) -> tuple[str, list[str]]:
-    """Wycina zdania niosace obalone twierdzenia. Oddaje (tekst, co wyciete).
-
-    Usuniecie zdania nigdy nie DOKLADA twierdzenia, wiec jest bezpieczne w
-    jedna strone: tekst po tej operacji nie moze byc mniej prawdziwy niz przed.
-    Dlatego wolno to zrobic bez pytania czlowieka.
-
-    Dopasowanie po wspolnych slowach dluzszych niz cztery znaki, prog polowy:
-    twierdzenie z audytu jest PARAFRAZA zdania, nie jego kopia, wiec rownosc
-    napisow nie trafilaby nigdy.
-    """
-    obalone = [str(c.get("claim") or "") for c in (audyt.get("claims") or [])
-               if str(c.get("status")) in ("refuted", "outdated")]
-    if not obalone:
-        return tekst, []
-
-    def slowa(t: str) -> set:
-        return set(re.findall(r"[a-z0-9]{5,}", (t or "").lower()))
-
-    zbiory = [z for z in (slowa(t) for t in obalone) if z]
-    wyciete: list[str] = []
-    nowe: list[str] = []
-    for akapit in (tekst or "").split("\n\n"):
-        zostaja = []
-        for zdanie in re.split(r"(?<=[.!?])\s+", akapit):
-            sz = slowa(zdanie)
-            if any(len(sz & st) >= max(2, len(st) // 2) for st in zbiory):
-                wyciete.append(zdanie.strip())
-            else:
-                zostaja.append(zdanie)
-        sklejony = " ".join(x for x in zostaja if x.strip()).strip()
-        if sklejony:
-            nowe.append(sklejony)
-    return "\n\n".join(nowe), wyciete
+# USUNIETE 1 wrzesnia 2026: `usun_obalone`, ktore wycinalo z gotowego tekstu
+# zdania niosace obalone twierdzenia. Zbudowane i cofniete tego samego dnia na
+# wyrazne polecenie wlasciciela — i slusznie: wyciete zdanie w srodku akapitu
+# zostawia dziure, tekst urywa sie w polowie mysli, a to jest gorsze dla
+# czytelnika niz jedno slabe zdanie. Sprawdzenie faktow przed publikacja jest
+# dzis WYLACZNIE wpisem w logu; nic nie blokuje i nic nie tnie.
 
 
 def write(

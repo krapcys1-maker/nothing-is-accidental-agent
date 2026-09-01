@@ -1336,39 +1336,27 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
     # za JEDNO zdanie — stopke z data zrodel — przy audycie, ktory w tym samym
     # zdaniu napisal, ze wszystkie twierdzenia merytoryczne sa potwierdzone.
     #
-    # Naprawa jest dwuwarstwowa. Warstwa pierwsza to `wstaw_date_zrodel`: date
-    # pisze teraz kod z karty, wiec ta konkretna stopka nie ma jak byc falszywa.
-    # Warstwa druga to petla nizej: obalone zdania sa WYCINANE i tekst wraca
-    # pod te sama bramke. Wyciecie zdania nigdy nie dokłada twierdzenia, wiec
-    # tekst po kazdej rundzie moze byc tylko blizszy prawdy.
+    # Naprawa idzie u ZRODLA, a nie po fakcie: `wstaw_date_zrodel` kaze kodowi
+    # napisac stopke z data z karty, wiec ta konkretna linijka — ta, ktora
+    # blokowala trzy artykuly z rzedu — nie ma juz jak byc falszywa.
     #
-    # Trzy rundy, bo kazda kosztuje jedno wywolanie `zweryfikuj` (~0,03 USD) i
-    # wyszukiwania; po trzeciej przebieg konczy sie BLEDEM widocznym w alarmie,
-    # a nie cisza. Nie publikujemy tekstu, ktory po wycieciu wszystkiego nadal
-    # jest obalany — to nie jest bramka na zgode czlowieka, tylko na falsz.
+    # WYCINANIA OBALONYCH ZDAN NIE MA I NIE MA BYC. Bylo zbudowane i zostalo
+    # cofniete tego samego dnia na wyrazne polecenie wlasciciela: tekst z
+    # wycietym zdaniem w srodku akapitu urywa sie w polowie mysli, a to jest
+    # gorsze dla czytelnika niz jedno slabe zdanie. Sprawdzenie faktow zostaje
+    # WYLACZNIE jako wpis w logu — widac, co model zakwestionowal, i tyle.
     print()
-    print("-- sprawdzenie faktow przed publikacja --", flush=True)
-    for runda in range(3):
-        audyt = stages.zweryfikuj(conn, run_id, draft["body"],
-                                  draft.get("title", ""))
-        if audyt.get("safe_to_post"):
-            break
-        print("   [%d] obalone: %s" % (runda + 1,
-                                       str(audyt.get("verdict", ""))[:200]),
-              flush=True)
-        oczyszczony, wyciete = stages.usun_obalone(draft["body"], audyt)
-        if not wyciete:
-            print("   nic do wyciecia — publikuje mimo to", flush=True)
-            break
-        for z in wyciete:
-            print("   - wyciete: %s" % z[:150], flush=True)
-        draft["body"] = oczyszczony
-        sciezka = stages.save(conn, run_id, brief, card, draft, status,
-                              blokada or "", notatki)
+    print("-- sprawdzenie faktow (log, NIE bramka) --", flush=True)
+    audyt = stages.zweryfikuj(conn, run_id, draft["body"], draft.get("title", ""))
+    if audyt.get("safe_to_post"):
+        print("   czysto: %s" % str(audyt.get("verdict", ""))[:150], flush=True)
     else:
-        print("   trzy rundy nie wystarczyly — publikuje po wycieciu",
-              flush=True)
-    print("   przechodzi: %s" % str(audyt.get("verdict", ""))[:150], flush=True)
+        print("   ZASTRZEZENIA (artykul i tak idzie): %s"
+              % str(audyt.get("verdict", ""))[:250], flush=True)
+        for c in (audyt.get("claims") or []):
+            if str(c.get("status")) in ("refuted", "outdated", "unverified"):
+                print("   [%s] %s" % (c.get("status"),
+                                      str(c.get("claim"))[:150]), flush=True)
 
     print()
     print("-- publikacja --", flush=True)

@@ -145,19 +145,14 @@ class AtrapaStages:
     czy sie zapisal, z jaka glebokoscia), a nie o to, czy cos zostalo wolane.
     """
 
-    # Te dwie ida do PRAWDZIWEGO `stages` — sa czyste (bez sieci, bez modelu,
-    # bez bazy), a atrapowanie ich zamienialoby test w sprawdzanie wlasnej
-    # atrapy. Stopka z data i wycinanie obalonych zdan maja dzialac naprawde.
+    # Stopka z data idzie do PRAWDZIWEGO `stages` — jest czysta (bez sieci,
+    # modelu i bazy), a atrapowanie jej zamienialoby test w sprawdzanie wlasnej
+    # atrapy. To ta jedna linijka blokowala trzy artykuly z rzedu.
     # Import w srodku, bo `sys.path` do `agent-v2` ustawia sie nizej w pliku.
     @staticmethod
     def wstaw_date_zrodel(tekst, card):
         import stages as _s
         return _s.wstaw_date_zrodel(tekst, card)
-
-    @staticmethod
-    def usun_obalone(tekst, audyt):
-        import stages as _s
-        return _s.usun_obalone(tekst, audyt)
 
     def __init__(self):
         self.slad = []

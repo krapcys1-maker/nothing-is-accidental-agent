@@ -375,7 +375,6 @@ def swiat_dnia(slad, st):
     fake_stages = modul(
         "stages",
         wstaw_date_zrodel=_CZYSTY.wstaw_date_zrodel,
-        usun_obalone=_CZYSTY.usun_obalone,
         budzet_dnia=lambda conn: {"notki": 1, "komentarze": 1, "lajki": 0,
                                   "restacki": 0, "follow": 0, "subskrypcje": 0},
         notki_dnia=notki_dnia,
@@ -480,7 +479,6 @@ def stages_artykulu(slad, st):
     return modul(
         "stages",
         wstaw_date_zrodel=_CZYSTY.wstaw_date_zrodel,
-        usun_obalone=_CZYSTY.usun_obalone,
         scout=lambda conn, run_id, ile: [dict(TEMAT)],
         feasibility=lambda conn, run_id, tematy: [
             {"index": 0, "feasible": True, "confidence": 0.9,

@@ -205,11 +205,6 @@ class AtrapaStages:
         import stages as _s
         return _s.wstaw_date_zrodel(tekst, card)
 
-    @staticmethod
-    def usun_obalone(tekst, audyt):
-        import stages as _s
-        return _s.usun_obalone(tekst, audyt)
-
     def __init__(self, slad, pada_na, fabryka, budzet_wyczerpany, conn):
         self.slad = slad
         self.pada_na = pada_na
