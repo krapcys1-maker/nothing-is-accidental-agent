@@ -89,15 +89,50 @@ sprawdz("i powod mowi o spiacej publicznosci",
 
 print()
 print("=== 4. OKNO DOTYCZY NOTEK, NIE KOMENTARZY ===")
-rp = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
-i = rp.index("wolno, powod = config.pora_na_publikacje()")
-blok = rp[i:i + 1800]
-sprawdz("poza oknem notki ida na zero", 'na_teraz["notki"] = 0' in blok)
-sprawdz("a komentarze NIE sa zerowane",
-        'na_teraz["komentarze"] = 0' not in blok,
-        "komentarze nadal wyciszane oknem")
+# MIERZONE NA DRZEWIE SKLADNI, NIE W OKNIE 1800 ZNAKOW.
+#
+# Stalo tu ciecie zrodla na sztywne okno od `wolno, powod = ...` i szukanie
+# w nim napisow. Wada, ktorej ten plik pilnuje, blokowala JEDEN Z PIECIU
+# PRZEBIEGOW CODZIENNIE — najdrozsza z opisanych w repozytorium — a wystarczylo
+# zapisac ja inaczej (`na_teraz['komentarze']=0`, petla po kluczach) albo
+# przesunac kod o 1800 znakow, zeby test zamilkl.
+#
+# Pytamy wiec o GALAZ, nie o odleglosc w znakach: znajdujemy `if`, ktorego
+# warunek dotyczy `wolno`, i patrzymy, co ta galaz PRZYPISUJE.
+import ast as _ast_o
+_drzewo = _ast_o.parse(pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8"))
+
+def _klucz(cel):
+    """Nazwa klucza w `na_teraz[...]`, albo None."""
+    if not isinstance(cel, _ast_o.Subscript):
+        return None
+    if getattr(cel.value, "id", "") != "na_teraz":
+        return None
+    s = cel.slice
+    return s.value if isinstance(s, _ast_o.Constant) else None
+
+_galezie = [n for n in _ast_o.walk(_drzewo) if isinstance(n, _ast_o.If)
+            and any(getattr(x, "id", "") == "wolno" for x in _ast_o.walk(n.test))]
+sprawdz("galaz okna publikacji istnieje w drzewie", len(_galezie) >= 1,
+        len(_galezie))
+
+_zerowane = set()
+for _g in _galezie:
+    for _n in _ast_o.walk(_g):
+        if isinstance(_n, _ast_o.Assign):
+            for _c in _n.targets:
+                k = _klucz(_c)
+                if k and isinstance(_n.value, _ast_o.Constant) and _n.value.value == 0:
+                    _zerowane.add(k)
+sprawdz("poza oknem notki ida na zero", "notki" in _zerowane, sorted(_zerowane))
+sprawdz("a komentarze NIE sa zerowane", "komentarze" not in _zerowane,
+        "zerowane w galezi okna: %s" % sorted(_zerowane))
+
+# KONTRDOWOD: gdyby wykrywacz nie widzial przypisan, obie asercje przechodzilyby
+# pusto. Sprawdzamy, ze widzi CHOC JEDNO.
+sprawdz("wykrywacz naprawde widzi przypisania", bool(_zerowane), _zerowane)
 sprawdz("i widac to w logu przebiegu",
-        "komentarze IDA" in blok)
+        "komentarze IDA" in pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8"))
 
 print()
 print("=== 5. UZASADNIENIE JEST W KODZIE, NIE TYLKO W COMMICIE ===")

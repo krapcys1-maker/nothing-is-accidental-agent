@@ -176,8 +176,36 @@ sprawdz("i stoi PRZED galezia publikacji", 0 < i_graf < i_wyslij,
 linia_graf = next(l for l in run_src.splitlines() if "stages.grafika(" in l)
 sprawdz("z wcieciem ciala funkcji, nie modulu",
         linia_graf.startswith("        stages.grafika("), repr(linia_graf[:24]))
-sprawdz("i nadal nie zatrzymuje artykulu przy awarii",
-        "NIGDY nie zatrzymuje" in run_src)
+# OBIETNICA MIERZONA NA DRZEWIE SKLADNI, NIE PO NAPISIE.
+#
+# Stalo tu `"NIGDY nie zatrzymuje" in run_src`. Jedyne wystapienie tego napisu
+# w `run.py` to KOMENTARZ nad wywolaniem — wiec mozna bylo usunac oslone
+# `try/except` i zostawic komentarz, a test przechodzilby dalej, podczas gdy
+# padnieta grafika zabijalaby artykul za czterdziesci dolarow researchu.
+#
+# Pytamy wiec o to, co naprawde chroni: czy wywolanie `stages.grafika` stoi
+# wewnatrz bloku `try` z obsluga wyjatku, i czy sama `grafika` lapie awarie
+# u siebie. Komentarz tego nie spelni.
+import ast as _ast_g
+_drzewo_run = _ast_g.parse(run_src)
+_wolania = [n for n in _ast_g.walk(_drzewo_run) if isinstance(n, _ast_g.Call)
+            and getattr(getattr(n.func, "value", None), "id", "") == "stages"
+            and getattr(n.func, "attr", "") == "grafika"]
+sprawdz("wywolanie grafiki jest w drzewie", len(_wolania) == 1, len(_wolania))
+_oslonione = []
+for _t in [n for n in _ast_g.walk(_drzewo_run) if isinstance(n, _ast_g.Try) and n.handlers]:
+    _oslonione += [w for w in _wolania if any(w is c for c in _ast_g.walk(_t))]
+sprawdz("i stoi POD try z obsluga wyjatku", len(_oslonione) == len(_wolania),
+        "oslonionych %d z %d" % (len(_oslonione), len(_wolania)))
+
+_drzewo_st = _ast_g.parse(pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8"))
+_graf = next((n for n in _ast_g.walk(_drzewo_st)
+              if isinstance(n, _ast_g.FunctionDef) and n.name == "grafika"), None)
+sprawdz("`stages.grafika` istnieje", _graf is not None)
+_lapie = [h for t in _ast_g.walk(_graf or _ast_g.Module(body=[], type_ignores=[]))
+          if isinstance(t, _ast_g.Try) for h in t.handlers] if _graf else []
+sprawdz("i sama lapie awarie u siebie", len(_lapie) >= 2,
+        "blokow obslugi: %d" % len(_lapie))
 
 print()
 print("=== 4. KAZDY MODEL ANTHROPIC UMIE SZUKAC ===")
