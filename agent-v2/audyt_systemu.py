@@ -37,7 +37,7 @@ WERDYKTY: list[tuple[str, str]] = []
 # DZIEN PRZESTAWIENIA KONTA NA AI. Wszystko starsze opisuje inna publikacje
 # i mieszanie tego z dzisiejszym stanem juz raz doprowadzilo do zlej decyzji
 # (sedzia banku dostal do oceny notki o szamponie).
-PIVOT = "2026-08-25"
+PIVOT = config.PRZESTAWIENIE_KONTA
 
 # CO MA WYCHODZIC NA ZEWNATRZ — JEDNA LISTA, DWOCH CZYTELNIKOW (etap 1 i 2).
 #

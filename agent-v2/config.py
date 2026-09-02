@@ -2218,6 +2218,73 @@ W_TESCIE = _w_darmowym_tescie()
 
 # Test platny albo swiadomy skrypt moze to podniesc: `config.WOLNO_WOLAC_MODEL = True`.
 WOLNO_WOLAC_MODEL = not W_TESCIE
+# --- warstwa oszacowan (pamiec, ktora nie pamieta zdan) ----------------------
+# TRZY WARSTWY, NIE DWIE: zdarzenie -> oszacowanie -> decyzja. Zdarzenie to
+# jeden zapisany fakt („komentarz 123 dostal 0 odpowiedzi"). Oszacowanie to
+# rachunek z wielu zdarzen, NIOSACY WLASNA NIEPEWNOSC. Decyzja to osobny krok,
+# ktory moze oszacowanie ZIGNOROWAC — i przy stalych redakcyjnych ma prawo.
+#
+# CZEGO TA WARSTWA NIE ROBI I NIE MA ROBIC. Nie zapisuje zdan. Ten projekt
+# stracil dziewiec dni, bo zapamietal zdanie „Substack zdjal przycisk Follow",
+# zdanie przestalo byc prawdziwe, a system cytowal je dalej jako fakt. Kazde
+# oszacowanie liczy sie OD NOWA z surowych zapisow przy kazdym przebiegu, wiec
+# nie ma czego zwietrzec. To NIE znaczy, ze oszacowanie nie moze byc falszywe —
+# rachunek deterministyczny daje powtarzalnosc, nie prawde. Znaczy tylko, ze
+# nowe dane uniewazniaja wniosek same, bez niczyjej interwencji.
+#
+# CZEGO NIE UMIEMY I MOWIMY TO WPROST: nie kontrolujemy zmiennych ubocznych.
+# Komentarz pod duzym kontem dostaje odpowiedz czesciej niz pod malym, a nasze
+# postawy nie sa losowane rownomiernie po wielkosci hosta. Roznica miedzy
+# postawami moze wiec byc roznica miedzy hostami. Dlatego oszacowanie jest
+# RAPORTEM, a nie pilotem.
+
+# Tryb obserwacyjny: oszacowania sa liczone i pokazywane, ale NIE zmieniaja
+# zadnej decyzji. Tak ma zostac, dopoki proby nie dojrzeja. Zmierzone
+# 1 wrzesnia 2026 na produkcji: 54 komentarze daly sie polaczyc z postawa,
+# a odpowiedzi bylo TRZY (MECHANIZM 1/14, CIEKAWOSC 1/13, PYTANIE 1/8).
+# Przy takich liczbach kazde „ta postawa dziala lepiej" jest szumem.
+OSZACOWANIA_TRYB_OBSERWACYJNY = True
+
+# Ile dni tresc musi miec, zanim jej wynik cokolwiek znaczy. Komentarz sprzed
+# godziny z zerem odpowiedzi NIE jest dowodem, ze postawa nie dziala — jest
+# dowodem, ze nikt jeszcze nie zdazyl odpowiedziec. Bez tego progu swieze
+# zera zalewaja rachunek i kazda postawa wyglada na martwa.
+OSZACOWANIA_DOJRZALOSC_DNI = 3
+
+# Najstarsze dane, ktore jeszcze biora udzial. Konto zmienilo tematyke
+# 25 sierpnia 2026 i pomiary sprzed tej daty opisuja inna publikacje;
+# `PRZESTAWIENIE_KONTA` odcina je twardo, a to okno odcina dodatkowo wszystko,
+# co po prostu za stare.
+OSZACOWANIA_OKNO_DNI = 60
+
+# Ile DOJRZALYCH obserwacji musi miec pojedynczy wariant, zeby wolno bylo o nim
+# powiedziec cokolwiek poza „nie wiem". Prog dotyczy KAZDEGO wariantu osobno,
+# nie sumy: dwanascie komentarzy razem i jeden na postawe to nadal nic.
+OSZACOWANIA_MIN_NA_WARIANT = 12
+
+# O ile najwyzej wolno oszacowaniu ruszyc wage redakcyjna, gdy tryb
+# obserwacyjny zostanie kiedys wylaczony. Polowa w gore, polowa w dol i ani
+# kroku dalej, BO WAGI NIE MIERZA WYLACZNIE SKUTECZNOSCI. `POSTAWY_KOMENTARZA`
+# trzyma KOREKTE i ZGODE nisko dlatego, ze „wieczny korygujacy i potakiwacz to
+# ta sama wada z dwoch stron" — to jest decyzja o tym, czym jest to pismo.
+# Optymalizator puszczony luzem nauczylby sie zaczepiac, bo zaczepka zbiera
+# odpowiedzi, i mialby racje w kazdej liczbie osobno.
+OSZACOWANIA_MAKS_MODULACJA = 0.5
+
+# Podloga eksploracji. Wariant oceniony zle dostaje mniej okazji, wiec zbiera
+# mniej danych, wiec nigdy nie odzyska wagi — petla, ktora zamyka sie sama i
+# wyglada przy tym na wynik pomiaru. Zaden wariant nie schodzi ponizej tego
+# ulamka swojej wagi redakcyjnej.
+OSZACOWANIA_PODLOGA_EKSPLORACJI = 0.35
+
+# Dzien, w ktorym konto przestalo pisac o czym innym i zaczelo o AI. Pomiary
+# sprzed tej daty dotycza innej publikacji i innych czytelnikow.
+#
+# JEDNA KOPIA, NIE DWIE. Ta data stala dotad wylacznie w `audyt_systemu.PIVOT`,
+# czyli w skrypcie audytowym — a od dzis potrzebuje jej takze kod chodzacy w
+# kazdym przebiegu. Dwie kopie tej samej daty rozjezdzaja sie po cichu i to
+# jest w tym repozytorium klasa bledu z wlasna historia.
+PRZESTAWIENIE_KONTA = "2026-08-25"
 
 
 # --- naprawa zamiast blokady i zamiast ciecia --------------------------------

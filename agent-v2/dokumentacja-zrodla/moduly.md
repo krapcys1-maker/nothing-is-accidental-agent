@@ -34,7 +34,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-6684 wierszy, 124 funkcji na poziomie modułu, 0 klas
+6669 wierszy, 123 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -130,7 +130,6 @@
 | `podsumowanie_dzialan(dni)` | Ile czego WYSZLO w ostatnich `dni` dniach, wobec normy z configu. |
 | `powody_porazek(dni)` | Dlaczego dzialania sie NIE UDALY — pogrupowane, najczestsze pierwsze. |
 | `_powod_przegranej(klucz_zwyciezcy, klucz_tematu)` *(wewn.)* | Ktory skladnik klucza sortowania ROZSTRZYGNAL, i jakimi wartosciami. |
-| `_pisze_do_produkcji(sciezka)` *(wewn.)* | Czy ta sciezka to PRAWDZIWY katalog danych, a nie katalog testu. |
 | `zapisz_przegranych(przegrani, run_id)` | Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej. |
 | `pick_topic(topics, assessments, run_id, wczesniejsze)` | Wybiera temat leksykograficznie wedlug dziewieciu kryteriow. |
 | `scout(conn, run_id, count)` | Etap 1 — skaut tematow (DeepSeek V4 Pro). |
@@ -258,7 +257,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-760 wierszy, 14 funkcji na poziomie modułu, 3 klas
+741 wierszy, 14 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -388,7 +387,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2501 wierszy, 22 funkcji na poziomie modułu, 0 klas
+2526 wierszy, 21 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -409,7 +408,6 @@
 | `_cisza_z_hasza(dzien)` *(wewn.)* | — |
 | `cichy_dzien(kiedy)` | Czy dzis nie nadajemy. Ta sama odpowiedz przez caly dzien. |
 | `timeout_for(max_tokens)` | Termin w sekundach, który realnie pokrywa podany sufit tokenów. |
-| `_w_darmowym_tescie()` *(wewn.)* | Czy uruchomiony program to test, ktory NIE MA prawa placic. |
 | `losowy_ruch_koncowy()` | Czym konczy sie TEN artykul. Rowne szanse, bez powtarzania formuly. |
 | `losowa_liczba_paraleli(glebokosc)` | Ile paraleli w drugim akcie. Krotki artykul nigdy nie bierze trzech. |
 | `losowe_generatory(ile)` | Ktore wzorce w tym przebiegu. Ten sam generator dwa dni z rzedu daje |
@@ -431,6 +429,29 @@
 | `wczytaj(rodzaj)` | Wszystkie pomiary z pliku, w kolejnosci zapisu. Uszkodzone linie pomija. |
 | `najnowsze_per_pozycja(rodzaj)` | {identyfikator: ostatni pomiar}. To sie czyta przy raporcie. |
 | `podsumowanie(rodzaj)` | Sumy i srednie PO POZYCJACH, nie po pomiarach. |
+
+### `oszacowania.py` — co z tych pomiarów wynika — i czego z nich NIE wynika: udziały z próbą, wiekiem i stanem „wiem/nie wiem”
+
+428 wierszy, 16 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_dziennik()` *(wewn.)* | Sciezka dziennika, czytana PRZY WYWOLANIU, nie przy imporcie. |
+| `wpisy(rodzaj)` | Dziennik, linia po linii. Uszkodzone linie pomija, jak `statystyki`. |
+| `_identyfikator(wartosc)` *(wewn.)* | Identyfikator nadajacy sie do POLACZENIA z pomiarem — albo pusty napis. |
+| `_chwila(tekst)` *(wewn.)* | ISO -> czas z UTC. Cokolwiek innego -> None, bez wyjatku. |
+| `_wiek_dni(wpis, pomiar, teraz)` *(wewn.)* | Ile dni ma TRESC — nie pomiar. |
+| `_oszacowanie(pytanie, wariant, pozycje, wynik, teraz)` *(wewn.)* | Jeden wariant jednego pytania — z licznikiem, mianownikiem i niepewnoscia. |
+| `_zbierz(rodzaj, klucz_id, klucz_wariantu, pytanie, wynik)` *(wewn.)* | Wspolny rachunek dla kazdego pytania „wariant -> wynik". |
+| `postawy_komentarza()` | Czy postawa komentarza ma zwiazek z tym, czy ktos odpowiada. |
+| `typy_notek()` | Czy typ notki ma zwiazek z reakcjami. |
+| `formy_notek()` | To samo dla formy. Forma trafia do dziennika dopiero od 1 wrzesnia 2026, |
+| `_host(wpis)` *(wewn.)* | Jedna nazwa hosta z tego, co dziennik akurat zapisal. |
+| `hosty()` | Czy sa miejsca, gdzie nikt nigdy nie odpowiada. |
+| `wszystkie()` | Komplet pytan, ktore umiemy dzis zadac wlasnym zapisom. |
+| `wagi_postaw(grupa)` | Wagi postaw po ewentualnej modulacji oszacowaniem. |
+| `migawka(oszacowanie)` | Skrot oszacowania do zapisania PRZY DECYZJI, ktora je wykorzystala. |
+| `raport(grupy)` | Czytelny raport. Pokazuje TAKZE to, czego nie wiemy, i co odpadlo. |
 
 ### `raport_statystyk.py` — te same dane w tabeli dla człowieka
 

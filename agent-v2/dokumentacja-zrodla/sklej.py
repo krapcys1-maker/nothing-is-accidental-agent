@@ -57,6 +57,7 @@ MODULY = [
     ("kopia_subskrybentow.py", "kopia jedynego aktywa, którego nie da się odtworzyć"),
     ("config.py", "wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)"),
     ("statystyki.py", "co przyniosła każda pozycja: wejścia, reakcje, subskrypcje"),
+    ("oszacowania.py", "co z tych pomiarów wynika — i czego z nich NIE wynika: udziały z próbą, wiekiem i stanem „wiem/nie wiem”"),
     ("raport_statystyk.py", "te same dane w tabeli dla człowieka"),
     ("korpus_kanalow.py", "o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło"),
     ("aktualne_modele.py", "jakie modele istnieją DZIŚ; pytane na żywo, nie z pamięci"),

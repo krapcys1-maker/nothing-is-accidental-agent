@@ -168,8 +168,18 @@
 | `FETCH_TIMEOUT_S` | `30.0` | — |
 | `FETCH_MIN_CHARS` | `1500` | ILE ZNAKOW MUSI ODDAC STRONA, ZEBY LICZYC SIE JAKO ZRODLO. Bylo 400 i to bylo za malo w sposob, ktory widac dopiero na przebiegu. Zmierzone  |
 | `FETCH_USER_AGENT` | `"Mozilla/5.0 (compatible; NothingIsAccidenta` | — |
+<<<<<<< HEAD
 | `W_TESCIE` | `_w_darmowym_tescie()` | Jedna nazwa, dwie zapory. Wykrywanie sluzy juz nie tylko pieniadzom: darmowy test nie ma tez prawa DOPISYWAC DO PRODUKCYJNYCH DANYCH. Zmierz |
 | `WOLNO_WOLAC_MODEL` | `not W_TESCIE` | Test platny albo swiadomy skrypt moze to podniesc: `config.WOLNO_WOLAC_MODEL = True`. |
+=======
+| `OSZACOWANIA_TRYB_OBSERWACYJNY` | `True` | Tryb obserwacyjny: oszacowania sa liczone i pokazywane, ale NIE zmieniaja zadnej decyzji. Tak ma zostac, dopoki proby nie dojrzeja. Zmierzon |
+| `OSZACOWANIA_DOJRZALOSC_DNI` | `3` | Ile dni tresc musi miec, zanim jej wynik cokolwiek znaczy. Komentarz sprzed godziny z zerem odpowiedzi NIE jest dowodem, ze postawa nie dzia |
+| `OSZACOWANIA_OKNO_DNI` | `60` | Najstarsze dane, ktore jeszcze biora udzial. Konto zmienilo tematyke 25 sierpnia 2026 i pomiary sprzed tej daty opisuja inna publikacje; `PR |
+| `OSZACOWANIA_MIN_NA_WARIANT` | `12` | Ile DOJRZALYCH obserwacji musi miec pojedynczy wariant, zeby wolno bylo o nim powiedziec cokolwiek poza „nie wiem". Prog dotyczy KAZDEGO war |
+| `OSZACOWANIA_MAKS_MODULACJA` | `0.5` | O ile najwyzej wolno oszacowaniu ruszyc wage redakcyjna, gdy tryb obserwacyjny zostanie kiedys wylaczony. Polowa w gore, polowa w dol i ani  |
+| `OSZACOWANIA_PODLOGA_EKSPLORACJI` | `0.35` | Podloga eksploracji. Wariant oceniony zle dostaje mniej okazji, wiec zbiera mniej danych, wiec nigdy nie odzyska wagi — petla, ktora zamyka  |
+| `PRZESTAWIENIE_KONTA` | `"2026-08-25"` | Dzien, w ktorym konto przestalo pisac o czym innym i zaczelo o AI. Pomiary sprzed tej daty dotycza innej publikacji i innych czytelnikow. JE |
+>>>>>>> ef5133a (Pamiec, ktora nie pamieta zdan — warstwa oszacowan)
 | `NAPRAWA_OBALONYCH` | `True` | --- naprawa zamiast blokady i zamiast ciecia -------------------------------- 1 wrzesnia 2026 o 19:46 poszla notka z liczba, ktora nasze wla |
 | `NAPRAW_NA_PRZEBIEG` | `4` | Ile napraw najwyzej w jednym przebiegu. Kazda to dwa platne wywolania (przepisanie plus PONOWNE sprawdzenie), wiec bez sufitu zly dzien potr |
 | `RUCHY_KONCOWE` | `{ "DO_SPRAWDZENIA": ( "Close by handing the ` | --- ruch koncowy i szerokosc drugiego aktu -------------------------------- Dwa artykuly napisane PO naprawie szamponu (0017 "The Gas You Di |

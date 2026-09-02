@@ -49,14 +49,14 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **22 plików**, 25 905 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 26 143 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
 | jedno polecenie uruchamiające | `python agent-v2/run.py` | dotrzymane |
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
-**WADA — 22 plików zamiast dziesięciu.** Najbliższe usunięciu:
+**WADA — 23 plików zamiast dziesięciu.** Najbliższe usunięciu:
 `style.py` (127 wierszy, wołany tylko z `stages.py`) i
 `kopia_subskrybentow.py` (203 wierszy, narzędzie ręczne poza
 przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 114 zestawów
-testów, 3222 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 112 zestawów
+testów, 3205 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -176,7 +176,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-6684 wierszy, 124 funkcji na poziomie modułu, 0 klas
+6488 wierszy, 118 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -250,14 +250,9 @@ wiec nie da sie go rozjechac z kodem.
 | `_otwarcie_formulka(zdanie)` *(wewn.)* | Czy zdanie zaczyna sie od zapowiedzi ruchu zamiast od samego ruchu. |
 | `sprawdz_fakty(conn, run_id, post)` | Szuka faktów do komentarza, zamiast pozwolić modelowi pisać z pamięci. |
 | `bez_wstrzykniecia(tekst)` | Czy w naszym tekscie nie ma sladu cudzych POLECEN. |
-| `_status_twierdzenia(c)` *(wewn.)* | Status twierdzenia, znormalizowany. NIEZNANA ETYKIETA ZNACZY `unverified`. |
 | `zweryfikuj(conn, run_id, tekst, kontekst)` | Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem. |
 | `_zapora_notki(tekst)` *(wewn.)* | Pusty napis, gdy tekst notki przechodzi zapory. Inaczej powod. |
 | `_zapora_komentarza(tekst)` *(wewn.)* | To samo dla komentarza — ale komentarz ma zapore o jedna wiecej. |
-| `_liczby_zarzutu(c)` *(wewn.)* | Liczby z zarzutu, znormalizowane — po nich rozpoznajemy TEN SAM fakt. |
-| `_slowa_zarzutu(c)` *(wewn.)* | Slowa trescioweko z samego twierdzenia — drugi sygnal tozsamosci. |
-| `_adres_zarzutu(c)` *(wewn.)* | — |
-| `_ten_sam_zarzut(a, b)` *(wewn.)* | Czy dwa zarzuty mowia o tym samym fakcie. ZACHOWAWCZO, i to celowo. |
 | `napraw_obalone(conn, run_id, tekst, audyt)` | Poprawia zdanie, ktoremu zapis przeczy. Nie wycina go i nie blokuje tekstu. |
 | `comment_on(conn, run_id, post, fakty)` | Komentarz do cudzego posta — do szuflady. |
 | `fallback_card(question, evidence)` | Karta złożona z dowodów bez modelu — gdy synteza padnie. |
@@ -272,7 +267,6 @@ wiec nie da sie go rozjechac z kodem.
 | `podsumowanie_dzialan(dni)` | Ile czego WYSZLO w ostatnich `dni` dniach, wobec normy z configu. |
 | `powody_porazek(dni)` | Dlaczego dzialania sie NIE UDALY — pogrupowane, najczestsze pierwsze. |
 | `_powod_przegranej(klucz_zwyciezcy, klucz_tematu)` *(wewn.)* | Ktory skladnik klucza sortowania ROZSTRZYGNAL, i jakimi wartosciami. |
-| `_pisze_do_produkcji(sciezka)` *(wewn.)* | Czy ta sciezka to PRAWDZIWY katalog danych, a nie katalog testu. |
 | `zapisz_przegranych(przegrani, run_id)` | Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej. |
 | `pick_topic(topics, assessments, run_id, wczesniejsze)` | Wybiera temat leksykograficznie wedlug dziewieciu kryteriow. |
 | `scout(conn, run_id, count)` | Etap 1 — skaut tematow (DeepSeek V4 Pro). |
@@ -400,7 +394,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-760 wierszy, 14 funkcji na poziomie modułu, 3 klas
+741 wierszy, 14 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -530,7 +524,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2501 wierszy, 22 funkcji na poziomie modułu, 0 klas
+2526 wierszy, 21 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -551,7 +545,6 @@ wiec nie da sie go rozjechac z kodem.
 | `_cisza_z_hasza(dzien)` *(wewn.)* | — |
 | `cichy_dzien(kiedy)` | Czy dzis nie nadajemy. Ta sama odpowiedz przez caly dzien. |
 | `timeout_for(max_tokens)` | Termin w sekundach, który realnie pokrywa podany sufit tokenów. |
-| `_w_darmowym_tescie()` *(wewn.)* | Czy uruchomiony program to test, ktory NIE MA prawa placic. |
 | `losowy_ruch_koncowy()` | Czym konczy sie TEN artykul. Rowne szanse, bez powtarzania formuly. |
 | `losowa_liczba_paraleli(glebokosc)` | Ile paraleli w drugim akcie. Krotki artykul nigdy nie bierze trzech. |
 | `losowe_generatory(ile)` | Ktore wzorce w tym przebiegu. Ten sam generator dwa dni z rzedu daje |
@@ -573,6 +566,29 @@ wiec nie da sie go rozjechac z kodem.
 | `wczytaj(rodzaj)` | Wszystkie pomiary z pliku, w kolejnosci zapisu. Uszkodzone linie pomija. |
 | `najnowsze_per_pozycja(rodzaj)` | {identyfikator: ostatni pomiar}. To sie czyta przy raporcie. |
 | `podsumowanie(rodzaj)` | Sumy i srednie PO POZYCJACH, nie po pomiarach. |
+
+### `oszacowania.py` — co z tych pomiarów wynika — i czego z nich NIE wynika: udziały z próbą, wiekiem i stanem „wiem/nie wiem”
+
+428 wierszy, 16 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_dziennik()` *(wewn.)* | Sciezka dziennika, czytana PRZY WYWOLANIU, nie przy imporcie. |
+| `wpisy(rodzaj)` | Dziennik, linia po linii. Uszkodzone linie pomija, jak `statystyki`. |
+| `_identyfikator(wartosc)` *(wewn.)* | Identyfikator nadajacy sie do POLACZENIA z pomiarem — albo pusty napis. |
+| `_chwila(tekst)` *(wewn.)* | ISO -> czas z UTC. Cokolwiek innego -> None, bez wyjatku. |
+| `_wiek_dni(wpis, pomiar, teraz)` *(wewn.)* | Ile dni ma TRESC — nie pomiar. |
+| `_oszacowanie(pytanie, wariant, pozycje, wynik, teraz)` *(wewn.)* | Jeden wariant jednego pytania — z licznikiem, mianownikiem i niepewnoscia. |
+| `_zbierz(rodzaj, klucz_id, klucz_wariantu, pytanie, wynik)` *(wewn.)* | Wspolny rachunek dla kazdego pytania „wariant -> wynik". |
+| `postawy_komentarza()` | Czy postawa komentarza ma zwiazek z tym, czy ktos odpowiada. |
+| `typy_notek()` | Czy typ notki ma zwiazek z reakcjami. |
+| `formy_notek()` | To samo dla formy. Forma trafia do dziennika dopiero od 1 wrzesnia 2026, |
+| `_host(wpis)` *(wewn.)* | Jedna nazwa hosta z tego, co dziennik akurat zapisal. |
+| `hosty()` | Czy sa miejsca, gdzie nikt nigdy nie odpowiada. |
+| `wszystkie()` | Komplet pytan, ktore umiemy dzis zadac wlasnym zapisom. |
+| `wagi_postaw(grupa)` | Wagi postaw po ewentualnej modulacji oszacowaniem. |
+| `migawka(oszacowanie)` | Skrot oszacowania do zapisania PRZY DECYZJI, ktora je wykorzystala. |
+| `raport(grupy)` | Czytelny raport. Pokazuje TAKZE to, czego nie wiemy, i co odpadlo. |
 
 ### `raport_statystyk.py` — te same dane w tabeli dla człowieka
 
@@ -6426,25 +6442,6 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
     if config.KILL_SWITCH:
         raise PreflightFailed("KILL_SWITCH=true — wywołania wstrzymane")
 
-    # ZAPORA PRZED PLATNYM WYWOLANIEM Z DARMOWEGO TESTU. Patrz
-    # `config._w_darmowym_tescie`: `tests/conftest.py` dziala tylko pod
-    # pytestem, a darmowe testy chodza petla po plikach, w ktorej conftest
-    # nie wykonuje sie wcale. Test bez atrapy placil wiec prawdziwymi
-    # pienedzmi, a jedynym sladem byl wiersz w `calls`.
-    #
-    # Stoi TU, a nie w atrapach: atrapa, ktorej ktos zapomnial podstawic,
-    # nie moze byc tym, co pilnuje, czy ktos ja podstawil.
-    # `DRY_RUN` WYJETY SPOD ZAPORY, i to nie jest ustepstwo: kilkanascie linii
-    # nizej `call` konczy sie na `DRY_RUN` zwracajac pusty napis, ZANIM
-    # dotknie sieci. Nie ma tam czego blokowac, a testy uzywaja tej sciezki,
-    # zeby sprawdzic, co `call` WYPISUJE — inaczej ostrzezenia o martwych
-    # ustawieniach nie dalyby sie zmierzyc inaczej niz szukaniem napisu w
-    # zrodle, czyli tak, jak ten projekt WLASNIE przestal robic.
-    if not config.WOLNO_WOLAC_MODEL and not config.DRY_RUN:
-        raise PreflightFailed(
-            "wywolanie modelu z darmowego testu (%s) — podstaw atrape pod "
-            "`llm.call` albo przenies test do tests/platne/" % purpose)
-
     model = config.MODEL_FOR[purpose]
     if model == config.CLAUDE and not config.ANTHROPIC_API_KEY:
         raise PreflightFailed("brak ANTHROPIC_API_KEY w .env")
@@ -7062,14 +7059,6 @@ def zapisz_przegranych(przegrani: list[dict[str, Any]],
                        run_id: int | None = None) -> int:
     """Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej.
 
-    DARMOWY TEST TU NIE PISZE. `test_wybor_tematu.py` wola `pick_topic`, ta wola
-    te funkcje, a sciezka szla z `config.DATA_DIR` — wiec kazde uruchomienie
-    zestawu dopisywalo atrapy do PRODUKCYJNEGO dziennika. Zmierzone 2 wrzesnia
-    2026: 294 z 400 wpisow na serwerze to byly atrapy, a prawdziwe przegrane
-    tematy zostaly z bufora wypchniete. Nic tego pliku nie czyta przy decyzjach,
-    wiec szkoda byla wylacznie diagnostyczna — ale dziennik, ktory w trzech
-    czwartych sklada sie z atrap, nie jest juz diagnostyka.
-
     DIAGNOSTYKA, NIE BRAMKA. Nic tego pliku nie czyta przy wyborze tematu
     i tak ma zostac. Powod jest konkretny: temat odrzucony dzis, bo brakowalo
     mu drugiego precedensu, moze go miec za pol roku, gdy pojawi sie nowy
@@ -7084,10 +7073,6 @@ def zapisz_przegranych(przegrani: list[dict[str, Any]],
     tylko jeden przy progu dwa. Z tym dziennikiem widac to od razu.
     """
     if not przegrani:
-        return 0
-    if config.W_TESCIE and _pisze_do_produkcji(PRZEGRANE_TEMATY):
-        print("  [przegrani] darmowy test — nie dopisuje do produkcyjnego dziennika",
-              flush=True)
         return 0
     try:
         stare = json.loads(PRZEGRANE_TEMATY.read_text(encoding="utf-8"))
@@ -12754,8 +12739,13 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `FETCH_TIMEOUT_S` | `30.0` | — |
 | `FETCH_MIN_CHARS` | `1500` | ILE ZNAKOW MUSI ODDAC STRONA, ZEBY LICZYC SIE JAKO ZRODLO. Bylo 400 i to bylo za malo w sposob, ktory widac dopiero na przebiegu. Zmierzone  |
 | `FETCH_USER_AGENT` | `"Mozilla/5.0 (compatible; NothingIsAccidenta` | — |
-| `W_TESCIE` | `_w_darmowym_tescie()` | Jedna nazwa, dwie zapory. Wykrywanie sluzy juz nie tylko pieniadzom: darmowy test nie ma tez prawa DOPISYWAC DO PRODUKCYJNYCH DANYCH. Zmierz |
-| `WOLNO_WOLAC_MODEL` | `not W_TESCIE` | Test platny albo swiadomy skrypt moze to podniesc: `config.WOLNO_WOLAC_MODEL = True`. |
+| `OSZACOWANIA_TRYB_OBSERWACYJNY` | `True` | Tryb obserwacyjny: oszacowania sa liczone i pokazywane, ale NIE zmieniaja zadnej decyzji. Tak ma zostac, dopoki proby nie dojrzeja. Zmierzon |
+| `OSZACOWANIA_DOJRZALOSC_DNI` | `3` | Ile dni tresc musi miec, zanim jej wynik cokolwiek znaczy. Komentarz sprzed godziny z zerem odpowiedzi NIE jest dowodem, ze postawa nie dzia |
+| `OSZACOWANIA_OKNO_DNI` | `60` | Najstarsze dane, ktore jeszcze biora udzial. Konto zmienilo tematyke 25 sierpnia 2026 i pomiary sprzed tej daty opisuja inna publikacje; `PR |
+| `OSZACOWANIA_MIN_NA_WARIANT` | `12` | Ile DOJRZALYCH obserwacji musi miec pojedynczy wariant, zeby wolno bylo o nim powiedziec cokolwiek poza „nie wiem". Prog dotyczy KAZDEGO war |
+| `OSZACOWANIA_MAKS_MODULACJA` | `0.5` | O ile najwyzej wolno oszacowaniu ruszyc wage redakcyjna, gdy tryb obserwacyjny zostanie kiedys wylaczony. Polowa w gore, polowa w dol i ani  |
+| `OSZACOWANIA_PODLOGA_EKSPLORACJI` | `0.35` | Podloga eksploracji. Wariant oceniony zle dostaje mniej okazji, wiec zbiera mniej danych, wiec nigdy nie odzyska wagi — petla, ktora zamyka  |
+| `PRZESTAWIENIE_KONTA` | `"2026-08-25"` | Dzien, w ktorym konto przestalo pisac o czym innym i zaczelo o AI. Pomiary sprzed tej daty dotycza innej publikacji i innych czytelnikow. JE |
 | `NAPRAWA_OBALONYCH` | `True` | --- naprawa zamiast blokady i zamiast ciecia -------------------------------- 1 wrzesnia 2026 o 19:46 poszla notka z liczba, ktora nasze wla |
 | `NAPRAW_NA_PRZEBIEG` | `4` | Ile napraw najwyzej w jednym przebiegu. Kazda to dwa platne wywolania (przepisanie plus PONOWNE sprawdzenie), wiec bez sufitu zly dzien potr |
 | `RUCHY_KONCOWE` | `{ "DO_SPRAWDZENIA": ( "Close by handing the ` | --- ruch koncowy i szerokosc drugiego aktu -------------------------------- Dwa artykuly napisane PO naprawie szamponu (0017 "The Gas You Di |
