@@ -2176,6 +2176,36 @@ FETCH_TIMEOUT_S = 30.0
 FETCH_MIN_CHARS = 1500
 FETCH_USER_AGENT = "Mozilla/5.0 (compatible; NothingIsAccidental/1.0; +editorial research)"
 
+# --- zapora przed platnym wywolaniem z testu ---------------------------------
+# `tests/conftest.py` chroni przed platnymi testami TYLKO POD PYTESTEM. A nasze
+# darmowe testy chodza petla po plikach (`tests/URUCHOM.md`):
+#
+#     for t in agent-v2/tests/test_*.py; do python "$t"; done
+#
+# W tej petli conftest NIE WYKONUJE SIE WCALE. Test, ktory zapomni podstawic
+# atrape pod `llm.call`, siega wiec po prawdziwy klucz z `.env` i placi — a
+# jedynym sladem jest wiersz w tabeli `calls`, ktorego nikt nie oglada. To jest
+# ta sama klasa bledu co „ostrzezenie w dokumencie nie jest bramka", opisana
+# w samym conftescie.
+#
+# Rozpoznajemy po SCIEZCE URUCHOMIONEGO PROGRAMU, a nie po zmiennej srodowiskowej,
+# bo zmienna trzeba pamietac, a sciezka jest faktem. Testy platne leza w
+# `tests/platne/` i maja placic — te przechodza.
+def _w_darmowym_tescie() -> bool:
+    """Czy uruchomiony program to test, ktory NIE MA prawa placic."""
+    import sys as _sys
+    try:
+        sciezka = Path(_sys.argv[0]).resolve()
+    except Exception:
+        return False
+    czesci = [c.lower() for c in sciezka.parts]
+    return "tests" in czesci and "platne" not in czesci
+
+
+# Test platny albo swiadomy skrypt moze to podniesc: `config.WOLNO_WOLAC_MODEL = True`.
+WOLNO_WOLAC_MODEL = not _w_darmowym_tescie()
+
+
 # --- naprawa zamiast blokady i zamiast ciecia --------------------------------
 # 1 wrzesnia 2026 o 19:46 poszla notka z liczba, ktora nasze wlasne sprawdzenie
 # faktow obalilo PRZED wysylka. W logu stalo „! OBALONE: Nuro logged thirty

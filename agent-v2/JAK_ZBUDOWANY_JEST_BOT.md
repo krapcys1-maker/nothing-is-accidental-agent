@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **22 plików**, 25 827 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **22 plików**, 25 876 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 112 zestawów
-testów, 3203 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 113 zestawów
+testów, 3213 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -399,7 +399,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-741 wierszy, 14 funkcji na poziomie modułu, 3 klas
+760 wierszy, 14 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -529,7 +529,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2457 wierszy, 21 funkcji na poziomie modułu, 0 klas
+2487 wierszy, 22 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -550,6 +550,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_cisza_z_hasza(dzien)` *(wewn.)* | — |
 | `cichy_dzien(kiedy)` | Czy dzis nie nadajemy. Ta sama odpowiedz przez caly dzien. |
 | `timeout_for(max_tokens)` | Termin w sekundach, który realnie pokrywa podany sufit tokenów. |
+| `_w_darmowym_tescie()` *(wewn.)* | Czy uruchomiony program to test, ktory NIE MA prawa placic. |
 | `losowy_ruch_koncowy()` | Czym konczy sie TEN artykul. Rowne szanse, bez powtarzania formuly. |
 | `losowa_liczba_paraleli(glebokosc)` | Ile paraleli w drugim akcie. Krotki artykul nigdy nie bierze trzech. |
 | `losowe_generatory(ile)` | Ktore wzorce w tym przebiegu. Ten sam generator dwa dni z rzedu daje |
@@ -6423,6 +6424,25 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
     """
     if config.KILL_SWITCH:
         raise PreflightFailed("KILL_SWITCH=true — wywołania wstrzymane")
+
+    # ZAPORA PRZED PLATNYM WYWOLANIEM Z DARMOWEGO TESTU. Patrz
+    # `config._w_darmowym_tescie`: `tests/conftest.py` dziala tylko pod
+    # pytestem, a darmowe testy chodza petla po plikach, w ktorej conftest
+    # nie wykonuje sie wcale. Test bez atrapy placil wiec prawdziwymi
+    # pienedzmi, a jedynym sladem byl wiersz w `calls`.
+    #
+    # Stoi TU, a nie w atrapach: atrapa, ktorej ktos zapomnial podstawic,
+    # nie moze byc tym, co pilnuje, czy ktos ja podstawil.
+    # `DRY_RUN` WYJETY SPOD ZAPORY, i to nie jest ustepstwo: kilkanascie linii
+    # nizej `call` konczy sie na `DRY_RUN` zwracajac pusty napis, ZANIM
+    # dotknie sieci. Nie ma tam czego blokowac, a testy uzywaja tej sciezki,
+    # zeby sprawdzic, co `call` WYPISUJE — inaczej ostrzezenia o martwych
+    # ustawieniach nie dalyby sie zmierzyc inaczej niz szukaniem napisu w
+    # zrodle, czyli tak, jak ten projekt WLASNIE przestal robic.
+    if not config.WOLNO_WOLAC_MODEL and not config.DRY_RUN:
+        raise PreflightFailed(
+            "wywolanie modelu z darmowego testu (%s) — podstaw atrape pod "
+            "`llm.call` albo przenies test do tests/platne/" % purpose)
 
     model = config.MODEL_FOR[purpose]
     if model == config.CLAUDE and not config.ANTHROPIC_API_KEY:
@@ -12721,6 +12741,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `FETCH_TIMEOUT_S` | `30.0` | — |
 | `FETCH_MIN_CHARS` | `1500` | ILE ZNAKOW MUSI ODDAC STRONA, ZEBY LICZYC SIE JAKO ZRODLO. Bylo 400 i to bylo za malo w sposob, ktory widac dopiero na przebiegu. Zmierzone  |
 | `FETCH_USER_AGENT` | `"Mozilla/5.0 (compatible; NothingIsAccidenta` | — |
+| `WOLNO_WOLAC_MODEL` | `not _w_darmowym_tescie()` | Test platny albo swiadomy skrypt moze to podniesc: `config.WOLNO_WOLAC_MODEL = True`. |
 | `NAPRAWA_OBALONYCH` | `True` | --- naprawa zamiast blokady i zamiast ciecia -------------------------------- 1 wrzesnia 2026 o 19:46 poszla notka z liczba, ktora nasze wla |
 | `NAPRAW_NA_PRZEBIEG` | `4` | Ile napraw najwyzej w jednym przebiegu. Kazda to dwa platne wywolania (przepisanie plus PONOWNE sprawdzenie), wiec bez sufitu zly dzien potr |
 | `RUCHY_KONCOWE` | `{ "DO_SPRAWDZENIA": ( "Close by handing the ` | --- ruch koncowy i szerokosc drugiego aktu -------------------------------- Dwa artykuly napisane PO naprawie szamponu (0017 "The Gas You Di |

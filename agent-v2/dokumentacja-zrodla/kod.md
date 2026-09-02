@@ -205,6 +205,25 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
     if config.KILL_SWITCH:
         raise PreflightFailed("KILL_SWITCH=true — wywołania wstrzymane")
 
+    # ZAPORA PRZED PLATNYM WYWOLANIEM Z DARMOWEGO TESTU. Patrz
+    # `config._w_darmowym_tescie`: `tests/conftest.py` dziala tylko pod
+    # pytestem, a darmowe testy chodza petla po plikach, w ktorej conftest
+    # nie wykonuje sie wcale. Test bez atrapy placil wiec prawdziwymi
+    # pienedzmi, a jedynym sladem byl wiersz w `calls`.
+    #
+    # Stoi TU, a nie w atrapach: atrapa, ktorej ktos zapomnial podstawic,
+    # nie moze byc tym, co pilnuje, czy ktos ja podstawil.
+    # `DRY_RUN` WYJETY SPOD ZAPORY, i to nie jest ustepstwo: kilkanascie linii
+    # nizej `call` konczy sie na `DRY_RUN` zwracajac pusty napis, ZANIM
+    # dotknie sieci. Nie ma tam czego blokowac, a testy uzywaja tej sciezki,
+    # zeby sprawdzic, co `call` WYPISUJE — inaczej ostrzezenia o martwych
+    # ustawieniach nie dalyby sie zmierzyc inaczej niz szukaniem napisu w
+    # zrodle, czyli tak, jak ten projekt WLASNIE przestal robic.
+    if not config.WOLNO_WOLAC_MODEL and not config.DRY_RUN:
+        raise PreflightFailed(
+            "wywolanie modelu z darmowego testu (%s) — podstaw atrape pod "
+            "`llm.call` albo przenies test do tests/platne/" % purpose)
+
     model = config.MODEL_FOR[purpose]
     if model == config.CLAUDE and not config.ANTHROPIC_API_KEY:
         raise PreflightFailed("brak ANTHROPIC_API_KEY w .env")
