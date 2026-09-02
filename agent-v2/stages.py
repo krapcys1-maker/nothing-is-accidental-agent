@@ -46,6 +46,66 @@ import llm
 # tokenow to awaria JEDNEGO wywolania, a budzet po niej nadal istnieje.
 PRZERYWAJA = (llm.BudgetExceeded, llm.PreflightFailed)
 
+
+def _na_kanal(nazwa: str):
+    """Wszystko, co ta funkcja zaplaci, ksieguje sie na kanal `nazwa`.
+
+    `purpose` w tabeli `calls` mowi, CO robil model, nie KOMU to sluzylo —
+    a `factcheck` sprawdza i notke, i komentarz, i artykul.
+
+    ZASIEG JEST CALA WARTOSCIA TEJ KOLUMNY. Wpiecia byly trzy (`run.py` dwa
+    razy, `notki_dnia` raz) przy 28 platnych call-site'ach. Zmierzone na
+    siedmiu dobach produkcji, 26.08-02.09.2026, 16,9656 USD rachunku:
+      * 8,49 USD (50,1%) nie moglo dostac kanalu ZADNA droga;
+      * kanal PEWNY, czyli na kazdej sciezce wywolan, mialo 3,62 USD (21,4%).
+    Po domknieciu zasiegu obie miary daja 100 procent, a pilnuje tego
+    `tests/test_kanal_platnego_wywolania.py` — z drzewa skladni, nie z grepa.
+
+    GENERATOR WYMAGA `yield from`, nie zwyklego wywolania: gdyby dekorator
+    tylko zawolal funkcje wewnatrz `with`, dostalby obiekt generatora i wyszedl
+    z bloku ZANIM cokolwiek sie wykona — znacznik bylby zdjety przed pierwszym
+    platnym wywolaniem. Ta pomylka nie zostawia sladu w logu, tylko puste pole
+    `akcja`, wiec sprawdza ja test.
+
+    STOI NA GORZE PLIKU, A NIE PRZY `notki_dnia`, BO DEKORATOR MUSI ISTNIEC
+    ZANIM PADNIE PIERWSZE @. Przy pierwszym wpieciu obslugiwal jedna funkcje
+    z linii 2991 i mogl lezec tuz nad nia; dzis dekoruje takze `review`
+    (linia 140) i `ocen_forme` (159), a te wykonuja sie przy imporcie duzo
+    wczesniej. Definicja nizej = `NameError` przy starcie procesu, nie cichy
+    brak znacznika.
+    """
+    import functools
+    import inspect
+
+    def zewnetrzny(f):
+        if inspect.isgeneratorfunction(f):
+            @functools.wraps(f)
+            def wewnetrzny(*a, **k):
+                with db.kanal(nazwa):
+                    yield from f(*a, **k)
+        else:
+            @functools.wraps(f)
+            def wewnetrzny(*a, **k):
+                with db.kanal(nazwa):
+                    return f(*a, **k)
+        return wewnetrzny
+    return zewnetrzny
+
+
+# KTORY KANAL PLACI ZA KTORY ETAP. Nazwa kanalu mowi, KOMU wywolanie sluzylo
+# — nie co robil model, bo to juz mowi `purpose`. Etap, ktory sluzy dokladnie
+# jednemu kanalowi, dostaje dekorator TUTAJ, w miejscu swojej definicji: jest
+# to jedno miejsce zamiast wszystkich wolajacych i nie da sie go zgubic przy
+# dopisaniu nowego wolajacego.
+#
+# Etapy sluzace WIECEJ NIZ JEDNEMU kanalowi (`zweryfikuj` sprawdza notke,
+# komentarz i artykul; `znajdz_ciekawostki` szuka materialu na notke i na
+# artykul; `wybierz_cele` wybiera cele komentarzy pod artykulami i pod
+# notkami) dekoratora NIE MAJA i miec nie moga — znacznik ustawia wtedy
+# WOLAJACY, bo tylko on wie, komu ta praca sluzy. Patrz `run.py`
+# (`komentarze`, `dyskusje`, `zweryfikuj` w sciezce artykulu)
+# i `artykul_z_puli.main`.
+
 # TRZECI KOMUNIKAT SYSTEMOWY Z POPRZEDNIEJ EPOKI, znaleziony przy tym samym
 # przegladzie co CURIOSITY_SYSTEM. Skaut dostawal "ordinary things" w
 # komunikacie systemowym i "artificial intelligence" w prompcie — a to tlumaczy,
@@ -137,6 +197,7 @@ REVIEW_SYSTEM = (
 )
 
 
+@_na_kanal("artykul")
 def review(
     conn: sqlite3.Connection, run_id: int, card: dict[str, Any], draft: dict[str, Any]
 ) -> dict[str, Any]:
@@ -156,6 +217,7 @@ FORMA_SYSTEM = (
 )
 
 
+@_na_kanal("artykul")
 def ocen_forme(
     conn: sqlite3.Connection, run_id: int, draft: dict[str, Any]
 ) -> dict[str, Any]:
@@ -417,6 +479,7 @@ def wstaw_date_zrodel(tekst: str, card: dict[str, Any]) -> str:
 # dzis WYLACZNIE wpisem w logu; nic nie blokuje i nic nie tnie.
 
 
+@_na_kanal("artykul")
 def write(
     conn: sqlite3.Connection, run_id: int, card: dict[str, Any],
     glebokosc: str = "RICH",
@@ -532,6 +595,7 @@ def _po_rowno_ze_zrodel(komentarze: list[dict[str, Any]],
     return wybrane
 
 
+@_na_kanal("odpowiedz")
 def wybierz_do_odpowiedzi(
     conn: sqlite3.Connection, run_id: int, komentarze: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -608,6 +672,7 @@ def wybierz_do_odpowiedzi(
     return wybrane[: ile_max]
 
 
+@_na_kanal("odpowiedz")
 def reply_to(
     conn: sqlite3.Connection, run_id: int, comment: dict[str, Any],
     evidence: dict[str, Any],
@@ -730,6 +795,7 @@ IMAGE_SYSTEM = (
 )
 
 
+@_na_kanal("artykul")
 def grafika(
     conn: sqlite3.Connection, run_id: int, draft: dict[str, Any],
     sciezka_artykulu: Path | None = None,
@@ -1246,6 +1312,105 @@ def _przebiegi_z_bankiem_dzis(conn: sqlite3.Connection) -> int:
         return 0
 
 
+# PREMIERA MODELU JEST JEDYNYM WYJATKIEM OD REGULY „OKAZJA, NIE TEMAT".
+#
+# Regula skauta ZOSTAJE w mocy dla calej reszty: „wyszedl nowy model to nie
+# temat, tylko to, co w tym tygodniu pisza wszyscy". Bez niej konto jest jednym
+# z pieciuset opisujacych premiere.
+#
+# CO ZMIERZONO 2 wrzesnia 2026. Wykrywanie premiery Fable 5.1 zadzialalo,
+# furtka sie otworzyla, pelne szukanie poszlo — i z pieciu faktow ANI JEDEN nie
+# dotyczyl tej premiery. Wina nie lezala w wykrywaczu ani w modelu: sekcja
+# „Happening right now" mowi wprost „It does not tell you what to write", wiec
+# model zrobil dokladnie to, o co go poproszono. Kosztowalo to pelne szukanie
+# (~0,23 USD) po to, zeby o premierze nie napisac nic.
+#
+# Wlasciciel: „jak wychodzi nowy model, to musi miec pierwszenstwo przed
+# wszystkim". Wiec dla PREMIERY — i tylko dla niej — okazja staje sie tematem.
+#
+# JEDEN KANDYDAT Z PARTII, NIE PARTIA. Sufit jest tu wazniejszy od podlogi:
+# konto ma nie zamienic sie w kanal newsowy. Zamawiamy DOKLADNIE jeden fakt o
+# premierze i mowimy wprost, ze pozostale maja premiere zignorowac.
+#
+# TYLKO NOWE ZDARZENIA. Ta funkcja dostaje `nowe_wyd`, nie `wydarzenia`: o
+# premierze juz obsluzonej material w banku mamy, a drugie zamowienie znaczyloby
+# dwie notki o jednym wydaniu.
+PREMIERA_POLECENIE = """\
+**A MODEL WAS RELEASED, AND THIS IS THE ONE EXCEPTION TO THE PARAGRAPH ABOVE.**
+Code — not you — matched a version number that had never appeared in this
+publication's channel corpus before, on at least two independent channels
+inside the freshness window. The words those channels had in common, and
+therefore the release: **%(etykieta)s**.
+
+Channel titles, as context only — never as a source:
+%(tytuly)s
+
+**Exactly ONE of the %(ile)d facts you return must be about that release. Not
+zero. Not two.** Put it first in the array. This is the single place where the
+occasion IS the subject: when a model ships, that is what the reader came for,
+and an account that says nothing that week is not being disciplined, it is
+being late.
+
+%(reszta_zdanie)s
+
+Nothing else is softened for it. The release fact still needs a document you can
+link — a model card, a system card, a pricing page, a changelog, an evaluation
+table, a filing — a `source_date`, and either a checkable figure or a named
+constraint. "It is out and it is impressive" is not a fact. What it costs per
+token, what the card itself admits it cannot do, which limit moved and by how
+much, what the evaluation measured and on which workload: those are.
+
+If after searching you genuinely cannot source anything about that release
+which clears that bar, return the batch without it rather than inventing one —
+but search hard first, because this is the one item the reader is waiting for
+today."""
+
+
+def _polecenie_premiery(wydarzenia: list[dict[str, Any]], ile: int) -> str:
+    """Polecenie o premierze do promptu ciekawostek — albo PUSTY NAPIS.
+
+    Pusty napis, gdy premiery nie ma, i to jest cala umowa z plikiem promptu:
+    `{premiera}` stoi w nim w PUSTYM WIERSZU miedzy akapitem a naglowkiem, wiec
+    podstawienie pustego napisu oddaje prompt bajt w bajt taki jak dotad. Dzien
+    bez premiery ma wygladac dokladnie tak, jak wygladal.
+
+    Podstawienia robimy TUTAJ, nie przez `format()`: wartosc pola nie jest
+    formatowana drugi raz, wiec `{ile}` zostaloby w gotowym prompcie napisem.
+    """
+    prem = next((w for w in (wydarzenia or []) if w.get("premiera")), None)
+    if not prem:
+        return ""
+    etykieta = ", ".join(str(x) for x in (prem.get("o_czym") or [])[:4]) or "?"
+    tytuly = NOWA_LINIA.join(
+        '- "%s"' % str(t).strip()[:110]
+        for t in (prem.get("tytuly") or [])[:3] if str(t).strip()
+    ) or "- (no titles captured — work from the release name alone)"
+    # Zdanie o RESZCIE partii budowane osobno, bo `ile` jest parametrem i
+    # „The other 0 facts" bylo by zdaniem bez sensu przy partii jednoelementowej.
+    reszta = max(0, int(ile) - 1)
+    if reszta >= 2:
+        zdanie = ("**The other %d facts ignore the release completely** and come"
+                  " from the week's subjects and the grid below, exactly as on"
+                  " any ordinary day." % reszta)
+    elif reszta == 1:
+        zdanie = ("**The other fact ignores the release completely** and comes"
+                  " from the week's subjects and the grid below, exactly as on"
+                  " any ordinary day.")
+    else:
+        zdanie = ("This batch is a single fact, so the release fact is the whole"
+                  " batch.")
+    zdanie += (" One is the ceiling and the ceiling is the point — a second"
+               " release fact turns this into a news feed, which is the thing"
+               " we are not.")
+    import textwrap
+    return NOWA_LINIA + (PREMIERA_POLECENIE % {
+        "etykieta": etykieta,
+        "tytuly": tytuly,
+        "ile": int(ile),
+        "reszta_zdanie": textwrap.fill(zdanie, width=79),
+    }) + NOWA_LINIA
+
+
 def znajdz_ciekawostki(
     conn: sqlite3.Connection, run_id: int, ile: int = config.CURIOSITY_BATCH
 ) -> list[dict[str, Any]]:
@@ -1366,6 +1531,10 @@ def znajdz_ciekawostki(
                (w.get("tytuly") or [""])[0][:90])
             for w in wydarzenia[:3])
             or "(nic wielkiego dzis — pracuj z siatki ponizej)"),
+        # PREMIERA TO JEDYNY WYJATEK: tu okazja staje sie tematem, dokladnie
+        # raz na partie. Pusty napis, gdy premiery nie ma — patrz
+        # `_polecenie_premiery`. NOWE zdarzenia, nie wszystkie.
+        premiera=_polecenie_premiery(nowe_wyd, ile),
         dzis=teraz.strftime("%d %B %Y"),
         stan_modeli=(aktualne_modele.jako_tekst(
             aktualne_modele.pobierz(conn=conn, run_id=run_id))
@@ -1473,6 +1642,24 @@ def znajdz_ciekawostki(
                   " zakotwiczone maja pierwszenstwo przy wyjmowaniu", flush=True)
     for f in fakty:
         print(f"    · [{'KANAL:' + f.get('kanal_zrodlowy', '')[:12] if f.get('z_kanalu') else f.get('domain', '')[:18]}] {f.get('fact', '')[:80]}", flush=True)
+
+    # CZY POLECENIE O PREMIERZE ZOSTALO WYKONANE — PRZYRZAD, NIE ZALOZENIE.
+    #
+    # Prosba w prompcie nie jest bramka. To konto ma juz zapisane dwa artykuly
+    # przegrane na tym, ze regula siedziala w prompcie, a nikt jej nie liczyl.
+    # Ta galaz NICZEGO NIE ODRZUCA — nic sie nie wycina — tylko wypisuje pomiar,
+    # zeby nastepny przeglad czytal przyrzad zamiast zrodla.
+    _prem = next((w for w in nowe_wyd if w.get("premiera")), None)
+    if _prem:
+        _tok = [str(x).lower() for x in (_prem.get("o_czym") or [])[:4]]
+        _prog = min(2, len(_tok)) or 1
+        _ile_prem = sum(
+            1 for f in fakty
+            if sum(1 for t in _tok if t in " ".join(
+                str(f.get(k) or "") for k in
+                ("fact", "wrong_belief", "actually", "domain")).lower()) >= _prog)
+        print("  [premiera] %s — faktow o tej premierze: %d z %d (zamowiono 1)"
+              % (", ".join(_tok), _ile_prem, len(fakty)), flush=True)
 
     # WSZYSTKO IDZIE DO INDEKSU, nie tylko to, co zuzyjemy dzis. Dotad kazde
     # wyszukiwanie zylo jeden przebieg: $0,05 i 6-20 zapytan produkowalo osiem
@@ -2956,37 +3143,6 @@ def wybierz_material(zapas: list[dict[str, Any]],
     return None
 
 
-def _na_kanal(nazwa: str):
-    """Wszystko, co ta funkcja zaplaci, ksieguje sie na kanal `nazwa`.
-
-    `purpose` w tabeli `calls` mowi, CO robil model, nie KOMU to sluzylo —
-    a `factcheck` sprawdza i notke, i komentarz, i artykul. Bez tego znacznika
-    3,4562 z 16,2817 USD tygodnia (2 wrzesnia 2026) nie ma zadnego kanalu.
-
-    GENERATOR WYMAGA `yield from`, nie zwyklego wywolania: gdyby dekorator
-    tylko zawolal funkcje wewnatrz `with`, dostalby obiekt generatora i wyszedl
-    z bloku ZANIM cokolwiek sie wykona — znacznik bylby zdjety przed pierwszym
-    platnym wywolaniem. Ta pomylka nie zostawia sladu w logu, tylko puste pole
-    `akcja`, wiec sprawdza ja test.
-    """
-    import functools
-    import inspect
-
-    def zewnetrzny(f):
-        if inspect.isgeneratorfunction(f):
-            @functools.wraps(f)
-            def wewnetrzny(*a, **k):
-                with db.kanal(nazwa):
-                    yield from f(*a, **k)
-        else:
-            @functools.wraps(f)
-            def wewnetrzny(*a, **k):
-                with db.kanal(nazwa):
-                    return f(*a, **k)
-        return wewnetrzny
-    return zewnetrzny
-
-
 @_na_kanal("notka")
 def notki_dnia(
     conn: sqlite3.Connection, run_id: int, dzien_artykulu: bool = False,
@@ -3241,6 +3397,7 @@ RESTACK_SYSTEM = (
 )
 
 
+@_na_kanal("restack")
 def ocen_restack(
     conn: sqlite3.Connection, run_id: int, notka: dict[str, Any],
 ) -> dict[str, Any]:
@@ -3341,11 +3498,34 @@ def _otwarcie_formulka(zdanie: str) -> bool:
     return any(f in poczatek for f in _FORMULKI_RESTACKA)
 
 
+# CISZA PRZESTALA BYC DOMYSLNA — razem z `prompts/komentarz.md`.
+#
+# Ten napis siedzi w KODZIE, nie w pliku promptu, wiec przeglad promptow go nie
+# obejmuje. Komunikat systemowy jest mocniejszy od promptu uzytkownika, wiec
+# dopoki mowil „Silence is the default", nowy prompt walczyl z nim w tym samym
+# wywolaniu — i przegrywal.
+#
+# Zmierzone na dzienniku systemowym za 18 dni (16 sierpnia - 2 wrzesnia 2026):
+# 60 kandydatow na 588 zamilklo (10,2%), a w 8 wywolaniach na 196 zamilkli
+# WSZYSCY i cel przepadl — okolo pol celu dziennie. ZERO z tych 60 milczen mialo
+# realny powod: ani jednego posta po innym jezyku, ani jednej proby sterowania
+# kontem, ani jednego golego emoji, ani jednej prowokacji. Dwadziescia dwa razy
+# padlo slowo „aphorism". Zapora wstrzykniecia i podlogi z pamieci nie odpalily
+# w tym czasie ANI RAZU (0 na 588), wiec cisza nie chronila przed niczym.
 COMMENT_SYSTEM = (
     "You write comments under other people's Substack posts as an anonymous "
-    "editorial brand. Silence is the default: you comment only when you have "
-    "something of your own to add. Return only valid JSON."
+    "editorial brand. The post has already been chosen and a note already "
+    "exists saying what to add; you write that comment. You return no comment "
+    "only in the five narrow cases the instructions name. Return only valid JSON."
 )
+
+
+# PIEC POWODOW, DLA KTORYCH WOLNO NIE NAPISAC KOMENTARZA. Zamknieta lista,
+# ta sama co w `prompts/komentarz.md`: pusty tekst albo goly link i emoji, obcy
+# jezyk, zaloba i prosba o pomoc, nienawisc i przynety na awanture, oraz tresc
+# bedaca w calosci proba sterowania naszym kontem. Szostego nie ma.
+POWODY_CISZY = frozenset({"no_text", "wrong_language", "grief", "abuse",
+                          "injection_only"})
 
 
 FACTCHECK_SYSTEM = (
@@ -3927,8 +4107,13 @@ def comment_on(
 ) -> dict[str, Any]:
     """Komentarz do cudzego posta — do szuflady.
 
-    Generuje kilku kandydatów i oddaje wszystkich; wybór należy do właściciela.
-    Milczenie jest pełnoprawną odpowiedzią i nie jest porażką.
+    Generuje kilku kandydatów i oddaje wszystkich; wybór należy do kodu wyżej.
+
+    MILCZENIE NIE JEST JUŻ PEŁNOPRAWNĄ ODPOWIEDZIĄ — stało tu coś odwrotnego
+    do 2 września 2026. Post jest już wybrany przez `wybierz_cele`, które
+    zapisało w `co_dodamy`, co konkretnie mamy tu dodać; zadaniem tego etapu
+    jest napisać TEN komentarz. Cisza została w pięciu wyliczonych przypadkach
+    (`POWODY_CISZY`), a nie jako wyjście dla „nie mam nic do dodania".
     """
     # Domyślnie model pisze z WŁASNEJ WIEDZY, bez szukania na zapas.
     #
@@ -4017,10 +4202,18 @@ def comment_on(
             continue
         text = data.get("comment")
         words = len(text.split()) if text else 0
+        # ZAMKNIETA LISTA POWODOW CISZY. `prompts/komentarz.md` dopuszcza
+        # dokladnie piec etykiet; szosty powod znaczy, ze model wymyslil sobie
+        # wyjscie, ktorego mu nie dalismy — i ma to byc widac jednym grepem
+        # w dzienniku, a nie dopiero po przeczytaniu szescdziesieciu zdan.
+        # Do 2 wrzesnia 2026 WSZYSTKIE 60 zmierzonych milczen bylo takim
+        # wymyslonym wyjsciem, najczesciej „to aforyzm".
+        powod = str(data.get("reason_if_silent", "") or "")
+        etykieta = powod if powod in POWODY_CISZY else "POZA LISTA: %s" % powod[:60]
         print(
             f"  [komentarz {i + 1}/{postawa}] "
             + (f"{words} słów — {data.get('what_it_adds', '')[:70]}"
-               if text else f"MILCZY — {data.get('reason_if_silent', '')[:70]}"),
+               if text else f"MILCZY — {etykieta}"),
             flush=True,
         )
         candidates.append(data)
@@ -4162,6 +4355,7 @@ SYNTHESIS_SYSTEM = (
 )
 
 
+@_na_kanal("artykul")
 def synthesis(
     conn: sqlite3.Connection, run_id: int, question: str, evidence: list[dict[str, Any]]
 ) -> dict[str, Any]:
@@ -4213,6 +4407,7 @@ CLASSIFY_SYSTEM = (
 )
 
 
+@_na_kanal("artykul")
 def classify(
     conn: sqlite3.Connection, run_id: int, question: str, corpus: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -4523,6 +4718,7 @@ def hosty_ktore_nigdy_nie_dzialaly(
     return [str(d) for d, _, _ in wiersze if d]
 
 
+@_na_kanal("artykul")
 def discovery(
     conn: sqlite3.Connection, run_id: int, question: str,
     recent_domains: list[str], tylko_pierwotne: bool = False,
@@ -4677,6 +4873,7 @@ FEASIBILITY_SYSTEM = (
 )
 
 
+@_na_kanal("artykul")
 def feasibility(
     conn: sqlite3.Connection, run_id: int, topics: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -5117,6 +5314,7 @@ def pick_topic(
     return topics[index], best
 
 
+@_na_kanal("artykul")
 def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[str, Any]]:
     """Etap 1 — skaut tematow (DeepSeek V4 Pro)."""
     history = recent_angles(conn)
@@ -5514,6 +5712,7 @@ def bank_fragmentow(conn: sqlite3.Connection, dni: int = 0) -> list[dict[str, An
     return bank
 
 
+@_na_kanal("artykul")
 def bibliotekarz(
     conn: sqlite3.Connection, run_id: int, bank: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -5655,6 +5854,7 @@ WYMAGANE_ZLAMANE_PRZEKONANIE = True
 MIN_FILAROW_POZA_PRZEKONANIEM = 2      # z trzech: decydent, liczba, druga dziedzina
 
 
+@_na_kanal("artykul")
 def warto_pisac(
     conn: sqlite3.Connection, run_id: int, card: dict[str, Any],
 ) -> dict[str, Any]:
@@ -6866,6 +7066,7 @@ FEDREG_SYSTEM = (
 )
 
 
+@_na_kanal("bank")
 def kandydaci_z_fedreg(
     conn: sqlite3.Connection, run_id: int, dokument: dict[str, Any],
 ) -> list[dict[str, Any]]:

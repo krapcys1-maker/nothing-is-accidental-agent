@@ -56,7 +56,7 @@ something that makes a stranger stop.
 If the event yields nothing that clears that bar, drop it and work the grid.
 An empty priority lane is fine; a thin piece published because something was
 trending is not.
-
+{premiera}
 ## What the field is actually talking about this week
 
 These are real video titles from the channels this publication follows, with

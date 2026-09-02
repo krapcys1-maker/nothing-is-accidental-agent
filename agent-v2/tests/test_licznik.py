@@ -265,8 +265,13 @@ conn.execute("INSERT INTO runs (started_at, finished_at, status, stage)"
              " VALUES (?, ?, 'FAILED', 'dzien')",
              ("%sT03:41:00+00:00" % DZIS, "%sT03:42:00+00:00" % DZIS))
 conn.commit()
-sprawdz("przebieg zapisany jako FAILED tez nie zabiera slotu",
-        run.ile_przebiegow_zostalo(conn) == N, run.ile_przebiegow_zostalo(conn))
+# TA ASERCJA UTRWALALA WADE. Do 2 wrzesnia 2026 pilnowala, zeby przebieg
+# `FAILED` NIE zabieral slotu — a to wlasnie przez to ostatni przebieg doby
+# dzielil reszte pracy przez dwa zamiast przez jeden. Zmierzone uruchomieniem
+# przy budzecie 20: jedna porazka zostawiala 4 z 20 niewykonane, dwie — 8 z 20.
+sprawdz("przebieg zapisany jako FAILED ZABIERA slot — bez tego ostatni przebieg"
+        " dnia dzieli reszte przez dwa i zostawia polowe",
+        run.ile_przebiegow_zostalo(conn) == N - 1, run.ile_przebiegow_zostalo(conn))
 
 print()
 print("=== 9. CZY WYWALONY PRZEBIEG ZAPISUJE SIE JAKO FAILED ===")

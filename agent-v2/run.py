@@ -347,9 +347,26 @@ def ile_przebiegow_zostalo(conn) -> int:
     Sluzy do dzielenia dziennej normy. Liczymy przebiegi ZAKONCZONE dzis, wiec
     ten, ktory wlasnie trwa, jeszcze sie nie liczy — i dobrze, bo ma cos wziac.
 
-    Przebieg PRZERWANY tez sie nie liczy, i to jest cala pointa: gdy jeden padnie,
-    kolejne widza, ze zostalo ich mniej, i dobieraja wiecej, zamiast zostawic
-    dzien niedomkniety. Ostatni dzieli przez jeden, czyli bierze cala reszte.
+    Przebieg PRZERWANY LICZY SIE TAK SAMO jak udany, i to jest cala pointa.
+    Odwrotna regula („FAILED nie zabiera slotu") brzmiala jak nadrabianie, a
+    dzialala na odwrot: skoro nie podbijala `zamkniete`, to `5 - zamkniete` bylo
+    WIEKSZE i kolejne przebiegi braly MNIEJ. Zmierzone uruchomieniem tej funkcji
+    na spreparowanych stanach 2 wrzesnia 2026, przy budzecie 20 komentarzy:
+    0 porazek -> 0/20 niewykonane, 1 porazka -> 4/20, 2 porazki -> 8/20,
+    3 porazki -> 12/20. Na produkcji zaszlo to 19 sierpnia: ostatni przebieg
+    doby podzielil 15 pozostalych komentarzy przez dwa i zostawil siedem.
+    Odtworzone na 60 przebiegach: dzielnik byl za duzy w 7 z nich.
+
+    Liczy sie kazdy przebieg ZAKONCZONY — DONE, FAILED albo zamkniety przez
+    kontrole zdrowia (`STALE`, trzecia klasa, o ktorej stara regula nie
+    wspominala). Biezacy ma `finished_at` puste, wiec sam siebie nie policzy
+    i nadal ma co wziac.
+
+    LICZYMY PO OBU DATACH, nie tylko po `finished_at`. Termin 23:40 dostaje do
+    25 minut losowego opoznienia (`RandomizedDelaySec=1500`), wiec startuje
+    nawet o 00:05 nastepnej doby — zmierzone: 31.08 o 00:00:45, 01.09 o
+    00:12:40, a koniec po polnocy wypadl w 9 z 15 nocy. Suma obu warunkow nie
+    pozwala takiemu przebiegowi zniknac z zadnej z dwoch dob.
 
     Nie pytamy systemd o harmonogram, choc to on odpala agenta. Godziny sa w pliku
     `.timer` i powtorzenie ich tutaj zlamaloby zasade jednej liczby w jednym
@@ -360,8 +377,10 @@ def ile_przebiegow_zostalo(conn) -> int:
     dzis = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     try:
         (zamkniete,) = conn.execute(
-            "SELECT COUNT(*) FROM runs WHERE stage = 'dzien' AND status = 'DONE'"
-            " AND finished_at LIKE ?", (f"{dzis}%",)).fetchone()
+            "SELECT COUNT(*) FROM runs WHERE stage = 'dzien'"
+            " AND finished_at IS NOT NULL"
+            " AND (started_at LIKE ? OR finished_at LIKE ?)",
+            (f"{dzis}%", f"{dzis}%")).fetchone()
     except Exception:
         zamkniete = 0             # licznik nie moze zatrzymac przebiegu
     return max(1, config.PRZEBIEGOW_DZIENNIE - int(zamkniete))
@@ -1279,6 +1298,12 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             zrobione["notki"] += 1
 
     # --- 3. komentarze u innych ----------------------------------------------
+    # KANAL NA CALYM BLOKU, NIE NA JEDNYM WYWOLANIU. Znacznik siedzial wczesniej
+    # wokol samego `comment_on`, a `wybierz_cele` — ta sama robota, ten sam
+    # komentarz, 0,5326 USD tygodnia — zostawala poza nim. `wybierz_cele`
+    # i `zweryfikuj` obsluguja OBA rodzaje komentarzy, wiec dekoratora przy
+    # sobie miec nie moga: tylko ten blok wie, ze chodzi o artykuly.
+    @stages._na_kanal("komentarz@artykul")
     def komentarze() -> None:
         # NOWE KONTA NAJPIERW. Kanal czytelnika pokazuje wylacznie to, co juz
         # znamy — jedenascie publikacji, ktore same z siebie nikogo nowego nie
@@ -1437,13 +1462,23 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             # notatka jest w 3 promptach na 3, bez pola w 0 na 3. Platne:
             # 68 wywolan `cele` = 0,6056 USD od 25 sierpnia za pole wyrzucane
             # do kosza, przy prompcie, ktory czyni je warunkiem przyjecia celu.
-            with db.kanal("komentarz@artykul"):
-                out = stages.comment_on(
-                    conn, run_id,
-                    {**strony[0], "co_dodamy": cel.get("co_dodamy", "")})
+            # (Kanal ustawia dekorator nad `komentarze` — obejmuje takze
+            # `wybierz_cele` wyzej i `zweryfikuj` w srodku `comment_on`.)
+            out = stages.comment_on(
+                conn, run_id,
+                {**strony[0], "co_dodamy": cel.get("co_dodamy", "")})
             dobre = [k for k in out["candidates"]
                      if k.get("comment") and k.get("safe_to_post")]
             if not dobre:
+                # CEL PRZEPADAL PO CICHU. „Wszyscy zamilkli" i „wszystkich
+                # zdjela zapora" wygladaly stad identycznie — czyli dwa zupelnie
+                # rozne problemy nie do odroznienia. Zmierzone na dzienniku
+                # systemowym za 18 dni: 8 celow na 196 wywolan przepadlo przez
+                # cisze wszystkich kandydatow, okolo pol celu dziennie.
+                cisze = sum(1 for k in out["candidates"] if not k.get("comment"))
+                print("  CEL BEZ KOMENTARZA — %d z %d milczalo, %d zdjela zapora"
+                      % (cisze, len(out["candidates"]),
+                         len(out["candidates"]) - cisze), flush=True)
                 continue
             if wyslij:
                 if not rytm("komentarz", "komentarze", rytm_stanu):
@@ -1515,6 +1550,8 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             zrobione["komentarze"] += 1
 
     # --- 3b. dyskusje pod cudzymi notkami -------------------------------------
+    # Ten sam powod, co przy `komentarze` — z drugim kanalem.
+    @stages._na_kanal("komentarz@notka")
     def dyskusje() -> None:
         """Wejscie w rozmowe pod cudza notka.
 
@@ -1542,21 +1579,39 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
               "komentarze": n["odpowiedzi"], "reakcje": n["reakcje"],
               "url": n["url"], "id": n["id"], "data": n.get("data", ""),
               "skad": n.get("skad", "kanal")} for n in notki])
+        # SUFIT TEGO BLOKU JEST DODATKOWY, NIE WSPOLNY — i to jest swiadome.
+        # Blok pod artykulami wzial juz do `na_teraz["komentarze"]`, ten bierze
+        # jeszcze polowe tego samego przydzialu, wiec jeden przebieg moze
+        # wystawic do N + N//2. Odjecie `zrobione["komentarze"]` ZMNIEJSZYLOBY
+        # liczbe publikacji, a doktryna mowi odwrotnie.
+        #
+        # Zmierzone na 51 przebiegach (18.08-02.09.2026): przydzial jest
+        # realizowany w 38 procentach (srednio 1,98 wystawione przy 5,27
+        # przydzielonych), sufit ruszyl DWA razy — 22.08 (4 -> 5) i 01.09
+        # (4 -> 6, dokladnie N + N//2) — i ani jedna doba z szesnastu nie
+        # przekroczyla przez to budzetu dobowego. Powod jest strukturalny, nie
+        # szczesliwy: `zostalo` liczy sie od nowa z dziennika na poczatku
+        # KAZDEGO przebiegu, wiec nadmiar jednego zabiera z puli nastepnym.
         for cel in cele[: max(1, na_teraz["komentarze"] // 2)]:
             if not zostal_czas("dyskusje"):
                 return
             # Drugie miejsce, w ktorym ginelo `co_dodamy` — patrz komentarz przy
             # bloku komentarzy pod artykulami. Tu slownik jest sklecony od zera,
             # wiec pole trzeba dopisac jawnie.
-            with db.kanal("komentarz@notka"):
-                out = stages.comment_on(
-                    conn, run_id,
-                    {"title": cel.get("tytul", ""), "text": cel.get("opis", ""),
-                     "author": cel.get("pub", ""), "url": cel.get("url", ""),
-                     "co_dodamy": cel.get("co_dodamy", "")})
+            # (Kanal ustawia dekorator nad `dyskusje` — patrz blok wyzej.)
+            out = stages.comment_on(
+                conn, run_id,
+                {"title": cel.get("tytul", ""), "text": cel.get("opis", ""),
+                 "author": cel.get("pub", ""), "url": cel.get("url", ""),
+                 "co_dodamy": cel.get("co_dodamy", "")})
             dobre = [k for k in out["candidates"]
                      if k.get("comment") and k.get("safe_to_post")]
             if not dobre:
+                # To samo, co w bloku komentarzy pod artykulami — patrz tam.
+                cisze = sum(1 for k in out["candidates"] if not k.get("comment"))
+                print("  CEL BEZ KOMENTARZA — %d z %d milczalo, %d zdjela zapora"
+                      % (cisze, len(out["candidates"]),
+                         len(out["candidates"]) - cisze), flush=True)
                 continue
             if wyslij:
                 if not rytm("komentarz", "dyskusje", rytm_stanu):
@@ -2727,8 +2782,14 @@ def main() -> int:
             # czlowieka. Zdjete 1 wrzesnia 2026, w obu sciezkach naraz, zeby
             # nie rozjechaly sie tak, jak juz raz w tej sesji.
             print("\n-- sprawdzenie faktow (log, NIE bramka) --", flush=True)
-            audyt = stages.zweryfikuj(conn, run_id, draft["body"],
-                                      draft.get("title", ""))
+            # ZNACZNIK USTAWIA WOLAJACY, BO TYLKO ON WIE, CO SPRAWDZAMY.
+            # `zweryfikuj` obsluguje notke (`stages.note`), komentarz
+            # (`comment_on`) i artykul — dekorator przy niej samej klamalby
+            # w dwoch przypadkach na trzy. To jedyne miejsce w `run.py`,
+            # w ktorym woła ją sciezka artykulu.
+            with db.kanal("artykul"):
+                audyt = stages.zweryfikuj(conn, run_id, draft["body"],
+                                          draft.get("title", ""))
             if audyt.get("safe_to_post"):
                 print("   czysto: %s" % str(audyt.get("verdict", ""))[:150],
                       flush=True)

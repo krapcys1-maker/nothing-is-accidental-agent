@@ -317,6 +317,15 @@ class FalszywaBaza:
         # wyjatek — czyli test mierzylby wlasna atrape, nie kod.
         pass
 
+    def kanal(self, nazwa):
+        # ZNACZNIK KANALU (`db.AKCJA`) — `run.main` opakowuje nim sprawdzenie
+        # faktow artykulu. Oddajemy PRAWDZIWY menedzer kontekstu, bo wlasna,
+        # pusta wersja cicho zdjelaby znacznik i ten test przestalby chodzic
+        # po tym samym kodzie, co produkcja. Znacznik nie dotyka dysku: to
+        # zmienna modulu `db`.
+        import db as _db
+        return _db.kanal(nazwa)
+
 
 def swiat_dnia(slad, st):
     """Atrapy, ktorych dotyka `run.dzien` — plus PRAWDZIWE `note`/`comment_on`."""
@@ -377,8 +386,18 @@ def swiat_dnia(slad, st):
         wynik["fakt"] = None
         return [wynik]
 
+    def _bez_kanalu(nazwa):
+        """Dekorator dla drzewa PRZED, w ktorym kanalow jeszcze nie bylo."""
+        return lambda f: f
+
     fake_stages = modul(
         "stages",
+        # PRAWDZIWY dekorator kanalu — bloki `komentarze` i `dyskusje`
+        # w `run.py` sa nim opakowane (patrz `FalszywaBaza.kanal`). Drzewo
+        # PRZED pochodzi sprzed tej zmiany i swojego `run.py` nim nie dekoruje,
+        # wiec dostaje wersje pusta. Odwrotna pomylka — nowy `run.py` bez
+        # `_na_kanal` — nadal wywala sie glosno i tak ma byc.
+        _na_kanal=getattr(st, "_na_kanal", _bez_kanalu),
         wstaw_date_zrodel=_CZYSTY.wstaw_date_zrodel,
         budzet_dnia=lambda conn: {"notki": 1, "komentarze": 1, "lajki": 0,
                                   "restacki": 0, "follow": 0, "subskrypcje": 0},

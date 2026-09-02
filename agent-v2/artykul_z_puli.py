@@ -324,8 +324,17 @@ def wybierz_fakt(conn, run_id, ile: int = 8) -> dict:
     return fakty[0]
 
 
+@stages._na_kanal("artykul")
 def main() -> int:
     """Otwiera przebieg, oddaje robote i ZAMYKA go — takze przy wyjatku.
+
+    KANAL NA WEJSCIU, NIE PRZY ETAPACH. Ten plik ma jedno wejscie
+    (`nia-artykul.service` wola `artykul_z_puli.py --wyslij`) i wszystko, co
+    ono zaplaci, sluzy jednemu artykulowi — takze etapy, ktore SAME w sobie
+    sluza dwom kanalom i dlatego wlasnego dekoratora miec nie moga:
+    `znajdz_ciekawostki` (przez `wybierz_fakt`) szuka materialu takze na
+    notki, a `zweryfikuj` (przez `_napisz_i_zapisz`) sprawdza takze notki
+    i komentarze. Znacznik postawiony tutaj obejmuje je bez zgadywania.
 
     PRZEBIEG BYL OTWIERANY I NIGDY NIE ZAMYKANY. `start_run` bylo, `finish_run`
     NIE BYLO ANI RAZU (dla porownania `run.py` wola je piec razy). Skutek:

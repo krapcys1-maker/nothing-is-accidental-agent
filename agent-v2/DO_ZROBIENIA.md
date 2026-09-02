@@ -193,7 +193,26 @@ uruchamiają z atrapą i liczą wywołania (jak `test_regula_naprawy.py`).
 
 ---
 
-## 13. Notatka `co_dodamy` zjada tekst źródłowy przy długich wpisach
+## 13. Czternaście testów celuje w produkcyjną bazę
+
+`config.py:31-32` liczy `DB_PATH` z `DATA_DIR` **przy imporcie**. Test, który
+podmienia `config.DATA_DIR` na katalog tymczasowy, nie zmienia przez to
+`DB_PATH` — ta nadal wskazuje produkcyjną bazę.
+
+Policzone: **23 pliki testowe przestawiają `DATA_DIR`, tylko 9 przestawia też
+`DB_PATH`.** Dziś nic z tego nie strzela, bo te akurat testy nie otwierają
+połączenia — ale przebieg sięgający `db.connect()` przy takim stanie **dopisał
+kolumny do produkcyjnej bazy** (sprawdzone w piaskownicy).
+
+To ta sama klasa błędu, co zatrucie `tematy_przegrane.json` 2 września (294 z
+400 wpisów było atrapami z testów), tylko innym wejściem. Tamto zamknięto
+stałą `config.W_TESCIE`; tu potrzebne jest zamknięcie **na poziomie klasy** —
+jedna droga przestawiająca komplet ścieżek pochodnych plus głośna odmowa
+otwarcia produkcyjnej bazy w trybie testowym.
+
+---
+
+## 14. Notatka `co_dodamy` zjada tekst źródłowy przy długich wpisach
 
 `comment_on` przycina `post["text"][:9000]` przed doklejeniem notatki, a całe
 `body` jest dopiero potem cięte na `[:12000]`. Zmierzone na prawdziwym artykule
