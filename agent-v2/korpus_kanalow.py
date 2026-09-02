@@ -69,7 +69,13 @@ KANALY = {
 
 # Naglowkowa oprawa do zdjecia. Zostawiamy ZDARZENIE, wyrzucamy obietnice.
 OPRAWA = (
-    r"\s*\(.*?\)\s*$", r"\s*\[.*?\]\s*$",
+    # NAWIAS Z LICZBA ZOSTAJE — tam siedzi numer wersji, czyli jedyne slowo,
+    # ktore przy premierze modelu maja wspolne rozne kanaly. Zmierzone
+    # 2 wrzesnia 2026: „Anthropic went CRAZY (Mythos/Fable 5.1)" (Matthew
+    # Berman) traci nawias, potem slowo „CRAZY", zostaje „Anthropic went" —
+    # dwa slowa przy progu czterech, wiec CALA pozycja wypada z korpusu.
+    # A byl to jedyny DRUGI kanal, ktory tego dnia mowil o Fable 5.1.
+    r"\s*\((?![^)]*\d)[^)]*\)\s*$", r"\s*\[(?![^\]]*\d)[^\]]*\]\s*$",
     r"\b(this )?(will |just )?change(s|d)? everything\b",
     r"\b(insane|shocking\w*|crazy|wild|unbelievable|mind-?blowing)\b",
     r"\bcritical warning\b", r"\bpanicking\b", r"\byou won'?t believe\b",
@@ -152,9 +158,22 @@ def _rdzen(temat: str) -> set[str]:
             if s not in _TLO}
 
 
+# Rok to nie numer wersji. Bez tego wyzwalacz premiery bral „AGI 2026" u dwoch
+# kanalow za premiere modelu o numerze 2026.
+_ROK = re.compile(r"^(19|20)\d\d$")
+
+
+def _numer_wersji(slowo: str) -> bool:
+    """Czy token wyglada na numer wydania: ma cyfre i nie jest rokiem.
+
+    „5.1", „5.3", „gpt-6", „4.6" — tak. „2026", „claude", „agents" — nie.
+    """
+    return any(c.isdigit() for c in slowo) and not _ROK.match(slowo)
+
+
 def wielkie_wydarzenia(korpus: list[dict[str, Any]], min_kanalow: int = 3,
-                       min_wspolnych: int = 2,
-                       swiezosc_dni: int = 4) -> list[dict[str, Any]]:
+                       min_wspolnych: int = 2, swiezosc_dni: int = 4,
+                       min_kanalow_premiery: int = 2) -> list[dict[str, Any]]:
     """Rzeczy, o ktorych mowi NARAZ kilka roznych kanalow.
 
     PO CO. Wlasciciel: „jak wychodzi nowy model albo jest duze wydarzenie AI,
@@ -164,20 +183,60 @@ def wielkie_wydarzenia(korpus: list[dict[str, Any]], min_kanalow: int = 3,
     nowy model" nie jest tematem, tylko tym, co w tym tygodniu pisza wszyscy.
     Regula jest sluszna — bez niej stajemy sie jednym z pieciuset kanalow
     opisujacych premiere.
-    
+
     Napiecie znika, gdy rozdzielic OKAZJE od TEMATU. Wydarzenie mowi nam, KIEDY
     czytelnik patrzy w te strone; nie mowi, CO mamy napisac. Tresc nadal musi
     przejsc te same bramki — mechanizm, zlamane przekonanie, sprawdzalnosc.
     Wykrycie wydarzenia daje wiec PIERWSZENSTWO W KOLEJCE, nigdy zwolnienia
-    z jakosci.
+    z jakosci. Ta funkcja NICZEGO NIE BLOKUJE: pusta lista znaczy „spokojny
+    dzien", a nie „stop".
 
-    SYGNAL JEST OBIEKTYWNY I LICZY GO KOD, nie model: ten sam rdzen tematu
-    u co najmniej `min_kanalow` ROZNYCH kanalow. Jeden kanal krzyczacy
-    „EVERYTHING CHANGED" to nie wydarzenie, tylko naglowek.
+    SYGNAL JEST OBIEKTYWNY I LICZY GO KOD, nie model. Sa dwa i celowo mierza
+    co innego:
+
+    1. FALA — ten sam rdzen tematu u co najmniej `min_kanalow` ROZNYCH
+       kanalow, i KAZDY z tych kanalow ma film nie starszy niz `swiezosc_dni`.
+       Jeden kanal krzyczacy „EVERYTHING CHANGED" to nie wydarzenie, tylko
+       naglowek.
+
+    2. PREMIERA — NOWY numer wersji u co najmniej `min_kanalow_premiery`
+       ROZNYCH kanalow w tym samym oknie. Powod jest zmierzony: w dniu
+       premiery jedynym slowem wspolnym dla kanalow jest NAZWA I NUMER, bo
+       reszta tytulu to szum, u kazdego inny — a regula fali wymaga wtedy
+       dwoch wspolnych slow i dlatego milczy. 2 wrzesnia 2026 o Fable 5.1
+       mowily tego dnia dwa kanaly (Wes Roth, Matthew Berman) i wspolne mialy
+       dokladnie {fable, 5.1}; wykrywacz oddal zero.
+
+       Nie jest to obnizenie progu do dwoch kanalow, bo warunki sa trzy naraz:
+       token musi miec CYFRE i nie byc rokiem, NIE MOZE wystepowac w korpusie
+       sprzed okna, i musza go miec DWA rozne kanaly. Zmierzone na 64 dniach
+       korpusu: ten wyzwalacz odpalil sie dwa razy, obydwa to premiera Fable
+       5.1. Doktryna „jeden kanal to nie wydarzenie" zostaje nietknieta —
+       swiadek nadal musi byc wiecej niz jeden.
+
+    NOWOSC LICZYMY WZGLEDEM PODANEGO KORPUSU, wiec te funkcje wola sie na
+    PELNYM korpusie (`korpus_kanalow(200)`), nigdy na przycietym: w korpusie
+    bez historii kazdy numer wersji wyglada na nowy.
     """
+    from datetime import datetime as _d, timedelta as _td, timezone as _tz
+    granica = (_d.now(_tz.utc) - _td(days=swiezosc_dni)).strftime("%Y-%m-%d")
+
+    # PIERWSZENSTWO PRZYSLUGUJE TEMU, CO DZIEJE SIE TERAZ — i liczy sie to
+    # NA POZYCJE, nie na grupe. Poprzednia wersja sprawdzala swiezosc przez
+    # `max(data)` calej grupy, wiec trzy kanaly rozrzucone na trzy miesiace
+    # przechodzily dzieki jednemu swiezemu filmowi. Tak przeszlo JEDYNE
+    # wykrycie w historii tej funkcji: grupa GLM 5.3 miala filmy z 15, 26 i 30
+    # sierpnia oraz 1 wrzesnia — rozpietosc 17 dni przy oknie czterech.
+    # Rzecz, o ktorej trzy kanaly mowily dwa tygodnie temu, jest historia,
+    # a nie powodem, zeby przestawiac kolejke.
+    swieze = [p for p in (korpus or []) if (p.get("data") or "") >= granica]
+    if not swieze:
+        return []
+
+    # --- 1. FALA: ten sam rdzen u wielu kanalow, kazdy w oknie ---
     grupy: list[dict[str, Any]] = []
-    for poz in korpus or []:
-        rdzen = _rdzen(poz.get("temat", ""))
+    for poz in swieze:
+        rdzen = _rdzen(poz.get("temat") or "")
         if len(rdzen) < min_wspolnych:
             continue
         for g in grupy:
@@ -187,25 +246,64 @@ def wielkie_wydarzenia(korpus: list[dict[str, Any]], min_kanalow: int = 3,
                 g["rdzen"] &= rdzen or g["rdzen"]
                 break
         else:
-            grupy.append({"rdzen": rdzen, "pozycje": [poz],
+            grupy.append({"rdzen": rdzen, "pozycje": [poz], "premiera": False,
                           "kanaly": {poz.get("kanal", "")}})
-    # PIERWSZENSTWO PRZYSLUGUJE TEMU, CO DZIEJE SIE TERAZ. Bez tego progu
-    # wykrywacz oddawal jako „wielkie wydarzenie" premiere sprzed szesnastu dni
-    # — zlapane pierwszym uruchomieniem na zywym korpusie. Rzecz, o ktorej trzy
-    # kanaly mowily dwa tygodnie temu, jest historia, a nie powodem, zeby
-    # przestawiac kolejke.
-    from datetime import datetime as _d, timedelta as _td, timezone as _tz
-    granica = (_d.now(_tz.utc) - _td(days=swiezosc_dni)).strftime("%Y-%m-%d")
 
-    wyniki = [{"o_czym": sorted(g["rdzen"])[:6],
-               "kanalow": len(g["kanaly"]),
-               "kanaly": sorted(g["kanaly"]),
-               "tytuly": [p["temat"] for p in g["pozycje"][:4]],
-               "data": max((p.get("data") or "") for p in g["pozycje"])}
-              for g in grupy if len(g["kanaly"]) >= min_kanalow
-              and max((p.get("data") or "") for p in g["pozycje"]) >= granica]
-    wyniki.sort(key=lambda w: (-w["kanalow"], w["data"]), reverse=False)
-    wyniki.sort(key=lambda w: w["kanalow"], reverse=True)
+    # --- 2. PREMIERA: numer wersji, ktorego wczesniej w korpusie nie bylo ---
+    # Pozycja bez daty liczy sie do historii, nie do okna — czyli w razie
+    # watpliwosci wyzwalacz MILCZY, zamiast strzelac.
+    znane: set[str] = set()
+    for p in korpus or []:
+        if (p.get("data") or "") < granica:
+            znane |= _rdzen(p.get("temat") or "")
+    premiery: dict[str, list[dict[str, Any]]] = {}
+    for p in swieze:
+        for s in _rdzen(p.get("temat") or ""):
+            if s not in znane and _numer_wersji(s):
+                premiery.setdefault(s, []).append(p)
+    for _s, pozycje in sorted(premiery.items()):
+        kanaly = {p.get("kanal", "") for p in pozycje}
+        if len(kanaly) < min_kanalow_premiery:
+            continue
+        # ETYKIETA TO CZESC WSPOLNA TYTULOW, NIE SAM NUMER. `stages` robi
+        # z niej klucz pamieci zdarzen, wiec gole „5.1" zlepiloby dwie rozne
+        # premiery o tym samym numerze w jedno i druga nigdy nie otworzylaby
+        # furtki. „5.1, fable" jest jednoznaczne.
+        wspolne = set.intersection(*[_rdzen(p.get("temat") or "")
+                                     for p in pozycje])
+        grupy.append({"rdzen": wspolne or {_s}, "pozycje": pozycje,
+                      "premiera": True, "kanaly": kanaly})
+
+    # JEDNO ZDARZENIE = JEDEN WPIS. Kazdy wpis kosztuje, bo `stages` otwiera
+    # platne szukanie raz na KAZDY nowy klucz zdarzenia (~0,23 USD). Skleic
+    # trzeba dwa przypadki: premiera zlapana juz przez fale, oraz dwa numery
+    # z tych samych tytulow („fable 5.1" i „5.1"), ktore daja te sama etykiete.
+    pokryte = {id(p) for g in grupy
+               if not g["premiera"] and len(g["kanaly"]) >= min_kanalow
+               for p in g["pozycje"]}
+    wyniki: list[dict[str, Any]] = []
+    widziane: set[tuple[str, ...]] = set()
+    for g in grupy:
+        if len(g["kanaly"]) < (min_kanalow_premiery if g["premiera"]
+                               else min_kanalow):
+            continue
+        if g["premiera"] and all(id(p) in pokryte for p in g["pozycje"]):
+            continue
+        o_czym = sorted(g["rdzen"])[:6]
+        if tuple(o_czym) in widziane:
+            continue
+        widziane.add(tuple(o_czym))
+        wyniki.append({"o_czym": o_czym,
+                       "kanalow": len(g["kanaly"]),
+                       "kanaly": sorted(g["kanaly"]),
+                       "tytuly": [p.get("temat") or "" for p in g["pozycje"][:4]],
+                       "data": max((p.get("data") or "") for p in g["pozycje"]),
+                       "premiera": g["premiera"]})
+
+    # Premiera przed fala — wlasciciel chce pisac o nowym modelu tego samego
+    # dnia; fala o rzeczy o tydzien starszej moze poczekac na drugie miejsce.
+    wyniki.sort(key=lambda w: w["data"], reverse=True)
+    wyniki.sort(key=lambda w: (not w["premiera"], -w["kanalow"]))
     return wyniki
 
 
