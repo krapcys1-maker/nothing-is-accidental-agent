@@ -1541,7 +1541,20 @@ def znajdz_ciekawostki(
             or "(could not be checked today — so name no version at all)"),
         miesiac=teraz.strftime("%B"),
         w_reku=config.co_teraz_w_reku(teraz) or "(nothing seasonal listed)",
-        uzyte=("\n".join(f"- {t}" for t in zuzyte[-config.CURIOSITY_MEMORY:])
+        # MODEL MUSI WIEDZIEC TAKZE O TYM, CO LEZY W BANKU NIEUZYTE.
+        #
+        # Do 2 wrzesnia 2026 szlo tu wylacznie `zuzyte`, czyli fakty juz
+        # OPUBLIKOWANE. O wolnych pozycjach bank model nie wiedzial nic — wiec
+        # przy kazdym szukaniu spokojnie oddawal to samo, co juz mielismy.
+        # Zmierzone na zywym banku: 37 wolnych pozycji to 24 rozne tematy,
+        # a jeden fakt — chip Jalapeño — lezal tam w SIEDMIU wariantach.
+        # To byla przyczyna zrodlowa „calej puli zderzajacej sie z pamiecia",
+        # przez ktora dzien konczyl sie na trzech notkach zamiast pieciu:
+        # bank miec mogl trzydziesci siedem pozycji i wciaz nie miec o czym pisac.
+        uzyte=("\n".join(f"- {t}" for t in (
+            [str(k.get("fact") or "")[:200] for k in wczytaj_indeks()
+             if k.get("status") == "nowy"][-config.CURIOSITY_MEMORY:]
+            + zuzyte[-config.CURIOSITY_MEMORY:]))
                or "(nothing yet — this is the first batch)"),
     )
     try:
@@ -6291,19 +6304,58 @@ def bramka_kandydata(k: dict[str, Any]) -> tuple[bool, str]:
 
 
 def wczytaj_indeks() -> list[dict[str, Any]]:
-    """Indeks kandydatow. Uszkodzony plik to pusty indeks, nie awaria."""
+    """Indeks kandydatow. Uszkodzony plik NIE udaje juz pustego banku.
+
+    Pusty bank i uszkodzony plik wygladaly stad identycznie, a znacza co innego:
+    pierwszy to „nie mamy o czym pisac, poszukaj", drugi to „stracilismy
+    oplacony material i nikt tego nie zauwazyl". Bank raz juz zniknal w calosci
+    (patrz `_zapisz_indeks`) i wlasnie ta cisza sprawila, ze nie wiadomo do dzis,
+    czy to byla awaria zapisu, czy czyjes swiadome skasowanie.
+
+    Uszkodzony plik jest teraz ODKLADANY OBOK jako dowod i GLOSNO zglaszany,
+    a przebieg idzie dalej — bo doktryna mowi, ze nic nie ma zatrzymywac tresci.
+    """
     try:
         dane = json.loads(INDEKS_KANDYDATOW.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except OSError:
+        return []
+    except ValueError:
+        from datetime import datetime, timezone
+        znacznik = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        ratunek = INDEKS_KANDYDATOW.with_suffix(".json.uszkodzony-%s" % znacznik)
+        try:
+            INDEKS_KANDYDATOW.replace(ratunek)
+            gdzie = ratunek.name
+        except OSError:
+            gdzie = "nie udalo sie odlozyc kopii"
+        print("  [indeks] UWAGA: plik banku jest USZKODZONY, nie pusty."
+              " Odlozony jako %s — material trzeba odzyskac recznie." % gdzie,
+              flush=True)
         return []
     return [k for k in dane if isinstance(k, dict) and k.get("fact")] \
         if isinstance(dane, list) else []
 
 
 def _zapisz_indeks(indeks: list[dict[str, Any]]) -> None:
+    """Zapis ATOMOWY: najpierw plik obok, potem podmiana jednym ruchem.
+
+    BANK RAZ JUZ ZNIKNAL W CALOSCI. Miedzy 25 a 29 sierpnia 2026 urosl z 66 do
+    119 wolnych pozycji, oplacony 22 wywolaniami za 1,51 USD, a 30 sierpnia
+    okolo 12:44 zostal po nim najstarszy wpis i nic wiecej — bez ani jednego
+    `uzyty`, bez ani jednego `przeterminowany`, bez linii w logu.
+
+    Zwykly `write_text` obcina plik i dopiero pisze. Przebieg ubity w tej
+    szczelinie zostawia plik pusty albo urwany, a `wczytaj_indeks` czytal
+    uszkodzony plik jako PUSTY BANK. `os.replace` jest atomowy, wiec albo jest
+    stara zawartosc, albo cala nowa — nigdy polowa.
+    """
+    import os
+
     INDEKS_KANDYDATOW.parent.mkdir(parents=True, exist_ok=True)
-    INDEKS_KANDYDATOW.write_text(
+    tymczasowy = INDEKS_KANDYDATOW.with_suffix(".json.nowy")
+    tymczasowy.write_text(
         json.dumps(indeks[-600:], ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tymczasowy, INDEKS_KANDYDATOW)
 
 
 def _stale_sygnaly(topics: list[dict], pola: tuple[str, ...]) -> list[str]:
@@ -6354,6 +6406,30 @@ def _precedens_ok(p: Any) -> bool:
     return not re.match(r"^\W*(nothing|none|no\s|nic|brak)", zmiana, re.I)
 
 
+def _wspolna_kotwica(a: str, b: str) -> bool:
+    """Czy oba zdania mowia o tej samej NAZWIE albo tej samej LICZBIE.
+
+    Drugi warunek uznania faktu za powtorke — obok podobienstwa slow. Sam
+    licznik wspolnych slow myli sie w jedna strone: zdania zbudowane z tej samej
+    ramki dziela slowa ramki, nie tresc. Dwa opisy tego samego zdarzenia dziela
+    natomiast to, czego przepisac sie nie da — nazwe wlasna albo liczbe.
+
+    Nazwe bierzemy z wielkiej litery W SRODKU zdania (pierwsze slowo pomijamy,
+    bo kazde zdanie zaczyna sie wielka litera), liczbe od dwoch znakow w gore,
+    zeby „5" z dowolnego zdania nie laczylo wszystkiego ze wszystkim.
+    """
+    import re as _re
+
+    def kotwice(t: str) -> set[str]:
+        slowa = (t or "").split()
+        nazwy = {w.strip(".,;:()'\"").lower() for w in slowa[1:]
+                 if w[:1].isupper() and len(w.strip(".,;:()'\"")) > 3}
+        liczby = {x for x in _re.findall(r"\d[\d.,]*", t or "") if len(x) >= 2}
+        return nazwy | liczby
+
+    return bool(kotwice(a) & kotwice(b))
+
+
 def dopisz_kandydatow(kandydaci: list[dict[str, Any]]) -> dict[str, int]:
     """Przepuszcza kandydatow przez bramke i dokłada do indeksu.
 
@@ -6363,12 +6439,40 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]]) -> dict[str, int]:
     """
     indeks = wczytaj_indeks()
     znane = {_klucz_faktu(k.get("fact", "")) for k in indeks}
-    licznik = {"przyjete": 0, "odrzucone": 0, "znane": 0}
+    # ODSIEW PO ZNACZENIU, NIE PO NAPISIE. `_klucz_faktu` porownuje tekst, wiec
+    # ten sam fakt opowiedziany innymi slowami wchodzil do banku jako nowy.
+    # Zmierzone na produkcji 2 wrzesnia 2026: 37 wolnych pozycji to 24 rozne
+    # tematy, a chip Jalapeño lezal tam w SIEDMIU wariantach („unveiled with
+    # Broadcom", „built with Broadcom and fabricated…", „a 700-watt part…").
+    # Prog dobrany pomiarem na tym samym banku, nie na oko: przy
+    # min_wspolnych=2/prog=0,12 podobnych par jest 117 (kasowaloby material
+    # naprawde rozny), przy 5/0,45 tylko 15 (przepuszcza bliskie warianty).
+    # 4/0,35 daje 30 par i lapie caly klaster Jalapeño.
+    #
+    # SAMO PODOBIENSTWO SLOW NIE WYSTARCZY — potrzebna jest WSPOLNA KOTWICA.
+    # Zdania zbudowane z tej samej ramki („Documented: X — Y, according to the
+    # published standard") dziela cztery slowa z samego szablonu i wygladaja
+    # na to samo, nie bedac tym samym. Dwa opisy TEGO SAMEGO faktu dziela
+    # natomiast NAZWE albo LICZBE: siedem wariantow chipu mowi „Jalapeño",
+    # „OpenAI" i „Broadcom", a dwa o Jane Street — „Anthropic" i „100".
+    PODOBIENSTWO = {"min_wspolnych": 4, "prog": 0.35}
+    fakty_w_banku = [str(k.get("fact") or "") for k in indeks]
+    licznik = {"przyjete": 0, "odrzucone": 0, "znane": 0, "podobne": 0}
     for k in kandydaci or []:
         klucz = _klucz_faktu(str(k.get("fact") or ""))
         if not klucz or klucz in znane:
             licznik["znane"] += 1
             continue
+        tresc = str(k.get("fact") or "")
+        blizniak = next((f for f in fakty_w_banku
+                         if _o_tym_samym(tresc, f, **PODOBIENSTWO)
+                         and _wspolna_kotwica(tresc, f)), None)
+        if blizniak:
+            licznik["podobne"] += 1
+            print("  [indeks] to samo innymi slowami — pomijam: %s" % tresc[:70],
+                  flush=True)
+            continue
+        fakty_w_banku.append(tresc)
         ok, powod = bramka_kandydata(k)
         indeks.append({
             "fact": str(k.get("fact") or "")[:500],
