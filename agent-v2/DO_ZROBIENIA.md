@@ -50,7 +50,14 @@ to poprawka „przy okazji" — wymaga świadomej decyzji i żywego przebiegu.
 
 ---
 
-## 2. Najdroższa wada ma test po napisie w oknie 1800 znaków
+## 2. ZROBIONE 2026-09-02 — najdroższa wada ma już test zachowania
+
+Przepisane na drzewo składni: szukamy gałęzi `if` o warunku `wolno` i patrzymy,
+co przypisuje. **Kontrdowód odtworzony:** wada zapisana jako
+`na_teraz["komentarze"]=0` (bez spacji) — nowy test łapie, stary nie łapie.
+
+<details><summary>opis pierwotny</summary>
+
 
 `test_okno_publikacji.py:93-100` tnie `run.py` na sztywne okno i orzeka
 negatywnie: `'na_teraz["komentarze"] = 0' not in blok`.
@@ -59,12 +66,18 @@ Ta wada **blokowała jeden z pięciu przebiegów CODZIENNIE** (docstring, linie
 17-22) — najdroższa z całej listy. Wystarczy zapisać ją `na_teraz['komentarze']=0`,
 pętlą po kluczach albo przesunąć kod o 1800 znaków i test milczy.
 
-**Zrobione, gdy:** sekcja 4 mierzy zachowanie tak, jak sekcje 1-3 tego samego
-pliku — podstawiony zegar, sprawdzenie, że `na_teraz["komentarze"]` jest dodatnie.
+</details>
 
 ---
 
-## 3. Asercja pilnuje KOMENTARZA, a nie osłony artykułu
+## 3. ZROBIONE 2026-09-02 — asercja pyta drzewo, nie komentarz
+
+Sprawdzone **na żywo na serwerze**: przy padniętym modelu opisującym scenę
+i przy padniętym generatorze obrazu `grafika` oddaje słownik z błędem zamiast
+rzucać — artykuł idzie dalej. Obietnica była prawdziwa, tylko nikt jej nie mierzył.
+
+<details><summary>opis pierwotny</summary>
+
 
 `test_obietnice_bez_pokrycia.py:179` — `"NIGDY nie zatrzymuje" in run_src`.
 Jedyne wystąpienie tego napisu to **komentarz** w `run.py:2605`; wywołanie
@@ -73,8 +86,7 @@ Jedyne wystąpienie tego napisu to **komentarz** w `run.py:2605`; wywołanie
 Można usunąć osłonę i zostawić komentarz — test zostanie zielony, a padnięta
 grafika zabije artykuł.
 
-**Zrobione, gdy:** test podstawia `stages.grafika` rzucającą wyjątek i sprawdza,
-że artykuł mimo to powstaje.
+</details>
 
 ---
 
@@ -198,15 +210,23 @@ a późniejszy blok dyskusji pod notkami bierze **jeszcze**
 licznik, między nimi nie ma odjęcia. Przy przydziale N jeden przebieg może
 zrobić do `N + N/2` publikacji.
 
-### G2. Nieudana publikacja artykułu wygląda jak sukces
+### G2. ZROBIONE 2026-09-02 — nieudana publikacja ma własny status
+
+Potwierdzone odtworzeniem, naprawione i wdrożone (`3b83849`). Publikacja jest
+ponawiana do trzech razy, porażka dostaje status `NIEOPUBLIKOWANY`, gotowy tekst
+zostawia znacznik, a rutyna dnia — chodząca pięć razy dziennie — próbuje go
+dowieźć bez pisania nowego artykułu. Alarm ma nową kontrolę. **Sprawdzone na
+żywo na serwerze:** świeży znacznik nie alarmuje, po 30 h alarm mówi ze ścieżką.
+
+<details><summary>opis pierwotny</summary>
+
 
 `browser.wystaw_artykul` łapie każdy wyjątek i oddaje `wyslane=False`; sterownik
 wypisuje „NIE POSZEDL" i **bezwarunkowo zwraca kod 0** (`artykul_z_puli.py:1361`),
 a `main()` zamienia zero na `DONE` (`:344`). Usługa nie ma `Restart=` ani
 drugiego terminu — następny automatyczny za tydzień.
 
-**To jest ta sama klasa, którą 2 września naprawialiśmy trzy razy: awaria
-nieodróżnialna od sukcesu.** Najpoważniejsza pozycja z całego audytu.
+</details>
 
 ### G3. Po nieudanym przebiegu norma nie jest domykana
 
