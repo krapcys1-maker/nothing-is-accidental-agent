@@ -382,7 +382,10 @@ print()
 print("=== 7. ODPOWIEDZ W WATKU — TA SAMA DZIURA ===")
 wyczysc()
 podepnij(Strona(wyjatek_goto=RuntimeError("Timeout 15000ms")))
-browser.potwierdz_odpowiedz = lambda page, nid, tekst: False
+# `None`, nie `False`: `potwierdz_odpowiedz` oddaje od 1 wrzesnia 2026
+# NUMER naszej odpowiedzi albo `None`. Atrapa oddajaca `False` opisywala
+# funkcje, ktorej juz nie ma.
+browser.potwierdz_odpowiedz = lambda page, nid, tekst: None
 browser.wystaw_odpowiedz(315876268, TEKST, wyslij=True)
 lista = wpisy()
 sprawdz("nieudana odpowiedz jest w dzienniku", len(lista) == 1, lista)

@@ -3508,20 +3508,45 @@ def wystaw_artykul(
     return wynik
 
 
-def potwierdz_odpowiedz(page, note_id: int, tekst: str) -> bool:
-    """Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku."""
-    import json as _json
+def potwierdz_odpowiedz(page, note_id: int, tekst: str) -> int | None:
+    """Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku — i KTORA.
 
+    ODDAJE NUMER, NIE SAMO „TAK". Dokladnie jak `potwierdz_komentarz`, i to nie
+    jest kosmetyka: bez numeru nie da sie polaczyc wypowiedzi z tym, co z niej
+    wyszlo. Zmierzone na produkcji 1 wrzesnia 2026 — na 121 komentarzy w
+    dzienniku 55 nie mialo pola `nasz_id`, w tym 43 UDANE. Przyczyna byla
+    tutaj: ta funkcja pobierala caly watek z API, zamieniala go z powrotem na
+    NAPIS przez `json.dumps` i sprawdzala, czy nasz tekst gdzies w nim jest.
+    Identyfikator lezal w tej samej odpowiedzi, tyle ze przepuszczony przez
+    `dumps` przestawal byc danymi i stawal sie literami.
+
+    Skutek dla pomiaru: KAZDY host mial w rachunku najwyzej jeden dajacy sie
+    polaczyc komentarz, wiec pytanie „gdzie nikt nam nigdy nie odpowiada" nie
+    moglo dojrzec NIGDY, choc dane na nie fizycznie istnialy. Tedy szla przy
+    tym wiekszosc pracy: `wystaw_odpowiedz` obsluguje komentarze pod cudzymi
+    notkami, a tych jest wiecej niz komentarzy pod artykulami.
+
+    Numer jest prawdziwy, wiec nadal dziala jak „tak"; brak to None.
+
+    POTWIERDZENIE NIE ZALEZY OD NUMERU. Gdy nasza tresc JEST w watku, a numeru
+    w odpowiedzi nie ma, oddajemy -1 — tak samo jak `potwierdz_komentarz`.
+    Inaczej ta poprawka zamienialaby udana publikacje w „host nie pokazuje
+    komentarza", a to jest zdanie, ktore w tym repozytorium kasuje hosta na
+    zawsze (`hosty_gdzie_komentarz_nie_wchodzi`). Lepszy pomiar nie moze byc
+    kupiony za falszywy dowod przeciw komus.
+    """
     probka = plaski(tekst)[:60]
     for nr in range(4):
         watek = api_json(page, f"/api/v1/reader/comment/{note_id}/replies"
-                               f"?comment_id={note_id}")
-        if probka in plaski(_json.dumps((watek or {}).get("commentBranches", []),
-                                        ensure_ascii=False)):
-            return True
+                               f"?comment_id={note_id}") or {}
+        wszystkie = [c for g in (watek.get("commentBranches") or [])
+                     for c in _plaskie(g)]
+        for c in wszystkie:
+            if probka in plaski(c.get("body") or ""):
+                return c.get("id") or -1
         if nr < 3:
             page.wait_for_timeout(8000)
-    return False
+    return None
 
 def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
                      kontekst: dict[str, Any] | None = None,
@@ -3551,7 +3576,11 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
     page = context.new_page()
     wynik: dict[str, Any] = {"wpisane": False, "wyslane": False, "blad": None}
     try:
-        if wyslij and potwierdz_odpowiedz(page, note_id, tekst):
+        # `is not None`, bo funkcja oddaje teraz NUMER. Samo `if` byloby
+        # falszywe dla numeru 0 — ktorego Substack nie uzywa, ale opieranie
+        # poprawnosci na tym, ze cudzy serwis nie zacznie numerowac od zera,
+        # jest zakladem bez potrzeby.
+        if wyslij and potwierdz_odpowiedz(page, note_id, tekst) is not None:
             print("  ta odpowiedz juz jest w watku — nie wystawiam drugi raz",
                   flush=True)
             wynik["wyslane"] = True
@@ -3634,10 +3663,19 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
             # robi do czterech `api_json` i nie polyka wyjatkow, wiec bez tej
             # linii kazdy timeout po klknieciu wygladalby jak odmowa hosta.
             wynik["potwierdzenie_odpowiedzialo"] = True
-            wynik["wyslane"] = odp
+            # `wyslane` ZOSTAJE LOGICZNE. `odp` jest teraz liczba, a wpisanie
+            # liczby do pola, ktore w calym dzienniku jest prawda albo falszem,
+            # zmienia ksztalt danych dla kazdego, kto je pozniej czyta.
+            wynik["wyslane"] = odp is not None
+            wynik["id"] = odp
+            # -1 znaczy „jest w watku, ale numeru nie podano" i do dziennika
+            # NIE IDZIE: pole `nasz_id` sluzy wylacznie do laczenia z pomiarem,
+            # a -1 nie polaczy sie z niczym. Zapisane wygladaloby jak numer,
+            # ktory zawiodl, zamiast jak numer, ktorego nie bylo.
             dopisz_wynik(rodzaj, wynik,
                                gdzie=f"note/c-{note_id}",
                                slow=len(tekst.split()), tekst=tekst[:300],
+                               nasz_id=(odp if (odp or 0) > 0 else None),
                                **(kontekst or {}))
             print("  ODPOWIEDŹ POTWIERDZONA W WĄTKU" if wynik["wyslane"]
                   else "  KLIKNIĘTE, ALE ODPOWIEDZI NIE MA W WĄTKU", flush=True)

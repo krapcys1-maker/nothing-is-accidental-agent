@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **22 plików**, 25 323 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **22 plików**, 25 624 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 109 zestawów
-testów, 3127 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 111 zestawów
+testów, 3177 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -176,7 +176,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-6240 wierszy, 115 funkcji na poziomie modułu, 0 klas
+6466 wierszy, 118 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -251,6 +251,9 @@ wiec nie da sie go rozjechac z kodem.
 | `sprawdz_fakty(conn, run_id, post)` | Szuka faktów do komentarza, zamiast pozwolić modelowi pisać z pamięci. |
 | `bez_wstrzykniecia(tekst)` | Czy w naszym tekscie nie ma sladu cudzych POLECEN. |
 | `zweryfikuj(conn, run_id, tekst, kontekst)` | Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem. |
+| `_zapora_notki(tekst)` *(wewn.)* | Pusty napis, gdy tekst notki przechodzi zapory. Inaczej powod. |
+| `_zapora_komentarza(tekst)` *(wewn.)* | To samo dla komentarza — ale komentarz ma zapore o jedna wiecej. |
+| `napraw_obalone(conn, run_id, tekst, audyt)` | Poprawia zdanie, ktoremu zapis przeczy. Nie wycina go i nie blokuje tekstu. |
 | `comment_on(conn, run_id, post, fakty)` | Komentarz do cudzego posta — do szuflady. |
 | `fallback_card(question, evidence)` | Karta złożona z dowodów bez modelu — gdy synteza padnie. |
 | `synthesis(conn, run_id, question, evidence)` | Etap 6 — karta dowodowa (DeepSeek V4 Pro). |
@@ -298,7 +301,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-4665 wierszy, 86 funkcji na poziomie modułu, 0 klas
+4703 wierszy, 86 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -371,7 +374,7 @@ wiec nie da sie go rozjechac z kodem.
 | `wystaw_odpowiedz_pod_artykulem(url_artykulu, autor, tekst, wyslij)` | Odpowiada pod KONKRETNYM komentarzem pod naszym artykułem. |
 | `potwierdz_artykul(page, tytul)` | Pyta Substacka, czy artykuł naprawdę jest opublikowany. |
 | `wystaw_artykul(sciezka_md, sciezka_png, wyslij)` | Wystawia artykuł na Substacku. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
-| `potwierdz_odpowiedz(page, note_id, tekst)` | Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku. |
+| `potwierdz_odpowiedz(page, note_id, tekst)` | Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku — i KTORA. |
 | `wystaw_odpowiedz(note_id, tekst, wyslij, kontekst, rodzaj)` | Odpowiada w watku — pod nasza notka albo w cudzej dyskusji. |
 | `wystaw_notke(tekst, wyslij, typ, forma)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
 | `zapamietaj_platny_host(host, prawo)` | Host, ktory wprost mowi, ze komentowac moga tylko placacy. |
@@ -521,7 +524,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2420 wierszy, 21 funkcji na poziomie modułu, 0 klas
+2457 wierszy, 21 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -9983,6 +9986,55 @@ Title: {title}
 
 ---
 
+#### `prompts/naprawa.md`
+
+**40 wierszy.** Pola wejsciowe: `kontekst`, `max_slow`, `min_slow`, `tekst`, `zarzuty`
+
+````markdown
+You are correcting a short text that is about to be published. A fact-check has
+just examined it and found specific claims that do not survive the record.
+
+Your job is to make those claims TRUE. Not to delete them.
+
+RULES
+
+1. Change only what the fact-check challenged. Every other sentence comes back
+   word for word, including the opening. This is a correction, not a rewrite:
+   the opening line has already been checked against our recent notes for
+   repetition, and the rhythm was chosen on purpose.
+
+2. Do not remove the challenged sentence. Correct it. If a number is wrong, put
+   the right number in. If a comparison is wrong, state the comparison the
+   evidence actually supports. Whatever point the sentence was making should
+   still be there when you are done — only the falsehood goes.
+
+3. Work from the evidence given below, not from memory. WHAT THE RECORD SAYS is
+   the material you correct with. If it gives you a figure, use that figure.
+
+4. If a claim cannot be saved in any form, replace it with the strongest TRUE
+   statement the same evidence supports, about the same subject. Do not leave a
+   gap and do not change the subject.
+
+5. Never make a false claim survivable by softening it. "Reportedly", "some
+   sources say", "roughly" and "arguably" are not corrections. If the number was
+   wrong, a vaguer version of the wrong number is still wrong.
+
+6. Keep the length between {min_slow} and {max_slow} words.
+
+CONTEXT: {kontekst}
+
+--- WHAT THE FACT-CHECK CHALLENGED ---
+{zarzuty}
+
+--- THE TEXT AS WRITTEN ---
+{tekst}
+
+Return only:
+{{"text": "the full corrected text", "co_zmienione": "one line: what you changed and what evidence you changed it to"}}
+````
+
+---
+
 #### `prompts/notka.md`
 
 **303 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
@@ -12664,6 +12716,8 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `FETCH_TIMEOUT_S` | `30.0` | — |
 | `FETCH_MIN_CHARS` | `1500` | ILE ZNAKOW MUSI ODDAC STRONA, ZEBY LICZYC SIE JAKO ZRODLO. Bylo 400 i to bylo za malo w sposob, ktory widac dopiero na przebiegu. Zmierzone  |
 | `FETCH_USER_AGENT` | `"Mozilla/5.0 (compatible; NothingIsAccidenta` | — |
+| `NAPRAWA_OBALONYCH` | `True` | --- naprawa zamiast blokady i zamiast ciecia -------------------------------- 1 wrzesnia 2026 o 19:46 poszla notka z liczba, ktora nasze wla |
+| `NAPRAW_NA_PRZEBIEG` | `4` | Ile napraw najwyzej w jednym przebiegu. Kazda to dwa platne wywolania (przepisanie plus PONOWNE sprawdzenie), wiec bez sufitu zly dzien potr |
 | `RUCHY_KONCOWE` | `{ "DO_SPRAWDZENIA": ( "Close by handing the ` | --- ruch koncowy i szerokosc drugiego aktu -------------------------------- Dwa artykuly napisane PO naprawie szamponu (0017 "The Gas You Di |
 | `RUCH_KONCOWY_MIX` | `("DO_SPRAWDZENIA", "KTO_NA_TYM_STOI", "POWRO` | — |
 | `ILE_PARALELI_WAGI` | `{1: 4, 2: 4, 3: 3}` | Ile paraleli w drugim akcie. Trzy wyliczone po kolei czytaja sie jak lista; jedna rozwinieta na dwa akapity czyta sie jak mysl. Chcemy obu,  |

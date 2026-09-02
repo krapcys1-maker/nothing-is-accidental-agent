@@ -13,7 +13,7 @@ import json
 import re
 import sqlite3
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 import aktualne_modele
@@ -2296,7 +2296,40 @@ def note(
         # `czysty` powyzej ZOSTAJE bramka i ma zostac: to zapora przeciw
         # wstrzyknieciu, czyli obrona przed cudzym tekstem probujacym pisac
         # przez nasze konto. To jest co innego niz watpliwosc co do faktu.
-        audyt = zweryfikuj(conn, run_id, text, f"Substack note, type {note_type}")
+        kontekst = f"Substack note, type {note_type}"
+        audyt = zweryfikuj(conn, run_id, text, kontekst)
+
+        # ADRES NIE IDZIE DO NAPRAWY. Kilkadziesiat wierszy wyzej kod dokleja
+        # do notki promujacej link do wlasnego artykulu — swiadomie WLASNYM
+        # kodem, bo „model potrafi przekrecic URL, a zly link pod notka
+        # promujaca artykul to notka wyrzucona do kosza". Oddanie mu teraz
+        # calosci do przepisania cofaloby tamta decyzje tylnymi drzwiami.
+        #
+        # Drugi powod jest arytmetyczny: dlugosc notki mierzy sie PRZED
+        # doklejeniem adresu (`words_actual`), wiec sprawdzanie naprawy razem
+        # z linkiem porownywaloby jedna liczbe z sufitem policzonym dla innej.
+        ogon = ("\n\n%s" % link) if link else ""
+        sufiks = ogon if (ogon and text.endswith(ogon)) else ""
+        proza = text[: -len(sufiks)] if sufiks else text
+
+        poprawka = napraw_obalone(
+            conn, run_id, proza, audyt,
+            kontekst=kontekst,
+            min_slow=config.NOTE_MIN_WORDS,
+            max_slow=config.NOTE_MAX_WORDS,
+            etap="naprawa",
+            zapora=_zapora_notki,
+        )
+        if poprawka:
+            # Zapis trzyma OBIE wersje. Bez tego nie da sie pozniej sprawdzic,
+            # czy naprawy poprawiaja, czy tylko przemieszczaja falsz.
+            data["tekst_przed_naprawa"] = data.get("note")
+            data["naprawa"] = {k: v for k, v in poprawka.items() if k != "audyt"}
+            text = poprawka["tekst"] + sufiks
+            data["note"] = text
+            data["words_actual"] = poprawka["slow"]
+            audyt = poprawka["audyt"]
+
         data["weryfikacja"] = audyt
         data["safe_to_post"] = True
         if not audyt.get("safe_to_post"):
@@ -3319,8 +3352,175 @@ def zweryfikuj(
                         else "· nieznalezione (teza, przechodzi)")
         print(f"    {etykieta}: {str(c.get('claim'))[:80]}", flush=True)
 
+    # ZARZUTY WYCHODZA NA ZEWNATRZ, nie tylko werdykt. Do 1 wrzesnia 2026 ta
+    # funkcja zamykala w sobie cala wiedze o tym, CO jest nie tak, i oddawala
+    # jedynie `safe_to_post`. Wolajacy wiedzial wiec, ze cos jest falszywe, a
+    # nie mial jak sie dowiedziec co — wiec jedyne, co mogl zrobic, to
+    # zablokowac albo puscic. Naprawa potrzebuje materialu.
+    out["zarzuty"] = blokujace
     out["safe_to_post"] = not blokujace
     return out
+
+
+NAPRAWA_SYSTEM = (
+    "You correct false statements in short text that is about to be published. "
+    "You change only what you are told is false, you work only from the evidence "
+    "you are given, and you never soften a claim instead of correcting it. "
+    "Return only valid JSON."
+)
+
+# Ile napraw juz poszlo w tym przebiegu, per `run_id`. Sufit stoi w
+# `config.NAPRAW_NA_PRZEBIEG` i liczy PROBY, nie sukcesy: nieudana proba
+# kosztuje tyle samo co udana, a sufit pilnuje wlasnie kosztu.
+_NAPRAW_ZUZYTE: dict[int, int] = {}
+
+
+def _zapora_notki(tekst: str) -> str:
+    """Pusty napis, gdy tekst notki przechodzi zapory. Inaczej powod."""
+    czysty, powod = bez_wstrzykniecia(tekst)
+    return "" if czysty else "slad cudzego polecenia (%s)" % powod
+
+
+def _zapora_komentarza(tekst: str) -> str:
+    """To samo dla komentarza — ale komentarz ma zapore o jedna wiecej."""
+    czysty, powod = bez_wstrzykniecia(tekst)
+    if not czysty:
+        return "slad cudzego polecenia (%s)" % powod
+    podloga = _podloga_z_pamieci(tekst)
+    return ("podloga: %s" % podloga) if podloga else ""
+
+
+def napraw_obalone(
+    conn: sqlite3.Connection,
+    run_id: int,
+    tekst: str,
+    audyt: dict[str, Any],
+    *,
+    kontekst: str,
+    min_slow: int,
+    max_slow: int,
+    etap: str,
+    zapora: Callable[[str], str],
+) -> dict[str, Any] | None:
+    """Poprawia zdanie, ktoremu zapis przeczy. Nie wycina go i nie blokuje tekstu.
+
+    TRZECIA DROGA. Do 1 wrzesnia 2026 sprawdzenie faktow mialo tylko dwa
+    zakonczenia i oba byly zle: bramka (tekst nie wychodzi, czyli cisza zamiast
+    publikacji) albo log (tekst wychodzi z falszem, ktory sami wykrylismy).
+    Tego dnia o 19:46 poszla druga wersja — notka twierdzaca „thirty times the
+    takeovers", podczas gdy jej wlasne liczby, 646 i 60 682 mile, daja 93,9.
+
+    NAPRAWIAMY WYLACZNIE `refuted` I `outdated`. To nie jest ostroznosc, tylko
+    warunek sensu: naprawa pracuje materialem dowodowym z pola
+    `what_the_source_says`, a przy `unverified` tego pola z definicji nie ma.
+    Kazac modelowi „poprawic" twierdzenie, ktorego nikt nie obalil, bo nikt go
+    nie znalazl, znaczy kazac mu WYMYSLIC liczbe, ktora przejdzie sprawdzenie.
+    Bylby to falsz mocniejszy od tego, ktory naprawiamy — powstaly PO
+    weryfikacji i przez nia uwiarygodniony.
+
+    JEDNA PROBA. Bez petli, bo petla „popraw, sprawdz, popraw" konczy sie
+    placeniem za zbieznosc, ktorej nikt nie obiecal.
+
+    NAPRAWA JEST SPRAWDZANA PONOWNIE i to jest polowa wartosci tej funkcji.
+    Poprawka, ktorej nikt nie zmierzyl, to kolejne twierdzenie bez pokrycia —
+    a osobny audyt z 1 wrzesnia znalazl w tym repozytorium SIEDEM szkod
+    wprowadzonych przez same naprawy. Nowy tekst przechodzi wiec te sama
+    sciezke co oryginal: zapory, dlugosc, sprawdzenie faktow. Gdy wypadnie
+    gorzej albo tak samo — zostaje oryginal.
+
+    Zwraca `None`, gdy naprawy nie bylo albo jej nie przyjeto; wtedy wolajacy
+    zostawia tekst bez zmian i idzie dalej. NIGDY nie blokuje publikacji.
+    """
+    if not config.NAPRAWA_OBALONYCH:
+        return None
+    do_naprawy = [c for c in (audyt.get("zarzuty") or [])
+                  if str(c.get("status") or "") in ("refuted", "outdated")]
+    if not do_naprawy:
+        return None
+
+    zuzyte = _NAPRAW_ZUZYTE.get(run_id, 0)
+    if zuzyte >= config.NAPRAW_NA_PRZEBIEG:
+        print("    [naprawa] sufit %d na przebieg wyczerpany — tekst idzie "
+              "z zastrzezeniem" % config.NAPRAW_NA_PRZEBIEG, flush=True)
+        return None
+    _NAPRAW_ZUZYTE[run_id] = zuzyte + 1
+
+    opis = ("\n\n").join(
+        "CLAIM: %s\nSTATUS: %s\nWHAT THE RECORD SAYS: %s\nSOURCE: %s" % (
+            str(c.get("claim") or "")[:300],
+            str(c.get("status") or ""),
+            str(c.get("what_the_source_says")
+                or "(the record does not support it)")[:500],
+            str(c.get("url") or c.get("source") or "")[:200],
+        )
+        for c in do_naprawy[:5]
+    )
+    print("    [naprawa] %d obalonych — przepisuje zamiast wycinac"
+          % len(do_naprawy), flush=True)
+
+    try:
+        raw = llm.call(
+            etap, NAPRAWA_SYSTEM,
+            _prompt("naprawa.md", kontekst=kontekst, tekst=tekst,
+                    zarzuty=opis, min_slow=min_slow, max_slow=max_slow),
+            conn=conn, run_id=run_id,
+        )
+        dane = llm.parse_json(raw)
+        nowy = (dane.get("text") or "").strip()
+    except PRZERYWAJA:
+        # Wyczerpany budzet albo `KILL_SWITCH` — patrz komentarz przy
+        # `PRZERYWAJA`. Naprawa sie NIE ODBYLA i nastepna tez sie nie odbedzie.
+        raise
+    except Exception as exc:
+        print("    [naprawa] nie wyszla (%s) — tekst idzie bez zmian" % exc,
+              flush=True)
+        return None
+
+    if not nowy:
+        print("    [naprawa] model oddal pusty tekst — zostaje oryginal",
+              flush=True)
+        return None
+    if nowy == tekst.strip():
+        print("    [naprawa] model nie zmienil ani slowa — zostaje oryginal",
+              flush=True)
+        return None
+
+    slow = len(nowy.split())
+    if not (min_slow <= slow <= max_slow):
+        print("    [naprawa] ODRZUCONA: %d slow, poza %d-%d — zostaje oryginal"
+              % (slow, min_slow, max_slow), flush=True)
+        return None
+
+    # ZAPORY OD NOWA. Naprawiony tekst to SWIEZE wyjscie modelu i nie przeszlo
+    # niczego, co przeszedl oryginal. Bez tego naprawa bylaby furtka wpuszczajaca
+    # do publikacji tekst z pominieciem zapory przeciw wstrzyknieciu — czyli
+    # dokladnie te klase szkody, ktorej ta funkcja ma zapobiegac.
+    powod = zapora(nowy)
+    if powod:
+        print("    [naprawa] ODRZUCONA na zaporze: %s — zostaje oryginal"
+              % powod, flush=True)
+        return None
+
+    audyt2 = zweryfikuj(conn, run_id, nowy, kontekst)
+    przed = len(do_naprawy)
+    po = len([c for c in (audyt2.get("zarzuty") or [])
+              if str(c.get("status") or "") in ("refuted", "outdated")])
+    if po >= przed:
+        print("    [naprawa] ODRZUCONA: obalonych bylo %d, po naprawie %d — "
+              "zostaje oryginal" % (przed, po), flush=True)
+        return None
+
+    print("    [naprawa] PRZYJETA: obalonych %d -> %d, %d slow. %s"
+          % (przed, po, slow, str(dane.get("co_zmienione") or "")[:120]),
+          flush=True)
+    return {
+        "tekst": nowy,
+        "audyt": audyt2,
+        "co_zmienione": str(dane.get("co_zmienione") or ""),
+        "obalonych_przed": przed,
+        "obalonych_po": po,
+        "slow": slow,
+    }
 
 
 def comment_on(
@@ -3472,6 +3672,32 @@ def comment_on(
         # bronia przed czyms, czego `zweryfikuj` nie umie sprawdzic — a to jest
         # co innego niz watpliwosc co do faktu.
         audyt = zweryfikuj(conn, run_id, text, post.get("title", ""))
+
+        # DLUGOSC KOMENTARZA LICZY SIE OD ORYGINALU, nie ze stalej. Komentarz
+        # nie ma sufitu w `config` i mial nie miec: `prompts/komentarz.md` mowi
+        # wprost, ze odpowiedz ma prawo miec osiem slow albo siedemdziesiat,
+        # zaleznie od tego, ile jest do powiedzenia. Narzucenie tu widelek z
+        # notki odrzucaloby poprawne naprawy krotkich komentarzy.
+        #
+        # Pilnujemy wiec czegos wezszego: naprawa ma zostac TYM SAMYM
+        # komentarzem. Tekst, ktory po poprawieniu jednej liczby urosl
+        # dwukrotnie, nie jest poprawka.
+        slow_bylo = len(text.split())
+        poprawka = napraw_obalone(
+            conn, run_id, text, audyt,
+            kontekst=post.get("title", ""),
+            min_slow=max(4, int(slow_bylo * 0.5)),
+            max_slow=max(12, int(slow_bylo * 1.5)),
+            etap="naprawa_komentarza",
+            zapora=_zapora_komentarza,
+        )
+        if poprawka:
+            data["tekst_przed_naprawa"] = text
+            data["naprawa"] = {k: v for k, v in poprawka.items() if k != "audyt"}
+            text = poprawka["tekst"]
+            data["comment"] = text
+            audyt = poprawka["audyt"]
+
         data["weryfikacja"] = audyt
         data["safe_to_post"] = True
         if not audyt.get("safe_to_post"):

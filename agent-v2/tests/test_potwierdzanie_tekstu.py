@@ -97,9 +97,23 @@ sprawdz("nie zostalo stare porownanie po samych spacjach",
         and 'probka = " ".join(tytul.split())' not in zrodlo)
 # I DRUGA STRONA POROWNANIA TEZ. Normalizacja tylko naszego tekstu nic nie da,
 # bo to Substack wstawia znaki typograficzne.
-for gdzie in ("plaski(tresc)", "plaski(x.get(", "plaski(_json.dumps",
-              "plaski(c.get("):
+# `plaski(_json.dumps` STALO TU DO 1 WRZESNIA 2026 i zniklo NIE dlatego, ze
+# normalizacja przestala byc potrzebna, tylko dlatego, ze zniknal caly ten
+# sposob sprawdzania. `potwierdz_odpowiedz` zamienialo odpowiedz API z powrotem
+# na napis przez `json.dumps` i szukalo w nim naszego tekstu — a numer naszego
+# komentarza, lezacy w tej samej odpowiedzi, przestawal przy tym byc danymi.
+# Kosztowalo to 43 udane komentarze bez pola `nasz_id`. Dzis ta funkcja chodzi
+# po `commentBranches` jak `potwierdz_komentarz` i normalizuje przez
+# `plaski(c.get("body"))`, ktore ta lista sprawdza nizej.
+for gdzie in ("plaski(tresc)", "plaski(x.get(", "plaski(c.get("):
     sprawdz("  druga strona tez normalizowana: %s" % gdzie, gdzie in zrodlo)
+# WASKO, BO `json.dumps` MA W TYM PLIKU UCZCIWA PRACE — zapisuje dziennik,
+# pamiec i liste platnych hostow (szesc miejsc). Zakaz dotyczy jednego idiomu:
+# POROWNYWANIA tresci z odpowiedzia API zamieniona w napis. Pierwsza wersja tej
+# asercji zabraniala `json.dumps` w ogole i oblewala na wlasnym zapisie pliku.
+sprawdz("  i nikt nie porownuje tresci z odpowiedzia przepuszczona przez napis",
+        "plaski(_json.dumps" not in zrodlo and "plaski(json.dumps" not in zrodlo,
+        "numer komentarza znowu przestaje byc danymi")
 
 print()
 print("=== 5. KONTRDOWOD: BEZ NORMALIZACJI TEST MUSI POLEC ===")

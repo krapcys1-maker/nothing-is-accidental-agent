@@ -113,6 +113,16 @@
 {{"comment": "<the comment, or null>", "reason_if_silent": "<one sentence, only when comment is null>", "what_it_adds": "<one sentence naming what this comment contributes that the post did not say>"}}
 ```
 
+#### `naprawa.md` (40 wierszy)
+
+**Pola wejściowe:** `kontekst`, `max_slow`, `min_slow`, `tekst`, `zarzuty`
+
+**Kontrakt wyjścia:**
+
+```json
+{{"text": "the full corrected text", "co_zmienione": "one line: what you changed and what evidence you changed it to"}}
+```
+
 #### `notka.md` (303 wierszy)
 
 **Pola wejściowe:** `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`

@@ -205,6 +205,13 @@ MODEL_FOR = {
     # zeby oplacalo sie wolac je czesto.
     "bank": DEEPSEEK,
     "factcheck": DEEPSEEK,
+    # NAPRAWA OBALONEGO ZDANIA. Kazdy tekst wraca do TEGO SAMEGO modelu,
+    # ktory go napisal — notka do Opusa, komentarz do DeepSeeka-pro. Nie z
+    # oszczednosci, tylko dlatego, ze naprawa ma zachowac glos: model, ktory
+    # nie pisal tego zdania, przepisuje przy okazji rytm calego tekstu, a
+    # wtedy „popraw jedna liczbe" cichcem staje sie „napisz to jeszcze raz".
+    "naprawa": CLAUDE,
+    "naprawa_komentarza": DEEPSEEK_PRO,
     # Pytanie „jakie modele sa dzisiaj" MUSI isc na model z wyszukiwaniem —
     # to jest cala jego wartosc. Ten sam, co sprawdzanie faktow, bo robi
     # dokladnie to samo: konfrontuje pamiec ze swiatem.
@@ -832,6 +839,11 @@ MAX_TOKENS = {
     "reply": _tokens_for(600) + 8000,
     "bank": 24000,
     "factcheck": 24000,
+    # Naprawa oddaje caly tekst od nowa plus jedna linie uzasadnienia — czyli
+    # tyle samo co oryginal. Sufit jak przy `note`/`comment`, bo to jest to
+    # samo zadanie pisarskie, tylko z narzuconym materialem.
+    "naprawa": _tokens_for(400) + 8000,
+    "naprawa_komentarza": _tokens_for(600) + 8000,
     # Pytanie o stan modeli wraca lista kilkunastu pozycji z datami —
     # krotka odpowiedz, ale wyszukiwanie dokłada do wyjscia swoje rundy.
     "aktualne_modele": 16000,
@@ -2163,6 +2175,31 @@ FETCH_TIMEOUT_S = 30.0
 # dokumenty urzedowe — zawiadomienie, postanowienie, nota — bywaja prawdziwe.
 FETCH_MIN_CHARS = 1500
 FETCH_USER_AGENT = "Mozilla/5.0 (compatible; NothingIsAccidental/1.0; +editorial research)"
+
+# --- naprawa zamiast blokady i zamiast ciecia --------------------------------
+# 1 wrzesnia 2026 o 19:46 poszla notka z liczba, ktora nasze wlasne sprawdzenie
+# faktow obalilo PRZED wysylka. W logu stalo „! OBALONE: Nuro logged thirty
+# times the takeovers of Zoox", notka i tak wyszla, a rachunek z jej wlasnych
+# liczb daje 93,9 raza, nie trzydziesci. Notka typu SPROSTOWANIE i formy LICZBA
+# opublikowala zla liczbe.
+#
+# Byly do wyboru trzy drogi i dwie sa zamkniete decyzja wlasciciela: BLOKADA
+# (notka nie wychodzi — nic nie ma czekac na czlowieka) oraz CIECIE (zdanie
+# znika — nic nie ma byc wycinane). Zostaje trzecia: NAPRAWIC. Model dostaje
+# wlasny tekst, zarzut i material dowodowy, i oddaje to samo zdanie prawdziwe.
+#
+# NAPRAWIAMY WYLACZNIE TO, CZEMU ZAPIS PRZECZY — `refuted` i `outdated`. NIE
+# naprawiamy `unverified`, i to jest najwazniejsza granica w tym bloku:
+# „nie znalazlem potwierdzenia" nie daje modelowi zadnego materialu, wiec
+# polecenie „popraw to" jest zaproszeniem do WYMYSLENIA liczby, ktora przejdzie.
+# Naprawa bez dowodu produkuje falsz pewniejszy siebie niz ten, ktory naprawia.
+# `unverified` zostaje wiec tym, czym byl: linia w logu.
+NAPRAWA_OBALONYCH = True
+
+# Ile napraw najwyzej w jednym przebiegu. Kazda to dwa platne wywolania
+# (przepisanie plus PONOWNE sprawdzenie), wiec bez sufitu zly dzien potrafi
+# dolozyc do rachunku wiecej niz caly etap, ktory naprawia.
+NAPRAW_NA_PRZEBIEG = 4
 
 # --- bramki jakości ----------------------------------------------------------
 # NIC NIE BLOKUJE. Bramki są zgłaszane właścicielowi jako uwagi do przeczytania;
