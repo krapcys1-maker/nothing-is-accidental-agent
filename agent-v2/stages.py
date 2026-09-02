@@ -2294,7 +2294,7 @@ def note(
         # trzy warianty. Zdarzylo sie w pierwszym przebiegu po wprowadzeniu
         # zapory — wlasnym zabezpieczeniem zabilem promocje artykulu.
         if text:
-            czysty, powod = bez_wstrzykniecia(text)
+            czysty, powod = bez_wstrzykniecia(text, wlasny_adres_ok=bool(link))
             data["czysty"] = czysty
             if not czysty:
                 data["odrzucony"] = powod
@@ -3186,6 +3186,19 @@ def notki_dnia(
             wynik["promocja_url"] = promowany["url"]
             promowany = None
         dzien.append(wynik)
+    # NIEWYDANE WRACAJA DO PULI — tak samo jak w sciezce artykulu, ktora wola
+    # `zwroc_kandydatow` od 30 sierpnia. `wez_kandydatow` znaczy jako uzyta
+    # CALA osemke przy WYJMOWANIU, a przebieg wystawia z niej jedna albo dwie
+    # notki; `wybierz_material` zdejmuje wziete z `zapas`, wiec to, co tu
+    # zostalo, nikt nigdy nie zobaczyl. Zmierzone na produkcji 1-2 wrzesnia
+    # 2026: 21 z 26 wyjetych pozycji (81%) spalone bez publikacji, przy etapie
+    # `curiosity` kosztujacym 3,72 USD, czyli 15,1% wydatkow od 25 sierpnia.
+    #
+    # Fakt, na ktory notka POWSTALA, zostaje spalony takze przy nieudanej
+    # publikacji — to ta sama zasada „wolimy stracic kandydata niz wystawic
+    # dwa razy", ktora stoi w `wez_kandydatow`, i ona sie nie zmienia.
+    if zapas:
+        zwroc_kandydatow(zapas)
     return dzien
 
 
@@ -3345,7 +3358,7 @@ def sprawdz_fakty(
     return fakty
 
 
-def bez_wstrzykniecia(tekst: str) -> tuple[bool, str]:
+def bez_wstrzykniecia(tekst: str, wlasny_adres_ok: bool = False) -> tuple[bool, str]:
     """Czy w naszym tekscie nie ma sladu cudzych POLECEN.
 
     Agent czyta teksty pisane przez obcych — posty, komentarze, notki, wyniki
@@ -3364,9 +3377,35 @@ def bez_wstrzykniecia(tekst: str) -> tuple[bool, str]:
     """
     import re as _re
 
-    if _re.search(r"https?://|\bwww\.", tekst or ""):
+    # WLASNY ADRES PUBLIKACJI NIE JEST WSTRZYKNIECIEM (`wlasny_adres_ok`).
+    # Notke promujaca artykul kod i tak konczy naszym linkiem, a model — ktoremu
+    # typ ARTYKUL mowi „let the link do the rest" i ktory dostaje wczesniejsze
+    # notki promocyjne RAZEM z doklejonym adresem — dopisuje ten sam adres sam.
+    # Zapora widziala wtedy WLASNY link jako cudzy i zabijala notke. Zmierzone
+    # 16 sierpnia - 2 wrzesnia 2026: 6 odrzucen na 16 prob promocji, wszystkie
+    # z powodem „adres www w tresci", zero innych; od 25 sierpnia 3 z 6, czyli
+    # polowa. W tym samym okresie 58 notek NIE-promujacych dostawalo karty
+    # z CUDZYMI adresami i nie zapalilo zapory ani razu.
+    #
+    # Wycinamy WYLACZNIE adres wlasnej publikacji o SCISLE ustalonym ksztalcie:
+    # nasz host, sciezka /p/<slug> ze znakow [a-z0-9-], bez zapytania i bez
+    # zagniezdzonego adresu. Reszta idzie przez te same zapory co zawsze, i to
+    # na tekscie PO wycieciu: podstawienie wstawia spacje, wiec moze tylko DODAC
+    # granice slowa. Dzieki temu „.../p/x@atakujacy" staje sie „ @atakujacy"
+    # i wpada w zapore wzmianek, ktora bez wyciecia by go przepuscila.
+    do_sprawdzenia = tekst or ""
+    if wlasny_adres_ok:
+        do_sprawdzenia = _re.sub(
+            r"https?://%s\.substack\.com/p/[a-z0-9][a-z0-9-]*/?"
+            % _re.escape(config.SUBSTACK_HANDLE), " ", do_sprawdzenia)
+    # WIELKOSC LITER NIE MOZE DECYDOWAC O ZAPORZE. Do 2 wrzesnia 2026 wzorzec
+    # byl na nia wrazliwy: „https://evil.example/steal" bylo blokowane, a
+    # „HTTPS://EVIL.EXAMPLE/STEAL" i „WWW.EVIL.EXAMPLE" przechodzily. Cudzy
+    # tekst przemycal dowolny adres przez zapore, zmieniajac jedna litere.
+    # `(?i:...)`, a nie `(?i)`, bo flaga na poczatku alternatywy wysypuje `re`.
+    if _re.search(r"(?i:https?://|\bwww\.)", do_sprawdzenia):
         return False, "adres www w tresci"
-    if _re.search(r"(^|\s)@[A-Za-z0-9_]{2,}", tekst or ""):
+    if _re.search(r"(^|\s)@[A-Za-z0-9_]{2,}", do_sprawdzenia):
         return False, "wzmianka @ w tresci"
     podejrzane = (
         "ignore the above", "ignore previous", "ignore all previous",
@@ -3535,8 +3574,13 @@ _NAPRAW_ZUZYTE: dict[int, int] = {}
 
 
 def _zapora_notki(tekst: str) -> str:
-    """Pusty napis, gdy tekst notki przechodzi zapory. Inaczej powod."""
-    czysty, powod = bez_wstrzykniecia(tekst)
+    """Pusty napis, gdy tekst notki przechodzi zapory. Inaczej powod.
+
+    `wlasny_adres_ok=True`, bo ta zapora oglada tekst notki JUZ Z doklejonym
+    przez kod linkiem. Bez tego jedna bramka przepuszczalaby notke promujaca,
+    a druga zabijala ja za ten sam wlasny adres.
+    """
+    czysty, powod = bez_wstrzykniecia(tekst, wlasny_adres_ok=True)
     return "" if czysty else "slad cudzego polecenia (%s)" % powod
 
 

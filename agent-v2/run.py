@@ -476,8 +476,18 @@ def _reakcje_z_dziennika() -> tuple[set[str], dict[str, dict]]:
     Oddaje `(slugi_nazw, po_uchwycie)`:
 
       * `slugi_nazw` — do STAREJ drogi, ktora zestawia nazwe wyswietlana ze
-        slugiem hosta z historii komentarzy. Ta droga trafia 7 osob z 69
-        i zostaje, bo dziala takze dla 199 wpisow sprzed 1 wrzesnia 2026,
+        slugiem hosta z historii komentarzy. Ta droga trafia 7 osob z 69 —
+        ale to ZASIEG PRZYRZADU, NIE ZBIEZNOSC, i kto cytuje „7 z 69" jako
+        miare wplywu komentarzy, cytuje slepote tego sita. Zmierzone
+        2 wrzesnia 2026: na 10 parach (nazwa, uchwyt), ktore znamy z pola
+        `uchwyty`, rownosc slug(nazwa) == slug(hosta) trafia 5 razy na 10
+        (`chaosengine2026` to „Chaos Engine", `theaioperators` to „Sherif
+        Saad", „Thor" wypada na progu dlugosci). Porownanie nazwy reagujacego
+        z polem `publikacja` z dziennika — ktore trzyma NAZWE publikacji,
+        a nie host — daje 26 z 73. Najwiekszy reagujacy, „Chaos Engine"
+        (112 z 279 zetkniec, 40 procent), JEST publikacja, pod ktora
+        komentowalismy 29 sierpnia, a stary przyrzad go nie widzi.
+        Droga zostaje, bo dziala takze dla 199 wpisow sprzed 1 wrzesnia 2026,
         ktore uchwytu nie maja i nigdy nie dostana (`dopisz_skutki` pomija
         zdarzenia juz zapisane, wiec historii nie da sie uzupelnic wstecz);
       * `po_uchwycie` — {uchwyt: {"ile", "rozmowa", "juz_czyta", "ostatnia"}},

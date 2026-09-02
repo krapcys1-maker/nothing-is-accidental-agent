@@ -748,8 +748,36 @@ def _nasze_pozycje() -> dict[str, dict]:
             continue
         chwila = _chwila(w.get("kiedy"))
         if chwila:
-            pozycje[str(ident)] = {"rodzaj": rodzaj, "kiedy": chwila}
+            pozycje[str(ident)] = {"rodzaj": rodzaj, "kiedy": chwila,
+                                   "gdzie": str(w.get("gdzie") or "")}
     return pozycje
+
+
+def kanal_reakcji(reakcja: dict, pozycje: dict[str, dict]) -> str:
+    """Ktorego NASZEGO kanalu dotknal czlowiek — z CELU reakcji, nie z jej typu.
+
+    TYP ZDARZENIA KLAMIE I DA SIE TO POKAZAC LICZBA. Komentarz pod CUDZA NOTKA
+    dostaje u Substacka numer z tej samej przestrzeni `c-`, co notka, wiec
+    reakcja na niego przychodzi jako `note_like` / `note_reply`. `KANAL_TYPU`
+    czyta to jako „notka" i dopisuje cudzy watek do naszego kanalu notek.
+    Zmierzone 2 wrzesnia 2026 na produkcyjnym dzienniku: z 79 reakcji, ktore da
+    sie podpiac pod nasza pozycje, 17 (9 `note_reply` + 8 `note_like`) dotyczy
+    NASZYCH KOMENTARZY POD CUDZYMI NOTKAMI — czyli co piata. Stary podzial calej
+    historii mowil „notka 165, komentarz 28"; prawdziwy to „notka 148,
+    komentarz@artykul 20, komentarz@notka 17".
+
+    Pytamy najpierw `czego` (numer naszej tresci, ktory `browser` zapisuje przy
+    kazdym skutku), a `KANAL_TYPU` zostaje DROGA ZAPASOWA dla reakcji, ktorych
+    podpiac sie nie da — bo czesc notek i komentarzy nie ma w dzienniku wlasnego
+    numeru. Zapasowa droga daje wtedy odpowiedz z grubsza, a nie zadnej.
+    """
+    poz = pozycje.get(str(reakcja.get("czego") or ""))
+    if not poz:
+        return KANAL_TYPU.get(reakcja["typ"], "nieznany")
+    if poz["rodzaj"] != "komentarz":
+        return poz["rodzaj"]
+    return ("komentarz@notka" if "note/" in (poz.get("gdzie") or "")
+            else "komentarz@artykul")
 
 
 def opoznienia() -> dict:
@@ -871,6 +899,9 @@ def kanaly() -> dict:
     """
     ludzie = czytelnicy()
     reakcje, _ = _reakcje()
+    # RAZ, PRZED PETLA. Wewnatrz petli ta funkcja czytalaby caly dziennik dla
+    # kazdego czytelnika z osobna.
+    pozycje = _nasze_pozycje()
     zrzuty = sorted(wczytaj(CZYTELNICY), key=lambda z: str(z.get("kiedy") or ""))
     zaczepieni: dict[str, list[tuple[str, object]]] = {}
     for klucz, kubel in zaczepienia().items():
@@ -899,7 +930,7 @@ def kanaly() -> dict:
                                  if z[1] and granica and z[1] < granica]
         if wczesniej:
             ostatnia = max(wczesniej, key=lambda r: r["kiedy"])
-            kanal = KANAL_TYPU.get(ostatnia["typ"], "nieznany")
+            kanal = kanal_reakcji(ostatnia, pozycje)
         elif zaczepienia_wczesniej:
             kanal = max(zaczepienia_wczesniej, key=lambda z: z[1])[0]
         else:

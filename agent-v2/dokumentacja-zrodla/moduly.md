@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-2751 wierszy, 26 funkcji na poziomie modułu, 1 klas
+2761 wierszy, 26 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -34,7 +34,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-6808 wierszy, 128 funkcji na poziomie modułu, 0 klas
+6852 wierszy, 128 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -111,7 +111,7 @@
 | `_podloga_z_pamieci(tekst)` *(wewn.)* | Dwie podlogi, ktore dzialaja BEZ karty dowodowej. |
 | `_otwarcie_formulka(zdanie)` *(wewn.)* | Czy zdanie zaczyna sie od zapowiedzi ruchu zamiast od samego ruchu. |
 | `sprawdz_fakty(conn, run_id, post)` | Szuka faktów do komentarza, zamiast pozwolić modelowi pisać z pamięci. |
-| `bez_wstrzykniecia(tekst)` | Czy w naszym tekscie nie ma sladu cudzych POLECEN. |
+| `bez_wstrzykniecia(tekst, wlasny_adres_ok)` | Czy w naszym tekscie nie ma sladu cudzych POLECEN. |
 | `_status_twierdzenia(c)` *(wewn.)* | Status twierdzenia, znormalizowany. NIEZNANA ETYKIETA ZNACZY `unverified`. |
 | `zweryfikuj(conn, run_id, tekst, kontekst)` | Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem. |
 | `_zapora_notki(tekst)` *(wewn.)* | Pusty napis, gdy tekst notki przechodzi zapory. Inaczej powod. |
@@ -566,7 +566,7 @@
 
 ### `wzajemnosc.py` — czy zaczepieni sie odwzajemniaja: liczy PO naszej akcji, osobno stan nieorzekalny
 
-1381 wierszy, 24 funkcji na poziomie modułu, 0 klas
+1412 wierszy, 25 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -587,6 +587,7 @@
 | `_reakcje()` *(wewn.)* | Zdarzenia `skutek` rozdzielone na kubelki plus licznik typow nieznanych. |
 | `skad_przyszli()` | Ilu naszych czytelnikow zetknelo sie wczesniej z nasza trescia. |
 | `_nasze_pozycje()` *(wewn.)* | Identyfikator wystawionej tresci -> rodzaj i chwila wystawienia. |
+| `kanal_reakcji(reakcja, pozycje)` | Ktorego NASZEGO kanalu dotknal czlowiek — z CELU reakcji, nie z jej typu. |
 | `opoznienia()` | Dwa rozne czasy, celowo NIE zsumowane w jeden. |
 | `kanaly()` | Co poprzedzilo pojawienie sie czytelnika — osobowo i pozycyjnie. |
 | `pomiar_oslepl()` | Czy w ogole mamy z czego liczyc wzajemnosc. |
