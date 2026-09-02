@@ -197,18 +197,38 @@ sprawdz("za krotka naprawa odrzucona", r is None)
 sprawdz("odrzucona przed platnym sprawdzeniem", "factcheck" not in licznik)
 
 print()
-print("=== 6. NAPRAWA, KTORA NIE POPRAWIA -> ZOSTAJE ORYGINAL ===")
+print("=== 6. ZARZUT, KTORY NIE ZNIKA -> ZOSTAJE ORYGINAL ===")
+# JEDYNE ODRZUCENIE, KTORE ZOSTALO. Naprawa nie zrobila tego, po co powstala,
+# wiec nowy tekst nie jest lepszy od starego — tylko inny.
+#
+# Stalo tu wczesniej „naprawa nie lepsza od oryginalu": regula porownywala
+# LICZBE zarzutow przed i po, a remis szedl na niekorzysc naprawy. Zdjete
+# decyzja wlasciciela („to nie apteka") i slusznie: notka i tak idzie w swiat,
+# wiec odrzucenie nie wstrzymywalo publikacji, tylko publikowalo wersje,
+# o ktorej WIEMY, ze zawiera falsz.
+licznik = []
+llm.call = stub({
+    "naprawa": json.dumps({"text": POPRAWIONY, "co_zmienione": "x"}),
+    "factcheck": json.dumps({"claims": [dict(ZARZUT)]}),   # ten sam zarzut, dalej stoi
+}, licznik)
+stages._NAPRAW_ZUZYTE.clear()
+r = stages.napraw_obalone(CONN, 6, ORYGINAL, audyt(ZARZUT), **naprawa_notki())
+sprawdz("zarzut nadal stoi -> odrzucona", r is None)
+
+print()
+print("=== 6b. INNY ZARZUT NIZ NAPRAWIANY -> NAPRAWA I TAK IDZIE ===")
 licznik = []
 llm.call = stub({
     "naprawa": json.dumps({"text": POPRAWIONY, "co_zmienione": "x"}),
     "factcheck": json.dumps({"claims": [
-        {"claim": "Ninety-four is also wrong.", "status": "refuted",
-         "what_the_source_says": "no"}]}),
+        {"claim": "Regulators publish these logs quarterly.", "status": "refuted",
+         "what_the_source_says": "nie publikuja"}]}),
 }, licznik)
 stages._NAPRAW_ZUZYTE.clear()
-r = stages.napraw_obalone(CONN, 6, ORYGINAL, audyt(ZARZUT), **naprawa_notki())
-sprawdz("naprawa nie lepsza od oryginalu -> odrzucona", r is None,
-        "monotonia: przyjmujemy tylko to, co zmniejsza liczbe obalonych")
+r = stages.napraw_obalone(CONN, 61, ORYGINAL, audyt(ZARZUT), **naprawa_notki())
+sprawdz("przyjeta — oryginal byl falszywy NA PEWNO", r is not None)
+sprawdz("nowy zarzut policzony, nie przemilczany",
+        bool(r) and r["nowych"] == 1, r)
 
 print()
 print("=== 7. SUFIT NAPRAW NA PRZEBIEG ===")

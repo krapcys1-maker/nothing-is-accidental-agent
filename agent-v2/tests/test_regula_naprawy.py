@@ -153,64 +153,50 @@ sprawdz("DWA wywolania — bez potwierdzania",
         k.zuzyte == ["naprawa", "factcheck"], k.zuzyte)
 
 print()
-print("=== 3. CEL NAPRAWIONY, ALE DOSZEDL NOWY ZARZUT ===")
-# Przypadek ZMIERZONY NA ZYWO 2 wrzesnia: naprawa policzyla poprawnie, a
-# ponowne sprawdzenie zglosilo cos innego. Stara regula (remis na niekorzysc)
-# wyrzucala wtedy poprawke i publikowala falsz.
-print("  -- 3a. nowy zarzut NIE wraca w drugim sprawdzeniu --")
+print("=== 3. CEL NAPRAWIONY, ALE DOSZEDL NOWY ZARZUT -> I TAK PRZYJETA ===")
+# Przypadek ZMIERZONY NA ZYWO 2 wrzesnia. Wersja posrednia doplacala tu za
+# trzecie sprawdzenie, zeby ustalic, czy nowy zarzut to migniecie. Zdjete
+# decyzja wlasciciela: „to nie apteka".
+#
+# Rachunek jest prosty i jest po jego stronie. Oryginal zawiera falsz NA PEWNO
+# — wlasnie go obalilismy. Naprawa stoi na materiale dowodowym i tylko jedno
+# losowanie bramki zarzuca jej cos innego. Wybor oryginalu znaczylby
+# publikowanie pewnej nieprawdy w obawie przed niepewna.
 r, k = uruchom([("naprawa", NAPRAWA_OK),
-                ("factcheck", factcheck(dict(NOWY_ZARZUT))),
-                ("factcheck", factcheck({"claim": "x", "status": "confirmed"}))])
-sprawdz("przyjeta — to bylo migniecie", r is not None)
-sprawdz("TRZY wywolania: doplacilismy tylko tutaj",
-        k.zuzyte == ["naprawa", "factcheck", "factcheck"], k.zuzyte)
-sprawdz("zapis mowi, ze bylo drugie sprawdzenie",
-        bool(r) and r["bylo_drugie_sprawdzenie"] is True, r)
-sprawdz("i ile zarzutow naprawiono", bool(r) and r["naprawionych"] == 1, r)
-
-print("  -- 3b. nowy zarzut WRACA --")
-r, k = uruchom([("naprawa", NAPRAWA_OK),
-                ("factcheck", factcheck(dict(NOWY_ZARZUT))),
                 ("factcheck", factcheck(dict(NOWY_ZARZUT)))])
-sprawdz("odrzucona — zarzut potwierdzony dwukrotnie", r is None)
-sprawdz("i kosztowalo trzy wywolania",
-        k.zuzyte == ["naprawa", "factcheck", "factcheck"], k.zuzyte)
+sprawdz("przyjeta mimo nowego zarzutu", r is not None)
+sprawdz("DWA wywolania — zadnego doplacania",
+        k.zuzyte == ["naprawa", "factcheck"], k.zuzyte)
+sprawdz("ale nowy zarzut jest POLICZONY, nie przemilczany",
+        bool(r) and r["nowych"] == 1, r)
+sprawdz("i zapis mowi, ze tekst byl sprawdzony",
+        bool(r) and r["sprawdzona"] is True, r)
 
 print()
-print("=== 4. AWARIA PONOWNEGO SPRAWDZENIA -> NIEROZSTRZYGNIETE ===")
-# NAJWAZNIEJSZY PRZYPADEK W TYM PLIKU. Ta sciezka byla na produkcji odwrotna:
-# awaria bramki dawala „zero zarzutow", zero bylo mniejsze od jedynki, i tekst
-# szedl w swiat NIESPRAWDZONY, zapisany jako sprawdzony.
+print("=== 4. AWARIA BRAMKI -> NAPRAWA IDZIE, ALE ZAPIS O TYM MOWI ===")
+# Ta sciezka byla na produkcji ZEPSUTA i to inaczej, niz wyglada teraz.
+# Tamten blad polegal na tym, ze awaria bramki LICZYLA SIE JAKO CZYSTY WYNIK:
+# `zweryfikuj` oddawalo `claims: []` bez klucza `zarzuty`, kod liczyl zero
+# zarzutow i wpisywal do dziennika „sprawdzone". Dzis decyzja jest ta sama,
+# ale JAWNA — i zapis niesie, ze sprawdzenia nie bylo.
 r, k = uruchom([("naprawa", NAPRAWA_OK),
                 ("factcheck", RuntimeError("dostawca padl"))])
-sprawdz("naprawy NIE przyjeto", r is None)
-sprawdz("nie doplacalismy za trzecie sprawdzenie",
-        k.zuzyte == ["naprawa", "factcheck"], k.zuzyte)
+sprawdz("naprawa idzie", r is not None)
+sprawdz("ale zapis mowi, ze NIE byla sprawdzona",
+        bool(r) and r["sprawdzona"] is False, r)
+sprawdz("i nie udaje, ze policzyl zarzuty",
+        bool(r) and r["obalonych_po"] is None, r)
+sprawdz("dwa wywolania", k.zuzyte == ["naprawa", "factcheck"], k.zuzyte)
 
-# KONTRDOWOD: pokazujemy, ze stary ksztalt danych naprawde by to przepuscil.
-awaryjny = stages.zweryfikuj.__wrapped__ if hasattr(stages.zweryfikuj, "__wrapped__") else None
+# KONTRDOWOD: pokazujemy, ze awaryjny wynik NADAL wygladalby na czysty,
+# gdyby czytac go tak, jak czytal go kod z 1 wrzesnia.
 llm.call = lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("padl"))
 awaria = stages.zweryfikuj(CONN, 1, "cokolwiek", "test")
 sprawdz("awaryjny wynik niesie jawne `nie_sprawdzone`",
         awaria.get("nie_sprawdzone") is True, awaria)
-sprawdz("i pusta liste zarzutow, ktora bez tej flagi wygladalaby na czystosc",
+sprawdz("bo bez tej flagi wygladalby na czystosc",
         awaria.get("zarzuty") == [] and awaria.get("safe_to_post") is True,
         awaria)
-stare_liczenie_po = len([c for c in (awaria.get("zarzuty") or [])
-                         if str(c.get("status") or "") in ("refuted", "outdated")])
-sprawdz("stara regula PRZYJELABY to (0 < 1) — dlatego jej nie ma",
-        stare_liczenie_po == 0)
-
-print()
-print("=== 5. AWARIA POTWIERDZENIA: ORYGINAL JEST FALSZYWY NA PEWNO ===")
-# Po jednej stronie falsz pewny, po drugiej zarzut z jednego losowania,
-# ktorego nie dalo sie potwierdzic. Bierzemy naprawe i mowimy o tym glosno.
-r, k = uruchom([("naprawa", NAPRAWA_OK),
-                ("factcheck", factcheck(dict(NOWY_ZARZUT))),
-                ("factcheck", RuntimeError("dostawca padl drugi raz"))])
-sprawdz("naprawa przyjeta mimo nierozstrzygnietego potwierdzenia",
-        r is not None)
-sprawdz("trzy wywolania", len(k.zuzyte) == 3, k.zuzyte)
 
 print()
 print("=== 6. STATUS SPOZA CZTERECH WARTOSCI NIE PRZECHODZI CICHO ===")

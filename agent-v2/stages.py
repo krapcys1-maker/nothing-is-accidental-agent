@@ -3631,97 +3631,92 @@ def napraw_obalone(
     # jedynki, i naprawa szla do publikacji NIESPRAWDZONA, zapisana w
     # dzienniku jako sprawdzona.
     if audyt2.get("nie_sprawdzone"):
-        print("    [naprawa] NIEROZSTRZYGNIETE: ponowne sprawdzenie sie nie "
-              "odbylo — zostaje oryginal", flush=True)
+        # BRAMKA PADLA — BIERZEMY NAPRAWE, ale zapis ma o tym MOWIC.
+        #
+        # Ta sama arytmetyka co nizej: oryginal jest falszywy NA PEWNO, bo
+        # wlasnie go obalilismy, a naprawa jest zbudowana na materiale
+        # dowodowym i tylko nie zdazyla zostac sprawdzona. Zostawianie pewnej
+        # nieprawdy dlatego, ze dostawca akurat padl, jest wyborem gorszej
+        # wersji z powodu, ktory z trescia nie ma nic wspolnego.
+        #
+        # I TO NIE JEST POWROT DO BLEDU Z 1 WRZESNIA. Tamten polegal na tym,
+        # ze awaria bramki LICZYLA SIE JAKO CZYSTY WYNIK i szla do dziennika
+        # jako „sprawdzone". Tu decyzja jest jawna, wypisana, a `audyt2` niesie
+        # `nie_sprawdzone: True`, wiec zapis mowi prawde o tym, czego nie wiemy.
+        print("    [naprawa] bramka nie odpowiedziala — biore naprawe, bo "
+              "oryginal jest falszywy NA PEWNO", flush=True)
         print("    [naprawa]   powod: %s"
               % str(audyt2.get("verdict"))[:120], flush=True)
-        return None
+        print("    [naprawa] PRZYJETA BEZ SPRAWDZENIA: %d slow. %s"
+              % (slow, str(dane.get("co_zmienione") or "")[:110]), flush=True)
+        return {
+            "tekst": nowy,
+            "audyt": audyt2,
+            "co_zmienione": str(dane.get("co_zmienione") or ""),
+            "naprawionych": len(do_naprawy),
+            "nowych": 0,
+            "obalonych_przed": len(do_naprawy),
+            "obalonych_po": None,      # nie zmierzone, i tak ma zostac zapisane
+            "sprawdzona": False,
+            "slow": slow,
+        }
 
-    # ROZNICA ZBIOROW, NIE ROZNICA LICZB.
+    # NAPRAWILA CEL — BIERZEMY. Bez trzeciego sprawdzania i bez wazenia zrodel.
     #
-    # Bylo: `po >= przed` na dwoch liczbach z DWOCH ROZNYCH wywolan platnej
-    # bramki. Cztery wady naraz. Po pierwsze porownywalo dwa niezalezne
-    # losowania, a nie dwa stany. Po drugie liczylo sztuki zamiast tozsamosci,
-    # wiec jedno twierdzenie zaflagowane szumem kasowalo realna naprawe — a
-    # nowy tekst bywa przez bramke rozkladany na INNA LICZBE twierdzen niz
-    # stary, wiec te dwie liczby nie sa porownywalne nawet bez szumu. Po
-    # trzecie remis szedl na niekorzysc naprawy, choc koszty sa odwrotne:
-    # notka i tak idzie w swiat (`safe_to_post = True` bezwarunkowo), wiec
-    # odrzucenie naprawy NIE wstrzymuje publikacji — ono publikuje wersje,
-    # o ktorej WIEMY, ze zawiera falsz. Po czwarte awaria bramki uchodzila za
-    # sukces (wyzej).
+    # Wersja posrednia liczyla jeszcze zarzuty NOWE i przy kazdym doplacala za
+    # trzecie sprawdzenie, zeby ustalic, czy to nie migniecie. Zdjete swiadomie
+    # decyzja wlasciciela: „to nie apteka". Rachunek jest po jego stronie i jest
+    # prosty. Po jednej stronie oryginal, o ktorym WIEMY, ze zawiera falsz — bo
+    # wlasnie go obalilismy. Po drugiej tekst zbudowany na materiale dowodowym,
+    # ktoremu jedno losowanie bramki zarzuca cos innego. Wybieranie pierwszego
+    # znaczy publikowanie pewnej nieprawdy w obawie przed niepewna.
     #
-    # Teraz pytamy o dwie rzeczy osobno: czy CEL zostal naprawiony i czy
-    # przyszlo cos NOWEGO.
-    zarzuty1 = audyt.get("zarzuty") or []
+    # Notka i tak idzie w swiat (`safe_to_post = True` bezwarunkowo), wiec nie
+    # ma tu trzeciego wyjscia „nie publikujemy". Jest tylko pytanie, KTORA
+    # wersje puscic.
+    #
+    # ZOSTAJE JEDNO ODRZUCENIE i jest to jedyne, ktore cos znaczy: zarzut,
+    # ktory mial zniknac, nadal stoi. Wtedy naprawa nie zrobila tego, po co
+    # powstala, i nowy tekst nie jest lepszy od starego — tylko inny.
     zarzuty2 = [c for c in (audyt2.get("zarzuty") or [])
                 if _status_twierdzenia(c) in ("refuted", "outdated")]
-    naprawione = [c for c in do_naprawy
-                  if not any(_ten_sam_zarzut(c, d) for d in zarzuty2)]
-    nowe = [d for d in zarzuty2
-            if not any(_ten_sam_zarzut(d, c) for c in zarzuty1)]
-
-    def odrzuc(powod: str) -> None:
-        """Log odrzucenia — z tekstem, ktory przepadl."""
-        print("    [naprawa] ODRZUCONA: %s — zostaje oryginal" % powod,
-              flush=True)
+    stoi_dalej = [c for c in do_naprawy
+                  if any(_ten_sam_zarzut(c, d) for d in zarzuty2)]
+    if stoi_dalej:
+        print("    [naprawa] ODRZUCONA: zarzut, ktory mial zniknac, nadal stoi "
+              "— zostaje oryginal", flush=True)
         print("    [naprawa] odrzucony tekst: %s" % nowy[:200], flush=True)
-        for c in zarzuty2[:3]:
-            print("    [naprawa]   zarzut do naprawy: %s"
-                  % str(c.get("claim"))[:110], flush=True)
-
-    if not naprawione:
-        # Cel nietkniety. Jedyne odrzucenie, ktore nie wymaga drugiego
-        # losowania: nie pytamy o szum, tylko stwierdzamy, ze naprawa nie
-        # zrobila tego, po co powstala.
-        odrzuc("zarzut, ktory mial zniknac, nadal stoi")
+        for c in stoi_dalej[:2]:
+            print("    [naprawa]   nadal: %s" % str(c.get("claim"))[:110],
+                  flush=True)
         return None
 
-    potwierdzone_drugim = False
+    nowe = [d for d in zarzuty2
+            if not any(_ten_sam_zarzut(d, c) for c in (audyt.get("zarzuty") or []))]
     if nowe:
-        # POTWIERDZENIE PRZED ODRZUCENIEM. Placimy za jedno dodatkowe
-        # sprawdzenie WYLACZNIE w chwili, w ktorej mielibysmy wyrzucic
-        # naprawe — czyli tam, gdzie szum bramki naprawde kosztuje. Przy
-        # suficie czterech napraw na przebieg to najwyzej cztery dodatkowe
-        # wywolania `factcheck`, rzedu dwoch centow.
-        print("    [naprawa] naprawa zalatwila cel, ale doszlo %d nowych "
-              "zarzutow — sprawdzam drugi raz" % len(nowe), flush=True)
-        audyt3 = zweryfikuj(conn, run_id, nowy, kontekst)
-        if audyt3.get("nie_sprawdzone"):
-            # Nie da sie potwierdzic. Po jednej stronie falsz PEWNY (oryginal,
-            # ktorego zarzut wlasnie naprawilismy), po drugiej zarzut z
-            # JEDNEGO losowania. Bierzemy naprawe i mowimy o tym glosno.
-            print("    [naprawa] drugie sprawdzenie tez sie nie odbylo — "
-                  "biore naprawe, bo oryginal jest falszywy NA PEWNO",
-                  flush=True)
-        else:
-            zarzuty3 = [c for c in (audyt3.get("zarzuty") or [])
-                        if _status_twierdzenia(c) in ("refuted", "outdated")]
-            wraca = [d for d in nowe
-                     if any(_ten_sam_zarzut(d, e) for e in zarzuty3)]
-            if wraca:
-                odrzuc("nowy zarzut wrocil w drugim sprawdzeniu (%s)"
-                       % str(wraca[0].get("claim"))[:80])
-                return None
-            potwierdzone_drugim = True
-            print("    [naprawa] nowe zarzuty nie wrocily — to bylo migniecie",
+        # Nie blokuje. Ma byc widoczne w logu, zeby dalo sie policzyc, jak
+        # czesto naprawa przynosi ze soba nowy zarzut — a nie zeby na tej
+        # podstawie cokolwiek odrzucac.
+        print("    [naprawa] uwaga: doszlo %d nowych zarzutow, tekst i tak "
+              "lepszy od obalonego oryginalu" % len(nowe), flush=True)
+        for c in nowe[:2]:
+            print("    [naprawa]   nowy: %s" % str(c.get("claim"))[:110],
                   flush=True)
 
-    print("    [naprawa] PRZYJETA: naprawionych %d, nowych %d, %d slow.%s %s"
-          % (len(naprawione), len(nowe), slow,
-             " (po drugim sprawdzeniu)" if potwierdzone_drugim else "",
-             str(dane.get("co_zmienione") or "")[:110]), flush=True)
+    print("    [naprawa] PRZYJETA: %d slow, nowych zarzutow %d. %s"
+          % (slow, len(nowe), str(dane.get("co_zmienione") or "")[:110]),
+          flush=True)
     return {
         "tekst": nowy,
         "audyt": audyt2,
         "co_zmienione": str(dane.get("co_zmienione") or ""),
         # ZAPIS DECYZJI, NIE TYLKO JEJ WYNIKU. Bez tego za miesiac znowu nie
         # da sie orzec, czy naprawa cos naprawila, czy tylko przemiescila falsz.
-        "naprawionych": len(naprawione),
+        "naprawionych": len(do_naprawy),
         "nowych": len(nowe),
-        "bylo_drugie_sprawdzenie": potwierdzone_drugim,
         "obalonych_przed": len(do_naprawy),
         "obalonych_po": len(zarzuty2),
+        "sprawdzona": True,
         "slow": slow,
     }
 
