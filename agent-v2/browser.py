@@ -1406,6 +1406,360 @@ def zapisz_wzrost_konta(profil: dict[str, Any]) -> dict[str, Any] | None:
     return stan
 
 
+# --- SKAD BIORA SIE ZAPISY: TABELA ZRODEL Z PANELU ---------------------------
+#
+# `wzrost.jsonl` mowi ILU nas czyta. Ten plik mowi SKAD przyszli — i to jest
+# jedyna liczba w calym systemie, ktora wiaze subskrybenta ze SCIEZKA, a nie
+# z okienkiem czasu.
+ZRODLA = config.DATA_DIR / "zrodla.jsonl"
+
+# Pod tymi kluczami panel trzyma liste zrodel. Dwa pierwsze sa ZMIERZONE
+# 2 wrzesnia 2026 (`rows` w `visitor_sources`, `sourceMetrics`
+# w `growth/sources`); reszta to zapas na przemianowanie pola — sprawdzamy po
+# kolei, zamiast zakladac jeden ksztalt na zawsze.
+_KLUCZE_LISTY = ("rows", "sourceMetrics", "sources", "results", "data", "items")
+
+# DWA KSZTALTY LICZB, BO PANEL PODAJE JE NA DWA SPOSOBY. `visitor_sources` ma
+# liczbe wprost w wierszu (`free_signup: 5`), a `growth/sources` chowa ja
+# w liscie miar: `metrics: [{"name": "Subscribers", "total": 5}, ...]`.
+# Obsluga obu jest tu po to, zeby jedno zrodlo nie wymagalo osobnej funkcji.
+_MIARY_ZAPISOW = ("subscribers", "signups", "free_signups", "signup")
+_MIARY_RUCHU = ("traffic", "views", "visitors")
+_KLUCZE_ZAPISOW = ("free_signup", "free_signups", "subscribers", "signups",
+                   "users", "count")
+
+
+def _wiersze_zrodel(dane: Any) -> list[dict[str, Any]]:
+    """Lista pozycji z odpowiedzi o zrodlach — niezaleznie od klucza."""
+    if isinstance(dane, list):
+        return [x for x in dane if isinstance(x, dict)]
+    if not isinstance(dane, dict):
+        return []
+    for klucz in _KLUCZE_LISTY:
+        wart = dane.get(klucz)
+        if isinstance(wart, list) and wart:
+            return [x for x in wart if isinstance(x, dict)]
+    return []
+
+
+def _cos_w_odpowiedzi(dane: Any) -> bool:
+    """Czy odpowiedz W OGOLE cos niesie — odroznia „pusto" od „nie wiem".
+
+    `{"rows": [], "total": 0}` jest poprawnym JSON-em i nie jest pomiarem.
+    Pytamy wiec nie o to, czy odpowiedz przyszla, tylko czy jest w niej
+    jakakolwiek NIEPUSTA zawartosc — lista albo zagniezdzony slownik.
+    """
+    if isinstance(dane, list):
+        return bool(dane)
+    if not isinstance(dane, dict):
+        return False
+    return any(isinstance(w, (dict, list)) and w for w in dane.values())
+
+
+def _suma_pola(wiersze: list[dict[str, Any]], *pola: str) -> int | None:
+    """Suma pierwszego istniejacego pola po wierszach.
+
+    `None`, gdy ZADEN wiersz takiego pola nie ma — bo „nie znalazlem liczby"
+    i „liczba wynosi zero" to dwie rozne rzeczy i w szeregu czasowym mylenie
+    ich juz raz kosztowalo ten projekt falszywy wniosek.
+    """
+    suma = 0
+    znalezione = False
+    for w in wiersze:
+        if not isinstance(w, dict):
+            continue
+        for pole in pola:
+            if isinstance(w.get(pole), (int, float)) and not isinstance(
+                    w.get(pole), bool):
+                suma += int(w[pole])
+                znalezione = True
+                break
+    return suma if znalezione else None
+
+
+def _z_miar(wezel: Any, nazwy: tuple[str, ...]) -> int | None:
+    """Liczba z `metrics: [{"name": "Subscribers", "total": 5}, ...]`."""
+    if not isinstance(wezel, dict):
+        return None
+    miary = wezel.get("metrics")
+    if not isinstance(miary, list):
+        return None
+    for miara in miary:
+        if not isinstance(miara, dict):
+            continue
+        if str(miara.get("name") or "").strip().lower() not in nazwy:
+            continue
+        razem = miara.get("total")
+        if isinstance(razem, (int, float)) and not isinstance(razem, bool):
+            return int(razem)
+    return None
+
+
+def _zapisy_wezla(wezel: Any) -> int | None:
+    """Zapisy z jednej galezi — obojetne, w ktorym z dwoch ksztaltow przyszly."""
+    z_miary = _z_miar(wezel, _MIARY_ZAPISOW)
+    return z_miary if z_miary is not None else _suma_pola([wezel],
+                                                          *_KLUCZE_ZAPISOW)
+
+
+def _z_totali(dane: Any, nazwy: tuple[str, ...]) -> int | None:
+    """Liczba z pola `totals` — panel podaje je LISTA, nie slownikiem."""
+    if not isinstance(dane, dict):
+        return None
+    razem = dane.get("totals", dane.get("total"))
+    if isinstance(razem, list):
+        return _z_miar({"metrics": razem}, nazwy)
+    if isinstance(razem, dict):
+        return _z_miar(razem, nazwy) if "metrics" in razem else _suma_pola(
+            [razem], *_KLUCZE_ZAPISOW)
+    return None
+
+
+def _zapisy_ogolem(dane: Any) -> int | None:
+    """Laczna liczba zapisow z drzewa `growth/sources`, albo `None`.
+
+    Zmierzone 2 wrzesnia: `totals` oddaje 6 i suma galezi najwyzszego poziomu
+    tez 6 (substack 6, direct 0, direct to app 0) — biore `totals`, a suma jest
+    droga zapasowa. Sumujemy WYLACZNIE najwyzszy poziom: dzieci (rozbicie na
+    notki) siedza w galeziach i policzone drugi raz podwoilyby wynik.
+    """
+    razem = _z_totali(dane, _MIARY_ZAPISOW)
+    if razem is not None:
+        return razem
+    sumy = [_zapisy_wezla(w) for w in _wiersze_zrodel(dane)]
+    sumy = [x for x in sumy if x is not None]
+    return sum(sumy) if sumy else None
+
+
+def _zapisy_per_notka(dane: Any) -> dict[str, int]:
+    """{numer notki: zapisy} — z dowolnie zagniezdzonego drzewa.
+
+    Chodzenie po calym drzewie zamiast po znanej sciezce jest tu celowe:
+    zmierzone 2 wrzesnia notki wisza jako `children` galezi „Notes", ale to,
+    ze Substack zostawi je dokladnie tam, nie jest niczym zagwarantowane.
+    Szukamy wiec POLA `noteId`, nie miejsca w drzewie.
+    """
+    wynik: dict[str, int] = {}
+    stos: list[Any] = [dane]
+    while stos:
+        wezel = stos.pop()
+        if isinstance(wezel, dict):
+            ident = wezel.get("noteId", wezel.get("note_id"))
+            if ident not in (None, ""):
+                ile = _zapisy_wezla(wezel)
+                if ile is not None:
+                    klucz = str(ident)
+                    wynik[klucz] = wynik.get(klucz, 0) + ile
+            stos.extend(wezel.values())
+        elif isinstance(wezel, list):
+            stos.extend(wezel)
+    return wynik
+
+
+def zapisz_zrodla_ruchu(page=None, dni: int = 30) -> dict[str, Any] | None:
+    """SKAD naprawde biora sie zapisy — tabela zrodel, jedna linia na odczyt.
+
+    CZEGO NIE MIERZYLISMY. Kod nazywal „subskrypcjami z artykulu" pole
+    `stats.signups_within_1_day` z panelu wydawcy. Ustalone pomiarem
+    2 wrzesnia 2026: to jest OKNO CZASOWE — kto zapisal sie w ciagu doby po
+    wpisie — a nie przypisanie zrodla. Prawdziwe przypisanie panel ma, tylko
+    nikt go nie czytal. Sa to dwa adresy, oba na bazie NASZEJ publikacji
+    (`api_json` bez `baza` pyta substack.com i oddaje cisze):
+
+        /api/v1/publication/stats/visitor_sources  — RUCH per zrodlo
+        /api/v1/publication/stats/growth/sources   — ZAPISY per zrodlo,
+                                                     z rozbiciem na notki
+
+    ZMIERZONE 2 wrzesnia 2026, okno 2026-08-03 -> 2026-09-02 (30 dni):
+        ruch    direct to app 640 wysw / 39 osob, substack app 184/46,
+                direct 14/5, email opens 12/6 — razem 850 wyswietlen, 96 osob
+        zapisy  6, w tym 5 z NOTEK (c-323761132 dwa, c-320809275,
+                c-322556153 i c-322757850 po jednym) i 1 z „substack other"
+    Liczba zapisow zgadza sie CO DO SZTUKI miedzy oboma adresami — dlatego
+    bierzemy oba i zapisujemy `zapisy_zgodne`: rozejscie sie tych dwoch liczb
+    jest sygnalem, ze cos w odczycie przestalo dzialac.
+
+    DLACZEGO SZEREG, A NIE ZRZUT. Szesc zapisow to za malo na jakikolwiek
+    wniosek o tym, co dziala. Wartosc tej funkcji polega na tym, ze za tydzien
+    bedzie siedem wierszy, a nie na tych szesciu — wiec DOPISUJEMY, nigdy nie
+    nadpisujemy, i zapisujemy okno, ktorego odczyt dotyczy (bez niego dwa
+    wiersze z roznymi oknami wygladaja na wzrost albo spadek, ktorego nie bylo).
+
+    CZEGO TA TABELA NIE MOWI, zeby jej nie przecenic: nie ma w niej galezi
+    „artykul" — rozbicie na sztuki dostaja WYLACZNIE notki. Brak artykulow nie
+    znaczy, ze nie przynosza zapisow; znaczy, ze ten przyrzad nie ma na to
+    rubryki. Wiersze z ruchem i wiersze z zapisami sa ROZLACZNE (`views: null`
+    przy `free_signup: 5`), wiec konwersji „zapisy na odwiedziny" z tego
+    policzyc SIE NIE DA i nie liczymy jej.
+
+    CISZA NIE JEST ZEREM — I TO JEST TU RZECZ NAJWAZNIEJSZA. Ten projekt ma
+    udokumentowany przypadek, w ktorym odpowiedz poprawna i PUSTA kosztowala
+    DZIEWIEC DNI: 23 sierpnia 2026 na szesciu profilach slowo „Follow" nie
+    wystapilo ani razu, wniosek brzmial „Substack zdjal przycisk", i przez
+    dziewiec dni agent nie zaobserwowal NIKOGO — a zero nikomu nie wygladalo
+    na awarie, bo tabela normy tlumaczyla je tym samym nieprawdziwym zdaniem.
+    Pomiar byl prawdziwy, wniosek falszywy, bo pustka wygladala jak wynik. To
+    samo w mniejszej skali: `/api/v1/note_stats/p-<id>` oddaje dla artykulu
+    odpowiedz poprawna i pusta, czyli piec rekordow z samymi zerami.
+
+    Stad cztery bramki, kazda na inna postac ciszy:
+
+      1. BRAK SESJI I PADNIETA PRZEGLADARKA. `wymagaj_sesji` rzuca
+         `SystemExit`, a to NIE jest `Exception` — samo `except Exception`
+         przepuscilo by je i pomiar zabralby caly przebieg. Lapiemy oba,
+         a przebieg dostaje `None`.
+      2. 403 I STRONA WYZWANIA. `api_json` oddaje wtedy `None`, bo tresc nie
+         jest JSON-em. `None` znaczy „nie wiem", nie „zero": ta polowa idzie
+         do pola `blad`, a nie do liczb.
+      3. ODPOWIEDZ POPRAWNA I PUSTA. Odczyt liczy sie za udany dopiero, gdy
+         odpowiedz cokolwiek NIESIE (`_cos_w_odpowiedzi`). Zmierzone: nawet
+         okno 30-dniowe na koncie z siedmioma subskrybentami oddaje szesc
+         wierszy, wiec pusta tabela znaczy u nas awarie, a nie spokojny dzien.
+         Wiersz z samymi zerami byl by nie do odroznienia od dnia, w ktorym
+         ruch naprawde ustal — wiec go NIE PISZEMY. Gdy nie odczytano ZADNEJ
+         polowy, funkcja oddaje `None` i nie dopisuje nic.
+      4. ZMIANA KSZTALTU. Do pliku idzie ZAWSZE odpowiedz SUROWA, a liczby
+         wyliczone leza obok niej. Gdy Substack przemianuje pola, sumy maja
+         `null` (nie zero), a surowe liczby zostaja w pliku — da sie je
+         przeliczyc pozniej, bez powtarzania pomiaru, ktorego powtorzyc nie
+         mozna, bo okno juz minelo.
+
+    TRZY STANY, NIE DWA — tak jak w `zapisz_czytelnikow`. `odczytane` mowi,
+    ktore polowy naprawde odpowiedzialy; `blad` jest zapisywany ZAWSZE, takze
+    jako `null`. Czytajacy ma pytac `wiersz.get("blad", "nie wiadomo")`.
+    """
+    import json as _json
+    from datetime import datetime, timedelta, timezone
+
+    NOWA_LINIA = chr(10)
+    teraz = datetime.now(timezone.utc)
+    dni = max(1, int(dni or 30))
+    do_dnia = teraz.date()
+    od_dnia = do_dnia - timedelta(days=dni)
+
+    wlasny = page is None
+    p_ = br_ = None
+    if wlasny:
+        # SESJI MOZE NIE BYC, A POMIAR NIGDY NIE ZABIJA PRZEBIEGU. `SystemExit`
+        # jest tu wymieniony osobno, bo nie dziedziczy po `Exception`.
+        try:
+            wymagaj_sesji()
+            p_, br_, ctx = podlacz_sie()
+            page = ctx.new_page()
+        except (Exception, SystemExit) as exc:
+            print("  [zrodla] sesji nie otworzylem: %s" % type(exc).__name__,
+                  flush=True)
+            try:
+                if br_ is not None:
+                    br_.close()
+                if p_ is not None:
+                    p_.stop()
+            except Exception:
+                pass
+            return None
+
+    baza = f"https://{config.SUBSTACK_HANDLE}.substack.com"
+    okres = f"from_date={od_dnia.isoformat()}&to_date={do_dnia.isoformat()}"
+    zapytania = (
+        ("ruch", "/api/v1/publication/stats/visitor_sources"
+                 f"?{okres}&offset=0&limit=50"
+                 "&order_by=views&order_direction=desc"),
+        ("zapisy", "/api/v1/publication/stats/growth/sources"
+                   f"?order_by=users&order_direction=desc&{okres}"),
+    )
+
+    surowe: dict[str, Any] = {"ruch": None, "zapisy": None}
+    odczytane: list[str] = []
+    bledy: dict[str, str] = {}
+    try:
+        for nazwa, sciezka in zapytania:
+            try:
+                dane = api_json(page, sciezka, baza=baza)
+            except Exception as exc:
+                # Jedna polowa, ktorej nie da sie odczytac, NIE zabiera drugiej
+                # — tak samo jak pojedyncza pozycja w `statystyki_pozycji`.
+                bledy[nazwa] = f"{type(exc).__name__}: {exc}"[:200]
+                print("  [zrodla] %s: %s" % (nazwa, bledy[nazwa]), flush=True)
+                continue
+            if dane is None:
+                bledy[nazwa] = "brak JSON-a (403 albo strona wyzwania)"
+            elif not _cos_w_odpowiedzi(dane):
+                bledy[nazwa] = "odpowiedz poprawna i PUSTA: %s" % str(dane)[:120]
+            else:
+                surowe[nazwa] = dane
+                odczytane.append(nazwa)
+                continue
+            print("  [zrodla] %s: %s" % (nazwa, bledy[nazwa]), flush=True)
+    finally:
+        if wlasny:
+            try:
+                page.close()
+                br_.close()
+                p_.stop()
+            except Exception:
+                pass
+
+    # NIC NIE ODCZYTANE TO NIE JEST POMIAR — brak danych ma wygladac na brak
+    # danych, a nie na dzien, w ktorym ruch spadl do zera.
+    if not odczytane:
+        print("  [zrodla] zadna polowa nie odpowiedziala — nie zapisuje nic",
+              flush=True)
+        return None
+
+    wiersze_ruchu = _wiersze_zrodel(surowe["ruch"])
+    zapisy_z_ruchu = _suma_pola(wiersze_ruchu, "free_signup", "free_signups")
+    zapisy_ze_wzrostu = _zapisy_ogolem(surowe["zapisy"])
+    stan = {
+        "kiedy": teraz.isoformat(timespec="seconds"),
+        # BEZ OKNA WIERSZ JEST NIEPOROWNYWALNY. Dwa odczyty o roznych oknach
+        # roznia sie liczbami, nie ruchem.
+        "okno": {"od": od_dnia.isoformat(), "do": do_dnia.isoformat(),
+                 "dni": dni},
+        "odczytane": odczytane,
+        "blad": bledy or None,
+        # SUROWE ODPOWIEDZI. Jedyna czesc tego wiersza, ktora przezyje
+        # przemianowanie pol po stronie Substacka.
+        "ruch": surowe["ruch"],
+        "zapisy": surowe["zapisy"],
+        # Liczby wyliczone OBOK surowych, nigdy zamiast nich. `null` znaczy
+        # „nie znalazlem", nie „zero".
+        "podsumowanie": {
+            "zrodel_ruchu": len(wiersze_ruchu) if "ruch" in odczytane else None,
+            "wyswietlenia": _suma_pola(wiersze_ruchu, "views"),
+            "osoby": _suma_pola(wiersze_ruchu, "users"),
+            "zapisy_z_ruchu": zapisy_z_ruchu,
+            "zapisy_ze_wzrostu": zapisy_ze_wzrostu,
+            # DRUGA LICZBA RUCHU, I ONA SIE Z PIERWSZA NIE ZGADZA: 2 wrzesnia
+            # `growth/sources` mowil 64 przy 850 wyswietleniach i 96 osobach
+            # z `visitor_sources`. Czego dokladnie liczy — nie wiem i nie
+            # zgaduje; zapisuje obie, bo rozjazd sam w sobie jest informacja.
+            "ruch_ze_wzrostu": _z_totali(surowe["zapisy"], _MIARY_RUCHU),
+            "zapisy_per_notka": (_zapisy_per_notka(surowe["zapisy"])
+                                 if "zapisy" in odczytane else None),
+            # KONTROLA KRZYZOWA. Dwa niezalezne adresy mowily 2 wrzesnia to
+            # samo (6 i 6). Gdy przestana, wiersz sam o tym powie.
+            "zapisy_zgodne": (None if zapisy_z_ruchu is None
+                              or zapisy_ze_wzrostu is None
+                              else zapisy_z_ruchu == zapisy_ze_wzrostu),
+        },
+    }
+
+    try:
+        ZRODLA.parent.mkdir(parents=True, exist_ok=True)
+        with ZRODLA.open("a", encoding="utf-8") as f:
+            f.write(_json.dumps(stan, ensure_ascii=False) + NOWA_LINIA)
+    except OSError as exc:
+        # Zapis jest premia, pomiar wazniejszy — tak samo jak przy wzroscie.
+        print("  [zrodla] nie zapisalem: %s" % type(exc).__name__, flush=True)
+
+    p = stan["podsumowanie"]
+    print("  [zrodla] %s..%s: %s wysw, %s osob, zapisy %s/%s, notki %s"
+          % (od_dnia, do_dnia, p["wyswietlenia"], p["osoby"],
+             p["zapisy_z_ruchu"], p["zapisy_ze_wzrostu"],
+             len(p["zapisy_per_notka"] or {})), flush=True)
+    return stan
+
+
 def _artykuly_z_panelu(page, baza: str) -> dict[str, dict[str, Any]]:
     """Nasze artykuly razem ze statystykami — JEDNYM zapytaniem.
 

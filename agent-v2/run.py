@@ -1429,7 +1429,18 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
             strony = browser.read_pages([cel["url"]])
             if not strony or not strony[0].get("text"):
                 continue
-            out = stages.comment_on(conn, run_id, strony[0])
+            # `co_dodamy` PRZEZ GRANICE, NA KTOREJ GINELO. `wybierz_cele`
+            # zapisuje przy kazdym przyjetym celu jedna konkretna rzecz, ktora
+            # warto pod tym wpisem dodac, `comment_on` to czyta — a tutaj szedl
+            # sam `strony[0]`, wiec model nigdy tej notatki nie widzial.
+            # Zmierzone atrapa promptu 2 wrzesnia 2026: ze slownikiem z polem
+            # notatka jest w 3 promptach na 3, bez pola w 0 na 3. Platne:
+            # 68 wywolan `cele` = 0,6056 USD od 25 sierpnia za pole wyrzucane
+            # do kosza, przy prompcie, ktory czyni je warunkiem przyjecia celu.
+            with db.kanal("komentarz@artykul"):
+                out = stages.comment_on(
+                    conn, run_id,
+                    {**strony[0], "co_dodamy": cel.get("co_dodamy", "")})
             dobre = [k for k in out["candidates"]
                      if k.get("comment") and k.get("safe_to_post")]
             if not dobre:
@@ -1534,10 +1545,15 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         for cel in cele[: max(1, na_teraz["komentarze"] // 2)]:
             if not zostal_czas("dyskusje"):
                 return
-            out = stages.comment_on(
-                conn, run_id,
-                {"title": cel.get("tytul", ""), "text": cel.get("opis", ""),
-                 "author": cel.get("pub", ""), "url": cel.get("url", "")})
+            # Drugie miejsce, w ktorym ginelo `co_dodamy` — patrz komentarz przy
+            # bloku komentarzy pod artykulami. Tu slownik jest sklecony od zera,
+            # wiec pole trzeba dopisac jawnie.
+            with db.kanal("komentarz@notka"):
+                out = stages.comment_on(
+                    conn, run_id,
+                    {"title": cel.get("tytul", ""), "text": cel.get("opis", ""),
+                     "author": cel.get("pub", ""), "url": cel.get("url", ""),
+                     "co_dodamy": cel.get("co_dodamy", "")})
             dobre = [k for k in out["candidates"]
                      if k.get("comment") and k.get("safe_to_post")]
             if not dobre:

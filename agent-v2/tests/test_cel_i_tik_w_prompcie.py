@@ -83,8 +83,13 @@ try:
     sprawdz("zdanie o tym, co dodajemy, jest w prompcie", CO_DODAMY in z_polem)
     sprawdz("i jest opisane jako NASZA notatka, nie jako tresc autora",
             "WHY THIS POST WAS SELECTED" in z_polem)
-    sprawdz("z pozwoleniem na milczenie, gdy juz nie trzyma",
-            "stay silent instead" in z_polem)
+    # CISZA PRZESTALA BYC OPCJA — 2 wrzesnia 2026. Do tego dnia prompt mowil
+    # „stay silent instead", czyli sam oferowal modelowi wyjscie bez publikacji.
+    # Doktryna mowi odwrotnie: co zaplanowane, to wychodzi, lepiej z bledem niz
+    # wcale. To bylo tez jedyne, co blokowalo przekazanie notatki do promptu.
+    sprawdz("BEZ pozwolenia na milczenie", "stay silent" not in z_polem)
+    sprawdz("i z jawnym poleceniem, zeby napisac cokolwiek",
+            "but write something" in z_polem)
     sprawdz("cudzy tekst nadal jest w prompcie", "cudzy tekst posta" in z_polem)
 
     # KONTRDOWOD: bez pola prompt wyglada dokladnie jak przed poprawka.

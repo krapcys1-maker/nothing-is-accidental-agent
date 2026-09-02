@@ -12,12 +12,44 @@ produkcje (stary agent: `attempt_no IN (1,2)` w osmiu tabelach, 1,84 USD do kosz
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import config
+
+# KTORE DZIALANIE PLACI ZA TO WYWOLANIE. `purpose` mowi, CO robi model
+# („comment", „factcheck"), ale nie mowi, KOMU to sluzy: jedno `llm.call`
+# z `purpose="comment"` obsluguje i komentarze pod cudzymi artykulami, i te pod
+# notkami, a jedno `factcheck` sprawdza notke, komentarz albo artykul.
+#
+# Zmierzone 2 wrzesnia 2026: 3,4562 z 16,2817 USD tygodnia (21 procent
+# rachunku) nie da sie przypisac do zadnego kanalu. Bez tego zadna miara
+# „na dolara" nie istnieje — mozna policzyc licznik i nie ma mianownika.
+#
+# Znacznik ustawia sie NAWIASEM (`with db.kanal(...)`), a nie parametrem przy
+# kazdym wywolaniu, bo wywolan sa dziesiatki, a blokow pracy piec. Zapis idzie
+# przez `record_call`, wiec obejmuje takze sciezki bledu i obraz — czyli
+# dokladnie te miejsca, ktore przy parametrze zostalyby zapomniane.
+AKCJA = ""
+
+
+@contextlib.contextmanager
+def kanal(nazwa: str):
+    """Na czas bloku kazde zapisane wywolanie dostaje `akcja = nazwa`.
+
+    Przywraca poprzednia wartosc w `finally`, wiec wyjatek w srodku bloku nie
+    zostawia znacznika przyklejonego do nastepnych wywolan.
+    """
+    global AKCJA
+    poprzednia = AKCJA
+    AKCJA = str(nazwa or "")
+    try:
+        yield
+    finally:
+        AKCJA = poprzednia
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -104,7 +136,9 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
 # wartoscia domyslna, nigdy przepisywanie danych". Funkcja robi dokladnie tyle
 # i ani kroku wiecej; nie utrzymuje wersji ani migracji danych.
 NOWE_KOLUMNY = {
-    "calls": {"cache_hit": "INTEGER NOT NULL DEFAULT 0"},
+    "calls": {"cache_hit": "INTEGER NOT NULL DEFAULT 0",
+              # KTORE DZIALANIE ZA TO ZAPLACILO — patrz `AKCJA` i `kanal`.
+              "akcja": "TEXT NOT NULL DEFAULT ''"},
     # TOR PRZEBIEGU. „produkcja" to praca konta, „test" to sprawdzanie kodu.
     # Domyslnie produkcja, bo bezpieczniejsza pomylka to policzyc test jako
     # produkcje (mniej wolnego budzetu) niz odwrotnie.
@@ -197,9 +231,14 @@ def record_call(conn: sqlite3.Connection, **fields: Any) -> None:
     następna kolumna dopisana do `calls` z wartością domyślną ma zadziałać sama,
     bez obchodzenia wszystkich wywołań.
     """
+    # Znacznik dzialania dokladamy TUTAJ, a nie u wolajacych: inaczej sciezki
+    # bledu i `obraz` — czyli te wywolania, o ktorych latwo zapomniec — byly by
+    # jedynymi bez przypisania do kanalu.
+    fields.setdefault("akcja", AKCJA)
     keys = [k for k in (
         "run_id", "provider", "model", "purpose", "tokens_in", "tokens_out",
         "cache_hit", "web_searches", "cost_usd", "price_verified", "ok", "note",
+        "akcja",
     ) if k in fields]
     conn.execute(
         f"INSERT INTO calls (at, {', '.join(keys)})"

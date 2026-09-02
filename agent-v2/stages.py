@@ -2956,6 +2956,38 @@ def wybierz_material(zapas: list[dict[str, Any]],
     return None
 
 
+def _na_kanal(nazwa: str):
+    """Wszystko, co ta funkcja zaplaci, ksieguje sie na kanal `nazwa`.
+
+    `purpose` w tabeli `calls` mowi, CO robil model, nie KOMU to sluzylo —
+    a `factcheck` sprawdza i notke, i komentarz, i artykul. Bez tego znacznika
+    3,4562 z 16,2817 USD tygodnia (2 wrzesnia 2026) nie ma zadnego kanalu.
+
+    GENERATOR WYMAGA `yield from`, nie zwyklego wywolania: gdyby dekorator
+    tylko zawolal funkcje wewnatrz `with`, dostalby obiekt generatora i wyszedl
+    z bloku ZANIM cokolwiek sie wykona — znacznik bylby zdjety przed pierwszym
+    platnym wywolaniem. Ta pomylka nie zostawia sladu w logu, tylko puste pole
+    `akcja`, wiec sprawdza ja test.
+    """
+    import functools
+    import inspect
+
+    def zewnetrzny(f):
+        if inspect.isgeneratorfunction(f):
+            @functools.wraps(f)
+            def wewnetrzny(*a, **k):
+                with db.kanal(nazwa):
+                    yield from f(*a, **k)
+        else:
+            @functools.wraps(f)
+            def wewnetrzny(*a, **k):
+                with db.kanal(nazwa):
+                    return f(*a, **k)
+        return wewnetrzny
+    return zewnetrzny
+
+
+@_na_kanal("notka")
 def notki_dnia(
     conn: sqlite3.Connection, run_id: int, dzien_artykulu: bool = False,
     karta: dict[str, Any] | None = None,
@@ -3940,10 +3972,16 @@ def comment_on(
         post = dict(post)
         post["text"] = (
             post.get("text", "")[:9000]
+            # CISZA NIE JEST TU OPCJA. Stalo tu „If it no longer holds up
+            # against the text above, stay silent instead" — a doktryna mowi
+            # wprost: co zaplanowane, to wychodzi, i lepiej zeby wyszlo z bledem
+            # niz nie wyszlo. Notatka ma naprowadzac na powod, dla ktorego
+            # wybralismy ten wpis, a nie dawac modelowi furtke do milczenia.
             + "\n\n--- WHY THIS POST WAS SELECTED (your own note from the "
             "target-selection stage: the one concrete thing you said you would "
             "add here). Write THAT comment. If it no longer holds up against "
-            "the text above, stay silent instead. ---\n"
+            "the text above, write about what the text actually says instead — "
+            "but write something. ---\n"
             + str(post["co_dodamy"])[:600]
         )
     otwarcie = config.losowe_otwarcie()

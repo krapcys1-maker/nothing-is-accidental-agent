@@ -19,9 +19,14 @@ def record_call(conn: sqlite3.Connection, **fields: Any) -> None:
     następna kolumna dopisana do `calls` z wartością domyślną ma zadziałać sama,
     bez obchodzenia wszystkich wywołań.
     """
+    # Znacznik dzialania dokladamy TUTAJ, a nie u wolajacych: inaczej sciezki
+    # bledu i `obraz` — czyli te wywolania, o ktorych latwo zapomniec — byly by
+    # jedynymi bez przypisania do kanalu.
+    fields.setdefault("akcja", AKCJA)
     keys = [k for k in (
         "run_id", "provider", "model", "purpose", "tokens_in", "tokens_out",
         "cache_hit", "web_searches", "cost_usd", "price_verified", "ok", "note",
+        "akcja",
     ) if k in fields]
     conn.execute(
         f"INSERT INTO calls (at, {', '.join(keys)})"
