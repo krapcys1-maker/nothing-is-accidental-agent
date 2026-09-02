@@ -920,6 +920,24 @@ def statystyki_pozycji(pozycje: list[dict[str, Any]] | None = None) -> list[dict
             # Lista skladana W TEJ SAMEJ sesji, zeby nie otwierac przegladarki
             # dwa razy — start Chromium to sekundy, a robimy to co przebieg.
             pozycje = nasze_pozycje_do_pomiaru(page)
+        # TABELA ZRODEL RUCHU — JEDYNE PRAWDZIWE PRZYPISANIE, JAKIE ISTNIEJE.
+        #
+        # Pole `signups_within_1_day`, ktorym mierzylismy „subskrypcje
+        # z artykulu", okazalo sie 2 wrzesnia 2026 OKNEM CZASOWYM: zestawione
+        # z prawdziwa lista subskrybentow trafialo co do sztuki w liczbe osob,
+        # ktore zapisaly sie NAZAJUTRZ po wysylce — kimkolwiek by je
+        # przyprowadzil. Substack liczy przypisanie osobno, w panelu, i za
+        # 30 dni mowi: 6 zapisow, 5 z NOTEK, jeden „Substack other".
+        #
+        # Czytamy to TUTAJ, bo sesja, strona i baza naszej publikacji sa juz
+        # otwarte, a wolajacy (`run.py`) trzyma ten pomiar pod `try` z zasada
+        # „pomiar NIGDY nie zabija przebiegu". W tym samym miejscu powstaja
+        # `wzrost.jsonl` i `czytelnicy.jsonl`, wiec trzy szeregi maja wspolna
+        # os czasu. Zero wywolan modelu, dwie nawigacje.
+        try:
+            zapisz_zrodla_ruchu(page)
+        except Exception as exc:
+            print("  [zrodla] nie odczytalem: %s" % type(exc).__name__, flush=True)
         for poz in pozycje:
             ident = str(poz.get("id") or "").strip()
             if not ident:
@@ -1448,12 +1466,23 @@ def _cos_w_odpowiedzi(dane: Any) -> bool:
     `{"rows": [], "total": 0}` jest poprawnym JSON-em i nie jest pomiarem.
     Pytamy wiec nie o to, czy odpowiedz przyszla, tylko czy jest w niej
     jakakolwiek NIEPUSTA zawartosc — lista albo zagniezdzony slownik.
+
+    LISTA MUSI ZAWIERAC SLOWNIKI, i to nie jest formalnosc: pierwsza wersja
+    przepuszczala `[1, 2, 3]` (bo lista niepusta), liczyla to za udany odczyt
+    i zapisywala wiersz, w ktorym `odczytane` klamalo, ze tabela odpowiedziala.
+    Wylapal to test, nie produkcja. Tabela zrodel to wiersze, czyli slowniki.
     """
     if isinstance(dane, list):
-        return bool(dane)
+        return any(isinstance(x, dict) and x for x in dane)
     if not isinstance(dane, dict):
         return False
-    return any(isinstance(w, (dict, list)) and w for w in dane.values())
+    for wart in dane.values():
+        if isinstance(wart, dict) and wart:
+            return True
+        if isinstance(wart, list) and any(isinstance(x, dict) and x
+                                          for x in wart):
+            return True
+    return False
 
 
 def _suma_pola(wiersze: list[dict[str, Any]], *pola: str) -> int | None:
