@@ -176,6 +176,77 @@ progu i sprawdzamy, że **wszystkie** wracają.
 
 ---
 
+## Z audytu GPT, 2026-09-02 — NIEZWERYFIKOWANE PRZEZE MNIE
+
+Pełny raport: `docs/GRUNTOWNY_AUDYT_GPT_2026-09-02.md`, dotyczy `main` na `20bc062`.
+
+**Traktować jako twierdzenia do sprawdzenia, nie jako fakty.** Powód jest
+konkretny: w jednym punkcie GPT trafiło mimo. Twierdziło, że stara lista
+piętnastu tematów sprzed przestawienia konta „jest naprawdę przekazywana do
+scouta". Sprawdzone na produkcji: `recent_angles` wchodzi w listę startową
+tylko `if len(angles) < 5`, a produkcja oddaje **12** — więc lista jest
+nieosiągalna. Jedyny stary temat, który realnie trafia do modelu, to nasz
+własny opublikowany artykuł, podany jako „nie powtarzaj". Reszta wskazanych
+miejsc (szampon, słoik, etykiety żywności) to **celowy kontekst negatywny** —
+usunięcie ich zabrałoby modelowi informację, czego unikać.
+
+### G1. Dwa bloki niezależnie zużywają ten sam budżet komentarzy
+
+Blok pod artykułami bierze `na_teraz["komentarze"]` celów (`run.py:1410`),
+a późniejszy blok dyskusji pod notkami bierze **jeszcze**
+`max(1, na_teraz["komentarze"] // 2)` (`run.py:1518`). Oba podbijają ten sam
+licznik, między nimi nie ma odjęcia. Przy przydziale N jeden przebieg może
+zrobić do `N + N/2` publikacji.
+
+### G2. Nieudana publikacja artykułu wygląda jak sukces
+
+`browser.wystaw_artykul` łapie każdy wyjątek i oddaje `wyslane=False`; sterownik
+wypisuje „NIE POSZEDL" i **bezwarunkowo zwraca kod 0** (`artykul_z_puli.py:1361`),
+a `main()` zamienia zero na `DONE` (`:344`). Usługa nie ma `Restart=` ani
+drugiego terminu — następny automatyczny za tydzień.
+
+**To jest ta sama klasa, którą 2 września naprawialiśmy trzy razy: awaria
+nieodróżnialna od sukcesu.** Najpoważniejsza pozycja z całego audytu.
+
+### G3. Po nieudanym przebiegu norma nie jest domykana
+
+Docstring obiecuje, że przerwany przebieg się nie liczy i ostatni dzieli przez
+jeden (`run.py:344`). Kod odejmuje od stałej 5 tylko liczbę statusów `DONE`
+(`run.py:358`), więc przy jednej wcześniejszej porażce przed ostatnim terminem
+dzieli resztę pracy przez dwa i zostawia połowę niewykonaną.
+
+### G4. Ostatni przebieg może wpaść w następną dobę UTC
+
+Termin 23:40 plus `RandomizedDelaySec=1500` sięga 00:05. Budżet i licznik biorą
+dzień z `datetime.now(timezone.utc)`, nie z terminu zegara — więc doba może mieć
+cztery, pięć albo sześć uruchomień, a rozdzielnik zakłada stałe pięć.
+
+### G5. Rozbieżności z wymaganiami, które mogą być świadomą polityką
+
+Nie są to usterki, dopóki właściciel nie powie, że są. **Do rozstrzygnięcia
+przez niego, nie przeze mnie:**
+
+- artykuł planowany **co tydzień** (`nia-artykul.timer`), nie co miesiąc
+- komentarze **15–23**, a przez pierwsze 30 dni efektywnie **15–19**, przy celu 20–30
+- **ciche dni zerują notki**, więc „pięć notek dziennie" nie jest kontraktem na każdą dobę
+
+### G6. Potwierdzenie niezależne
+
+Punkt 6.4 audytu („wybrany powód komentarza ginie przed pisaniem") to **to samo,
+co pozycja 1 tej listy** — `co_dodamy`. Dwa niezależne odczyty tego samego kodu
+znalazły tę samą martwą ścieżkę. To podnosi jej wagę.
+
+### Czego z tego audytu NIE zrobię bez rozmowy
+
+GPT proponuje **deterministyczną bramkę tematyczną „czy to na pewno o AI"**.
+Odradzam. Nasz najlepszy komentarz z 1 września brzmiał: *„1846 is your
+chokepoint map in another century: Britain approved thousands of miles of
+railway…"* — zero słów o AI, i dokładnie ten rejestr, po który to pismo istnieje.
+Bramka na słowa kluczowe zabiłaby go. Kupilibyśmy gwarancję tematu za utratę
+tego, co w tym piśmie najlepsze.
+
+---
+
 ## Zasada, która z tego wynika
 
 Większość tych pozycji to jedna wada w wielu przebraniach: **asercja po treści
