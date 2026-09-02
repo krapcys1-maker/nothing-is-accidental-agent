@@ -437,6 +437,20 @@
 | `najnowsze_per_pozycja(rodzaj)` | {identyfikator: ostatni pomiar}. To sie czyta przy raporcie. |
 | `podsumowanie(rodzaj)` | Sumy i srednie PO POZYCJACH, nie po pomiarach. |
 
+### `bramki.py` — co może zatrzymać treść — wyliczone z drzewa składni, nie spisane z pamięci
+
+258 wierszy, 7 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_zrodlo(nazwa)` *(wewn.)* | — |
+| `_komentarz_nad(linie, nr, ile)` *(wewn.)* | Ostatnia linia komentarza nad wskazanym wierszem — zwykle uzasadnienie. |
+| `_rodzic_funkcji(drzewo)` *(wewn.)* | Mapa: numer wiersza -> nazwa funkcji, w ktorej ten wiersz lezy. |
+| `wstrzymania_publikacji(pelne)` | Kazde miejsce, ktore ustawia `safe_to_post` na falsz. |
+| `warunki_przed_wystawieniem(pelne)` | Kazde wystawienie tresci i warunki, pod ktorymi stoi. |
+| `przerwania_w_petlach()` | `continue` i `return` w petlach po kandydatach — czyli „ten odpada". |
+| `raport(pelne)` | — |
+
 ### `raport_statystyk.py` — te same dane w tabeli dla człowieka
 
 278 wierszy, 5 funkcji na poziomie modułu, 0 klas

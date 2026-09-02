@@ -49,14 +49,14 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **22 plików**, 26 167 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 26 425 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
 | jedno polecenie uruchamiające | `python agent-v2/run.py` | dotrzymane |
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
-**WADA — 22 plików zamiast dziesięciu.** Najbliższe usunięciu:
+**WADA — 23 plików zamiast dziesięciu.** Najbliższe usunięciu:
 `style.py` (127 wierszy, wołany tylko z `stages.py`) i
 `kopia_subskrybentow.py` (203 wierszy, narzędzie ręczne poza
 przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 115 zestawów
-testów, 3248 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 116 zestawów
+testów, 3257 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -578,6 +578,20 @@ wiec nie da sie go rozjechac z kodem.
 | `wczytaj(rodzaj)` | Wszystkie pomiary z pliku, w kolejnosci zapisu. Uszkodzone linie pomija. |
 | `najnowsze_per_pozycja(rodzaj)` | {identyfikator: ostatni pomiar}. To sie czyta przy raporcie. |
 | `podsumowanie(rodzaj)` | Sumy i srednie PO POZYCJACH, nie po pomiarach. |
+
+### `bramki.py` — co może zatrzymać treść — wyliczone z drzewa składni, nie spisane z pamięci
+
+258 wierszy, 7 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_zrodlo(nazwa)` *(wewn.)* | — |
+| `_komentarz_nad(linie, nr, ile)` *(wewn.)* | Ostatnia linia komentarza nad wskazanym wierszem — zwykle uzasadnienie. |
+| `_rodzic_funkcji(drzewo)` *(wewn.)* | Mapa: numer wiersza -> nazwa funkcji, w ktorej ten wiersz lezy. |
+| `wstrzymania_publikacji(pelne)` | Kazde miejsce, ktore ustawia `safe_to_post` na falsz. |
+| `warunki_przed_wystawieniem(pelne)` | Kazde wystawienie tresci i warunki, pod ktorymi stoi. |
+| `przerwania_w_petlach()` | `continue` i `return` w petlach po kandydatach — czyli „ten odpada". |
+| `raport(pelne)` | — |
 
 ### `raport_statystyk.py` — te same dane w tabeli dla człowieka
 
