@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **23 plików**, 27 737 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 27 847 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -176,7 +176,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-7091 wierszy, 130 funkcji na poziomie modułu, 0 klas
+7201 wierszy, 131 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -295,10 +295,11 @@ wiec nie da sie go rozjechac z kodem.
 | `_to_pdf(odpowiedz, url)` *(wewn.)* | Czy to PDF. Naglowek jest wiarygodniejszy od koncowki adresu. |
 | `_tekst_z_pdf(dane, max_stron)` *(wewn.)* | Warstwa tekstowa PDF-a. |
 | `bramka_kandydata(k)` | Czy z tego da sie zrobic notke. Sprawdza KOD, nie model. |
-| `wczytaj_indeks()` | Indeks kandydatow. Uszkodzony plik to pusty indeks, nie awaria. |
-| `_zapisz_indeks(indeks)` *(wewn.)* | — |
+| `wczytaj_indeks()` | Indeks kandydatow. Uszkodzony plik NIE udaje juz pustego banku. |
+| `_zapisz_indeks(indeks)` *(wewn.)* | Zapis ATOMOWY: najpierw plik obok, potem podmiana jednym ruchem. |
 | `_stale_sygnaly(topics, pola)` *(wewn.)* | Ktore z pol mialy TE SAMA wartosc u WSZYSTKICH kandydatow. |
 | `_precedens_ok(p)` *(wewn.)* | Czy ten wpis to naprawde precedens, a nie wypelniacz. |
+| `_wspolna_kotwica(a, b)` *(wewn.)* | Czy oba zdania mowia o tej samej NAZWIE albo tej samej LICZBIE. |
 | `dopisz_kandydatow(kandydaci)` | Przepuszcza kandydatow przez bramke i dokłada do indeksu. |
 | `wez_kandydatow(ile)` | Wyjmuje kandydatow gotowych do pisania i ZNACZY ich jako uzytych. |
 | `co_zadzialalo(ile)` | NASZE wlasne notki z ZMIERZONYM odbiorem — material dla sedziego banku. |
