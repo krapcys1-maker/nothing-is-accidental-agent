@@ -55,7 +55,7 @@ it, and wrote down what we would add: that the mechanism missing from "person +
 AI" is control of the output — who owns it when an employer owns the tools.
 Minutes later this stage, with that note in front of it, called the post an
 aphorism with nothing to engage and returned nothing. Three times. Then the run
-ran out of clock. The post got no comment, and the reason was that a note we had
+ran out of time. The post got no comment, and the reason was that a note we had
 already written was ignored.
 
 So none of these is a reason. Each has a way in:
