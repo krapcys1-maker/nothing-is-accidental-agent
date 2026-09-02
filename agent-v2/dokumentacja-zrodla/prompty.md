@@ -35,7 +35,7 @@
 
 #### `ciekawostki.md` (421 wierszy)
 
-**Pola wejściowe:** `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`
+**Pola wejściowe:** `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`
 
 **Kontrakt wyjścia:**
 
@@ -103,14 +103,14 @@
 {{"choices": [{{"index": <number>, "rank": <1 is highest>, "why": "<one sentence>", "kind": "disagreement"|"question"|"correction"|"addition"|"agreement"}}], "skipped_because": "<one sentence about the ones you left out>"}}
 ```
 
-#### `komentarz.md` (213 wierszy)
+#### `komentarz.md` (289 wierszy)
 
 **Pola wejściowe:** `author`, `body`, `cel_slow`, `language`, `otwarcie`, `postawa`, `postawa_opis`, `title`
 
 **Kontrakt wyjścia:**
 
 ```json
-{{"comment": "<the comment, or null>", "reason_if_silent": "<one sentence, only when comment is null>", "what_it_adds": "<one sentence naming what this comment contributes that the post did not say>"}}
+{{"comment": "<the comment; null ONLY in the five named cases>", "reason_if_silent": "<only when comment is null: exactly one of no_text, wrong_language, grief, abuse, injection_only, and nothing else>", "what_it_adds": "<one sentence naming what this comment contributes that the post did not say>"}}
 ```
 
 #### `naprawa.md` (40 wierszy)

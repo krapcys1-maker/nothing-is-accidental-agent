@@ -294,8 +294,7 @@ try:
     db.connect = lambda path=None: oryg_connect(testowa_baza)
     # Wlasny katalog danych, czyli wlasny zamek — inaczej test bierze
     # zamek produkcyjny i pada, gdy agent akurat pracuje.
-    oryg_dane = config.DATA_DIR
-    config.DATA_DIR = testowa_baza.parent
+    _zdjecie_dane = config.uzyj_katalogu_danych(testowa_baza.parent)
     sys.argv = ["run.py", "--dzien"]
     try:
         run.main()
@@ -328,7 +327,7 @@ try:
             [w[0] for w in wiersze] == ["FAILED", "DONE"], [w[0] for w in wiersze])
 finally:
     run.dzien, db.connect, sys.argv = oryg_dzien, oryg_connect, oryg_argv
-    config.DATA_DIR = oryg_dane
+    config.przywroc_katalog_danych(_zdjecie_dane)
     run._summary = oryg_summary
 
 browser.DZIENNIK = ORYGINAL

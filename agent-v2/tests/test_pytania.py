@@ -11,7 +11,7 @@ import tempfile
 
 sys.path.insert(0, "agent-v2")
 import config   # noqa: E402
-config.DATA_DIR = pathlib.Path(tempfile.mkdtemp())
+config.uzyj_katalogu_danych(pathlib.Path(tempfile.mkdtemp()))
 import stages   # noqa: E402
 stages.PYTANIA_CZYTELNIKOW = config.DATA_DIR / "pytania_czytelnikow.json"
 

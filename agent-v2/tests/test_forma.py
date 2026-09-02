@@ -134,9 +134,8 @@ print()
 print("=== 4. WYBOR KANDYDATA Z INNYM OTWARCIEM ===")
 
 kat = pathlib.Path(tempfile.mkdtemp())
-oryg_dir = config.DATA_DIR
+_zdjecie = config.uzyj_katalogu_danych(kat)
 try:
-    config.DATA_DIR = kat
     (kat / "dziennik.jsonl").write_text("\n".join(json.dumps(x) for x in [
         {"kiedy": "2026-08-17T10:00:00+00:00", "rodzaj": "notka", "udane": True,
          "tekst": "The stop sign is the only octagonal traffic sign."},
@@ -179,10 +178,10 @@ try:
     sprawdz("STARY sposob wzialby 'The date...' (test rozroznia)",
             kandydaci[0]["note"] != "The date on your milk carton is not a deadline.")
 
-    config.DATA_DIR = kat / "nie-ma-mnie"
+    config.uzyj_katalogu_danych(kat / "nie-ma-mnie", utworz=False)
     sprawdz("brak dziennika nie wywala", stages.ostatnie_otwarcia() == [])
 finally:
-    config.DATA_DIR = oryg_dir
+    config.przywroc_katalog_danych(_zdjecie)
 
 print()
 print("=== 5. CZY NASZE DOTYCHCZASOWE NOTKI BY TO ZLAPALY ===")

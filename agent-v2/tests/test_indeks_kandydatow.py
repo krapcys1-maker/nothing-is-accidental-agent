@@ -20,8 +20,7 @@ import config   # noqa: E402
 # Bez tego kazdy proces, ktory uruchomi ten plik razem z innymi (choćby
 # `pytest agent-v2/tests`), zostaje z `config.DATA_DIR` wskazujacym na katalog
 # tymczasowy tego testu, a nastepny test pisze albo czyta nie tam, gdzie mysli.
-_ORYG_DATA_DIR = config.DATA_DIR
-config.DATA_DIR = pathlib.Path(tempfile.mkdtemp())
+_ZDJECIE_SCIEZEK = config.uzyj_katalogu_danych(pathlib.Path(tempfile.mkdtemp()))
 import stages   # noqa: E402
 _ORYG_INDEKS = stages.INDEKS_KANDYDATOW
 stages.INDEKS_KANDYDATOW = config.DATA_DIR / "indeks_kandydatow.json"
@@ -489,7 +488,7 @@ try:
 finally:
     # Oddajemy swiat w stanie, w jakim go zastalismy — takze wtedy, gdy
     # ktoras asercja wywali sie wyjatkiem w polowie pliku.
-    config.DATA_DIR = _ORYG_DATA_DIR
+    config.przywroc_katalog_danych(_ZDJECIE_SCIEZEK)
     stages.INDEKS_KANDYDATOW = _ORYG_INDEKS
 
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

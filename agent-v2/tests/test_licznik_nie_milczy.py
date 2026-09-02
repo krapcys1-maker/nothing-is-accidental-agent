@@ -94,7 +94,7 @@ def sprawdz(nazwa, warunek, szczegol=""):
 
 
 KAT = pathlib.Path(tempfile.mkdtemp())
-STARY_DIR = config.DATA_DIR
+ZDJECIE_SCIEZEK = None
 STARA_CISZA = config.cichy_dzien
 NORMY = config.normy_dzienne()
 PRZEBIEGI = config.PRZEBIEGOW_DZIENNIE
@@ -507,7 +507,7 @@ def zestaw(data_dzis, stary):
 
 
 try:
-    config.DATA_DIR = KAT
+    ZDJECIE_SCIEZEK = config.uzyj_katalogu_danych(KAT)
     zrodlo = KAT / "norma_e88b456.py"
     try:
         zrodlo.write_bytes(subprocess.check_output(
@@ -561,7 +561,7 @@ try:
         sprawdz("a przy planie mniejszym niz 10 budzi w %d przypadkach"
                 % len(nowe), len(nowe) >= 20, len(nowe))
 finally:
-    config.DATA_DIR = STARY_DIR
+    config.przywroc_katalog_danych(ZDJECIE_SCIEZEK)
     config.cichy_dzien = STARA_CISZA
 
 print()

@@ -54,13 +54,12 @@ def _dziennik(katalog, wpisy):
 
 
 def _z_dziennikiem(wpisy, dni=7):
-    stary = config.DATA_DIR
     with tempfile.TemporaryDirectory() as tmp:
-        config.DATA_DIR = _dziennik(tmp, wpisy)
+        _zdjecie = config.uzyj_katalogu_danych(_dziennik(tmp, wpisy))
         try:
             return stages.podsumowanie_dzialan(dni)
         finally:
-            config.DATA_DIR = stary
+            config.przywroc_katalog_danych(_zdjecie)
 
 
 print("=== 1. LICZY TO, CO WYSZLO ===")
@@ -131,13 +130,12 @@ def _wolumeny(mnoznik):
     for rodzaj, norma in normy.items():
         for _ in range(int(round(norma * 7 * mnoznik))):
             wpisy.append({"rodzaj": rodzaj, "udane": True, "kiedy": _kiedy(1)})
-    stary = config.DATA_DIR
     with tempfile.TemporaryDirectory() as tmp:
-        config.DATA_DIR = _dziennik(tmp, wpisy)
+        _zdjecie = config.uzyj_katalogu_danych(_dziennik(tmp, wpisy))
         try:
             return alarm.wolumeny()
         finally:
-            config.DATA_DIR = stary
+            config.przywroc_katalog_danych(_zdjecie)
 
 
 sprawdz("przy 100% normy alarm milczy", _wolumeny(1.0) is None, _wolumeny(1.0))
@@ -152,13 +150,12 @@ sprawdz("i nazywa rzecz po imieniu: tego nie widac w logu",
 sprawdz("prog stoi w configu", isinstance(config.PROG_ALARMU_WOLUMENU, int))
 # Pusty dziennik to brak danych, nie alarm o zerze — inaczej pierwszy dzien
 # po instalacji zawsze krzyczy.
-stary = config.DATA_DIR
 with tempfile.TemporaryDirectory() as tmp:
-    config.DATA_DIR = pathlib.Path(tmp)
+    _zdjecie = config.uzyj_katalogu_danych(pathlib.Path(tmp))
     try:
         sprawdz("pusty dziennik to cisza, nie alarm", alarm.wolumeny() is None)
     finally:
-        config.DATA_DIR = stary
+        config.przywroc_katalog_danych(_zdjecie)
 
 print()
 print("=== 6. ID NOTKI Z ODPOWIEDZI SUBSTACKA ===")
@@ -215,13 +212,12 @@ wpisy = (
         "powod": "nie znalazlem przycisku wysylki"}]
     + [{"rodzaj": "notka", "udane": True, "kiedy": _kiedy(1)}]
 )
-stary = config.DATA_DIR
 with tempfile.TemporaryDirectory() as tmp:
-    config.DATA_DIR = _dziennik(tmp, wpisy)
+    _zdjecie = config.uzyj_katalogu_danych(_dziennik(tmp, wpisy))
     try:
         powody = stages.powody_porazek(7)
     finally:
-        config.DATA_DIR = stary
+        config.przywroc_katalog_danych(_zdjecie)
 jako_slownik = {(r, p): n for r, p, n in powody}
 sprawdz("porazki sa liczone", bool(powody), powody)
 # Dwa rozne timeouty tej samej klasy maja sie ZLICZYC, inaczej kazdy blad
@@ -236,23 +232,25 @@ sprawdz("najczestszy powod jest pierwszy", powody[0][2] == 5, powody[0])
 sprawdz("udane dzialania nie sa powodem porazki",
         all(r != "notka" for r, _, _ in powody), powody)
 with tempfile.TemporaryDirectory() as tmp:
-    config.DATA_DIR = _dziennik(tmp, [{"rodzaj": "skutek", "udane": False,
-                                       "kiedy": _kiedy(1), "powod": "x"}])
+    _zdjecie = config.uzyj_katalogu_danych(
+        _dziennik(tmp, [{"rodzaj": "skutek", "udane": False,
+                         "kiedy": _kiedy(1), "powod": "x"}]))
     try:
         sprawdz("cudze reakcje nie sa naszymi porazkami",
                 stages.powody_porazek(7) == [])
     finally:
-        config.DATA_DIR = stary
+        config.przywroc_katalog_danych(_zdjecie)
 # Porazka bez zapisanego powodu ma byc WIDOCZNA jako brak powodu, nie pominieta.
 with tempfile.TemporaryDirectory() as tmp:
-    config.DATA_DIR = _dziennik(tmp, [{"rodzaj": "notka", "udane": False,
-                                       "kiedy": _kiedy(1)}])
+    _zdjecie = config.uzyj_katalogu_danych(
+        _dziennik(tmp, [{"rodzaj": "notka", "udane": False,
+                         "kiedy": _kiedy(1)}]))
     try:
         w = stages.powody_porazek(7)
         sprawdz("porazka bez powodu nadal sie liczy",
                 w and w[0][1] == "nie zapisano powodu", w)
     finally:
-        config.DATA_DIR = stary
+        config.przywroc_katalog_danych(_zdjecie)
 
 print()
 print("=== 8. KAZDE DZIALANIE ZOSTAWIA SLAD, TAKZE NIEUDANE ===")

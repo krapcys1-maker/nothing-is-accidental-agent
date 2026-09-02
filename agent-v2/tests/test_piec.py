@@ -293,6 +293,11 @@ import inspect  # noqa: E402
 # czemu wywolania juz tam nie ma. Test ma pytac co kod ROBI.
 kat = pathlib.Path(tempfile.mkdtemp())
 oryg_plik, oryg_llm = stages.ZUZYTE_FAKTY, stages.llm.call
+# CALY KATALOG DANYCH, nie sam plik zuzytych faktow. `znajdz_ciekawostki` schodzi
+# przez `aktualne_modele.pobierz` do `db.connect()`, a bez przekierowania to jest
+# PRODUKCYJNA baza — zmierzone sonda 2 wrzesnia 2026 — bo `config.DB_PATH` jest
+# liczone przy imporcie i samo podstawienie `DATA_DIR` by go nie ruszylo.
+_zdjecie_sciezek = config.uzyj_katalogu_danych(kat)
 stages.ZUZYTE_FAKTY = kat / "zuzyte.json"
 try:
     stages.llm.call = lambda *a, **k: (_ for _ in ()).throw(
@@ -311,6 +316,7 @@ try:
             any("windach" in t for t in stages.wczytaj_zuzyte()))
 finally:
     stages.ZUZYTE_FAKTY, stages.llm.call = oryg_plik, oryg_llm
+    config.przywroc_katalog_danych(_zdjecie_sciezek)
 
 zrodlo_run = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
 sprawdz("run.py odhacza fakt dopiero po potwierdzonej publikacji",

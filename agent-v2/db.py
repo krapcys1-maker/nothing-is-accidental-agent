@@ -116,9 +116,58 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+class ProdukcyjnaBazaWTescie(RuntimeError):
+    """Darmowy test probowal otworzyc produkcyjna baze."""
+
+
+def _odmow_produkcji(db_path: Path) -> None:
+    """GLOSNA odmowa: wyjatek, nie ciche pominiecie.
+
+    DLACZEGO WYJATEK, A NIE `return`. Ciche pominiecie kosztowalo juz ten
+    projekt dziewiec dni — bramka faktow „przepuszczala" artykul i nikt nie
+    wiedzial, ze cokolwiek sie stalo. Test, ktory po cichu dostaje pusta baze
+    zamiast tej, o ktora prosil, przechodzi na zielono i NIC nie mierzy.
+    Wyjatek zatrzymuje ten plik i pokazuje palcem, co poprawic.
+
+    DLACZEGO TO W OGOLE STRZELA. `config.DB_PATH` jest liczone raz, przy
+    imporcie. Test, ktory podstawia sam `config.DATA_DIR`, nie rusza `DB_PATH`
+    — wiec `db.connect()` idzie do produkcji. Zmierzone 2 wrzesnia 2026:
+    `stages.znajdz_ciekawostki` -> `aktualne_modele.pobierz` -> `db.connect()`
+    otwieralo PRODUKCYJNA baze z `test_piec.py` i `test_pas_wydarzen.py`,
+    a zaden z tych plikow nie ma w sobie slowa „connect".
+
+    Dzis to nie niszczy danych tylko dlatego, ze produkcyjny schemat jest
+    aktualny. Na bazie o jedna kolumne starszej ten sam przebieg dopisuje
+    kolumny: zmierzone na kopii — trzy `ALTER TABLE`, 12288 -> 24576 bajtow,
+    inny SHA. Kazda nowa kolumna w `NOWE_KOLUMNY` uzbraja to od nowa.
+    """
+    if not config.W_TESCIE:
+        return
+    if getattr(config, "WOLNO_TKNAC_PRODUKCYJNA_BAZE", False):
+        return
+    if not config.pod_produkcyjnymi_danymi(db_path):
+        return
+    raise ProdukcyjnaBazaWTescie(
+        "Darmowy test probuje otworzyc PRODUKCYJNA baze:\n"
+        "    %s\n\n"
+        "Prawie na pewno przestawiles `config.DATA_DIR` bez `config.DB_PATH`.\n"
+        "`DB_PATH` jest liczone RAZ przy imporcie, wiec samo `DATA_DIR` go nie rusza.\n\n"
+        "Popraw tak — jedno wywolanie przestawia komplet sciezek:\n"
+        "    stare = config.uzyj_katalogu_danych(katalog_tymczasowy)\n"
+        "    try:\n"
+        "        ...\n"
+        "    finally:\n"
+        "        config.przywroc_katalog_danych(stare)\n\n"
+        "Jesli ten test NAPRAWDE ma dotknac produkcji, powiedz to wprost:\n"
+        "    config.WOLNO_TKNAC_PRODUKCYJNA_BAZE = True"
+        % db_path
+    )
+
+
 def connect(path: Path | None = None) -> sqlite3.Connection:
     """Otwiera bazę i zakłada schemat, jeśli go nie ma."""
-    db_path = path or config.DB_PATH
+    db_path = Path(path) if path is not None else Path(config.DB_PATH)
+    _odmow_produkcji(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row

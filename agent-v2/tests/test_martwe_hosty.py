@@ -92,8 +92,17 @@ sprawdz("jedna blokada plus jedno puste to za malo",
 print()
 print("=== 5. NA PRAWDZIWEJ HISTORII ===")
 import config   # noqa: E402
+# TA SEKCJA CELOWO SIEGA DO PRODUKCJI i tak ma zostac: cala jej wartosc polega
+# na tym, ze liczy sie na PRAWDZIWEJ historii zrodel, a nie na atrapie.
+# Przekierowanie na katalog tymczasowy zabraloby jej sens.
+#
+# Ale otwieramy TYLKO DO ODCZYTU (`mode=ro`), bo zwykle `sqlite3.connect`
+# otwiera do zapisu i ZAKLADA plik, gdy go nie ma — czyli test potrafilby
+# zostawic smiec w produkcyjnym katalogu danych. Brak pliku nadal konczy sie
+# wyjatkiem i pominieciem sekcji, dokladnie jak przedtem.
 try:
-    prod = sqlite3.connect(str(config.DATA_DIR / "zasiew-produkcji.db"))
+    _zasiew = (config.DATA_DIR / "zasiew-produkcji.db").resolve()
+    prod = sqlite3.connect("%s?mode=ro" % _zasiew.as_uri(), uri=True)
     prod.execute("SELECT 1 FROM sources LIMIT 1")
 except Exception:
     prod = None

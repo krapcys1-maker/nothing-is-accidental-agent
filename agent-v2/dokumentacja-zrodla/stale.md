@@ -11,6 +11,7 @@
 | `STYLE_CORPUS` | `PROMPTS_DIR / "styl" / "article_style_sample` | Korpus stylu. Przypięty hashem, bo to jedyna rzecz odróżniająca to konto od tysiąca innych — loader ma odmówić, jeśli ktoś po cichu podmieni |
 | `STYLE_CORPUS_SHA256` | `"d4e4e6bf928421d6a0eed6a6cafc796807ea289b275` | — |
 | `STYLE_PROFILES_DIR` | `REPO_ROOT / "instrukcja dla pisania artykulo` | — |
+| `PRODUKCYJNY_KATALOG_DANYCH` | `DATA_DIR` | GDZIE NAPRAWDE LEZY PRODUKCJA. Zapamietane TERAZ, przed jakimkolwiek przekierowaniem, bo po przestawieniu `DATA_DIR` nie da sie juz odtworzy |
 | `ANTHROPIC_API_KEY` | `_env("ANTHROPIC_API_KEY")` | — |
 | `DEEPSEEK_API_KEY` | `_env("DEEPSEEK_API_KEY")` | — |
 | `OPENAI_API_KEY` | `_env("OPENAI_API_KEY")` | — |
@@ -174,6 +175,7 @@
 | `FETCH_USER_AGENT` | `"Mozilla/5.0 (compatible; NothingIsAccidenta` | — |
 | `W_TESCIE` | `_w_darmowym_tescie()` | Jedna nazwa, dwie zapory. Wykrywanie sluzy juz nie tylko pieniadzom: darmowy test nie ma tez prawa DOPISYWAC DO PRODUKCYJNYCH DANYCH. Zmierz |
 | `WOLNO_WOLAC_MODEL` | `not W_TESCIE` | Test platny albo swiadomy skrypt moze to podniesc: `config.WOLNO_WOLAC_MODEL = True`. |
+| `WOLNO_TKNAC_PRODUKCYJNA_BAZE` | `not W_TESCIE` | Trzecia zapora tej samej rodziny: darmowy test nie ma prawa OTWORZYC produkcyjnej bazy. Patrz `uzyj_katalogu_danych` i `db.connect`. |
 | `NAPRAWA_OBALONYCH` | `True` | --- naprawa zamiast blokady i zamiast ciecia -------------------------------- 1 wrzesnia 2026 o 19:46 poszla notka z liczba, ktora nasze wla |
 | `NAPRAW_NA_PRZEBIEG` | `4` | Ile napraw najwyzej w jednym przebiegu. Kazda to dwa platne wywolania (przepisanie plus PONOWNE sprawdzenie), wiec bez sufitu zly dzien potr |
 | `RUCHY_KONCOWE` | `{ "DO_SPRAWDZENIA": ( "Close by handing the ` | --- ruch koncowy i szerokosc drugiego aktu -------------------------------- Dwa artykuly napisane PO naprawie szamponu (0017 "The Gas You Di |

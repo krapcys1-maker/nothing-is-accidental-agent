@@ -29,6 +29,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, "agent-v2")
+import config           # noqa: E402
 import korpus_kanalow   # noqa: E402
 import stages           # noqa: E402
 
@@ -76,6 +77,12 @@ _stary_korpus = korpus_kanalow.korpus_kanalow
 _stary_pelny = stages.bank_pelny
 _stare_zuzyte = stages.wczytaj_zuzyte
 _stara_pamiec_wyd = stages.WYDARZENIA_OBSLUZONE
+
+# CALY KATALOG DANYCH, a nie tylko te stale, ktore widac ponizej.
+# `znajdz_ciekawostki` schodzi przez `aktualne_modele.pobierz` do `db.connect()`,
+# a `config.DB_PATH` jest liczone przy imporcie — wiec bez tego przekierowania
+# ten test otwieral PRODUKCYJNA baze. Zmierzone sonda 2 wrzesnia 2026.
+_zdjecie_sciezek = config.uzyj_katalogu_danych(katalog)
 
 stages.INDEKS_KANDYDATOW = katalog / "indeks.json"
 stages.INDEKS_KANDYDATOW.write_text("[]", encoding="utf-8")
@@ -158,6 +165,7 @@ finally:
     stages.zaczyn_z_kanalow = _stary_zaczyn
     stages.bank_pelny = _stary_pelny
     stages.wczytaj_zuzyte = _stare_zuzyte
+    config.przywroc_katalog_danych(_zdjecie_sciezek)
     korpus_kanalow.wielkie_wydarzenia = _stare_wyd
     korpus_kanalow.korpus_kanalow = _stary_korpus
 

@@ -97,8 +97,7 @@ finally:
 
 print()
 print("=== 5. LICZNIK CZYTA PLAN I TLUMACZY NAZWY ===")
-stary_dir = config.DATA_DIR
-config.DATA_DIR = katalog
+_zdjecie_dir = config.uzyj_katalogu_danych(katalog)
 try:
     (katalog / "budzety.json").write_text(json.dumps({
         "2026-01-03": {"budzet": {"komentarze": 8, "notki": 5, "follow": 1},
@@ -119,7 +118,7 @@ try:
     (katalog / "budzety.json").write_text("to nie jest json", encoding="utf-8")
     sprawdz("uszkodzony plik tez", norma.budzety_dzienne() == {})
 finally:
-    config.DATA_DIR = stary_dir
+    config.przywroc_katalog_danych(_zdjecie_dir)
 
 print()
 print("=== 7. ALARM STOI NA WYKONANIU, NIE NA AMBICJI ===")

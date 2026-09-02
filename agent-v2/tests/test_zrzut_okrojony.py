@@ -378,9 +378,8 @@ with (UDAWANA / "czytelnicy.jsonl").open("w", encoding="utf-8") as f:
                                          {"uchwyt": "chaosengine2026",
                                           "nazwa": "Chaos Engine"}]},
                        ensure_ascii=False) + "\n")
-o_data = wzajemnosc.config.DATA_DIR
+_zdjecie_data = wzajemnosc.config.uzyj_katalogu_danych(UDAWANA)
 try:
-    wzajemnosc.config.DATA_DIR = UDAWANA
     ludzie_w = wzajemnosc.czytelnicy()
     subskrybenci = {u: w for u, w in ludzie_w.items() if "subskrybent" in w["role"]}
     sprawdz("KAZDY subskrybent wyglada na pozyskanego po naszej akcji"
@@ -391,7 +390,7 @@ try:
     sprawdz("a to nieprawda: obaj byli juz w zrzucie zerowym, tylko go nie"
             " odczytano", len(subskrybenci) == 2, sorted(subskrybenci))
 finally:
-    wzajemnosc.config.DATA_DIR = o_data
+    wzajemnosc.config.przywroc_katalog_danych(_zdjecie_data)
 
 print()
 print("=== 5. ZGODNOSC WSTECZ: SIEDEM ZRZUTOW BEZ TEGO POLA ===")
@@ -414,8 +413,8 @@ with (STARE / "czytelnicy.jsonl").open("w", encoding="utf-8") as f:
             "subskrybenci": [{"uchwyt": "chaosengine2026", "nazwa": "Chaos Engine"}]
             + ([{"uchwyt": "leonard896188", "nazwa": "Leonard"}] if i else []),
         }, ensure_ascii=False) + "\n")
+_zdjecie_data = wzajemnosc.config.uzyj_katalogu_danych(STARE)
 try:
-    wzajemnosc.config.DATA_DIR = STARE
     starzy = wzajemnosc.czytelnicy()
     sprawdz("stary ksztalt czyta sie bez wyjatku i bez ubytku",
             len(starzy) == 4, sorted(starzy))
@@ -427,7 +426,7 @@ try:
         sprawdz("i ocena zrzutow tez przezywa brak pola",
                 len(oceny) == 7, len(oceny))
 finally:
-    wzajemnosc.config.DATA_DIR = o_data
+    wzajemnosc.config.przywroc_katalog_danych(_zdjecie_data)
 
 # Odwrotny kierunek: nowe pole nie moze niczego przestawic czytajacym.
 NOWE = pathlib.Path(tempfile.mkdtemp())
@@ -436,15 +435,15 @@ with (NOWE / "czytelnicy.jsonl").open("w", encoding="utf-8") as f:
         w = json.loads(l)
         w["odczytane"] = ["obserwujacy", "subskrybenci"]
         f.write(json.dumps(w, ensure_ascii=False) + "\n")
+_zdjecie_data = wzajemnosc.config.uzyj_katalogu_danych(NOWE)
 try:
-    wzajemnosc.config.DATA_DIR = NOWE
     nowi = wzajemnosc.czytelnicy()
     sprawdz("nowy ksztalt daje DOKLADNIE ten sam wynik, co stary",
             {u: w["pierwszy_zrzut"] for u, w in nowi.items()}
             == {u: w["pierwszy_zrzut"] for u, w in starzy.items()},
             (sorted(nowi), sorted(starzy)))
 finally:
-    wzajemnosc.config.DATA_DIR = o_data
+    wzajemnosc.config.przywroc_katalog_danych(_zdjecie_data)
 
 print()
 print("=== PRODUKCJA: bez zmian ===")

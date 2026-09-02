@@ -216,11 +216,11 @@ def uruchom(sciezka, wpisy, budzety=None, kalendarz=None):
     if kalendarz:
         mod.datetime = Zegar(datetime.strptime(kalendarz, "%Y-%m-%d").replace(
             hour=12, tzinfo=timezone.utc))
-    stare = (browser.DZIENNIK, browser.WZROST, config.DB_PATH, config.DATA_DIR)
+    stare = (browser.DZIENNIK, browser.WZROST)
+    zdjecie = config.uzyj_katalogu_danych(KAT)
+    config.DB_PATH = DB
     browser.DZIENNIK = plik
     browser.WZROST = KAT / "brak-wzrostu.jsonl"
-    config.DB_PATH = DB
-    config.DATA_DIR = KAT
     buf = io.StringIO()
     wyjatek = None
     try:
@@ -229,8 +229,8 @@ def uruchom(sciezka, wpisy, budzety=None, kalendarz=None):
     except BaseException as exc:      # noqa: BLE001 — raport i tak czytamy
         wyjatek = exc
     finally:
-        (browser.DZIENNIK, browser.WZROST,
-         config.DB_PATH, config.DATA_DIR) = stare
+        browser.DZIENNIK, browser.WZROST = stare
+        config.przywroc_katalog_danych(zdjecie)
     return buf.getvalue(), wyjatek
 
 

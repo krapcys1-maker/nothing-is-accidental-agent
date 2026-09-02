@@ -125,7 +125,7 @@ podstawka.write_text(
     # WLASNY katalog danych, czyli wlasny zamek. Bez tego podproces bierze
     # zamek PRODUKCYJNY i konczy bez zmian, gdy agent akurat pracuje —
     # test klamalby wtedy o kodzie, bo zderzyl sie z rzeczywistoscia.
-    "config.DATA_DIR = pathlib.Path(%r)\n" % str(kat) +
+    "config.uzyj_katalogu_danych(pathlib.Path(%r))\n" % str(kat) +
     "oryg = db.connect\n"
     "db.connect = lambda path=None: oryg(pathlib.Path(%r))\n" % str(baza) +
     "run.dzien = lambda conn, run_id, wyslij: time.sleep(600)\n"

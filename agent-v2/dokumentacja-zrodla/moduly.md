@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-2777 wierszy, 26 funkcji na poziomie modułu, 1 klas
+2838 wierszy, 26 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -34,10 +34,11 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-6890 wierszy, 129 funkcji na poziomie modułu, 0 klas
+7091 wierszy, 130 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
+| `_na_kanal(nazwa)` *(wewn.)* | Wszystko, co ta funkcja zaplaci, ksieguje sie na kanal `nazwa`. |
 | `_prompt(name, **fields)` *(wewn.)* | — |
 | `recent_angles(conn, limit)` | Ostatnie kąty redakcyjne — wejście do reguły różnorodności. |
 | `tematy_do_porownania(conn, limit)` | Poprzednie artykuly w postaci NADAJACEJ SIE DO POROWNANIA. |
@@ -72,6 +73,7 @@
 | `_nowe_wydarzenia(wydarzenia)` *(wewn.)* | Ktore z tych zdarzen sa NOWE — czyli nie dobieralismy juz o nich materialu. |
 | `_zapamietaj_wydarzenia(nowe, znane, ile)` *(wewn.)* | Zapisuje, ze o tych zdarzeniach material JUZ WROCIL. |
 | `_przebiegi_z_bankiem_dzis(conn)` *(wewn.)* | Ile PRZEBIEGOW dobieralo dzis material do banku. |
+| `_polecenie_premiery(wydarzenia, ile)` *(wewn.)* | Polecenie o premierze do promptu ciekawostek — albo PUSTY NAPIS. |
 | `znajdz_ciekawostki(conn, run_id, ile)` | Materiał na notki w dni bez artykułu. |
 | `kuplet_korygujacy(tekst)` | Czy tekst uzywa ruchu „nie X. Y." — zaprzeczenie, potem poprawka. |
 | `zdania_z_tikiem(tekst)` | TE SAME trzy postacie tiku, ale oddane jako ZDANIA, nie jako „tak/nie". |
@@ -106,7 +108,6 @@
 | `_o_tym_samym(a, b, min_wspolnych, prog)` *(wewn.)* | Czy dwa teksty mowia o tej samej rzeczy. |
 | `teksty_ostatnich_notek(ile)` | Tresci ostatnich notek — do porownania po NAZWACH WLASNYCH. |
 | `wybierz_material(zapas, unikaj, wczesniej, teksty)` | Bierze fakt, ktory NIE jest o tym samym, co juz dzis wystawiamy. |
-| `_na_kanal(nazwa)` *(wewn.)* | Wszystko, co ta funkcja zaplaci, ksieguje sie na kanal `nazwa`. |
 | `notki_dnia(conn, run_id, dzien_artykulu, karta, ciekawostki, link_artykulu, ile, od)` | Do pieciu notek z dziennego planu, kazda z innego materialu. |
 | `ocen_restack(conn, run_id, notka)` | Czy podac te notke dalej i z jakim zdaniem. |
 | `_podloga_z_pamieci(tekst)` *(wewn.)* | Dwie podlogi, ktore dzialaja BEZ karty dowodowej. |
@@ -170,7 +171,7 @@
 
 ### `browser.py` — cała styczność z Substackiem; nie woła modelu
 
-5022 wierszy, 92 funkcji na poziomie modułu, 0 klas
+5131 wierszy, 96 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -211,6 +212,9 @@
 | `_wiersze_zrodel(dane)` *(wewn.)* | Lista pozycji z odpowiedzi o zrodlach — niezaleznie od klucza. |
 | `_cos_w_odpowiedzi(dane)` *(wewn.)* | Czy odpowiedz W OGOLE cos niesie — odroznia „pusto" od „nie wiem". |
 | `_suma_pola(wiersze, *pola)` *(wewn.)* | Suma pierwszego istniejacego pola po wierszach. |
+| `_z_miar(wezel, nazwy)` *(wewn.)* | Liczba z `metrics: [{"name": "Subscribers", "total": 5}, ...]`. |
+| `_zapisy_wezla(wezel)` *(wewn.)* | Zapisy z jednej galezi — obojetne, w ktorym z dwoch ksztaltow przyszly. |
+| `_z_totali(dane, nazwy)` *(wewn.)* | Liczba z pola `totals` — panel podaje je LISTA, nie slownikiem. |
 | `_zapisy_ogolem(dane)` *(wewn.)* | Laczna liczba zapisow z drzewa `growth/sources`, albo `None`. |
 | `_zapisy_per_notka(dane)` *(wewn.)* | {numer notki: zapisy} — z dowolnie zagniezdzonego drzewa. |
 | `zapisz_zrodla_ruchu(page, dni)` | SKAD naprawde biora sie zapisy — tabela zrodel, jedna linia na odczyt. |
@@ -249,6 +253,7 @@
 | `wystaw_odpowiedz_pod_artykulem(url_artykulu, autor, tekst, wyslij)` | Odpowiada pod KONKRETNYM komentarzem pod naszym artykułem. |
 | `potwierdz_artykul(page, tytul)` | Pyta Substacka, czy artykuł naprawdę jest opublikowany. |
 | `wystaw_artykul(sciezka_md, sciezka_png, wyslij)` | Wystawia artykuł na Substacku. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
+| `_watek_z_paginacja(page, nid, stron)` *(wewn.)* | Caly watek notki — ze WSZYSTKICH stron, nie tylko z pierwszej. |
 | `potwierdz_odpowiedz(page, note_id, tekst)` | Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku — i KTORA. |
 | `wystaw_odpowiedz(note_id, tekst, wyslij, kontekst, rodzaj)` | Odpowiada w watku — pod nasza notka albo w cudzej dyskusji. |
 | `wystaw_notke(tekst, wyslij, typ, forma)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
@@ -315,12 +320,13 @@
 
 ### `db.py` — schemat i zapis
 
-284 wierszy, 10 funkcji na poziomie modułu, 0 klas
+333 wierszy, 11 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
 | `kanal(nazwa)` | Na czas bloku kazde zapisane wywolanie dostaje `akcja = nazwa`. |
 | `now()` | — |
+| `_odmow_produkcji(db_path)` *(wewn.)* | GLOSNA odmowa: wyjatek, nie ciche pominiecie. |
 | `connect(path)` | Otwiera bazę i zakłada schemat, jeśli go nie ma. |
 | `_dopisz_brakujace_kolumny(conn)` *(wewn.)* | — |
 | `start_run(conn, stage, tryb)` | Nowy przebieg. `tryb` to „produkcja" albo „test". |
@@ -402,7 +408,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2528 wierszy, 22 funkcji na poziomie modułu, 0 klas
+2683 wierszy, 26 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -424,6 +430,10 @@
 | `cichy_dzien(kiedy)` | Czy dzis nie nadajemy. Ta sama odpowiedz przez caly dzien. |
 | `timeout_for(max_tokens)` | Termin w sekundach, który realnie pokrywa podany sufit tokenów. |
 | `_w_darmowym_tescie()` *(wewn.)* | Czy uruchomiony program to test, ktory NIE MA prawa placic. |
+| `pod_produkcyjnymi_danymi(sciezka)` | Czy ta sciezka lezy w PRAWDZIWYM katalogu danych (takze w podkatalogu). |
+| `_moduly_projektu()` *(wewn.)* | Zaimportowane moduly z `agent-v2/`, bez samych testow. |
+| `uzyj_katalogu_danych(katalog, utworz)` | Przestawia `DATA_DIR` I KOMPLET sciezek z niego policzonych. |
+| `przywroc_katalog_danych(zdjecie)` | Cofa `uzyj_katalogu_danych`. Bez tego nastepny test dziedziczy podmiane. |
 | `losowy_ruch_koncowy()` | Czym konczy sie TEN artykul. Rowne szanse, bez powtarzania formuly. |
 | `losowa_liczba_paraleli(glebokosc)` | Ile paraleli w drugim akcie. Krotki artykul nigdy nie bierze trzech. |
 | `losowe_generatory(ile)` | Ktore wzorce w tym przebiegu. Ten sam generator dwa dni z rzedu daje |
@@ -498,7 +508,7 @@
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1442 wierszy, 14 funkcji na poziomie modułu, 0 klas
+1451 wierszy, 14 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

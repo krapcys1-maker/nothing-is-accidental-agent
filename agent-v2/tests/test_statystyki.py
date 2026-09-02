@@ -92,13 +92,12 @@ KLUCZE = {"wyswietlenia", "powierzchnie", "odbiorcy", "interakcje",
 
 def _w_pustym_katalogu(funkcja):
     """Uruchamia `funkcja()` z DATA_DIR przekierowanym na katalog tymczasowy."""
-    stary = config.DATA_DIR
     with tempfile.TemporaryDirectory() as tmp:
-        config.DATA_DIR = pathlib.Path(tmp)
+        _zdjecie = config.uzyj_katalogu_danych(pathlib.Path(tmp))
         try:
             return funkcja(pathlib.Path(tmp))
         finally:
-            config.DATA_DIR = stary
+            config.przywroc_katalog_danych(_zdjecie)
 
 
 def _z_liniami(linie, funkcja):
@@ -305,7 +304,8 @@ sprawdz("brak pliku -> podsumowanie bez wyjatku",
 def _niemozliwa_sciezka(katalog):
     zajete = katalog / "to-jest-plik"
     zajete.write_text("x", encoding="utf-8")
-    config.DATA_DIR = zajete / "podkatalog"   # rodzic jest PLIKIEM
+    config.uzyj_katalogu_danych(zajete / "podkatalog",   # rodzic jest PLIKIEM
+                                utworz=False)
     try:
         statystyki.zapisz("notka", "1", {"wyswietlenia": 17})
         return True

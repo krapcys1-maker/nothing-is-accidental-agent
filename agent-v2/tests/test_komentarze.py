@@ -34,9 +34,8 @@ PRZED = {str(p): odcisk(p) for p in PILNOWANE}
 print("=== 1. ostatnie_otwarcia CZYTA WLASCIWY RODZAJ ===")
 
 kat = pathlib.Path(tempfile.mkdtemp())
-oryg_dir = config.DATA_DIR
+_zdjecie = config.uzyj_katalogu_danych(kat)
 try:
-    config.DATA_DIR = kat
     (kat / "dziennik.jsonl").write_text("\n".join(json.dumps(x) for x in [
         {"kiedy": "2026-08-18T10:00:00+00:00", "rodzaj": "notka", "udane": True,
          "tekst": "The stop sign is octagonal."},
@@ -85,10 +84,10 @@ try:
     sprawdz("gdy wszyscy powtarzaja, lista zostaje nietknieta",
             [d["comment"] for d in wszyscy] == ["The one.", "The two."], wszyscy)
 
-    config.DATA_DIR = kat / "nie-ma"
+    config.uzyj_katalogu_danych(kat / "nie-ma", utworz=False)
     sprawdz("brak dziennika nie wywala", stages.ostatnie_otwarcia("komentarz") == [])
 finally:
-    config.DATA_DIR = oryg_dir
+    config.przywroc_katalog_danych(_zdjecie)
 
 print()
 print("=== 3. KOD NAPRAWDE TEGO UZYWA ===")

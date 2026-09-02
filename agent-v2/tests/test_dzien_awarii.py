@@ -77,7 +77,7 @@ KAT = pathlib.Path(tempfile.mkdtemp())
 TERAZ = datetime.now(timezone.utc)
 NORMY = config.normy_dzienne()
 
-STARY_DIR = config.DATA_DIR
+ZDJECIE_SCIEZEK = None
 STARY_DZIENNIK = norma.DZIENNIK
 STARA_CISZA = config.cichy_dzien
 STARE_PRZEBIEGI = norma.przebiegow_dzis
@@ -145,7 +145,7 @@ RESTACK = norma.RODZAJE.index("restack")
 SUBSKRYPCJA = norma.RODZAJE.index("subskrypcja")
 
 try:
-    config.DATA_DIR = KAT
+    ZDJECIE_SCIEZEK = config.uzyj_katalogu_danych(KAT)
     # Cisze ustawiamy sami. Prawdziwa `cichy_dzien` liczy sie z daty, wiec test
     # oparty o nia wybuchalby w losowy dzien kalendarza — dokladnie ta bomba,
     # ktora juz raz wybuchla w tym repozytorium.
@@ -660,7 +660,7 @@ try:
     sprawdz("KONTRDOWOD: `suma/(dni or 1)` dawalo 0.0, nie brak danych",
             0 / (0 or 1) == 0.0)
 finally:
-    config.DATA_DIR = STARY_DIR
+    config.przywroc_katalog_danych(ZDJECIE_SCIEZEK)
     norma.DZIENNIK = STARY_DZIENNIK
     config.cichy_dzien = STARA_CISZA
     norma.przebiegow_dzis = STARE_PRZEBIEGI

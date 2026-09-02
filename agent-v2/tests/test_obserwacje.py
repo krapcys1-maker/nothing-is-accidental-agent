@@ -359,10 +359,10 @@ WYPELNIACZ = [
 
 with tempfile.TemporaryDirectory() as tmp:
     tmp = pathlib.Path(tmp)
-    stary_kat, stary_plik = config.DATA_DIR, stages.PAMIEC_NOTEK_PLIK
+    stary_plik = stages.PAMIEC_NOTEK_PLIK
     stare_okno = config.PAMIEC_NOTEK
+    _zdjecie = config.uzyj_katalogu_danych(tmp)
     try:
-        config.DATA_DIR = tmp
         stages.PAMIEC_NOTEK_PLIK = tmp / "wystawione_notki.json"
 
         # Notka o szamponie idzie na SAM POCZATEK, 119 notek przed dzisiejsza.
@@ -411,7 +411,8 @@ with tempfile.TemporaryDirectory() as tmp:
                 stages.pamiec_wystawionych() == [],
                 stages.pamiec_wystawionych())
     finally:
-        config.DATA_DIR, stages.PAMIEC_NOTEK_PLIK = stary_kat, stary_plik
+        stages.PAMIEC_NOTEK_PLIK = stary_plik
+        config.przywroc_katalog_danych(_zdjecie)
         config.PAMIEC_NOTEK = stare_okno
 
 print()
@@ -423,9 +424,9 @@ print("=== 4d. SKROT CZYTA TYLKO PRZYROST DZIENNIKA ===")
 
 with tempfile.TemporaryDirectory() as tmp:
     tmp = pathlib.Path(tmp)
-    stary_kat, stary_plik = config.DATA_DIR, stages.PAMIEC_NOTEK_PLIK
+    stary_plik = stages.PAMIEC_NOTEK_PLIK
+    _zdjecie = config.uzyj_katalogu_danych(tmp)
     try:
-        config.DATA_DIR = tmp
         stages.PAMIEC_NOTEK_PLIK = tmp / "wystawione_notki.json"
         dziennik_z_notek(tmp, WYPELNIACZ[:10])
         stages.pamiec_wystawionych()
@@ -478,7 +479,8 @@ with tempfile.TemporaryDirectory() as tmp:
         finally:
             stages._PUSTE_SLOWA = stare_puste
     finally:
-        config.DATA_DIR, stages.PAMIEC_NOTEK_PLIK = stary_kat, stary_plik
+        stages.PAMIEC_NOTEK_PLIK = stary_plik
+        config.przywroc_katalog_danych(_zdjecie)
 
 print()
 print("=== 4e. DZIEN SIE NIE ZAGLADZA ===")
@@ -554,8 +556,8 @@ print("=== 4f. RECZNA EDYCJA DZIENNIKA NIE GUBI NOTKI ===")
 import json as _json
 
 _kat = pathlib.Path(tempfile.mkdtemp())
-_stary_data, _stary_plik = config.DATA_DIR, stages.PAMIEC_NOTEK_PLIK
-config.DATA_DIR = _kat
+_stary_plik = stages.PAMIEC_NOTEK_PLIK
+_zdjecie_notek = config.uzyj_katalogu_danych(_kat)
 stages.PAMIEC_NOTEK_PLIK = _kat / "wystawione_notki.json"
 _dz = _kat / "dziennik.jsonl"
 
@@ -601,7 +603,8 @@ try:
     sprawdz("offset w srodku wiersza wymusza przeliczenie od zera",
             len(_p3) == 42, len(_p3))
 finally:
-    config.DATA_DIR, stages.PAMIEC_NOTEK_PLIK = _stary_data, _stary_plik
+    stages.PAMIEC_NOTEK_PLIK = _stary_plik
+    config.przywroc_katalog_danych(_zdjecie_notek)
 
 print()
 print("=== 5. FAKT W PAMIECI ZUZYTYCH TO ZDANIE, NIE SLOWNIK ===")
@@ -678,15 +681,14 @@ sprawdz("i jego norma dzienna jest DODATNIA",
 # a nie jako „BRAK". Do 1 wrzesnia bylo odwrotnie i wlasnie to zamykalo sprawe:
 # `norma.NIEWYKONALNE` zamienialo zero w kreske, a kreska nie budzi nikogo.
 with tempfile.TemporaryDirectory() as tmp:
-    stary_kat = config.DATA_DIR
+    _zdjecie = config.uzyj_katalogu_danych(pathlib.Path(tmp))
     try:
-        config.DATA_DIR = pathlib.Path(tmp)
         (config.DATA_DIR / "dziennik.jsonl").write_text(
             '{"rodzaj": "lajk", "udane": true, "kiedy": "2999-01-01T00:00:00Z"}\n',
             encoding="utf-8")
         pods = stages.podsumowanie_dzialan(7)
     finally:
-        config.DATA_DIR = stary_kat
+        config.przywroc_katalog_danych(_zdjecie)
     obs = pods.get("obserwacja", {})
     sprawdz("podsumowanie nadal sie liczy", isinstance(pods, dict))
     print("    obserwacja w podsumowaniu: %s" % (obs,))
@@ -699,15 +701,14 @@ stara_stala = config.FOLLOW_MIESIECZNIE
 config.FOLLOW_MIESIECZNIE = (0, 0)
 try:
     with tempfile.TemporaryDirectory() as tmp:
-        stary_kat = config.DATA_DIR
+        _zdjecie = config.uzyj_katalogu_danych(pathlib.Path(tmp))
         try:
-            config.DATA_DIR = pathlib.Path(tmp)
             (config.DATA_DIR / "dziennik.jsonl").write_text(
                 '{"rodzaj": "lajk", "udane": true,'
                 ' "kiedy": "2999-01-01T00:00:00Z"}\n', encoding="utf-8")
             pods0 = stages.podsumowanie_dzialan(7)
         finally:
-            config.DATA_DIR = stary_kat
+            config.przywroc_katalog_danych(_zdjecie)
 finally:
     config.FOLLOW_MIESIECZNIE = stara_stala
 print("    KONTRDOWOD (0,0): %s" % (pods0.get("obserwacja", {}),))

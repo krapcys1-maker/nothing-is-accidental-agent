@@ -40,7 +40,8 @@ def record_call(conn: sqlite3.Connection, **fields: Any) -> None:
 ```python
 def connect(path: Path | None = None) -> sqlite3.Connection:
     """Otwiera bazę i zakłada schemat, jeśli go nie ma."""
-    db_path = path or config.DB_PATH
+    db_path = Path(path) if path is not None else Path(config.DB_PATH)
+    _odmow_produkcji(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row

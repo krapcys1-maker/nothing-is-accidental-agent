@@ -91,7 +91,7 @@ PILNOWANE = [config.DB_PATH,
              config.DATA_DIR / "statystyki.jsonl"]
 PRZED = {str(p): odcisk(p) for p in PILNOWANE}
 
-ORYG_DATA_DIR = config.DATA_DIR
+ZDJECIE_SCIEZEK = None
 ORYG_DZIENNIK = browser.DZIENNIK
 ORYG_POLACZENIE = alarm._polaczenie
 KAT = pathlib.Path(tempfile.mkdtemp(prefix="wzajemnosc-"))
@@ -242,11 +242,11 @@ def zapisz(dziennik, zrzuty=ZRZUTY, wzrost=None):
         plik_wzrostu.write_text(
             "\n".join(json.dumps(x, ensure_ascii=False) for x in wzrost) + "\n",
             encoding="utf-8")
-    config.DATA_DIR = KAT
+    config.uzyj_katalogu_danych(KAT)
     browser.DZIENNIK = KAT / "dziennik.jsonl"
 
 
-config.DATA_DIR = KAT
+ZDJECIE_SCIEZEK = config.uzyj_katalogu_danych(KAT)
 browser.DZIENNIK = KAT / "dziennik.jsonl"
 alarm._polaczenie = baza_w_pamieci
 
@@ -584,7 +584,7 @@ try:
     sprawdz("kontrola slepoty pomiaru jest na liscie kontroli",
             "pomiar-wzajemnosci" in tekst_kontroli, tekst_kontroli[-900:])
 finally:
-    config.DATA_DIR = ORYG_DATA_DIR
+    config.przywroc_katalog_danych(ZDJECIE_SCIEZEK)
     browser.DZIENNIK = ORYG_DZIENNIK
     alarm._polaczenie = ORYG_POLACZENIE
     shutil.rmtree(KAT, ignore_errors=True)

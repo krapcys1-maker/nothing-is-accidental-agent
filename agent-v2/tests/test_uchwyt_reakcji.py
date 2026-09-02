@@ -377,9 +377,8 @@ try:
 finally:
     browser.DZIENNIK = o_dz
 
-o_data = wzajemnosc.config.DATA_DIR
+_zdjecie_data = wzajemnosc.config.uzyj_katalogu_danych(MIESZANE)
 try:
-    wzajemnosc.config.DATA_DIR = MIESZANE
     reakcje, nieznane = wzajemnosc._reakcje()
     sprawdz("wzajemnosc._reakcje czyta mieszany dziennik bez wyjatku",
             isinstance(reakcje, list), type(reakcje))
@@ -392,7 +391,7 @@ try:
             == sorted(r["typ"] for r in reakcje[len(reakcje) // 2:]),
             [r["typ"] for r in reakcje])
 finally:
-    wzajemnosc.config.DATA_DIR = o_data
+    wzajemnosc.config.przywroc_katalog_danych(_zdjecie_data)
 
 print()
 print("=== PRODUKCJA: bez zmian ===")

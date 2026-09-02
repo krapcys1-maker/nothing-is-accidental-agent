@@ -103,7 +103,7 @@ PRZED = {str(p): odcisk(p) for p in PILNOWANE}
 DATA_PRZED = sorted(p.name for p in config.DATA_DIR.glob("*"))
 
 KAT = pathlib.Path(tempfile.mkdtemp())
-STARY_DIR = config.DATA_DIR
+ZDJECIE_SCIEZEK = None
 STARA_CISZA = config.cichy_dzien
 PRZEBIEGI = config.PRZEBIEGOW_DZIENNIE
 
@@ -369,7 +369,7 @@ def siatka(mod, moment):
 
 
 try:
-    config.DATA_DIR = KAT
+    ZDJECIE_SCIEZEK = config.uzyj_katalogu_danych(KAT)
     zrodlo = KAT / ("norma_%s.py" % POPRZEDNIA_WERSJA)
     try:
         zrodlo.write_bytes(subprocess.check_output(
@@ -427,7 +427,7 @@ try:
         sprawdz("i zadna z nich nie ma planu 2 — alarm od kostki zostal cichy",
                 all(p >= 3 for p, _ in dolozone), dolozone)
 finally:
-    config.DATA_DIR = STARY_DIR
+    config.przywroc_katalog_danych(ZDJECIE_SCIEZEK)
     config.cichy_dzien = STARA_CISZA
 
 print()

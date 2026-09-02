@@ -61,8 +61,7 @@ else:
     import kopia_subskrybentow as kop
 
     with tempfile.TemporaryDirectory() as tmp:
-        stary = config.DATA_DIR
-        config.DATA_DIR = pathlib.Path(tmp)
+        _zdjecie = config.uzyj_katalogu_danych(pathlib.Path(tmp))
         kop.KATALOG = config.DATA_DIR / "kopie"
         kop.PRZYCHODZACE = kop.KATALOG / "przychodzace"
         kop.PRZYCHODZACE.mkdir(parents=True)
@@ -78,7 +77,7 @@ else:
             # miejscach, a to drugie nikogo nie pilnuje.
             sprawdz("plik przychodzacy zostal usuniety",
                     not list(kop.PRZYCHODZACE.glob("*.csv")))
-        config.DATA_DIR = stary
+        config.przywroc_katalog_danych(_zdjecie)
 
 print()
 print("=== 6. POBIERANIE LISTY Z WLASNEGO PANELU ===")

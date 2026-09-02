@@ -46,6 +46,12 @@ STYLE_CORPUS = PROMPTS_DIR / "styl" / "article_style_samples_v1.txt"
 STYLE_CORPUS_SHA256 = "d4e4e6bf928421d6a0eed6a6cafc796807ea289b275ff1a7aced49329de6638e"
 STYLE_PROFILES_DIR = REPO_ROOT / "instrukcja dla pisania artykulow"
 
+# GDZIE NAPRAWDE LEZY PRODUKCJA. Zapamietane TERAZ, przed jakimkolwiek
+# przekierowaniem, bo po przestawieniu `DATA_DIR` nie da sie juz odtworzyc,
+# gdzie bylo naprawde. Wszystkie zapory nizej pytaja o TE sciezke, nie o
+# biezaca wartosc `DATA_DIR`.
+PRODUKCYJNY_KATALOG_DANYCH = DATA_DIR
+
 load_dotenv(ENV_PATH)
 # Zapasowo .env z katalogu głównego repozytorium: właściciel dopisał klucz
 # OpenAI tam, a agent szukał go tylko u siebie i widział "BRAK". Sekret ma leżeć
@@ -1630,7 +1636,14 @@ LAJKI_DZIENNIE = (10, 16)
 # maszyna. Dlatego razem z ta zmiana odstep komentarza poszedl z 3-8 na 5-15
 # minut (patrz ODSTEPY) i doszly dwa przebiegi na dobe — bez tego norma nie
 # miala gdzie sie zmiescic w czasie.
-KOMENTARZE_DZIENNIE = (15, 23)    # 0 jest dozwolone: milczenie bije slaby komentarz
+# NIEAKTUALNE OD 2 WRZESNIA 2026 stalo tu: „0 jest dozwolone: milczenie bije
+# slaby komentarz". Zmierzone na dzienniku systemowym za 18 dni: 60 kandydatow
+# na 588 zamilklo, ZERO z realnego powodu — ani jednego posta po innym jezyku,
+# ani jednej proby sterowania kontem, ani jednego golego emoji. Wszystkie 60 to
+# „to aforyzm, nie ma z czym dyskutowac", a osiem celow przepadlo przez to
+# w calosci. Cisza jest teraz dopuszczona w pieciu wyliczonych przypadkach
+# (`prompts/komentarz.md`), a nie jako domyslna odpowiedz.
+KOMENTARZE_DZIENNIE = (15, 23)
 # ZEROWANE 2026-08-23, PRZYWROCONE 2026-09-01 — BO WNIOSEK BYL FALSZYWY.
 #
 # Stalo tu `(0, 0)` z uzasadnieniem „Substack zdjal Follow ze stron
@@ -2245,6 +2258,148 @@ W_TESCIE = _w_darmowym_tescie()
 
 # Test platny albo swiadomy skrypt moze to podniesc: `config.WOLNO_WOLAC_MODEL = True`.
 WOLNO_WOLAC_MODEL = not W_TESCIE
+
+# Trzecia zapora tej samej rodziny: darmowy test nie ma prawa OTWORZYC
+# produkcyjnej bazy. Patrz `uzyj_katalogu_danych` i `db.connect`.
+WOLNO_TKNAC_PRODUKCYJNA_BAZE = not W_TESCIE
+
+
+# --- jedno przekierowanie zamiast dwudziestu recznych ------------------------
+# CO BYLO ZLE. `DB_PATH` jest liczone RAZ, przy imporcie, z `DATA_DIR`. Test,
+# ktory podstawia `config.DATA_DIR = katalog_tymczasowy`, NIE zmienia przez to
+# `config.DB_PATH` — ta nadal celuje w produkcyjna baze. Zmierzone 2 wrzesnia
+# 2026 na tym repozytorium: 21 plikow testowych przestawialo `DATA_DIR`, a tylko
+# 4 przestawialy takze `DB_PATH`.
+#
+# I NIE CHODZI TYLKO O BAZE. Stalych liczonych przy imporcie z `DATA_DIR` jest
+# w tym kodzie 25 poza `config.py` — jedenascie w `stages.py`, siedem
+# w `browser.py`, reszta w `alarm.py`, `norma.py`, `kanal.py`, `run.py`,
+# `aktualne_modele.py` i `kopia_subskrybentow.py`. Kazda z nich to ta sama
+# pulapka co `DB_PATH`: przestawienie `DATA_DIR` po imporcie nie rusza zadnej.
+# Dokladnie tedy weszly atrapy do `tematy_przegrane.json`
+# (`stages.PRZEGRANE_TEMATY`).
+#
+# DLATEGO NIE MA TU LISTY NAZW. Lista wymaga pamietania o dopisaniu do niej, a
+# ten projekt ma udokumentowane, ze proba w dokumencie nie jest bramka.
+# Zamiast tego przechodzimy po JUZ ZAIMPORTOWANYCH modulach projektu i
+# przestawiamy KAZDA sciezke lezaca pod starym katalogiem danych. Nowa stala
+# pochodna dopisana jutro w `stages.py` przeniesie sie sama, bez zmiany tutaj.
+
+
+def pod_produkcyjnymi_danymi(sciezka) -> bool:
+    """Czy ta sciezka lezy w PRAWDZIWYM katalogu danych (takze w podkatalogu).
+
+    Swiadomie szerzej niz `stages._pisze_do_produkcji`, ktore porownuje samego
+    rodzica: baza moglaby zostac przeniesiona do podkatalogu i zapora
+    przestalaby ja widziec, nie mowiac o tym ani slowa.
+    """
+    try:
+        s = Path(sciezka).resolve()
+    except Exception:
+        return False
+    korzen = Path(PRODUKCYJNY_KATALOG_DANYCH).resolve()
+    return s == korzen or korzen in s.parents
+
+
+def _moduly_projektu():
+    """Zaimportowane moduly z `agent-v2/`, bez samych testow."""
+    import sys as _sys
+
+    korzen = AGENT_DIR.resolve()
+    testy = (korzen / "tests").resolve()
+    for modul in list(_sys.modules.values()):
+        plik = getattr(modul, "__file__", None)
+        if not plik:
+            continue
+        try:
+            p = Path(plik).resolve()
+        except Exception:
+            continue
+        if korzen not in p.parents:
+            continue
+        if testy == p.parent or testy in p.parents:
+            continue
+        yield modul
+
+
+def uzyj_katalogu_danych(katalog, utworz: bool = True):
+    """Przestawia `DATA_DIR` I KOMPLET sciezek z niego policzonych.
+
+    Jedyna poprawna droga do podstawienia katalogu danych w tescie. Oddaje
+    zdjecie poprzednich wartosci — podaj je `przywroc_katalog_danych`, zeby
+    cofnac zmiane w `finally`.
+
+        stare = config.uzyj_katalogu_danych(kat)
+        try:
+            ...
+        finally:
+            config.przywroc_katalog_danych(stare)
+
+    `utworz=False` dla testow, ktore sprawdzaja zachowanie przy BRAKUJACYM
+    katalogu danych — inaczej samo przekierowanie tworzylo by katalog i test
+    mierzylby cos innego, niz mysli.
+
+    Rusza trzy rzeczy: stale w `config`, sciezki-atrybuty w zaimportowanych
+    modulach projektu i nic wiecej. Sciezki spoza katalogu danych (`PROMPTS_DIR`,
+    `STYLE_CORPUS`, `ENV_PATH`) zostaja nietkniete celowo — nie sa danymi konta.
+    """
+    global DATA_DIR, DB_PATH, ARTICLES_DIR
+
+    nowy = Path(katalog).resolve()
+    if utworz:
+        nowy.mkdir(parents=True, exist_ok=True)
+    stary = Path(DATA_DIR).resolve()
+
+    def przeniesiona(wartosc):
+        """Ta sama sciezka wzgledem NOWEGO katalogu — albo None, gdy nie nasza."""
+        try:
+            p = Path(wartosc).resolve()
+        except Exception:
+            return None
+        if p == stary:
+            return nowy
+        if stary in p.parents:
+            return nowy / p.relative_to(stary)
+        return None
+
+    zdjecie = {"__config__": {}, "__moduly__": []}
+
+    for nazwa in ("DATA_DIR", "DB_PATH", "ARTICLES_DIR"):
+        zdjecie["__config__"][nazwa] = globals()[nazwa]
+    DATA_DIR = nowy
+    DB_PATH = przeniesiona(zdjecie["__config__"]["DB_PATH"]) or (nowy / "agent-v2.db")
+    ARTICLES_DIR = przeniesiona(zdjecie["__config__"]["ARTICLES_DIR"]) or (nowy / "articles")
+
+    for modul in _moduly_projektu():
+        if modul.__name__ == "config":
+            continue
+        for nazwa, wartosc in list(vars(modul).items()):
+            if not isinstance(wartosc, Path):
+                continue
+            cel = przeniesiona(wartosc)
+            if cel is None:
+                continue
+            zdjecie["__moduly__"].append((modul, nazwa, wartosc))
+            setattr(modul, nazwa, cel)
+
+    return zdjecie
+
+
+def przywroc_katalog_danych(zdjecie) -> None:
+    """Cofa `uzyj_katalogu_danych`. Bez tego nastepny test dziedziczy podmiane."""
+    global DATA_DIR, DB_PATH, ARTICLES_DIR
+
+    if not zdjecie:
+        return
+    for modul, nazwa, wartosc in zdjecie.get("__moduly__", []):
+        setattr(modul, nazwa, wartosc)
+    stale = zdjecie.get("__config__", {})
+    if "DATA_DIR" in stale:
+        DATA_DIR = stale["DATA_DIR"]
+    if "DB_PATH" in stale:
+        DB_PATH = stale["DB_PATH"]
+    if "ARTICLES_DIR" in stale:
+        ARTICLES_DIR = stale["ARTICLES_DIR"]
 
 
 # --- naprawa zamiast blokady i zamiast ciecia --------------------------------

@@ -36,7 +36,7 @@ sys.path.insert(0, "agent-v2")
 import config      # noqa: E402
 
 KATALOG = pathlib.Path(tempfile.mkdtemp(prefix="artykul-test-"))
-config.DATA_DIR = KATALOG
+config.uzyj_katalogu_danych(KATALOG)
 config.PRZERWA_MIEDZY_PROBAMI_ARTYKULU_S = 0      # test nie ma spac
 
 import artykul_z_puli as az   # noqa: E402
