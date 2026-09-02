@@ -596,6 +596,45 @@ def wydarzenie_bez_pokrycia() -> str | None:
                  + timedelta(days=config.WYDARZENIE_WAZNE_DNI)).date().isoformat())
 
 
+def bank_bez_tematow() -> str | None:
+    """Czy w banku zostalo dosc ROZNYCH tematow na dzisiejsze notki.
+
+    OSTRZEZENIE PRZED AWARIA, NIE PO NIEJ. Dzien konczacy sie na trzech notkach
+    zamiast pieciu wyglada w logu jak decyzja („zostal tylko material o tym
+    samym"), a nie jak brak — i przez to nie alarmowal nikogo. Zmierzone
+    2 wrzesnia 2026: bank mial 37 wolnych pozycji i tylko 24 RONZE tematy,
+    bo ten sam fakt o chipie Jalapeño lezal w nim w siedmiu wariantach.
+
+    Liczymy wiec nie pozycje, tylko tematy — tym samym porownaniem, ktorego
+    uzywa odsiew przy dopisywaniu. Zero wywolan modelu, jeden plik z dysku.
+    """
+    import stages
+
+    try:
+        wolne = [k for k in stages.wczytaj_indeks() if k.get("status") == "nowy"]
+    except Exception:
+        return None
+    if not wolne:
+        return ("Bank jest PUSTY — dzisiejsze notki stana na materiale"
+                " dobranym w biegu albo nie wyjda wcale.")
+
+    grupy: list[str] = []
+    for k in wolne:
+        tresc = str(k.get("fact") or "")
+        if not any(stages._o_tym_samym(tresc, g, min_wspolnych=4, prog=0.35)
+                   and stages._wspolna_kotwica(tresc, g) for g in grupy):
+            grupy.append(tresc)
+
+    trzeba = config.NOTEK_DZIENNIE if isinstance(getattr(config, "NOTEK_DZIENNIE", None), int) \
+        else len(getattr(config, "NOTE_MIX_OTHER_DAY", [1, 2, 3, 4, 5]))
+    if len(grupy) >= trzeba:
+        return None
+    return ("Bank ma %d roznych tematow przy %d notkach na dobe (wolnych pozycji"
+            " %d — reszta to warianty tego samego). Dzien skonczy sie krocej,"
+            " a w logu bedzie to wygladalo na decyzje, nie na brak."
+            % (len(grupy), trzeba, len(wolne)))
+
+
 def sprawdz_wszystko() -> list[str]:
     """Uruchamia komplet kontroli i alarmuje o tym, co znalazl."""
     kontrole = (
@@ -617,6 +656,8 @@ def sprawdz_wszystko() -> list[str]:
         # Furtka wydarzenia zamknieta, a w tresci ani slowa — patrz docstring.
         ("wydarzenie-bez-pokrycia", "WYDARZENIE ODHACZONE, A NIC NIE WYSZLO",
          wydarzenie_bez_pokrycia),
+        # Ostrzezenie PRZED skroconym dniem, nie po nim — patrz docstring.
+        ("bank-bez-tematow", "BANK NIE MA O CZYM PISAC", bank_bez_tematow),
     )
     # TABELA WOLUMENOW DRUKOWANA ZAWSZE, nie tylko gdy cos jest nie tak.
     # Alarm ma odpowiadac na pytanie „ile wyszlo", a nie tylko krzyczec, gdy
