@@ -194,13 +194,41 @@ notki:      46 pozycji / 1654 wyswietlenia /  0 subskrypcji
 komentarze: 63 pozycje  /   77 wyswietlen  /  0 subskrypcji
 ```
 
-Najszerzej oglądana notka miała **373 wyświetlenia i dała zero**. Artykuł
-z **ośmioma** wyświetleniami dał trzech subskrybentów.
+**TA TABELA PORÓWNUJE TRZY RÓŻNE PRZYRZĄDY** i nie wolno z niej czytać, który
+kanał przynosi subskrypcje. Sprawdzone pomiarem 2 września 2026:
 
-**To nie znaczy, że notki są bezwartościowe** — 4 z 19 naszych czytelników
-zetknęło się wcześniej z naszą treścią, a to notki i komentarze budują to
-zetknięcie. Ale **subskrypcje przynoszą artykuły**, i każda zmiana, która
-utrudnia wyjście artykułu, kosztuje najwięcej.
+| kanał | skąd liczba | co naprawdę liczy |
+|---|---|---|
+| artykuł | `stats.signups_within_1_day` | **każdego, kto zapisał się w ciągu doby po wysyłce** — bez względu na to, co go przyprowadziło |
+| notka | karta `interactions`, kafelek „Subscribe" | zapisy kliknięte z widoku samej notki |
+| komentarz | kart zasięgu brak (21 z 69) | nic; zero znaczy „nikt nie policzył" |
+
+Dowód, że pole artykułu jest OKNEM CZASOWYM, a nie przypisaniem — zestawienie
+z prawdziwą listą subskrybentów (`data/kopie/subskrybenci-2026-09-02.csv`):
+
+```
+The Watermark Was Never a Verdict   25.08   pole 3   nowych nazajutrz 3
+First, Remove the Brakes            30.08   pole 2   nowych nazajutrz 2
+The Expensive Part Comes After...   01.09   pole 0   nowych nazajutrz 0
+```
+
+Co do sztuki, w każdym przypadku. W obie te doby wychodziło też pięć notek
+i kilkanaście komentarzy — mogły przyprowadzić tych ludzi tak samo dobrze.
+Subskrybent z 29 sierpnia nie ma w oknie żadnego artykułu i nie liczy go NIC.
+
+Dlatego dawne zdanie „artykuł z ośmioma wyświetleniami dał trzech
+subskrybentów" nie opisuje konwersji 37 procent. Opisuje dobę, w której akurat
+wyszedł artykuł.
+
+**Co zostaje prawdą:** notki i komentarze budują zetknięcie (4 z 19 czytelników
+zetknęło się z treścią wcześniej), a artykuł jest najdroższą pozycją, jaką to
+konto produkuje. Najszerzej oglądana notka miała 373 wyświetlenia i zero
+zapisów kliniętych z jej widoku.
+
+**Co przestaje być prawdą:** że wiemy, który kanał przynosi subskrypcje. Nie
+wiemy. Zdanie „subskrypcje przynoszą artykuły" stało tu do 2 września 2026
+i zostało obalone pomiarem, nie opinią. Czy artykuł ma nadal mieć
+pierwszeństwo, jest decyzją właściciela — ale nie wynika już z liczb.
 
 ---
 
