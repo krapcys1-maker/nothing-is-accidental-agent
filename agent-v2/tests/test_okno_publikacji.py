@@ -89,6 +89,8 @@ sprawdz("i powod mowi o spiacej publicznosci",
 
 print()
 print("=== 4. OKNO DOTYCZY NOTEK, NIE KOMENTARZY ===")
+rp = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
+
 # MIERZONE NA DRZEWIE SKLADNI, NIE W OKNIE 1800 ZNAKOW.
 #
 # Stalo tu ciecie zrodla na sztywne okno od `wolno, powod = ...` i szukanie
@@ -100,7 +102,7 @@ print("=== 4. OKNO DOTYCZY NOTEK, NIE KOMENTARZY ===")
 # Pytamy wiec o GALAZ, nie o odleglosc w znakach: znajdujemy `if`, ktorego
 # warunek dotyczy `wolno`, i patrzymy, co ta galaz PRZYPISUJE.
 import ast as _ast_o
-_drzewo = _ast_o.parse(pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8"))
+_drzewo = _ast_o.parse(rp)
 
 def _klucz(cel):
     """Nazwa klucza w `na_teraz[...]`, albo None."""
@@ -132,7 +134,7 @@ sprawdz("a komentarze NIE sa zerowane", "komentarze" not in _zerowane,
 # pusto. Sprawdzamy, ze widzi CHOC JEDNO.
 sprawdz("wykrywacz naprawde widzi przypisania", bool(_zerowane), _zerowane)
 sprawdz("i widac to w logu przebiegu",
-        "komentarze IDA" in pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8"))
+        "komentarze IDA" in rp)
 
 print()
 print("=== 5. UZASADNIENIE JEST W KODZIE, NIE TYLKO W COMMICIE ===")
