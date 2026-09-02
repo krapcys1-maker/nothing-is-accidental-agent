@@ -16,7 +16,9 @@ z wejscia — a komunikat mowil „najpierw najzywsze watki".
 Wada odpala sie powyzej `WYBIERAJ_POWYZEJ` komentarzy naraz, wiec dzis jeszcze
 nie boli. Ten test pilnuje, zeby nie zaczela.
 """
+import contextlib
 import hashlib
+import io
 import json
 import pathlib
 import sys
@@ -153,18 +155,43 @@ print("=== 5. CALY ETAP, Z PODSTAWIONYM MODELEM ===")
 widziane = {}
 
 
+# PODMIENIAMY TYLKO `call`, A ODPOWIEDZ ODDAJEMY SUROWA. Do 2 wrzesnia ten
+# plik podmienial takze `llm.parse_json` na lambde ignorujaca `raw` — czyli
+# omijal jedyna funkcje, ktora tlumaczy odpowiedz modelu na ksztalt oczekiwany
+# przez kod. Tu jeszcze doklada sie proza, ktora model z wlaczonym
+# wyszukiwaniem pisze WOKOL JSON-a; wlasnie na niej `parse_json` raz juz
+# poleglo (dwadziescia wyszukiwan i 0,13 USD, po czym oddalo zero). Atrapa
+# odtwarza wiec ten ksztalt, a nie sam czysty slownik.
+ODPOWIEDZ_MODELU = (
+    "I'll look through the replies and return one object {like this}.\n\n"
+    + json.dumps({"choices": [{"index": i, "rank": i} for i in range(8)],
+                  "skipped_because": "reszta to podziekowania"})
+    + "\n\nThat covers the threads with an actual question in them.")
+
+
 def call(rodzaj, system, prompt, conn=None, run_id=None, **k):
     widziane["prompt"] = prompt
-    return "{}"
+    return ODPOWIEDZ_MODELU
 
 
 ORYG = (stages.llm.call, stages.llm.parse_json)
 try:
     stages.llm.call = call
-    stages.llm.parse_json = lambda raw: {
-        "choices": [{"index": i, "rank": i} for i in range(8)],
-        "skipped_because": "reszta to podziekowania"}
-    wynik = stages.wybierz_do_odpowiedzi(None, 0, list(WSZYSTKIE))
+    _log = io.StringIO()
+    with contextlib.redirect_stdout(_log):
+        wynik = stages.wybierz_do_odpowiedzi(None, 0, list(WSZYSTKIE))
+    print(_log.getvalue(), end="")
+    # ODPOWIEDZ MODELU MA BYC NAPRAWDE ZROZUMIANA. Bez tego caly ten blok
+    # przechodzi rowniez wtedy, gdy `parse_json` sie wywroci: etap lapie
+    # wyjatek i „bierze najstarsze", a asercje nizej nie odrozniaja wyboru
+    # modelu od tego zapasu. Wlasnie tak wygladala awaria z 25 sierpnia —
+    # zero z wyjasnieniem przestaje wygladac na awarie.
+    sprawdz("odpowiedz modelu zostala ROZEBRANA, a nie odpuszczona",
+            "[wybor] nie wyszedl" not in _log.getvalue(),
+            _log.getvalue().strip().splitlines()[-1:])
+    sprawdz("i to wybor modelu, nie zapas 'biore najstarsze'",
+            "reszta to podziekowania" in _log.getvalue(),
+            _log.getvalue().strip().splitlines()[-1:])
     sprawdz("oddaje nie wiecej niz limit duzego dnia",
             len(wynik) <= config.MAX_ODPOWIEDZI_DUZE, len(wynik))
     sprawdz("i wsrod wybranych sa wszystkie trzy miejsca rozmowy",

@@ -71,6 +71,11 @@ import types
 
 sys.path.insert(0, "agent-v2")
 import config   # noqa: E402
+# PRAWDZIWY `_na_kanal`, bo atrapa `stages` musi go miec: bloki `komentarze`
+# i `dyskusje` w `run.py` sa nim dekorowane (znacznik kanalu w tabeli `calls`).
+# Podstawienie tu wlasnej, pustej wersji zmienilo by ten test w potwierdzenie
+# samego siebie — przebieg chodzilby bez znacznika, ktory produkcja stawia.
+import stages   # noqa: E402
 
 zdane = oblane = 0
 
@@ -217,6 +222,7 @@ def swiat(slad, martwe_hosty, czekajace=()):
 
     fake_stages = modul(
         "stages",
+        _na_kanal=stages._na_kanal,
         budzet_dnia=lambda conn: {"notki": 0, "komentarze": 2, "lajki": 0,
                                   "restacki": 0, "follow": 0, "subskrypcje": 0},
         wybierz_cele=wybierz_cele,
@@ -540,22 +546,21 @@ sprawdz("i log mowi, KTORY host wypadl, nie tylko ile",
         MARTWY in wydruk_w2.split("odsiane hosty bez wejscia komentarza")[-1][:120],
         wydruk_w2.split("odsiane hosty")[-1][:160])
 
-print()
-print("=== 9. ZRODLO MOWI, DLACZEGO ===")
-# Bez tego za pol roku ktos „uprosci" warunek z powrotem.
-sprawdz("run.py bierze wynik wystaw_komentarz",
-        "wynik = browser.wystaw_komentarz(" in ZRODLO)
-sprawdz("run.py bierze wynik wystaw_odpowiedz",
-        "wynik = browser.wystaw_odpowiedz(" in ZRODLO)
-sprawdz("run.py tlumaczy, czym jest `wyslane`",
-        "potwierdz_komentarz" in ZRODLO and "potwierdz_odpowiedz" in ZRODLO)
-sprawdz("odsiew martwych hostow stoi PRZED platna ocena",
-        ZRODLO.index("hosty_gdzie_komentarz_nie_wchodzi()")
-        < ZRODLO.index("cele = stages.wybierz_cele(conn, run_id, unikalne)"),
-        "kolejnosc wywolan w run.py")
-sprawdz("kolejne rundy szukania tez przechodza przez oba sita",
-        ZRODLO.index("if martwe:\n                from urllib.parse")
-        > ZRODLO.index("runda %d szukania"))
+# SEKCJA 9 SKASOWANA 2 wrzesnia 2026. Byla to piatka asercji po TRESCI
+# ZRODLA `run.py`, a nie po zachowaniu — z czego najgorsza:
+#
+#     ZRODLO.index("if martwe:\n                from urllib.parse")
+#
+# czyli szesnascie spacji wciecia wpisanych w warunek testu. Ta asercja
+# oblewala przy przesunieciu bloku o jeden poziom, ktore niczego nie zmienia,
+# i przechodzila, gdyby caly odsiew wyladowal w galezi, do ktorej przebieg
+# nie dochodzi. Pozostale cztery pilnowaly napisow („wynik = browser.wystaw_...")
+# i kolejnosci ich wystapien w PLIKU, a nie w wykonaniu.
+#
+# Nic z tego nie ginie: sekcje 1-8 uruchamiaja prawdziwe `dzien()` na atrapach
+# i mierza to samo ZACHOWANIEM — ze nieudany komentarz nie liczy sie i nic nie
+# pali (1), ze udany robi komplet (2), ze potwierdzenie jest brane z
+# `potwierdz_*` (3-5), ze martwy host nie dostaje platnej oceny (6-8).
 
 print()
 print("=== PRODUKCJA ===")

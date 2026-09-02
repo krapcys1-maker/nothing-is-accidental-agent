@@ -55,7 +55,15 @@ for u in uslugi:
     else:
         # Uslugi dlugodzialajace (VNC, Chrome) [Install] MAJA MIEC — maja
         # wstawac razem z systemem. Rozroznienie idzie po Type=, nie po nazwie.
-        sprawdz("%s nie jest oneshot — [Install] dozwolone" % u.name, True)
+        #
+        # TU STALO `sprawdz(..., True)` — asercja, ktora nie mogla oblac nigdy,
+        # a zajmowala miejsce w liczniku zdanych. Zdanie powyzej jest twarde
+        # („MAJA MIEC") i wlasnie ono jest tu sprawdzane: usluga dlugodzialajaca
+        # BEZ `[Install]` nie wstanie po restarcie maszyny i nikt tego nie
+        # zauwazy, dopoki agent nie zamilknie na dobre.
+        sprawdz("%s nie jest oneshot — MA mieć [Install] (wstaje z systemem)"
+                % u.name, ma_install,
+                "brak sekcji [Install] w usludze dlugodzialajacej")
 
 print()
 print("=== 2. LIMIT CZASU: JEDNA LICZBA W JEDNYM MIEJSCU ===")

@@ -46,18 +46,26 @@ def sprawdz(nazwa, warunek, szczegol=""):
 
 
 # --- podstawiamy model: sprawdzamy KOD skladajacy werdykt, nie dostawce ------
+# PODSTAWIAMY WYLACZNIE `call`. Do 2 wrzesnia `parse_json` bylo tu wlasnym
+# `json.loads` — czyli omijalo prawdziwa funkcje tlumaczaca odpowiedz modelu
+# na ksztalt oczekiwany przez kod (trzydziesci linii obslugi prozy wokol
+# JSON-a, ktorych awaria kosztowala „dwadziescia wyszukiwan i 0,13 USD, po
+# czym oddalo zero"). Atrapa oddaje wiec tekst w takim ksztalcie, w jakim
+# oddaje go model z wlaczonym wyszukiwaniem, a rozbiera go PRAWDZIWY
+# `llm.parse_json`.
+import llm as _prawdziwy_llm   # noqa: E402
+
+
 class FalszywyLLM:
     odpowiedz: dict = {}
+    parse_json = staticmethod(_prawdziwy_llm.parse_json)
 
     @staticmethod
     def call(*a, **k):
         import json
-        return json.dumps(FalszywyLLM.odpowiedz)
-
-    @staticmethod
-    def parse_json(t):
-        import json
-        return json.loads(t)
+        return ("Let me weigh the card — I will return {one object} only.\n\n"
+                + json.dumps(FalszywyLLM.odpowiedz)
+                + "\n\nThat is my reading of what the record supports.")
 
 
 def odsiew(**pola):
@@ -304,8 +312,56 @@ print("=== 9. ZRODLO KODU ZGADZA SIE Z TESTEM ===")
 zrodlo = open("agent-v2/stages.py", encoding="utf-8").read()
 sprawdz("stages liczy nośność z obu rzeczy", '"nosny"' in zrodlo)
 sprawdz("stages ma drogę stawki", "droga_stawki" in zrodlo)
-sprawdz("i wymaga nazwanego decydenta",
-        'droga_stawki = stawka and filary["named_decider"]' in zrodlo)
+
+# URUCHOMIONE, NIE WYGREPOWANE. Do 2 wrzesnia stała tu cała linia źródła —
+# `'droga_stawki = stawka and filary["named_decider"]' in zrodlo`. Taka
+# asercja przechodzi także wtedy, gdy warunek wyląduje w gałęzi, do której
+# `warto_pisac` nie dochodzi, a oblewa przy każdej zmianie odstępu.
+#
+# Pytamy więc prawdziwy `warto_pisac` o werdykt. Podmieniamy WYŁĄCZNIE
+# `llm.call` i oddajemy `json.dumps({...})`, żeby prawdziwy `llm.parse_json`
+# został w torze. Zero sieci, zero płatnych wywołań.
+import contextlib   # noqa: E402
+import io           # noqa: E402
+import json         # noqa: E402
+
+
+def werdykt_stawki(nazwany_decydent):
+    """Karta z nierozstrzygniętym wynikiem i spisaną regułą; decydent zmienny."""
+    odpowiedz = {
+        "contradicted_belief": {"present": False},
+        "named_decider": {"present": nazwany_decydent,
+                          "who": "The Assembly's rapporteur"},
+        "felt_number": {"present": False},
+        "second_domain": {"present": False},
+        "unsettled_outcome": {
+            "present": True,
+            "the_question": "Whether the disclosure duty covers screening "
+                            "reports at all",
+            "governed_by": "FCRA adverse action notice rule"},
+    }
+    oryg = stages.llm.call
+    stages.llm.call = lambda *a, **k: json.dumps(odpowiedz)
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            return stages.warto_pisac(None, 0, {"tytul": "karta testowa"})
+    finally:
+        stages.llm.call = oryg
+
+
+z_decydentem = werdykt_stawki(True)
+bez_decydenta = werdykt_stawki(False)
+sprawdz("stawka Z nazwanym decydentem otwiera drogę do pisania",
+        z_decydentem["werdykt"] == "PISZ", z_decydentem["werdykt"])
+sprawdz("i powód nazywa to drogą stawki",
+        "droga stawki" in z_decydentem["powod"], z_decydentem["powod"])
+sprawdz("i wymaga nazwanego decydenta — bez niego drogi stawki NIE MA",
+        bez_decydenta["werdykt"] == "DOLOZ", bez_decydenta["werdykt"])
+# KONTRDOWOD: wynik sam w sobie został rozpoznany w OBU przypadkach, więc
+# różnicę robi wyłącznie decydent, a nie odrzucenie całej stawki.
+sprawdz("KONTRDOWOD: sama stawka jest widziana w obu przypadkach",
+        z_decydentem["stawka"] is True and bez_decydenta["stawka"] is True,
+        (z_decydentem["stawka"], bez_decydenta["stawka"]))
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

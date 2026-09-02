@@ -18,6 +18,7 @@ ma czego wyszukac. Zmyslone przezycie przechodzilo wiec przez cala scianke
 i szlo na cudzy post pod nazwa pisma.
 """
 import hashlib
+import json
 import pathlib
 import sys
 
@@ -77,17 +78,28 @@ class Licznik:
 
 
 def podstaw_llm(kandydaci):
-    """Model oddaje po kolei podane slowniki, bez sieci i bez kosztu."""
+    """Model oddaje po kolei podane slowniki, bez sieci i bez kosztu.
+
+    PODMIENIAMY WYLACZNIE `call`. Do 2 wrzesnia ten plik podstawial takze
+    `llm.parse_json` — czyli omijal jedyna funkcje, ktora tlumaczy odpowiedz
+    modelu na ksztalt oczekiwany przez kod. Trzydziesci linii obslugi prozy
+    wokol JSON-a, o ktorych wlasny docstring mowi, ile kosztowala ich awaria
+    („dwadziescia wyszukiwan i 0,13 USD, po czym oddalo zero"), nie bylo w
+    tescie dotkniete ani razu.
+
+    Atrapa oddaje wiec SUROWY tekst — z proza dookola, bo tak wlasnie pisze
+    model z wlaczonym wyszukiwaniem — i prawdziwy `parse_json` musi go
+    rozebrac.
+    """
     kolejka = list(kandydaci)
 
     def call(*a, **k):
-        return "{}"
-
-    def parse_json(raw):
-        return kolejka.pop(0) if kolejka else {}
+        dane = kolejka.pop(0) if kolejka else {}
+        return ("Working through the post — one object {like this}.\n\n"
+                + json.dumps(dane, ensure_ascii=False)
+                + "\n\nThat is the version I would stand behind.")
 
     stages.llm.call = call
-    stages.llm.parse_json = parse_json
 
 
 ORYG_CALL, ORYG_PARSE = stages.llm.call, stages.llm.parse_json

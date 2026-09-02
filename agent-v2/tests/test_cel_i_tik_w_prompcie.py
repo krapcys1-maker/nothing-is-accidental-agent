@@ -18,6 +18,7 @@
 import contextlib
 import hashlib
 import io
+import json
 import pathlib
 import sys
 
@@ -47,11 +48,33 @@ PILNOWANE = [config.DB_PATH, config.DATA_DIR / "dziennik.jsonl"]
 PRZED = {str(p): odcisk(p) for p in PILNOWANE}
 
 widziane = {}
+# CO ATRAPA ODDAJE MODELOWI DO PRZETLUMACZENIA. Do 2 wrzesnia ten plik
+# podmienial takze `llm.parse_json` na lambde ignorujaca `raw` — czyli omijal
+# jedyna funkcje, ktora tlumaczy odpowiedz modelu na ksztalt oczekiwany przez
+# kod. Trzydziesci linii obslugi prozy wokol JSON-a, ktorej wlasny docstring
+# podaje koszt awarii („dwadziescia wyszukiwan i 0,13 USD, po czym oddalo
+# zero"), nie bylo w tescie dotkniete ani razu.
+#
+# Teraz podmieniamy WYLACZNIE `call` i oddajemy `json.dumps({...})`.
+odpowiedz = {"tresc": "{}"}
+
+
+def odpowiada(dane):
+    """Ustawia, co atrapa modelu odda w SUROWEJ postaci.
+
+    Z PROZA WOKOL JSON-A, i to z nawiasem w srodku — bo dokladnie na tym
+    `parse_json` raz juz poleglo: naiwny wycinek „od pierwszego { do
+    ostatniego }" lapal nawias ze zdania i caly etap przepadal.
+    """
+    odpowiedz["tresc"] = (
+        "Working on it. I will return one object {like this} and nothing else."
+        "\n\n" + json.dumps(dane, ensure_ascii=False)
+        + "\n\nThat is the whole answer.")
 
 
 def przechwyc_prompt(rodzaj, system, prompt, conn=None, run_id=None, **k):
     widziane["prompt"] = prompt
-    return "{}"
+    return odpowiedz["tresc"]
 
 
 ORYG_CALL, ORYG_PARSE = stages.llm.call, stages.llm.parse_json
@@ -72,8 +95,7 @@ print()
 print("=== 2. I TRAFIA DO PROMPTU KOMENTARZA ===")
 try:
     stages.llm.call = przechwyc_prompt
-    stages.llm.parse_json = lambda raw: {"comment": None,
-                                         "reason_if_silent": "nic do dodania"}
+    odpowiada({"comment": None, "reason_if_silent": "nic do dodania"})
     stages.zweryfikuj = lambda *a, **k: {"claims": [], "safe_to_post": True}
     with contextlib.redirect_stdout(io.StringIO()):
         stages.comment_on(None, 0, {"url": "https://x/p/a", "title": "T",
@@ -111,7 +133,7 @@ try:
     ]
     stages.teksty_ostatnich_notek = lambda ile=40: list(NASZE_Z_TIKIEM)
     stages.ostatnie_otwarcia = lambda rodzaj="notka", ile=8: []
-    stages.llm.parse_json = lambda raw: {"note": "x " * 40, "words": 40}
+    odpowiada({"note": "x " * 40, "words": 40})
     with contextlib.redirect_stdout(io.StringIO()):
         stages.note(None, 0, "MYSL", {"o_czym_sie_mowi": "x"})
     z_tikiem = widziane["prompt"]
@@ -149,8 +171,7 @@ try:
     print("=== 5. LOG NIE KLAMIE O TYM, CO ZA CHWILE ZROBI ===")
     stages.teksty_ostatnich_notek = lambda ile=40: []
     stages.ostatnie_otwarcia = lambda rodzaj="notka", ile=8: ["the"]
-    stages.llm.parse_json = lambda raw: {
-        "note": "The " + "word " * 40, "words": 41}
+    odpowiada({"note": "The " + "word " * 40, "words": 41})
     bufor = io.StringIO()
     with contextlib.redirect_stdout(bufor):
         wynik = stages.note(None, 0, "CIEKAWOSTKA", {"fact": {"fact": "x"}})

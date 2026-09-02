@@ -113,7 +113,13 @@ sprawdz("i mówi wprost, że to gorsza wada",
         "far\nworse fault" in P or "far worse fault" in P)
 sprawdz("i pozwala zostawić zastrzeżenie, gdy inaczej się nie da",
         "keep the hedge" in PLASKI)
-sprawdz("config ostrzega o tej samej pułapce",
+# TEST DOKUMENTACJI, NIE KODU — i od 2 wrzesnia nazywa się tak wprost.
+# Sprawdza obecność KOMENTARZA w `config.py`, więc nie mówi nic o zachowaniu:
+# przejdzie także wtedy, gdy pułapka wróci do kodu, a ostrzeżenie zostanie.
+# Zostaje, bo ten komentarz jest jedynym miejscem, w którym ktoś czytający
+# `config.py` dowie się, dlaczego liczba zastrzeżeń nie może spaść do zera —
+# ale nie ma udawać, że pilnuje pisarza. Pisarza pilnują sekcje 1-3 i 5.
+sprawdz("[dokumentacja] config.py NIESIE ostrzeżenie o tej samej pułapce",
         "UWAGA NA PULAPKE" in (config.__file__ and
                                pathlib.Path(config.__file__).read_text(encoding="utf-8")))
 

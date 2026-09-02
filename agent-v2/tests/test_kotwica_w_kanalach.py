@@ -27,6 +27,8 @@ pelnej z uczciwa adnotacja.
 
 BEZ PYTESTA, bez platnych wywolan. Uruchamiac z korzenia repozytorium.
 """
+import contextlib
+import io
 import json
 import sys
 
@@ -120,7 +122,6 @@ for slowo in ("benchmark", "retracted", "between two versions"):
 print()
 print("=== 4. KOD MIERZY KOTWICE, NIE WIERZY DEKLARACJI ===")
 zrodlo = open("agent-v2/stages.py", encoding="utf-8").read()
-sprawdz("skaut liczy udzial z kanalow", "z kanalow: %d z %d" in zrodlo)
 sprawdz("i porownuje z progiem z konfiguracji",
         "SKAUT_UDZIAL_Z_KANALOW" in zrodlo)
 sprawdz("kotwica wchodzi na czolo klucza sortowania",
@@ -128,8 +129,58 @@ sprawdz("kotwica wchodzi na czolo klucza sortowania",
 sprawdz("falszywa deklaracja jest wypisywana",
         "kotwica deklarowana, ale nieznaleziona" in zrodlo)
 sprawdz("ponizej progu mowimy glosno", "PONIZEJ PROGU KOTWIC" in zrodlo)
-sprawdz("ale NIE kasujemy tematow", "nie kasujemy" in zrodlo.lower()
-        or "NIE ODRZUCAMY" in zrodlo)
+
+
+def uruchom_skauta(tematy, korpus=KORPUS):
+    """PRAWDZIWY `stages.scout` na atrapie modelu. Oddaje (kolejnosc, log).
+
+    Podmieniamy WYLACZNIE `llm.call` i oddajemy `json.dumps({...})` — prawdziwy
+    `llm.parse_json` zostaje w torze, bo to on tlumaczy odpowiedz modelu na
+    ksztalt, ktorego oczekuje kod. Zero sieci, zero platnych wywolan.
+    """
+    oryg = (stages.recent_angles, stages.pytania_dla_skauta,
+            stages.zaczyn_z_kanalow, stages.llm.call,
+            korpus_kanalow.korpus_kanalow)
+    stages.recent_angles = lambda conn, limit=None: []
+    stages.pytania_dla_skauta = lambda ile=6: []
+    stages.zaczyn_z_kanalow = lambda ile=26: "(atrapa)"
+    korpus_kanalow.korpus_kanalow = lambda ile=200: [dict(w) for w in korpus]
+    stages.llm.call = lambda *a, **k: json.dumps(
+        {"topics": [dict(t) for t in tematy],
+         "ranking": {"least_written_about": list(range(len(tematy)))}})
+    bufor = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(bufor):
+            wynik = stages.scout(None, 0, count=len(tematy))
+    finally:
+        (stages.recent_angles, stages.pytania_dla_skauta,
+         stages.zaczyn_z_kanalow, stages.llm.call,
+         korpus_kanalow.korpus_kanalow) = oryg
+    return wynik, bufor.getvalue()
+
+
+# ZACHOWANIE, NIE GREP. Do 2 wrzesnia stalo tu `"z kanalow: %d z %d" in zrodlo`
+# — a ten sam napis jest DRUGI RAZ w etapie ciekawostek (`stages.py`, blok
+# `[ciekawostki]`). Asercja trafiala wiec w cudzy `print` i przechodzilaby
+# takze wtedy, gdyby skaut przestal cokolwiek liczyc.
+kolejnosc, log = uruchom_skauta([Z_KANALU, Z_PAMIECI])
+sprawdz("skaut liczy udzial z kanalow — i mowi to WLASNYM glosem",
+        "[skaut] z kanalow: 1 z 2" in log, log)
+sprawdz("i podaje przy tym prog wlasciciela",
+        "prog %.0f%%" % (100 * config.SKAUT_UDZIAL_Z_KANALOW) in log, log)
+
+# PROG, NIE OBCIECIE — mierzone, nie odczytane z komentarza. Oba tematy sa
+# z pamieci (drugi DEKLARUJE kotwice, ktorej nie uzyl), czyli 0% wobec progu
+# 75%. Skaut ma o tym powiedziec glosno i ODDAC KOMPLET.
+ponizej, log_ponizej = uruchom_skauta([Z_PAMIECI, KLAMIE])
+sprawdz("na 0% kotwic skaut naprawde jest ponizej progu",
+        "[skaut] PONIZEJ PROGU KOTWIC" in log_ponizej, log_ponizej)
+sprawdz("ale NIE kasujemy tematow — wraca komplet",
+        sorted(t["title"] for t in ponizej)
+        == sorted(t["title"] for t in (Z_PAMIECI, KLAMIE)),
+        [t["title"] for t in ponizej])
+sprawdz("i przy pelnym komplecie kotwic tez nic nie ginie",
+        len(uruchom_skauta([Z_KANALU])[0]) == 1)
 
 print()
 print("=== 5. SORTOWANIE STAWIA ZAKOTWICZONE NA CZELE ===")

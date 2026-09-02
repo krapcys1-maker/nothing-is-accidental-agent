@@ -55,6 +55,10 @@ class Pole:
         return 1
 
     def click(self, **k):
+        # Limit zapisujemy ZAWSZE, takze przy nieudanym klikaniu: to jedyna
+        # liczba, ktora agent naprawde podaje Playwrightowi, i tylko ona mowi,
+        # ile sekund kosztuje nas post bez pola komentarza.
+        self.strona.limity.append(k.get("timeout"))
         if not self.widoczne:
             # Dokladnie to robi Playwright: czeka do timeoutu i rzuca.
             raise TimeoutError("Locator.click: Timeout %sms exceeded."
@@ -99,6 +103,7 @@ class Strona:
     def __init__(self, pola):
         self.pola = pola
         self.klikniete = []
+        self.limity = []          # z jakim `timeout` przyszlo kazde klikniecie
         self.wpisane = []
         self.keyboard = self
         self.mouse = self
@@ -213,11 +218,19 @@ for opis, pola in (("brak textarea", []), ("pierwsza ukryta", [False, True])):
 
 print()
 print("=== 6. NOWY SPOSOB CZEKA KROCEJ, GDY JUZ MUSI ===")
-zrodlo = open("agent-v2/browser.py", encoding="utf-8").read()
-sprawdz("limit na klikniecie pola zszedl z 15 s", "pole.click(timeout=8_000)" in zrodlo)
+# MIERZONE, NIE CZYTANE Z NAPISU. Do 2 wrzesnia stalo tu
+# `"pole.click(timeout=8_000)" in zrodlo` — asercja, ktora oblewa przy zapisie
+# `8000` zamiast `8_000` (ta sama liczba, to samo zachowanie) i przechodzi,
+# gdy klikanie wyladuje w galezi, do ktorej przebieg nie dochodzi.
+# Atrapa zapisuje teraz limit, z ktorym Playwright DOSTAJE polecenie.
+w, s = komentuj([True])
+sprawdz("pole naprawde kliknieto", s.klikniete == [0], s.klikniete)
+sprawdz("limit na klikniecie pola zszedl z 15 s", s.limity == [8_000], s.limity)
+# Przy poscie BEZ pola komentarza — przypadek z produkcji — nie czekamy wcale.
+w2, s2 = komentuj([])
 sprawdz("i nie zostal nigdzie stary 15-sekundowy",
-        'page.locator("textarea").first\n        pole.click(timeout=15_000)'
-        not in zrodlo)
+        all(t is not None and t < 15_000 for t in s.limity + s2.limity),
+        s.limity + s2.limity)
 
 print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))

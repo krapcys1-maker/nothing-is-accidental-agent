@@ -262,7 +262,70 @@ sprawdz("i mowi, ze zrodla sie nie zgadzaja",
 sprawdz("okno publikacji NADAL dziala (to nie to samo co godziny)",
         len(re.findall(r"OKNO_PUBLIKACJI_ET", cfg)) > 1,
         len(re.findall(r"OKNO_PUBLIKACJI_ET", cfg)))
-sprawdz("i jest realnie wolane w przebiegu", "pora_na_publikacje()" in reszta)
+
+# „REALNIE WOLANE" MA ZNACZYC REALNIE WOLANE. Do 2 wrzesnia stalo tu
+# `"pora_na_publikacje()" in reszta` — czyli grep, ktory przechodzi rowniez
+# wtedy, gdy wywolanie stoi za `return` albo pod `if False:`, i oblewa przy
+# samej zmianie wciecia. Pytamy wiec drzewo skladni (wzorzec z
+# `test_waga_artykulu.py`): czy w OSIAGALNYM kodzie `run.dzien` jest to
+# wywolanie i czy jego wynik jest do czegokolwiek uzyty.
+import ast as _ast   # noqa: E402
+
+
+def _zywe_wolania(funkcja, nazwa):
+    """Wywolania `nazwa` w kodzie funkcji, do ktorego wykonanie MOZE dojsc.
+
+    Instrukcje za `return`/`raise` i galezie `if False:` sa dla nas nieobecne —
+    dokladnie ta roznica dzieli dzialajacy kod od zielonego grepa.
+    """
+    zywe, kolejka = [], [funkcja.body]
+    while kolejka:
+        wezel = kolejka.pop()
+        if isinstance(wezel, list):
+            for w in wezel:
+                kolejka.append(w)
+                if isinstance(w, (_ast.Return, _ast.Raise,
+                                  _ast.Continue, _ast.Break)):
+                    break
+            continue
+        if isinstance(wezel, _ast.If) and isinstance(wezel.test, _ast.Constant):
+            kolejka.append(wezel.body if wezel.test.value else wezel.orelse)
+            continue
+        if isinstance(wezel, _ast.Call) and nazwa in (
+                getattr(wezel.func, "attr", None),
+                getattr(wezel.func, "id", None)):
+            zywe.append(wezel)
+        for _, wartosc in _ast.iter_fields(wezel):
+            if isinstance(wartosc, list) and wartosc and isinstance(
+                    wartosc[0], _ast.stmt):
+                kolejka.append(wartosc)
+            elif isinstance(wartosc, list):
+                kolejka.extend(x for x in wartosc if isinstance(x, _ast.AST))
+            elif isinstance(wartosc, _ast.AST):
+                kolejka.append(wartosc)
+    return zywe
+
+
+_run_drzewo = _ast.parse(pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8"))
+_dzien = next((f for f in _ast.walk(_run_drzewo)
+               if isinstance(f, _ast.FunctionDef) and f.name == "dzien"), None)
+sprawdz("przebieg dnia w ogole istnieje", _dzien is not None)
+_pora = _zywe_wolania(_dzien, "pora_na_publikacje") if _dzien else []
+sprawdz("i okno publikacji jest w nim WOLANE, w zywej galezi",
+        len(_pora) >= 1, len(_pora))
+# Wywolanie, ktorego wyniku nikt nie czyta, jest tym samym co brak wywolania —
+# to caly temat tego pliku. Wynik ma byc przypisany i pozniej uzyty.
+_uzyty = False
+for _w in _ast.walk(_dzien) if _dzien else []:
+    if not isinstance(_w, _ast.Assign) or _w.value not in _pora:
+        continue
+    _nazwy = {n.id for t in _w.targets for n in _ast.walk(t)
+              if isinstance(n, _ast.Name)}
+    _uzyty = _uzyty or any(
+        isinstance(n, _ast.Name) and n.id in _nazwy
+        and isinstance(n.ctx, _ast.Load)
+        for n in _ast.walk(_dzien))
+sprawdz("a jego wynik jest CZYTANY, nie wyrzucany", _uzyty)
 
 print()
 print("=== 6. RECENZENT: SKLADAMY Z DWOCH ZRODEL, NIE Z JEDNEGO ===")
@@ -323,9 +386,72 @@ sprawdz("brak pola u wszystkich = stala None",
         _stale_sygnaly([{}, {}, {}], ("confidence",)) != [])
 
 st_src = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
-sprawdz("wykrywacz jest realnie wolany w skaucie", "_stale_sygnaly(topics" in st_src)
-sprawdz("i obejmuje watki", '"ile_watkow"' in st_src.split("_stale_sygnaly(topics")[1][:400])
-sprawdz("i nasycenie", '"nasycony"' in st_src.split("_stale_sygnaly(topics")[1][:400])
+
+# WYKRYWACZ SPRAWDZONY URUCHOMIENIEM, NIE GREPEM. Do 2 wrzesnia stalo tu
+# `"_stale_sygnaly(topics" in st_src` plus dwa okna po 400 znakow od tego
+# napisu. Trzy asercje po TRESCI ZRODLA — przechodzilyby takze wtedy, gdyby
+# caly blok stal w martwej galezi, i oblewalyby przy zmianie nazwy zmiennej.
+#
+# Uruchamiamy wiec prawdziwego skauta na atrapie modelu (podmieniamy TYLKO
+# `llm.call`, `llm.parse_json` zostaje prawdziwy) i patrzymy, czy wykrywacz
+# naprawde sie odzywa i czy obejmuje watki oraz nasycenie.
+import contextlib as _ctx   # noqa: E402
+import io as _io            # noqa: E402
+import json as _json        # noqa: E402
+
+import korpus_kanalow as _kk   # noqa: E402
+import stages as _stages       # noqa: E402
+
+_TEMAT_WZORCOWY = {
+    "title": "The Chip Built in Nine Months",
+    "question": "What did the custom inference chip change about who sets the "
+                "price of a token?",
+    "kind": "BROKEN_BELIEF", "scale": "AN_INDUSTRY", "zaczyn": "",
+    "broken_belief": "Everyone assumes the chip changes what the model can do.",
+    # TA SAMA WARTOSC U WSZYSTKICH — dokladnie to, co zlapal log z 2026-08-20:
+    # `watki na temat: [3, 3, 3, ...]` i nasycenie u kazdego.
+    "threads": [1, 2, 3], "already_written": [1, 2, 3], "precedents": [],
+}
+
+
+def _log_skauta(ile=4):
+    """Prawdziwy `stages.scout` na atrapie. Oddaje to, co wypisal."""
+    # `zasieg` CELOWO rozny u polowy tematow — to jest kontrdowod: pole, ktore
+    # naprawde rozroznia, nie moze trafic do meldunku o martwych sygnalach.
+    tematy = [dict(_TEMAT_WZORCOWY, title="Temat %d" % i,
+                   scale="AN_INDUSTRY" if i % 2 else "A_PLACE")
+              for i in range(ile)]
+    _oryg = (_stages.recent_angles, _stages.pytania_dla_skauta,
+             _stages.zaczyn_z_kanalow, _stages.llm.call, _kk.korpus_kanalow)
+    _stages.recent_angles = lambda conn, limit=None: []
+    _stages.pytania_dla_skauta = lambda ile=6: []
+    _stages.zaczyn_z_kanalow = lambda ile=26: "(atrapa)"
+    _kk.korpus_kanalow = lambda ile=200: []
+    _stages.llm.call = lambda *a, **k: _json.dumps(
+        {"topics": tematy, "ranking": {"least_written_about": [0]}})
+    bufor = _io.StringIO()
+    try:
+        with _ctx.redirect_stdout(bufor):
+            _stages.scout(None, 0, count=ile)
+    finally:
+        (_stages.recent_angles, _stages.pytania_dla_skauta,
+         _stages.zaczyn_z_kanalow, _stages.llm.call,
+         _kk.korpus_kanalow) = _oryg
+    return bufor.getvalue()
+
+
+_log = _log_skauta()
+sprawdz("wykrywacz odzywa sie w PRAWDZIWYM przebiegu skauta",
+        "MARTWE W TYM PRZEBIEGU" in _log, _log[-400:])
+_martwe_linia = next((l for l in _log.splitlines()
+                      if "MARTWE W TYM PRZEBIEGU" in l), "")
+sprawdz("i obejmuje watki", "ile_watkow=3" in _martwe_linia, _martwe_linia)
+sprawdz("i nasycenie", "nasycony=True" in _martwe_linia, _martwe_linia)
+# KONTRDOWOD: pole, ktore realnie rozroznia, NIE moze trafic do tego meldunku —
+# inaczej wykrywacz krzyczy zawsze i nikt go nie czyta. `zasieg` dostal wyzej
+# dwie rozne wartosci, wiec ma sie w meldunku NIE pojawic.
+sprawdz("a pole rozroznajace (zasieg) nie jest zglaszane",
+        "zasieg=" not in _martwe_linia, _martwe_linia)
 
 print()
 print("=== 8. KOMUNIKAT NIE MOZE OBIECYWAC ODSIEWU, KTOREGO NIE MA ===")

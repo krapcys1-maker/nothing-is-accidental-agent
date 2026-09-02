@@ -82,8 +82,39 @@ sprawdz("write NIE uzywa juz stalej TARGET_WORDS",
 sprawdz("write bierze dlugosc z glebokosci", 'config.dlugosc_dla(glebokosc)' in zrodlo_w)
 zrodlo_r = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
 sprawdz("run.py czyta depth z odsiewu", 'verdict.get("depth")' in zrodlo_r)
-sprawdz("run.py przekazuje glebokosc do pisarza",
-        "stages.write(conn, run_id, card, glebokosc)" in zrodlo_r)
+
+# DRZEWO SKLADNI, NIE NAPIS. Do 2 wrzesnia stalo tu
+# `"stages.write(conn, run_id, card, glebokosc)" in zrodlo_r` — cala linia
+# zrodla. Wystarczylo, ze JEDNO z dwoch wywolan pisarza (zwykle i po awarii)
+# zgubi czwarty argument, a asercja nadal przechodzila, bo napis znajdowala
+# w tym drugim. Pytamy wiec o KAZDE wywolanie z osobna.
+import ast  # noqa: E402
+
+_main = next((f for f in ast.walk(ast.parse(zrodlo_r))
+              if isinstance(f, ast.FunctionDef) and f.name == "main"), None)
+sprawdz("run.main() istnieje", _main is not None)
+_wywolania = [w for w in (ast.walk(_main) if _main else [])
+              if isinstance(w, ast.Call)
+              and getattr(w.func, "attr", "") == "write"
+              and getattr(getattr(w.func, "value", None), "id", "") == "stages"]
+sprawdz("pisarz jest wolany (i to nie raz — jest jeszcze powtorka po awarii)",
+        len(_wywolania) >= 2, len(_wywolania))
+sprawdz("KAZDE wywolanie pisarza niesie czwarty argument — glebokosc",
+        bool(_wywolania) and all(len(w.args) == 4 for w in _wywolania),
+        [len(w.args) for w in _wywolania])
+# I to ma byc DOKLADNIE ta zmienna, ktora powstala z `verdict.get("depth")` —
+# inaczej pisarz dostaje czwarty argument, tylko nie ten.
+_z_odsiewu = {t.id for w in (ast.walk(_main) if _main else [])
+              if isinstance(w, ast.Assign)
+              and "verdict" in ast.unparse(w.value)
+              and "depth" in ast.unparse(w.value)
+              for t in w.targets if isinstance(t, ast.Name)}
+sprawdz("i glebokosc pochodzi z odsiewu, nie ze stalej",
+        bool(_z_odsiewu) and all(
+            isinstance(w.args[3], ast.Name) and w.args[3].id in _z_odsiewu
+            for w in _wywolania if len(w.args) == 4),
+        (sorted(_z_odsiewu),
+         [ast.unparse(w.args[3]) for w in _wywolania if len(w.args) == 4]))
 
 for g, d in (("RICH", r), ("SINGLE", s)):
     # Ruch koncowy i liczba paraleli sa od teraz losowane per artykul, wiec

@@ -92,7 +92,11 @@ print("    bylo:  6 znalezionych -> 3 pobrane (2 x pusto, 1 x 404)")
 print("    gdyby przegladarka odzyskala te dwa: 5 z 6")
 sprawdz("prog zrodel pierwotnych to %s" % config.MIN_PRIMARY_SOURCES,
         config.MIN_PRIMARY_SOURCES >= 2)
-sprawdz("dwa odzyskane zrodla to roznica miedzy 2 a 4 dokumentami", True)
+# TU STALO `sprawdz("dwa odzyskane zrodla to roznica miedzy 2 a 4 dokumentami",
+# True)` — asercja z warunkiem `True`, ktora nie mogla oblac nigdy. Liczyla sie
+# do „zdanych" i nie pilnowala niczego. To jest zdanie o danych z przebiegu,
+# nie twierdzenie o kodzie, wiec nalezy do wydruku, nie do licznika.
+print("    dwa odzyskane źródła to różnica między 2 a 4 dokumentami")
 
 print()
 print("=== WYNIK: %s zdanych, %s oblanych ===" % (zdane, oblane))

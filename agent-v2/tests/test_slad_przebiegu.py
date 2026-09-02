@@ -127,8 +127,21 @@ try:
     print()
     print("=== 6. RYTM NAPRAWDE Z TEGO KORZYSTA ===")
     src = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
-    poczatek = src.find("def rytm(")
-    ciało = src[poczatek:poczatek + 2600]
+    # CIALO FUNKCJI, A NIE OKNO 2600 ZNAKOW. Do 2 wrzesnia stalo tu
+    # `src[poczatek:poczatek + 2600]` — wycinek, ktory konczyl sie w polowie
+    # `rytm` i dzialal przypadkiem: dopisanie akapitu komentarza wypychalo
+    # z okna zdanie o wycofaniu, a asercje oblewaly bez zmiany zachowania.
+    # Odwrotnie tez: kod dopisany PO oknie byl dla testu niewidzialny.
+    import ast
+
+    _rytm = next(f for f in ast.walk(ast.parse(src))
+                 if isinstance(f, ast.FunctionDef) and f.name == "rytm")
+    ciało = ast.get_source_segment(src, _rytm) or ""
+    sprawdz("cialo `rytm` wyciete w calosci, nie oknem znakow",
+            ciało.startswith("def rytm(") and ciało.rstrip().endswith(("True",
+                                                                      "False",
+                                                                      ")")),
+            (ciało[:24], ciało.rstrip()[-24:]))
     # Hamulec liczy porazki TEGO BLOKU, nie wszystkich blokow naraz — patrz
     # `test_hamulec_per_blok.py`. `_pod_rzad_w_bloku` stoi na
     # `browser.pod_rzad_nieudanych`, tylko odejmuje stan z chwili wejscia

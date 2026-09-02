@@ -69,8 +69,48 @@ zrodlo = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
 for petla in ("notki", "komentarze", "dyskusje", "odpowiedzi", "obserwowanie"):
     sprawdz("petla %-13s pyta o czas" % petla,
             'zostal_czas("%s")' % petla in zrodlo)
-sprawdz("dzien() ustawia koniec czasu na starcie",
-        "_KONIEC_CZASU = time.time() + max(" in zrodlo)
+
+# DRZEWO SKLADNI, NIE NAPIS. Do 2 wrzesnia stalo tu
+# `"_KONIEC_CZASU = time.time() + max(" in zrodlo`. Ten grep przechodzil
+# rowniez wtedy, gdy z `dzien()` znikala deklaracja `global` — a wtedy
+# przypisanie tworzy ZMIENNA LOKALNA, modulowy `_KONIEC_CZASU` zostaje `None`
+# i `zostal_czas` przepuszcza wszystko do konca swiata. Oblewal za to przy
+# zmianie odstepu wokol `+`, ktora niczego nie zmienia.
+import ast  # noqa: E402
+
+_drzewo = ast.parse(zrodlo)
+_dzien = next((f for f in ast.walk(_drzewo)
+               if isinstance(f, ast.FunctionDef) and f.name == "dzien"), None)
+sprawdz("dzien() istnieje", _dzien is not None)
+
+_globalne = {n for w in ast.walk(_dzien) if isinstance(w, ast.Global)
+             for n in w.names} if _dzien else set()
+sprawdz("dzien() deklaruje `global _KONIEC_CZASU` (inaczej ustawia LOKALNA)",
+        "_KONIEC_CZASU" in _globalne, sorted(_globalne))
+
+# Przypisanie musi stac w OSIAGALNEJ czesci funkcji — czyli przed pierwszym
+# `return` na jej najwyzszym poziomie — i liczyc sie od TERAZ.
+_osiagalne = []
+for _w in (_dzien.body if _dzien else []):
+    _osiagalne.append(_w)
+    if isinstance(_w, (ast.Return, ast.Raise)):
+        break
+_ustawienia = [w for w in _osiagalne if isinstance(w, ast.Assign)
+               and any(isinstance(t, ast.Name) and t.id == "_KONIEC_CZASU"
+                       for t in w.targets)]
+sprawdz("i ustawia koniec czasu na starcie, w zywej galezi",
+        len(_ustawienia) == 1, len(_ustawienia))
+_wartosc = _ustawienia[0].value if _ustawienia else None
+sprawdz("koniec czasu liczy sie od TERAZ (time.time() + zapas)",
+        isinstance(_wartosc, ast.BinOp) and isinstance(_wartosc.op, ast.Add)
+        and isinstance(_wartosc.left, ast.Call)
+        and getattr(_wartosc.left.func, "attr", "") == "time",
+        ast.dump(_wartosc)[:120] if _wartosc else "(brak)")
+sprawdz("i ma podloge, zeby limit nigdy nie wyszedl ujemny",
+        isinstance(_wartosc, ast.BinOp) and isinstance(_wartosc.right, ast.Call)
+        and getattr(_wartosc.right.func, "id", "") == "max",
+        ast.dump(_wartosc.right)[:120] if isinstance(_wartosc, ast.BinOp)
+        else "(brak)")
 
 print()
 print("=== 4. SIGTERM ZOSTAWIA SLAD (prawdziwy proces, prawdziwy sygnal) ===")
