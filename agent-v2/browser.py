@@ -104,6 +104,21 @@ POWOD_HOST_NIE_POKAZUJE = "Substack nie potwierdzil, ze wyszlo"
 
 
 def dopisz_wynik(rodzaj: str, wynik: dict, **szczegoly) -> None:
+    # DLACZEGO 1200 ZNAKOW, A NIE 300 — TO BYL BLAD POMIARU, NIE OSZCZEDNOSC.
+    #
+    # Do 2 wrzesnia 2026 zapisywalismy `tekst[:300]`. Zmierzone tego dnia na
+    # profilu: mediana notki ma 333 znaki, maksimum 456 — czyli dziennik urywal
+    # KAZDA drugą notke, i to zawsze na koncu.
+    #
+    # Koniec jest tu najdrozszym miejscem. Forma PYTANIE stawia pytanie
+    # w OSTATNIEJ linii, po podaniu faktu. Zliczylem wiec pytajniki w dzienniku,
+    # dostalem zero na 53 notki i oglosilem wlascicielowi, ze forma jest martwa.
+    # Byla to nieprawda: na profilu wisi nasza wlasna notka konczaca sie
+    # „How far back does your work chat history go?". Pomiar mierzyl obciecie,
+    # nie tresc — a wniosek z niego byl gotowa decyzja o przepisaniu promptow.
+    #
+    # 1200 znakow miesci notke (do 64 slow) i komentarz (do 70 slow) w calosci,
+    # z zapasem. Linia JSONL jest tania; falszywy wniosek nie jest.
     """Jeden wpis na dzialanie — takze wtedy, gdy sie NIE UDALO, i z powodem.
 
     DWIE DZIURY NARAZ, obie groznie ciche.
@@ -3368,7 +3383,7 @@ def wystaw_odpowiedz_pod_artykulem(
             wynik["wyslane"] = odp
             dopisz_wynik("odpowiedz_pod_artykulem", wynik,
                                gdzie=url_artykulu, komu=autor,
-                               slow=len(tekst.split()), tekst=tekst[:300])
+                               slow=len(tekst.split()), tekst=tekst[:1200])
             print("  ODPOWIEDŹ POD ARTYKUŁEM POTWIERDZONA" if wynik["wyslane"]
                   else "  KLIKNIĘTE, ALE ODPOWIEDZI NIE WIDAĆ", flush=True)
         elif not wyslij:
@@ -3391,7 +3406,7 @@ def wystaw_odpowiedz_pod_artykulem(
             if wyslij:
                 dopisz_wynik("odpowiedz_pod_artykulem", wynik,
                              gdzie=url_artykulu, komu=autor,
-                             slow=len(tekst.split()), tekst=tekst[:300])
+                             slow=len(tekst.split()), tekst=tekst[:1200])
         except Exception as exc:
             print("  (nie zapisalem odpowiedzi pod artykulem do dziennika: %s)"
                   % type(exc).__name__, flush=True)
@@ -3674,7 +3689,7 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
             # ktory zawiodl, zamiast jak numer, ktorego nie bylo.
             dopisz_wynik(rodzaj, wynik,
                                gdzie=f"note/c-{note_id}",
-                               slow=len(tekst.split()), tekst=tekst[:300],
+                               slow=len(tekst.split()), tekst=tekst[:1200],
                                nasz_id=(odp if (odp or 0) > 0 else None),
                                **(kontekst or {}))
             print("  ODPOWIEDŹ POTWIERDZONA W WĄTKU" if wynik["wyslane"]
@@ -3708,7 +3723,7 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
         try:
             if wyslij and not wynik.get("pominiete"):
                 dopisz_wynik(rodzaj, wynik, gdzie=f"note/c-{note_id}",
-                             slow=len(tekst.split()), tekst=tekst[:300],
+                             slow=len(tekst.split()), tekst=tekst[:1200],
                              **(kontekst or {}))
         except Exception as exc:
             print("  (nie zapisalem odpowiedzi do dziennika: %s)"
@@ -3817,7 +3832,7 @@ def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
                       "NIE ODCZYTANY — reakcji nie da sie z nia polaczyc"),
                       flush=True)
             dopisz_wynik("notka", wynik, slow=len(tekst.split()),
-                         tekst=tekst[:300], id=wynik["id"],
+                         tekst=tekst[:1200], id=wynik["id"],
                          typ=typ, forma=forma)
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
@@ -3829,7 +3844,7 @@ def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
         # albo bo nie bylo przycisku — porazka i tak trafia do dziennika.
         if wyslij:
             dopisz_wynik("notka", wynik, slow=len(tekst.split()),
-                         tekst=tekst[:300], id=wynik.get("id", ""),
+                         tekst=tekst[:1200], id=wynik.get("id", ""),
                          typ=typ, forma=forma)
         page.close()
         browser.close()
@@ -4395,7 +4410,7 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
             wynik["wyslane"] = nasz_numer is not None
             wynik["id"] = nasz_numer
             dopisz_wynik("komentarz", wynik, gdzie=url,
-                               slow=len(tekst.split()), tekst=tekst[:300],
+                               slow=len(tekst.split()), tekst=tekst[:1200],
                                nasz_id=nasz_numer, **(kontekst or {}))
             print("  KOMENTARZ POTWIERDZONY U SUBSTACKA" if wynik["wyslane"]
                   else "  KLIKNIĘTE, ALE SUBSTACK GO NIE POKAZUJE", flush=True)
@@ -4446,7 +4461,7 @@ def wystaw_komentarz(url: str, tekst: str, wyslij: bool = False,
         try:
             if wyslij and not wynik.get("pominiete"):
                 dopisz_wynik("komentarz", wynik, gdzie=url,
-                             slow=len(tekst.split()), tekst=tekst[:300],
+                             slow=len(tekst.split()), tekst=tekst[:1200],
                              nasz_id=wynik.get("id"), **(kontekst or {}))
         except Exception as exc:
             print("  (nie zapisalem komentarza do dziennika: %s)"

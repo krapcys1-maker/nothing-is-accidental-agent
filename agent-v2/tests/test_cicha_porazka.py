@@ -673,12 +673,15 @@ nowy = sprzatanie(browser, 12345)
 print("    Z POPRAWKA:      blad=%s strona=%s przegladarka=%s sterownik=%s" % nowy)
 
 wyczysc()
+# Literal `[:1200]` MUSI byc taki sam jak w `browser.py`. Byl tu `[:300]`
+# i latka odwrotna przestala miec co cofac w chwili, gdy podniesiono
+# obciecie — czyli kontrdowod cicho przestal byc kontrdowodem.
 bez_oslony = stary_browser(
     "browser_bez_oslony",
     ("""        try:
             if wyslij and not wynik.get("pominiete"):
                 dopisz_wynik("komentarz", wynik, gdzie=url,
-                             slow=len(tekst.split()), tekst=tekst[:300],
+                             slow=len(tekst.split()), tekst=tekst[:1200],
                              nasz_id=wynik.get("id"), **(kontekst or {}))
         except Exception as exc:
             print("  (nie zapisalem komentarza do dziennika: %s)"
@@ -686,7 +689,7 @@ bez_oslony = stary_browser(
 """,
      """        if wyslij and not wynik.get("pominiete"):
             dopisz_wynik("komentarz", wynik, gdzie=url,
-                         slow=len(tekst.split()), tekst=tekst[:300],
+                         slow=len(tekst.split()), tekst=tekst[:1200],
                          nasz_id=wynik.get("id"), **(kontekst or {}))
 """))
 stary = sprzatanie(bez_oslony, 12345)
