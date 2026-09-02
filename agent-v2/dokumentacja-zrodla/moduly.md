@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-2690 wierszy, 26 funkcji na poziomie modułu, 1 klas
+2710 wierszy, 26 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -34,7 +34,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-6669 wierszy, 123 funkcji na poziomie modułu, 0 klas
+6684 wierszy, 124 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -130,6 +130,7 @@
 | `podsumowanie_dzialan(dni)` | Ile czego WYSZLO w ostatnich `dni` dniach, wobec normy z configu. |
 | `powody_porazek(dni)` | Dlaczego dzialania sie NIE UDALY — pogrupowane, najczestsze pierwsze. |
 | `_powod_przegranej(klucz_zwyciezcy, klucz_tematu)` *(wewn.)* | Ktory skladnik klucza sortowania ROZSTRZYGNAL, i jakimi wartosciami. |
+| `_pisze_do_produkcji(sciezka)` *(wewn.)* | Czy ta sciezka to PRAWDZIWY katalog danych, a nie katalog testu. |
 | `zapisz_przegranych(przegrani, run_id)` | Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej. |
 | `pick_topic(topics, assessments, run_id, wczesniejsze)` | Wybiera temat leksykograficznie wedlug dziewieciu kryteriow. |
 | `scout(conn, run_id, count)` | Etap 1 — skaut tematow (DeepSeek V4 Pro). |
@@ -257,7 +258,7 @@
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-741 wierszy, 14 funkcji na poziomie modułu, 3 klas
+760 wierszy, 14 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
@@ -387,7 +388,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2526 wierszy, 21 funkcji na poziomie modułu, 0 klas
+2568 wierszy, 22 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -408,6 +409,7 @@
 | `_cisza_z_hasza(dzien)` *(wewn.)* | — |
 | `cichy_dzien(kiedy)` | Czy dzis nie nadajemy. Ta sama odpowiedz przez caly dzien. |
 | `timeout_for(max_tokens)` | Termin w sekundach, który realnie pokrywa podany sufit tokenów. |
+| `_w_darmowym_tescie()` *(wewn.)* | Czy uruchomiony program to test, ktory NIE MA prawa placic. |
 | `losowy_ruch_koncowy()` | Czym konczy sie TEN artykul. Rowne szanse, bez powtarzania formuly. |
 | `losowa_liczba_paraleli(glebokosc)` | Ile paraleli w drugim akcie. Krotki artykul nigdy nie bierze trzech. |
 | `losowe_generatory(ile)` | Ktore wzorce w tym przebiegu. Ten sam generator dwa dni z rzedu daje |
@@ -432,7 +434,7 @@
 
 ### `oszacowania.py` — co z tych pomiarów wynika — i czego z nich NIE wynika: udziały z próbą, wiekiem i stanem „wiem/nie wiem”
 
-428 wierszy, 16 funkcji na poziomie modułu, 0 klas
+442 wierszy, 18 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -448,6 +450,8 @@
 | `formy_notek()` | To samo dla formy. Forma trafia do dziennika dopiero od 1 wrzesnia 2026, |
 | `_host(wpis)` *(wewn.)* | Jedna nazwa hosta z tego, co dziennik akurat zapisal. |
 | `hosty()` | Czy sa miejsca, gdzie nikt nigdy nie odpowiada. |
+| `_blok_dnia(wpis)` *(wewn.)* | Ktory blok doby, wedlug czasu UTC z dziennika. |
+| `pory_dnia()` | Czy pora publikacji notki ma zwiazek z zasiegiem. |
 | `wszystkie()` | Komplet pytan, ktore umiemy dzis zadac wlasnym zapisom. |
 | `wagi_postaw(grupa)` | Wagi postaw po ewentualnej modulacji oszacowaniem. |
 | `migawka(oszacowanie)` | Skrot oszacowania do zapisania PRZY DECYZJI, ktora je wykorzystala. |

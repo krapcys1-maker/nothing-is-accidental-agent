@@ -2685,6 +2685,26 @@ def _summary(conn, run_id: int) -> None:
     ).fetchone()
     print(f"\n== koszt przebiegu: ${row['total']:.4f} w {row['n']} wywołaniach ==", flush=True)
 
+    # CO WIEMY O WLASNEJ PRACY — na koniec kazdego przebiegu, ZA DARMO.
+    #
+    # Zero wywolan modelu: caly rachunek idzie z dziennika i ze statystyk.
+    # W trybie obserwacyjnym nie zmienia ZADNEJ decyzji i tak ma zostac,
+    # dopoki proby nie dojrzeja; dzis odpowiedzia jest „nie wiem" wszedzie,
+    # bo uzyteczne okno ma cztery dni — od progu dojrzalosci do przestawienia
+    # konta.
+    #
+    # POD `try`, BO RAPORT NIE MOZE ZABIC PRZEBIEGU. Ta funkcja jest wolana
+    # takze ze sciezki awaryjnej, tuz przed `raise` — gdyby rzucila stamtad,
+    # podmienilaby prawdziwa przyczyne awarii na wlasna i zabralaby jedyny
+    # slad tego, co sie naprawde stalo. Dziennik, ktory wywala agenta, jest
+    # gorszy od jego braku.
+    try:
+        import oszacowania
+        print(flush=True)
+        print(oszacowania.raport(), flush=True)
+    except Exception as exc:      # noqa: BLE001
+        print("  (oszacowania nie policzone: %s)" % type(exc).__name__, flush=True)
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

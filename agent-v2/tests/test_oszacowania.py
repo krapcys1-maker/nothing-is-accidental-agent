@@ -235,7 +235,18 @@ print("=== 11. PUSTE DANE NIE WYWALAJA NICZEGO ===")
 zapisz([], [])
 try:
     g = oszacowania.wszystkie()
-    sprawdz("cztery pytania mimo pustki", len(g) == 4, len(g))
+    # NAZWY PYTAN, NIE ICH LICZBA. Pierwsza wersja sprawdzala „len == 4"
+    # i oblala przy dolozeniu pory dnia — czyli mierzyla, ile pytan bylo wczoraj,
+    # zamiast tego, czy kazde umie odpowiedziec na pustych danych. Lista nazw
+    # tez pilnuje kompletu, ale gdy sie zmieni, mowi CO sie zmienilo.
+    nazwy = sorted(x["pytanie"] for x in g)
+    sprawdz("komplet pytan mimo pustki",
+            nazwy == sorted(["postawa -> odpowiedzi", "typ notki -> odpowiedzi",
+                             "forma notki -> odpowiedzi", "host -> odpowiedzi",
+                             "pora notki -> wyswietlenia"]), nazwy)
+    sprawdz("kazde oddaje komplet kluczy",
+            all(set(x) == {"pytanie", "wynik", "oszacowania", "straty"} for x in g),
+            [set(x) for x in g])
     sprawdz("raport sie sklada", isinstance(oszacowania.raport(g), str))
     sprawdz("wagi wracaja redakcyjne", oszacowania.wagi_postaw() == redakcyjne)
 except Exception as exc:                              # noqa: BLE001
@@ -250,6 +261,33 @@ with io.open(KATALOG / "dziennik.jsonl", "a", encoding="utf-8") as f:
 o = oszacowania.postawy_komentarza()["oszacowania"]
 sprawdz("polowiczna linia pominieta, reszta policzona",
         bool(o) and o[0]["mianownik"] == 20, o)
+
+print()
+print("=== 13. RAPORT W PRZEBIEGU NIE MOZE ZABIC PRZEBIEGU ===")
+# `run._summary` wola raport takze ze sciezki AWARYJNEJ, tuz przed `raise`.
+# Gdyby raport rzucil stamtad, podmienilby prawdziwa przyczyne awarii na
+# wlasna i zabralby jedyny slad tego, co sie naprawde stalo.
+#
+# Sprawdzane na DRZEWIE SKLADNI, nie po napisie: `import run` ciagnie
+# playwrighta, ktorego na maszynie wlasciciela nie ma, wiec test wywolujacy
+# `_summary` naprawde bylby testem obecnosci przegladarki.
+import ast as _ast
+_zrodlo = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
+_summary = next((w for w in _ast.walk(_ast.parse(_zrodlo))
+                 if isinstance(w, _ast.FunctionDef) and w.name == "_summary"), None)
+sprawdz("`_summary` istnieje", _summary is not None)
+_wola_raport = [w for w in _ast.walk(_summary)
+                if isinstance(w, _ast.Call)
+                and getattr(w.func, "attr", "") == "raport"] if _summary else []
+sprawdz("i wola raport oszacowan", bool(_wola_raport))
+_pod_try = []
+for _t in _ast.walk(_summary or _ast.Module(body=[], type_ignores=[])):
+    if isinstance(_t, _ast.Try) and _t.handlers:
+        _pod_try += [w for w in _ast.walk(_t)
+                     if isinstance(w, _ast.Call)
+                     and getattr(w.func, "attr", "") == "raport"]
+sprawdz("wolanie stoi pod `try` z obsluga wyjatku",
+        bool(_pod_try), "raport bez oslony podmienia przyczyne awarii")
 
 print()
 print("=" * 62)

@@ -172,9 +172,20 @@ def _oszacowanie(pytanie: str, wariant: str, pozycje: list[dict],
     }
 
 
-def _zbierz(rodzaj: str, klucz_id: str, klucz_wariantu: str,
+def _zbierz(rodzaj: str, klucz_id: str,
+            klucz_wariantu: str | Callable[[dict], str],
             pytanie: str, wynik: str = GLOWNY_WYNIK) -> dict[str, Any]:
     """Wspolny rachunek dla kazdego pytania „wariant -> wynik".
+
+    `klucz_wariantu` moze byc nazwa pola ALBO funkcja, ktora wariant wylicza —
+    bo nie kazde pytanie ma gotowa kolumne. Pora dnia i host mieszkaja w
+    czasie i w adresie, a nie w osobnym polu.
+
+    JEDNA IMPLEMENTACJA, NIE DWIE. Pierwsza wersja miala `hosty()` przepisane
+    osobno, z wlasna kopia odsiewu i wlasnym slownikiem strat. Dwie kopie tej
+    samej reguly rozjezdzaja sie po cichu, a w tym repozytorium jest to klasa
+    bledu z wlasna historia — od dwoch kopii daty przestawienia konta po dwie
+    kopie listy rodzajow w audycie.
 
     Zwraca oszacowania PLUS rachunek strat: ile wpisow odpadlo i dlaczego.
     Rachunek strat jest czescia odpowiedzi, nie przypisem — bez niego
@@ -191,7 +202,8 @@ def _zbierz(rodzaj: str, klucz_id: str, klucz_wariantu: str,
 
     for w in wpisy(rodzaj):
         ident = _identyfikator(w.get(klucz_id))
-        wariant = str(w.get(klucz_wariantu) or "")
+        wariant = str((klucz_wariantu(w) if callable(klucz_wariantu)
+                       else w.get(klucz_wariantu)) or "")
         if not ident:
             straty["bez_id"] += 1
             continue
@@ -275,48 +287,50 @@ def hosty() -> dict[str, Any]:
     czterech probach nie znaczy nic; przy czterdziestu znaczy tyle, ze warto
     poszukac indziej. To sygnal do rankingu, nie wyrok.
     """
-    teraz = datetime.now(timezone.utc)
-    pomiary = statystyki.najnowsze_per_pozycja("komentarz")
-    granica = _chwila(config.PRZESTAWIENIE_KONTA)
-    straty = {"bez_id": 0, "bez_wariantu": 0, "bez_pomiaru": 0,
-              "sprzed_przestawienia": 0, "za_stare": 0, "niedojrzale": 0}
-    wg: dict[str, list[dict]] = {}
-    for w in wpisy("komentarz"):
-        ident = _identyfikator(w.get("nasz_id"))
-        if not ident:
-            straty["bez_id"] += 1
-            continue
-        host = _host(w)
-        if not host:
-            straty["bez_wariantu"] += 1
-            continue
-        pomiar = pomiary.get(ident)
-        if pomiar is None:
-            straty["bez_pomiaru"] += 1
-            continue
-        kiedy = _chwila(w.get("kiedy"))
-        if granica and kiedy and kiedy < granica:
-            straty["sprzed_przestawienia"] += 1
-            continue
-        wiek = _wiek_dni(w, pomiar, teraz)
-        if wiek is None or wiek > config.OSZACOWANIA_OKNO_DNI:
-            straty["za_stare"] += 1
-            continue
-        if wiek < config.OSZACOWANIA_DOJRZALOSC_DNI:
-            straty["niedojrzale"] += 1
-            continue
-        wg.setdefault(host, []).append(
-            {"id": ident, "pomiar": pomiar, "wiek": wiek, "wpis": w})
-    osz = [_oszacowanie("host -> odpowiedzi", h, p, GLOWNY_WYNIK, teraz)
-           for h, p in sorted(wg.items())]
-    osz.sort(key=lambda o: (-o["mianownik"], o["wariant"]))
-    return {"pytanie": "host -> odpowiedzi", "wynik": GLOWNY_WYNIK,
-            "oszacowania": osz, "straty": straty}
+    return _zbierz("komentarz", "nasz_id", _host, "host -> odpowiedzi")
+
+
+# Pory dnia w czterech blokach, nie w dwudziestu czterech. Przebiegow jest
+# piec dziennie, wiec przy godzinowych kubelkach kazdy miesci najwyzej jeden
+# wpis i zaden nigdy nie dojrzeje. Kubelek, ktory z definicji nie moze uzbierac
+# proby, to nie jest ostrozny pomiar, tylko pomiar udawany.
+BLOKI_DNIA = ((0, "00-05 noc"), (6, "06-11 rano"),
+              (12, "12-17 popoludnie"), (18, "18-23 wieczor"))
+
+
+def _blok_dnia(wpis: dict) -> str:
+    """Ktory blok doby, wedlug czasu UTC z dziennika."""
+    kiedy = _chwila(wpis.get("kiedy"))
+    if kiedy is None:
+        return ""
+    etykieta = BLOKI_DNIA[0][1]
+    for od, nazwa in BLOKI_DNIA:
+        if kiedy.hour >= od:
+            etykieta = nazwa
+    return etykieta
+
+
+def pory_dnia() -> dict[str, Any]:
+    """Czy pora publikacji notki ma zwiazek z zasiegiem.
+
+    Wynikiem sa WYSWIETLENIA, nie odpowiedzi: notka zbiera odpowiedzi rzadko,
+    a wyswietlenia zawsze, wiec przy tej wielkosci konta tylko one maja szanse
+    cokolwiek pokazac.
+
+    ZASTRZEZENIE, KTORE ZOSTAJE NIEZALATANE: wyswietlenia zaleza takze od
+    tematu, dlugosci i od tego, kto akurat byl online — a pora nie jest
+    losowana niezaleznie od tych rzeczy, bo przebiegi stoja o stalych porach
+    z 25-minutowym rozmyciem. Roznica miedzy blokami moze wiec byc roznica
+    miedzy tym, co w tych blokach pisalismy.
+    """
+    return _zbierz("notka", "id", _blok_dnia, "pora notki -> wyswietlenia",
+                   wynik="wyswietlenia")
 
 
 def wszystkie() -> list[dict[str, Any]]:
     """Komplet pytan, ktore umiemy dzis zadac wlasnym zapisom."""
-    return [postawy_komentarza(), typy_notek(), formy_notek(), hosty()]
+    return [postawy_komentarza(), typy_notek(), formy_notek(), hosty(),
+            pory_dnia()]
 
 
 # --------------------------------------------------------------------------
