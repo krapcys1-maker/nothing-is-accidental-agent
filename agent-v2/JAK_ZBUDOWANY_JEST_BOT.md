@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **22 plików**, 25 920 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **22 plików**, 26 167 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 114 zestawów
-testów, 3227 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 115 zestawów
+testów, 3248 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-2690 wierszy, 26 funkcji na poziomie modułu, 1 klas
+2751 wierszy, 26 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -176,7 +176,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-6684 wierszy, 124 funkcji na poziomie modułu, 0 klas
+6752 wierszy, 128 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -233,6 +233,10 @@ wiec nie da sie go rozjechac z kodem.
 | `note(conn, run_id, note_type, evidence, link, note_form)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_pola_ksztaltu(ksztalt, pomin)` *(wewn.)* | Nazwy pol z kontraktu na odpowiedz, bez klucza opakowujacego. |
 | `zakwestionuj_promocje(url, powod)` | Artykul, ktorego notka promujaca odpadla na sprawdzeniu faktow. |
+| `zapamietaj_niewystawiony(sciezka, powod)` | Zapisuje, ze gotowy artykul lezy na dysku i nie poszedl w swiat. |
+| `niewystawiony_artykul()` | Artykul czekajacy na ponowna probe, albo None. NIGDY nie rzuca. |
+| `odnotuj_probe_artykulu(powod)` | Podbija licznik prob i oddaje nowa wartosc. Zero, gdy znacznika nie ma. |
+| `zapomnij_niewystawiony()` | Tekst jest publiczny — znacznik znika. |
 | `zapisz_do_promocji(url, tytul, tekst)` | Zapisuje opublikowany artykul do promowania przez kolejne dni. |
 | `wczytaj_promocje()` | — |
 | `artykul_do_promocji()` | Artykul, ktory dzis czeka na notke promujaca — najwyzej JEDNA na dobe. |
@@ -479,7 +483,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-778 wierszy, 20 funkcji na poziomie modułu, 0 klas
+807 wierszy, 21 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -488,6 +492,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_ostatnio(klucz)` *(wewn.)* | — |
 | `_zapisz(klucz)` *(wewn.)* | — |
 | `wyslij(klucz, temat, tresc)` | Wysyła alarm. `klucz` identyfikuje RODZAJ problemu, nie pojedynczy wypadek. |
+| `artykul_zalegly()` | Czy gotowy artykul lezy na dysku niewystawiony dluzej niz dobe. |
 | `sprawdz_sesje_i_ostrzez()` | Pilnuje jedynej rzeczy, która zatrzymuje agenta bez żadnego błędu. |
 | `sprawdz_przebiegi_i_ostrzez(ile)` | Alarmuje, gdy agent pada raz za razem. |
 | `_polaczenie()` *(wewn.)* | — |
@@ -530,7 +535,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2501 wierszy, 22 funkcji na poziomie modułu, 0 klas
+2522 wierszy, 22 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -611,7 +616,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `artykul_z_puli.py` — artykuł bierze temat z tej samej puli, co notki
 
-1374 wierszy, 13 funkcji na poziomie modułu, 0 klas
+1442 wierszy, 14 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -624,6 +629,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_rozszerz_najstarsze(card, data_faktu)` *(wewn.)* | Data wstrzyknietego zrodla wazy — ale TYLKO w strone ostrzezenia. |
 | `_przebieg(conn, run_id)` *(wewn.)* | — |
 | `_katalog_ratunku()` *(wewn.)* | Katalog OBOK `ARTICLES_DIR`, nigdy w nim. |
+| `_opublikuj(sciezka)` *(wewn.)* | Wystawia gotowy artykul, probujac wiecej niz raz. NIE JEST BRAMKA. |
 | `_ramka(powod, brak, katalog)` *(wewn.)* | Ostrzezenie, ktore idzie na POCZATEK `.md`, a nie tylko obok niego. |
 | `_zrodla(card)` *(wewn.)* | Sekcja `## Sources` — bez pytania bazy o nazwy zrodel. |
 | `_ratuj_tekst(run_id, brief, card, draft, etap, exc, raport)` *(wewn.)* | Gotowy tekst na dysk, gdy budzet albo wylacznik przerywa PO pisaniu. |
@@ -12725,7 +12731,10 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `RESTACK_DZIENNIE` | `(1, 2)` | Zjechane z 2-4 na 1-2 (2026-08-20). Restack stawia NASZE nazwisko obok cudzego tekstu — to najmocniejszy gest w calym repertuarze i jedyny,  |
 | `RESTACK_MAX_SLOW` | `40` | Dopisek do cudzej notki. Powyzej tego to juz nie dopisek, tylko wlasna notka doczepiona do czyjegos tekstu — a wtedy lepiej napisac wlasna n |
 | `PRZEBIEGOW_DZIENNIE` | `5` | Pierwszy miesiac na dolnej polowie widelek. Nowe konto z jednym artykulem, ktore nagle obserwuje dwadziescia osob, wyglada dokladnie jak far |
-| `LIMIT_CZASU_PRZEBIEGU_S` | `9000` | ILE CZASU MA PRZEBIEG. Musi zgadzac sie z `TimeoutStartSec` w pliku uslugi — to jedyne miejsce, gdzie ta sama liczba stoi dwa razy, i pilnuj |
+| `PROB_PUBLIKACJI_ARTYKULU` | `3` | ILE CZASU MA PRZEBIEG. Musi zgadzac sie z `TimeoutStartSec` w pliku uslugi — to jedyne miejsce, gdzie ta sama liczba stoi dwa razy, i pilnuj |
+| `PRZERWA_MIEDZY_PROBAMI_ARTYKULU_S` | `120` | — |
+| `PROB_ZALEGLEGO_ARTYKULU` | `12` | ILE RAZY RUTYNA DNIA PROBUJE DOWIEZC ZALEGLY ARTYKUL, zanim przestanie. Piec przebiegow dziennie razy dwanascie prob to dwa i pol dnia dobij |
+| `LIMIT_CZASU_PRZEBIEGU_S` | `9000` | — |
 | `ZAPAS_CZASU_S` | `900` | Zapas na domkniecie: ostatnia publikacja, zamkniecie przebiegu, alarm. |
 | `SKAUT_UDZIAL_Z_KANALOW` | `0.75` | Jaka czesc tematow skauta ma wychodzic z kanalow, ktore konto obserwuje. Decyzja wlasciciela z 30 sierpnia, po pomiarze: przed nia z kanalow |
 | `ROZBIEG_DNI` | `30` | — |

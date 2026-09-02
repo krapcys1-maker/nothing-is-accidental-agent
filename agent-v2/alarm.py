@@ -112,6 +112,31 @@ def wyslij(klucz: str, temat: str, tresc: str) -> bool:
         return False
 
 
+def artykul_zalegly() -> str | None:
+    """Czy gotowy artykul lezy na dysku niewystawiony dluzej niz dobe.
+
+    ALARM O PRZEBIEGACH TEGO NIE ZLAPIE. `sprawdz_przebiegi_i_ostrzez` patrzy
+    na TRZY OSTATNIE przebiegi, a rutyna dnia chodzi piec razy dziennie —
+    jeden przebieg artykulu jest z tej listy zepchniety w ciagu kilku godzin.
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    import stages
+
+    zaleg = stages.niewystawiony_artykul()
+    if not zaleg:
+        return None
+    try:
+        kiedy = _dt.fromisoformat(str(zaleg.get("kiedy", "")))
+    except ValueError:
+        return "Artykul %s czeka na wystawienie." % zaleg.get("sciezka")
+    godzin = (_dt.now(_tz.utc) - kiedy).total_seconds() / 3600
+    if godzin < 24:
+        return None
+    return ("Artykul %s czeka %.0f h i %d prob. Ostatni powod: %s"
+            % (zaleg.get("sciezka"), godzin, zaleg.get("proby", 0),
+               str(zaleg.get("powod"))[:200]))
+
+
 def sprawdz_sesje_i_ostrzez() -> None:
     """Pilnuje jedynej rzeczy, która zatrzymuje agenta bez żadnego błędu."""
     import browser
@@ -502,6 +527,10 @@ def sprawdz_wszystko() -> list[str]:
          kopia_subskrybentow),
         ("pomiar-wzajemnosci", "POMIAR WZAJEMNOSCI OSLEPL",
          pomiar_wzajemnosci),
+        # Gotowy, oplacony tekst lezacy na dysku to najdrozsza cisza, jaka to
+        # konto potrafi wyprodukowac — i do 2 wrzesnia 2026 nie zglaszal jej
+        # nikt: przebieg z nieudana publikacja zapisywal sie jako `DONE`.
+        ("artykul-zalegly", "ARTYKUL CZEKA NA WYSTAWIENIE", artykul_zalegly),
     )
     # TABELA WOLUMENOW DRUKOWANA ZAWSZE, nie tylko gdy cos jest nie tak.
     # Alarm ma odpowiadac na pytanie „ile wyszlo", a nie tylko krzyczec, gdy

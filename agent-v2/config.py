@@ -1867,6 +1867,27 @@ PRZEBIEGOW_DZIENNIE = 5
 # komentarzy przy odstepach 3-8 minut. Zabity SIGTERM-em proces nic nie zapisal,
 # wiec wiersz wisial w bazie jako RUNNING do najblizszej kontroli zdrowia.
 # Agent ma teraz konczyc SAM, zanim zegar go zetnie w polowie zdania.
+# ILE RAZY PROBUJEMY WYSTAWIC GOTOWY ARTYKUL W JEDNYM PRZEBIEGU.
+#
+# ZMIERZONE 2 wrzesnia 2026 na odtworzeniu: przebieg z UDANA publikacja
+# i przebieg z NIEUDANA zapisywaly sie w bazie IDENTYCZNIE — `DONE`, notatka
+# pusta — a trzy nieudane z rzedu nie budzily alarmu ani razu. `wystaw_artykul`
+# lapie kazdy wyjatek u siebie i oddaje slownik, a `_napisz_i_zapisz` konczylo
+# BEZWARUNKOWYM `return 0`.
+#
+# Tekst jest juz napisany i oplacony (1,4-2,1 USD), a ponowienie kosztuje jedno
+# wejscie przegladarka i ZERO dolarow. Podwojnej publikacji nie ma jak zrobic:
+# `wystaw_artykul` zaczyna od `potwierdz_artykul` i przy tekscie, ktory jednak
+# wyszedl, oddaje `pominiete=True`.
+PROB_PUBLIKACJI_ARTYKULU = 3
+PRZERWA_MIEDZY_PROBAMI_ARTYKULU_S = 120
+
+# ILE RAZY RUTYNA DNIA PROBUJE DOWIEZC ZALEGLY ARTYKUL, zanim przestanie.
+# Piec przebiegow dziennie razy dwanascie prob to dwa i pol dnia dobijania sie.
+# TO NIE JEST BRAMKA: tekst zostaje na dysku, znacznik zostaje, alarm krzyczy.
+# To jest tylko koniec petli, ktora dowiodla, ze nie dziala.
+PROB_ZALEGLEGO_ARTYKULU = 12
+
 LIMIT_CZASU_PRZEBIEGU_S = 9000
 # Zapas na domkniecie: ostatnia publikacja, zamkniecie przebiegu, alarm.
 ZAPAS_CZASU_S = 900

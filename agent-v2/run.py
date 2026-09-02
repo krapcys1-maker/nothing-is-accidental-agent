@@ -1996,6 +1996,66 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     # ktorego nie da sie nadrobic pozniej, i to one poszerzaja krag ludzi,
     # do ktorych w ogole mozemy sie potem odezwac.
     # --- 6. kopia listy subskrybentow, gdy sie zestarzala --------------------
+    def zalegly_artykul() -> None:
+        """Dowozi tekst, ktory zostal na dysku po nieudanej publikacji.
+
+        NIE PISZE NOWEGO ARTYKULU i nie wola modelu ani razu. Bierze plik, za
+        ktory `artykul_z_puli` juz zaplacil, i probuje wystawic go jeszcze raz.
+
+        DLACZEGO TU, A NIE PRZEZ `Restart=` W USLUDZE. Zegar artykulu chodzi
+        RAZ W TYGODNIU, wiec nieudany wtorek oznaczal tydzien ciszy. Restart
+        uslugi puscilby caly przebieg od nowa razem z platnym researchem —
+        a rutyna dnia chodzi piec razy dziennie i tekst juz ma.
+
+        PODWOJNEJ PUBLIKACJI NIE MA JAK ZROBIC: `wystaw_artykul` zaczyna od
+        `potwierdz_artykul` i przy tekscie juz publicznym oddaje
+        `pominiete=True` — wtedy tez kasujemy znacznik.
+
+        NIC TU NIE BLOKUJE. Po wyczerpaniu prob tekst i znacznik ZOSTAJA,
+        a alarm krzyczy; petla tylko przestaje sie dobijac.
+        """
+        zaleg = stages.niewystawiony_artykul()
+        if not zaleg:
+            print("  brak zaleglego artykulu", flush=True)
+            return
+        sciezka = str(zaleg["sciezka"])
+        if not os.path.exists(sciezka):
+            print("  [zalegly] plik zniknal (%s) — kasuje znacznik" % sciezka,
+                  flush=True)
+            stages.zapomnij_niewystawiony()
+            return
+        if int(zaleg.get("proby", 0)) >= config.PROB_ZALEGLEGO_ARTYKULU:
+            print("  [zalegly] %d prob i nadal nie wychodzi — PRZESTAJE"
+                  " PROBOWAC, tekst i znacznik zostaja" % zaleg["proby"],
+                  flush=True)
+            try:
+                import alarm
+                alarm.wyslij(
+                    "artykul-nie-wychodzi",
+                    "Artykul nie wychodzi mimo %d prob" % zaleg["proby"],
+                    "Plik: %s\nOstatni powod: %s\n\nTekst jest gotowy"
+                    " i oplacony. Wystaw go recznie albo zbadaj, dlaczego"
+                    " przegladarka go nie przepuszcza."
+                    % (sciezka, zaleg.get("powod", "")))
+            except Exception as exc:
+                print("  (alarm nie poszedl: %s)" % type(exc).__name__,
+                      flush=True)
+            return
+        if not wyslij:
+            print("  (wystawilbym zalegly artykul: %s)" % sciezka, flush=True)
+            return
+        import browser as _br
+        wynik = _br.wystaw_artykul(sciezka, wyslij=True)
+        if wynik.get("wyslane"):
+            print("  [zalegly] DOWIEZIONY: %s" % sciezka, flush=True)
+            stages.zapomnij_niewystawiony()
+            return
+        ile = stages.odnotuj_probe_artykulu(
+            str(wynik.get("blad") or "brak potwierdzenia"))
+        print("  [zalegly] nadal nie poszedl (proba %d/%d): %s"
+              % (ile, config.PROB_ZALEGLEGO_ARTYKULU,
+                 str(wynik.get("blad"))[:120]), flush=True)
+
     def kopia_listy() -> None:
         """Jedyne aktywo, ktorego nie da sie odtworzyc — i jedyne miejsce,
         gdzie wlasciciel musial dotad cos kliknac.
@@ -2031,6 +2091,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                           ("obserwowanie", obserwuj), ("subskrypcje", subskrybuj),
                           ("komentarze", komentarze), ("dyskusje", dyskusje),
                           ("polubienia", polubienia), ("restacki", restacki),
+                          ("zalegly artykul", zalegly_artykul),
                           ("kopia listy", kopia_listy)):
         print(f"\n-- {nazwa} --", flush=True)
         blok(nazwa, robota)

@@ -361,7 +361,15 @@ def main() -> int:
         db.finish_run(conn, run_id, "ERROR", "artykul",
                       f"{uwaga}: {exc}"[:200])
         raise
-    db.finish_run(conn, run_id, "DONE" if kod == 0 else "SKIPPED", "artykul")
+    # TRZY WYNIKI, TRZY STATUSY. `NIEOPUBLIKOWANY` nie nalezy do
+    # ("DONE", "SAVED"), wiec `alarm.sprawdz_przebiegi_i_ostrzez` widzi go od
+    # razu, bez zmiany w kodzie alarmu. `Restart=` NIE jest dodawany: ponowienie
+    # calego przebiegu kosztowaloby nowy platny research, a tekst juz istnieje.
+    if kod == KOD_NIEOPUBLIKOWANY:
+        db.finish_run(conn, run_id, "NIEOPUBLIKOWANY", "artykul",
+                      "tekst gotowy, publikacja nie potwierdzona")
+    else:
+        db.finish_run(conn, run_id, "DONE" if kod == 0 else "SKIPPED", "artykul")
     return kod
 
 
@@ -835,7 +843,51 @@ def _katalog_ratunku() -> Path:
 # `runs.note`. Zmienna modulu, bo `_ratuj_tekst` siedzi trzy ramki glebiej niz
 # `main` i nie ma jak nic zwrocic: miedzy nimi leci `raise`. Proces obsluguje
 # JEDEN przebieg, wiec lista nie ma jak sie przeciac miedzy przebiegami.
+# KOD WYJSCIA DLA „TEKST GOTOWY, PUBLIKACJA NIE POSZLA".
+# Rozny od 0 (udane) i rozny od reszty (pominiete, brak tematu), bo `main`
+# musi umiec ODROZNIC te trzy rzeczy w statusie przebiegu.
+KOD_NIEOPUBLIKOWANY = 3
+
 URATOWANE: list[Path] = []
+
+
+def _opublikuj(sciezka: Path) -> dict:
+    """Wystawia gotowy artykul, probujac wiecej niz raz. NIE JEST BRAMKA.
+
+    Nie ma tu ani jednego warunku, ktory moglby publikacji ZABRONIC. Jedyne,
+    co ta funkcja doklada do `browser.wystaw_artykul`, to POWTORZENIE proby
+    i PRAWDA O WYNIKU.
+
+    DLACZEGO POWTORZENIE JEST TANIE I BEZPIECZNE. Tekst jest juz napisany
+    i oplacony; ponowienie to jedno wejscie przegladarka. `wystaw_artykul`
+    zaczyna od `potwierdz_artykul` i przy tekscie, ktory jednak wyszedl,
+    oddaje `pominiete=True, wyslane=True` — druga proba nie ma jak wystawic
+    tego samego dwa razy.
+
+    DLACZEGO WLASNY `except`, skoro `wystaw_artykul` lapie wyjatki u siebie:
+    `wymagaj_sesji` i `podlacz_sie` stoja PRZED tamtym `try`, wiec padnieta
+    przegladarka rzuca, zanim slownik wyniku w ogole powstanie.
+    """
+    import time
+    import browser
+
+    wynik: dict = {"wyslane": False, "blad": "nie probowano"}
+    for proba in range(1, config.PROB_PUBLIKACJI_ARTYKULU + 1):
+        try:
+            wynik = browser.wystaw_artykul(sciezka, wyslij=True)
+        except Exception as exc:
+            wynik = {"wyslane": False,
+                     "blad": "%s: %s" % (type(exc).__name__, exc)}
+        print(">> proba %d/%d: %s%s"
+              % (proba, config.PROB_PUBLIKACJI_ARTYKULU,
+                 "OPUBLIKOWANY" if wynik.get("wyslane") else "NIE POSZEDL",
+                 "  " + str(wynik.get("blad")) if wynik.get("blad") else ""),
+              flush=True)
+        if wynik.get("wyslane"):
+            return wynik
+        if proba < config.PROB_PUBLIKACJI_ARTYKULU:
+            time.sleep(config.PRZERWA_MIEDZY_PROBAMI_ARTYKULU_S)
+    return wynik
 
 # STATUS TEKSTU URATOWANEGO Z PRZERWANEGO PRZEBIEGU.
 #
@@ -1360,11 +1412,27 @@ def _napisz_i_zapisz(conn, run_id, brief, card) -> int:
 
     print()
     print("-- publikacja --", flush=True)
-    wynik = browser.wystaw_artykul(sciezka, wyslij=True)
-    print(">> %s%s" % ("OPUBLIKOWANY" if wynik.get("wyslane") else "NIE POSZEDL",
-                       "  " + str(wynik.get("blad")) if wynik.get("blad") else ""),
+    wynik = _opublikuj(sciezka)
+    if wynik.get("wyslane"):
+        print(">> OPUBLIKOWANY", flush=True)
+        stages.zapomnij_niewystawiony()
+        return 0
+
+    # NIC SIE TU NIE ZATRZYMUJE I NIC NIE CZEKA NA CZLOWIEKA. Tekst lezy na
+    # dysku, przebieg konczy sie normalnie. Zmienia sie WYLACZNIE to, co ten
+    # przebieg o sobie mowi — i to, ze zostawia adres pliku rutynie dnia,
+    # ktora chodzi PIEC RAZY DZIENNIE zamiast raz w tygodniu.
+    #
+    # ZMIERZONE PRZED NAPRAWA: przebieg z nieudana publikacja i przebieg
+    # z udana zapisywaly sie w bazie IDENTYCZNIE — `DONE`, notatka pusta —
+    # a trzy takie z rzedu nie budzily `sprawdz_przebiegi_i_ostrzez` ani razu.
+    # Stalo tu BEZWARUNKOWE `return 0`.
+    powod = str(wynik.get("blad") or "Substack nie potwierdzil publikacji")
+    stages.zapamietaj_niewystawiony(sciezka, powod)
+    print(">> ARTYKUL NIE POSZEDL: %s" % powod[:200], flush=True)
+    print(">> tekst zostaje w %s — rutyna dnia sprobuje dalej" % sciezka,
           flush=True)
-    return 0
+    return KOD_NIEOPUBLIKOWANY
 
 
 

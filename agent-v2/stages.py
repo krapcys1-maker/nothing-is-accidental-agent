@@ -2420,6 +2420,74 @@ def zakwestionuj_promocje(url: str, powod: str) -> None:
         return
 
 
+# GOTOWY TEKST, KTORY NIE ZOSTAL WYSTAWIONY. Jedyny slad, ktory przezywa
+# proces: `runs.note` widzi tylko czlowiek zagladajacy do bazy, a linia na
+# stdout ginie w journalctl. Rutyna dnia chodzi PIEC RAZY DZIENNIE i czyta ten
+# plik — dzieki temu nieudany wtorek nie oznacza tygodnia ciszy, bo zegar
+# artykulu chodzi raz w tygodniu.
+NIEWYSTAWIONY = config.DATA_DIR / "artykul_niewystawiony.json"
+
+
+def zapamietaj_niewystawiony(sciezka: Any, powod: str) -> None:
+    """Zapisuje, ze gotowy artykul lezy na dysku i nie poszedl w swiat.
+
+    DARMOWY TEST TU NIE PISZE — ta sama zapora, co w `zapisz_przegranych`.
+    Znaleziona przy pisaniu testu tej wlasnie funkcji: atrapy `stages` w dwoch
+    plikach testowych nie mialy tej metody, a delegowanie jej do prawdziwego
+    modulu wpuscilo by testy do produkcyjnego katalogu danych. Zapora stoi
+    wiec przy ZAPISIE, nie w atrapie, bo atrapa, ktorej ktos nie podstawil,
+    nie moze pilnowac niczego.
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    if config.W_TESCIE and _pisze_do_produkcji(NIEWYSTAWIONY):
+        print("  [artykul] darmowy test — nie zapisuje znacznika w produkcji",
+              flush=True)
+        return
+    try:
+        NIEWYSTAWIONY.parent.mkdir(parents=True, exist_ok=True)
+        NIEWYSTAWIONY.write_text(json.dumps(
+            {"sciezka": str(sciezka), "powod": powod[:300], "proby": 0,
+             "kiedy": _dt.now(_tz.utc).isoformat(timespec="seconds")},
+            ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception as exc:
+        print("  [artykul] nie zapisalem znacznika (%s)" % type(exc).__name__,
+              flush=True)
+
+
+def niewystawiony_artykul() -> dict[str, Any] | None:
+    """Artykul czekajacy na ponowna probe, albo None. NIGDY nie rzuca."""
+    try:
+        if not NIEWYSTAWIONY.exists():
+            return None
+        dane = json.loads(NIEWYSTAWIONY.read_text(encoding="utf-8"))
+        return dane if isinstance(dane, dict) and dane.get("sciezka") else None
+    except Exception:
+        return None
+
+
+def odnotuj_probe_artykulu(powod: str) -> int:
+    """Podbija licznik prob i oddaje nowa wartosc. Zero, gdy znacznika nie ma."""
+    dane = niewystawiony_artykul()
+    if not dane:
+        return 0
+    dane["proby"] = int(dane.get("proby", 0)) + 1
+    dane["powod"] = powod[:300]
+    try:
+        NIEWYSTAWIONY.write_text(json.dumps(dane, ensure_ascii=False, indent=1),
+                                 encoding="utf-8")
+    except Exception:
+        pass
+    return int(dane["proby"])
+
+
+def zapomnij_niewystawiony() -> None:
+    """Tekst jest publiczny — znacznik znika."""
+    try:
+        NIEWYSTAWIONY.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
 def zapisz_do_promocji(url: str, tytul: str, tekst: str) -> None:
     """Zapisuje opublikowany artykul do promowania przez kolejne dni."""
     from datetime import datetime, timezone

@@ -184,6 +184,29 @@ class AtrapaStages:
         import stages as _s
         return _s.wstaw_date_zrodel(tekst, card)
 
+    # ZNACZNIK NIEWYSTAWIONEGO ARTYKULU — czyste operacje na pliku, wiec ida
+    # do prawdziwego `stages` zgodnie z zasada opisana wyzej. Produkcji nie
+    # tkna: `zapamietaj_niewystawiony` ma wlasna zapore na `config.W_TESCIE`.
+    @staticmethod
+    def zapamietaj_niewystawiony(sciezka, powod):
+        import stages as _s
+        return _s.zapamietaj_niewystawiony(sciezka, powod)
+
+    @staticmethod
+    def zapomnij_niewystawiony():
+        import stages as _s
+        return _s.zapomnij_niewystawiony()
+
+    @staticmethod
+    def niewystawiony_artykul():
+        import stages as _s
+        return _s.niewystawiony_artykul()
+
+    @staticmethod
+    def odnotuj_probe_artykulu(powod):
+        import stages as _s
+        return _s.odnotuj_probe_artykulu(powod)
+
     def __init__(self, slad, pada_na, fabryka, budzet_wyczerpany):
         self.slad = slad
         self.pada_na = pada_na
