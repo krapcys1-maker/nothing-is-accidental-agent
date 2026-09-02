@@ -131,9 +131,15 @@ def recent_angles(conn: sqlite3.Connection, limit: int = config.DIVERSITY_LOOKBA
     Na świeżej bazie dokłada listę startową z poprzedniego agenta, żeby pierwszy
     temat nie był trzynastym z rzędu o tym samym.
     """
+    # PIEC ROZNYCH, NIE PIEC WIERSZY. Tabela `articles` ma osobny wiersz na
+    # KAZDE podejscie do tego samego tekstu, a artykul bywa pisany kilka razy
+    # (zmierzone: 13 wywolan `write` na 3 opublikowane artykuly). Bez odsiewu
+    # jeden temat zjadal wiec kilka miejsc z pieciu: 2 wrzesnia 2026 skaut
+    # dostawal „The Safety Test Without Safeties" TRZY RAZY i widzial przez to
+    # trzy rozne tematy zamiast pieciu.
     rows = conn.execute(
-        "SELECT topic FROM articles WHERE topic IS NOT NULL ORDER BY id DESC LIMIT ?",
-        (limit,),
+        "SELECT topic FROM articles WHERE topic IS NOT NULL"
+        " GROUP BY topic ORDER BY MAX(id) DESC LIMIT ?", (limit,),
     ).fetchall()
     angles = [r["topic"] for r in rows]
 
