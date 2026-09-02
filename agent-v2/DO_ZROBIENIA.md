@@ -193,7 +193,27 @@ uruchamiają z atrapą i liczą wywołania (jak `test_regula_naprawy.py`).
 
 ---
 
-## 13. `Callable` w adnotacji bez importu
+## 13. Notatka `co_dodamy` zjada tekst źródłowy przy długich wpisach
+
+`comment_on` przycina `post["text"][:9000]` przed doklejeniem notatki, a całe
+`body` jest dopiero potem cięte na `[:12000]`. Zmierzone na prawdziwym artykule
+13 269 znaków: prompt z notatką ma 18 902 znaki, bez notatki 21 412 — czyli
+model widzi **o ~3000 znaków mniej samego artykułu** w zamian za ~490 znaków
+notatki. Przy wpisach poniżej 9000 znaków (wszystkie notki, większość postów)
+straty nie ma.
+
+**Uśpiona pułapka obok:** gdyby ktoś kiedyś podał `fakty=` do `comment_on`,
+drugie `[:9000]` w bloku `co_dodamy` **skasowałoby właśnie doklejony blok
+VERIFIED FACTS**. Dziś żaden wołający `fakty` nie podaje, więc jest to
+nieosiągalne — ale gałąź `co_dodamy` właśnie ożyła, więc pułapka jest jeden
+argument od zadziałania.
+
+Do tego docstring `comment_on` nadal mówi „Milczenie jest pełnoprawną
+odpowiedzią i nie jest porażką", co po zmianie promptu przestanie być prawdą.
+
+---
+
+## 14. `Callable` w adnotacji bez importu
 
 `oszacowania.py:176` (gałąź `pamiec/oszacowania`) używa `Callable`, a moduł
 importuje z `typing` tylko `Any`. Program działa dzięki `from __future__ import

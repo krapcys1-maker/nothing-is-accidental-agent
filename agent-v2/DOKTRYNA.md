@@ -269,10 +269,21 @@ Ta sekcja ma być **pusta**. Każda pozycja to dług.
 tygodniowym kolejka nie nadążała — ale ten powód zniknął, gdy zaczęliśmy
 promować najświeższy artykuł i dodaliśmy okno siedmiu dni. Do przywrócenia.
 
-**2. Połowa notek promujących nie wychodzi.**
-Sześć prób od 25 sierpnia, trzy opublikowane. Trzy padły na **naszej własnej
-zaporze przeciw wstrzyknięciu**: model dostaje w karcie cały tekst artykułu,
-sam wpisuje adres, zapora blokuje. Dwa artykuły utknęły na 2/3 na stałe.
+~~**2. Połowa notek promujących nie wychodzi.**~~ **ZAMKNIĘTE 2 września 2026.**
+Sześć prób od 25 sierpnia, trzy opublikowane; trzy padły na **naszej własnej
+zaporze przeciw wstrzyknięciu**. Zmierzone na całym okresie: 16 prób, 6 odrzuceń,
+**wszystkie z powodem „adres www w tresci" i zero innych powodów** — a w tym samym
+czasie 58 notek nie-promujących dostawało karty z cudzymi adresami i nie zapaliło
+zapory ani razu. Diagnoza z tej sekcji była w połowie błędna: adres nie brał się
+z tekstu artykułu w karcie (7 z 7 kart nie zawiera żadnego adresu), tylko z tego,
+że typ ARTYKUL mówi modelowi „let the link do the rest", a wcześniejsze notki
+promocyjne dostaje razem z linkiem doklejonym przez kod.
+
+Zapora wycina teraz własny adres publikacji o ściśle ustalonym kształcie, zanim
+sprawdzi tekst; kontrdowód 9 przypadków (polecenie z naszym adresem, cudzy obok
+naszego, wszyty jako `?next=`, podszycie pod domenę, poddomena, slug ze wzmianką)
+nadal blokuje. Przy okazji zamknięta **dziura, przez którą przechodził dowolny
+cudzy adres pisany WIELKIMI LITERAMI**.
 
 **3. Nie ma reguły „przestajemy, gdy rozmowa kręci się w kółko".**
 Poniżej dwudziestu komentarzy odpowiadamy każdemu. Osąd co do treści jest
@@ -292,10 +303,25 @@ w całym repozytorium, mimo docstringa „niedziela to dzień artykułu".
 pomysłów chodzi przez DeepSeek `/responses`, gdzie limitu nie da się ustawić.
 Zmierzone: 71 wywołań, 1026 wyszukań, **średnio 14,45, maksymalnie 32**.
 
-**7. Bank wygasa w całości w ciągu tygodnia.**
-58 wolnych pozycji: 9 wygasa 6 września, 25 siódmego, 24 ósmego. 26 z nich nie
-ma w ogóle rangi, bo sędzia ocenia tylko 40 najstarszych.
+**7. Bank NIE wygasa ze starości — pali się przy wyjmowaniu.** *(zmierzone
+2 września, teza z tej sekcji obalona)*
+Pozycji po terminie jest **zero** i ani jedna nie została nigdy oznaczona jako
+przeterminowana. Materiał ginął gdzie indziej: `wez_kandydatow(8)` znaczy jako
+zużytą całą ósemkę przy WYJMOWANIU, a przebieg wystawia z niej jedną albo dwie
+notki. **21 z 26 wyjętych pozycji (81%) nigdy nie poszło w świat**, przy etapie
+`curiosity` kosztującym 3,72 USD, czyli 15,1% wydatków od 25 sierpnia. Ścieżka
+artykułu oddawała niewydane od 30 sierpnia, ścieżka notek nie oddawała nigdy —
+od 2 września oddaje.
 
-**8. Zniknęło 119 wcześniejszych kandydatów z banku.**
-Bez śladu. Plik nie jest w gicie, nie ma kopii, a w kodzie nie ma niczego, co
-by je kasowało. Niewyjaśnione.
+**8. Zniknęło 119 wcześniejszych kandydatów z banku — mechanizm już znany,
+naprawa nie.**
+Bank rósł 66 → 119 wolnych pozycji między 25 a 29 sierpnia, opłacony 22
+wywołaniami za **1,51 USD**, i zniknął w całości około 30 sierpnia 12:44 — bez
+ani jednego wpisu `uzyty` i bez ani jednego `przeterminowany`. Znaleziony
+2 września mechanizm, który to tłumaczy: zapis indeksu to **nieatomowy
+`write_text`**, a odczyt traktuje nieczytelny plik jak **pusty**. Przebieg ubity
+w trakcie zapisu kasuje więc bank po cichu — bez wyjątku i bez linii w logu.
+Drugie możliwe wyjaśnienie to świadomy reset podczas testów tamtego dnia; ze
+śladów nie da się rozstrzygnąć, które zaszło, i to samo w sobie jest wadą.
+Naprawa (zapis przez plik tymczasowy i `os.replace`, głośne oblanie przy
+nieczytelnym pliku) stoi jako pozycja 1 w `agent-v2/DO_ZROBIENIA.md`.
