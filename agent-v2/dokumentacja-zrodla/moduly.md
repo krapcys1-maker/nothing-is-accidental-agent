@@ -34,7 +34,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-6488 wierszy, 118 funkcji na poziomie modułu, 0 klas
+6669 wierszy, 123 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -108,9 +108,14 @@
 | `_otwarcie_formulka(zdanie)` *(wewn.)* | Czy zdanie zaczyna sie od zapowiedzi ruchu zamiast od samego ruchu. |
 | `sprawdz_fakty(conn, run_id, post)` | Szuka faktów do komentarza, zamiast pozwolić modelowi pisać z pamięci. |
 | `bez_wstrzykniecia(tekst)` | Czy w naszym tekscie nie ma sladu cudzych POLECEN. |
+| `_status_twierdzenia(c)` *(wewn.)* | Status twierdzenia, znormalizowany. NIEZNANA ETYKIETA ZNACZY `unverified`. |
 | `zweryfikuj(conn, run_id, tekst, kontekst)` | Sprawdza to, co model NAPISAŁ — nie to, czego szukał przed pisaniem. |
 | `_zapora_notki(tekst)` *(wewn.)* | Pusty napis, gdy tekst notki przechodzi zapory. Inaczej powod. |
 | `_zapora_komentarza(tekst)` *(wewn.)* | To samo dla komentarza — ale komentarz ma zapore o jedna wiecej. |
+| `_liczby_zarzutu(c)` *(wewn.)* | Liczby z zarzutu, znormalizowane — po nich rozpoznajemy TEN SAM fakt. |
+| `_slowa_zarzutu(c)` *(wewn.)* | Slowa trescioweko z samego twierdzenia — drugi sygnal tozsamosci. |
+| `_adres_zarzutu(c)` *(wewn.)* | — |
+| `_ten_sam_zarzut(a, b)` *(wewn.)* | Czy dwa zarzuty mowia o tym samym fakcie. ZACHOWAWCZO, i to celowo. |
 | `napraw_obalone(conn, run_id, tekst, audyt)` | Poprawia zdanie, ktoremu zapis przeczy. Nie wycina go i nie blokuje tekstu. |
 | `comment_on(conn, run_id, post, fakty)` | Komentarz do cudzego posta — do szuflady. |
 | `fallback_card(question, evidence)` | Karta złożona z dowodów bez modelu — gdy synteza padnie. |

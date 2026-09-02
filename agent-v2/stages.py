@@ -3263,6 +3263,30 @@ def bez_wstrzykniecia(tekst: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _status_twierdzenia(c: dict[str, Any]) -> str:
+    """Status twierdzenia, znormalizowany. NIEZNANA ETYKIETA ZNACZY `unverified`.
+
+    ZMIERZONE TESTEM 2 wrzesnia 2026 — wczesniej kod czytal `status` doslownie:
+
+        status = str(c.get("status") or "")
+        if status in ("refuted", "outdated"): ...
+
+    czyli `"REFUTED"` wielkimi literami, brak pola i etykieta wymyslona przez
+    model („maybe", „partially") NIE PASOWALY DO ZADNEJ GALEZI i twierdzenie
+    po cichu przestawalo byc zarzutem. Obalony fakt zapisany wielka litera
+    przechodzil przez cala bramke bez jednej linii w logu — a bramka, ktora
+    milczy, wyglada dokladnie jak bramka, ktora nic nie znalazla.
+
+    Nieznana etykieta jest traktowana jak `unverified`, nie jak `confirmed`,
+    bo etykieta, ktorej nie rozumiemy, NIE JEST potwierdzeniem. Dalej rozstrzyga
+    ta sama regula co zawsze: twierdzenie z liczba nie przechodzi, teza bez
+    liczby przechodzi.
+    """
+    status = str(c.get("status") or "").strip().lower()
+    return status if status in ("confirmed", "refuted", "outdated",
+                                "unverified") else "unverified"
+
+
 def zweryfikuj(
     conn: sqlite3.Connection, run_id: int, tekst: str, kontekst: str = "",
 ) -> dict[str, Any]:
@@ -3305,7 +3329,17 @@ def zweryfikuj(
     except Exception as exc:
         # Awaria weryfikacji to nie jest dowód fałszu. Komentarz i tak stoi na faktach
         # zebranych przed pisaniem — druga siatka pękła, pierwsza trzyma.
-        return {"claims": [], "safe_to_post": True,
+        # `nie_sprawdzone` JAWNIE, a nie do odczytania z tresci werdyktu.
+        #
+        # Wolajacy musi umiec odroznic „sprawdzilem i nic nie znalazlem" od
+        # „nie sprawdzilem", a jedyna roznica byl tu NAPIS w polu `verdict`.
+        # Sciezka naprawy czytala `zarzuty`, ktorych ten slownik w ogole nie
+        # ma — wiec liczyla zero zarzutow i przyjmowala naprawe JAKO
+        # SPRAWDZONA. Nowy tekst modelu szedl do publikacji bez zadnej
+        # weryfikacji, a dziennik zapisywal go jako czysty. To ta sama klasa
+        # bledu, co „zero z wyjasnieniem przestaje wygladac na awarie".
+        return {"claims": [], "zarzuty": [], "nie_sprawdzone": True,
+                "safe_to_post": True,
                 "verdict": f"weryfikacja nie doszła do skutku ({exc}) — puszczam na pierwszej siatce"}
     # Próg mieszka tutaj, nie w ocenie modelu.
     #
@@ -3335,14 +3369,14 @@ def zweryfikuj(
 
     blokujace = []
     for c in out.get("claims", []):
-        status = str(c.get("status") or "")
+        status = _status_twierdzenia(c)
         if status in ("refuted", "outdated"):
             blokujace.append(c)
         elif status == "unverified" and _ma_sprawdzalny_konkret(c):
             blokujace.append(c)
 
     for c in out.get("claims", []):
-        status = str(c.get("status") or "")
+        status = _status_twierdzenia(c)
         if status == "confirmed":
             continue
         etykieta = {"refuted": "! OBALONE",
@@ -3358,6 +3392,7 @@ def zweryfikuj(
     # nie mial jak sie dowiedziec co — wiec jedyne, co mogl zrobic, to
     # zablokowac albo puscic. Naprawa potrzebuje materialu.
     out["zarzuty"] = blokujace
+    out["nie_sprawdzone"] = False
     out["safe_to_post"] = not blokujace
     return out
 
@@ -3388,6 +3423,81 @@ def _zapora_komentarza(tekst: str) -> str:
         return "slad cudzego polecenia (%s)" % powod
     podloga = _podloga_z_pamieci(tekst)
     return ("podloga: %s" % podloga) if podloga else ""
+
+
+def _liczby_zarzutu(c: dict[str, Any]) -> frozenset[str]:
+    """Liczby z zarzutu, znormalizowane — po nich rozpoznajemy TEN SAM fakt.
+
+    Separatory lecą, zeby „60,682" i „60682" byly ta sama liczba. Ogon
+    interpunkcyjny tez, bo „93,9." to nie jest inna liczba niz „93,9".
+    """
+    tekst = "%s %s" % (c.get("claim") or "", c.get("what_the_source_says") or "")
+    out = set()
+    for surowa in re.findall(r"\d[\d.,]*", tekst):
+        znormalizowana = surowa.rstrip(".,").replace(",", "")
+        if znormalizowana:
+            out.add(znormalizowana)
+    return frozenset(out)
+
+
+def _slowa_zarzutu(c: dict[str, Any]) -> frozenset[str]:
+    """Slowa trescioweko z samego twierdzenia — drugi sygnal tozsamosci.
+
+    Z `claim`, nie z `what_the_source_says`: uzasadnienie bramki jest
+    rozwlekle i dwa rozne zarzuty potrafia dzielic pol slownika, bo oba
+    cytuja ten sam dokument. Krotkie slowa lecą, bo „the" i „was" nie
+    swiadcza o niczym.
+    """
+    slowa = re.findall(r"[^\W\d_]{4,}", str(c.get("claim") or ""), re.UNICODE)
+    return frozenset(w.lower() for w in slowa)
+
+
+def _adres_zarzutu(c: dict[str, Any]) -> str:
+    return str(c.get("url") or c.get("source") or "").strip().lower().rstrip("/")
+
+
+def _ten_sam_zarzut(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Czy dwa zarzuty mowia o tym samym fakcie. ZACHOWAWCZO, i to celowo.
+
+    Bledy sa tu niesymetryczne i tylko jeden z nich jest grozny:
+
+      - uznac ROZNE za TO SAMO — swiezo wprowadzony falsz przechodzi jako
+        „juz znany" i idzie do publikacji;
+      - uznac TO SAMO za ROZNE — placimy za jedno dodatkowe sprawdzenie.
+
+    Drugi kosztuje pol centa, pierwszy kosztuje nieprawde pod naszym nazwiskiem.
+    Dlatego zgoda musi byc MOCNA: albo identyczny zbior liczb, albo ten sam
+    adres zrodla przy liczbach, ktore sie pokrywaja. Sama wspolna liczba nie
+    wystarcza — „1946" jako rok standaryzacji i „1946" jako naklad to dwa
+    rozne fakty niosace ten sam napis.
+    """
+    # SAMA ZGODNOSC LICZB NIE WYSTARCZA i pierwsza wersja tego kodu na tym
+    # polegla przy pierwszym sprawdzeniu: „rok 1946" i „naklad 1946" wyszly
+    # jako ten sam zarzut, bo zbiory liczb byly identyczne. Dwa rozne fakty
+    # niosace ten sam napis to jest wlasnie przypadek, ktory przepuszcza
+    # swiezy falsz jako „juz znany".
+    #
+    # Potrzebne sa wiec DWA sygnaly naraz: liczby i tresc.
+    sa, sb = _slowa_zarzutu(a), _slowa_zarzutu(b)
+    wspolne_slowa = sa & sb
+    if len(wspolne_slowa) < 2:
+        return False
+    la, lb = _liczby_zarzutu(a), _liczby_zarzutu(b)
+
+    # ZARZUT BEZ LICZB TEZ MUSI PASOWAC SAM DO SIEBIE. Pierwsza wersja
+    # opierala cala zgodnosc na liczbach, wiec twierdzenie, w ktorym zadnej
+    # liczby nie ma — a takie sa wszystkie `outdated` o tezach i czesc
+    # `refuted` — nie bylo rozpoznawane nawet we wlasnym powtorzeniu. Skutek
+    # byl dokladnie odwrotny do zamierzonego: ten sam, wciaz stojacy zarzut
+    # wygladal na „naprawiony", bo nie dalo sie go dopasowac. Zlapane testem.
+    if not la and not lb:
+        unia = sa | sb
+        return bool(unia) and len(wspolne_slowa) / len(unia) >= 0.6
+
+    if la and la == lb:
+        return True
+    ua, ub = _adres_zarzutu(a), _adres_zarzutu(b)
+    return bool(ua and ua == ub and (la & lb))
 
 
 def napraw_obalone(
@@ -3446,7 +3556,7 @@ def napraw_obalone(
     if not config.NAPRAWA_OBALONYCH:
         return None
     do_naprawy = [c for c in (audyt.get("zarzuty") or [])
-                  if str(c.get("status") or "") in ("refuted", "outdated")]
+                  if _status_twierdzenia(c) in ("refuted", "outdated")]
     if not do_naprawy:
         return None
 
@@ -3514,33 +3624,104 @@ def napraw_obalone(
         return None
 
     audyt2 = zweryfikuj(conn, run_id, nowy, kontekst)
-    przed = len(do_naprawy)
-    po = len([c for c in (audyt2.get("zarzuty") or [])
-              if str(c.get("status") or "") in ("refuted", "outdated")])
-    if po >= przed:
-        # ODRZUCONY TEKST MUSI BYC WIDOCZNY. Pierwsza wersja tej funkcji milczala
-        # o tym, co odrzucila, i pierwszy zywy przebieg natychmiast to ukaral:
-        # naprawa zostala odrzucona, a tekstu, ktory przepadl, NIE DALO SIE
-        # obejrzec — wiec nie bylo jak orzec, czy to byl szum sprawdzarki, czy
-        # model naprawde napisal cos gorszego. Diagnoza sprowadzala sie do
-        # zgadywania, a to jest w tym repozytorium osobna klasa dlugu.
-        print("    [naprawa] ODRZUCONA: obalonych bylo %d, po naprawie %d — "
-              "zostaje oryginal" % (przed, po), flush=True)
-        print("    [naprawa] odrzucony tekst: %s" % nowy[:200], flush=True)
-        for c in (audyt2.get("zarzuty") or [])[:3]:
-            print("    [naprawa]   zarzut do naprawy: %s"
-                  % str(c.get("claim"))[:110], flush=True)
+
+    # SPRAWDZENIE, KTORE SIE NIE ODBYLO, NIE JEST CZYSTYM WYNIKIEM.
+    # Poprzednia wersja liczyla tu zarzuty ze slownika awaryjnego, ktory
+    # `zarzuty` w ogole nie ma — wychodzilo zero, zero bylo mniejsze od
+    # jedynki, i naprawa szla do publikacji NIESPRAWDZONA, zapisana w
+    # dzienniku jako sprawdzona.
+    if audyt2.get("nie_sprawdzone"):
+        print("    [naprawa] NIEROZSTRZYGNIETE: ponowne sprawdzenie sie nie "
+              "odbylo — zostaje oryginal", flush=True)
+        print("    [naprawa]   powod: %s"
+              % str(audyt2.get("verdict"))[:120], flush=True)
         return None
 
-    print("    [naprawa] PRZYJETA: obalonych %d -> %d, %d slow. %s"
-          % (przed, po, slow, str(dane.get("co_zmienione") or "")[:120]),
-          flush=True)
+    # ROZNICA ZBIOROW, NIE ROZNICA LICZB.
+    #
+    # Bylo: `po >= przed` na dwoch liczbach z DWOCH ROZNYCH wywolan platnej
+    # bramki. Cztery wady naraz. Po pierwsze porownywalo dwa niezalezne
+    # losowania, a nie dwa stany. Po drugie liczylo sztuki zamiast tozsamosci,
+    # wiec jedno twierdzenie zaflagowane szumem kasowalo realna naprawe — a
+    # nowy tekst bywa przez bramke rozkladany na INNA LICZBE twierdzen niz
+    # stary, wiec te dwie liczby nie sa porownywalne nawet bez szumu. Po
+    # trzecie remis szedl na niekorzysc naprawy, choc koszty sa odwrotne:
+    # notka i tak idzie w swiat (`safe_to_post = True` bezwarunkowo), wiec
+    # odrzucenie naprawy NIE wstrzymuje publikacji — ono publikuje wersje,
+    # o ktorej WIEMY, ze zawiera falsz. Po czwarte awaria bramki uchodzila za
+    # sukces (wyzej).
+    #
+    # Teraz pytamy o dwie rzeczy osobno: czy CEL zostal naprawiony i czy
+    # przyszlo cos NOWEGO.
+    zarzuty1 = audyt.get("zarzuty") or []
+    zarzuty2 = [c for c in (audyt2.get("zarzuty") or [])
+                if _status_twierdzenia(c) in ("refuted", "outdated")]
+    naprawione = [c for c in do_naprawy
+                  if not any(_ten_sam_zarzut(c, d) for d in zarzuty2)]
+    nowe = [d for d in zarzuty2
+            if not any(_ten_sam_zarzut(d, c) for c in zarzuty1)]
+
+    def odrzuc(powod: str) -> None:
+        """Log odrzucenia — z tekstem, ktory przepadl."""
+        print("    [naprawa] ODRZUCONA: %s — zostaje oryginal" % powod,
+              flush=True)
+        print("    [naprawa] odrzucony tekst: %s" % nowy[:200], flush=True)
+        for c in zarzuty2[:3]:
+            print("    [naprawa]   zarzut do naprawy: %s"
+                  % str(c.get("claim"))[:110], flush=True)
+
+    if not naprawione:
+        # Cel nietkniety. Jedyne odrzucenie, ktore nie wymaga drugiego
+        # losowania: nie pytamy o szum, tylko stwierdzamy, ze naprawa nie
+        # zrobila tego, po co powstala.
+        odrzuc("zarzut, ktory mial zniknac, nadal stoi")
+        return None
+
+    potwierdzone_drugim = False
+    if nowe:
+        # POTWIERDZENIE PRZED ODRZUCENIEM. Placimy za jedno dodatkowe
+        # sprawdzenie WYLACZNIE w chwili, w ktorej mielibysmy wyrzucic
+        # naprawe — czyli tam, gdzie szum bramki naprawde kosztuje. Przy
+        # suficie czterech napraw na przebieg to najwyzej cztery dodatkowe
+        # wywolania `factcheck`, rzedu dwoch centow.
+        print("    [naprawa] naprawa zalatwila cel, ale doszlo %d nowych "
+              "zarzutow — sprawdzam drugi raz" % len(nowe), flush=True)
+        audyt3 = zweryfikuj(conn, run_id, nowy, kontekst)
+        if audyt3.get("nie_sprawdzone"):
+            # Nie da sie potwierdzic. Po jednej stronie falsz PEWNY (oryginal,
+            # ktorego zarzut wlasnie naprawilismy), po drugiej zarzut z
+            # JEDNEGO losowania. Bierzemy naprawe i mowimy o tym glosno.
+            print("    [naprawa] drugie sprawdzenie tez sie nie odbylo — "
+                  "biore naprawe, bo oryginal jest falszywy NA PEWNO",
+                  flush=True)
+        else:
+            zarzuty3 = [c for c in (audyt3.get("zarzuty") or [])
+                        if _status_twierdzenia(c) in ("refuted", "outdated")]
+            wraca = [d for d in nowe
+                     if any(_ten_sam_zarzut(d, e) for e in zarzuty3)]
+            if wraca:
+                odrzuc("nowy zarzut wrocil w drugim sprawdzeniu (%s)"
+                       % str(wraca[0].get("claim"))[:80])
+                return None
+            potwierdzone_drugim = True
+            print("    [naprawa] nowe zarzuty nie wrocily — to bylo migniecie",
+                  flush=True)
+
+    print("    [naprawa] PRZYJETA: naprawionych %d, nowych %d, %d slow.%s %s"
+          % (len(naprawione), len(nowe), slow,
+             " (po drugim sprawdzeniu)" if potwierdzone_drugim else "",
+             str(dane.get("co_zmienione") or "")[:110]), flush=True)
     return {
         "tekst": nowy,
         "audyt": audyt2,
         "co_zmienione": str(dane.get("co_zmienione") or ""),
-        "obalonych_przed": przed,
-        "obalonych_po": po,
+        # ZAPIS DECYZJI, NIE TYLKO JEJ WYNIKU. Bez tego za miesiac znowu nie
+        # da sie orzec, czy naprawa cos naprawila, czy tylko przemiescila falsz.
+        "naprawionych": len(naprawione),
+        "nowych": len(nowe),
+        "bylo_drugie_sprawdzenie": potwierdzone_drugim,
+        "obalonych_przed": len(do_naprawy),
+        "obalonych_po": len(zarzuty2),
         "slow": slow,
     }
 
