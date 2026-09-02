@@ -841,6 +841,14 @@ def zapisz_przegranych(przegrani: list[dict[str, Any]],
                        run_id: int | None = None) -> int:
     """Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej.
 
+    DARMOWY TEST TU NIE PISZE. `test_wybor_tematu.py` wola `pick_topic`, ta wola
+    te funkcje, a sciezka szla z `config.DATA_DIR` — wiec kazde uruchomienie
+    zestawu dopisywalo atrapy do PRODUKCYJNEGO dziennika. Zmierzone 2 wrzesnia
+    2026: 294 z 400 wpisow na serwerze to byly atrapy, a prawdziwe przegrane
+    tematy zostaly z bufora wypchniete. Nic tego pliku nie czyta przy decyzjach,
+    wiec szkoda byla wylacznie diagnostyczna — ale dziennik, ktory w trzech
+    czwartych sklada sie z atrap, nie jest juz diagnostyka.
+
     DIAGNOSTYKA, NIE BRAMKA. Nic tego pliku nie czyta przy wyborze tematu
     i tak ma zostac. Powod jest konkretny: temat odrzucony dzis, bo brakowalo
     mu drugiego precedensu, moze go miec za pol roku, gdy pojawi sie nowy
@@ -855,6 +863,10 @@ def zapisz_przegranych(przegrani: list[dict[str, Any]],
     tylko jeden przy progu dwa. Z tym dziennikiem widac to od razu.
     """
     if not przegrani:
+        return 0
+    if config.W_TESCIE and _pisze_do_produkcji(PRZEGRANE_TEMATY):
+        print("  [przegrani] darmowy test — nie dopisuje do produkcyjnego dziennika",
+              flush=True)
         return 0
     try:
         stare = json.loads(PRZEGRANE_TEMATY.read_text(encoding="utf-8"))

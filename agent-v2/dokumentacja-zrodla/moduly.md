@@ -34,7 +34,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-6664 wierszy, 123 funkcji na poziomie modułu, 0 klas
+6684 wierszy, 124 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -130,6 +130,7 @@
 | `podsumowanie_dzialan(dni)` | Ile czego WYSZLO w ostatnich `dni` dniach, wobec normy z configu. |
 | `powody_porazek(dni)` | Dlaczego dzialania sie NIE UDALY — pogrupowane, najczestsze pierwsze. |
 | `_powod_przegranej(klucz_zwyciezcy, klucz_tematu)` *(wewn.)* | Ktory skladnik klucza sortowania ROZSTRZYGNAL, i jakimi wartosciami. |
+| `_pisze_do_produkcji(sciezka)` *(wewn.)* | Czy ta sciezka to PRAWDZIWY katalog danych, a nie katalog testu. |
 | `zapisz_przegranych(przegrani, run_id)` | Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej. |
 | `pick_topic(topics, assessments, run_id, wczesniejsze)` | Wybiera temat leksykograficznie wedlug dziewieciu kryteriow. |
 | `scout(conn, run_id, count)` | Etap 1 — skaut tematow (DeepSeek V4 Pro). |
@@ -387,7 +388,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2487 wierszy, 22 funkcji na poziomie modułu, 0 klas
+2501 wierszy, 22 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

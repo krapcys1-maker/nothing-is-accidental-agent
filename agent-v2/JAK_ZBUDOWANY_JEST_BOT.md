@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **22 plików**, 25 871 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **22 plików**, 25 905 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 113 zestawów
-testów, 3212 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 114 zestawów
+testów, 3222 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -176,7 +176,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-6664 wierszy, 123 funkcji na poziomie modułu, 0 klas
+6684 wierszy, 124 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -272,6 +272,7 @@ wiec nie da sie go rozjechac z kodem.
 | `podsumowanie_dzialan(dni)` | Ile czego WYSZLO w ostatnich `dni` dniach, wobec normy z configu. |
 | `powody_porazek(dni)` | Dlaczego dzialania sie NIE UDALY — pogrupowane, najczestsze pierwsze. |
 | `_powod_przegranej(klucz_zwyciezcy, klucz_tematu)` *(wewn.)* | Ktory skladnik klucza sortowania ROZSTRZYGNAL, i jakimi wartosciami. |
+| `_pisze_do_produkcji(sciezka)` *(wewn.)* | Czy ta sciezka to PRAWDZIWY katalog danych, a nie katalog testu. |
 | `zapisz_przegranych(przegrani, run_id)` | Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej. |
 | `pick_topic(topics, assessments, run_id, wczesniejsze)` | Wybiera temat leksykograficznie wedlug dziewieciu kryteriow. |
 | `scout(conn, run_id, count)` | Etap 1 — skaut tematow (DeepSeek V4 Pro). |
@@ -529,7 +530,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2487 wierszy, 22 funkcji na poziomie modułu, 0 klas
+2501 wierszy, 22 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -7061,6 +7062,14 @@ def zapisz_przegranych(przegrani: list[dict[str, Any]],
                        run_id: int | None = None) -> int:
     """Dopisuje do dziennika tematy, ktore NIE wygraly, z powodem przegranej.
 
+    DARMOWY TEST TU NIE PISZE. `test_wybor_tematu.py` wola `pick_topic`, ta wola
+    te funkcje, a sciezka szla z `config.DATA_DIR` — wiec kazde uruchomienie
+    zestawu dopisywalo atrapy do PRODUKCYJNEGO dziennika. Zmierzone 2 wrzesnia
+    2026: 294 z 400 wpisow na serwerze to byly atrapy, a prawdziwe przegrane
+    tematy zostaly z bufora wypchniete. Nic tego pliku nie czyta przy decyzjach,
+    wiec szkoda byla wylacznie diagnostyczna — ale dziennik, ktory w trzech
+    czwartych sklada sie z atrap, nie jest juz diagnostyka.
+
     DIAGNOSTYKA, NIE BRAMKA. Nic tego pliku nie czyta przy wyborze tematu
     i tak ma zostac. Powod jest konkretny: temat odrzucony dzis, bo brakowalo
     mu drugiego precedensu, moze go miec za pol roku, gdy pojawi sie nowy
@@ -7075,6 +7084,10 @@ def zapisz_przegranych(przegrani: list[dict[str, Any]],
     tylko jeden przy progu dwa. Z tym dziennikiem widac to od razu.
     """
     if not przegrani:
+        return 0
+    if config.W_TESCIE and _pisze_do_produkcji(PRZEGRANE_TEMATY):
+        print("  [przegrani] darmowy test — nie dopisuje do produkcyjnego dziennika",
+              flush=True)
         return 0
     try:
         stare = json.loads(PRZEGRANE_TEMATY.read_text(encoding="utf-8"))
@@ -12741,7 +12754,8 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `FETCH_TIMEOUT_S` | `30.0` | — |
 | `FETCH_MIN_CHARS` | `1500` | ILE ZNAKOW MUSI ODDAC STRONA, ZEBY LICZYC SIE JAKO ZRODLO. Bylo 400 i to bylo za malo w sposob, ktory widac dopiero na przebiegu. Zmierzone  |
 | `FETCH_USER_AGENT` | `"Mozilla/5.0 (compatible; NothingIsAccidenta` | — |
-| `WOLNO_WOLAC_MODEL` | `not _w_darmowym_tescie()` | Test platny albo swiadomy skrypt moze to podniesc: `config.WOLNO_WOLAC_MODEL = True`. |
+| `W_TESCIE` | `_w_darmowym_tescie()` | Jedna nazwa, dwie zapory. Wykrywanie sluzy juz nie tylko pieniadzom: darmowy test nie ma tez prawa DOPISYWAC DO PRODUKCYJNYCH DANYCH. Zmierz |
+| `WOLNO_WOLAC_MODEL` | `not W_TESCIE` | Test platny albo swiadomy skrypt moze to podniesc: `config.WOLNO_WOLAC_MODEL = True`. |
 | `NAPRAWA_OBALONYCH` | `True` | --- naprawa zamiast blokady i zamiast ciecia -------------------------------- 1 wrzesnia 2026 o 19:46 poszla notka z liczba, ktora nasze wla |
 | `NAPRAW_NA_PRZEBIEG` | `4` | Ile napraw najwyzej w jednym przebiegu. Kazda to dwa platne wywolania (przepisanie plus PONOWNE sprawdzenie), wiec bez sufitu zly dzien potr |
 | `RUCHY_KONCOWE` | `{ "DO_SPRAWDZENIA": ( "Close by handing the ` | --- ruch koncowy i szerokosc drugiego aktu -------------------------------- Dwa artykuly napisane PO naprawie szamponu (0017 "The Gas You Di |

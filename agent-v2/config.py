@@ -2202,8 +2202,22 @@ def _w_darmowym_tescie() -> bool:
     return "tests" in czesci and "platne" not in czesci
 
 
+# Jedna nazwa, dwie zapory. Wykrywanie sluzy juz nie tylko pieniadzom: darmowy
+# test nie ma tez prawa DOPISYWAC DO PRODUKCYJNYCH DANYCH.
+#
+# Zmierzone 2 wrzesnia 2026 na serwerze: `agent-v2/data/tematy_przegrane.json`
+# mial 400 wpisow (czyli sufit `ILE_PRZEGRANYCH_TRZYMAMY`), z czego 294 to byly
+# ATRAPY Z TESTOW — „A", „B", „The Soap That Says Antibacterial" i trzy inne, po
+# 49 sztuk kazda. `test_wybor_tematu.py` wola `stages.pick_topic`, ta wola
+# `zapisz_przegranych`, a sciezka byla liczona z `config.DATA_DIR`. Kazde
+# uruchomienie zestawu na serwerze wypychalo z bufora prawdziwe przegrane
+# tematy. Odcisk calego katalogu przed i po pokazal, ze to JEDYNY taki plik na
+# 68 — ale jeden wystarczy, zeby dziennik diagnostyczny przestal cokolwiek
+# znaczyc.
+W_TESCIE = _w_darmowym_tescie()
+
 # Test platny albo swiadomy skrypt moze to podniesc: `config.WOLNO_WOLAC_MODEL = True`.
-WOLNO_WOLAC_MODEL = not _w_darmowym_tescie()
+WOLNO_WOLAC_MODEL = not W_TESCIE
 
 
 # --- naprawa zamiast blokady i zamiast ciecia --------------------------------
