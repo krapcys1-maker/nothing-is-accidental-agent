@@ -1,129 +1,162 @@
 # Rzeczy do zrobienia
 
-Jedno miejsce, żeby nie były rozsypane po trzech. Uszeregowane wagą, nie
-kolejnością znalezienia.
-
-**Skąd to jest:** audyt zestawu testów z 2 września 2026 — agent uruchomił
-wszystkie 111 plików i porównał odciski wszystkich 68 plików w `agent-v2/data/`
-przed i po. Szesnaście znalezisk, wszystkie zmierzone, wszystkie z numerami
-linii. Jedno naprawione tego samego dnia (poz. 0).
+Jedno miejsce, żeby nie były rozsypane po trzech. Uszeregowane **wagą**, nie
+kolejnością znalezienia. Pozycja znika stąd, gdy jest zamknięta i sprawdzona
+na produkcji — nie wtedy, gdy przechodzi test.
 
 **Czego ta lista NIE zawiera** — żeby nie powstała czwarta kopia tych samych
 zapisów, bo to w tym repozytorium osobna klasa błędu:
 
 - otwarte długi doktryny → `agent-v2/DOKTRYNA.md`, sekcja „Rozbieżności doktryny z kodem"
-- płatne testy bramki faktów (kalibracja szumu, zbiór regresyjny) → `docs/PAMIEC_I_NAPRAWA_2026-09-01.md`
+- pełny audyt modelu spoza projektu → `docs/ROZSTRZYGNIECIE_2026-09-02.md`
 - pamięć / warstwa oszacowań → gałąź `pamiec/oszacowania`, niewdrożona
 
----
-
-## 0. ZROBIONE 2026-09-02 — testy dopisywały atrapy do produkcji
-
-`test_wybor_tematu.py` wołał `pick_topic` → `zapisz_przegranych` → produkcyjny
-`data/tematy_przegrane.json`. Na serwerze **294 z 400 wpisów było atrapami**.
-Zamknięte na poziomie klasy: `config.W_TESCIE` + odmowa w `zapisz_przegranych`.
-Zweryfikowane odciskiem całego katalogu: przed 1 plik na 68, po **zero**.
+Stan na 2 września 2026, wieczór. Produkcja na `5684d12`.
 
 ---
 
-## 1. MARTWA FUNKCJA NA PRODUKCJI — `co_dodamy` nigdy nie dociera do modelu
+## 1. Bank może zniknąć bez śladu i raz już zniknął
 
-**To jedyna pozycja, która nie jest usterką testu, tylko usterką agenta.**
+`_zapisz_indeks` to nieatomowy `write_text` (`stages.py`), a `wczytaj_indeks`
+traktuje nieczytelny plik jak **pusty**. Przebieg ubity w trakcie zapisu kasuje
+więc cały bank po cichu: nie ma wyjątku, nie ma linii w logu, jest pusta pula.
 
-`wybierz_cele` zapisuje przy każdym przyjętym celu `co_dodamy` — notatkę modelu
-o tym, co warto dodać do tego wpisu (`stages.py:1089`). `comment_on` to czyta
-i wkleja do promptu (`stages.py:3771`, `:3779`). Ale `run.py` przekazuje jako
-`post` **inny słownik**:
+**To nie jest teoria.** Najstarszy ocalały wpis w indeksie pochodzi z 30 sierpnia
+12:44:37. Wcześniejsza kohorta — bank rósł 66 → 119 wolnych pozycji między 25
+a 29 sierpnia, opłacony 22 wywołaniami za **1,51 USD** — zniknęła w całości, bez
+ani jednego wpisu `uzyty` i bez ani jednego `przeterminowany`. Drugie możliwe
+wyjaśnienie to świadomy reset podczas testów tamtego dnia; ze śladów nie da się
+rozstrzygnąć, które zaszło, i to samo w sobie jest wadą.
 
-- `run.py:1422` — `strony[0]`, czyli pobraną stronę z `read_pages`
-- `run.py:1527` — świeżo sklecony `{title, text, author, url}`
-
-`grep -c co_dodamy agent-v2/run.py` → **0**. Model wymyśla, po co komentuje ten
-wpis, zapisujemy to do dziennika, i nigdy mu tego nie podajemy.
-
-**Zrobione, gdy:** oba wywołania przekazują `co_dodamy` z `cel`, a
-`test_cel_i_tik_w_prompcie.py:172` ma zamiast `print`-a asercję
-`sprawdz("run.py przekazuje co_dodamy", "co_dodamy" in _run)`.
-
-**Uwaga:** to zmienia treść promptu komentarza, czyli jakość wyjścia. Nie jest
-to poprawka „przy okazji" — wymaga świadomej decyzji i żywego przebiegu.
+**Zrobione, gdy:** zapis idzie przez plik tymczasowy i `os.replace` (atomowo),
+a nieczytelny plik **oblewa głośno** zamiast udawać pusty bank. Do tego jedna
+kopia zapasowa obok, jak przy `promocja.json`.
 
 ---
 
-## 2. ZROBIONE 2026-09-02 — najdroższa wada ma już test zachowania
+## 2. Znacznik kanału obejmuje 3 miejsca z 26
 
-Przepisane na drzewo składni: szukamy gałęzi `if` o warunku `wolno` i patrzymy,
-co przypisuje. **Kontrdowód odtworzony:** wada zapisana jako
-`na_teraz["komentarze"]=0` (bez spacji) — nowy test łapie, stary nie łapie.
+Kolumna `akcja` w `calls` działa (potwierdzone niezależnie na produkcji: zapisuje
+się, nie przecieka, wytrzymuje wyjątek, dekorator obejmuje generatory). Ale
+wpięta jest tylko w dwóch wywołaniach `comment_on` i w `notki_dnia`.
 
-<details><summary>opis pierwotny</summary>
+Zmierzone na 7 dniach: **8,84 z 16,97 USD (52,1%) nie dostanie kanału nigdy** —
+w tym `write` (4,11 USD, cały artykuł), `discovery` (1,82), `cele`, `synthesis`,
+`scout`, `reply`, `review`, `forma`, `classify`, `obraz`, `grafika`, `restack`,
+`warto_pisac`, `wybor`, `feasibility`, `bibliotekarz`, `fedreg`.
 
+Dopóki to stoi, miara „różni ludzie na dolara" nie istnieje dla artykułów,
+tematów ani odpowiedzi — czyli dla ponad połowy rachunku.
 
-`test_okno_publikacji.py:93-100` tnie `run.py` na sztywne okno i orzeka
-negatywnie: `'na_teraz["komentarze"] = 0' not in blok`.
-
-Ta wada **blokowała jeden z pięciu przebiegów CODZIENNIE** (docstring, linie
-17-22) — najdroższa z całej listy. Wystarczy zapisać ją `na_teraz['komentarze']=0`,
-pętlą po kluczach albo przesunąć kod o 1800 znaków i test milczy.
-
-</details>
-
----
-
-## 3. ZROBIONE 2026-09-02 — asercja pyta drzewo, nie komentarz
-
-Sprawdzone **na żywo na serwerze**: przy padniętym modelu opisującym scenę
-i przy padniętym generatorze obrazu `grafika` oddaje słownik z błędem zamiast
-rzucać — artykuł idzie dalej. Obietnica była prawdziwa, tylko nikt jej nie mierzył.
-
-<details><summary>opis pierwotny</summary>
-
-
-`test_obietnice_bez_pokrycia.py:179` — `"NIGDY nie zatrzymuje" in run_src`.
-Jedyne wystąpienie tego napisu to **komentarz** w `run.py:2605`; wywołanie
-`stages.grafika` stoi linijkę niżej.
-
-Można usunąć osłonę i zostawić komentarz — test zostanie zielony, a padnięta
-grafika zabije artykuł.
-
-</details>
+**Zrobione, gdy:** każde płatne wywołanie jest osiągalne wyłącznie ze ścieżki
+z kanałem, a test liczący to z drzewa składni **oblewa**, gdy ktoś doda nowe
+wywołanie bez kanału.
 
 ---
 
-## 4. Test podłóg na serwerze mierzy coś innego niż lokalnie
+## 3. Dwa bloki niezależnie zużywają ten sam budżet komentarzy
 
-`test_podlogi_playbook.py:41-47` szuka prawdziwego artykułu 0025 w
-`agent-v2/data/articles/`. Katalog jest w `.gitignore:99`, więc **na świeżym
-klonie i na serwerze pliku nie ma** — a wtedy test po cichu podstawia wbudowane
-wycinki i dalej drukuje same OK.
+Blok pod artykułami bierze `na_teraz["komentarze"]` celów, a późniejszy blok
+dyskusji pod notkami bierze **jeszcze** `max(1, na_teraz["komentarze"] // 2)`.
+Oba podbijają ten sam licznik, między nimi nie ma odjęcia. Przy przydziale N
+jeden przebieg może zrobić do `N + N/2` publikacji.
 
-Docstring mówi: „każda nowa podłoga MUSI się na nim zapalić. Jeśli któraś
-milczy, to znaczy, że mierzy coś innego, niż myślę". Fallback dokładnie tego
+Z audytu GPT (G1), niezweryfikowane pomiarem — do sprawdzenia przed poprawką,
+bo dziś wolumeny są **poniżej** normy, a nie powyżej, więc może to nie boli.
+
+---
+
+## 4. Po nieudanym przebiegu norma nie jest domykana
+
+Docstring obiecuje, że przerwany przebieg się nie liczy i ostatni dzieli przez
+jeden. Kod odejmuje od stałej 5 tylko liczbę statusów `DONE`, więc przy jednej
+wcześniejszej porażce przed ostatnim terminem dzieli resztę pracy przez dwa
+i zostawia połowę niewykonaną.
+
+Z audytu GPT (G3), niezweryfikowane pomiarem.
+
+---
+
+## 5. Ostatni przebieg może wpaść w następną dobę UTC
+
+Termin 23:40 plus `RandomizedDelaySec=1500` sięga 00:05. Budżet i licznik biorą
+dzień z `datetime.now(timezone.utc)`, nie z terminu zegara — więc doba może mieć
+cztery, pięć albo sześć uruchomień, a rozdzielnik zakłada stałe pięć.
+
+Z audytu GPT (G4), niezweryfikowane pomiarem.
+
+---
+
+## 6. Czternaście publikacji w tydzień bez potwierdzenia
+
+Osiem komentarzy i sześć odpowiedzi z powodem „Substack nie potwierdził, że
+wyszło" (7 dni do 2 września). Przy 57 komentarzach to 14% strat, i **nie
+wiadomo, czy tekst wisi, czy przepadł** — potwierdzanie po API oddaje wtedy
+pustkę, a my zapisujemy porażkę.
+
+**Zrobione, gdy:** przy braku potwierdzenia jest druga próba odczytu po
+odstępie, a jeśli i ona milczy, wpis dostaje status „niepewne" zamiast
+„nieudane" — żeby licznik strat nie mieszał dwóch różnych rzeczy.
+
+---
+
+## 7. Wolumeny poniżej normy — obserwacje na 33%
+
+Zmierzone przez alarm na 7 dniach: obserwacje **0,14/dzień wobec ~0,4** (33%),
+notki 2,86 wobec 5 (67%), komentarze 8,14 wobec ~19 (70%), polubienia 81%,
+restacki 88%. Subskrypcje jako jedyne powyżej (200%).
+
+Alarm nazywa to wprost: „to jest ta awaria, której nie widać w logu". Nic się
+nie wywala — po prostu wychodzi mniej, niż doktryna deklaruje. Przyczyna
+niezbadana.
+
+---
+
+## 8. Trzy dziury w pomiarze, przez które nie da się liczyć skutku
+
+- **`nasz_id` przy odpowiedziach: 0 z 56** w całej historii. Kanał odpowiedzi
+  jest niemierzalny w obie strony — nie wiadomo, co dostało reakcję.
+- **`komu` przy komentarzach: nie istnieje nigdy** (0 z 129). Jest tylko
+  `publikacja`. Przy polubieniach `komu` ma 21 z 179.
+- **`uchwyty` przy skutkach: 22 z 221**, i wszystkie z jednego dnia. Dopisanie
+  wstecz jest niemożliwe (`dopisz_skutki` pomija zdarzenia już zapisane).
+
+Bez pierwszych dwóch nie policzy się, który komentarz co przyniósł. Trzecia
+zamyka się sama z czasem, ale dopiero od 1 września.
+
+---
+
+## 9. Test podłóg na serwerze mierzy co innego niż lokalnie
+
+`test_podlogi_playbook.py` szuka prawdziwego artykułu 0025 w `data/articles/`.
+Katalog jest w `.gitignore`, więc **na świeżym klonie i na serwerze pliku nie
+ma** — a wtedy test po cichu podstawia wbudowane wycinki i dalej drukuje same OK.
+
+Docstring mówi: „każda nowa podłoga MUSI się na nim zapalić". Fallback tego
 zakazu nie egzekwuje.
 
 **Zrobione, gdy:** albo wycinki 0025 wchodzą do repozytorium jako materiał
-dowodowy, albo brak pliku **oblewa** test zamiast drukować notatkę.
+dowodowy, albo brak pliku **oblewa** test.
 
 ---
 
-## 5. Cztery pliki omijają prawdziwy `parse_json`
+## 10. Cztery pliki omijają prawdziwy `parse_json`
 
 Podmieniają nie tylko `llm.call`, ale też `llm.parse_json` na lambdę ignorującą
 `raw` — czyli omijają jedyną funkcję tłumaczącą odpowiedź modelu na kształt
-oczekiwany przez kod (`llm.py:706`, 30 linii obsługi prozy wokół JSON-a, której
-własny docstring podaje koszt awarii: „dwadzieścia wyszukiwań i 0,13 USD, po
-czym oddało zero").
+oczekiwany przez kod (30 linii obsługi prozy wokół JSON-a, której własny
+docstring podaje koszt awarii: „dwadzieścia wyszukiwań i 0,13 USD, po czym
+oddało zero").
 
-- `test_cel_i_tik_w_prompcie.py:75, :109, :147`
-- `test_wybor_odpowiedzi.py:164-166`
-- `test_podlogi_z_pamieci.py:85-90`
+`test_cel_i_tik_w_prompcie.py`, `test_wybor_odpowiedzi.py`,
+`test_podlogi_z_pamieci.py`.
 
 **Zrobione, gdy:** podmieniają tylko `call` i oddają `json.dumps({...})` — wzorzec
-już działa w `test_bramka_banku.py:66` i `test_pas_wydarzen.py:94`.
+już działa w `test_bramka_banku.py` i `test_pas_wydarzen.py`.
 
 ---
 
-## 6. Siedem asercji po treści źródła, w tym dwie kłamiące etykietą
+## 11. Dziewięć asercji pilnuje napisów w źródle, nie zachowania
 
 Każda przeżyje przeniesienie zachowania do martwej gałęzi i każda oblewa przy
 kosmetycznym refaktorze:
@@ -137,143 +170,62 @@ kosmetycznym refaktorze:
 | `test_czas.py:73` | `"_KONIEC_CZASU = time.time() + max("` |
 | `test_glebokosc.py:88` | `"stages.write(conn, run_id, card, glebokosc)"` |
 | `test_indeks_kandydatow.py:159` | `"dopisz_kandydatow(fakty)"` |
+| `test_kotwica_w_kanalach.py:131` | „ale NIE kasujemy tematów" — spełnione przez **docstring innej funkcji**; `grep -ic "nie kasujemy"` = 0 |
+| `test_kotwica_w_kanalach.py:123` | „skaut liczy udział z kanałów" — trafia w `print` z **etapu ciekawostek**, nie ze skauta |
 
-**Zrobione, gdy:** używają wzorca, który w repozytorium już jest —
-`test_waga_artykulu.py:178-184` pyta o **drzewo składni**, a
-`test_generatory.py:229-249` czyta listę pól z AST wywołania `_prompt`
-i porównuje z listą pól z pliku promptu.
-
----
-
-## 7. Dwie asercje trafiają w zupełnie inny tekst
-
-- `test_kotwica_w_kanalach.py:131` — „ale NIE kasujemy tematów" spełnione przez
-  **docstring innej funkcji** (`stages.py:1688`, o faktach o zdarzeniach).
-  `grep -ic "nie kasujemy" stages.py` = 0.
-- `test_kotwica_w_kanalach.py:123` — „skaut liczy udział z kanałów" trafia
-  w `print` z **etapu ciekawostek** (`stages.py:1418`), nie ze skauta
-  (`stages.py:5014`). Usunięcie pomiaru ze skauta nie oblewa testu.
-
-**Zrobione, gdy:** obie mierzą wywołanie — skaut dostaje listę tematów poniżej
-progu i sprawdzamy, że **wszystkie** wracają.
+**Zrobione, gdy:** pytają o drzewo składni (jak `test_waga_artykulu.py`) albo
+uruchamiają z atrapą i liczą wywołania (jak `test_regula_naprawy.py`).
 
 ---
 
-## 8. Dwa testy przybite do wcięcia i do sztywnego okna
-
-- `test_komentarz_potwierdzony.py:544-558` — sekcja 9: dwa gołe identyfikatory
-  w `ZRODLO` (spełnione też przez komentarz) plus `index()` z 16 spacjami
-  wcięcia wpisanymi w asercję. Sekcje 1-8 tego pliku są mocne. **Skasować
-  sekcję 9**, tak jak skasowano sekcję 6 w `test_podlogi_z_pamieci.py:186`.
-- `test_slad_przebiegu.py:131` — okno 2600 znaków od `def rytm(`, kończące się
-  w połowie funkcji. Dziś działa przypadkiem, bo `return False` jest jedno.
-
----
-
-## 9. Drobne, ale zawyżają licznik
+## 12. Drobne, ale zawyżają licznik zdanych
 
 - `test_pobieranie.py:95` i `test_jednostki_systemd.py:57` — `sprawdz(nazwa, True)`
-  poza blokiem `except`. **Nie mogą oblać nigdy.** Zamienić na `print` albo dopisać
-  realny warunek.
+  poza blokiem `except`. **Nie mogą oblać nigdy.**
+- `test_komentarz_potwierdzony.py:544-558` — sekcja 9 przybita do `index()`
+  z 16 spacjami wcięcia wpisanymi w asercję. Sekcje 1–8 są mocne; skasować samą 9.
+- `test_slad_przebiegu.py:131` — okno 2600 znaków od `def rytm(`, kończące się
+  w połowie funkcji. Działa przypadkiem.
 - `test_pisarz_zakazy.py:116` — sprawdza istnienie **komentarza** w `config.py`.
-  To test dokumentacji podszyty pod test kodu. Zostawić, ale nazwać wprost.
-- Bramka „PRODUKCJA" drukuje „bez zmian" także dla plików, których **w ogóle nie
-  ma** (`odcisk` oddaje wtedy „brak", a „brak" == „brak"). Mechanizm jest
-  poprawny, ale wiersz czyta się jak potwierdzenie ochrony, której nie ma.
-  Drukować „nie istniał i nie istnieje", jak robi `test_ratunek_tekstu.py`.
+  Test dokumentacji podszyty pod test kodu; zostawić, ale nazwać wprost.
 - `test_bank_notek.py:5` i `test_indeks_kandydatow.py:19` przestawiają
-  `config.DATA_DIR` globalnie i nie cofają. Przy uruchamianiu pętlą (proces na
-  plik) to martwe; ożywa dla czegokolwiek, co ładuje dwa moduły naraz.
-  Przywracać w `finally`, jak `test_budzety_dzienne.py:122`.
+  `config.DATA_DIR` globalnie i nie cofają. Przywracać w `finally`.
 
 ---
 
-## Z audytu GPT, 2026-09-02 — NIEZWERYFIKOWANE PRZEZE MNIE
+## 13. `Callable` w adnotacji bez importu
 
-Pełny raport: `docs/GRUNTOWNY_AUDYT_GPT_2026-09-02.md`, dotyczy `main` na `20bc062`.
+`oszacowania.py:176` (gałąź `pamiec/oszacowania`) używa `Callable`, a moduł
+importuje z `typing` tylko `Any`. Program działa dzięki `from __future__ import
+annotations`, ale `typing.get_type_hints` na tej funkcji rzuci `NameError`,
+a każdy linter to zgłosi.
 
-**Traktować jako twierdzenia do sprawdzenia, nie jako fakty.** Powód jest
-konkretny: w jednym punkcie GPT trafiło mimo. Twierdziło, że stara lista
-piętnastu tematów sprzed przestawienia konta „jest naprawdę przekazywana do
-scouta". Sprawdzone na produkcji: `recent_angles` wchodzi w listę startową
-tylko `if len(angles) < 5`, a produkcja oddaje **12** — więc lista jest
-nieosiągalna. Jedyny stary temat, który realnie trafia do modelu, to nasz
-własny opublikowany artykuł, podany jako „nie powtarzaj". Reszta wskazanych
-miejsc (szampon, słoik, etykiety żywności) to **celowy kontekst negatywny** —
-usunięcie ich zabrałoby modelowi informację, czego unikać.
+---
 
-### G1. Dwa bloki niezależnie zużywają ten sam budżet komentarzy
+## Czeka na decyzję właściciela — nie na kod
 
-Blok pod artykułami bierze `na_teraz["komentarze"]` celów (`run.py:1410`),
-a późniejszy blok dyskusji pod notkami bierze **jeszcze**
-`max(1, na_teraz["komentarze"] // 2)` (`run.py:1518`). Oba podbijają ten sam
-licznik, między nimi nie ma odjęcia. Przy przydziale N jeden przebieg może
-zrobić do `N + N/2` publikacji.
+Z audytu GPT (G5) i z dzisiejszego rozstrzygnięcia. **Nie są to usterki, dopóki
+właściciel nie powie, że są:**
 
-### G2. ZROBIONE 2026-09-02 — nieudana publikacja ma własny status
-
-Potwierdzone odtworzeniem, naprawione i wdrożone (`3b83849`). Publikacja jest
-ponawiana do trzech razy, porażka dostaje status `NIEOPUBLIKOWANY`, gotowy tekst
-zostawia znacznik, a rutyna dnia — chodząca pięć razy dziennie — próbuje go
-dowieźć bez pisania nowego artykułu. Alarm ma nową kontrolę. **Sprawdzone na
-żywo na serwerze:** świeży znacznik nie alarmuje, po 30 h alarm mówi ze ścieżką.
-
-<details><summary>opis pierwotny</summary>
-
-
-`browser.wystaw_artykul` łapie każdy wyjątek i oddaje `wyslane=False`; sterownik
-wypisuje „NIE POSZEDL" i **bezwarunkowo zwraca kod 0** (`artykul_z_puli.py:1361`),
-a `main()` zamienia zero na `DONE` (`:344`). Usługa nie ma `Restart=` ani
-drugiego terminu — następny automatyczny za tydzień.
-
-</details>
-
-### G3. Po nieudanym przebiegu norma nie jest domykana
-
-Docstring obiecuje, że przerwany przebieg się nie liczy i ostatni dzieli przez
-jeden (`run.py:344`). Kod odejmuje od stałej 5 tylko liczbę statusów `DONE`
-(`run.py:358`), więc przy jednej wcześniejszej porażce przed ostatnim terminem
-dzieli resztę pracy przez dwa i zostawia połowę niewykonaną.
-
-### G4. Ostatni przebieg może wpaść w następną dobę UTC
-
-Termin 23:40 plus `RandomizedDelaySec=1500` sięga 00:05. Budżet i licznik biorą
-dzień z `datetime.now(timezone.utc)`, nie z terminu zegara — więc doba może mieć
-cztery, pięć albo sześć uruchomień, a rozdzielnik zakłada stałe pięć.
-
-### G5. Rozbieżności z wymaganiami, które mogą być świadomą polityką
-
-Nie są to usterki, dopóki właściciel nie powie, że są. **Do rozstrzygnięcia
-przez niego, nie przeze mnie:**
-
-- artykuł planowany **co tydzień** (`nia-artykul.timer`), nie co miesiąc
-- komentarze **15–23**, a przez pierwsze 30 dni efektywnie **15–19**, przy celu 20–30
-- **ciche dni zerują notki**, więc „pięć notek dziennie" nie jest kontraktem na każdą dobę
-
-### G6. Potwierdzenie niezależne
-
-Punkt 6.4 audytu („wybrany powód komentarza ginie przed pisaniem") to **to samo,
-co pozycja 1 tej listy** — `co_dodamy`. Dwa niezależne odczyty tego samego kodu
-znalazły tę samą martwą ścieżkę. To podnosi jej wagę.
-
-### Czego z tego audytu NIE zrobię bez rozmowy
-
-GPT proponuje **deterministyczną bramkę tematyczną „czy to na pewno o AI"**.
-Odradzam. Nasz najlepszy komentarz z 1 września brzmiał: *„1846 is your
-chokepoint map in another century: Britain approved thousands of miles of
-railway…"* — zero słów o AI, i dokładnie ten rejestr, po który to pismo istnieje.
-Bramka na słowa kluczowe zabiłaby go. Kupilibyśmy gwarancję tematu za utratę
-tego, co w tym piśmie najlepsze.
+- artykuł planowany **co tydzień**, nie co miesiąc
+- komentarze **15–23**, a przez pierwsze 30 dni efektywnie 15–19, przy celu 20–30
+- **ciche dni zerują notki**, więc „pięć notek dziennie" nie jest kontraktem na
+  każdą dobę
+- czy **artykuł ma nadal mieć pierwszeństwo**, skoro zdanie „subskrypcje
+  przynoszą artykuły" upadło pomiarem, a panel Substacka przypisuje 5 z 6
+  zapisów **notkom**
 
 ---
 
 ## Zasada, która z tego wynika
 
-Większość tych pozycji to jedna wada w wielu przebraniach: **asercja po treści
+Większość pozycji 9–12 to jedna wada w wielu przebraniach: **asercja po treści
 źródła zamiast po zachowaniu**. Pilnuje kształtu kodu, nie tego, co kod robi —
 więc przeżywa przeniesienie zachowania do martwej gałęzi i umiera przy zmianie
-wcięcia. Nowe testy w tym repozytorium tego nie robią; te są starsze.
+wcięcia.
 
-Gdy wybór stoi między „grep w źródle" a niczym, lepszy jest **AST** (jak
-`test_waga_artykulu.py`) albo **uruchomienie z atrapą i policzenie wywołań**
-(jak `test_regula_naprawy.py`).
+Gdy wybór stoi między „grep w źródle" a niczym, lepszy jest **AST** albo
+**uruchomienie z atrapą i policzenie wywołań**.
+
+A gdy poprawka jest wdrożona — dowodem jest **ślad z produkcji**, nie zielony
+zestaw testów. Także ten na serwerze.
