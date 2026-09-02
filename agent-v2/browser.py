@@ -4147,7 +4147,7 @@ def wystaw_odpowiedz(note_id: int, tekst: str, wyslij: bool = False,
 
 
 def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
-                 forma: str = "") -> dict[str, Any]:
+                 forma: str = "", model: str = "") -> dict[str, Any]:
     """Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA.
 
     `wyslij=False` to nie ostrożność dla samej ostrożności: notki nie da się
@@ -4245,7 +4245,7 @@ def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
                       flush=True)
             dopisz_wynik("notka", wynik, slow=len(tekst.split()),
                          tekst=tekst[:1200], id=wynik["id"],
-                         typ=typ, forma=forma)
+                         typ=typ, forma=forma, model=model)
         elif not wyslij:
             print("  (nie wysyłam — tryb sprawdzenia)", flush=True)
     except Exception as exc:
@@ -4257,7 +4257,7 @@ def wystaw_notke(tekst: str, wyslij: bool = False, typ: str = "",
         if wyslij:
             dopisz_wynik("notka", wynik, slow=len(tekst.split()),
                          tekst=tekst[:1200], id=wynik.get("id", ""),
-                         typ=typ, forma=forma)
+                         typ=typ, forma=forma, model=model)
         page.close()
         browser.close()
         p.stop()

@@ -842,6 +842,55 @@ def _co_z_tego_wyszlo(wpisy: list[dict]) -> None:
             print(f"\n    ! {laczne_lajki} polubien i ZERO odpowiedzi — tresci sa"
                   " przyjmowane, ale nie zaczepiaja nikogo do rozmowy")
 
+    # KTORY PISARZ NOTEK ZBIERA WIECEJ — Opus czy DeepSeek.
+    #
+    # Od 2 wrzesnia 2026 notki ida na zmiane: parzysta Opusem, nieparzysta
+    # DeepSeekiem pro (osiem razy tanszym). Koszt obu rozlicza sie sam w tabeli
+    # `calls`, bo maja osobne etapy — ale KOSZT to nie SKUTEK. Ta sekcja jest
+    # jedynym miejscem, gdzie te dwie rzeczy spotykaja sie w jednym wierszu.
+    #
+    # Wynik czytamy z pomiarow Substacka po numerze notki, a nie z reakcji
+    # w dzienniku, bo dziennik zna tylko te reakcje, ktore przyszly przez
+    # powiadomienia. Notki bez pola `model` to te sprzed podzialu — pokazujemy
+    # je osobno, zeby nie udawaly wyniku zadnego z pisarzy.
+    try:
+        import statystyki
+        pomiary = statystyki.najnowsze_per_pozycja("notka")
+    except Exception as exc:
+        print("  (pomiarow notek nie odczytalem: %s)" % type(exc).__name__,
+              flush=True)
+        pomiary = {}
+    per_model: dict[str, dict[str, float]] = {}
+    for w in wystawione:
+        if w["rodzaj"] != "notka":
+            continue
+        m = str(w.get("model") or "(sprzed podzialu)")
+        poz = per_model.setdefault(m, {"ile": 0, "wysw": 0, "polub": 0, "odp": 0,
+                                       "zmierzonych": 0})
+        poz["ile"] += 1
+        s = pomiary.get(str(w.get("id") or ""))
+        if s:
+            poz["zmierzonych"] += 1
+            poz["wysw"] += int(s.get("wyswietlenia") or 0)
+            poz["polub"] += int(s.get("polubienia") or 0)
+            poz["odp"] += int(s.get("odpowiedzi") or 0)
+    if len(per_model) > 1 or (per_model and "(sprzed podzialu)" not in per_model):
+        print("\n  KTORY PISARZ NOTEK — koszt jest w `calls`, tu jest SKUTEK:")
+        for m, p in sorted(per_model.items(), key=lambda x: -x[1]["ile"]):
+            if not p["zmierzonych"]:
+                print(f"    {m:<22} {int(p['ile']):>2} notek, zadna jeszcze"
+                      " niezmierzona")
+                continue
+            print(f"    {m:<22} {int(p['ile']):>2} notek"
+                  f" ({int(p['zmierzonych'])} zmierzonych)"
+                  f"  wysw {p['wysw'] / p['zmierzonych']:>5.1f}"
+                  f"  polub {p['polub'] / p['zmierzonych']:>4.1f}"
+                  f"  odp {p['odp'] / p['zmierzonych']:>4.2f}"
+                  "  (srednio na notke)")
+        if any(p["zmierzonych"] < 8 for p in per_model.values()):
+            print("    UWAGA: ponizej osmiu zmierzonych notek na pisarza ta"
+                  " tabela NIE ROZSTRZYGA niczego — pokazuje, ze pomiar dziala.")
+
     # CZY OPLACA SIE BYC WCZESNIE. Pod tekstem ze 126 komentarzami nasza uwaga
     # jest niewidoczna — ale to trzeba pokazac liczbami, a nie twierdzic.
     odpowiedzialy = {w.get("czego") for w in skutki if w.get("czego")}

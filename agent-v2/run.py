@@ -1279,7 +1279,12 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                     return
                 wynik = browser.wystaw_notke(gotowe[0]["note"].strip(), wyslij=True,
                                              typ=n.get("type", ""),
-                                             forma=n.get("forma", ""))
+                                             forma=n.get("forma", ""),
+                                             # KTORY PISARZ — do dziennika, bo
+                                             # tam stoja wyniki. Bez tego pola
+                                             # koszt obu modeli znamy z `calls`,
+                                             # a SKUTKU nie porownamy nigdy.
+                                             model=gotowe[0].get("model", ""))
                 # Fakt odhaczamy DOPIERO po potwierdzonej publikacji. Wczesniej
                 # znikal juz przy znalezieniu, wiec przepadal takze wtedy, gdy
                 # notka nie poszla albo gdy przebieg byl tylko sprawdzeniem.

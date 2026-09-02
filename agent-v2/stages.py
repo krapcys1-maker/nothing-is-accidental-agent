@@ -2407,7 +2407,7 @@ def _opis_typu(note_type: str) -> str:
 
 def note(
     conn: sqlite3.Connection, run_id: int, note_type: str, evidence: dict[str, Any],
-    link: str | None = None, note_form: str = "PROSTA",
+    link: str | None = None, note_form: str = "PROSTA", etap: str = "note",
 ) -> dict[str, Any]:
     """Jedna notka danego typu i danej FORMY — do szuflady.
 
@@ -2469,8 +2469,12 @@ def note(
     candidates: list[dict[str, Any]] = []
     for i in range(config.NOTE_CANDIDATES):
         try:
-            raw = llm.call("note", NOTE_SYSTEM, prompt, conn=conn, run_id=run_id)
+            raw = llm.call(etap, NOTE_SYSTEM, prompt, conn=conn, run_id=run_id)
             data = llm.parse_json(raw)
+            # KTORY PISARZ TO NAPISAL — niesione dalej az do dziennika.
+            # Bez tego pola po dwoch tygodniach mielibysmy dwie kolumny kosztow
+            # i ZERO mozliwosci porownania, ktore notki cos przyniosly.
+            data["model"] = config.MODEL_FOR.get(etap, "")
         except PRZERYWAJA:
             # `continue` jest tu odwrotem POZORNYM: po wyczerpanym budzecie
             # albo przy `KILL_SWITCH=true` zaden nastepny kandydat nie ma prawa
@@ -3353,9 +3357,16 @@ def notki_dnia(
         print(f"  [{typ} / {forma}]", flush=True)
         # Adres artykułu leci TYLKO pod notką, która ten artykuł promuje.
         # Pod ciekawostką byłby reklamą doklejoną do faktu i psułby ją.
+        # DWAJ PISARZE NA ZMIANE. Numer liczony w skali DOBY (`od` to tyle,
+        # ile juz dzis wyszlo), nie w skali przebiegu — inaczej kazdy przebieg
+        # zaczynalby od zera i cala doba szlaby jednym modelem.
+        # Parzysta notka: Opus. Nieparzysta: DeepSeek pro, osiem razy tanszy.
+        etap_pisarza = "note" if (od + nr) % 2 == 0 else "note_tani"
+        print("  [pisarz] %s (%s)" % (config.MODEL_FOR.get(etap_pisarza, "?"),
+                                      etap_pisarza), flush=True)
         wynik = note(conn, run_id, typ, material,
                      link=link_artykulu if typ == "ARTYKUL" else None,
-                     note_form=forma)
+                     note_form=forma, etap=etap_pisarza)
         # Fakt jedzie razem z notka, zeby `run.py` mial co odhaczyc dopiero
         # wtedy, gdy notka naprawde pojdzie w swiat.
         # MYSL nie zuzyla zadnego faktu, wiec nie ma czego odhaczac.

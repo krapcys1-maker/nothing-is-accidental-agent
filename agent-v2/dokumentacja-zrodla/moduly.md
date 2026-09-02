@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-2838 wierszy, 26 funkcji na poziomie modułu, 1 klas
+2843 wierszy, 26 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -34,7 +34,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-7201 wierszy, 131 funkcji na poziomie modułu, 0 klas
+7212 wierszy, 131 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -90,7 +90,7 @@
 | `_przytnij_pamiec(odciski)` *(wewn.)* | Zamienia odciski na zbiory i honoruje `config.PAMIEC_NOTEK`. |
 | `_zapisz_skrot_notek(odciski, bajtow, glowa, glowa_bajtow, sygnatura)` *(wewn.)* | Zapisuje skrot. NIGDY nie przerywa dnia. |
 | `_opis_typu(note_type)` *(wewn.)* | Opis typu, a przy MYSLI takze PRZYDZIELONY ksztalt. |
-| `note(conn, run_id, note_type, evidence, link, note_form)` | Jedna notka danego typu i danej FORMY — do szuflady. |
+| `note(conn, run_id, note_type, evidence, link, note_form, etap)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_pola_ksztaltu(ksztalt, pomin)` *(wewn.)* | Nazwy pol z kontraktu na odpowiedz, bez klucza opakowujacego. |
 | `zakwestionuj_promocje(url, powod)` | Artykul, ktorego notka promujaca odpadla na sprawdzeniu faktow. |
 | `zapamietaj_niewystawiony(sciezka, powod)` | Zapisuje, ze gotowy artykul lezy na dysku i nie poszedl w swiat. |
@@ -257,7 +257,7 @@
 | `_watek_z_paginacja(page, nid, stron)` *(wewn.)* | Caly watek notki — ze WSZYSTKICH stron, nie tylko z pierwszej. |
 | `potwierdz_odpowiedz(page, note_id, tekst)` | Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku — i KTORA. |
 | `wystaw_odpowiedz(note_id, tekst, wyslij, kontekst, rodzaj)` | Odpowiada w watku — pod nasza notka albo w cudzej dyskusji. |
-| `wystaw_notke(tekst, wyslij, typ, forma)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
+| `wystaw_notke(tekst, wyslij, typ, forma, model)` | Wystawia notkę. Domyślnie WYPEŁNIA i NIE WYSYŁA. |
 | `zapamietaj_platny_host(host, prawo)` | Host, ktory wprost mowi, ze komentowac moga tylko placacy. |
 | `hosty_tylko_dla_placacych()` | Hosty, gdzie komentowac moga tylko placacy — do odsiania PRZED ocena. |
 | `zapomnij_platny_host(host)` | Udany komentarz kasuje host z listy — wydawca mogl zmienic ustawienia. |
@@ -356,7 +356,7 @@
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-893 wierszy, 22 funkcji na poziomie modułu, 0 klas
+942 wierszy, 22 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -409,7 +409,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2683 wierszy, 26 funkcji na poziomie modułu, 0 klas
+2698 wierszy, 26 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

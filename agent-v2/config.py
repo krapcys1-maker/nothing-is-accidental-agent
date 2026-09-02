@@ -204,6 +204,20 @@ MODEL_FOR = {
     # a nie czterdziestu pieciu slow, i przy czterech artykulach miesiecznie
     # roznica ceny to $1,85.
     "note": CLAUDE,
+    # DRUGI PISARZ NOTEK — TEN SAM ETAP, INNY MODEL, OSOBNA POZYCJA W KSIEDZE.
+    #
+    # Notki ida na zmiane: parzysta Opusem, nieparzysta DeepSeekiem. Osobna
+    # nazwa etapu zamiast parametru `model=` przy wywolaniu jest tu celowa —
+    # tabela `calls` rozlicza po etapie, wiec koszt obu pisarzy rozdziela sie
+    # SAM, bez dokladania kolumny i bez liczenia czegokolwiek recznie.
+    #
+    # Po co w ogole: notka na Opusie kosztuje 0,084 USD, na DeepSeeku pro
+    # 0,010 — osiem razy taniej. Slepa proba z 19 sierpnia pokazala, ze przy
+    # notkach wlasciciel NIE ROZPOZNAL drozszego modelu (Fable kontra Opus
+    # 2:2 na dziewieciu parach). Podzial pol na pol jest wiec jednoczesnie
+    # oszczednoscia i testem: po dwoch tygodniach zobaczymy z dziennika, czy
+    # notki jednego pisarza zbieraja wiecej odpowiedzi niz drugiego.
+    "note_tani": DEEPSEEK_PRO,
     "comment": DEEPSEEK_PRO,
     "reply": DEEPSEEK_PRO,
     # RANKING BANKU POMYSLOW. Flash, bo to porzadkowanie kilkudziesieciu
@@ -841,6 +855,7 @@ MAX_TOKENS = {
     "review": 48000,
     "forma": 24000,
     "note": _tokens_for(400) + 8000,
+    "note_tani": _tokens_for(400) + 8000,   # ten sam kontrakt, inny pisarz
     "comment": _tokens_for(600) + 8000,
     "reply": _tokens_for(600) + 8000,
     "bank": 24000,

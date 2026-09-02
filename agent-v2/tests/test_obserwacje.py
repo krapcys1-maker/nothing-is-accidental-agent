@@ -514,7 +514,10 @@ def dzien_probny(nowe_fakty, ile):
     stages.pamiec_wystawionych = lambda: PAMIEC_TESTOWA
     stages.znajdz_ciekawostki = lambda conn, run_id, ile=8: (
         wolania.append("szukanie") or [dict(f) for f in nowe_fakty])
-    stages.note = lambda conn, run_id, typ, material, link=None, note_form="PROSTA": {
+    # `**k` OD 2 WRZESNIA 2026: `note` dostalo parametr `etap`, bo notki pisza
+    # dwaj pisarze na zmiane. Atrapa ma przyjmowac to, co przyjmuje oryginal —
+    # inaczej test oblewa na ksztalcie wywolania, a nie na zachowaniu.
+    stages.note = lambda conn, run_id, typ, material, link=None, note_form="PROSTA", **k: {
         "typ": typ, "material": material, "candidates": []}
     return stages.notki_dnia(None, 0, ciekawostki=[dict(ZDERZONY)], ile=ile), \
         len(wolania)

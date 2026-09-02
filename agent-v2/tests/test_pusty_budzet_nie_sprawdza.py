@@ -346,9 +346,13 @@ def swiat_dnia(slad, st):
         # tylko dlugosc i tresc, wiec nie dalo sie zmierzyc, czy formy w ogole
         # sie roznicuja. Atrapa je przyjmuje i ZAPISUJE — inaczej test milczalby
         # o tym, ze produkcja przestala je przekazywac.
-        wystaw_notke=lambda tekst, wyslij=False, typ="", forma="": (
+        # `model` OD 2 WRZESNIA 2026: notki pisza dwaj pisarze na zmiane, wiec
+        # dziennik dostaje nazwe tego, ktory napisal. Atrapa przyjmuje i ZAPISUJE
+        # to pole z tego samego powodu, co `typ` i `forma` — zeby test krzyknal,
+        # gdyby produkcja przestala je przekazywac.
+        wystaw_notke=lambda tekst, wyslij=False, typ="", forma="", model="": (
             slad.notki.append({"tekst": tekst, "wyslij": wyslij,
-                               "typ": typ, "forma": forma})
+                               "typ": typ, "forma": forma, "model": model})
             or {"wyslane": True, "blad": None}),
         wystaw_komentarz=lambda url, tekst, wyslij=False, kontekst=None: (
             slad.komentarze.append({"url": url, "tekst": tekst, "wyslij": wyslij})
