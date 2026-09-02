@@ -3421,6 +3421,18 @@ def napraw_obalone(
     JEDNA PROBA. Bez petli, bo petla „popraw, sprawdz, popraw" konczy sie
     placeniem za zbieznosc, ktorej nikt nie obiecal.
 
+    ILE WARTA JEST TA PONOWNA OCENA — ZMIERZONE 2 wrzesnia 2026 na zywo, osiem
+    wywolan bramki na dwoch wersjach tego samego zdania:
+
+        „thirty times the takeovers"       (falsz)  -> OBALONE 4/4
+        „ninety-four times the takeovers"  (prawda) -> POTWIERDZONE 4/4
+
+    Bramka jest wiec na tym przypadku powtarzalna w obie strony, i regula
+    monotoniczna ponizej stoi na czyms, co naprawde mierzy. To NIE znaczy, ze
+    jest nieomylna: przy pierwszej zywej naprawie odrzucila tekst, ktorego
+    nigdy nie zobaczylem, bo kod o nim milczal — stad wypisywanie odrzuconego
+    tekstu nizej. Jeden pomiar na jednym zdaniu to nie jest dowod ogolny.
+
     NAPRAWA JEST SPRAWDZANA PONOWNIE i to jest polowa wartosci tej funkcji.
     Poprawka, ktorej nikt nie zmierzyl, to kolejne twierdzenie bez pokrycia —
     a osobny audyt z 1 wrzesnia znalazl w tym repozytorium SIEDEM szkod
@@ -3506,8 +3518,18 @@ def napraw_obalone(
     po = len([c for c in (audyt2.get("zarzuty") or [])
               if str(c.get("status") or "") in ("refuted", "outdated")])
     if po >= przed:
+        # ODRZUCONY TEKST MUSI BYC WIDOCZNY. Pierwsza wersja tej funkcji milczala
+        # o tym, co odrzucila, i pierwszy zywy przebieg natychmiast to ukaral:
+        # naprawa zostala odrzucona, a tekstu, ktory przepadl, NIE DALO SIE
+        # obejrzec — wiec nie bylo jak orzec, czy to byl szum sprawdzarki, czy
+        # model naprawde napisal cos gorszego. Diagnoza sprowadzala sie do
+        # zgadywania, a to jest w tym repozytorium osobna klasa dlugu.
         print("    [naprawa] ODRZUCONA: obalonych bylo %d, po naprawie %d — "
               "zostaje oryginal" % (przed, po), flush=True)
+        print("    [naprawa] odrzucony tekst: %s" % nowy[:200], flush=True)
+        for c in (audyt2.get("zarzuty") or [])[:3]:
+            print("    [naprawa]   zarzut do naprawy: %s"
+                  % str(c.get("claim"))[:110], flush=True)
         return None
 
     print("    [naprawa] PRZYJETA: obalonych %d -> %d, %d slow. %s"
