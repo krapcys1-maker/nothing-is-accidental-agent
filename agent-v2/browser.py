@@ -3906,6 +3906,39 @@ def wystaw_artykul(
     return wynik
 
 
+def _watek_z_paginacja(page, nid, stron: int = 6) -> list[dict]:
+    """Caly watek notki — ze WSZYSTKICH stron, nie tylko z pierwszej.
+
+    ZMIERZONE 2 wrzesnia 2026 na 21 wpisach z powodem „Substack nie potwierdzil,
+    ze wyszlo": SZESNASCIE tych tekstow WISIALO na Substacku, z autorem naszego
+    konta i znacznikiem czasu 20-60 sekund PRZED wpisem o porazce. Czyli tresc
+    wychodzila, a potwierdzanie jej nie znajdowalo.
+
+    Dwa z nich — `note/c-246390011` i `note/c-252967738` — lezaly na DRUGIEJ
+    stronie watku. `/replies` oddaje osiem galezi naraz i dokleja `nextCursor`,
+    a kod czterokrotnie czytal TE SAMA pierwsza strone. Petla czekala 24 sekundy
+    na cos, co lezalo jeden `cursor` dalej — i zadna liczba prob tam nie siega.
+
+    Prog szesciu stron to okolo 48 galezi. Dluzsze watki i tak domyka
+    `juz_sie_odezwalismy`, ktore pyta Substacka wprost.
+    """
+    from urllib.parse import quote
+
+    wszystkie: list[dict] = []
+    kursor = None
+    for _ in range(stron):
+        sciezka = f"/api/v1/reader/comment/{nid}/replies?comment_id={nid}"
+        if kursor:
+            sciezka += f"&cursor={quote(str(kursor), safe='')}"
+        watek = api_json(page, sciezka) or {}
+        for g in (watek.get("commentBranches") or []):
+            wszystkie.extend(_plaskie(g))
+        kursor = watek.get("nextCursor")
+        if not kursor:
+            break
+    return wszystkie
+
+
 def potwierdz_odpowiedz(page, note_id: int, tekst: str) -> int | None:
     """Pyta Substacka, czy nasza odpowiedź naprawdę jest w wątku — i KTORA.
 
@@ -3935,11 +3968,7 @@ def potwierdz_odpowiedz(page, note_id: int, tekst: str) -> int | None:
     """
     probka = plaski(tekst)[:60]
     for nr in range(4):
-        watek = api_json(page, f"/api/v1/reader/comment/{note_id}/replies"
-                               f"?comment_id={note_id}") or {}
-        wszystkie = [c for g in (watek.get("commentBranches") or [])
-                     for c in _plaskie(g)]
-        for c in wszystkie:
+        for c in _watek_z_paginacja(page, note_id):
             if probka in plaski(c.get("body") or ""):
                 return c.get("id") or -1
         if nr < 3:
@@ -4658,11 +4687,7 @@ def potwierdz_komentarz(page, url: str, tekst: str) -> int | None:
     if "/note/c-" in url:
         nid = url.rstrip("/").rsplit("c-", 1)[-1]
         for nr in range(4):
-            watek = api_json(page, f"/api/v1/reader/comment/{nid}/replies"
-                                   f"?comment_id={nid}") or {}
-            wszystkie = [c for g in (watek.get("commentBranches") or [])
-                         for c in _plaskie(g)]
-            for c in wszystkie:
+            for c in _watek_z_paginacja(page, nid):
                 if probka in plaski(c.get("body") or ""):
                     return c.get("id") or -1
             if nr < 3:
@@ -4680,9 +4705,14 @@ def potwierdz_komentarz(page, url: str, tekst: str) -> int | None:
         dane = api_json(page, f"/api/v1/post/{post['id']}/comments?all_comments=true",
                         baza=czyja)
         lista = dane if isinstance(dane, list) else (dane or {}).get("comments") or []
-        for k in lista:
-            if isinstance(k, dict) and probka in " ".join(
-                    (k.get("body") or "").split()):
+        # GALAZ ARTYKULU CZYTALA TYLKO WIERZCH. Poprawka apostrofu z 31 sierpnia
+        # weszla wylacznie do galezi notek: tutaj zostalo surowe `" ".join(...)`,
+        # ktore nie normalizuje cudzyslowow, i pominiete byly odpowiedzi
+        # zagniezdzone — czyli caly komentarz w watku ponizej pierwszego poziomu.
+        # Zmierzone 2 wrzesnia: pod jednym z tych adresow bylo 90 wypowiedzi
+        # z 124, ktorych ten kod w ogole nie ogladal.
+        for k in (c for w in lista if isinstance(w, dict) for c in _plaskie(w)):
+            if probka in plaski(k.get("body") or ""):
                 return k.get("id") or -1
         if nr < 3:
             page.wait_for_timeout(8000)
