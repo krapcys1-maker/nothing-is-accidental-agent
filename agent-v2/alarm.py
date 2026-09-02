@@ -513,6 +513,89 @@ def pomiar_wzajemnosci() -> str | None:
     return wzajemnosc.pomiar_oslepl()
 
 
+def wydarzenie_bez_pokrycia() -> str | None:
+    """Wydarzenie odhaczone jako obsluzone, a w tresci ani slowa o nim.
+
+    2 wrzesnia 2026 premiera Fable 5.1 zostala odhaczona o 09:44:51 przy zerze
+    platnych wywolan; przebieg o 11:34 wypisal „wszystkie juz obsluzone
+    wczesniej" i to WYGLADALO na poprawne dzialanie. Awaria nie zostawila w
+    logu ani jednej linii, ktora dalaby sie zauwazyc.
+
+    Ta kontrola pyta o SKUTEK: skoro furtka jest zamknieta, to gdzies — w banku
+    albo w opublikowanej tresci — musi byc slad tego wydarzenia. Jesli nie ma,
+    znaczy to, ze zaplacilismy zamknieciem furtki za nic.
+
+    Zero wywolan modelu, zero sieci: czyta trzy pliki z dysku.
+    """
+    import json
+    import stages
+
+    try:
+        znane = json.loads(stages.WYDARZENIA_OBSLUZONE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(znane, dict):
+        return None
+
+    granica = (datetime.now(timezone.utc)
+               - timedelta(days=config.WYDARZENIE_WAZNE_DNI)).date().isoformat()
+
+    def _kiedy(wpis) -> str:
+        return str(wpis.get("kiedy") or "") if isinstance(wpis, dict) else str(wpis or "")
+
+    swieze = {k: v for k, v in znane.items() if _kiedy(v) >= granica}
+    if not swieze:
+        return None
+
+    # Material w banku liczy sie jako pokrycie: notka moze jeszcze nie wyjsc,
+    # ale wydarzenie zostalo kupione i lezy w kolejce.
+    try:
+        bank = json.dumps(json.loads(
+            (config.DATA_DIR / "indeks_kandydatow.json").read_text(encoding="utf-8")),
+            ensure_ascii=False).lower()
+    except (OSError, ValueError):
+        bank = ""
+
+    tresc = []
+    try:
+        for linia in (config.DATA_DIR / "dziennik.jsonl").read_text(
+                encoding="utf-8").splitlines():
+            if not linia.strip():
+                continue
+            try:
+                w = json.loads(linia)
+            except ValueError:
+                continue
+            if w.get("rodzaj") in ("notka", "komentarz", "odpowiedz") and w.get("udane"):
+                tresc.append(str(w.get("tekst") or "").lower())
+    except OSError:
+        pass
+    opublikowane = " ".join(tresc)
+
+    puste = []
+    for klucz, wpis in sorted(swieze.items()):
+        slowa = [t.strip().lower() for t in str(klucz).split(",") if t.strip()]
+        if not slowa:
+            continue
+        w_banku = all(t in bank for t in slowa)
+        w_tresci = all(t in opublikowane for t in slowa)
+        ile = int(wpis.get("ile") or 0) if isinstance(wpis, dict) else -1
+        if not w_banku and not w_tresci:
+            puste.append("„%s" % klucz + "” odhaczone %s, material w banku: nie,"
+                         " w opublikowanej tresci: nie%s"
+                         % (_kiedy(wpis),
+                            "" if ile < 0 else ", znacznik mowi %d faktow" % ile))
+
+    if not puste:
+        return None
+    return ("Wydarzenie odhaczone, a nic o nim nie wyszlo: "
+            + "; ".join(puste)
+            + ". Furtka jest zamknieta i sama sie nie otworzy przed %s."
+              " Plik: agent-v2/data/wydarzenia_obsluzone.json"
+              % (datetime.now(timezone.utc)
+                 + timedelta(days=config.WYDARZENIE_WAZNE_DNI)).date().isoformat())
+
+
 def sprawdz_wszystko() -> list[str]:
     """Uruchamia komplet kontroli i alarmuje o tym, co znalazl."""
     kontrole = (
@@ -531,6 +614,9 @@ def sprawdz_wszystko() -> list[str]:
         # konto potrafi wyprodukowac — i do 2 wrzesnia 2026 nie zglaszal jej
         # nikt: przebieg z nieudana publikacja zapisywal sie jako `DONE`.
         ("artykul-zalegly", "ARTYKUL CZEKA NA WYSTAWIENIE", artykul_zalegly),
+        # Furtka wydarzenia zamknieta, a w tresci ani slowa — patrz docstring.
+        ("wydarzenie-bez-pokrycia", "WYDARZENIE ODHACZONE, A NIC NIE WYSZLO",
+         wydarzenie_bez_pokrycia),
     )
     # TABELA WOLUMENOW DRUKOWANA ZAWSZE, nie tylko gdy cos jest nie tak.
     # Alarm ma odpowiadac na pytanie „ile wyszlo", a nie tylko krzyczec, gdy

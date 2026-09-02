@@ -1166,18 +1166,46 @@ def _nowe_wydarzenia(
         znane = {}
     granica = (datetime.now(timezone.utc)
                - timedelta(days=config.WYDARZENIE_WAZNE_DNI)).date().isoformat()
+    def _obsluzone_od(wpis: Any) -> str:
+        # Slownik to nowy format: {"kiedy": data, "ile": ile faktow wrocilo}.
+        # Zero faktow znaczy, ze furtka zostala tkniela, ale nic przez nia nie
+        # przeszlo — takiego wpisu NIE traktujemy jako obsluzenia.
+        if isinstance(wpis, dict):
+            if int(wpis.get("ile") or 0) > 0:
+                return str(wpis.get("kiedy") or "")
+            # Material nie wrocil. Furtka zostaje otwarta, ale nie w nieskonczonosc:
+            # po `WYDARZENIE_PROB_MAKS` nieudanych probach zamykamy ja mimo to,
+            # zeby padajace szukanie nie chodzilo przy kazdym z pieciu przebiegow.
+            if int(wpis.get("proby") or 0) >= config.WYDARZENIE_PROB_MAKS:
+                return str(wpis.get("kiedy") or "")
+            return ""
+        return str(wpis or "")
+
     nowe = [w for w in (wydarzenia or [])
-            if str(znane.get(_rdzen_wydarzenia(w), "")) < granica]
+            if _obsluzone_od(znane.get(_rdzen_wydarzenia(w))) < granica]
     return nowe, znane
 
 
 def _zapamietaj_wydarzenia(nowe: list[dict[str, Any]],
-                           znane: dict[str, str]) -> None:
-    """Zapisuje, ze o tych zdarzeniach juz dobieralismy material."""
+                           znane: dict[str, Any], ile: int) -> None:
+    """Zapisuje, ze o tych zdarzeniach material JUZ WROCIL.
+
+    `ile` to liczba faktow, ktore weszly do indeksu. Zapisujemy ja razem z
+    data, bo sama data mowi tylko, ze ktos tedy przechodzil. Wpis z zerem NIE
+    zamyka furtki (`_nowe_wydarzenia`) — to druga linia obrony na wypadek, gdyby
+    ktos kiedys znowu zawolal te funkcje przed dobraniem materialu.
+
+    Stary format (sam napis z data) czytamy nadal, zeby plik z produkcji
+    dzialal bez migracji.
+    """
     from datetime import datetime, timezone
     dzis = datetime.now(timezone.utc).date().isoformat()
     for w in nowe:
-        znane[_rdzen_wydarzenia(w)] = dzis
+        klucz = _rdzen_wydarzenia(w)
+        stary = znane.get(klucz)
+        proby = int(stary.get("proby") or 0) if isinstance(stary, dict) else 0
+        znane[klucz] = {"kiedy": dzis, "ile": int(ile),
+                        "proby": proby + (0 if int(ile) > 0 else 1)}
     try:
         WYDARZENIA_OBSLUZONE.parent.mkdir(parents=True, exist_ok=True)
         WYDARZENIA_OBSLUZONE.write_text(
@@ -1276,7 +1304,21 @@ def znajdz_ciekawostki(
         print("  [wydarzenia] wszystkie juz obsluzone wczesniej — nie"
               " otwieram furtki drugi raz", flush=True)
     if nowe_wyd:
-        _zapamietaj_wydarzenia(nowe_wyd, znane_wyd)
+        # ZNACZNIK ZAPISUJEMY NA KONCU, PO MATERIALE — nie tutaj.
+        #
+        # Tu stalo `_zapamietaj_wydarzenia(...)`, wiec plik notowal ZAMIAR, a
+        # nie skutek. 2 wrzesnia 2026 o 09:44:51, minute po wdrozeniu, recznie
+        # uruchomione sprawdzenie weszlo w te linie i wyszlo BEZ materialu:
+        # premiera Fable 5.1 zostala odhaczona jako obsluzona przy zerze
+        # platnych wywolan tego dnia. Przy `WYDARZENIE_WAZNE_DNI = 2` i oknie
+        # swiezosci korpusu na cztery doby to znaczy STRACONE, nie odlozone —
+        # znacznik wygasa dokladnie wtedy, gdy filmy wypadaja z okna.
+        #
+        # To ta sama klasa bledu, co „nieudana publikacja ksiegowana jako
+        # sukces" (naprawiona 2 wrzesnia rano w `artykul_z_puli.py`): stan
+        # zapisany z gory, zanim wiadomo, czy cokolwiek z tego wyszlo.
+        print("  [wydarzenia] NOWE (%d) — otwieram furtke mimo sufitu banku"
+              % len(nowe_wyd), flush=True)
     elif _przebiegi_z_bankiem_dzis(conn) >= config.SZUKANIE_BANKU_NA_DOBE:
         # Zwykle dobieranie do banku: RAZ NA DOBE, nie przy kazdym z pieciu
         # przebiegow. Licznik czytamy z tabeli `calls`, bo tam i tak zapisujemy
@@ -1320,7 +1362,8 @@ def znajdz_ciekawostki(
         # WYDARZENIE JAKO OKAZJA, NIE TEMAT — patrz komentarz wyzej.
         wydarzenia=("\n".join(
             "- %s (mowi o tym %d kanalow): %s"
-            % (", ".join(w["o_czym"][:4]), w["kanalow"], w["tytuly"][0][:90])
+            % (", ".join((w.get("o_czym") or [])[:4]), w.get("kanalow") or 0,
+               (w.get("tytuly") or [""])[0][:90])
             for w in wydarzenia[:3])
             or "(nic wielkiego dzis — pracuj z siatki ponizej)"),
         dzis=teraz.strftime("%d %B %Y"),
@@ -1353,6 +1396,11 @@ def znajdz_ciekawostki(
             print("  [ciekawostki] odzyskane: %d faktow" % len(fakty), flush=True)
     except Exception as exc:
         print(f"  [ciekawostki] nie wyszły ({exc})", flush=True)
+        # PROBA LICZY SIE TAKZE WTEDY, GDY MODEL RZUCIL. Bez tego wydarzenie,
+        # przy ktorym szukanie pada w kolko, otwieraloby furtke przy kazdym
+        # z pieciu przebiegow dziennie — bez konca i bez sladu.
+        if nowe_wyd:
+            _zapamietaj_wydarzenia(nowe_wyd, znane_wyd, 0)
         return []
     fakty = [f for f in fakty if f.get("fact") and f.get("url")]
     # Druga siatka na powtórki: model bywa głuchy na własną listę zakazów, a to
@@ -1436,6 +1484,14 @@ def znajdz_ciekawostki(
         dopisz_kandydatow(fakty)
     except Exception as exc:
         print(f"  [indeks] nie zapisalem ({type(exc).__name__})", flush=True)
+
+    # DOPIERO TERAZ wydarzenie jest OBSLUZONE: material wrocil i wszedl do
+    # indeksu. Przerwany przebieg, padniety model, wyczerpany budzet albo
+    # sprawdzenie po wdrozeniu zostawiaja furtke OTWARTA — najgorsze, co moze
+    # sie stac, to drugie szukanie o tym samym, czyli zachowanie sprzed
+    # poprawki z 1 wrzesnia. Utrata premiery jest drozsza.
+    if nowe_wyd:
+        _zapamietaj_wydarzenia(nowe_wyd, znane_wyd, len(fakty))
     return fakty
 
 

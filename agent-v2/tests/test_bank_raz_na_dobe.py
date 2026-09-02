@@ -122,7 +122,7 @@ try:
     print("=== 2. TO SAMO WYDARZENIE OTWIERA FURTKE RAZ ===")
     nowe, znane = stages._nowe_wydarzenia([GLM])
     sprawdz("pierwszy raz: zdarzenie jest NOWE", len(nowe) == 1, nowe)
-    stages._zapamietaj_wydarzenia(nowe, znane)
+    stages._zapamietaj_wydarzenia(nowe, znane, 8)  # 8 faktow wrocilo
     nowe2, _ = stages._nowe_wydarzenia([GLM])
     sprawdz("drugi raz: to samo zdarzenie NIE jest juz nowe",
             nowe2 == [], nowe2)
@@ -170,22 +170,41 @@ try:
                 wynik2 == [], wynik2)
 
         # NOWE zdarzenie ma przebic limit dobowy — model DOSTAJE szanse.
-        # `llm.call` nadal rzuca, wiec dowodem jest to, ze doszlo do wywolania.
+        # DOWODEM JEST LICZNIK WYWOLAN, nie zlapany wyjatek: etap lapie bledy
+        # modelu szeroko (`except Exception` przy `llm.call`), wiec z samego
+        # wyjatku nie da sie wnioskowac, czy do wywolania w ogole doszlo.
         stages.bank_pelny = lambda: True
         korpus_kanalow.wielkie_wydarzenia = lambda *a, **k: [dict(INNE)]
-        doszlo = False
-        try:
-            stages.znajdz_ciekawostki(baza_z_przebiegami(5), 1)
-        except AssertionError:
-            doszlo = True
-        except Exception:
-            doszlo = True          # inny blad znaczy, ze przeszlo bramki
-        sprawdz("NOWE zdarzenie przebija limit dobowy i pelny bank", doszlo)
+        licznik = {"n": 0}
 
-        # ...ale to samo zdarzenie drugi raz juz nie przebija.
-        wynik3 = stages.znajdz_ciekawostki(baza_z_przebiegami(5), 1)
-        sprawdz("to samo zdarzenie drugi raz NIE przebija — pusto bez modelu",
-                wynik3 == [], wynik3)
+        def liczacy(*a, **k):
+            # LICZYMY TYLKO SZUKANIE DO BANKU. Jedno wejscie w etap wola model
+            # DWA razy: raz po stan modeli (`aktualne_modele`), raz po material
+            # (`curiosity`). Liczenie obu dawalo 2, 6, 6 zamiast 1, 3, 3 —
+            # i wygladalo jak zepsuta bramka, choc bramka dzialala.
+            if a and a[0] == "curiosity":
+                licznik["n"] += 1
+                raise RuntimeError("model niedostepny")   # material NIE wraca
+            return "{}"
+
+        llm.call = liczacy
+        stages.znajdz_ciekawostki(baza_z_przebiegami(5), 1)
+        sprawdz("NOWE zdarzenie przebija limit dobowy i pelny bank",
+                licznik["n"] == 1, licznik)
+
+        # OD 2 WRZESNIA 2026 nieudana proba NIE zamyka furtki — znacznik
+        # notuje SKUTEK, nie zamiar (`test_furtka_wydarzenia.py`). Ale liczba
+        # prob jest ograniczona, zeby padajace szukanie nie chodzilo przy
+        # kazdym z pieciu przebiegow dziennie.
+        for _ in range(config.WYDARZENIE_PROB_MAKS - 1):
+            stages.znajdz_ciekawostki(baza_z_przebiegami(5), 1)
+        sprawdz("nieudane proby dostaja szanse az do limitu (%d)"
+                % config.WYDARZENIE_PROB_MAKS,
+                licznik["n"] == config.WYDARZENIE_PROB_MAKS, licznik)
+
+        stages.znajdz_ciekawostki(baza_z_przebiegami(5), 1)
+        sprawdz("po limicie prob furtka sie zamyka — model NIE wolany",
+                licznik["n"] == config.WYDARZENIE_PROB_MAKS, licznik)
     finally:
         korpus_kanalow.korpus_kanalow = oryg_korpus
         korpus_kanalow.wielkie_wydarzenia = oryg_wyd

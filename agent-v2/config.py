@@ -1520,6 +1520,12 @@ SZUKANIE_BANKU_NA_DOBE = 1
 # pokrywaja to okno dokladnie. Po nich ten sam rdzen moze wrocic — jesli
 # temat naprawde odzyl, zasluguje na drugie podejscie.
 WYDARZENIE_WAZNE_DNI = 2
+# ILE RAZY PROBUJEMY DOBRAC MATERIAL DO JEDNEGO WYDARZENIA, zanim uznamy je za
+# zamkniete mimo braku materialu. Od 2 wrzesnia 2026 furtke zamyka SKUTEK, nie
+# zamiar — a bez tego licznika wydarzenie, przy ktorym szukanie pada w kolko,
+# otwieraloby ja przy kazdym z pieciu przebiegow dziennie. To dokladnie ta
+# petla kosztowa, ktora 1 wrzesnia kosztowala 13,6 USD miesiecznie.
+WYDARZENIE_PROB_MAKS = 3
 
 # TERMIN WAZNOSCI W BANKU, liczony od dnia dopisania — osobny od wieku ZRODLA.
 # To sa dwa rozne pytania: dokument kontrolny mowi, czy fakt jest nadal
