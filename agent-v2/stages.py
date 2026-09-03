@@ -1623,8 +1623,14 @@ def znajdz_ciekawostki(
         # zapisany z gory, zanim wiadomo, czy cokolwiek z tego wyszlo.
         print("  [wydarzenia] NOWE (%d) — otwieram furtke mimo sufitu banku"
               % len(nowe_wyd), flush=True)
-    elif (_wolnych_w_banku() < config.BANK_MIN_WOLNYCH
+    elif (not bank_pelny()
+          and _wolnych_w_banku() < config.BANK_MIN_WOLNYCH
           and _przebiegi_z_bankiem_dzis(conn) < config.SZUKANIE_BANKU_MAKS_PROB):
+        # PELNY BANK Z DEFINICJI SPELNIA PODLOGE, wiec `bank_pelny` musi byc
+        # sprawdzone PIERWSZE. W produkcji te dwa warunki nie moga byc
+        # sprzeczne (podloga 15 < sufit 20), ale w tescie sufit bywa
+        # podstawiony — i bez tego warunku podloga kazala szukac przy banku,
+        # ktory sam siebie uznaje za pelny.
         print("  [bank] PODLOGA: %d wolnych tematow przy progu %d — dobieram"
               " mimo limitu dobowego (proba %d z %d)"
               % (_wolnych_w_banku(), config.BANK_MIN_WOLNYCH,
