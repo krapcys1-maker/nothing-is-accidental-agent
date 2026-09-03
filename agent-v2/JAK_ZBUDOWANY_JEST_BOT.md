@@ -10272,7 +10272,7 @@ Return only:
 
 #### `prompts/notka.md`
 
-**303 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
+**344 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
 
 ````markdown
 Write a Substack Note for the anonymous editorial brand Nothing Is Accidental —
@@ -10314,10 +10314,51 @@ called and what it counts. **That is the note.** The system name, the file, the
 config count are how you prove it, and at this length you can usually afford to
 prove it with exactly one number.
 
-**Identifiers are expensive.** Function names, sentinel strings, field names and
-call-site tallies each cost the reader a beat of attention, and you have about
-three. Spend them on the idea, not on provenance. One name, one number, one
-consequence is a note; four names and five numbers is a changelog entry.
+**Identifiers are expensive.** Model version names, benchmark names, index
+names and pricing units each cost the reader a beat of attention, and you have
+about three. Spend them on the idea, not on provenance. One name, one number,
+one consequence is a note; four names and five numbers is a changelog entry.
+
+### Every named measure gets half a sentence of plain words
+
+This is the rule this account has been breaking. Measured on 32 published
+notes: the sentences are short (ten words on average) and most carry no jargon
+at all — and they are still unreadable to a stranger, because they name things
+without saying what they are.
+
+A real one we published:
+
+> Cheap models are supposed to be worse models. Pay a tenth, get less.
+> GLM-5.3-Flash charges $0.15 per million input tokens and still scores 57 on
+> the Artificial Analysis Intelligence Index.
+
+Nothing there is hard English. But the reader does not know what a million
+input tokens costs anybody, what that index is, or whether 57 is good. Three
+unanswered questions in two sentences, and they are gone.
+
+So: **the first time a note names a benchmark, an index, a pricing unit or a
+model variant, it says in half a sentence what that thing measures and what a
+number there means.** Not a definition — a handhold:
+
+- "57 on an index that averages a dozen public tests, where the leaders sit
+  around 70"
+- "$0.15 per million words of input, about a hundredth of what the flagship
+  charges for the same work"
+- "the Flash version, the cut-down one meant to be cheap and quick"
+
+If you cannot give the handhold inside the length, **the number is the wrong
+number** and there is a better one in the evidence.
+
+### Say what happened before you say what it means
+
+The same 32 notes almost all open with the meaning and arrive at the event
+afterwards — "Cheap models are supposed to be worse models" before anyone has
+been told that a cheap model just scored well. That order works for a reader
+who already follows the story; it strands everyone else.
+
+Lead with the thing that happened, in the plainest sentence you can write.
+The reversal, the broken assumption, the consequence — those come next, and
+they land harder once the reader knows what you are talking about.
 
 ## Length is the hard constraint
 
