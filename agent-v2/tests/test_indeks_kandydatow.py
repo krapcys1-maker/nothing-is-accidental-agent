@@ -485,6 +485,46 @@ try:
         stages.INDEKS_KANDYDATOW = _st4
 
     print()
+    print("=== KOPIA ZAPASOWA BANKU ===")
+    # ATOMOWOSC CHRONI PRZED POLOWA PLIKU, NIE PRZED PLIKIEM ZLYM. Zapis
+    # poprawny, ale pusty — blad w kodzie, wyjatek w polowie budowania listy —
+    # przechodzi przez `os.replace` bez zarzutu i kasuje material oplacony
+    # wyszukiwaniami. Bank raz juz zniknal w calosci (25-30 sierpnia 2026,
+    # 1,51 USD w 22 wywolaniach) i to jest jedyna rzecz, ktora oddaje go z
+    # powrotem.
+    import tempfile as _tf
+    import pathlib as _pl
+    _kat5 = _pl.Path(_tf.mkdtemp())
+    _st5 = stages.INDEKS_KANDYDATOW
+    try:
+        stages.INDEKS_KANDYDATOW = _kat5 / "indeks.json"
+        kopia = stages.INDEKS_KANDYDATOW.with_suffix(".json.kopia")
+
+        stages._zapisz_indeks([{"fact": "pierwsza zawartosc"}])
+        sprawdz("pierwszy zapis NIE zostawia pustej kopii",
+                not kopia.exists(), kopia.exists())
+
+        stages._zapisz_indeks([{"fact": "druga zawartosc"}])
+        sprawdz("drugi zapis zostawia kopie", kopia.exists())
+        # KOPIA MA TRZYMAC POPRZEDNIA ZAWARTOSC, nie biezaca — inaczej jest
+        # tylko drugim egzemplarzem tej samej straty.
+        stara = json.loads(kopia.read_text(encoding="utf-8"))
+        nowa = json.loads(stages.INDEKS_KANDYDATOW.read_text(encoding="utf-8"))
+        sprawdz("kopia trzyma POPRZEDNIA zawartosc, nie biezaca",
+                stara == [{"fact": "pierwsza zawartosc"}]
+                and nowa == [{"fact": "druga zawartosc"}], (stara, nowa))
+
+        # I NAJWAZNIEJSZE: da sie z niej wrocic. Kasujemy bank i podstawiamy
+        # kopie — dokladnie ten ruch, ktory wlasciciel zrobilby po awarii.
+        stages.INDEKS_KANDYDATOW.unlink()
+        kopia.replace(stages.INDEKS_KANDYDATOW)
+        sprawdz("po podmianie kopii bank znowu sie czyta",
+                stages.wczytaj_indeks() == [{"fact": "pierwsza zawartosc"}],
+                stages.wczytaj_indeks())
+    finally:
+        stages.INDEKS_KANDYDATOW = _st5
+
+    print()
 finally:
     # Oddajemy swiat w stanie, w jakim go zastalismy — takze wtedy, gdy
     # ktoras asercja wywali sie wyjatkiem w polowie pliku.

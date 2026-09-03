@@ -6396,8 +6396,28 @@ def _zapisz_indeks(indeks: list[dict[str, Any]]) -> None:
     stara zawartosc, albo cala nowa — nigdy polowa.
     """
     import os
+    import shutil
 
     INDEKS_KANDYDATOW.parent.mkdir(parents=True, exist_ok=True)
+    # JEDNA KOPIA POPRZEDNIEJ ZAWARTOSCI, jak przy `promocja.json`.
+    #
+    # Atomowosc chroni przed polowa pliku, ale NIE przed plikiem poprawnym i
+    # zlym — bledem w kodzie, ktory zapisze pusta albo przycieta liste. Wtedy
+    # `os.replace` wykona swoje zadanie bez zarzutu i skasuje material oplacony
+    # wyszukiwaniami. Kopia kosztuje jeden plik na dysku i jest jedyna rzecza,
+    # ktora oddaje bank z powrotem.
+    #
+    # Kopiujemy PRZED podmiana i tylko wtedy, gdy stary plik istnieje —
+    # inaczej pierwszy zapis zostawialby pusta kopie wygladajaca jak strata.
+    if INDEKS_KANDYDATOW.exists():
+        try:
+            shutil.copy2(INDEKS_KANDYDATOW,
+                         INDEKS_KANDYDATOW.with_suffix(".json.kopia"))
+        except OSError as exc:
+            # Nieudana kopia NIE zatrzymuje zapisu: brak kopii jest gorszy od
+            # braku kopii ORAZ braku nowych faktow.
+            print("  [indeks] kopia zapasowa sie nie udala (%s) — zapisuje dalej"
+                  % type(exc).__name__, flush=True)
     tymczasowy = INDEKS_KANDYDATOW.with_suffix(".json.nowy")
     tymczasowy.write_text(
         json.dumps(indeks[-600:], ensure_ascii=False, indent=2), encoding="utf-8")

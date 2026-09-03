@@ -11,50 +11,11 @@ zapisów, bo to w tym repozytorium osobna klasa błędu:
 - pełny audyt modelu spoza projektu → `docs/ROZSTRZYGNIECIE_2026-09-02.md`
 - pamięć / warstwa oszacowań → gałąź `pamiec/oszacowania`, niewdrożona
 
-Stan na 2 września 2026, wieczór. Produkcja na `5684d12`.
+Stan na 3 września 2026, rano. Produkcja na `42f1932`.
 
 ---
 
-## 1. Bank może zniknąć bez śladu i raz już zniknął
-
-`_zapisz_indeks` to nieatomowy `write_text` (`stages.py`), a `wczytaj_indeks`
-traktuje nieczytelny plik jak **pusty**. Przebieg ubity w trakcie zapisu kasuje
-więc cały bank po cichu: nie ma wyjątku, nie ma linii w logu, jest pusta pula.
-
-**To nie jest teoria.** Najstarszy ocalały wpis w indeksie pochodzi z 30 sierpnia
-12:44:37. Wcześniejsza kohorta — bank rósł 66 → 119 wolnych pozycji między 25
-a 29 sierpnia, opłacony 22 wywołaniami za **1,51 USD** — zniknęła w całości, bez
-ani jednego wpisu `uzyty` i bez ani jednego `przeterminowany`. Drugie możliwe
-wyjaśnienie to świadomy reset podczas testów tamtego dnia; ze śladów nie da się
-rozstrzygnąć, które zaszło, i to samo w sobie jest wadą.
-
-**Zrobione, gdy:** zapis idzie przez plik tymczasowy i `os.replace` (atomowo),
-a nieczytelny plik **oblewa głośno** zamiast udawać pusty bank. Do tego jedna
-kopia zapasowa obok, jak przy `promocja.json`.
-
----
-
-## 2. Znacznik kanału obejmuje 3 miejsca z 26
-
-Kolumna `akcja` w `calls` działa (potwierdzone niezależnie na produkcji: zapisuje
-się, nie przecieka, wytrzymuje wyjątek, dekorator obejmuje generatory). Ale
-wpięta jest tylko w dwóch wywołaniach `comment_on` i w `notki_dnia`.
-
-Zmierzone na 7 dniach: **8,84 z 16,97 USD (52,1%) nie dostanie kanału nigdy** —
-w tym `write` (4,11 USD, cały artykuł), `discovery` (1,82), `cele`, `synthesis`,
-`scout`, `reply`, `review`, `forma`, `classify`, `obraz`, `grafika`, `restack`,
-`warto_pisac`, `wybor`, `feasibility`, `bibliotekarz`, `fedreg`.
-
-Dopóki to stoi, miara „różni ludzie na dolara" nie istnieje dla artykułów,
-tematów ani odpowiedzi — czyli dla ponad połowy rachunku.
-
-**Zrobione, gdy:** każde płatne wywołanie jest osiągalne wyłącznie ze ścieżki
-z kanałem, a test liczący to z drzewa składni **oblewa**, gdy ktoś doda nowe
-wywołanie bez kanału.
-
----
-
-## 3. Dwa bloki niezależnie zużywają ten sam budżet komentarzy
+## 1. Dwa bloki niezależnie zużywają ten sam budżet komentarzy
 
 Blok pod artykułami bierze `na_teraz["komentarze"]` celów, a późniejszy blok
 dyskusji pod notkami bierze **jeszcze** `max(1, na_teraz["komentarze"] // 2)`.
@@ -66,7 +27,7 @@ bo dziś wolumeny są **poniżej** normy, a nie powyżej, więc może to nie bol
 
 ---
 
-## 4. Po nieudanym przebiegu norma nie jest domykana
+## 2. Po nieudanym przebiegu norma nie jest domykana
 
 Docstring obiecuje, że przerwany przebieg się nie liczy i ostatni dzieli przez
 jeden. Kod odejmuje od stałej 5 tylko liczbę statusów `DONE`, więc przy jednej
@@ -77,7 +38,7 @@ Z audytu GPT (G3), niezweryfikowane pomiarem.
 
 ---
 
-## 5. Ostatni przebieg może wpaść w następną dobę UTC
+## 3. Ostatni przebieg może wpaść w następną dobę UTC
 
 Termin 23:40 plus `RandomizedDelaySec=1500` sięga 00:05. Budżet i licznik biorą
 dzień z `datetime.now(timezone.utc)`, nie z terminu zegara — więc doba może mieć
@@ -87,7 +48,7 @@ Z audytu GPT (G4), niezweryfikowane pomiarem.
 
 ---
 
-## 6. Czternaście publikacji w tydzień bez potwierdzenia
+## 4. Czternaście publikacji w tydzień bez potwierdzenia
 
 Osiem komentarzy i sześć odpowiedzi z powodem „Substack nie potwierdził, że
 wyszło" (7 dni do 2 września). Przy 57 komentarzach to 14% strat, i **nie
@@ -100,15 +61,60 @@ odstępie, a jeśli i ona milczy, wpis dostaje status „niepewne" zamiast
 
 ---
 
-## 7. Wolumeny poniżej normy — obserwacje na 33%
+## 5. Wolumeny: normy zmienione, wykonanie jeszcze niesprawdzone
 
-Zmierzone przez alarm na 7 dniach: obserwacje **0,14/dzień wobec ~0,4** (33%),
-notki 2,86 wobec 5 (67%), komentarze 8,14 wobec ~19 (70%), polubienia 81%,
-restacki 88%. Subskrypcje jako jedyne powyżej (200%).
+3 września normy zmieniono: **notki 5 → 10** (połowa Opus, połowa DeepSeek),
+**komentarze 15–23 → 7–9**, **dobierania banku 1 → 2**. Wdrożone i żywe
+(`budzet_dnia` na produkcji: `notki=10 komentarze=8`).
 
-Alarm nazywa to wprost: „to jest ta awaria, której nie widać w logu". Nic się
-nie wywala — po prostu wychodzi mniej, niż doktryna deklaruje. Przyczyna
-niezbadana.
+**Czego jeszcze nie wiemy:** czy doba naprawdę odda dziesięć notek. Symulacja
+na kopii prawdziwego banku mówi, że tak (10 na 10, pięć partii po dwie), ale
+symulacja to nie produkcja. Pierwszy przebieg 3 września nie wystawił notek i
+**słusznie** — o 05:00 UTC u czytelników jest 01:03, czyli poza oknem 6:00–22:00.
+
+Ze starego pomiaru zostaje jedno otwarte: **obserwacje 0,14/dzień wobec ~0,4
+(33%)**. Przyczyna niezbadana.
+
+**Zrobione, gdy:** pełna doba z pięcioma przebiegami odda dziesięć notek i
+osiem komentarzy, sprawdzone w dzienniku, nie w logu przebiegu.
+
+---
+
+## 6. Odpowiedzi są najtańszym zasięgiem, jaki mamy — i robimy ich trzy
+
+Zmierzone 3 września na równym czasie (24 h od pierwszego pomiaru) i na kosztach
+bezpośrednich z kolumny `akcja`:
+
+| kanał | za sztukę | wejść po 24 h | za wejście | za polubienie |
+|---|---|---|---|---|
+| komentarz | $0,0324 | 1,5 | $0,0222 | $0,1200 |
+| notka | $0,1233 | 27,3 | $0,0045 | $0,0419 |
+| **odpowiedź** | $0,0320 | 26,5 | **$0,0012** | **$0,0071** |
+
+Odpowiedź kosztuje tyle co komentarz i ma zasięg notki — osiemnaście razy
+tańsze wejście niż komentarz. To na razie **dwie dojrzałe pozycje**, więc trop,
+nie dowód; ale trop tani do sprawdzenia.
+
+**Zrobione, gdy:** wiadomo, czy to prawda przy dziesięciu dojrzałych
+odpowiedziach — a jeśli tak, czy da się ich robić więcej bez czekania, aż ktoś
+odpowie nam pierwszy.
+
+---
+
+## 7. 68 z 91 komentarzy ma dokładnie zero wyświetleń
+
+Pole istnieje i jest wypełnione — to nie jest brak pomiaru. Rekord życiowy
+komentarza to 40 wejść, mediana po 24 h wynosi **0**. Dla porównania żadna
+notka nie ma zera.
+
+Nie wiadomo, czy Substack liczy „wyświetlenie" komentarza pod cudzym wpisem tak
+samo jak wyświetlenie notki. Polubienia potwierdzają obraz niezależnie od tej
+wątpliwości (0,27 na komentarz wobec 2,94 na notkę), ale samego pytania nie
+rozstrzygają.
+
+**Zrobione, gdy:** wiadomo, czy zero znaczy „nikt nie zobaczył", czy „Substack
+tego nie liczy". Bez tego nie da się powiedzieć, ile naprawdę warte jest
+komentowanie.
 
 ---
 
@@ -232,12 +238,34 @@ odpowiedzią i nie jest porażką", co po zmianie promptu przestanie być prawd�
 
 ---
 
-## 14. `Callable` w adnotacji bez importu
+## 15. `Callable` w adnotacji bez importu
 
 `oszacowania.py:176` (gałąź `pamiec/oszacowania`) używa `Callable`, a moduł
 importuje z `typing` tylko `Any`. Program działa dzięki `from __future__ import
 annotations`, ale `typing.get_type_hints` na tej funkcji rzuci `NameError`,
 a każdy linter to zgłosi.
+
+---
+
+## 16. Trzy wywołania, żeby trzy razy dojść do tego samego
+
+Przebieg 3 września trzykrotnie pytał model o odpowiedź na komentarz będący
+samym emoji „😂" i trzy razy dostał „MILCZY — nie ma na co odpowiadać".
+Koszt: $0,0058 za potwierdzenie tego samego wniosku trzy razy.
+
+**Zrobione, gdy:** pierwsza odmowa z powodem „nie ma treści" kończy próby dla
+tego celu, zamiast wchodzić w pętlę powtórzeń.
+
+---
+
+## 17. Jeden fakt starszy niż reguła 90 dni siedzi w banku
+
+Z 18 wolnych faktów jeden ma 95 dni (BIS, 31 maja). Zostanie odrzucony przy
+wyjmowaniu — więc nie zaszkodzi — ale zajmuje miejsce i zawyża licznik
+„wolnych" w każdym raporcie.
+
+**Zrobione, gdy:** przeterminowane są odsiewane przy dopisywaniu, a nie dopiero
+przy wyjmowaniu.
 
 ---
 
@@ -247,12 +275,13 @@ Z audytu GPT (G5) i z dzisiejszego rozstrzygnięcia. **Nie są to usterki, dopó
 właściciel nie powie, że są:**
 
 - artykuł planowany **co tydzień**, nie co miesiąc
-- komentarze **15–23**, a przez pierwsze 30 dni efektywnie 15–19, przy celu 20–30
 - **ciche dni zerują notki**, więc „pięć notek dziennie" nie jest kontraktem na
   każdą dobę
 - czy **artykuł ma nadal mieć pierwszeństwo**, skoro zdanie „subskrypcje
   przynoszą artykuły" upadło pomiarem, a panel Substacka przypisuje 5 z 6
-  zapisów **notkom**
+  zapisów **notkom** — 3 września potwierdzone drugi raz, imiennie: notki
+  `323761132` (2 zapisy), `322757850`, `322556153`, `320809275`; z artykułów
+  **ani jednego**
 
 ---
 

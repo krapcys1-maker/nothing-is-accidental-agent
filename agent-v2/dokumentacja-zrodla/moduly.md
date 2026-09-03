@@ -34,7 +34,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-7404 wierszy, 133 funkcji na poziomie modułu, 0 klas
+7424 wierszy, 133 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -445,7 +445,7 @@
 
 ### `statystyki.py` — co przyniosła każda pozycja: wejścia, reakcje, subskrypcje
 
-519 wierszy, 10 funkcji na poziomie modułu, 0 klas
+575 wierszy, 11 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -458,6 +458,7 @@
 | `zapisz(rodzaj, identyfikator, rekord, tekst)` | Dopisuje JEDEN pomiar. Nigdy nie przerywa dzialania agenta. |
 | `wczytaj(rodzaj)` | Wszystkie pomiary z pliku, w kolejnosci zapisu. Uszkodzone linie pomija. |
 | `najnowsze_per_pozycja(rodzaj)` | {identyfikator: ostatni pomiar}. To sie czyta przy raporcie. |
+| `po_godzinach(rodzaj, godzin)` | Stan kazdej pozycji po TYLE SAMO czasu od pierwszego pomiaru. |
 | `podsumowanie(rodzaj)` | Sumy i srednie PO POZYCJACH, nie po pomiarach. |
 
 ### `bramki.py` — co może zatrzymać treść — wyliczone z drzewa składni, nie spisane z pamięci
@@ -476,7 +477,7 @@
 
 ### `raport_statystyk.py` — te same dane w tabeli dla człowieka
 
-278 wierszy, 5 funkcji na poziomie modułu, 0 klas
+475 wierszy, 8 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -484,6 +485,9 @@
 | `_mediana(liczby)` *(wewn.)* | — |
 | `dwie_epoki(najnowsze)` | Epoka AI osobno, epoka ukrytych systemow osobno. |
 | `wzrost_konta()` | Ilu nas czyta i czy tego przybywa. |
+| `koszt_wobec_wyniku()` | Ile kosztuje jedna pozycja i co za to przychodzi — w jednej tabeli. |
+| `_pozycje_w_okresie(od, do_)` *(wewn.)* | Ile pozycji kazdego rodzaju powstalo miedzy tymi datami (dziennik). |
+| `zrodla_zapisow()` | SKAD NAPRAWDE przyszli ludzie — wlasne przypisanie Substacka. |
 | `main()` | — |
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
