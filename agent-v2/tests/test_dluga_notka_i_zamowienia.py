@@ -413,5 +413,61 @@ sprawdz("KONTRDOWOD: bez oddania kat zostaje spalony",
         BANK7[0]["katy"][0]["uzyty"] is True, BANK7[0]["katy"])
 
 print()
+print("=== 15. TERMINY, PRZY KTORYCH CZYTELNIK SIE ZATRZYMUJE ===")
+# Regula „kazda nazwana miara dostaje pol zdania zwyklymi slowami" stoi w
+# `notka.md` od 3 wrzesnia 2026 i NIE zadzialala: nastepnego wieczora wyszla
+# notka z „schema-following test", „RL steps" i „enforced JSON parsing at the
+# API" w piecdziesieciu pieciu slowach. Prog 3 wziety z pomiaru na 34 notkach
+# plus dwoch z tamtego wieczora: lapie wszystkie zargonowe, zero falszywych
+# trafien na siedmiu uznanych za dobre.
+GESTE = {
+    "#16 GLM/DeepSWE": (
+        "On GLM-5.3 Flash, the run that passes a flaky task is the longer one "
+        "only 46% of the time. On 900 rollouts across 113 DeepSWE tasks, the "
+        "pattern held. Distillation did not take the capability away."),
+    "wieczorna HF": (
+        "Hugging Face recipe raised a 350M open model from 22.6% to 29.7% on a "
+        "schema-following test, on a free notebook GPU with 100 RL steps. "
+        "Enforced JSON parsing at the API is the usual route."),
+}
+RZADKIE = {
+    "WeatherNext": (
+        "Rain radar on your phone can now update once an hour, down to about a "
+        "5 km patch. WeatherNext 3 learns straight from live satellite and "
+        "weather-station readings."),
+    "dwa akapity": (
+        "Two paragraphs. That is how much of any answer I skip before I read."),
+    "Irlandia": (
+        "Ireland grid gives nearly a quarter of its metered electricity to data "
+        "centres: 23% in 2025, up from 22% in 2024."),
+    "12,50 za godzine": (
+        "$12.50 an hour is what the contracts paid per worker. Under $2 an hour "
+        "is what the Kenyan workers doing the reading took home."),
+}
+for nazwa, t in GESTE.items():
+    sprawdz("lapie: %s" % nazwa, bool(stages.za_duzo_zargonu(t)),
+            stages.terminy_insiderskie(t))
+for nazwa, t in RZADKIE.items():
+    sprawdz("KONTRDOWOD, przepuszcza: %s" % nazwa,
+            not stages.za_duzo_zargonu(t), stages.terminy_insiderskie(t))
+
+sprawdz("skroty, ktore czytelnik zna, nie licza sie jako zargon",
+        stages.terminy_insiderskie("The EU and the US both use AI and a PC.") == [],
+        stages.terminy_insiderskie("The EU and the US both use AI and a PC."))
+sprawdz("dwa terminy to jeszcze nie za duzo",
+        not stages.za_duzo_zargonu("The API returns weights."),
+        stages.terminy_insiderskie("The API returns weights."))
+sprawdz("ten sam termin dwa razy liczy sie RAZ",
+        stages.terminy_insiderskie("API and API and API") == ["API"],
+        stages.terminy_insiderskie("API and API and API"))
+sprawdz("adres nie jest zargonem",
+        stages.terminy_insiderskie("See https://openai.com/index/GPT-5x/") == [],
+        stages.terminy_insiderskie("See https://openai.com/index/GPT-5x/"))
+sprawdz("pusty tekst nie wywraca", stages.za_duzo_zargonu("") == [])
+sprawdz("None tez nie", stages.za_duzo_zargonu(None) == [])
+sprawdz("prog stoi na 3, jak zmierzono", stages.MAKS_TERMINOW == 3,
+        stages.MAKS_TERMINOW)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

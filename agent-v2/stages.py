@@ -2714,6 +2714,64 @@ def otwiera_sporem(tekst: str) -> str:
     return ""
 
 
+# TERMINY, KTORYCH ZWYKLY CZYTELNIK NIE ZNA.
+#
+# Skroty spoza tej listy sa insiderskie. Lista jest krotka celowo: to ma byc
+# to, co czytelnik gazety czyta bez zatrzymania.
+SKROTY_ZNANE = frozenset("""AI US USA EU UK UN NATO CEO CFO PC TV OK ID URL
+PDF GPS DNA HIV COVID FBI CIA NASA IT GDP VAT CO2 SMS USB WIFI HD 3D""".split())
+
+# Slowa branzowe, ktore wygladaja jak zwykle angielskie i dlatego przechodza
+# kazdy filtr po ksztalcie. „Weights" to dla czytelnika ciezarki.
+SLOWA_BRANZOWE = frozenset("""rollout rollouts distillation distilled inference
+throughput checkpoint quantised quantized flaky leaderboard abliteration
+finetune tokenizer embeddings latency multimodal parameters logits softmax
+context-window open-weights weights schema-following""".split())
+
+# Prog wziety Z POMIARU na 34 opublikowanych notkach plus dwoch z tego wieczora.
+# Przy trzech terminach lapie 16, 22, 28 i wieczorna notke o Hugging Face —
+# czyli wszystkie, ktore przy recznym czytaniu okazaly sie nie do przejscia z
+# powodu zargonu — i ZERO z siedmiu uznanych za dobre. Przy dwoch wpadaja dwie
+# dobre, przy czterech ucieka notka o MiniMaksie.
+MAKS_TERMINOW = 3
+
+
+def terminy_insiderskie(tekst: str) -> list[str]:
+    """Slowa, przy ktorych zwykly czytelnik sie zatrzymuje. Bez powtorzen."""
+    t = re.sub(r"https?://\S+", " ", str(tekst or ""))
+    out: list[str] = []
+    for m in re.finditer(r"[A-Za-z][A-Za-z0-9'.\-]*[A-Za-z0-9]", t):
+        w = m.group(0).strip(".'-")
+        if len(w) < 2:
+            continue
+        rdzen = w.split("-")[0].strip(".'")
+        czy = (
+            # skrot wielkimi literami spoza listy znanych: RL, MMLU, DMV, CSO
+            (re.fullmatch(r"[A-Z]{2,6}", rdzen) and rdzen not in SKROTY_ZNANE)
+            # nazwa z cyfra wewnatrz: H3, 768p, 350M, 35x, GLM-5.3
+            or re.search(r"[A-Za-z][0-9]|[0-9][A-Za-z]", w.replace("-", ""))
+            # termin branzowy w zwyklym przebraniu
+            or w.lower() in SLOWA_BRANZOWE
+            or w.lower().rstrip("s") in SLOWA_BRANZOWE
+            # zlepek wielkich liter w srodku: DeepSWE, OpenRouter, MiniMax
+            or re.match(r"^[A-Z][a-z]+[A-Z]", w)
+        )
+        if czy and w not in out:
+            out.append(w)
+    return out
+
+
+def za_duzo_zargonu(tekst: str) -> list[str]:
+    """Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto.
+
+    NIE JEST BRAMKA, z tego samego powodu co `otwiera_sporem`: kandydat jest
+    jeden, wiec odrzucenie znaczy dzien bez notki. Sluzy do policzenia, czy
+    wada wraca, i do pokazania modelowi JEGO WLASNYCH notek jako przykladu.
+    """
+    t = terminy_insiderskie(tekst)
+    return t if len(t) >= MAKS_TERMINOW else []
+
+
 def note(
     conn: sqlite3.Connection, run_id: int, note_type: str, evidence: dict[str, Any],
     link: str | None = None, note_form: str = "PROSTA", etap: str = "note",
@@ -2801,6 +2859,27 @@ def note(
             "breaking is worth naming, name it as something the reader "
             "recognises in themselves, in words they would use about their own "
             "behaviour — not as something 'people say'.")
+    # TA SAMA METODA NA ZARGON. Regula „kazda nazwana miara dostaje pol zdania
+    # zwyklymi slowami" stoi w `notka.md` od 3 wrzesnia i NIE zadzialala:
+    # nastepnego wieczora wyszla notka z „schema-following test", „RL steps"
+    # i „enforced JSON parsing at the API" w piecdziesieciu pieciu slowach.
+    # Prosba nie jest bramka — ale wlasne zdanie konta obok liczby terminow
+    # jest czyms, czego model nie moze zbyc.
+    gesty = [(t, za_duzo_zargonu(t)) for t in teksty_ostatnich_notek(12)]
+    gesty = [(t, z) for t, z in gesty if z][:2]
+    if gesty:
+        prompt += (
+            "\n\n## Notes of ours a reader had to stop and decode\n\n"
+            "Each of these carries three or more terms an ordinary reader does "
+            "not know, inside sixty words. Not one of them is explained.\n\n"
+            + "\n".join("- %s\n  (unexplained: %s)"
+                        % (t.replace("\n", " ")[:150], ", ".join(z[:6]))
+                        for t, z in gesty)
+            + "\n\nCount the terms in your note the same way before you finish. "
+            "A named model, a benchmark, a training method, an acronym: each "
+            "one either gets half a sentence of ordinary words, or it comes "
+            "out. Two such terms is a lot. Three without explanation is a note "
+            "nobody finishes.")
     zajete_otwarcia = set(ostatnie_otwarcia())
     candidates: list[dict[str, Any]] = []
     for i in range(config.NOTE_CANDIDATES):
@@ -2842,6 +2921,12 @@ def note(
         if _spor:
             print("    UWAGA: otwiera sporem, ktorego czytelnik nie slyszal —"
                   " %r (notka i tak idzie)" % _spor[:90], flush=True)
+        _zargon = za_duzo_zargonu(text)
+        data["zargon"] = _zargon
+        if _zargon:
+            print("    UWAGA: %d terminow, przy ktorych czytelnik sie zatrzyma"
+                  " — %s (notka i tak idzie)"
+                  % (len(_zargon), ", ".join(_zargon[:6])), flush=True)
         # ZAPORA NA TEKSCIE MODELU, zanim kod doklei nasz wlasny adres.
         # Inaczej notka promujaca artykul odpada ZAWSZE: kod dokleja do niej
         # link do wlasnego tekstu, a zapora widzi adres www i odrzuca wszystkie
