@@ -1234,6 +1234,42 @@ CURIOSITY_SYSTEM = (
 )
 
 
+def zamowienia_z_banku(ile: int = 8) -> list[str]:
+    """Czego bank kazal doszukac — jako lista dla nastepnego szukania.
+
+    MARTWY SYGNAL. `posortuj_bank` prosi model o katy, a przy kazdym kacie o
+    pole `czego_brakuje`; prompt banku mowi o nim wprost: „to nie jest skarga,
+    to zamowienie na nastepne szukanie". Do 3 wrzesnia 2026 pole bylo
+    ZAPISYWANE do indeksu i LICZONE w linii logu — i czytane przez nikogo.
+    Zmierzone tego dnia na zywym przebiegu: 18 katow przy 11 faktach, z czego
+    9 z brakiem materialu. Dziewiec zamowien, zero realizacji.
+
+    To jest ta sama klasa bledu co bramka bedaca prosba w promptcie: sygnal
+    wytworzony, oplacony i wyrzucony. Rownoczesnie tlumaczy zarzut „szukacz
+    przynosi rzeczy, ktore juz mamy" — szukacz nie wiedzial, czego brakuje,
+    bo nikt mu nie powiedzial.
+
+    Bierzemy WYLACZNIE braki przy katach NIEUZYTYCH i faktach wolnych: brak
+    przy kacie juz wykorzystanym jest historia, nie zamowieniem.
+    """
+    out: list[str] = []
+    try:
+        for k in wczytaj_indeks():
+            if k.get("status") != "nowy":
+                continue
+            if str(k.get("kiedy") or "")[:10] < config.DATA_PRZESTAWIENIA:
+                continue
+            if _po_terminie(k):
+                continue
+            for kat in (k.get("katy") or []):
+                brak = str(kat.get("czego_brakuje") or "").strip()
+                if brak and not kat.get("uzyty") and brak not in out:
+                    out.append(brak)
+    except Exception:
+        return []
+    return out[:ile]
+
+
 def zaczyn_z_kanalow(ile: int = 26) -> str:
     """Tematy, o ktorych mowi sie w tym tygodniu — do promptu, nie do cytowania.
 
@@ -1677,6 +1713,12 @@ def znajdz_ciekawostki(
         generatory=NOWA_LINIA.join(
             f"**{g}** — {config.GENERATORY[g]}" for g in generatory),
         zaczyn_kanalow=zaczyn_z_kanalow(),
+        # ZAMOWIENIE Z BANKU — patrz `zamowienia_z_banku`. Bank juz wie, czego
+        # brakuje do napisania katow, ktore sam wymyslil; bez tego wiersza
+        # szukacz zaczyna za kazdym razem od zera i przynosi to, co mamy.
+        zamowienia=(NOWA_LINIA.join("- %s" % z for z in zamowienia_z_banku())
+                    or "(the bank has no outstanding orders"
+                       " — work the grid below)"),
         # WYDARZENIE JAKO OKAZJA, NIE TEMAT — patrz komentarz wyzej.
         wydarzenia=("\n".join(
             "- %s (mowi o tym %d kanalow): %s"
@@ -2585,12 +2627,21 @@ def note(
     `evidence` to karta artykułu albo fragmenty, których artykuł nie zużył.
     W obu wypadkach notka stoi na materiale ocytowanym, więc nie ma skąd
     zmyślać liczby. Generujemy kilku kandydatów; wybór należy do właściciela.
+
+    OKNO DLUGOSCI ZALEZY OD FORMY i liczone jest RAZ, tutaj. Wczesniej trzy
+    miejsca siegaly osobno po `config.NOTE_MIN_WORDS`/`NOTE_MAX_WORDS`: prompt,
+    pomiar `length_ok` i naprawa. Przy jednym oknie dla wszystkich forma nie
+    miala znaczenia, ale `WYJASNIENIE` pisze sie w 120-200 slow — a rozjazd
+    miedzy tymi trzema miejscami znaczylby, ze model dostaje jedno polecenie,
+    kod mierzy wedlug drugiego, a naprawa przepisuje wedlug trzeciego. Notka
+    odpadalaby wtedy za to, ze posluchala.
     """
+    _min_slow, _maks_slow = config.zakres_slow(note_form)
     prompt = _prompt(
         "notka.md",
         language=config.ARTICLE_LANGUAGE,
-        min_words=config.NOTE_MIN_WORDS,
-        max_words=config.NOTE_MAX_WORDS,
+        min_words=_min_slow,
+        max_words=_maks_slow,
         note_type=note_type,
         type_brief=_opis_typu(note_type),
         note_form=note_form,
@@ -2662,7 +2713,7 @@ def note(
         text = (data.get("note") or "").strip()
         words = len(text.split())
         data["words_actual"] = words
-        in_range = config.NOTE_MIN_WORDS <= words <= config.NOTE_MAX_WORDS
+        in_range = _min_slow <= words <= _maks_slow
         data["length_ok"] = in_range
         print(
             f"  [notka {i + 1}] {words:>3} słów {'OK ' if in_range else 'POZA'}"
@@ -2752,8 +2803,8 @@ def note(
         poprawka = napraw_obalone(
             conn, run_id, proza, audyt,
             kontekst=kontekst,
-            min_slow=config.NOTE_MIN_WORDS,
-            max_slow=config.NOTE_MAX_WORDS,
+            min_slow=_min_slow,
+            max_slow=_maks_slow,
             etap="naprawa",
             zapora=_zapora_notki,
         )

@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **23 plików**, 29 596 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 29 711 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 128 zestawów
-testów, 3533 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 129 zestawów
+testów, 3558 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-7785 wierszy, 138 funkcji na poziomie modułu, 0 klas
+7836 wierszy, 139 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -212,6 +212,7 @@ wiec nie da sie go rozjechac z kodem.
 | `wczytaj_zuzyte()` | — |
 | `zapisz_zuzyte(nowe)` | Pamięć zużytych ciekawostek — poza bazą, bo budżet to cztery tabele. |
 | `wybierz_cele(conn, run_id, posty)` | Które posty z kanału zasługują na komentarz. |
+| `zamowienia_z_banku(ile)` | Czego bank kazal doszukac — jako lista dla nastepnego szukania. |
 | `zaczyn_z_kanalow(ile)` | Tematy, o ktorych mowi sie w tym tygodniu — do promptu, nie do cytowania. |
 | `_rdzen_wydarzenia(w)` *(wewn.)* | Klucz zdarzenia: posortowane slowa rdzenia, zeby ta sama premiera |
 | `_nowe_wydarzenia(wydarzenia)` *(wewn.)* | Ktore z tych zdarzen sa NOWE — czyli nie dobieralismy juz o nich materialu. |
@@ -561,7 +562,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2906 wierszy, 26 funkcji na poziomie modułu, 0 klas
+2970 wierszy, 27 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -574,6 +575,7 @@ wiec nie da sie go rozjechac z kodem.
 | `kotwica_dlugosci(glebokosc)` | Zdanie kalibrujace dlugosc, dobrane do ilosci materialu. |
 | `dlugosc_dla(glebokosc)` | Ile slow ma miec artykul o tej glebokosci. |
 | `_tokens_for(chars)` *(wewn.)* | — |
+| `zakres_slow(forma)` | Ile slow wolno tej formie. JEDNO ZRODLO dla promptu, pomiaru i naprawy. |
 | `losowa_postawa()` | Ktora postawa dla TEGO komentarza. Wagi, nie rownomiernie. |
 | `losowe_otwarcie()` | — |
 | `losowa_dlugosc()` | Ile slow ma miec ta konkretna wypowiedz. |
@@ -8920,7 +8922,7 @@ visible either way:
 
 #### `prompts/ciekawostki.md`
 
-**421 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`
+**437 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
 
 ````markdown
 Find {ile} documented facts worth stopping a stranger mid-scroll.
@@ -8982,6 +8984,22 @@ If the event yields nothing that clears that bar, drop it and work the grid.
 An empty priority lane is fine; a thin piece published because something was
 trending is not.
 {premiera}
+## Orders standing from the idea bank — fill these first
+
+The bank already holds facts we intend to write about, and for each one it has
+worked out the angles worth taking. Where an angle cannot be written yet, the
+bank recorded exactly what is missing. Those gaps are below.
+
+{zamowienia}
+
+Each line is a specific hole in material we already own, so filling one is
+worth more than a fresh find: it turns a fact we are sitting on into a piece we
+can publish. Search for these before you work the grid, and return what you
+find in the same shape as everything else — the same two halves, the same
+control document, the same age rules. If the searching shows an order cannot be
+filled, drop it silently and move on; do not return a weak fact to satisfy a
+line on this list.
+
 ## What the field is actually talking about this week
 
 These are real video titles from the channels this publication follows, with
@@ -12956,6 +12974,9 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `MAX_TOKENS` | `{ # 6 tematow: tytul, pytanie, ZLAMANE PRZEK` | — |
 | `NOTE_MIN_WORDS` | `33` | --- notki i komentarze ------------------------------------------------------ Zmierzone na publicznych analizach Substacka: 33-64 słowa dają |
 | `NOTE_MAX_WORDS` | `64` | — |
+| `NOTE_MIN_WORDS_DLUGA` | `120` | DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT. Sufit wyzej optymalizuje ZAANGAZOWANIE i ma zrodlo. Nie optymalizuje ZROZUMI |
+| `NOTE_MAX_WORDS_DLUGA` | `200` | — |
+| `FORMY_DLUGIE` | `{"WYJASNIENIE"}` | Formy pisane w dlugim oknie. Zbior, nie pojedyncza nazwa, zeby dolozenie drugiej dlugiej formy nie wymagalo dotykania `zakres_slow`. |
 | `NOTE_CANDIDATES` | `1` | Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe warianty tego samego zdania niczego nie dokladaly, a placilismy za n |
 | `DZIEDZINY_CIEKAWOSTEK` | `( # --- co te systemy realnie robia i jak sa` | Ile ciekawostek szukamy naraz. Cztery z pięciu notek dziennie stoją na nich, a jedno szukanie kosztuje tyle co jedno — więc bierzemy zapas n |
 | `ILE_DZIEDZIN_NA_PRZEBIEG` | `5` | — |

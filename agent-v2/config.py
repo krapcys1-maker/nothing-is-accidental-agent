@@ -908,6 +908,49 @@ MAX_TOKENS = {
 NOTE_MIN_WORDS = 33
 NOTE_MAX_WORDS = 64
 
+# DLUGA NOTKA — OKNO OSOBNE, BO SUFIT 64 SLOW MA ZMIERZONY KOSZT.
+#
+# Sufit wyzej optymalizuje ZAANGAZOWANIE i ma zrodlo. Nie optymalizuje
+# ZROZUMIALOSCI i to sie 3 wrzesnia 2026 zemscilo: wlasciciel przeczytal
+# opublikowana notke trzy razy i nie wiedzial, o czym jest.
+#
+# ZMIERZONE tego dnia na wszystkich 34 notkach od przestawienia konta:
+#   * reakcje NIE odrozniaja notki zrozumialej od belkotu — otwarcie
+#     konkretne 3,2, abstrakcyjne 3,0, bez liczb 3,1. Plasko.
+#   * czyli sygnal, pod ktory ustawiony jest sufit, u nas nie istnieje.
+#
+# Wlasciciel przepisal te sama notke recznie: 158 slow. Rozklad tych slow:
+# 28 na definicje terminu zwyklymi slowami, 65 na przylozenie jej do
+# czytelnika, 24 na to, jak wyglada wersja porzadna, 35 na zalecenie.
+# W 64 slowa miesci sie DOKLADNIE JEDEN z tych czterech blokow — wiec model
+# zostawia teze, a wycina definicje i rozpisanie. Aforyzm nie jest stylem,
+# ktory wybralismy; jest osadem po scisnieciu 158 slow do 64.
+#
+# DLATEGO EKSPERYMENT, A NIE PODNIESIENIE SUFITU. Jedna forma
+# (`WYJASNIENIE`) dostaje wlasne okno; reszta zostaje na 33-64. Przy dziesieciu
+# notkach na dobe i dziewieciu formach w rotacji wypada okolo jednej dziennie.
+# Rozstrzygnie to `nad_wzorcem_24h` — notka wobec wlasnej sredniej konta —
+# a nie kolejna dyskusja o tym, czy dluzsze jest lepsze.
+NOTE_MIN_WORDS_DLUGA = 120
+NOTE_MAX_WORDS_DLUGA = 200          # sufit ustawiony przez wlasciciela
+
+# Formy pisane w dlugim oknie. Zbior, nie pojedyncza nazwa, zeby dolozenie
+# drugiej dlugiej formy nie wymagalo dotykania `zakres_slow`.
+FORMY_DLUGIE = {"WYJASNIENIE"}
+
+
+def zakres_slow(forma: str | None) -> tuple[int, int]:
+    """Ile slow wolno tej formie. JEDNO ZRODLO dla promptu, pomiaru i naprawy.
+
+    Trzy miejsca w `stages` czytaly `NOTE_MIN_WORDS`/`NOTE_MAX_WORDS` osobno:
+    prompt dostaje zakres, `length_ok` mierzy gotowy tekst, a naprawa dostaje
+    wlasne `min_slow`/`max_slow`. Rozjazd miedzy nimi znaczy, ze model dostaje
+    jedno polecenie, a kod mierzy wedlug innego — i notka odpada za posluszenstwo.
+    """
+    if forma in FORMY_DLUGIE:
+        return NOTE_MIN_WORDS_DLUGA, NOTE_MAX_WORDS_DLUGA
+    return NOTE_MIN_WORDS, NOTE_MAX_WORDS
+
 # Ilu kandydatow generujemy. Dawniej bylo pieciu, potem trzech; dodatkowe
 # warianty tego samego zdania niczego nie dokladaly, a placilismy za nie i ich
 # weryfikacje. Dzis notke pisze Opus, a kandydat jest jeden.
@@ -1382,10 +1425,31 @@ NOTE_FORMS = {
         "is 'open the model card and see for yourself' — newer document, "
         "identical homework."
     ),
+    # WYJASNIENIE — jedyna forma z dlugim oknem (patrz `FORMY_DLUGIE`).
+    # Napisana z wzorca, ktory wlasciciel podal recznie 3 wrzesnia 2026, gdy
+    # przepisal nasza niezrozumiala notke o benchmarkach. Cztery ruchy w tej
+    # kolejnosci sa CALA trescia tej formy — bez ktoregokolwiek zostaje
+    # aforyzm, czyli to, co naprawiamy.
+    "WYJASNIENIE": (
+        "Four moves, in this order, and none of them is optional. "
+        "ONE: name the thing in the first two sentences, plainly, including "
+        "the verdict on it. TWO: define the technical word you just used, as "
+        "an answer to the question the reader is already asking - 'what is X, "
+        "minus the jargon?' - and define it as a list of ordinary parts, not "
+        "as another abstraction. THREE: hold the reader's own situation "
+        "against that definition, part by part, and say which parts theirs is "
+        "missing. FOUR: close with the smallest version of the right thing "
+        "they could start doing this week, with a number in it. "
+        "FORBIDDEN HERE, because this form exists to cure them: opening by "
+        "contradicting a claim the reader has never heard ('I keep hearing "
+        "that...'); a metaphor standing in place of a definition; any named "
+        "measure, method or product left unexplained. If you find yourself "
+        "writing an aphorism, you are writing the wrong form."
+    ),
 }
 
 NOTE_FORM_MIX = ("SCENA", "KONTRAST", "ZACZEP_I_KONKRET", "PROSTA", "LISTA",
-                 "PYTANIE", "ODWROCENIE", "LICZBA")
+                 "PYTANIE", "ODWROCENIE", "LICZBA", "WYJASNIENIE")
 
 NOTE_TYPES = {
     # MYSL — jedyny typ ZWOLNIONY z karty dowodowej, i jedyny, ktoremu nie

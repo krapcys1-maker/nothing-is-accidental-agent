@@ -400,7 +400,7 @@ visible either way:
 
 #### `prompts/ciekawostki.md`
 
-**421 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`
+**437 wierszy.** Pola wejsciowe: `dziedziny`, `dzis`, `generatory`, `ile`, `miesiac`, `premiera`, `stan_modeli`, `uzyte`, `w_reku`, `wydarzenia`, `zaczyn_kanalow`, `zamowienia`
 
 ````markdown
 Find {ile} documented facts worth stopping a stranger mid-scroll.
@@ -462,6 +462,22 @@ If the event yields nothing that clears that bar, drop it and work the grid.
 An empty priority lane is fine; a thin piece published because something was
 trending is not.
 {premiera}
+## Orders standing from the idea bank — fill these first
+
+The bank already holds facts we intend to write about, and for each one it has
+worked out the angles worth taking. Where an angle cannot be written yet, the
+bank recorded exactly what is missing. Those gaps are below.
+
+{zamowienia}
+
+Each line is a specific hole in material we already own, so filling one is
+worth more than a fresh find: it turns a fact we are sitting on into a piece we
+can publish. Search for these before you work the grid, and return what you
+find in the same shape as everything else — the same two halves, the same
+control document, the same age rules. If the searching shows an order cannot be
+filled, drop it silently and move on; do not return a weak fact to satisfy a
+line on this list.
+
 ## What the field is actually talking about this week
 
 These are real video titles from the channels this publication follows, with
