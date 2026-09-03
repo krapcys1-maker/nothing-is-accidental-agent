@@ -749,6 +749,24 @@ def ratuj_json(purpose: str, tekst: str, ksztalt: str, *, conn,
     """
     if not (tekst or "").strip():
         return ""
+    # RATUNEK MA CO RATOWAC ALBO NIE MA GO WCALE.
+    #
+    # ZMIERZONE 4 wrzesnia 2026 na zywym przebiegu: szukanie zrobilo 24 rundy,
+    # wydalo 36 972 tokeny wyjscia i oddalo prawie pusta wiadomosc koncowa —
+    # caly budzet poszedl na rundy wyszukiwania, nie na odpowiedz. Ratunek
+    # dostal wtedy 274 tokeny wejscia (czyli sam system i prosbe) i oddal zero
+    # faktow. Kosztowalo to grosze, ale zostawialo w dzienniku linie
+    # „odzyskane: 0 faktow", ktora brzmi jak nieudana proba odzyskania
+    # materialu — a materialu nie bylo.
+    #
+    # Prog wziety z pomiaru, nie z glowy: udane odpowiedzi tego etapu maja
+    # tysiace znakow (jeden fakt z dwoma dokumentami to okolo 400), wiec
+    # ponizej 200 znakow nie ma tam ani jednego kompletnego faktu.
+    if len((tekst or "").strip()) < 200:
+        print("  [ratunek] nie ma czego odzyskiwac — model oddal %d znakow,"
+              " caly budzet wyjscia poszedl na rundy wyszukiwania"
+              % len((tekst or "").strip()), flush=True)
+        return ""
     try:
         return call(purpose, RATUNEK_SYSTEM,
                     RATUNEK_PROSBA % (ksztalt, tekst[:60_000]),
