@@ -3509,8 +3509,29 @@ def wybierz_material(zapas: list[dict[str, Any]],
         # powtorka konczyla sie o polnocy. 23 i 24 sierpnia poszly dwie notki o
         # tym samym symbolu na butelce szamponu. Od 25 sierpnia ta lista nie ma
         # konca: pamietamy WSZYSTKIE wystawione notki, nie ostatnie dwanascie.
-        if any(_zderzenie(temat, u, **POROWNANIE_MIEDZY_DNIAMI)
-               for u in wczesniej_rdzenie):
+        # KOLEJNE UJECIE TEGO SAMEGO FAKTU JEST ZWOLNIONE Z TEJ JEDNEJ BRAMKI.
+        #
+        # `kat_nr > 0` znaczy, ze bank rozpisal przy tym fakcie kilka katow,
+        # pierwszy juz poszedl w swiat, a ten lamie INNE przekonanie (warunek
+        # `lamie` w `posortuj_bank` odrzuca kat, ktory go nie ma). Bez tego
+        # zwolnienia caly mechanizm katow byl by martwy w produkcji mimo
+        # zielonych testow: drugie ujecie ma te sama tresc faktu, wiec zawsze
+        # zderzalo sie z wlasna wczesniejsza notka.
+        #
+        # ZWOLNIENIE DOTYCZY WYLACZNIE PORZEDNICH DNI. Bramka `unikaj` wyzej —
+        # czyli „to samo, co juz DZIS wystawiamy" — obowiazuje kazdy material
+        # bez wyjatku, i tak ma zostac: 31 sierpnia wyszly trzy notki o
+        # GLM-5.3-Flash jednego dnia i czytelnik nie zobaczyl trzech roznych
+        # ustalen, tylko plaskosc. Katy maja isc PRZEZ DNI, nie w jednej dobie.
+        if f.get("kat_nr") and any(
+                _zderzenie(temat, u, **POROWNANIE_MIEDZY_DNIAMI)
+                for u in wczesniej_rdzenie):
+            print("  [katy] przepuszczam kolejne ujecie mimo podobienstwa do"
+                  " naszej wczesniejszej notki: %s"
+                  % str((f.get("kat_wziety") or {}).get("lamie"))[:70],
+                  flush=True)
+        elif any(_zderzenie(temat, u, **POROWNANIE_MIEDZY_DNIAMI)
+                 for u in wczesniej_rdzenie):
             continue
         # DRUGI SYGNAL: WSPOLNA NAZWA WLASNA.
         #
@@ -3549,7 +3570,14 @@ def wybierz_material(zapas: list[dict[str, Any]],
         # rzadka (jak `jalapeño` czy `glm-5.3-flash`) nadal blokuje. Funkcja
         # dziala wiec tak, jak byla zaprojektowana — dostaje tylko korpus,
         # w ktorym rzadkosc cokolwiek znaczy.
-        if teksty_wczesniej:
+        # DRUGA BRAMKA MIEDZYDNIOWA, TO SAMO ZWOLNIENIE. Kolejne ujecie tego
+        # samego faktu z definicji dzieli z pierwszym nazwe wlasna — DeepSeek
+        # zostaje DeepSeekiem — wiec ta bramka zabijalaby katy nawet po
+        # zwolnieniu z porownania po slowach. Zlapane testem, nie rozumowaniem:
+        # pierwsza wersja zwolnienia przepuszczala material tam i odrzucala go
+        # tutaj, czyli mechanizm katow bylby martwy na produkcji mimo zielonego
+        # zestawu. Bramka `unikaj` (to samo, co DZIS) obowiazuje dalej.
+        if teksty_wczesniej and not f.get("kat_nr"):
             fakt_tekst = "%s %s" % (f.get("domain") or "", f.get("fact") or "")
             korpus = opublikowane_teksty() or teksty_wczesniej
             wspolna = next(
@@ -7432,16 +7460,25 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
     # i zostaja nietkniete. Katy sa GLEBIA na chudy dzien, nie zamiennikiem
     # szukania — zmierzone 3 wrzesnia: bank spadl do szesciu wolnych faktow
     # przy dziesieciu notkach na dobe.
-    def _wez_kat(k: dict[str, Any]) -> dict[str, Any] | None:
-        for kat in (k.get("katy") or []):
-            if isinstance(kat, dict) and not kat.get("uzyty"):
+    def _wez_kat(k: dict[str, Any]) -> tuple[dict[str, Any] | None, int]:
+        """Pierwszy nieuzyty kat i JEGO NUMER — numer decyduje o zwolnieniu.
+
+        Numer to liczba katow zuzytych PRZED tym. Zero znaczy, ze o tym fakcie
+        jeszcze nie pisalismy; jeden i wiecej, ze to KOLEJNE ujecie — i tylko
+        wtedy `wybierz_material` ma prawo przepuscic material podobny do naszej
+        wlasnej wczesniejszej notki.
+        """
+        katy = [x for x in (k.get("katy") or []) if isinstance(x, dict)]
+        for nr, kat in enumerate(katy):
+            if not kat.get("uzyty"):
                 kat["uzyty"] = True
-                return kat
-        return None
+                return kat, nr
+        return None, 0
 
     wynik: list[dict[str, Any]] = []
     for k in wziete:
-        wynik.append(dict(k, kat_wziety=_wez_kat(k)))
+        _kat, _nr = _wez_kat(k)
+        wynik.append(dict(k, kat_wziety=_kat, kat_nr=_nr))
     # Rundami, po jednym kacie z kazdego faktu — zeby przy dwoch faktach o
     # trzech katach nie wyszly trzy notki o pierwszym i zero o drugim.
     while len(wynik) < ile:
@@ -7449,12 +7486,13 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
         for k in wziete:
             if len(wynik) >= ile:
                 break
-            kat = _wez_kat(k)
+            kat, nr = _wez_kat(k)
             if kat:
-                wynik.append(dict(k, kat_wziety=kat))
+                wynik.append(dict(k, kat_wziety=kat, kat_nr=nr))
                 postep = True
-                print("  [katy] drugie ujecie tego samego faktu: %s"
-                      % str(kat.get("lamie") or kat.get("kat"))[:70], flush=True)
+                print("  [katy] kolejne ujecie tego samego faktu (%d): %s"
+                      % (nr + 1, str(kat.get("lamie") or kat.get("kat"))[:70]),
+                      flush=True)
         if not postep:
             break
 

@@ -338,5 +338,41 @@ sprawdz("i mowi, ze `lamie` ma byc ZA KAZDYM RAZEM inne",
         "DIFFERENT wrong belief" in _tresc_nt2)
 
 print()
+print("=== 13. KOLEJNE UJECIE PRZECHODZI PRZEZ WYBOR MATERIALU ===")
+# TU MECHANIZM KATOW ZYJE ALBO UMIERA. `wez_kandydatow` moze oddac dwa wpisy
+# tego samego faktu, ale wybiera z nich `wybierz_material` — a on odrzuca
+# material podobny do naszych wczesniejszych notek. Bez zwolnienia dla
+# `kat_nr > 0` katy byly by martwe na produkcji mimo zielonych testow wyzej.
+FAKT_TRESC = ("DeepSeek open-sourced Harness v0.1 where the model writes runs "
+              "and modifies its own plugins")
+STARA_NOTKA = FAKT_TRESC          # nasza wczesniejsza notka o tym samym
+
+pierwsze = [{"fact": FAKT_TRESC, "domain": "agents", "kat_nr": 0,
+             "kat_wziety": {"kat": "a", "lamie": "pierwsze przekonanie"}}]
+kolejne = [{"fact": FAKT_TRESC, "domain": "agents", "kat_nr": 1,
+            "kat_wziety": {"kat": "b", "lamie": "drugie przekonanie"}}]
+
+w_pierwsze = stages.wybierz_material(pierwsze, [], [STARA_NOTKA],
+                                     teksty=[STARA_NOTKA])
+sprawdz("BRAMKA STOI: pierwsze ujecie podobne do starej notki odpada",
+        w_pierwsze is None, w_pierwsze)
+w_kolejne = stages.wybierz_material(kolejne, [], [STARA_NOTKA],
+                                    teksty=[STARA_NOTKA])
+sprawdz("ZWOLNIENIE DZIALA: kolejne ujecie przechodzi",
+        w_kolejne is not None,
+        (w_kolejne or {}).get("kat_nr"))
+sprawdz("i niesie SWOJ kat, nie pierwszy",
+        (w_kolejne or {}).get("kat_wziety", {}).get("lamie")
+        == "drugie przekonanie",
+        (w_kolejne or {}).get("kat_wziety"))
+
+# Zwolnienie dotyczy WYLACZNIE poprzednich dni. To, co idzie DZIS, blokuje
+# kazdy material bez wyjatku — 31 sierpnia wyszly trzy notki o GLM-5.3-Flash
+# jednego dnia i czytelnik zobaczyl plaskosc, nie trzy ustalenia.
+w_dzis = stages.wybierz_material(kolejne, [FAKT_TRESC], [], teksty=[])
+sprawdz("KONTRDOWOD: to samo co DZIS blokuje takze kolejne ujecie",
+        w_dzis is None, w_dzis)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
