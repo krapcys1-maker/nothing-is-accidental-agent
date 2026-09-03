@@ -125,6 +125,38 @@ def _prompt(name: str, **fields: Any) -> str:
     return text.format(**fields)
 
 
+def _juz_w_domu(ile_banku: int = 25, ile_notek: int = 25) -> list[str]:
+    """Co juz mamy poza artykulami: fakty czekajace w banku i wydane notki.
+
+    Skaut szuka tematu na ARTYKUL i dostawal do tej pory wylacznie liste
+    ostatnich tematow artykulow (`recent_angles`). Bank notek i opublikowane
+    notki byly dla niego niewidzialne — a to tam siedzi wiekszosc tego, co
+    konto ma juz przerobione. Stad temat „przyniesiony" i juz posiadany.
+    """
+    out: list[str] = []
+    try:
+        for k in wczytaj_indeks():
+            if k.get("status") != "nowy":
+                continue
+            if str(k.get("kiedy") or "")[:10] < config.DATA_PRZESTAWIENIA:
+                continue
+            t = str(k.get("fact") or "").strip()
+            if t:
+                out.append("bank: " + t[:160])
+    except Exception:
+        pass
+    out = out[-ile_banku:]
+    try:
+        for tekst in opublikowane_teksty(limit=ile_notek):
+            wiersze = str(tekst or "").strip().splitlines()
+            pierwsze = wiersze[0].strip() if wiersze else ""
+            if pierwsze:
+                out.append("wydane: " + pierwsze[:160])
+    except Exception:
+        pass
+    return out
+
+
 def recent_angles(conn: sqlite3.Connection, limit: int = config.DIVERSITY_LOOKBACK) -> list[str]:
     """Ostatnie kąty redakcyjne — wejście do reguły różnorodności.
 
@@ -5674,6 +5706,14 @@ def scout(conn: sqlite3.Connection, run_id: int, count: int = 6) -> list[dict[st
         count=count,
         zaczyn_kanalow=zaczyn_z_kanalow(),
         history_json=json.dumps(history, ensure_ascii=False, indent=2),
+        # CO JUZ MAMY POZA ARTYKULAMI. `recent_angles` oddaje wylacznie tematy
+        # ARTYKULOW — wiec skaut nie wiedzial nic ani o faktach lezacych w
+        # banku notek, ani o tym, co poszlo w notkach. Zarzut wlasciciela z
+        # 3 wrzesnia 2026 („skaut jeden temat przyniosl i jeszcze taki, ktory
+        # byl") mial dokladnie to zrodlo: pytalismy o nowosc kogos, komu
+        # pokazalismy jedna trzecia tego, co juz zrobilismy.
+        juz_mamy=(NOWA_LINIA.join(
+            "- %s" % t for t in _juz_w_domu()) or "(nothing on file yet)"),
         pytania_czytelnikow=(
             "\n".join("- " + p for p in pytania) if pytania
             else "(zadne jeszcze nie wplynelo)"),

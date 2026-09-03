@@ -35,12 +35,13 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-7836 wierszy, 139 funkcji na poziomie modułu, 0 klas
+7876 wierszy, 140 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_na_kanal(nazwa)` *(wewn.)* | Wszystko, co ta funkcja zaplaci, ksieguje sie na kanal `nazwa`. |
 | `_prompt(name, **fields)` *(wewn.)* | — |
+| `_juz_w_domu(ile_banku, ile_notek)` *(wewn.)* | Co juz mamy poza artykulami: fakty czekajace w banku i wydane notki. |
 | `recent_angles(conn, limit)` | Ostatnie kąty redakcyjne — wejście do reguły różnorodności. |
 | `tematy_do_porownania(conn, limit)` | Poprzednie artykuly w postaci NADAJACEJ SIE DO POROWNANIA. |
 | `review(conn, run_id, card, draft)` | Etap 8 — recenzja: rozliczenie kazdego zdania (DeepSeek V4 Pro). |

@@ -3061,7 +3061,7 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/skaut.md`
 
-**651 wierszy.** Pola wejsciowe: `count`, `history_json`, `pytania_czytelnikow`, `zaczyn_kanalow`
+**661 wierszy.** Pola wejsciowe: `count`, `history_json`, `juz_mamy`, `pytania_czytelnikow`, `zaczyn_kanalow`
 
 ````markdown
 You are a topic scout for the English-language Substack "Nothing Is Accidental",
@@ -3461,6 +3461,16 @@ These angles have been covered recently. Do not repeat or paraphrase any of them
 and do not stay in the same subject area:
 
 {history_json}
+
+## What this publication already holds outside articles
+
+The list above is only past articles. Below is everything else the account has
+already worked: facts sitting in the idea bank waiting to be written as notes,
+and the opening lines of notes already published. Treat both exactly like the
+list above — a topic that restates any of them is not a find, it is work we
+have already paid for.
+
+{juz_mamy}
 
 ## Output
 

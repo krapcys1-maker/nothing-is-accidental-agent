@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **23 plików**, 29 711 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 29 751 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 129 zestawów
-testów, 3558 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 3567 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,12 +177,13 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-7836 wierszy, 139 funkcji na poziomie modułu, 0 klas
+7876 wierszy, 140 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `_na_kanal(nazwa)` *(wewn.)* | Wszystko, co ta funkcja zaplaci, ksieguje sie na kanal `nazwa`. |
 | `_prompt(name, **fields)` *(wewn.)* | — |
+| `_juz_w_domu(ile_banku, ile_notek)` *(wewn.)* | Co juz mamy poza artykulami: fakty czekajace w banku i wydane notki. |
 | `recent_angles(conn, limit)` | Ostatnie kąty redakcyjne — wejście do reguły różnorodności. |
 | `tematy_do_porownania(conn, limit)` | Poprzednie artykuly w postaci NADAJACEJ SIE DO POROWNANIA. |
 | `review(conn, run_id, card, draft)` | Etap 8 — recenzja: rozliczenie kazdego zdania (DeepSeek V4 Pro). |
@@ -11583,7 +11584,7 @@ Return only valid JSON, shaped exactly as:
 
 #### `prompts/skaut.md`
 
-**651 wierszy.** Pola wejsciowe: `count`, `history_json`, `pytania_czytelnikow`, `zaczyn_kanalow`
+**661 wierszy.** Pola wejsciowe: `count`, `history_json`, `juz_mamy`, `pytania_czytelnikow`, `zaczyn_kanalow`
 
 ````markdown
 You are a topic scout for the English-language Substack "Nothing Is Accidental",
@@ -11983,6 +11984,16 @@ These angles have been covered recently. Do not repeat or paraphrase any of them
 and do not stay in the same subject area:
 
 {history_json}
+
+## What this publication already holds outside articles
+
+The list above is only past articles. Below is everything else the account has
+already worked: facts sitting in the idea bank waiting to be written as notes,
+and the opening lines of notes already published. Treat both exactly like the
+list above — a topic that restates any of them is not a find, it is work we
+have already paid for.
+
+{juz_mamy}
 
 ## Output
 

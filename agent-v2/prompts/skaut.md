@@ -396,6 +396,16 @@ and do not stay in the same subject area:
 
 {history_json}
 
+## What this publication already holds outside articles
+
+The list above is only past articles. Below is everything else the account has
+already worked: facts sitting in the idea bank waiting to be written as notes,
+and the opening lines of notes already published. Treat both exactly like the
+list above — a topic that restates any of them is not a find, it is work we
+have already paid for.
+
+{juz_mamy}
+
 ## Output
 
 Return only valid JSON, shaped as:

@@ -150,5 +150,50 @@ sprawdz("i zakazuje oddawania slabego faktu byle odhaczyc pozycje",
         "do not return a weak fact" in _tresc)
 
 print()
+print("=== 7. SKAUT WIDZI TAKZE BANK I WYDANE NOTKI ===")
+# Zarzut wlasciciela: „skaut jeden temat przyniosl i jeszcze taki, ktory byl".
+# Przyczyna: `recent_angles` oddaje wylacznie tematy ARTYKULOW, wiec bank notek
+# i notki opublikowane byly dla skauta niewidzialne.
+BANK2 = [
+    {"status": "nowy", "kiedy": config.DATA_PRZESTAWIENIA,
+     "fact": "Ireland gave 23 percent of metered electricity to data centres"},
+    {"status": "uzyty", "kiedy": config.DATA_PRZESTAWIENIA,
+     "fact": "TEGO JUZ UZYLISMY, wiec nie musi wracac na liste banku"},
+    {"status": "nowy", "kiedy": "2020-01-01",
+     "fact": "SPRZED PRZESTAWIENIA KONTA, inna epoka tematyczna"},
+]
+_stary_indeks = stages.wczytaj_indeks
+_stare_teksty = stages.opublikowane_teksty
+stages.wczytaj_indeks = lambda *a, **k: BANK2
+_NOTKA_ATRAPA = ("Two paragraphs. That is how much of any answer I skip."
+                 + chr(10) + chr(10) + "Drugi akapit.")
+stages.opublikowane_teksty = lambda *a, **k: [_NOTKA_ATRAPA]
+try:
+    dom = stages._juz_w_domu()
+finally:
+    stages.wczytaj_indeks = _stary_indeks
+    stages.opublikowane_teksty = _stare_teksty
+
+sprawdz("wolny fakt z banku trafia do skauta",
+        any("Ireland gave 23 percent" in d for d in dom), dom)
+sprawdz("i jest oznaczony jako `bank:`",
+        any(d.startswith("bank: ") for d in dom), dom)
+sprawdz("opublikowana notka tez trafia",
+        any("Two paragraphs" in d for d in dom), dom)
+sprawdz("i jest oznaczona jako `wydane:`",
+        any(d.startswith("wydane: ") for d in dom), dom)
+sprawdz("z notki idzie TYLKO pierwszy wiersz, nie caly tekst",
+        not any("Drugi akapit" in d for d in dom), dom)
+sprawdz("KONTRDOWOD: fakt juz zuzyty nie wraca jako `bank:`",
+        not any("TEGO JUZ UZYLISMY" in d for d in dom), dom)
+sprawdz("KONTRDOWOD: fakt sprzed przestawienia konta nie wraca",
+        not any("SPRZED PRZESTAWIENIA" in d for d in dom), dom)
+
+_tresc_sk = pathlib.Path("agent-v2/prompts/skaut.md").read_text(encoding="utf-8")
+sprawdz("prompt skauta ma miejsce na te liste", "{juz_mamy}" in _tresc_sk)
+sprawdz("i mowi, ze to sa rzeczy JUZ oplacone",
+        "already paid for" in _tresc_sk)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
