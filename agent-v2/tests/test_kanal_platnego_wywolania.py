@@ -276,12 +276,35 @@ def werdykt(katalog):
         f = dane["funkcje"].get(q, {})
         zywe = [w for w in wolania.get(q, []) if not w[2]]
         z_main = [w for w in wolania.get(q, []) if w[2]]
-        if f.get("kanal"):
+        # BRAK WOLAJACYCH WYGRYWA Z DEKORATOREM — poprawione 3 wrzesnia 2026.
+        #
+        # Stalo tu odwrotnie: `if f.get("kanal")` bylo PIERWSZE, wiec funkcja
+        # z dekoratorem i ZEREM wolajacych raportowala sie jako zdrowa
+        # („KANAL:bank") i nigdy nie trafiala do `BEZ_WOLAJACYCH`. Tym
+        # przejsciem przeszedl `kandydaci_z_fedreg`: platny etap `fedreg`,
+        # ktorego nie wola nic w produkcji — jedyne wywolania sa w tescie
+        # platnym i w liscie oczekiwan tego strażnika. Skutek dla ustawien:
+        # `config.MODEL_FOR["fedreg"]` byl WPISEM BEZ SKUTKU, a test o tym
+        # milczal.
+        #
+        # To jest dokladnie ta klasa wady, ktora ten projekt sam nazywa:
+        # zielony test nad martwym kodem. Znalazl to obcy model mapujacy
+        # repozytorium; potwierdzone tutaj grepem po calym `agent-v2/`.
+        # WARUNEK JEST O WOLAJACYCH, NIE O `pokryte` — i to jest istota.
+        #
+        # Obcy model, ktory to znalazl, proponowal `not zywe and q not in
+        # pokryte`. Sprawdzone uruchomieniem: NIE DZIALA, bo `pokryte` jest
+        # inicjowane wlasnie funkcjami Z DEKORATOREM (`if f["kanal"]`), wiec
+        # `kandydaci_z_fedreg` nadal wychodzil zdrowy. Pytanie musi brzmiec
+        # „czy ktokolwiek w produkcji ja wola", bez ogladania sie na kanal:
+        # `wolania` jest budowane z krawedzi w `agent-v2/*.py`, wiec pusta
+        # lista znaczy zero wolajacych w calym kodzie produkcyjnym.
+        if not zywe and not z_main:
+            stan = "MARTWE"
+        elif f.get("kanal"):
             stan = "KANAL:%s" % f["kanal"]
         elif q in pokryte:
             stan = "dziedziczy"
-        elif not zywe:
-            stan = "MARTWE"
         else:
             stan = "BEZ KANALU"
         stany[q] = {"stan": stan, "wolania": zywe, "main": z_main,
@@ -301,6 +324,25 @@ BEZ_WOLAJACYCH = {
         "szuka faktow do KOMENTARZA; zero wywolan w calym repozytorium "
         "(takze w tests/). Gdy wroci do uzycia, kanal ma ustawic WOLAJACY — "
         "komentarz pod artykulem i pod notka to dwa rozne kanaly.",
+    # DOPISANE 3 wrzesnia 2026, gdy `werdykt` zaczal w ogole to widziec.
+    #
+    # Nie jest to usterka do naprawy, tylko ZALEGLOSC PO ZMIANIE TEMATU KONTA.
+    # `prompts/fedreg.md` szuka faktow w preambulach amerykanskich rozporzadzen
+    # — „urzad tlumaczy na papierze, czemu oczywiste zalozenie jest bledne".
+    # To byla epoka ukrytych systemow (jajka, nakretki, kody na butelkach).
+    # Konto przeszlo na AI 25 sierpnia 2026 (`DATA_PRZESTAWIENIA`), wiec ta
+    # sciezka stracila temat, nie dzialanie.
+    #
+    # CO Z TEGO WYNIKA DLA USTAWIEN: `config.MODEL_FOR["fedreg"]` jest wpisem
+    # BEZ SKUTKU. Zostaje swiadomie — razem z promptem i testem platnym — bo
+    # przy powrocie do tematu regulacyjnego cala sciezka jest gotowa. Ale ma
+    # byc WIDOCZNE, ze nic dzis nie robi, i po to jest ten wpis.
+    "stages.kandydaci_z_fedreg":
+        "platny etap `fedreg`; zero wolajacych w produkcji — jedyne wywolania "
+        "sa w `tests/platne/test_fedreg_pelna_sciezka.py`. Zaleglosc po epoce "
+        "ukrytych systemow, nie usterka: prompt szuka faktow w preambulach "
+        "rozporzadzen, a konto pisze o AI od 25 sierpnia 2026. Wpis "
+        "`MODEL_FOR['fedreg']` nie ma dzis skutku.",
 }
 
 # ZAMKNIETA LISTA KANALOW. Bez niej `Artykul`, `article` i `artykuly` zylyby
@@ -343,6 +385,34 @@ sprawdz("lista funkcji bez wolajacych jest DOKLADNIE ta z opisu",
 for q in martwe:
     if q in BEZ_WOLAJACYCH:
         print("       (%s: %s)" % (q, BEZ_WOLAJACYCH[q][:70]))
+
+# KONTRDOWOD ODTWARZANY, NIE OPISANY: stara kolejnosc warunkow na TYCH SAMYCH
+# danych ukrywala martwy etap. Do 3 wrzesnia 2026 `werdykt` pytal najpierw
+# o dekorator, wiec funkcja z `@_na_kanal("bank")` i zerem wolajacych
+# raportowala sie jako zdrowa. Odtwarzamy tamta regule tutaj — jesli kiedys
+# ktos ja przywroci, ta asercja oblewa.
+def _stary_werdykt(q):
+    """Regula sprzed 3 wrzesnia 2026: dekorator sprawdzany PRZED wolajacymi."""
+    f = DANE["funkcje"].get(q, {})
+    zywe = [w for w in WOLANIA.get(q, []) if not w[2]]
+    if f.get("kanal"):
+        return "KANAL:%s" % f["kanal"]
+    if q in POKRYTE:
+        return "dziedziczy"
+    return "MARTWE" if not zywe else "BEZ KANALU"
+
+
+_ukryty = "stages.kandydaci_z_fedreg"
+sprawdz("KONTRDOWOD: stara regula nazywala %s zdrowym (%s), nowa mowi MARTWE"
+        % (_ukryty.split(".")[-1], _stary_werdykt(_ukryty)),
+        _stary_werdykt(_ukryty) != "MARTWE"
+        and STANY.get(_ukryty, {}).get("stan") == "MARTWE",
+        (_stary_werdykt(_ukryty), STANY.get(_ukryty, {}).get("stan")))
+# I ZE POPRAWKA PROPONOWANA PRZEZ MAPE TEZ BY NIE WYSTARCZYLA. `pokryte` jest
+# inicjowane funkcjami Z DEKORATOREM, wiec warunek „not zywe and q not in
+# pokryte" nadal przepuszczalby ten sam przypadek.
+sprawdz("KONTRDOWOD: warunek oparty o `pokryte` tez by go przepuscil",
+        _ukryty in POKRYTE, sorted(POKRYTE)[:3])
 
 uzyte = {s["kanal"] for s in STANY.values() if s["kanal"]}
 uzyte |= {k for w in DANE["platne"] for k in w["kanal"]}

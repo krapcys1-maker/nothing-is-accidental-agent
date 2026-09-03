@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **23 plików**, 28 737 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 28 774 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 125 zestawów
-testów, 3493 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 126 zestawów
+testów, 3502 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -421,10 +421,11 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `llm.py` — JEDYNA warstwa dostępu do modeli i liczenia kosztu
 
-760 wierszy, 14 funkcji na poziomie modułu, 3 klas
+797 wierszy, 15 funkcji na poziomie modułu, 3 klas
 
 | funkcja | co robi |
 |---|---|
+| `dostawca(model)` | Kto wystawia rachunek za ten model. |
 | `_preflight(purpose, conn, run_id)` *(wewn.)* | Warunki, które decydują, czy wywołanie może się w ogóle udać. |
 | `_narzedzie_wyszukiwania(model)` *(wewn.)* | Nazwa narzedzia wyszukiwania; ostrzega RAZ NA PROCES o braku wpisu. |
 | `_cost(model, tokens_in, tokens_out, web_searches, cache_hit)` *(wewn.)* | — |
@@ -6362,7 +6363,7 @@ def call(
     """
     _preflight(purpose, conn, run_id)
     model = config.MODEL_FOR[purpose]
-    provider = "deepseek" if model.startswith("deepseek") else "anthropic"
+    provider = dostawca(model)
 
     # STALA, KTORA WYGLADA JAK USTAWIENIE. Wpis w EFFORT czyta sie jak decyzja
     # o kosztach, a przy modelu spoza Claude nie robi NIC.
@@ -6502,13 +6503,36 @@ def _preflight(purpose: str, conn: sqlite3.Connection, run_id: int | None) -> No
             "wywolanie modelu z darmowego testu (%s) — podstaw atrape pod "
             "`llm.call` albo przenies test do tests/platne/" % purpose)
 
+    # KLUCZ SPRAWDZANY PO DOSTAWCY, NIE PO NAZWIE MODELU — 3 wrzesnia 2026.
+    #
+    # Stalo tu trzy porownania do KONKRETNYCH identyfikatorow: `config.CLAUDE`
+    # (`claude-opus-5`), `config.DEEPSEEK` (`deepseek-v4-flash`) i
+    # `config.IMAGE_MODEL`. W systemie sa jednak jeszcze dwa:
+    #     FABLE        = "claude-fable-5-1"  — etap `write`, czyli ARTYKUL
+    #     DEEPSEEK_PRO = "deepseek-v4-pro"   — jedenascie etapow, m.in.
+    #                                          comment, reply, restack,
+    #                                          discovery, synthesis
+    # Przy braku klucza te etapy NIE zatrzymywaly sie na kontroli wstepnej.
+    # Szly do sieci i wywracaly sie dopiero na odpowiedzi HTTP, wiec komunikat
+    # mowil o transporcie, a nie o brakujacym kluczu — i diagnoza zaczynala sie
+    # od zlego konca. Cala idea `_preflight` to „nie place za wywolanie
+    # niemozliwe od pierwszej sekundy"; przy dwoch z pieciu modeli nie dzialala.
+    #
+    # Znalazl to obcy model mapujacy repozytorium (`nia-substack-bot`,
+    # `docs/ROZWIAZYWANIE_PROBLEMOW.md` §3); potwierdzone tutaj czytaniem kodu.
+    #
+    # JEDNO ZRODLO DLA KONTROLI I WYSYLKI. `dostawca()` jest teraz uzywana i tu,
+    # i w `call`. Wczesniej `call` liczyl dostawce po swojemu
+    # (`model.startswith("deepseek")`), a kontrola po liscie nazw — dwie regulty
+    # o tym samym, wiec rozjazd byl kwestia czasu, nie przypadku.
     model = config.MODEL_FOR[purpose]
-    if model == config.CLAUDE and not config.ANTHROPIC_API_KEY:
-        raise PreflightFailed("brak ANTHROPIC_API_KEY w .env")
-    if model == config.DEEPSEEK and not config.DEEPSEEK_API_KEY:
-        raise PreflightFailed("brak DEEPSEEK_API_KEY w .env")
-    if model == config.IMAGE_MODEL and not config.OPENAI_API_KEY:
-        raise PreflightFailed("brak OPENAI_API_KEY w .env")
+    KLUCZ = {"anthropic": ("ANTHROPIC_API_KEY", config.ANTHROPIC_API_KEY),
+             "deepseek": ("DEEPSEEK_API_KEY", config.DEEPSEEK_API_KEY),
+             "openai": ("OPENAI_API_KEY", config.OPENAI_API_KEY)}
+    nazwa_klucza, wartosc = KLUCZ[dostawca(model)]
+    if not wartosc:
+        raise PreflightFailed(
+            "brak %s w .env (etap %s, model %s)" % (nazwa_klucza, purpose, model))
 
     if purpose not in config.MAX_TOKENS and purpose not in config.BEZ_TOKENOW:
         raise PreflightFailed(f"brak sufitu tokenów dla etapu {purpose!r}")
