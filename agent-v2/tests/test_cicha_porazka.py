@@ -673,25 +673,40 @@ nowy = sprzatanie(browser, 12345)
 print("    Z POPRAWKA:      blad=%s strona=%s przegladarka=%s sterownik=%s" % nowy)
 
 wyczysc()
-# Literal `[:1200]` MUSI byc taki sam jak w `browser.py`. Byl tu `[:300]`
-# i latka odwrotna przestala miec co cofac w chwili, gdy podniesiono
-# obciecie — czyli kontrdowod cicho przestal byc kontrdowodem.
+# OBCIECIE TEKSTU CZYTAMY ZE ZRODLA, NIE WPISUJEMY GO TU RECZNIE.
+#
+# Stal tu literal `[:300]`, potem `[:1200]`, i za kazdym razem, gdy sufit
+# w `browser.py` rosl, latka odwrotna przestawala miec co cofac — czyli
+# kontrdowod cicho przestawal byc kontrdowodem. Trzeci raz (1200 -> 2000,
+# 4 wrzesnia 2026, po dolozeniu formy WYJASNIENIE) juz go nie bedzie:
+# liczba idzie prosto z `browser.py`, wiec nie ma sie z czym rozjechac.
+import re as _re  # noqa: E402  (tylko do odczytania obciecia ze zrodla)
+
+# PRZYPISANIE, NIE SAM LITERAL. Pierwsza wersja szukala `tekst[:N]` i trafiala
+# w KOMENTARZ nad `dopisz_wynik`, ktory cytuje stara wartosc („zapisywalismy
+# tekst[:300]") — czyli test czytal historie zamiast stanu.
+_M_CIACH = _re.search(r"tekst=tekst\[:([0-9]+)\]",
+                      pathlib.Path("agent-v2/browser.py").read_text(
+                          encoding="utf-8"))
+assert _M_CIACH, "nie znalazlem obciecia tekstu w browser.py"
+_CIACH = "tekst[:%s]" % _M_CIACH.group(1)
+
 bez_oslony = stary_browser(
     "browser_bez_oslony",
     ("""        try:
             if wyslij and not wynik.get("pominiete"):
                 dopisz_wynik("komentarz", wynik, gdzie=url,
-                             slow=len(tekst.split()), tekst=tekst[:1200],
+                             slow=len(tekst.split()), tekst=%(c)s,
                              nasz_id=wynik.get("id"), **(kontekst or {}))
         except Exception as exc:
-            print("  (nie zapisalem komentarza do dziennika: %s)"
-                  % type(exc).__name__, flush=True)
-""",
+            print("  (nie zapisalem komentarza do dziennika: %%s)"
+                  %% type(exc).__name__, flush=True)
+""" % {"c": _CIACH},
      """        if wyslij and not wynik.get("pominiete"):
             dopisz_wynik("komentarz", wynik, gdzie=url,
-                         slow=len(tekst.split()), tekst=tekst[:1200],
+                         slow=len(tekst.split()), tekst=%(c)s,
                          nasz_id=wynik.get("id"), **(kontekst or {}))
-"""))
+""" % {"c": _CIACH}))
 stary = sprzatanie(bez_oslony, 12345)
 print("    BEZ OSLONY:      blad=%s strona=%s przegladarka=%s sterownik=%s" % stary)
 
