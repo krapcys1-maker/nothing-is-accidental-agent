@@ -251,14 +251,41 @@ def tryb_przebiegu(conn: sqlite3.Connection, run_id: int | None) -> str:
 
 
 def finish_run(
-    conn: sqlite3.Connection, run_id: int, status: str, stage: str, note: str = ""
+    conn: sqlite3.Connection, run_id: int, status: str,
+    stage: str | None = None, note: str = ""
 ) -> None:
-    conn.execute(
-        "UPDATE runs SET finished_at = ?, status = ?, stage = ?, note = ?,"
-        " cost_usd = (SELECT COALESCE(SUM(cost_usd), 0) FROM calls WHERE run_id = ?)"
-        " WHERE id = ?",
-        (now(), status, stage, note, run_id, run_id),
-    )
+    """Zamyka wiersz przebiegu. `stage=None` znaczy „NIE RUSZAJ nazwy etapu".
+
+    PO CO TA MOZLIWOSC. `stage` bylo obowiazkowe i zawsze nadpisywane, a to
+    znaczy, ze kazdy, kto zamyka CUDZY przebieg, musi wymyslic jakas nazwe —
+    i zamazuje prawdziwa.
+
+    Zmierzone 3 wrzesnia 2026 na produkcji: kontrola zdrowia (`alarm.py`)
+    zamykala wiszace przebiegi, podajac w tym polu slowo „kontrola". W bazie
+    bylo wiec 19 przebiegow o etapie `kontrola`, WSZYSTKIE ze statusem STALE —
+    i wygladalo to jak nowy rodzaj przebiegu, ktory zawsze pada. Nie bylo.
+    To byly zwykle przebiegi (m.in. SZESC artykulowych, ktore zdazyly zaplacic
+    za pelny tekst po 0,80 USD), a nazwa etapu zostala im zabrana w chwili
+    zamykania.
+
+    Koszt tej wady nie byl w pieniadzach, a w SLEPOCIE: audyt wydatkow nie
+    umial powiedziec, ktory etap wisi, bo dowod byl zamazany. Sam wpisalem
+    z tego powodu bledna przyczyne do raportu.
+    """
+    if stage is None:
+        conn.execute(
+            "UPDATE runs SET finished_at = ?, status = ?, note = ?,"
+            " cost_usd = (SELECT COALESCE(SUM(cost_usd), 0) FROM calls"
+            " WHERE run_id = ?) WHERE id = ?",
+            (now(), status, note, run_id, run_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE runs SET finished_at = ?, status = ?, stage = ?, note = ?,"
+            " cost_usd = (SELECT COALESCE(SUM(cost_usd), 0) FROM calls WHERE run_id = ?)"
+            " WHERE id = ?",
+            (now(), status, stage, note, run_id, run_id),
+        )
     conn.commit()
 
 

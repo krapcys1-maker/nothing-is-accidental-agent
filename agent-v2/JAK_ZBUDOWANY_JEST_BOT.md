@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **23 plików**, 29 055 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 29 104 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -113,8 +113,8 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 > w głównej ścieżce artykułu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
-się testować bez przeglądarki i bez pieniędzy**. 127 zestawów
-testów, 3518 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+się testować bez przeglądarki i bez pieniędzy**. 128 zestawów
+testów, 3530 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -468,7 +468,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `db.py` — schemat i zapis
 
-333 wierszy, 11 funkcji na poziomie modułu, 1 klas
+360 wierszy, 11 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -479,7 +479,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_dopisz_brakujace_kolumny(conn)` *(wewn.)* | — |
 | `start_run(conn, stage, tryb)` | Nowy przebieg. `tryb` to „produkcja" albo „test". |
 | `tryb_przebiegu(conn, run_id)` | Tor, do ktorego nalezy przebieg. Bez przebiegu — produkcja. |
-| `finish_run(conn, run_id, status, stage, note)` | — |
+| `finish_run(conn, run_id, status, stage, note)` | Zamyka wiersz przebiegu. `stage=None` znaczy „NIE RUSZAJ nazwy etapu". |
 | `record_call(conn, **fields)` | Zapisuje wywołanie, wstawiając TYLKO te kolumny, które ktoś podał. |
 | `spent_usd(conn, since_prefix, tryb)` | Suma kosztów od znacznika czasu zaczynającego się danym prefiksem. |
 | `recent_domains(conn, limit)` | Domeny z ostatnich N artykułów — wejście do reguły różnorodności. |
@@ -503,7 +503,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `alarm.py` — kontrola sesji, zdrowia i alarm do właściciela
 
-983 wierszy, 23 funkcji na poziomie modułu, 0 klas
+1005 wierszy, 23 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

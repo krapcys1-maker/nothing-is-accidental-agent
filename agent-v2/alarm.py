@@ -253,17 +253,39 @@ def zawieszone() -> str | None:
     conn = _polaczenie()
     granica = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
     wiszace = conn.execute(
-        "SELECT id, started_at FROM runs WHERE status = 'RUNNING' AND started_at < ?",
+        # `stage` DOCIAGNIETY do zapytania, bo komunikat ma nazwac, co wisi.
+        "SELECT id, started_at, stage FROM runs"
+        " WHERE status = 'RUNNING' AND started_at < ?",
         (granica,),
     ).fetchall()
     if not wiszace:
         return None
     # Zamykamy je, zeby nie zasmiecaly obrazu — proces i tak juz nie zyje.
+    #
+    # NAZWA ETAPU ZOSTAJE NIETKNIETA. Do 3 wrzesnia 2026 szlo tu slowo
+    # „kontrola" jako `stage`, a `finish_run` je NADPISYWALO. Skutek: 19
+    # przebiegow w bazie mialo etap `kontrola` i status STALE, co wygladalo
+    # jak rodzaj przebiegu, ktory zawsze pada. To byly zwykle przebiegi —
+    # w tym SZESC artykulowych, ktore zdazyly zaplacic po 0,80 USD za pelny
+    # tekst i umarly przed publikacja. Audyt wydatkow nie umial tego wskazac,
+    # bo dowod byl zamazany w chwili zamykania wiersza.
+    #
+    # Teraz etykieta idzie do `note`, gdzie jest jej miejsce, a `stage=None`
+    # mowi wprost: nie ruszaj.
     for r in wiszace:
         db.finish_run(conn, r["id"], "STALE",
-                      "kontrola", "przebieg wisial ponad trzy godziny")
+                      note="zamkniete przez kontrole zdrowia: wisial ponad "
+                           "trzy godziny w stanie RUNNING")
+    # KOMUNIKAT MA NAZWAC ETAPY, nie tylko numery. Pytanie, ktore ktos zada po
+    # przeczytaniu tej linii, brzmi „co sie wiesza", a nie „ktore to bylo id".
+    etapy: dict[str, int] = {}
+    for r in wiszace:
+        klucz = str(r["stage"] or "?")
+        etapy[klucz] = etapy.get(klucz, 0) + 1
+    opis = ", ".join("%s x%d" % (k, n) if n > 1 else k
+                     for k, n in sorted(etapy.items(), key=lambda kv: -kv[1]))
     return (f"{len(wiszace)} przebiegow wisialo w stanie RUNNING ponad trzy "
-            f"godziny — zamkniete jako STALE (id: "
+            f"godziny — zamkniete jako STALE. Etapy: {opis} (id: "
             f"{', '.join(str(r['id']) for r in wiszace[:5])}).")
 
 
