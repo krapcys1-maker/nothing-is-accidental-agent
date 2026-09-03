@@ -64,6 +64,7 @@ MODULY = [
     ("artykul_z_puli.py", "artykuł bierze temat z tej samej puli, co notki"),
     ("norma.py", "licznik produkcji: ile agent wystawil wobec normy dziennej"),
     ("audyt_tematow.py", "audyt segmentu tematow na zywych danych: jedenascie etapow, od kanalow po zwrot do puli"),
+    ("przeglad_dnia.py", "caly lancuch jednego dnia bez wolania modelu: szukanie, bank z katami, powody odrzucen, notki"),
     ("audyt_researchu.py", "audyt segmentu researchu na zywych danych: dyskoveria, pobieranie, martwe hosty, karta dowodowa"),
     ("audyt_systemu.py", "audyt CALEGO systemu na zywych danych: publikowanie, normy, komentarze, statystyki, artykul, pieniadze, pamiec"),
     ("wzajemnosc.py",

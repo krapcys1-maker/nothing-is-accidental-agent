@@ -49,14 +49,14 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **23 plików**, 29 953 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **24 plików**, 30 142 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
 | jedno polecenie uruchamiające | `python agent-v2/run.py` | dotrzymane |
 | pełna autonomia, zero pytań | brak interaktywnych promptów | dotrzymane |
 
-**WADA — 23 plików zamiast dziesięciu.** Najbliższe usunięciu:
+**WADA — 24 plików zamiast dziesięciu.** Najbliższe usunięciu:
 `style.py` (127 wierszy, wołany tylko z `stages.py`) i
 `kopia_subskrybentow.py` (203 wierszy, narzędzie ręczne poza
 przebiegiem). Scalenie któregokolwiek przywraca zgodność z mandatem.
@@ -726,6 +726,19 @@ wiec nie da sie go rozjechac z kodem.
 | `etap(nr, nazwa)` | — |
 | `werdykt(nazwa, stan, szczegol)` | — |
 | `bank()` | — |
+| `main()` | — |
+
+### `przeglad_dnia.py` — caly lancuch jednego dnia bez wolania modelu: szukanie, bank z katami, powody odrzucen, notki
+
+189 wierszy, 6 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_dzien()` *(wewn.)* | — |
+| `_naglowek(tekst)` *(wewn.)* | — |
+| `_wpisy(dzien)` *(wewn.)* | — |
+| `_bank()` *(wewn.)* | — |
+| `_log_przebiegu(dzien)` *(wewn.)* | Linie decyzji z dziennika systemowego. Puste, gdy go nie ma. |
 | `main()` | — |
 
 ### `audyt_researchu.py` — audyt segmentu researchu na zywych danych: dyskoveria, pobieranie, martwe hosty, karta dowodowa

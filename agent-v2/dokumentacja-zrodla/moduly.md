@@ -586,6 +586,19 @@
 | `bank()` | — |
 | `main()` | — |
 
+### `przeglad_dnia.py` — caly lancuch jednego dnia bez wolania modelu: szukanie, bank z katami, powody odrzucen, notki
+
+189 wierszy, 6 funkcji na poziomie modułu, 0 klas
+
+| funkcja | co robi |
+|---|---|
+| `_dzien()` *(wewn.)* | — |
+| `_naglowek(tekst)` *(wewn.)* | — |
+| `_wpisy(dzien)` *(wewn.)* | — |
+| `_bank()` *(wewn.)* | — |
+| `_log_przebiegu(dzien)` *(wewn.)* | Linie decyzji z dziennika systemowego. Puste, gdy go nie ma. |
+| `main()` | — |
+
 ### `audyt_researchu.py` — audyt segmentu researchu na zywych danych: dyskoveria, pobieranie, martwe hosty, karta dowodowa
 
 196 wierszy, 3 funkcji na poziomie modułu, 0 klas
