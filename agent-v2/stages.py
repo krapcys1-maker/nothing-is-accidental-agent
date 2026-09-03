@@ -7921,18 +7921,36 @@ def zwroc_kandydatow(kandydaci: list[dict[str, Any]]) -> int:
     tresci.discard("")
     if not tresci:
         return 0
+    # KAT TEZ WRACA, i to osobno od statusu faktu. Od 4 wrzesnia 2026 wyjecie
+    # kandydata zuzywa JEDEN kat (`kat_wziety`), a fakt z pozostalymi katami
+    # zostaje w banku ze statusem „nowy". Gdyby wracal sam fakt, a kat zostawal
+    # odhaczony, oddanie do puli byloby pozorne: temat wraca, ale ujecie, o
+    # ktore chodzilo, jest juz spalone.
+    katy_zwracane = {" ".join(str((k.get("kat_wziety") or {}).get("kat")
+                                  or "").split())
+                     for k in kandydaci}
+    katy_zwracane.discard("")
+
     indeks = wczytaj_indeks()
-    ile = 0
+    ile = ile_katow = 0
     for k in indeks:
+        if " ".join(str(k.get("fact") or "").split()) not in tresci:
+            continue
+        for kat in (k.get("katy") or []):
+            if not isinstance(kat, dict) or not kat.get("uzyty"):
+                continue
+            if " ".join(str(kat.get("kat") or "").split()) in katy_zwracane:
+                kat["uzyty"] = False
+                ile_katow += 1
         if k.get("status") != "uzyty":
             continue
-        if " ".join(str(k.get("fact") or "").split()) in tresci:
-            k["status"] = "nowy"
-            k.pop("uzyty_kiedy", None)
-            ile += 1
-    if ile:
+        k["status"] = "nowy"
+        k.pop("uzyty_kiedy", None)
+        ile += 1
+    if ile or ile_katow:
         _zapisz_indeks(indeks)
-        print("  [indeks] oddane do puli, bo nieuzyte: %d" % ile, flush=True)
+        print("  [indeks] oddane do puli, bo nieuzyte: %d tematow, %d katow"
+              % (ile, ile_katow), flush=True)
     return ile
 
 

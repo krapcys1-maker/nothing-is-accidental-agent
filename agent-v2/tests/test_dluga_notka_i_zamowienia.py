@@ -374,5 +374,44 @@ sprawdz("KONTRDOWOD: to samo co DZIS blokuje takze kolejne ujecie",
         w_dzis is None, w_dzis)
 
 print()
+print("=== 14. ODDANIE DO PULI ODDAJE TAKZE KAT ===")
+# `notki_dnia` oddaje niewydanych kandydatow przez `zwroc_kandydatow` (naprawa
+# z 2 wrzesnia 2026, zmierzona: marnotrawstwo spadlo z ~70% do 22%). Od kiedy
+# wyjecie kandydata zuzywa JEDEN kat, samo oddanie tematu nie wystarcza —
+# temat wracalby ze spalonym ujeciem, czyli oddanie byloby pozorne.
+BANK6 = [_fakt("Ireland gave 23 percent of metered power to data centres",
+               ["cena", "sieci"])]
+w6 = _wywolaj(BANK6, 1)
+sprawdz("po wyjeciu kat jest odhaczony",
+        BANK6[0]["katy"][0]["uzyty"] is True, BANK6[0]["katy"])
+
+_st_ind, _st_zap = stages.wczytaj_indeks, stages._zapisz_indeks
+stages.wczytaj_indeks = lambda *a, **k: BANK6
+stages._zapisz_indeks = lambda x: None
+try:
+    stages.zwroc_kandydatow(w6)
+finally:
+    stages.wczytaj_indeks, stages._zapisz_indeks = _st_ind, _st_zap
+
+sprawdz("po oddaniu do puli kat znowu jest wolny",
+        BANK6[0]["katy"][0]["uzyty"] is False, BANK6[0]["katy"])
+sprawdz("KONTRDOWOD: kat, ktorego nikt nie bral, pozostaje wolny",
+        BANK6[0]["katy"][1]["uzyty"] is False, BANK6[0]["katy"])
+
+# Kat UZYTY do napisanej notki NIE moze wrocic — inaczej to samo ujecie
+# wyszlo by dwa razy.
+BANK7 = [_fakt("Ireland gave 23 percent of metered power to data centres",
+               ["cena", "sieci"])]
+w7 = _wywolaj(BANK7, 1)
+stages.wczytaj_indeks = lambda *a, **k: BANK7
+stages._zapisz_indeks = lambda x: None
+try:
+    stages.zwroc_kandydatow([])          # nic nie oddajemy
+finally:
+    stages.wczytaj_indeks, stages._zapisz_indeks = _st_ind, _st_zap
+sprawdz("KONTRDOWOD: bez oddania kat zostaje spalony",
+        BANK7[0]["katy"][0]["uzyty"] is True, BANK7[0]["katy"])
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
