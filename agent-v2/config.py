@@ -109,7 +109,16 @@ TRYB_SERWERA = _env("AGENT_V2_SERVER", "0").lower() in {"1", "true", "yes"}
 
 CLAUDE = "claude-opus-5"
 SONNET = "claude-sonnet-5"
-FABLE = "claude-fable-5"  # najmocniejszy, dwa razy droższy od Opusa
+# PISARZ ARTYKULOW. Fable 5.1 wyszedl 1 wrzesnia 2026 i od 3 wrzesnia pisze
+# artykuly; poprzednik zostaje pod wlasna nazwa, bo pod nia stoi cala historia
+# kosztow i porownan A/B z sierpnia.
+#
+# Sprawdzone NA ZYWO przed przestawieniem, nie po: `claude-fable-5-1` odpowiada
+# (18 tokenow wejscia, 4 wyjscia). Przestawienie pisarza artykulow na
+# identyfikator, ktorego nie ma, zabiloby wtorkowy artykul — a najblizszy jest
+# 8 wrzesnia, wiec wyszloby to dopiero za piec dni.
+FABLE_5 = "claude-fable-5"          # poprzednik, zostaje dla historii i porownan
+FABLE = "claude-fable-5-1"  # najmocniejszy, dwa razy droższy od Opusa
 DEEPSEEK = "deepseek-v4-flash"
 DEEPSEEK_PRO = "deepseek-v4-pro"  # ma server-side web_search przez /responses
 
@@ -301,7 +310,13 @@ BEZ_TOKENOW = {"obraz"}
 PRICING = {
     CLAUDE: {"in": 5.00, "out": 25.00, "verified": True},
     SONNET: {"in": 3.00, "out": 15.00, "verified": True},
-    FABLE: {"in": 10.00, "out": 50.00, "verified": True},
+    # STAWKA FABLE 5.1 NIEPOTWIERDZONA. Wpisana z ceny poprzednika, bo model
+    # wyszedl 1 wrzesnia i nie ma go jeszcze na zadnej naszej fakturze.
+    # `verified: False` sprawia, ze kazde takie wywolanie zapisuje sie
+    # z `price_verified = 0` — czyli koszt artykulu bedzie widoczny jako
+    # SZACUNEK, dopoki nie sprawdzimy go na rozliczeniu.
+    FABLE: {"in": 10.00, "out": 50.00, "verified": False},
+    FABLE_5: {"in": 10.00, "out": 50.00, "verified": True},
     # STAWKI POTWIERDZONE FAKTURA (15-19 sierpnia 2026). Dziesiec wierszy
     # rozliczenia odtworzonych co do centa, wiec `verified` znaczy tu wreszcie
     # to, co powinno: rozliczone z rachunkiem, nie przepisane z cennika.
@@ -429,6 +444,7 @@ WEB_SEARCH_TOOL = {
     # zeby dostac KeyError w SRODKU platnej sciezki, po oplaceniu
     # wczesniejszych etapow.
     FABLE: "web_search_20260209",
+    FABLE_5: "web_search_20260209",
 }
 
 # Wersja narzedzia wyszukiwania dla modelu Anthropic, z galezia awaryjna.

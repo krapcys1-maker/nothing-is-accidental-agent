@@ -28,7 +28,8 @@
 | `TRYB_SERWERA` | `_env("AGENT_V2_SERVER", "0").lower() in {"1"` | Serwer bez ekranu: zamiast podlaczac sie do Chrome'a uruchomionego przez czlowieka, agent otwiera wlasna przegladarke bez ekranu i wklada je |
 | `CLAUDE` | `"claude-opus-5"` | — |
 | `SONNET` | `"claude-sonnet-5"` | — |
-| `FABLE` | `"claude-fable-5"` | — |
+| `FABLE_5` | `"claude-fable-5"` | PISARZ ARTYKULOW. Fable 5.1 wyszedl 1 wrzesnia 2026 i od 3 wrzesnia pisze artykuly; poprzednik zostaje pod wlasna nazwa, bo pod nia stoi cal |
+| `FABLE` | `"claude-fable-5-1"` | — |
 | `DEEPSEEK` | `"deepseek-v4-flash"` | — |
 | `DEEPSEEK_PRO` | `"deepseek-v4-pro"` | — |
 | `MODEL_FOR` | `{ "scout": DEEPSEEK_PRO, "feasibility": DEEP` | Decyzja wlasciciela 2026-08-15 zaczela od DeepSeeka poza pisaniem. Po pozniejszych testach artykuly trafily do Fable 5, notki do Opusa 5, a  |
