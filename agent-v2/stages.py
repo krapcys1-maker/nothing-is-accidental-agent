@@ -6719,6 +6719,43 @@ def _powtorka_wg_modelu(
         return 0, ""
 
 
+def opublikowane_teksty(limit: int = 200) -> list[str]:
+    """Tresci, ktore NAPRAWDE wyszly na konto — notki i artykuly z dziennika.
+
+    Bank porownywal kandydata WYLACZNIE z zawartoscia banku. Fakt, o ktorym
+    napisalismy notke, znika z banku jako `uzyty` i nadal tam jest, wiec
+    porownanie teoretycznie go widzi — ale przy progu 0,35 nie lapie tego
+    samego wydarzenia opowiedzianego przez model drugi raz innymi slowami.
+
+    ZMIERZONE 3 wrzesnia 2026 na zywym banku: z 17 wolnych faktow SZESC
+    dotyczylo rzeczy, o ktorych notka juz poszla — 1200 agentow OpenAI, dane
+    Spirit Airlines, tozsamosc Ox-Alpha, distylacja GLM-5.3 Flash, jego cena.
+    Trzydziesci piec procent banku to byl material zuzyty.
+
+    Porownujemy z TEKSTEM NOTKI, nie z faktem zrodlowym, bo to notka jest tym,
+    co czytelnik widzial. Fakt moze byc sformulowany inaczej niz zdanie, ktore
+    z niego wyszlo, a powtorke widzi sie po tym drugim.
+    """
+    import json as _json
+
+    teksty: list[str] = []
+    plik = config.DATA_DIR / "dziennik.jsonl"
+    if not plik.exists():
+        return teksty
+    try:
+        with plik.open(encoding="utf-8") as f:
+            for linia in f:
+                try:
+                    w = _json.loads(linia)
+                except ValueError:
+                    continue
+                if w.get("rodzaj") in ("notka", "artykul") and w.get("tekst"):
+                    teksty.append(str(w["tekst"]))
+    except OSError:
+        return teksty
+    return teksty[-limit:]
+
+
 def dopisz_kandydatow(kandydaci: list[dict[str, Any]],
         conn: sqlite3.Connection | None = None,
         run_id: int | None = None,) -> dict[str, int]:
@@ -6748,8 +6785,23 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]],
     # „OpenAI" i „Broadcom", a dwa o Jane Street — „Anthropic" i „100".
     PODOBIENSTWO = {"min_wspolnych": 4, "prog": 0.35}
     fakty_w_banku = [str(k.get("fact") or "") for k in indeks]
+    # JUZ WYSZLO NA KONTO — druga lista porownawcza, LUZNIEJSZA od bankowej.
+    #
+    # Prog 0,25 zamiast 0,35, i to jest dobrane pomiarem, nie na oko. Na
+    # produkcyjnym banku z 3 wrzesnia 2026, przy wymogu wspolnej nazwy albo
+    # liczby, wobec 60 opublikowanych tekstow:
+    #     0,35 lapie 4    0,30 lapie 5    0,25 lapie 6    0,20 lapie 8
+    # Szesc to dokladnie tyle, ile bylo prawdziwych powtorzen policzonych
+    # recznie; przy 0,20 wpada juz H3 Max, o ktorym notki NIE bylo.
+    #
+    # Luzniejszy prog jest tu uzasadniony inaczej niz w banku: tam falszywe
+    # trafienie kasuje material, ktory nigdy nie zobaczyl swiatla. Tu kasuje
+    # material, ktorego czytelnik JUZ RAZ nie potrzebuje — koszt pomylki jest
+    # mniejszy, wiec wolno byc ostrzejszym.
+    JUZ_WYSZLO = {"min_wspolnych": 4, "prog": 0.25}
+    opublikowane = opublikowane_teksty()
     licznik = {"przyjete": 0, "odrzucone": 0, "znane": 0, "podobne": 0,
-               "powtorka_llm": 0}
+               "powtorka_llm": 0, "juz_pisalismy": 0}
     for k in kandydaci or []:
         klucz = _klucz_faktu(str(k.get("fact") or ""))
         if not klucz or klucz in znane:
@@ -6764,6 +6816,18 @@ def dopisz_kandydatow(kandydaci: list[dict[str, Any]],
             print("  [indeks] to samo innymi slowami — pomijam: %s" % tresc[:70],
                   flush=True)
             continue
+        # A TERAZ: CZY MY O TYM JUZ NIE PISALISMY. Bank porownuje kandydata
+        # z bankiem; ta lista pyta o cos innego — czy czytelnik juz to od nas
+        # dostal. Stoi PRZED platnym straznikiem, bo jest darmowa.
+        wyszlo = next((w for w in opublikowane
+                       if _o_tym_samym(tresc, w, **JUZ_WYSZLO)
+                       and _dzieli_temat(tresc, w)), None)
+        if wyszlo:
+            licznik["juz_pisalismy"] += 1
+            print("  [indeks] JUZ O TYM PISALISMY — pomijam: %s" % tresc[:66],
+                  flush=True)
+            continue
+
         # DRUGI PRZEBIEG: to samo pytanie, zadane modelowi. Filtr wyzej liczy
         # WSPOLNE SLOWA, a starannie przepisane zdanie ich nie ma — zmierzone
         # na produkcji 3 wrzesnia 2026, gdy z 22 wolnych faktow cztery pary

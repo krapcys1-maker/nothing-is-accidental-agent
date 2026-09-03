@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-7579 wierszy, 136 funkcji na poziomie modułu, 0 klas
+7643 wierszy, 137 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -164,6 +164,7 @@
 | `_wspolna_kotwica(a, b)` *(wewn.)* | Czy oba zdania mowia o tej samej NAZWIE albo tej samej LICZBIE. |
 | `_dzieli_temat(a, b)` *(wewn.)* | Czy oba zdania mowia o tym samym bohaterze — SZEROKO, na potrzeby pytania. |
 | `_powtorka_wg_modelu(nowy, z_banku, conn, run_id)` *(wewn.)* | Czy `nowy` powtarza ktoras z pozycji `z_banku`. (numer albo 0, powod). |
+| `opublikowane_teksty(limit)` | Tresci, ktore NAPRAWDE wyszly na konto — notki i artykuly z dziennika. |
 | `dopisz_kandydatow(kandydaci, conn, run_id)` | Przepuszcza kandydatow przez bramke i dokłada do indeksu. |
 | `wez_kandydatow(ile)` | Wyjmuje kandydatow gotowych do pisania i ZNACZY ich jako uzytych. |
 | `co_zadzialalo(ile)` | NASZE wlasne notki z ZMIERZONYM odbiorem — material dla sedziego banku. |
