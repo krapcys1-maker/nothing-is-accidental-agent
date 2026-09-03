@@ -1336,6 +1336,39 @@ def _zapamietaj_wydarzenia(nowe: list[dict[str, Any]],
               flush=True)
 
 
+def _faktow_dopisanych_dzis() -> int:
+    """Ile faktow NAPRAWDE wpadlo dzis do banku. Zdobycz, nie proba."""
+    from datetime import datetime, timezone
+    dzis = datetime.now(timezone.utc).date().isoformat()
+    try:
+        return sum(1 for k in wczytaj_indeks()
+                   if str(k.get("kiedy") or "")[:10] == dzis)
+    except Exception:
+        return 0
+
+
+def _ile_prob_wolno_dzis() -> int:
+    """Ile RAZY wolno dzis siegnac po nowy material.
+
+    LIMIT LICZYL PROBY, NIE ZDOBYCZ — i to kosztowalo cala dobe materialu.
+    Zmierzone 3 wrzesnia 2026: `curiosity` poszedl o 11:55, zrobil 23
+    szukania, zjadl 513 tys. tokenow wejscia za 0,13 USD i oddal odpowiedz,
+    ktorej nie dalo sie sparsowac — „odzyskane: 0 faktow". Bank nie urosl ani
+    o jedna pozycje. Ale licznik zliczal PRZEBIEGI Z WYWOLANIEM `curiosity`,
+    wiec ta nieudana proba zabrala jeden z dwoch dziennych przydzialow.
+    Doba stracila polowe doplywu za nic.
+
+    Teraz: gdy dzien nie przyniosl ANI JEDNEGO faktu, wolno sprobowac raz
+    wiecej. Jeden raz, nie w kolko — jesli i druga proba nic nie da, przyczyna
+    jest po stronie dostawcy albo promptu i dokladanie pieniedzy tego nie
+    zmieni. Sufit rosnie wiec o jeden, nie znika.
+    """
+    zdobycz = _faktow_dopisanych_dzis()
+    if zdobycz:
+        return config.SZUKANIE_BANKU_NA_DOBE
+    return config.SZUKANIE_BANKU_NA_DOBE + 1
+
+
 def _przebiegi_z_bankiem_dzis(conn: sqlite3.Connection) -> int:
     """Ile PRZEBIEGOW dobieralo dzis material do banku.
 
@@ -1537,14 +1570,15 @@ def znajdz_ciekawostki(
         # zapisany z gory, zanim wiadomo, czy cokolwiek z tego wyszlo.
         print("  [wydarzenia] NOWE (%d) — otwieram furtke mimo sufitu banku"
               % len(nowe_wyd), flush=True)
-    elif _przebiegi_z_bankiem_dzis(conn) >= config.SZUKANIE_BANKU_NA_DOBE:
+    elif _przebiegi_z_bankiem_dzis(conn) >= _ile_prob_wolno_dzis():
         # Zwykle dobieranie do banku: RAZ NA DOBE, nie przy kazdym z pieciu
         # przebiegow. Licznik czytamy z tabeli `calls`, bo tam i tak zapisujemy
         # kazde wywolanie — osobny plik stanu bylby druga prawda. Liczymy
         # PRZEBIEGI, nie wywolania: jedno wejscie tutaj potrafi wolac model
         # kilka razy.
         print("  [ciekawostki] dzis juz dobieralismy do banku — nie szukam"
-              " drugi raz (limit %d/dobe)" % config.SZUKANIE_BANKU_NA_DOBE,
+              " ponownie (proby: %d, wolno %d)"
+              % (_przebiegi_z_bankiem_dzis(conn), _ile_prob_wolno_dzis()),
               flush=True)
         return []
     elif bank_pelny():

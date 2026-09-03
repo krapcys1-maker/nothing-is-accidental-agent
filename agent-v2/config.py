@@ -1062,7 +1062,30 @@ PAMIEC_NOTEK = None
 # Zlapane na zywym tekscie: notka o ukrytych tokenach w modelach o1, napisana
 # 25 sierpnia 2026 na podstawie artykulu o ich premierze z konca 2024. Okolo
 # 700 dni. Sprawdzanie faktow ja przepuscilo, bo fakt byl PRAWDZIWY.
-MAKS_WIEK_ZRODLA_DNI = 90
+# SKROCONE Z 90 NA 30 DNI — 3 wrzesnia 2026, po pomiarze na tym, co WYSZLO.
+#
+# 90 dni bylo decyzja wlasciciela i przez to jej nie kwestionowalem, choc rano
+# tego samego dnia sam zauwazylem w banku fakty sprzed kwartalu. To bylo
+# uleglosc, nie ostroznosc: wystarczylo policzyc, ile z nich naprawde poszlo
+# na konto.
+#
+# ZMIERZONE na 38 faktach uzytych w calej historii, wiek zrodla W CHWILI
+# WYSTAWIENIA notki:
+#     <=7 dni  14      31-60   4
+#     8-14      4      61-90   4
+#     15-30     7      >90     5
+# Czyli 13 z 38 notek (34 procent) stalo na fakcie starszym niz miesiac, a
+# PIEC na starszym niz wlasna regula 90 dni — bo wiek sprawdzalo sie tylko
+# przy wkladaniu do banku, nie przy wyjmowaniu (domkniete tego samego dnia).
+#
+# Konto pisze o AI. Fakt sprzed kwartalu nie jest w tej dziedzinie
+# ciekawostka, tylko archiwum — a 91 procent naszego zasiegu idzie do ludzi,
+# ktorzy nas nie znaja i oceniaja po jednej notce.
+#
+# CO TO KOSZTUJE: bank spada z 16 na 11 wolnych faktow. Dlatego razem z ta
+# zmiana idzie poprawka limitu dobierania (stages._ile_prob_wolno_dzis): nieudane
+# szukanie przestaje zjadac dzienny przydzial.
+MAKS_WIEK_ZRODLA_DNI = 30
 
 # Slowa, po ktorych poznajemy, ze zdanie twierdzi cos o STANIE SWIATA TERAZ,
 # a nie opowiada o zdarzeniu z wlasna data. Tylko takie zdania podlegaja

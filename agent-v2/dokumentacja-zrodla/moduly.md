@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-7492 wierszy, 134 funkcji na poziomie modułu, 0 klas
+7526 wierszy, 136 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -74,6 +74,8 @@
 | `_rdzen_wydarzenia(w)` *(wewn.)* | Klucz zdarzenia: posortowane slowa rdzenia, zeby ta sama premiera |
 | `_nowe_wydarzenia(wydarzenia)` *(wewn.)* | Ktore z tych zdarzen sa NOWE — czyli nie dobieralismy juz o nich materialu. |
 | `_zapamietaj_wydarzenia(nowe, znane, ile)` *(wewn.)* | Zapisuje, ze o tych zdarzeniach material JUZ WROCIL. |
+| `_faktow_dopisanych_dzis()` *(wewn.)* | Ile faktow NAPRAWDE wpadlo dzis do banku. Zdobycz, nie proba. |
+| `_ile_prob_wolno_dzis()` *(wewn.)* | Ile RAZY wolno dzis siegnac po nowy material. |
 | `_przebiegi_z_bankiem_dzis(conn)` *(wewn.)* | Ile PRZEBIEGOW dobieralo dzis material do banku. |
 | `_polecenie_premiery(wydarzenia, ile)` *(wewn.)* | Polecenie o premierze do promptu ciekawostek — albo PUSTY NAPIS. |
 | `znajdz_ciekawostki(conn, run_id, ile)` | Materiał na notki w dni bez artykułu. |
@@ -415,7 +417,7 @@
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2856 wierszy, 26 funkcji na poziomie modułu, 0 klas
+2879 wierszy, 26 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

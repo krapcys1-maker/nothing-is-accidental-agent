@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **23 plików**, 29 104 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 29 161 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-7492 wierszy, 134 funkcji na poziomie modułu, 0 klas
+7526 wierszy, 136 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -216,6 +216,8 @@ wiec nie da sie go rozjechac z kodem.
 | `_rdzen_wydarzenia(w)` *(wewn.)* | Klucz zdarzenia: posortowane slowa rdzenia, zeby ta sama premiera |
 | `_nowe_wydarzenia(wydarzenia)` *(wewn.)* | Ktore z tych zdarzen sa NOWE — czyli nie dobieralismy juz o nich materialu. |
 | `_zapamietaj_wydarzenia(nowe, znane, ile)` *(wewn.)* | Zapisuje, ze o tych zdarzeniach material JUZ WROCIL. |
+| `_faktow_dopisanych_dzis()` *(wewn.)* | Ile faktow NAPRAWDE wpadlo dzis do banku. Zdobycz, nie proba. |
+| `_ile_prob_wolno_dzis()` *(wewn.)* | Ile RAZY wolno dzis siegnac po nowy material. |
 | `_przebiegi_z_bankiem_dzis(conn)` *(wewn.)* | Ile PRZEBIEGOW dobieralo dzis material do banku. |
 | `_polecenie_premiery(wydarzenia, ile)` *(wewn.)* | Polecenie o premierze do promptu ciekawostek — albo PUSTY NAPIS. |
 | `znajdz_ciekawostki(conn, run_id, ile)` | Materiał na notki w dni bez artykułu. |
@@ -557,7 +559,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2856 wierszy, 26 funkcji na poziomie modułu, 0 klas
+2879 wierszy, 26 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -12888,7 +12890,7 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `CURIOSITY_BATCH` | `8` | — |
 | `CURIOSITY_MEMORY` | `60` | Ile ostatnio zuzytych faktow pokazujemy szukajacemu jako zakaz powtorki. Bez tego to samo szukanie codziennie oddaje te same slynne osiem. |
 | `PAMIEC_NOTEK` | `None` | Ile OSTATNICH WYSTAWIONYCH NOTEK bot pamieta, wybierajac material na dzis. `None` = WSZYSTKIE, jakie kiedykolwiek wyszly. To jest stan obowi |
-| `MAKS_WIEK_ZRODLA_DNI` | `90` | ILE DNI MOZE MIEC ZRODLO FAKTU, KTORY TWIERDZI COS O STANIE TERAZ. Wlasciciel ustawil to sam, dwa razy. Najpierw ogolnie: „cos, co mialo sen |
+| `MAKS_WIEK_ZRODLA_DNI` | `30` | ILE DNI MOZE MIEC ZRODLO FAKTU, KTORY TWIERDZI COS O STANIE TERAZ. Wlasciciel ustawil to sam, dwa razy. Najpierw ogolnie: „cos, co mialo sen |
 | `TWIERDZI_O_TERAZ` | `( "now", "currently", "today", "these days",` | Slowa, po ktorych poznajemy, ze zdanie twierdzi cos o STANIE SWIATA TERAZ, a nie opowiada o zdarzeniu z wlasna data. Tylko takie zdania podl |
 | `ZNIKA` | `( "deprecat", "retired", "retirement", "suns` | Slowa, ktore mowia, ze rzecz jest W TRAKCIE ZNIKANIA. Publikacja o AI nie ma po co opisywac czegos, co za osiem tygodni przestanie istniec — |
 | `WZORZEC_WERSJI` | `r"\b(gpt|claude|gemini|llama|mistral|qwen|gr` | NAZWA PRODUKTU Z NUMEREM WERSJI. Wlasciciel: „nie ma mi pisac o GPT 5.0, jak jest juz 5.5". Zdanie, ktore nazywa konkretna wersje, starzeje  |
