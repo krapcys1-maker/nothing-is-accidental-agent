@@ -1739,6 +1739,15 @@ def znajdz_ciekawostki(
     teraz = datetime.now(timezone.utc)
     print(f"  [ciekawostki] dziedziny: {chr(44).join(dziedziny)}", flush=True)
     print(f"  [ciekawostki] wzorce: {chr(44).join(generatory)}", flush=True)
+    # ZAMOWIENIA WIDOCZNE W DZIENNIKU. Sygnal, ktorego nie widac w logu, wraca
+    # do stanu sprzed naprawy: pole bylo zapisywane i liczone, i nikt nie
+    # zauwazyl przez dobe, ze nikt go nie czyta.
+    _zamowienia = zamowienia_z_banku()
+    if _zamowienia:
+        print("  [ciekawostki] zamowienia z banku: %d" % len(_zamowienia),
+              flush=True)
+        for _z in _zamowienia[:3]:
+            print("      - %s" % _z[:88], flush=True)
     prompt = _prompt(
         "ciekawostki.md", ile=ile,
         dziedziny=NOWA_LINIA.join(f"- {d}" for d in dziedziny),
@@ -1748,7 +1757,7 @@ def znajdz_ciekawostki(
         # ZAMOWIENIE Z BANKU — patrz `zamowienia_z_banku`. Bank juz wie, czego
         # brakuje do napisania katow, ktore sam wymyslil; bez tego wiersza
         # szukacz zaczyna za kazdym razem od zera i przynosi to, co mamy.
-        zamowienia=(NOWA_LINIA.join("- %s" % z for z in zamowienia_z_banku())
+        zamowienia=(NOWA_LINIA.join("- %s" % z for z in _zamowienia)
                     or "(the bank has no outstanding orders"
                        " — work the grid below)"),
         # WYDARZENIE JAKO OKAZJA, NIE TEMAT — patrz komentarz wyzej.
