@@ -144,6 +144,8 @@ print()
 print("=== 5. ILE PRZEBIEGOW ZOSTALO ===")
 
 import db      # noqa: E402
+from datetime import datetime as _dt, timedelta as _td
+
 import run     # noqa: E402
 
 
@@ -272,6 +274,40 @@ conn.commit()
 sprawdz("przebieg zapisany jako FAILED ZABIERA slot — bez tego ostatni przebieg"
         " dnia dzieli reszte przez dwa i zostawia polowe",
         run.ile_przebiegow_zostalo(conn) == N - 1, run.ile_przebiegow_zostalo(conn))
+
+# TRZECIA KLASA ZAKONCZENIA, o ktorej stara regula nie wspominala wcale.
+# Kontrola zdrowia zamyka porzucony przebieg statusem `STALE`. Gdyby ten nie
+# zabieral slotu, wracalaby dokladnie ta sama wada co przy `FAILED`, tylko
+# wchodzila by inna droga — a `FAILED` jest juz pilnowany, wiec nikt by tego
+# nie zauwazyl.
+conn.execute("DELETE FROM runs")
+conn.execute("INSERT INTO runs (started_at, finished_at, status, stage)"
+             " VALUES (?, ?, 'STALE', 'dzien')",
+             ("%sT03:41:00+00:00" % DZIS, "%sT03:42:00+00:00" % DZIS))
+conn.commit()
+sprawdz("przebieg zamkniety jako STALE tez ZABIERA slot",
+        run.ile_przebiegow_zostalo(conn) == N - 1, run.ile_przebiegow_zostalo(conn))
+
+# PRZEBIEG PRZEZ POLNOC. Termin 23:40 dostaje do 25 minut losowego opoznienia,
+# wiec startuje nawet o 00:05 nastepnej doby — zmierzone: 31.08 o 00:00:45,
+# 01.09 o 00:12:40, koniec po polnocy w 9 z 15 nocy. Taki przebieg NIE MOZE
+# zniknac z zadnej z dwoch dob, bo w jednej z nich rozdzielnik policzylby o
+# jeden slot za duzo i rozmienil reszte normy na drobne.
+WCZORAJ = (_dt.strptime(DZIS, "%Y-%m-%d") - _td(days=1)).strftime("%Y-%m-%d")
+for opis, start, koniec, oczek in (
+        ("start wczoraj, koniec dzis", WCZORAJ, DZIS, N - 1),
+        ("start dzis, koniec wczoraj (zegar sie cofnal)", DZIS, WCZORAJ, N - 1),
+        ("caly wczoraj — dzisiejszej doby NIE dotyka", WCZORAJ, WCZORAJ, N)):
+    conn.execute("DELETE FROM runs")
+    conn.execute("INSERT INTO runs (started_at, finished_at, status, stage)"
+                 " VALUES (?, ?, 'DONE', 'dzien')",
+                 ("%sT23:50:00+00:00" % start, "%sT00:05:00+00:00" % koniec))
+    conn.commit()
+    sprawdz("%-46s -> zostalo %d" % (opis, oczek),
+            run.ile_przebiegow_zostalo(conn) == oczek,
+            run.ile_przebiegow_zostalo(conn))
+conn.execute("DELETE FROM runs")
+conn.commit()
 
 print()
 print("=== 9. CZY WYWALONY PRZEBIEG ZAPISUJE SIE JAKO FAILED ===")

@@ -27,28 +27,7 @@ bo dziś wolumeny są **poniżej** normy, a nie powyżej, więc może to nie bol
 
 ---
 
-## 2. Po nieudanym przebiegu norma nie jest domykana
-
-Docstring obiecuje, że przerwany przebieg się nie liczy i ostatni dzieli przez
-jeden. Kod odejmuje od stałej 5 tylko liczbę statusów `DONE`, więc przy jednej
-wcześniejszej porażce przed ostatnim terminem dzieli resztę pracy przez dwa
-i zostawia połowę niewykonaną.
-
-Z audytu GPT (G3), niezweryfikowane pomiarem.
-
----
-
-## 3. Ostatni przebieg może wpaść w następną dobę UTC
-
-Termin 23:40 plus `RandomizedDelaySec=1500` sięga 00:05. Budżet i licznik biorą
-dzień z `datetime.now(timezone.utc)`, nie z terminu zegara — więc doba może mieć
-cztery, pięć albo sześć uruchomień, a rozdzielnik zakłada stałe pięć.
-
-Z audytu GPT (G4), niezweryfikowane pomiarem.
-
----
-
-## 4. Czternaście publikacji w tydzień bez potwierdzenia
+## 2. Czternaście publikacji w tydzień bez potwierdzenia
 
 Osiem komentarzy i sześć odpowiedzi z powodem „Substack nie potwierdził, że
 wyszło" (7 dni do 2 września). Przy 57 komentarzach to 14% strat, i **nie
@@ -61,7 +40,7 @@ odstępie, a jeśli i ona milczy, wpis dostaje status „niepewne" zamiast
 
 ---
 
-## 5. Wolumeny: normy zmienione, wykonanie jeszcze niesprawdzone
+## 3. Wolumeny: normy zmienione, wykonanie jeszcze niesprawdzone
 
 3 września normy zmieniono: **notki 5 → 10** (połowa Opus, połowa DeepSeek),
 **komentarze 15–23 → 7–9**, **dobierania banku 1 → 2**. Wdrożone i żywe
@@ -80,7 +59,7 @@ osiem komentarzy, sprawdzone w dzienniku, nie w logu przebiegu.
 
 ---
 
-## 6. Odpowiedzi są najtańszym zasięgiem, jaki mamy — i robimy ich trzy
+## 4. Odpowiedzi są najtańszym zasięgiem, jaki mamy — i robimy ich trzy
 
 Zmierzone 3 września na równym czasie (24 h od pierwszego pomiaru) i na kosztach
 bezpośrednich z kolumny `akcja`:
@@ -101,7 +80,7 @@ odpowie nam pierwszy.
 
 ---
 
-## 7. 68 z 91 komentarzy ma dokładnie zero wyświetleń
+## 5. 68 z 91 komentarzy ma dokładnie zero wyświetleń
 
 Pole istnieje i jest wypełnione — to nie jest brak pomiaru. Rekord życiowy
 komentarza to 40 wejść, mediana po 24 h wynosi **0**. Dla porównania żadna
@@ -118,7 +97,7 @@ komentowanie.
 
 ---
 
-## 8. Trzy dziury w pomiarze, przez które nie da się liczyć skutku
+## 6. Trzy dziury w pomiarze, przez które nie da się liczyć skutku
 
 - **`nasz_id` przy odpowiedziach: 0 z 56** w całej historii. Kanał odpowiedzi
   jest niemierzalny w obie strony — nie wiadomo, co dostało reakcję.
@@ -132,7 +111,7 @@ zamyka się sama z czasem, ale dopiero od 1 września.
 
 ---
 
-## 9. Test podłóg na serwerze mierzy co innego niż lokalnie
+## 7. Test podłóg na serwerze mierzy co innego niż lokalnie
 
 `test_podlogi_playbook.py` szuka prawdziwego artykułu 0025 w `data/articles/`.
 Katalog jest w `.gitignore`, więc **na świeżym klonie i na serwerze pliku nie
@@ -146,7 +125,7 @@ dowodowy, albo brak pliku **oblewa** test.
 
 ---
 
-## 10. Cztery pliki omijają prawdziwy `parse_json`
+## 8. Cztery pliki omijają prawdziwy `parse_json`
 
 Podmieniają nie tylko `llm.call`, ale też `llm.parse_json` na lambdę ignorującą
 `raw` — czyli omijają jedyną funkcję tłumaczącą odpowiedź modelu na kształt
@@ -162,7 +141,7 @@ już działa w `test_bramka_banku.py` i `test_pas_wydarzen.py`.
 
 ---
 
-## 11. Dziewięć asercji pilnuje napisów w źródle, nie zachowania
+## 9. Dziewięć asercji pilnuje napisów w źródle, nie zachowania
 
 Każda przeżyje przeniesienie zachowania do martwej gałęzi i każda oblewa przy
 kosmetycznym refaktorze:
@@ -184,7 +163,7 @@ uruchamiają z atrapą i liczą wywołania (jak `test_regula_naprawy.py`).
 
 ---
 
-## 12. Drobne, ale zawyżają licznik zdanych
+## 10. Drobne, ale zawyżają licznik zdanych
 
 - `test_pobieranie.py:95` i `test_jednostki_systemd.py:57` — `sprawdz(nazwa, True)`
   poza blokiem `except`. **Nie mogą oblać nigdy.**
@@ -199,7 +178,7 @@ uruchamiają z atrapą i liczą wywołania (jak `test_regula_naprawy.py`).
 
 ---
 
-## 13. Czternaście testów celuje w produkcyjną bazę
+## 11. Czternaście testów celuje w produkcyjną bazę
 
 `config.py:31-32` liczy `DB_PATH` z `DATA_DIR` **przy imporcie**. Test, który
 podmienia `config.DATA_DIR` na katalog tymczasowy, nie zmienia przez to
@@ -218,7 +197,7 @@ otwarcia produkcyjnej bazy w trybie testowym.
 
 ---
 
-## 14. Notatka `co_dodamy` zjada tekst źródłowy przy długich wpisach
+## 12. Notatka `co_dodamy` zjada tekst źródłowy przy długich wpisach
 
 `comment_on` przycina `post["text"][:9000]` przed doklejeniem notatki, a całe
 `body` jest dopiero potem cięte na `[:12000]`. Zmierzone na prawdziwym artykule
@@ -238,7 +217,7 @@ odpowiedzią i nie jest porażką", co po zmianie promptu przestanie być prawd�
 
 ---
 
-## 15. `Callable` w adnotacji bez importu
+## 13. `Callable` w adnotacji bez importu
 
 `oszacowania.py:176` (gałąź `pamiec/oszacowania`) używa `Callable`, a moduł
 importuje z `typing` tylko `Any`. Program działa dzięki `from __future__ import
