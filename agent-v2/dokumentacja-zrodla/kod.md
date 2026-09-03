@@ -954,7 +954,7 @@ def losuj_odstep(co: str = "") -> float:
     """
     import random
 
-    dol, gora = config.ODSTEPY.get(co, config.ODSTEP_MIEDZY_DZIALANIAMI)
+    dol, gora = zakres_odstepu(co)
     return random.uniform(dol, gora)
 ```
 
@@ -1720,9 +1720,14 @@ def zmiesci_sie(rodzaj: str, ile: int, udzial: float = 1.0) -> int:
     """
     import time
 
+    import stages as _s
+
     if _KONIEC_CZASU is None or ile <= 0:
         return ile
-    dol, gora = config.ODSTEPY.get(rodzaj, config.ODSTEP_MIEDZY_DZIALANIAMI)
+    # PRZERWA Z TEGO SAMEGO ZRODLA, CO SEN — patrz `stages.zakres_odstepu`.
+    # Przy nadrabianiu obowiazuje krotsza; czytanie jej wprost z `ODSTEPY`
+    # dawalo plan na jednej liczbie i sen na drugiej.
+    dol, gora = _s.zakres_odstepu(rodzaj)
     odstep = (dol + gora) / 2
     zostalo = max(0.0, _KONIEC_CZASU - time.time()) * udzial
 

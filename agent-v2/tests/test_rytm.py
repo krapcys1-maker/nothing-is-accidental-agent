@@ -195,8 +195,33 @@ print("    stara formula (przerwa po kazdej): %s, poprawna (n-1 przerw): %s"
 sprawdz("poprawka n-1 przerw naprawde zmienia wynik (test rozroznia)",
         dobrze > zle, (dobrze, zle))
 
-zrodlo = pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8")
-sprawdz("dzien() przycina plan do czasu", 'zmiesci_sie("notka"' in zrodlo)
+# PYTAMY O STRUKTURE, NIE O NAPIS — poprawione 3 wrzesnia 2026.
+#
+# Stalo tu `'zmiesci_sie("notka"' in zrodlo`. Ta asercja oblala przy zmianie,
+# ktora NICZEGO nie zepsula: wywolanie zostalo przelamane na dwie linie, wiec
+# napis zniknal, a zachowanie zostalo takie samo. Odwrotny blad jest gorszy —
+# napis przechodzi takze wtedy, gdy wywolanie stoi w martwej galezi albo jego
+# wynik jest wyrzucany.
+#
+# Drzewo skladniowe odpowiada na wlasciwe pytanie: czy w `run.py` JEST
+# wywolanie `zmiesci_sie` z „notka" jako pierwszym argumentem, i czy jego
+# wynik gdzies ladu. Formatowanie moze sie zmieniac dowolnie.
+import ast as _ast   # noqa: E402
+
+_drzewo = _ast.parse(pathlib.Path("agent-v2/run.py").read_text(encoding="utf-8"))
+_przyciecia = []
+for _w in _ast.walk(_drzewo):
+    if (isinstance(_w, _ast.Call)
+            and isinstance(_w.func, _ast.Name)
+            and _w.func.id == "zmiesci_sie"
+            and _w.args
+            and isinstance(_w.args[0], _ast.Constant)):
+        _przyciecia.append(_w.args[0].value)
+sprawdz("dzien() przycina plan notek do czasu",
+        "notka" in _przyciecia, _przyciecia)
+# I KOMENTARZE TEZ — druga polowa tej samej obietnicy, dotad niepilnowana.
+sprawdz("i plan komentarzy tak samo",
+        "komentarz" in _przyciecia, _przyciecia)
 sprawdz("notki maja pierwszenstwo, ale nie caly przebieg",
         "UDZIAL_CZASU_NA_NOTKI" in zrodlo)
 

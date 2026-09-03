@@ -2002,7 +2002,27 @@ PRZERWA_MIEDZY_PROBAMI_ARTYKULU_S = 120
 # To jest tylko koniec petli, ktora dowiodla, ze nie dziala.
 PROB_ZALEGLEGO_ARTYKULU = 12
 
-LIMIT_CZASU_PRZEBIEGU_S = 9000
+# SKROCONE Z 9000 NA 6900 (2,5 h -> 1 h 55 min), 3 wrzesnia 2026.
+#
+# PRZEBIEG ZJADAL NASTEPNY PRZEBIEG. Najkrotszy odstep miedzy terminami zegara
+# to 2 h 10 min (19:20 -> 21:30 i 21:30 -> 23:40), a `RandomizedDelaySec`
+# przesuwa start o kolejne minuty — wiec skuteczna luka byla 105 min przy
+# limicie 150. Przebieg, ktory trwal dluzej, TRZYMAL ZAMEK w chwili, gdy
+# odpalal sie nastepny, i nastepny konczyl sie po cichu bez zadnej pracy.
+#
+# ZMIERZONE na 54 przebiegach od 20 sierpnia do 3 wrzesnia 2026:
+#     mediana 70 min, srednia 76 min
+#     14 z 54 (26 procent) trwalo dluzej niz 130 min — czyli dluzej niz odstep
+#     3 z 54 zostaly ZABITE przez systemd dokladnie po 150,0 min (status FAILED)
+# Co czwarty przebieg mogl wiec skasowac swojego nastepce, a trzy zostaly
+# przeciete w polowie zdania.
+#
+# Dobor liczby: 6900 < 7200, gdzie 7200 to najkrotszy odstep (7800 s) minus
+# nowy poslizg (600 s). Zapas piec minut. Razem z tym idzie
+# `RandomizedDelaySec=600` w pliku zegara — przy 1500 nawet 6900 sie nie
+# miescilo. Test `test_jednostki_systemd` liczy to teraz sam z pliku zegara,
+# zeby rozjazd nie czekal na kolejna noc.
+LIMIT_CZASU_PRZEBIEGU_S = 6900
 # Zapas na domkniecie: ostatnia publikacja, zamkniecie przebiegu, alarm.
 ZAPAS_CZASU_S = 900
 
@@ -2054,6 +2074,22 @@ ODSTEPY = {
     # 35-65 min zamiast 45-90: dwie notki potrzebuja teraz 58 min i mieszcza sie
     # z zapasem, a rytm nadal nie jest rytmem maszyny — pol godziny do godziny
     # przerwy miedzy notkami czyta sie jak czlowiek wracajacy do tematu.
+    # ZOSTAJE 35-65 MIN, mimo skrocenia przebiegu do 6900 s (3 wrzesnia 2026).
+    #
+    # Skracalem to na chwile do 30-50 min, zeby dwie notki mieszcily sie w
+    # krotszym przebiegu, i `test_rytm` sluszznie oblal: gorna granica jest tym,
+    # co odroznia rytm czlowieka od rytmu maszyny. Przerwy zawsze miedzy 30 a 50
+    # minut sa REGULARNIEJSZE niz 35-65, a regularnosc jest wlasnie podpisem,
+    # ktory chcemy ukryc.
+    #
+    # Czas na druga notke kupiony wiec UDZIALEM, nie skracaniem przerwy:
+    # `UDZIAL_CZASU_NA_NOTKI` z 0,60 na 0,75. Uzasadnienie jest pomiarowe, nie
+    # wygodowe — 3 wrzesnia zmierzone po rownym czasie (24 h): notka ma mediane
+    # 23 wyswietlen, komentarz 0, wiec czas przebiegu nalezy do notek.
+    #
+    # Rachunek dla NAJGORSZEGO losowania: 2 x 240 + 3900 = 4380 s przy budzecie
+    # 0,75 x 6000 = 4500 s. Dwie notki na przebieg sa gwarantowane, nie
+    # prawdopodobne — takze wtedy, gdy wypadnie 65 minut.
     "notka":      (2100, 3900),  # 35-65 min
     # CO NAJMNIEJ PIEC MINUT — decyzja wlasciciela z 30 sierpnia: „zeby nie
     # wygladal jak bot nakurwiajacy 10 komentarzy w 10 sekund". Dolna granica
@@ -2107,7 +2143,49 @@ ZWLOKA_PRZED_NOTKAMI = (0, 900)         # 0-15 min
 # a do czternastu zaplanowanych komentarzy nie doszla wcale.
 #
 # Notki maja pierwszenstwo, bo sa rzadsze i wazniejsze — ale nie caly przebieg.
-UDZIAL_CZASU_NA_NOTKI = 0.60
+# PODNIESIONE Z 0,60 NA 0,75 — 3 wrzesnia 2026, razem ze skroceniem przebiegu.
+#
+# Przebieg ma teraz 6900 s zamiast 9000 (patrz `LIMIT_CZASU_PRZEBIEGU_S`), bo
+# dluzszy zjadal swojego nastepce. Przy 0,60 druga notka nie mieszcila sie w
+# najgorszym losowaniu przerwy i przebieg oddawal jedna — cicho, bez bledu.
+#
+# Wybor jest miedzy „mniej notek" i „mniej czasu na komentarze". Rozstrzyga
+# pomiar z 3 wrzesnia, po rownym czasie 24 h od pierwszego pomiaru:
+#     notka      52 dojrzale   mediana 23 wyswietlen   2,94 polubien/szt
+#     komentarz  37 dojrzalych mediana  0 wyswietlen   0,27 polubien/szt
+# Czas przebiegu nalezy wiec do notek. Komentarzom zostaje 0,25 budzetu, co
+# przy przerwie 5-15 min miesci dwa na przebieg, czyli dziesiec na dobe przy
+# planie osmiu.
+UDZIAL_CZASU_NA_NOTKI = 0.75
+
+# NADRABIANIE PO STRACONYM PRZEBIEGU — dwie stale, ktore wlaczaja sie SAME
+# i tylko wtedy, gdy doba jest w plecy.
+#
+# PO CO. Sufit dwoch notek na przebieg jest CZASOWY, nie budzetowy: przy
+# pieciu przebiegach daje dokladnie dziesiec notek, czyli plan co do jednej i
+# zero zapasu. Stracony przebieg zabieral wiec dwie notki NA STALE — dodatkowy
+# przydzial nic nie dawal, bo przycinal go czas, a nie budzet. Doba konczyla
+# sie na osmiu i zaden licznik nie mowil, ze to porazka, bo „przydzial
+# wykonany".
+#
+# JAK. Gdy do konca doby zostaje wiecej notek, niz zmiesci sie po dwie na
+# przebieg, ten przebieg dostaje wiekszy udzial czasu i KROTSZA przerwe miedzy
+# notkami — i bierze trzy. Policzone: 720 + 2 x 2400 = 5520 s przy budzecie
+# 0,95 x 6000 = 5700 s. Cztery notki nadal sie nie mieszcza i to jest celowe.
+#
+# CZEGO TO NIE ROBI. Nie przyspiesza doby, w ktorej wszystko idzie dobrze —
+# przy dwoch na przebieg warunek nie jest spelniony ani razu, wiec zwykly
+# rytm 30-50 min zostaje nietkniety. Krotsza przerwa wchodzi WYLACZNIE po
+# stracie, i to jest wybor swiadomy: 30 minut miedzy notkami zamiast 40 jest
+# mniej ludzkie niz zwykle, ale brak notki jest jeszcze mniej ludzki.
+UDZIAL_CZASU_NA_NOTKI_NADRABIANIE = 0.95
+# 35-40 MIN, czyli WEWNATRZ zwyklego zakresu 35-65. To wazne: nadrabianie nie
+# wprowadza tempa, ktorego normalnie nie ma — wybiera tylko krotszy koniec
+# tego, co i tak sie zdarza. Podpisu maszyny z tego nie bedzie.
+#
+# Rachunek: 3 x 240 + 2 x 2400 = 5520 s przy budzecie 0,95 x 6000 = 5700 s.
+# Czwarta notka nadal sie nie miesci i to jest celowe.
+ODSTEP_NOTKI_NADRABIANIE = (2100, 2400)   # 35-40 min
 
 # Ile trwa samo dzialanie poza przerwa: napisanie, sprawdzenie faktow,
 # wystawienie i potwierdzenie u zrodla. Z realnych przebiegow.

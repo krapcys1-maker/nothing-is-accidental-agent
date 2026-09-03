@@ -87,6 +87,92 @@ if m:
             "najdluzsza przerwa %d s" % najdluzszy)
 
 print()
+print("=== 2b. PRZEBIEG NIE MOZE DOZYC NASTEPNEGO TERMINU ===")
+# NAJDROZSZA WADA, JAKA TU BYLA, I NIKT JEJ NIE MIERZYL.
+#
+# Przebieg trzyma zamek. Jesli trwa dluzej niz odstep do nastepnego terminu,
+# nastepny przebieg odpala sie, nie dostaje zamka i konczy sie po cichu — bez
+# bledu, bez wpisu, bez pracy. Zmierzone na 54 przebiegach od 20 sierpnia do
+# 3 wrzesnia 2026: mediana 70 min, ale 14 z 54 (26 procent) trwalo dluzej niz
+# 130 min, czyli dluzej niz najkrotszy odstep. Trzy zostaly zabite przez
+# systemd dokladnie po 150,0 min. Co czwarty przebieg mogl skasowac nastepce.
+#
+# Liczby ida z PLIKU ZEGARA, nie z pamieci: rozjazd ma wyjsc tutaj, a nie
+# z pomiaru doby, ktora zostala w plecy.
+zegar = (KAT / "nia-agent.timer").read_text(encoding="utf-8")
+terminy = []
+for g, mi in re.findall(r"^OnCalendar=\*-\*-\* (\d{2}):(\d{2}):", zegar, re.M):
+    terminy.append(int(g) * 3600 + int(mi) * 60)
+terminy.sort()
+poslizg_m = re.search(r"^RandomizedDelaySec=(\d+)", zegar, re.M)
+poslizg = int(poslizg_m.group(1)) if poslizg_m else 0
+
+sprawdz("zegar ma co najmniej dwa terminy (inaczej nie ma czego porownywac)",
+        len(terminy) >= 2, terminy)
+sprawdz("liczba terminow zgadza sie z PRZEBIEGOW_DZIENNIE",
+        len(terminy) == config.PRZEBIEGOW_DZIENNIE,
+        (len(terminy), config.PRZEBIEGOW_DZIENNIE))
+if len(terminy) >= 2:
+    najkrotszy = min(b - a for a, b in zip(terminy, terminy[1:]))
+    # POSLIZG SKRACA LUKE. `RandomizedDelaySec` przesuwa start losowo, wiec
+    # najgorszy przypadek to „ten przebieg spozniony maksymalnie, nastepny
+    # punktualnie" — i wlasnie ten przypadek musi sie miescic.
+    luka = najkrotszy - poslizg
+    sprawdz("najkrotszy odstep minus poslizg jest dodatni",
+            luka > 0, (najkrotszy, poslizg))
+    sprawdz("LIMIT_CZASU_PRZEBIEGU_S (%d s) miesci sie w tej luce (%d s)"
+            % (config.LIMIT_CZASU_PRZEBIEGU_S, luka),
+            config.LIMIT_CZASU_PRZEBIEGU_S < luka,
+            "przebieg dozylby nastepnego terminu i skasowal go po cichu")
+    # KONTRDOWOD ODTWARZANY, NIE OPISANY: stare liczby (limit 9000, poslizg
+    # 1500) oblewaja ten sam warunek. Bez tego asercja przechodzilaby takze
+    # wtedy, gdyby nic sie nie zmienilo.
+    sprawdz("KONTRDOWOD: przy limicie 9000 i poslizgu 1500 warunek OBLEWA",
+            not (9000 < najkrotszy - 1500), (najkrotszy, najkrotszy - 1500))
+
+print()
+print("=== 2c. DOBA MA DOWIEZC PLAN NOTEK, TAKZE PO STRACIE PRZEBIEGU ===")
+# Sufit notek na przebieg jest CZASOWY. Przy pieciu przebiegach po dwie notki
+# doba daje dokladnie dziesiec — plan co do jednej i zero zapasu. Dlatego
+# istnieje tryb nadrabiania i dlatego jego arytmetyka jest sprawdzana tutaj,
+# a nie odkrywana po dobie zakonczonej na osmiu.
+import run as _run          # noqa: E402
+import stages as _stg       # noqa: E402
+
+_stg.NADRABIANE = set()
+zwykle = _run.ile_notek_na_przebieg()
+_stg.NADRABIANE = {"notka"}
+nadrabiane = _run.ile_notek_na_przebieg(config.UDZIAL_CZASU_NA_NOTKI_NADRABIANIE)
+_stg.NADRABIANE = set()
+plan = len(config.NOTE_MIX_OTHER_DAY)
+
+sprawdz("zwykly przebieg bierze co najmniej dwie notki", zwykle >= 2, zwykle)
+sprawdz("doba bez awarii dowozi plan (%d x %d >= %d)"
+        % (zwykle, config.PRZEBIEGOW_DZIENNIE, plan),
+        zwykle * config.PRZEBIEGOW_DZIENNIE >= plan, (zwykle, plan))
+sprawdz("nadrabianie bierze WIECEJ niz zwykly przebieg",
+        nadrabiane > zwykle, (nadrabiane, zwykle))
+sprawdz("i po stracie JEDNEGO przebiegu plan nadal sie domyka (%d x %d >= %d)"
+        % (nadrabiane, config.PRZEBIEGOW_DZIENNIE - 1, plan),
+        nadrabiane * (config.PRZEBIEGOW_DZIENNIE - 1) >= plan,
+        (nadrabiane, plan))
+# PLAN I SEN MUSZA CZYTAC TE SAMA LICZBE. Gdyby `zmiesci_sie` bralo przerwe
+# z `ODSTEPY`, a `losuj_odstep` z nadrabiania, planista obiecywalby trzecia
+# notke, a `zostal_czas` odmawialby jej tuz przed snem — bez bledu w logu.
+_stg.NADRABIANE = {"notka"}
+sprawdz("przy nadrabianiu obowiazuje KROTSZA przerwa, ta sama dla obu",
+        _stg.zakres_odstepu("notka") == config.ODSTEP_NOTKI_NADRABIANIE,
+        _stg.zakres_odstepu("notka"))
+_stg.NADRABIANE = set()
+sprawdz("a bez nadrabiania — zwykla",
+        _stg.zakres_odstepu("notka") == config.ODSTEPY["notka"],
+        _stg.zakres_odstepu("notka"))
+# I ZE KROTSZA JEST NAPRAWDE KROTSZA, a nie tylko inna.
+sprawdz("KONTRDOWOD: przerwa nadrabiania jest krotsza od zwyklej",
+        config.ODSTEP_NOTKI_NADRABIANIE[1] < config.ODSTEPY["notka"][1],
+        (config.ODSTEP_NOTKI_NADRABIANIE, config.ODSTEPY["notka"]))
+
+print()
 print("=== 3. BEZ AUTOMATYCZNEGO PONAWIANIA PLATNYCH PRZEBIEGOW ===")
 # Restart= po bledzie oznacza ponawianie oplaconych wywolan bez nadzoru.
 for u in uslugi:

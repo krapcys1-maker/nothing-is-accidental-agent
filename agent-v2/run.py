@@ -318,6 +318,36 @@ def rytm(co: str, na_co: str, stan: dict) -> bool:
     return True
 
 
+def ile_notek_na_przebieg(udzial: float | None = None) -> int:
+    """Ile notek wchodzi w JEDEN przebieg — z liczb, nie z pamieci.
+
+    Sufit notek jest CZASOWY: budzet przebiegu razy udzial na notki, podzielony
+    przez czas dzialania plus przerwy. Wychodzi dwa i to jest cala przyczyna,
+    dla ktorej dziesiec notek na dobe wymaga pieciu przebiegow co do jednego.
+    Liczba nie jest nigdzie wpisana, bo wpisana rozjechala by sie przy pierwszej
+    zmianie limitu czasu albo odstepu — a rozjazd wyszedl by dopiero z pomiaru
+    doby, ktora zostala w plecy.
+
+    NAJDLUZSZA PRZERWA, NIE SREDNIA. Przerwa jest losowa; sufit, ktory wchodzi
+    tylko przy szczesliwym losowaniu, nie jest sufitem. Ta liczba ma znaczyc
+    „tyle wejdzie ZAWSZE".
+    """
+    import stages as _s
+
+    if udzial is None:
+        udzial = config.UDZIAL_CZASU_NA_NOTKI
+    budzet = max(60, config.LIMIT_CZASU_PRZEBIEGU_S - config.ZAPAS_CZASU_S) * udzial
+    _, gora = _s.zakres_odstepu("notka")
+    ile = 0
+    while True:
+        nastepne = ile + 1
+        potrzeba = (nastepne * config.CZAS_DZIALANIA_S
+                    + max(0, nastepne - 1) * gora)
+        if potrzeba > budzet:
+            return ile
+        ile = nastepne
+
+
 def zmiesci_sie(rodzaj: str, ile: int, udzial: float = 1.0) -> int:
     """Ile z zaplanowanych dzialan NAPRAWDE zmiesci sie w czasie przebiegu.
 
@@ -332,9 +362,14 @@ def zmiesci_sie(rodzaj: str, ile: int, udzial: float = 1.0) -> int:
     """
     import time
 
+    import stages as _s
+
     if _KONIEC_CZASU is None or ile <= 0:
         return ile
-    dol, gora = config.ODSTEPY.get(rodzaj, config.ODSTEP_MIEDZY_DZIALANIAMI)
+    # PRZERWA Z TEGO SAMEGO ZRODLA, CO SEN — patrz `stages.zakres_odstepu`.
+    # Przy nadrabianiu obowiazuje krotsza; czytanie jej wprost z `ODSTEPY`
+    # dawalo plan na jednej liczbie i sen na drugiej.
+    dol, gora = _s.zakres_odstepu(rodzaj)
     odstep = (dol + gora) / 2
     zostalo = max(0.0, _KONIEC_CZASU - time.time()) * udzial
 
@@ -1061,8 +1096,29 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
     na_teraz = {k: min(v, max(1, round(v / zostalo_przebiegow))) if v else 0
                 for k, v in zostalo.items()}
     # Obietnica przyciete do zegara. Notki maja pierwszenstwo, ale nie caly przebieg.
-    na_teraz["notki"] = zmiesci_sie("notka", na_teraz["notki"],
-                                    config.UDZIAL_CZASU_NA_NOTKI)
+    # NADRABIANIE STRACONEGO PRZEBIEGU — wlacza sie samo i tylko gdy trzeba.
+    #
+    # Sufit notek na przebieg jest CZASOWY, nie budzetowy, wiec przy pieciu
+    # przebiegach po dwie notki doba daje dokladnie dziesiec — plan co do
+    # jednej i zero zapasu. Stracony przebieg zabieral dwie notki NA STALE:
+    # `na_teraz` rosl, ale `zmiesci_sie` scinal go z powrotem do dwoch, bo
+    # przycinal go zegar. Doba konczyla sie na osmiu i zaden licznik nie
+    # nazywal tego porazka, bo przydzial byl „wykonany".
+    #
+    # Warunek jest arytmetyczny, nie uznaniowy: jesli tego, co zostalo, nie da
+    # sie rozlozyc po dwie na kazdy pozostaly przebieg, to ten przebieg musi
+    # wziac trzy. Przy zdrowej dobie nie jest spelniony ani razu.
+    _ile_zwykle = ile_notek_na_przebieg()
+    _nadrabiamy = (zostalo["notki"] > _ile_zwykle * zostalo_przebiegow)
+    stages.NADRABIANE = {"notka"} if _nadrabiamy else set()
+    if _nadrabiamy:
+        print("   [nadrabianie] zostalo %d notek na %d przebiegow, a zwykly"
+              " sufit to %d na przebieg — biore wiecej i skracam przerwe"
+              % (zostalo["notki"], zostalo_przebiegow, _ile_zwykle), flush=True)
+    na_teraz["notki"] = zmiesci_sie(
+        "notka", na_teraz["notki"],
+        config.UDZIAL_CZASU_NA_NOTKI_NADRABIANIE if _nadrabiamy
+        else config.UDZIAL_CZASU_NA_NOTKI)
     na_teraz["komentarze"] = zmiesci_sie("komentarz", na_teraz["komentarze"])
     print(f"   dzis juz: notki={juz.get('notki', 0)} "
           f"komentarze={juz.get('komentarze', 0)} lajki={juz.get('lajki', 0)}   "

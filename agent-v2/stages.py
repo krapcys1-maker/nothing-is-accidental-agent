@@ -1050,6 +1050,28 @@ def sesje_dnia() -> list[dict[str, Any]]:
             for g, w in zip(godziny, wagi)]
 
 
+# RODZAJE DZIALAN, KTORE TEN PRZEBIEG NADRABIA. Ustawia to `run.py` na
+# poczatku przebiegu i tylko wtedy, gdy doba jest w plecy; puste na kazdej
+# normalnej dobie. Zbior, nie flaga, bo nadrabiac moze kiedys nie tylko notka
+# — a wtedy „czy nadrabiamy" bez nazwy dzialania jest pytaniem bez sensu.
+NADRABIANE: set[str] = set()
+
+
+def zakres_odstepu(co: str = "") -> tuple[float, float]:
+    """Jaka przerwa OBOWIAZUJE teraz dla tego rodzaju dzialania.
+
+    JEDNO ZRODLO DLA PLANU I DLA SNU. `zmiesci_sie` liczy, ile dzialan wejdzie,
+    a `losuj_odstep` odsypia przerwe — i gdyby czytaly rozne liczby, planista
+    obiecywalby trzecia notke, a `zostal_czas` odmawial jej tuz przed snem.
+    Przebieg oddawal by dwie zamiast trzech i nikt by nie wiedzial dlaczego,
+    bo w logu nie ma bledu. Ta funkcja istnieje po to, zeby taki rozjazd byl
+    niemozliwy, a nie tylko nieprawdopodobny.
+    """
+    if co in NADRABIANE:
+        return config.ODSTEP_NOTKI_NADRABIANIE
+    return config.ODSTEPY.get(co, config.ODSTEP_MIEDZY_DZIALANIAMI)
+
+
 def losuj_odstep(co: str = "") -> float:
     """Losuje przerwę, ale jej NIE odsypia.
 
@@ -1062,7 +1084,7 @@ def losuj_odstep(co: str = "") -> float:
     """
     import random
 
-    dol, gora = config.ODSTEPY.get(co, config.ODSTEP_MIEDZY_DZIALANIAMI)
+    dol, gora = zakres_odstepu(co)
     return random.uniform(dol, gora)
 
 

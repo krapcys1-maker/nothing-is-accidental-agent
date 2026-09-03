@@ -145,14 +145,16 @@
 | `PROB_PUBLIKACJI_ARTYKULU` | `3` | ILE CZASU MA PRZEBIEG. Musi zgadzac sie z `TimeoutStartSec` w pliku uslugi — to jedyne miejsce, gdzie ta sama liczba stoi dwa razy, i pilnuj |
 | `PRZERWA_MIEDZY_PROBAMI_ARTYKULU_S` | `120` | — |
 | `PROB_ZALEGLEGO_ARTYKULU` | `12` | ILE RAZY RUTYNA DNIA PROBUJE DOWIEZC ZALEGLY ARTYKUL, zanim przestanie. Piec przebiegow dziennie razy dwanascie prob to dwa i pol dnia dobij |
-| `LIMIT_CZASU_PRZEBIEGU_S` | `9000` | — |
+| `LIMIT_CZASU_PRZEBIEGU_S` | `6900` | SKROCONE Z 9000 NA 6900 (2,5 h -> 1 h 55 min), 3 wrzesnia 2026. PRZEBIEG ZJADAL NASTEPNY PRZEBIEG. Najkrotszy odstep miedzy terminami zegara |
 | `ZAPAS_CZASU_S` | `900` | Zapas na domkniecie: ostatnia publikacja, zamkniecie przebiegu, alarm. |
 | `SKAUT_UDZIAL_Z_KANALOW` | `0.75` | Jaka czesc tematow skauta ma wychodzic z kanalow, ktore konto obserwuje. Decyzja wlasciciela z 30 sierpnia, po pomiarze: przed nia z kanalow |
 | `ROZBIEG_DNI` | `30` | — |
 | `ODSTEPY` | `{ # 45-90 MIN, nie 10-25. Zmierzone na profi` | Odstepy miedzy dzialaniami, w sekundach. Pietnascie polubien w dziewiecdziesiat sekund to nie jest czytanie i kazdy system to widzi. Odstepy |
 | `ODSTEP_MIEDZY_DZIALANIAMI` | `(45, 180)` | — |
 | `ZWLOKA_PRZED_NOTKAMI` | `(0, 900)` | ZWLOKA PRZED PIERWSZA NOTKA PRZEBIEGU. Bez niej pierwsza notka wychodzila zawsze kilka minut po starcie zegara, wiec piec razy dziennie o te |
-| `UDZIAL_CZASU_NA_NOTKI` | `0.60` | ILE CZASU PRZEBIEGU WOLNO ZJESC SAMYM NOTKOM. Rozdzielnik dzienny nie wiedzial nic o czasie: dzielil norme tak, jakby dzialania byly natychm |
+| `UDZIAL_CZASU_NA_NOTKI` | `0.75` | ILE CZASU PRZEBIEGU WOLNO ZJESC SAMYM NOTKOM. Rozdzielnik dzienny nie wiedzial nic o czasie: dzielil norme tak, jakby dzialania byly natychm |
+| `UDZIAL_CZASU_NA_NOTKI_NADRABIANIE` | `0.95` | NADRABIANIE PO STRACONYM PRZEBIEGU — dwie stale, ktore wlaczaja sie SAME i tylko wtedy, gdy doba jest w plecy. PO CO. Sufit dwoch notek na p |
+| `ODSTEP_NOTKI_NADRABIANIE` | `(2100, 2400)` | 35-40 MIN, czyli WEWNATRZ zwyklego zakresu 35-65. To wazne: nadrabianie nie wprowadza tempa, ktorego normalnie nie ma — wybiera tylko krotsz |
 | `CZAS_DZIALANIA_S` | `240` | Ile trwa samo dzialanie poza przerwa: napisanie, sprawdzenie faktow, wystawienie i potwierdzenie u zrodla. Z realnych przebiegow. |
 | `MIN_WIEK_POSTA_MIN` | `(90, 900)` | NIE KOMENTUJEMY SWIEZYCH POSTOW. Wlasciciel opisal to najlepiej: napisal notke i piec sekund pozniej ktos odpisal ogolnikowa zgoda — i to zd |
 | `MIN_WIEK_NOTKI_MIN` | `(20, 90)` | NOTKA TO NIE ARTYKUL i zyje godziny, nie dni. Ten sam prog co dla artykulow oznaczal, ze pod notki wchodzilismy zawsze PO koncu rozmowy: prz |

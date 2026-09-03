@@ -25,7 +25,7 @@ ExecStart=/home/ubuntu/nothing-is-accidental-agent/.venv/bin/python agent-v2/run
 # jest juz jedyna obrona: `run.rytm` nie zaczyna przerwy, ktora sie nie miesci.
 # JEDYNA LICZBA W JEDNYM MIEJSCU: config.LIMIT_CZASU_PRZEBIEGU_S ma byc rowny
 # tej wartosci, inaczej agent liczy sobie inny koniec niz systemd.
-TimeoutStartSec=9000
+TimeoutStartSec=6900
 
 # BEZ Restart=. To jest zadanie jednorazowe uruchamiane z zegara, nie usluga.
 # Automatyczny restart po bledzie oznaczalby ponawianie platnych wywolan bez

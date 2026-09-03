@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **23 plików**, 28 581 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 28 737 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 125 zestawów
-testów, 3480 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 3493 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -143,7 +143,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-2856 wierszy, 26 funkcji na poziomie modułu, 1 klas
+2912 wierszy, 27 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -155,6 +155,7 @@ wiec nie da sie go rozjechac z kodem.
 | `zostal_czas(na_co, potrzeba_s)` | Czy zdazymy jeszcze cokolwiek zrobic przed koncem czasu przebiegu. |
 | `_pod_rzad_w_bloku(co, na_co)` *(wewn.)* | Ile porazek pod rzad naliczyl TEN blok, odkad sie zaczal. |
 | `rytm(co, na_co, stan)` | Przerwa MIEDZY dwoma dzialaniami tego samego rodzaju. |
+| `ile_notek_na_przebieg(udzial)` | Ile notek wchodzi w JEDEN przebieg — z liczb, nie z pamieci. |
 | `zmiesci_sie(rodzaj, ile, udzial)` | Ile z zaplanowanych dzialan NAPRAWDE zmiesci sie w czasie przebiegu. |
 | `ile_przebiegow_zostalo(conn)` | Ile przebiegow dnia jeszcze bedzie, wliczajac biezacy. |
 | `_slug(tekst)` *(wewn.)* | Nazwa do porownywania: same litery i cyfry ASCII, malymi. |
@@ -176,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-7470 wierszy, 133 funkcji na poziomie modułu, 0 klas
+7492 wierszy, 134 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -203,6 +204,7 @@ wiec nie da sie go rozjechac z kodem.
 | `budzet_dnia(conn)` | Ile czego agent może dziś zrobić — losowane z widełek, nie stałe. |
 | `_zapisz_budzet_dnia(dzien, budzet, rozbieg)` *(wewn.)* | Zapisuje, ile agent SOBIE ZALOZYL na ten dzien. |
 | `sesje_dnia()` | Rozkłada dzień na kilka posiedzeń zamiast jednego ciągu. |
+| `zakres_odstepu(co)` | Jaka przerwa OBOWIAZUJE teraz dla tego rodzaju dzialania. |
 | `losuj_odstep(co)` | Losuje przerwę, ale jej NIE odsypia. |
 | `odczekaj(co, ile)` | Przerwa po działaniu, dobrana do tego, ile ono zajmuje CZLOWIEKOWI. |
 | `_klucz_faktu(tekst)` *(wewn.)* | Odcisk faktu odporny na przestawienie słów i inną liczbę w tym samym zdaniu. |
@@ -554,7 +556,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `config.py` — wszystkie liczby i decyzje w jednym miejscu (patrz ZAŁĄCZNIK B)
 
-2778 wierszy, 26 funkcji na poziomie modułu, 0 klas
+2856 wierszy, 26 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -7224,7 +7226,7 @@ def losuj_odstep(co: str = "") -> float:
     """
     import random
 
-    dol, gora = config.ODSTEPY.get(co, config.ODSTEP_MIEDZY_DZIALANIAMI)
+    dol, gora = zakres_odstepu(co)
     return random.uniform(dol, gora)
 ```
 
@@ -7990,9 +7992,14 @@ def zmiesci_sie(rodzaj: str, ile: int, udzial: float = 1.0) -> int:
     """
     import time
 
+    import stages as _s
+
     if _KONIEC_CZASU is None or ile <= 0:
         return ile
-    dol, gora = config.ODSTEPY.get(rodzaj, config.ODSTEP_MIEDZY_DZIALANIAMI)
+    # PRZERWA Z TEGO SAMEGO ZRODLA, CO SEN — patrz `stages.zakres_odstepu`.
+    # Przy nadrabianiu obowiazuje krotsza; czytanie jej wprost z `ODSTEPY`
+    # dawalo plan na jednej liczbie i sen na drugiej.
+    dol, gora = _s.zakres_odstepu(rodzaj)
     odstep = (dol + gora) / 2
     zostalo = max(0.0, _KONIEC_CZASU - time.time()) * udzial
 
@@ -12897,14 +12904,16 @@ wartosc i komentarz stojacy bezposrednio nad definicja.
 | `PROB_PUBLIKACJI_ARTYKULU` | `3` | ILE CZASU MA PRZEBIEG. Musi zgadzac sie z `TimeoutStartSec` w pliku uslugi — to jedyne miejsce, gdzie ta sama liczba stoi dwa razy, i pilnuj |
 | `PRZERWA_MIEDZY_PROBAMI_ARTYKULU_S` | `120` | — |
 | `PROB_ZALEGLEGO_ARTYKULU` | `12` | ILE RAZY RUTYNA DNIA PROBUJE DOWIEZC ZALEGLY ARTYKUL, zanim przestanie. Piec przebiegow dziennie razy dwanascie prob to dwa i pol dnia dobij |
-| `LIMIT_CZASU_PRZEBIEGU_S` | `9000` | — |
+| `LIMIT_CZASU_PRZEBIEGU_S` | `6900` | SKROCONE Z 9000 NA 6900 (2,5 h -> 1 h 55 min), 3 wrzesnia 2026. PRZEBIEG ZJADAL NASTEPNY PRZEBIEG. Najkrotszy odstep miedzy terminami zegara |
 | `ZAPAS_CZASU_S` | `900` | Zapas na domkniecie: ostatnia publikacja, zamkniecie przebiegu, alarm. |
 | `SKAUT_UDZIAL_Z_KANALOW` | `0.75` | Jaka czesc tematow skauta ma wychodzic z kanalow, ktore konto obserwuje. Decyzja wlasciciela z 30 sierpnia, po pomiarze: przed nia z kanalow |
 | `ROZBIEG_DNI` | `30` | — |
 | `ODSTEPY` | `{ # 45-90 MIN, nie 10-25. Zmierzone na profi` | Odstepy miedzy dzialaniami, w sekundach. Pietnascie polubien w dziewiecdziesiat sekund to nie jest czytanie i kazdy system to widzi. Odstepy |
 | `ODSTEP_MIEDZY_DZIALANIAMI` | `(45, 180)` | — |
 | `ZWLOKA_PRZED_NOTKAMI` | `(0, 900)` | ZWLOKA PRZED PIERWSZA NOTKA PRZEBIEGU. Bez niej pierwsza notka wychodzila zawsze kilka minut po starcie zegara, wiec piec razy dziennie o te |
-| `UDZIAL_CZASU_NA_NOTKI` | `0.60` | ILE CZASU PRZEBIEGU WOLNO ZJESC SAMYM NOTKOM. Rozdzielnik dzienny nie wiedzial nic o czasie: dzielil norme tak, jakby dzialania byly natychm |
+| `UDZIAL_CZASU_NA_NOTKI` | `0.75` | ILE CZASU PRZEBIEGU WOLNO ZJESC SAMYM NOTKOM. Rozdzielnik dzienny nie wiedzial nic o czasie: dzielil norme tak, jakby dzialania byly natychm |
+| `UDZIAL_CZASU_NA_NOTKI_NADRABIANIE` | `0.95` | NADRABIANIE PO STRACONYM PRZEBIEGU — dwie stale, ktore wlaczaja sie SAME i tylko wtedy, gdy doba jest w plecy. PO CO. Sufit dwoch notek na p |
+| `ODSTEP_NOTKI_NADRABIANIE` | `(2100, 2400)` | 35-40 MIN, czyli WEWNATRZ zwyklego zakresu 35-65. To wazne: nadrabianie nie wprowadza tempa, ktorego normalnie nie ma — wybiera tylko krotsz |
 | `CZAS_DZIALANIA_S` | `240` | Ile trwa samo dzialanie poza przerwa: napisanie, sprawdzenie faktow, wystawienie i potwierdzenie u zrodla. Z realnych przebiegow. |
 | `MIN_WIEK_POSTA_MIN` | `(90, 900)` | NIE KOMENTUJEMY SWIEZYCH POSTOW. Wlasciciel opisal to najlepiej: napisal notke i piec sekund pozniej ktos odpisal ogolnikowa zgoda — i to zd |
 | `MIN_WIEK_NOTKI_MIN` | `(20, 90)` | NOTKA TO NIE ARTYKUL i zyje godziny, nie dni. Ten sam prog co dla artykulow oznaczal, ze pod notki wchodzilismy zawsze PO koncu rozmowy: prz |
