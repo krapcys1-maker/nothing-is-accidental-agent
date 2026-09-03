@@ -188,6 +188,113 @@ def wzrost_konta() -> None:
         print("   To pierwszy zapis — przyrostu nie ma jeszcze z czego policzyc.")
 
 
+def koszt_wobec_wyniku() -> None:
+    """Ile kosztuje jedna pozycja i co za to przychodzi — w jednej tabeli.
+
+    DWIE POLOWY, KTORE DOTAD LEZALY OSOBNO. Koszty siedza w bazie (`calls`),
+    wyniki w pliku statystyk, i nikt ich nigdy nie podzielil przez siebie —
+    a to jest jedyne pytanie, na ktore wlasciciel naprawde potrzebuje
+    odpowiedzi: czy to, na co wydajemy, cokolwiek daje.
+
+    KOSZT JEST BEZPOSREDNI, NIE CALKOWITY. Kolumna `akcja` znaczy kanal, do
+    ktorego wywolanie zostalo napisane — pisanie notki, pisanie komentarza,
+    odpowiedz. NIE obejmuje kosztow wspolnych: dobierania banku, szukania
+    celow, sprawdzania faktow poza kanalem. Te sa wypisane osobno jako
+    „nieprzypisane", zeby suma sie zgadzala i zeby nikt nie wzial kosztu
+    bezposredniego za caly rachunek.
+
+    WYNIK JEST PO ROWNYM CZASIE (24 h), bo inaczej starsza pozycja wygrywa
+    wiekiem, a nie trescia. Okno kosztow i okno wynikow to DWA ROZNE okresy —
+    `akcja` istnieje dopiero od 2 wrzesnia 2026, a pomiary siegaja dalej wstecz.
+    Dlatego dzielimy koszt na sztuke przez wynik na sztuke, a nie sumy przez
+    sumy: stosunek jest uczciwy, suma nie bylaby.
+    """
+    import sqlite3
+    print()
+    print("=" * 96)
+    print("ILE KOSZTUJE JEDNA POZYCJA I CO ZA TO PRZYCHODZI")
+    print("=" * 96)
+    try:
+        conn = sqlite3.connect(str(config.DATA_DIR / "agent.db"))
+        wiersze = list(conn.execute(
+            "SELECT akcja, COUNT(*), SUM(cost_usd), MIN(substr(at,1,10)), "
+            "MAX(substr(at,1,10)) FROM calls "
+            "WHERE akcja IS NOT NULL AND akcja<>'' GROUP BY 1"))
+        nieprzypisane = list(conn.execute(
+            "SELECT COUNT(*), SUM(cost_usd) FROM calls "
+            "WHERE akcja IS NULL OR akcja=''"))[0]
+    except Exception as exc:
+        print("  Nie umiem odczytac kosztow (%s)." % type(exc).__name__)
+        return
+    if not wiersze:
+        print("  Zadne wywolanie nie ma jeszcze przypisanego kanalu.")
+        print("  Kolumna `akcja` zapisuje sie od 2 wrzesnia 2026.")
+        return
+
+    # Kanaly komentarza sa dwa (pod artykulem i pod notka) — dla tej tabeli to
+    # jeden koszt jednej pozycji, bo wynik tez mierzymy jednym rodzajem.
+    koszty, ile_wywolan, od, do_ = {}, {}, None, None
+    for akcja, n, suma, mn, mx in wiersze:
+        klucz = "komentarz" if str(akcja).startswith("komentarz") else str(akcja)
+        koszty[klucz] = koszty.get(klucz, 0.0) + float(suma or 0)
+        ile_wywolan[klucz] = ile_wywolan.get(klucz, 0) + int(n or 0)
+        od = mn if od is None or (mn and mn < od) else od
+        do_ = mx if do_ is None or (mx and mx > do_) else do_
+
+    ile_pozycji = _pozycje_w_okresie(od, do_)
+    print("  koszty z okresu %s..%s   (kolumna `akcja`)" % (od, do_))
+    print()
+    print("  %-11s %9s %8s %10s %9s %9s %11s" % (
+        "KANAL", "KOSZT", "SZTUK", "ZA SZTUKE", "WEJSC 24h", "ZA WEJSCIE",
+        "ZA POLUBIENIE"))
+    print("  " + "-" * 76)
+    for kanal in sorted(koszty, key=lambda k: -koszty[k]):
+        sztuk = ile_pozycji.get(kanal, 0)
+        za_sztuke = koszty[kanal] / sztuk if sztuk else None
+        okno = statystyki.po_godzinach(kanal, 24.0)["pozycje"]
+        wej = [int(p.get("wyswietlenia") or 0) for p in okno.values()]
+        pol = [int(p.get("polubienia") or 0) for p in okno.values()]
+        sr_wej = (sum(wej) / len(wej)) if wej else 0.0
+        sr_pol = (sum(pol) / len(pol)) if pol else 0.0
+        print("  %-11s %9.4f %8s %10s %9.1f %9s %11s" % (
+            kanal, koszty[kanal], sztuk if sztuk else "—",
+            ("%.4f" % za_sztuke) if za_sztuke else "—",
+            sr_wej,
+            ("%.4f" % (za_sztuke / sr_wej)) if za_sztuke and sr_wej else "—",
+            ("%.4f" % (za_sztuke / sr_pol)) if za_sztuke and sr_pol else "—"))
+    print("  " + "-" * 76)
+    print("  nieprzypisane do kanalu: %s wywolan, %.4f USD — dobieranie banku,"
+          % (nieprzypisane[0], float(nieprzypisane[1] or 0)))
+    print("  szukanie celow, sprawdzanie faktow i cala historia sprzed kolumny.")
+
+
+def _pozycje_w_okresie(od: str, do_: str) -> dict:
+    """Ile pozycji kazdego rodzaju powstalo miedzy tymi datami (dziennik)."""
+    plik = config.DATA_DIR / "dziennik.jsonl"
+    ile: dict[str, int] = {}
+    if not (od and do_ and plik.exists()):
+        return ile
+    # NAZWY RODZAJOW SA INNE W DZIENNIKU NIZ W KOLUMNIE `akcja`, wiec mapujemy
+    # je wprost. Milczace niedopasowanie dawaloby „—" wygladajace jak brak
+    # danych, a nie jak literowka.
+    MAPA = {"notka": "notka", "komentarz": "komentarz",
+            "odpowiedz": "odpowiedz", "odpowiedz_pod_artykulem": "odpowiedz",
+            "restack": "restack"}
+    with plik.open(encoding="utf-8") as f:
+        for linia in f:
+            try:
+                w = json.loads(linia)
+            except Exception:
+                continue
+            kiedy = str(w.get("kiedy") or "")[:10]
+            if not (od <= kiedy <= do_):
+                continue
+            rodzaj = MAPA.get(str(w.get("rodzaj") or w.get("co") or ""))
+            if rodzaj:
+                ile[rodzaj] = ile.get(rodzaj, 0) + 1
+    return ile
+
+
 def zrodla_zapisow() -> None:
     """SKAD NAPRAWDE przyszli ludzie — wlasne przypisanie Substacka.
 
@@ -357,6 +464,7 @@ def main() -> int:
         for nazwa, ile in sorted(powierzchnie.items(), key=lambda x: -x[1]):
             print("   %-16s %s" % (nazwa, ile))
 
+    koszt_wobec_wyniku()
     zrodla_zapisow()
     dwie_epoki(najnowsze)
     wzrost_konta()
