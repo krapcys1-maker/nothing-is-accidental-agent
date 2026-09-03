@@ -209,13 +209,13 @@ def koszt_wobec_wyniku() -> None:
     Dlatego dzielimy koszt na sztuke przez wynik na sztuke, a nie sumy przez
     sumy: stosunek jest uczciwy, suma nie bylaby.
     """
-    import sqlite3
+    import db
     print()
     print("=" * 96)
     print("ILE KOSZTUJE JEDNA POZYCJA I CO ZA TO PRZYCHODZI")
     print("=" * 96)
     try:
-        conn = sqlite3.connect(str(config.DATA_DIR / "agent.db"))
+        conn = db.connect()
         wiersze = list(conn.execute(
             "SELECT akcja, COUNT(*), SUM(cost_usd), MIN(substr(at,1,10)), "
             "MAX(substr(at,1,10)) FROM calls "
