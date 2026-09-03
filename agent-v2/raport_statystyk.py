@@ -188,6 +188,55 @@ def wzrost_konta() -> None:
         print("   To pierwszy zapis — przyrostu nie ma jeszcze z czego policzyc.")
 
 
+def komu_sie_pokazujemy() -> None:
+    """Ile zasiegu idzie do OBCYCH, a ile do wlasnych czytelnikow.
+
+    Karta `audience` rozroznia trzy typy odbiorcow — `Unconnected`,
+    `Subscribers`, `Followers` — i te liczby leza w naszym pliku od dawna,
+    w polu `odbiorcy`. Raport ich nigdy nie pokazal, choc odpowiadaja na
+    pytanie, ktorego nie da sie zadac inaczej: czy konto jest jeszcze w fazie
+    zdobywania obcych, czy juz mowi do wlasnej publicznosci.
+
+    Zmierzone 3 wrzesnia 2026 na 63 notkach z tym pomiarem: 1085 zasiegu do
+    obcych, 79 do subskrybentow, 33 do obserwujacych — czyli 90,6 procent
+    pokazan trafia do kogos, kto nas nie zna. To nie jest wada; to jest
+    informacja o tym, ktora dzwignia dziala. Przy takim rozkladzie liczy sie
+    to, co zatrzymuje OBCEGO, a nie to, co ucieszy stalego czytelnika.
+    """
+    poz = statystyki.najnowsze_per_pozycja()
+    sumy: dict[str, int] = {}
+    ile_pozycji = 0
+    for p in poz.values():
+        odbiorcy = p.get("odbiorcy") or {}
+        if not odbiorcy:
+            continue
+        ile_pozycji += 1
+        for tytul, ile in odbiorcy.items():
+            try:
+                sumy[str(tytul)] = sumy.get(str(tytul), 0) + int(ile or 0)
+            except (TypeError, ValueError):
+                continue
+    print()
+    print("=" * 96)
+    print("KOMU SIE POKAZUJEMY  (karta `audience` — typ odbiorcy)")
+    print("=" * 96)
+    if not sumy:
+        print("  Zadna pozycja nie ma jeszcze rozbicia odbiorcow.")
+        return
+    razem = sum(sumy.values())
+    print("  pozycji z tym pomiarem: %d" % ile_pozycji)
+    for tytul, ile in sorted(sumy.items(), key=lambda kv: -kv[1]):
+        print("     %-16s %6d   %5.1f%%" % (tytul, ile, 100.0 * ile / max(1, razem)))
+    # JEDNA LICZBA, KTORA MOWI, W JAKIEJ FAZIE JEST KONTO. Nazwy typow sa
+    # Substacka, wiec bierzemy je z danych, a nie zakladamy — gdy dojdzie
+    # czwarty typ, ma sie pojawic w tabeli wyzej, a nie zniknac w reszcie.
+    obcy = sumy.get("Unconnected", 0)
+    print("  ---")
+    print("  do OBCYCH idzie %.1f%% zasiegu (%d z %d) — czyli liczy sie to, co"
+          % (100.0 * obcy / max(1, razem), obcy, razem))
+    print("  zatrzymuje kogos, kto nas nie zna.")
+
+
 def kto_przyszedl() -> None:
     """Imiennie: kto sie zapisal i z ktorej pozycji.
 
@@ -559,6 +608,7 @@ def main() -> int:
         for nazwa, ile in sorted(powierzchnie.items(), key=lambda x: -x[1]):
             print("   %-16s %s" % (nazwa, ile))
 
+    komu_sie_pokazujemy()
     kto_przyszedl()
     lepsze_od_sredniej()
     koszt_wobec_wyniku()

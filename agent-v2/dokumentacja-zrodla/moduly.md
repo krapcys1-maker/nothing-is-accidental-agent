@@ -483,7 +483,7 @@
 
 ### `raport_statystyk.py` — te same dane w tabeli dla człowieka
 
-572 wierszy, 10 funkcji na poziomie modułu, 0 klas
+622 wierszy, 11 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -491,6 +491,7 @@
 | `_mediana(liczby)` *(wewn.)* | — |
 | `dwie_epoki(najnowsze)` | Epoka AI osobno, epoka ukrytych systemow osobno. |
 | `wzrost_konta()` | Ilu nas czyta i czy tego przybywa. |
+| `komu_sie_pokazujemy()` | Ile zasiegu idzie do OBCYCH, a ile do wlasnych czytelnikow. |
 | `kto_przyszedl()` | Imiennie: kto sie zapisal i z ktorej pozycji. |
 | `lepsze_od_sredniej()` | Ktora pozycja pobila NASZA WLASNA srednia — panel podaje wzorzec sam. |
 | `koszt_wobec_wyniku()` | Ile kosztuje jedna pozycja i co za to przychodzi — w jednej tabeli. |

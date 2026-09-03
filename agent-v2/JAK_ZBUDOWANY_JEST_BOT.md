@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **23 plików**, 29 005 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 29 055 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -625,7 +625,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `raport_statystyk.py` — te same dane w tabeli dla człowieka
 
-572 wierszy, 10 funkcji na poziomie modułu, 0 klas
+622 wierszy, 11 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -633,6 +633,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_mediana(liczby)` *(wewn.)* | — |
 | `dwie_epoki(najnowsze)` | Epoka AI osobno, epoka ukrytych systemow osobno. |
 | `wzrost_konta()` | Ilu nas czyta i czy tego przybywa. |
+| `komu_sie_pokazujemy()` | Ile zasiegu idzie do OBCYCH, a ile do wlasnych czytelnikow. |
 | `kto_przyszedl()` | Imiennie: kto sie zapisal i z ktorej pozycji. |
 | `lepsze_od_sredniej()` | Ktora pozycja pobila NASZA WLASNA srednia — panel podaje wzorzec sam. |
 | `koszt_wobec_wyniku()` | Ile kosztuje jedna pozycja i co za to przychodzi — w jednej tabeli. |
