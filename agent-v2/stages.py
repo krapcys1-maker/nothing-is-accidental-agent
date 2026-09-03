@@ -3041,6 +3041,15 @@ def _zderzenie(x: set[str] | frozenset[str], y: set[str] | frozenset[str],
             and len(wspolne) / min(len(x), len(y)) >= prog)
 
 
+# SLOWA KALENDARZA. Z wielkiej litery pisze je konwencja, nie fakt, ze
+# nazywaja cokolwiek, o czym piszemy — a padaja niemal w kazdym fakcie
+# datowanym, czyli w naszych wszystkich.
+KALENDARZ = frozenset("""
+january february march april may june july august september october november
+december monday tuesday wednesday thursday friday saturday sunday
+""".split())
+
+
 def nazwy_wlasne(tekst: str) -> set[str]:
     """Nazwy wlasne i identyfikatory z tekstu, sprowadzone do jednej postaci.
 
@@ -3064,6 +3073,19 @@ def nazwy_wlasne(tekst: str) -> set[str]:
         w = m.group(0)
         rdzen = w.strip(".-'’").lower()
         if len(rdzen) < 4:
+            continue
+        # KALENDARZ TO NIE NAZWA WLASNA — dopisane 3 wrzesnia 2026 po pomiarze
+        # na produkcji. Miesiac stoi z wielkiej litery z konwencji, a nie
+        # dlatego, ze nazywa rzecz, o ktorej piszemy. Wystepuje przy tym w
+        # niemal kazdym fakcie o AI, wiec jako „wspolna nazwa" laczyl wszystko
+        # ze wszystkim. Zmierzone w przebiegu 17:09 — powody odrzucen
+        # kandydatow na notki:
+        #     pomijam — ta sama nazwa co w juz wystawionej notce: september
+        #     pomijam — ta sama nazwa co w juz wystawionej notce: july
+        #     pomijam — ta sama nazwa co w juz wystawionej notce: march
+        # Bramka, ktora miala chronic przed trzema notkami o jednym modelu,
+        # wycinala material za to, ze dwa fakty wspominaja ten sam miesiac.
+        if rdzen in KALENDARZ:
             continue
         wewnetrzna_wielka = any(c.isupper() for c in w[1:])
         ma_cyfre = any(c.isdigit() for c in w)
@@ -3294,11 +3316,35 @@ def wybierz_material(zapas: list[dict[str, Any]],
         # Rzadkosc liczymy w KORPUSIE wystawionych notek: nazwa, ktora pada
         # w polowie z nich (np. „OpenAI"), nie odroznia niczego i blokowalaby
         # wszystko.
+        # KORPUS DO LICZENIA RZADKOSCI TO WSZYSTKIE WYSTAWIONE NOTKI, NIE
+        # DZISIEJSZE — poprawione 3 wrzesnia 2026 wieczorem.
+        #
+        # Zabezpieczenie „nazwa czestsza niz w dwoch tekstach nie jest rzadka"
+        # bylo dobre, ale liczylo czestosc w `teksty_wczesniej`, czyli w
+        # notkach z DZISIAJ. Przy korpusie z trzech tekstow prawie kazda nazwa
+        # miesci sie w progu dwoch i uchodzi za rzadka.
+        #
+        # ZMIERZONE na produkcji tego samego wieczora — powody odrzucen
+        # kandydatow w przebiegu 17:09:
+        #     pomijam — ta sama nazwa: september
+        #     pomijam — ta sama nazwa: july
+        #     pomijam — ta sama nazwa: march
+        #     pomijam — ta sama nazwa: openai's
+        # Nazwy MIESIECY i „openai's", ktore stoi w polowie faktow o AI.
+        # Bramka majaca chronic przed trzema notkami o jednym modelu wycinala
+        # material za to, ze dwa fakty wspominaja wrzesien.
+        #
+        # Przy korpusie 60 opublikowanych tekstow „september" i „openai" maja
+        # czestosc grubo powyzej progu i przestaja blokowac, a nazwa naprawde
+        # rzadka (jak `jalapeño` czy `glm-5.3-flash`) nadal blokuje. Funkcja
+        # dziala wiec tak, jak byla zaprojektowana — dostaje tylko korpus,
+        # w ktorym rzadkosc cokolwiek znaczy.
         if teksty_wczesniej:
             fakt_tekst = "%s %s" % (f.get("domain") or "", f.get("fact") or "")
+            korpus = opublikowane_teksty() or teksty_wczesniej
             wspolna = next(
                 (n for u in teksty_wczesniej
-                 if (n := wspolna_nazwa(fakt_tekst, u, teksty_wczesniej))), "")
+                 if (n := wspolna_nazwa(fakt_tekst, u, korpus))), "")
             if wspolna:
                 print("  [notki] pomijam — ta sama nazwa co w juz wystawionej"
                       " notce: %s" % wspolna, flush=True)
