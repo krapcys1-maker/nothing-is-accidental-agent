@@ -1336,6 +1336,22 @@ def _zapamietaj_wydarzenia(nowe: list[dict[str, Any]],
               flush=True)
 
 
+def _wolnych_w_banku() -> int:
+    """Ile tematow NAPRAWDE da sie dzis wziac do pisania.
+
+    Ta sama definicja, ktorej uzywa `bank_pelny`: wolne, po dacie przestawienia
+    konta i w terminie. Zapas z przeterminowanych nie jest zapasem, a policzony
+    razem z nimi pokazywalby podloge jako spelniona, gdy pisac nie ma z czego.
+    """
+    try:
+        return sum(1 for k in wczytaj_indeks()
+                   if k.get("status") == "nowy"
+                   and str(k.get("kiedy") or "")[:10] >= config.DATA_PRZESTAWIENIA
+                   and not _po_terminie(k))
+    except Exception:
+        return 0
+
+
 def _faktow_dopisanych_dzis() -> int:
     """Ile faktow NAPRAWDE wpadlo dzis do banku. Zdobycz, nie proba."""
     from datetime import datetime, timezone
@@ -1363,6 +1379,14 @@ def _ile_prob_wolno_dzis() -> int:
     jest po stronie dostawcy albo promptu i dokladanie pieniedzy tego nie
     zmieni. Sufit rosnie wiec o jeden, nie znika.
     """
+    # PODLOGA BIJE LIMIT DOBOWY. Gdy w banku jest mniej niz `BANK_MIN_WOLNYCH`
+    # tematow, konto nie ma z czego pisac — i wtedy „dzis juz szukalismy" jest
+    # zla odpowiedzia. Wolno probowac do `SZUKANIE_BANKU_MAKS_PROB` razy, bo
+    # sufit prob musi zostac: zepsute szukanie (3 wrzesnia: 23 zapytania,
+    # 513 tys. tokenow, zero faktow) probowaloby inaczej w kolko.
+    wolne = _wolnych_w_banku()
+    if wolne < config.BANK_MIN_WOLNYCH:
+        return config.SZUKANIE_BANKU_MAKS_PROB
     zdobycz = _faktow_dopisanych_dzis()
     if zdobycz:
         return config.SZUKANIE_BANKU_NA_DOBE
@@ -1599,6 +1623,13 @@ def znajdz_ciekawostki(
         # zapisany z gory, zanim wiadomo, czy cokolwiek z tego wyszlo.
         print("  [wydarzenia] NOWE (%d) — otwieram furtke mimo sufitu banku"
               % len(nowe_wyd), flush=True)
+    elif (_wolnych_w_banku() < config.BANK_MIN_WOLNYCH
+          and _przebiegi_z_bankiem_dzis(conn) < config.SZUKANIE_BANKU_MAKS_PROB):
+        print("  [bank] PODLOGA: %d wolnych tematow przy progu %d — dobieram"
+              " mimo limitu dobowego (proba %d z %d)"
+              % (_wolnych_w_banku(), config.BANK_MIN_WOLNYCH,
+                 _przebiegi_z_bankiem_dzis(conn) + 1,
+                 config.SZUKANIE_BANKU_MAKS_PROB), flush=True)
     elif _przebiegi_z_bankiem_dzis(conn) >= _ile_prob_wolno_dzis():
         # Zwykle dobieranie do banku: RAZ NA DOBE, nie przy kazdym z pieciu
         # przebiegow. Licznik czytamy z tabeli `calls`, bo tam i tak zapisujemy

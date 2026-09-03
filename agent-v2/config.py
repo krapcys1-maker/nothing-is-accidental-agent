@@ -1597,6 +1597,33 @@ BANK_MAKS_WOLNYCH = 20
 # zuzyciu, a nie apetytowi.
 #
 # Koszt: okolo 0,078 USD za szukanie, czyli plus 2,4 USD miesiecznie.
+# PODLOGA BANKU — decyzja wlasciciela z 3 wrzesnia 2026: „musi byc jakis
+# straznik, ktory powie, ze minimalna ilosc to 15 tematow".
+#
+# CZEGO BRAKOWALO. Bank mial SUFIT (`BANK_MAKS_WOLNYCH` — nie dokladaj powyzej)
+# i LIMIT PROB (`SZUKANIE_BANKU_NA_DOBE` — nie szukaj czesciej), a nie mial
+# nic, co KAZE dobrac, gdy jest pusto. Uzupelnianie odpalalo sie przy okazji
+# pisania notek i tylko dwa razy na dobe, niezaleznie od tego, czy w banku
+# leza dwa tematy czy dwadziescia.
+#
+# ZMIERZONE tego samego wieczora: bank spadl do SZESCIU wolnych faktow przy
+# dziesieciu notkach dziennie, czyli ponizej jednej doby zapasu — a limit
+# dobowy byl juz wyczerpany i nic nie mialo prawa go uzupelnic do rana.
+#
+# LICZBY Z POMIARU, nie z glowy: jedno szukanie oddaje 4-7 przyjetych faktow
+# (zmierzone na osmiu przebiegach) i kosztuje okolo 0,13 USD. Podloga 15 to
+# okolo poltorej doby zapasu przy dziesieciu notkach — dosc, zeby jeden
+# nieudany research nie zatrzymal konta, i za malo, zeby bank zamienil sie
+# w magazyn starych tematow (przed tym broni sufit 20 i termin 30 dni).
+BANK_MIN_WOLNYCH = 15
+
+# SUFIT PROB NA DOBE, gdy bank jest pod podloga. Bez niego zepsute szukanie
+# (takie jak 3 wrzesnia: 23 zapytania, 513 tys. tokenow, ZERO faktow)
+# probowaloby w kolko przy kazdym przebiegu i przepalilo dobowy budzet.
+# Piec prob po ~0,13 USD to najgorszy przypadek 0,65 USD na dobe i tylko
+# w dniu, w ktorym bank naprawde jest pusty.
+SZUKANIE_BANKU_MAKS_PROB = 5
+
 SZUKANIE_BANKU_NA_DOBE = 2
 
 # JAK DLUGO TO SAMO WYDARZENIE NIE OTWIERA FURTKI DRUGI RAZ.
