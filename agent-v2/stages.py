@@ -1431,8 +1431,10 @@ therefore the release: **%(etykieta)s**.
 Channel titles, as context only — never as a source:
 %(tytuly)s
 
-**Exactly ONE of the %(ile)d facts you return must be about that release. Not
-zero. Not two.** Put it first in the array. This is the single place where the
+**Between one and %(ile_premiera)d of the %(ile)d facts you return must be about that
+release, and never zero.** Put them first in the array. If you can only source
+one that clears the bar below, one is the right answer — but do not stop at one
+when the release genuinely gives you two or three SEPARATE broken beliefs. This is the single place where the
 occasion IS the subject: when a model ships, that is what the reader came for,
 and an account that says nothing that week is not being disciplined, it is
 being late.
@@ -1473,7 +1475,29 @@ def _polecenie_premiery(wydarzenia: list[dict[str, Any]], ile: int) -> str:
     ) or "- (no titles captured — work from the release name alone)"
     # Zdanie o RESZCIE partii budowane osobno, bo `ile` jest parametrem i
     # „The other 0 facts" bylo by zdaniem bez sensu przy partii jednoelementowej.
-    reszta = max(0, int(ile) - 1)
+    # SUFIT PODNIESIONY Z JEDNEGO FAKTU NA TRZY — 3 wrzesnia 2026, decyzja
+    # wlasciciela: „z jednego newsa mozna 3 dobre notki zrobic, ale trzeba
+    # pomyslec".
+    #
+    # CO TU STALO I CZEMU BYLO ZLE. Prompt konczyl sie zdaniem: „One is the
+    # ceiling and the ceiling is the point — a second release fact turns this
+    # into a news feed, which is the thing we are not". To NIE jest regula
+    # z doktryny — sprawdzone, `DOKTRYNA.md` o premierach milczy. Ktos wpisal
+    # ja do promptu, a skutek byl policzalny: premiera Fable 5.1, czyli
+    # modelu, ktorym sami piszemy artykuly, dostawala JEDNA szanse. Gdy ten
+    # jeden fakt nie wrocil — a fakt o premierze latwo odpada na bramce
+    # swiezosci, bo z definicji nazywa numer wersji — wydarzenie przepadalo
+    # bez sladu. Na koncie nie wyszla o nim ANI JEDNA notka.
+    #
+    # ROZNICA MIEDZY GLEBIA A KANALEM NEWSOWYM nie jest w LICZBIE faktow, tylko
+    # w tym, czy kazdy niesie WLASNE zlamane przekonanie. Trzy fakty o jednej
+    # premierze, z ktorych kazdy obala co innego (co ten model naprawde robi
+    # inaczej, ile kosztuje wobec obietnicy, co pokazal benchmark i czego nie
+    # pokazal), to sa trzy rozne teksty. Trzy parafrazy komunikatu prasowego to
+    # kanal newsowy — i przed tym broni nie sufit, tylko `wrong_belief`,
+    # ktorego kazdy fakt musi miec, oraz straznik powtorek na wejsciu do banku.
+    ile_o_premierze = min(3, max(1, int(ile)))
+    reszta = max(0, int(ile) - ile_o_premierze)
     if reszta >= 2:
         zdanie = ("**The other %d facts ignore the release completely** and come"
                   " from the week's subjects and the grid below, exactly as on"
@@ -1483,16 +1507,21 @@ def _polecenie_premiery(wydarzenia: list[dict[str, Any]], ile: int) -> str:
                   " from the week's subjects and the grid below, exactly as on"
                   " any ordinary day.")
     else:
-        zdanie = ("This batch is a single fact, so the release fact is the whole"
+        zdanie = ("This batch is small, so the release facts are the whole"
                   " batch.")
-    zdanie += (" One is the ceiling and the ceiling is the point — a second"
-               " release fact turns this into a news feed, which is the thing"
-               " we are not.")
+    zdanie += (" Up to %d release facts, and every one of them must break a"
+               " DIFFERENT belief: what the thing actually does differently,"
+               " what it costs against what was promised, what the benchmark"
+               " showed and what it hid. Three paraphrases of the same press"
+               " release are a news feed, which is the thing we are not —"
+               " three separate broken beliefs are depth."
+               % ile_o_premierze)
     import textwrap
     return NOWA_LINIA + (PREMIERA_POLECENIE % {
         "etykieta": etykieta,
         "tytuly": tytuly,
         "ile": int(ile),
+        "ile_premiera": ile_o_premierze,
         "reszta_zdanie": textwrap.fill(zdanie, width=79),
     }) + NOWA_LINIA
 
@@ -1749,6 +1778,10 @@ def znajdz_ciekawostki(
     # przegrane na tym, ze regula siedziala w prompcie, a nikt jej nie liczyl.
     # Ta galaz NICZEGO NIE ODRZUCA — nic sie nie wycina — tylko wypisuje pomiar,
     # zeby nastepny przeglad czytal przyrzad zamiast zrodla.
+    # Domyslnie: ile faktow w ogole wrocilo. Gdy w partii jest PREMIERA,
+    # podstawiamy nizej liczbe faktow O NIEJ — bo to ona rozstrzyga, czy
+    # wydarzenie zostalo obsluzone.
+    _ile_o_wydarzeniu = len(fakty)
     _prem = next((w for w in nowe_wyd if w.get("premiera")), None)
     if _prem:
         _tok = [str(x).lower() for x in (_prem.get("o_czym") or [])[:4]]
@@ -1760,6 +1793,26 @@ def znajdz_ciekawostki(
                 ("fact", "wrong_belief", "actually", "domain")).lower()) >= _prog)
         print("  [premiera] %s — faktow o tej premierze: %d z %d (zamowiono 1)"
               % (", ".join(_tok), _ile_prem, len(fakty)), flush=True)
+        # TA LICZBA IDZIE DO BRAMKI, a nie `len(fakty)` — poprawione
+        # 3 wrzesnia 2026 wieczorem.
+        #
+        # ZMIERZONE, ILE TO KOSZTOWALO. Pamiec wydarzen miala wpis:
+        #     "5.1,fable": {"kiedy": "2026-09-02", "ile": 5, "proby": 0}
+        # czyli premiera Fable 5.1 — modelu, ktorym SAMI piszemy artykuly —
+        # byla uznana za obsluzona piecioma faktami. Te piec faktow bylo o
+        # OpenAI i SpaceX, kontroli eksportu BIS, modelu Astra i Apple Siri.
+        # Ani jedno slowo o Fable. W banku nie ma o nim ANI JEDNEGO faktu,
+        # a na koncie nie wyszla ANI JEDNA notka.
+        #
+        # Przyczyna byla jednym slowem: do `_zapamietaj_wydarzenia` szlo
+        # `len(fakty)`, czyli ile faktow w ogole wrocilo z wyszukiwania.
+        # Kazde niepuste wyszukiwanie zamykalo wiec KAZDE czekajace
+        # wydarzenie, niezaleznie od tego, czego dotyczylo. `_ile_prem` bylo
+        # liczone linijke wyzej i tylko drukowane.
+        #
+        # To ta sama klasa, co „nieudana publikacja ksiegowana jako sukces":
+        # dowod istnial, byl wypisany na ekran i nie zostal uzyty do decyzji.
+        _ile_o_wydarzeniu = _ile_prem
 
     # WSZYSTKO IDZIE DO INDEKSU, nie tylko to, co zuzyjemy dzis. Dotad kazde
     # wyszukiwanie zylo jeden przebieg: $0,05 i 6-20 zapytan produkowalo osiem
@@ -1778,7 +1831,7 @@ def znajdz_ciekawostki(
     # sie stac, to drugie szukanie o tym samym, czyli zachowanie sprzed
     # poprawki z 1 wrzesnia. Utrata premiery jest drozsza.
     if nowe_wyd:
-        _zapamietaj_wydarzenia(nowe_wyd, znane_wyd, len(fakty))
+        _zapamietaj_wydarzenia(nowe_wyd, znane_wyd, _ile_o_wydarzeniu)
     return fakty
 
 

@@ -160,16 +160,57 @@ finally:
     stages.WYDARZENIA_OBSLUZONE = oryg2
 
 print()
-print("=== 3. GDY MATERIAL WROCIL — FURTKA SIE ZAMYKA ===")
+print("=== 3. GDY MATERIAL WROCIL O TYM WYDARZENIU — FURTKA SIE ZAMYKA ===")
+# KONTRAKT ZAOSTRZONY 3 wrzesnia 2026 wieczorem. Do tego dnia wystarczylo, ze
+# wyszukiwanie oddalo COKOLWIEK — do bramki szlo `len(fakty)`. Skutek na
+# produkcji: premiera Fable 5.1, czyli modelu, ktorym SAMI piszemy artykuly,
+# zostala uznana za obsluzona pieciona faktami o OpenAI, kontroli eksportu BIS,
+# modelu Astra i Apple Siri. W banku nie bylo o Fable ANI JEDNEGO faktu, na
+# koncie nie wyszla ANI JEDNA notka, a bramka odmawiala otwarcia sie drugi raz.
+#
+# Teraz liczy sie material O WYDARZENIU, wiec atrapa musi go naprawde
+# zawierac — inaczej ten test opisywalby zachowanie, ktorego juz nie ma.
+# DATA ZRODLA JEST OBOWIAZKOWA przy fakcie nazywajacym wersje — bramka
+# swiezosci odrzuca inaczej z powodem „nazywa wersje, a zrodlo nie ma daty".
+# Bez niej ta atrapa nie dochodzi do liczenia i test bada co innego, niz mysli.
+from datetime import datetime as _dt2, timezone as _tz2
+_SWIEZA = _dt2.now(_tz2.utc).date().isoformat()
+O_FABLE = dict(FAKT, source_date=_SWIEZA,
+               fact="Anthropic released Fable 5.1 and published its"
+                    " benchmark numbers the same day.")
 p3 = KAT / "udany.json"
-stan3 = uruchom(stages, p3, [dict(FAKT),
-                             dict(FAKT, url="https://example.org/b",
-                                  fact="Second one.")])
+stan3 = uruchom(stages, p3, [dict(O_FABLE),
+                             dict(O_FABLE, url="https://example.org/b",
+                                  fact="Fable 5.1 costs the same as 5.0 per"
+                                       " million tokens.")])
 wpis = stan3.get("5.1,fable")
 sprawdz("wydarzenie odhaczone", bool(wpis), stan3)
-sprawdz("znacznik niesie DOWOD: ile faktow wrocilo",
+sprawdz("znacznik niesie DOWOD: ile faktow O TYM WYDARZENIU wrocilo",
         isinstance(wpis, dict) and int(wpis.get("ile") or 0) > 0, wpis)
 sprawdz("i date", isinstance(wpis, dict) and wpis.get("kiedy") == DZIS, wpis)
+
+print()
+print("=== 3b. MATERIAL O CZYMS INNYM NIE ZAMYKA FURTKI ===")
+# To jest DOKLADNIE przypadek z produkcji: wyszukiwanie wrocilo z pelnymi
+# rekami, ale nie o tym, o co pytalismy. Wtedy wydarzenie ma zostac otwarte,
+# a znacznik ma zapisac probe, zeby nie probowac w nieskonczonosc.
+p3b = KAT / "obok.json"
+stan3b = uruchom(stages, p3b, [dict(FAKT),
+                               dict(FAKT, url="https://example.org/c",
+                                    fact="Something else entirely happened.")])
+wpis3b = stan3b.get("5.1,fable")
+sprawdz("znacznik mowi, ze o wydarzeniu nie bylo nic (ile=0)",
+        isinstance(wpis3b, dict) and int(wpis3b.get("ile") or 0) == 0, wpis3b)
+sprawdz("i liczy PROBE, zeby nie szukac bez konca",
+        isinstance(wpis3b, dict) and int(wpis3b.get("proby") or 0) >= 1, wpis3b)
+# I NAJWAZNIEJSZE: przy nastepnym przebiegu wydarzenie jest NADAL nowe.
+_oryg3b = stages.WYDARZENIA_OBSLUZONE
+try:
+    stages.WYDARZENIA_OBSLUZONE = p3b
+    n3b, _ = stages._nowe_wydarzenia([dict(FABLE)])
+    sprawdz("wydarzenie NADAL nowe — furtka otwarta", len(n3b) == 1, n3b)
+finally:
+    stages.WYDARZENIA_OBSLUZONE = _oryg3b
 
 print()
 print("=== 4. WPIS Z ZEREM NIE ZAMYKA FURTKI (druga linia obrony) ===")
