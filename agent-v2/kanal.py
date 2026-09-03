@@ -129,6 +129,13 @@ def posty_z_kanalu(ile: int = 25) -> list[dict[str, Any]]:
                 "tytul": (x.get("title") or "")[:120],
                 "opis": (x.get("subtitle") or x.get("description") or "")[:300],
                 "pub": ((x.get("publication") or {}).get("name") or ""),
+                # UCHWYT OBOK NAZWY, nie zamiast niej. Nazwa jest do czytania
+                # („Naval"), uchwyt do LACZENIA — dziennik polubien trzyma pod
+                # polem `komu` wlasnie uchwyt („genieai"), a komentarz zapisywal
+                # sama nazwe. Dwa kanaly mowily o tych samych ludziach dwoma
+                # jezykami, wiec pytanie „czy ten, komu polubilismy notke,
+                # dostal tez komentarz" nie mialo jak sie policzyc.
+                "uchwyt": ((x.get("publication") or {}).get("subdomain") or ""),
                 "komentarze": x.get("comment_count") or 0,
                 "reakcje": x.get("reaction_count") or 0,
                 "url": x.get("canonical_url") or "",
@@ -246,6 +253,7 @@ def szukaj_nowych(ile: int = 20) -> list[dict]:
                         "tytul": post.get("title", "")[:120],
                         "opis": (post.get("subtitle") or post.get("description") or "")[:300],
                         "pub": pub.get("name") or pub.get("subdomain") or "",
+                        "uchwyt": pub.get("subdomain") or "",
                         "komentarze": post.get("comment_count") or 0,
                         "reakcje": post.get("reaction_count") or 0,
                         "url": post.get("canonical_url"),
@@ -258,6 +266,7 @@ def szukaj_nowych(ile: int = 20) -> list[dict]:
                         "tytul": (kom.get("body") or "")[:120],
                         "opis": (kom.get("body") or "")[:600],
                         "pub": kom.get("name") or kom.get("handle") or "",
+                        "uchwyt": kom.get("handle") or "",
                         "komentarze": kom.get("children_count") or 0,
                         "reakcje": kom.get("reaction_count") or 0,
                         "url": f"https://substack.com/note/c-{kom.get('id')}",

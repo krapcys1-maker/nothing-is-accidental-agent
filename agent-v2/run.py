@@ -153,6 +153,18 @@ def opis_celu(cel: dict) -> dict:
 
     return {
         "publikacja": (cel.get("pub") or "")[:80],
+        # POLE `komu` TAK SAMO JAK PRZY POLUBIENIACH — uchwyt, nie nazwa.
+        #
+        # Dotad komentarz zapisywal wylacznie `publikacja` („Naval"), a
+        # polubienie `komu` („genieai"). Dwa kanaly mowily o tych samych
+        # ludziach dwoma jezykami i nie dalo sie ich zestawic. Zmierzone
+        # 3 wrzesnia 2026: `komu` przy komentarzach 0 ze 149 wpisow, przy
+        # polubieniach 23 z 23 od 1 wrzesnia.
+        #
+        # `publikacja` ZOSTAJE — nazwa jest do czytania w przegladzie, uchwyt
+        # do laczenia. Wpisanie nazwy pod `komu` dalo by pole wygladajace na
+        # laczalne i nie bedace nim, czyli wade gorsza od braku pola.
+        "komu": (cel.get("uchwyt") or "")[:60],
         "skad": (cel.get("skad") or "")[:60],
         # Ilu bylo przed nami. To jest ta liczba, o ktora chodzi najbardziej.
         "komentarzy_przed": int(cel.get("komentarze") or 0),
@@ -1581,6 +1593,7 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
         cele = stages.wybierz_cele(
             conn, run_id,
             [{"tytul": n["tekst"][:120], "opis": n["tekst"], "pub": n["autor"],
+              "uchwyt": n.get("handle", ""),
               "komentarze": n["odpowiedzi"], "reakcje": n["reakcje"],
               "url": n["url"], "id": n["id"], "data": n.get("data", ""),
               "skad": n.get("skad", "kanal")} for n in notki])

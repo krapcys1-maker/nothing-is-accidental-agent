@@ -1,7 +1,7 @@
 
 ### `run.py` — rozdzielnik — ścieżka artykułu i ścieżka dnia
 
-2843 wierszy, 26 funkcji na poziomie modułu, 1 klas
+2856 wierszy, 26 funkcji na poziomie modułu, 1 klas
 
 | funkcja | co robi |
 |---|---|
@@ -341,7 +341,7 @@
 
 ### `kanal.py` — pamięć o cudzych publikacjach
 
-295 wierszy, 10 funkcji na poziomie modułu, 0 klas
+304 wierszy, 10 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

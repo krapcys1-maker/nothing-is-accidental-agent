@@ -97,17 +97,32 @@ komentowanie.
 
 ---
 
-## 6. Trzy dziury w pomiarze, przez które nie da się liczyć skutku
+## 6. Jedna dziura w pomiarze została z trzech
 
-- **`nasz_id` przy odpowiedziach: 0 z 56** w całej historii. Kanał odpowiedzi
-  jest niemierzalny w obie strony — nie wiadomo, co dostało reakcję.
-- **`komu` przy komentarzach: nie istnieje nigdy** (0 z 129). Jest tylko
-  `publikacja`. Przy polubieniach `komu` ma 21 z 179.
-- **`uchwyty` przy skutkach: 22 z 221**, i wszystkie z jednego dnia. Dopisanie
-  wstecz jest niemożliwe (`dopisz_skutki` pomija zdarzenia już zapisane).
+Zmierzone ponownie na produkcyjnym dzienniku 3 września — dwie z trzech
+zamknęły się same, odkąd komentarze i polubienia zaczęły zapisywać więcej:
 
-Bez pierwszych dwóch nie policzy się, który komentarz co przyniósł. Trzecia
-zamyka się sama z czasem, ale dopiero od 1 września.
+| pole | wtedy | teraz | od 1 września |
+|---|---|---|---|
+| `nasz_id` przy komentarzach | 0 | 133 ze 149 | 36 z 40 |
+| `komu` przy polubieniach | 21 ze 179 | 30 ze 188 | **23 z 23** |
+| `komu` przy komentarzach | 0 ze 129 | dopisane 3 września | — |
+| **`nasz_id` przy odpowiedziach** | **0 z 56** | **2 z 58** | **2 z 4** |
+
+`komu` przy komentarzach jest już zapisywane — jako **uchwyt** (`naval`), nie
+nazwa (`Naval`), żeby dało się je zestawić z polubieniami, które od zawsze
+trzymają uchwyt. Wpisanie tam nazwy dałoby pole wyglądające na łączalne i nie
+będące nim.
+
+**Zostaje:** `nasz_id` przy odpowiedziach — 2 z 4 od 1 września, czyli połowa.
+Bez niego nie wiadomo, która odpowiedź dostała reakcję, a to właśnie kanał
+odpowiedzi wygląda w pomiarze na najtańszy zasięg, jaki mamy (pozycja 4).
+
+`uchwyty` przy skutkach: 33 z 232, wszystkie od 1 września — zamyka się sama
+z czasem, dopisanie wstecz jest niemożliwe.
+
+**Zrobione, gdy:** wpis `odpowiedz` ma `nasz_id` w każdym przypadku, w którym
+Substack oddaje numer, i osobny ślad wtedy, gdy nie oddaje.
 
 ---
 
