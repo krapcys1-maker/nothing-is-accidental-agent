@@ -117,10 +117,35 @@ try:
             stan.get(OSOBNY))
 
     print()
-    print("=== 3. I DA SIE GO WZIAC NASTEPNYM RAZEM ===")
+    print("=== 3. ALE NIE JESZCZE DZIS — DOPIERO JUTRO ===")
+    # KONTRAKT ZMIENIONY 3 WRZESNIA 2026. Do tego dnia pominiety blizniak
+    # wychodzil w NASTEPNEJ PARTII, bo porownanie siegalo tylko do faktow
+    # wyjmowanych w tym samym wywolaniu. Doba ma jednak PIEC przebiegow, wiec
+    # „nastepna partia" znaczylo „za dwie godziny tego samego dnia" — i dwie
+    # notki o jednym bohaterze wychodzily tego samego popoludnia.
+    #
+    # Teraz porownanie obejmuje wszystko, co wzieto DZIS, wiec blizniak czeka
+    # do jutra. Zmierzone na kopii produkcyjnego banku (18 wolnych faktow,
+    # 3 wrzesnia 2026), zeby ta zwloka nie okazala sie glodem: doba oddaje
+    # 10 notek na 10 przed zmiana i 10 po niej — piec partii po dwie w obu
+    # przypadkach. Blokada nic nie kosztuje, dopoki bank ma rozny material.
     znowu = [k["fact"] for k in stages.wez_kandydatow(3)]
-    sprawdz("pominiety blizniak wychodzi w kolejnej partii",
-            znowu == [BLIZNIAK_B], znowu)
+    sprawdz("tego samego dnia blizniak NIE wychodzi", znowu == [], znowu)
+    nadal = json.loads(stages.INDEKS_KANDYDATOW.read_text(encoding="utf-8"))
+    sprawdz("i nadal czeka w banku jako `nowy`, nie zostal odrzucony",
+            {k["fact"]: k["status"] for k in nadal}.get(BLIZNIAK_B) == "nowy",
+            {k["fact"]: k["status"] for k in nadal}.get(BLIZNIAK_B))
+
+    # NAZAJUTRZ WYCHODZI. Ten sam bank, ten sam kod, przestawiony zegar —
+    # dowod, ze blizniak jest ODLOZONY, a nie po cichu skasowany.
+    _stare_now = stages.db.now
+    try:
+        stages.db.now = lambda: "2099-01-01T10:00:00+00:00"
+        jutro = [k["fact"] for k in stages.wez_kandydatow(3)]
+    finally:
+        stages.db.now = _stare_now
+    sprawdz("nazajutrz pominiety blizniak wychodzi", jutro == [BLIZNIAK_B],
+            jutro)
 
     print()
     print("=== 4. KONTRDOWOD: BEZ PARY BLIZNIACZEJ NIC NIE JEST CIETE ===")

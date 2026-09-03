@@ -35,6 +35,7 @@ import json
 import pathlib
 import sys
 import tempfile
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, "agent-v2")
 import config   # noqa: E402
@@ -69,6 +70,12 @@ PARY = (("DeepSeek Harness", DSH_A, DSH_B),
         ("Jalapeno", CHIP_A, CHIP_B))
 
 PODOBIENSTWO = {"min_wspolnych": 4, "prog": 0.35}
+
+# Sekcja 7 potrzebuje dat: fakt musi byc swiezy i po dacie przestawienia konta,
+# inaczej odsiew w `wez_kandydatow` odrzuci go z innego powodu niz badany.
+_teraz = datetime.now(timezone.utc)
+dzis_iso = _teraz.isoformat(timespec="seconds")
+jutro = (_teraz + timedelta(days=1)).strftime("%Y-%m-%d %H:%M")
 
 katalog = pathlib.Path(tempfile.mkdtemp())
 _stary_indeks = stages.INDEKS_KANDYDATOW
@@ -213,6 +220,123 @@ try:
     sprawdz("bez `conn` straznik nie jest wolany i nic nie wybucha",
             len(wolania) == 0 and len(stages.wczytaj_indeks()) == 2,
             (len(wolania), len(stages.wczytaj_indeks())))
+
+    print()
+    print()
+    print("=== 7. DWA PRZEBIEGI JEDNEJ DOBY NIE BIORA TEGO SAMEGO BOHATERA ===")
+    # Doba ma piec przebiegow, a `wez_kandydatow` porownywalo kandydata
+    # WYLACZNIE z faktami wyjmowanymi w tym samym wywolaniu. Fakt wziety o
+    # 11:20 nie byl porownywany z niczym o 17:00 — wiec dwie notki o jednym
+    # bohaterze mogly wyjsc tego samego dnia z dwoch roznych przebiegow.
+    # Przy dziesieciu notkach urna jest losowana dwa razy czesciej, wiec luka
+    # strzelajaca dotad rzadko zaczela by strzelac regularnie.
+    #
+    # PARA JEST PRAWDZIWA I DOBRANA TAK, ZEBY DOSZLA DO TEGO MIEJSCA. Sekcja 1
+    # pokazala, ze filtru banku ta para nie budzi — wiec OBA zdania naprawde
+    # leza w banku i jedyne, co moze zatrzymac drugie, to porownanie miedzy
+    # przebiegami. Zmyslony blizniak zostalby odsiany juz przy wejsciu i test
+    # swiecilby na zielono, nie sprawdzajac niczego.
+    wyczysc()
+    ODPOWIEDZ["co"] = {"powtorka_nr": 0, "powod": ""}
+    licz = stages.dopisz_kandydatow([wsadz(DSH_A), wsadz(DSH_B)])
+    indeks = stages.wczytaj_indeks()
+    for k in indeks:
+        k["kiedy"] = dzis_iso
+        k["wazny_do"] = jutro
+    stages._zapisz_indeks(indeks)
+    sprawdz("obie polowy prawdziwej pary SA w banku (inaczej test bada nic)",
+            licz["przyjete"] == 2
+            and sum(1 for k in indeks if k.get("status") == "nowy") == 2,
+            licz)
+
+    pierwszy = stages.wez_kandydatow(1)
+    wziety = str(pierwszy[0].get("fact") or "") if pierwszy else ""
+    sprawdz("pierwszy przebieg bierze jeden fakt", len(pierwszy) == 1, len(pierwszy))
+
+    drugi = stages.wez_kandydatow(1)
+    sprawdz("drugi przebieg tej samej doby NIE bierze drugiej polowy pary",
+            drugi == [], [str(k.get("fact") or "")[:60] for k in drugi])
+    zostal = [k for k in stages.wczytaj_indeks() if k.get("status") == "nowy"]
+    sprawdz("odrzucony blizniak ZOSTAJE w banku ze statusem `nowy`",
+            len(zostal) == 1 and str(zostal[0].get("fact") or "") != wziety,
+            [(k.get("status"), str(k.get("fact") or "")[:40]) for k in zostal])
+
+    # KONTRDOWOD ODTWARZANY, NIE OPISANY. Ten sam bank i ten sam kod, ale zegar
+    # przestawiony o dobe do przodu — wtedy fakt wziety „dzis" jest dla nowego
+    # dnia niewidoczny, czyli dokladnie tak, jak zachowywal sie kod przed
+    # 3 wrzesnia 2026, gdy porownywal wylacznie z biezaca partia.
+    _stare_now = stages.db.now
+    try:
+        jutrzejszy = (_teraz + timedelta(days=1)).isoformat(timespec="seconds")
+        stages.db.now = lambda: jutrzejszy
+        trzeci = stages.wez_kandydatow(1)
+    finally:
+        stages.db.now = _stare_now
+    sprawdz("KONTRDOWOD: gdy fakty z dzis sa niewidoczne, blizniak WYCHODZI",
+            len(trzeci) == 1
+            and stages._o_tym_samym(wziety, str(trzeci[0].get("fact") or ""),
+                                    **stages.POROWNANIE_MIEDZY_DNIAMI)
+            or (len(trzeci) == 1
+                and stages._dzielą_rzadkie(wziety,
+                                           str(trzeci[0].get("fact") or ""))),
+            [str(k.get("fact") or "")[:60] for k in trzeci])
+
+    print()
+    print("=== 8. PROG DLA BLIZNIAKA BEZ NAZWY LEZY W ZMIERZONEJ PRZERWIE ===")
+    # Dwa fakty uznajemy za to samo, gdy dziela bohatera ALBO gdy sa do siebie
+    # podobne az tak, ze wspolna ramka zdania tego nie tlumaczy. Drugie wejscie
+    # istnieje, bo ogolne wyjasnienie nie zawiera zadnej nazwy — a napisane dwa
+    # razy jest ta sama notka.
+    #
+    # Ten prog jest jedyna liczba w calym mechanizmie, ktora nie wynika z
+    # niczego poza pomiarem, wiec pomiar jest tutaj ODTWARZANY przy kazdym
+    # uruchomieniu, a nie przepisany z notatki.
+    BLIZ_A = ("Language models produce their answer one token at a time, "
+              "because each token is fed back as input before the next one is "
+              "computed, which is why the text appears word by word.")
+    BLIZ_B = ("The text appears word by word because every token the model "
+              "produces is fed back as input, and the next token cannot be "
+              "computed before that happens.")
+    RAMKA = [("aircraft oxygen masks", "drop-down masks supply about twelve minutes of oxygen"),
+             ("credit card numbers", "the final digit is a checksum, not part of the account"),
+             ("ship anchors", "an anchor holds by the chain lying flat, not by its weight"),
+             ("railway timetables", "published journey times carry deliberate padding"),
+             ("emergency numbers", "999 was chosen because it could be dialled in the dark"),
+             ("supermarket trolleys", "the wheel locks at a buried wire, not by radio"),
+             ("pedestrian crossings", "many buttons do nothing during peak signal cycles"),
+             ("fire door closers", "the closing speed is set by regulation, not by preference"),
+             ("bank cheques", "the ragged edge is a security feature, not a tearing artefact"),
+             ("motorway paint", "lane lines are longer than drivers estimate them to be"),
+             ("bottle caps", "the ring stays attached because a directive required it"),
+             ("lift buttons", "the door-close button is disabled during normal service")]
+    ramki = ["Documented: %s — %s, according to the published standard." % (t, z)
+             for t, z in RAMKA]
+
+    def udzial(a, b):
+        sa, sb = stages._slowa(a), stages._slowa(b)
+        if not sa or not sb:
+            return 0.0
+        return len(sa & sb) / float(min(len(sa), len(sb)))
+
+    prog = stages.BLIZNIAK_BEZ_NAZWY["prog"]
+    naj_ramka = max(udzial(ramki[i], ramki[j])
+                    for i in range(len(ramki)) for j in range(i + 1, len(ramki)))
+    naj_bank = max(udzial(a, b) for _, a, b in PARY)
+    blizniactwo = udzial(BLIZ_A, BLIZ_B)
+
+    sprawdz("prawdziwy blizniak bez nazwy jest NAD progiem (%.3f > %.2f)"
+            % (blizniactwo, prog), blizniactwo > prog)
+    sprawdz("zbieznosc samej ramki zdania jest POD progiem (%.3f < %.2f)"
+            % (naj_ramka, prog), naj_ramka < prog)
+    sprawdz("prawdziwe pary z banku sa POD progiem (%.3f < %.2f)"
+            % (naj_bank, prog), naj_bank < prog)
+    # ZAPAS, nie wlos. Prog na samej granicy pomiaru pekłby przy pierwszym
+    # nowym zdaniu; pytamy wiec, czy przerwa jest jeszcze szeroka.
+    sprawdz("przerwa miedzy ramka a blizniakiem ma zapas w obie strony",
+            blizniactwo - prog >= 0.05 and prog - naj_ramka >= 0.05,
+            (naj_ramka, prog, blizniactwo))
+    sprawdz("i ten blizniak NIE ma wspolnej nazwy — inaczej drugie wejscie "
+            "byloby zbedne", not stages._dzieli_temat(BLIZ_A, BLIZ_B))
 
 finally:
     stages.INDEKS_KANDYDATOW = _stary_indeks

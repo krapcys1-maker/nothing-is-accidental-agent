@@ -3037,6 +3037,16 @@ POROWNANIE_MIEDZY_DNIAMI = {"min_wspolnych": 4, "prog": 0.30}
 # najblizszy falszywy przypadek (0.17).
 POWTORKA_TEMATU = {"min_wspolnych": 4, "prog": 0.20}
 
+# BLIZNIAK, KTORY NIE MA NAZWY. Drugie wejscie do uznania dwoch faktow za to
+# samo — obok „podobne slowa + wspolny bohater". Potrzebne, bo ogolne
+# wyjasnienie (czemu odpowiedz plynie slowo po slowie) nie zawiera zadnej nazwy
+# wlasnej ani liczby, a napisane dwa razy jest ta sama notka.
+#
+# Prog z pomiaru trzech zbiorow (3 wrzesnia 2026): 66 par zbudowanych z jednej
+# ramki zdania siega 0,500; 153 pary prawdziwego banku siegaja 0,273; prawdziwa
+# para blizniacza stoi na 0,692. 0,60 lezy w przerwie miedzy nimi.
+BLIZNIAK_BEZ_NAZWY = {"min_wspolnych": 4, "prog": 0.60}
+
 
 def teksty_ostatnich_notek(ile: int = 40) -> list[str]:
     """Tresci ostatnich notek — do porownania po NAZWACH WLASNYCH.
@@ -6826,14 +6836,67 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
 
     wziete: list[dict[str, Any]] = []
     blizniaki: list[tuple[str, str]] = []
+    # PORONYWAMY TEZ Z TYM, CO JUZ DZIS POSZLO — nie tylko z ta partia.
+    #
+    # Do 3 wrzesnia 2026 blizniactwa szukano wylacznie wsrod `wziete`, czyli
+    # wsrod faktow wyjmowanych W TYM SAMYM WYWOLANIU. Przy pieciu notkach na
+    # dobe wychodzilo to prawie zawsze, bo przebieg bral dwa fakty naraz i oba
+    # byly porownane. Ale doba ma PIEC przebiegow: fakt wziety o 11:20 nie byl
+    # porownywany z niczym o 17:00, wiec dwie notki o jednym bohaterze mogly
+    # wyjsc tego samego dnia z dwoch roznych przebiegow — a to dokladnie ta
+    # wpadka z 23 i 24 sierpnia, ktorej ten kod mial zapobiegac.
+    #
+    # Przejscie na DZIESIEC notek podwaja liczbe losowan z tej samej urny, wiec
+    # luka, ktora dotad strzelala rzadko, zaczela by strzelac regularnie.
+    #
+    # Fakty z dzis wchodza WYLACZNIE do porownania — nie do `wziete`, bo tamta
+    # lista jest zwracana i znaczona jako uzyta.
+    _dzis = db.now()[:10]
+    porownanie = [k for k in indeks
+                  if str(k.get("uzyty_kiedy") or "")[:10] == _dzis]
+    if porownanie:
+        print("  [bank] porownuje takze z %d faktami wziętymi dzis wczesniej"
+              % len(porownanie), flush=True)
     for k, _ in swiezi:
         if len(wziete) >= max(0, ile):
             break
         tresc = str(k.get("fact") or "")
+        # PODOBIENSTWO SLOW WYMAGA WSPOLNEGO BOHATERA — tak samo jak w banku.
+        #
+        # Bez tego warunku zdania zbudowane z tej samej ramki uchodzily za
+        # blizniaki, bo dziela slowa RAMKI, nie tresci. Zmierzone 3 wrzesnia
+        # 2026 na dwunastu faktach o zupelnie roznych rzeczach — maskach
+        # tlenowych, kotwicach, rozkladach jazdy — zapisanych jednym wzorem
+        # „Documented: X — Y, according to the published standard": dwa z nich
+        # zostaly uznane za powtorke i partia oddala [3, 3, 3, 1] zamiast
+        # [3, 3, 3, 3].
+        #
+        # Dopoki pominiecie trwalo jeden przebieg, ta pomylka kosztowala
+        # dwie godziny zwloki. Odkad obejmuje cala dobe, kosztowalaby dzien
+        # materialu — wiec warunek, ktory bank ma od poczatku, musi byc i tu.
+        # `_dzielą_rzadkie` wlasnej kotwicy nie potrzebuje: sam wymaga rdzenia
+        # wygladajacego na nazwe.
+        #
+        # ALE BLIZNIAKI BEZ NAZWY ISTNIEJA. Dwa razy to samo wyjasnienie, czemu
+        # odpowiedz plynie slowo po slowie, nie zawiera ANI JEDNEJ nazwy wlasnej
+        # i ani jednej liczby — a jest tym samym tekstem napisanym dwa razy.
+        # Sam warunek kotwicy przepuscilby taka pare, wiec obok niego stoi
+        # drugie wejscie: podobienstwo tak wysokie, ze wspolna ramka zdania go
+        # nie tlumaczy.
+        #
+        # PROG ZMIERZONY, NIE DOBRANY NA OKO (3 wrzesnia 2026, trzy zbiory):
+        #     66 par z jednej ramki, rozne rzeczy   maksimum 0,500
+        #     153 pary prawdziwego banku            maksimum 0,273
+        #     jedna prawdziwa para blizniacza       0,692
+        # Przerwa miedzy 0,500 a 0,692 jest szeroka, wiec 0,60 lezy w srodku
+        # i ma zapas w obie strony.
         blizniak = next(
-            (w for w in wziete
-             if _o_tym_samym(tresc, str(w.get("fact") or ""),
-                             **POROWNANIE_MIEDZY_DNIAMI)
+            (w for w in porownanie
+             if (_o_tym_samym(tresc, str(w.get("fact") or ""),
+                              **POROWNANIE_MIEDZY_DNIAMI)
+                 and _dzieli_temat(tresc, str(w.get("fact") or "")))
+             or _o_tym_samym(tresc, str(w.get("fact") or ""),
+                             **BLIZNIAK_BEZ_NAZWY)
              or _dzielą_rzadkie(tresc, str(w.get("fact") or ""))), None)
         if blizniak is not None:
             rzadkie = _dzielą_rzadkie(tresc, str(blizniak.get("fact") or ""))
@@ -6841,6 +6904,7 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
                               str(blizniak.get("fact") or "")))
             continue
         wziete.append(k)
+        porownanie.append(k)
     # GLOSNO, nie po cichu. Partia przycieta bez slowa wyglada jak partia
     # kompletna — a to jest wlasnie ta klasa bledu, ktora tropimy.
     for tresc, wzorzec in blizniaki:
