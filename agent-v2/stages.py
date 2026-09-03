@@ -2650,6 +2650,61 @@ def _opis_typu(note_type: str) -> str:
         opis, ksztalt, config.KSZTALTY_MYSLI[ksztalt])
 
 
+# OTWARCIE SPOREM, KTOREGO CZYTELNIK NIE SLYSZAL.
+#
+# Wada znaleziona 3 wrzesnia 2026 przy przeczytaniu wszystkich 34 notek od
+# przestawienia konta. Wlasciciel przeczytal jedna z nich trzy razy i nie
+# wiedzial, o czym jest. Obie winne notki otwieraja sie tak samo: wydaja
+# WERDYKT na twierdzenie, ktorego czytelnikowi nikt nie pokazal.
+#
+#   „Shelved genius is the most flattering story this industry tells..."
+#   „...I keep hearing that public tests are useless..."
+#
+# Nikt scrollujacy nie slyszal, ze publiczne testy sa bezuzyteczne, i nikt nie
+# zna zwrotu „shelved genius". Czytelnik dostaje odpowiedz bez pytania.
+#
+# TO NIE JEST BRAMKA I NIE MOZE NIA BYC: `NOTE_CANDIDATES` wynosi 1, wiec
+# odrzucenie kandydata znaczy dzien bez notki — kod mowi o tym wprost przy
+# sprawdzaniu faktow kilkaset wierszy nizej. Dziala tak samo jak wykrywacz
+# tiku „X, not Y": wykrywa, podaje modelowi JEGO WLASNE zdania i glosno liczy.
+OTWARCIE_SPOREM = re.compile(
+    "|".join((
+        r"i (?:keep|kept) (?:hearing|being told)",
+        r"everyone (?:says|thinks|assumes)",
+        r"the (?:standard|received|usual|common) (?:line|wisdom|view)",
+        r"it(?:'s| is) fashionable to",
+        r"we(?:'re| are) (?:all )?told that",
+        r"people (?:say|keep saying|like to say)",
+        r"is the most \w+ (?:story|myth|lie|excuse)",
+    )),
+    re.I)
+
+
+def otwiera_sporem(tekst: str) -> str:
+    """Zdanie, ktorym notka wchodzi w spor nieznany czytelnikowi. Puste, gdy go nie ma.
+
+    Patrzy na TRZY pierwsze zdania, nie na dwa. Zakres wziety z winnej notki,
+    nie z glowy: w niej ruch stoi w zdaniu TRZECIM („Trying it yourself is also
+    a benchmark. / Sample size one, run once, never written down. / I keep
+    hearing that public tests are useless..."). Przy dwoch zdaniach wykrywacz
+    przepuscilby dokladnie ten tekst, dla ktorego powstal.
+
+    Dalej w tekscie ten sam ruch jest w porzadku — czytelnik ma juz wtedy o
+    czym myslec. Wada polega na tym, ze stoi na WEJSCIU.
+
+    ZMIERZONE na wszystkich 34 notkach od przestawienia konta: strzela przy
+    dwoch, i sa to dokladnie te dwie, ktore przy recznym czytaniu okazaly sie
+    nieczytelne. Zero falszywych trafien na pozostalych 32.
+    """
+    czysty = re.sub(r"https?://\S+", " ", str(tekst or ""))
+    czysty = " ".join(czysty.split())
+    zdania = [z.strip() for z in re.split(r"(?<=[.!?])\s+", czysty) if z.strip()]
+    for z in zdania[:3]:
+        if OTWARCIE_SPOREM.search(z):
+            return z[:160]
+    return ""
+
+
 def note(
     conn: sqlite3.Connection, run_id: int, note_type: str, evidence: dict[str, Any],
     link: str | None = None, note_form: str = "PROSTA", etap: str = "note",
@@ -2719,6 +2774,24 @@ def note(
             "and a reader scanning the column sees the rhythm before they read "
             "a word. Make your point without the correction frame: say what "
             "the thing IS, and let the wrong belief go unmentioned.")
+    # TO SAMO PODEJSCIE, INNA WADA: otwarcie sporem, ktorego czytelnik nie
+    # slyszal (patrz `otwiera_sporem`). Regula stoi juz w `notka.md`, ale
+    # regula jest abstrakcja — dwa wlasne zdania konta sa dowodem. Wkladamy je
+    # tylko wtedy, gdy naprawde takie mamy; wymyslony przyklad uczylby wady.
+    sporne = [z for t in teksty_ostatnich_notek(12) if (z := otwiera_sporem(t))]
+    if sporne:
+        prompt += (
+            "\n\n## Openings that left our own reader lost\n\n"
+            "These are opening sentences from our own recent notes. Each one "
+            "delivers a verdict on a claim the reader was never shown, so the "
+            "note reads as an answer with the question missing. The owner read "
+            "one of them three times and still could not say what it was "
+            "about.\n\n"
+            + "\n".join("- %s" % z[:160] for z in sporne[:3])
+            + "\n\nDo not start this note that way. If the belief you are "
+            "breaking is worth naming, name it as something the reader "
+            "recognises in themselves, in words they would use about their own "
+            "behaviour — not as something 'people say'.")
     zajete_otwarcia = set(ostatnie_otwarcia())
     candidates: list[dict[str, Any]] = []
     for i in range(config.NOTE_CANDIDATES):
@@ -2752,6 +2825,14 @@ def note(
             f"  {text[:78]}",
             flush=True,
         )
+        # POMIAR, NIE BRAMKA — i zapisany przy notce, zeby dalo sie policzyc,
+        # czy wada wraca po tym, jak model dostal wlasne przyklady. Odrzucenie
+        # tutaj oznaczaloby dzien bez notki, bo kandydat jest jeden.
+        _spor = otwiera_sporem(text)
+        data["otwarcie_sporem"] = _spor
+        if _spor:
+            print("    UWAGA: otwiera sporem, ktorego czytelnik nie slyszal —"
+                  " %r (notka i tak idzie)" % _spor[:90], flush=True)
         # ZAPORA NA TEKSCIE MODELU, zanim kod doklei nasz wlasny adres.
         # Inaczej notka promujaca artykul odpada ZAWSZE: kod dokleja do niej
         # link do wlasnego tekstu, a zapora widzi adres www i odrzuca wszystkie

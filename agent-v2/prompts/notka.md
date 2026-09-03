@@ -83,6 +83,33 @@ Lead with the thing that happened, in the plainest sentence you can write.
 The reversal, the broken assumption, the consequence — those come next, and
 they land harder once the reader knows what you are talking about.
 
+### Never open by contradicting something the reader has not heard
+
+This is the single defect that made the owner read a published note three
+times and still not know what it was about. Two live examples, both ours:
+
+> Shelved genius is the most flattering story this industry tells about itself.
+
+> Trying it yourself is also a benchmark. Sample size one, run once, never
+> written down. I keep hearing that public tests are useless...
+
+Both walk into the middle of an argument and expect the reader to already
+have a side. "Shelved genius" is not a phrase anyone knows. Nobody scrolling
+has been hearing that public tests are useless. The reader is handed a verdict
+on a claim they were never shown, and the note reads as an answer with the
+question missing.
+
+The move is banned in every form. Concretely, do not open with any of:
+"I keep hearing that...", "Everyone says...", "The standard line is...",
+"X is the most flattering story...", "It is fashionable to argue...", or any
+sentence whose first job is to disagree.
+
+The permitted version of the same idea names the belief as the reader's OWN,
+in words they would use about their own behaviour — "Asking a chatbot to check
+its own draft feels like free proofreading" works, because the reader has done
+exactly that. The test: would a stranger recognise this as something they
+themselves think, without being told anyone thinks it?
+
 ## Length is the hard constraint
 
 **{min_words} to {max_words} words. Count them.**

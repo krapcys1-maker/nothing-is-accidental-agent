@@ -195,5 +195,63 @@ sprawdz("i mowi, ze to sa rzeczy JUZ oplacone",
         "already paid for" in _tresc_sk)
 
 print()
+print("=== 8. OTWARCIE SPOREM, KTOREGO CZYTELNIK NIE SLYSZAL ===")
+# Zmierzone na wszystkich 34 notkach od przestawienia konta: wykrywacz strzela
+# przy dwoch i sa to dokladnie te dwie, ktore przy recznym czytaniu okazaly sie
+# nieczytelne. Ponizej oba prawdziwe teksty, doslownie.
+NOTKA_07 = ("Shelved genius is the most flattering story this industry tells "
+            "about itself. I keep half-agreeing.")
+NOTKA_34 = ("Trying it yourself is also a benchmark. Sample size one, run "
+            "once, never written down. I keep hearing that public tests are "
+            "useless and personal experience is the honest measure.")
+sprawdz("lapie notke #07 (wlasny zwrot podany jak znany)",
+        bool(stages.otwiera_sporem(NOTKA_07)), stages.otwiera_sporem(NOTKA_07))
+sprawdz("lapie notke #34 — te, ktora wlasciciel czytal trzy razy",
+        bool(stages.otwiera_sporem(NOTKA_34)), stages.otwiera_sporem(NOTKA_34))
+sprawdz("i zwraca CALE zdanie, a nie sam pasujacy fragment",
+        stages.otwiera_sporem(NOTKA_34).startswith("I keep hearing"),
+        stages.otwiera_sporem(NOTKA_34))
+
+# ZASIEG TRZECH ZDAN NIE JEST OZDOBA. W notce #34 ruch stoi w zdaniu TRZECIM,
+# wiec wykrywacz patrzacy na dwa przepuscilby tekst, dla ktorego powstal.
+sprawdz("KONTRDOWOD ZASIEGU: przy dwoch zdaniach #34 by uciekla",
+        not stages.OTWARCIE_SPOREM.search(
+            "Trying it yourself is also a benchmark.")
+        and not stages.OTWARCIE_SPOREM.search(
+            "Sample size one, run once, never written down."))
+
+print()
+print("=== 9. KONTRDOWOD: DOBRE NOTKI PRZECHODZA CZYSTO ===")
+CZYSTE = [
+    "Two paragraphs. That is how much of any answer I skip before I read.",
+    "Asking a chatbot to check its own draft feels like free proofreading.",
+    "Cheap models are supposed to be worse models. Pay a tenth, get less.",
+    "Ireland gave 23 percent of its metered electricity to data centres.",
+    "A model refusal is not a rule. It is a single direction in its weights.",
+]
+for t in CZYSTE:
+    sprawdz("przepuszcza: %s" % t[:46], not stages.otwiera_sporem(t),
+            stages.otwiera_sporem(t))
+sprawdz("pusty tekst nie wywraca wykrywacza", stages.otwiera_sporem("") == "")
+sprawdz("None tez nie", stages.otwiera_sporem(None) == "")
+sprawdz("ten sam ruch DALEJ w tekscie jest w porzadku",
+        not stages.otwiera_sporem(
+            "Ireland gave 23 percent of its power to data centres. The share "
+            "rose for a third year. The grid operator said so in August. "
+            "Everyone says this is about crypto."))
+
+print()
+print("=== 10. REGULA STOI TEZ W PROMPCIE NOTKI ===")
+_tresc_nt = pathlib.Path("agent-v2/prompts/notka.md").read_text(encoding="utf-8")
+sprawdz("prompt zakazuje tego otwarcia wprost",
+        "Never open by contradicting something the reader has not heard"
+        in _tresc_nt)
+sprawdz("i podaje OBIE winne notki jako przyklad",
+        "Shelved genius" in _tresc_nt and "I keep hearing" in _tresc_nt)
+sprawdz("i mowi, czym zastapic — przekonaniem czytelnika o SOBIE",
+        "as something they" in _tresc_nt.lower()
+        or "the reader's OWN" in _tresc_nt)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

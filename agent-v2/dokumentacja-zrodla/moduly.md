@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-7876 wierszy, 140 funkcji na poziomie modułu, 0 klas
+7957 wierszy, 141 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -97,6 +97,7 @@
 | `_przytnij_pamiec(odciski)` *(wewn.)* | Zamienia odciski na zbiory i honoruje `config.PAMIEC_NOTEK`. |
 | `_zapisz_skrot_notek(odciski, bajtow, glowa, glowa_bajtow, sygnatura)` *(wewn.)* | Zapisuje skrot. NIGDY nie przerywa dnia. |
 | `_opis_typu(note_type)` *(wewn.)* | Opis typu, a przy MYSLI takze PRZYDZIELONY ksztalt. |
+| `otwiera_sporem(tekst)` | Zdanie, ktorym notka wchodzi w spor nieznany czytelnikowi. Puste, gdy go nie ma. |
 | `note(conn, run_id, note_type, evidence, link, note_form, etap)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_pola_ksztaltu(ksztalt, pomin)` *(wewn.)* | Nazwy pol z kontraktu na odpowiedz, bez klucza opakowujacego. |
 | `zakwestionuj_promocje(url, powod)` | Artykul, ktorego notka promujaca odpadla na sprawdzeniu faktow. |

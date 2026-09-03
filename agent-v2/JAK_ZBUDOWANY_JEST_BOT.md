@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **23 plików**, 29 751 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 29 832 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 129 zestawów
-testów, 3567 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 3578 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-7876 wierszy, 140 funkcji na poziomie modułu, 0 klas
+7957 wierszy, 141 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -239,6 +239,7 @@ wiec nie da sie go rozjechac z kodem.
 | `_przytnij_pamiec(odciski)` *(wewn.)* | Zamienia odciski na zbiory i honoruje `config.PAMIEC_NOTEK`. |
 | `_zapisz_skrot_notek(odciski, bajtow, glowa, glowa_bajtow, sygnatura)` *(wewn.)* | Zapisuje skrot. NIGDY nie przerywa dnia. |
 | `_opis_typu(note_type)` *(wewn.)* | Opis typu, a przy MYSLI takze PRZYDZIELONY ksztalt. |
+| `otwiera_sporem(tekst)` | Zdanie, ktorym notka wchodzi w spor nieznany czytelnikowi. Puste, gdy go nie ma. |
 | `note(conn, run_id, note_type, evidence, link, note_form, etap)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_pola_ksztaltu(ksztalt, pomin)` *(wewn.)* | Nazwy pol z kontraktu na odpowiedz, bez klucza opakowujacego. |
 | `zakwestionuj_promocje(url, powod)` | Artykul, ktorego notka promujaca odpadla na sprawdzeniu faktow. |
@@ -10295,7 +10296,7 @@ Return only:
 
 #### `prompts/notka.md`
 
-**344 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
+**371 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
 
 ````markdown
 Write a Substack Note for the anonymous editorial brand Nothing Is Accidental —
@@ -10382,6 +10383,33 @@ who already follows the story; it strands everyone else.
 Lead with the thing that happened, in the plainest sentence you can write.
 The reversal, the broken assumption, the consequence — those come next, and
 they land harder once the reader knows what you are talking about.
+
+### Never open by contradicting something the reader has not heard
+
+This is the single defect that made the owner read a published note three
+times and still not know what it was about. Two live examples, both ours:
+
+> Shelved genius is the most flattering story this industry tells about itself.
+
+> Trying it yourself is also a benchmark. Sample size one, run once, never
+> written down. I keep hearing that public tests are useless...
+
+Both walk into the middle of an argument and expect the reader to already
+have a side. "Shelved genius" is not a phrase anyone knows. Nobody scrolling
+has been hearing that public tests are useless. The reader is handed a verdict
+on a claim they were never shown, and the note reads as an answer with the
+question missing.
+
+The move is banned in every form. Concretely, do not open with any of:
+"I keep hearing that...", "Everyone says...", "The standard line is...",
+"X is the most flattering story...", "It is fashionable to argue...", or any
+sentence whose first job is to disagree.
+
+The permitted version of the same idea names the belief as the reader's OWN,
+in words they would use about their own behaviour — "Asking a chatbot to check
+its own draft feels like free proofreading" works, because the reader has done
+exactly that. The test: would a stranger recognise this as something they
+themselves think, without being told anyone thinks it?
 
 ## Length is the hard constraint
 
