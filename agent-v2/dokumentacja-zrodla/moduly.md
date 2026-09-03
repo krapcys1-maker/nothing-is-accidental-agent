@@ -35,7 +35,7 @@
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-8163 wierszy, 143 funkcji na poziomie modułu, 0 klas
+8217 wierszy, 144 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -99,6 +99,7 @@
 | `_opis_typu(note_type)` *(wewn.)* | Opis typu, a przy MYSLI takze PRZYDZIELONY ksztalt. |
 | `otwiera_sporem(tekst)` | Zdanie, ktorym notka wchodzi w spor nieznany czytelnikowi. Puste, gdy go nie ma. |
 | `terminy_insiderskie(tekst)` | Slowa, przy ktorych zwykly czytelnik sie zatrzymuje. Bez powtorzen. |
+| `hak_bez_zaczepu(tekst)` | Otwarcie jednym slowem, ktorego nastepne zdanie nie wiaze. Puste, gdy wiaze. |
 | `za_duzo_zargonu(tekst)` | Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto. |
 | `note(conn, run_id, note_type, evidence, link, note_form, etap)` | Jedna notka danego typu i danej FORMY — do szuflady. |
 | `_pola_ksztaltu(ksztalt, pomin)` *(wewn.)* | Nazwy pol z kontraktu na odpowiedz, bez klucza opakowujacego. |
@@ -590,7 +591,7 @@
 
 ### `przeglad_dnia.py` — caly lancuch jednego dnia bez wolania modelu: szukanie, bank z katami, powody odrzucen, notki
 
-229 wierszy, 6 funkcji na poziomie modułu, 0 klas
+233 wierszy, 6 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

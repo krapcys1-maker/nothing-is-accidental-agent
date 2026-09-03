@@ -197,6 +197,10 @@ def main() -> None:
             if spor:
                 uwagi.append("otwiera sporem, ktorego czytelnik nie slyszal:"
                              " %r" % spor[:70])
+            hak = stages.hak_bez_zaczepu(tekst)
+            if hak:
+                uwagi.append("otwiera hakiem %r, ktorego nastepne zdanie nie"
+                             " wiaze" % hak)
             zarg = stages.za_duzo_zargonu(tekst)
             if zarg:
                 uwagi.append("%d terminow bez tlumaczenia: %s"

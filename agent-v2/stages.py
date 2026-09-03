@@ -2761,6 +2761,54 @@ def terminy_insiderskie(tekst: str) -> list[str]:
     return out
 
 
+# HAK ZAWIESZONY W PROZNI.
+#
+# Forma LICZBA otwiera notke jednym slowem i nastepne zdanie ma je ZWIAZAC:
+# „Zero. / That's how many permissions you need in Japan..." dziala, bo
+# czytelnik dostaje rzeczownik. Zmierzone 3 wrzesnia 2026 na szesciu notkach
+# otwieranych krotkim hakiem: DWIE nie wiaza go wcale.
+#
+#   „Zero." -> „SemiAnalysis physically tore down Huawei's Kirin 9030..."
+#   „320 patients." -> „Insilico's Phase III trial of rentosertib..."
+#
+# Pierwsza jest zepsuta wprost: zero CZEGO, notka nigdy tego nie mowi. Druga
+# da sie wywnioskowac, ale nie jest powiedziana.
+WIAZE_HAK = re.compile(r"that's\s+(how|what|the|why)|that is\s+(how|what)",
+                       re.I)
+
+
+def hak_bez_zaczepu(tekst: str) -> str:
+    """Otwarcie jednym slowem, ktorego nastepne zdanie nie wiaze. Puste, gdy wiaze.
+
+    Wiazaniem jest albo zwrot „that's how/what/the/why", albo powtorzenie
+    slowa z haka. Sprawdzamy tylko pierwsze 170 znakow dalszego ciagu: dalej
+    czytelnik juz nie szuka, tylko przestaje czytac.
+    """
+    # APOSTROF PROSTUJEMY, I TO NIE JEST KOSMETYKA. Model pisze „That's" ze
+    # znakiem U+2019, wiec wzorzec z apostrofem prostym nie trafial w NIC —
+    # przy pierwszym uruchomieniu wykrywacz oznaczyl wszystkie szesc notek z
+    # hakiem, w tym cztery, ktore wiaza go poprawnie. Ta sama pulapka zjadla mi
+    # rano pierwszy pomiar tej samej wady.
+    t = re.sub(r"https?://\S+", " ", str(tekst or ""))
+    t = t.replace(chr(8217), "'").replace(chr(8216), "'").strip()
+    linie = [l.strip() for l in t.splitlines() if l.strip()]
+    if not linie:
+        return ""
+    hak = linie[0]
+    if len(hak.split()) > 4 or not hak.rstrip().endswith("."):
+        return ""
+    dalej = " ".join(linie[1:])[:170]
+    if not dalej:
+        return ""
+    if WIAZE_HAK.search(dalej):
+        return ""
+    slowa = [w for w in re.sub(r"[^a-z ]", " ", hak.lower()).split()
+             if len(w) > 3]
+    if any(w in dalej.lower() for w in slowa):
+        return ""
+    return hak[:60]
+
+
 def za_duzo_zargonu(tekst: str) -> list[str]:
     """Terminy insiderskie, gdy jest ich wiecej, niz notka udzwignie. Inaczej pusto.
 
@@ -2921,6 +2969,12 @@ def note(
         if _spor:
             print("    UWAGA: otwiera sporem, ktorego czytelnik nie slyszal —"
                   " %r (notka i tak idzie)" % _spor[:90], flush=True)
+        _hak = hak_bez_zaczepu(text)
+        data["hak_bez_zaczepu"] = _hak
+        if _hak:
+            print("    UWAGA: otwiera hakiem %r, ktorego nastepne zdanie nie"
+                  " wiaze — czytelnik dostaje liczbe bez rzeczownika" % _hak,
+                  flush=True)
         _zargon = za_duzo_zargonu(text)
         data["zargon"] = _zargon
         if _zargon:

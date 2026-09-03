@@ -469,5 +469,45 @@ sprawdz("prog stoi na 3, jak zmierzono", stages.MAKS_TERMINOW == 3,
         stages.MAKS_TERMINOW)
 
 print()
+print("=== 16. HAK ZAWIESZONY W PROZNI ===")
+# Forma LICZBA otwiera notke jednym slowem, a nastepne zdanie ma je ZWIAZAC.
+# Zmierzone na 34 notkach: szesc otwiera sie krotkim hakiem, DWIE nie wiaza go
+# wcale. Notka #31 jest zepsuta wprost — „Zero." i ani slowa o tym, zero CZEGO.
+APOSTROF = chr(8217)          # ' — model pisze wlasnie taki, nie prosty
+sprawdz("lapie #31: hak Zero bez rzeczownika",
+        stages.hak_bez_zaczepu(
+            "Zero.\n\nSemiAnalysis physically tore down Huawei's Kirin 9030 "
+            "and found US export controls did not stop progress.") == "Zero.",
+        stages.hak_bez_zaczepu("Zero.\n\nSemiAnalysis tore down a chip."))
+sprawdz("lapie #08: zwiazek tylko do wywnioskowania",
+        bool(stages.hak_bez_zaczepu(
+            "320 patients.\n\nInsilico's Phase III trial of rentosertib, the "
+            "first drug where AI picked the biological target.")))
+
+sprawdz("KONTRDOWOD: zwrot That is how many wiaze hak",
+        not stages.hak_bez_zaczepu(
+            "Zero.\n\nThat" + APOSTROF + "s how many permissions you need in "
+            "Japan to train a commercial AI on copyrighted work."))
+sprawdz("KONTRDOWOD: krzywy apostrof tez ma dzialac — model pisze wlasnie taki",
+        not stages.hak_bez_zaczepu(
+            "Two paragraphs.\n\nThat" + APOSTROF + "s how much of any answer "
+            "I skip before I start reading."))
+sprawdz("KONTRDOWOD: powtorzone slowo z haka tez wiaze",
+        not stages.hak_bez_zaczepu(
+            "Fourteen days.\n\nOpenAI paused training for fourteen days after "
+            "its own framework could not rule out the risk."))
+sprawdz("KONTRDOWOD: dluga pierwsza linia to nie hak",
+        not stages.hak_bez_zaczepu(
+            "Ireland gave nearly a quarter of its metered electricity to data "
+            "centres.\n\nThe share rose for a third year running."))
+sprawdz("KONTRDOWOD: pierwsza linia bez kropki to nie hak",
+        not stages.hak_bez_zaczepu(
+            "Two paragraphs\n\nSomething entirely unrelated follows here."))
+sprawdz("pusty tekst nie wywraca", stages.hak_bez_zaczepu("") == "")
+sprawdz("None tez nie", stages.hak_bez_zaczepu(None) == "")
+sprawdz("sam hak bez dalszego ciagu nie jest wada",
+        stages.hak_bez_zaczepu("Zero.") == "")
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)
