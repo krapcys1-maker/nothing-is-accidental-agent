@@ -3360,8 +3360,22 @@ def notki_dnia(
         # DWAJ PISARZE NA ZMIANE. Numer liczony w skali DOBY (`od` to tyle,
         # ile juz dzis wyszlo), nie w skali przebiegu — inaczej kazdy przebieg
         # zaczynalby od zera i cala doba szlaby jednym modelem.
-        # Parzysta notka: Opus. Nieparzysta: DeepSeek pro, osiem razy tanszy.
-        etap_pisarza = "note" if (od + nr) % 2 == 0 else "note_tani"
+        #
+        # PARZYSTOSC PRZESUWA SIE CO DOBE i to jest cala pointa tej linii.
+        # `NOTE_MIX_OTHER_DAY` ma STALA kolejnosc typow (CIEKAWOSTKA,
+        # CIEKAWOSTKA, DYSKUSJA, SPROSTOWANIE, MYSL), wiec bez przesuniecia
+        # pisarz bylby przypiety do typu na zawsze: Opus zawsze MYSL i DYSKUSJA,
+        # DeepSeek zawsze SPROSTOWANIE. Porownanie po dwoch tygodniach mierzyloby
+        # wtedy RODZAJ NOTKI, nie pisarza — a to jest zdanie o niczym.
+        # Zlapane 3 wrzesnia 2026 na pierwszej parze notek: DeepSeek dostal
+        # SPROSTOWANIE/SCENA, Opus MYSL/KONTRAST, dokladnie jak przewiduje
+        # stala kolejnosc.
+        #
+        # Dzien liczymy z daty UTC, wiec podzial jest deterministyczny — ten sam
+        # dzien zawsze daje ten sam uklad i da sie go odtworzyc z dziennika.
+        from datetime import datetime as _dt, timezone as _tz
+        _doba = _dt.now(_tz.utc).toordinal()
+        etap_pisarza = "note" if (od + nr + _doba) % 2 == 0 else "note_tani"
         print("  [pisarz] %s (%s)" % (config.MODEL_FOR.get(etap_pisarza, "?"),
                                       etap_pisarza), flush=True)
         wynik = note(conn, run_id, typ, material,

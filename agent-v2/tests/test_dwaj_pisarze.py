@@ -150,8 +150,41 @@ sprawdz("KONTRDOWOD: liczone w skali przebiegu dalo by piec razy ten sam model",
         set(w_skali_przebiegu) == {"note"}, w_skali_przebiegu)
 
 zrodlo = pathlib.Path("agent-v2/stages.py").read_text(encoding="utf-8")
-sprawdz("i tak wlasnie liczy to kod produkcyjny (`od + nr`)",
-        '"note" if (od + nr) % 2 == 0 else "note_tani"' in zrodlo)
+sprawdz("i tak wlasnie liczy to kod produkcyjny (doba + numer notki)",
+        '"note" if (od + nr + _doba) % 2 == 0 else "note_tani"' in zrodlo)
+
+print()
+print("=== 3b. PISARZ NIE MOZE BYC PRZYPIETY DO RODZAJU NOTKI ===")
+# `NOTE_MIX_OTHER_DAY` ma STALA kolejnosc, wiec bez przesuniecia co dobe pisarz
+# dostawalby zawsze te same rodzaje — a porownanie po dwoch tygodniach
+# mierzyloby RODZAJ, nie pisarza. Zlapane 3 wrzesnia 2026 na pierwszej parze
+# notek z produkcji: DeepSeek dostal SPROSTOWANIE, Opus MYSL.
+import collections  # noqa: E402
+
+MIKS = config.NOTE_MIX_OTHER_DAY
+
+
+def rozklad(z_przesunieciem: bool) -> dict:
+    par = collections.Counter()
+    for doba in range(14):
+        for i, typ in enumerate(MIKS):
+            e = "note" if (i + (doba if z_przesunieciem else 0)) % 2 == 0 else "note_tani"
+            par[(e, typ)] += 1
+    return par
+
+
+bez, z_nim = rozklad(False), rozklad(True)
+typy = list(dict.fromkeys(MIKS))
+sprawdz("KONTRDOWOD: bez przesuniecia jeden pisarz NIGDY nie pisze"
+        " niektorych rodzajow",
+        any(bez[("note", t)] == 0 or bez[("note_tani", t)] == 0 for t in typy),
+        {t: (bez[("note", t)], bez[("note_tani", t)]) for t in typy})
+sprawdz("z przesunieciem KAZDY pisarz dostaje KAZDY rodzaj",
+        all(z_nim[("note", t)] and z_nim[("note_tani", t)] for t in typy),
+        {t: (z_nim[("note", t)], z_nim[("note_tani", t)]) for t in typy})
+sprawdz("i dostaja ich po rowno (roznica najwyzej o jeden)",
+        all(abs(z_nim[("note", t)] - z_nim[("note_tani", t)]) <= 1 for t in typy),
+        {t: (z_nim[("note", t)], z_nim[("note_tani", t)]) for t in typy})
 
 print()
 print("=== 4. DZIENNIK DOSTAJE NAZWE MODELU ===")
