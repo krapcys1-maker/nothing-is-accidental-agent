@@ -30,8 +30,19 @@ import sys
 from collections import Counter
 from datetime import datetime, timezone
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent))
+# SCIEZKA Z REPOZYTORIUM, NIE Z KATALOGU SKRYPTU — i to nie jest ostroznosc na
+# zapas. Uruchomiony jako kopia z `/tmp` skrypt wciagnal STARE `config.py`
+# lezace tam po wczesniejszych sesjach i pokazal „wolnych tematow: 0" oraz
+# „wystawionych: 0" przy pelnym banku i wystawionych notkach. Cichy falsz w
+# przyrzadzie do sprawdzania jest gorszy niz brak przyrzadu.
+_REPO = pathlib.Path.cwd() / "agent-v2"
+_TU = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(_REPO if (_REPO / "config.py").exists() else _TU))
 import config  # noqa: E402
+
+if not (pathlib.Path(config.__file__).parent / "stages.py").exists():
+    print("UWAGA: wczytalem config z %s — to nie wyglada na repozytorium agenta."
+          % config.__file__)
 
 
 def _dzien() -> str:
