@@ -32,25 +32,43 @@ RSS = "https://www.youtube.com/feeds/videos.xml"
 NS = {"a": "http://www.w3.org/2005/Atom"}
 
 # Identyfikatory ustalone przez wyszukiwarke (strony statystyk kanalow), bo
-# youtube.com/@uchwyt przekierowuje na zgode. Sprawdzone: kazdy oddaje RSS 200.
+# youtube.com/@uchwyt przekierowuje na zgode.
+#
+# SPRAWDZENIEM NIE JEST KOD 200 — I TO NAS KOSZTOWALO TRZY KANALY.
+# Do 3 wrzesnia 2026 stalo tu „sprawdzone: kazdy oddaje RSS 200". Kod 200
+# oddaje takze feed CUDZEGO kanalu, wiec bledny identyfikator przechodzil
+# kontrole. Zmierzone tego dnia na zywo, przez pobranie i odczytanie wpisow:
+#
+#   TheAIGRID  UCSPkiRjFYpz... -> feed „TheLifeGrid", ZERO wpisow
+#   ByCloud    UC6r0JH23PKZ... -> hiszpanski kanal growy, ostatni film
+#                                 2019-05-26 („Vagrant Story", Fortnite)
+#   MLST       UCZHmQk67mSJ... -> „Yannic Kilcher", nie MLST
+#
+# ByCloud byl gorszy niz bezuzyteczny: pietnascie hiszpanskich tytulow z lat
+# 2013-2019 wchodzilo do zbioru `znane` w `wielkie_wydarzenia`, czyli zatruwalo
+# wykrywacz premier historia bez zwiazku z AI. Poprawny TheAIGRID ma film o
+# Fable 5.1 z 2 wrzesnia — czyli o premierze, na ktora bylismy slepi.
+#
+# SPRAWDZAJAC IDENTYFIKATOR, CZYTAJ <title> FEEDU I DATE OSTATNIEGO WPISU.
+# Nie kod odpowiedzi.
 KANALY = {
     # Zdarzenia i newsy
     "AI Revolution":       "UC5l7RouTQ60oUjLjt1Nh-UQ",
     "Wes Roth":            "UCqcbQf6yw5KzRoDDcZ_wBSw",
     "Matt Wolfe":          "UChpleBmo18P08aKCIgti38g",
-    "TheAIGRID":           "UCSPkiRjFYpz-8DY-aF_1wRg",
+    "TheAIGRID":           "UCbY9xX3_jW5c2fjlZVBI4cg",
     "1littlecoder":        "UCpV_X0VrL8-jg3t6wYGS-1g",
     "Sam Witteveen":       "UC55ODQSvARtgSyc8ThfiepQ",
     # Wyjasnianie mechanizmow — najblizsze temu, co robimy
     "AI Explained":        "UCNJ1Ymd5yFuUPtn21xtRbbw",
     "Two Minute Papers":   "UCbfYPyITQ-7l4upoX8nvctg",
-    "ByCloud":             "UC6r0JH23PKZfogSwn2Q-oMw",
+    "ByCloud":             "UCgfe2ooZD3VJPB6aJAnuQng",
     "Dr Waku":             "UCZf5IX90oe5gdPppMXGImwg",
     # Wielkie pytania z rozmow — rejestr Kaweckiego.
     # Lex Fridman WYPADL: w wiekszosci nie o AI, a klipy z jednego
     # wywiadu dawaly dziesiec pozycji dziennie i wypychaly reszte.
     "Dwarkesh Patel":      "UCXl4i9dYBrFOabk0xGmbkRA",
-    "MLST":                "UCZHmQk67mSJgfCCTn7xBfew",
+    "MLST":                "UCMLtBahI5DMrt0NPvDSoIRQ",
     # Produktowe — trzymane osobno, bo najczesciej daja poradniki
     "Matthew Berman":      "UCawZsQWqfGSbCI5yjkdVkTA",
 }

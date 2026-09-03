@@ -78,6 +78,21 @@ def main() -> int:
             "OK" if zywe_kanaly >= 8 else "UWAGA",
             "%d z %d" % (zywe_kanaly, len(korpus_kanalow.KANALY)))
 
+    # LICZBA ZBIORCZA UKRYWALA TRZY MARTWE KANALY PRZEZ TYDZIEN.
+    # „10 z 13" wygladalo jak OK, bo prog wynosi 8 — a trzy z tych trzynastu
+    # mialy bledne identyfikatory i oddawaly feed cudzego kanalu (patrz
+    # `korpus_kanalow.KANALY`). Aggregat nie moze byc jedynym sprawdzeniem
+    # zbioru, ktorego elementy psuja sie POJEDYNCZO. Od 3 wrzesnia 2026 audyt
+    # wymienia z nazwy kazdy kanal, ktory nie dal ANI JEDNEJ pozycji.
+    ile_z_kanalu = {}
+    for w in k2:
+        ile_z_kanalu[w.get("kanal")] = ile_z_kanalu.get(w.get("kanal"), 0) + 1
+    nieme = sorted(n for n in korpus_kanalow.KANALY if not ile_z_kanalu.get(n))
+    werdykt("kazdy kanal cos dal", "OK" if not nieme else "BLAD",
+            "nie dal nic: %s" % ", ".join(nieme) if nieme else "wszystkie 13")
+    for nazwa in sorted(korpus_kanalow.KANALY, key=lambda n: -ile_z_kanalu.get(n, 0)):
+        print("    %-18s %3d pozycji" % (nazwa, ile_z_kanalu.get(nazwa, 0)))
+
     # ---------------------------------------------------------------
     etap(2, "PAS PIERWSZENSTWA — wielkie wydarzenia")
     wyd = korpus_kanalow.wielkie_wydarzenia(k2)
