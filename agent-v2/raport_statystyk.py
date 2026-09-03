@@ -16,11 +16,13 @@ Uruchomienie:
     python agent-v2/raport_statystyk.py
     python agent-v2/raport_statystyk.py notka
 """
+import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import config
 import statystyki  # noqa: E402
 
 
@@ -186,6 +188,75 @@ def wzrost_konta() -> None:
         print("   To pierwszy zapis — przyrostu nie ma jeszcze z czego policzyc.")
 
 
+def zrodla_zapisow() -> None:
+    """SKAD NAPRAWDE przyszli ludzie — wlasne przypisanie Substacka.
+
+    Osobna sekcja, a nie kolumna w tabeli wyzej, bo to inne zrodlo danych i
+    inna jednostka: tamta tabela mierzy POZYCJE, ta odpowiada na pytanie
+    „ktora droga ktos przyszedl". Sklejenie ich dawalo liczbe, ktora wyglada
+    jak przypisanie, a nim nie jest.
+
+    Czyta ostatnia linie `data/zrodla.jsonl`, ktora `zapisz_zrodla_ruchu`
+    dokleja przy kazdym przebiegu. Gdy pliku nie ma, mowi to wprost zamiast
+    milczec — brak pomiaru i zero to nie to samo.
+    """
+    plik = config.DATA_DIR / "zrodla.jsonl"
+    print()
+    print("=" * 96)
+    print("SKAD NAPRAWDE PRZYSZLI LUDZIE  (przypisanie Substacka, nie okno czasowe)")
+    print("=" * 96)
+    if not plik.exists():
+        print("  Brak `data/zrodla.jsonl` — tabela zrodel nie byla jeszcze czytana.")
+        print("  To NIE znaczy zero zapisow; to znaczy, ze nikt nie pytal.")
+        return
+    ostatnia = None
+    for linia in plik.read_text(encoding="utf-8").splitlines():
+        if linia.strip():
+            try:
+                ostatnia = json.loads(linia)
+            except Exception:
+                continue
+    if not ostatnia:
+        print("  Plik jest, ale nie ma w nim ani jednego czytelnego odczytu.")
+        return
+    okno = ostatnia.get("okno") or {}
+    pod = ostatnia.get("podsumowanie") or {}
+    print("  odczyt z %s, okno %s..%s (%s dni)" % (
+        str(ostatnia.get("kiedy"))[:16], okno.get("od"), okno.get("do"),
+        okno.get("dni")))
+    print("  zapisow razem: %s   ruch: %s wyswietlen / %s osob" % (
+        pod.get("zapisy_ze_wzrostu", "?"), pod.get("wyswietlenia", "?"),
+        pod.get("osoby", "?")))
+    # ZGODNOSC DWOCH ADRESOW. Panel oddaje te sama liczbe dwoma drogami;
+    # rozjazd znaczy, ze jedna z nich czytamy zle — i lepiej to wiedziec.
+    if pod.get("zapisy_zgodne") is False:
+        print("  UWAGA: dwa adresy panelu podaja ROZNE sumy zapisow (%s vs %s)"
+              % (pod.get("zapisy_z_ruchu"), pod.get("zapisy_ze_wzrostu")))
+    per = pod.get("zapisy_per_notka") or {}
+    if per:
+        teksty = {}
+        for poz in statystyki.najnowsze_per_pozycja().values():
+            teksty[str(poz.get("id"))] = poz.get("tekst", "")
+        print()
+        print("  KTORA NOTKA PRZYNIOSLA CZLOWIEKA:")
+        for nid, ile in sorted(per.items(), key=lambda kv: -kv[1]):
+            print("     %2s zapis(ow)  %-10s  %s"
+                  % (ile, nid, _skrot(teksty.get(str(nid), ""), 58)))
+        print("     razem z notek: %d" % sum(per.values()))
+    else:
+        print("  Panel nie przypisal zadnego zapisu do konkretnej notki.")
+    # RUCH PER ZRODLO — druga polowa obrazu: co przyciaga oczy, a nie zapisy.
+    rzedy = ((ostatnia.get("ruch") or {}).get("rows")) or []
+    if rzedy:
+        print()
+        print("  RUCH WG ZRODLA:")
+        for r in sorted(rzedy, key=lambda r: -(r.get("views") or 0))[:8]:
+            print("     %-18s %6s wyswietlen  %5s osob  %s zapisow"
+                  % (str(r.get("source"))[:18], r.get("views") if r.get("views") is not None else "—",
+                     r.get("users") if r.get("users") is not None else "—",
+                     r.get("free_signup") if r.get("free_signup") is not None else "—"))
+
+
 def main() -> int:
     rodzaj = sys.argv[1] if len(sys.argv) > 1 else None
 
@@ -212,8 +283,25 @@ def main() -> int:
     print("CO PRZYNIOSLA KAZDA POZYCJA%s" % (
         "  (tylko: %s)" % rodzaj if rodzaj else ""))
     print("=" * 96)
+    # KOLUMNA, KTORA MOWILA COS INNEGO, NIZ WSZYSCY CZYTALI.
+    #
+    # „SUBS" przy pozycji NIE jest przypisaniem zapisu do tej pozycji. Przy
+    # artykule to `signups_within_1_day` z panelu wydawcy — czyli KTO ZAPISAL
+    # SIE W CIAGU DOBY po wpisie, z dowolnego powodu. Przy notce tego pola nie
+    # ma wcale, wiec stoi tam zero, ktore znaczy „nie mierzone", a wyglada jak
+    # „nic nie przyniosla".
+    #
+    # Zmierzone 3 wrzesnia 2026 na tych samych danych: tabela pokazywala
+    # 7 subskrypcji przy artykulach i 0 przy notkach, a wlasne przypisanie
+    # Substacka (`stats/growth/sources`) mowilo dokladnie odwrotnie — 6 zapisow,
+    # z tego 5 z notek i ANI JEDNEGO z artykulu. Kolumna zapraszala wiec do
+    # odwrotnego wniosku niz prawda, i to przy jedynym pytaniu, ktore naprawde
+    # sie liczy: co przynosi ludzi.
+    #
+    # Prawdziwe przypisanie jest nizej, w osobnej sekcji. Tu zostaje nazwa,
+    # ktora nie udaje odpowiedzi na tamto pytanie.
     print("%-11s %-10s %6s %6s %5s %5s %5s  %s" % (
-        "RODZAJ", "NUMER", "WEJSC", "POLUB", "KOM", "SUBS", "OBS", "TRESC"))
+        "RODZAJ", "NUMER", "WEJSC", "POLUB", "KOM", "ZAP24", "OBS", "TRESC"))
     print("-" * 96)
     for r in pozycje:
         print("%-11s %-10s %6s %6s %5s %5s %5s  %s" % (
@@ -269,6 +357,7 @@ def main() -> int:
         for nazwa, ile in sorted(powierzchnie.items(), key=lambda x: -x[1]):
             print("   %-16s %s" % (nazwa, ile))
 
+    zrodla_zapisow()
     dwie_epoki(najnowsze)
     wzrost_konta()
     return 0
