@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **23 plików**, 29 832 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 29 888 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -114,7 +114,7 @@ przeglądarki, `browser.py` nigdy nie woła modelu.
 
 Powód tego rozdziału jest praktyczny: dzięki niemu **cała warstwa myślowa da
 się testować bez przeglądarki i bez pieniędzy**. 129 zestawów
-testów, 3578 sprawdzeń, żaden nie otwiera Chrome i żaden nie
+testów, 3593 sprawdzeń, żaden nie otwiera Chrome i żaden nie
 woła płatnego modelu.
 
 ### I.4. Trzy zasady, z których wynika reszta
@@ -177,7 +177,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `stages.py` — wszystkie etapy myślowe; nie dotyka przeglądarki
 
-7957 wierszy, 141 funkcji na poziomie modułu, 0 klas
+8013 wierszy, 141 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
@@ -10296,7 +10296,7 @@ Return only:
 
 #### `prompts/notka.md`
 
-**371 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
+**383 wierszy.** Pola wejsciowe: `evidence`, `form_brief`, `language`, `max_words`, `min_words`, `note_form`, `note_type`, `ostatnie_otwarcia_json`, `type_brief`
 
 ````markdown
 Write a Substack Note for the anonymous editorial brand Nothing Is Accidental —
@@ -10659,6 +10659,18 @@ that never ran, because it reads as checked.
 ## The evidence
 
 {evidence}
+
+**If the evidence carries `kat_wziety`, that is your assignment, not a
+suggestion.** It holds two fields. `kat` says what to lead with. `lamie` is the
+belief this note has to break — and it is the reason the field exists: the same
+fact may be written more than once, each time against a DIFFERENT wrong belief,
+and a second note that breaks the first one's belief again is a duplicate no
+matter how differently it is worded.
+
+So write to that belief and no other. Everything else in the evidence is
+background you may draw on, but the note is about this one angle. If `lamie`
+names something the evidence cannot actually support, say the smaller true
+thing rather than stretching the fact to fit the assignment.
 
 **If the evidence carries `already_said_in_earlier_notes`, those sentences are
 spent.** They went out in the feed on earlier days, to the same people. Do not

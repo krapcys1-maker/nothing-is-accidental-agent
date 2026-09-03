@@ -253,5 +253,90 @@ sprawdz("i mowi, czym zastapic — przekonaniem czytelnika o SOBIE",
         or "the reader's OWN" in _tresc_nt)
 
 print()
+print("=== 11. JEDEN FAKT ODDAJE KILKA NOTEK PRZEZ KATY ===")
+# Do 4 wrzesnia 2026 katy byly wylacznie ZAPISYWANE: pisanie notki zjadalo caly
+# fakt. Model rozpisywal je przy kazdym przebiegu i placilismy za to, a „z
+# jednego newsa trzy notki" nie zdarzylo sie ani razu.
+
+
+def _fakt(tresc, katy, kiedy=None):
+    return {"status": "nowy", "kiedy": kiedy or config.DATA_PRZESTAWIENIA,
+            "wazny_do": "2099-01-01", "source_date": config.DATA_PRZESTAWIENIA,
+            "fact": tresc,
+            "katy": [{"kat": k, "lamie": k + " belief", "czego_brakuje": "",
+                      "uzyty": False} for k in katy]}
+
+
+def _wywolaj(bank, ile):
+    zapisane = {}
+    st_ind, st_zap = stages.wczytaj_indeks, stages._zapisz_indeks
+    st_pub = stages.opublikowane_teksty
+    stages.wczytaj_indeks = lambda *a, **k: bank
+    stages._zapisz_indeks = lambda x: zapisane.update({"bank": x})
+    stages.opublikowane_teksty = lambda *a, **k: []
+    try:
+        return stages.wez_kandydatow(ile)
+    finally:
+        stages.wczytaj_indeks, stages._zapisz_indeks = st_ind, st_zap
+        stages.opublikowane_teksty = st_pub
+
+
+B1 = [_fakt("Ireland gave 23 percent of metered power to data centres",
+            ["cena", "sieci", "prawo"])]
+w1 = _wywolaj(B1, 1)
+sprawdz("jedna notka -> jeden kandydat", len(w1) == 1, len(w1))
+sprawdz("kandydat niesie kat", bool(w1 and w1[0].get("kat_wziety")),
+        w1[0].get("kat_wziety") if w1 else None)
+sprawdz("fakt ZOSTAJE w banku, bo ma jeszcze dwa katy",
+        B1[0]["status"] == "nowy", B1[0]["status"])
+sprawdz("zuzyty jest DOKLADNIE jeden kat",
+        sum(1 for k in B1[0]["katy"] if k["uzyty"]) == 1,
+        [k["uzyty"] for k in B1[0]["katy"]])
+
+B2 = [_fakt("Ireland gave 23 percent of metered power to data centres",
+            ["cena", "sieci", "prawo"])]
+w2 = _wywolaj(B2, 3)
+sprawdz("trzy notki z JEDNEGO faktu", len(w2) == 3, len(w2))
+sprawdz("kazda dostaje INNY kat",
+        len({str((x.get("kat_wziety") or {}).get("kat")) for x in w2}) == 3,
+        [(x.get("kat_wziety") or {}).get("kat") for x in w2])
+sprawdz("po wyczerpaniu katow fakt wychodzi z banku",
+        B2[0]["status"] == "uzyty", B2[0]["status"])
+
+B3 = [_fakt("a" * 40 + " pierwszy", ["a1", "a2"]),
+      _fakt("b" * 40 + " drugi", ["b1", "b2"])]
+w3 = _wywolaj(B3, 4)
+sprawdz("dwa fakty po dwa katy daja cztery notki", len(w3) == 4, len(w3))
+_kolejnosc = [x["fact"][:1] for x in w3]
+sprawdz("kolejnosc jest RUNDAMI, nie po jednym fakcie do wyczerpania",
+        _kolejnosc[:2] != [_kolejnosc[0], _kolejnosc[0]], _kolejnosc)
+
+B4 = [_fakt("fakt zupelnie bez katow", [])]
+w4 = _wywolaj(B4, 2)
+sprawdz("KONTRDOWOD: fakt bez katow oddaje jedna notke", len(w4) == 1, len(w4))
+sprawdz("i wychodzi z banku od razu", B4[0]["status"] == "uzyty",
+        B4[0]["status"])
+sprawdz("a jego `kat_wziety` jest pusty",
+        w4 and w4[0].get("kat_wziety") is None, w4[0].get("kat_wziety"))
+
+print()
+print("=== 12. KONTRDOWOD: FAKT NIE JEST WLASNYM BLIZNIAKIEM ===")
+# Fakt z nieuzytym katem zostaje „nowy", ale z dzisiejsza data w `uzyty_kiedy`
+# — czyli trafia do listy wolnych I do listy porownawczej. Bez wykluczenia
+# tozsamosci wypadlby jako wlasny blizniak i pozostale katy nie doczekalyby
+# sie nigdy.
+B5 = [_fakt("Ireland gave 23 percent of metered power to data centres",
+            ["cena", "sieci"])]
+B5[0]["uzyty_kiedy"] = __import__("db").now()
+w5 = _wywolaj(B5, 1)
+sprawdz("fakt wzięty dzis nadal da sie wziac po kolejny kat",
+        len(w5) == 1, len(w5))
+
+_tresc_nt2 = pathlib.Path("agent-v2/prompts/notka.md").read_text(encoding="utf-8")
+sprawdz("prompt notki wie, co zrobic z `kat_wziety`", "kat_wziety" in _tresc_nt2)
+sprawdz("i mowi, ze `lamie` ma byc ZA KAZDYM RAZEM inne",
+        "DIFFERENT wrong belief" in _tresc_nt2)
+
+print()
 print("=== WYNIK: %d zdanych, %d oblanych ===" % (zdane, oblane))
 sys.exit(1 if oblane else 0)

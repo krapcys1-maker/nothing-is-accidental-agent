@@ -7382,13 +7382,20 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
         # Przerwa miedzy 0,500 a 0,692 jest szeroka, wiec 0,60 lezy w srodku
         # i ma zapas w obie strony.
         blizniak = next(
+            # `w is not k` — FAKT NIE JEST WLASNYM BLIZNIAKIEM. Od 4 wrzesnia
+            # 2026 fakt z nieuzytym katem zostaje w banku ze statusem „nowy",
+            # ale z dzisiejsza data w `uzyty_kiedy` — czyli trafia do OBU list
+            # naraz. Bez tego warunku porownywalby sie sam ze soba, zawsze
+            # wypadal jako blizniak i pozostale katy nie doczekalyby sie nigdy,
+            # a dziennik pokazywalby „blizniak zostaje w banku: X (juz biore: X)".
             (w for w in porownanie
-             if (_o_tym_samym(tresc, str(w.get("fact") or ""),
-                              **POROWNANIE_MIEDZY_DNIAMI)
-                 and _dzieli_temat(tresc, str(w.get("fact") or "")))
-             or _o_tym_samym(tresc, str(w.get("fact") or ""),
-                             **BLIZNIAK_BEZ_NAZWY)
-             or _dzielą_rzadkie(tresc, str(w.get("fact") or ""))), None)
+             if w is not k
+             and ((_o_tym_samym(tresc, str(w.get("fact") or ""),
+                                **POROWNANIE_MIEDZY_DNIAMI)
+                   and _dzieli_temat(tresc, str(w.get("fact") or "")))
+                  or _o_tym_samym(tresc, str(w.get("fact") or ""),
+                                  **BLIZNIAK_BEZ_NAZWY)
+                  or _dzielą_rzadkie(tresc, str(w.get("fact") or "")))), None)
         if blizniak is not None:
             rzadkie = _dzielą_rzadkie(tresc, str(blizniak.get("fact") or ""))
             blizniaki.append((tresc + ((" [rzadkie: %s]" % rzadkie) if rzadkie else ""),
@@ -7402,14 +7409,63 @@ def wez_kandydatow(ile: int = 1) -> list[dict[str, Any]]:
         print("  [indeks] blizniak zostaje w banku: %s (juz biore: %s)"
               % (tresc[:64], wzorzec[:64]), flush=True)
 
+    # --- KATY: JEDEN FAKT MOZE ODDAC KILKA NOTEK ----------------------------
+    #
+    # `posortuj_bank` kaze modelowi rozpisac przy kazdym fakcie katy, a przy
+    # kazdym kacie ZLAMANE PRZEKONANIE — inne dla kazdego. Do 4 wrzesnia 2026
+    # katy byly wylacznie ZAPISYWANE: pisanie notki zjadalo caly fakt, wiec
+    # „z jednego newsa trzy notki" nie dzialo sie nigdy, mimo ze model za to
+    # rozpisanie placil przy kazdym przebiegu.
+    #
+    # NAJPIERW ROZNE FAKTY, KATY DOPIERO GDY BRAKUJE. Kolejnosc nie jest
+    # ozdobna: dwie notki o roznych rzeczach sa dla czytelnika lepsze niz dwa
+    # ujecia jednej, a strazniki powtorek wyzej pracuja na pierwszym podejsciu
+    # i zostaja nietkniete. Katy sa GLEBIA na chudy dzien, nie zamiennikiem
+    # szukania — zmierzone 3 wrzesnia: bank spadl do szesciu wolnych faktow
+    # przy dziesieciu notkach na dobe.
+    def _wez_kat(k: dict[str, Any]) -> dict[str, Any] | None:
+        for kat in (k.get("katy") or []):
+            if isinstance(kat, dict) and not kat.get("uzyty"):
+                kat["uzyty"] = True
+                return kat
+        return None
+
+    wynik: list[dict[str, Any]] = []
+    for k in wziete:
+        wynik.append(dict(k, kat_wziety=_wez_kat(k)))
+    # Rundami, po jednym kacie z kazdego faktu — zeby przy dwoch faktach o
+    # trzech katach nie wyszly trzy notki o pierwszym i zero o drugim.
+    while len(wynik) < ile:
+        postep = False
+        for k in wziete:
+            if len(wynik) >= ile:
+                break
+            kat = _wez_kat(k)
+            if kat:
+                wynik.append(dict(k, kat_wziety=kat))
+                postep = True
+                print("  [katy] drugie ujecie tego samego faktu: %s"
+                      % str(kat.get("lamie") or kat.get("kat"))[:70], flush=True)
+        if not postep:
+            break
+
     if wziete:
         znaczniki = {id(k) for k in wziete}
         for k in indeks:
-            if id(k) in znaczniki:
-                k["status"] = "uzyty"
+            if id(k) not in znaczniki:
+                continue
+            # FAKT ZOSTAJE W BANKU, DOPOKI MA NIEUZYTY KAT. Inaczej pierwsza
+            # notka kasowalaby dwa pozostale ujecia, ktore model juz wymyslil
+            # i za ktore juz zaplacilismy. Termin i tak go kiedys usunie —
+            # `_po_terminie` liczy od daty zrodla, nie od wziecia.
+            if any(isinstance(x, dict) and not x.get("uzyty")
+                   for x in (k.get("katy") or [])):
                 k["uzyty_kiedy"] = db.now()
+                continue
+            k["status"] = "uzyty"
+            k["uzyty_kiedy"] = db.now()
         _zapisz_indeks(indeks)
-    return wziete
+    return wynik
 
 
 # Trzy jedyne powody, dla ktorych wolno skasowac oplaconego kandydata. KOD, nie
