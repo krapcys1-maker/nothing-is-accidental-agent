@@ -590,7 +590,7 @@
 
 ### `przeglad_dnia.py` — caly lancuch jednego dnia bez wolania modelu: szukanie, bank z katami, powody odrzucen, notki
 
-200 wierszy, 6 funkcji na poziomie modułu, 0 klas
+229 wierszy, 6 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

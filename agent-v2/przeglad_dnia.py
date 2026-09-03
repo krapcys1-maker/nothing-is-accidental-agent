@@ -172,13 +172,42 @@ def main() -> None:
         dl = [r.get("slow") or 0 for r in notki]
         print("  slow:  min %d  mediana %d  maks %d"
               % (min(dl), sorted(dl)[len(dl) // 2], max(dl)))
+    # TRZY WYKRYWACZE NA GOTOWYM TEKSCIE. Kazdy powstal po tym, jak wlasciciel
+    # nie mogl przeczytac opublikowanej notki, i kazdy jest skalibrowany na
+    # naszych wlasnych notkach — nie na wyobrazeniu o tym, co jest trudne.
+    # Zadny NIE JEST BRAMKA: kandydat jest jeden, wiec odrzucenie znaczy dzien
+    # bez notki. Sa tu po to, zeby dalo sie policzyc, czy wada wraca.
+    try:
+        import stages
+    except Exception:
+        stages = None
     for r in notki:
         print()
         print("  --- %s  typ=%s forma=%s slow=%s model=%s ranga_faktu=%s"
               % (str(r.get("kiedy"))[11:16], r.get("typ"), r.get("forma"),
                  r.get("slow"), r.get("model"), r.get("fakt_ranga")))
         # UCIETE DO 300 ZNAKOW W ZRODLE — patrz naglowek pliku.
-        print("      " + str(r.get("tekst") or "").replace("\n", " ")[:220])
+        tekst = str(r.get("tekst") or "")
+        print("      " + tekst.replace("\n", " ")[:220])
+        if stages is None:
+            continue
+        uwagi = []
+        try:
+            spor = stages.otwiera_sporem(tekst)
+            if spor:
+                uwagi.append("otwiera sporem, ktorego czytelnik nie slyszal:"
+                             " %r" % spor[:70])
+            zarg = stages.za_duzo_zargonu(tekst)
+            if zarg:
+                uwagi.append("%d terminow bez tlumaczenia: %s"
+                             % (len(zarg), ", ".join(zarg[:6])))
+            if not re.search(r"[0-9]", re.sub(r"https?://\S+", "", tekst)):
+                uwagi.append("ani jednej liczby (samo w sobie NIE jest wada —"
+                             " najlepsza notka okresu tez jej nie ma)")
+        except Exception as exc:
+            uwagi.append("wykrywacze nie ruszyly: %s" % type(exc).__name__)
+        for u in uwagi:
+            print("      ^ %s" % u)
 
     # ------------------------------------------------------------------
     _naglowek("5. RESZTA DNIA")
