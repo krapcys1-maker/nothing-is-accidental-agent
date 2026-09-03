@@ -5168,7 +5168,7 @@ Pięć plików nie ma kontrdowodu w żadnej z odmian: `test_czas`, `test_generat
 
 ### Baza, dysk, koszty i operacje
 
-Ten rozdział opisuje wszystko, co agent zapisuje na trwałe, ile to kosztuje i jak jest uruchamiane. Liczby pochodzą z produkcyjnej bazy `~/nothing-is-accidental-agent/agent-v2/data/agent-v2.db` odczytanej 2026-08-20 w trybie read-only oraz z `systemctl cat` na serwerze `57.131.139.221`.
+Ten rozdział opisuje wszystko, co agent zapisuje na trwałe, ile to kosztuje i jak jest uruchamiane. Liczby pochodzą z produkcyjnej bazy `~/nothing-is-accidental-agent/agent-v2/data/agent-v2.db` odczytanej 2026-08-20 w trybie read-only oraz z `systemctl cat` na serwerze `<IP-SERWERA>`.
 
 ---
 

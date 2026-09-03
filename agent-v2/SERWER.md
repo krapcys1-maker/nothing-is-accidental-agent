@@ -6,7 +6,7 @@
 > (użytkownik `ubuntu`, nie `root`), codzienne polecenia i lista rzeczy, które
 > zmienialiśmy w systemie.
 
-Maszyna: **OVH VPS-3, Ubuntu 26.04, Frankfurt, `57.131.139.221`**.
+Maszyna: **OVH VPS-3, Ubuntu 26.04, Frankfurt, `<IP-SERWERA>`**.
 
 Robimy to w **dwóch etapach**, celowo. Etap 1 odpowiada na jedno pytanie i nic
 poza tym nie rusza. Dopiero jego wynik decyduje, czy Etap 2 ma sens.
@@ -42,8 +42,8 @@ Dwa pliki, których celowo nie ma w gicie. Wysyłasz je **ty**, bo to twoje
 sekrety i nie mają przechodzić przez nic po drodze.
 
 ```bash
-scp "C:/Users/user/Desktop/agent project/.env" root@57.131.139.221:~/nothing-is-accidental-agent/.env
-scp "C:/Users/user/Desktop/agent project/agent-v2/data/storage-state.json" root@57.131.139.221:~/nothing-is-accidental-agent/agent-v2/data/storage-state.json
+scp "C:/Users/user/Desktop/agent project/.env" root@<IP-SERWERA>:~/nothing-is-accidental-agent/.env
+scp "C:/Users/user/Desktop/agent project/agent-v2/data/storage-state.json" root@<IP-SERWERA>:~/nothing-is-accidental-agent/agent-v2/data/storage-state.json
 ```
 
 ### 1.3 Na serwerze — sprawdzenie

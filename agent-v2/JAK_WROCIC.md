@@ -1,5 +1,18 @@
 # Jak wrócić do agenta — ściąga na później
 
+> **ADRES SERWERA NIE STOI JUZ W REPOZYTORIUM.** Repozytorium jest
+> publiczne, a ten plik podawal w jednym miejscu adres, uzytkownika, nazwy
+> kluczy SSH i sciezki do dwoch plikow z sekretami. Same sekrety nigdy nie
+> byly w historii Gita — sprawdzone na wszystkich galeziach.
+>
+> Adres trzymaj poza Gitem: `agent-v2/data/serwer.txt` (katalog `data/*`
+> jest w `.gitignore`) albo menedzer hasel. W polecenia nizej podstaw go
+> w miejsce `<IP-SERWERA>`.
+>
+> UWAGA: to usuwa adres z BIEZACEJ wersji, nie z historii. Kto zna
+> `git log`, nadal go znajdzie. Usuniecie z historii to osobna decyzja.
+
+
 Ten plik istnieje po to, żeby za trzy miesiące nikt nie siedział godzinę nad
 pytaniem „dlaczego to nie działa" albo „jak ja się tu w ogóle logowałem".
 Zapisane jest wszystko, co zmienialiśmy, i po co.
@@ -9,7 +22,7 @@ Zapisane jest wszystko, co zmienialiśmy, i po co.
 ## Dostęp
 
 ```bash
-ssh -i ~/.ssh/id_ed25519_nia_vps ubuntu@57.131.139.221
+ssh -i ~/.ssh/id_ed25519_nia_vps ubuntu@<IP-SERWERA>
 ```
 
 Klucz leży na komputerze właściciela w `~/.ssh/`. **Jest bez hasła** — musi taki
@@ -19,7 +32,7 @@ do serwera. To **jedyny klucz** wpisany dla `ubuntu`.
 ### Gdyby klucz zginął — trzy drogi, wszystkie sprawdzone
 
 1. **Logowanie hasłem po SSH.** `PasswordAuthentication` jest **włączone**, a
-   `ubuntu` ma ustawione hasło. Czyli `ssh ubuntu@57.131.139.221` bez klucza
+   `ubuntu` ma ustawione hasło. Czyli `ssh ubuntu@<IP-SERWERA>` bez klucza
    zadziała.
 2. **Konsola KVM w panelu OVH** (VPS-3, Frankfurt). Działa nawet gdy SSH padnie
    całkowicie — to samo hasło.

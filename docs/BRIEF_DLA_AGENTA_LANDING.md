@@ -18,7 +18,7 @@ treść w niespójnym stanie.** Twoja strona i jego praca są całkowicie rozdzi
 ## Twój dostęp
 
 ```bash
-ssh -i ~/.ssh/id_ed25519_landing web@57.131.139.221
+ssh -i ~/.ssh/id_ed25519_landing web@<IP-SERWERA>
 ```
 
 Klucz jest już wgrany. Logujesz się jako **`web`**, nie jako `ubuntu`.

@@ -1,7 +1,7 @@
 # Audyt sześciu promptów v2 — z pozycji wykonawcy
 
 **Data:** 2026-08-23. **Wykonawca:** Claude Fable 5 — model, który w produkcji dostaje `pisarz.md`.
-**Źródło:** produkcja, `ubuntu@57.131.139.221:~/nothing-is-accidental-agent/agent-v2/prompts/`, pobrane 2026-08-23.
+**Źródło:** produkcja, `ubuntu@<IP-SERWERA>:~/nothing-is-accidental-agent/agent-v2/prompts/`, pobrane 2026-08-23.
 **Stan repo lokalnego przy audycie:** commit `aa5fd82`. **Uwaga:** 4/6 lokalnych plików różni się od produkcji — `skaut.md`, `wykonalnosc.md`, `synteza.md`, `pisarz.md`; identyczne są `recenzent.md` i `forma.md`.
 
 Odciski audytowanych wersji (sha256):
