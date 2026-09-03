@@ -247,17 +247,6 @@ a każdy linter to zgłosi.
 
 ---
 
-## 16. Jeden fakt starszy niż reguła 90 dni siedzi w banku
-
-Z 18 wolnych faktów jeden ma 95 dni (BIS, 31 maja). Zostanie odrzucony przy
-wyjmowaniu — więc nie zaszkodzi — ale zajmuje miejsce i zawyża licznik
-„wolnych" w każdym raporcie.
-
-**Zrobione, gdy:** przeterminowane są odsiewane przy dopisywaniu, a nie dopiero
-przy wyjmowaniu.
-
----
-
 ## Czeka na decyzję właściciela — nie na kod
 
 Z audytu GPT (G5) i z dzisiejszego rozstrzygnięcia. **Nie są to usterki, dopóki

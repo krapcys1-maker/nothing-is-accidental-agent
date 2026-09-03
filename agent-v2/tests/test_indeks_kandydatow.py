@@ -525,6 +525,44 @@ try:
         stages.INDEKS_KANDYDATOW = _st5
 
     print()
+    print("=== DWA ZEGARY TERMINU: TEMAT I ZRODLO ===")
+    # `wazny_do` mowi, jak dlugo temat jest AKTUALNY; `source_date` — jak stare
+    # jest ZRODLO. Do 3 wrzesnia 2026 `_po_terminie` znala tylko pierwszy, a
+    # wiek zrodla sprawdzalo dopiero wyjmowanie i po cichu POMIJALO, nie
+    # zmieniajac statusu. Skutek zmierzony na produkcji: fakt z 31 maja siedzial
+    # w banku jako „nowy" 95 dni przy regule 90 i byl liczony jako material w
+    # kazdym raporcie — a to jest liczba, na ktorej stoi decyzja, ile razy
+    # dziennie dobierac nowe tematy.
+    from datetime import datetime as _dt2, timedelta as _td2, timezone as _tz2
+    _dzis2 = _dt2.now(_tz2.utc).date()
+    ZAWSZE_WAZNY = "2099-01-01 00:00"
+
+    def _fakt(dni, wazny=ZAWSZE_WAZNY):
+        return {"source_date": (_dzis2 - _td2(days=dni)).isoformat(),
+                "wazny_do": wazny}
+
+    prog = config.MAKS_WIEK_ZRODLA_DNI
+    sprawdz("zrodlo dokladnie na progu (%d dni) ZOSTAJE" % prog,
+            not stages._po_terminie(_fakt(prog)), prog)
+    sprawdz("zrodlo dzien za progiem (%d dni) WYPADA" % (prog + 1),
+            stages._po_terminie(_fakt(prog + 1)), prog + 1)
+    # KONTRDOWOD: gdyby sprawdzenie bralo cokolwiek innego niz wiek zrodla,
+    # swiezy fakt tez by wypadal — a wtedy bank pustoszalby sam z siebie.
+    sprawdz("swieze zrodlo z waznym terminem ZOSTAJE",
+            not stages._po_terminie(_fakt(1)))
+    # BRAK DATY NIE JEST POWODEM DO WYRZUCENIA. Decyzja o niewiadomej nalezy do
+    # sprawdzenia swiezosci przy wyjmowaniu, nie do tego miejsca.
+    sprawdz("fakt bez `source_date` zostaje",
+            not stages._po_terminie({"wazny_do": ZAWSZE_WAZNY}))
+    sprawdz("fakt z nieczytelna data zrodla zostaje",
+            not stages._po_terminie({"source_date": "kiedys",
+                                     "wazny_do": ZAWSZE_WAZNY}))
+    # I STARY ZEGAR DALEJ CHODZI — nowy warunek jest DODANY, nie zamieniony.
+    sprawdz("swieze zrodlo, ale minal termin tematu — WYPADA",
+            stages._po_terminie({"source_date": _dzis2.isoformat(),
+                                 "wazny_do": "2020-01-01 00:00"}))
+
+    print()
 finally:
     # Oddajemy swiat w stanie, w jakim go zastalismy — takze wtedy, gdy
     # ktoras asercja wywali sie wyjatkiem w polowie pliku.

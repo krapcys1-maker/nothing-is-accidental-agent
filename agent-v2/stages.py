@@ -7248,9 +7248,30 @@ def _po_terminie(k: dict[str, Any]) -> bool:
     Wpisy sprzed tej zmiany terminu nie maja — dla nich liczymy go ze starej
     reguly (dzien dopisania + `BANK_MAKS_DNI`), zeby nie zyly wiecznie tylko
     dlatego, ze powstaly wczesniej.
+
+    DWA ZEGARY, NIE JEDEN. `wazny_do` mowi, jak dlugo temat jest AKTUALNY;
+    `source_date` mowi, jak stare jest ZRODLO. Do 3 wrzesnia 2026 ta funkcja
+    znala tylko pierwszy z nich, a wiek zrodla sprawdzalo dopiero wyjmowanie —
+    i po cichu pomijalo, nie zmieniajac statusu. Skutek: fakt z 31 maja siedzial
+    w banku jako „nowy" 95 dni, przy wlascicielskiej regule 90, i byl liczony
+    jako material w kazdym raporcie. Nie kosztowal wywolan, ale klamal o tym,
+    ile mamy z czego pisac — a to jest liczba, na ktorej stoi decyzja o tym,
+    ile razy dziennie dobierac nowe tematy.
     """
     from datetime import datetime as _d, timedelta as _td, timezone as _tz
     teraz = _d.now(_tz.utc).strftime("%Y-%m-%d %H:%M")
+    zrodlo = str(k.get("source_date") or "")[:10]
+    if zrodlo:
+        # BRAK DATY NIE JEST POWODEM DO WYRZUCENIA. Fakt bez `source_date`
+        # przechodzi dalej i trafia na sprawdzenie swiezosci przy wyjmowaniu —
+        # tam jest miejsce na decyzje o niewiadomej, nie tutaj.
+        try:
+            wiek = (_d.now(_tz.utc).date()
+                    - _d.strptime(zrodlo, "%Y-%m-%d").date()).days
+        except ValueError:
+            wiek = None
+        if wiek is not None and wiek > config.MAKS_WIEK_ZRODLA_DNI:
+            return True
     termin = str(k.get("wazny_do") or "")
     if not termin:
         dopisane = str(k.get("kiedy") or "")[:10]
