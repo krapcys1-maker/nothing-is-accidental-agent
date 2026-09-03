@@ -3535,6 +3535,24 @@ def notki_dnia(
         # MYSL nie zuzyla zadnego faktu, wiec nie ma czego odhaczac.
         wynik["fakt"] = (None if typ == "MYSL"
                          else tekst_faktu(material.get("fact")) or None)
+        # RANGA JEDZIE RAZEM Z FAKTEM — do dziennika, nie do decyzji.
+        #
+        # PO CO. Bank ustawia fakty od najmocniejszego i to on decyduje, ktory
+        # idzie pierwszy. Czy ta ocena cokolwiek znaczy, dalo sie dotad
+        # sprawdzic wylacznie przez PAROWANIE PO SLOWACH notki z faktem —
+        # zrobilem to 3 wrzesnia 2026 i wyszlo 14 par z 46 notek, czyli
+        # probka, na ktorej nie wolno niczego przestawiac.
+        #
+        # Wynik tamtego parowania (traktowac jako trop, nie dowod):
+        #     fakty z czolowki banku (ranga 0-3): mediana ilorazu 0,75
+        #     fakty z dolu banku    (ranga >=6):  mediana ilorazu 1,25
+        # gdzie iloraz to wynik notki wobec WLASNEJ sredniej konta z panelu.
+        # Najlepsza notka w historii (3,31x) wyszla z faktu o randze 7.
+        #
+        # Z tym polem parowanie jest DOKLADNE i za dwa tygodnie probka jest
+        # duza. Dopiero wtedy wolno cokolwiek zrobic z samym rankingiem.
+        wynik["fakt_ranga"] = (None if typ == "MYSL"
+                               else material.get("ranga"))
         # Ta sama zasada co przy faktach: dzien promocji odhacza ten, kto notke
         # NAPRAWDE wystawil. Wystarczylo, ze kandydat przeszedl bramke — wiec
         # nieudana publikacja albo zwykle sprawdzenie zjadaly po cichu jeden

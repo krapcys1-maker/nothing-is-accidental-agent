@@ -350,7 +350,11 @@ def swiat_dnia(slad, st):
         # dziennik dostaje nazwe tego, ktory napisal. Atrapa przyjmuje i ZAPISUJE
         # to pole z tego samego powodu, co `typ` i `forma` — zeby test krzyknal,
         # gdyby produkcja przestala je przekazywac.
-        wystaw_notke=lambda tekst, wyslij=False, typ="", forma="", model="": (
+        # Parametr `fakt_ranga` doszedl 3 wrzesnia 2026 — notka zapisuje range,
+        # ktora bank nadal faktowi, zeby dalo sie policzyc, czy ta ocena
+        # cokolwiek przewiduje. Atrapa musi ja przyjac, inaczej wywolanie
+        # wywala sie i test mierzy wlasna niezgodnosc zamiast zachowania.
+        wystaw_notke=lambda tekst, wyslij=False, typ="", forma="", model="", fakt_ranga=None: (
             slad.notki.append({"tekst": tekst, "wyslij": wyslij,
                                "typ": typ, "forma": forma, "model": model})
             or {"wyslane": True, "blad": None}),

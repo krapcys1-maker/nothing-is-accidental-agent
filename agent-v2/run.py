@@ -1352,7 +1352,14 @@ def dzien(conn, run_id: int, wyslij: bool) -> int:
                                              # tam stoja wyniki. Bez tego pola
                                              # koszt obu modeli znamy z `calls`,
                                              # a SKUTKU nie porownamy nigdy.
-                                             model=gotowe[0].get("model", ""))
+                                             model=gotowe[0].get("model", ""),
+                                             # RANGA FAKTU — zeby dalo sie
+                                             # policzyc, czy ocena banku
+                                             # cokolwiek przewiduje. Bez tego
+                                             # trzeba parowac notke z faktem po
+                                             # nakladaniu sie slow, co dalo 14
+                                             # par z 46 notek.
+                                             fakt_ranga=n.get("fakt_ranga"))
                 # Fakt odhaczamy DOPIERO po potwierdzonej publikacji. Wczesniej
                 # znikal juz przy znalezieniu, wiec przepadal takze wtedy, gdy
                 # notka nie poszla albo gdy przebieg byl tylko sprawdzeniem.
