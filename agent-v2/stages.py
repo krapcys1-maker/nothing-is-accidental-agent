@@ -7387,6 +7387,38 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
             scietych += 1 if chce_artykul else 0
         k["dlaczego_mocny"] = str(o.get("dlaczego_mocny") or "")[:200]
         k["podobne_do"] = str(o.get("podobne_do") or "")[:200]
+        # KATY — ile notek da sie z tego faktu napisac i jakich.
+        #
+        # PO CO. Bank byl konsumowany JEDEN FAKT = JEDNA NOTKA. Przy dziesieciu
+        # notkach na dobe znaczy to dziesiec ROZNYCH wydarzen dziennie, czego
+        # zaden research nie dowozi — stad bank ciagle pusty i siegania po
+        # material sprzed kwartalu. A z premiery modelu da sie napisac trzy
+        # notki, ktore lamia trzy rozne przekonania: ze wyszedl i co w nim
+        # zaskakuje, co naprawde mierzy jego benchmark, i ile kosztuje wobec
+        # obietnicy. To nie jest ten sam tekst trzy razy.
+        #
+        # PYTAMY O TO MODEL, KTORY I TAK CZYTA CALY BANK. Etap `bank` chodzi
+        # przy kazdym przebiegu, kosztuje okolo 2 centow i do 3 wrzesnia 2026
+        # oddawal wylacznie KOLEJNOSC — 30 tysiecy tokenow wyjscia na
+        # permutacje jedenastu pozycji, zero wyrzuconych faktow w calej
+        # historii poza jednym. Katy nie kosztuja ani jednego wywolania wiecej.
+        katy = []
+        for _kat in (o.get("katy") or [])[:3]:
+            if not isinstance(_kat, dict):
+                continue
+            tresc_kata = str(_kat.get("kat") or "").strip()
+            lamie = str(_kat.get("lamie") or "").strip()
+            # KAT BEZ ZLAMANEGO PRZEKONANIA NIE JEST KATEM. Bez tego warunku
+            # model oddaje trzy parafrazy jednego zdania, a my dostajemy trzy
+            # notki o tym samym — czyli dokladnie to, przed czym bronimy sie
+            # w calym banku.
+            if not tresc_kata or not lamie:
+                continue
+            katy.append({"kat": tresc_kata[:200], "lamie": lamie[:200],
+                         "czego_brakuje": str(_kat.get("czego_brakuje")
+                                              or "").strip()[:200],
+                         "uzyty": False})
+        k["katy"] = katy
         # ZIELONE SWIATLO ZAPALA KOD, NIE MODEL. Pierwszy w kolejnosci
         # idzie do publikacji jako pierwszy — tak juz dziala
         # `wez_kandydatow`, ktore bierze po randze. Pole istnieje po to,
@@ -7397,6 +7429,15 @@ def posortuj_bank(conn: sqlite3.Connection, run_id: int | None = None,
             k["status"] = "odrzucony"
             k["powod"] = "bank: %s" % str(o.get("powod_wyrzucenia") or "slaby")[:150]
             wyrzucone += 1
+    _z_katami = sum(1 for k in wolni if k.get("katy"))
+    _katow = sum(len(k.get("katy") or []) for k in wolni)
+    _braki = sum(1 for k in wolni for _k in (k.get("katy") or [])
+                 if _k.get("czego_brakuje"))
+    if _katow:
+        print("  [bank] katy: %d propozycji przy %d faktach (srednio %.1f na"
+              " fakt); %d wymaga doszukania materialu"
+              % (_katow, _z_katami, _katow / max(1, _z_katami), _braki),
+              flush=True)
     if scietych:
         # GLOSNO. Sufit, ktory tnie po cichu, wyglada jak ocena modelu.
         print("  [bank] znacznik artykulowy: zostawiam %d (sufit %d z %d), "

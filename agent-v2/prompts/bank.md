@@ -107,13 +107,39 @@ you can name the second act or the second place out loud. Anything past that
 share is cut by the order anyway, strongest kept, so a generous list does not
 help the candidates in it — it only hides which ones you actually meant.
 
+## How many notes each one can carry
+
+Some facts are one note. Some carry two or three, and the difference is not
+length — it is whether the fact contains more than one thing a stranger
+believes wrongly.
+
+A model release is the clearest case. The release itself is one note ("it
+shipped and here is the number nobody expected"). The evaluation table is a
+second, and a different reader is wrong about a different thing ("a benchmark
+score is a ranking" — no, it is a measurement of one workload). The price
+against the promise is a third. Those are three notes, not one note told three
+times.
+
+The test is strict and it is the same test as everywhere on this account: each
+angle must break a DIFFERENT belief. If two angles would puncture the same
+assumption, that is one angle written twice — return one.
+
+For each candidate return `katy`: between one and three angles. Give one when
+one is honest. An angle is a short instruction to the writer, not a headline:
+say what to lead with and which belief it breaks.
+
+Where an angle needs something we do not have — a comparison table, a
+side-by-side with the previous version, the vendor's own eval page — say so in
+`czego_brakuje` for that angle. That is not a complaint; it is the next search
+we should run.
+
 ## Output
 
 Return only valid JSON. `kolejnosc` lists every id exactly once, strongest
 first. Do not omit any id and do not invent one.
 
 {{"kolejnosc": [<id>, <id>, ...],
-  "oceny": [{{"id": <id>, "wyrzuc": true|false, "kod_wyrzucenia": "NOT_AI"|"NOTHING_TO_CHECK"|"NO_MECHANISM"|"", "powod_wyrzucenia": "<one clause saying why that code applies, empty when keeping>", "na_artykul": true|false, "dlaczego_mocny": "<one clause — what would make a stranger stop>", "podobne_do": "<which side of the measured evidence this resembles, and in what respect — one clause; empty if neither>"}}]}}
+  "oceny": [{{"id": <id>, "wyrzuc": true|false, "kod_wyrzucenia": "NOT_AI"|"NOTHING_TO_CHECK"|"NO_MECHANISM"|"", "powod_wyrzucenia": "<one clause saying why that code applies, empty when keeping>", "na_artykul": true|false, "dlaczego_mocny": "<one clause — what would make a stranger stop>", "podobne_do": "<which side of the measured evidence this resembles, and in what respect — one clause; empty if neither>", "katy": [{{"kat": "<what to lead with — one clause to the writer>", "lamie": "<the belief this one angle breaks — different for every angle>", "czego_brakuje": "<what we would have to find to write it, empty when we already have enough>"}}]}}]}}
 
 `kod_wyrzucenia` must be one of the three codes whenever `wyrzuc` is true, and
 empty otherwise. A deletion with any other value is refused and the candidate is
