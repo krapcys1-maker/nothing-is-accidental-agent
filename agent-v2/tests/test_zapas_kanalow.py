@@ -110,9 +110,16 @@ siegniecia["ile"] = 0
 korpus_kanalow._ZAPAS["wpisy"] = None
 korpus_kanalow._ZAPAS["kiedy"] = 0.0
 korpus_kanalow.korpus_kanalow(5)
-sprawdz("odpytal kazdy kanal", siegniecia["ile"] == len(korpus_kanalow.KANALY),
-        "%d zapytan przy %d kanalach"
-        % (siegniecia["ile"], len(korpus_kanalow.KANALY)))
+# KANALY I ZRODLA PIERWOTNE. Od 3 wrzesnia 2026 korpus pyta o dwa zbiory:
+# trzynascie kanalow YouTube (Atom) i siedem zrodel pierwotnych (RSS 2.0,
+# poza vLLM). Test pilnuje, ze KAZDE zostalo odpytane dokladnie raz — czyli
+# ze nikt nie zgubil zbioru i nikt nie pyta dwa razy o to samo.
+_ile_zrodel = len(korpus_kanalow.KANALY) + len(korpus_kanalow.ZRODLA)
+sprawdz("odpytal kazdy kanal i kazde zrodlo",
+        siegniecia["ile"] == _ile_zrodel,
+        "%d zapytan przy %d kanalach i %d zrodlach"
+        % (siegniecia["ile"], len(korpus_kanalow.KANALY),
+           len(korpus_kanalow.ZRODLA)))
 
 print()
 print("=== 4. PRZETERMINOWANY ZAPAS NIE JEST UZYWANY ===")

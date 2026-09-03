@@ -49,7 +49,7 @@ Ograniczenia postawione przy starcie wersji drugiej:
 
 | ograniczenie | stan faktyczny | ocena |
 |---|---|---|
-| maksimum 10 plików `.py` | **23 plików**, 29 457 wierszy | **PRZEKROCZONE** |
+| maksimum 10 plików `.py` | **23 plików**, 29 596 wierszy | **PRZEKROCZONE** |
 | 4 tabele w bazie | 4: `runs`, `calls`, `articles`, `sources` | dotrzymane |
 | jedna warstwa abstrakcji | jedna: `llm.py` | dotrzymane |
 | brak migracji, brak kolejek | `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` | dotrzymane |
@@ -647,11 +647,14 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `korpus_kanalow.py` — o czym mówi się w tym tygodniu — zaczyn tematów, nigdy źródło
 
-368 wierszy, 6 funkcji na poziomie modułu, 0 klas
+492 wierszy, 9 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|
 | `oczysc(tytul)` | Zdejmuje obietnice, zostawia zdarzenie. |
+| `_pole(e, nazwa)` *(wewn.)* | Tresc pola wpisu, obojetnie czy feed jest Atomem czy RSS-em 2.0. |
+| `_data_wpisu(e)` *(wewn.)* | Data wpisu jako RRRR-MM-DD. Atom daje ISO, RSS 2.0 format RFC 822. |
+| `_link_wpisu(e)` *(wewn.)* | Adres wpisu. W Atomie w atrybucie `href`, w RSS-ie w tresci znacznika. |
 | `przetworz(wpisy)` | (nazwa_kanalu, element) -> kandydaci. Czysta funkcja, testowalna. |
 | `_rdzen(temat)` *(wewn.)* | Slowa nosne tytulu — do porownywania, czy dwa kanaly mowia o tym samym. |
 | `_numer_wersji(slowo)` *(wewn.)* | Czy token wyglada na numer wydania: ma cyfre i nie jest rokiem. |
@@ -712,7 +715,7 @@ wiec nie da sie go rozjechac z kodem.
 
 ### `audyt_tematow.py` — audyt segmentu tematow na zywych danych: jedenascie etapow, od kanalow po zwrot do puli
 
-295 wierszy, 4 funkcji na poziomie modułu, 0 klas
+310 wierszy, 4 funkcji na poziomie modułu, 0 klas
 
 | funkcja | co robi |
 |---|---|

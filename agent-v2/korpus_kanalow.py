@@ -73,6 +73,42 @@ KANALY = {
     "Matthew Berman":      "UCawZsQWqfGSbCI5yjkdVkTA",
 }
 
+# ZRODLA PIERWOTNE — DRUGI TYP KORPUSU, dolozony 3 wrzesnia 2026.
+#
+# CZEGO BRAKOWALO. Wszystkie trzynascie kanalow wyzej to JEDEN typ zrodla:
+# komentarz do zdarzenia, po fakcie, po angielsku, z USA. Zadne z nich nie
+# publikuje DOKUMENTU Z DATA. Doktryna wymaga „nazwanej liczby i dokumentu do
+# podlinkowania", a tytul filmu na YouTube nie niesie liczby — niesie obietnice
+# liczby, ktora dopiero trzeba znalezc. Stad bramka faktograficzna zabijajaca
+# teksty i stad slepota na premiery: o wydaniu modelu wiadomo z filmu dzien
+# lub dwa PO tym, jak wyszla karta modelu.
+#
+# Kazdy adres ponizej sprawdzony na zywo 3 wrzesnia 2026: kod 200, wlasciwy
+# tytul feedu, wpis z ostatnich dni. Odrzucone tego samego dnia i DLACZEGO:
+#   qwenlm.github.io/blog/index.xml  — 200, wyglada zywo, ostatni wpis
+#                                      2025-09-23. Feed martwy od roku.
+#   vertex-ai-release-notes.xml      — poprawny Atom, ostatni wpis 2026-03-16.
+#   epoch.ai/rss.xml, anthropic.com/rss.xml — 404, nie istnieja.
+#   datacenterdynamics.com/rss/      — 302, a bez filtra na moc i AI zalewa
+#                                      korpus (10 pozycji na 90 minut).
+# To sa dokladnie te pulapki, przed ktorymi chroni regula spod `KANALY`:
+# kod odpowiedzi nie jest sprawdzeniem, tytul i data ostatniego wpisu — jest.
+ZRODLA = {
+    "OpenAI":        "https://openai.com/news/rss.xml",
+    "DeepMind":      "https://deepmind.google/blog/rss.xml",
+    "HuggingFace":   "https://huggingface.co/blog/feed.xml",
+    "vLLM":          "https://github.com/vllm-project/vllm/releases.atom",
+    "Awarie Claude": "https://status.claude.com/history.rss",
+    "Komisja UE":    "https://digital-strategy.ec.europa.eu/en/rss.xml",
+    "Epoch AI":      "https://epochai.substack.com/feed",
+}
+
+# ILE NAJNOWSZYCH BIERZEMY Z JEDNEGO ZRODLA. YouTube oddaje 15 i tyle wystarcza;
+# feed OpenAI ma 1164 wpisow i bez sufitu jedno zrodlo zdominowaloby korpus.
+# Bierzemy po dacie, nie po kolejnosci w pliku — kolejnosc bywa dowolna.
+Z_JEDNEGO_ZRODLA = 12
+
+
 # JAK ZDOBYWA SIE IDENTYFIKATOR KANALU, bo to kosztowalo pol godziny.
 # youtube.com/@uchwyt przekierowuje na sciane zgody i nie oddaje niczego;
 # oEmbed dziala tylko dla FILMOW, nie dla kanalow (404); przegladarka nie
@@ -127,15 +163,55 @@ def oczysc(tytul: str) -> str:
     return t
 
 
+def _pole(e: Any, nazwa: str) -> str:
+    """Tresc pola wpisu, obojetnie czy feed jest Atomem czy RSS-em 2.0.
+
+    YouTube oddaje Atom (`entry`/`title`/`published` w przestrzeni nazw),
+    a laboratoria i rejestry — RSS 2.0 (`item`/`title`/`pubDate`, bez
+    przestrzeni). Jeden korpus ma czytac oba, wiec pytamy najpierw o wersje
+    z przestrzenia, potem o goly znacznik.
+    """
+    w = e.find("a:%s" % nazwa, NS)
+    if w is None:
+        w = e.find(nazwa)
+    return (w.text or "").strip() if w is not None else ""
+
+
+def _data_wpisu(e: Any) -> str:
+    """Data wpisu jako RRRR-MM-DD. Atom daje ISO, RSS 2.0 format RFC 822."""
+    iso = _pole(e, "published") or _pole(e, "updated")
+    if iso[:4].isdigit():
+        return iso[:10]
+    rfc = _pole(e, "pubDate") or iso
+    if rfc:
+        try:
+            from email.utils import parsedate_to_datetime
+            return parsedate_to_datetime(rfc).strftime("%Y-%m-%d")
+        except Exception:
+            return ""
+    return ""
+
+
+def _link_wpisu(e: Any) -> str:
+    """Adres wpisu. W Atomie w atrybucie `href`, w RSS-ie w tresci znacznika."""
+    w = e.find("a:link", NS)
+    if w is not None and w.get("href"):
+        return w.get("href")
+    w = e.find("link")
+    if w is None:
+        return ""
+    return w.get("href") or (w.text or "").strip()
+
+
 def przetworz(wpisy: list[tuple[str, Any]]) -> list[dict[str, Any]]:
     """(nazwa_kanalu, element) -> kandydaci. Czysta funkcja, testowalna."""
     widziane: set[str] = set()
     out: list[dict[str, Any]] = []
     for kanal, e in wpisy or []:
-        t = e.find("a:title", NS)
-        if t is None or not (t.text or "").strip():
+        tytul = _pole(e, "title")
+        if not tytul:
             continue
-        surowy = " ".join(t.text.split())
+        surowy = " ".join(tytul.split())
         if NIE_TEMAT.search(surowy):
             continue
         czysty = oczysc(surowy)
@@ -145,14 +221,12 @@ def przetworz(wpisy: list[tuple[str, Any]]) -> list[dict[str, Any]]:
         if klucz in widziane:
             continue
         widziane.add(klucz)
-        link = e.find("a:link", NS)
         out.append({
             "temat": czysty,
             "surowy": surowy,
             "kanal": kanal,
-            "data": (e.find("a:published", NS).text or "")[:10]
-                    if e.find("a:published", NS) is not None else "",
-            "url": link.get("href") if link is not None else "",
+            "data": _data_wpisu(e),
+            "url": _link_wpisu(e),
             "rola": "zdarzenie do sprawdzenia; naglowka nie kopiujemy",
         })
     out.sort(key=lambda x: x["data"], reverse=True)
@@ -366,9 +440,41 @@ def korpus_kanalow(ile: int = 30) -> list[dict[str, Any]]:
                     wpisy.append((nazwa, e))
             except Exception as exc:
                 print("  [kanaly] %s: %s" % (nazwa, type(exc).__name__), flush=True)
+        from datetime import datetime, timedelta, timezone
+        prog_wieku = (datetime.now(timezone.utc)
+                      - timedelta(days=config.MAKS_WIEK_ZRODLA_DNI)
+                      ).strftime("%Y-%m-%d")
+
+        # ZRODLA PIERWOTNE. Ta sama sesja HTTP, ta sama funkcja `przetworz` —
+        # roznica jest w formacie feedu (RSS 2.0 zamiast Atoma) i obsluguje ja
+        # `_pole`. Awaria jednego zrodla nie moze zabrac reszty, wiec kazde
+        # ma wlasny `try`, tak jak kanaly.
+        for nazwa, adres in ZRODLA.items():
+            try:
+                r = c.get(adres)
+                if r.status_code != 200:
+                    print("  [zrodla] %s: HTTP %s" % (nazwa, r.status_code),
+                          flush=True)
+                    continue
+                korzen = ET.fromstring(r.content)
+                poz = korzen.findall(".//a:entry", NS) or korzen.findall(".//item")
+                poz.sort(key=_data_wpisu, reverse=True)
+                # WIEK ODCINAMY JUZ TUTAJ, inaczej niz przy kanalach. YouTube
+                # oddaje 15 ostatnich filmow i to sa z natury rzeczy filmy
+                # swieze; feed OpenAI ma 1164 wpisow, a Epoch AI publikuje
+                # rzadko, wiec „dwanascie najnowszych" siega u niego czerwca.
+                # Takie pozycje i tak odpadaja pozniej na terminie w banku —
+                # ale zajmuja miejsce w korpusie, ktory idzie do promptu.
+                for e in poz[:Z_JEDNEGO_ZRODLA]:
+                    if _data_wpisu(e) < prog_wieku:
+                        continue
+                    wpisy.append((nazwa, e))
+            except Exception as exc:
+                print("  [zrodla] %s: %s" % (nazwa, type(exc).__name__), flush=True)
+
     k = przetworz(wpisy)
-    print("  [kanaly] %d filmow z %d kanalow -> %d tematow"
-          % (len(wpisy), len(KANALY), len(k)), flush=True)
+    print("  [kanaly] %d wpisow z %d kanalow i %d zrodel -> %d tematow"
+          % (len(wpisy), len(KANALY), len(ZRODLA), len(k)), flush=True)
     # Zapas zapisujemy TYLKO wtedy, gdy cos przyszlo. Zapamietanie pustki po
     # sieciowej wpadce wyciszyloby kanaly na pol godziny, a prompt dostalby
     # „(nothing fetched today)" mimo dzialajacej sieci.
